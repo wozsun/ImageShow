@@ -45,11 +45,11 @@ export const adminBasePath = "/admin";
 export const adminApiBasePath = "/api/admin";
 export const adminImagePageLimit = appConfig.adminImagePageSize;
 
-// Default reserved subdomain prefixes (random.<domain>, static.<domain>). The
-// server's authoritative copy lives in config.json (site.random_subdomain /
-// site.static_subdomain); the frontend uses these defaults to warn when a theme
-// name would collide with a reserved subdomain.
-export const reservedSubdomains = ["random", "static"] as const;
+// Default reserved subdomain prefixes (random.<domain>, static.<domain>,
+// docs.<domain>). The server's authoritative copy lives in config.json
+// (site.random_subdomain / static_subdomain / docs_subdomain); the frontend uses
+// these defaults to warn when a theme name would collide with a reserved subdomain.
+export const reservedSubdomains = ["random", "static", "docs"] as const;
 
 export type Device = (typeof appConfig.devices)[number];
 export type Brightness = (typeof appConfig.brightness)[number];

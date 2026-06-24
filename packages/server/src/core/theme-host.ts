@@ -5,12 +5,20 @@ import { getGalleryOptions } from "./redis.js";
 type HostParts = { hostname: string; port: string };
 
 // The configured reserved sub-prefixes that are not themes: <random>.<domain>
-// serves the random API, and <static>.<domain> serves local-storage objects (for
-// cookie isolation). Both labels are set in config.json (site.random_subdomain /
-// site.static_subdomain), defaulting to "random" / "static".
+// serves the random API, <static>.<domain> serves local-storage objects (for
+// cookie isolation), and <docs>.<domain> serves the bundled VitePress docs site
+// (built from packages/docs, deployed with the app — see routes/docs.ts). The
+// labels are set in config.json (site.random_subdomain / static_subdomain /
+// docs_subdomain), defaulting to "random" / "static" / "docs".
 function reservedPrefixes() {
   const site = getRuntimeConfig().site;
-  return { random: site.random_subdomain, static: site.static_subdomain };
+  return { random: site.random_subdomain, static: site.static_subdomain, docs: site.docs_subdomain };
+}
+
+// Every reserved prefix label, so a theme can't collide with any of them.
+function reservedPrefixList() {
+  const reserved = reservedPrefixes();
+  return [reserved.random, reserved.static, reserved.docs];
 }
 
 // The single label before the configured site domain (e.g. "nature" for
@@ -25,25 +33,24 @@ function hostPrefix(hostHeader: string) {
 
 export function themeFromHost(hostHeader: string) {
   const prefix = hostPrefix(hostHeader);
-  const reserved = reservedPrefixes();
-  if (prefix === reserved.random || prefix === reserved.static) return "";
+  if (reservedPrefixList().includes(prefix)) return "";
   return prefix && !prefix.includes(".") && /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(prefix) ? prefix : "";
 }
 
-export function specialHost(hostHeader: string): "random" | "static" | "" {
+export function specialHost(hostHeader: string): "random" | "static" | "docs" | "" {
   const prefix = hostPrefix(hostHeader);
   if (!prefix) return "";
   const reserved = reservedPrefixes();
   if (prefix === reserved.random) return "random";
   if (prefix === reserved.static) return "static";
+  if (prefix === reserved.docs) return "docs";
   return "";
 }
 
 // A theme can never equal a reserved subdomain prefix, or its gallery host
-// (<theme>.<domain>) would collide with the random API / static object host.
+// (<theme>.<domain>) would collide with the random API / static object / docs host.
 export function isReservedSubdomain(label: string): boolean {
-  const reserved = reservedPrefixes();
-  return label === reserved.random || label === reserved.static;
+  return reservedPrefixList().includes(label);
 }
 
 // Absolute base URL for serving objects from the cookie-isolated object host. An

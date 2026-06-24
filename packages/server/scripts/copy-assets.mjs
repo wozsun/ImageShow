@@ -84,10 +84,16 @@ await mkdir(serverDist, { recursive: true });
 await rewriteWorkspaceImports(serverDist);
 await rm(resolve(serverDist, "migrations"), { recursive: true, force: true });
 await rm(resolve(serverDist, "public"), { recursive: true, force: true });
+await rm(resolve(serverDist, "docs"), { recursive: true, force: true });
 await cp(resolve(pkg, "migrations"), resolve(serverDist, "migrations"), { recursive: true });
 const webDist = resolve(repo, "packages", "web", "dist");
 if (existsSync(webDist)) {
   await cp(webDist, resolve(serverDist, "public"), { recursive: true });
+}
+// The VitePress build output, served on docs.<domain> by routes/docs.ts.
+const docsDist = resolve(repo, "packages", "docs", ".vitepress", "dist");
+if (existsSync(docsDist)) {
+  await cp(docsDist, resolve(serverDist, "docs"), { recursive: true });
 }
 const remixIcon = resolve(repo, "node_modules", "remixicon");
 if (existsSync(remixIcon)) {

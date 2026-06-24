@@ -64,7 +64,7 @@ CREATE INDEX IF NOT EXISTS idx_metadata_md5
 ON metadata(md5)
 WHERE md5 <> '';
 
--- Lets the startup md5 backfill skip a full table scan once every row is hashed.
+-- Lets the on-demand md5 backfill skip a full table scan once every row is hashed.
 CREATE INDEX IF NOT EXISTS idx_metadata_missing_md5
 ON metadata(id)
 WHERE md5 = '';

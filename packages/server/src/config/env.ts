@@ -19,11 +19,14 @@ const runtimeConfigSchema = z.object({
     // https://static.example.com). File-only; not exposed in the settings UI.
     // Empty falls back to deriving https://<static_subdomain>.<domain>.
     static_base_url: z.string().trim().default(""),
-    // Reserved sub-prefixes: <random_subdomain>.<domain> serves the random API and
-    // <static_subdomain>.<domain> serves local objects. File-only; not exposed in
+    // Reserved sub-prefixes: <random_subdomain>.<domain> serves the random API,
+    // <static_subdomain>.<domain> serves local objects, and <docs_subdomain>.<domain>
+    // serves the documentation site (built from packages/docs and bundled into the
+    // app). All three are kept off the theme namespace. File-only; not exposed in
     // the settings UI or to the frontend.
     random_subdomain: subdomainLabel.default("random"),
-    static_subdomain: subdomainLabel.default("static")
+    static_subdomain: subdomainLabel.default("static"),
+    docs_subdomain: subdomainLabel.default("docs")
   }).default({}),
   port: z.coerce.number().int().positive().default(5518),
   database: z.object({
@@ -92,9 +95,13 @@ const processEnvSchema = z.object({
 export type RuntimeConfig = z.infer<typeof runtimeConfigSchema>;
 
 const rawEnv = processEnvSchema.parse(process.env);
-const configDir = rawEnv.NODE_ENV === "production" ? "/app/config" : join(process.cwd(), "data", "config");
-const storageDir = rawEnv.NODE_ENV === "production" ? "/app/storage" : join(process.cwd(), "data", "storage");
-const configPath = join(configDir, "config.json");
+// Single data root so a deployment only mounts one volume (/app/data in
+// production): config.json sits at its root, with storage/ and log/ beneath it.
+const dataDir = rawEnv.NODE_ENV === "production" ? "/app/data" : join(process.cwd(), "data");
+const configDir = dataDir;
+const storageDir = join(dataDir, "storage");
+const logDir = join(dataDir, "log");
+const configPath = join(dataDir, "config.json");
 
 function envValue(name: string) {
   const value = process.env[name];
@@ -107,16 +114,6 @@ function requiredBootstrapEnv(name: string) {
   return value;
 }
 
-function normalizeLegacyConfig(fileConfig: Record<string, unknown>) {
-  const normalized = { ...fileConfig };
-  const site = typeof normalized.site === "object" && normalized.site ? { ...(normalized.site as Record<string, unknown>) } : {};
-  if (typeof normalized.domain === "string" && !site.domain) site.domain = normalized.domain;
-  normalized.site = site;
-  delete normalized.domain;
-  delete normalized.assets;
-  return normalized;
-}
-
 function readExistingConfig(): RuntimeConfig | null {
   if (!existsSync(configPath)) return null;
   let value: unknown;
@@ -125,7 +122,7 @@ function readExistingConfig(): RuntimeConfig | null {
   } catch (error) {
     throw new Error(`Cannot parse runtime config ${configPath}: ${error instanceof Error ? error.message : String(error)}`);
   }
-  const parsed = runtimeConfigSchema.safeParse(normalizeLegacyConfig(value as Record<string, unknown>));
+  const parsed = runtimeConfigSchema.safeParse(value);
   if (!parsed.success) {
     throw new Error(`Invalid runtime config ${configPath}: ${parsed.error.message}`);
   }
@@ -141,7 +138,8 @@ function initialConfigFromEnvironment() {
       root_redirect: envValue("ROOT_REDIRECT"),
       static_base_url: envValue("STATIC_BASE_URL"),
       random_subdomain: envValue("RANDOM_SUBDOMAIN"),
-      static_subdomain: envValue("STATIC_SUBDOMAIN")
+      static_subdomain: envValue("STATIC_SUBDOMAIN"),
+      docs_subdomain: envValue("DOCS_SUBDOMAIN")
     },
     port: envValue("PORT"),
     database: {
@@ -237,6 +235,7 @@ export const env = {
   ADMIN_PASSWORD: rawEnv.ADMIN_PASSWORD,
   CONFIG_DIR: configDir,
   STORAGE_DIR: storageDir,
+  LOG_DIR: logDir,
   APP_DOMAIN: runtimeConfig.site.domain,
   PORT: runtimeConfig.port,
   POSTGRES_HOST: runtimeConfig.database.host,

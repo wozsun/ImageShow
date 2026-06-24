@@ -8,6 +8,7 @@ import { ensureStorage } from "./storage/storage.js";
 import { fail, requireAuth, requireCsrf, routeError } from "./core/http.js";
 import { registerAdminImageRoutes } from "./routes/admin-images.js";
 import { registerCheckRoutes } from "./routes/check.js";
+import { registerDocsRoutes } from "./routes/docs.js";
 import { registerHealthRoutes } from "./routes/health.js";
 import { registerProtectedAuthRoutes, registerPublicAuthRoutes } from "./routes/auth.js";
 import { registerPublicRoutes } from "./routes/public.js";
@@ -30,6 +31,9 @@ app.use("*", async (c, next) => {
   await next();
 });
 app.options("*", async () => new Response(null, { status: 204 }));
+// docs.<domain> serves the bundled VitePress site and short-circuits the rest of
+// the app (registered before the other host middleware on purpose).
+registerDocsRoutes(app);
 // Host-based access control for the reserved subdomains:
 //   random.<domain> → the random API only, at "/" with GET/HEAD; everything else 404.
 //   static.<domain> → object bytes only, under /media/* and /thumbs/*; else 404.

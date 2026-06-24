@@ -49,8 +49,7 @@ services:
     ports:
       - "${HOST_PORT:-5518}:5518"
     volumes:
-      - ./data/config:/app/config
-      - ./data/storage:/app/storage
+      - ./data:/app/data
     init: true
     security_opt:
       - no-new-privileges:true

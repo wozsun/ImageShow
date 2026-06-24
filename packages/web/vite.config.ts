@@ -5,9 +5,9 @@ import { fileURLToPath } from "node:url";
 
 // Resolve the dev proxy target the same way the app resolves its own domain, so
 // `npm run dev` talks to whatever backend the local config points at. Priority:
-// data/config/config.json (site.domain + port) → APP_DOMAIN + PORT env → localhost:5518.
+// data/config.json (site.domain + port) → APP_DOMAIN + PORT env → localhost:5518.
 function resolveProxyTarget() {
-  const configPath = fileURLToPath(new URL("../../data/config/config.json", import.meta.url));
+  const configPath = fileURLToPath(new URL("../../data/config.json", import.meta.url));
   if (existsSync(configPath)) {
     try {
       const config = JSON.parse(readFileSync(configPath, "utf8")) as { site?: { domain?: string }; port?: number };

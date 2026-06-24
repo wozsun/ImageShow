@@ -4,6 +4,7 @@ COPY package.json package-lock.json* ./
 COPY packages/shared/package.json packages/shared/package.json
 COPY packages/server/package.json packages/server/package.json
 COPY packages/web/package.json packages/web/package.json
+COPY packages/docs/package.json packages/docs/package.json
 RUN npm ci
 
 FROM deps AS build
@@ -29,7 +30,7 @@ COPY --chown=node:node --from=build /app/packages/shared/package.json ./packages
 COPY --chown=node:node --from=build /app/packages/shared/dist ./packages/shared/dist
 COPY --chown=node:node --from=build /app/packages/server/package.json ./packages/server/package.json
 COPY --chown=node:node --from=build /app/packages/server/dist ./packages/server/dist
-RUN mkdir -p /app/config /app/storage && chown -R node:node /app/config /app/storage
+RUN mkdir -p /app/data/storage /app/data/log && chown -R node:node /app/data
 USER node
 EXPOSE ${PORT}
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 CMD node packages/server/dist/healthcheck-cli.js
