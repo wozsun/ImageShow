@@ -1,0 +1,5 @@
+@import "./styles/base.css";
+@import "./styles/home.css";
+@import "./styles/gallery.css";
+@import "./styles/admin.css";
+@import "./styles/responsive.css";

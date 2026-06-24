@@ -1,0 +1,347 @@
+:root {
+  color: #20242a;
+  background: #f5f6f8;
+  font-family: Inter, ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+}
+
+* { box-sizing: border-box; }
+html { overflow-y: auto; }
+html.modal-open, body.modal-open { overflow: hidden; }
+html.home-document { overflow-y: hidden; }
+body { margin: 0; min-height: 100vh; overflow-x: hidden; }
+
+/* Inner scroll areas (modals, code blocks, menus) keep a slim native scrollbar. */
+* { scrollbar-width: thin; scrollbar-color: rgba(20, 30, 44, .3) transparent; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb {
+  background: rgba(20, 30, 44, .26);
+  background-clip: padding-box;
+  border: 3px solid transparent;
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-thumb:hover { background: rgba(20, 30, 44, .42); background-clip: padding-box; }
+*::-webkit-scrollbar-corner { background: transparent; }
+
+/* The document scroll is drawn by the floating OverlayScrollbar component, so the
+   native page scrollbar is hidden entirely: it never reserves layout width, and
+   switching to a scrollable page no longer shifts the layout left. The class is
+   added by OverlayScrollbar only once mounted on a supported device, so without
+   JS (or on touch / high-contrast devices) the native bar stays in place. */
+html.has-overlay-scrollbar, html.has-overlay-scrollbar body { scrollbar-width: none; }
+html.has-overlay-scrollbar::-webkit-scrollbar,
+html.has-overlay-scrollbar body::-webkit-scrollbar { width: 0; height: 0; }
+.overlay-scrollbar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 14px;
+  z-index: 9;
+  pointer-events: none;
+}
+.overlay-scrollbar-handle {
+  position: absolute;
+  right: 0;
+  width: 6px;
+  border-radius: 999px;
+  background: rgba(20, 30, 44, .34);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .24s ease, width .12s ease, background-color .12s ease;
+}
+.overlay-scrollbar.is-active .overlay-scrollbar-handle { opacity: 1; pointer-events: auto; }
+.overlay-scrollbar-handle:hover,
+.overlay-scrollbar-handle.is-dragging { width: 10px; background: rgba(20, 30, 44, .54); }
+/* Element-mode handle for in-modal scroll containers (position set from JS, sits
+   above modal content but below portal dropdowns). */
+.overlay-scrollbar-handle.is-floating { position: fixed; z-index: 30; }
+.overlay-scrollbar-handle.is-floating.is-active { opacity: 1; pointer-events: auto; }
+/* A scroll container whose bar is drawn by an element-mode OverlayScrollbar. */
+.overlay-scroll-host { scrollbar-width: none; }
+.overlay-scroll-host::-webkit-scrollbar { width: 0; height: 0; }
+a { color: inherit; text-decoration: none; }
+button, input, textarea { font: inherit; }
+input, textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 9px 10px;
+  background: #fff;
+  border: 1px solid #c9d1dc;
+  border-radius: 6px;
+}
+textarea { min-height: 76px; resize: vertical; }
+.theme-input-control { width: 100%; min-width: 0; }
+/* A theme that collides with a reserved subdomain prefix (random / static) is
+   rejected on save; flag it inline so it's caught before submitting. */
+.theme-input-control input[aria-invalid="true"] { border-color: #d64545; box-shadow: 0 0 0 1px #d64545; }
+
+.select-control { position: relative; width: 100%; min-width: 0; }
+/* Storage-backend pickers only hold short labels (本地存储 / 对象存储), so they get a
+   compact fixed width instead of stretching; the portal menu follows the trigger. */
+.select-control.is-storage-select { width: 120px; min-width: 120px; flex: 0 0 auto; }
+.select-trigger {
+  position: relative;
+  width: 100%;
+  min-height: 38px;
+  padding: 9px 38px 9px 10px;
+  justify-content: flex-start;
+  overflow: hidden;
+  color: #20242a;
+  background: #fff;
+  border-color: #c9d1dc;
+  text-align: left;
+}
+.select-trigger > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.select-trigger::after {
+  content: "";
+  position: absolute;
+  right: 13px;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-65%) rotate(45deg);
+  transition: transform .16s ease;
+}
+.select-trigger.is-open::after { transform: translateY(-25%) rotate(225deg); }
+.select-menu {
+  position: fixed;
+  z-index: 100;
+  padding: 5px;
+  overflow-y: auto;
+  color: #20242a;
+  background: #fff;
+  border: 1px solid #c9d1dc;
+  border-radius: 7px;
+  box-shadow: 0 14px 34px rgba(20, 30, 44, .18);
+  transform-origin: top center;
+  animation: select-menu-in .16s cubic-bezier(.2, .8, .2, 1);
+}
+.select-menu.opens-up { transform-origin: bottom center; }
+.select-menu > button {
+  width: 100%;
+  min-height: 36px;
+  padding: 7px 30px 7px 10px;
+  justify-content: flex-start;
+  color: #20242a;
+  background: transparent;
+  border-color: transparent;
+  text-align: left;
+}
+.select-menu > button:hover,
+.select-menu > button:focus-visible { background: #eef5ff; }
+.select-menu > button.is-selected { position: relative; color: #1f6feb; background: #eef5ff; }
+.select-menu > button.is-selected::after { content: "✓"; position: absolute; right: 10px; }
+.select-menu.is-closing { pointer-events: none; animation: select-menu-out .12s ease-in forwards; }
+.theme-combo-menu > button.is-active { background: #eef5ff; }
+.modal-footer-actions { display: flex; align-items: center; gap: 12px; }
+/* Shared in-modal image-list scroll area (batch editor + uploader): fills the gap
+   between the fixed header/property rows and the footer, sits flush to both divider
+   lines, and keeps its scrollbar at the modal edge with a uniform inner padding. */
+.modal-scroll-list { flex: 1; min-height: 0; overflow: auto; padding: 14px; }
+footer .admin-pagination { margin-top: 0; }
+
+@keyframes select-menu-in {
+  from { opacity: 0; transform: translateY(-5px) scaleY(.96); }
+  to { opacity: 1; transform: translateY(0) scaleY(1); }
+}
+@keyframes select-menu-out {
+  from { opacity: 1; transform: translateY(0) scaleY(1); }
+  to { opacity: 0; transform: translateY(-4px) scaleY(.97); }
+}
+.select-menu.opens-up { animation-name: select-menu-in-up; }
+.select-menu.opens-up.is-closing { animation-name: select-menu-out-up; }
+@keyframes select-menu-in-up {
+  from { opacity: 0; transform: translateY(5px) scaleY(.96); }
+  to { opacity: 1; transform: translateY(0) scaleY(1); }
+}
+@keyframes select-menu-out-up {
+  from { opacity: 1; transform: translateY(0) scaleY(1); }
+  to { opacity: 0; transform: translateY(4px) scaleY(.97); }
+}
+
+button, .button {
+  min-height: 36px;
+  border: 1px solid #c9d1dc;
+  background: #fff;
+  color: #20242a;
+  border-radius: 6px;
+  padding: 8px 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+button:disabled { opacity: .45; cursor: not-allowed; }
+button.active, .button {
+  background: #1f6feb;
+  border-color: #1f6feb;
+  color: white;
+}
+.button.secondary { background: #fff; color: #20242a; border-color: #c9d1dc; }
+.danger-button, button.danger-button {
+  color: #a13a32;
+  background: #fff1ef;
+  border-color: #e8aaa4;
+}
+.danger-button:hover, button.danger-button:hover { color: #84271f; background: #ffe7e3; border-color: #d98179; }
+/* A gentle uniform darken on hover for every clickable button and button-styled link
+   — the same feedback the 清空 buttons give, a touch lighter. Filter (not a bg swap)
+   so it works on any base color; dropdown triggers open a menu so they're excluded. */
+button:not(:disabled):not(.select-trigger):hover,
+.button:not(:disabled):hover { filter: brightness(.97); }
+.icon { width: 36px; padding: 0; flex: 0 0 36px; }
+/* Modal close (×) buttons share a soft-red cross wherever the class is used. */
+.close { color: #d98c8c; }
+.close:hover { color: #c25b5b; }
+.app-icon {
+  width: 1.125rem;
+  height: 1.125rem;
+  flex: 0 0 1.125rem;
+  display: inline-block;
+  background: currentColor;
+  -webkit-mask: var(--icon-url) center / contain no-repeat;
+  mask: var(--icon-url) center / contain no-repeat;
+  vertical-align: middle;
+}
+.icon .app-icon { margin: 0; }
+/* Shown in place of a thumbnail whose image failed to load. */
+.thumb-fallback { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #e8edf3; color: #9aa6b4; }
+.thumb-fallback .app-icon { width: 38%; height: 38%; max-width: 44px; max-height: 44px; }
+
+.page { min-height: 100vh; overflow-y: auto; }
+.home-page { height: 100svh; overflow: hidden; }
+.topbar {
+  height: 64px;
+  padding: 0 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #fff;
+  border-bottom: 1px solid #dce2ea;
+}
+.brand { font-weight: 800; font-size: 20px; }
+.topbar .desktop-nav, .actions, .inline-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.topbar .desktop-nav { gap: 18px; }
+.topbar .desktop-nav a {
+  min-height: 34px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #495260;
+  transition: color .16s ease, background-color .16s ease, font-weight .16s ease, transform .1s ease;
+}
+.topbar .desktop-nav a:hover, .topbar .desktop-nav a.active { color: #1f6feb; font-weight: 700; }
+.topbar .desktop-nav a:active { transform: scale(.95); }
+.pressable:active { transform: scale(.95); }
+.topbar .desktop-nav a.active {
+  color: #1f6feb;
+  background: #eef5ff;
+}
+.topbar .desktop-nav .app-icon {
+  width: 1rem;
+  height: 1rem;
+  flex-basis: 1rem;
+}
+.mobile-navigation { display: none; position: relative; }
+.mobile-nav-toggle { min-height: 38px; }
+.mobile-nav-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 20;
+  min-width: 190px;
+  padding: 8px;
+  display: grid;
+  gap: 4px;
+  background: #fff;
+  border: 1px solid #dce2ea;
+  border-radius: 8px;
+  box-shadow: 0 14px 34px rgba(20, 30, 44, .18);
+  transform-origin: top right;
+  animation: menu-pop .18s cubic-bezier(.2, .8, .2, 1);
+}
+.mobile-nav-dropdown a, .mobile-nav-dropdown button {
+  width: 100%;
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  justify-content: flex-start;
+  color: #20242a;
+  background: transparent;
+  border-color: transparent;
+}
+.mobile-nav-dropdown a.active { color: #1f6feb; background: #eef5ff; border-radius: 6px; }
+.mobile-nav-dropdown.is-closing {
+  pointer-events: none;
+  animation: menu-pop-out .12s ease-in forwards;
+}
+.copy-button {
+  transition: color .16s ease, background-color .16s ease, border-color .16s ease, transform .1s ease, filter .16s ease;
+}
+.pressable { transition: color .16s ease, background-color .16s ease, border-color .16s ease, transform .1s ease, filter .16s ease; }
+.copy-button:active { transform: scale(.95); }
+.copy-button.is-copied {
+  color: #245236;
+  background: #eaf8ee;
+  border-color: #9fd3ad;
+}
+.copy-button.is-failed {
+  color: #8a2d24;
+  background: #fff2f0;
+  border-color: #de8b83;
+}
+.theme-select-menu {
+  position: fixed;
+  z-index: 100;
+  padding: 10px;
+  overflow-y: auto;
+  color: #20242a;
+  background: #fff;
+  border: 1px solid #c9d1dc;
+  border-radius: 8px;
+  box-shadow: 0 14px 34px rgba(20, 30, 44, .18);
+  transform-origin: top center;
+  animation: select-menu-in .16s cubic-bezier(.2, .8, .2, 1);
+}
+.theme-select-menu.opens-up { transform-origin: bottom center; animation-name: select-menu-in-up; }
+.theme-select-menu.is-closing { pointer-events: none; animation: select-menu-out .12s ease-in forwards; }
+.theme-select-menu.opens-up.is-closing { animation-name: select-menu-out-up; }
+.theme-selected-list > div { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 8px; }
+/* Reserve a single steady row for live results so the menu doesn't jump when the
+   first match appears; it wraps and grows from there as more matches show. The
+   reserve (30px) equals one chip: line-height 20 + padding 8 + border 2. */
+.theme-search-results { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 6px; margin-top: 8px; min-height: 30px; }
+.theme-search-results > .muted { white-space: nowrap; align-self: center; }
+.theme-search-results button, .theme-selected-list button { min-height: 30px; padding: 4px 9px; line-height: 20px; }
+.theme-search-results button { color: #20242a; background: #fff; border-color: #dce2ea; }
+.theme-search-results button:hover, .theme-search-results button:focus-visible { background: #f1f3f6; border-color: #aeb8c5; }
+.theme-menu-divider { margin: 10px 0; border-top: 1px solid #dce2ea; }
+.theme-selected-list { display: grid; gap: 2px; }
+.theme-selected-list strong { font-size: 13px; color: #66717f; }
+.theme-selected-list button { background: #eef5ff; border-color: #9fc2f5; color: #1f6feb; }
+.theme-selected-list button span { font-size: 16px; line-height: 1; }
+.theme-mode-switch { position: sticky; bottom: -10px; margin: 10px -10px -10px; padding: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; border-top: 1px solid #dce2ea; background: #fff; }
+.theme-mode-switch button { min-height: 30px; padding: 4px 9px; font-size: 14px; }
+.theme-mode-switch button.active { color: #1f6feb; background: #eef5ff; border-color: #9fc2f5; }
+
+@keyframes menu-pop {
+  from { opacity: 0; transform: translateY(-6px) scale(.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes menu-pop-out {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(-6px) scale(.98); }
+}
+
+@keyframes surface-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}

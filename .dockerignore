@@ -1,0 +1,12 @@
+node_modules
+dist
+packages/*/node_modules
+packages/*/dist
+packages/web/dist
+scripts
+.git
+data
+cert
+nginx
+.env
+*.log

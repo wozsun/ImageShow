@@ -1,0 +1,195 @@
+.upload-summary {
+  border: 1px solid #dce2ea;
+  background: #fff;
+  border-radius: 8px;
+  padding: 14px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.upload-summary h2 { margin: 0 0 4px; }
+
+.upload-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(13, 18, 28, .74);
+  animation: modal-fade .16s ease-out;
+}
+.upload-overlay.is-closing {
+  pointer-events: none;
+  animation: modal-fade-out .12s ease-in forwards;
+}
+.upload-window {
+  width: min(1180px, 96vw);
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, .28);
+  animation: modal-pop .18s cubic-bezier(.2, .8, .2, 1);
+}
+.upload-overlay.is-closing .upload-window { animation: modal-pop-out .12s ease-in forwards; }
+/* A duplicate card opens the shared detail modal nested inside this overlay; lift
+   it above the upload list's floating overlay scrollbar handle (z-index 30) so the
+   handle can't show through or intercept backdrop clicks while it's open. */
+.upload-overlay .image-detail-modal { z-index: 40; }
+.upload-window > header,
+.upload-window > footer {
+  flex-shrink: 0;
+  z-index: 2;
+  background: #fff;
+  border-bottom: 1px solid #dce2ea;
+  padding: 14px 16px;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+}
+.upload-window > header h1 { margin: 0; font-size: 24px; }
+.upload-window > footer {
+  bottom: 0;
+  border-top: 1px solid #dce2ea;
+  border-bottom: 0;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+}
+.upload-backend {
+  display: flex;
+  align-items: center;
+  justify-self: start;
+}
+.upload-window > footer .admin-pagination { justify-self: center; }
+.upload-window > footer .modal-footer-actions { justify-self: end; }
+/* Bare controls (no text labels) on a row that ends with a full-width divider,
+   mirroring the batch editor's .batch-edit-common. */
+.upload-defaults {
+  flex-shrink: 0;
+  padding: 12px 16px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px;
+  border-bottom: 1px solid #dce2ea;
+}
+/* Device/brightness widen just enough for the 6-char "…自动识别" default; theme is
+   1.5× as wide. */
+.select-control.upload-default-select { width: 150px; flex: 0 0 auto; }
+.theme-input-control.upload-default-theme { width: 225px; flex: 0 0 auto; }
+/* Match the adjacent inputs' 9px/10px box so the height lines up; the apply button
+   sits snug after theme, and the auto margin on the first following clear button
+   pushes the 清空 pair to the right edge. */
+.upload-apply-defaults { align-self: end; min-height: 38px; padding: 9px 10px; white-space: nowrap; }
+.upload-apply-defaults + .clear-button { margin-left: auto; }
+/* This button is wide, so the shared .admin scale(.95) press reads as too much;
+   the extra :not(.select-trigger) only lifts specificity above the base and the
+   responsive-breakpoint rules so this gentler scale wins everywhere. */
+.admin button.upload-apply-defaults:not(:disabled):not(.select-trigger):active { transform: scale(.98); }
+/* The "选择图片" label looks like a generic secondary button (.button.secondary),
+   with .pressable supplying the hover-darken + click-shrink transitions (a <label>
+   doesn't inherit the .admin button transition/:active rules); here we only hide its
+   native file input and pin the width. */
+.upload-picker { width: 200px; flex: 0 0 auto; }
+.upload-picker input { display: none; }
+/* Scroll behavior/padding come from the shared .modal-scroll-list; only the grid
+   layout of the cards lives here. */
+.upload-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  align-content: start;
+}
+.upload-head-actions { display: flex; align-items: center; gap: 10px; }
+.upload-footer-left { justify-self: start; min-width: 0; display: flex; align-items: center; gap: 10px; }
+/* Clear actions keep a red label but on a neutral button, so a cluster of them
+   doesn't read as alarming; reused for every 清空 button in the upload window. */
+.clear-button { color: #d0473a; }
+.clear-button:not(:disabled):hover { color: #bd3c30; background: #f4f6f8; }
+.upload-job {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  border: 1px solid #dce2ea;
+  border-radius: 8px;
+  background: #f7f8fa;
+  padding: 10px;
+}
+.upload-job-thumbnail { grid-row: span 2; }
+.upload-job-head { min-width: 0; display: grid; gap: 4px; }
+.upload-job-head strong,
+.upload-job-head span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.upload-job-head span { color: #66717f; font-size: 14px; }
+/* The "副本文件等待上传" note keeps the duplicate panel's amber after the panel itself
+   is dismissed, as a lingering reminder this image is a confirmed duplicate. */
+.upload-job-head .dup-confirmed { color: #b8860b; }
+.upload-progress {
+  height: 5px;
+  overflow: hidden;
+  background: #dce7f6;
+  border-radius: 999px;
+}
+.upload-progress span {
+  display: block;
+  height: 100%;
+  background: #1f6feb;
+  transition: width .18s ease;
+}
+.upload-job-fields {
+  grid-column: 2 / 4;
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) 120px 120px minmax(130px, .8fr) minmax(150px, 1fr) minmax(150px, 1fr);
+  gap: 8px;
+}
+.upload-job-fields textarea { grid-column: 1 / -1; min-height: 62px; }
+.upload-job.done { border-color: #78b78a; background: #f2fbf5; }
+.upload-job.failed { border-color: #de8b83; background: #fff6f4; }
+.upload-job.hashing { border-color: #9bb9e8; background: #f5f9ff; }
+.duplicate-panel {
+  grid-column: 2 / 4;
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  background: #fff8e8;
+  border: 1px solid #f0d38a;
+  border-radius: 8px;
+}
+.duplicate-panel span { color: #66717f; font-size: 14px; }
+.duplicate-note { min-width: 0; display: grid; gap: 2px; }
+/* The preview cards take the left; the 仍然上传 / 移除 actions share the row, tucked
+   bottom-right beside them, so the panel stays short. */
+.duplicate-body { display: flex; align-items: flex-end; gap: 12px; }
+.duplicate-body .duplicate-list { flex: 1; min-width: 0; }
+.duplicate-body .inline-actions { flex: 0 0 auto; flex-wrap: nowrap; }
+.duplicate-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 8px;
+}
+.duplicate-item {
+  padding: 8px;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  justify-content: stretch;
+  text-align: left;
+}
+.duplicate-item .image-thumbnail { grid-row: span 2; }
+.duplicate-item span, .duplicate-item small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.duplicate-item small { color: #66717f; }
+.empty-state {
+  margin: 0;
+  padding: 28px;
+  text-align: center;
+  color: #66717f;
+  background: #fff;
+  border: 1px dashed #c9d1dc;
+  border-radius: 8px;
+}

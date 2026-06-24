@@ -1,0 +1,137 @@
+.settings-grid {
+  display: grid;
+  grid-template-columns: minmax(360px, 1.2fr) minmax(280px, .8fr);
+  gap: 16px;
+}
+.settings-grid section, .check-result section {
+  background: #fff;
+  border: 1px solid #dce2ea;
+  border-radius: 8px;
+  padding: 14px;
+}
+.settings-grid label {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 10px;
+  color: #495260;
+}
+.hint {
+  margin: 0 0 12px;
+  color: #66717f;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.settings-grid label:has(input[type="checkbox"]) {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+}
+.settings-grid input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+}
+.settings-feedback {
+  margin: 12px 0 0;
+  padding: 12px 14px;
+  border: 1px solid #cfe0fb;
+  border-radius: 8px;
+  color: #29415f;
+  background: #eef5ff;
+  animation: surface-in .18s ease-out;
+}
+.settings-feedback.ok {
+  color: #245236;
+  background: #f2fbf5;
+  border-color: #b9dec4;
+}
+.settings-feedback.error {
+  color: #8a2d24;
+  background: #fff6f4;
+  border-color: #de8b83;
+}
+.settings-feedback pre {
+  margin: 0;
+  max-height: 280px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+.settings-card-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.storage-test-button { min-width: 154px; }
+.storage-provider-row { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
+.storage-provider-row label { flex: 0 0 auto; margin-bottom: 0; }
+/* Widen this card's backend picker (the uploader footer one keeps the base 120px),
+   and match the 设为默认上传位置 button's height to the select trigger (38px). */
+.storage-provider-row .select-control.is-storage-select { width: 200px; min-width: 200px; }
+.storage-provider-row button { min-height: 38px; }
+.storage-default-note { display: flex; align-items: center; gap: 8px; margin: 0 0 14px; font-size: 14px; font-weight: 600; color: #20242a; }
+.storage-default-note strong { padding: 2px 10px; border-radius: 999px; background: #e8f1ff; color: #1f6feb; font-weight: 700; }
+
+/* Check-page header actions: row 1 = the checks, row 2 = the storage operations
+   right-aligned under them, so the heavier operations sit apart from the checks. */
+.check-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  margin-left: auto;
+}
+.check-actions .actions { justify-content: flex-end; }
+
+.check-result {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+.operation-modal { width: min(620px, 96vw); }
+.operation-body {
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+}
+.operation-body label {
+  display: grid;
+  gap: 6px;
+  color: #495260;
+}
+.check-summary {
+  margin-bottom: 16px;
+  padding: 14px;
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  animation: surface-in .18s ease-out;
+}
+.check-card { animation: surface-in .2s ease-out; }
+.check-summary.ok, .check-card.ok { border: 1px solid #b9dec4; background: #f2fbf5; }
+.check-summary.warn, .check-card.warn { border: 1px solid #f0d38a; background: #fff8e8; }
+.check-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.check-card-head h2 { margin: 0; }
+.check-card-head span {
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.check-card.ok .check-card-head span { color: #245236; background: #dff3e5; }
+.check-card.warn .check-card-head span { color: #765314; background: #f9e7af; }
+pre {
+  background: #fff;
+  border: 1px solid #dce2ea;
+  border-radius: 8px;
+  padding: 14px;
+  overflow: auto;
+  max-height: 420px;
+}
+.check-result pre { border: 0; padding: 0; max-height: 360px; }

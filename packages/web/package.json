@@ -1,0 +1,25 @@
+{
+  "name": "@imageshow/web",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc -p tsconfig.json && vite build",
+    "check": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@imageshow/shared": "file:../shared",
+    "@tanstack/react-query": "^5.62.8",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-router-dom": "^7.0.2",
+    "remixicon": "^4.9.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.2",
+    "@types/react-dom": "^19.0.2",
+    "@vitejs/plugin-react": "^5.1.4",
+    "typescript": "^5.7.2",
+    "vite": "^8.0.16"
+  }
+}
