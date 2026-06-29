@@ -39,7 +39,18 @@ export function MobileNavigation({ children, className = "" }: { children: React
       >
         <Icon name="menu-line" />导航
       </button>
-      {open && <nav id={menuId} className={`mobile-nav-dropdown ${exit.closing ? "is-closing" : ""}`} aria-hidden={exit.closing} inert={exit.closing} onAnimationEnd={exit.onAnimationEnd} onClick={() => exit.requestClose()}>{children}</nav>}
+      {open && (
+        <nav
+          id={menuId}
+          className={`mobile-nav-dropdown ${exit.closing ? "is-closing" : ""}`}
+          aria-hidden={exit.closing}
+          inert={exit.closing}
+          onAnimationEnd={exit.onAnimationEnd}
+          onClick={() => exit.requestClose()}
+        >
+          {children}
+        </nav>
+      )}
     </div>
   );
 }

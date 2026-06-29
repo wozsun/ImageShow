@@ -1,13 +1,12 @@
 import { createHash } from "node:crypto";
 import { fileTypeFromBuffer, fileTypeFromFile } from "file-type";
 import sharp from "sharp";
-import { appConfig, type ImageExt } from "@imageshow/shared";
+import { type ImageExt } from "@imageshow/shared";
 import { ApiError } from "../core/http.js";
 import { thumbnailObjectKey } from "../storage/image-paths.js";
-import { getImageMaxLongEdge, getStorageConfig, getUploadLimitBytes, type StorageBackend } from "../config/settings.js";
+import { getDefaultStorageSlug, getImageMaxLongEdge, getStorageBackend, getThumbnailSettings, getUploadLimitBytes } from "../config/settings.js";
 import {
   openStorageRead,
-  objectStat,
   readStorageBuffer,
   safeStoragePath,
   writeStorageBuffer,
@@ -26,7 +25,7 @@ async function detectImageExt(input: ImageInput) {
   return normalizeImageExt(detected?.ext);
 }
 
-function md5Buffer(input: Buffer) {
+export function md5Buffer(input: Buffer) {
   return createHash("md5").update(input).digest("hex");
 }
 
@@ -43,8 +42,8 @@ async function imageDimensions(input: ImageInput) {
   return { width, height };
 }
 
-export async function calculateObjectMd5(prefix: StoragePrefix, key: string, backend?: StorageBackend) {
-  const opened = await openStorageRead(prefix, key, backend);
+export async function calculateObjectMd5(prefix: StoragePrefix, key: string, slug?: string) {
+  const opened = await openStorageRead(prefix, key, slug);
   const limit = opened.backend === "s3" ? await getUploadLimitBytes() : undefined;
   if (limit !== undefined && opened.size !== undefined && opened.size > limit) {
     opened.body.destroy();
@@ -68,41 +67,44 @@ export async function calculateObjectMd5(prefix: StoragePrefix, key: string, bac
   }
 }
 
-export async function validateImage(prefix: StoragePrefix, key: string, expectedExt: ImageExt, backend?: StorageBackend) {
-  const effective = backend ?? (await getStorageConfig()).backend;
-  const input = effective === "s3" ? await readStorageBuffer(prefix, key, effective) : safeStoragePath(prefix, key);
-  const actualExt = await detectImageExt(input);
-  if (!actualExt) throw new ApiError(400, "unsupported_file_type", "Unsupported file type");
-  if (actualExt !== expectedExt) {
-    throw new ApiError(400, "extension_mismatch", "File extension does not match image content", { expected: expectedExt, actual: actualExt });
-  }
+// Validates raw image bytes (an uploaded buffer, or one fetched from an imported
+// link) and returns the fields a metadata row needs. Enforces the long-edge limit
+// via imageDimensions.
+export async function probeImageBytes(input: Buffer) {
+  const ext = await detectImageExt(input);
+  if (!ext) throw new ApiError(400, "unsupported_file_type", "Unsupported file type");
   const dimensions = await imageDimensions(input);
-  let size: number;
-  if (typeof input === "string") {
-    const limit = await getUploadLimitBytes();
-    size = (await objectStat(prefix, key, effective)).size;
-    if (size > limit) {
-      throw new ApiError(400, "upload_too_large", "Upload too large", { limit });
-    }
-  } else {
-    size = input.byteLength;
-  }
-  const md5 = Buffer.isBuffer(input) ? md5Buffer(input) : await calculateObjectMd5(prefix, key, effective);
-  return { ...dimensions, ext: actualExt, md5, size };
+  return { ...dimensions, ext, md5: md5Buffer(input), size: input.byteLength };
+}
+
+// Infers the device axis from image dimensions, matching the uploader's
+// width >= height => pc heuristic. Used by link import, where there's no client to
+// detect it. (Brightness has no dimension-based equivalent — auto-brightness would
+// analyze the decoded image bytes separately.)
+export function detectDeviceFromDimensions(width: number, height: number): "pc" | "mb" {
+  return width >= height ? "pc" : "mb";
 }
 
 export async function createThumbnail(input: ImageInput) {
+  const thumbnail = getThumbnailSettings();
   return sharp(input)
     .rotate()
-    .resize({ width: appConfig.thumbnail.longEdge, height: appConfig.thumbnail.longEdge, fit: "inside", withoutEnlargement: true })
-    .webp({ quality: appConfig.thumbnail.quality })
+    .resize({ width: thumbnail.long_edge, height: thumbnail.long_edge, fit: "inside", withoutEnlargement: true })
+    .webp({ quality: thumbnail.quality })
     .toBuffer();
 }
 
-export async function makeThumb(objectKey: string, backend?: StorageBackend) {
-  const effective = backend ?? (await getStorageConfig()).backend;
-  const input = effective === "s3" ? await readStorageBuffer("objects", objectKey, effective) : safeStoragePath("objects", objectKey);
-  await writeStorageBuffer("thumbs", thumbnailObjectKey(objectKey), await createThumbnail(input), "image/webp", effective);
+// Returns the generated thumbnail's byte size so callers can record it for
+// storage-usage stats. (Lazy-serve regenerations ignore the return value.)
+export async function makeThumb(objectKey: string, slug?: string) {
+  const targetSlug = slug ?? await getDefaultStorageSlug();
+  const config = await getStorageBackend(targetSlug);
+  // Local objects are thumbnailed straight from disk; remote backends are read into a
+  // buffer first.
+  const input = config.type === "local" ? safeStoragePath("objects", objectKey) : await readStorageBuffer("objects", objectKey, targetSlug);
+  const thumbnail = await createThumbnail(input);
+  await writeStorageBuffer("thumbs", thumbnailObjectKey(objectKey), thumbnail, "image/webp", targetSlug);
+  return thumbnail.byteLength;
 }
 
 export function contentType(ext: string) {

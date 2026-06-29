@@ -3,6 +3,8 @@ import { pool, pingDb } from "../core/db.js";
 import { fail, routeError } from "../core/http.js";
 import { pingRedis } from "../core/redis.js";
 
+// Thin HTTP layer for liveness/readiness probes; pings DB + Redis (core/db.ts,
+// core/redis.ts). No domain logic.
 export function registerHealthRoutes(app: Hono) {
   app.all("/livez", async (c) => {
     if (c.req.method !== "GET") return routeError({ status: 405, message: "Method Not Allowed" });

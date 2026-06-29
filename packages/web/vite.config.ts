@@ -27,7 +27,35 @@ export default defineConfig({
   plugins: [react()],
   build: {
     outDir: "dist",
-    emptyOutDir: true
+    emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        // 缓存失效指纹：把默认 8 位哈希缩短为 6 位（仍是内容哈希，base64 字符集不变）。任一资源内容
+        // 变化即改名，CDN/浏览器据此拉新文件、不会命中旧缓存。6 位 base64 ≈ 687 亿种，足够防碰撞。
+        entryFileNames: "assets/[name]-[hash:6].js",
+        chunkFileNames: "assets/[name]-[hash:6].js",
+        assetFileNames: "assets/[name]-[hash:6][extname]",
+        // Split the framework deps into their own long-cache chunks, separate from app code
+        // (which is further route-split via React.lazy in AppRoutes), so a public visitor
+        // doesn't download the admin bundle and vendor code stays cached across app deploys.
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return undefined;
+          if (id.includes("@tanstack")) return "query-vendor";
+          if (/[\\/](react-router-dom|react-router|react-dom|react|scheduler)[\\/]/.test(id)) return "react-vendor";
+          return undefined;
+        }
+      }
+    }
+  },
+  // Web Worker（md5.worker）走独立的打包管线，命名不受 build.rollupOptions 影响，单独同样设为 6 位哈希。
+  worker: {
+    rollupOptions: {
+      output: {
+        entryFileNames: "assets/[name]-[hash:6].js",
+        chunkFileNames: "assets/[name]-[hash:6].js",
+        assetFileNames: "assets/[name]-[hash:6][extname]"
+      }
+    }
   },
   server: {
     // Only the API surface is proxied. /media and /thumbs are intentionally NOT

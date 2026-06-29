@@ -70,15 +70,35 @@ input, textarea {
   border-radius: 6px;
 }
 textarea { min-height: 76px; resize: vertical; }
-.theme-input-control { width: 100%; min-width: 0; }
-/* A theme that collides with a reserved subdomain prefix (random / static) is
-   rejected on save; flag it inline so it's caught before submitting. */
-.theme-input-control input[aria-invalid="true"] { border-color: #d64545; box-shadow: 0 0 0 1px #d64545; }
+/* Match the greyed-out look disabled buttons get (button:disabled), so disabled
+   text fields, textareas and the theme typeahead read as locked too — e.g. upload
+   cards during/after upload, where only the custom selects greyed out before. */
+input:disabled, textarea:disabled { opacity: .45; cursor: not-allowed; }
+/* 通用的非法字段红框：任何被标记 aria-invalid 的输入（如不符合策略的密码、含非法字符的 slug）。 */
+input[aria-invalid="true"] { border-color: #d64545; box-shadow: 0 0 0 1px #d64545; }
 
+/* 只读标签 chip 的基础样式：画廊看图弹窗与后台可编辑标签编辑器共用。 */
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 4px 3px 10px;
+  background: #eef2f7;
+  border: 1px solid #dce3ec;
+  border-radius: 999px;
+  font-size: 13px;
+  line-height: 1.4;
+  /* Keep their natural size and overflow (scroll) rather than squishing on one line. */
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+/* Read-only tag chips in the image detail dialog. */
+.image-detail-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+/* These chips have no remove button, so they don't need the editable chip's extra
+   left padding (which is there to balance that button). Symmetric padding keeps the
+   label centred in the pill instead of looking shifted to the right. */
+.image-detail-tags .tag-chip { padding: 3px 10px; }
 .select-control { position: relative; width: 100%; min-width: 0; }
-/* Storage-backend pickers only hold short labels (本地存储 / 对象存储), so they get a
-   compact fixed width instead of stretching; the portal menu follows the trigger. */
-.select-control.is-storage-select { width: 120px; min-width: 120px; flex: 0 0 auto; }
 .select-trigger {
   position: relative;
   width: 100%;
@@ -135,6 +155,8 @@ textarea { min-height: 76px; resize: vertical; }
 .select-menu > button.is-selected::after { content: "✓"; position: absolute; right: 10px; }
 .select-menu.is-closing { pointer-events: none; animation: select-menu-out .12s ease-in forwards; }
 .theme-combo-menu > button.is-active { background: #eef5ff; }
+/* Secondary slug shown after the display name in the theme/tag typeahead rows. */
+.theme-combo-menu > button .facet-slug { margin-left: auto; padding-left: 12px; color: #97a1b0; font-size: 12px; }
 .modal-footer-actions { display: flex; align-items: center; gap: 12px; }
 /* Shared in-modal image-list scroll area (batch editor + uploader): fills the gap
    between the fixed header/property rows and the footer, sits flush to both divider
@@ -182,12 +204,6 @@ button.active, .button {
   color: white;
 }
 .button.secondary { background: #fff; color: #20242a; border-color: #c9d1dc; }
-.danger-button, button.danger-button {
-  color: #a13a32;
-  background: #fff1ef;
-  border-color: #e8aaa4;
-}
-.danger-button:hover, button.danger-button:hover { color: #84271f; background: #ffe7e3; border-color: #d98179; }
 /* A gentle uniform darken on hover for every clickable button and button-styled link
    — the same feedback the 清空 buttons give, a touch lighter. Filter (not a bg swap)
    so it works on any base color; dropdown triggers open a menu so they're excluded. */
@@ -229,19 +245,22 @@ button:not(:disabled):not(.select-trigger):hover,
 .topbar .desktop-nav a {
   min-height: 34px;
   padding: 6px 10px;
-  border-radius: 999px;
+  border-radius: 8px;
   display: inline-flex;
   align-items: center;
   gap: 8px;
   color: #495260;
   transition: color .16s ease, background-color .16s ease, font-weight .16s ease, transform .1s ease;
 }
-.topbar .desktop-nav a:hover, .topbar .desktop-nav a.active { color: #1f6feb; font-weight: 700; }
+.topbar .desktop-nav a:hover { color: #1f6feb; font-weight: 700; }
 .topbar .desktop-nav a:active { transform: scale(.95); }
 .pressable:active { transform: scale(.95); }
+/* Active nav item = solid dark-blue rounded-rect tag with white text (≈6:1 contrast,
+   clears WCAG AA; the prior #1f6feb-on-#eef5ff pill measured ~4.2:1, which Lighthouse flagged). */
 .topbar .desktop-nav a.active {
-  color: #1f6feb;
-  background: #eef5ff;
+  color: #fff;
+  background: #2056e0;
+  font-weight: 700;
 }
 .topbar .desktop-nav .app-icon {
   width: 1rem;
@@ -323,6 +342,8 @@ button:not(:disabled):not(.select-trigger):hover,
 .theme-search-results button, .theme-selected-list button { min-height: 30px; padding: 4px 9px; line-height: 20px; }
 .theme-search-results button { color: #20242a; background: #fff; border-color: #dce2ea; }
 .theme-search-results button:hover, .theme-search-results button:focus-visible { background: #f1f3f6; border-color: #aeb8c5; }
+/* Result pills show slug + display name: keep the display name muted and spaced after the slug. */
+.theme-search-results button .facet-slug { margin-left: 6px; color: #97a1b0; font-size: 12px; }
 .theme-menu-divider { margin: 10px 0; border-top: 1px solid #dce2ea; }
 .theme-selected-list { display: grid; gap: 2px; }
 .theme-selected-list strong { font-size: 13px; color: #66717f; }

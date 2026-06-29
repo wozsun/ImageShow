@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "./Icon.js";
 
-export async function copyText(value: string) {
+async function copyText(value: string) {
   if (navigator.clipboard?.writeText) {
     try {
       await navigator.clipboard.writeText(value);

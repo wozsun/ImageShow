@@ -1,8 +1,25 @@
 .settings-grid {
   display: grid;
-  grid-template-columns: minmax(360px, 1.2fr) minmax(280px, .8fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
 }
+/* Site-config save/reload sit in the page header's top-right; the save/reload feedback
+   shows inline to their left in the header's free space (desktop). */
+.settings-head-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  min-width: 0;
+}
+/* Stable button caption (StableLabel): the idle and busy texts are stacked in one grid
+   cell, so the cell always reserves the wider of the two and the hidden one still holds its
+   space. Swapping idle ↔ 保存中/运行中/清理中 then neither resizes the button nor shifts the
+   leading icon — whichever text is longer, there's no click-time width jump. */
+.btn-label-slot { display: inline-grid; }
+.btn-label-slot > .btn-label-cell { grid-area: 1 / 1; text-align: center; white-space: nowrap; }
+.btn-label-slot > .btn-label-cell.is-hidden { visibility: hidden; }
 .settings-grid section, .check-result section {
   background: #fff;
   border: 1px solid #dce2ea;
@@ -21,11 +38,15 @@
   font-size: 14px;
   line-height: 1.45;
 }
-.settings-grid label:has(input[type="checkbox"]) {
+/* Checkbox rows (站点配置的「标题点击打开原图」、存储后端的 Path-style）lay the box beside its
+   label instead of stacking it on top, and keep the box at its natural 16px size. */
+.settings-grid label:has(input[type="checkbox"]),
+.operation-body label:has(input[type="checkbox"]) {
   grid-template-columns: auto 1fr;
   align-items: center;
 }
-.settings-grid input[type="checkbox"] {
+.settings-grid input[type="checkbox"],
+.operation-body input[type="checkbox"] {
   width: 16px;
   height: 16px;
   padding: 0;
@@ -56,21 +77,75 @@
   padding: 0;
   background: transparent;
 }
-.settings-card-actions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
+/* Compact, single-line feedback pill for the header (vs. the block variant used in the
+   storage card list); ellipsizes long error text instead of pushing the buttons. */
+.settings-feedback.is-inline {
+  margin: 0;
+  padding: 7px 12px;
+  min-width: 0;
+  max-width: 420px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  animation: none;
 }
 .storage-test-button { min-width: 154px; }
-.storage-provider-row { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
-.storage-provider-row label { flex: 0 0 auto; margin-bottom: 0; }
-/* Widen this card's backend picker (the uploader footer one keeps the base 120px),
-   and match the 设为默认上传位置 button's height to the select trigger (38px). */
-.storage-provider-row .select-control.is-storage-select { width: 200px; min-width: 200px; }
-.storage-provider-row button { min-height: 38px; }
 .storage-default-note { display: flex; align-items: center; gap: 8px; margin: 0 0 14px; font-size: 14px; font-weight: 600; color: #20242a; }
 .storage-default-note strong { padding: 2px 10px; border-radius: 999px; background: #e8f1ff; color: #1f6feb; font-weight: 700; }
+
+/* Storage backends as cards: title = display name, subtitle = slug + type, the default
+   toggle top-right; the footer holds the enable toggle (left) and the 拖动/编辑/删除
+   actions (right). A dashed "add" card trails. Card width + grid gap match the 图片管理
+   image cards (minmax 340 / gap 8). */
+.storage-card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 8px; margin: 4px 0 14px; }
+.storage-backend-card { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border: 1px solid #e2e6ec; border-radius: 12px; background: #fff; }
+.storage-backend-card.is-default { border-color: #1f6feb; box-shadow: 0 0 0 1px rgba(31, 111, 235, 0.25); }
+.storage-backend-card.is-off { opacity: 0.7; }
+/* Dimmed while its grip handle drags it to a new position. */
+.storage-backend-card.is-dragging { opacity: 0.55; }
+.storage-card-body { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+.storage-card-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 16px; color: #20242a; }
+.storage-card-title strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.storage-card-meta { font-size: 13px; color: #8a93a0; }
+/* Default-upload toggle (top-right): a compact star pill. Highlighted blue when this is
+   the current default; an outline "设为默认" otherwise. */
+.storage-default-toggle { flex: 0 0 auto; min-height: 28px; gap: 5px; padding: 3px 10px; border-radius: 999px; border: 1px solid #d0d5dd; background: #fff; color: #4a525d; font-size: 12px; font-weight: 600; }
+.storage-default-toggle.is-default { border-color: #9fc2f5; background: #e8f1ff; color: #1f6feb; }
+/* The default pill is disabled (it's a static indicator), but must stay fully visible. */
+.storage-default-toggle.is-default:disabled { opacity: 1; cursor: default; }
+.storage-default-toggle .app-icon { width: 14px; height: 14px; flex-basis: 14px; }
+.storage-card-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; border-top: 1px solid #eef1f5; padding-top: 8px; }
+.storage-card-actions-left { display: flex; align-items: center; gap: 8px; min-height: 30px; }
+/* Footer button height + icon-button size match the 图片管理 image-card footer (36×34). */
+.storage-card-actions button { min-height: 34px; }
+.storage-card-actions .icon { width: 36px; flex: 0 0 36px; }
+/* Enable/disable toggle at the card's bottom-left: green dot + text when on, grey when off. */
+.storage-enable-toggle { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; border: 1px solid #d0d5dd; background: #f3f4f6; color: #6b7280; font-size: 12px; font-weight: 600; cursor: pointer; }
+.storage-enable-toggle .storage-enable-dot { width: 8px; height: 8px; border-radius: 50%; background: #9ca3af; }
+.storage-enable-toggle.is-on { background: #e8f7ee; border-color: #b9dec4; color: #1f9d57; }
+.storage-enable-toggle.is-on .storage-enable-dot { background: #1f9d57; }
+.storage-enable-toggle:disabled { cursor: default; opacity: .7; }
+.storage-card-actions-right { display: flex; align-items: center; gap: 6px; }
+.storage-card-actions .icon.is-danger { color: #d23b3b; }
+/* Grip handle: drag is only armed while it's held (see BackendCard), mirroring 主题/标签. */
+.storage-drag-handle { cursor: grab; }
+.storage-drag-handle:active { cursor: grabbing; }
+.storage-add-card { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 132px; border: 1px dashed #c4ccd6; border-radius: 12px; background: #fafbfc; color: #4a525d; font-size: 14px; cursor: pointer; }
+.storage-add-card:hover:not(:disabled) { border-color: #1f6feb; color: #1f6feb; }
+/* The storage edit modal scrolls inside its body via the custom OverlayScrollbar (like
+   the batch editor): the form is a flex column so the header/footer stay pinned. */
+.edit-modal form.storage-edit-modal { display: flex; flex-direction: column; overflow: hidden; }
+.storage-edit-modal .operation-body { display: flex; flex-direction: column; gap: 10px; flex: 1; min-height: 0; overflow: auto; }
+.storage-modal-left { display: flex; gap: 8px; margin-right: auto; }
+/* Header right cluster: the "保存成功" pill sits just left of the close button (a save no
+   longer auto-closes the editor), so success is acknowledged without losing the form. */
+.storage-modal-header-right { display: flex; align-items: center; gap: 10px; }
+.storage-saved-pill { display: inline-flex; align-items: center; gap: 4px; color: #0f7b55; font-size: 13px; font-weight: 600; white-space: nowrap; }
+/* On a narrow screen let the footer wrap (连接测试/设为默认 on one row, 取消/新建 on the next)
+   and keep every label on one line, so the 新建/保存 button never gets crushed until its two
+   characters stack vertically. */
+.storage-edit-modal footer { flex-wrap: wrap; row-gap: 10px; }
+.storage-edit-modal footer button { white-space: nowrap; }
 
 /* Check-page header actions: row 1 = the checks, row 2 = the storage operations
    right-aligned under them, so the heavier operations sit apart from the checks. */
@@ -99,6 +174,12 @@
   gap: 6px;
   color: #495260;
 }
+/* 账户设置：自助修改密码表单（所有角色可见，是图片管理员唯一的设置页）。 */
+.account-form { max-width: 420px; display: grid; gap: 14px; }
+.account-form label { display: grid; gap: 6px; color: #495260; }
+.account-form .button { justify-self: start; }
+.account-note { margin: 0; font-size: 13px; line-height: 1.5; }
+.form-success { display: flex; align-items: center; gap: 6px; margin: 0; color: #1a7f37; }
 .check-summary {
   margin-bottom: 16px;
   padding: 14px;

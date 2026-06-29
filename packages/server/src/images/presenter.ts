@@ -1,8 +1,8 @@
-import type { Brightness, Device } from "@imageshow/shared";
+import { adminApiBasePath, type Brightness, type Device } from "@imageshow/shared";
 import { setImageLookups } from "../core/redis.js";
-import type { StorageBackend } from "../config/settings.js";
 import { thumbnailObjectKey } from "../storage/image-paths.js";
-import { createUploadTarget, publicImageUrls } from "../storage/storage.js";
+import { publicImageUrls } from "../storage/storage.js";
+import { getTagsForImages } from "../tags/query.js";
 
 export type ImageRecord = {
   id: string;
@@ -17,7 +17,11 @@ export type ImageRecord = {
   ext: string;
   md5?: string | null;
   object_key: string;
-  storage_backend?: StorageBackend;
+  storage_slug?: string;
+  is_link?: boolean;
+  // Optional single author slug (FK -> author.slug), NULL when unset. Resolved to a display
+  // name + link on the client via the gallery facets, like theme.
+  author?: string | null;
   title?: string | null;
   description?: string | null;
   source?: string | null;
@@ -34,37 +38,34 @@ export type UploadSessionRecord = {
   id: string;
   status: string;
   expires_at: string | Date;
-  staging_object_key: string;
-  expected_size: number | string;
-  storage_backend: StorageBackend;
-  metadata_payload?: { md5?: string } | null;
 };
 
-export async function uploadSessionResponse(row: UploadSessionRecord) {
-  const expiresAt = new Date(row.expires_at).getTime();
-  const target = await createUploadTarget({
-    ...row,
-    expected_size: Number(row.expected_size),
-    content_md5_hex: typeof row.metadata_payload?.md5 === "string" ? row.metadata_payload.md5 : undefined
-  });
+// Every upload streams through this server (browser → server → backend), so the
+// target is always the same same-origin endpoint regardless of which backend the
+// session is pinned to. The browser PUTs there with the admin session cookie and
+// CSRF header — see docs/guide/flows for why we don't presign direct-to-S3 PUTs.
+export function uploadSessionResponse(row: UploadSessionRecord) {
   return {
     id: row.id,
     status: row.status,
-    upload_url: target.upload_url,
-    upload_headers: target.upload_headers,
-    upload_backend: target.backend,
-    expires_at: new Date(expiresAt).toISOString()
+    upload_url: `${adminApiBasePath}/uploads/${row.id}/file`,
+    expires_at: new Date(row.expires_at).toISOString()
   };
 }
 
-export async function publicImage(row: ImageRecord) {
-  const backend: StorageBackend = row.storage_backend ?? "local";
-  const urls = await publicImageUrls(row.object_key, backend);
+export async function publicImage(row: ImageRecord, tags?: string[]) {
+  const slug = row.storage_slug ?? "local";
+  const isLink = Boolean(row.is_link);
+  const urls = await publicImageUrls(row.object_key, slug, isLink, isLink ? { id: row.id, device: row.device, brightness: row.brightness, theme: row.theme, ext: row.ext } : undefined);
+  // Single-image callers (e.g. fetch/edit one) let this fetch its own tags; list
+  // callers pass a pre-fetched batch (publicImages) to avoid a per-row query.
+  const tagList = tags ?? (await getTagsForImages([row.id])).get(row.id) ?? [];
   return {
     id: row.id,
     device: row.device,
     brightness: row.brightness,
     theme: row.theme,
+    author: row.author ?? "",
     category_key: row.category_key,
     category_index: row.category_index,
     index_key: row.index_key,
@@ -73,12 +74,14 @@ export async function publicImage(row: ImageRecord) {
     ext: row.ext,
     md5: row.md5 ?? "",
     object_key: row.object_key,
-    storage_backend: backend,
+    storage_slug: slug,
+    is_link: isLink,
     title: row.title ?? "",
     description: row.description ?? "",
     source: row.source ?? "",
     original: row.original ?? "",
     status: row.status,
+    tags: tagList,
     deleted_at: row.deleted_at ?? null,
     created_at: row.created_at ?? null,
     updated_at: row.updated_at ?? null,
@@ -87,15 +90,18 @@ export async function publicImage(row: ImageRecord) {
 }
 
 export async function publicImages(rows: ImageRecord[]) {
-  return Promise.all(rows.map((row) => publicImage(row)));
+  const tagMap = await getTagsForImages(rows.map((row) => row.id));
+  return Promise.all(rows.map((row) => publicImage(row, tagMap.get(row.id) ?? [])));
 }
 
-export function publicImagesCacheKey(q: { status: string; d?: string; b?: string; t?: string; cursor?: string; limit: number }) {
+export function publicImagesCacheKey(q: { status: string; d?: string; b?: string; t?: string; tag?: string; a?: string; cursor?: string; limit: number }) {
   return [
     `status=${q.status}`,
     `d=${q.d ?? ""}`,
     `b=${q.b ?? ""}`,
     `t=${q.t ?? ""}`,
+    `tag=${q.tag ?? ""}`,
+    `a=${q.a ?? ""}`,
     `cursor=${q.cursor ?? ""}`,
     `limit=${q.limit}`
   ].map((part) => encodeURIComponent(part)).join("&");
@@ -104,11 +110,14 @@ export function publicImagesCacheKey(q: { status: string; d?: string; b?: string
 export async function cacheImageLookups(items: PublicImage[]) {
   const lookups = [];
   for (const item of items) {
+    // Link images resolve their thumbnail (link.<domain>/thumbs) and proxied original
+    // (link.<domain>/media) by id at serve time, so they need no object/thumb lookup entry.
+    if (item.is_link) continue;
     lookups.push({
       object_key: item.object_key,
       thumb_key: thumbnailObjectKey(item.object_key),
       ext: item.ext,
-      backend: item.storage_backend
+      slug: item.storage_slug
     });
   }
   await setImageLookups(lookups);

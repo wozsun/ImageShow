@@ -1,5 +1,6 @@
+/* 全局样式包：公共页（首页/画廊）与共享组件的样式，未登录访客也会加载。
+   后台样式不在此处，而由 AdminShell.tsx 引入 styles/admin.css，单独成 admin 分块，公共访客不会下载。 */
 @import "./styles/base.css";
 @import "./styles/home.css";
 @import "./styles/gallery.css";
-@import "./styles/admin.css";
 @import "./styles/responsive.css";

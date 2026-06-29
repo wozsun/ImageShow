@@ -22,6 +22,15 @@ export default defineConfig({
         ]
       },
       {
+        text: "架构与原理",
+        items: [
+          { text: "架构总览", link: "/guide/architecture" },
+          { text: "项目结构", link: "/guide/project-structure" },
+          { text: "数据库结构", link: "/guide/database" },
+          { text: "功能与流程", link: "/guide/flows" }
+        ]
+      },
+      {
         text: "部署",
         items: [
           { text: "配置说明", link: "/guide/configuration" },

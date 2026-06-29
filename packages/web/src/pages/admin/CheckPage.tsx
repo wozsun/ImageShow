@@ -1,20 +1,26 @@
 import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { api } from "../../lib/api.js";
 import { adminApiBasePath } from "../../lib/constants.js";
+import { errorMessage } from "../../lib/formatters.js";
 import { Icon } from "../../components/Icon.js";
 import { SelectMenu } from "../../components/SelectMenu.js";
+import { StableLabel } from "../../components/StableLabel.js";
 import { useAnimatedClose } from "../../components/useAnimatedClose.js";
+import type { StorageBackendOption } from "../../lib/types.js";
 
 export function CheckPage() {
   const [result, setResult] = useState<unknown>(null);
   const [running, setRunning] = useState("");
-  const [migrationDirection, setMigrationDirection] = useState<"local-to-s3" | "s3-to-local">("local-to-s3");
+  const [migrateSource, setMigrateSource] = useState("");
+  const [migrateTarget, setMigrateTarget] = useState("");
+  const { data: storageOptionsData } = useQuery<{ backends: StorageBackendOption[] }>({ queryKey: ["storage-options"], queryFn: () => api(`${adminApiBasePath}/storage/options`) });
+  const storageOptions = (storageOptionsData?.backends ?? []).map((backend) => ({ value: backend.slug, label: backend.display_name || backend.slug }));
   const [operationModal, setOperationModal] = useState<"migrate-storage-location" | "migrate-storage-paths" | "storage-cleanup" | null>(null);
   const checks = useMemo(() => [
     { name: "db", label: "数据库" },
     { name: "storage", label: "存储" },
     { name: "redis", label: "Redis" },
-    { name: "cors", label: "CORS" },
     { name: "trash", label: "回收站" },
     { name: "all", label: "全部" }
   ], []);
@@ -23,7 +29,7 @@ export function CheckPage() {
     try {
       setResult(await api(`${adminApiBasePath}/check/${name}`, { method: "POST", body: body ? JSON.stringify(body) : undefined }));
     } catch (error) {
-      setResult({ ok: false, error: error instanceof Error ? error.message : String(error) });
+      setResult({ ok: false, error: errorMessage(error) });
     } finally {
       setRunning("");
     }
@@ -34,13 +40,60 @@ export function CheckPage() {
         <div><h1>检查</h1><p>check</p></div>
         <div className="check-actions">
           <div className="actions">
-            {checks.map((check) => <button type="button" key={check.name} disabled={Boolean(running)} onClick={() => void runCheck(check.name)}><Icon name="refresh-line" />{running === check.name ? "运行中" : check.label}</button>)}
+            {checks.map((check) => (
+              <button
+                type="button"
+                key={check.name}
+                disabled={Boolean(running)}
+                onClick={() => void runCheck(check.name)}
+              >
+                <Icon name="refresh-line" /><StableLabel idle={check.label} busyText="运行中" busy={running === check.name} />
+              </button>
+            ))}
           </div>
           <div className="actions">
-            <button type="button" disabled={Boolean(running)} onClick={() => void runCheck("backfill-md5")}><Icon name="fingerprint-line" />{running === "backfill-md5" ? "补全中" : "补全 MD5"}</button>
-            <button type="button" disabled={Boolean(running)} onClick={() => setOperationModal("migrate-storage-location")}><Icon name="database-2-line" />{running === "migrate-storage-location" ? "迁移中" : "迁移存储后端"}</button>
-            <button type="button" disabled={Boolean(running)} onClick={() => setOperationModal("migrate-storage-paths")}><Icon name="refresh-line" />{running === "migrate-storage-paths" ? "整理中" : "整理路径结构"}</button>
-            <button className="danger-button" type="button" disabled={Boolean(running)} onClick={() => setOperationModal("storage-cleanup")}><Icon name="delete-bin-6-line" />{running === "storage-cleanup" ? "清理中" : "清理无效存储"}</button>
+            <button
+              type="button"
+              disabled={Boolean(running)}
+              onClick={() => void runCheck("db-repair")}
+            >
+              <Icon name="scales-3-line" /><StableLabel idle="对账修复" busyText="修复中" busy={running === "db-repair"} />
+            </button>
+            <button
+              type="button"
+              disabled={Boolean(running)}
+              onClick={() => void runCheck("backfill-md5")}
+            >
+              <Icon name="fingerprint-line" /><StableLabel idle="补全 MD5" busyText="补全中" busy={running === "backfill-md5"} />
+            </button>
+            <button
+              type="button"
+              disabled={Boolean(running)}
+              onClick={() => {
+                setOperationModal("migrate-storage-location");
+                if (storageOptions.length) {
+                  setMigrateSource((value) => value || storageOptions[0].value);
+                  setMigrateTarget((value) => value || (storageOptions[1]?.value ?? storageOptions[0].value));
+                }
+              }}
+            >
+              <Icon name="database-2-line" /><StableLabel idle="迁移存储后端" busyText="迁移中" busy={running === "migrate-storage-location"} />
+            </button>
+            <button
+              type="button"
+              disabled={Boolean(running)}
+              onClick={() => setOperationModal("migrate-storage-paths")}
+            >
+              <Icon name="refresh-line" /><StableLabel idle="整理路径结构" busyText="整理中" busy={running === "migrate-storage-paths"} />
+            </button>
+            <button
+              className="danger-button"
+              type="button"
+              disabled={Boolean(running)}
+              onClick={() => setOperationModal("storage-cleanup")}
+            >
+              <Icon name="delete-bin-6-line" /><StableLabel idle="清理无效存储" busyText="清理中" busy={running === "storage-cleanup"} />
+            </button>
           </div>
         </div>
       </header>
@@ -48,12 +101,15 @@ export function CheckPage() {
         <CheckOperationModal
           operation={operationModal}
           running={running}
-          migrationDirection={migrationDirection}
-          onDirectionChange={setMigrationDirection}
+          source={migrateSource}
+          target={migrateTarget}
+          options={storageOptions}
+          onSourceChange={setMigrateSource}
+          onTargetChange={setMigrateTarget}
           onClose={() => setOperationModal(null)}
           onRun={async () => {
             if (operationModal === "migrate-storage-location") {
-              await runCheck("migrate-storage-location", { direction: migrationDirection });
+              await runCheck("migrate-storage-location", { source: migrateSource, target: migrateTarget });
             } else {
               await runCheck(operationModal);
             }
@@ -65,11 +121,14 @@ export function CheckPage() {
   );
 }
 
-function CheckOperationModal({ operation, running, migrationDirection, onDirectionChange, onClose, onRun }: {
+function CheckOperationModal({ operation, running, source, target, options, onSourceChange, onTargetChange, onClose, onRun }: {
   operation: "migrate-storage-location" | "migrate-storage-paths" | "storage-cleanup";
   running: string;
-  migrationDirection: "local-to-s3" | "s3-to-local";
-  onDirectionChange: (value: "local-to-s3" | "s3-to-local") => void;
+  source: string;
+  target: string;
+  options: { value: string; label: string }[];
+  onSourceChange: (value: string) => void;
+  onTargetChange: (value: string) => void;
   onClose: () => void;
   onRun: () => Promise<void>;
 }) {
@@ -84,24 +143,65 @@ function CheckOperationModal({ operation, running, migrationDirection, onDirecti
   const runningText = isLocationMigration ? "迁移中" : isCleanup ? "清理中" : "整理中";
   const exit = useAnimatedClose(onClose);
   return (
-    <div className={`modal edit-modal ${exit.closing ? "is-closing" : ""}`} onAnimationEnd={exit.onAnimationEnd} onClick={running ? undefined : () => exit.requestClose()}>
-      <form className="operation-modal" onSubmit={async (event) => { event.preventDefault(); await onRun(); exit.requestClose(); }} onClick={(event) => event.stopPropagation()}>
+    <div
+      className={`modal edit-modal ${exit.closing ? "is-closing" : ""}`}
+      onAnimationEnd={exit.onAnimationEnd}
+      onClick={running ? undefined : () => exit.requestClose()}
+    >
+      <form
+        className="operation-modal"
+        onSubmit={async (event) => { event.preventDefault(); await onRun(); exit.requestClose(); }}
+        onClick={(event) => event.stopPropagation()}
+      >
         <header>
           <div>
             <h2>{title}</h2>
             <p>{description}</p>
           </div>
-          <button className="icon close pressable" type="button" title="关闭" disabled={Boolean(running)} onClick={() => exit.requestClose()}><Icon name="close-line" /></button>
+          <button
+            className="icon close pressable"
+            type="button"
+            title="关闭"
+            disabled={Boolean(running)}
+            onClick={() => exit.requestClose()}
+          >
+            <Icon name="close-line" />
+          </button>
         </header>
         <div className="operation-body">
           {isLocationMigration && (
-            <label>迁移方向<SelectMenu value={migrationDirection} onChange={(value) => onDirectionChange(value as "local-to-s3" | "s3-to-local")} options={[{ value: "local-to-s3", label: "本地迁往 S3" }, { value: "s3-to-local", label: "S3 迁往本地" }]} ariaLabel="迁移方向" /></label>
+            <>
+              <label>
+                源后端
+                <SelectMenu
+                  value={source}
+                  onChange={onSourceChange}
+                  options={options}
+                  ariaLabel="源后端"
+                />
+              </label>
+              <label>
+                目标后端
+                <SelectMenu
+                  value={target}
+                  onChange={onTargetChange}
+                  options={options}
+                  ariaLabel="目标后端"
+                />
+              </label>
+            </>
           )}
           <p className="notice-line">此操作会修改存储对象。执行前请先运行存储检查，确认检查结果，并避免同时上传或批量编辑图片。</p>
         </div>
         <footer>
           <button type="button" disabled={Boolean(running)} onClick={() => exit.requestClose()}>取消</button>
-          <button className="button" type="submit" disabled={Boolean(running)}><Icon name="refresh-line" />{running === operation ? runningText : "开始执行"}</button>
+          <button
+            className="button"
+            type="submit"
+            disabled={Boolean(running) || (isLocationMigration && (!source || !target || source === target))}
+          >
+            <Icon name="refresh-line" /><StableLabel idle="开始执行" busyText={runningText} busy={running === operation} />
+          </button>
         </footer>
       </form>
     </div>
@@ -125,7 +225,7 @@ function CheckResult({ result }: { result: unknown }) {
           return (
             <section key={key} className={issue ? "check-card warn" : "check-card ok"}>
               <div className="check-card-head">
-                <h2>{key}</h2>
+                <h2 title={key}>{checkResultLabel(key)}</h2>
                 <span>{issue ? `${issue} 项` : "正常"}</span>
               </div>
               <pre>{JSON.stringify(value, null, 2)}</pre>
@@ -135,6 +235,63 @@ function CheckResult({ result }: { result: unknown }) {
       </div>
     </>
   );
+}
+
+// Maps the raw check-result keys (returned across db / storage / redis / trash / cleanup /
+// migration checks) to clear Chinese card titles. Falls back to the raw key for anything
+// new, with the original key always available on hover (title attr).
+const CHECK_RESULT_LABELS: Record<string, string> = {
+  // 数据库检查
+  categories: "分类计数",
+  mismatches: "计数不一致",
+  index_gaps: "序号缺口",
+  operations: "进行中 / 失败的任务",
+  // 对账修复
+  counts_fixed: "已修正计数",
+  index_gaps_fixed: "已修正序号",
+  // 回收站
+  deleted_count: "回收站数量",
+  candidates: "待处理对象",
+  // 存储检查
+  missing_objects: "缺失的原图",
+  missing_thumbs: "缺失的缩略图",
+  missing_trash: "缺失的回收站对象",
+  orphan_objects: "游离的原图",
+  orphan_thumbs: "游离的缩略图",
+  orphan_trash: "游离的回收站对象",
+  staging_files: "上传暂存文件",
+  unavailable_backends: "无法访问的后端",
+  // 清理无效存储
+  removed: "已删除",
+  failures: "失败项",
+  // 整理路径结构
+  migrated: "已迁移",
+  unchanged: "无需迁移",
+  missing: "源对象缺失",
+  thumbs: "缩略图数",
+  errors: "错误明细",
+  error_count: "错误数量",
+  // 迁移存储后端
+  migration: "迁移结果",
+  // Redis 状态
+  connection: "连接状态",
+  prefix_counts: "键数量统计",
+  core_keys: "核心键",
+  folder_summary: "目录映射摘要",
+  folder_map: "目录映射",
+  random_objects: "随机图索引",
+  gallery_options: "画廊选项缓存",
+  issues: "发现的问题",
+  // 全部检查（概览）
+  images: "图片总数",
+  default_backend: "默认存储后端",
+  storage: "各后端对象统计",
+  // 补全 MD5
+  backfilled: "已补全 MD5"
+};
+
+function checkResultLabel(key: string) {
+  return CHECK_RESULT_LABELS[key] ?? key;
 }
 
 function isIssueKey(key: string) {

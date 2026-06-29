@@ -1,0 +1,160 @@
+// ImageShow 运行时配置文件示例 / Runtime config file example
+// ---------------------------------------------------------------------------
+// 实际文件为 data/config.json（生产环境 /app/data/config.json），是纯 JSON、不支持注释。
+// 本文件用 .jsonc 格式仅作字段参考，列出所有可配置项及其默认值。
+// The real file is data/config.json (/app/data/config.json in production): plain JSON, no
+// comments. This .jsonc is a reference only — it lists every option with its default value.
+//
+// 说明 / Notes:
+// - 首次启动时这些字段由对应环境变量播种（见 .env.example），之后以 config.json 为准；
+//   改完文件可在后台「设置 → 读取配置文件」热加载（连接类的 database/redis/port 仍需重启）。
+//   On first boot these are seeded from env vars (see .env.example); afterwards config.json is
+//   authoritative. Edit then hot-reload via Settings → "读取配置文件" (database/redis/port still
+//   need a container restart).
+// - 存储后端（本地 / S3 / WebDAV）与管理员账号存在 PostgreSQL，不在此文件。
+//   Storage backends (local / S3 / WebDAV) and admin accounts live in PostgreSQL, not here.
+{
+  "site": {
+    // 站点名称 / Site name
+    "name": "ImageShow",
+    // 主域名 / Primary domain
+    "domain": "example.com",
+    // 站点图标 URL / Site icon URL
+    "icon_url": "/assets/brand/favicon.svg",
+    // 根路径跳转目标：home 或 gallery / Root path redirect: home | gallery
+    "root_redirect": "home",
+    // 是否启用公共首页 /home / Whether the public homepage (/home) exists
+    "home_enabled": true,
+    // 登录页背景图；留空＝用站点自身随机图 / Login background; empty = site's own random API
+    "login_background": "",
+    // 首页 hero 背景图；留空同上 / Homepage hero background; empty = same as above
+    "home_hero_background": "",
+    // 随机图 API 子域前缀 / Random-image API subdomain prefix
+    "random_subdomain": "random",
+    // 本地对象存储子域前缀 / Local object host subdomain prefix
+    "static_subdomain": "static",
+    // 文档站子域前缀 / Docs site subdomain prefix
+    "docs_subdomain": "docs",
+    // 是否启用文档站子域；关闭后 docs.<域名> 返回 404（前缀仍保留，主题不可占用）
+    // Serve the docs.<domain> site; off ⇒ that host returns 404 (the prefix stays reserved)
+    "docs_enabled": true,
+    // 外链图片子域前缀 / Link-image host subdomain prefix
+    "link_subdomain": "link"
+  },
+  // 应用监听端口（改后需重启）/ App listen port (restart required)
+  "port": 5518,
+  // PostgreSQL 连接（改后需重启）/ PostgreSQL connection (restart required)
+  "database": {
+    // 主机 / Host
+    "host": "postgresql",
+    // 端口 / Port
+    "port": 5432,
+    // 数据库名 / Database name
+    "name": "imageshow",
+    // 用户名 / User
+    "user": "imageshow",
+    // 密码 / Password
+    "password": "change-me-db"
+  },
+  // Redis 连接（改后需重启）/ Redis connection (restart required)
+  "redis": {
+    // 主机 / Host
+    "host": "redis",
+    // 端口 / Port
+    "port": 6379,
+    // 库号 / DB index
+    "db": 0
+  },
+  "home": {
+    // 首页随机预览切换延迟（毫秒）/ Homepage random-preview switch delay (ms)
+    "preview_delay_ms": 1000
+  },
+  "upload": {
+    // 单文件大小上限（MB）/ Max upload file size (MB)
+    "max_file_size_mb": 15,
+    // 图片长边像素上限 / Max image long-edge (px)
+    "max_long_edge": 8192,
+    // 上传列表每页数量 / Upload list page size
+    "list_page_size": 20,
+    // 上传并发数（也驱动缩略图任务并发）/ Upload concurrency (also drives thumb tasks)
+    "concurrency": 2
+  },
+  "admin": {
+    // 后台图片每页数量 / Admin image list page size
+    "image_page_size": 60,
+    // 概览页「最近上传」数量 / Overview "recent uploads" count
+    "recent_uploads": 12
+  },
+  "gallery": {
+    // 画廊默认每页数量 / Gallery default page size
+    "default_limit": 60,
+    // 画廊排序：latest 或 random / Gallery order: latest | random
+    "order": "random"
+  },
+  "random": {
+    // /random 默认返回方式：redirect 或 proxy / Default /random method: redirect | proxy
+    "default_method": "redirect"
+  },
+  "image_detail": {
+    // 详情弹窗标题是否链接到原图 / Whether the detail dialog title links to the original
+    "title_opens_image": true
+  },
+  "link_image": {
+    // 外链导入是否自动填入「原图URL」/ Whether link import pre-fills the 原图URL field
+    "fill_original_url": false
+  },
+  // 后台任务 worker 并发（仅文件配置）/ Worker concurrency (file-only)
+  "operation_log": {
+    // delete.finalize 并发 / delete.finalize concurrency
+    "delete_concurrency": 5,
+    // move.cleanup 并发 / move.cleanup concurrency
+    "move_cleanup_concurrency": 5,
+    // empty-trash 并发 / empty-trash concurrency
+    "empty_trash_concurrency": 5,
+    // 删除主题时图片搬运并发 / Theme-delete file move concurrency
+    "theme_reassign_concurrency": 5
+  },
+  // 安全相关（仅文件配置）/ Security tuning (file-only)
+  "security": {
+    // 登录会话有效期（秒，默认 7 天）/ Session lifetime (s, default 7 days)
+    "session_ttl_seconds": 604800,
+    // 单 IP+用户名 失败计数窗口（秒）/ Per IP+username failure window (s)
+    "login_failure_window_seconds": 60,
+    // 该窗口内最大失败次数 / Max failures within that window
+    "login_max_failures": 5,
+    // 全局尝试计数窗口（秒）/ Global attempt window (s)
+    "login_global_window_seconds": 180,
+    // 该窗口内全局最大尝试次数 / Max global attempts within that window
+    "login_global_max_attempts": 10
+  },
+  // 缩略图输出（仅文件配置）/ Thumbnail output (file-only)
+  "thumbnail": {
+    // 缩略图长边像素 / Thumbnail long-edge (px)
+    "long_edge": 512,
+    // webp 质量 1-100 / webp quality 1-100
+    "quality": 75
+  },
+  // 登录验证码（仅文件配置）/ Login captcha (file-only)
+  "captcha": {
+    // 总开关，默认开启；关闭则跳过验证码 / Master switch (default on); off skips the captcha
+    "enabled": true,
+    // 验证码位数 3-8 / Code length 3-8
+    "code_length": 6,
+    // 验证码有效期（秒）/ Challenge lifetime (s)
+    "ttl_seconds": 60,
+    // 干扰线条数量 / Number of distractor lines
+    "noise_lines": 8,
+    // 噪点数量；其余视觉几何（间距/字号/旋转）是代码常量 captchaDifficulty
+    // Speckle-dot count; the rest of the look is a code constant (captchaDifficulty).
+    "noise_dots": 50
+  },
+  // 日志（仅文件配置）/ Logging (file-only)
+  "log": {
+    // 级别 DEBUG/INFO/WARN/ERROR/OFF / Level
+    "level": "WARN",
+    // 单个日志超过该大小(MB)即轮转 / Rotate app.log once it passes this size (MB)
+    "max_size_mb": 10,
+    // 保留的轮转归档数 app.log.1 … app.log.N / Rotated archives kept
+    "max_files": 5
+  }
+}

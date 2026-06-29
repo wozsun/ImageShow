@@ -1,0 +1,88 @@
+/* 实体管理页（主题 / 标签 / 作者 / 用户管理）的卡片网格与新建条样式，共用 .entity-* 类。 */
+
+/* In-page scrollable list region (用户管理): header + create form stay put while only the
+   list scrolls. (图片 / 主题 / 标签管理 use the pinned-pager .workspace-paged layout instead.) */
+.admin-scroll-list { max-height: calc(100svh - 210px); overflow-y: auto; padding-right: 2px; }
+
+/* 主题 / 标签 / 用户管理：卡片网格（共用 .entity-* 类） */
+.theme-create-form { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+.theme-create-form input { flex: 1 1 200px; max-width: 280px; }
+/* slug 输入框在列向的 .entity-slug-field 包裹内（下方堆叠校验提示），所以重置基础规则给 input 的
+   flex（否则 flex-basis:200px 会被当成列主轴=高度，把输入框撑成 200px 高）：自然高度、填满包裹宽。 */
+.theme-create-form .entity-create-slug { flex: 0 0 auto; max-width: none; }
+/* 批量删除按钮推到行尾右对齐（新建按钮仍紧跟输入框）。 */
+.theme-create-form .danger-button { margin-left: auto; }
+/* The create-user password takes the same slot as a bare input but stacks its policy hint
+   directly under the box (and holds the eye-toggle wrapper); flex-start keeps the sibling
+   username box and button top-aligned when the hint appears. */
+.theme-create-field { flex: 1 1 200px; max-width: 280px; display: flex; flex-direction: column; gap: 4px; }
+.theme-create-form:has(.theme-create-field) { align-items: flex-start; }
+/* 主题/标签/作者 的 slug 字段：以显示名框（最宽 280px）为基准取约 3/5 ≈ 170px。不随行宽增长，
+   但行宽不足时可收缩（flex-shrink:1）；移动端在 admin/responsive.css 里复位为整行全宽。 */
+.entity-slug-field { flex: 0 1 170px; max-width: 170px; }
+/* 校验提示保持单行，溢出到右侧（显示名输入框下方的空白）而不是在 170px 窄框里折行。 */
+.entity-slug-field .field-error { white-space: nowrap; }
+/* 用户管理的密码框比通用字段略宽，让“密码（至少 8 位…）”的提示连同显示密码按钮能完整显示。 */
+.user-password-field { flex: 1 1 300px; max-width: 360px; }
+/* PasswordInput 的内层 <input> 默认被通用 .theme-create-form input 的 max-width:280px 截断，而外层
+   .password-input 包裹仍是字段全宽（360px），导致绝对定位在包裹右缘的显示密码按钮落到输入框外。
+   解除 max-width 让内层 input 撑满包裹（同 slug 框对 .entity-create-slug 的处理），按钮回到框内。 */
+.theme-create-form .password-input input { max-width: none; }
+/* Card width + grid gap match the 图片管理 image cards (minmax 340 / gap 8); shared by the
+   主题/标签/作者 pages and the 用户管理 cards (.user-card). */
+.entity-admin-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 8px;
+  align-content: start;
+}
+.entity-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+}
+.entity-card-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
+/* Fixed-width slug chip so every 显示名 input (and role badge) lines up across cards;
+   long slugs/usernames ellipsis with the full value on hover (title attr). */
+.entity-slug {
+  flex: 0 0 120px;
+  width: 120px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: #eef2f7;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 18px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.entity-display-input { flex: 1 1 0; min-width: 0; }
+/* Authors only: the 链接 input sits on its own full-width row under the slug/显示名 row. */
+.entity-link-input { flex: 1 1 0; min-width: 0; }
+.entity-display-static { flex: 1 1 0; min-width: 0; color: #66717f; }
+.entity-select { width: 16px; height: 16px; flex: 0 0 auto; margin: 0; }
+/* margin-top:auto pins the foot to the card's bottom so feet line up across cards even when a
+   card's body is shorter — e.g. the pinned 未设置 card, whose 显示名 is static text (not an
+   input), which otherwise lets its 图片数量 + note ride up to the top of the stretched card. */
+.entity-card-foot { display: flex; align-items: center; gap: 8px; margin-top: auto; }
+/* Footer button height + icon-button width match the 图片管理 image-card footer (36×34). */
+.entity-card-foot button { min-height: 34px; }
+.entity-card-foot .icon { width: 36px; flex: 0 0 36px; }
+.entity-count { margin-right: auto; white-space: nowrap; }
+/* User-management cards have no 数量 spacer, so their 重置密码/删除 (and the super card's
+   不可修改) sit in the bottom-right corner. */
+.user-card .entity-card-foot { justify-content: flex-end; }
+.entity-pinned-note { white-space: nowrap; font-size: 13px; }
+/* Grip handle: drag is only armed while it's held (see EntityCard). */
+.entity-drag-handle { cursor: grab; }
+.entity-drag-handle:active { cursor: grabbing; }
+.entity-card.is-pinned { background: #f7f9fc; border-style: dashed; }
+.entity-card.is-selected { border-color: #2d6cdf; box-shadow: inset 0 0 0 1px #2d6cdf; }
+.entity-card.is-dragging { opacity: .55; }
+.role-badge { font-size: 12px; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.role-super { background: #fef3c7; color: #92400e; }
+.role-image { background: #e0e7ff; color: #3730a3; }

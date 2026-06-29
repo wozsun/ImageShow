@@ -1,114 +1,11 @@
 import { readdir, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { ColumnType, Kysely, PostgresDialect, sql } from "kysely";
-import pg from "pg";
+import pg, { type PoolClient } from "pg";
 import argon2 from "argon2";
-import { appConfig } from "@imageshow/shared";
+import { appConfig, indexKey } from "@imageshow/shared";
 import { env } from "../config/env.js";
-
-type TimestampColumn = ColumnType<Date, Date | string | undefined, Date | string>;
-type NullableTimestampColumn = ColumnType<Date | null, Date | string | null | undefined, Date | string | null>;
-type JsonColumn<T = unknown> = ColumnType<T, T | string | undefined, T | string>;
-type DeviceValue = "pc" | "mb" | "none";
-type BrightnessValue = "dark" | "light" | "none";
-type ImageStatus = "ready" | "deleted";
-type StorageBackendValue = "local" | "s3";
-type UploadSessionStatus = "created" | "finalizing" | "finalized" | "expired" | "failed";
-type OperationStatus = "pending" | "running" | "succeeded" | "failed" | "ignored";
-type OperationType = "delete.finalize" | "restore.finalize" | "move.cleanup" | "empty-trash" | "upload.cleanup" | "cache.rebuild" | "thumb.generate";
-
-export interface MetadataTable {
-  id: string;
-  device: DeviceValue;
-  brightness: BrightnessValue;
-  theme: string;
-  category_key: string;
-  category_index: number;
-  index_key: string;
-  width: number;
-  height: number;
-  ext: "jpg" | "png" | "webp" | "gif" | "avif";
-  object_key: string;
-  title: string;
-  description: string;
-  source: string;
-  original: string;
-  md5: string;
-  storage_backend: StorageBackendValue;
-  status: ImageStatus;
-  deleted_at: NullableTimestampColumn;
-  created_at: TimestampColumn;
-  updated_at: TimestampColumn;
-}
-
-export interface CategoryTable {
-  category_key: string;
-  device: DeviceValue;
-  brightness: BrightnessValue;
-  theme: string;
-  count: number;
-  created_at: TimestampColumn;
-  updated_at: TimestampColumn;
-}
-
-export interface UploadSessionTable {
-  id: string;
-  staging_object_key: string;
-  final_object_key: string;
-  storage_backend: StorageBackendValue;
-  expected_size: ColumnType<number, number | string, number | string>;
-  metadata_payload: JsonColumn<Record<string, unknown>>;
-  status: UploadSessionStatus;
-  idempotency_key: string;
-  error: string;
-  expires_at: TimestampColumn;
-  created_at: TimestampColumn;
-  updated_at: TimestampColumn;
-}
-
-export interface OperationLogTable {
-  id: string;
-  type: OperationType;
-  target_id: string;
-  idempotency_key: string | null;
-  status: OperationStatus;
-  payload: JsonColumn<Record<string, unknown>>;
-  result: JsonColumn<Record<string, unknown>>;
-  error: string;
-  retry_count: number;
-  next_retry_at: NullableTimestampColumn;
-  created_at: TimestampColumn;
-  updated_at: TimestampColumn;
-}
-
-export interface AppConfigTable {
-  key: string;
-  value: JsonColumn;
-  updated_at: TimestampColumn;
-}
-
-export interface AdminAccountTable {
-  username: string;
-  password_hash: string;
-  created_at: TimestampColumn;
-  updated_at: TimestampColumn;
-}
-
-export interface SchemaMigrationsTable {
-  version: string;
-  applied_at: TimestampColumn;
-}
-
-export interface Database {
-  metadata: MetadataTable;
-  category: CategoryTable;
-  upload_session: UploadSessionTable;
-  operation_log: OperationLogTable;
-  app_config: AppConfigTable;
-  admin_account: AdminAccountTable;
-  schema_migrations: SchemaMigrationsTable;
-}
+import { logger } from "./logger.js";
 
 export const pool = new pg.Pool({
   host: env.POSTGRES_HOST,
@@ -124,11 +21,27 @@ export const pool = new pg.Pool({
 
 // An idle client emitting an error (e.g. the backend dropped the connection)
 // otherwise crashes the process; log and let the pool evict it instead.
-pool.on("error", (error) => console.error("Idle PostgreSQL client error", error));
+pool.on("error", (error) => logger.error("idle PostgreSQL client error", error));
 
-export const db = new Kysely<Database>({
-  dialect: new PostgresDialect({ pool })
-});
+// Runs `work` inside a transaction on a pooled client: BEGIN, COMMIT on success,
+// ROLLBACK on throw, and always release the client. The shared wrapper for the
+// straightforward write paths; flows that need the client after rollback, an early
+// commit, or a mid-transaction rollback (updateImageMetadata, batch delete, restore)
+// keep their own control flow.
+export async function withTransaction<T>(work: (client: PoolClient) => Promise<T>): Promise<T> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const result = await work(client);
+    await client.query("COMMIT");
+    return result;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
 
 export async function runMigrations() {
   const here = dirname(fileURLToPath(import.meta.url));
@@ -140,39 +53,82 @@ export async function runMigrations() {
     const exists = await pool.query("SELECT 1 FROM schema_migrations WHERE version = $1", [version]).catch(() => ({ rowCount: 0 }));
     if (exists.rowCount) continue;
     const body = await readFile(join(migrationDir, file), "utf8");
-    const client = await pool.connect();
-    try {
-      await client.query("BEGIN");
+    await withTransaction(async (client) => {
       await client.query(body);
       await client.query("INSERT INTO schema_migrations(version) VALUES($1) ON CONFLICT DO NOTHING", [version]);
-      await client.query("COMMIT");
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
-    }
+    });
   }
 }
 
+// Provision — and on every restart resync — the single super admin from
+// ADMIN_USERNAME / ADMIN_PASSWORD, so a forgotten password is always recoverable
+// by redeploying with new env values. Image admins are created in the UI and are
+// never touched here. If env creds are absent but a super admin already exists,
+// this is a no-op so a restart without env vars keeps working.
 export async function initializeAdmin() {
-  const existing = await pool.query("SELECT username FROM admin_account LIMIT 1");
-  if (existing.rowCount) return;
   if (!env.ADMIN_USERNAME || !env.ADMIN_PASSWORD) {
-    throw new Error("ADMIN_USERNAME and ADMIN_PASSWORD are required only for first admin initialization.");
+    const hasSuper = await pool.query("SELECT 1 FROM admin_account WHERE role = 'super' LIMIT 1");
+    if (hasSuper.rowCount) return;
+    throw new Error("ADMIN_USERNAME and ADMIN_PASSWORD are required to provision the super admin.");
   }
-  // Password hashing is intentionally deferred until the first account is needed.
   const hash = await argon2.hash(env.ADMIN_PASSWORD, { type: argon2.argon2id });
-  await pool.query(
-    "INSERT INTO admin_account(username, password_hash) VALUES($1, $2) ON CONFLICT DO NOTHING",
-    [env.ADMIN_USERNAME, hash]
-  );
+  await withTransaction(async (client) => {
+    // Only one super admin may exist; drop a stale one if the env username changed.
+    await client.query("DELETE FROM admin_account WHERE role = 'super' AND username <> $1", [env.ADMIN_USERNAME]);
+    // Upsert the configured super admin, resyncing its password every start. If the
+    // username already belonged to an image admin, it is promoted to super.
+    await client.query(
+      `INSERT INTO admin_account(username, password_hash, role) VALUES($1, $2, 'super')
+       ON CONFLICT (username) DO UPDATE SET password_hash = EXCLUDED.password_hash, role = 'super', updated_at = now()`,
+      [env.ADMIN_USERNAME, hash]
+    );
+  });
 }
 
 export async function pingDb() {
-  await sql`SELECT 1`.execute(db);
+  await pool.query("SELECT 1");
 }
 
+// Idempotently registers a category row (count starts at 0) so a later count bump has a
+// row to update. Shared by every image-write path that may introduce a new category.
+export async function upsertCategory(client: PoolClient, key: string, device: string, brightness: string, theme: string) {
+  await client.query(
+    "INSERT INTO category(category_key, device, brightness, theme, count) VALUES($1,$2,$3,$4,0) ON CONFLICT (category_key) DO NOTHING",
+    [key, device, brightness, theme]
+  );
+}
+
+// Adjusts a category's image count by `delta` (+1 on insert, -1 on remove), shared by the
+// upload / link-import / edit / delete paths.
+export async function adjustCategoryCount(client: PoolClient, key: string, delta: number) {
+  await client.query("UPDATE category SET count=count+$2, updated_at=now() WHERE category_key=$1", [key, delta]);
+}
+
+// Fills the index slot a removed/moved image vacated, by pulling the category's last ready
+// image (at `lastIndex`) into `vacatedIndex` so category_index stays a contiguous 1..N. A
+// no-op when the vacated slot was already the last one. The caller must already hold the
+// category row lock and have freed the vacated index_key (delete flips status first; a move
+// re-keys the moved row out first), so the filler's new index_key never collides on the
+// ready partial-unique index. Shared by the delete and category-move paths.
+export async function backfillCategoryHole(client: PoolClient, categoryKey: string, vacatedIndex: number, lastIndex: number) {
+  if (vacatedIndex === lastIndex) return;
+  const filler = (await client.query(
+    "SELECT id FROM metadata WHERE category_key=$1 AND status='ready' AND category_index=$2 FOR UPDATE",
+    [categoryKey, lastIndex]
+  )).rows[0];
+  if (filler) {
+    await client.query(
+      "UPDATE metadata SET category_index=$2, index_key=$3, updated_at=now() WHERE id=$1",
+      [filler.id, vacatedIndex, indexKey(categoryKey, vacatedIndex)]
+    );
+  }
+}
+
+// Drops categories no image references anymore. A soft-deleted image still points
+// at its category_key (so it can be restored into it), and the metadata.category_key
+// foreign key forbids removing a category out from under such a row — so a category
+// is cleaned only once NO metadata row of any status references it (i.e. after the
+// trashed images that held it are purged), not merely when it has no ready rows.
 export async function cleanupEmptyCategories() {
   await pool.query(`
     DELETE FROM category c
@@ -181,7 +137,6 @@ export async function cleanupEmptyCategories() {
         SELECT 1
         FROM metadata m
         WHERE m.category_key = c.category_key
-          AND m.status = 'ready'
       )
   `);
 }

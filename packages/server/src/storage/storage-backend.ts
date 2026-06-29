@@ -4,35 +4,20 @@
 // implementing StorageDriver and adding one branch to driverFor below — nothing
 // else in the app imports the concrete backends directly.
 import type { Readable } from "node:stream";
-import type { StorageBackend, StorageConfig } from "../config/settings.js";
+import type { StorageType, StorageConfig } from "../config/settings.js";
 import type { ReadablePrefix, StoragePrefix } from "./object-keys.js";
 import { LocalBackend } from "./local-backend.js";
 import { S3Backend } from "./s3-backend.js";
+import { WebdavBackend } from "./webdav-backend.js";
 
-export type OpenedRead = { body: Readable; size: number | undefined; backend: StorageBackend };
+export type OpenedRead = { body: Readable; size: number | undefined; backend: StorageType };
 
 export type MoveFromPrefix = "objects" | "_uploads" | "trash";
 export type MoveToPrefix = "objects" | "trash";
 export type CopyPrefix = "objects" | "thumbs" | "trash";
 
-// The upload-session fields a backend needs to mint an upload target.
-export type UploadTargetRow = {
-  id: string;
-  staging_object_key: string;
-  expected_size: number;
-  expires_at: Date | string;
-  storage_backend: StorageBackend;
-  content_md5_hex?: string;
-};
-
-export type UploadTarget = {
-  upload_url: string;
-  upload_headers: Record<string, string>;
-  backend: string;
-};
-
 export type StorageSelfTest = {
-  backend: StorageBackend;
+  backend: StorageType;
   writable: boolean;
   storage_dir?: string;
   bucket?: string;
@@ -48,19 +33,23 @@ export interface StorageDriver {
   remove(prefix: StoragePrefix, key: string): Promise<void>;
   move(fromPrefix: MoveFromPrefix, fromKey: string, toPrefix: MoveToPrefix, toKey: string, targetContentType?: string): Promise<void>;
   copy(fromPrefix: CopyPrefix, fromKey: string, toPrefix: CopyPrefix, toKey: string): Promise<void>;
-  stat(prefix: StoragePrefix, key: string): Promise<{ size: number }>;
   writeUploadFromWeb(id: string, body: ReadableStream<Uint8Array>, expectedSize: number): Promise<void>;
   readObject(prefix: ReadablePrefix, key: string): Promise<Readable>;
   listKeys(prefix: StoragePrefix): Promise<string[]>;
   // Direct public URL for a readable object, or "" when the backend has none
   // (local, or S3 without a public_base_url) and the caller must fall back.
   publicObjectUrl(prefix: ReadablePrefix, key: string): string;
-  createUploadTarget(row: UploadTargetRow): Promise<UploadTarget>;
   selfTest(): Promise<StorageSelfTest>;
+  // Removes directories left empty after files move/delete out of them (e.g. a deleted
+  // theme's now-empty device-brightness/theme folder). Returns how many were removed.
+  // Object stores have no real directories, so they return 0.
+  pruneEmptyDirs(): Promise<number>;
 }
 
-// Selects the driver for a resolved config; its `backend` field decides which
+// Selects the driver for a resolved config; its `type` field decides which
 // implementation runs the operation.
 export function driverFor(config: StorageConfig): StorageDriver {
-  return config.backend === "s3" ? new S3Backend(config) : new LocalBackend();
+  if (config.type === "s3") return new S3Backend(config);
+  if (config.type === "webdav") return new WebdavBackend(config);
+  return new LocalBackend();
 }

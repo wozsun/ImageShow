@@ -1,15 +1,6 @@
-.upload-summary {
-  border: 1px solid #dce2ea;
-  background: #fff;
-  border-radius: 8px;
-  padding: 14px;
-  margin-bottom: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-.upload-summary h2 { margin: 0 0 4px; }
+/* The 链接导入 / 上传图片 triggers sit in the 图片 header, left of the view tabs. */
+.upload-triggers { display: flex; gap: 10px; }
+.upload-trigger { min-width: 120px; }
 
 .upload-overlay {
   position: fixed;
@@ -18,7 +9,7 @@
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgba(13, 18, 28, .74);
+  background: rgba(13, 18, 28, .76);
   animation: modal-fade .16s ease-out;
 }
 .upload-overlay.is-closing {
@@ -41,6 +32,9 @@
    it above the upload list's floating overlay scrollbar handle (z-index 30) so the
    handle can't show through or intercept backdrop clicks while it's open. */
 .upload-overlay .image-detail-modal { z-index: 40; }
+/* The "导入链接" URL-input popup is nested inside this overlay (link mode), so lift it above
+   the window and the detail modal. */
+.upload-overlay .link-url-overlay { z-index: 45; }
 .upload-window > header,
 .upload-window > footer {
   flex-shrink: 0;
@@ -54,6 +48,9 @@
   align-items: center;
 }
 .upload-window > header h1 { margin: 0; font-size: 24px; }
+/* Subtitle matches the edit/batch modal's muted line (.edit-modal p) so both headers read
+   the same instead of the browser-default dark, loose paragraph. */
+.upload-window > header p { margin: 4px 0 0; color: #66717f; font-size: 14px; }
 .upload-window > footer {
   bottom: 0;
   border-top: 1px solid #dce2ea;
@@ -68,6 +65,14 @@
 }
 .upload-window > footer .admin-pagination { justify-self: center; }
 .upload-window > footer .modal-footer-actions { justify-self: end; }
+/* Pin every footer control to exactly 38px so this footer is the same height as the batch
+   editor's. Buttons default to 36px (bump to 38). The backend select has a 38px min-height,
+   but its 9px vertical padding + the label's line-box push it to ~40px — making this footer
+   ~2px taller than the batch footer (whose tallest control is a 38px button) — so give the
+   select a fixed 38px height. It's a flex button with overflow:hidden, so the label stays
+   centered and clipped rather than growing the box. */
+.upload-window > footer button { min-height: 38px; }
+.upload-window > footer .select-trigger { height: 38px; }
 /* Bare controls (no text labels) on a row that ends with a full-width divider,
    mirroring the batch editor's .batch-edit-common. */
 .upload-defaults {
@@ -79,34 +84,50 @@
   gap: 8px;
   border-bottom: 1px solid #dce2ea;
 }
-/* Device/brightness widen just enough for the 6-char "…自动识别" default; theme is
-   1.5× as wide. */
-.select-control.upload-default-select { width: 150px; flex: 0 0 auto; }
-.theme-input-control.upload-default-theme { width: 225px; flex: 0 0 auto; }
-/* Match the adjacent inputs' 9px/10px box so the height lines up; the apply button
-   sits snug after theme, and the auto margin on the first following clear button
-   pushes the 清空 pair to the right edge. */
-.upload-apply-defaults { align-self: end; min-height: 38px; padding: 9px 10px; white-space: nowrap; }
-.upload-apply-defaults + .clear-button { margin-left: auto; }
+/* Default bar: device/明暗 are 120px (matching the 120px dropdown popup). 主题 + 标签 sit in
+   a shared .upload-default-pair group that flexes together (主题 ≥150 grow 1, 标签 ≥200 grow 2
+   — 标签 takes 2/3 of the shared space) and, when the bar gets too narrow (but before mobile),
+   drops to a second row as a unit — see the intermediate-width media query in admin/responsive.css.
+   A slightly tighter arrow gutter keeps 自动设备 / 自动明暗 from crowding the caret. */
+.select-control.upload-default-select { flex: 0 0 auto; }
+.upload-default-select .select-trigger { padding-right: 30px; }
+.select-control.upload-default-device { width: 120px; }
+.select-control.upload-default-brightness { width: 120px; }
+/* display:contents normally, so 主题/标签 behave as direct flex items of the bar (keeping the
+   wide one-row layout and the mobile grid unchanged); the responsive band promotes this to a
+   real flex box to wrap the pair onto its own row. */
+.upload-default-pair { display: contents; }
+.theme-input-control.upload-default-theme { flex: 1 1 0; min-width: 150px; }
+.theme-input-control.upload-default-author { flex: 1 1 0; min-width: 150px; }
+/* The 应用到全部 button (shared with the batch editor's identical button). Matches the
+   adjacent inputs' 9px/10px box so the height lines up; it sits flush at the right edge
+   after the stretched 标签 box, with 标题自动生成 leading the row from the far left. */
+.apply-to-all-button { align-self: end; min-height: 38px; padding: 9px 10px; white-space: nowrap; }
 /* This button is wide, so the shared .admin scale(.95) press reads as too much;
    the extra :not(.select-trigger) only lifts specificity above the base and the
    responsive-breakpoint rules so this gentler scale wins everywhere. */
-.admin button.upload-apply-defaults:not(:disabled):not(.select-trigger):active { transform: scale(.98); }
+.admin button.apply-to-all-button:not(:disabled):not(.select-trigger):active { transform: scale(.98); }
 /* The "选择图片" label looks like a generic secondary button (.button.secondary),
    with .pressable supplying the hover-darken + click-shrink transitions (a <label>
    doesn't inherit the .admin button transition/:active rules); here we only hide its
    native file input and pin the width. */
 .upload-picker { width: 200px; flex: 0 0 auto; }
 .upload-picker input { display: none; }
+/* Link import: a button next to "上传图片" and its modal. */
+.link-import-card { width: min(560px, 96vw); max-height: 90vh; overflow: auto; background: #fff; border-radius: 8px; padding: 18px; display: flex; flex-direction: column; gap: 12px; animation: modal-pop .18s cubic-bezier(.2, .8, .2, 1); }
+.link-import-head { display: flex; align-items: center; justify-content: space-between; }
+.link-import-head h2 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 20px; }
+.link-import-urls { width: 100%; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; padding: 10px; }
+.link-import-actions { display: flex; justify-content: flex-end; gap: 10px; }
 /* Scroll behavior/padding come from the shared .modal-scroll-list; only the grid
    layout of the cards lives here. */
 .upload-list {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 12px;
+  gap: 8px;
   align-content: start;
 }
-.upload-head-actions { display: flex; align-items: center; gap: 10px; }
+.upload-head-actions { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
 .upload-footer-left { justify-self: start; min-width: 0; display: flex; align-items: center; gap: 10px; }
 /* Clear actions keep a red label but on a neutral button, so a cluster of them
    doesn't read as alarming; reused for every 清空 button in the upload window. */
@@ -122,7 +143,10 @@
   background: #f7f8fa;
   padding: 10px;
 }
-.upload-job-thumbnail { grid-row: span 2; }
+/* Left column: the thumbnail with the file size captioned beneath it (file jobs only),
+   spanning the head + fields rows like the bare thumbnail used to. */
+.upload-job-aside { grid-row: span 2; display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
+.upload-job-size { color: #66717f; font-size: 12px; white-space: nowrap; }
 .upload-job-head { min-width: 0; display: grid; gap: 4px; }
 .upload-job-head strong,
 .upload-job-head span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -142,13 +166,9 @@
   background: #1f6feb;
   transition: width .18s ease;
 }
-.upload-job-fields {
-  grid-column: 2 / 4;
-  display: grid;
-  grid-template-columns: minmax(150px, 1fr) 120px 120px minmax(130px, .8fr) minmax(150px, 1fr) minmax(150px, 1fr);
-  gap: 8px;
-}
-.upload-job-fields textarea { grid-column: 1 / -1; min-height: 62px; }
+/* The shared ImageDraftFields block (.image-fields, styled in admin/image-edit.css) sits in the
+   card's second row, spanning the head + remove-button columns. */
+.upload-job .image-fields { grid-column: 2 / 4; }
 .upload-job.done { border-color: #78b78a; background: #f2fbf5; }
 .upload-job.failed { border-color: #de8b83; background: #fff6f4; }
 .upload-job.hashing { border-color: #9bb9e8; background: #f5f9ff; }
@@ -193,3 +213,29 @@
   border: 1px dashed #c9d1dc;
   border-radius: 8px;
 }
+/* The empty list is also the drop target / picker shortcut: a full-width button that
+   opens the file dialog on click and accepts dragged-in images, highlighting while a
+   drag hovers over it. */
+button.empty-state.upload-dropzone {
+  width: 100%;
+  min-height: 140px;
+  flex-direction: column;
+  gap: 10px;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color .16s ease, background-color .16s ease, color .16s ease, transform .08s ease;
+}
+/* Let drag events always target the button itself, not the icon/text, so the
+   dragover highlight doesn't flicker as the pointer crosses child elements. */
+.upload-dropzone > * { pointer-events: none; }
+.upload-dropzone .app-icon { width: 32px; height: 32px; flex-basis: 32px; opacity: .7; }
+button.empty-state.upload-dropzone:not(:disabled):hover,
+.upload-dropzone.is-dragover {
+  border-color: #1f6feb;
+  background: #f5f9ff;
+  color: #1f6feb;
+}
+.upload-dropzone.is-dragover { border-style: solid; }
+/* This box is large, so the shared .admin scale(.95) press reads as too much; shrink
+   it just slightly on click. */
+.admin button.upload-dropzone:not(:disabled):not(.select-trigger):active { transform: scale(.99); }

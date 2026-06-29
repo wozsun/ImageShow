@@ -16,7 +16,7 @@ const ENABLE_QUERY = "(hover: hover) and (pointer: fine) and (forced-colors: non
 // for modal scroll containers), drawing a fixed handle over the element's right
 // edge. Scrolling stays native, so scroll-locks/sticky/infinite-scroll are
 // unaffected. Renders nothing on unsupported devices (native bar stays).
-export function OverlayScrollbar({ targetRef }: { targetRef?: RefObject<HTMLElement | null> } = {}) {
+export function OverlayScrollbar({ targetRef, pageEdge }: { targetRef?: RefObject<HTMLElement | null>; pageEdge?: boolean } = {}) {
   const [enabled, setEnabled] = useState(false);
 
   useEffect(() => {
@@ -36,10 +36,10 @@ export function OverlayScrollbar({ targetRef }: { targetRef?: RefObject<HTMLElem
   }, [enabled, targetRef]);
 
   if (!enabled) return null;
-  return <OverlayScrollbarHandle targetRef={targetRef} />;
+  return <OverlayScrollbarHandle targetRef={targetRef} pageEdge={pageEdge} />;
 }
 
-function OverlayScrollbarHandle({ targetRef }: { targetRef?: RefObject<HTMLElement | null> }) {
+function OverlayScrollbarHandle({ targetRef, pageEdge }: { targetRef?: RefObject<HTMLElement | null>; pageEdge?: boolean }) {
   const [metrics, setMetrics] = useState<Metrics>({ visible: false, top: 0, height: 0, right: 0 });
   const [active, setActive] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -60,7 +60,9 @@ function OverlayScrollbarHandle({ targetRef }: { targetRef?: RefObject<HTMLEleme
     const read = () => {
       if (el) {
         const rect = el.getBoundingClientRect();
-        return { viewport: el.clientHeight, total: el.scrollHeight, scroll: el.scrollTop, offsetTop: rect.top, right: Math.max(0, window.innerWidth - rect.right) };
+        // pageEdge pins the bar to the viewport's right edge (the whole-page edge) rather than
+        // the scroll container's own right edge.
+        return { viewport: el.clientHeight, total: el.scrollHeight, scroll: el.scrollTop, offsetTop: rect.top, right: pageEdge ? 0 : Math.max(0, window.innerWidth - rect.right) };
       }
       return { viewport: window.innerHeight, total: document.documentElement.scrollHeight, scroll: window.scrollY, offsetTop: 0, right: 0 };
     };
@@ -118,7 +120,7 @@ function OverlayScrollbarHandle({ targetRef }: { targetRef?: RefObject<HTMLEleme
       window.clearTimeout(hideTimer.current);
       if (el) el.classList.remove("overlay-scroll-host");
     };
-  }, [targetRef]);
+  }, [targetRef, pageEdge]);
 
   const onHandlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     event.preventDefault();

@@ -1,21 +1,8 @@
-.login, .center { min-height: 100vh; display: grid; place-items: center; }
-.login {
-  background-image: linear-gradient(rgba(12, 18, 28, .45), rgba(12, 18, 28, .72)), url("/random?m=redirect");
-  background-size: cover;
-  background-position: center;
-}
-.login form {
-  width: min(360px, calc(100vw - 32px));
-  display: grid;
-  gap: 12px;
-  background: rgba(255, 255, 255, .94);
-  padding: 24px;
-  border: 1px solid #dce2ea;
-  border-radius: 8px;
-  animation: surface-in .2s ease-out;
-}
-.login h1 { margin: 0 0 6px; }
-.error { color: #b42318; margin: 0; }
+/* 全局响应式与共享动画：公共页（首页/画廊）与共享组件的规则，未登录访客也会加载。
+   后台的响应式规则在 admin/responsive.css。
+   注意：modal-* 关键帧与下方共享的“减少动态效果”项须留在全局，后台分块也会引用它们。 */
+
+.center { min-height: 100vh; display: grid; place-items: center; }
 
 @keyframes modal-fade {
   from { opacity: 0; }
@@ -38,21 +25,12 @@
 
 @media (prefers-reduced-motion: reduce) {
   .modal,
-  .modal article,
-  .edit-modal form,
-  .upload-overlay,
-  .upload-window {
-    animation: none;
-  }
-  .mobile-nav-dropdown,
-  .settings-feedback,
-  .check-summary,
-  .check-card,
-  .login form { animation: none; }
+  .modal article { animation: none; }
+  .mobile-nav-dropdown { animation: none; }
   .copy-button { transition: none; }
   .copy-button:active { transform: none; }
   .overlay-scrollbar-handle { transition: none; }
-  .pressable:active, .admin button:not(:disabled):active { transform: none; }
+  .pressable:active { transform: none; }
   .select-menu,
   .select-menu.is-closing,
   .theme-select-menu,
@@ -60,8 +38,7 @@
 }
 
 @media (max-width: 1080px) {
-  .home-bottom, .upload-defaults, .upload-job-fields, .settings-grid, .edit-form-grid { grid-template-columns: 1fr 1fr; }
-  .batch-edit-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .home-bottom { grid-template-columns: 1fr 1fr; }
 }
 
 @media (max-width: 760px) {
@@ -77,14 +54,85 @@
   .home-hero { min-height: 200px; padding: 22px; }
   .home-hero h1 { font-size: 36px; }
   .home-bottom { grid-template-columns: 1fr; grid-template-rows: auto auto; }
-  .random-preview { border-right: 0; border-bottom: 1px solid #dce2ea; gap: 12px; }
+  /* Builder sits above the preview on mobile, with the divider between the two. */
+  .random-builder {
+    order: -1;
+    border-bottom: 1px solid #dce2ea;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 12px;
+    align-content: start;
+  }
+  .random-preview { border-right: 0; border-bottom: 0; gap: 12px; }
   .random-preview, .random-builder { padding: 16px; }
   .preview-frame { min-height: 300px; }
-  .builder-grid { grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
-  .generated-link { grid-template-columns: 1fr auto; margin-top: 14px; }
-  .generated-link .button { grid-column: 1 / -1; }
+  /* Builder controls in 2-column pairs (设备亮度 / 模式作者 / 主题标签); the hint and link row
+     span both columns. display:contents dissolves the axes/facets sub-grids so all six controls
+     share the builder's grid and can pair across the two groups; equal orders break by DOM order
+     (so 设备/亮度/模式 keep their sequence), and 作者 jumps ahead of 主题/标签 to fill row two. */
+  .random-builder > h2 { grid-column: 1 / -1; }
+  .builder-grid { display: contents; }
+  .builder-grid-axes label { order: 1; }
+  .builder-grid-facets label { order: 3; }
+  .builder-grid-facets label:last-child { order: 2; }
+  .builder-hint { grid-column: 1 / -1; order: 4; margin-top: 0; }
+  .generated-link {
+    grid-column: 1 / -1;
+    order: 5;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    margin-top: 0;
+  }
   .gallery-toolbar { position: static; padding: 12px 16px; align-items: stretch; flex-direction: column; }
   .gallery-toolbar label { min-width: 0; }
+  /* Collapsible filter drawer: by default only the 筛选 toggle shows; the filters (and the
+     random-link row) reveal below it when opened, so the image grid isn't pushed off-screen. */
+  .gallery-filter-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px;
+    width: 100%;
+    min-height: 40px;
+    padding: 8px 14px;
+    border: 1px solid #c9d1dc;
+    border-radius: 8px;
+    background: #fff;
+    color: #20242a;
+    font-weight: 600;
+  }
+  .gallery-filter-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: #1f6feb;
+    color: #fff;
+    font-size: 12px;
+  }
+  .gallery-filter-chevron { margin-left: auto; display: inline-flex; transition: transform .18s ease; }
+  .gallery-toolbar.filters-open .gallery-filter-chevron { transform: rotate(180deg); }
+  .gallery-toolbar:not(.filters-open) > label,
+  .gallery-toolbar:not(.filters-open) > .theme-link { display: none; }
+  /* Expanded, the filters lay out in 2-column pairs (设备亮度 / 模式作者 / 主题标签) like the
+     home builder; the 筛选 toggle, theme title and random-link row span both columns. Axes drop
+     their fixed 120px to fill the cell. Equal orders break by DOM order; 作者 (the last label,
+     robust to the theme page hiding 主题) jumps ahead of 主题/标签 to fill row two. */
+  .gallery-toolbar.filters-open {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    align-items: end;
+  }
+  .gallery-toolbar.filters-open > .gallery-filter-toggle,
+  .gallery-toolbar.filters-open > .theme-title,
+  .gallery-toolbar.filters-open > .theme-link { grid-column: 1 / -1; }
+  .gallery-toolbar.filters-open > label { order: 3; }
+  .gallery-toolbar.filters-open > label.gallery-axis { order: 1; width: auto; }
+  .gallery-toolbar.filters-open > label:last-of-type { order: 2; }
+  .gallery-toolbar.filters-open > .theme-link { order: 4; }
   .theme-title { min-width: 0; }
   .theme-link { width: 100%; min-width: 0; flex: 0 0 auto; gap: 4px; }
   .theme-link > span { font-size: 13px; line-height: 18px; }
@@ -92,118 +140,11 @@
   .theme-link-row .button { grid-column: auto; padding-inline: 10px; }
   .gallery { padding: 16px; gap: 12px; }
   .gallery-column { gap: 12px; }
-  .admin { padding-left: 0; }
-  .admin > aside { display: none; }
-  .admin-mobile-header {
-    position: sticky;
-    top: 0;
-    z-index: 5;
-    height: 64px;
-    padding: 0 16px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    color: #f6f7f9;
-    background: #171b22;
-    border-bottom: 1px solid #2c333d;
-  }
-  .admin-mobile-navigation .mobile-nav-toggle {
-    color: #f6f7f9;
-    background: #242a33;
-    border-color: #3a424e;
-  }
-  .admin-mobile-navigation .mobile-nav-dropdown {
-    background: #171b22;
-    border-color: #3a424e;
-  }
-  .admin-mobile-navigation .mobile-nav-dropdown a,
-  .admin-mobile-navigation .mobile-nav-dropdown button {
-    color: #f6f7f9;
-    line-height: 1.25;
-  }
-  .admin-mobile-navigation .mobile-nav-dropdown a.active {
-    color: #fff;
-    background: #29466d;
-  }
-  .admin-mobile-navigation .admin-nav-divider {
-    height: 1px;
-    margin: 4px;
-    border-top: 1px solid #343b46;
-  }
-  .workspace { padding: 16px; }
-  .workspace-head, .toolbar { align-items: stretch; flex-direction: column; }
-  .workspace-head .segmented {
-    width: 100%;
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-  .workspace-head .segmented button { width: 100%; }
-  .upload-summary { align-items: stretch; flex-direction: column; }
-  .upload-overlay { padding: 10px; }
-  .upload-window { width: 100%; max-height: 96vh; }
+  /* 共享遮罩：.modal 在 gallery.css、.modal-footer-actions 在 base.css，本就随全局加载，故移动端覆盖留全局。 */
   .modal { padding: 10px; }
-  .edit-modal form { width: 100%; max-height: calc(100dvh - 20px); }
-  /* Stack the paginated modal footers so the pager and action buttons each get a full row instead of overflowing. */
-  .batch-edit-modal footer { flex-wrap: wrap; row-gap: 10px; }
-  .batch-edit-modal footer > * { flex: 1 1 100%; }
-  /* Footer action clusters fill their row so the buttons line up flush instead of
-     bunching to one side (upload: 清空列表/关闭/开始上传; batch: 取消/保存). */
   .modal-footer-actions > * { flex: 1; }
-  /* The 3-up upload footer (storage+清空重复待确认 / pager / actions) can't sit side by
-     side, so each group takes its own full-width row and fills it edge to edge
-     rather than left-packing with a ragged right margin. */
-  .upload-window > footer { grid-template-columns: 1fr; row-gap: 10px; justify-items: stretch; }
-  .upload-window > footer .upload-footer-left,
-  .upload-window > footer .admin-pagination,
-  .upload-window > footer .modal-footer-actions { justify-self: stretch; }
-  .upload-window > footer .upload-footer-left > .clear-button { flex: 1; }
-  .upload-window > footer .admin-pagination button,
-  .batch-edit-modal footer .admin-pagination button { flex: 1; }
-  .edit-form-grid .url-field { grid-column: auto; }
-  .admin button:not(:disabled) { transition-duration: .08s; }
-  .admin button:not(:disabled):not(.select-trigger):active { transform: scale(.95); }
-  .upload-job-fields, .settings-grid, .edit-form-grid, .batch-edit-fields, .batch-edit-common, .overview-grid { grid-template-columns: 1fr; }
-  /* Settings storage row stacks the picker and its action full-width; the card
-     action clusters do the same so each reads as a clean full-width column. */
-  .storage-provider-row { flex-direction: column; align-items: stretch; }
-  .storage-provider-row label { width: 100%; margin-bottom: 0; }
-  .storage-provider-row .select-control.is-storage-select { width: 100%; min-width: 0; }
-  .storage-provider-row button { width: 100%; }
-  .settings-card-actions { flex-direction: column; align-items: stretch; }
-  /* Check-page button groups become an even 2-col grid instead of right-aligned
-     wrapping that leaves ragged gaps between rows. */
-  .check-actions { margin-left: 0; }
-  .check-actions .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-  .check-actions .actions button { width: 100%; }
-  /* Too narrow for the default bar's single flat row, so pack it into a tidy
-     2-col grid: 设备 | 亮度, then 主题 and 应用到全部 full-width, then the two 清空
-     buttons side by side — shorter and aligned instead of six stacked rows. */
-  .upload-defaults { display: grid; grid-template-columns: 1fr 1fr; align-items: stretch; }
-  .select-control.upload-default-select,
-  .theme-input-control.upload-default-theme { width: auto; }
-  .theme-input-control.upload-default-theme,
-  .upload-apply-defaults { grid-column: 1 / -1; }
-  .upload-apply-defaults + .clear-button { margin-left: 0; }
+  /* 画廊 facet 的主题选择器（FacetSelector，首页随机图构建器也用）。 */
   .theme-select-control { width: 100%; min-width: 0; }
-  .upload-job { grid-template-columns: 56px minmax(0, 1fr) auto; }
-  .upload-job > .image-thumbnail, .batch-edit-row > .image-thumbnail { width: 56px; height: 56px; flex-basis: 56px; }
-  .batch-edit-list { display: block; padding: 10px; overflow-x: hidden; }
-  .batch-edit-row { position: relative; display: block; width: 100%; max-width: 100%; margin-bottom: 10px; padding: 8px; min-width: 0; }
-  .batch-edit-row:last-child { margin-bottom: 0; }
-  .batch-edit-row > .image-thumbnail { position: absolute; top: 8px; left: 8px; width: 48px; height: 48px; flex-basis: 48px; }
-  .batch-edit-content { width: 100%; }
-  .batch-edit-head { min-height: 48px; padding-left: 56px; }
-  .upload-job-fields { grid-column: 1 / -1; }
-  .duplicate-panel { grid-column: 1 / -1; }
-  /* Too narrow to sit the 300px cards and the buttons side by side — stack them,
-     keeping the actions right-aligned below the list. */
-  .duplicate-body { flex-direction: column; align-items: stretch; }
-  .duplicate-body .inline-actions { justify-content: flex-end; }
-  .admin-image-grid { grid-template-columns: 1fr; }
-  .row { grid-template-columns: 22px 56px minmax(0, 1fr); }
-  .thumb-button { width: 56px; height: 56px; }
-  .row-actions { grid-column: 1 / -1; justify-content: flex-end; }
   .image-detail-modal {
     padding: 0;
     place-items: stretch;

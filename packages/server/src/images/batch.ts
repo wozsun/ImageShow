@@ -1,20 +1,16 @@
 import { indexKey } from "@imageshow/shared";
 import { cleanupEmptyCategories, pool } from "../core/db.js";
-import { ApiError } from "../core/http.js";
 import { invalidateImageReadCaches, invalidateMd5Caches, bumpFolder } from "../core/redis.js";
 import { enqueueMany } from "../jobs/tasks.js";
 import type { ImageRecord } from "./presenter.js";
 
 export async function batchDeleteImages(ids: string[]) {
-  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  const uniqueIds = [...new Set(ids)].filter(Boolean);
-  if (uniqueIds.some((id) => !uuidPattern.test(id))) {
-    throw new ApiError(400, "validation_error", "Validation failed", { ids: "ids must be UUID strings" });
-  }
-  if (!uniqueIds.length) return { deleted: 0, ignored: 0 };
+  // ids arrive validated, deduped and capped (max 200) by imageIdsInput at the route, so there's
+  // no UUID-format / dedup work to repeat here — just the empty short-circuit.
+  if (!ids.length) return { deleted: 0, ignored: 0 };
   const readyRows = (await pool.query(
     "SELECT id, category_key FROM metadata WHERE id = ANY($1::uuid[]) AND status='ready' ORDER BY category_key, id",
-    [uniqueIds]
+    [ids]
   )).rows as Array<{ id: string; category_key: string }>;
   const groups = new Map<string, string[]>();
   for (const row of readyRows) {
@@ -34,7 +30,7 @@ export async function batchDeleteImages(ids: string[]) {
   await invalidateMd5Caches(deletedTargets.map((target) => target.md5 ?? ""));
   await cleanupEmptyCategories();
   if (deleted) await invalidateImageReadCaches();
-  return { deleted, ignored: uniqueIds.length - deleted };
+  return { deleted, ignored: ids.length - deleted };
 }
 
 async function deleteCategoryGroup(category: string, groupIds: string[]) {

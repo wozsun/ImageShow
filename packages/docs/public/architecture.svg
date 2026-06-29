@@ -1,0 +1,41 @@
+<svg viewBox="0 0 680 612" role="img" xmlns="http://www.w3.org/2000/svg">
+<title>ImageShow 架构图</title>
+<desc>从客户端经反向代理按 Host 分流到 Hono 应用，应用读写 PostgreSQL、Redis 与存储后端，后台 Worker 消费 operation_log 队列。</desc>
+<style>
+svg{--edge-fill:#f4f4f5;--edge-stroke:#d4d4d8;--app-fill:#eef2ff;--app-stroke:#6366f1;--data-fill:#faf5ff;--data-stroke:#a855f7;--cont:#d4d4d8;--t1:#1f2937;--t2:#6b7280;--arr:#9ca3af;}
+@media (prefers-color-scheme:dark){svg{--edge-fill:#27272a;--edge-stroke:#3f3f46;--app-fill:#1e1b4b;--app-stroke:#818cf8;--data-fill:#2e1065;--data-stroke:#c084fc;--cont:#3f3f46;--t1:#e5e7eb;--t2:#9ca3af;--arr:#6b7280;}}
+text{font-family:ui-sans-serif,system-ui,'Segoe UI',Roboto,'PingFang SC','Microsoft YaHei',sans-serif;}
+.t1{fill:var(--t1);}.t2{fill:var(--t2);}
+.edge{fill:var(--edge-fill);stroke:var(--edge-stroke);}
+.app{fill:var(--app-fill);stroke:var(--app-stroke);}
+.data{fill:var(--data-fill);stroke:var(--data-stroke);}
+.arr{stroke:var(--arr);stroke-width:1.5;}
+</style>
+<defs><marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="var(--arr)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+<rect x="40" y="40" width="12" height="12" rx="3" class="edge"/><text x="58" y="50" font-size="12" class="t2">客户端 / 边缘</text>
+<rect x="176" y="40" width="12" height="12" rx="3" class="app"/><text x="194" y="50" font-size="12" class="t2">应用层</text>
+<rect x="280" y="40" width="12" height="12" rx="3" class="data"/><text x="298" y="50" font-size="12" class="t2">数据与存储</text>
+<rect x="40" y="68" width="186" height="50" rx="6" class="edge"/><text x="133" y="98" font-size="14" class="t1" text-anchor="middle">浏览器 SPA / 后台</text>
+<rect x="247" y="68" width="186" height="50" rx="6" class="edge"/><text x="340" y="98" font-size="14" class="t1" text-anchor="middle">随机图嵌入</text>
+<rect x="454" y="68" width="186" height="50" rx="6" class="edge"/><text x="547" y="98" font-size="14" class="t1" text-anchor="middle">API 调用方</text>
+<line x1="133" y1="118" x2="133" y2="154" class="arr" marker-end="url(#ar)"/>
+<line x1="340" y1="118" x2="340" y2="154" class="arr" marker-end="url(#ar)"/>
+<line x1="547" y1="118" x2="547" y2="154" class="arr" marker-end="url(#ar)"/>
+<rect x="40" y="156" width="600" height="56" rx="6" class="edge"/><text x="340" y="180" font-size="14" font-weight="500" class="t1" text-anchor="middle">反向代理 · 按 Host 分流</text><text x="340" y="200" font-size="12" class="t2" text-anchor="middle">主站 · random · static · docs · &lt;theme&gt;</text>
+<line x1="340" y1="212" x2="340" y2="246" class="arr" marker-end="url(#ar)"/>
+<rect x="40" y="248" width="600" height="150" rx="8" fill="none" stroke="var(--cont)" stroke-dasharray="5 4"/><text x="54" y="268" font-size="14" font-weight="500" class="t1">Hono 应用 · Node 服务</text>
+<rect x="60" y="278" width="560" height="30" rx="5" class="app"/><text x="340" y="297" font-size="14" class="t1" text-anchor="middle">中间件：安全响应头 · Host 分流 · 鉴权 / CSRF</text>
+<rect x="60" y="330" width="128" height="54" rx="5" class="app"/><text x="124" y="354" font-size="14" font-weight="500" class="t1" text-anchor="middle">images</text><text x="124" y="372" font-size="12" class="t2" text-anchor="middle">图片 / 上传</text>
+<rect x="204" y="330" width="128" height="54" rx="5" class="app"/><text x="268" y="354" font-size="14" font-weight="500" class="t1" text-anchor="middle">random</text><text x="268" y="372" font-size="12" class="t2" text-anchor="middle">随机图</text>
+<rect x="348" y="330" width="128" height="54" rx="5" class="app"/><text x="412" y="354" font-size="14" font-weight="500" class="t1" text-anchor="middle">tags / themes</text><text x="412" y="372" font-size="12" class="t2" text-anchor="middle">标签 · 主题</text>
+<rect x="492" y="330" width="128" height="54" rx="5" class="app"/><text x="556" y="354" font-size="14" font-weight="500" class="t1" text-anchor="middle">storage / jobs</text><text x="556" y="372" font-size="12" class="t2" text-anchor="middle">存储 · 任务</text>
+<line x1="133" y1="398" x2="133" y2="432" class="arr" marker-end="url(#ar)"/>
+<line x1="340" y1="398" x2="340" y2="432" class="arr" marker-end="url(#ar)"/>
+<line x1="547" y1="398" x2="547" y2="432" class="arr" marker-end="url(#ar)"/>
+<rect x="40" y="434" width="186" height="64" rx="6" class="data"/><text x="133" y="462" font-size="14" font-weight="500" class="t1" text-anchor="middle">PostgreSQL</text><text x="133" y="482" font-size="12" class="t2" text-anchor="middle">真相源 · 8 张表</text>
+<rect x="247" y="434" width="186" height="64" rx="6" class="data"/><text x="340" y="462" font-size="14" font-weight="500" class="t1" text-anchor="middle">Redis</text><text x="340" y="482" font-size="12" class="t2" text-anchor="middle">缓存 · 随机池 · 去重</text>
+<rect x="454" y="434" width="186" height="64" rx="6" class="data"/><text x="547" y="462" font-size="14" font-weight="500" class="t1" text-anchor="middle">存储后端</text><text x="547" y="482" font-size="12" class="t2" text-anchor="middle">Local · S3 · Link</text>
+<line x1="133" y1="498" x2="133" y2="532" class="arr" marker-end="url(#ar)"/>
+<line x1="547" y1="532" x2="547" y2="498" class="arr" marker-end="url(#ar)"/>
+<rect x="40" y="534" width="600" height="54" rx="6" class="app"/><text x="340" y="558" font-size="14" font-weight="500" class="t1" text-anchor="middle">后台 Worker · operation_log 队列</text><text x="340" y="578" font-size="12" class="t2" text-anchor="middle">缩略图 · 删除收尾 · 缓存重建 · 清理上传</text>
+</svg>

@@ -6,8 +6,10 @@ import { env } from "../config/env.js";
 import { ApiError } from "../core/http.js";
 import type { StorageConfig } from "../config/settings.js";
 
-export type StoragePrefix = "objects" | "thumbs" | "_uploads" | "trash";
-export type ReadablePrefix = "objects" | "thumbs";
+// "link" is a top-level prefix (sibling to thumbs/trash) holding link-image
+// thumbnails, kept separate from regular object thumbnails.
+export type StoragePrefix = "objects" | "thumbs" | "_uploads" | "trash" | "link";
+export type ReadablePrefix = "objects" | "thumbs" | "link";
 
 // Maps a (prefix, key) pair to its stored object name. "objects" live at the
 // storage root; the other prefixes are namespaced under a directory of that name.
@@ -16,7 +18,7 @@ export function storageObjectName(prefix: StoragePrefix, key: string) {
   if (key.includes("\0") || key.includes("..") || key.startsWith("/") || key.startsWith("\\")) {
     throw new ApiError(400, "unsafe_path", "Unsafe storage path");
   }
-  if (prefix === "objects" && /^(objects|thumbs|_uploads|trash)\//.test(key)) {
+  if (prefix === "objects" && /^(objects|thumbs|_uploads|trash|link)\//.test(key)) {
     throw new ApiError(400, "unsafe_path", "Unsafe storage path");
   }
   return prefix === "objects" ? key : `${prefix}/${key}`;

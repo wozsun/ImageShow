@@ -11,10 +11,8 @@ import {
   PutObjectCommand,
   S3Client
 } from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { getRuntimeConfig } from "../config/env.js";
 import { ApiError } from "../core/http.js";
-import { getPresignExpiresSeconds, getUploadLimitBytes, missingS3Fields, type StorageConfig } from "../config/settings.js";
+import { getUploadLimitBytes, missingS3Fields, type StorageConfig } from "../config/settings.js";
 import { s3CopySource, s3ListPrefix, storageS3ObjectName, type ReadablePrefix, type StoragePrefix } from "./object-keys.js";
 import { limitedWebStream, nodeReadableFromWeb, streamToBuffer } from "./stream-buffer.js";
 import type {
@@ -23,14 +21,11 @@ import type {
   MoveToPrefix,
   OpenedRead,
   StorageDriver,
-  StorageSelfTest,
-  UploadTarget,
-  UploadTargetRow
+  StorageSelfTest
 } from "./storage-backend.js";
 
-// Builds an S3 client for a backend config. Exported because the CORS check
-// (storage/cors.ts) issues its own probe requests against the same endpoint.
-export function storageS3Client(config: StorageConfig) {
+// Builds an S3 client for a backend config.
+function storageS3Client(config: StorageConfig) {
   const endpoint = /^https?:\/\//i.test(config.s3.endpoint) ? config.s3.endpoint : `https://${config.s3.endpoint}`;
   return new S3Client({
     endpoint,
@@ -114,11 +109,6 @@ export class S3Backend implements StorageDriver {
     }));
   }
 
-  async stat(prefix: StoragePrefix, key: string) {
-    const result = await this.client.send(new HeadObjectCommand({ Bucket: this.bucket, Key: this.name(prefix, key) }));
-    return { size: Number(result.ContentLength ?? 0) };
-  }
-
   async writeUploadFromWeb(id: string, body: ReadableStream<Uint8Array>, expectedSize: number) {
     // Stream straight to S3 with a known length instead of buffering the whole
     // body in memory. The size cap is enforced inline; the exact-size and MD5
@@ -146,7 +136,7 @@ export class S3Backend implements StorageDriver {
       for (const item of result.Contents ?? []) {
         if (!item.Key || item.Key === prefixPath) continue;
         const key = item.Key.startsWith(prefixPath) ? item.Key.slice(prefixPath.length) : item.Key;
-        if (prefix === "objects" && /^(thumbs|_uploads|trash)\//.test(key)) continue;
+        if (prefix === "objects" && /^(thumbs|_uploads|trash|link)\//.test(key)) continue;
         keys.push(key);
       }
       token = result.NextContinuationToken;
@@ -159,29 +149,6 @@ export class S3Backend implements StorageDriver {
     const base = this.config.s3.public_base_url.replace(/\/+$/, "");
     const encoded = this.name(prefix, key).split("/").map(encodeURIComponent).join("/");
     return `${base}/${encoded}`;
-  }
-
-  async createUploadTarget(row: UploadTargetRow): Promise<UploadTarget> {
-    const expiresAt = new Date(row.expires_at).getTime();
-    // Sign a Content-MD5 header so the object store validates the uploaded bytes
-    // and rejects corruption in transit (BadDigest). The browser must replay the
-    // exact header, so it's returned in upload_headers; this needs the bucket CORS
-    // to allow Content-MD5. The hex digest the browser already computed is encoded
-    // to the base64 form S3/COS expect.
-    const contentMd5 = getRuntimeConfig().upload.verify_content_md5 && row.content_md5_hex && /^[a-f0-9]{32}$/.test(row.content_md5_hex)
-      ? Buffer.from(row.content_md5_hex, "hex").toString("base64")
-      : undefined;
-    const command = new PutObjectCommand({
-      Bucket: this.bucket,
-      Key: this.name("_uploads", row.staging_object_key),
-      ...(contentMd5 ? { ContentMD5: contentMd5 } : {})
-    });
-    const seconds = Math.max(60, Math.min(await getPresignExpiresSeconds(), Math.floor((expiresAt - Date.now()) / 1000)));
-    return {
-      upload_url: await getSignedUrl(this.client, command, { expiresIn: seconds }),
-      upload_headers: contentMd5 ? { "Content-MD5": contentMd5 } : {},
-      backend: "s3-direct"
-    };
   }
 
   async selfTest(): Promise<StorageSelfTest> {
@@ -198,5 +165,10 @@ export class S3Backend implements StorageDriver {
       endpoint: this.config.s3.endpoint,
       public_base_url: this.config.s3.public_base_url
     };
+  }
+
+  // Object storage has no real directories (keys are flat), so nothing to prune.
+  async pruneEmptyDirs(): Promise<number> {
+    return 0;
   }
 }

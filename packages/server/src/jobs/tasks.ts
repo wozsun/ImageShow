@@ -4,12 +4,15 @@
 import { v7 as uuidv7 } from "uuid";
 import { appConfig } from "@imageshow/shared";
 import { cleanupEmptyCategories, pool } from "../core/db.js";
-import { contentType, makeThumb } from "../images/processing.js";
-import { thumbnailObjectKey } from "../storage/image-paths.js";
-import { moveObject, removeObject, exists } from "../storage/storage.js";
+import { errorMessage } from "../core/http.js";
+import { logger } from "../core/logger.js";
+import { contentType, createThumbnail, makeThumb, md5Buffer } from "../images/processing.js";
+import { thumbnailObjectKey, thumbnailRef } from "../storage/image-paths.js";
+import { exists, moveObject, readStorageBuffer, removeObject, writeStorageBuffer } from "../storage/storage.js";
 import { rebuildFolderMap } from "../core/redis.js";
 import { restoreImageFromTrash } from "./restore.js";
 import { getRuntimeConfig } from "../config/env.js";
+import { getStorageBackend } from "../config/settings.js";
 
 let timer: NodeJS.Timeout | undefined;
 let tickPromise: Promise<void> | null = null;
@@ -42,18 +45,23 @@ export async function enqueueMany(type: string, targetIds: string[]) {
   return ids;
 }
 
-async function claim() {
+// Atomically claims the oldest claimable task — optionally restricted to one type, so a
+// per-type lane only pulls its own work. SKIP LOCKED means concurrent lanes (and other
+// instances) never grab the same row.
+async function claim(type?: string) {
   const result = await pool.query(
     `UPDATE operation_log
      SET status = 'running', updated_at = now()
      WHERE id = (
        SELECT id FROM operation_log
-       WHERE status = 'pending' OR (status = 'failed' AND next_retry_at <= now())
+       WHERE (status = 'pending' OR (status = 'failed' AND next_retry_at <= now()))
+         ${type ? "AND type = $1" : ""}
        ORDER BY created_at
        FOR UPDATE SKIP LOCKED
        LIMIT 1
      )
-     RETURNING *`
+     RETURNING *`,
+    type ? [type] : []
   );
   return result.rows[0] as { id: string; type: string; target_id: string; payload: Record<string, unknown>; retry_count: number } | undefined;
 }
@@ -66,83 +74,168 @@ async function ignore(id: string, reason: string) {
   await pool.query("UPDATE operation_log SET status='ignored', error=$2, updated_at=now() WHERE id=$1", [id, reason]);
 }
 
-async function fail(id: string, retryCount: number, error: unknown) {
-  const retry = retryCount + 1;
+async function fail(task: Task, error: unknown) {
+  const retry = task.retry_count + 1;
   const maxRetries = appConfig.operationLog.maxRetries;
-  const seconds = appConfig.operationLog.retryBackoffSeconds[Math.max(0, retry - 1)] ?? appConfig.operationLog.retryBackoffSeconds.at(-1) ?? 21600;
+  const backoff = appConfig.operationLog.retryBackoffSeconds;
+  const seconds = backoff[Math.min(retry - 1, backoff.length - 1)];
+  const exhausted = retry >= maxRetries;
+  // A retrying task is a warning; one that's out of retries is an error worth attention.
+  logger[exhausted ? "error" : "warn"](
+    `task ${task.type} ${exhausted ? "gave up" : `will retry (${retry}/${maxRetries})`} id=${task.id.slice(0, 8)}: ${errorMessage(error)}`
+  );
   await pool.query(
     "UPDATE operation_log SET status='failed', retry_count=$2, next_retry_at=$3, error=$4, updated_at=now() WHERE id=$1",
-    [id, retry, retry >= maxRetries ? null : new Date(Date.now() + seconds * 1000), error instanceof Error ? error.message : String(error)]
+    [task.id, retry, exhausted ? null : new Date(Date.now() + seconds * 1000), errorMessage(error)]
   );
 }
 
-async function runOne(task: NonNullable<Awaited<ReturnType<typeof claim>>>) {
-  if (task.type === "thumb.generate") {
-    const result = await pool.query("SELECT object_key, status, storage_backend FROM metadata WHERE id=$1", [task.target_id]);
+type Task = NonNullable<Awaited<ReturnType<typeof claim>>>;
+
+// One handler per operation_log task type. Each finishes via succeed() / ignore(), or throws —
+// a throw is caught by the draining lane and routed to fail() with backoff. Unknown types fall
+// through to the "not implemented" ignore in runOne.
+const taskHandlers: Record<string, (task: Task) => Promise<unknown>> = {
+  "thumb.generate": async (task) => {
+    const result = await pool.query("SELECT object_key, status, storage_slug, is_link, md5 FROM metadata WHERE id=$1", [task.target_id]);
     const row = result.rows[0];
     if (!row) return ignore(task.id, "metadata missing");
     if (row.status !== "ready") return ignore(task.id, "image not ready");
-    if (!await exists("objects", row.object_key, row.storage_backend)) return ignore(task.id, "object missing");
-    await makeThumb(row.object_key, row.storage_backend);
+    // Link thumbnails are made at import time from the downloaded bytes (no stored
+    // object to read here), so this job doesn't apply to them.
+    if (row.is_link) return ignore(task.id, "link thumbnail generated at import");
+    if (!await exists("objects", row.object_key, row.storage_slug)) return ignore(task.id, "object missing");
+    let thumbnailSize: number;
+    const config = await getStorageBackend(row.storage_slug);
+    if (config.type !== "local") {
+      // thumb.generate runs after a category move re-keys a remote object (or on restore)
+      // — not on upload, which thumbnails inline. We download the bytes to thumbnail them
+      // anyway, so verify their md5 against the recorded value as a cheap integrity
+      // check, then thumbnail from the same buffer. A mismatch fails the task (surfaced
+      // in the check page) rather than thumbnailing a corrupt object.
+      const buffer = await readStorageBuffer("objects", row.object_key, row.storage_slug);
+      if (row.md5 && md5Buffer(buffer) !== row.md5) {
+        throw new Error(`integrity check failed: stored object md5 does not match recorded md5 (${row.md5})`);
+      }
+      const thumbnail = await createThumbnail(buffer);
+      await writeStorageBuffer("thumbs", thumbnailObjectKey(row.object_key), thumbnail, "image/webp", row.storage_slug);
+      thumbnailSize = thumbnail.byteLength;
+    } else {
+      thumbnailSize = await makeThumb(row.object_key, row.storage_slug);
+    }
+    // Record the hosted thumbnail bytes so storage-usage stats stay accurate.
+    await pool.query("UPDATE metadata SET thumbnail_size=$2 WHERE id=$1", [task.target_id, thumbnailSize]);
     return succeed(task.id);
-  }
-  if (task.type === "delete.finalize") {
-    const result = await pool.query("SELECT id, object_key, ext, status, storage_backend FROM metadata WHERE id=$1", [task.target_id]);
+  },
+  "delete.finalize": async (task) => {
+    const result = await pool.query("SELECT id, object_key, ext, status, storage_slug, is_link FROM metadata WHERE id=$1", [task.target_id]);
     const row = result.rows[0];
     if (!row || row.status !== "deleted") return ignore(task.id, "image not deleted");
-    if (await exists("objects", row.object_key, row.storage_backend)) {
-      await moveObject("objects", row.object_key, "trash", row.object_key, contentType(row.ext), row.storage_backend);
+    // Link images store no bytes and keep their thumbnail until purge, so soft-delete
+    // has no storage finalize work.
+    if (row.is_link) return succeed(task.id);
+    if (await exists("objects", row.object_key, row.storage_slug)) {
+      await moveObject("objects", row.object_key, "trash", row.object_key, contentType(row.ext), row.storage_slug);
     }
-    await removeObject("thumbs", thumbnailObjectKey(row.object_key), row.storage_backend);
+    await removeObject("thumbs", thumbnailObjectKey(row.object_key), row.storage_slug);
     return succeed(task.id);
-  }
-  if (task.type === "restore.finalize") {
+  },
+  "restore.finalize": async (task) => {
     const result = await restoreImageFromTrash(task.target_id);
     if (result.status === "not_deleted") return ignore(task.id, "image not deleted");
     if (result.status === "object_missing") return ignore(task.id, "object missing");
     return succeed(task.id);
-  }
-  if (task.type === "move.cleanup") {
+  },
+  "move.cleanup": async (task) => {
     const objectKey = typeof task.payload.object_key === "string" ? task.payload.object_key : "";
-    const rawBackend = task.payload.backend;
-    const backend = rawBackend === "s3" ? ("s3" as const) : rawBackend === "local" ? ("local" as const) : undefined;
+    // payload.backend is the source image's storage_slug (set when the move enqueued
+    // this cleanup); undefined falls back to the default backend.
+    const backend = typeof task.payload.backend === "string" ? task.payload.backend : undefined;
     if (objectKey) {
       await removeObject("objects", objectKey, backend);
       await removeObject("thumbs", thumbnailObjectKey(objectKey), backend);
     }
     return succeed(task.id);
-  }
-  if (task.type === "upload.cleanup") {
+  },
+  "upload.cleanup": async (task) => {
+    // Reclaim staging bytes for stale in-flight sessions (created/failed/finalizing past
+    // their TTL), then delete every past-TTL session so the table can't grow without bound.
+    // 'finalizing' past TTL is a crashed finalize (finalize takes seconds): its staging is
+    // already moved to objects/, and any orphan final object is reclaimed by 清理无效存储. A
+    // finalized session's lasting record is its image row, so it too is retired once expired.
     const rows = (await pool.query(
-      "SELECT id, staging_object_key FROM upload_session WHERE status IN ('created','failed','expired') AND expires_at < now() LIMIT $1",
+      "SELECT id, staging_object_key FROM upload_session WHERE status IN ('created','failed','finalizing') AND expires_at < now() LIMIT $1",
       [appConfig.trashBatchSize]
     )).rows;
     for (const row of rows) {
       await removeObject("_uploads", row.staging_object_key).catch(() => undefined);
       await removeObject("_uploads", `${row.staging_object_key}.part`).catch(() => undefined);
     }
-    await pool.query("UPDATE upload_session SET status='expired', updated_at=now() WHERE id = ANY($1::uuid[]) AND status IN ('created','failed')", [rows.map((row) => row.id)]);
-    return succeed(task.id, { cleaned: rows.length });
-  }
-  if (task.type === "cache.rebuild") {
+    // 'expired' is included for backward compatibility — older rows may still carry it.
+    const deleted = await pool.query(
+      "DELETE FROM upload_session WHERE id = ANY($1::uuid[]) OR (status IN ('finalized','expired') AND expires_at < now())",
+      [rows.map((row) => row.id)]
+    );
+    return succeed(task.id, { cleaned: deleted.rowCount });
+  },
+  "cache.rebuild": async (task) => {
     await rebuildFolderMap();
     return succeed(task.id);
-  }
-  if (task.type === "empty-trash") {
+  },
+  "empty-trash": async (task) => {
     const ids = Array.isArray(task.payload.ids) ? task.payload.ids : [];
     const rows = ids.length
-      ? (await pool.query("SELECT id, object_key, storage_backend FROM metadata WHERE id = ANY($1::uuid[]) AND status='deleted'", [ids])).rows
+      ? (await pool.query("SELECT id, object_key, storage_slug, is_link, device, brightness, theme FROM metadata WHERE id = ANY($1::uuid[]) AND status='deleted'", [ids])).rows
       : [];
     for (const row of rows) {
-      await removeObject("objects", row.object_key, row.storage_backend).catch(() => undefined);
-      await removeObject("trash", row.object_key, row.storage_backend).catch(() => undefined);
-      await removeObject("thumbs", thumbnailObjectKey(row.object_key), row.storage_backend).catch(() => undefined);
+      const thumb = thumbnailRef(row);
+      await removeObject("objects", row.object_key, row.storage_slug).catch(() => undefined);
+      await removeObject("trash", row.object_key, row.storage_slug).catch(() => undefined);
+      await removeObject(thumb.prefix, thumb.key, thumb.slug).catch(() => undefined);
     }
     await pool.query("DELETE FROM metadata WHERE id = ANY($1::uuid[]) AND status='deleted'", [ids]);
     await cleanupEmptyCategories();
     return succeed(task.id, { deleted: rows.length });
   }
-  return ignore(task.id, "not implemented");
+};
+
+// Dispatches a claimed task to its type handler; unknown types are ignored as not implemented.
+async function runOne(task: Task) {
+  const handler = taskHandlers[task.type];
+  return handler ? handler(task) : ignore(task.id, "not implemented");
+}
+
+// Per-task-type worker concurrency. thumb.generate shares the upload concurrency knob;
+// the idempotent storage-cleanup types have their own file-only knobs. Everything else
+// stays serial (limit 1): restore.finalize mutates category indexes under per-category
+// locks, and cache.rebuild / upload.cleanup are idempotency-key singletons — none want
+// parallel lanes here.
+function typeConcurrency(type: string): number {
+  const config = getRuntimeConfig();
+  switch (type) {
+    case "thumb.generate": return config.upload.concurrency;
+    case "delete.finalize": return config.operation_log.delete_concurrency;
+    case "move.cleanup": return config.operation_log.move_cleanup_concurrency;
+    case "empty-trash": return config.operation_log.empty_trash_concurrency;
+    default: return 1;
+  }
+}
+
+// Drains all claimable tasks of one type using `lanes` parallel workers, each pulling
+// the next task (SKIP LOCKED) until the type's queue is empty.
+async function drainType(type: string, lanes: number) {
+  async function lane() {
+    for (;;) {
+      const task = await claim(type);
+      if (!task) return;
+      try {
+        await runOne(task);
+      } catch (error) {
+        await fail(task, error);
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: lanes }, lane));
 }
 
 async function runTick() {
@@ -158,16 +251,16 @@ async function runTick() {
     lastExpireUploads = now;
     await expireUploads();
   }
-  const maxTasksPerTick = getRuntimeConfig().operation_log.max_tasks_per_tick;
-  for (let i = 0; i < maxTasksPerTick; i += 1) {
-    const task = await claim();
-    if (!task) return;
-    try {
-      await runOne(task);
-    } catch (error) {
-      await fail(task.id, task.retry_count, error);
-    }
-  }
+  // One cheap aggregate finds which types have claimable work, then each type is drained
+  // in parallel with its own bounded concurrency (capped at the count actually waiting, so
+  // we never spawn idle lanes). Lanes keep claiming, so tasks enqueued mid-tick are picked
+  // up too. The tick ends when every type's queue is empty.
+  const pending = (await pool.query(
+    `SELECT type, count(*)::int AS n FROM operation_log
+     WHERE status='pending' OR (status='failed' AND next_retry_at <= now())
+     GROUP BY type`
+  )).rows as { type: string; n: number }[];
+  await Promise.all(pending.map((row) => drainType(row.type, Math.min(typeConcurrency(row.type), row.n))));
 }
 
 function tick() {
@@ -177,34 +270,57 @@ function tick() {
 }
 
 async function recoverStaleTasks() {
+  // Re-queue tasks left 'running' by a crashed process. Mirror fail()'s retry cap: once the
+  // incremented retry_count reaches maxRetries, stop (next_retry_at=null) instead of looping a
+  // task that hangs on every run forever.
   await pool.query(
     `UPDATE operation_log
      SET status='failed',
          retry_count=retry_count+1,
-         next_retry_at=now(),
+         next_retry_at=CASE WHEN retry_count + 1 >= $2 THEN NULL ELSE now() END,
          error='Recovered stale running task',
          updated_at=now()
      WHERE status='running'
        AND updated_at < now() - ($1 || ' seconds')::interval`,
-    [appConfig.operationLog.taskTimeoutSeconds]
+    [appConfig.operationLog.taskTimeoutSeconds, appConfig.operationLog.maxRetries]
   );
 }
 
 async function expireUploads() {
-  const count = Number((await pool.query(
-    "SELECT count(*)::int FROM upload_session WHERE status IN ('created','failed') AND expires_at < now()"
-  )).rows[0].count);
-  // The idempotency key collapses repeated ticks into one active cleanup job.
-  if (count) await enqueue("upload.cleanup", "", {}, "upload.cleanup").catch(() => undefined);
+  // Enqueue one cleanup when any session has passed its TTL, but only if none is already
+  // pending/running (the same "one active job" guard as the cache.rebuild fallback). A
+  // constant idempotency_key can't be used here: succeeded operation_log rows are never
+  // pruned, so it would wedge the job permanently after its first run.
+  await pool.query(
+    `INSERT INTO operation_log(id, type, status)
+     SELECT $1, 'upload.cleanup', 'pending'
+     WHERE EXISTS (SELECT 1 FROM upload_session WHERE expires_at < now())
+       AND NOT EXISTS (
+         SELECT 1 FROM operation_log WHERE type='upload.cleanup' AND status IN ('pending', 'running')
+       )`,
+    [uuidv7()]
+  ).catch(() => undefined);
 }
 
 export function startWorker() {
   if (timer) return;
-  timer = setInterval(() => tick().catch(console.error), 5000);
-  void tick().catch(console.error);
+  const onTickError = (error: unknown) => logger.error("worker tick failed", error);
+  timer = setInterval(() => tick().catch(onTickError), appConfig.operationLog.tickIntervalMs);
+  void tick().catch(onTickError);
 }
 
 export function stopWorker() {
   if (timer) clearInterval(timer);
   timer = undefined;
+}
+
+// Waits for the in-flight tick (if any) to finish before shutdown, bounded by a
+// timeout so a tick stuck on slow storage I/O can't block the process from exiting.
+// Tasks are durable, so a tick abandoned at the timeout is recovered on next start.
+export async function drainWorker(timeoutMs = appConfig.operationLog.drainTimeoutMs) {
+  if (!tickPromise) return;
+  let timer: NodeJS.Timeout | undefined;
+  const deadline = new Promise<void>((resolve) => { timer = setTimeout(resolve, timeoutMs); });
+  await Promise.race([tickPromise.catch(() => undefined), deadline]);
+  if (timer) clearTimeout(timer);
 }

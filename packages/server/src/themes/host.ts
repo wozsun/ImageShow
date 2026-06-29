@@ -1,24 +1,26 @@
 import type { Context, Next } from "hono";
 import { getRuntimeConfig } from "../config/env.js";
-import { getGalleryOptions } from "./redis.js";
+import { getGalleryOptions } from "../core/redis.js";
 
 type HostParts = { hostname: string; port: string };
 
 // The configured reserved sub-prefixes that are not themes: <random>.<domain>
 // serves the random API, <static>.<domain> serves local-storage objects (for
-// cookie isolation), and <docs>.<domain> serves the bundled VitePress docs site
-// (built from packages/docs, deployed with the app — see routes/docs.ts). The
-// labels are set in config.json (site.random_subdomain / static_subdomain /
-// docs_subdomain), defaulting to "random" / "static" / "docs".
+// cookie isolation), <docs>.<domain> serves the bundled VitePress docs site
+// (built from packages/docs, deployed with the app — see routes/docs.ts), and
+// <link>.<domain> serves everything for link (external-URL) images: their stored
+// thumbnail at /thumbs and the server-side proxy of their external original at /media.
+// The labels are set in config.json (site.random_subdomain / static_subdomain /
+// docs_subdomain / link_subdomain), defaulting to "random" / "static" / "docs" / "link".
 function reservedPrefixes() {
   const site = getRuntimeConfig().site;
-  return { random: site.random_subdomain, static: site.static_subdomain, docs: site.docs_subdomain };
+  return { random: site.random_subdomain, static: site.static_subdomain, docs: site.docs_subdomain, link: site.link_subdomain };
 }
 
 // Every reserved prefix label, so a theme can't collide with any of them.
 function reservedPrefixList() {
   const reserved = reservedPrefixes();
-  return [reserved.random, reserved.static, reserved.docs];
+  return [reserved.random, reserved.static, reserved.docs, reserved.link];
 }
 
 // The single label before the configured site domain (e.g. "nature" for
@@ -37,13 +39,14 @@ export function themeFromHost(hostHeader: string) {
   return prefix && !prefix.includes(".") && /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(prefix) ? prefix : "";
 }
 
-export function specialHost(hostHeader: string): "random" | "static" | "docs" | "" {
+export function specialHost(hostHeader: string): "random" | "static" | "docs" | "link" | "" {
   const prefix = hostPrefix(hostHeader);
   if (!prefix) return "";
   const reserved = reservedPrefixes();
   if (prefix === reserved.random) return "random";
   if (prefix === reserved.static) return "static";
   if (prefix === reserved.docs) return "docs";
+  if (prefix === reserved.link) return "link";
   return "";
 }
 
@@ -53,14 +56,22 @@ export function isReservedSubdomain(label: string): boolean {
   return reservedPrefixList().includes(label);
 }
 
-// Absolute base URL for serving objects from the cookie-isolated object host. An
-// explicit site.static_base_url wins; otherwise it's derived as
-// https://<static_subdomain>.<domain>, so the site must be a real domain whose
-// object subdomain resolves (or set static_base_url explicitly).
+// Absolute base URL for serving objects from the cookie-isolated object host, derived
+// as https://<static_subdomain>.<domain>. The object subdomain always resolves under the
+// wildcard DNS the theme subdomains already require. To front it with a CDN, point
+// (CNAME) <static_subdomain>.<domain> at the CDN and let it origin-pull.
 export function staticLocalBaseUrl() {
   const site = getRuntimeConfig().site;
-  if (site.static_base_url) return site.static_base_url.replace(/\/+$/, "");
   return `https://${site.static_subdomain}.${site.domain.replace(/:\d+$/, "")}`;
+}
+
+// Absolute base URL for link (external-URL) images, derived as
+// https://<link_subdomain>.<domain>. Hosts the stored link thumbnail (/thumbs) and the
+// server-side proxy of the external original (/media). Resolves under the same wildcard
+// DNS the theme/static subdomains require.
+export function linkBaseUrl() {
+  const site = getRuntimeConfig().site;
+  return `https://${site.link_subdomain}.${site.domain.replace(/:\d+$/, "")}`;
 }
 
 export async function existingThemeFromHost(hostHeader: string) {

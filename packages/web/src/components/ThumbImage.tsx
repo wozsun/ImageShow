@@ -39,6 +39,7 @@ export function ThumbImage({ src, alt = "", className = "" }: { src: string; alt
       className={className}
       loading="lazy"
       decoding="async"
+      referrerPolicy="no-referrer"
       onError={() => {
         if (attempt >= MAX_RETRIES) { setFailed(true); return; }
         const next = attempt + 1;

@@ -2,6 +2,7 @@
 *.log
 *.key
 .venv
+*.tsbuildinfo
 __pycache__/
 
 .env

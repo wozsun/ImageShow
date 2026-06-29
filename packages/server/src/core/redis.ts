@@ -5,7 +5,6 @@ import { Redis } from "ioredis";
 import { v7 as uuidv7 } from "uuid";
 import { appConfig, indexKey } from "@imageshow/shared";
 import { env } from "../config/env.js";
-import type { StorageBackend } from "../config/settings.js";
 import { pool } from "./db.js";
 
 export const redis = new Redis({
@@ -21,14 +20,25 @@ export const RANDOM_OBJECTS_KEY = "imageshow:random_objects";
 export const GALLERY_OPTIONS_KEY = "imageshow:gallery_options";
 export const MD5_CACHE_PREFIX = "imageshow:md5:";
 export const PUBLIC_IMAGES_CACHE_PREFIX = "imageshow:public_images:";
+// Generation counter for the public-image list cache. Invalidation bumps this in
+// O(1) instead of SCAN-deleting every cached page; stale entries (now under an old
+// generation in their key) are never read again and expire on their own TTL.
+const PUBLIC_IMAGES_GEN_KEY = "imageshow:public_images_gen";
 export const IMAGE_LOOKUP_OBJECTS_KEY = "imageshow:image_lookup:objects";
 export const IMAGE_LOOKUP_THUMBS_KEY = "imageshow:image_lookup:thumbs";
+// Small, rarely-changing lists read on hot public paths: the theme/tag vocabulary
+// (slug + display name) backs term resolution on every filtered random/gallery
+// request, and the assembled gallery filter facets back the gallery's filter UI.
+const THEME_VOCAB_KEY = "imageshow:theme_vocab";
+const TAG_VOCAB_KEY = "imageshow:tag_vocab";
+const AUTHOR_VOCAB_KEY = "imageshow:author_vocab";
+const GALLERY_FACETS_KEY = "imageshow:gallery_facets";
 let redisConnectPromise: Promise<unknown> | null = null;
 
 export type FolderMap = Record<string, Record<string, Record<string, number>>>;
 export type GalleryFilterOptions = { devices: string[]; brightnesses: string[]; themes: string[] };
 export type RandomPoolSnapshot = { folderMap: FolderMap; themes: string[] };
-export type ImageLookupItem = { object_key: string; thumb_key: string; ext: string; backend?: StorageBackend };
+export type ImageLookupItem = { object_key: string; thumb_key: string; ext: string; slug?: string };
 export type RandomObjectIndexItem = {
   id: string;
   object_key: string;
@@ -38,7 +48,8 @@ export type RandomObjectIndexItem = {
   brightness: "dark" | "light";
   theme: string;
   category_index: number;
-  storage_backend: StorageBackend;
+  storage_slug: string;
+  is_link: boolean;
 };
 
 export async function pingRedis() {
@@ -53,9 +64,9 @@ export async function pingRedis() {
 
 export async function rebuildFolderMap() {
   const result = await pool.query(
-    `SELECT id, device, brightness, theme, category_key, category_index, object_key, ext, storage_backend
+    `SELECT id, device, brightness, theme, category_key, category_index, object_key, ext, storage_slug, is_link
      FROM metadata
-     WHERE status='ready' AND device IN ('pc','mb') AND brightness IN ('dark','light')
+     WHERE status='ready'
      ORDER BY category_key, category_index`
   );
   const map: FolderMap = {};
@@ -65,18 +76,7 @@ export async function rebuildFolderMap() {
     map[row.device][row.brightness] ??= {};
     map[row.device][row.brightness][row.theme] ??= 0;
     map[row.device][row.brightness][row.theme] += 1;
-    const key = indexKey(row.category_key, Number(row.category_index));
-    objectEntries.push(key, JSON.stringify({
-      id: row.id,
-      object_key: row.object_key,
-      ext: row.ext,
-      index_key: key,
-      device: row.device,
-      brightness: row.brightness,
-      theme: row.theme,
-      category_index: Number(row.category_index),
-      storage_backend: row.storage_backend
-    } satisfies RandomObjectIndexItem));
+    objectEntries.push(...serializeRandomObject(row));
   }
   const tmp = `${FOLDER_MAP_KEY}:tmp:${Date.now()}`;
   const tmpObjects = `${RANDOM_OBJECTS_KEY}:tmp:${Date.now()}`;
@@ -102,6 +102,28 @@ function optionsFromFolderMap(map: FolderMap): GalleryFilterOptions {
     }
   }
   return { devices: ["pc", "mb"], brightnesses: ["light", "dark"], themes: [...themes].sort() };
+}
+
+// Maps one ready metadata row to the [index_key, JSON] pair stored in the RANDOM_OBJECTS_KEY
+// hash. Shared by the full rebuild and the per-category refresh so both write the identical
+// shape; spread into an entries array (`objectEntries.push(...serializeRandomObject(row))`).
+function serializeRandomObject(row: {
+  id: string; object_key: string; ext: string; category_key: string; category_index: number | string;
+  device: "pc" | "mb"; brightness: "dark" | "light"; theme: string; storage_slug: string; is_link: boolean;
+}): [string, string] {
+  const key = indexKey(row.category_key, Number(row.category_index));
+  return [key, JSON.stringify({
+    id: row.id,
+    object_key: row.object_key,
+    ext: row.ext,
+    index_key: key,
+    device: row.device,
+    brightness: row.brightness,
+    theme: row.theme,
+    category_index: Number(row.category_index),
+    storage_slug: row.storage_slug,
+    is_link: row.is_link
+  } satisfies RandomObjectIndexItem)];
 }
 
 export async function getFolderMap() {
@@ -147,9 +169,22 @@ export async function getGalleryOptions() {
     return optionsFromFolderMap(await rebuildFolderMap());
   } catch {
     const result = await pool.query(
-      "SELECT DISTINCT theme FROM metadata WHERE status='ready' AND device IN ('pc','mb') AND brightness IN ('dark','light') ORDER BY theme"
+      "SELECT DISTINCT theme FROM metadata WHERE status='ready' ORDER BY theme"
     );
     return { devices: ["pc", "mb"], brightnesses: ["light", "dark"], themes: result.rows.map((row) => row.theme as string) };
+  }
+}
+
+// Current generation for the public-image list cache. Callers capture it once at
+// the start of a read and reuse it for both the lookup and the write-back, so a
+// concurrent invalidation lands the about-to-be-written entry under the old
+// generation (orphaned) rather than serving it as fresh.
+export async function publicImagesCacheGeneration(): Promise<string> {
+  try {
+    await pingRedis();
+    return (await redis.get(PUBLIC_IMAGES_GEN_KEY)) ?? "0";
+  } catch {
+    return "0";
   }
 }
 
@@ -217,22 +252,16 @@ export async function setImageLookups(items: ImageLookupItem[]) {
 export async function invalidateImageReadCaches() {
   try {
     await pingRedis();
+    // Bump the list-cache generation (O(1)) so every cached page is logically
+    // invalidated at once, drop the two object/thumb lookup hashes outright, and drop
+    // the gallery facets (an image add/remove changes which themes/tags are in use).
     await Promise.all([
-      deleteByPattern(`${PUBLIC_IMAGES_CACHE_PREFIX}*`),
-      redis.del(IMAGE_LOOKUP_OBJECTS_KEY, IMAGE_LOOKUP_THUMBS_KEY)
+      redis.incr(PUBLIC_IMAGES_GEN_KEY),
+      redis.del(IMAGE_LOOKUP_OBJECTS_KEY, IMAGE_LOOKUP_THUMBS_KEY, GALLERY_FACETS_KEY)
     ]);
   } catch {
     // Cache invalidation failure is non-fatal because write paths committed to PostgreSQL.
   }
-}
-
-async function deleteByPattern(pattern: string) {
-  let cursor = "0";
-  do {
-    const result = await redis.scan(cursor, "MATCH", pattern, "COUNT", 200);
-    cursor = result[0];
-    if (result[1].length) await redis.del(...result[1]);
-  } while (cursor !== "0");
 }
 
 export async function bumpFolder(categoryKey: string, delta: number) {
@@ -254,12 +283,12 @@ export async function bumpFolder(categoryKey: string, delta: number) {
 
 async function refreshRandomCategory(categoryKey: string, delta: number) {
   const rowsResult = await pool.query(
-      `SELECT id, device, brightness, theme, category_key, category_index, object_key, ext, storage_backend
-       FROM metadata
-       WHERE category_key=$1 AND status='ready'
-       ORDER BY category_index`,
-      [categoryKey]
-    );
+    `SELECT id, device, brightness, theme, category_key, category_index, object_key, ext, storage_slug, is_link
+     FROM metadata
+     WHERE category_key=$1 AND status='ready'
+     ORDER BY category_index`,
+    [categoryKey]
+  );
   const raw = await redis.get(FOLDER_MAP_KEY);
   const map = raw ? JSON.parse(raw) as FolderMap : await rebuildFolderMap();
   const previous = findMapEntry(map, categoryKey);
@@ -286,18 +315,7 @@ async function refreshRandomCategory(categoryKey: string, delta: number) {
   const objectEntries: string[] = [];
   for (const row of rows) {
     if (!["pc", "mb"].includes(row.device) || !["dark", "light"].includes(row.brightness)) continue;
-    const key = indexKey(row.category_key, Number(row.category_index));
-    objectEntries.push(key, JSON.stringify({
-      id: row.id,
-      object_key: row.object_key,
-      ext: row.ext,
-      index_key: key,
-      device: row.device,
-      brightness: row.brightness,
-      theme: row.theme,
-      category_index: Number(row.category_index),
-      storage_backend: row.storage_backend
-    } satisfies RandomObjectIndexItem));
+    objectEntries.push(...serializeRandomObject(row));
   }
   if (objectEntries.length) await redis.hset(RANDOM_OBJECTS_KEY, ...objectEntries);
   await redis.set(FOLDER_MAP_KEY, JSON.stringify(map), "EX", appConfig.folderMapTtlSeconds);
@@ -386,3 +404,83 @@ export async function invalidateMd5Caches(md5s: string[]) {
     // PostgreSQL remains authoritative; stale cache entries expire naturally.
   }
 }
+
+export type VocabEntry = { slug: string; display_name: string };
+
+async function loadVocab(table: "theme" | "tag"): Promise<VocabEntry[]> {
+  return (await pool.query(`SELECT slug, display_name FROM ${table} ORDER BY slug`)).rows as VocabEntry[];
+}
+
+// Cache-aside read of a small vocabulary list: serve from Redis, else load from PostgreSQL
+// and backfill the cache; a Redis outage reads straight from PostgreSQL. A freshly
+// auto-created slug (empty display name, made by ensureTheme / setImageTags) may be missing
+// until the TTL lapses — harmless, since term resolution falls back to slug-identity for
+// anything absent here. Shared by the theme / tag / author vocab getters below.
+async function cachedVocab<T>(key: string, load: () => Promise<T>): Promise<T> {
+  try {
+    await pingRedis();
+    const raw = await redis.get(key);
+    if (raw) return JSON.parse(raw) as T;
+    const rows = await load();
+    await redis.set(key, JSON.stringify(rows), "EX", appConfig.folderMapTtlSeconds);
+    return rows;
+  } catch {
+    return load();
+  }
+}
+
+// The theme / tag vocabulary (slug + display name), read on every theme/tag term resolution.
+export function getThemeVocab(): Promise<VocabEntry[]> {
+  return cachedVocab(THEME_VOCAB_KEY, () => loadVocab("theme"));
+}
+
+export function getTagVocab(): Promise<VocabEntry[]> {
+  return cachedVocab(TAG_VOCAB_KEY, () => loadVocab("tag"));
+}
+
+// The author vocabulary carries an extra `link` beyond slug + display name, since the
+// image detail view renders the author as a link.
+export type AuthorVocabEntry = { slug: string; display_name: string; link: string };
+
+async function loadAuthorVocab(): Promise<AuthorVocabEntry[]> {
+  return (await pool.query("SELECT slug, display_name, link FROM author ORDER BY slug")).rows as AuthorVocabEntry[];
+}
+
+export function getAuthorVocab(): Promise<AuthorVocabEntry[]> {
+  return cachedVocab(AUTHOR_VOCAB_KEY, loadAuthorVocab);
+}
+
+export async function getGalleryFacetsCache<T>(): Promise<T | null> {
+  try {
+    await pingRedis();
+    const raw = await redis.get(GALLERY_FACETS_KEY);
+    return raw ? JSON.parse(raw) as T : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function setGalleryFacetsCache(value: unknown) {
+  try {
+    await pingRedis();
+    await redis.set(GALLERY_FACETS_KEY, JSON.stringify(value), "EX", appConfig.folderMapTtlSeconds);
+  } catch {
+    // PostgreSQL remains the source of truth when Redis is unavailable.
+  }
+}
+
+// Called by the theme / tag / author admin mutations. Drops the changed vocabulary plus
+// the gallery facets (which embed display names + the in-use slug set) so a rename/create/
+// delete reflects immediately rather than waiting out the TTL.
+async function invalidateVocab(vocabKey: string) {
+  try {
+    await pingRedis();
+    await redis.del(vocabKey, GALLERY_FACETS_KEY);
+  } catch {
+    // Stale vocabulary expires on its own TTL.
+  }
+}
+
+export const invalidateThemeVocab = () => invalidateVocab(THEME_VOCAB_KEY);
+export const invalidateTagVocab = () => invalidateVocab(TAG_VOCAB_KEY);
+export const invalidateAuthorVocab = () => invalidateVocab(AUTHOR_VOCAB_KEY);

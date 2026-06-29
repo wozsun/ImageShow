@@ -1,54 +1,68 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api } from "../../lib/api.js";
-import { Icon } from "../../components/Icon.js";
 import { ThumbImage } from "../../components/ThumbImage.js";
-import { adminApiBasePath, adminBasePath } from "../../lib/constants.js";
-import { storageBackendShortLabel } from "../../lib/select-options.js";
+import { adminApiBasePath, adminBasePath, queryKeys } from "../../lib/constants.js";
+import { formatBytes } from "../../lib/formatters.js";
 
 type RecentImage = { id: string; title: string; thumb_url: string; created_at: string | null };
 type ThemeCount = { theme: string; count: number };
 type OverviewStats = {
   gallery: number;
-  unset: number;
+  theme_unset: number;
   trash: number;
   total: number;
   local: number;
-  s3: number;
+  nonlocal: number;
+  link_count: number;
+  local_image_size: number;
+  local_thumb_size: number;
+  nonlocal_image_size: number;
+  nonlocal_thumb_size: number;
+  link_local_size: number;
+  link_nonlocal_size: number;
   theme_count: number;
-  default_backend: string;
+  backend_count: number;
   pc: number;
   mb: number;
   dark: number;
   light: number;
-  pending_tasks: number;
   top_themes: ThemeCount[];
   recent: RecentImage[];
 };
 
-type Card = { label: string; value?: number | string; hint?: string };
+type Card = { label: string; value?: number | string; hint?: string; to?: string };
 
 function Cards({ items }: { items: Card[] }) {
   return (
     <div className="overview-cards">
-      {items.map((item) => (
-        <div className="overview-card" key={item.label}>
-          <span className="overview-card-value">{item.value ?? "—"}</span>
-          <span className="overview-card-label">{item.label}</span>
-          {item.hint && <span className="overview-card-hint">{item.hint}</span>}
-        </div>
-      ))}
+      {items.map((item) => {
+        const body = (
+          <>
+            <span className="overview-card-value">{item.value ?? "—"}</span>
+            <span className="overview-card-label">{item.label}</span>
+            {item.hint && <span className="overview-card-hint">{item.hint}</span>}
+          </>
+        );
+        return item.to
+          ? (
+            <Link className="overview-card overview-card-link pressable" key={item.label} to={item.to}>
+              {body}
+            </Link>
+          )
+          : <div className="overview-card" key={item.label}>{body}</div>;
+      })}
     </div>
   );
 }
 
 export function Overview() {
-  const { data } = useQuery<OverviewStats>({ queryKey: ["admin-overview"], queryFn: () => api(`${adminApiBasePath}/overview`) });
+  const { data } = useQuery<OverviewStats>({ queryKey: queryKeys.overview, queryFn: () => api(`${adminApiBasePath}/overview`) });
   const imageCards: Card[] = [
-    { label: "图库", value: data?.gallery, hint: "已分类展示" },
-    { label: "未设置", value: data?.unset, hint: "缺少设备或亮度" },
-    { label: "回收站", value: data?.trash, hint: "可恢复" },
-    { label: "主题", value: data?.theme_count, hint: "图库主题数" }
+    { label: "图库", value: data?.gallery, hint: "已分类展示", to: `${adminBasePath}/images` },
+    { label: "未设置主题", value: data?.theme_unset, hint: "缺少主题", to: `${adminBasePath}/images?view=unset` },
+    { label: "回收站", value: data?.trash, hint: "可恢复", to: `${adminBasePath}/images?view=deleted` },
+    { label: "主题", value: data?.theme_count, hint: "图库主题数", to: `${adminBasePath}/themes` }
   ];
   const deviceCards: Card[] = [
     { label: "桌面", value: data?.pc },
@@ -56,11 +70,15 @@ export function Overview() {
     { label: "暗色", value: data?.dark },
     { label: "亮色", value: data?.light }
   ];
+  // 原图大小 + 略缩图大小（或 链接图的 本地占用 + 其它存储占用），用「+」拼成卡片副标题。
+  const sizePair = (first?: number, second?: number) =>
+    first === undefined || second === undefined ? undefined : `${formatBytes(first)} + ${formatBytes(second)}`;
   const storageCards: Card[] = [
-    { label: storageBackendShortLabel("local"), value: data?.local },
-    { label: storageBackendShortLabel("s3"), value: data?.s3 },
-    { label: "默认上传", value: data ? storageBackendShortLabel(data.default_backend) : undefined },
-    { label: "待处理任务", value: data?.pending_tasks }
+    // 本地存储 / 其它存储的非链接图片（原图+略缩图，不含链接图）、链接图略缩图（本地+其它存储）、当前存储后端数。
+    { label: "本地存储", value: data?.local, hint: sizePair(data?.local_image_size, data?.local_thumb_size) },
+    { label: "其它存储", value: data?.nonlocal, hint: sizePair(data?.nonlocal_image_size, data?.nonlocal_thumb_size) },
+    { label: "链接图片", value: data?.link_count, hint: sizePair(data?.link_local_size, data?.link_nonlocal_size) },
+    { label: "存储后端", value: data?.backend_count }
   ];
   return (
     <section className="workspace overview">
@@ -81,17 +99,8 @@ export function Overview() {
           </div>
 
           <div className="overview-section">
-            <h2>存储与任务</h2>
+            <h2>存储与大小</h2>
             <Cards items={storageCards} />
-          </div>
-
-          <div className="overview-section">
-            <h2>快捷入口</h2>
-            <div className="overview-links">
-              <Link className="button secondary pressable" to={`${adminBasePath}/images`}><Icon name="image-line" />图片管理</Link>
-              <Link className="button secondary pressable" to={`${adminBasePath}/settings`}><Icon name="settings-3-line" />设置</Link>
-              <Link className="button secondary pressable" to={`${adminBasePath}/check`}><Icon name="checkbox-circle-line" />检查</Link>
-            </div>
           </div>
         </div>
 
@@ -112,7 +121,12 @@ export function Overview() {
               <h2>最近上传</h2>
               <div className="overview-recent">
                 {data.recent.map((img) => (
-                  <Link className="overview-recent-item" key={img.id} to={`${adminBasePath}/images`} title={img.title || img.id}>
+                  <Link
+                    className="overview-recent-item"
+                    key={img.id}
+                    to={`${adminBasePath}/images`}
+                    title={img.title || img.id}
+                  >
                     <ThumbImage src={img.thumb_url} alt="" />
                   </Link>
                 ))}

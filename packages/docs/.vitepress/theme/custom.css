@@ -1,0 +1,8 @@
+/* The home page is short (hero + three feature cards + one intro line). VitePress's
+   default home layout reserves a large bottom padding, which pushes that short page a
+   few pixels past the viewport and shows a needless page scrollbar. Trim the bottom
+   padding so the home fits without scrolling; longer doc pages are unaffected (they
+   scroll regardless of this value). */
+.VPHome {
+  padding-bottom: 24px;
+}

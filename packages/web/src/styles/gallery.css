@@ -20,6 +20,16 @@
   line-height: 20px;
 }
 .gallery-toolbar .select-trigger { height: var(--gallery-control-height); }
+/* 设备/亮度/模式 are fixed selectors that only ever show a short label. 120px fits their
+   widest 4-char option (全部设备 / 全部亮度 / 默认模式) at the 16px trigger font without
+   clipping — the trigger reserves 10px left + 38px right (caret) padding, so 110px left only
+   ~60px for text (a 4-char CJK label needs 64px). 120px also matches the same short-label
+   selects in the uploader bar / batch editor / storage picker. The wider 主题/标签/作者
+   search dropdowns flex alongside them. */
+.gallery-toolbar label.gallery-axis { min-width: 0; width: 120px; flex: 0 0 auto; }
+/* The 筛选 drawer toggle is a mobile-only affordance (see responsive.css); on desktop all
+   filters are always shown, so the toggle is hidden and the .filters-open class is a no-op. */
+.gallery-filter-toggle { display: none; }
 .theme-page {
   background: #f5f6f8;
 }
@@ -189,74 +199,3 @@ dl { display: grid; grid-template-columns: 82px 1fr; gap: 8px 12px; }
 dt { color: #66717f; }
 dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 dd a { color: #1f6feb; }
-.edit-modal form {
-  width: min(860px, 100%);
-  max-width: 100%;
-  max-height: 90vh;
-  overflow: auto;
-  background: #fff;
-  border-radius: 8px;
-  animation: modal-pop .18s cubic-bezier(.2, .8, .2, 1);
-  overscroll-behavior: contain;
-}
-.edit-modal header, .edit-modal footer {
-  padding: 16px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  border-bottom: 1px solid #dce2ea;
-}
-.edit-modal footer { border-top: 1px solid #dce2ea; border-bottom: 0; justify-content: flex-end; }
-.edit-modal h2 { margin: 0; }
-.edit-modal p { margin: 4px 0 0; color: #66717f; }
-.edit-modal form.batch-edit-modal { width: min(1180px, 100%); display: flex; flex-direction: column; overflow: hidden; }
-.batch-edit-modal footer { justify-content: space-between; }
-.edit-storage { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 0 16px 14px; }
-.edit-storage-info { display: grid; gap: 2px; margin-right: auto; }
-.edit-storage-info span { color: #66717f; font-size: 13px; }
-.confirm-dialog form { width: min(520px, 100%); }
-.confirm-dialog form > footer { border-top: 0; }
-.confirm-dialog h2 { font-size: 19px; }
-.confirm-dialog p { font-size: 15px; }
-/* Scroll behavior/padding come from the shared .modal-scroll-list. */
-.batch-edit-list {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 10px;
-}
-.batch-edit-row {
-  width: 100%;
-  max-width: 100%;
-  display: grid;
-  grid-template-columns: 72px minmax(0, 1fr);
-  gap: 12px;
-  align-items: start;
-  padding: 10px;
-  background: #f7f8fa;
-  border: 1px solid #dce2ea;
-  border-radius: 8px;
-}
-.batch-edit-content { min-width: 0; display: grid; gap: 8px; }
-.batch-edit-head { min-width: 0; display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
-.batch-edit-head > div { min-width: 0; display: grid; gap: 3px; padding-top: 1px; }
-.batch-edit-head strong, .batch-edit-head span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.batch-edit-head span { color: #66717f; font-size: 13px; }
-.batch-edit-fields {
-  min-width: 0;
-  display: grid;
-  grid-template-columns: minmax(150px, 1.1fr) 120px 120px minmax(120px, .8fr) minmax(160px, 1fr) minmax(160px, 1fr);
-  gap: 8px;
-  align-items: center;
-}
-.batch-edit-fields > *, .batch-edit-content > textarea { min-width: 0; width: 100%; }
-.batch-edit-content textarea { min-height: 62px; }
-.edit-form-grid {
-  padding: 16px;
-  display: grid;
-  grid-template-columns: minmax(180px, 1fr) 120px 120px minmax(180px, 1fr);
-  gap: 12px;
-}
-.edit-form-grid label { display: grid; gap: 6px; color: #495260; }
-.edit-form-grid .url-field { grid-column: span 2; }
-.span-all { grid-column: 1 / -1; }

@@ -18,7 +18,7 @@ docker run --rm -p 5518:5518 \
 
 ## 反向代理与 HTTPS
 
-生产环境务必在可信反向代理终止 TLS，并**覆盖**而不是透传客户端伪造的转发头。把站点域名与其所有子域名（含 `random` / `static` / `docs` / 主题）都转发到应用的 `5518` 端口：
+生产环境务必在可信反向代理终止 TLS，并**覆盖**而不是透传客户端伪造的转发头。把站点域名与其所有子域名（含 `random` / `static` / `docs` / `link` / 主题）都转发到应用的 `5518` 端口：
 
 ```nginx
 server {
@@ -35,4 +35,4 @@ server {
 }
 ```
 
-不要把应用 HTTP 端口直接暴露到公网。若 `X-Forwarded-Proto` 缺失或错误，Secure Cookie、同源检查与生成的跳转 URL 都会不正确。本地存储的图片由浏览器同源 PUT 到应用，依赖管理员会话 Cookie 与 `X-CSRF-Token` 鉴权；S3 预签名 URL 由浏览器直连对象存储，不应经过应用反代或其 access log。
+不要把应用 HTTP 端口直接暴露到公网。若 `X-Forwarded-Proto` 缺失或错误，Secure Cookie、同源检查与生成的跳转 URL 都会不正确。上传的图片一律由浏览器同源 PUT 到应用（再由应用流式写入本地或 S3），依赖管理员会话 Cookie 与 `X-CSRF-Token` 鉴权；浏览器不直连对象存储上传，因此存储桶无需配置 CORS。

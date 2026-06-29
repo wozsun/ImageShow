@@ -1,0 +1,227 @@
+/* 后台的登录页样式与响应式规则，随 admin 分块加载。公共/共享的响应式规则在全局 styles/responsive.css。
+   维护约定：本文件的选择器须为后台独有；公共页可能用到的应放回全局文件。 */
+
+/* 后台登录页（/admin 入口）。背景图由 Login 组件按站点配置内联设置（默认站点自身的随机图 API，见 site.login_background）。 */
+.login {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background-size: cover;
+  background-position: center;
+}
+.login form {
+  width: min(360px, calc(100vw - 32px));
+  display: grid;
+  gap: 12px;
+  background: rgba(255, 255, 255, .94);
+  padding: 24px;
+  border: 1px solid #dce2ea;
+  border-radius: 8px;
+  animation: surface-in .2s ease-out;
+}
+.login h1 { margin: 0 0 6px; }
+/* 验证码行：答案输入框占据剩余宽度，挑战图紧随其后，点击可刷新。 */
+.login-captcha { display: flex; gap: 10px; align-items: stretch; }
+.login-captcha input { flex: 1; min-width: 0; }
+.login-captcha img {
+  flex: 0 0 auto;
+  /* 挑战图 SVG 的尺寸随（可配置的）验证码长度变化；固定高度、宽度自适应，
+     无论长度多少都保持纵横比。 */
+  height: 40px;
+  width: auto;
+  border: 1px solid #dce2ea;
+  border-radius: 6px;
+  background: #f1f3f6;
+  cursor: pointer;
+}
+/* 后台表单的错误提示（登录失败、账户设置校验、图片弹窗等，均在后台分块内）。 */
+.error { color: #b42318; margin: 0; }
+
+/* 后台专属的“减少动态效果”项；公共/共享的同类项留在全局 responsive.css。 */
+@media (prefers-reduced-motion: reduce) {
+  .edit-modal form,
+  .upload-overlay,
+  .upload-window,
+  .settings-feedback,
+  .check-summary,
+  .check-card,
+  .login form { animation: none; }
+  .admin button:not(:disabled):active { transform: none; }
+}
+
+@media (max-width: 1080px) {
+  .upload-defaults, .settings-grid { grid-template-columns: 1fr 1fr; }
+}
+
+/* 中等宽度（高于移动端、又不足以让上传/批量默认条在一行排下）：把
+   主题 + 标签 这一对作为整体落到第二行，而 应用到全部 留在第一行与选择器并排。
+   .*-pair 从 display:contents 提升为整行的 flex 盒；order 让 应用到全部 排在该对之前，
+   于是 flex-basis 100% 的这一对才是换行的那一块。 */
+@media (min-width: 761px) and (max-width: 1023px) {
+  .upload-default-pair,
+  .batch-common-pair {
+    order: 2;
+    flex: 1 1 100%;
+    min-width: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: 8px;
+  }
+  .upload-defaults .apply-to-all-button,
+  .batch-edit-common .apply-to-all-button { order: 1; }
+}
+
+@media (max-width: 760px) {
+  .admin { padding-left: 0; }
+  .admin > aside { display: none; }
+  .admin-mobile-header {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    height: 64px;
+    padding: 0 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    color: #f6f7f9;
+    background: #171b22;
+    border-bottom: 1px solid #2c333d;
+  }
+  .admin-mobile-navigation .mobile-nav-toggle {
+    color: #f6f7f9;
+    background: #242a33;
+    border-color: #3a424e;
+  }
+  .admin-mobile-navigation .mobile-nav-dropdown {
+    background: #171b22;
+    border-color: #3a424e;
+    /* 后台菜单项较多；将其高度限制在头部以下的空间并内部滚动，使每一项在矮视口下都可达
+       （下拉锚定在 sticky 头部，无法依赖页面滚动来露出折叠线以下的项）。 */
+    max-height: calc(100svh - 72px);
+    overflow-y: auto;
+  }
+  .admin-mobile-navigation .mobile-nav-dropdown a,
+  .admin-mobile-navigation .mobile-nav-dropdown button {
+    color: #f6f7f9;
+    line-height: 1.25;
+  }
+  .admin-mobile-navigation .mobile-nav-dropdown a.active {
+    color: #fff;
+    background: #29466d;
+  }
+  .admin-mobile-navigation .admin-nav-divider {
+    height: 1px;
+    margin: 4px;
+    border-top: 1px solid #343b46;
+  }
+  .workspace { padding: 16px; }
+  /* 分页型后台页（图片列表 / 主题 / 标签 / 作者管理，均为 .workspace-paged）在移动端也保持桌面
+     行为：卡片区域内部滚动、分页器固定在底部，而非整页滚动。.admin 变为 flex 列，让分页型工作区
+     填满 64px sticky 移动头部以下的空间（无魔法数字）。其高度固定为 100svh（固定盒——使内层可滚动，
+     且避免大/小视口的整页滚动落差）；overflow 保持 visible（非 hidden）以免高的 导航 下拉被裁剪。
+     非分页页（概览/设置/检查/账户/用户）保持正常整页滚动。桌面端见 admin/layout.css。 */
+  .admin:has(> .workspace-paged) { height: 100svh; min-height: 0; display: flex; flex-direction: column; }
+  .admin:has(> .workspace-paged) > .admin-mobile-header { flex: 0 0 auto; }
+  .workspace-paged { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; padding-bottom: 16px; }
+  .workspace-paged > .admin-scroll-region { flex: 1; min-height: 0; overflow-y: auto; padding-right: 2px; align-content: start; }
+  /* 通栏分隔线：先抵消移动端工作区的 16px 侧边内边距使横线铺满整个区域，再补回内边距让分页器内容保持对齐。 */
+  .workspace-paged > .admin-pagination { margin: 0 -16px; padding: 12px 16px 0; border-top: 1px solid #e2e8f0; }
+  .workspace-head, .toolbar { align-items: stretch; flex-direction: column; }
+  .workspace-head .segmented {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .workspace-head .segmented button { width: 100%; }
+  .image-admin-head-tools { flex-direction: column; align-items: stretch; }
+  /* 移动端堆叠顺序：视图切换标签置顶，两个触发按钮在其下。 */
+  .image-admin-head-tools .segmented { order: -1; }
+  .upload-triggers > .button { flex: 1; }
+  .upload-overlay { padding: 10px; }
+  .upload-window { width: 100%; max-height: 96vh; }
+  /* 与 .upload-window 相同的 max-height，使批量/编辑弹窗在列表滚动时居中方式一致
+     （两个遮罩都用匹配的 10px 内边距）。 */
+  .edit-modal form { width: 100%; max-height: 96vh; }
+  /* 堆叠分页型弹窗页脚（一个 grid，与上传窗口一致），让左侧控件、分页器、动作各占一整行，避免溢出。 */
+  .batch-edit-modal footer { grid-template-columns: 1fr; row-gap: 10px; justify-items: stretch; }
+  /* grid-column: auto 撤销桌面端固定到第 3 列，使每个控件在单列中堆叠。 */
+  .batch-edit-modal footer > * { grid-column: auto; justify-self: stretch; }
+  /* 3 列上传页脚（存储+清空重复待确认 / 分页 / 动作）无法并排，于是每组各占一整行并铺满边到边，
+     而非左对齐留出参差的右边距。 */
+  .upload-window > footer { grid-template-columns: 1fr; row-gap: 10px; justify-items: stretch; }
+  .upload-window > footer .upload-footer-left,
+  .upload-window > footer .admin-pagination,
+  .upload-window > footer .modal-footer-actions { justify-self: stretch; }
+  .upload-window > footer .upload-footer-left > .clear-button { flex: 1; }
+  .upload-window > footer .admin-pagination button,
+  .batch-edit-modal footer .admin-pagination button { flex: 1; }
+  .admin button:not(:disabled) { transition-duration: .08s; }
+  .admin button:not(:disabled):not(.select-trigger):active { transform: scale(.95); }
+  .settings-grid, .overview-grid { grid-template-columns: 1fr; }
+  /* 批量通用条（flex 行）：设备/亮度 成对，主题/标签/应用到全部 整行堆叠。 */
+  .select-control.batch-common-select { flex: 1 1 calc(50% - 4px); width: auto; }
+  .theme-input-control.batch-common-theme,
+  .tag-input-control.batch-common-tags,
+  .batch-edit-common .apply-to-all-button { flex-basis: 100%; width: auto; }
+  /* 头部堆叠在标题之下：两个配置按钮共享一行（无固定宽度），反馈在其下整宽换行。 */
+  .settings-head-actions { margin-left: 0; flex-wrap: wrap; }
+  .settings-head-actions .settings-config-button { flex: 1 1 auto; min-width: 0; }
+  .settings-feedback.is-inline { order: 3; flex-basis: 100%; max-width: none; }
+  /* 检查页按钮组改为均匀的 2 列 grid，而非右对齐换行留下参差的行间空隙。 */
+  .check-actions { margin-left: 0; }
+  .check-actions .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .check-actions .actions button { width: 100%; }
+  /* 太窄放不下默认条的单行平铺，于是排成整齐的 2 列 grid：设备 | 亮度，
+     再 主题、标签 与 应用到全部 各自整宽——更短且对齐，而非堆叠参差的行。 */
+  .upload-defaults { display: grid; grid-template-columns: 1fr 1fr; align-items: stretch; }
+  .select-control.upload-default-select,
+  .theme-input-control.upload-default-theme,
+  .tag-input-control.upload-default-tags { width: auto; }
+  .theme-input-control.upload-default-theme,
+  .tag-input-control.upload-default-tags,
+  .apply-to-all-button { grid-column: 1 / -1; }
+  .upload-job { grid-template-columns: 56px minmax(0, 1fr) auto; }
+  .upload-job-thumbnail, .batch-edit-row > .image-thumbnail { width: 56px; height: 56px; flex-basis: 56px; }
+  .batch-edit-list { display: block; padding: 10px; overflow-x: hidden; }
+  .batch-edit-row { position: relative; display: block; width: 100%; max-width: 100%; margin-bottom: 8px; padding: 8px; min-width: 0; }
+  .batch-edit-row:last-child { margin-bottom: 0; }
+  .batch-edit-row > .image-thumbnail { position: absolute; top: 8px; left: 8px; width: 48px; height: 48px; flex-basis: 48px; }
+  .batch-edit-content { width: 100%; }
+  .batch-edit-head { min-height: 48px; padding-left: 56px; }
+  .upload-job .image-fields { grid-column: 1 / -1; }
+  /* 卡片/行的字段块在手机上放不下五个并排控件：标题独占一行，设备/亮度/主题/标签 每行两个，URL 堆叠。
+     上传卡片与批量编辑行共用（两者都用 .image-fields）。 */
+  .image-fields-primary, .image-fields-urls { flex-wrap: wrap; }
+  .image-fields-title { flex-basis: 100%; }
+  .select-control.image-fields-device,
+  .select-control.image-fields-brightness,
+  .theme-input-control.image-fields-theme,
+  .theme-input-control.image-fields-author,
+  .tag-input-control.image-fields-tags { flex: 1 1 calc(50% - 4px); width: auto; min-width: 0; }
+  .image-fields-urls > input { flex-basis: 100%; }
+  .duplicate-panel { grid-column: 1 / -1; }
+  /* 太窄无法把 300px 卡片与按钮并排——堆叠它们，动作右对齐在列表下方。 */
+  .duplicate-body { flex-direction: column; align-items: stretch; }
+  .duplicate-body .inline-actions { justify-content: flex-end; }
+  .admin-image-grid { grid-template-columns: 1fr; }
+  .row { grid-template-columns: 22px 56px minmax(0, 1fr); }
+  .thumb-button { width: 56px; height: 56px; }
+  .row-actions { grid-column: 1 / -1; justify-content: flex-end; }
+  /* 次级后台表单与弹窗（主题/标签/作者/用户管理的新建条、重置密码、检查操作 / 图片迁移弹窗、
+     链接导入弹窗、账户设置）：每个输入/字段占一整行，动作按钮共享一行且 flex:1 铺满宽度（与
+     上传/批量弹窗页脚一致），而非左对齐留参差或在默认宽度下右对齐；44px 高便于点按。存储编辑弹窗
+     保留其自己的多按钮换行规则（此处排除）；批量/上传弹窗页脚保留上面的专属 grid。 */
+  .theme-create-form input,
+  .theme-create-form .theme-create-field,
+  .theme-create-form .entity-slug-field { flex-basis: 100%; max-width: none; }
+  /* 撤销桌面端右对齐的 批量删除，使该行像其余行一样堆叠（slug 字段的整宽来自上面的
+     .entity-slug-field 重置）。 */
+  .theme-create-form button { flex: 1; min-height: 44px; }
+  .theme-create-form .danger-button { margin-left: 0; }
+  .operation-modal:not(.storage-edit-modal) footer { gap: 10px; }
+  .operation-modal:not(.storage-edit-modal) footer button { flex: 1; min-height: 44px; }
+  .link-import-actions button { flex: 1; min-height: 44px; }
+  .account-form .button { justify-self: stretch; min-height: 44px; }
+}
