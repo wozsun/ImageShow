@@ -3,7 +3,9 @@
 
 /* 后台登录页（/admin 入口）。背景图由 Login 组件按站点配置内联设置（默认站点自身的随机图 API，见 site.login_background）。 */
 .login {
-  min-height: 100vh;
+  /* 用 svh（小视口高度）而非 vh：iOS Safari 的 100vh 是工具栏收起后的「大视口」，比初始可见区域高，
+     在其中垂直居中会把登录框推到可见中线之下、底部还可能被地址栏遮挡。svh 对齐可见区域，居中才正确。 */
+  min-height: 100svh;
   display: grid;
   place-items: center;
   background-size: cover;
@@ -124,8 +126,15 @@
      非分页页（概览/设置/检查/账户/用户）保持正常整页滚动。桌面端见 admin/layout.css。 */
   .admin:has(> .workspace-paged) { height: 100svh; min-height: 0; display: flex; flex-direction: column; }
   .admin:has(> .workspace-paged) > .admin-mobile-header { flex: 0 0 auto; }
+  /* iOS Safari：全局 body 的 min-height:100vh 是「大视口」（工具栏收起后的高度），比固定为 100svh 的
+     分页型 .admin 更高，多出的一截让整页能被滚动一小段——于是「固定」的分页器看起来还能向上滑。分页页
+     挂载时把文档锁到小视口、禁止整页滚动，只让内部卡片区域滚动（:has 仅在存在 .workspace-paged 时命中，
+     不影响概览/设置等可整页滚动的非分页页）。 */
+  html:has(.workspace-paged),
+  body:has(.workspace-paged) { min-height: 0; height: 100svh; overflow: hidden; }
   .workspace-paged { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; padding-bottom: 16px; }
-  .workspace-paged > .admin-scroll-region { flex: 1; min-height: 0; overflow-y: auto; padding-right: 2px; align-content: start; }
+  /* overscroll-behavior 阻断滚动链，避免卡片区滚到尽头时把橡皮筋回弹传给文档。 */
+  .workspace-paged > .admin-scroll-region { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-right: 2px; align-content: start; }
   /* 通栏分隔线：先抵消移动端工作区的 16px 侧边内边距使横线铺满整个区域，再补回内边距让分页器内容保持对齐。 */
   .workspace-paged > .admin-pagination { margin: 0 -16px; padding: 12px 16px 0; border-top: 1px solid #e2e8f0; }
   .workspace-head, .toolbar { align-items: stretch; flex-direction: column; }

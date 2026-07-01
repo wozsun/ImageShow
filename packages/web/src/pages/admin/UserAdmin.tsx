@@ -9,6 +9,7 @@ import { useBodyScrollLock } from "../../components/useBodyScrollLock.js";
 import { adminApiBasePath, queryKeys, slugCharset, slugFormatHint } from "../../lib/constants.js";
 import { errorMessage } from "../../lib/formatters.js";
 import { PasswordInput } from "../../components/PasswordInput.js";
+import { SlugChip } from "../../components/SlugChip.js";
 import { PageToast } from "../../components/PageToast.js";
 import { generateAdminPassword, isValidAdminPassword, passwordPolicyHint } from "../../lib/password.js";
 import type { AdminUser } from "../../lib/types.js";
@@ -172,7 +173,7 @@ function UserCard({ user, onResetPassword, onDelete }: { user: AdminUser; onRese
   return (
     <div className={`entity-card user-card${isSuper ? " is-pinned" : ""}`}>
       <div className="entity-card-row">
-        <code className="entity-slug" title={user.username}>{user.username}</code>
+        <SlugChip value={user.username} ariaLabel="用户名" />
         <span className={`role-badge ${isSuper ? "role-super" : "role-image"}`}>{isSuper ? "超级管理员" : "图片管理员"}</span>
       </div>
       <div className="entity-card-foot">

@@ -46,31 +46,40 @@
   background: #fff;
 }
 .entity-card-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
-/* Fixed-width slug chip so every 显示名 input (and role badge) lines up across cards;
-   long slugs/usernames ellipsis with the full value on hover (title attr). */
+/* 等宽 slug 小框：固定宽度让每张卡片的「显示名」输入框（及角色徽标）横向对齐。本身就是一个只读
+   输入框（见 SlugChip）——光标可右移 / 横向滚动来查看并选中完整 slug（普通文本元素做不到）。超长时
+   由原生 text-overflow:ellipsis 紧贴文字末尾画出截断号「…」（间距最短、与文字相连），聚焦时浏览器
+   自动让位，便于滚动 / 选中到末尾。 */
 .entity-slug {
   flex: 0 0 120px;
   width: 120px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  background: #eef2f7;
   padding: 4px 8px;
+  border: 0;
   border-radius: 6px;
+  background: #eef2f7;
+  color: inherit;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 18px;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  cursor: text;
 }
+.entity-slug:focus { outline: none; }
 .entity-display-input { flex: 1 1 0; min-width: 0; }
 /* Authors only: the 链接 input sits on its own full-width row under the slug/显示名 row. */
 .entity-link-input { flex: 1 1 0; min-width: 0; }
-.entity-display-static { flex: 1 1 0; min-width: 0; color: #66717f; }
 .entity-select { width: 16px; height: 16px; flex: 0 0 auto; margin: 0; }
-/* margin-top:auto pins the foot to the card's bottom so feet line up across cards even when a
-   card's body is shorter — e.g. the pinned 未设置 card, whose 显示名 is static text (not an
-   input), which otherwise lets its 图片数量 + note ride up to the top of the stretched card. */
-.entity-card-foot { display: flex; align-items: center; gap: 8px; margin-top: auto; }
-/* Footer button height + icon-button width match the 图片管理 image-card footer (36×34). */
-.entity-card-foot button { min-height: 34px; }
+/* none（pinned）卡片没有复选框：用等宽占位撑出复选框的位置，配合行 gap 让其 slug/显示名与其他卡片对齐。 */
+.entity-select-placeholder { width: 16px; flex: 0 0 auto; }
+/* margin-top:auto pins the foot to the card's bottom so feet line up across cards of differing
+   body height (e.g. author cards carry an extra 链接 row). 页脚与按钮统一 34px，pinned 卡片（页脚
+   仅文字、无按钮）也靠这条 min-height 与其他卡片保持同高。 */
+.entity-card-foot { display: flex; align-items: center; gap: 8px; margin-top: auto; min-height: 34px; }
+/* 页脚所有按钮固定 34px 高、图标按钮 36px 宽（对齐图片管理卡片页脚）。保存按钮带文字行高，仅用
+   min-height 仍会高于 34px 把页脚（和卡片）顶高，故用 height 钉死并去掉纵向内边距（box-sizing 为
+   border-box，内容区 32px 足够容纳 18px 图标+文字），使其与图标按钮等高、出现/消失不改变卡片高度。 */
+.entity-card-foot button { height: 34px; min-height: 34px; padding-top: 0; padding-bottom: 0; }
 .entity-card-foot .icon { width: 36px; flex: 0 0 36px; }
 .entity-count { margin-right: auto; white-space: nowrap; }
 /* User-management cards have no 数量 spacer, so their 重置密码/删除 (and the super card's

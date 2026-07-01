@@ -118,6 +118,19 @@ function sameOrigin(c: Context) {
   }
 }
 
+// Fetch Metadata cross-origin gate for the SPA's own read endpoints. Browsers send Sec-Fetch-Site
+// and page scripts can't forge it (a forbidden header), so blocking "cross-site" / "same-site"
+// refuses another origin fetching or embedding our JSON, while "same-origin", "none" (direct nav)
+// and an absent header (old / non-browser clients) still pass — nothing legitimate breaks. It's a
+// cross-origin guard, not an anti-scrape wall: omitting the header still gets through (see robots.txt).
+export function blockCrossSiteFetch(c: Context, next: Next) {
+  const site = c.req.header("sec-fetch-site");
+  if (site === "cross-site" || site === "same-site") {
+    throw new ApiError(403, "cross_origin_forbidden", "Cross-origin request forbidden");
+  }
+  return next();
+}
+
 export async function login(c: Context, username: string, password: string) {
   if (!sameOrigin(c)) throw new ApiError(403, "origin_forbidden", "Origin forbidden");
   await reserveLoginAttempt(c, username);

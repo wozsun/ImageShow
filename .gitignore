@@ -20,7 +20,8 @@ packages/docs/.vitepress/cache/
 data/
 cert/
 nginx/
-scripts/
+# root-only, so per-package build scripts (packages/*/scripts) stay tracked
+/scripts/
 .claude/
 AGENTS.md
 CLAUDE.md

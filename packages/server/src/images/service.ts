@@ -2,11 +2,13 @@ import type { Pool, PoolClient } from "pg";
 import { indexKey, type Brightness } from "@imageshow/shared";
 import { adjustCategoryCount, backfillCategoryHole, cleanupEmptyCategories, pool, upsertCategory, withTransaction } from "../core/db.js";
 import { ApiError } from "../core/http.js";
+import { getRuntimeConfig } from "../config/env.js";
+import { mapWithConcurrency } from "../core/concurrency.js";
 import { metadataUpdateInput, normalizedCategory, parse } from "../core/validation.js";
 import { bumpFolder, invalidateImageReadCaches, invalidateMd5Cache } from "../core/redis.js";
 import { enqueue } from "../jobs/tasks.js";
 import { storageObjectKey, thumbnailObjectKey, thumbnailRef } from "../storage/image-paths.js";
-import { copyObject, exists, readStorageBuffer, removeObject, writeStorageBuffer } from "../storage/storage.js";
+import { copyObject, exists, readStorageBuffer, removeObject } from "../storage/storage.js";
 import { migrateImageStorage, type MigrateRecord } from "../storage/migration.js";
 import { isReservedSubdomain } from "../themes/host.js";
 import { ensureTheme } from "../themes/service.js";
@@ -45,8 +47,9 @@ async function applyImageFieldEdits(
   return result.rows[0] as ImageRecord;
 }
 
-// Soft-deletes a ready image: marks it deleted, backfills the category index hole
-// with the tail image, decrements the count, then finalizes (trash move) async.
+// Soft-deletes a ready image into the recycle bin: marks it deleted, backfills the category
+// index hole with the tail image, decrements the count. No storage I/O — the original and
+// thumbnail stay in place (objects/ + thumbs/); they're only physically removed on purge.
 export async function deleteImage(id: string) {
   // The locked row already carries md5, so return it from the transaction instead of
   // re-querying it afterwards for cache invalidation (saves one round-trip per delete).
@@ -60,7 +63,6 @@ export async function deleteImage(id: string) {
     await adjustCategoryCount(client, image.category_key, -1);
     return { categoryKey: image.category_key as string, md5: (image.md5 ?? "") as string };
   });
-  await enqueue("delete.finalize", id);
   await bumpFolder(deleted.categoryKey, -1);
   await cleanupEmptyCategories();
   await invalidateMd5Cache(deleted.md5);
@@ -129,8 +131,9 @@ export async function updateImageMetadata(id: string, body: unknown) {
     const oldThumbKey = thumbnailRef(linkRow).key;
     const newThumbKey = thumbnailRef({ ...linkRow, device: targetDevice, brightness: targetBrightness, theme: targetTheme }).key;
     if (oldThumbKey !== newThumbKey) {
-      const buffer = await readStorageBuffer("link", oldThumbKey, current.storage_slug);
-      await writeStorageBuffer("link", newThumbKey, buffer, "image/webp", current.storage_slug);
+      // Backend-native copy (server-side on S3/WebDAV), same as the object pre-copy above — the
+      // thumbnail bytes never round-trip through the app server.
+      await copyObject("link", oldThumbKey, "link", newThumbKey, current.storage_slug);
       preCopiedLinkThumb = newThumbKey;
     }
   }
@@ -273,8 +276,7 @@ export async function updateImageMetadata(id: string, body: unknown) {
     const newThumbKey = thumbnailRef({ ...updated, storage_slug: updated.storage_slug ?? "local", is_link: true }).key;
     if (oldThumbKey !== newThumbKey) {
       if (preCopiedLinkThumb !== newThumbKey) {
-        const buffer = await readStorageBuffer("link", oldThumbKey, sourceImage.storage_slug).catch(() => null);
-        if (buffer) await writeStorageBuffer("link", newThumbKey, buffer, "image/webp", sourceImage.storage_slug).catch(() => undefined);
+        await copyObject("link", oldThumbKey, "link", newThumbKey, sourceImage.storage_slug).catch(() => undefined);
         if (preCopiedLinkThumb) await removeObject("link", preCopiedLinkThumb, sourceImage.storage_slug).catch(() => undefined);
       }
       await removeObject("link", oldThumbKey, sourceImage.storage_slug).catch(() => undefined);
@@ -294,7 +296,11 @@ export async function migrateImagesStorage(ids: string[], target: string) {
   let failed = 0;
   const failedIds: string[] = [];
   const categories = new Set<string>();
-  for (const row of rows) {
+  // Copy up to migrate_concurrency images between backends at once (each loads the full image
+  // buffer), instead of strictly one-at-a-time — bounds memory / backend load while cutting the
+  // wall time of a large batch. Counter/collection updates are synchronous, so no data race.
+  const concurrency = getRuntimeConfig().operation_log.migrate_concurrency;
+  await mapWithConcurrency(rows, concurrency, async (row) => {
     try {
       const result = await migrateImageStorage(row as MigrateRecord, target);
       if (result === "migrated") { migrated += 1; categories.add(row.category_key); }
@@ -304,7 +310,7 @@ export async function migrateImagesStorage(ids: string[], target: string) {
       failed += 1;
       failedIds.push(row.id);
     }
-  }
+  });
   for (const category of categories) await bumpFolder(category, 0);
   if (migrated) await invalidateImageReadCaches();
   return { requested: ids.length, migrated, unchanged, failed, failed_ids: failedIds };

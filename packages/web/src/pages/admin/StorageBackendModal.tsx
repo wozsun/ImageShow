@@ -58,6 +58,8 @@ export function BackendEditModal({ target, busy, feedback, onClose, onSave, onSe
   // for it (submit saves, the slug field locks) even though `target` is still "new".
   const [createdSlug, setCreatedSlug] = useState<string | null>(null);
   const savedOk = lastAction === "save" && feedback?.status === "success";
+  // 保存进行中也展示在 header pill（与「保存成功」同处），不再落到卡片下方的 body。
+  const saving = lastAction === "save" && feedback?.status === "pending";
   // The form reads as "create" only until the backend actually exists; afterwards it's an edit.
   const isCreateForm = creating && createdSlug === null;
   const configPayload = () => (isWebdav ? { webdav } : { s3 });
@@ -92,6 +94,7 @@ export function BackendEditModal({ target, busy, feedback, onClose, onSave, onSe
             {!isCreateForm && <p>{createdSlug ?? backend!.slug} · {storageTypeLabel(effectiveType)}</p>}
           </div>
           <div className="storage-modal-header-right">
+            {saving && <span className="storage-saved-pill is-pending"><Icon name="refresh-line" />正在保存…</span>}
             {savedOk && <span className="storage-saved-pill"><Icon name="check-line" />保存成功</span>}
             <button
               className="icon close pressable"
@@ -144,7 +147,11 @@ export function BackendEditModal({ target, busy, feedback, onClose, onSave, onSe
                 : <S3Fields value={s3} onChange={setS3} configured={backend?.s3.secret_access_key_configured} />}
             </>
           )}
-          {feedback && !(feedback.status === "success" && (lastAction === "save" || lastAction === "default")) && <SettingsFeedback feedback={feedback} />}
+          {/* 保存中 / 保存成功 都改由 header pill 展示；body 这里只保留连接测试结果与各类错误（含保存失败）。 */}
+          {feedback
+            && !(lastAction === "save" && feedback.status !== "error")
+            && !(lastAction === "default" && feedback.status === "success")
+            && <SettingsFeedback feedback={feedback} />}
         </div>
         <OverlayScrollbar targetRef={bodyRef} />
         <footer>

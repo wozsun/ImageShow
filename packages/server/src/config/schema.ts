@@ -30,8 +30,8 @@ export const recentUploads = z.coerce.number().int().min(1).max(50);
 // One knob drives two parallelisms: how many files the browser uploads at once and how
 // many thumb.generate tasks the worker runs at once (see Uploader / jobs.tasks).
 export const uploadConcurrency = z.coerce.number().int().min(1).max(16);
-// File-only worker concurrency for the idempotent storage-cleanup task types
-// (delete.finalize / move.cleanup / empty-trash).
+// File-only worker concurrency for the idempotent move.cleanup task and the theme-reassign
+// file moves (operation_log.*_concurrency).
 export const taskConcurrency = z.coerce.number().int().min(1).max(32);
 
 // Security / session tuning (file-only; see env.ts security.*). Defaults come from appConfig.

@@ -49,7 +49,7 @@ const runtimeConfigSchema = z.object({
     // settings UI.
     docs_enabled: z.boolean().default(d.site.docs_enabled),
     link_subdomain: subdomainLabel.default(d.site.link_subdomain)
-  }).default({}),
+  }).prefault({}),
   port: z.coerce.number().int().positive().default(d.port),
   database: z.object({
     host: z.string().trim().min(1),
@@ -62,10 +62,10 @@ const runtimeConfigSchema = z.object({
     host: z.string().trim().min(1).default(d.redis.host),
     port: z.coerce.number().int().positive().default(d.redis.port),
     db: z.coerce.number().int().nonnegative().default(d.redis.db)
-  }).default({}),
+  }).prefault({}),
   home: z.object({
     preview_delay_ms: previewDelayMs.default(d.home.preview_delay_ms)
-  }).default({}),
+  }).prefault({}),
   upload: z.object({
     max_file_size_mb: maxFileSizeMb.default(d.upload.max_file_size_mb),
     max_long_edge: maxLongEdge.default(d.upload.max_long_edge),
@@ -73,43 +73,44 @@ const runtimeConfigSchema = z.object({
     // Parallelism for a batch: the browser uploads this many files at once, and the
     // worker runs this many thumb.generate tasks at once. Editable in the settings UI.
     concurrency: uploadConcurrency.default(d.upload.concurrency)
-  }).default({}),
+  }).prefault({}),
   admin: z.object({
     image_page_size: imagePageSize.default(d.admin.image_page_size),
-    recent_uploads: recentUploads.default(d.admin.recent_uploads)
-  }).default({}),
+    recent_uploads: recentUploads.default(d.admin.recent_uploads),
+    // 主题管理页是否展示钉住的「未设置 / none」占位卡片（默认显示）。可在设置页（admin 组）切换。
+    show_unset_theme_card: z.boolean().default(d.admin.show_unset_theme_card)
+  }).prefault({}),
   gallery: z.object({
     default_limit: galleryLimit.default(d.gallery.default_limit),
     // Site-wide gallery order: newest-first or shuffled within each loaded page.
     order: galleryOrder.default(d.gallery.order)
-  }).default({}),
+  }).prefault({}),
   random: z.object({
     default_method: randomMethod.default(d.random.default_method)
-  }).default({}),
+  }).prefault({}),
   image_detail: z.object({
     // When on, the image detail dialog's title becomes a link that opens the
     // image's direct object URL in a new tab. File-only (not in the settings UI);
     // set to false in config.json to turn the title link off.
     title_opens_image: z.boolean().default(d.image_detail.title_opens_image)
-  }).default({}),
+  }).prefault({}),
   link_image: z.object({
     // When on, importing a link image pre-fills its 原图URL (original) field with the
     // imported link itself. Off by default, so the 原图URL starts empty and the admin
     // fills it only when they want a distinct source link. File-only (read by the
     // uploader via the admin settings API; not editable in the settings UI).
     fill_original_url: z.boolean().default(d.link_image.fill_original_url)
-  }).default({}),
+  }).prefault({}),
   operation_log: z.object({
-    // File-only worker concurrency for the idempotent storage-cleanup task types
-    // (not exposed in the settings UI). Each runs up to this many tasks at once; the
-    // category-mutating type (restore.finalize) and the idempotency-key singletons
-    // (cache.rebuild / upload.cleanup) stay serial.
-    delete_concurrency: taskConcurrency.default(d.operation_log.delete_concurrency),
+    // File-only worker concurrency (not exposed in the settings UI). move.cleanup runs up to
+    // this many tasks at once; theme_reassign_concurrency caps how many of a deleted theme's
+    // images move their files to the none/ folder in parallel; migrate_concurrency caps how many
+    // images the storage-migrate batch copies between backends at once (each loads the full image
+    // buffer, so this bounds memory). Every other task type stays serial.
     move_cleanup_concurrency: taskConcurrency.default(d.operation_log.move_cleanup_concurrency),
-    empty_trash_concurrency: taskConcurrency.default(d.operation_log.empty_trash_concurrency),
-    // How many of a deleted theme's images move their files to the none/ folder at once.
-    theme_reassign_concurrency: taskConcurrency.default(d.operation_log.theme_reassign_concurrency)
-  }).default({}),
+    theme_reassign_concurrency: taskConcurrency.default(d.operation_log.theme_reassign_concurrency),
+    migrate_concurrency: taskConcurrency.default(d.operation_log.migrate_concurrency)
+  }).prefault({}),
   // File-only security tuning (not in the settings UI): session lifetime and the login
   // rate-limit thresholds. Read at request time, so a config.json edit + reload applies live.
   security: z.object({
@@ -118,13 +119,13 @@ const runtimeConfigSchema = z.object({
     login_max_failures: loginMaxFailures.default(d.security.login_max_failures),
     login_global_window_seconds: loginGlobalWindowSeconds.default(d.security.login_global_window_seconds),
     login_global_max_attempts: loginGlobalMaxAttempts.default(d.security.login_global_max_attempts)
-  }).default({}),
+  }).prefault({}),
   // File-only thumbnail output tuning: the long-edge cap (px) and webp quality of newly
   // generated thumbnails.
   thumbnail: z.object({
     long_edge: thumbnailLongEdge.default(d.thumbnail.long_edge),
     quality: thumbnailQuality.default(d.thumbnail.quality)
-  }).default({}),
+  }).prefault({}),
   // File-only login captcha params: code length, challenge lifetime, and the two noise counts
   // (distractor lines / speckle dots). The rest of the image's look is a code-front constant.
   captcha: z.object({
@@ -135,7 +136,7 @@ const runtimeConfigSchema = z.object({
     ttl_seconds: captchaTtlSeconds.default(d.captcha.ttl_seconds),
     noise_lines: captchaNoiseLines.default(d.captcha.noise_lines),
     noise_dots: captchaNoiseDots.default(d.captcha.noise_dots)
-  }).default({}),
+  }).prefault({}),
   // File-only logging: the threshold level (DEBUG/INFO/WARN/ERROR/OFF; default WARN) plus
   // size-based rotation of data/log/app.log — rotate once it passes max_size_mb, keeping
   // max_files archives (app.log.1 … app.log.N). Read at write time, so a reload applies live.
@@ -143,7 +144,7 @@ const runtimeConfigSchema = z.object({
     level: logLevel.default(d.log.level),
     max_size_mb: logMaxSizeMb.default(d.log.max_size_mb),
     max_files: logMaxFiles.default(d.log.max_files)
-  }).default({})
+  }).prefault({})
 });
 
 const optionalEnvString = z.preprocess(
@@ -176,6 +177,16 @@ function envValue(name: string) {
   return value === undefined || value === "" ? undefined : value;
 }
 
+// Booleans arrive from env as strings; accept the obvious truthy/falsy spellings and treat
+// anything else (including unset) as undefined so the schema default applies.
+function envBoolean(name: string): boolean | undefined {
+  const value = envValue(name);
+  if (value === undefined) return undefined;
+  if (value === "true" || value === "1") return true;
+  if (value === "false" || value === "0") return false;
+  return undefined;
+}
+
 function requiredBootstrapEnv(name: string) {
   const value = envValue(name);
   if (!value) throw new Error(`${name} is required when creating ${configPath} for the first time.`);
@@ -197,27 +208,32 @@ function readExistingConfig(): RuntimeConfig | null {
   return parsed.data;
 }
 
+// Seeds config.json from environment variables on first boot only. The mapping is uniform:
+// each config field <group>.<field> reads env var <GROUP>_<FIELD> (UPPER_SNAKE); the top-level
+// scalar `port` uses its bare name PORT. Only the fields listed here are env-seedable; every
+// other config field is file-only (edit config.json). ADMIN_USERNAME / ADMIN_PASSWORD are
+// handled separately (they seed the admin_account table, not config.json).
 function initialConfigFromEnvironment() {
   return runtimeConfigSchema.parse({
     site: {
       name: envValue("SITE_NAME"),
-      domain: envValue("APP_DOMAIN"),
+      domain: envValue("SITE_DOMAIN"),
       icon_url: envValue("SITE_ICON_URL"),
-      root_redirect: envValue("ROOT_REDIRECT"),
+      root_redirect: envValue("SITE_ROOT_REDIRECT"),
       login_background: envValue("SITE_LOGIN_BACKGROUND"),
       home_hero_background: envValue("SITE_HOME_HERO_BACKGROUND"),
-      random_subdomain: envValue("RANDOM_SUBDOMAIN"),
-      static_subdomain: envValue("STATIC_SUBDOMAIN"),
-      docs_subdomain: envValue("DOCS_SUBDOMAIN"),
-      link_subdomain: envValue("LINK_SUBDOMAIN")
+      random_subdomain: envValue("SITE_RANDOM_SUBDOMAIN"),
+      static_subdomain: envValue("SITE_STATIC_SUBDOMAIN"),
+      docs_subdomain: envValue("SITE_DOCS_SUBDOMAIN"),
+      link_subdomain: envValue("SITE_LINK_SUBDOMAIN")
     },
     port: envValue("PORT"),
     database: {
-      host: requiredBootstrapEnv("POSTGRES_HOST"),
-      port: envValue("POSTGRES_PORT"),
-      name: requiredBootstrapEnv("POSTGRES_DB"),
-      user: requiredBootstrapEnv("POSTGRES_USER"),
-      password: requiredBootstrapEnv("POSTGRES_PASSWORD")
+      host: requiredBootstrapEnv("DATABASE_HOST"),
+      port: envValue("DATABASE_PORT"),
+      name: requiredBootstrapEnv("DATABASE_NAME"),
+      user: requiredBootstrapEnv("DATABASE_USER"),
+      password: requiredBootstrapEnv("DATABASE_PASSWORD")
     },
     redis: {
       host: envValue("REDIS_HOST"),
@@ -231,10 +247,13 @@ function initialConfigFromEnvironment() {
       list_page_size: envValue("UPLOAD_LIST_PAGE_SIZE"),
       concurrency: envValue("UPLOAD_CONCURRENCY")
     },
-    admin: { image_page_size: envValue("ADMIN_IMAGE_PAGE_SIZE"), recent_uploads: envValue("ADMIN_RECENT_UPLOADS") },
+    admin: {
+      image_page_size: envValue("ADMIN_IMAGE_PAGE_SIZE"),
+      recent_uploads: envValue("ADMIN_RECENT_UPLOADS"),
+      show_unset_theme_card: envBoolean("ADMIN_SHOW_UNSET_THEME_CARD")
+    },
     gallery: { default_limit: envValue("GALLERY_DEFAULT_LIMIT") },
     random: { default_method: envValue("RANDOM_DEFAULT_METHOD") }
-    // operation_log.*_concurrency are file-only advanced knobs (default in config.json).
   });
 }
 
@@ -282,10 +301,23 @@ export function getRuntimeConfig() {
   return runtimeConfig;
 }
 
+// Subscribers run whenever the runtime config is replaced (admin save or disk hot-reload), so
+// derived process-global state — e.g. sharp's thread concurrency — can re-apply itself without
+// the config layer importing those modules. Registered once at startup from the composition root.
+type RuntimeConfigListener = () => void;
+const runtimeConfigListeners: RuntimeConfigListener[] = [];
+export function onRuntimeConfigChange(listener: RuntimeConfigListener) {
+  runtimeConfigListeners.push(listener);
+}
+function notifyRuntimeConfigChange() {
+  for (const listener of runtimeConfigListeners) listener();
+}
+
 export function updateRuntimeConfig(patch: Partial<RuntimeConfig>) {
   const next = runtimeConfigSchema.parse(mergeDeep(runtimeConfig, patch as Record<string, unknown>));
   writeRuntimeConfig(next);
   runtimeConfig = next;
+  notifyRuntimeConfigChange();
   return runtimeConfig;
 }
 
@@ -296,6 +328,7 @@ export function reloadRuntimeConfig() {
   const fromDisk = readExistingConfig();
   if (!fromDisk) throw new Error(`Runtime config ${configPath} does not exist`);
   runtimeConfig = fromDisk;
+  notifyRuntimeConfigChange();
   return runtimeConfig;
 }
 
@@ -306,13 +339,12 @@ export const env = {
   CONFIG_DIR: configDir,
   STORAGE_DIR: storageDir,
   LOG_DIR: logDir,
-  APP_DOMAIN: runtimeConfig.site.domain,
   PORT: runtimeConfig.port,
-  POSTGRES_HOST: runtimeConfig.database.host,
-  POSTGRES_PORT: runtimeConfig.database.port,
-  POSTGRES_DB: runtimeConfig.database.name,
-  POSTGRES_USER: runtimeConfig.database.user,
-  POSTGRES_PASSWORD: runtimeConfig.database.password,
+  DATABASE_HOST: runtimeConfig.database.host,
+  DATABASE_PORT: runtimeConfig.database.port,
+  DATABASE_NAME: runtimeConfig.database.name,
+  DATABASE_USER: runtimeConfig.database.user,
+  DATABASE_PASSWORD: runtimeConfig.database.password,
   REDIS_HOST: runtimeConfig.redis.host,
   REDIS_PORT: runtimeConfig.redis.port,
   REDIS_DB: runtimeConfig.redis.db

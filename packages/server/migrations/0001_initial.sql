@@ -156,7 +156,8 @@ CREATE TABLE IF NOT EXISTS metadata (
   source TEXT NOT NULL DEFAULT '',
   original TEXT NOT NULL DEFAULT '',
   author TEXT,
-  -- Lifecycle: status flips to 'deleted' (soft delete) before the trash move finalizes.
+  -- Lifecycle: status flips to 'deleted' (soft delete); the original and thumbnail stay in
+  -- place (objects/ + thumbs/) until the row is purged from the recycle bin.
   status TEXT NOT NULL DEFAULT 'ready',
   deleted_at TIMESTAMPTZ DEFAULT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -194,7 +195,7 @@ CREATE TABLE IF NOT EXISTS metadata (
 );
 
 -- One ready image per index_key and per (category_key, category_index); deleted rows are
--- exempt, so trash can keep the former occupant of a now-reused slot.
+-- exempt, so a recycle-bin row can keep the former occupant of a now-reused slot.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_metadata_ready_index_key
 ON metadata(index_key) WHERE status = 'ready';
 
@@ -260,7 +261,7 @@ CREATE TABLE IF NOT EXISTS upload_session (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   CHECK (expected_size > 0),
-  CHECK (status IN ('created', 'finalizing', 'finalized', 'expired', 'failed'))
+  CHECK (status IN ('created', 'finalizing', 'finalized', 'failed'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_upload_session_status_expires
@@ -269,8 +270,8 @@ ON upload_session(status, expires_at);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_upload_session_final_object_key
 ON upload_session(final_object_key) WHERE final_object_key <> '';
 
--- Durable job queue for async/idempotent background work (trash finalize, cache rebuild,
--- thumbnail generation, ...), retried with backoff by the worker.
+-- Durable job queue for async/idempotent background work (thumbnail generation, storage-move
+-- cleanup, cache rebuild, upload cleanup), retried with backoff by the worker.
 CREATE TABLE IF NOT EXISTS operation_log (
   id UUID PRIMARY KEY,
   type TEXT NOT NULL,
@@ -284,7 +285,7 @@ CREATE TABLE IF NOT EXISTS operation_log (
   next_retry_at TIMESTAMPTZ DEFAULT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  CHECK (type IN ('delete.finalize','restore.finalize','move.cleanup','empty-trash','upload.cleanup','cache.rebuild','thumb.generate')),
+  CHECK (type IN ('thumb.generate','move.cleanup','upload.cleanup','cache.rebuild')),
   CHECK (status IN ('pending', 'running', 'succeeded', 'failed', 'ignored'))
 );
 

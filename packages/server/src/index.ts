@@ -1,7 +1,9 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
+import { compress } from "hono/compress";
 import { adminApiBasePath, appConfig } from "@imageshow/shared";
-import { env } from "./config/env.js";
+import { env, onRuntimeConfigChange } from "./config/env.js";
+import { applyImageConcurrency } from "./images/processing.js";
 import { initializeAdmin, pingDb, pool, runMigrations } from "./core/db.js";
 import { pingRedis, redis } from "./core/redis.js";
 import { logger } from "./core/logger.js";
@@ -18,6 +20,7 @@ import { registerDocsRoutes } from "./routes/docs.js";
 import { registerHealthRoutes } from "./routes/health.js";
 import { registerProtectedAuthRoutes, registerPublicAuthRoutes } from "./routes/auth.js";
 import { registerPublicRoutes } from "./routes/public.js";
+import { serveRobotsTxt } from "./routes/robots.js";
 import { handleRandomImage, handleThemeHostRandom, registerRandomRoutes } from "./routes/random.js";
 import { registerSettingsRoutes } from "./routes/settings.js";
 import { registerStaticRoutes } from "./routes/spa.js";
@@ -33,6 +36,10 @@ app.use("*", async (c, next) => {
   await next();
 });
 app.options("*", async () => new Response(null, { status: 204 }));
+// Host-aware robots.txt (routes/robots.ts). Registered before the docs short-circuit and the host
+// guards below so it answers on every host — including static/link/random, which otherwise 404 any
+// non-asset path, and docs, which otherwise serves only the bundled site.
+app.get("/robots.txt", serveRobotsTxt);
 // docs.<domain> serves the bundled VitePress site and short-circuits the rest of
 // the app (registered before the other host middleware on purpose).
 registerDocsRoutes(app);
@@ -71,6 +78,11 @@ app.use("/media/*", mediaHostGuard);
 app.use("/thumbs/*", mediaHostGuard);
 app.use("*", enforceThemeHostNavigation);
 
+// Compress the dynamic JSON API responses (they're otherwise sent uncompressed). Static assets
+// are already served precompressed via serveStatic, and image bytes / the SPA document are
+// handled separately, so scope compression to /api only — never re-compressing those.
+app.use("/api/*", compress());
+
 registerHealthRoutes(app);
 registerPublicRoutes(app);
 registerRandomRoutes(app);
@@ -99,6 +111,10 @@ await pingDb();
 await runMigrations();
 await initializeAdmin();
 await pingRedis();
+// Bound libvips' thread pool to upload.concurrency now, and keep it in sync when the admin
+// saves settings or hot-reloads config.json.
+applyImageConcurrency();
+onRuntimeConfigChange(applyImageConcurrency);
 startWorker();
 
 const server = serve({ fetch: app.fetch, port: env.PORT });

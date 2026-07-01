@@ -1,11 +1,9 @@
 import { useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { api } from "../lib/api.js";
-import { defaultSite, queryKeys } from "../lib/constants.js";
-import type { SiteConfig } from "../lib/types.js";
+import { defaultSite } from "../lib/constants.js";
+import { useSiteConfig } from "../lib/site-data.js";
 
 export function SiteHead() {
-  const { data } = useQuery<SiteConfig>({ queryKey: queryKeys.siteConfig, queryFn: () => api("/api/site-config") });
+  const { data } = useSiteConfig();
   const site = data?.site ?? defaultSite;
   useEffect(() => {
     document.title = site.name || defaultSite.name;

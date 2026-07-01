@@ -167,16 +167,22 @@ GET /api/images?d=&b=&t=&tag=&cursor=&limit=&shuffle=
 
 ## 删除生命周期（软删 → 回收站 → 彻底删 / 恢复）
 
-删除分两段：先**同步**软删（立即从画廊消失），再**异步**把字节搬进回收站。
+删除是**纯数据库**操作：原图与缩略图始终留在 `objects/` + `thumbs/`，软删 / 恢复都不搬运或删除任何文件，只有彻底删除才物理删字节。
 
-1. **软删** `POST /images/:id/delete` → `deleteImage`（事务内）：`FOR UPDATE` 锁住 ready 图行与其分类行 → 标记 `status='deleted'` + `deleted_at` → 若该图不是分类内末位，用末位图（`category_index == count`）填补它腾出的空洞，保持序号连续 → 分类计数 -1 → 提交。提交后排 `delete.finalize`、`bumpFolder(-1)`、清空空分类、失效 MD5 / 读缓存。批量删除（`batch-delete`）同理，按批排 `delete.finalize`。
-2. **`delete.finalize`（后台队列）**：把原对象从 `objects/` 移到 `trash/`（同键保留），删掉 `thumbs/` 缩略图。link 图无字节、缩略图保留到彻底删除（恢复时无需重新下载），故直接成功。
-3. **恢复** `POST /images/:id/restore` → `restoreImageFromTrash`（**同步**，一个事务）：锁住该删除行 → 对象不在 `objects/` 就从 `trash/` 移回 → 在原分类**追加**重排（取新的末位序号）→ 置回 `status='ready'`、清 `deleted_at` → 把尚未执行的 `delete.finalize` 任务置 `ignored`，免得它把刚恢复的图又搬走 → 提交。非 link 排 `thumb.generate` 重生成缩略图、`bumpFolder(+1)`。若中途失败，会把已从 trash 取回的对象放回去，不留「有 ready 行却无 trash 备份」的状态。批量恢复 `batch-restore` 逐张走同一逻辑。
-4. **彻底删** `POST /images/:id/purge`（单张）/ `POST /images/empty-trash`（清空回收站）→ `purgeDeletedImages`（**同步**，每 10 张一批）：对每张删除 `objects/` + `trash/` + 缩略图（用 `thumbnailRef` 定位正确 prefix / backend，含 link 的 `link/<设备-明暗>/<主题>/<id>.webp`）→ 从 `metadata` 删行 → 把相关 `delete.finalize` 任务置 `ignored` → 失效缓存、清空空分类。彻底删不可恢复。
+1. **软删** `POST /images/:id/delete` → `deleteImage`（事务内）：`FOR UPDATE` 锁住 ready 图行与其分类行 → 标记 `status='deleted'` + `deleted_at` → 若该图不是分类内末位，用末位图（`category_index == count`）填补它腾出的空洞，保持序号连续 → 分类计数 -1 → 提交。提交后 `bumpFolder(-1)`、清空空分类、失效 MD5 / 读缓存。**不动任何文件**。批量删除（`batch-delete`）同理。
+2. **恢复** `POST /images/:id/restore` → `restoreImageFromTrash`（**同步**，一个事务）：锁住该删除行 → 在原分类**追加**重排（取新的末位序号）→ 置回 `status='ready'`、清 `deleted_at` → 提交，再 `bumpFolder(+1)`。原图与缩略图本就在原位，故无字节搬运、无缩略图重建。批量恢复 `batch-restore` 逐张走同一逻辑。
+3. **彻底删** `POST /images/:id/purge`（单张）/ `POST /images/empty-trash`（清空回收站）→ `purgeDeletedImages`（**同步**，每 10 张一批）：对每张物理删除 `objects/` 原图 + 缩略图（用 `thumbnailRef` 定位正确 prefix / backend，含 link 的 `link/<设备-明暗>/<主题>/<id>.webp`）→ 从 `metadata` 删行 → 失效缓存、清空空分类。彻底删不可恢复，是**唯一**删除存储字节的路径。
+
+**回收站图片的访问控制**：已删除图片虽仍留在存储中，但**未登录不可访问，仅后台可见**：
+
+- 公共画廊接口 `/api/images` 仅服务 `ready`——请求 `?status=deleted` 直接按校验错误拒绝，无法借此枚举回收站。
+- **源站**对已删除图片一律 404：`static.<域名>` / `link.<域名>` 的 `/media`、`/thumbs` 都拒绝（覆盖 local 与未配公共 URL 的 S3/WebDAV；link 原图本就是 `no-store` 代理、不缓存）。
+- **缓存的固有边界**：ready 期间的字节响应带 `Cache-Control: public, max-age=31536000, immutable`，故**源站的 404 无法回收任何已缓存副本**——(a) 若 `static.`/`link.` 前面挂了 CDN，边缘会继续吐缓存字节直到条目过期（最长 1 年）或被显式 purge（`immutable` 还会让其在 max-age 内根本不回源校验）；(b) 配了公共 URL 的对象存储走 CDN 直链，同理；(c) 曾在 ready 期间取过该图的浏览器本地缓存亦然（仅该用户）。换言之**软删只是可逆隐藏、不是安全级吊销**：真正吊销 = 彻底删除（物理删字节）+（若有 CDN）purge 缓存；从未被取用、或缓存已过期的图片则由源站 404 完全兜住。本仓库自带的 nginx 是纯反代（无 `proxy_cache`），故本机/该配置下只有浏览器级缓存、无边缘缓存。
+- 后台回收站视图改走带鉴权的 `GET /admin/api/images/:id/thumb` 与 `/raw`（`requireAuth`，服务端转发字节、`private, no-store`），故只有登录管理员能查看已删除图片的略缩图与原图；presenter 在投影时把已删除图片的 `thumb_url` / `object_url` 指向这两个端点。
 
 ## 后台 Worker
 
-每 5 秒一拍：先做僵尸任务恢复与上传过期（各自慢节奏），再**按任务类型并发**领取执行——每种类型用各自的并发上限：`thumb.generate` 跟随「上传 / 缩略图并发数」；`delete.finalize` / `move.cleanup` / `empty-trash` 各有文件配置（默认 5）；其余类型（`restore.finalize` / `cache.rebuild` / `upload.cleanup`）串行。领取用 `FOR UPDATE SKIP LOCKED`（并发 lane 与多实例都不会撞同一条），失败指数退避重试（最多 5 次，60s → 6h）。所有重活（缩略图、字节搬运、缓存重建）都异步化，HTTP 请求只负责落库与排队。
+每 5 秒一拍：先做僵尸任务恢复与上传过期（各自慢节奏），再**按任务类型并发**领取执行——每种类型用各自的并发上限：`thumb.generate` 跟随「上传 / 缩略图并发数」（`upload.concurrency`，该值同时被设为 sharp/libvips 的单次操作线程数 `sharp.concurrency`，使图片处理的总原生线程数有界，启动时应用、配置热重载时同步）；`move.cleanup` 有文件配置（默认 5）；其余类型（`cache.rebuild` / `upload.cleanup`）串行。领取用 `FOR UPDATE SKIP LOCKED`（并发 lane 与多实例都不会撞同一条），失败指数退避重试（最多 5 次，60s → 6h）。所有重活（缩略图、字节搬运、缓存重建）都异步化，HTTP 请求只负责落库与排队。
 
 ## 缓存策略
 

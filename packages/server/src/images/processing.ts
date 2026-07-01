@@ -3,8 +3,19 @@ import { fileTypeFromBuffer, fileTypeFromFile } from "file-type";
 import sharp from "sharp";
 import { type ImageExt } from "@imageshow/shared";
 import { ApiError } from "../core/http.js";
+import { getRuntimeConfig } from "../config/env.js";
 import { thumbnailObjectKey } from "../storage/image-paths.js";
 import { getDefaultStorageSlug, getImageMaxLongEdge, getStorageBackend, getThumbnailSettings, getUploadLimitBytes } from "../config/settings.js";
+
+// Pin libvips' per-operation thread pool to the shared upload/thumbnail concurrency knob
+// (upload.concurrency, which also bounds the thumb.generate worker lanes). Without this, each
+// sharp call fans out to every CPU core, so several concurrent thumbnail jobs spawn cores²
+// native threads and spike memory; matching sharp's internal threads to the same number keeps
+// total native parallelism bounded. Called at startup and re-applied on config hot-reload
+// (wired from the composition root in index.ts).
+export function applyImageConcurrency() {
+  sharp.concurrency(Math.max(1, getRuntimeConfig().upload.concurrency));
+}
 import {
   openStorageRead,
   readStorageBuffer,
@@ -105,13 +116,4 @@ export async function makeThumb(objectKey: string, slug?: string) {
   const thumbnail = await createThumbnail(input);
   await writeStorageBuffer("thumbs", thumbnailObjectKey(objectKey), thumbnail, "image/webp", targetSlug);
   return thumbnail.byteLength;
-}
-
-export function contentType(ext: string) {
-  if (ext === "jpg") return "image/jpeg";
-  if (ext === "png") return "image/png";
-  if (ext === "webp") return "image/webp";
-  if (ext === "gif") return "image/gif";
-  if (ext === "avif") return "image/avif";
-  return "application/octet-stream";
 }

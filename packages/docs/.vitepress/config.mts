@@ -2,7 +2,7 @@ import { defineConfig } from "vitepress";
 
 // VitePress builds the docs into .vitepress/dist. That output is copied into the
 // server bundle (dist/docs) by packages/server/scripts/copy-assets.mjs and served
-// on docs.<APP_DOMAIN> by packages/server/src/routes/docs.ts — so the docs ship and
+// on docs.<SITE_DOMAIN> by packages/server/src/routes/docs.ts — so the docs ship and
 // deploy together with the app. base stays "/" because the docs host serves at root.
 export default defineConfig({
   lang: "zh-CN",

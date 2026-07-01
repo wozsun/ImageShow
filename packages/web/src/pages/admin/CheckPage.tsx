@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { api } from "../../lib/api.js";
 import { adminApiBasePath } from "../../lib/constants.js";
 import { errorMessage } from "../../lib/formatters.js";
@@ -7,14 +6,14 @@ import { Icon } from "../../components/Icon.js";
 import { SelectMenu } from "../../components/SelectMenu.js";
 import { StableLabel } from "../../components/StableLabel.js";
 import { useAnimatedClose } from "../../components/useAnimatedClose.js";
-import type { StorageBackendOption } from "../../lib/types.js";
+import { useStorageOptions } from "../../lib/storage-options.js";
 
 export function CheckPage() {
   const [result, setResult] = useState<unknown>(null);
   const [running, setRunning] = useState("");
   const [migrateSource, setMigrateSource] = useState("");
   const [migrateTarget, setMigrateTarget] = useState("");
-  const { data: storageOptionsData } = useQuery<{ backends: StorageBackendOption[] }>({ queryKey: ["storage-options"], queryFn: () => api(`${adminApiBasePath}/storage/options`) });
+  const { data: storageOptionsData } = useStorageOptions();
   const storageOptions = (storageOptionsData?.backends ?? []).map((backend) => ({ value: backend.slug, label: backend.display_name || backend.slug }));
   const [operationModal, setOperationModal] = useState<"migrate-storage-location" | "migrate-storage-paths" | "storage-cleanup" | null>(null);
   const checks = useMemo(() => [
@@ -255,10 +254,8 @@ const CHECK_RESULT_LABELS: Record<string, string> = {
   // 存储检查
   missing_objects: "缺失的原图",
   missing_thumbs: "缺失的缩略图",
-  missing_trash: "缺失的回收站对象",
   orphan_objects: "游离的原图",
   orphan_thumbs: "游离的缩略图",
-  orphan_trash: "游离的回收站对象",
   staging_files: "上传暂存文件",
   unavailable_backends: "无法访问的后端",
   // 清理无效存储
@@ -295,7 +292,7 @@ function checkResultLabel(key: string) {
 }
 
 function isIssueKey(key: string) {
-  return ["issues", "mismatches", "index_gaps", "operations", "missing_objects", "missing_thumbs", "missing_trash", "orphan_objects", "orphan_thumbs", "orphan_trash", "staging_files"].includes(key);
+  return ["issues", "mismatches", "index_gaps", "operations", "missing_objects", "missing_thumbs", "orphan_objects", "orphan_thumbs", "staging_files"].includes(key);
 }
 
 function countCheckIssues(result: Record<string, unknown>) {

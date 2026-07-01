@@ -1,4 +1,4 @@
-import { copyFile, cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { dirname, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -12,70 +12,6 @@ const here = dirname(fileURLToPath(import.meta.url));
 const pkg = resolve(here, "..");
 const repo = resolve(pkg, "..", "..");
 const serverDist = resolve(pkg, "dist");
-const remixIconNames = [
-  "add-line",
-  "arrow-down-s-line",
-  "arrow-go-back-line",
-  "arrow-left-right-line",
-  "checkbox-blank-line",
-  "checkbox-circle-line",
-  "checkbox-line",
-  "check-line",
-  "close-line",
-  "cloud-line",
-  "dashboard-line",
-  "drag-move-2-fill",
-  "database-2-line",
-  "delete-bin-6-line",
-  "delete-bin-7-line",
-  "download-cloud-2-line",
-  "external-link-line",
-  "eye-line",
-  "eye-off-line",
-  "file-copy-line",
-  "file-damage-line",
-  "filter-3-line",
-  "fingerprint-line",
-  "flask-line",
-  "group-line",
-  "hard-drive-2-line",
-  "home-4-line",
-  "image-line",
-  "information-line",
-  "key-2-line",
-  "logout-box-r-line",
-  "menu-line",
-  "palette-line",
-  "pencil-line",
-  "price-tag-3-line",
-  "quill-pen-line",
-  "refresh-line",
-  "save-3-line",
-  "scales-3-line",
-  "settings-3-line",
-  "shuffle-line",
-  "star-fill",
-  "star-line",
-  "upload-cloud-2-line",
-  "user-add-line"
-];
-
-async function findSvgFiles(root) {
-  const files = new Map();
-  async function walk(dir) {
-    const entries = await readdir(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      const fullPath = resolve(dir, entry.name);
-      if (entry.isDirectory()) {
-        await walk(fullPath);
-      } else if (entry.isFile() && entry.name.endsWith(".svg")) {
-        files.set(entry.name.replace(/\.svg$/, ""), fullPath);
-      }
-    }
-  }
-  await walk(root);
-  return files;
-}
 
 function importPath(fromFile, targetFile) {
   const path = relative(dirname(fromFile), targetFile).split(sep).join("/");
@@ -152,22 +88,9 @@ const docsDist = resolve(repo, "packages", "docs", ".vitepress", "dist");
 if (existsSync(docsDist)) {
   await cp(docsDist, resolve(serverDist, "docs"), { recursive: true });
 }
-const remixIcon = resolve(repo, "node_modules", "remixicon");
-if (existsSync(remixIcon)) {
-  const icons = await findSvgFiles(resolve(remixIcon, "icons"));
-  // Output to a neutral /assets/icons path (no upstream name or version) so the icon
-  // URLs the browser requests don't disclose the source set; the SVGs themselves carry
-  // no attribution markup. The npm package below is still the source of the files.
-  const targetDir = resolve(serverDist, "public", "assets", "icons");
-  await mkdir(targetDir, { recursive: true });
-  for (const name of remixIconNames) {
-    const source = icons.get(name);
-    if (!source) throw new Error(`Missing Remix Icon SVG: ${name}`);
-    await copyFile(source, resolve(targetDir, `${name}.svg`));
-  }
-}
 
-// 最后一步：对最终汇集的静态目录做预压缩（public 含 SPA 资源 + 图标；docs 为文档站）。
+// 最后一步：对最终汇集的静态目录做预压缩（public 含 SPA 资源；docs 为文档站。图标已内联进
+// JS 包，不再作为 /assets/icons 静态文件单独发布）。
 await precompressDir(resolve(serverDist, "public"));
 const docsOut = resolve(serverDist, "docs");
 if (existsSync(docsOut)) await precompressDir(docsOut);

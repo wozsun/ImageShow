@@ -24,7 +24,6 @@ export type ImageItem = {
   md5: string;
   original: string;
   source: string;
-  category_key: string;
   category_index: number;
   index_key: string;
   width: number;
@@ -130,13 +129,13 @@ export type SiteSettings = {
   home_hero_background: string;
 };
 
-export type GalleryOrder = "latest" | "random";
+type GalleryOrder = "latest" | "random";
 
 export type AdminSettings = {
   site: SiteSettings;
   home: { preview_delay_ms: number };
   upload: { max_file_size_mb: number; max_long_edge: number; list_page_size: number; concurrency: number };
-  admin: { image_page_size: number; recent_uploads: number };
+  admin: { image_page_size: number; recent_uploads: number; show_unset_theme_card: boolean };
   gallery: { default_limit: number; order: GalleryOrder };
   random: { default_method: "proxy" | "redirect" };
   image_detail: { title_opens_image: boolean };
@@ -153,7 +152,7 @@ export type SiteConfig = {
   captcha: { enabled: boolean };
 };
 
-export type AdminRole = "super" | "image";
+type AdminRole = "super" | "image";
 
 export type AuthState = {
   authenticated: boolean;
@@ -176,7 +175,7 @@ export type FacetOption = {
 };
 
 // An author facet adds a link to the shared facet shape; the detail view links to it.
-export type AuthorOption = FacetOption & { link: string };
+type AuthorOption = FacetOption & { link: string };
 
 export type GalleryOptions = {
   devices: string[];

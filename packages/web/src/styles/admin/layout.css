@@ -68,6 +68,17 @@
   flex-direction: column;
   gap: 10px;
 }
+/* The persistent admin scroll regions (image / entity lists, sidebar nav) only get
+   .overlay-scroll-host once their OverlayScrollbar mounts. Until then the native bar shows, and on
+   a route switch its ~10px gutter makes the list render briefly narrower before snapping to full
+   width. Pre-hide it on the same devices OverlayScrollbar enables (its ENABLE_QUERY) so there's no
+   first-paint shift; touch / coarse / high-contrast devices keep the native bar (overlay stays off).
+   Admin-only selectors, so this stays in the admin chunk rather than the global base.css. */
+@media (hover: hover) and (pointer: fine) and (forced-colors: none) {
+  .admin-scroll-region, .admin-nav-scroll { scrollbar-width: none; }
+  .admin-scroll-region::-webkit-scrollbar,
+  .admin-nav-scroll::-webkit-scrollbar { width: 0; height: 0; }
+}
 /* The nav band's scrollbar is the floating OverlayScrollbar (driven from AdminShell), so the
    native bar is hidden by .overlay-scroll-host and reserves no gutter — the items don't shift.
    The default handle is dark (for light content areas); tint it light over the dark sidebar. */

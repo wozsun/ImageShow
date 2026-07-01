@@ -7,7 +7,7 @@ import { ConfirmDialog } from "../../components/ConfirmDialog.js";
 import { OverlayScrollbar } from "../../components/OverlayScrollbar.js";
 import { adminApiBasePath, queryKeys } from "../../lib/constants.js";
 import { errorMessage, formatDate, formatImageMeta } from "../../lib/formatters.js";
-import { imageStorageLabel } from "../../lib/select-options.js";
+import { useStorageNameResolver } from "../../lib/storage-options.js";
 import type { AdminSettings, Author, ImageItem, Tag, Theme } from "../../lib/types.js";
 import { ImageDetailModal } from "../../components/ImageDetailModal.js";
 import { ThumbImage } from "../../components/ThumbImage.js";
@@ -19,6 +19,10 @@ type ConfirmAction =
   | { kind: "batch-delete"; ids: string[] }
   | { kind: "empty-trash" }
   | { kind: "purge"; id: string; title: string };
+
+// 批量恢复每批提交的张数。恢复现在是纯数据库操作（不动文件），但仍分小批依次提交：让进度
+// 「恢复中… X/N」能逐批刷新、单请求有界，避免一次性大批量时按钮长时间无响应。
+const restoreChunkSize = 10;
 
 export function ImageAdmin() {
   // The overview's image cards deep-link into a specific tab via ?view=unset|deleted; the
@@ -39,12 +43,18 @@ export function ImageAdmin() {
   const gridRef = useRef<HTMLDivElement | null>(null);
   const client = useQueryClient();
   const { data: settingsData } = useQuery<{ settings: AdminSettings }>({ queryKey: queryKeys.settings, queryFn: () => api(`${adminApiBasePath}/settings`) });
-  const { data: themeData } = useQuery<{ items: Theme[] }>({ queryKey: queryKeys.themes, queryFn: () => api(`${adminApiBasePath}/themes`) });
+  // The theme/tag/author vocab only feeds the edit + batch-edit modals' selectors, so don't fetch
+  // it on the plain list view — defer until an editor opens. (The Uploader fetches its own copy,
+  // gated the same way on its window being open.)
+  const editorDataNeeded = Boolean(editing || batchEditing);
+  const { data: themeData } = useQuery<{ items: Theme[] }>({ queryKey: queryKeys.themes, queryFn: () => api(`${adminApiBasePath}/themes`), enabled: editorDataNeeded });
   const themes = themeData?.items ?? [];
-  const { data: tagData } = useQuery<{ items: Tag[] }>({ queryKey: queryKeys.tags, queryFn: () => api(`${adminApiBasePath}/tags`) });
+  const { data: tagData } = useQuery<{ items: Tag[] }>({ queryKey: queryKeys.tags, queryFn: () => api(`${adminApiBasePath}/tags`), enabled: editorDataNeeded });
   const allTags = tagData?.items ?? [];
-  const { data: authorData } = useQuery<{ items: Author[] }>({ queryKey: queryKeys.authors, queryFn: () => api(`${adminApiBasePath}/authors`) });
+  const { data: authorData } = useQuery<{ items: Author[] }>({ queryKey: queryKeys.authors, queryFn: () => api(`${adminApiBasePath}/authors`), enabled: editorDataNeeded });
   const authors = authorData?.items ?? [];
+  // 列表卡片左下角的「所在存储」展示后端显示名（而非 slug）；从后端列表解析。
+  const storageName = useStorageNameResolver();
   const pageSize = settingsData?.settings.admin.image_page_size ?? 50;
   const editPageSize = settingsData?.settings.upload.list_page_size ?? 20;
   const cursor = cursorHistory.at(-1) ?? "";
@@ -54,9 +64,13 @@ export function ImageAdmin() {
   if (view === "unset") listParams.set("t", "none");
   if (cursor) listParams.set("cursor", cursor);
   const listPath = `${adminApiBasePath}/images?${listParams}`;
+  // Gate on settingsData: the list's limit is settings.admin.image_page_size, so firing before
+  // settings loads would request page 1 at the default size and then refetch at the real size
+  // once settings arrives. Waiting one (fast, in-memory) settings read avoids that double-fetch.
   const { data, isFetching } = useQuery<{ items: ImageItem[]; total: number; has_next: boolean; next_cursor: string | null }>({
     queryKey: [...queryKeys.adminImages, view, cursor, pageSize],
     queryFn: () => api(listPath),
+    enabled: Boolean(settingsData),
   });
   const refresh = () => {
     setSelected([]);
@@ -113,6 +127,37 @@ export function ImageAdmin() {
       setActionBusy(false);
     }
   };
+  // 批量恢复：把选中项切成小批依次提交，每批后更新「恢复中… X/N」进度，全程 actionBusy 禁用按钮，
+  // 结束再汇总恢复/忽略/失败数。出错时也走 refresh，让已成功恢复的部分如实反映到列表。
+  const restoreSelected = async () => {
+    const ids = [...selected];
+    const total = ids.length;
+    if (!total) return;
+    setActionBusy(true);
+    setFeedback({ text: `恢复中… 0/${total} 张`, status: "pending" });
+    let restored = 0;
+    let ignored = 0;
+    let failed = 0;
+    try {
+      for (let start = 0; start < total; start += restoreChunkSize) {
+        const chunk = ids.slice(start, start + restoreChunkSize);
+        const result = await api<{ restored: number; ignored: number; failed: number }>(
+          `${adminApiBasePath}/images/batch-restore`,
+          { method: "POST", body: JSON.stringify({ ids: chunk }) }
+        );
+        restored += result.restored;
+        ignored += result.ignored;
+        failed += result.failed;
+        setFeedback({ text: `恢复中… ${Math.min(start + chunk.length, total)}/${total} 张`, status: "pending" });
+      }
+      setFeedback({ text: `已恢复 ${restored} 张，忽略 ${ignored} 张，失败 ${failed} 张`, status: "success" });
+    } catch (error) {
+      setFeedback({ text: `批量恢复失败：${errorMessage(error)}（已恢复 ${restored} 张）`, status: "error" });
+    } finally {
+      setActionBusy(false);
+      refresh();
+    }
+  };
   const confirmCopy = confirmAction?.kind === "batch-delete"
     ? { title: "确认批量删除", description: `将选中的 ${confirmAction.ids.length} 张图片移入回收站，可以稍后恢复。`, label: "确认删除" }
     : confirmAction?.kind === "empty-trash"
@@ -129,6 +174,8 @@ export function ImageAdmin() {
         </div>
         <div className="image-admin-head-tools">
           {view === "ready" && <Uploader onDone={refresh} />}
+          {/* 批量操作进度/结果（含回收站批量恢复的「恢复中… X/N」）就近显示在视图标签左侧。 */}
+          {feedback && <SettingsFeedback feedback={feedback} inline />}
           <div className="segmented">
             <button type="button" className={view === "ready" ? "active" : ""} onClick={() => changeView("ready")}>
               图库
@@ -142,7 +189,6 @@ export function ImageAdmin() {
           </div>
         </div>
       </header>
-      {feedback && <SettingsFeedback feedback={feedback} />}
       <div className="toolbar">
         <div className="inline-actions">
           <label className="check-label">
@@ -174,12 +220,8 @@ export function ImageAdmin() {
           {view === "deleted" && (
             <button
               type="button"
-              disabled={!selected.length}
-              onClick={async () => {
-                const result = await api<{ restored: number; ignored: number; failed: number }>(`${adminApiBasePath}/images/batch-restore`, { method: "POST", body: JSON.stringify({ ids: selected }) });
-                setFeedback({ text: `已恢复 ${result.restored} 张，忽略 ${result.ignored} 张，失败 ${result.failed} 张`, status: "success" });
-                refresh();
-              }}
+              disabled={!selected.length || actionBusy}
+              onClick={restoreSelected}
             >
               <Icon name="arrow-go-back-line" />批量恢复
             </button>
@@ -201,6 +243,7 @@ export function ImageAdmin() {
           <ImageRow
             key={item.id}
             item={item}
+            storageName={storageName}
             checked={selected.includes(item.id)}
             onCheck={(checked) => setSelected((current) => checked ? [...current, item.id] : current.filter((id) => id !== item.id))}
             onDetail={() => setDetail(item)}
@@ -262,8 +305,9 @@ export function ImageAdmin() {
   );
 }
 
-function ImageRow({ item, checked, onCheck, onDetail, onEdit, onPurge, onChanged }: {
+function ImageRow({ item, storageName, checked, onCheck, onDetail, onEdit, onPurge, onChanged }: {
   item: ImageItem;
+  storageName: (item: { is_link: boolean; storage_slug: string }) => string;
   checked: boolean;
   onCheck: (checked: boolean) => void;
   onDetail: () => void;
@@ -298,7 +342,7 @@ function ImageRow({ item, checked, onCheck, onDetail, onEdit, onPurge, onChanged
       </div>
       <div className="row-actions" onClick={(event) => event.stopPropagation()}>
         {item.status === "deleted" && item.deleted_at && <span className="row-deleted">删除于 {formatDate(item.deleted_at)}</span>}
-        {item.status === "ready" && <span className="row-storage"><Icon name="hard-drive-2-line" />{imageStorageLabel(item)}</span>}
+        {item.status === "ready" && <span className="row-storage"><Icon name="hard-drive-2-line" />{storageName(item)}</span>}
         {item.status === "ready" ? (
           <>
             <button title="编辑" onClick={onEdit}><Icon name="pencil-line" /></button>

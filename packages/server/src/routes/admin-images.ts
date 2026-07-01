@@ -4,6 +4,7 @@ import { ok } from "../core/http.js";
 import { adminImageListQuery, batchMigrateStorageInput, imageIdsInput, md5Input, parse, uuidInput } from "../core/validation.js";
 import { batchDeleteImages } from "../images/batch.js";
 import { checkImageMd5, getAdminImage, getOverviewStats, listAdminImages } from "../images/query.js";
+import { serveAdminObject, serveAdminThumb } from "../images/serving.js";
 import { deleteImage, migrateImagesStorage, updateImageMetadata } from "../images/service.js";
 import { batchRestoreImages, purgeDeletedImage, purgeDeletedImages, restoreDeletedImage } from "../images/trash.js";
 
@@ -21,6 +22,19 @@ export function registerAdminImageRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/images/:id`, async (c) => {
     const id = parse(uuidInput, c.req.param("id"));
     return c.json(ok({ item: await getAdminImage(id) }));
+  });
+
+  // Authenticated byte serving for the recycle-bin view: the public static/link hosts refuse
+  // deleted images, so a deleted image's thumb_url/object_url point here instead (see
+  // presenter.adminImageView). Streams any-status bytes through the server, gated by requireAuth.
+  app.get(`${adminApiBasePath}/images/:id/thumb`, async (c) => {
+    const id = parse(uuidInput, c.req.param("id"));
+    return serveAdminThumb(id);
+  });
+
+  app.get(`${adminApiBasePath}/images/:id/raw`, async (c) => {
+    const id = parse(uuidInput, c.req.param("id"));
+    return serveAdminObject(id);
   });
 
   app.post(`${adminApiBasePath}/images/check-md5`, async (c) => {

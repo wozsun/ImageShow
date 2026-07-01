@@ -218,9 +218,11 @@ button:not(:disabled):not(.select-trigger):hover,
   height: 1.125rem;
   flex: 0 0 1.125rem;
   display: inline-block;
-  background: currentColor;
-  -webkit-mask: var(--icon-url) center / contain no-repeat;
-  mask: var(--icon-url) center / contain no-repeat;
+  /* Inline <svg> icons (see Icon.tsx): the <path> has no own fill, so it takes the surrounding
+     text colour from here. Sizing / vertical rhythm match the old masked span, so the many
+     context overrides (.row-storage .app-icon { width }, nav carets, the spinning save pill, …)
+     keep working unchanged. */
+  fill: currentColor;
   vertical-align: middle;
 }
 .icon .app-icon { margin: 0; }

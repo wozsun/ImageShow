@@ -52,21 +52,22 @@ export async function migrateStoragePaths() {
     let copiedThumb = false;
     let databaseUpdated = false;
     try {
-      const prefix = row.status === "deleted" ? "trash" : "objects";
-      const oldObjectExists = await exists(prefix, row.object_key, backend);
-      const newObjectExists = await exists(prefix, nextKey, backend);
+      // Recycle-bin images keep their original (objects/) and thumbnail (thumbs/) like ready
+      // ones, so the path rewrite copies both regardless of status.
+      const oldObjectExists = await exists("objects", row.object_key, backend);
+      const newObjectExists = await exists("objects", nextKey, backend);
       if (!oldObjectExists && !newObjectExists) {
         missing += 1;
         errors.push({ id: row.id, object_key: row.object_key, expected_key: nextKey, reason: "source_missing" });
         continue;
       }
       if (oldObjectExists && !newObjectExists) {
-        await copyObject(prefix, row.object_key, prefix, nextKey, backend);
+        await copyObject("objects", row.object_key, "objects", nextKey, backend);
         copiedObject = true;
       }
       const oldThumbKey = thumbnailObjectKey(row.object_key);
       const nextThumbKey = thumbnailObjectKey(nextKey);
-      if (row.status === "ready" && await exists("thumbs", oldThumbKey, backend)) {
+      if (await exists("thumbs", oldThumbKey, backend)) {
         if (!(await exists("thumbs", nextThumbKey, backend))) {
           await copyObject("thumbs", oldThumbKey, "thumbs", nextThumbKey, backend);
           copiedThumb = true;
@@ -76,14 +77,14 @@ export async function migrateStoragePaths() {
       const updated = await pool.query("UPDATE metadata SET object_key=$2, updated_at=now() WHERE id=$1 AND object_key=$3", [row.id, nextKey, row.object_key]);
       if (!updated.rowCount) throw new ApiError(409, "image_changed", "Image changed during path migration");
       databaseUpdated = true;
-      if (oldObjectExists) await removeObject(prefix, row.object_key, backend).catch(() => undefined);
-      if (row.status === "ready" && await exists("thumbs", oldThumbKey, backend)) {
+      if (oldObjectExists) await removeObject("objects", row.object_key, backend).catch(() => undefined);
+      if (await exists("thumbs", oldThumbKey, backend)) {
         await removeObject("thumbs", oldThumbKey, backend).catch(() => undefined);
       }
       migrated += 1;
     } catch (error) {
       if (!databaseUpdated) {
-        if (copiedObject) await removeObject(row.status === "deleted" ? "trash" : "objects", nextKey, backend).catch(() => undefined);
+        if (copiedObject) await removeObject("objects", nextKey, backend).catch(() => undefined);
         if (copiedThumb) await removeObject("thumbs", thumbnailObjectKey(nextKey), backend).catch(() => undefined);
       }
       errors.push({ id: row.id, object_key: row.object_key, expected_key: nextKey, reason: errorMessage(error) });

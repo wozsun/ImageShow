@@ -1,11 +1,10 @@
 import { useMemo, useRef } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Icon } from "./Icon.js";
-import { api } from "../lib/api.js";
-import { queryKeys } from "../lib/constants.js";
 import { formatDate, formatDimensions, formatIndex } from "../lib/formatters.js";
-import { brightnessOptionLabel, deviceOptionLabel, imageStorageLabel } from "../lib/select-options.js";
-import type { GalleryOptions, ImageItem, SiteConfig } from "../lib/types.js";
+import { brightnessOptionLabel, deviceOptionLabel } from "../lib/select-options.js";
+import type { ImageItem } from "../lib/types.js";
+import { useGalleryOptions, useSiteConfig } from "../lib/site-data.js";
+import { useStorageNameResolver } from "../lib/storage-options.js";
 import { useAnimatedClose } from "./useAnimatedClose.js";
 import { useBodyScrollLock } from "./useBodyScrollLock.js";
 import { OverlayScrollbar } from "./OverlayScrollbar.js";
@@ -14,11 +13,13 @@ export function ImageDetailModal({ item, onClose, admin = false }: { item: Image
   const exit = useAnimatedClose(onClose);
   useBodyScrollLock();
   const contentRef = useRef<HTMLDivElement | null>(null);
-  const { data: siteConfig } = useQuery<SiteConfig>({ queryKey: queryKeys.siteConfig, queryFn: () => api("/api/site-config") });
+  const { data: siteConfig } = useSiteConfig();
   // Theme/tag are stored as slugs; resolve them to their human display names via the
   // (shared, cached) gallery facets. Falls back to the slug when no display name is set
   // or the facets haven't loaded.
-  const { data: facets } = useQuery<GalleryOptions>({ queryKey: queryKeys.galleryOptions, queryFn: () => api("/api/gallery-options") });
+  const { data: facets } = useGalleryOptions();
+  // 存储行仅在 admin 详情展示，故仅在 admin 时拉取后端列表来把 slug 解析成显示名。
+  const storageName = useStorageNameResolver(admin);
   const themeNames = useMemo(() => new Map((facets?.themes ?? []).map((option) => [option.slug, option.display_name])), [facets]);
   const tagNames = useMemo(() => new Map((facets?.tags ?? []).map((option) => [option.slug, option.display_name])), [facets]);
   const authorMap = useMemo(() => new Map((facets?.authors ?? []).map((option) => [option.slug, option])), [facets]);
@@ -74,7 +75,7 @@ export function ImageDetailModal({ item, onClose, admin = false }: { item: Image
               <>
                 <dt>UUID</dt><dd>{item.id}</dd>
                 <dt>MD5</dt><dd>{item.md5 || "未记录"}</dd>
-                <dt>存储</dt><dd>{imageStorageLabel(item)}</dd>
+                <dt>存储</dt><dd>{storageName(item)}</dd>
               </>
             )}
             {authorSlug && (

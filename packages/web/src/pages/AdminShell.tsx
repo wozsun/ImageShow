@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Link, NavLink, Route, Routes, useNavigate } from "react-router-dom";
 import { api, clearCsrfToken, setCsrfToken } from "../lib/api.js";
 import { Icon } from "../components/Icon.js";
 import { NavGroup } from "../components/NavGroup.js";
 import { PasswordInput } from "../components/PasswordInput.js";
 import { OverlayScrollbar } from "../components/OverlayScrollbar.js";
-import { adminApiBasePath, adminBasePath, defaultSite, queryKeys } from "../lib/constants.js";
-import type { AuthState, SiteConfig } from "../lib/types.js";
+import { adminApiBasePath, adminBasePath, defaultSite } from "../lib/constants.js";
+import { useAuthMe, useSiteConfig } from "../lib/site-data.js";
 import { CheckPage } from "./admin/CheckPage.js";
 import { ImageAdmin } from "./admin/ImageAdmin.js";
 import { EntityAdmin } from "./admin/EntityAdmin.js";
@@ -25,16 +24,13 @@ export function AdminShell() {
   // The middle nav band scrolls; drive it with the floating OverlayScrollbar (like the admin
   // content areas) so an appearing bar doesn't reserve gutter and shove the items left.
   const navScrollRef = useRef<HTMLDivElement | null>(null);
-  const { data: siteConfig } = useQuery<SiteConfig>({ queryKey: queryKeys.siteConfig, queryFn: () => api("/api/site-config") });
+  const { data: siteConfig } = useSiteConfig();
   const siteName = siteConfig?.site?.name ?? defaultSite.name;
   // The "view public site" shortcut always points at the site root (/), which redirects to the
   // configured landing (root_redirect / home_enabled). Always labelled 首页 — no need to relabel
   // it 画廊 when the homepage is off, since / lands on the right page either way.
-  const viewSite = { to: "/", icon: "home-4-line", label: "首页" };
-  const { data, refetch } = useQuery<AuthState>({
-    queryKey: queryKeys.me,
-    queryFn: () => api(`${adminApiBasePath}/auth/me`)
-  });
+  const viewSite = { to: "/", icon: "home-4-line", label: "首页" } as const;
+  const { data, refetch } = useAuthMe();
   useEffect(() => { if (data?.csrf_token) setCsrfToken(data.csrf_token); }, [data]);
   if (!data) return <div className="center">加载中</div>;
   if (!data.authenticated) return <Login onLogin={() => refetch()} />;
@@ -161,7 +157,7 @@ export function AdminShell() {
 }
 
 function Login({ onLogin }: { onLogin: () => void }) {
-  const { data: siteConfig } = useQuery<SiteConfig>({ queryKey: queryKeys.siteConfig, queryFn: () => api("/api/site-config") });
+  const { data: siteConfig } = useSiteConfig();
   const siteName = siteConfig?.site?.name ?? defaultSite.name;
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");

@@ -66,7 +66,6 @@ export async function publicImage(row: ImageRecord, tags?: string[]) {
     brightness: row.brightness,
     theme: row.theme,
     author: row.author ?? "",
-    category_key: row.category_key,
     category_index: row.category_index,
     index_key: row.index_key,
     width: Number(row.width ?? 0),
@@ -84,7 +83,6 @@ export async function publicImage(row: ImageRecord, tags?: string[]) {
     tags: tagList,
     deleted_at: row.deleted_at ?? null,
     created_at: row.created_at ?? null,
-    updated_at: row.updated_at ?? null,
     ...urls
   };
 }
@@ -92,6 +90,59 @@ export async function publicImage(row: ImageRecord, tags?: string[]) {
 export async function publicImages(rows: ImageRecord[]) {
   const tagMap = await getTagsForImages(rows.map((row) => row.id));
   return Promise.all(rows.map((row) => publicImage(row, tagMap.get(row.id) ?? [])));
+}
+
+// The public gallery list (/api/images) is unauthenticated, so it should only carry what
+// the gallery grid + its detail modal actually render — not every metadata column. This is
+// an explicit allowlist (so a new column added to publicImage never silently leaks): it
+// drops the fields that appear in no public/detail view — object_key (internal storage path),
+// category_key, status, updated_at, ext, and deleted_at (the list is ready-only, so it would
+// always be null). It deliberately keeps md5 / storage_slug / is_link / created_at, which the
+// detail modal shows to a logged-in admin browsing the public gallery (admin=true). Applied on
+// egress in listPublicImages, after cacheImageLookups has read object_key/slug/ext off the full
+// objects.
+export type PublicListImage = ReturnType<typeof publicListImage>;
+
+export function publicListImage(image: PublicImage) {
+  return {
+    id: image.id,
+    device: image.device,
+    brightness: image.brightness,
+    theme: image.theme,
+    author: image.author,
+    category_index: image.category_index,
+    index_key: image.index_key,
+    width: image.width,
+    height: image.height,
+    title: image.title,
+    description: image.description,
+    source: image.source,
+    original: image.original,
+    tags: image.tags,
+    md5: image.md5,
+    storage_slug: image.storage_slug,
+    is_link: image.is_link,
+    created_at: image.created_at,
+    object_url: image.object_url,
+    thumb_url: image.thumb_url
+  };
+}
+
+// Admin-facing projection of a PublicImage for the management lists / detail / dedup check.
+// Two jobs: (1) drop `ext`, an internal field the admin UI never reads (it only exists for
+// server-side thumbnail-key derivation); (2) for a recycle-bin (deleted) image, repoint its
+// URLs at the authenticated admin byte endpoints — the public static/link hosts now refuse
+// deleted images (see images/serving.ts), so the trash view streams them through the server.
+export type AdminImage = Omit<PublicImage, "ext">;
+
+export function adminImageView(image: PublicImage): AdminImage {
+  const { ext: _ext, ...rest } = image;
+  if (image.status !== "deleted") return rest;
+  return {
+    ...rest,
+    object_url: `${adminApiBasePath}/images/${image.id}/raw`,
+    thumb_url: `${adminApiBasePath}/images/${image.id}/thumb`
+  };
 }
 
 export function publicImagesCacheKey(q: { status: string; d?: string; b?: string; t?: string; tag?: string; a?: string; cursor?: string; limit: number }) {

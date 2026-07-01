@@ -17,14 +17,15 @@ export async function storageBackends() {
 
 // Expected thumbnail keys grouped by the backend they live in, split by prefix:
 // regular thumbnails under "thumbs" (beside their object) and link thumbnails under
-// the top-level "link" prefix. A thumbnail exists for every ready image and for every
-// link image (kept until purge, including while soft-deleted). This is what tells a
-// genuine orphan apart from a live thumbnail, so cleanup never deletes a live one.
+// the top-level "link" prefix. A thumbnail exists for every stored image kept on disk — ready
+// OR in the recycle bin (status='deleted'), since soft-delete no longer removes it — and for
+// every link image. This is what tells a genuine orphan apart from a live (or recoverable)
+// thumbnail, so cleanup never deletes one that a restore would need.
 export function expectedThumbs(rows: StorageRow[]) {
   const thumbs = new Map<string, Set<string>>();
   const link = new Map<string, Set<string>>();
   for (const row of rows) {
-    if (row.status !== "ready" && !row.is_link) continue;
+    if (row.status !== "ready" && row.status !== "deleted" && !row.is_link) continue;
     const ref = thumbnailRef(row);
     const target = ref.prefix === "link" ? link : thumbs;
     let set = target.get(ref.slug);

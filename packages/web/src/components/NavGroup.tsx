@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { Icon } from "./Icon.js";
+import { Icon, type IconName } from "./Icon.js";
 
 type NavGroupItem = { to: string; label: string; end?: boolean };
 
 // An expandable sidebar nav section. The main label navigates to the first item
 // (and opens the section); the caret on the right toggles the submenu, which
 // expands/collapses with an animation. Auto-opens while inside the section.
-export function NavGroup({ icon, label, items }: { icon: string; label: string; items: NavGroupItem[] }) {
+export function NavGroup({ icon, label, items }: { icon: IconName; label: string; items: NavGroupItem[] }) {
   const location = useLocation();
   const navigate = useNavigate();
   const sectionActive = items.some((item) => location.pathname === item.to || location.pathname.startsWith(`${item.to}/`));

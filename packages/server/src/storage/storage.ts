@@ -1,20 +1,20 @@
-// Public storage surface for the rest of the app. The actual per-backend behavior
-// lives behind the StorageDriver interface (storage-backend.ts) with the Local, S3
-// and WebDAV implementations; this module only resolves which config/driver an
-// operation should use (by backend slug, via the storage_backend registry) and
-// re-exports the shared helpers. Keeping the public API here means adding a backend
-// never changes any caller's imports.
+// Public storage facade for the rest of the app. Per-backend behavior lives behind the
+// StorageDriver interface (storage-backend.ts: Local / S3 / WebDAV); this module only resolves
+// which backend an operation uses (by slug, via the storage_backend registry) and re-exports the
+// shared helpers, so adding a backend never changes a caller's imports.
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { env } from "../config/env.js";
 import { linkBaseUrl, staticLocalBaseUrl } from "../themes/host.js";
 import { getDefaultStorageBackend, getStorageBackend, type StorageConfig } from "../config/settings.js";
 import { linkThumbnailKey, thumbnailObjectKey } from "./image-paths.js";
-import { driverFor } from "./storage-backend.js";
-import type { ReadablePrefix, StoragePrefix } from "./object-keys.js";
+import { driverFor, type CopyPrefix } from "./storage-backend.js";
+import { contentTypeForKey, NAMESPACED_PREFIXES, type ReadablePrefix, type StoragePrefix } from "./object-keys.js";
+import { logger } from "../core/logger.js";
 
-// Re-exported so existing importers keep their import paths unchanged.
-export { safeStoragePath, storageS3ObjectName } from "./object-keys.js";
+// Re-exported so callers reach these storage helpers (path mapping, content types) through the one
+// facade rather than the low-level modules.
+export { contentType, safeStoragePath } from "./object-keys.js";
 export type { StoragePrefix } from "./object-keys.js";
 
 // Creates the local filesystem layout (config/storage/log + storage subdirs).
@@ -23,7 +23,7 @@ export async function ensureStorage() {
   await mkdir(env.CONFIG_DIR, { recursive: true });
   await mkdir(env.STORAGE_DIR, { recursive: true });
   await mkdir(env.LOG_DIR, { recursive: true });
-  for (const dir of ["thumbs", "_uploads", "trash", "link"]) {
+  for (const dir of NAMESPACED_PREFIXES) {
     await mkdir(join(env.STORAGE_DIR, dir), { recursive: true });
   }
 }
@@ -61,11 +61,23 @@ export async function writeStorageBuffer(prefix: StoragePrefix, key: string, bod
 export async function removeObject(prefix: StoragePrefix, key: string, slug?: string) {
   return driverFor(await resolveConfig(slug)).remove(prefix, key);
 }
-export async function moveObject(fromPrefix: "objects" | "_uploads" | "trash", fromKey: string, toPrefix: "objects" | "trash", toKey: string, targetContentType?: string, slug?: string) {
+export async function moveObject(fromPrefix: "objects" | "_uploads", fromKey: string, toPrefix: "objects", toKey: string, targetContentType?: string, slug?: string) {
   return driverFor(await resolveConfig(slug)).move(fromPrefix, fromKey, toPrefix, toKey, targetContentType);
 }
-export async function copyObject(fromPrefix: "objects" | "thumbs" | "trash", fromKey: string, toPrefix: "objects" | "thumbs" | "trash", toKey: string, slug?: string) {
-  return driverFor(await resolveConfig(slug)).copy(fromPrefix, fromKey, toPrefix, toKey);
+// Copies an object within one backend, re-keying it. Tries the native copy first (local copyFile,
+// S3 CopyObject, WebDAV COPY) so bytes never round-trip through the app; on ANY failure it falls back
+// to read+write (every backend implements it), covering servers without COPY and quirky CopyObject
+// impls. The fallback preserves bytes + a key-derived content-type only, not S3 metadata / ACL /
+// storage-class (we never set those on writes).
+export async function copyObject(fromPrefix: CopyPrefix, fromKey: string, toPrefix: CopyPrefix, toKey: string, slug?: string) {
+  if (fromPrefix === toPrefix && fromKey === toKey) return; // copying an object onto itself is a no-op
+  const driver = driverFor(await resolveConfig(slug));
+  try {
+    await driver.copy(fromPrefix, fromKey, toPrefix, toKey);
+  } catch (error) {
+    logger.debug(`native copy failed; using read+write fallback: ${fromPrefix}/${fromKey} -> ${toPrefix}/${toKey}`, error);
+    await driver.writeBuffer(toPrefix, toKey, await driver.readBuffer(fromPrefix, fromKey), contentTypeForKey(toKey));
+  }
 }
 export async function writeUploadFromWeb(id: string, body: ReadableStream<Uint8Array>, expectedSize: number, slug?: string) {
   return driverFor(await resolveConfig(slug)).writeUploadFromWeb(id, body, expectedSize);

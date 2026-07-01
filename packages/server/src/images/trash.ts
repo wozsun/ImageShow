@@ -14,7 +14,6 @@ export async function restoreDeletedImage(id: string, missingIsError = true) {
     if (missingIsError) throw new ApiError(404, "not_found", "Deleted image not found");
     return false;
   }
-  if (result.status === "object_missing") throw new ApiError(404, "object_missing", "Deleted image object is missing");
   await invalidateMd5Cache(result.image.md5 ?? "");
   await invalidateImageReadCaches();
   return true;
@@ -35,9 +34,9 @@ export async function batchRestoreImages(ids: string[]) {
   return { requested: ids.length, restored, ignored, failed: failedIds.length, failed_ids: failedIds };
 }
 
-// Hard-deletes trashed images: removes their object/thumb/trash bytes (10 at a
-// time), then drops the metadata rows and reconciles caches. With no ids it
-// purges the whole trash (empty-trash).
+// Hard-deletes recycle-bin images: physically removes their original + thumbnail (10 at a
+// time), then drops the metadata rows and reconciles caches. With no ids it empties the whole
+// recycle bin. This is the ONLY path that deletes stored bytes — soft-delete leaves them in place.
 export async function purgeDeletedImages(ids?: string[]) {
   const rows = (await pool.query(
     ids?.length
@@ -53,7 +52,6 @@ export async function purgeDeletedImages(ids?: string[]) {
         const thumb = thumbnailRef(row);
         await Promise.all([
           removeObject("objects", row.object_key, row.storage_slug),
-          removeObject("trash", row.object_key, row.storage_slug),
           removeObject(thumb.prefix, thumb.key, thumb.slug)
         ]);
         deletedRows.push(row);
@@ -65,10 +63,6 @@ export async function purgeDeletedImages(ids?: string[]) {
   const deletedIds = deletedRows.map((row) => row.id);
   if (deletedIds.length) {
     await pool.query("DELETE FROM metadata WHERE id = ANY($1::uuid[]) AND status='deleted'", [deletedIds]);
-    await pool.query(
-      "UPDATE operation_log SET status='ignored', error='purged from trash', updated_at=now() WHERE target_id = ANY($1::text[]) AND type IN ('delete.finalize','restore.finalize') AND status IN ('pending','running','failed')",
-      [deletedIds]
-    );
     await invalidateMd5Caches(deletedRows.map((row) => row.md5));
     await cleanupEmptyCategories();
     await invalidateImageReadCaches();

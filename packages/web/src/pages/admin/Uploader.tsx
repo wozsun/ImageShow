@@ -15,7 +15,8 @@ import { UploadJobCard } from "./UploadJobCard.js";
 import { LinkUrlDialog } from "./LinkUrlDialog.js";
 import { adminApiBasePath, queryKeys } from "../../lib/constants.js";
 import { storageBackendLabel, uploadCommonBrightnessOptions, uploadCommonDeviceOptions } from "../../lib/select-options.js";
-import type { AdminSettings, Author, Brightness, Device, ImageDraft, ImageItem, StorageBackendOption, Tag, Theme, UploadJob } from "../../lib/types.js";
+import { useStorageOptions } from "../../lib/storage-options.js";
+import type { AdminSettings, Author, Brightness, Device, ImageDraft, ImageItem, Tag, Theme, UploadJob } from "../../lib/types.js";
 import { browserUuid, type CommonAttributes, draftFromFile, isUploadableImage, md5File, normalizeAuthor, normalizeTheme, putFileWithProgress, runWithConcurrency } from "../../lib/upload-utils.js";
 
 // Shape returned by the link-import prepare endpoint (download + stage a thumbnail).
@@ -48,11 +49,13 @@ export function Uploader({ onDone }: { onDone: () => void }) {
   // original for links). Separate from detailItem, which opens a matched library duplicate.
   const [previewSrc, setPreviewSrc] = useState<string | null>(null);
   const { data: settingsData } = useQuery<{ settings: AdminSettings }>({ queryKey: queryKeys.settings, queryFn: () => api(`${adminApiBasePath}/settings`) });
-  const { data: themeData } = useQuery<{ items: Theme[] }>({ queryKey: queryKeys.themes, queryFn: () => api(`${adminApiBasePath}/themes`) });
+  // The theme/tag/author vocab only feeds the open upload window's per-image fields, so defer
+  // fetching it until the window is actually opened (shared cache with the image-list editors).
+  const { data: themeData } = useQuery<{ items: Theme[] }>({ queryKey: queryKeys.themes, queryFn: () => api(`${adminApiBasePath}/themes`), enabled: open });
   const themes = themeData?.items ?? [];
-  const { data: tagData } = useQuery<{ items: Tag[] }>({ queryKey: queryKeys.tags, queryFn: () => api(`${adminApiBasePath}/tags`) });
+  const { data: tagData } = useQuery<{ items: Tag[] }>({ queryKey: queryKeys.tags, queryFn: () => api(`${adminApiBasePath}/tags`), enabled: open });
   const allTags = tagData?.items ?? [];
-  const { data: authorData } = useQuery<{ items: Author[] }>({ queryKey: queryKeys.authors, queryFn: () => api(`${adminApiBasePath}/authors`) });
+  const { data: authorData } = useQuery<{ items: Author[] }>({ queryKey: queryKeys.authors, queryFn: () => api(`${adminApiBasePath}/authors`), enabled: open });
   const authors = authorData?.items ?? [];
   const pageSize = settingsData?.settings.upload.list_page_size ?? 20;
   const maxBytes = (settingsData?.settings.upload.max_file_size_mb ?? 15) * 1024 * 1024;
@@ -62,7 +65,7 @@ export function Uploader({ onDone }: { onDone: () => void }) {
   // Whether a link import pre-fills its 原图URL (original) with the imported link itself.
   // File-only config, default off — when off the 原图URL starts blank for manual entry.
   const fillOriginalUrl = settingsData?.settings.link_image?.fill_original_url ?? false;
-  const { data: storageData } = useQuery<{ backends: StorageBackendOption[] }>({ queryKey: ["storage-options"], queryFn: () => api(`${adminApiBasePath}/storage/options`) });
+  const { data: storageData } = useStorageOptions();
   const storageBackends = storageData?.backends ?? [];
   const defaultBackend = storageBackends.find((backend) => backend.is_default)?.slug ?? "local";
   const [backendChoice, setBackendChoice] = useState<string>("");

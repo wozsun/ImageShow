@@ -141,6 +141,13 @@
    longer auto-closes the editor), so success is acknowledged without losing the form. */
 .storage-modal-header-right { display: flex; align-items: center; gap: 10px; }
 .storage-saved-pill { display: inline-flex; align-items: center; gap: 4px; color: #0f7b55; font-size: 13px; font-weight: 600; white-space: nowrap; }
+/* 保存进行中的同位 pill：与「保存成功」同处（close 按钮左侧），用中性灰 + 旋转图标，与绿色成功态区分。 */
+.storage-saved-pill.is-pending { color: #66717f; }
+.storage-saved-pill.is-pending .app-icon { animation: storage-pill-spin .8s linear infinite; }
+@keyframes storage-pill-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .storage-saved-pill.is-pending .app-icon { animation: none; }
+}
 /* On a narrow screen let the footer wrap (连接测试/设为默认 on one row, 取消/新建 on the next)
    and keep every label on one line, so the 新建/保存 button never gets crushed until its two
    characters stack vertically. */

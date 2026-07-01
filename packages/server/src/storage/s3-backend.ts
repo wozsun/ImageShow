@@ -13,7 +13,7 @@ import {
 } from "@aws-sdk/client-s3";
 import { ApiError } from "../core/http.js";
 import { getUploadLimitBytes, missingS3Fields, type StorageConfig } from "../config/settings.js";
-import { s3CopySource, s3ListPrefix, storageS3ObjectName, type ReadablePrefix, type StoragePrefix } from "./object-keys.js";
+import { isReservedRootKey, s3CopySource, s3ListPrefix, storageS3ObjectName, type ReadablePrefix, type StoragePrefix } from "./object-keys.js";
 import { limitedWebStream, nodeReadableFromWeb, streamToBuffer } from "./stream-buffer.js";
 import type {
   CopyPrefix,
@@ -136,7 +136,7 @@ export class S3Backend implements StorageDriver {
       for (const item of result.Contents ?? []) {
         if (!item.Key || item.Key === prefixPath) continue;
         const key = item.Key.startsWith(prefixPath) ? item.Key.slice(prefixPath.length) : item.Key;
-        if (prefix === "objects" && /^(thumbs|_uploads|trash|link)\//.test(key)) continue;
+        if (prefix === "objects" && isReservedRootKey(key)) continue;
         keys.push(key);
       }
       token = result.NextContinuationToken;

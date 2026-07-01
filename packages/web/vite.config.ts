@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 // Resolve the dev proxy target the same way the app resolves its own domain, so
 // `npm run dev` talks to whatever backend the local config points at. Priority:
-// data/config.json (site.domain + port) → APP_DOMAIN + PORT env → localhost:5518.
+// data/config.json (site.domain + port) → SITE_DOMAIN + PORT env → localhost:5518.
 function resolveProxyTarget() {
   const configPath = fileURLToPath(new URL("../../data/config.json", import.meta.url));
   if (existsSync(configPath)) {
@@ -17,7 +17,7 @@ function resolveProxyTarget() {
       // Fall through to env / default on a missing or malformed config.
     }
   }
-  if (process.env.APP_DOMAIN) return `http://${process.env.APP_DOMAIN.replace(/:\d+$/, "")}:${process.env.PORT ?? 5518}`;
+  if (process.env.SITE_DOMAIN) return `http://${process.env.SITE_DOMAIN.replace(/:\d+$/, "")}:${process.env.PORT ?? 5518}`;
   return "http://localhost:5518";
 }
 
@@ -33,7 +33,16 @@ export default defineConfig({
         // 缓存失效指纹：把默认 8 位哈希缩短为 6 位（仍是内容哈希，base64 字符集不变）。任一资源内容
         // 变化即改名，CDN/浏览器据此拉新文件、不会命中旧缓存。6 位 base64 ≈ 687 亿种，足够防碰撞。
         entryFileNames: "assets/[name]-[hash:6].js",
-        chunkFileNames: "assets/[name]-[hash:6].js",
+        // Rollup names an auto-created shared chunk after an arbitrary member module (e.g.
+        // "MobileNavigation"), which misleads — such a chunk actually holds code shared across
+        // routes (the Icon component + icon path-map, the mobile nav, the detail modal, …). Give
+        // these shared chunks a neutral "shared" name; route chunks (dynamic entries) and the
+        // explicit vendor chunks keep their real, informative names.
+        chunkFileNames(chunk) {
+          const isVendor = chunk.name === "react-vendor" || chunk.name === "query-vendor";
+          const isShared = !chunk.isEntry && !chunk.isDynamicEntry && !isVendor;
+          return isShared ? "assets/shared-[hash:6].js" : "assets/[name]-[hash:6].js";
+        },
         assetFileNames: "assets/[name]-[hash:6][extname]",
         // Split the framework deps into their own long-cache chunks, separate from app code
         // (which is further route-split via React.lazy in AppRoutes), so a public visitor

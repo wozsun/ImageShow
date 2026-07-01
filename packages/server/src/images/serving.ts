@@ -1,19 +1,33 @@
 import { pool } from "../core/db.js";
 import { ApiError } from "../core/http.js";
-import { contentType, makeThumb } from "./processing.js";
-import { thumbnailObjectKey } from "../storage/image-paths.js";
-import { exists, publicObjectUrl, readObject } from "../storage/storage.js";
+import { makeThumb } from "./processing.js";
+import { linkThumbnailKey, thumbnailObjectKey } from "../storage/image-paths.js";
+import { contentType, exists, publicObjectUrl, readObject } from "../storage/storage.js";
 import { getImageLookupByObjectKey, getImageLookupByThumbKey, setImageLookup } from "../core/redis.js";
 
 const immutableCache = "public, max-age=31536000, immutable";
 
-// Streams a stored thumbnail's bytes. Used wherever serveThumb has already established there's
-// no public URL to redirect to — directly, never by re-entering serveThumb, so a perpetually
-// missing lookup cache (Redis down) can't drive it into unbounded self-recursion.
-async function streamThumb(key: string, backend: string) {
+// Streams a stored thumbnail's bytes with the given cache policy. Used wherever a caller has
+// already established there's no public URL to redirect to — directly, never by re-entering
+// serveThumb, so a perpetually missing lookup cache (Redis down) can't drive it into unbounded
+// self-recursion.
+async function streamThumb(key: string, backend: string, cacheControl = immutableCache) {
   return new Response(await readObject("thumbs", key, backend) as unknown as BodyInit, {
-    headers: { "Content-Type": "image/webp", "Cache-Control": immutableCache }
+    headers: { "Content-Type": "image/webp", "Cache-Control": cacheControl }
   });
+}
+
+// Regenerates a stored (non-link) thumbnail from its still-present original when the thumb is
+// missing (e.g. after a category move re-keyed the object), then streams it. Returns null when no
+// thumbnail can be produced — neither a thumb nor a source object exists — so the caller picks the
+// fallback (serve the original, or 404). Shared by serveThumb (cached + DB-miss paths) and the
+// authenticated serveAdminThumb.
+async function streamThumbEnsuring(objectKey: string, thumbKey: string, backend: string, cacheControl = immutableCache): Promise<Response | null> {
+  if (!(await exists("thumbs", thumbKey, backend)) && await exists("objects", objectKey, backend)) {
+    await makeThumb(objectKey, backend).catch(() => undefined);
+  }
+  if (await exists("thumbs", thumbKey, backend)) return streamThumb(thumbKey, backend, cacheControl);
+  return null;
 }
 
 // Only reached on the static object host (or same-origin in dev without one), so
@@ -25,7 +39,11 @@ export async function serveObject(key: string) {
   let ext = cached?.ext ?? "";
   let slug = cached?.slug;
   if (!ext || !slug) {
-    const row = (await pool.query("SELECT object_key, ext, storage_slug FROM metadata WHERE object_key=$1 LIMIT 1", [key])).rows[0];
+    const row = (await pool.query("SELECT object_key, ext, storage_slug, status FROM metadata WHERE object_key=$1 LIMIT 1", [key])).rows[0];
+    // A deleted image's original stays in objects/ until purge, but the public host must not
+    // serve it (recycle-bin access is admin-only — see serveAdminObject). 404 before caching so
+    // the ready-only lookup cache is never poisoned with a deleted entry.
+    if (row && row.status !== "ready") throw new ApiError(404, "not_found", "Object not found");
     ext = ext || row?.ext || key.split(".").pop() || "";
     slug = slug ?? row?.storage_slug;
     if (row) await setImageLookup({ object_key: key, thumb_key: thumbnailObjectKey(key), ext, slug: row.storage_slug });
@@ -43,15 +61,17 @@ export async function serveThumb(key: string): Promise<Response> {
     const backend = cached.slug ?? "local";
     const publicUrl = await publicObjectUrl("thumbs", key, backend);
     if (publicUrl) return immutableRedirect(publicUrl);
-    if (await exists("thumbs", key, backend)) return streamThumb(key, backend);
+    // cached.thumb_key === key (the thumbs lookup is keyed by thumb_key).
+    const streamed = await streamThumbEnsuring(cached.object_key, key, backend);
+    if (streamed) return streamed;
+    // No thumbnail available; fall back to the original bytes (404 if it's gone too).
     if (!(await exists("objects", cached.object_key, backend))) throw new ApiError(404, "not_found", "Object not found");
-    await makeThumb(cached.object_key, backend).catch(() => undefined);
-    // cached.thumb_key === key (the thumbs lookup is keyed by thumb_key), so stream it directly
-    // rather than recursing back into serveThumb — recursion here can never break the loop.
-    if (await exists("thumbs", key, backend)) return streamThumb(key, backend);
     return new Response(await readObject("objects", cached.object_key, backend) as unknown as BodyInit, { headers: { "Content-Type": contentType(cached.ext), "Cache-Control": immutableCache } });
   }
-  const row = (await pool.query("SELECT object_key, ext, storage_slug FROM metadata WHERE object_key=$1 OR regexp_replace(object_key, '\\.[^/.]+$', '.webp')=$1 LIMIT 1", [key])).rows[0];
+  const row = (await pool.query("SELECT object_key, ext, storage_slug, status FROM metadata WHERE object_key=$1 OR regexp_replace(object_key, '\\.[^/.]+$', '.webp')=$1 LIMIT 1", [key])).rows[0];
+  // A deleted image keeps its thumbnail until purge; the public host must not serve it (admin-only
+  // via serveAdminThumb). 404 before caching/regenerating so the ready-only cache stays clean.
+  if (row && row.status !== "ready") throw new ApiError(404, "not_found", "Thumbnail not found");
   const objectKey = row?.object_key ?? key;
   const thumbKey = thumbnailObjectKey(objectKey);
   const ext = row?.ext ?? "";
@@ -60,10 +80,9 @@ export async function serveThumb(key: string): Promise<Response> {
   const publicUrl = await publicObjectUrl("thumbs", thumbKey, backend);
   if (publicUrl) return immutableRedirect(publicUrl);
   if (!(await exists("objects", objectKey, backend))) throw new ApiError(404, "not_found", "Object not found");
-  if (!(await exists("thumbs", thumbKey, backend))) await makeThumb(objectKey, backend).catch(() => undefined);
-  // Stream the thumb directly instead of recursing: with the lookup cache down (Redis), a
-  // recursive serveThumb(thumbKey) would re-resolve the same key every time and never terminate.
-  if (await exists("thumbs", thumbKey, backend)) return streamThumb(thumbKey, backend);
+  const streamed = await streamThumbEnsuring(objectKey, thumbKey, backend);
+  if (streamed) return streamed;
+  // Thumbnail couldn't be produced; fall back to the original bytes (needs a known ext).
   if (!ext) throw new ApiError(404, "not_found", "Thumbnail not found");
   return new Response(await readObject("objects", objectKey, backend) as unknown as BodyInit, { headers: { "Content-Type": contentType(ext), "Cache-Control": immutableCache } });
 }
@@ -118,14 +137,18 @@ export async function proxyExternalImage(externalUrl: string, ext: string, isHea
 
 // Serves a link image's stored thumbnail from the "link" prefix. The URL key is the
 // foldered name <device>-<brightness>/<theme>/<id>.webp; the id (last path segment) resolves
-// the backend. Fast path tries local first (most link thumbnails are local), then the
-// image's actual backend (S3 public URL → 302, otherwise stream the bytes).
+// the row (for the status gate) and the backend. Then serves local-first (most link thumbnails
+// are local), else the image's actual backend (S3 public URL → 302, otherwise stream the bytes).
 export async function serveLinkThumb(key: string): Promise<Response> {
+  // Resolve the row up front (not just on the non-local fast path) so a deleted link image's
+  // thumbnail — which survives in link/ until purge — is refused on the public host even when
+  // it sits locally. Recycle-bin access is admin-only (serveAdminThumb).
+  const id = (key.split("/").pop() ?? key).replace(/\.[^/.]+$/, "");
+  const row = (await pool.query("SELECT storage_slug, status FROM metadata WHERE id=$1 AND is_link=true LIMIT 1", [id])).rows[0];
+  if (row && row.status !== "ready") throw new ApiError(404, "not_found", "Thumbnail not found");
   if (await exists("link", key, "local")) {
     return new Response(await readObject("link", key, "local") as unknown as BodyInit, { headers: { "Content-Type": "image/webp", "Cache-Control": immutableCache } });
   }
-  const id = (key.split("/").pop() ?? key).replace(/\.[^/.]+$/, "");
-  const row = (await pool.query("SELECT storage_slug FROM metadata WHERE id=$1 AND is_link=true LIMIT 1", [id])).rows[0];
   const backend = row?.storage_slug ?? "local";
   const publicUrl = await publicObjectUrl("link", key, backend);
   if (publicUrl) return immutableRedirect(publicUrl);
@@ -140,7 +163,48 @@ export async function serveLinkThumb(key: string): Promise<Response> {
 // (the bytes are someone else's CDN), so this never caches a foreign original.
 export async function serveLinkMedia(key: string): Promise<Response> {
   const id = key.replace(/\.[^/.]+$/, "");
-  const row = (await pool.query("SELECT object_key, ext FROM metadata WHERE id=$1 AND is_link=true LIMIT 1", [id])).rows[0];
-  if (!row) throw new ApiError(404, "not_found", "Link image not found");
+  const row = (await pool.query("SELECT object_key, ext, status FROM metadata WHERE id=$1 AND is_link=true LIMIT 1", [id])).rows[0];
+  // Missing or recycle-bin (deleted) link images are not served publicly; the admin proxies a
+  // deleted link's original through serveAdminObject instead.
+  if (!row || row.status !== "ready") throw new ApiError(404, "not_found", "Link image not found");
   return proxyExternalImage(row.object_key as string, (row.ext as string) || "jpg", false, { "Cache-Control": "no-store" });
+}
+
+// --- Authenticated admin byte serving (main host, behind requireAuth) ---
+
+// Streams an image's thumbnail / original through the server by id, regardless of status, so the
+// recycle-bin (deleted) admin view can show images that the public static/link hosts now refuse.
+// Always streams the bytes (never a public-URL 302) and marks them private/no-store, so a deleted
+// image's URL is never handed to a cache or an unauthenticated client.
+const privateCache = "private, no-store";
+
+export async function serveAdminThumb(id: string): Promise<Response> {
+  const row = (await pool.query(
+    "SELECT object_key, storage_slug, is_link, device, brightness, theme FROM metadata WHERE id=$1 LIMIT 1",
+    [id]
+  )).rows[0];
+  if (!row) throw new ApiError(404, "not_found", "Image not found");
+  const backend = row.storage_slug ?? "local";
+  if (row.is_link) {
+    const linkKey = linkThumbnailKey(row.device, row.brightness, row.theme, id);
+    if (!(await exists("link", linkKey, backend))) throw new ApiError(404, "not_found", "Thumbnail not found");
+    return new Response(await readObject("link", linkKey, backend) as unknown as BodyInit, { headers: { "Content-Type": "image/webp", "Cache-Control": privateCache } });
+  }
+  const thumbKey = thumbnailObjectKey(row.object_key);
+  // Regenerate a missing thumbnail from the still-present original (e.g. after a move) and stream
+  // it privately; 404 if this trash entry has neither a thumbnail nor a source object to rebuild.
+  const streamed = await streamThumbEnsuring(row.object_key, thumbKey, backend, privateCache);
+  if (streamed) return streamed;
+  throw new ApiError(404, "not_found", "Thumbnail not found");
+}
+
+export async function serveAdminObject(id: string): Promise<Response> {
+  const row = (await pool.query("SELECT object_key, ext, storage_slug, is_link FROM metadata WHERE id=$1 LIMIT 1", [id])).rows[0];
+  if (!row) throw new ApiError(404, "not_found", "Image not found");
+  // A link image's "original" is an external URL — proxy it (beating hotlink protection), like the
+  // public link.<domain>/media route, but private/no-store since this is the admin view.
+  if (row.is_link) return proxyExternalImage(row.object_key as string, (row.ext as string) || "jpg", false, { "Cache-Control": privateCache });
+  const backend = row.storage_slug ?? "local";
+  if (!(await exists("objects", row.object_key, backend))) throw new ApiError(404, "not_found", "Object not found");
+  return new Response(await readObject("objects", row.object_key, backend) as unknown as BodyInit, { headers: { "Content-Type": contentType(row.ext), "Cache-Control": privateCache } });
 }

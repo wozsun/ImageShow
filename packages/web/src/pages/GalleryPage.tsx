@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api.js";
 import { AppHeader } from "../components/AppHeader.js";
 import { CopyButton } from "../components/CopyButton.js";
@@ -8,13 +7,14 @@ import { ImageDetailModal } from "../components/ImageDetailModal.js";
 import { LazyGalleryImage } from "../components/LazyGalleryImage.js";
 import { SelectMenu } from "../components/SelectMenu.js";
 import { FacetSelector } from "../components/FacetSelector.js";
-import { adminApiBasePath, eagerThumbnailCount, galleryRenderBatch, gallerySentinelRootMargin, queryKeys } from "../lib/constants.js";
+import { eagerThumbnailCount, galleryRenderBatch, gallerySentinelRootMargin } from "../lib/constants.js";
 import { formatImageMeta } from "../lib/formatters.js";
 import { masonryColumns, nextRenderBatch, useGalleryColumnCount } from "../lib/gallery-layout.js";
 import { buildRandomUrl } from "../lib/random-url.js";
 import { brightnessOptionLabel, deviceOptionLabel, randomModeSelectOptions } from "../lib/select-options.js";
 import { rootSiteOrigin } from "../lib/theme-host.js";
-import type { AuthState, GalleryOptions, ImageItem, RandomMode, SiteConfig } from "../lib/types.js";
+import type { ImageItem, RandomMode } from "../lib/types.js";
+import { useAuthMe, useGalleryOptions, useSiteConfig } from "../lib/site-data.js";
 
 export function GalleryPage({ fixedTheme = "", standalone = false }: { fixedTheme?: string; standalone?: boolean }) {
   const [selected, setSelected] = useState<ImageItem | null>(null);
@@ -30,13 +30,9 @@ export function GalleryPage({ fixedTheme = "", standalone = false }: { fixedThem
   const [hasNext, setHasNext] = useState(true);
   const [loading, setLoading] = useState(false);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
-  const { data: options } = useQuery<GalleryOptions>({ queryKey: queryKeys.galleryOptions, queryFn: () => api("/api/gallery-options") });
-  const { data: siteConfig } = useQuery<SiteConfig>({ queryKey: queryKeys.siteConfig, queryFn: () => api("/api/site-config") });
-  const { data: auth } = useQuery<AuthState>({
-    queryKey: queryKeys.me,
-    queryFn: () => api(`${adminApiBasePath}/auth/me`),
-    enabled: !standalone
-  });
+  const { data: options } = useGalleryOptions();
+  const { data: siteConfig } = useSiteConfig();
+  const { data: auth } = useAuthMe(!standalone);
   // Gallery order is a site-wide config (Settings → 站点), not a per-visitor toggle.
   const order = siteConfig?.gallery.order ?? "latest";
   const filterKey = `${filters.device}|${filters.brightness}|${filters.theme}|${filters.tag}|${filters.author}|${order}`;

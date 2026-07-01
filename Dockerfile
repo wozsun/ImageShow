@@ -22,8 +22,10 @@ RUN npm ci --omit=dev --workspace @imageshow/shared --workspace @imageshow/serve
 FROM node:24-slim AS runtime
 WORKDIR /app
 ARG PORT=5518
+# MALLOC_ARENA_MAX: 限制 glibc malloc 的 per-thread arena 数量。sharp/libvips 等原生库在多线程下
 ENV NODE_ENV=production \
-    PORT=${PORT}
+    PORT=${PORT} \
+    MALLOC_ARENA_MAX=2
 # gosu drops from root to node in the entrypoint after fixing data-dir ownership.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends gosu \

@@ -2,8 +2,9 @@ import { pool } from "../core/db.js";
 import { errorMessage } from "../core/http.js";
 import { thumbnailObjectKey, thumbnailRef } from "./image-paths.js";
 import { assertStorageWritable, getStorageBackend } from "../config/settings.js";
-import { contentType, createThumbnail } from "../images/processing.js";
+import { createThumbnail } from "../images/processing.js";
 import {
+  contentType,
   readStorageBufferWithConfig,
   removeObject,
   storageExistsWithConfig,
@@ -23,9 +24,8 @@ export async function migrateImageStorage(row: MigrateRecord, target: string): P
   const dest = await assertStorageWritable(target); // validates target credentials
   // Link images keep no original bytes of ours (object_key is an external URL); "migrating" a
   // link just moves its stored thumbnail — which lives under the dedicated "link" prefix, kept
-  // separate from regular thumbs — to the target backend, then flips storage_slug. No
-  // object/trash copy, and status doesn't matter (a link keeps its thumbnail even while
-  // soft-deleted).
+  // separate from regular thumbs — to the target backend, then flips storage_slug. Status
+  // doesn't matter (a link keeps its thumbnail even while in the recycle bin).
   if (row.is_link) {
     const thumb = thumbnailRef(row);
     if (!(await storageExistsWithConfig(source, thumb.prefix, thumb.key))) return "missing";
@@ -40,19 +40,20 @@ export async function migrateImageStorage(row: MigrateRecord, target: string): P
     await removeObject(thumb.prefix, thumb.key, row.storage_slug).catch(() => undefined);
     return "migrated";
   }
-  const objectPrefix = row.status === "deleted" ? "trash" : "objects";
-  if (!(await storageExistsWithConfig(source, objectPrefix, row.object_key))) return "missing";
-  if (!(await storageExistsWithConfig(dest, objectPrefix, row.object_key))) {
+  // Recycle-bin images keep their original (objects/) and thumbnail (thumbs/) just like ready
+  // ones, so a migrate moves both regardless of status.
+  if (!(await storageExistsWithConfig(source, "objects", row.object_key))) return "missing";
+  if (!(await storageExistsWithConfig(dest, "objects", row.object_key))) {
     await writeStorageBufferWithConfig(
       dest,
-      objectPrefix,
+      "objects",
       row.object_key,
-      await readStorageBufferWithConfig(source, objectPrefix, row.object_key),
+      await readStorageBufferWithConfig(source, "objects", row.object_key),
       contentType(row.ext)
     );
   }
   const thumbKey = thumbnailObjectKey(row.object_key);
-  if (row.status === "ready" && !(await storageExistsWithConfig(dest, "thumbs", thumbKey))) {
+  if (!(await storageExistsWithConfig(dest, "thumbs", thumbKey))) {
     const thumb = await storageExistsWithConfig(source, "thumbs", thumbKey)
       ? await readStorageBufferWithConfig(source, "thumbs", thumbKey)
       : await createThumbnail(await readStorageBufferWithConfig(source, "objects", row.object_key));
@@ -63,8 +64,8 @@ export async function migrateImageStorage(row: MigrateRecord, target: string): P
     [row.id, target, row.storage_slug]
   );
   if (!updated.rowCount) return "unchanged";
-  await removeObject(objectPrefix, row.object_key, row.storage_slug).catch(() => undefined);
-  if (row.status === "ready") await removeObject("thumbs", thumbKey, row.storage_slug).catch(() => undefined);
+  await removeObject("objects", row.object_key, row.storage_slug).catch(() => undefined);
+  await removeObject("thumbs", thumbKey, row.storage_slug).catch(() => undefined);
   return "migrated";
 }
 

@@ -8,11 +8,11 @@ import { env } from "../config/env.js";
 import { logger } from "./logger.js";
 
 export const pool = new pg.Pool({
-  host: env.POSTGRES_HOST,
-  port: env.POSTGRES_PORT,
-  database: env.POSTGRES_DB,
-  user: env.POSTGRES_USER,
-  password: env.POSTGRES_PASSWORD,
+  host: env.DATABASE_HOST,
+  port: env.DATABASE_PORT,
+  database: env.DATABASE_NAME,
+  user: env.DATABASE_USER,
+  password: env.DATABASE_PASSWORD,
   max: appConfig.pgPool.max,
   idleTimeoutMillis: appConfig.pgPool.idleTimeoutMillis,
   connectionTimeoutMillis: appConfig.pgPool.connectionTimeoutMillis,

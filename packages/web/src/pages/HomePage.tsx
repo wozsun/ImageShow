@@ -1,17 +1,16 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { api } from "../lib/api.js";
 import { AppHeader } from "../components/AppHeader.js";
 import { CopyButton } from "../components/CopyButton.js";
 import { Icon } from "../components/Icon.js";
 import { SelectMenu } from "../components/SelectMenu.js";
 import { ProgressBar } from "../components/ProgressBar.js";
 import { FacetSelector } from "../components/FacetSelector.js";
-import { defaultSite, queryKeys } from "../lib/constants.js";
+import { defaultSite } from "../lib/constants.js";
 import { buildRandomUrl } from "../lib/random-url.js";
 import { rootSiteOrigin } from "../lib/theme-host.js";
 import { randomBrightnessSelectOptions, randomDeviceSelectOptions, randomModeSelectOptions } from "../lib/select-options.js";
-import type { GalleryOptions, RandomLinkDraft, RandomMode, SiteConfig } from "../lib/types.js";
+import type { RandomLinkDraft, RandomMode } from "../lib/types.js";
+import { useGalleryOptions, useSiteConfig } from "../lib/site-data.js";
 
 export function HomePage() {
   const [device, setDevice] = useState("");
@@ -29,8 +28,8 @@ export function HomePage() {
   const [nonce, setNonce] = useState(0);
   const themeTimerRef = useRef<number | undefined>(undefined);
   const previewObjectUrlRef = useRef("");
-  const { data: siteConfig } = useQuery<SiteConfig>({ queryKey: queryKeys.siteConfig, queryFn: () => api("/api/site-config") });
-  const { data: galleryOptions } = useQuery<GalleryOptions>({ queryKey: queryKeys.galleryOptions, queryFn: () => api("/api/gallery-options") });
+  const { data: siteConfig } = useSiteConfig();
+  const { data: galleryOptions } = useGalleryOptions();
   const siteName = siteConfig?.site?.name ?? defaultSite.name;
   // Effective URL from /api/site-config (default: the site's own random API); falls back
   // to the same-host random endpoint before it loads, mirroring the admin login bg.

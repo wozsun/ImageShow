@@ -7,7 +7,7 @@ import { pipeline } from "node:stream/promises";
 import type { Readable } from "node:stream";
 import { env } from "../config/env.js";
 import { ApiError } from "../core/http.js";
-import { safeStoragePath, type ReadablePrefix, type StoragePrefix } from "./object-keys.js";
+import { isReservedRootKey, NAMESPACED_PREFIXES, safeStoragePath, STORAGE_PREFIXES, type ReadablePrefix, type StoragePrefix } from "./object-keys.js";
 import { nodeReadableFromWeb } from "./stream-buffer.js";
 import type {
   CopyPrefix,
@@ -57,27 +57,20 @@ export class LocalBackend implements StorageDriver {
     } catch (error) {
       const code = (error as { code?: string }).code;
       if (!["EXDEV", "EBUSY", "EPERM"].includes(code ?? "")) throw error;
-      // Windows development and cross-device volumes can make rename unreliable
-      // immediately after image inspection. Copy+remove keeps complete idempotent.
+      // Windows dev and cross-device volumes can make rename fail (EXDEV/EBUSY/EPERM),
+      // sometimes right after image inspection; copy+remove is the portable fallback.
       await copyFile(source, target);
       await rm(source, { force: true }).catch(() => undefined);
     }
   }
 
   async copy(fromPrefix: CopyPrefix, fromKey: string, toPrefix: CopyPrefix, toKey: string) {
-    const source = safeStoragePath(fromPrefix, fromKey);
     const target = safeStoragePath(toPrefix, toKey);
     await mkdir(dirname(target), { recursive: true });
-    try {
-      await copyFile(source, target);
-    } catch (error) {
-      const code = (error as { code?: string }).code;
-      if (!["ENOENT", "EXDEV", "EINVAL", "EBUSY", "EPERM"].includes(code ?? "")) throw error;
-      // copyFile uses copy_file_range/sendfile, which can fail spuriously on
-      // bind-mounted filesystems (e.g. Docker Desktop on Windows) even when the
-      // source exists. Fall back to a plain read+write, which they handle reliably.
-      await writeFile(target, await readFile(source));
-    }
+    // Native copy only. copyFile uses copy_file_range/sendfile, which can fail spuriously on
+    // bind-mounted filesystems (e.g. Docker Desktop on Windows); the copyObject facade catches that
+    // and falls back to read+write, so no per-backend fallback is needed here.
+    await copyFile(safeStoragePath(fromPrefix, fromKey), target);
   }
 
   async writeUploadFromWeb(id: string, body: ReadableStream<Uint8Array>, expectedSize: number) {
@@ -107,12 +100,12 @@ export class LocalBackend implements StorageDriver {
     async function walk(dir: string) {
       const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
       for (const entry of entries) {
-        if (prefix === "objects" && dir === root && entry.isDirectory() && ["objects", "thumbs", "_uploads", "trash", "link"].includes(entry.name)) continue;
+        if (prefix === "objects" && dir === root && entry.isDirectory() && (STORAGE_PREFIXES as readonly string[]).includes(entry.name)) continue;
         const path = join(dir, entry.name);
         if (entry.isDirectory()) await walk(path);
         else {
           const key = relative(root, path).split(sep).join("/");
-          if (prefix === "objects" && /^(thumbs|_uploads|trash|objects|link)\//.test(key)) continue;
+          if (prefix === "objects" && isReservedRootKey(key)) continue;
           keys.push(key);
         }
       }
@@ -136,12 +129,12 @@ export class LocalBackend implements StorageDriver {
   }
 
   // Depth-first prune: recurse into every subtree, then rmdir each directory that ended up
-  // empty. The storage root and the top-level prefix dirs (thumbs/trash/link/_uploads,
-  // maintained by ensureStorage) are never removed; rmdir only succeeds on an empty dir, so
-  // a concurrent write that just repopulated one is harmless (ENOTEMPTY is swallowed).
+  // empty. The storage root and the top-level prefix dirs (thumbs/link/_uploads, maintained by
+  // ensureStorage) are never removed; rmdir only succeeds on an empty dir, so a concurrent write
+  // that just repopulated one is harmless (ENOTEMPTY is swallowed).
   async pruneEmptyDirs(): Promise<number> {
     const root = env.STORAGE_DIR;
-    const protectedDirs = new Set(["thumbs", "trash", "link", "_uploads"].map((name) => join(root, name)));
+    const protectedDirs = new Set(NAMESPACED_PREFIXES.map((name) => join(root, name)));
     let removed = 0;
     const prune = async (dir: string): Promise<void> => {
       const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);

@@ -7,8 +7,8 @@
 ```bash
 docker run --rm -p 5518:5518 \
   -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD='replace-this-password' \
-  -e POSTGRES_HOST=db.example.internal -e POSTGRES_DB=imageshow \
-  -e POSTGRES_USER=imageshow -e POSTGRES_PASSWORD='replace-this-db-password' \
+  -e DATABASE_HOST=db.example.internal -e DATABASE_NAME=imageshow \
+  -e DATABASE_USER=imageshow -e DATABASE_PASSWORD='replace-this-db-password' \
   -e REDIS_HOST=redis.example.internal \
   -v /srv/imageshow/data:/app/data \
   your-user/imageshow:latest

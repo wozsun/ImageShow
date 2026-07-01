@@ -51,11 +51,11 @@ ImageShow/
 | --- | --- |
 | `storage/storage.ts` | 门面：`readObject` / `removeObject` / `moveObject` / `copyObject` / `exists`、`publicImageUrls()`、`writeUploadFromWeb()`、`ensureStorage()`。 |
 | `storage/storage-backend.ts` | `driverFor(config)` 按 `config.type` 返回 Local / S3 / WebDAV 驱动。链接图由图片层的 `is_link` 处理，无独立驱动。 |
-| `storage/local-backend.ts` | 本地磁盘后端（`/app/data/storage` 下 objects / thumbs / trash / _uploads / link），含空目录回收 `pruneEmptyDirs()`。 |
+| `storage/local-backend.ts` | 本地磁盘后端（`/app/data/storage` 下 objects / thumbs / _uploads / link），含空目录回收 `pruneEmptyDirs()`。 |
 | `storage/s3-backend.ts` | S3 / COS 后端：经服务器中转 PUT、读写删、`root_path` 前缀。 |
 | `storage/webdav-backend.ts` | WebDAV 后端：PROPFIND/MKCOL/PUT/GET/DELETE/MOVE/COPY，HTTP Basic 认证，`base_url + root_path` 前缀。 |
 | `storage/image-paths.ts` | 键名规则：`storageObjectKey()`、`thumbnailObjectKey()`、`linkThumbnailKey(device,brightness,theme,id)`，以及集中助手 `thumbnailRef(row)`——link 缩略图按分类分文件夹存在该图自己的存储后端的 `link/` 前缀下。所有清理 / 检查路径都走它，避免孤儿。 |
-| `storage/object-keys.ts` | 路径 / 键名映射与防穿越：本地 `safeStoragePath()`、S3 `storageS3ObjectName()` 等，物理布局 `<root_path>/<objects｜thumbs｜trash｜_uploads｜link>/<key>`。 |
+| `storage/object-keys.ts` | 路径 / 键名映射与防穿越：本地 `safeStoragePath()`、S3 `storageS3ObjectName()` 等，物理布局 `<root_path>/<objects｜thumbs｜_uploads｜link>/<key>`。 |
 | `storage/migration.ts` | 单图在任意后端间（local / s3 / webdav）迁移字节（含缩略图），以及整后端批量迁移 `migrateStorageBackend()`。 |
 | `storage/stream-buffer.ts` | 流 ↔ Buffer 辅助。 |
 
@@ -65,15 +65,15 @@ ImageShow/
 | --- | --- |
 | `images/service.ts` | 软删除 `deleteImage()`、改元数据 / 换分类 `updateImageMetadata()`（换分类＝移动对象键 + 重排两个分类索引，事务内完成，link 不动字节）、单 / 批量迁移存储。 |
 | `images/query.ts` | 画廊列表：游标分页 + Redis 列表缓存 + `withShuffle()`（出口处洗牌，不污染共享缓存）。 |
-| `images/serving.ts` | 字节服务：`serveObject` / `serveThumb`（S3 公共 URL 时 302），外链图 `serveLinkThumb`（存储的略缩图，先试本地再回退该图后端）/ `serveLinkMedia`（`proxyExternalImage` 服务端代理外部原图）。 |
-| `images/presenter.ts` | `publicImage()` / `publicImages()` 把 DB 行变成 API 响应、列表缓存键、`cacheImageLookups()`（link 跳过）。 |
+| `images/serving.ts` | 字节服务：`serveObject` / `serveThumb`（S3 公共 URL 时 302；已删除图片在公共主机一律 404），外链图 `serveLinkThumb`（存储的略缩图，先试本地再回退该图后端）/ `serveLinkMedia`（`proxyExternalImage` 服务端代理外部原图）；以及带鉴权的后台字节服务 `serveAdminThumb` / `serveAdminObject`（按 id 转发任意状态的略缩图 / 原图，供回收站视图，`private, no-store`）。 |
+| `images/presenter.ts` | `publicImage()` / `publicImages()` 把 DB 行变成 API 响应、`publicListImage()`（公共列表出口白名单）、`adminImageView()`（后台投影：去 `ext`、已删除图改指鉴权字节端点）、列表缓存键、`cacheImageLookups()`（link 跳过）。 |
 | `images/processing.ts` | sharp 封装：`probeImageBytes()`、`makeThumb()` / `createThumbnail()`、`contentType()`、`detectDeviceFromDimensions()`（w≥h⇒pc）。 |
 | `images/brightness.ts` | 明暗识别 `detectBrightness()`：在 CIELAB L\* 直方图上算感知亮度评分判 dark/light。评分源自 `scripts/classify.py`，按本程序的标注样本重标定（去掉人工复核用的救回规则，准确率 95.3%→97.0%）。 |
 | `images/link-import.ts` | 链接导入：下载一次→探测尺寸 / MD5→生成缩略图→自动判设备→入库（`object_key`＝外链）→提交后写略缩图 `link/<设备-明暗>/<主题>/<id>.webp`。 |
 | `images/upload.ts` | 上传会话生命周期：创建会话、完成上传（同步完成校验、明暗识别、缩略图与落库，不留后台待办）。 |
-| `images/batch.ts` | 批量软删除 `batchDeleteImages()`：按分类分组、回填索引空洞、入队 `delete.finalize`。 |
+| `images/batch.ts` | 批量软删除 `batchDeleteImages()`：按分类分组、回填索引空洞、标记 `status='deleted'`（不动文件）。 |
 | `images/cursor.ts` | 游标编解码（稳定分页）。 |
-| `images/trash.ts` | 回收站：恢复 `restoreDeletedImage()` / `batchRestoreImages()`、彻底清除 `purgeDeletedImages()`（用 `thumbnailRef` 删缩略图）。 |
+| `images/trash.ts` | 回收站：恢复 `restoreDeletedImage()` / `batchRestoreImages()`（纯数据库，不动文件）、彻底清除 `purgeDeletedImages()`（物理删原图 + 缩略图，用 `thumbnailRef` 定位）。 |
 
 ### tags / themes / authors / users —— 配套领域
 
@@ -118,6 +118,7 @@ ImageShow/
 | `routes/health.ts` | `/healthz`、`/readyz` |
 | `routes/docs.ts` | `docs.<域名>` 提供文档站（`site.docs_enabled=false` 时该域名返回 404） |
 | `routes/spa.ts` | 前端 SPA 静态资源与 fallback |
+| `routes/robots.ts` | 按主机区分的 `GET /robots.txt`（主站仅放行首页；资源 / API / 主题子域禁抓；docs 可抓） |
 
 ## packages/web —— 前端
 

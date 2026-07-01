@@ -59,7 +59,7 @@ PostgreSQL，单一迁移文件 `packages/server/migrations/0001_initial.sql`，
 | 字段 | 含义 |
 | --- | --- |
 | `id` (PK) | 任务 id |
-| `type` | 任务类型：`thumb.generate` / `delete.finalize` / `restore.finalize` / `move.cleanup` / `upload.cleanup` / `cache.rebuild` / `empty-trash` |
+| `type` | 任务类型：`thumb.generate` / `move.cleanup` / `upload.cleanup` / `cache.rebuild` |
 | `target_id` | 目标图片 id |
 | `idempotency_key` | 幂等键（如 `cache.rebuild` / `upload.cleanup` 全局仅一个活跃） |
 | `status` | `pending` / `running` / `succeeded` / `failed` / `ignored` |

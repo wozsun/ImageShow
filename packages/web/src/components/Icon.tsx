@@ -1,16 +1,17 @@
-import React from "react";
+import { ICONS, type IconName } from "./icons.generated.js";
 
-// Served from a neutral path so the URL doesn't disclose the upstream icon set or its
-// version; the SVGs are copied into public/assets/icons at build time (copy-assets.mjs).
-const iconBaseUrl = "/assets/icons";
+// The whole icon set is inlined as a path-map (icons.generated.ts) and rendered as an inline
+// <svg>, so it ships inside the hashed JS bundle: no per-icon request, fully CDN/immutable-
+// cacheable, and the icon name is type-checked (IconName) instead of a free-form string — a
+// typo'd or missing icon is now a compile error, not a silent runtime 404. Colour follows the
+// surrounding text via fill: currentColor (.app-icon in base.css); every Remix icon shares the
+// "0 0 24 24" viewBox.
+export type { IconName };
 
-export function Icon({ name }: { name: string }) {
-  const iconUrl = `${iconBaseUrl}/${name}.svg`;
+export function Icon({ name }: { name: IconName }) {
   return (
-    <span
-      className="app-icon"
-      style={{ "--icon-url": `url("${iconUrl}")` } as React.CSSProperties}
-      aria-hidden="true"
-    />
+    <svg className="app-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d={ICONS[name]} />
+    </svg>
   );
 }

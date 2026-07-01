@@ -1,7 +1,6 @@
 import { indexKey } from "@imageshow/shared";
 import { cleanupEmptyCategories, pool } from "../core/db.js";
 import { invalidateImageReadCaches, invalidateMd5Caches, bumpFolder } from "../core/redis.js";
-import { enqueueMany } from "../jobs/tasks.js";
 import type { ImageRecord } from "./presenter.js";
 
 export async function batchDeleteImages(ids: string[]) {
@@ -26,7 +25,6 @@ export async function batchDeleteImages(ids: string[]) {
     await bumpFolder(category, -targets.length);
     deleted += targets.length;
   }
-  await enqueueMany("delete.finalize", deletedTargets.map((target) => target.id));
   await invalidateMd5Caches(deletedTargets.map((target) => target.md5 ?? ""));
   await cleanupEmptyCategories();
   if (deleted) await invalidateImageReadCaches();

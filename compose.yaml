@@ -3,11 +3,10 @@ services:
     image: postgres:18
     container_name: imageshow-postgresql
     environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    ports:
-      - "${POSTGRES_HOST_PORT:-5432}:5432"
+      # The official postgres image requires these exact var names to initialize the DB;
+      POSTGRES_DB: ${DATABASE_NAME}
+      POSTGRES_USER: ${DATABASE_USER}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
     volumes:
       - postgresql18_data:/var/lib/postgresql
     healthcheck:
@@ -33,19 +32,20 @@ services:
       context: .
     image: imageshow:latest
     container_name: imageshow
+    restart: unless-stopped
     depends_on:
       postgresql:
         condition: service_healthy
       redis:
         condition: service_healthy
     environment:
+      SITE_DOMAIN: ${SITE_DOMAIN}
       ADMIN_USERNAME: ${ADMIN_USERNAME}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
-      POSTGRES_HOST: postgresql
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      APP_DOMAIN: ${APP_DOMAIN:-example.com}
+      DATABASE_HOST: postgresql
+      DATABASE_NAME: ${DATABASE_NAME}
+      DATABASE_USER: ${DATABASE_USER}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
     ports:
       - "${HOST_PORT:-5518}:5518"
     volumes:

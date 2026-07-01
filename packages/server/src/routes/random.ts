@@ -4,9 +4,8 @@
 import type { Context, Hono } from "hono";
 import { appConfig } from "@imageshow/shared";
 import { getFolderMap } from "../core/redis.js";
-import { contentType } from "../images/processing.js";
 import { proxyExternalImage } from "../images/serving.js";
-import { publicImageUrls, readObject } from "../storage/storage.js";
+import { contentType, publicImageUrls, readObject } from "../storage/storage.js";
 import { clientIp, routeError } from "../core/http.js";
 import { pickRandom } from "../random/service.js";
 import { buildRandomImageCountData } from "../random/query.js";

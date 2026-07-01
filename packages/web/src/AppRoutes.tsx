@@ -1,10 +1,8 @@
 import { lazy, Suspense } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Navigate, Route, Routes } from "react-router-dom";
-import { api } from "./lib/api.js";
-import { adminBasePath, publicHomePath, queryKeys } from "./lib/constants.js";
+import { adminBasePath, publicHomePath } from "./lib/constants.js";
 import { themeFromHostname, rootSiteOrigin } from "./lib/theme-host.js";
-import type { GalleryOptions, SiteConfig } from "./lib/types.js";
+import { useGalleryOptions, useSiteConfig } from "./lib/site-data.js";
 
 // Route components are code-split: a public visitor on /home or /gallery never downloads the
 // (much larger) admin bundle, and each page loads as its own lazy chunk under Suspense.
@@ -14,8 +12,10 @@ const ThemeHostPage = lazy(() => import("./pages/GalleryPage.js").then((module) 
 const AdminShell = lazy(() => import("./pages/AdminShell.js").then((module) => ({ default: module.AdminShell })));
 
 export function AppRoutes() {
-  const { data } = useQuery<SiteConfig>({ queryKey: queryKeys.siteConfig, queryFn: () => api("/api/site-config") });
-  const { data: options } = useQuery<GalleryOptions>({ queryKey: queryKeys.galleryOptions, queryFn: () => api("/api/gallery-options"), enabled: Boolean(data) });
+  // site-config drives routing; gallery-options is only needed by the theme-host branch but is
+  // fetched in parallel (no enabled-gate) so the first paint doesn't serialize the two requests.
+  const { data } = useSiteConfig();
+  const { data: options } = useGalleryOptions();
   if (!data) return <div className="center">加载中</div>;
   const fixedTheme = themeFromHostname(window.location.hostname, data.site.domain);
   if (fixedTheme) {
@@ -49,7 +49,7 @@ export function AppRoutes() {
 }
 
 function RootRedirect() {
-  const { data } = useQuery<SiteConfig>({ queryKey: queryKeys.siteConfig, queryFn: () => api("/api/site-config") });
+  const { data } = useSiteConfig();
   if (!data) return <div className="center">加载中</div>;
   const target = data.site.root_redirect === "gallery" ? "/gallery" : publicHomePath(data.site);
   return <Navigate to={target} replace />;

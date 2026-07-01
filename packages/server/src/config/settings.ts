@@ -40,7 +40,7 @@ const webdavSettingsSchema = z.object({
 // A backend's driver kind.
 export type StorageType = "local" | "s3" | "webdav";
 export type S3Settings = z.infer<typeof s3SettingsSchema>;
-export type WebdavSettings = z.infer<typeof webdavSettingsSchema>;
+type WebdavSettings = z.infer<typeof webdavSettingsSchema>;
 
 // A resolved backend, ready to drive storage operations. `s3` and `webdav` are always
 // present (defaulted for other types) so each driver / key mapper reads its own
@@ -67,8 +67,8 @@ export const storageBackendCreateInput = z.object({
   slug: storageSlugInput,
   display_name: storageDisplayInput.optional().default(""),
   type: z.enum(["s3", "webdav"]).default("s3"),
-  s3: s3SettingsSchema.optional().default({}),
-  webdav: webdavSettingsSchema.optional().default({})
+  s3: s3SettingsSchema.optional().prefault({}),
+  webdav: webdavSettingsSchema.optional().prefault({})
 });
 
 export const storageBackendUpdateInput = z.object({
@@ -104,7 +104,8 @@ const appSettingsSchema = z.object({
   }).optional(),
   admin: z.object({
     image_page_size: imagePageSize.default(appConfig.runtimeDefaults.admin.image_page_size),
-    recent_uploads: recentUploads.default(appConfig.runtimeDefaults.admin.recent_uploads)
+    recent_uploads: recentUploads.default(appConfig.runtimeDefaults.admin.recent_uploads),
+    show_unset_theme_card: z.boolean().default(appConfig.runtimeDefaults.admin.show_unset_theme_card)
   }).optional(),
   gallery: z.object({
     default_limit: galleryLimit.default(appConfig.runtimeDefaults.gallery.default_limit),
@@ -459,11 +460,30 @@ export async function getSettingsForAdmin() {
 function randomApiBackground(domain: string) {
   return `https://${domain}/random?m=redirect`;
 }
-export function effectiveLoginBackground(site: { login_background?: string; domain: string }) {
+function effectiveLoginBackground(site: { login_background?: string; domain: string }) {
   return site.login_background?.trim() || randomApiBackground(site.domain);
 }
-export function effectiveHomeHeroBackground(site: { home_hero_background?: string; domain: string }) {
+function effectiveHomeHeroBackground(site: { home_hero_background?: string; domain: string }) {
   return site.home_hero_background?.trim() || randomApiBackground(site.domain);
+}
+
+// The public site configuration the SPA needs at boot. Shared by GET /api/site-config (which wraps
+// it in the standard {ok:true,...} envelope) and by the SPA document's inlined
+// <script type="application/json"> block (routes/spa.ts), so the app starts without a round-trip
+// and both deliver the same site config.
+export function siteConfigPayload() {
+  const runtime = getRuntimeConfig();
+  const { name, domain, icon_url, root_redirect, home_enabled } = runtime.site;
+  return {
+    // login_background / home_hero_background are resolved to their effective URLs here so the
+    // login page and homepage hero can use them directly without the random-API convention.
+    site: { name, domain, icon_url, root_redirect, home_enabled, login_background: effectiveLoginBackground(runtime.site), home_hero_background: effectiveHomeHeroBackground(runtime.site) },
+    home: runtime.home,
+    upload: { max_file_size_mb: runtime.upload.max_file_size_mb, max_long_edge: runtime.upload.max_long_edge },
+    gallery: { order: runtime.gallery.order },
+    image_detail: runtime.image_detail,
+    captcha: { enabled: runtime.captcha.enabled }
+  };
 }
 
 export async function saveAppSettings(input: AppSettingsInput) {

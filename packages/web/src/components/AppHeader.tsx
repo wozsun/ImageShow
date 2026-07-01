@@ -1,14 +1,12 @@
-import { useQuery } from "@tanstack/react-query";
 import { Link, NavLink } from "react-router-dom";
-import { api } from "../lib/api.js";
-import { adminApiBasePath, adminBasePath, defaultSite, publicHomePath, queryKeys } from "../lib/constants.js";
-import type { AuthState, SiteConfig } from "../lib/types.js";
+import { adminBasePath, defaultSite, publicHomePath } from "../lib/constants.js";
+import { useAuthMe, useSiteConfig } from "../lib/site-data.js";
 import { Icon } from "./Icon.js";
 import { MobileNavigation } from "./MobileNavigation.js";
 
 export function AppHeader() {
-  const { data } = useQuery<SiteConfig>({ queryKey: queryKeys.siteConfig, queryFn: () => api("/api/site-config") });
-  const { data: auth } = useQuery<AuthState>({ queryKey: queryKeys.me, queryFn: () => api(`${adminApiBasePath}/auth/me`) });
+  const { data } = useSiteConfig();
+  const { data: auth } = useAuthMe();
   const siteName = data?.site?.name ?? defaultSite.name;
   // Home off: the 首页 nav entry disappears and the brand falls back to the gallery.
   const homeEnabled = data?.site?.home_enabled ?? true;

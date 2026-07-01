@@ -1,4 +1,4 @@
-import { Icon } from "./Icon.js";
+import { Icon, type IconName } from "./Icon.js";
 import { useAnimatedClose } from "./useAnimatedClose.js";
 import { useBodyScrollLock } from "./useBodyScrollLock.js";
 
@@ -17,7 +17,7 @@ export function ConfirmDialog({
   confirmLabel: string;
   busy?: boolean;
   danger?: boolean;
-  confirmIcon?: string;
+  confirmIcon?: IconName;
   onClose: () => void;
   onConfirm: () => Promise<void>;
 }) {

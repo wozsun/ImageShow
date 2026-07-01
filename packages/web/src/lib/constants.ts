@@ -1,5 +1,5 @@
 import type { SiteSettings } from "./types.js";
-export { adminApiBasePath, adminBasePath, adminImagePageLimit, reservedSubdomains, slugPattern } from "@imageshow/shared";
+export { adminApiBasePath, adminBasePath, reservedSubdomains, slugPattern } from "@imageshow/shared";
 
 export const queryKeys = {
   siteConfig: ["site-config"] as const,

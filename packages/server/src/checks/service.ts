@@ -24,7 +24,6 @@ export async function checkAll() {
       storage[backend] = {
         objects: (await listStorageKeys("objects", backend)).length,
         thumbs: (await listStorageKeys("thumbs", backend)).length,
-        trash: (await listStorageKeys("trash", backend)).length,
         uploads: (await listStorageKeys("_uploads", backend)).length
       };
     } catch (error) {

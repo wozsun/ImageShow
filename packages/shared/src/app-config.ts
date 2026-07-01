@@ -89,16 +89,15 @@ export const appConfig = {
     redis: { host: "redis", port: 6379, db: 0 },
     home: { preview_delay_ms: 1000 },
     upload: { max_file_size_mb: 15, max_long_edge: 8192, list_page_size: 20, concurrency: 2 },
-    admin: { image_page_size: 60, recent_uploads: 12 },
+    admin: { image_page_size: 60, recent_uploads: 12, show_unset_theme_card: true },
     gallery: { default_limit: 60, order: "random" },
     random: { default_method: "redirect" },
     image_detail: { title_opens_image: true },
     link_image: { fill_original_url: false },
     operation_log: {
-      delete_concurrency: 5,
       move_cleanup_concurrency: 5,
-      empty_trash_concurrency: 5,
-      theme_reassign_concurrency: 5
+      theme_reassign_concurrency: 5,
+      migrate_concurrency: 5
     },
     security: {
       session_ttl_seconds: 7 * 24 * 60 * 60,

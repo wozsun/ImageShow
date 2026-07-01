@@ -3,18 +3,10 @@ import { categoryKey, indexKey, slugPattern, type Brightness, type Device } from
 import { cleanupEmptyCategories, pool, upsertCategory, withTransaction } from "../core/db.js";
 import { ApiError } from "../core/http.js";
 import { getRuntimeConfig } from "../config/env.js";
+import { mapWithConcurrency } from "../core/concurrency.js";
 import { invalidateImageReadCaches, invalidateThemeVocab, rebuildFolderMap } from "../core/redis.js";
 import { linkThumbnailKey, storageObjectKey, thumbnailObjectKey } from "../storage/image-paths.js";
-import { copyObject, pruneEmptyStorageDirs, readStorageBuffer, removeObject, writeStorageBuffer } from "../storage/storage.js";
-
-// Runs `task` over `items` with at most `limit` in flight (chunked), the same bounded
-// storage-I/O pattern the purge path uses. Used to move a deleted theme's image files.
-async function mapWithConcurrency<T>(items: T[], limit: number, task: (item: T) => Promise<void>): Promise<void> {
-  const size = Math.max(1, limit);
-  for (let offset = 0; offset < items.length; offset += size) {
-    await Promise.all(items.slice(offset, offset + size).map(task));
-  }
-}
+import { copyObject, pruneEmptyStorageDirs, removeObject } from "../storage/storage.js";
 
 // Registers a theme slug so it becomes manageable (display name + aliases). A
 // no-op for the 'none' sentinel or an already-registered slug. New slugs append to
@@ -65,9 +57,9 @@ export async function reorderThemes(slugs: string[]) {
 
 // Moves every image off `theme` and onto the 'none' sentinel — ready images are appended (in
 // order) to their device-brightness-none category to keep the index contiguous; deleted
-// images are just relabelled. For stored (non-link) images the actual object + thumbnail (or,
-// for a deleted image, its trash object) is moved into the none/ folder so object_key keeps
-// mirroring the category, with the file copies run up to operation_log.theme_reassign_concurrency
+// images are just relabelled. For stored (non-link) images the object + thumbnail are moved into
+// the none/ folder so object_key keeps mirroring the category (recycle-bin images now live in
+// objects/ + thumbs/ like ready ones), with the file copies run up to operation_log.theme_reassign_concurrency
 // at a time; link images keep their external URL as the object key, but their foldered
 // thumbnail is relocated to the none/ folder too. Returns whether anything moved, so callers
 // can skip the (full) random-pool rebuild.
@@ -99,21 +91,18 @@ async function reassignThemeImagesToNone(theme: string): Promise<boolean> {
     .filter((move) => move.oldThumbKey !== move.newThumbKey);
   const concurrency = getRuntimeConfig().operation_log.theme_reassign_concurrency;
 
-  // Phase 1: copy each stored image's bytes to the none/ key first, so both copies exist
-  // across the pointer flip (the crash-safe ordering the single-image re-theme uses). A ready
-  // image carries an object + thumbnail; a deleted image's only bytes are its trash object.
+  // Phase 1: copy each stored image's bytes to the none/ key first, so both copies exist across
+  // the pointer flip (the crash-safe ordering the single-image re-theme uses). Ready and
+  // recycle-bin images are structurally identical now (object in objects/, thumbnail in thumbs/),
+  // so both copy the object + thumbnail.
   await mapWithConcurrency(moves, concurrency, async (move) => {
-    if (move.status === "deleted") {
-      await copyObject("trash", move.object_key, "trash", move.newKey, move.storage_slug);
-    } else {
-      await copyObject("objects", move.object_key, "objects", move.newKey, move.storage_slug);
-      await copyObject("thumbs", thumbnailObjectKey(move.object_key), "thumbs", thumbnailObjectKey(move.newKey), move.storage_slug);
-    }
+    await copyObject("objects", move.object_key, "objects", move.newKey, move.storage_slug);
+    await copyObject("thumbs", thumbnailObjectKey(move.object_key), "thumbs", thumbnailObjectKey(move.newKey), move.storage_slug);
   });
-  // Copy each link image's thumbnail to its none/ folder (small webp, copy-then-remove like above).
+  // Copy each link image's thumbnail to its none/ folder (backend-native copy, same as the
+  // object/thumb copies above; copy-then-remove — the old path is dropped in phase 3).
   await mapWithConcurrency(linkThumbMoves, concurrency, async (move) => {
-    const buffer = await readStorageBuffer("link", move.oldThumbKey, move.storage_slug);
-    await writeStorageBuffer("link", move.newThumbKey, buffer, "image/webp", move.storage_slug);
+    await copyObject("link", move.oldThumbKey, "link", move.newThumbKey, move.storage_slug);
   });
 
   // Phase 2: flip the DB pointers in one transaction (category/index + object_key).
@@ -148,7 +137,7 @@ async function reassignThemeImagesToNone(theme: string): Promise<boolean> {
     }
     // All ready images left the theme's own categories, so they're empty now.
     await client.query("UPDATE category SET count=0, updated_at=now() WHERE theme=$1", [theme]);
-    // Deleted images: relabel theme + category_key and re-key their (trash) object.
+    // Deleted (recycle-bin) images: relabel theme + category_key and re-key their object.
     for (const row of deleted) {
       const target = categoryKey(row.device, row.brightness, "none");
       await upsertCategory(client, target, row.device, row.brightness, "none");
@@ -162,12 +151,8 @@ async function reassignThemeImagesToNone(theme: string): Promise<boolean> {
   // Phase 3: drop the old-path copies, then prune the directories they vacated. Best-effort —
   // a leftover is a harmless orphan that 清理无效存储 reclaims.
   await mapWithConcurrency(moves, concurrency, async (move) => {
-    if (move.status === "deleted") {
-      await removeObject("trash", move.object_key, move.storage_slug).catch(() => undefined);
-    } else {
-      await removeObject("objects", move.object_key, move.storage_slug).catch(() => undefined);
-      await removeObject("thumbs", thumbnailObjectKey(move.object_key), move.storage_slug).catch(() => undefined);
-    }
+    await removeObject("objects", move.object_key, move.storage_slug).catch(() => undefined);
+    await removeObject("thumbs", thumbnailObjectKey(move.object_key), move.storage_slug).catch(() => undefined);
   });
   await mapWithConcurrency(linkThumbMoves, concurrency, async (move) => {
     await removeObject("link", move.oldThumbKey, move.storage_slug).catch(() => undefined);

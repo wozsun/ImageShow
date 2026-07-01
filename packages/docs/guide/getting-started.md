@@ -12,9 +12,9 @@ docker compose up -d --build
 ```ini
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=change-me-now
-POSTGRES_DB=imageshow
-POSTGRES_USER=imageshow
-POSTGRES_PASSWORD=change-me-db
+DATABASE_NAME=imageshow
+DATABASE_USER=imageshow
+DATABASE_PASSWORD=change-me-db
 ```
 
 `ADMIN_USERNAME` / `ADMIN_PASSWORD` 仅在数据库尚无管理员时用于创建首个账号（最终以用户名 + Argon2id 密码哈希保存到数据库），初始化完成后即可从 `.env` 移除。

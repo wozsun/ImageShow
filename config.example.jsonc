@@ -83,7 +83,9 @@
     // 后台图片每页数量 / Admin image list page size
     "image_page_size": 60,
     // 概览页「最近上传」数量 / Overview "recent uploads" count
-    "recent_uploads": 12
+    "recent_uploads": 12,
+    // 主题管理是否显示「未设置」占位卡片 / Show the "unset" placeholder card on the theme page
+    "show_unset_theme_card": true
   },
   "gallery": {
     // 画廊默认每页数量 / Gallery default page size
@@ -105,14 +107,12 @@
   },
   // 后台任务 worker 并发（仅文件配置）/ Worker concurrency (file-only)
   "operation_log": {
-    // delete.finalize 并发 / delete.finalize concurrency
-    "delete_concurrency": 5,
     // move.cleanup 并发 / move.cleanup concurrency
     "move_cleanup_concurrency": 5,
-    // empty-trash 并发 / empty-trash concurrency
-    "empty_trash_concurrency": 5,
     // 删除主题时图片搬运并发 / Theme-delete file move concurrency
-    "theme_reassign_concurrency": 5
+    "theme_reassign_concurrency": 5,
+    // 批量迁移存储时图片拷贝并发（每张载入整图，限并发以控内存）/ Storage-migrate copy concurrency
+    "migrate_concurrency": 5
   },
   // 安全相关（仅文件配置）/ Security tuning (file-only)
   "security": {

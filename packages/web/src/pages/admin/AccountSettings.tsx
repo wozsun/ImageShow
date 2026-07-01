@@ -1,18 +1,17 @@
 import { useState, type FormEvent } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { api } from "../../lib/api.js";
 import { Icon } from "../../components/Icon.js";
 import { PasswordInput } from "../../components/PasswordInput.js";
-import { adminApiBasePath, queryKeys } from "../../lib/constants.js";
+import { adminApiBasePath } from "../../lib/constants.js";
 import { errorMessage } from "../../lib/formatters.js";
 import { isValidAdminPassword, passwordPolicyHint } from "../../lib/password.js";
-import type { AuthState } from "../../lib/types.js";
+import { useAuthMe } from "../../lib/site-data.js";
 
 // Self-service password change, available to every signed-in admin (both super and image
 // roles). For image admins — who have no other settings access — this is their dedicated
 // settings page. Takes the current password once plus the new one twice (confirm).
 export function AccountSettings() {
-  const { data: auth } = useQuery<AuthState>({ queryKey: queryKeys.me, queryFn: () => api(`${adminApiBasePath}/auth/me`) });
+  const { data: auth } = useAuthMe();
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");

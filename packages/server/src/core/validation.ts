@@ -175,6 +175,11 @@ const imageListBase = z.object({
 });
 
 export const listQuery = imageListBase.extend({
+  // The public gallery is ready-only; deleted images are admin-only (the admin list uses
+  // adminImageListQuery, which keeps both statuses). Narrow the shared base's status enum to
+  // the single literal so an unauthenticated ?status=deleted can't enumerate the recycle bin —
+  // it's rejected as a validation error instead of returning trashed images.
+  status: z.literal("ready").default("ready"),
   limit: z.coerce.number().int().positive().max(appConfig.pagination.maxLimit).optional(),
   // When set, shuffle the items within each loaded page. Applied on egress only, so
   // the keyset cursor still pages over the stable (created_at, id) order.

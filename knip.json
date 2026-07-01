@@ -1,0 +1,15 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignoreWorkspaces": ["packages/docs"],
+  "workspaces": {
+    "packages/shared": {
+      "ignoreBinaries": ["tsc"]
+    },
+    "packages/server": {
+      "entry": ["src/healthcheck-cli.ts"]
+    },
+    "packages/web": {
+      "ignoreDependencies": ["remixicon"]
+    }
+  }
+}

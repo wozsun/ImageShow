@@ -5,7 +5,7 @@
 import type { Readable } from "node:stream";
 import { ApiError } from "../core/http.js";
 import { getUploadLimitBytes, type StorageConfig } from "../config/settings.js";
-import { storageObjectName, type ReadablePrefix, type StoragePrefix } from "./object-keys.js";
+import { isReservedRootKey, storageObjectName, type ReadablePrefix, type StoragePrefix } from "./object-keys.js";
 import { limitedWebStream, nodeReadableFromWeb, streamToBuffer } from "./stream-buffer.js";
 import type {
   CopyPrefix,
@@ -126,6 +126,9 @@ export class WebdavBackend implements StorageDriver {
     await this.transfer("MOVE", fromPrefix, fromKey, toPrefix, toKey);
   }
 
+  // Native server-side COPY. Some WebDAV servers advertise COPY in OPTIONS yet reject it (seen: 405,
+  // and 423 for a cross-collection copy); that throws here and the copyObject facade falls back to
+  // read+write, so a re-key still succeeds on a COPY-less server.
   async copy(fromPrefix: CopyPrefix, fromKey: string, toPrefix: CopyPrefix, toKey: string) {
     await this.transfer("COPY", fromPrefix, fromKey, toPrefix, toKey);
   }
@@ -182,7 +185,7 @@ export class WebdavBackend implements StorageDriver {
       if (entry.collection || !entry.path.startsWith(`${rootPath}/`)) return null;
       const rel = entry.path.slice(rootPath.length + 1);
       if (!rel) return null;
-      if (prefix === "objects" && /^(thumbs|_uploads|trash|link)\//.test(rel)) return null;
+      if (prefix === "objects" && isReservedRootKey(rel)) return null;
       return rel;
     };
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api.js";
 import { Icon } from "../../components/Icon.js";
 import { NumberInput } from "../../components/NumberInput.js";
@@ -21,6 +21,7 @@ export type SettingsFeedbackState = {
 // 站点配置：站点信息 + 应用参数（file-backed runtime config）。存储后端管理是独立页（StorageSettings）。
 export function SettingsPage() {
   const query = useQuery<{ settings: AdminSettings }>({ queryKey: queryKeys.settings, queryFn: () => api(`${adminApiBasePath}/settings`) });
+  const client = useQueryClient();
   const [settings, setSettings] = useState<AdminSettings | null>(null);
   const [feedback, setFeedback] = useState<SettingsFeedbackState | null>(null);
   const [action, setAction] = useState<"" | "save-application" | "reload">("");
@@ -53,6 +54,9 @@ export function SettingsPage() {
       });
       setFeedback({ scope: "application", text: "应用配置已保存", status: "success" });
       await query.refetch();
+      // site-config 现为 staleTime:Infinity 的全局缓存，保存后必须显式失效，公共端（站点标题/图标、
+      // 画廊顺序、登录背景等）才会刷新到最新值，而不必整页刷新。
+      await client.invalidateQueries({ queryKey: queryKeys.siteConfig });
     } catch (error) {
       setFeedback({ scope: "application", text: `保存失败：${errorMessage(error)}`, status: "error" });
     } finally {
@@ -66,6 +70,7 @@ export function SettingsPage() {
     try {
       await api(`${adminApiBasePath}/settings/reload`, { method: "POST" });
       await query.refetch();
+      await client.invalidateQueries({ queryKey: queryKeys.siteConfig });
       setFeedback({ scope: "application", text: "已读取并应用最新配置文件", status: "success" });
     } catch (error) {
       setFeedback({ scope: "application", text: `读取失败：${errorMessage(error)}`, status: "error" });
@@ -250,6 +255,14 @@ export function SettingsPage() {
               options={[{ value: "proxy", label: "代理返回" }, { value: "redirect", label: "302 跳转" }]}
               ariaLabel="随机图默认模式"
             />
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={settings.admin.show_unset_theme_card}
+              onChange={(event) => setSettings({ ...settings, admin: { ...settings.admin, show_unset_theme_card: event.target.checked } })}
+            />
+            主题管理显示「未设置」卡片
           </label>
           <label>
             <input

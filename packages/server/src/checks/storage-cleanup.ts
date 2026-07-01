@@ -1,20 +1,24 @@
 import { pool } from "../core/db.js";
 import { errorMessage } from "../core/http.js";
 import { invalidateImageReadCaches } from "../core/redis.js";
-import { listStorageKeys, pruneEmptyStorageDirs, removeObject } from "../storage/storage.js";
+import { listStorageKeys, pruneEmptyStorageDirs, removeObject, type StoragePrefix } from "../storage/storage.js";
 import { expectedThumbs, storageBackends, type StorageRow } from "./storage-common.js";
 
-// Removes storage objects unreferenced within their own backend (orphan
-// objects/thumbs/trash/link and abandoned upload staging files), keeping live and
-// in-flight uploads intact, then prunes the now-empty directories (e.g. a deleted theme's
-// folder) the removals leave behind.
+// The image id embedded in an object key (<device>-<brightness>/<theme>/<id>.<ext>): its
+// last path segment without the extension.
+function objectKeyId(key: string) {
+  return key.split("/").pop()?.replace(/\.[^./]+$/, "") ?? "";
+}
+
+// Removes storage objects unreferenced within their own backend (orphan objects / thumbs /
+// link, plus abandoned upload staging files), keeping live images, recycle-bin originals and
+// thumbnails, and in-flight uploads intact, then prunes the now-empty directories the removals
+// leave behind (e.g. a deleted theme's folder).
 export async function cleanupStorage() {
   const rows = (await pool.query("SELECT id, object_key, status, storage_slug, is_link, device, brightness, theme FROM metadata")).rows as StorageRow[];
-  // Only protect the objects of uploads that could still legitimately finalize: a
-  // session still within its TTL. A 'finalizing' session past expires_at is a crashed
-  // finalize (finalize runs in seconds, the TTL is minutes) — its final object is a true
-  // orphan, so it must NOT be protected here, or cleanup can never remove it (the bug
-  // where checkStorage reports an orphan that 清理无效存储 refuses to clean).
+  // Only protect uploads that could still legitimately finalize: a session within its TTL. A
+  // 'finalizing' session past expires_at is a crashed finalize (finalize takes seconds, the TTL
+  // minutes), so its final object is a true orphan and must not be protected here.
   const uploadRows = (await pool.query(
     "SELECT staging_object_key, final_object_key FROM upload_session WHERE status IN ('finalizing','created') AND expires_at >= now()"
   )).rows as Array<{ staging_object_key: string; final_object_key: string | null }>;
@@ -26,22 +30,23 @@ export async function cleanupStorage() {
   let removed = 0;
   let candidateCount = 0;
   let prunedDirs = 0;
-  // Only objects unreferenced within their own backend are removed.
   for (const backend of backends) {
     try {
       const ready = new Set(rows.filter((row) => row.storage_slug === backend && row.status === "ready").map((row) => row.object_key));
       const deleted = new Set(rows.filter((row) => row.storage_slug === backend && row.status === "deleted").map((row) => row.object_key));
+      // Defense in depth: never delete an original whose id the DB still maps to THIS backend,
+      // whatever its status or exact stored path. Scoped per-backend so a stale leftover on a
+      // backend the image has since migrated off stays reclaimable (its id is known elsewhere).
+      const knownOnBackend = new Set(rows.filter((row) => row.storage_slug === backend).map((row) => String(row.id)));
       const readyThumbs = expected.thumbs.get(backend) ?? new Set<string>();
       const linkThumbs = expected.link.get(backend) ?? new Set<string>();
-      const candidates: Array<readonly ["objects" | "thumbs" | "trash" | "_uploads" | "link", string]> = [
-        // A soft-deleted image's original sits in objects/ (status='deleted') until its async
-        // delete.finalize moves it to trash/. During that window the key is in neither `ready`
-        // nor `finalizingObjects`, so guard it with `deleted` too — otherwise a cleanup racing a
-        // (possibly slow, batched) finalize destroys the original and leaves the trashed image
-        // unrestorable. Once finalized the object is in trash/, so this guard then no-ops.
-        ...(await listStorageKeys("objects", backend)).filter((key) => !ready.has(key) && !finalizingObjects.has(key) && !deleted.has(key)).map((key) => ["objects", key] as const),
+      const candidates: Array<readonly [StoragePrefix, string]> = [
+        // Recycle-bin images keep their original (objects/) and thumbnail (thumbs/) until purge,
+        // so exclude `deleted` originals and rely on expectedThumbs (which includes deleted rows)
+        // for thumbs. finalizingObjects protects an in-flight upload's final object; knownOnBackend
+        // is the id-level backstop that refuses to delete any original the DB still maps here.
+        ...(await listStorageKeys("objects", backend)).filter((key) => !ready.has(key) && !deleted.has(key) && !finalizingObjects.has(key) && !knownOnBackend.has(objectKeyId(key))).map((key) => ["objects", key] as const),
         ...(await listStorageKeys("thumbs", backend)).filter((key) => !readyThumbs.has(key)).map((key) => ["thumbs", key] as const),
-        ...(await listStorageKeys("trash", backend)).filter((key) => !deleted.has(key)).map((key) => ["trash", key] as const),
         ...(await listStorageKeys("link", backend)).filter((key) => !linkThumbs.has(key)).map((key) => ["link", key] as const),
         ...(backend === defaultBackend ? (await listStorageKeys("_uploads", backend)).filter((key) => !activeUploads.has(key.replace(/\.part$/, ""))).map((key) => ["_uploads", key] as const) : [])
       ];
@@ -54,7 +59,6 @@ export async function cleanupStorage() {
           failures.push({ prefix, key, backend, error: errorMessage(error) });
         }
       }
-      // Drop the directories the removals (and any prior theme moves) left empty.
       prunedDirs += await pruneEmptyStorageDirs(backend);
     } catch (error) {
       failures.push({ prefix: "*", key: "*", backend, error: errorMessage(error) });

@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { api } from "../../lib/api.js";
 import { Icon } from "../../components/Icon.js";
 import { ImageThumbnail } from "../../components/ImageThumbnail.js";
@@ -14,8 +13,9 @@ import { useAnimatedClose } from "../../components/useAnimatedClose.js";
 import { useBodyScrollLock } from "../../components/useBodyScrollLock.js";
 import { adminApiBasePath } from "../../lib/constants.js";
 import { formatDimensions, formatImageMeta } from "../../lib/formatters.js";
-import { batchCommonBrightnessOptions, batchCommonDeviceOptions, cardBrightnessSelectOptions, cardDeviceSelectOptions, imageStorageLabel } from "../../lib/select-options.js";
-import type { Author, Brightness, Device, FacetOption, ImageDraft, ImageItem, StorageBackendOption } from "../../lib/types.js";
+import { batchCommonBrightnessOptions, batchCommonDeviceOptions, cardBrightnessSelectOptions, cardDeviceSelectOptions } from "../../lib/select-options.js";
+import { storageNameResolver, useStorageOptions } from "../../lib/storage-options.js";
+import type { Author, Brightness, Device, FacetOption, ImageDraft, ImageItem } from "../../lib/types.js";
 import { applyCommonAttributes, normalizeAuthor, normalizeTheme } from "../../lib/upload-utils.js";
 
 // Shared by the batch editor and (with single=true) the single-image editor: single mode
@@ -67,8 +67,10 @@ export function BatchMetadataModal({
   const [migrating, setMigrating] = useState(false);
   const [migrateTarget, setMigrateTarget] = useState<string>("");
   const [migrateBusy, setMigrateBusy] = useState(false);
-  const { data: storageOptionsData } = useQuery<{ backends: StorageBackendOption[] }>({ queryKey: ["storage-options"], queryFn: () => api(`${adminApiBasePath}/storage/options`) });
+  const { data: storageOptionsData } = useStorageOptions();
   const migrateOptions = (storageOptionsData?.backends ?? []).map((backend) => ({ value: backend.slug, label: backend.display_name || backend.slug }));
+  // 列表行左下角的「所在存储」展示后端显示名；复用上面已为迁移目标选择器取到的后端列表。
+  const resolveStorageName = storageNameResolver(storageOptionsData?.backends ?? []);
   const activeSet = new Set(activeIds);
   const activeItems = items.filter((item) => activeSet.has(item.id));
   const totalPages = Math.max(1, Math.ceil(activeItems.length / pageSize));
@@ -232,7 +234,7 @@ export function BatchMetadataModal({
                         <strong>{item.object_key.split("/").pop()}</strong>
                         {cardChanged && <span className="changed-badge">已修改</span>}
                       </div>
-                      <span>{formatDimensions(item.width, item.height)} · {item.theme} · {item.device}/{item.brightness} · {imageStorageLabel(item)}</span>
+                      <span>{formatDimensions(item.width, item.height)} · {item.theme} · {item.device}/{item.brightness} · {resolveStorageName(item)}</span>
                     </div>
                     {!single && (
                       <button

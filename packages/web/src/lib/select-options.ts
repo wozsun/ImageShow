@@ -97,12 +97,6 @@ export function storageBackendDisplay(backend: { slug: string; display_name?: st
   return backend.display_name || storageBackendLabel(backend.slug);
 }
 
-// Where an image's bytes live, for display: link images show 外部链接, otherwise the
-// backend slug's label.
-export function imageStorageLabel(item: { is_link: boolean; storage_slug: string }) {
-  return item.is_link ? "外部链接" : storageBackendLabel(item.storage_slug);
-}
-
 const storageTypeLabels: Record<string, string> = { local: "本地", s3: "对象存储", webdav: "WebDAV" };
 
 export function storageTypeLabel(type: string) {

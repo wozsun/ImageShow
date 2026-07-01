@@ -3,14 +3,13 @@
 // exponential backoff, and recovered if a previous process crashed mid-run.
 import { v7 as uuidv7 } from "uuid";
 import { appConfig } from "@imageshow/shared";
-import { cleanupEmptyCategories, pool } from "../core/db.js";
+import { pool } from "../core/db.js";
 import { errorMessage } from "../core/http.js";
 import { logger } from "../core/logger.js";
-import { contentType, createThumbnail, makeThumb, md5Buffer } from "../images/processing.js";
-import { thumbnailObjectKey, thumbnailRef } from "../storage/image-paths.js";
-import { exists, moveObject, readStorageBuffer, removeObject, writeStorageBuffer } from "../storage/storage.js";
+import { createThumbnail, makeThumb, md5Buffer } from "../images/processing.js";
+import { thumbnailObjectKey } from "../storage/image-paths.js";
+import { exists, readStorageBuffer, removeObject, writeStorageBuffer } from "../storage/storage.js";
 import { rebuildFolderMap } from "../core/redis.js";
-import { restoreImageFromTrash } from "./restore.js";
 import { getRuntimeConfig } from "../config/env.js";
 import { getStorageBackend } from "../config/settings.js";
 
@@ -31,18 +30,6 @@ export async function enqueue(type: string, targetId = "", payload: unknown = {}
     [id, type, targetId, JSON.stringify(payload), idempotencyKey ?? null]
   );
   return id;
-}
-
-export async function enqueueMany(type: string, targetIds: string[]) {
-  if (!targetIds.length) return [];
-  const ids = targetIds.map(() => uuidv7());
-  await pool.query(
-    `INSERT INTO operation_log(id, type, target_id, payload)
-     SELECT task_id, $3, target_id, '{}'::jsonb
-     FROM unnest($1::uuid[], $2::text[]) AS queued(task_id, target_id)`,
-    [ids, targetIds, type]
-  );
-  return ids;
 }
 
 // Atomically claims the oldest claimable task — optionally restricted to one type, so a
@@ -108,11 +95,12 @@ const taskHandlers: Record<string, (task: Task) => Promise<unknown>> = {
     let thumbnailSize: number;
     const config = await getStorageBackend(row.storage_slug);
     if (config.type !== "local") {
-      // thumb.generate runs after a category move re-keys a remote object (or on restore)
-      // — not on upload, which thumbnails inline. We download the bytes to thumbnail them
-      // anyway, so verify their md5 against the recorded value as a cheap integrity
-      // check, then thumbnail from the same buffer. A mismatch fails the task (surfaced
-      // in the check page) rather than thumbnailing a corrupt object.
+      // thumb.generate is the fallback for a category move whose thumbnail copy failed
+      // (updateImageMetadata copies the old thumb to the re-keyed object; only a failed copy
+      // enqueues this) — never on upload (thumbnails inline) or restore (pure DB, no file move).
+      // We have to download the object to rebuild the thumb anyway, so verify its md5 against the
+      // recorded value as a cheap integrity check, then thumbnail from the same buffer. A mismatch
+      // fails the task (surfaced in the check page) rather than thumbnailing a corrupt object.
       const buffer = await readStorageBuffer("objects", row.object_key, row.storage_slug);
       if (row.md5 && md5Buffer(buffer) !== row.md5) {
         throw new Error(`integrity check failed: stored object md5 does not match recorded md5 (${row.md5})`);
@@ -125,25 +113,6 @@ const taskHandlers: Record<string, (task: Task) => Promise<unknown>> = {
     }
     // Record the hosted thumbnail bytes so storage-usage stats stay accurate.
     await pool.query("UPDATE metadata SET thumbnail_size=$2 WHERE id=$1", [task.target_id, thumbnailSize]);
-    return succeed(task.id);
-  },
-  "delete.finalize": async (task) => {
-    const result = await pool.query("SELECT id, object_key, ext, status, storage_slug, is_link FROM metadata WHERE id=$1", [task.target_id]);
-    const row = result.rows[0];
-    if (!row || row.status !== "deleted") return ignore(task.id, "image not deleted");
-    // Link images store no bytes and keep their thumbnail until purge, so soft-delete
-    // has no storage finalize work.
-    if (row.is_link) return succeed(task.id);
-    if (await exists("objects", row.object_key, row.storage_slug)) {
-      await moveObject("objects", row.object_key, "trash", row.object_key, contentType(row.ext), row.storage_slug);
-    }
-    await removeObject("thumbs", thumbnailObjectKey(row.object_key), row.storage_slug);
-    return succeed(task.id);
-  },
-  "restore.finalize": async (task) => {
-    const result = await restoreImageFromTrash(task.target_id);
-    if (result.status === "not_deleted") return ignore(task.id, "image not deleted");
-    if (result.status === "object_missing") return ignore(task.id, "object missing");
     return succeed(task.id);
   },
   "move.cleanup": async (task) => {
@@ -171,9 +140,8 @@ const taskHandlers: Record<string, (task: Task) => Promise<unknown>> = {
       await removeObject("_uploads", row.staging_object_key).catch(() => undefined);
       await removeObject("_uploads", `${row.staging_object_key}.part`).catch(() => undefined);
     }
-    // 'expired' is included for backward compatibility — older rows may still carry it.
     const deleted = await pool.query(
-      "DELETE FROM upload_session WHERE id = ANY($1::uuid[]) OR (status IN ('finalized','expired') AND expires_at < now())",
+      "DELETE FROM upload_session WHERE id = ANY($1::uuid[]) OR (status = 'finalized' AND expires_at < now())",
       [rows.map((row) => row.id)]
     );
     return succeed(task.id, { cleaned: deleted.rowCount });
@@ -181,21 +149,6 @@ const taskHandlers: Record<string, (task: Task) => Promise<unknown>> = {
   "cache.rebuild": async (task) => {
     await rebuildFolderMap();
     return succeed(task.id);
-  },
-  "empty-trash": async (task) => {
-    const ids = Array.isArray(task.payload.ids) ? task.payload.ids : [];
-    const rows = ids.length
-      ? (await pool.query("SELECT id, object_key, storage_slug, is_link, device, brightness, theme FROM metadata WHERE id = ANY($1::uuid[]) AND status='deleted'", [ids])).rows
-      : [];
-    for (const row of rows) {
-      const thumb = thumbnailRef(row);
-      await removeObject("objects", row.object_key, row.storage_slug).catch(() => undefined);
-      await removeObject("trash", row.object_key, row.storage_slug).catch(() => undefined);
-      await removeObject(thumb.prefix, thumb.key, thumb.slug).catch(() => undefined);
-    }
-    await pool.query("DELETE FROM metadata WHERE id = ANY($1::uuid[]) AND status='deleted'", [ids]);
-    await cleanupEmptyCategories();
-    return succeed(task.id, { deleted: rows.length });
   }
 };
 
@@ -206,17 +159,13 @@ async function runOne(task: Task) {
 }
 
 // Per-task-type worker concurrency. thumb.generate shares the upload concurrency knob;
-// the idempotent storage-cleanup types have their own file-only knobs. Everything else
-// stays serial (limit 1): restore.finalize mutates category indexes under per-category
-// locks, and cache.rebuild / upload.cleanup are idempotency-key singletons — none want
-// parallel lanes here.
+// move.cleanup has its own file-only knob. Everything else stays serial (limit 1):
+// cache.rebuild / upload.cleanup are idempotency-key singletons that don't want parallel lanes.
 function typeConcurrency(type: string): number {
   const config = getRuntimeConfig();
   switch (type) {
     case "thumb.generate": return config.upload.concurrency;
-    case "delete.finalize": return config.operation_log.delete_concurrency;
     case "move.cleanup": return config.operation_log.move_cleanup_concurrency;
-    case "empty-trash": return config.operation_log.empty_trash_concurrency;
     default: return 1;
   }
 }
@@ -319,8 +268,8 @@ export function stopWorker() {
 // Tasks are durable, so a tick abandoned at the timeout is recovered on next start.
 export async function drainWorker(timeoutMs = appConfig.operationLog.drainTimeoutMs) {
   if (!tickPromise) return;
-  let timer: NodeJS.Timeout | undefined;
-  const deadline = new Promise<void>((resolve) => { timer = setTimeout(resolve, timeoutMs); });
+  let deadlineTimer: NodeJS.Timeout | undefined;
+  const deadline = new Promise<void>((resolve) => { deadlineTimer = setTimeout(resolve, timeoutMs); });
   await Promise.race([tickPromise.catch(() => undefined), deadline]);
-  if (timer) clearTimeout(timer);
+  if (deadlineTimer) clearTimeout(deadlineTimer);
 }

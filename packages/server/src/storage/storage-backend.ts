@@ -12,9 +12,12 @@ import { WebdavBackend } from "./webdav-backend.js";
 
 export type OpenedRead = { body: Readable; size: number | undefined; backend: StorageType };
 
-export type MoveFromPrefix = "objects" | "_uploads" | "trash";
-export type MoveToPrefix = "objects" | "trash";
-export type CopyPrefix = "objects" | "thumbs" | "trash";
+export type MoveFromPrefix = "objects" | "_uploads";
+export type MoveToPrefix = "objects";
+// copy() re-keys within one backend: an original + its thumbnail on a category/theme move, and
+// link-image thumbnails (relocated the same way), always as a backend-native copy (server-side on
+// S3/WebDAV). "_uploads" is staging-only and never copied.
+export type CopyPrefix = "objects" | "thumbs" | "link";
 
 export type StorageSelfTest = {
   backend: StorageType;

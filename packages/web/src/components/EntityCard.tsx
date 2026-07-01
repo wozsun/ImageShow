@@ -1,6 +1,7 @@
 import { useState, type DragEvent } from "react";
 import { api } from "../lib/api.js";
 import { Icon } from "./Icon.js";
+import { SlugChip } from "./SlugChip.js";
 import { adminApiBasePath } from "../lib/constants.js";
 import { errorMessage } from "../lib/formatters.js";
 
@@ -66,18 +67,28 @@ export function EntityCard({ kind, item, onChanged, onDelete, onError, pinned = 
       onDragEnd={() => { setArmed(false); onDragEnd?.(); }}
     >
       <div className="entity-card-row">
-        {!pinned && (
-          <input
-            type="checkbox"
-            className="entity-select"
-            checked={selected}
-            onChange={(event) => onToggleSelect?.(event.target.checked)}
-            aria-label={`选择${noun} ${item.slug}`}
-          />
-        )}
-        <code className="entity-slug" title={item.slug}>{item.slug}</code>
         {pinned
-          ? <span className="entity-display-static">{item.display_name || "未设置"}</span>
+          ? <span className="entity-select-placeholder" aria-hidden="true" />
+          : (
+            <input
+              type="checkbox"
+              className="entity-select"
+              checked={selected}
+              onChange={(event) => onToggleSelect?.(event.target.checked)}
+              aria-label={`选择${noun} ${item.slug}`}
+            />
+          )}
+        <SlugChip value={item.slug} ariaLabel={`${noun} slug`} />
+        {pinned
+          ? (
+            // none 卡片同样用输入框（禁用、不可编辑），与其他卡片的显示名框完全对齐。
+            <input
+              className="entity-display-input"
+              value={item.display_name || "未设置"}
+              disabled
+              aria-label="未设置（不可编辑）"
+            />
+          )
           : (
             <input
               className="entity-display-input"

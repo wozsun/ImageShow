@@ -53,7 +53,14 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
   const client = useQueryClient();
   const { data, isFetching } = useQuery<{ items: Entity[] }>({ queryKey, queryFn: () => api(`${adminApiBasePath}/${kind}`) });
   const { data: settingsData } = useQuery<{ settings: AdminSettings }>({ queryKey: queryKeys.settings, queryFn: () => api(`${adminApiBasePath}/settings`) });
-  const refresh = () => client.invalidateQueries({ queryKey });
+  // 新建/删除词条会改动公共画廊的筛选词表（gallery-options，staleTime:Infinity 不会自动刷新），
+  // 删除还会清除关联图片上的该属性，故一并失效公共/后台图片列表，与 ImageAdmin.refresh 的失效集对齐。
+  const refresh = () => {
+    client.invalidateQueries({ queryKey });
+    client.invalidateQueries({ queryKey: queryKeys.galleryOptions });
+    client.invalidateQueries({ queryKey: ["public-images"] });
+    client.invalidateQueries({ queryKey: queryKeys.adminImages });
+  };
   const [slug, setSlug] = useState("");
   const [display, setDisplay] = useState("");
   // Authors only: the optional link captured alongside the slug + display name when creating.
@@ -79,8 +86,14 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
   // Client-side pagination over the (small, in-memory) vocab, page size shared with the
   // image list ("图片管理每页数量").
   const pageSize = settingsData?.settings.admin.image_page_size ?? 50;
-  const totalPages = Math.max(1, Math.ceil(order.length / pageSize));
-  const pageItems = order.slice((page - 1) * pageSize, page * pageSize);
+  // 主题页可隐藏钉住的「未设置 / none」占位卡片（设置页 admin 组的开关，默认显示）；其它类别无此卡片。
+  // 只过滤展示用列表，order（含 none）保持完整，拖拽排序逻辑不受影响。
+  const showUnsetCard = settingsData?.settings.admin.show_unset_theme_card ?? true;
+  const visibleItems = kind === "themes" && !showUnsetCard
+    ? order.filter((item) => item.slug !== "none")
+    : order;
+  const totalPages = Math.max(1, Math.ceil(visibleItems.length / pageSize));
+  const pageItems = visibleItems.slice((page - 1) * pageSize, page * pageSize);
   useEffect(() => { setPage((current) => Math.min(current, totalPages)); }, [totalPages]);
 
   const create = async (event: FormEvent) => {
@@ -169,7 +182,7 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
       <header className="workspace-head">
         <div>
           <h1>{copy.noun}管理</h1>
-          <p>第 {page} / {totalPages} 页 · 共 {order.length} 个{copy.noun}{isFetching ? " · 加载中" : ""} · {copy.headHint}</p>
+          <p>第 {page} / {totalPages} 页 · 共 {visibleItems.length} 个{copy.noun}{isFetching ? " · 加载中" : ""} · {copy.headHint}</p>
         </div>
       </header>
       <form className="theme-create-form" onSubmit={create}>

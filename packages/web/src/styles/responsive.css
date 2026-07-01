@@ -2,7 +2,7 @@
    后台的响应式规则在 admin/responsive.css。
    注意：modal-* 关键帧与下方共享的“减少动态效果”项须留在全局，后台分块也会引用它们。 */
 
-.center { min-height: 100vh; display: grid; place-items: center; }
+.center { min-height: 100svh; display: grid; place-items: center; }
 
 @keyframes modal-fade {
   from { opacity: 0; }

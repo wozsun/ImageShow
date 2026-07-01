@@ -31,7 +31,7 @@ type OverviewStats = {
   recent: RecentImage[];
 };
 
-type Card = { label: string; value?: number | string; hint?: string; to?: string };
+type Card = { label: string; value?: number | string; hint?: string; hintTitle?: string; to?: string };
 
 function Cards({ items }: { items: Card[] }) {
   return (
@@ -41,7 +41,7 @@ function Cards({ items }: { items: Card[] }) {
           <>
             <span className="overview-card-value">{item.value ?? "—"}</span>
             <span className="overview-card-label">{item.label}</span>
-            {item.hint && <span className="overview-card-hint">{item.hint}</span>}
+            {item.hint && <span className="overview-card-hint" title={item.hintTitle}>{item.hint}</span>}
           </>
         );
         return item.to
@@ -73,11 +73,20 @@ export function Overview() {
   // 原图大小 + 略缩图大小（或 链接图的 本地占用 + 其它存储占用），用「+」拼成卡片副标题。
   const sizePair = (first?: number, second?: number) =>
     first === undefined || second === undefined ? undefined : `${formatBytes(first)} + ${formatBytes(second)}`;
+  // 卡片副标题只显示「X + Y」两个体积；hover 的 title 再标明每段各是什么，避免用户不清楚 + 两边的含义。
+  const sizeTitle = (firstLabel: string, first: number | undefined, secondLabel: string, second: number | undefined) =>
+    first === undefined || second === undefined ? undefined : `${firstLabel} ${formatBytes(first)} + ${secondLabel} ${formatBytes(second)}`;
   const storageCards: Card[] = [
     // 本地存储 / 其它存储的非链接图片（原图+略缩图，不含链接图）、链接图略缩图（本地+其它存储）、当前存储后端数。
-    { label: "本地存储", value: data?.local, hint: sizePair(data?.local_image_size, data?.local_thumb_size) },
-    { label: "其它存储", value: data?.nonlocal, hint: sizePair(data?.nonlocal_image_size, data?.nonlocal_thumb_size) },
-    { label: "链接图片", value: data?.link_count, hint: sizePair(data?.link_local_size, data?.link_nonlocal_size) },
+    { label: "本地存储", value: data?.local,
+      hint: sizePair(data?.local_image_size, data?.local_thumb_size),
+      hintTitle: sizeTitle("原图", data?.local_image_size, "略缩图", data?.local_thumb_size) },
+    { label: "其它存储", value: data?.nonlocal,
+      hint: sizePair(data?.nonlocal_image_size, data?.nonlocal_thumb_size),
+      hintTitle: sizeTitle("原图", data?.nonlocal_image_size, "略缩图", data?.nonlocal_thumb_size) },
+    { label: "链接图片", value: data?.link_count,
+      hint: sizePair(data?.link_local_size, data?.link_nonlocal_size),
+      hintTitle: sizeTitle("本地", data?.link_local_size, "其它存储", data?.link_nonlocal_size) },
     { label: "存储后端", value: data?.backend_count }
   ];
   return (
