@@ -5,4 +5,4 @@
 - 登录前置图形验证码（一次性，存于 Redis，校验即焚），可在 `config.json` 的 `captcha.enabled` 关闭。
 - 全站响应头包含 `X-Content-Type-Options`、`X-Frame-Options`、`Referrer-Policy`、`Cross-Origin-Opener-Policy` 与 CSP。
 - 公共画廊数据接口 `/api/images` 与 `/api/gallery-options` 的**跨源保护**：借 Fetch Metadata（`Sec-Fetch-Site`）拒绝**跨站 / 同站跨源**读取，只放行同源（前端自身，含主题子域走相对 URL）、直接导航（`none`）与**不发该头**的老浏览器 / 非浏览器客户端（优雅降级，不误伤画廊）。它是跨源护栏、不是反爬墙——省略该头的客户端仍可访问，合规爬虫由 robots.txt 兜。（`/api/site-config` 不设限——它是内联进 SPA 的启动配置，需在任意首屏场景下可加载。）
-- **robots.txt（按主机区分）**：主站**仅放行首页**（站点描述），画廊 / 接口 / 静态资源 / 后台一律不许抓取；`static.` / `link.` / `random.` 以及各主题子域（`<主题>.<域名>`）整站禁抓；`docs.` 文档站可正常抓取。
+- **robots.txt（按主机区分，默认关闭）**：由 `config.json` 的 `site.robots_enabled` 控制，**默认 `false`**——此时 `/robots.txt` 对所有主机返回 404、不提供任何抓取规则。开启后按主机区分：主站**仅放行首页**（站点描述），画廊 / 接口 / 静态资源 / 后台一律不许抓取；`static.` / `link.` / `random.` 以及各主题子域（`<主题>.<域名>`）整站禁抓；`docs.` 文档站可正常抓取。

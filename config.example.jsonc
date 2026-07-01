@@ -39,7 +39,12 @@
     // Serve the docs.<domain> site; off ⇒ that host returns 404 (the prefix stays reserved)
     "docs_enabled": true,
     // 外链图片子域前缀 / Link-image host subdomain prefix
-    "link_subdomain": "link"
+    "link_subdomain": "link",
+    // 是否提供 robots.txt，默认关闭；关闭时 /robots.txt 对所有主机返回 404（不提供任何抓取规则），
+    // 开启后主站仅放行首页、docs. 子域可抓、其余资源与主题子域禁抓
+    // Whether to serve robots.txt (default off); off ⇒ /robots.txt 404s on every host (no rules).
+    // On ⇒ main homepage + docs. crawlable, resource/theme hosts disallowed.
+    "robots_enabled": false
   },
   // 应用监听端口（改后需重启）/ App listen port (restart required)
   "port": 5518,

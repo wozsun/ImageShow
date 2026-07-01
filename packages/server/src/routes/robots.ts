@@ -1,14 +1,17 @@
 import type { Context } from "hono";
 import { getRuntimeConfig } from "../config/env.js";
-import { noCacheControl } from "../core/http.js";
+import { noCacheControl, routeError } from "../core/http.js";
 import { specialHost, themeFromHost } from "../themes/host.js";
 
-// Host-aware robots.txt. On the main site only the homepage (the site description) is crawlable —
-// not the gallery / API / assets / admin; resource and theme-gallery hosts (static / link / random /
-// <theme>.<domain>) block everything; the docs host stays fully crawlable. Served from live config +
-// no-cache so a home_enabled / subdomain change shows on the next fetch. Registered before the host
-// guards (index.ts) so it answers on every host.
+// Host-aware robots.txt, opt-in via site.robots_enabled (default off). While off the app publishes NO
+// robots.txt — /robots.txt 404s on every host, so crawlers see no rules at all. Once on, the main
+// site exposes only its homepage (the site description) — not the gallery / API / assets / admin;
+// resource and theme-gallery hosts (static / link / random / <theme>.<domain>) block everything; the
+// docs host is fully crawlable. Served from live config + no-cache so a config change shows on the
+// next fetch. Registered before the host guards (index.ts) so it answers on every host.
 export function serveRobotsTxt(c: Context) {
+  // Opt-in: with crawling disabled (the default) the app publishes no robots.txt — 404 on every host.
+  if (!getRuntimeConfig().site.robots_enabled) return routeError({ status: 404, message: "Not Found" });
   const host = c.req.header("host") ?? "";
   const special = specialHost(host);
   // Documentation should be findable; everything the docs host serves is public reference material.

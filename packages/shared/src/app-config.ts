@@ -82,7 +82,8 @@ export const appConfig = {
       static_subdomain: "static",
       docs_subdomain: "docs",
       docs_enabled: true,
-      link_subdomain: "link"
+      link_subdomain: "link",
+      robots_enabled: false
     },
     port: 5518,
     database: { port: 5432 },

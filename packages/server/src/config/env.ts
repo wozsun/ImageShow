@@ -48,7 +48,12 @@ const runtimeConfigSchema = z.object({
     // (so a theme still can't collide with it). File-only, like home_enabled — not in the
     // settings UI.
     docs_enabled: z.boolean().default(d.site.docs_enabled),
-    link_subdomain: subdomainLabel.default(d.site.link_subdomain)
+    link_subdomain: subdomainLabel.default(d.site.link_subdomain),
+    // Whether the app publishes a robots.txt at all. Off by default: /robots.txt then 404s on every
+    // host, so no crawl rules are exposed. On serves the host-aware policy (main homepage + docs
+    // crawlable, resource/theme hosts disallowed). File-only, like home_enabled/docs_enabled:
+    // server-side only (robots.txt), not in the settings UI.
+    robots_enabled: z.boolean().default(d.site.robots_enabled)
   }).prefault({}),
   port: z.coerce.number().int().positive().default(d.port),
   database: z.object({
