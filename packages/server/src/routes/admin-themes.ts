@@ -6,8 +6,6 @@ import { invalidateImageReadCaches } from "../core/redis.js";
 import { listThemesWithMeta } from "../themes/query.js";
 import { createTheme, deleteTheme, deleteThemes, reorderThemes, setThemeDisplayName } from "../themes/service.js";
 
-// Thin HTTP layer for theme management; logic lives in themes/service.ts (mutations)
-// and themes/query.ts (reads).
 export function registerAdminThemeRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/themes`, async (c) => {
     return c.json(ok({ items: await listThemesWithMeta() }));
@@ -19,15 +17,12 @@ export function registerAdminThemeRoutes(app: Hono) {
     return c.json(ok());
   });
 
-  // Static routes registered before the `:slug` param route so they aren't captured by it.
-  // Manual drag-to-sort order (the given slugs in their new order).
   app.post(`${adminApiBasePath}/themes/reorder`, async (c) => {
     const input = parse(slugListInput, await c.req.json().catch(() => ({})));
     await reorderThemes(input.slugs);
     return c.json(ok());
   });
 
-  // Batch delete: each theme's images are reassigned to the 'none' sentinel first.
   app.post(`${adminApiBasePath}/themes/batch-delete`, async (c) => {
     const input = parse(slugListInput, await c.req.json().catch(() => ({})));
     const result = await deleteThemes(input.slugs);
@@ -35,7 +30,6 @@ export function registerAdminThemeRoutes(app: Hono) {
     return c.json(ok(result));
   });
 
-  // Sets a theme's display name.
   app.post(`${adminApiBasePath}/themes/:slug`, async (c) => {
     const slug = parse(themeSlugInput, c.req.param("slug"));
     const input = parse(themeDisplayUpdateInput, await c.req.json().catch(() => ({})));

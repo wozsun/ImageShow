@@ -1,8 +1,6 @@
 import { ApiError } from "../core/http.js";
 import { uuidInput } from "../core/validation.js";
 
-// Opaque keyset-pagination cursor over (created_at, id) for image lists ordered
-// by `created_at DESC, id DESC`. Shared by the admin and public image lists.
 export function encodeImageCursor(row: { cursor_created_at: string; id: string }) {
   return Buffer.from(JSON.stringify([row.cursor_created_at, row.id])).toString("base64url");
 }

@@ -1,6 +1,5 @@
 export type Device = "pc" | "mb";
 export type Brightness = "dark" | "light";
-// A storage backend's driver kind: 'local' is the built-in; 's3' and 'webdav' are user-creatable.
 export type StorageType = "local" | "s3" | "webdav";
 
 export type ImageItem = {
@@ -10,14 +9,10 @@ export type ImageItem = {
   device: Device;
   brightness: Brightness;
   theme: string;
-  // Optional author slug ("" when unset); resolved to a display name + link via the
-  // gallery facets, like theme.
   author: string;
   status: "ready" | "deleted";
   object_url: string;
   object_key: string;
-  // The named backend this image's bytes live in (storage_backend.slug). is_link =
-  // imported external URL (object_key is the URL; only the thumbnail is hosted).
   storage_slug: string;
   is_link: boolean;
   thumb_url: string;
@@ -33,8 +28,6 @@ export type ImageItem = {
   deleted_at?: string;
 };
 
-// Tags and themes share one shape (slug PK + display name); only cardinality
-// differs — an image has many tags but a single theme.
 export type Tag = {
   slug: string;
   display_name: string;
@@ -47,8 +40,6 @@ export type Theme = {
   image_count: number;
 };
 
-// An author mirrors a theme (slug + display name + image count) with one extra field:
-// link, an optional http(s) URL for the author's page.
 export type Author = {
   slug: string;
   display_name: string;
@@ -58,11 +49,8 @@ export type Author = {
 
 export type ImageDraft = {
   device: Device;
-  // The editable brightness also carries the transient "auto" (detect/re-detect on the
-  // server); the stored value is always a concrete Brightness.
   brightness: Brightness | "auto";
   theme: string;
-  // Optional author slug; "" means no author.
   author: string;
   title: string;
   description: string;
@@ -93,7 +81,6 @@ export type WebdavSettings = {
   password_configured?: boolean;
 };
 
-// A named storage backend as the admin manages it (secrets stripped to flags).
 export type StorageBackendAdmin = {
   slug: string;
   display_name: string;
@@ -104,62 +91,54 @@ export type StorageBackendAdmin = {
   webdav: WebdavSettings;
 };
 
-// Lightweight selectable backend for upload/migrate target pickers.
-export type StorageBackendOption = {
-  slug: string;
-  display_name: string;
-  type: StorageType;
-  // Whether new images may be written here; gates only the upload/link selector.
-  enabled: boolean;
-  is_default: boolean;
-};
-
 export type SiteSettings = {
   name: string;
   domain: string;
   icon_url: string;
   root_redirect: "home" | "gallery";
-  // Whether the public homepage exists. Only present in SiteConfig (/api/site-config);
-  // the admin settings endpoint omits it (file-only), so it's optional. Absent ⇒ enabled.
-  home_enabled?: boolean;
-  // Admin login background. In AdminSettings this is the raw stored value (empty =
-  // auto); in SiteConfig (from /api/site-config) it's the resolved effective URL.
-  login_background: string;
-  // Homepage hero background. Same raw/effective duality as login_background.
-  home_hero_background: string;
+  home: {
+    enabled: boolean;
+    tagline: string;
+    hero_background: string;
+    preview_delay_ms: number;
+  };
+  gallery: { default_limit: number; order: GalleryOrder };
+  random_default_method: "proxy" | "redirect";
 };
 
 type GalleryOrder = "latest" | "random";
 
 export type AdminSettings = {
   site: SiteSettings;
-  home: { preview_delay_ms: number };
-  upload: { max_file_size_mb: number; max_long_edge: number; list_page_size: number; concurrency: number };
-  admin: { image_page_size: number; recent_uploads: number; show_unset_theme_card: boolean };
-  gallery: { default_limit: number; order: GalleryOrder };
-  random: { default_method: "proxy" | "redirect" };
+  upload: {
+    max_file_size_mb: number;
+    max_long_edge: number;
+    list_page_size: number;
+    concurrency: number;
+  };
+  normalize: {
+    quality: number;
+    quality_step: number;
+    min_quality: number;
+    max_long_edge: number;
+    max_size_kb: number;
+    skip_webp_under_kb: number;
+  };
+  thumbnail: { long_edge: number; quality: number };
   image_detail: { title_opens_image: boolean };
-  // File-only flag read by the uploader: pre-fill 原图URL with the imported link (default off).
-  link_image: { fill_original_url: boolean };
-};
-
-export type SiteConfig = {
-  site: SiteSettings;
-  home: { preview_delay_ms: number };
-  upload: { max_file_size_mb: number; max_long_edge: number };
-  gallery: { order: GalleryOrder };
-  image_detail: { title_opens_image: boolean };
-  captcha: { enabled: boolean };
+  admin: {
+    login_background: string;
+    image_page_size: number;
+    recent_uploads: number;
+    show_unset_theme_card: boolean;
+  };
+  link_image: {
+    fill_original_url: boolean;
+    concurrency: number;
+  };
 };
 
 type AdminRole = "super" | "image";
-
-export type AuthState = {
-  authenticated: boolean;
-  username: string;
-  role: AdminRole | "";
-  csrf_token: string;
-};
 
 export type AdminUser = {
   username: string;
@@ -167,22 +146,9 @@ export type AdminUser = {
   created_at: string | null;
 };
 
-// A selectable facet value (theme or tag): canonical slug + human display name.
-// The display name is shown/searched; the slug is what goes into URLs.
 export type FacetOption = {
   slug: string;
   display_name: string;
-};
-
-// An author facet adds a link to the shared facet shape; the detail view links to it.
-type AuthorOption = FacetOption & { link: string };
-
-export type GalleryOptions = {
-  devices: string[];
-  brightnesses: string[];
-  themes: FacetOption[];
-  tags: FacetOption[];
-  authors: AuthorOption[];
 };
 
 export type RandomMode = "" | "redirect" | "proxy";
@@ -196,24 +162,32 @@ export type RandomLinkDraft = {
   mode: RandomMode;
 };
 
-export type UploadJob = {
+export type ImportJob = {
   id: string;
-  // "file" = a picked file uploaded via the staging session; "link" = an external URL whose
-  // thumbnail is staged server-side and committed on submit. file/md5 are set for file jobs,
-  // url/stagingId for link jobs.
-  kind: "file" | "link";
-  status: "hashing" | "queued" | "uploading" | "finalizing" | "done" | "failed";
+  kind: "local" | "download" | "proxy";
+  status: "queued" | "uploading" | "downloading" | "processing" | "ready" | "committing" | "done" | "failed" | "cancelled";
   message: string;
   preview: string;
+  previewFull?: string;
+  objectUrl?: string;
   draft: ImageDraft;
   width: number;
   height: number;
+  originalWidth?: number;
+  originalHeight?: number;
   uploadProgress: number;
   duplicates: ImageItem[];
   duplicateDecision: "upload" | "undecided";
   detected: { device: Device; brightness: Brightness | "auto" };
   file?: File;
+  fileFingerprint?: string;
   md5?: string;
   url?: string;
   stagingId?: string;
+  originalSize?: number;
+  finalSize?: number;
+  quality?: number | null;
+  transcoded?: boolean;
+  storageSlug: string;
+  failureStage?: "prepare" | "commit";
 };

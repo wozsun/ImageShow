@@ -5,8 +5,6 @@ import { invalidateMd5Cache } from "../core/redis.js";
 import { calculateObjectMd5 } from "../images/processing.js";
 import { exists } from "../storage/storage.js";
 
-// Recomputes md5 for ready images whose md5 column is empty (older rows imported
-// before md5 was recorded). Invoked on demand from the check page.
 export async function backfillMissingMd5() {
   let lastId = "00000000-0000-0000-0000-000000000000";
   let processed = 0;
@@ -26,8 +24,7 @@ export async function backfillMissingMd5() {
     for (const row of rows) {
       lastId = row.id;
       try {
-        // Use the image's own backend, not the default — otherwise images on a non-default
-        // backend would fail the existence check and never get backfilled.
+
         if (!(await exists("objects", row.object_key, row.storage_slug))) continue;
         const md5 = await calculateObjectMd5("objects", row.object_key, row.storage_slug);
         const result = await pool.query(

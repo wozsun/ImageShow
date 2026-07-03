@@ -1,6 +1,3 @@
-// Candidate selection for the random API: resolve the device/brightness/theme
-// axes from the request, then weight-pick an image from the Redis folder map,
-// with a direct PostgreSQL pick as the fallback path.
 import { appConfig, categoryKey, indexKey } from "@imageshow/shared";
 import { getRandomObject, getRandomPoolSnapshot, rebuildFolderMap, type RandomObjectIndexItem } from "../core/redis.js";
 import { pool } from "../core/db.js";
@@ -18,6 +15,7 @@ function inferDevice(ua: string) {
 
 export function resolveCandidateAxes(requestedDevice: string | null, requestedBrightness: string | null, userAgent: string) {
   const device = requestedDevice || inferDevice(userAgent);
+  // r 表示“随机设备”：请求未指定且 UA 不明确时，同时在 pc/mb 两个池里按后续权重挑选。
   const deviceCandidates = device === "r" ? [...randomDevices] : [device as "pc" | "mb"];
   const brightnessCandidates = requestedBrightness && isRandomBrightness(requestedBrightness) ? [requestedBrightness] : [...randomBrightness];
   return { deviceCandidates, brightnessCandidates, requestedDevice, requestedBrightness };
@@ -35,8 +33,7 @@ export async function pickFromRedisPool(url: URL, method: "proxy" | "redirect", 
   let folderMap = snapshot.folderMap;
   let themes = snapshot.themes;
   let rebuilds = 0;
-  // A recently-served candidate is skipped, but kept as a fallback so a pool
-  // smaller than the dedupe history still returns something instead of 404.
+
   let fallback: RandomObjectIndexItem | null = null;
   for (let attempt = 0; attempt < appConfig.randomDedupe.maxAttempts; attempt += 1) {
     const themeCandidates = parseThemeSelectors(url.searchParams, themes);
@@ -54,25 +51,24 @@ export async function pickFromRedisPool(url: URL, method: "proxy" | "redirect", 
     if (!candidates.length) return noCandidatesError(url, axes);
     const item = await weightedPick(candidates);
     if (!item) {
-      // A stale index pointed at a removed image: rebuild from PostgreSQL and retry,
-      // bounded by the miss-retry budget so a persistently empty slot can't loop.
+      // Redis 随机池可能因手动改库或异常退出而短暂落后；命中空洞时重建 folderMap 后再试几次。
       if (rebuilds >= appConfig.randomMissRetries) break;
       rebuilds += 1;
       folderMap = await rebuildFolderMap();
       themes = validThemesFromMap(folderMap);
       continue;
     }
+    // 短期去重优先避免重复；如果全都命中 recent，保留一个可用 fallback，避免接口明明有图却返回空。
     if (recent.has(item.id)) { fallback = item; continue; }
     return { ...item, method };
   }
   return fallback ? { ...fallback, method } : null;
 }
 
-// One weighted draw: a category's chance is proportional to its image count, then
-// a uniform index within it. Returns null when the chosen index is a stale slot.
 async function weightedPick(candidates: Array<{ category: string; count: number }>): Promise<RandomObjectIndexItem | null> {
   const total = candidates.reduce((sum, choice) => sum + choice.count, 0);
   let ticket = Math.random() * total;
+  // 先按分类图片数量加权选分类，再在该分类连续 index 范围里选序号，避免小分类被大分类同等概率淹没。
   const selected = candidates.find((item) => {
     ticket -= item.count;
     return ticket < 0;
@@ -94,26 +90,21 @@ export async function pickFromDatabase(url: URL, method: "proxy" | "redirect", a
   if (authors instanceof Response) return authors;
   const conditions = ["status='ready'", "device = ANY($1::text[])", "brightness = ANY($2::text[])", "theme = ANY($3::text[])"];
   const params: unknown[] = [axes.deviceCandidates, axes.brightnessCandidates, themeCandidates];
-  // Include is OR (any selected tag); exclude removes images carrying any of them.
+
   if (tags.include.length) { params.push(tags.include); conditions.push(`id IN (SELECT image_id FROM image_tag WHERE tag_slug = ANY($${params.length}::text[]))`); }
   if (tags.exclude.length) { params.push(tags.exclude); conditions.push(`id NOT IN (SELECT image_id FROM image_tag WHERE tag_slug = ANY($${params.length}::text[]))`); }
-  // One author per image: include is IN the selected set, exclude removes them (keeping
-  // no-author (NULL) images, which aren't by any excluded author).
+
   if (authors.include.length) { params.push(authors.include); conditions.push(`author = ANY($${params.length}::text[])`); }
   if (authors.exclude.length) { params.push(authors.exclude); conditions.push(`(author IS NULL OR author <> ALL($${params.length}::text[]))`); }
   const recentIds = [...recent];
-  // First pass excludes recently-served images for short-term no-repeat; if that
-  // empties the pool (history covers everything), a second pass without the
-  // exclusion still serves rather than 404s.
+
   for (const excludeRecent of recentIds.length ? [true, false] : [false]) {
+    // PG 降级路径先排除 recent；如果排除后无结果，再放宽一次，保证随机 API 可用性优先于短期去重。
     const passConditions = [...conditions];
     const passParams = [...params];
     if (excludeRecent) { passParams.push(recentIds); passConditions.push(`id <> ALL($${passParams.length}::uuid[])`); }
     const where = passConditions.join(" AND ");
-    // Avoid a full `ORDER BY random()` sort of the whole match set: count the matches, then
-    // index-scan to a uniform random offset ordered by the PK. (A row deleted between the two
-    // queries can rarely leave the offset past the end → empty result → next pass / 404; that's
-    // acceptable on this Redis-down fallback path.)
+
     const total = Number((await pool.query(`SELECT count(*)::int AS n FROM metadata WHERE ${where}`, passParams)).rows[0].n);
     if (!total) continue;
     const row = (await pool.query(

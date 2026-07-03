@@ -4,8 +4,7 @@ import { invalidateImageReadCaches, invalidateMd5Caches, bumpFolder } from "../c
 import type { ImageRecord } from "./presenter.js";
 
 export async function batchDeleteImages(ids: string[]) {
-  // ids arrive validated, deduped and capped (max 200) by imageIdsInput at the route, so there's
-  // no UUID-format / dedup work to repeat here — just the empty short-circuit.
+
   if (!ids.length) return { deleted: 0, ignored: 0 };
   const readyRows = (await pool.query(
     "SELECT id, category_key FROM metadata WHERE id = ANY($1::uuid[]) AND status='ready' ORDER BY category_key, id",

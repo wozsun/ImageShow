@@ -5,7 +5,6 @@ import { invalidateImageReadCaches, rebuildFolderMap } from "../core/redis.js";
 import { migrateStorageBackend, type MigrateRecord } from "../storage/migration.js";
 import { copyObject, exists, removeObject } from "../storage/storage.js";
 
-// Wholesale-migrate every image on backend `source` to backend `target` (both slugs).
 export async function migrateStorageLocation(input: { source?: unknown; target?: unknown }) {
   const source = typeof input?.source === "string" ? input.source : "";
   const target = typeof input?.target === "string" ? input.target : "";
@@ -16,8 +15,6 @@ export async function migrateStorageLocation(input: { source?: unknown; target?:
   return { migration };
 }
 
-// Rewrites object keys to the canonical device-brightness-theme/uuid.ext layout
-// for rows whose stored key drifted, copying object+thumb then updating the row.
 export async function migrateStoragePaths() {
   const rows = (await pool.query("SELECT id, object_key, device, brightness, theme, ext, status, storage_slug, is_link FROM metadata ORDER BY created_at ASC")).rows as Array<{
     id: string;
@@ -37,8 +34,7 @@ export async function migrateStoragePaths() {
   const errors: Array<Record<string, unknown>> = [];
   for (const row of rows) {
     const backend = row.storage_slug;
-    // Link images intentionally keep their external URL as the object key — there's no
-    // canonical storage path to rewrite them to.
+
     if (row.is_link) {
       unchanged += 1;
       continue;
@@ -52,8 +48,6 @@ export async function migrateStoragePaths() {
     let copiedThumb = false;
     let databaseUpdated = false;
     try {
-      // Recycle-bin images keep their original (objects/) and thumbnail (thumbs/) like ready
-      // ones, so the path rewrite copies both regardless of status.
       const oldObjectExists = await exists("objects", row.object_key, backend);
       const newObjectExists = await exists("objects", nextKey, backend);
       if (!oldObjectExists && !newObjectExists) {

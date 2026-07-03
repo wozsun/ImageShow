@@ -5,13 +5,11 @@ import { invalidateTagVocab } from "../core/redis.js";
 import type { Tag } from "./types.js";
 import { resolveTagNames } from "./query.js";
 
-// Get-or-create. The tag vocabulary is shared, so creating an existing slug
-// updates its display name instead of erroring. Slugs are validated at the route.
 export async function createTag(slug: string, displayName = ""): Promise<Tag> {
   if (slug.length > 32 || !slugPattern.test(slug)) {
     throw new ApiError(400, "invalid_tag", "Tag slug must be a lowercase slug (a-z, 0-9, -), <=32 chars", { slug });
   }
-  // New tags append to the end of the manual order; re-creating one keeps its order.
+
   const tag = (await pool.query(
     `INSERT INTO tag(slug, display_name, sort_order)
      VALUES($1, $2, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM tag))
@@ -24,7 +22,6 @@ export async function createTag(slug: string, displayName = ""): Promise<Tag> {
   return tag;
 }
 
-// Persists the manual order: each given slug's sort_order becomes its list position.
 export async function reorderTags(slugs: string[]) {
   if (!slugs.length) return;
   await pool.query(
@@ -36,7 +33,6 @@ export async function reorderTags(slugs: string[]) {
   await invalidateTagVocab();
 }
 
-// Batch delete; image_tag rows cascade, so the images simply lose these tags.
 export async function deleteTags(slugs: string[]) {
   const targets = [...new Set(slugs)];
   if (!targets.length) return { deleted: 0 };
@@ -52,16 +48,13 @@ export async function setTagDisplayName(slug: string, displayName: string) {
 }
 
 export async function deleteTag(slug: string) {
-  const result = await pool.query("DELETE FROM tag WHERE slug = $1", [slug]); // image_tag rows cascade
+  const result = await pool.query("DELETE FROM tag WHERE slug = $1", [slug]);
   if (!result.rowCount) throw new ApiError(404, "not_found", "Tag not found");
   await invalidateTagVocab();
 }
 
-// Replaces an image's tag set with `names`, get-or-creating each tag. Returns the
-// resulting slugs sorted. Runs in a transaction so a failure leaves tags intact.
 export async function setImageTags(imageId: string, names: string[]): Promise<string[]> {
-  // Resolve any aliases to their canonical tag slug before assigning, so tagging
-  // by an alias attaches the real tag rather than creating a tag of the alias.
+
   const resolved = await resolveTagNames(names);
   await withTransaction(async (client) => {
     const image = await client.query("SELECT 1 FROM metadata WHERE id = $1", [imageId]);
@@ -74,8 +67,7 @@ export async function setImageTags(imageId: string, names: string[]): Promise<st
       await client.query("INSERT INTO image_tag(image_id, tag_slug) VALUES($1, $2) ON CONFLICT DO NOTHING", [imageId, slug]);
     }
   });
-  // May have introduced new tag slugs and changed which tags are in use, so refresh
-  // the tag vocabulary + gallery facets (the image read caches are dropped by callers).
+
   await invalidateTagVocab();
   return [...resolved].sort();
 }

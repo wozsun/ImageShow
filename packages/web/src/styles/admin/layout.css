@@ -39,8 +39,7 @@
 .admin > aside a:hover .app-icon, .admin > aside button:hover .app-icon,
 .admin > aside a.active .app-icon { filter: brightness(1.25); }
 .admin button:not(:disabled) { transition: color .16s ease, background-color .16s ease, border-color .16s ease, transform .08s ease, filter .16s ease; }
-/* The password show/hide toggle keeps its own centred scale(.96) press (admin/controls.css) — exclude
-   it here so this rule's scale(.95) doesn't override and drop its vertical centering. */
+
 .admin button:not(:disabled):not(.select-trigger):not(.password-toggle):active { transform: scale(.95); }
 .login-site-title { color: inherit; border-radius: 6px; }
 .login-site-title:hover { color: #1f6feb; }
@@ -57,9 +56,7 @@
   margin: 4px 0;
   border-top: 1px solid #343b46;
 }
-/* Only the nav items between the two dividers scroll; the brand/首页 (above the first
-   divider) and 账户/退出 (below the second) stay pinned. flex:1 here also pushes the
-   bottom group down, so the logout divider no longer needs margin-top:auto. */
+
 .admin > aside .admin-nav-scroll {
   flex: 1 1 auto;
   min-height: 0;
@@ -68,27 +65,19 @@
   flex-direction: column;
   gap: 10px;
 }
-/* The persistent admin scroll regions (image / entity lists, sidebar nav) only get
-   .overlay-scroll-host once their OverlayScrollbar mounts. Until then the native bar shows, and on
-   a route switch its ~10px gutter makes the list render briefly narrower before snapping to full
-   width. Pre-hide it on the same devices OverlayScrollbar enables (its ENABLE_QUERY) so there's no
-   first-paint shift; touch / coarse / high-contrast devices keep the native bar (overlay stays off).
-   Admin-only selectors, so this stays in the admin chunk rather than the global base.css. */
+
 @media (hover: hover) and (pointer: fine) and (forced-colors: none) {
   .admin-scroll-region, .admin-nav-scroll { scrollbar-width: none; }
   .admin-scroll-region::-webkit-scrollbar,
   .admin-nav-scroll::-webkit-scrollbar { width: 0; height: 0; }
 }
-/* The nav band's scrollbar is the floating OverlayScrollbar (driven from AdminShell), so the
-   native bar is hidden by .overlay-scroll-host and reserves no gutter — the items don't shift.
-   The default handle is dark (for light content areas); tint it light over the dark sidebar. */
+
 .admin > aside .overlay-scrollbar-handle { background: rgba(255, 255, 255, .3); }
 .admin > aside .overlay-scrollbar-handle:hover,
 .admin > aside .overlay-scrollbar-handle.is-dragging { background: rgba(255, 255, 255, .5); }
 .admin > aside .logout-button { margin-top: 0; }
 .admin > aside .admin-nav-group { display: flex; flex-direction: column; gap: 4px; }
-/* The trigger is a row: a main button (icon + label) that navigates to the first
-   item, plus a caret button on the right that toggles the submenu. */
+
 .admin-nav-group-trigger { display: flex; align-items: center; border-radius: 6px; }
 .admin-nav-group-trigger:hover, .admin-nav-group-trigger.active { background: #242a33; }
 .admin > aside .admin-nav-group-main { flex: 1 1 auto; width: auto; }
@@ -97,15 +86,43 @@
 .admin > aside .admin-nav-caret { width: auto; flex: 0 0 auto; padding: 10px 10px; }
 .admin-nav-caret .app-icon { width: 18px; height: 18px; flex-basis: 18px; transition: transform .2s ease; }
 .admin-nav-group.is-open .admin-nav-caret .app-icon { transform: rotate(180deg); }
-/* Animated expand/collapse: grid-template-rows 0fr -> 1fr with the inner clipped. */
+
 .admin > aside .admin-nav-sub { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .2s ease; }
 .admin > aside .admin-nav-sub.is-open { grid-template-rows: 1fr; }
-/* Tighter row gap than the 10px top-level rhythm so the 二级 items read as one clustered
-   group under their trigger, visually set apart from the first-level entries. */
+
 .admin-nav-sub-inner { display: flex; flex-direction: column; gap: 2px; padding-left: 18px; overflow: hidden; opacity: 0; transition: opacity .2s ease; }
 .admin-nav-sub.is-open .admin-nav-sub-inner { opacity: 1; }
 .admin > aside .admin-nav-sub a { min-height: 38px; }
 .workspace { padding: 24px; min-width: 0; }
+.admin:has(> .settings-page) {
+  height: 100svh;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.admin:has(> .settings-page) > .admin-mobile-header {
+  flex: 0 0 auto;
+}
+.admin:has(> .settings-page) > .settings-page {
+  flex: 1;
+  min-height: 0;
+}
+.settings-page {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.settings-page > .workspace-head {
+  flex: 0 0 auto;
+}
+.settings-scroll-region {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 2px;
+}
 .workspace-head {
   display: flex;
   justify-content: space-between;
@@ -119,19 +136,12 @@
 .workspace h2 { margin: 0 0 12px; font-size: 16px; display: flex; align-items: center; gap: 8px; }
 .workspace p { margin: 4px 0 0; color: #66717f; }
 
-/* Pages with a pinned bottom pager (图片列表 / 主题 / 标签 / 作者管理): the workspace fills the
-   viewport and only the .admin-scroll-region card area scrolls, so the header stays on top
-   and the pager stays at the bottom regardless of how many cards there are. The mobile
-   counterpart (same behavior, fitted below the 64px mobile header) lives in responsive.css. */
 @media (min-width: 761px) {
-  /* padding-bottom trims the gap under the pager to 16px (the .workspace 24px base keeps the
-     full inset on the top/sides, only the bottom is tightened). */
+
   .workspace-paged { height: 100svh; display: flex; flex-direction: column; overflow: hidden; padding-bottom: 16px; }
-  /* align-content: start keeps the (grid) cards at their natural height — without it a
-     tall flex:1 grid stretches its rows to fill the extra space, bloating the cards. */
+
   .workspace-paged > .admin-scroll-region { flex: 1; min-height: 0; overflow-y: auto; padding-right: 2px; align-content: start; }
-  /* Full-bleed divider: negative side margins cancel the workspace's 24px side padding so the
-     border-top spans the whole region edge-to-edge; equal side padding keeps the pager aligned. */
+
   .workspace-paged > .admin-pagination { margin: 0 -24px; padding: 12px 24px 0; border-top: 1px solid #e2e8f0; }
 }
 
@@ -142,20 +152,14 @@
   overflow: hidden;
 }
 .segmented button { border: 0; border-radius: 0; }
-/* 图片 header right side: upload triggers + view tabs share one centered row, so the
-   tabs sit at the buttons' vertical center instead of hugging the title's top edge. */
+
 .image-admin-head-tools { display: flex; align-items: center; gap: 12px; }
 @media (min-width: 761px) {
   .image-admin-head { align-items: center; }
-  /* The 图库/未设置/回收站 tabs are a fixed-length control of three equal cells, so the bar
-     never changes width as the active tab (a 2- vs 3-character label) switches, and it gives
-     the upload triggers a stable amount of room to flex against. */
+
   .image-admin-head .segmented { flex: 0 0 auto; }
   .image-admin-head .segmented button { flex: 1 1 0; min-width: 76px; }
-  /* When the header row gets tight, the 链接导入 / 上传图片 triggers wrap to a second row
-     rather than squashing the fixed tabs. They keep their fixed width (no stretch) and
-     right-align, so wrapping just drops the second button beneath the first against the right
-     edge (next to the tabs). The 120px floor comes from .upload-trigger in upload.css. */
+
   .image-admin-head-tools .upload-triggers { flex: 0 1 auto; min-width: 0; flex-wrap: wrap; justify-content: flex-end; }
   .image-admin-head-tools .upload-trigger { flex: 0 0 auto; }
 }
@@ -181,7 +185,7 @@
 .overview-card-value { font-size: 26px; font-weight: 700; line-height: 1.15; }
 .overview-card-label { font-size: 14px; color: #4a5563; }
 .overview-card-hint { font-size: 12px; color: #8a93a2; }
-/* The image cards (图库 / 回收站 / 主题) deep-link into their pages. */
+
 a.overview-card-link { text-decoration: none; color: inherit; cursor: pointer; transition: border-color .15s ease, box-shadow .15s ease, transform .08s ease; }
 a.overview-card-link:hover { border-color: #b9c4d4; box-shadow: 0 4px 14px rgba(13, 18, 28, .08); }
 .overview-themes { display: flex; flex-wrap: wrap; gap: 8px; }

@@ -14,19 +14,13 @@ export const queryKeys = {
   me: ["me"] as const
 };
 
-// Live (lenient) slug character check for the create forms' red-border feedback: only the
-// allowed character set, so a half-typed value isn't flagged for a trailing hyphen — the strict
-// no-leading/trailing-hyphen rule (slugPattern) is enforced server-side. Shared by the
-// theme/tag/author and the create-user (username) slug-style fields.
 export const slugCharset = /^[a-z0-9-]+$/;
 export const slugFormatHint = "只能包含小写字母、数字、连字符";
 
 export const galleryRenderBatch = 12;
-// How many leading gallery thumbnails (above the fold) load eagerly with high fetch priority so
-// the LCP image isn't deferred by the lazy observer; everything after stays lazy. Tune freely.
+
 export const eagerThumbnailCount = 12;
-// IntersectionObserver pre-roll margins: how early a lazy thumbnail starts loading before it
-// scrolls into view, and how early the infinite-scroll sentinel triggers the next page load.
+
 export const galleryLazyRootMargin = "360px 0px";
 export const gallerySentinelRootMargin = "280px 0px";
 export const defaultSite: SiteSettings = {
@@ -34,14 +28,16 @@ export const defaultSite: SiteSettings = {
   domain: "img.example.com",
   icon_url: "/assets/brand/favicon.svg",
   root_redirect: "home",
-  home_enabled: true,
-  login_background: "",
-  home_hero_background: ""
+  home: {
+    enabled: true,
+    tagline: "个人图片管理、画廊展示和随机图片 API。",
+    hero_background: "",
+    preview_delay_ms: 1000
+  },
+  gallery: { default_limit: 60, order: "random" },
+  random_default_method: "redirect"
 };
 
-// The public-facing landing path. With the homepage enabled (default) it's /home;
-// turning it off makes the gallery stand in wherever a "home" link points — the root
-// redirect, the header brand, and the admin sidebar's view-site shortcut.
-export function publicHomePath(site: { home_enabled?: boolean }): "/home" | "/gallery" {
-  return site.home_enabled === false ? "/gallery" : "/home";
+export function publicHomePath(site: { home?: { enabled?: boolean } }): "/home" | "/gallery" {
+  return site.home?.enabled === false ? "/gallery" : "/home";
 }

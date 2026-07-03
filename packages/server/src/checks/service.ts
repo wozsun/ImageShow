@@ -1,7 +1,3 @@
-// Public surface of the checks module. Each diagnostic/maintenance concern lives in
-// its own file (database, storage check/cleanup/migrate); this barrel re-exports
-// them so callers import from one place, and holds checkAll — the one overview that
-// genuinely spans both the database and every storage backend.
 import { pool } from "../core/db.js";
 import { errorMessage } from "../core/http.js";
 import { getFolderMap } from "../core/redis.js";

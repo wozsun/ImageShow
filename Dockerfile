@@ -22,11 +22,9 @@ RUN npm ci --omit=dev --workspace @imageshow/shared --workspace @imageshow/serve
 FROM node:24-slim AS runtime
 WORKDIR /app
 ARG PORT=5518
-# MALLOC_ARENA_MAX: 限制 glibc malloc 的 per-thread arena 数量。sharp/libvips 等原生库在多线程下
 ENV NODE_ENV=production \
     PORT=${PORT} \
     MALLOC_ARENA_MAX=2
-# gosu drops from root to node in the entrypoint after fixing data-dir ownership.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends gosu \
     && rm -rf /var/lib/apt/lists/*
@@ -40,8 +38,6 @@ RUN mkdir -p /app/data/storage /app/data/log && chown -R node:node /app/data
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN sed -i 's/\r$//' /usr/local/bin/docker-entrypoint.sh && chmod +x /usr/local/bin/docker-entrypoint.sh
 EXPOSE ${PORT}
-# Probe every 3s during the start window so the container goes healthy promptly on
-# boot, then settle to every 30s. start-period failures don't count toward retries.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --start-interval=3s --retries=3 CMD node packages/server/dist/healthcheck-cli.js
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["node", "packages/server/dist/index.js"]

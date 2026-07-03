@@ -1,6 +1,3 @@
-// HTTP helpers: typed API errors, Redis-backed session auth, CSRF and
-// same-origin checks, and login rate limiting (per IP+username plus a short
-// global backstop against distributed attacks).
 import type { Context, Next } from "hono";
 import { getCookie, setCookie, deleteCookie } from "hono/cookie";
 import { randomBytes } from "node:crypto";
@@ -10,14 +7,8 @@ import { pool } from "./db.js";
 import { redis } from "./redis.js";
 import { logger } from "./logger.js";
 
-// Login rate-limit thresholds/windows are file-only runtime config (config.json security.*,
-// defaults in appConfig.runtimeDefaults.security); only the Redis key for the global backstop is fixed here.
 const loginGlobalKey = "imageshow:login_fail_global";
 
-// Security headers applied to every response. object-src/base-uri/frame-ancestors are safe
-// everywhere and are what make the CSP actually mitigate XSS / clickjacking; the HTML document
-// tightens script-src further (see spaDocumentHeaders) — that can't be global because the
-// bundled docs site (VitePress) ships inline scripts a strict script-src would block.
 export const securityHeaders: Record<string, string> = {
   "X-Content-Type-Options": "nosniff",
   "X-Frame-Options": "DENY",
@@ -26,18 +17,12 @@ export const securityHeaders: Record<string, string> = {
   "Content-Security-Policy": "object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
 };
 
-// Headers for the SPA's own HTML document. Its markup carries no inline scripts (Vite emits
-// external /assets/*.js), so script-src 'self' locks scripting to same-origin without breaking
-// the app. Trusted Types ships Report-Only for now: the app has no innerHTML sinks, so DOM-sink
-// violations get reported (not blocked) until the policy can be flipped to enforce safely.
 export const spaDocumentHeaders: Record<string, string> = {
   ...securityHeaders,
   "Content-Security-Policy": "script-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
   "Content-Security-Policy-Report-Only": "require-trusted-types-for 'script'"
 };
 
-// Cache-Control values shared by the SPA and docs responses: HTML is always revalidated;
-// hashed immutable assets are cached for a year.
 export const noCacheControl = "no-cache";
 export const immutableCacheControl = "public, max-age=31536000, immutable";
 
@@ -56,8 +41,6 @@ export function ok(data: Record<string, unknown> = {}) {
   return { ok: true, ...data };
 }
 
-// Pulls a human-readable message out of an unknown thrown value (Error or otherwise),
-// for logging or recording in a result/failure entry.
 export function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
@@ -70,13 +53,11 @@ export function fail(c: Context, error: unknown) {
   if (anyError?.name === "redis_unavailable") {
     return c.json({ ok: false, code: "redis_unavailable", error: "Redis unavailable", details: {} }, 503);
   }
-  // Genuine unexpected failures only — ApiError (4xx) and redis_unavailable returned above are
-  // expected and stay out of the log.
+
   logger.error(`unhandled ${c.req.method} ${new URL(c.req.url).pathname}`, error);
   return c.json({ ok: false, code: "internal_error", error: "Internal server error", details: {} }, 500);
 }
 
-// Default machine-readable code for a status, used when a route doesn't supply one.
 function codeForStatus(status: number): string {
   switch (status) {
     case 400: return "bad_request";
@@ -89,9 +70,6 @@ function codeForStatus(status: number): string {
   }
 }
 
-// Builds a direct Response for the middleware/random paths that can't throw an
-// ApiError. Emits the same { ok:false, code, error, details } envelope as fail(),
-// so every JSON error the API returns has one consistent shape.
 export function routeError(error: { status: number; message: string; code?: string }, details: Record<string, unknown> = {}) {
   const payload: Record<string, unknown> = { ok: false, code: error.code ?? codeForStatus(error.status), error: error.message };
   if (Object.keys(details).length) payload.details = details;
@@ -118,11 +96,6 @@ function sameOrigin(c: Context) {
   }
 }
 
-// Fetch Metadata cross-origin gate for the SPA's own read endpoints. Browsers send Sec-Fetch-Site
-// and page scripts can't forge it (a forbidden header), so blocking "cross-site" / "same-site"
-// refuses another origin fetching or embedding our JSON, while "same-origin", "none" (direct nav)
-// and an absent header (old / non-browser clients) still pass — nothing legitimate breaks. It's a
-// cross-origin guard, not an anti-scrape wall: omitting the header still gets through (see robots.txt).
 export function blockCrossSiteFetch(c: Context, next: Next) {
   const site = c.req.header("sec-fetch-site");
   if (site === "cross-site" || site === "same-site") {
@@ -177,8 +150,6 @@ export async function requireCsrf(c: Context, next: Next) {
   await next();
 }
 
-// Gate for super-admin-only routes (user management, settings writes). Runs after
-// requireAuth, which puts the session — including its role — on the context.
 export async function requireSuper(c: Context, next: Next) {
   const session = c.get("session") as { role?: string } | undefined;
   if (session?.role !== "super") throw new ApiError(403, "forbidden", "Super admin only");
@@ -191,9 +162,6 @@ export async function logout(c: Context) {
   deleteCookie(c, "imageshow_session", { path: "/" });
 }
 
-// Best-effort client IP from the proxy headers (nginx sets X-Forwarded-For /
-// X-Real-IP); "unknown" when absent. Used for per-client login rate limiting and
-// the random API's short-term no-repeat history.
 export function clientIp(c: Context): string {
   const forwarded = c.req.header("x-forwarded-for")?.split(",")[0]?.trim();
   return forwarded || c.req.header("x-real-ip") || "unknown";

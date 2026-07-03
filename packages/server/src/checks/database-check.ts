@@ -2,14 +2,8 @@ import { appConfig } from "@imageshow/shared";
 import { cleanupEmptyCategories, pool, withTransaction } from "../core/db.js";
 import { rebuildFolderMap } from "../core/redis.js";
 
-// Temporary high offset applied to category_index during gap repair, so the old indexes sit in
-// a disjoint range while rows are renumbered to a dense 1..N — keeps the unique
-// (category_key, category_index) index from being transiently violated. Assumes < 1e6 ready
-// rows per category.
 const REINDEX_TEMP_OFFSET = 1_000_000;
 
-// Reconciles the category counters and category_index sequences against the actual
-// ready rows, and lists any stuck/failed background operations.
 export async function checkDatabase() {
   const categories = (await pool.query("SELECT c.category_key, c.count, COALESCE(m.count, 0)::int AS actual FROM category c LEFT JOIN (SELECT category_key, count(*) FROM metadata WHERE status='ready' GROUP BY category_key) m USING(category_key) ORDER BY c.category_key")).rows;
   const gaps = (await pool.query(`
@@ -27,18 +21,9 @@ export async function checkDatabase() {
   return { categories, mismatches: categories.filter((row) => Number(row.count) !== Number(row.actual)), index_gaps: gaps, operations };
 }
 
-// Repairs exactly what checkDatabase reports: re-sequences any category_index gaps
-// to a dense 1..N per category and resets each category.count to its real ready-row
-// count, then drops emptied categories and rebuilds the Redis random pool from the
-// repaired rows. Normal operations keep both invariants on their own (deletes backfill
-// the index hole, every write adjusts the count), so this is a recovery tool for drift
-// left behind by an interrupted operation, not routine upkeep.
 export async function repairDatabase() {
   const repaired = await withTransaction(async (client) => {
-    // Only categories that actually have a gap are touched. Within each, shift every
-    // ready row's index out into a disjoint high range first, then renumber to a dense
-    // 1..N in index order — so the unique (category_key, category_index) index is never
-    // transiently violated mid-statement (old values stay >1e6 while new ones are 1..N).
+
     const gapRows = (await client.query(`
       WITH ready AS (
         SELECT id, category_key, category_index,
@@ -67,8 +52,7 @@ export async function repairDatabase() {
         [gapCategories, appConfig.categoryIndexDigits]
       );
     }
-    // Reset every drifted counter to its true ready-row count (0 for categories with
-    // none left); rowCount is how many were wrong.
+
     const counts = await client.query(`
       UPDATE category c
       SET count = sub.actual, updated_at = now()

@@ -6,8 +6,6 @@ import { invalidateImageReadCaches } from "../core/redis.js";
 import { listAuthorsWithMeta } from "../authors/query.js";
 import { createAuthor, deleteAuthor, deleteAuthors, reorderAuthors, setAuthorMeta } from "../authors/service.js";
 
-// Thin HTTP layer for author management; logic lives in authors/service.ts (mutations)
-// and authors/query.ts (reads). Mirrors admin-themes.ts, plus the link field.
 export function registerAdminAuthorRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/authors`, async (c) => {
     return c.json(ok({ items: await listAuthorsWithMeta() }));
@@ -19,14 +17,12 @@ export function registerAdminAuthorRoutes(app: Hono) {
     return c.json(ok());
   });
 
-  // Static routes registered before the `:slug` param route so they aren't captured by it.
   app.post(`${adminApiBasePath}/authors/reorder`, async (c) => {
     const input = parse(slugListInput, await c.req.json().catch(() => ({})));
     await reorderAuthors(input.slugs);
     return c.json(ok());
   });
 
-  // Batch delete: each author's images are reassigned to the 'none' sentinel first.
   app.post(`${adminApiBasePath}/authors/batch-delete`, async (c) => {
     const input = parse(slugListInput, await c.req.json().catch(() => ({})));
     const result = await deleteAuthors(input.slugs);
@@ -34,7 +30,6 @@ export function registerAdminAuthorRoutes(app: Hono) {
     return c.json(ok(result));
   });
 
-  // Sets an author's display name + link.
   app.post(`${adminApiBasePath}/authors/:slug`, async (c) => {
     const slug = parse(authorSlugInput, c.req.param("slug"));
     const input = parse(authorMetaUpdateInput, await c.req.json().catch(() => ({})));

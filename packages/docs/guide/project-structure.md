@@ -49,10 +49,10 @@ ImageShow/
 
 | 文件 | 职责 |
 | --- | --- |
-| `storage/storage.ts` | 门面：`readObject` / `removeObject` / `moveObject` / `copyObject` / `exists`、`publicImageUrls()`、`writeUploadFromWeb()`、`ensureStorage()`。 |
+| `storage/storage.ts` | 门面：`readObject` / `removeObject` / `moveObject` / `copyObject` / `exists`、`publicImageUrls()`、`ensureStorage()`。 |
 | `storage/storage-backend.ts` | `driverFor(config)` 按 `config.type` 返回 Local / S3 / WebDAV 驱动。链接图由图片层的 `is_link` 处理，无独立驱动。 |
 | `storage/local-backend.ts` | 本地磁盘后端（`/app/data/storage` 下 objects / thumbs / _uploads / link），含空目录回收 `pruneEmptyDirs()`。 |
-| `storage/s3-backend.ts` | S3 / COS 后端：经服务器中转 PUT、读写删、`root_path` 前缀。 |
+| `storage/s3-backend.ts` | S3 / COS 后端：processed image / thumbnail 读写删与服务端复制/移动、`root_path` 前缀。 |
 | `storage/webdav-backend.ts` | WebDAV 后端：PROPFIND/MKCOL/PUT/GET/DELETE/MOVE/COPY，HTTP Basic 认证，`base_url + root_path` 前缀。 |
 | `storage/image-paths.ts` | 键名规则：`storageObjectKey()`、`thumbnailObjectKey()`、`linkThumbnailKey(device,brightness,theme,id)`，以及集中助手 `thumbnailRef(row)`——link 缩略图按分类分文件夹存在该图自己的存储后端的 `link/` 前缀下。所有清理 / 检查路径都走它，避免孤儿。 |
 | `storage/object-keys.ts` | 路径 / 键名映射与防穿越：本地 `safeStoragePath()`、S3 `storageS3ObjectName()` 等，物理布局 `<root_path>/<objects｜thumbs｜_uploads｜link>/<key>`。 |
@@ -65,12 +65,12 @@ ImageShow/
 | --- | --- |
 | `images/service.ts` | 软删除 `deleteImage()`、改元数据 / 换分类 `updateImageMetadata()`（换分类＝移动对象键 + 重排两个分类索引，事务内完成，link 不动字节）、单 / 批量迁移存储。 |
 | `images/query.ts` | 画廊列表：游标分页 + Redis 列表缓存 + `withShuffle()`（出口处洗牌，不污染共享缓存）。 |
-| `images/serving.ts` | 字节服务：`serveObject` / `serveThumb`（S3 公共 URL 时 302；已删除图片在公共主机一律 404），外链图 `serveLinkThumb`（存储的略缩图，先试本地再回退该图后端）/ `serveLinkMedia`（`proxyExternalImage` 服务端代理外部原图）；以及带鉴权的后台字节服务 `serveAdminThumb` / `serveAdminObject`（按 id 转发任意状态的略缩图 / 原图，供回收站视图，`private, no-store`）。 |
+| `images/serving.ts` | 存储对象、缩略图、link 与后台字节出口；集中处理外部回源代理、原图直连探测和缓存策略。 |
 | `images/presenter.ts` | `publicImage()` / `publicImages()` 把 DB 行变成 API 响应、`publicListImage()`（公共列表出口白名单）、`adminImageView()`（后台投影：去 `ext`、已删除图改指鉴权字节端点）、列表缓存键、`cacheImageLookups()`（link 跳过）。 |
-| `images/processing.ts` | sharp 封装：`probeImageBytes()`、`makeThumb()` / `createThumbnail()`、`contentType()`、`detectDeviceFromDimensions()`（w≥h⇒pc）。 |
+| `images/processing.ts` | sharp 封装：探测、缩略图、`transcodeStoredImage()` 与设备识别。 |
 | `images/brightness.ts` | 明暗识别 `detectBrightness()`：在 CIELAB L\* 直方图上算感知亮度评分判 dark/light。评分源自 `scripts/classify.py`，按本程序的标注样本重标定（去掉人工复核用的救回规则，准确率 95.3%→97.0%）。 |
-| `images/link-import.ts` | 链接导入：下载一次→探测尺寸 / MD5→生成缩略图→自动判设备→入库（`object_key`＝外链）→提交后写略缩图 `link/<设备-明暗>/<主题>/<id>.webp`。 |
-| `images/upload.ts` | 上传会话生命周期：创建会话、完成上传（同步完成校验、明暗识别、缩略图与落库，不留后台待办）。 |
+| `images/link-import/` | 链接来源适配：限时下载到本地 raw、代理链接 Redis stage 与提交。 |
+| `images/prepared-import/` | 本地上传与链接下载共用的 raw 临时文件、标准化、prepared 会话、commit/cancel 生命周期。 |
 | `images/batch.ts` | 批量软删除 `batchDeleteImages()`：按分类分组、回填索引空洞、标记 `status='deleted'`（不动文件）。 |
 | `images/cursor.ts` | 游标编解码（稳定分页）。 |
 | `images/trash.ts` | 回收站：恢复 `restoreDeletedImage()` / `batchRestoreImages()`（纯数据库，不动文件）、彻底清除 `purgeDeletedImages()`（物理删原图 + 缩略图，用 `thumbnailRef` 定位）。 |
@@ -110,12 +110,12 @@ ImageShow/
 | `routes/random.ts` | `GET /random`、`GET /img-count`、`<theme>.<域名>/random` |
 | `routes/auth.ts` | 登录 / 登出 / `/me`（CSRF token） |
 | `routes/admin-images.ts` | 后台图片增删改查、批量、迁移 |
-| `routes/uploads.ts` | 创建上传会话 / PUT 字节 / 完成上传 |
+| `routes/uploads.ts` | 创建上传会话 / PUT 原始字节 / prepared preview、SSE 与批量 status、commit、cancel |
 | `routes/admin-links.ts` | 链接批量导入 |
 | `routes/admin-tags.ts` · `admin-themes.ts` · `admin-authors.ts` · `admin-users.ts` | 标签 / 主题 / 作者 / 用户管理 |
 | `routes/settings.ts` | 读取 / 保存设置、`POST /storage/test` 存储自检 |
 | `routes/check.ts` | 存储一致性检查 / 清理 / 迁移 |
-| `routes/health.ts` | `/healthz`、`/readyz` |
+| `routes/health.ts` | `/livez`、`/readyz`、`/healthcheck` |
 | `routes/docs.ts` | `docs.<域名>` 提供文档站（`site.docs_enabled=false` 时该域名返回 404） |
 | `routes/spa.ts` | 前端 SPA 静态资源与 fallback |
 | `routes/robots.ts` | 按主机区分的 `GET /robots.txt`（主站仅放行首页；资源 / API / 主题子域禁抓；docs 可抓） |
@@ -127,9 +127,10 @@ ImageShow/
 | 入口 / 路由 | `main.tsx`、`AppRoutes.tsx` |
 | 公共页 | `pages/HomePage.tsx`（首页随机预览）、`pages/GalleryPage.tsx`（画廊，含设备 / 亮度 / 主题 / 标签 / 作者 / 排序筛选） |
 | 后台 | `pages/AdminShell.tsx` 及 `admin/` 下 Overview / ImageAdmin / Uploader（含链接导入模式）/ EntityAdmin（主题、标签、作者共用）/ UserAdmin / SettingsPage / AccountSettings（自助改密，全角色）/ CheckPage / ImageModals |
-| 组件 | SelectMenu / ThemeInput / TagInput / AuthorInput / FacetSelector / ImageDetailModal / LazyGalleryImage / ThumbImage 等 |
-| lib | `api.ts`（带 CSRF）、`types.ts`、`select-options.ts`、`random-url.ts`、`gallery-layout.ts` |
-| worker | `workers/md5.worker.ts`（浏览器端算 MD5，用于秒传判重与完成阶段的完整性校验） |
+| 组件 | `components/actions` / `data-display` / `feedback` / `form` / `icon` / `image` / `layout` / `navigation` 下的跨页面 UI 组件。 |
+| hooks | `hooks/` 下存放跨页面复用的交互 Hook，例如锚定菜单、动画关闭和滚动锁定。 |
+| lib | 无界面代码，按 `api` / `auth` / `gallery` / `ui` / `upload` 分类；页面专属状态机留在对应页面目录。 |
+| 导入队列 | `pages/admin/uploader/`（统一 ImportJob 队列；最终 MD5 只由服务端 prepared 阶段计算） |
 
 ## packages/docs —— 文档站
 

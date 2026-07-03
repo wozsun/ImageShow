@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Route, Routes, useNavigate } from "react-router-dom";
-import { api, clearCsrfToken, setCsrfToken } from "../lib/api.js";
-import { Icon } from "../components/Icon.js";
-import { NavGroup } from "../components/NavGroup.js";
-import { PasswordInput } from "../components/PasswordInput.js";
-import { OverlayScrollbar } from "../components/OverlayScrollbar.js";
+import { api, clearCsrfToken, setCsrfToken } from "../lib/api/client.js";
+import { Icon } from "../components/icon/Icon.js";
+import { NavGroup } from "../components/navigation/NavGroup.js";
+import { PasswordInput } from "../components/form/PasswordInput.js";
+import { OverlayScrollbar } from "../components/layout/OverlayScrollbar.js";
 import { adminApiBasePath, adminBasePath, defaultSite } from "../lib/constants.js";
-import { useAuthMe, useSiteConfig } from "../lib/site-data.js";
+import { useAuthMe, useSiteConfig } from "../lib/api/site-data.js";
 import { CheckPage } from "./admin/CheckPage.js";
 import { ImageAdmin } from "./admin/ImageAdmin.js";
 import { EntityAdmin } from "./admin/EntityAdmin.js";
@@ -15,20 +15,17 @@ import { Overview } from "./admin/Overview.js";
 import { SettingsPage } from "./admin/SettingsPage.js";
 import { StorageSettings } from "./admin/StorageSettings.js";
 import { AccountSettings } from "./admin/AccountSettings.js";
-import { MobileNavigation } from "../components/MobileNavigation.js";
+import { MobileNavigation } from "../components/navigation/MobileNavigation.js";
 // 后台样式在此引入（而非全局 styles.css），随 AdminShell 懒加载分块下载，公共页不会加载。
 import "../styles/admin.css";
 
 export function AdminShell() {
   const navigate = useNavigate();
-  // The middle nav band scrolls; drive it with the floating OverlayScrollbar (like the admin
-  // content areas) so an appearing bar doesn't reserve gutter and shove the items left.
+
   const navScrollRef = useRef<HTMLDivElement | null>(null);
   const { data: siteConfig } = useSiteConfig();
   const siteName = siteConfig?.site?.name ?? defaultSite.name;
-  // The "view public site" shortcut always points at the site root (/), which redirects to the
-  // configured landing (root_redirect / home_enabled). Always labelled 首页 — no need to relabel
-  // it 画廊 when the homepage is off, since / lands on the right page either way.
+
   const viewSite = { to: "/", icon: "home-4-line", label: "首页" } as const;
   const { data, refetch } = useAuthMe();
   useEffect(() => { if (data?.csrf_token) setCsrfToken(data.csrf_token); }, [data]);
@@ -162,17 +159,14 @@ function Login({ onLogin }: { onLogin: () => void }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [captcha, setCaptcha] = useState("");
-  // Bumped to fetch a fresh captcha image (a new server-side code). The captcha is one-time,
-  // so we also refresh it after every failed login.
+
   const [captchaNonce, setCaptchaNonce] = useState(() => Date.now());
   const [error, setError] = useState("");
   const refreshCaptcha = () => { setCaptcha(""); setCaptchaNonce(Date.now()); };
-  // Captcha can be turned off site-wide (config.json captcha.enabled); default on until the
-  // site config loads, so a fresh page never briefly drops the challenge.
+
   const captchaEnabled = siteConfig?.captcha?.enabled ?? true;
-  // Effective URL comes from /api/site-config (default: the site's own random API).
-  // Before it loads, fall back to the same-host random endpoint so there's no flash.
-  const background = siteConfig?.site?.login_background || "/random?m=redirect";
+
+  const background = siteConfig?.admin?.login_background || "/random?m=redirect";
   return (
     <main
       className="login"
@@ -187,7 +181,7 @@ function Login({ onLogin }: { onLogin: () => void }) {
           onLogin();
         } catch (err) {
           setError((err as Error).message);
-          if (captchaEnabled) refreshCaptcha(); // the one-time captcha is now spent — load a fresh one
+          if (captchaEnabled) refreshCaptcha();
         }
       }}>
         <a className="login-site-title" href="/"><h1>{siteName}</h1></a>

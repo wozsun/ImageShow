@@ -7,11 +7,6 @@ export type RestoreResult =
   | { status: "restored"; image: ImageRecord }
   | { status: "not_deleted" };
 
-// Restores a recycle-bin image back into its category. Soft-delete never moves or deletes the
-// original or thumbnail — they stay in objects/ + thumbs/ — so restore is pure bookkeeping:
-// lock the row, re-index it as the new tail of its category, flip it back to 'ready', and bump
-// the random pool. No storage I/O, no thumbnail regeneration. Returns 'not_deleted' for a row
-// that isn't in the recycle bin.
 export async function restoreImageFromTrash(id: string): Promise<RestoreResult> {
   const client = await pool.connect();
   let image: ImageRecord | undefined;
@@ -22,7 +17,7 @@ export async function restoreImageFromTrash(id: string): Promise<RestoreResult> 
       await client.query("ROLLBACK");
       return { status: "not_deleted" };
     }
-    // Serialize per-category index assignment (same lock the delete/move paths take).
+
     await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [image.category_key]);
     await upsertCategory(client, image.category_key, image.device, image.brightness, image.theme);
     await client.query("SELECT * FROM category WHERE category_key=$1 FOR UPDATE", [image.category_key]);

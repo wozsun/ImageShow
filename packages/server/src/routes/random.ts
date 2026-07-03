@@ -1,6 +1,3 @@
-// Public random-image API: GET /random (weighted pick returned as a proxied
-// body or a 302 to the object's public URL) and GET /img-count (pool stats).
-// Selection logic lives in random/; this module only shapes HTTP responses.
 import type { Context, Hono } from "hono";
 import { appConfig } from "@imageshow/shared";
 import { getFolderMap } from "../core/redis.js";
@@ -20,8 +17,6 @@ export async function handleRandomImage(c: Context) {
   return respondRandom(c, new URL(c.req.url));
 }
 
-// <theme>.<domain>/random behaves like /random?t=<theme> on the main host: it
-// forces the theme selector to this host's theme while keeping any d/b/m params.
 export async function handleThemeHostRandom(c: Context, theme: string) {
   if (c.req.method !== "GET" && c.req.method !== "HEAD") return routeError({ status: 405, message: "Method Not Allowed" });
   const url = new URL(c.req.url);
@@ -37,19 +32,13 @@ async function respondRandom(c: Context, url: URL) {
   const imageInfo = `${picked.device}-${picked.brightness}-${picked.theme}-${String(picked.category_index).padStart(appConfig.categoryIndexDigits, "0")}`;
   const baseHeaders = { "Cache-Control": "no-store", "X-Image-Info": imageInfo };
   if (picked.method === "proxy") {
-    // A link image has no stored original of ours, so the server fetches its external URL and
-    // streams it back same-origin (own-origin Referer beats hotlink protection). A stored image
-    // streams from our own storage. HEAD mirrors GET's headers without the payload.
+
     if (picked.is_link) return proxyExternalImage(picked.object_key, picked.ext, c.req.method === "HEAD", baseHeaders);
     const headers = { ...baseHeaders, "Content-Type": contentType(picked.ext) };
     if (c.req.method === "HEAD") return new Response(null, { headers });
     return new Response(await readObject("objects", picked.object_key, picked.storage_slug) as unknown as BodyInit, { headers });
   }
-  // Redirect mode 302s to the image's public URL: a stored image's object URL (or S3 CDN), or —
-  // for a link image — link.<domain>/media/<id>.<ext>, which proxies the external original
-  // server-side, so redirect mode displays link images too instead of hotlink-blocking.
-  // Referrer-Policy: no-referrer applies to CSS background:url(/random) and <img src=/random>
-  // embeds, which can't carry a referrerpolicy attribute of their own.
+
   const { object_url: location } = await publicImageUrls(
     picked.object_key,
     picked.storage_slug,

@@ -1,6 +1,3 @@
-// Redis cache layer. PostgreSQL stays the source of truth; reads here degrade
-// to a database rebuild (or are skipped) when Redis is unavailable. Holds the
-// random pool, gallery filter options, public-image lists and md5/lookup caches.
 import { Redis } from "ioredis";
 import { v7 as uuidv7 } from "uuid";
 import { appConfig, indexKey } from "@imageshow/shared";
@@ -20,15 +17,11 @@ export const RANDOM_OBJECTS_KEY = "imageshow:random_objects";
 export const GALLERY_OPTIONS_KEY = "imageshow:gallery_options";
 export const MD5_CACHE_PREFIX = "imageshow:md5:";
 export const PUBLIC_IMAGES_CACHE_PREFIX = "imageshow:public_images:";
-// Generation counter for the public-image list cache. Invalidation bumps this in
-// O(1) instead of SCAN-deleting every cached page; stale entries (now under an old
-// generation in their key) are never read again and expire on their own TTL.
+
 const PUBLIC_IMAGES_GEN_KEY = "imageshow:public_images_gen";
 export const IMAGE_LOOKUP_OBJECTS_KEY = "imageshow:image_lookup:objects";
 export const IMAGE_LOOKUP_THUMBS_KEY = "imageshow:image_lookup:thumbs";
-// Small, rarely-changing lists read on hot public paths: the theme/tag vocabulary
-// (slug + display name) backs term resolution on every filtered random/gallery
-// request, and the assembled gallery filter facets back the gallery's filter UI.
+
 const THEME_VOCAB_KEY = "imageshow:theme_vocab";
 const TAG_VOCAB_KEY = "imageshow:tag_vocab";
 const AUTHOR_VOCAB_KEY = "imageshow:author_vocab";
@@ -104,9 +97,6 @@ function optionsFromFolderMap(map: FolderMap): GalleryFilterOptions {
   return { devices: ["pc", "mb"], brightnesses: ["light", "dark"], themes: [...themes].sort() };
 }
 
-// Maps one ready metadata row to the [index_key, JSON] pair stored in the RANDOM_OBJECTS_KEY
-// hash. Shared by the full rebuild and the per-category refresh so both write the identical
-// shape; spread into an entries array (`objectEntries.push(...serializeRandomObject(row))`).
 function serializeRandomObject(row: {
   id: string; object_key: string; ext: string; category_key: string; category_index: number | string;
   device: "pc" | "mb"; brightness: "dark" | "light"; theme: string; storage_slug: string; is_link: boolean;
@@ -139,10 +129,6 @@ export async function getFolderMap() {
   }
 }
 
-// Reads the folder map and gallery options in one round-trip so the random API
-// can reuse the already-cached theme list (GalleryOptions.themes) instead of
-// recomputing it from the folder map on every request. Throws redis_unavailable
-// when Redis can't be reached so callers can fall back to PostgreSQL.
 export async function getRandomPoolSnapshot(): Promise<RandomPoolSnapshot> {
   try {
     await pingRedis();
@@ -175,10 +161,6 @@ export async function getGalleryOptions() {
   }
 }
 
-// Current generation for the public-image list cache. Callers capture it once at
-// the start of a read and reuse it for both the lookup and the write-back, so a
-// concurrent invalidation lands the about-to-be-written entry under the old
-// generation (orphaned) rather than serving it as fresh.
 export async function publicImagesCacheGeneration(): Promise<string> {
   try {
     await pingRedis();
@@ -203,7 +185,7 @@ export async function setPublicImagesCache(key: string, value: unknown) {
     await pingRedis();
     await redis.set(`${PUBLIC_IMAGES_CACHE_PREFIX}${key}`, JSON.stringify(value), "EX", appConfig.folderMapTtlSeconds);
   } catch {
-    // PostgreSQL remains the source of truth when Redis is unavailable.
+    // Redis 不可用时以 PostgreSQL 为准。
   }
 }
 
@@ -245,22 +227,20 @@ export async function setImageLookups(items: ImageLookupItem[]) {
     pipeline.expire(IMAGE_LOOKUP_THUMBS_KEY, appConfig.folderMapTtlSeconds);
     await pipeline.exec();
   } catch {
-    // A missed metadata lookup cache only costs one future database read.
+    // 写缓存失败只会多一次后续数据库读取。
   }
 }
 
 export async function invalidateImageReadCaches() {
   try {
     await pingRedis();
-    // Bump the list-cache generation (O(1)) so every cached page is logically
-    // invalidated at once, drop the two object/thumb lookup hashes outright, and drop
-    // the gallery facets (an image add/remove changes which themes/tags are in use).
+
     await Promise.all([
       redis.incr(PUBLIC_IMAGES_GEN_KEY),
       redis.del(IMAGE_LOOKUP_OBJECTS_KEY, IMAGE_LOOKUP_THUMBS_KEY, GALLERY_FACETS_KEY)
     ]);
   } catch {
-    // Cache invalidation failure is non-fatal because write paths committed to PostgreSQL.
+    // 写入路径已提交到 PostgreSQL，缓存失效失败不影响正确性。
   }
 }
 
@@ -302,8 +282,7 @@ async function refreshRandomCategory(categoryKey: string, delta: number) {
     map[category.device][category.brightness][category.theme] = rows.length;
   }
   pruneEmptyMap(map);
-  // When a category shrinks, delete the index-key entries past the new length
-  // so the random pool never resolves to a removed position.
+
   const staleTailStart = randomPoolCategory && delta >= 0 ? rows.length + 1 : 1;
   const staleTailEnd = previous?.count ?? 0;
   if (staleTailEnd >= staleTailStart) {
@@ -380,7 +359,7 @@ export async function setMd5Cache(md5: string, items: unknown[]) {
     await pingRedis();
     await redis.set(`${MD5_CACHE_PREFIX}${md5}`, JSON.stringify(items), "EX", appConfig.folderMapTtlSeconds);
   } catch {
-    // Duplicate checks can safely fall back to PostgreSQL on the next request.
+    // 判重下次可回退到 PostgreSQL。
   }
 }
 
@@ -390,7 +369,7 @@ export async function invalidateMd5Cache(md5: string) {
     await pingRedis();
     await redis.del(`${MD5_CACHE_PREFIX}${md5}`);
   } catch {
-    // Cache invalidation failure is non-fatal because PostgreSQL remains source of truth.
+    // PostgreSQL 仍是真相源，缓存失效失败不影响正确性。
   }
 }
 
@@ -401,7 +380,7 @@ export async function invalidateMd5Caches(md5s: string[]) {
     await pingRedis();
     await redis.del(...keys);
   } catch {
-    // PostgreSQL remains authoritative; stale cache entries expire naturally.
+    // PostgreSQL 仍是真相源，旧缓存会自然过期。
   }
 }
 
@@ -411,11 +390,6 @@ async function loadVocab(table: "theme" | "tag"): Promise<VocabEntry[]> {
   return (await pool.query(`SELECT slug, display_name FROM ${table} ORDER BY slug`)).rows as VocabEntry[];
 }
 
-// Cache-aside read of a small vocabulary list: serve from Redis, else load from PostgreSQL
-// and backfill the cache; a Redis outage reads straight from PostgreSQL. A freshly
-// auto-created slug (empty display name, made by ensureTheme / setImageTags) may be missing
-// until the TTL lapses — harmless, since term resolution falls back to slug-identity for
-// anything absent here. Shared by the theme / tag / author vocab getters below.
 async function cachedVocab<T>(key: string, load: () => Promise<T>): Promise<T> {
   try {
     await pingRedis();
@@ -429,7 +403,6 @@ async function cachedVocab<T>(key: string, load: () => Promise<T>): Promise<T> {
   }
 }
 
-// The theme / tag vocabulary (slug + display name), read on every theme/tag term resolution.
 export function getThemeVocab(): Promise<VocabEntry[]> {
   return cachedVocab(THEME_VOCAB_KEY, () => loadVocab("theme"));
 }
@@ -438,8 +411,6 @@ export function getTagVocab(): Promise<VocabEntry[]> {
   return cachedVocab(TAG_VOCAB_KEY, () => loadVocab("tag"));
 }
 
-// The author vocabulary carries an extra `link` beyond slug + display name, since the
-// image detail view renders the author as a link.
 export type AuthorVocabEntry = { slug: string; display_name: string; link: string };
 
 async function loadAuthorVocab(): Promise<AuthorVocabEntry[]> {
@@ -465,19 +436,16 @@ export async function setGalleryFacetsCache(value: unknown) {
     await pingRedis();
     await redis.set(GALLERY_FACETS_KEY, JSON.stringify(value), "EX", appConfig.folderMapTtlSeconds);
   } catch {
-    // PostgreSQL remains the source of truth when Redis is unavailable.
+    // Redis 不可用时以 PostgreSQL 为准。
   }
 }
 
-// Called by the theme / tag / author admin mutations. Drops the changed vocabulary plus
-// the gallery facets (which embed display names + the in-use slug set) so a rename/create/
-// delete reflects immediately rather than waiting out the TTL.
 async function invalidateVocab(vocabKey: string) {
   try {
     await pingRedis();
     await redis.del(vocabKey, GALLERY_FACETS_KEY);
   } catch {
-    // Stale vocabulary expires on its own TTL.
+    // 旧词表会按 TTL 自然过期。
   }
 }
 

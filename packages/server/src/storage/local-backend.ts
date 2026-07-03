@@ -1,14 +1,9 @@
-// Local-disk storage backend. All paths resolve under env.STORAGE_DIR via
-// safeStoragePath; the backend is stateless (no config needed beyond the data dir).
-import { createReadStream, createWriteStream } from "node:fs";
+import { createReadStream } from "node:fs";
 import { copyFile, mkdir, readFile, readdir, rename, rm, rmdir, stat, writeFile, access } from "node:fs/promises";
 import { dirname, join, relative, sep } from "node:path";
-import { pipeline } from "node:stream/promises";
 import type { Readable } from "node:stream";
 import { env } from "../config/env.js";
-import { ApiError } from "../core/http.js";
 import { isReservedRootKey, NAMESPACED_PREFIXES, safeStoragePath, STORAGE_PREFIXES, type ReadablePrefix, type StoragePrefix } from "./object-keys.js";
-import { nodeReadableFromWeb } from "./stream-buffer.js";
 import type {
   CopyPrefix,
   MoveFromPrefix,
@@ -57,8 +52,7 @@ export class LocalBackend implements StorageDriver {
     } catch (error) {
       const code = (error as { code?: string }).code;
       if (!["EXDEV", "EBUSY", "EPERM"].includes(code ?? "")) throw error;
-      // Windows dev and cross-device volumes can make rename fail (EXDEV/EBUSY/EPERM),
-      // sometimes right after image inspection; copy+remove is the portable fallback.
+
       await copyFile(source, target);
       await rm(source, { force: true }).catch(() => undefined);
     }
@@ -67,27 +61,8 @@ export class LocalBackend implements StorageDriver {
   async copy(fromPrefix: CopyPrefix, fromKey: string, toPrefix: CopyPrefix, toKey: string) {
     const target = safeStoragePath(toPrefix, toKey);
     await mkdir(dirname(target), { recursive: true });
-    // Native copy only. copyFile uses copy_file_range/sendfile, which can fail spuriously on
-    // bind-mounted filesystems (e.g. Docker Desktop on Windows); the copyObject facade catches that
-    // and falls back to read+write, so no per-backend fallback is needed here.
-    await copyFile(safeStoragePath(fromPrefix, fromKey), target);
-  }
 
-  async writeUploadFromWeb(id: string, body: ReadableStream<Uint8Array>, expectedSize: number) {
-    const part = safeStoragePath("_uploads", `${id}.part`);
-    const final = safeStoragePath("_uploads", id);
-    await mkdir(dirname(final), { recursive: true });
-    let total = 0;
-    const limiter = new TransformStream<Uint8Array, Uint8Array>({
-      transform(chunk, controller) {
-        total += chunk.byteLength;
-        if (total > expectedSize) throw new ApiError(400, "upload_too_large", "Upload too large");
-        controller.enqueue(chunk);
-      }
-    });
-    await pipeline(nodeReadableFromWeb(body.pipeThrough(limiter)), createWriteStream(part));
-    if (total !== expectedSize) throw new ApiError(400, "size_mismatch", "Upload size mismatch", { expected: expectedSize, actual: total });
-    await rename(part, final);
+    await copyFile(safeStoragePath(fromPrefix, fromKey), target);
   }
 
   async readObject(prefix: ReadablePrefix, key: string): Promise<Readable> {
@@ -115,8 +90,7 @@ export class LocalBackend implements StorageDriver {
   }
 
   publicObjectUrl(_prefix: ReadablePrefix, _key: string) {
-    // Local objects are not directly addressable; the caller falls back to the
-    // cookie-isolated static.<domain> host (see publicImageUrls).
+
     return "";
   }
 
@@ -128,10 +102,6 @@ export class LocalBackend implements StorageDriver {
     return { backend: "local", writable: true, storage_dir: env.STORAGE_DIR };
   }
 
-  // Depth-first prune: recurse into every subtree, then rmdir each directory that ended up
-  // empty. The storage root and the top-level prefix dirs (thumbs/link/_uploads, maintained by
-  // ensureStorage) are never removed; rmdir only succeeds on an empty dir, so a concurrent write
-  // that just repopulated one is harmless (ENOTEMPTY is swallowed).
   async pruneEmptyDirs(): Promise<number> {
     const root = env.STORAGE_DIR;
     const protectedDirs = new Set(NAMESPACED_PREFIXES.map((name) => join(root, name)));

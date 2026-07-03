@@ -1,9 +1,6 @@
-/* 全局响应式与共享动画：公共页（首页/画廊）与共享组件的规则，未登录访客也会加载。
-   后台的响应式规则在 admin/responsive.css。
-   注意：modal-* 关键帧与下方共享的“减少动态效果”项须留在全局，后台分块也会引用它们。 */
-
 .center { min-height: 100svh; display: grid; place-items: center; }
 
+/* modal-* 动画被公共页与后台弹窗共同引用，需留在全局样式包中。 */
 @keyframes modal-fade {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -45,16 +42,14 @@
   .topbar { padding: 0 16px; position: relative; z-index: 4; }
   .desktop-nav { display: none !important; }
   .mobile-navigation { display: block; }
-  /* Phones can't fit the hero + preview + builder into one locked 100svh screen
-     without clipping the builder, so here the home page scrolls naturally: the
-     hero and preview keep usable heights and the builder flows below the fold. */
+
   html.home-document { overflow-y: auto; }
   .home-page { height: auto; min-height: 100svh; overflow: visible; }
   .home-layout { height: auto; min-height: 0; overflow: visible; grid-template-rows: auto auto; }
   .home-hero { min-height: 200px; padding: 22px; }
   .home-hero h1 { font-size: 36px; }
   .home-bottom { grid-template-columns: 1fr; grid-template-rows: auto auto; }
-  /* Builder sits above the preview on mobile, with the divider between the two. */
+
   .random-builder {
     order: -1;
     border-bottom: 1px solid #dce2ea;
@@ -66,10 +61,7 @@
   .random-preview { border-right: 0; border-bottom: 0; gap: 12px; }
   .random-preview, .random-builder { padding: 16px; }
   .preview-frame { min-height: 300px; }
-  /* Builder controls in 2-column pairs (设备亮度 / 模式作者 / 主题标签); the hint and link row
-     span both columns. display:contents dissolves the axes/facets sub-grids so all six controls
-     share the builder's grid and can pair across the two groups; equal orders break by DOM order
-     (so 设备/亮度/模式 keep their sequence), and 作者 jumps ahead of 主题/标签 to fill row two. */
+
   .random-builder > h2 { grid-column: 1 / -1; }
   .builder-grid { display: contents; }
   .builder-grid-axes label { order: 1; }
@@ -84,8 +76,7 @@
   }
   .gallery-toolbar { position: static; padding: 12px 16px; align-items: stretch; flex-direction: column; }
   .gallery-toolbar label { min-width: 0; }
-  /* Collapsible filter drawer: by default only the 筛选 toggle shows; the filters (and the
-     random-link row) reveal below it when opened, so the image grid isn't pushed off-screen. */
+
   .gallery-filter-toggle {
     display: flex;
     align-items: center;
@@ -116,10 +107,7 @@
   .gallery-toolbar.filters-open .gallery-filter-chevron { transform: rotate(180deg); }
   .gallery-toolbar:not(.filters-open) > label,
   .gallery-toolbar:not(.filters-open) > .theme-link { display: none; }
-  /* Expanded, the filters lay out in 2-column pairs (设备亮度 / 模式作者 / 主题标签) like the
-     home builder; the 筛选 toggle, theme title and random-link row span both columns. Axes drop
-     their fixed 120px to fill the cell. Equal orders break by DOM order; 作者 (the last label,
-     robust to the theme page hiding 主题) jumps ahead of 主题/标签 to fill row two. */
+
   .gallery-toolbar.filters-open {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -140,10 +128,10 @@
   .theme-link-row .button { grid-column: auto; padding-inline: 10px; }
   .gallery { padding: 16px; gap: 12px; }
   .gallery-column { gap: 12px; }
-  /* 共享遮罩：.modal 在 gallery.css、.modal-footer-actions 在 base.css，本就随全局加载，故移动端覆盖留全局。 */
+
   .modal { padding: 10px; }
   .modal-footer-actions > * { flex: 1; }
-  /* 画廊 facet 的主题选择器（FacetSelector，首页随机图构建器也用）。 */
+  /*画廊 facet 的主题选择器（FacetSelector，首页随机图构建器也用）。*/
   .theme-select-control { width: 100%; min-width: 0; }
   .image-detail-modal {
     padding: 0;
@@ -180,8 +168,7 @@
 }
 
 @media (max-height: 560px) {
-  /* Short viewports (incl. landscape phones) also need the home page to scroll;
-     unlock the document so the builder below the fold stays reachable. */
+
   html.home-document { overflow-y: auto; }
   .home-page {
     height: auto;

@@ -1,13 +1,99 @@
 # 配置说明
 
-配置按持久化位置分为三类：
+ImageShow 的配置按持久化位置分为三类：数据库、`/app/data/config.json`、环境变量。排查配置时先确认“这项配置存在哪里”，再判断修改后是否需要热加载或重启。
 
-1. **数据库**：管理员账号；S3 的 endpoint/region/bucket/access key/secret key/根目录/public URL 等存储配置。secret key 由数据库持久化，不会返回给前端（管理页只显示「已配置」），请限制数据库与配置目录访问。
-2. **配置文件** `/app/data/config.json`：站点名 / 域名 / icon / 根路径跳转 / 登录页与首页背景、监听端口、PostgreSQL 与 Redis 连接、上传与画廊参数、随机图默认模式等非敏感项。**完整字段示例**（含中英文注释、每项默认值）见仓库根的 `config.example.jsonc` —— 实际 `config.json` 为纯 JSON、不支持注释。
-3. **环境变量**：仅在配置文件**首次生成**时读取；此后修改配置请使用后台设置页，或编辑配置文件后在设置页点击「读取配置文件」热加载（数据库 / Redis / 端口等连接类配置仍需重启容器）。部分进阶项只在配置文件中调整：概览「最近上传」数量；`operation_log.*_concurrency` 系列并发——`move.cleanup` 清理任务的并发 `move_cleanup_concurrency`、删除主题时把图片文件搬到 `none/` 文件夹的 `theme_reassign_concurrency`、批量迁移存储时图片拷贝的 `migrate_concurrency`（每张载入整图，限并发以控内存），默认各 5；`link_image.fill_original_url`（外链导入时是否把链接自动填入「原图URL」，**默认 `false` 关闭**，后台上传器读取该项决定是否预填）；`site.home_enabled`（是否启用公共首页 `/home`，**默认 `true` 开启**；关闭后 `/home` 会重定向到画廊、导航不再显示「首页」入口、根路径跳转也强制改为画廊——即便 `root_redirect` 仍为 `home`）；以及 `site.docs_enabled`（是否启用文档站子域 `docs.<域名>`，**默认 `true` 开启**；关闭后该子域一律返回 404，但 `docs` 前缀仍被保留、主题不可占用）；以及 `site.robots_enabled`（是否提供 `robots.txt`，**默认 `false` 关闭**；关闭时 `/robots.txt` 对所有主机返回 404、不提供任何抓取规则，开启后主站仅放行首页、`docs.` 子域可抓、其余资源与主题子域禁抓）。另有两组**仅配置文件**的进阶项：`security.*`——会话有效期 `session_ttl_seconds`（默认 `604800` 秒 = 7 天）与登录限流阈值 `login_max_failures`（默认 5）/ `login_failure_window_seconds`（默认 60）/ `login_global_max_attempts`（默认 10）/ `login_global_window_seconds`（默认 180）；`thumbnail.*`——缩略图长边 `long_edge`（默认 512）与 webp 质量 `quality`（默认 75，仅影响此后新生成的缩略图）；`captcha.*`——登录验证码的 `code_length`（位数，默认 6）、`ttl_seconds`（有效期秒数，默认 60）、`noise_lines`（干扰线条数，默认 8）与 `noise_dots`（噪点数，默认 50）；其余视觉几何（间距/字号/旋转幅度等）与**字符集**（大小写字母+数字，校验不区分大小写）才是代码前部常量（`core/captcha.ts` 的 `captchaDifficulty` 与 `codeAlphabet`）；`log.*`——日志级别 `level`（`DEBUG` / `INFO` / `WARN` / `ERROR` / `OFF`，默认 `WARN`）与按大小轮转的 `max_size_mb`（默认 10）/ `max_files`（默认 5，保留的归档数 `app.log.1 … app.log.N`），日志写入 `data/log/app.log` 并同时输出到容器 stdout/stderr。以上各项改后经设置页「读取配置文件」热加载即生效。
+## 配置来源
+
+| 来源 | 保存内容 | 修改方式 |
+| --- | --- | --- |
+| PostgreSQL | 管理员账号；本地 / S3 / WebDAV 存储后端注册表；S3 endpoint、region、bucket、access key、secret key、根目录、public URL 等敏感或实例化数据。 | 后台设置页。secret key 只保存，不返回给前端。 |
+| `/app/data/config.json` | 站点名、域名、icon、根路径跳转、首页 / 画廊 / 随机图默认行为、登录页背景、监听端口、PostgreSQL / Redis 连接、上传限制、链接导入、标准化、缩略图、安全、验证码、日志等非敏感运行时配置。 | 后台设置页，或直接编辑文件后在后台「设置 → 读取配置文件」。 |
+| 环境变量 | 只用于首次生成 `config.json`，以及初始化管理员账号和 PostgreSQL 官方镜像变量。 | 修改 `.env` 后重建 / 重启；配置文件生成后，普通运行时配置以 `config.json` 为准。 |
+
+完整字段清单、默认值和中英文注释见仓库根目录的 `config.example.jsonc`。实际运行文件是纯 JSON，不支持注释。
+
+## 热加载边界
+
+大多数 `config.json` 配置可在后台点击「读取配置文件」后生效。以下连接类配置改动后需要重启容器：
+
+- `database.*`
+- `redis.*`
+- `port`
+
+`ADMIN_USERNAME` / `ADMIN_PASSWORD` 只在数据库没有管理员账号时创建首个账号，最终写入 PostgreSQL 的 `admin_account` 表，不进入 `config.json`。初始化完成后可以从 `.env` 移除。
+
+## 常用配置组
+
+| 配置路径 | 用途 |
+| --- | --- |
+| `site.name` / `site.domain` / `site.icon_url` | 站点名称、主域名和图标。 |
+| `site.root_redirect` | 根路径跳转目标：`home` 或 `gallery`。 |
+| `site.home.enabled` | 是否启用公共首页 `/home`，默认 `true`。关闭后 `/home` 重定向到画廊，导航不再显示首页入口，根路径也强制进画廊。 |
+| `site.home.tagline` / `site.home.hero_background` / `site.home.preview_delay_ms` | 首页 banner 文案、hero 背景与随机预览切换延迟。 |
+| `site.gallery.default_limit` / `site.gallery.order` | 画廊默认分页数量与排序。 |
+| `site.random_default_method` | `/random` 默认返回方式：`redirect` 或 `proxy`。 |
+| `site.random_subdomain` / `site.static_subdomain` / `site.docs_subdomain` / `site.link_subdomain` | 保留子域名前缀。 |
+| `site.docs_enabled` | 是否启用 `docs.<域名>` 文档站，默认 `true`。关闭后该主机返回 404，但前缀仍保留，主题不可占用。 |
+| `site.robots_enabled` | 是否提供 `robots.txt`，默认 `false`。开启后主站首页与文档站可抓取，资源域和主题域禁抓。 |
+| `upload.*` | 上传文件大小、图片长边限制、上传列表分页和上传并发。 |
+| `link_image.fill_original_url` | 两种链接导入模式是否自动填入「原图URL」。 |
+| `link_image.concurrency` | “下载图片”模式同时下载并标准化的任务数。 |
+| `normalize.*` | 本地上传与下载导入共用的最终入库文件标准化策略。 |
+| `thumbnail.*` | 缩略图长边和 WebP 质量，只影响此后新生成的缩略图。 |
+| `image_detail.title_opens_image` | 图片详情弹窗标题是否链接到图片直链。 |
+| `admin.login_background` | 后台登录页背景；留空时使用站点自身随机图。 |
+| `admin.image_page_size` / `admin.recent_uploads` / `admin.show_unset_theme_card` | 后台图片分页、概览最近上传数量、主题页「未设置」占位卡片开关。 |
+| `operation_log.*` | 后台任务并发：移动清理、删除主题时图片搬运、批量迁移存储拷贝。默认各 5。 |
+| `security.*` | 登录会话有效期和登录限流阈值。 |
+| `captcha.*` | 登录验证码开关、位数、有效期、干扰线和噪点数量。字符集与几何样式仍是代码常量。 |
+| `log.*` | 日志级别、单文件大小上限和轮转文件保留数量。日志写入 `data/log/app.log`，并同时输出到容器 stdout / stderr。 |
+
+## 入库图片标准化
+
+本地上传与「下载图片」共用顶层 `normalize` 配置。原始文件先落到容器本地 `data/tmp`，服务端完成校验、缩略图和最终入库文件处理后，才把候选文件写入选定存储后端。
+
+```json
+{
+  "link_image": {
+    "fill_original_url": false,
+    "concurrency": 2
+  },
+  "normalize": {
+    "quality": 80,
+    "quality_step": 5,
+    "min_quality": 20,
+    "max_long_edge": 4500,
+    "max_size_kb": 500,
+    "skip_webp_under_kb": 700
+  }
+}
+```
+
+`normalize.quality` 是首次 WebP 编码质量。输出超过 `normalize.max_size_kb` 时，每轮降低 `normalize.quality_step`，最低降到 `normalize.min_quality`。尺寸会按比例缩小到 `normalize.max_long_edge` 以内，不会放大。
+
+输入本身是 WebP、体积小于 `normalize.skip_webp_under_kb` 且长边已经达标时，原字节直接成为最终候选文件；服务端仍会执行解码校验、标准缩略图生成和最终 MD5 计算。
 
 ## 环境变量
 
-`compose.yaml` 只向容器注入少数几个变量（见仓库根 `.env.example`）：管理员初始账号 `ADMIN_USERNAME` / `ADMIN_PASSWORD`、数据库 `DATABASE_NAME` / `DATABASE_USER` / `DATABASE_PASSWORD`、站点主域名 `SITE_DOMAIN`（默认 `example.com`），以及一个可选的应用宿主端口映射 `HOST_PORT`（默认 `5518`；PostgreSQL 不对宿主发布，需直连数据库时用 `docker exec`）。它们只在 `config.json` **首次生成**时把对应字段播种进去。环境变量与配置字段统一按 `<组>_<字段>`（大写下划线）对应——如 `site.domain ↔ SITE_DOMAIN`、`database.name ↔ DATABASE_NAME`、`admin.show_unset_theme_card ↔ ADMIN_SHOW_UNSET_THEME_CARD`；顶层 `port` 用裸名 `PORT`。两个例外：`ADMIN_USERNAME` / `ADMIN_PASSWORD` 写入数据库的管理员账号表、不进 `config.json`；PostgreSQL 容器本身仍按官方镜像要求接收 `POSTGRES_DB/USER/PASSWORD`（由 `compose.yaml` 从上述 `DATABASE_*` 映射而来）。
+`compose.yaml` 默认只向容器注入少数变量：
 
-其余配置项 `compose.yaml` 不再注入，请直接在 `config.json` 中设置——**完整字段清单（含每项默认值与中英文双语注释）见仓库根的 `config.example.jsonc`**。改完文件在后台「设置 → 读取配置文件」热加载即可生效（连接类的 `database` / `redis` / `port` 仍需重启容器）。
+| 环境变量 | 用途 |
+| --- | --- |
+| `ADMIN_USERNAME` / `ADMIN_PASSWORD` | 初始化首个管理员账号。 |
+| `DATABASE_NAME` / `DATABASE_USER` / `DATABASE_PASSWORD` | 初始化应用数据库和 PostgreSQL 容器。 |
+| `SITE_DOMAIN` | 首次生成配置文件时播种 `site.domain`，默认 `example.com`。 |
+| `HOST_PORT` | 应用宿主机端口映射，默认 `5518`。 |
+
+支持环境变量播种的配置字段统一按完整路径转成大写下划线，例如：
+
+| 配置字段 | 环境变量 |
+| --- | --- |
+| `site.domain` | `SITE_DOMAIN` |
+| `site.home.tagline` | `SITE_HOME_TAGLINE` |
+| `site.home.preview_delay_ms` | `SITE_HOME_PREVIEW_DELAY_MS` |
+| `admin.login_background` | `ADMIN_LOGIN_BACKGROUND` |
+| `normalize.quality_step` | `NORMALIZE_QUALITY_STEP` |
+| `link_image.concurrency` | `LINK_IMAGE_CONCURRENCY` |
+| `port` | `PORT` |
+
+仓库自带 `compose.yaml` 不注入所有可选项。配置文件已经生成后，请直接修改 `config.json` 并热加载；连接类配置仍需重启容器。

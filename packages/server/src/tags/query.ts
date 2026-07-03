@@ -3,9 +3,6 @@ import { getTagVocab } from "../core/redis.js";
 import { resolveSlugs, resolveTermMap } from "../core/term-resolve.js";
 import type { Tag } from "./types.js";
 
-// Tag slugs for a batch of image ids, as image_id -> sorted slugs. Done in one
-// query per page so image lists don't fan out into a tag lookup per row. The slug
-// is stored directly on image_tag, so no join is needed.
 export async function getTagsForImages(ids: string[]): Promise<Map<string, string[]>> {
   const map = new Map<string, string[]>();
   if (!ids.length) return map;
@@ -24,8 +21,6 @@ export async function getTagsForImages(ids: string[]): Promise<Map<string, strin
   return map;
 }
 
-// The full tag vocabulary with how many images carry each tag — backs the tag
-// management page and the admin tag typeahead.
 export async function listTagsWithCounts(): Promise<Tag[]> {
   return (await pool.query(
     `SELECT t.slug, t.display_name,
@@ -35,8 +30,6 @@ export async function listTagsWithCounts(): Promise<Tag[]> {
   )).rows as Tag[];
 }
 
-// Term → canonical tag slug, and term-list → deduped slug list, over the cached tag
-// vocabulary (see core/term-resolve for the shared resolution rules).
 export function resolveTagTermMap(terms: string[]): Promise<Map<string, string>> {
   return resolveTermMap(getTagVocab, terms);
 }

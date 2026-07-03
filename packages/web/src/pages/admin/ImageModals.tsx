@@ -1,27 +1,23 @@
 import { useEffect, useRef, useState } from "react";
-import { api } from "../../lib/api.js";
-import { Icon } from "../../components/Icon.js";
-import { ImageThumbnail } from "../../components/ImageThumbnail.js";
-import { ImagePreview } from "../../components/ImagePreview.js";
-import { OverlayScrollbar } from "../../components/OverlayScrollbar.js";
-import { SelectMenu } from "../../components/SelectMenu.js";
-import { ThemeInput } from "../../components/ThemeInput.js";
-import { TagInput } from "../../components/TagInput.js";
-import { AuthorInput } from "../../components/AuthorInput.js";
-import { ImageDraftFields } from "../../components/ImageDraftFields.js";
-import { useAnimatedClose } from "../../components/useAnimatedClose.js";
-import { useBodyScrollLock } from "../../components/useBodyScrollLock.js";
+import { api } from "../../lib/api/client.js";
+import { Icon } from "../../components/icon/Icon.js";
+import { ImageThumbnail } from "../../components/image/ImageThumbnail.js";
+import { ImagePreview } from "../../components/image/ImagePreview.js";
+import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
+import { SelectMenu } from "../../components/form/SelectMenu.js";
+import { ThemeInput } from "../../components/form/ThemeInput.js";
+import { TagInput } from "../../components/form/TagInput.js";
+import { AuthorInput } from "../../components/form/AuthorInput.js";
+import { ImageDraftFields } from "../../components/form/ImageDraftFields.js";
+import { useAnimatedClose } from "../../hooks/useAnimatedClose.js";
+import { useBodyScrollLock } from "../../hooks/useBodyScrollLock.js";
 import { adminApiBasePath } from "../../lib/constants.js";
-import { formatDimensions, formatImageMeta } from "../../lib/formatters.js";
-import { batchCommonBrightnessOptions, batchCommonDeviceOptions, cardBrightnessSelectOptions, cardDeviceSelectOptions } from "../../lib/select-options.js";
-import { storageNameResolver, useStorageOptions } from "../../lib/storage-options.js";
+import { formatDimensions, formatImageMeta } from "../../lib/ui/formatters.js";
+import { batchCommonBrightnessOptions, batchCommonDeviceOptions, cardBrightnessSelectOptions, cardDeviceSelectOptions } from "../../lib/ui/select-options.js";
+import { storageNameResolver, useStorageOptions } from "../../lib/api/storage-options.js";
 import type { Author, Brightness, Device, FacetOption, ImageDraft, ImageItem } from "../../lib/types.js";
-import { applyCommonAttributes, normalizeAuthor, normalizeTheme } from "../../lib/upload-utils.js";
+import { applyCommonAttributes, normalizeAuthor, normalizeTheme } from "../../lib/upload/upload-utils.js";
 
-// Shared by the batch editor and (with single=true) the single-image editor: single mode
-// drops the 应用到全部 bar and the pager and trims the wording — so editing one image and
-// editing many share all the field logic (the auto-brightness model, the change highlight, save,
-// migrate) and read identically.
 export function BatchMetadataModal({
   items,
   pageSize,
@@ -57,12 +53,11 @@ export function BatchMetadataModal({
   }])));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  // Click-to-preview a row's full image (its object_url) in a lightbox.
+
   const [previewSrc, setPreviewSrc] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [activeIds, setActiveIds] = useState(() => items.map((item) => item.id));
-  // device "auto" = 自动设备 (resolved per-image at apply); brightness "auto" = 自动亮暗
-  // (resolved server-side at save). "" = 不变 (leave the row untouched).
+
   const [common, setCommon] = useState({ device: "" as "" | "auto" | Device, brightness: "" as "" | "auto" | Brightness, theme: "", author: "", tags: [] as string[] });
   const [migrating, setMigrating] = useState(false);
   const [migrateTarget, setMigrateTarget] = useState<string>("");
@@ -78,9 +73,7 @@ export function BatchMetadataModal({
   useEffect(() => setPage((current) => Math.min(current, totalPages)), [totalPages]);
   const patchDraft = (id: string, patch: Partial<ImageDraft>) => setDrafts((current) => ({ ...current, [id]: { ...current[id], ...patch } }));
   const itemsById = new Map(items.map((item) => [item.id, item]));
-  // Per-field diff of each draft against its saved image, so edited controls/cards tint
-  // amber. theme is normalized ("none" → "") and tags are sorted before comparing, matching
-  // what saveAll persists.
+
   const fieldsChangedFor = (item: ImageItem) => {
     const draft = drafts[item.id];
     return {
@@ -97,8 +90,7 @@ export function BatchMetadataModal({
   };
   const changedByItem = new Map(activeItems.map((item) => [item.id, fieldsChangedFor(item)]));
   const changedCount = activeItems.filter((item) => Object.values(changedByItem.get(item.id)!).some(Boolean)).length;
-  // The 应用到全部 bar isn't a diff — flag the inputs that hold a value (so it's clear what a
-  // click would write), and light up the button while there's anything to apply.
+
   const commonChanged = { device: common.device !== "", brightness: common.brightness !== "", theme: common.theme.trim() !== "", author: common.author.trim() !== "", tags: common.tags.length > 0 };
   const commonHasValue = commonChanged.device || commonChanged.brightness || commonChanged.theme || commonChanged.author || commonChanged.tags;
   const saveAll = async () => {
@@ -208,8 +200,7 @@ export function BatchMetadataModal({
               disabled={saving}
               onClick={() => setDrafts((current) => Object.fromEntries(Object.entries(current).map(([id, draft]) => {
                 if (!activeSet.has(id)) return [id, draft];
-                // 自动设备 has no per-card option, so resolve it to this image's orientation here
-                // (mirroring the uploader); 自动亮暗 stays "auto" and is resolved server-side on save.
+                // 自动设备在这里按当前图片方向落到具体设备；自动亮暗保留给服务端重算。
                 const item = itemsById.get(id);
                 const device = common.device === "auto" ? (item && item.width >= item.height ? "pc" : "mb") : common.device;
                 return [id, applyCommonAttributes(draft, { ...common, device })];
@@ -352,9 +343,6 @@ export function BatchMetadataModal({
   );
 }
 
-// Single-image editor: the batch modal with one item and single mode (no apply-to-all bar,
-// no pager). A thin wrapper so the call sites stay unchanged and single/batch share all the
-// field, save and migrate logic.
 export function ImageEditModal({
   item,
   themes,

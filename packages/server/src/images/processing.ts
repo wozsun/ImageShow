@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { readFile, stat } from "node:fs/promises";
 import { fileTypeFromBuffer, fileTypeFromFile } from "file-type";
 import sharp from "sharp";
 import { type ImageExt } from "@imageshow/shared";
@@ -7,12 +8,6 @@ import { getRuntimeConfig } from "../config/env.js";
 import { thumbnailObjectKey } from "../storage/image-paths.js";
 import { getDefaultStorageSlug, getImageMaxLongEdge, getStorageBackend, getThumbnailSettings, getUploadLimitBytes } from "../config/settings.js";
 
-// Pin libvips' per-operation thread pool to the shared upload/thumbnail concurrency knob
-// (upload.concurrency, which also bounds the thumb.generate worker lanes). Without this, each
-// sharp call fans out to every CPU core, so several concurrent thumbnail jobs spawn cores²
-// native threads and spike memory; matching sharp's internal threads to the same number keeps
-// total native parallelism bounded. Called at startup and re-applied on config hot-reload
-// (wired from the composition root in index.ts).
 export function applyImageConcurrency() {
   sharp.concurrency(Math.max(1, getRuntimeConfig().upload.concurrency));
 }
@@ -42,13 +37,15 @@ export function md5Buffer(input: Buffer) {
 
 async function imageDimensions(input: ImageInput) {
   const meta = await sharp(input).metadata();
+  // sharp 的 metadata 宽高是原始像素方向；带 EXIF 旋转的手机图在展示时会互换宽高，因此这里返回展示方向。
+  // longEdge 仍按原始像素最大边校验，因为转码前解码压力取决于真实像素尺寸。
   const rotated = typeof meta.orientation === "number" && meta.orientation >= 5 && meta.orientation <= 8;
   const width = rotated ? meta.height ?? 0 : meta.width ?? 0;
   const height = rotated ? meta.width ?? 0 : meta.height ?? 0;
   const longEdge = Math.max(meta.width ?? 0, meta.height ?? 0);
   const limit = await getImageMaxLongEdge();
   if (!longEdge || longEdge > limit) {
-    throw new ApiError(400, "image_too_large", "Image dimensions exceed the configured limit", { limit });
+    throw new ApiError(400, "image_too_large", "图片尺寸超过限制", { limit });
   }
   return { width, height };
 }
@@ -56,9 +53,10 @@ async function imageDimensions(input: ImageInput) {
 export async function calculateObjectMd5(prefix: StoragePrefix, key: string, slug?: string) {
   const opened = await openStorageRead(prefix, key, slug);
   const limit = opened.backend === "s3" ? await getUploadLimitBytes() : undefined;
+  // S3/WebDAV 这类远端读取不一定可靠提供 Content-Length；即使开头拿到 size，也在流式读取时继续累计兜底。
   if (limit !== undefined && opened.size !== undefined && opened.size > limit) {
     opened.body.destroy();
-    throw new ApiError(400, "object_too_large", "Object is too large to buffer safely", { limit });
+    throw new ApiError(400, "object_too_large", "图片大小超过限制", { limit });
   }
   const hash = createHash("md5");
   let total = 0;
@@ -67,7 +65,7 @@ export async function calculateObjectMd5(prefix: StoragePrefix, key: string, slu
       const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
       total += buffer.byteLength;
       if (limit !== undefined && total > limit) {
-        throw new ApiError(400, "object_too_large", "Object is too large to buffer safely", { limit });
+        throw new ApiError(400, "object_too_large", "图片大小超过限制", { limit });
       }
       hash.update(buffer);
     }
@@ -78,9 +76,6 @@ export async function calculateObjectMd5(prefix: StoragePrefix, key: string, slu
   }
 }
 
-// Validates raw image bytes (an uploaded buffer, or one fetched from an imported
-// link) and returns the fields a metadata row needs. Enforces the long-edge limit
-// via imageDimensions.
 export async function probeImageBytes(input: Buffer) {
   const ext = await detectImageExt(input);
   if (!ext) throw new ApiError(400, "unsupported_file_type", "Unsupported file type");
@@ -88,10 +83,6 @@ export async function probeImageBytes(input: Buffer) {
   return { ...dimensions, ext, md5: md5Buffer(input), size: input.byteLength };
 }
 
-// Infers the device axis from image dimensions, matching the uploader's
-// width >= height => pc heuristic. Used by link import, where there's no client to
-// detect it. (Brightness has no dimension-based equivalent — auto-brightness would
-// analyze the decoded image bytes separately.)
 export function detectDeviceFromDimensions(width: number, height: number): "pc" | "mb" {
   return width >= height ? "pc" : "mb";
 }
@@ -105,13 +96,90 @@ export async function createThumbnail(input: ImageInput) {
     .toBuffer();
 }
 
-// Returns the generated thumbnail's byte size so callers can record it for
-// storage-usage stats. (Lazy-serve regenerations ignore the return value.)
+type DownloadTranscodeSettings = {
+  quality: number;
+  quality_step: number;
+  min_quality: number;
+  max_long_edge: number;
+  max_size_kb: number;
+};
+
+export type StoredImageTranscodeSettings = DownloadTranscodeSettings & {
+  skip_webp_under_kb: number;
+};
+
+export type PreparedStoredImage = {
+  processed: Buffer;
+  thumbnail: Buffer;
+  sourceSize: number;
+  sourceWidth: number;
+  sourceHeight: number;
+  width: number;
+  height: number;
+  ext: ImageExt;
+  md5: string;
+  size: number;
+  quality: number | null;
+  transcoded: boolean;
+};
+
+export async function transcodeStoredImage(path: string, settings: StoredImageTranscodeSettings): Promise<PreparedStoredImage> {
+  const [sourceSize, sourceExt, dimensions] = await Promise.all([
+    stat(path).then((value) => value.size),
+    detectImageExt(path),
+    imageDimensions(path)
+  ]);
+  if (!sourceExt) throw new ApiError(400, "unsupported_file_type", "Unsupported file type");
+  // 小体积 WebP 且尺寸已达标时保留原字节，避免重复有损编码；缩略图仍重新生成，保证尺寸与配置一致。
+  const canSkip = sourceExt === "webp"
+    && sourceSize < settings.skip_webp_under_kb * 1024
+    && Math.max(dimensions.width, dimensions.height) <= settings.max_long_edge;
+  const thumbnailPromise = createThumbnail(path);
+  const convertedPromise = canSkip
+    ? readFile(path).then((buffer) => ({ buffer, quality: null as number | null, transcoded: false }))
+    : transcodeDownloadedImage(path, settings).then(({ buffer, quality }) => ({ buffer, quality, transcoded: true }));
+  const [thumbnail, converted] = await Promise.all([thumbnailPromise, convertedPromise]);
+  const probe = await probeImageBytes(converted.buffer);
+  return {
+    processed: converted.buffer,
+    thumbnail,
+    sourceSize,
+    sourceWidth: dimensions.width,
+    sourceHeight: dimensions.height,
+    width: probe.width,
+    height: probe.height,
+    ext: probe.ext,
+    md5: probe.md5,
+    size: probe.size,
+    quality: converted.quality,
+    transcoded: converted.transcoded
+  };
+}
+
+async function transcodeDownloadedImage(input: ImageInput, settings: DownloadTranscodeSettings) {
+  const pipeline = sharp(input)
+    .rotate()
+    .resize({
+      width: settings.max_long_edge,
+      height: settings.max_long_edge,
+      fit: "inside",
+      withoutEnlargement: true
+    });
+  const maxBytes = Math.floor(settings.max_size_kb * 1024);
+  let quality = settings.quality;
+  while (true) {
+    // sharp pipeline 在 toBuffer 后会被消费；每轮 clone 后降质量，直到达到体积目标或触底最低质量。
+    const buffer = await pipeline.clone().webp({ quality }).toBuffer();
+    if (buffer.byteLength <= maxBytes || quality <= settings.min_quality) {
+      return { buffer, quality };
+    }
+    quality = Math.max(settings.min_quality, quality - settings.quality_step);
+  }
+}
+
 export async function makeThumb(objectKey: string, slug?: string) {
   const targetSlug = slug ?? await getDefaultStorageSlug();
   const config = await getStorageBackend(targetSlug);
-  // Local objects are thumbnailed straight from disk; remote backends are read into a
-  // buffer first.
   const input = config.type === "local" ? safeStoragePath("objects", objectKey) : await readStorageBuffer("objects", objectKey, targetSlug);
   const thumbnail = await createThumbnail(input);
   await writeStorageBuffer("thumbs", thumbnailObjectKey(objectKey), thumbnail, "image/webp", targetSlug);

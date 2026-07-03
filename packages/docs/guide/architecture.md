@@ -2,7 +2,7 @@
 
 ImageShow 是一个 npm workspaces 单仓多包项目：自托管图库 + 随机图 API。后端用 Hono（Node），前端用 React + Vite，文档站用 VitePress，三者随应用一起构建、部署。
 
-数据分两层：PostgreSQL 是唯一真相源，Redis 只是可随时丢弃的加速层；图片字节存在可插拔的存储后端（本地磁盘 / S3 兼容对象存储 / 外部链接）。所有耗时操作（缩略图、字节搬运、缓存重建）都交给后台 Worker 异步处理，HTTP 请求只负责落库与排队。
+数据分两层：PostgreSQL 是唯一真相源，Redis 只是可随时丢弃的加速层；图片字节存在可插拔的存储后端（本地磁盘 / S3 兼容对象存储 / WebDAV / 外部链接）。本地上传与链接下载在请求内完成限流、标准化和 prepared 暂存；删除收尾、缩略图补建、迁移清理、缓存重建等持久任务交给后台 Worker 异步处理。
 
 ## 整体结构
 
@@ -17,7 +17,7 @@ ImageShow 是一个 npm workspaces 单仓多包项目：自托管图库 + 随机
 | `<域名>`（主站） | SPA 前端 + 后台 + 公共 API |
 | `random.<域名>` | 只有随机图 API（`/` 的 GET/HEAD），其余一律 404 |
 | `static.<域名>` | 只提供对象字节 `/media/*`、`/thumbs/*`（cookie 隔离，主站从不直接吐字节） |
-| `link.<域名>` | 外链图片专用：`/thumbs/*` 取存储的略缩图，`/media/*` 服务端代理外部原图 |
+| `link.<域名>` | 外链资源专用：`/thumbs/*` 取 link 图略缩图，`/media/*` 代理 link 图原图，`/original/*` 代理详情字段中的原图链接 |
 | `docs.<域名>` | 本文档站（VitePress 构建产物） |
 | `<theme>.<域名>` | 该主题作用域的导航；`/random` 等价于 `/random?t=<theme>` |
 

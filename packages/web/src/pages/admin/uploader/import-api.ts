@@ -1,0 +1,112 @@
+import { api, getCsrfToken } from "../../../lib/api/client.js";
+import { adminApiBasePath } from "../../../lib/constants.js";
+import type { Brightness, Device, ImageDraft, ImageItem } from "../../../lib/types.js";
+
+export type PreparedImport = {
+  id: string;
+  preview_url: string;
+  width: number;
+  height: number;
+  original_width: number;
+  original_height: number;
+  ext: string;
+  md5: string;
+  original_size: number;
+  size: number;
+  quality: number | null;
+  transcoded: boolean;
+  device: Device;
+  brightness: Brightness;
+  storage_slug: string;
+};
+
+export type ImportSession = {
+  id: string;
+  upload_url?: string;
+  prepare_url?: string;
+};
+
+export type StoredImportStatus = {
+  id?: string;
+  status: string;
+  error: string;
+  phase?: string;
+  message?: string;
+};
+
+export function getStoredImportStatuses(ids: string[], signal?: AbortSignal) {
+  const query = encodeURIComponent(ids.join(","));
+  return api<{ items: StoredImportStatus[] }>(`${adminApiBasePath}/imports/status?ids=${query}`, { signal }).then((result) => result.items);
+}
+
+export function createLocalSession(input: ImageDraft & { size: number; session_id: string; idempotency_key: string; storage_slug: string }) {
+  return api<ImportSession>(`${adminApiBasePath}/uploads/create`, { method: "POST", body: JSON.stringify(input) });
+}
+
+export function createDownloadSession(input: { url: string; storage_slug: string; session_id: string; idempotency_key: string }) {
+  return api<ImportSession>(`${adminApiBasePath}/import-links/download/create`, { method: "POST", body: JSON.stringify(input) });
+}
+
+export function startDownloadPrepare(session: ImportSession, signal?: AbortSignal) {
+  if (!session.prepare_url) throw new Error("下载导入会话缺少 prepare URL");
+  return api<PreparedImport>(session.prepare_url, { method: "POST", signal });
+}
+
+export function storedImportStatusMessage(state: StoredImportStatus) {
+  if (state.message) return state.message;
+  if (state.status === "created") return "等待接收原图";
+  if (state.status === "receiving") return "服务端接收原图";
+  if (state.status === "preparing") return "标准化图片并生成缩略图";
+  if (state.status === "ready") return "服务端处理完成";
+  if (state.status === "committing") return "写入图库";
+  if (state.status === "finalized") return "已写入图库";
+  if (state.status === "failed") return state.error || "处理失败";
+  if (state.status === "cancelled") return "已取消";
+  return "等待处理";
+}
+
+export function uploadLocalRaw(
+  session: ImportSession,
+  file: File,
+  callbacks: { onProgress: (progress: number) => void; onUploaded: () => void }
+) {
+  if (!session.upload_url) throw new Error("上传会话缺少 upload URL");
+  const request = new XMLHttpRequest();
+  const promise = new Promise<PreparedImport>((resolve, reject) => {
+    request.open("PUT", session.upload_url!);
+    const csrf = getCsrfToken();
+    if (csrf) request.setRequestHeader("x-csrf-token", csrf);
+    request.upload.onprogress = (event) => {
+      if (event.lengthComputable && event.total > 0) callbacks.onProgress(Math.min(100, Math.round((event.loaded / event.total) * 100)));
+    };
+    request.upload.onload = callbacks.onUploaded;
+    request.onload = () => {
+      const data = parseUploadResponse(request.responseText);
+      if (request.status >= 200 && request.status < 300 && data.ok !== false) {
+        resolve(data as unknown as PreparedImport);
+        return;
+      }
+      reject(new Error(String(data.error || `上传失败（HTTP ${request.status}）`)));
+    };
+    request.onerror = () => reject(new Error("上传网络请求失败"));
+    request.onabort = () => reject(new Error("上传已取消"));
+    request.send(file);
+  });
+  return { promise, abort: () => request.abort() };
+}
+
+function parseUploadResponse(text: string): Record<string, unknown> {
+  try {
+    return JSON.parse(text || "{}") as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+}
+
+export function cancelStoredImport(sessionId: string) {
+  return api(`${adminApiBasePath}/imports/${sessionId}/cancel`, { method: "POST" });
+}
+
+export function commitStoredImport(sessionId: string, draft: ImageDraft) {
+  return api<{ item: ImageItem }>(`${adminApiBasePath}/imports/${sessionId}/commit`, { method: "POST", body: JSON.stringify(draft) });
+}

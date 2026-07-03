@@ -46,9 +46,9 @@ PostgreSQL，单一迁移文件 `packages/server/migrations/0001_initial.sql`，
 | `id` / `staging_object_key` (UNIQUE) | 会话 id / 暂存键 |
 | `final_object_key` | 完成后的正式键 |
 | `storage_slug` | 该会话目标后端 slug（不加外键，瞬时状态） |
-| `expected_size` | 预期字节数（>0，用于校验） |
-| `metadata_payload` (JSONB) | 待落库的元数据（含浏览器算的 MD5） |
-| `status` | `created` / `finalizing` / `finalized` / `expired` / `failed` |
+| `expected_size` | 本地上传声明的 raw 字节数；链接下载创建时为 NULL，prepare 后写实测值 |
+| `metadata_payload` (JSONB) | 待落库元数据与服务端 prepared 真值（最终 MD5 / 尺寸 / 质量 / 缩略图键） |
+| `status` | `created` / `receiving` / `preparing` / `ready` / `committing` / `finalized` / `failed` / `cancelled` |
 | `idempotency_key` (UNIQUE) | 幂等键（防重复完成） |
 | `error` | 失败原因 |
 | `expires_at` | 过期时间（默认 10 分钟，过期由 `upload.cleanup` 清暂存） |

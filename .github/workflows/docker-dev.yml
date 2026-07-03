@@ -1,3 +1,5 @@
+# 本文件定义 开发镜像构建流程。
+
 name: Docker Dev Image
 
 on:

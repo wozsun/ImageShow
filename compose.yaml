@@ -3,7 +3,6 @@ services:
     image: postgres:18
     container_name: imageshow-postgresql
     environment:
-      # The official postgres image requires these exact var names to initialize the DB;
       POSTGRES_DB: ${DATABASE_NAME}
       POSTGRES_USER: ${DATABASE_USER}
       POSTGRES_PASSWORD: ${DATABASE_PASSWORD}

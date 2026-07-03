@@ -1,27 +1,26 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { api } from "../lib/api.js";
-import { AppHeader } from "../components/AppHeader.js";
-import { CopyButton } from "../components/CopyButton.js";
-import { Icon } from "../components/Icon.js";
-import { ImageDetailModal } from "../components/ImageDetailModal.js";
-import { LazyGalleryImage } from "../components/LazyGalleryImage.js";
-import { SelectMenu } from "../components/SelectMenu.js";
-import { FacetSelector } from "../components/FacetSelector.js";
+import { api } from "../lib/api/client.js";
+import { AppHeader } from "../components/navigation/AppHeader.js";
+import { CopyButton } from "../components/actions/CopyButton.js";
+import { Icon } from "../components/icon/Icon.js";
+import { ImageDetailModal } from "../components/image/ImageDetailModal.js";
+import { LazyGalleryImage } from "../components/image/LazyGalleryImage.js";
+import { SelectMenu } from "../components/form/SelectMenu.js";
+import { FacetSelector } from "../components/data-display/FacetSelector.js";
 import { eagerThumbnailCount, galleryRenderBatch, gallerySentinelRootMargin } from "../lib/constants.js";
-import { formatImageMeta } from "../lib/formatters.js";
-import { masonryColumns, nextRenderBatch, useGalleryColumnCount } from "../lib/gallery-layout.js";
-import { buildRandomUrl } from "../lib/random-url.js";
-import { brightnessOptionLabel, deviceOptionLabel, randomModeSelectOptions } from "../lib/select-options.js";
-import { rootSiteOrigin } from "../lib/theme-host.js";
+import { formatImageMeta } from "../lib/ui/formatters.js";
+import { masonryColumns, nextRenderBatch, useGalleryColumnCount } from "../lib/gallery/gallery-layout.js";
+import { buildRandomUrl } from "../lib/gallery/random-url.js";
+import { brightnessOptionLabel, deviceOptionLabel, randomModeSelectOptions } from "../lib/ui/select-options.js";
+import { rootSiteOrigin } from "../lib/gallery/theme-host.js";
 import type { ImageItem, RandomMode } from "../lib/types.js";
-import { useAuthMe, useGalleryOptions, useSiteConfig } from "../lib/site-data.js";
+import { useAuthMe, useGalleryOptions, useSiteConfig } from "../lib/api/site-data.js";
 
 export function GalleryPage({ fixedTheme = "", standalone = false }: { fixedTheme?: string; standalone?: boolean }) {
   const [selected, setSelected] = useState<ImageItem | null>(null);
   const [filters, setFilters] = useState({ device: "", brightness: "", theme: fixedTheme, tag: "", author: "" });
   const [mode, setMode] = useState<RandomMode>("");
-  // Mobile only: the filter row collapses behind a 筛选 toggle so it doesn't eat the screen
-  // before any images show (desktop always shows the filters and ignores this).
+
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [items, setItems] = useState<ImageItem[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -33,8 +32,8 @@ export function GalleryPage({ fixedTheme = "", standalone = false }: { fixedThem
   const { data: options } = useGalleryOptions();
   const { data: siteConfig } = useSiteConfig();
   const { data: auth } = useAuthMe(!standalone);
-  // Gallery order is a site-wide config (Settings → 站点), not a per-visitor toggle.
-  const order = siteConfig?.gallery.order ?? "latest";
+
+  const order = siteConfig?.site.gallery.order ?? "latest";
   const filterKey = `${filters.device}|${filters.brightness}|${filters.theme}|${filters.tag}|${filters.author}|${order}`;
   const randomOrigin = fixedTheme && siteConfig?.site.domain ? rootSiteOrigin(siteConfig.site.domain).replace(/\/$/, "") : window.location.origin;
   const randomUrl = buildRandomUrl({
@@ -47,9 +46,6 @@ export function GalleryPage({ fixedTheme = "", standalone = false }: { fixedThem
     mode
   });
 
-  // How many filters differ from their default — shown as a badge on the mobile 筛选 toggle
-  // so an active filter is visible even while the drawer is collapsed. The theme axis is a
-  // fixed value (not user-changeable) on a standalone theme page, so it never counts there.
   const activeFilterCount =
     (filters.device ? 1 : 0) +
     (filters.brightness ? 1 : 0) +
@@ -76,8 +72,7 @@ export function GalleryPage({ fixedTheme = "", standalone = false }: { fixedThem
     let cancelled = false;
     const params = new URLSearchParams();
     if (cursor) params.set("cursor", cursor);
-    // "r" (强制随机) is a random-URL-only device — it isn't a concrete pc/mb the image list can
-    // filter on, so the gallery list treats it like 全部设备 (no d filter).
+    // 「r」是随机图专用设备值，画廊列表按「全部设备」处理。
     if (filters.device && filters.device !== "r") params.set("d", filters.device);
     if (filters.brightness) params.set("b", filters.brightness);
     if (filters.theme) params.set("t", filters.theme);
@@ -125,8 +120,7 @@ export function GalleryPage({ fixedTheme = "", standalone = false }: { fixedThem
   const columnCount = useGalleryColumnCount();
   const visibleItems = useMemo(() => items.slice(0, visibleCount), [items, visibleCount]);
   const columns = useMemo(() => masonryColumns(visibleItems, columnCount), [visibleItems, columnCount]);
-  // The first eagerThumbnailCount images (above the fold) load eagerly / high-priority for LCP;
-  // masonry splits items across columns, so match by id rather than per-column position.
+
   const eagerIds = useMemo(() => new Set(visibleItems.slice(0, eagerThumbnailCount).map((item) => item.id)), [visibleItems]);
 
   return (

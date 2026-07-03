@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { api } from "../../lib/api.js";
-import { ThumbImage } from "../../components/ThumbImage.js";
+import { api } from "../../lib/api/client.js";
+import { ThumbImage } from "../../components/image/ThumbImage.js";
 import { adminApiBasePath, adminBasePath, queryKeys } from "../../lib/constants.js";
-import { formatBytes } from "../../lib/formatters.js";
+import { formatBytes } from "../../lib/ui/formatters.js";
 
 type RecentImage = { id: string; title: string; thumb_url: string; created_at: string | null };
 type ThemeCount = { theme: string; count: number };

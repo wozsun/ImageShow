@@ -1,9 +1,9 @@
 import { useRef, useState } from "react";
-import { Icon } from "../../components/Icon.js";
-import { SelectMenu } from "../../components/SelectMenu.js";
-import { useAnimatedClose } from "../../components/useAnimatedClose.js";
-import { OverlayScrollbar } from "../../components/OverlayScrollbar.js";
-import { storageBackendDisplay, storageTypeLabel } from "../../lib/select-options.js";
+import { Icon } from "../../components/icon/Icon.js";
+import { SelectMenu } from "../../components/form/SelectMenu.js";
+import { useAnimatedClose } from "../../hooks/useAnimatedClose.js";
+import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
+import { storageBackendDisplay, storageTypeLabel } from "../../lib/ui/select-options.js";
 import type { S3Settings, StorageBackendAdmin, StorageType, WebdavSettings } from "../../lib/types.js";
 import { SettingsFeedback, type SettingsFeedbackState } from "./SettingsPage.js";
 
@@ -21,12 +21,6 @@ const storageTypeOptions = [
   { value: "webdav", label: "WebDAV" }
 ];
 
-// Create (target="new") / edit a backend. Local backends only expose a display name;
-// S3/WebDAV backends expose the full config (enable/disable lives on the card, not here).
-// The modal never auto-closes on save: success surfaces a "保存成功" pill by the close button
-// (so input — esp. the secret — is never lost), and the user closes when done. After a
-// successful create the modal switches into edit mode for the new backend (createdSlug), so a
-// second submit saves it instead of re-POSTing the same slug (which would conflict).
 export function BackendEditModal({ target, busy, feedback, onClose, onSave, onSetDefault, onTest }: {
   target: StorageBackendAdmin | "new";
   busy: string;
@@ -44,35 +38,30 @@ export function BackendEditModal({ target, busy, feedback, onClose, onSave, onSe
   const [type, setType] = useState<StorageType>(backend?.type ?? "s3");
   const [s3, setS3] = useState<S3Settings>({ ...emptyS3, ...(backend?.s3 ?? {}), secret_access_key: "" });
   const [webdav, setWebdav] = useState<WebdavSettings>({ ...emptyWebdav, ...(backend?.webdav ?? {}), password: "" });
-  // Type is chosen on create; on edit it's fixed to the backend's existing type.
+
   const effectiveType: StorageType = creating ? type : backend!.type;
   const isWebdav = effectiveType === "webdav";
   const exit = useAnimatedClose(onClose);
   const bodyRef = useRef<HTMLDivElement | null>(null);
-  // Which action produced the current feedback: a save / set-default success is surfaced as a
-  // header pill / button state (and keeps the modal open), while a connection-test result and
-  // any error still render in the body below.
+
   const [lastAction, setLastAction] = useState<"save" | "default" | "test" | null>(null);
   const [isDefaultNow, setIsDefaultNow] = useState(backend?.is_default ?? false);
-  // Slug of a backend created during this modal session; once set, the modal acts as an editor
-  // for it (submit saves, the slug field locks) even though `target` is still "new".
+
   const [createdSlug, setCreatedSlug] = useState<string | null>(null);
   const savedOk = lastAction === "save" && feedback?.status === "success";
   // 保存进行中也展示在 header pill（与「保存成功」同处），不再落到卡片下方的 body。
   const saving = lastAction === "save" && feedback?.status === "pending";
-  // The form reads as "create" only until the backend actually exists; afterwards it's an edit.
+
   const isCreateForm = creating && createdSlug === null;
   const configPayload = () => (isWebdav ? { webdav } : { s3 });
   const submit = async () => {
     setLastAction("save");
     if (isCreateForm) {
       const ok = await onSave(slug, { slug, display_name: displayName, type: effectiveType, ...configPayload() }, true);
-      if (ok) setCreatedSlug(slug); // switch to edit mode so a re-submit saves, not re-creates
+      if (ok) setCreatedSlug(slug);
       return;
     }
-    // Edit (a real existing backend, or one just created in this session). Local backends only
-    // carry a display name; everything else also sends its config. The modal stays open either
-    // way — the "保存成功" pill by the close button confirms the save.
+
     const editSlug = createdSlug ?? backend!.slug;
     await onSave(editSlug, { display_name: displayName, ...(isLocal ? {} : configPayload()) }, false);
   };
@@ -81,12 +70,10 @@ export function BackendEditModal({ target, busy, feedback, onClose, onSave, onSe
     <div
       className={`modal edit-modal ${exit.closing ? "is-closing" : ""}`}
       onAnimationEnd={exit.onAnimationEnd}
-      onClick={busy ? undefined : () => exit.requestClose()}
     >
       <form
         className="operation-modal storage-edit-modal"
         onSubmit={(event) => { event.preventDefault(); void submit(); }}
-        onClick={(event) => event.stopPropagation()}
       >
         <header>
           <div>

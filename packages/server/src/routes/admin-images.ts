@@ -4,13 +4,10 @@ import { ok } from "../core/http.js";
 import { adminImageListQuery, batchMigrateStorageInput, imageIdsInput, md5Input, parse, uuidInput } from "../core/validation.js";
 import { batchDeleteImages } from "../images/batch.js";
 import { checkImageMd5, getAdminImage, getOverviewStats, listAdminImages } from "../images/query.js";
-import { serveAdminObject, serveAdminThumb } from "../images/serving.js";
+import { serveAdminObject, serveAdminOriginalLink, serveAdminThumb } from "../images/serving.js";
 import { deleteImage, migrateImagesStorage, updateImageMetadata } from "../images/service.js";
 import { batchRestoreImages, purgeDeletedImage, purgeDeletedImages, restoreDeletedImage } from "../images/trash.js";
 
-// Thin HTTP layer for admin image management. Reads live in images/query.ts,
-// mutations in images/service.ts, trash ops in images/trash.ts, batch delete in
-// images/batch.ts.
 export function registerAdminImageRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/overview`, async (c) => c.json(ok(await getOverviewStats())));
 
@@ -24,9 +21,6 @@ export function registerAdminImageRoutes(app: Hono) {
     return c.json(ok({ item: await getAdminImage(id) }));
   });
 
-  // Authenticated byte serving for the recycle-bin view: the public static/link hosts refuse
-  // deleted images, so a deleted image's thumb_url/object_url point here instead (see
-  // presenter.adminImageView). Streams any-status bytes through the server, gated by requireAuth.
   app.get(`${adminApiBasePath}/images/:id/thumb`, async (c) => {
     const id = parse(uuidInput, c.req.param("id"));
     return serveAdminThumb(id);
@@ -35,6 +29,11 @@ export function registerAdminImageRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/images/:id/raw`, async (c) => {
     const id = parse(uuidInput, c.req.param("id"));
     return serveAdminObject(id);
+  });
+
+  app.get(`${adminApiBasePath}/images/:id/original`, async (c) => {
+    const id = parse(uuidInput, c.req.param("id"));
+    return serveAdminOriginalLink(id, c.req.header("user-agent") ?? "");
   });
 
   app.post(`${adminApiBasePath}/images/check-md5`, async (c) => {
@@ -71,7 +70,6 @@ export function registerAdminImageRoutes(app: Hono) {
     return c.json(ok(await purgeDeletedImage(id)));
   });
 
-  // Migrate storage for one or many images (the single-image action posts one id).
   app.post(`${adminApiBasePath}/images/batch-migrate-storage`, async (c) => {
     const input = parse(batchMigrateStorageInput, await c.req.json().catch(() => ({})));
     return c.json(ok(await migrateImagesStorage(input.ids, input.target)));

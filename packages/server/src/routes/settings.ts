@@ -20,10 +20,6 @@ import {
 import { parse, slugListInput, storageSlugInput } from "../core/validation.js";
 import { testStorage } from "../storage/storage.js";
 
-// Thin HTTP layer for app + storage settings; persistence/validation live in
-// config/settings.ts, the storage self-test in storage/storage.ts. App-settings and
-// storage-backend writes are super-only; the lightweight backend options list is
-// readable by any admin (the uploader/migrate pickers need it).
 export function registerSettingsRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/settings`, async (c) => {
     return c.json(ok({ settings: await getSettingsForAdmin(), defaults: appConfig }));
@@ -40,12 +36,10 @@ export function registerSettingsRoutes(app: Hono) {
     return c.json(ok({ settings: await getSettingsForAdmin() }));
   });
 
-  // Enabled backends for upload/migrate target pickers (no secrets; any admin).
   app.get(`${adminApiBasePath}/storage/options`, async (c) => {
     return c.json(ok({ backends: await listStorageBackendOptions() }));
   });
 
-  // --- storage backend registry management (super-only) ---
   app.get(`${adminApiBasePath}/storage/backends`, requireSuper, async (c) => {
     return c.json(ok({ backends: await getStorageBackendsForAdmin() }));
   });
@@ -56,8 +50,6 @@ export function registerSettingsRoutes(app: Hono) {
     return c.json(ok());
   });
 
-  // Static route before the `:slug` param routes so it isn't captured as a slug.
-  // Manual drag-to-sort order (the given slugs in their new order; 'local' excluded).
   app.post(`${adminApiBasePath}/storage/backends/reorder`, requireSuper, async (c) => {
     const input = parse(slugListInput, await c.req.json().catch(() => ({})));
     await reorderStorageBackends(input.slugs);
@@ -83,7 +75,6 @@ export function registerSettingsRoutes(app: Hono) {
     return c.json(ok());
   });
 
-  // Connection test: an existing backend by {slug}, or an ad-hoc {s3} config from the form.
   app.post(`${adminApiBasePath}/storage/test`, requireSuper, async (c) => {
     const body = await c.req.json().catch(() => ({}));
     return c.json(ok({ result: await testStorage(await resolveStorageTestConfig(body)) }));

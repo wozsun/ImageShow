@@ -1,6 +1,3 @@
-// S3-compatible object-storage backend. Stateless apart from the client it builds
-// from its bound config; every key flows through object-keys so it agrees with
-// listings and deletes.
 import type { Readable } from "node:stream";
 import {
   CopyObjectCommand,
@@ -14,7 +11,7 @@ import {
 import { ApiError } from "../core/http.js";
 import { getUploadLimitBytes, missingS3Fields, type StorageConfig } from "../config/settings.js";
 import { isReservedRootKey, s3CopySource, s3ListPrefix, storageS3ObjectName, type ReadablePrefix, type StoragePrefix } from "./object-keys.js";
-import { limitedWebStream, nodeReadableFromWeb, streamToBuffer } from "./stream-buffer.js";
+import { streamToBuffer } from "./stream-buffer.js";
 import type {
   CopyPrefix,
   MoveFromPrefix,
@@ -24,7 +21,6 @@ import type {
   StorageSelfTest
 } from "./storage-backend.js";
 
-// Builds an S3 client for a backend config.
 function storageS3Client(config: StorageConfig) {
   const endpoint = /^https?:\/\//i.test(config.s3.endpoint) ? config.s3.endpoint : `https://${config.s3.endpoint}`;
   return new S3Client({
@@ -73,7 +69,7 @@ export class S3Backend implements StorageDriver {
     const opened = await this.openRead(prefix, key);
     if (opened.size !== undefined && opened.size > limit) {
       opened.body.destroy();
-      throw new ApiError(400, "object_too_large", "Object is too large to buffer safely", { limit });
+      throw new ApiError(400, "object_too_large", "图片大小超过限制", { limit });
     }
     try {
       return await streamToBuffer(opened.body, limit);
@@ -106,19 +102,6 @@ export class S3Backend implements StorageDriver {
       Bucket: this.bucket,
       CopySource: s3CopySource(this.config, fromPrefix, fromKey),
       Key: this.name(toPrefix, toKey)
-    }));
-  }
-
-  async writeUploadFromWeb(id: string, body: ReadableStream<Uint8Array>, expectedSize: number) {
-    // Stream straight to S3 with a known length instead of buffering the whole
-    // body in memory. The size cap is enforced inline; the exact-size and MD5
-    // checks still run against the stored object during upload completion.
-    await this.client.send(new PutObjectCommand({
-      Bucket: this.bucket,
-      Key: this.name("_uploads", id),
-      Body: nodeReadableFromWeb(limitedWebStream(body, expectedSize)),
-      ContentLength: expectedSize,
-      ContentType: "application/octet-stream"
     }));
   }
 
@@ -167,7 +150,6 @@ export class S3Backend implements StorageDriver {
     };
   }
 
-  // Object storage has no real directories (keys are flat), so nothing to prune.
   async pruneEmptyDirs(): Promise<number> {
     return 0;
   }

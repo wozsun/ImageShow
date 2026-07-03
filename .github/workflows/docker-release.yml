@@ -1,3 +1,5 @@
+# 本文件定义 发布镜像构建与推送流程。
+
 name: Docker Release Image
 
 on:
@@ -39,6 +41,14 @@ jobs:
             echo "Release tags must use v<major>.<minor>.<patch>, got: ${GITHUB_REF_NAME}" >&2
             exit 1
           fi
+          release_version="${GITHUB_REF_NAME
+          for manifest in package.json packages/*/package.json; do
+            manifest_version="$(node -p "require('./${manifest}').version")"
+            if [[ "${manifest_version}" != "${release_version}" ]]; then
+              echo "${manifest} version ${manifest_version} does not match release tag ${GITHUB_REF_NAME}" >&2
+              exit 1
+            fi
+          done
           git fetch --no-tags origin main:refs/remotes/origin/main
           if ! git merge-base --is-ancestor "${GITHUB_SHA}" "origin/main"; then
             echo "Release tag ${GITHUB_REF_NAME} does not point to a commit on main" >&2

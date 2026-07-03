@@ -1,19 +1,10 @@
-/* 后台的表单控件与反馈基元：主题输入、字段校验提示、顶部浮动提示、密码框、批量编辑 diff 高亮、
-   可编辑标签编辑器、危险按钮等。共享的只读 .tag-chip 基类与 .select-control/.select-menu 在 base.css。 */
-
-/* 主题输入控件（ThemeInput，仅后台图片字段使用）。 */
 .theme-input-control { width: 100%; min-width: 0; }
-/* A theme that collides with a reserved subdomain prefix (random / static) is
-   rejected on save; flag it red inline so it's caught before submitting. A typed
-   theme that matches no existing slug will be created on submit — flag it green. */
+
 .theme-input-control input[aria-invalid="true"] { border-color: #d64545; box-shadow: 0 0 0 1px #d64545; }
 .theme-input-control input[data-new-theme="true"] { border-color: #1f9d57; box-shadow: 0 0 0 1px #1f9d57; }
-/* 表单字段校验提示（slug 非法、密码不符合策略等）。 */
+/*表单字段校验提示（slug 非法、密码不符合策略等）。*/
 .field-error { margin: 0; color: #d64545; font-size: 13px; }
 
-/* Floating notice pinned to the viewport's top-right corner (server errors, one-off feedback).
-   Sits above modals (z-index 200) so it stays visible even over a dialog; capped so it never
-   overflows a narrow viewport. Rendered by the PageToast component. */
 .page-toast {
   position: fixed;
   top: 16px;
@@ -40,8 +31,7 @@
   justify-content: center;
   width: 22px;
   height: 22px;
-  /* Clear the global `button { min-height: 36px }` floor — without this the close button forces
-     the whole toast to ~36px and a one-line message looks two lines tall. */
+
   min-height: 0;
   padding: 0;
   border: 0;
@@ -54,16 +44,13 @@
 .page-toast-close:hover { opacity: 1; }
 @keyframes page-toast-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
 
-/* Password field with a show/hide eye toggle (PasswordInput): the button sits inside the
-   input's right padding and flips the input between password and text. */
 .password-input { position: relative; width: 100%; min-width: 0; }
 .password-input input { width: 100%; padding-right: 38px; }
 .password-toggle {
   position: absolute;
   top: 50%;
   right: 4px;
-  /* Centre with a negative margin (half the height), not translateY(-50%), so the :active
-     scale below doesn't drop the centering and make the button jump down on click. */
+
   margin-top: -15px;
   width: 32px;
   height: 30px;
@@ -77,10 +64,6 @@
 .password-toggle:hover:not(:disabled) { color: #1f6feb; }
 .password-toggle:active:not(:disabled) { transform: scale(.96); }
 
-/* "Edited from the saved value" highlight (used by the batch editor's per-field diff and its
-   filled 应用到全部 inputs). Amber, deliberately distinct from the red (invalid) and green
-   (new theme/tag) flags above; the theme input's :not() guards let green/red win when both
-   would otherwise apply. */
 input.is-changed,
 textarea.is-changed,
 .select-control.is-changed .select-trigger,
@@ -90,7 +73,6 @@ textarea.is-changed,
   background: #fff8e8;
 }
 
-/* Multi-value tag editor (TagInput): chips + an inline text box that share one bordered box. */
 .tag-input-control {
   width: 100%;
   min-width: 0;
@@ -102,10 +84,7 @@ textarea.is-changed,
   border: 1px solid #c9d1dc;
   border-radius: 6px;
   background: #fff;
-  /* Stay one line at a fixed height: chips and the input never wrap, so a narrow box
-     can't grow taller. Overflow scrolls horizontally; the scrollbar is hidden (the box
-     is too short for one) but the focused input still auto-scrolls into view and its
-     own text scrolls left natively as you type past the right edge. */
+
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
@@ -113,8 +92,7 @@ textarea.is-changed,
 .tag-input-control::-webkit-scrollbar { display: none; }
 .tag-input-field { flex: 1 1 80px; min-width: 80px; width: auto; border: 0; padding: 4px 2px; border-radius: 0; }
 .tag-input-field:focus { outline: none; }
-/* A chip whose slug isn't in the known vocabulary is a brand-new tag that will be
-   created on submit — tint it green so new tags stand apart from existing ones. */
+
 .tag-chip.is-new { background: #e7f7ee; border-color: #8fd6ab; color: #176c3c; }
 .tag-chip.is-new .tag-chip-remove { color: #2f8f5b; }
 .tag-chip.is-new .tag-chip-remove:hover { background: #cdeedb; color: #11522d; }
@@ -125,16 +103,12 @@ textarea.is-changed,
 }
 .tag-chip-remove:hover { background: #d8dee7; color: #384150; }
 .tag-chip-remove .app-icon { width: 12px; height: 12px; flex-basis: 12px; }
-/* Default-tags box in the upload defaults bar flexes alongside 主题, growing 2× 主题 (takes
-   2/3 of the freed/shared space), never narrower than 200px. Basis is 0 (not auto) so it
-   doesn't inherit the control's width:100% and wrap onto its own line. */
+
 .tag-input-control.upload-default-tags { flex: 2 1 0; min-width: 200px; align-self: end; }
 
-/* Storage-backend pickers only hold short labels (本地存储 / 对象存储), so they get a
-   compact fixed width instead of stretching; the portal menu follows the trigger. */
 .select-control.is-storage-select { width: 120px; min-width: 120px; flex: 0 0 auto; }
 
-/* 危险动作按钮（删除等）。 */
+/*危险动作按钮（删除等）。*/
 .danger-button, button.danger-button {
   color: #a13a32;
   background: #fff1ef;

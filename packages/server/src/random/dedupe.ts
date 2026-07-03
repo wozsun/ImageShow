@@ -1,8 +1,3 @@
-// Short-term no-repeat for the public random API. Keyed by viewer (client IP) and
-// filter signature, a capped Redis list remembers the most recently served image
-// ids for a short window; the picker excludes them so consecutive calls don't
-// repeat. Best-effort throughout: when Redis is down — or the candidate pool is
-// smaller than the history — repeats are allowed rather than failing the request.
 import { createHash } from "node:crypto";
 import { appConfig } from "@imageshow/shared";
 import { pingRedis, redis } from "../core/redis.js";
@@ -17,10 +12,6 @@ function recentKey(clientId: string, signature: string) {
   return `${RECENT_PREFIX}${shortHash(clientId)}:${shortHash(signature)}`;
 }
 
-// The selectors that decide which images are eligible — requests sharing them
-// share one recent-history stream. `m` (proxy/redirect) is excluded since it
-// doesn't change which image is picked. Expects the already theme/tag-resolved URL
-// so aliases and display names collapse to the same signature as their slugs.
 export function filterSignature(url: URL): string {
   const params = url.searchParams;
   const multi = (key: string) => [...new Set(params.getAll(key)
@@ -58,6 +49,6 @@ export async function rememberServedId(clientId: string, signature: string, id: 
       .expire(key, appConfig.randomDedupe.ttlSeconds)
       .exec();
   } catch {
-    // A missed record only risks one near-term repeat; PostgreSQL/Redis pool unaffected.
+    // 记录失败只影响短期去重，不影响图片池。
   }
 }

@@ -1,17 +1,17 @@
 import { useRef, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "../../lib/api.js";
-import { Icon } from "../../components/Icon.js";
-import { OverlayScrollbar } from "../../components/OverlayScrollbar.js";
-import { ConfirmDialog } from "../../components/ConfirmDialog.js";
-import { useAnimatedClose } from "../../components/useAnimatedClose.js";
-import { useBodyScrollLock } from "../../components/useBodyScrollLock.js";
+import { api } from "../../lib/api/client.js";
+import { Icon } from "../../components/icon/Icon.js";
+import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
+import { ConfirmDialog } from "../../components/feedback/ConfirmDialog.js";
+import { useAnimatedClose } from "../../hooks/useAnimatedClose.js";
+import { useBodyScrollLock } from "../../hooks/useBodyScrollLock.js";
 import { adminApiBasePath, queryKeys, slugCharset, slugFormatHint } from "../../lib/constants.js";
-import { errorMessage } from "../../lib/formatters.js";
-import { PasswordInput } from "../../components/PasswordInput.js";
-import { SlugChip } from "../../components/SlugChip.js";
-import { PageToast } from "../../components/PageToast.js";
-import { generateAdminPassword, isValidAdminPassword, passwordPolicyHint } from "../../lib/password.js";
+import { errorMessage } from "../../lib/ui/formatters.js";
+import { PasswordInput } from "../../components/form/PasswordInput.js";
+import { SlugChip } from "../../components/data-display/SlugChip.js";
+import { PageToast } from "../../components/feedback/PageToast.js";
+import { generateAdminPassword, isValidAdminPassword, passwordPolicyHint } from "../../lib/auth/password.js";
 import type { AdminUser } from "../../lib/types.js";
 
 export function UserAdmin() {
@@ -21,7 +21,7 @@ export function UserAdmin() {
   const refresh = () => client.invalidateQueries({ queryKey: queryKeys.users });
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  // One toast slot for both errors and the generate-password success notice.
+
   const [toast, setToast] = useState<{ message: string; kind: "error" | "success" }>({ message: "", kind: "error" });
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<AdminUser | null>(null);
@@ -29,8 +29,7 @@ export function UserAdmin() {
   const listRef = useRef<HTMLDivElement | null>(null);
   const showError = (message: string) => setToast({ message, kind: "error" });
   const clearToast = () => setToast((current) => ({ message: "", kind: current.kind }));
-  // Username reuses the theme/tag/author slug rule; password the credential policy. Each flags a
-  // red border + hint once it holds something invalid.
+
   const usernameInvalid = username.length > 0 && !slugCharset.test(username);
   const usernameValid = username.trim().length > 0 && slugCharset.test(username.trim());
   const passwordInvalid = password.length > 0 && !isValidAdminPassword(password);
@@ -53,8 +52,6 @@ export function UserAdmin() {
     }
   };
 
-  // Fills the password with a fresh random one and copies the username + password together, so
-  // the super admin can hand both to the new user in a single paste.
   const generatePassword = async () => {
     if (busy) return;
     const pwd = generateAdminPassword();
@@ -168,8 +165,6 @@ export function UserAdmin() {
 
 function UserCard({ user, onResetPassword, onDelete }: { user: AdminUser; onResetPassword: () => void; onDelete: () => void }) {
   const isSuper = user.role === "super";
-  // The super admin is env-managed and can't be edited/deleted here, so its card is rendered
-  // read-only and greyed (reusing the pinned-sentinel look from the 未设置 theme/作者 cards).
   return (
     <div className={`entity-card user-card${isSuper ? " is-pinned" : ""}`}>
       <div className="entity-card-row">

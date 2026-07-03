@@ -1,6 +1,3 @@
-// Durable background worker. Jobs live in the operation_log table and are
-// claimed one at a time with SELECT ... FOR UPDATE SKIP LOCKED, retried with
-// exponential backoff, and recovered if a previous process crashed mid-run.
 import { v7 as uuidv7 } from "uuid";
 import { appConfig } from "@imageshow/shared";
 import { pool } from "../core/db.js";
@@ -12,12 +9,11 @@ import { exists, readStorageBuffer, removeObject, writeStorageBuffer } from "../
 import { rebuildFolderMap } from "../core/redis.js";
 import { getRuntimeConfig } from "../config/env.js";
 import { getStorageBackend } from "../config/settings.js";
+import { cleanupOrphanRawImports, removeRawImport } from "../images/prepared-import/temp-files.js";
 
 let timer: NodeJS.Timeout | undefined;
 let tickPromise: Promise<void> | null = null;
-// Stale-task recovery and upload expiry are housekeeping, not per-tick work, so
-// they run on their own slow cadence instead of on every 5s tick. Both start at 0
-// so they fire on the first tick after startup, then throttle to their interval.
+
 let lastStaleRecovery = 0;
 let lastExpireUploads = 0;
 
@@ -32,10 +28,8 @@ export async function enqueue(type: string, targetId = "", payload: unknown = {}
   return id;
 }
 
-// Atomically claims the oldest claimable task — optionally restricted to one type, so a
-// per-type lane only pulls its own work. SKIP LOCKED means concurrent lanes (and other
-// instances) never grab the same row.
 async function claim(type?: string) {
+  // SKIP LOCKED 允许同类任务多 lane 并发领取；每个任务只会被一个 worker 实例抢到。
   const result = await pool.query(
     `UPDATE operation_log
      SET status = 'running', updated_at = now()
@@ -67,7 +61,8 @@ async function fail(task: Task, error: unknown) {
   const backoff = appConfig.operationLog.retryBackoffSeconds;
   const seconds = backoff[Math.min(retry - 1, backoff.length - 1)];
   const exhausted = retry >= maxRetries;
-  // A retrying task is a warning; one that's out of retries is an error worth attention.
+
+  // 失败任务按固定退避表重试；耗尽后仍保留 failed 状态，检查页可以看到最后错误。
   logger[exhausted ? "error" : "warn"](
     `task ${task.type} ${exhausted ? "gave up" : `will retry (${retry}/${maxRetries})`} id=${task.id.slice(0, 8)}: ${errorMessage(error)}`
   );
@@ -79,28 +74,19 @@ async function fail(task: Task, error: unknown) {
 
 type Task = NonNullable<Awaited<ReturnType<typeof claim>>>;
 
-// One handler per operation_log task type. Each finishes via succeed() / ignore(), or throws —
-// a throw is caught by the draining lane and routed to fail() with backoff. Unknown types fall
-// through to the "not implemented" ignore in runOne.
 const taskHandlers: Record<string, (task: Task) => Promise<unknown>> = {
   "thumb.generate": async (task) => {
     const result = await pool.query("SELECT object_key, status, storage_slug, is_link, md5 FROM metadata WHERE id=$1", [task.target_id]);
     const row = result.rows[0];
     if (!row) return ignore(task.id, "metadata missing");
     if (row.status !== "ready") return ignore(task.id, "image not ready");
-    // Link thumbnails are made at import time from the downloaded bytes (no stored
-    // object to read here), so this job doesn't apply to them.
+
     if (row.is_link) return ignore(task.id, "link thumbnail generated at import");
     if (!await exists("objects", row.object_key, row.storage_slug)) return ignore(task.id, "object missing");
     let thumbnailSize: number;
     const config = await getStorageBackend(row.storage_slug);
     if (config.type !== "local") {
-      // thumb.generate is the fallback for a category move whose thumbnail copy failed
-      // (updateImageMetadata copies the old thumb to the re-keyed object; only a failed copy
-      // enqueues this) — never on upload (thumbnails inline) or restore (pure DB, no file move).
-      // We have to download the object to rebuild the thumb anyway, so verify its md5 against the
-      // recorded value as a cheap integrity check, then thumbnail from the same buffer. A mismatch
-      // fails the task (surfaced in the check page) rather than thumbnailing a corrupt object.
+      // 远端对象先读回内存再生成缩略图；有记录 md5 时顺便校验，避免给损坏对象生成新的“正常”缩略图。
       const buffer = await readStorageBuffer("objects", row.object_key, row.storage_slug);
       if (row.md5 && md5Buffer(buffer) !== row.md5) {
         throw new Error(`integrity check failed: stored object md5 does not match recorded md5 (${row.md5})`);
@@ -111,14 +97,13 @@ const taskHandlers: Record<string, (task: Task) => Promise<unknown>> = {
     } else {
       thumbnailSize = await makeThumb(row.object_key, row.storage_slug);
     }
-    // Record the hosted thumbnail bytes so storage-usage stats stay accurate.
+
     await pool.query("UPDATE metadata SET thumbnail_size=$2 WHERE id=$1", [task.target_id, thumbnailSize]);
     return succeed(task.id);
   },
   "move.cleanup": async (task) => {
     const objectKey = typeof task.payload.object_key === "string" ? task.payload.object_key : "";
-    // payload.backend is the source image's storage_slug (set when the move enqueued
-    // this cleanup); undefined falls back to the default backend.
+
     const backend = typeof task.payload.backend === "string" ? task.payload.backend : undefined;
     if (objectKey) {
       await removeObject("objects", objectKey, backend);
@@ -127,23 +112,34 @@ const taskHandlers: Record<string, (task: Task) => Promise<unknown>> = {
     return succeed(task.id);
   },
   "upload.cleanup": async (task) => {
-    // Reclaim staging bytes for stale in-flight sessions (created/failed/finalizing past
-    // their TTL), then delete every past-TTL session so the table can't grow without bound.
-    // 'finalizing' past TTL is a crashed finalize (finalize takes seconds): its staging is
-    // already moved to objects/, and any orphan final object is reclaimed by 清理无效存储. A
-    // finalized session's lasting record is its image row, so it too is retired once expired.
     const rows = (await pool.query(
-      "SELECT id, staging_object_key FROM upload_session WHERE status IN ('created','failed','finalizing') AND expires_at < now() LIMIT $1",
+      `SELECT id, staging_object_key, storage_slug, metadata_payload
+       FROM upload_session WHERE status <> 'finalized' AND expires_at < now() LIMIT $1`,
       [appConfig.trashBatchSize]
-    )).rows;
+    )).rows as Array<{ id: string; staging_object_key: string; storage_slug: string; metadata_payload: Record<string, unknown> }>;
+    const cleanedIds: string[] = [];
+    const failures: string[] = [];
     for (const row of rows) {
-      await removeObject("_uploads", row.staging_object_key).catch(() => undefined);
-      await removeObject("_uploads", `${row.staging_object_key}.part`).catch(() => undefined);
+      try {
+        // prepared import 可能停在 created/receiving/preparing/ready 任一阶段，因此同时清理 _uploads 和 raw 临时目录。
+        await Promise.all([
+          removeObject("_uploads", row.staging_object_key, row.storage_slug),
+          removeObject("_uploads", String(row.metadata_payload.prepared_thumbnail_key ?? `${row.id}.thumb.webp`), row.storage_slug),
+          removeRawImport("upload", row.id),
+          removeRawImport("import", row.id)
+        ]);
+        cleanedIds.push(row.id);
+      } catch (error) {
+        failures.push(`${row.storage_slug}/${row.staging_object_key}: ${errorMessage(error)}`);
+      }
     }
     const deleted = await pool.query(
       "DELETE FROM upload_session WHERE id = ANY($1::uuid[]) OR (status = 'finalized' AND expires_at < now())",
-      [rows.map((row) => row.id)]
+      [cleanedIds]
     );
+    await cleanupOrphanRawImports(appConfig.uploadTtlSeconds * 1000);
+
+    if (failures.length) throw new Error(`upload staging cleanup failed: ${failures.join("; ")}`);
     return succeed(task.id, { cleaned: deleted.rowCount });
   },
   "cache.rebuild": async (task) => {
@@ -152,15 +148,11 @@ const taskHandlers: Record<string, (task: Task) => Promise<unknown>> = {
   }
 };
 
-// Dispatches a claimed task to its type handler; unknown types are ignored as not implemented.
 async function runOne(task: Task) {
   const handler = taskHandlers[task.type];
   return handler ? handler(task) : ignore(task.id, "not implemented");
 }
 
-// Per-task-type worker concurrency. thumb.generate shares the upload concurrency knob;
-// move.cleanup has its own file-only knob. Everything else stays serial (limit 1):
-// cache.rebuild / upload.cleanup are idempotency-key singletons that don't want parallel lanes.
 function typeConcurrency(type: string): number {
   const config = getRuntimeConfig();
   switch (type) {
@@ -170,8 +162,6 @@ function typeConcurrency(type: string): number {
   }
 }
 
-// Drains all claimable tasks of one type using `lanes` parallel workers, each pulling
-// the next task (SKIP LOCKED) until the type's queue is empty.
 async function drainType(type: string, lanes: number) {
   async function lane() {
     for (;;) {
@@ -189,9 +179,7 @@ async function drainType(type: string, lanes: number) {
 
 async function runTick() {
   const now = Date.now();
-  // Recovery runs before claiming new work so stale tasks from a crashed process
-  // can re-enter the normal retry path without manual intervention — but only on
-  // its slow interval to avoid an idle periodic UPDATE every few seconds.
+
   if (now - lastStaleRecovery >= appConfig.operationLog.staleRecoveryIntervalMs) {
     lastStaleRecovery = now;
     await recoverStaleTasks();
@@ -200,10 +188,7 @@ async function runTick() {
     lastExpireUploads = now;
     await expireUploads();
   }
-  // One cheap aggregate finds which types have claimable work, then each type is drained
-  // in parallel with its own bounded concurrency (capped at the count actually waiting, so
-  // we never spawn idle lanes). Lanes keep claiming, so tasks enqueued mid-tick are picked
-  // up too. The tick ends when every type's queue is empty.
+
   const pending = (await pool.query(
     `SELECT type, count(*)::int AS n FROM operation_log
      WHERE status='pending' OR (status='failed' AND next_retry_at <= now())
@@ -213,15 +198,14 @@ async function runTick() {
 }
 
 function tick() {
+  // tick 不重入：上一次扫描未结束时直接复用同一个 Promise，避免重复领取相同类型的任务批次。
   if (tickPromise) return tickPromise;
   tickPromise = runTick().finally(() => { tickPromise = null; });
   return tickPromise;
 }
 
 async function recoverStaleTasks() {
-  // Re-queue tasks left 'running' by a crashed process. Mirror fail()'s retry cap: once the
-  // incremented retry_count reaches maxRetries, stop (next_retry_at=null) instead of looping a
-  // task that hangs on every run forever.
+  // 进程崩溃可能留下 running 任务；超过超时时间后转 failed 并进入正常重试路径。
   await pool.query(
     `UPDATE operation_log
      SET status='failed',
@@ -236,10 +220,9 @@ async function recoverStaleTasks() {
 }
 
 async function expireUploads() {
-  // Enqueue one cleanup when any session has passed its TTL, but only if none is already
-  // pending/running (the same "one active job" guard as the cache.rebuild fallback). A
-  // constant idempotency_key can't be used here: succeeded operation_log rows are never
-  // pruned, so it would wedge the job permanently after its first run.
+  // 上传会话过期只入队一个清理任务，避免每次 tick 都插入重复 cleanup。
+  await cleanupOrphanRawImports(appConfig.uploadTtlSeconds * 1000);
+
   await pool.query(
     `INSERT INTO operation_log(id, type, status)
      SELECT $1, 'upload.cleanup', 'pending'
@@ -263,9 +246,6 @@ export function stopWorker() {
   timer = undefined;
 }
 
-// Waits for the in-flight tick (if any) to finish before shutdown, bounded by a
-// timeout so a tick stuck on slow storage I/O can't block the process from exiting.
-// Tasks are durable, so a tick abandoned at the timeout is recovered on next start.
 export async function drainWorker(timeoutMs = appConfig.operationLog.drainTimeoutMs) {
   if (!tickPromise) return;
   let deadlineTimer: NodeJS.Timeout | undefined;

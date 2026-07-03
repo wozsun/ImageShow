@@ -83,7 +83,7 @@ const webDist = resolve(repo, "packages", "web", "dist");
 if (existsSync(webDist)) {
   await cp(webDist, resolve(serverDist, "public"), { recursive: true });
 }
-// The VitePress build output, served on docs.<domain> by routes/docs.ts.
+
 const docsDist = resolve(repo, "packages", "docs", ".vitepress", "dist");
 if (existsSync(docsDist)) {
   await cp(docsDist, resolve(serverDist, "docs"), { recursive: true });

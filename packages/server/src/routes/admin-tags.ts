@@ -6,8 +6,6 @@ import { invalidateImageReadCaches } from "../core/redis.js";
 import { createTag, deleteTag, deleteTags, reorderTags, setImageTags, setTagDisplayName } from "../tags/service.js";
 import { listTagsWithCounts } from "../tags/query.js";
 
-// Thin HTTP layer for tag management; logic lives in tags/service.ts (mutations)
-// and tags/query.ts (reads).
 export function registerAdminTagRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/tags`, async (c) => {
     return c.json(ok({ items: await listTagsWithCounts() }));
@@ -18,7 +16,6 @@ export function registerAdminTagRoutes(app: Hono) {
     return c.json(ok({ item: await createTag(input.slug, input.display_name) }));
   });
 
-  // Static routes before the `:slug` param route. Manual drag-to-sort order.
   app.post(`${adminApiBasePath}/tags/reorder`, async (c) => {
     const input = parse(slugListInput, await c.req.json().catch(() => ({})));
     await reorderTags(input.slugs);
@@ -32,7 +29,6 @@ export function registerAdminTagRoutes(app: Hono) {
     return c.json(ok(result));
   });
 
-  // Sets a tag's display name.
   app.post(`${adminApiBasePath}/tags/:slug`, async (c) => {
     const slug = parse(tagSlugInput, c.req.param("slug"));
     const input = parse(tagDisplayUpdateInput, await c.req.json().catch(() => ({})));
@@ -48,7 +44,6 @@ export function registerAdminTagRoutes(app: Hono) {
     return c.json(ok());
   });
 
-  // Replaces the image's whole tag set; tags not yet in the vocabulary are created.
   app.post(`${adminApiBasePath}/images/:id/tags`, async (c) => {
     const id = parse(uuidInput, c.req.param("id"));
     const input = parse(imageTagsInput, await c.req.json().catch(() => ({})));

@@ -98,8 +98,7 @@
 .panel-head h2, .random-builder h2 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 18px; }
 .builder-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
 .builder-grid-axes { grid-template-columns: 1fr 1fr 1fr; }
-/* 主题/标签/作者 share one row (like the gallery toolbar). Each trigger is then narrower than
-   the search popup's 300px min-width, so the popup card overhangs wider than the button. */
+
 .builder-grid-facets { grid-template-columns: 1fr 1fr 1fr; margin-top: 12px; }
 .builder-grid label { display: grid; gap: 6px; color: #495260; }
 .generated-link {

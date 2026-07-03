@@ -1,12 +1,12 @@
 import { useMemo, useState } from "react";
-import { api } from "../../lib/api.js";
+import { api } from "../../lib/api/client.js";
 import { adminApiBasePath } from "../../lib/constants.js";
-import { errorMessage } from "../../lib/formatters.js";
-import { Icon } from "../../components/Icon.js";
-import { SelectMenu } from "../../components/SelectMenu.js";
-import { StableLabel } from "../../components/StableLabel.js";
-import { useAnimatedClose } from "../../components/useAnimatedClose.js";
-import { useStorageOptions } from "../../lib/storage-options.js";
+import { errorMessage } from "../../lib/ui/formatters.js";
+import { Icon } from "../../components/icon/Icon.js";
+import { SelectMenu } from "../../components/form/SelectMenu.js";
+import { StableLabel } from "../../components/data-display/StableLabel.js";
+import { useAnimatedClose } from "../../hooks/useAnimatedClose.js";
+import { useStorageOptions } from "../../lib/api/storage-options.js";
 
 export function CheckPage() {
   const [result, setResult] = useState<unknown>(null);
@@ -236,9 +236,6 @@ function CheckResult({ result }: { result: unknown }) {
   );
 }
 
-// Maps the raw check-result keys (returned across db / storage / redis / trash / cleanup /
-// migration checks) to clear Chinese card titles. Falls back to the raw key for anything
-// new, with the original key always available on hover (title attr).
 const CHECK_RESULT_LABELS: Record<string, string> = {
   // 数据库检查
   categories: "分类计数",
