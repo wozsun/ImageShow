@@ -47,9 +47,6 @@ export async function writeStorageBuffer(prefix: StoragePrefix, key: string, bod
 export async function removeObject(prefix: StoragePrefix, key: string, slug?: string) {
   return driverFor(await resolveConfig(slug)).remove(prefix, key);
 }
-export async function moveObject(fromPrefix: "media" | "_uploads", fromKey: string, toPrefix: "media" | "thumbs", toKey: string, targetContentType?: string, slug?: string) {
-  return driverFor(await resolveConfig(slug)).move(fromPrefix, fromKey, toPrefix, toKey, targetContentType);
-}
 
 export async function copyObject(fromPrefix: CopyPrefix, fromKey: string, toPrefix: CopyPrefix, toKey: string, slug?: string) {
   if (fromPrefix === toPrefix && fromKey === toKey) return;

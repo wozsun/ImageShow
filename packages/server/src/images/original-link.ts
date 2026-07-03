@@ -26,5 +26,5 @@ export async function displayUrlForOriginalComparison(image: OriginalComparableI
 }
 
 export function hasDistinctOriginalUrl(original: string, displayUrl: string) {
-  return /^https?:\/\//i.test(original.trim()) && !equivalentUrl(original, displayUrl);
+  return /^https:\/\//i.test(original.trim()) && !equivalentUrl(original, displayUrl);
 }

@@ -17,7 +17,8 @@ PostgreSQL，单一迁移文件 `packages/server/migrations/0001_initial.sql`，
 | `storage_slug` | 图片所在存储后端 slug（外键 → `storage_backend.slug`） |
 | `is_link` | 是否为代理链接图；为真时只保存缩略图 |
 | `md5` | 文件 MD5，32 位十六进制；用于判重 |
-| `title` / `description` / `source` / `original` | 标题 / 描述 / 来源 / 原图链接 |
+| `title` / `description` / `source` / `original` | 标题 / 描述 / 来源 / 原图链接；`original` 仅允许 HTTPS |
+| `extra` | 预留扩展属性 JSON；用于后续 EXIF、AI 标签、主色、来源平台等非核心字段 |
 | `author` | 作者 slug，可空，外键 → `author.slug`，删除作者时自动置空 |
 | `status` | `ready` / `deleted` |
 | `deleted_at` | 软删时间 |
@@ -35,12 +36,13 @@ PostgreSQL，单一迁移文件 `packages/server/migrations/0001_initial.sql`，
 | `mode` | `upload` / `download` / `proxy` |
 | `final_object_key` | 已提交后的正式对象键；未提交为空 |
 | `storage_slug` | 该会话锁定的目标后端 slug；不加外键，避免过期会话阻塞后端删除 |
-| `source_url` | URL 导入来源；upload 模式为空 |
+| `source_url` | URL 导入来源，仅允许 HTTPS；upload 模式为空 |
 | `expected_size` | 本地上传声明的 raw 字节数 |
 | `metadata_payload` | 创建会话时的草稿元数据 |
 | `prepared_payload` | 服务端 prepared 真值：MD5、尺寸、质量、暂存键等 |
 | `status` | `created` / `receiving` / `preparing` / `ready` / `committing` / `finalized` / `failed` / `cancelled` |
 | `idempotency_key` | 幂等键 |
+| `request_hash` | 幂等请求摘要；同一幂等键仅在摘要一致时复用会话 |
 | `error` | 失败原因 |
 | `expires_at` | 过期时间，过期后由 `upload.cleanup` 清理 |
 | `created_at` / `updated_at` | 时间戳 |

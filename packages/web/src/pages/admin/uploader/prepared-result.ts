@@ -13,10 +13,10 @@ export type AppendImportQueueApi = ImportQueueApi & {
 };
 
 export async function applyPreparedResult(queue: ImportQueueApi, jobId: string, prepared: PreparedImport) {
-  // 先认领 md5：同一批并发完成的重复文件不会同时进入“待提交”状态。
-  if (!queue.claimPreparedMd5(jobId, prepared.md5)) return false;
   const current = queue.jobsRef.current.find((job) => job.id === jobId);
   if (!current || current.status === "cancelled") return false;
+  // 先认领 md5：同一批并发完成的重复文件不会同时进入“待提交”状态。
+  if (!queue.claimPreparedMd5(jobId, prepared.md5)) return false;
   const duplicates = prepared.duplicates ?? [];
   const duplicateExists = prepared.duplicate_exists || duplicates.length > 0;
   // 服务端已提供稳定预览地址后，释放本地 blob URL，避免上传几十张大图时占用浏览器内存。

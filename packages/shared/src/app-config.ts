@@ -66,11 +66,13 @@ export const appConfig = {
       max_file_size_mb: 15,
       max_long_edge: 8192,
       list_page_size: 20,
-      concurrency: 2
+      concurrency: 2,
+      global_concurrency: 5
     },
     link_image: {
       fill_original_url: false,
-      concurrency: 2
+      concurrency: 2,
+      global_concurrency: 5
     },
     normalize: {
       quality: 80,
@@ -155,11 +157,13 @@ export type UploadSettings = {
   max_long_edge: number;
   list_page_size: number;
   concurrency: number;
+  global_concurrency: number;
 };
 
 export type LinkImageSettings = {
   fill_original_url: boolean;
   concurrency: number;
+  global_concurrency: number;
 };
 
 export type NormalizeSettings = {

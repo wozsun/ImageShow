@@ -2,7 +2,7 @@ import { z } from "zod";
 import { appConfig, slugPattern, type StorageType } from "@imageshow/shared";
 import { pool, withTransaction } from "../core/db.js";
 import { getRuntimeConfig, reloadRuntimeConfig, updateRuntimeConfig, type RuntimeConfig } from "./env.js";
-import { galleryLimit, galleryOrder, homeHeroBackground, homeTagline, imagePageSize, linkImageConcurrency, listPageSize, loginBackground, maxFileSizeMb, maxLongEdge, normalizeMaxLongEdge, normalizeMaxSizeKb, normalizeMinQuality, normalizeQuality, normalizeQualityStep, previewDelayMs, randomMethod, recentUploads, rootRedirect, siteDomain, siteIconUrl, siteName, skipWebpUnderKb, thumbnailLongEdge, thumbnailQuality, uploadConcurrency } from "./schema.js";
+import { galleryLimit, galleryOrder, homeHeroBackground, homeTagline, imagePageSize, importGlobalConcurrency, linkImageConcurrency, listPageSize, loginBackground, maxFileSizeMb, maxLongEdge, normalizeMaxLongEdge, normalizeMaxSizeKb, normalizeMinQuality, normalizeQuality, normalizeQualityStep, previewDelayMs, randomMethod, recentUploads, rootRedirect, siteDomain, siteIconUrl, siteName, skipWebpUnderKb, thumbnailLongEdge, thumbnailQuality, uploadConcurrency } from "./schema.js";
 import { ApiError } from "../core/http.js";
 import { clearStorageDriverCache } from "../storage/storage-backend.js";
 
@@ -88,11 +88,13 @@ const appSettingsSchema = z.object({
     max_file_size_mb: maxFileSizeMb.default(appConfig.runtimeDefaults.upload.max_file_size_mb),
     max_long_edge: maxLongEdge.default(appConfig.runtimeDefaults.upload.max_long_edge),
     list_page_size: listPageSize.default(appConfig.runtimeDefaults.upload.list_page_size),
-    concurrency: uploadConcurrency.default(appConfig.runtimeDefaults.upload.concurrency)
+    concurrency: uploadConcurrency.default(appConfig.runtimeDefaults.upload.concurrency),
+    global_concurrency: importGlobalConcurrency.default(appConfig.runtimeDefaults.upload.global_concurrency)
   }).optional(),
   link_image: z.object({
     fill_original_url: z.boolean().default(appConfig.runtimeDefaults.link_image.fill_original_url),
-    concurrency: linkImageConcurrency.default(appConfig.runtimeDefaults.link_image.concurrency)
+    concurrency: linkImageConcurrency.default(appConfig.runtimeDefaults.link_image.concurrency),
+    global_concurrency: importGlobalConcurrency.default(appConfig.runtimeDefaults.link_image.global_concurrency)
   }).optional(),
   normalize: z.object({
     quality: normalizeQuality.default(appConfig.runtimeDefaults.normalize.quality),

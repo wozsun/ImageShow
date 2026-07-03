@@ -1,18 +1,115 @@
 import type { Readable } from "node:stream";
+import { XMLParser } from "fast-xml-parser";
 import { ApiError } from "../core/http.js";
 import { getUploadLimitBytes, type StorageConfig } from "../config/settings.js";
 import { storageObjectName, type ReadablePrefix, type StoragePrefix } from "./object-keys.js";
 import { nodeReadableFromWeb, streamToBuffer } from "./stream-buffer.js";
 import type {
   CopyPrefix,
-  MoveFromPrefix,
-  MoveToPrefix,
   OpenedRead,
   StorageDriver,
   StorageSelfTest
 } from "./storage-backend.js";
 
 const PROPFIND_BODY = '<?xml version="1.0" encoding="utf-8"?><propfind xmlns="DAV:"><prop><resourcetype/></prop></propfind>';
+const WEBDAV_TIMEOUT_MS = 15_000;
+const WEBDAV_RETRY_ATTEMPTS = 3;
+const WEBDAV_RETRY_BASE_MS = 250;
+const WEBDAV_LIST_CONCURRENCY = 4;
+const WEBDAV_MAX_LIST_KEYS = 50_000;
+const webdavXmlParser = new XMLParser({
+  ignoreAttributes: false,
+  parseTagValue: false,
+  removeNSPrefix: true
+});
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function retryAfterMs(response: Response, attempt: number) {
+  const retryAfter = response.headers.get("retry-after");
+  if (retryAfter) {
+    const seconds = Number(retryAfter);
+    if (Number.isFinite(seconds) && seconds >= 0) return Math.min(seconds * 1000, 10_000);
+    const date = Date.parse(retryAfter);
+    if (Number.isFinite(date)) return Math.min(Math.max(0, date - Date.now()), 10_000);
+  }
+  return WEBDAV_RETRY_BASE_MS * 2 ** attempt;
+}
+
+function shouldRetryWebdavStatus(status: number) {
+  return status === 429 || (status >= 500 && status <= 599);
+}
+
+function responseWithTimeout(response: Response, timer: ReturnType<typeof setTimeout>) {
+  if (!response.body) {
+    clearTimeout(timer);
+    return response;
+  }
+  const reader = response.body.getReader();
+  let closed = false;
+  const closeTimer = () => {
+    if (closed) return;
+    closed = true;
+    clearTimeout(timer);
+  };
+  const body = new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      try {
+        const { done, value } = await reader.read();
+        if (done) {
+          closeTimer();
+          controller.close();
+          return;
+        }
+        controller.enqueue(value);
+      } catch (error) {
+        closeTimer();
+        controller.error(error);
+      }
+    },
+    cancel(reason) {
+      closeTimer();
+      return reader.cancel(reason);
+    }
+  });
+  return new Response(body, { status: response.status, statusText: response.statusText, headers: response.headers });
+}
+
+async function webdavFetch(input: string, init: RequestInit) {
+  const method = String(init.method ?? "GET").toUpperCase();
+  const streamsResponseBody = method === "GET" || method === "PROPFIND";
+  for (let attempt = 0; attempt < WEBDAV_RETRY_ATTEMPTS; attempt += 1) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), WEBDAV_TIMEOUT_MS);
+    let handedOffTimer = false;
+    try {
+      const response = await fetch(input, { ...init, signal: controller.signal });
+      if (!shouldRetryWebdavStatus(response.status) || attempt === WEBDAV_RETRY_ATTEMPTS - 1) {
+        if (!streamsResponseBody) {
+          await response.body?.cancel().catch(() => undefined);
+          clearTimeout(timer);
+          return response;
+        }
+        handedOffTimer = Boolean(response.body);
+        return responseWithTimeout(response, timer);
+      }
+      const delayMs = retryAfterMs(response, attempt);
+      clearTimeout(timer);
+      await response.body?.cancel().catch(() => undefined);
+      await sleep(delayMs);
+    } catch (error) {
+      if ((error as Error).name === "AbortError") {
+        throw new ApiError(504, "storage_timeout", "WebDAV request timed out");
+      }
+      throw error;
+    } finally {
+      if (!handedOffTimer) clearTimeout(timer);
+    }
+  }
+  throw new ApiError(502, "storage_request_failed", "WebDAV request failed");
+}
 
 function trimSlashes(value: string) {
   return value.replace(/^\/+|\/+$/g, "");
@@ -53,13 +150,13 @@ export class WebdavBackend implements StorageDriver {
     let acc = this.base;
     for (const seg of segs) {
       acc += `/${encodeURIComponent(seg)}`;
-      await fetch(acc, { method: "MKCOL", headers: this.auth() }).catch(() => undefined);
+      await webdavFetch(acc, { method: "MKCOL", headers: this.auth() }).catch(() => undefined);
     }
   }
 
   async exists(prefix: StoragePrefix, key: string) {
     try {
-      const res = await fetch(this.objectUrl(prefix, key), { method: "HEAD", headers: this.auth() });
+      const res = await webdavFetch(this.objectUrl(prefix, key), { method: "HEAD", headers: this.auth() });
       return res.ok;
     } catch {
       return false;
@@ -67,8 +164,11 @@ export class WebdavBackend implements StorageDriver {
   }
 
   async openRead(prefix: StoragePrefix, key: string): Promise<OpenedRead> {
-    const res = await fetch(this.objectUrl(prefix, key), { headers: this.auth() });
-    if (!res.ok || !res.body) throw new ApiError(res.status === 404 ? 404 : 502, "storage_read_failed", `WebDAV GET failed (${res.status})`);
+    const res = await webdavFetch(this.objectUrl(prefix, key), { headers: this.auth() });
+    if (!res.ok || !res.body) {
+      await res.body?.cancel().catch(() => undefined);
+      throw new ApiError(res.status === 404 ? 404 : 502, "storage_read_failed", `WebDAV GET failed (${res.status})`);
+    }
     const size = Number(res.headers.get("content-length"));
     return { body: nodeReadableFromWeb(res.body), size: Number.isFinite(size) && size >= 0 ? size : undefined, backend: "webdav" };
   }
@@ -92,7 +192,7 @@ export class WebdavBackend implements StorageDriver {
     const url = this.objectUrl(prefix, key);
 
     const payload = body as unknown as BodyInit;
-    const put = () => fetch(url, { method: "PUT", headers: { ...this.auth(), "Content-Type": type }, body: payload });
+    const put = () => webdavFetch(url, { method: "PUT", headers: { ...this.auth(), "Content-Type": type }, body: payload });
     let res = await put();
 
     if (res.status === 403 || res.status === 409 || res.status === 404) {
@@ -103,22 +203,17 @@ export class WebdavBackend implements StorageDriver {
   }
 
   async remove(prefix: StoragePrefix, key: string) {
-    const res = await fetch(this.objectUrl(prefix, key), { method: "DELETE", headers: this.auth() });
+    const res = await webdavFetch(this.objectUrl(prefix, key), { method: "DELETE", headers: this.auth() });
     if (!res.ok && res.status !== 404) throw new ApiError(502, "storage_delete_failed", `WebDAV DELETE failed (${res.status})`);
-  }
-
-  async move(fromPrefix: MoveFromPrefix, fromKey: string, toPrefix: MoveToPrefix, toKey: string, _targetContentType?: string) {
-    await this.transfer("MOVE", fromPrefix, fromKey, toPrefix, toKey);
   }
 
   async copy(fromPrefix: CopyPrefix, fromKey: string, toPrefix: CopyPrefix, toKey: string) {
     await this.transfer("COPY", fromPrefix, fromKey, toPrefix, toKey);
   }
 
-  private async transfer(method: "MOVE" | "COPY", fromPrefix: StoragePrefix, fromKey: string, toPrefix: StoragePrefix, toKey: string) {
-
+  private async transfer(method: "COPY", fromPrefix: StoragePrefix, fromKey: string, toPrefix: StoragePrefix, toKey: string) {
     await this.ensureParent(toPrefix, toKey);
-    const res = await fetch(this.objectUrl(fromPrefix, fromKey), {
+    const res = await webdavFetch(this.objectUrl(fromPrefix, fromKey), {
       method,
       headers: { ...this.auth(), Destination: this.objectUrl(toPrefix, toKey), Overwrite: "T" }
     });
@@ -126,8 +221,11 @@ export class WebdavBackend implements StorageDriver {
   }
 
   async readObject(prefix: ReadablePrefix, key: string): Promise<Readable> {
-    const res = await fetch(this.objectUrl(prefix, key), { headers: this.auth() });
-    if (!res.ok || !res.body) throw new ApiError(res.status === 404 ? 404 : 502, "storage_read_failed", `WebDAV GET failed (${res.status})`);
+    const res = await webdavFetch(this.objectUrl(prefix, key), { headers: this.auth() });
+    if (!res.ok || !res.body) {
+      await res.body?.cancel().catch(() => undefined);
+      throw new ApiError(res.status === 404 ? 404 : 502, "storage_read_failed", `WebDAV GET failed (${res.status})`);
+    }
     return nodeReadableFromWeb(res.body);
   }
 
@@ -136,9 +234,12 @@ export class WebdavBackend implements StorageDriver {
     const rootPath = decodeURIComponent(new URL(rootUrl).pathname).replace(/\/+$/, "");
 
     const propfind = async (url: string, depth: "1" | "infinity") => {
-      const res = await fetch(url, { method: "PROPFIND", headers: { ...this.auth(), Depth: depth, "Content-Type": "application/xml" }, body: PROPFIND_BODY });
+      const res = await webdavFetch(url, { method: "PROPFIND", headers: { ...this.auth(), Depth: depth, "Content-Type": "application/xml" }, body: PROPFIND_BODY });
       if (res.status === 404) return [];
-      if (!res.ok) throw new ApiError(502, "storage_list_failed", `WebDAV PROPFIND failed (${res.status})`);
+      if (!res.ok) {
+        await res.body?.cancel().catch(() => undefined);
+        throw new ApiError(502, "storage_list_failed", `WebDAV PROPFIND failed (${res.status})`);
+      }
       return parsePropfind(await res.text(), this.origin);
     };
 
@@ -150,22 +251,53 @@ export class WebdavBackend implements StorageDriver {
     };
 
     if (this.config.webdav.list_depth_infinity) {
-      return (await propfind(rootUrl, "infinity")).map(toKey).filter((key): key is string => key !== null);
+      const keys = (await propfind(rootUrl, "infinity")).map(toKey).filter((key): key is string => key !== null);
+      if (keys.length > WEBDAV_MAX_LIST_KEYS) throw new ApiError(502, "storage_list_too_large", "WebDAV listing exceeded the safety limit");
+      return keys;
     }
 
     const keys: string[] = [];
-    const walk = async (url: string) => {
+    const queue = [rootUrl];
+    const pushKey = (key: string) => {
+      keys.push(key);
+      if (keys.length > WEBDAV_MAX_LIST_KEYS) throw new ApiError(502, "storage_list_too_large", "WebDAV listing exceeded the safety limit");
+    };
+    const processOne = async (url: string) => {
       const here = decodeURIComponent(new URL(url).pathname).replace(/\/+$/, "");
-      const subdirs: string[] = [];
       for (const entry of await propfind(url, "1")) {
         if (entry.path === here) continue;
-        if (entry.collection) { subdirs.push(entry.url); continue; }
+        if (entry.collection) {
+          queue.push(entry.url);
+          continue;
+        }
         const key = toKey(entry);
-        if (key !== null) keys.push(key);
+        if (key !== null) pushKey(key);
       }
-      await Promise.all(subdirs.map(walk));
     };
-    await walk(rootUrl);
+    await new Promise<void>((resolve, reject) => {
+      let active = 0;
+      let failed = false;
+      const schedule = () => {
+        if (failed) return;
+        if (!queue.length && active === 0) {
+          resolve();
+          return;
+        }
+        while (active < WEBDAV_LIST_CONCURRENCY && queue.length) {
+          const url = queue.shift();
+          if (!url) continue;
+          active += 1;
+          processOne(url).then(() => {
+            active -= 1;
+            schedule();
+          }).catch((error) => {
+            failed = true;
+            reject(error);
+          });
+        }
+      };
+      schedule();
+    });
     return keys;
   }
 
@@ -191,17 +323,53 @@ export class WebdavBackend implements StorageDriver {
   }
 }
 
+function objectNode(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function nodeChild(value: unknown, key: string) {
+  return objectNode(value)?.[key];
+}
+
+function nodeArray(value: unknown) {
+  if (value === undefined || value === null) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
+function nodeText(value: unknown): string {
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
+  const node = objectNode(value);
+  if (!node) return "";
+  return nodeText(node["#text"]);
+}
+
+function nodeContainsElement(value: unknown, key: string): boolean {
+  if (Array.isArray(value)) return value.some((item) => nodeContainsElement(item, key));
+  const node = objectNode(value);
+  if (!node) return false;
+  if (Object.hasOwn(node, key)) return true;
+  return Object.values(node).some((item) => nodeContainsElement(item, key));
+}
+
 function parsePropfind(xml: string, origin: string) {
   const entries: Array<{ url: string; path: string; collection: boolean }> = [];
-  const blocks = xml.match(/<(?:\w+:)?response\b[\s\S]*?<\/(?:\w+:)?response>/gi) ?? [];
-  for (const block of blocks) {
-    const hrefMatch = block.match(/<(?:\w+:)?href\b[^>]*>([\s\S]*?)<\/(?:\w+:)?href>/i);
-    if (!hrefMatch) continue;
-    const href = hrefMatch[1].trim();
+  let document: unknown;
+  try {
+    document = webdavXmlParser.parse(xml);
+  } catch {
+    throw new ApiError(502, "storage_list_failed", "WebDAV PROPFIND returned invalid XML");
+  }
+  const root = nodeChild(document, "multistatus") ?? document;
+  for (const response of nodeArray(nodeChild(root, "response"))) {
+    const href = nodeText(nodeChild(response, "href")).trim();
     if (!href) continue;
-    const url = /^https?:\/\//i.test(href) ? href : origin + (href.startsWith("/") ? href : `/${href}`);
-    const collection = /<(?:\w+:)?collection\b\s*\/?\s*>/i.test(block) || href.endsWith("/");
-    entries.push({ url, path: decodeURIComponent(new URL(url).pathname).replace(/\/+$/, ""), collection });
+    try {
+      const parsed = new URL(href, origin);
+      const collection = nodeContainsElement(response, "collection") || href.endsWith("/");
+      entries.push({ url: parsed.toString(), path: decodeURIComponent(parsed.pathname).replace(/\/+$/, ""), collection });
+    } catch {
+      // Ignore malformed href entries from non-conforming WebDAV servers.
+    }
   }
   return entries;
 }

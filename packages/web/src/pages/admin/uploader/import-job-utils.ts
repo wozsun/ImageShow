@@ -6,7 +6,7 @@ export function parseImportUrls(input: string | string[]) {
   const raw = Array.isArray(input) ? input : input.split(/\s+/);
   const seen = new Set<string>();
   return raw.map((url) => url.trim()).filter((url) => {
-    if (!/^https?:\/\//i.test(url) || seen.has(url)) return false;
+    if (!/^https:\/\//i.test(url) || seen.has(url)) return false;
     seen.add(url);
     return true;
   });

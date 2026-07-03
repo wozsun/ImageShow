@@ -42,10 +42,11 @@ export function SettingsPage() {
     setAction("save-application");
     setFeedback({ scope: "application", text: "正在保存应用配置...", status: "pending" });
     try {
+      const site = settings.site.home.enabled ? settings.site : { ...settings.site, root_redirect: "gallery" as const };
       await api(`${adminApiBasePath}/settings`, {
         method: "POST",
         body: JSON.stringify({
-          site: settings.site,
+          site,
           upload: settings.upload,
           link_image: settings.link_image,
           normalize: settings.normalize,
@@ -82,6 +83,10 @@ export function SettingsPage() {
   };
   const updateSite = (patch: Partial<AdminSettings["site"]>) => setSettings({ ...settings, site: { ...settings.site, ...patch } });
   const updateSiteHome = (patch: Partial<AdminSettings["site"]["home"]>) => updateSite({ home: { ...settings.site.home, ...patch } });
+  const updateHomeEnabled = (enabled: boolean) => updateSite({
+    home: { ...settings.site.home, enabled },
+    ...(enabled ? {} : { root_redirect: "gallery" as const })
+  });
   const updateSiteGallery = (patch: Partial<AdminSettings["site"]["gallery"]>) => updateSite({ gallery: { ...settings.site.gallery, ...patch } });
   const updateUpload = (patch: Partial<AdminSettings["upload"]>) => setSettings({ ...settings, upload: { ...settings.upload, ...patch } });
   const updateLinkImage = (patch: Partial<AdminSettings["link_image"]>) => setSettings({ ...settings, link_image: { ...settings.link_image, ...patch } });
@@ -173,21 +178,12 @@ export function SettingsPage() {
           </section>
           <section>
             <h2><Icon name="settings-3-line" />页面行为</h2>
-            <label>
-              根路径跳转
-              <SelectMenu
-                value={settings.site.root_redirect}
-                onChange={(value) => updateSite({ root_redirect: value as SiteSettings["root_redirect"] })}
-                options={[{ value: "home", label: "首页 /home" }, { value: "gallery", label: "画廊 /gallery" }]}
-                ariaLabel="根路径跳转"
-              />
-            </label>
             <div className="settings-toggle-grid">
               <label>
                 <input
                   type="checkbox"
                   checked={settings.site.home.enabled}
-                  onChange={(event) => updateSiteHome({ enabled: event.target.checked })}
+                  onChange={(event) => updateHomeEnabled(event.target.checked)}
                 />
                 启用主页
               </label>
@@ -200,6 +196,16 @@ export function SettingsPage() {
                 启用 docs 站
               </label>
             </div>
+            <label>
+              根路径跳转
+              <SelectMenu
+                value={settings.site.home.enabled ? settings.site.root_redirect : "gallery"}
+                onChange={(value) => updateSite({ root_redirect: value as SiteSettings["root_redirect"] })}
+                options={[{ value: "home", label: "首页 /home" }, { value: "gallery", label: "画廊 /gallery" }]}
+                ariaLabel="根路径跳转"
+                disabled={!settings.site.home.enabled}
+              />
+            </label>
             <label>
               首页预览切换间隔 ms
               <NumberInput
@@ -289,7 +295,16 @@ export function SettingsPage() {
                 />
               </label>
               <label>
-                上传并发数
+                图片管理每页数量
+                <NumberInput
+                  min={10}
+                  max={200}
+                  value={settings.admin.image_page_size}
+                  onChange={(value) => updateAdmin({ image_page_size: value })}
+                />
+              </label>
+              <label>
+                单客户端上传并发数
                 <NumberInput
                   min={1}
                   max={16}
@@ -298,7 +313,16 @@ export function SettingsPage() {
                 />
               </label>
               <label>
-                下载导入并发数
+                全局上传处理并发数
+                <NumberInput
+                  min={1}
+                  max={64}
+                  value={settings.upload.global_concurrency}
+                  onChange={(value) => updateUpload({ global_concurrency: value })}
+                />
+              </label>
+              <label>
+                单客户端链接导入并发数
                 <NumberInput
                   min={1}
                   max={16}
@@ -307,12 +331,12 @@ export function SettingsPage() {
                 />
               </label>
               <label>
-                图片管理每页数量
+                全局链接导入处理并发数
                 <NumberInput
-                  min={10}
-                  max={200}
-                  value={settings.admin.image_page_size}
-                  onChange={(value) => updateAdmin({ image_page_size: value })}
+                  min={1}
+                  max={64}
+                  value={settings.link_image.global_concurrency}
+                  onChange={(value) => updateLinkImage({ global_concurrency: value })}
                 />
               </label>
               <label>

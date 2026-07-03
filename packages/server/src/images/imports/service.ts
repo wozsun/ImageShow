@@ -1,5 +1,6 @@
 import type { z } from "zod";
 import { EventEmitter } from "node:events";
+import { createHash } from "node:crypto";
 import { appConfig, type Brightness, type Device, type ImageExt } from "@imageshow/shared";
 import { pool, withTransaction } from "../../core/db.js";
 import { ApiError, errorMessage, privateNoStoreCacheControl } from "../../core/http.js";
@@ -9,7 +10,7 @@ import { syncRandomImage } from "../../random/random-cache.js";
 import { getRuntimeConfig } from "../../config/env.js";
 import { assertStorageUploadable, getDefaultStorageSlug, getImageMaxLongEdge, getUploadLimitBytes } from "../../config/settings.js";
 import { importCommitInput, importCreateInput } from "../../core/validation.js";
-import { contentType, exists, moveObject, readStorageBuffer, removeObject, writeStorageBuffer } from "../../storage/storage.js";
+import { contentType, copyObject, exists, readStorageBuffer, removeObject, writeStorageBuffer } from "../../storage/storage.js";
 import { linkThumbnailKey, storageObjectKey, thumbnailObjectKey } from "../../storage/image-paths.js";
 import { ensureAuthor } from "../../authors/service.js";
 import { ensureTheme } from "../../themes/service.js";
@@ -63,6 +64,7 @@ type ImportSessionRow = {
   final_object_key: string;
   metadata_payload: MetadataPayload;
   prepared_payload: Partial<PreparedPayload>;
+  request_hash: string;
   error: string;
   expires_at: string | Date;
 };
@@ -102,6 +104,69 @@ const importStatusEvents = new EventEmitter();
 const cancelledImportKey = (id: string) => `imageshow:import-cancelled:${id}`;
 const cancelledImports = new Map<string, number>();
 
+class ImportPrepareLimiter {
+  private active = 0;
+  private queue: Array<{ run: () => void; signal: AbortSignal; abort: () => void }> = [];
+
+  constructor(private readonly limit: () => number) {}
+
+  async run<T>(signal: AbortSignal, work: () => Promise<T>, hooks: { onQueued?: () => void; onStarted?: () => void } = {}): Promise<T> {
+    await this.acquire(signal, hooks.onQueued);
+    hooks.onStarted?.();
+    try {
+      return await work();
+    } finally {
+      this.active = Math.max(0, this.active - 1);
+      this.drain();
+    }
+  }
+
+  private acquire(signal: AbortSignal, onQueued?: () => void) {
+    if (signal.aborted) throw new ApiError(409, "import_cancelled", "导入已取消");
+    if (this.active < this.currentLimit()) {
+      this.active += 1;
+      return Promise.resolve();
+    }
+    onQueued?.();
+    return new Promise<void>((resolve, reject) => {
+      let entry: { run: () => void; signal: AbortSignal; abort: () => void };
+      entry = {
+        signal,
+        abort: () => {
+          this.queue = this.queue.filter((item) => item !== entry);
+          reject(new ApiError(409, "import_cancelled", "导入已取消"));
+        },
+        run: () => {
+          signal.removeEventListener("abort", entry.abort);
+          this.active += 1;
+          resolve();
+        }
+      };
+      signal.addEventListener("abort", entry.abort, { once: true });
+      this.queue.push(entry);
+    });
+  }
+
+  private currentLimit() {
+    return Math.max(1, Math.floor(this.limit()));
+  }
+
+  private drain() {
+    while (this.active < this.currentLimit()) {
+      const next = this.queue.shift();
+      if (!next) return;
+      if (next.signal.aborted) {
+        next.abort();
+        continue;
+      }
+      next.run();
+    }
+  }
+}
+
+const uploadPrepareLimiter = new ImportPrepareLimiter(() => getRuntimeConfig().upload.global_concurrency);
+const linkPrepareLimiter = new ImportPrepareLimiter(() => getRuntimeConfig().link_image.global_concurrency);
+
 importStatusEvents.setMaxListeners(0);
 
 function stagingImageKey(id: string) {
@@ -125,6 +190,24 @@ function defaultMetadata(input: ImportCreateInput): MetadataPayload {
     original: input.original,
     tags: input.tags
   };
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson((value as Record<string, unknown>)[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function importRequestHash(input: ImportCreateInput, storageSlug: string, sourceUrl: string, metadata: MetadataPayload) {
+  return createHash("sha256").update(stableJson({
+    mode: input.mode,
+    source_url: sourceUrl,
+    size: input.size ?? null,
+    storage_slug: storageSlug,
+    metadata_payload: { ...metadata, tags: [...metadata.tags].sort() }
+  })).digest("hex");
 }
 
 async function preparedResult(id: string, mode: ImportMode, storageSlug: string, payload: PreparedPayload): Promise<PreparedImportResult> {
@@ -178,6 +261,10 @@ async function notifyImportStatus(id: string) {
 function setImportPhase(id: string, phase: string, message: string) {
   activeImportPhases.set(id, { phase, message });
   notifyImportStatus(id).catch(() => undefined);
+}
+
+function clearImportPhase(id: string) {
+  activeImportPhases.delete(id);
 }
 
 async function importWasCancelled(id: string) {
@@ -409,13 +496,16 @@ export async function createImportSession(input: ImportCreateInput) {
     ...input,
     original: input.mode !== "upload" && runtime.link_image.fill_original_url ? sourceUrl : input.original
   });
+  const requestHash = importRequestHash(input, storageSlug, sourceUrl, metadata);
   const result = await pool.query(
-    `INSERT INTO import_session(id, mode, storage_slug, source_url, expected_size, metadata_payload, idempotency_key, expires_at)
-     VALUES($1,$2,$3,$4,$5,$6::jsonb,$7,$8)
-     ON CONFLICT (idempotency_key) DO UPDATE SET idempotency_key=excluded.idempotency_key
+    `INSERT INTO import_session(id, mode, storage_slug, source_url, expected_size, metadata_payload, idempotency_key, request_hash, expires_at)
+     VALUES($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9)
+     ON CONFLICT (idempotency_key) DO UPDATE SET idempotency_key=import_session.idempotency_key
+     WHERE import_session.request_hash=excluded.request_hash
      RETURNING *`,
-    [id, input.mode, storageSlug, sourceUrl, input.size ?? null, JSON.stringify(metadata), input.idempotency_key, new Date(Date.now() + appConfig.uploadTtlSeconds * 1000)]
+    [id, input.mode, storageSlug, sourceUrl, input.size ?? null, JSON.stringify(metadata), input.idempotency_key, requestHash, new Date(Date.now() + appConfig.uploadTtlSeconds * 1000)]
   );
+  if (!result.rowCount) throw new ApiError(409, "idempotency_conflict", "同一幂等键已用于不同导入请求");
   if (await importWasCancelled(id)) {
     await pool.query("DELETE FROM import_session WHERE id=$1 AND status='created'", [id]);
     throw new ApiError(409, "import_cancelled", "导入已取消");
@@ -423,7 +513,7 @@ export async function createImportSession(input: ImportCreateInput) {
   return importSessionResponse(result.rows[0] as ImportSessionRecord);
 }
 
-export async function receiveImportFile(id: string, body: ReadableStream<Uint8Array> | null) {
+export async function receiveImportFile(id: string, body: ReadableStream<Uint8Array> | null, signal?: AbortSignal) {
   if (!body) throw new ApiError(400, "empty_body", "Empty body");
   const claimed = await pool.query(
     "UPDATE import_session SET status='receiving', updated_at=now() WHERE id=$1 AND mode='upload' AND status='created' RETURNING expected_size",
@@ -433,7 +523,7 @@ export async function receiveImportFile(id: string, body: ReadableStream<Uint8Ar
   await notifyImportStatus(id);
   try {
     setImportPhase(id, "receiving", "服务端接收上传文件");
-    await writeRawImport(id, body, Number(claimed.rows[0].expected_size), undefined);
+    await writeRawImport(id, body, Number(claimed.rows[0].expected_size), signal);
     return { id, status: "receiving" };
   } catch (error) {
     await removeRawImport(id);
@@ -448,10 +538,14 @@ export async function prepareImportSession(id: string) {
   if (session.status === "ready") return preparedResult(id, session.mode, session.storage_slug, session.prepared_payload as PreparedPayload);
   if (session.status === "finalized") throw new ApiError(409, "import_finalized", "导入任务已完成");
   if (await importWasCancelled(id)) throw new ApiError(409, "import_cancelled", "导入已取消");
+  const waitHooks = {
+    onQueued: () => setImportPhase(id, "prepare-waiting", "服务端全局处理名额已满，等待空闲名额"),
+    onStarted: () => clearImportPhase(id)
+  };
   return runActive(id, (signal) => {
-    if (session.mode === "upload") return prepareUploadSession(id, signal);
-    if (session.mode === "download") return prepareDownloadSession(id, signal);
-    return prepareProxySession(id, signal);
+    if (session.mode === "upload") return uploadPrepareLimiter.run(signal, () => prepareUploadSession(id, signal), waitHooks);
+    if (session.mode === "download") return linkPrepareLimiter.run(signal, () => prepareDownloadSession(id, signal), waitHooks);
+    return linkPrepareLimiter.run(signal, () => prepareProxySession(id, signal), waitHooks);
   });
 }
 
@@ -482,7 +576,7 @@ export async function getImportStatus(id: string) {
     [id]
   )).rows[0] as Pick<ImportSessionRow, "mode" | "status" | "error"> | undefined;
   if (!row) throw new ApiError(404, "not_found", "导入任务不存在");
-  const phase = row.status === "receiving" || row.status === "preparing" ? activeImportPhases.get(id) : undefined;
+  const phase = ["created", "receiving", "preparing"].includes(row.status) ? activeImportPhases.get(id) : undefined;
   return {
     status: row.status,
     error: row.error,
@@ -569,74 +663,103 @@ async function commitStoredImageSession(id: string, session: ImportSessionRow, p
   const backend = session.storage_slug;
   const finalKey = session.final_object_key;
   const thumbKey = thumbnailObjectKey(finalKey);
-  if (!(await exists("media", finalKey, backend))) {
-    if (!(await exists("_uploads", stagingImageKey(id), backend))) throw new ApiError(409, "prepared_object_missing", "准备好的图片文件不存在");
-    await moveObject("_uploads", stagingImageKey(id), "media", finalKey, contentType(payload.ext), backend);
-  }
-  if (!(await exists("thumbs", thumbKey, backend))) {
-    if (!(await exists("_uploads", payload.prepared_thumbnail_key, backend))) throw new ApiError(409, "prepared_thumbnail_missing", "准备好的缩略图不存在");
-    await moveObject("_uploads", payload.prepared_thumbnail_key, "thumbs", thumbKey, "image/webp", backend);
-  }
+  let copiedImage = false;
+  let copiedThumb = false;
+  let dbCommitted = false;
+  try {
+    if (!(await exists("media", finalKey, backend))) {
+      if (!(await exists("_uploads", stagingImageKey(id), backend))) throw new ApiError(409, "prepared_object_missing", "准备好的图片文件不存在");
+      await copyObject("_uploads", stagingImageKey(id), "media", finalKey, backend);
+      copiedImage = true;
+    }
+    if (!(await exists("thumbs", thumbKey, backend))) {
+      if (!(await exists("_uploads", payload.prepared_thumbnail_key, backend))) throw new ApiError(409, "prepared_thumbnail_missing", "准备好的缩略图不存在");
+      await copyObject("_uploads", payload.prepared_thumbnail_key, "thumbs", thumbKey, backend);
+      copiedThumb = true;
+    }
 
-  const brightness: Brightness = payload.brightness === "auto" ? payload.detected_brightness : payload.brightness;
-  const result = await withTransaction(async (client) => {
-    await ensureTheme(client, payload.theme);
-    await ensureAuthor(client, payload.author);
-    const insertedRow = await client.query(
-      `INSERT INTO metadata(id, device, brightness, theme, width, height, image_size, ext,
-       object_key, storage_slug, title, description, source, original, md5, thumbnail_size, author)
-       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
-       ON CONFLICT (id) DO NOTHING RETURNING *`,
-      [id, payload.device, brightness, payload.theme, payload.width, payload.height,
-        payload.size, payload.ext, finalKey, backend, payload.title,
-        payload.description, payload.source, payload.original, payload.md5,
-        payload.thumbnail_size, payload.author || null]
-    );
-    const inserted = Boolean(insertedRow.rowCount);
-    await client.query("UPDATE import_session SET status='finalized', updated_at=now() WHERE id=$1 AND status='committing'", [id]);
-    return { image: (await client.query("SELECT * FROM metadata WHERE id=$1", [id])).rows[0] as ImageRecord, inserted };
-  });
-  await finishImport(result.image, payload, result.inserted);
-  return { status: "imported" as const, item: await publicImage(result.image) };
+    const brightness: Brightness = payload.brightness === "auto" ? payload.detected_brightness : payload.brightness;
+    const result = await withTransaction(async (client) => {
+      await ensureTheme(client, payload.theme);
+      await ensureAuthor(client, payload.author);
+      const insertedRow = await client.query(
+        `INSERT INTO metadata(id, device, brightness, theme, width, height, image_size, ext,
+         object_key, storage_slug, title, description, source, original, md5, thumbnail_size, author)
+         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+         ON CONFLICT (id) DO NOTHING RETURNING *`,
+        [id, payload.device, brightness, payload.theme, payload.width, payload.height,
+          payload.size, payload.ext, finalKey, backend, payload.title,
+          payload.description, payload.source, payload.original, payload.md5,
+          payload.thumbnail_size, payload.author || null]
+      );
+      const inserted = Boolean(insertedRow.rowCount);
+      await client.query("UPDATE import_session SET status='finalized', updated_at=now() WHERE id=$1 AND status='committing'", [id]);
+      return { image: (await client.query("SELECT * FROM metadata WHERE id=$1", [id])).rows[0] as ImageRecord, inserted };
+    });
+    dbCommitted = true;
+    await Promise.all([
+      removeObject("_uploads", stagingImageKey(id), backend).catch(() => undefined),
+      removeObject("_uploads", payload.prepared_thumbnail_key, backend).catch(() => undefined)
+    ]);
+    await finishImport(result.image, payload, result.inserted);
+    return { status: "imported" as const, item: await publicImage(result.image) };
+  } catch (error) {
+    if (!dbCommitted) {
+      await Promise.all([
+        copiedImage ? removeObject("media", finalKey, backend).catch(() => undefined) : Promise.resolve(),
+        copiedThumb ? removeObject("thumbs", thumbKey, backend).catch(() => undefined) : Promise.resolve()
+      ]);
+    }
+    throw error;
+  }
 }
 
 async function commitProxySession(id: string, session: ImportSessionRow, payload: PreparedPayload) {
   const backend = session.storage_slug;
   const brightness: Brightness = payload.brightness === "auto" ? payload.detected_brightness : payload.brightness;
   const linkKey = linkThumbnailKey(payload.device, brightness, payload.theme, id);
-  if (!(await exists("link", linkKey, backend))) {
-    const thumbnail = await readStorageBuffer("_uploads", payload.prepared_thumbnail_key, backend);
-    await writeStorageBuffer("link", linkKey, thumbnail, "image/webp", backend);
-  }
+  let copiedLink = false;
+  let dbCommitted = false;
+  try {
+    if (!(await exists("link", linkKey, backend))) {
+      if (!(await exists("_uploads", payload.prepared_thumbnail_key, backend))) throw new ApiError(409, "prepared_thumbnail_missing", "准备好的缩略图不存在");
+      await copyObject("_uploads", payload.prepared_thumbnail_key, "link", linkKey, backend);
+      copiedLink = true;
+    }
 
-  const result = await withTransaction(async (client) => {
-    await ensureTheme(client, payload.theme);
-    await ensureAuthor(client, payload.author);
-    const insertedRow = await client.query(
-      `INSERT INTO metadata(id, device, brightness, theme, width, height, ext,
-       object_key, storage_slug, is_link, title, description, source, original, md5, thumbnail_size, author)
-       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,true,$10,$11,$12,$13,$14,$15,$16)
-       ON CONFLICT (object_key) DO NOTHING RETURNING *`,
-      [id, payload.device, brightness, payload.theme, payload.width, payload.height,
-        payload.ext, payload.source_url, backend, payload.title,
-        payload.description, payload.source, payload.original, payload.md5,
-        payload.thumbnail_size, payload.author || null]
-    );
-    const inserted = Boolean(insertedRow.rowCount);
-    await client.query("UPDATE import_session SET status='finalized', updated_at=now() WHERE id=$1 AND status='committing'", [id]);
-    const image = inserted
-      ? insertedRow.rows[0] as ImageRecord
-      : (await client.query("SELECT * FROM metadata WHERE id=$1", [id])).rows[0] as ImageRecord | undefined;
-    return { image, inserted };
-  });
+    const result = await withTransaction(async (client) => {
+      await ensureTheme(client, payload.theme);
+      await ensureAuthor(client, payload.author);
+      const insertedRow = await client.query(
+        `INSERT INTO metadata(id, device, brightness, theme, width, height, ext,
+         object_key, storage_slug, is_link, title, description, source, original, md5, thumbnail_size, author)
+         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,true,$10,$11,$12,$13,$14,$15,$16)
+         ON CONFLICT (object_key) DO NOTHING RETURNING *`,
+        [id, payload.device, brightness, payload.theme, payload.width, payload.height,
+          payload.ext, payload.source_url, backend, payload.title,
+          payload.description, payload.source, payload.original, payload.md5,
+          payload.thumbnail_size, payload.author || null]
+      );
+      const inserted = Boolean(insertedRow.rowCount);
+      await client.query("UPDATE import_session SET status='finalized', updated_at=now() WHERE id=$1 AND status='committing'", [id]);
+      const image = inserted
+        ? insertedRow.rows[0] as ImageRecord
+        : (await client.query("SELECT * FROM metadata WHERE id=$1", [id])).rows[0] as ImageRecord | undefined;
+      return { image, inserted };
+    });
+    dbCommitted = true;
 
-  await removeObject("_uploads", payload.prepared_thumbnail_key, backend).catch(() => undefined);
-  if (!result.image) {
-    await removeObject("link", linkKey, backend).catch(() => undefined);
-    return { status: "duplicate" as const };
+    await removeObject("_uploads", payload.prepared_thumbnail_key, backend).catch(() => undefined);
+    if (!result.image) {
+      await removeObject("link", linkKey, backend).catch(() => undefined);
+      return { status: "duplicate" as const };
+    }
+    await finishImport(result.image, payload, result.inserted);
+    return { status: "imported" as const, item: await publicImage(result.image) };
+  } catch (error) {
+    if (!dbCommitted && copiedLink) await removeObject("link", linkKey, backend).catch(() => undefined);
+    throw error;
   }
-  await finishImport(result.image, payload, result.inserted);
-  return { status: "imported" as const, item: await publicImage(result.image) };
 }
 
 export async function commitImportSession(id: string, metadata: ImportMetadata) {

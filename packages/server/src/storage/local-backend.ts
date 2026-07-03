@@ -1,13 +1,11 @@
 import { createReadStream } from "node:fs";
-import { copyFile, mkdir, readFile, readdir, rename, rm, rmdir, stat, writeFile, access } from "node:fs/promises";
+import { copyFile, mkdir, readFile, readdir, rm, rmdir, stat, writeFile, access } from "node:fs/promises";
 import { dirname, join, relative, sep } from "node:path";
 import type { Readable } from "node:stream";
 import { env } from "../config/env.js";
 import { safeStoragePath, STORAGE_PREFIXES, type ReadablePrefix, type StoragePrefix } from "./object-keys.js";
 import type {
   CopyPrefix,
-  MoveFromPrefix,
-  MoveToPrefix,
   OpenedRead,
   StorageDriver,
   StorageSelfTest
@@ -41,21 +39,6 @@ export class LocalBackend implements StorageDriver {
 
   async remove(prefix: StoragePrefix, key: string) {
     await rm(safeStoragePath(prefix, key), { force: true });
-  }
-
-  async move(fromPrefix: MoveFromPrefix, fromKey: string, toPrefix: MoveToPrefix, toKey: string, _targetContentType?: string) {
-    const source = safeStoragePath(fromPrefix, fromKey);
-    const target = safeStoragePath(toPrefix, toKey);
-    await mkdir(dirname(target), { recursive: true });
-    try {
-      await rename(source, target);
-    } catch (error) {
-      const code = (error as { code?: string }).code;
-      if (!["EXDEV", "EBUSY", "EPERM"].includes(code ?? "")) throw error;
-
-      await copyFile(source, target);
-      await rm(source, { force: true }).catch(() => undefined);
-    }
   }
 
   async copy(fromPrefix: CopyPrefix, fromKey: string, toPrefix: CopyPrefix, toKey: string) {

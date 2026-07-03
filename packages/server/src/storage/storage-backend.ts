@@ -7,10 +7,7 @@ import { WebdavBackend } from "./webdav-backend.js";
 
 export type OpenedRead = { body: Readable; size: number | undefined; backend: StorageType };
 
-export type MoveFromPrefix = "media" | "_uploads";
-export type MoveToPrefix = "media" | "thumbs";
-
-export type CopyPrefix = "media" | "thumbs" | "link";
+export type CopyPrefix = "media" | "thumbs" | "link" | "_uploads";
 
 export type StorageSelfTest = {
   backend: StorageType;
@@ -27,7 +24,6 @@ export interface StorageDriver {
   readBuffer(prefix: StoragePrefix, key: string): Promise<Buffer>;
   writeBuffer(prefix: StoragePrefix, key: string, body: Buffer, type: string): Promise<void>;
   remove(prefix: StoragePrefix, key: string): Promise<void>;
-  move(fromPrefix: MoveFromPrefix, fromKey: string, toPrefix: MoveToPrefix, toKey: string, targetContentType?: string): Promise<void>;
   copy(fromPrefix: CopyPrefix, fromKey: string, toPrefix: CopyPrefix, toKey: string): Promise<void>;
   readObject(prefix: ReadablePrefix, key: string): Promise<Readable>;
   listKeys(prefix: StoragePrefix): Promise<string[]>;

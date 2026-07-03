@@ -14,7 +14,7 @@ export function registerImportRoutes(app: Hono) {
   app.put(`${adminApiBasePath}/imports/:id/file`, async (c) => {
     const id = parse(uuidInput, c.req.param("id"));
     const body = c.req.raw.body ?? new Response(await c.req.arrayBuffer()).body;
-    return c.json(ok(await receiveImportFile(id, body)));
+    return c.json(ok(await receiveImportFile(id, body, c.req.raw.signal)));
   });
 
   app.post(`${adminApiBasePath}/imports/:id/prepare`, async (c) => {

@@ -3,7 +3,7 @@ import { setImageLookups } from "./image-cache.js";
 import { thumbnailObjectKey } from "../storage/image-paths.js";
 import { publicImageUrls } from "../storage/storage.js";
 import { getTagsForImages } from "../tags/query.js";
-import { displayUrlForOriginalComparison, hasDistinctOriginalUrl } from "./original-link.js";
+import { hasDistinctOriginalUrl } from "./original-link.js";
 
 export type ImageRecord = {
   id: string;
@@ -24,6 +24,7 @@ export type ImageRecord = {
   description?: string | null;
   source?: string | null;
   original?: string | null;
+  extra?: Record<string, unknown> | null;
   status: string;
   deleted_at?: string | Date | null;
   created_at?: string | Date | null;
@@ -56,10 +57,7 @@ export async function publicImage(row: ImageRecord, tags?: string[]) {
   const isLink = Boolean(row.is_link);
   const urls = await publicImageUrls(row.object_key, slug, isLink, isLink ? { id: row.id, device: row.device, brightness: row.brightness, theme: row.theme, ext: row.ext } : undefined);
   const original = row.original ?? "";
-  const hasDistinctOriginal = hasDistinctOriginalUrl(
-    original,
-    await displayUrlForOriginalComparison({ object_key: row.object_key, storage_slug: slug, is_link: isLink })
-  );
+  const hasDistinctOriginal = hasDistinctOriginalUrl(original, isLink ? row.object_key : urls.object_url);
 
   const tagList = tags ?? (await getTagsForImages([row.id])).get(row.id) ?? [];
   return {
@@ -80,6 +78,7 @@ export async function publicImage(row: ImageRecord, tags?: string[]) {
     description: row.description ?? "",
     source: row.source ?? "",
     original,
+    extra: row.extra && typeof row.extra === "object" && !Array.isArray(row.extra) ? row.extra : {},
     has_distinct_original: hasDistinctOriginal,
     status: row.status,
     tags: tagList,

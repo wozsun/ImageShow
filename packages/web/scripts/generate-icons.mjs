@@ -31,6 +31,7 @@ const iconNames = [
   "flask-line",
   "group-line",
   "hard-drive-2-line",
+  "history-line",
   "home-4-line",
   "image-line",
   "information-line",

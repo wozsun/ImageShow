@@ -161,7 +161,7 @@
   .upload-window > footer .admin-pagination button,
   .batch-edit-modal footer .admin-pagination button { flex: 1; }
   .admin button:not(:disabled) { transition-duration: .08s; }
-  .admin button:not(:disabled):not(.select-trigger):active { transform: scale(.95); }
+  .admin button:not(:disabled):not(.select-trigger):not(.password-toggle):active { transform: scale(.95); }
   .settings-grid, .overview-grid { grid-template-columns: 1fr; }
   /*批量通用条（flex 行）：设备/亮度成对，文本类输入与应用到全部整行堆叠。*/
   .select-control.batch-common-select { flex: 1 1 calc(50% - 4px); width: auto; }
@@ -224,7 +224,7 @@
   .theme-create-form .theme-create-field,
   .theme-create-form .entity-slug-field { flex-basis: 100%; max-width: none; }
   /*撤销桌面端右对齐的 批量删除，使该行像其余行一样堆叠（slug 字段的整宽来自上面的*/
-  .theme-create-form button { flex: 1; min-height: 44px; }
+  .theme-create-form > button { flex: 1; min-height: 44px; }
   .theme-create-form .danger-button { margin-left: 0; }
   .operation-modal:not(.storage-edit-modal) footer { gap: 10px; }
   .operation-modal:not(.storage-edit-modal) footer button { flex: 1; min-height: 44px; }

@@ -1,7 +1,7 @@
 import { useMemo, useRef } from "react";
 import { Icon } from "../icon/Icon.js";
 import { ProgressiveImage } from "./ProgressiveImage.js";
-import { displayNameOrSlug, imageDisplayTitle, imageFallbackTitle, formatDate, formatDimensions } from "../../lib/ui/formatters.js";
+import { displayNameOrSlug, imageDisplayTitle, formatDate, formatDimensions } from "../../lib/ui/formatters.js";
 import { brightnessOptionLabel, deviceOptionLabel } from "../../lib/ui/select-options.js";
 import type { ImageItem } from "../../lib/types.js";
 import { useGalleryOptions, useSiteConfig } from "../../lib/api/site-data.js";
@@ -26,11 +26,11 @@ export function ImageDetailModal({ item, onClose, admin = false }: { item: Image
 
   const authorSlug = item.author || "";
   const authorOption = authorSlug ? authorMap.get(authorSlug) : undefined;
-  const authorLabel = authorOption?.display_name || authorSlug;
+  const authorLabel = authorOption ? displayNameOrSlug(authorOption) : authorSlug;
   const authorLink = authorOption?.link || "";
 
   const titleOpensImage = (siteConfig?.image_detail?.title_opens_image ?? true) && Boolean(item.object_url);
-  const title = item.title?.trim() ? imageDisplayTitle(item) : imageFallbackTitle(item.id);
+  const title = imageDisplayTitle(item);
   const canOpenOriginal = item.has_distinct_original;
   const originalHref = admin && item.deleted_at
     ? `/api/admin/images/${encodeURIComponent(item.id)}/original`

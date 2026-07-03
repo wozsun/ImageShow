@@ -10,6 +10,7 @@ const terminalStatuses = new Set<ImportJob["status"]>(["ready", "done", "failed"
 
 function patchFromStatus(job: ImportJob, state: StoredImportStatus): Partial<ImportJob> | null {
   const message = storedImportStatusMessage(state);
+  if (state.phase === "prepare-waiting") return { status: "queued", message };
   if (state.status === "created") return { status: "queued", message };
   if (state.status === "receiving") return { status: job.kind === "local" ? "uploading" : "downloading", message };
   if (state.status === "preparing") return { status: "processing", message };

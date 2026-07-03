@@ -23,6 +23,7 @@ export const galleryLimit = z.coerce.number().int().positive().max(appConfig.pag
 export const recentUploads = z.coerce.number().int().min(1).max(50);
 
 export const uploadConcurrency = z.coerce.number().int().min(1).max(16);
+export const importGlobalConcurrency = z.coerce.number().int().min(1).max(64);
 
 export const normalizeQuality = z.coerce.number().int().min(1).max(100);
 export const normalizeQualityStep = z.coerce.number().int().min(1).max(50);

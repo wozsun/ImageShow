@@ -1,5 +1,6 @@
 import { pool } from "../core/db.js";
 import { ApiError, immutableCacheControl, noStoreCacheControl, privateNoStoreCacheControl, publicProxyFallbackThumbCacheControl, publicProxyImageCacheControl } from "../core/http.js";
+import { isExternalImageRejection, safeFetchExternalImage } from "../core/external-image-fetch.js";
 import { makeThumb } from "./processing.js";
 import { linkThumbnailKey, thumbnailObjectKey } from "../storage/image-paths.js";
 import { contentType, exists, publicObjectUrl, readObject } from "../storage/storage.js";
@@ -11,6 +12,10 @@ const proxyTimeoutMs = 12_000;
 const proxyUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 
 type ProxyFallback = () => Response | Promise<Response>;
+
+function shouldNotRedirectExternalError(error: unknown) {
+  return isExternalImageRejection(error);
+}
 
 export async function proxyExternalImage(
   externalUrl: string,
@@ -30,19 +35,21 @@ export async function proxyExternalImage(
   try {
     origin = `${new URL(externalUrl).origin}/`;
   } catch {
-    return redirectFallback();
+    if (fallback) return fallback();
+    throw new ApiError(400, "external_image_rejected", "外部图片请求未通过安全校验");
   }
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), proxyTimeoutMs);
   try {
     // 外链代理带源站同源 Referer 绕过简单防盗链；取流失败时走调用方 fallback，默认退回 302。
-    const upstream = await fetch(externalUrl, {
+    const upstream = await safeFetchExternalImage(externalUrl, {
+      timeoutMs: proxyTimeoutMs,
       headers: { Referer: origin, "User-Agent": proxyUserAgent, Accept: "image/*,*/*" },
-      redirect: "follow",
-      signal: controller.signal
+      imageValidation: "sniff"
     });
-    if (!upstream.ok || !upstream.body) return redirectFallback();
+    if (!upstream.ok || !upstream.body) {
+      await upstream.body?.cancel().catch(() => undefined);
+      return redirectFallback();
+    }
 
     const headers: Record<string, string> = { ...baseHeaders, "Content-Type": upstream.headers.get("content-type") || contentType(ext) };
     if (fallbackCacheControl) {
@@ -58,10 +65,12 @@ export async function proxyExternalImage(
       }
     }
     return new Response(upstream.body, { headers });
-  } catch {
+  } catch (error) {
+    if (shouldNotRedirectExternalError(error)) {
+      if (fallback) return fallback();
+      throw error;
+    }
     return redirectFallback();
-  } finally {
-    clearTimeout(timeout);
   }
 }
 
@@ -75,22 +84,18 @@ function externalImageExt(url: string) {
 }
 
 async function originalSupportsDirectAccess(url: string, userAgent: string) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), proxyTimeoutMs);
   try {
     // 用 Range 只探测第一个字节，确认“无 Referer 直连是否可达”，避免为了探测下载整张原图。
-    const response = await fetch(url, {
+    const response = await safeFetchExternalImage(url, {
       method: "GET",
+      timeoutMs: proxyTimeoutMs,
       headers: { "User-Agent": userAgent || proxyUserAgent, Accept: "image/*,*/*", Range: "bytes=0-0" },
-      redirect: "follow",
-      signal: controller.signal
+      imageValidation: "header"
     });
     await response.body?.cancel().catch(() => undefined);
     return response.ok;
   } catch {
     return false;
-  } finally {
-    clearTimeout(timeout);
   }
 }
 
@@ -218,7 +223,7 @@ export async function redirectOriginalLink(id: string, userAgent: string) {
     throw new ApiError(404, "not_found", "Original link not found");
   }
 
-  if (!/^https?:\/\//i.test(original)) throw new ApiError(404, "not_found", "Original link not found");
+  if (!/^https:\/\//i.test(original)) throw new ApiError(404, "not_found", "Original link not found");
   const displayUrl = await displayUrlForOriginalComparison(row);
   if (!hasDistinctOriginalUrl(original, displayUrl)) throw new ApiError(404, "not_found", "Original link not found");
 
@@ -244,7 +249,7 @@ export async function serveOriginalLinkProxy(id: string) {
     throw new ApiError(404, "not_found", "Original link not found");
   }
 
-  if (!/^https?:\/\//i.test(original)) throw new ApiError(404, "not_found", "Original link not found");
+  if (!/^https:\/\//i.test(original)) throw new ApiError(404, "not_found", "Original link not found");
   const displayUrl = await displayUrlForOriginalComparison(row);
   if (!hasDistinctOriginalUrl(original, displayUrl)) throw new ApiError(404, "not_found", "Original link not found");
 
@@ -287,7 +292,7 @@ export async function serveAdminObject(id: string): Promise<Response> {
 export async function serveAdminOriginalLink(id: string, userAgent: string): Promise<Response> {
   const row = (await pool.query("SELECT original, object_key, storage_slug, is_link FROM metadata WHERE id=$1 LIMIT 1", [id])).rows[0];
   const original = String(row?.original ?? "");
-  if (!row || !/^https?:\/\//i.test(original)) throw new ApiError(404, "not_found", "Original link not found");
+  if (!row || !/^https:\/\//i.test(original)) throw new ApiError(404, "not_found", "Original link not found");
   const displayUrl = await displayUrlForOriginalComparison(row);
   if (!hasDistinctOriginalUrl(original, displayUrl)) throw new ApiError(404, "not_found", "Original link not found");
   if (await originalSupportsDirectAccess(original, userAgent)) {

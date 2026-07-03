@@ -11,6 +11,7 @@ export const queryKeys = {
   authors: ["authors"] as const,
   users: ["users"] as const,
   settings: ["settings"] as const,
+  logs: ["admin-logs"] as const,
   me: ["me"] as const
 };
 

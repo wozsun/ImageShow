@@ -15,6 +15,7 @@ import { Overview } from "./admin/Overview.js";
 import { SettingsPage } from "./admin/SettingsPage.js";
 import { StorageSettings } from "./admin/StorageSettings.js";
 import { AccountSettings } from "./admin/AccountSettings.js";
+import { LogPage } from "./admin/LogPage.js";
 import { MobileNavigation } from "../components/navigation/MobileNavigation.js";
 // 后台样式在此引入（而非全局 styles.css），随 AdminShell 懒加载分块下载，公共页不会加载。
 import "../styles/admin.css";
@@ -76,6 +77,11 @@ export function AdminShell() {
               <Icon name="checkbox-circle-line" />检查
             </NavLink>
           )}
+          {isSuper && (
+            <NavLink className={({ isActive }) => isActive ? "active" : ""} to={`${adminBasePath}/logs`}>
+              <Icon name="history-line" />日志
+            </NavLink>
+          )}
         </div>
         <OverlayScrollbar targetRef={navScrollRef} />
         <div className="admin-nav-divider logout-divider" role="separator" />
@@ -128,6 +134,11 @@ export function AdminShell() {
               <Icon name="checkbox-circle-line" />检查
             </NavLink>
           )}
+          {isSuper && (
+            <NavLink className={({ isActive }) => isActive ? "active" : ""} to={`${adminBasePath}/logs`}>
+              <Icon name="history-line" />日志
+            </NavLink>
+          )}
           <div className="admin-nav-divider" role="separator" />
           <NavLink className={({ isActive }) => isActive ? "active" : ""} to={`${adminBasePath}/account`}>
             <Icon name="key-2-line" />账户
@@ -148,6 +159,7 @@ export function AdminShell() {
         {isSuper && <Route path="storage" element={<StorageSettings />} />}
         {isSuper && <Route path="users" element={<UserAdmin />} />}
         {isSuper && <Route path="check" element={<CheckPage />} />}
+        {isSuper && <Route path="logs" element={<LogPage />} />}
       </Routes>
     </main>
   );

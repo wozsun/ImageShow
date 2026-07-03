@@ -8,8 +8,10 @@ import { cleanupOrphanRawImports } from "./images/imports/temp-files.js";
 import { initializeAdmin, pingDb, pool, runMigrations } from "./core/db.js";
 import { pingRedis, redis } from "./core/redis-client.js";
 import { logger } from "./core/logger.js";
+import { auditAdminMutation } from "./core/audit-log.js";
 import { ensureStorage } from "./storage/storage.js";
 import { fail, noStoreCacheControl, requireAuth, requireCsrf, routeError, securityHeaders } from "./core/http.js";
+import { registerAdminLogRoutes } from "./routes/admin-logs.js";
 import { registerAdminImageRoutes } from "./routes/admin-images.js";
 import { registerAdminTagRoutes } from "./routes/admin-tags.js";
 import { registerAdminThemeRoutes } from "./routes/admin-themes.js";
@@ -83,6 +85,7 @@ registerRandomRoutes(app);
 registerPublicAuthRoutes(app);
 
 app.use(`${adminApiBasePath}/*`, requireAuth);
+app.use(`${adminApiBasePath}/*`, auditAdminMutation);
 registerProtectedAuthRoutes(app);
 app.use(`${adminApiBasePath}/*`, async (c, next) => {
   if (c.req.method !== "GET") return requireCsrf(c, next);
@@ -95,6 +98,7 @@ registerAdminThemeRoutes(app);
 registerAdminAuthorRoutes(app);
 registerAdminUserRoutes(app);
 registerImportRoutes(app);
+registerAdminLogRoutes(app);
 registerSettingsRoutes(app);
 registerCheckRoutes(app);
 registerStaticRoutes(app);

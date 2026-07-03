@@ -4,7 +4,7 @@
 
 ## 三种图片导入模式
 
-三种模式共用一个 `ImportJob` 队列、任务卡片、元数据编辑、最终 MD5 判重、SSE 状态推送、取消/重试和批量提交界面。底层统一为 `import_session`：`mode=upload` 保存浏览器上传文件，`mode=download` 由服务端下载并保存，`mode=proxy` 只保存缩略图与外部链接。
+三种模式共用一个 `ImportJob` 队列、任务卡片、元数据编辑、最终 MD5 判重、SSE 状态推送、取消/重试和批量提交界面。底层统一为 `import_session`：`mode=upload` 保存浏览器上传文件，`mode=download` 由服务端下载并保存，`mode=proxy` 只保存缩略图与外部链接。会话创建时写入 `request_hash`，同一 `idempotency_key` 只有在模式、URL、大小、存储后端和初始元数据摘要一致时才复用。
 
 ```text
 模式 1：本地上传
@@ -27,7 +27,7 @@ File ──► 立即创建卡片 + blob: 临时预览
 
 URL ──► 立即创建卡片
     └─► 创建 import_session(mode=download，锁定 storage_slug/source_url）
-         └─► 服务端限时、限大小下载
+         └─► 服务端限时、限大小、安全下载图片
               └─► data/tmp/<id>.raw
                    └─► 与本地上传相同的 transcodeStoredImage()、staging、ready、commit
 
@@ -35,14 +35,14 @@ URL ──► 立即创建卡片
 
 URL ──► 立即创建卡片
     └─► 创建 import_session(mode=proxy，锁定缩略图 storage_slug/source_url）
-         └─► 服务端下载一次用于校验、MD5、尺寸、明暗识别和缩略图
+         └─► 服务端安全下载一次用于校验、MD5、尺寸、明暗识别和缩略图
               ├─► <锁定后端>/_uploads/<id>.thumb.webp
               └─► ready：编辑/提交
                    └─► metadata.object_key = URL、is_link=true
                         + <锁定后端>/link/<分类>/<id>.webp
 ```
 
-prepare 完成后会删除 `data/tmp` 下的 raw 文件；失败、取消和过期清理同样删除 raw 与 `_uploads` 候选对象。清理只匹配 UUID 形态的 `.raw` / `.raw.part` 文件，避免误删其他临时内容。原始上传/下载字节从不写入 S3、WebDAV 等目标后端，因此不存在“先远端上传原图、再下载回来压缩”的重复传输。
+prepare 完成后会删除 `data/tmp` 下的 raw 文件；失败、取消和过期清理同样删除 raw 与 `_uploads` 候选对象。清理只匹配 UUID 形态的 `.raw` / `.raw.part` 文件，避免误删其他临时内容。原始上传/下载字节从不写入 S3、WebDAV 等目标后端，因此不存在“先远端上传原图、再下载回来压缩”的重复传输。服务端还会按 `upload.global_concurrency` / `link_image.global_concurrency` 对 prepare 做进程内全局限流，防止绕过前端队列直接并发压垮进程；触发全局等待时会通过状态消息显示“服务端全局处理名额已满，等待空闲名额”。
 
 ### prepared import 状态机
 
@@ -66,6 +66,7 @@ created
 prepare 承担所有重处理：
 
 - upload/download：原始流精确大小限制与服务端本地落盘；
+- download/proxy：外部 URL 只允许 `https` 且必须使用域名，不接受直接 IP；每次请求和重定向后都会校验主机解析结果，禁止 localhost、内网、链路本地、组播和云 metadata 等受限地址，并依赖运行时 TLS 验证确认证书有效，再通过内容嗅探确认返回的是支持的图片格式；安全拒绝对外统一返回通用提示，内部 debug 日志保留拒绝原因；
 - upload/download：图片解码校验、长边约束、可选 WebP 转码与体积控制；
 - 三种模式：标准缩略图、最终预览、设备/明暗识别；
 - upload/download 基于最终候选字节计算 `metadata.md5`；proxy 基于外部原图字节计算 `metadata.md5`；
@@ -74,11 +75,12 @@ prepare 承担所有重处理：
 commit 不重新下载、不重新转码，也不从远端读回候选文件：
 
 1. 会话 advisory lock 防止并发重复提交；
-2. upload/download：`_uploads` 中 processed image 移到 `media`，prepared thumbnail 移到 `thumbs`；proxy：prepared thumbnail 移到 `link`；
+2. upload/download：`_uploads` 中 processed image 复制到 `media`，prepared thumbnail 复制到 `thumbs`；proxy：prepared thumbnail 复制到 `link`；
 3. 短事务写 `metadata` 与会话最终状态；
-4. 写标签、更新随机池和读缓存。
+4. 事务成功后清理 `_uploads` 候选对象；
+5. 写标签、更新随机池和读缓存。
 
-对象移动具有幂等检查：若上次提交已移动对象但数据库步骤失败，重试会复用已存在的目标对象。
+对象提交具有幂等检查和异常补偿：若目标对象已存在，重试会复用；若正式对象已经复制但数据库事务失败，会 best-effort 删除本次复制出的 `media`、`thumbs` 或 `link` 对象，减少孤儿文件。
 
 ### 前端队列与判重
 
@@ -101,11 +103,11 @@ commit 不重新下载、不重新转码，也不从远端读回候选文件：
 | 正式位置 | `media` + `thumbs` | `media` + `thumbs` | URL + `link` 缩略图 |
 | 数据库标记 | `is_link=false` | `is_link=false` | `is_link=true` |
 
-两种 URL 模式都遵循 `link_image.fill_original_url`。入库标准化参数位于顶层 `normalize`，下载并发位于 `link_image.concurrency`。
+两种 URL 模式都遵循 `link_image.fill_original_url`。入库标准化参数位于顶层 `normalize`；单客户端 URL 队列并发位于 `link_image.concurrency`，服务端全局 URL prepare 并发位于 `link_image.global_concurrency`。
 
 ## 原图链接与外链代理
 
-详情弹窗的「原图」只在 `original` 字段存在且不同于展示图时显示，并先请求 `/api/images/:id/original`。后端也执行相同判断：`original` 为空或等于展示 URL 时返回 404。只有 `original` 指向另一个 URL 时，后端才用当前浏览器 User-Agent、无 Referer、`GET + Range: bytes=0-0` 探测：可直接访问则 302 到原 URL，否则 302 到 `link.<域名>/original/:id`，由服务端带源站 Referer 转发。
+详情弹窗的「原图」只在 `original` 字段存在且不同于展示图时显示，并先请求 `/api/images/:id/original`。后端也执行相同判断：`original` 为空、不是 `https` 或等于展示 URL 时返回 404。只有 `original` 指向另一个 HTTPS URL 时，后端才用当前浏览器 User-Agent、无 Referer、`GET + Range: bytes=0-0` 探测：可直接访问则 302 到原 URL，否则 302 到 `link.<域名>/original/:id`，由服务端带源站 Referer 转发。
 
 公共原图接口只接受 `status=ready`。后台回收站的原图按钮显示规则与公开页面一致：只有 `original` 存在且不同于展示图时显示；deleted 行点击时走带鉴权的 `/api/admin/images/:id/original`，它允许回收站内的独立原图链接，但仍使用 `private, no-store`。回收站查看图片本体使用带鉴权的 raw/thumb 接口。
 
@@ -168,4 +170,4 @@ HTTP 缓存按 CDN 友好但不泄露私有数据分层：
 - SPA HTML、文档 HTML、`/api/images`、`/api/site-config`、`/api/gallery-options`、`/img-count` 都是公共数据：浏览器不长期持有，CDN 通过 `s-maxage` 短缓存，并允许 `stale-while-revalidate` / `stale-if-error`。
 - `/random` 和 `random.<域名>` 永远 `no-store`，避免 CDN 把随机图固定成同一张。
 - `/api/admin/*`、登录 / 验证码 / 上传暂存预览 / SSE、后台图片字节、健康检查和错误响应使用 `no-store` 或 `private, no-store`，不应被 CDN 缓存。
-- `link.<域名>/media` 与仍需使用的 `/original` 公共代理成功响应优先继承源站 `Cache-Control` / `Expires`；源站未声明时使用站内 CDN fallback：浏览器缓存 1 天、共享缓存 1 年，并允许 stale 回源兜底。`/media` 回源失败退回 link 略缩图时，该兜底缩略图缓存 1 周。后台代理仍为 `private, no-store`。
+- `link.<域名>/media` 与仍需使用的 `/original` 公共代理成功响应优先继承源站 `Cache-Control` / `Expires`；源站未声明时使用站内 CDN fallback：浏览器缓存 1 天、共享缓存 1 年，并允许 stale 回源兜底。`/media` 回源失败退回 link 缩略图时，该兜底缩略图缓存 1 周。后台代理仍为 `private, no-store`。

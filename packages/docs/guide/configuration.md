@@ -35,9 +35,10 @@ ImageShow 的配置按持久化位置分为三类：数据库、`/app/data/confi
 | `site.random_subdomain` / `site.static_subdomain` / `site.docs_subdomain` / `site.link_subdomain` | 保留子域名前缀。 |
 | `site.docs_enabled` | 是否启用 `docs.<域名>` 文档站，默认 `true`。关闭后该主机返回 404，但前缀仍保留，主题不可占用。 |
 | `site.robots_enabled` | 是否提供 `robots.txt`，默认 `false`。开启后主站首页与文档站可抓取，资源域和主题域禁抓。 |
-| `upload.*` | 上传文件大小、图片长边限制、上传列表分页和上传并发。 |
+| `upload.*` | 上传文件大小、图片长边限制、上传列表分页、单客户端上传队列并发与服务端全局上传 prepare 并发。 |
 | `link_image.fill_original_url` | 两种链接导入模式是否自动填入「原图URL」。 |
-| `link_image.concurrency` | URL 导入预处理并发数，覆盖“下载保存”和“代理链接”。 |
+| `link_image.concurrency` | 单客户端 URL 导入队列并发数，覆盖“下载保存”和“代理链接”。 |
+| `link_image.global_concurrency` | 服务端 URL 导入 prepare 全局并发数，多个客户端共享。 |
 | `normalize.*` | 本地上传与下载导入共用的最终入库文件标准化策略。 |
 | `thumbnail.*` | 缩略图长边和压缩质量，只影响此后新生成的缩略图。 |
 | `image_detail.title_opens_image` | 图片详情弹窗标题是否链接到图片直链。 |
@@ -46,7 +47,7 @@ ImageShow 的配置按持久化位置分为三类：数据库、`/app/data/confi
 | `background_job.*` | 后台任务并发：移动清理、删除主题时图片搬运、批量迁移存储拷贝。默认各 5。 |
 | `security.*` | 登录会话有效期和登录限流阈值。 |
 | `captcha.*` | 登录验证码开关、位数、有效期、干扰线和噪点数量。字符集与几何样式仍是代码常量。 |
-| `log.*` | 日志级别、单文件大小上限和轮转文件保留数量。日志写入 `data/log/app.log`，并同时输出到容器 stdout / stderr。 |
+| `log.*` | 日志级别、单文件大小上限和轮转文件保留数量。日志写入 `data/log/app.log`，并同时输出到容器 stdout / stderr；超级管理员可在后台「日志」页实时调整 `log.level` 并查看最近日志。后台非 GET 写操作会记录操作者、路径、状态、耗时和 IP，不记录请求体。 |
 
 ## 入库图片标准化
 
@@ -54,9 +55,14 @@ ImageShow 的配置按持久化位置分为三类：数据库、`/app/data/confi
 
 ```json
 {
+  "upload": {
+    "concurrency": 2,
+    "global_concurrency": 5
+  },
   "link_image": {
     "fill_original_url": false,
-    "concurrency": 2
+    "concurrency": 2,
+    "global_concurrency": 5
   },
   "normalize": {
     "quality": 80,
@@ -71,7 +77,7 @@ ImageShow 的配置按持久化位置分为三类：数据库、`/app/data/confi
 
 `normalize.quality` 是首次 WebP 编码质量。输出超过 `normalize.max_size_kb` 时，每轮降低 `normalize.quality_step`，最低降到 `normalize.min_quality`。尺寸会按比例缩小到 `normalize.max_long_edge` 以内，不会放大。
 
-输入本身是 WebP、体积小于 `normalize.skip_webp_under_kb` 且长边已经达标时，原字节直接成为最终候选文件；服务端仍会执行解码校验、标准缩略图生成和最终 MD5 计算。
+输入本身是 WebP、体积小于 `normalize.skip_webp_under_kb` 且长边已经达标时，原字节直接成为最终候选文件；服务端仍会执行解码校验、标准缩略图生成和最终 MD5 计算。`upload.concurrency` / `link_image.concurrency` 只约束单个后台页面自己的队列；`upload.global_concurrency` / `link_image.global_concurrency` 约束服务端 prepare 全局并发，即使调用方绕过前端队列直接打接口，进程内也会排队并支持取消等待中的任务。
 
 ## 环境变量
 
@@ -94,7 +100,10 @@ ImageShow 的配置按持久化位置分为三类：数据库、`/app/data/confi
 | `site.home.preview_delay_ms` | `SITE_HOME_PREVIEW_DELAY_MS` |
 | `admin.login_background` | `ADMIN_LOGIN_BACKGROUND` |
 | `normalize.quality_step` | `NORMALIZE_QUALITY_STEP` |
+| `upload.concurrency` | `UPLOAD_CONCURRENCY` |
+| `upload.global_concurrency` | `UPLOAD_GLOBAL_CONCURRENCY` |
 | `link_image.concurrency` | `LINK_IMAGE_CONCURRENCY` |
+| `link_image.global_concurrency` | `LINK_IMAGE_GLOBAL_CONCURRENCY` |
 | `port` | `PORT` |
 
 仓库自带 `compose.yaml` 不注入所有可选项。配置文件已经生成后，请直接修改 `config.json` 并热加载；连接类配置仍需重启容器。

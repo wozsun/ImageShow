@@ -38,7 +38,7 @@ export function LinkUrlDialog({ onClose, onSubmit }: {
         <p className="hint">
           {mode === "download"
             ? <>服务器下载原图并转为压缩 WebP，<br />处理完成后按普通图片保存，原始下载数据不会保留。</>
-            : <>服务器仅生成并保存略缩图。<br />图库记录保留外部图片链接，查看时通过代理访问原图。</>}
+            : <>服务器仅生成并保存缩略图。<br />图库记录保留外部图片链接，查看时通过代理访问原图。</>}
         </p>
         <textarea
           className="link-import-urls"

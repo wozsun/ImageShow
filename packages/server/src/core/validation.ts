@@ -2,15 +2,21 @@ import { z } from "zod";
 import { adminImagePageLimit, appConfig, slugPattern } from "@imageshow/shared";
 import { ApiError } from "./http.js";
 
+const externalImageRejectedMessage = "外部图片请求未通过安全校验";
+
 function httpUrlField(message: string) {
-  return httpUrlBase(message).default("");
+  return urlBase(message, ["http:", "https:"]).default("");
 }
 
-function optionalHttpUrlField(message: string) {
-  return httpUrlBase(message).optional();
+function httpsUrlField(message: string) {
+  return urlBase(message, ["https:"]).default("");
 }
 
-function httpUrlBase(message: string) {
+function optionalHttpsUrlField(message: string) {
+  return urlBase(message, ["https:"]).optional();
+}
+
+function urlBase(message: string, protocols: string[]) {
   return z.string().trim().max(2048)
     .transform((value) => {
       if (!value || /^[a-z][a-z0-9+.-]*:\/\//i.test(value)) return value;
@@ -20,8 +26,7 @@ function httpUrlBase(message: string) {
       if (value === "") return true;
       try {
         const parsed = new URL(value);
-        return (parsed.protocol === "http:" || parsed.protocol === "https:")
-          && /^[a-z0-9.-]+$/.test(parsed.hostname);
+        return protocols.includes(parsed.protocol) && /^[a-z0-9.-]+$/.test(parsed.hostname);
       } catch {
         return false;
       }
@@ -38,7 +43,7 @@ const metadataInput = z.object({
   title: z.string().trim().max(200).default(""),
   description: z.string().trim().max(2000).default(""),
   source: z.string().trim().max(2048).default(""),
-  original: httpUrlField("原图 URL 需为有效的 http(s) 链接")
+  original: httpsUrlField(externalImageRejectedMessage)
 });
 
 export const metadataUpdateInput = z.object({
@@ -51,7 +56,7 @@ export const metadataUpdateInput = z.object({
   title: z.string().trim().max(200).optional(),
   description: z.string().trim().max(2000).optional(),
   source: z.string().trim().max(2048).optional(),
-  original: optionalHttpUrlField("原图 URL 需为有效的 http(s) 链接")
+  original: optionalHttpsUrlField(externalImageRejectedMessage)
 });
 
 const slugInput = z.string().trim().toLowerCase()
@@ -112,7 +117,7 @@ export const batchMigrateStorageInput = z.object({
 export const importCreateInput = metadataInput.extend({
   mode: z.enum(["upload", "download", "proxy"]),
   brightness: z.enum(["dark", "light", "auto"]).default("auto"),
-  source_url: z.string().trim().url().max(2048).optional(),
+  source_url: optionalHttpsUrlField(externalImageRejectedMessage),
   size: z.number().int().positive().optional(),
   session_id: z.string().uuid(),
   idempotency_key: z.string().uuid(),

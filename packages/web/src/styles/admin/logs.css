@@ -1,0 +1,125 @@
+.admin:has(> .log-page) {
+  height: 100svh;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.admin:has(> .log-page) > .admin-mobile-header {
+  flex: 0 0 auto;
+}
+
+.admin:has(> .log-page) > .log-page {
+  flex: 1;
+  min-height: 0;
+}
+
+.log-page {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.log-page > .workspace-head {
+  flex: 0 0 auto;
+  align-items: center;
+}
+
+.log-head-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: end;
+  justify-content: flex-end;
+  gap: 10px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.log-control {
+  min-width: 150px;
+  display: grid;
+  gap: 6px;
+  color: #495260;
+  font-size: 14px;
+}
+
+.log-toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.log-toolbar .log-control {
+  min-width: min(260px, 100%);
+}
+
+.log-meta {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: #66717f;
+  font-size: 13px;
+}
+
+.log-meta span {
+  padding: 3px 8px;
+  border: 1px solid #dce2ea;
+  border-radius: 999px;
+  background: #fff;
+  white-space: nowrap;
+}
+
+.log-viewer {
+  flex: 1;
+  min-height: 240px;
+  max-height: none;
+  margin: 0;
+  border-color: #232b38;
+  background: #111827;
+  color: #e5edf8;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow: auto;
+  tab-size: 2;
+}
+
+.log-viewer.is-empty {
+  color: #9aa4b2;
+}
+
+@media (max-width: 760px) {
+  .log-page > .workspace-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .log-head-actions {
+    margin-left: 0;
+    justify-content: stretch;
+  }
+
+  .log-head-actions .settings-feedback.is-inline,
+  .log-head-actions .log-control,
+  .log-head-actions button {
+    flex: 1 1 100%;
+    max-width: none;
+  }
+
+  .log-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .log-meta {
+    justify-content: flex-start;
+  }
+}

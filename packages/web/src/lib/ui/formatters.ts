@@ -1,15 +1,7 @@
 import type { ImageItem } from "../types.js";
 
-function shortImageId(id: string) {
-  return id.replace(/-/g, "").slice(-12);
-}
-
-export function imageFallbackTitle(id: string) {
-  return `#${shortImageId(id)}`;
-}
-
 export function imageDisplayTitle(item: { id: string; title?: string }) {
-  return item.title?.trim() || imageFallbackTitle(item.id);
+  return item.title?.trim() || `#${item.id.replace(/-/g, "").slice(-12)}`;
 }
 
 export function displayNameOrSlug(item: { slug: string; display_name?: string }) {

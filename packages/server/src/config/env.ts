@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync 
 import { join } from "node:path";
 import { z } from "zod";
 import { appConfig, type RuntimeConfig as SharedRuntimeConfig } from "@imageshow/shared";
-import { captchaCodeLength, captchaNoiseDots, captchaNoiseLines, captchaTtlSeconds, galleryLimit, galleryOrder, homeHeroBackground, homeTagline, imagePageSize, linkImageConcurrency, listPageSize, logLevel, logMaxFiles, logMaxSizeMb, loginBackground, loginFailureWindowSeconds, loginGlobalMaxAttempts, loginGlobalWindowSeconds, loginMaxFailures, maxFileSizeMb, maxLongEdge, normalizeMaxLongEdge, normalizeMaxSizeKb, normalizeMinQuality, normalizeQuality, normalizeQualityStep, previewDelayMs, randomMethod, recentUploads, rootRedirect, sessionTtlSeconds, siteDomain, siteIconUrl, siteName, skipWebpUnderKb, taskConcurrency, thumbnailLongEdge, thumbnailQuality, uploadConcurrency } from "./schema.js";
+import { captchaCodeLength, captchaNoiseDots, captchaNoiseLines, captchaTtlSeconds, galleryLimit, galleryOrder, homeHeroBackground, homeTagline, imagePageSize, importGlobalConcurrency, linkImageConcurrency, listPageSize, logLevel, logMaxFiles, logMaxSizeMb, loginBackground, loginFailureWindowSeconds, loginGlobalMaxAttempts, loginGlobalWindowSeconds, loginMaxFailures, maxFileSizeMb, maxLongEdge, normalizeMaxLongEdge, normalizeMaxSizeKb, normalizeMinQuality, normalizeQuality, normalizeQualityStep, previewDelayMs, randomMethod, recentUploads, rootRedirect, sessionTtlSeconds, siteDomain, siteIconUrl, siteName, skipWebpUnderKb, taskConcurrency, thumbnailLongEdge, thumbnailQuality, uploadConcurrency } from "./schema.js";
 
 const subdomainLabel = z.string().trim().regex(/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/, "must be a lowercase DNS label");
 
@@ -49,11 +49,13 @@ const runtimeConfigSchema = z.object({
     max_file_size_mb: maxFileSizeMb.default(d.upload.max_file_size_mb),
     max_long_edge: maxLongEdge.default(d.upload.max_long_edge),
     list_page_size: listPageSize.default(d.upload.list_page_size),
-    concurrency: uploadConcurrency.default(d.upload.concurrency)
+    concurrency: uploadConcurrency.default(d.upload.concurrency),
+    global_concurrency: importGlobalConcurrency.default(d.upload.global_concurrency)
   }).prefault({}),
   link_image: z.object({
     fill_original_url: z.boolean().default(d.link_image.fill_original_url),
-    concurrency: linkImageConcurrency.default(d.link_image.concurrency)
+    concurrency: linkImageConcurrency.default(d.link_image.concurrency),
+    global_concurrency: importGlobalConcurrency.default(d.link_image.global_concurrency)
   }).prefault({}),
   normalize: z.object({
     quality: normalizeQuality.default(d.normalize.quality),
@@ -219,7 +221,8 @@ function initialConfigFromEnvironment() {
       max_file_size_mb: envValue("UPLOAD_MAX_FILE_SIZE_MB"),
       max_long_edge: envValue("UPLOAD_MAX_LONG_EDGE"),
       list_page_size: envValue("UPLOAD_LIST_PAGE_SIZE"),
-      concurrency: envValue("UPLOAD_CONCURRENCY")
+      concurrency: envValue("UPLOAD_CONCURRENCY"),
+      global_concurrency: envValue("UPLOAD_GLOBAL_CONCURRENCY")
     },
     admin: {
       login_background: envValue("ADMIN_LOGIN_BACKGROUND"),
@@ -229,7 +232,8 @@ function initialConfigFromEnvironment() {
     },
     link_image: {
       fill_original_url: envBoolean("LINK_IMAGE_FILL_ORIGINAL_URL"),
-      concurrency: envValue("LINK_IMAGE_CONCURRENCY")
+      concurrency: envValue("LINK_IMAGE_CONCURRENCY"),
+      global_concurrency: envValue("LINK_IMAGE_GLOBAL_CONCURRENCY")
     },
     normalize: {
       quality: envValue("NORMALIZE_QUALITY"),

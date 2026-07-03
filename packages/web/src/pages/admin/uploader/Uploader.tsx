@@ -75,7 +75,7 @@ export function Uploader({ onDone }: { onDone: () => void }) {
   };
   const localImport = useLocalUploadImport({ queue: queueApi, defaults, storageSlug: activeBackend, maxBytes, concurrency: uploadConcurrency });
   const downloadImport = useDownloadImport({ queue: queueApi, defaults, fillOriginalUrl, storageSlug: activeBackend, concurrency: downloadConcurrency });
-  const proxyImport = useProxyLinkImport({ queue: queueApi, defaults, fillOriginalUrl, storageSlug: activeBackend, concurrency: uploadConcurrency });
+  const proxyImport = useProxyLinkImport({ queue: queueApi, defaults, fillOriginalUrl, storageSlug: activeBackend, concurrency: downloadConcurrency });
   const commitImports = useImportCommit({ updateJob: queue.updateJob, concurrency: Math.max(uploadConcurrency, downloadConcurrency), onDone });
   useImportStatusEvents(queue.jobs, queue.jobsRef, queue.updateJob);
 

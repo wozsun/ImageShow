@@ -17,7 +17,7 @@ ImageShow 是一个 npm workspaces 单仓多包项目：自托管图库 + 随机
 | `<域名>`（主站） | SPA 前端 + 后台 + 公共 API |
 | `random.<域名>` | 只有随机图 API（`/` 的 GET/HEAD），其余一律 404 |
 | `static.<域名>` | 只提供对象字节 `/media/*`、`/thumbs/*`（cookie 隔离，主站从不直接吐字节） |
-| `link.<域名>` | 外链资源专用：`/thumbs/*` 取 link 图略缩图，`/media/*` 代理 link 图展示原图，`/original/*` 仅在详情原图 URL 与展示 URL 不同时代理详情字段 |
+| `link.<域名>` | 外链资源专用：`/thumbs/*` 取 link 图缩略图，`/media/*` 代理 link 图展示原图，`/original/*` 仅在详情原图 URL 与展示 URL 不同时代理详情字段 |
 | `docs.<域名>` | 本文档站（VitePress 构建产物） |
 | `<theme>.<域名>` | 该主题作用域的导航；`/random` 等价于 `/random?t=<theme>` |
 

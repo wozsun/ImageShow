@@ -48,6 +48,12 @@
   margin-bottom: 10px;
   color: #495260;
 }
+.settings-grid section > h2:has(+ .hint) {
+  margin-bottom: 4px;
+}
+.settings-grid section > h2 + .hint {
+  margin-bottom: 18px;
+}
 .hint {
   margin: 0 0 12px;
   color: #66717f;

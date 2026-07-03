@@ -17,6 +17,7 @@ export type ImageItem = {
   thumb_url: string;
   md5: string;
   original: string;
+  extra?: Record<string, unknown>;
   has_distinct_original: boolean;
   source: string;
   width: number;

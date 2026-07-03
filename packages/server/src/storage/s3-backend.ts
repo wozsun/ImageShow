@@ -14,8 +14,6 @@ import { s3CopySource, s3ListPrefix, storageS3ObjectName, type ReadablePrefix, t
 import { streamToBuffer } from "./stream-buffer.js";
 import type {
   CopyPrefix,
-  MoveFromPrefix,
-  MoveToPrefix,
   OpenedRead,
   StorageDriver,
   StorageSelfTest
@@ -85,16 +83,6 @@ export class S3Backend implements StorageDriver {
 
   async remove(prefix: StoragePrefix, key: string) {
     await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: this.name(prefix, key) }));
-  }
-
-  async move(fromPrefix: MoveFromPrefix, fromKey: string, toPrefix: MoveToPrefix, toKey: string, targetContentType?: string) {
-    await this.client.send(new CopyObjectCommand({
-      Bucket: this.bucket,
-      CopySource: s3CopySource(this.config, fromPrefix, fromKey),
-      Key: this.name(toPrefix, toKey),
-      ...(targetContentType ? { ContentType: targetContentType, MetadataDirective: "REPLACE" as const } : {})
-    }));
-    await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: this.name(fromPrefix, fromKey) }));
   }
 
   async copy(fromPrefix: CopyPrefix, fromKey: string, toPrefix: CopyPrefix, toKey: string) {

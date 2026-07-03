@@ -82,16 +82,20 @@
     "max_long_edge": 8192,
     // 上传任务列表每页数量。
     "list_page_size": 20,
-    // 本地上传预处理并发数。
-    "concurrency": 2
+    // 单客户端本地上传队列并发数。
+    "concurrency": 2,
+    // 服务端本地上传 prepare 全局并发数；多个客户端共享此上限。
+    "global_concurrency": 5
   },
 
   // 链接图片导入配置。
   "link_image": {
     // 代理链接模式是否尝试探测并回填可直达的原图地址。
     "fill_original_url": false,
-    // URL 导入预处理并发数，覆盖“下载保存”和“代理链接”。
-    "concurrency": 2
+    // 单客户端 URL 导入队列并发数，覆盖“下载保存”和“代理链接”。
+    "concurrency": 2,
+    // 服务端 URL 导入 prepare 全局并发数；多个客户端共享此上限。
+    "global_concurrency": 5
   },
 
   // 本地上传与链接下载共用的最终入库文件标准化策略。
@@ -176,7 +180,7 @@
 
   // 服务端日志配置。
   "log": {
-    // 日志级别：DEBUG、INFO、WARN、ERROR、OFF。
+    // 日志级别：DEBUG、INFO、WARN、ERROR、OFF。后台写操作审计日志从 INFO 开始记录。
     "level": "WARN",
     // 单个日志文件超过该大小后轮转，单位 MB。
     "max_size_mb": 10,

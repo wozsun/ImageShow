@@ -81,6 +81,7 @@ CREATE TABLE IF NOT EXISTS metadata (
   description TEXT NOT NULL DEFAULT '',
   source TEXT NOT NULL DEFAULT '',
   original TEXT NOT NULL DEFAULT '',
+  extra JSONB NOT NULL DEFAULT '{}'::jsonb,
   author TEXT,
   status TEXT NOT NULL DEFAULT 'ready',
   deleted_at TIMESTAMPTZ DEFAULT NULL,
@@ -99,7 +100,7 @@ CREATE TABLE IF NOT EXISTS metadata (
   CHECK (thumbnail_size >= 0),
   CHECK (length(source) <= 2048),
   CHECK (length(original) <= 2048),
-  CHECK (original = '' OR original ~* '^https?://'),
+  CHECK (original = '' OR original ~* '^https://'),
   CHECK (author <> ''),
   CHECK (length(author) <= 32),
   CHECK (author ~ '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'),
@@ -150,13 +151,14 @@ CREATE TABLE IF NOT EXISTS import_session (
   prepared_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
   status TEXT NOT NULL DEFAULT 'created',
   idempotency_key TEXT NOT NULL UNIQUE,
+  request_hash TEXT NOT NULL DEFAULT '',
   error TEXT NOT NULL DEFAULT '',
   expires_at TIMESTAMPTZ NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   CHECK (mode IN ('upload', 'download', 'proxy')),
   CHECK (expected_size IS NULL OR expected_size > 0),
-  CHECK (source_url = '' OR source_url ~* '^https?://'),
+  CHECK (source_url = '' OR source_url ~* '^https://'),
   CHECK (status IN ('created', 'receiving', 'preparing', 'ready', 'committing', 'finalized', 'failed', 'cancelled'))
 );
 
