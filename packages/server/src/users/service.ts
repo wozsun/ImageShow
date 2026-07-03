@@ -4,14 +4,12 @@ import { ApiError } from "../core/http.js";
 
 export type AdminUserRecord = { username: string; role: string; created_at: string };
 
-// Admin accounts ordered super-first, then alphabetical — backs the user mgmt page.
 export async function listAdminUsers(): Promise<AdminUserRecord[]> {
   return (await pool.query(
     "SELECT username, role, created_at::text AS created_at FROM admin_account ORDER BY (role <> 'super'), username ASC"
   )).rows as AdminUserRecord[];
 }
 
-// Creates an image admin. Super admins come only from env, never the UI.
 export async function createImageAdmin(username: string, password: string) {
   const hash = await argon2.hash(password, { type: argon2.argon2id });
   try {
@@ -22,7 +20,6 @@ export async function createImageAdmin(username: string, password: string) {
   }
 }
 
-// Resets an image admin's password. The super admin's password is env-managed.
 export async function resetUserPassword(username: string, password: string) {
   const target = await pool.query("SELECT role FROM admin_account WHERE username = $1", [username]);
   if (!target.rowCount) throw new ApiError(404, "not_found", "用户不存在");
@@ -31,10 +28,6 @@ export async function resetUserPassword(username: string, password: string) {
   await pool.query("UPDATE admin_account SET password_hash = $2, updated_at = now() WHERE username = $1", [username, hash]);
 }
 
-// Self-service password change for any logged-in admin: verifies the current password, then
-// stores the new hash. Works for both image and super admins. Note the super admin's password
-// is re-synced from ADMIN_PASSWORD on every restart (initializeAdmin), so a super's self-change
-// is overwritten on the next redeploy — the env vars stay the source of truth for recovery.
 export async function changeOwnPassword(username: string, currentPassword: string, newPassword: string) {
   const row = (await pool.query("SELECT password_hash FROM admin_account WHERE username = $1", [username])).rows[0] as { password_hash: string } | undefined;
   if (!row) throw new ApiError(404, "not_found", "User not found");
@@ -45,7 +38,6 @@ export async function changeOwnPassword(username: string, currentPassword: strin
   await pool.query("UPDATE admin_account SET password_hash = $2, updated_at = now() WHERE username = $1", [username, hash]);
 }
 
-// Deletes an image admin. The super admin cannot be deleted.
 export async function deleteUser(username: string) {
   const target = await pool.query("SELECT role FROM admin_account WHERE username = $1", [username]);
   if (!target.rowCount) throw new ApiError(404, "not_found", "用户不存在");

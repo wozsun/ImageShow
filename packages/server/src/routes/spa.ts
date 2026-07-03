@@ -6,33 +6,42 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getRuntimeConfig } from "../config/env.js";
 import { siteConfigPayload } from "../config/settings.js";
-import { immutableCacheControl, noCacheControl, spaDocumentHeaders } from "../core/http.js";
+import { immutableCacheControl, noStoreCacheControl, publicDocumentCacheControl, publicStaticCacheControl, spaDocumentHeaders } from "../core/http.js";
 import { existingThemeFromHost, rootSiteUrl, themeFromHost } from "../themes/host.js";
 
 const publicDir = join(dirname(fileURLToPath(import.meta.url)), "../public");
 
-// Static asset + SPA serving with theme-subdomain access gating (themes/host.ts).
-// Not a domain API: serves index.html / assets / favicon and redirects unknown
-// theme hosts back to the root site.
 export function registerStaticRoutes(app: Hono) {
   app.use("/assets/*", async (c, next) => {
     await next();
-    c.header("Cache-Control", immutableCacheControl);
+    c.header("Cache-Control", c.res.status < 400
+      ? c.req.path.startsWith("/assets/brand/") ? publicStaticCacheControl : immutableCacheControl
+      : noStoreCacheControl);
   });
-  // precompressed: 按 Accept-Encoding 优先发预构建的 .br，其次 .gz（构建时由 copy-assets 生成），
-  // 并自动带上 Content-Encoding 与 Vary: Accept-Encoding；客户端不接受时回退原文件。
   app.use("/assets/*", serveStatic({ root: publicDir, precompressed: true }));
+  app.use("/favicon.ico", async (c, next) => {
+    await next();
+    c.header("Cache-Control", c.res.status < 400 ? publicStaticCacheControl : noStoreCacheControl);
+  });
   app.get("/favicon.ico", serveStatic({ path: join(publicDir, "favicon.ico") }));
 
   app.get("/", async (c) => {
     const hostHeader = c.req.header("host") ?? "";
     const requestedTheme = themeFromHost(hostHeader);
     if (!requestedTheme) {
-      const { root_redirect, home_enabled } = getRuntimeConfig().site;
-      // Home off ⇒ the gallery is the landing even if root_redirect is still "home".
-      return c.redirect(!home_enabled || root_redirect === "gallery" ? "/gallery" : "/home", 302);
+      const { root_redirect, home } = getRuntimeConfig().site;
+      return new Response(null, {
+        status: 302,
+        headers: {
+          Location: !home.enabled || root_redirect === "gallery" ? "/gallery" : "/home",
+          "Cache-Control": publicDocumentCacheControl
+        }
+      });
     }
-    return await existingThemeFromHost(hostHeader) ? spaHandler(c) : c.redirect(rootSiteUrl(c), 302);
+    return await existingThemeFromHost(hostHeader) ? spaHandler(c) : new Response(null, {
+      status: 302,
+      headers: { Location: rootSiteUrl(c), "Cache-Control": noStoreCacheControl }
+    });
   });
   app.get("/home", themeAwareSpaHandler);
   app.get("/gallery", themeAwareSpaHandler);
@@ -40,17 +49,11 @@ export function registerStaticRoutes(app: Hono) {
   app.get(`${adminBasePath}/*`, themeAwareSpaHandler);
 }
 
-// The SPA shell, read from disk once and reused. The site config is inlined as a NON-executed JSON
-// block — the SPA document's CSP allows <script type="application/json"> (data, not an inline
-// executable script) — so the app boots without a separate /api/site-config round-trip; a
-// preconnect warms the cross-origin thumbnail host for a faster first image. Rebuilt from the live
-// config on each request and served no-cache, so a settings change shows up on the next load.
 let spaTemplate: string | null = null;
 
 function buildSpaDocument(): string {
   spaTemplate ??= readFileSync(join(publicDir, "index.html"), "utf8");
   const site = getRuntimeConfig().site;
-  // Escape "<" so a config string value can never break out of the JSON <script> block.
   const inlineConfig = JSON.stringify(siteConfigPayload()).replace(/</g, "\\u003c");
   const head =
     `<link rel="preconnect" href="https://${site.static_subdomain}.${site.domain}" crossorigin>` +
@@ -59,12 +62,10 @@ function buildSpaDocument(): string {
 }
 
 async function spaHandler(_c: Context) {
-  // Spread the security headers in: this fresh Response bypasses the global c.header() middleware
-  // (index.ts), so without this the HTML document would ship with no CSP / COOP.
   return new Response(buildSpaDocument(), {
     headers: {
       "Content-Type": "text/html; charset=utf-8",
-      "Cache-Control": noCacheControl,
+      "Cache-Control": publicDocumentCacheControl,
       ...spaDocumentHeaders
     }
   });
@@ -74,5 +75,8 @@ async function themeAwareSpaHandler(c: Context) {
   const hostHeader = c.req.header("host") ?? "";
   const requestedTheme = themeFromHost(hostHeader);
   if (!requestedTheme) return spaHandler(c);
-  return await existingThemeFromHost(hostHeader) ? spaHandler(c) : c.redirect(rootSiteUrl(c), 302);
+  return await existingThemeFromHost(hostHeader) ? spaHandler(c) : new Response(null, {
+    status: 302,
+    headers: { Location: rootSiteUrl(c), "Cache-Control": noStoreCacheControl }
+  });
 }

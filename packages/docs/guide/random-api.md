@@ -11,7 +11,9 @@
 | `a` | 逗号分隔作者 | 缺省全部；`a=x,y` 为包含，`a=!x,!y` 为排除，二者不可混用 |
 | `m` | `proxy` / `redirect` | 返回方式。缺省时取设置页默认值（普通图与外链图一致，见下） |
 
-`t` / `tag` / `a` 均可填 slug 或显示名（自动解析为 slug）。有 `tag` 或 `a` 筛选时改走 PostgreSQL 直接选取（作者、标签不在按分类键组织的随机池里）。
+`t` / `tag` / `a` 均可填 slug 或显示名（自动解析为 slug）。基础随机、主题筛选、标签筛选和作者筛选都在 Redis 随机池中完成：先按 axis/category 计数加权选集合，`tag` / `a` 再通过短期 Redis 过滤集合做包含或排除。
+
+正常 `/random` 请求不依赖 PostgreSQL，不使用 `ORDER BY random()`，也不使用 count + offset。Redis 随机池不可用时返回 503；后台数据库 / Redis 检查读取随机池时会在缓存缺失时自动重建，写路径增量刷新失败时也会排队 `cache.rebuild` 任务从 PostgreSQL 全量重建。
 
 `m=proxy` 直接回源图片字节并附带 `X-Image-Info` 头；`m=redirect` 返回 302 跳转到图片的公开 URL。
 

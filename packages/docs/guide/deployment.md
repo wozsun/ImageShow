@@ -7,6 +7,7 @@
 ```bash
 docker run --rm -p 5518:5518 \
   -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD='replace-this-password' \
+  -e ADMIN_FORCE_SYNC=false \
   -e DATABASE_HOST=db.example.internal -e DATABASE_NAME=imageshow \
   -e DATABASE_USER=imageshow -e DATABASE_PASSWORD='replace-this-db-password' \
   -e REDIS_HOST=redis.example.internal \
@@ -35,4 +36,4 @@ server {
 }
 ```
 
-不要把应用 HTTP 端口直接暴露到公网。若 `X-Forwarded-Proto` 缺失或错误，Secure Cookie、同源检查与生成的跳转 URL 都会不正确。上传的图片一律由浏览器同源 PUT 到应用（再由应用流式写入本地或 S3），依赖管理员会话 Cookie 与 `X-CSRF-Token` 鉴权；浏览器不直连对象存储上传，因此存储桶无需配置 CORS。
+不要把应用 HTTP 端口直接暴露到公网。若 `X-Forwarded-Proto` 缺失或错误，Secure Cookie、同源检查与生成的跳转 URL 都会不正确。浏览器同源 PUT 的原始图片先写入容器 `data/tmp`，服务端 prepare 完成后才向选定后端写入候选文件；请求依赖管理员会话 Cookie 与 `X-CSRF-Token`，浏览器不直连对象存储，因此存储桶无需配置 CORS。

@@ -1,6 +1,4 @@
-// Request parsing/validation for the random API plus the count aggregation that
-// powers /img-count. Pure functions over URLSearchParams and the Redis folder map.
-import type { FolderMap } from "../core/redis.js";
+import type { FolderMap } from "./random-cache.js";
 import { routeError } from "../core/http.js";
 import { splitSelectors } from "../core/selectors.js";
 
@@ -8,7 +6,6 @@ export const randomDevices = ["pc", "mb"] as const;
 export const randomBrightness = ["dark", "light"] as const;
 export type RandomBrightness = (typeof randomBrightness)[number];
 
-// Accepted request selectors. "r" is the random/unknown device sentinel.
 export const randomRequestDevices = new Set(["pc", "mb", "r"]);
 export const randomMethods = new Set(["proxy", "redirect"]);
 const randomAllowedQuery = new Set(["d", "b", "t", "tag", "a", "m"]);
@@ -39,14 +36,6 @@ export function validateRandomQuery(query: URLSearchParams) {
   return null;
 }
 
-export function validThemesFromMap(map: FolderMap) {
-  return Array.from(new Set(randomDevices.flatMap((device) =>
-    Object.values(map[device] ?? {}).flatMap((brightnesses) => Object.keys(brightnesses ?? {}))
-  ))).sort();
-}
-
-// Rejects a selector set that mixes include and exclude terms, as a routeError tagged
-// with `noun` (theme / tag / author); returns null when there's no mix.
 function mixedSelectorsError(noun: string, include: string[], exclude: string[]) {
   if (!include.length || !exclude.length) return null;
   return routeError(
@@ -70,17 +59,11 @@ export function parseThemeSelectors(query: URLSearchParams, validThemes: string[
   return validThemes;
 }
 
-// Tag selectors for the random API: comma-separated, each optionally `!`-prefixed to
-// exclude. Include is OR (image carries any selected tag). Terms are expected pre-resolved
-// to slugs (the service resolves display names). Mixing include and exclude is rejected.
 export function parseTagSelectors(query: URLSearchParams) {
   const { include, exclude } = splitSelectors(query.getAll("tag"));
   return mixedSelectorsError("tag", include, exclude) ?? { include, exclude };
 }
 
-// Author selectors for the random API: comma-separated, each optionally `!`-prefixed to
-// exclude. An image has one author, so include is IN (any selected author). Terms are
-// expected pre-resolved to slugs. Mixing include and exclude is rejected.
 export function parseAuthorSelectors(query: URLSearchParams) {
   const { include, exclude } = splitSelectors(query.getAll("a"));
   return mixedSelectorsError("author", include, exclude) ?? { include, exclude };

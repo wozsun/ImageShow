@@ -1,16 +1,16 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { AppHeader } from "../components/AppHeader.js";
-import { CopyButton } from "../components/CopyButton.js";
-import { Icon } from "../components/Icon.js";
-import { SelectMenu } from "../components/SelectMenu.js";
-import { ProgressBar } from "../components/ProgressBar.js";
-import { FacetSelector } from "../components/FacetSelector.js";
+import { AppHeader } from "../components/navigation/AppHeader.js";
+import { CopyButton } from "../components/actions/CopyButton.js";
+import { Icon } from "../components/icon/Icon.js";
+import { SelectMenu } from "../components/form/SelectMenu.js";
+import { ProgressBar } from "../components/feedback/ProgressBar.js";
+import { FacetSelector } from "../components/data-display/FacetSelector.js";
 import { defaultSite } from "../lib/constants.js";
-import { buildRandomUrl } from "../lib/random-url.js";
-import { rootSiteOrigin } from "../lib/theme-host.js";
-import { randomBrightnessSelectOptions, randomDeviceSelectOptions, randomModeSelectOptions } from "../lib/select-options.js";
+import { buildRandomUrl } from "../lib/gallery/random-url.js";
+import { rootSiteOrigin } from "../lib/gallery/theme-host.js";
+import { randomBrightnessSelectOptions, randomDeviceSelectOptions, randomModeSelectOptions } from "../lib/ui/select-options.js";
 import type { RandomLinkDraft, RandomMode } from "../lib/types.js";
-import { useGalleryOptions, useSiteConfig } from "../lib/site-data.js";
+import { useGalleryOptions, useSiteConfig } from "../lib/api/site-data.js";
 
 export function HomePage() {
   const [device, setDevice] = useState("");
@@ -31,13 +31,11 @@ export function HomePage() {
   const { data: siteConfig } = useSiteConfig();
   const { data: galleryOptions } = useGalleryOptions();
   const siteName = siteConfig?.site?.name ?? defaultSite.name;
-  // Effective URL from /api/site-config (default: the site's own random API); falls back
-  // to the same-host random endpoint before it loads, mirroring the admin login bg.
-  const homeHeroBackground = siteConfig?.site?.home_hero_background || "/random?m=redirect";
-  const previewDelayMs = siteConfig?.home.preview_delay_ms ?? 1_000;
-  // The shareable link uses the configured public domain, falling back to the
-  // current origin only until the site config loads. The preview below keeps the
-  // current origin so the dev proxy works and the fetch stays same-origin.
+  const homeTagline = siteConfig?.site?.home.tagline ?? defaultSite.home.tagline;
+
+  const homeHeroBackground = siteConfig?.site?.home.hero_background || "/random?m=redirect";
+  const previewDelayMs = siteConfig?.site?.home.preview_delay_ms ?? 1_000;
+
   const linkOrigin = siteConfig?.site.domain
     ? rootSiteOrigin(siteConfig.site.domain).replace(/\/$/, "")
     : window.location.origin;
@@ -72,8 +70,6 @@ export function HomePage() {
     applyRandomDraft({ device, brightness, theme: themeInput, tag: tagInput, author: authorInput, mode: value });
   };
 
-  // Theme/tag changes debounce the preview reload (they fire as you build a
-  // multi-select) while the shareable link stays in sync once committed.
   const scheduleFacets = (next: RandomLinkDraft) => {
     setThemePending(true);
     setThemeProgressKey((current) => current + 1);
@@ -148,7 +144,7 @@ export function HomePage() {
         <section className="home-hero" style={{ backgroundImage: `url("${homeHeroBackground}")` }}>
           <div>
             <h1>{siteName}</h1>
-            <p>个人图片管理、画廊展示和随机图片 API。</p>
+            {homeTagline && <p>{homeTagline}</p>}
           </div>
         </section>
         <section className="home-bottom">

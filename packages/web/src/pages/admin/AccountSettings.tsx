@@ -1,15 +1,12 @@
 import { useState, type FormEvent } from "react";
-import { api } from "../../lib/api.js";
-import { Icon } from "../../components/Icon.js";
-import { PasswordInput } from "../../components/PasswordInput.js";
+import { api } from "../../lib/api/client.js";
+import { Icon } from "../../components/icon/Icon.js";
+import { PasswordInput } from "../../components/form/PasswordInput.js";
 import { adminApiBasePath } from "../../lib/constants.js";
-import { errorMessage } from "../../lib/formatters.js";
-import { isValidAdminPassword, passwordPolicyHint } from "../../lib/password.js";
-import { useAuthMe } from "../../lib/site-data.js";
+import { errorMessage } from "../../lib/ui/formatters.js";
+import { isValidAdminPassword, passwordPolicyHint } from "../../lib/auth/password.js";
+import { useAuthMe } from "../../lib/api/site-data.js";
 
-// Self-service password change, available to every signed-in admin (both super and image
-// roles). For image admins — who have no other settings access — this is their dedicated
-// settings page. Takes the current password once plus the new one twice (confirm).
 export function AccountSettings() {
   const { data: auth } = useAuthMe();
   const [current, setCurrent] = useState("");
@@ -19,7 +16,7 @@ export function AccountSettings() {
   const [done, setDone] = useState(false);
   const [busy, setBusy] = useState(false);
   const isSuper = auth?.role === "super";
-  // Flag the new-password field red (+ hint) once something's typed that breaks the policy.
+
   const nextInvalid = next.length > 0 && !isValidAdminPassword(next);
   const mismatch = confirm.length > 0 && next !== confirm;
   const canSubmit = current.length > 0 && isValidAdminPassword(next) && next === confirm && !busy;

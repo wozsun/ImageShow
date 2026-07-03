@@ -21,5 +21,6 @@ data/
 cert/
 nginx/
 .claude/
+.codex/
 AGENTS.md
 CLAUDE.md

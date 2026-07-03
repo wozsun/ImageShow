@@ -1,22 +1,18 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "../../lib/api.js";
-import { Icon } from "../../components/Icon.js";
-import { OverlayScrollbar } from "../../components/OverlayScrollbar.js";
-import { ConfirmDialog } from "../../components/ConfirmDialog.js";
-import { EntityCard } from "../../components/EntityCard.js";
-import { PageToast } from "../../components/PageToast.js";
+import { api } from "../../lib/api/client.js";
+import { Icon } from "../../components/icon/Icon.js";
+import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
+import { ConfirmDialog } from "../../components/feedback/ConfirmDialog.js";
+import { EntityCard } from "../../components/data-display/EntityCard.js";
+import { PageToast } from "../../components/feedback/PageToast.js";
 import { adminApiBasePath, queryKeys, slugCharset, slugFormatHint } from "../../lib/constants.js";
-import { errorMessage } from "../../lib/formatters.js";
+import { errorMessage } from "../../lib/ui/formatters.js";
 import type { AdminSettings, Author, Tag, Theme } from "../../lib/types.js";
 
 type EntityKind = "tags" | "themes" | "authors";
 type Entity = Tag | Theme | Author;
 
-// 主题/标签/作者 are the same slug + 显示名 CRUD page — only the wording, endpoint segment, the
-// theme-only pinned 'none' sentinel and the author's extra 链接 field differ — so all three
-// routes render this one component (the per-card UI is the shared EntityCard). `kind` selects
-// the copy and the API path.
 const COPY = {
   tags: {
     noun: "标签",
@@ -54,16 +50,15 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
   const { data, isFetching } = useQuery<{ items: Entity[] }>({ queryKey, queryFn: () => api(`${adminApiBasePath}/${kind}`) });
   const { data: settingsData } = useQuery<{ settings: AdminSettings }>({ queryKey: queryKeys.settings, queryFn: () => api(`${adminApiBasePath}/settings`) });
   // 新建/删除词条会改动公共画廊的筛选词表（gallery-options，staleTime:Infinity 不会自动刷新），
-  // 删除还会清除关联图片上的该属性，故一并失效公共/后台图片列表，与 ImageAdmin.refresh 的失效集对齐。
+  // 删除还会清除关联图片上的该属性，故一并失效后台图片列表，与 ImageAdmin.refresh 的失效集对齐。
   const refresh = () => {
     client.invalidateQueries({ queryKey });
     client.invalidateQueries({ queryKey: queryKeys.galleryOptions });
-    client.invalidateQueries({ queryKey: ["public-images"] });
     client.invalidateQueries({ queryKey: queryKeys.adminImages });
   };
   const [slug, setSlug] = useState("");
   const [display, setDisplay] = useState("");
-  // Authors only: the optional link captured alongside the slug + display name when creating.
+
   const [link, setLink] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -71,20 +66,15 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
   const [confirmBatch, setConfirmBatch] = useState(false);
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<string[]>([]);
-  // Local ordered copy so a drag can reorder live; re-synced whenever the server list
-  // changes (create / delete / reorder refetch).
+
   const [order, setOrder] = useState<Entity[]>([]);
   const dragSlug = useRef<string | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => { setOrder(data?.items ?? []); }, [data]);
 
-  // Red-border + hint the slug box (like the create-user username field) once it holds a
-  // disallowed character, and block submit while invalid.
   const slugInvalid = slug.length > 0 && !slugCharset.test(slug);
 
-  // Client-side pagination over the (small, in-memory) vocab, page size shared with the
-  // image list ("图片管理每页数量").
   const pageSize = settingsData?.settings.admin.image_page_size ?? 50;
   // 主题页可隐藏钉住的「未设置 / none」占位卡片（设置页 admin 组的开关，默认显示）；其它类别无此卡片。
   // 只过滤展示用列表，order（含 none）保持完整，拖拽排序逻辑不受影响。
@@ -148,8 +138,6 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
 
   const toggleSelect = (s: string, checked: boolean) => setSelected((current) => checked ? [...new Set([...current, s])] : current.filter((x) => x !== s));
 
-  // Reorder `order` live as the dragged card moves over another (never past the pinned
-  // 'none' sentinel), then persist the non-pinned order on drop.
   const moveOver = (targetSlug: string) => {
     const from = dragSlug.current;
     if (!from || from === targetSlug || from === "none" || targetSlug === "none") return;
@@ -173,7 +161,7 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
       refresh();
     } catch (err) {
       setError(errorMessage(err));
-      refresh(); // re-sync to the server order on failure
+      refresh();
     }
   };
 

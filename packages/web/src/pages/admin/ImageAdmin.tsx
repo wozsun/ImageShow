@@ -1,19 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "../../lib/api.js";
-import { Icon } from "../../components/Icon.js";
-import { ConfirmDialog } from "../../components/ConfirmDialog.js";
-import { OverlayScrollbar } from "../../components/OverlayScrollbar.js";
+import { api } from "../../lib/api/client.js";
+import { Icon } from "../../components/icon/Icon.js";
+import { ConfirmDialog } from "../../components/feedback/ConfirmDialog.js";
+import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
 import { adminApiBasePath, queryKeys } from "../../lib/constants.js";
-import { errorMessage, formatDate, formatImageMeta } from "../../lib/formatters.js";
-import { useStorageNameResolver } from "../../lib/storage-options.js";
+import { errorMessage, formatDate, formatImageMeta, imageDisplayTitle } from "../../lib/ui/formatters.js";
+import { useStorageNameResolver } from "../../lib/api/storage-options.js";
 import type { AdminSettings, Author, ImageItem, Tag, Theme } from "../../lib/types.js";
-import { ImageDetailModal } from "../../components/ImageDetailModal.js";
-import { ThumbImage } from "../../components/ThumbImage.js";
+import { ImageDetailModal } from "../../components/image/ImageDetailModal.js";
+import { ThumbImage } from "../../components/image/ThumbImage.js";
 import { BatchMetadataModal, ImageEditModal } from "./ImageModals.js";
 import { SettingsFeedback } from "./SettingsPage.js";
-import { Uploader } from "./Uploader.js";
+import { Uploader } from "./uploader/Uploader.js";
 
 type ConfirmAction =
   | { kind: "batch-delete"; ids: string[] }
@@ -25,8 +25,7 @@ type ConfirmAction =
 const restoreChunkSize = 10;
 
 export function ImageAdmin() {
-  // The overview's image cards deep-link into a specific tab via ?view=unset|deleted; the
-  // 未设置 tab lists ready images with no theme (theme='none').
+
   const [searchParams, setSearchParams] = useSearchParams();
   const viewParam = searchParams.get("view");
   const [view, setView] = useState<"ready" | "unset" | "deleted">(viewParam === "unset" || viewParam === "deleted" ? viewParam : "ready");
@@ -35,17 +34,14 @@ export function ImageAdmin() {
   const [detail, setDetail] = useState<ImageItem | null>(null);
   const [editing, setEditing] = useState<ImageItem | null>(null);
   const [batchEditing, setBatchEditing] = useState(false);
-  // Batch-operation status shown as the shared header feedback card (pending/success/error),
-  // matching the "保存应用配置" card style.
+
   const [feedback, setFeedback] = useState<{ text: string; status: "pending" | "success" | "error" } | null>(null);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
   const gridRef = useRef<HTMLDivElement | null>(null);
   const client = useQueryClient();
   const { data: settingsData } = useQuery<{ settings: AdminSettings }>({ queryKey: queryKeys.settings, queryFn: () => api(`${adminApiBasePath}/settings`) });
-  // The theme/tag/author vocab only feeds the edit + batch-edit modals' selectors, so don't fetch
-  // it on the plain list view — defer until an editor opens. (The Uploader fetches its own copy,
-  // gated the same way on its window being open.)
+
   const editorDataNeeded = Boolean(editing || batchEditing);
   const { data: themeData } = useQuery<{ items: Theme[] }>({ queryKey: queryKeys.themes, queryFn: () => api(`${adminApiBasePath}/themes`), enabled: editorDataNeeded });
   const themes = themeData?.items ?? [];
@@ -60,13 +56,11 @@ export function ImageAdmin() {
   const cursor = cursorHistory.at(-1) ?? "";
   const pageNumber = cursorHistory.length;
   const listParams = new URLSearchParams({ status: view === "deleted" ? "deleted" : "ready", limit: String(pageSize) });
-  // 未设置 tab = ready images with no theme.
+  // 「未设置」页签只显示未设置主题的正常图片。
   if (view === "unset") listParams.set("t", "none");
   if (cursor) listParams.set("cursor", cursor);
   const listPath = `${adminApiBasePath}/images?${listParams}`;
-  // Gate on settingsData: the list's limit is settings.admin.image_page_size, so firing before
-  // settings loads would request page 1 at the default size and then refetch at the real size
-  // once settings arrives. Waiting one (fast, in-memory) settings read avoids that double-fetch.
+
   const { data, isFetching } = useQuery<{ items: ImageItem[]; total: number; has_next: boolean; next_cursor: string | null }>({
     queryKey: [...queryKeys.adminImages, view, cursor, pageSize],
     queryFn: () => api(listPath),
@@ -76,7 +70,6 @@ export function ImageAdmin() {
     setSelected([]);
     setCursorHistory([""]);
     client.invalidateQueries({ queryKey: queryKeys.adminImages });
-    client.invalidateQueries({ queryKey: ["public-images"] });
     client.invalidateQueries({ queryKey: queryKeys.galleryOptions });
     client.invalidateQueries({ queryKey: queryKeys.themes });
     client.invalidateQueries({ queryKey: queryKeys.tags });
@@ -92,7 +85,7 @@ export function ImageAdmin() {
     setCursorHistory([""]);
     setSelected([]);
     setFeedback(null);
-    // Keep the URL in sync so the tab survives a refresh / shared link.
+
     setSearchParams(next === "ready" ? {} : { view: next }, { replace: true });
   };
   const previousPage = () => {
@@ -248,7 +241,7 @@ export function ImageAdmin() {
             onCheck={(checked) => setSelected((current) => checked ? [...current, item.id] : current.filter((id) => id !== item.id))}
             onDetail={() => setDetail(item)}
             onEdit={() => setEditing(item)}
-            onPurge={() => setConfirmAction({ kind: "purge", id: item.id, title: item.title || item.index_key })}
+            onPurge={() => setConfirmAction({ kind: "purge", id: item.id, title: imageDisplayTitle(item) })}
             onChanged={refresh}
           />
         ))}
@@ -335,9 +328,11 @@ function ImageRow({ item, storageName, checked, onCheck, onDetail, onEdit, onPur
         onClick={(event) => event.stopPropagation()}
         onChange={(event) => onCheck(event.target.checked)}
       />
-      <div className="thumb-button"><ThumbImage src={item.thumb_url} alt="" /></div>
+      <div className="thumb-button">
+        <ThumbImage src={item.thumb_url} alt="" />
+      </div>
       <div className="row-main">
-        <strong>{item.title || item.index_key}</strong>
+        <strong>{imageDisplayTitle(item)}</strong>
         <span>{formatImageMeta(item)}</span>
       </div>
       <div className="row-actions" onClick={(event) => event.stopPropagation()}>

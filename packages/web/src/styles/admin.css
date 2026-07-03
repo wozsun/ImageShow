@@ -1,5 +1,3 @@
-/* 后台样式聚合入口，由 AdminShell.tsx 引入，只随 admin 懒加载分块下载。
-   responsive.css 置于最后，使其移动端覆盖生效于上面的桌面规则。 */
 @import "./admin/layout.css";
 @import "./admin/upload.css";
 @import "./admin/images.css";

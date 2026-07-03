@@ -5,10 +5,7 @@ import { issueCaptcha, verifyCaptcha } from "../core/captcha.js";
 import { parse, passwordChangeInput } from "../core/validation.js";
 import { changeOwnPassword } from "../users/service.js";
 
-// Thin HTTP layer for admin auth; session/login/logout logic lives in core/http.ts.
 export function registerPublicAuthRoutes(app: Hono) {
-  // Login captcha image (public, registered before the requireAuth middleware). Each GET
-  // issues a fresh one-time challenge and sets the captcha cookie.
   app.get(`${adminApiBasePath}/auth/captcha`, (c) => issueCaptcha(c));
 
   app.post(`${adminApiBasePath}/auth/login`, async (c) => {
@@ -30,8 +27,6 @@ export function registerProtectedAuthRoutes(app: Hono) {
     return c.json(ok());
   });
 
-  // Self-service password change for the current session's account (any role). Verifies the
-  // current password and applies the new one; the session itself stays valid.
   app.post(`${adminApiBasePath}/auth/password`, requireCsrf, async (c) => {
     const session = await getSession(c);
     if (!session) throw new ApiError(401, "unauthorized", "Unauthorized");

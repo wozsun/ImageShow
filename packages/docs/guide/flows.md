@@ -1,193 +1,171 @@
 # 功能与流程
 
-本页串讲 ImageShow 的主要功能与端到端流程。底层数据见[数据库结构](./database)，组件分布见[项目结构](./project-structure)。
+本页描述 ImageShow 的主要端到端流程。底层表结构见[数据库结构](./database)，组件边界见[项目结构](./project-structure)。
 
-## 上传图片（三段式）
+## 三种图片导入模式
 
-上传一张图要走三个接口：**创建会话 → 上传字节 → 完成**。前端可并发处理多张（并发数 = 设置页「上传 / 缩略图并发数」，默认 2），每张图各自独立走完这三步、互不等待。
+三种模式共用一个 `ImportJob` 队列、任务卡片、元数据编辑、最终 MD5 判重、SSE 状态推送、取消/重试和批量提交界面。底层统一为 `import_session`：`mode=upload` 保存浏览器上传文件，`mode=download` 由服务端下载并保存，`mode=proxy` 只保存缩略图与外部链接。
 
+```text
+模式 1：本地上传
+
+File ──► 立即创建卡片 + blob: 临时预览
+     └─► 创建 import_session(mode=upload，锁定 storage_slug）
+          └─► PUT 原始字节
+               └─► data/tmp/<id>.raw
+                    └─► transcodeStoredImage()
+                         ├─ 校验格式、尺寸
+                         ├─ WebP < 阈值且尺寸达标：跳过转码
+                         ├─ 否则缩放、WebP 编码、按体积逐级降质量
+                         ├─ 生成标准缩略图、识别设备与明暗
+                         └─ 计算最终 md5 / size / ext
+                              ├─► <锁定后端>/_uploads/<id>.image.webp
+                              └─► <锁定后端>/_uploads/<id>.thumb.webp
+                                   └─► ready：切换为最终预览，允许编辑/提交
+
+模式 2：链接下载
+
+URL ──► 立即创建卡片
+    └─► 创建 import_session(mode=download，锁定 storage_slug/source_url）
+         └─► 服务端限时、限大小下载
+              └─► data/tmp/<id>.raw
+                   └─► 与本地上传相同的 transcodeStoredImage()、staging、ready、commit
+
+模式 3：代理链接
+
+URL ──► 立即创建卡片
+    └─► 创建 import_session(mode=proxy，锁定缩略图 storage_slug/source_url）
+         └─► 服务端下载一次用于校验、MD5、尺寸、明暗识别和缩略图
+              ├─► <锁定后端>/_uploads/<id>.thumb.webp
+              └─► ready：编辑/提交
+                   └─► metadata.object_key = URL、is_link=true
+                        + <锁定后端>/link/<分类>/<id>.webp
 ```
-浏览器                              服务器                                 存储 / 数据库
-──────                              ──────                                 ────────────
-[选文件]
- ├ 本地解码读出 宽/高
- ├ Web Worker 算 MD5 ──(库内判重)
- └ 文件名解析 设备/亮度/主题(可选)
-                                                                          ┌──────────────┐
- ① 创建会话 ──(只发 size+md5+元数据)─►  校验 主题/大小上限/后端可写         ──► │ upload_session │
-                                ◄── 返回 upload_url                        └──────────────┘
-                                                                          ┌──────────────┐
- ② PUT 字节 ─────(原始字节)──────►  流式写暂存区, 边写边卡大小上限       ──► │ _uploads/<id> │
-                                    (本地另比对精确字节)                    └──────────────┘
- ③ 完成 ─────────────────────────►  ┌ 计算段(可并行 · 不持锁) ───────────┐
-                                    │ 读回字节一次 → 探测真值:            │
-                                    │   · 格式/扩展名(看魔数)             │
-                                    │   · 宽/高(重新卡长边上限)           │
-                                    │   · 服务器 MD5 / 真实字节数         │
-                                    │ 校验 字节数==声明? MD5==声明? ──────┼─ ✗ → size/md5_mismatch
-                                    │ 生成 512px webp 缩略图              │   ┌──────────────────┐
-                                    │ 亮度=auto? 用缩略图判 dark/light    │   │ objects/ · thumbs/│
-                                    │ 落盘: 暂存→objects · 写缩略图 ──────┼─► │ (慢 IO, 在锁之前)  │
-                                    ├ 提交段(短事务 · 锁分类行) ──────────┤   └──────────────────┘
-                                    │ 分配 category_index(串行)           │   ┌──────────────┐
-                                    │ 插入 metadata 行 · 写标签 · 计数+1  ─┼─► │ metadata · 标签│
-                                    └ 刷新随机池 · 失效缓存 ──────────────┘   └──────────────┘
-                                ◄── 返回「就绪」图片
+
+prepare 完成后会删除 `data/tmp` 下的 raw 文件；失败、取消和过期清理同样删除 raw 与 `_uploads` 候选对象。清理只匹配 UUID 形态的 `.raw` / `.raw.part` 文件，避免误删其他临时内容。原始上传/下载字节从不写入 S3、WebDAV 等目标后端，因此不存在“先远端上传原图、再下载回来压缩”的重复传输。
+
+### prepared import 状态机
+
+```text
+created
+  ├─► receiving（本地：接收上传；下载保存：服务端下载）
+  │    └─► preparing（校验 / 转码 / 缩略图 / 最终 MD5）
+  └─► preparing（代理链接：探测外链 / 生成缩略图 / 最终 MD5）
+            └─► ready（可编辑、可提交）
+                 └─► committing（只搬候选对象并写数据库）
+                      └─► finalized
+
+任一 prepare 阶段 ─► failed
+可取消阶段         ─► cancel + 删除会话、raw、processed、prepared thumbnail
 ```
 
-### 浏览器侧：上传前在本地做的事
+每个任务在创建会话时锁定 `storage_slug`。之后修改全局默认存储只影响新任务；ready 任务不支持换后端，commit 必须使用会话中的后端。
 
-选中文件后，浏览器先在本地算出这些——**大多仅供前端用，并不上传**：
+### prepare 与 commit 的职责
 
-- **解码图片读出宽、高**，按「宽 ≥ 高 ⇒ 横屏 `pc`，否则竖屏 `mb`」推断默认设备，并据此**本地拦下超长边的图**（提示不让上传）。宽高本身**不发给服务器**；
-- 用 **Web Worker 池算文件 MD5**：用于「秒传」式的库内判重（提示是否已存在相同图），并**作为核验值发给服务器**；
-- 从**文件名后缀**取扩展名、从 `设备-亮度-主题-序号` 之类的文件名解析出设备 / 亮度 / 主题填进卡片——**这些都只在浏览器端用来填表**，扩展名与文件名都不上传。
+prepare 承担所有重处理：
 
-只有两类东西会真正发到服务器：**核验项**（字节大小 + MD5，稍后和真实字节比对）和**你确认的元数据**（设备 / 亮度 / 主题 / 标题 / …，服务器原样采用或按 `auto` 判定）。
+- upload/download：原始流精确大小限制与服务端本地落盘；
+- upload/download：图片解码校验、长边约束、可选 WebP 转码与体积控制；
+- 三种模式：标准缩略图、最终预览、设备/明暗识别；
+- upload/download 基于最终候选字节计算 `metadata.md5`；proxy 基于外部原图字节计算 `metadata.md5`；
+- upload/download 把 processed image 和 prepared thumbnail 写入锁定后端的 `_uploads`；proxy 只写 prepared thumbnail。
 
-### 第一步：创建会话（只发属性，不发字节）
+commit 不重新下载、不重新转码，也不从远端读回候选文件：
 
-浏览器只提交两类东西作为 JSON：**核验项**（声明的字节大小 + MD5）和**元数据**（你在卡片里编辑的设备、亮度、主题、标题、描述、来源、原图链接、标签），再加一个幂等键（本次任务 id）和目标存储后端。**宽 / 高 / 扩展名 / 文件名都不发**——尺寸与扩展名一律由服务器探测真值，文件名只用于前端填表。
+1. 会话 advisory lock 防止并发重复提交；
+2. upload/download：`_uploads` 中 processed image 移到 `media`，prepared thumbnail 移到 `thumbs`；proxy：prepared thumbnail 移到 `link`；
+3. 短事务写 `metadata` 与会话最终状态；
+4. 写标签、更新随机池和读缓存。
 
-服务器**当场校验**（尽早失败）：主题不与保留子域名冲突、声明大小不超上限、目标后端存在且可写（选了 S3 还会校验凭据完整）。通过后落一行**上传会话**记录（把这些属性原样暂存进去），返回上传地址。此刻**数据库里只有这条临时会话行，没有任何正式图片记录**。重复提交同一幂等键会折叠成同一会话。
+对象移动具有幂等检查：若上次提交已移动对象但数据库步骤失败，重试会复用已存在的目标对象。
 
-### 第二步：上传字节
+### 前端队列与判重
 
-浏览器把原始字节 PUT 到上一步给的地址（同源，带管理员会话 Cookie 与 CSRF 头）。服务器**流式**写入该后端的暂存区，**边写边卡大小上限**（超了立刻中止）；本地后端还会在写完比对**精确字节数**，不符即 `size_mismatch`。无论本地还是 S3 / WebDAV，字节都**先经过本服务器**再转存——不存在浏览器直传对象存储。
+- 选择本地文件后立即加入卡片，本地 `objectURL` 只用于 prepare 前临时预览；切换为服务端最终预览时立即 revoke。
+- 队列状态优先走 SSE 实时推送；SSE 连接失败或断开后才降级为 2 秒一次的批量状态轮询，轮询按当前未完成任务集合合并请求，不按单卡片单独轮询。
+- 前端不读取整文件计算 MD5。批次内的预筛只用 `name + size + lastModified + webkitRelativePath`，浏览器拿不到完整路径时不依赖路径。
+- 服务端返回最终 MD5 后，队列以同步 reservation 防止并发 prepare 的两张相同图片同时通过批内判重，再查询图库已有项。
+- 卡片区分等待、上传/下载、处理、已就绪、提交、完成、失败、取消；显示存储后端显示名、处理前后像素尺寸、处理前后体积、质量或短路状态、失败原因及取消/重试。
+- 清空列表和取消单项会先调用后端 cancel，再移除卡片；本地 XHR、下载请求和代理准备请求也会中止。
 
-### 第三步：完成（同步做完所有处理才返回）
+### 三种模式差异
 
-这一步**同步**跑完全部处理，所以接口一返回就代表图片**真正就绪、已在库、缩略图已就位**，不往后台队列遗留任何待办。内部分成两段：
-
-**计算段（无共享状态、可并行、不持任何锁）**
-
-1. 把暂存字节**读回内存一次**——后面所有校验、判明暗、缩略图都用这同一份。
-2. **探测真值**：从字节的「魔数」识别真实格式 / 扩展名（被改名成 `.png` 的 JPEG 也会被认成 jpg）；用解码出的真实宽高，并**卡长边上限**（这里是**唯一**的尺寸闸——客户端不发尺寸，超限报 `image_too_large`）；算出**服务器版 MD5** 与真实字节数。
-3. **两道完整性校验**：真实字节数必须等于第一步声明的大小（否则 `size_mismatch`）；服务器算出的 MD5 必须等于浏览器声明的 MD5（否则 `md5_mismatch`）。任一不符，**整个上传失败、不入库**，暂存字节留待过期回收。
-4. **生成缩略图**：缩成长边 512px 的 webp（按 EXIF 自动转正方向）。
-5. **判明暗（仅当亮度选了「自动识别」，即默认）**：在**刚生成的那张缩略图**上算明暗（见下文「明暗识别」），得 dark / light；若你已手填具体 dark/light，跳过这一步。
-6. **落盘**：把暂存对象搬到正式位置、把缩略图写入存储——都在事务**之前**完成，所以慢 IO 不占数据库锁。
-
-**提交段（一个短事务，唯一的串行点）**
-
-7. 锁住目标分类行、取下一个序号、**插入正式 `metadata` 行**。注意：**入库的宽 / 高 / 字节数 / MD5 / 扩展名一律取服务器探测的真值**，而设备 / 亮度 / 主题 / 标题 / 描述 / 来源 / 原图链接取你提交的值。
-8. 写标签关联、分类计数 +1、会话标记完成，提交。
-9. 事务后：刷新随机池、失效相关缓存，返回就绪图片。
-
-并发安全：分配序号是整条流程里**唯一**需要串行的点——靠分类行锁，**同一分类**的并发完成会自动排队、绝不撞号，**不同分类**则完全并行。
-
-### 哪些值可信、哪些不可信
-
-| 项 | 浏览器发送？ | 入库采用 | 不符 / 越界 |
+| 项目 | 本地上传 | 链接下载 | 代理链接 |
 | --- | --- | --- | --- |
-| 字节大小 | **发**（核验 + PUT 限流） | **服务器实测** | `size_mismatch`，上传失败 |
-| MD5 | **发**（判重 + 核验） | **服务器实算** | `md5_mismatch`，上传失败 |
-| 宽 / 高 | **不发**（仅前端本地判设备 + 拦超长边） | **服务器探测** | 超限 `image_too_large` |
-| 扩展名 / 格式 | **不发** | **服务器按魔数识别** | 非图片 `unsupported_file_type` |
-| 文件名 | **不发**（仅前端解析填表） | — | — |
-| 设备 | 发（本地按宽高 / 文件名推断） | **原样采用**（pc/mb，上传不重判） | — |
-| 亮度 | 文件名 / 你选的 | `auto`（默认）→**服务器判**；具体值→采用 | — |
-| 主题 / 标题 / 描述 / 来源 / 原图 / 标签 | 你填的 | **原样采用**（仅校验格式） | 格式非法 `validation_error` |
+| 会话表 | `import_session(mode=upload)` | `import_session(mode=download)` | `import_session(mode=proxy)` |
+| raw 临时位置 | `data/tmp/<id>.raw` | `data/tmp/<id>.raw` | 不保存 raw |
+| 最终原图 | 标准化后的 WebP | 标准化后的 WebP | 不保存，保留 URL |
+| 最终 MD5 | processed image | processed image | prepare 时下载的远程原图 |
+| prepared 暂存 | `_uploads/*.image.webp` + `*.thumb.webp` | 同左 | `_uploads/*.thumb.webp` |
+| 正式位置 | `media` + `thumbs` | `media` + `thumbs` | URL + `link` 缩略图 |
+| 数据库标记 | `is_link=false` | `is_link=false` | `is_link=true` |
 
-> 设备与亮度**永远是具体值**——没有「暂不设置」。设备总是 pc/mb（上传时浏览器按宽高比定、服务器不重判；链接导入没有浏览器，由服务器按宽高判）。亮度默认「自动识别」（`brightness='auto'`，服务端判 dark/light），也可手填具体值。
+两种 URL 模式都遵循 `link_image.fill_original_url`。入库标准化参数位于顶层 `normalize`，下载并发位于 `link_image.concurrency`。
 
-失败处理：大小 / MD5 不符等都以 `{ ok:false, code, error }` 形式返回对应状态码，前端按 `code` 提示。未在 `uploadTtlSeconds`（默认 10 分钟）内完成的会话，其暂存文件由 `upload.cleanup` 任务回收。
+## 原图链接与外链代理
 
-## 链接导入
+详情弹窗的「原图」只在 `original` 字段存在且不同于展示图时显示，并先请求 `/api/images/:id/original`。后端也执行相同判断：`original` 为空或等于展示 URL 时返回 404。只有 `original` 指向另一个 URL 时，后端才用当前浏览器 User-Agent、无 Referer、`GET + Range: bytes=0-0` 探测：可直接访问则 302 到原 URL，否则 302 到 `link.<域名>/original/:id`，由服务端带源站 Referer 转发。
 
-“不存原图，但要缩略图”：导入同样**可并发**（并发数同「上传 / 缩略图并发数」）。每条链接——下载一次（有超时预算）→ 探测宽高 / MD5 → 生成 512px webp 缩略图 → 按宽高自动判设备（w≥h ⇒ pc）→ **下载阶段就先判一次明暗作为卡片默认值** → 提交时若亮度仍是「自动识别」再用暂存缩略图复判 → 入库（`object_key` ＝外链，`is_link=true`，缩略图写入你选的后端）。原图始终只是外链、从不落盘。
+公共原图接口只接受 `status=ready`。后台回收站的原图按钮显示规则与公开页面一致：只有 `original` 存在且不同于展示图时显示；deleted 行点击时走带鉴权的 `/api/admin/images/:id/original`，它允许回收站内的独立原图链接，但仍使用 `private, no-store`。回收站查看图片本体使用带鉴权的 raw/thumb 接口。
 
-生命周期由集中助手统一管理：删除 / 迁移 / 检查 / 清理都识别 link 缩略图，既不留孤儿、也不会被误删。
+## 明暗识别
 
-## 明暗识别（自动判 dark/light）
-
-亮度选择「自动识别」（`brightness='auto'`）时，服务端自动判 dark/light：在 ≤1024px 缩略图的 CIELAB L\* 直方图上算一个感知亮度评分（中位 / 均值 / p75 亮度加权，再按极暗 / 极亮像素占比微调），低于阈值即 dark。评分思路源自 `scripts/classify.py`，但**为本程序重新标定**——脚本里给人工复核用的“硬暗 / 救回”规则在这里只会添乱，去掉它们并重标阈值后，在一组 407 张带标注的样本上准确率从 95.3% 升到 97.0%（5 折交叉验证 ≈ 96.8%），且直接给出唯一结论、无“待定”中间态。识别一律复用**已生成的 512px 缩略图**（而非回解码原图）——反正缩略图必然要生成，拿它判明暗更省 IO 与解码；在同一标注集上重测，缩略图判定与原图仅差 1 张（96.8%），阈值无需重调。
-
-- **上传 / 链接导入**：亮度默认 `auto`，在请求内对刚生成的缩略图就地识别（无需回队列），随后直接以最终分类入库。每张图入库即已分类——**没有「未设置」状态**。
-- **重新识别**：在图片编辑（或批量编辑）里把亮度选回「自动识别」即可重判——走**同步**的编辑路径（读回缩略图 → 判明暗 → 复用换类逻辑改写亮度并在新键重排缩略图），没有后台队列。链接图片同样支持（原图是外链，但缩略图存在本地）。
-
-文件名按 `<device>-<brightness>-<theme>-<index>` 或 `<device>-<brightness>-<index>` 命名时，除序号外的属性会被预填为默认值；其中亮度是具体的 dark/light（不触发自动识别）。否则亮度默认「自动识别」，由服务端判定。
+`brightness=auto` 时，服务端在已生成的标准缩略图上按 CIELAB L\* 分布判断 dark/light。本地上传仍兼容旧文件名规则：如 `pc-dark-theme-001` 会预填设备、明暗和主题，`pc-dark-001` 会预填设备和明暗；不命中时明暗保持 auto。重新识别同样复用缩略图。
 
 ## 随机图 API
 
-```
+```text
 GET /random?d=&b=&t=&tag=&a=&m=
 ```
 
-1. 校验参数，并把 `t` / `tag` / `a` 的别名 / 显示名解析为标准 slug。
-2. `resolveCandidateAxes`：未指定设备时按 User-Agent 推断（手机 ⇒ mb，桌面 ⇒ pc，未知 ⇒ 随机）。
-3. 短时不重复：按 `(客户端 IP + 筛选签名)` 取最近若干张（默认 30 张 / 15 分钟）排除掉。
-4. 取图：
-   - 无标签 / 作者筛选 ⇒ Redis 加权池（按分类图数加权抽，跳过最近项但保留 fallback 以防 404）；Redis 不可用时降级到 PostgreSQL。
-   - 有标签或作者筛选 ⇒ 直接 PostgreSQL 选取（标签子查询 `image_tag`，作者匹配 `metadata.author`）：先 `count(*)` 再按主键索引扫到一个随机 `OFFSET`，避免对整个匹配集做 `ORDER BY random()` 全排序。两遍策略：先排除最近，若清空再不排除。
-5. 响应：`m=proxy` 代理字节；否则 302 到对象公共 URL。**外链图（link）与普通图一样遵循设置页默认值**——区别只在其公共 URL 是 `link.<域名>/media/<id>.<ext>`（不是外部主机）：`m=redirect` 即 302 到该地址，浏览器再请求它时由服务端以图片自身域名作 `Referer`（浏览器伪造不了、服务端可以）拉取外链原图并转发；`m=proxy` 则由 `/random` 直接同源回源字节。两者最终都经服务端代理，拉取失败降级 302 到外链 URL。
-6. `GET /img-count` 返回池统计（不接受任何查询参数）。
+1. 校验参数并把主题、标签、作者别名解析为 slug。
+2. 未指定设备时按 User-Agent 推断。
+3. 按客户端与筛选签名做短时不重复。
+4. 在 Redis generation 随机池中按 axis/category 计数加权选集合；标签和作者筛选通过 Redis 临时过滤集合完成。Redis 不可用时随机 API 返回 503。
+5. `m=proxy` 代理字节，否则 302 到对象 URL。link 图片的 URL 指向 `link.<域名>/media/<id>.<ext>`。
 
 参数细节见[随机图 API](./random-api)。
 
 ## 画廊浏览
 
-```
+```text
 GET /api/images?d=&b=&t=&tag=&cursor=&limit=&shuffle=
 ```
 
-游标分页（稳定不跳页）+ Redis 列表缓存（缓存键不含 `shuffle`，多人共享）。`shuffle=1` 时在出口处对当前这批做 Fisher-Yates 洗牌，不影响游标、也不污染缓存。前端画廊页提供设备 / 亮度 / 主题 / 标签 / 排序（最新优先 / 随机打乱）筛选。
+列表使用游标分页与 Redis 缓存。`shuffle=1` 只在出口打乱当前批次，不影响游标和共享缓存。
 
 ## 后台管理
 
-登录（会话 cookie + CSRF token + 登录限流）后可用：
+- 图片列表、编辑、批量操作、回收站、存储迁移；
+- 标签、主题、作者、用户、设置、检查与账户设置；
+- 存储检查比对数据库与实际后端，可清理孤儿对象与过期 prepared 暂存；
+- 应用设置写 `config.json`，存储后端与密钥写 PostgreSQL。
 
-- 图片管理：列表 / 编辑 / 删除 / 批量 / 换分类 / 换存储后端。编辑、换分类与删除的详细流程见下文「图片编辑」「删除生命周期」两节。
-- 标签 / 主题 / 作者 / 用户 / 设置 / 检查 / 账户设置各有独立页面（「账户设置」对所有角色开放，用于自助改密——原密码一次 + 新密码两次；image 管理员仅此一个设置页）。设置分两类：应用配置（站点 / 上传 / 画廊 / 随机，写 `config.json`）与存储后端（写 `storage_backend` 表，含 S3 / WebDAV 密钥，二者分开保存）。`POST /api/admin/storage/test` 做存储连通自检。
-- 删除主题：先把该主题的图片归到 `none`——就绪图按序补进 `device-brightness-none` 分类，并把对象 + 缩略图（已删除图则是回收站对象）**实际搬到 `none/` 文件夹**（`object_key` 随之更新，文件拷贝并发 `operation_log.theme_reassign_concurrency`，默认 5），link 图保留其外链 URL、但其按主题分文件夹的略缩图同样搬到 `none/` 文件夹；随后删主题、清空腾空的旧主题目录。
-- 存储检查：比对数据库与实际存储，查缺失对象 / 孤儿缩略图，可一键清理或迁移路径；已对 link 缩略图做特判，避免误删。「清理无效存储」还会删掉清理后腾空的目录（本地后端），并回收已过期但卡在 `finalizing` 的上传所占的孤儿对象（过期会话不再被视为在途，避免「检查报孤儿、清理却清不掉」）。
+## 图片编辑与换分类
 
-## 图片编辑（改元数据 / 换分类）
+只改标题、描述、来源、原图 URL 或作者时不搬对象。修改设备、明暗或主题时：事务外预拷贝候选对象键，事务内更新 metadata，提交后删除旧对象并重建缩略图；异常回滚会清理预拷贝。link 图片不搬外部原图，但会移动按分类组织的 `link` 缩略图。所有影响随机筛选的变更都会同步 Redis 随机池。
 
-`POST /api/admin/images/:id` → `updateImageMetadata`。请求体是**部分**元数据（只传要改的字段）：先按 id 查图（查不到先回 404，再校验请求体），主题若与保留子域名冲突则 400。是否「换分类」只看一件事——**请求体里有没有 `device` / `brightness` / `theme`**。
+## 删除生命周期
 
-### 情况一：请求体不含 device / brightness / theme
+1. 软删只更新数据库状态并从 Redis 随机池移除，原图/缩略图留在原位。
+2. 恢复只更新数据库状态并重新加入 Redis 随机池，不搬字节。
+3. 彻底删除才物理删除对象和 metadata。
 
-只改 `title` / `description` / `source` / `original`。一条 `UPDATE`（`COALESCE` 只覆盖传入字段），**不动对象、不改分类、不重排索引**，失效 MD5 与读缓存后返回。最轻量的一类编辑。
-
-### 情况二：请求体含 device / brightness / theme（可能换分类）
-
-这类编辑可能把图片移到新分类，需要重排索引、并可能搬动存储对象：
-
-- **分类键与对象键一一对应**：`category_key = device-brightness-theme`，对象键 `storageObjectKey(...) = device-brightness/theme/<id>.<ext>`（device/brightness 永远具体，不再有 `unset/` 桶）。所以真的换了分类就**必然**改对象键、搬动存储对象。例外是 link 图——其对象键是外链、从不变，换分类只改 DB 行与索引。
-- **先在事务外预拷贝**（仅当：非 link、`ready`、目标分类 ≠ 当前、目标键 ≠ 当前键）：把对象 `copyObject` 到新键。S3 拷贝是一次往返、较慢，提前做可避免长时间占着分类行锁。
-- **事务内**：`FOR UPDATE` 锁住该图行并重新计算目标分类——
-  - 若实际没换分类 → 提交、丢弃预拷贝、返回；
-  - 否则按字典序锁住「旧 + 新」两个分类行（排序避免死锁）、登记新主题、用尾图填补旧分类的索引空洞、旧分类计数 -1 新分类 +1、把 `device` / `brightness` / `theme` / `category_key` / `category_index` / `index_key` / `object_key` 一并写回 `metadata`，提交。预拷贝与锁定行不一致（极少数：读到与加锁之间行被改过）时就地重拷正确键。
-- **提交后**：丢弃多余预拷贝；**仅当对象键真的变了**才删旧对象 + 旧缩略图，并排 `thumb.generate` 在新键重生成缩略图；`bumpFolder` 旧 -1 / 新 +1、清缓存。
-- **回滚不留孤儿**：任何异常都会 `ROLLBACK`，并删掉本次新建、但回滚后的行未采用的对象 / link 略缩图（预拷贝 / 事务内拷贝）；直接删失败再兜底排 `move.cleanup` 任务。
-- **link 图**：对象键就是外链、不搬字节，但其略缩图按分类分文件夹，故换分类会把略缩图**实际搬到**新 `<设备-明暗>/<主题>/` 文件夹——与对象同模式：先预拷贝到新文件夹（off-lock），提交后删旧、回滚则删新拷贝。略缩图无重生路径，因此是搬运而非重生。
-
-编辑时把亮度选回「自动识别」重判明暗也复用这条路径——识别出 dark/light 后即按换分类重新归类并在新键重生成缩略图。
-
-## 删除生命周期（软删 → 回收站 → 彻底删 / 恢复）
-
-删除是**纯数据库**操作：原图与缩略图始终留在 `objects/` + `thumbs/`，软删 / 恢复都不搬运或删除任何文件，只有彻底删除才物理删字节。
-
-1. **软删** `POST /images/:id/delete` → `deleteImage`（事务内）：`FOR UPDATE` 锁住 ready 图行与其分类行 → 标记 `status='deleted'` + `deleted_at` → 若该图不是分类内末位，用末位图（`category_index == count`）填补它腾出的空洞，保持序号连续 → 分类计数 -1 → 提交。提交后 `bumpFolder(-1)`、清空空分类、失效 MD5 / 读缓存。**不动任何文件**。批量删除（`batch-delete`）同理。
-2. **恢复** `POST /images/:id/restore` → `restoreImageFromTrash`（**同步**，一个事务）：锁住该删除行 → 在原分类**追加**重排（取新的末位序号）→ 置回 `status='ready'`、清 `deleted_at` → 提交，再 `bumpFolder(+1)`。原图与缩略图本就在原位，故无字节搬运、无缩略图重建。批量恢复 `batch-restore` 逐张走同一逻辑。
-3. **彻底删** `POST /images/:id/purge`（单张）/ `POST /images/empty-trash`（清空回收站）→ `purgeDeletedImages`（**同步**，每 10 张一批）：对每张物理删除 `objects/` 原图 + 缩略图（用 `thumbnailRef` 定位正确 prefix / backend，含 link 的 `link/<设备-明暗>/<主题>/<id>.webp`）→ 从 `metadata` 删行 → 失效缓存、清空空分类。彻底删不可恢复，是**唯一**删除存储字节的路径。
-
-**回收站图片的访问控制**：已删除图片虽仍留在存储中，但**未登录不可访问，仅后台可见**：
-
-- 公共画廊接口 `/api/images` 仅服务 `ready`——请求 `?status=deleted` 直接按校验错误拒绝，无法借此枚举回收站。
-- **源站**对已删除图片一律 404：`static.<域名>` / `link.<域名>` 的 `/media`、`/thumbs` 都拒绝（覆盖 local 与未配公共 URL 的 S3/WebDAV；link 原图本就是 `no-store` 代理、不缓存）。
-- **缓存的固有边界**：ready 期间的字节响应带 `Cache-Control: public, max-age=31536000, immutable`，故**源站的 404 无法回收任何已缓存副本**——(a) 若 `static.`/`link.` 前面挂了 CDN，边缘会继续吐缓存字节直到条目过期（最长 1 年）或被显式 purge（`immutable` 还会让其在 max-age 内根本不回源校验）；(b) 配了公共 URL 的对象存储走 CDN 直链，同理；(c) 曾在 ready 期间取过该图的浏览器本地缓存亦然（仅该用户）。换言之**软删只是可逆隐藏、不是安全级吊销**：真正吊销 = 彻底删除（物理删字节）+（若有 CDN）purge 缓存；从未被取用、或缓存已过期的图片则由源站 404 完全兜住。本仓库自带的 nginx 是纯反代（无 `proxy_cache`），故本机/该配置下只有浏览器级缓存、无边缘缓存。
-- 后台回收站视图改走带鉴权的 `GET /admin/api/images/:id/thumb` 与 `/raw`（`requireAuth`，服务端转发字节、`private, no-store`），故只有登录管理员能查看已删除图片的略缩图与原图；presenter 在投影时把已删除图片的 `thumb_url` / `object_url` 指向这两个端点。
+公共 static/link 路由拒绝 deleted 图片；后台 `/api/admin/images/:id/raw|thumb|original` 经鉴权提供回收站查看。软删无法撤回浏览器/CDN 已缓存副本，安全级吊销需彻底删除并清 CDN。
 
 ## 后台 Worker
 
-每 5 秒一拍：先做僵尸任务恢复与上传过期（各自慢节奏），再**按任务类型并发**领取执行——每种类型用各自的并发上限：`thumb.generate` 跟随「上传 / 缩略图并发数」（`upload.concurrency`，该值同时被设为 sharp/libvips 的单次操作线程数 `sharp.concurrency`，使图片处理的总原生线程数有界，启动时应用、配置热重载时同步）；`move.cleanup` 有文件配置（默认 5）；其余类型（`cache.rebuild` / `upload.cleanup`）串行。领取用 `FOR UPDATE SKIP LOCKED`（并发 lane 与多实例都不会撞同一条），失败指数退避重试（最多 5 次，60s → 6h）。所有重活（缩略图、字节搬运、缓存重建）都异步化，HTTP 请求只负责落库与排队。
+Worker 用 `FOR UPDATE SKIP LOCKED` 领取持久任务，按任务类型限制并发，并定期恢复僵尸任务、清理过期 `import_session`、prepared staging 与孤儿 raw 临时文件。
 
 ## 缓存策略
 
-PostgreSQL 永远是真相源，Redis 是可随时丢弃的加速层：
+PostgreSQL 是真相源，Redis 是可丢弃的加速层：随机池、画廊筛选、公共列表、MD5 判重与对象查找走缓存；写路径增量刷新，Redis 不可用时排缓存重建任务。随机 API 的正常路径依赖 Redis 随机池，避免 PostgreSQL 随机排序或 count+offset。
 
-- `folder_map`（分类 → 计数）+ `random_objects`（`index_key` → 图）驱动随机池；
-- 另缓存画廊筛选项、公共列表、MD5 判重、对象 / 缩略图查找；
-- 写路径用 `bumpFolder` 增量刷新单个分类（而非全量重建）；Redis 不可用时降级到 SQL 或排 `cache.rebuild` 任务。
+HTTP 缓存按 CDN 友好但不泄露私有数据分层：
+
+- `/assets/*` 的 Vite 构建产物和 `/media/*`、`/thumbs/*` 图片对象使用一年 `immutable`；`/assets/brand/*`、`/favicon.ico` 不是 hash 路径，只给短浏览器缓存和较长 CDN 缓存。
+- SPA HTML、文档 HTML、`/api/images`、`/api/site-config`、`/api/gallery-options`、`/img-count` 都是公共数据：浏览器不长期持有，CDN 通过 `s-maxage` 短缓存，并允许 `stale-while-revalidate` / `stale-if-error`。
+- `/random` 和 `random.<域名>` 永远 `no-store`，避免 CDN 把随机图固定成同一张。
+- `/api/admin/*`、登录 / 验证码 / 上传暂存预览 / SSE、后台图片字节、健康检查和错误响应使用 `no-store` 或 `private, no-store`，不应被 CDN 缓存。
+- `link.<域名>/media` 与仍需使用的 `/original` 公共代理成功响应优先继承源站 `Cache-Control` / `Expires`；源站未声明时使用站内 CDN fallback：浏览器缓存 1 天、共享缓存 1 年，并允许 stale 回源兜底。`/media` 回源失败退回 link 略缩图时，该兜底缩略图缓存 1 周。后台代理仍为 `private, no-store`。

@@ -13,9 +13,7 @@
   align-items: center;
   gap: 8px;
 }
-/* Keep each action label (批量编辑 / 批量删除 …) on a single line: in the tight desktop band
-   (~761–783px) the buttons were squeezed enough to wrap their text onto two rows. They hold
-   their width (no shrink) and the left-hand status text gives way (wraps) instead. */
+
 .toolbar-actions button { white-space: nowrap; flex-shrink: 0; }
 .check-label {
   display: inline-flex;
@@ -28,14 +26,7 @@
 .admin-image-grid {
   grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
   align-items: start;
-  /* Size every row to the card it holds. Without this, grid-auto-rows:auto collapses
-     each track to the card's min-height (82px) — but ONLY when this grid is the desktop
-     .workspace-paged flex scroll region (flex:1 + overflow-y:auto) AND its content
-     overflows (a long image list). Each card still renders at its full ~137px height,
-     overflows its 82px track, and the next row gets laid out over the previous card, so
-     cards visibly overlap (the lower card covers the bottom of the one above). It showed
-     up most in the single-column band (~761–957px) but happens at any column count once
-     the list overflows. min-content pins each track to its card's height and fixes it. */
+
   grid-auto-rows: min-content;
 }
 .row {
@@ -53,10 +44,7 @@
   padding: 8px;
   cursor: pointer;
 }
-/* No align-self: stretch. With grid-auto-rows:min-content above, each track already
-   matches its card's height, so stretching is redundant; and stretching a card to a
-   mis-sized (too-short) track is what spilled the footer out the bottom before.
-   min-height is just a floor for an unusually short card. */
+
 .admin-image-grid .row {
   min-height: 82px;
 }
@@ -68,22 +56,16 @@
   gap: 12px;
 }
 .admin-pagination span { min-width: 72px; color: #66717f; text-align: center; }
-/* Mirrors the uploader's 应用到全部 bar (.upload-defaults): same control widths (设备/亮度
-   120), 主题 + 标签 share a flex group (.batch-common-pair) that resizes together and wraps
-   to a second row as a unit in the intermediate band (see admin/responsive.css), and the
-   标题自动生成 toggle + 应用到全部 button bookend the row. */
+
 .batch-edit-common { padding: 12px 16px; display: flex; flex-wrap: wrap; align-items: end; gap: 8px; border-bottom: 1px solid #dce2ea; }
 .select-control.batch-common-select { width: 120px; flex: 0 0 auto; }
-/* display:contents normally so 主题/标签 act as direct flex items (mirroring the uploader
-   bar); the responsive band promotes it to a real flex box to drop the pair onto row two. */
+
 .batch-common-pair { display: contents; }
 .theme-input-control.batch-common-theme { flex: 1 1 0; min-width: 150px; }
-/* Basis 0 (not auto) so it doesn't inherit the control's width:100% and wrap to its own
-   line; grows 2× 主题 (takes 2/3 of the freed space), never narrower than 200px. */
+
 .tag-input-control.batch-common-tags { flex: 2 1 0; min-width: 200px; align-self: end; }
 .theme-input-control.batch-common-author { flex: 1 1 0; min-width: 150px; align-self: end; }
-/* 应用到全部 lights up solid blue once the bar holds a value, cueing that there's something
-   to write onto the cards. */
+
 .apply-to-all-button.is-ready { background: #1f6feb; border-color: #1f6feb; color: #fff; }
 .image-thumbnail { width: 72px; height: 72px; flex: 0 0 72px; overflow: hidden; border-radius: 6px; background: #e8edf3; }
 .image-thumbnail.is-small { width: 44px; height: 44px; flex-basis: 44px; }
@@ -91,6 +73,7 @@
 .image-thumbnail img { display: block; width: 100%; height: 100%; object-fit: cover; background: #e8edf3; }
 .thumb-button {
   grid-area: thumb;
+  position: relative;
   display: block;
   width: 64px;
   height: 64px;

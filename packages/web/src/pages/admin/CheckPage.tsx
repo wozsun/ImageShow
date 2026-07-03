@@ -1,12 +1,12 @@
 import { useMemo, useState } from "react";
-import { api } from "../../lib/api.js";
+import { api } from "../../lib/api/client.js";
 import { adminApiBasePath } from "../../lib/constants.js";
-import { errorMessage } from "../../lib/formatters.js";
-import { Icon } from "../../components/Icon.js";
-import { SelectMenu } from "../../components/SelectMenu.js";
-import { StableLabel } from "../../components/StableLabel.js";
-import { useAnimatedClose } from "../../components/useAnimatedClose.js";
-import { useStorageOptions } from "../../lib/storage-options.js";
+import { errorMessage } from "../../lib/ui/formatters.js";
+import { Icon } from "../../components/icon/Icon.js";
+import { SelectMenu } from "../../components/form/SelectMenu.js";
+import { StableLabel } from "../../components/data-display/StableLabel.js";
+import { useAnimatedClose } from "../../hooks/useAnimatedClose.js";
+import { useStorageOptions } from "../../lib/api/storage-options.js";
 
 export function CheckPage() {
   const [result, setResult] = useState<unknown>(null);
@@ -51,20 +51,6 @@ export function CheckPage() {
             ))}
           </div>
           <div className="actions">
-            <button
-              type="button"
-              disabled={Boolean(running)}
-              onClick={() => void runCheck("db-repair")}
-            >
-              <Icon name="scales-3-line" /><StableLabel idle="对账修复" busyText="修复中" busy={running === "db-repair"} />
-            </button>
-            <button
-              type="button"
-              disabled={Boolean(running)}
-              onClick={() => void runCheck("backfill-md5")}
-            >
-              <Icon name="fingerprint-line" /><StableLabel idle="补全 MD5" busyText="补全中" busy={running === "backfill-md5"} />
-            </button>
             <button
               type="button"
               disabled={Boolean(running)}
@@ -145,12 +131,10 @@ function CheckOperationModal({ operation, running, source, target, options, onSo
     <div
       className={`modal edit-modal ${exit.closing ? "is-closing" : ""}`}
       onAnimationEnd={exit.onAnimationEnd}
-      onClick={running ? undefined : () => exit.requestClose()}
     >
       <form
         className="operation-modal"
         onSubmit={async (event) => { event.preventDefault(); await onRun(); exit.requestClose(); }}
-        onClick={(event) => event.stopPropagation()}
       >
         <header>
           <div>
@@ -236,18 +220,9 @@ function CheckResult({ result }: { result: unknown }) {
   );
 }
 
-// Maps the raw check-result keys (returned across db / storage / redis / trash / cleanup /
-// migration checks) to clear Chinese card titles. Falls back to the raw key for anything
-// new, with the original key always available on hover (title attr).
 const CHECK_RESULT_LABELS: Record<string, string> = {
   // 数据库检查
-  categories: "分类计数",
-  mismatches: "计数不一致",
-  index_gaps: "序号缺口",
   operations: "进行中 / 失败的任务",
-  // 对账修复
-  counts_fixed: "已修正计数",
-  index_gaps_fixed: "已修正序号",
   // 回收站
   deleted_count: "回收站数量",
   candidates: "待处理对象",
@@ -265,6 +240,7 @@ const CHECK_RESULT_LABELS: Record<string, string> = {
   migrated: "已迁移",
   unchanged: "无需迁移",
   missing: "源对象缺失",
+  media: "原图数",
   thumbs: "缩略图数",
   errors: "错误明细",
   error_count: "错误数量",
@@ -276,15 +252,18 @@ const CHECK_RESULT_LABELS: Record<string, string> = {
   core_keys: "核心键",
   folder_summary: "目录映射摘要",
   folder_map: "目录映射",
-  random_objects: "随机图索引",
+  random_items: "随机池图片",
+  random_generation: "随机池版本",
+  ready_count: "图库就绪数",
+  random_pool_count: "随机池数量",
+  random_pool_mismatch: "随机池数量不一致",
+  random_pool_error: "随机池错误",
   gallery_options: "画廊选项缓存",
   issues: "发现的问题",
   // 全部检查（概览）
   images: "图片总数",
   default_backend: "默认存储后端",
   storage: "各后端对象统计",
-  // 补全 MD5
-  backfilled: "已补全 MD5"
 };
 
 function checkResultLabel(key: string) {
@@ -292,7 +271,7 @@ function checkResultLabel(key: string) {
 }
 
 function isIssueKey(key: string) {
-  return ["issues", "mismatches", "index_gaps", "operations", "missing_objects", "missing_thumbs", "orphan_objects", "orphan_thumbs", "staging_files"].includes(key);
+  return ["issues", "operations", "random_pool_mismatch", "random_pool_error", "missing_objects", "missing_thumbs", "orphan_objects", "orphan_thumbs", "staging_files"].includes(key);
 }
 
 function countCheckIssues(result: Record<string, unknown>) {

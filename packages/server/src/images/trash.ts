@@ -1,13 +1,10 @@
-import { cleanupEmptyCategories, pool } from "../core/db.js";
+import { pool } from "../core/db.js";
 import { ApiError } from "../core/http.js";
 import { restoreImageFromTrash } from "../jobs/restore.js";
 import { removeObject } from "../storage/storage.js";
 import { thumbnailRef } from "../storage/image-paths.js";
-import { invalidateImageReadCaches, invalidateMd5Cache, invalidateMd5Caches } from "../core/redis.js";
+import { invalidateImageReadCaches, invalidateMd5Cache, invalidateMd5Caches } from "./image-cache.js";
 
-// Restores one deleted image (transaction in jobs/restore.ts) and invalidates the
-// affected caches. Returns false instead of throwing on a missing row when
-// `missingIsError` is off, so batch restore can tally ignored ids.
 export async function restoreDeletedImage(id: string, missingIsError = true) {
   const result = await restoreImageFromTrash(id);
   if (result.status === "not_deleted") {
@@ -34,9 +31,6 @@ export async function batchRestoreImages(ids: string[]) {
   return { requested: ids.length, restored, ignored, failed: failedIds.length, failed_ids: failedIds };
 }
 
-// Hard-deletes recycle-bin images: physically removes their original + thumbnail (10 at a
-// time), then drops the metadata rows and reconciles caches. With no ids it empties the whole
-// recycle bin. This is the ONLY path that deletes stored bytes — soft-delete leaves them in place.
 export async function purgeDeletedImages(ids?: string[]) {
   const rows = (await pool.query(
     ids?.length
@@ -51,7 +45,7 @@ export async function purgeDeletedImages(ids?: string[]) {
       try {
         const thumb = thumbnailRef(row);
         await Promise.all([
-          removeObject("objects", row.object_key, row.storage_slug),
+          removeObject("media", row.object_key, row.storage_slug),
           removeObject(thumb.prefix, thumb.key, thumb.slug)
         ]);
         deletedRows.push(row);
@@ -64,13 +58,11 @@ export async function purgeDeletedImages(ids?: string[]) {
   if (deletedIds.length) {
     await pool.query("DELETE FROM metadata WHERE id = ANY($1::uuid[]) AND status='deleted'", [deletedIds]);
     await invalidateMd5Caches(deletedRows.map((row) => row.md5));
-    await cleanupEmptyCategories();
     await invalidateImageReadCaches();
   }
   return { requested: rows.length, deleted: deletedIds.length, failed };
 }
 
-// Single-image purge with the not-found / storage-failure mapping the route used.
 export async function purgeDeletedImage(id: string) {
   const result = await purgeDeletedImages([id]);
   if (!result.requested) throw new ApiError(404, "not_found", "Deleted image not found");

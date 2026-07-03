@@ -1,8 +1,3 @@
-// Shared parsing for the comma-separated, optionally `!`-prefixed filter selectors used by
-// the random API (t / tag / a) and the gallery list filters. Each raw value may be
-// comma-joined; an exclude term carries a leading `!`. Returns deduped, lowercased bare
-// slug lists; a lone "!" (no slug after it) is dropped. Mixing include and exclude is left
-// for the caller to reject (the error shape differs between the two call sites).
 export function splitSelectors(rawValues: string[]): { include: string[]; exclude: string[] } {
   const values = [...new Set(rawValues
     .flatMap((value) => value.split(","))

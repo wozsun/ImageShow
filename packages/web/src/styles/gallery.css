@@ -20,15 +20,9 @@
   line-height: 20px;
 }
 .gallery-toolbar .select-trigger { height: var(--gallery-control-height); }
-/* 设备/亮度/模式 are fixed selectors that only ever show a short label. 120px fits their
-   widest 4-char option (全部设备 / 全部亮度 / 默认模式) at the 16px trigger font without
-   clipping — the trigger reserves 10px left + 38px right (caret) padding, so 110px left only
-   ~60px for text (a 4-char CJK label needs 64px). 120px also matches the same short-label
-   selects in the uploader bar / batch editor / storage picker. The wider 主题/标签/作者
-   search dropdowns flex alongside them. */
+
 .gallery-toolbar label.gallery-axis { min-width: 0; width: 120px; flex: 0 0 auto; }
-/* The 筛选 drawer toggle is a mobile-only affordance (see responsive.css); on desktop all
-   filters are always shown, so the toggle is hidden and the .filters-open class is a no-op. */
+
 .gallery-filter-toggle { display: none; }
 .theme-page {
   background: #f5f6f8;
@@ -121,24 +115,33 @@
   object-fit: contain;
   background: #e8edf3;
 }
-.tile span {
+.tile-info {
   position: absolute;
   right: 0;
   bottom: 0;
   left: 0;
+  display: grid;
+  gap: 2px;
   padding: 10px 12px;
   color: #fff;
   line-height: 1.35;
-  white-space: normal;
+  white-space: nowrap;
   overflow: hidden;
-  overflow-wrap: anywhere;
   background: linear-gradient(180deg, rgba(14, 18, 28, 0), rgba(14, 18, 28, .78));
   transform: translateY(100%);
   transition: transform .16s ease;
 }
-.tile:hover span, .tile:focus-visible span { transform: translateY(0); }
-/* .gallery-empty also carries .empty-state (margin: 0) from the admin styles,
-   which loads later; the combined selector wins so the card keeps side insets. */
+.tile-info strong,
+.tile-info small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tile-info strong { font-weight: 700; }
+.tile-info small { opacity: .86; font-size: 12px; }
+.tile:hover .tile-info, .tile:focus-visible .tile-info { transform: translateY(0); }
+
 .gallery-loading,
 .gallery-empty.empty-state {
   margin: 0 28px 28px;
@@ -174,8 +177,12 @@
 .modal.is-closing > form {
   animation: modal-pop-out .12s ease-in forwards;
 }
-.image-detail-modal > article > img { width: 100%; height: 90vh; max-height: 90vh; object-fit: contain; background: #111820; }
-.image-detail-modal > article > div { padding: 20px; overflow: auto; position: relative; }
+.image-detail-image {
+  width: 100%;
+  height: 90vh;
+  max-height: 90vh;
+}
+.image-detail-modal .image-detail-content { padding: 20px; overflow: auto; position: relative; }
 .image-detail-head {
   position: sticky;
   top: 0;
@@ -190,8 +197,7 @@
 }
 .image-detail-head > div { min-width: 0; }
 .image-detail-head h2 { margin: 0; }
-/* Title-as-direct-image-link (toggled by image_detail.title_opens_image): keeps
-   the heading color, hinting clickability only on hover. */
+
 .image-detail-title-link { color: inherit; }
 .image-detail-title-link:hover { color: #1f6feb; text-decoration: underline; }
 .image-detail-head p { margin: 6px 0 0; }

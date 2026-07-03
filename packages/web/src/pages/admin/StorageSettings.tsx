@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { api } from "../../lib/api.js";
-import { Icon } from "../../components/Icon.js";
+import { api } from "../../lib/api/client.js";
+import { Icon } from "../../components/icon/Icon.js";
 import { adminApiBasePath } from "../../lib/constants.js";
-import { storageBackendDisplay, storageBackendLabel, storageTypeLabel } from "../../lib/select-options.js";
-import { errorMessage } from "../../lib/formatters.js";
+import { storageBackendDisplay, storageBackendLabel, storageTypeLabel } from "../../lib/ui/select-options.js";
+import { errorMessage } from "../../lib/ui/formatters.js";
 import type { StorageBackendAdmin } from "../../lib/types.js";
 import { SettingsFeedback, type SettingsFeedbackState } from "./SettingsPage.js";
 import { BackendEditModal } from "./StorageBackendModal.js";
@@ -22,15 +22,11 @@ function StorageBackendsManager() {
   const backends = query.data?.backends ?? [];
   const defaultBackend = backends.find((backend) => backend.is_default);
   const defaultSlug = defaultBackend?.slug ?? "local";
-  // Local ordered copy so a drag can reorder cards live; re-synced whenever the server
-  // list changes (create / delete / default / enable / reorder refetch). 'local' is pinned
-  // first and never dragged.
+
   const [order, setOrder] = useState<StorageBackendAdmin[]>([]);
   const dragSlug = useRef<string | null>(null);
   useEffect(() => { setOrder(query.data?.backends ?? []); }, [query.data]);
 
-  // Reorder `order` live as the dragged card moves over another (never past the pinned
-  // 'local' backend), then persist the non-local order on drop.
   const moveOver = (targetSlug: string) => {
     const from = dragSlug.current;
     if (!from || from === targetSlug || from === "local" || targetSlug === "local") return;
@@ -57,8 +53,6 @@ function StorageBackendsManager() {
     );
   };
 
-  // Runs a mutation, shows feedback, refetches; returns whether it succeeded so the
-  // edit modal can stay open (preserving input) on failure.
   const run = async (key: string, fn: () => Promise<unknown>, pending: string, success: string): Promise<boolean> => {
     if (busy) return false;
     setBusy(key);
@@ -96,9 +90,6 @@ function StorageBackendsManager() {
     return run(`default:${slug}`, () => api(`${adminApiBasePath}/storage/backends/${slug}/default`, { method: "POST" }), "正在切换默认后端...", `默认后端已设为 ${name}`);
   };
 
-  // Open / close the edit modal, always clearing any lingering page feedback first: this is
-  // what stops a prior action's message (e.g. "默认后端已设为…") from bleeding into the modal,
-  // and resets the header pill when the modal closes.
   const openEditor = (target: StorageBackendAdmin | "new") => { setFeedback(null); setEditing(target); };
   const closeEditor = () => { setFeedback(null); setEditing(null); };
 
@@ -109,8 +100,7 @@ function StorageBackendsManager() {
           <h1>存储管理</h1>
           <p>命名存储后端：本地与多个对象存储桶可并存</p>
         </div>
-        {/* Page-level feedback (set default / enable / delete / reorder) sits top-right; while
-            the editor is open, its own feedback shows inside the modal instead. */}
+        {/* 顶部只展示列表级反馈（设默认、启停、删除、排序）；编辑弹窗打开时，保存/测试反馈改在弹窗内部展示。 */}
         {!editing && feedback && (
           <div className="settings-head-actions">
             <SettingsFeedback feedback={feedback} inline />
@@ -172,11 +162,6 @@ function StorageBackendsManager() {
   );
 }
 
-// One configured backend = one card. Title = display name, subtitle = slug + type. The
-// default-upload toggle sits top-right (highlighted when this backend is the default);
-// the footer carries the enable toggle on the left and, right-to-left, the delete /
-// edit / drag-sort actions. 'local' is pinned first: no drag, no delete, no enable
-// toggle. Dragging the grip handle reorders the card (persisted on drop).
 function BackendCard({ backend, busy, onEdit, onSetDefault, onDelete, onToggleEnabled, onDragStart, onDragEnter, onDragEnd }: {
   backend: StorageBackendAdmin;
   busy: string;
@@ -189,13 +174,13 @@ function BackendCard({ backend, busy, onEdit, onSetDefault, onDelete, onToggleEn
   onDragEnd: () => void;
 }) {
   const isLocal = backend.slug === "local";
-  // The card is only draggable while the grip handle is held, so its body stays interactive.
+
   const [armed, setArmed] = useState(false);
   const title = backend.display_name || storageBackendLabel(backend.slug);
 
   const begin = (event: DragEvent<HTMLDivElement>) => {
     event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("text/plain", backend.slug); // Firefox needs data set to drag
+    event.dataTransfer.setData("text/plain", backend.slug);
     onDragStart(backend.slug);
   };
 

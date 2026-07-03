@@ -1,10 +1,6 @@
-// Public surface of the checks module. Each diagnostic/maintenance concern lives in
-// its own file (database, storage check/cleanup/migrate); this barrel re-exports
-// them so callers import from one place, and holds checkAll — the one overview that
-// genuinely spans both the database and every storage backend.
 import { pool } from "../core/db.js";
 import { errorMessage } from "../core/http.js";
-import { getFolderMap } from "../core/redis.js";
+import { getFolderMap } from "../random/random-cache.js";
 import { listStorageKeys } from "../storage/storage.js";
 import { storageBackends } from "./storage-common.js";
 
@@ -22,7 +18,7 @@ export async function checkAll() {
   for (const backend of backends) {
     try {
       storage[backend] = {
-        objects: (await listStorageKeys("objects", backend)).length,
+        media: (await listStorageKeys("media", backend)).length,
         thumbs: (await listStorageKeys("thumbs", backend)).length,
         uploads: (await listStorageKeys("_uploads", backend)).length
       };
