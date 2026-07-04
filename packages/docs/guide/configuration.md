@@ -29,7 +29,7 @@ ImageShow 的配置按持久化位置分为三类：数据库、`/app/data/confi
 | `site.name` / `site.domain` / `site.icon_url` | 站点名称、主域名和图标；`site.name` 也会写入 SPA HTML 的 `<title>`。 |
 | `site.root_redirect` | 根路径跳转目标：`home` 或 `gallery`。 |
 | `site.home.enabled` | 是否启用公共首页 `/home`，默认 `true`。关闭后 `/home` 重定向到画廊，导航不再显示首页入口，根路径也强制进画廊。 |
-| `site.home.tagline` / `site.home.hero_background` / `site.home.preview_delay_ms` | 首页 banner 文案、hero 背景与随机预览切换延迟；`site.home.tagline` 也会写入 SPA HTML 的 description。 |
+| `site.home.tagline` / `site.home.hero_background` / `site.home.preview_delay_ms` | 站点描述、首页 hero 背景与随机预览切换延迟；`site.home.tagline` 也会写入 SPA HTML 的 description。 |
 | `site.gallery.default_limit` / `site.gallery.order` | 画廊默认分页数量与排序。 |
 | `site.random_default_method` | `/random` 默认返回方式：`redirect` 或 `proxy`。 |
 | `site.random_subdomain` / `site.static_subdomain` / `site.docs_subdomain` / `site.link_subdomain` | 保留子域名前缀。 |
@@ -96,10 +96,14 @@ ImageShow 的配置按持久化位置分为三类：数据库、`/app/data/confi
 | 配置字段 | 环境变量 |
 | --- | --- |
 | `site.domain` | `SITE_DOMAIN` |
+| `site.docs_enabled` | `SITE_DOCS_ENABLED` |
+| `site.robots_enabled` | `SITE_ROBOTS_ENABLED` |
 | `site.home.tagline` | `SITE_HOME_TAGLINE` |
 | `site.home.preview_delay_ms` | `SITE_HOME_PREVIEW_DELAY_MS` |
 | `admin.login_background` | `ADMIN_LOGIN_BACKGROUND` |
 | `normalize.quality_step` | `NORMALIZE_QUALITY_STEP` |
+| `thumbnail.long_edge` | `THUMBNAIL_LONG_EDGE` |
+| `thumbnail.quality` | `THUMBNAIL_QUALITY` |
 | `upload.concurrency` | `UPLOAD_CONCURRENCY` |
 | `upload.global_concurrency` | `UPLOAD_GLOBAL_CONCURRENCY` |
 | `link_image.concurrency` | `LINK_IMAGE_CONCURRENCY` |

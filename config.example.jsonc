@@ -16,7 +16,7 @@
     "home": {
       // 是否启用公共首页 /home；关闭后首页入口会指向画廊。
       "enabled": true,
-      // 首页 banner 下方说明文案。
+      // 站点描述；用于首页 banner 下方说明文案和 HTML description。
       "tagline": "个人图片管理、画廊展示和随机图片 API。",
       // 首页 hero 背景图；留空时使用站点自身随机图。
       "hero_background": "",

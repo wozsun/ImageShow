@@ -102,7 +102,7 @@ ImageShow/
 
 | 文件 | 职责 |
 | --- | --- |
-| `jobs/tasks.ts` | 持久化后台任务队列（`background_job`）。按任务类型并发领取（各类型独立并发上限）、指数退避重试、僵尸任务恢复。 |
+| `jobs/tasks.ts` | 持久化后台任务队列（`background_job`）。按任务类型并发领取（各类型独立并发上限）、指数退避重试、僵尸任务恢复、过期导入暂存与任务历史清理。 |
 | `jobs/restore.ts` | 从回收站恢复，并把图片重新加入 Redis 随机池。 |
 
 ### routes/ —— HTTP 薄层

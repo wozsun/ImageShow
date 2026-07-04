@@ -60,7 +60,7 @@ PostgreSQL，单一迁移文件 `packages/server/migrations/0001_initial.sql`，
 | `retry_count` / `next_retry_at` | 重试次数与下次重试时间 |
 | `created_at` / `updated_at` | 时间戳 |
 
-`cache.rebuild` 会从 PostgreSQL 全量重建 Redis 随机池。
+`cache.rebuild` 会从 PostgreSQL 全量重建 Redis 随机池。Worker 会按保留策略裁剪历史记录：`succeeded` / `ignored` 保留 7 天，耗尽重试且 `next_retry_at IS NULL` 的 `failed` 保留 90 天。
 
 ## storage_backend —— 命名存储后端注册表
 

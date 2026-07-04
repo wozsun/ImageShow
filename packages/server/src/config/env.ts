@@ -202,7 +202,9 @@ function initialConfigFromEnvironment() {
       random_subdomain: envValue("SITE_RANDOM_SUBDOMAIN"),
       static_subdomain: envValue("SITE_STATIC_SUBDOMAIN"),
       docs_subdomain: envValue("SITE_DOCS_SUBDOMAIN"),
-      link_subdomain: envValue("SITE_LINK_SUBDOMAIN")
+      docs_enabled: envBoolean("SITE_DOCS_ENABLED"),
+      link_subdomain: envValue("SITE_LINK_SUBDOMAIN"),
+      robots_enabled: envBoolean("SITE_ROBOTS_ENABLED")
     },
     port: envValue("PORT"),
     database: {
@@ -224,12 +226,6 @@ function initialConfigFromEnvironment() {
       concurrency: envValue("UPLOAD_CONCURRENCY"),
       global_concurrency: envValue("UPLOAD_GLOBAL_CONCURRENCY")
     },
-    admin: {
-      login_background: envValue("ADMIN_LOGIN_BACKGROUND"),
-      image_page_size: envValue("ADMIN_IMAGE_PAGE_SIZE"),
-      recent_uploads: envValue("ADMIN_RECENT_UPLOADS"),
-      show_unset_theme_card: envBoolean("ADMIN_SHOW_UNSET_THEME_CARD")
-    },
     link_image: {
       fill_original_url: envBoolean("LINK_IMAGE_FILL_ORIGINAL_URL"),
       concurrency: envValue("LINK_IMAGE_CONCURRENCY"),
@@ -242,6 +238,43 @@ function initialConfigFromEnvironment() {
       max_long_edge: envValue("NORMALIZE_MAX_LONG_EDGE"),
       max_size_kb: envValue("NORMALIZE_MAX_SIZE_KB"),
       skip_webp_under_kb: envValue("NORMALIZE_SKIP_WEBP_UNDER_KB")
+    },
+    thumbnail: {
+      long_edge: envValue("THUMBNAIL_LONG_EDGE"),
+      quality: envValue("THUMBNAIL_QUALITY")
+    },
+    image_detail: {
+      title_opens_image: envBoolean("IMAGE_DETAIL_TITLE_OPENS_IMAGE")
+    },
+    admin: {
+      login_background: envValue("ADMIN_LOGIN_BACKGROUND"),
+      image_page_size: envValue("ADMIN_IMAGE_PAGE_SIZE"),
+      recent_uploads: envValue("ADMIN_RECENT_UPLOADS"),
+      show_unset_theme_card: envBoolean("ADMIN_SHOW_UNSET_THEME_CARD")
+    },
+    background_job: {
+      move_cleanup_concurrency: envValue("BACKGROUND_JOB_MOVE_CLEANUP_CONCURRENCY"),
+      theme_reassign_concurrency: envValue("BACKGROUND_JOB_THEME_REASSIGN_CONCURRENCY"),
+      migrate_concurrency: envValue("BACKGROUND_JOB_MIGRATE_CONCURRENCY")
+    },
+    security: {
+      session_ttl_seconds: envValue("SECURITY_SESSION_TTL_SECONDS"),
+      login_failure_window_seconds: envValue("SECURITY_LOGIN_FAILURE_WINDOW_SECONDS"),
+      login_max_failures: envValue("SECURITY_LOGIN_MAX_FAILURES"),
+      login_global_window_seconds: envValue("SECURITY_LOGIN_GLOBAL_WINDOW_SECONDS"),
+      login_global_max_attempts: envValue("SECURITY_LOGIN_GLOBAL_MAX_ATTEMPTS")
+    },
+    captcha: {
+      enabled: envBoolean("CAPTCHA_ENABLED"),
+      code_length: envValue("CAPTCHA_CODE_LENGTH"),
+      ttl_seconds: envValue("CAPTCHA_TTL_SECONDS"),
+      noise_lines: envValue("CAPTCHA_NOISE_LINES"),
+      noise_dots: envValue("CAPTCHA_NOISE_DOTS")
+    },
+    log: {
+      level: envValue("LOG_LEVEL"),
+      max_size_mb: envValue("LOG_MAX_SIZE_MB"),
+      max_files: envValue("LOG_MAX_FILES")
     }
   });
 }

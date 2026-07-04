@@ -152,7 +152,7 @@ export function SettingsPage() {
               />
             </label>
             <label>
-              首页 banner 文案
+              站点描述
               <input
                 value={settings.site.home.tagline}
                 onChange={(event) => updateSiteHome({ tagline: event.target.value })}

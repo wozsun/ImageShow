@@ -26,7 +26,7 @@ features:
     details: 常用配置由后台管理，进阶配置落在 config.json，读取配置文件后即时生效。
   - icon: 🔄
     title: 异步处理队列
-    details: 删除收尾、缩略图补建、迁移清理、缓存重建和上传清理进入后台任务队列。
+    details: 缩略图补建、移动清理、缓存重建和上传清理进入后台任务队列。
   - icon: 🛡️
     title: Host 隔离
     details: 主站、随机图、静态资源、代理链接和文档站按子域隔离，降低跨域与 Cookie 风险。

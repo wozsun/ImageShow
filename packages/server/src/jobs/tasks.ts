@@ -16,6 +16,7 @@ let tickPromise: Promise<void> | null = null;
 
 let lastStaleRecovery = 0;
 let lastExpireUploads = 0;
+let lastHistoryCleanup = 0;
 
 export async function enqueue(type: string, targetId = "", payload: unknown = {}, idempotencyKey?: string) {
   const id = uuidv7();
@@ -187,6 +188,10 @@ async function runTick() {
     lastExpireUploads = now;
     await expireUploads();
   }
+  if (now - lastHistoryCleanup >= appConfig.backgroundJob.historyCleanupIntervalMs) {
+    lastHistoryCleanup = now;
+    await cleanupJobHistory();
+  }
 
   const pending = (await pool.query(
     `SELECT type, count(*)::int AS n FROM background_job
@@ -231,6 +236,40 @@ async function expireUploads() {
        )`,
     [uuidv7()]
   ).catch(() => undefined);
+}
+
+async function cleanupJobHistory() {
+  const result = await pool.query(
+    `WITH deleted AS (
+       DELETE FROM background_job
+       WHERE id IN (
+         SELECT id FROM background_job
+         WHERE (
+             status IN ('succeeded', 'ignored')
+             AND updated_at < now() - ($1 || ' seconds')::interval
+           )
+           OR (
+             status = 'failed'
+             AND next_retry_at IS NULL
+             AND updated_at < now() - ($2 || ' seconds')::interval
+           )
+         ORDER BY updated_at ASC
+         LIMIT $3
+       )
+       RETURNING status
+     )
+     SELECT status, count(*)::int AS count
+     FROM deleted
+     GROUP BY status`,
+    [
+      appConfig.backgroundJob.completedRetentionSeconds,
+      appConfig.backgroundJob.failedRetentionSeconds,
+      appConfig.backgroundJob.historyCleanupBatchSize
+    ]
+  );
+  const rows = result.rows as Array<{ status: string; count: number }>;
+  if (rows.length) logger.debug("cleaned background job history", Object.fromEntries(rows.map((row) => [row.status, row.count])));
+  return rows;
 }
 
 export function startWorker() {

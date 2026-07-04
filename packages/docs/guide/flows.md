@@ -159,7 +159,7 @@ GET /api/images/:id
 
 ## 后台 Worker
 
-Worker 用 `FOR UPDATE SKIP LOCKED` 领取持久任务，按任务类型限制并发，并定期恢复僵尸任务、清理过期 `import_session`、prepared staging 与孤儿 raw 临时文件。
+Worker 用 `FOR UPDATE SKIP LOCKED` 领取持久任务，按任务类型限制并发，并定期恢复僵尸任务、清理过期 `import_session`、prepared staging 与孤儿 raw 临时文件。已完成 / 已忽略任务保留 7 天后按批删除，耗尽重试的失败任务保留 90 天后删除；待执行、运行中和仍在重试窗口内的失败任务不会被历史清理删除。
 
 ## 缓存策略
 
