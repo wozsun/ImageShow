@@ -3,6 +3,7 @@ import { copyFile, mkdir, readFile, readdir, rm, rmdir, stat, writeFile, access 
 import { dirname, join, relative, sep } from "node:path";
 import type { Readable } from "node:stream";
 import { env } from "../config/env.js";
+import { ApiError } from "../core/http.js";
 import { safeStoragePath, STORAGE_PREFIXES, type ReadablePrefix, type StoragePrefix } from "./object-keys.js";
 import type {
   CopyPrefix,
@@ -49,7 +50,13 @@ export class LocalBackend implements StorageDriver {
   }
 
   async readObject(prefix: ReadablePrefix, key: string): Promise<Readable> {
-    return createReadStream(safeStoragePath(prefix, key));
+    const path = safeStoragePath(prefix, key);
+    try {
+      await access(path);
+    } catch {
+      throw new ApiError(404, "storage_object_not_found", "Object not found");
+    }
+    return createReadStream(path);
   }
 
   async listKeys(prefix: StoragePrefix) {

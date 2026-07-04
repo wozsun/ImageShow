@@ -1,30 +1,33 @@
 export type { AdminSettings, Brightness, Device, SiteSettings, StorageType } from "@imageshow/shared";
 import type { Brightness, Device, StorageType } from "@imageshow/shared";
 
-export type ImageItem = {
+export type GalleryImageCard = {
   id: string;
   title: string;
-  description: string;
   device: Device;
   brightness: Brightness;
   theme: string;
+  thumb_url: string;
+  width: number;
+  height: number;
+  tags: string[];
+  created_at: string;
+};
+
+export type ImageItem = GalleryImageCard & {
+  description: string;
   author: string;
   status: "ready" | "deleted";
   object_url: string;
   object_key: string;
   storage_slug: string;
   is_link: boolean;
-  thumb_url: string;
   md5: string;
   original: string;
   extra?: Record<string, unknown>;
   has_distinct_original: boolean;
   source: string;
-  width: number;
-  height: number;
   image_size?: number;
-  tags: string[];
-  created_at: string;
   deleted_at?: string;
 };
 

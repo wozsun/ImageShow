@@ -26,17 +26,17 @@ ImageShow 的配置按持久化位置分为三类：数据库、`/app/data/confi
 
 | 配置路径 | 用途 |
 | --- | --- |
-| `site.name` / `site.domain` / `site.icon_url` | 站点名称、主域名和图标。 |
+| `site.name` / `site.domain` / `site.icon_url` | 站点名称、主域名和图标；`site.name` 也会写入 SPA HTML 的 `<title>`。 |
 | `site.root_redirect` | 根路径跳转目标：`home` 或 `gallery`。 |
 | `site.home.enabled` | 是否启用公共首页 `/home`，默认 `true`。关闭后 `/home` 重定向到画廊，导航不再显示首页入口，根路径也强制进画廊。 |
-| `site.home.tagline` / `site.home.hero_background` / `site.home.preview_delay_ms` | 首页 banner 文案、hero 背景与随机预览切换延迟。 |
+| `site.home.tagline` / `site.home.hero_background` / `site.home.preview_delay_ms` | 首页 banner 文案、hero 背景与随机预览切换延迟；`site.home.tagline` 也会写入 SPA HTML 的 description。 |
 | `site.gallery.default_limit` / `site.gallery.order` | 画廊默认分页数量与排序。 |
 | `site.random_default_method` | `/random` 默认返回方式：`redirect` 或 `proxy`。 |
 | `site.random_subdomain` / `site.static_subdomain` / `site.docs_subdomain` / `site.link_subdomain` | 保留子域名前缀。 |
 | `site.docs_enabled` | 是否启用 `docs.<域名>` 文档站，默认 `true`。关闭后该主机返回 404，但前缀仍保留，主题不可占用。 |
 | `site.robots_enabled` | 是否提供 `robots.txt`，默认 `false`。开启后主站首页与文档站可抓取，资源域和主题域禁抓。 |
 | `upload.*` | 上传文件大小、图片长边限制、上传列表分页、单客户端上传队列并发与服务端全局上传 prepare 并发。 |
-| `link_image.fill_original_url` | 两种链接导入模式是否自动填入「原图URL」。 |
+| `link_image.fill_original_url` | 两种链接导入模式是否自动把输入 URL 填入「原图 URL」字段；不做可直达探测。 |
 | `link_image.concurrency` | 单客户端 URL 导入队列并发数，覆盖“下载保存”和“代理链接”。 |
 | `link_image.global_concurrency` | 服务端 URL 导入 prepare 全局并发数，多个客户端共享。 |
 | `normalize.*` | 本地上传与下载导入共用的最终入库文件标准化策略。 |

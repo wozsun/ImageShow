@@ -3,7 +3,9 @@ export { adminApiBasePath, adminBasePath, reservedSubdomains, slugPattern } from
 
 export const queryKeys = {
   siteConfig: ["site-config"] as const,
-  galleryOptions: ["gallery-options"] as const,
+  galleryFacets: ["gallery-facets"] as const,
+  publicImages: ["public-images"] as const,
+  publicImageDetail: ["public-image-detail"] as const,
   overview: ["admin-overview"] as const,
   adminImages: ["admin-images"] as const,
   tags: ["tags"] as const,

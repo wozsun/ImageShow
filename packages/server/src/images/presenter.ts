@@ -1,5 +1,5 @@
 import { adminApiBasePath, type Brightness, type Device } from "@imageshow/shared";
-import { setImageLookups } from "./image-cache.js";
+import { setImageLookups, type ImageLookupItem } from "./image-cache.js";
 import { thumbnailObjectKey } from "../storage/image-paths.js";
 import { publicImageUrls } from "../storage/storage.js";
 import { getTagsForImages } from "../tags/query.js";
@@ -32,6 +32,11 @@ export type ImageRecord = {
 };
 
 export type PublicImage = Awaited<ReturnType<typeof publicImage>>;
+
+export type PublicImageCardRecord = Pick<
+  ImageRecord,
+  "id" | "device" | "brightness" | "theme" | "width" | "height" | "ext" | "object_key" | "storage_slug" | "is_link" | "title" | "created_at"
+>;
 
 export type ImportSessionRecord = {
   id: string;
@@ -93,30 +98,29 @@ export async function publicImages(rows: ImageRecord[]) {
   return Promise.all(rows.map((row) => publicImage(row, tagMap.get(row.id) ?? [])));
 }
 
-export type PublicListImage = ReturnType<typeof publicListImage>;
+export type PublicImageCard = Awaited<ReturnType<typeof publicImageCard>>;
 
-export function publicListImage(image: PublicImage) {
+async function publicImageCard(row: PublicImageCardRecord, tags: string[] = []) {
+  const slug = row.storage_slug ?? "local";
+  const isLink = Boolean(row.is_link);
+  const urls = await publicImageUrls(row.object_key, slug, isLink, isLink ? { id: row.id, device: row.device, brightness: row.brightness, theme: row.theme, ext: row.ext } : undefined);
   return {
-    id: image.id,
-    device: image.device,
-    brightness: image.brightness,
-    theme: image.theme,
-    author: image.author,
-    width: image.width,
-    height: image.height,
-    title: image.title,
-    description: image.description,
-    source: image.source,
-    original: image.original,
-    has_distinct_original: image.has_distinct_original,
-    tags: image.tags,
-    md5: image.md5,
-    storage_slug: image.storage_slug,
-    is_link: image.is_link,
-    created_at: image.created_at,
-    object_url: image.object_url,
-    thumb_url: image.thumb_url
+    id: row.id,
+    device: row.device,
+    brightness: row.brightness,
+    theme: row.theme,
+    width: Number(row.width ?? 0),
+    height: Number(row.height ?? 0),
+    title: row.title ?? "",
+    tags,
+    created_at: row.created_at ?? null,
+    thumb_url: urls.thumb_url
   };
+}
+
+export async function publicImageCards(rows: PublicImageCardRecord[]) {
+  const tagMap = await getTagsForImages(rows.map((row) => row.id));
+  return Promise.all(rows.map((row) => publicImageCard(row, tagMap.get(row.id) ?? [])));
 }
 
 export type AdminImage = Omit<PublicImage, "ext">;
@@ -131,7 +135,7 @@ export function adminImageView(image: PublicImage): AdminImage {
   };
 }
 
-export function publicImagesCacheKey(q: { status: string; d?: string; b?: string; t?: string; tag?: string; a?: string; cursor?: string; limit: number }) {
+export function publicImageListCacheKey(q: { status: string; d?: string; b?: string; t?: string; tag?: string; a?: string; cursor?: string; limit: number }) {
   return [
     `status=${q.status}`,
     `d=${q.d ?? ""}`,
@@ -144,10 +148,9 @@ export function publicImagesCacheKey(q: { status: string; d?: string; b?: string
   ].map((part) => encodeURIComponent(part)).join("&");
 }
 
-export async function cacheImageLookups(items: PublicImage[]) {
-  const lookups = [];
+export async function cacheImageLookups(items: Array<{ is_link?: boolean; object_key: string; ext: string; storage_slug?: string }>) {
+  const lookups: ImageLookupItem[] = [];
   for (const item of items) {
-
     if (item.is_link) continue;
     lookups.push({
       object_key: item.object_key,

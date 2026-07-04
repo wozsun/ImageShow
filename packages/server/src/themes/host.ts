@@ -1,6 +1,6 @@
 import type { Context, Next } from "hono";
 import { getRuntimeConfig } from "../config/env.js";
-import { getGalleryOptions } from "../random/random-cache.js";
+import { getGalleryFilterOptions } from "../random/random-cache.js";
 
 type HostParts = { hostname: string; port: string };
 
@@ -55,8 +55,8 @@ export function linkBaseUrl() {
 export async function existingThemeFromHost(hostHeader: string) {
   const theme = themeFromHost(hostHeader);
   if (!theme) return "";
-  const options = await getGalleryOptions();
-  return options.themes.includes(theme) ? theme : "";
+  const filterOptions = await getGalleryFilterOptions();
+  return filterOptions.themes.includes(theme) ? theme : "";
 }
 
 export function rootSiteUrl(c: Context, path = "/") {

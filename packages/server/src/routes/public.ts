@@ -2,7 +2,7 @@ import type { Hono } from "hono";
 import { blockCrossSiteFetch, ok, publicConfigCacheControl, publicListCacheControl, publicMetadataCacheControl } from "../core/http.js";
 import { listQuery, parse, uuidInput } from "../core/validation.js";
 import { siteConfigPayload } from "../config/settings.js";
-import { getPublicGalleryFacets, listPublicImages } from "../images/query.js";
+import { getPublicGalleryFacets, getPublicImage, listPublicImages } from "../images/query.js";
 import { redirectOriginalLink, serveLinkMedia, serveLinkThumb, serveObject, serveOriginalLinkProxy, serveThumb } from "../images/serving.js";
 import { specialHost } from "../themes/host.js";
 
@@ -19,9 +19,15 @@ export function registerPublicRoutes(app: Hono) {
     return c.json(ok(siteConfigPayload()));
   });
 
-  app.get("/api/gallery-options", blockCrossSiteFetch, async (c) => {
+  app.get("/api/gallery-facets", blockCrossSiteFetch, async (c) => {
     c.header("Cache-Control", publicMetadataCacheControl);
     return c.json(ok(await getPublicGalleryFacets()));
+  });
+
+  app.get("/api/images/:id", blockCrossSiteFetch, async (c) => {
+    const id = parse(uuidInput, c.req.param("id"));
+    c.header("Cache-Control", publicMetadataCacheControl);
+    return c.json(ok({ item: await getPublicImage(id) }));
   });
 
   app.get("/api/images/:id/original", async (c) => redirectOriginalLink(

@@ -4,7 +4,7 @@ import { ProgressiveImage } from "./ProgressiveImage.js";
 import { displayNameOrSlug, imageDisplayTitle, formatDate, formatDimensions } from "../../lib/ui/formatters.js";
 import { brightnessOptionLabel, deviceOptionLabel } from "../../lib/ui/select-options.js";
 import type { ImageItem } from "../../lib/types.js";
-import { useGalleryOptions, useSiteConfig } from "../../lib/api/site-data.js";
+import { useGalleryFacets, useSiteConfig } from "../../lib/api/site-data.js";
 import { useStorageNameResolver } from "../../lib/api/storage-options.js";
 import { useAnimatedClose } from "../../hooks/useAnimatedClose.js";
 import { useBodyScrollLock } from "../../hooks/useBodyScrollLock.js";
@@ -16,7 +16,7 @@ export function ImageDetailModal({ item, onClose, admin = false }: { item: Image
   const contentRef = useRef<HTMLDivElement | null>(null);
   const { data: siteConfig } = useSiteConfig();
 
-  const { data: facets } = useGalleryOptions();
+  const { data: facets } = useGalleryFacets();
   // 存储行仅在 admin 详情展示，故仅在 admin 时拉取后端列表来把 slug 解析成显示名。
   const storageName = useStorageNameResolver(admin);
   const themeNames = useMemo(() => new Map((facets?.themes ?? []).map((option) => [option.slug, displayNameOrSlug(option)])), [facets]);

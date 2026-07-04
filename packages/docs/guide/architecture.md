@@ -35,7 +35,7 @@ ImageShow 是一个 npm workspaces 单仓多包项目：自托管图库 + 随机
 ## 数据与缓存
 
 - PostgreSQL 是唯一真相源，承载图片元数据、标签 / 主题 / 作者（含 `image_tag` 关联表）、统一导入会话、后台任务、存储后端注册表与管理员账号，共 9 张业务表（见[数据库结构](./database)）。
-- Redis 是加速层：generation 随机池（`random:<generation>:item`、axis/category/tag/author 集合与计数）、画廊筛选项、公共列表缓存、MD5 判重、对象 / 缩略图查找、随机去重历史。正常 `/random` 不依赖 PostgreSQL；Redis 不可用时随机 API 返回 503，其他读路径可按场景降级到 PostgreSQL。
+- Redis 是加速层：generation 随机池（`random:<generation>:item`、axis/category/tag/author 集合与计数）、画廊筛选项、公共列表 / 详情缓存、后台概览短缓存、原图直连探测缓存、MD5 判重、对象 / 缩略图查找、随机去重历史。正常 `/random` 不依赖 PostgreSQL；Redis 不可用时随机 API 返回 503，其他读路径可按场景降级到 PostgreSQL。
 - 存储后端按图片记录的 `storage_slug`（外键 → `storage_backend` 注册表）决定：本地磁盘、S3 兼容对象存储或 WebDAV；外部链接（link，自身不存字节，仅缩略图落于某后端）由 `is_link` 标记。详见[存储](./storage)。
 
 ## 后台 Worker

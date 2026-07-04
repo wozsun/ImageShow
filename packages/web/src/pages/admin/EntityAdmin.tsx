@@ -49,11 +49,11 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
   const client = useQueryClient();
   const { data, isFetching } = useQuery<{ items: Entity[] }>({ queryKey, queryFn: () => api(`${adminApiBasePath}/${kind}`) });
   const { data: settingsData } = useQuery<{ settings: AdminSettings }>({ queryKey: queryKeys.settings, queryFn: () => api(`${adminApiBasePath}/settings`) });
-  // 新建/删除词条会改动公共画廊的筛选词表（gallery-options，staleTime:Infinity 不会自动刷新），
+  // 新建/删除词条会改动公共画廊的筛选词表（gallery-facets，staleTime:Infinity 不会自动刷新），
   // 删除还会清除关联图片上的该属性，故一并失效后台图片列表，与 ImageAdmin.refresh 的失效集对齐。
   const refresh = () => {
     client.invalidateQueries({ queryKey });
-    client.invalidateQueries({ queryKey: queryKeys.galleryOptions });
+    client.invalidateQueries({ queryKey: queryKeys.galleryFacets });
     client.invalidateQueries({ queryKey: queryKeys.adminImages });
   };
   const [slug, setSlug] = useState("");

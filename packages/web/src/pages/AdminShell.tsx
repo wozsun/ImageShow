@@ -6,7 +6,8 @@ import { NavGroup } from "../components/navigation/NavGroup.js";
 import { PasswordInput } from "../components/form/PasswordInput.js";
 import { OverlayScrollbar } from "../components/layout/OverlayScrollbar.js";
 import { adminApiBasePath, adminBasePath, defaultSite } from "../lib/constants.js";
-import { useAuthMe, useSiteConfig } from "../lib/api/site-data.js";
+import { clearSessionProbeHint, rememberSessionProbeHint, useAuthMe, useSiteConfig } from "../lib/api/site-data.js";
+import { cssUrl } from "../lib/ui/formatters.js";
 import { CheckPage } from "./admin/CheckPage.js";
 import { ImageAdmin } from "./admin/ImageAdmin.js";
 import { EntityAdmin } from "./admin/EntityAdmin.js";
@@ -29,13 +30,22 @@ export function AdminShell() {
 
   const viewSite = { to: "/", icon: "home-4-line", label: "首页" } as const;
   const { data, refetch } = useAuthMe();
-  useEffect(() => { if (data?.csrf_token) setCsrfToken(data.csrf_token); }, [data]);
+  useEffect(() => {
+    if (!data) return;
+    if (data.authenticated) {
+      if (data.csrf_token) setCsrfToken(data.csrf_token);
+      rememberSessionProbeHint();
+    } else {
+      clearSessionProbeHint();
+    }
+  }, [data]);
   if (!data) return <div className="center">加载中</div>;
-  if (!data.authenticated) return <Login onLogin={() => refetch()} />;
+  if (!data.authenticated) return <Login onLogin={() => refetch()} captchaEnabled={data.captcha_enabled} loginBackground={data.login_background} />;
   const isSuper = data.role === "super";
   const logout = async () => {
     await api(`${adminApiBasePath}/auth/logout`, { method: "POST" });
     clearCsrfToken();
+    clearSessionProbeHint();
     navigate(adminBasePath);
     location.reload();
   };
@@ -165,7 +175,7 @@ export function AdminShell() {
   );
 }
 
-function Login({ onLogin }: { onLogin: () => void }) {
+function Login({ onLogin, captchaEnabled, loginBackground }: { onLogin: () => void; captchaEnabled: boolean; loginBackground: string }) {
   const { data: siteConfig } = useSiteConfig();
   const siteName = siteConfig?.site?.name ?? defaultSite.name;
   const [username, setUsername] = useState("");
@@ -176,13 +186,11 @@ function Login({ onLogin }: { onLogin: () => void }) {
   const [error, setError] = useState("");
   const refreshCaptcha = () => { setCaptcha(""); setCaptchaNonce(Date.now()); };
 
-  const captchaEnabled = siteConfig?.captcha?.enabled ?? true;
-
-  const background = siteConfig?.admin?.login_background || "/random?m=redirect";
+  const background = loginBackground || "/random?m=redirect";
   return (
     <main
       className="login"
-      style={{ backgroundImage: `linear-gradient(rgba(12, 18, 28, .45), rgba(12, 18, 28, .72)), url("${background}")` }}
+      style={{ backgroundImage: `linear-gradient(rgba(12, 18, 28, .45), rgba(12, 18, 28, .72)), ${cssUrl(background)}` }}
     >
       <form onSubmit={async (event) => {
         event.preventDefault();
@@ -190,6 +198,7 @@ function Login({ onLogin }: { onLogin: () => void }) {
         try {
           const res = await api<{ csrf_token: string }>(`${adminApiBasePath}/auth/login`, { method: "POST", body: JSON.stringify({ username, password, ...(captchaEnabled ? { captcha } : {}) }) });
           setCsrfToken(res.csrf_token);
+          rememberSessionProbeHint();
           onLogin();
         } catch (err) {
           setError((err as Error).message);

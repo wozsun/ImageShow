@@ -5,7 +5,7 @@ import { appConfig, type Brightness, type Device, type ImageExt } from "@imagesh
 import { pool, withTransaction } from "../../core/db.js";
 import { ApiError, errorMessage, privateNoStoreCacheControl } from "../../core/http.js";
 import { redis } from "../../core/redis-client.js";
-import { invalidateImageReadCaches, invalidateMd5Cache } from "../image-cache.js";
+import { invalidateImageReadCaches, invalidateMd5Cache, setImageLookup } from "../image-cache.js";
 import { syncRandomImage } from "../../random/random-cache.js";
 import { getRuntimeConfig } from "../../config/env.js";
 import { assertStorageUploadable, getDefaultStorageSlug, getImageMaxLongEdge, getUploadLimitBytes } from "../../config/settings.js";
@@ -311,6 +311,14 @@ async function finishImport(image: ImageRecord, payload: PreparedPayload, insert
   if (inserted || tagsChanged) await syncRandomImage(image.id);
   await invalidateMd5Cache(payload.md5);
   await invalidateImageReadCaches();
+  if (!image.is_link) {
+    await setImageLookup({
+      object_key: image.object_key,
+      thumb_key: thumbnailObjectKey(image.object_key),
+      ext: image.ext,
+      slug: image.storage_slug
+    });
+  }
 }
 
 async function updateFailed(id: string, error: unknown) {

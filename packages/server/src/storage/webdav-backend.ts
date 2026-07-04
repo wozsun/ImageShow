@@ -42,6 +42,10 @@ function shouldRetryWebdavStatus(status: number) {
   return status === 429 || (status >= 500 && status <= 599);
 }
 
+function isAbortError(error: unknown) {
+  return error instanceof Error && error.name === "AbortError";
+}
+
 function responseWithTimeout(response: Response, timer: ReturnType<typeof setTimeout>) {
   if (!response.body) {
     clearTimeout(timer);
@@ -100,10 +104,14 @@ async function webdavFetch(input: string, init: RequestInit) {
       await response.body?.cancel().catch(() => undefined);
       await sleep(delayMs);
     } catch (error) {
-      if ((error as Error).name === "AbortError") {
+      if (isAbortError(error) && attempt === WEBDAV_RETRY_ATTEMPTS - 1) {
         throw new ApiError(504, "storage_timeout", "WebDAV request timed out");
       }
-      throw error;
+      if (attempt === WEBDAV_RETRY_ATTEMPTS - 1) {
+        throw new ApiError(502, "storage_request_failed", "WebDAV request failed");
+      }
+      clearTimeout(timer);
+      await sleep(WEBDAV_RETRY_BASE_MS * 2 ** attempt);
     } finally {
       if (!handedOffTimer) clearTimeout(timer);
     }
@@ -184,7 +192,8 @@ export class WebdavBackend implements StorageDriver {
       return await streamToBuffer(opened.body, limit);
     } catch (error) {
       opened.body.destroy();
-      throw error;
+      if (error instanceof ApiError) throw error;
+      throw new ApiError(502, "storage_read_failed", "WebDAV GET failed while reading response body");
     }
   }
 

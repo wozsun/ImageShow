@@ -4,6 +4,8 @@ import { ApiError, login, logout, ok, requireCsrf, getSession } from "../core/ht
 import { issueCaptcha, verifyCaptcha } from "../core/captcha.js";
 import { parse, passwordChangeInput } from "../core/validation.js";
 import { changeOwnPassword } from "../users/service.js";
+import { getRuntimeConfig } from "../config/env.js";
+import { getEffectiveLoginBackground } from "../config/settings.js";
 
 export function registerPublicAuthRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/auth/captcha`, (c) => issueCaptcha(c));
@@ -17,7 +19,14 @@ export function registerPublicAuthRoutes(app: Hono) {
 
   app.get(`${adminApiBasePath}/auth/me`, async (c) => {
     const session = await getSession(c);
-    return c.json(ok({ authenticated: Boolean(session), username: session?.username ?? "", role: session?.role ?? "", csrf_token: session?.csrf ?? "" }));
+    return c.json(ok({
+      authenticated: Boolean(session),
+      username: session?.username ?? "",
+      role: session?.role ?? "",
+      csrf_token: session?.csrf ?? "",
+      captcha_enabled: getRuntimeConfig().captcha.enabled,
+      login_background: getEffectiveLoginBackground()
+    }));
   });
 }
 

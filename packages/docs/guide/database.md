@@ -26,7 +26,7 @@ PostgreSQL，单一迁移文件 `packages/server/migrations/0001_initial.sql`，
 
 数据库不再保存 `category_index` / `index_key` / `category_key`。人工可读目录仍由 `device/brightness/theme` 组成，但随机性能由 Redis 集合保证，不需要在 PostgreSQL 中维护连续编号。
 
-关键索引：`ready` 状态下的 `(device, brightness, theme, id)`，以及状态分页、MD5、缩略图反查、主题、作者和存储后端索引。
+关键索引：`ready` 状态下的随机轴 `(device, brightness, theme, id)`；公共列表按 `created_at DESC, id DESC` 游标分页，并为常用筛选预建 ready 部分索引：无筛选、单设备、单亮度、设备+亮度、单主题、设备+主题、亮度+主题、设备+亮度+主题、作者。标签查询依赖 `image_tag(tag_slug, image_id)` 命中标签集合，结合 `metadata` 的 ready/时间与主题等索引完成分页；另有 MD5、缩略图反查、主题、作者和存储后端索引。
 
 ## import_session —— 统一导入会话
 

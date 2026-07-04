@@ -35,6 +35,9 @@ export function LazyGalleryImage({ src, alt, device, width, height, priority = f
           alt={alt}
           loading={priority ? "eager" : "lazy"}
           fetchPriority={priority ? "high" : "auto"}
+          decoding="async"
+          width={width > 0 ? width : undefined}
+          height={height > 0 ? height : undefined}
           referrerPolicy="no-referrer"
           onLoad={() => setLoaded(true)}
           onError={() => { setFailed(true); setLoaded(true); }}

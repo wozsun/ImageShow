@@ -406,11 +406,16 @@ export async function getSettingsForAdmin() {
 function randomApiBackground(domain: string) {
   return `https://${domain}/random?m=redirect`;
 }
-function effectiveLoginBackground(input: { login_background?: string; domain: string }) {
-  return input.login_background?.trim() || randomApiBackground(input.domain);
+function effectiveLoginBackground(input: { login_background?: string }) {
+  return input.login_background?.trim() || "/random?m=redirect";
 }
 function effectiveHomeHeroBackground(site: { home: { hero_background?: string }; domain: string }) {
   return site.home.hero_background?.trim() || randomApiBackground(site.domain);
+}
+
+export function getEffectiveLoginBackground() {
+  const runtime = getRuntimeConfig();
+  return effectiveLoginBackground({ login_background: runtime.admin.login_background });
 }
 
 export function siteConfigPayload() {
@@ -427,10 +432,7 @@ export function siteConfigPayload() {
       random_default_method,
       docs_enabled
     },
-    upload: { max_file_size_mb: runtime.upload.max_file_size_mb, max_long_edge: runtime.upload.max_long_edge },
-    image_detail: runtime.image_detail,
-    admin: { login_background: effectiveLoginBackground({ domain, login_background: runtime.admin.login_background }) },
-    captcha: { enabled: runtime.captcha.enabled }
+    image_detail: runtime.image_detail
   };
 }
 

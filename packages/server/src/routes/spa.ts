@@ -51,14 +51,34 @@ export function registerStaticRoutes(app: Hono) {
 
 let spaTemplate: string | null = null;
 
+function escapeHtmlText(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function escapeHtmlAttr(value: string) {
+  return escapeHtmlText(value)
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function buildSpaDocument(): string {
   spaTemplate ??= readFileSync(join(publicDir, "index.html"), "utf8");
   const site = getRuntimeConfig().site;
   const inlineConfig = JSON.stringify(siteConfigPayload()).replace(/</g, "\\u003c");
+  const title = escapeHtmlText(site.name || "ImageShow");
+  const description = escapeHtmlAttr(site.home.tagline || site.name || "ImageShow");
+  const iconUrl = escapeHtmlAttr(site.icon_url || "/assets/brand/favicon.svg");
   const head =
     `<link rel="preconnect" href="https://${site.static_subdomain}.${site.domain}" crossorigin>` +
     `<script type="application/json" id="__site_config__">${inlineConfig}</script>`;
-  return spaTemplate.replace("</head>", `${head}</head>`);
+  return spaTemplate
+    .replace(/<title>[\s\S]*?<\/title>/i, `<title>${title}</title>`)
+    .replace(/<meta\s+name="description"\s+content="[^"]*"\s*\/?>/i, `<meta name="description" content="${description}" />`)
+    .replace(/<link\s+rel="icon"[^>]*>/i, `<link rel="icon" type="${iconUrl.endsWith(".svg") ? "image/svg+xml" : ""}" href="${iconUrl}" />`)
+    .replace("</head>", `${head}</head>`);
 }
 
 async function spaHandler(_c: Context) {

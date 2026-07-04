@@ -1,4 +1,5 @@
 import type { Readable } from "node:stream";
+import { ApiError } from "../core/http.js";
 import type { StorageType, StorageConfig } from "../config/settings.js";
 import type { ReadablePrefix, StoragePrefix } from "./object-keys.js";
 import { LocalBackend } from "./local-backend.js";
@@ -32,6 +33,10 @@ export interface StorageDriver {
   selfTest(): Promise<StorageSelfTest>;
 
   pruneEmptyDirs(): Promise<number>;
+}
+
+export function isStorageNotFoundError(error: unknown) {
+  return error instanceof ApiError && error.status === 404;
 }
 
 const driverCache = new Map<string, StorageDriver>();

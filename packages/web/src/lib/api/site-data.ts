@@ -3,22 +3,21 @@ import { api } from "./client.js";
 import { adminApiBasePath, queryKeys } from "../constants.js";
 import type { AdminUser, FacetOption, SiteSettings } from "../types.js";
 
-type SiteConfig = {
+export type SiteConfig = {
   site: SiteSettings;
-  upload: { max_file_size_mb: number; max_long_edge: number };
   image_detail: { title_opens_image: boolean };
-  admin: { login_background: string };
-  captcha: { enabled: boolean };
 };
 
-type AuthState = {
+export type AuthState = {
   authenticated: boolean;
   username: string;
   role: AdminUser["role"] | "";
   csrf_token: string;
+  captcha_enabled: boolean;
+  login_background: string;
 };
 
-type GalleryOptions = {
+export type GalleryFacets = {
   devices: string[];
   brightnesses: string[];
   themes: FacetOption[];
@@ -26,15 +25,44 @@ type GalleryOptions = {
   authors: Array<FacetOption & { link: string }>;
 };
 
-// site-config 与 gallery-options 是「会话级近乎不变」的全局数据：只有在管理员保存站点设置 / 改动
-
-// 在每次组件重挂、路由切换、窗口重新聚焦时反复后台刷新；gcTime 同设 Infinity，使离开画廊再返回也不必
-// 重新拉取。任何页面都应改用下面两个 hook，而非各自内联 useQuery，既减少请求也统一了取数方式。
+// site-config 与 gallery-facets 是「会话级近乎不变」的全局数据：只有在管理员保存站点设置、
+// 改动主题 / 标签 / 作者或导入图片后才需要显式失效。这里关闭自动后台刷新，避免组件重挂、
+// 路由切换和窗口重新聚焦时反复请求；gcTime 同设 Infinity，使离开画廊再返回也不必重新拉取。
+// 任何页面都应改用下面两个 hook，而非各自内联 useQuery，既减少请求也统一了取数方式。
 const sessionGlobalQuery = {
   staleTime: Number.POSITIVE_INFINITY,
   gcTime: Number.POSITIVE_INFINITY,
   refetchOnWindowFocus: false
 } as const;
+
+const sessionProbeHintKey = "site_session_hint";
+
+export function hasSessionProbeHint() {
+  if (typeof localStorage === "undefined") return false;
+  try {
+    return localStorage.getItem(sessionProbeHintKey) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function rememberSessionProbeHint() {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(sessionProbeHintKey, "1");
+  } catch {
+    // 忽略无痕模式或浏览器策略导致的本地存储失败。
+  }
+}
+
+export function clearSessionProbeHint() {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.removeItem(sessionProbeHintKey);
+  } catch {
+    // 忽略无痕模式或浏览器策略导致的本地存储失败。
+  }
+}
 
 const inlinedSiteConfig: SiteConfig | undefined = (() => {
   if (typeof document === "undefined") return undefined;
@@ -56,10 +84,11 @@ export function useSiteConfig() {
   });
 }
 
-export function useGalleryOptions() {
-  return useQuery<GalleryOptions>({
-    queryKey: queryKeys.galleryOptions,
-    queryFn: () => api("/api/gallery-options"),
+export function useGalleryFacets(enabled = true) {
+  return useQuery<GalleryFacets>({
+    queryKey: queryKeys.galleryFacets,
+    queryFn: () => api("/api/gallery-facets"),
+    enabled,
     ...sessionGlobalQuery
   });
 }

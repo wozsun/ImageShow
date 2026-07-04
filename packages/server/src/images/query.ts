@@ -1,19 +1,24 @@
 import type { z } from "zod";
 import { pool } from "../core/db.js";
 import { ApiError } from "../core/http.js";
+import { coalesce } from "../core/coalesce.js";
 import { getRuntimeConfig } from "../config/env.js";
 import { adminImageListQuery, listQuery } from "../core/validation.js";
 import { splitSelectors } from "../core/selectors.js";
 import { decodeImageCursor, encodeImageCursor } from "./cursor.js";
-import { adminImageView, cacheImageLookups, publicImage, publicImages, publicImagesCacheKey, publicListImage, type ImageRecord, type PublicImage, type PublicListImage } from "./presenter.js";
-import { getGalleryOptions } from "../random/random-cache.js";
+import { adminImageView, cacheImageLookups, publicImage, publicImageCards, publicImageListCacheKey, publicImages, type ImageRecord, type PublicImage, type PublicImageCard, type PublicImageCardRecord } from "./presenter.js";
+import { getGalleryFilterOptions } from "../random/random-cache.js";
 import { getThemeVocab } from "../vocab/vocab-cache.js";
 import {
+  getAdminOverviewCache,
   getGalleryFacetsCache,
   getMd5Cache,
+  getPublicImageDetailCache,
   getPublicImagesCache,
   publicImagesCacheGeneration,
+  setAdminOverviewCache,
   setGalleryFacetsCache,
+  setPublicImageDetailCache,
   setMd5Cache,
   setPublicImagesCache
 } from "./image-cache.js";
@@ -28,9 +33,24 @@ type GalleryFacets = { devices: string[]; brightnesses: string[]; themes: FacetO
 
 type AdminImageListQuery = z.infer<typeof adminImageListQuery>;
 type PublicListQuery = z.infer<typeof listQuery>;
-type PublicImagesPayload = { items: PublicListImage[]; limit: number; has_next: boolean; next_cursor: string | null; total: null };
+type PublicImageListPayload = { items: PublicImageCard[]; limit: number; has_next: boolean; next_cursor: string | null; total: null };
 
-async function fetchImagePage(where: string[], params: unknown[], limit: number, cursor?: string) {
+const publicImageCardColumns = [
+  "id",
+  "device",
+  "brightness",
+  "theme",
+  "width",
+  "height",
+  "ext",
+  "object_key",
+  "storage_slug",
+  "is_link",
+  "title",
+  "created_at"
+].join(", ");
+
+async function fetchImageRows(where: string[], params: unknown[], limit: number, cursor: string | undefined, columns: string) {
   if (cursor) {
     const decoded = decodeImageCursor(cursor);
     params.push(decoded.createdAt, decoded.id);
@@ -38,14 +58,26 @@ async function fetchImagePage(where: string[], params: unknown[], limit: number,
   }
   params.push(limit + 1);
   const result = await pool.query(
-    `SELECT *, created_at::text AS cursor_created_at FROM metadata WHERE ${where.join(" AND ")} ORDER BY created_at DESC, id DESC LIMIT $${params.length}`,
+    `SELECT ${columns}, created_at::text AS cursor_created_at FROM metadata WHERE ${where.join(" AND ")} ORDER BY created_at DESC, id DESC LIMIT $${params.length}`,
     params
   );
-  const visibleRows = result.rows.slice(0, limit) as Array<ImageRecord & { id: string; cursor_created_at: string }>;
+  const visibleRows = result.rows.slice(0, limit) as Array<{ id: string; cursor_created_at: string }>;
   const hasNext = result.rows.length > limit;
   const last = visibleRows.at(-1);
-  const items = await publicImages(visibleRows);
-  return { items, hasNext, nextCursor: hasNext && last ? encodeImageCursor(last) : null };
+  return { rows: visibleRows, hasNext, nextCursor: hasNext && last ? encodeImageCursor(last) : null };
+}
+
+async function fetchImagePage(where: string[], params: unknown[], limit: number, cursor?: string) {
+  const page = await fetchImageRows(where, params, limit, cursor, "*");
+  const items = await publicImages(page.rows as Array<ImageRecord & { id: string; cursor_created_at: string }>);
+  return { items, hasNext: page.hasNext, nextCursor: page.nextCursor };
+}
+
+async function fetchPublicImageCardPage(where: string[], params: unknown[], limit: number, cursor?: string) {
+  const page = await fetchImageRows(where, params, limit, cursor, publicImageCardColumns);
+  const rows = page.rows as Array<PublicImageCardRecord & { id: string; cursor_created_at: string }>;
+  const items = await publicImageCards(rows);
+  return { rows, items, hasNext: page.hasNext, nextCursor: page.nextCursor };
 }
 
 export async function listAdminImages(q: AdminImageListQuery) {
@@ -66,7 +98,7 @@ export async function listAdminImages(q: AdminImageListQuery) {
   return { items: page.items.map(adminImageView), limit, total, has_next: page.hasNext, next_cursor: page.nextCursor };
 }
 
-function withShuffle(q: PublicListQuery, payload: PublicImagesPayload): PublicImagesPayload {
+function withShuffle(q: PublicListQuery, payload: PublicImageListPayload): PublicImageListPayload {
   if (!q.shuffle || payload.items.length < 2) return payload;
   const items = [...payload.items];
   for (let i = items.length - 1; i > 0; i -= 1) {
@@ -90,35 +122,63 @@ async function selectorFilter(
   return clause(params.length, isExclude);
 }
 
-const PUBLIC_LIST_SHAPE_VERSION = "s4";
+const PUBLIC_IMAGE_CARD_SHAPE_VERSION = "s5";
+const PUBLIC_IMAGE_DETAIL_SHAPE_VERSION = "s1";
 
-export async function listPublicImages(q: PublicListQuery): Promise<PublicImagesPayload> {
+export async function listPublicImages(q: PublicListQuery): Promise<PublicImageListPayload> {
   const limit = q.limit ?? getRuntimeConfig().site.gallery.default_limit;
 
   const generation = await publicImagesCacheGeneration();
-  const cacheKey = `v${generation}:${PUBLIC_LIST_SHAPE_VERSION}:${publicImagesCacheKey({ ...q, limit })}`;
-  const cached = await getPublicImagesCache<PublicImagesPayload>(cacheKey);
+  const cacheKey = `v${generation}:${PUBLIC_IMAGE_CARD_SHAPE_VERSION}:${publicImageListCacheKey({ ...q, limit })}`;
+  const cached = await getPublicImagesCache<PublicImageListPayload>(cacheKey);
   if (cached) return withShuffle(q, cached);
-  const params: unknown[] = [q.status];
-  const where = ["status = $1"];
-  if (q.d) { params.push(q.d); where.push(`device = $${params.length}`); }
-  if (q.b) { params.push(q.b); where.push(`brightness = $${params.length}`); }
+  const payload = await coalesce(`public-images:${cacheKey}`, async () => {
+    const raced = await getPublicImagesCache<PublicImageListPayload>(cacheKey);
+    if (raced) return raced;
 
-  if (q.t) where.push(await selectorFilter(q.t, params, resolveThemeSlugs, "theme",
-    (index, exclude) => exclude ? `NOT (theme = ANY($${index}::text[]))` : `theme = ANY($${index}::text[])`));
-  if (q.tag) where.push(await selectorFilter(q.tag, params, resolveTagNames, "tag",
-    (index, exclude) => exclude
-      ? `NOT (id IN (SELECT image_id FROM image_tag WHERE tag_slug = ANY($${index}::text[])))`
-      : `id IN (SELECT image_id FROM image_tag WHERE tag_slug = ANY($${index}::text[]))`));
+    const params: unknown[] = [q.status];
+    const where = ["status = $1"];
+    if (q.d) { params.push(q.d); where.push(`device = $${params.length}`); }
+    if (q.b) { params.push(q.b); where.push(`brightness = $${params.length}`); }
 
-  if (q.a) where.push(await selectorFilter(q.a, params, resolveAuthorSlugs, "author",
-    (index, exclude) => exclude ? `(author IS NULL OR NOT (author = ANY($${index}::text[])))` : `author = ANY($${index}::text[])`));
-  const page = await fetchImagePage(where, params, limit, q.cursor);
+    if (q.t) where.push(await selectorFilter(q.t, params, resolveThemeSlugs, "theme",
+      (index, exclude) => exclude ? `NOT (theme = ANY($${index}::text[]))` : `theme = ANY($${index}::text[])`));
+    if (q.tag) where.push(await selectorFilter(q.tag, params, resolveTagNames, "tag",
+      (index, exclude) => exclude
+        ? `NOT (id IN (SELECT image_id FROM image_tag WHERE tag_slug = ANY($${index}::text[])))`
+        : `id IN (SELECT image_id FROM image_tag WHERE tag_slug = ANY($${index}::text[]))`));
 
-  await cacheImageLookups(page.items);
-  const payload: PublicImagesPayload = { items: page.items.map(publicListImage), limit, has_next: page.hasNext, next_cursor: page.nextCursor, total: null };
-  await setPublicImagesCache(cacheKey, payload);
+    if (q.a) where.push(await selectorFilter(q.a, params, resolveAuthorSlugs, "author",
+      (index, exclude) => exclude ? `(author IS NULL OR NOT (author = ANY($${index}::text[])))` : `author = ANY($${index}::text[])`));
+    const page = await fetchPublicImageCardPage(where, params, limit, q.cursor);
+
+    await cacheImageLookups(page.rows);
+    const fresh: PublicImageListPayload = { items: page.items, limit, has_next: page.hasNext, next_cursor: page.nextCursor, total: null };
+    await setPublicImagesCache(cacheKey, fresh);
+    return fresh;
+  });
   return withShuffle(q, payload);
+}
+
+export async function getPublicImage(id: string) {
+  const generation = await publicImagesCacheGeneration();
+  const cacheKey = `v${generation}:${PUBLIC_IMAGE_DETAIL_SHAPE_VERSION}:${id}`;
+  const cached = await getPublicImageDetailCache<PublicImage>(cacheKey);
+  if (cached) return cached;
+
+  return coalesce(`public-image:${cacheKey}`, async () => {
+    const raced = await getPublicImageDetailCache<PublicImage>(cacheKey);
+    if (raced) return raced;
+
+    const result = await pool.query("SELECT * FROM metadata WHERE id=$1 AND status='ready' LIMIT 1", [id]);
+    if (!result.rows[0]) throw new ApiError(404, "not_found", "Image not found");
+    const image = await publicImage(result.rows[0] as ImageRecord);
+    await Promise.all([
+      cacheImageLookups([image]),
+      setPublicImageDetailCache(cacheKey, image)
+    ]);
+    return image;
+  });
 }
 
 export async function getAdminImage(id: string) {
@@ -130,15 +190,74 @@ export async function getAdminImage(id: string) {
 export async function checkImageMd5(md5: string) {
   const cached = await getMd5Cache(md5) as PublicImage[] | null;
   if (cached) return { md5, exists: cached.length > 0, items: cached.map(adminImageView) };
-  const rows = await publicImages((await pool.query(
-    "SELECT * FROM metadata WHERE md5=$1 ORDER BY status ASC, created_at DESC LIMIT 20",
-    [md5]
-  )).rows as ImageRecord[]);
-  await setMd5Cache(md5, rows);
-  return { md5, exists: rows.length > 0, items: rows.map(adminImageView) };
+  return coalesce(`md5:${md5}`, async () => {
+    const raced = await getMd5Cache(md5) as PublicImage[] | null;
+    if (raced) return { md5, exists: raced.length > 0, items: raced.map(adminImageView) };
+
+    const rows = await publicImages((await pool.query(
+      "SELECT * FROM metadata WHERE md5=$1 ORDER BY status ASC, created_at DESC LIMIT 20",
+      [md5]
+    )).rows as ImageRecord[]);
+    await setMd5Cache(md5, rows);
+    return { md5, exists: rows.length > 0, items: rows.map(adminImageView) };
+  });
 }
 
+export async function getPublicGalleryFacets(): Promise<GalleryFacets> {
+  const cached = await getGalleryFacetsCache<GalleryFacets>();
+  if (cached) return cached;
+  return coalesce("gallery-facets", async () => {
+    const raced = await getGalleryFacetsCache<GalleryFacets>();
+    if (raced) return raced;
+
+    const [base, themeVocab, tagResult, authorResult] = await Promise.all([
+      getGalleryFilterOptions(),
+      getThemeVocab(),
+      pool.query(
+        `SELECT DISTINCT it.tag_slug AS slug, COALESCE(tg.display_name, '') AS display_name
+         FROM image_tag it
+         JOIN metadata m ON m.id = it.image_id AND m.status='ready'
+         LEFT JOIN tag tg ON tg.slug = it.tag_slug
+         ORDER BY it.tag_slug`
+      ),
+      pool.query(
+        `SELECT a.slug, COALESCE(a.display_name, '') AS display_name, COALESCE(a.link, '') AS link
+         FROM author a
+         WHERE EXISTS (SELECT 1 FROM metadata m WHERE m.author = a.slug AND m.status='ready')
+         ORDER BY a.sort_order ASC, a.slug ASC`
+      )
+    ]);
+
+    const themeNames = new Map(themeVocab.map((entry) => [entry.slug, entry.display_name]));
+    const themes: FacetOption[] = base.themes.map((slug) => ({ slug, display_name: themeNames.get(slug) || "" }));
+    const tags = tagResult.rows as FacetOption[];
+
+    const authors = authorResult.rows as AuthorOption[];
+    const facets: GalleryFacets = { devices: base.devices, brightnesses: base.brightnesses, themes, tags, authors };
+    await setGalleryFacetsCache(facets);
+    return facets;
+  });
+}
+
+type OverviewStats = Awaited<ReturnType<typeof buildOverviewStats>>;
+
 export async function getOverviewStats() {
+  const generation = await publicImagesCacheGeneration();
+  const cacheKey = `v1:${generation}`;
+  const cached = await getAdminOverviewCache<OverviewStats>(cacheKey);
+  if (cached) return cached;
+
+  return coalesce(`admin-overview:${cacheKey}`, async () => {
+    const raced = await getAdminOverviewCache<OverviewStats>(cacheKey);
+    if (raced) return raced;
+
+    const stats = await buildOverviewStats();
+    await setAdminOverviewCache(cacheKey, stats);
+    return stats;
+  });
+}
+
+async function buildOverviewStats() {
   const recentLimit = getRuntimeConfig().admin.recent_uploads;
 
   const [statsResult, topThemesResult, recentResult, backendResult] = await Promise.all([
@@ -195,35 +314,4 @@ export async function getOverviewStats() {
     top_themes: topThemes.map((t) => ({ theme: t.theme, count: t.count })),
     recent: recent.map((r) => ({ id: r.id, title: r.title, thumb_url: r.thumb_url, created_at: r.created_at }))
   };
-}
-
-export async function getPublicGalleryFacets(): Promise<GalleryFacets> {
-  const cached = await getGalleryFacetsCache<GalleryFacets>();
-  if (cached) return cached;
-  const [base, themeVocab, tagResult, authorResult] = await Promise.all([
-    getGalleryOptions(),
-    getThemeVocab(),
-    pool.query(
-      `SELECT DISTINCT it.tag_slug AS slug, COALESCE(tg.display_name, '') AS display_name
-       FROM image_tag it
-       JOIN metadata m ON m.id = it.image_id AND m.status='ready'
-       LEFT JOIN tag tg ON tg.slug = it.tag_slug
-       ORDER BY it.tag_slug`
-    ),
-    pool.query(
-      `SELECT a.slug, COALESCE(a.display_name, '') AS display_name, COALESCE(a.link, '') AS link
-       FROM author a
-       WHERE EXISTS (SELECT 1 FROM metadata m WHERE m.author = a.slug AND m.status='ready')
-       ORDER BY a.sort_order ASC, a.slug ASC`
-    )
-  ]);
-
-  const themeNames = new Map(themeVocab.map((entry) => [entry.slug, entry.display_name]));
-  const themes: FacetOption[] = base.themes.map((slug) => ({ slug, display_name: themeNames.get(slug) || "" }));
-  const tags = tagResult.rows as FacetOption[];
-
-  const authors = authorResult.rows as AuthorOption[];
-  const facets: GalleryFacets = { devices: base.devices, brightnesses: base.brightnesses, themes, tags, authors };
-  await setGalleryFacetsCache(facets);
-  return facets;
 }

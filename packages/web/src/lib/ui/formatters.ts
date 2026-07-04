@@ -31,3 +31,19 @@ export function formatBytes(bytes: number) {
   const value = bytes / 1024 ** exponent;
   return `${value >= 100 || exponent === 0 ? Math.round(value) : value.toFixed(1)} ${units[exponent]}`;
 }
+
+export function cssUrl(value: string) {
+  return `url("${escapeCssString(value)}")`;
+}
+
+function escapeCssString(value: string) {
+  return value.replace(/["\\\u0000-\u001f\u007f]/g, (char) => {
+    if (char === "\"") return "\\\"";
+    if (char === "\\") return "\\\\";
+    if (char === "\n") return "\\a ";
+    if (char === "\r") return "\\d ";
+    if (char === "\f") return "\\c ";
+    const code = char.codePointAt(0)?.toString(16) ?? "fffd";
+    return `\\${code} `;
+  });
+}

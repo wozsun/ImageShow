@@ -8,7 +8,7 @@ import { pingRedis, redis } from "../core/redis-client.js";
 export const RANDOM_CURRENT_KEY = "imageshow:random:current";
 const RANDOM_VERSION_KEY = "imageshow:random:version";
 const RANDOM_UPDATE_LOCK_KEY = "imageshow:random:update_lock";
-export const GALLERY_OPTIONS_KEY = "imageshow:gallery_options";
+export const GALLERY_FILTER_OPTIONS_KEY = "imageshow:gallery_filter_options";
 const RANDOM_OLD_GENERATION_TTL_SECONDS = 60 * 60;
 const RANDOM_FILTER_TTL_SECONDS = 90;
 
@@ -107,7 +107,7 @@ function pruneEmptyMap(map: FolderMap) {
   }
 }
 
-function optionsFromFolderMap(map: FolderMap): GalleryFilterOptions {
+function filterOptionsFromFolderMap(map: FolderMap): GalleryFilterOptions {
   const themes = new Set<string>();
   for (const device of Object.values(map)) {
     for (const brightness of Object.values(device)) {
@@ -206,18 +206,17 @@ function queuePoolMembership(
 function queueSnapshot(
   pipeline: ReturnType<Redis["pipeline"]>,
   generation: string,
-  folderMap: FolderMap,
-  keys?: Set<string>
+  folderMap: FolderMap
 ) {
-  const options = optionsFromFolderMap(folderMap);
+  const filterOptions = filterOptionsFromFolderMap(folderMap);
   const counts = countsFromFolderMap(folderMap);
-  pipeline.set(randomSnapshotKey(generation), JSON.stringify({ folderMap, themes: options.themes }));
+  pipeline.set(randomSnapshotKey(generation), JSON.stringify({ folderMap, themes: filterOptions.themes }));
   pipeline.del(randomCountsKey(generation));
   const countEntries = Object.entries(counts).flatMap(([key, value]) => [key, String(value)]);
   if (countEntries.length) pipeline.hset(randomCountsKey(generation), ...countEntries);
   pipeline.del(randomThemesKey(generation));
-  if (options.themes.length) pipeline.sadd(randomThemesKey(generation), ...options.themes);
-  pipeline.set(GALLERY_OPTIONS_KEY, JSON.stringify(options));
+  if (filterOptions.themes.length) pipeline.sadd(randomThemesKey(generation), ...filterOptions.themes);
+  pipeline.set(GALLERY_FILTER_OPTIONS_KEY, JSON.stringify(filterOptions));
 }
 
 async function expireOldGeneration(generation: string | null) {
@@ -252,13 +251,13 @@ export async function rebuildRandomPool(): Promise<RandomPoolSnapshot> {
     }
     pipeline.hset(randomItemKey(generation), ...Object.entries(itemValues).flatMap(([key, value]) => [key, value]));
   }
-  queueSnapshot(pipeline, generation, folderMap, keys);
+  queueSnapshot(pipeline, generation, folderMap);
   pipeline.sadd(randomManifestKey(generation), ...keys);
   pipeline.set(RANDOM_CURRENT_KEY, generation);
   pipeline.incr(RANDOM_VERSION_KEY);
   await pipeline.exec();
   await expireOldGeneration(previousGeneration);
-  const themes = optionsFromFolderMap(folderMap).themes;
+  const themes = filterOptionsFromFolderMap(folderMap).themes;
   return { generation, folderMap, themes };
 }
 
@@ -373,12 +372,12 @@ export async function getFolderMap() {
   return (await getRandomPoolSnapshot()).folderMap;
 }
 
-export async function getGalleryOptions() {
+export async function getGalleryFilterOptions() {
   try {
     await pingRedis();
-    const raw = await redis.get(GALLERY_OPTIONS_KEY);
+    const raw = await redis.get(GALLERY_FILTER_OPTIONS_KEY);
     if (raw) return JSON.parse(raw) as GalleryFilterOptions;
-    return optionsFromFolderMap((await getRandomPoolSnapshot()).folderMap);
+    return filterOptionsFromFolderMap((await getRandomPoolSnapshot()).folderMap);
   } catch {
     const result = await pool.query(
       "SELECT DISTINCT theme FROM metadata WHERE status='ready' ORDER BY theme"

@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { galleryRenderBatch } from "../constants.js";
-import type { Device, ImageItem } from "../types.js";
+import type { Device, GalleryImageCard } from "../types.js";
 
 const galleryBreakpoints = { single: 520, double: 760, triple: 1080 } as const;
 const galleryMaxColumns = 4;
 
-export function masonryColumns(items: ImageItem[], columnCount: number) {
-  const columns = Array.from({ length: Math.max(1, columnCount) }, () => [] as ImageItem[]);
+export function masonryColumns(items: GalleryImageCard[], columnCount: number) {
+  const columns = Array.from({ length: Math.max(1, columnCount) }, () => [] as GalleryImageCard[]);
   const heights = columns.map(() => 0);
   items.forEach((item) => {
     const targetIndex = heights.indexOf(Math.min(...heights));
@@ -44,7 +44,7 @@ function galleryColumnCount(width: number) {
   return galleryMaxColumns;
 }
 
-function galleryImageWeight(item: ImageItem) {
+function galleryImageWeight(item: GalleryImageCard) {
   if (item.width > 0 && item.height > 0) return item.height / item.width;
   if (item.device === "mb") return 16 / 9;
   if (item.device === "pc") return 9 / 16;

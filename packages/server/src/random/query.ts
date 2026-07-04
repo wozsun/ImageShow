@@ -3,14 +3,14 @@ import { routeError } from "../core/http.js";
 import { splitSelectors } from "../core/selectors.js";
 
 export const randomDevices = ["pc", "mb"] as const;
-export const randomBrightness = ["dark", "light"] as const;
-export type RandomBrightness = (typeof randomBrightness)[number];
+export const randomBrightnesses = ["dark", "light"] as const;
+export type RandomBrightness = (typeof randomBrightnesses)[number];
 
 export const randomRequestDevices = new Set(["pc", "mb", "r"]);
 export const randomMethods = new Set(["proxy", "redirect"]);
 const randomAllowedQuery = new Set(["d", "b", "t", "tag", "a", "m"]);
 const randomSingleValueQuery = new Set(["d", "b", "m"]);
-const randomBrightnessSet = new Set(randomBrightness);
+const randomBrightnessSet = new Set(randomBrightnesses);
 
 export function isRandomBrightness(value: string): value is RandomBrightness {
   return randomBrightnessSet.has(value as RandomBrightness);

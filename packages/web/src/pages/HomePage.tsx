@@ -8,9 +8,10 @@ import { FacetSelector } from "../components/data-display/FacetSelector.js";
 import { defaultSite } from "../lib/constants.js";
 import { buildRandomUrl } from "../lib/gallery/random-url.js";
 import { rootSiteOrigin } from "../lib/gallery/theme-host.js";
+import { cssUrl } from "../lib/ui/formatters.js";
 import { randomBrightnessSelectOptions, randomDeviceSelectOptions, randomModeSelectOptions } from "../lib/ui/select-options.js";
 import type { RandomLinkDraft, RandomMode } from "../lib/types.js";
-import { useGalleryOptions, useSiteConfig } from "../lib/api/site-data.js";
+import { useGalleryFacets, useSiteConfig } from "../lib/api/site-data.js";
 
 export function HomePage() {
   const [device, setDevice] = useState("");
@@ -29,7 +30,7 @@ export function HomePage() {
   const themeTimerRef = useRef<number | undefined>(undefined);
   const previewObjectUrlRef = useRef("");
   const { data: siteConfig } = useSiteConfig();
-  const { data: galleryOptions } = useGalleryOptions();
+  const { data: galleryFacets } = useGalleryFacets();
   const siteName = siteConfig?.site?.name ?? defaultSite.name;
   const homeTagline = siteConfig?.site?.home.tagline ?? defaultSite.home.tagline;
 
@@ -141,7 +142,7 @@ export function HomePage() {
     <main className="page home-page">
       <AppHeader />
       <section className="home-layout">
-        <section className="home-hero" style={{ backgroundImage: `url("${homeHeroBackground}")` }}>
+        <section className="home-hero" style={{ backgroundImage: cssUrl(homeHeroBackground) }}>
           <div>
             <h1>{siteName}</h1>
             {homeTagline && <p>{homeTagline}</p>}
@@ -202,7 +203,7 @@ export function HomePage() {
               <label>
                 主题
                 <FacetSelector
-                  options={galleryOptions?.themes ?? []}
+                  options={galleryFacets?.themes ?? []}
                   value={themeInput}
                   onChange={updateThemeInput}
                   noun="主题"
@@ -211,7 +212,7 @@ export function HomePage() {
               <label>
                 标签
                 <FacetSelector
-                  options={galleryOptions?.tags ?? []}
+                  options={galleryFacets?.tags ?? []}
                   value={tagInput}
                   onChange={updateTagInput}
                   noun="标签"
@@ -220,7 +221,7 @@ export function HomePage() {
               <label>
                 作者
                 <FacetSelector
-                  options={galleryOptions?.authors ?? []}
+                  options={galleryFacets?.authors ?? []}
                   value={authorInput}
                   onChange={updateAuthorInput}
                   noun="作者"

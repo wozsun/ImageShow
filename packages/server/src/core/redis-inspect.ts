@@ -1,7 +1,7 @@
 import { env } from "../config/env.js";
 import { pingRedis, redis } from "./redis-client.js";
 import {
-  GALLERY_OPTIONS_KEY,
+  GALLERY_FILTER_OPTIONS_KEY,
   RANDOM_CURRENT_KEY,
   getRandomPoolSnapshot,
   randomCountsKey,
@@ -12,9 +12,11 @@ import {
   type GalleryFilterOptions
 } from "../random/random-cache.js";
 import {
+  ADMIN_OVERVIEW_CACHE_PREFIX,
   IMAGE_LOOKUP_MEDIA_KEY,
   IMAGE_LOOKUP_THUMBS_KEY,
   MD5_CACHE_PREFIX,
+  ORIGINAL_DIRECT_CACHE_PREFIX,
   PUBLIC_IMAGES_CACHE_PREFIX
 } from "../images/image-cache.js";
 
@@ -29,26 +31,26 @@ export async function inspectRedisState() {
   const countsKey = randomCountsKey(snapshot.generation);
   const themesKey = randomThemesKey(snapshot.generation);
   const [galleryRaw, dbsize, memoryInfo, keyspaceInfo, randomObjectCount] = await Promise.all([
-    redis.get(GALLERY_OPTIONS_KEY),
+    redis.get(GALLERY_FILTER_OPTIONS_KEY),
     redis.dbsize(),
     redis.info("memory").catch(() => ""),
     redis.info("keyspace").catch(() => ""),
     redis.hlen(itemKey).catch(() => 0)
   ]);
-  const galleryOptions = parseJson<GalleryFilterOptions>(galleryRaw, { devices: [], brightnesses: [], themes: [] });
+  const galleryFilterOptions = parseJson<GalleryFilterOptions>(galleryRaw, { devices: [], brightnesses: [], themes: [] });
   const [coreKeys, prefixCounts, randomItemIds] = await Promise.all([
-    Promise.all([RANDOM_CURRENT_KEY, snapshotKey, itemKey, countsKey, themesKey, GALLERY_OPTIONS_KEY, IMAGE_LOOKUP_MEDIA_KEY, IMAGE_LOOKUP_THUMBS_KEY].map((key) => redisKeySummary(key))),
+    Promise.all([RANDOM_CURRENT_KEY, snapshotKey, itemKey, countsKey, themesKey, GALLERY_FILTER_OPTIONS_KEY, IMAGE_LOOKUP_MEDIA_KEY, IMAGE_LOOKUP_THUMBS_KEY].map((key) => redisKeySummary(key))),
     redisPrefixCounts(),
     sampleHashKeys(itemKey, 12)
   ]);
   const folderSummary = summarizeFolderMap(snapshot.folderMap);
-  const gallerySummary = {
-    devices: galleryOptions.devices,
-    brightnesses: galleryOptions.brightnesses,
-    themes: galleryOptions.themes,
-    theme_count: galleryOptions.themes.length
+  const galleryFilterSummary = {
+    devices: galleryFilterOptions.devices,
+    brightnesses: galleryFilterOptions.brightnesses,
+    themes: galleryFilterOptions.themes,
+    theme_count: galleryFilterOptions.themes.length
   };
-  const issues = redisStateIssues(folderSummary.total_images, randomObjectCount, coreKeys, galleryOptions, folderSummary.themes, [RANDOM_CURRENT_KEY, snapshotKey, itemKey, countsKey]);
+  const issues = redisStateIssues(folderSummary.total_images, randomObjectCount, coreKeys, galleryFilterOptions, folderSummary.themes, [RANDOM_CURRENT_KEY, snapshotKey, itemKey, countsKey]);
   return {
     connection: {
       status: redis.status,
@@ -67,7 +69,7 @@ export async function inspectRedisState() {
       count: randomObjectCount,
       sample_ids: randomItemIds
     },
-    gallery_options: gallerySummary,
+    gallery_filter_options: galleryFilterSummary,
     issues
   };
 }
@@ -107,11 +109,13 @@ async function redisKeyLength(key: string, type: string) {
 }
 
 async function redisPrefixCounts() {
-  const [all, random, md5, publicImages, sessions, loginFailures, temporary] = await Promise.all([
+  const [all, random, md5, publicImages, originalDirect, adminOverview, sessions, loginFailures, temporary] = await Promise.all([
     scanCount("imageshow:*"),
     scanCount("imageshow:random:*"),
     scanCount(`${MD5_CACHE_PREFIX}*`),
     scanCount(`${PUBLIC_IMAGES_CACHE_PREFIX}*`),
+    scanCount(`${ORIGINAL_DIRECT_CACHE_PREFIX}*`),
+    scanCount(`${ADMIN_OVERVIEW_CACHE_PREFIX}*`),
     scanCount(`${SESSION_KEY_PREFIX}*`),
     scanCount(`${LOGIN_FAIL_KEY_PREFIX}*`),
     scanCount("imageshow:*:tmp:*")
@@ -121,6 +125,8 @@ async function redisPrefixCounts() {
     random_pool: random,
     md5_cache: md5,
     public_images_cache: publicImages,
+    original_direct_cache: originalDirect,
+    admin_overview_cache: adminOverview,
     sessions,
     login_failures: loginFailures,
     temporary
@@ -176,7 +182,7 @@ function redisStateIssues(
   folderTotal: number,
   randomObjectCount: number,
   coreKeys: Awaited<ReturnType<typeof redisKeySummary>>[],
-  galleryOptions: GalleryFilterOptions,
+  galleryFilterOptions: GalleryFilterOptions,
   folderThemes: string[],
   requiredKeys: string[]
 ) {
@@ -186,8 +192,8 @@ function redisStateIssues(
     if (required.has(summary.key) && !summary.exists) issues.push(`${summary.key} 不存在`);
   }
   if (folderTotal !== randomObjectCount) issues.push(`random:item 数量 ${randomObjectCount} 与 folder_map 总数 ${folderTotal} 不一致`);
-  const optionThemes = [...galleryOptions.themes].sort();
-  if (JSON.stringify(optionThemes) !== JSON.stringify(folderThemes)) issues.push("gallery_options 主题列表与 folder_map 不一致");
+  const optionThemes = [...galleryFilterOptions.themes].sort();
+  if (JSON.stringify(optionThemes) !== JSON.stringify(folderThemes)) issues.push("gallery_filter_options 主题列表与 folder_map 不一致");
   return issues;
 }
 

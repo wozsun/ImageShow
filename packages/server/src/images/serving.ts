@@ -1,10 +1,13 @@
+import { createHash } from "node:crypto";
 import { pool } from "../core/db.js";
 import { ApiError, immutableCacheControl, noStoreCacheControl, privateNoStoreCacheControl, publicProxyFallbackThumbCacheControl, publicProxyImageCacheControl } from "../core/http.js";
 import { isExternalImageRejection, safeFetchExternalImage } from "../core/external-image-fetch.js";
+import { coalesce } from "../core/coalesce.js";
 import { makeThumb } from "./processing.js";
 import { linkThumbnailKey, thumbnailObjectKey } from "../storage/image-paths.js";
 import { contentType, exists, publicObjectUrl, readObject } from "../storage/storage.js";
-import { getImageLookupByObjectKey, getImageLookupByThumbKey, setImageLookup } from "./image-cache.js";
+import { isStorageNotFoundError } from "../storage/storage-backend.js";
+import { getImageLookupByObjectKey, getImageLookupByThumbKey, getOriginalDirectCache, setImageLookup, setOriginalDirectCache } from "./image-cache.js";
 import { linkBaseUrl } from "../themes/host.js";
 import { displayUrlForOriginalComparison, hasDistinctOriginalUrl } from "./original-link.js";
 
@@ -99,26 +102,79 @@ async function originalSupportsDirectAccess(url: string, userAgent: string) {
   }
 }
 
+function originalDirectUserAgentFamily(userAgent: string) {
+  const ua = userAgent.toLowerCase();
+  if (/(bot|crawler|spider|preview)/.test(ua)) return "bot";
+  if (ua.includes("micromessenger")) return "wechat";
+  if (ua.includes("firefox") || ua.includes("fxios")) return "firefox";
+  if (ua.includes("edg/") || ua.includes("edgios") || ua.includes("edga")) return "edge";
+  if (ua.includes("chrome") || ua.includes("crios") || ua.includes("chromium")) return "chrome";
+  if (ua.includes("safari") && !ua.includes("android")) return "safari";
+  return "other";
+}
+
+function originalDirectCacheKey(url: string, userAgent: string) {
+  return createHash("sha1")
+    .update(url)
+    .update("\n")
+    .update(originalDirectUserAgentFamily(userAgent))
+    .digest("hex");
+}
+
+async function cachedOriginalSupportsDirectAccess(url: string, userAgent: string) {
+  const cacheKey = originalDirectCacheKey(url, userAgent || proxyUserAgent);
+  const cached = await getOriginalDirectCache(cacheKey);
+  if (cached) return cached.direct;
+
+  return coalesce(`original-direct:${cacheKey}`, async () => {
+    const raced = await getOriginalDirectCache(cacheKey);
+    if (raced) return raced.direct;
+
+    const direct = await originalSupportsDirectAccess(url, userAgent);
+    await setOriginalDirectCache(cacheKey, direct);
+    return direct;
+  });
+}
+
 async function streamThumb(key: string, backend: string, cacheControl = immutableCacheControl) {
   return new Response(await readObject("thumbs", key, backend) as unknown as BodyInit, {
     headers: { "Content-Type": "image/webp", "Cache-Control": cacheControl }
   });
 }
 
+async function readObjectOrNull(prefix: "media" | "thumbs" | "link", key: string, backend: string) {
+  try {
+    return await readObject(prefix, key, backend);
+  } catch (error) {
+    if (isStorageNotFoundError(error)) return null;
+    throw error;
+  }
+}
+
 async function streamThumbEnsuring(objectKey: string, thumbKey: string, backend: string, cacheControl = immutableCacheControl): Promise<Response | null> {
+  const existing = await readObjectOrNull("thumbs", thumbKey, backend);
+  if (existing) {
+    return new Response(existing as unknown as BodyInit, {
+      headers: { "Content-Type": "image/webp", "Cache-Control": cacheControl }
+    });
+  }
+
   // 缩略图缺失但原图仍在时即时补建，修复历史数据或迁移中断造成的缩略图空洞。
-  if (!(await exists("thumbs", thumbKey, backend)) && await exists("media", objectKey, backend)) {
+  if (await exists("media", objectKey, backend)) {
     await makeThumb(objectKey, backend).catch(() => undefined);
   }
-  if (await exists("thumbs", thumbKey, backend)) return streamThumb(thumbKey, backend, cacheControl);
-  return null;
+  return streamThumb(thumbKey, backend, cacheControl).catch((error: unknown) => {
+    if (isStorageNotFoundError(error)) return null;
+    throw error;
+  });
 }
 
 async function linkThumbFallback(id: string, row: { storage_slug?: string; device: string; brightness: string; theme: string }, cacheControl: string) {
   const backend = row.storage_slug ?? "local";
   const key = linkThumbnailKey(row.device, row.brightness, row.theme, id);
-  if (!(await exists("link", key, backend))) throw new ApiError(404, "not_found", "Link thumbnail not found");
-  return new Response(await readObject("link", key, backend) as unknown as BodyInit, {
+  const body = await readObjectOrNull("link", key, backend);
+  if (!body) throw new ApiError(404, "not_found", "Link thumbnail not found");
+  return new Response(body as unknown as BodyInit, {
     headers: { "Content-Type": "image/webp", "Cache-Control": cacheControl }
   });
 }
@@ -139,8 +195,9 @@ export async function serveObject(key: string) {
   const resolved = slug ?? "local";
   const publicUrl = await publicObjectUrl("media", key, resolved);
   if (publicUrl) return immutableRedirect(publicUrl);
-  if (!(await exists("media", key, resolved))) throw new ApiError(404, "not_found", "Object not found");
-  return new Response(await readObject("media", key, resolved) as unknown as BodyInit, { headers: { "Content-Type": contentType(ext), "Cache-Control": immutableCacheControl } });
+  const body = await readObjectOrNull("media", key, resolved);
+  if (!body) throw new ApiError(404, "not_found", "Object not found");
+  return new Response(body as unknown as BodyInit, { headers: { "Content-Type": contentType(ext), "Cache-Control": immutableCacheControl } });
 }
 
 export async function serveThumb(key: string): Promise<Response> {
@@ -153,8 +210,9 @@ export async function serveThumb(key: string): Promise<Response> {
     const streamed = await streamThumbEnsuring(cached.object_key, key, backend);
     if (streamed) return streamed;
 
-    if (!(await exists("media", cached.object_key, backend))) throw new ApiError(404, "not_found", "Object not found");
-    return new Response(await readObject("media", cached.object_key, backend) as unknown as BodyInit, { headers: { "Content-Type": contentType(cached.ext), "Cache-Control": immutableCacheControl } });
+    const body = await readObjectOrNull("media", cached.object_key, backend);
+    if (!body) throw new ApiError(404, "not_found", "Object not found");
+    return new Response(body as unknown as BodyInit, { headers: { "Content-Type": contentType(cached.ext), "Cache-Control": immutableCacheControl } });
   }
   const row = (await pool.query("SELECT object_key, ext, storage_slug, status FROM metadata WHERE object_key=$1 OR regexp_replace(object_key, '\\.[^/.]+$', '.webp')=$1 LIMIT 1", [key])).rows[0];
 
@@ -166,12 +224,13 @@ export async function serveThumb(key: string): Promise<Response> {
   if (row) await setImageLookup({ object_key: objectKey, thumb_key: thumbKey, ext, slug: backend });
   const publicUrl = await publicObjectUrl("thumbs", thumbKey, backend);
   if (publicUrl) return immutableRedirect(publicUrl);
-  if (!(await exists("media", objectKey, backend))) throw new ApiError(404, "not_found", "Object not found");
   const streamed = await streamThumbEnsuring(objectKey, thumbKey, backend);
   if (streamed) return streamed;
 
   if (!ext) throw new ApiError(404, "not_found", "Thumbnail not found");
-  return new Response(await readObject("media", objectKey, backend) as unknown as BodyInit, { headers: { "Content-Type": contentType(ext), "Cache-Control": immutableCacheControl } });
+  const body = await readObjectOrNull("media", objectKey, backend);
+  if (!body) throw new ApiError(404, "not_found", "Object not found");
+  return new Response(body as unknown as BodyInit, { headers: { "Content-Type": contentType(ext), "Cache-Control": immutableCacheControl } });
 }
 
 function immutableRedirect(location: string) {
@@ -182,14 +241,16 @@ export async function serveLinkThumb(key: string): Promise<Response> {
   const id = (key.split("/").pop() ?? key).replace(/\.[^/.]+$/, "");
   const row = (await pool.query("SELECT storage_slug, status FROM metadata WHERE id=$1 AND is_link=true LIMIT 1", [id])).rows[0];
   if (row && row.status !== "ready") throw new ApiError(404, "not_found", "Thumbnail not found");
-  if (await exists("link", key, "local")) {
-    return new Response(await readObject("link", key, "local") as unknown as BodyInit, { headers: { "Content-Type": "image/webp", "Cache-Control": immutableCacheControl } });
+  const localBody = await readObjectOrNull("link", key, "local");
+  if (localBody) {
+    return new Response(localBody as unknown as BodyInit, { headers: { "Content-Type": "image/webp", "Cache-Control": immutableCacheControl } });
   }
   const backend = row?.storage_slug ?? "local";
   const publicUrl = await publicObjectUrl("link", key, backend);
   if (publicUrl) return immutableRedirect(publicUrl);
-  if (await exists("link", key, backend)) {
-    return new Response(await readObject("link", key, backend) as unknown as BodyInit, { headers: { "Content-Type": "image/webp", "Cache-Control": immutableCacheControl } });
+  const body = await readObjectOrNull("link", key, backend);
+  if (body) {
+    return new Response(body as unknown as BodyInit, { headers: { "Content-Type": "image/webp", "Cache-Control": immutableCacheControl } });
   }
   throw new ApiError(404, "not_found", "Thumbnail not found");
 }
@@ -227,7 +288,7 @@ export async function redirectOriginalLink(id: string, userAgent: string) {
   const displayUrl = await displayUrlForOriginalComparison(row);
   if (!hasDistinctOriginalUrl(original, displayUrl)) throw new ApiError(404, "not_found", "Original link not found");
 
-  const direct = await originalSupportsDirectAccess(original, userAgent);
+  const direct = await cachedOriginalSupportsDirectAccess(original, userAgent);
   // 原图链接可无 Referer 直连时直接 302；否则跳到 link 子域代理，避免详情页按钮打开后被防盗链拦截。
   return new Response(null, {
     status: 302,
@@ -271,8 +332,9 @@ export async function serveAdminThumb(id: string): Promise<Response> {
   const backend = row.storage_slug ?? "local";
   if (row.is_link) {
     const linkKey = linkThumbnailKey(row.device, row.brightness, row.theme, id);
-    if (!(await exists("link", linkKey, backend))) throw new ApiError(404, "not_found", "Thumbnail not found");
-    return new Response(await readObject("link", linkKey, backend) as unknown as BodyInit, { headers: { "Content-Type": "image/webp", "Cache-Control": privateNoStoreCacheControl } });
+    const body = await readObjectOrNull("link", linkKey, backend);
+    if (!body) throw new ApiError(404, "not_found", "Thumbnail not found");
+    return new Response(body as unknown as BodyInit, { headers: { "Content-Type": "image/webp", "Cache-Control": privateNoStoreCacheControl } });
   }
   const thumbKey = thumbnailObjectKey(row.object_key);
   const streamed = await streamThumbEnsuring(row.object_key, thumbKey, backend, privateNoStoreCacheControl);
@@ -285,8 +347,9 @@ export async function serveAdminObject(id: string): Promise<Response> {
   if (!row) throw new ApiError(404, "not_found", "Image not found");
   if (row.is_link) return proxyExternalImage(row.object_key as string, (row.ext as string) || "jpg", false, { "Cache-Control": privateNoStoreCacheControl }, undefined, () => linkThumbFallback(id, row, privateNoStoreCacheControl));
   const backend = row.storage_slug ?? "local";
-  if (!(await exists("media", row.object_key, backend))) throw new ApiError(404, "not_found", "Object not found");
-  return new Response(await readObject("media", row.object_key, backend) as unknown as BodyInit, { headers: { "Content-Type": contentType(row.ext), "Cache-Control": privateNoStoreCacheControl } });
+  const body = await readObjectOrNull("media", row.object_key, backend);
+  if (!body) throw new ApiError(404, "not_found", "Object not found");
+  return new Response(body as unknown as BodyInit, { headers: { "Content-Type": contentType(row.ext), "Cache-Control": privateNoStoreCacheControl } });
 }
 
 export async function serveAdminOriginalLink(id: string, userAgent: string): Promise<Response> {
@@ -295,7 +358,7 @@ export async function serveAdminOriginalLink(id: string, userAgent: string): Pro
   if (!row || !/^https:\/\//i.test(original)) throw new ApiError(404, "not_found", "Original link not found");
   const displayUrl = await displayUrlForOriginalComparison(row);
   if (!hasDistinctOriginalUrl(original, displayUrl)) throw new ApiError(404, "not_found", "Original link not found");
-  if (await originalSupportsDirectAccess(original, userAgent)) {
+  if (await cachedOriginalSupportsDirectAccess(original, userAgent)) {
     return new Response(null, {
       status: 302,
       headers: { Location: original, "Cache-Control": privateNoStoreCacheControl, "Referrer-Policy": "no-referrer" }

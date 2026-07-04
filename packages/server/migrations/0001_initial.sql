@@ -119,6 +119,33 @@ ON metadata(status, deleted_at, id);
 CREATE INDEX IF NOT EXISTS idx_metadata_status_created_at
 ON metadata(status, created_at DESC, id DESC);
 
+CREATE INDEX IF NOT EXISTS idx_metadata_ready_created
+ON metadata(created_at DESC, id DESC) WHERE status = 'ready';
+
+CREATE INDEX IF NOT EXISTS idx_metadata_ready_device_created
+ON metadata(device, created_at DESC, id DESC) WHERE status = 'ready';
+
+CREATE INDEX IF NOT EXISTS idx_metadata_ready_brightness_created
+ON metadata(brightness, created_at DESC, id DESC) WHERE status = 'ready';
+
+CREATE INDEX IF NOT EXISTS idx_metadata_ready_device_brightness_created
+ON metadata(device, brightness, created_at DESC, id DESC) WHERE status = 'ready';
+
+CREATE INDEX IF NOT EXISTS idx_metadata_ready_device_theme_created
+ON metadata(device, theme, created_at DESC, id DESC) WHERE status = 'ready';
+
+CREATE INDEX IF NOT EXISTS idx_metadata_ready_brightness_theme_created
+ON metadata(brightness, theme, created_at DESC, id DESC) WHERE status = 'ready';
+
+CREATE INDEX IF NOT EXISTS idx_metadata_ready_axes_created
+ON metadata(device, brightness, theme, created_at DESC, id DESC) WHERE status = 'ready';
+
+CREATE INDEX IF NOT EXISTS idx_metadata_ready_theme_created
+ON metadata(theme, created_at DESC, id DESC) WHERE status = 'ready';
+
+CREATE INDEX IF NOT EXISTS idx_metadata_ready_author_created
+ON metadata(author, created_at DESC, id DESC) WHERE status = 'ready';
+
 CREATE INDEX IF NOT EXISTS idx_metadata_md5
 ON metadata(md5);
 

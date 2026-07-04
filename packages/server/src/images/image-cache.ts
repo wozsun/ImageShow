@@ -3,12 +3,17 @@ import { pingRedis, redis } from "../core/redis-client.js";
 
 export const MD5_CACHE_PREFIX = "imageshow:md5:";
 export const PUBLIC_IMAGES_CACHE_PREFIX = "imageshow:public_images:";
+export const ORIGINAL_DIRECT_CACHE_PREFIX = "imageshow:original_direct:";
+export const ADMIN_OVERVIEW_CACHE_PREFIX = "imageshow:admin_overview:";
 const PUBLIC_IMAGES_GEN_KEY = "imageshow:public_images_gen";
 export const IMAGE_LOOKUP_MEDIA_KEY = "imageshow:image_lookup:media";
 export const IMAGE_LOOKUP_THUMBS_KEY = "imageshow:image_lookup:thumbs";
 export const GALLERY_FACETS_KEY = "imageshow:gallery_facets";
+const ORIGINAL_DIRECT_CACHE_TTL_SECONDS = 60 * 60;
+const ADMIN_OVERVIEW_CACHE_TTL_SECONDS = 60;
 
 export type ImageLookupItem = { object_key: string; thumb_key: string; ext: string; slug?: string };
+type OriginalDirectCacheValue = { direct: boolean };
 
 export async function publicImagesCacheGeneration(): Promise<string> {
   try {
@@ -35,6 +40,54 @@ export async function setPublicImagesCache(key: string, value: unknown) {
     await redis.set(`${PUBLIC_IMAGES_CACHE_PREFIX}${key}`, JSON.stringify(value), "EX", appConfig.folderMapTtlSeconds);
   } catch {
     // Redis 不可用时以 PostgreSQL 为准。
+  }
+}
+
+export async function getPublicImageDetailCache<T>(key: string) {
+  return getPublicImagesCache<T>(`detail:${key}`);
+}
+
+export async function setPublicImageDetailCache(key: string, value: unknown) {
+  await setPublicImagesCache(`detail:${key}`, value);
+}
+
+export async function getOriginalDirectCache(key: string) {
+  try {
+    await pingRedis();
+    const raw = await redis.get(`${ORIGINAL_DIRECT_CACHE_PREFIX}${key}`);
+    if (!raw) return null;
+    const value = JSON.parse(raw) as Partial<OriginalDirectCacheValue>;
+    return typeof value.direct === "boolean" ? { direct: value.direct } : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function setOriginalDirectCache(key: string, direct: boolean) {
+  try {
+    await pingRedis();
+    await redis.set(`${ORIGINAL_DIRECT_CACHE_PREFIX}${key}`, JSON.stringify({ direct }), "EX", ORIGINAL_DIRECT_CACHE_TTL_SECONDS);
+  } catch {
+    // 外站直连策略缓存失败时，下次请求重新探测即可。
+  }
+}
+
+export async function getAdminOverviewCache<T>(key: string) {
+  try {
+    await pingRedis();
+    const raw = await redis.get(`${ADMIN_OVERVIEW_CACHE_PREFIX}${key}`);
+    return raw ? JSON.parse(raw) as T : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function setAdminOverviewCache(key: string, value: unknown) {
+  try {
+    await pingRedis();
+    await redis.set(`${ADMIN_OVERVIEW_CACHE_PREFIX}${key}`, JSON.stringify(value), "EX", ADMIN_OVERVIEW_CACHE_TTL_SECONDS);
+  } catch {
+    // 管理概览缓存失败只会多跑一次聚合查询。
   }
 }
 

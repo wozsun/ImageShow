@@ -32,6 +32,11 @@ function storageS3Client(config: StorageConfig) {
   });
 }
 
+function isS3NotFound(error: unknown) {
+  const maybe = error as { name?: string; Code?: string; $metadata?: { httpStatusCode?: number } };
+  return maybe?.$metadata?.httpStatusCode === 404 || maybe?.name === "NoSuchKey" || maybe?.name === "NotFound" || maybe?.Code === "NoSuchKey";
+}
+
 export class S3Backend implements StorageDriver {
   private readonly client: S3Client;
   private readonly bucket: string;
@@ -55,7 +60,10 @@ export class S3Backend implements StorageDriver {
   }
 
   async openRead(prefix: StoragePrefix, key: string): Promise<OpenedRead> {
-    const result = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: this.name(prefix, key) }));
+    const result = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: this.name(prefix, key) })).catch((error: unknown) => {
+      if (isS3NotFound(error)) throw new ApiError(404, "storage_object_not_found", "Object not found");
+      throw error;
+    });
     const body = result.Body as Readable | undefined;
     if (!body) throw new ApiError(502, "storage_read_failed", "Storage returned an empty response body");
     const rawSize = Number(result.ContentLength);
@@ -94,7 +102,10 @@ export class S3Backend implements StorageDriver {
   }
 
   async readObject(prefix: ReadablePrefix, key: string): Promise<Readable> {
-    const result = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: this.name(prefix, key) }));
+    const result = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: this.name(prefix, key) })).catch((error: unknown) => {
+      if (isS3NotFound(error)) throw new ApiError(404, "storage_object_not_found", "Object not found");
+      throw error;
+    });
     return result.Body as Readable;
   }
 

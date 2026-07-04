@@ -55,7 +55,7 @@ ImageShow/
 | `storage/storage-backend.ts` | `driverFor(config)` 按配置签名缓存并返回 Local / S3 / WebDAV 驱动，避免热路径反复创建 S3/WebDAV client；链接图由图片层的 `is_link` 处理，无独立驱动。 |
 | `storage/local-backend.ts` | 本地磁盘后端（`/app/data/storage` 下 media / thumbs / _uploads / link），含空目录回收 `pruneEmptyDirs()`。 |
 | `storage/s3-backend.ts` | S3 / COS 后端：processed image / thumbnail 读写删与服务端复制/移动、`root_path` 前缀。 |
-| `storage/webdav-backend.ts` | WebDAV 后端：PROPFIND/MKCOL/PUT/GET/DELETE/COPY，HTTP Basic 认证，XML parser 解析 PROPFIND，`base_url + root_path` 前缀，统一 timeout / 429·5xx 重试与有界目录遍历。 |
+| `storage/webdav-backend.ts` | WebDAV 后端：PROPFIND/MKCOL/PUT/GET/DELETE/COPY，HTTP Basic 认证，XML parser 解析 PROPFIND，`base_url + root_path` 前缀，统一 timeout / 临时错误重试与有界目录遍历。 |
 | `storage/image-paths.ts` | 键名规则：`storageObjectKey()`、`thumbnailObjectKey()`、`linkThumbnailKey(device,brightness,theme,id)`，以及集中助手 `thumbnailRef(row)`——link 缩略图按分类分文件夹存在该图自己的存储后端的 `link/` 前缀下。所有清理 / 检查路径都走它，避免孤儿。 |
 | `storage/object-keys.ts` | 路径 / 键名映射与防穿越：本地 `safeStoragePath()`、S3 `storageS3ObjectName()` 等，物理布局 `<root_path>/<media｜thumbs｜_uploads｜link>/<key>`。 |
 | `storage/migration.ts` | 单图在任意后端间（local / s3 / webdav）迁移字节（含缩略图），以及整后端批量迁移 `migrateStorageBackend()`。 |
@@ -66,10 +66,10 @@ ImageShow/
 | 文件 | 职责 |
 | --- | --- |
 | `images/service.ts` | 软删除 `deleteImage()`、改元数据 / 换分类 `updateImageMetadata()`（换分类＝移动对象键并同步 Redis 随机池，link 只移动缩略图）、单 / 批量迁移存储。 |
-| `images/query.ts` | 画廊列表：游标分页 + Redis 列表缓存 + `withShuffle()`（出口处洗牌，不污染共享缓存）。 |
-| `images/image-cache.ts` | 图片读缓存：公共列表 generation、公共列表缓存、对象 / 缩略图反查、MD5 判重缓存、画廊 facets 缓存与统一失效。 |
-| `images/serving.ts` | 存储对象、缩略图、link 与后台字节出口；集中处理外部回源代理、原图直连探测和缓存策略。 |
-| `images/presenter.ts` | `publicImage()` / `publicImages()` 把 DB 行变成 API 响应、`publicListImage()`（公共列表出口白名单）、`adminImageView()`（后台投影：去 `ext`、已删除图改指鉴权字节端点）、列表缓存键、`cacheImageLookups()`（link 跳过）。 |
+| `images/query.ts` | 画廊列表、公开详情与后台概览：公共列表使用轻量卡片投影、游标分页、Redis 列表缓存和 `withShuffle()`（出口处洗牌，不污染共享缓存）；公开详情按 id 缓存；后台概览使用短 TTL 缓存；公共列表、公开详情、facets、后台概览和 MD5 判重在 Redis miss 后做同进程 in-flight 合并。 |
+| `images/image-cache.ts` | 图片读缓存：公共列表 generation、公共列表 / 公开详情缓存、后台概览缓存、原图直连探测缓存、对象 / 缩略图反查、MD5 判重缓存、画廊 facets 缓存与统一失效。 |
+| `images/serving.ts` | 存储对象、缩略图、link 与后台字节出口；集中处理外部回源代理、原图直连探测及其短 TTL 缓存、缓存策略和缩略图缺失时的乐观读取 / 补建。 |
+| `images/presenter.ts` | `publicImage()` / `publicImages()` 把 DB 行变成完整公开详情响应、`publicImageCard()`（公共列表卡片出口白名单）、`adminImageView()`（后台投影：去 `ext`、已删除图改指鉴权字节端点）、列表缓存键、`cacheImageLookups()`（link 跳过）。 |
 | `images/processing.ts` | sharp 封装：探测、缩略图、`transcodeStoredImage()` 与设备识别。 |
 | `images/brightness.ts` | 明暗识别 `detectBrightness()`：在 CIELAB L\* 直方图上算感知亮度评分判 dark/light。评分源自 `scripts/classify.py`，按本程序的标注样本重标定（去掉人工复核用的救回规则，准确率 95.3%→97.0%）。 |
 | `images/imports/` | 统一 `import_session` 生命周期：本地上传、链接下载保存、代理链接的创建、接收文件、URL 抓取、prepare、preview、status/SSE、commit/cancel 与过期清理。 |
@@ -93,7 +93,7 @@ ImageShow/
 | 文件 | 职责 |
 | --- | --- |
 | `random/service.ts` | 编排一次随机：校验→解析主题 / 标签 / 作者别名→定候选轴→取最近已服务列表→Redis 池取→记录已服务 id。 |
-| `random/random-cache.ts` | Redis generation 随机池、axis/category/tag/author 集合、画廊筛选项、`rebuildRandomPool()` 全量重建、`syncRandomImage(s)` 增量同步；Redis 更新失败时排 `cache.rebuild`。 |
+| `random/random-cache.ts` | Redis generation 随机池、axis/category/tag/author 集合、随机池派生的画廊筛选轴、`rebuildRandomPool()` 全量重建、`syncRandomImage(s)` 增量同步；Redis 更新失败时排 `cache.rebuild`。 |
 | `random/picker.ts` | `resolveCandidateAxes()`（按 UA 推设备）、`pickFromRedisPool()`（按 axis/category 计数加权选集合，tag/author 用 Redis 临时过滤集合，跳过最近项并保留 fallback）。 |
 | `random/dedupe.ts` | 短时不重复：`filterSignature()`、`recentlyServedIds()`、`rememberServedId()`（Redis LPUSH + LTRIM + EXPIRE）。 |
 | `random/query.ts` | 随机请求参数校验、主题 / 标签 / 作者选择子解析、`img-count` 统计数据。 |
@@ -109,7 +109,7 @@ ImageShow/
 
 | 文件 | 端点 |
 | --- | --- |
-| `routes/public.ts` | `GET /api/images`、`/api/images/:id/original`、`/api/site-config`、`/api/gallery-options`、`/media/*`、`/thumbs/*`、`/original/:id` |
+| `routes/public.ts` | `GET /api/images`、`/api/images/:id`、`/api/images/:id/original`、`/api/site-config`、`/api/gallery-facets`、`/media/*`、`/thumbs/*`、`/original/:id` |
 | `routes/random.ts` | `GET /random`、`GET /img-count`、`<theme>.<域名>/random` |
 | `routes/auth.ts` | 登录 / 登出 / `/me`（CSRF token） |
 | `routes/admin-images.ts` | 后台图片增删改查、批量、迁移 |

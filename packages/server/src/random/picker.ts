@@ -10,7 +10,7 @@ import {
   type RandomPoolSnapshot
 } from "./random-cache.js";
 import { routeError } from "../core/http.js";
-import { isRandomBrightness, parseAuthorSelectors, parseTagSelectors, parseThemeSelectors, randomBrightness, randomDevices } from "./query.js";
+import { isRandomBrightness, parseAuthorSelectors, parseTagSelectors, parseThemeSelectors, randomBrightnesses, randomDevices } from "./query.js";
 
 export type PickedImage = RandomPoolItem & { method: "proxy" | "redirect" };
 
@@ -24,7 +24,7 @@ function inferDevice(ua: string) {
 export function resolveCandidateAxes(requestedDevice: string | null, requestedBrightness: string | null, userAgent: string) {
   const device = requestedDevice || inferDevice(userAgent);
   const deviceCandidates = device === "r" ? [...randomDevices] : [device as "pc" | "mb"];
-  const brightnessCandidates = requestedBrightness && isRandomBrightness(requestedBrightness) ? [requestedBrightness] : [...randomBrightness];
+  const brightnessCandidates = requestedBrightness && isRandomBrightness(requestedBrightness) ? [requestedBrightness] : [...randomBrightnesses];
   return { deviceCandidates, brightnessCandidates, requestedDevice, requestedBrightness };
 }
 

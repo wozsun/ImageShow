@@ -258,7 +258,7 @@ const CHECK_RESULT_LABELS: Record<string, string> = {
   random_pool_count: "随机池数量",
   random_pool_mismatch: "随机池数量不一致",
   random_pool_error: "随机池错误",
-  gallery_options: "画廊选项缓存",
+  gallery_filter_options: "画廊筛选轴缓存",
   issues: "发现的问题",
   // 全部检查（概览）
   images: "图片总数",

@@ -70,7 +70,7 @@ export function ImageAdmin() {
     setSelected([]);
     setCursorHistory([""]);
     client.invalidateQueries({ queryKey: queryKeys.adminImages });
-    client.invalidateQueries({ queryKey: queryKeys.galleryOptions });
+    client.invalidateQueries({ queryKey: queryKeys.galleryFacets });
     client.invalidateQueries({ queryKey: queryKeys.themes });
     client.invalidateQueries({ queryKey: queryKeys.tags });
     client.invalidateQueries({ queryKey: queryKeys.authors });
