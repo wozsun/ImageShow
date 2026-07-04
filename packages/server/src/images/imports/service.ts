@@ -16,7 +16,8 @@ import { ensureAuthor } from "../../authors/service.js";
 import { ensureTheme } from "../../themes/service.js";
 import { setImageTags } from "../../tags/service.js";
 import { detectBrightness } from "../brightness.js";
-import { createThumbnail, detectDeviceFromDimensions, probeImageBytes, transcodeStoredImage } from "../processing.js";
+import { createThumbnail, probeImageBytes, transcodeStoredImage } from "../processing.js";
+import { deviceFromDimensions, resolveBrightnessWith, resolveClassification, resolveDeviceWith } from "../classification.js";
 import { publicImage, importSessionResponse, type ImageRecord, type ImportSessionRecord } from "../presenter.js";
 import { checkImageMd5 } from "../query.js";
 import { proxyExternalImage } from "../serving.js";
@@ -50,8 +51,8 @@ type PreparedPayload = MetadataPayload & {
   thumbnail_size: number;
   quality: number | null;
   transcoded: boolean;
-  detected_device: Device;
-  detected_brightness: Brightness;
+  resolved_device: Device;
+  resolved_brightness: Brightness;
 };
 
 type ImportSessionRow = {
@@ -192,6 +193,10 @@ function defaultMetadata(input: ImportCreateInput): MetadataPayload {
   };
 }
 
+function requiredDeviceFromDimensions(width: number, height: number): Device {
+  return deviceFromDimensions(width, height) ?? "pc";
+}
+
 function stableJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
   if (value && typeof value === "object") {
@@ -226,8 +231,8 @@ async function preparedResult(id: string, mode: ImportMode, storageSlug: string,
     size: payload.size,
     quality: payload.quality,
     transcoded: payload.transcoded,
-    device: payload.detected_device,
-    brightness: payload.detected_brightness,
+    device: payload.resolved_device,
+    brightness: payload.resolved_brightness,
     storage_slug: storageSlug,
     duplicate_exists: duplicate.exists,
     duplicates: duplicate.items
@@ -347,9 +352,9 @@ async function prepareStoredImageSession(id: string, mode: Extract<ImportMode, "
     if (signal.aborted) throw new ApiError(409, "import_cancelled", "导入已取消");
     await sessionStillPreparing(id);
 
-    setImportPhase(id, "detecting", "检测图片尺寸、设备类型和明暗");
-    const brightness = await detectBrightness(normalized.thumbnail);
-    const device = detectDeviceFromDimensions(normalized.width, normalized.height);
+    setImportPhase(id, "detecting", "确认图片尺寸、设备类型和明暗");
+    const device = resolveDeviceWith(session.metadata_payload.device, () => requiredDeviceFromDimensions(normalized.width, normalized.height));
+    const brightness = await resolveBrightnessWith(session.metadata_payload.brightness, () => detectBrightness(normalized.thumbnail));
 
     setImportPhase(id, "staging", "写入处理后的图片和缩略图");
     const writes = await Promise.allSettled([
@@ -376,8 +381,8 @@ async function prepareStoredImageSession(id: string, mode: Extract<ImportMode, "
       thumbnail_size: normalized.thumbnail.byteLength,
       quality: normalized.quality,
       transcoded: normalized.transcoded,
-      detected_device: device,
-      detected_brightness: brightness
+      resolved_device: device,
+      resolved_brightness: brightness
     };
     const updated = await pool.query(
       `UPDATE import_session
@@ -447,8 +452,8 @@ async function prepareProxySession(id: string, signal: AbortSignal) {
     const buffer = await fetchImportImage(session.source_url, await getUploadLimitBytes(), signal);
     const probe = await probeImageBytes(buffer);
     const thumbnail = await createThumbnail(buffer);
-    const brightness = await detectBrightness(thumbnail);
-    const device = detectDeviceFromDimensions(probe.width, probe.height);
+    const device = resolveDeviceWith(session.metadata_payload.device, () => requiredDeviceFromDimensions(probe.width, probe.height));
+    const brightness = await resolveBrightnessWith(session.metadata_payload.brightness, () => detectBrightness(thumbnail));
     await writeStorageBuffer("_uploads", stagingThumbnailKey(id), thumbnail, "image/webp", session.storage_slug);
     const payload: PreparedPayload = {
       ...session.metadata_payload,
@@ -467,8 +472,8 @@ async function prepareProxySession(id: string, signal: AbortSignal) {
       thumbnail_size: thumbnail.byteLength,
       quality: null,
       transcoded: false,
-      detected_device: device,
-      detected_brightness: brightness
+      resolved_device: device,
+      resolved_brightness: brightness
     };
     const updated = await pool.query(
       `UPDATE import_session
@@ -686,7 +691,7 @@ async function commitStoredImageSession(id: string, session: ImportSessionRow, p
       copiedThumb = true;
     }
 
-    const brightness: Brightness = payload.brightness === "auto" ? payload.detected_brightness : payload.brightness;
+    const classification = resolveClassification(payload, { device: payload.resolved_device, brightness: payload.resolved_brightness });
     const result = await withTransaction(async (client) => {
       await ensureTheme(client, payload.theme);
       await ensureAuthor(client, payload.author);
@@ -695,7 +700,7 @@ async function commitStoredImageSession(id: string, session: ImportSessionRow, p
          object_key, storage_slug, title, description, source, original, md5, thumbnail_size, author)
          VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
          ON CONFLICT (id) DO NOTHING RETURNING *`,
-        [id, payload.device, brightness, payload.theme, payload.width, payload.height,
+        [id, classification.device, classification.brightness, payload.theme, payload.width, payload.height,
           payload.size, payload.ext, finalKey, backend, payload.title,
           payload.description, payload.source, payload.original, payload.md5,
           payload.thumbnail_size, payload.author || null]
@@ -724,8 +729,8 @@ async function commitStoredImageSession(id: string, session: ImportSessionRow, p
 
 async function commitProxySession(id: string, session: ImportSessionRow, payload: PreparedPayload) {
   const backend = session.storage_slug;
-  const brightness: Brightness = payload.brightness === "auto" ? payload.detected_brightness : payload.brightness;
-  const linkKey = linkThumbnailKey(payload.device, brightness, payload.theme, id);
+  const classification = resolveClassification(payload, { device: payload.resolved_device, brightness: payload.resolved_brightness });
+  const linkKey = linkThumbnailKey(classification.device, classification.brightness, payload.theme, id);
   let copiedLink = false;
   let dbCommitted = false;
   try {
@@ -743,7 +748,7 @@ async function commitProxySession(id: string, session: ImportSessionRow, payload
          object_key, storage_slug, is_link, title, description, source, original, md5, thumbnail_size, author)
          VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,true,$10,$11,$12,$13,$14,$15,$16)
          ON CONFLICT (object_key) DO NOTHING RETURNING *`,
-        [id, payload.device, brightness, payload.theme, payload.width, payload.height,
+        [id, classification.device, classification.brightness, payload.theme, payload.width, payload.height,
           payload.ext, payload.source_url, backend, payload.title,
           payload.description, payload.source, payload.original, payload.md5,
           payload.thumbnail_size, payload.author || null]
@@ -788,8 +793,8 @@ export async function commitImportSession(id: string, metadata: ImportMetadata) 
     if (!["ready", "committing"].includes(session.status)) throw new ApiError(409, "invalid_import_state", "图片尚未准备完成");
     if (session.status === "ready") {
       const payload = { ...session.prepared_payload, ...metadata } as PreparedPayload;
-      const brightness = metadata.brightness === "auto" ? payload.detected_brightness : metadata.brightness;
-      const finalKey = session.mode === "proxy" ? "" : storageObjectKey(metadata.device, brightness, metadata.theme, id, payload.ext);
+      const classification = resolveClassification(metadata, { device: payload.resolved_device, brightness: payload.resolved_brightness });
+      const finalKey = session.mode === "proxy" ? "" : storageObjectKey(classification.device, classification.brightness, metadata.theme, id, payload.ext);
       const claimed = await pool.query(
         `UPDATE import_session
          SET status='committing', metadata_payload=$2::jsonb, prepared_payload=$3::jsonb,

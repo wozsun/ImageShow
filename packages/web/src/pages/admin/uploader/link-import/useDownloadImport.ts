@@ -1,7 +1,7 @@
 import { useCallback, useRef } from "react";
 import type { ImportJob } from "../../../../lib/types.js";
 import { normalizeAuthor, normalizeTheme, type CommonAttributes } from "../../../../lib/upload/upload-utils.js";
-import { appendAndPrepare, draftWithPreparedDetection, linkImportJobs, retryPrepareJob } from "../import-job-utils.js";
+import { appendAndPrepare, linkImportJobs, retryPrepareJob } from "../import-job-utils.js";
 import { applyPreparedResult, type AppendImportQueueApi } from "../prepared-result.js";
 import { cancelStoredImport, createImportSession, prepareImportSession } from "../import-api.js";
 
@@ -34,9 +34,6 @@ export function useDownloadImport(options: {
       });
       queue.updateJob(job.id, { status: "downloading", message: "服务端下载原图", stagingId: session.id });
       const prepared = await prepareImportSession(session, controller.signal);
-      queue.updateJob(job.id, {
-        draft: draftWithPreparedDetection(job.draft, defaults, prepared)
-      });
       const accepted = await applyPreparedResult(queue, job.id, prepared);
       if (!accepted) {
         // 批次内重复会释放服务端暂存文件，避免用户看不到的重复任务占用 _uploads。
@@ -49,7 +46,7 @@ export function useDownloadImport(options: {
     } finally {
       controllers.current.delete(job.id);
     }
-  }, [defaults, queue]);
+  }, [queue]);
 
   const addUrls = useCallback(async (urls: string[]) => {
     await appendAndPrepare(queue, linkImportJobs("download", urls, defaults, fillOriginalUrl, storageSlug), concurrency, prepare);

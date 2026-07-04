@@ -142,6 +142,12 @@
   transition: width .18s ease;
 }
 .upload-job .image-fields { grid-column: 2 / 4; }
+.upload-job .select-control.image-fields-device.is-changed .select-trigger,
+.upload-job .select-control.image-fields-brightness.is-changed .select-trigger {
+  border-color: #e4bd58;
+  background: #fff;
+  box-shadow: 0 0 0 1px rgba(228, 189, 88, .34);
+}
 .upload-job.done { border-color: #78b78a; background: #f2fbf5; }
 .upload-job.failed { border-color: #de8b83; background: #fff6f4; }
 .upload-job.cancelled { border-color: #c7ccd3; background: #f4f5f7; opacity: .82; }

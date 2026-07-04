@@ -13,10 +13,10 @@ import { useAnimatedClose } from "../../hooks/useAnimatedClose.js";
 import { useBodyScrollLock } from "../../hooks/useBodyScrollLock.js";
 import { adminApiBasePath } from "../../lib/constants.js";
 import { formatBytes, formatDimensions } from "../../lib/ui/formatters.js";
-import { batchCommonBrightnessOptions, batchCommonDeviceOptions, cardBrightnessSelectOptions, cardDeviceSelectOptions } from "../../lib/ui/select-options.js";
+import { batchCommonBrightnessOptions, batchCommonDeviceOptions, cardBrightnessSelectOptions, editCardDeviceSelectOptions } from "../../lib/ui/select-options.js";
 import { storageNameResolver, useStorageOptions } from "../../lib/api/storage-options.js";
 import type { Author, Brightness, Device, FacetOption, ImageDraft, ImageItem } from "../../lib/types.js";
-import { applyCommonAttributes, normalizeAuthor, normalizeTheme } from "../../lib/upload/upload-utils.js";
+import { mergeBatchEditCommonAttributes, normalizeAuthor, normalizeTheme } from "../../lib/upload/upload-utils.js";
 
 export function BatchMetadataModal({
   items,
@@ -72,7 +72,6 @@ export function BatchMetadataModal({
   const visibleItems = activeItems.slice((page - 1) * pageSize, page * pageSize);
   useEffect(() => setPage((current) => Math.min(current, totalPages)), [totalPages]);
   const patchDraft = (id: string, patch: Partial<ImageDraft>) => setDrafts((current) => ({ ...current, [id]: { ...current[id], ...patch } }));
-  const itemsById = new Map(items.map((item) => [item.id, item]));
 
   const fieldsChangedFor = (item: ImageItem) => {
     const draft = drafts[item.id];
@@ -199,10 +198,7 @@ export function BatchMetadataModal({
               disabled={saving}
               onClick={() => setDrafts((current) => Object.fromEntries(Object.entries(current).map(([id, draft]) => {
                 if (!activeSet.has(id)) return [id, draft];
-                // 自动设备在这里按当前图片方向落到具体设备；自动亮暗保留给服务端重算。
-                const item = itemsById.get(id);
-                const device = common.device === "auto" ? (item && item.width >= item.height ? "pc" : "mb") : common.device;
-                return [id, applyCommonAttributes(draft, { ...common, device })];
+                return [id, mergeBatchEditCommonAttributes(draft, common)];
               })))}
             >
               应用到全部
@@ -253,7 +249,7 @@ export function BatchMetadataModal({
                     themes={themes}
                     allTags={allTags}
                     authors={authors}
-                    deviceOptions={cardDeviceSelectOptions}
+                    deviceOptions={editCardDeviceSelectOptions}
                     brightnessOptions={cardBrightnessSelectOptions}
                     disabled={saving}
                     ariaPrefix={item.id}

@@ -1,7 +1,7 @@
 import { Icon } from "../../../components/icon/Icon.js";
 import { ImageThumbnail } from "../../../components/image/ImageThumbnail.js";
 import { ImageDraftFields } from "../../../components/form/ImageDraftFields.js";
-import { cardBrightnessSelectOptions, cardDeviceSelectOptions } from "../../../lib/ui/select-options.js";
+import { importCardBrightnessSelectOptions, importCardDeviceSelectOptions } from "../../../lib/ui/select-options.js";
 import { formatBytes, formatImageMeta, imageDisplayTitle } from "../../../lib/ui/formatters.js";
 import type { Author, ImageDraft, ImageItem, ImportJob, Tag, Theme } from "../../../lib/types.js";
 
@@ -87,7 +87,8 @@ export function ImportJobCard({ job, busy, storageDisplayName, themes, allTags, 
       </div>
       <ImageDraftFields
         draft={job.draft} onPatch={onPatch} themes={themes} allTags={allTags} authors={authors}
-        deviceOptions={cardDeviceSelectOptions} brightnessOptions={cardBrightnessSelectOptions}
+        deviceOptions={importCardDeviceSelectOptions(job.draft.device)} brightnessOptions={importCardBrightnessSelectOptions(job.draft.brightness)}
+        changed={{ device: job.classificationOverride?.device, brightness: job.classificationOverride?.brightness }}
         disabled={!editable} ariaPrefix={job.url ?? job.file?.name ?? job.id}
       />
       {job.status === "ready" && job.duplicateDecision === "undecided" && job.duplicates.length > 0 && (

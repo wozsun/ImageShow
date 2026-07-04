@@ -33,8 +33,10 @@ function urlBase(message: string, protocols: string[]) {
     }, message);
 }
 
+const classificationDevices = [...appConfig.devices, "auto"] as const;
+
 const metadataInput = z.object({
-  device: z.enum(appConfig.devices),
+  device: z.enum(classificationDevices),
   brightness: z.enum(appConfig.brightness),
   theme: z.string().trim().toLowerCase().min(1).max(appConfig.themeMaxLength).regex(slugPattern).default("none"),
   author: z.string().trim().toLowerCase().max(32)
@@ -47,7 +49,7 @@ const metadataInput = z.object({
 });
 
 export const metadataUpdateInput = z.object({
-  device: z.enum(appConfig.devices).optional(),
+  device: z.enum(classificationDevices).optional(),
   brightness: z.enum(["dark", "light", "auto"]).optional(),
   theme: z.string().trim().toLowerCase().min(1).max(appConfig.themeMaxLength).regex(slugPattern).optional(),
   author: z.string().trim().toLowerCase().max(32)

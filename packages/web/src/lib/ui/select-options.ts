@@ -11,16 +11,37 @@ export function brightnessOptionLabel(value: string) {
   return brightnessLabels[value] ?? value;
 }
 
-export const cardDeviceSelectOptions: readonly SelectOption[] = [
+const cardDeviceSelectOptions: readonly SelectOption[] = [
   { value: "pc", label: deviceOptionLabel("pc") },
   { value: "mb", label: deviceOptionLabel("mb") }
 ];
 
-export const cardBrightnessSelectOptions: readonly SelectOption[] = [
-  { value: "auto", label: "自动亮暗" },
+export const editCardDeviceSelectOptions: readonly SelectOption[] = [
+  { value: "auto", label: "自动设备" },
+  ...cardDeviceSelectOptions
+];
+
+export function importCardDeviceSelectOptions(value: string): readonly SelectOption[] {
+  return value === "auto"
+    ? [{ value: "auto", label: "识别中" }, ...cardDeviceSelectOptions]
+    : cardDeviceSelectOptions;
+}
+
+const manualBrightnessSelectOptions: readonly SelectOption[] = [
   { value: "light", label: brightnessOptionLabel("light") },
   { value: "dark", label: brightnessOptionLabel("dark") }
 ];
+
+export const cardBrightnessSelectOptions: readonly SelectOption[] = [
+  { value: "auto", label: "自动亮暗" },
+  ...manualBrightnessSelectOptions
+];
+
+export function importCardBrightnessSelectOptions(value: string): readonly SelectOption[] {
+  return value === "auto"
+    ? [{ value: "auto", label: "识别中" }, ...manualBrightnessSelectOptions]
+    : manualBrightnessSelectOptions;
+}
 
 export const uploadCommonDeviceOptions: readonly SelectOption[] = [
   { value: "", label: "自动设备" },

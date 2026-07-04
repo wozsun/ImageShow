@@ -1,6 +1,5 @@
 import type { Device, ImageDraft, ImportJob } from "../../../lib/types.js";
 import { browserUuid, resolveUploadDefaultBrightness, runWithConcurrency, type CommonAttributes } from "../../../lib/upload/upload-utils.js";
-import type { PreparedImport } from "./import-api.js";
 
 export function parseImportUrls(input: string | string[]) {
   const raw = Array.isArray(input) ? input : input.split(/\s+/);
@@ -18,7 +17,7 @@ function linkDraft(url: string, defaults: CommonAttributes, fillOriginalUrl: boo
     description: "",
     source: "",
     original: fillOriginalUrl ? url : "",
-    device: defaults.device ? defaults.device as Device : "pc",
+    device: defaults.device ? defaults.device as Device : "auto",
     brightness: resolveUploadDefaultBrightness(defaults.brightness, "auto"),
     theme: defaults.theme,
     author: defaults.author,
@@ -45,18 +44,9 @@ export function linkImportJobs(
     uploadProgress: 0,
     duplicates: [],
     duplicateDecision: "upload",
-    detected: { device: "pc", brightness: "auto" },
     url,
     storageSlug
   }));
-}
-
-export function draftWithPreparedDetection(draft: ImageDraft, defaults: CommonAttributes, prepared: Pick<PreparedImport, "device" | "brightness">): ImageDraft {
-  return {
-    ...draft,
-    device: defaults.device ? defaults.device as Device : prepared.device,
-    brightness: resolveUploadDefaultBrightness(defaults.brightness, prepared.brightness)
-  };
 }
 
 export function retryPrepareJob(job: ImportJob): ImportJob {

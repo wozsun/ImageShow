@@ -70,7 +70,8 @@ ImageShow/
 | `images/image-cache.ts` | 图片读缓存：公共列表 generation、公共列表 / 公开详情缓存、后台概览缓存、原图直连探测缓存、对象 / 缩略图反查、MD5 判重缓存、画廊 facets 缓存与统一失效。 |
 | `images/serving.ts` | 存储对象、缩略图、link 与后台字节出口；集中处理外部回源代理、原图直连探测及其短 TTL 缓存、缓存策略和缩略图缺失时的乐观读取 / 补建。 |
 | `images/presenter.ts` | `publicImage()` / `publicImages()` 把 DB 行变成完整公开详情响应、`publicImageCard()`（公共列表卡片出口白名单）、`adminImageView()`（后台投影：去 `ext`、已删除图改指鉴权字节端点）、列表缓存键、`cacheImageLookups()`（link 跳过）。 |
-| `images/processing.ts` | sharp 封装：探测、缩略图、`transcodeStoredImage()` 与设备识别。 |
+| `images/processing.ts` | sharp 封装：图片格式 / 尺寸探测、缩略图、`transcodeStoredImage()`。 |
+| `images/classification.ts` | 设备 / 明暗三态分类工具：`auto` 解析、按宽高落设备、导入与编辑共用的最终分类收敛。 |
 | `images/brightness.ts` | 明暗识别 `detectBrightness()`：在 CIELAB L\* 直方图上算感知亮度评分判 dark/light。评分源自 `scripts/classify.py`，按本程序的标注样本重标定（去掉人工复核用的救回规则，准确率 95.3%→97.0%）。 |
 | `images/imports/` | 统一 `import_session` 生命周期：本地上传、链接下载保存、代理链接的创建、接收文件、URL 抓取、prepare、preview、status/SSE、commit/cancel 与过期清理。 |
 | `images/batch.ts` | 批量软删除 `batchDeleteImages()`：标记 `status='deleted'` 并从 Redis 随机池移除（不动文件）。 |

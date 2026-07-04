@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
-import type { Device, ImageDraft, ImportJob } from "../../../lib/types.js";
-import { resolveUploadDefaultBrightness, type CommonAttributes } from "../../../lib/upload/upload-utils.js";
+import type { ImageDraft, ImportJob } from "../../../lib/types.js";
+import type { CommonAttributes } from "../../../lib/upload/upload-utils.js";
 
 type QueueState = { jobs: ImportJob[]; page: number };
 type QueueAction =
@@ -16,6 +16,32 @@ function pageCount(length: number, pageSize: number) {
   return Math.max(1, Math.ceil(length / pageSize));
 }
 
+function classificationOverrideFor(job: Pick<ImportJob, "draft" | "resolvedClassification">) {
+  const resolved = job.resolvedClassification;
+  if (!resolved) return undefined;
+  const classificationOverride: ImportJob["classificationOverride"] = {};
+  if (job.draft.device !== resolved.device) classificationOverride.device = true;
+  if (job.draft.brightness !== resolved.brightness) classificationOverride.brightness = true;
+  return Object.keys(classificationOverride).length ? classificationOverride : undefined;
+}
+
+function patchJobDraft(job: ImportJob, patch: Partial<ImageDraft>): ImportJob {
+  const next = { ...job, draft: { ...job.draft, ...patch } };
+  return { ...next, classificationOverride: classificationOverrideFor(next) };
+}
+
+function applyDefaultsToJob(job: ImportJob, defaults: CommonAttributes): ImportJob {
+  if (["done", "cancelled"].includes(job.status)) return job;
+  const draftPatch: Partial<ImageDraft> = {
+    ...(defaults.device ? { device: defaults.device as ImageDraft["device"] } : job.resolvedClassification ? { device: job.resolvedClassification.device } : {}),
+    ...(defaults.brightness ? { brightness: defaults.brightness as ImageDraft["brightness"] } : job.resolvedClassification ? { brightness: job.resolvedClassification.brightness } : {}),
+    ...(defaults.theme.trim() ? { theme: defaults.theme } : {}),
+    ...(defaults.author.trim() ? { author: defaults.author } : {}),
+    ...(defaults.tags.length ? { tags: [...defaults.tags] } : {})
+  };
+  return patchJobDraft(job, draftPatch);
+}
+
 function reducer(state: QueueState, action: QueueAction): QueueState {
   switch (action.type) {
     case "append": {
@@ -27,7 +53,10 @@ function reducer(state: QueueState, action: QueueAction): QueueState {
     case "patch":
       return { ...state, jobs: state.jobs.map((job) => job.id === action.id ? { ...job, ...action.patch } : job) };
     case "patch-draft":
-      return { ...state, jobs: state.jobs.map((job) => job.id === action.id ? { ...job, draft: { ...job.draft, ...action.patch } } : job) };
+      return {
+        ...state,
+        jobs: state.jobs.map((job) => job.id === action.id ? patchJobDraft(job, action.patch) : job)
+      };
     case "remove": {
       const jobs = state.jobs.filter((job) => !action.ids.has(job.id));
       return { jobs, page: Math.min(state.page, pageCount(jobs.length, action.pageSize)) };
@@ -35,17 +64,7 @@ function reducer(state: QueueState, action: QueueAction): QueueState {
     case "apply-defaults":
       return {
         ...state,
-        jobs: state.jobs.map((job) => ["done", "cancelled"].includes(job.status) ? job : {
-          ...job,
-          draft: {
-            ...job.draft,
-            device: action.defaults.device ? action.defaults.device as Device : job.detected.device,
-            brightness: resolveUploadDefaultBrightness(action.defaults.brightness, job.detected.brightness),
-            ...(action.defaults.theme.trim() ? { theme: action.defaults.theme } : {}),
-            ...(action.defaults.author.trim() ? { author: action.defaults.author } : {}),
-            ...(action.defaults.tags.length ? { tags: [...action.defaults.tags] } : {})
-          }
-        })
+        jobs: state.jobs.map((job) => applyDefaultsToJob(job, action.defaults))
       };
     case "set-page":
       return { ...state, page: Math.max(1, Math.min(action.page, pageCount(state.jobs.length, action.pageSize))) };

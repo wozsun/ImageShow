@@ -39,7 +39,7 @@ PostgreSQL，单一迁移文件 `packages/server/migrations/0001_initial.sql`，
 | `source_url` | URL 导入来源，仅允许 HTTPS；upload 模式为空 |
 | `expected_size` | 本地上传声明的 raw 字节数 |
 | `metadata_payload` | 创建会话时的草稿元数据 |
-| `prepared_payload` | 服务端 prepared 真值：MD5、尺寸、质量、暂存键等 |
+| `prepared_payload` | 服务端 prepared 真值：MD5、尺寸、质量、暂存键、`resolved_device` / `resolved_brightness` 等 |
 | `status` | `created` / `receiving` / `preparing` / `ready` / `committing` / `finalized` / `failed` / `cancelled` |
 | `idempotency_key` | 幂等键 |
 | `request_hash` | 幂等请求摘要；同一幂等键仅在摘要一致时复用会话 |

@@ -17,7 +17,7 @@ File ──► 立即创建卡片 + blob: 临时预览
                          ├─ 校验格式、尺寸
                          ├─ WebP < 阈值且尺寸达标：跳过转码
                          ├─ 否则缩放、WebP 编码、按体积逐级降质量
-                         ├─ 生成标准缩略图、识别设备与明暗
+                         ├─ 生成标准缩略图、确认或识别设备与明暗
                          └─ 计算最终 md5 / size / ext
                               ├─► <锁定后端>/_uploads/<id>.image.webp
                               └─► <锁定后端>/_uploads/<id>.thumb.webp
@@ -35,7 +35,7 @@ URL ──► 立即创建卡片
 
 URL ──► 立即创建卡片
     └─► 创建 import_session(mode=proxy，锁定缩略图 storage_slug/source_url）
-         └─► 服务端安全下载一次用于校验、MD5、尺寸、明暗识别和缩略图
+         └─► 服务端安全下载一次用于校验、MD5、尺寸、明暗确认和缩略图
               ├─► <锁定后端>/_uploads/<id>.thumb.webp
               └─► ready：编辑/提交
                    └─► metadata.object_key = URL、is_link=true
@@ -68,7 +68,7 @@ prepare 承担所有重处理：
 - upload/download：原始流精确大小限制与服务端本地落盘；
 - download/proxy：外部 URL 只允许 `https` 且必须使用域名，不接受直接 IP；每次请求和重定向后都会校验主机解析结果，禁止 localhost、内网、链路本地、组播和云 metadata 等受限地址，并依赖运行时 TLS 验证确认证书有效，再通过内容嗅探确认返回的是支持的图片格式；安全拒绝对外统一返回通用提示，内部 debug 日志保留拒绝原因；
 - upload/download：图片解码校验、长边约束、可选 WebP 转码与体积控制；
-- 三种模式：标准缩略图、最终预览、设备/明暗识别；
+- 三种模式：标准缩略图、最终预览、设备/明暗确认；
 - upload/download 基于最终候选字节计算 `metadata.md5`；proxy 基于外部原图字节计算 `metadata.md5`；
 - upload/download 把 processed image 和 prepared thumbnail 写入锁定后端的 `_uploads`；proxy 只写 prepared thumbnail。
 
@@ -111,9 +111,13 @@ commit 不重新下载、不重新转码，也不从远端读回候选文件：
 
 公共原图接口只接受 `status=ready`。后台回收站的原图按钮显示规则与公开页面一致：只有 `original` 存在且不同于展示图时显示；deleted 行点击时走带鉴权的 `/api/admin/images/:id/original`，它允许回收站内的独立原图链接，但仍使用 `private, no-store`。回收站查看图片本体使用带鉴权的 raw/thumb 接口。
 
-## 明暗识别
+## 设备与明暗识别
 
-`brightness=auto` 时，服务端在已生成的标准缩略图上按 CIELAB L\* 分布判断 dark/light。本地上传仍兼容旧文件名规则：如 `pc-dark-theme-001` 会预填设备、明暗和主题，`pc-dark-001` 会预填设备和明暗；不命中时明暗保持 auto。重新识别同样复用缩略图。
+导入与编辑统一使用三态分类：`device=auto` 表示按图片宽高落到 `pc` 或 `mb`，`brightness=auto` 表示在标准缩略图上按 CIELAB L\* 分布判断 `dark` 或 `light`；传入具体值则视为用户或文件名已明确指定，服务端不再重新识别。
+
+本地上传仍兼容旧文件名规则：如 `pc-dark-theme-001` 会预填设备、明暗和主题，`pc-dark-001` 会预填设备和明暗；命中文件名规则时，设备和明暗都直接使用文件名结果。不命中规则时卡片先显示“识别中”，prepare 完成后替换为服务端识别结果。导入会话的 `prepared_payload` 保存 `resolved_device` / `resolved_brightness`，它们是 prepare 阶段把用户选择、文件名结果或自动识别结果收敛后的兜底分类；提交时只有最终元数据仍为 `auto` 才会使用它们。编辑图片时可把设备改为“自动设备”，服务端按当前图片宽高重新落到 `pc` 或 `mb`；重新识别明暗同样复用缩略图。
+
+上传 / 链接导入窗口顶部的“应用到全部”会让设备 / 亮度遵循当前顶部选择：保持“自动设备”或“自动亮暗”时，已就绪卡片恢复为 prepare 阶段保存的自动识别结果，并清除对应淡黄色偏离提示；选择具体设备或亮度时则批量强制覆盖。主题、作者和标签按顶部填写值覆盖已有卡片。
 
 ## 随机图 API
 

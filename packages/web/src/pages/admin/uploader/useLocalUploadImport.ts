@@ -81,7 +81,7 @@ export function useLocalUploadImport(options: {
         preview: objectUrl, objectUrl, draft: inferred.draft, width: inferred.width,
         height: inferred.height, originalWidth: inferred.width, originalHeight: inferred.height,
         uploadProgress: 0, duplicates: [], duplicateDecision: "upload",
-        detected: inferred.detected, storageSlug, originalSize: file.size
+        storageSlug, originalSize: file.size
       };
     }));
     queue.appendJobs(jobs);

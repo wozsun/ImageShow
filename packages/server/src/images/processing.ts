@@ -55,10 +55,6 @@ export async function probeImageBytes(input: Buffer) {
   return { ...dimensions, ext, md5: md5Buffer(input), size: input.byteLength };
 }
 
-export function detectDeviceFromDimensions(width: number, height: number): "pc" | "mb" {
-  return width >= height ? "pc" : "mb";
-}
-
 export async function createThumbnail(input: ImageInput) {
   const thumbnail = getThumbnailSettings();
   return sharp(input)

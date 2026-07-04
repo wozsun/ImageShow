@@ -3,7 +3,7 @@ import { ThemeInput } from "./ThemeInput.js";
 import { TagInput } from "./TagInput.js";
 import { AuthorInput } from "./AuthorInput.js";
 import type { SelectOption } from "../../lib/ui/select-options.js";
-import type { Device, FacetOption, ImageDraft } from "../../lib/types.js";
+import type { FacetOption, ImageDraft } from "../../lib/types.js";
 
 export function ImageDraftFields({
   draft,
@@ -45,7 +45,7 @@ export function ImageDraftFields({
         <SelectMenu
           className={`image-fields-device${c.device ? " is-changed" : ""}`}
           value={draft.device}
-          onChange={(value) => onPatch({ device: value as Device })}
+          onChange={(value) => onPatch({ device: value as ImageDraft["device"] })}
           disabled={disabled}
           options={deviceOptions}
           ariaLabel={`${ariaPrefix} 设备`}

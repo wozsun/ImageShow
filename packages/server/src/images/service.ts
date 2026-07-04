@@ -1,5 +1,4 @@
 import type { Pool, PoolClient } from "pg";
-import type { Brightness } from "@imageshow/shared";
 import { pool, withTransaction } from "../core/db.js";
 import { ApiError } from "../core/http.js";
 import { getRuntimeConfig } from "../config/env.js";
@@ -15,17 +14,23 @@ import { isReservedSubdomain } from "../themes/host.js";
 import { ensureTheme } from "../themes/service.js";
 import { ensureAuthor } from "../authors/service.js";
 import { detectBrightness } from "./brightness.js";
+import { deviceFromDimensions, resolveOptionalBrightnessWith, resolveOptionalDeviceWith } from "./classification.js";
 import { publicImage, type ImageRecord } from "./presenter.js";
 
 function storageSlug(image: Pick<ImageRecord, "storage_slug">) {
   return image.storage_slug ?? "local";
 }
 
-async function resolveAutoBrightness(image: ImageRecord): Promise<Brightness | undefined> {
+async function detectImageBrightness(image: ImageRecord) {
   if (image.status !== "ready") return undefined;
   const thumb = thumbnailRef({ ...image, storage_slug: storageSlug(image), is_link: Boolean(image.is_link) });
   if (!(await exists(thumb.prefix, thumb.key, thumb.slug))) return undefined;
   return detectBrightness(await readStorageBuffer(thumb.prefix, thumb.key, thumb.slug));
+}
+
+function detectImageDevice(image: ImageRecord) {
+  if (image.status !== "ready") return undefined;
+  return deviceFromDimensions(image.width, image.height);
 }
 
 async function applyImageFieldEdits(
@@ -63,7 +68,11 @@ export async function updateImageMetadata(id: string, body: unknown) {
   const parsed = parse(metadataUpdateInput, body);
   if (parsed.theme && isReservedSubdomain(parsed.theme)) throw new ApiError(400, "theme_reserved", "Theme conflicts with a reserved subdomain prefix", { theme: parsed.theme });
 
-  const next = { ...parsed, brightness: parsed.brightness === "auto" ? await resolveAutoBrightness(current) : parsed.brightness };
+  const next = {
+    ...parsed,
+    device: resolveOptionalDeviceWith(parsed.device, () => detectImageDevice(current)),
+    brightness: await resolveOptionalBrightnessWith(parsed.brightness, () => detectImageBrightness(current))
+  };
   const touchAuthor = next.author !== undefined;
   const authorValue = next.author ? next.author : null;
   const targetDevice = next.device ?? current.device;

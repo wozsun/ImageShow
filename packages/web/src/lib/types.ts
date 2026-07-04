@@ -51,7 +51,7 @@ export type Author = {
 };
 
 export type ImageDraft = {
-  device: Device;
+  device: Device | "auto";
   brightness: Brightness | "auto";
   theme: string;
   author: string;
@@ -134,7 +134,8 @@ export type ImportJob = {
   uploadProgress: number;
   duplicates: ImageItem[];
   duplicateDecision: "upload" | "undecided";
-  detected: { device: Device; brightness: Brightness | "auto" };
+  resolvedClassification?: { device: Device; brightness: Brightness };
+  classificationOverride?: Partial<Record<"device" | "brightness", boolean>>;
   file?: File;
   fileFingerprint?: string;
   md5?: string;

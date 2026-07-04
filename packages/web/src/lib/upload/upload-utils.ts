@@ -1,5 +1,7 @@
 import type { Brightness, Device, ImageDraft } from "../types.js";
 
+type FilenameMetadata = { device?: Device; brightness?: Brightness; theme?: string };
+
 export async function runWithConcurrency<T>(items: T[], limit: number, task: (item: T) => Promise<void>): Promise<void> {
   let cursor = 0;
   const worker = async () => {
@@ -13,7 +15,7 @@ export async function runWithConcurrency<T>(items: T[], limit: number, task: (it
 }
 
 const defaultDraft: ImageDraft = {
-  device: "pc",
+  device: "auto",
   brightness: "auto",
   theme: "",
   author: "",
@@ -26,7 +28,7 @@ const defaultDraft: ImageDraft = {
 
 export type CommonAttributes = { device: string; brightness: string; theme: string; author: string; tags: string[] };
 
-export function applyCommonAttributes(draft: ImageDraft, common: CommonAttributes): ImageDraft {
+export function mergeBatchEditCommonAttributes(draft: ImageDraft, common: CommonAttributes): ImageDraft {
   return {
     ...draft,
     ...(common.device ? { device: common.device as ImageDraft["device"] } : {}),
@@ -38,7 +40,7 @@ export function applyCommonAttributes(draft: ImageDraft, common: CommonAttribute
 }
 
 export function resolveUploadDefaultBrightness(value: string, fallback: Brightness | "auto"): Brightness | "auto" {
-  // 上传窗口顶部的“自动亮暗”表示“不强制覆盖”，应优先使用文件名或服务端检测结果。
+  // 新任务默认“自动亮暗”表示不强制指定，应优先使用文件名或服务端检测结果。
   return value === "dark" || value === "light" ? value : fallback;
 }
 
@@ -74,40 +76,36 @@ export function isUploadableImage(file: File) {
 
 export async function draftFromFile(file: File, defaults: CommonAttributes, previewUrl: string) {
   const structured = metadataFromFilename(file.name);
-  const image = await imageInfo(previewUrl);
-  const detected: { device: Device; brightness: Brightness | "auto" } = {
-    device: structured.device ?? image.device,
-    brightness: structured.brightness ?? "auto"
-  };
+  const image = await loadImageDimensions(previewUrl);
   return { draft: applyUploadDefaults({
     ...defaultDraft,
-    device: detected.device,
-    brightness: detected.brightness,
+    device: structured.device ?? "auto",
+    brightness: structured.brightness ?? "auto",
     theme: structured.theme ?? ""
-  }, defaults), detected, width: image.width, height: image.height };
+  }, defaults), width: image.width, height: image.height };
 }
 
-function metadataFromFilename(filename: string): Partial<ImageDraft> {
+function metadataFromFilename(filename: string): FilenameMetadata {
   const stem = filename.replace(/\.[^.]+$/, "").toLowerCase();
   const full = /^(pc|mb)-(dark|light)-([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)-\d+$/i.exec(stem);
-  if (full) return { device: full[1] as Device, brightness: full[2] as ImageDraft["brightness"], theme: full[3].toLowerCase() };
+  if (full) return { device: full[1] as Device, brightness: full[2] as Brightness, theme: full[3].toLowerCase() };
   const partial = /^(pc|mb)-(dark|light)-\d+$/i.exec(stem);
-  if (partial) return { device: partial[1] as Device, brightness: partial[2] as ImageDraft["brightness"] };
+  if (partial) return { device: partial[1] as Device, brightness: partial[2] as Brightness };
   return {};
 }
 
-async function imageInfo(previewUrl: string): Promise<{ device: Device; width: number; height: number }> {
+async function loadImageDimensions(previewUrl: string): Promise<{ width: number; height: number }> {
   return new Promise((resolve) => {
     const image = new Image();
-    const finish = (device: Device, width = 0, height = 0) => {
+    const finish = (width = 0, height = 0) => {
       window.clearTimeout(timeout);
       image.onload = null;
       image.onerror = null;
-      resolve({ device, width, height });
+      resolve({ width, height });
     };
-    const timeout = window.setTimeout(() => finish("pc"), 2000);
-    image.onload = () => finish(image.naturalWidth >= image.naturalHeight ? "pc" : "mb", image.naturalWidth, image.naturalHeight);
-    image.onerror = () => finish("pc");
+    const timeout = window.setTimeout(() => finish(), 2000);
+    image.onload = () => finish(image.naturalWidth, image.naturalHeight);
+    image.onerror = () => finish();
     image.src = previewUrl;
   });
 }

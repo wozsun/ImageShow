@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import type { ImportJob } from "../../../../lib/types.js";
 import { normalizeAuthor, normalizeTheme, type CommonAttributes } from "../../../../lib/upload/upload-utils.js";
-import { appendAndPrepare, draftWithPreparedDetection, linkImportJobs, retryPrepareJob } from "../import-job-utils.js";
+import { appendAndPrepare, linkImportJobs, retryPrepareJob } from "../import-job-utils.js";
 import { applyPreparedResult, type AppendImportQueueApi } from "../prepared-result.js";
 import { cancelStoredImport, createImportSession, prepareImportSession } from "../import-api.js";
 
@@ -31,9 +31,6 @@ export function useProxyLinkImport(options: {
       });
       queue.updateJob(job.id, { status: "processing", message: "探测外链并生成代理缩略图", stagingId: session.id });
       const result = await prepareImportSession(session);
-      queue.updateJob(job.id, {
-        draft: draftWithPreparedDetection(job.draft, defaults, result)
-      });
       const accepted = await applyPreparedResult(queue, job.id, result);
       if (!accepted) {
         await cancelStoredImport(session.id).catch(() => undefined);
@@ -43,7 +40,7 @@ export function useProxyLinkImport(options: {
       const current = queue.jobsRef.current.find((item) => item.id === job.id);
       if (current?.status !== "cancelled") queue.updateJob(job.id, { status: "failed", failureStage: "prepare", message: (error as Error).message });
     }
-  }, [defaults, queue]);
+  }, [queue]);
 
   const addUrls = useCallback(async (urls: string[]) => {
     await appendAndPrepare(queue, linkImportJobs("proxy", urls, defaults, fillOriginalUrl, storageSlug), concurrency, prepare);
