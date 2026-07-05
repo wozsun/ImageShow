@@ -39,9 +39,11 @@ services:
         condition: service_healthy
     environment:
       SITE_DOMAIN: ${SITE_DOMAIN}
+      TZ: ${TZ:-UTC}
       ADMIN_USERNAME: ${ADMIN_USERNAME}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       ADMIN_FORCE_SYNC: ${ADMIN_FORCE_SYNC:-false}
+      LINK_IMAGE_FETCH_TIMEOUT_SECONDS: ${LINK_IMAGE_FETCH_TIMEOUT_SECONDS:-30}
       DATABASE_HOST: postgresql
       DATABASE_NAME: ${DATABASE_NAME}
       DATABASE_USER: ${DATABASE_USER}

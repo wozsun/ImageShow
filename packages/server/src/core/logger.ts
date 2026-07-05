@@ -48,12 +48,18 @@ function formatContext(context: unknown): string {
   }
 }
 
+function localTimestamp() {
+  const date = new Date();
+  const pad = (value: number, size = 2) => String(value).padStart(size, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}.${pad(date.getMilliseconds(), 3)}`;
+}
+
 function write(level: LevelName, message: string, context?: unknown) {
   const config = getRuntimeConfig().log;
   const threshold = LEVELS[config.level as LevelName] ?? LEVELS.WARN;
   if (LEVELS[level] < threshold) return;
 
-  const timestamp = new Date().toISOString().replace("T", " ").replace("Z", "");
+  const timestamp = localTimestamp();
   const line = `[${timestamp}] ${`[${level}]`.padEnd(7)} ${message}${formatContext(context)}\n`;
   (level === "ERROR" || level === "WARN" ? process.stderr : process.stdout).write(line);
   try {

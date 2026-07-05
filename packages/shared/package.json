@@ -1,6 +1,6 @@
 {
   "name": "@imageshow/shared",
-  "version": "3.2.2",
+  "version": "3.2.3",
   "type": "module",
   "main": "dist/app-config.js",
   "types": "dist/app-config.d.ts",

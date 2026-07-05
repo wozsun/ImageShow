@@ -67,6 +67,7 @@ export function prepareImportSession(session: ImportSession, signal?: AbortSigna
 }
 
 export function storedImportStatusMessage(state: StoredImportStatus) {
+  if (state.status === "failed") return state.error || "处理失败";
   if (state.message) return state.message;
   if (state.status === "created") return "等待接收原图";
   if (state.status === "receiving") return "服务端接收原图";
@@ -74,7 +75,6 @@ export function storedImportStatusMessage(state: StoredImportStatus) {
   if (state.status === "ready") return "服务端处理完成";
   if (state.status === "committing") return "写入图库";
   if (state.status === "finalized") return "已写入图库";
-  if (state.status === "failed") return state.error || "处理失败";
   if (state.status === "cancelled") return "已取消";
   return "等待处理";
 }

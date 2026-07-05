@@ -1,17 +1,17 @@
-import { appConfig } from "@imageshow/shared";
 import { createWriteStream } from "node:fs";
 import { mkdir, rename, rm } from "node:fs/promises";
 import { dirname } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { ApiError } from "../../core/http.js";
 import { safeFetchExternalImage } from "../../core/external-image-fetch.js";
+import { getRuntimeConfig } from "../../config/env.js";
 import { nodeReadableFromWeb } from "../../storage/stream-buffer.js";
 
 async function fetchImportResponse(url: string, limitBytes: number, externalSignal?: AbortSignal) {
   try {
     const response = await safeFetchExternalImage(url, {
       signal: externalSignal,
-      timeoutMs: appConfig.linkImport.fetchTimeoutMs,
+      timeoutMs: getRuntimeConfig().link_image.fetch_timeout_seconds * 1000,
       headers: { Accept: "image/*,*/*" },
       imageValidation: "sniff"
     });

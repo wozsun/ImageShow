@@ -2,7 +2,7 @@ import { z } from "zod";
 import { appConfig, slugPattern, type StorageType } from "@imageshow/shared";
 import { pool, withTransaction } from "../core/db.js";
 import { getRuntimeConfig, reloadRuntimeConfig, updateRuntimeConfig, type RuntimeConfig } from "./env.js";
-import { galleryLimit, galleryOrder, homeHeroBackground, homeTagline, imagePageSize, importGlobalConcurrency, linkImageConcurrency, listPageSize, loginBackground, maxFileSizeMb, maxLongEdge, normalizeMaxLongEdge, normalizeMaxSizeKb, normalizeMinQuality, normalizeQuality, normalizeQualityStep, previewDelayMs, randomMethod, recentUploads, rootRedirect, siteDomain, siteIconUrl, siteName, skipWebpUnderKb, thumbnailLongEdge, thumbnailQuality, uploadConcurrency } from "./schema.js";
+import { galleryLimit, galleryOrder, homeHeroBackground, homeTagline, imagePageSize, importGlobalConcurrency, linkFetchTimeoutSeconds, linkImageConcurrency, listPageSize, loginBackground, maxFileSizeMb, maxLongEdge, normalizeMaxLongEdge, normalizeMaxSizeKb, normalizeMinQuality, normalizeQuality, normalizeQualityStep, previewDelayMs, randomMethod, recentUploads, rootRedirect, siteDomain, siteIconUrl, siteName, skipWebpUnderKb, thumbnailLongEdge, thumbnailQuality, uploadConcurrency } from "./schema.js";
 import { ApiError } from "../core/http.js";
 import { clearStorageDriverCache } from "../storage/storage-backend.js";
 
@@ -94,7 +94,8 @@ const appSettingsSchema = z.object({
   link_image: z.object({
     fill_original_url: z.boolean().default(appConfig.runtimeDefaults.link_image.fill_original_url),
     concurrency: linkImageConcurrency.default(appConfig.runtimeDefaults.link_image.concurrency),
-    global_concurrency: importGlobalConcurrency.default(appConfig.runtimeDefaults.link_image.global_concurrency)
+    global_concurrency: importGlobalConcurrency.default(appConfig.runtimeDefaults.link_image.global_concurrency),
+    fetch_timeout_seconds: linkFetchTimeoutSeconds.default(appConfig.runtimeDefaults.link_image.fetch_timeout_seconds)
   }).optional(),
   normalize: z.object({
     quality: normalizeQuality.default(appConfig.runtimeDefaults.normalize.quality),

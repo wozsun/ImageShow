@@ -285,9 +285,10 @@ async function markImportCancelled(id: string) {
 }
 
 async function runActive(id: string, work: (signal: AbortSignal) => Promise<PreparedImportResult>) {
-  if (activeImports.has(id)) throw new ApiError(409, "import_already_running", "导入任务正在处理中");
+  const active = activeImports.get(id);
+  if (active) return active.promise;
   const controller = new AbortController();
-  const promise = work(controller.signal);
+  const promise = Promise.resolve().then(() => work(controller.signal));
   activeImports.set(id, { controller, promise });
   try {
     return await promise;

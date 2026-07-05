@@ -39,6 +39,7 @@ ImageShow 的配置按持久化位置分为三类：数据库、`/app/data/confi
 | `link_image.fill_original_url` | 两种链接导入模式是否自动把输入 URL 填入「原图 URL」字段；不做可直达探测。 |
 | `link_image.concurrency` | 单客户端 URL 导入队列并发数，覆盖“下载保存”和“代理链接”。 |
 | `link_image.global_concurrency` | 服务端 URL 导入 prepare 全局并发数，多个客户端共享。 |
+| `link_image.fetch_timeout_seconds` | 外链图片请求超时，单位秒；只覆盖下载和代理准备阶段的外部请求。 |
 | `normalize.*` | 本地上传与下载导入共用的最终入库文件标准化策略。 |
 | `thumbnail.*` | 缩略图长边和压缩质量，只影响此后新生成的缩略图。 |
 | `image_detail.title_opens_image` | 图片详情弹窗标题是否链接到图片直链。 |
@@ -62,7 +63,8 @@ ImageShow 的配置按持久化位置分为三类：数据库、`/app/data/confi
   "link_image": {
     "fill_original_url": false,
     "concurrency": 2,
-    "global_concurrency": 5
+    "global_concurrency": 5,
+    "fetch_timeout_seconds": 30
   },
   "normalize": {
     "quality": 80,
@@ -75,7 +77,7 @@ ImageShow 的配置按持久化位置分为三类：数据库、`/app/data/confi
 }
 ```
 
-`normalize.quality` 是首次 WebP 编码质量。输出超过 `normalize.max_size_kb` 时，每轮降低 `normalize.quality_step`，最低降到 `normalize.min_quality`。尺寸会按比例缩小到 `normalize.max_long_edge` 以内，不会放大。
+`normalize.quality` 是首次 WebP 编码质量。输出超过 `normalize.max_size_kb` 时，会按超限倍数放大 `normalize.quality_step` 降低质量，最大不超过 `3 * quality_step`。某轮达标后会按原步进向上回补探测，最多补回本轮跳过的质量档位，尽量避免一次跳过可用画质。最低降到 `normalize.min_quality`；到达最低质量后即使仍超出目标体积，也会直接入库。尺寸会按比例缩小到 `normalize.max_long_edge` 以内，不会放大。
 
 输入本身是 WebP、体积小于 `normalize.skip_webp_under_kb` 且长边已经达标时，原字节直接成为最终候选文件；服务端仍会执行解码校验、标准缩略图生成和最终 MD5 计算。`upload.concurrency` / `link_image.concurrency` 只约束单个后台页面自己的队列；`upload.global_concurrency` / `link_image.global_concurrency` 约束服务端 prepare 全局并发，即使调用方绕过前端队列直接打接口，进程内也会排队并支持取消等待中的任务。
 
@@ -89,7 +91,9 @@ ImageShow 的配置按持久化位置分为三类：数据库、`/app/data/confi
 | `ADMIN_FORCE_SYNC` | 设为 `true` 时启动阶段强制同步 super 账号和密码；默认不启用。 |
 | `DATABASE_NAME` / `DATABASE_USER` / `DATABASE_PASSWORD` | 初始化应用数据库和 PostgreSQL 容器。 |
 | `SITE_DOMAIN` | 首次生成配置文件时播种 `site.domain`，默认 `example.com`。 |
+| `LINK_IMAGE_FETCH_TIMEOUT_SECONDS` | 首次生成配置文件时播种外链图片请求超时，默认 `30`。 |
 | `HOST_PORT` | 应用宿主机端口映射，默认 `5518`。 |
+| `TZ` | 应用容器时区，影响日志时间格式，默认 `UTC`。 |
 
 支持环境变量播种的配置字段统一按完整路径转成大写下划线，例如：
 
@@ -108,6 +112,7 @@ ImageShow 的配置按持久化位置分为三类：数据库、`/app/data/confi
 | `upload.global_concurrency` | `UPLOAD_GLOBAL_CONCURRENCY` |
 | `link_image.concurrency` | `LINK_IMAGE_CONCURRENCY` |
 | `link_image.global_concurrency` | `LINK_IMAGE_GLOBAL_CONCURRENCY` |
+| `link_image.fetch_timeout_seconds` | `LINK_IMAGE_FETCH_TIMEOUT_SECONDS` |
 | `port` | `PORT` |
 
 仓库自带 `compose.yaml` 不注入所有可选项。配置文件已经生成后，请直接修改 `config.json` 并热加载；连接类配置仍需重启容器。

@@ -103,7 +103,7 @@ commit 不重新下载、不重新转码，也不从远端读回候选文件：
 | 正式位置 | `media` + `thumbs` | `media` + `thumbs` | URL + `link` 缩略图 |
 | 数据库标记 | `is_link=false` | `is_link=false` | `is_link=true` |
 
-两种 URL 模式都遵循 `link_image.fill_original_url`：开启时自动把输入 URL 写入 `original` 字段，不做可直达探测；原图按钮点击时才探测直连可用性。入库标准化参数位于顶层 `normalize`；单客户端 URL 队列并发位于 `link_image.concurrency`，服务端全局 URL prepare 并发位于 `link_image.global_concurrency`。
+两种 URL 模式都遵循 `link_image.fill_original_url`：开启时自动把输入 URL 写入 `original` 字段，不做可直达探测；原图按钮点击时才探测直连可用性。外链图片请求超时由 `link_image.fetch_timeout_seconds` 控制，只覆盖下载和代理准备阶段的外部请求，不包含后续图片标准化、缩略图生成和存储写入。入库标准化参数位于顶层 `normalize`；单客户端 URL 队列并发位于 `link_image.concurrency`，服务端全局 URL prepare 并发位于 `link_image.global_concurrency`。
 
 ## 原图链接与外链代理
 

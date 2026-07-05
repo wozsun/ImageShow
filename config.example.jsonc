@@ -95,7 +95,9 @@
     // 单客户端 URL 导入队列并发数，覆盖“下载保存”和“代理链接”。
     "concurrency": 2,
     // 服务端 URL 导入 prepare 全局并发数；多个客户端共享此上限。
-    "global_concurrency": 5
+    "global_concurrency": 5,
+    // 外链图片请求超时，单位秒；只覆盖下载和代理准备阶段的外部请求。
+    "fetch_timeout_seconds": 30
   },
 
   // 本地上传与链接下载共用的最终入库文件标准化策略。

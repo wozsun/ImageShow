@@ -32,6 +32,7 @@ export const normalizeMaxLongEdge = z.coerce.number().int().min(512).max(32_768)
 export const normalizeMaxSizeKb = z.coerce.number().int().min(50).max(100 * 1024);
 export const skipWebpUnderKb = z.coerce.number().int().min(0).max(100 * 1024);
 export const linkImageConcurrency = z.coerce.number().int().min(1).max(16);
+export const linkFetchTimeoutSeconds = z.coerce.number().int().min(5).max(300);
 
 export const taskConcurrency = z.coerce.number().int().min(1).max(32);
 

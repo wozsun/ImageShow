@@ -135,13 +135,33 @@ async function transcodeDownloadedImage(input: ImageInput, settings: DownloadTra
     });
   const maxBytes = Math.floor(settings.max_size_kb * 1024);
   let quality = settings.quality;
+  let lastDropMultiplier = 1;
+  const encode = (targetQuality: number) => pipeline.clone().webp({ quality: targetQuality }).toBuffer();
+  const backfillQuality = async (buffer: Buffer, successfulQuality: number, attempts: number) => {
+    let bestBuffer = buffer;
+    let bestQuality = successfulQuality;
+    for (let index = 0; index < attempts; index += 1) {
+      const nextQuality = Math.min(settings.quality, bestQuality + settings.quality_step);
+      if (nextQuality <= bestQuality) break;
+      const candidate = await encode(nextQuality);
+      if (candidate.byteLength > maxBytes) break;
+      bestBuffer = candidate;
+      bestQuality = nextQuality;
+    }
+    return { buffer: bestBuffer, quality: bestQuality };
+  };
   while (true) {
     // sharp pipeline 在 toBuffer 后会被消费；每轮 clone 后降质量，直到达到体积目标或触底最低质量。
-    const buffer = await pipeline.clone().webp({ quality }).toBuffer();
-    if (buffer.byteLength <= maxBytes || quality <= settings.min_quality) {
+    const buffer = await encode(quality);
+    if (quality <= settings.min_quality) {
       return { buffer, quality };
     }
-    quality = Math.max(settings.min_quality, quality - settings.quality_step);
+    if (buffer.byteLength <= maxBytes) {
+      return backfillQuality(buffer, quality, lastDropMultiplier - 1);
+    }
+    const overLimitMultiplier = Math.min(3, Math.max(1, Math.floor(buffer.byteLength / maxBytes)));
+    lastDropMultiplier = overLimitMultiplier;
+    quality = Math.max(settings.min_quality, quality - settings.quality_step * overLimitMultiplier);
   }
 }
 

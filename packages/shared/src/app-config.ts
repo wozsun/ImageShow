@@ -13,7 +13,6 @@ export const appConfig = {
     maxAttempts: 8
   },
 
-  linkImport: { fetchTimeoutMs: 15_000 },
   trashBatchSize: 100,
 
   uploadTtlSeconds: 10 * 60,
@@ -76,7 +75,8 @@ export const appConfig = {
     link_image: {
       fill_original_url: false,
       concurrency: 2,
-      global_concurrency: 5
+      global_concurrency: 5,
+      fetch_timeout_seconds: 30
     },
     normalize: {
       quality: 80,
@@ -168,6 +168,7 @@ export type LinkImageSettings = {
   fill_original_url: boolean;
   concurrency: number;
   global_concurrency: number;
+  fetch_timeout_seconds: number;
 };
 
 export type NormalizeSettings = {

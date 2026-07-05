@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync 
 import { join } from "node:path";
 import { z } from "zod";
 import { appConfig, type RuntimeConfig as SharedRuntimeConfig } from "@imageshow/shared";
-import { captchaCodeLength, captchaNoiseDots, captchaNoiseLines, captchaTtlSeconds, galleryLimit, galleryOrder, homeHeroBackground, homeTagline, imagePageSize, importGlobalConcurrency, linkImageConcurrency, listPageSize, logLevel, logMaxFiles, logMaxSizeMb, loginBackground, loginFailureWindowSeconds, loginGlobalMaxAttempts, loginGlobalWindowSeconds, loginMaxFailures, maxFileSizeMb, maxLongEdge, normalizeMaxLongEdge, normalizeMaxSizeKb, normalizeMinQuality, normalizeQuality, normalizeQualityStep, previewDelayMs, randomMethod, recentUploads, rootRedirect, sessionTtlSeconds, siteDomain, siteIconUrl, siteName, skipWebpUnderKb, taskConcurrency, thumbnailLongEdge, thumbnailQuality, uploadConcurrency } from "./schema.js";
+import { captchaCodeLength, captchaNoiseDots, captchaNoiseLines, captchaTtlSeconds, galleryLimit, galleryOrder, homeHeroBackground, homeTagline, imagePageSize, importGlobalConcurrency, linkFetchTimeoutSeconds, linkImageConcurrency, listPageSize, logLevel, logMaxFiles, logMaxSizeMb, loginBackground, loginFailureWindowSeconds, loginGlobalMaxAttempts, loginGlobalWindowSeconds, loginMaxFailures, maxFileSizeMb, maxLongEdge, normalizeMaxLongEdge, normalizeMaxSizeKb, normalizeMinQuality, normalizeQuality, normalizeQualityStep, previewDelayMs, randomMethod, recentUploads, rootRedirect, sessionTtlSeconds, siteDomain, siteIconUrl, siteName, skipWebpUnderKb, taskConcurrency, thumbnailLongEdge, thumbnailQuality, uploadConcurrency } from "./schema.js";
 
 const subdomainLabel = z.string().trim().regex(/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/, "must be a lowercase DNS label");
 
@@ -55,7 +55,8 @@ const runtimeConfigSchema = z.object({
   link_image: z.object({
     fill_original_url: z.boolean().default(d.link_image.fill_original_url),
     concurrency: linkImageConcurrency.default(d.link_image.concurrency),
-    global_concurrency: importGlobalConcurrency.default(d.link_image.global_concurrency)
+    global_concurrency: importGlobalConcurrency.default(d.link_image.global_concurrency),
+    fetch_timeout_seconds: linkFetchTimeoutSeconds.default(d.link_image.fetch_timeout_seconds)
   }).prefault({}),
   normalize: z.object({
     quality: normalizeQuality.default(d.normalize.quality),
@@ -229,7 +230,8 @@ function initialConfigFromEnvironment() {
     link_image: {
       fill_original_url: envBoolean("LINK_IMAGE_FILL_ORIGINAL_URL"),
       concurrency: envValue("LINK_IMAGE_CONCURRENCY"),
-      global_concurrency: envValue("LINK_IMAGE_GLOBAL_CONCURRENCY")
+      global_concurrency: envValue("LINK_IMAGE_GLOBAL_CONCURRENCY"),
+      fetch_timeout_seconds: envValue("LINK_IMAGE_FETCH_TIMEOUT_SECONDS")
     },
     normalize: {
       quality: envValue("NORMALIZE_QUALITY"),
