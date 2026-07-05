@@ -140,7 +140,7 @@ GET /api/images?d=&b=&t=&tag=&cursor=&limit=&shuffle=
 GET /api/images/:id
 ```
 
-画廊筛选维度由 `/api/gallery-facets` 单独返回；图片列表使用 `/api/images` 游标分页与 Redis 缓存，返回字段只覆盖卡片渲染所需的 `id`、缩略图 URL、标题、标签、主题、设备、尺寸和创建时间。详情弹窗打开后再请求 `/api/images/:id` 获取完整公开详情，详情响应同样按 `public_images_gen + id` 进入 Redis 缓存。原图按钮会先尝试无 Referer 直连探测；探测结果按原图 URL 和浏览器家族短 TTL 缓存，失败时回退到 link 子域代理。`shuffle=1` 只在出口打乱当前批次，不影响游标和共享缓存。Redis 缓存 miss 时，同进程内会合并相同 key 的并发查询，避免冷启动或失效瞬间重复打 PostgreSQL。
+画廊筛选维度由 `/api/gallery-facets` 单独返回；图片列表使用 `/api/images` 游标分页与 Redis 缓存，返回字段覆盖卡片与详情基础展示所需的 `id`、缩略图 URL、标题、标签、主题、设备、尺寸和创建时间。详情弹窗始终请求 `/api/images/:id`，但该公开详情接口只补充展示图 URL、描述、作者、来源和原图按钮标记，不重复返回列表已有字段，也不返回对象键、存储后端、MD5、扩展 JSON 等后台 / 内部字段。浏览器存在登录 hint 时，公开详情会直接请求 `/api/admin/images/:id/admin-info` 获取 `md5`、创建时间与后端算好的 `storage_label`，用于展示 UUID、MD5、存储后端和创建时间；若该轻量接口返回 401，则清除 hint 并保持普通访客展示。详情响应同样按 `public_images_gen + id` 进入 Redis 缓存。原图按钮会先尝试无 Referer 直连探测；探测结果按原图 URL 和浏览器家族短 TTL 缓存，失败时回退到 link 子域代理。`shuffle=1` 只在出口打乱当前批次，不影响游标和共享缓存。Redis 缓存 miss 时，同进程内会合并相同 key 的并发查询，避免冷启动或失效瞬间重复打 PostgreSQL。
 
 ## 后台管理
 

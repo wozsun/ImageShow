@@ -6,6 +6,7 @@ export const queryKeys = {
   galleryFacets: ["gallery-facets"] as const,
   publicImages: ["public-images"] as const,
   publicImageDetail: ["public-image-detail"] as const,
+  adminImageInfo: ["admin-image-info"] as const,
   overview: ["admin-overview"] as const,
   adminImages: ["admin-images"] as const,
   tags: ["tags"] as const,

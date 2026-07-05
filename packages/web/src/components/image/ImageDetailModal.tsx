@@ -1,23 +1,41 @@
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { api, isApiClientError } from "../../lib/api/client.js";
 import { Icon } from "../icon/Icon.js";
 import { ProgressiveImage } from "./ProgressiveImage.js";
 import { displayNameOrSlug, imageDisplayTitle, formatDate, formatDimensions } from "../../lib/ui/formatters.js";
 import { brightnessOptionLabel, deviceOptionLabel } from "../../lib/ui/select-options.js";
-import type { ImageItem } from "../../lib/types.js";
-import { useGalleryFacets, useSiteConfig } from "../../lib/api/site-data.js";
+import type { ImageAdminInfo, ImageItem, PublicImageItem } from "../../lib/types.js";
+import { clearSessionProbeHint, hasSessionProbeHint, useGalleryFacets, useSiteConfig } from "../../lib/api/site-data.js";
 import { useStorageNameResolver } from "../../lib/api/storage-options.js";
+import { adminApiBasePath, queryKeys } from "../../lib/constants.js";
 import { useAnimatedClose } from "../../hooks/useAnimatedClose.js";
 import { useBodyScrollLock } from "../../hooks/useBodyScrollLock.js";
 import { OverlayScrollbar } from "../layout/OverlayScrollbar.js";
 
-export function ImageDetailModal({ item, onClose, admin = false }: { item: ImageItem; onClose: () => void; admin?: boolean }) {
+type ImageDetailModalProps =
+  | { item: PublicImageItem; onClose: () => void; admin?: false }
+  | { item: ImageItem; onClose: () => void; admin: true };
+
+export function ImageDetailModal(props: ImageDetailModalProps) {
+  const { item, onClose } = props;
+  const admin = props.admin === true;
+  const adminItem = admin ? props.item : null;
+  const shouldProbeAdminSession = !admin && hasSessionProbeHint();
   const exit = useAnimatedClose(onClose);
   useBodyScrollLock();
   const contentRef = useRef<HTMLDivElement | null>(null);
   const { data: siteConfig } = useSiteConfig();
+  const { data: rawAdminInfo, error: adminInfoError } = useQuery<ImageAdminInfo>({
+    queryKey: [...queryKeys.adminImageInfo, item.id],
+    queryFn: ({ signal }) => api(`${adminApiBasePath}/images/${encodeURIComponent(item.id)}/admin-info`, { signal }),
+    enabled: shouldProbeAdminSession,
+    retry: false,
+    refetchOnWindowFocus: false
+  });
 
   const { data: facets } = useGalleryFacets();
-  // 存储行仅在 admin 详情展示，故仅在 admin 时拉取后端列表来把 slug 解析成显示名。
+  // 后台完整详情只有 storage_slug，需拉取后端列表来解析显示名；登录态公开详情由 admin-info 直接返回标签。
   const storageName = useStorageNameResolver(admin);
   const themeNames = useMemo(() => new Map((facets?.themes ?? []).map((option) => [option.slug, displayNameOrSlug(option)])), [facets]);
   const tagNames = useMemo(() => new Map((facets?.tags ?? []).map((option) => [option.slug, displayNameOrSlug(option)])), [facets]);
@@ -29,12 +47,18 @@ export function ImageDetailModal({ item, onClose, admin = false }: { item: Image
   const authorLabel = authorOption ? displayNameOrSlug(authorOption) : authorSlug;
   const authorLink = authorOption?.link || "";
 
+  const adminInfo = rawAdminInfo?.id === item.id ? rawAdminInfo : undefined;
   const titleOpensImage = (siteConfig?.image_detail?.title_opens_image ?? true) && Boolean(item.object_url);
   const title = imageDisplayTitle(item);
   const canOpenOriginal = item.has_distinct_original;
-  const originalHref = admin && item.deleted_at
+  const createdAt = adminItem?.created_at ?? adminInfo?.created_at;
+  const originalHref = adminItem?.deleted_at
     ? `/api/admin/images/${encodeURIComponent(item.id)}/original`
     : `/api/images/${encodeURIComponent(item.id)}/original`;
+
+  useEffect(() => {
+    if (!admin && isApiClientError(adminInfoError) && adminInfoError.status === 401) clearSessionProbeHint();
+  }, [admin, adminInfoError]);
 
   return (
     <div
@@ -80,11 +104,17 @@ export function ImageDetailModal({ item, onClose, admin = false }: { item: Image
             </button>
           </header>
           <dl>
+            {(admin || adminInfo) && <><dt>UUID</dt><dd>{item.id}</dd></>}
             {admin && (
               <>
-                <dt>UUID</dt><dd>{item.id}</dd>
-                <dt>MD5</dt><dd>{item.md5 || "未记录"}</dd>
-                <dt>存储</dt><dd>{storageName(item)}</dd>
+                <dt>MD5</dt><dd>{adminItem?.md5 || "未记录"}</dd>
+                {adminItem && <><dt>存储</dt><dd>{storageName(adminItem)}</dd></>}
+              </>
+            )}
+            {!admin && adminInfo && (
+              <>
+                <dt>MD5</dt><dd>{adminInfo.md5 || "未记录"}</dd>
+                <dt>存储</dt><dd>{adminInfo.storage_label || "未记录"}</dd>
               </>
             )}
             {authorSlug && (
@@ -120,8 +150,8 @@ export function ImageDetailModal({ item, onClose, admin = false }: { item: Image
               </>
             )}
             <dt>尺寸</dt><dd>{formatDimensions(item.width, item.height)}</dd>
-            {admin && <><dt>创建</dt><dd>{formatDate(item.created_at)}</dd></>}
-            {admin && item.deleted_at && <><dt>删除</dt><dd>{formatDate(item.deleted_at)}</dd></>}
+            {createdAt && <><dt>创建</dt><dd>{formatDate(createdAt)}</dd></>}
+            {adminItem?.deleted_at && <><dt>删除</dt><dd>{formatDate(adminItem.deleted_at)}</dd></>}
           </dl>
           <div className="inline-actions">
             {canOpenOriginal && (

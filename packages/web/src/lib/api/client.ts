@@ -1,5 +1,20 @@
 let csrfToken = "";
 
+export class ApiClientError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly code = ""
+  ) {
+    super(message);
+    this.name = "ApiClientError";
+  }
+}
+
+export function isApiClientError(error: unknown): error is ApiClientError {
+  return error instanceof ApiClientError;
+}
+
 export function setCsrfToken(value: string) {
   csrfToken = value;
 }
@@ -18,6 +33,6 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (init.method && init.method !== "GET" && csrfToken) headers.set("x-csrf-token", csrfToken);
   const response = await fetch(path, { ...init, headers, credentials: "same-origin" });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok || data.ok === false) throw new Error(data.error || `HTTP ${response.status}`);
+  if (!response.ok || data.ok === false) throw new ApiClientError(data.error || `HTTP ${response.status}`, response.status, data.code || "");
   return data;
 }

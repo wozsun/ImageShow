@@ -69,7 +69,7 @@ ImageShow/
 | `images/query.ts` | 画廊列表、公开详情与后台概览：公共列表使用轻量卡片投影、游标分页、Redis 列表缓存和 `withShuffle()`（出口处洗牌，不污染共享缓存）；公开详情按 id 缓存；后台概览使用短 TTL 缓存；公共列表、公开详情、facets、后台概览和 MD5 判重在 Redis miss 后做同进程 in-flight 合并。 |
 | `images/image-cache.ts` | 图片读缓存：公共列表 generation、公共列表 / 公开详情缓存、后台概览缓存、原图直连探测缓存、对象 / 缩略图反查、MD5 判重缓存、画廊 facets 缓存与统一失效。 |
 | `images/serving.ts` | 存储对象、缩略图、link 与后台字节出口；集中处理外部回源代理、原图直连探测及其短 TTL 缓存、缓存策略和缩略图缺失时的乐观读取 / 补建。 |
-| `images/presenter.ts` | `publicImage()` / `publicImages()` 把 DB 行变成完整公开详情响应、`publicImageCard()`（公共列表卡片出口白名单）、`adminImageView()`（后台投影：去 `ext`、已删除图改指鉴权字节端点）、列表缓存键、`cacheImageLookups()`（link 跳过）。 |
+| `images/presenter.ts` | `publicImage()` / `publicImages()` 把 DB 行变成后台可复用的完整图片视图、`publicImageDetail()`（公开详情补充字段白名单）、`publicImageCard()`（公共列表卡片出口白名单）、`adminImageView()`（后台投影：去 `ext`、已删除图改指鉴权字节端点）、列表缓存键、`cacheImageLookups()`（link 跳过）。 |
 | `images/processing.ts` | sharp 封装：图片格式 / 尺寸探测、缩略图、`transcodeStoredImage()`。 |
 | `images/classification.ts` | 设备 / 明暗三态分类工具：`auto` 解析、按宽高落设备、导入与编辑共用的最终分类收敛。 |
 | `images/brightness.ts` | 明暗识别 `detectBrightness()`：在 CIELAB L\* 直方图上算感知亮度评分判 dark/light。评分源自 `scripts/classify.py`，按本程序的标注样本重标定（去掉人工复核用的救回规则，准确率 95.3%→97.0%）。 |

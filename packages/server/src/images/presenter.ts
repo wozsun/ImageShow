@@ -32,10 +32,16 @@ export type ImageRecord = {
 };
 
 export type PublicImage = Awaited<ReturnType<typeof publicImage>>;
+export type PublicImageDetail = Awaited<ReturnType<typeof publicImageDetail>>;
 
 export type PublicImageCardRecord = Pick<
   ImageRecord,
   "id" | "device" | "brightness" | "theme" | "width" | "height" | "ext" | "object_key" | "storage_slug" | "is_link" | "title" | "created_at"
+>;
+
+export type PublicImageDetailRecord = Pick<
+  ImageRecord,
+  "id" | "device" | "brightness" | "theme" | "ext" | "object_key" | "storage_slug" | "is_link" | "author" | "description" | "source" | "original"
 >;
 
 export type ImportSessionRecord = {
@@ -53,6 +59,7 @@ export function importSessionResponse(row: ImportSessionRecord) {
     upload_url: row.mode === "upload" ? `${adminApiBasePath}/imports/${row.id}/file` : undefined,
     prepare_url: `${adminApiBasePath}/imports/${row.id}/prepare`,
     preview_url: `${adminApiBasePath}/imports/${row.id}/preview`,
+    preview_full_url: `${adminApiBasePath}/imports/${row.id}/preview/full`,
     expires_at: new Date(row.expires_at).toISOString()
   };
 }
@@ -96,6 +103,23 @@ export async function publicImage(row: ImageRecord, tags?: string[]) {
 export async function publicImages(rows: ImageRecord[]) {
   const tagMap = await getTagsForImages(rows.map((row) => row.id));
   return Promise.all(rows.map((row) => publicImage(row, tagMap.get(row.id) ?? [])));
+}
+
+export async function publicImageDetail(row: PublicImageDetailRecord) {
+  const slug = row.storage_slug ?? "local";
+  const isLink = Boolean(row.is_link);
+  const urls = await publicImageUrls(row.object_key, slug, isLink, isLink ? { id: row.id, device: row.device, brightness: row.brightness, theme: row.theme, ext: row.ext } : undefined);
+  const original = row.original ?? "";
+  const hasDistinctOriginal = hasDistinctOriginalUrl(original, isLink ? row.object_key : urls.object_url);
+
+  return {
+    id: row.id,
+    author: row.author ?? "",
+    description: row.description ?? "",
+    source: row.source ?? "",
+    has_distinct_original: hasDistinctOriginal,
+    object_url: urls.object_url
+  };
 }
 
 export type PublicImageCard = Awaited<ReturnType<typeof publicImageCard>>;

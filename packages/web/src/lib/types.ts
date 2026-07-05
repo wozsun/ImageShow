@@ -14,21 +14,34 @@ export type GalleryImageCard = {
   created_at: string;
 };
 
-export type ImageItem = GalleryImageCard & {
+export type PublicImageDetail = {
+  id: string;
   description: string;
   author: string;
-  status: "ready" | "deleted";
   object_url: string;
+  has_distinct_original: boolean;
+  source: string;
+};
+
+export type PublicImageItem = GalleryImageCard & PublicImageDetail;
+
+export type ImageItem = PublicImageItem & {
+  status: "ready" | "deleted";
   object_key: string;
   storage_slug: string;
   is_link: boolean;
   md5: string;
   original: string;
   extra?: Record<string, unknown>;
-  has_distinct_original: boolean;
-  source: string;
   image_size?: number;
   deleted_at?: string;
+};
+
+export type ImageAdminInfo = {
+  id: string;
+  md5: string;
+  storage_label: string;
+  created_at: string;
 };
 
 export type Tag = {

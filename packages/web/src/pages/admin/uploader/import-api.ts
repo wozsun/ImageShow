@@ -6,6 +6,7 @@ export type PreparedImport = {
   id: string;
   mode: "upload" | "download" | "proxy";
   preview_url: string;
+  preview_full_url: string;
   width: number;
   height: number;
   original_width: number;
@@ -30,6 +31,7 @@ export type ImportSession = {
   upload_url?: string;
   prepare_url: string;
   preview_url: string;
+  preview_full_url?: string;
   expires_at: string;
 };
 

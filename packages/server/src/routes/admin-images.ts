@@ -3,7 +3,7 @@ import { adminApiBasePath } from "@imageshow/shared";
 import { ok } from "../core/http.js";
 import { adminImageListQuery, batchMigrateStorageInput, imageIdsInput, parse, uuidInput } from "../core/validation.js";
 import { batchDeleteImages } from "../images/batch.js";
-import { getAdminImage, getOverviewStats, listAdminImages } from "../images/query.js";
+import { getAdminImage, getAdminImageInfo, getOverviewStats, listAdminImages } from "../images/query.js";
 import { serveAdminObject, serveAdminOriginalLink, serveAdminThumb } from "../images/serving.js";
 import { deleteImage, migrateImagesStorage, updateImageMetadata } from "../images/service.js";
 import { batchRestoreImages, purgeDeletedImage, purgeDeletedImages, restoreDeletedImage } from "../images/trash.js";
@@ -19,6 +19,11 @@ export function registerAdminImageRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/images/:id`, async (c) => {
     const id = parse(uuidInput, c.req.param("id"));
     return c.json(ok({ item: await getAdminImage(id) }));
+  });
+
+  app.get(`${adminApiBasePath}/images/:id/admin-info`, async (c) => {
+    const id = parse(uuidInput, c.req.param("id"));
+    return c.json(ok(await getAdminImageInfo(id)));
   });
 
   app.get(`${adminApiBasePath}/images/:id/thumb`, async (c) => {

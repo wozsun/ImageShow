@@ -6,7 +6,7 @@ import { getRuntimeConfig } from "../config/env.js";
 import { adminImageListQuery, listQuery } from "../core/validation.js";
 import { splitSelectors } from "../core/selectors.js";
 import { decodeImageCursor, encodeImageCursor } from "./cursor.js";
-import { adminImageView, cacheImageLookups, publicImage, publicImageCards, publicImageListCacheKey, publicImages, type ImageRecord, type PublicImage, type PublicImageCard, type PublicImageCardRecord } from "./presenter.js";
+import { adminImageView, cacheImageLookups, publicImage, publicImageCards, publicImageDetail, publicImageListCacheKey, publicImages, type ImageRecord, type PublicImage, type PublicImageCard, type PublicImageCardRecord, type PublicImageDetail, type PublicImageDetailRecord } from "./presenter.js";
 import { getGalleryFilterOptions } from "../random/random-cache.js";
 import { getThemeVocab } from "../vocab/vocab-cache.js";
 import {
@@ -34,6 +34,14 @@ type GalleryFacets = { devices: string[]; brightnesses: string[]; themes: FacetO
 type AdminImageListQuery = z.infer<typeof adminImageListQuery>;
 type PublicListQuery = z.infer<typeof listQuery>;
 type PublicImageListPayload = { items: PublicImageCard[]; limit: number; has_next: boolean; next_cursor: string | null; total: null };
+
+const storageBackendLabels: Record<string, string> = { local: "本地存储" };
+
+function imageStorageLabel(row: { storage_slug?: string | null; storage_display_name?: string | null; is_link?: boolean | null }) {
+  if (row.is_link) return "外部链接";
+  const slug = row.storage_slug ?? "local";
+  return row.storage_display_name?.trim() || storageBackendLabels[slug] || slug;
+}
 
 const publicImageCardColumns = [
   "id",
@@ -123,7 +131,7 @@ async function selectorFilter(
 }
 
 const PUBLIC_IMAGE_CARD_SHAPE_VERSION = "s5";
-const PUBLIC_IMAGE_DETAIL_SHAPE_VERSION = "s1";
+const PUBLIC_IMAGE_DETAIL_SHAPE_VERSION = "s3";
 
 export async function listPublicImages(q: PublicListQuery): Promise<PublicImageListPayload> {
   const limit = q.limit ?? getRuntimeConfig().site.gallery.default_limit;
@@ -163,18 +171,36 @@ export async function listPublicImages(q: PublicListQuery): Promise<PublicImageL
 export async function getPublicImage(id: string) {
   const generation = await publicImagesCacheGeneration();
   const cacheKey = `v${generation}:${PUBLIC_IMAGE_DETAIL_SHAPE_VERSION}:${id}`;
-  const cached = await getPublicImageDetailCache<PublicImage>(cacheKey);
+  const cached = await getPublicImageDetailCache<PublicImageDetail>(cacheKey);
   if (cached) return cached;
 
   return coalesce(`public-image:${cacheKey}`, async () => {
-    const raced = await getPublicImageDetailCache<PublicImage>(cacheKey);
+    const raced = await getPublicImageDetailCache<PublicImageDetail>(cacheKey);
     if (raced) return raced;
 
-    const result = await pool.query("SELECT * FROM metadata WHERE id=$1 AND status='ready' LIMIT 1", [id]);
+    const result = await pool.query(
+      `SELECT id,
+              device,
+              brightness,
+              theme,
+              ext,
+              object_key,
+              storage_slug,
+              is_link,
+              author,
+              description,
+              source,
+              original
+         FROM metadata
+        WHERE id=$1 AND status='ready'
+        LIMIT 1`,
+      [id]
+    );
     if (!result.rows[0]) throw new ApiError(404, "not_found", "Image not found");
-    const image = await publicImage(result.rows[0] as ImageRecord);
+    const row = result.rows[0] as PublicImageDetailRecord;
+    const image = await publicImageDetail(row);
     await Promise.all([
-      cacheImageLookups([image]),
+      cacheImageLookups([row]),
       setPublicImageDetailCache(cacheKey, image)
     ]);
     return image;
@@ -185,6 +211,29 @@ export async function getAdminImage(id: string) {
   const result = await pool.query("SELECT * FROM metadata WHERE id=$1", [id]);
   if (!result.rows[0]) throw new ApiError(404, "not_found", "Image not found");
   return adminImageView(await publicImage(result.rows[0] as ImageRecord));
+}
+
+export async function getAdminImageInfo(id: string) {
+  const row = (await pool.query(
+    `SELECT m.id,
+            m.md5,
+            m.storage_slug,
+            m.is_link,
+            m.created_at::text AS created_at,
+            COALESCE(sb.display_name, '') AS storage_display_name
+       FROM metadata m
+       LEFT JOIN storage_backend sb ON sb.slug = m.storage_slug
+      WHERE m.id=$1
+      LIMIT 1`,
+    [id]
+  )).rows[0] as { id?: string; md5?: string | null; storage_slug?: string | null; is_link?: boolean | null; created_at?: string | null; storage_display_name?: string | null } | undefined;
+  if (!row) throw new ApiError(404, "not_found", "Image not found");
+  return {
+    id: row.id ?? id,
+    md5: row.md5 ?? "",
+    storage_label: imageStorageLabel(row),
+    created_at: row.created_at ?? ""
+  };
 }
 
 export async function checkImageMd5(md5: string) {

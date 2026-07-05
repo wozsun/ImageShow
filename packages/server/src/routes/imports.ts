@@ -21,8 +21,12 @@ export function registerImportRoutes(app: Hono) {
     return c.json(ok(await prepareImportSession(parse(uuidInput, c.req.param("id")))));
   });
 
+  app.get(`${adminApiBasePath}/imports/:id/preview/full`, async (c) => {
+    return previewImportSession(parse(uuidInput, c.req.param("id")), "full");
+  });
+
   app.get(`${adminApiBasePath}/imports/:id/preview`, async (c) => {
-    return previewImportSession(parse(uuidInput, c.req.param("id")));
+    return previewImportSession(parse(uuidInput, c.req.param("id")), "thumb");
   });
 
   app.get(`${adminApiBasePath}/imports/:id/status`, async (c) => {

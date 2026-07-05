@@ -74,6 +74,7 @@ export type PreparedImportResult = {
   id: string;
   mode: ImportMode;
   preview_url: string;
+  preview_full_url: string;
   width: number;
   height: number;
   original_width: number;
@@ -221,6 +222,7 @@ async function preparedResult(id: string, mode: ImportMode, storageSlug: string,
     id,
     mode,
     preview_url: `/api/admin/imports/${id}/preview`,
+    preview_full_url: `/api/admin/imports/${id}/preview/full`,
     width: payload.width,
     height: payload.height,
     original_width: payload.original_width,
@@ -563,13 +565,19 @@ export async function prepareImportSession(id: string) {
   });
 }
 
-export async function previewImportSession(id: string) {
+export async function previewImportSession(id: string, variant: "thumb" | "full" = "thumb") {
   const session = (await pool.query(
     "SELECT mode, source_url, storage_slug, status, prepared_payload FROM import_session WHERE id=$1",
     [id]
   )).rows[0] as Pick<ImportSessionRow, "mode" | "source_url" | "storage_slug" | "status" | "prepared_payload"> | undefined;
   if (!session || !["ready", "committing"].includes(session.status)) throw new ApiError(404, "not_found", "准备好的图片不存在");
   const payload = session.prepared_payload as PreparedPayload;
+  if (variant === "thumb") {
+    const buffer = await readStorageBuffer("_uploads", payload.prepared_thumbnail_key, session.storage_slug);
+    return new Response(buffer as unknown as BodyInit, {
+      headers: { "Content-Type": "image/webp", "Cache-Control": privateNoStoreCacheControl }
+    });
+  }
   if (session.mode === "proxy") {
     return proxyExternalImage(session.source_url, payload.ext || "jpg", false, { "Cache-Control": privateNoStoreCacheControl }, undefined, async () => {
       const buffer = await readStorageBuffer("_uploads", payload.prepared_thumbnail_key, session.storage_slug);

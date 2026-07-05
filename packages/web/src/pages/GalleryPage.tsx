@@ -14,7 +14,7 @@ import { masonryColumns, nextRenderBatch, useGalleryColumnCount } from "../lib/g
 import { buildRandomUrl } from "../lib/gallery/random-url.js";
 import { brightnessOptionLabel, deviceOptionLabel, randomModeSelectOptions } from "../lib/ui/select-options.js";
 import { rootSiteOrigin } from "../lib/gallery/theme-host.js";
-import type { GalleryImageCard, ImageItem, RandomMode } from "../lib/types.js";
+import type { GalleryImageCard, PublicImageDetail, PublicImageItem, RandomMode } from "../lib/types.js";
 import { useGalleryFacets, useSiteConfig } from "../lib/api/site-data.js";
 
 type GalleryFilters = { device: string; brightness: string; theme: string; tag: string; author: string };
@@ -33,33 +33,26 @@ function gallerySearchParams(filters: GalleryFilters, order: string, cursor = ""
   return params;
 }
 
-function imagePlaceholder(card: GalleryImageCard): ImageItem {
+function imagePlaceholder(card: GalleryImageCard): PublicImageItem {
   return {
     ...card,
     description: "",
     author: "",
-    status: "ready",
     object_url: "",
-    object_key: "",
-    storage_slug: "",
-    is_link: false,
-    md5: "",
-    original: "",
-    extra: {},
     has_distinct_original: false,
-    source: "",
-    image_size: 0
+    source: ""
   };
 }
 
 function GalleryImageDetail({ card, onClose }: { card: GalleryImageCard; onClose: () => void }) {
   const placeholder = useMemo(() => imagePlaceholder(card), [card]);
-  const { data } = useQuery<{ item: ImageItem }>({
+  const { data } = useQuery<{ item: PublicImageDetail }>({
     queryKey: [...queryKeys.publicImageDetail, card.id],
-    queryFn: ({ signal }) => api(`/api/images/${encodeURIComponent(card.id)}`, { signal }),
-    placeholderData: { item: placeholder }
+    queryFn: ({ signal }) => api(`/api/images/${encodeURIComponent(card.id)}`, { signal })
   });
-  return <ImageDetailModal item={data?.item ?? placeholder} onClose={onClose} admin={false} />;
+  const detail = data?.item.id === card.id ? data.item : null;
+  const item = useMemo(() => ({ ...placeholder, ...(detail ?? {}) }), [placeholder, detail]);
+  return <ImageDetailModal item={item} onClose={onClose} admin={false} />;
 }
 
 export function GalleryPage({ fixedTheme = "", standalone = false }: { fixedTheme?: string; standalone?: boolean }) {
