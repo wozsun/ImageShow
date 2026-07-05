@@ -5,14 +5,13 @@ type NumberInputProps = {
   onChange: (value: number) => void;
   min?: number;
   max?: number;
-  step?: number;
   placeholder?: string;
   disabled?: boolean;
   className?: string;
   ariaLabel?: string;
 };
 
-export function NumberInput({ value, onChange, min, max, step, placeholder, disabled, className, ariaLabel }: NumberInputProps) {
+export function NumberInput({ value, onChange, min, max, placeholder, disabled, className, ariaLabel }: NumberInputProps) {
   const [draft, setDraft] = useState(String(value));
   const [editing, setEditing] = useState(false);
 
@@ -42,7 +41,6 @@ export function NumberInput({ value, onChange, min, max, step, placeholder, disa
       aria-label={ariaLabel}
       min={min}
       max={max}
-      step={step}
       placeholder={placeholder}
       disabled={disabled}
       value={draft}

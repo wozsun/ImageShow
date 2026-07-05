@@ -7,7 +7,7 @@ ImageShow 的配置按持久化位置分为三类：数据库、`/app/data/confi
 | 来源 | 保存内容 | 修改方式 |
 | --- | --- | --- |
 | PostgreSQL | 管理员账号；本地 / S3 / WebDAV 存储后端注册表；S3 endpoint、region、bucket、access key、secret key、根目录、public URL 等敏感或实例化数据。 | 后台设置页。secret key 只保存，不返回给前端。 |
-| `/app/data/config.json` | 站点名、域名、icon、根路径跳转、首页 / 画廊 / 随机图默认行为、登录页背景、监听端口、PostgreSQL / Redis 连接、上传限制、链接导入、标准化、缩略图、安全、验证码、日志等非敏感运行时配置。 | 后台设置页，或直接编辑文件后在后台「设置 → 读取配置文件」。 |
+| `/app/data/config.json` | 站点名、域名、icon、根路径跳转、首页 / 画廊 / 随机图默认行为、登录页背景、监听端口、PostgreSQL / Redis 连接、上传限制、链接导入、标准化、缩略图、安全、验证码、日志等非敏感运行时配置。 | 后台设置页，或直接编辑文件后在后台「设置 → 读取配置文件」；上传文件大小、上传长边校验和服务端全局导入并发只通过配置文件维护。 |
 | 环境变量 | 只用于首次生成 `config.json`，以及初始化管理员账号和 PostgreSQL 官方镜像变量。 | 修改 `.env` 后重建 / 重启；配置文件生成后，普通运行时配置以 `config.json` 为准。 |
 
 完整字段清单、默认值和中英文注释见仓库根目录的 `config.example.jsonc`。实际运行文件是纯 JSON，不支持注释。
@@ -35,10 +35,10 @@ ImageShow 的配置按持久化位置分为三类：数据库、`/app/data/confi
 | `site.random_subdomain` / `site.static_subdomain` / `site.docs_subdomain` / `site.link_subdomain` | 保留子域名前缀。 |
 | `site.docs_enabled` | 是否启用 `docs.<域名>` 文档站，默认 `true`。关闭后该主机返回 404，但前缀仍保留，主题不可占用。 |
 | `site.robots_enabled` | 是否提供 `robots.txt`，默认 `false`。开启后主站首页与文档站可抓取，资源域和主题域禁抓。 |
-| `upload.*` | 上传文件大小、图片长边限制、上传列表分页、单客户端上传队列并发与服务端全局上传 prepare 并发。 |
+| `upload.*` | 上传文件大小、图片长边限制、上传列表分页、单客户端上传队列并发与服务端全局上传 prepare 并发；其中 `upload.max_file_size_mb`、`upload.max_long_edge` 和 `upload.global_concurrency` 只在配置文件中维护。 |
 | `link_image.fill_original_url` | 两种链接导入模式是否自动把输入 URL 填入「原图 URL」字段；不做可直达探测。 |
 | `link_image.concurrency` | 单客户端 URL 导入队列并发数，覆盖“下载保存”和“代理链接”。 |
-| `link_image.global_concurrency` | 服务端 URL 导入 prepare 全局并发数，多个客户端共享。 |
+| `link_image.global_concurrency` | 服务端 URL 导入 prepare 全局并发数，多个客户端共享；只在配置文件中维护。 |
 | `link_image.fetch_timeout_seconds` | 外链图片请求超时，单位秒；只覆盖下载和代理准备阶段的外部请求。 |
 | `normalize.*` | 本地上传与下载导入共用的最终入库文件标准化策略。 |
 | `thumbnail.*` | 缩略图长边和压缩质量，只影响此后新生成的缩略图。 |
@@ -57,6 +57,8 @@ ImageShow 的配置按持久化位置分为三类：数据库、`/app/data/confi
 ```json
 {
   "upload": {
+    "max_file_size_mb": 100,
+    "max_long_edge": 32000,
     "concurrency": 2,
     "global_concurrency": 5
   },

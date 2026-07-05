@@ -46,7 +46,7 @@ export function Uploader({ onDone }: { onDone: () => void }) {
   const authors = authorData?.items ?? [];
 
   const pageSize = settingsData?.settings.upload.list_page_size ?? 20;
-  const maxBytes = (settingsData?.settings.upload.max_file_size_mb ?? 15) * 1024 * 1024;
+  const maxBytes = (settingsData?.settings.upload.max_file_size_mb ?? 100) * 1024 * 1024;
   const uploadConcurrency = settingsData?.settings.upload.concurrency ?? 2;
   const downloadConcurrency = settingsData?.settings.link_image.concurrency ?? 2;
   const fillOriginalUrl = settingsData?.settings.link_image.fill_original_url ?? false;

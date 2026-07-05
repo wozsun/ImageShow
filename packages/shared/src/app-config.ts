@@ -66,8 +66,8 @@ export const appConfig = {
     database: { port: 5432 },
     redis: { host: "redis", port: 6379, db: 0 },
     upload: {
-      max_file_size_mb: 15,
-      max_long_edge: 8192,
+      max_file_size_mb: 100,
+      max_long_edge: 32000,
       list_page_size: 20,
       concurrency: 2,
       global_concurrency: 5

@@ -211,7 +211,6 @@ export function SettingsPage() {
               <NumberInput
                 min={0}
                 max={30000}
-                step={100}
                 value={settings.site.home.preview_delay_ms}
                 onChange={(value) => updateSiteHome({ preview_delay_ms: value })}
               />
@@ -266,26 +265,6 @@ export function SettingsPage() {
             <p className="hint">这些配置影响新上传、链接下载、缩略图生成和图片管理列表；已存在图片不会自动重新处理。</p>
             <div className="settings-field-grid">
               <label>
-                单文件大小限制 MB
-                <NumberInput
-                  min={1}
-                  max={200}
-                  step={1}
-                  value={settings.upload.max_file_size_mb}
-                  onChange={(value) => updateUpload({ max_file_size_mb: value })}
-                />
-              </label>
-              <label>
-                上传校验长边限制 px
-                <NumberInput
-                  min={512}
-                  max={32768}
-                  step={128}
-                  value={settings.upload.max_long_edge}
-                  onChange={(value) => updateUpload({ max_long_edge: value })}
-                />
-              </label>
-              <label>
                 上传与批量编辑每页数量
                 <NumberInput
                   min={5}
@@ -313,30 +292,12 @@ export function SettingsPage() {
                 />
               </label>
               <label>
-                全局上传处理并发数
-                <NumberInput
-                  min={1}
-                  max={64}
-                  value={settings.upload.global_concurrency}
-                  onChange={(value) => updateUpload({ global_concurrency: value })}
-                />
-              </label>
-              <label>
                 单客户端链接导入并发数
                 <NumberInput
                   min={1}
                   max={16}
                   value={settings.link_image.concurrency}
                   onChange={(value) => updateLinkImage({ concurrency: value })}
-                />
-              </label>
-              <label>
-                全局链接导入处理并发数
-                <NumberInput
-                  min={1}
-                  max={64}
-                  value={settings.link_image.global_concurrency}
-                  onChange={(value) => updateLinkImage({ global_concurrency: value })}
                 />
               </label>
               <label>
@@ -367,11 +328,19 @@ export function SettingsPage() {
                 />
               </label>
               <label>
+                跳过转码阈值 KB
+                <NumberInput
+                  min={0}
+                  max={102400}
+                  value={settings.normalize.skip_webp_under_kb}
+                  onChange={(value) => updateNormalize({ skip_webp_under_kb: value })}
+                />
+              </label>
+              <label>
                 入库长边上限 px
                 <NumberInput
                   min={512}
                   max={32768}
-                  step={128}
                   value={settings.normalize.max_long_edge}
                   onChange={(value) => updateNormalize({ max_long_edge: value })}
                 />
@@ -381,19 +350,8 @@ export function SettingsPage() {
                 <NumberInput
                   min={50}
                   max={102400}
-                  step={50}
                   value={settings.normalize.max_size_kb}
                   onChange={(value) => updateNormalize({ max_size_kb: value })}
-                />
-              </label>
-              <label>
-                跳过转码阈值 KB
-                <NumberInput
-                  min={0}
-                  max={102400}
-                  step={50}
-                  value={settings.normalize.skip_webp_under_kb}
-                  onChange={(value) => updateNormalize({ skip_webp_under_kb: value })}
                 />
               </label>
               <label>
@@ -401,7 +359,6 @@ export function SettingsPage() {
                 <NumberInput
                   min={64}
                   max={4096}
-                  step={64}
                   value={settings.thumbnail.long_edge}
                   onChange={(value) => updateThumbnail({ long_edge: value })}
                 />
