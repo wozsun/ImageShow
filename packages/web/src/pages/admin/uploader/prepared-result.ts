@@ -12,11 +12,18 @@ export type AppendImportQueueApi = ImportQueueApi & {
   appendJobs: (jobs: ImportJob[]) => void;
 };
 
-export async function applyPreparedResult(queue: ImportQueueApi, jobId: string, prepared: PreparedImport) {
+type PreparedApplyResult = "applied" | "duplicate" | "stale";
+
+export function isCurrentImportAttempt(queue: ImportQueueApi, jobId: string, attemptId: string) {
   const current = queue.jobsRef.current.find((job) => job.id === jobId);
-  if (!current || current.status === "cancelled") return false;
+  return Boolean(current && current.attemptId === attemptId && current.status !== "cancelled");
+}
+
+export function applyPreparedResult(queue: ImportQueueApi, jobId: string, attemptId: string, prepared: PreparedImport): PreparedApplyResult {
+  const current = queue.jobsRef.current.find((job) => job.id === jobId);
+  if (!current || current.status === "cancelled" || current.attemptId !== attemptId || current.sessionId !== prepared.id) return "stale";
   // 先认领 md5：同一批并发完成的重复文件不会同时进入“待提交”状态。
-  if (!queue.claimPreparedMd5(jobId, prepared.md5)) return false;
+  if (!queue.claimPreparedMd5(jobId, prepared.md5)) return "duplicate";
   const duplicates = prepared.duplicates ?? [];
   const duplicateExists = prepared.duplicate_exists || duplicates.length > 0;
   // 服务端已提供稳定预览地址后，释放本地 blob URL，避免上传几十张大图时占用浏览器内存。
@@ -51,5 +58,5 @@ export async function applyPreparedResult(queue: ImportQueueApi, jobId: string, 
       brightness: current.draft.brightness === "auto" ? resolved.brightness : current.draft.brightness || resolved.brightness
     }
   });
-  return true;
+  return "applied";
 }

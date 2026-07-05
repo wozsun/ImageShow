@@ -2,7 +2,7 @@ import { useCallback, useRef } from "react";
 import type { ImportJob } from "../../../lib/types.js";
 import { browserUuid, draftFromFile, isUploadableImage, normalizeAuthor, normalizeTheme, runWithConcurrency, type CommonAttributes } from "../../../lib/upload/upload-utils.js";
 import { retryPrepareJob } from "./import-job-utils.js";
-import { applyPreparedResult, type AppendImportQueueApi } from "./prepared-result.js";
+import { applyPreparedResult, isCurrentImportAttempt, type AppendImportQueueApi } from "./prepared-result.js";
 import { cancelStoredImport, createImportSession, prepareImportSession, uploadLocalRaw } from "./import-api.js";
 
 function fileFingerprint(file: File) {
@@ -18,13 +18,14 @@ export function useLocalUploadImport(options: {
   concurrency: number;
 }) {
   const { queue, defaults, storageSlug, maxBytes, concurrency } = options;
-  const activeRequests = useRef(new Map<string, () => void>());
+  const activeRequests = useRef(new Map<string, { attemptId: string; abort: () => void }>());
 
   const prepare = useCallback(async (job: ImportJob) => {
     if (!job.file) return;
+    const attemptId = job.attemptId;
+    const controller = new AbortController();
+    activeRequests.current.set(job.id, { attemptId, abort: () => controller.abort() });
     try {
-      const sessionId = job.stagingId || job.id;
-      queue.updateJob(job.id, { stagingId: sessionId });
       queue.updateJob(job.id, { status: "queued", message: "创建上传会话", uploadProgress: 0 });
       const session = await createImportSession({
         ...job.draft,
@@ -32,33 +33,58 @@ export function useLocalUploadImport(options: {
         theme: normalizeTheme(job.draft.theme),
         author: normalizeAuthor(job.draft.author),
         size: job.file.size,
-        session_id: sessionId,
-        idempotency_key: sessionId,
+        session_id: attemptId,
+        idempotency_key: attemptId,
         storage_slug: job.storageSlug
-      });
-      queue.updateJob(job.id, { stagingId: session.id });
+      }, controller.signal);
+      if (!isCurrentImportAttempt(queue, job.id, attemptId)) {
+        await cancelStoredImport(session.id).catch(() => undefined);
+        return;
+      }
+      queue.updateJob(job.id, { sessionId: session.id });
       queue.updateJob(job.id, { status: "uploading", message: "浏览器上传原文件", uploadProgress: 0 });
       const request = uploadLocalRaw(session, job.file, {
-        onProgress: (uploadProgress) => queue.updateJob(job.id, { uploadProgress }),
+        onProgress: (uploadProgress) => {
+          if (isCurrentImportAttempt(queue, job.id, attemptId)) queue.updateJob(job.id, { uploadProgress });
+        },
         onUploaded: () => {
-          queue.updateJob(job.id, { status: "processing", message: "上传完成，等待服务端处理", uploadProgress: 100 });
+          if (isCurrentImportAttempt(queue, job.id, attemptId)) {
+            queue.updateJob(job.id, { status: "processing", message: "上传完成，等待服务端处理", uploadProgress: 100 });
+          }
         }
       });
       // uploadLocalRaw 使用 XMLHttpRequest 才能拿到上传进度；这里保存 abort，取消按钮可中断仍在传输的请求。
-      activeRequests.current.set(job.id, request.abort);
+      activeRequests.current.set(job.id, {
+        attemptId,
+        abort: () => {
+          controller.abort();
+          request.abort();
+        }
+      });
       await request.promise;
-      activeRequests.current.delete(job.id);
-      queue.updateJob(job.id, { status: "processing", message: "上传完成，等待服务端处理", uploadProgress: 100 });
-      const prepared = await prepareImportSession(session);
-      const accepted = await applyPreparedResult(queue, job.id, prepared);
-      if (!accepted) {
+      if (!isCurrentImportAttempt(queue, job.id, attemptId)) {
         await cancelStoredImport(session.id).catch(() => undefined);
-        queue.updateJob(job.id, { status: "cancelled", message: "批次内最终文件重复，已取消" });
+        return;
+      }
+      activeRequests.current.set(job.id, { attemptId, abort: () => controller.abort() });
+      queue.updateJob(job.id, { status: "processing", message: "上传完成，等待服务端处理", uploadProgress: 100 });
+      const prepared = await prepareImportSession(session, controller.signal);
+      const accepted = applyPreparedResult(queue, job.id, attemptId, prepared);
+      if (accepted === "duplicate") {
+        await cancelStoredImport(session.id).catch(() => undefined);
+        if (isCurrentImportAttempt(queue, job.id, attemptId)) {
+          queue.updateJob(job.id, { status: "cancelled", message: "批次内最终文件重复，已取消" });
+        }
+      } else if (accepted === "stale") {
+        await cancelStoredImport(session.id).catch(() => undefined);
       }
     } catch (error) {
-      activeRequests.current.delete(job.id);
       const current = queue.jobsRef.current.find((item) => item.id === job.id);
-      if (current?.status !== "cancelled") queue.updateJob(job.id, { status: "failed", failureStage: "prepare", message: (error as Error).message });
+      if (current?.attemptId === attemptId && current.status !== "cancelled") {
+        queue.updateJob(job.id, { status: "failed", failureStage: "prepare", message: (error as Error).message });
+      }
+    } finally {
+      if (activeRequests.current.get(job.id)?.attemptId === attemptId) activeRequests.current.delete(job.id);
     }
   }, [queue]);
 
@@ -75,13 +101,25 @@ export function useLocalUploadImport(options: {
       const objectUrl = URL.createObjectURL(file);
       const inferred = await draftFromFile(file, defaults, objectUrl);
       return {
-        id: browserUuid(), kind: "local", file, fileFingerprint: fileFingerprint(file),
+        id: browserUuid(),
+        attemptId: browserUuid(),
+        kind: "local",
+        file,
+        fileFingerprint: fileFingerprint(file),
         status: file.size > maxBytes ? "failed" : "queued",
         message: file.size > maxBytes ? "图片大小超过限制" : "等待上传",
-        preview: objectUrl, objectUrl, draft: inferred.draft, width: inferred.width,
-        height: inferred.height, originalWidth: inferred.width, originalHeight: inferred.height,
-        uploadProgress: 0, duplicates: [], duplicateDecision: "upload",
-        storageSlug, originalSize: file.size
+        preview: objectUrl,
+        objectUrl,
+        draft: inferred.draft,
+        width: inferred.width,
+        height: inferred.height,
+        originalWidth: inferred.width,
+        originalHeight: inferred.height,
+        uploadProgress: 0,
+        duplicates: [],
+        duplicateDecision: "upload",
+        storageSlug,
+        originalSize: file.size
       };
     }));
     queue.appendJobs(jobs);
@@ -89,14 +127,14 @@ export function useLocalUploadImport(options: {
   }, [concurrency, defaults, maxBytes, prepare, queue, storageSlug]);
 
   const cancel = useCallback(async (job: ImportJob) => {
-    activeRequests.current.get(job.id)?.();
+    activeRequests.current.get(job.id)?.abort();
     queue.updateJob(job.id, { status: "cancelled", message: "已取消" });
-    await cancelStoredImport(job.stagingId || job.id).catch(() => undefined);
+    await cancelStoredImport(job.sessionId ?? job.attemptId).catch(() => undefined);
   }, [queue]);
 
   const retry = useCallback(async (job: ImportJob) => {
     if (!job.file) return;
-    if (job.stagingId) await cancelStoredImport(job.stagingId).catch(() => undefined);
+    await cancelStoredImport(job.sessionId ?? job.attemptId).catch(() => undefined);
     const next = { ...retryPrepareJob(job), uploadProgress: 0 };
     queue.updateJob(job.id, next);
     await prepare(next);

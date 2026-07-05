@@ -34,6 +34,7 @@ export function linkImportJobs(
 ) {
   return parseImportUrls(urls).map((url): ImportJob => ({
     id: browserUuid(),
+    attemptId: browserUuid(),
     kind,
     status: "queued",
     message: "等待下载",
@@ -52,7 +53,8 @@ export function linkImportJobs(
 export function retryPrepareJob(job: ImportJob): ImportJob {
   return {
     ...job,
-    stagingId: browserUuid(),
+    attemptId: browserUuid(),
+    sessionId: undefined,
     status: "queued",
     failureStage: undefined,
     message: "等待重试"

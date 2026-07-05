@@ -179,6 +179,13 @@ function stagingThumbnailKey(id: string) {
   return `${id}.thumb.webp`;
 }
 
+async function preparedThumbnailResponse(payload: Pick<PreparedPayload, "prepared_thumbnail_key">, storageSlug: string) {
+  const buffer = await readStorageBuffer("_uploads", payload.prepared_thumbnail_key, storageSlug);
+  return new Response(buffer as unknown as BodyInit, {
+    headers: { "Content-Type": "image/webp", "Cache-Control": privateNoStoreCacheControl }
+  });
+}
+
 function defaultMetadata(input: ImportCreateInput): MetadataPayload {
   return {
     version: 3,
@@ -573,18 +580,17 @@ export async function previewImportSession(id: string, variant: "thumb" | "full"
   if (!session || !["ready", "committing"].includes(session.status)) throw new ApiError(404, "not_found", "准备好的图片不存在");
   const payload = session.prepared_payload as PreparedPayload;
   if (variant === "thumb") {
-    const buffer = await readStorageBuffer("_uploads", payload.prepared_thumbnail_key, session.storage_slug);
-    return new Response(buffer as unknown as BodyInit, {
-      headers: { "Content-Type": "image/webp", "Cache-Control": privateNoStoreCacheControl }
-    });
+    return preparedThumbnailResponse(payload, session.storage_slug);
   }
   if (session.mode === "proxy") {
-    return proxyExternalImage(session.source_url, payload.ext || "jpg", false, { "Cache-Control": privateNoStoreCacheControl }, undefined, async () => {
-      const buffer = await readStorageBuffer("_uploads", payload.prepared_thumbnail_key, session.storage_slug);
-      return new Response(buffer as unknown as BodyInit, {
-        headers: { "Content-Type": "image/webp", "Cache-Control": privateNoStoreCacheControl }
-      });
-    });
+    return proxyExternalImage(
+      session.source_url,
+      payload.ext || "jpg",
+      false,
+      { "Cache-Control": privateNoStoreCacheControl },
+      undefined,
+      () => preparedThumbnailResponse(payload, session.storage_slug)
+    );
   }
   const buffer = await readStorageBuffer("_uploads", stagingImageKey(id), session.storage_slug);
   return new Response(buffer as unknown as BodyInit, {

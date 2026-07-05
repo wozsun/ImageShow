@@ -44,6 +44,11 @@ export type PublicImageDetailRecord = Pick<
   "id" | "device" | "brightness" | "theme" | "ext" | "object_key" | "storage_slug" | "is_link" | "author" | "description" | "source" | "original"
 >;
 
+type PublicImageUrlRecord = Pick<
+  ImageRecord,
+  "id" | "device" | "brightness" | "theme" | "ext" | "object_key" | "storage_slug" | "is_link"
+>;
+
 export type ImportSessionRecord = {
   id: string;
   mode: "upload" | "download" | "proxy";
@@ -64,10 +69,16 @@ export function importSessionResponse(row: ImportSessionRecord) {
   };
 }
 
-export async function publicImage(row: ImageRecord, tags?: string[]) {
-  const slug = row.storage_slug ?? "local";
+async function publicUrlsForRow(row: PublicImageUrlRecord) {
+  const storageSlug = row.storage_slug ?? "local";
   const isLink = Boolean(row.is_link);
-  const urls = await publicImageUrls(row.object_key, slug, isLink, isLink ? { id: row.id, device: row.device, brightness: row.brightness, theme: row.theme, ext: row.ext } : undefined);
+  const linkParams = isLink ? { id: row.id, device: row.device, brightness: row.brightness, theme: row.theme, ext: row.ext } : undefined;
+  const urls = await publicImageUrls(row.object_key, storageSlug, isLink, linkParams);
+  return { storageSlug, isLink, urls };
+}
+
+export async function publicImage(row: ImageRecord, tags?: string[]) {
+  const { storageSlug, isLink, urls } = await publicUrlsForRow(row);
   const original = row.original ?? "";
   const hasDistinctOriginal = hasDistinctOriginalUrl(original, isLink ? row.object_key : urls.object_url);
 
@@ -84,7 +95,7 @@ export async function publicImage(row: ImageRecord, tags?: string[]) {
     ext: row.ext,
     md5: row.md5 ?? "",
     object_key: row.object_key,
-    storage_slug: slug,
+    storage_slug: storageSlug,
     is_link: isLink,
     title: row.title ?? "",
     description: row.description ?? "",
@@ -106,9 +117,7 @@ export async function publicImages(rows: ImageRecord[]) {
 }
 
 export async function publicImageDetail(row: PublicImageDetailRecord) {
-  const slug = row.storage_slug ?? "local";
-  const isLink = Boolean(row.is_link);
-  const urls = await publicImageUrls(row.object_key, slug, isLink, isLink ? { id: row.id, device: row.device, brightness: row.brightness, theme: row.theme, ext: row.ext } : undefined);
+  const { isLink, urls } = await publicUrlsForRow(row);
   const original = row.original ?? "";
   const hasDistinctOriginal = hasDistinctOriginalUrl(original, isLink ? row.object_key : urls.object_url);
 
@@ -125,9 +134,7 @@ export async function publicImageDetail(row: PublicImageDetailRecord) {
 export type PublicImageCard = Awaited<ReturnType<typeof publicImageCard>>;
 
 async function publicImageCard(row: PublicImageCardRecord, tags: string[] = []) {
-  const slug = row.storage_slug ?? "local";
-  const isLink = Boolean(row.is_link);
-  const urls = await publicImageUrls(row.object_key, slug, isLink, isLink ? { id: row.id, device: row.device, brightness: row.brightness, theme: row.theme, ext: row.ext } : undefined);
+  const { urls } = await publicUrlsForRow(row);
   return {
     id: row.id,
     device: row.device,

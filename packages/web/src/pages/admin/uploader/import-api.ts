@@ -60,8 +60,8 @@ export function createImportSession(input: ImageDraft & {
   session_id: string;
   idempotency_key: string;
   storage_slug: string;
-}) {
-  return api<ImportSession>(`${adminApiBasePath}/imports/create`, { method: "POST", body: JSON.stringify(input) });
+}, signal?: AbortSignal) {
+  return api<ImportSession>(`${adminApiBasePath}/imports/create`, { method: "POST", body: JSON.stringify(input), signal });
 }
 
 export function prepareImportSession(session: ImportSession, signal?: AbortSignal) {

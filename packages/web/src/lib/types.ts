@@ -153,7 +153,10 @@ export type ImportJob = {
   fileFingerprint?: string;
   md5?: string;
   url?: string;
-  stagingId?: string;
+  // 当前前端处理尝试，用作服务端会话请求 id 和幂等键；重试时会更新。
+  attemptId: string;
+  // 已成功创建的 import_session id；SSE 状态监听和提交只使用真实会话 id。
+  sessionId?: string;
   originalSize?: number;
   finalSize?: number;
   quality?: number | null;

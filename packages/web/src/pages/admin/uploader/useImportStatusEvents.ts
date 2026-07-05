@@ -17,7 +17,8 @@ function patchFromStatus(job: ImportJob, state: StoredImportStatus): Partial<Imp
   if (state.status === "ready") return { status: "processing", message };
   if (state.status === "committing") return { status: "committing", message };
   if (state.status === "finalized") return { status: "done", message };
-  if (state.status === "failed" || state.status === "missing") return { status: "failed", failureStage: "prepare", message };
+  if (state.status === "missing") return null;
+  if (state.status === "failed") return { status: "failed", failureStage: "prepare", message };
   if (state.status === "cancelled") return { status: "cancelled", message };
   return null;
 }
@@ -28,7 +29,7 @@ function applyStoredImportStatus(
   updateJob: (id: string, patch: Partial<ImportJob>) => void
 ) {
   if (!state.id) return;
-  const job = jobsRef.current.find((item) => item.stagingId === state.id || item.id === state.id);
+  const job = jobsRef.current.find((item) => item.sessionId === state.id);
   if (!job || terminalStatuses.has(job.status)) return;
   const patch = patchFromStatus(job, state);
   if (patch) updateJob(job.id, patch);
@@ -41,8 +42,8 @@ export function useImportStatusEvents(
 ) {
   const idsKey = useMemo(() => {
     return jobs
-      .filter((job) => job.stagingId && !terminalStatuses.has(job.status))
-      .map((job) => job.stagingId!)
+      .filter((job) => job.sessionId && !terminalStatuses.has(job.status))
+      .map((job) => job.sessionId!)
       .sort()
       .join(",");
   }, [jobs]);

@@ -14,8 +14,8 @@ export function useImportCommit(options: {
       try {
         updateJob(job.id, { status: "committing", message: "写入图库" });
         const draft = { ...job.draft, theme: normalizeTheme(job.draft.theme), author: normalizeAuthor(job.draft.author) };
-        if (!job.stagingId) throw new Error("导入会话不存在");
-        const result = await commitStoredImport(job.stagingId, draft);
+        if (!job.sessionId) throw new Error("导入会话不存在");
+        const result = await commitStoredImport(job.sessionId, draft);
         updateJob(job.id, {
           status: "done",
           message: result.status === "duplicate" ? "图片已存在（跳过）" : "已完成",
