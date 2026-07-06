@@ -71,7 +71,7 @@ export default defineConfig({
       {
         text: "使用",
         items: [
-          { text: "存储：本地 / S3", link: "/guide/storage" },
+          { text: "存储：本地 / S3 / WebDAV", link: "/guide/storage" },
           { text: "随机图 API", link: "/guide/random-api" },
           { text: "安全", link: "/guide/security" }
         ]

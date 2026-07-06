@@ -76,7 +76,7 @@ features:
     <div class="docs-workflow-step">
       <span class="docs-step-index">B</span>
       <h3>Redis 只做加速层</h3>
-      <p>随机池、筛选项、读缓存和去重历史可以重建；Redis 异常时读路径回退到 PostgreSQL。</p>
+      <p>随机池、筛选项、读缓存和去重历史可以重建；非随机读路径可按场景回退到 PostgreSQL。</p>
     </div>
     <div class="docs-workflow-step">
       <span class="docs-step-index">C</span>

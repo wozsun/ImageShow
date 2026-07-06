@@ -9,7 +9,7 @@ import { LazyGalleryImage } from "../components/image/LazyGalleryImage.js";
 import { SelectMenu } from "../components/form/SelectMenu.js";
 import { FacetSelector } from "../components/data-display/FacetSelector.js";
 import { eagerThumbnailCount, galleryRenderBatch, gallerySentinelRootMargin, queryKeys } from "../lib/constants.js";
-import { displayNameOrSlug } from "../lib/ui/formatters.js";
+import { displayNameOrSlug, imageDisplayTitle } from "../lib/ui/formatters.js";
 import { masonryColumns, nextRenderBatch, useGalleryColumnCount } from "../lib/gallery/gallery-layout.js";
 import { buildRandomUrl } from "../lib/gallery/random-url.js";
 import { brightnessOptionLabel, deviceOptionLabel, randomModeSelectOptions } from "../lib/ui/select-options.js";
@@ -136,8 +136,8 @@ export function GalleryPage({ fixedTheme = "", standalone = false }: { fixedThem
   const tagNames = useMemo(() => new Map((facets?.tags ?? []).map((option) => [option.slug, displayNameOrSlug(option)])), [facets]);
 
   const eagerIds = useMemo(() => new Set(visibleItems.slice(0, eagerThumbnailCount).map((item) => item.id)), [visibleItems]);
-  const themeLabel = (slug: string) => slug === "none" ? "未设置主题" : themeNames.get(slug) ?? slug;
-  const galleryHoverTitle = (item: GalleryImageCard) => item.title?.trim() || themeLabel(item.theme);
+  const themeLabel = (slug: string) => slug === "none" ? "" : themeNames.get(slug) ?? slug;
+  const galleryHoverTitle = (item: GalleryImageCard) => item.title?.trim() || themeLabel(item.theme) || imageDisplayTitle(item);
   const galleryHoverTags = (item: GalleryImageCard) => item.tags.map((tag) => tagNames.get(tag) ?? tag).join(" · ");
   const loading = imagePages.isLoading || imagePages.isFetchingNextPage;
 

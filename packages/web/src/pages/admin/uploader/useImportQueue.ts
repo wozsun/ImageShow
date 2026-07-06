@@ -45,8 +45,8 @@ function applyDefaultsToJob(job: ImportJob, defaults: CommonAttributes): ImportJ
 function reducer(state: QueueState, action: QueueAction): QueueState {
   switch (action.type) {
     case "append": {
-      const jobs = [...state.jobs, ...action.jobs];
-      return { jobs, page: pageCount(jobs.length, action.pageSize) };
+      const jobs = [...action.jobs, ...state.jobs];
+      return { jobs, page: 1 };
     }
     case "retain-mode":
       return { jobs: state.jobs.filter((job) => action.mode === "file" ? job.kind === "local" : job.kind !== "local"), page: 1 };

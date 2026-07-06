@@ -110,6 +110,8 @@ ImageShow 的配置按持久化位置分为三类：数据库、`/app/data/confi
 | `normalize.quality_step` | `NORMALIZE_QUALITY_STEP` |
 | `thumbnail.long_edge` | `THUMBNAIL_LONG_EDGE` |
 | `thumbnail.quality` | `THUMBNAIL_QUALITY` |
+| `upload.max_file_size_mb` | `UPLOAD_MAX_FILE_SIZE_MB` |
+| `upload.max_long_edge` | `UPLOAD_MAX_LONG_EDGE` |
 | `upload.concurrency` | `UPLOAD_CONCURRENCY` |
 | `upload.global_concurrency` | `UPLOAD_GLOBAL_CONCURRENCY` |
 | `link_image.concurrency` | `LINK_IMAGE_CONCURRENCY` |

@@ -1,6 +1,6 @@
 # 数据库结构
 
-PostgreSQL，单一迁移文件 `packages/server/migrations/0001_initial.sql`，共 9 张业务表（另有迁移记录表 `schema_migrations`）。PostgreSQL 是唯一真相源；Redis 随机池、列表缓存和判重缓存都可重建。
+PostgreSQL，共 9 张业务表（另有迁移记录表 `schema_migrations`）。`packages/server/migrations/0001_initial.sql` 是全新安装基线；线上已有数据后，schema 变更应新增按文件名顺序执行的前向迁移（例如 `0002_xxx.sql`），不要直接改写已发布迁移。PostgreSQL 是唯一真相源；Redis 随机池、列表缓存和判重缓存都可重建。
 
 ## metadata —— 图片主表
 

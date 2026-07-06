@@ -136,7 +136,7 @@ GET /random?d=&b=&t=&tag=&a=&m=
 ## 画廊浏览
 
 ```text
-GET /api/images?d=&b=&t=&tag=&cursor=&limit=&shuffle=
+GET /api/images?d=&b=&t=&tag=&a=&cursor=&limit=&shuffle=
 GET /api/images/:id
 ```
 

@@ -21,7 +21,7 @@ text{font-family:ui-sans-serif,system-ui,'Segoe UI',Roboto,'PingFang SC','Micros
 <line x1="133" y1="118" x2="133" y2="154" class="arr" marker-end="url(#ar)"/>
 <line x1="340" y1="118" x2="340" y2="154" class="arr" marker-end="url(#ar)"/>
 <line x1="547" y1="118" x2="547" y2="154" class="arr" marker-end="url(#ar)"/>
-<rect x="40" y="156" width="600" height="56" rx="6" class="edge"/><text x="340" y="180" font-size="14" font-weight="500" class="t1" text-anchor="middle">反向代理 · 按 Host 分流</text><text x="340" y="200" font-size="12" class="t2" text-anchor="middle">主站 · random · static · docs · &lt;theme&gt;</text>
+<rect x="40" y="156" width="600" height="56" rx="6" class="edge"/><text x="340" y="180" font-size="14" font-weight="500" class="t1" text-anchor="middle">反向代理 · 按 Host 分流</text><text x="340" y="200" font-size="12" class="t2" text-anchor="middle">主站 · random · static · link · docs · &lt;theme&gt;</text>
 <line x1="340" y1="212" x2="340" y2="246" class="arr" marker-end="url(#ar)"/>
 <rect x="40" y="248" width="600" height="150" rx="8" fill="none" stroke="var(--cont)" stroke-dasharray="5 4"/><text x="54" y="268" font-size="14" font-weight="500" class="t1">Hono 应用 · Node 服务</text>
 <rect x="60" y="278" width="560" height="30" rx="5" class="app"/><text x="340" y="297" font-size="14" class="t1" text-anchor="middle">中间件：安全响应头 · Host 分流 · 鉴权 / CSRF</text>
@@ -32,7 +32,7 @@ text{font-family:ui-sans-serif,system-ui,'Segoe UI',Roboto,'PingFang SC','Micros
 <line x1="133" y1="398" x2="133" y2="432" class="arr" marker-end="url(#ar)"/>
 <line x1="340" y1="398" x2="340" y2="432" class="arr" marker-end="url(#ar)"/>
 <line x1="547" y1="398" x2="547" y2="432" class="arr" marker-end="url(#ar)"/>
-<rect x="40" y="434" width="186" height="64" rx="6" class="data"/><text x="133" y="462" font-size="14" font-weight="500" class="t1" text-anchor="middle">PostgreSQL</text><text x="133" y="482" font-size="12" class="t2" text-anchor="middle">真相源 · 11 张表</text>
+<rect x="40" y="434" width="186" height="64" rx="6" class="data"/><text x="133" y="462" font-size="14" font-weight="500" class="t1" text-anchor="middle">PostgreSQL</text><text x="133" y="482" font-size="12" class="t2" text-anchor="middle">真相源 · 9 张业务表</text>
 <rect x="247" y="434" width="186" height="64" rx="6" class="data"/><text x="340" y="462" font-size="14" font-weight="500" class="t1" text-anchor="middle">Redis</text><text x="340" y="482" font-size="12" class="t2" text-anchor="middle">缓存 · 随机池 · 去重</text>
 <rect x="454" y="434" width="186" height="64" rx="6" class="data"/><text x="547" y="462" font-size="14" font-weight="500" class="t1" text-anchor="middle">存储后端</text><text x="547" y="482" font-size="12" class="t2" text-anchor="middle">Local · S3 · WebDAV</text>
 <line x1="133" y1="498" x2="133" y2="532" class="arr" marker-end="url(#ar)"/>

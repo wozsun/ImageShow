@@ -27,7 +27,7 @@ ImageShow 是一个 npm workspaces 单仓多包项目：自托管图库 + 随机
 
 - `packages/shared`：前后端共享的配置常量（`appConfig`）与类型、`reservedSubdomains`、`adminApiBasePath` 等工具。
 - `packages/server`：业务全部在此，按领域分层 —— `core/`（DB / Redis / HTTP / 校验）、`config/`、`storage/`、`images/`、`random/`、`tags/`、`themes/`、`authors/`、`users/`、`checks/`、`jobs/`、`routes/`。`routes/` 只是 HTTP 薄层，真正逻辑在各领域模块。
-- `packages/web`：React SPA，含公共页（首页 / 画廊）与后台（图片 / 上传 / 标签 / 主题 / 作者 / 用户 / 设置 / 检查）。
+- `packages/web`：React SPA，含公共页（首页 / 画廊）与后台（图片 / 上传 / 标签 / 主题 / 作者 / 用户 / 设置 / 存储 / 检查 / 日志）。
 - `packages/docs`：本文档站。
 
 逐文件职责见[项目结构](./project-structure)。

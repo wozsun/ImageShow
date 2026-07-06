@@ -6,6 +6,7 @@
 
 ```bash
 docker run --rm -p 5518:5518 \
+  -e SITE_DOMAIN=img.example.com -e TZ=UTC \
   -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD='replace-this-password' \
   -e ADMIN_FORCE_SYNC=false \
   -e DATABASE_HOST=db.example.internal -e DATABASE_NAME=imageshow \
@@ -24,7 +25,7 @@ docker run --rm -p 5518:5518 \
 ```nginx
 server {
   listen 443 ssl;
-  server_name example.com *.example.com;   # 证书需覆盖通配子域名
+  server_name img.example.com *.img.example.com;   # 证书需覆盖通配子域名
 
   location / {
     proxy_pass http://127.0.0.1:5518;

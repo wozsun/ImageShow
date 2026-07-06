@@ -20,7 +20,7 @@ ImageShow/
 
 | 文件 | 职责 |
 | --- | --- |
-| `app-config.ts` | 唯一的共享配置常量与纯类型源：`appConfig` 默认值、分页 / 缩略图 / 随机去重 / 链接导入超时 / 操作日志重试等常量；导出 `Device` / `Brightness` / `ImageExt` / `RuntimeConfig` / `AdminSettings` / `SiteSettings`、`reservedSubdomains`、`adminApiBasePath` 等前后端共用项。 |
+| `app-config.ts` | 唯一的共享配置常量与纯类型源：`appConfig` 默认值、分页 / 缩略图 / 随机去重 / 链接导入超时 / 后台任务重试等常量；导出 `Device` / `Brightness` / `ImageExt` / `RuntimeConfig` / `AdminSettings` / `SiteSettings`、`reservedSubdomains`、`adminApiBasePath` 等前后端共用项。 |
 
 ## packages/server —— 后端
 
@@ -30,6 +30,7 @@ ImageShow/
 | --- | --- |
 | `index.ts` | 应用装配：挂载安全响应头、多主机路由中间件、注册所有路由；启动时依次 `ensureStorage → pingDb → runMigrations → initializeAdmin → pingRedis → startWorker`，并处理 SIGTERM 优雅退出。 |
 | `config/env.ts` | 三级运行时配置：环境变量只在首次启动时播种 `config.json`，之后该文件权威、原子写入；DB / Redis / 端口等连接级值固化到 `env`。含热重载。 |
+| `config/schema.ts` | 运行时配置 zod schema 与边界值：站点、上传、链接导入、标准化、缩略图、安全、验证码和日志等设置校验。 |
 | `config/settings.ts` | 命名存储后端注册表（`storage_backend` 表，含密钥，进程内 TTL 备忘）：`listStorageBackends` / `getStorageBackend(slug)` / `getDefaultStorageBackend` / CRUD / `assertStorageWritable` / `assertStorageUploadable`；定义 `StorageConfig`（`{slug,type,s3,webdav}`）、`missingS3Fields()`、对外脱敏的列表；文件型运行时设置经 `getAppSettings()` / `getSettingsForAdmin()` 读取；存储后端或运行时配置变更会清理 driver/client 缓存。 |
 
 ### core/ —— 基础设施
@@ -40,6 +41,9 @@ ImageShow/
 | `core/redis-client.ts` | Redis 连接实例与 `pingRedis()`；业务缓存逻辑按领域拆到 `random/`、`images/`、`vocab/`。 |
 | `core/redis-inspect.ts` | 后台“检查”页用的 Redis 健康 / 键值巡检。 |
 | `core/http.ts` | HTTP 工具：`ok()` / `fail()` / `routeError()`、`ApiError`、`requireAuth` / `requireCsrf` / `requireSuper`、会话 cookie、登录限流、`clientIp()`。 |
+| `core/audit-log.ts` | 后台非 GET 写操作审计：记录操作者、角色、路径、状态、耗时、IP，失败时附带响应 code/error。 |
+| `core/coalesce.ts` | 进程内 in-flight 合并工具，用于公共列表 / 详情 / facets / 概览 / MD5 等缓存 miss 后避免重复查询。 |
+| `core/concurrency.ts` | 简单有界并发遍历工具，用于存储检查 / 清理等批量操作。 |
 | `core/validation.ts` | 请求体 / 查询参数的 zod schema：`listQuery`（含 `shuffle`）、`metadataInput`、导入 / 批量操作输入等。 |
 | `core/external-image-fetch.ts` | 外部图片 URL 安全边界：限制 HTTPS、要求域名、验证证书、阻断内网 / metadata 地址、逐跳重定向校验、超时请求与图片内容嗅探，并对外统一安全拒绝提示，供链接导入和 link/original 代理复用。 |
 | `core/term-resolve.ts` · `core/selectors.ts` | 共享解析：`resolveTermMap` / `resolveSlugs`（主题 / 标签 / 作者「别名·显示名 → slug」的统一规则），`splitSelectors`（逗号分隔、`!` 排除选择子拆分，随机 API 与画廊筛选共用）。 |
@@ -69,10 +73,11 @@ ImageShow/
 | `images/query.ts` | 画廊列表、公开详情与后台概览：公共列表使用轻量卡片投影、游标分页、Redis 列表缓存和 `withShuffle()`（出口处洗牌，不污染共享缓存）；公开详情按 id 缓存；后台概览使用短 TTL 缓存；公共列表、公开详情、facets、后台概览和 MD5 判重在 Redis miss 后做同进程 in-flight 合并。 |
 | `images/image-cache.ts` | 图片读缓存：公共列表 generation、公共列表 / 公开详情缓存、后台概览缓存、原图直连探测缓存、对象 / 缩略图反查、MD5 判重缓存、画廊 facets 缓存与统一失效。 |
 | `images/serving.ts` | 存储对象、缩略图、link 与后台字节出口；集中处理外部回源代理、原图直连探测及其短 TTL 缓存、缓存策略和缩略图缺失时的乐观读取 / 补建。 |
+| `images/original-link.ts` | 原图入口判断工具：计算展示 URL、规范化比较 URL，并只在 `original` 为 HTTPS 且不同于展示图时开放原图按钮 / 跳转。 |
 | `images/presenter.ts` | `publicImage()` / `publicImages()` 把 DB 行变成后台可复用的完整图片视图、`publicImageDetail()`（公开详情补充字段白名单）、`publicImageCard()`（公共列表卡片出口白名单）、`adminImageView()`（后台投影：去 `ext`、已删除图改指鉴权字节端点）、列表缓存键、`cacheImageLookups()`（link 跳过）。 |
 | `images/processing.ts` | sharp 封装：图片格式 / 尺寸探测、缩略图、`transcodeStoredImage()`。 |
 | `images/classification.ts` | 设备 / 明暗三态分类工具：`auto` 解析、按宽高落设备、导入与编辑共用的最终分类收敛。 |
-| `images/brightness.ts` | 明暗识别 `detectBrightness()`：在 CIELAB L\* 直方图上算感知亮度评分判 dark/light。评分源自 `scripts/classify.py`，按本程序的标注样本重标定（去掉人工复核用的救回规则，准确率 95.3%→97.0%）。 |
+| `images/brightness.ts` | 明暗识别 `detectBrightness()`：缩小图片后用 CIELAB L\* 直方图计算平均值、分位数、亮暗像素比例，并按运行时常量判定 `dark` / `light`。 |
 | `images/imports/` | 统一 `import_session` 生命周期：本地上传、链接下载保存、代理链接的创建、接收文件、URL 抓取、prepare、preview、status/SSE、commit/cancel 与过期清理。 |
 | `images/batch.ts` | 批量软删除 `batchDeleteImages()`：标记 `status='deleted'` 并从 Redis 随机池移除（不动文件）。 |
 | `images/cursor.ts` | 游标编解码（稳定分页）。 |
@@ -99,6 +104,17 @@ ImageShow/
 | `random/dedupe.ts` | 短时不重复：`filterSignature()`、`recentlyServedIds()`、`rememberServedId()`（Redis LPUSH + LTRIM + EXPIRE）。 |
 | `random/query.ts` | 随机请求参数校验、主题 / 标签 / 作者选择子解析、`img-count` 统计数据。 |
 
+### checks/ —— 后台检查与维护
+
+| 文件 | 职责 |
+| --- | --- |
+| `checks/service.ts` | 检查领域出口：聚合数据库、随机池、存储后端和文件数量，重导出各检查 / 清理 / 迁移能力。 |
+| `checks/database-check.ts` | 数据库与随机池一致性检查、回收站候选抽样。 |
+| `checks/storage-check.ts` | 存储一致性检查：缺失原图 / 缩略图、孤儿对象、staging 文件和不可用后端。 |
+| `checks/storage-cleanup.ts` | 存储清理：删除孤儿 media / thumbs / link / _uploads 对象并回收本地空目录。 |
+| `checks/storage-common.ts` | 存储检查共享类型与 expected thumbs/link 缩略图集合计算。 |
+| `checks/storage-migrate.ts` | 后端迁移与旧对象路径迁移入口，完成后重建随机池并失效图片读缓存。 |
+
 ### jobs/ —— 后台 Worker
 
 | 文件 | 职责 |
@@ -111,9 +127,9 @@ ImageShow/
 | 文件 | 端点 |
 | --- | --- |
 | `routes/public.ts` | `GET /api/images`、`/api/images/:id`、`/api/images/:id/original`、`/api/site-config`、`/api/gallery-facets`、`/media/*`、`/thumbs/*`、`/original/:id` |
-| `routes/random.ts` | `GET /random`、`GET /img-count`、`<theme>.<域名>/random` |
-| `routes/auth.ts` | 登录 / 登出 / `/me`（CSRF token） |
-| `routes/admin-images.ts` | 后台图片增删改查、批量、迁移 |
+| `routes/random.ts` | `GET /random`、`GET /img-count`、`random.<域名>/`、`<theme>.<域名>/random` |
+| `routes/auth.ts` | 登录 / 登出 / `/api/admin/auth/me`（登录态、CSRF token、验证码开关、登录背景） |
+| `routes/admin-images.ts` | 后台图片增删改查、批量、迁移、回收站原图、登录态轻量 `admin-info` |
 | `routes/imports.ts` | 统一 `/api/admin/imports/*`：create、PUT file、prepare、preview、status、SSE events、commit、cancel |
 | `routes/admin-tags.ts` · `admin-themes.ts` · `admin-authors.ts` · `admin-users.ts` | 标签 / 主题 / 作者 / 用户管理 |
 | `routes/settings.ts` | 读取 / 保存设置、`POST /storage/test` 存储自检 |
@@ -130,10 +146,11 @@ ImageShow/
 | --- | --- |
 | 入口 / 路由 | `main.tsx`、`AppRoutes.tsx` |
 | 公共页 | `pages/HomePage.tsx`（首页随机预览）、`pages/GalleryPage.tsx`（画廊，含设备 / 亮度 / 主题 / 标签 / 作者 / 排序筛选） |
-| 后台 | `pages/AdminShell.tsx` 及 `admin/` 下 Overview / ImageAdmin / Uploader（含链接导入模式）/ EntityAdmin（主题、标签、作者共用）/ UserAdmin / SettingsPage / AccountSettings（自助改密，全角色）/ CheckPage / LogPage / ImageModals |
+| 后台 | `pages/AdminShell.tsx` 及 `admin/` 下 Overview / ImageAdmin / Uploader（含链接导入模式）/ EntityAdmin（主题、标签、作者共用）/ SettingsPage / StorageSettings / UserAdmin / AccountSettings（自助改密，全角色）/ CheckPage / LogPage / ImageModals |
 | 组件 | `components/actions` / `data-display` / `feedback` / `form` / `icon` / `image` / `layout` / `navigation` 下的跨页面 UI 组件。 |
 | hooks | `hooks/` 下存放跨页面复用的交互 Hook，例如锚定菜单、动画关闭和滚动锁定。 |
 | lib | 无界面代码，按 `api` / `auth` / `gallery` / `ui` / `upload` 分类；页面专属状态机留在对应页面目录。 |
+| styles | `styles/` 下存放全局样式入口，按 base / home / gallery / admin / responsive 拆分。 |
 | 导入队列 | `pages/admin/uploader/`（统一 ImportJob 队列；最终 MD5 只由服务端 prepared 阶段计算） |
 
 ## packages/docs —— 文档站
