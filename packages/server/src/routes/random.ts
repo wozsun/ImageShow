@@ -1,10 +1,10 @@
 import type { Context, Hono } from "hono";
-import { getFolderMap } from "../random/random-cache.js";
-import { proxyExternalImage } from "../images/serving.js";
-import { contentType, publicImageUrls, readObject } from "../storage/storage.js";
-import { clientIp, noStoreCacheControl, publicMetadataCacheControl, routeError } from "../core/http.js";
-import { pickRandom } from "../random/service.js";
-import { buildRandomImageCountData } from "../random/query.js";
+import { getRandomCategoryCounts } from "../random/random-cache.ts";
+import { proxyExternalImage } from "../images/serving.ts";
+import { contentType, publicImageUrls, readObject } from "../storage/storage.ts";
+import { clientIp, noStoreCacheControl, publicMetadataCacheControl, routeError } from "../core/http.ts";
+import { pickRandom } from "../random/service.ts";
+import { buildRandomImageCountData } from "../random/query.ts";
 
 export function registerRandomRoutes(app: Hono) {
   app.all("/random", handleRandomImage);
@@ -51,5 +51,5 @@ async function handleRandomImageCount(c: Context) {
   if (c.req.method !== "GET") return routeError({ status: 405, message: "Method Not Allowed" });
   if (new URL(c.req.url).search) return routeError({ status: 403, message: "Forbidden: Query parameters are not allowed on this route" });
   c.header("Cache-Control", publicMetadataCacheControl);
-  return c.json(buildRandomImageCountData(await getFolderMap()));
+  return c.json(buildRandomImageCountData(await getRandomCategoryCounts()));
 }

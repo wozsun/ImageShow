@@ -87,7 +87,7 @@ export function AccountSettings() {
         {mismatch && <p className="error">两次输入的新密码不一致。</p>}
         {error && <p className="error">{error}</p>}
         {done && <p className="form-success"><Icon name="checkbox-circle-line" />密码已更新。</p>}
-        {isSuper && <p className="muted account-note">超级管理员密码可通过修改环境变量并重启容器来强制覆盖。</p>}
+        {isSuper && <p className="muted account-note">无法登录时，可在容器终端使用 imageshow reset-password 恢复超级管理员密码。</p>}
         <button className="button" type="submit" disabled={!canSubmit}>
           <Icon name="key-2-line" />{busy ? "保存中…" : "修改密码"}
         </button>

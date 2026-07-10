@@ -1,7 +1,7 @@
 import type { Context } from "hono";
-import { getRuntimeConfig } from "../config/env.js";
-import { robotsCacheControl, routeError } from "../core/http.js";
-import { specialHost, themeFromHost } from "../themes/host.js";
+import { getRuntimeConfig } from "../config/runtime-config-store.ts";
+import { robotsCacheControl, routeError } from "../core/http.ts";
+import { specialHost, themeFromHost } from "../themes/host.ts";
 
 export function serveRobotsTxt(c: Context) {
 

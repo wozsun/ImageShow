@@ -1,4 +1,4 @@
-FROM node:24 AS deps
+FROM node:26.5.0 AS deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
 COPY packages/shared/package.json packages/shared/package.json
@@ -12,14 +12,14 @@ WORKDIR /app
 COPY . .
 RUN npm run check && npm run build
 
-FROM node:24 AS prod-deps
+FROM node:26.5.0 AS prod-deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
 COPY packages/shared/package.json packages/shared/package.json
 COPY packages/server/package.json packages/server/package.json
 RUN npm ci --omit=dev --workspace @imageshow/shared --workspace @imageshow/server --include-workspace-root=false
 
-FROM node:24-slim AS runtime
+FROM node:26.5.0-slim AS runtime
 WORKDIR /app
 ARG PORT=5518
 ENV NODE_ENV=production \
@@ -36,7 +36,9 @@ COPY --chown=node:node --from=build /app/packages/server/package.json ./packages
 COPY --chown=node:node --from=build /app/packages/server/dist ./packages/server/dist
 RUN mkdir -p /app/data/storage /app/data/log && chown -R node:node /app/data
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-RUN sed -i 's/\r$//' /usr/local/bin/docker-entrypoint.sh && chmod +x /usr/local/bin/docker-entrypoint.sh
+COPY scripts/runtime/imageshow /usr/local/bin/imageshow
+RUN sed -i 's/\r$//' /usr/local/bin/docker-entrypoint.sh /usr/local/bin/imageshow \
+    && chmod +x /usr/local/bin/docker-entrypoint.sh /usr/local/bin/imageshow
 EXPOSE ${PORT}
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --start-interval=3s --retries=3 CMD node packages/server/dist/healthcheck-cli.js
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

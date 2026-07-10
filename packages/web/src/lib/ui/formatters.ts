@@ -8,7 +8,7 @@ export function displayNameOrSlug(item: { slug: string; display_name?: string })
   return item.display_name?.trim() || item.slug;
 }
 
-export function formatImageMeta(item: ImageItem) {
+export function formatImageClassification(item: ImageItem) {
   return `${item.theme} · ${item.device}/${item.brightness}`;
 }
 

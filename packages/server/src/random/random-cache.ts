@@ -1,20 +1,24 @@
 import { createHash } from "node:crypto";
 import type { Redis } from "ioredis";
-import { v7 as uuidv7 } from "uuid";
 import type { Brightness, Device } from "@imageshow/shared";
-import { pool } from "../core/db.js";
-import { pingRedis, redis } from "../core/redis-client.js";
+import { pool } from "../core/db.ts";
+import { pingRedis, redis } from "../core/redis-client.ts";
+import { randomUuidV7 } from "../core/uuid.ts";
 
 export const RANDOM_CURRENT_KEY = "imageshow:random:current";
-const RANDOM_VERSION_KEY = "imageshow:random:version";
+const RANDOM_REVISION_KEY = "imageshow:random:version";
 const RANDOM_UPDATE_LOCK_KEY = "imageshow:random:update_lock";
 export const GALLERY_FILTER_OPTIONS_KEY = "imageshow:gallery_filter_options";
 const RANDOM_OLD_GENERATION_TTL_SECONDS = 60 * 60;
 const RANDOM_FILTER_TTL_SECONDS = 90;
 
-export type FolderMap = Record<string, Record<string, Record<string, number>>>;
+export type RandomCategoryCounts = Record<string, Record<string, Record<string, number>>>;
 export type GalleryFilterOptions = { devices: string[]; brightnesses: string[]; themes: string[] };
-export type RandomPoolSnapshot = { generation: string; folderMap: FolderMap; themes: string[] };
+export type RandomPoolSnapshot = {
+  generation: string;
+  categoryCounts: RandomCategoryCounts;
+  themes: string[];
+};
 export type RandomPoolItem = {
   id: string;
   object_key: string;
@@ -88,28 +92,35 @@ function parseRandomItem(raw: string | null): RandomPoolItem | null {
   }
 }
 
-function addToFolderMap(map: FolderMap, item: Pick<RandomPoolItem, "device" | "brightness" | "theme">, delta: number) {
-  map[item.device] ??= {};
-  map[item.device][item.brightness] ??= {};
-  map[item.device][item.brightness][item.theme] = Math.max(0, Number(map[item.device][item.brightness][item.theme] ?? 0) + delta);
-  pruneEmptyMap(map);
+function adjustCategoryCounts(
+  counts: RandomCategoryCounts,
+  item: Pick<RandomPoolItem, "device" | "brightness" | "theme">,
+  delta: number
+) {
+  counts[item.device] ??= {};
+  counts[item.device][item.brightness] ??= {};
+  counts[item.device][item.brightness][item.theme] = Math.max(
+    0,
+    Number(counts[item.device][item.brightness][item.theme] ?? 0) + delta
+  );
+  pruneEmptyCategoryCounts(counts);
 }
 
-function pruneEmptyMap(map: FolderMap) {
-  for (const [device, deviceMap] of Object.entries(map)) {
+function pruneEmptyCategoryCounts(counts: RandomCategoryCounts) {
+  for (const [device, deviceMap] of Object.entries(counts)) {
     for (const [brightness, brightnessMap] of Object.entries(deviceMap)) {
       for (const [theme, count] of Object.entries(brightnessMap)) {
         if (!Number.isFinite(Number(count)) || Number(count) <= 0) delete brightnessMap[theme];
       }
       if (!Object.keys(brightnessMap).length) delete deviceMap[brightness];
     }
-    if (!Object.keys(deviceMap).length) delete map[device];
+    if (!Object.keys(deviceMap).length) delete counts[device];
   }
 }
 
-function filterOptionsFromFolderMap(map: FolderMap): GalleryFilterOptions {
+function filterOptionsFromCategoryCounts(counts: RandomCategoryCounts): GalleryFilterOptions {
   const themes = new Set<string>();
-  for (const device of Object.values(map)) {
+  for (const device of Object.values(counts)) {
     for (const brightness of Object.values(device)) {
       for (const theme of Object.keys(brightness)) themes.add(theme);
     }
@@ -117,21 +128,21 @@ function filterOptionsFromFolderMap(map: FolderMap): GalleryFilterOptions {
   return { devices: ["pc", "mb"], brightnesses: ["light", "dark"], themes: [...themes].sort() };
 }
 
-function countsFromFolderMap(map: FolderMap): Record<string, number> {
-  const counts: Record<string, number> = {};
-  for (const [device, deviceMap] of Object.entries(map)) {
+function redisCountsFromCategoryCounts(categoryCounts: RandomCategoryCounts): Record<string, number> {
+  const redisCounts: Record<string, number> = {};
+  for (const [device, deviceMap] of Object.entries(categoryCounts)) {
     for (const [brightness, brightnessMap] of Object.entries(deviceMap)) {
       let axisCount = 0;
       for (const [theme, rawCount] of Object.entries(brightnessMap)) {
         const count = Number(rawCount);
         if (!Number.isFinite(count) || count <= 0) continue;
         axisCount += count;
-        counts[`cat:${device}:${brightness}:${theme}`] = count;
+        redisCounts[`cat:${device}:${brightness}:${theme}`] = count;
       }
-      if (axisCount > 0) counts[`axis:${device}:${brightness}`] = axisCount;
+      if (axisCount > 0) redisCounts[`axis:${device}:${brightness}`] = axisCount;
     }
   }
-  return counts;
+  return redisCounts;
 }
 
 async function readyRandomItems(ids?: string[]): Promise<RandomPoolItem[]> {
@@ -156,7 +167,7 @@ async function readyRandomItems(ids?: string[]): Promise<RandomPoolItem[]> {
     device: row.device,
     brightness: row.brightness,
     theme: row.theme,
-    storage_slug: row.storage_slug ?? "local",
+    storage_slug: row.storage_slug,
     is_link: Boolean(row.is_link),
     author: row.author ?? "",
     tags: row.tags ?? []
@@ -206,13 +217,16 @@ function queuePoolMembership(
 function queueSnapshot(
   pipeline: ReturnType<Redis["pipeline"]>,
   generation: string,
-  folderMap: FolderMap
+  categoryCounts: RandomCategoryCounts
 ) {
-  const filterOptions = filterOptionsFromFolderMap(folderMap);
-  const counts = countsFromFolderMap(folderMap);
-  pipeline.set(randomSnapshotKey(generation), JSON.stringify({ folderMap, themes: filterOptions.themes }));
+  const filterOptions = filterOptionsFromCategoryCounts(categoryCounts);
+  const redisCounts = redisCountsFromCategoryCounts(categoryCounts);
+  pipeline.set(
+    randomSnapshotKey(generation),
+    JSON.stringify({ categoryCounts, themes: filterOptions.themes })
+  );
   pipeline.del(randomCountsKey(generation));
-  const countEntries = Object.entries(counts).flatMap(([key, value]) => [key, String(value)]);
+  const countEntries = Object.entries(redisCounts).flatMap(([key, value]) => [key, String(value)]);
   if (countEntries.length) pipeline.hset(randomCountsKey(generation), ...countEntries);
   pipeline.del(randomThemesKey(generation));
   if (filterOptions.themes.length) pipeline.sadd(randomThemesKey(generation), ...filterOptions.themes);
@@ -236,29 +250,29 @@ async function expireOldGeneration(generation: string | null) {
 export async function rebuildRandomPool(): Promise<RandomPoolSnapshot> {
   await pingRedis();
   const previousGeneration = await redis.get(RANDOM_CURRENT_KEY).catch(() => null);
-  const generation = uuidv7();
+  const generation = randomUuidV7();
   const items = await readyRandomItems();
-  const folderMap: FolderMap = {};
+  const categoryCounts: RandomCategoryCounts = {};
   const keys = new Set<string>();
   registerRandomKeys(generation, keys);
   const pipeline = redis.pipeline();
   if (items.length) {
     const itemValues: Record<string, string> = {};
     for (const item of items) {
-      addToFolderMap(folderMap, item, 1);
+      adjustCategoryCounts(categoryCounts, item, 1);
       itemValues[item.id] = JSON.stringify(item);
       queuePoolMembership(pipeline, generation, item, true, keys);
     }
     pipeline.hset(randomItemKey(generation), ...Object.entries(itemValues).flatMap(([key, value]) => [key, value]));
   }
-  queueSnapshot(pipeline, generation, folderMap);
+  queueSnapshot(pipeline, generation, categoryCounts);
   pipeline.sadd(randomManifestKey(generation), ...keys);
   pipeline.set(RANDOM_CURRENT_KEY, generation);
-  pipeline.incr(RANDOM_VERSION_KEY);
+  pipeline.incr(RANDOM_REVISION_KEY);
   await pipeline.exec();
   await expireOldGeneration(previousGeneration);
-  const themes = filterOptionsFromFolderMap(folderMap).themes;
-  return { generation, folderMap, themes };
+  const themes = filterOptionsFromCategoryCounts(categoryCounts).themes;
+  return { generation, categoryCounts, themes };
 }
 
 async function scheduleRandomRebuild() {
@@ -269,12 +283,12 @@ async function scheduleRandomRebuild() {
        SELECT 1 FROM background_job
        WHERE type='cache.rebuild' AND status IN ('pending', 'running')
      )`,
-    [uuidv7()]
+    [randomUuidV7()]
   ).catch(() => undefined);
 }
 
 async function acquireRandomUpdateLock() {
-  const token = uuidv7();
+  const token = randomUuidV7();
   const locked = await redis.set(RANDOM_UPDATE_LOCK_KEY, token, "PX", 10_000, "NX");
   return locked ? token : "";
 }
@@ -319,8 +333,14 @@ export async function syncRandomImages(ids: string[]) {
         await rebuildRandomPool();
         return;
       }
-      const snapshot = JSON.parse(snapshotRaw) as { folderMap: FolderMap };
-      const folderMap = snapshot.folderMap ?? {};
+      const snapshot = JSON.parse(snapshotRaw) as {
+        categoryCounts?: RandomCategoryCounts;
+      };
+      if (!snapshot.categoryCounts) {
+        await rebuildRandomPool();
+        return;
+      }
+      const categoryCounts = snapshot.categoryCounts;
       const currentById = new Map(currentItems.map((item) => [item.id, item]));
       const pipeline = redis.pipeline();
       const touchedKeys = new Set<string>();
@@ -330,19 +350,19 @@ export async function syncRandomImages(ids: string[]) {
         const currentItem = currentById.get(id);
         if (oldItem) {
           queuePoolMembership(pipeline, generation, oldItem, false, touchedKeys);
-          addToFolderMap(folderMap, oldItem, -1);
+          adjustCategoryCounts(categoryCounts, oldItem, -1);
         }
         if (currentItem) {
           pipeline.hset(randomItemKey(generation), currentItem.id, JSON.stringify(currentItem));
           queuePoolMembership(pipeline, generation, currentItem, true, touchedKeys);
-          addToFolderMap(folderMap, currentItem, 1);
+          adjustCategoryCounts(categoryCounts, currentItem, 1);
         } else {
           pipeline.hdel(randomItemKey(generation), id);
         }
       }
-      queueSnapshot(pipeline, generation, folderMap);
+      queueSnapshot(pipeline, generation, categoryCounts);
       if (touchedKeys.size) pipeline.sadd(randomManifestKey(generation), ...touchedKeys);
-      pipeline.incr(RANDOM_VERSION_KEY);
+      pipeline.incr(RANDOM_REVISION_KEY);
       await pipeline.exec();
     } finally {
       await releaseRandomUpdateLock(token);
@@ -361,15 +381,25 @@ export async function getRandomPoolSnapshot(): Promise<RandomPoolSnapshot> {
     if (!generation) return rebuildRandomPool();
     const raw = await redis.get(randomSnapshotKey(generation));
     if (!raw) return rebuildRandomPool();
-    const parsed = JSON.parse(raw) as { folderMap: FolderMap; themes: string[] };
-    return { generation, folderMap: parsed.folderMap, themes: parsed.themes };
+    const parsed = JSON.parse(raw) as {
+      categoryCounts?: RandomCategoryCounts;
+      themes?: string[];
+    };
+    if (!parsed.categoryCounts || !Array.isArray(parsed.themes)) {
+      return rebuildRandomPool();
+    }
+    return {
+      generation,
+      categoryCounts: parsed.categoryCounts,
+      themes: parsed.themes
+    };
   } catch {
     throw redisUnavailable();
   }
 }
 
-export async function getFolderMap() {
-  return (await getRandomPoolSnapshot()).folderMap;
+export async function getRandomCategoryCounts() {
+  return (await getRandomPoolSnapshot()).categoryCounts;
 }
 
 export async function getGalleryFilterOptions() {
@@ -377,7 +407,9 @@ export async function getGalleryFilterOptions() {
     await pingRedis();
     const raw = await redis.get(GALLERY_FILTER_OPTIONS_KEY);
     if (raw) return JSON.parse(raw) as GalleryFilterOptions;
-    return filterOptionsFromFolderMap((await getRandomPoolSnapshot()).folderMap);
+    return filterOptionsFromCategoryCounts(
+      (await getRandomPoolSnapshot()).categoryCounts
+    );
   } catch {
     const result = await pool.query(
       "SELECT DISTINCT theme FROM metadata WHERE status='ready' ORDER BY theme"
@@ -411,8 +443,8 @@ export async function buildRandomFilterSet(input: {
   authorExclude: string[];
 }): Promise<{ key: string; count: number }> {
   await pingRedis();
-  const version = await redis.get(RANDOM_VERSION_KEY).catch(() => "0") ?? "0";
-  const signature = `${input.signature}|v=${version}`;
+  const revision = await redis.get(RANDOM_REVISION_KEY).catch(() => "0") ?? "0";
+  const signature = `${input.signature}|r=${revision}`;
   const finalKey = randomFilterKey(input.generation, signature, "final");
   if (await redis.exists(finalKey)) {
     const count = await redis.scard(finalKey);

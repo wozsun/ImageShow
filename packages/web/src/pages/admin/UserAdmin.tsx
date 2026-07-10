@@ -6,17 +6,18 @@ import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
 import { ConfirmDialog } from "../../components/feedback/ConfirmDialog.js";
 import { useAnimatedClose } from "../../hooks/useAnimatedClose.js";
 import { useBodyScrollLock } from "../../hooks/useBodyScrollLock.js";
-import { adminApiBasePath, queryKeys, slugCharset, slugFormatHint } from "../../lib/constants.js";
+import { adminApiBasePath, queryKeys, slugFormatHint, slugPattern } from "../../lib/constants.js";
 import { errorMessage } from "../../lib/ui/formatters.js";
 import { PasswordInput } from "../../components/form/PasswordInput.js";
 import { SlugChip } from "../../components/data-display/SlugChip.js";
 import { PageToast } from "../../components/feedback/PageToast.js";
 import { generateAdminPassword, isValidAdminPassword, passwordPolicyHint } from "../../lib/auth/password.js";
 import type { AdminUser } from "../../lib/types.js";
+import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
 
 export function UserAdmin() {
   const client = useQueryClient();
-  const { data, isFetching } = useQuery<{ items: AdminUser[] }>({ queryKey: queryKeys.users, queryFn: () => api(`${adminApiBasePath}/users`) });
+  const { data, error: listError, isError: listFailed, isFetching, refetch } = useQuery<{ items: AdminUser[] }>({ queryKey: queryKeys.users, queryFn: () => api(`${adminApiBasePath}/users`) });
   const users = data?.items ?? [];
   const refresh = () => client.invalidateQueries({ queryKey: queryKeys.users });
   const [username, setUsername] = useState("");
@@ -30,8 +31,8 @@ export function UserAdmin() {
   const showError = (message: string) => setToast({ message, kind: "error" });
   const clearToast = () => setToast((current) => ({ message: "", kind: current.kind }));
 
-  const usernameInvalid = username.length > 0 && !slugCharset.test(username);
-  const usernameValid = username.trim().length > 0 && slugCharset.test(username.trim());
+  const usernameInvalid = username.length > 0 && !slugPattern.test(username);
+  const usernameValid = username.trim().length > 0 && slugPattern.test(username.trim());
   const passwordInvalid = password.length > 0 && !isValidAdminPassword(password);
 
   const create = async (event: FormEvent) => {
@@ -87,8 +88,8 @@ export function UserAdmin() {
           <p>共 {users.length} 个管理员{isFetching ? " · 加载中" : ""} · 在此新增与管理图片管理员</p>
         </div>
       </header>
-      <form className="theme-create-form" onSubmit={create}>
-        <div className="theme-create-field entity-slug-field">
+      <form className="admin-create-form" onSubmit={create}>
+        <div className="admin-create-field entity-slug-field">
           <input
             className="entity-create-slug"
             value={username}
@@ -101,7 +102,7 @@ export function UserAdmin() {
           />
           {usernameInvalid && <p className="field-error">{slugFormatHint}</p>}
         </div>
-        <div className="theme-create-field user-password-field">
+        <div className="admin-create-field user-password-field">
           <PasswordInput
             value={password}
             onChange={setPassword}
@@ -139,7 +140,8 @@ export function UserAdmin() {
             onDelete={() => setConfirmDelete(user)}
           />
         ))}
-        {!users.length && !isFetching && <p className="muted">还没有管理员</p>}
+        {listFailed && <QueryErrorState error={listError} onRetry={() => void refetch()} />}
+        {!listFailed && !users.length && !isFetching && <p className="muted">还没有管理员</p>}
       </div>
       <OverlayScrollbar targetRef={listRef} />
       {confirmDelete && (

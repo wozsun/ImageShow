@@ -22,7 +22,7 @@ export function FacetSelector({ options, value, onChange, noun, disabled = false
   disabled?: boolean;
   ariaLabel?: string;
 }) {
-  const label0 = ariaLabel ?? noun;
+  const resolvedAriaLabel = ariaLabel ?? noun;
   const parsed = parseValue(value);
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState<FacetMode>(parsed.exclude ? "exclude" : "include");
@@ -53,16 +53,16 @@ export function FacetSelector({ options, value, onChange, noun, disabled = false
     if (parsed.selected.length) setMode(parsed.exclude ? "exclude" : "include");
   }, [parsed.exclude, value]);
 
-  const emit = (selected: string[], nextMode = mode) => {
+  const emitSelection = (selected: string[], nextMode = mode) => {
     onChange(selected.map((slug) => nextMode === "exclude" ? `!${slug}` : slug).join(","));
   };
 
   const menu = open && typeof document !== "undefined" ? createPortal(
     <div
       ref={menuRef}
-      className={`theme-select-menu ${opensUp ? "opens-up" : ""} ${closing ? "is-closing" : ""}`}
+      className={`facet-select-menu ${opensUp ? "opens-up" : ""} ${closing ? "is-closing" : ""}`}
       role="dialog"
-      aria-label={`${label0}筛选`}
+      aria-label={`${resolvedAriaLabel}筛选`}
       aria-hidden={closing}
       inert={closing}
       style={position}
@@ -75,25 +75,25 @@ export function FacetSelector({ options, value, onChange, noun, disabled = false
         onChange={(event) => setQuery(event.target.value)}
         placeholder={`搜索${noun}`}
       />
-      <div className="theme-search-results" aria-label={`待选${noun}`}>
+      <div className="facet-search-results" aria-label={`待选${noun}`}>
         {!normalizedQuery && <span className="muted">输入关键字搜索{noun}</span>}
         {normalizedQuery && results.map((option) => (
           <button
-            className="theme-search-option"
+            className="facet-search-option"
             type="button"
             key={option.slug}
-            onClick={() => emit([...parsed.selected, option.slug])}
+            onClick={() => emitSelection([...parsed.selected, option.slug])}
           >
             <span>{option.slug}</span>
             {option.display_name && option.display_name !== option.slug && (
-              <span className="facet-slug">{option.display_name}</span>
+              <span className="option-display-name">{option.display_name}</span>
             )}
           </button>
         ))}
         {normalizedQuery && !results.length && <span className="muted">没有可添加的{noun}</span>}
       </div>
-      <div className="theme-menu-divider" role="separator" />
-      <div className="theme-selected-list" aria-label={`已选${noun}`}>
+      <div className="facet-menu-divider" role="separator" />
+      <div className="facet-selected-list" aria-label={`已选${noun}`}>
         <strong>已选{noun}</strong>
         <div>
           {parsed.selected.map((slug) => (
@@ -101,7 +101,7 @@ export function FacetSelector({ options, value, onChange, noun, disabled = false
               type="button"
               key={slug}
               title={`移除 ${nameFor(slug)}`}
-              onClick={() => emit(parsed.selected.filter((item) => item !== slug))}
+              onClick={() => emitSelection(parsed.selected.filter((item) => item !== slug))}
             >
               {nameFor(slug)}<span aria-hidden="true">×</span>
             </button>
@@ -109,14 +109,14 @@ export function FacetSelector({ options, value, onChange, noun, disabled = false
           {!parsed.selected.length && <span className="muted">尚未选择，默认使用全部{noun}</span>}
         </div>
       </div>
-      <div className="theme-mode-switch" aria-label={`${noun}筛选方式`}>
+      <div className="facet-mode-switch" aria-label={`${noun}筛选方式`}>
         {(["include", "exclude"] as const).map((nextMode) => (
           <button
             type="button"
             key={nextMode}
             className={mode === nextMode ? "active" : ""}
             aria-pressed={mode === nextMode}
-            onClick={() => { setMode(nextMode); if (parsed.selected.length) emit(parsed.selected, nextMode); }}
+            onClick={() => { setMode(nextMode); if (parsed.selected.length) emitSelection(parsed.selected, nextMode); }}
           >
             {mode === nextMode ? "✓ " : ""}{nextMode === "include" ? "包含" : "排除"}
           </button>
@@ -130,12 +130,12 @@ export function FacetSelector({ options, value, onChange, noun, disabled = false
     ? `${mode === "include" ? "包含" : "排除"} ${parsed.selected.length} 个${noun}`
     : `全部${noun}`;
   return (
-    <div className="select-control theme-select-control">
+    <div className="select-control facet-select-control">
       <button
         ref={triggerRef}
         className={`select-trigger ${open && !closing ? "is-open" : ""}`}
         type="button"
-        aria-label={label0}
+        aria-label={resolvedAriaLabel}
         aria-haspopup="dialog"
         aria-expanded={open && !closing}
         disabled={disabled}

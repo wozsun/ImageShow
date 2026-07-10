@@ -1,7 +1,7 @@
 import { appConfig } from "@imageshow/shared";
-import { pool } from "../core/db.js";
-import { pingRedis, redis } from "../core/redis-client.js";
-import { GALLERY_FACETS_KEY } from "../images/image-cache.js";
+import { pool } from "../core/db.ts";
+import { pingRedis, redis } from "../core/redis-client.ts";
+import { GALLERY_FACETS_KEY } from "../images/image-cache.ts";
 
 const THEME_VOCAB_KEY = "imageshow:theme_vocab";
 const TAG_VOCAB_KEY = "imageshow:tag_vocab";
@@ -24,7 +24,7 @@ async function cachedVocab<T>(key: string, load: () => Promise<T>): Promise<T> {
     const raw = await redis.get(key);
     if (raw) return JSON.parse(raw) as T;
     const rows = await load();
-    await redis.set(key, JSON.stringify(rows), "EX", appConfig.folderMapTtlSeconds);
+    await redis.set(key, JSON.stringify(rows), "EX", appConfig.derivedCacheTtlSeconds);
     return rows;
   } catch {
     return load();

@@ -3,9 +3,9 @@ import type { Hono } from "hono";
 import { createReadStream, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { getRuntimeConfig } from "../config/env.js";
-import { immutableCacheControl, noStoreCacheControl, publicDocsCacheControl, routeError } from "../core/http.js";
-import { specialHost } from "../themes/host.js";
+import { getRuntimeConfig } from "../config/runtime-config-store.ts";
+import { immutableCacheControl, noStoreCacheControl, publicDocsCacheControl, routeError } from "../core/http.ts";
+import { specialHost } from "../themes/host.ts";
 
 const docsDir = join(dirname(fileURLToPath(import.meta.url)), "../docs");
 

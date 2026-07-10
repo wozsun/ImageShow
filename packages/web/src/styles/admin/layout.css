@@ -164,6 +164,19 @@
   .image-admin-head-tools .upload-trigger { flex: 0 0 auto; }
 }
 
+@media (min-width: 761px) and (max-width: 1080px) {
+  .image-admin-head { align-items: flex-start; }
+  .image-admin-head-tools { flex-direction: column; align-items: flex-end; }
+  .image-admin-head-tools .segmented { order: -1; }
+  .image-admin-head-tools .upload-triggers { flex-wrap: nowrap; }
+  .image-admin-head-tools .link-import-split { flex: 0 0 auto; }
+  .image-admin-head-tools .upload-triggers .link-import-main,
+  .image-admin-head-tools .upload-triggers > .upload-trigger {
+    min-width: 0;
+    padding-inline: 8px;
+  }
+}
+
 .overview-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; align-items: start; }
 .overview-grid > div { min-width: 0; }
 .overview-side > .overview-section:first-child { margin-top: 0; }

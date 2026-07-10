@@ -1,18 +1,18 @@
-import { pool } from "../core/db.js";
-import { errorMessage } from "../core/http.js";
-import { getFolderMap } from "../random/random-cache.js";
-import { listStorageKeys } from "../storage/storage.js";
-import { storageBackends } from "./storage-common.js";
+import { pool } from "../core/db.ts";
+import { errorMessage } from "../core/http.ts";
+import { getRandomCategoryCounts } from "../random/random-cache.ts";
+import { listStorageKeys } from "../storage/storage.ts";
+import { storageBackends } from "./storage-common.ts";
 
-export * from "./storage-common.js";
-export * from "./database-check.js";
-export * from "./storage-check.js";
-export * from "./storage-cleanup.js";
-export * from "./storage-migrate.js";
+export * from "./storage-common.ts";
+export * from "./database-check.ts";
+export * from "./storage-check.ts";
+export * from "./storage-cleanup.ts";
+export * from "./storage-migrate.ts";
 
 export async function checkAll() {
   const dbCheck = (await pool.query("SELECT count(*)::int FROM metadata")).rows[0].count;
-  const folderMap = await getFolderMap();
+  const categoryCounts = await getRandomCategoryCounts();
   const { defaultBackend, backends } = await storageBackends();
   const storage: Record<string, unknown> = {};
   for (const backend of backends) {
@@ -26,5 +26,10 @@ export async function checkAll() {
       storage[backend] = { error: errorMessage(error) };
     }
   }
-  return { images: dbCheck, default_backend: defaultBackend, folder_map: folderMap, storage };
+  return {
+    images: dbCheck,
+    default_backend: defaultBackend,
+    random_category_counts: categoryCounts,
+    storage
+  };
 }

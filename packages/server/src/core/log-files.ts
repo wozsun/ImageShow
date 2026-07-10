@@ -1,7 +1,8 @@
 import { open, readdir, stat } from "node:fs/promises";
 import { basename, join } from "node:path";
-import { env, getRuntimeConfig, updateRuntimeConfig } from "../config/env.js";
-import { ApiError } from "./http.js";
+import { runtimePaths } from "../config/bootstrap-env.ts";
+import { getRuntimeConfig, updateRuntimeConfig } from "../config/runtime-config-store.ts";
+import { ApiError } from "./http.ts";
 
 const logFilePattern = /^app\.log(?:\.\d+)?$/;
 const defaultTailBytes = 200_000;
@@ -29,12 +30,12 @@ function logFileSortKey(name: string) {
 }
 
 async function listLogFiles(): Promise<LogFileSummary[]> {
-  const names = await readdir(env.LOG_DIR).catch(() => []);
+  const names = await readdir(runtimePaths.logDirectory).catch(() => []);
   const files = await Promise.all(names
     .filter((name) => logFilePattern.test(name))
     .sort((a, b) => logFileSortKey(a) - logFileSortKey(b))
     .map(async (name) => {
-      const info = await stat(join(env.LOG_DIR, name)).catch(() => null);
+      const info = await stat(join(runtimePaths.logDirectory, name)).catch(() => null);
       if (!info?.isFile()) return null;
       return { name, size: info.size, modified_at: info.mtime.toISOString() };
     }));
@@ -44,7 +45,7 @@ async function listLogFiles(): Promise<LogFileSummary[]> {
 async function tailFile(name: string, limitBytes: number) {
   const safeName = basename(name);
   if (!logFilePattern.test(safeName)) throw new ApiError(400, "invalid_log_file", "日志文件名无效");
-  const path = join(env.LOG_DIR, safeName);
+  const path = join(runtimePaths.logDirectory, safeName);
   const info = await stat(path).catch(() => null);
   if (!info?.isFile()) return { content: "", truncated: false, bytes_read: 0 };
 

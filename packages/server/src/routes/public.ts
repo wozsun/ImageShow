@@ -1,16 +1,17 @@
 import type { Hono } from "hono";
-import { blockCrossSiteFetch, ok, publicConfigCacheControl, publicListCacheControl, publicMetadataCacheControl } from "../core/http.js";
-import { listQuery, parse, uuidInput } from "../core/validation.js";
-import { siteConfigPayload } from "../config/settings.js";
-import { getPublicGalleryFacets, getPublicImage, listPublicImages } from "../images/query.js";
-import { redirectOriginalLink, serveLinkMedia, serveLinkThumb, serveObject, serveOriginalLinkProxy, serveThumb } from "../images/serving.js";
-import { specialHost } from "../themes/host.js";
+import { blockCrossSiteFetch, noStoreCacheControl, ok, publicConfigCacheControl, publicListCacheControl, publicMetadataCacheControl } from "../core/http.ts";
+import { listQuery, parse, uuidInput } from "../core/validation.ts";
+import { siteConfigPayload } from "../config/app-settings.ts";
+import { getPublicGalleryFacets } from "../images/read-models/facets.ts";
+import { getPublicImage, listPublicImages } from "../images/read-models/public-images.ts";
+import { redirectOriginalLink, serveLinkMedia, serveLinkThumb, serveObject, serveOriginalLinkProxy, serveThumb } from "../images/serving.ts";
+import { specialHost } from "../themes/host.ts";
 
 export function registerPublicRoutes(app: Hono) {
 
   app.get("/api/images", blockCrossSiteFetch, async (c) => {
     const q = parse(listQuery, Object.fromEntries(new URL(c.req.url).searchParams));
-    c.header("Cache-Control", publicListCacheControl);
+    c.header("Cache-Control", q.shuffle ? noStoreCacheControl : publicListCacheControl);
     return c.json(ok(await listPublicImages(q)));
   });
 

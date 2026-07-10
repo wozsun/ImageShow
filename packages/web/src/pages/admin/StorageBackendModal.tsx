@@ -5,7 +5,7 @@ import { useAnimatedClose } from "../../hooks/useAnimatedClose.js";
 import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
 import { storageBackendDisplay, storageTypeLabel } from "../../lib/ui/select-options.js";
 import type { S3Settings, StorageBackendAdmin, StorageType, WebdavSettings } from "../../lib/types.js";
-import { SettingsFeedback, type SettingsFeedbackState } from "./SettingsPage.js";
+import { ActionFeedback, type ActionFeedbackState } from "../../components/feedback/ActionFeedback.js";
 
 const emptyS3: S3Settings = {
   endpoint: "", region: "auto", bucket: "", access_key_id: "",
@@ -21,10 +21,10 @@ const storageTypeOptions = [
   { value: "webdav", label: "WebDAV" }
 ];
 
-export function BackendEditModal({ target, busy, feedback, onClose, onSave, onSetDefault, onTest }: {
+export function StorageBackendModal({ target, busy, feedback, onClose, onSave, onSetDefault, onTest }: {
   target: StorageBackendAdmin | "new";
   busy: string;
-  feedback: SettingsFeedbackState | null;
+  feedback: ActionFeedbackState | null;
   onClose: () => void;
   onSave: (slug: string, payload: Record<string, unknown>, isCreate: boolean) => Promise<boolean>;
   onSetDefault: (slug: string) => Promise<boolean>;
@@ -138,7 +138,7 @@ export function BackendEditModal({ target, busy, feedback, onClose, onSave, onSe
           {feedback
             && !(lastAction === "save" && feedback.status !== "error")
             && !(lastAction === "default" && feedback.status === "success")
-            && <SettingsFeedback feedback={feedback} />}
+            && <ActionFeedback feedback={feedback} />}
         </div>
         <OverlayScrollbar targetRef={bodyRef} />
         <footer>
@@ -180,7 +180,7 @@ function S3Fields({ value, onChange, configured }: { value: S3Settings; onChange
       <p className="hint">Secret Key 保存后只显示“已配置”；上传统一经服务器转发到 S3（不使用浏览器直传），无需为存储桶配置 CORS。</p>
       <label>
         Endpoint
-        <input value={value.endpoint} onChange={(event) => patch({ endpoint: event.target.value })} />
+        <input value={value.endpoint} onChange={(event) => patch({ endpoint: event.target.value })} placeholder="https://s3.example.com" />
       </label>
       <label>
         Region
@@ -209,7 +209,7 @@ function S3Fields({ value, onChange, configured }: { value: S3Settings; onChange
       </label>
       <label>
         Public Base URL
-        <input value={value.public_base_url} onChange={(event) => patch({ public_base_url: event.target.value })} />
+        <input value={value.public_base_url} onChange={(event) => patch({ public_base_url: event.target.value })} placeholder="https://cdn.example.com" />
       </label>
       <label>
         <input type="checkbox" checked={value.force_path_style} onChange={(event) => patch({ force_path_style: event.target.checked })} />
@@ -247,7 +247,7 @@ function WebdavFields({ value, onChange, configured }: { value: WebdavSettings; 
       </label>
       <label>
         Public Base URL
-        <input value={value.public_base_url} onChange={(event) => patch({ public_base_url: event.target.value })} />
+        <input value={value.public_base_url} onChange={(event) => patch({ public_base_url: event.target.value })} placeholder="https://cdn.example.com" />
       </label>
       <label>
         <input type="checkbox" checked={value.list_depth_infinity} onChange={(event) => patch({ list_depth_infinity: event.target.checked })} />

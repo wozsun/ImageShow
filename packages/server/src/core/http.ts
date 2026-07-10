@@ -1,11 +1,12 @@
 import type { Context, Next } from "hono";
 import { getCookie, setCookie, deleteCookie } from "hono/cookie";
 import { randomBytes } from "node:crypto";
-import argon2 from "argon2";
-import { getRuntimeConfig } from "../config/env.js";
-import { pool } from "./db.js";
-import { redis } from "./redis-client.js";
-import { logger } from "./logger.js";
+import { getRuntimeConfig } from "../config/runtime-config-store.ts";
+import { pool } from "./db.ts";
+import { redis } from "./redis-client.ts";
+import { logger } from "./logger.ts";
+import { verifyPassword } from "./password.ts";
+import { rehashPasswordIfNeeded } from "../users/password-upgrade.ts";
 
 const loginGlobalKey = "imageshow:login_fail_global";
 
@@ -31,19 +32,27 @@ export const publicDocsCacheControl = "public, max-age=0, s-maxage=600, stale-wh
 export const publicStaticCacheControl = "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800, stale-if-error=604800";
 export const publicProxyImageCacheControl = "public, max-age=86400, s-maxage=31536000, stale-while-revalidate=604800, stale-if-error=2592000";
 export const publicProxyFallbackThumbCacheControl = "public, max-age=604800, s-maxage=604800";
-export const publicListCacheControl = "public, max-age=0, s-maxage=30, stale-while-revalidate=120, stale-if-error=600";
-export const publicMetadataCacheControl = "public, max-age=0, s-maxage=300, stale-while-revalidate=600, stale-if-error=3600";
-export const publicConfigCacheControl = "public, max-age=0, s-maxage=60, stale-while-revalidate=300, stale-if-error=600";
+const publicApiCacheControl = "public, max-age=0, s-maxage=30, stale-while-revalidate=30, stale-if-error=30";
+export const publicListCacheControl = publicApiCacheControl;
+export const publicMetadataCacheControl = publicApiCacheControl;
+export const publicConfigCacheControl = publicApiCacheControl;
 export const robotsCacheControl = "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400, stale-if-error=86400";
 
 export class ApiError extends Error {
+  status: number;
+  code: string;
+  details: unknown;
+
   constructor(
-    public status: number,
-    public code: string,
+    status: number,
+    code: string,
     message: string,
-    public details: unknown = {}
+    details: unknown = {}
   ) {
     super(message);
+    this.status = status;
+    this.code = code;
+    this.details = details;
   }
 }
 
@@ -120,9 +129,13 @@ export async function login(c: Context, username: string, password: string) {
   await reserveLoginAttempt(c, username);
   const result = await pool.query("SELECT username, password_hash, role FROM admin_account WHERE username = $1", [username]);
   const user = result.rows[0];
-  if (!user || !(await argon2.verify(user.password_hash, password))) {
+  if (!user || !(await verifyPassword(user.password_hash, password))) {
     throw new ApiError(401, "invalid_credentials", "Invalid credentials");
   }
+  await rehashPasswordIfNeeded(
+    (sql, params) => pool.query(sql, params),
+    { username: user.username, password, currentHash: user.password_hash }
+  ).catch((error) => logger.warn("could not upgrade administrator password hash", error));
   await clearLoginFailures(c, username);
   const sessionId = randomBytes(32).toString("base64url");
   const csrf = randomBytes(32).toString("base64url");

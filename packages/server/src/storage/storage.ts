@@ -1,23 +1,24 @@
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { env } from "../config/env.js";
-import { linkBaseUrl, staticLocalBaseUrl } from "../themes/host.js";
-import { getDefaultStorageBackend, getStorageBackend, type StorageConfig } from "../config/settings.js";
-import { linkThumbnailKey, thumbnailObjectKey } from "./image-paths.js";
-import { driverFor, type CopyPrefix } from "./storage-backend.js";
-import { contentTypeForKey, STORAGE_PREFIXES, type ReadablePrefix, type StoragePrefix } from "./object-keys.js";
-import { logger } from "../core/logger.js";
+import { runtimePaths } from "../config/bootstrap-env.ts";
+import { linkBaseUrl, staticLocalBaseUrl } from "../themes/host.ts";
+import type { StorageConfig } from "./backend-config.ts";
+import { getDefaultStorageBackend, getStorageBackend } from "./backend-registry.ts";
+import { linkThumbnailKey, thumbnailObjectKey } from "./image-paths.ts";
+import { driverFor, type CopyPrefix } from "./storage-backend.ts";
+import { contentTypeForKey, STORAGE_PREFIXES, type ReadablePrefix, type StoragePrefix } from "./object-keys.ts";
+import { logger } from "../core/logger.ts";
 
-export { contentType, safeStoragePath } from "./object-keys.js";
-export type { StoragePrefix } from "./object-keys.js";
+export { contentType, safeStoragePath } from "./object-keys.ts";
+export type { StoragePrefix } from "./object-keys.ts";
 
-export async function ensureStorage() {
-  await mkdir(env.CONFIG_DIR, { recursive: true });
-  await mkdir(env.STORAGE_DIR, { recursive: true });
-  await mkdir(env.LOG_DIR, { recursive: true });
-  await mkdir(env.TEMP_DIR, { recursive: true });
+export async function ensureRuntimeDirectories() {
+  await mkdir(runtimePaths.configDirectory, { recursive: true });
+  await mkdir(runtimePaths.storageDirectory, { recursive: true });
+  await mkdir(runtimePaths.logDirectory, { recursive: true });
+  await mkdir(runtimePaths.tempDirectory, { recursive: true });
   for (const dir of STORAGE_PREFIXES) {
-    await mkdir(join(env.STORAGE_DIR, dir), { recursive: true });
+    await mkdir(join(runtimePaths.storageDirectory, dir), { recursive: true });
   }
 }
 
@@ -81,9 +82,9 @@ function localMediaUrl(prefix: ReadablePrefix, key: string) {
   return `/${route}/${encodeKeyPath(key)}`;
 }
 
-type LinkImageUrls = { id: string; device: string; brightness: string; theme: string; ext: string };
+type LinkImageUrlParts = { id: string; device: string; brightness: string; theme: string; ext: string };
 
-export async function publicImageUrls(objectKey: string, slug: string, isLink: boolean, link?: LinkImageUrls) {
+export async function publicImageUrls(objectKey: string, slug: string, isLink: boolean, link?: LinkImageUrlParts) {
   if (isLink) {
     const thumbDriver = driverFor(await resolveConfig(slug));
     const linkInfo = link ?? { id: "", device: "pc", brightness: "dark", theme: "none", ext: "jpg" };
@@ -105,7 +106,7 @@ export async function publicImageUrls(objectKey: string, slug: string, isLink: b
   };
 }
 
-export async function testStorage(config?: StorageConfig) {
+export async function testStorageBackend(config?: StorageConfig) {
   const effective = config ?? await getDefaultStorageBackend();
   return driverFor(effective).selfTest();
 }

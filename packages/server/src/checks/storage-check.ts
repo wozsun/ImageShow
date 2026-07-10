@@ -1,8 +1,8 @@
-import { pool } from "../core/db.js";
-import { errorMessage } from "../core/http.js";
-import { thumbnailRef } from "../storage/image-paths.js";
-import { listStorageKeys } from "../storage/storage.js";
-import { expectedThumbs, storageBackends, type StorageRow } from "./storage-common.js";
+import { pool } from "../core/db.ts";
+import { errorMessage } from "../core/http.ts";
+import { thumbnailRef } from "../storage/image-paths.ts";
+import { listStorageKeys } from "../storage/storage.ts";
+import { expectedThumbs, storageBackends, type StorageRow } from "./storage-common.ts";
 
 export async function checkStorage() {
   const rows = (await pool.query("SELECT id, object_key, status, storage_slug, is_link, device, brightness, theme FROM metadata")).rows as StorageRow[];

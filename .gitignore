@@ -1,27 +1,28 @@
+# OS metadata
 .DS_Store
-*.log
-*.key
-.venv
-*.tsbuildinfo
-__pycache__/
 
+# Local secrets and operator-only files
 .env
+*.key
 compose.override.yaml
+AGENTS.md
+TODO.md
 
+# Dependencies and generated output
 node_modules/
 dist/
-packages/*/node_modules/
-packages/*/dist/
-packages/web/dist/
-packages/web/dist-ts/
-packages/docs/.vitepress/dist/
 packages/docs/.vitepress/cache/
+*.tsbuildinfo
+*.log
 
+# Local-only tests
+**/test/
+**/tests/
+**/*.test.*
+**/*.spec.*
+
+# Runtime and local tool data
 data/
 cert/
 nginx/
-.claude/
 .codex/
-AGENTS.md
-CLAUDE.md
-TODO.md

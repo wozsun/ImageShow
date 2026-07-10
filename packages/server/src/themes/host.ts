@@ -1,6 +1,6 @@
 import type { Context, Next } from "hono";
-import { getRuntimeConfig } from "../config/env.js";
-import { getGalleryFilterOptions } from "../random/random-cache.js";
+import { getRuntimeConfig } from "../config/runtime-config-store.ts";
+import { getGalleryFilterOptions } from "../random/random-cache.ts";
 
 type HostParts = { hostname: string; port: string };
 
@@ -19,6 +19,20 @@ function hostPrefix(hostHeader: string) {
   const root = splitHost(getRuntimeConfig().site.domain);
   if (!current.hostname || !root.hostname || !current.hostname.endsWith(`.${root.hostname}`)) return "";
   return current.hostname.slice(0, -root.hostname.length - 1);
+}
+
+export function isAllowedSiteHost(hostHeader: string) {
+  const raw = hostHeader.trim().toLowerCase();
+  if (!/^[a-z0-9.-]+(?::\d{1,5})?$/.test(raw)) return false;
+  const current = splitHost(raw);
+  const root = splitHost(getRuntimeConfig().site.domain);
+  if (!current.hostname || !root.hostname) return false;
+  if (current.port && (Number(current.port) < 1 || Number(current.port) > 65_535)) return false;
+  if (root.port && current.port !== root.port) return false;
+  if (current.hostname === root.hostname) return true;
+  if (!current.hostname.endsWith(`.${root.hostname}`)) return false;
+  const prefix = current.hostname.slice(0, -root.hostname.length - 1);
+  return !prefix.includes(".") && /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(prefix);
 }
 
 export function themeFromHost(hostHeader: string) {
@@ -91,7 +105,7 @@ function isThemeInternalPath(pathname: string) {
 }
 
 function splitHost(value: string): HostParts {
-  const raw = value.trim().toLowerCase().replace(/^https?:\/\//, "").split("/")[0];
+  const raw = value.trim().toLowerCase();
   if (!raw) return { hostname: "", port: "" };
   const portMatch = /:(\d+)$/.exec(raw);
   const port = portMatch?.[1] ?? "";

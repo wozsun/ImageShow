@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 import type { ImageDraft, ImportJob } from "../../../lib/types.js";
-import type { CommonAttributes } from "../../../lib/upload/upload-utils.js";
+import type { CommonImageAttributes } from "../../../lib/upload/upload-utils.js";
 
 type QueueState = { jobs: ImportJob[]; page: number };
 type QueueAction =
@@ -9,7 +9,7 @@ type QueueAction =
   | { type: "patch"; id: string; patch: Partial<ImportJob> }
   | { type: "patch-draft"; id: string; patch: Partial<ImageDraft> }
   | { type: "remove"; ids: Set<string>; pageSize: number }
-  | { type: "apply-defaults"; defaults: CommonAttributes }
+  | { type: "apply-defaults"; defaults: CommonImageAttributes }
   | { type: "set-page"; page: number; pageSize: number };
 
 function pageCount(length: number, pageSize: number) {
@@ -30,14 +30,16 @@ function patchJobDraft(job: ImportJob, patch: Partial<ImageDraft>): ImportJob {
   return { ...next, classificationOverride: classificationOverrideFor(next) };
 }
 
-function applyDefaultsToJob(job: ImportJob, defaults: CommonAttributes): ImportJob {
-  if (["done", "cancelled"].includes(job.status)) return job;
+/** @internal Exported only for local import queue verification. */
+export function applyDefaultsToJob(job: ImportJob, defaults: CommonImageAttributes): ImportJob {
+  if (["done", "skipped", "cancelled"].includes(job.status)) return job;
+  const inlineFields = new Set(job.inlineMetadataFields ?? []);
   const draftPatch: Partial<ImageDraft> = {
-    ...(defaults.device ? { device: defaults.device as ImageDraft["device"] } : job.resolvedClassification ? { device: job.resolvedClassification.device } : {}),
-    ...(defaults.brightness ? { brightness: defaults.brightness as ImageDraft["brightness"] } : job.resolvedClassification ? { brightness: job.resolvedClassification.brightness } : {}),
-    ...(defaults.theme.trim() ? { theme: defaults.theme } : {}),
-    ...(defaults.author.trim() ? { author: defaults.author } : {}),
-    ...(defaults.tags.length ? { tags: [...defaults.tags] } : {})
+    ...(!inlineFields.has("device") && defaults.device ? { device: defaults.device as ImageDraft["device"] } : !inlineFields.has("device") && job.resolvedClassification ? { device: job.resolvedClassification.device } : {}),
+    ...(!inlineFields.has("brightness") && defaults.brightness ? { brightness: defaults.brightness as ImageDraft["brightness"] } : !inlineFields.has("brightness") && job.resolvedClassification ? { brightness: job.resolvedClassification.brightness } : {}),
+    ...(!inlineFields.has("theme") && defaults.theme.trim() ? { theme: defaults.theme } : {}),
+    ...(!inlineFields.has("author") && defaults.author.trim() ? { author: defaults.author } : {}),
+    ...(!inlineFields.has("tags") && defaults.tags.length ? { tags: [...defaults.tags] } : {})
   };
   return patchJobDraft(job, draftPatch);
 }
@@ -131,7 +133,7 @@ export function useImportQueue(pageSize: number) {
     dispatch({ type: "retain-mode", mode });
   }, [dispatch, releaseJob]);
 
-  const applyDefaultsToAll = useCallback((defaults: CommonAttributes) => dispatch({ type: "apply-defaults", defaults }), [dispatch]);
+  const applyDefaultsToAll = useCallback((defaults: CommonImageAttributes) => dispatch({ type: "apply-defaults", defaults }), [dispatch]);
   const setPage = useCallback((next: number | ((current: number) => number)) => {
     const page = typeof next === "function" ? next(stateRef.current.page) : next;
     dispatch({ type: "set-page", page, pageSize });

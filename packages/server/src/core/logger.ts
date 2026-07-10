@@ -1,18 +1,19 @@
 import { appendFileSync, existsSync, mkdirSync, renameSync, statSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
-import { env, getRuntimeConfig } from "../config/env.js";
+import { runtimePaths } from "../config/bootstrap-env.ts";
+import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 
 const LEVELS = { DEBUG: 10, INFO: 20, WARN: 30, ERROR: 40, OFF: 100 } as const;
 type LevelName = keyof typeof LEVELS;
 
-const logPath = join(env.LOG_DIR, "app.log");
+const logPath = join(runtimePaths.logDirectory, "app.log");
 let logDirReady = false;
 
 let currentLogBytes = 0;
 
 function ensureLogDir() {
   if (logDirReady) return;
-  mkdirSync(env.LOG_DIR, { recursive: true });
+  mkdirSync(runtimePaths.logDirectory, { recursive: true });
   try {
     currentLogBytes = statSync(logPath).size;
   } catch {

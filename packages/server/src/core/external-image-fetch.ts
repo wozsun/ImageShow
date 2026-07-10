@@ -1,8 +1,10 @@
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
+import type { LookupFunction } from "node:net";
 import { fileTypeFromBuffer } from "file-type";
-import { ApiError } from "./http.js";
-import { logger } from "./logger.js";
+import { Agent } from "undici";
+import { ApiError } from "./http.ts";
+import { logger } from "./logger.ts";
 
 const maxExternalRedirects = 5;
 const imageSniffBytes = 4100;
@@ -10,6 +12,7 @@ const allowedImageMimeTypes = new Set(["image/jpeg", "image/png", "image/webp", 
 const metadataHostnames = new Set(["metadata", "metadata.google.internal"]);
 const externalImageRejectedCode = "external_image_rejected";
 const externalImageRejectedMessage = "外部图片请求未通过安全校验";
+const externalImageLookupErrorCode = "EXTERNAL_IMAGE_LOOKUP_REJECTED";
 const tlsCertificateErrorCodes = new Set([
   "CERT_HAS_EXPIRED",
   "CERT_UNTRUSTED",
@@ -22,6 +25,10 @@ const tlsCertificateErrorCodes = new Set([
 ]);
 
 type ImageValidation = "sniff" | "header" | "none";
+type ExternalImageAddress = { address: string; family: number };
+type ExternalImageAddressResolver = (
+  hostname: string
+) => Promise<ExternalImageAddress[]>;
 
 export type SafeExternalImageFetchOptions = {
   method?: "GET" | "HEAD";
@@ -153,6 +160,61 @@ function isBlockedIp(address: string) {
   return true;
 }
 
+function externalImageLookupError(message: string, cause?: unknown) {
+  return Object.assign(new Error(message, { cause }), {
+    code: externalImageLookupErrorCode
+  });
+}
+
+function assertExternalImageAddresses(addresses: ExternalImageAddress[]) {
+  if (!addresses.length || addresses.some(({ address }) => isBlockedIp(address))) {
+    throw externalImageLookupError("Blocked external image address");
+  }
+}
+
+/** @internal Exported only for local SSRF lookup verification. */
+export function createExternalImageLookup(
+  resolveAddresses: ExternalImageAddressResolver
+): LookupFunction {
+  return (hostname, options, callback) => {
+    resolveAddresses(hostname).then((addresses) => {
+      try {
+        assertExternalImageAddresses(addresses);
+        const requestedFamily = typeof options.family === "number"
+          ? options.family
+          : 0;
+        const candidates = requestedFamily
+          ? addresses.filter(({ family }) => family === requestedFamily)
+          : addresses;
+        if (!candidates.length) {
+          throw externalImageLookupError(
+            "No external image address for requested family"
+          );
+        }
+        if (options.all) callback(null, candidates);
+        else callback(null, candidates[0].address, candidates[0].family);
+      } catch (error) {
+        callback(error as NodeJS.ErrnoException, "", 0);
+      }
+    }, (error) => {
+      callback(
+        externalImageLookupError("External image DNS lookup failed", error),
+        "",
+        0
+      );
+    });
+  };
+}
+
+const externalImageDispatcher = new Agent({
+  connect: {
+    lookup: createExternalImageLookup((hostname) => lookup(hostname, {
+      all: true,
+      verbatim: true
+    }))
+  }
+});
+
 function tlsCertificateErrorCode(error: unknown) {
   const seen = new Set<unknown>();
   let current = error;
@@ -167,6 +229,17 @@ function tlsCertificateErrorCode(error: unknown) {
     current = (current as { cause?: unknown }).cause;
   }
   return "";
+}
+
+function hasErrorCode(error: unknown, expectedCode: string) {
+  const seen = new Set<unknown>();
+  let current = error;
+  while (current && typeof current === "object" && !seen.has(current)) {
+    seen.add(current);
+    if ((current as { code?: unknown }).code === expectedCode) return true;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return false;
 }
 
 function assertTlsCertificateVerificationEnabled() {
@@ -196,15 +269,6 @@ async function validateExternalImageUrl(input: string): Promise<URL> {
     throw externalImageRejected("direct_ip_hostname", urlLogContext(url));
   }
 
-  let addresses: Array<{ address: string }>;
-  try {
-    addresses = await lookup(hostname, { all: true, verbatim: true });
-  } catch {
-    throw externalImageRejected("dns_lookup_failed", urlLogContext(url));
-  }
-  if (!addresses.length || addresses.some(({ address }) => isBlockedIp(address))) {
-    throw externalImageRejected("blocked_resolved_address", urlLogContext(url));
-  }
   return url;
 }
 
@@ -330,12 +394,16 @@ async function fetchWithTimeout(url: URL, options: SafeExternalImageFetchOptions
       method: options.method ?? "GET",
       headers: options.headers,
       redirect: "manual",
-      signal: controller.signal
-    });
+      signal: controller.signal,
+      dispatcher: externalImageDispatcher
+    } as RequestInit & { dispatcher: Agent });
     handedOff = Boolean(response.body);
     return responseWithAbortScope(response, cleanup);
   } catch (error) {
     if ((error as Error).name === "AbortError") throw abortError(options.signal);
+    if (hasErrorCode(error, externalImageLookupErrorCode)) {
+      throw externalImageRejected("blocked_resolved_address", urlLogContext(url));
+    }
     if (tlsCertificateErrorCode(error)) throw externalImageRejected("tls_certificate_invalid", urlLogContext(url));
     throw error;
   } finally {

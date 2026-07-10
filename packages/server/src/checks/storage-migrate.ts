@@ -1,10 +1,8 @@
-import { pool } from "../core/db.js";
-import { ApiError, errorMessage } from "../core/http.js";
-import { storageObjectKey, thumbnailObjectKey } from "../storage/image-paths.js";
-import { invalidateImageReadCaches } from "../images/image-cache.js";
-import { rebuildRandomPool } from "../random/random-cache.js";
-import { migrateStorageBackend, type MigrateRecord } from "../storage/migration.js";
-import { copyObject, exists, removeObject } from "../storage/storage.js";
+import { pool } from "../core/db.ts";
+import { ApiError } from "../core/http.ts";
+import { invalidateImageReadCaches } from "../images/image-cache.ts";
+import { rebuildRandomPool } from "../random/random-cache.ts";
+import { migrateStorageBackend, type MigrateRecord } from "../storage/migration.ts";
 
 export async function migrateStorageLocation(input: { source?: unknown; target?: unknown }) {
   const source = typeof input?.source === "string" ? input.source : "";
@@ -15,78 +13,4 @@ export async function migrateStorageLocation(input: { source?: unknown; target?:
   if (migration.migrated) await rebuildRandomPool();
   await invalidateImageReadCaches();
   return { migration };
-}
-
-export async function migrateStoragePaths() {
-  const rows = (await pool.query("SELECT id, object_key, device, brightness, theme, ext, status, storage_slug, is_link FROM metadata ORDER BY created_at ASC")).rows as Array<{
-    id: string;
-    object_key: string;
-    device: string;
-    brightness: string;
-    theme: string;
-    ext: string;
-    status: string;
-    storage_slug: string;
-    is_link: boolean;
-  }>;
-  let migrated = 0;
-  let unchanged = 0;
-  let missing = 0;
-  let thumbs = 0;
-  const errors: Array<Record<string, unknown>> = [];
-  for (const row of rows) {
-    const backend = row.storage_slug;
-
-    if (row.is_link) {
-      unchanged += 1;
-      continue;
-    }
-    const nextKey = storageObjectKey(row.device, row.brightness, row.theme, row.id, row.ext);
-    if (row.object_key === nextKey) {
-      unchanged += 1;
-      continue;
-    }
-    let copiedObject = false;
-    let copiedThumb = false;
-    let databaseUpdated = false;
-    try {
-      const oldObjectExists = await exists("media", row.object_key, backend);
-      const newObjectExists = await exists("media", nextKey, backend);
-      if (!oldObjectExists && !newObjectExists) {
-        missing += 1;
-        errors.push({ id: row.id, object_key: row.object_key, expected_key: nextKey, reason: "source_missing" });
-        continue;
-      }
-      if (oldObjectExists && !newObjectExists) {
-        await copyObject("media", row.object_key, "media", nextKey, backend);
-        copiedObject = true;
-      }
-      const oldThumbKey = thumbnailObjectKey(row.object_key);
-      const nextThumbKey = thumbnailObjectKey(nextKey);
-      if (await exists("thumbs", oldThumbKey, backend)) {
-        if (!(await exists("thumbs", nextThumbKey, backend))) {
-          await copyObject("thumbs", oldThumbKey, "thumbs", nextThumbKey, backend);
-          copiedThumb = true;
-        }
-        thumbs += 1;
-      }
-      const updated = await pool.query("UPDATE metadata SET object_key=$2, updated_at=now() WHERE id=$1 AND object_key=$3", [row.id, nextKey, row.object_key]);
-      if (!updated.rowCount) throw new ApiError(409, "image_changed", "Image changed during path migration");
-      databaseUpdated = true;
-      if (oldObjectExists) await removeObject("media", row.object_key, backend).catch(() => undefined);
-      if (await exists("thumbs", oldThumbKey, backend)) {
-        await removeObject("thumbs", oldThumbKey, backend).catch(() => undefined);
-      }
-      migrated += 1;
-    } catch (error) {
-      if (!databaseUpdated) {
-        if (copiedObject) await removeObject("media", nextKey, backend).catch(() => undefined);
-        if (copiedThumb) await removeObject("thumbs", thumbnailObjectKey(nextKey), backend).catch(() => undefined);
-      }
-      errors.push({ id: row.id, object_key: row.object_key, expected_key: nextKey, reason: errorMessage(error) });
-    }
-  }
-  await rebuildRandomPool();
-  await invalidateImageReadCaches();
-  return { migrated, unchanged, missing, thumbs, errors: errors.slice(0, 100), error_count: errors.length };
 }

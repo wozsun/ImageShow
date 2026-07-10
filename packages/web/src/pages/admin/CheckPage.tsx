@@ -4,7 +4,7 @@ import { adminApiBasePath } from "../../lib/constants.js";
 import { errorMessage } from "../../lib/ui/formatters.js";
 import { Icon } from "../../components/icon/Icon.js";
 import { SelectMenu } from "../../components/form/SelectMenu.js";
-import { StableLabel } from "../../components/data-display/StableLabel.js";
+import { StableButtonLabel } from "../../components/data-display/StableButtonLabel.js";
 import { useAnimatedClose } from "../../hooks/useAnimatedClose.js";
 import { useStorageOptions } from "../../lib/api/storage-options.js";
 
@@ -15,7 +15,7 @@ export function CheckPage() {
   const [migrateTarget, setMigrateTarget] = useState("");
   const { data: storageOptionsData } = useStorageOptions();
   const storageOptions = (storageOptionsData?.backends ?? []).map((backend) => ({ value: backend.slug, label: backend.display_name || backend.slug }));
-  const [operationModal, setOperationModal] = useState<"migrate-storage-location" | "migrate-storage-paths" | "storage-cleanup" | null>(null);
+  const [operationModal, setOperationModal] = useState<"migrate-storage-location" | "storage-cleanup" | null>(null);
   const checks = useMemo(() => [
     { name: "db", label: "数据库" },
     { name: "storage", label: "存储" },
@@ -46,7 +46,7 @@ export function CheckPage() {
                 disabled={Boolean(running)}
                 onClick={() => void runCheck(check.name)}
               >
-                <Icon name="refresh-line" /><StableLabel idle={check.label} busyText="运行中" busy={running === check.name} />
+                <Icon name="refresh-line" /><StableButtonLabel idle={check.label} busyText="运行中" busy={running === check.name} />
               </button>
             ))}
           </div>
@@ -62,14 +62,7 @@ export function CheckPage() {
                 }
               }}
             >
-              <Icon name="database-2-line" /><StableLabel idle="迁移存储后端" busyText="迁移中" busy={running === "migrate-storage-location"} />
-            </button>
-            <button
-              type="button"
-              disabled={Boolean(running)}
-              onClick={() => setOperationModal("migrate-storage-paths")}
-            >
-              <Icon name="refresh-line" /><StableLabel idle="整理路径结构" busyText="整理中" busy={running === "migrate-storage-paths"} />
+              <Icon name="database-2-line" /><StableButtonLabel idle="迁移存储后端" busyText="迁移中" busy={running === "migrate-storage-location"} />
             </button>
             <button
               className="danger-button"
@@ -77,7 +70,7 @@ export function CheckPage() {
               disabled={Boolean(running)}
               onClick={() => setOperationModal("storage-cleanup")}
             >
-              <Icon name="delete-bin-6-line" /><StableLabel idle="清理无效存储" busyText="清理中" busy={running === "storage-cleanup"} />
+              <Icon name="delete-bin-6-line" /><StableButtonLabel idle="清理无效存储" busyText="清理中" busy={running === "storage-cleanup"} />
             </button>
           </div>
         </div>
@@ -107,7 +100,7 @@ export function CheckPage() {
 }
 
 function CheckOperationModal({ operation, running, source, target, options, onSourceChange, onTargetChange, onClose, onRun }: {
-  operation: "migrate-storage-location" | "migrate-storage-paths" | "storage-cleanup";
+  operation: "migrate-storage-location" | "storage-cleanup";
   running: string;
   source: string;
   target: string;
@@ -118,14 +111,11 @@ function CheckOperationModal({ operation, running, source, target, options, onSo
   onRun: () => Promise<void>;
 }) {
   const isLocationMigration = operation === "migrate-storage-location";
-  const isCleanup = operation === "storage-cleanup";
-  const title = isLocationMigration ? "迁移存储后端" : isCleanup ? "清理无效存储" : "整理路径结构";
+  const title = isLocationMigration ? "迁移存储后端" : "清理无效存储";
   const description = isLocationMigration
     ? "复制图片和缩略图到目标存储后端，并更新数据库中的存储引用。"
-    : isCleanup
-      ? "删除数据库未引用的原图、缩略图、回收站对象和已失效的上传暂存文件。不会删除仍在使用的对象。"
-      : "在当前存储后端内移动对象到规范路径，并同步更新数据库。";
-  const runningText = isLocationMigration ? "迁移中" : isCleanup ? "清理中" : "整理中";
+    : "删除数据库未引用的原图、缩略图、回收站对象和已失效的上传暂存文件。不会删除仍在使用的对象。";
+  const runningText = isLocationMigration ? "迁移中" : "清理中";
   const exit = useAnimatedClose(onClose);
   return (
     <div
@@ -183,7 +173,7 @@ function CheckOperationModal({ operation, running, source, target, options, onSo
             type="submit"
             disabled={Boolean(running) || (isLocationMigration && (!source || !target || source === target))}
           >
-            <Icon name="refresh-line" /><StableLabel idle="开始执行" busyText={runningText} busy={running === operation} />
+            <Icon name="refresh-line" /><StableButtonLabel idle="开始执行" busyText={runningText} busy={running === operation} />
           </button>
         </footer>
       </form>
@@ -203,8 +193,7 @@ function CheckResult({ result }: { result: unknown }) {
       </div>
       <div className="check-result">
         {entries.map(([key, value]) => {
-          const count = countValue(value);
-          const issue = isIssueKey(key) ? count : 0;
+          const issue = countCheckIssues({ [key]: value });
           return (
             <section key={key} className={issue ? "check-card warn" : "check-card ok"}>
               <div className="check-card-head">
@@ -236,7 +225,6 @@ const CHECK_RESULT_LABELS: Record<string, string> = {
   // 清理无效存储
   removed: "已删除",
   failures: "失败项",
-  // 整理路径结构
   migrated: "已迁移",
   unchanged: "无需迁移",
   missing: "源对象缺失",
@@ -251,7 +239,7 @@ const CHECK_RESULT_LABELS: Record<string, string> = {
   prefix_counts: "键数量统计",
   core_keys: "核心键",
   folder_summary: "目录映射摘要",
-  folder_map: "目录映射",
+  random_category_counts: "随机分类计数",
   random_items: "随机池图片",
   random_generation: "随机池版本",
   ready_count: "图库就绪数",
@@ -271,13 +259,25 @@ function checkResultLabel(key: string) {
 }
 
 function isIssueKey(key: string) {
-  return ["issues", "operations", "random_pool_mismatch", "random_pool_error", "missing_objects", "missing_thumbs", "orphan_objects", "orphan_thumbs", "staging_files"].includes(key);
+  return [
+    "issues", "operations", "failures", "unavailable_backends", "error", "errors", "error_count",
+    "random_pool_mismatch", "random_pool_error", "missing_objects", "missing_thumbs",
+    "orphan_objects", "orphan_thumbs", "staging_files"
+  ].includes(key);
 }
 
 function countCheckIssues(result: Record<string, unknown>) {
-  return Object.entries(result)
-    .filter(([key]) => isIssueKey(key))
-    .reduce((sum, [, value]) => sum + countValue(value), 0);
+  let total = 0;
+  for (const [key, value] of Object.entries(result)) {
+    if (key === "ok") continue;
+    if (isIssueKey(key)) {
+      total += countValue(value);
+    } else if (value && typeof value === "object") {
+      total += countCheckIssues(value as Record<string, unknown>);
+    }
+  }
+  if (total) return total;
+  return result.ok === false ? 1 : 0;
 }
 
 function countValue(value: unknown) {

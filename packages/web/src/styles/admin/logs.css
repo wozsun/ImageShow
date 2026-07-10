@@ -107,7 +107,7 @@
     justify-content: stretch;
   }
 
-  .log-head-actions .settings-feedback.is-inline,
+  .log-head-actions .action-feedback.is-inline,
   .log-head-actions .log-control,
   .log-head-actions button {
     flex: 1 1 100%;

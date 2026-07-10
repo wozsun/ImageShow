@@ -1,5 +1,5 @@
 import type { Device, ImageDraft, ImportJob } from "../../../lib/types.js";
-import { browserUuid, resolveUploadDefaultBrightness, runWithConcurrency, type CommonAttributes } from "../../../lib/upload/upload-utils.js";
+import { browserUuid, resolveUploadDefaultBrightness, type CommonImageAttributes } from "../../../lib/upload/upload-utils.js";
 
 export function parseImportUrls(input: string | string[]) {
   const raw = Array.isArray(input) ? input : input.split(/\s+/);
@@ -11,7 +11,7 @@ export function parseImportUrls(input: string | string[]) {
   });
 }
 
-function linkDraft(url: string, defaults: CommonAttributes, fillOriginalUrl: boolean): ImageDraft {
+function linkDraft(url: string, defaults: CommonImageAttributes, fillOriginalUrl: boolean): ImageDraft {
   return {
     title: "",
     description: "",
@@ -28,13 +28,13 @@ function linkDraft(url: string, defaults: CommonAttributes, fillOriginalUrl: boo
 export function linkImportJobs(
   kind: "download" | "proxy",
   urls: string[],
-  defaults: CommonAttributes,
+  defaults: CommonImageAttributes,
   fillOriginalUrl: boolean,
   storageSlug: string
 ) {
   return parseImportUrls(urls).map((url): ImportJob => ({
     id: browserUuid(),
-    attemptId: browserUuid(),
+    attemptKey: browserUuid(),
     kind,
     status: "queued",
     message: "等待下载",
@@ -53,20 +53,10 @@ export function linkImportJobs(
 export function retryPrepareJob(job: ImportJob): ImportJob {
   return {
     ...job,
-    attemptId: browserUuid(),
+    attemptKey: browserUuid(),
     sessionId: undefined,
     status: "queued",
     failureStage: undefined,
     message: "等待重试"
   };
-}
-
-export async function appendAndPrepare(
-  queue: { appendJobs: (jobs: ImportJob[]) => void },
-  jobs: ImportJob[],
-  concurrency: number,
-  prepare: (job: ImportJob) => Promise<void>
-) {
-  queue.appendJobs(jobs);
-  await runWithConcurrency(jobs, concurrency, prepare);
 }

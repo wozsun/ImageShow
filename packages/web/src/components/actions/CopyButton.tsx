@@ -24,7 +24,7 @@ async function copyText(value: string) {
   }
 }
 
-export function CopyButton({ value }: { value: string }) {
+export function CopyButton({ value, ariaLabel = "复制内容" }: { value: string; ariaLabel?: string }) {
   const [status, setStatus] = useState<"idle" | "copied" | "failed">("idle");
   const resetTimer = useRef<number | undefined>(undefined);
 
@@ -49,7 +49,7 @@ export function CopyButton({ value }: { value: string }) {
       className={`copy-button ${copied ? "is-copied" : failed ? "is-failed" : ""}`}
       type="button"
       title={copied ? "已复制" : failed ? "复制失败" : "复制"}
-      aria-label={copied ? "已复制，可再次复制" : failed ? "复制失败，可重试" : "复制随机图片链接"}
+      aria-label={copied ? `${ariaLabel}成功，可再次复制` : failed ? `${ariaLabel}失败，可重试` : ariaLabel}
       onClick={() => void handleCopy()}
     >
       <Icon name={copied ? "check-line" : failed ? "close-line" : "file-copy-line"} />

@@ -1,7 +1,7 @@
 import type { Hono } from "hono";
 import { adminApiBasePath } from "@imageshow/shared";
-import { ok, requireSuper } from "../core/http.js";
-import { readRecentLogFile, updateLogLevel } from "../core/log-files.js";
+import { ok, requireSuper } from "../core/http.ts";
+import { readRecentLogFile, updateLogLevel } from "../core/log-files.ts";
 
 export function registerAdminLogRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/logs`, requireSuper, async (c) => {

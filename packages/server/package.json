@@ -1,31 +1,29 @@
 {
   "name": "@imageshow/server",
-  "version": "3.2.7",
+  "version": "3.3.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "build": "tsc -p tsconfig.json && node scripts/copy-assets.mjs",
+    "dev": "node --watch src/index.ts",
+    "build": "tsc -p tsconfig.json && node ../../scripts/build/copy-server-assets.mjs",
     "check": "tsc -p tsconfig.json --noEmit",
     "start": "node dist/index.js"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1079.0",
+    "@aws-sdk/client-s3": "^3.1084.0",
     "@hono/node-server": "^2.0.8",
     "@imageshow/shared": "file:../shared",
-    "argon2": "^0.44.0",
     "fast-xml-parser": "^5.9.3",
     "file-type": "^22.0.1",
-    "hono": "^4.12.27",
+    "hono": "^4.12.29",
     "ioredis": "^5.4.2",
     "pg": "^8.22.0",
     "sharp": "^0.35.3",
-    "uuid": "^14.0.1",
+    "undici": "^8.7.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@types/node": "^24.0.0",
+    "@types/node": "^26.1.1",
     "@types/pg": "^8.11.10",
-    "tsx": "^4.23.0",
-    "typescript": "^6.0.3"
+    "typescript": "^7.0.2"
   }
 }

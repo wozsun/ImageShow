@@ -1,7 +1,7 @@
 import { join, normalize, sep } from "node:path";
-import { env } from "../config/env.js";
-import { ApiError } from "../core/http.js";
-import type { StorageConfig } from "../config/settings.js";
+import { runtimePaths } from "../config/bootstrap-env.ts";
+import { ApiError } from "../core/http.ts";
+import type { StorageConfig } from "./backend-config.ts";
 
 export const STORAGE_PREFIXES = ["media", "thumbs", "_uploads", "link"] as const;
 export type StoragePrefix = typeof STORAGE_PREFIXES[number];
@@ -24,7 +24,7 @@ export function storageObjectName(prefix: StoragePrefix, key: string) {
 }
 
 export function safeStoragePath(prefix: StoragePrefix, key: string) {
-  const base = env.STORAGE_DIR;
+  const base = runtimePaths.storageDirectory;
   const resolved = normalize(join(base, storageObjectName(prefix, key)));
   // join/normalize 后再做前缀校验，抵御反斜杠、重复分隔符等平台路径差异导致的目录逃逸。
   if (resolved !== base && !resolved.startsWith(`${base}${sep}`)) {

@@ -14,14 +14,14 @@ export type AppendImportQueueApi = ImportQueueApi & {
 
 type PreparedApplyResult = "applied" | "duplicate" | "stale";
 
-export function isCurrentImportAttempt(queue: ImportQueueApi, jobId: string, attemptId: string) {
+export function isCurrentImportAttempt(queue: ImportQueueApi, jobId: string, attemptKey: string) {
   const current = queue.jobsRef.current.find((job) => job.id === jobId);
-  return Boolean(current && current.attemptId === attemptId && current.status !== "cancelled");
+  return Boolean(current && current.attemptKey === attemptKey && current.status !== "cancelled");
 }
 
-export function applyPreparedResult(queue: ImportQueueApi, jobId: string, attemptId: string, prepared: PreparedImport): PreparedApplyResult {
+export function applyPreparedResult(queue: ImportQueueApi, jobId: string, attemptKey: string, prepared: PreparedImport): PreparedApplyResult {
   const current = queue.jobsRef.current.find((job) => job.id === jobId);
-  if (!current || current.status === "cancelled" || current.attemptId !== attemptId || current.sessionId !== prepared.id) return "stale";
+  if (!current || current.status === "cancelled" || current.attemptKey !== attemptKey || current.sessionId !== prepared.id) return "stale";
   // 先认领 md5：同一批并发完成的重复文件不会同时进入“待提交”状态。
   if (!queue.claimPreparedMd5(jobId, prepared.md5)) return "duplicate";
   const duplicates = prepared.duplicates ?? [];

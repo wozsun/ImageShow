@@ -1,10 +1,10 @@
 import type { Pool, PoolClient } from "pg";
 import { slugPattern } from "@imageshow/shared";
-import { pool } from "../core/db.js";
-import { ApiError } from "../core/http.js";
-import { invalidateImageReadCaches } from "../images/image-cache.js";
-import { rebuildRandomPool } from "../random/random-cache.js";
-import { invalidateAuthorVocab } from "../vocab/vocab-cache.js";
+import { pool } from "../core/db.ts";
+import { ApiError } from "../core/http.ts";
+import { invalidateImageReadCaches } from "../images/image-cache.ts";
+import { rebuildRandomPool } from "../random/random-cache.ts";
+import { invalidateAuthorVocab } from "../vocab/vocab-cache.ts";
 
 export async function ensureAuthor(client: Pool | PoolClient, slug: string) {
   if (!slug) return;
@@ -14,7 +14,7 @@ export async function ensureAuthor(client: Pool | PoolClient, slug: string) {
   );
 }
 
-export async function createAuthor(slug: string, displayName: string, link: string) {
+export async function upsertAuthor(slug: string, displayName: string, link: string) {
   if (slug.length > 32 || !slugPattern.test(slug)) {
     throw new ApiError(400, "invalid_author", "Author slug must be a lowercase slug (a-z, 0-9, -), <=32 chars", { slug });
   }

@@ -1,10 +1,13 @@
 import { appConfig } from "@imageshow/shared";
-import { pool } from "../core/db.js";
-import { getFolderMap, type FolderMap } from "../random/random-cache.js";
+import { pool } from "../core/db.ts";
+import {
+  getRandomCategoryCounts,
+  type RandomCategoryCounts
+} from "../random/random-cache.ts";
 
-function folderTotal(map: FolderMap) {
+function categoryTotal(counts: RandomCategoryCounts) {
   let total = 0;
-  for (const device of Object.values(map)) {
+  for (const device of Object.values(counts)) {
     for (const brightness of Object.values(device)) {
       for (const count of Object.values(brightness)) total += Number(count) || 0;
     }
@@ -19,13 +22,13 @@ export async function checkDatabase() {
     [appConfig.backgroundJob.sampleLimit]
   )).rows;
   try {
-    const folderMap = await getFolderMap();
-    const randomPoolCount = folderTotal(folderMap);
+    const categoryCounts = await getRandomCategoryCounts();
+    const randomPoolCount = categoryTotal(categoryCounts);
     return {
       ready_count: readyCount,
       random_pool_count: randomPoolCount,
       random_pool_mismatch: readyCount !== randomPoolCount,
-      folder_map: folderMap,
+      random_category_counts: categoryCounts,
       operations
     };
   } catch (error) {

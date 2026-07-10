@@ -1,6 +1,6 @@
-import type { FolderMap } from "./random-cache.js";
-import { routeError } from "../core/http.js";
-import { splitSelectors } from "../core/selectors.js";
+import type { RandomCategoryCounts } from "./random-cache.ts";
+import { routeError } from "../core/http.ts";
+import { splitSelectors } from "../core/selectors.ts";
 
 export const randomDevices = ["pc", "mb"] as const;
 export const randomBrightnesses = ["dark", "light"] as const;
@@ -69,12 +69,12 @@ export function parseAuthorSelectors(query: URLSearchParams) {
   return mixedSelectorsError("author", include, exclude) ?? { include, exclude };
 }
 
-export function buildRandomImageCountData(folderMap: FolderMap) {
+export function buildRandomImageCountData(categoryCounts: RandomCategoryCounts) {
   const groupTotals: Record<string, number> = {};
   const themeDetails: Record<string, Record<string, number>> = {};
   let totalImages = 0;
-  for (const device of Object.keys(folderMap).sort()) {
-    const deviceEntry = folderMap[device];
+  for (const device of Object.keys(categoryCounts).sort()) {
+    const deviceEntry = categoryCounts[device];
     if (!deviceEntry || typeof deviceEntry !== "object") continue;
     for (const brightness of Object.keys(deviceEntry).sort()) {
       const brightnessEntry = deviceEntry[brightness];

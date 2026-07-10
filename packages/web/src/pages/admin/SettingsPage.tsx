@@ -4,24 +4,24 @@ import { api } from "../../lib/api/client.js";
 import { Icon } from "../../components/icon/Icon.js";
 import { NumberInput } from "../../components/form/NumberInput.js";
 import { SelectMenu } from "../../components/form/SelectMenu.js";
-import { StableLabel } from "../../components/data-display/StableLabel.js";
+import { StableButtonLabel } from "../../components/data-display/StableButtonLabel.js";
 import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
 import { adminApiBasePath, queryKeys } from "../../lib/constants.js";
 import { galleryOrderSelectOptions } from "../../lib/ui/select-options.js";
 import { errorMessage } from "../../lib/ui/formatters.js";
 import type { AdminSettings, SiteSettings } from "../../lib/types.js";
+import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
+import { ActionFeedback, type ActionFeedbackState } from "../../components/feedback/ActionFeedback.js";
 
-export type SettingsFeedbackState = {
-  scope: "storage" | "application";
-  text: string;
-  status: "pending" | "success" | "error";
+type ApplicationSettingsFeedbackState = ActionFeedbackState & {
+  scope: "application";
 };
 
 export function SettingsPage() {
   const query = useQuery<{ settings: AdminSettings }>({ queryKey: queryKeys.settings, queryFn: () => api(`${adminApiBasePath}/settings`) });
   const client = useQueryClient();
   const [settings, setSettings] = useState<AdminSettings | null>(null);
-  const [feedback, setFeedback] = useState<SettingsFeedbackState | null>(null);
+  const [feedback, setFeedback] = useState<ApplicationSettingsFeedbackState | null>(null);
   const [action, setAction] = useState<"" | "save-application" | "reload">("");
   const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -30,6 +30,7 @@ export function SettingsPage() {
     }
   }, [query.data]);
   if (!settings) {
+    if (query.isError) return <QueryErrorState error={query.error} onRetry={() => void query.refetch()} fullPage />;
     return (
       <section className="workspace">
         <h1>站点配置</h1>
@@ -101,7 +102,7 @@ export function SettingsPage() {
           <p>站点信息与应用参数</p>
         </div>
         <div className="settings-head-actions">
-          {feedback?.scope === "application" && <SettingsFeedback feedback={feedback} inline />}
+          {feedback?.scope === "application" && <ActionFeedback feedback={feedback} inline />}
           <button
             type="button"
             className="settings-config-button"
@@ -109,7 +110,7 @@ export function SettingsPage() {
             onClick={reloadConfig}
           >
             <Icon name="refresh-line" />
-            <StableLabel idle="读取配置文件" busyText="读取中" busy={action === "reload"} />
+            <StableButtonLabel idle="读取配置文件" busyText="读取中" busy={action === "reload"} />
           </button>
           <button
             className="button settings-config-button"
@@ -118,7 +119,7 @@ export function SettingsPage() {
             onClick={saveApplication}
           >
             <Icon name="save-3-line" />
-            <StableLabel idle="保存应用配置" busyText="保存中" busy={action === "save-application"} />
+            <StableButtonLabel idle="保存应用配置" busyText="保存中" busy={action === "save-application"} />
           </button>
         </div>
       </header>
@@ -197,12 +198,12 @@ export function SettingsPage() {
               </label>
             </div>
             <label>
-              根路径跳转
+              根路径页面
               <SelectMenu
                 value={settings.site.home.enabled ? settings.site.root_redirect : "gallery"}
                 onChange={(value) => updateSite({ root_redirect: value as SiteSettings["root_redirect"] })}
                 options={[{ value: "home", label: "首页 /home" }, { value: "gallery", label: "画廊 /gallery" }]}
-                ariaLabel="根路径跳转"
+                ariaLabel="根路径页面"
                 disabled={!settings.site.home.enabled}
               />
             </label>
@@ -396,16 +397,5 @@ export function SettingsPage() {
       </div>
       <OverlayScrollbar targetRef={scrollRef} pageEdge />
     </section>
-  );
-}
-
-export function SettingsFeedback({ feedback, inline = false }: {
-  feedback: { text: string; status: "pending" | "success" | "error" };
-  inline?: boolean;
-}) {
-  return (
-    <div className={`settings-feedback${inline ? " is-inline" : ""} ${feedback.status === "success" ? "ok" : feedback.status === "error" ? "error" : ""}`}>
-      {feedback.text.trim().startsWith("{") ? <pre>{feedback.text}</pre> : <span>{feedback.text}</span>}
-    </div>
   );
 }

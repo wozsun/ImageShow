@@ -2,23 +2,29 @@ import { createReadStream } from "node:fs";
 import { copyFile, mkdir, readFile, readdir, rm, rmdir, stat, writeFile, access } from "node:fs/promises";
 import { dirname, join, relative, sep } from "node:path";
 import type { Readable } from "node:stream";
-import { env } from "../config/env.js";
-import { ApiError } from "../core/http.js";
-import { safeStoragePath, STORAGE_PREFIXES, type ReadablePrefix, type StoragePrefix } from "./object-keys.js";
+import { runtimePaths } from "../config/bootstrap-env.ts";
+import { ApiError } from "../core/http.ts";
+import { safeStoragePath, STORAGE_PREFIXES, type ReadablePrefix, type StoragePrefix } from "./object-keys.ts";
 import type {
   CopyPrefix,
   OpenedRead,
   StorageDriver,
   StorageSelfTest
-} from "./storage-backend.js";
+} from "./storage-backend.ts";
+
+/** @internal Exported only for local storage error verification. */
+export function isMissingFileError(error: unknown) {
+  return (error as NodeJS.ErrnoException | undefined)?.code === "ENOENT";
+}
 
 export class LocalBackend implements StorageDriver {
   async exists(prefix: StoragePrefix, key: string) {
     try {
       await access(safeStoragePath(prefix, key));
       return true;
-    } catch {
-      return false;
+    } catch (error) {
+      if (isMissingFileError(error)) return false;
+      throw error;
     }
   }
 
@@ -60,7 +66,7 @@ export class LocalBackend implements StorageDriver {
   }
 
   async listKeys(prefix: StoragePrefix) {
-    const root = join(env.STORAGE_DIR, prefix);
+    const root = join(runtimePaths.storageDirectory, prefix);
     const keys: string[] = [];
     async function walk(dir: string) {
       const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
@@ -83,15 +89,15 @@ export class LocalBackend implements StorageDriver {
   }
 
   async selfTest(): Promise<StorageSelfTest> {
-    await mkdir(join(env.STORAGE_DIR, "_uploads"), { recursive: true });
+    await mkdir(join(runtimePaths.storageDirectory, "_uploads"), { recursive: true });
     const path = safeStoragePath("_uploads", ".storage-test");
     await writeFile(path, "ok");
     await rm(path, { force: true });
-    return { backend: "local", writable: true, storage_dir: env.STORAGE_DIR };
+    return { backend: "local", writable: true, storage_dir: runtimePaths.storageDirectory };
   }
 
   async pruneEmptyDirs(): Promise<number> {
-    const root = env.STORAGE_DIR;
+    const root = runtimePaths.storageDirectory;
     const protectedDirs = new Set(STORAGE_PREFIXES.map((name) => join(root, name)));
     let removed = 0;
     const prune = async (dir: string): Promise<void> => {

@@ -1,6 +1,6 @@
 import type { Context, Next } from "hono";
-import { ApiError, clientIp, errorMessage } from "./http.js";
-import { logger } from "./logger.js";
+import { ApiError, clientIp, errorMessage } from "./http.ts";
+import { logger } from "./logger.ts";
 
 function adminSession(c: Context) {
   return c.get("session") as { username?: string; role?: string } | undefined;

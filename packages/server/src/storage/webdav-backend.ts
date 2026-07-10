@@ -1,15 +1,16 @@
 import type { Readable } from "node:stream";
 import { XMLParser } from "fast-xml-parser";
-import { ApiError } from "../core/http.js";
-import { getUploadLimitBytes, type StorageConfig } from "../config/settings.js";
-import { storageObjectName, type ReadablePrefix, type StoragePrefix } from "./object-keys.js";
-import { nodeReadableFromWeb, streamToBuffer } from "./stream-buffer.js";
+import { ApiError } from "../core/http.ts";
+import { getInputImageMaxBytes } from "../config/app-settings.ts";
+import type { StorageConfig } from "./backend-config.ts";
+import { contentTypeForKey, storageObjectName, type ReadablePrefix, type StoragePrefix } from "./object-keys.ts";
+import { nodeReadableFromWeb, streamToBuffer } from "./stream-buffer.ts";
 import type {
   CopyPrefix,
   OpenedRead,
   StorageDriver,
   StorageSelfTest
-} from "./storage-backend.js";
+} from "./storage-backend.ts";
 
 const PROPFIND_BODY = '<?xml version="1.0" encoding="utf-8"?><propfind xmlns="DAV:"><prop><resourcetype/></prop></propfind>';
 const WEBDAV_TIMEOUT_MS = 15_000;
@@ -123,11 +124,18 @@ function trimSlashes(value: string) {
   return value.replace(/^\/+|\/+$/g, "");
 }
 
+/** @internal Exported only for local storage error verification. */
+export function isWebdavNotFoundStatus(status: number) {
+  return status === 404;
+}
+
 export class WebdavBackend implements StorageDriver {
   private readonly base: string;
   private readonly origin: string;
+  private readonly config: StorageConfig;
 
-  constructor(private readonly config: StorageConfig) {
+  constructor(config: StorageConfig) {
+    this.config = config;
     this.base = config.webdav.base_url.replace(/\/+$/, "");
     this.origin = (() => { try { return new URL(this.base).origin; } catch { return this.base; } })();
   }
@@ -163,12 +171,10 @@ export class WebdavBackend implements StorageDriver {
   }
 
   async exists(prefix: StoragePrefix, key: string) {
-    try {
-      const res = await webdavFetch(this.objectUrl(prefix, key), { method: "HEAD", headers: this.auth() });
-      return res.ok;
-    } catch {
-      return false;
-    }
+    const res = await webdavFetch(this.objectUrl(prefix, key), { method: "HEAD", headers: this.auth() });
+    if (res.ok) return true;
+    if (isWebdavNotFoundStatus(res.status)) return false;
+    throw new ApiError(502, "storage_read_failed", `WebDAV HEAD failed (${res.status})`);
   }
 
   async openRead(prefix: StoragePrefix, key: string): Promise<OpenedRead> {
@@ -182,7 +188,7 @@ export class WebdavBackend implements StorageDriver {
   }
 
   async readBuffer(prefix: StoragePrefix, key: string) {
-    const limit = await getUploadLimitBytes();
+    const limit = await getInputImageMaxBytes();
     const opened = await this.openRead(prefix, key);
     if (opened.size !== undefined && opened.size > limit) {
       opened.body.destroy();
@@ -217,16 +223,52 @@ export class WebdavBackend implements StorageDriver {
   }
 
   async copy(fromPrefix: CopyPrefix, fromKey: string, toPrefix: CopyPrefix, toKey: string) {
-    await this.transfer("COPY", fromPrefix, fromKey, toPrefix, toKey);
+    try {
+      await this.copyNative(fromPrefix, fromKey, toPrefix, toKey);
+    } catch {
+      await this.writeBuffer(toPrefix, toKey, await this.readBuffer(fromPrefix, fromKey), contentTypeForKey(toKey));
+    }
   }
 
-  private async transfer(method: "COPY", fromPrefix: StoragePrefix, fromKey: string, toPrefix: StoragePrefix, toKey: string) {
+  private async copyNative(fromPrefix: CopyPrefix, fromKey: string, toPrefix: CopyPrefix, toKey: string) {
     await this.ensureParent(toPrefix, toKey);
-    const res = await webdavFetch(this.objectUrl(fromPrefix, fromKey), {
-      method,
-      headers: { ...this.auth(), Destination: this.objectUrl(toPrefix, toKey), Overwrite: "T" }
-    });
-    if (!res.ok) throw new ApiError(502, "storage_transfer_failed", `WebDAV ${method} failed (${res.status})`);
+    const targetExisted = await this.exists(toPrefix, toKey);
+    const fromName = fromKey.split("/").at(-1) ?? fromKey;
+    const toParent = toKey.includes("/") ? toKey.slice(0, toKey.lastIndexOf("/") + 1) : "";
+    const sideEffectKey = `${toParent}${fromName}`;
+    const sideEffectExisted = sideEffectKey === toKey || await this.exists(toPrefix, sideEffectKey);
+    let status = 0;
+    let requestError: unknown;
+    try {
+      const response = await webdavFetch(this.objectUrl(fromPrefix, fromKey), {
+        method: "COPY",
+        headers: { ...this.auth(), Destination: this.objectUrl(toPrefix, toKey), Overwrite: "T" }
+      });
+      status = response.status;
+      await response.body?.cancel().catch(() => undefined);
+    } catch (error) {
+      requestError = error;
+    }
+
+    const targetExists = await this.exists(toPrefix, toKey);
+    if (!sideEffectExisted && sideEffectKey !== toKey) {
+      await this.remove(toPrefix, sideEffectKey).catch(() => undefined);
+    }
+    if (status >= 200 && status < 300 && targetExists) {
+      if (!targetExisted) return;
+      const [sourceBody, targetBody] = await Promise.all([
+        this.readBuffer(fromPrefix, fromKey),
+        this.readBuffer(toPrefix, toKey)
+      ]);
+      if (sourceBody.equals(targetBody)) return;
+      await this.writeBuffer(toPrefix, toKey, sourceBody, contentTypeForKey(toKey));
+      return;
+    }
+    if (requestError) throw requestError;
+    if (targetExisted && targetExists) {
+      throw new ApiError(502, "storage_transfer_failed", `WebDAV COPY failed without replacing the existing target (${status || "network error"})`);
+    }
+    throw new ApiError(502, "storage_transfer_failed", `WebDAV COPY failed (${status || "network error"})`);
   }
 
   async readObject(prefix: ReadablePrefix, key: string): Promise<Readable> {

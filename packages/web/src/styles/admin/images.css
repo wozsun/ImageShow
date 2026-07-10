@@ -61,10 +61,10 @@
 .select-control.batch-common-select { width: 120px; flex: 0 0 auto; }
 
 .batch-common-pair { display: contents; }
-.theme-input-control.batch-common-theme { flex: 1 1 0; min-width: 150px; }
+.slug-combo-control.batch-common-theme { flex: 1 1 0; min-width: 150px; }
 
 .tag-input-control.batch-common-tags { flex: 2 1 0; min-width: 200px; align-self: end; }
-.theme-input-control.batch-common-author { flex: 1 1 0; min-width: 150px; align-self: end; }
+.slug-combo-control.batch-common-author { flex: 1 1 0; min-width: 150px; align-self: end; }
 
 .apply-to-all-button.is-ready { background: #1f6feb; border-color: #1f6feb; color: #fff; }
 .image-thumbnail { width: 72px; height: 72px; flex: 0 0 72px; overflow: hidden; border-radius: 6px; background: #e8edf3; }

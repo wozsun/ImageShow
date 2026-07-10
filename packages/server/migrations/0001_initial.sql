@@ -1,9 +1,9 @@
-CREATE TABLE IF NOT EXISTS schema_migrations (
+CREATE TABLE schema_migrations (
   version TEXT PRIMARY KEY,
   applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS storage_backend (
+CREATE TABLE storage_backend (
   slug TEXT PRIMARY KEY,
   display_name TEXT NOT NULL DEFAULT '',
   type TEXT NOT NULL DEFAULT 'local',
@@ -19,13 +19,13 @@ CREATE TABLE IF NOT EXISTS storage_backend (
   CHECK (type IN ('local', 's3', 'webdav'))
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_storage_backend_default
+CREATE UNIQUE INDEX idx_storage_backend_default
 ON storage_backend((is_default)) WHERE is_default;
 
 INSERT INTO storage_backend(slug, display_name, type, is_default)
-VALUES('local', '本地', 'local', true) ON CONFLICT (slug) DO NOTHING;
+VALUES('local', '本地', 'local', true);
 
-CREATE TABLE IF NOT EXISTS theme (
+CREATE TABLE theme (
   slug TEXT PRIMARY KEY,
   display_name TEXT NOT NULL DEFAULT '',
   sort_order INTEGER NOT NULL DEFAULT 0,
@@ -36,9 +36,9 @@ CREATE TABLE IF NOT EXISTS theme (
   CHECK (length(display_name) <= 64)
 );
 
-INSERT INTO theme(slug, display_name) VALUES('none', '未设置') ON CONFLICT (slug) DO NOTHING;
+INSERT INTO theme(slug, display_name) VALUES('none', '未设置');
 
-CREATE TABLE IF NOT EXISTS tag (
+CREATE TABLE tag (
   slug TEXT PRIMARY KEY,
   display_name TEXT NOT NULL DEFAULT '',
   sort_order INTEGER NOT NULL DEFAULT 0,
@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS tag (
   CHECK (length(display_name) <= 64)
 );
 
-CREATE TABLE IF NOT EXISTS author (
+CREATE TABLE author (
   slug TEXT PRIMARY KEY,
   display_name TEXT NOT NULL DEFAULT '',
   link TEXT NOT NULL DEFAULT '',
@@ -60,10 +60,10 @@ CREATE TABLE IF NOT EXISTS author (
   CHECK (slug ~ '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'),
   CHECK (length(display_name) <= 64),
   CHECK (length(link) <= 2048),
-  CHECK (link = '' OR link ~* '^https?://')
+  CHECK (link = '' OR link ~* '^https://')
 );
 
-CREATE TABLE IF NOT EXISTS metadata (
+CREATE TABLE metadata (
   id UUID PRIMARY KEY,
   device TEXT NOT NULL,
   brightness TEXT NOT NULL,
@@ -71,7 +71,7 @@ CREATE TABLE IF NOT EXISTS metadata (
   ext TEXT NOT NULL,
   object_key TEXT NOT NULL UNIQUE,
   is_link BOOLEAN NOT NULL DEFAULT false,
-  storage_slug TEXT NOT NULL DEFAULT 'local',
+  storage_slug TEXT NOT NULL,
   md5 TEXT NOT NULL,
   width INTEGER NOT NULL DEFAULT 0,
   height INTEGER NOT NULL DEFAULT 0,
@@ -85,6 +85,7 @@ CREATE TABLE IF NOT EXISTS metadata (
   author TEXT,
   status TEXT NOT NULL DEFAULT 'ready',
   deleted_at TIMESTAMPTZ DEFAULT NULL,
+  image_time TIMESTAMPTZ NOT NULL DEFAULT now(),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   CHECK (device IN ('pc', 'mb')),
@@ -99,6 +100,7 @@ CREATE TABLE IF NOT EXISTS metadata (
   CHECK (image_size >= 0),
   CHECK (thumbnail_size >= 0),
   CHECK (length(source) <= 2048),
+  CHECK (source = '' OR source ~* '^https://'),
   CHECK (length(original) <= 2048),
   CHECK (original = '' OR original ~* '^https://'),
   CHECK (author <> ''),
@@ -110,68 +112,66 @@ CREATE TABLE IF NOT EXISTS metadata (
   CONSTRAINT fk_metadata_author   FOREIGN KEY (author)       REFERENCES author(slug)           ON DELETE SET NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_metadata_ready_random_axes
+CREATE INDEX idx_metadata_ready_random_axes
 ON metadata(device, brightness, theme, id) WHERE status = 'ready';
 
-CREATE INDEX IF NOT EXISTS idx_metadata_status_deleted
+CREATE INDEX idx_metadata_status_deleted
 ON metadata(status, deleted_at, id);
 
-CREATE INDEX IF NOT EXISTS idx_metadata_status_created_at
-ON metadata(status, created_at DESC, id DESC);
+CREATE INDEX idx_metadata_status_image_time
+ON metadata(status, image_time DESC, id DESC);
 
-CREATE INDEX IF NOT EXISTS idx_metadata_ready_created
-ON metadata(created_at DESC, id DESC) WHERE status = 'ready';
+CREATE INDEX idx_metadata_ready_image_time
+ON metadata(image_time DESC, id DESC) WHERE status = 'ready';
 
-CREATE INDEX IF NOT EXISTS idx_metadata_ready_device_created
-ON metadata(device, created_at DESC, id DESC) WHERE status = 'ready';
+CREATE INDEX idx_metadata_ready_device_image_time
+ON metadata(device, image_time DESC, id DESC) WHERE status = 'ready';
 
-CREATE INDEX IF NOT EXISTS idx_metadata_ready_brightness_created
-ON metadata(brightness, created_at DESC, id DESC) WHERE status = 'ready';
+CREATE INDEX idx_metadata_ready_brightness_image_time
+ON metadata(brightness, image_time DESC, id DESC) WHERE status = 'ready';
 
-CREATE INDEX IF NOT EXISTS idx_metadata_ready_device_brightness_created
-ON metadata(device, brightness, created_at DESC, id DESC) WHERE status = 'ready';
+CREATE INDEX idx_metadata_ready_device_brightness_image_time
+ON metadata(device, brightness, image_time DESC, id DESC) WHERE status = 'ready';
 
-CREATE INDEX IF NOT EXISTS idx_metadata_ready_device_theme_created
-ON metadata(device, theme, created_at DESC, id DESC) WHERE status = 'ready';
+CREATE INDEX idx_metadata_ready_device_theme_image_time
+ON metadata(device, theme, image_time DESC, id DESC) WHERE status = 'ready';
 
-CREATE INDEX IF NOT EXISTS idx_metadata_ready_brightness_theme_created
-ON metadata(brightness, theme, created_at DESC, id DESC) WHERE status = 'ready';
+CREATE INDEX idx_metadata_ready_brightness_theme_image_time
+ON metadata(brightness, theme, image_time DESC, id DESC) WHERE status = 'ready';
 
-CREATE INDEX IF NOT EXISTS idx_metadata_ready_axes_created
-ON metadata(device, brightness, theme, created_at DESC, id DESC) WHERE status = 'ready';
+CREATE INDEX idx_metadata_ready_axes_image_time
+ON metadata(device, brightness, theme, image_time DESC, id DESC) WHERE status = 'ready';
 
-CREATE INDEX IF NOT EXISTS idx_metadata_ready_theme_created
-ON metadata(theme, created_at DESC, id DESC) WHERE status = 'ready';
+CREATE INDEX idx_metadata_ready_theme_image_time
+ON metadata(theme, image_time DESC, id DESC) WHERE status = 'ready';
 
-CREATE INDEX IF NOT EXISTS idx_metadata_ready_author_created
-ON metadata(author, created_at DESC, id DESC) WHERE status = 'ready';
+CREATE INDEX idx_metadata_ready_author_image_time
+ON metadata(author, image_time DESC, id DESC) WHERE status = 'ready';
 
-CREATE INDEX IF NOT EXISTS idx_metadata_md5
+CREATE INDEX idx_metadata_md5
 ON metadata(md5);
 
-CREATE INDEX IF NOT EXISTS idx_metadata_thumb_key
+CREATE INDEX idx_metadata_thumb_key
 ON metadata((regexp_replace(object_key, '\.[^/.]+$', '.webp')));
 
-CREATE INDEX IF NOT EXISTS idx_metadata_theme ON metadata(theme);
-CREATE INDEX IF NOT EXISTS idx_metadata_author ON metadata(author);
-CREATE INDEX IF NOT EXISTS idx_metadata_storage_slug ON metadata(storage_slug);
+CREATE INDEX idx_metadata_theme ON metadata(theme);
+CREATE INDEX idx_metadata_author ON metadata(author);
+CREATE INDEX idx_metadata_storage_slug ON metadata(storage_slug);
 
-CREATE TABLE IF NOT EXISTS image_tag (
+CREATE TABLE image_tag (
   image_id UUID NOT NULL REFERENCES metadata(id) ON DELETE CASCADE,
   tag_slug TEXT NOT NULL REFERENCES tag(slug) ON DELETE CASCADE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (image_id, tag_slug)
 );
 
-CREATE INDEX IF NOT EXISTS idx_image_tag_tag ON image_tag(tag_slug, image_id);
+CREATE INDEX idx_image_tag_tag ON image_tag(tag_slug, image_id);
 
--- ============================================================================
-
-CREATE TABLE IF NOT EXISTS import_session (
+CREATE TABLE import_session (
   id UUID PRIMARY KEY,
   mode TEXT NOT NULL,
   final_object_key TEXT NOT NULL DEFAULT '',
-  storage_slug TEXT NOT NULL DEFAULT 'local',
+  storage_slug TEXT NOT NULL REFERENCES storage_backend(slug) ON DELETE RESTRICT,
   source_url TEXT NOT NULL DEFAULT '',
   expected_size BIGINT,
   metadata_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
@@ -179,6 +179,7 @@ CREATE TABLE IF NOT EXISTS import_session (
   status TEXT NOT NULL DEFAULT 'created',
   idempotency_key TEXT NOT NULL UNIQUE,
   request_hash TEXT NOT NULL DEFAULT '',
+  image_time TIMESTAMPTZ NOT NULL DEFAULT now(),
   error TEXT NOT NULL DEFAULT '',
   expires_at TIMESTAMPTZ NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -189,13 +190,13 @@ CREATE TABLE IF NOT EXISTS import_session (
   CHECK (status IN ('created', 'receiving', 'preparing', 'ready', 'committing', 'finalized', 'failed', 'cancelled'))
 );
 
-CREATE INDEX IF NOT EXISTS idx_import_session_status_expires
+CREATE INDEX idx_import_session_status_expires
 ON import_session(status, expires_at);
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_import_session_final_object_key
+CREATE UNIQUE INDEX idx_import_session_final_object_key
 ON import_session(final_object_key) WHERE final_object_key <> '';
 
-CREATE TABLE IF NOT EXISTS background_job (
+CREATE TABLE background_job (
   id UUID PRIMARY KEY,
   type TEXT NOT NULL,
   target_id TEXT NOT NULL DEFAULT '',
@@ -208,30 +209,34 @@ CREATE TABLE IF NOT EXISTS background_job (
   next_retry_at TIMESTAMPTZ DEFAULT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  CHECK (type IN ('thumb.generate','move.cleanup','upload.cleanup','cache.rebuild')),
+  CHECK (type IN ('thumb.generate','move.cleanup','import.cleanup','cache.rebuild')),
   CHECK (status IN ('pending', 'running', 'succeeded', 'failed', 'ignored'))
 );
 
-CREATE INDEX IF NOT EXISTS idx_background_job_status
+CREATE INDEX idx_background_job_status
 ON background_job(status, updated_at);
 
-CREATE INDEX IF NOT EXISTS idx_background_job_target
+CREATE INDEX idx_background_job_target
 ON background_job(target_id, type);
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_background_job_idempotency
+CREATE UNIQUE INDEX idx_background_job_idempotency
 ON background_job(idempotency_key) WHERE idempotency_key IS NOT NULL;
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_background_job_active_cache_rebuild
+CREATE UNIQUE INDEX idx_background_job_active_cache_rebuild
 ON background_job(type) WHERE type = 'cache.rebuild' AND status IN ('pending', 'running');
 
-CREATE TABLE IF NOT EXISTS admin_account (
+CREATE TABLE admin_account (
   username TEXT PRIMARY KEY,
   password_hash TEXT NOT NULL,
   role TEXT NOT NULL DEFAULT 'image',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  CHECK (role IN ('super', 'image'))
+  CHECK (role IN ('super', 'image')),
+  CHECK (
+    char_length(password_hash) BETWEEN 64 AND 512
+    AND password_hash ~ '^\$argon2id\$v=[0-9]+\$m=[0-9]+,t=[0-9]+,p=[0-9]+\$[A-Za-z0-9+/]+\$[A-Za-z0-9+/]+$'
+  )
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_single_super
+CREATE UNIQUE INDEX idx_admin_single_super
 ON admin_account((role)) WHERE role = 'super';

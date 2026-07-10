@@ -2,17 +2,20 @@ import { readdir, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import pg, { type PoolClient } from "pg";
-import argon2 from "argon2";
 import { appConfig } from "@imageshow/shared";
-import { env } from "../config/env.js";
-import { logger } from "./logger.js";
+import { bootstrapEnvironment } from "../config/bootstrap-env.ts";
+import { getRuntimeConfig } from "../config/runtime-config-store.ts";
+import { ensureSuperAdmin } from "../users/admin-bootstrap.ts";
+import { logger } from "./logger.ts";
+
+const databaseConfig = getRuntimeConfig().database;
 
 export const pool = new pg.Pool({
-  host: env.DATABASE_HOST,
-  port: env.DATABASE_PORT,
-  database: env.DATABASE_NAME,
-  user: env.DATABASE_USER,
-  password: env.DATABASE_PASSWORD,
+  host: databaseConfig.host,
+  port: databaseConfig.port,
+  database: databaseConfig.name,
+  user: databaseConfig.user,
+  password: databaseConfig.password,
   max: appConfig.pgPool.max,
   idleTimeoutMillis: appConfig.pgPool.idleTimeoutMillis,
   connectionTimeoutMillis: appConfig.pgPool.connectionTimeoutMillis,
@@ -36,43 +39,69 @@ export async function withTransaction<T>(work: (client: PoolClient) => Promise<T
   }
 }
 
+export async function withAdvisoryLock<T>(key: string, work: () => Promise<T>, mode: "exclusive" | "shared" = "exclusive"): Promise<T> {
+  const client = await pool.connect();
+  const lockFunction = mode === "shared" ? "pg_advisory_lock_shared" : "pg_advisory_lock";
+  const unlockFunction = mode === "shared" ? "pg_advisory_unlock_shared" : "pg_advisory_unlock";
+  try {
+    await client.query(`SELECT ${lockFunction}(hashtext($1))`, [key]);
+    return await work();
+  } finally {
+    await client.query(`SELECT ${unlockFunction}(hashtext($1))`, [key]).catch(() => undefined);
+    client.release();
+  }
+}
+
 export async function runMigrations() {
   const here = dirname(fileURLToPath(import.meta.url));
-
   const migrationDir = join(here, "..", "migrations");
   const files = (await readdir(migrationDir)).filter((file) => file.endsWith(".sql")).sort();
-  for (const file of files) {
-    const version = file.replace(/\.sql$/, "");
-    const exists = await pool.query("SELECT 1 FROM schema_migrations WHERE version = $1", [version]).catch(() => ({ rowCount: 0 }));
-    if (exists.rowCount) continue;
-    const body = await readFile(join(migrationDir, file), "utf8");
-    await withTransaction(async (client) => {
-      await client.query(body);
-      await client.query("INSERT INTO schema_migrations(version) VALUES($1) ON CONFLICT DO NOTHING", [version]);
-    });
+  const client = await pool.connect();
+  try {
+    await client.query("SELECT pg_advisory_lock(hashtext('imageshow:migrations'))");
+    for (const file of files) {
+      const version = file.replace(/\.sql$/, "");
+      let applied = false;
+      try {
+        applied = Boolean((await client.query(
+          "SELECT 1 FROM schema_migrations WHERE version = $1",
+          [version]
+        )).rowCount);
+      } catch (error) {
+        if ((error as { code?: string }).code !== "42P01") throw error;
+      }
+      if (applied) continue;
+
+      const body = await readFile(join(migrationDir, file), "utf8");
+      await client.query("BEGIN");
+      try {
+        await client.query(body);
+        await client.query("INSERT INTO schema_migrations(version) VALUES($1)", [version]);
+        await client.query("COMMIT");
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      }
+    }
+  } finally {
+    await client.query("SELECT pg_advisory_unlock(hashtext('imageshow:migrations'))").catch(() => undefined);
+    client.release();
   }
 }
 
 export async function initializeAdmin() {
-  const hasSuper = await pool.query("SELECT 1 FROM admin_account WHERE role = 'super' LIMIT 1");
-  if (hasSuper.rowCount && !env.ADMIN_FORCE_SYNC) return;
-
-  if (!env.ADMIN_USERNAME || !env.ADMIN_PASSWORD) {
-    throw new Error(hasSuper.rowCount
-      ? "ADMIN_FORCE_SYNC=true requires ADMIN_USERNAME and ADMIN_PASSWORD."
-      : "ADMIN_USERNAME and ADMIN_PASSWORD are required to provision the super admin.");
-  }
-
-  const hash = await argon2.hash(env.ADMIN_PASSWORD, { type: argon2.argon2id });
-  await withTransaction(async (client) => {
-    if (env.ADMIN_FORCE_SYNC) await client.query("DELETE FROM admin_account WHERE role = 'super' AND username <> $1", [env.ADMIN_USERNAME]);
-
-    await client.query(
-      `INSERT INTO admin_account(username, password_hash, role) VALUES($1, $2, 'super')
-       ON CONFLICT (username) DO UPDATE SET password_hash = EXCLUDED.password_hash, role = 'super', updated_at = now()`,
-      [env.ADMIN_USERNAME, hash]
+  const client = await pool.connect();
+  try {
+    await ensureSuperAdmin(
+      (sql, params) => client.query(sql, params),
+      {
+        username: bootstrapEnvironment.adminUsername,
+        password: bootstrapEnvironment.adminPassword
+      }
     );
-  });
+  } finally {
+    client.release();
+  }
 }
 
 export async function pingDb() {

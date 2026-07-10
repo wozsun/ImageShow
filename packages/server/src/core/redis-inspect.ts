@@ -1,5 +1,5 @@
-import { env } from "../config/env.js";
-import { pingRedis, redis } from "./redis-client.js";
+import { getRuntimeConfig } from "../config/runtime-config-store.ts";
+import { pingRedis, redis } from "./redis-client.ts";
 import {
   GALLERY_FILTER_OPTIONS_KEY,
   RANDOM_CURRENT_KEY,
@@ -8,17 +8,18 @@ import {
   randomItemKey,
   randomSnapshotKey,
   randomThemesKey,
-  type FolderMap,
+  type RandomCategoryCounts,
   type GalleryFilterOptions
-} from "../random/random-cache.js";
+} from "../random/random-cache.ts";
 import {
   ADMIN_OVERVIEW_CACHE_PREFIX,
+  IMAGE_LOOKUP_ID_KEY,
   IMAGE_LOOKUP_MEDIA_KEY,
   IMAGE_LOOKUP_THUMBS_KEY,
   MD5_CACHE_PREFIX,
   ORIGINAL_DIRECT_CACHE_PREFIX,
   PUBLIC_IMAGES_CACHE_PREFIX
-} from "../images/image-cache.js";
+} from "../images/image-cache.ts";
 
 const SESSION_KEY_PREFIX = "imageshow:session:";
 const LOGIN_FAIL_KEY_PREFIX = "imageshow:login_fail:";
@@ -39,22 +40,39 @@ export async function inspectRedisState() {
   ]);
   const galleryFilterOptions = parseJson<GalleryFilterOptions>(galleryRaw, { devices: [], brightnesses: [], themes: [] });
   const [coreKeys, prefixCounts, randomItemIds] = await Promise.all([
-    Promise.all([RANDOM_CURRENT_KEY, snapshotKey, itemKey, countsKey, themesKey, GALLERY_FILTER_OPTIONS_KEY, IMAGE_LOOKUP_MEDIA_KEY, IMAGE_LOOKUP_THUMBS_KEY].map((key) => redisKeySummary(key))),
+    Promise.all([
+      RANDOM_CURRENT_KEY,
+      snapshotKey,
+      itemKey,
+      countsKey,
+      themesKey,
+      GALLERY_FILTER_OPTIONS_KEY,
+      IMAGE_LOOKUP_MEDIA_KEY,
+      IMAGE_LOOKUP_THUMBS_KEY,
+      IMAGE_LOOKUP_ID_KEY
+    ].map((key) => redisKeySummary(key))),
     redisPrefixCounts(),
     sampleHashKeys(itemKey, 12)
   ]);
-  const folderSummary = summarizeFolderMap(snapshot.folderMap);
+  const categorySummary = summarizeCategoryCounts(snapshot.categoryCounts);
   const galleryFilterSummary = {
     devices: galleryFilterOptions.devices,
     brightnesses: galleryFilterOptions.brightnesses,
     themes: galleryFilterOptions.themes,
     theme_count: galleryFilterOptions.themes.length
   };
-  const issues = redisStateIssues(folderSummary.total_images, randomObjectCount, coreKeys, galleryFilterOptions, folderSummary.themes, [RANDOM_CURRENT_KEY, snapshotKey, itemKey, countsKey]);
+  const issues = redisStateIssues(
+    categorySummary.total_images,
+    randomObjectCount,
+    coreKeys,
+    galleryFilterOptions,
+    categorySummary.themes,
+    [RANDOM_CURRENT_KEY, snapshotKey, itemKey, countsKey]
+  );
   return {
     connection: {
       status: redis.status,
-      configured_db: env.REDIS_DB,
+      configured_db: getRuntimeConfig().redis.db,
       dbsize,
       memory: parseRedisInfo(memoryInfo),
       keyspace: parseRedisInfo(keyspaceInfo)
@@ -62,8 +80,8 @@ export async function inspectRedisState() {
     prefix_counts: prefixCounts,
     core_keys: coreKeys,
     random_generation: snapshot.generation,
-    folder_summary: folderSummary,
-    folder_map: snapshot.folderMap,
+    random_category_summary: categorySummary,
+    random_category_counts: snapshot.categoryCounts,
     random_items: {
       key: itemKey,
       count: randomObjectCount,
@@ -151,12 +169,12 @@ async function sampleHashKeys(key: string, limit: number) {
   return entries.filter((_, index) => index % 2 === 0).slice(0, limit);
 }
 
-function summarizeFolderMap(map: FolderMap) {
+function summarizeCategoryCounts(counts: RandomCategoryCounts) {
   const groupTotals: Record<string, number> = {};
   const themes = new Set<string>();
   let totalImages = 0;
   let categoryCount = 0;
-  for (const [device, deviceMap] of Object.entries(map)) {
+  for (const [device, deviceMap] of Object.entries(counts)) {
     for (const [brightness, brightnessMap] of Object.entries(deviceMap)) {
       const groupKey = `${device}-${brightness}`;
       groupTotals[groupKey] = 0;
@@ -179,11 +197,11 @@ function summarizeFolderMap(map: FolderMap) {
 }
 
 function redisStateIssues(
-  folderTotal: number,
+  categoryTotal: number,
   randomObjectCount: number,
   coreKeys: Awaited<ReturnType<typeof redisKeySummary>>[],
   galleryFilterOptions: GalleryFilterOptions,
-  folderThemes: string[],
+  categoryThemes: string[],
   requiredKeys: string[]
 ) {
   const issues: string[] = [];
@@ -191,9 +209,15 @@ function redisStateIssues(
   for (const summary of coreKeys) {
     if (required.has(summary.key) && !summary.exists) issues.push(`${summary.key} 不存在`);
   }
-  if (folderTotal !== randomObjectCount) issues.push(`random:item 数量 ${randomObjectCount} 与 folder_map 总数 ${folderTotal} 不一致`);
+  if (categoryTotal !== randomObjectCount) {
+    issues.push(
+      `random:item 数量 ${randomObjectCount} 与随机分类计数总数 ${categoryTotal} 不一致`
+    );
+  }
   const optionThemes = [...galleryFilterOptions.themes].sort();
-  if (JSON.stringify(optionThemes) !== JSON.stringify(folderThemes)) issues.push("gallery_filter_options 主题列表与 folder_map 不一致");
+  if (JSON.stringify(optionThemes) !== JSON.stringify(categoryThemes)) {
+    issues.push("gallery_filter_options 主题列表与随机分类计数不一致");
+  }
   return issues;
 }
 

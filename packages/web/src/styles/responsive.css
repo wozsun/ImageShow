@@ -32,8 +32,8 @@
   .progressive-image-full-frame { animation: none; }
   .select-menu,
   .select-menu.is-closing,
-  .theme-select-menu,
-  .theme-select-menu.is-closing { animation: none; }
+  .facet-select-menu,
+  .facet-select-menu.is-closing { animation: none; }
 }
 
 @media (max-width: 1080px) {
@@ -134,7 +134,7 @@
   .modal { padding: 10px; }
   .modal-footer-actions > * { flex: 1; }
   /*画廊 facet 的主题选择器（FacetSelector，首页随机图构建器也用）。*/
-  .theme-select-control { width: 100%; min-width: 0; }
+  .facet-select-control { width: 100%; min-width: 0; }
   .image-detail-modal {
     padding: 0;
     place-items: stretch;

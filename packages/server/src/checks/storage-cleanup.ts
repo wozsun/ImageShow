@@ -1,8 +1,9 @@
-import { pool } from "../core/db.js";
-import { errorMessage } from "../core/http.js";
-import { invalidateImageReadCaches } from "../images/image-cache.js";
-import { listStorageKeys, pruneEmptyStorageDirs, removeObject, type StoragePrefix } from "../storage/storage.js";
-import { expectedThumbs, storageBackends, type StorageRow } from "./storage-common.js";
+import { pool } from "../core/db.ts";
+import { errorMessage } from "../core/http.ts";
+import { invalidateImageReadCaches } from "../images/image-cache.ts";
+import { listStorageKeys, pruneEmptyStorageDirs, removeObject, type StoragePrefix } from "../storage/storage.ts";
+import { withStorageMaintenanceLock } from "../storage/maintenance-lock.ts";
+import { expectedThumbs, storageBackends, type StorageRow } from "./storage-common.ts";
 
 function objectKeyId(key: string) {
   return key.split("/").pop()?.replace(/\.[^./]+$/, "") ?? "";
@@ -12,7 +13,7 @@ function stagingSessionKey(key: string) {
   return key.replace(/\.(?:image|thumb)\.webp$/, "");
 }
 
-export async function cleanupStorage() {
+async function cleanupStorageUnderLock() {
   const rows = (await pool.query("SELECT id, object_key, status, storage_slug, is_link, device, brightness, theme FROM metadata")).rows as StorageRow[];
 
   const uploadRows = (await pool.query(
@@ -68,4 +69,8 @@ export async function cleanupStorage() {
   }
   await invalidateImageReadCaches();
   return { removed, candidates: candidateCount, pruned_dirs: prunedDirs, failures };
+}
+
+export function cleanupStorage() {
+  return withStorageMaintenanceLock(cleanupStorageUnderLock);
 }

@@ -1,16 +1,16 @@
 .admin-scroll-list { max-height: calc(100svh - 210px); overflow-y: auto; padding-right: 2px; }
 
 /*主题 / 标签 / 用户管理：卡片网格（共用 .entity-* 类）*/
-.theme-create-form { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
-.theme-create-form input { flex: 1 1 200px; max-width: 280px; }
+.admin-create-form { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+.admin-create-form input { flex: 1 1 200px; max-width: 280px; }
 /* slug 输入框在列向的 .entity-slug-field 包裹内（下方堆叠校验提示），所以重置基础规则给 input 的
    flex（否则 flex-basis:200px 会被当成列主轴=高度，把输入框撑成 200px 高）：自然高度、填满包裹宽。 */
-.theme-create-form .entity-create-slug { flex: 0 0 auto; max-width: none; }
+.admin-create-form .entity-create-slug { flex: 0 0 auto; max-width: none; }
 /*批量删除按钮推到行尾右对齐（新建按钮仍紧跟输入框）。*/
-.theme-create-form .danger-button { margin-left: auto; }
+.admin-create-form .danger-button { margin-left: auto; }
 
-.theme-create-field { flex: 1 1 200px; max-width: 280px; display: flex; flex-direction: column; gap: 4px; }
-.theme-create-form:has(.theme-create-field) { align-items: flex-start; }
+.admin-create-field { flex: 1 1 200px; max-width: 280px; display: flex; flex-direction: column; gap: 4px; }
+.admin-create-form:has(.admin-create-field) { align-items: flex-start; }
 /*主题/标签/作者 的 slug 字段：以显示名框（最宽 280px）为基准取约 3/5 ≈ 170px。不随行宽增长，*/
 .entity-slug-field { flex: 0 1 170px; max-width: 170px; }
 /*校验提示保持单行，溢出到右侧（显示名输入框下方的空白）而不是在 170px 窄框里折行。*/
@@ -18,7 +18,7 @@
 /*用户管理的密码框比通用字段略宽，让“密码（至少 8 位…）”的提示连同显示密码按钮能完整显示。*/
 .user-password-field { flex: 1 1 300px; max-width: 360px; }
 /*.password-input 包裹仍是字段全宽（360px），导致绝对定位在包裹右缘的显示密码按钮落到输入框外。*/
-.theme-create-form .password-input input { max-width: none; }
+.admin-create-form .password-input input { max-width: none; }
 
 .entity-admin-grid {
   display: grid;

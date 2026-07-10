@@ -1,8 +1,8 @@
 import type { Hono } from "hono";
 import { adminApiBasePath } from "@imageshow/shared";
-import { ok, requireSuper } from "../core/http.js";
-import { inspectRedisState } from "../core/redis-inspect.js";
-import { checkAll, checkDatabase, checkStorage, checkTrash, cleanupStorage, migrateStorageLocation, migrateStoragePaths } from "../checks/service.js";
+import { ok, requireSuper } from "../core/http.ts";
+import { inspectRedisState } from "../core/redis-inspect.ts";
+import { checkAll, checkDatabase, checkStorage, checkTrash, cleanupStorage, migrateStorageLocation } from "../checks/service.ts";
 
 export function registerCheckRoutes(app: Hono) {
   app.use(`${adminApiBasePath}/check/*`, requireSuper);
@@ -18,6 +18,4 @@ export function registerCheckRoutes(app: Hono) {
     const body = await c.req.json().catch(() => ({}));
     return c.json(ok(await migrateStorageLocation(body)));
   });
-
-  app.post(`${adminApiBasePath}/check/migrate-storage-paths`, async (c) => c.json(ok(await migrateStoragePaths())));
 }

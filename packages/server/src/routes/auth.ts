@@ -1,11 +1,18 @@
 import type { Hono } from "hono";
 import { adminApiBasePath } from "@imageshow/shared";
-import { ApiError, login, logout, ok, requireCsrf, getSession } from "../core/http.js";
-import { issueCaptcha, verifyCaptcha } from "../core/captcha.js";
-import { parse, passwordChangeInput } from "../core/validation.js";
-import { changeOwnPassword } from "../users/service.js";
-import { getRuntimeConfig } from "../config/env.js";
-import { getEffectiveLoginBackground } from "../config/settings.js";
+import { ApiError, login, logout, ok, requireCsrf, getSession } from "../core/http.ts";
+import { issueCaptcha, verifyCaptcha } from "../core/captcha.ts";
+import { redis } from "../core/redis-client.ts";
+import { parse, passwordChangeInput } from "../core/validation.ts";
+import { changeOwnPassword } from "../users/service.ts";
+import {
+  adminSessionRedisClient,
+  invalidateAdminSessionsByUsername
+} from "../users/session-invalidation.ts";
+import { getRuntimeConfig } from "../config/runtime-config-store.ts";
+import { getEffectiveLoginBackground } from "../config/app-settings.ts";
+
+const sessionRedis = adminSessionRedisClient(redis);
 
 export function registerPublicAuthRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/auth/captcha`, (c) => issueCaptcha(c));
@@ -41,6 +48,7 @@ export function registerProtectedAuthRoutes(app: Hono) {
     if (!session) throw new ApiError(401, "unauthorized", "Unauthorized");
     const input = parse(passwordChangeInput, await c.req.json().catch(() => ({})));
     await changeOwnPassword(session.username, input.current_password, input.new_password);
+    await invalidateAdminSessionsByUsername(sessionRedis, session.username, session.id);
     return c.json(ok());
   });
 }

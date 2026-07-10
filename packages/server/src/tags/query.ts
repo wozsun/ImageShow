@@ -1,7 +1,7 @@
-import { pool } from "../core/db.js";
-import { getTagVocab } from "../vocab/vocab-cache.js";
-import { resolveSlugs, resolveTermMap } from "../core/term-resolve.js";
-import type { Tag } from "./types.js";
+import { pool } from "../core/db.ts";
+import { getTagVocab } from "../vocab/vocab-cache.ts";
+import { resolveSlugs, resolveTermMap } from "../core/term-resolve.ts";
+import type { Tag } from "./types.ts";
 
 export async function getTagsForImages(ids: string[]): Promise<Map<string, string[]>> {
   const map = new Map<string, string[]>();

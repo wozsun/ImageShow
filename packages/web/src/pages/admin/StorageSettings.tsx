@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api/client.js";
 import { Icon } from "../../components/icon/Icon.js";
 import { adminApiBasePath } from "../../lib/constants.js";
 import { storageBackendDisplay, storageBackendLabel, storageTypeLabel } from "../../lib/ui/select-options.js";
 import { errorMessage } from "../../lib/ui/formatters.js";
 import type { StorageBackendAdmin } from "../../lib/types.js";
-import { SettingsFeedback, type SettingsFeedbackState } from "./SettingsPage.js";
-import { BackendEditModal } from "./StorageBackendModal.js";
+import { ActionFeedback, type ActionFeedbackState } from "../../components/feedback/ActionFeedback.js";
+import { StorageBackendModal } from "./StorageBackendModal.js";
+import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
 
 // 存储管理：命名存储后端的注册表 CRUD（卡片列表 + 拖动排序），新建/编辑走 StorageBackendModal。
 export function StorageSettings() {
@@ -15,9 +16,10 @@ export function StorageSettings() {
 }
 
 function StorageBackendsManager() {
+  const client = useQueryClient();
   const query = useQuery<{ backends: StorageBackendAdmin[] }>({ queryKey: ["storage-backends"], queryFn: () => api(`${adminApiBasePath}/storage/backends`) });
   const [busy, setBusy] = useState("");
-  const [feedback, setFeedback] = useState<SettingsFeedbackState | null>(null);
+  const [feedback, setFeedback] = useState<(ActionFeedbackState & { scope: "storage" }) | null>(null);
   const [editing, setEditing] = useState<StorageBackendAdmin | "new" | null>(null);
   const backends = query.data?.backends ?? [];
   const defaultBackend = backends.find((backend) => backend.is_default);
@@ -45,7 +47,7 @@ function StorageBackendsManager() {
     if (!dragSlug.current) return;
     dragSlug.current = null;
     const slugs = order.filter((backend) => backend.slug !== "local").map((backend) => backend.slug);
-    void run(
+    void runStorageAction(
       "reorder",
       () => api(`${adminApiBasePath}/storage/backends/reorder`, { method: "POST", body: JSON.stringify({ slugs }) }),
       "正在保存排序...",
@@ -53,14 +55,17 @@ function StorageBackendsManager() {
     );
   };
 
-  const run = async (key: string, fn: () => Promise<unknown>, pending: string, success: string): Promise<boolean> => {
+  const runStorageAction = async (key: string, action: () => Promise<unknown>, pending: string, success: string): Promise<boolean> => {
     if (busy) return false;
     setBusy(key);
     setFeedback({ scope: "storage", text: pending, status: "pending" });
     try {
-      await fn();
+      await action();
       setFeedback({ scope: "storage", text: success, status: "success" });
-      await query.refetch();
+      await Promise.all([
+        client.invalidateQueries({ queryKey: ["storage-backends"] }),
+        client.invalidateQueries({ queryKey: ["storage-options"] })
+      ]);
       return true;
     } catch (error) {
       setFeedback({ scope: "storage", text: errorMessage(error), status: "error" });
@@ -87,7 +92,7 @@ function StorageBackendsManager() {
   const setDefault = (slug: string) => {
     const backend = backends.find((item) => item.slug === slug);
     const name = backend ? storageBackendDisplay(backend) : storageBackendLabel(slug);
-    return run(`default:${slug}`, () => api(`${adminApiBasePath}/storage/backends/${slug}/default`, { method: "POST" }), "正在切换默认后端...", `默认后端已设为 ${name}`);
+    return runStorageAction(`default:${slug}`, () => api(`${adminApiBasePath}/storage/backends/${slug}/default`, { method: "POST" }), "正在切换默认后端...", `默认后端已设为 ${name}`);
   };
 
   const openEditor = (target: StorageBackendAdmin | "new") => { setFeedback(null); setEditing(target); };
@@ -103,13 +108,14 @@ function StorageBackendsManager() {
         {/* 顶部只展示列表级反馈（设默认、启停、删除、排序）；编辑弹窗打开时，保存/测试反馈改在弹窗内部展示。 */}
         {!editing && feedback && (
           <div className="settings-head-actions">
-            <SettingsFeedback feedback={feedback} inline />
+            <ActionFeedback feedback={feedback} inline />
           </div>
         )}
       </header>
       <p className="hint">每张图片记录自己所在的存储后端，可定义多个（同类型也可，例如两个对象存储桶）。新上传写入“默认”后端；已有图片可在图片管理处迁移到任意后端。</p>
       <p className="storage-default-note">当前默认上传后端 <strong>{defaultBackend ? storageBackendDisplay(defaultBackend) : storageBackendLabel(defaultSlug)}</strong></p>
       {query.isLoading && <p className="muted">加载中</p>}
+      {query.isError && <QueryErrorState error={query.error} onRetry={() => void query.refetch()} />}
       <div className="storage-card-grid">
         {order.map((backend) => (
           <BackendCard
@@ -118,13 +124,13 @@ function StorageBackendsManager() {
             busy={busy}
             onEdit={() => openEditor(backend)}
             onSetDefault={() => void setDefault(backend.slug)}
-            onToggleEnabled={() => void run(
+            onToggleEnabled={() => void runStorageAction(
               `enable:${backend.slug}`,
               () => api(`${adminApiBasePath}/storage/backends/${backend.slug}`, { method: "POST", body: JSON.stringify({ enabled: !backend.enabled }) }),
               backend.enabled ? "正在停用后端..." : "正在启用后端...",
               backend.enabled ? "存储后端已停用" : "存储后端已启用"
             )}
-            onDelete={() => void run(
+            onDelete={() => void runStorageAction(
               `delete:${backend.slug}`,
               () => api(`${adminApiBasePath}/storage/backends/${backend.slug}/delete`, { method: "POST" }),
               "正在删除后端...",
@@ -140,7 +146,7 @@ function StorageBackendsManager() {
         </button>
       </div>
       {editing && (
-        <BackendEditModal
+        <StorageBackendModal
           key={editing === "new" ? "new" : editing.slug}
           target={editing}
           busy={busy}
@@ -148,7 +154,7 @@ function StorageBackendsManager() {
           onClose={closeEditor}
           onTest={testConfig}
           onSetDefault={setDefault}
-          onSave={(slug, payload, isCreate) => run(
+          onSave={(slug, payload, isCreate) => runStorageAction(
             isCreate ? "create" : `save:${slug}`,
             () => isCreate
               ? api(`${adminApiBasePath}/storage/backends`, { method: "POST", body: JSON.stringify(payload) })

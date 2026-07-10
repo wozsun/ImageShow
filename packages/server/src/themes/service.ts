@@ -1,34 +1,42 @@
 import type { PoolClient } from "pg";
 import { slugPattern, type Brightness, type Device } from "@imageshow/shared";
-import { pool, withTransaction } from "../core/db.js";
-import { ApiError } from "../core/http.js";
-import { getRuntimeConfig } from "../config/env.js";
-import { mapWithConcurrency } from "../core/concurrency.js";
-import { invalidateImageReadCaches } from "../images/image-cache.js";
-import { rebuildRandomPool } from "../random/random-cache.js";
-import { invalidateThemeVocab } from "../vocab/vocab-cache.js";
-import { linkThumbnailKey, storageObjectKey, thumbnailObjectKey } from "../storage/image-paths.js";
-import { copyObject, pruneEmptyStorageDirs, removeObject } from "../storage/storage.js";
+import { pool, withAdvisoryLock, withTransaction } from "../core/db.ts";
+import { ApiError } from "../core/http.ts";
+import { getRuntimeConfig } from "../config/runtime-config-store.ts";
+import { mapWithConcurrency } from "../core/concurrency.ts";
+import { invalidateImageReadCaches } from "../images/image-cache.ts";
+import { rebuildRandomPool } from "../random/random-cache.ts";
+import { invalidateThemeVocab } from "../vocab/vocab-cache.ts";
+import { linkThumbnailKey, storageObjectKey, thumbnailObjectKey } from "../storage/image-paths.ts";
+import { copyObject, pruneEmptyStorageDirs, removeObject } from "../storage/storage.ts";
+import { withStorageMutationLock } from "../storage/maintenance-lock.ts";
 
 export async function ensureTheme(client: PoolClient, slug: string) {
   if (!slug || slug === "none") return;
+  await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [themeMutationLockKey(slug)]);
   await client.query(
     "INSERT INTO theme(slug, sort_order) VALUES($1, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM theme)) ON CONFLICT (slug) DO NOTHING",
     [slug]
   );
 }
 
-export async function createTheme(slug: string, displayName: string) {
+function themeMutationLockKey(slug: string) {
+  return `imageshow:theme:${slug}`;
+}
+
+export async function upsertTheme(slug: string, displayName: string) {
   if (slug === "none" || slug.length > 32 || !slugPattern.test(slug)) {
     throw new ApiError(400, "invalid_theme", "Theme slug must be a lowercase slug (a-z, 0-9, -), <=32 chars", { slug });
   }
 
-  await pool.query(
-    `INSERT INTO theme(slug, display_name, sort_order)
-     VALUES($1, $2, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM theme))
-     ON CONFLICT (slug) DO UPDATE SET display_name = EXCLUDED.display_name, updated_at = now()`,
-    [slug, displayName]
-  );
+  await withAdvisoryLock(themeMutationLockKey(slug), async () => {
+    await pool.query(
+      `INSERT INTO theme(slug, display_name, sort_order)
+       VALUES($1, $2, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM theme))
+       ON CONFLICT (slug) DO UPDATE SET display_name = EXCLUDED.display_name, updated_at = now()`,
+      [slug, displayName]
+    );
+  });
   await invalidateThemeVocab();
 }
 
@@ -106,17 +114,23 @@ async function reassignThemeImagesToNone(theme: string): Promise<boolean> {
   return true;
 }
 
+async function deleteThemeUnderLock(slug: string) {
+  const exists = (await pool.query("SELECT 1 FROM theme WHERE slug=$1", [slug])).rowCount;
+  if (!exists) return { deleted: false, moved: false };
+
+  const moved = await withStorageMutationLock(() => reassignThemeImagesToNone(slug));
+  const deleted = Boolean((await pool.query("DELETE FROM theme WHERE slug = $1", [slug])).rowCount);
+  return { deleted, moved };
+}
+
 export async function deleteTheme(slug: string) {
   if (slug === "none") {
     throw new ApiError(400, "invalid_theme", "The reserved 'none' theme cannot be deleted", { slug });
   }
-  const exists = (await pool.query("SELECT 1 FROM theme WHERE slug=$1", [slug])).rowCount;
-  if (!exists) throw new ApiError(404, "not_found", "Theme not found");
-
-  const moved = await reassignThemeImagesToNone(slug);
-  await pool.query("DELETE FROM theme WHERE slug = $1", [slug]);
+  const result = await withAdvisoryLock(themeMutationLockKey(slug), () => deleteThemeUnderLock(slug));
+  if (!result.deleted) throw new ApiError(404, "not_found", "Theme not found");
   await invalidateThemeVocab();
-  if (moved) {
+  if (result.moved) {
     await rebuildRandomPool();
     await invalidateImageReadCaches();
   }
@@ -128,9 +142,9 @@ export async function deleteThemes(slugs: string[]) {
   let moved = false;
   let deleted = 0;
   for (const slug of targets) {
-    if (!(await pool.query("SELECT 1 FROM theme WHERE slug=$1", [slug])).rowCount) continue;
-    if (await reassignThemeImagesToNone(slug)) moved = true;
-    deleted += (await pool.query("DELETE FROM theme WHERE slug=$1", [slug])).rowCount ?? 0;
+    const result = await withAdvisoryLock(themeMutationLockKey(slug), () => deleteThemeUnderLock(slug));
+    if (result.moved) moved = true;
+    if (result.deleted) deleted += 1;
   }
   await invalidateThemeVocab();
   if (moved) {

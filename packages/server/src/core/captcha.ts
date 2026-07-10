@@ -1,9 +1,9 @@
 import type { Context } from "hono";
 import { getCookie, setCookie } from "hono/cookie";
 import { randomBytes } from "node:crypto";
-import { getRuntimeConfig } from "../config/env.js";
-import { redis } from "./redis-client.js";
-import { ApiError, isSecure, noStoreCacheControl } from "./http.js";
+import { getRuntimeConfig } from "../config/runtime-config-store.ts";
+import { redis } from "./redis-client.ts";
+import { ApiError, isSecure, noStoreCacheControl } from "./http.ts";
 
 const captchaCookie = "imageshow_captcha";
 

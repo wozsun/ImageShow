@@ -11,7 +11,7 @@ export type GalleryImageCard = {
   width: number;
   height: number;
   tags: string[];
-  created_at: string;
+  image_time: string;
 };
 
 export type PublicImageDetail = {
@@ -35,13 +35,17 @@ export type ImageItem = PublicImageItem & {
   extra?: Record<string, unknown>;
   image_size?: number;
   deleted_at?: string;
+  created_at?: string;
+  updated_at?: string;
 };
 
 export type ImageAdminInfo = {
   id: string;
   md5: string;
   storage_label: string;
+  image_time: string;
   created_at: string;
+  updated_at: string;
 };
 
 export type Tag = {
@@ -134,7 +138,7 @@ export type RandomLinkDraft = {
 export type ImportJob = {
   id: string;
   kind: "local" | "download" | "proxy";
-  status: "queued" | "uploading" | "downloading" | "processing" | "ready" | "committing" | "done" | "failed" | "cancelled";
+  status: "queued" | "uploading" | "downloading" | "processing" | "ready" | "committing" | "done" | "skipped" | "failed" | "cancelled";
   message: string;
   preview: string;
   previewFull?: string;
@@ -153,10 +157,15 @@ export type ImportJob = {
   fileFingerprint?: string;
   md5?: string;
   url?: string;
-  // 当前前端处理尝试，用作服务端会话请求 id 和幂等键；重试时会更新。
-  attemptId: string;
+  // 当前前端处理尝试，同时作为 create 请求幂等键；重试时会更新。
+  attemptKey: string;
   // 已成功创建的 import_session id；SSE 状态监听和提交只使用真实会话 id。
   sessionId?: string;
+  imageTime?: string;
+  manifestLine?: number;
+  manifestPosition?: number;
+  duplicatePolicy?: "confirm" | "skip";
+  inlineMetadataFields?: Array<keyof ImageDraft>;
   originalSize?: number;
   finalSize?: number;
   quality?: number | null;

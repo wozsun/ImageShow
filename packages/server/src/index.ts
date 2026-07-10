@@ -2,39 +2,47 @@ import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { compress } from "hono/compress";
 import { adminApiBasePath, appConfig } from "@imageshow/shared";
-import { env, onRuntimeConfigChange } from "./config/env.js";
-import { applyImageConcurrency } from "./images/processing.js";
-import { cleanupOrphanRawImports } from "./images/imports/temp-files.js";
-import { initializeAdmin, pingDb, pool, runMigrations } from "./core/db.js";
-import { pingRedis, redis } from "./core/redis-client.js";
-import { logger } from "./core/logger.js";
-import { auditAdminMutation } from "./core/audit-log.js";
-import { ensureStorage } from "./storage/storage.js";
-import { fail, noStoreCacheControl, requireAuth, requireCsrf, routeError, securityHeaders } from "./core/http.js";
-import { registerAdminLogRoutes } from "./routes/admin-logs.js";
-import { registerAdminImageRoutes } from "./routes/admin-images.js";
-import { registerAdminTagRoutes } from "./routes/admin-tags.js";
-import { registerAdminThemeRoutes } from "./routes/admin-themes.js";
-import { registerAdminAuthorRoutes } from "./routes/admin-authors.js";
-import { registerAdminUserRoutes } from "./routes/admin-users.js";
-import { registerCheckRoutes } from "./routes/check.js";
-import { registerDocsRoutes } from "./routes/docs.js";
-import { registerHealthRoutes } from "./routes/health.js";
-import { registerProtectedAuthRoutes, registerPublicAuthRoutes } from "./routes/auth.js";
-import { registerPublicRoutes } from "./routes/public.js";
-import { serveRobotsTxt } from "./routes/robots.js";
-import { handleRandomImage, handleThemeHostRandom, registerRandomRoutes } from "./routes/random.js";
-import { registerSettingsRoutes } from "./routes/settings.js";
-import { registerStaticRoutes } from "./routes/spa.js";
-import { registerImportRoutes } from "./routes/imports.js";
-import { drainWorker, startWorker, stopWorker } from "./jobs/tasks.js";
-import { enforceThemeHostNavigation, specialHost, themeFromHost } from "./themes/host.js";
+import { getRuntimeConfig, onRuntimeConfigChange } from "./config/runtime-config-store.ts";
+import { configureSharpConcurrency } from "./images/processing.ts";
+import { cleanupOrphanRawImports } from "./images/imports/temp-files.ts";
+import { initializeAdmin, pingDb, pool, runMigrations } from "./core/db.ts";
+import { pingRedis, redis } from "./core/redis-client.ts";
+import { logger } from "./core/logger.ts";
+import { auditAdminMutation } from "./core/audit-log.ts";
+import { ensureRuntimeDirectories } from "./storage/storage.ts";
+import { fail, noStoreCacheControl, requireAuth, requireCsrf, routeError, securityHeaders } from "./core/http.ts";
+import { limitApiRequestBody } from "./core/request-body-limit.ts";
+import { registerAdminLogRoutes } from "./routes/admin-logs.ts";
+import { registerAdminImageRoutes } from "./routes/admin-images.ts";
+import { registerAdminTagRoutes } from "./routes/admin-tags.ts";
+import { registerAdminThemeRoutes } from "./routes/admin-themes.ts";
+import { registerAdminAuthorRoutes } from "./routes/admin-authors.ts";
+import { registerAdminUserRoutes } from "./routes/admin-users.ts";
+import { registerCheckRoutes } from "./routes/check.ts";
+import { registerDocsRoutes } from "./routes/docs.ts";
+import { registerHealthRoutes } from "./routes/health.ts";
+import { registerProtectedAuthRoutes, registerPublicAuthRoutes } from "./routes/auth.ts";
+import { registerPublicRoutes } from "./routes/public.ts";
+import { serveRobotsTxt } from "./routes/robots.ts";
+import { handleRandomImage, handleThemeHostRandom, registerRandomRoutes } from "./routes/random.ts";
+import { registerSettingsRoutes } from "./routes/settings.ts";
+import { registerStorageRoutes } from "./routes/storage.ts";
+import { registerSpaRoutes } from "./routes/spa.ts";
+import { registerImportRoutes } from "./routes/imports.ts";
+import { drainWorker, startWorker, stopWorker } from "./jobs/worker.ts";
+import { enforceThemeHostNavigation, isAllowedSiteHost, specialHost, themeFromHost } from "./themes/host.ts";
 
 const app = new Hono();
 
 app.onError((error, c) => fail(c, error));
 app.use("*", async (c, next) => {
   for (const [name, value] of Object.entries(securityHeaders)) c.header(name, value);
+  await next();
+});
+app.use("*", async (c, next) => {
+  if (!isAllowedSiteHost(c.req.header("host") ?? "")) {
+    return routeError({ status: 404, message: "Not Found" });
+  }
   await next();
 });
 app.options("*", async () => new Response(null, { status: 204 }));
@@ -69,6 +77,7 @@ app.use("/thumbs/*", mediaHostGuard);
 app.use("/original/*", mediaHostGuard);
 app.use("*", enforceThemeHostNavigation);
 
+app.use("/api/*", limitApiRequestBody);
 const apiCompress = compress();
 app.use("/api/*", async (c, next) => {
   if (new URL(c.req.url).pathname === `${adminApiBasePath}/imports/events`) return next();
@@ -100,21 +109,23 @@ registerAdminUserRoutes(app);
 registerImportRoutes(app);
 registerAdminLogRoutes(app);
 registerSettingsRoutes(app);
+registerStorageRoutes(app);
 registerCheckRoutes(app);
-registerStaticRoutes(app);
+registerSpaRoutes(app);
 
-await ensureStorage();
+await ensureRuntimeDirectories();
 await cleanupOrphanRawImports(appConfig.uploadTtlSeconds * 1000);
 await pingDb();
 await runMigrations();
 await initializeAdmin();
 await pingRedis();
-applyImageConcurrency();
-onRuntimeConfigChange(applyImageConcurrency);
+configureSharpConcurrency();
+onRuntimeConfigChange(configureSharpConcurrency);
 startWorker();
 
-const server = serve({ fetch: app.fetch, port: env.PORT });
-logger.info(`ImageShow listening on :${env.PORT}`);
+const serverPort = getRuntimeConfig().port;
+const server = serve({ fetch: app.fetch, port: serverPort });
+logger.info(`ImageShow listening on :${serverPort}`);
 
 let shuttingDown = false;
 async function shutdown(signal: string) {

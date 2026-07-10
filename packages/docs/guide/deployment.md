@@ -7,16 +7,41 @@
 ```bash
 docker run --rm -p 5518:5518 \
   -e SITE_DOMAIN=img.example.com -e TZ=UTC \
-  -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD='replace-this-password' \
-  -e ADMIN_FORCE_SYNC=false \
+  -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD="${ADMIN_PASSWORD:?set ADMIN_PASSWORD first}" \
   -e DATABASE_HOST=db.example.internal -e DATABASE_NAME=imageshow \
-  -e DATABASE_USER=imageshow -e DATABASE_PASSWORD='replace-this-db-password' \
+  -e DATABASE_USER=imageshow -e DATABASE_PASSWORD="${DATABASE_PASSWORD:?set DATABASE_PASSWORD first}" \
   -e REDIS_HOST=redis.example.internal \
   -v /srv/imageshow/data:/app/data \
   your-user/imageshow:latest
 ```
 
 应用数据统一落在 `/app/data` 下（`config.json` 配置文件、`storage/` 本地图片、`log/` 日志），因此只需挂载这一个目录。数据库密码会以 `0600` 权限写入配置文件，请限制宿主机目录访问。
+
+## 管理员密码恢复
+
+首次安装时，`ADMIN_USERNAME` / `ADMIN_PASSWORD` 只在数据库没有 super
+管理员时创建首个账号。正常情况下应登录后台修改自己的密码；修改
+`.env` 或重启容器不会覆盖数据库中的已有密码。
+
+无法登录后台时，在宿主机执行：
+
+```bash
+docker exec -it imageshow imageshow reset-password <username>
+```
+
+命令会在交互式终端中隐藏读取并二次确认新密码，不接受明文密码参数。
+密码更新只依赖 PostgreSQL；Redis 可用时会清除全部管理员会话，旧密码
+立即失效，所有管理员需要重新登录。源码环境可使用：
+
+```bash
+npm run admin:reset-password -- <username>
+```
+
+命令只要求当前 `data/config.json` 中的 PostgreSQL 连接可用。Redis 故障
+不会阻止密码更新，命令会输出警告；由于旧会话可能在 Redis 恢复后继续
+有效，应在 Redis 恢复后清空 `imageshow:session:*`，或使用相同新密码
+重新运行密码重置命令。用户不存在、密码不符合规则或 PostgreSQL 更新
+失败时会返回非零退出码。
 
 ## 反向代理与 HTTPS
 

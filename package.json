@@ -1,23 +1,24 @@
 {
   "name": "imageshow",
   "private": true,
-  "version": "3.2.7",
+  "version": "3.3.0",
   "type": "module",
   "workspaces": [
     "packages/*"
   ],
   "scripts": {
-    "dev": "npm run dev -w @imageshow/server",
-    "clean": "node -e \"const fs=require('node:fs'); ['dist','packages/shared/dist','packages/server/dist','packages/web/dist','packages/web/dist-ts','packages/docs/.vitepress/dist','packages/docs/.vitepress/cache'].forEach((path)=>fs.rmSync(path,{recursive:true,force:true}))\"",
+    "dev": "npm run build -w @imageshow/shared && npm run dev -w @imageshow/server",
+    "clean": "node -e \"const fs=require('node:fs'); ['dist','packages/shared/dist','packages/server/dist','packages/web/dist','packages/docs/.vitepress/dist','packages/docs/.vitepress/cache'].forEach((path)=>fs.rmSync(path,{recursive:true,force:true}))\"",
     "build": "npm run clean && npm run build -w @imageshow/shared && npm run build -w @imageshow/web && npm run build -w @imageshow/docs && npm run build -w @imageshow/server",
     "check": "npm run build -w @imageshow/shared && npm --workspaces run check",
     "knip": "knip",
+    "admin:reset-password": "node packages/server/src/admin-password-cli.ts reset-password",
     "start": "npm run start -w @imageshow/server"
   },
   "engines": {
-    "node": ">=24"
+    "node": ">=26.5.0 <27"
   },
   "devDependencies": {
-    "knip": "^6.23.0"
+    "knip": "^6.26.0"
   }
 }

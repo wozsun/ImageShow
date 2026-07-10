@@ -1,5 +1,5 @@
-import { thumbnailRef } from "../storage/image-paths.js";
-import { listStorageBackends } from "../config/settings.js";
+import { thumbnailRef } from "../storage/image-paths.ts";
+import { listStorageBackends } from "../storage/backend-registry.ts";
 
 export type StorageRow = { id: string; object_key: string; status: string; storage_slug: string; is_link: boolean; device: string; brightness: string; theme: string };
 

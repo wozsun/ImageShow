@@ -1,7 +1,7 @@
 import type { Context, Hono } from "hono";
-import { pool, pingDb } from "../core/db.js";
-import { fail, noStoreCacheControl, routeError } from "../core/http.js";
-import { pingRedis } from "../core/redis-client.js";
+import { pool, pingDb } from "../core/db.ts";
+import { fail, noStoreCacheControl, routeError } from "../core/http.ts";
+import { pingRedis } from "../core/redis-client.ts";
 
 export function registerHealthRoutes(app: Hono) {
   app.all("/livez", async (c) => {

@@ -1,4 +1,5 @@
 let csrfToken = "";
+export const authExpiredEvent = "imageshow:auth-expired";
 
 export class ApiClientError extends Error {
   constructor(
@@ -33,6 +34,10 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (init.method && init.method !== "GET" && csrfToken) headers.set("x-csrf-token", csrfToken);
   const response = await fetch(path, { ...init, headers, credentials: "same-origin" });
   const data = await response.json().catch(() => ({}));
+  if (response.status === 401 && !path.includes("/auth/login") && !path.includes("/auth/me")) {
+    clearCsrfToken();
+    if (typeof window !== "undefined") window.dispatchEvent(new Event(authExpiredEvent));
+  }
   if (!response.ok || data.ok === false) throw new ApiClientError(data.error || `HTTP ${response.status}`, response.status, data.code || "");
   return data;
 }

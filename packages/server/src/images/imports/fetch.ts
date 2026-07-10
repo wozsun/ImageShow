@@ -2,10 +2,10 @@ import { createWriteStream } from "node:fs";
 import { mkdir, rename, rm } from "node:fs/promises";
 import { dirname } from "node:path";
 import { pipeline } from "node:stream/promises";
-import { ApiError } from "../../core/http.js";
-import { safeFetchExternalImage } from "../../core/external-image-fetch.js";
-import { getRuntimeConfig } from "../../config/env.js";
-import { nodeReadableFromWeb } from "../../storage/stream-buffer.js";
+import { ApiError } from "../../core/http.ts";
+import { safeFetchExternalImage } from "../../core/external-image-fetch.ts";
+import { getRuntimeConfig } from "../../config/runtime-config-store.ts";
+import { nodeReadableFromWeb } from "../../storage/stream-buffer.ts";
 
 async function fetchImportResponse(url: string, limitBytes: number, externalSignal?: AbortSignal) {
   try {

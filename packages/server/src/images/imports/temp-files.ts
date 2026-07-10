@@ -2,12 +2,12 @@ import { createWriteStream } from "node:fs";
 import { mkdir, readdir, rename, rm, stat } from "node:fs/promises";
 import { dirname, join, normalize, sep } from "node:path";
 import { pipeline } from "node:stream/promises";
-import { env } from "../../config/env.js";
-import { ApiError } from "../../core/http.js";
-import { nodeReadableFromWeb } from "../../storage/stream-buffer.js";
+import { runtimePaths } from "../../config/bootstrap-env.ts";
+import { ApiError } from "../../core/http.ts";
+import { nodeReadableFromWeb } from "../../storage/stream-buffer.ts";
 
 export function rawImportPath(id: string) {
-  const root = env.TEMP_DIR;
+  const root = runtimePaths.tempDirectory;
   const path = normalize(join(root, `${id}.raw`));
   if (!path.startsWith(`${root}${sep}`)) throw new ApiError(400, "unsafe_path", "Unsafe temporary path");
   return path;
@@ -57,7 +57,7 @@ export async function removeRawImport(id: string) {
 export async function cleanupOrphanRawImports(maxAgeMs: number) {
   const cutoff = Date.now() - maxAgeMs;
   let removed = 0;
-  const root = env.TEMP_DIR;
+  const root = runtimePaths.tempDirectory;
   await mkdir(root, { recursive: true });
   const entries = await readdir(root, { withFileTypes: true });
   for (const entry of entries) {

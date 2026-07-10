@@ -3,10 +3,11 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../../lib/api/client.js";
 import { SelectMenu } from "../../components/form/SelectMenu.js";
 import { Icon } from "../../components/icon/Icon.js";
-import { StableLabel } from "../../components/data-display/StableLabel.js";
+import { StableButtonLabel } from "../../components/data-display/StableButtonLabel.js";
 import { adminApiBasePath, queryKeys } from "../../lib/constants.js";
 import { errorMessage, formatBytes, formatDate } from "../../lib/ui/formatters.js";
 import type { SelectOption } from "../../lib/ui/select-options.js";
+import { ActionFeedback, type ActionFeedbackState } from "../../components/feedback/ActionFeedback.js";
 
 type LogLevel = "DEBUG" | "INFO" | "WARN" | "ERROR" | "OFF";
 
@@ -45,7 +46,7 @@ export function LogPage() {
   const [selectedFile, setSelectedFile] = useState("");
   const [level, setLevel] = useState<LogLevel>("WARN");
   const [savingLevel, setSavingLevel] = useState(false);
-  const [feedback, setFeedback] = useState<{ text: string; status: "pending" | "success" | "error" } | null>(null);
+  const [feedback, setFeedback] = useState<ActionFeedbackState | null>(null);
   const query = useQuery<AdminLogPayload>({
     queryKey: [...queryKeys.logs, selectedFile],
     queryFn: () => api(logsPath(selectedFile))
@@ -95,11 +96,7 @@ export function LogPage() {
           <p>查看应用日志，并实时调整写入等级</p>
         </div>
         <div className="log-head-actions">
-          {feedback && (
-            <div className={`settings-feedback is-inline ${feedback.status === "success" ? "ok" : feedback.status === "error" ? "error" : ""}`}>
-              <span>{feedback.text}</span>
-            </div>
-          )}
+          {feedback && <ActionFeedback feedback={feedback} inline />}
           <label className="log-control">
             写入等级
             <SelectMenu
@@ -112,7 +109,7 @@ export function LogPage() {
           </label>
           <button type="button" disabled={query.isFetching} onClick={() => void query.refetch()}>
             <Icon name="refresh-line" />
-            <StableLabel idle="刷新" busyText="刷新中" busy={query.isFetching} />
+            <StableButtonLabel idle="刷新" busyText="刷新中" busy={query.isFetching} />
           </button>
         </div>
       </header>
@@ -134,7 +131,7 @@ export function LogPage() {
           {query.data?.truncated && <span>已截取最近 {formatBytes(query.data.limit_bytes)}</span>}
         </div>
       </div>
-      {loadError && <div className="settings-feedback error"><span>读取失败：{loadError}</span></div>}
+      {loadError && <ActionFeedback feedback={{ text: `读取失败：${loadError}`, status: "error" }} />}
       <pre className={`log-viewer${query.data?.content ? "" : " is-empty"}`}>
         {query.data?.content || (query.isFetching ? "正在读取日志..." : "暂无日志")}
       </pre>

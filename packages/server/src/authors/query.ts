@@ -1,7 +1,7 @@
-import { pool } from "../core/db.js";
-import { getAuthorVocab } from "../vocab/vocab-cache.js";
-import { resolveSlugs, resolveTermMap } from "../core/term-resolve.js";
-import type { Author } from "./types.js";
+import { pool } from "../core/db.ts";
+import { getAuthorVocab } from "../vocab/vocab-cache.ts";
+import { resolveSlugs, resolveTermMap } from "../core/term-resolve.ts";
+import type { Author } from "./types.ts";
 
 export function resolveAuthorTermMap(terms: string[]): Promise<Map<string, string>> {
   return resolveTermMap(getAuthorVocab, terms);

@@ -1,10 +1,9 @@
 import type { Hono } from "hono";
 import { adminApiBasePath } from "@imageshow/shared";
-import { ok } from "../core/http.js";
-import { parse, slugListInput, themeCreateInput, themeDisplayUpdateInput, themeSlugInput } from "../core/validation.js";
-import { invalidateImageReadCaches } from "../images/image-cache.js";
-import { listThemesWithMeta } from "../themes/query.js";
-import { createTheme, deleteTheme, deleteThemes, reorderThemes, setThemeDisplayName } from "../themes/service.js";
+import { ok } from "../core/http.ts";
+import { parse, slugListInput, themeCreateInput, themeDisplayUpdateInput, themeSlugInput } from "../core/validation.ts";
+import { listThemesWithMeta } from "../themes/query.ts";
+import { upsertTheme, deleteTheme, deleteThemes, reorderThemes, setThemeDisplayName } from "../themes/service.ts";
 
 export function registerAdminThemeRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/themes`, async (c) => {
@@ -13,7 +12,7 @@ export function registerAdminThemeRoutes(app: Hono) {
 
   app.post(`${adminApiBasePath}/themes`, async (c) => {
     const input = parse(themeCreateInput, await c.req.json().catch(() => ({})));
-    await createTheme(input.slug, input.display_name);
+    await upsertTheme(input.slug, input.display_name);
     return c.json(ok());
   });
 
@@ -26,7 +25,6 @@ export function registerAdminThemeRoutes(app: Hono) {
   app.post(`${adminApiBasePath}/themes/batch-delete`, async (c) => {
     const input = parse(slugListInput, await c.req.json().catch(() => ({})));
     const result = await deleteThemes(input.slugs);
-    await invalidateImageReadCaches();
     return c.json(ok(result));
   });
 
@@ -34,14 +32,12 @@ export function registerAdminThemeRoutes(app: Hono) {
     const slug = parse(themeSlugInput, c.req.param("slug"));
     const input = parse(themeDisplayUpdateInput, await c.req.json().catch(() => ({})));
     await setThemeDisplayName(slug, input.display_name);
-    await invalidateImageReadCaches();
     return c.json(ok());
   });
 
   app.post(`${adminApiBasePath}/themes/:slug/delete`, async (c) => {
     const slug = parse(themeSlugInput, c.req.param("slug"));
     await deleteTheme(slug);
-    await invalidateImageReadCaches();
     return c.json(ok());
   });
 }

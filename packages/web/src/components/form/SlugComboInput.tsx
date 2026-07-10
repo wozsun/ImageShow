@@ -78,7 +78,7 @@ export function SlugComboInput({ value, onChange, options, noun, checkReserved =
     <div
       ref={menuRef}
       id={listId}
-      className={`select-menu theme-combo-menu ${opensUp ? "opens-up" : ""} ${closing ? "is-closing" : ""}`}
+      className={`select-menu suggestion-menu ${opensUp ? "opens-up" : ""} ${closing ? "is-closing" : ""}`}
       role="listbox"
       aria-label={ariaLabel}
       aria-hidden={closing}
@@ -98,7 +98,7 @@ export function SlugComboInput({ value, onChange, options, noun, checkReserved =
         >
           <span>{option.slug}</span>
           {option.display_name && option.display_name !== option.slug && (
-            <span className="facet-slug">{option.display_name}</span>
+              <span className="option-display-name">{option.display_name}</span>
           )}
         </button>
       ))}
@@ -107,7 +107,7 @@ export function SlugComboInput({ value, onChange, options, noun, checkReserved =
   ) : null;
 
   return (
-    <div className={`theme-input-control ${className ?? ""}`.trim()} ref={wrapRef}>
+    <div className={`slug-combo-control ${className ?? ""}`.trim()} ref={wrapRef}>
       <input
         ref={inputRef}
         value={focused ? value : nameFor(value)}
@@ -124,7 +124,7 @@ export function SlugComboInput({ value, onChange, options, noun, checkReserved =
         aria-controls={open ? listId : undefined}
         aria-autocomplete="list"
         aria-invalid={reserved || undefined}
-        data-new-theme={isNew || undefined}
+        data-new-slug={isNew || undefined}
         title={reserved ? `「${query}」是保留子域名前缀，不能作为${noun}` : isNew ? `「${query}」是新${noun}，提交后会自动创建` : undefined}
         autoComplete="off"
       />

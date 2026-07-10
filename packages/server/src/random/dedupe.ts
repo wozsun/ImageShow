@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { appConfig } from "@imageshow/shared";
-import { pingRedis, redis } from "../core/redis-client.js";
+import { pingRedis, redis } from "../core/redis-client.ts";
 
 const RECENT_PREFIX = "imageshow:random_recent:";
 

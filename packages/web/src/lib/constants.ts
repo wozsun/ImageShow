@@ -18,7 +18,6 @@ export const queryKeys = {
   me: ["me"] as const
 };
 
-export const slugCharset = /^[a-z0-9-]+$/;
 export const slugFormatHint = "只能包含小写字母、数字、连字符";
 
 export const galleryRenderBatch = 12;
@@ -43,6 +42,8 @@ export const defaultSite: SiteSettings = {
   docs_enabled: true
 };
 
-export function publicHomePath(site: { home?: { enabled?: boolean } }): "/home" | "/gallery" {
-  return site.home?.enabled === false ? "/gallery" : "/home";
+export function publicRootPath(
+  site: Pick<SiteSettings, "root_redirect" | "home">
+): "/home" | "/gallery" {
+  return site.home.enabled === false || site.root_redirect === "gallery" ? "/gallery" : "/home";
 }

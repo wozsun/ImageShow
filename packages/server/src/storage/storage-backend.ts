@@ -1,10 +1,10 @@
 import type { Readable } from "node:stream";
-import { ApiError } from "../core/http.js";
-import type { StorageType, StorageConfig } from "../config/settings.js";
-import type { ReadablePrefix, StoragePrefix } from "./object-keys.js";
-import { LocalBackend } from "./local-backend.js";
-import { S3Backend } from "./s3-backend.js";
-import { WebdavBackend } from "./webdav-backend.js";
+import { ApiError } from "../core/http.ts";
+import type { StorageType, StorageConfig } from "./backend-config.ts";
+import type { ReadablePrefix, StoragePrefix } from "./object-keys.ts";
+import { LocalBackend } from "./local-backend.ts";
+import { S3Backend } from "./s3-backend.ts";
+import { WebdavBackend } from "./webdav-backend.ts";
 
 export type OpenedRead = { body: Readable; size: number | undefined; backend: StorageType };
 

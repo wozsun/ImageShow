@@ -1,12 +1,17 @@
 import type { Hono } from "hono";
 import { adminApiBasePath } from "@imageshow/shared";
-import { ok } from "../core/http.js";
-import { adminImageListQuery, batchMigrateStorageInput, imageIdsInput, parse, uuidInput } from "../core/validation.js";
-import { batchDeleteImages } from "../images/batch.js";
-import { getAdminImage, getAdminImageInfo, getOverviewStats, listAdminImages } from "../images/query.js";
-import { serveAdminObject, serveAdminOriginalLink, serveAdminThumb } from "../images/serving.js";
-import { deleteImage, migrateImagesStorage, updateImageMetadata } from "../images/service.js";
-import { batchRestoreImages, purgeDeletedImage, purgeDeletedImages, restoreDeletedImage } from "../images/trash.js";
+import { ok } from "../core/http.ts";
+import { adminImageListQuery, batchMigrateStorageInput, imageIdsInput, parse, uuidInput } from "../core/validation.ts";
+import { batchDeleteImages } from "../images/batch-delete.ts";
+import {
+  getAdminImage,
+  getAdminImageInfo,
+  listAdminImages
+} from "../images/read-models/admin-images.ts";
+import { getOverviewStats } from "../images/read-models/overview.ts";
+import { serveAdminObject, serveAdminOriginalLink, serveAdminThumb } from "../images/serving.ts";
+import { deleteImage, migrateImagesStorage, updateImageMetadata } from "../images/service.ts";
+import { batchRestoreImages, purgeDeletedImage, purgeDeletedImages, restoreDeletedImage } from "../images/trash.ts";
 
 export function registerAdminImageRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/overview`, async (c) => c.json(ok(await getOverviewStats())));

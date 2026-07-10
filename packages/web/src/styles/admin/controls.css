@@ -1,7 +1,54 @@
-.theme-input-control { width: 100%; min-width: 0; }
+.slug-combo-control { width: 100%; min-width: 0; }
 
-.theme-input-control input[aria-invalid="true"] { border-color: #d64545; box-shadow: 0 0 0 1px #d64545; }
-.theme-input-control input[data-new-theme="true"] { border-color: #1f9d57; box-shadow: 0 0 0 1px #1f9d57; }
+.slug-combo-control input[aria-invalid="true"] { border-color: #d64545; box-shadow: 0 0 0 1px #d64545; }
+.slug-combo-control input[data-new-slug="true"] { border-color: #1f9d57; box-shadow: 0 0 0 1px #1f9d57; }
+
+.proxy-image-note {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  color: #66717f;
+  font-weight: 600;
+}
+.proxy-image-note .app-icon { width: 11px; height: 11px; flex-basis: 11px; }
+
+.action-feedback {
+  margin: 12px 0 0;
+  padding: 12px 14px;
+  border: 1px solid #cfe0fb;
+  border-radius: 8px;
+  color: #29415f;
+  background: #eef5ff;
+  animation: surface-in .18s ease-out;
+}
+.action-feedback.ok {
+  color: #245236;
+  background: #f2fbf5;
+  border-color: #b9dec4;
+}
+.action-feedback.error {
+  color: #8a2d24;
+  background: #fff6f4;
+  border-color: #de8b83;
+}
+.action-feedback pre {
+  margin: 0;
+  max-height: 280px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+.action-feedback.is-inline {
+  margin: 0;
+  padding: 7px 12px;
+  min-width: 0;
+  max-width: 420px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  animation: none;
+}
 /*表单字段校验提示（slug 非法、密码不符合策略等）。*/
 .field-error { margin: 0; color: #d64545; font-size: 13px; }
 
@@ -68,7 +115,7 @@ input.is-changed,
 textarea.is-changed,
 .select-control.is-changed .select-trigger,
 .tag-input-control.is-changed,
-.theme-input-control.is-changed input:not([data-new-theme]):not([aria-invalid]) {
+.slug-combo-control.is-changed input:not([data-new-slug]):not([aria-invalid]) {
   border-color: #d99a00;
   background: #fff8e8;
 }

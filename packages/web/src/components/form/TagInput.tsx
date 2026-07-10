@@ -80,7 +80,7 @@ export function TagInput({ value, onChange, suggestions, disabled = false, ariaL
     <div
       ref={menuRef}
       id={listId}
-      className={`select-menu theme-combo-menu ${opensUp ? "opens-up" : ""} ${closing ? "is-closing" : ""}`}
+      className={`select-menu suggestion-menu ${opensUp ? "opens-up" : ""} ${closing ? "is-closing" : ""}`}
       role="listbox"
       aria-label={ariaLabel}
       aria-hidden={closing}
@@ -100,7 +100,7 @@ export function TagInput({ value, onChange, suggestions, disabled = false, ariaL
         >
           <span>{tag.slug}</span>
           {tag.display_name && tag.display_name !== tag.slug && (
-            <span className="facet-slug">{tag.display_name}</span>
+            <span className="option-display-name">{tag.display_name}</span>
           )}
         </button>
       ))}

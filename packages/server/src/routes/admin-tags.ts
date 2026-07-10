@@ -1,9 +1,9 @@
 import type { Hono } from "hono";
 import { adminApiBasePath } from "@imageshow/shared";
-import { ok } from "../core/http.js";
-import { imageTagsInput, parse, slugListInput, tagCreateInput, tagDisplayUpdateInput, tagSlugInput, uuidInput } from "../core/validation.js";
-import { createTag, deleteTag, deleteTags, reorderTags, setImageTags, setTagDisplayName } from "../tags/service.js";
-import { listTagsWithCounts } from "../tags/query.js";
+import { ok } from "../core/http.ts";
+import { imageTagsInput, parse, slugListInput, tagCreateInput, tagDisplayUpdateInput, tagSlugInput, uuidInput } from "../core/validation.ts";
+import { upsertTag, deleteTag, deleteTags, reorderTags, setImageTags, setTagDisplayName } from "../tags/service.ts";
+import { listTagsWithCounts } from "../tags/query.ts";
 
 export function registerAdminTagRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/tags`, async (c) => {
@@ -12,7 +12,7 @@ export function registerAdminTagRoutes(app: Hono) {
 
   app.post(`${adminApiBasePath}/tags`, async (c) => {
     const input = parse(tagCreateInput, await c.req.json().catch(() => ({})));
-    return c.json(ok({ item: await createTag(input.slug, input.display_name) }));
+    return c.json(ok({ item: await upsertTag(input.slug, input.display_name) }));
   });
 
   app.post(`${adminApiBasePath}/tags/reorder`, async (c) => {

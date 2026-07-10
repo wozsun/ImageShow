@@ -1,6 +1,6 @@
 {
   "name": "@imageshow/docs",
-  "version": "3.2.7",
+  "version": "3.3.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,6 +10,6 @@
     "check": "node -e \"\""
   },
   "devDependencies": {
-    "vitepress": "^2.0.0-alpha.17"
+    "vitepress": "^2.0.0-alpha.18"
   }
 }

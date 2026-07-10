@@ -15,8 +15,12 @@ export const appConfig = {
 
   trashBatchSize: 100,
 
+  imports: {
+    jsonlManifestMaxBytes: 16 * 1024 * 1024
+  },
+
   uploadTtlSeconds: 10 * 60,
-  folderMapTtlSeconds: 60 * 60,
+  derivedCacheTtlSeconds: 60 * 60,
   pgPool: {
     max: 20,
     idleTimeoutMillis: 30000,
@@ -76,7 +80,9 @@ export const appConfig = {
       fill_original_url: false,
       concurrency: 2,
       global_concurrency: 5,
-      fetch_timeout_seconds: 30
+      fetch_timeout_seconds: 30,
+      url_list_max_items: 100,
+      jsonl_max_items: 100
     },
     normalize: {
       quality: 80,
@@ -169,6 +175,8 @@ export type LinkImageSettings = {
   concurrency: number;
   global_concurrency: number;
   fetch_timeout_seconds: number;
+  url_list_max_items: number;
+  jsonl_max_items: number;
 };
 
 export type NormalizeSettings = {

@@ -1,9 +1,7 @@
 import { adminApiBasePath, type Brightness, type Device } from "@imageshow/shared";
-import { setImageLookups, type ImageLookupItem } from "./image-cache.js";
-import { thumbnailObjectKey } from "../storage/image-paths.js";
-import { publicImageUrls } from "../storage/storage.js";
-import { getTagsForImages } from "../tags/query.js";
-import { hasDistinctOriginalUrl } from "./original-link.js";
+import { publicImageUrls } from "../storage/storage.ts";
+import { getTagsForImages } from "../tags/query.ts";
+import { hasDistinctOriginalUrl } from "./original-link.ts";
 
 export type ImageRecord = {
   id: string;
@@ -16,8 +14,8 @@ export type ImageRecord = {
   ext: string;
   md5?: string | null;
   object_key: string;
-  storage_slug?: string;
-  is_link?: boolean;
+  storage_slug: string;
+  is_link: boolean;
 
   author?: string | null;
   title?: string | null;
@@ -27,6 +25,7 @@ export type ImageRecord = {
   extra?: Record<string, unknown> | null;
   status: string;
   deleted_at?: string | Date | null;
+  image_time?: string | Date | null;
   created_at?: string | Date | null;
   updated_at?: string | Date | null;
 };
@@ -36,12 +35,12 @@ export type PublicImageDetail = Awaited<ReturnType<typeof publicImageDetail>>;
 
 export type PublicImageCardRecord = Pick<
   ImageRecord,
-  "id" | "device" | "brightness" | "theme" | "width" | "height" | "ext" | "object_key" | "storage_slug" | "is_link" | "title" | "created_at"
+  "id" | "device" | "brightness" | "theme" | "width" | "height" | "ext" | "object_key" | "storage_slug" | "is_link" | "title" | "image_time" | "status"
 >;
 
 export type PublicImageDetailRecord = Pick<
   ImageRecord,
-  "id" | "device" | "brightness" | "theme" | "ext" | "object_key" | "storage_slug" | "is_link" | "author" | "description" | "source" | "original"
+  "id" | "device" | "brightness" | "theme" | "ext" | "object_key" | "storage_slug" | "is_link" | "author" | "description" | "source" | "original" | "status"
 >;
 
 type PublicImageUrlRecord = Pick<
@@ -70,7 +69,7 @@ export function importSessionResponse(row: ImportSessionRecord) {
 }
 
 async function publicUrlsForRow(row: PublicImageUrlRecord) {
-  const storageSlug = row.storage_slug ?? "local";
+  const storageSlug = row.storage_slug;
   const isLink = Boolean(row.is_link);
   const linkParams = isLink ? { id: row.id, device: row.device, brightness: row.brightness, theme: row.theme, ext: row.ext } : undefined;
   const urls = await publicImageUrls(row.object_key, storageSlug, isLink, linkParams);
@@ -106,7 +105,9 @@ export async function publicImage(row: ImageRecord, tags?: string[]) {
     status: row.status,
     tags: tagList,
     deleted_at: row.deleted_at ?? null,
+    image_time: row.image_time ?? null,
     created_at: row.created_at ?? null,
+    updated_at: row.updated_at ?? null,
     ...urls
   };
 }
@@ -144,7 +145,7 @@ async function publicImageCard(row: PublicImageCardRecord, tags: string[] = []) 
     height: Number(row.height ?? 0),
     title: row.title ?? "",
     tags,
-    created_at: row.created_at ?? null,
+    image_time: row.image_time ?? null,
     thumb_url: urls.thumb_url
   };
 }
@@ -164,31 +165,4 @@ export function adminImageView(image: PublicImage): AdminImage {
     object_url: `${adminApiBasePath}/images/${image.id}/raw`,
     thumb_url: `${adminApiBasePath}/images/${image.id}/thumb`
   };
-}
-
-export function publicImageListCacheKey(q: { status: string; d?: string; b?: string; t?: string; tag?: string; a?: string; cursor?: string; limit: number }) {
-  return [
-    `status=${q.status}`,
-    `d=${q.d ?? ""}`,
-    `b=${q.b ?? ""}`,
-    `t=${q.t ?? ""}`,
-    `tag=${q.tag ?? ""}`,
-    `a=${q.a ?? ""}`,
-    `cursor=${q.cursor ?? ""}`,
-    `limit=${q.limit}`
-  ].map((part) => encodeURIComponent(part)).join("&");
-}
-
-export async function cacheImageLookups(items: Array<{ is_link?: boolean; object_key: string; ext: string; storage_slug?: string }>) {
-  const lookups: ImageLookupItem[] = [];
-  for (const item of items) {
-    if (item.is_link) continue;
-    lookups.push({
-      object_key: item.object_key,
-      thumb_key: thumbnailObjectKey(item.object_key),
-      ext: item.ext,
-      slug: item.storage_slug
-    });
-  }
-  await setImageLookups(lookups);
 }

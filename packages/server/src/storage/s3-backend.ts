@@ -8,19 +8,20 @@ import {
   PutObjectCommand,
   S3Client
 } from "@aws-sdk/client-s3";
-import { ApiError } from "../core/http.js";
-import { getUploadLimitBytes, missingS3Fields, type StorageConfig } from "../config/settings.js";
-import { s3CopySource, s3ListPrefix, storageS3ObjectName, type ReadablePrefix, type StoragePrefix } from "./object-keys.js";
-import { streamToBuffer } from "./stream-buffer.js";
+import { ApiError } from "../core/http.ts";
+import { getInputImageMaxBytes } from "../config/app-settings.ts";
+import { missingS3Fields, type StorageConfig } from "./backend-config.ts";
+import { s3CopySource, s3ListPrefix, storageS3ObjectName, type ReadablePrefix, type StoragePrefix } from "./object-keys.ts";
+import { streamToBuffer } from "./stream-buffer.ts";
 import type {
   CopyPrefix,
   OpenedRead,
   StorageDriver,
   StorageSelfTest
-} from "./storage-backend.js";
+} from "./storage-backend.ts";
 
 function storageS3Client(config: StorageConfig) {
-  const endpoint = /^https?:\/\//i.test(config.s3.endpoint) ? config.s3.endpoint : `https://${config.s3.endpoint}`;
+  const endpoint = /^https:\/\//i.test(config.s3.endpoint) ? config.s3.endpoint : `https://${config.s3.endpoint}`;
   return new S3Client({
     endpoint,
     region: config.s3.region || "auto",
@@ -32,7 +33,8 @@ function storageS3Client(config: StorageConfig) {
   });
 }
 
-function isS3NotFound(error: unknown) {
+/** @internal Exported only for local storage error verification. */
+export function isS3NotFound(error: unknown) {
   const maybe = error as { name?: string; Code?: string; $metadata?: { httpStatusCode?: number } };
   return maybe?.$metadata?.httpStatusCode === 404 || maybe?.name === "NoSuchKey" || maybe?.name === "NotFound" || maybe?.Code === "NoSuchKey";
 }
@@ -40,8 +42,10 @@ function isS3NotFound(error: unknown) {
 export class S3Backend implements StorageDriver {
   private readonly client: S3Client;
   private readonly bucket: string;
+  private readonly config: StorageConfig;
 
-  constructor(private readonly config: StorageConfig) {
+  constructor(config: StorageConfig) {
+    this.config = config;
     this.client = storageS3Client(config);
     this.bucket = config.s3.bucket;
   }
@@ -54,8 +58,9 @@ export class S3Backend implements StorageDriver {
     try {
       await this.client.send(new HeadObjectCommand({ Bucket: this.bucket, Key: this.name(prefix, key) }));
       return true;
-    } catch {
-      return false;
+    } catch (error) {
+      if (isS3NotFound(error)) return false;
+      throw error;
     }
   }
 
@@ -71,7 +76,7 @@ export class S3Backend implements StorageDriver {
   }
 
   async readBuffer(prefix: StoragePrefix, key: string) {
-    const limit = await getUploadLimitBytes();
+    const limit = await getInputImageMaxBytes();
     const opened = await this.openRead(prefix, key);
     if (opened.size !== undefined && opened.size > limit) {
       opened.body.destroy();

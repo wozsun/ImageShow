@@ -6,14 +6,16 @@ import { Icon } from "../../components/icon/Icon.js";
 import { ConfirmDialog } from "../../components/feedback/ConfirmDialog.js";
 import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
 import { adminApiBasePath, queryKeys } from "../../lib/constants.js";
-import { errorMessage, formatDate, formatImageMeta, imageDisplayTitle } from "../../lib/ui/formatters.js";
+import { errorMessage, formatDate, formatImageClassification, imageDisplayTitle } from "../../lib/ui/formatters.js";
 import { useStorageNameResolver } from "../../lib/api/storage-options.js";
 import type { AdminSettings, Author, ImageItem, Tag, Theme } from "../../lib/types.js";
 import { ImageDetailModal } from "../../components/image/ImageDetailModal.js";
 import { ThumbImage } from "../../components/image/ThumbImage.js";
-import { BatchMetadataModal, ImageEditModal } from "./ImageModals.js";
-import { SettingsFeedback } from "./SettingsPage.js";
+import { BatchMetadataModal } from "./BatchMetadataModal.js";
+import { ImageEditModal } from "./ImageEditModal.js";
+import { ActionFeedback } from "../../components/feedback/ActionFeedback.js";
 import { Uploader } from "./uploader/Uploader.js";
+import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
 
 type ConfirmAction =
   | { kind: "batch-delete"; ids: string[] }
@@ -38,6 +40,7 @@ export function ImageAdmin() {
   const [feedback, setFeedback] = useState<{ text: string; status: "pending" | "success" | "error" } | null>(null);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
+  const [rowBusy, setRowBusy] = useState("");
   const gridRef = useRef<HTMLDivElement | null>(null);
   const client = useQueryClient();
   const { data: settingsData } = useQuery<{ settings: AdminSettings }>({ queryKey: queryKeys.settings, queryFn: () => api(`${adminApiBasePath}/settings`) });
@@ -61,7 +64,7 @@ export function ImageAdmin() {
   if (cursor) listParams.set("cursor", cursor);
   const listPath = `${adminApiBasePath}/images?${listParams}`;
 
-  const { data, isFetching } = useQuery<{ items: ImageItem[]; total: number; has_next: boolean; next_cursor: string | null }>({
+  const { data, error: listError, isError: listFailed, isFetching, refetch: refetchList } = useQuery<{ items: ImageItem[]; total: number; has_next: boolean; next_cursor: string | null }>({
     queryKey: [...queryKeys.adminImages, view, cursor, pageSize],
     queryFn: () => api(listPath),
     enabled: Boolean(settingsData),
@@ -98,6 +101,20 @@ export function ImageAdmin() {
     setCursorHistory((current) => [...current, data.next_cursor!]);
   };
   useEffect(() => setSelected([]), [cursor]);
+  const runRowAction = async (item: ImageItem, action: "delete" | "restore") => {
+    if (rowBusy) return;
+    setRowBusy(`${action}:${item.id}`);
+    setFeedback({ text: action === "delete" ? "正在删除图片…" : "正在恢复图片…", status: "pending" });
+    try {
+      await api(`${adminApiBasePath}/images/${item.id}/${action}`, { method: "POST" });
+      setFeedback({ text: action === "delete" ? "图片已移入回收站" : "图片已恢复", status: "success" });
+      refresh();
+    } catch (error) {
+      setFeedback({ text: `操作失败：${errorMessage(error)}`, status: "error" });
+    } finally {
+      setRowBusy("");
+    }
+  };
   const runConfirmedAction = async () => {
     if (!confirmAction) return;
     setActionBusy(true);
@@ -168,7 +185,7 @@ export function ImageAdmin() {
         <div className="image-admin-head-tools">
           {view === "ready" && <Uploader onDone={refresh} />}
           {/* 批量操作进度/结果（含回收站批量恢复的「恢复中… X/N」）就近显示在视图标签左侧。 */}
-          {feedback && <SettingsFeedback feedback={feedback} inline />}
+          {feedback && <ActionFeedback feedback={feedback} inline />}
           <div className="segmented">
             <button type="button" className={view === "ready" ? "active" : ""} onClick={() => changeView("ready")}>
               图库
@@ -242,11 +259,14 @@ export function ImageAdmin() {
             onDetail={() => setDetail(item)}
             onEdit={() => setEditing(item)}
             onPurge={() => setConfirmAction({ kind: "purge", id: item.id, title: imageDisplayTitle(item) })}
-            onChanged={refresh}
+            busy={rowBusy.endsWith(item.id)}
+            onDelete={() => void runRowAction(item, "delete")}
+            onRestore={() => void runRowAction(item, "restore")}
           />
         ))}
+        {listFailed && <QueryErrorState error={listError} onRetry={() => void refetchList()} />}
         {isFetching && !items.length && <p className="muted">加载中</p>}
-        {!isFetching && !items.length && <p className="muted">暂无记录</p>}
+        {!listFailed && !isFetching && !items.length && <p className="muted">暂无记录</p>}
       </div>
       <OverlayScrollbar targetRef={gridRef} pageEdge />
       <nav className="admin-pagination" aria-label="图片列表分页">
@@ -298,15 +318,17 @@ export function ImageAdmin() {
   );
 }
 
-function ImageRow({ item, storageName, checked, onCheck, onDetail, onEdit, onPurge, onChanged }: {
+function ImageRow({ item, storageName, checked, busy, onCheck, onDetail, onEdit, onPurge, onDelete, onRestore }: {
   item: ImageItem;
   storageName: (item: { is_link: boolean; storage_slug: string }) => string;
   checked: boolean;
+  busy: boolean;
   onCheck: (checked: boolean) => void;
   onDetail: () => void;
   onEdit: () => void;
   onPurge: () => void;
-  onChanged: () => void;
+  onDelete: () => void;
+  onRestore: () => void;
 }) {
   const handleCardKey = (event: React.KeyboardEvent<HTMLElement>) => {
     if (event.key === "Enter" || event.key === " ") {
@@ -333,18 +355,19 @@ function ImageRow({ item, storageName, checked, onCheck, onDetail, onEdit, onPur
       </div>
       <div className="row-main">
         <strong>{imageDisplayTitle(item)}</strong>
-        <span>{formatImageMeta(item)}</span>
+        <span>{formatImageClassification(item)}</span>
       </div>
       <div className="row-actions" onClick={(event) => event.stopPropagation()}>
         {item.status === "deleted" && item.deleted_at && <span className="row-deleted">删除于 {formatDate(item.deleted_at)}</span>}
         {item.status === "ready" && <span className="row-storage"><Icon name="hard-drive-2-line" />{storageName(item)}</span>}
         {item.status === "ready" ? (
           <>
-            <button title="编辑" onClick={onEdit}><Icon name="pencil-line" /></button>
+            <button title="编辑" disabled={busy} onClick={onEdit}><Icon name="pencil-line" /></button>
             <button
               className="danger-button"
               title="删除"
-              onClick={async () => { await api(`${adminApiBasePath}/images/${item.id}/delete`, { method: "POST" }); onChanged(); }}
+              disabled={busy}
+              onClick={onDelete}
             >
               <Icon name="delete-bin-6-line" />
             </button>
@@ -353,11 +376,12 @@ function ImageRow({ item, storageName, checked, onCheck, onDetail, onEdit, onPur
           <>
             <button
               title="恢复"
-              onClick={async () => { await api(`${adminApiBasePath}/images/${item.id}/restore`, { method: "POST" }); onChanged(); }}
+              disabled={busy}
+              onClick={onRestore}
             >
               <Icon name="arrow-go-back-line" />
             </button>
-            <button className="danger-button" title="永久删除" onClick={onPurge}>
+            <button className="danger-button" title="永久删除" disabled={busy} onClick={onPurge}>
               <Icon name="delete-bin-7-line" />
             </button>
           </>

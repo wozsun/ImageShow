@@ -7,10 +7,10 @@ ImageShow 的配置按持久化位置分为三类：数据库、`/app/data/confi
 | 来源 | 保存内容 | 修改方式 |
 | --- | --- | --- |
 | PostgreSQL | 管理员账号；本地 / S3 / WebDAV 存储后端注册表；S3 endpoint、region、bucket、access key、secret key、根目录、public URL 等敏感或实例化数据。 | 后台设置页。secret key 只保存，不返回给前端。 |
-| `/app/data/config.json` | 站点名、域名、icon、根路径跳转、首页 / 画廊 / 随机图默认行为、登录页背景、监听端口、PostgreSQL / Redis 连接、上传限制、链接导入、标准化、缩略图、安全、验证码、日志等非敏感运行时配置。 | 后台设置页，或直接编辑文件后在后台「设置 → 读取配置文件」；上传文件大小、上传长边校验和服务端全局导入并发只通过配置文件维护。 |
+| `/app/data/config.json` | 站点名、域名、入口行为、上传 / 导入 / 图片处理、安全与日志配置，以及 PostgreSQL / Redis 连接凭据。 | 后台设置页，或直接编辑文件后在后台「设置 → 读取配置文件」；该文件包含数据库密码，需限制宿主机访问。上传文件大小、上传长边校验和服务端全局导入并发只通过配置文件维护。 |
 | 环境变量 | 只用于首次生成 `config.json`，以及初始化管理员账号和 PostgreSQL 官方镜像变量。 | 修改 `.env` 后重建 / 重启；配置文件生成后，普通运行时配置以 `config.json` 为准。 |
 
-完整字段清单、默认值和中英文注释见仓库根目录的 `config.example.jsonc`。实际运行文件是纯 JSON，不支持注释。
+完整字段清单、默认值和中英文注释见仓库根目录的 `config.example.jsonc`。实际运行文件是纯 JSON，不支持注释，且必须包含当前版本的完整字段；缺字段、未知字段或类型错误都会在启动或手动重载时明确拒绝，不再自动补齐旧配置。
 
 ## 热加载边界
 
@@ -20,16 +20,16 @@ ImageShow 的配置按持久化位置分为三类：数据库、`/app/data/confi
 - `redis.*`
 - `port`
 
-`ADMIN_USERNAME` / `ADMIN_PASSWORD` 只在数据库没有 super 管理员时创建首个账号，最终写入 PostgreSQL 的 `admin_account` 表，不进入 `config.json`。已有 super 时默认不会同步环境变量密码；只有显式设置 `ADMIN_FORCE_SYNC=true` 且同时提供账号密码，启动时才会强制同步 super。
+`ADMIN_USERNAME` / `ADMIN_PASSWORD` 只在数据库没有 super 管理员时创建首个账号，最终写入 PostgreSQL 的 `admin_account` 表，不进入 `config.json`。初始化会先取得数据库 advisory lock 并检查已有 super，只有确实缺失时才要求这两个值；已有 super 时不会再读取环境变量覆盖账号或密码。
 
 ## 常用配置组
 
 | 配置路径 | 用途 |
 | --- | --- |
-| `site.name` / `site.domain` / `site.icon_url` | 站点名称、主域名和图标；`site.name` 也会写入 SPA HTML 的 `<title>`。 |
-| `site.root_redirect` | 根路径跳转目标：`home` 或 `gallery`。 |
-| `site.home.enabled` | 是否启用公共首页 `/home`，默认 `true`。关闭后 `/home` 重定向到画廊，导航不再显示首页入口，根路径也强制进画廊。 |
-| `site.home.tagline` / `site.home.hero_background` / `site.home.preview_delay_ms` | 站点描述、首页 hero 背景与随机预览切换延迟；`site.home.tagline` 也会写入 SPA HTML 的 description。 |
+| `site.name` / `site.domain` / `site.icon_url` | 站点名称、主域名和图标；域名仅允许 DNS 名称（开发环境可带端口），图标仅允许站内绝对路径或 HTTPS，`site.name` 也会写入 SPA HTML 的 `<title>`。 |
+| `site.root_redirect` | 根路径直接显示的页面：`home` 或 `gallery`；`/home`、`/gallery` 固定路径仍可单独访问。 |
+| `site.home.enabled` | 是否启用公共首页 `/home`，默认 `true`。关闭后 `/home` 重定向到画廊，导航不再显示首页入口，根路径固定显示画廊。 |
+| `site.home.tagline` / `site.home.hero_background` / `site.home.preview_delay_ms` | 站点描述、首页 hero 背景与随机预览切换延迟；背景仅允许站内绝对路径或 HTTPS，`site.home.tagline` 也会写入 SPA HTML 的 description。 |
 | `site.gallery.default_limit` / `site.gallery.order` | 画廊默认分页数量与排序。 |
 | `site.random_default_method` | `/random` 默认返回方式：`redirect` 或 `proxy`。 |
 | `site.random_subdomain` / `site.static_subdomain` / `site.docs_subdomain` / `site.link_subdomain` | 保留子域名前缀。 |
@@ -40,10 +40,12 @@ ImageShow 的配置按持久化位置分为三类：数据库、`/app/data/confi
 | `link_image.concurrency` | 单客户端 URL 导入队列并发数，覆盖“下载保存”和“代理链接”。 |
 | `link_image.global_concurrency` | 服务端 URL 导入 prepare 全局并发数，多个客户端共享；只在配置文件中维护。 |
 | `link_image.fetch_timeout_seconds` | 外链图片请求超时，单位秒；只覆盖下载和代理准备阶段的外部请求。 |
+| `link_image.url_list_max_items` | URL 列表单次输入数量上限，默认 100；不在设置页展示，管理端只读返回该值供导入窗口预检。 |
+| `link_image.jsonl_max_items` | JSONL 清单单次图片数量上限，默认 100、最大 4096（受 UUIDv7 `rand_a` 容量约束）；不在设置页展示，管理端只读返回该值供导入窗口预检，修改需编辑配置文件。 |
 | `normalize.*` | 本地上传与下载导入共用的最终入库文件标准化策略。 |
 | `thumbnail.*` | 缩略图长边和压缩质量，只影响此后新生成的缩略图。 |
 | `image_detail.title_opens_image` | 图片详情弹窗标题是否链接到图片直链。 |
-| `admin.login_background` | 后台登录页背景；留空时使用站点自身随机图。 |
+| `admin.login_background` | 后台登录页背景，仅允许站内绝对路径或 HTTPS；留空时使用站点自身随机图。 |
 | `admin.image_page_size` / `admin.recent_uploads` / `admin.show_unset_theme_card` | 后台图片分页、概览最近上传数量、主题页「未设置」占位卡片开关。 |
 | `background_job.*` | 后台任务并发：移动清理、删除主题时图片搬运、批量迁移存储拷贝。默认各 5。 |
 | `security.*` | 登录会话有效期和登录限流阈值。 |
@@ -66,7 +68,9 @@ ImageShow 的配置按持久化位置分为三类：数据库、`/app/data/confi
     "fill_original_url": false,
     "concurrency": 2,
     "global_concurrency": 5,
-    "fetch_timeout_seconds": 30
+    "fetch_timeout_seconds": 30,
+    "url_list_max_items": 100,
+    "jsonl_max_items": 100
   },
   "normalize": {
     "quality": 80,
@@ -85,15 +89,13 @@ ImageShow 的配置按持久化位置分为三类：数据库、`/app/data/confi
 
 ## 环境变量
 
-`compose.yaml` 默认只向容器注入少数变量：
+`compose.yaml` 默认使用或向容器注入以下变量：
 
 | 环境变量 | 用途 |
 | --- | --- |
 | `ADMIN_USERNAME` / `ADMIN_PASSWORD` | 数据库没有 super 时初始化首个管理员账号。 |
-| `ADMIN_FORCE_SYNC` | 设为 `true` 时启动阶段强制同步 super 账号和密码；默认不启用。 |
 | `DATABASE_NAME` / `DATABASE_USER` / `DATABASE_PASSWORD` | 初始化应用数据库和 PostgreSQL 容器。 |
 | `SITE_DOMAIN` | 首次生成配置文件时播种 `site.domain`，默认 `example.com`。 |
-| `LINK_IMAGE_FETCH_TIMEOUT_SECONDS` | 首次生成配置文件时播种外链图片请求超时，默认 `30`。 |
 | `HOST_PORT` | 应用宿主机端口映射，默认 `5518`。 |
 | `TZ` | 应用容器时区，影响日志时间格式，默认 `UTC`。 |
 
@@ -117,6 +119,10 @@ ImageShow 的配置按持久化位置分为三类：数据库、`/app/data/confi
 | `link_image.concurrency` | `LINK_IMAGE_CONCURRENCY` |
 | `link_image.global_concurrency` | `LINK_IMAGE_GLOBAL_CONCURRENCY` |
 | `link_image.fetch_timeout_seconds` | `LINK_IMAGE_FETCH_TIMEOUT_SECONDS` |
+| `link_image.url_list_max_items` | `LINK_IMAGE_URL_LIST_MAX_ITEMS` |
+| `link_image.jsonl_max_items` | `LINK_IMAGE_JSONL_MAX_ITEMS` |
 | `port` | `PORT` |
 
-仓库自带 `compose.yaml` 不注入所有可选项。配置文件已经生成后，请直接修改 `config.json` 并热加载；连接类配置仍需重启容器。
+仓库自带 `compose.yaml` 不注入表中的可选播种项；如需在首次启动时使用，
+应通过 Compose override 显式传入。配置文件已经生成后，请直接修改
+`config.json` 并热加载；连接类配置仍需重启容器。

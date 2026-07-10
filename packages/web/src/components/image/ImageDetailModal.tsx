@@ -51,7 +51,9 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
   const titleOpensImage = (siteConfig?.image_detail?.title_opens_image ?? true) && Boolean(item.object_url);
   const title = imageDisplayTitle(item);
   const canOpenOriginal = item.has_distinct_original;
+  const imageTime = adminItem?.image_time ?? adminInfo?.image_time ?? item.image_time;
   const createdAt = adminItem?.created_at ?? adminInfo?.created_at;
+  const updatedAt = adminItem?.updated_at ?? adminInfo?.updated_at;
   const originalHref = adminItem?.deleted_at
     ? `/api/admin/images/${encodeURIComponent(item.id)}/original`
     : `/api/images/${encodeURIComponent(item.id)}/original`;
@@ -150,7 +152,9 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
               </>
             )}
             <dt>尺寸</dt><dd>{formatDimensions(item.width, item.height)}</dd>
-            {createdAt && <><dt>创建</dt><dd>{formatDate(createdAt)}</dd></>}
+            {imageTime && <><dt>图片时间</dt><dd>{formatDate(imageTime)}</dd></>}
+            {(admin || adminInfo) && createdAt && <><dt>导入时间</dt><dd>{formatDate(createdAt)}</dd></>}
+            {(admin || adminInfo) && updatedAt && <><dt>更新时间</dt><dd>{formatDate(updatedAt)}</dd></>}
             {adminItem?.deleted_at && <><dt>删除</dt><dd>{formatDate(adminItem.deleted_at)}</dd></>}
           </dl>
           <div className="inline-actions">

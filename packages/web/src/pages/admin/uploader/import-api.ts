@@ -35,6 +35,35 @@ export type ImportSession = {
   expires_at: string;
 };
 
+export type JsonlManifestItem = {
+  line: number;
+  manifest_position: number;
+  original: string;
+  source?: string;
+  image_time?: string;
+  mode?: "download" | "proxy";
+  author?: string;
+  tags?: string[];
+  title?: string;
+  description?: string;
+  theme?: string;
+  device?: Device | "auto";
+  brightness?: Brightness | "auto";
+  storage_slug?: string;
+};
+
+export type JsonlManifestParseError = {
+  line: number;
+  raw: string;
+  error: string;
+};
+
+export type JsonlManifestResult = {
+  items: JsonlManifestItem[];
+  errors: JsonlManifestParseError[];
+  total: number;
+};
+
 export type StoredImportStatus = {
   id?: string;
   status: string;
@@ -57,11 +86,20 @@ export function createImportSession(input: ImageDraft & {
   mode: "upload" | "download" | "proxy";
   size?: number;
   source_url?: string;
-  session_id: string;
+  image_time?: string;
+  manifest_position?: number;
   idempotency_key: string;
   storage_slug: string;
 }, signal?: AbortSignal) {
   return api<ImportSession>(`${adminApiBasePath}/imports/create`, { method: "POST", body: JSON.stringify(input), signal });
+}
+
+export function parseImportJsonl(content: string, signal?: AbortSignal) {
+  return api<JsonlManifestResult>(`${adminApiBasePath}/imports/jsonl/parse`, {
+    method: "POST",
+    body: JSON.stringify({ content }),
+    signal
+  });
 }
 
 export function prepareImportSession(session: ImportSession, signal?: AbortSignal) {

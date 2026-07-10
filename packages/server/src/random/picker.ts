@@ -8,9 +8,9 @@ import {
   sampleRandomSet,
   type RandomPoolItem,
   type RandomPoolSnapshot
-} from "./random-cache.js";
-import { routeError } from "../core/http.js";
-import { isRandomBrightness, parseAuthorSelectors, parseTagSelectors, parseThemeSelectors, randomBrightnesses, randomDevices } from "./query.js";
+} from "./random-cache.ts";
+import { routeError } from "../core/http.ts";
+import { isRandomBrightness, parseAuthorSelectors, parseTagSelectors, parseThemeSelectors, randomBrightnesses, randomDevices } from "./query.ts";
 
 export type PickedImage = RandomPoolItem & { method: "proxy" | "redirect" };
 
@@ -59,7 +59,7 @@ function weightedPick<T extends { count: number }>(candidates: T[]): T | null {
 function axisCandidates(snapshot: RandomPoolSnapshot, axes: CandidateAxes) {
   const candidates: Array<{ key: string; count: number }> = [];
   for (const device of axes.deviceCandidates) {
-    const deviceMap = snapshot.folderMap[device] ?? {};
+    const deviceMap = snapshot.categoryCounts[device] ?? {};
     for (const brightness of axes.brightnessCandidates) {
       const count = Object.values(deviceMap[brightness] ?? {}).reduce((sum, value) => {
         const n = Number(value);
@@ -74,7 +74,7 @@ function axisCandidates(snapshot: RandomPoolSnapshot, axes: CandidateAxes) {
 function categoryCandidates(snapshot: RandomPoolSnapshot, axes: CandidateAxes, themes: string[]) {
   const candidates: Array<{ key: string; count: number }> = [];
   for (const device of axes.deviceCandidates) {
-    const deviceMap = snapshot.folderMap[device] ?? {};
+    const deviceMap = snapshot.categoryCounts[device] ?? {};
     for (const brightness of axes.brightnessCandidates) {
       const themeMap = deviceMap[brightness] ?? {};
       for (const theme of themes) {

@@ -1,12 +1,28 @@
-node_modules
-dist
-packages/*/node_modules
-packages/*/dist
-packages/web/dist
-scripts
-.git
+# Dependencies and generated output
+**/node_modules
+**/dist
+packages/docs/.vitepress/cache
+*.tsbuildinfo
+*.log
+
+# Local-only tests and tooling
+**/test
+**/tests
+**/*.test.*
+**/*.spec.*
+.codex
+AGENTS.md
+TODO.md
+
+# Runtime data and secrets
+.env
+*.key
+compose.override.yaml
 data
 cert
 nginx
-.env
-*.log
+
+# Repository and non-build project assets
+.git
+.github
+.DS_Store

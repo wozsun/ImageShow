@@ -1,9 +1,9 @@
-import { pool } from "../core/db.js";
-import { ApiError } from "../core/http.js";
-import { restoreImageFromTrash } from "../jobs/restore.js";
-import { removeObject } from "../storage/storage.js";
-import { thumbnailRef } from "../storage/image-paths.js";
-import { invalidateImageReadCaches, invalidateMd5Cache, invalidateMd5Caches } from "./image-cache.js";
+import { pool } from "../core/db.ts";
+import { ApiError } from "../core/http.ts";
+import { restoreImageFromTrash, restoreImagesFromTrash } from "./restore.ts";
+import { removeObject } from "../storage/storage.ts";
+import { thumbnailRef } from "../storage/image-paths.ts";
+import { invalidateImageReadCaches, invalidateMd5Cache, invalidateMd5Caches } from "./image-cache.ts";
 
 export async function restoreDeletedImage(id: string, missingIsError = true) {
   const result = await restoreImageFromTrash(id);
@@ -17,18 +17,16 @@ export async function restoreDeletedImage(id: string, missingIsError = true) {
 }
 
 export async function batchRestoreImages(ids: string[]) {
-  let restored = 0;
-  let ignored = 0;
-  const failedIds: string[] = [];
-  for (const id of ids) {
-    try {
-      if (await restoreDeletedImage(id, false)) restored += 1;
-      else ignored += 1;
-    } catch {
-      failedIds.push(id);
-    }
-  }
-  return { requested: ids.length, restored, ignored, failed: failedIds.length, failed_ids: failedIds };
+  const restoredImages = await restoreImagesFromTrash(ids);
+  await invalidateMd5Caches(restoredImages.map((image) => image.md5 ?? ""));
+  if (restoredImages.length) await invalidateImageReadCaches();
+  return {
+    requested: ids.length,
+    restored: restoredImages.length,
+    ignored: ids.length - restoredImages.length,
+    failed: 0,
+    failed_ids: []
+  };
 }
 
 export async function purgeDeletedImages(ids?: string[]) {
@@ -44,10 +42,11 @@ export async function purgeDeletedImages(ids?: string[]) {
     await Promise.all(rows.slice(offset, offset + 10).map(async (row) => {
       try {
         const thumb = thumbnailRef(row);
-        await Promise.all([
-          removeObject("media", row.object_key, row.storage_slug),
-          removeObject(thumb.prefix, thumb.key, thumb.slug)
-        ]);
+        const removals = [removeObject(thumb.prefix, thumb.key, thumb.slug)];
+        if (!row.is_link) {
+          removals.push(removeObject("media", row.object_key, row.storage_slug));
+        }
+        await Promise.all(removals);
         deletedRows.push(row);
       } catch {
         failed += 1;

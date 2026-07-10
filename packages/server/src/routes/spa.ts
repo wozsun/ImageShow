@@ -4,14 +4,14 @@ import { adminBasePath } from "@imageshow/shared";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { getRuntimeConfig } from "../config/env.js";
-import { siteConfigPayload } from "../config/settings.js";
-import { immutableCacheControl, noStoreCacheControl, publicDocumentCacheControl, publicStaticCacheControl, spaDocumentHeaders } from "../core/http.js";
-import { existingThemeFromHost, rootSiteUrl, themeFromHost } from "../themes/host.js";
+import { getRuntimeConfig } from "../config/runtime-config-store.ts";
+import { siteConfigPayload } from "../config/app-settings.ts";
+import { immutableCacheControl, noStoreCacheControl, publicDocumentCacheControl, publicStaticCacheControl, spaDocumentHeaders } from "../core/http.ts";
+import { existingThemeFromHost, rootSiteUrl, themeFromHost } from "../themes/host.ts";
 
 const publicDir = join(dirname(fileURLToPath(import.meta.url)), "../public");
 
-export function registerStaticRoutes(app: Hono) {
+export function registerSpaRoutes(app: Hono) {
   app.use("/assets/*", async (c, next) => {
     await next();
     c.header("Cache-Control", c.res.status < 400
@@ -28,16 +28,7 @@ export function registerStaticRoutes(app: Hono) {
   app.get("/", async (c) => {
     const hostHeader = c.req.header("host") ?? "";
     const requestedTheme = themeFromHost(hostHeader);
-    if (!requestedTheme) {
-      const { root_redirect, home } = getRuntimeConfig().site;
-      return new Response(null, {
-        status: 302,
-        headers: {
-          Location: !home.enabled || root_redirect === "gallery" ? "/gallery" : "/home",
-          "Cache-Control": publicDocumentCacheControl
-        }
-      });
-    }
+    if (!requestedTheme) return spaHandler(c);
     return await existingThemeFromHost(hostHeader) ? spaHandler(c) : new Response(null, {
       status: 302,
       headers: { Location: rootSiteUrl(c), "Cache-Control": noStoreCacheControl }

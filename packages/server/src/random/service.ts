@@ -1,13 +1,13 @@
-import { getRuntimeConfig } from "../config/env.js";
-import { routeError } from "../core/http.js";
-import { isRandomBrightness, randomMethods, randomRequestDevices, validateRandomQuery } from "./query.js";
-import { pickFromRedisPool, resolveCandidateAxes, type PickedImage } from "./picker.js";
-import { filterSignature, recentlyServedIds, rememberServedId } from "./dedupe.js";
-import { resolveThemeTermMap } from "../themes/query.js";
-import { resolveTagTermMap } from "../tags/query.js";
-import { resolveAuthorTermMap } from "../authors/query.js";
+import { getRuntimeConfig } from "../config/runtime-config-store.ts";
+import { routeError } from "../core/http.ts";
+import { isRandomBrightness, randomMethods, randomRequestDevices, validateRandomQuery } from "./query.ts";
+import { pickFromRedisPool, resolveCandidateAxes, type PickedImage } from "./picker.ts";
+import { filterSignature, recentlyServedIds, rememberServedId } from "./dedupe.ts";
+import { resolveThemeTermMap } from "../themes/query.ts";
+import { resolveTagTermMap } from "../tags/query.ts";
+import { resolveAuthorTermMap } from "../authors/query.ts";
 
-export type { PickedImage } from "./picker.js";
+export type { PickedImage } from "./picker.ts";
 
 export async function pickRandom(url: URL, userAgent = "", clientId = ""): Promise<PickedImage | Response | null> {
   const queryError = validateRandomQuery(url.searchParams);

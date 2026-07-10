@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../../../lib/api/client.js";
 import { Icon } from "../../../components/icon/Icon.js";
 import { ImageDetailModal } from "../../../components/image/ImageDetailModal.js";
-import { ImagePreview } from "../../../components/image/ImagePreview.js";
+import { ImagePreviewModal } from "../../../components/image/ImagePreviewModal.js";
 import { ThemeInput } from "../../../components/form/ThemeInput.js";
 import { TagInput } from "../../../components/form/TagInput.js";
 import { AuthorInput } from "../../../components/form/AuthorInput.js";
@@ -15,13 +15,15 @@ import { adminApiBasePath, queryKeys } from "../../../lib/constants.js";
 import { storageBackendLabel, uploadCommonBrightnessOptions, uploadCommonDeviceOptions } from "../../../lib/ui/select-options.js";
 import { useStorageOptions } from "../../../lib/api/storage-options.js";
 import type { AdminSettings, Author, ImageItem, ImportJob, Tag, Theme } from "../../../lib/types.js";
-import type { CommonAttributes } from "../../../lib/upload/upload-utils.js";
+import type { CommonImageAttributes } from "../../../lib/upload/upload-utils.js";
 import { ImportJobList } from "./ImportJobList.js";
-import { LinkUrlDialog, type LinkImportMode } from "./link-import/LinkUrlDialog.js";
+import { LinkUrlDialog, type LinkDialogSubmission, type LinkInputMode } from "./link-import/LinkUrlDialog.js";
+import { LinkImportSplitButton } from "./link-import/LinkImportSplitButton.js";
+import { jsonlImportJobs } from "./link-import/jsonl-jobs.js";
+import type { JsonlManifestParseError } from "./import-api.js";
 import { useImportQueue } from "./useImportQueue.js";
 import { useLocalUploadImport } from "./useLocalUploadImport.js";
-import { useDownloadImport } from "./link-import/useDownloadImport.js";
-import { useProxyLinkImport } from "./link-import/useProxyLinkImport.js";
+import { useLinkImport } from "./link-import/useLinkImport.js";
 import { useImportCommit } from "./useImportCommit.js";
 import { useImportStatusEvents } from "./useImportStatusEvents.js";
 
@@ -29,8 +31,10 @@ export function Uploader({ onDone }: { onDone: () => void }) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"file" | "link">("file");
   const [urlInputOpen, setUrlInputOpen] = useState(false);
+  const [linkInputMode, setLinkInputMode] = useState<LinkInputMode>("urls");
+  const [jsonlErrors, setJsonlErrors] = useState<JsonlManifestParseError[]>([]);
   const [dragOver, setDragOver] = useState(false);
-  const [defaults, setDefaults] = useState<CommonAttributes>({ device: "", brightness: "", theme: "", author: "", tags: [] });
+  const [defaults, setDefaults] = useState<CommonImageAttributes>({ device: "", brightness: "", theme: "", author: "", tags: [] });
   const [busy, setBusy] = useState(false);
   const [detailItem, setDetailItem] = useState<ImageItem | null>(null);
   const [preview, setPreview] = useState<{ src: string; thumbSrc: string; width?: number; height?: number } | null>(null);
@@ -50,6 +54,8 @@ export function Uploader({ onDone }: { onDone: () => void }) {
   const uploadConcurrency = settingsData?.settings.upload.concurrency ?? 2;
   const downloadConcurrency = settingsData?.settings.link_image.concurrency ?? 2;
   const fillOriginalUrl = settingsData?.settings.link_image.fill_original_url ?? false;
+  const urlListMaxItems = settingsData?.settings.link_image.url_list_max_items ?? 100;
+  const jsonlMaxItems = settingsData?.settings.link_image.jsonl_max_items ?? 100;
   const queue = useImportQueue(pageSize);
 
   const { data: storageData } = useStorageOptions();
@@ -74,26 +80,25 @@ export function Uploader({ onDone }: { onDone: () => void }) {
     claimPreparedMd5: queue.claimPreparedMd5
   };
   const localImport = useLocalUploadImport({ queue: queueApi, defaults, storageSlug: activeBackend, maxBytes, concurrency: uploadConcurrency });
-  const downloadImport = useDownloadImport({ queue: queueApi, defaults, fillOriginalUrl, storageSlug: activeBackend, concurrency: downloadConcurrency });
-  const proxyImport = useProxyLinkImport({ queue: queueApi, defaults, fillOriginalUrl, storageSlug: activeBackend, concurrency: downloadConcurrency });
+  const linkImport = useLinkImport({ queue: queueApi, defaults, fillOriginalUrl, storageSlug: activeBackend, concurrency: downloadConcurrency });
   const commitImports = useImportCommit({ updateJob: queue.updateJob, concurrency: Math.max(uploadConcurrency, downloadConcurrency), onDone });
   useImportStatusEvents(queue.jobs, queue.jobsRef, queue.updateJob);
 
   const exit = useAnimatedClose(() => {
     setOpen(false);
-    queue.clearJobs((job) => job.status === "done");
+    queue.clearJobs((job) => ["done", "skipped"].includes(job.status));
+    setJsonlErrors([]);
   });
   useBodyScrollLock(open);
 
   const cancelJob = async (job: ImportJob) => {
     if (job.kind === "local") await localImport.cancel(job);
-    else if (job.kind === "download") await downloadImport.cancel(job);
-    else await proxyImport.cancel(job);
+    else await linkImport.cancel(job);
   };
 
   const openInMode = async (next: "file" | "link") => {
     const discarded = queue.jobsRef.current.filter((job) => next === "file" ? job.kind !== "local" : job.kind === "local");
-    await Promise.all(discarded.filter((job) => !["done", "cancelled"].includes(job.status)).map(cancelJob));
+    await Promise.all(discarded.filter((job) => !["done", "skipped", "cancelled"].includes(job.status)).map(cancelJob));
     queue.retainMode(next);
     setMode(next);
     setOpen(true);
@@ -106,38 +111,51 @@ export function Uploader({ onDone }: { onDone: () => void }) {
       return;
     }
     if (job.kind === "local") await localImport.retry(job);
-    else if (job.kind === "download") await downloadImport.retry(job);
-    else await proxyImport.retry(job);
+    else await linkImport.retry(job);
   };
 
   const removeJob = async (job: ImportJob) => {
-    if (!["done", "cancelled"].includes(job.status)) await cancelJob(job);
+    if (!["done", "skipped", "cancelled"].includes(job.status)) await cancelJob(job);
     queue.removeJob(job.id);
   };
 
   const clearJobs = async (predicate: (job: ImportJob) => boolean) => {
     const targets = queue.jobsRef.current.filter(predicate);
-    await Promise.all(targets.filter((job) => !["done", "cancelled"].includes(job.status)).map(cancelJob));
+    await Promise.all(targets.filter((job) => !["done", "skipped", "cancelled"].includes(job.status)).map(cancelJob));
     queue.clearJobs(predicate);
   };
 
-  const addLinks = (urls: string[], linkMode: LinkImportMode) => {
-    if (linkMode === "download") void downloadImport.addUrls(urls);
-    else void proxyImport.addUrls(urls);
+  const openLinkInput = async (inputMode: LinkInputMode) => {
+    setLinkInputMode(inputMode);
+    await openInMode("link");
+    setUrlInputOpen(true);
+  };
+
+  const addLinks = (submission: LinkDialogSubmission) => {
+    if (submission.inputMode === "urls") {
+      void linkImport.addUrls(submission.urls, submission.mode);
+      return;
+    }
+    setJsonlErrors((current) => [...current, ...submission.manifest.errors]);
+    const jobs = jsonlImportJobs(submission.manifest.items, defaults, submission.mode, activeBackend);
+    void linkImport.addJobs(jobs);
   };
 
   const readyJobs = queue.jobs.filter((job) => job.status === "ready" && job.duplicateDecision !== "undecided");
   const duplicateJobs = queue.jobs.filter((job) => job.status === "ready" && job.duplicateDecision === "undecided").length;
   const runningJobs = queue.jobs.filter((job) => ["queued", "uploading", "downloading", "processing", "committing"].includes(job.status)).length;
+  const doneJobs = queue.jobs.filter((job) => job.status === "done").length;
+  const failedJobs = queue.jobs.filter((job) => job.status === "failed").length;
+  const skippedJobs = queue.jobs.filter((job) => job.status === "skipped").length;
   const modeTitle = mode === "file" ? "上传图片" : "链接导入";
   const subtitle = queue.jobs.length
-    ? `${queue.jobs.length} 个任务，${runningJobs} 个处理中，${readyJobs.length} 个待提交${duplicateJobs ? `，${duplicateJobs} 个重复待确认` : ""}`
+    ? `${queue.jobs.length} 个任务，${runningJobs} 个处理中，${readyJobs.length} 个待提交，${doneJobs} 个成功，${skippedJobs} 个跳过，${failedJobs} 个失败${jsonlErrors.length ? `，${jsonlErrors.length} 行解析失败` : ""}${duplicateJobs ? `，${duplicateJobs} 个重复待确认` : ""}`
     : mode === "file" ? "选择后立即上传并在服务端准备图片" : "输入后立即下载并在服务端准备图片";
 
   return (
     <>
       <div className="upload-triggers">
-        <button className="button secondary upload-trigger" type="button" onClick={() => void openInMode("link")}><Icon name="download-cloud-2-line" />链接导入</button>
+        <LinkImportSplitButton onOpenUrls={() => void openLinkInput("urls")} onOpenJsonl={() => void openLinkInput("jsonl")} />
         <button className="button upload-trigger" type="button" onClick={() => void openInMode("file")}><Icon name="upload-cloud-2-line" />上传图片</button>
       </div>
       {open && (
@@ -147,10 +165,10 @@ export function Uploader({ onDone }: { onDone: () => void }) {
               <div><h1>{modeTitle}</h1><p>{subtitle}</p></div>
               <div className="upload-head-actions">
                 <button type="button" className="clear-button" disabled={busy || !duplicateJobs} onClick={() => void clearJobs((job) => job.status === "ready" && job.duplicateDecision === "undecided")}>清空重复待确认</button>
-                <button type="button" className="clear-button" disabled={busy || !queue.jobs.some((job) => job.status !== "done")} onClick={() => void clearJobs((job) => job.status !== "done")}>清空未提交</button>
-                <button type="button" className="clear-button" disabled={busy || !queue.jobs.some((job) => job.status === "done")} onClick={() => void clearJobs((job) => job.status === "done")}>清空已提交</button>
+                <button type="button" className="clear-button" disabled={busy || !queue.jobs.some((job) => !["done", "skipped"].includes(job.status))} onClick={() => void clearJobs((job) => !["done", "skipped"].includes(job.status))}>清空未提交</button>
+                <button type="button" className="clear-button" disabled={busy || !queue.jobs.some((job) => ["done", "skipped"].includes(job.status))} onClick={() => void clearJobs((job) => ["done", "skipped"].includes(job.status))}>清空已结束</button>
                 {mode === "link" ? (
-                  <button type="button" className="button secondary upload-picker pressable" disabled={busy} onClick={() => setUrlInputOpen(true)}><Icon name="download-cloud-2-line" />导入链接</button>
+                  <button type="button" className="button secondary upload-picker pressable" disabled={busy} onClick={() => { setLinkInputMode("urls"); setUrlInputOpen(true); }}><Icon name="download-cloud-2-line" />导入链接</button>
                 ) : (
                   <label className="button secondary upload-picker pressable">
                     <Icon name="upload-cloud-2-line" /><input ref={fileInputRef} type="file" accept="image/*" multiple onChange={(event) => { void localImport.addFiles(event.target.files); event.target.value = ""; }} />选择图片
@@ -171,6 +189,14 @@ export function Uploader({ onDone }: { onDone: () => void }) {
               <button type="button" className="apply-to-all-button" disabled={busy || !queue.jobs.length} onClick={() => queue.applyDefaultsToAll(defaults)}>应用到全部</button>
             </div>
 
+            {jsonlErrors.length > 0 && (
+              <div className="jsonl-import-report">
+                <span>{jsonlErrors.length} 行未创建任务</span>
+                <button type="button" onClick={() => void navigator.clipboard.writeText(jsonlErrors.map((error) => `第 ${error.line} 行：${error.error}\n${error.raw}`).join("\n\n")).catch(() => undefined)}><Icon name="file-copy-line" />复制错误</button>
+                <button type="button" onClick={() => setJsonlErrors([])}>清除</button>
+              </div>
+            )}
+
             <div className="modal-scroll-list upload-list" ref={listRef}>
               <ImportJobList jobs={queue.visibleJobs} busy={busy} storageName={storageName} themes={themes} tags={tags} authors={authors}
                 onPatch={(job, patch) => queue.updateJobDraft(job.id, patch)} onCancel={(job) => void cancelJob(job)}
@@ -178,7 +204,7 @@ export function Uploader({ onDone }: { onDone: () => void }) {
                 onConfirmDuplicate={(job) => queue.updateJob(job.id, { duplicateDecision: "upload", message: "已确认提交副本" })}
                 onOpenDetail={setDetailItem} onPreview={(job) => setPreview({ src: job.previewFull || job.preview, thumbSrc: job.preview, width: job.width, height: job.height })} />
               {!queue.jobs.length && (mode === "link" ? (
-                <button type="button" className="empty-state upload-dropzone" onClick={() => setUrlInputOpen(true)}><Icon name="download-cloud-2-line" /><span>还没有导入链接，点击此处输入图片链接</span></button>
+                <button type="button" className="empty-state upload-dropzone" onClick={() => { setLinkInputMode("urls"); setUrlInputOpen(true); }}><Icon name="download-cloud-2-line" /><span>还没有导入链接，点击此处输入图片链接</span></button>
               ) : (
                 <button type="button" className={`empty-state upload-dropzone${dragOver ? " is-dragover" : ""}`} onClick={() => fileInputRef.current?.click()}
                   onDragOver={(event) => { event.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)}
@@ -204,8 +230,8 @@ export function Uploader({ onDone }: { onDone: () => void }) {
           </section>
           <OverlayScrollbar targetRef={listRef} />
           {detailItem && <ImageDetailModal item={detailItem} admin onClose={() => setDetailItem(null)} />}
-          {preview && <ImagePreview src={preview.src} thumbSrc={preview.thumbSrc} width={preview.width} height={preview.height} onClose={() => setPreview(null)} />}
-          {urlInputOpen && <LinkUrlDialog onClose={() => setUrlInputOpen(false)} onSubmit={addLinks} />}
+          {preview && <ImagePreviewModal src={preview.src} thumbSrc={preview.thumbSrc} width={preview.width} height={preview.height} onClose={() => setPreview(null)} />}
+          {urlInputOpen && <LinkUrlDialog initialInputMode={linkInputMode} urlListMaxItems={urlListMaxItems} jsonlMaxItems={jsonlMaxItems} onClose={() => setUrlInputOpen(false)} onSubmit={addLinks} />}
         </div>
       )}
     </>

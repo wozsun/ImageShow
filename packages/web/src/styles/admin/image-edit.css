@@ -111,9 +111,9 @@
 .image-fields-title { flex: 1 1 0; min-width: 150px; }
 .select-control.image-fields-device { width: 120px; flex: 0 0 auto; }
 .select-control.image-fields-brightness { width: 120px; flex: 0 0 auto; }
-.theme-input-control.image-fields-theme { width: 150px; flex: 0 0 auto; }
+.slug-combo-control.image-fields-theme { width: 150px; flex: 0 0 auto; }
 
 .tag-input-control.image-fields-tags { flex: 0 1 300px; min-width: 200px; }
-.theme-input-control.image-fields-author { width: 150px; flex: 0 0 auto; }
+.slug-combo-control.image-fields-author { width: 150px; flex: 0 0 auto; }
 .image-fields-urls > input { flex: 1 1 0; min-width: 0; }
 .image-fields-desc { min-height: 62px; }

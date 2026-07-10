@@ -4,6 +4,7 @@ import { api } from "../../lib/api/client.js";
 import { ThumbImage } from "../../components/image/ThumbImage.js";
 import { adminApiBasePath, adminBasePath, queryKeys } from "../../lib/constants.js";
 import { formatBytes } from "../../lib/ui/formatters.js";
+import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
 
 type RecentImage = { id: string; title: string; thumb_url: string; created_at: string | null };
 type ThemeCount = { theme: string; count: number };
@@ -31,13 +32,13 @@ type OverviewStats = {
   recent: RecentImage[];
 };
 
-type Card = { label: string; value?: number | string; hint?: string; hintTitle?: string; to?: string };
+type OverviewMetric = { label: string; value?: number | string; hint?: string; hintTitle?: string; to?: string };
 
-function Cards({ items }: { items: Card[] }) {
+function OverviewMetricCards({ items }: { items: OverviewMetric[] }) {
   return (
     <div className="overview-cards">
       {items.map((item) => {
-        const body = (
+        const cardContent = (
           <>
             <span className="overview-card-value">{item.value ?? "—"}</span>
             <span className="overview-card-label">{item.label}</span>
@@ -47,24 +48,26 @@ function Cards({ items }: { items: Card[] }) {
         return item.to
           ? (
             <Link className="overview-card overview-card-link pressable" key={item.label} to={item.to}>
-              {body}
+              {cardContent}
             </Link>
           )
-          : <div className="overview-card" key={item.label}>{body}</div>;
+          : <div className="overview-card" key={item.label}>{cardContent}</div>;
       })}
     </div>
   );
 }
 
 export function Overview() {
-  const { data } = useQuery<OverviewStats>({ queryKey: queryKeys.overview, queryFn: () => api(`${adminApiBasePath}/overview`) });
-  const imageCards: Card[] = [
+  const query = useQuery<OverviewStats>({ queryKey: queryKeys.overview, queryFn: () => api(`${adminApiBasePath}/overview`) });
+  const { data } = query;
+  if (query.isError) return <QueryErrorState error={query.error} onRetry={() => void query.refetch()} fullPage />;
+  const imageCards: OverviewMetric[] = [
     { label: "图库", value: data?.gallery, hint: "已分类展示", to: `${adminBasePath}/images` },
     { label: "未设置主题", value: data?.theme_unset, hint: "缺少主题", to: `${adminBasePath}/images?view=unset` },
     { label: "回收站", value: data?.trash, hint: "可恢复", to: `${adminBasePath}/images?view=deleted` },
     { label: "主题", value: data?.theme_count, hint: "图库主题数", to: `${adminBasePath}/themes` }
   ];
-  const deviceCards: Card[] = [
+  const deviceCards: OverviewMetric[] = [
     { label: "桌面", value: data?.pc },
     { label: "移动", value: data?.mb },
     { label: "暗色", value: data?.dark },
@@ -76,7 +79,7 @@ export function Overview() {
   // 卡片副标题只显示「X + Y」两个体积；hover 的 title 再标明每段各是什么，避免用户不清楚 + 两边的含义。
   const sizeTitle = (firstLabel: string, first: number | undefined, secondLabel: string, second: number | undefined) =>
     first === undefined || second === undefined ? undefined : `${firstLabel} ${formatBytes(first)} + ${secondLabel} ${formatBytes(second)}`;
-  const storageCards: Card[] = [
+  const storageCards: OverviewMetric[] = [
     // 本地存储 / 其它存储的非链接图片（原图+缩略图，不含链接图）、链接图缩略图（本地+其它存储）、当前存储后端数。
     { label: "本地存储", value: data?.local,
       hint: sizePair(data?.local_image_size, data?.local_thumb_size),
@@ -100,16 +103,16 @@ export function Overview() {
 
       <div className="overview-grid">
         <div className="overview-main">
-          <Cards items={imageCards} />
+          <OverviewMetricCards items={imageCards} />
 
           <div className="overview-section">
             <h2>设备与亮度</h2>
-            <Cards items={deviceCards} />
+            <OverviewMetricCards items={deviceCards} />
           </div>
 
           <div className="overview-section">
             <h2>存储与大小</h2>
-            <Cards items={storageCards} />
+            <OverviewMetricCards items={storageCards} />
           </div>
         </div>
 

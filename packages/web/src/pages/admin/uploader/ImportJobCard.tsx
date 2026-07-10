@@ -2,12 +2,12 @@ import { Icon } from "../../../components/icon/Icon.js";
 import { ImageThumbnail } from "../../../components/image/ImageThumbnail.js";
 import { ImageDraftFields } from "../../../components/form/ImageDraftFields.js";
 import { importCardBrightnessSelectOptions, importCardDeviceSelectOptions } from "../../../lib/ui/select-options.js";
-import { formatBytes, formatImageMeta, imageDisplayTitle } from "../../../lib/ui/formatters.js";
+import { formatBytes, formatImageClassification, imageDisplayTitle } from "../../../lib/ui/formatters.js";
 import type { Author, ImageDraft, ImageItem, ImportJob, Tag, Theme } from "../../../lib/types.js";
 
 const statusLabels: Record<ImportJob["status"], string> = {
   queued: "等待中", uploading: "上传中", downloading: "下载中", processing: "处理中",
-  ready: "已就绪", committing: "正在提交", done: "已完成", failed: "失败", cancelled: "已取消"
+  ready: "已就绪", committing: "正在提交", done: "已完成", skipped: "已跳过", failed: "失败", cancelled: "已取消"
 };
 
 function formatPixelDimensions(width?: number, height?: number) {
@@ -44,36 +44,37 @@ export function ImportJobCard({ job, busy, storageDisplayName, themes, allTags, 
     ? String(job.quality)
     : !isProxy && job.transcoded === false ? "跳过转码" : "";
   const statusDetailText = job.message || statusLabels[job.status];
-  const metaText = [storageDisplayName, dimensionsText, statusDetailText].filter(Boolean).join(" · ");
+  const manifestLineText = job.manifestLine ? `JSONL 第 ${job.manifestLine} 行` : "";
+  const metaText = [manifestLineText, storageDisplayName, dimensionsText, statusDetailText].filter(Boolean).join(" · ");
 
   return (
-    <article className={`upload-job ${job.status}`}>
-      <div className="upload-job-aside">
-        <div className="upload-job-preview">
+    <article className={`import-job ${job.status}`}>
+      <div className="import-job-aside">
+        <div className="import-job-preview">
           {job.preview
-            ? <ImageThumbnail src={job.preview} className="upload-job-thumbnail" onClick={onPreview} />
-            : <div className="image-thumbnail upload-job-thumbnail" aria-hidden="true" />}
+            ? <ImageThumbnail src={job.preview} className="import-job-thumbnail" onClick={onPreview} />
+            : <div className="image-thumbnail import-job-thumbnail" aria-hidden="true" />}
         </div>
         {isProxy
           ? (
-            <span className="upload-job-size upload-proxy-note" title="代理链接图片">
+            <span className="import-job-size proxy-image-note" title="代理链接图片">
               <Icon name="external-link-line" />代理链接
             </span>
           )
           : (
-            <span className="upload-job-size is-vertical">
+            <span className="import-job-size is-vertical">
               <span>{originalSizeText}</span>
               <small>{qualityText ? `↓ ${qualityText}` : "↓"}</small>
               <span>{finalSizeText}</span>
             </span>
           )}
       </div>
-      <div className="upload-job-head">
+      <div className="import-job-head">
         <strong>
           <b className="import-status-label">【{statusLabels[job.status]}】</b>
           {displayName}
         </strong>
-        <span className="upload-job-meta">
+        <span className="import-job-meta">
           {metaText}
         </span>
         {(job.status === "uploading" || job.status === "processing") && job.kind === "local" && (
@@ -99,7 +100,7 @@ export function ImportJobCard({ job, busy, storageDisplayName, themes, allTags, 
               {job.duplicates.map((item) => (
                 <button type="button" key={item.id} className="duplicate-item" onClick={() => onOpenDetail(item)}>
                   <ImageThumbnail src={item.thumb_url} size="small" />
-                  <span>{imageDisplayTitle(item)}</span><small>{formatImageMeta(item)}</small>
+                  <span>{imageDisplayTitle(item)}</span><small>{formatImageClassification(item)}</small>
                 </button>
               ))}
             </div>

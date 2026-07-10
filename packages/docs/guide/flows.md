@@ -4,7 +4,7 @@
 
 ## 三种图片导入模式
 
-三种模式共用一个 `ImportJob` 队列、任务卡片、元数据编辑、最终 MD5 判重、SSE 状态推送、取消/重试和批量提交界面。底层统一为 `import_session`：`mode=upload` 保存浏览器上传文件，`mode=download` 由服务端下载并保存，`mode=proxy` 只保存缩略图与外部链接。会话创建时写入 `request_hash`，同一 `idempotency_key` 只有在模式、URL、大小、存储后端和初始元数据摘要一致时才复用。
+三种模式共用一个 `ImportJob` 队列、任务卡片、元数据编辑、最终 MD5 判重、SSE 状态推送、取消/重试和批量提交界面。底层统一为 `import_session`：`mode=upload` 保存浏览器上传文件，`mode=download` 由服务端下载并保存，`mode=proxy` 只保存缩略图与外部链接。前端 `attemptKey` 只负责幂等和防旧请求污染，最终会话 / 图片 UUIDv7 由服务端按 `image_time` 生成：当前时间 ID 直接使用 Node.js 原生 UUIDv7，历史图片则保留原生随机位并替换 UUIDv7 的 48 位时间戳。会话创建时写入 `request_hash`，同一 `idempotency_key` 只有在模式、URL、大小、存储后端、规范化图片时间、JSONL 临时清单位置和初始元数据摘要一致时才复用。
 
 ```text
 模式 1：本地上传
@@ -42,7 +42,21 @@ URL ──► 立即创建卡片
                         + <锁定后端>/link/<分类>/<id>.webp
 ```
 
-prepare 完成后会删除 `data/tmp` 下的 raw 文件；失败、取消和过期清理同样删除 raw 与 `_uploads` 候选对象。清理只匹配 UUID 形态的 `.raw` / `.raw.part` 文件，避免误删其他临时内容。原始上传/下载字节从不写入 S3、WebDAV 等目标后端，因此不存在“先远端上传原图、再下载回来压缩”的重复传输。服务端还会按 `upload.global_concurrency` / `link_image.global_concurrency` 对 prepare 做进程内全局限流，防止绕过前端队列直接并发压垮进程；触发全局等待时会通过状态消息显示“服务端全局处理名额已满，等待空闲名额”。
+### URL 列表与 JSONL 清单
+
+链接导入按钮提供 URL 列表和 JSONL 清单两种输入方式，二者最终都进入上面的 download / proxy 生命周期。URL 列表按 `link_image.url_list_max_items` 限制单次输入数量，保持原有逐 URL 导入体验，`image_time` 由后端使用会话创建时间。JSONL 每行一个对象，正式字段为 `original`、`source`、`image_time`、`author`、`tags`、`mode`、`title`、`description`、`theme`、`device`、`brightness`、`storage_slug`；`original` 同时作为下载 URL 和元数据原图 URL，`source` 仅表示来源页面。
+
+JSONL 先请求管理端解析接口，服务端按 `link_image.jsonl_max_items` 限制数量、逐行严格校验并规范化 `image_time`。合法行才创建 `ImportJob`，错误行保留行号、截断后的原文预览和错误原因。字段优先级为“JSONL 行内字段 > 应用到全部默认值 > 系统默认值”；行内 `tags: []` 是显式空标签，不合并默认标签。JSONL 任务默认跳过重复图：prepare 返回图库重复或批内 MD5 重复时立即 cancel 会话、清理暂存并记为“已跳过”，不会进入 commit；普通 URL、本地上传和代理链接的重复确认体验不变。
+
+解析接口还会按非空记录生成从 0 开始的临时清单位置。服务端把
+`0xFFF - 位置` 写入 UUIDv7 的 `rand_a`，因此现有
+`ORDER BY image_time DESC, id DESC` 在相同毫秒内保持单批 JSONL 输入顺序；
+该位置不写入数据库字段，也不保证跨批次相同时间的人工顺序。单批默认
+上限 100，低于 `rand_a` 的 4096 个可用位置。
+
+`image_time` 的带偏移 ISO 8601 输入由原生 `Temporal.Instant` 解析；`YYYY-MM-DD HH:mm:ss` 无偏移输入由 `Temporal.PlainDateTime` 按运行时 `TZ` 转为瞬时时间。夏令时跳跃造成的不存在时间或回拨造成的歧义时间都会被拒绝，不依赖 `Date` 的隐式本地时间解析。
+
+prepare 完成后会删除 `data/tmp` 下的 raw 文件；失败、取消和过期清理同样删除 raw 与 `_uploads` 候选对象。清理只匹配 UUID 形态的 `.raw` / `.raw.part` 文件，避免误删其他临时内容。接收、排队、prepare 与 commit 期间会周期性续租 `expires_at`；后台清理用 `FOR UPDATE SKIP LOCKED` 原子认领真正空闲过期的会话，不处理 `committing`。原始上传/下载字节从不写入 S3、WebDAV 等目标后端，因此不存在“先远端上传原图、再下载回来压缩”的重复传输。服务端还会按 `upload.global_concurrency` / `link_image.global_concurrency` 对 prepare 做进程内全局限流，防止绕过前端队列直接并发压垮进程；触发全局等待时会通过状态消息显示“服务端全局处理名额已满，等待空闲名额”。
 
 ### prepared import 状态机
 
@@ -76,9 +90,9 @@ commit 不重新下载、不重新转码，也不从远端读回候选文件：
 
 1. 会话 advisory lock 防止并发重复提交；
 2. upload/download：`_uploads` 中 processed image 复制到 `media`，prepared thumbnail 复制到 `thumbs`；proxy：prepared thumbnail 复制到 `link`；
-3. 短事务写 `metadata` 与会话最终状态；
+3. 短事务写 `metadata`、标签关联与会话最终状态；
 4. 事务成功后清理 `_uploads` 候选对象；
-5. 写标签、更新随机池和读缓存。
+5. 更新标签词表、随机池和读缓存；事务后的派生缓存操作可幂等重试。
 
 对象提交具有幂等检查和异常补偿：若目标对象已存在，重试会复用；若正式对象已经复制但数据库事务失败，会 best-effort 删除本次复制出的 `media`、`thumbs` 或 `link` 对象，减少孤儿文件。
 
@@ -88,7 +102,7 @@ commit 不重新下载、不重新转码，也不从远端读回候选文件：
 - 队列状态优先走 SSE 实时推送；SSE 连接失败或断开后才降级为 2 秒一次的批量状态轮询，轮询按当前未完成任务集合合并请求，不按单卡片单独轮询。
 - 前端不读取整文件计算 MD5。批次内的预筛只用 `name + size + lastModified + webkitRelativePath`，浏览器拿不到完整路径时不依赖路径。
 - 服务端返回最终 MD5 后，队列以同步 reservation 防止并发 prepare 的两张相同图片同时通过批内判重，再查询图库已有项。
-- 卡片区分等待、上传/下载、处理、已就绪、提交、完成、失败、取消；显示存储后端显示名、处理前后像素尺寸、处理前后体积、质量或短路状态、失败原因及取消/重试。
+- 卡片区分等待、上传/下载、处理、已就绪、提交、完成、跳过、失败、取消；显示存储后端显示名、处理前后像素尺寸、处理前后体积、质量或短路状态、失败原因及取消/重试。
 - 清空列表和取消单项会先调用后端 cancel，再移除卡片；本地 XHR、下载请求和代理准备请求也会中止。
 
 ### 三种模式差异
@@ -113,11 +127,11 @@ commit 不重新下载、不重新转码，也不从远端读回候选文件：
 
 ## 设备与明暗识别
 
-导入与编辑统一使用三态分类：`device=auto` 表示按图片宽高落到 `pc` 或 `mb`，`brightness=auto` 表示在标准缩略图上按 CIELAB L\* 分布判断 `dark` 或 `light`；传入具体值则视为用户或文件名已明确指定，服务端不再重新识别。
+导入与编辑统一使用三态分类：`device=auto` 表示按图片宽高落到 `pc` 或 `mb`，`brightness=auto` 表示在标准缩略图上按 CIELAB L\* 分布判断 `dark` 或 `light`；传入具体值则视为用户已明确指定，服务端不再重新识别。
 
-本地上传仍兼容旧文件名规则：如 `pc-dark-theme-001` 会预填设备、明暗和主题，`pc-dark-001` 会预填设备和明暗；命中文件名规则时，设备和明暗都直接使用文件名结果。不命中规则时卡片先显示“识别中”，prepare 完成后替换为服务端识别结果。导入会话的 `prepared_payload` 保存 `resolved_device` / `resolved_brightness`，它们是 prepare 阶段把用户选择、文件名结果或自动识别结果收敛后的兜底分类；提交时只有最终元数据仍为 `auto` 才会使用它们。编辑图片时可把设备改为“自动设备”，服务端按当前图片宽高重新落到 `pc` 或 `mb`；重新识别明暗同样复用缩略图。
+本地上传默认把设备与明暗设为自动，不再从文件名推断旧索引格式。prepare 完成后，卡片中的“识别中”会替换为服务端识别结果。导入会话的 `prepared_payload` 保存 `resolved_device` / `resolved_brightness`，它们是 prepare 阶段把用户选择或自动识别结果收敛后的兜底分类；提交时只有最终元数据仍为 `auto` 才会使用它们。编辑图片时可把设备改为“自动设备”，服务端按当前图片宽高重新落到 `pc` 或 `mb`；重新识别明暗同样复用缩略图。
 
-上传 / 链接导入窗口顶部的“应用到全部”会让设备 / 亮度遵循当前顶部选择：保持“自动设备”或“自动亮暗”时，已就绪卡片恢复为 prepare 阶段保存的自动识别结果，并清除对应淡黄色偏离提示；选择具体设备或亮度时则批量强制覆盖。主题、作者和标签按顶部填写值覆盖已有卡片。
+上传 / 链接导入窗口顶部的“应用到全部”会让设备 / 亮度遵循当前顶部选择：保持“自动设备”或“自动亮暗”时，已就绪卡片恢复为 prepare 阶段保存的自动识别结果，并清除对应淡黄色偏离提示；选择具体设备或亮度时则批量强制覆盖。主题、作者和标签按顶部填写值覆盖已有卡片。JSONL 行内显式提供的设备、亮度、主题、作者或标签是锁定值，不会被后续“应用到全部”覆盖；未提供的字段仍可应用窗口默认值。
 
 ## 随机图 API
 
@@ -140,7 +154,7 @@ GET /api/images?d=&b=&t=&tag=&a=&cursor=&limit=&shuffle=
 GET /api/images/:id
 ```
 
-画廊筛选维度由 `/api/gallery-facets` 单独返回；图片列表使用 `/api/images` 游标分页与 Redis 缓存，返回字段覆盖卡片与详情基础展示所需的 `id`、缩略图 URL、标题、标签、主题、设备、尺寸和创建时间。详情弹窗始终请求 `/api/images/:id`，但该公开详情接口只补充展示图 URL、描述、作者、来源和原图按钮标记，不重复返回列表已有字段，也不返回对象键、存储后端、MD5、扩展 JSON 等后台 / 内部字段。浏览器存在登录 hint 时，公开详情会直接请求 `/api/admin/images/:id/admin-info` 获取 `md5`、创建时间与后端算好的 `storage_label`，用于展示 UUID、MD5、存储后端和创建时间；若该轻量接口返回 401，则清除 hint 并保持普通访客展示。详情响应同样按 `public_images_gen + id` 进入 Redis 缓存。原图按钮会先尝试无 Referer 直连探测；探测结果按原图 URL 和浏览器家族短 TTL 缓存，失败时回退到 link 子域代理。`shuffle=1` 只在出口打乱当前批次，不影响游标和共享缓存。Redis 缓存 miss 时，同进程内会合并相同 key 的并发查询，避免冷启动或失效瞬间重复打 PostgreSQL。
+画廊筛选维度由 `/api/gallery-facets` 单独返回；图片列表按 `image_time DESC, id DESC` 使用 `/api/images` 游标分页与 Redis 缓存，返回字段覆盖卡片与详情基础展示所需的 `id`、缩略图 URL、标题、标签、主题、设备、尺寸和图片时间。详情弹窗始终请求 `/api/images/:id`，但该公开详情接口只补充展示图 URL、描述、作者、来源和原图按钮标记，不重复返回列表已有字段，也不返回对象键、存储后端、MD5、扩展 JSON 等后台 / 内部字段。浏览器存在登录 hint 时，公开详情会直接请求 `/api/admin/images/:id/admin-info` 获取 `md5`、`image_time`、`created_at`、`updated_at` 与后端算好的 `storage_label`，用于展示 UUID、MD5、存储后端、图片时间、导入时间和更新时间；若该轻量接口返回 401，则清除 hint 并保持普通访客展示。详情响应同样按 `public_images_gen + id` 进入 Redis 缓存。原图按钮会先尝试无 Referer 直连探测；探测结果按原图 URL 和浏览器家族短 TTL 缓存，失败时回退到 link 子域代理。`shuffle=1` 只在出口打乱当前批次，不影响游标和共享缓存。Redis 缓存 miss 时，同进程内会合并相同 key 的并发查询，避免冷启动或失效瞬间重复打 PostgreSQL。
 
 ## 后台管理
 
@@ -163,16 +177,16 @@ GET /api/images/:id
 
 ## 后台 Worker
 
-Worker 用 `FOR UPDATE SKIP LOCKED` 领取持久任务，按任务类型限制并发，并定期恢复僵尸任务、清理过期 `import_session`、prepared staging 与孤儿 raw 临时文件。已完成 / 已忽略任务保留 7 天后按批删除，耗尽重试的失败任务保留 90 天后删除；待执行、运行中和仍在重试窗口内的失败任务不会被历史清理删除。
+Worker 用 `FOR UPDATE SKIP LOCKED` 领取持久任务，按任务类型限制并发，并定期恢复僵尸任务、清理过期 `import_session`、prepared staging 与孤儿 raw 临时文件。存储孤儿清理使用独占维护锁；导入、分类移动、主题重分配和存储迁移持有共享写锁，防止清理任务删除尚未写入最终数据库引用的候选对象。已完成 / 已忽略任务保留 7 天后按批删除，耗尽重试的失败任务保留 90 天后删除；待执行、运行中和仍在重试窗口内的失败任务不会被历史清理删除。
 
 ## 缓存策略
 
-PostgreSQL 是真相源，Redis 是可丢弃的加速层：随机池、画廊筛选、公共列表、公开详情、后台概览、原图直连探测、MD5 判重与对象查找走缓存；写路径增量刷新，Redis 不可用时排缓存重建任务。随机 API 的正常路径依赖 Redis 随机池，避免 PostgreSQL 随机排序或 count+offset。
+PostgreSQL 是真相源，Redis 是可丢弃的加速层：随机池、画廊筛选、公共列表、公开详情、后台概览、原图直连探测、MD5 判重与对象键 / 缩略图键 / 图片 id lookup 走缓存；写路径增量刷新，Redis 不可用或 lookup JSON 损坏时资源出口回退 PostgreSQL。随机 API 的正常路径依赖 Redis 随机池，避免 PostgreSQL 随机排序或 count+offset。
 
 HTTP 缓存按 CDN 友好但不泄露私有数据分层：
 
 - `/assets/*` 的 Vite 构建产物和 `/media/*`、`/thumbs/*` 图片对象使用一年 `immutable`；`/assets/brand/*`、`/favicon.ico` 不是 hash 路径，只给短浏览器缓存和较长 CDN 缓存。
-- SPA HTML、文档 HTML、`/api/images`、`/api/site-config`、`/api/gallery-facets`、`/img-count` 都是公共数据：浏览器不长期持有，CDN 通过 `s-maxage` 短缓存，并允许 `stale-while-revalidate` / `stale-if-error`。
+- `/api/images`、`/api/images/:id`、`/api/site-config`、`/api/gallery-facets` 与 `/img-count` 是公共动态数据：浏览器不持有，CDN 的新鲜、重验证和错误兜底窗口均不超过 30 秒。SPA 与文档 HTML 使用独立的短缓存策略，不与动态 API 共用时长。
 - `/random` 和 `random.<域名>` 永远 `no-store`，避免 CDN 把随机图固定成同一张。
 - `/api/admin/*`、登录 / 验证码 / 上传暂存预览 / SSE、后台图片字节、健康检查和错误响应使用 `no-store` 或 `private, no-store`，不应被 CDN 缓存。
 - `link.<域名>/media` 与仍需使用的 `/original` 公共代理成功响应优先继承源站 `Cache-Control` / `Expires`；源站未声明时使用站内 CDN fallback：浏览器缓存 1 天、共享缓存 1 年，并允许 stale 回源兜底。`/media` 回源失败退回 link 缩略图时，该兜底缩略图缓存 1 周。后台代理仍为 `private, no-store`。

@@ -1,13 +1,14 @@
 import { slugPattern } from "@imageshow/shared";
-import { pool, withTransaction } from "../core/db.js";
-import { ApiError } from "../core/http.js";
-import { invalidateImageReadCaches } from "../images/image-cache.js";
-import { rebuildRandomPool, syncRandomImage } from "../random/random-cache.js";
-import { invalidateTagVocab } from "../vocab/vocab-cache.js";
-import type { Tag } from "./types.js";
-import { resolveTagNames } from "./query.js";
+import type { PoolClient } from "pg";
+import { pool, withTransaction } from "../core/db.ts";
+import { ApiError } from "../core/http.ts";
+import { invalidateImageReadCaches } from "../images/image-cache.ts";
+import { rebuildRandomPool, syncRandomImage } from "../random/random-cache.ts";
+import { invalidateTagVocab } from "../vocab/vocab-cache.ts";
+import type { Tag } from "./types.ts";
+import { resolveTagNames } from "./query.ts";
 
-export async function createTag(slug: string, displayName = ""): Promise<Tag> {
+export async function upsertTag(slug: string, displayName = ""): Promise<Tag> {
   if (slug.length > 32 || !slugPattern.test(slug)) {
     throw new ApiError(400, "invalid_tag", "Tag slug must be a lowercase slug (a-z, 0-9, -), <=32 chars", { slug });
   }
@@ -67,19 +68,28 @@ type SetImageTagsOptions = {
   invalidate?: boolean;
 };
 
-export async function setImageTags(imageId: string, names: string[], options: SetImageTagsOptions = {}): Promise<string[]> {
+export async function replaceImageTags(client: PoolClient, imageId: string, slugs: string[]) {
+  const image = await client.query("SELECT 1 FROM metadata WHERE id = $1", [imageId]);
+  if (!image.rowCount) throw new ApiError(404, "not_found", "Image not found");
+  for (const slug of slugs) {
+    await client.query(
+      "INSERT INTO tag(slug, sort_order) VALUES($1, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM tag)) ON CONFLICT (slug) DO NOTHING",
+      [slug]
+    );
+  }
+  await client.query("DELETE FROM image_tag WHERE image_id = $1", [imageId]);
+  for (const slug of slugs) {
+    await client.query(
+      "INSERT INTO image_tag(image_id, tag_slug) VALUES($1, $2) ON CONFLICT DO NOTHING",
+      [imageId, slug]
+    );
+  }
+}
 
+export async function setImageTags(imageId: string, names: string[], options: SetImageTagsOptions = {}): Promise<string[]> {
   const resolved = await resolveTagNames(names);
   await withTransaction(async (client) => {
-    const image = await client.query("SELECT 1 FROM metadata WHERE id = $1", [imageId]);
-    if (!image.rowCount) throw new ApiError(404, "not_found", "Image not found");
-    for (const slug of resolved) {
-      await client.query("INSERT INTO tag(slug, sort_order) VALUES($1, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM tag)) ON CONFLICT (slug) DO NOTHING", [slug]);
-    }
-    await client.query("DELETE FROM image_tag WHERE image_id = $1", [imageId]);
-    for (const slug of resolved) {
-      await client.query("INSERT INTO image_tag(image_id, tag_slug) VALUES($1, $2) ON CONFLICT DO NOTHING", [imageId, slug]);
-    }
+    await replaceImageTags(client, imageId, resolved);
   });
 
   await invalidateTagVocab();

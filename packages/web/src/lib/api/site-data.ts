@@ -1,5 +1,6 @@
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { api } from "./client.js";
+import { api, authExpiredEvent } from "./client.js";
 import { adminApiBasePath, queryKeys } from "../constants.js";
 import type { AdminUser, FacetOption, SiteSettings } from "../types.js";
 
@@ -99,10 +100,20 @@ export function useGalleryFacets(enabled = true) {
 // 任何后台写操作命中 401 时由 api 层处理，登录/登出后各调用点用 refetch/invalidate 显式刷新；staleTime
 // 沿用全局默认即可。enabled 供公共画廊在独立主题域（standalone）下跳过这次鉴权探测。
 export function useAuthMe(enabled = true) {
-  return useQuery<AuthState>({
+  const query = useQuery<AuthState>({
     queryKey: queryKeys.me,
     queryFn: () => api(`${adminApiBasePath}/auth/me`),
     enabled,
     refetchOnWindowFocus: false
   });
+  useEffect(() => {
+    if (!enabled) return;
+    const refreshAuth = () => {
+      clearSessionProbeHint();
+      void query.refetch();
+    };
+    window.addEventListener(authExpiredEvent, refreshAuth);
+    return () => window.removeEventListener(authExpiredEvent, refreshAuth);
+  }, [enabled, query.refetch]);
+  return query;
 }

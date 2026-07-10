@@ -1,10 +1,12 @@
 import { Redis } from "ioredis";
-import { env } from "../config/env.js";
+import { getRuntimeConfig } from "../config/runtime-config-store.ts";
+
+const redisConfig = getRuntimeConfig().redis;
 
 export const redis = new Redis({
-  host: env.REDIS_HOST,
-  port: env.REDIS_PORT,
-  db: env.REDIS_DB,
+  host: redisConfig.host,
+  port: redisConfig.port,
+  db: redisConfig.db,
   lazyConnect: true,
   maxRetriesPerRequest: 1
 });

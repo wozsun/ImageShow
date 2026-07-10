@@ -6,7 +6,7 @@ import { getStoredImportStatuses, storedImportStatusMessage, type StoredImportSt
 
 const STATUS_POLL_INTERVAL_MS = 2_000;
 const SSE_CONNECT_TIMEOUT_MS = 5_000;
-const terminalStatuses = new Set<ImportJob["status"]>(["ready", "done", "failed", "cancelled"]);
+const terminalStatuses = new Set<ImportJob["status"]>(["ready", "done", "skipped", "failed", "cancelled"]);
 
 function patchFromStatus(job: ImportJob, state: StoredImportStatus): Partial<ImportJob> | null {
   const message = storedImportStatusMessage(state);

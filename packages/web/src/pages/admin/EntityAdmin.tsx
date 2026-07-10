@@ -4,11 +4,12 @@ import { api } from "../../lib/api/client.js";
 import { Icon } from "../../components/icon/Icon.js";
 import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
 import { ConfirmDialog } from "../../components/feedback/ConfirmDialog.js";
-import { EntityCard } from "../../components/data-display/EntityCard.js";
+import { EntityAdminCard } from "./EntityAdminCard.js";
 import { PageToast } from "../../components/feedback/PageToast.js";
-import { adminApiBasePath, queryKeys, slugCharset, slugFormatHint } from "../../lib/constants.js";
+import { adminApiBasePath, queryKeys, slugFormatHint, slugPattern } from "../../lib/constants.js";
 import { errorMessage } from "../../lib/ui/formatters.js";
 import type { AdminSettings, Author, Tag, Theme } from "../../lib/types.js";
+import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
 
 type EntityKind = "tags" | "themes" | "authors";
 type Entity = Tag | Theme | Author;
@@ -47,7 +48,7 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
   const isAuthor = kind === "authors";
   const queryKey = QUERY_KEYS[kind];
   const client = useQueryClient();
-  const { data, isFetching } = useQuery<{ items: Entity[] }>({ queryKey, queryFn: () => api(`${adminApiBasePath}/${kind}`) });
+  const { data, error: listError, isError: listFailed, isFetching, refetch } = useQuery<{ items: Entity[] }>({ queryKey, queryFn: () => api(`${adminApiBasePath}/${kind}`) });
   const { data: settingsData } = useQuery<{ settings: AdminSettings }>({ queryKey: queryKeys.settings, queryFn: () => api(`${adminApiBasePath}/settings`) });
   // 新建/删除词条会改动公共画廊的筛选词表（gallery-facets，staleTime:Infinity 不会自动刷新），
   // 删除还会清除关联图片上的该属性，故一并失效后台图片列表，与 ImageAdmin.refresh 的失效集对齐。
@@ -73,7 +74,7 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
 
   useEffect(() => { setOrder(data?.items ?? []); }, [data]);
 
-  const slugInvalid = slug.length > 0 && !slugCharset.test(slug);
+  const slugInvalid = slug.length > 0 && !slugPattern.test(slug);
 
   const pageSize = settingsData?.settings.admin.image_page_size ?? 50;
   // 主题页可隐藏钉住的「未设置 / none」占位卡片（设置页 admin 组的开关，默认显示）；其它类别无此卡片。
@@ -173,8 +174,8 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
           <p>第 {page} / {totalPages} 页 · 共 {visibleItems.length} 个{copy.noun}{isFetching ? " · 加载中" : ""} · {copy.headHint}</p>
         </div>
       </header>
-      <form className="theme-create-form" onSubmit={create}>
-        <div className="theme-create-field entity-slug-field">
+      <form className="admin-create-form" onSubmit={create}>
+        <div className="admin-create-field entity-slug-field">
           <input
             className="entity-create-slug"
             value={slug}
@@ -197,7 +198,7 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
           <input
             value={link}
             onChange={(event) => setLink(event.target.value)}
-            placeholder="链接 URL（http(s)，可选）"
+            placeholder="链接 URL（HTTPS，可选）"
             disabled={busy}
             maxLength={2048}
           />
@@ -217,7 +218,7 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
       <PageToast message={error} onClose={() => setError("")} />
       <div className="entity-admin-grid admin-scroll-region" ref={listRef}>
         {pageItems.map((item) => (
-          <EntityCard
+          <EntityAdminCard
             key={item.slug}
             kind={kind}
             item={item}
@@ -232,7 +233,8 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
             onDragEnd={persistOrder}
           />
         ))}
-        {!order.length && !isFetching && <p className="muted">{copy.empty}</p>}
+        {listFailed && <QueryErrorState error={listError} onRetry={() => void refetch()} />}
+        {!listFailed && !order.length && !isFetching && <p className="muted">{copy.empty}</p>}
       </div>
       <OverlayScrollbar targetRef={listRef} pageEdge />
       <nav className="admin-pagination" aria-label={`${copy.noun}分页`}>

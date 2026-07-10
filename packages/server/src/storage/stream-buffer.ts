@@ -1,5 +1,5 @@
 import { Readable } from "node:stream";
-import { ApiError } from "../core/http.js";
+import { ApiError } from "../core/http.ts";
 
 export async function streamToBuffer(stream: Readable, limit = Number.MAX_SAFE_INTEGER) {
   const chunks: Buffer[] = [];

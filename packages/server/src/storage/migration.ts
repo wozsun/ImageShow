@@ -1,20 +1,21 @@
-import { pool } from "../core/db.js";
-import { errorMessage } from "../core/http.js";
-import { thumbnailObjectKey, thumbnailRef } from "./image-paths.js";
-import { assertStorageWritable, getStorageBackend } from "../config/settings.js";
-import { createThumbnail } from "../images/processing.js";
+import { pool } from "../core/db.ts";
+import { errorMessage } from "../core/http.ts";
+import { thumbnailObjectKey, thumbnailRef } from "./image-paths.ts";
+import { assertStorageWritable, getStorageBackend } from "./backend-registry.ts";
+import { createThumbnail } from "../images/processing.ts";
 import {
   contentType,
   readStorageBufferWithConfig,
   removeObject,
   storageExistsWithConfig,
   writeStorageBufferWithConfig
-} from "./storage.js";
+} from "./storage.ts";
+import { withStorageMutationLock } from "./maintenance-lock.ts";
 
 export type MigrateRecord = { id: string; object_key: string; ext: string; status: string; storage_slug: string; is_link: boolean; device: string; brightness: string; theme: string };
 type MigrateResult = "migrated" | "unchanged" | "missing";
 
-export async function migrateImageStorage(row: MigrateRecord, target: string): Promise<MigrateResult> {
+async function migrateImageStorageUnlocked(row: MigrateRecord, target: string): Promise<MigrateResult> {
   if (row.storage_slug === target) return "unchanged";
   const source = await getStorageBackend(row.storage_slug);
   const dest = await assertStorageWritable(target);
@@ -59,6 +60,10 @@ export async function migrateImageStorage(row: MigrateRecord, target: string): P
   await removeObject("media", row.object_key, row.storage_slug).catch(() => undefined);
   await removeObject("thumbs", thumbKey, row.storage_slug).catch(() => undefined);
   return "migrated";
+}
+
+export function migrateImageStorage(row: MigrateRecord, target: string): Promise<MigrateResult> {
+  return withStorageMutationLock(() => migrateImageStorageUnlocked(row, target));
 }
 
 export async function migrateStorageBackend(sourceSlug: string, targetSlug: string, entries: MigrateRecord[]) {

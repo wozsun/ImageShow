@@ -1,6 +1,6 @@
 import { useCallback, useRef } from "react";
 import type { ImportJob } from "../../../lib/types.js";
-import { browserUuid, draftFromFile, isUploadableImage, normalizeAuthor, normalizeTheme, runWithConcurrency, type CommonAttributes } from "../../../lib/upload/upload-utils.js";
+import { browserUuid, draftFromFile, isUploadableImage, normalizeAuthor, normalizeTheme, runWithConcurrency, type CommonImageAttributes } from "../../../lib/upload/upload-utils.js";
 import { retryPrepareJob } from "./import-job-utils.js";
 import { applyPreparedResult, isCurrentImportAttempt, type AppendImportQueueApi } from "./prepared-result.js";
 import { cancelStoredImport, createImportSession, prepareImportSession, uploadLocalRaw } from "./import-api.js";
@@ -12,19 +12,19 @@ function fileFingerprint(file: File) {
 
 export function useLocalUploadImport(options: {
   queue: AppendImportQueueApi;
-  defaults: CommonAttributes;
+  defaults: CommonImageAttributes;
   storageSlug: string;
   maxBytes: number;
   concurrency: number;
 }) {
   const { queue, defaults, storageSlug, maxBytes, concurrency } = options;
-  const activeRequests = useRef(new Map<string, { attemptId: string; abort: () => void }>());
+  const activeRequests = useRef(new Map<string, { attemptKey: string; abort: () => void }>());
 
   const prepare = useCallback(async (job: ImportJob) => {
     if (!job.file) return;
-    const attemptId = job.attemptId;
+    const attemptKey = job.attemptKey;
     const controller = new AbortController();
-    activeRequests.current.set(job.id, { attemptId, abort: () => controller.abort() });
+    activeRequests.current.set(job.id, { attemptKey, abort: () => controller.abort() });
     try {
       queue.updateJob(job.id, { status: "queued", message: "创建上传会话", uploadProgress: 0 });
       const session = await createImportSession({
@@ -33,11 +33,10 @@ export function useLocalUploadImport(options: {
         theme: normalizeTheme(job.draft.theme),
         author: normalizeAuthor(job.draft.author),
         size: job.file.size,
-        session_id: attemptId,
-        idempotency_key: attemptId,
+        idempotency_key: attemptKey,
         storage_slug: job.storageSlug
       }, controller.signal);
-      if (!isCurrentImportAttempt(queue, job.id, attemptId)) {
+      if (!isCurrentImportAttempt(queue, job.id, attemptKey)) {
         await cancelStoredImport(session.id).catch(() => undefined);
         return;
       }
@@ -45,34 +44,34 @@ export function useLocalUploadImport(options: {
       queue.updateJob(job.id, { status: "uploading", message: "浏览器上传原文件", uploadProgress: 0 });
       const request = uploadLocalRaw(session, job.file, {
         onProgress: (uploadProgress) => {
-          if (isCurrentImportAttempt(queue, job.id, attemptId)) queue.updateJob(job.id, { uploadProgress });
+          if (isCurrentImportAttempt(queue, job.id, attemptKey)) queue.updateJob(job.id, { uploadProgress });
         },
         onUploaded: () => {
-          if (isCurrentImportAttempt(queue, job.id, attemptId)) {
+          if (isCurrentImportAttempt(queue, job.id, attemptKey)) {
             queue.updateJob(job.id, { status: "processing", message: "上传完成，等待服务端处理", uploadProgress: 100 });
           }
         }
       });
       // uploadLocalRaw 使用 XMLHttpRequest 才能拿到上传进度；这里保存 abort，取消按钮可中断仍在传输的请求。
       activeRequests.current.set(job.id, {
-        attemptId,
+        attemptKey,
         abort: () => {
           controller.abort();
           request.abort();
         }
       });
       await request.promise;
-      if (!isCurrentImportAttempt(queue, job.id, attemptId)) {
+      if (!isCurrentImportAttempt(queue, job.id, attemptKey)) {
         await cancelStoredImport(session.id).catch(() => undefined);
         return;
       }
-      activeRequests.current.set(job.id, { attemptId, abort: () => controller.abort() });
+      activeRequests.current.set(job.id, { attemptKey, abort: () => controller.abort() });
       queue.updateJob(job.id, { status: "processing", message: "上传完成，等待服务端处理", uploadProgress: 100 });
       const prepared = await prepareImportSession(session, controller.signal);
-      const accepted = applyPreparedResult(queue, job.id, attemptId, prepared);
+      const accepted = applyPreparedResult(queue, job.id, attemptKey, prepared);
       if (accepted === "duplicate") {
         await cancelStoredImport(session.id).catch(() => undefined);
-        if (isCurrentImportAttempt(queue, job.id, attemptId)) {
+        if (isCurrentImportAttempt(queue, job.id, attemptKey)) {
           queue.updateJob(job.id, { status: "cancelled", message: "批次内最终文件重复，已取消" });
         }
       } else if (accepted === "stale") {
@@ -80,11 +79,11 @@ export function useLocalUploadImport(options: {
       }
     } catch (error) {
       const current = queue.jobsRef.current.find((item) => item.id === job.id);
-      if (current?.attemptId === attemptId && current.status !== "cancelled") {
+      if (current?.attemptKey === attemptKey && current.status !== "cancelled") {
         queue.updateJob(job.id, { status: "failed", failureStage: "prepare", message: (error as Error).message });
       }
     } finally {
-      if (activeRequests.current.get(job.id)?.attemptId === attemptId) activeRequests.current.delete(job.id);
+      if (activeRequests.current.get(job.id)?.attemptKey === attemptKey) activeRequests.current.delete(job.id);
     }
   }, [queue]);
 
@@ -102,7 +101,7 @@ export function useLocalUploadImport(options: {
       const inferred = await draftFromFile(file, defaults, objectUrl);
       return {
         id: browserUuid(),
-        attemptId: browserUuid(),
+        attemptKey: browserUuid(),
         kind: "local",
         file,
         fileFingerprint: fileFingerprint(file),
@@ -129,12 +128,12 @@ export function useLocalUploadImport(options: {
   const cancel = useCallback(async (job: ImportJob) => {
     activeRequests.current.get(job.id)?.abort();
     queue.updateJob(job.id, { status: "cancelled", message: "已取消" });
-    await cancelStoredImport(job.sessionId ?? job.attemptId).catch(() => undefined);
+    if (job.sessionId) await cancelStoredImport(job.sessionId).catch(() => undefined);
   }, [queue]);
 
   const retry = useCallback(async (job: ImportJob) => {
     if (!job.file) return;
-    await cancelStoredImport(job.sessionId ?? job.attemptId).catch(() => undefined);
+    if (job.sessionId) await cancelStoredImport(job.sessionId).catch(() => undefined);
     const next = { ...retryPrepareJob(job), uploadProgress: 0 };
     queue.updateJob(job.id, next);
     await prepare(next);

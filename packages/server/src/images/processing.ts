@@ -3,19 +3,20 @@ import { readFile, stat } from "node:fs/promises";
 import { fileTypeFromBuffer, fileTypeFromFile } from "file-type";
 import sharp from "sharp";
 import { type ImageExt } from "@imageshow/shared";
-import { ApiError } from "../core/http.js";
-import { getRuntimeConfig } from "../config/env.js";
-import { thumbnailObjectKey } from "../storage/image-paths.js";
-import { getDefaultStorageSlug, getImageMaxLongEdge, getStorageBackend, getThumbnailSettings } from "../config/settings.js";
+import { ApiError } from "../core/http.ts";
+import { getRuntimeConfig } from "../config/runtime-config-store.ts";
+import { thumbnailObjectKey } from "../storage/image-paths.ts";
+import { getInputImageMaxLongEdge, getThumbnailSettings } from "../config/app-settings.ts";
+import { getStorageBackend } from "../storage/backend-registry.ts";
 
-export function applyImageConcurrency() {
+export function configureSharpConcurrency() {
   sharp.concurrency(Math.max(1, getRuntimeConfig().upload.concurrency));
 }
 import {
   readStorageBuffer,
   safeStoragePath,
   writeStorageBuffer
-} from "../storage/storage.js";
+} from "../storage/storage.ts";
 
 type ImageInput = Buffer | string;
 
@@ -41,7 +42,7 @@ async function imageDimensions(input: ImageInput) {
   const width = rotated ? meta.height ?? 0 : meta.width ?? 0;
   const height = rotated ? meta.width ?? 0 : meta.height ?? 0;
   const longEdge = Math.max(meta.width ?? 0, meta.height ?? 0);
-  const limit = await getImageMaxLongEdge();
+  const limit = await getInputImageMaxLongEdge();
   if (!longEdge || longEdge > limit) {
     throw new ApiError(400, "image_too_large", "图片尺寸超过限制", { limit });
   }
@@ -64,7 +65,7 @@ export async function createThumbnail(input: ImageInput) {
     .toBuffer();
 }
 
-type DownloadTranscodeSettings = {
+type ImageTranscodeSettings = {
   quality: number;
   quality_step: number;
   min_quality: number;
@@ -72,7 +73,7 @@ type DownloadTranscodeSettings = {
   max_size_kb: number;
 };
 
-export type StoredImageTranscodeSettings = DownloadTranscodeSettings & {
+export type StoredImageTranscodeSettings = ImageTranscodeSettings & {
   skip_webp_under_kb: number;
 };
 
@@ -105,7 +106,7 @@ export async function transcodeStoredImage(path: string, settings: StoredImageTr
   const thumbnailPromise = createThumbnail(path);
   const convertedPromise = canSkip
     ? readFile(path).then((buffer) => ({ buffer, quality: null as number | null, transcoded: false }))
-    : transcodeDownloadedImage(path, settings).then(({ buffer, quality }) => ({ buffer, quality, transcoded: true }));
+    : transcodeImageToWebp(path, settings).then(({ buffer, quality }) => ({ buffer, quality, transcoded: true }));
   const [thumbnail, converted] = await Promise.all([thumbnailPromise, convertedPromise]);
   const probe = await probeImageBytes(converted.buffer);
   return {
@@ -124,7 +125,7 @@ export async function transcodeStoredImage(path: string, settings: StoredImageTr
   };
 }
 
-async function transcodeDownloadedImage(input: ImageInput, settings: DownloadTranscodeSettings) {
+async function transcodeImageToWebp(input: ImageInput, settings: ImageTranscodeSettings) {
   const pipeline = sharp(input)
     .rotate()
     .resize({
@@ -165,11 +166,10 @@ async function transcodeDownloadedImage(input: ImageInput, settings: DownloadTra
   }
 }
 
-export async function makeThumb(objectKey: string, slug?: string) {
-  const targetSlug = slug ?? await getDefaultStorageSlug();
-  const config = await getStorageBackend(targetSlug);
-  const input = config.type === "local" ? safeStoragePath("media", objectKey) : await readStorageBuffer("media", objectKey, targetSlug);
+export async function generateStoredThumbnail(objectKey: string, storageSlug: string) {
+  const config = await getStorageBackend(storageSlug);
+  const input = config.type === "local" ? safeStoragePath("media", objectKey) : await readStorageBuffer("media", objectKey, storageSlug);
   const thumbnail = await createThumbnail(input);
-  await writeStorageBuffer("thumbs", thumbnailObjectKey(objectKey), thumbnail, "image/webp", targetSlug);
+  await writeStorageBuffer("thumbs", thumbnailObjectKey(objectKey), thumbnail, "image/webp", storageSlug);
   return thumbnail.byteLength;
 }

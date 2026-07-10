@@ -1,7 +1,7 @@
-import { pool } from "../core/db.js";
-import { getThemeVocab } from "../vocab/vocab-cache.js";
-import { resolveSlugs, resolveTermMap } from "../core/term-resolve.js";
-import type { Theme } from "./types.js";
+import { pool } from "../core/db.ts";
+import { getThemeVocab } from "../vocab/vocab-cache.ts";
+import { resolveSlugs, resolveTermMap } from "../core/term-resolve.ts";
+import type { Theme } from "./types.ts";
 
 export function resolveThemeTermMap(terms: string[]): Promise<Map<string, string>> {
   return resolveTermMap(getThemeVocab, terms);

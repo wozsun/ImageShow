@@ -31,19 +31,19 @@ export function ImageDraftFields({
 
   changed?: Partial<Record<"title" | "device" | "brightness" | "theme" | "tags" | "author" | "original" | "source" | "description", boolean>>;
 }) {
-  const c = changed;
+  const changedFields = changed;
   return (
     <div className="image-fields">
       <div className="image-fields-row image-fields-primary">
         <input
-          className={`image-fields-title${c.title ? " is-changed" : ""}`}
+          className={`image-fields-title${changedFields.title ? " is-changed" : ""}`}
           value={title ? title.value : draft.title}
           onChange={(event) => onPatch({ title: event.target.value })}
           placeholder={title?.placeholder ?? "标题"}
           disabled={title ? title.disabled : disabled}
         />
         <SelectMenu
-          className={`image-fields-device${c.device ? " is-changed" : ""}`}
+          className={`image-fields-device${changedFields.device ? " is-changed" : ""}`}
           value={draft.device}
           onChange={(value) => onPatch({ device: value as ImageDraft["device"] })}
           disabled={disabled}
@@ -51,7 +51,7 @@ export function ImageDraftFields({
           ariaLabel={`${ariaPrefix} 设备`}
         />
         <SelectMenu
-          className={`image-fields-brightness${c.brightness ? " is-changed" : ""}`}
+          className={`image-fields-brightness${changedFields.brightness ? " is-changed" : ""}`}
           value={draft.brightness}
           onChange={(value) => onPatch({ brightness: value as ImageDraft["brightness"] })}
           disabled={disabled}
@@ -59,7 +59,7 @@ export function ImageDraftFields({
           ariaLabel={`${ariaPrefix} 亮度`}
         />
         <ThemeInput
-          className={`image-fields-theme${c.theme ? " is-changed" : ""}`}
+          className={`image-fields-theme${changedFields.theme ? " is-changed" : ""}`}
           value={draft.theme}
           onChange={(theme) => onPatch({ theme })}
           themes={themes}
@@ -68,7 +68,7 @@ export function ImageDraftFields({
           ariaLabel={`${ariaPrefix} 主题`}
         />
         <TagInput
-          className={`image-fields-tags${c.tags ? " is-changed" : ""}`}
+          className={`image-fields-tags${changedFields.tags ? " is-changed" : ""}`}
           value={draft.tags}
           onChange={(tags) => onPatch({ tags })}
           suggestions={allTags}
@@ -77,7 +77,7 @@ export function ImageDraftFields({
           placeholder="标签"
         />
         <AuthorInput
-          className={`image-fields-author${c.author ? " is-changed" : ""}`}
+          className={`image-fields-author${changedFields.author ? " is-changed" : ""}`}
           value={draft.author}
           onChange={(author) => onPatch({ author })}
           authors={authors}
@@ -88,14 +88,14 @@ export function ImageDraftFields({
       </div>
       <div className="image-fields-row image-fields-urls">
         <input
-          className={c.original ? "is-changed" : undefined}
+          className={changedFields.original ? "is-changed" : undefined}
           value={draft.original}
           onChange={(event) => onPatch({ original: event.target.value })}
           placeholder="原图 URL"
           disabled={disabled}
         />
         <input
-          className={c.source ? "is-changed" : undefined}
+          className={changedFields.source ? "is-changed" : undefined}
           value={draft.source}
           onChange={(event) => onPatch({ source: event.target.value })}
           placeholder="来源 URL"
@@ -103,7 +103,7 @@ export function ImageDraftFields({
         />
       </div>
       <textarea
-        className={`image-fields-desc${c.description ? " is-changed" : ""}`}
+        className={`image-fields-desc${changedFields.description ? " is-changed" : ""}`}
         value={draft.description}
         onChange={(event) => onPatch({ description: event.target.value })}
         placeholder="详情描述"
