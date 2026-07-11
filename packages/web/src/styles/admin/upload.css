@@ -45,6 +45,7 @@
 .upload-window {
   width: min(1180px, 96vw);
   max-height: 92vh;
+  container: upload-window / inline-size;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -139,7 +140,25 @@
   gap: 8px;
   align-content: start;
 }
-.upload-head-actions { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
+.upload-head-copy { min-width: 0; }
+.upload-task-summary { display: grid; gap: 2px; }
+.upload-summary-primary,
+.upload-summary-secondary { display: block; }
+.upload-head-actions,
+.upload-primary-actions,
+.upload-clear-actions { display: flex; align-items: center; gap: 10px; }
+.upload-head-actions { justify-content: flex-end; }
+.upload-primary-actions,
+.upload-clear-actions { flex-wrap: nowrap; }
+@container upload-window (max-width: 980px) {
+  .upload-head-actions {
+    display: grid;
+    justify-items: end;
+    gap: 8px;
+  }
+  .upload-primary-actions { grid-row: 1; }
+  .upload-clear-actions { grid-row: 2; }
+}
 .upload-footer-left { justify-self: start; min-width: 0; display: flex; align-items: center; gap: 10px; }
 .upload-storage-hint { color: #66717f; white-space: nowrap; }
 .clear-button { color: #d0473a; }
@@ -222,6 +241,8 @@
   text-align: left;
 }
 .duplicate-item .image-thumbnail { grid-row: span 2; }
+.batch-duplicate-item { grid-template-rows: auto auto auto; }
+.batch-duplicate-item .image-thumbnail { grid-row: span 3; }
 .duplicate-item span, .duplicate-item small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .duplicate-item small { color: #66717f; }
 .empty-state {

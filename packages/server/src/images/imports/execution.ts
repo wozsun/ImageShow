@@ -4,7 +4,8 @@ import { withStorageMutationLock } from "../../storage/maintenance-lock.ts";
 import { clearImportPhase, setImportPhase, withImportLease } from "./progress.ts";
 import type { ImportMode, PreparedImportResult } from "./types.ts";
 
-class ImportPrepareLimiter {
+/** @internal Shared dynamic limiter, exported only for local concurrency verification. */
+export class ImportConcurrencyLimiter {
   private active = 0;
   private queue: Array<{ run: () => void; signal: AbortSignal; abort: () => void }> = [];
   private readonly limit: () => number;
@@ -71,11 +72,14 @@ class ImportPrepareLimiter {
   }
 }
 
-const uploadPrepareLimiter = new ImportPrepareLimiter(
+const uploadPrepareLimiter = new ImportConcurrencyLimiter(
   () => getRuntimeConfig().upload.global_concurrency
 );
-const linkPrepareLimiter = new ImportPrepareLimiter(
+const linkPrepareLimiter = new ImportConcurrencyLimiter(
   () => getRuntimeConfig().link_image.global_concurrency
+);
+const commitLimiter = new ImportConcurrencyLimiter(
+  () => getRuntimeConfig().import.global_commit_concurrency
 );
 const activeImports = new Map<string, {
   controller: AbortController;
@@ -106,6 +110,10 @@ export async function runImportPreparation(
     if (activeImports.get(id)?.promise === promise) activeImports.delete(id);
     clearImportPhase(id);
   }
+}
+
+export function runImportCommit<T>(work: () => Promise<T>, signal = new AbortController().signal) {
+  return commitLimiter.run(signal, work);
 }
 
 export function abortActiveImport(id: string) {

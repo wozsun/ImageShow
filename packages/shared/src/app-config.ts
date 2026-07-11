@@ -22,7 +22,7 @@ export const appConfig = {
   uploadTtlSeconds: 10 * 60,
   derivedCacheTtlSeconds: 60 * 60,
   pgPool: {
-    max: 20,
+    max: 30,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 10000,
     maxLifetimeSeconds: 30 * 60
@@ -93,6 +93,10 @@ export const appConfig = {
       skip_webp_under_kb: 700
     },
     thumbnail: { long_edge: 512, quality: 75 },
+    import: {
+      commit_concurrency: 5,
+      global_commit_concurrency: 10
+    },
     image_detail: { title_opens_image: true },
     admin: {
       login_background: "",
@@ -193,6 +197,11 @@ export type ThumbnailSettings = {
   quality: number;
 };
 
+export type ImportSettings = {
+  commit_concurrency: number;
+  global_commit_concurrency: number;
+};
+
 export type ImageDetailSettings = {
   title_opens_image: boolean;
 };
@@ -213,6 +222,7 @@ export type RuntimeConfig = {
   link_image: LinkImageSettings;
   normalize: NormalizeSettings;
   thumbnail: ThumbnailSettings;
+  import: ImportSettings;
   image_detail: ImageDetailSettings;
   admin: AdminPanelSettings;
   background_job: {
@@ -245,6 +255,7 @@ export type AdminSettings = {
   link_image: LinkImageSettings;
   normalize: NormalizeSettings;
   thumbnail: ThumbnailSettings;
+  import: ImportSettings;
   image_detail: ImageDetailSettings;
   admin: AdminPanelSettings;
 };

@@ -150,6 +150,40 @@
   .upload-triggers > .upload-trigger { flex: 1 1 auto; min-width: 0; }
   .upload-overlay { padding: 10px; }
   .upload-window { width: 100%; max-height: 96vh; }
+  .upload-window-header {
+    position: relative;
+    display: grid;
+    align-items: stretch;
+    gap: 10px;
+    padding-right: 16px;
+  }
+  .upload-head-copy { padding-right: 44px; }
+  .upload-head-actions {
+    display: grid;
+    width: 100%;
+    justify-items: stretch;
+  }
+  .upload-primary-actions {
+    display: block;
+    width: 100%;
+  }
+  .upload-primary-actions .upload-picker {
+    width: 100%;
+    min-height: 44px;
+  }
+  .upload-close-button {
+    position: absolute;
+    top: 14px;
+    right: 16px;
+  }
+  .upload-clear-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+    gap: 8px;
+  }
+  .upload-clear-actions .clear-button { min-height: 44px; }
+  .upload-clear-actions .clear-button:first-child { grid-column: 1 / -1; }
   /* 与 .upload-window 相同的 max-height，使批量/编辑弹窗在列表滚动时居中方式一致
      （两个遮罩都用匹配的 10px 内边距）。 */
   .edit-modal form { width: 100%; max-height: 96vh; }

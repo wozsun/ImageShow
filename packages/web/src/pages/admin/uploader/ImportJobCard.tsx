@@ -2,8 +2,9 @@ import { Icon } from "../../../components/icon/Icon.js";
 import { ImageThumbnail } from "../../../components/image/ImageThumbnail.js";
 import { ImageDraftFields } from "../../../components/form/ImageDraftFields.js";
 import { importCardBrightnessSelectOptions, importCardDeviceSelectOptions } from "../../../lib/ui/select-options.js";
-import { formatBytes, formatImageClassification, imageDisplayTitle } from "../../../lib/ui/formatters.js";
+import { formatBytes } from "../../../lib/ui/formatters.js";
 import type { Author, ImageDraft, ImageItem, ImportJob, Tag, Theme } from "../../../lib/types.js";
+import { DuplicateMatchPanel, type ImportPreviewTarget } from "./DuplicateMatchPanel.js";
 
 const statusLabels: Record<ImportJob["status"], string> = {
   queued: "等待中", uploading: "上传中", downloading: "下载中", processing: "处理中",
@@ -27,7 +28,7 @@ export function ImportJobCard({ job, busy, storageDisplayName, themes, allTags, 
   onRemove: () => void;
   onConfirmDuplicate: () => void;
   onOpenDetail: (item: ImageItem) => void;
-  onPreview: () => void;
+  onPreview: (target: ImportPreviewTarget) => void;
 }) {
   const editable = job.status === "ready" && !busy;
   const running = ["queued", "uploading", "downloading", "processing"].includes(job.status);
@@ -46,13 +47,35 @@ export function ImportJobCard({ job, busy, storageDisplayName, themes, allTags, 
   const statusDetailText = job.message || statusLabels[job.status];
   const manifestLineText = job.manifestLine ? `JSONL 第 ${job.manifestLine} 行` : "";
   const metaText = [manifestLineText, storageDisplayName, dimensionsText, statusDetailText].filter(Boolean).join(" · ");
+  const libraryDuplicate = job.status === "skipped" ? job.duplicates[0] : undefined;
+  const batchDuplicate = job.status === "skipped" ? job.batchDuplicate : undefined;
+  const previewSrc = libraryDuplicate?.thumb_url || (batchDuplicate ? batchDuplicate.preview : job.preview);
+  const openPreview = libraryDuplicate
+    ? () => onOpenDetail(libraryDuplicate)
+    : batchDuplicate?.available
+      ? () => onPreview({
+          src: batchDuplicate.previewFull,
+          thumbSrc: batchDuplicate.preview,
+          width: batchDuplicate.width,
+          height: batchDuplicate.height
+        })
+      : previewSrc
+        ? () => onPreview({
+            src: job.previewFull || previewSrc,
+            thumbSrc: previewSrc,
+            width: job.width,
+            height: job.height
+          })
+        : undefined;
+  const confirmDuplicate = job.status === "ready" && job.duplicateDecision === "undecided" && job.duplicates.length > 0;
+  const skippedDuplicate = job.status === "skipped" && (job.duplicates.length > 0 || Boolean(job.batchDuplicate));
 
   return (
     <article className={`import-job ${job.status}`}>
       <div className="import-job-aside">
         <div className="import-job-preview">
-          {job.preview
-            ? <ImageThumbnail src={job.preview} className="import-job-thumbnail" onClick={onPreview} />
+          {previewSrc
+            ? <ImageThumbnail src={previewSrc} className="import-job-thumbnail" onClick={openPreview} />
             : <div className="image-thumbnail import-job-thumbnail" aria-hidden="true" />}
         </div>
         {isProxy
@@ -92,24 +115,16 @@ export function ImportJobCard({ job, busy, storageDisplayName, themes, allTags, 
         changed={{ device: job.classificationOverride?.device, brightness: job.classificationOverride?.brightness }}
         disabled={!editable} ariaPrefix={job.url ?? job.file?.name ?? job.id}
       />
-      {job.status === "ready" && job.duplicateDecision === "undecided" && job.duplicates.length > 0 && (
-        <div className="duplicate-panel">
-          <div className="duplicate-note"><strong>已存在相同的最终入库文件</strong><span>确认后可继续提交副本，或取消此任务。</span></div>
-          <div className="duplicate-body">
-            <div className="duplicate-list">
-              {job.duplicates.map((item) => (
-                <button type="button" key={item.id} className="duplicate-item" onClick={() => onOpenDetail(item)}>
-                  <ImageThumbnail src={item.thumb_url} size="small" />
-                  <span>{imageDisplayTitle(item)}</span><small>{formatImageClassification(item)}</small>
-                </button>
-              ))}
-            </div>
-            <div className="inline-actions">
-              <button type="button" onClick={onConfirmDuplicate}>仍然提交</button>
-              <button className="danger-button" type="button" onClick={onCancel}>取消</button>
-            </div>
-          </div>
-        </div>
+      {(confirmDuplicate || skippedDuplicate) && (
+        <DuplicateMatchPanel
+          libraryItems={job.duplicates}
+          batchDuplicate={job.batchDuplicate}
+          confirmMode={confirmDuplicate}
+          onOpenDetail={onOpenDetail}
+          onPreview={onPreview}
+          onConfirm={onConfirmDuplicate}
+          onCancel={onCancel}
+        />
       )}
     </article>
   );

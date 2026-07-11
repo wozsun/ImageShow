@@ -26,3 +26,4 @@ data/
 cert/
 nginx/
 .codex/
+/docs/

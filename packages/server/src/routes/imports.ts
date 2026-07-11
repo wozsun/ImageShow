@@ -70,7 +70,7 @@ export function registerImportRoutes(app: Hono) {
     const id = parse(uuidInput, c.req.param("id"));
     const input = parse(importCommitInput, await c.req.json().catch(() => ({})));
     if (isReservedSubdomain(input.theme)) throw new ApiError(400, "theme_reserved", "Theme conflicts with a reserved subdomain prefix", { theme: input.theme });
-    return c.json(ok(await commitImportSession(id, input)));
+    return c.json(ok(await commitImportSession(id, input, c.req.raw.signal)));
   });
 
   app.post(`${adminApiBasePath}/imports/:id/cancel`, async (c) => {

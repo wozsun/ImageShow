@@ -69,12 +69,12 @@ export function useLocalUploadImport(options: {
       queue.updateJob(job.id, { status: "processing", message: "上传完成，等待服务端处理", uploadProgress: 100 });
       const prepared = await prepareImportSession(session, controller.signal);
       const accepted = applyPreparedResult(queue, job.id, attemptKey, prepared);
-      if (accepted === "duplicate") {
+      if (accepted.status === "duplicate") {
         await cancelStoredImport(session.id).catch(() => undefined);
         if (isCurrentImportAttempt(queue, job.id, attemptKey)) {
           queue.updateJob(job.id, { status: "cancelled", message: "批次内最终文件重复，已取消" });
         }
-      } else if (accepted === "stale") {
+      } else if (accepted.status === "stale") {
         await cancelStoredImport(session.id).catch(() => undefined);
       }
     } catch (error) {

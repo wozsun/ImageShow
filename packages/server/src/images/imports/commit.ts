@@ -18,6 +18,7 @@ import {
 import { resolveClassification } from "../classification.ts";
 import { publicImage, type ImageRecord } from "../presenter.ts";
 import { notifyImportStatus, withImportLease } from "./progress.ts";
+import { runImportCommit } from "./execution.ts";
 import { stagingImageKey } from "./staging.ts";
 import type {
   ImportMetadata,
@@ -257,7 +258,7 @@ async function commitProxySession(
   }
 }
 
-export async function commitImportSession(id: string, metadata: ImportMetadata) {
+async function commitImportSessionWithinLimit(id: string, metadata: ImportMetadata) {
   const lockClient = await pool.connect();
   const lockKey = `import.commit:${id}`;
   const locked = Boolean((await lockClient.query(
@@ -348,4 +349,8 @@ export async function commitImportSession(id: string, metadata: ImportMetadata) 
     ).catch(() => undefined);
     lockClient.release();
   }
+}
+
+export function commitImportSession(id: string, metadata: ImportMetadata, signal?: AbortSignal) {
+  return runImportCommit(() => commitImportSessionWithinLimit(id, metadata), signal);
 }

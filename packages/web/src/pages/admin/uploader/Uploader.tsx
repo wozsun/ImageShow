@@ -17,6 +17,7 @@ import { useStorageOptions } from "../../../lib/api/storage-options.js";
 import type { AdminSettings, Author, ImageItem, ImportJob, Tag, Theme } from "../../../lib/types.js";
 import type { CommonImageAttributes } from "../../../lib/upload/upload-utils.js";
 import { ImportJobList } from "./ImportJobList.js";
+import type { ImportPreviewTarget } from "./DuplicateMatchPanel.js";
 import { LinkUrlDialog, type LinkDialogSubmission, type LinkInputMode } from "./link-import/LinkUrlDialog.js";
 import { LinkImportSplitButton } from "./link-import/LinkImportSplitButton.js";
 import { jsonlImportJobs } from "./link-import/jsonl-jobs.js";
@@ -37,7 +38,7 @@ export function Uploader({ onDone }: { onDone: () => void }) {
   const [defaults, setDefaults] = useState<CommonImageAttributes>({ device: "", brightness: "", theme: "", author: "", tags: [] });
   const [busy, setBusy] = useState(false);
   const [detailItem, setDetailItem] = useState<ImageItem | null>(null);
-  const [preview, setPreview] = useState<{ src: string; thumbSrc: string; width?: number; height?: number } | null>(null);
+  const [preview, setPreview] = useState<ImportPreviewTarget | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -53,6 +54,7 @@ export function Uploader({ onDone }: { onDone: () => void }) {
   const maxBytes = (settingsData?.settings.upload.max_file_size_mb ?? 100) * 1024 * 1024;
   const uploadConcurrency = settingsData?.settings.upload.concurrency ?? 2;
   const downloadConcurrency = settingsData?.settings.link_image.concurrency ?? 2;
+  const commitConcurrency = settingsData?.settings.import.commit_concurrency ?? 5;
   const fillOriginalUrl = settingsData?.settings.link_image.fill_original_url ?? false;
   const urlListMaxItems = settingsData?.settings.link_image.url_list_max_items ?? 100;
   const jsonlMaxItems = settingsData?.settings.link_image.jsonl_max_items ?? 100;
@@ -81,7 +83,7 @@ export function Uploader({ onDone }: { onDone: () => void }) {
   };
   const localImport = useLocalUploadImport({ queue: queueApi, defaults, storageSlug: activeBackend, maxBytes, concurrency: uploadConcurrency });
   const linkImport = useLinkImport({ queue: queueApi, defaults, fillOriginalUrl, storageSlug: activeBackend, concurrency: downloadConcurrency });
-  const commitImports = useImportCommit({ updateJob: queue.updateJob, concurrency: Math.max(uploadConcurrency, downloadConcurrency), onDone });
+  const commitImports = useImportCommit({ updateJob: queue.updateJob, concurrency: commitConcurrency, onDone });
   useImportStatusEvents(queue.jobs, queue.jobsRef, queue.updateJob);
 
   const exit = useAnimatedClose(() => {
@@ -148,9 +150,9 @@ export function Uploader({ onDone }: { onDone: () => void }) {
   const failedJobs = queue.jobs.filter((job) => job.status === "failed").length;
   const skippedJobs = queue.jobs.filter((job) => job.status === "skipped").length;
   const modeTitle = mode === "file" ? "上传图片" : "链接导入";
-  const subtitle = queue.jobs.length
-    ? `${queue.jobs.length} 个任务，${runningJobs} 个处理中，${readyJobs.length} 个待提交，${doneJobs} 个成功，${skippedJobs} 个跳过，${failedJobs} 个失败${jsonlErrors.length ? `，${jsonlErrors.length} 行解析失败` : ""}${duplicateJobs ? `，${duplicateJobs} 个重复待确认` : ""}`
-    : mode === "file" ? "选择后立即上传并在服务端准备图片" : "输入后立即下载并在服务端准备图片";
+  const emptySubtitle = mode === "file"
+    ? "选择后立即上传并在服务端准备图片"
+    : "输入后立即下载并在服务端准备图片";
 
   return (
     <>
@@ -161,20 +163,39 @@ export function Uploader({ onDone }: { onDone: () => void }) {
       {open && (
         <div className={`upload-overlay ${exit.closing ? "is-closing" : ""}`} role="dialog" aria-modal="true" aria-label={modeTitle} onAnimationEnd={exit.onAnimationEnd}>
           <section className="upload-window">
-            <header>
-              <div><h1>{modeTitle}</h1><p>{subtitle}</p></div>
-              <div className="upload-head-actions">
-                <button type="button" className="clear-button" disabled={busy || !duplicateJobs} onClick={() => void clearJobs((job) => job.status === "ready" && job.duplicateDecision === "undecided")}>清空重复待确认</button>
-                <button type="button" className="clear-button" disabled={busy || !queue.jobs.some((job) => !["done", "skipped"].includes(job.status))} onClick={() => void clearJobs((job) => !["done", "skipped"].includes(job.status))}>清空未提交</button>
-                <button type="button" className="clear-button" disabled={busy || !queue.jobs.some((job) => ["done", "skipped"].includes(job.status))} onClick={() => void clearJobs((job) => ["done", "skipped"].includes(job.status))}>清空已结束</button>
-                {mode === "link" ? (
-                  <button type="button" className="button secondary upload-picker pressable" disabled={busy} onClick={() => { setLinkInputMode("urls"); setUrlInputOpen(true); }}><Icon name="download-cloud-2-line" />导入链接</button>
+            <header className="upload-window-header">
+              <div className="upload-head-copy">
+                <h1>{modeTitle}</h1>
+                {queue.jobs.length ? (
+                  <p className="upload-task-summary">
+                    <span className="upload-summary-primary">
+                      {queue.jobs.length} 个任务，{runningJobs} 个处理中，{readyJobs.length} 个待提交；
+                    </span>
+                    <span className="upload-summary-secondary">
+                      {doneJobs} 个成功，{skippedJobs} 个跳过，{failedJobs} 个失败，{duplicateJobs} 个重复待确认
+                      {jsonlErrors.length ? `，${jsonlErrors.length} 行解析失败` : ""}
+                    </span>
+                  </p>
                 ) : (
-                  <label className="button secondary upload-picker pressable">
-                    <Icon name="upload-cloud-2-line" /><input ref={fileInputRef} type="file" accept="image/*" multiple onChange={(event) => { void localImport.addFiles(event.target.files); event.target.value = ""; }} />选择图片
-                  </label>
+                  <p>{emptySubtitle}</p>
                 )}
-                <button className="icon close pressable" type="button" title="关闭" onClick={() => exit.requestClose()} disabled={busy}><Icon name="close-line" /></button>
+              </div>
+              <div className="upload-head-actions">
+                <div className="upload-clear-actions">
+                  <button type="button" className="clear-button" disabled={busy || !duplicateJobs} onClick={() => void clearJobs((job) => job.status === "ready" && job.duplicateDecision === "undecided")}>清空重复待确认</button>
+                  <button type="button" className="clear-button" disabled={busy || !queue.jobs.some((job) => !["done", "skipped"].includes(job.status))} onClick={() => void clearJobs((job) => !["done", "skipped"].includes(job.status))}>清空未提交</button>
+                  <button type="button" className="clear-button" disabled={busy || !queue.jobs.some((job) => job.status === "done")} onClick={() => void clearJobs((job) => job.status === "done")}>清空已完成</button>
+                </div>
+                <div className="upload-primary-actions">
+                  {mode === "link" ? (
+                    <button type="button" className="button secondary upload-picker pressable" disabled={busy} onClick={() => { setLinkInputMode("urls"); setUrlInputOpen(true); }}><Icon name="download-cloud-2-line" />导入链接</button>
+                  ) : (
+                    <label className="button secondary upload-picker pressable">
+                      <Icon name="upload-cloud-2-line" /><input ref={fileInputRef} type="file" accept="image/*" multiple onChange={(event) => { void localImport.addFiles(event.target.files); event.target.value = ""; }} />选择图片
+                    </label>
+                  )}
+                  <button className="icon close pressable upload-close-button" type="button" title="关闭" onClick={() => exit.requestClose()} disabled={busy}><Icon name="close-line" /></button>
+                </div>
               </div>
             </header>
 
@@ -202,7 +223,7 @@ export function Uploader({ onDone }: { onDone: () => void }) {
                 onPatch={(job, patch) => queue.updateJobDraft(job.id, patch)} onCancel={(job) => void cancelJob(job)}
                 onRetry={(job) => void retryJob(job)} onRemove={(job) => void removeJob(job)}
                 onConfirmDuplicate={(job) => queue.updateJob(job.id, { duplicateDecision: "upload", message: "已确认提交副本" })}
-                onOpenDetail={setDetailItem} onPreview={(job) => setPreview({ src: job.previewFull || job.preview, thumbSrc: job.preview, width: job.width, height: job.height })} />
+                onOpenDetail={setDetailItem} onPreview={setPreview} />
               {!queue.jobs.length && (mode === "link" ? (
                 <button type="button" className="empty-state upload-dropzone" onClick={() => { setLinkInputMode("urls"); setUrlInputOpen(true); }}><Icon name="download-cloud-2-line" /><span>还没有导入链接，点击此处输入图片链接</span></button>
               ) : (

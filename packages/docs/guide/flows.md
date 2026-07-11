@@ -46,7 +46,7 @@ URL ──► 立即创建卡片
 
 链接导入按钮提供 URL 列表和 JSONL 清单两种输入方式，二者最终都进入上面的 download / proxy 生命周期。URL 列表按 `link_image.url_list_max_items` 限制单次输入数量，保持原有逐 URL 导入体验，`image_time` 由后端使用会话创建时间。JSONL 每行一个对象，正式字段为 `original`、`source`、`image_time`、`author`、`tags`、`mode`、`title`、`description`、`theme`、`device`、`brightness`、`storage_slug`；`original` 同时作为下载 URL 和元数据原图 URL，`source` 仅表示来源页面。
 
-JSONL 先请求管理端解析接口，服务端按 `link_image.jsonl_max_items` 限制数量、逐行严格校验并规范化 `image_time`。合法行才创建 `ImportJob`，错误行保留行号、截断后的原文预览和错误原因。字段优先级为“JSONL 行内字段 > 应用到全部默认值 > 系统默认值”；行内 `tags: []` 是显式空标签，不合并默认标签。JSONL 任务默认跳过重复图：prepare 返回图库重复或批内 MD5 重复时立即 cancel 会话、清理暂存并记为“已跳过”，不会进入 commit；普通 URL、本地上传和代理链接的重复确认体验不变。
+JSONL 先请求管理端解析接口，服务端按 `link_image.jsonl_max_items` 限制数量、逐行严格校验并规范化 `image_time`。合法行才创建 `ImportJob`，错误行保留行号、截断后的原文预览和错误原因。字段优先级为“JSONL 行内字段 > 应用到全部默认值 > 系统默认值”；行内 `tags: []` 是显式空标签，不合并默认标签。JSONL 任务默认跳过重复图：判重发生在 prepare 完成并取得转码后最终 MD5 之后；图库重复会显示已有图片的缩略图、标题和分类，点击进入图片详情；批内重复会显示首个任务的转码结果、来源、标题、行号和分类，点击打开该处理结果预览。随后重复任务立即 cancel 会话、清理自身暂存并记为“已跳过”，不会进入 commit；普通 URL、本地上传和代理链接的重复确认体验不变。批内首个任务的预览若在提交后切换为持久图片地址，重复卡片会同步更新；清除首个已完成任务时仍保留该持久快照，提前移除未完成的首个任务则把重复卡片标为不可预览。
 
 解析接口还会按非空记录生成从 0 开始的临时清单位置。服务端把
 `0xFFF - 位置` 写入 UUIDv7 的 `rand_a`，因此现有
@@ -56,7 +56,7 @@ JSONL 先请求管理端解析接口，服务端按 `link_image.jsonl_max_items`
 
 `image_time` 的带偏移 ISO 8601 输入由原生 `Temporal.Instant` 解析；`YYYY-MM-DD HH:mm:ss` 无偏移输入由 `Temporal.PlainDateTime` 按运行时 `TZ` 转为瞬时时间。夏令时跳跃造成的不存在时间或回拨造成的歧义时间都会被拒绝，不依赖 `Date` 的隐式本地时间解析。
 
-prepare 完成后会删除 `data/tmp` 下的 raw 文件；失败、取消和过期清理同样删除 raw 与 `_uploads` 候选对象。清理只匹配 UUID 形态的 `.raw` / `.raw.part` 文件，避免误删其他临时内容。接收、排队、prepare 与 commit 期间会周期性续租 `expires_at`；后台清理用 `FOR UPDATE SKIP LOCKED` 原子认领真正空闲过期的会话，不处理 `committing`。原始上传/下载字节从不写入 S3、WebDAV 等目标后端，因此不存在“先远端上传原图、再下载回来压缩”的重复传输。服务端还会按 `upload.global_concurrency` / `link_image.global_concurrency` 对 prepare 做进程内全局限流，防止绕过前端队列直接并发压垮进程；触发全局等待时会通过状态消息显示“服务端全局处理名额已满，等待空闲名额”。
+prepare 完成后会删除 `data/tmp` 下的 raw 文件；失败、取消和过期清理同样删除 raw 与 `_uploads` 候选对象。清理只匹配 UUID 形态的 `.raw` / `.raw.part` 文件，避免误删其他临时内容。接收、排队、prepare 与 commit 期间会周期性续租 `expires_at`；后台清理用 `FOR UPDATE SKIP LOCKED` 原子认领真正空闲过期的会话，不处理 `committing`。原始上传/下载字节从不写入 S3、WebDAV 等目标后端，因此不存在“先远端上传原图、再下载回来压缩”的重复传输。服务端按 `upload.global_concurrency` / `link_image.global_concurrency` 对 prepare 做进程内全局限流，防止绕过前端队列直接并发压垮进程；触发全局等待时会通过状态消息显示“服务端全局处理名额已满，等待空闲名额”。commit 则独立使用 `import.global_commit_concurrency`，在取得会话锁和数据库连接之前排队，所有客户端与直接 API 请求共享上限。
 
 ### prepared import 状态机
 
@@ -94,6 +94,8 @@ commit 不重新下载、不重新转码，也不从远端读回候选文件：
 4. 事务成功后清理 `_uploads` 候选对象；
 5. 更新标签词表、随机池和读缓存；事务后的派生缓存操作可幂等重试。
 
+单个后台页面用 `import.commit_concurrency` 并发调用 commit，服务端再用 `import.global_commit_concurrency` 统一限流。全局许可覆盖上述完整流程，任务成功、失败或请求在排队阶段取消都会释放名额。
+
 对象提交具有幂等检查和异常补偿：若目标对象已存在，重试会复用；若正式对象已经复制但数据库事务失败，会 best-effort 删除本次复制出的 `media`、`thumbs` 或 `link` 对象，减少孤儿文件。
 
 ### 前端队列与判重
@@ -102,8 +104,8 @@ commit 不重新下载、不重新转码，也不从远端读回候选文件：
 - 队列状态优先走 SSE 实时推送；SSE 连接失败或断开后才降级为 2 秒一次的批量状态轮询，轮询按当前未完成任务集合合并请求，不按单卡片单独轮询。
 - 前端不读取整文件计算 MD5。批次内的预筛只用 `name + size + lastModified + webkitRelativePath`，浏览器拿不到完整路径时不依赖路径。
 - 服务端返回最终 MD5 后，队列以同步 reservation 防止并发 prepare 的两张相同图片同时通过批内判重，再查询图库已有项。
-- 卡片区分等待、上传/下载、处理、已就绪、提交、完成、跳过、失败、取消；显示存储后端显示名、处理前后像素尺寸、处理前后体积、质量或短路状态、失败原因及取消/重试。
-- 清空列表和取消单项会先调用后端 cancel，再移除卡片；本地 XHR、下载请求和代理准备请求也会中止。
+- 卡片区分等待、上传/下载、处理、已就绪、提交、完成、跳过、失败、取消；显示存储后端显示名、处理前后像素尺寸、处理前后体积、质量或短路状态、失败原因及取消/重试。窗口统计固定分成“任务 / 处理中 / 待提交”和“成功 / 跳过 / 失败 / 重复待确认”两行。
+- “清空已完成”只移除成功提交的卡片，跳过项会继续保留以便核对重复信息；清空未提交、清空重复待确认、取消单项会先调用后端 cancel，再移除卡片，本地 XHR、下载请求和代理准备请求也会中止。
 
 ### 三种模式差异
 

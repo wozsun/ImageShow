@@ -5,8 +5,10 @@ import {
   captchaNoiseDots,
   captchaNoiseLines,
   captchaTtlSeconds,
+  commitConcurrency,
   galleryLimit,
   galleryOrder,
+  globalCommitConcurrency,
   homeHeroBackground,
   homeTagline,
   imagePageSize,
@@ -115,6 +117,10 @@ const runtimeConfigSchema = z.strictObject({
     path: ["min_quality"]
   }),
   thumbnail: z.strictObject({ long_edge: thumbnailLongEdge, quality: thumbnailQuality }),
+  import: z.strictObject({
+    commit_concurrency: commitConcurrency,
+    global_commit_concurrency: globalCommitConcurrency
+  }),
   image_detail: z.strictObject({ title_opens_image: z.boolean() }),
   admin: z.strictObject({
     login_background: loginBackground,
@@ -165,8 +171,42 @@ function mergeDefined(base: Record<string, unknown>, patch: Record<string, unkno
   return result;
 }
 
-export function parseRuntimeConfig(value: unknown): RuntimeConfig {
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function runtimeConfigNormalizationBase(): Record<string, unknown> {
+  return {
+    ...structuredClone(appConfig.runtimeDefaults),
+    database: {
+      host: undefined,
+      port: appConfig.runtimeDefaults.database.port,
+      name: undefined,
+      user: undefined,
+      password: undefined
+    }
+  };
+}
+
+function projectKnownConfig(base: unknown, input: unknown): unknown {
+  if (!isPlainRecord(base)) return input === undefined ? base : input;
+  if (input === undefined) return structuredClone(base);
+  if (!isPlainRecord(input)) return input;
+
+  return Object.fromEntries(
+    Object.entries(base).map(([key, defaultValue]) => [
+      key,
+      projectKnownConfig(defaultValue, input[key])
+    ])
+  );
+}
+
+function parseRuntimeConfig(value: unknown): RuntimeConfig {
   return runtimeConfigSchema.parse(value);
+}
+
+export function normalizeRuntimeConfig(value: unknown): RuntimeConfig {
+  return runtimeConfigSchema.parse(projectKnownConfig(runtimeConfigNormalizationBase(), value));
 }
 
 export function mergeRuntimeConfig(current: RuntimeConfig, patch: RuntimeConfigPatch): RuntimeConfig {

@@ -2,6 +2,7 @@ import { useCallback, useRef } from "react";
 import type { ImportJob } from "../../../../lib/types.js";
 import { normalizeAuthor, normalizeTheme, runWithConcurrency, type CommonImageAttributes } from "../../../../lib/upload/upload-utils.js";
 import { linkImportJobs, retryPrepareJob } from "../import-job-utils.js";
+import { batchDuplicateFromJob } from "../duplicate-match.js";
 import { applyPreparedResult, isCurrentImportAttempt, type AppendImportQueueApi } from "../prepared-result.js";
 import { cancelStoredImport, createImportSession, prepareImportSession } from "../import-api.js";
 import type { LinkImportMode } from "./LinkUrlDialog.js";
@@ -47,17 +48,44 @@ export function useLinkImport(options: {
       const prepared = await prepareImportSession(session, controller.signal);
       const applied = applyPreparedResult(queue, job.id, attemptKey, prepared);
       const duplicateExists = prepared.duplicate_exists || prepared.duplicates.length > 0;
-      const shouldSkip = job.duplicatePolicy === "skip" && (applied === "duplicate" || duplicateExists);
-      if (shouldSkip || applied === "duplicate") {
+      const shouldSkip = job.duplicatePolicy === "skip" && (applied.status === "duplicate" || duplicateExists);
+      if (shouldSkip || applied.status === "duplicate") {
         if (isCurrentImportAttempt(queue, job.id, attemptKey)) {
+          const duplicates = prepared.duplicates ?? [];
+          const libraryDuplicate = duplicates[0];
+          const owner = applied.status === "duplicate"
+            ? queue.jobsRef.current.find((item) => item.id === applied.ownerId)
+            : undefined;
+          const batchDuplicate = !libraryDuplicate && owner
+            ? batchDuplicateFromJob(owner)
+            : undefined;
           queue.updateJob(job.id, {
             status: shouldSkip ? "skipped" : "cancelled",
-            message: shouldSkip ? "检测到重复图片，已跳过" : "批次内最终文件重复，已取消",
+            message: shouldSkip
+              ? libraryDuplicate
+                ? `与图库中 ${duplicates.length} 张图片的最终文件重复，已跳过`
+                : owner?.manifestLine
+                  ? `与 JSONL 第 ${owner.manifestLine} 行的处理后文件重复，已跳过`
+                  : "与同批处理任务的最终文件重复，已跳过"
+              : "批次内最终文件重复，已取消",
+            ...(libraryDuplicate ? {
+              preview: libraryDuplicate.thumb_url,
+              previewFull: libraryDuplicate.object_url,
+              width: libraryDuplicate.width,
+              height: libraryDuplicate.height,
+              batchDuplicate: undefined
+            } : batchDuplicate ? {
+              preview: batchDuplicate.preview,
+              previewFull: batchDuplicate.previewFull,
+              width: batchDuplicate.width,
+              height: batchDuplicate.height,
+              batchDuplicate
+            } : {}),
             duplicateDecision: "upload"
           });
         }
         await cancelStoredImport(session.id).catch(() => undefined);
-      } else if (applied === "stale") {
+      } else if (applied.status === "stale") {
         await cancelStoredImport(session.id).catch(() => undefined);
       }
     } catch (error) {

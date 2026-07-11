@@ -136,6 +136,10 @@ export function runtimeConfigFromEnvironment(): RuntimeConfig {
       long_edge: environmentNumber("THUMBNAIL_LONG_EDGE"),
       quality: environmentNumber("THUMBNAIL_QUALITY")
     },
+    import: {
+      commit_concurrency: environmentNumber("IMPORT_COMMIT_CONCURRENCY"),
+      global_commit_concurrency: environmentNumber("IMPORT_GLOBAL_COMMIT_CONCURRENCY")
+    },
     image_detail: {
       title_opens_image: environmentBoolean("IMAGE_DETAIL_TITLE_OPENS_IMAGE")
     },

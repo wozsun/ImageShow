@@ -135,6 +135,21 @@ export type RandomLinkDraft = {
   mode: RandomMode;
 };
 
+export type BatchDuplicateMatch = {
+  ownerId: string | null;
+  manifestLine?: number;
+  displayName: string;
+  sourceUrl: string;
+  preview: string;
+  previewFull: string;
+  width: number;
+  height: number;
+  device: ImageDraft["device"];
+  brightness: ImageDraft["brightness"];
+  theme: string;
+  available: boolean;
+};
+
 export type ImportJob = {
   id: string;
   kind: "local" | "download" | "proxy";
@@ -165,6 +180,7 @@ export type ImportJob = {
   manifestLine?: number;
   manifestPosition?: number;
   duplicatePolicy?: "confirm" | "skip";
+  batchDuplicate?: BatchDuplicateMatch;
   inlineMetadataFields?: Array<keyof ImageDraft>;
   originalSize?: number;
   finalSize?: number;

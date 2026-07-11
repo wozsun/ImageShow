@@ -117,6 +117,7 @@ function getAppSettings() {
     link_image: runtime.link_image,
     normalize: runtime.normalize,
     thumbnail: runtime.thumbnail,
+    import: runtime.import,
     image_detail: runtime.image_detail,
     admin: runtime.admin,
     background_job: runtime.background_job
@@ -148,6 +149,7 @@ export function getSettingsForAdmin() {
     upload: settings.upload,
     normalize: settings.normalize,
     thumbnail: settings.thumbnail,
+    import: settings.import,
     image_detail: settings.image_detail,
     admin: { login_background, image_page_size, recent_uploads, show_unset_theme_card },
     link_image: settings.link_image

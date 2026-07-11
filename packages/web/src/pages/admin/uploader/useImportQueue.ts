@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 import type { ImageDraft, ImportJob } from "../../../lib/types.js";
 import type { CommonImageAttributes } from "../../../lib/upload/upload-utils.js";
+import {
+  claimPreparedMd5Owner,
+  detachRemovedBatchDuplicateOwners,
+  refreshBatchDuplicateMatches
+} from "./duplicate-match.js";
 
 type QueueState = { jobs: ImportJob[]; page: number };
 type QueueAction =
@@ -53,14 +58,20 @@ function reducer(state: QueueState, action: QueueAction): QueueState {
     case "retain-mode":
       return { jobs: state.jobs.filter((job) => action.mode === "file" ? job.kind === "local" : job.kind !== "local"), page: 1 };
     case "patch":
-      return { ...state, jobs: state.jobs.map((job) => job.id === action.id ? { ...job, ...action.patch } : job) };
+      return {
+        ...state,
+        jobs: refreshBatchDuplicateMatches(
+          state.jobs.map((job) => job.id === action.id ? { ...job, ...action.patch } : job),
+          action.id
+        )
+      };
     case "patch-draft":
       return {
         ...state,
         jobs: state.jobs.map((job) => job.id === action.id ? patchJobDraft(job, action.patch) : job)
       };
     case "remove": {
-      const jobs = state.jobs.filter((job) => !action.ids.has(job.id));
+      const jobs = detachRemovedBatchDuplicateOwners(state.jobs, action.ids);
       return { jobs, page: Math.min(state.page, pageCount(jobs.length, action.pageSize)) };
     }
     case "apply-defaults":
@@ -103,11 +114,10 @@ export function useImportQueue(pageSize: number) {
 
   const claimPreparedMd5 = useCallback((id: string, md5: string) => {
     // 同一批次内最终文件 md5 重复时，只保留第一个任务进入“待提交”，其余任务取消服务端暂存。
-    const owner = md5OwnersRef.current.get(md5);
-    if (owner && owner !== id) return false;
-    md5OwnersRef.current.set(md5, id);
+    const claim = claimPreparedMd5Owner(md5OwnersRef.current, id, md5);
+    if (!claim.claimed) return claim;
     dispatch({ type: "patch", id, patch: { md5 } });
-    return true;
+    return claim;
   }, [dispatch]);
 
   const releaseJob = useCallback((job: ImportJob) => {

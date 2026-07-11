@@ -10,7 +10,7 @@ ImageShow 的配置按持久化位置分为三类：数据库、`/app/data/confi
 | `/app/data/config.json` | 站点名、域名、入口行为、上传 / 导入 / 图片处理、安全与日志配置，以及 PostgreSQL / Redis 连接凭据。 | 后台设置页，或直接编辑文件后在后台「设置 → 读取配置文件」；该文件包含数据库密码，需限制宿主机访问。上传文件大小、上传长边校验和服务端全局导入并发只通过配置文件维护。 |
 | 环境变量 | 只用于首次生成 `config.json`，以及初始化管理员账号和 PostgreSQL 官方镜像变量。 | 修改 `.env` 后重建 / 重启；配置文件生成后，普通运行时配置以 `config.json` 为准。 |
 
-完整字段清单、默认值和中英文注释见仓库根目录的 `config.example.jsonc`。实际运行文件是纯 JSON，不支持注释，且必须包含当前版本的完整字段；缺字段、未知字段或类型错误都会在启动或手动重载时明确拒绝，不再自动补齐旧配置。
+完整字段清单、默认值和中英文注释见仓库根目录的 `config.example.jsonc`。实际运行文件是纯 JSON，不支持注释。启动和手动重载时会按当前 schema 归一化：缺少且有默认值的字段自动补齐，未知字段递归删除，已有有效值保留；归一化发生变化时原子写回完整配置。已有但类型错误、格式错误或超出范围的值仍会明确拒绝，数据库 `host`、`name`、`user`、`password` 等没有默认值的必填项也不会自动生成。
 
 ## 热加载边界
 
@@ -44,6 +44,8 @@ ImageShow 的配置按持久化位置分为三类：数据库、`/app/data/confi
 | `link_image.jsonl_max_items` | JSONL 清单单次图片数量上限，默认 100、最大 4096（受 UUIDv7 `rand_a` 容量约束）；不在设置页展示，管理端只读返回该值供导入窗口预检，修改需编辑配置文件。 |
 | `normalize.*` | 本地上传与下载导入共用的最终入库文件标准化策略。 |
 | `thumbnail.*` | 缩略图长边和压缩质量，只影响此后新生成的缩略图。 |
+| `import.commit_concurrency` | 单个管理页面同时执行的 commit 数，默认 5；只在配置文件中维护，管理端只读返回。 |
+| `import.global_commit_concurrency` | 单个服务端进程同时执行的 commit 数，默认 10；所有客户端和直接 API 请求共享，只在配置文件中维护。 |
 | `image_detail.title_opens_image` | 图片详情弹窗标题是否链接到图片直链。 |
 | `admin.login_background` | 后台登录页背景，仅允许站内绝对路径或 HTTPS；留空时使用站点自身随机图。 |
 | `admin.image_page_size` / `admin.recent_uploads` / `admin.show_unset_theme_card` | 后台图片分页、概览最近上传数量、主题页「未设置」占位卡片开关。 |
@@ -87,6 +89,8 @@ ImageShow 的配置按持久化位置分为三类：数据库、`/app/data/confi
 
 输入本身是 WebP、体积小于 `normalize.skip_webp_under_kb` 且长边已经达标时，原字节直接成为最终候选文件；服务端仍会执行解码校验、标准缩略图生成和最终 MD5 计算。`upload.concurrency` / `link_image.concurrency` 只约束单个后台页面自己的队列；`upload.global_concurrency` / `link_image.global_concurrency` 约束服务端 prepare 全局并发，即使调用方绕过前端队列直接打接口，进程内也会排队并支持取消等待中的任务。
 
+commit 使用独立的 `import.commit_concurrency` / `import.global_commit_concurrency`，不再复用上传或 URL prepare 并发。前者限制单个后台页面，后者在取得会话 advisory lock、存储共享锁和数据库事务连接之前限制整个服务端进程。该许可覆盖正式对象复制、数据库事务、暂存清理和缓存更新，而不只是 `INSERT`。PostgreSQL 应用连接池上限为 30。
+
 ## 环境变量
 
 `compose.yaml` 默认使用或向容器注入以下变量：
@@ -112,6 +116,8 @@ ImageShow 的配置按持久化位置分为三类：数据库、`/app/data/confi
 | `normalize.quality_step` | `NORMALIZE_QUALITY_STEP` |
 | `thumbnail.long_edge` | `THUMBNAIL_LONG_EDGE` |
 | `thumbnail.quality` | `THUMBNAIL_QUALITY` |
+| `import.commit_concurrency` | `IMPORT_COMMIT_CONCURRENCY` |
+| `import.global_commit_concurrency` | `IMPORT_GLOBAL_COMMIT_CONCURRENCY` |
 | `upload.max_file_size_mb` | `UPLOAD_MAX_FILE_SIZE_MB` |
 | `upload.max_long_edge` | `UPLOAD_MAX_LONG_EDGE` |
 | `upload.concurrency` | `UPLOAD_CONCURRENCY` |
@@ -123,6 +129,4 @@ ImageShow 的配置按持久化位置分为三类：数据库、`/app/data/confi
 | `link_image.jsonl_max_items` | `LINK_IMAGE_JSONL_MAX_ITEMS` |
 | `port` | `PORT` |
 
-仓库自带 `compose.yaml` 不注入表中的可选播种项；如需在首次启动时使用，
-应通过 Compose override 显式传入。配置文件已经生成后，请直接修改
-`config.json` 并热加载；连接类配置仍需重启容器。
+仓库自带 `compose.yaml` 会以 5/10 注入两项 commit 并发变量，其他可选播种项需通过 Compose override 显式传入。配置文件已经生成后，环境变量不会覆盖已有值；请直接修改 `config.json` 并热加载，连接类配置仍需重启容器。

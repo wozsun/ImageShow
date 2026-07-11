@@ -92,7 +92,7 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | `images/classification.ts` | 设备 / 明暗三态分类工具：`auto` 解析、按宽高落设备、导入与编辑共用的最终分类收敛。 |
 | `images/image-time.ts` | 图片展示时间专用解析与 UUIDv7 生成：用原生 Temporal 处理带偏移 ISO 8601、按 `TZ` 严格解析无偏移本地时间并拒绝夏令时歧义；JSONL 可把临时清单位置映射到 `rand_a`。 |
 | `images/brightness.ts` | 明暗识别 `detectBrightness()`：缩小图片后用 CIELAB L\* 直方图计算平均值、分位数、亮暗像素比例，并按运行时常量判定 `dark` / `light`。 |
-| `images/imports/` | 统一 `import_session` 生命周期：`session.ts` 负责创建 / 接收 / 预览 / 取消，`prepare.ts` 与 `commit.ts` 分管处理和提交，`progress.ts` 管租约 / 状态 / SSE，`execution.ts` 管进程内并发与 active promise，`staging.ts` 管暂存对象；另含 JSONL、请求摘要、安全抓取和临时文件模块。 |
+| `images/imports/` | 统一 `import_session` 生命周期：`session.ts` 负责创建 / 接收 / 预览 / 取消，`prepare.ts` 与 `commit.ts` 分管处理和提交，`progress.ts` 管租约 / 状态 / SSE，`execution.ts` 统一管理 prepare / commit 动态并发限制与 active promise，`staging.ts` 管暂存对象；另含 JSONL、请求摘要、安全抓取和临时文件模块。 |
 | `images/batch-delete.ts` | 批量软删除 `batchDeleteImages()`：标记 `status='deleted'` 并从 Redis 随机池移除（不动文件）。 |
 | `images/cursor.ts` | 游标编解码（稳定分页）。 |
 | `images/trash.ts` | 回收站编排：单图 / 批量恢复后统一失效 MD5 与图片读缓存；彻底清除时删除本站持有的对象，本地图删除原图和缩略图，link 图只删除本站缩略图。 |
