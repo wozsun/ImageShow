@@ -79,7 +79,7 @@ export function Uploader({ onDone }: { onDone: () => void }) {
 
   const queueApi = {
     jobsRef: queue.jobsRef, appendJobs: queue.appendJobs, updateJob: queue.updateJob,
-    claimPreparedMd5: queue.claimPreparedMd5
+    claimPreparedMd5: queue.claimPreparedMd5, releasePreparedMd5: queue.releasePreparedMd5
   };
   const localImport = useLocalUploadImport({ queue: queueApi, defaults, storageSlug: activeBackend, maxBytes, concurrency: uploadConcurrency });
   const linkImport = useLinkImport({ queue: queueApi, defaults, fillOriginalUrl, storageSlug: activeBackend, concurrency: downloadConcurrency });
@@ -108,6 +108,18 @@ export function Uploader({ onDone }: { onDone: () => void }) {
 
   const retryJob = async (job: ImportJob) => {
     if (job.failureStage === "commit") {
+      queue.releasePreparedMd5(job.id);
+      if (job.md5) {
+        const claim = queue.claimPreparedMd5(job.id, job.md5);
+        if (!claim.claimed) {
+          queue.updateJob(job.id, {
+            status: "failed",
+            failureStage: "commit",
+            message: "同批相同图片已由其他任务占用，请稍后重试"
+          });
+          return;
+        }
+      }
       setBusy(true);
       await commitImports([job]).finally(() => setBusy(false));
       return;

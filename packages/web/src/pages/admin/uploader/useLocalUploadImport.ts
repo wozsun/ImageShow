@@ -134,6 +134,7 @@ export function useLocalUploadImport(options: {
   const retry = useCallback(async (job: ImportJob) => {
     if (!job.file) return;
     if (job.sessionId) await cancelStoredImport(job.sessionId).catch(() => undefined);
+    queue.releasePreparedMd5(job.id);
     const next = { ...retryPrepareJob(job), uploadProgress: 0 };
     queue.updateJob(job.id, next);
     await prepare(next);

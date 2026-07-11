@@ -62,10 +62,9 @@ export function DuplicateMatchPanel({
               {batchDuplicate.preview
                 ? <ImageThumbnail src={batchDuplicate.preview} size="small" />
                 : <span className="image-thumbnail is-small" aria-hidden="true" />}
-              <span>{batchDuplicate.displayName}</span>
-              <small className="duplicate-item-source" title={batchDuplicate.sourceUrl}>
-                {batchDuplicate.sourceUrl}
-              </small>
+              <span className="duplicate-item-source" title={batchDuplicate.original}>
+                {batchDuplicate.original}
+              </span>
               <small>
                 {batchDuplicate.available
                   ? [

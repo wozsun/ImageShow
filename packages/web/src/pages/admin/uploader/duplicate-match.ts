@@ -15,13 +15,22 @@ export function claimPreparedMd5Owner(
   return { claimed: true };
 }
 
+export function releasePreparedMd5Owner(
+  owners: Map<string, string>,
+  id: string,
+  md5: string
+) {
+  if (owners.get(md5) !== id) return false;
+  owners.delete(md5);
+  return true;
+}
+
 export function batchDuplicateFromJob(owner: ImportJob): BatchDuplicateMatch {
   const previewFull = owner.previewFull || owner.preview;
   return {
     ownerId: owner.id,
     manifestLine: owner.manifestLine,
-    displayName: owner.draft.title || owner.file?.name || owner.url || owner.id,
-    sourceUrl: owner.url || owner.draft.source,
+    original: owner.url || owner.draft.original,
     preview: owner.preview,
     previewFull,
     width: owner.width,

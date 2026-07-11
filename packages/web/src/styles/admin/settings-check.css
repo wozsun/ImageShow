@@ -8,6 +8,7 @@
 }
 .advanced-config-page { display: flex; flex-direction: column; overflow: hidden; }
 .advanced-config-page > .workspace-head { flex: 0 0 auto; }
+.advanced-config-page > .action-feedback { margin: 0 0 12px; }
 .advanced-config-head-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-left: auto; }
 .advanced-config-editor {
   display: grid;

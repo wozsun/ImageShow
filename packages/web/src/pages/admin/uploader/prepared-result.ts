@@ -7,6 +7,7 @@ export type ImportQueueApi = {
   jobsRef: RefObject<ImportJob[]>;
   updateJob: (id: string, patch: Partial<ImportJob>) => void;
   claimPreparedMd5: (id: string, md5: string) => PreparedMd5Claim;
+  releasePreparedMd5: (id: string) => boolean;
 };
 
 export type AppendImportQueueApi = ImportQueueApi & {
@@ -61,9 +62,13 @@ export function applyPreparedResult(queue: ImportQueueApi, jobId: string, attemp
     }
   });
   if (!claim.claimed) return { status: "duplicate", ownerId: claim.ownerId };
+  let message = "已就绪，待提交";
+  if (duplicateExists) {
+    message = duplicates.length > 0 ? `发现 ${duplicates.length} 张相同图片` : "发现重复图片";
+  }
   queue.updateJob(jobId, {
     status: "ready",
-    message: duplicateExists ? `发现 ${duplicates.length} 张相同图片` : "已就绪，待提交"
+    message
   });
   return { status: "applied" };
 }

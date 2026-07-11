@@ -157,7 +157,7 @@ export function AdvancedConfigPage() {
       {exportConfirmation && (
         <ConfirmDialog
           title="导出敏感配置包"
-          description="导出文件包含 S3 Secret Key 和 WebDAV 密码，请确认将在可信设备上妥善保管。"
+          description="配置包包含明文存储凭据（S3 Secret Key 和 WebDAV 密码），请仅在可信设备上导出并妥善保管。"
           confirmLabel="确认导出"
           confirmIcon="download-cloud-2-line"
           danger={false}

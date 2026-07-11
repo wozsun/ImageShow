@@ -51,7 +51,13 @@
 .confirm-dialog form > footer { border-top: 0; }
 
 .confirm-dialog header h2 { font-size: 19px; }
-.confirm-dialog header p { font-size: 15px; }
+.confirm-dialog header p {
+  overflow: visible;
+  white-space: normal;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+  font-size: 15px;
+}
 
 .batch-edit-list {
   display: grid;

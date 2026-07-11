@@ -48,8 +48,9 @@ export function useLinkImport(options: {
       const prepared = await prepareImportSession(session, controller.signal);
       const applied = applyPreparedResult(queue, job.id, attemptKey, prepared);
       const duplicateExists = prepared.duplicate_exists || prepared.duplicates.length > 0;
-      const shouldSkip = job.duplicatePolicy === "skip" && (applied.status === "duplicate" || duplicateExists);
-      if (shouldSkip || applied.status === "duplicate") {
+      const shouldSkip = applied.status === "duplicate"
+        || (job.duplicatePolicy === "skip" && duplicateExists);
+      if (shouldSkip) {
         if (isCurrentImportAttempt(queue, job.id, attemptKey)) {
           const duplicates = prepared.duplicates ?? [];
           const libraryDuplicate = duplicates[0];
@@ -60,14 +61,12 @@ export function useLinkImport(options: {
             ? batchDuplicateFromJob(owner)
             : undefined;
           queue.updateJob(job.id, {
-            status: shouldSkip ? "skipped" : "cancelled",
-            message: shouldSkip
-              ? libraryDuplicate
-                ? `与图库中 ${duplicates.length} 张图片的最终文件重复，已跳过`
-                : owner?.manifestLine
-                  ? `与 JSONL 第 ${owner.manifestLine} 行的处理后文件重复，已跳过`
-                  : "与同批处理任务的最终文件重复，已跳过"
-              : "批次内最终文件重复，已取消",
+            status: "skipped",
+            message: libraryDuplicate
+              ? `与图库中 ${duplicates.length} 张图片的最终文件重复，已跳过`
+              : owner?.manifestLine
+                ? `与 JSONL 第 ${owner.manifestLine} 行的处理后文件重复，已跳过`
+                : "与同批处理任务的最终文件重复，已跳过",
             ...(libraryDuplicate ? {
               preview: libraryDuplicate.thumb_url,
               previewFull: libraryDuplicate.object_url,
@@ -117,6 +116,7 @@ export function useLinkImport(options: {
 
   const retry = useCallback(async (job: ImportJob) => {
     if (job.sessionId) await cancelStoredImport(job.sessionId).catch(() => undefined);
+    queue.releasePreparedMd5(job.id);
     const next = retryPrepareJob(job);
     queue.updateJob(job.id, next);
     await prepare(next);

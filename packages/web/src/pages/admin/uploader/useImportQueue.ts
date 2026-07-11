@@ -4,8 +4,11 @@ import type { CommonImageAttributes } from "../../../lib/upload/upload-utils.js"
 import {
   claimPreparedMd5Owner,
   detachRemovedBatchDuplicateOwners,
+  releasePreparedMd5Owner,
   refreshBatchDuplicateMatches
 } from "./duplicate-match.js";
+
+const preparedMd5ReleaseStatuses = new Set<ImportJob["status"]>(["done", "skipped", "failed", "cancelled"]);
 
 type QueueState = { jobs: ImportJob[]; page: number };
 type QueueAction =
@@ -109,7 +112,20 @@ export function useImportQueue(pageSize: number) {
     if (jobs.length) dispatch({ type: "append", jobs, pageSize });
   }, [dispatch, pageSize]);
 
-  const updateJob = useCallback((id: string, patch: Partial<ImportJob>) => dispatch({ type: "patch", id, patch }), [dispatch]);
+  const releasePreparedMd5 = useCallback((id: string) => {
+    const job = jobsRef.current.find((item) => item.id === id);
+    if (!job?.md5) return false;
+    return releasePreparedMd5Owner(md5OwnersRef.current, id, job.md5);
+  }, []);
+
+  const updateJob = useCallback((id: string, patch: Partial<ImportJob>) => {
+    if (patch.status && preparedMd5ReleaseStatuses.has(patch.status)) {
+      const current = jobsRef.current.find((item) => item.id === id);
+      const md5 = patch.md5 ?? current?.md5;
+      if (md5) releasePreparedMd5Owner(md5OwnersRef.current, id, md5);
+    }
+    dispatch({ type: "patch", id, patch });
+  }, [dispatch]);
   const updateJobDraft = useCallback((id: string, patch: Partial<ImageDraft>) => dispatch({ type: "patch-draft", id, patch }), [dispatch]);
 
   const claimPreparedMd5 = useCallback((id: string, md5: string) => {
@@ -122,7 +138,7 @@ export function useImportQueue(pageSize: number) {
 
   const releaseJob = useCallback((job: ImportJob) => {
     // 本地预览 URL 由前端创建，任务离队时必须释放；服务端 preview_url 不需要 revoke。
-    if (job.md5 && md5OwnersRef.current.get(job.md5) === job.id) md5OwnersRef.current.delete(job.md5);
+    if (job.md5) releasePreparedMd5Owner(md5OwnersRef.current, job.id, job.md5);
     revokeObjectUrl(job);
   }, []);
 
@@ -154,7 +170,7 @@ export function useImportQueue(pageSize: number) {
 
   return {
     jobs: state.jobs, jobsRef, page: state.page, totalPages, visibleJobs, setPage,
-    appendJobs, retainMode, updateJob, updateJobDraft, claimPreparedMd5, removeJob,
-    clearJobs, applyDefaultsToAll
+    appendJobs, retainMode, updateJob, updateJobDraft, claimPreparedMd5,
+    releasePreparedMd5, removeJob, clearJobs, applyDefaultsToAll
   };
 }

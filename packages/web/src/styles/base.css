@@ -76,7 +76,7 @@ input[aria-invalid="true"] { border-color: #d64545; box-shadow: 0 0 0 1px #d6454
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 3px 4px 3px 10px;
+  padding: 3px 4px 3px 8px;
   background: #eef2f7;
   border: 1px solid #dce3ec;
   border-radius: 999px;

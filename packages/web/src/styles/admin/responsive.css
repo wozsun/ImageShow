@@ -226,7 +226,11 @@
   .advanced-config-editor-footer .action-feedback.is-inline { flex-basis: auto; }
   .advanced-config-editor-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .advanced-config-editor-actions .button { grid-column: 1 / -1; }
-  .advanced-config-editor { grid-template-rows: auto minmax(220px, 1fr) auto; }
+  /* iOS 动态工具栏压缩可见区域或反馈条出现时，由编辑区让出高度并保持内部滚动；
+     页脚仍留在卡片边框内，不把 CodeMirror 的完整内容计入卡片固有高度。 */
+  .advanced-config-editor {
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
   .advanced-config-code-editor .cm-editor { font-size: 12px; }
   /*批量通用条（flex 行）：设备/亮度成对，文本类输入与应用到全部整行堆叠。*/
   .select-control.batch-common-select { flex: 1 1 calc(50% - 4px); width: auto; }

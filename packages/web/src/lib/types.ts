@@ -162,8 +162,7 @@ export type RandomLinkDraft = {
 export type BatchDuplicateMatch = {
   ownerId: string | null;
   manifestLine?: number;
-  displayName: string;
-  sourceUrl: string;
+  original: string;
   preview: string;
   previewFull: string;
   width: number;

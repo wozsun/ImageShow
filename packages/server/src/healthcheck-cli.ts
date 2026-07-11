@@ -1,8 +1,10 @@
 import { request } from "node:http";
 import { getRuntimeConfig } from "./config/runtime-config-store.ts";
+import { readActiveServerPort } from "./core/listening-port.ts";
 
-const port = String(getRuntimeConfig().port);
-const host = getRuntimeConfig().site.domain;
+const runtimeConfig = getRuntimeConfig();
+const port = String(readActiveServerPort());
+const host = runtimeConfig.site.domain;
 const checks = ["/livez", "/readyz", "/", "/home", "/gallery", "/random?m=redirect", "/img-count"];
 
 function requestStatus(path: string) {

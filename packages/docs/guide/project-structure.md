@@ -38,7 +38,7 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | `config/bootstrap-env.ts` | 启动环境边界：解析 `NODE_ENV`、首次管理员凭据和首次生成 `config.json` 所需环境变量；集中导出数据、存储、临时文件和日志目录。环境变量只在配置文件首次生成时播种。 |
 | `config/runtime-config.ts` | 完整运行时配置的严格 zod schema、可迁移配置投影、当前配置解析和嵌套 patch 合并。 |
 | `config/runtime-config-store.ts` | `data/config.json` 的读取、按 schema 归一化、原子写入、内存快照、热重载与变更监听；配置文件生成后成为运行时配置真相源。 |
-| `config/config-package.ts` | `imageshow-config` 版本化配置包的构建、严格解析、敏感存储配置投影、slug 冲突预检和原子导入编排。 |
+| `config/config-package.ts` | `imageshow-config` 版本化配置包的构建、严格解析、敏感存储配置投影、slug 冲突预检和带普通异常补偿的导入编排。 |
 | `config/full-config.ts` | 完整运行时配置的危险字段差异、只读预检、共享写锁与精准保存编排。 |
 | `config/fields.ts` | 运行时配置字段的 zod 边界值：站点、上传、链接导入、标准化、缩略图、安全、验证码和日志等设置校验。 |
 | `config/app-settings.ts` | 可编辑应用设置的输入 schema、后台设置 DTO、公开站点配置和图片输入 / 缩略图运行时设置；不负责存储后端注册表。 |
@@ -48,6 +48,7 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | 文件 | 职责 |
 | --- | --- |
 | `core/db.ts` | PostgreSQL 连接池、事务与 advisory lock 工具、迁移串行执行，并把启动期 super 初始化交给 users 领域。 |
+| `core/listening-port.ts` | 原子记录并校验当前服务进程的实际监听端口，供独立 healthcheck 进程读取，避免待重启配置提前改变探测目标。 |
 | `core/password.ts` | Node.js 原生异步 Argon2id 密码派生与 PHC 编解码：当前参数生成、安全范围内的旧参数验证、升级判断和恒定时间比较。 |
 | `core/uuid.ts` | Node.js 原生 UUIDv7 封装：生成当前时间 ID，为历史 `image_time` 替换 48 位时间戳，并可显式写入 12 位 `rand_a`。 |
 | `core/redis-client.ts` | Redis 连接实例与 `pingRedis()`；业务缓存逻辑按领域拆到 `random/`、`images/`、`vocab/`。 |
