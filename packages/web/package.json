@@ -1,6 +1,6 @@
 {
   "name": "@imageshow/web",
-  "version": "3.3.0",
+  "version": "3.5.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
@@ -10,8 +10,10 @@
     "check": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@codemirror/lang-json": "^6.0.2",
     "@imageshow/shared": "file:../shared",
     "@tanstack/react-query": "^5.101.2",
+    "@uiw/react-codemirror": "^4.25.11",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.18.1"

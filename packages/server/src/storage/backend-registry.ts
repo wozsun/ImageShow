@@ -9,6 +9,7 @@ import {
   s3SettingsSchema,
   webdavSettingsSchema,
   type StorageBackendCreateInput,
+  type StorageBackendImportInput,
   type StorageBackendRecord,
   type StorageBackendUpdateInput,
   type StorageConfig,
@@ -166,6 +167,51 @@ export async function createStorageBackend(input: StorageBackendCreateInput) {
     }
     throw error;
   });
+  invalidateStorageBackendCache();
+}
+
+export async function importStorageBackends(
+  backends: StorageBackendImportInput[],
+  beforeCommit: () => void | Promise<void>
+) {
+  try {
+    await withTransaction(async (client) => {
+      const highestSortOrder = Number((await client.query(
+        "SELECT COALESCE(MAX(sort_order), 0) AS value FROM storage_backend"
+      )).rows[0]?.value ?? 0);
+
+      for (const [index, backend] of backends.entries()) {
+        await client.query(
+          `INSERT INTO storage_backend(slug, display_name, type, config, enabled, is_default, sort_order)
+           VALUES($1, $2, $3, $4::jsonb, $5, false, $6)`,
+          [
+            backend.slug,
+            backend.display_name,
+            backend.type,
+            JSON.stringify(backend.config),
+            backend.enabled,
+            highestSortOrder + index + 1
+          ]
+        );
+      }
+
+      const importedDefault = backends.find((backend) => backend.is_default);
+      if (importedDefault) {
+        await client.query("UPDATE storage_backend SET is_default=false, updated_at=now() WHERE is_default");
+        await client.query(
+          "UPDATE storage_backend SET is_default=true, updated_at=now() WHERE slug=$1",
+          [importedDefault.slug]
+        );
+      }
+
+      await beforeCommit();
+    });
+  } catch (error) {
+    if (error && typeof error === "object" && (error as { code?: string }).code === "23505") {
+      throw new ApiError(409, "storage_backend_exists", "导入的存储后端 slug 已存在");
+    }
+    throw error;
+  }
   invalidateStorageBackendCache();
 }
 

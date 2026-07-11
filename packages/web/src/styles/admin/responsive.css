@@ -70,6 +70,19 @@
 }
 
 @media (max-width: 760px) {
+  .admin:has(> .advanced-config-page) {
+    height: 100dvh;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .admin:has(> .advanced-config-page) > .admin-mobile-header { flex: 0 0 auto; }
+  .admin:has(> .advanced-config-page) > .advanced-config-page {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+  }
   .admin { padding-left: 0; }
   .admin > aside { display: none; }
   .admin-mobile-header {
@@ -203,6 +216,18 @@
   .admin button:not(:disabled) { transition-duration: .08s; }
   .admin button:not(:disabled):not(.select-trigger):not(.password-toggle):active { transform: scale(.95); }
   .settings-grid, .overview-grid { grid-template-columns: 1fr; }
+  .advanced-config-summary { grid-template-columns: 1fr 1fr; }
+  .advanced-config-backend { grid-template-columns: 1fr; }
+  .advanced-config-ready { justify-self: start; }
+  .advanced-config-head-actions { display: grid; grid-template-columns: 1fr 1fr; margin-left: 0; }
+  .advanced-config-head-actions button { min-width: 0; }
+  .advanced-config-editor-head,
+  .advanced-config-editor-footer { align-items: stretch; flex-direction: column; }
+  .advanced-config-editor-footer .action-feedback.is-inline { flex-basis: auto; }
+  .advanced-config-editor-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .advanced-config-editor-actions .button { grid-column: 1 / -1; }
+  .advanced-config-editor { grid-template-rows: auto minmax(220px, 1fr) auto; }
+  .advanced-config-code-editor .cm-editor { font-size: 12px; }
   /*批量通用条（flex 行）：设备/亮度成对，文本类输入与应用到全部整行堆叠。*/
   .select-control.batch-common-select { flex: 1 1 calc(50% - 4px); width: auto; }
   .slug-combo-control.batch-common-theme,

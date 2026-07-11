@@ -56,7 +56,7 @@ JSONL 先请求管理端解析接口，服务端按 `link_image.jsonl_max_items`
 
 `image_time` 的带偏移 ISO 8601 输入由原生 `Temporal.Instant` 解析；`YYYY-MM-DD HH:mm:ss` 无偏移输入由 `Temporal.PlainDateTime` 按运行时 `TZ` 转为瞬时时间。夏令时跳跃造成的不存在时间或回拨造成的歧义时间都会被拒绝，不依赖 `Date` 的隐式本地时间解析。
 
-prepare 完成后会删除 `data/tmp` 下的 raw 文件；失败、取消和过期清理同样删除 raw 与 `_uploads` 候选对象。清理只匹配 UUID 形态的 `.raw` / `.raw.part` 文件，避免误删其他临时内容。接收、排队、prepare 与 commit 期间会周期性续租 `expires_at`；后台清理用 `FOR UPDATE SKIP LOCKED` 原子认领真正空闲过期的会话，不处理 `committing`。原始上传/下载字节从不写入 S3、WebDAV 等目标后端，因此不存在“先远端上传原图、再下载回来压缩”的重复传输。服务端按 `upload.global_concurrency` / `link_image.global_concurrency` 对 prepare 做进程内全局限流，防止绕过前端队列直接并发压垮进程；触发全局等待时会通过状态消息显示“服务端全局处理名额已满，等待空闲名额”。commit 则独立使用 `import.global_commit_concurrency`，在取得会话锁和数据库连接之前排队，所有客户端与直接 API 请求共享上限。
+prepare 完成后会删除 `data/tmp` 下的 raw 文件；失败、取消和过期清理同样删除 raw 与 `_uploads` 候选对象。清理只匹配 UUID 形态的 `.raw` / `.raw.part` 文件，避免误删其他临时内容。导入会话空闲有效期为 30 分钟；接收、排队、prepare 与 commit 期间会周期性续租 `expires_at`，取消标记和孤儿 raw 清理年龄也使用同一有效期。后台清理用 `FOR UPDATE SKIP LOCKED` 原子认领真正空闲过期的会话，不处理 `committing`。原始上传/下载字节从不写入 S3、WebDAV 等目标后端，因此不存在“先远端上传原图、再下载回来压缩”的重复传输。服务端按 `upload.global_concurrency` / `link_image.global_concurrency` 对 prepare 做进程内全局限流，防止绕过前端队列直接并发压垮进程；触发全局等待时会通过状态消息显示“服务端全局处理名额已满，等待空闲名额”。commit 则独立使用 `import.global_commit_concurrency`，在取得会话锁和数据库连接之前排队，所有客户端与直接 API 请求共享上限。
 
 ### prepared import 状态机
 
@@ -180,6 +180,36 @@ GET /api/images/:id
 ## 后台 Worker
 
 Worker 用 `FOR UPDATE SKIP LOCKED` 领取持久任务，按任务类型限制并发，并定期恢复僵尸任务、清理过期 `import_session`、prepared staging 与孤儿 raw 临时文件。存储孤儿清理使用独占维护锁；导入、分类移动、主题重分配和存储迁移持有共享写锁，防止清理任务删除尚未写入最终数据库引用的候选对象。已完成 / 已忽略任务保留 7 天后按批删除，耗尽重试的失败任务保留 90 天后删除；待执行、运行中和仍在重试窗口内的失败任务不会被历史清理删除。
+
+## 高级配置编辑与迁移
+
+「设置 → 高级配置」主体是当前实例完整 `config.json` 编辑器。浏览器先解析 JSON，
+服务端再按精准 schema 做只读预检并比较危险字段；用户确认后，保存接口会在共享
+配置写锁内重新校验，原子替换文件和内存快照。连接与端口变更等待容器重启，其他
+支持热加载的字段通过既有监听器立即应用。
+
+「设置 → 高级配置」通过版本化 JSON 包迁移可移植运行时配置及自定义存储
+后端，不搬运数据库业务数据、缓存、图片对象或新实例自己的连接与域名配置。
+
+```text
+导出：当前配置 + 自定义存储注册表
+        └─► 排除基础设施字段与内置 local
+             └─► imageshow-config v1 JSON（含完整存储凭据）
+
+导入：选择 JSON
+        └─► 严格校验格式、版本、配置和后端数量
+             └─► 预检当前 slug
+                  ├─ 无冲突：保留原 slug
+                  └─ 有冲突：要求输入新 slug
+                       └─► 再校验当前注册表
+                            └─► 原子写配置 + 单事务新增后端
+```
+
+同 slug 永不覆盖现有后端。完整配置保存与配置包应用共用 PostgreSQL advisory
+lock 串行执行，避免并发写入互相覆盖配置快照。导入时先保存运行时配置快照，在存储后端数据库
+事务提交前原子写入配置文件；任一写入或提交失败都会回滚数据库事务并恢复快照，
+不会留下部分导入的后端。若导入包把某个自定义后端标为默认，成功后会在映射后的
+slug 上恢复默认状态。
 
 ## 缓存策略
 

@@ -8,7 +8,13 @@ const MIN_HANDLE = 36;
 
 const ENABLE_QUERY = "(hover: hover) and (pointer: fine) and (forced-colors: none)";
 
-export function OverlayScrollbar({ targetRef, pageEdge }: { targetRef?: RefObject<HTMLElement | null>; pageEdge?: boolean } = {}) {
+type OverlayScrollbarProps = {
+  targetRef?: RefObject<HTMLElement | null>;
+  pageEdge?: boolean;
+  tone?: "default" | "dark";
+};
+
+export function OverlayScrollbar({ targetRef, pageEdge, tone = "default" }: OverlayScrollbarProps = {}) {
   const [enabled, setEnabled] = useState(false);
 
   useEffect(() => {
@@ -27,10 +33,10 @@ export function OverlayScrollbar({ targetRef, pageEdge }: { targetRef?: RefObjec
   }, [enabled, targetRef]);
 
   if (!enabled) return null;
-  return <OverlayScrollbarHandle targetRef={targetRef} pageEdge={pageEdge} />;
+  return <OverlayScrollbarHandle targetRef={targetRef} pageEdge={pageEdge} tone={tone} />;
 }
 
-function OverlayScrollbarHandle({ targetRef, pageEdge }: { targetRef?: RefObject<HTMLElement | null>; pageEdge?: boolean }) {
+function OverlayScrollbarHandle({ targetRef, pageEdge, tone }: OverlayScrollbarProps) {
   const [metrics, setMetrics] = useState<Metrics>({ visible: false, top: 0, height: 0, right: 0 });
   const [active, setActive] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -149,10 +155,11 @@ function OverlayScrollbarHandle({ targetRef, pageEdge }: { targetRef?: RefObject
   if (!metrics.visible) return null;
   const activeClass = active || dragging ? "is-active" : "";
   const draggingClass = dragging ? "is-dragging" : "";
+  const toneClass = tone === "dark" ? "is-dark" : "";
   if (targetRef) {
     return (
       <div
-        className={`overlay-scrollbar-handle is-floating ${activeClass} ${draggingClass}`.trim()}
+        className={`overlay-scrollbar-handle is-floating ${toneClass} ${activeClass} ${draggingClass}`.trim()}
         style={{ top: metrics.top, height: metrics.height, right: metrics.right }}
         onPointerDown={onHandlePointerDown}
         aria-hidden="true"
@@ -162,7 +169,7 @@ function OverlayScrollbarHandle({ targetRef, pageEdge }: { targetRef?: RefObject
   return (
     <div className={`overlay-scrollbar ${activeClass}`.trim()} aria-hidden="true">
       <div
-        className={`overlay-scrollbar-handle ${draggingClass}`.trim()}
+        className={`overlay-scrollbar-handle ${toneClass} ${draggingClass}`.trim()}
         style={{ top: metrics.top, height: metrics.height }}
         onPointerDown={onHandlePointerDown}
       />

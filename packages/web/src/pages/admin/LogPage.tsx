@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../lib/api/client.js";
 import { SelectMenu } from "../../components/form/SelectMenu.js";
@@ -8,6 +8,7 @@ import { adminApiBasePath, queryKeys } from "../../lib/constants.js";
 import { errorMessage, formatBytes, formatDate } from "../../lib/ui/formatters.js";
 import type { SelectOption } from "../../lib/ui/select-options.js";
 import { ActionFeedback, type ActionFeedbackState } from "../../components/feedback/ActionFeedback.js";
+import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
 
 type LogLevel = "DEBUG" | "INFO" | "WARN" | "ERROR" | "OFF";
 
@@ -43,6 +44,7 @@ function logsPath(file: string) {
 }
 
 export function LogPage() {
+  const logViewerRef = useRef<HTMLPreElement | null>(null);
   const [selectedFile, setSelectedFile] = useState("");
   const [level, setLevel] = useState<LogLevel>("WARN");
   const [savingLevel, setSavingLevel] = useState(false);
@@ -132,9 +134,12 @@ export function LogPage() {
         </div>
       </div>
       {loadError && <ActionFeedback feedback={{ text: `读取失败：${loadError}`, status: "error" }} />}
-      <pre className={`log-viewer${query.data?.content ? "" : " is-empty"}`}>
-        {query.data?.content || (query.isFetching ? "正在读取日志..." : "暂无日志")}
-      </pre>
+      <div className="log-viewer-frame">
+        <pre ref={logViewerRef} className={`log-viewer${query.data?.content ? "" : " is-empty"}`}>
+          {query.data?.content || (query.isFetching ? "正在读取日志..." : "暂无日志")}
+        </pre>
+        <OverlayScrollbar targetRef={logViewerRef} tone="dark" />
+      </div>
     </section>
   );
 }

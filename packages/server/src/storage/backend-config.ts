@@ -68,6 +68,15 @@ export const storageBackendUpdateInput = z.object({
 export type StorageBackendCreateInput = z.infer<typeof storageBackendCreateInput>;
 export type StorageBackendUpdateInput = z.infer<typeof storageBackendUpdateInput>;
 
+export type StorageBackendImportInput = {
+  slug: string;
+  display_name: string;
+  type: "s3" | "webdav";
+  enabled: boolean;
+  is_default: boolean;
+  config: S3Settings | WebdavSettings;
+};
+
 export const defaultS3Settings: S3Settings = Object.freeze(s3SettingsSchema.parse({}));
 export const defaultWebdavSettings: WebdavSettings = Object.freeze(webdavSettingsSchema.parse({}));
 

@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Icon } from "../../../../components/icon/Icon.js";
 import { SelectMenu } from "../../../../components/form/SelectMenu.js";
 import { parseImportUrls } from "../import-job-utils.js";
 import { parseImportJsonl, type JsonlManifestParseError, type JsonlManifestResult } from "../import-api.js";
 import { linkInputLimitState, linkInputTextareaRows, type LinkInputMode } from "./link-input.js";
+import { OverlayScrollbar } from "../../../../components/layout/OverlayScrollbar.js";
 
 export type LinkImportMode = "download" | "proxy";
 export type { LinkInputMode } from "./link-input.js";
@@ -28,6 +29,7 @@ export function LinkUrlDialog({ initialInputMode, urlListMaxItems, jsonlMaxItems
   onClose: () => void;
   onSubmit: (submission: LinkDialogSubmission) => void;
 }) {
+  const importCardRef = useRef<HTMLDivElement | null>(null);
   const [text, setText] = useState("");
   const [mode, setMode] = useState<LinkImportMode>("download");
   const [inputMode, setInputMode] = useState<LinkInputMode>(initialInputMode);
@@ -87,7 +89,7 @@ export function LinkUrlDialog({ initialInputMode, urlListMaxItems, jsonlMaxItems
 
   return (
     <div className="modal link-url-overlay">
-      <div className="link-import-card">
+      <div ref={importCardRef} className="link-import-card">
         <div className="link-import-head">
           <h2><Icon name={inputMode === "jsonl" ? "file-copy-line" : "download-cloud-2-line"} />{inputMode === "jsonl" ? "批量导入" : "导入链接"}</h2>
           <div className="link-import-head-status">
@@ -154,6 +156,7 @@ export function LinkUrlDialog({ initialInputMode, urlListMaxItems, jsonlMaxItems
           </div>
         </div>
       </div>
+      <OverlayScrollbar targetRef={importCardRef} />
     </div>
   );
 }

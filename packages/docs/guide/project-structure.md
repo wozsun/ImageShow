@@ -36,8 +36,10 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | `index.ts` | 应用装配：挂载安全响应头、多主机路由中间件、注册所有路由；启动时依次 `ensureRuntimeDirectories → pingDb → runMigrations → initializeAdmin → pingRedis → startWorker`，并处理 SIGTERM 优雅退出。 |
 | `admin-password-cli.ts` | 宿主机/容器管理员密码恢复入口：隐藏读取新密码、更新 PostgreSQL 账号，并尽力清除 Redis 管理会话。 |
 | `config/bootstrap-env.ts` | 启动环境边界：解析 `NODE_ENV`、首次管理员凭据和首次生成 `config.json` 所需环境变量；集中导出数据、存储、临时文件和日志目录。环境变量只在配置文件首次生成时播种。 |
-| `config/runtime-config.ts` | 完整运行时配置的严格 zod schema、当前配置解析，以及不补全缺失字段的嵌套 patch 合并。 |
-| `config/runtime-config-store.ts` | `data/config.json` 的读取、原子写入、内存快照、热重载与变更监听；配置文件生成后成为运行时配置真相源。 |
+| `config/runtime-config.ts` | 完整运行时配置的严格 zod schema、可迁移配置投影、当前配置解析和嵌套 patch 合并。 |
+| `config/runtime-config-store.ts` | `data/config.json` 的读取、按 schema 归一化、原子写入、内存快照、热重载与变更监听；配置文件生成后成为运行时配置真相源。 |
+| `config/config-package.ts` | `imageshow-config` 版本化配置包的构建、严格解析、敏感存储配置投影、slug 冲突预检和原子导入编排。 |
+| `config/full-config.ts` | 完整运行时配置的危险字段差异、只读预检、共享写锁与精准保存编排。 |
 | `config/fields.ts` | 运行时配置字段的 zod 边界值：站点、上传、链接导入、标准化、缩略图、安全、验证码和日志等设置校验。 |
 | `config/app-settings.ts` | 可编辑应用设置的输入 schema、后台设置 DTO、公开站点配置和图片输入 / 缩略图运行时设置；不负责存储后端注册表。 |
 
@@ -152,6 +154,7 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | `routes/imports.ts` | 统一 `/api/admin/imports/*`：JSONL parse、create、PUT file、prepare、preview、status、SSE events、commit、cancel |
 | `routes/admin-tags.ts` · `admin-themes.ts` · `admin-authors.ts` · `admin-users.ts` | 标签 / 主题 / 作者 / 用户管理 |
 | `routes/settings.ts` | 读取、保存与重载应用设置 |
+| `routes/advanced-config.ts` | super 完整配置读取 / 预检 / 保存，以及配置包导出、导入预检和应用接口 |
 | `routes/storage.ts` | 存储后端选项、CRUD、排序、默认后端切换与 `POST /storage/test` 自检 |
 | `routes/check.ts` | 数据库、Redis、随机池和存储一致性检查，以及存储清理 / 迁移 |
 | `routes/admin-logs.ts` | 超级管理员日志页：读取 `app.log` / 轮转日志尾部内容、实时修改 `log.level` |
@@ -166,7 +169,7 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | --- | --- |
 | 入口 / 路由 | `main.tsx`、`AppRoutes.tsx` |
 | 公共页 | `pages/home/`（首页与专属预览进度）、`pages/gallery/`（画廊、懒加载图片和瀑布流布局；含设备 / 亮度 / 主题 / 标签 / 作者 / 排序筛选） |
-| 后台 | `pages/admin/AdminShell.tsx` 及同目录 Overview / ImageAdmin / Uploader（含 URL 列表与 JSONL 批量导入模式）/ EntityAdmin / SettingsPage / StorageSettings / UserAdmin / AccountSettings / CheckPage / LogPage / `BatchMetadataModal` / `ImageEditModal` |
+| 后台 | `pages/admin/AdminShell.tsx` 及同目录 Overview / ImageAdmin / Uploader（含 URL 列表与 JSONL 批量导入模式）/ EntityAdmin / SettingsPage / AdvancedConfigPage（`advanced-config/` 内含完整 JSON 编辑器和配置包导入模态窗口）/ StorageSettings / UserAdmin / AccountSettings / CheckPage / LogPage / `BatchMetadataModal` / `ImageEditModal` |
 | 组件 | `components/actions` / `data-display` / `feedback` / `form` / `icon` / `image` / `layout` / `navigation` 下的跨页面 UI 组件。 |
 | hooks | `hooks/` 下存放跨页面复用的交互 Hook，例如锚定菜单、动画关闭和滚动锁定。 |
 | lib | 无界面代码，按 `api` / `auth` / `gallery` / `ui` / `upload` 分类；页面专属状态机留在对应页面目录。 |

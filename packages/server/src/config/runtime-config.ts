@@ -150,6 +150,14 @@ const runtimeConfigSchema = z.strictObject({
   log: z.strictObject({ level: logLevel, max_size_mb: logMaxSizeMb, max_files: logMaxFiles })
 });
 
+export const portableRuntimeConfigSchema = runtimeConfigSchema
+  .omit({ port: true, database: true, redis: true })
+  .extend({ site: runtimeConfigSchema.shape.site.omit({ domain: true }) });
+
+export type PortableRuntimeConfig = Omit<RuntimeConfig, "port" | "database" | "redis" | "site"> & {
+  site: Omit<RuntimeConfig["site"], "domain">;
+};
+
 export type RuntimeConfigPatch<T = RuntimeConfig> = {
   [K in keyof T]?: T[K] extends Record<string, unknown> ? RuntimeConfigPatch<T[K]> : T[K];
 };
@@ -201,7 +209,7 @@ function projectKnownConfig(base: unknown, input: unknown): unknown {
   );
 }
 
-function parseRuntimeConfig(value: unknown): RuntimeConfig {
+export function parseRuntimeConfig(value: unknown): RuntimeConfig {
   return runtimeConfigSchema.parse(value);
 }
 

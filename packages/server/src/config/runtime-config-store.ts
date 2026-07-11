@@ -71,6 +71,13 @@ export function updateRuntimeConfig(patch: RuntimeConfigPatch) {
   return runtimeConfig;
 }
 
+export function replaceRuntimeConfig(next: RuntimeConfig) {
+  writeRuntimeConfigFile(next);
+  runtimeConfig = next;
+  notifyRuntimeConfigChange();
+  return runtimeConfig;
+}
+
 export function reloadRuntimeConfig() {
   const fromDisk = readRuntimeConfigFile();
   if (!fromDisk) throw new Error(`Runtime config ${runtimePaths.configFile} does not exist`);

@@ -111,6 +111,30 @@ export type StorageBackendAdmin = {
   webdav: WebdavSettings;
 };
 
+type AdvancedConfigBackendPreview = {
+  slug: string;
+  display_name: string;
+  type: "s3" | "webdav";
+  enabled: boolean;
+  is_default: boolean;
+};
+
+export type AdvancedConfigPreview = {
+  format: "imageshow-config";
+  format_version: number;
+  application_version: string;
+  exported_at: string;
+  config_groups: number;
+  storage_backends: AdvancedConfigBackendPreview[];
+  conflicts: string[];
+  existing_slugs: string[];
+};
+
+export type RuntimeConfigChangeSummary = {
+  restart_required: Array<"port" | "database" | "redis">;
+  access_changes: Array<"site.domain">;
+};
+
 type AdminRole = "super" | "image";
 
 export type AdminUser = {

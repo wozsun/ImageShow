@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Link, Navigate, NavLink, Route, Routes, useNavigate } from "react-router-dom";
 import { api, clearCsrfToken, setCsrfToken } from "../../lib/api/client.js";
 import { Icon } from "../../components/icon/Icon.js";
@@ -21,6 +21,10 @@ import { AccountSettings } from "./AccountSettings.js";
 import { LogPage } from "./LogPage.js";
 // 后台样式在此引入（而非全局 styles.css），随 AdminShell 懒加载分块下载，公共页不会加载。
 import "../../styles/admin.css";
+
+const AdvancedConfigPage = lazy(() => import("./AdvancedConfigPage.js").then((module) => ({
+  default: module.AdvancedConfigPage
+})));
 
 export function AdminShell() {
   const navigate = useNavigate();
@@ -82,6 +86,7 @@ export function AdminShell() {
               label="设置"
               items={[
                 { to: `${adminBasePath}/site`, label: "站点配置" },
+                { to: `${adminBasePath}/advanced-config`, label: "高级配置" },
                 { to: `${adminBasePath}/storage`, label: "存储管理" },
                 { to: `${adminBasePath}/users`, label: "用户管理" }
               ]}
@@ -135,6 +140,11 @@ export function AdminShell() {
             </NavLink>
           )}
           {isSuper && (
+            <NavLink className={({ isActive }) => isActive ? "active" : ""} to={`${adminBasePath}/advanced-config`}>
+              <Icon name="settings-3-line" />高级配置
+            </NavLink>
+          )}
+          {isSuper && (
             <NavLink className={({ isActive }) => isActive ? "active" : ""} to={`${adminBasePath}/storage`}>
               <Icon name="hard-drive-2-line" />存储管理
             </NavLink>
@@ -171,6 +181,16 @@ export function AdminShell() {
         <Route path="authors" element={<EntityAdmin kind="authors" />} />
         <Route path="account" element={<AccountSettings />} />
         {isSuper && <Route path="site" element={<SettingsPage />} />}
+        {isSuper && (
+          <Route
+            path="advanced-config"
+            element={(
+              <Suspense fallback={<div className="center">正在加载高级配置…</div>}>
+                <AdvancedConfigPage />
+              </Suspense>
+            )}
+          />
+        )}
         {isSuper && <Route path="storage" element={<StorageSettings />} />}
         {isSuper && <Route path="users" element={<UserAdmin />} />}
         {isSuper && <Route path="check" element={<CheckPage />} />}

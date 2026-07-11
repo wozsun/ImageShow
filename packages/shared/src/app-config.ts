@@ -16,10 +16,12 @@ export const appConfig = {
   trashBatchSize: 100,
 
   imports: {
-    jsonlManifestMaxBytes: 16 * 1024 * 1024
+    jsonlManifestMaxBytes: 16 * 1024 * 1024,
+    configPackageMaxBytes: 1024 * 1024,
+    configPackageMaxBackends: 100
   },
 
-  uploadTtlSeconds: 10 * 60,
+  uploadTtlSeconds: 30 * 60,
   derivedCacheTtlSeconds: 60 * 60,
   pgPool: {
     max: 30,

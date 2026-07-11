@@ -8,7 +8,10 @@ export function ActionFeedback({ feedback, inline = false }: {
   inline?: boolean;
 }) {
   return (
-    <div className={`action-feedback${inline ? " is-inline" : ""} ${feedback.status === "success" ? "ok" : feedback.status === "error" ? "error" : ""}`}>
+    <div
+      className={`action-feedback${inline ? " is-inline" : ""} ${feedback.status === "success" ? "ok" : feedback.status === "error" ? "error" : ""}`}
+      title={feedback.status === "error" ? feedback.text : undefined}
+    >
       {feedback.text.trim().startsWith("{") ? <pre>{feedback.text}</pre> : <span>{feedback.text}</span>}
     </div>
   );
