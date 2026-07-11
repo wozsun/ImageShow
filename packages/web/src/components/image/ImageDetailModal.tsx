@@ -50,7 +50,7 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
   const adminInfo = rawAdminInfo?.id === item.id ? rawAdminInfo : undefined;
   const titleOpensImage = (siteConfig?.image_detail?.title_opens_image ?? true) && Boolean(item.object_url);
   const title = imageDisplayTitle(item);
-  const canOpenOriginal = item.has_distinct_original;
+  const canOpenOriginal = item.diff_original;
   const imageTime = adminItem?.image_time ?? adminInfo?.image_time ?? item.image_time;
   const createdAt = adminItem?.created_at ?? adminInfo?.created_at;
   const updatedAt = adminItem?.updated_at ?? adminInfo?.updated_at;

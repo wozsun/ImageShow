@@ -38,9 +38,7 @@ function imagePlaceholder(card: GalleryImageCard): PublicImageItem {
   return {
     ...card,
     description: "",
-    author: "",
     object_url: "",
-    has_distinct_original: false,
     source: ""
   };
 }

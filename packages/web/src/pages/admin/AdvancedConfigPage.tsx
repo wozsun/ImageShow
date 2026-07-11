@@ -130,7 +130,7 @@ export function AdvancedConfigPage() {
             ref={fileInputRef}
             className="advanced-config-file-input"
             type="file"
-            accept="application/json,.json"
+            accept=".json"
             onChange={(event) => void selectPackage(event.target.files?.[0])}
           />
           <button type="button" disabled={Boolean(busy)} onClick={() => fileInputRef.current?.click()}>

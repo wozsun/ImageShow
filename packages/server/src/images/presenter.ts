@@ -35,12 +35,12 @@ export type PublicImageDetail = Awaited<ReturnType<typeof publicImageDetail>>;
 
 export type PublicImageCardRecord = Pick<
   ImageRecord,
-  "id" | "device" | "brightness" | "theme" | "width" | "height" | "ext" | "object_key" | "storage_slug" | "is_link" | "title" | "image_time" | "status"
+  "id" | "device" | "brightness" | "theme" | "width" | "height" | "ext" | "object_key" | "storage_slug" | "is_link" | "author" | "title" | "original" | "image_time" | "status"
 >;
 
 export type PublicImageDetailRecord = Pick<
   ImageRecord,
-  "id" | "device" | "brightness" | "theme" | "ext" | "object_key" | "storage_slug" | "is_link" | "author" | "description" | "source" | "original" | "status"
+  "id" | "device" | "brightness" | "theme" | "ext" | "object_key" | "storage_slug" | "is_link" | "description" | "source" | "original" | "status"
 >;
 
 type PublicImageUrlRecord = Pick<
@@ -101,7 +101,7 @@ export async function publicImage(row: ImageRecord, tags?: string[]) {
     source: row.source ?? "",
     original,
     extra: row.extra && typeof row.extra === "object" && !Array.isArray(row.extra) ? row.extra : {},
-    has_distinct_original: hasDistinctOriginal,
+    diff_original: hasDistinctOriginal,
     status: row.status,
     tags: tagList,
     deleted_at: row.deleted_at ?? null,
@@ -118,16 +118,12 @@ export async function publicImages(rows: ImageRecord[]) {
 }
 
 export async function publicImageDetail(row: PublicImageDetailRecord) {
-  const { isLink, urls } = await publicUrlsForRow(row);
-  const original = row.original ?? "";
-  const hasDistinctOriginal = hasDistinctOriginalUrl(original, isLink ? row.object_key : urls.object_url);
+  const { urls } = await publicUrlsForRow(row);
 
   return {
     id: row.id,
-    author: row.author ?? "",
     description: row.description ?? "",
     source: row.source ?? "",
-    has_distinct_original: hasDistinctOriginal,
     object_url: urls.object_url
   };
 }
@@ -135,16 +131,20 @@ export async function publicImageDetail(row: PublicImageDetailRecord) {
 export type PublicImageCard = Awaited<ReturnType<typeof publicImageCard>>;
 
 async function publicImageCard(row: PublicImageCardRecord, tags: string[] = []) {
-  const { urls } = await publicUrlsForRow(row);
+  const { isLink, urls } = await publicUrlsForRow(row);
+  const original = row.original ?? "";
+  const hasDistinctOriginal = hasDistinctOriginalUrl(original, isLink ? row.object_key : urls.object_url);
   return {
     id: row.id,
     device: row.device,
     brightness: row.brightness,
     theme: row.theme,
+    author: row.author ?? "",
     width: Number(row.width ?? 0),
     height: Number(row.height ?? 0),
     title: row.title ?? "",
     tags,
+    diff_original: hasDistinctOriginal,
     image_time: row.image_time ?? null,
     thumb_url: urls.thumb_url
   };

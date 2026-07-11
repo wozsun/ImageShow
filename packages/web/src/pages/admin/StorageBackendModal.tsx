@@ -180,7 +180,7 @@ function S3Fields({ value, onChange, configured }: { value: S3Settings; onChange
       <p className="hint">Secret Key 保存后只显示“已配置”；上传统一经服务器转发到 S3（不使用浏览器直传），无需为存储桶配置 CORS。</p>
       <label>
         Endpoint
-        <input value={value.endpoint} onChange={(event) => patch({ endpoint: event.target.value })} placeholder="https://s3.example.com" />
+        <input value={value.endpoint} onChange={(event) => patch({ endpoint: event.target.value })} placeholder="（https://）s3.example.com" />
       </label>
       <label>
         Region

@@ -33,8 +33,8 @@ type PublicImageListPayload = {
   total: null;
 };
 
-const PUBLIC_IMAGE_CARD_SHAPE_VERSION = "s6";
-const PUBLIC_IMAGE_DETAIL_SHAPE_VERSION = "s3";
+const PUBLIC_IMAGE_CARD_SHAPE_VERSION = "v3";
+const PUBLIC_IMAGE_DETAIL_SHAPE_VERSION = "v3";
 
 function publicImageListCacheKey(q: {
   status: string;
@@ -185,7 +185,6 @@ export async function getPublicImage(id: string) {
               object_key,
               storage_slug,
               is_link,
-              author,
               description,
               source,
               original,

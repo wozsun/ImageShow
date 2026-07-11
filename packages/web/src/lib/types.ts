@@ -7,19 +7,19 @@ export type GalleryImageCard = {
   device: Device;
   brightness: Brightness;
   theme: string;
+  author: string;
   thumb_url: string;
   width: number;
   height: number;
   tags: string[];
+  diff_original: boolean;
   image_time: string;
 };
 
 export type PublicImageDetail = {
   id: string;
   description: string;
-  author: string;
   object_url: string;
-  has_distinct_original: boolean;
   source: string;
 };
 
