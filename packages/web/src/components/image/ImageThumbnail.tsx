@@ -5,7 +5,7 @@ export function ImageThumbnail({ src, alt = "", size = "normal", className = "",
   alt?: string;
   size?: "normal" | "small";
   className?: string;
-  onClick?: () => void;
+  onClick?: (opener: HTMLElement) => void;
 }) {
   const interactive = Boolean(onClick);
   return (
@@ -14,8 +14,13 @@ export function ImageThumbnail({ src, alt = "", size = "normal", className = "",
       role={interactive ? "button" : undefined}
       tabIndex={interactive ? 0 : undefined}
       title={interactive ? "点击预览" : undefined}
-      onClick={onClick}
-      onKeyDown={interactive ? (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onClick!(); } } : undefined}
+      onClick={onClick ? (event) => onClick(event.currentTarget) : undefined}
+      onKeyDown={interactive ? (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onClick!(event.currentTarget);
+        }
+      } : undefined}
     >
       <ThumbImage src={src} alt={alt} />
     </div>

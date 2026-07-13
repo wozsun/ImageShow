@@ -42,6 +42,7 @@ export function ImageAdmin() {
   const [actionBusy, setActionBusy] = useState(false);
   const [rowBusy, setRowBusy] = useState("");
   const gridRef = useRef<HTMLDivElement | null>(null);
+  const detailReturnFocusRef = useRef<HTMLElement | null>(null);
   const client = useQueryClient();
   const { data: settingsData } = useQuery<{ settings: AdminSettings }>({ queryKey: queryKeys.settings, queryFn: () => api(`${adminApiBasePath}/settings`) });
 
@@ -256,7 +257,10 @@ export function ImageAdmin() {
             storageName={storageName}
             checked={selected.includes(item.id)}
             onCheck={(checked) => setSelected((current) => checked ? [...current, item.id] : current.filter((id) => id !== item.id))}
-            onDetail={() => setDetail(item)}
+            onDetail={(opener) => {
+              detailReturnFocusRef.current = opener;
+              setDetail(item);
+            }}
             onEdit={() => setEditing(item)}
             onPurge={() => setConfirmAction({ kind: "purge", id: item.id, title: imageDisplayTitle(item) })}
             busy={rowBusy.endsWith(item.id)}
@@ -282,7 +286,14 @@ export function ImageAdmin() {
           onClick={nextPage}
         >下一页</button>
       </nav>
-      {detail && <ImageDetailModal item={detail} onClose={() => setDetail(null)} admin />}
+      {detail && (
+        <ImageDetailModal
+          item={detail}
+          onClose={() => setDetail(null)}
+          returnFocusRef={detailReturnFocusRef}
+          admin
+        />
+      )}
       {editing && (
         <ImageEditModal
           item={editing}
@@ -324,7 +335,7 @@ function ImageRow({ item, storageName, checked, busy, onCheck, onDetail, onEdit,
   checked: boolean;
   busy: boolean;
   onCheck: (checked: boolean) => void;
-  onDetail: () => void;
+  onDetail: (opener: HTMLElement) => void;
   onEdit: () => void;
   onPurge: () => void;
   onDelete: () => void;
@@ -333,7 +344,7 @@ function ImageRow({ item, storageName, checked, busy, onCheck, onDetail, onEdit,
   const handleCardKey = (event: React.KeyboardEvent<HTMLElement>) => {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
-      onDetail();
+      onDetail(event.currentTarget);
     }
   };
   return (
@@ -341,7 +352,7 @@ function ImageRow({ item, storageName, checked, busy, onCheck, onDetail, onEdit,
       className="row"
       role="button"
       tabIndex={0}
-      onClick={onDetail}
+      onClick={(event) => onDetail(event.currentTarget)}
       onKeyDown={handleCardKey}
     >
       <input

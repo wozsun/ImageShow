@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { api } from "../../lib/api/client.js";
 import { AppHeader } from "../../components/navigation/AppHeader.js";
@@ -8,7 +8,7 @@ import { ImageDetailModal } from "../../components/image/ImageDetailModal.js";
 import { SelectMenu } from "../../components/form/SelectMenu.js";
 import { FacetSelector } from "../../components/data-display/FacetSelector.js";
 import { eagerThumbnailCount, galleryRenderBatch, gallerySentinelRootMargin, queryKeys } from "../../lib/constants.js";
-import { displayNameOrSlug, imageDisplayTitle } from "../../lib/ui/formatters.js";
+import { displayNameOrSlug, errorMessage, imageDisplayTitle } from "../../lib/ui/formatters.js";
 import { buildRandomUrl } from "../../lib/gallery/random-url.js";
 import { brightnessOptionLabel, deviceOptionLabel, randomModeSelectOptions } from "../../lib/ui/select-options.js";
 import { rootSiteOrigin } from "../../lib/gallery/theme-host.js";
@@ -43,15 +43,35 @@ function imagePlaceholder(card: GalleryImageCard): PublicImageItem {
   };
 }
 
-function GalleryImageDetail({ card, onClose }: { card: GalleryImageCard; onClose: () => void }) {
+function GalleryImageDetail({
+  card,
+  onClose,
+  returnFocusRef,
+}: {
+  card: GalleryImageCard;
+  onClose: () => void;
+  returnFocusRef: RefObject<HTMLElement | null>;
+}) {
   const placeholder = useMemo(() => imagePlaceholder(card), [card]);
-  const { data } = useQuery<{ item: PublicImageDetail }>({
+  const { data, isPending, isFetching, isError, error, refetch } = useQuery<{ item: PublicImageDetail }>({
     queryKey: [...queryKeys.publicImageDetail, card.id],
     queryFn: ({ signal }) => api(`/api/images/${encodeURIComponent(card.id)}`, { signal })
   });
   const detail = data?.item.id === card.id ? data.item : null;
   const item = useMemo(() => ({ ...placeholder, ...(detail ?? {}) }), [placeholder, detail]);
-  return <ImageDetailModal item={item} onClose={onClose} admin={false} />;
+  const detailLoading = isPending || (isFetching && !detail);
+  const detailError = isError && !detail && !isFetching ? errorMessage(error) : "";
+  return (
+    <ImageDetailModal
+      item={item}
+      onClose={onClose}
+      admin={false}
+      detailLoading={detailLoading}
+      detailError={detailError}
+      onDetailRetry={() => void refetch()}
+      returnFocusRef={returnFocusRef}
+    />
+  );
 }
 
 export function GalleryPage({ fixedTheme = "", standalone = false }: { fixedTheme?: string; standalone?: boolean }) {
@@ -61,6 +81,7 @@ export function GalleryPage({ fixedTheme = "", standalone = false }: { fixedThem
 
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [visibleCount, setVisibleCount] = useState(galleryRenderBatch);
+  const detailReturnFocusRef = useRef<HTMLElement | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const { data: facets } = useGalleryFacets();
   const { data: siteConfig } = useSiteConfig();
@@ -248,7 +269,10 @@ export function GalleryPage({ fixedTheme = "", standalone = false }: { fixedThem
                 className="tile"
                 key={item.id}
                 data-image-id={item.id}
-                onClick={() => setSelected(item)}
+                onClick={(event) => {
+                  detailReturnFocusRef.current = event.currentTarget;
+                  setSelected(item);
+                }}
               >
                 <LazyGalleryImage
                   src={item.thumb_url}
@@ -277,6 +301,7 @@ export function GalleryPage({ fixedTheme = "", standalone = false }: { fixedThem
         <GalleryImageDetail
           card={selected}
           onClose={() => setSelected(null)}
+          returnFocusRef={detailReturnFocusRef}
         />
       )}
     </main>

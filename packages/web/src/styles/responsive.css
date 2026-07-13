@@ -158,14 +158,33 @@
     max-height: min(48vh, 420px);
     max-height: min(48dvh, 420px);
   }
+  .image-detail-modal .image-detail-panel {
+    flex: 1 1 auto;
+  }
+  .image-detail-modal .image-detail-panel::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto;
+    z-index: 5;
+    height: 24px;
+    background: #fff;
+    pointer-events: none;
+  }
   .image-detail-modal .image-detail-content {
     flex: 1 1 auto;
-    min-height: 0;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    touch-action: pan-y;
-    -webkit-overflow-scrolling: touch;
+  }
+  .image-detail-modal .image-detail-scroll-body {
     padding-bottom: max(20px, env(safe-area-inset-bottom));
+  }
+}
+
+@media (forced-colors: none) {
+  .image-detail-modal .image-detail-content {
+    scrollbar-width: none;
+  }
+  .image-detail-modal .image-detail-content::-webkit-scrollbar {
+    width: 0;
+    height: 0;
   }
 }
 

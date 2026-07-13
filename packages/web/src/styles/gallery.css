@@ -148,6 +148,16 @@
 }
 .gallery-sentinel { height: 1px; }
 
+@keyframes image-detail-backdrop-in {
+  from { background-color: rgba(13, 18, 28, 0); }
+  to { background-color: rgba(13, 18, 28, .76); }
+}
+
+@keyframes image-detail-surface-in {
+  from { transform: translateY(8px) scale(.985); }
+  to { transform: translateY(0) scale(1); }
+}
+
 .modal {
   position: fixed;
   inset: 0;
@@ -159,15 +169,17 @@
   animation: modal-fade .16s ease-out;
   overscroll-behavior: none;
 }
+.image-detail-modal { animation: image-detail-backdrop-in .16s ease-out; }
 .image-detail-modal > article {
   width: min(1100px, 96vw);
+  height: 90vh;
   max-height: 90vh;
   background: #fff;
   border-radius: 8px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 340px;
   overflow: hidden;
-  animation: modal-pop .18s cubic-bezier(.2, .8, .2, 1);
+  animation: image-detail-surface-in .18s cubic-bezier(.2, .8, .2, 1);
 }
 .modal.is-closing {
   pointer-events: none;
@@ -182,25 +194,196 @@
   height: 90vh;
   max-height: 90vh;
 }
-.image-detail-modal .image-detail-content { padding: 20px; overflow: auto; position: relative; }
-.image-detail-head {
+.image-detail-panel {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.image-detail-modal .image-detail-content {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 0;
+  overflow-anchor: none;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+.image-detail-modal .image-detail-head {
   position: sticky;
   top: 0;
-  z-index: 1;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  margin: -4px -4px 14px;
-  padding: 4px;
+  z-index: 6;
+  flex: 0 0 auto;
+  display: grid;
+  margin: 0;
+  padding: 20px 20px 10px;
   background: #fff;
 }
-.image-detail-head > div { min-width: 0; }
-.image-detail-head h2 { margin: 0; }
+.image-detail-title-row {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.image-detail-title-row h2 {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.image-detail-modal .image-detail-head h2 {
+  margin: 0;
+  font-size: 1.5em;
+  line-height: 1.2;
+  display: block;
+}
+.image-detail-scroll-body {
+  flex: 0 0 auto;
+  min-height: auto;
+  overflow: visible;
+  padding: 0 20px 20px;
+}
 
 .image-detail-title-link { color: inherit; }
 .image-detail-title-link:hover { color: #1f6feb; text-decoration: underline; }
-.image-detail-head p { margin: 6px 0 0; }
+.image-detail-modal .image-detail-description-slot {
+  position: relative;
+  flex: 0 0 auto;
+  width: auto;
+  height: 52px;
+  min-height: 52px;
+  max-height: 52px;
+  margin: 0 20px 14px;
+  line-height: 20px;
+}
+.image-detail-description-card {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #e3e8ef;
+  border-radius: 8px;
+  background: #fafbfd;
+  transition: box-shadow .14s ease;
+}
+.image-detail-description-card.is-expanded {
+  box-shadow: 0 10px 24px rgba(28, 43, 62, .10);
+}
+.image-detail-description-card-body {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  padding: 5px 10px;
+}
+.image-detail-description-card.is-expanded .image-detail-description-card-body {
+  overflow: auto;
+  overscroll-behavior-y: auto;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+  padding: 5px 10px 28px;
+}
+.image-detail-description-text {
+  height: 40px;
+  margin: 0;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
+}
+.image-detail-modal .image-detail-description-text {
+  margin: 0;
+  color: inherit;
+}
+.image-detail-description-card.is-expanded .image-detail-description-text {
+  height: auto;
+  padding-right: 0;
+  display: block;
+  white-space: pre-wrap;
+}
+.image-detail-description-text.is-placeholder { color: #8a93a0; }
+.image-detail-description-text.is-error { color: #a33f3f; }
+.image-detail-description-toggle,
+.image-detail-description-retry {
+  position: absolute;
+  right: 8px;
+  bottom: 5px;
+  z-index: 1;
+  min-height: 20px;
+  height: 20px;
+  padding: 0 2px 0 12px;
+  border: 0;
+  background: linear-gradient(90deg, rgba(250,251,253,0), #fafbfd 28%);
+  color: #1f6feb;
+  line-height: 20px;
+}
+.image-detail-public-properties { margin-top: 0; }
+.image-detail-actions { min-height: 38px; }
+.image-detail-original.is-disabled,
+.image-detail-source.is-disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+.image-detail-original.is-disabled:hover,
+.image-detail-source.is-disabled:hover { filter: none; }
+.image-detail-admin-details {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #e3e8ef;
+}
+.image-detail-admin-toggle {
+  --pressable-active-scale: 1;
+  width: 100%;
+  min-height: 34px;
+  justify-content: flex-start;
+  padding: 5px 8px;
+  border-color: transparent;
+  background: transparent;
+  color: #4c5868;
+}
+.image-detail-admin-toggle:hover { background: #f4f6f9; }
+.image-detail-admin-toggle:hover,
+.image-detail-admin-toggle[aria-expanded="true"] { color: #3b4655; }
+.image-detail-admin-toggle > span { width: 12px; color: currentColor; }
+.image-detail-admin-panel {
+  margin-top: 6px;
+  padding: 12px;
+  border: 1px solid #e7ebf0;
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+.image-detail-admin-panel dl { margin: 0; }
+.image-detail-admin-uuid,
+.image-detail-admin-md5 {
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  overflow-wrap: anywhere;
+}
+.image-detail-admin-md5 {
+  display: grid;
+  grid-template-areas: "value";
+  min-width: 0;
+}
+.image-detail-admin-md5 > span { grid-area: value; min-width: 0; }
+.image-detail-admin-md5-reserve { visibility: hidden; }
+.image-detail-admin-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #ead5d5;
+  color: #a33f3f;
+}
+.image-detail-admin-error button { flex: 0 0 auto; min-height: 30px; padding: 4px 10px; }
 dl { display: grid; grid-template-columns: 82px 1fr; gap: 8px 12px; }
 dt { color: #66717f; }
 dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }

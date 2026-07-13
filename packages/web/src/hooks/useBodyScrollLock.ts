@@ -1,14 +1,15 @@
-import { useEffect } from "react";
+import { useLayoutEffect } from "react";
 
 let lockCount = 0;
 let lockedScrollY = 0;
 let previousBodyStyles: Pick<CSSStyleDeclaration, "position" | "top" | "left" | "right" | "width"> | null = null;
 
 export function useBodyScrollLock(active = true) {
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!active) return;
     if (!lockCount) {
       lockedScrollY = window.scrollY;
+      const scrollbarWidth = Math.max(0, window.innerWidth - document.documentElement.clientWidth);
       previousBodyStyles = {
         position: document.body.style.position,
         top: document.body.style.top,
@@ -19,8 +20,8 @@ export function useBodyScrollLock(active = true) {
       document.body.style.position = "fixed";
       document.body.style.top = `-${lockedScrollY}px`;
       document.body.style.left = "0";
-      document.body.style.right = "0";
-      document.body.style.width = "100%";
+      document.body.style.right = `${scrollbarWidth}px`;
+      document.body.style.width = "auto";
     }
     lockCount += 1;
     document.documentElement.classList.add("modal-open");

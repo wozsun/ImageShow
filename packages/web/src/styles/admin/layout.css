@@ -38,9 +38,18 @@
 .admin > aside a.active { color: #fff; background: #242a33; font-weight: 700; }
 .admin > aside a:hover .app-icon, .admin > aside button:hover .app-icon,
 .admin > aside a.active .app-icon { filter: brightness(1.25); }
-.admin button:not(:disabled) { transition: color .16s ease, background-color .16s ease, border-color .16s ease, transform .08s ease, filter .16s ease; }
+.admin button:not(:disabled) {
+  transition:
+    color .16s ease,
+    background-color .16s ease,
+    border-color .16s ease,
+    transform var(--pressable-transition-duration, .08s) ease,
+    filter .16s ease;
+}
 
-.admin button:not(:disabled):not(.select-trigger):not(.password-toggle):active { transform: scale(.95); }
+.admin button:not(:disabled):not(.select-trigger):not(.password-toggle):active {
+  transform: scale(var(--pressable-active-scale, .95));
+}
 .login-site-title { color: inherit; border-radius: 6px; }
 .login-site-title:hover { color: #1f6feb; }
 .admin > aside .app-icon {

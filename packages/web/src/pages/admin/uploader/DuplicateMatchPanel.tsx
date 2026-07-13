@@ -21,7 +21,7 @@ export function DuplicateMatchPanel({
   libraryItems: ImageItem[];
   batchDuplicate?: BatchDuplicateMatch;
   confirmMode: boolean;
-  onOpenDetail: (item: ImageItem) => void;
+  onOpenDetail: (item: ImageItem, opener: HTMLElement) => void;
   onPreview: (target: ImportPreviewTarget) => void;
   onConfirm: () => void;
   onCancel: () => void;
@@ -41,7 +41,12 @@ export function DuplicateMatchPanel({
       <div className="duplicate-body">
         <div className="duplicate-list">
           {libraryItems.map((item) => (
-            <button type="button" key={item.id} className="duplicate-item" onClick={() => onOpenDetail(item)}>
+            <button
+              type="button"
+              key={item.id}
+              className="duplicate-item"
+              onClick={(event) => onOpenDetail(item, event.currentTarget)}
+            >
               <ImageThumbnail src={item.thumb_url} size="small" />
               <span>{imageDisplayTitle(item)}</span>
               <small>{formatImageClassification(item)}</small>

@@ -51,7 +51,9 @@ html.has-overlay-scrollbar body::-webkit-scrollbar { width: 0; height: 0; }
 .overlay-scrollbar-handle.is-dark.is-dragging { background: rgba(230, 237, 243, .62); }
 
 .overlay-scrollbar-handle.is-floating { position: fixed; z-index: 30; }
-.overlay-scrollbar-handle.is-floating.is-active { opacity: 1; pointer-events: auto; }
+.overlay-scrollbar-handle.is-contained { position: absolute; z-index: 2; }
+.overlay-scrollbar-handle.is-floating.is-active,
+.overlay-scrollbar-handle.is-contained.is-active { opacity: 1; pointer-events: auto; }
 
 .overlay-scroll-host { scrollbar-width: none; }
 .overlay-scroll-host::-webkit-scrollbar { width: 0; height: 0; }
@@ -289,7 +291,7 @@ button:not(:disabled):not(.select-trigger):hover,
 }
 .topbar .desktop-nav a:hover { color: #1f6feb; font-weight: 700; }
 .topbar .desktop-nav a:active { transform: scale(.95); }
-.pressable:active { transform: scale(.95); }
+.pressable:active { transform: scale(var(--pressable-active-scale, .95)); }
 
 .topbar .desktop-nav a.active {
   color: #fff;
@@ -339,7 +341,14 @@ button:not(:disabled):not(.select-trigger):hover,
 .copy-button {
   transition: color .16s ease, background-color .16s ease, border-color .16s ease, transform .1s ease, filter .16s ease;
 }
-.pressable { transition: color .16s ease, background-color .16s ease, border-color .16s ease, transform .1s ease, filter .16s ease; }
+.pressable {
+  transition:
+    color .16s ease,
+    background-color .16s ease,
+    border-color .16s ease,
+    transform var(--pressable-transition-duration, .1s) ease,
+    filter .16s ease;
+}
 .copy-button:active { transform: scale(.95); }
 .copy-button.is-copied {
   color: #245236;

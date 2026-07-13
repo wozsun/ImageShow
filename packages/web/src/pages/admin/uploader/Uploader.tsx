@@ -41,6 +41,7 @@ export function Uploader({ onDone }: { onDone: () => void }) {
   const [preview, setPreview] = useState<ImportPreviewTarget | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const detailReturnFocusRef = useRef<HTMLElement | null>(null);
 
   const { data: settingsData } = useQuery<{ settings: AdminSettings }>({ queryKey: queryKeys.settings, queryFn: () => api(`${adminApiBasePath}/settings`) });
   const { data: themeData } = useQuery<{ items: Theme[] }>({ queryKey: queryKeys.themes, queryFn: () => api(`${adminApiBasePath}/themes`), enabled: open });
@@ -235,7 +236,10 @@ export function Uploader({ onDone }: { onDone: () => void }) {
                 onPatch={(job, patch) => queue.updateJobDraft(job.id, patch)} onCancel={(job) => void cancelJob(job)}
                 onRetry={(job) => void retryJob(job)} onRemove={(job) => void removeJob(job)}
                 onConfirmDuplicate={(job) => queue.updateJob(job.id, { duplicateDecision: "upload", message: "已确认提交副本" })}
-                onOpenDetail={setDetailItem} onPreview={setPreview} />
+                onOpenDetail={(item, opener) => {
+                  detailReturnFocusRef.current = opener;
+                  setDetailItem(item);
+                }} onPreview={setPreview} />
               {!queue.jobs.length && (mode === "link" ? (
                 <button type="button" className="empty-state upload-dropzone" onClick={() => { setLinkInputMode("urls"); setUrlInputOpen(true); }}><Icon name="download-cloud-2-line" /><span>还没有导入链接，点击此处输入图片链接</span></button>
               ) : (
@@ -262,7 +266,14 @@ export function Uploader({ onDone }: { onDone: () => void }) {
             </footer>
           </section>
           <OverlayScrollbar targetRef={listRef} />
-          {detailItem && <ImageDetailModal item={detailItem} admin onClose={() => setDetailItem(null)} />}
+          {detailItem && (
+            <ImageDetailModal
+              item={detailItem}
+              admin
+              onClose={() => setDetailItem(null)}
+              returnFocusRef={detailReturnFocusRef}
+            />
+          )}
           {preview && <ImagePreviewModal src={preview.src} thumbSrc={preview.thumbSrc} width={preview.width} height={preview.height} onClose={() => setPreview(null)} />}
           {urlInputOpen && <LinkUrlDialog initialInputMode={linkInputMode} urlListMaxItems={urlListMaxItems} jsonlMaxItems={jsonlMaxItems} onClose={() => setUrlInputOpen(false)} onSubmit={addLinks} />}
         </div>

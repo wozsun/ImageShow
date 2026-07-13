@@ -7,6 +7,7 @@
   background-size: cover;
   background-position: center;
 }
+
 .login form {
   width: min(360px, calc(100vw - 32px));
   display: grid;
@@ -34,18 +35,6 @@
 }
 /*后台表单的错误提示（登录失败、账户设置校验、图片弹窗等，均在后台分块内）。*/
 .error { color: #b42318; margin: 0; }
-
-/*后台专属的“减少动态效果”项；公共/共享的同类项留在全局 responsive.css。*/
-@media (prefers-reduced-motion: reduce) {
-  .edit-modal form,
-  .upload-overlay,
-  .upload-window,
-  .action-feedback,
-  .check-summary,
-  .check-card,
-  .login form { animation: none; }
-  .admin button:not(:disabled):active { transform: none; }
-}
 
 @media (max-width: 1080px) {
   .upload-defaults, .settings-grid { grid-template-columns: 1fr 1fr; }
@@ -213,8 +202,12 @@
   .upload-window > footer .upload-footer-left > .clear-button { flex: 1; }
   .upload-window > footer .admin-pagination button,
   .batch-edit-modal footer .admin-pagination button { flex: 1; }
-  .admin button:not(:disabled) { transition-duration: .08s; }
-  .admin button:not(:disabled):not(.select-trigger):not(.password-toggle):active { transform: scale(.95); }
+  .admin button:not(:disabled) {
+    transition-duration: var(--pressable-transition-duration, .08s);
+  }
+  .admin button:not(:disabled):not(.select-trigger):not(.password-toggle):active {
+    transform: scale(var(--pressable-active-scale, .95));
+  }
   .settings-grid, .overview-grid { grid-template-columns: 1fr; }
   .advanced-config-summary { grid-template-columns: 1fr 1fr; }
   .advanced-config-backend { grid-template-columns: 1fr; }
@@ -303,4 +296,20 @@
   .link-import-action-buttons { width: 100%; }
   .link-import-action-buttons button { flex: 1; min-height: 44px; }
   .account-form .button { justify-self: stretch; min-height: 44px; }
+}
+
+/* 后台专属的“减少动态效果”项放在所有尺寸规则之后，避免移动端
+   :active 规则重新启用缩放；公共/共享规则留在全局 responsive.css。 */
+@media (prefers-reduced-motion: reduce) {
+  .edit-modal form,
+  .upload-overlay,
+  .upload-window,
+  .action-feedback,
+  .check-summary,
+  .check-card,
+  .login form { animation: none; }
+  .admin button:not(:disabled):active { transform: none; }
+  .admin button:not(:disabled):not(.select-trigger):not(.password-toggle):active {
+    transform: none;
+  }
 }

@@ -14,7 +14,7 @@ export function ImportJobList({ jobs, busy, storageName, themes, tags, authors, 
   onRetry: (job: ImportJob) => void;
   onRemove: (job: ImportJob) => void;
   onConfirmDuplicate: (job: ImportJob) => void;
-  onOpenDetail: (item: ImageItem) => void;
+  onOpenDetail: (item: ImageItem, opener: HTMLElement) => void;
   onPreview: (target: ImportPreviewTarget) => void;
 }) {
   return jobs.map((job) => (

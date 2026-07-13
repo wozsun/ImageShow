@@ -27,7 +27,7 @@ export function ImportJobCard({ job, busy, storageDisplayName, themes, allTags, 
   onRetry: () => void;
   onRemove: () => void;
   onConfirmDuplicate: () => void;
-  onOpenDetail: (item: ImageItem) => void;
+  onOpenDetail: (item: ImageItem, opener: HTMLElement) => void;
   onPreview: (target: ImportPreviewTarget) => void;
 }) {
   const editable = job.status === "ready" && !busy;
@@ -50,8 +50,8 @@ export function ImportJobCard({ job, busy, storageDisplayName, themes, allTags, 
   const libraryDuplicate = job.status === "skipped" ? job.duplicates[0] : undefined;
   const batchDuplicate = job.status === "skipped" ? job.batchDuplicate : undefined;
   const previewSrc = libraryDuplicate?.thumb_url || (batchDuplicate ? batchDuplicate.preview : job.preview);
-  const openPreview = libraryDuplicate
-    ? () => onOpenDetail(libraryDuplicate)
+  const openPreview: ((opener: HTMLElement) => void) | undefined = libraryDuplicate
+    ? (opener) => onOpenDetail(libraryDuplicate, opener)
     : batchDuplicate?.available
       ? () => onPreview({
           src: batchDuplicate.previewFull,
