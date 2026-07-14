@@ -40,8 +40,12 @@ export type PublicImageCardRecord = Pick<
 
 export type PublicImageDetailRecord = Pick<
   ImageRecord,
-  "id" | "device" | "brightness" | "theme" | "ext" | "object_key" | "storage_slug" | "is_link" | "description" | "source" | "original" | "status"
->;
+  "id" | "device" | "brightness" | "theme" | "ext" | "object_key" | "storage_slug" | "is_link" | "status"
+> & {
+  description: string | null;
+  source: string | null;
+  original: string | null;
+};
 
 type PublicImageUrlRecord = Pick<
   ImageRecord,

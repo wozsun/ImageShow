@@ -25,6 +25,7 @@ export type ImageLookupItem = {
   status: "ready";
 };
 export type ImageLookupByIdItem = {
+  detail_complete: true;
   id: string;
   object_key: string;
   original: string;
@@ -37,6 +38,27 @@ export type ImageLookupByIdItem = {
   status: string;
   description: string;
   source: string;
+};
+type ImageObjectLookupSource = {
+  is_link?: boolean;
+  object_key: string;
+  ext: string;
+  storage_slug: string;
+  status?: string;
+};
+export type CompleteImageLookupSource = {
+  id: string;
+  object_key: string;
+  original: string | null;
+  ext: string;
+  storage_slug: string;
+  is_link: boolean;
+  device: Device;
+  brightness: Brightness;
+  theme: string;
+  status: string;
+  description: string | null;
+  source: string | null;
 };
 type OriginalDirectCacheValue = { direct: boolean };
 
@@ -64,7 +86,8 @@ export function parseImageLookup(raw: string): ImageLookupItem | null {
 export function parseImageLookupById(raw: string): ImageLookupByIdItem | null {
   try {
     const value = JSON.parse(raw) as Partial<ImageLookupByIdItem>;
-    if (typeof value.id !== "string" || typeof value.object_key !== "string" || typeof value.original !== "string"
+    if (value.detail_complete !== true
+      || typeof value.id !== "string" || typeof value.object_key !== "string" || typeof value.original !== "string"
       || typeof value.ext !== "string" || !imageLookupExtensions.has(value.ext)
       || typeof value.storage_slug !== "string" || typeof value.is_link !== "boolean"
       || !appConfig.devices.includes(value.device as Device) || !appConfig.brightness.includes(value.brightness as Brightness)
@@ -176,7 +199,26 @@ async function setImageLookups(items: ImageLookupItem[]) {
   }
 }
 
-export async function setImageLookupById(item: ImageLookupByIdItem) {
+function imageLookupByIdItem(item: CompleteImageLookupSource): ImageLookupByIdItem {
+  return {
+    detail_complete: true,
+    id: item.id,
+    object_key: item.object_key,
+    original: item.original ?? "",
+    ext: item.ext,
+    storage_slug: item.storage_slug,
+    is_link: item.is_link,
+    device: item.device,
+    brightness: item.brightness,
+    theme: item.theme,
+    status: item.status,
+    description: item.description ?? "",
+    source: item.source ?? ""
+  };
+}
+
+export async function setImageLookupById(item: CompleteImageLookupSource): Promise<ImageLookupByIdItem> {
+  const lookup = imageLookupByIdItem(item);
   try {
     await redis.hsetex(
       IMAGE_LOOKUP_ID_KEY,
@@ -184,12 +226,13 @@ export async function setImageLookupById(item: ImageLookupByIdItem) {
       IMAGE_LOOKUP_TTL_SECONDS,
       "FIELDS",
       1,
-      item.id,
-      JSON.stringify(item)
+      lookup.id,
+      JSON.stringify(lookup)
     );
   } catch {
     // 写缓存失败时资源接口仍会回查 PostgreSQL。
   }
+  return lookup;
 }
 
 async function setImageLookupsById(items: ImageLookupByIdItem[]) {
@@ -209,22 +252,8 @@ async function setImageLookupsById(items: ImageLookupByIdItem[]) {
   }
 }
 
-export async function warmImageLookups(items: Array<{
-  id?: string;
-  is_link?: boolean;
-  object_key: string;
-  original?: string | null;
-  ext: string;
-  storage_slug: string;
-  device?: Device;
-  brightness?: Brightness;
-  theme?: string;
-  status?: string;
-  description?: string | null;
-  source?: string | null;
-}>) {
+export async function warmObjectLookups(items: readonly ImageObjectLookupSource[]) {
   const objectLookups: ImageLookupItem[] = [];
-  const idLookups: ImageLookupByIdItem[] = [];
   for (const item of items) {
     if (!item.is_link && item.status === "ready") {
       objectLookups.push({
@@ -235,26 +264,19 @@ export async function warmImageLookups(items: Array<{
         status: "ready"
       });
     }
-    if (item.id && item.device && item.brightness && item.theme && item.status) {
-      idLookups.push({
-        id: item.id,
-        object_key: item.object_key,
-        original: item.original ?? "",
-        ext: item.ext,
-        storage_slug: item.storage_slug,
-        is_link: Boolean(item.is_link),
-        device: item.device,
-        brightness: item.brightness,
-        theme: item.theme,
-        status: item.status,
-        description: item.description ?? "",
-        source: item.source ?? ""
-      });
-    }
   }
+  await setImageLookups(objectLookups);
+}
+
+async function warmImageIdLookups(items: readonly CompleteImageLookupSource[]) {
+  const idLookups = items.map(imageLookupByIdItem);
+  await setImageLookupsById(idLookups);
+}
+
+export async function warmCompleteImageLookups(items: readonly CompleteImageLookupSource[]) {
   await Promise.all([
-    setImageLookups(objectLookups),
-    setImageLookupsById(idLookups)
+    warmObjectLookups(items),
+    warmImageIdLookups(items)
   ]);
 }
 

@@ -3,7 +3,7 @@ import { pool } from "../../core/db.ts";
 import { ApiError } from "../../core/http.ts";
 import { adminImageListQuery } from "../../core/validation.ts";
 import { resolveThemeSlugs } from "../../themes/query.ts";
-import { warmImageLookups } from "../image-cache.ts";
+import { warmCompleteImageLookups } from "../image-cache.ts";
 import {
   adminImageView,
   publicImage,
@@ -49,7 +49,7 @@ export async function listAdminImages(query: AdminImageListQuery) {
     ),
     fetchAdminImagePage([...where], [...params], query.limit, query.cursor)
   ]);
-  await warmImageLookups(page.rows);
+  await warmCompleteImageLookups(page.rows);
   return {
     items: page.items.map(adminImageView),
     limit: query.limit,

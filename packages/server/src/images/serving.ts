@@ -10,7 +10,17 @@ import { contentType, exists, openObject, publicObjectUrl } from "../storage/sto
 import { isStorageNotFoundError } from "../storage/storage-backend.ts";
 import type { OpenedRead } from "../storage/storage-backend.ts";
 import { webReadableFromNode } from "../storage/stream-buffer.ts";
-import { getImageLookupById, getImageLookupByObjectKey, getImageLookupByThumbKey, getOriginalDirectCache, setImageLookup, setImageLookupById, setOriginalDirectCache, type ImageLookupByIdItem } from "./image-cache.ts";
+import {
+  getImageLookupById,
+  getImageLookupByObjectKey,
+  getImageLookupByThumbKey,
+  getOriginalDirectCache,
+  setImageLookup,
+  setImageLookupById,
+  setOriginalDirectCache,
+  type CompleteImageLookupSource,
+  type ImageLookupByIdItem
+} from "./image-cache.ts";
 import { linkBaseUrl } from "../themes/host.ts";
 import { displayUrlForOriginalComparison, hasDistinctOriginalUrl } from "./original-link.ts";
 
@@ -245,9 +255,9 @@ async function imageLookupById(id: string): Promise<ImageLookupByIdItem | null> 
       WHERE id=$1
       LIMIT 1`,
     [id]
-  )).rows[0] as Partial<ImageLookupByIdItem> | undefined;
+  )).rows[0] as Partial<CompleteImageLookupSource> | undefined;
   if (!row) return null;
-  const item: ImageLookupByIdItem = {
+  return setImageLookupById({
     id,
     object_key: String(row.object_key ?? ""),
     original: String(row.original ?? ""),
@@ -260,9 +270,7 @@ async function imageLookupById(id: string): Promise<ImageLookupByIdItem | null> 
     status: String(row.status ?? ""),
     description: String(row.description ?? ""),
     source: String(row.source ?? "")
-  };
-  await setImageLookupById(item);
-  return item;
+  });
 }
 
 export async function serveObject(key: string, request: StoredResponseRequest = {}) {

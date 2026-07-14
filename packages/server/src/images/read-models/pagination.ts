@@ -6,6 +6,7 @@ import {
   type ImageRecord,
   type PublicImageCardRecord
 } from "../presenter.ts";
+import type { CompleteImageLookupSource } from "../image-cache.ts";
 
 const publicImageCardColumns = [
   "id",
@@ -68,7 +69,7 @@ export async function fetchAdminImagePage(
   cursor?: string
 ) {
   const page = await fetchImageRows(where, params, limit, cursor, "*");
-  const rows = page.rows as Array<ImageRecord & { cursor_image_time: string }>;
+  const rows = page.rows as Array<ImageRecord & CompleteImageLookupSource & { cursor_image_time: string }>;
   const items = await publicImages(rows);
   return { rows, items, hasNext: page.hasNext, nextCursor: page.nextCursor };
 }

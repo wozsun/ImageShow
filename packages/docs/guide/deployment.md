@@ -68,7 +68,7 @@ server {
   ssl_certificate /etc/nginx/cert/fullchain.pem;
   ssl_certificate_key /etc/nginx/cert/privkey.pem;
 
-  # 不得低于运行时 upload.max_file_size_mb（默认 100 MB）。
+  # 不得低于应用配置的任何请求体上限，包括 upload.max_file_size_mb（默认 100 MB）。
   client_max_body_size 100m;
 
   proxy_set_header Host $host;
@@ -102,7 +102,7 @@ server {
   ssl_certificate_key /etc/nginx/cert/privkey.pem;
   ssl_protocols TLSv1.2 TLSv1.3;
 
-  # 不得低于运行时 upload.max_file_size_mb（默认 100 MB）。
+  # 不得低于应用配置的任何请求体上限，包括 upload.max_file_size_mb（默认 100 MB）。
   client_max_body_size 100m;
 
   proxy_set_header Host $host;
@@ -127,6 +127,6 @@ server {
 }
 ```
 
-不要把应用 HTTP 端口直接暴露到公网。若 `X-Forwarded-Proto` 缺失或错误，Secure Cookie、同源检查与生成的跳转 URL 都会不正确。Docker Compose 部署时，把示例中的 `127.0.0.1:5518` 改为 Compose 服务名，例如 `imageshow:5518`。如果修改 `upload.max_file_size_mb`，同步调整 `client_max_body_size`。
+不要把应用 HTTP 端口直接暴露到公网。若 `X-Forwarded-Proto` 缺失或错误，Secure Cookie、同源检查与生成的跳转 URL 都会不正确。Docker Compose 部署时，把示例中的 `127.0.0.1:5518` 改为 Compose 服务名，例如 `imageshow:5518`。反向代理的请求体上限不能低于应用内任一对应设置，否则请求会在到达应用鉴权和校验逻辑前被代理返回 413；修改 `upload.max_file_size_mb` 或其他请求体上限时，应同步调整 `client_max_body_size`。
 
 浏览器同源 PUT 的原始图片先写入容器 `data/tmp`，服务端 prepare 完成后才向选定后端写入候选文件；请求依赖管理员会话 Cookie 与 `X-CSRF-Token`，浏览器不直连对象存储，因此存储桶无需配置 CORS。

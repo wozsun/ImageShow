@@ -15,7 +15,8 @@ import {
   publicImagesCacheGeneration,
   setPublicImageDetailCache,
   setPublicImagesCache,
-  warmImageLookups
+  warmCompleteImageLookups,
+  warmObjectLookups
 } from "../image-cache.ts";
 import {
   publicImageDetail,
@@ -158,7 +159,7 @@ export async function listPublicImages(
       total: null
     };
     await Promise.all([
-      warmImageLookups(page.rows),
+      warmObjectLookups(page.rows),
       setPublicImagesCache(cacheKey, fresh)
     ]);
     return fresh;
@@ -205,7 +206,7 @@ export async function getPublicImage(id: string) {
     const row = result.rows[0] as PublicImageDetailRecord;
     const image = await publicImageDetail(row);
     await Promise.all([
-      warmImageLookups([row]),
+      warmCompleteImageLookups([row]),
       setPublicImageDetailCache(cacheKey, image)
     ]);
     return image;

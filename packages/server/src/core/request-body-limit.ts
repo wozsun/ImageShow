@@ -3,13 +3,13 @@ import { bodyLimit } from "hono/body-limit";
 import type { Context, Next } from "hono";
 import { routeError } from "./http.ts";
 
-const standardApiBodyMaxBytes = 64 * 1024;
+const standardApiBodyMaxBytes = 128 * 1024;
 const jsonlManifestBodyMaxBytes = appConfig.imports.jsonlManifestMaxBytes;
 const advancedConfigMaxBytes =
   appConfig.imports.configPackageMaxBytes + 64 * 1024;
 const jsonlManifestPath = `${adminApiBasePath}/imports/jsonl/parse`;
 const importBatchCreatePath = `${adminApiBasePath}/imports/batch-create`;
-const batchImageUpdatePath = `${adminApiBasePath}/images/batch-update`;
+export const batchImageUpdatePath = `${adminApiBasePath}/images/batch-update`;
 const batchImageUpdateBodyMaxBytes = 8 * 1024 * 1024;
 const importFilePath = new RegExp(`^${adminApiBasePath}/imports/[^/]+/file$`);
 const advancedConfigLargeBodyPath = new RegExp(
@@ -39,7 +39,7 @@ const limitConfigPackageBody = bodyLimit({
   onError: tooLarge
 });
 
-const limitBatchImageUpdateBody = bodyLimit({
+export const limitBatchImageUpdateBody = bodyLimit({
   maxSize: batchImageUpdateBodyMaxBytes,
   onError: tooLarge
 });
@@ -54,7 +54,7 @@ export function limitApiRequestBody(c: Context, next: Next) {
     return next();
   }
   if (c.req.method === "POST" && path === batchImageUpdatePath) {
-    return limitBatchImageUpdateBody(c, next);
+    return next();
   }
   if (c.req.method === "POST" && advancedConfigLargeBodyPath.test(path)) {
     return limitConfigPackageBody(c, next);

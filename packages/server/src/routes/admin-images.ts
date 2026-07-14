@@ -1,6 +1,7 @@
 import type { Hono } from "hono";
 import { adminApiBasePath } from "@imageshow/shared";
 import { ok } from "../core/http.ts";
+import { batchImageUpdatePath, limitBatchImageUpdateBody } from "../core/request-body-limit.ts";
 import {
   adminImageListQuery,
   batchImageUpdateInput,
@@ -99,7 +100,7 @@ export function registerAdminImageRoutes(app: Hono) {
     return c.json(ok(await migrateImagesStorage(input.ids, input.target)));
   });
 
-  app.post(`${adminApiBasePath}/images/batch-update`, async (c) => {
+  app.post(batchImageUpdatePath, limitBatchImageUpdateBody, async (c) => {
     const input = parse(batchImageUpdateInput, await c.req.json().catch(() => ({})));
     const entityCountInvalidationBatch = createEntityCountCacheInvalidationBatch();
     let updated = 0;

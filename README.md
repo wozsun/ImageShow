@@ -88,7 +88,7 @@ server {
 }
 ```
 
-不要把应用 HTTP 端口直接暴露公网；`X-Forwarded-Proto` 缺失会导致 Secure Cookie、同源检查与跳转 URL 出错。示例面向当前 stable Nginx 1.30.3；文档站提供可直接复制的[最少配置与推荐配置](packages/docs/guide/deployment.md#反向代理与-https)，推荐配置只增加上传流式转发和长任务超时，不在 Nginx 重复实现 Hono 的缓存策略。
+反向代理的请求体上限不能低于应用内任一对应设置；否则请求会在到达应用鉴权和校验逻辑前被代理返回 413。不要把应用 HTTP 端口直接暴露公网；`X-Forwarded-Proto` 缺失会导致 Secure Cookie、同源检查与跳转 URL 出错。示例面向当前 stable Nginx 1.30.3；文档站提供可直接复制的[最少配置与推荐配置](packages/docs/guide/deployment.md#反向代理与-https)，推荐配置只增加上传流式转发和长任务超时，不在 Nginx 重复实现 Hono 的缓存策略。
 
 ### 数据与配置
 
