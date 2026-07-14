@@ -34,7 +34,8 @@ export function useLocalUploadImport(options: {
         author: normalizeAuthor(job.draft.author),
         size: job.file.size,
         idempotency_key: attemptKey,
-        storage_slug: job.storageSlug
+        storage_slug: job.storageSlug,
+        manifest_position: job.manifestPosition
       }, controller.signal);
       if (!isCurrentImportAttempt(queue, job.id, attemptKey)) {
         await cancelStoredImport(session.id).catch(() => undefined);
@@ -96,12 +97,13 @@ export function useLocalUploadImport(options: {
       existing.add(fingerprint);
       return true;
     });
-    const jobs = await Promise.all(selected.map(async (file): Promise<ImportJob> => {
+    const jobs = await Promise.all(selected.map(async (file, manifestPosition): Promise<ImportJob> => {
       const objectUrl = URL.createObjectURL(file);
       const inferred = await draftFromFile(file, defaults, objectUrl);
       return {
         id: browserUuid(),
         attemptKey: browserUuid(),
+        manifestPosition,
         kind: "local",
         file,
         fileFingerprint: fileFingerprint(file),

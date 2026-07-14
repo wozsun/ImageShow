@@ -6,7 +6,8 @@ import {
   HeadObjectCommand,
   ListObjectsV2Command,
   PutObjectCommand,
-  S3Client
+  S3Client,
+  type GetObjectCommandOutput
 } from "@aws-sdk/client-s3";
 import { ApiError } from "../core/http.ts";
 import { getInputImageMaxBytes } from "../config/app-settings.ts";
@@ -19,6 +20,7 @@ import type {
   StorageDriver,
   StorageSelfTest
 } from "./storage-backend.ts";
+import { assertSingleByteRangeSyntax, totalSizeFromContentRange } from "./byte-range.ts";
 
 function storageS3Client(config: StorageConfig) {
   const endpoint = /^https:\/\//i.test(config.s3.endpoint) ? config.s3.endpoint : `https://${config.s3.endpoint}`;
@@ -54,6 +56,15 @@ export class S3Backend implements StorageDriver {
     return storageS3ObjectName(this.config, prefix, key);
   }
 
+  private async objectSize(prefix: StoragePrefix, key: string) {
+    const result = await this.client.send(new HeadObjectCommand({
+      Bucket: this.bucket,
+      Key: this.name(prefix, key)
+    }));
+    const size = Number(result.ContentLength);
+    return Number.isSafeInteger(size) && size >= 0 ? size : undefined;
+  }
+
   async exists(prefix: StoragePrefix, key: string) {
     try {
       await this.client.send(new HeadObjectCommand({ Bucket: this.bucket, Key: this.name(prefix, key) }));
@@ -64,15 +75,43 @@ export class S3Backend implements StorageDriver {
     }
   }
 
-  async openRead(prefix: StoragePrefix, key: string): Promise<OpenedRead> {
-    const result = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: this.name(prefix, key) })).catch((error: unknown) => {
+  async openRead(prefix: StoragePrefix, key: string, range?: string): Promise<OpenedRead> {
+    assertSingleByteRangeSyntax(range);
+    let result: GetObjectCommandOutput;
+    try {
+      result = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: this.name(prefix, key), Range: range }));
+    } catch (error) {
       if (isS3NotFound(error)) throw new ApiError(404, "storage_object_not_found", "Object not found");
+      if ((error as { $metadata?: { httpStatusCode?: number } })?.$metadata?.httpStatusCode === 416) {
+        const responseHeaders = (error as {
+          $response?: { headers?: Record<string, string | string[] | undefined> };
+        }).$response?.headers;
+        const contentRange = responseHeaders?.["content-range"];
+        const headerValue = Array.isArray(contentRange) ? contentRange[0] : contentRange;
+        const totalSize = totalSizeFromContentRange(headerValue)
+          ?? await this.objectSize(prefix, key).catch(() => undefined);
+        throw new ApiError(
+          416,
+          "range_not_satisfiable",
+          "Requested range is not satisfiable",
+          totalSize === undefined ? {} : { total_size: totalSize }
+        );
+      }
       throw error;
-    });
+    }
     const body = result.Body as Readable | undefined;
     if (!body) throw new ApiError(502, "storage_read_failed", "Storage returned an empty response body");
     const rawSize = Number(result.ContentLength);
-    return { body, size: Number.isFinite(rawSize) && rawSize >= 0 ? rawSize : undefined, backend: "s3" };
+    const size = Number.isFinite(rawSize) && rawSize >= 0 ? rawSize : undefined;
+    const contentRange = result.ContentRange;
+    const totalSize = totalSizeFromContentRange(contentRange) ?? size;
+    return {
+      body,
+      size,
+      totalSize: Number.isFinite(totalSize) ? totalSize : undefined,
+      contentRange,
+      backend: "s3"
+    };
   }
 
   async readBuffer(prefix: StoragePrefix, key: string) {
@@ -104,14 +143,6 @@ export class S3Backend implements StorageDriver {
       CopySource: s3CopySource(this.config, fromPrefix, fromKey),
       Key: this.name(toPrefix, toKey)
     }));
-  }
-
-  async readObject(prefix: ReadablePrefix, key: string): Promise<Readable> {
-    const result = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: this.name(prefix, key) })).catch((error: unknown) => {
-      if (isS3NotFound(error)) throw new ApiError(404, "storage_object_not_found", "Object not found");
-      throw error;
-    });
-    return result.Body as Readable;
   }
 
   async listKeys(prefix: StoragePrefix) {

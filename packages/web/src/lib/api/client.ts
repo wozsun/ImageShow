@@ -28,11 +28,22 @@ export function getCsrfToken() {
   return csrfToken;
 }
 
+function publicCacheableRequest(path: string, method: string) {
+  if (method !== "GET" && method !== "HEAD") return false;
+  const pathname = new URL(path, "https://imageshow.invalid").pathname;
+  return pathname === "/api/site-config"
+    || pathname === "/api/gallery-facets"
+    || pathname === "/img-count"
+    || /^\/api\/images(?:\/[^/]+)?$/.test(pathname);
+}
+
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   if (!(init.body instanceof FormData) && init.body && !headers.has("content-type")) headers.set("content-type", "application/json");
   if (init.method && init.method !== "GET" && csrfToken) headers.set("x-csrf-token", csrfToken);
-  const response = await fetch(path, { ...init, headers, credentials: "same-origin" });
+  const method = String(init.method ?? "GET").toUpperCase();
+  const credentials = init.credentials ?? (publicCacheableRequest(path, method) ? "omit" : "same-origin");
+  const response = await fetch(path, { ...init, headers, credentials });
   const data = await response.json().catch(() => ({}));
   if (response.status === 401 && !path.includes("/auth/login") && !path.includes("/auth/me")) {
     clearCsrfToken();

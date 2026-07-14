@@ -16,3 +16,39 @@ export async function streamToBuffer(stream: Readable, limit = Number.MAX_SAFE_I
 export function nodeReadableFromWeb(stream: ReadableStream<Uint8Array>) {
   return Readable.fromWeb(stream as Parameters<typeof Readable.fromWeb>[0]);
 }
+
+/**
+ * Adapts a Node stream explicitly instead of passing it to the Fetch Response
+ * constructor as an undocumented BodyInit. Node 26.5 can otherwise close the
+ * same byte stream twice after a short ranged file response and terminate the
+ * process with ERR_INVALID_STATE.
+ */
+export function webReadableFromNode(stream: Readable): ReadableStream<Uint8Array> {
+  const iterator = stream[Symbol.asyncIterator]();
+  let active = true;
+
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      try {
+        const chunk = await iterator.next();
+        if (!active) return;
+        if (chunk.done) {
+          active = false;
+          controller.close();
+          return;
+        }
+        controller.enqueue(Buffer.isBuffer(chunk.value) ? chunk.value : Buffer.from(chunk.value));
+      } catch (error) {
+        if (!active) return;
+        active = false;
+        controller.error(error);
+      }
+    },
+    async cancel(reason) {
+      if (!active) return;
+      active = false;
+      stream.destroy(reason instanceof Error ? reason : undefined);
+      await iterator.return?.().catch(() => undefined);
+    }
+  });
+}

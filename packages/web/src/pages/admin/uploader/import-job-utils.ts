@@ -32,7 +32,7 @@ export function linkImportJobs(
   fillOriginalUrl: boolean,
   storageSlug: string
 ) {
-  return parseImportUrls(urls).map((url): ImportJob => ({
+  return parseImportUrls(urls).map((url, manifestPosition): ImportJob => ({
     id: browserUuid(),
     attemptKey: browserUuid(),
     kind,
@@ -46,7 +46,8 @@ export function linkImportJobs(
     duplicates: [],
     duplicateDecision: "upload",
     url,
-    storageSlug
+    storageSlug,
+    manifestPosition
   }));
 }
 

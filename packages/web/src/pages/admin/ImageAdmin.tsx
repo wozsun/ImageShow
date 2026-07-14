@@ -16,6 +16,7 @@ import { ImageEditModal } from "./ImageEditModal.js";
 import { ActionFeedback } from "../../components/feedback/ActionFeedback.js";
 import { Uploader } from "./uploader/Uploader.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
+import { invalidateImageData } from "../../lib/api/query-invalidation.js";
 
 type ConfirmAction =
   | { kind: "batch-delete"; ids: string[] }
@@ -73,11 +74,7 @@ export function ImageAdmin() {
   const refresh = () => {
     setSelected([]);
     setCursorHistory([""]);
-    client.invalidateQueries({ queryKey: queryKeys.adminImages });
-    client.invalidateQueries({ queryKey: queryKeys.galleryFacets });
-    client.invalidateQueries({ queryKey: queryKeys.themes });
-    client.invalidateQueries({ queryKey: queryKeys.tags });
-    client.invalidateQueries({ queryKey: queryKeys.authors });
+    void invalidateImageData(client);
   };
   const items = data?.items ?? [];
   const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / pageSize));

@@ -1,7 +1,6 @@
 import { createReadStream } from "node:fs";
 import { copyFile, mkdir, readFile, readdir, rm, rmdir, stat, writeFile, access } from "node:fs/promises";
 import { dirname, join, relative, sep } from "node:path";
-import type { Readable } from "node:stream";
 import { runtimePaths } from "../config/bootstrap-env.ts";
 import { ApiError } from "../core/http.ts";
 import { safeStoragePath, STORAGE_PREFIXES, type ReadablePrefix, type StoragePrefix } from "./object-keys.ts";
@@ -11,6 +10,7 @@ import type {
   StorageDriver,
   StorageSelfTest
 } from "./storage-backend.ts";
+import { parseSingleByteRange } from "./byte-range.ts";
 
 /** @internal Exported only for local storage error verification. */
 export function isMissingFileError(error: unknown) {
@@ -28,10 +28,22 @@ export class LocalBackend implements StorageDriver {
     }
   }
 
-  async openRead(prefix: StoragePrefix, key: string): Promise<OpenedRead> {
+  async openRead(prefix: StoragePrefix, key: string, rangeHeader?: string): Promise<OpenedRead> {
     const path = safeStoragePath(prefix, key);
-    const size = (await stat(path)).size;
-    return { body: createReadStream(path), size, backend: "local" };
+    const totalSize = await stat(path).then((value) => value.size).catch((error: unknown) => {
+      if (isMissingFileError(error)) throw new ApiError(404, "storage_object_not_found", "Object not found");
+      throw error;
+    });
+    const range = parseSingleByteRange(rangeHeader, totalSize);
+    if (!range) return { body: createReadStream(path), size: totalSize, totalSize, backend: "local" };
+    const size = range.end - range.start + 1;
+    return {
+      body: createReadStream(path, range),
+      size,
+      totalSize,
+      contentRange: `bytes ${range.start}-${range.end}/${totalSize}`,
+      backend: "local"
+    };
   }
 
   async readBuffer(prefix: StoragePrefix, key: string) {
@@ -53,16 +65,6 @@ export class LocalBackend implements StorageDriver {
     await mkdir(dirname(target), { recursive: true });
 
     await copyFile(safeStoragePath(fromPrefix, fromKey), target);
-  }
-
-  async readObject(prefix: ReadablePrefix, key: string): Promise<Readable> {
-    const path = safeStoragePath(prefix, key);
-    try {
-      await access(path);
-    } catch {
-      throw new ApiError(404, "storage_object_not_found", "Object not found");
-    }
-    return createReadStream(path);
   }
 
   async listKeys(prefix: StoragePrefix) {

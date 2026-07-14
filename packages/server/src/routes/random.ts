@@ -1,10 +1,11 @@
 import type { Context, Hono } from "hono";
 import { getRandomCategoryCounts } from "../random/random-cache.ts";
 import { proxyExternalImage } from "../images/serving.ts";
-import { contentType, publicImageUrls, readObject } from "../storage/storage.ts";
+import { contentType, openObject, publicImageUrls } from "../storage/storage.ts";
 import { clientIp, noStoreCacheControl, publicMetadataCacheControl, routeError } from "../core/http.ts";
 import { pickRandom } from "../random/service.ts";
 import { buildRandomImageCountData } from "../random/query.ts";
+import { webReadableFromNode } from "../storage/stream-buffer.ts";
 
 export function registerRandomRoutes(app: Hono) {
   app.all("/random", handleRandomImage);
@@ -33,9 +34,11 @@ async function respondRandom(c: Context, url: URL) {
   if (picked.method === "proxy") {
 
     if (picked.is_link) return proxyExternalImage(picked.object_key, picked.ext, c.req.method === "HEAD", baseHeaders);
-    const headers = { ...baseHeaders, "Content-Type": contentType(picked.ext) };
-    if (c.req.method === "HEAD") return new Response(null, { headers });
-    return new Response(await readObject("media", picked.object_key, picked.storage_slug) as unknown as BodyInit, { headers });
+    const opened = await openObject("media", picked.object_key, picked.storage_slug);
+    const headers = new Headers({ ...baseHeaders, "Content-Type": contentType(picked.ext), "Accept-Ranges": "bytes" });
+    if (opened.size !== undefined) headers.set("Content-Length", String(opened.size));
+    if (c.req.method === "HEAD") opened.body.destroy();
+    return new Response(c.req.method === "HEAD" ? null : webReadableFromNode(opened.body), { headers });
   }
 
   const { object_url: location } = await publicImageUrls(

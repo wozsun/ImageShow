@@ -45,21 +45,88 @@ npm run admin:reset-password -- <username>
 
 ## 反向代理与 HTTPS
 
-生产环境务必在可信反向代理终止 TLS，并**覆盖**而不是透传客户端伪造的转发头。把站点域名与其所有子域名（含 `random` / `static` / `docs` / `link` / 主题）都转发到应用的 `5518` 端口：
+生产环境务必在可信反向代理终止 TLS，并**覆盖**而不是透传客户端伪造的转发头。把站点域名与其所有子域名（含 `random` / `static` / `docs` / `link` / 主题）都转发到应用的 `5518` 端口。
+
+ImageShow 已由 Hono 处理 Redis 数据缓存、HTTP 缓存头、压缩、静态预压缩、ETag、304 和图片 Range；Nginx 无需再配置 `proxy_cache`。如果以后接入 CDN，让 CDN 直接遵循 Hono 返回的 `Cache-Control` 和 `Vary` 即可。
+
+### 最少配置
+
+以下示例面向当前 stable Nginx 1.30.3，直接使用其默认 HTTP/1.1 与上游 keepalive。最少配置保留 TLS、HTTP/2、上传大小和必要的转发头；Nginx 使用默认缓冲与超时。
 
 ```nginx
 server {
+  listen 80;
+  server_name img.example.com *.img.example.com;
+  return 301 https://$host$request_uri;
+}
+
+server {
   listen 443 ssl;
-  server_name img.example.com *.img.example.com;   # 证书需覆盖通配子域名
+  http2 on;
+  server_name img.example.com *.img.example.com;
+
+  ssl_certificate /etc/nginx/cert/fullchain.pem;
+  ssl_certificate_key /etc/nginx/cert/privkey.pem;
+
+  # 不得低于运行时 upload.max_file_size_mb（默认 100 MB）。
+  client_max_body_size 100m;
+
+  proxy_set_header Host $host;
+  proxy_set_header X-Real-IP $remote_addr;
+  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  proxy_set_header X-Forwarded-Proto $scheme;
 
   location / {
     proxy_pass http://127.0.0.1:5518;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
   }
 }
 ```
 
-不要把应用 HTTP 端口直接暴露到公网。若 `X-Forwarded-Proto` 缺失或错误，Secure Cookie、同源检查与生成的跳转 URL 都会不正确。浏览器同源 PUT 的原始图片先写入容器 `data/tmp`，服务端 prepare 完成后才向选定后端写入候选文件；请求依赖管理员会话 Cookie 与 `X-CSRF-Token`，浏览器不直连对象存储，因此存储桶无需配置 CORS。
+### 推荐配置
+
+推荐长期使用。它只在最少配置上为上传流、导入处理、SSE 和存储检查调整缓冲或超时，不接管 Hono 的缓存策略。
+
+```nginx
+server {
+  listen 80;
+  server_name img.example.com *.img.example.com;
+  return 301 https://$host$request_uri;
+}
+
+server {
+  listen 443 ssl;
+  http2 on;
+  server_name img.example.com *.img.example.com;
+
+  ssl_certificate /etc/nginx/cert/fullchain.pem;
+  ssl_certificate_key /etc/nginx/cert/privkey.pem;
+  ssl_protocols TLSv1.2 TLSv1.3;
+
+  # 不得低于运行时 upload.max_file_size_mb（默认 100 MB）。
+  client_max_body_size 100m;
+
+  proxy_set_header Host $host;
+  proxy_set_header X-Real-IP $remote_addr;
+  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  proxy_set_header X-Forwarded-Proto $scheme;
+
+  location /api/admin/imports/ {
+    proxy_pass http://127.0.0.1:5518;
+    proxy_request_buffering off;
+    proxy_read_timeout 300s;
+  }
+
+  location /api/admin/check/ {
+    proxy_pass http://127.0.0.1:5518;
+    proxy_read_timeout 300s;
+  }
+
+  location / {
+    proxy_pass http://127.0.0.1:5518;
+  }
+}
+```
+
+不要把应用 HTTP 端口直接暴露到公网。若 `X-Forwarded-Proto` 缺失或错误，Secure Cookie、同源检查与生成的跳转 URL 都会不正确。Docker Compose 部署时，把示例中的 `127.0.0.1:5518` 改为 Compose 服务名，例如 `imageshow:5518`。如果修改 `upload.max_file_size_mb`，同步调整 `client_max_body_size`。
+
+浏览器同源 PUT 的原始图片先写入容器 `data/tmp`，服务端 prepare 完成后才向选定后端写入候选文件；请求依赖管理员会话 Cookie 与 `X-CSRF-Token`，浏览器不直连对象存储，因此存储桶无需配置 CORS。

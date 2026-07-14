@@ -1,6 +1,5 @@
 import { pool } from "../core/db.ts";
 import { errorMessage } from "../core/http.ts";
-import { invalidateImageReadCaches } from "../images/image-cache.ts";
 import { listStorageKeys, pruneEmptyStorageDirs, removeObject, type StoragePrefix } from "../storage/storage.ts";
 import { withStorageMaintenanceLock } from "../storage/maintenance-lock.ts";
 import { expectedThumbs, storageBackends, type StorageRow } from "./storage-common.ts";
@@ -67,7 +66,6 @@ async function cleanupStorageUnderLock() {
       failures.push({ prefix: "*", key: "*", backend, error: errorMessage(error) });
     }
   }
-  await invalidateImageReadCaches();
   return { removed, candidates: candidateCount, pruned_dirs: prunedDirs, failures };
 }
 

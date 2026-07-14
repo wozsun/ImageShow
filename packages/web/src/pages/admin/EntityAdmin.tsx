@@ -10,6 +10,7 @@ import { adminApiBasePath, queryKeys, slugFormatHint, slugPattern } from "../../
 import { errorMessage } from "../../lib/ui/formatters.js";
 import type { AdminSettings, Author, Tag, Theme } from "../../lib/types.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
+import { invalidateImageData } from "../../lib/api/query-invalidation.js";
 
 type EntityKind = "tags" | "themes" | "authors";
 type Entity = Tag | Theme | Author;
@@ -53,9 +54,7 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
   // 新建/删除词条会改动公共画廊的筛选词表（gallery-facets，staleTime:Infinity 不会自动刷新），
   // 删除还会清除关联图片上的该属性，故一并失效后台图片列表，与 ImageAdmin.refresh 的失效集对齐。
   const refresh = () => {
-    client.invalidateQueries({ queryKey });
-    client.invalidateQueries({ queryKey: queryKeys.galleryFacets });
-    client.invalidateQueries({ queryKey: queryKeys.adminImages });
+    void invalidateImageData(client);
   };
   const [slug, setSlug] = useState("");
   const [display, setDisplay] = useState("");

@@ -12,6 +12,7 @@ import { errorMessage } from "../../lib/ui/formatters.js";
 import type { AdminSettings, SiteSettings } from "../../lib/types.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
 import { ActionFeedback, type ActionFeedbackState } from "../../components/feedback/ActionFeedback.js";
+import { invalidateRuntimeData } from "../../lib/api/query-invalidation.js";
 
 type ApplicationSettingsFeedbackState = ActionFeedbackState & {
   scope: "application";
@@ -60,7 +61,7 @@ export function SettingsPage() {
       await query.refetch();
       // site-config 现为 staleTime:Infinity 的全局缓存，保存后必须显式失效，公共端（站点标题/图标、
       // 画廊顺序、登录背景等）才会刷新到最新值，而不必整页刷新。
-      await client.invalidateQueries({ queryKey: queryKeys.siteConfig });
+      await invalidateRuntimeData(client);
     } catch (error) {
       setFeedback({ scope: "application", text: `保存失败：${errorMessage(error)}`, status: "error" });
     } finally {
@@ -74,7 +75,7 @@ export function SettingsPage() {
     try {
       await api(`${adminApiBasePath}/settings/reload`, { method: "POST" });
       await query.refetch();
-      await client.invalidateQueries({ queryKey: queryKeys.siteConfig });
+      await invalidateRuntimeData(client);
       setFeedback({ scope: "application", text: "已读取并应用最新配置文件", status: "success" });
     } catch (error) {
       setFeedback({ scope: "application", text: `读取失败：${errorMessage(error)}`, status: "error" });

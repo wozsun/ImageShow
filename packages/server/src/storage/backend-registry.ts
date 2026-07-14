@@ -21,6 +21,7 @@ const storageCacheTtlMs = appConfig.derivedCacheTtlSeconds * 1000;
 let storageCache: StorageBackendRecord[] | null = null;
 let storageCacheExpiresAt = 0;
 let storageLoad: Promise<StorageBackendRecord[]> | null = null;
+const storageBackendChangeListeners = new Set<() => void>();
 
 async function loadStorageBackends(): Promise<StorageBackendRecord[]> {
   const rows = (await pool.query(
@@ -60,6 +61,12 @@ function invalidateStorageBackendCache() {
   storageCache = null;
   storageCacheExpiresAt = 0;
   clearStorageDriverCache();
+  for (const listener of storageBackendChangeListeners) listener();
+}
+
+export function onStorageBackendChange(listener: () => void) {
+  storageBackendChangeListeners.add(listener);
+  return () => storageBackendChangeListeners.delete(listener);
 }
 
 function toStorageConfig(record: StorageBackendRecord): StorageConfig {

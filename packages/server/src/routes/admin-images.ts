@@ -33,12 +33,22 @@ export function registerAdminImageRoutes(app: Hono) {
 
   app.get(`${adminApiBasePath}/images/:id/thumb`, async (c) => {
     const id = parse(uuidInput, c.req.param("id"));
-    return serveAdminThumb(id);
+    return serveAdminThumb(id, {
+      range: c.req.header("range"),
+      ifNoneMatch: c.req.header("if-none-match"),
+      ifRange: c.req.header("if-range"),
+      isHead: c.req.method === "HEAD"
+    });
   });
 
   app.get(`${adminApiBasePath}/images/:id/raw`, async (c) => {
     const id = parse(uuidInput, c.req.param("id"));
-    return serveAdminObject(id);
+    return serveAdminObject(id, {
+      range: c.req.header("range"),
+      ifNoneMatch: c.req.header("if-none-match"),
+      ifRange: c.req.header("if-range"),
+      isHead: c.req.method === "HEAD"
+    });
   });
 
   app.get(`${adminApiBasePath}/images/:id/original`, async (c) => {

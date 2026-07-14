@@ -6,7 +6,13 @@ import { LocalBackend } from "./local-backend.ts";
 import { S3Backend } from "./s3-backend.ts";
 import { WebdavBackend } from "./webdav-backend.ts";
 
-export type OpenedRead = { body: Readable; size: number | undefined; backend: StorageType };
+export type OpenedRead = {
+  body: Readable;
+  size: number | undefined;
+  totalSize: number | undefined;
+  contentRange?: string;
+  backend: StorageType;
+};
 
 export type CopyPrefix = "media" | "thumbs" | "link" | "_uploads";
 
@@ -21,12 +27,11 @@ export type StorageSelfTest = {
 
 export interface StorageDriver {
   exists(prefix: StoragePrefix, key: string): Promise<boolean>;
-  openRead(prefix: StoragePrefix, key: string): Promise<OpenedRead>;
+  openRead(prefix: StoragePrefix, key: string, range?: string): Promise<OpenedRead>;
   readBuffer(prefix: StoragePrefix, key: string): Promise<Buffer>;
   writeBuffer(prefix: StoragePrefix, key: string, body: Buffer, type: string): Promise<void>;
   remove(prefix: StoragePrefix, key: string): Promise<void>;
   copy(fromPrefix: CopyPrefix, fromKey: string, toPrefix: CopyPrefix, toKey: string): Promise<void>;
-  readObject(prefix: ReadablePrefix, key: string): Promise<Readable>;
   listKeys(prefix: StoragePrefix): Promise<string[]>;
 
   publicObjectUrl(prefix: ReadablePrefix, key: string): string;

@@ -38,11 +38,22 @@ export function registerPublicRoutes(app: Hono) {
 
   app.get("/media/*", async (c) => {
     const key = c.req.path.replace(/^\/media\//, "");
-    return specialHost(c.req.header("host") ?? "") === "link" ? serveLinkMedia(key) : serveObject(key);
+    return specialHost(c.req.header("host") ?? "") === "link" ? serveLinkMedia(key, c.req.method === "HEAD") : serveObject(key, {
+      range: c.req.header("range"),
+      ifNoneMatch: c.req.header("if-none-match"),
+      ifRange: c.req.header("if-range"),
+      isHead: c.req.method === "HEAD"
+    });
   });
   app.get("/thumbs/*", async (c) => {
     const key = c.req.path.replace(/^\/thumbs\//, "");
-    return specialHost(c.req.header("host") ?? "") === "link" ? serveLinkThumb(key) : serveThumb(key);
+    const request = {
+      range: c.req.header("range"),
+      ifNoneMatch: c.req.header("if-none-match"),
+      ifRange: c.req.header("if-range"),
+      isHead: c.req.method === "HEAD"
+    };
+    return specialHost(c.req.header("host") ?? "") === "link" ? serveLinkThumb(key, request) : serveThumb(key, request);
   });
-  app.get("/original/:id", async (c) => serveOriginalLinkProxy(parse(uuidInput, c.req.param("id"))));
+  app.get("/original/:id", async (c) => serveOriginalLinkProxy(parse(uuidInput, c.req.param("id")), c.req.method === "HEAD"));
 }

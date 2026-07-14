@@ -73,5 +73,5 @@ export function createImageId(imageTime: Date, manifestPosition?: number) {
   if (!Number.isInteger(manifestPosition) || manifestPosition < 0 || manifestPosition > 0xfff) {
     throw new RangeError("manifest_position must fit in 12 bits");
   }
-  return randomUuidV7At(imageTime, 0xfff - manifestPosition);
+  return randomUuidV7At(imageTime, manifestPosition);
 }

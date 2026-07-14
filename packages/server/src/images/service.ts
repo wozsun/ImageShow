@@ -4,7 +4,7 @@ import { ApiError } from "../core/http.ts";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { mapWithConcurrency } from "../core/concurrency.ts";
 import { metadataUpdateInput, parse } from "../core/validation.ts";
-import { invalidateImageReadCaches, invalidateMd5Cache } from "./image-cache.ts";
+import { invalidateImageLookupEntries, invalidateImageReadCaches, invalidateMd5Cache } from "./image-cache.ts";
 import { syncRandomImage, syncRandomImages } from "../random/random-cache.ts";
 import { enqueue } from "../jobs/repository.ts";
 import { storageObjectKey, thumbnailObjectKey, thumbnailRef } from "../storage/image-paths.ts";
@@ -51,12 +51,13 @@ async function applyImageFieldEdits(
 
 export async function deleteImage(id: string) {
   const deleted = await withTransaction(async (client) => {
-    const result = await client.query("UPDATE metadata SET status='deleted', deleted_at=now(), updated_at=now() WHERE id=$1 AND status='ready' RETURNING id, md5", [id]);
+    const result = await client.query("UPDATE metadata SET status='deleted', deleted_at=now(), updated_at=now() WHERE id=$1 AND status='ready' RETURNING id, object_key, md5", [id]);
     if (!result.rowCount) throw new ApiError(404, "not_found", "Ready image not found");
-    return result.rows[0] as { id: string; md5: string | null };
+    return result.rows[0] as { id: string; object_key: string; md5: string | null };
   });
   await syncRandomImage(deleted.id);
   await invalidateMd5Cache(deleted.md5 ?? "");
+  await invalidateImageLookupEntries([deleted]);
   await invalidateImageReadCaches();
 }
 
@@ -84,6 +85,7 @@ export async function updateImageMetadata(id: string, body: unknown) {
     const updated = await applyImageFieldEdits(pool, id, next, authorValue, touchAuthor);
     await syncRandomImage(id);
     await invalidateMd5Cache(current.md5 ?? "");
+    await invalidateImageLookupEntries([{ id, object_key: current.object_key }]);
     await invalidateImageReadCaches();
     return publicImage(updated);
   }
@@ -223,6 +225,10 @@ export async function updateImageMetadata(id: string, body: unknown) {
 
     await syncRandomImage(id);
     await invalidateMd5Cache(sourceImage.md5 ?? "");
+    await invalidateImageLookupEntries([
+      { id, object_key: sourceImage.object_key },
+      { object_key: committedObjectKey }
+    ]);
     await invalidateImageReadCaches();
     return publicImage(updated ?? ((await pool.query("SELECT * FROM metadata WHERE id=$1", [id])).rows[0] as ImageRecord));
   });
@@ -255,7 +261,11 @@ export async function migrateImagesStorage(ids: string[], target: string) {
     }
   });
   if (migratedIds.length) {
+    const migratedIdSet = new Set(migratedIds);
     await syncRandomImages(migratedIds);
+    await invalidateImageLookupEntries(rows
+      .filter((row) => migratedIdSet.has(row.id))
+      .map((row) => ({ id: row.id, object_key: row.object_key })));
     await invalidateImageReadCaches();
   }
   return {

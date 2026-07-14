@@ -68,9 +68,9 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 
 | 文件 | 职责 |
 | --- | --- |
-| `storage/storage.ts` | 门面：`readObject` / `removeObject` / `copyObject` / `exists`、`publicImageUrls()`、`testStorageBackend()`、`ensureRuntimeDirectories()`。 |
+| `storage/storage.ts` | 门面：`openObject` / `removeObject` / `copyObject` / `exists`、`publicImageUrls()`、`testStorageBackend()`、`ensureRuntimeDirectories()`。 |
 | `storage/backend-config.ts` | S3 / WebDAV 配置 schema、`StorageConfig` / 输入类型、默认值和完整性校验。 |
-| `storage/backend-registry.ts` | `storage_backend` 数据库注册表、默认后端、CRUD、排序、启停、脱敏后台 DTO 与进程内 TTL 缓存；变更时同步失效 driver cache。 |
+| `storage/backend-registry.ts` | `storage_backend` 数据库注册表、默认后端、CRUD、排序、启停、脱敏后台 DTO 与进程内 TTL 缓存；变更时同步失效 driver cache，并通知公共图片 URL 读缓存失效。 |
 | `storage/maintenance-lock.ts` | 存储变更共享锁与维护独占锁，避免导入、重分类、迁移和全盘清理互相删除对象。 |
 | `storage/storage-backend.ts` | `driverFor(config)` 按配置签名缓存并返回 Local / S3 / WebDAV 驱动，避免热路径反复创建 S3/WebDAV client；链接图由图片层的 `is_link` 处理，无独立驱动。 |
 | `storage/local-backend.ts` | 本地磁盘后端（`/app/data/storage` 下 media / thumbs / _uploads / link），含空目录回收 `pruneEmptyDirs()`。 |
@@ -87,8 +87,8 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | --- | --- |
 | `images/service.ts` | 软删除 `deleteImage()`、改元数据 / 换分类 `updateImageMetadata()`（换分类＝移动对象键并同步 Redis 随机池，link 只移动缩略图）、单 / 批量迁移存储。 |
 | `images/read-models/` | 图片读取模型：`public-images.ts`（公共列表 / 详情与 Redis 缓存）、`admin-images.ts`（后台列表 / 详情）、`duplicates.ts`（MD5 判重）、`facets.ts`、`overview.ts`，以及复用的 `pagination.ts`；Redis miss 后按场景做同进程 in-flight 合并。 |
-| `images/image-cache.ts` | 图片读缓存：公共列表 generation、公共列表 / 公开详情缓存、后台概览缓存、原图直连探测缓存、对象键 / 缩略图键 / 图片 id lookup、MD5 判重缓存、画廊 facets 缓存与统一失效。 |
-| `images/serving.ts` | 存储对象、缩略图、link 与后台字节出口；集中处理外部回源代理、原图直连探测及其短 TTL 缓存、缓存策略和缩略图缺失时的乐观读取 / 补建。 |
+| `images/image-cache.ts` | 图片读缓存：公共列表 generation、公共列表 / 公开详情缓存、后台概览缓存、原图直连探测缓存、Redis 8 字段 TTL 的对象键 / 缩略图键 / 图片 id lookup、MD5 判重缓存，以及公共 generation / facets / 定向 lookup 分层失效。 |
+| `images/serving.ts` | 存储对象、缩略图、link 与后台字节出口；集中处理 Content-Length、ETag、单段 Range、外部回源代理、原图直连探测及其短 TTL 缓存、缓存策略和缩略图缺失时的乐观读取 / 补建。 |
 | `images/original-link.ts` | 原图入口判断工具：计算展示 URL、规范化比较 URL，并只在 `original` 为 HTTPS 且不同于展示图时开放原图按钮 / 跳转。 |
 | `images/presenter.ts` | `publicImage()` / `publicImages()` 把 DB 行变成后台可复用的完整图片视图、`publicImageDetail()`（公开详情字段白名单）、`publicImageCard()`（公共列表卡片白名单）、`adminImageView()`（后台投影：去 `ext`、已删除图改指鉴权字节端点）。缓存键与 lookup 预热归读取 / 缓存模块。 |
 | `images/processing.ts` | sharp 封装：图片格式 / 尺寸探测、缩略图、`transcodeStoredImage()`、`generateStoredThumbnail()`，以及运行时 Sharp 并发配置。 |
@@ -120,7 +120,7 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | 文件 | 职责 |
 | --- | --- |
 | `random/service.ts` | 编排一次随机：校验→解析主题 / 标签 / 作者别名→定候选轴→取最近已服务列表→Redis 池取→记录已服务 id。 |
-| `random/random-cache.ts` | Redis generation 随机池、axis/category/tag/author 集合与 `RandomCategoryCounts` 分类计数、随机池派生的画廊筛选轴、全量重建和增量同步；Redis 更新失败时排 `cache.rebuild`。 |
+| `random/random-cache.ts` | Redis generation 随机池、axis/category/tag/author 集合与 `RandomCategoryCounts` 分类计数、随机池派生的画廊筛选轴、跨实例单飞全量重建、增量同步及 Lua 合并读；Redis 更新失败时排 `cache.rebuild`。 |
 | `random/picker.ts` | `resolveCandidateAxes()`（按 UA 推设备）、`pickFromRedisPool()`（按 axis/category 计数加权选集合，tag/author 用 Redis 临时过滤集合，跳过最近项并保留 fallback）。 |
 | `random/dedupe.ts` | 短时不重复：`filterSignature()`、`recentlyServedIds()`、`rememberServedId()`（Redis LPUSH + LTRIM + EXPIRE）。 |
 | `random/query.ts` | 随机请求参数校验、主题 / 标签 / 作者选择子解析、`img-count` 统计数据。 |

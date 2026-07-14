@@ -3,7 +3,7 @@ import { ApiError } from "../core/http.ts";
 import { restoreImageFromTrash, restoreImagesFromTrash } from "./restore.ts";
 import { removeObject } from "../storage/storage.ts";
 import { thumbnailRef } from "../storage/image-paths.ts";
-import { invalidateImageReadCaches, invalidateMd5Cache, invalidateMd5Caches } from "./image-cache.ts";
+import { invalidateImageLookupEntries, invalidateImageReadCaches, invalidateMd5Cache, invalidateMd5Caches } from "./image-cache.ts";
 
 export async function restoreDeletedImage(id: string, missingIsError = true) {
   const result = await restoreImageFromTrash(id);
@@ -12,6 +12,7 @@ export async function restoreDeletedImage(id: string, missingIsError = true) {
     return false;
   }
   await invalidateMd5Cache(result.image.md5 ?? "");
+  await invalidateImageLookupEntries([result.image]);
   await invalidateImageReadCaches();
   return true;
 }
@@ -19,7 +20,10 @@ export async function restoreDeletedImage(id: string, missingIsError = true) {
 export async function batchRestoreImages(ids: string[]) {
   const restoredImages = await restoreImagesFromTrash(ids);
   await invalidateMd5Caches(restoredImages.map((image) => image.md5 ?? ""));
-  if (restoredImages.length) await invalidateImageReadCaches();
+  if (restoredImages.length) {
+    await invalidateImageLookupEntries(restoredImages);
+    await invalidateImageReadCaches();
+  }
   return {
     requested: ids.length,
     restored: restoredImages.length,
@@ -57,6 +61,7 @@ export async function purgeDeletedImages(ids?: string[]) {
   if (deletedIds.length) {
     await pool.query("DELETE FROM metadata WHERE id = ANY($1::uuid[]) AND status='deleted'", [deletedIds]);
     await invalidateMd5Caches(deletedRows.map((row) => row.md5));
+    await invalidateImageLookupEntries(deletedRows);
     await invalidateImageReadCaches();
   }
   return { requested: rows.length, deleted: deletedIds.length, failed };

@@ -4,6 +4,7 @@ import { compress } from "hono/compress";
 import { adminApiBasePath, appConfig } from "@imageshow/shared";
 import { getRuntimeConfig, onRuntimeConfigChange } from "./config/runtime-config-store.ts";
 import { configureSharpConcurrency } from "./images/processing.ts";
+import { invalidateImageReadCaches } from "./images/image-cache.ts";
 import { cleanupOrphanRawImports } from "./images/imports/temp-files.ts";
 import { initializeAdmin, pingDb, pool, runMigrations } from "./core/db.ts";
 import { pingRedis, redis } from "./core/redis-client.ts";
@@ -11,8 +12,9 @@ import { writeActiveServerPort } from "./core/listening-port.ts";
 import { logger } from "./core/logger.ts";
 import { auditAdminMutation } from "./core/audit-log.ts";
 import { ensureRuntimeDirectories } from "./storage/storage.ts";
-import { fail, noStoreCacheControl, requireAuth, requireCsrf, routeError, securityHeaders } from "./core/http.ts";
+import { appendVaryHeader, fail, noStoreCacheControl, requireAuth, requireCsrf, routeError, securityHeaders } from "./core/http.ts";
 import { limitApiRequestBody } from "./core/request-body-limit.ts";
+import { prepareCompressionThreshold } from "./core/compression-threshold.ts";
 import { registerAdminLogRoutes } from "./routes/admin-logs.ts";
 import { registerAdvancedConfigRoutes } from "./routes/advanced-config.ts";
 import { registerAdminImageRoutes } from "./routes/admin-images.ts";
@@ -33,6 +35,7 @@ import { registerSpaRoutes } from "./routes/spa.ts";
 import { registerImportRoutes } from "./routes/imports.ts";
 import { drainWorker, startWorker, stopWorker } from "./jobs/worker.ts";
 import { enforceThemeHostNavigation, isAllowedSiteHost, specialHost, themeFromHost } from "./themes/host.ts";
+import { onStorageBackendChange } from "./storage/backend-registry.ts";
 
 const app = new Hono();
 
@@ -47,7 +50,7 @@ app.use("*", async (c, next) => {
   }
   await next();
 });
-app.options("*", async () => new Response(null, { status: 204 }));
+app.options("*", async () => new Response(null, { status: 204, headers: { "Cache-Control": noStoreCacheControl } }));
 app.get("/robots.txt", serveRobotsTxt);
 registerDocsRoutes(app);
 
@@ -80,10 +83,21 @@ app.use("/original/*", mediaHostGuard);
 app.use("*", enforceThemeHostNavigation);
 
 app.use("/api/*", limitApiRequestBody);
-const apiCompress = compress();
+app.use("/api/*", async (c, next) => {
+  await next();
+  appendVaryHeader(c, "Accept-Encoding");
+});
+const apiCompress = compress({ threshold: 1024 });
 app.use("/api/*", async (c, next) => {
   if (new URL(c.req.url).pathname === `${adminApiBasePath}/imports/events`) return next();
-  return apiCompress(c, next);
+  let temporaryContentLength = false;
+  await apiCompress(c, async () => {
+    await next();
+    temporaryContentLength = await prepareCompressionThreshold(c, 1024);
+  });
+  if (temporaryContentLength && !c.res.headers.has("Content-Encoding")) {
+    c.res.headers.delete("Content-Length");
+  }
 });
 app.use("/api/*", async (c, next) => {
   await next();
@@ -115,6 +129,7 @@ registerSettingsRoutes(app);
 registerStorageRoutes(app);
 registerCheckRoutes(app);
 registerSpaRoutes(app);
+app.notFound(() => routeError({ status: 404, message: "Not Found" }));
 
 await ensureRuntimeDirectories();
 await cleanupOrphanRawImports(appConfig.uploadTtlSeconds * 1000);
@@ -124,6 +139,14 @@ await initializeAdmin();
 await pingRedis();
 configureSharpConcurrency();
 onRuntimeConfigChange(configureSharpConcurrency);
+let publicUrlConfigSignature = publicUrlConfigCacheSignature();
+onRuntimeConfigChange(() => {
+  const nextSignature = publicUrlConfigCacheSignature();
+  if (nextSignature === publicUrlConfigSignature) return;
+  publicUrlConfigSignature = nextSignature;
+  void invalidateImageReadCaches();
+});
+onStorageBackendChange(() => void invalidateImageReadCaches());
 startWorker();
 
 const serverPort = getRuntimeConfig().port;
@@ -152,3 +175,12 @@ async function shutdown(signal: string) {
 
 process.on("SIGTERM", () => void shutdown("SIGTERM"));
 process.on("SIGINT", () => void shutdown("SIGINT"));
+
+function publicUrlConfigCacheSignature() {
+  const { site } = getRuntimeConfig();
+  return JSON.stringify({
+    domain: site.domain,
+    static_subdomain: site.static_subdomain,
+    link_subdomain: site.link_subdomain
+  });
+}

@@ -2,12 +2,19 @@ import { createHash } from "node:crypto";
 import type { Redis } from "ioredis";
 import type { Brightness, Device } from "@imageshow/shared";
 import { pool } from "../core/db.ts";
-import { pingRedis, redis } from "../core/redis-client.ts";
+import { redis } from "../core/redis-client.ts";
+import { coalesce } from "../core/coalesce.ts";
 import { randomUuidV7 } from "../core/uuid.ts";
 
 export const RANDOM_CURRENT_KEY = "imageshow:random:current";
 const RANDOM_REVISION_KEY = "imageshow:random:version";
 const RANDOM_UPDATE_LOCK_KEY = "imageshow:random:update_lock";
+const RANDOM_REBUILD_LOCK_KEY = "imageshow:random:rebuild_lock";
+const RANDOM_REBUILD_REQUEST_KEY = "imageshow:random:rebuild_request";
+const RANDOM_REBUILD_COMPLETED_KEY = "imageshow:random:rebuild_completed";
+const RANDOM_REBUILD_LOCK_TTL_MS = 120_000;
+const RANDOM_REBUILD_WAIT_INTERVAL_MS = 100;
+const RANDOM_REBUILD_WAIT_ATTEMPTS = RANDOM_REBUILD_LOCK_TTL_MS / RANDOM_REBUILD_WAIT_INTERVAL_MS;
 export const GALLERY_FILTER_OPTIONS_KEY = "imageshow:gallery_filter_options";
 const RANDOM_OLD_GENERATION_TTL_SECONDS = 60 * 60;
 const RANDOM_FILTER_TTL_SECONDS = 90;
@@ -247,8 +254,7 @@ async function expireOldGeneration(generation: string | null) {
   await pipeline.exec();
 }
 
-export async function rebuildRandomPool(): Promise<RandomPoolSnapshot> {
-  await pingRedis();
+async function performRandomPoolRebuild(): Promise<RandomPoolSnapshot> {
   const previousGeneration = await redis.get(RANDOM_CURRENT_KEY).catch(() => null);
   const generation = randomUuidV7();
   const items = await readyRandomItems();
@@ -275,6 +281,119 @@ export async function rebuildRandomPool(): Promise<RandomPoolSnapshot> {
   return { generation, categoryCounts, themes };
 }
 
+async function releaseOwnedLock(key: string, token: string) {
+  const script = `
+    if redis.call("GET", KEYS[1]) == ARGV[1] then
+      return redis.call("DEL", KEYS[1])
+    end
+    return 0
+  `;
+  await redis.eval(script, 1, key, token).catch(() => undefined);
+}
+
+async function readRandomPoolSnapshot(): Promise<RandomPoolSnapshot | null> {
+  const result = await redis.eval(
+    `local generation = redis.call("GET", KEYS[1])
+     if not generation then return {} end
+     local raw = redis.call("GET", ARGV[1] .. generation .. ARGV[2])
+     if not raw then return { generation } end
+     return { generation, raw }`,
+    1,
+    RANDOM_CURRENT_KEY,
+    "imageshow:random:",
+    ":snapshot"
+  ) as string[];
+  const [generation, raw] = result;
+  if (!generation || !raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as { categoryCounts?: RandomCategoryCounts; themes?: string[] };
+    if (!parsed.categoryCounts || !Array.isArray(parsed.themes)) return null;
+    return { generation, categoryCounts: parsed.categoryCounts, themes: parsed.themes };
+  } catch {
+    return null;
+  }
+}
+
+function redisRevision(raw: string | null) {
+  const revision = Number(raw ?? "0");
+  return Number.isSafeInteger(revision) && revision >= 0 ? revision : 0;
+}
+
+async function rebuildRandomPoolWhileLocked(token: string) {
+  const renewal = setInterval(() => {
+    void redis.eval(
+      `if redis.call("GET", KEYS[1]) == ARGV[1] then
+         return redis.call("PEXPIRE", KEYS[1], ARGV[2])
+       end
+       return 0`,
+      1,
+      RANDOM_REBUILD_LOCK_KEY,
+      token,
+      RANDOM_REBUILD_LOCK_TTL_MS
+    ).catch(() => undefined);
+  }, 30_000);
+  renewal.unref();
+
+  try {
+    for (;;) {
+      // Capture the newest rebuild request before reading PostgreSQL. Any mutation that
+      // requests another rebuild while this pass is running increments the revision,
+      // forcing one more pass before the distributed lock is released.
+      const targetRevision = redisRevision(await redis.get(RANDOM_REBUILD_REQUEST_KEY));
+      const snapshot = await performRandomPoolRebuild();
+      await redis.set(RANDOM_REBUILD_COMPLETED_KEY, String(targetRevision));
+      const latestRevision = redisRevision(await redis.get(RANDOM_REBUILD_REQUEST_KEY));
+      if (latestRevision <= targetRevision) return snapshot;
+    }
+  } finally {
+    clearInterval(renewal);
+    await releaseOwnedLock(RANDOM_REBUILD_LOCK_KEY, token);
+  }
+}
+
+async function processPendingRandomPoolRebuilds() {
+  for (let attempt = 0; attempt < RANDOM_REBUILD_WAIT_ATTEMPTS; attempt += 1) {
+    const [snapshot, requestedRaw, completedRaw] = await Promise.all([
+      readRandomPoolSnapshot().catch(() => null),
+      redis.get(RANDOM_REBUILD_REQUEST_KEY),
+      redis.get(RANDOM_REBUILD_COMPLETED_KEY)
+    ]);
+    const requestedRevision = redisRevision(requestedRaw);
+    const completedRevision = redisRevision(completedRaw);
+    if (snapshot && completedRevision >= requestedRevision) {
+      return await readRandomPoolSnapshot() ?? snapshot;
+    }
+
+    const token = randomUuidV7();
+    const locked = await redis.set(
+      RANDOM_REBUILD_LOCK_KEY,
+      token,
+      "PX",
+      RANDOM_REBUILD_LOCK_TTL_MS,
+      "NX"
+    );
+    if (locked) return rebuildRandomPoolWhileLocked(token);
+    await new Promise((resolve) => setTimeout(resolve, RANDOM_REBUILD_WAIT_INTERVAL_MS));
+  }
+
+  await scheduleRandomRebuild();
+  throw redisUnavailable();
+}
+
+export async function rebuildRandomPool(options: { requireFresh?: boolean } = {}): Promise<RandomPoolSnapshot> {
+  const requireFresh = options.requireFresh ?? true;
+  const requiredRevision = requireFresh
+    ? await redis.incr(RANDOM_REBUILD_REQUEST_KEY)
+    : redisRevision(await redis.get(RANDOM_REBUILD_REQUEST_KEY));
+
+  for (;;) {
+    const snapshot = await coalesce("random-pool-rebuild", processPendingRandomPoolRebuilds);
+    if (!requireFresh) return snapshot;
+    const completedRevision = redisRevision(await redis.get(RANDOM_REBUILD_COMPLETED_KEY));
+    if (completedRevision >= requiredRevision) return await readRandomPoolSnapshot() ?? snapshot;
+  }
+}
+
 async function scheduleRandomRebuild() {
   await pool.query(
     `INSERT INTO background_job(id, type, status)
@@ -294,20 +413,13 @@ async function acquireRandomUpdateLock() {
 }
 
 async function releaseRandomUpdateLock(token: string) {
-  const script = `
-    if redis.call("GET", KEYS[1]) == ARGV[1] then
-      return redis.call("DEL", KEYS[1])
-    end
-    return 0
-  `;
-  await redis.eval(script, 1, RANDOM_UPDATE_LOCK_KEY, token).catch(() => undefined);
+  await releaseOwnedLock(RANDOM_UPDATE_LOCK_KEY, token);
 }
 
 export async function syncRandomImages(ids: string[]) {
   const uniqueIds = [...new Set(ids.filter(Boolean))];
   if (!uniqueIds.length) return;
   try {
-    await pingRedis();
     let generation = await redis.get(RANDOM_CURRENT_KEY);
     if (!generation) {
       await rebuildRandomPool();
@@ -376,23 +488,7 @@ export const syncRandomImage = (id: string) => syncRandomImages([id]);
 
 export async function getRandomPoolSnapshot(): Promise<RandomPoolSnapshot> {
   try {
-    await pingRedis();
-    const generation = await redis.get(RANDOM_CURRENT_KEY);
-    if (!generation) return rebuildRandomPool();
-    const raw = await redis.get(randomSnapshotKey(generation));
-    if (!raw) return rebuildRandomPool();
-    const parsed = JSON.parse(raw) as {
-      categoryCounts?: RandomCategoryCounts;
-      themes?: string[];
-    };
-    if (!parsed.categoryCounts || !Array.isArray(parsed.themes)) {
-      return rebuildRandomPool();
-    }
-    return {
-      generation,
-      categoryCounts: parsed.categoryCounts,
-      themes: parsed.themes
-    };
+    return await readRandomPoolSnapshot() ?? await rebuildRandomPool({ requireFresh: false });
   } catch {
     throw redisUnavailable();
   }
@@ -404,7 +500,6 @@ export async function getRandomCategoryCounts() {
 
 export async function getGalleryFilterOptions() {
   try {
-    await pingRedis();
     const raw = await redis.get(GALLERY_FILTER_OPTIONS_KEY);
     if (raw) return JSON.parse(raw) as GalleryFilterOptions;
     return filterOptionsFromCategoryCounts(
@@ -418,18 +513,16 @@ export async function getGalleryFilterOptions() {
   }
 }
 
-export async function sampleRandomSet(key: string, count: number): Promise<string[]> {
-  await pingRedis();
-  const result = await redis.srandmember(key, Math.max(1, count));
-  return Array.isArray(result) ? result : result ? [result] : [];
-}
-
-export async function getRandomPoolItems(ids: string[], generation?: string): Promise<RandomPoolItem[]> {
-  if (!ids.length) return [];
-  await pingRedis();
-  const activeGeneration = generation ?? await redis.get(RANDOM_CURRENT_KEY);
-  if (!activeGeneration) return [];
-  const raws = await redis.hmget(randomItemKey(activeGeneration), ...ids);
+export async function sampleRandomPoolItems(setKey: string, count: number, generation: string): Promise<RandomPoolItem[]> {
+  const raws = await redis.eval(
+    `local ids = redis.call("SRANDMEMBER", KEYS[1], ARGV[1])
+     if #ids == 0 then return {} end
+     return redis.call("HMGET", KEYS[2], unpack(ids))`,
+    2,
+    setKey,
+    randomItemKey(generation),
+    Math.max(1, count)
+  ) as Array<string | null>;
   return raws.map(parseRandomItem).filter((item): item is RandomPoolItem => Boolean(item));
 }
 
@@ -442,15 +535,19 @@ export async function buildRandomFilterSet(input: {
   authorInclude: string[];
   authorExclude: string[];
 }): Promise<{ key: string; count: number }> {
-  await pingRedis();
   const revision = await redis.get(RANDOM_REVISION_KEY).catch(() => "0") ?? "0";
   const signature = `${input.signature}|r=${revision}`;
   const finalKey = randomFilterKey(input.generation, signature, "final");
-  if (await redis.exists(finalKey)) {
-    const count = await redis.scard(finalKey);
-    await redis.expire(finalKey, RANDOM_FILTER_TTL_SECONDS);
-    return { key: finalKey, count };
-  }
+  const cachedCount = Number(await redis.eval(
+    `if redis.call("EXISTS", KEYS[1]) == 0 then return -1 end
+     local count = redis.call("SCARD", KEYS[1])
+     redis.call("EXPIRE", KEYS[1], ARGV[1])
+     return count`,
+    1,
+    finalKey,
+    RANDOM_FILTER_TTL_SECONDS
+  ));
+  if (cachedCount >= 0) return { key: finalKey, count: cachedCount };
 
   const tempKeys: string[] = [];
   let current = randomFilterKey(input.generation, signature, "base");

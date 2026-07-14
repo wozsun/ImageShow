@@ -1,4 +1,4 @@
-import type { Readable } from "node:stream";
+import { Readable } from "node:stream";
 import { XMLParser } from "fast-xml-parser";
 import { ApiError } from "../core/http.ts";
 import { getInputImageMaxBytes } from "../config/app-settings.ts";
@@ -11,6 +11,7 @@ import type {
   StorageDriver,
   StorageSelfTest
 } from "./storage-backend.ts";
+import { assertSingleByteRangeSyntax, parseSingleByteRange, totalSizeFromContentRange } from "./byte-range.ts";
 
 const PROPFIND_BODY = '<?xml version="1.0" encoding="utf-8"?><propfind xmlns="DAV:"><prop><resourcetype/></prop></propfind>';
 const WEBDAV_TIMEOUT_MS = 15_000;
@@ -160,6 +161,18 @@ export class WebdavBackend implements StorageDriver {
     return `${segs.length ? `${this.base}/${segs.map(encodeURIComponent).join("/")}` : this.base}/`;
   }
 
+  private async objectSize(prefix: StoragePrefix, key: string) {
+    const response = await webdavFetch(this.objectUrl(prefix, key), {
+      method: "HEAD",
+      headers: this.auth()
+    });
+    if (!response.ok) return undefined;
+    const contentLength = response.headers.get("content-length");
+    if (contentLength === null) return undefined;
+    const size = Number(contentLength);
+    return Number.isSafeInteger(size) && size >= 0 ? size : undefined;
+  }
+
   private async ensureParent(prefix: StoragePrefix, key: string) {
     const parts = storageObjectName(prefix, key).split("/").slice(0, -1);
     const segs = [...trimSlashes(this.config.webdav.root_path).split("/"), ...parts].filter(Boolean);
@@ -177,14 +190,51 @@ export class WebdavBackend implements StorageDriver {
     throw new ApiError(502, "storage_read_failed", `WebDAV HEAD failed (${res.status})`);
   }
 
-  async openRead(prefix: StoragePrefix, key: string): Promise<OpenedRead> {
-    const res = await webdavFetch(this.objectUrl(prefix, key), { headers: this.auth() });
+  async openRead(prefix: StoragePrefix, key: string, range?: string): Promise<OpenedRead> {
+    assertSingleByteRangeSyntax(range);
+    const res = await webdavFetch(this.objectUrl(prefix, key), { headers: { ...this.auth(), ...(range ? { Range: range } : {}) } });
     if (!res.ok || !res.body) {
+      const responseTotalSize = res.status === 416
+        ? totalSizeFromContentRange(res.headers.get("content-range"))
+        : undefined;
       await res.body?.cancel().catch(() => undefined);
-      throw new ApiError(res.status === 404 ? 404 : 502, "storage_read_failed", `WebDAV GET failed (${res.status})`);
+      const status = res.status === 404 ? 404 : res.status === 416 ? 416 : 502;
+      const totalSize = status === 416
+        ? responseTotalSize ?? await this.objectSize(prefix, key).catch(() => undefined)
+        : undefined;
+      throw new ApiError(
+        status,
+        status === 416 ? "range_not_satisfiable" : "storage_read_failed",
+        `WebDAV GET failed (${res.status})`,
+        totalSize === undefined ? {} : { total_size: totalSize }
+      );
     }
-    const size = Number(res.headers.get("content-length"));
-    return { body: nodeReadableFromWeb(res.body), size: Number.isFinite(size) && size >= 0 ? size : undefined, backend: "webdav" };
+    const rawContentLength = res.headers.get("content-length");
+    const size = rawContentLength === null ? Number.NaN : Number(rawContentLength);
+    const normalizedSize = Number.isFinite(size) && size >= 0 ? size : undefined;
+    const contentRange = res.status === 206 ? res.headers.get("content-range") ?? undefined : undefined;
+    const totalSize = totalSizeFromContentRange(contentRange) ?? normalizedSize;
+    const body = nodeReadableFromWeb(res.body);
+    if (range && res.status === 200) {
+      const buffer = await streamToBuffer(body, await getInputImageMaxBytes());
+      const parsedRange = parseSingleByteRange(range, buffer.length);
+      if (!parsedRange) throw new ApiError(416, "range_not_satisfiable", "Requested range is not satisfiable", { total_size: buffer.length });
+      const rangedBody = buffer.subarray(parsedRange.start, parsedRange.end + 1);
+      return {
+        body: Readable.from(rangedBody),
+        size: rangedBody.length,
+        totalSize: buffer.length,
+        contentRange: `bytes ${parsedRange.start}-${parsedRange.end}/${buffer.length}`,
+        backend: "webdav"
+      };
+    }
+    return {
+      body,
+      size: normalizedSize,
+      totalSize: Number.isFinite(totalSize) ? totalSize : undefined,
+      contentRange,
+      backend: "webdav"
+    };
   }
 
   async readBuffer(prefix: StoragePrefix, key: string) {
@@ -269,15 +319,6 @@ export class WebdavBackend implements StorageDriver {
       throw new ApiError(502, "storage_transfer_failed", `WebDAV COPY failed without replacing the existing target (${status || "network error"})`);
     }
     throw new ApiError(502, "storage_transfer_failed", `WebDAV COPY failed (${status || "network error"})`);
-  }
-
-  async readObject(prefix: ReadablePrefix, key: string): Promise<Readable> {
-    const res = await webdavFetch(this.objectUrl(prefix, key), { headers: this.auth() });
-    if (!res.ok || !res.body) {
-      await res.body?.cancel().catch(() => undefined);
-      throw new ApiError(res.status === 404 ? 404 : 502, "storage_read_failed", `WebDAV GET failed (${res.status})`);
-    }
-    return nodeReadableFromWeb(res.body);
   }
 
   async listKeys(prefix: StoragePrefix) {

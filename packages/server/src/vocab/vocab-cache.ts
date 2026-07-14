@@ -1,6 +1,6 @@
 import { appConfig } from "@imageshow/shared";
 import { pool } from "../core/db.ts";
-import { pingRedis, redis } from "../core/redis-client.ts";
+import { redis } from "../core/redis-client.ts";
 import { GALLERY_FACETS_KEY } from "../images/image-cache.ts";
 
 const THEME_VOCAB_KEY = "imageshow:theme_vocab";
@@ -20,7 +20,6 @@ async function loadAuthorVocab(): Promise<AuthorVocabEntry[]> {
 
 async function cachedVocab<T>(key: string, load: () => Promise<T>): Promise<T> {
   try {
-    await pingRedis();
     const raw = await redis.get(key);
     if (raw) return JSON.parse(raw) as T;
     const rows = await load();
@@ -45,7 +44,6 @@ export function getAuthorVocab(): Promise<AuthorVocabEntry[]> {
 
 async function invalidateVocab(vocabKey: string) {
   try {
-    await pingRedis();
     await redis.del(vocabKey, GALLERY_FACETS_KEY);
   } catch {
     // 旧词表会按 TTL 自然过期。

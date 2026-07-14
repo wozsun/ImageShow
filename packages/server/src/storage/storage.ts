@@ -59,8 +59,8 @@ export async function copyObject(fromPrefix: CopyPrefix, fromKey: string, toPref
     await driver.writeBuffer(toPrefix, toKey, await driver.readBuffer(fromPrefix, fromKey), contentTypeForKey(toKey));
   }
 }
-export async function readObject(prefix: ReadablePrefix, key: string, slug?: string) {
-  return driverFor(await resolveConfig(slug)).readObject(prefix, key);
+export async function openObject(prefix: ReadablePrefix, key: string, slug?: string, range?: string) {
+  return driverFor(await resolveConfig(slug)).openRead(prefix, key, range);
 }
 export async function listStorageKeys(prefix: StoragePrefix, slug?: string) {
   return driverFor(await resolveConfig(slug)).listKeys(prefix);

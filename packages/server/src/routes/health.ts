@@ -17,11 +17,10 @@ async function readinessHandler(c: Context) {
   if (c.req.method !== "GET") return routeError({ status: 405, message: "Method Not Allowed" });
   if (new URL(c.req.url).search) return routeError({ status: 403, message: "Forbidden: Query parameters are not allowed on this route" });
   try {
-    await pingDb();
-    await pingRedis();
     await Promise.all([
-      pool.query("SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1"),
-      pool.query("SELECT 1")
+      pingDb(),
+      pingRedis(),
+      pool.query("SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1")
     ]);
     c.header("Cache-Control", noStoreCacheControl);
     return c.json({ message: "ImageShow is healthy", ok: true, status: "healthy" });

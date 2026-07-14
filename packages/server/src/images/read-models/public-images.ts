@@ -152,7 +152,6 @@ export async function listPublicImages(
     }
 
     const page = await fetchPublicImageCardPage(where, params, limit, query.cursor);
-    await warmImageLookups(page.rows);
     const fresh: PublicImageListPayload = {
       items: page.items,
       limit,
@@ -160,7 +159,10 @@ export async function listPublicImages(
       next_cursor: page.nextCursor,
       total: null
     };
-    await setPublicImagesCache(cacheKey, fresh);
+    await Promise.all([
+      warmImageLookups(page.rows),
+      setPublicImagesCache(cacheKey, fresh)
+    ]);
     return fresh;
   });
   return withShuffle(query, payload);

@@ -4,7 +4,7 @@ import { pool, withAdvisoryLock, withTransaction } from "../core/db.ts";
 import { ApiError } from "../core/http.ts";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { mapWithConcurrency } from "../core/concurrency.ts";
-import { invalidateImageReadCaches } from "../images/image-cache.ts";
+import { invalidateAllImageLookups, invalidateImageReadCaches } from "../images/image-cache.ts";
 import { rebuildRandomPool } from "../random/random-cache.ts";
 import { invalidateThemeVocab } from "../vocab/vocab-cache.ts";
 import { linkThumbnailKey, storageObjectKey, thumbnailObjectKey } from "../storage/image-paths.ts";
@@ -132,7 +132,10 @@ export async function deleteTheme(slug: string) {
   await invalidateThemeVocab();
   if (result.moved) {
     await rebuildRandomPool();
-    await invalidateImageReadCaches();
+    await Promise.all([
+      invalidateAllImageLookups(),
+      invalidateImageReadCaches()
+    ]);
   }
 }
 
@@ -149,7 +152,10 @@ export async function deleteThemes(slugs: string[]) {
   await invalidateThemeVocab();
   if (moved) {
     await rebuildRandomPool();
-    await invalidateImageReadCaches();
+    await Promise.all([
+      invalidateAllImageLookups(),
+      invalidateImageReadCaches()
+    ]);
   }
   return { deleted };
 }

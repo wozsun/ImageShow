@@ -3,7 +3,8 @@ import type { RuntimeConfig } from "@imageshow/shared";
 import CodeMirror, { EditorView } from "@uiw/react-codemirror";
 import { json } from "@codemirror/lang-json";
 import { api } from "../../../lib/api/client.js";
-import { adminApiBasePath, queryKeys } from "../../../lib/constants.js";
+import { invalidateRuntimeData } from "../../../lib/api/query-invalidation.js";
+import { adminApiBasePath } from "../../../lib/constants.js";
 import { errorMessage } from "../../../lib/ui/formatters.js";
 import type { RuntimeConfigChangeSummary } from "../../../lib/types.js";
 import { Icon } from "../../../components/icon/Icon.js";
@@ -133,12 +134,7 @@ export function RuntimeConfigEditor({ reloadToken }: { reloadToken: number }) {
       const formatted = formatConfig(response.config);
       setText(formatted);
       setBaseline(formatted);
-      await Promise.all([
-        client.invalidateQueries({ queryKey: queryKeys.settings }),
-        client.invalidateQueries({ queryKey: queryKeys.siteConfig }),
-        client.invalidateQueries({ queryKey: queryKeys.me }),
-        client.invalidateQueries({ queryKey: ["storage-options"] })
-      ]);
+      await invalidateRuntimeData(client);
       const restartRequired = response.changes.restart_required.length > 0;
       setFeedback({
         text: restartRequired ? "配置已保存；连接或端口变更需重启容器" : "完整配置已保存并应用",

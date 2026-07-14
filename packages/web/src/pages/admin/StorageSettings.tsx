@@ -9,6 +9,7 @@ import type { StorageBackendAdmin } from "../../lib/types.js";
 import { ActionFeedback, type ActionFeedbackState } from "../../components/feedback/ActionFeedback.js";
 import { StorageBackendModal } from "./StorageBackendModal.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
+import { invalidateStorageData } from "../../lib/api/query-invalidation.js";
 
 // 存储管理：命名存储后端的注册表 CRUD（卡片列表 + 拖动排序），新建/编辑走 StorageBackendModal。
 export function StorageSettings() {
@@ -62,10 +63,7 @@ function StorageBackendsManager() {
     try {
       await action();
       setFeedback({ scope: "storage", text: success, status: "success" });
-      await Promise.all([
-        client.invalidateQueries({ queryKey: ["storage-backends"] }),
-        client.invalidateQueries({ queryKey: ["storage-options"] })
-      ]);
+      await invalidateStorageData(client);
       return true;
     } catch (error) {
       setFeedback({ scope: "storage", text: errorMessage(error), status: "error" });

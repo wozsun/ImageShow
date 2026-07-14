@@ -3,6 +3,7 @@ import { routeError } from "../core/http.ts";
 import { isRandomBrightness, randomMethods, randomRequestDevices, validateRandomQuery } from "./query.ts";
 import { pickFromRedisPool, resolveCandidateAxes, type PickedImage } from "./picker.ts";
 import { filterSignature, recentlyServedIds, rememberServedId } from "./dedupe.ts";
+import { getRandomPoolSnapshot } from "./random-cache.ts";
 import { resolveThemeTermMap } from "../themes/query.ts";
 import { resolveTagTermMap } from "../tags/query.ts";
 import { resolveAuthorTermMap } from "../authors/query.ts";
@@ -25,17 +26,27 @@ export async function pickRandom(url: URL, userAgent = "", clientId = ""): Promi
     return routeError({ status: 400, message: "Bad Request: Invalid device" }, { field: "d" });
   }
 
-  let resolvedUrl = await withResolvedSelectors(url, "t", resolveThemeTermMap);
-  resolvedUrl = await withResolvedSelectors(resolvedUrl, "tag", resolveTagTermMap);
-  resolvedUrl = await withResolvedSelectors(resolvedUrl, "a", resolveAuthorTermMap);
+  const [themeUrl, tagUrl, authorUrl] = await Promise.all([
+    withResolvedSelectors(url, "t", resolveThemeTermMap),
+    withResolvedSelectors(url, "tag", resolveTagTermMap),
+    withResolvedSelectors(url, "a", resolveAuthorTermMap)
+  ]);
+  const resolvedUrl = new URL(url);
+  for (const [key, source] of [["t", themeUrl], ["tag", tagUrl], ["a", authorUrl]] as const) {
+    resolvedUrl.searchParams.delete(key);
+    for (const value of source.searchParams.getAll(key)) resolvedUrl.searchParams.append(key, value);
+  }
   const axes = resolveCandidateAxes(requestedDevice, requestedBrightness, userAgent);
 
   const signature = filterSignature(resolvedUrl);
-  const recent = await recentlyServedIds(clientId, signature);
 
   let picked: PickedImage | Response | null;
   try {
-    picked = await pickFromRedisPool(resolvedUrl, method, axes, recent);
+    const [recent, snapshot] = await Promise.all([
+      recentlyServedIds(clientId, signature),
+      getRandomPoolSnapshot()
+    ]);
+    picked = await pickFromRedisPool(resolvedUrl, method, axes, recent, snapshot);
   } catch (error) {
     if ((error as Error).name !== "redis_unavailable") throw error;
     return routeError({ status: 503, message: "Service Unavailable: Random pool is unavailable" });

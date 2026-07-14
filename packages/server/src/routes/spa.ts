@@ -7,7 +7,8 @@ import { fileURLToPath } from "node:url";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { siteConfigPayload } from "../config/app-settings.ts";
 import { immutableCacheControl, noStoreCacheControl, publicDocumentCacheControl, publicStaticCacheControl, spaDocumentHeaders } from "../core/http.ts";
-import { existingThemeFromHost, rootSiteUrl, themeFromHost } from "../themes/host.ts";
+import { conditionalStaticResponse } from "../core/static-conditional.ts";
+import { existingThemeFromHost, isValidatedThemeRequest, rootSiteUrl, themeFromHost } from "../themes/host.ts";
 
 const publicDir = join(dirname(fileURLToPath(import.meta.url)), "../public");
 
@@ -18,18 +19,20 @@ export function registerSpaRoutes(app: Hono) {
       ? c.req.path.startsWith("/assets/brand/") ? publicStaticCacheControl : immutableCacheControl
       : noStoreCacheControl);
   });
+  app.use("/assets/*", conditionalStaticResponse);
   app.use("/assets/*", serveStatic({ root: publicDir, precompressed: true }));
   app.use("/favicon.ico", async (c, next) => {
     await next();
     c.header("Cache-Control", c.res.status < 400 ? publicStaticCacheControl : noStoreCacheControl);
   });
+  app.use("/favicon.ico", conditionalStaticResponse);
   app.get("/favicon.ico", serveStatic({ path: join(publicDir, "favicon.ico") }));
 
   app.get("/", async (c) => {
     const hostHeader = c.req.header("host") ?? "";
     const requestedTheme = themeFromHost(hostHeader);
     if (!requestedTheme) return spaHandler(c);
-    return await existingThemeFromHost(hostHeader) ? spaHandler(c) : new Response(null, {
+    return isValidatedThemeRequest(c) || await existingThemeFromHost(hostHeader) ? spaHandler(c) : new Response(null, {
       status: 302,
       headers: { Location: rootSiteUrl(c), "Cache-Control": noStoreCacheControl }
     });
@@ -86,7 +89,7 @@ async function themeAwareSpaHandler(c: Context) {
   const hostHeader = c.req.header("host") ?? "";
   const requestedTheme = themeFromHost(hostHeader);
   if (!requestedTheme) return spaHandler(c);
-  return await existingThemeFromHost(hostHeader) ? spaHandler(c) : new Response(null, {
+  return isValidatedThemeRequest(c) || await existingThemeFromHost(hostHeader) ? spaHandler(c) : new Response(null, {
     status: 302,
     headers: { Location: rootSiteUrl(c), "Cache-Control": noStoreCacheControl }
   });

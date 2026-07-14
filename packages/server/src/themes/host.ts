@@ -1,8 +1,10 @@
 import type { Context, Next } from "hono";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { getGalleryFilterOptions } from "../random/random-cache.ts";
+import { noStoreCacheControl } from "../core/http.ts";
 
 type HostParts = { hostname: string; port: string };
+const validatedThemeRequests = new WeakSet<Request>();
 
 function reservedPrefixes() {
   const site = getRuntimeConfig().site;
@@ -91,13 +93,24 @@ export async function enforceThemeHostNavigation(c: Context, next: Next) {
   if (isThemeInternalPath(url.pathname)) return next();
 
   const existingTheme = await existingThemeFromHost(hostHeader);
-  if (!existingTheme) return c.redirect(rootSiteUrl(c), 302);
+  if (!existingTheme) return new Response(null, {
+    status: 302,
+    headers: { Location: rootSiteUrl(c), "Cache-Control": noStoreCacheControl }
+  });
+  validatedThemeRequests.add(c.req.raw);
 
   if (url.pathname !== "/" || url.search) {
     const protocol = c.req.header("x-forwarded-proto") || url.protocol.replace(":", "");
-    return c.redirect(`${protocol}://${hostHeader.split(",")[0]}/`, 302);
+    return new Response(null, {
+      status: 302,
+      headers: { Location: `${protocol}://${hostHeader.split(",")[0]}/`, "Cache-Control": noStoreCacheControl }
+    });
   }
   return next();
+}
+
+export function isValidatedThemeRequest(c: Context) {
+  return validatedThemeRequests.has(c.req.raw);
 }
 
 function isThemeInternalPath(pathname: string) {

@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { immutableCacheControl, noStoreCacheControl, publicDocsCacheControl, routeError } from "../core/http.ts";
+import { conditionalStaticResponse } from "../core/static-conditional.ts";
 import { specialHost } from "../themes/host.ts";
 
 const docsDir = join(dirname(fileURLToPath(import.meta.url)), "../docs");
@@ -33,6 +34,9 @@ export function registerDocsRoutes(app: Hono) {
     if (specialHost(c.req.header("host") ?? "") !== "docs") return next();
 
     if (!getRuntimeConfig().site.docs_enabled) return routeError({ status: 404, message: "Not Found" });
-    return docsStatic(c, async () => {});
+    return conditionalStaticResponse(c, async () => {
+      const response = await docsStatic(c, async () => {});
+      if (response) c.res = response;
+    });
   });
 }

@@ -1,11 +1,10 @@
 import { appConfig } from "@imageshow/shared";
 import {
   buildRandomFilterSet,
-  getRandomPoolItems,
   getRandomPoolSnapshot,
   randomAxisSetKey,
   randomCategorySetKey,
-  sampleRandomSet,
+  sampleRandomPoolItems,
   type RandomPoolItem,
   type RandomPoolSnapshot
 } from "./random-cache.ts";
@@ -92,9 +91,8 @@ async function pickFromSet(generation: string, setKey: string, method: "proxy" |
   const batchSize = Math.max(8, Math.min(64, appConfig.randomDedupe.historySize + 1));
   let fallback: RandomPoolItem | null = null;
   for (let attempt = 0; attempt < appConfig.randomDedupe.maxAttempts; attempt += 1) {
-    const ids = await sampleRandomSet(setKey, batchSize);
-    if (!ids.length) return fallback ? { ...fallback, method } : null;
-    const items = await getRandomPoolItems(ids, generation);
+    const items = await sampleRandomPoolItems(setKey, batchSize, generation);
+    if (!items.length) return fallback ? { ...fallback, method } : null;
     for (const item of items) {
       if (!fallback) fallback = item;
       if (!recent.has(item.id)) return { ...item, method };
@@ -103,8 +101,8 @@ async function pickFromSet(generation: string, setKey: string, method: "proxy" |
   return fallback ? { ...fallback, method } : null;
 }
 
-export async function pickFromRedisPool(url: URL, method: "proxy" | "redirect", axes: CandidateAxes, recent: Set<string> = new Set()): Promise<PickedImage | Response | null> {
-  const snapshot = await getRandomPoolSnapshot();
+export async function pickFromRedisPool(url: URL, method: "proxy" | "redirect", axes: CandidateAxes, recent: Set<string> = new Set(), prefetchedSnapshot?: RandomPoolSnapshot): Promise<PickedImage | Response | null> {
+  const snapshot = prefetchedSnapshot ?? await getRandomPoolSnapshot();
   const themeCandidates = parseThemeSelectors(url.searchParams, snapshot.themes);
   if (themeCandidates instanceof Response) return themeCandidates;
 

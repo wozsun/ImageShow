@@ -32,6 +32,7 @@ export const publicDocsCacheControl = "public, max-age=0, s-maxage=600, stale-wh
 export const publicStaticCacheControl = "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800, stale-if-error=604800";
 export const publicProxyImageCacheControl = "public, max-age=86400, s-maxage=31536000, stale-while-revalidate=604800, stale-if-error=2592000";
 export const publicProxyFallbackThumbCacheControl = "public, max-age=604800, s-maxage=604800";
+export const publicRedirectCacheControl = "public, max-age=300, s-maxage=3600, stale-while-revalidate=3600, stale-if-error=86400";
 const publicApiCacheControl = "public, max-age=0, s-maxage=30, stale-while-revalidate=30, stale-if-error=30";
 export const publicListCacheControl = publicApiCacheControl;
 export const publicMetadataCacheControl = publicApiCacheControl;
@@ -67,6 +68,9 @@ export function errorMessage(err: unknown): string {
 export function fail(c: Context, error: unknown) {
   c.header("Cache-Control", noStoreCacheControl);
   if (error instanceof ApiError) {
+    if (error.status === 416 && typeof (error.details as { total_size?: unknown })?.total_size === "number") {
+      c.header("Content-Range", `bytes */${(error.details as { total_size: number }).total_size}`);
+    }
     return c.json({ ok: false, code: error.code, error: error.message, details: error.details }, error.status as never);
   }
   const anyError = error as { name?: string; message?: string };
@@ -117,11 +121,22 @@ function sameOrigin(c: Context) {
 }
 
 export function blockCrossSiteFetch(c: Context, next: Next) {
+  appendVaryHeader(c, "Sec-Fetch-Site");
   const site = c.req.header("sec-fetch-site");
   if (site === "cross-site" || site === "same-site") {
     throw new ApiError(403, "cross_origin_forbidden", "Cross-origin request forbidden");
   }
   return next();
+}
+
+export function appendVaryHeader(c: Context, ...names: string[]) {
+  const existing = c.res.headers.get("Vary")
+    ?.split(",")
+    .map((name) => name.trim())
+    .filter(Boolean) ?? [];
+  const normalized = new Map(existing.map((name) => [name.toLowerCase(), name]));
+  for (const name of names) normalized.set(name.toLowerCase(), name);
+  c.header("Vary", [...normalized.values()].join(", "));
 }
 
 export async function login(c: Context, username: string, password: string) {

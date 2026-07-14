@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api/client.js";
-import { adminApiBasePath, queryKeys } from "../../lib/constants.js";
+import { adminApiBasePath } from "../../lib/constants.js";
 import { errorMessage } from "../../lib/ui/formatters.js";
 import type { AdvancedConfigPreview } from "../../lib/types.js";
 import { Icon } from "../../components/icon/Icon.js";
@@ -12,6 +12,7 @@ import {
 import { ConfirmDialog } from "../../components/feedback/ConfirmDialog.js";
 import { ConfigPackageImportDialog } from "./advanced-config/ConfigPackageImportDialog.js";
 import { RuntimeConfigEditor } from "./advanced-config/RuntimeConfigEditor.js";
+import { invalidateRuntimeData } from "../../lib/api/query-invalidation.js";
 
 const maxPackageBytes = 1024 * 1024;
 const packageFileReadOverheadBytes = 64 * 1024;
@@ -99,13 +100,7 @@ export function AdvancedConfigPage() {
           body: JSON.stringify({ package: selectedPackage, slug_mappings: slugMappings })
         }
       );
-      await Promise.all([
-        client.invalidateQueries({ queryKey: queryKeys.settings }),
-        client.invalidateQueries({ queryKey: queryKeys.siteConfig }),
-        client.invalidateQueries({ queryKey: queryKeys.me }),
-        client.invalidateQueries({ queryKey: ["storage-backends"] }),
-        client.invalidateQueries({ queryKey: ["storage-options"] })
-      ]);
+      await invalidateRuntimeData(client);
       setRuntimeConfigReloadToken((current) => current + 1);
       const count = response.result.imported_backends.length;
       setFeedback({ text: `配置导入成功，新增 ${count} 个存储后端`, status: "success" });

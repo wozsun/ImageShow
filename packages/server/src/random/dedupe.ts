@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { appConfig } from "@imageshow/shared";
-import { pingRedis, redis } from "../core/redis-client.ts";
+import { redis } from "../core/redis-client.ts";
 
 const RECENT_PREFIX = "imageshow:random_recent:";
 
@@ -30,7 +30,6 @@ export function filterSignature(url: URL): string {
 export async function recentlyServedIds(clientId: string, signature: string): Promise<Set<string>> {
   if (!clientId) return new Set();
   try {
-    await pingRedis();
     const ids = await redis.lrange(recentKey(clientId, signature), 0, appConfig.randomDedupe.historySize - 1);
     return new Set(ids);
   } catch {
@@ -41,7 +40,6 @@ export async function recentlyServedIds(clientId: string, signature: string): Pr
 export async function rememberServedId(clientId: string, signature: string, id: string): Promise<void> {
   if (!clientId || !id) return;
   try {
-    await pingRedis();
     const key = recentKey(clientId, signature);
     await redis.pipeline()
       .lpush(key, id)
