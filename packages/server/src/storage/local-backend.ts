@@ -1,5 +1,4 @@
-import { createReadStream } from "node:fs";
-import { copyFile, mkdir, readFile, readdir, rm, rmdir, stat, writeFile, access } from "node:fs/promises";
+import { copyFile, mkdir, open, readFile, readdir, rm, rmdir, writeFile, access } from "node:fs/promises";
 import { dirname, join, relative, sep } from "node:path";
 import { runtimePaths } from "../config/bootstrap-env.ts";
 import { ApiError } from "../core/http.ts";
@@ -11,6 +10,7 @@ import type {
   StorageSelfTest
 } from "./storage-backend.ts";
 import { parseSingleByteRange } from "./byte-range.ts";
+import { localObjectEtag } from "./object-validator.ts";
 
 /** @internal Exported only for local storage error verification. */
 export function isMissingFileError(error: unknown) {
@@ -30,20 +30,35 @@ export class LocalBackend implements StorageDriver {
 
   async openRead(prefix: StoragePrefix, key: string, rangeHeader?: string): Promise<OpenedRead> {
     const path = safeStoragePath(prefix, key);
-    const totalSize = await stat(path).then((value) => value.size).catch((error: unknown) => {
+    const handle = await open(path, "r").catch((error: unknown) => {
       if (isMissingFileError(error)) throw new ApiError(404, "storage_object_not_found", "Object not found");
       throw error;
     });
-    const range = parseSingleByteRange(rangeHeader, totalSize);
-    if (!range) return { body: createReadStream(path), size: totalSize, totalSize, backend: "local" };
-    const size = range.end - range.start + 1;
-    return {
-      body: createReadStream(path, range),
-      size,
-      totalSize,
-      contentRange: `bytes ${range.start}-${range.end}/${totalSize}`,
-      backend: "local"
-    };
+    try {
+      const stats = await handle.stat({ bigint: true });
+      const totalSize = Number(stats.size);
+      if (!Number.isSafeInteger(totalSize) || totalSize < 0) {
+        throw new ApiError(502, "storage_read_failed", "Object size is not supported");
+      }
+      const range = parseSingleByteRange(rangeHeader, totalSize);
+      const common = {
+        totalSize,
+        etag: localObjectEtag(stats),
+        lastModified: new Date(Number(stats.mtimeMs)).toUTCString(),
+        backend: "local" as const
+      };
+      if (!range) return { body: handle.createReadStream(), size: totalSize, ...common };
+      const size = range.end - range.start + 1;
+      return {
+        body: handle.createReadStream(range),
+        size,
+        contentRange: `bytes ${range.start}-${range.end}/${totalSize}`,
+        ...common
+      };
+    } catch (error) {
+      await handle.close().catch(() => undefined);
+      throw error;
+    }
   }
 
   async readBuffer(prefix: StoragePrefix, key: string) {

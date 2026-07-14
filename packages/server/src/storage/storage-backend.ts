@@ -11,6 +11,8 @@ export type OpenedRead = {
   size: number | undefined;
   totalSize: number | undefined;
   contentRange?: string;
+  etag?: string;
+  lastModified?: string;
   backend: StorageType;
 };
 

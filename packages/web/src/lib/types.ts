@@ -200,6 +200,7 @@ export type ImportJob = {
   // 已成功创建的 import_session id；SSE 状态监听和提交只使用真实会话 id。
   sessionId?: string;
   imageTime?: string;
+  batchTime?: string;
   manifestLine?: number;
   manifestPosition?: number;
   duplicatePolicy?: "confirm" | "skip";

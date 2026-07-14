@@ -1,11 +1,16 @@
 import type { Context, Next } from "hono";
 
-function staticEtag(headers: Headers) {
+/** @internal Exported only for static Range validator verification. */
+export function staticEtag(headers: Headers) {
   const modified = headers.get("Last-Modified");
-  const length = headers.get("Content-Length");
-  if (!modified || !length) return "";
+  const contentRange = headers.get("Content-Range");
+  const rangeTotal = contentRange?.match(/^bytes\s+\d+-\d+\/(\d+)$/i)?.[1];
+  const length = rangeTotal ?? headers.get("Content-Length");
+  const modifiedTime = modified ? new Date(modified).getTime() : Number.NaN;
+  const resourceLength = length === null ? Number.NaN : Number(length);
+  if (!Number.isFinite(modifiedTime) || !Number.isSafeInteger(resourceLength) || resourceLength < 0) return "";
   const encoding = headers.get("Content-Encoding") ?? "identity";
-  return `W/\"${new Date(modified).getTime().toString(16)}-${Number(length).toString(16)}-${encoding}\"`;
+  return `W/\"${modifiedTime.toString(16)}-${resourceLength.toString(16)}-${encoding}\"`;
 }
 
 function noneMatchMatches(header: string, etag: string) {

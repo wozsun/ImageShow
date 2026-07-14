@@ -28,6 +28,7 @@ export function jsonlImportJobs(
   defaultMode: LinkImportMode,
   defaultStorageSlug: string
 ): ImportJob[] {
+  const batchTime = new Date().toISOString();
   return items.map((item) => ({
     id: browserUuid(),
     attemptKey: browserUuid(),
@@ -44,6 +45,7 @@ export function jsonlImportJobs(
     url: item.original,
     storageSlug: item.storage_slug ?? defaultStorageSlug,
     imageTime: item.image_time,
+    batchTime,
     manifestLine: item.line,
     manifestPosition: item.manifest_position,
     duplicatePolicy: "skip",

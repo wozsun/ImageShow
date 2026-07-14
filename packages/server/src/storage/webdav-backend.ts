@@ -1,10 +1,9 @@
-import { Readable } from "node:stream";
 import { XMLParser } from "fast-xml-parser";
 import { ApiError } from "../core/http.ts";
 import { getInputImageMaxBytes } from "../config/app-settings.ts";
 import type { StorageConfig } from "./backend-config.ts";
 import { contentTypeForKey, storageObjectName, type ReadablePrefix, type StoragePrefix } from "./object-keys.ts";
-import { nodeReadableFromWeb, streamToBuffer } from "./stream-buffer.ts";
+import { nodeReadableFromWeb, sliceReadable, streamToBuffer } from "./stream-buffer.ts";
 import type {
   CopyPrefix,
   OpenedRead,
@@ -12,6 +11,7 @@ import type {
   StorageSelfTest
 } from "./storage-backend.ts";
 import { assertSingleByteRangeSyntax, parseSingleByteRange, totalSizeFromContentRange } from "./byte-range.ts";
+import { normalizeObjectEtag } from "./object-validator.ts";
 
 const PROPFIND_BODY = '<?xml version="1.0" encoding="utf-8"?><propfind xmlns="DAV:"><prop><resourcetype/></prop></propfind>';
 const WEBDAV_TIMEOUT_MS = 15_000;
@@ -86,12 +86,19 @@ function responseWithTimeout(response: Response, timer: ReturnType<typeof setTim
 async function webdavFetch(input: string, init: RequestInit) {
   const method = String(init.method ?? "GET").toUpperCase();
   const streamsResponseBody = method === "GET" || method === "PROPFIND";
+  const headers = new Headers(init.headers);
+  if (method === "HEAD" || (method === "GET" && !headers.has("Range"))) {
+    // undici 会自动解压响应，但保留源站压缩表示的 Content-Length。对象读取必须
+    // 使用 identity，确保响应长度、Range 总长度和实际流字节描述同一表示；
+    // Range GET 由 Node 26 fetch 自动附加 identity，避免形成重复请求头。
+    headers.set("Accept-Encoding", "identity");
+  }
   for (let attempt = 0; attempt < WEBDAV_RETRY_ATTEMPTS; attempt += 1) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), WEBDAV_TIMEOUT_MS);
     let handedOffTimer = false;
     try {
-      const response = await fetch(input, { ...init, signal: controller.signal });
+      const response = await fetch(input, { ...init, headers, signal: controller.signal });
       if (!shouldRetryWebdavStatus(response.status) || attempt === WEBDAV_RETRY_ATTEMPTS - 1) {
         if (!streamsResponseBody) {
           await response.body?.cancel().catch(() => undefined);
@@ -213,18 +220,42 @@ export class WebdavBackend implements StorageDriver {
     const size = rawContentLength === null ? Number.NaN : Number(rawContentLength);
     const normalizedSize = Number.isFinite(size) && size >= 0 ? size : undefined;
     const contentRange = res.status === 206 ? res.headers.get("content-range") ?? undefined : undefined;
+    if (res.status === 206 && !contentRange) {
+      await res.body.cancel().catch(() => undefined);
+      throw new ApiError(502, "storage_read_failed", "WebDAV returned 206 without Content-Range");
+    }
     const totalSize = totalSizeFromContentRange(contentRange) ?? normalizedSize;
     const body = nodeReadableFromWeb(res.body);
     if (range && res.status === 200) {
-      const buffer = await streamToBuffer(body, await getInputImageMaxBytes());
-      const parsedRange = parseSingleByteRange(range, buffer.length);
-      if (!parsedRange) throw new ApiError(416, "range_not_satisfiable", "Requested range is not satisfiable", { total_size: buffer.length });
-      const rangedBody = buffer.subarray(parsedRange.start, parsedRange.end + 1);
+      const ignoredRangeTotalSize = normalizedSize ?? await this.objectSize(prefix, key).catch(() => undefined);
+      if (ignoredRangeTotalSize === undefined) {
+        return {
+          body,
+          size: normalizedSize,
+          totalSize: normalizedSize,
+          etag: normalizeObjectEtag(res.headers.get("etag")),
+          lastModified: res.headers.get("last-modified") ?? undefined,
+          backend: "webdav"
+        };
+      }
+      let parsedRange;
+      try {
+        parsedRange = parseSingleByteRange(range, ignoredRangeTotalSize);
+      } catch (error) {
+        body.destroy();
+        throw error;
+      }
+      if (!parsedRange) {
+        body.destroy();
+        throw new ApiError(416, "range_not_satisfiable", "Requested range is not satisfiable", { total_size: ignoredRangeTotalSize });
+      }
       return {
-        body: Readable.from(rangedBody),
-        size: rangedBody.length,
-        totalSize: buffer.length,
-        contentRange: `bytes ${parsedRange.start}-${parsedRange.end}/${buffer.length}`,
+        body: sliceReadable(body, parsedRange.start, parsedRange.end),
+        size: parsedRange.end - parsedRange.start + 1,
+        totalSize: ignoredRangeTotalSize,
+        contentRange: `bytes ${parsedRange.start}-${parsedRange.end}/${ignoredRangeTotalSize}`,
+        etag: normalizeObjectEtag(res.headers.get("etag")),
+        lastModified: res.headers.get("last-modified") ?? undefined,
         backend: "webdav"
       };
     }
@@ -233,6 +264,8 @@ export class WebdavBackend implements StorageDriver {
       size: normalizedSize,
       totalSize: Number.isFinite(totalSize) ? totalSize : undefined,
       contentRange,
+      etag: normalizeObjectEtag(res.headers.get("etag")),
+      lastModified: res.headers.get("last-modified") ?? undefined,
       backend: "webdav"
     };
   }

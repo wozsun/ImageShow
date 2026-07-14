@@ -32,6 +32,7 @@ export function linkImportJobs(
   fillOriginalUrl: boolean,
   storageSlug: string
 ) {
+  const batchTime = new Date().toISOString();
   return parseImportUrls(urls).map((url, manifestPosition): ImportJob => ({
     id: browserUuid(),
     attemptKey: browserUuid(),
@@ -47,6 +48,7 @@ export function linkImportJobs(
     duplicateDecision: "upload",
     url,
     storageSlug,
+    batchTime,
     manifestPosition
   }));
 }

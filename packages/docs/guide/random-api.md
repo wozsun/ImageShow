@@ -13,9 +13,9 @@
 
 `t` / `tag` / `a` 均可填 slug 或显示名（自动解析为 slug）。基础随机、主题筛选、标签筛选和作者筛选都在 Redis 随机池中完成：先按 axis/category 计数加权选集合，`tag` / `a` 再通过短期 Redis 过滤集合做包含或排除。
 
-正常 `/random` 请求不依赖 PostgreSQL，不使用 `ORDER BY random()`，也不使用 count + offset。快照 generation 与内容通过单次 Redis 脚本读取，随机集合抽样与 item hash 读取也合并为一次往返；主题 / 标签 / 作者显示名并行解析。Redis 随机池不可用时返回 503；后台数据库 / Redis 检查读取随机池时会在缓存缺失时自动重建，重建由进程内合并与 Redis 分布式锁保证跨实例单飞，并用请求 / 完成 revision 保证重建期间发生的新写入在释放锁前再触发一轮；写路径增量刷新失败时也会排队 `cache.rebuild` 任务从 PostgreSQL 全量重建。
+正常 `/random` 请求不依赖 PostgreSQL，不使用 `ORDER BY random()`，也不使用 count + offset。快照 generation 与内容通过单次 Redis 脚本读取，随机集合抽样与 item hash 读取也合并为一次往返；主题 / 标签 / 作者显示名并行解析。Redis 随机池不可用时返回 503；后台数据库 / Redis 检查读取随机池时会在缓存缺失时自动重建，重建由进程内合并与 Redis 分布式锁保证跨实例单飞。全量与 `syncRandomImages` 共用 mutation revision，只有完成 PostgreSQL 快照后仍通过 Lua 原子校验的 generation 才会发布；写路径增量刷新失败时排队 `cache.rebuild` 从 PostgreSQL 重建。
 
-`m=proxy` 直接回源图片字节并附带 `X-Image-Info` 头；`m=redirect` 返回 302 跳转到图片的公开 URL。
+`m=proxy` 直接回源图片字节并附带 `X-Image-Info` 头；由于每次请求都会重新抽图，它不声明 `Accept-Ranges`。`m=redirect` 返回 302 跳转到图片的公开 URL。
 
 **外链图（is_link）的返回方式**：与普通图一样遵循设置页默认值，显式 `m=` 始终优先（外链图不再恒定走代理）。区别只在“图片公开 URL”指向哪里——外链图的公开 URL 是 `link.<域名>/media/<id>.<ext>`，而非外部主机。
 

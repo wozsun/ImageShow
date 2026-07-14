@@ -3,14 +3,14 @@ import type { Redis } from "ioredis";
 import type { Brightness, Device } from "@imageshow/shared";
 import { pool } from "../core/db.ts";
 import { redis } from "../core/redis-client.ts";
+import { execRedisPipeline } from "../core/redis-pipeline.ts";
 import { coalesce } from "../core/coalesce.ts";
 import { randomUuidV7 } from "../core/uuid.ts";
 
 export const RANDOM_CURRENT_KEY = "imageshow:random:current";
-const RANDOM_REVISION_KEY = "imageshow:random:version";
+const RANDOM_MUTATION_REVISION_KEY = "imageshow:random:version";
 const RANDOM_UPDATE_LOCK_KEY = "imageshow:random:update_lock";
 const RANDOM_REBUILD_LOCK_KEY = "imageshow:random:rebuild_lock";
-const RANDOM_REBUILD_REQUEST_KEY = "imageshow:random:rebuild_request";
 const RANDOM_REBUILD_COMPLETED_KEY = "imageshow:random:rebuild_completed";
 const RANDOM_REBUILD_LOCK_TTL_MS = 120_000;
 const RANDOM_REBUILD_WAIT_INTERVAL_MS = 100;
@@ -18,6 +18,17 @@ const RANDOM_REBUILD_WAIT_ATTEMPTS = RANDOM_REBUILD_LOCK_TTL_MS / RANDOM_REBUILD
 export const GALLERY_FILTER_OPTIONS_KEY = "imageshow:gallery_filter_options";
 const RANDOM_OLD_GENERATION_TTL_SECONDS = 60 * 60;
 const RANDOM_FILTER_TTL_SECONDS = 90;
+
+/** @internal Exported only for atomic generation publication verification. */
+export const RANDOM_GENERATION_PUBLISH_SCRIPT = `
+  local currentRevision = tonumber(redis.call("GET", KEYS[2]) or "0")
+  if currentRevision ~= tonumber(ARGV[1]) then return { 0, "" } end
+  local previousGeneration = redis.call("GET", KEYS[1]) or ""
+  redis.call("SET", KEYS[1], ARGV[2])
+  redis.call("SET", KEYS[3], ARGV[1])
+  redis.call("SET", KEYS[4], ARGV[3])
+  return { 1, previousGeneration }
+`;
 
 export type RandomCategoryCounts = Record<string, Record<string, Record<string, number>>>;
 export type GalleryFilterOptions = { devices: string[]; brightnesses: string[]; themes: string[] };
@@ -224,7 +235,8 @@ function queuePoolMembership(
 function queueSnapshot(
   pipeline: ReturnType<Redis["pipeline"]>,
   generation: string,
-  categoryCounts: RandomCategoryCounts
+  categoryCounts: RandomCategoryCounts,
+  updateGalleryOptions = true
 ) {
   const filterOptions = filterOptionsFromCategoryCounts(categoryCounts);
   const redisCounts = redisCountsFromCategoryCounts(categoryCounts);
@@ -237,7 +249,9 @@ function queueSnapshot(
   if (countEntries.length) pipeline.hset(randomCountsKey(generation), ...countEntries);
   pipeline.del(randomThemesKey(generation));
   if (filterOptions.themes.length) pipeline.sadd(randomThemesKey(generation), ...filterOptions.themes);
-  pipeline.set(GALLERY_FILTER_OPTIONS_KEY, JSON.stringify(filterOptions));
+  if (updateGalleryOptions) {
+    pipeline.set(GALLERY_FILTER_OPTIONS_KEY, JSON.stringify(filterOptions));
+  }
 }
 
 async function expireOldGeneration(generation: string | null) {
@@ -251,11 +265,13 @@ async function expireOldGeneration(generation: string | null) {
     if (key.startsWith(generationPrefix)) pipeline.expire(key, RANDOM_OLD_GENERATION_TTL_SECONDS);
   }
   pipeline.expire(manifest, RANDOM_OLD_GENERATION_TTL_SECONDS);
-  await pipeline.exec();
+  await execRedisPipeline(pipeline);
 }
 
-async function performRandomPoolRebuild(): Promise<RandomPoolSnapshot> {
-  const previousGeneration = await redis.get(RANDOM_CURRENT_KEY).catch(() => null);
+async function performRandomPoolRebuild(targetRevision: number): Promise<{
+  published: boolean;
+  snapshot: RandomPoolSnapshot;
+}> {
   const generation = randomUuidV7();
   const items = await readyRandomItems();
   const categoryCounts: RandomCategoryCounts = {};
@@ -271,14 +287,25 @@ async function performRandomPoolRebuild(): Promise<RandomPoolSnapshot> {
     }
     pipeline.hset(randomItemKey(generation), ...Object.entries(itemValues).flatMap(([key, value]) => [key, value]));
   }
-  queueSnapshot(pipeline, generation, categoryCounts);
+  queueSnapshot(pipeline, generation, categoryCounts, false);
   pipeline.sadd(randomManifestKey(generation), ...keys);
-  pipeline.set(RANDOM_CURRENT_KEY, generation);
-  pipeline.incr(RANDOM_REVISION_KEY);
-  await pipeline.exec();
-  await expireOldGeneration(previousGeneration);
+  await execRedisPipeline(pipeline);
   const themes = filterOptionsFromCategoryCounts(categoryCounts).themes;
-  return { generation, categoryCounts, themes };
+  const snapshot = { generation, categoryCounts, themes };
+  const publication = await redis.eval(
+    RANDOM_GENERATION_PUBLISH_SCRIPT,
+    4,
+    RANDOM_CURRENT_KEY,
+    RANDOM_MUTATION_REVISION_KEY,
+    RANDOM_REBUILD_COMPLETED_KEY,
+    GALLERY_FILTER_OPTIONS_KEY,
+    String(targetRevision),
+    generation,
+    JSON.stringify(filterOptionsFromCategoryCounts(categoryCounts))
+  ) as [number, string];
+  const published = Number(publication[0]) === 1;
+  await expireOldGeneration(published ? publication[1] || null : generation);
+  return { published, snapshot };
 }
 
 async function releaseOwnedLock(key: string, token: string) {
@@ -336,14 +363,11 @@ async function rebuildRandomPoolWhileLocked(token: string) {
 
   try {
     for (;;) {
-      // Capture the newest rebuild request before reading PostgreSQL. Any mutation that
-      // requests another rebuild while this pass is running increments the revision,
-      // forcing one more pass before the distributed lock is released.
-      const targetRevision = redisRevision(await redis.get(RANDOM_REBUILD_REQUEST_KEY));
-      const snapshot = await performRandomPoolRebuild();
-      await redis.set(RANDOM_REBUILD_COMPLETED_KEY, String(targetRevision));
-      const latestRevision = redisRevision(await redis.get(RANDOM_REBUILD_REQUEST_KEY));
-      if (latestRevision <= targetRevision) return snapshot;
+      // 所有全量与增量变更共享同一 revision。构建完成后只有 revision 仍未变化，
+      // Lua 才会原子切换 current generation；否则丢弃未发布 generation 并重做。
+      const targetRevision = redisRevision(await redis.get(RANDOM_MUTATION_REVISION_KEY));
+      const rebuilt = await performRandomPoolRebuild(targetRevision);
+      if (rebuilt.published) return rebuilt.snapshot;
     }
   } finally {
     clearInterval(renewal);
@@ -355,7 +379,7 @@ async function processPendingRandomPoolRebuilds() {
   for (let attempt = 0; attempt < RANDOM_REBUILD_WAIT_ATTEMPTS; attempt += 1) {
     const [snapshot, requestedRaw, completedRaw] = await Promise.all([
       readRandomPoolSnapshot().catch(() => null),
-      redis.get(RANDOM_REBUILD_REQUEST_KEY),
+      redis.get(RANDOM_MUTATION_REVISION_KEY),
       redis.get(RANDOM_REBUILD_COMPLETED_KEY)
     ]);
     const requestedRevision = redisRevision(requestedRaw);
@@ -383,8 +407,8 @@ async function processPendingRandomPoolRebuilds() {
 export async function rebuildRandomPool(options: { requireFresh?: boolean } = {}): Promise<RandomPoolSnapshot> {
   const requireFresh = options.requireFresh ?? true;
   const requiredRevision = requireFresh
-    ? await redis.incr(RANDOM_REBUILD_REQUEST_KEY)
-    : redisRevision(await redis.get(RANDOM_REBUILD_REQUEST_KEY));
+    ? await redis.incr(RANDOM_MUTATION_REVISION_KEY)
+    : redisRevision(await redis.get(RANDOM_MUTATION_REVISION_KEY));
 
   for (;;) {
     const snapshot = await coalesce("random-pool-rebuild", processPendingRandomPoolRebuilds);
@@ -420,9 +444,12 @@ export async function syncRandomImages(ids: string[]) {
   const uniqueIds = [...new Set(ids.filter(Boolean))];
   if (!uniqueIds.length) return;
   try {
+    // 数据库变更已提交后先登记 mutation；任何正在构建的 generation 都会在发布前
+    // 看到 revision 变化并重读 PostgreSQL，避免覆盖这次增量更新。
+    await redis.incr(RANDOM_MUTATION_REVISION_KEY);
     let generation = await redis.get(RANDOM_CURRENT_KEY);
     if (!generation) {
-      await rebuildRandomPool();
+      await rebuildRandomPool({ requireFresh: false });
       return;
     }
     const token = await acquireRandomUpdateLock();
@@ -433,7 +460,7 @@ export async function syncRandomImages(ids: string[]) {
     try {
       generation = await redis.get(RANDOM_CURRENT_KEY);
       if (!generation) {
-        await rebuildRandomPool();
+        await rebuildRandomPool({ requireFresh: false });
         return;
       }
       const [snapshotRaw, oldItemsRaw, currentItems] = await Promise.all([
@@ -442,14 +469,14 @@ export async function syncRandomImages(ids: string[]) {
         readyRandomItems(uniqueIds)
       ]);
       if (!snapshotRaw) {
-        await rebuildRandomPool();
+        await rebuildRandomPool({ requireFresh: false });
         return;
       }
       const snapshot = JSON.parse(snapshotRaw) as {
         categoryCounts?: RandomCategoryCounts;
       };
       if (!snapshot.categoryCounts) {
-        await rebuildRandomPool();
+        await rebuildRandomPool({ requireFresh: false });
         return;
       }
       const categoryCounts = snapshot.categoryCounts;
@@ -474,8 +501,7 @@ export async function syncRandomImages(ids: string[]) {
       }
       queueSnapshot(pipeline, generation, categoryCounts);
       if (touchedKeys.size) pipeline.sadd(randomManifestKey(generation), ...touchedKeys);
-      pipeline.incr(RANDOM_REVISION_KEY);
-      await pipeline.exec();
+      await execRedisPipeline(pipeline);
     } finally {
       await releaseRandomUpdateLock(token);
     }
@@ -535,7 +561,7 @@ export async function buildRandomFilterSet(input: {
   authorInclude: string[];
   authorExclude: string[];
 }): Promise<{ key: string; count: number }> {
-  const revision = await redis.get(RANDOM_REVISION_KEY).catch(() => "0") ?? "0";
+  const revision = await redis.get(RANDOM_MUTATION_REVISION_KEY).catch(() => "0") ?? "0";
   const signature = `${input.signature}|r=${revision}`;
   const finalKey = randomFilterKey(input.generation, signature, "final");
   const cachedCount = Number(await redis.eval(
@@ -593,6 +619,6 @@ export async function buildRandomFilterSet(input: {
   const pipeline = redis.pipeline();
   for (const key of tempKeys) pipeline.expire(key, RANDOM_FILTER_TTL_SECONDS);
   pipeline.expire(finalKey, RANDOM_FILTER_TTL_SECONDS);
-  await pipeline.exec();
+  await execRedisPipeline(pipeline);
   return { key: finalKey, count };
 }

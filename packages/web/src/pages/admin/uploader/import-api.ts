@@ -87,6 +87,7 @@ export function createImportSession(input: ImageDraft & {
   size?: number;
   source_url?: string;
   image_time?: string;
+  batch_time?: string;
   manifest_position?: number;
   idempotency_key: string;
   storage_slug: string;

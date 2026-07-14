@@ -4,7 +4,7 @@
 
 ## 三种图片导入模式
 
-三种模式共用一个 `ImportJob` 队列、任务卡片、元数据编辑、最终 MD5 判重、SSE 状态推送、取消/重试和批量提交界面。底层统一为 `import_session`：`mode=upload` 保存浏览器上传文件，`mode=download` 由服务端下载并保存，`mode=proxy` 只保存缩略图与外部链接。前端 `attemptKey` 只负责幂等和防旧请求污染，最终会话 / 图片 UUIDv7 由服务端按 `image_time` 生成：当前时间 ID 直接使用 Node.js 原生 UUIDv7，历史图片则保留原生随机位并替换 UUIDv7 的 48 位时间戳。会话创建时写入 `request_hash`，同一 `idempotency_key` 只有在模式、URL、大小、存储后端、规范化图片时间、JSONL 临时清单位置和初始元数据摘要一致时才复用。
+三种模式共用一个 `ImportJob` 队列、任务卡片、元数据编辑、最终 MD5 判重、SSE 状态推送、取消/重试和批量提交界面。底层统一为 `import_session`：`mode=upload` 保存浏览器上传文件，`mode=download` 由服务端下载并保存，`mode=proxy` 只保存缩略图与外部链接。前端 `attemptKey` 只负责幂等和防旧请求污染，最终会话 / 图片 UUIDv7 由服务端按 `image_time` 生成：当前时间 ID 直接使用 Node.js 原生 UUIDv7，历史图片则保留原生随机位并替换 UUIDv7 的 48 位时间戳。会话创建接口兼容可选 `batch_time` 与既有 `manifest_position`：没有显式 `image_time` 时使用批次共享时间，并把稳定输入位置写入 UUIDv7。会话创建时写入 `request_hash`，同一 `idempotency_key` 只有在模式、URL、大小、存储后端、规范化图片时间、JSONL 临时清单位置和初始元数据摘要一致时才复用。
 
 ```text
 模式 1：本地上传
@@ -44,15 +44,16 @@ URL ──► 立即创建卡片
 
 ### URL 列表与 JSONL 清单
 
-链接导入按钮提供 URL 列表和 JSONL 清单两种输入方式，二者最终都进入上面的 download / proxy 生命周期。URL 列表按 `link_image.url_list_max_items` 限制单次输入数量，保持原有逐 URL 导入体验，`image_time` 由后端使用会话创建时间。JSONL 每行一个对象，正式字段为 `original`、`source`、`image_time`、`author`、`tags`、`mode`、`title`、`description`、`theme`、`device`、`brightness`、`storage_slug`；`original` 同时作为下载 URL 和元数据原图 URL，`source` 仅表示来源页面。
+链接导入按钮提供 URL 列表和 JSONL 清单两种输入方式，二者最终都进入上面的 download / proxy 生命周期。URL 列表按 `link_image.url_list_max_items` 限制单次输入数量，保持原有逐 URL 导入体验；前端为一次选择生成共享 `batch_time`，所以并发创建会话不会按请求到达时间打乱输入顺序。JSONL 每行一个对象，正式字段为 `original`、`source`、`image_time`、`author`、`tags`、`mode`、`title`、`description`、`theme`、`device`、`brightness`、`storage_slug`；`original` 同时作为下载 URL 和元数据原图 URL，`source` 仅表示来源页面。
 
 JSONL 先请求管理端解析接口，服务端按 `link_image.jsonl_max_items` 限制数量、逐行严格校验并规范化 `image_time`。合法行才创建 `ImportJob`，错误行保留行号、截断后的原文预览和错误原因。字段优先级为“JSONL 行内字段 > 应用到全部默认值 > 系统默认值”；行内 `tags: []` 是显式空标签，不合并默认标签。JSONL 任务默认跳过重复图：判重发生在 prepare 完成并取得转码后最终 MD5 之后；图库重复会显示已有图片的缩略图、标题和分类，点击进入图片详情。JSONL、普通 URL 和代理链接在批内重复时均显示首个任务的转码结果、`original`、JSONL 行号（若有）和分类，点击打开该处理结果预览；随后重复任务立即 cancel 会话、清理自身暂存并记为“已跳过”，不会进入 commit。普通 URL 和代理链接与图库已有图片重复时仍等待用户确认，本地上传的重复处理不变。批内首个任务的预览若在提交后切换为持久图片地址，重复卡片会同步更新；清除首个已完成任务时仍保留该持久快照，提前移除未完成的首个任务则把重复卡片标为不可预览。
 
 解析接口还会按非空记录生成从 0 开始的临时清单位置，普通 URL、代理
 URL 和本地批量文件也会按各自经过校验、去重后的输入顺序生成批内位置。
-服务端把位置直接写入 UUIDv7 的 `rand_a`，因此现有
-`ORDER BY image_time DESC, id DESC` 在 `image_time` 相同时会让靠后的输入
-排序更新。`image_time` 始终拥有更高优先级；该位置不写入数据库字段，也
+同一批任务共享 `batch_time`，服务端在没有显式 `image_time` 时用它作为图片
+时间，并把稳定的 `manifest_position` 直接写入 UUIDv7 的 `rand_a`。因此并发
+会话请求仍会在现有 `ORDER BY image_time DESC, id DESC` 下让靠后的输入排序
+更新。显式 `image_time` 始终拥有更高优先级；该位置不写入数据库字段，也
 不保证跨批次相同时间的人工顺序。JSONL 和 URL 单批默认上限 100，低于
 `rand_a` 的 4096 个可用位置。
 
@@ -219,16 +220,16 @@ lock 串行执行，避免并发写入互相覆盖配置快照。导入时先保
 
 ## 缓存策略
 
-PostgreSQL 是真相源，Redis 是可丢弃的加速层：随机池、画廊筛选、公共列表、公开详情、后台概览、原图直连探测、MD5 判重与对象键 / 缩略图键 / 图片 id lookup 走缓存；写路径按“公共列表 generation / facets / 定向 lookup 字段”分别失效，避免一次图片修改清空全部 lookup，只有会批量改写对象键和 link 缩略图键的主题迁移清空三个 lookup namespace。lookup 使用 Redis 8 hash 字段级 TTL，不会因其他图片回填而延长旧字段寿命。域名、静态 / link 子域或存储公开 URL 变化时也会提升公共读缓存 generation。Redis 不可用或 lookup JSON 损坏时资源出口回退 PostgreSQL。随机 API 的正常路径依赖 Redis 随机池，避免 PostgreSQL 随机排序或 count+offset；随机池冷启动全量重建使用进程内合并和 Redis 分布式锁，同一时刻只有一个实例查询 PostgreSQL 并发布新 generation。每次强制重建先递增请求 revision，持锁实例发布后写入完成 revision；重建期间出现的新写入会让持锁实例在释放锁前再执行一轮，避免返回与写入竞态的旧 generation。
+PostgreSQL 18 是真相源，Redis 8 是可丢弃的加速层：随机池、画廊筛选、公共列表、公开详情、后台概览、原图直连探测、MD5 判重与对象键 / 缩略图键 / 图片 id lookup 走缓存；写路径按“公共列表 generation / facets / 定向 lookup 字段”分别失效，避免一次图片修改清空全部 lookup，只有会批量改写对象键和 link 缩略图键的主题迁移清空三个 lookup namespace。lookup 使用 `HSETEX` 在单条命令中原子写入一个或多个字段值及其 TTL，不保留 `HSET` 与 `HEXPIRE` 之间的中间状态。域名、静态 / link 子域或存储公开 URL 变化时也会提升公共读缓存 generation。Redis 不可用或 lookup JSON 损坏时资源出口回退 PostgreSQL。随机 API 的正常路径依赖 Redis 随机池，避免 PostgreSQL 随机排序或 count+offset；随机池冷启动全量重建使用进程内合并和 Redis 分布式锁，同一时刻只有一个实例查询 PostgreSQL 并发布新 generation。全量重建与 `syncRandomImages` 共用 mutation revision；持锁实例完成 PostgreSQL 快照后通过 Lua 原子校验 revision、切换 generation、记录完成 revision 与发布画廊筛选项，revision 已变化则丢弃未发布 generation 并重做。
 
 HTTP 缓存按 CDN 友好但不泄露私有数据分层：
 
-- `/assets/*` 的 Vite 构建产物和稳定的 `/media/*`、`/thumbs/*` 图片对象使用一年 `immutable`；`/assets/brand/*`、`/favicon.ico` 不是 hash 路径，只给短浏览器缓存和较长 CDN 缓存。构建会为可压缩静态文本生成 Brotli / gzip 版本，服务端按 `Accept-Encoding` 选择并附带 `Vary`，同时支持 ETag / Last-Modified 条件请求。存储后端的公开 URL 可能被管理员修改，因此指向该 URL 的 302 只短期缓存；缩略图缺失时临时回退原图也不使用 immutable。
+- `/assets/*` 的 Vite 构建产物和稳定的 `/media/*`、`/thumbs/*` 图片对象使用一年 `immutable`；`/assets/brand/*`、`/favicon.ico` 不是 hash 路径，只给短浏览器缓存和较长 CDN 缓存。构建会为可压缩静态文本生成 Brotli / gzip 版本，服务端按 `Accept-Encoding` 选择并附带 `Vary`，同时支持 ETag / Last-Modified 条件请求；静态 206 的 ETag 使用完整表示长度，因此不同 Range 与完整响应共用同一验证器。存储后端的公开 URL 可能被管理员修改，因此指向该 URL 的 302 只短期缓存；缩略图缺失时临时回退原图也不使用 immutable。
 - `/api/images`、`/api/images/:id`、`/api/site-config`、`/api/gallery-facets` 与 `/img-count` 是公共动态数据：浏览器不持有，CDN 的新鲜、重验证和错误兜底窗口均不超过 30 秒。SPA 与文档 HTML 使用独立的短缓存策略，不与动态 API 共用时长。
-- `/random` 和 `random.<域名>` 永远 `no-store`，避免 CDN 把随机图固定成同一张。
+- `/random` 和 `random.<域名>` 永远 `no-store`，避免 CDN 把随机图固定成同一张；每次请求都会重新抽图，因此 proxy 响应不声明 `Accept-Ranges`。
 - `/api/admin/*`、登录 / 验证码 / 上传暂存预览 / SSE、后台图片字节、健康检查和错误响应使用 `no-store` 或 `private, no-store`，不应被 CDN 缓存。
 - `link.<域名>/media` 与仍需使用的 `/original` 公共代理成功响应优先继承源站 `Cache-Control` / `Expires`；源站未声明时使用站内 CDN fallback：浏览器缓存 1 天、共享缓存 1 年，并允许 stale 回源兜底。`/media` 回源失败退回 link 缩略图时，该兜底缩略图缓存 1 周。后台代理仍为 `private, no-store`。
 
-公共 API 的缓存响应按 `Sec-Fetch-Site` 分变体，所有 API 按 `Accept-Encoding` 分变体。动态压缩先读取不超过 1 KiB 的响应前缀决定是否压缩，不再复制并完整缓冲大响应。本站直接输出的图片对象带 `Content-Length`、ETag、`Accept-Ranges: bytes`，支持单段 Range 和 `If-Range`；多段或不可满足的 Range 返回带对象总长度的 416。
+公共 API 的缓存响应按 `Sec-Fetch-Site` 分变体，所有 API 按 `Accept-Encoding` 分变体。动态压缩先读取不超过 1 KiB 的响应前缀决定是否压缩，不再复制并完整缓冲大响应。本站静态 / link 子域直接输出的存储图片带 `Content-Length` 和内容或对象版本 ETag；有可靠验证器时支持正确的 304，单段 Range 使用同一完整对象验证器并按强 ETag 或日期处理 `If-Range`。多段或不可满足的 Range 返回带对象总长度的 416；WebDAV 忽略 Range 时按流跳过并截取所需区间，不缓冲完整对象。
 
 推荐 Nginx 配置面向当前 stable 1.30.3，不重复声明其默认 HTTP/1.1 / keepalive，也不重复实现应用缓存；它只负责 TLS、HTTP/2、转发头，并为导入 / SSE 与长时间检查路径关闭请求缓冲或放宽超时。若需要共享 HTTP 缓存，优先让外部 CDN 遵循 Hono 返回的 `Cache-Control` 与 `Vary`。

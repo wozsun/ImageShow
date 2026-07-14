@@ -35,6 +35,7 @@ export function useLocalUploadImport(options: {
         size: job.file.size,
         idempotency_key: attemptKey,
         storage_slug: job.storageSlug,
+        batch_time: job.batchTime,
         manifest_position: job.manifestPosition
       }, controller.signal);
       if (!isCurrentImportAttempt(queue, job.id, attemptKey)) {
@@ -97,12 +98,14 @@ export function useLocalUploadImport(options: {
       existing.add(fingerprint);
       return true;
     });
+    const batchTime = new Date().toISOString();
     const jobs = await Promise.all(selected.map(async (file, manifestPosition): Promise<ImportJob> => {
       const objectUrl = URL.createObjectURL(file);
       const inferred = await draftFromFile(file, defaults, objectUrl);
       return {
         id: browserUuid(),
         attemptKey: browserUuid(),
+        batchTime,
         manifestPosition,
         kind: "local",
         file,

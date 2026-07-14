@@ -17,6 +17,31 @@ export function nodeReadableFromWeb(stream: ReadableStream<Uint8Array>) {
   return Readable.fromWeb(stream as Parameters<typeof Readable.fromWeb>[0]);
 }
 
+export function sliceReadable(stream: Readable, start: number, end: number) {
+  async function* chunks() {
+    let offset = 0;
+    try {
+      for await (const chunk of stream) {
+        const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+        const nextOffset = offset + buffer.length;
+        if (nextOffset <= start) {
+          offset = nextOffset;
+          continue;
+        }
+        if (offset > end) break;
+        const from = Math.max(0, start - offset);
+        const to = Math.min(buffer.length, end - offset + 1);
+        if (to > from) yield buffer.subarray(from, to);
+        offset = nextOffset;
+        if (offset > end) break;
+      }
+    } finally {
+      stream.destroy();
+    }
+  }
+  return Readable.from(chunks());
+}
+
 /**
  * Adapts a Node stream explicitly instead of passing it to the Fetch Response
  * constructor as an undocumented BodyInit. Node 26.5 can otherwise close the

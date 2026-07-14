@@ -117,6 +117,7 @@ export const importCreateInput = metadataInput.extend({
   brightness: z.enum(["dark", "light", "auto"]).default("auto"),
   source_url: optionalHttpsDomainUrlField(externalImageRejectedMessage),
   image_time: z.string().trim().min(1).max(64).optional(),
+  batch_time: z.string().trim().min(1).max(64).optional(),
   manifest_position: z.number().int().min(0).max(0xfff).optional(),
   size: z.number().int().positive().optional(),
   idempotency_key: z.string().uuid(),

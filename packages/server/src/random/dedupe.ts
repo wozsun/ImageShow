@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { appConfig } from "@imageshow/shared";
 import { redis } from "../core/redis-client.ts";
+import { execRedisPipeline } from "../core/redis-pipeline.ts";
 
 const RECENT_PREFIX = "imageshow:random_recent:";
 
@@ -41,11 +42,11 @@ export async function rememberServedId(clientId: string, signature: string, id: 
   if (!clientId || !id) return;
   try {
     const key = recentKey(clientId, signature);
-    await redis.pipeline()
+    const pipeline = redis.pipeline()
       .lpush(key, id)
       .ltrim(key, 0, appConfig.randomDedupe.historySize - 1)
-      .expire(key, appConfig.randomDedupe.ttlSeconds)
-      .exec();
+      .expire(key, appConfig.randomDedupe.ttlSeconds);
+    await execRedisPipeline(pipeline);
   } catch {
     // 记录失败只影响短期去重，不影响图片池。
   }

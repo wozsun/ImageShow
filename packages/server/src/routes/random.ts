@@ -35,7 +35,8 @@ async function respondRandom(c: Context, url: URL) {
 
     if (picked.is_link) return proxyExternalImage(picked.object_key, picked.ext, c.req.method === "HEAD", baseHeaders);
     const opened = await openObject("media", picked.object_key, picked.storage_slug);
-    const headers = new Headers({ ...baseHeaders, "Content-Type": contentType(picked.ext), "Accept-Ranges": "bytes" });
+    // 每次请求都会重新抽图，后续 Range 请求不保证命中同一对象，因此不声明字节范围能力。
+    const headers = new Headers({ ...baseHeaders, "Content-Type": contentType(picked.ext) });
     if (opened.size !== undefined) headers.set("Content-Length", String(opened.size));
     if (c.req.method === "HEAD") opened.body.destroy();
     return new Response(c.req.method === "HEAD" ? null : webReadableFromNode(opened.body), { headers });

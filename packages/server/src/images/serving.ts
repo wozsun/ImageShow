@@ -7,6 +7,7 @@ import { generateStoredThumbnail } from "./processing.ts";
 import { linkThumbnailKey, thumbnailObjectKey } from "../storage/image-paths.ts";
 import { contentType, exists, openObject, publicObjectUrl } from "../storage/storage.ts";
 import { isStorageNotFoundError } from "../storage/storage-backend.ts";
+import type { OpenedRead } from "../storage/storage-backend.ts";
 import { webReadableFromNode } from "../storage/stream-buffer.ts";
 import { getImageLookupById, getImageLookupByObjectKey, getImageLookupByThumbKey, getOriginalDirectCache, setImageLookup, setImageLookupById, setOriginalDirectCache, type ImageLookupByIdItem } from "./image-cache.ts";
 import { linkBaseUrl } from "../themes/host.ts";
@@ -143,13 +144,39 @@ async function cachedOriginalSupportsDirectAccess(url: string, userAgent: string
   });
 }
 
-function storedObjectEtag(prefix: "media" | "thumbs" | "link", key: string, backend: string) {
-  const digest = createHash("sha256").update(prefix).update("\0").update(backend).update("\0").update(key).digest("base64url");
-  return `\"${digest}\"`;
+function weakEtagValue(etag: string) {
+  return etag.startsWith("W/") ? etag.slice(2) : etag;
 }
 
-function etagMatches(header: string | undefined, etag: string) {
-  return header?.split(",").some((value) => value.trim() === "*" || value.trim() === etag) ?? false;
+/** @internal Exported only for HTTP validator verification. */
+export function etagMatches(header: string | undefined, etag: string) {
+  const current = weakEtagValue(etag);
+  return header?.split(",").some((value) => {
+    const candidate = value.trim();
+    return candidate === "*" || weakEtagValue(candidate) === current;
+  }) ?? false;
+}
+
+/** @internal Exported only for HTTP validator verification. */
+export function ifRangeMatches(header: string | undefined, opened: OpenedRead) {
+  const candidate = header?.trim();
+  if (!candidate) return true;
+  if (candidate.startsWith("W/") || candidate.startsWith("\"")) {
+    return Boolean(opened.etag && !opened.etag.startsWith("W/") && candidate === opened.etag);
+  }
+  if (!opened.lastModified) return false;
+  const requestedTime = Date.parse(candidate);
+  const modifiedTime = Date.parse(opened.lastModified);
+  return Number.isFinite(requestedTime) && Number.isFinite(modifiedTime) && modifiedTime <= requestedTime;
+}
+
+function sameObjectVersion(left: OpenedRead, right: OpenedRead) {
+  if (left.etag || right.etag) return Boolean(left.etag && right.etag && left.etag === right.etag);
+  return Boolean(
+    left.lastModified && right.lastModified &&
+    left.lastModified === right.lastModified &&
+    left.totalSize !== undefined && left.totalSize === right.totalSize
+  );
 }
 
 async function streamStoredObject(
@@ -160,18 +187,33 @@ async function streamStoredObject(
   cacheControl: string,
   request: StoredResponseRequest = {}
 ) {
-  const etag = storedObjectEtag(prefix, key, backend);
-  if (etagMatches(request.ifNoneMatch, etag)) {
-    return new Response(null, { status: 304, headers: { ETag: etag, "Cache-Control": cacheControl, "Accept-Ranges": "bytes" } });
+  const validateBeforeRange = Boolean(request.range && (request.ifNoneMatch || request.ifRange));
+  let opened = await openObject(prefix, key, backend, validateBeforeRange ? undefined : request.range);
+  const anyCurrentObject = request.ifNoneMatch?.split(",").some((value) => value.trim() === "*") ?? false;
+  if (anyCurrentObject || (opened.etag && etagMatches(request.ifNoneMatch, opened.etag))) {
+    opened.body.destroy();
+    const headers = new Headers({ "Cache-Control": cacheControl, "Accept-Ranges": "bytes" });
+    if (opened.etag) headers.set("ETag", opened.etag);
+    if (opened.lastModified) headers.set("Last-Modified", opened.lastModified);
+    return new Response(null, { status: 304, headers });
   }
-  const range = request.ifRange && request.ifRange.trim() !== etag ? undefined : request.range;
-  const opened = await openObject(prefix, key, backend, range);
+  const shouldApplyRange = Boolean(request.range && (!request.ifRange || ifRangeMatches(request.ifRange, opened)));
+  if (validateBeforeRange && shouldApplyRange) {
+    const full = opened;
+    full.body.destroy();
+    opened = await openObject(prefix, key, backend, request.range);
+    if (!sameObjectVersion(full, opened)) {
+      opened.body.destroy();
+      opened = await openObject(prefix, key, backend);
+    }
+  }
   const headers = new Headers({
     "Content-Type": contentTypeValue,
     "Cache-Control": cacheControl,
-    "Accept-Ranges": "bytes",
-    ETag: etag
+    "Accept-Ranges": "bytes"
   });
+  if (opened.etag) headers.set("ETag", opened.etag);
+  if (opened.lastModified) headers.set("Last-Modified", opened.lastModified);
   if (opened.size !== undefined) headers.set("Content-Length", String(opened.size));
   if (opened.contentRange) headers.set("Content-Range", opened.contentRange);
   if (request.isHead) opened.body.destroy();

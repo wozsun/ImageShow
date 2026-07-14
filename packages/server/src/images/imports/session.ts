@@ -73,7 +73,7 @@ export async function createImportSession(input: ImportCreateInput) {
     let normalizedImageTime;
     try {
       normalizedImageTime = parseImageTime(
-        input.image_time ?? (existing ? new Date(existing.image_time).toISOString() : undefined)
+        input.image_time ?? input.batch_time ?? (existing ? new Date(existing.image_time).toISOString() : undefined)
       );
     } catch (error) {
       if (error instanceof ImageTimeError) throw new ApiError(400, error.code, error.message);

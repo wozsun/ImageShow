@@ -34,6 +34,7 @@ export function useLinkImport(options: {
         storage_slug: job.storageSlug,
         idempotency_key: attemptKey,
         image_time: job.imageTime,
+        batch_time: job.batchTime,
         manifest_position: job.manifestPosition
       }, controller.signal);
       if (!isCurrentImportAttempt(queue, job.id, attemptKey)) {

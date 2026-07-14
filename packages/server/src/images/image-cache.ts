@@ -1,5 +1,6 @@
 import { appConfig, type Brightness, type Device } from "@imageshow/shared";
 import { redis } from "../core/redis-client.ts";
+import { execRedisPipeline } from "../core/redis-pipeline.ts";
 import { thumbnailObjectKey } from "../storage/image-paths.ts";
 
 export const MD5_CACHE_PREFIX = "imageshow:md5:";
@@ -174,40 +175,58 @@ async function setImageLookups(items: ImageLookupItem[]) {
   if (!items.length) return;
   try {
     const pipeline = redis.pipeline();
-    for (const item of items) {
-      const value = JSON.stringify(item);
-      pipeline.hset(IMAGE_LOOKUP_MEDIA_KEY, item.object_key, value);
-      pipeline.hset(IMAGE_LOOKUP_THUMBS_KEY, item.thumb_key, value);
-    }
-    const mediaFields = items.map((item) => item.object_key);
-    const thumbFields = items.map((item) => item.thumb_key);
-    pipeline.hexpire(IMAGE_LOOKUP_MEDIA_KEY, appConfig.derivedCacheTtlSeconds, "FIELDS", mediaFields.length, ...mediaFields);
-    pipeline.hexpire(IMAGE_LOOKUP_THUMBS_KEY, appConfig.derivedCacheTtlSeconds, "FIELDS", thumbFields.length, ...thumbFields);
-    await pipeline.exec();
+    const mediaFieldValues = items.flatMap((item) => [item.object_key, JSON.stringify(item)]);
+    const thumbFieldValues = items.flatMap((item) => [item.thumb_key, JSON.stringify(item)]);
+    pipeline.hsetex(
+      IMAGE_LOOKUP_MEDIA_KEY,
+      "EX",
+      appConfig.derivedCacheTtlSeconds,
+      "FIELDS",
+      items.length,
+      ...mediaFieldValues
+    );
+    pipeline.hsetex(
+      IMAGE_LOOKUP_THUMBS_KEY,
+      "EX",
+      appConfig.derivedCacheTtlSeconds,
+      "FIELDS",
+      items.length,
+      ...thumbFieldValues
+    );
+    await execRedisPipeline(pipeline);
   } catch {
-    // 写缓存失败只会多一次后续数据库读取。
+    // HSETEX 将每个 hash 的字段写入与 TTL 原子完成；失败只会造成缓存 miss。
   }
 }
 
 export async function setImageLookupById(item: ImageLookupByIdItem) {
   try {
-    const pipeline = redis.pipeline();
-    pipeline.hset(IMAGE_LOOKUP_ID_KEY, item.id, JSON.stringify(item));
-    pipeline.hexpire(IMAGE_LOOKUP_ID_KEY, appConfig.derivedCacheTtlSeconds, "FIELDS", 1, item.id);
-    await pipeline.exec();
+    await redis.hsetex(
+      IMAGE_LOOKUP_ID_KEY,
+      "EX",
+      appConfig.derivedCacheTtlSeconds,
+      "FIELDS",
+      1,
+      item.id,
+      JSON.stringify(item)
+    );
   } catch {
-    // 写缓存失败只会多一次后续数据库读取。
+    // 写缓存失败时资源接口仍会回查 PostgreSQL。
   }
 }
 
 async function setImageLookupsById(items: ImageLookupByIdItem[]) {
   if (!items.length) return;
   try {
-    const pipeline = redis.pipeline();
-    for (const item of items) pipeline.hset(IMAGE_LOOKUP_ID_KEY, item.id, JSON.stringify(item));
-    const fields = items.map((item) => item.id);
-    pipeline.hexpire(IMAGE_LOOKUP_ID_KEY, appConfig.derivedCacheTtlSeconds, "FIELDS", fields.length, ...fields);
-    await pipeline.exec();
+    const fieldValues = items.flatMap((item) => [item.id, JSON.stringify(item)]);
+    await redis.hsetex(
+      IMAGE_LOOKUP_ID_KEY,
+      "EX",
+      appConfig.derivedCacheTtlSeconds,
+      "FIELDS",
+      items.length,
+      ...fieldValues
+    );
   } catch {
     // 批量预热失败时资源接口仍会回查 PostgreSQL。
   }
@@ -262,7 +281,7 @@ export async function invalidateImageReadCaches(options: { facets?: boolean } = 
   try {
     const pipeline = redis.pipeline().incr(PUBLIC_IMAGES_GEN_KEY);
     if (options.facets ?? true) pipeline.del(GALLERY_FACETS_KEY);
-    await pipeline.exec();
+    await execRedisPipeline(pipeline);
   } catch {
     // 写入路径已提交到 PostgreSQL，缓存失效失败不影响正确性。
   }
@@ -284,7 +303,7 @@ export async function invalidateImageLookupEntries(items: Array<{
     if (ids.length) pipeline.hdel(IMAGE_LOOKUP_ID_KEY, ...ids);
     if (objectKeys.length) pipeline.hdel(IMAGE_LOOKUP_MEDIA_KEY, ...objectKeys);
     if (thumbKeys.length) pipeline.hdel(IMAGE_LOOKUP_THUMBS_KEY, ...thumbKeys);
-    await pipeline.exec();
+    await execRedisPipeline(pipeline);
   } catch {
     // 字段有独立 TTL；失效失败不会延长同一 hash 中其他字段的寿命。
   }

@@ -21,6 +21,7 @@ import type {
   StorageSelfTest
 } from "./storage-backend.ts";
 import { assertSingleByteRangeSyntax, totalSizeFromContentRange } from "./byte-range.ts";
+import { normalizeObjectEtag } from "./object-validator.ts";
 
 function storageS3Client(config: StorageConfig) {
   const endpoint = /^https:\/\//i.test(config.s3.endpoint) ? config.s3.endpoint : `https://${config.s3.endpoint}`;
@@ -105,11 +106,15 @@ export class S3Backend implements StorageDriver {
     const size = Number.isFinite(rawSize) && rawSize >= 0 ? rawSize : undefined;
     const contentRange = result.ContentRange;
     const totalSize = totalSizeFromContentRange(contentRange) ?? size;
+    const etag = normalizeObjectEtag(result.ETag)
+      ?? (result.VersionId ? `"s3-version-${Buffer.from(result.VersionId).toString("base64url")}"` : undefined);
     return {
       body,
       size,
       totalSize: Number.isFinite(totalSize) ? totalSize : undefined,
       contentRange,
+      etag,
+      lastModified: result.LastModified?.toUTCString(),
       backend: "s3"
     };
   }
