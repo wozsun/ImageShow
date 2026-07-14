@@ -16,6 +16,7 @@ export const appConfig = {
   trashBatchSize: 100,
 
   imports: {
+    batchHardLimit: 3_000,
     jsonlManifestMaxBytes: 16 * 1024 * 1024,
     configPackageMaxBytes: 1024 * 1024,
     configPackageMaxBackends: 100
@@ -23,6 +24,9 @@ export const appConfig = {
 
   uploadTtlSeconds: 30 * 60,
   derivedCacheTtlSeconds: 60 * 60,
+  imageLookup: {
+    ttlSeconds: 6 * 60 * 60
+  },
   pgPool: {
     max: 30,
     idleTimeoutMillis: 30000,
@@ -122,6 +126,8 @@ export const appConfig = {
     log: { level: "WARN", max_size_mb: 10, max_files: 5 }
   } as const
 };
+
+export const importBatchHardLimit: number = appConfig.imports.batchHardLimit;
 
 export const slugPattern = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 

@@ -2,6 +2,7 @@ import { appConfig } from "@imageshow/shared";
 import { getInputImageMaxBytes } from "../../config/app-settings.ts";
 import { getRuntimeConfig } from "../../config/runtime-config-store.ts";
 import { pool, withTransaction } from "../../core/db.ts";
+import { mapWithConcurrency } from "../../core/concurrency.ts";
 import { ApiError, privateNoStoreCacheControl } from "../../core/http.ts";
 import { assertStorageUploadable, getDefaultStorageSlug } from "../../storage/backend-registry.ts";
 import { contentType, readStorageBuffer } from "../../storage/storage.ts";
@@ -32,6 +33,10 @@ import type {
   MetadataPayload,
   PreparedPayload
 } from "./types.ts";
+
+export type ImportSessionBatchItem =
+  | { idempotency_key: string; id: string; mode: "download" | "proxy"; status: string }
+  | { idempotency_key: string; error: string; code: string };
 
 function defaultMetadata(input: ImportCreateInput, imageTime: string): MetadataPayload {
   return {
@@ -127,6 +132,29 @@ export async function createImportSession(input: ImportCreateInput) {
     throw new ApiError(409, "import_cancelled", "导入已取消");
   }
   return importSessionResponse(result as ImportSessionRecord);
+}
+
+export async function createImportSessions(inputs: ImportCreateInput[]): Promise<ImportSessionBatchItem[]> {
+  return mapWithConcurrency(inputs, Math.min(16, appConfig.pgPool.max), async (input) => {
+    try {
+      if (input.mode === "upload") {
+        throw new ApiError(400, "invalid_import_mode", "批量入口仅支持链接导入");
+      }
+      const session = await createImportSession(input);
+      return {
+        idempotency_key: input.idempotency_key,
+        id: session.id,
+        mode: input.mode,
+        status: session.status
+      };
+    } catch (error) {
+      return {
+        idempotency_key: input.idempotency_key,
+        error: error instanceof ApiError ? error.message : "创建导入会话失败",
+        code: error instanceof ApiError ? error.code : "import_session_create_failed"
+      };
+    }
+  });
 }
 
 export async function receiveImportFile(

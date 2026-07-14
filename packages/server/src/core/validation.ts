@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { adminImagePageLimit, appConfig, slugPattern } from "@imageshow/shared";
+import { adminImagePageLimit, appConfig, importBatchHardLimit, slugPattern } from "@imageshow/shared";
 import { adminPasswordInput, adminUsernameInput } from "../users/credentials.ts";
 import { ApiError } from "./http.ts";
 import { isHttpsUrl } from "./url-validation.ts";
@@ -92,6 +92,14 @@ export const authorMetaUpdateInput = z.object({ display_name: displayNameInput.d
 
 export const uuidInput = z.string().uuid();
 
+export const batchImageUpdateInput = z.object({
+  items: z.array(metadataUpdateInput.extend({
+    id: uuidInput,
+    tags: z.array(tagSlugInput).max(50).optional()
+      .transform((tags) => tags === undefined ? undefined : [...new Set(tags)]),
+  })).min(1).max(200),
+});
+
 export { adminUsernameInput } from "../users/credentials.ts";
 export const userCreateInput = z.object({ username: adminUsernameInput, password: adminPasswordInput });
 export const userPasswordInput = z.object({ password: adminPasswordInput });
@@ -129,6 +137,31 @@ export const importCreateInput = metadataInput.extend({
   }
   if (value.mode !== "upload" && !value.source_url) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["source_url"], message: "链接导入模式需要图片链接" });
+  }
+});
+
+export const importBatchCreateInput = z.object({
+  source: z.enum(["urls", "jsonl"]),
+  items: z.array(importCreateInput).min(1).max(importBatchHardLimit)
+}).superRefine((value, ctx) => {
+  const idempotencyKeys = new Set<string>();
+  for (let index = 0; index < value.items.length; index += 1) {
+    const item = value.items[index];
+    if (item.mode === "upload") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["items", index, "mode"],
+        message: "批量入口仅支持链接导入"
+      });
+    }
+    if (idempotencyKeys.has(item.idempotency_key)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["items", index, "idempotency_key"],
+        message: "批量导入幂等键不能重复"
+      });
+    }
+    idempotencyKeys.add(item.idempotency_key);
   }
 });
 

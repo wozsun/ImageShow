@@ -1,6 +1,7 @@
 import { pool } from "../core/db.ts";
 import { invalidateImageLookupEntries, invalidateImageReadCaches, invalidateMd5Caches } from "./image-cache.ts";
 import { syncRandomImages } from "../random/random-cache.ts";
+import { invalidateEntityCountCaches } from "../vocab/vocab-cache.ts";
 import type { ImageRecord } from "./presenter.ts";
 
 export async function batchDeleteImages(ids: string[]) {
@@ -15,7 +16,10 @@ export async function batchDeleteImages(ids: string[]) {
   await invalidateMd5Caches(deletedTargets.map((target) => target.md5 ?? ""));
   if (deletedTargets.length) {
     await invalidateImageLookupEntries(deletedTargets);
-    await invalidateImageReadCaches();
+    await Promise.all([
+      invalidateImageReadCaches(),
+      invalidateEntityCountCaches(["theme", "author"]),
+    ]);
   }
   return { deleted: deletedTargets.length, ignored: ids.length - deletedTargets.length };
 }

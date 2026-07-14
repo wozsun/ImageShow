@@ -1,4 +1,4 @@
-import type { Author, ImageDraft, ImageItem, ImportJob, Tag, Theme } from "../../../lib/types.js";
+import type { FacetOption, ImageDraft, ImageItem, ImportJob } from "../../../lib/types.js";
 import { ImportJobCard } from "./ImportJobCard.js";
 import type { ImportPreviewTarget } from "./DuplicateMatchPanel.js";
 
@@ -6,9 +6,9 @@ export function ImportJobList({ jobs, busy, storageName, themes, tags, authors, 
   jobs: ImportJob[];
   busy: boolean;
   storageName: (slug: string) => string;
-  themes: Theme[];
-  tags: Tag[];
-  authors: Author[];
+  themes: FacetOption[];
+  tags: FacetOption[];
+  authors: FacetOption[];
   onPatch: (job: ImportJob, patch: Partial<ImageDraft>) => void;
   onCancel: (job: ImportJob) => void;
   onRetry: (job: ImportJob) => void;

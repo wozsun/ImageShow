@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { Redis } from "ioredis";
+import type { PoolClient } from "pg";
 import type { Brightness, Device } from "@imageshow/shared";
 import { pool } from "../core/db.ts";
 import { redis } from "../core/redis-client.ts";
@@ -8,16 +9,22 @@ import { coalesce } from "../core/coalesce.ts";
 import { randomUuidV7 } from "../core/uuid.ts";
 
 export const RANDOM_CURRENT_KEY = "imageshow:random:current";
-const RANDOM_MUTATION_REVISION_KEY = "imageshow:random:version";
-const RANDOM_UPDATE_LOCK_KEY = "imageshow:random:update_lock";
+export const RANDOM_MUTATION_REVISION_KEY = "imageshow:random:version";
+/** @internal Exported only for lock ownership verification. */
+export const RANDOM_UPDATE_LOCK_KEY = "imageshow:random:update_lock";
 const RANDOM_REBUILD_LOCK_KEY = "imageshow:random:rebuild_lock";
-const RANDOM_REBUILD_COMPLETED_KEY = "imageshow:random:rebuild_completed";
+export const RANDOM_REBUILD_COMPLETED_KEY = "imageshow:random:rebuild_completed";
+/** @internal Exported only for lock renewal verification. */
+export const RANDOM_UPDATE_LOCK_TTL_MS = 30_000;
+const RANDOM_UPDATE_LOCK_RENEW_INTERVAL_MS = 10_000;
 const RANDOM_REBUILD_LOCK_TTL_MS = 120_000;
 const RANDOM_REBUILD_WAIT_INTERVAL_MS = 100;
 const RANDOM_REBUILD_WAIT_ATTEMPTS = RANDOM_REBUILD_LOCK_TTL_MS / RANDOM_REBUILD_WAIT_INTERVAL_MS;
 export const GALLERY_FILTER_OPTIONS_KEY = "imageshow:gallery_filter_options";
 const RANDOM_OLD_GENERATION_TTL_SECONDS = 60 * 60;
 const RANDOM_FILTER_TTL_SECONDS = 90;
+const RANDOM_REBUILD_BATCH_SIZE = 750;
+const RANDOM_CLEANUP_BATCH_SIZE = 500;
 
 /** @internal Exported only for atomic generation publication verification. */
 export const RANDOM_GENERATION_PUBLISH_SCRIPT = `
@@ -28,6 +35,28 @@ export const RANDOM_GENERATION_PUBLISH_SCRIPT = `
   redis.call("SET", KEYS[3], ARGV[1])
   redis.call("SET", KEYS[4], ARGV[3])
   return { 1, previousGeneration }
+`;
+
+/** @internal Exported only for mutation revision consistency verification. */
+export const RANDOM_INCREMENTAL_COMPLETE_SCRIPT = `
+  local currentGeneration = redis.call("GET", KEYS[1]) or ""
+  local currentRevision = tonumber(redis.call("GET", KEYS[2]) or "0")
+  local currentToken = redis.call("GET", KEYS[4]) or ""
+  if currentGeneration ~= ARGV[1]
+    or currentRevision ~= tonumber(ARGV[2])
+    or currentToken ~= ARGV[3] then
+    return 0
+  end
+  redis.call("SET", KEYS[3], ARGV[2])
+  return 1
+`;
+
+/** @internal Exported only for lock renewal verification. */
+export const RANDOM_UPDATE_LOCK_RENEW_SCRIPT = `
+  if redis.call("GET", KEYS[1]) == ARGV[1] then
+    return redis.call("PEXPIRE", KEYS[1], ARGV[2])
+  end
+  return 0
 `;
 
 export type RandomCategoryCounts = Record<string, Record<string, Record<string, number>>>;
@@ -60,7 +89,7 @@ function randomKey(generation: string, ...parts: string[]) {
   return ["imageshow:random", generation, ...parts].join(":");
 }
 
-function randomManifestKey(generation: string) {
+export function randomManifestKey(generation: string) {
   return randomKey(generation, "keys");
 }
 
@@ -68,16 +97,8 @@ export function randomItemKey(generation: string) {
   return randomKey(generation, "item");
 }
 
-export function randomCountsKey(generation: string) {
-  return randomKey(generation, "counts");
-}
-
 export function randomSnapshotKey(generation: string) {
   return randomKey(generation, "snapshot");
-}
-
-export function randomThemesKey(generation: string) {
-  return randomKey(generation, "themes");
 }
 
 export function randomAxisSetKey(generation: string, device: string, brightness: string) {
@@ -121,7 +142,7 @@ function adjustCategoryCounts(
     0,
     Number(counts[item.device][item.brightness][item.theme] ?? 0) + delta
   );
-  pruneEmptyCategoryCounts(counts);
+  if (delta < 0) pruneEmptyCategoryCounts(counts);
 }
 
 function pruneEmptyCategoryCounts(counts: RandomCategoryCounts) {
@@ -146,21 +167,19 @@ function filterOptionsFromCategoryCounts(counts: RandomCategoryCounts): GalleryF
   return { devices: ["pc", "mb"], brightnesses: ["light", "dark"], themes: [...themes].sort() };
 }
 
-function redisCountsFromCategoryCounts(categoryCounts: RandomCategoryCounts): Record<string, number> {
-  const redisCounts: Record<string, number> = {};
-  for (const [device, deviceMap] of Object.entries(categoryCounts)) {
-    for (const [brightness, brightnessMap] of Object.entries(deviceMap)) {
-      let axisCount = 0;
-      for (const [theme, rawCount] of Object.entries(brightnessMap)) {
-        const count = Number(rawCount);
-        if (!Number.isFinite(count) || count <= 0) continue;
-        axisCount += count;
-        redisCounts[`cat:${device}:${brightness}:${theme}`] = count;
-      }
-      if (axisCount > 0) redisCounts[`axis:${device}:${brightness}`] = axisCount;
-    }
-  }
-  return redisCounts;
+function mapRandomItems(rows: Array<Record<string, unknown>>): RandomPoolItem[] {
+  return rows.map((row) => ({
+    id: String(row.id),
+    object_key: String(row.object_key),
+    ext: String(row.ext),
+    device: row.device as Device,
+    brightness: row.brightness as Brightness,
+    theme: String(row.theme),
+    storage_slug: String(row.storage_slug),
+    is_link: Boolean(row.is_link),
+    author: typeof row.author === "string" ? row.author : "",
+    tags: Array.isArray(row.tags) ? row.tags as string[] : []
+  }));
 }
 
 async function readyRandomItems(ids?: string[]): Promise<RandomPoolItem[]> {
@@ -169,7 +188,8 @@ async function readyRandomItems(ids?: string[]): Promise<RandomPoolItem[]> {
   if (ids?.length) params.push(ids);
   const rows = (await pool.query(
     `SELECT m.id, m.object_key, m.ext, m.device, m.brightness, m.theme,
-            m.storage_slug, m.is_link, COALESCE(m.author, '') AS author,
+            m.storage_slug, m.is_link,
+            COALESCE(m.author, '') AS author,
             COALESCE(array_remove(array_agg(it.tag_slug ORDER BY it.tag_slug), NULL), '{}') AS tags
      FROM metadata m
      LEFT JOIN image_tag it ON it.image_id = m.id
@@ -178,58 +198,78 @@ async function readyRandomItems(ids?: string[]): Promise<RandomPoolItem[]> {
      ORDER BY m.id`,
     params
   )).rows;
-  return rows.map((row) => ({
-    id: row.id,
-    object_key: row.object_key,
-    ext: row.ext,
-    device: row.device,
-    brightness: row.brightness,
-    theme: row.theme,
-    storage_slug: row.storage_slug,
-    is_link: Boolean(row.is_link),
-    author: row.author ?? "",
-    tags: row.tags ?? []
-  }));
+  return mapRandomItems(rows);
+}
+
+async function readyRandomItemBatch(
+  client: PoolClient,
+  afterId: string | null
+): Promise<RandomPoolItem[]> {
+  const rows = (await client.query(
+    `WITH ready AS (
+       SELECT m.id, m.object_key, m.ext, m.device, m.brightness, m.theme,
+              m.storage_slug, m.is_link, m.author
+         FROM metadata m
+        WHERE m.status='ready'
+          AND ($1::uuid IS NULL OR m.id > $1::uuid)
+        ORDER BY m.id
+        LIMIT $2
+     )
+     SELECT ready.id, ready.object_key, ready.ext, ready.device, ready.brightness,
+            ready.theme, ready.storage_slug, ready.is_link,
+            COALESCE(ready.author, '') AS author,
+            COALESCE(array_remove(array_agg(it.tag_slug ORDER BY it.tag_slug), NULL), '{}') AS tags
+       FROM ready
+       LEFT JOIN image_tag it ON it.image_id = ready.id
+      GROUP BY ready.id, ready.object_key, ready.ext, ready.device, ready.brightness,
+               ready.theme, ready.storage_slug, ready.is_link, ready.author
+      ORDER BY ready.id`,
+    [afterId, RANDOM_REBUILD_BATCH_SIZE]
+  )).rows;
+  return mapRandomItems(rows);
 }
 
 function registerRandomKeys(generation: string, keys: Set<string>) {
   keys.add(randomManifestKey(generation));
   keys.add(randomItemKey(generation));
-  keys.add(randomCountsKey(generation));
   keys.add(randomSnapshotKey(generation));
-  keys.add(randomThemesKey(generation));
 }
 
-function queuePoolMembership(
-  pipeline: ReturnType<Redis["pipeline"]>,
+function membershipKeys(
+  generation: string,
+  item: RandomPoolItem
+): string[] {
+  const keys = [
+    randomAxisSetKey(generation, item.device, item.brightness),
+    randomCategorySetKey(generation, item.device, item.brightness, item.theme)
+  ];
+  for (const tag of item.tags) {
+    keys.push(randomTagSetKey(generation, tag));
+  }
+  if (item.author) keys.push(randomAuthorSetKey(generation, item.author));
+  return keys;
+}
+
+function collectMembership(
+  target: Map<string, string[]>,
   generation: string,
   item: RandomPoolItem,
-  add: boolean,
   keys?: Set<string>
 ) {
-  const axisKey = randomAxisSetKey(generation, item.device, item.brightness);
-  const catKey = randomCategorySetKey(generation, item.device, item.brightness, item.theme);
-  if (add) {
-    pipeline.sadd(axisKey, item.id);
-    pipeline.sadd(catKey, item.id);
-  } else {
-    pipeline.srem(axisKey, item.id);
-    pipeline.srem(catKey, item.id);
-  }
-  keys?.add(axisKey);
-  keys?.add(catKey);
-  for (const tag of item.tags) {
-    const key = randomTagSetKey(generation, tag);
-    if (add) pipeline.sadd(key, item.id);
-    else pipeline.srem(key, item.id);
+  for (const key of membershipKeys(generation, item)) {
+    const ids = target.get(key);
+    if (ids) ids.push(item.id);
+    else target.set(key, [item.id]);
     keys?.add(key);
   }
-  if (item.author) {
-    const key = randomAuthorSetKey(generation, item.author);
-    if (add) pipeline.sadd(key, item.id);
-    else pipeline.srem(key, item.id);
-    keys?.add(key);
-  }
+}
+
+function queueMembershipMap(
+  pipeline: ReturnType<Redis["pipeline"]>,
+  command: "sadd" | "srem",
+  memberships: Map<string, string[]>
+) {
+  for (const [key, ids] of memberships) pipeline[command](key, ...ids);
 }
 
 function queueSnapshot(
@@ -238,20 +278,86 @@ function queueSnapshot(
   categoryCounts: RandomCategoryCounts,
   updateGalleryOptions = true
 ) {
-  const filterOptions = filterOptionsFromCategoryCounts(categoryCounts);
-  const redisCounts = redisCountsFromCategoryCounts(categoryCounts);
   pipeline.set(
     randomSnapshotKey(generation),
-    JSON.stringify({ categoryCounts, themes: filterOptions.themes })
+    JSON.stringify({ categoryCounts })
   );
-  pipeline.del(randomCountsKey(generation));
-  const countEntries = Object.entries(redisCounts).flatMap(([key, value]) => [key, String(value)]);
-  if (countEntries.length) pipeline.hset(randomCountsKey(generation), ...countEntries);
-  pipeline.del(randomThemesKey(generation));
-  if (filterOptions.themes.length) pipeline.sadd(randomThemesKey(generation), ...filterOptions.themes);
   if (updateGalleryOptions) {
+    const filterOptions = filterOptionsFromCategoryCounts(categoryCounts);
     pipeline.set(GALLERY_FILTER_OPTIONS_KEY, JSON.stringify(filterOptions));
   }
+}
+
+function chunks<T>(items: T[], size: number): T[][] {
+  const result: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    result.push(items.slice(index, index + size));
+  }
+  return result;
+}
+
+async function cleanupFailedGeneration(
+  generation: string,
+  knownKeys: Set<string>,
+  mode: "delete" | "expire" = "delete"
+) {
+  let current: string | null;
+  try {
+    current = await redis.get(RANDOM_CURRENT_KEY);
+  } catch {
+    // Publication may have succeeded even if its response was lost. Without a
+    // reliable current-generation read, cleanup must prefer leaking temporary
+    // keys over deleting a generation that is already serving traffic.
+    return;
+  }
+  if (current === generation) return;
+
+  const manifest = randomManifestKey(generation);
+  const manifestKeys = await redis.smembers(manifest).catch(() => []);
+  const prefix = randomKey(generation, "");
+  const keys = [...new Set([
+    ...knownKeys,
+    ...manifestKeys.filter((key) => key.startsWith(prefix)),
+    manifest
+  ])].filter((key) => key.startsWith(prefix));
+  if (!keys.length) return;
+
+  if (mode === "expire") {
+    const pipeline = redis.pipeline();
+    for (const key of keys) pipeline.expire(key, RANDOM_OLD_GENERATION_TTL_SECONDS);
+    await execRedisPipeline(pipeline).catch(() => undefined);
+    return;
+  }
+
+  try {
+    for (const batch of chunks(keys, RANDOM_CLEANUP_BATCH_SIZE)) {
+      await redis.unlink(...batch);
+    }
+  } catch {
+    const pipeline = redis.pipeline();
+    for (const key of keys) pipeline.expire(key, RANDOM_OLD_GENERATION_TTL_SECONDS);
+    await execRedisPipeline(pipeline).catch(() => undefined);
+  }
+}
+
+async function writeRandomGenerationBatch(
+  generation: string,
+  items: RandomPoolItem[],
+  categoryCounts: RandomCategoryCounts,
+  keys: Set<string>
+) {
+  if (!items.length) return;
+  const memberships = new Map<string, string[]>();
+  const itemValues: string[] = [];
+  for (const item of items) {
+    adjustCategoryCounts(categoryCounts, item, 1);
+    itemValues.push(item.id, JSON.stringify(item));
+    collectMembership(memberships, generation, item, keys);
+  }
+  const pipeline = redis.pipeline();
+  pipeline.hset(randomItemKey(generation), ...itemValues);
+  queueMembershipMap(pipeline, "sadd", memberships);
+  await execRedisPipeline(pipeline);
 }
 
 async function expireOldGeneration(generation: string | null) {
@@ -268,44 +374,81 @@ async function expireOldGeneration(generation: string | null) {
   await execRedisPipeline(pipeline);
 }
 
+async function readReadyRandomItemBatches(): Promise<RandomPoolItem[][]> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
+    const batches: RandomPoolItem[][] = [];
+    let afterId: string | null = null;
+    for (;;) {
+      const items = await readyRandomItemBatch(client, afterId);
+      if (!items.length) break;
+      batches.push(items);
+      afterId = items.at(-1)?.id ?? null;
+      if (items.length < RANDOM_REBUILD_BATCH_SIZE) break;
+    }
+    await client.query("COMMIT");
+    return batches;
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 async function performRandomPoolRebuild(targetRevision: number): Promise<{
   published: boolean;
   snapshot: RandomPoolSnapshot;
 }> {
   const generation = randomUuidV7();
-  const items = await readyRandomItems();
   const categoryCounts: RandomCategoryCounts = {};
   const keys = new Set<string>();
   registerRandomKeys(generation, keys);
-  const pipeline = redis.pipeline();
-  if (items.length) {
-    const itemValues: Record<string, string> = {};
-    for (const item of items) {
-      adjustCategoryCounts(categoryCounts, item, 1);
-      itemValues[item.id] = JSON.stringify(item);
-      queuePoolMembership(pipeline, generation, item, true, keys);
+  let publicationAttempted = false;
+  try {
+    // PostgreSQL snapshot lifetime covers database reads only. Redis generation
+    // writes begin after COMMIT, so a slow Redis cannot pin the database snapshot.
+    const itemBatches = await readReadyRandomItemBatches();
+    for (const items of itemBatches) {
+      await writeRandomGenerationBatch(generation, items, categoryCounts, keys);
     }
-    pipeline.hset(randomItemKey(generation), ...Object.entries(itemValues).flatMap(([key, value]) => [key, value]));
+
+    const finalPipeline = redis.pipeline();
+    queueSnapshot(finalPipeline, generation, categoryCounts, false);
+    for (const batch of chunks([...keys], RANDOM_CLEANUP_BATCH_SIZE)) {
+      finalPipeline.sadd(randomManifestKey(generation), ...batch);
+    }
+    await execRedisPipeline(finalPipeline);
+
+    const themes = filterOptionsFromCategoryCounts(categoryCounts).themes;
+    const snapshot = { generation, categoryCounts, themes };
+    publicationAttempted = true;
+    const publication = await redis.eval(
+      RANDOM_GENERATION_PUBLISH_SCRIPT,
+      4,
+      RANDOM_CURRENT_KEY,
+      RANDOM_MUTATION_REVISION_KEY,
+      RANDOM_REBUILD_COMPLETED_KEY,
+      GALLERY_FILTER_OPTIONS_KEY,
+      String(targetRevision),
+      generation,
+      JSON.stringify(filterOptionsFromCategoryCounts(categoryCounts))
+    ) as [number, string];
+    const published = Number(publication[0]) === 1;
+    if (published) {
+      await expireOldGeneration(publication[1] || null).catch(() => undefined);
+    }
+    else await cleanupFailedGeneration(generation, keys);
+    return { published, snapshot };
+  } catch (error) {
+    await cleanupFailedGeneration(
+      generation,
+      keys,
+      publicationAttempted ? "expire" : "delete"
+    );
+    throw error;
   }
-  queueSnapshot(pipeline, generation, categoryCounts, false);
-  pipeline.sadd(randomManifestKey(generation), ...keys);
-  await execRedisPipeline(pipeline);
-  const themes = filterOptionsFromCategoryCounts(categoryCounts).themes;
-  const snapshot = { generation, categoryCounts, themes };
-  const publication = await redis.eval(
-    RANDOM_GENERATION_PUBLISH_SCRIPT,
-    4,
-    RANDOM_CURRENT_KEY,
-    RANDOM_MUTATION_REVISION_KEY,
-    RANDOM_REBUILD_COMPLETED_KEY,
-    GALLERY_FILTER_OPTIONS_KEY,
-    String(targetRevision),
-    generation,
-    JSON.stringify(filterOptionsFromCategoryCounts(categoryCounts))
-  ) as [number, string];
-  const published = Number(publication[0]) === 1;
-  await expireOldGeneration(published ? publication[1] || null : generation);
-  return { published, snapshot };
 }
 
 async function releaseOwnedLock(key: string, token: string) {
@@ -333,9 +476,13 @@ async function readRandomPoolSnapshot(): Promise<RandomPoolSnapshot | null> {
   const [generation, raw] = result;
   if (!generation || !raw) return null;
   try {
-    const parsed = JSON.parse(raw) as { categoryCounts?: RandomCategoryCounts; themes?: string[] };
-    if (!parsed.categoryCounts || !Array.isArray(parsed.themes)) return null;
-    return { generation, categoryCounts: parsed.categoryCounts, themes: parsed.themes };
+    const parsed = JSON.parse(raw) as { categoryCounts?: RandomCategoryCounts };
+    if (!parsed.categoryCounts) return null;
+    return {
+      generation,
+      categoryCounts: parsed.categoryCounts,
+      themes: filterOptionsFromCategoryCounts(parsed.categoryCounts).themes
+    };
   } catch {
     return null;
   }
@@ -432,12 +579,67 @@ async function scheduleRandomRebuild() {
 
 async function acquireRandomUpdateLock() {
   const token = randomUuidV7();
-  const locked = await redis.set(RANDOM_UPDATE_LOCK_KEY, token, "PX", 10_000, "NX");
+  const locked = await redis.set(
+    RANDOM_UPDATE_LOCK_KEY,
+    token,
+    "PX",
+    RANDOM_UPDATE_LOCK_TTL_MS,
+    "NX",
+  );
   return locked ? token : "";
 }
 
 async function releaseRandomUpdateLock(token: string) {
   await releaseOwnedLock(RANDOM_UPDATE_LOCK_KEY, token);
+}
+
+/** @internal Exported only for local ownership and TTL verification. */
+export async function renewRandomUpdateLock(token: string) {
+  const renewed = await redis.eval(
+    RANDOM_UPDATE_LOCK_RENEW_SCRIPT,
+    1,
+    RANDOM_UPDATE_LOCK_KEY,
+    token,
+    RANDOM_UPDATE_LOCK_TTL_MS,
+  );
+  return Number(renewed) === 1;
+}
+
+function startRandomUpdateLockRenewal(token: string) {
+  let ownershipLost = false;
+  let stopped = false;
+  let renewalChain = Promise.resolve();
+
+  const renew = async () => {
+    if (stopped || ownershipLost) return !ownershipLost;
+    try {
+      if (!await renewRandomUpdateLock(token)) ownershipLost = true;
+    } catch {
+      // A failed ownership check is treated conservatively. The incremental
+      // update must not publish a completed revision after an uncertain lease.
+      ownershipLost = true;
+    }
+    return !ownershipLost;
+  };
+  const queueRenewal = () => {
+    const result = renewalChain.then(renew);
+    renewalChain = result.then(() => undefined, () => undefined);
+    return result;
+  };
+  const timer = setInterval(() => {
+    void queueRenewal();
+  }, RANDOM_UPDATE_LOCK_RENEW_INTERVAL_MS);
+  timer.unref();
+
+  return {
+    ownershipLost: () => ownershipLost,
+    renewNow: queueRenewal,
+    async stop() {
+      stopped = true;
+      clearInterval(timer);
+      await renewalChain;
+    },
+  };
 }
 
 export async function syncRandomImages(ids: string[]) {
@@ -446,7 +648,7 @@ export async function syncRandomImages(ids: string[]) {
   try {
     // 数据库变更已提交后先登记 mutation；任何正在构建的 generation 都会在发布前
     // 看到 revision 变化并重读 PostgreSQL，避免覆盖这次增量更新。
-    await redis.incr(RANDOM_MUTATION_REVISION_KEY);
+    const mutationRevision = await redis.incr(RANDOM_MUTATION_REVISION_KEY);
     let generation = await redis.get(RANDOM_CURRENT_KEY);
     if (!generation) {
       await rebuildRandomPool({ requireFresh: false });
@@ -457,6 +659,7 @@ export async function syncRandomImages(ids: string[]) {
       await scheduleRandomRebuild();
       return;
     }
+    const lockRenewal = startRandomUpdateLockRenewal(token);
     try {
       generation = await redis.get(RANDOM_CURRENT_KEY);
       if (!generation) {
@@ -472,9 +675,7 @@ export async function syncRandomImages(ids: string[]) {
         await rebuildRandomPool({ requireFresh: false });
         return;
       }
-      const snapshot = JSON.parse(snapshotRaw) as {
-        categoryCounts?: RandomCategoryCounts;
-      };
+      const snapshot = JSON.parse(snapshotRaw) as { categoryCounts?: RandomCategoryCounts };
       if (!snapshot.categoryCounts) {
         await rebuildRandomPool({ requireFresh: false });
         return;
@@ -483,26 +684,53 @@ export async function syncRandomImages(ids: string[]) {
       const currentById = new Map(currentItems.map((item) => [item.id, item]));
       const pipeline = redis.pipeline();
       const touchedKeys = new Set<string>();
+      const removals = new Map<string, string[]>();
+      const additions = new Map<string, string[]>();
+      const itemValues: string[] = [];
+      const removedIds: string[] = [];
       for (let index = 0; index < uniqueIds.length; index += 1) {
         const id = uniqueIds[index];
         const oldItem = parseRandomItem(oldItemsRaw[index]);
         const currentItem = currentById.get(id);
         if (oldItem) {
-          queuePoolMembership(pipeline, generation, oldItem, false, touchedKeys);
+          collectMembership(removals, generation, oldItem, touchedKeys);
           adjustCategoryCounts(categoryCounts, oldItem, -1);
         }
         if (currentItem) {
-          pipeline.hset(randomItemKey(generation), currentItem.id, JSON.stringify(currentItem));
-          queuePoolMembership(pipeline, generation, currentItem, true, touchedKeys);
+          itemValues.push(currentItem.id, JSON.stringify(currentItem));
+          collectMembership(additions, generation, currentItem, touchedKeys);
           adjustCategoryCounts(categoryCounts, currentItem, 1);
         } else {
-          pipeline.hdel(randomItemKey(generation), id);
+          removedIds.push(id);
         }
       }
+      queueMembershipMap(pipeline, "srem", removals);
+      queueMembershipMap(pipeline, "sadd", additions);
+      if (itemValues.length) pipeline.hset(randomItemKey(generation), ...itemValues);
+      if (removedIds.length) pipeline.hdel(randomItemKey(generation), ...removedIds);
       queueSnapshot(pipeline, generation, categoryCounts);
       if (touchedKeys.size) pipeline.sadd(randomManifestKey(generation), ...touchedKeys);
+      if (!await lockRenewal.renewNow()) {
+        await scheduleRandomRebuild();
+        return;
+      }
       await execRedisPipeline(pipeline);
+      const completed = lockRenewal.ownershipLost()
+        ? 0
+        : Number(await redis.eval(
+            RANDOM_INCREMENTAL_COMPLETE_SCRIPT,
+            4,
+            RANDOM_CURRENT_KEY,
+            RANDOM_MUTATION_REVISION_KEY,
+            RANDOM_REBUILD_COMPLETED_KEY,
+            RANDOM_UPDATE_LOCK_KEY,
+            generation,
+            String(mutationRevision),
+            token,
+          ));
+      if (!completed) await scheduleRandomRebuild();
     } finally {
+      await lockRenewal.stop();
       await releaseRandomUpdateLock(token);
     }
   } catch {
@@ -564,61 +792,70 @@ export async function buildRandomFilterSet(input: {
   const revision = await redis.get(RANDOM_MUTATION_REVISION_KEY).catch(() => "0") ?? "0";
   const signature = `${input.signature}|r=${revision}`;
   const finalKey = randomFilterKey(input.generation, signature, "final");
-  const cachedCount = Number(await redis.eval(
-    `if redis.call("EXISTS", KEYS[1]) == 0 then return -1 end
-     local count = redis.call("SCARD", KEYS[1])
-     redis.call("EXPIRE", KEYS[1], ARGV[1])
-     return count`,
-    1,
-    finalKey,
-    RANDOM_FILTER_TTL_SECONDS
-  ));
-  if (cachedCount >= 0) return { key: finalKey, count: cachedCount };
+  return coalesce(`random-filter:${finalKey}`, async () => {
+    const cachedCount = Number(await redis.eval(
+      `if redis.call("EXISTS", KEYS[1]) == 0 then return -1 end
+       local count = redis.call("SCARD", KEYS[1])
+       redis.call("EXPIRE", KEYS[1], ARGV[1])
+       return count`,
+      1,
+      finalKey,
+      RANDOM_FILTER_TTL_SECONDS
+    ));
+    if (cachedCount >= 0) return { key: finalKey, count: cachedCount };
 
-  const tempKeys: string[] = [];
-  let current = randomFilterKey(input.generation, signature, "base");
-  tempKeys.push(current);
-  if (!input.baseSetKeys.length) await redis.del(current);
-  else if (input.baseSetKeys.length === 1) await redis.sunionstore(current, input.baseSetKeys[0]);
-  else await redis.sunionstore(current, ...input.baseSetKeys);
+    const tempKeys: string[] = [];
+    let current = randomFilterKey(input.generation, signature, "base");
+    tempKeys.push(current);
+    try {
+      if (!input.baseSetKeys.length) await redis.del(current);
+      else if (input.baseSetKeys.length === 1) await redis.sunionstore(current, input.baseSetKeys[0]);
+      else await redis.sunionstore(current, ...input.baseSetKeys);
 
-  const applyUnion = async (kind: "tag" | "author", values: string[], suffix: string) => {
-    if (!values.length) return "";
-    const key = randomFilterKey(input.generation, signature, suffix);
-    const sourceKeys = values.map((value) => kind === "tag" ? randomTagSetKey(input.generation, value) : randomAuthorSetKey(input.generation, value));
-    await redis.sunionstore(key, ...sourceKeys);
-    tempKeys.push(key);
-    return key;
-  };
+      const applyUnion = async (kind: "tag" | "author", values: string[], suffix: string) => {
+        if (!values.length) return "";
+        const key = randomFilterKey(input.generation, signature, suffix);
+        const sourceKeys = values.map((value) => kind === "tag" ? randomTagSetKey(input.generation, value) : randomAuthorSetKey(input.generation, value));
+        tempKeys.push(key);
+        await redis.sunionstore(key, ...sourceKeys);
+        return key;
+      };
 
-  const intersectWith = async (source: string, suffix: string) => {
-    if (!source) return;
-    const next = randomFilterKey(input.generation, signature, suffix);
-    await redis.sinterstore(next, current, source);
-    tempKeys.push(next);
-    current = next;
-  };
+      const intersectWith = async (source: string, suffix: string) => {
+        if (!source) return;
+        const next = randomFilterKey(input.generation, signature, suffix);
+        tempKeys.push(next);
+        await redis.sinterstore(next, current, source);
+        current = next;
+      };
 
-  const diffWith = async (source: string, suffix: string) => {
-    if (!source) return;
-    const next = randomFilterKey(input.generation, signature, suffix);
-    await redis.sdiffstore(next, current, source);
-    tempKeys.push(next);
-    current = next;
-  };
+      const diffWith = async (source: string, suffix: string) => {
+        if (!source) return;
+        const next = randomFilterKey(input.generation, signature, suffix);
+        tempKeys.push(next);
+        await redis.sdiffstore(next, current, source);
+        current = next;
+      };
 
-  await intersectWith(await applyUnion("tag", input.tagInclude, "tag-include"), "after-tag-include");
-  await diffWith(await applyUnion("tag", input.tagExclude, "tag-exclude"), "after-tag-exclude");
-  await intersectWith(await applyUnion("author", input.authorInclude, "author-include"), "after-author-include");
-  await diffWith(await applyUnion("author", input.authorExclude, "author-exclude"), "after-author-exclude");
+      await intersectWith(await applyUnion("tag", input.tagInclude, "tag-include"), "after-tag-include");
+      await diffWith(await applyUnion("tag", input.tagExclude, "tag-exclude"), "after-tag-exclude");
+      await intersectWith(await applyUnion("author", input.authorInclude, "author-include"), "after-author-include");
+      await diffWith(await applyUnion("author", input.authorExclude, "author-exclude"), "after-author-exclude");
 
-  if (current !== finalKey) {
-    await redis.sunionstore(finalKey, current);
-  }
-  const count = await redis.scard(finalKey);
-  const pipeline = redis.pipeline();
-  for (const key of tempKeys) pipeline.expire(key, RANDOM_FILTER_TTL_SECONDS);
-  pipeline.expire(finalKey, RANDOM_FILTER_TTL_SECONDS);
-  await execRedisPipeline(pipeline);
-  return { key: finalKey, count };
+      if (current !== finalKey) await redis.sunionstore(finalKey, current);
+      const count = await redis.scard(finalKey);
+      const pipeline = redis.pipeline();
+      for (const key of tempKeys) pipeline.expire(key, RANDOM_FILTER_TTL_SECONDS);
+      pipeline.expire(finalKey, RANDOM_FILTER_TTL_SECONDS);
+      await execRedisPipeline(pipeline);
+      return { key: finalKey, count };
+    } catch (error) {
+      const cleanup = redis.pipeline();
+      for (const key of new Set([...tempKeys, finalKey])) {
+        cleanup.expire(key, RANDOM_FILTER_TTL_SECONDS);
+      }
+      await execRedisPipeline(cleanup).catch(() => undefined);
+      throw error;
+    }
+  });
 }

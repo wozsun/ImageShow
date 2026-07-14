@@ -8,7 +8,7 @@ import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
 import { adminApiBasePath, queryKeys } from "../../lib/constants.js";
 import { errorMessage, formatDate, formatImageClassification, imageDisplayTitle } from "../../lib/ui/formatters.js";
 import { useStorageNameResolver } from "../../lib/api/storage-options.js";
-import type { AdminSettings, Author, ImageItem, Tag, Theme } from "../../lib/types.js";
+import type { AdminSettings, FacetOption, ImageItem } from "../../lib/types.js";
 import { ImageDetailModal } from "../../components/image/ImageDetailModal.js";
 import { ThumbImage } from "../../components/image/ThumbImage.js";
 import { BatchMetadataModal } from "./BatchMetadataModal.js";
@@ -48,12 +48,15 @@ export function ImageAdmin() {
   const { data: settingsData } = useQuery<{ settings: AdminSettings }>({ queryKey: queryKeys.settings, queryFn: () => api(`${adminApiBasePath}/settings`) });
 
   const editorDataNeeded = Boolean(editing || batchEditing);
-  const { data: themeData } = useQuery<{ items: Theme[] }>({ queryKey: queryKeys.themes, queryFn: () => api(`${adminApiBasePath}/themes`), enabled: editorDataNeeded });
-  const themes = themeData?.items ?? [];
-  const { data: tagData } = useQuery<{ items: Tag[] }>({ queryKey: queryKeys.tags, queryFn: () => api(`${adminApiBasePath}/tags`), enabled: editorDataNeeded });
-  const allTags = tagData?.items ?? [];
-  const { data: authorData } = useQuery<{ items: Author[] }>({ queryKey: queryKeys.authors, queryFn: () => api(`${adminApiBasePath}/authors`), enabled: editorDataNeeded });
-  const authors = authorData?.items ?? [];
+  const { data: vocabulary } = useQuery<{ themes: FacetOption[]; tags: FacetOption[]; authors: FacetOption[] }>({
+    queryKey: queryKeys.importVocabulary,
+    queryFn: () => api(`${adminApiBasePath}/import-vocabulary`),
+    enabled: editorDataNeeded,
+    staleTime: Number.POSITIVE_INFINITY
+  });
+  const themes = vocabulary?.themes ?? [];
+  const allTags = vocabulary?.tags ?? [];
+  const authors = vocabulary?.authors ?? [];
   // 列表卡片左下角的「所在存储」展示后端显示名（而非 slug）；从后端列表解析。
   const storageName = useStorageNameResolver();
   const pageSize = settingsData?.settings.admin.image_page_size ?? 50;

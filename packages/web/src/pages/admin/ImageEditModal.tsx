@@ -1,4 +1,4 @@
-import type { Author, FacetOption, ImageItem } from "../../lib/types.js";
+import type { FacetOption, ImageItem } from "../../lib/types.js";
 import { BatchMetadataModal } from "./BatchMetadataModal.js";
 
 export function ImageEditModal({
@@ -12,7 +12,7 @@ export function ImageEditModal({
   item: ImageItem;
   themes: FacetOption[];
   allTags: FacetOption[];
-  authors: Author[];
+  authors: FacetOption[];
   onClose: () => void;
   onSaved: () => void;
 }) {

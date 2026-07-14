@@ -108,5 +108,12 @@ export async function publicImageUrls(objectKey: string, slug: string, isLink: b
 
 export async function testStorageBackend(config?: StorageConfig) {
   const effective = config ?? await getDefaultStorageBackend();
-  return driverFor(effective).selfTest();
+  const driver = driverFor(effective);
+  try {
+    return await driver.selfTest();
+  } finally {
+    if (effective.slug === "(test)") {
+      await Promise.resolve(driver.close?.()).catch(() => undefined);
+    }
+  }
 }

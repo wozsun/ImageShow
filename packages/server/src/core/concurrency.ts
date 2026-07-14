@@ -1,6 +1,12 @@
-export async function mapWithConcurrency<T>(items: T[], limit: number, task: (item: T) => Promise<void>): Promise<void> {
+export async function mapWithConcurrency<T, Result>(
+  items: T[],
+  limit: number,
+  task: (item: T) => Promise<Result>
+): Promise<Result[]> {
   const size = Math.max(1, limit);
+  const results: Result[] = [];
   for (let offset = 0; offset < items.length; offset += size) {
-    await Promise.all(items.slice(offset, offset + size).map(task));
+    results.push(...await Promise.all(items.slice(offset, offset + size).map(task)));
   }
+  return results;
 }

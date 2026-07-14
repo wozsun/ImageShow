@@ -14,6 +14,13 @@ import { withStorageMutationLock } from "../storage/maintenance-lock.ts";
 import { isReservedSubdomain } from "../themes/host.ts";
 import { ensureTheme } from "../themes/service.ts";
 import { ensureAuthor } from "../authors/service.ts";
+import {
+  invalidateEntityCountCaches,
+  invalidateOrCollectEntityCountCaches,
+  refreshEntityVocabularies,
+  type EntityCacheKind,
+  type EntityCountCacheInvalidationBatch,
+} from "../vocab/vocab-cache.ts";
 import { detectBrightness } from "./brightness.ts";
 import { deviceFromDimensions, resolveOptionalBrightnessWith, resolveOptionalDeviceWith } from "./classification.ts";
 import { publicImage, type ImageRecord } from "./presenter.ts";
@@ -29,6 +36,10 @@ function detectImageDevice(image: ImageRecord) {
   if (image.status !== "ready") return undefined;
   return deviceFromDimensions(image.width, image.height);
 }
+
+type ImageMutationOptions = {
+  entityCountInvalidationBatch?: EntityCountCacheInvalidationBatch;
+};
 
 async function applyImageFieldEdits(
   executor: Pool | PoolClient,
@@ -58,10 +69,13 @@ export async function deleteImage(id: string) {
   await syncRandomImage(deleted.id);
   await invalidateMd5Cache(deleted.md5 ?? "");
   await invalidateImageLookupEntries([deleted]);
-  await invalidateImageReadCaches();
+  await Promise.all([
+    invalidateImageReadCaches(),
+    invalidateEntityCountCaches(["theme", "author"]),
+  ]);
 }
 
-export async function updateImageMetadata(id: string, body: unknown) {
+export async function updateImageMetadata(id: string, body: unknown, options: ImageMutationOptions = {}) {
   const current = (await pool.query("SELECT * FROM metadata WHERE id=$1", [id])).rows[0] as ImageRecord | undefined;
   if (!current) throw new ApiError(404, "not_found", "Image not found");
 
@@ -79,14 +93,23 @@ export async function updateImageMetadata(id: string, body: unknown) {
   const targetBrightness = next.brightness ?? current.brightness;
   const targetTheme = next.theme ?? current.theme;
   const classificationChanged = targetDevice !== current.device || targetBrightness !== current.brightness || targetTheme !== current.theme;
+  const authorChanged = touchAuthor && authorValue !== current.author;
 
   if (!classificationChanged) {
-    if (next.author) await ensureAuthor(pool, next.author);
+    const createdAuthor = next.author ? await ensureAuthor(pool, next.author) : false;
     const updated = await applyImageFieldEdits(pool, id, next, authorValue, touchAuthor);
     await syncRandomImage(id);
     await invalidateMd5Cache(current.md5 ?? "");
     await invalidateImageLookupEntries([{ id, object_key: current.object_key }]);
-    await invalidateImageReadCaches();
+    const cacheTasks: Array<Promise<unknown>> = [invalidateImageReadCaches()];
+    if (authorChanged) {
+      cacheTasks.push(invalidateOrCollectEntityCountCaches(
+        ["author"],
+        options.entityCountInvalidationBatch,
+      ));
+    }
+    if (createdAuthor) cacheTasks.push(refreshEntityVocabularies(["author"]));
+    await Promise.all(cacheTasks);
     return publicImage(updated);
   }
 
@@ -128,6 +151,7 @@ export async function updateImageMetadata(id: string, body: unknown) {
     let updated: ImageRecord | null = null;
     let committedObjectKey = "";
     let copiedObjectKey = "";
+    const createdEntityKinds = new Set<EntityCacheKind>();
     try {
       await client.query("BEGIN");
       const locked = (await client.query("SELECT * FROM metadata WHERE id=$1 FOR UPDATE", [id])).rows[0] as ImageRecord | undefined;
@@ -142,13 +166,13 @@ export async function updateImageMetadata(id: string, body: unknown) {
       const nextObjectKey = isLink ? locked.object_key : storageObjectKey(device, brightness, theme, id, locked.ext);
 
       if (device === locked.device && brightness === locked.brightness && theme === locked.theme) {
-        if (next.author) await ensureAuthor(client, next.author);
+        if (next.author && await ensureAuthor(client, next.author)) createdEntityKinds.add("author");
         updated = await applyImageFieldEdits(client, id, next, authorValue, touchAuthor);
         await client.query("COMMIT");
         committedObjectKey = locked.object_key;
       } else {
-        await ensureTheme(client, theme);
-        if (next.author) await ensureAuthor(client, next.author);
+        if (await ensureTheme(client, theme)) createdEntityKinds.add("theme");
+        if (next.author && await ensureAuthor(client, next.author)) createdEntityKinds.add("author");
 
         if (!isLink && nextObjectKey !== locked.object_key) {
           if (preCopiedObjectKey !== nextObjectKey) {
@@ -229,7 +253,17 @@ export async function updateImageMetadata(id: string, body: unknown) {
       { id, object_key: sourceImage.object_key },
       { object_key: committedObjectKey }
     ]);
-    await invalidateImageReadCaches();
+    const changedEntityKinds: EntityCacheKind[] = [];
+    if (updated && sourceImage.theme !== updated.theme) changedEntityKinds.push("theme");
+    if (updated && sourceImage.author !== updated.author) changedEntityKinds.push("author");
+    await Promise.all([
+      invalidateImageReadCaches(),
+      invalidateOrCollectEntityCountCaches(
+        changedEntityKinds,
+        options.entityCountInvalidationBatch,
+      ),
+      refreshEntityVocabularies(createdEntityKinds),
+    ]);
     return publicImage(updated ?? ((await pool.query("SELECT * FROM metadata WHERE id=$1", [id])).rows[0] as ImageRecord));
   });
 }

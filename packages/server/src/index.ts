@@ -21,6 +21,7 @@ import { registerAdminImageRoutes } from "./routes/admin-images.ts";
 import { registerAdminTagRoutes } from "./routes/admin-tags.ts";
 import { registerAdminThemeRoutes } from "./routes/admin-themes.ts";
 import { registerAdminAuthorRoutes } from "./routes/admin-authors.ts";
+import { registerAdminImportVocabularyRoute } from "./routes/admin-entity-routes.ts";
 import { registerAdminUserRoutes } from "./routes/admin-users.ts";
 import { registerCheckRoutes } from "./routes/check.ts";
 import { registerDocsRoutes } from "./routes/docs.ts";
@@ -36,6 +37,7 @@ import { registerImportRoutes } from "./routes/imports.ts";
 import { drainWorker, startWorker, stopWorker } from "./jobs/worker.ts";
 import { enforceThemeHostNavigation, isAllowedSiteHost, specialHost, themeFromHost } from "./themes/host.ts";
 import { onStorageBackendChange } from "./storage/backend-registry.ts";
+import { rebuildRandomPool } from "./random/random-cache.ts";
 
 const app = new Hono();
 
@@ -121,6 +123,7 @@ registerAdminImageRoutes(app);
 registerAdminTagRoutes(app);
 registerAdminThemeRoutes(app);
 registerAdminAuthorRoutes(app);
+registerAdminImportVocabularyRoute(app);
 registerAdminUserRoutes(app);
 registerImportRoutes(app);
 registerAdminLogRoutes(app);
@@ -148,6 +151,11 @@ onRuntimeConfigChange(() => {
 });
 onStorageBackendChange(() => void invalidateImageReadCaches());
 startWorker();
+const startupRandomPool = rebuildRandomPool({ requireFresh: false }).catch((error) => {
+  // Redis is a derived layer. A failed warm-up is retried by normal reads and
+  // queued rebuild jobs without preventing the HTTP service from starting.
+  logger.warn("startup random pool warm-up failed", error);
+});
 
 const serverPort = getRuntimeConfig().port;
 const server = serve({ fetch: app.fetch, port: serverPort });
@@ -165,6 +173,7 @@ async function shutdown(signal: string) {
     await new Promise<void>((resolve) => server.close(() => resolve()));
     stopWorker();
     await drainWorker();
+    await startupRandomPool;
     await redis.quit().catch(() => redis.disconnect());
     await pool.end().catch(() => undefined);
   } finally {

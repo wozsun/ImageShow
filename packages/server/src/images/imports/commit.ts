@@ -5,7 +5,11 @@ import { syncRandomImage } from "../../random/random-cache.ts";
 import { ensureTheme } from "../../themes/service.ts";
 import { resolveTagNames } from "../../tags/query.ts";
 import { replaceImageTags } from "../../tags/service.ts";
-import { invalidateTagVocab } from "../../vocab/vocab-cache.ts";
+import {
+  invalidateEntityCountCaches,
+  refreshEntityVocabularies,
+  type EntityCacheKind,
+} from "../../vocab/vocab-cache.ts";
 import { linkThumbnailKey, storageObjectKey, thumbnailObjectKey } from "../../storage/image-paths.ts";
 import { withStorageMutationLock } from "../../storage/maintenance-lock.ts";
 import { copyObject, exists, removeObject } from "../../storage/storage.ts";
@@ -27,11 +31,22 @@ import type {
   PreparedPayload
 } from "./types.ts";
 
-async function finishImport(image: ImageRecord, payload: PreparedPayload) {
-  if (payload.tags?.length) await invalidateTagVocab();
+async function finishImport(
+  image: ImageRecord,
+  payload: PreparedPayload,
+  createdEntityKinds: Iterable<EntityCacheKind> = [],
+) {
   await syncRandomImage(image.id);
-  await invalidateMd5Cache(payload.md5);
-  await invalidateImageReadCaches();
+  await Promise.all([
+    invalidateImageReadCaches(),
+    invalidateEntityCountCaches([
+      "theme",
+      ...(image.author ? ["author" as const] : []),
+      ...((payload.tags?.length ?? 0) ? ["tag" as const] : []),
+    ]),
+    refreshEntityVocabularies(createdEntityKinds),
+    invalidateMd5Cache(payload.md5),
+  ]);
   await setImageLookupById({
     id: image.id,
     object_key: image.object_key,
@@ -42,7 +57,9 @@ async function finishImport(image: ImageRecord, payload: PreparedPayload) {
     device: image.device,
     brightness: image.brightness,
     theme: image.theme,
-    status: image.status
+    status: image.status,
+    description: image.description ?? "",
+    source: image.source ?? ""
   });
   if (!image.is_link) {
     await setImageLookup({
@@ -95,8 +112,9 @@ async function commitStoredImageSession(
       brightness: payload.resolved_brightness
     });
     const result = await withTransaction(async (client) => {
-      await ensureTheme(client, payload.theme);
-      await ensureAuthor(client, payload.author);
+      const createdEntityKinds = new Set<EntityCacheKind>();
+      if (await ensureTheme(client, payload.theme)) createdEntityKinds.add("theme");
+      if (await ensureAuthor(client, payload.author)) createdEntityKinds.add("author");
       const insertedRow = await client.query(
         `INSERT INTO metadata(id, image_time, device, brightness, theme, width, height, image_size, ext,
          object_key, storage_slug, title, description, source, original, md5, thumbnail_size, author)
@@ -128,7 +146,7 @@ async function commitStoredImageSession(
         ? insertedRow.rows[0]
         : (await client.query("SELECT * FROM metadata WHERE id=$1", [id])).rows[0]
       ) as ImageRecord;
-      await replaceImageTags(client, image.id, resolvedTags);
+      if (await replaceImageTags(client, image.id, resolvedTags)) createdEntityKinds.add("tag");
       const finalized = await client.query(
         "UPDATE import_session SET status='finalized', updated_at=now() WHERE id=$1 AND status='committing'",
         [id]
@@ -136,7 +154,7 @@ async function commitStoredImageSession(
       if (!finalized.rowCount) {
         throw new ApiError(409, "invalid_import_state", "导入任务提交状态已变化");
       }
-      return { image, inserted };
+      return { image, inserted, createdEntityKinds };
     });
     databaseCommitted = true;
 
@@ -144,7 +162,7 @@ async function commitStoredImageSession(
       removeObject("_uploads", stagingImageKey(id), backend).catch(() => undefined),
       removeObject("_uploads", payload.prepared_thumbnail_key, backend).catch(() => undefined)
     ]);
-    await finishImport(result.image, payload);
+    await finishImport(result.image, payload, result.createdEntityKinds);
     return { status: "imported" as const, item: await publicImage(result.image) };
   } catch (error) {
     if (!databaseCommitted) {
@@ -197,8 +215,9 @@ async function commitProxySession(
     }
 
     const result = await withTransaction(async (client) => {
-      await ensureTheme(client, payload.theme);
-      await ensureAuthor(client, payload.author);
+      const createdEntityKinds = new Set<EntityCacheKind>();
+      if (await ensureTheme(client, payload.theme)) createdEntityKinds.add("theme");
+      if (await ensureAuthor(client, payload.author)) createdEntityKinds.add("author");
       const insertedRow = await client.query(
         `INSERT INTO metadata(id, image_time, device, brightness, theme, width, height, ext,
          object_key, storage_slug, is_link, title, description, source, original, md5, thumbnail_size, author)
@@ -231,7 +250,9 @@ async function commitProxySession(
             "SELECT * FROM metadata WHERE id=$1",
             [id]
           )).rows[0] as ImageRecord | undefined;
-      if (image) await replaceImageTags(client, image.id, resolvedTags);
+      if (image && await replaceImageTags(client, image.id, resolvedTags)) {
+        createdEntityKinds.add("tag");
+      }
       const finalized = await client.query(
         "UPDATE import_session SET status='finalized', updated_at=now() WHERE id=$1 AND status='committing'",
         [id]
@@ -239,16 +260,20 @@ async function commitProxySession(
       if (!finalized.rowCount) {
         throw new ApiError(409, "invalid_import_state", "导入任务提交状态已变化");
       }
-      return { image, inserted };
+      return { image, inserted, createdEntityKinds };
     });
     databaseCommitted = true;
 
     await removeObject("_uploads", payload.prepared_thumbnail_key, backend).catch(() => undefined);
     if (!result.image) {
       await removeObject("link", linkKey, backend).catch(() => undefined);
+      await Promise.all([
+        refreshEntityVocabularies(result.createdEntityKinds),
+        invalidateEntityCountCaches(result.createdEntityKinds),
+      ]);
       return { status: "duplicate" as const };
     }
-    await finishImport(result.image, payload);
+    await finishImport(result.image, payload, result.createdEntityKinds);
     return { status: "imported" as const, item: await publicImage(result.image) };
   } catch (error) {
     if (!databaseCommitted && copiedLink) {

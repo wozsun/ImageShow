@@ -61,7 +61,10 @@ function zodErrorMessage(error: z.ZodError) {
 }
 
 export function parseJsonlManifest(content: string, options: { maxItems: number; timeZone?: string }) {
-  const maxItems = Math.max(1, Math.floor(options.maxItems));
+  const maxItems = Math.min(
+    appConfig.imports.batchHardLimit,
+    Math.max(1, Math.floor(options.maxItems))
+  );
   if (Buffer.byteLength(content, "utf8") > appConfig.imports.jsonlManifestMaxBytes) {
     throw new JsonlManifestError("jsonl_too_large", "JSONL 清单内容过大");
   }

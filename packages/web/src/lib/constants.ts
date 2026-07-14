@@ -12,6 +12,7 @@ export const queryKeys = {
   tags: ["tags"] as const,
   themes: ["themes"] as const,
   authors: ["authors"] as const,
+  importVocabulary: ["import-vocabulary"] as const,
   users: ["users"] as const,
   settings: ["settings"] as const,
   logs: ["admin-logs"] as const,

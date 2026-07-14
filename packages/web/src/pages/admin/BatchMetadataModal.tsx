@@ -15,8 +15,47 @@ import { adminApiBasePath } from "../../lib/constants.js";
 import { formatBytes, formatDimensions } from "../../lib/ui/formatters.js";
 import { batchCommonBrightnessOptions, batchCommonDeviceOptions, cardBrightnessSelectOptions, editCardDeviceSelectOptions } from "../../lib/ui/select-options.js";
 import { storageNameResolver, useStorageOptions } from "../../lib/api/storage-options.js";
-import type { Author, Brightness, Device, FacetOption, ImageDraft, ImageItem } from "../../lib/types.js";
+import type { Brightness, Device, FacetOption, ImageDraft, ImageItem } from "../../lib/types.js";
 import { mergeBatchEditCommonAttributes, normalizeAuthor, normalizeTheme } from "../../lib/upload/upload-utils.js";
+
+type BatchMetadataChanges = Record<keyof ImageDraft, boolean>;
+type BatchMetadataUpdate = { id: string } & Partial<ImageDraft>;
+
+function tagsChanged(draftTags: string[], savedTags: string[]) {
+  return JSON.stringify([...draftTags].sort()) !== JSON.stringify([...savedTags].sort());
+}
+
+function fieldsChangedFor(item: ImageItem, draft: ImageDraft): BatchMetadataChanges {
+  return {
+    title: draft.title !== item.title,
+    description: draft.description !== item.description,
+    source: draft.source !== item.source,
+    original: draft.original !== item.original,
+    device: draft.device !== item.device,
+    brightness: draft.brightness !== item.brightness,
+    theme: normalizeTheme(draft.theme) !== normalizeTheme(item.theme),
+    author: normalizeAuthor(draft.author) !== normalizeAuthor(item.author === "none" ? "" : item.author),
+    tags: tagsChanged(draft.tags, item.tags ?? [])
+  };
+}
+
+function changedMetadataUpdate(
+  item: ImageItem,
+  draft: ImageDraft,
+  changed: BatchMetadataChanges
+): BatchMetadataUpdate {
+  const update: BatchMetadataUpdate = { id: item.id };
+  if (changed.title) update.title = draft.title;
+  if (changed.description) update.description = draft.description;
+  if (changed.source) update.source = draft.source;
+  if (changed.original) update.original = draft.original;
+  if (changed.device) update.device = draft.device;
+  if (changed.brightness) update.brightness = draft.brightness;
+  if (changed.theme) update.theme = normalizeTheme(draft.theme);
+  if (changed.author) update.author = normalizeAuthor(draft.author);
+  if (changed.tags) update.tags = draft.tags;
+  return update;
+}
 
 export function BatchMetadataModal({
   items,
@@ -32,7 +71,7 @@ export function BatchMetadataModal({
   pageSize: number;
   themes: FacetOption[];
   allTags: FacetOption[];
-  authors: Author[];
+  authors: FacetOption[];
   onClose: () => void;
   onSaved: () => void;
   single?: boolean;
@@ -73,37 +112,30 @@ export function BatchMetadataModal({
   useEffect(() => setPage((current) => Math.min(current, totalPages)), [totalPages]);
   const patchDraft = (id: string, patch: Partial<ImageDraft>) => setDrafts((current) => ({ ...current, [id]: { ...current[id], ...patch } }));
 
-  const fieldsChangedFor = (item: ImageItem) => {
-    const draft = drafts[item.id];
-    return {
-      title: draft.title !== item.title,
-      description: draft.description !== item.description,
-      source: draft.source !== item.source,
-      original: draft.original !== item.original,
-      device: draft.device !== item.device,
-      brightness: draft.brightness !== item.brightness,
-      theme: draft.theme !== (item.theme === "none" ? "" : item.theme),
-      author: draft.author !== (item.author === "none" ? "" : item.author),
-      tags: JSON.stringify([...draft.tags].sort()) !== JSON.stringify([...(item.tags ?? [])].sort())
-    };
-  };
-  const changedByItem = new Map(activeItems.map((item) => [item.id, fieldsChangedFor(item)]));
+  const changedByItem = new Map(activeItems.map((item) => [
+    item.id,
+    fieldsChangedFor(item, drafts[item.id])
+  ]));
   const changedCount = activeItems.filter((item) => Object.values(changedByItem.get(item.id)!).some(Boolean)).length;
   const modalSubtitle = single ? (items[0]?.object_key ?? "") : `${activeItems.length} 张图片`;
 
   const commonChanged = { device: common.device !== "", brightness: common.brightness !== "", theme: common.theme.trim() !== "", author: common.author.trim() !== "", tags: common.tags.length > 0 };
   const commonHasValue = commonChanged.device || commonChanged.brightness || commonChanged.theme || commonChanged.author || commonChanged.tags;
   const saveAll = async () => {
+    const changedItems = activeItems.flatMap((item) => {
+      const changed = changedByItem.get(item.id)!;
+      if (!Object.values(changed).some(Boolean)) return [];
+      return [changedMetadataUpdate(item, drafts[item.id], changed)];
+    });
+    if (!changedItems.length) return;
+
     setSaving(true);
     setError("");
     try {
-      for (const item of activeItems) {
-        const draft = drafts[item.id];
-        await api(`${adminApiBasePath}/images/${item.id}`, { method: "POST", body: JSON.stringify({ ...draft, theme: normalizeTheme(draft.theme), author: normalizeAuthor(draft.author) }) });
-        if (JSON.stringify([...draft.tags].sort()) !== JSON.stringify([...(item.tags ?? [])].sort())) {
-          await api(`${adminApiBasePath}/images/${item.id}/tags`, { method: "POST", body: JSON.stringify({ tags: draft.tags }) });
-        }
-      }
+      await api(`${adminApiBasePath}/images/batch-update`, {
+        method: "POST",
+        body: JSON.stringify({ items: changedItems }),
+      });
       exit.requestClose(onSaved);
     } catch (err) {
       setError((err as Error).message);
@@ -284,7 +316,7 @@ export function BatchMetadataModal({
           )}
           <div className="modal-footer-actions">
             <button type="button" disabled={saving} onClick={() => exit.requestClose()}>取消</button>
-            <button className="button" type="submit" disabled={saving || !activeItems.length}>
+            <button className="button" type="submit" disabled={saving || !changedCount}>
               <Icon name="save-3-line" />{saving ? "保存中" : (!single && changedCount) ? `保存 (${changedCount})` : "保存"}
             </button>
           </div>

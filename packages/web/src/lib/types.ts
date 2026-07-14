@@ -97,6 +97,9 @@ export type WebdavSettings = {
   root_path: string;
   public_base_url: string;
   list_depth_infinity: boolean;
+  connect_timeout_seconds: number;
+  idle_timeout_seconds: number;
+  task_timeout_seconds: number;
   password?: string;
   password_configured?: boolean;
 };

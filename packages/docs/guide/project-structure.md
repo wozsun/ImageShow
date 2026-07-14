@@ -33,7 +33,7 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 
 | 文件 | 职责 |
 | --- | --- |
-| `index.ts` | 应用装配：挂载安全响应头、多主机路由中间件、注册所有路由；启动时依次 `ensureRuntimeDirectories → pingDb → runMigrations → initializeAdmin → pingRedis → startWorker`，并处理 SIGTERM 优雅退出。 |
+| `index.ts` | 应用装配：挂载安全响应头、多主机路由中间件、注册所有路由；启动时依次 `ensureRuntimeDirectories → pingDb → runMigrations → initializeAdmin → pingRedis → startWorker`，再异步确保随机池存在，并处理 SIGTERM 优雅退出。 |
 | `admin-password-cli.ts` | 宿主机/容器管理员密码恢复入口：隐藏读取新密码、更新 PostgreSQL 账号，并尽力清除 Redis 管理会话。 |
 | `config/bootstrap-env.ts` | 启动环境边界：解析 `NODE_ENV`、首次管理员凭据和首次生成 `config.json` 所需环境变量；集中导出数据、存储、临时文件和日志目录。环境变量只在配置文件首次生成时播种。 |
 | `config/runtime-config.ts` | 完整运行时配置的严格 zod schema、可迁移配置投影、当前配置解析和嵌套 patch 合并。 |
@@ -57,6 +57,8 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | `core/http.ts` | HTTP 工具：`ok()` / `fail()` / `routeError()`、`ApiError`、`requireAuth` / `requireCsrf` / `requireSuper`、会话 cookie、登录限流、`clientIp()`。 |
 | `core/audit-log.ts` | 后台非 GET 写操作审计：记录操作者、角色、路径、状态、耗时、IP，失败时附带响应 code/error。 |
 | `core/coalesce.ts` | 进程内 in-flight 合并工具，用于公共列表 / 详情 / facets / 概览 / MD5 等缓存 miss 后避免重复查询。 |
+| `core/redis-json.ts` | PostgreSQL 派生 JSON 缓存的类型化 GET / SET EX / 删除 helper；Redis 故障只产生 cache miss。 |
+| `core/http-validator.ts` | 静态资源与图片字节出口共用的 ETag 强弱比较、条件请求、If-Range 和 HTTP 日期语义。 |
 | `core/concurrency.ts` | 简单有界并发遍历工具，用于存储检查 / 清理等批量操作。 |
 | `core/validation.ts` | 请求体 / 查询参数的 zod schema：`listQuery`（含 `shuffle`）、`metadataInput`、导入 / 批量操作输入等。 |
 | `core/external-image-fetch.ts` | 外部图片 URL 安全边界：限制 HTTPS、要求域名、验证证书、用连接级受控 DNS lookup 阻断 rebinding 与内网 / metadata 地址、逐跳重定向校验、超时请求与图片内容嗅探，并对外统一安全拒绝提示，供链接导入和 link/original 代理复用。 |
@@ -89,7 +91,7 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | --- | --- |
 | `images/service.ts` | 软删除 `deleteImage()`、改元数据 / 换分类 `updateImageMetadata()`（换分类＝移动对象键并同步 Redis 随机池，link 只移动缩略图）、单 / 批量迁移存储。 |
 | `images/read-models/` | 图片读取模型：`public-images.ts`（公共列表 / 详情与 Redis 缓存）、`admin-images.ts`（后台列表 / 详情）、`duplicates.ts`（MD5 判重）、`facets.ts`、`overview.ts`，以及复用的 `pagination.ts`；Redis miss 后按场景做同进程 in-flight 合并。 |
-| `images/image-cache.ts` | 图片读缓存：公共列表 generation、公共列表 / 公开详情缓存、后台概览缓存、原图直连探测缓存、Redis 8 `HSETEX` 原子写入的对象键 / 缩略图键 / 图片 id lookup、MD5 判重缓存，以及公共 generation / facets / 定向 lookup 分层失效。 |
+| `images/image-cache.ts` | 图片读缓存：公共列表 generation、公共列表 / 公开详情缓存、后台概览缓存、原图直连探测缓存、Redis 8 `HSETEX` 原子写入且字段 TTL 独立为 6 小时的对象键 / 缩略图键 / 图片 id lookup、MD5 判重缓存，以及公共 generation / facets / 定向 lookup 分层失效；不触发实体缓存刷新。 |
 | `images/serving.ts` | 存储对象、缩略图、link 与后台字节出口；集中处理 Content-Length、内容 / 对象版本 ETag、304、单段 Range / If-Range、外部回源代理、原图直连探测及其短 TTL 缓存、缓存策略和缩略图缺失时的乐观读取 / 补建。 |
 | `images/original-link.ts` | 原图入口判断工具：计算展示 URL、规范化比较 URL，并只在 `original` 为 HTTPS 且不同于展示图时开放原图按钮 / 跳转。 |
 | `images/presenter.ts` | `publicImage()` / `publicImages()` 把 DB 行变成后台可复用的完整图片视图、`publicImageDetail()`（公开详情字段白名单）、`publicImageCard()`（公共列表卡片白名单）、`adminImageView()`（后台投影：去 `ext`、已删除图改指鉴权字节端点）。缓存键与 lookup 预热归读取 / 缓存模块。 |
@@ -111,7 +113,7 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | `themes/{types,query,service}.ts` | 主题：注册表、`resolveThemeTermMap` 别名 / 显示名解析。一图一主题。 |
 | `themes/host.ts` | 主机名解析：`specialHost()`、`themeFromHost()`、`enforceThemeHostNavigation`、`isReservedSubdomain()`。 |
 | `authors/{types,query,service}.ts` | 作者：注册表、`resolveAuthorTermMap` 别名 / 显示名解析。一图一作者，多一个 `link` 字段，不参与分类键。 |
-| `vocab/vocab-cache.ts` | 主题 / 标签 / 作者词表 Redis 缓存与 gallery facets 联动失效。 |
+| `vocab/vocab-cache.ts` | 主题 / 标签 / 作者词表和后台带计数列表的六个独立 Redis 读模型；缓存值携带单实例进程 epoch 与本地 revision，失效失败或进程重启后的遗留值不会重新命中；词表只在实体定义变化时刷新，计数列表用 dirty revision 合并重复失效并在 miss 时按实体类型 `coalesce()` 单飞回源；提供批量失效收集器。 |
 | `users/admin-bootstrap.ts` · `users/credentials.ts` | advisory lock 保护的首个 super 初始化，以及初始化、后台接口和恢复 CLI 共用的账号规则。 |
 | `users/password-{recovery,upgrade}.ts` | 紧急密码恢复与登录成功后的旧参数哈希条件升级。 |
 | `users/session-invalidation.ts` · `users/admin-password-command.ts` | Redis 管理会话全量 / 按账号失效和恢复命令参数解析。 |
@@ -122,7 +124,7 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | 文件 | 职责 |
 | --- | --- |
 | `random/service.ts` | 编排一次随机：校验→解析主题 / 标签 / 作者别名→定候选轴→取最近已服务列表→Redis 池取→记录已服务 id。 |
-| `random/random-cache.ts` | Redis generation 随机池、axis/category/tag/author 集合与 `RandomCategoryCounts` 分类计数、随机池派生的画廊筛选轴、跨实例单飞全量重建、增量同步及 Lua 合并读；Redis 更新失败时排 `cache.rebuild`。 |
+| `random/random-cache.ts` | Redis generation 随机池、axis/category/tag/author 集合与 `RandomCategoryCounts` 分类计数、随机池派生的画廊筛选轴、单飞全量重建、带 token 续租的增量同步及 Lua 合并读；数据库快照提交后才写 generation，随机池不预热 lookup，Redis 更新不确定时排 `cache.rebuild`。 |
 | `random/picker.ts` | `resolveCandidateAxes()`（按 UA 推设备）、`pickFromRedisPool()`（按 axis/category 计数加权选集合，tag/author 用 Redis 临时过滤集合，跳过最近项并保留 fallback）。 |
 | `random/dedupe.ts` | 短时不重复：`filterSignature()`、`recentlyServedIds()`、`rememberServedId()`（Redis LPUSH + LTRIM + EXPIRE）。 |
 | `random/query.ts` | 随机请求参数校验、主题 / 标签 / 作者选择子解析、`img-count` 统计数据。 |
@@ -153,9 +155,10 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | `routes/public.ts` | `GET /api/images`、`/api/images/:id`、`/api/images/:id/original`、`/api/site-config`、`/api/gallery-facets`、`/media/*`、`/thumbs/*`、`/original/:id` |
 | `routes/random.ts` | `GET /random`、`GET /img-count`、`random.<域名>/`、`<theme>.<域名>/random` |
 | `routes/auth.ts` | 登录 / 登出 / `/api/admin/auth/me`（登录态、CSRF token、验证码开关、登录背景） |
-| `routes/admin-images.ts` | 后台图片增删改查、批量、迁移、回收站原图、登录态轻量 `admin-info` |
+| `routes/admin-images.ts` | 后台图片增删改查、单请求批量元数据 / 标签编辑、迁移、回收站原图、登录态轻量 `admin-info` |
 | `routes/imports.ts` | 统一 `/api/admin/imports/*`：JSONL parse、create、PUT file、prepare、preview、status、SSE events、commit、cancel |
 | `routes/admin-tags.ts` · `admin-themes.ts` · `admin-authors.ts` · `admin-users.ts` | 标签 / 主题 / 作者 / 用户管理 |
+| `routes/admin-entity-routes.ts` | 标签 / 主题 / 作者相同 CRUD 路由骨架及精简导入词表入口；删除副作用仍由各领域 service 承担。 |
 | `routes/settings.ts` | 读取、保存与重载应用设置 |
 | `routes/advanced-config.ts` | super 完整配置读取 / 预检 / 保存，以及配置包导出、导入预检和应用接口 |
 | `routes/storage.ts` | 存储后端选项、CRUD、排序、默认后端切换与 `POST /storage/test` 自检 |

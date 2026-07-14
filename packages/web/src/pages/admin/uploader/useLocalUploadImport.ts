@@ -1,9 +1,11 @@
+import { importBatchHardLimit } from "@imageshow/shared";
 import { useCallback, useRef } from "react";
 import type { ImportJob } from "../../../lib/types.js";
 import { browserUuid, draftFromFile, isUploadableImage, normalizeAuthor, normalizeTheme, runWithConcurrency, type CommonImageAttributes } from "../../../lib/upload/upload-utils.js";
 import { retryPrepareJob } from "./import-job-utils.js";
-import { applyPreparedResult, isCurrentImportAttempt, type AppendImportQueueApi } from "./prepared-result.js";
-import { cancelStoredImport, createImportSession, prepareImportSession, uploadLocalRaw } from "./import-api.js";
+import { isCurrentImportAttempt, type AppendImportQueueApi } from "./prepared-result.js";
+import { cancelStoredImport, uploadLocalRaw } from "./import-api.js";
+import { applyImportAttemptFailure, runImportAttempt } from "./import-attempt.js";
 
 function fileFingerprint(file: File) {
   // 这里只做浏览器内“同一文件重复选择”的快速去重；最终内容去重仍以服务端标准化后的 md5 为准。
@@ -27,63 +29,58 @@ export function useLocalUploadImport(options: {
     activeRequests.current.set(job.id, { attemptKey, abort: () => controller.abort() });
     try {
       queue.updateJob(job.id, { status: "queued", message: "创建上传会话", uploadProgress: 0 });
-      const session = await createImportSession({
-        ...job.draft,
-        mode: "upload",
-        theme: normalizeTheme(job.draft.theme),
-        author: normalizeAuthor(job.draft.author),
-        size: job.file.size,
-        idempotency_key: attemptKey,
-        storage_slug: job.storageSlug,
-        batch_time: job.batchTime,
-        manifest_position: job.manifestPosition
-      }, controller.signal);
-      if (!isCurrentImportAttempt(queue, job.id, attemptKey)) {
-        await cancelStoredImport(session.id).catch(() => undefined);
-        return;
-      }
-      queue.updateJob(job.id, { sessionId: session.id });
-      queue.updateJob(job.id, { status: "uploading", message: "浏览器上传原文件", uploadProgress: 0 });
-      const request = uploadLocalRaw(session, job.file, {
-        onProgress: (uploadProgress) => {
-          if (isCurrentImportAttempt(queue, job.id, attemptKey)) queue.updateJob(job.id, { uploadProgress });
+      const result = await runImportAttempt({
+        queue,
+        job,
+        controller,
+        createInput: {
+          ...job.draft,
+          mode: "upload",
+          theme: normalizeTheme(job.draft.theme),
+          author: normalizeAuthor(job.draft.author),
+          size: job.file.size,
+          idempotency_key: attemptKey,
+          storage_slug: job.storageSlug,
+          batch_time: job.batchTime,
+          manifest_position: job.manifestPosition
         },
-        onUploaded: () => {
-          if (isCurrentImportAttempt(queue, job.id, attemptKey)) {
-            queue.updateJob(job.id, { status: "processing", message: "上传完成，等待服务端处理", uploadProgress: 100 });
-          }
+        onSession: (session) => queue.updateJob(job.id, { sessionId: session.id }),
+        transfer: async (session) => {
+          queue.updateJob(job.id, { status: "uploading", message: "浏览器上传原文件", uploadProgress: 0 });
+          const request = uploadLocalRaw(session, job.file!, {
+            onProgress: (uploadProgress) => {
+              if (isCurrentImportAttempt(queue, job.id, attemptKey)) queue.updateJob(job.id, { uploadProgress });
+            },
+            onUploaded: () => {
+              if (isCurrentImportAttempt(queue, job.id, attemptKey)) {
+                queue.updateJob(job.id, { status: "processing", message: "上传完成，等待服务端处理", uploadProgress: 100 });
+              }
+            }
+          });
+          // XHR 才能提供上传进度；取消时同时中断会话请求和文件传输。
+          activeRequests.current.set(job.id, {
+            attemptKey,
+            abort: () => {
+              controller.abort();
+              request.abort();
+            }
+          });
+          await request.promise;
+        },
+        onPreparing: () => {
+          activeRequests.current.set(job.id, { attemptKey, abort: () => controller.abort() });
+          queue.updateJob(job.id, { status: "processing", message: "上传完成，等待服务端处理", uploadProgress: 100 });
         }
       });
-      // uploadLocalRaw 使用 XMLHttpRequest 才能拿到上传进度；这里保存 abort，取消按钮可中断仍在传输的请求。
-      activeRequests.current.set(job.id, {
-        attemptKey,
-        abort: () => {
-          controller.abort();
-          request.abort();
-        }
-      });
-      await request.promise;
-      if (!isCurrentImportAttempt(queue, job.id, attemptKey)) {
-        await cancelStoredImport(session.id).catch(() => undefined);
-        return;
-      }
-      activeRequests.current.set(job.id, { attemptKey, abort: () => controller.abort() });
-      queue.updateJob(job.id, { status: "processing", message: "上传完成，等待服务端处理", uploadProgress: 100 });
-      const prepared = await prepareImportSession(session, controller.signal);
-      const accepted = applyPreparedResult(queue, job.id, attemptKey, prepared);
-      if (accepted.status === "duplicate") {
-        await cancelStoredImport(session.id).catch(() => undefined);
+      if (!result) return;
+      if (result.acceptance.status === "duplicate") {
+        await cancelStoredImport(result.session.id).catch(() => undefined);
         if (isCurrentImportAttempt(queue, job.id, attemptKey)) {
           queue.updateJob(job.id, { status: "cancelled", message: "批次内最终文件重复，已取消" });
         }
-      } else if (accepted.status === "stale") {
-        await cancelStoredImport(session.id).catch(() => undefined);
       }
     } catch (error) {
-      const current = queue.jobsRef.current.find((item) => item.id === job.id);
-      if (current?.attemptKey === attemptKey && current.status !== "cancelled") {
-        queue.updateJob(job.id, { status: "failed", failureStage: "prepare", message: (error as Error).message });
-      }
+      applyImportAttemptFailure(queue, job.id, attemptKey, error);
     } finally {
       if (activeRequests.current.get(job.id)?.attemptKey === attemptKey) activeRequests.current.delete(job.id);
     }
@@ -98,6 +95,10 @@ export function useLocalUploadImport(options: {
       existing.add(fingerprint);
       return true;
     });
+    if (selected.length > importBatchHardLimit) {
+      window.alert(`单批最多允许 ${importBatchHardLimit} 个本地文件，请拆分后再导入`);
+      return;
+    }
     const batchTime = new Date().toISOString();
     const jobs = await Promise.all(selected.map(async (file, manifestPosition): Promise<ImportJob> => {
       const objectUrl = URL.createObjectURL(file);

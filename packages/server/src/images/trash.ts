@@ -4,6 +4,7 @@ import { restoreImageFromTrash, restoreImagesFromTrash } from "./restore.ts";
 import { removeObject } from "../storage/storage.ts";
 import { thumbnailRef } from "../storage/image-paths.ts";
 import { invalidateImageLookupEntries, invalidateImageReadCaches, invalidateMd5Cache, invalidateMd5Caches } from "./image-cache.ts";
+import { invalidateEntityCountCaches } from "../vocab/vocab-cache.ts";
 
 export async function restoreDeletedImage(id: string, missingIsError = true) {
   const result = await restoreImageFromTrash(id);
@@ -13,7 +14,10 @@ export async function restoreDeletedImage(id: string, missingIsError = true) {
   }
   await invalidateMd5Cache(result.image.md5 ?? "");
   await invalidateImageLookupEntries([result.image]);
-  await invalidateImageReadCaches();
+  await Promise.all([
+    invalidateImageReadCaches(),
+    invalidateEntityCountCaches(["theme", "author"]),
+  ]);
   return true;
 }
 
@@ -22,7 +26,10 @@ export async function batchRestoreImages(ids: string[]) {
   await invalidateMd5Caches(restoredImages.map((image) => image.md5 ?? ""));
   if (restoredImages.length) {
     await invalidateImageLookupEntries(restoredImages);
-    await invalidateImageReadCaches();
+    await Promise.all([
+      invalidateImageReadCaches(),
+      invalidateEntityCountCaches(["theme", "author"]),
+    ]);
   }
   return {
     requested: ids.length,
@@ -62,7 +69,10 @@ export async function purgeDeletedImages(ids?: string[]) {
     await pool.query("DELETE FROM metadata WHERE id = ANY($1::uuid[]) AND status='deleted'", [deletedIds]);
     await invalidateMd5Caches(deletedRows.map((row) => row.md5));
     await invalidateImageLookupEntries(deletedRows);
-    await invalidateImageReadCaches();
+    await Promise.all([
+      invalidateImageReadCaches(),
+      invalidateEntityCountCaches(["tag"]),
+    ]);
   }
   return { requested: rows.length, deleted: deletedIds.length, failed };
 }

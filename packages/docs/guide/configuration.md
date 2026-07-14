@@ -40,8 +40,8 @@ ImageShow 的配置按持久化位置分为三类：数据库、`/app/data/confi
 | `link_image.concurrency` | 单客户端 URL 导入队列并发数，覆盖“下载保存”和“代理链接”。 |
 | `link_image.global_concurrency` | 服务端 URL 导入 prepare 全局并发数，多个客户端共享；只在配置文件中维护。 |
 | `link_image.fetch_timeout_seconds` | 外链图片请求超时，单位秒；只覆盖下载和代理准备阶段的外部请求。 |
-| `link_image.url_list_max_items` | URL 列表单次输入数量上限，默认 100；不在设置页展示，管理端只读返回该值供导入窗口预检。 |
-| `link_image.jsonl_max_items` | JSONL 清单单次图片数量上限，默认 100、最大 4096（受 UUIDv7 `rand_a` 容量约束）；不在设置页展示，管理端只读返回该值供导入窗口预检，修改需编辑配置文件。 |
+| `link_image.url_list_max_items` | URL 列表单次输入软上限，默认 100；不在设置页展示，管理端只读返回该值供导入窗口预检，可配置范围为 1–3000。 |
+| `link_image.jsonl_max_items` | JSONL 清单单次图片软上限，默认 100；不在设置页展示，管理端只读返回该值供导入窗口预检，修改需编辑配置文件，可配置范围为 1–3000。 |
 | `normalize.*` | 本地上传与下载导入共用的最终入库文件标准化策略。 |
 | `thumbnail.*` | 缩略图长边和压缩质量，只影响此后新生成的缩略图。 |
 | `import.commit_concurrency` | 单个管理页面同时执行的 commit 数，默认 5；只在配置文件中维护，管理端只读返回。 |
@@ -94,6 +94,10 @@ ImageShow 的配置按持久化位置分为三类：数据库、`/app/data/confi
 输入本身是 WebP、体积小于 `normalize.skip_webp_under_kb` 且长边已经达标时，原字节直接成为最终候选文件；服务端仍会执行解码校验、标准缩略图生成和最终 MD5 计算。`upload.concurrency` / `link_image.concurrency` 只约束单个后台页面自己的队列；`upload.global_concurrency` / `link_image.global_concurrency` 约束服务端 prepare 全局并发，即使调用方绕过前端队列直接打接口，进程内也会排队并支持取消等待中的任务。
 
 commit 使用独立的 `import.commit_concurrency` / `import.global_commit_concurrency`，不再复用上传或 URL prepare 并发。前者限制单个后台页面，后者在取得会话 advisory lock、存储共享锁和数据库事务连接之前限制整个服务端进程。该许可覆盖正式对象复制、数据库事务、暂存清理和缓存更新，而不只是 `INSERT`。PostgreSQL 应用连接池上限为 30。
+
+URL、JSONL 和本地文件的一次前端批次都有 3000 项硬上限；URL / JSONL
+还需同时满足上述可配置软上限。超过限制会在创建会话前明确拒绝，不自动拆成多个
+`batch_time`，避免改变输入顺序语义或制造额外 HTTP 请求。
 
 ## 高级配置
 

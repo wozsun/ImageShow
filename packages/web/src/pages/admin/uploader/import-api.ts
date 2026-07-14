@@ -35,6 +35,25 @@ export type ImportSession = {
   expires_at: string;
 };
 
+export type ImportSessionHandle = Pick<ImportSession, "id" | "mode" | "status" | "prepare_url"> & {
+  upload_url?: string;
+};
+
+export type ImportSessionCreateInput = ImageDraft & {
+  mode: "upload" | "download" | "proxy";
+  size?: number;
+  source_url?: string;
+  image_time?: string;
+  batch_time?: string;
+  manifest_position?: number;
+  idempotency_key: string;
+  storage_slug: string;
+};
+
+export type BatchImportSessionResult =
+  | { idempotency_key: string; session: ImportSessionHandle }
+  | { idempotency_key: string; error: string; code: string };
+
 export type JsonlManifestItem = {
   line: number;
   manifest_position: number;
@@ -82,17 +101,34 @@ export function getStoredImportStatuses(ids: string[], signal?: AbortSignal) {
   return api<{ items: StoredImportStatus[] }>(`${adminApiBasePath}/imports/status?ids=${query}`, { signal }).then((result) => result.items);
 }
 
-export function createImportSession(input: ImageDraft & {
-  mode: "upload" | "download" | "proxy";
-  size?: number;
-  source_url?: string;
-  image_time?: string;
-  batch_time?: string;
-  manifest_position?: number;
-  idempotency_key: string;
-  storage_slug: string;
-}, signal?: AbortSignal) {
+export function createImportSession(input: ImportSessionCreateInput, signal?: AbortSignal) {
   return api<ImportSession>(`${adminApiBasePath}/imports/create`, { method: "POST", body: JSON.stringify(input), signal });
+}
+
+export function createImportSessionsBatch(
+  source: "urls" | "jsonl",
+  items: ImportSessionCreateInput[],
+  signal?: AbortSignal
+) {
+  type RawResult =
+    | { idempotency_key: string; id: string; mode: "download" | "proxy"; status: string }
+    | { idempotency_key: string; error: string; code: string };
+  return api<{ items: RawResult[] }>(`${adminApiBasePath}/imports/batch-create`, {
+    method: "POST",
+    body: JSON.stringify({ source, items }),
+    signal
+  }).then(({ items: results }): BatchImportSessionResult[] => results.map((result) => {
+    if ("error" in result) return result;
+    return {
+      idempotency_key: result.idempotency_key,
+      session: {
+        id: result.id,
+        mode: result.mode,
+        status: result.status,
+        prepare_url: `${adminApiBasePath}/imports/${result.id}/prepare`
+      }
+    };
+  }));
 }
 
 export function parseImportJsonl(content: string, signal?: AbortSignal) {
@@ -103,7 +139,7 @@ export function parseImportJsonl(content: string, signal?: AbortSignal) {
   });
 }
 
-export function prepareImportSession(session: ImportSession, signal?: AbortSignal) {
+export function prepareImportSession(session: ImportSessionHandle, signal?: AbortSignal) {
   return api<PreparedImport>(session.prepare_url, { method: "POST", signal });
 }
 
@@ -121,7 +157,7 @@ export function storedImportStatusMessage(state: StoredImportStatus) {
 }
 
 export function uploadLocalRaw(
-  session: ImportSession,
+  session: ImportSessionHandle,
   file: File,
   callbacks: { onProgress: (progress: number) => void; onUploaded: () => void }
 ) {

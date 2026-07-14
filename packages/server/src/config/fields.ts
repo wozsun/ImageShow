@@ -56,8 +56,8 @@ export const normalizeMaxSizeKb = z.coerce.number().int().min(50).max(100 * 1024
 export const skipWebpUnderKb = z.coerce.number().int().min(0).max(100 * 1024);
 export const linkImageConcurrency = z.coerce.number().int().min(1).max(16);
 export const linkFetchTimeoutSeconds = z.coerce.number().int().min(5).max(300);
-export const linkImportMaxItems = z.coerce.number().int().min(1).max(10_000);
-export const jsonlImportMaxItems = z.coerce.number().int().min(1).max(4_096);
+export const linkImportMaxItems = z.coerce.number().int().min(1).max(appConfig.imports.batchHardLimit);
+export const jsonlImportMaxItems = z.coerce.number().int().min(1).max(appConfig.imports.batchHardLimit);
 
 export const taskConcurrency = z.coerce.number().int().min(1).max(32);
 

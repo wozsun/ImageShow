@@ -1,5 +1,6 @@
 import { appConfig, type Brightness, type Device } from "@imageshow/shared";
 import { redis } from "../core/redis-client.ts";
+import { deleteRedisKeys, getRedisJson, setRedisJson } from "../core/redis-json.ts";
 import { execRedisPipeline } from "../core/redis-pipeline.ts";
 import { thumbnailObjectKey } from "../storage/image-paths.ts";
 
@@ -11,9 +12,10 @@ const PUBLIC_IMAGES_GEN_KEY = "imageshow:public_images_gen";
 export const IMAGE_LOOKUP_MEDIA_KEY = "imageshow:image_lookup:media";
 export const IMAGE_LOOKUP_THUMBS_KEY = "imageshow:image_lookup:thumbs";
 export const IMAGE_LOOKUP_ID_KEY = "imageshow:image_lookup:id";
-export const GALLERY_FACETS_KEY = "imageshow:gallery_facets";
+const GALLERY_FACETS_KEY = "imageshow:gallery_facets";
 const ORIGINAL_DIRECT_CACHE_TTL_SECONDS = 60 * 60;
 const ADMIN_OVERVIEW_CACHE_TTL_SECONDS = 60;
+export const IMAGE_LOOKUP_TTL_SECONDS = appConfig.imageLookup.ttlSeconds;
 
 export type ImageLookupItem = {
   object_key: string;
@@ -33,6 +35,8 @@ export type ImageLookupByIdItem = {
   brightness: Brightness;
   theme: string;
   status: string;
+  description: string;
+  source: string;
 };
 type OriginalDirectCacheValue = { direct: boolean };
 
@@ -64,7 +68,8 @@ export function parseImageLookupById(raw: string): ImageLookupByIdItem | null {
       || typeof value.ext !== "string" || !imageLookupExtensions.has(value.ext)
       || typeof value.storage_slug !== "string" || typeof value.is_link !== "boolean"
       || !appConfig.devices.includes(value.device as Device) || !appConfig.brightness.includes(value.brightness as Brightness)
-      || typeof value.theme !== "string" || typeof value.status !== "string" || !imageLookupStatuses.has(value.status)) return null;
+      || typeof value.theme !== "string" || typeof value.status !== "string" || !imageLookupStatuses.has(value.status)
+      || typeof value.description !== "string" || typeof value.source !== "string") return null;
     return value as ImageLookupByIdItem;
   } catch {
     return null;
@@ -80,20 +85,11 @@ export async function publicImagesCacheGeneration(): Promise<string> {
 }
 
 export async function getPublicImagesCache<T>(key: string) {
-  try {
-    const raw = await redis.get(`${PUBLIC_IMAGES_CACHE_PREFIX}${key}`);
-    return raw ? JSON.parse(raw) as T : null;
-  } catch {
-    return null;
-  }
+  return getRedisJson<T>(`${PUBLIC_IMAGES_CACHE_PREFIX}${key}`);
 }
 
 export async function setPublicImagesCache(key: string, value: unknown) {
-  try {
-    await redis.set(`${PUBLIC_IMAGES_CACHE_PREFIX}${key}`, JSON.stringify(value), "EX", appConfig.derivedCacheTtlSeconds);
-  } catch {
-    // Redis 不可用时以 PostgreSQL 为准。
-  }
+  await setRedisJson(`${PUBLIC_IMAGES_CACHE_PREFIX}${key}`, value);
 }
 
 export async function getPublicImageDetailCache<T>(key: string) {
@@ -105,39 +101,20 @@ export async function setPublicImageDetailCache(key: string, value: unknown) {
 }
 
 export async function getOriginalDirectCache(key: string) {
-  try {
-    const raw = await redis.get(`${ORIGINAL_DIRECT_CACHE_PREFIX}${key}`);
-    if (!raw) return null;
-    const value = JSON.parse(raw) as Partial<OriginalDirectCacheValue>;
-    return typeof value.direct === "boolean" ? { direct: value.direct } : null;
-  } catch {
-    return null;
-  }
+  const value = await getRedisJson<Partial<OriginalDirectCacheValue>>(`${ORIGINAL_DIRECT_CACHE_PREFIX}${key}`);
+  return typeof value?.direct === "boolean" ? { direct: value.direct } : null;
 }
 
 export async function setOriginalDirectCache(key: string, direct: boolean) {
-  try {
-    await redis.set(`${ORIGINAL_DIRECT_CACHE_PREFIX}${key}`, JSON.stringify({ direct }), "EX", ORIGINAL_DIRECT_CACHE_TTL_SECONDS);
-  } catch {
-    // 外站直连策略缓存失败时，下次请求重新探测即可。
-  }
+  await setRedisJson(`${ORIGINAL_DIRECT_CACHE_PREFIX}${key}`, { direct }, ORIGINAL_DIRECT_CACHE_TTL_SECONDS);
 }
 
 export async function getAdminOverviewCache<T>(key: string) {
-  try {
-    const raw = await redis.get(`${ADMIN_OVERVIEW_CACHE_PREFIX}${key}`);
-    return raw ? JSON.parse(raw) as T : null;
-  } catch {
-    return null;
-  }
+  return getRedisJson<T>(`${ADMIN_OVERVIEW_CACHE_PREFIX}${key}`);
 }
 
 export async function setAdminOverviewCache(key: string, value: unknown) {
-  try {
-    await redis.set(`${ADMIN_OVERVIEW_CACHE_PREFIX}${key}`, JSON.stringify(value), "EX", ADMIN_OVERVIEW_CACHE_TTL_SECONDS);
-  } catch {
-    // 管理概览缓存失败只会多跑一次聚合查询。
-  }
+  await setRedisJson(`${ADMIN_OVERVIEW_CACHE_PREFIX}${key}`, value, ADMIN_OVERVIEW_CACHE_TTL_SECONDS);
 }
 
 export async function getImageLookupByThumbKey(thumbKey: string) {
@@ -180,7 +157,7 @@ async function setImageLookups(items: ImageLookupItem[]) {
     pipeline.hsetex(
       IMAGE_LOOKUP_MEDIA_KEY,
       "EX",
-      appConfig.derivedCacheTtlSeconds,
+      IMAGE_LOOKUP_TTL_SECONDS,
       "FIELDS",
       items.length,
       ...mediaFieldValues
@@ -188,7 +165,7 @@ async function setImageLookups(items: ImageLookupItem[]) {
     pipeline.hsetex(
       IMAGE_LOOKUP_THUMBS_KEY,
       "EX",
-      appConfig.derivedCacheTtlSeconds,
+      IMAGE_LOOKUP_TTL_SECONDS,
       "FIELDS",
       items.length,
       ...thumbFieldValues
@@ -204,7 +181,7 @@ export async function setImageLookupById(item: ImageLookupByIdItem) {
     await redis.hsetex(
       IMAGE_LOOKUP_ID_KEY,
       "EX",
-      appConfig.derivedCacheTtlSeconds,
+      IMAGE_LOOKUP_TTL_SECONDS,
       "FIELDS",
       1,
       item.id,
@@ -222,7 +199,7 @@ async function setImageLookupsById(items: ImageLookupByIdItem[]) {
     await redis.hsetex(
       IMAGE_LOOKUP_ID_KEY,
       "EX",
-      appConfig.derivedCacheTtlSeconds,
+      IMAGE_LOOKUP_TTL_SECONDS,
       "FIELDS",
       items.length,
       ...fieldValues
@@ -243,6 +220,8 @@ export async function warmImageLookups(items: Array<{
   brightness?: Brightness;
   theme?: string;
   status?: string;
+  description?: string | null;
+  source?: string | null;
 }>) {
   const objectLookups: ImageLookupItem[] = [];
   const idLookups: ImageLookupByIdItem[] = [];
@@ -267,7 +246,9 @@ export async function warmImageLookups(items: Array<{
         device: item.device,
         brightness: item.brightness,
         theme: item.theme,
-        status: item.status
+        status: item.status,
+        description: item.description ?? "",
+        source: item.source ?? ""
       });
     }
   }
@@ -309,63 +290,33 @@ export async function invalidateImageLookupEntries(items: Array<{
   }
 }
 
-export async function invalidateAllImageLookups() {
-  try {
-    await redis.del(IMAGE_LOOKUP_MEDIA_KEY, IMAGE_LOOKUP_THUMBS_KEY, IMAGE_LOOKUP_ID_KEY);
-  } catch {
-    // 全量维护完成后缓存会按字段 TTL 自然过期。
-  }
-}
-
 export async function getMd5Cache(md5: string) {
-  try {
-    const raw = await redis.get(`${MD5_CACHE_PREFIX}${md5}`);
-    return raw ? JSON.parse(raw) as unknown[] : null;
-  } catch {
-    return null;
-  }
+  return getRedisJson<unknown[]>(`${MD5_CACHE_PREFIX}${md5}`);
 }
 
 export async function setMd5Cache(md5: string, items: unknown[]) {
-  try {
-    await redis.set(`${MD5_CACHE_PREFIX}${md5}`, JSON.stringify(items), "EX", appConfig.derivedCacheTtlSeconds);
-  } catch {
-    // 判重下次可回退到 PostgreSQL。
-  }
+  await setRedisJson(`${MD5_CACHE_PREFIX}${md5}`, items);
 }
 
 export async function invalidateMd5Cache(md5: string) {
   if (!md5) return;
-  try {
-    await redis.del(`${MD5_CACHE_PREFIX}${md5}`);
-  } catch {
-    // PostgreSQL 仍是真相源，缓存失效失败不影响正确性。
-  }
+  await deleteRedisKeys(`${MD5_CACHE_PREFIX}${md5}`);
 }
 
 export async function invalidateMd5Caches(md5s: string[]) {
   const keys = [...new Set(md5s.filter(Boolean))].map((md5) => `${MD5_CACHE_PREFIX}${md5}`);
   if (!keys.length) return;
-  try {
-    await redis.del(...keys);
-  } catch {
-    // PostgreSQL 仍是真相源，旧缓存会自然过期。
-  }
+  await deleteRedisKeys(...keys);
 }
 
 export async function getGalleryFacetsCache<T>(): Promise<T | null> {
-  try {
-    const raw = await redis.get(GALLERY_FACETS_KEY);
-    return raw ? JSON.parse(raw) as T : null;
-  } catch {
-    return null;
-  }
+  return getRedisJson<T>(GALLERY_FACETS_KEY);
 }
 
 export async function setGalleryFacetsCache(value: unknown) {
-  try {
-    await redis.set(GALLERY_FACETS_KEY, JSON.stringify(value), "EX", appConfig.derivedCacheTtlSeconds);
-  } catch {
-    // Redis 不可用时以 PostgreSQL 为准。
-  }
+  await setRedisJson(GALLERY_FACETS_KEY, value);
+}
+
+export async function invalidateGalleryFacetsCache() {
+  await deleteRedisKeys(GALLERY_FACETS_KEY);
 }

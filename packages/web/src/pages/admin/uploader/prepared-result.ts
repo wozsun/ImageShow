@@ -14,7 +14,7 @@ export type AppendImportQueueApi = ImportQueueApi & {
   appendJobs: (jobs: ImportJob[]) => void;
 };
 
-type PreparedApplyResult =
+export type PreparedApplyResult =
   | { status: "applied" }
   | { status: "duplicate"; ownerId: string }
   | { status: "stale" };

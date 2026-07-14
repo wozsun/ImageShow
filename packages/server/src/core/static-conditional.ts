@@ -1,4 +1,5 @@
 import type { Context, Next } from "hono";
+import { conditionalRequestNotModified } from "./http-validator.ts";
 
 /** @internal Exported only for static Range validator verification. */
 export function staticEtag(headers: Headers) {
@@ -13,10 +14,6 @@ export function staticEtag(headers: Headers) {
   return `W/\"${modifiedTime.toString(16)}-${resourceLength.toString(16)}-${encoding}\"`;
 }
 
-function noneMatchMatches(header: string, etag: string) {
-  return header.split(",").some((candidate) => candidate.trim() === "*" || candidate.trim() === etag);
-}
-
 export async function conditionalStaticResponse(c: Context, next: Next) {
   await next();
   if (c.req.method !== "GET" && c.req.method !== "HEAD") return;
@@ -28,9 +25,12 @@ export async function conditionalStaticResponse(c: Context, next: Next) {
   const ifNoneMatch = c.req.header("if-none-match");
   const lastModified = c.res.headers.get("Last-Modified");
   const ifModifiedSince = c.req.header("if-modified-since");
-  const notModified = etag && ifNoneMatch
-    ? noneMatchMatches(ifNoneMatch, etag)
-    : Boolean(lastModified && ifModifiedSince && Date.parse(ifModifiedSince) >= Date.parse(lastModified));
+  const notModified = conditionalRequestNotModified({
+    ifNoneMatch,
+    ifModifiedSince,
+    etag,
+    lastModified
+  });
   if (!notModified) return;
 
   const headers = new Headers(c.res.headers);

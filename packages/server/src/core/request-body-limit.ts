@@ -8,6 +8,9 @@ const jsonlManifestBodyMaxBytes = appConfig.imports.jsonlManifestMaxBytes;
 const advancedConfigMaxBytes =
   appConfig.imports.configPackageMaxBytes + 64 * 1024;
 const jsonlManifestPath = `${adminApiBasePath}/imports/jsonl/parse`;
+const importBatchCreatePath = `${adminApiBasePath}/imports/batch-create`;
+const batchImageUpdatePath = `${adminApiBasePath}/images/batch-update`;
+const batchImageUpdateBodyMaxBytes = 8 * 1024 * 1024;
 const importFilePath = new RegExp(`^${adminApiBasePath}/imports/[^/]+/file$`);
 const advancedConfigLargeBodyPath = new RegExp(
   `^${adminApiBasePath}/advanced-config/(?:preview|import|runtime(?:/validate)?)$`
@@ -36,10 +39,22 @@ const limitConfigPackageBody = bodyLimit({
   onError: tooLarge
 });
 
+const limitBatchImageUpdateBody = bodyLimit({
+  maxSize: batchImageUpdateBodyMaxBytes,
+  onError: tooLarge
+});
+
 export function limitApiRequestBody(c: Context, next: Next) {
   const path = new URL(c.req.url).pathname;
-  if (path === jsonlManifestPath || (c.req.method === "PUT" && importFilePath.test(path))) {
+  if (
+    path === jsonlManifestPath
+    || path === importBatchCreatePath
+    || (c.req.method === "PUT" && importFilePath.test(path))
+  ) {
     return next();
+  }
+  if (c.req.method === "POST" && path === batchImageUpdatePath) {
+    return limitBatchImageUpdateBody(c, next);
   }
   if (c.req.method === "POST" && advancedConfigLargeBodyPath.test(path)) {
     return limitConfigPackageBody(c, next);

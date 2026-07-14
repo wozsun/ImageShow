@@ -28,6 +28,7 @@ export type StorageSelfTest = {
 };
 
 export interface StorageDriver {
+  close?(): void | Promise<void>;
   exists(prefix: StoragePrefix, key: string): Promise<boolean>;
   openRead(prefix: StoragePrefix, key: string, range?: string): Promise<OpenedRead>;
   readBuffer(prefix: StoragePrefix, key: string): Promise<Buffer>;
@@ -59,7 +60,11 @@ function createDriver(config: StorageConfig): StorageDriver {
 }
 
 export function clearStorageDriverCache() {
+  const drivers = [...driverCache.values()];
   driverCache.clear();
+  for (const driver of drivers) {
+    void Promise.resolve(driver.close?.()).catch(() => undefined);
+  }
 }
 
 export function driverFor(config: StorageConfig): StorageDriver {

@@ -1,5 +1,5 @@
 import { pool } from "../core/db.ts";
-import { getTagVocab } from "../vocab/vocab-cache.ts";
+import { getAdminTagList, getTagVocab } from "../vocab/vocab-cache.ts";
 import { resolveSlugs, resolveTermMap } from "../core/term-resolve.ts";
 import type { Tag } from "./types.ts";
 
@@ -22,12 +22,7 @@ export async function getTagsForImages(ids: string[]): Promise<Map<string, strin
 }
 
 export async function listTagsWithCounts(): Promise<Tag[]> {
-  return (await pool.query(
-    `SELECT t.slug, t.display_name,
-            (SELECT count(*)::int FROM image_tag it WHERE it.tag_slug = t.slug) AS image_count
-     FROM tag t
-     ORDER BY t.sort_order ASC, t.slug ASC`
-  )).rows as Tag[];
+  return getAdminTagList();
 }
 
 export function resolveTagTermMap(terms: string[]): Promise<Map<string, string>> {

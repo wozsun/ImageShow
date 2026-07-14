@@ -14,7 +14,7 @@ import { useBodyScrollLock } from "../../../hooks/useBodyScrollLock.js";
 import { adminApiBasePath, queryKeys } from "../../../lib/constants.js";
 import { storageBackendLabel, uploadCommonBrightnessOptions, uploadCommonDeviceOptions } from "../../../lib/ui/select-options.js";
 import { useStorageOptions } from "../../../lib/api/storage-options.js";
-import type { AdminSettings, Author, ImageItem, ImportJob, Tag, Theme } from "../../../lib/types.js";
+import type { AdminSettings, FacetOption, ImageItem, ImportJob } from "../../../lib/types.js";
 import type { CommonImageAttributes } from "../../../lib/upload/upload-utils.js";
 import { ImportJobList } from "./ImportJobList.js";
 import type { ImportPreviewTarget } from "./DuplicateMatchPanel.js";
@@ -44,12 +44,15 @@ export function Uploader({ onDone }: { onDone: () => void }) {
   const detailReturnFocusRef = useRef<HTMLElement | null>(null);
 
   const { data: settingsData } = useQuery<{ settings: AdminSettings }>({ queryKey: queryKeys.settings, queryFn: () => api(`${adminApiBasePath}/settings`) });
-  const { data: themeData } = useQuery<{ items: Theme[] }>({ queryKey: queryKeys.themes, queryFn: () => api(`${adminApiBasePath}/themes`), enabled: open });
-  const { data: tagData } = useQuery<{ items: Tag[] }>({ queryKey: queryKeys.tags, queryFn: () => api(`${adminApiBasePath}/tags`), enabled: open });
-  const { data: authorData } = useQuery<{ items: Author[] }>({ queryKey: queryKeys.authors, queryFn: () => api(`${adminApiBasePath}/authors`), enabled: open });
-  const themes = themeData?.items ?? [];
-  const tags = tagData?.items ?? [];
-  const authors = authorData?.items ?? [];
+  const { data: vocabulary } = useQuery<{ themes: FacetOption[]; tags: FacetOption[]; authors: FacetOption[] }>({
+    queryKey: queryKeys.importVocabulary,
+    queryFn: () => api(`${adminApiBasePath}/import-vocabulary`),
+    enabled: open,
+    staleTime: Number.POSITIVE_INFINITY
+  });
+  const themes = vocabulary?.themes ?? [];
+  const tags = vocabulary?.tags ?? [];
+  const authors = vocabulary?.authors ?? [];
 
   const pageSize = settingsData?.settings.upload.list_page_size ?? 20;
   const maxBytes = (settingsData?.settings.upload.max_file_size_mb ?? 100) * 1024 * 1024;

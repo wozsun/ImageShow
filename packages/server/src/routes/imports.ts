@@ -1,12 +1,13 @@
 import type { Hono } from "hono";
-import { adminApiBasePath } from "@imageshow/shared";
+import { adminApiBasePath, appConfig } from "@imageshow/shared";
 import { ApiError, ok } from "../core/http.ts";
-import { importCommitInput, importCreateInput, jsonlManifestInput, parse, uuidInput } from "../core/validation.ts";
+import { importBatchCreateInput, importCommitInput, importCreateInput, jsonlManifestInput, parse, uuidInput } from "../core/validation.ts";
 import { commitImportSession } from "../images/imports/commit.ts";
 import { prepareImportSession } from "../images/imports/prepare.ts";
 import { getImportStatus, listImportStatuses, streamImportEvents } from "../images/imports/progress.ts";
 import {
   cancelImportSession,
+  createImportSessions,
   createImportSession,
   previewImportSession,
   receiveImportFile
@@ -20,6 +21,22 @@ export function registerImportRoutes(app: Hono) {
   app.post(`${adminApiBasePath}/imports/create`, async (c) => {
     const input = parse(importCreateInput, await c.req.json().catch(() => ({})));
     return c.json(ok(await createImportSession(input)));
+  });
+
+  app.post(`${adminApiBasePath}/imports/batch-create`, limitJsonlManifestBody, async (c) => {
+    const input = parse(importBatchCreateInput, await c.req.json().catch(() => ({})));
+    const linkConfig = getRuntimeConfig().link_image;
+    const configuredLimit = Math.min(appConfig.imports.batchHardLimit, input.source === "jsonl"
+      ? linkConfig.jsonl_max_items
+      : linkConfig.url_list_max_items);
+    if (input.items.length > configuredLimit) {
+      throw new ApiError(
+        400,
+        "import_batch_limit_exceeded",
+        `单批最多允许 ${configuredLimit} 项`
+      );
+    }
+    return c.json(ok({ items: await createImportSessions(input.items) }));
   });
 
   app.post(`${adminApiBasePath}/imports/jsonl/parse`, limitJsonlManifestBody, async (c) => {

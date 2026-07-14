@@ -1,13 +1,13 @@
 {
   "name": "@imageshow/docs",
-  "version": "3.5.5",
+  "version": "3.6.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vitepress dev",
     "build": "vitepress build",
     "preview": "vitepress preview",
-    "check": "node -e \"\""
+    "check": "vitepress build"
   },
   "devDependencies": {
     "vitepress": "^2.0.0-alpha.18"

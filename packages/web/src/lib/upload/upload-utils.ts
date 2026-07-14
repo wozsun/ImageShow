@@ -72,7 +72,7 @@ export function isUploadableImage(file: File) {
   return file.type.startsWith("image/") || ["jpg", "jpeg", "png", "webp", "gif", "avif"].includes(fileExt(file));
 }
 
-export async function draftFromFile(file: File, defaults: CommonImageAttributes, previewUrl: string) {
+export async function draftFromFile(_file: File, defaults: CommonImageAttributes, previewUrl: string) {
   const image = await loadImageDimensions(previewUrl);
   return { draft: applyUploadDefaults({
     ...defaultDraft,

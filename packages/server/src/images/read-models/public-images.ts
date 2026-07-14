@@ -10,6 +10,7 @@ import { resolveTagNames } from "../../tags/query.ts";
 import { resolveThemeSlugs } from "../../themes/query.ts";
 import {
   getPublicImageDetailCache,
+  getImageLookupById,
   getPublicImagesCache,
   publicImagesCacheGeneration,
   setPublicImageDetailCache,
@@ -32,9 +33,6 @@ type PublicImageListPayload = {
   next_cursor: string | null;
   total: null;
 };
-
-const PUBLIC_IMAGE_CARD_SHAPE_VERSION = "v3";
-const PUBLIC_IMAGE_DETAIL_SHAPE_VERSION = "v3";
 
 function publicImageListCacheKey(q: {
   status: string;
@@ -96,7 +94,7 @@ export async function listPublicImages(
 ): Promise<PublicImageListPayload> {
   const limit = query.limit ?? getRuntimeConfig().site.gallery.default_limit;
   const generation = await publicImagesCacheGeneration();
-  const cacheKey = `v${generation}:${PUBLIC_IMAGE_CARD_SHAPE_VERSION}:${publicImageListCacheKey({
+  const cacheKey = `${generation}:${publicImageListCacheKey({
     ...query,
     limit
   })}`;
@@ -170,13 +168,20 @@ export async function listPublicImages(
 
 export async function getPublicImage(id: string) {
   const generation = await publicImagesCacheGeneration();
-  const cacheKey = `v${generation}:${PUBLIC_IMAGE_DETAIL_SHAPE_VERSION}:${id}`;
+  const cacheKey = `${generation}:${id}`;
   const cached = await getPublicImageDetailCache<PublicImageDetail>(cacheKey);
   if (cached) return cached;
 
   return coalesce(`public-image:${cacheKey}`, async () => {
     const raced = await getPublicImageDetailCache<PublicImageDetail>(cacheKey);
     if (raced) return raced;
+
+    const lookup = await getImageLookupById(id);
+    if (lookup?.status === "ready") {
+      const image = await publicImageDetail(lookup);
+      await setPublicImageDetailCache(cacheKey, image);
+      return image;
+    }
 
     const result = await pool.query(
       `SELECT id,

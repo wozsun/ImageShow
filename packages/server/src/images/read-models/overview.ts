@@ -12,7 +12,7 @@ type OverviewStats = Awaited<ReturnType<typeof buildOverviewStats>>;
 
 export async function getOverviewStats() {
   const generation = await publicImagesCacheGeneration();
-  const cacheKey = `v1:${generation}`;
+  const cacheKey = generation;
   const cached = await getAdminOverviewCache<OverviewStats>(cacheKey);
   if (cached) return cached;
 

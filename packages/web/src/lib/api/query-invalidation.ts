@@ -15,7 +15,8 @@ export function invalidateImageData(client: QueryClient) {
     queryKeys.overview,
     queryKeys.themes,
     queryKeys.tags,
-    queryKeys.authors
+    queryKeys.authors,
+    queryKeys.importVocabulary
   ]);
 }
 

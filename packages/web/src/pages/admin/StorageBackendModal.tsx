@@ -13,7 +13,8 @@ const emptyS3: S3Settings = {
 };
 
 const emptyWebdav: WebdavSettings = {
-  base_url: "", username: "", root_path: "/", public_base_url: "", password: "", list_depth_infinity: false
+  base_url: "", username: "", root_path: "/", public_base_url: "", password: "", list_depth_infinity: false,
+  connect_timeout_seconds: 15, idle_timeout_seconds: 15, task_timeout_seconds: 300
 };
 
 const storageTypeOptions = [
@@ -248,6 +249,18 @@ function WebdavFields({ value, onChange, configured }: { value: WebdavSettings; 
       <label>
         Public Base URL
         <input value={value.public_base_url} onChange={(event) => patch({ public_base_url: event.target.value })} placeholder="https://cdn.example.com" />
+      </label>
+      <label>
+        连接 / 首字节超时（秒）
+        <input type="number" min="1" max="120" value={value.connect_timeout_seconds} onChange={(event) => patch({ connect_timeout_seconds: Number(event.target.value) })} />
+      </label>
+      <label>
+        流读取空闲超时（秒）
+        <input type="number" min="1" max="300" value={value.idle_timeout_seconds} onChange={(event) => patch({ idle_timeout_seconds: Number(event.target.value) })} />
+      </label>
+      <label>
+        单次任务总超时（秒）
+        <input type="number" min="15" max="3600" value={value.task_timeout_seconds} onChange={(event) => patch({ task_timeout_seconds: Number(event.target.value) })} />
       </label>
       <label>
         <input type="checkbox" checked={value.list_depth_infinity} onChange={(event) => patch({ list_depth_infinity: event.target.checked })} />

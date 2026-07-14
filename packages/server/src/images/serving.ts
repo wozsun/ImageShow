@@ -3,6 +3,7 @@ import { pool } from "../core/db.ts";
 import { ApiError, immutableCacheControl, noStoreCacheControl, privateNoStoreCacheControl, publicProxyFallbackThumbCacheControl, publicProxyImageCacheControl, publicRedirectCacheControl } from "../core/http.ts";
 import { isExternalImageRejection, safeFetchExternalImage } from "../core/external-image-fetch.ts";
 import { coalesce } from "../core/coalesce.ts";
+import { ifNoneMatchMatches, ifRangeMatches } from "../core/http-validator.ts";
 import { generateStoredThumbnail } from "./processing.ts";
 import { linkThumbnailKey, thumbnailObjectKey } from "../storage/image-paths.ts";
 import { contentType, exists, openObject, publicObjectUrl } from "../storage/storage.ts";
@@ -144,31 +145,13 @@ async function cachedOriginalSupportsDirectAccess(url: string, userAgent: string
   });
 }
 
-function weakEtagValue(etag: string) {
-  return etag.startsWith("W/") ? etag.slice(2) : etag;
-}
-
 /** @internal Exported only for HTTP validator verification. */
 export function etagMatches(header: string | undefined, etag: string) {
-  const current = weakEtagValue(etag);
-  return header?.split(",").some((value) => {
-    const candidate = value.trim();
-    return candidate === "*" || weakEtagValue(candidate) === current;
-  }) ?? false;
+  return ifNoneMatchMatches(header, etag);
 }
 
 /** @internal Exported only for HTTP validator verification. */
-export function ifRangeMatches(header: string | undefined, opened: OpenedRead) {
-  const candidate = header?.trim();
-  if (!candidate) return true;
-  if (candidate.startsWith("W/") || candidate.startsWith("\"")) {
-    return Boolean(opened.etag && !opened.etag.startsWith("W/") && candidate === opened.etag);
-  }
-  if (!opened.lastModified) return false;
-  const requestedTime = Date.parse(candidate);
-  const modifiedTime = Date.parse(opened.lastModified);
-  return Number.isFinite(requestedTime) && Number.isFinite(modifiedTime) && modifiedTime <= requestedTime;
-}
+export { ifRangeMatches };
 
 function sameObjectVersion(left: OpenedRead, right: OpenedRead) {
   if (left.etag || right.etag) return Boolean(left.etag && right.etag && left.etag === right.etag);
@@ -189,8 +172,7 @@ async function streamStoredObject(
 ) {
   const validateBeforeRange = Boolean(request.range && (request.ifNoneMatch || request.ifRange));
   let opened = await openObject(prefix, key, backend, validateBeforeRange ? undefined : request.range);
-  const anyCurrentObject = request.ifNoneMatch?.split(",").some((value) => value.trim() === "*") ?? false;
-  if (anyCurrentObject || (opened.etag && etagMatches(request.ifNoneMatch, opened.etag))) {
+  if (ifNoneMatchMatches(request.ifNoneMatch, opened.etag)) {
     opened.body.destroy();
     const headers = new Headers({ "Cache-Control": cacheControl, "Accept-Ranges": "bytes" });
     if (opened.etag) headers.set("ETag", opened.etag);
@@ -257,7 +239,8 @@ async function imageLookupById(id: string): Promise<ImageLookupByIdItem | null> 
   const cached = await getImageLookupById(id);
   if (cached) return cached;
   const row = (await pool.query(
-    `SELECT id, object_key, original, ext, storage_slug, is_link, device, brightness, theme, status
+    `SELECT id, object_key, original, ext, storage_slug, is_link, device, brightness, theme,
+            status, description, source
        FROM metadata
       WHERE id=$1
       LIMIT 1`,
@@ -274,7 +257,9 @@ async function imageLookupById(id: string): Promise<ImageLookupByIdItem | null> 
     device: row.device as ImageLookupByIdItem["device"],
     brightness: row.brightness as ImageLookupByIdItem["brightness"],
     theme: String(row.theme ?? "none"),
-    status: String(row.status ?? "")
+    status: String(row.status ?? ""),
+    description: String(row.description ?? ""),
+    source: String(row.source ?? "")
   };
   await setImageLookupById(item);
   return item;

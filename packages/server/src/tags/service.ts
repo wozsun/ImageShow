@@ -2,11 +2,25 @@ import { slugPattern } from "@imageshow/shared";
 import type { PoolClient } from "pg";
 import { pool, withTransaction } from "../core/db.ts";
 import { ApiError } from "../core/http.ts";
-import { invalidateImageReadCaches } from "../images/image-cache.ts";
+import { invalidateGalleryFacetsCache, invalidateImageReadCaches } from "../images/image-cache.ts";
 import { rebuildRandomPool, syncRandomImage } from "../random/random-cache.ts";
-import { invalidateTagVocab } from "../vocab/vocab-cache.ts";
+import {
+  invalidateEntityCountCaches,
+  invalidateOrCollectEntityCountCaches,
+  refreshEntityVocabularies,
+  type EntityCountCacheInvalidationBatch,
+} from "../vocab/vocab-cache.ts";
 import type { Tag } from "./types.ts";
 import { resolveTagNames } from "./query.ts";
+
+async function refreshTagDefinitionCaches(options: { facets?: boolean } = {}) {
+  const tasks: Array<Promise<unknown>> = [
+    refreshEntityVocabularies(["tag"]),
+    invalidateEntityCountCaches(["tag"]),
+  ];
+  if (options.facets ?? true) tasks.push(invalidateGalleryFacetsCache());
+  await Promise.all(tasks);
+}
 
 export async function upsertTag(slug: string, displayName = ""): Promise<Tag> {
   if (slug.length > 32 || !slugPattern.test(slug)) {
@@ -21,7 +35,7 @@ export async function upsertTag(slug: string, displayName = ""): Promise<Tag> {
                (SELECT count(*)::int FROM image_tag it WHERE it.tag_slug = tag.slug) AS image_count`,
     [slug, displayName]
   )).rows[0] as Tag;
-  await invalidateTagVocab();
+  await refreshTagDefinitionCaches();
   return tag;
 }
 
@@ -33,17 +47,19 @@ export async function reorderTags(slugs: string[]) {
      WHERE t.slug = v.slug`,
     [slugs]
   );
-  await invalidateTagVocab();
+  await refreshTagDefinitionCaches();
 }
 
 export async function deleteTags(slugs: string[]) {
   const targets = [...new Set(slugs)];
   if (!targets.length) return { deleted: 0 };
   const result = await pool.query("DELETE FROM tag WHERE slug = ANY($1::text[])", [targets]);
-  await invalidateTagVocab();
   if (result.rowCount) {
     await rebuildRandomPool();
-    await invalidateImageReadCaches();
+    await Promise.all([
+      invalidateImageReadCaches(),
+      refreshTagDefinitionCaches({ facets: false }),
+    ]);
   }
   return { deleted: result.rowCount ?? 0 };
 }
@@ -51,31 +67,37 @@ export async function deleteTags(slugs: string[]) {
 export async function setTagDisplayName(slug: string, displayName: string) {
   const result = await pool.query("UPDATE tag SET display_name = $2, updated_at = now() WHERE slug = $1", [slug, displayName]);
   if (!result.rowCount) throw new ApiError(404, "not_found", "Tag not found");
-  await invalidateTagVocab();
-  await invalidateImageReadCaches();
+  await refreshTagDefinitionCaches();
 }
 
 export async function deleteTag(slug: string) {
   const result = await pool.query("DELETE FROM tag WHERE slug = $1", [slug]);
   if (!result.rowCount) throw new ApiError(404, "not_found", "Tag not found");
-  await invalidateTagVocab();
   await rebuildRandomPool();
-  await invalidateImageReadCaches();
+  await Promise.all([
+    invalidateImageReadCaches(),
+    refreshTagDefinitionCaches({ facets: false }),
+  ]);
 }
 
 type SetImageTagsOptions = {
   syncRandom?: boolean;
-  invalidate?: boolean;
+  entityCountInvalidationBatch?: EntityCountCacheInvalidationBatch;
 };
 
 export async function replaceImageTags(client: PoolClient, imageId: string, slugs: string[]) {
   const image = await client.query("SELECT 1 FROM metadata WHERE id = $1", [imageId]);
   if (!image.rowCount) throw new ApiError(404, "not_found", "Image not found");
+  let createdTag = false;
   for (const slug of slugs) {
-    await client.query(
-      "INSERT INTO tag(slug, sort_order) VALUES($1, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM tag)) ON CONFLICT (slug) DO NOTHING",
+    const inserted = await client.query(
+      `INSERT INTO tag(slug, sort_order)
+       VALUES($1, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM tag))
+       ON CONFLICT (slug) DO NOTHING
+       RETURNING slug`,
       [slug]
     );
+    if (inserted.rowCount) createdTag = true;
   }
   await client.query("DELETE FROM image_tag WHERE image_id = $1", [imageId]);
   for (const slug of slugs) {
@@ -84,16 +106,20 @@ export async function replaceImageTags(client: PoolClient, imageId: string, slug
       [imageId, slug]
     );
   }
+  return createdTag;
 }
 
 export async function setImageTags(imageId: string, names: string[], options: SetImageTagsOptions = {}): Promise<string[]> {
   const resolved = await resolveTagNames(names);
-  await withTransaction(async (client) => {
-    await replaceImageTags(client, imageId, resolved);
+  const createdTag = await withTransaction(async (client) => {
+    return replaceImageTags(client, imageId, resolved);
   });
 
-  await invalidateTagVocab();
+  await Promise.all([
+    invalidateImageReadCaches(),
+    invalidateOrCollectEntityCountCaches(["tag"], options.entityCountInvalidationBatch),
+    createdTag ? refreshEntityVocabularies(["tag"]) : Promise.resolve(),
+  ]);
   if (options.syncRandom ?? true) await syncRandomImage(imageId);
-  if (options.invalidate ?? true) await invalidateImageReadCaches();
   return [...resolved].sort();
 }

@@ -28,7 +28,10 @@ export const webdavSettingsSchema = z.object({
     .regex(/^\/?(?:[a-zA-Z0-9._-]+\/?)*$/, "root_path must be a simple absolute path")
     .default("/"),
   public_base_url: optionalHttpsUrl.default(""),
-  list_depth_infinity: z.boolean().default(false)
+  list_depth_infinity: z.boolean().default(false),
+  connect_timeout_seconds: z.coerce.number().int().min(1).max(120).default(15),
+  idle_timeout_seconds: z.coerce.number().int().min(1).max(300).default(15),
+  task_timeout_seconds: z.coerce.number().int().min(15).max(3_600).default(300)
 });
 
 export type S3Settings = z.infer<typeof s3SettingsSchema>;

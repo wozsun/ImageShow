@@ -1,7 +1,14 @@
 import type { Hono } from "hono";
 import { adminApiBasePath } from "@imageshow/shared";
 import { ok } from "../core/http.ts";
-import { adminImageListQuery, batchMigrateStorageInput, imageIdsInput, parse, uuidInput } from "../core/validation.ts";
+import {
+  adminImageListQuery,
+  batchImageUpdateInput,
+  batchMigrateStorageInput,
+  imageIdsInput,
+  parse,
+  uuidInput,
+} from "../core/validation.ts";
 import { batchDeleteImages } from "../images/batch-delete.ts";
 import {
   getAdminImage,
@@ -12,6 +19,8 @@ import { getOverviewStats } from "../images/read-models/overview.ts";
 import { serveAdminObject, serveAdminOriginalLink, serveAdminThumb } from "../images/serving.ts";
 import { deleteImage, migrateImagesStorage, updateImageMetadata } from "../images/service.ts";
 import { batchRestoreImages, purgeDeletedImage, purgeDeletedImages, restoreDeletedImage } from "../images/trash.ts";
+import { setImageTags } from "../tags/service.ts";
+import { createEntityCountCacheInvalidationBatch } from "../vocab/vocab-cache.ts";
 
 export function registerAdminImageRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/overview`, async (c) => c.json(ok(await getOverviewStats())));
@@ -88,6 +97,29 @@ export function registerAdminImageRoutes(app: Hono) {
   app.post(`${adminApiBasePath}/images/batch-migrate-storage`, async (c) => {
     const input = parse(batchMigrateStorageInput, await c.req.json().catch(() => ({})));
     return c.json(ok(await migrateImagesStorage(input.ids, input.target)));
+  });
+
+  app.post(`${adminApiBasePath}/images/batch-update`, async (c) => {
+    const input = parse(batchImageUpdateInput, await c.req.json().catch(() => ({})));
+    const entityCountInvalidationBatch = createEntityCountCacheInvalidationBatch();
+    let updated = 0;
+    try {
+      for (const item of input.items) {
+        const { id, tags, ...metadata } = item;
+        const metadataChanged = Object.keys(metadata).length > 0;
+        if (!metadataChanged && tags === undefined) continue;
+        if (metadataChanged) {
+          await updateImageMetadata(id, metadata, { entityCountInvalidationBatch });
+        }
+        if (tags !== undefined) {
+          await setImageTags(id, tags, { entityCountInvalidationBatch });
+        }
+        updated += 1;
+      }
+    } finally {
+      await entityCountInvalidationBatch.flush();
+    }
+    return c.json(ok({ updated }));
   });
 
   app.post(`${adminApiBasePath}/images/:id`, async (c) => {

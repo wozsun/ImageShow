@@ -4,24 +4,44 @@ import { pool, withAdvisoryLock, withTransaction } from "../core/db.ts";
 import { ApiError } from "../core/http.ts";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { mapWithConcurrency } from "../core/concurrency.ts";
-import { invalidateAllImageLookups, invalidateImageReadCaches } from "../images/image-cache.ts";
+import {
+  invalidateGalleryFacetsCache,
+  invalidateImageLookupEntries,
+  invalidateImageReadCaches,
+} from "../images/image-cache.ts";
 import { rebuildRandomPool } from "../random/random-cache.ts";
-import { invalidateThemeVocab } from "../vocab/vocab-cache.ts";
+import {
+  invalidateEntityCountCaches,
+  refreshEntityVocabularies,
+} from "../vocab/vocab-cache.ts";
 import { linkThumbnailKey, storageObjectKey, thumbnailObjectKey } from "../storage/image-paths.ts";
 import { copyObject, pruneEmptyStorageDirs, removeObject } from "../storage/storage.ts";
 import { withStorageMutationLock } from "../storage/maintenance-lock.ts";
 
 export async function ensureTheme(client: PoolClient, slug: string) {
-  if (!slug || slug === "none") return;
+  if (!slug || slug === "none") return false;
   await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [themeMutationLockKey(slug)]);
-  await client.query(
-    "INSERT INTO theme(slug, sort_order) VALUES($1, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM theme)) ON CONFLICT (slug) DO NOTHING",
+  const result = await client.query(
+    `INSERT INTO theme(slug, sort_order)
+     VALUES($1, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM theme))
+     ON CONFLICT (slug) DO NOTHING
+     RETURNING slug`,
     [slug]
   );
+  return Boolean(result.rowCount);
 }
 
 function themeMutationLockKey(slug: string) {
   return `imageshow:theme:${slug}`;
+}
+
+async function refreshThemeDefinitionCaches(options: { facets?: boolean } = {}) {
+  const tasks: Array<Promise<unknown>> = [
+    refreshEntityVocabularies(["theme"]),
+    invalidateEntityCountCaches(["theme"]),
+  ];
+  if (options.facets ?? true) tasks.push(invalidateGalleryFacetsCache());
+  await Promise.all(tasks);
 }
 
 export async function upsertTheme(slug: string, displayName: string) {
@@ -37,14 +57,14 @@ export async function upsertTheme(slug: string, displayName: string) {
       [slug, displayName]
     );
   });
-  await invalidateThemeVocab();
+  await refreshThemeDefinitionCaches();
 }
 
 export async function setThemeDisplayName(slug: string, displayName: string) {
   if (slug === "none") throw new ApiError(400, "invalid_theme", "The reserved 'none' theme cannot be renamed", { slug });
   const result = await pool.query("UPDATE theme SET display_name = $2, updated_at = now() WHERE slug = $1", [slug, displayName]);
   if (!result.rowCount) throw new ApiError(404, "not_found", "Theme not found");
-  await invalidateThemeVocab();
+  await refreshThemeDefinitionCaches();
 }
 
 export async function reorderThemes(slugs: string[]) {
@@ -55,15 +75,20 @@ export async function reorderThemes(slugs: string[]) {
      WHERE t.slug = v.slug AND t.slug <> 'none'`,
     [slugs]
   );
-  await invalidateThemeVocab();
+  await refreshThemeDefinitionCaches();
 }
 
-async function reassignThemeImagesToNone(theme: string): Promise<boolean> {
+type ThemeLookupInvalidation = {
+  id: string;
+  object_key?: string;
+};
+
+async function reassignThemeImagesToNone(theme: string): Promise<ThemeLookupInvalidation[]> {
   const images = (await pool.query(
     "SELECT id, device, brightness, ext, object_key, storage_slug, is_link, status FROM metadata WHERE theme=$1 ORDER BY device, brightness, id",
     [theme]
   )).rows as Array<{ id: string; device: Device; brightness: Brightness; ext: string; object_key: string; storage_slug: string; is_link: boolean; status: string }>;
-  if (!images.length) return false;
+  if (!images.length) return [];
 
   const moves = images
     .filter((image) => !image.is_link)
@@ -111,16 +136,25 @@ async function reassignThemeImagesToNone(theme: string): Promise<boolean> {
   for (const slug of new Set([...moves, ...linkThumbMoves].map((move) => move.storage_slug))) {
     await pruneEmptyStorageDirs(slug).catch(() => undefined);
   }
-  return true;
+  return images.flatMap((image) => {
+    if (image.is_link) return [{ id: image.id }];
+    const newKey = newKeyById.get(image.id);
+    return newKey && newKey !== image.object_key
+      ? [
+          { id: image.id, object_key: image.object_key },
+          { id: image.id, object_key: newKey },
+        ]
+      : [{ id: image.id, object_key: image.object_key }];
+  });
 }
 
 async function deleteThemeUnderLock(slug: string) {
   const exists = (await pool.query("SELECT 1 FROM theme WHERE slug=$1", [slug])).rowCount;
-  if (!exists) return { deleted: false, moved: false };
+  if (!exists) return { deleted: false, lookupInvalidations: [] as ThemeLookupInvalidation[] };
 
-  const moved = await withStorageMutationLock(() => reassignThemeImagesToNone(slug));
+  const lookupInvalidations = await withStorageMutationLock(() => reassignThemeImagesToNone(slug));
   const deleted = Boolean((await pool.query("DELETE FROM theme WHERE slug = $1", [slug])).rowCount);
-  return { deleted, moved };
+  return { deleted, lookupInvalidations };
 }
 
 export async function deleteTheme(slug: string) {
@@ -129,33 +163,33 @@ export async function deleteTheme(slug: string) {
   }
   const result = await withAdvisoryLock(themeMutationLockKey(slug), () => deleteThemeUnderLock(slug));
   if (!result.deleted) throw new ApiError(404, "not_found", "Theme not found");
-  await invalidateThemeVocab();
-  if (result.moved) {
+  if (result.lookupInvalidations.length) {
     await rebuildRandomPool();
     await Promise.all([
-      invalidateAllImageLookups(),
-      invalidateImageReadCaches()
+      invalidateImageLookupEntries(result.lookupInvalidations),
+      invalidateImageReadCaches(),
+      refreshThemeDefinitionCaches({ facets: false }),
     ]);
-  }
+  } else await refreshThemeDefinitionCaches();
 }
 
 export async function deleteThemes(slugs: string[]) {
   const targets = [...new Set(slugs)].filter((slug) => slug !== "none");
   if (!targets.length) return { deleted: 0 };
-  let moved = false;
+  const lookupInvalidations: ThemeLookupInvalidation[] = [];
   let deleted = 0;
   for (const slug of targets) {
     const result = await withAdvisoryLock(themeMutationLockKey(slug), () => deleteThemeUnderLock(slug));
-    if (result.moved) moved = true;
+    lookupInvalidations.push(...result.lookupInvalidations);
     if (result.deleted) deleted += 1;
   }
-  await invalidateThemeVocab();
-  if (moved) {
+  if (lookupInvalidations.length) {
     await rebuildRandomPool();
     await Promise.all([
-      invalidateAllImageLookups(),
-      invalidateImageReadCaches()
+      invalidateImageLookupEntries(lookupInvalidations),
+      invalidateImageReadCaches(),
+      refreshThemeDefinitionCaches({ facets: false }),
     ]);
-  }
+  } else if (deleted) await refreshThemeDefinitionCaches();
   return { deleted };
 }

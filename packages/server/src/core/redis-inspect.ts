@@ -1,87 +1,133 @@
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
-import { pingRedis, redis } from "./redis-client.ts";
 import {
   GALLERY_FILTER_OPTIONS_KEY,
   RANDOM_CURRENT_KEY,
-  getRandomPoolSnapshot,
-  randomCountsKey,
+  RANDOM_MUTATION_REVISION_KEY,
+  RANDOM_REBUILD_COMPLETED_KEY,
   randomItemKey,
+  randomManifestKey,
   randomSnapshotKey,
-  randomThemesKey,
-  type RandomCategoryCounts,
-  type GalleryFilterOptions
+  type GalleryFilterOptions,
+  type RandomCategoryCounts
 } from "../random/random-cache.ts";
 import {
   ADMIN_OVERVIEW_CACHE_PREFIX,
   IMAGE_LOOKUP_ID_KEY,
   IMAGE_LOOKUP_MEDIA_KEY,
   IMAGE_LOOKUP_THUMBS_KEY,
+  IMAGE_LOOKUP_TTL_SECONDS,
   MD5_CACHE_PREFIX,
   ORIGINAL_DIRECT_CACHE_PREFIX,
   PUBLIC_IMAGES_CACHE_PREFIX
 } from "../images/image-cache.ts";
+import { pingRedis, redis } from "./redis-client.ts";
 
 const SESSION_KEY_PREFIX = "imageshow:session:";
 const LOGIN_FAIL_KEY_PREFIX = "imageshow:login_fail:";
+const RANDOM_GENERATION_PREFIX = "imageshow:random:";
+const RANDOM_GLOBAL_PARTS = new Set([
+  "current",
+  "version",
+  "update_lock",
+  "rebuild_lock",
+  "rebuild_completed"
+]);
+
+type RandomPoolSnapshotValue = {
+  categoryCounts: RandomCategoryCounts;
+};
 
 export async function inspectRedisState() {
   await pingRedis();
-  const snapshot = await getRandomPoolSnapshot();
-  const itemKey = randomItemKey(snapshot.generation);
-  const snapshotKey = randomSnapshotKey(snapshot.generation);
-  const countsKey = randomCountsKey(snapshot.generation);
-  const themesKey = randomThemesKey(snapshot.generation);
-  const [galleryRaw, dbsize, memoryInfo, keyspaceInfo, randomObjectCount] = await Promise.all([
-    redis.get(GALLERY_FILTER_OPTIONS_KEY),
-    redis.dbsize(),
+  const [generation, requestedRaw, completedRaw] = await Promise.all([
+    redis.get(RANDOM_CURRENT_KEY),
+    redis.get(RANDOM_MUTATION_REVISION_KEY).catch(() => null),
+    redis.get(RANDOM_REBUILD_COMPLETED_KEY).catch(() => null)
+  ]);
+  const snapshotKey = generation ? randomSnapshotKey(generation) : "";
+  const itemKey = generation ? randomItemKey(generation) : "";
+  const [snapshotRaw, galleryRaw, dbsize, serverInfo, memoryInfo, keyspaceInfo, scanned] = await Promise.all([
+    snapshotKey ? redis.get(snapshotKey).catch(() => null) : Promise.resolve(null),
+    redis.get(GALLERY_FILTER_OPTIONS_KEY).catch(() => null),
+    redis.dbsize().catch(() => 0),
+    redis.info("server").catch(() => ""),
     redis.info("memory").catch(() => ""),
     redis.info("keyspace").catch(() => ""),
-    redis.hlen(itemKey).catch(() => 0)
+    scanImageshowKeys().catch(() => ({ counts: emptyPrefixCounts(), generations: new Map<string, string[]>() }))
   ]);
-  const galleryFilterOptions = parseJson<GalleryFilterOptions>(galleryRaw, { devices: [], brightnesses: [], themes: [] });
-  const [coreKeys, prefixCounts, randomItemIds] = await Promise.all([
-    Promise.all([
-      RANDOM_CURRENT_KEY,
-      snapshotKey,
-      itemKey,
-      countsKey,
-      themesKey,
-      GALLERY_FILTER_OPTIONS_KEY,
-      IMAGE_LOOKUP_MEDIA_KEY,
-      IMAGE_LOOKUP_THUMBS_KEY,
-      IMAGE_LOOKUP_ID_KEY
-    ].map((key) => redisKeySummary(key))),
-    redisPrefixCounts(),
-    sampleHashKeys(itemKey, 12)
+
+  const snapshot = parseSnapshot(snapshotRaw);
+  const galleryFilterOptions = parseJson<GalleryFilterOptions>(galleryRaw, {
+    devices: [],
+    brightnesses: [],
+    themes: []
+  });
+  const coreKeyNames = [
+    RANDOM_CURRENT_KEY,
+    ...(generation ? [snapshotKey, itemKey, randomManifestKey(generation)] : []),
+    GALLERY_FILTER_OPTIONS_KEY,
+    IMAGE_LOOKUP_MEDIA_KEY,
+    IMAGE_LOOKUP_THUMBS_KEY,
+    IMAGE_LOOKUP_ID_KEY
+  ];
+  const [coreKeys, randomItemIds, hsetexSupported, lookupFieldTtls, generationInspection] = await Promise.all([
+    Promise.all(coreKeyNames.map((key) => redisKeySummary(key).catch(() => missingKeySummary(key)))),
+    itemKey ? sampleHashFields(itemKey, 12).catch(() => []) : Promise.resolve([]),
+    inspectHsetexCapability(),
+    inspectLookupFieldTtls(),
+    inspectGenerations(generation, scanned.generations)
   ]);
-  const categorySummary = summarizeCategoryCounts(snapshot.categoryCounts);
+  const randomObjectCount = itemKey
+    ? await redis.hlen(itemKey).catch(() => 0)
+    : 0;
+  const categorySummary = summarizeCategoryCounts(snapshot?.categoryCounts ?? {});
   const galleryFilterSummary = {
     devices: galleryFilterOptions.devices,
     brightnesses: galleryFilterOptions.brightnesses,
     themes: galleryFilterOptions.themes,
     theme_count: galleryFilterOptions.themes.length
   };
-  const issues = redisStateIssues(
-    categorySummary.total_images,
+  const issues = redisStateIssues({
+    generation,
+    snapshot,
+    categoryTotal: categorySummary.total_images,
     randomObjectCount,
     coreKeys,
     galleryFilterOptions,
-    categorySummary.themes,
-    [RANDOM_CURRENT_KEY, snapshotKey, itemKey, countsKey]
-  );
+    categoryThemes: categorySummary.themes,
+    generationInspection,
+    hsetexSupported,
+    requestedRevision: redisRevision(requestedRaw),
+    completedRevision: redisRevision(completedRaw)
+  });
+
   return {
     connection: {
       status: redis.status,
       configured_db: getRuntimeConfig().redis.db,
+      redis_version: parseRedisInfo(serverInfo, new Set(["redis_version"])).redis_version ?? "unknown",
+      hsetex_supported: hsetexSupported,
       dbsize,
       memory: parseRedisInfo(memoryInfo),
       keyspace: parseRedisInfo(keyspaceInfo)
     },
-    prefix_counts: prefixCounts,
+    prefix_counts: scanned.counts,
     core_keys: coreKeys,
-    random_generation: snapshot.generation,
+    lookup_fields: {
+      configured_ttl_seconds: IMAGE_LOOKUP_TTL_SECONDS,
+      media: keyLength(coreKeys, IMAGE_LOOKUP_MEDIA_KEY),
+      thumbs: keyLength(coreKeys, IMAGE_LOOKUP_THUMBS_KEY),
+      id: keyLength(coreKeys, IMAGE_LOOKUP_ID_KEY),
+      ttl_samples: lookupFieldTtls
+    },
+    random_generation: generation ?? "",
+    random_revisions: {
+      mutation: redisRevision(requestedRaw),
+      completed: redisRevision(completedRaw)
+    },
+    random_generations: generationInspection,
     random_category_summary: categorySummary,
-    random_category_counts: snapshot.categoryCounts,
+    random_category_counts: snapshot?.categoryCounts ?? {},
     random_items: {
       key: itemKey,
       count: randomObjectCount,
@@ -92,6 +138,12 @@ export async function inspectRedisState() {
   };
 }
 
+function parseSnapshot(raw: string | null): RandomPoolSnapshotValue | null {
+  const parsed = parseJson<Partial<RandomPoolSnapshotValue> | null>(raw, null);
+  if (!parsed?.categoryCounts) return null;
+  return parsed as RandomPoolSnapshotValue;
+}
+
 function parseJson<T>(raw: string | null, fallback: T) {
   if (!raw) return fallback;
   try {
@@ -99,6 +151,11 @@ function parseJson<T>(raw: string | null, fallback: T) {
   } catch {
     return fallback;
   }
+}
+
+async function inspectHsetexCapability() {
+  const result = await redis.call("COMMAND", "INFO", "HSETEX").catch(() => null);
+  return Array.isArray(result) && result.length > 0 && result[0] !== null;
 }
 
 async function redisKeySummary(key: string) {
@@ -117,6 +174,17 @@ async function redisKeySummary(key: string) {
   };
 }
 
+function missingKeySummary(key: string) {
+  return {
+    key,
+    exists: false,
+    type: "unknown",
+    ttl_seconds: -2,
+    memory_bytes: null,
+    length: 0
+  };
+}
+
 async function redisKeyLength(key: string, type: string) {
   if (type === "string") return redis.strlen(key);
   if (type === "hash") return redis.hlen(key);
@@ -126,47 +194,124 @@ async function redisKeyLength(key: string, type: string) {
   return 0;
 }
 
-async function redisPrefixCounts() {
-  const [all, random, md5, publicImages, originalDirect, adminOverview, sessions, loginFailures, temporary] = await Promise.all([
-    scanCount("imageshow:*"),
-    scanCount("imageshow:random:*"),
-    scanCount(`${MD5_CACHE_PREFIX}*`),
-    scanCount(`${PUBLIC_IMAGES_CACHE_PREFIX}*`),
-    scanCount(`${ORIGINAL_DIRECT_CACHE_PREFIX}*`),
-    scanCount(`${ADMIN_OVERVIEW_CACHE_PREFIX}*`),
-    scanCount(`${SESSION_KEY_PREFIX}*`),
-    scanCount(`${LOGIN_FAIL_KEY_PREFIX}*`),
-    scanCount("imageshow:*:tmp:*")
-  ]);
+function emptyPrefixCounts() {
   return {
-    imageshow_total: all,
-    random_pool: random,
-    md5_cache: md5,
-    public_images_cache: publicImages,
-    original_direct_cache: originalDirect,
-    admin_overview_cache: adminOverview,
-    sessions,
-    login_failures: loginFailures,
-    temporary
+    imageshow_total: 0,
+    random_pool: 0,
+    md5_cache: 0,
+    public_images_cache: 0,
+    original_direct_cache: 0,
+    admin_overview_cache: 0,
+    sessions: 0,
+    login_failures: 0,
+    temporary: 0
   };
 }
 
-async function scanCount(pattern: string) {
+async function scanImageshowKeys() {
+  const counts = emptyPrefixCounts();
+  const generations = new Map<string, string[]>();
   let cursor = "0";
-  let count = 0;
   do {
-    const result = await redis.scan(cursor, "MATCH", pattern, "COUNT", 200);
-    cursor = result[0];
-    count += result[1].length;
+    const [nextCursor, keys] = await redis.scan(cursor, "MATCH", "imageshow:*", "COUNT", 500);
+    cursor = nextCursor;
+    for (const key of keys) {
+      counts.imageshow_total += 1;
+      if (key.startsWith(RANDOM_GENERATION_PREFIX)) {
+        counts.random_pool += 1;
+        const generation = randomGenerationFromKey(key);
+        if (generation) {
+          const generationKeys = generations.get(generation);
+          if (generationKeys) generationKeys.push(key);
+          else generations.set(generation, [key]);
+        }
+      }
+      if (key.startsWith(MD5_CACHE_PREFIX)) counts.md5_cache += 1;
+      if (key.startsWith(PUBLIC_IMAGES_CACHE_PREFIX)) counts.public_images_cache += 1;
+      if (key.startsWith(ORIGINAL_DIRECT_CACHE_PREFIX)) counts.original_direct_cache += 1;
+      if (key.startsWith(ADMIN_OVERVIEW_CACHE_PREFIX)) counts.admin_overview_cache += 1;
+      if (key.startsWith(SESSION_KEY_PREFIX)) counts.sessions += 1;
+      if (key.startsWith(LOGIN_FAIL_KEY_PREFIX)) counts.login_failures += 1;
+      if (key.includes(":tmp:")) counts.temporary += 1;
+    }
   } while (cursor !== "0");
-  return count;
+  return { counts, generations };
 }
 
-async function sampleHashKeys(key: string, limit: number) {
-  const type = await redis.type(key);
-  if (type !== "hash") return [];
-  const [, entries] = await redis.hscan(key, "0", "COUNT", Math.max(1, limit * 2));
-  return entries.filter((_, index) => index % 2 === 0).slice(0, limit);
+function randomGenerationFromKey(key: string) {
+  if (!key.startsWith(RANDOM_GENERATION_PREFIX)) return "";
+  const generation = key.slice(RANDOM_GENERATION_PREFIX.length).split(":", 1)[0];
+  return RANDOM_GLOBAL_PARTS.has(generation) ? "" : generation;
+}
+
+async function sampleHashFields(key: string, limit: number): Promise<string[]> {
+  if (await redis.type(key) !== "hash") return [];
+  const raw = await redis.hrandfield(key, Math.max(1, limit));
+  if (Array.isArray(raw)) return raw.filter((field): field is string => typeof field === "string").slice(0, limit);
+  return typeof raw === "string" ? [raw] : [];
+}
+
+async function inspectLookupFieldTtls() {
+  const result: Record<string, Array<{ field: string; ttl_seconds: number | null }>> = {};
+  for (const key of [IMAGE_LOOKUP_MEDIA_KEY, IMAGE_LOOKUP_THUMBS_KEY, IMAGE_LOOKUP_ID_KEY]) {
+    const fields = await sampleHashFields(key, 5).catch(() => []);
+    if (!fields.length) {
+      result[key] = [];
+      continue;
+    }
+    const rawTtls = await redis.call("HTTL", key, "FIELDS", fields.length, ...fields).catch(() => []);
+    const ttls = Array.isArray(rawTtls) ? rawTtls : [];
+    result[key] = fields.map((field, index) => ({
+      field,
+      ttl_seconds: typeof ttls[index] === "number" ? ttls[index] : null
+    }));
+  }
+  return result;
+}
+
+async function inspectGenerations(current: string | null, generations: Map<string, string[]>) {
+  const result: Array<{
+    generation: string;
+    current: boolean;
+    key_count: number;
+    manifest_exists: boolean;
+    ttl_seconds: number;
+    orphaned: boolean;
+  }> = [];
+  for (const [generation, keys] of generations) {
+    const manifest = randomManifestKey(generation);
+    const [manifestExists, ttls] = await Promise.all([
+      redis.exists(manifest).catch(() => 0),
+      Promise.all(keys.slice(0, 25).map((key) => redis.ttl(key).catch(() => -2)))
+    ]);
+    const isCurrent = generation === current;
+    const positiveTtls = ttls.filter((ttl) => ttl > 0);
+    const ttl = ttls.includes(-1)
+      ? -1
+      : positiveTtls.length ? Math.min(...positiveTtls) : -2;
+    result.push({
+      generation,
+      current: isCurrent,
+      key_count: keys.length,
+      manifest_exists: Boolean(manifestExists),
+      ttl_seconds: ttl,
+      orphaned: !isCurrent && (!manifestExists || ttl < 0)
+    });
+  }
+  return result.sort((left, right) => Number(right.current) - Number(left.current)
+    || right.generation.localeCompare(left.generation));
+}
+
+function keyLength(
+  summaries: Awaited<ReturnType<typeof redisKeySummary>>[],
+  key: string
+) {
+  return summaries.find((summary) => summary.key === key)?.length ?? 0;
+}
+
+function redisRevision(raw: string | null) {
+  const revision = Number(raw ?? "0");
+  return Number.isSafeInteger(revision) && revision >= 0 ? revision : 0;
 }
 
 function summarizeCategoryCounts(counts: RandomCategoryCounts) {
@@ -196,39 +341,54 @@ function summarizeCategoryCounts(counts: RandomCategoryCounts) {
   };
 }
 
-function redisStateIssues(
-  categoryTotal: number,
-  randomObjectCount: number,
-  coreKeys: Awaited<ReturnType<typeof redisKeySummary>>[],
-  galleryFilterOptions: GalleryFilterOptions,
-  categoryThemes: string[],
-  requiredKeys: string[]
-) {
+function redisStateIssues(input: {
+  generation: string | null;
+  snapshot: RandomPoolSnapshotValue | null;
+  categoryTotal: number;
+  randomObjectCount: number;
+  coreKeys: Awaited<ReturnType<typeof redisKeySummary>>[];
+  galleryFilterOptions: GalleryFilterOptions;
+  categoryThemes: string[];
+  generationInspection: Awaited<ReturnType<typeof inspectGenerations>>;
+  hsetexSupported: boolean;
+  requestedRevision: number;
+  completedRevision: number;
+}) {
   const issues: string[] = [];
-  const required = new Set(requiredKeys);
-  for (const summary of coreKeys) {
-    if (required.has(summary.key) && !summary.exists) issues.push(`${summary.key} 不存在`);
+  if (!input.generation) issues.push(`${RANDOM_CURRENT_KEY} 不存在`);
+  if (input.generation && !input.snapshot) issues.push(`当前随机池 snapshot 不存在或无法解析`);
+  for (const summary of input.coreKeys) {
+    if ([RANDOM_CURRENT_KEY, GALLERY_FILTER_OPTIONS_KEY].includes(summary.key) && !summary.exists) {
+      issues.push(`${summary.key} 不存在`);
+    }
   }
-  if (categoryTotal !== randomObjectCount) {
-    issues.push(
-      `random:item 数量 ${randomObjectCount} 与随机分类计数总数 ${categoryTotal} 不一致`
-    );
+  if (input.snapshot && input.categoryTotal !== input.randomObjectCount) {
+    issues.push(`random:item 数量 ${input.randomObjectCount} 与随机分类计数总数 ${input.categoryTotal} 不一致`);
   }
-  const optionThemes = [...galleryFilterOptions.themes].sort();
-  if (JSON.stringify(optionThemes) !== JSON.stringify(categoryThemes)) {
+  const optionThemes = [...input.galleryFilterOptions.themes].sort();
+  if (input.snapshot && JSON.stringify(optionThemes) !== JSON.stringify(input.categoryThemes)) {
     issues.push("gallery_filter_options 主题列表与随机分类计数不一致");
+  }
+  if (!input.hsetexSupported) issues.push("当前 Redis 不支持 HSETEX");
+  if (input.completedRevision < input.requestedRevision) {
+    issues.push(`随机池 completed revision ${input.completedRevision} 落后于 mutation revision ${input.requestedRevision}`);
+  }
+  for (const generation of input.generationInspection) {
+    if (generation.orphaned) issues.push(`发现孤立 generation ${generation.generation}`);
   }
   return issues;
 }
 
-function parseRedisInfo(info: string) {
-  const picked = new Set([
+function parseRedisInfo(
+  info: string,
+  picked = new Set([
     "used_memory_human",
     "used_memory_peak_human",
     "maxmemory_human",
     "mem_fragmentation_ratio",
     "db0"
-  ]);
+  ])
+) {
   const result: Record<string, string> = {};
   for (const rawLine of info.split(/\r?\n/)) {
     const line = rawLine.trim();

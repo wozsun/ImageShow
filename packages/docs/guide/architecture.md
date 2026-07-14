@@ -35,7 +35,7 @@ ImageShow 是一个 npm workspaces 单仓多包项目：自托管图库 + 随机
 ## 数据与缓存
 
 - PostgreSQL 是唯一真相源，承载图片元数据、标签 / 主题 / 作者（含 `image_tag` 关联表）、统一导入会话、后台任务、存储后端注册表与管理员账号，共 9 张业务表（见[数据库结构](./database)）。
-- Redis 8 是加速层：generation 随机池（`random:<generation>:item`、axis/category/tag/author 集合与计数）、画廊筛选项、公共列表 / 详情缓存、后台概览短缓存、原图直连探测缓存、MD5 判重、对象键 / 缩略图键 / 图片 id lookup、随机去重历史。lookup hash 使用 `HSETEX` 原子写入字段值与 TTL，避免写入成功但字段过期设置失败；主题批量迁移会清空三个 lookup namespace，公共列表 generation 与 facets 独立失效。正常 `/random` 不依赖 PostgreSQL；随机池缺失时用跨实例单飞锁重建，全量与增量更新共享 mutation revision，只有 Lua 原子校验 revision 未变化才切换 generation，Redis 不可用时随机 API 返回 503，其他读路径可按场景降级到 PostgreSQL。
+- Redis 8 是加速层：generation 随机池（`random:<generation>:item`、snapshot 与 axis/category/tag/author 集合）、画廊筛选项、公共列表 / 详情缓存、后台实体计数列表、导入词表、后台概览短缓存、原图直连探测缓存、MD5 判重、对象键 / 缩略图键 / 图片 id lookup、随机去重历史。实体词表与带 `image_count` 的后台列表使用独立 key：图片写入只把相关计数列表标为 dirty，实体定义变化才刷新对应词表。generation snapshot 只保留分类计数，主题列表由计数派生并原子发布为画廊筛选项，不另存 counts hash 与 themes set；高频标签筛选所需的 axis 与 tag 集合继续保留。lookup hash 使用 Redis 8 `HSETEX` 原子写入字段值与独立 6 小时 TTL，随机池构建不再预热全局 lookup。正常 `/random` 不依赖 PostgreSQL；Redis 为空时启动阶段异步重建随机池，全量与增量更新共享 mutation revision，只有 Lua 原子校验 revision 未变化才切换 generation；Redis 不可用时随机 API 返回 503，其他读路径可按场景降级到 PostgreSQL。
 - 存储后端按图片记录的 `storage_slug`（外键 → `storage_backend` 注册表）决定：本地磁盘、S3 兼容对象存储或 WebDAV；外部链接（link，自身不存字节，仅缩略图落于某后端）由 `is_link` 标记。详见[存储](./storage)。
 
 ## 后台 Worker

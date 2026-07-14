@@ -70,6 +70,7 @@ export async function migrateStorageBackend(sourceSlug: string, targetSlug: stri
   let migrated = 0;
   let unchanged = 0;
   let missing = 0;
+  const migratedEntries: MigrateRecord[] = [];
   const errors: Array<Record<string, unknown>> = [];
   for (const entry of entries) {
     if (entry.storage_slug !== sourceSlug) {
@@ -78,7 +79,10 @@ export async function migrateStorageBackend(sourceSlug: string, targetSlug: stri
     }
     try {
       const result = await migrateImageStorage(entry, targetSlug);
-      if (result === "migrated") migrated += 1;
+      if (result === "migrated") {
+        migrated += 1;
+        migratedEntries.push(entry);
+      }
       else if (result === "missing") {
         missing += 1;
         errors.push({ id: entry.id, object_key: entry.object_key, reason: "source_object_missing" });
@@ -89,5 +93,14 @@ export async function migrateStorageBackend(sourceSlug: string, targetSlug: stri
       errors.push({ id: entry.id, object_key: entry.object_key, reason: errorMessage(error) });
     }
   }
-  return { source: sourceSlug, target: targetSlug, migrated, unchanged, missing, errors: errors.slice(0, 100), error_count: errors.length };
+  return {
+    source: sourceSlug,
+    target: targetSlug,
+    migrated,
+    migratedEntries,
+    unchanged,
+    missing,
+    errors: errors.slice(0, 100),
+    error_count: errors.length,
+  };
 }

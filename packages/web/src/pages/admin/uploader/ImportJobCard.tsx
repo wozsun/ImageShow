@@ -3,7 +3,7 @@ import { ImageThumbnail } from "../../../components/image/ImageThumbnail.js";
 import { ImageDraftFields } from "../../../components/form/ImageDraftFields.js";
 import { importCardBrightnessSelectOptions, importCardDeviceSelectOptions } from "../../../lib/ui/select-options.js";
 import { formatBytes } from "../../../lib/ui/formatters.js";
-import type { Author, ImageDraft, ImageItem, ImportJob, Tag, Theme } from "../../../lib/types.js";
+import type { FacetOption, ImageDraft, ImageItem, ImportJob } from "../../../lib/types.js";
 import { DuplicateMatchPanel, type ImportPreviewTarget } from "./DuplicateMatchPanel.js";
 
 const statusLabels: Record<ImportJob["status"], string> = {
@@ -19,9 +19,9 @@ export function ImportJobCard({ job, busy, storageDisplayName, themes, allTags, 
   job: ImportJob;
   busy: boolean;
   storageDisplayName: string;
-  themes: Theme[];
-  allTags: Tag[];
-  authors: Author[];
+  themes: FacetOption[];
+  allTags: FacetOption[];
+  authors: FacetOption[];
   onPatch: (patch: Partial<ImageDraft>) => void;
   onCancel: () => void;
   onRetry: () => void;
