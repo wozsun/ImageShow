@@ -1,12 +1,13 @@
 import { useCallback, useRef } from "react";
 import type { ImportJob } from "../../../../lib/types.js";
+import { isApiClientError } from "../../../../lib/api/client.js";
 import {
   normalizeAuthor,
   normalizeTheme,
   runWithConcurrency,
   type CommonImageAttributes
 } from "../../../../lib/upload/upload-utils.js";
-import { linkImportJobs, retryPrepareJob } from "../import-job-utils.js";
+import { linkImportJobs, retryLinkPrepareJob } from "../import-job-utils.js";
 import { batchDuplicateFromJob } from "../duplicate-match.js";
 import { isCurrentImportAttempt, type AppendImportQueueApi } from "../prepared-result.js";
 import {
@@ -47,6 +48,7 @@ export function useLinkImport(options: {
     if (!job.url || job.kind === "local") return;
     const attemptKey = job.attemptKey;
     const isProxy = job.kind === "proxy";
+    let sessionCreated = Boolean(existingSession);
     const controller = new AbortController();
     controllers.current.set(job.id, controller);
     try {
@@ -63,6 +65,7 @@ export function useLinkImport(options: {
         createInput: linkSessionInput(job),
         session: existingSession,
         onSession: (session) => {
+          sessionCreated = true;
           queue.updateJob(job.id, {
             status: isProxy ? "processing" : "downloading",
             message: isProxy ? "探测外链并生成代理缩略图" : "服务端下载原图",
@@ -122,7 +125,13 @@ export function useLinkImport(options: {
         await cancelStoredImport(result.session.id).catch(() => undefined);
       }
     } catch (error) {
-      applyImportAttemptFailure(queue, job.id, attemptKey, error);
+      applyImportAttemptFailure(
+        queue,
+        job.id,
+        attemptKey,
+        error,
+        sessionCreated || isApiClientError(error) ? "prepare" : "create"
+      );
     } finally {
       if (controllers.current.get(job.id) === controller) controllers.current.delete(job.id);
     }
@@ -139,7 +148,8 @@ export function useLinkImport(options: {
     try {
       results = await createImportSessionsBatch(source, jobs.map(linkSessionInput));
     } catch (error) {
-      for (const job of jobs) applyImportAttemptFailure(queue, job.id, job.attemptKey, error);
+      const failureStage = isApiClientError(error) ? "prepare" : "create";
+      for (const job of jobs) applyImportAttemptFailure(queue, job.id, job.attemptKey, error, failureStage);
       return;
     }
 
@@ -163,7 +173,13 @@ export function useLinkImport(options: {
     }
     for (const job of jobs) {
       if (!returnedAttempts.has(job.attemptKey)) {
-        applyImportAttemptFailure(queue, job.id, job.attemptKey, new Error("服务端未返回导入会话结果"));
+        applyImportAttemptFailure(
+          queue,
+          job.id,
+          job.attemptKey,
+          new Error("服务端未返回导入会话结果"),
+          "create"
+        );
       }
     }
     await runWithConcurrency(accepted, concurrency, ({ job, session }) => prepare(job, session));
@@ -187,7 +203,9 @@ export function useLinkImport(options: {
   const retry = useCallback(async (job: ImportJob) => {
     if (job.sessionId) await cancelStoredImport(job.sessionId).catch(() => undefined);
     queue.releasePreparedMd5(job.id);
-    const next = retryPrepareJob(job);
+    // If create completed on the server but its response was lost, retry with
+    // the same idempotency key so the existing session can be recovered.
+    const next = retryLinkPrepareJob(job);
     queue.updateJob(job.id, next);
     await prepare(next);
   }, [prepare, queue]);

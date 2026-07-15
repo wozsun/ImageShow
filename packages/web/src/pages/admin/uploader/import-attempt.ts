@@ -68,13 +68,14 @@ export function applyImportAttemptFailure(
   queue: AppendImportQueueApi,
   jobId: string,
   attemptKey: string,
-  error: unknown
+  error: unknown,
+  failureStage: "create" | "prepare" = "prepare"
 ) {
   const current = queue.jobsRef.current.find((item) => item.id === jobId);
   if (current?.attemptKey === attemptKey && current.status !== "cancelled") {
     queue.updateJob(jobId, {
       status: "failed",
-      failureStage: "prepare",
+      failureStage,
       message: importAttemptErrorMessage(error)
     });
   }

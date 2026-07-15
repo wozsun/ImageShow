@@ -35,18 +35,23 @@ export const homeHeroBackground = z.string().trim().max(2048)
   .refine((value) => !value || isRootRelativeOrHttpsUrl(value), "首页背景必须是站内绝对路径或 HTTPS URL");
 export const homeTagline = z.string().trim().max(200);
 
-export const previewDelayMs = z.coerce.number().int().min(0).max(30_000);
-export const maxFileSizeMb = z.coerce.number().positive().max(200);
+export const previewDelayMs = z.coerce.number().int().min(0).max(10_000);
+export const applicationPort = z.coerce.number().int().min(1_000).max(65_535);
+export const servicePort = z.coerce.number().int().min(1).max(65_535);
+export const redisDatabase = z.coerce.number().int().min(0).max(15);
+export const maxFileSizeMb = z.coerce.number().positive().max(500);
 export const maxLongEdge = z.coerce.number().int().min(512).max(32_768);
-export const listPageSize = z.coerce.number().int().min(5).max(100);
+export const listPageSize = z.coerce.number().int().min(1).max(100);
+export const uploadImportMaxItems = z.coerce.number().int().min(1)
+  .max(appConfig.imports.uploadSoftLimitMax);
 export const imagePageSize = z.coerce.number().int().min(10).max(appConfig.pagination.maxLimit);
 export const galleryLimit = z.coerce.number().int().positive().max(appConfig.pagination.maxLimit);
 export const recentUploads = z.coerce.number().int().min(1).max(50);
 
-export const uploadConcurrency = z.coerce.number().int().min(1).max(16);
-export const importGlobalConcurrency = z.coerce.number().int().min(1).max(64);
-export const commitConcurrency = z.coerce.number().int().min(1).max(16);
-export const globalCommitConcurrency = z.coerce.number().int().min(1).max(30);
+export const uploadConcurrency = z.coerce.number().int().min(1).max(128);
+export const importGlobalConcurrency = z.coerce.number().int().min(1).max(512);
+export const commitConcurrency = z.coerce.number().int().min(1).max(128);
+export const globalCommitConcurrency = z.coerce.number().int().min(1).max(512);
 
 export const normalizeQuality = z.coerce.number().int().min(1).max(100);
 export const normalizeQualityStep = z.coerce.number().int().min(1).max(50);
@@ -54,16 +59,18 @@ export const normalizeMinQuality = z.coerce.number().int().min(1).max(100);
 export const normalizeMaxLongEdge = z.coerce.number().int().min(512).max(32_768);
 export const normalizeMaxSizeKb = z.coerce.number().int().min(50).max(100 * 1024);
 export const skipWebpUnderKb = z.coerce.number().int().min(0).max(100 * 1024);
-export const linkImageConcurrency = z.coerce.number().int().min(1).max(16);
+export const linkImageConcurrency = z.coerce.number().int().min(1).max(128);
 export const linkFetchTimeoutSeconds = z.coerce.number().int().min(5).max(300);
-export const linkImportMaxItems = z.coerce.number().int().min(1).max(appConfig.imports.batchHardLimit);
-export const jsonlImportMaxItems = z.coerce.number().int().min(1).max(appConfig.imports.batchHardLimit);
+export const linkImportMaxItems = z.coerce.number().int().min(1)
+  .max(appConfig.imports.linkSoftLimitMax);
+export const jsonlImportMaxItems = z.coerce.number().int().min(1)
+  .max(appConfig.imports.linkSoftLimitMax);
 
-export const taskConcurrency = z.coerce.number().int().min(1).max(32);
+export const taskConcurrency = z.coerce.number().int().min(1).max(512);
 
 export const sessionTtlSeconds = z.coerce.number().int().min(5 * 60).max(365 * 24 * 60 * 60);
 export const loginFailureWindowSeconds = z.coerce.number().int().min(60).max(24 * 60 * 60);
-export const loginMaxFailures = z.coerce.number().int().min(1).max(1000);
+export const loginMaxFailures = z.coerce.number().int().min(1).max(500);
 export const loginGlobalWindowSeconds = z.coerce.number().int().min(10).max(60 * 60);
 export const loginGlobalMaxAttempts = z.coerce.number().int().min(1).max(100_000);
 

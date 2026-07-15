@@ -301,7 +301,7 @@ export function ImageAdmin() {
           allTags={allTags}
           authors={authors}
           onClose={() => setEditing(null)}
-          onSaved={() => { setEditing(null); refresh(); }}
+          onSaved={refresh}
         />
       )}
       {batchEditing && (
@@ -312,7 +312,7 @@ export function ImageAdmin() {
           allTags={allTags}
           authors={authors}
           onClose={() => setBatchEditing(false)}
-          onSaved={() => { setBatchEditing(false); refresh(); }}
+          onSaved={refresh}
         />
       )}
       {confirmAction && confirmCopy && (

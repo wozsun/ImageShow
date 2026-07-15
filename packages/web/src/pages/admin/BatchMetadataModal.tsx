@@ -20,6 +20,15 @@ import { mergeBatchEditCommonAttributes, normalizeAuthor, normalizeTheme } from 
 
 type BatchMetadataChanges = Record<keyof ImageDraft, boolean>;
 type BatchMetadataUpdate = { id: string } & Partial<ImageDraft>;
+type BatchUpdateItemResult =
+  | { id: string; status: "updated" }
+  | { id: string; status: "failed"; code: string; message: string };
+type BatchUpdateResponse = {
+  requested: number;
+  updated: number;
+  failed: number;
+  results: BatchUpdateItemResult[];
+};
 
 function tagsChanged(draftTags: string[], savedTags: string[]) {
   return JSON.stringify([...draftTags].sort()) !== JSON.stringify([...savedTags].sort());
@@ -79,7 +88,10 @@ export function BatchMetadataModal({
   const exit = useAnimatedClose(onClose);
   useBodyScrollLock();
   const listRef = useRef<HTMLDivElement | null>(null);
-  const [drafts, setDrafts] = useState<Record<string, ImageDraft>>(() => Object.fromEntries(items.map((item) => [item.id, {
+  // 保存成功后父级会刷新列表并清空选择。弹窗必须继续持有打开时的图片快照，
+  // 否则部分成功会让仍失败的项目连同草稿一起从弹窗中消失。
+  const [initialItems] = useState(() => items);
+  const [drafts, setDrafts] = useState<Record<string, ImageDraft>>(() => Object.fromEntries(initialItems.map((item) => [item.id, {
     title: item.title,
     description: item.description,
     source: item.source,
@@ -92,10 +104,11 @@ export function BatchMetadataModal({
   }])));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [saveSummary, setSaveSummary] = useState<BatchUpdateResponse | null>(null);
 
   const [preview, setPreview] = useState<{ src: string; thumbSrc: string; width: number; height: number } | null>(null);
   const [page, setPage] = useState(1);
-  const [activeIds, setActiveIds] = useState(() => items.map((item) => item.id));
+  const [activeIds, setActiveIds] = useState(() => initialItems.map((item) => item.id));
 
   const [common, setCommon] = useState({ device: "" as "" | "auto" | Device, brightness: "" as "" | "auto" | Brightness, theme: "", author: "", tags: [] as string[] });
   const [migrating, setMigrating] = useState(false);
@@ -106,7 +119,7 @@ export function BatchMetadataModal({
   // 列表行左下角的「所在存储」展示后端显示名；复用上面已为迁移目标选择器取到的后端列表。
   const resolveStorageName = storageNameResolver(storageOptionsData?.backends ?? []);
   const activeSet = new Set(activeIds);
-  const activeItems = items.filter((item) => activeSet.has(item.id));
+  const activeItems = initialItems.filter((item) => activeSet.has(item.id));
   const totalPages = Math.max(1, Math.ceil(activeItems.length / pageSize));
   const visibleItems = activeItems.slice((page - 1) * pageSize, page * pageSize);
   useEffect(() => setPage((current) => Math.min(current, totalPages)), [totalPages]);
@@ -117,7 +130,7 @@ export function BatchMetadataModal({
     fieldsChangedFor(item, drafts[item.id])
   ]));
   const changedCount = activeItems.filter((item) => Object.values(changedByItem.get(item.id)!).some(Boolean)).length;
-  const modalSubtitle = single ? (items[0]?.object_key ?? "") : `${activeItems.length} 张图片`;
+  const modalSubtitle = single ? (initialItems[0]?.object_key ?? "") : `${activeItems.length} 张图片`;
 
   const commonChanged = { device: common.device !== "", brightness: common.brightness !== "", theme: common.theme.trim() !== "", author: common.author.trim() !== "", tags: common.tags.length > 0 };
   const commonHasValue = commonChanged.device || commonChanged.brightness || commonChanged.theme || commonChanged.author || commonChanged.tags;
@@ -131,12 +144,23 @@ export function BatchMetadataModal({
 
     setSaving(true);
     setError("");
+    setSaveSummary(null);
     try {
-      await api(`${adminApiBasePath}/images/batch-update`, {
+      const response = await api<BatchUpdateResponse>(`${adminApiBasePath}/images/batch-update`, {
         method: "POST",
         body: JSON.stringify({ items: changedItems }),
       });
-      exit.requestClose(onSaved);
+      setSaveSummary(response);
+      const updatedIds = new Set(
+        response.results
+          .filter((result) => result.status === "updated")
+          .map((result) => result.id)
+      );
+      if (updatedIds.size) {
+        setActiveIds((current) => current.filter((id) => !updatedIds.has(id)));
+        onSaved();
+      }
+      if (!response.failed) exit.requestClose();
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -149,7 +173,8 @@ export function BatchMetadataModal({
     try {
       await api(`${adminApiBasePath}/images/batch-migrate-storage`, { method: "POST", body: JSON.stringify({ ids: activeIds, target: migrateTarget }) });
       setMigrating(false);
-      exit.requestClose(onSaved);
+      onSaved();
+      exit.requestClose();
     } catch (err) {
       setMigrating(false);
       setError((err as Error).message);
@@ -293,6 +318,18 @@ export function BatchMetadataModal({
           })}
           {!activeItems.length && <p className="empty-state">批量编辑列表为空</p>}
         </div>
+        {saveSummary && (
+          <div className="notice-line" role="status">
+            保存完成：成功 {saveSummary.updated} 项，失败 {saveSummary.failed} 项。
+            {saveSummary.results
+              .filter((result): result is Extract<BatchUpdateItemResult, { status: "failed" }> => result.status === "failed")
+              .map((result) => (
+                <div className="error" key={result.id}>
+                  {result.id}：{result.message}（{result.code}）
+                </div>
+              ))}
+          </div>
+        )}
         {error && <p className="error">{error}</p>}
         <footer>
           <button

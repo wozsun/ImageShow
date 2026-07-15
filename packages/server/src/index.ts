@@ -38,6 +38,10 @@ import { drainWorker, startWorker, stopWorker } from "./jobs/worker.ts";
 import { enforceThemeHostNavigation, isAllowedSiteHost, specialHost, themeFromHost } from "./themes/host.ts";
 import { onStorageBackendChange } from "./storage/backend-registry.ts";
 import { rebuildRandomPool } from "./random/random-cache.ts";
+import {
+  cleanupActiveRandomRebuildSpools,
+  cleanupOrphanRandomRebuildSpools,
+} from "./random/rebuild-spool.ts";
 
 const app = new Hono();
 
@@ -136,6 +140,7 @@ app.notFound(() => routeError({ status: 404, message: "Not Found" }));
 
 await ensureRuntimeDirectories();
 await cleanupOrphanRawImports(appConfig.uploadTtlSeconds * 1000);
+await cleanupOrphanRandomRebuildSpools();
 await pingDb();
 await runMigrations();
 await initializeAdmin();
@@ -174,6 +179,7 @@ async function shutdown(signal: string) {
     stopWorker();
     await drainWorker();
     await startupRandomPool;
+    await cleanupActiveRandomRebuildSpools();
     await redis.quit().catch(() => redis.disconnect());
     await pool.end().catch(() => undefined);
   } finally {

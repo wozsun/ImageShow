@@ -1,3 +1,4 @@
+import { appConfig } from "@imageshow/shared";
 import { SelectMenu } from "./SelectMenu.js";
 import { ThemeInput } from "./ThemeInput.js";
 import { TagInput } from "./TagInput.js";
@@ -39,6 +40,7 @@ export function ImageDraftFields({
           className={`image-fields-title${changedFields.title ? " is-changed" : ""}`}
           value={title ? title.value : draft.title}
           onChange={(event) => onPatch({ title: event.target.value })}
+          maxLength={appConfig.imageMetadata.titleMaxLength}
           placeholder={title?.placeholder ?? "标题"}
           disabled={title ? title.disabled : disabled}
         />
@@ -106,6 +108,7 @@ export function ImageDraftFields({
         className={`image-fields-desc${changedFields.description ? " is-changed" : ""}`}
         value={draft.description}
         onChange={(event) => onPatch({ description: event.target.value })}
+        maxLength={appConfig.imageMetadata.descriptionMaxLength}
         placeholder="详情描述"
         disabled={disabled}
       />

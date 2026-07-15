@@ -25,6 +25,7 @@ export type ImportVocabulary = {
 type EntityCountCacheInvalidationBatch = {
   add: (kinds: Iterable<EntityCacheKind>) => void;
   flush: () => Promise<void>;
+  hasWork: () => boolean;
 };
 type EntityCacheEnvelope<T extends unknown[]> = {
   epoch: string;
@@ -300,6 +301,9 @@ export function createEntityCountCacheInvalidationBatch(): EntityCountCacheInval
       const kinds = [...pending];
       pending.clear();
       await invalidateEntityCountCaches(kinds);
+    },
+    hasWork() {
+      return pending.size > 0;
     },
   };
 }

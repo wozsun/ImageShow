@@ -31,7 +31,8 @@ import {
   skipWebpUnderKb,
   thumbnailLongEdge,
   thumbnailQuality,
-  uploadConcurrency
+  uploadConcurrency,
+  uploadImportMaxItems
 } from "./fields.ts";
 import {
   getRuntimeConfig,
@@ -62,6 +63,7 @@ const appSettingsSchema = z.object({
     random_default_method: randomMethod.optional()
   }).optional(),
   upload: z.object({
+    max_items: uploadImportMaxItems.default(appConfig.runtimeDefaults.upload.max_items),
     max_file_size_mb: maxFileSizeMb.default(appConfig.runtimeDefaults.upload.max_file_size_mb),
     max_long_edge: maxLongEdge.default(appConfig.runtimeDefaults.upload.max_long_edge),
     list_page_size: listPageSize.default(appConfig.runtimeDefaults.upload.list_page_size),

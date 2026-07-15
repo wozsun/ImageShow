@@ -63,3 +63,13 @@ export function retryPrepareJob(job: ImportJob): ImportJob {
     message: "等待重试"
   };
 }
+
+export function retryLinkPrepareJob(job: ImportJob): ImportJob {
+  if (job.failureStage !== "create" || job.sessionId) return retryPrepareJob(job);
+  return {
+    ...job,
+    status: "queued",
+    failureStage: undefined,
+    message: "重新获取导入会话"
+  };
+}

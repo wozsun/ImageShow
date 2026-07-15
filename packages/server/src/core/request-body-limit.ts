@@ -1,5 +1,4 @@
 import { adminApiBasePath, appConfig } from "@imageshow/shared";
-import { bodyLimit } from "hono/body-limit";
 import type { Context, Next } from "hono";
 import { routeError } from "./http.ts";
 
@@ -9,8 +8,14 @@ const advancedConfigMaxBytes =
   appConfig.imports.configPackageMaxBytes + 64 * 1024;
 const jsonlManifestPath = `${adminApiBasePath}/imports/jsonl/parse`;
 const importBatchCreatePath = `${adminApiBasePath}/imports/batch-create`;
+// The schema accepts 3,600 items and its maximum-length fields can produce a
+// JSON document of about 147.5 MiB after worst-case escaping. Use the next
+// configured size tier so syntax and future compatible fields retain headroom.
+const importBatchCreateBodyMaxBytes = 256 * 1024 * 1024;
 export const batchImageUpdatePath = `${adminApiBasePath}/images/batch-update`;
-const batchImageUpdateBodyMaxBytes = 8 * 1024 * 1024;
+// Two hundred maximum-field items occupy about 5.692 MiB after worst-case JSON
+// escaping. The 6 MiB tier covers every legal request with finite headroom.
+const batchImageUpdateBodyMaxBytes = 6 * 1024 * 1024;
 const importFilePath = new RegExp(`^${adminApiBasePath}/imports/[^/]+/file$`);
 const advancedConfigLargeBodyPath = new RegExp(
   `^${adminApiBasePath}/advanced-config/(?:preview|import|runtime(?:/validate)?)$`
@@ -24,25 +29,73 @@ function tooLarge(_c: Context) {
   });
 }
 
-const limitStandardApiBody = bodyLimit({
-  maxSize: standardApiBodyMaxBytes,
-  onError: tooLarge
-});
+const requestBodyBytesContextKey = "requestBodyBytes";
 
-export const limitJsonlManifestBody = bodyLimit({
-  maxSize: jsonlManifestBodyMaxBytes,
-  onError: tooLarge
-});
+/**
+ * Hono's body limiter does not expose the number of bytes it inspected. This
+ * equivalent limiter records that count for summary logs without parsing,
+ * retaining, or logging the request body itself.
+ */
+function measuredBodyLimit(maxSize: number) {
+  return async (c: Context, next: Next) => {
+    if (!c.req.raw.body) {
+      c.set(requestBodyBytesContextKey, 0);
+      return next();
+    }
 
-const limitConfigPackageBody = bodyLimit({
-  maxSize: advancedConfigMaxBytes,
-  onError: tooLarge
-});
+    const hasTransferEncoding = c.req.raw.headers.has("transfer-encoding");
+    const rawContentLength = c.req.raw.headers.get("content-length");
+    if (rawContentLength !== null && !hasTransferEncoding) {
+      const parsedContentLength = Number.parseInt(rawContentLength, 10);
+      const contentLength = Number.isFinite(parsedContentLength)
+        ? Math.max(0, parsedContentLength)
+        : 0;
+      c.set(requestBodyBytesContextKey, contentLength);
+      return contentLength > maxSize ? tooLarge(c) : next();
+    }
 
-export const limitBatchImageUpdateBody = bodyLimit({
-  maxSize: batchImageUpdateBodyMaxBytes,
-  onError: tooLarge
-});
+    let size = 0;
+    const chunks: Uint8Array[] = [];
+    const reader = c.req.raw.body.getReader();
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.length;
+      c.set(requestBodyBytesContextKey, size);
+      if (size > maxSize) return tooLarge(c);
+      chunks.push(value);
+    }
+
+    const requestInit: RequestInit & { duplex: "half" } = {
+      body: new ReadableStream<Uint8Array>({
+        start(controller) {
+          for (const chunk of chunks) controller.enqueue(chunk);
+          controller.close();
+        },
+      }),
+      duplex: "half",
+    };
+    c.req.raw = new Request(c.req.raw, requestInit);
+    return next();
+  };
+}
+
+export function getRequestBodyBytes(c: Context) {
+  const measured = c.get(requestBodyBytesContextKey) as number | undefined;
+  if (Number.isFinite(measured)) return measured ?? 0;
+  const declared = Number.parseInt(c.req.header("content-length") ?? "0", 10);
+  return Number.isFinite(declared) ? Math.max(0, declared) : 0;
+}
+
+const limitStandardApiBody = measuredBodyLimit(standardApiBodyMaxBytes);
+
+export const limitJsonlManifestBody = measuredBodyLimit(jsonlManifestBodyMaxBytes);
+
+export const limitImportBatchCreateBody = measuredBodyLimit(importBatchCreateBodyMaxBytes);
+
+const limitConfigPackageBody = measuredBodyLimit(advancedConfigMaxBytes);
+
+export const limitBatchImageUpdateBody = measuredBodyLimit(batchImageUpdateBodyMaxBytes);
 
 export function limitApiRequestBody(c: Context, next: Next) {
   const path = new URL(c.req.url).pathname;

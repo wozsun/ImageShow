@@ -166,7 +166,8 @@
     position: absolute;
     inset: 0 0 auto;
     z-index: 5;
-    height: 24px;
+    /* 保留足够的 iOS 接缝遮罩，但不要进入从 20px 处开始的标题控件区域。 */
+    height: 16px;
     background: #fff;
     pointer-events: none;
   }

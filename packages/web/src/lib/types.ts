@@ -214,5 +214,5 @@ export type ImportJob = {
   quality?: number | null;
   transcoded?: boolean;
   storageSlug: string;
-  failureStage?: "prepare" | "commit";
+  failureStage?: "create" | "prepare" | "commit";
 };

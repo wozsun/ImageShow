@@ -212,7 +212,7 @@ export function SettingsPage() {
               首页预览切换间隔 ms
               <NumberInput
                 min={0}
-                max={30000}
+                max={10000}
                 value={settings.site.home.preview_delay_ms}
                 onChange={(value) => updateSiteHome({ preview_delay_ms: value })}
               />
@@ -269,7 +269,7 @@ export function SettingsPage() {
               <label>
                 上传与批量编辑每页数量
                 <NumberInput
-                  min={5}
+                  min={1}
                   max={100}
                   value={settings.upload.list_page_size}
                   onChange={(value) => updateUpload({ list_page_size: value })}
@@ -288,7 +288,7 @@ export function SettingsPage() {
                 单客户端上传并发数
                 <NumberInput
                   min={1}
-                  max={16}
+                  max={128}
                   value={settings.upload.concurrency}
                   onChange={(value) => updateUpload({ concurrency: value })}
                 />
@@ -297,7 +297,7 @@ export function SettingsPage() {
                 单客户端链接导入并发数
                 <NumberInput
                   min={1}
-                  max={16}
+                  max={128}
                   value={settings.link_image.concurrency}
                   onChange={(value) => updateLinkImage({ concurrency: value })}
                 />

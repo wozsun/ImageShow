@@ -2,6 +2,10 @@ export const appConfig = {
   devices: ["pc", "mb"] as const,
   brightness: ["dark", "light"] as const,
   themeMaxLength: 32,
+  imageMetadata: {
+    titleMaxLength: 80,
+    descriptionMaxLength: 500
+  },
 
   pagination: {
     maxLimit: 200
@@ -16,8 +20,10 @@ export const appConfig = {
   trashBatchSize: 100,
 
   imports: {
-    batchHardLimit: 3_000,
-    jsonlManifestMaxBytes: 16 * 1024 * 1024,
+    batchHardLimit: 3_600,
+    uploadSoftLimitMax: 1_000,
+    linkSoftLimitMax: 1_000,
+    jsonlManifestMaxBytes: 128 * 1024 * 1024,
     configPackageMaxBytes: 1024 * 1024,
     configPackageMaxBackends: 100
   },
@@ -76,6 +82,7 @@ export const appConfig = {
     database: { port: 5432 },
     redis: { host: "redis", port: 6379, db: 0 },
     upload: {
+      max_items: 200,
       max_file_size_mb: 100,
       max_long_edge: 32000,
       list_page_size: 20,
@@ -175,6 +182,7 @@ export type RuntimeSiteSettings = {
 };
 
 export type UploadSettings = {
+  max_items: number;
   max_file_size_mb: number;
   max_long_edge: number;
   list_page_size: number;

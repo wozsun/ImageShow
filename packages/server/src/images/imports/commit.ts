@@ -146,7 +146,7 @@ async function commitStoredImageSession(
         ? insertedRow.rows[0]
         : (await client.query("SELECT * FROM metadata WHERE id=$1", [id])).rows[0]
       ) as ImageRecord;
-      if (await replaceImageTags(client, image.id, resolvedTags)) createdEntityKinds.add("tag");
+      if ((await replaceImageTags(client, image.id, resolvedTags)).createdTag) createdEntityKinds.add("tag");
       const finalized = await client.query(
         "UPDATE import_session SET status='finalized', updated_at=now() WHERE id=$1 AND status='committing'",
         [id]
@@ -250,7 +250,7 @@ async function commitProxySession(
             "SELECT * FROM metadata WHERE id=$1",
             [id]
           )).rows[0] as ImageRecord | undefined;
-      if (image && await replaceImageTags(client, image.id, resolvedTags)) {
+      if (image && (await replaceImageTags(client, image.id, resolvedTags)).createdTag) {
         createdEntityKinds.add("tag");
       }
       const finalized = await client.query(

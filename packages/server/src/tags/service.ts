@@ -3,7 +3,8 @@ import type { PoolClient } from "pg";
 import { pool, withTransaction } from "../core/db.ts";
 import { ApiError } from "../core/http.ts";
 import { invalidateGalleryFacetsCache, invalidateImageReadCaches } from "../images/image-cache.ts";
-import { rebuildRandomPool, syncRandomImage } from "../random/random-cache.ts";
+import { applyOrCollectImageMutationSync, type ImageMutationSyncBatch } from "../images/mutation-sync.ts";
+import { rebuildRandomPool } from "../random/random-cache.ts";
 import {
   invalidateEntityCountCaches,
   invalidateOrCollectEntityCountCaches,
@@ -81,12 +82,12 @@ export async function deleteTag(slug: string) {
 }
 
 type SetImageTagsOptions = {
-  syncRandom?: boolean;
   entityCountInvalidationBatch?: EntityCountCacheInvalidationBatch;
+  mutationSyncBatch?: ImageMutationSyncBatch;
 };
 
 export async function replaceImageTags(client: PoolClient, imageId: string, slugs: string[]) {
-  const image = await client.query("SELECT 1 FROM metadata WHERE id = $1", [imageId]);
+  const image = await client.query("SELECT md5 FROM metadata WHERE id = $1", [imageId]);
   if (!image.rowCount) throw new ApiError(404, "not_found", "Image not found");
   let createdTag = false;
   for (const slug of slugs) {
@@ -106,20 +107,32 @@ export async function replaceImageTags(client: PoolClient, imageId: string, slug
       [imageId, slug]
     );
   }
-  return createdTag;
+  return {
+    createdTag,
+    md5: String(image.rows[0]?.md5 ?? ""),
+  };
 }
 
 export async function setImageTags(imageId: string, names: string[], options: SetImageTagsOptions = {}): Promise<string[]> {
   const resolved = await resolveTagNames(names);
-  const createdTag = await withTransaction(async (client) => {
+  const mutation = await withTransaction(async (client) => {
     return replaceImageTags(client, imageId, resolved);
   });
 
-  await Promise.all([
-    invalidateImageReadCaches(),
+  // The database transaction has committed. Attempt every derived-cache
+  // repair even if one cache backend operation fails, so callers never observe
+  // tags committed without the random pool and MD5 detail cache being repaired.
+  const cacheRepairs = await Promise.allSettled([
+    applyOrCollectImageMutationSync({
+      id: imageId,
+      md5: mutation.md5,
+    }, options.mutationSyncBatch),
     invalidateOrCollectEntityCountCaches(["tag"], options.entityCountInvalidationBatch),
-    createdTag ? refreshEntityVocabularies(["tag"]) : Promise.resolve(),
+    mutation.createdTag ? refreshEntityVocabularies(["tag"]) : Promise.resolve(),
   ]);
-  if (options.syncRandom ?? true) await syncRandomImage(imageId);
+  const failedRepair = cacheRepairs.find(
+    (result): result is PromiseRejectedResult => result.status === "rejected"
+  );
+  if (failedRepair) throw failedRepair.reason;
   return [...resolved].sort();
 }

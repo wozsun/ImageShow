@@ -1,7 +1,12 @@
 import type { Hono } from "hono";
 import { adminApiBasePath } from "@imageshow/shared";
 import { ok } from "../core/http.ts";
-import { batchImageUpdatePath, limitBatchImageUpdateBody } from "../core/request-body-limit.ts";
+import { logger } from "../core/logger.ts";
+import {
+  batchImageUpdatePath,
+  getRequestBodyBytes,
+  limitBatchImageUpdateBody,
+} from "../core/request-body-limit.ts";
 import {
   adminImageListQuery,
   batchImageUpdateInput,
@@ -11,6 +16,7 @@ import {
   uuidInput,
 } from "../core/validation.ts";
 import { batchDeleteImages } from "../images/batch-delete.ts";
+import { updateImagesBatch } from "../images/batch-update.ts";
 import {
   getAdminImage,
   getAdminImageInfo,
@@ -20,8 +26,6 @@ import { getOverviewStats } from "../images/read-models/overview.ts";
 import { serveAdminObject, serveAdminOriginalLink, serveAdminThumb } from "../images/serving.ts";
 import { deleteImage, migrateImagesStorage, updateImageMetadata } from "../images/service.ts";
 import { batchRestoreImages, purgeDeletedImage, purgeDeletedImages, restoreDeletedImage } from "../images/trash.ts";
-import { setImageTags } from "../tags/service.ts";
-import { createEntityCountCacheInvalidationBatch } from "../vocab/vocab-cache.ts";
 
 export function registerAdminImageRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/overview`, async (c) => c.json(ok(await getOverviewStats())));
@@ -96,31 +100,53 @@ export function registerAdminImageRoutes(app: Hono) {
   });
 
   app.post(`${adminApiBasePath}/images/batch-migrate-storage`, async (c) => {
+    const startedAt = performance.now();
     const input = parse(batchMigrateStorageInput, await c.req.json().catch(() => ({})));
-    return c.json(ok(await migrateImagesStorage(input.ids, input.target)));
+    let maxItemDurationMs = 0;
+    let randomPoolFullRebuildTriggered = false;
+    const result = await migrateImagesStorage(input.ids, input.target, {
+      onMetrics(metrics) {
+        maxItemDurationMs = metrics.maxItemDurationMs;
+        randomPoolFullRebuildTriggered = metrics.randomPoolFullRebuildTriggered;
+      },
+    });
+    logger.info("batch_storage_migration_summary", {
+      requested: result.requested,
+      succeeded: result.migrated + result.unchanged,
+      failed: result.failed,
+      total_duration_ms: Math.round((performance.now() - startedAt) * 100) / 100,
+      max_item_duration_ms: Math.round(maxItemDurationMs * 100) / 100,
+      request_body_bytes: getRequestBodyBytes(c),
+      entity_count_invalidation_triggered: false,
+      random_pool_full_rebuild_triggered: randomPoolFullRebuildTriggered,
+    });
+    return c.json(ok(result));
   });
 
   app.post(batchImageUpdatePath, limitBatchImageUpdateBody, async (c) => {
+    const startedAt = performance.now();
     const input = parse(batchImageUpdateInput, await c.req.json().catch(() => ({})));
-    const entityCountInvalidationBatch = createEntityCountCacheInvalidationBatch();
-    let updated = 0;
-    try {
-      for (const item of input.items) {
-        const { id, tags, ...metadata } = item;
-        const metadataChanged = Object.keys(metadata).length > 0;
-        if (!metadataChanged && tags === undefined) continue;
-        if (metadataChanged) {
-          await updateImageMetadata(id, metadata, { entityCountInvalidationBatch });
-        }
-        if (tags !== undefined) {
-          await setImageTags(id, tags, { entityCountInvalidationBatch });
-        }
-        updated += 1;
-      }
-    } finally {
-      await entityCountInvalidationBatch.flush();
-    }
-    return c.json(ok({ updated }));
+    let maxItemDurationMs = 0;
+    let entityCountInvalidationTriggered = false;
+    let randomPoolFullRebuildTriggered = false;
+    const result = await updateImagesBatch(input.items, {
+      onMetrics(metrics) {
+        maxItemDurationMs = metrics.maxItemDurationMs;
+        entityCountInvalidationTriggered = metrics.entityCountInvalidationTriggered;
+        randomPoolFullRebuildTriggered = metrics.randomPoolFullRebuildTriggered;
+      },
+    });
+    logger.info("batch_image_update_summary", {
+      requested: result.requested,
+      succeeded: result.updated,
+      failed: result.failed,
+      total_duration_ms: Math.round((performance.now() - startedAt) * 100) / 100,
+      max_item_duration_ms: Math.round(maxItemDurationMs * 100) / 100,
+      request_body_bytes: getRequestBodyBytes(c),
+      entity_count_invalidation_triggered: entityCountInvalidationTriggered,
+      random_pool_full_rebuild_triggered: randomPoolFullRebuildTriggered,
+    });
+    return c.json(ok(result));
   });
 
   app.post(`${adminApiBasePath}/images/:id`, async (c) => {

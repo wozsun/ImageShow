@@ -35,13 +35,14 @@ ImageShow 的配置按持久化位置分为三类：数据库、`/app/data/confi
 | `site.random_subdomain` / `site.static_subdomain` / `site.docs_subdomain` / `site.link_subdomain` | 保留子域名前缀。 |
 | `site.docs_enabled` | 是否启用 `docs.<域名>` 文档站，默认 `true`。关闭后该主机返回 404，但前缀仍保留，主题不可占用。 |
 | `site.robots_enabled` | 是否提供 `robots.txt`，默认 `false`。开启后主站首页与文档站可抓取，资源域和主题域禁抓。 |
-| `upload.*` | 上传文件大小、图片长边限制、上传列表分页、单客户端上传队列并发与服务端全局上传 prepare 并发；其中 `upload.max_file_size_mb`、`upload.max_long_edge` 和 `upload.global_concurrency` 只在配置文件中维护。 |
+| `upload.*` | 本地文件单次选择软上限、上传文件大小、图片长边限制、上传列表分页、单客户端上传队列并发与服务端全局上传 prepare 并发；其中 `upload.max_items`、`upload.max_file_size_mb`、`upload.max_long_edge` 和 `upload.global_concurrency` 只在配置文件中维护。 |
+| `upload.max_items` | 本地文件单次选择软上限，默认 200，可配置范围为 1–1000；只由前端限制，服务端仍逐文件创建会话，没有本地批次条目数硬上限。 |
 | `link_image.fill_original_url` | 两种链接导入模式是否自动把输入 URL 填入「原图 URL」字段；不做可直达探测。 |
 | `link_image.concurrency` | 单客户端 URL 导入队列并发数，覆盖“下载保存”和“代理链接”。 |
 | `link_image.global_concurrency` | 服务端 URL 导入 prepare 全局并发数，多个客户端共享；只在配置文件中维护。 |
 | `link_image.fetch_timeout_seconds` | 外链图片请求超时，单位秒；只覆盖下载和代理准备阶段的外部请求。 |
-| `link_image.url_list_max_items` | URL 列表单次输入软上限，默认 100；不在设置页展示，管理端只读返回该值供导入窗口预检，可配置范围为 1–3000。 |
-| `link_image.jsonl_max_items` | JSONL 清单单次图片软上限，默认 100；不在设置页展示，管理端只读返回该值供导入窗口预检，修改需编辑配置文件，可配置范围为 1–3000。 |
+| `link_image.url_list_max_items` | URL 列表单次输入软上限，默认 100；不在设置页展示，管理端只读返回该值供导入窗口预检，可配置范围为 1–1000。 |
+| `link_image.jsonl_max_items` | JSONL 清单单次图片软上限，默认 100；不在设置页展示，管理端只读返回该值供导入窗口预检，修改需编辑配置文件，可配置范围为 1–1000。 |
 | `normalize.*` | 本地上传与下载导入共用的最终入库文件标准化策略。 |
 | `thumbnail.*` | 缩略图长边和压缩质量，只影响此后新生成的缩略图。 |
 | `import.commit_concurrency` | 单个管理页面同时执行的 commit 数，默认 5；只在配置文件中维护，管理端只读返回。 |
@@ -54,6 +55,56 @@ ImageShow 的配置按持久化位置分为三类：数据库、`/app/data/confi
 | `captcha.*` | 登录验证码开关、位数、有效期、干扰线和噪点数量。字符集与几何样式仍是代码常量。 |
 | `log.*` | 日志级别、单文件大小上限和轮转文件保留数量。日志写入 `data/log/app.log`，并同时输出到容器 stdout / stderr；超级管理员可在后台「日志」页实时调整 `log.level` 并查看最近日志。后台非 GET 写操作会记录操作者、路径、状态、耗时和 IP，不记录请求体。 |
 
+## 数值配置范围
+
+除 `upload.max_file_size_mb` 和 `log.max_size_mb` 可使用小数外，下列数值字段都必须是整数。这里的默认值用于首次生成配置或补齐缺失字段，不会覆盖已有配置文件中的有效值。
+
+| 配置路径 | 默认值 | 合法范围 |
+| --- | ---: | ---: |
+| `site.home.preview_delay_ms` | 1000 | 0–10000 ms |
+| `site.gallery.default_limit` | 60 | 1–200 |
+| `port` | 5518 | 1000–65535 |
+| `database.port` | 5432 | 1–65535 |
+| `redis.port` | 6379 | 1–65535 |
+| `redis.db` | 0 | 0–15 |
+| `upload.max_items` | 200 | 1–1000 |
+| `upload.max_file_size_mb` | 100 | 大于 0，最大 500 MiB |
+| `upload.max_long_edge` | 32000 | 512–32768 px |
+| `upload.list_page_size` | 20 | 1–100 |
+| `upload.concurrency` | 2 | 1–128 |
+| `upload.global_concurrency` | 5 | 1–512 |
+| `link_image.concurrency` | 2 | 1–128 |
+| `link_image.global_concurrency` | 5 | 1–512 |
+| `link_image.fetch_timeout_seconds` | 30 | 5–300 秒 |
+| `link_image.url_list_max_items` | 100 | 1–1000 |
+| `link_image.jsonl_max_items` | 100 | 1–1000 |
+| `normalize.quality` | 80 | 1–100 |
+| `normalize.quality_step` | 5 | 1–50 |
+| `normalize.min_quality` | 20 | 1–100，且不能高于 `quality` |
+| `normalize.max_long_edge` | 4500 | 512–32768 px |
+| `normalize.max_size_kb` | 500 | 50–102400 KiB |
+| `normalize.skip_webp_under_kb` | 700 | 0–102400 KiB |
+| `thumbnail.long_edge` | 512 | 64–4096 px |
+| `thumbnail.quality` | 75 | 1–100 |
+| `import.commit_concurrency` | 5 | 1–128 |
+| `import.global_commit_concurrency` | 10 | 1–512 |
+| `admin.image_page_size` | 60 | 10–200 |
+| `admin.recent_uploads` | 12 | 1–50 |
+| `background_job.move_cleanup_concurrency` | 5 | 1–512 |
+| `background_job.theme_reassign_concurrency` | 5 | 1–512 |
+| `background_job.migrate_concurrency` | 5 | 1–512 |
+| `security.session_ttl_seconds` | 604800 | 300–31536000 秒 |
+| `security.login_failure_window_seconds` | 60 | 60–86400 秒 |
+| `security.login_max_failures` | 5 | 1–500 |
+| `security.login_global_window_seconds` | 180 | 10–3600 秒 |
+| `security.login_global_max_attempts` | 10 | 1–100000 |
+| `captcha.code_length` | 6 | 3–8 |
+| `captcha.ttl_seconds` | 60 | 30–3600 秒 |
+| `captcha.noise_lines` | 8 | 0–60 |
+| `captcha.noise_dots` | 50 | 0–400 |
+| `log.max_size_mb` | 10 | 大于 0，最大 1024 MiB |
+| `log.max_files` | 5 | 1–100 |
+
 导入会话的空闲有效期固定为 30 分钟，是应用代码生命周期常量，不属于
 `config.json`。创建会话后，接收、排队、prepare 和 commit 会持续续租；取消标记
 与孤儿 raw 临时文件的安全清理年龄使用同一有效期，避免活跃会话被提前回收。
@@ -65,6 +116,7 @@ ImageShow 的配置按持久化位置分为三类：数据库、`/app/data/confi
 ```json
 {
   "upload": {
+    "max_items": 200,
     "max_file_size_mb": 100,
     "max_long_edge": 32000,
     "concurrency": 2,
@@ -95,9 +147,10 @@ ImageShow 的配置按持久化位置分为三类：数据库、`/app/data/confi
 
 commit 使用独立的 `import.commit_concurrency` / `import.global_commit_concurrency`，不再复用上传或 URL prepare 并发。前者限制单个后台页面，后者在取得会话 advisory lock、存储共享锁和数据库事务连接之前限制整个服务端进程。该许可覆盖正式对象复制、数据库事务、暂存清理和缓存更新，而不只是 `INSERT`。PostgreSQL 应用连接池上限为 30。
 
-URL、JSONL 和本地文件的一次前端批次都有 3000 项硬上限；URL / JSONL
-还需同时满足上述可配置软上限。超过限制会在创建会话前明确拒绝，不自动拆成多个
-`batch_time`，避免改变输入顺序语义或制造额外 HTTP 请求。
+URL 与 JSONL 的批量解析/会话创建接口有 3600 项服务端硬上限，并同时满足
+最高 1000 项的可配置软上限。超过限制会在创建会话前明确拒绝，不自动拆成多个
+`batch_time`。本地文件仅按 `upload.max_items` 做单次选择前端软限制；服务端逐文件
+创建会话，不维护本地选择批次，因此没有对应的服务端条目数硬上限。
 
 ## 高级配置
 
@@ -167,7 +220,6 @@ super 管理员可在「设置 → 高级配置」导出或导入版本化 JSON 
 | `DATABASE_NAME` / `DATABASE_USER` / `DATABASE_PASSWORD` | 初始化应用数据库和 PostgreSQL 容器。 |
 | `SITE_DOMAIN` | 首次生成配置文件时播种 `site.domain`，默认 `example.com`。 |
 | `HOST_PORT` | 应用宿主机端口映射，默认 `5518`。 |
-| `TZ` | 应用容器时区，影响日志时间格式，默认 `UTC`。 |
 
 支持环境变量播种的配置字段统一按完整路径转成大写下划线，例如：
 
@@ -184,6 +236,7 @@ super 管理员可在「设置 → 高级配置」导出或导入版本化 JSON 
 | `thumbnail.quality` | `THUMBNAIL_QUALITY` |
 | `import.commit_concurrency` | `IMPORT_COMMIT_CONCURRENCY` |
 | `import.global_commit_concurrency` | `IMPORT_GLOBAL_COMMIT_CONCURRENCY` |
+| `upload.max_items` | `UPLOAD_MAX_ITEMS` |
 | `upload.max_file_size_mb` | `UPLOAD_MAX_FILE_SIZE_MB` |
 | `upload.max_long_edge` | `UPLOAD_MAX_LONG_EDGE` |
 | `upload.concurrency` | `UPLOAD_CONCURRENCY` |

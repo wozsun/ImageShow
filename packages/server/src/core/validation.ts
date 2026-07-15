@@ -43,8 +43,8 @@ const metadataInput = z.object({
   author: z.string().trim().toLowerCase().max(32)
     .refine((value) => value === "" || slugPattern.test(value), "author must be a lowercase slug")
     .default(""),
-  title: z.string().trim().max(200).default(""),
-  description: z.string().trim().max(2000).default(""),
+  title: z.string().trim().max(appConfig.imageMetadata.titleMaxLength).default(""),
+  description: z.string().trim().max(appConfig.imageMetadata.descriptionMaxLength).default(""),
   source: httpsUrlField("来源页面链接需为有效的 HTTPS 链接"),
   original: httpsDomainUrlField(externalImageRejectedMessage)
 });
@@ -56,8 +56,8 @@ export const metadataUpdateInput = z.object({
   author: z.string().trim().toLowerCase().max(32)
     .refine((value) => value === "" || slugPattern.test(value), "author must be a lowercase slug")
     .optional(),
-  title: z.string().trim().max(200).optional(),
-  description: z.string().trim().max(2000).optional(),
+  title: z.string().trim().max(appConfig.imageMetadata.titleMaxLength).optional(),
+  description: z.string().trim().max(appConfig.imageMetadata.descriptionMaxLength).optional(),
   source: optionalHttpsUrlField("来源页面链接需为有效的 HTTPS 链接"),
   original: optionalHttpsDomainUrlField(externalImageRejectedMessage)
 });
@@ -92,12 +92,44 @@ export const authorMetaUpdateInput = z.object({ display_name: displayNameInput.d
 
 export const uuidInput = z.string().uuid();
 
+const batchImageTagsInput = z.array(tagSlugInput)
+  // The public limit applies after normalization, so repeated spellings do not
+  // consume the per-image tag allowance.
+  .transform((tags) => [...new Set(tags)])
+  .pipe(z.array(tagSlugInput).max(50));
+
+const batchImageUpdateItemInput = metadataUpdateInput.extend({
+  id: uuidInput,
+  tags: batchImageTagsInput.optional(),
+}).superRefine((value, ctx) => {
+  const hasMetadataUpdate = Object.entries(value).some(([key, fieldValue]) =>
+    key !== "id" && key !== "tags" && fieldValue !== undefined
+  );
+  if (!hasMetadataUpdate && value.tags === undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "批量更新项必须包含 metadata 或 tags",
+    });
+  }
+});
+
+export type BatchImageUpdateItemInput = z.infer<typeof batchImageUpdateItemInput>;
+
 export const batchImageUpdateInput = z.object({
-  items: z.array(metadataUpdateInput.extend({
-    id: uuidInput,
-    tags: z.array(tagSlugInput).max(50).optional()
-      .transform((tags) => tags === undefined ? undefined : [...new Set(tags)]),
-  })).min(1).max(200),
+  items: z.array(batchImageUpdateItemInput).min(1).max(200),
+}).superRefine((value, ctx) => {
+  const ids = new Set<string>();
+  for (let index = 0; index < value.items.length; index += 1) {
+    const id = value.items[index].id.toLowerCase();
+    if (ids.has(id)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["items", index, "id"],
+        message: "批量更新中的图片 ID 不能重复",
+      });
+    }
+    ids.add(id);
+  }
 });
 
 export { adminUsernameInput } from "../users/credentials.ts";

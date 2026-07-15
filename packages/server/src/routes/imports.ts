@@ -15,7 +15,12 @@ import {
 import { isReservedSubdomain } from "../themes/host.ts";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { JsonlManifestError, parseJsonlManifest } from "../images/imports/jsonl.ts";
-import { limitJsonlManifestBody } from "../core/request-body-limit.ts";
+import {
+  getRequestBodyBytes,
+  limitImportBatchCreateBody,
+  limitJsonlManifestBody,
+} from "../core/request-body-limit.ts";
+import { logger } from "../core/logger.ts";
 
 export function registerImportRoutes(app: Hono) {
   app.post(`${adminApiBasePath}/imports/create`, async (c) => {
@@ -23,7 +28,8 @@ export function registerImportRoutes(app: Hono) {
     return c.json(ok(await createImportSession(input)));
   });
 
-  app.post(`${adminApiBasePath}/imports/batch-create`, limitJsonlManifestBody, async (c) => {
+  app.post(`${adminApiBasePath}/imports/batch-create`, limitImportBatchCreateBody, async (c) => {
+    const startedAt = performance.now();
     const input = parse(importBatchCreateInput, await c.req.json().catch(() => ({})));
     const linkConfig = getRuntimeConfig().link_image;
     const configuredLimit = Math.min(appConfig.imports.batchHardLimit, input.source === "jsonl"
@@ -36,7 +42,24 @@ export function registerImportRoutes(app: Hono) {
         `单批最多允许 ${configuredLimit} 项`
       );
     }
-    return c.json(ok({ items: await createImportSessions(input.items) }));
+    let maxItemDurationMs = 0;
+    const items = await createImportSessions(input.items, {
+      onItemComplete(durationMs) {
+        maxItemDurationMs = Math.max(maxItemDurationMs, durationMs);
+      },
+    });
+    const failed = items.filter((item) => "error" in item).length;
+    logger.info("import_batch_create_summary", {
+      requested: input.items.length,
+      succeeded: input.items.length - failed,
+      failed,
+      total_duration_ms: Math.round((performance.now() - startedAt) * 100) / 100,
+      max_item_duration_ms: Math.round(maxItemDurationMs * 100) / 100,
+      request_body_bytes: getRequestBodyBytes(c),
+      entity_count_invalidation_triggered: false,
+      random_pool_full_rebuild_triggered: false,
+    });
+    return c.json(ok({ items }));
   });
 
   app.post(`${adminApiBasePath}/imports/jsonl/parse`, limitJsonlManifestBody, async (c) => {

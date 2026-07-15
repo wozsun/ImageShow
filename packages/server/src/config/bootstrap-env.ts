@@ -110,6 +110,7 @@ export function runtimeConfigFromEnvironment(): RuntimeConfig {
       db: environmentNumber("REDIS_DB")
     },
     upload: {
+      max_items: environmentNumber("UPLOAD_MAX_ITEMS"),
       max_file_size_mb: environmentNumber("UPLOAD_MAX_FILE_SIZE_MB"),
       max_long_edge: environmentNumber("UPLOAD_MAX_LONG_EDGE"),
       list_page_size: environmentNumber("UPLOAD_LIST_PAGE_SIZE"),

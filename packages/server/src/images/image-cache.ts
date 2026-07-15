@@ -25,7 +25,6 @@ export type ImageLookupItem = {
   status: "ready";
 };
 export type ImageLookupByIdItem = {
-  detail_complete: true;
   id: string;
   object_key: string;
   original: string;
@@ -86,8 +85,7 @@ export function parseImageLookup(raw: string): ImageLookupItem | null {
 export function parseImageLookupById(raw: string): ImageLookupByIdItem | null {
   try {
     const value = JSON.parse(raw) as Partial<ImageLookupByIdItem>;
-    if (value.detail_complete !== true
-      || typeof value.id !== "string" || typeof value.object_key !== "string" || typeof value.original !== "string"
+    if (typeof value.id !== "string" || typeof value.object_key !== "string" || typeof value.original !== "string"
       || typeof value.ext !== "string" || !imageLookupExtensions.has(value.ext)
       || typeof value.storage_slug !== "string" || typeof value.is_link !== "boolean"
       || !appConfig.devices.includes(value.device as Device) || !appConfig.brightness.includes(value.brightness as Brightness)
@@ -201,7 +199,6 @@ async function setImageLookups(items: ImageLookupItem[]) {
 
 function imageLookupByIdItem(item: CompleteImageLookupSource): ImageLookupByIdItem {
   return {
-    detail_complete: true,
     id: item.id,
     object_key: item.object_key,
     original: item.original ?? "",

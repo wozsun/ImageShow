@@ -32,6 +32,8 @@ const RANDOM_GLOBAL_PARTS = new Set([
   "rebuild_lock",
   "rebuild_completed"
 ]);
+const RANDOM_GENERATION_TTL_SAMPLE_SIZE = 25;
+const generationTtlSampleOffsets = new Map<string, number>();
 
 type RandomPoolSnapshotValue = {
   categoryCounts: RandomCategoryCounts;
@@ -276,13 +278,19 @@ async function inspectGenerations(current: string | null, generations: Map<strin
     key_count: number;
     manifest_exists: boolean;
     ttl_seconds: number;
+    ttl_sample_size: number;
+    ttl_sample_offset: number;
     orphaned: boolean;
   }> = [];
+  for (const sampledGeneration of generationTtlSampleOffsets.keys()) {
+    if (!generations.has(sampledGeneration)) generationTtlSampleOffsets.delete(sampledGeneration);
+  }
   for (const [generation, keys] of generations) {
     const manifest = randomManifestKey(generation);
+    const ttlSample = rotatingGenerationTtlSample(generation, keys);
     const [manifestExists, ttls] = await Promise.all([
       redis.exists(manifest).catch(() => 0),
-      Promise.all(keys.slice(0, 25).map((key) => redis.ttl(key).catch(() => -2)))
+      Promise.all(ttlSample.keys.map((key) => redis.ttl(key).catch(() => -2)))
     ]);
     const isCurrent = generation === current;
     const positiveTtls = ttls.filter((ttl) => ttl > 0);
@@ -295,11 +303,29 @@ async function inspectGenerations(current: string | null, generations: Map<strin
       key_count: keys.length,
       manifest_exists: Boolean(manifestExists),
       ttl_seconds: ttl,
+      ttl_sample_size: ttlSample.keys.length,
+      ttl_sample_offset: ttlSample.offset,
       orphaned: !isCurrent && (!manifestExists || ttl < 0)
     });
   }
   return result.sort((left, right) => Number(right.current) - Number(left.current)
     || right.generation.localeCompare(left.generation));
+}
+
+function rotatingGenerationTtlSample(generation: string, keys: string[]) {
+  if (!keys.length) return { keys: [], offset: 0 };
+  const requestedOffset = generationTtlSampleOffsets.get(generation) ?? 0;
+  const offset = requestedOffset % keys.length;
+  const sampleSize = Math.min(RANDOM_GENERATION_TTL_SAMPLE_SIZE, keys.length);
+  const sample = Array.from(
+    { length: sampleSize },
+    (_, index) => keys[(offset + index) % keys.length],
+  );
+  generationTtlSampleOffsets.set(
+    generation,
+    (offset + sampleSize) % keys.length,
+  );
+  return { keys: sample, offset };
 }
 
 function keyLength(
@@ -357,6 +383,12 @@ function redisStateIssues(input: {
   const issues: string[] = [];
   if (!input.generation) issues.push(`${RANDOM_CURRENT_KEY} 不存在`);
   if (input.generation && !input.snapshot) issues.push(`当前随机池 snapshot 不存在或无法解析`);
+  if (input.generation) {
+    const manifest = randomManifestKey(input.generation);
+    if (!input.coreKeys.find((summary) => summary.key === manifest)?.exists) {
+      issues.push(`当前随机池 manifest ${manifest} 不存在`);
+    }
+  }
   for (const summary of input.coreKeys) {
     if ([RANDOM_CURRENT_KEY, GALLERY_FILTER_OPTIONS_KEY].includes(summary.key) && !summary.exists) {
       issues.push(`${summary.key} 不存在`);

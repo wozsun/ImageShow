@@ -27,11 +27,26 @@ function strongEtagMatches(left: string, right: string) {
     && left === right;
 }
 
+function parseEntityTagList(header: string) {
+  const candidates: string[] = [];
+  let start = 0;
+  let quoted = false;
+  for (let index = 0; index < header.length; index += 1) {
+    const character = header[index];
+    if (character === '"') quoted = !quoted;
+    else if (character === "," && !quoted) {
+      candidates.push(header.slice(start, index).trim());
+      start = index + 1;
+    }
+  }
+  candidates.push(header.slice(start).trim());
+  return quoted ? [] : candidates;
+}
+
 /** If-None-Match uses weak comparison for GET and HEAD responses. */
 export function ifNoneMatchMatches(header: string | null | undefined, etag?: string | null) {
   if (!header) return false;
-  return header.split(",").some((rawCandidate) => {
-    const candidate = rawCandidate.trim();
+  return parseEntityTagList(header).some((candidate) => {
     return candidate === "*" || Boolean(etag && weakEtagMatches(candidate, etag));
   });
 }

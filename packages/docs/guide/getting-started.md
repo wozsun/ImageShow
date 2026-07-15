@@ -7,13 +7,12 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-Docker 镜像已包含 Node.js 26.5.0。只有在宿主机直接运行开发、检查或构建命令时，才需要安装 Node.js `>=26.5.0 <27`；该最低小版本覆盖项目使用的原生 UUIDv7、Temporal 与 Argon2，项目不提供旧 Node 兼容分支。
+Docker 镜像已包含 Node.js 26.5.0。只有在宿主机直接运行开发、检查或构建命令时，才需要安装 Node.js `>=26.3.0 <27`；该最低小版本已覆盖项目使用的原生 UUIDv7、Temporal、Argon2 与 TypeScript 类型擦除，项目不提供旧 Node 兼容分支。
 
 首次启动必须在 `.env` 中提供：
 
 ```ini
 SITE_DOMAIN=img.example.com
-TZ=UTC
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=
 DATABASE_NAME=imageshow

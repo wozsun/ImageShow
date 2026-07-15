@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { appConfig, type RuntimeConfig } from "@imageshow/shared";
 import {
+  applicationPort,
   captchaCodeLength,
   captchaNoiseDots,
   captchaNoiseLines,
@@ -36,8 +37,10 @@ import {
   previewDelayMs,
   randomMethod,
   recentUploads,
+  redisDatabase,
   rootRedirect,
   sessionTtlSeconds,
+  servicePort,
   siteDomain,
   siteIconUrl,
   siteName,
@@ -45,7 +48,8 @@ import {
   taskConcurrency,
   thumbnailLongEdge,
   thumbnailQuality,
-  uploadConcurrency
+  uploadConcurrency,
+  uploadImportMaxItems
 } from "./fields.ts";
 
 const subdomainLabel = z.string().trim().regex(
@@ -77,20 +81,21 @@ const runtimeConfigSchema = z.strictObject({
     link_subdomain: subdomainLabel,
     robots_enabled: z.boolean()
   }),
-  port: z.coerce.number().int().positive(),
+  port: applicationPort,
   database: z.strictObject({
     host: z.string().trim().min(1),
-    port: z.coerce.number().int().positive(),
+    port: servicePort,
     name: z.string().trim().min(1),
     user: z.string().trim().min(1),
     password: z.string().min(1)
   }),
   redis: z.strictObject({
     host: z.string().trim().min(1),
-    port: z.coerce.number().int().positive(),
-    db: z.coerce.number().int().nonnegative()
+    port: servicePort,
+    db: redisDatabase
   }),
   upload: z.strictObject({
+    max_items: uploadImportMaxItems,
     max_file_size_mb: maxFileSizeMb,
     max_long_edge: maxLongEdge,
     list_page_size: listPageSize,

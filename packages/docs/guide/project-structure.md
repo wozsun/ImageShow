@@ -101,6 +101,8 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | `images/brightness.ts` | 明暗识别 `detectBrightness()`：缩小图片后用 CIELAB L\* 直方图计算平均值、分位数、亮暗像素比例，并按运行时常量判定 `dark` / `light`。 |
 | `images/imports/` | 统一 `import_session` 生命周期：`session.ts` 负责创建 / 接收 / 预览 / 取消，`prepare.ts` 与 `commit.ts` 分管处理和提交，`progress.ts` 管租约 / 状态 / SSE，`execution.ts` 统一管理 prepare / commit 动态并发限制与 active promise，`staging.ts` 管暂存对象；另含 JSONL、请求摘要、安全抓取和临时文件模块。 |
 | `images/batch-delete.ts` | 批量软删除 `batchDeleteImages()`：标记 `status='deleted'` 并从 Redis 随机池移除（不动文件）。 |
+| `images/batch-update.ts` | 批量编辑协调：不同图片固定低并发 2、单图 metadata→tags 有序，隔离业务错误并按请求顺序返回结果；批次末统一同步派生缓存与实体计数缓存。 |
+| `images/mutation-sync.ts` | 图片写入后的派生状态协调器：合并随机池、公共读缓存、MD5 与精确 lookup 失效；单图调用即时执行，批量编辑按请求收集后执行一次。 |
 | `images/cursor.ts` | 游标编解码（稳定分页）。 |
 | `images/trash.ts` | 回收站编排：单图 / 批量恢复后统一失效 MD5 与图片读缓存；彻底清除时删除本站持有的对象，本地图删除原图和缩略图，link 图只删除本站缩略图。 |
 | `images/restore.ts` | 单图 / 批量恢复数据库状态，并把恢复后的图片增量同步回 Redis 随机池。 |
@@ -125,6 +127,7 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | --- | --- |
 | `random/service.ts` | 编排一次随机：校验→解析主题 / 标签 / 作者别名→定候选轴→取最近已服务列表→Redis 池取→记录已服务 id。 |
 | `random/random-cache.ts` | Redis generation 随机池、axis/category/tag/author 集合与 `RandomCategoryCounts` 分类计数、随机池派生的画廊筛选轴、单飞全量重建、带 token 续租的增量同步及 Lua 合并读；数据库快照提交后才写 generation，随机池不预热 lookup，Redis 更新不确定时排 `cache.rebuild`。 |
+| `random/rebuild-spool.ts` | 随机池全量重建的受控内存 / NDJSON spool：16 MiB 阈值、格式和大小校验、活动文件及启动遗留清理。 |
 | `random/picker.ts` | `resolveCandidateAxes()`（按 UA 推设备）、`pickFromRedisPool()`（按 axis/category 计数加权选集合，tag/author 用 Redis 临时过滤集合，跳过最近项并保留 fallback）。 |
 | `random/dedupe.ts` | 短时不重复：`filterSignature()`、`recentlyServedIds()`、`rememberServedId()`（Redis LPUSH + LTRIM + EXPIRE）。 |
 | `random/query.ts` | 随机请求参数校验、主题 / 标签 / 作者选择子解析、`img-count` 统计数据。 |

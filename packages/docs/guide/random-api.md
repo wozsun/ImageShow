@@ -13,9 +13,11 @@
 
 `t` / `tag` / `a` 均可填 slug 或显示名（自动解析为 slug）。基础随机、主题筛选、标签筛选和作者筛选都在 Redis 随机池中完成：先按 axis/category 计数加权选集合，`tag` / `a` 再通过短期 Redis 过滤集合做包含或排除。
 
-正常 `/random` 请求不依赖 PostgreSQL，不使用 `ORDER BY random()`，也不使用 count + offset。快照 generation 与内容通过单次 Redis 脚本读取，随机集合抽样与 item hash 读取也合并为一次往返；主题 / 标签 / 作者显示名并行解析。相同标签 / 作者筛选签名的并发临时集合构建会在进程内合并。Redis 随机池不可用时返回 503；Redis 为空时应用启动后异步重建随机池，普通派生缓存为空不会阻止 HTTP 服务启动。
+正常 `/random` 请求不依赖 PostgreSQL，不使用 `ORDER BY random()`，也不使用 count + offset。快照 generation 与内容通过单次 Redis 脚本读取，随机集合抽样与 item hash 读取也合并为一次往返；主题 / 标签 / 作者显示名并行解析。相同标签 / 作者筛选签名的并发临时集合构建会在进程内合并；空结果由短 TTL 哨兵缓存。过滤集合先写候选键，并在读取缓存和发布候选时同时核对 mutation revision、completed revision 与增量锁；增量更新尚未完成或全量重建尚未追平时丢弃候选并短暂重试，不发布过期筛选结果。Redis 随机池不可用时返回 503；Redis 为空时应用启动后异步重建随机池，普通派生缓存为空不会阻止 HTTP 服务启动。
 
-重建由进程内合并与 Redis 分布式锁保证单飞：repeatable-read 事务只分批读取随机池所需字段，COMMIT 后才写未发布 generation，随机池构建不写全局图片 lookup。全量与 `syncRandomImages` 共用 mutation revision，只有完成快照后仍通过 Lua 原子校验的 generation 才会发布；失败的未发布 generation 会定向清理或设置 TTL。增量更新锁使用 token 校验并定期续租，完成 Lua 还会校验锁所有权；锁丢失或写入状态不确定时不推进 completed revision，而是排队 `cache.rebuild`。
+重建由进程内合并与 Redis 分布式锁保证单飞：repeatable-read 事务每批读取 500 条随机池所需字段，批次序列化载荷在 16 MiB 以内保留于受控内存，超过阈值自动转存到 `data/tmp` 的 NDJSON spool；COMMIT 后才从内存 / spool 逐批写未发布 generation，随机池构建不写全局图片 lookup。spool 使用非用户输入的随机文件名，校验单批、文件大小、批次数和条目数，并在完成、失败、进程关闭或下次启动时清理。每次重建记录条目数、序列化字节、峰值内存载荷估算及是否使用 spool。
+
+全量与 `syncRandomImages` 共用 mutation revision，只有完成快照后仍通过 Lua 原子校验的 generation 才会发布；失败的未发布 generation 会定向清理或设置 TTL。增量更新锁使用 token 校验并定期续租，完成 Lua 还会校验锁所有权；锁丢失或写入状态不确定时不推进 completed revision，而是排队 `cache.rebuild`。后台 Redis 巡检把当前 generation 的 manifest 缺失直接列为 issue；每次对 generation 最多检查 25 个 TTL，但会轮换采样 offset，使超大 generation 的局部异常最终可见。
 
 `m=proxy` 直接回源图片字节并附带 `X-Image-Info` 头；由于每次请求都会重新抽图，它不声明 `Accept-Ranges`。`m=redirect` 返回 302 跳转到图片的公开 URL。
 

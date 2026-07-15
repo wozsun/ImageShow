@@ -55,6 +55,7 @@ export function Uploader({ onDone }: { onDone: () => void }) {
   const authors = vocabulary?.authors ?? [];
 
   const pageSize = settingsData?.settings.upload.list_page_size ?? 20;
+  const uploadMaxItems = settingsData?.settings.upload.max_items ?? 200;
   const maxBytes = (settingsData?.settings.upload.max_file_size_mb ?? 100) * 1024 * 1024;
   const uploadConcurrency = settingsData?.settings.upload.concurrency ?? 2;
   const downloadConcurrency = settingsData?.settings.link_image.concurrency ?? 2;
@@ -85,7 +86,14 @@ export function Uploader({ onDone }: { onDone: () => void }) {
     jobsRef: queue.jobsRef, appendJobs: queue.appendJobs, updateJob: queue.updateJob,
     claimPreparedMd5: queue.claimPreparedMd5, releasePreparedMd5: queue.releasePreparedMd5
   };
-  const localImport = useLocalUploadImport({ queue: queueApi, defaults, storageSlug: activeBackend, maxBytes, concurrency: uploadConcurrency });
+  const localImport = useLocalUploadImport({
+    queue: queueApi,
+    defaults,
+    storageSlug: activeBackend,
+    maxItems: uploadMaxItems,
+    maxBytes,
+    concurrency: uploadConcurrency
+  });
   const linkImport = useLinkImport({ queue: queueApi, defaults, fillOriginalUrl, storageSlug: activeBackend, concurrency: downloadConcurrency });
   const commitImports = useImportCommit({ updateJob: queue.updateJob, concurrency: commitConcurrency, onDone });
   useImportStatusEvents(queue.jobs, queue.jobsRef, queue.updateJob);

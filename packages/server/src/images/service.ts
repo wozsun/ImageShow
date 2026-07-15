@@ -24,6 +24,10 @@ import {
 import { detectBrightness } from "./brightness.ts";
 import { deviceFromDimensions, resolveOptionalBrightnessWith, resolveOptionalDeviceWith } from "./classification.ts";
 import { publicImage, type ImageRecord } from "./presenter.ts";
+import {
+  applyOrCollectImageMutationSync,
+  type ImageMutationSyncBatch,
+} from "./mutation-sync.ts";
 
 async function detectImageBrightness(image: ImageRecord) {
   if (image.status !== "ready") return undefined;
@@ -39,6 +43,8 @@ function detectImageDevice(image: ImageRecord) {
 
 type ImageMutationOptions = {
   entityCountInvalidationBatch?: EntityCountCacheInvalidationBatch;
+  mutationSyncBatch?: ImageMutationSyncBatch;
+  presentResult?: boolean;
 };
 
 async function applyImageFieldEdits(
@@ -98,10 +104,11 @@ export async function updateImageMetadata(id: string, body: unknown, options: Im
   if (!classificationChanged) {
     const createdAuthor = next.author ? await ensureAuthor(pool, next.author) : false;
     const updated = await applyImageFieldEdits(pool, id, next, authorValue, touchAuthor);
-    await syncRandomImage(id);
-    await invalidateMd5Cache(current.md5 ?? "");
-    await invalidateImageLookupEntries([{ id, object_key: current.object_key }]);
-    const cacheTasks: Array<Promise<unknown>> = [invalidateImageReadCaches()];
+    const cacheTasks: Array<Promise<unknown>> = [applyOrCollectImageMutationSync({
+      id,
+      md5: current.md5 ?? "",
+      lookupEntries: [{ id, object_key: current.object_key }],
+    }, options.mutationSyncBatch)];
     if (authorChanged) {
       cacheTasks.push(invalidateOrCollectEntityCountCaches(
         ["author"],
@@ -110,7 +117,7 @@ export async function updateImageMetadata(id: string, body: unknown, options: Im
     }
     if (createdAuthor) cacheTasks.push(refreshEntityVocabularies(["author"]));
     await Promise.all(cacheTasks);
-    return publicImage(updated);
+    return (options.presentResult ?? true) ? publicImage(updated) : undefined;
   }
 
   return withStorageMutationLock(async () => {
@@ -247,37 +254,57 @@ export async function updateImageMetadata(id: string, body: unknown, options: Im
       }
     }
 
-    await syncRandomImage(id);
-    await invalidateMd5Cache(sourceImage.md5 ?? "");
-    await invalidateImageLookupEntries([
-      { id, object_key: sourceImage.object_key },
-      { object_key: committedObjectKey }
-    ]);
     const changedEntityKinds: EntityCacheKind[] = [];
     if (updated && sourceImage.theme !== updated.theme) changedEntityKinds.push("theme");
     if (updated && sourceImage.author !== updated.author) changedEntityKinds.push("author");
     await Promise.all([
-      invalidateImageReadCaches(),
+      applyOrCollectImageMutationSync({
+        id,
+        md5: sourceImage.md5 ?? "",
+        lookupEntries: [
+          { id, object_key: sourceImage.object_key },
+          { object_key: committedObjectKey },
+        ],
+      }, options.mutationSyncBatch),
       invalidateOrCollectEntityCountCaches(
         changedEntityKinds,
         options.entityCountInvalidationBatch,
       ),
       refreshEntityVocabularies(createdEntityKinds),
     ]);
+    if (!(options.presentResult ?? true)) return undefined;
     return publicImage(updated ?? ((await pool.query("SELECT * FROM metadata WHERE id=$1", [id])).rows[0] as ImageRecord));
   });
 }
 
-export async function migrateImagesStorage(ids: string[], target: string) {
+type BatchStorageMigrationMetrics = {
+  maxItemDurationMs: number;
+  randomPoolFullRebuildTriggered: boolean;
+};
+
+type BatchStorageMigrationOptions = {
+  onMetrics?: (metrics: BatchStorageMigrationMetrics) => void;
+};
+
+export async function migrateImagesStorage(
+  ids: string[],
+  target: string,
+  options: BatchStorageMigrationOptions = {},
+) {
   const rows = (await pool.query("SELECT id, object_key, ext, status, storage_slug, is_link, device, brightness, theme FROM metadata WHERE id = ANY($1::uuid[])", [ids])).rows;
+  const foundIds = new Set(rows.map((row) => String(row.id)));
+  const missingIds = ids.filter((id) => !foundIds.has(id));
   let migrated = 0;
   let unchanged = 0;
-  let failed = 0;
-  const failedIds: string[] = [];
+  let failed = missingIds.length;
+  const failedIds: string[] = [...missingIds];
   const migratedIds: string[] = [];
+  let maxItemDurationMs = 0;
+  let randomPoolFullRebuildTriggered = false;
 
   const concurrency = getRuntimeConfig().background_job.migrate_concurrency;
   await mapWithConcurrency(rows, concurrency, async (row) => {
+    const itemStartedAt = performance.now();
     try {
       const result = await migrateImageStorage(row as MigrateRecord, target);
       if (result === "migrated") {
@@ -292,16 +319,23 @@ export async function migrateImagesStorage(ids: string[], target: string) {
     } catch {
       failed += 1;
       failedIds.push(row.id);
+    } finally {
+      maxItemDurationMs = Math.max(maxItemDurationMs, performance.now() - itemStartedAt);
     }
   });
   if (migratedIds.length) {
     const migratedIdSet = new Set(migratedIds);
-    await syncRandomImages(migratedIds);
+    const randomSync = await syncRandomImages(migratedIds);
+    randomPoolFullRebuildTriggered = randomSync.fullRebuildTriggered;
     await invalidateImageLookupEntries(rows
       .filter((row) => migratedIdSet.has(row.id))
       .map((row) => ({ id: row.id, object_key: row.object_key })));
     await invalidateImageReadCaches();
   }
+  options.onMetrics?.({
+    maxItemDurationMs,
+    randomPoolFullRebuildTriggered,
+  });
   return {
     requested: ids.length,
     migrated,

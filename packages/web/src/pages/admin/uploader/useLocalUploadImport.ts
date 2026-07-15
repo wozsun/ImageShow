@@ -1,4 +1,3 @@
-import { importBatchHardLimit } from "@imageshow/shared";
 import { useCallback, useRef } from "react";
 import type { ImportJob } from "../../../lib/types.js";
 import { browserUuid, draftFromFile, isUploadableImage, normalizeAuthor, normalizeTheme, runWithConcurrency, type CommonImageAttributes } from "../../../lib/upload/upload-utils.js";
@@ -16,10 +15,11 @@ export function useLocalUploadImport(options: {
   queue: AppendImportQueueApi;
   defaults: CommonImageAttributes;
   storageSlug: string;
+  maxItems: number;
   maxBytes: number;
   concurrency: number;
 }) {
-  const { queue, defaults, storageSlug, maxBytes, concurrency } = options;
+  const { queue, defaults, storageSlug, maxItems, maxBytes, concurrency } = options;
   const activeRequests = useRef(new Map<string, { attemptKey: string; abort: () => void }>());
 
   const prepare = useCallback(async (job: ImportJob) => {
@@ -95,8 +95,8 @@ export function useLocalUploadImport(options: {
       existing.add(fingerprint);
       return true;
     });
-    if (selected.length > importBatchHardLimit) {
-      window.alert(`单批最多允许 ${importBatchHardLimit} 个本地文件，请拆分后再导入`);
+    if (selected.length > maxItems) {
+      window.alert(`单次最多允许 ${maxItems} 个本地文件，请拆分后再导入`);
       return;
     }
     const batchTime = new Date().toISOString();
@@ -129,7 +129,7 @@ export function useLocalUploadImport(options: {
     }));
     queue.appendJobs(jobs);
     void runWithConcurrency(jobs.filter((job) => job.status === "queued"), concurrency, prepare);
-  }, [concurrency, defaults, maxBytes, prepare, queue, storageSlug]);
+  }, [concurrency, defaults, maxBytes, maxItems, prepare, queue, storageSlug]);
 
   const cancel = useCallback(async (job: ImportJob) => {
     activeRequests.current.get(job.id)?.abort();

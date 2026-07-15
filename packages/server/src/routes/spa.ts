@@ -7,26 +7,30 @@ import { fileURLToPath } from "node:url";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { siteConfigPayload } from "../config/app-settings.ts";
 import { immutableCacheControl, noStoreCacheControl, publicDocumentCacheControl, publicStaticCacheControl, spaDocumentHeaders } from "../core/http.ts";
-import { conditionalStaticResponse } from "../core/static-conditional.ts";
+import { serveStaticWithValidators } from "../core/static-conditional.ts";
 import { existingThemeFromHost, isValidatedThemeRequest, rootSiteUrl, themeFromHost } from "../themes/host.ts";
 
 const publicDir = join(dirname(fileURLToPath(import.meta.url)), "../public");
 
 export function registerSpaRoutes(app: Hono) {
+  const assetStatic = serveStatic({ root: publicDir, precompressed: true });
+  const faviconStatic = serveStatic({ path: join(publicDir, "favicon.ico") });
   app.use("/assets/*", async (c, next) => {
     await next();
     c.header("Cache-Control", c.res.status < 400
       ? c.req.path.startsWith("/assets/brand/") ? publicStaticCacheControl : immutableCacheControl
       : noStoreCacheControl);
   });
-  app.use("/assets/*", conditionalStaticResponse);
-  app.use("/assets/*", serveStatic({ root: publicDir, precompressed: true }));
+  app.use("/assets/*", async (c, next) => {
+    return await serveStaticWithValidators(c, assetStatic) ?? next();
+  });
   app.use("/favicon.ico", async (c, next) => {
     await next();
     c.header("Cache-Control", c.res.status < 400 ? publicStaticCacheControl : noStoreCacheControl);
   });
-  app.use("/favicon.ico", conditionalStaticResponse);
-  app.get("/favicon.ico", serveStatic({ path: join(publicDir, "favicon.ico") }));
+  app.get("/favicon.ico", async (c, next) => {
+    return await serveStaticWithValidators(c, faviconStatic) ?? next();
+  });
 
   app.get("/", async (c) => {
     const hostHeader = c.req.header("host") ?? "";
