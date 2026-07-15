@@ -148,11 +148,15 @@ export function useImportQueue(pageSize: number) {
     dispatch({ type: "remove", ids: new Set([id]), pageSize });
   }, [dispatch, pageSize, releaseJob]);
 
-  const clearJobs = useCallback((predicate: (job: ImportJob) => boolean) => {
-    const removed = jobsRef.current.filter(predicate);
+  const clearJobIds = useCallback((ids: ReadonlySet<string>) => {
+    const removed = jobsRef.current.filter((job) => ids.has(job.id));
     removed.forEach(releaseJob);
     dispatch({ type: "remove", ids: new Set(removed.map((job) => job.id)), pageSize });
   }, [dispatch, pageSize, releaseJob]);
+
+  const clearJobs = useCallback((predicate: (job: ImportJob) => boolean) => {
+    clearJobIds(new Set(jobsRef.current.filter(predicate).map((job) => job.id)));
+  }, [clearJobIds]);
 
   const retainMode = useCallback((mode: "file" | "link") => {
     jobsRef.current.filter((job) => mode === "file" ? job.kind !== "local" : job.kind === "local").forEach(releaseJob);
@@ -171,6 +175,6 @@ export function useImportQueue(pageSize: number) {
   return {
     jobs: state.jobs, jobsRef, page: state.page, totalPages, visibleJobs, setPage,
     appendJobs, retainMode, updateJob, updateJobDraft, claimPreparedMd5,
-    releasePreparedMd5, removeJob, clearJobs, applyDefaultsToAll
+    releasePreparedMd5, removeJob, clearJobIds, clearJobs, applyDefaultsToAll
   };
 }

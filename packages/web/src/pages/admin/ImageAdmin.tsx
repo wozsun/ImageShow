@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api/client.js";
 import { Icon } from "../../components/icon/Icon.js";
 import { ConfirmDialog } from "../../components/feedback/ConfirmDialog.js";
+import { PageToast } from "../../components/feedback/PageToast.js";
 import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
 import { adminApiBasePath, queryKeys } from "../../lib/constants.js";
 import { errorMessage, formatDate, formatImageClassification, imageDisplayTitle } from "../../lib/ui/formatters.js";
@@ -23,6 +24,29 @@ type ConfirmAction =
   | { kind: "empty-trash" }
   | { kind: "purge"; id: string; title: string };
 
+type ImageAdminView = "ready" | "unset" | "deleted";
+type AdminImageListResult = {
+  items: ImageItem[];
+  total: number;
+  has_next: boolean;
+  next_cursor: string | null;
+};
+
+function adminImageListQuery(view: ImageAdminView, cursor: string, pageSize: number) {
+  const params = new URLSearchParams({
+    status: view === "deleted" ? "deleted" : "ready",
+    limit: String(pageSize)
+  });
+  // 「未设置」页签只显示未设置主题的正常图片。
+  if (view === "unset") params.set("t", "none");
+  if (cursor) params.set("cursor", cursor);
+
+  return {
+    queryKey: [...queryKeys.adminImages, view, cursor, pageSize] as const,
+    queryFn: () => api<AdminImageListResult>(`${adminApiBasePath}/images?${params}`)
+  };
+}
+
 // 批量恢复每批提交的张数。恢复现在是纯数据库操作（不动文件），但仍分小批依次提交：让进度
 // 「恢复中… X/N」能逐批刷新、单请求有界，避免一次性大批量时按钮长时间无响应。
 const restoreChunkSize = 10;
@@ -31,19 +55,23 @@ export function ImageAdmin() {
 
   const [searchParams, setSearchParams] = useSearchParams();
   const viewParam = searchParams.get("view");
-  const [view, setView] = useState<"ready" | "unset" | "deleted">(viewParam === "unset" || viewParam === "deleted" ? viewParam : "ready");
+  const [view, setView] = useState<ImageAdminView>(viewParam === "unset" || viewParam === "deleted" ? viewParam : "ready");
   const [cursorHistory, setCursorHistory] = useState<string[]>([""]);
+  const [pageNavigation, setPageNavigation] = useState<"previous" | "next" | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [detail, setDetail] = useState<ImageItem | null>(null);
   const [editing, setEditing] = useState<ImageItem | null>(null);
   const [batchEditing, setBatchEditing] = useState(false);
 
   const [feedback, setFeedback] = useState<{ text: string; status: "pending" | "success" | "error" } | null>(null);
+  const [toast, setToast] = useState<{ id: number; message: string; kind: "error" | "success" } | null>(null);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
   const [rowBusy, setRowBusy] = useState("");
   const gridRef = useRef<HTMLDivElement | null>(null);
   const detailReturnFocusRef = useRef<HTMLElement | null>(null);
+  const toastSequenceRef = useRef(0);
+  const pageNavigationSequenceRef = useRef(0);
   const client = useQueryClient();
   const { data: settingsData } = useQuery<{ settings: AdminSettings }>({ queryKey: queryKeys.settings, queryFn: () => api(`${adminApiBasePath}/settings`) });
 
@@ -63,18 +91,17 @@ export function ImageAdmin() {
   const editPageSize = settingsData?.settings.upload.list_page_size ?? 20;
   const cursor = cursorHistory.at(-1) ?? "";
   const pageNumber = cursorHistory.length;
-  const listParams = new URLSearchParams({ status: view === "deleted" ? "deleted" : "ready", limit: String(pageSize) });
-  // 「未设置」页签只显示未设置主题的正常图片。
-  if (view === "unset") listParams.set("t", "none");
-  if (cursor) listParams.set("cursor", cursor);
-  const listPath = `${adminApiBasePath}/images?${listParams}`;
-
-  const { data, error: listError, isError: listFailed, isFetching, refetch: refetchList } = useQuery<{ items: ImageItem[]; total: number; has_next: boolean; next_cursor: string | null }>({
-    queryKey: [...queryKeys.adminImages, view, cursor, pageSize],
-    queryFn: () => api(listPath),
-    enabled: Boolean(settingsData),
+  const { data, error: listError, isError: listFailed, isFetching, refetch: refetchList } = useQuery({
+    ...adminImageListQuery(view, cursor, pageSize),
+    enabled: Boolean(settingsData)
   });
+  const showToast = (message: string, kind: "error" | "success") => {
+    toastSequenceRef.current += 1;
+    setToast({ id: toastSequenceRef.current, message, kind });
+  };
   const refresh = () => {
+    pageNavigationSequenceRef.current += 1;
+    setPageNavigation(null);
     setSelected([]);
     setCursorHistory([""]);
     void invalidateImageData(client);
@@ -85,33 +112,64 @@ export function ImageAdmin() {
   const allSelected = items.length > 0 && selected.length === items.length;
   const canDeleteReadyItems = view !== "deleted";
   const changeView = (next: typeof view) => {
+    pageNavigationSequenceRef.current += 1;
+    setPageNavigation(null);
     setView(next);
     setCursorHistory([""]);
     setSelected([]);
     setFeedback(null);
+    setToast(null);
 
     setSearchParams(next === "ready" ? {} : { view: next }, { replace: true });
   };
+  const loadPage = async (
+    targetHistory: string[],
+    direction: "previous" | "next"
+  ) => {
+    if (pageNavigation) return;
+    const targetCursor = targetHistory.at(-1) ?? "";
+    const requestSequence = ++pageNavigationSequenceRef.current;
+    setPageNavigation(direction);
+    setToast(null);
+
+    try {
+      // 当前页及页码保持不动；目标页完整返回并进入查询缓存后，再一次性提交游标。
+      await client.fetchQuery(adminImageListQuery(view, targetCursor, pageSize));
+      if (requestSequence !== pageNavigationSequenceRef.current) return;
+      setSelected([]);
+      setCursorHistory(targetHistory);
+    } catch (error) {
+      if (requestSequence === pageNavigationSequenceRef.current) {
+        showToast(`页面加载失败：${errorMessage(error)}`, "error");
+      }
+    } finally {
+      if (requestSequence === pageNavigationSequenceRef.current) {
+        setPageNavigation(null);
+      }
+    }
+  };
   const previousPage = () => {
-    setSelected([]);
-    setCursorHistory((current) => current.length > 1 ? current.slice(0, -1) : current);
+    if (pageNavigation || cursorHistory.length === 1) return;
+    void loadPage(cursorHistory.slice(0, -1), "previous");
   };
   const nextPage = () => {
-    if (!data?.next_cursor) return;
-    setSelected([]);
-    setCursorHistory((current) => [...current, data.next_cursor!]);
+    if (pageNavigation || !data?.next_cursor) return;
+    void loadPage([...cursorHistory, data.next_cursor], "next");
   };
   useEffect(() => setSelected([]), [cursor]);
   const runRowAction = async (item: ImageItem, action: "delete" | "restore") => {
     if (rowBusy) return;
     setRowBusy(`${action}:${item.id}`);
+    setToast(null);
     setFeedback({ text: action === "delete" ? "正在删除图片…" : "正在恢复图片…", status: "pending" });
     try {
       await api(`${adminApiBasePath}/images/${item.id}/${action}`, { method: "POST" });
-      setFeedback({ text: action === "delete" ? "图片已移入回收站" : "图片已恢复", status: "success" });
+      setFeedback(null);
+      showToast(action === "delete" ? "图片已移入回收站" : "图片已恢复", "success");
       refresh();
     } catch (error) {
-      setFeedback({ text: `操作失败：${errorMessage(error)}`, status: "error" });
+      setFeedback(null);
+      showToast(`操作失败：${errorMessage(error)}`, "error");
     } finally {
       setRowBusy("");
     }
@@ -181,7 +239,10 @@ export function ImageAdmin() {
       <header className="workspace-head image-admin-head">
         <div>
           <h1>图片</h1>
-          <p>第 {pageNumber} / {totalPages} 页 · 共 {data?.total ?? 0} 项 · 本页 {items.length} 项{isFetching ? " · 加载中" : ""}</p>
+          <p>
+            第 {pageNumber} / {totalPages} 页 · 共 {data?.total ?? 0} 项 · 本页 {items.length} 项
+            {pageNavigation === "previous" ? " · 正在加载上一页" : pageNavigation === "next" ? " · 正在加载下一页" : isFetching ? " · 加载中" : ""}
+          </p>
         </div>
         <div className="image-admin-head-tools">
           {view === "ready" && <Uploader onDone={refresh} />}
@@ -276,13 +337,13 @@ export function ImageAdmin() {
       <nav className="admin-pagination" aria-label="图片列表分页">
         <button
           type="button"
-          disabled={cursorHistory.length === 1 || isFetching}
+          disabled={cursorHistory.length === 1 || isFetching || pageNavigation !== null}
           onClick={previousPage}
         >上一页</button>
         <span>第 {pageNumber} / {totalPages} 页</span>
         <button
           type="button"
-          disabled={!data?.has_next || !data.next_cursor || isFetching}
+          disabled={!data?.has_next || !data.next_cursor || isFetching || pageNavigation !== null}
           onClick={nextPage}
         >下一页</button>
       </nav>
@@ -323,6 +384,14 @@ export function ImageAdmin() {
           busy={actionBusy}
           onClose={() => setConfirmAction(null)}
           onConfirm={runConfirmedAction}
+        />
+      )}
+      {toast && (
+        <PageToast
+          key={toast.id}
+          message={toast.message}
+          kind={toast.kind}
+          onClose={() => setToast(null)}
         />
       )}
     </section>

@@ -147,8 +147,16 @@ export function Uploader({ onDone }: { onDone: () => void }) {
 
   const clearJobs = async (predicate: (job: ImportJob) => boolean) => {
     const targets = queue.jobsRef.current.filter(predicate);
-    await Promise.all(targets.filter((job) => !["done", "skipped", "cancelled"].includes(job.status)).map(cancelJob));
-    queue.clearJobs(predicate);
+    // cancelJob 会先把任务改成 cancelled。固定本次 ID，避免取消完成后再次按旧状态条件
+    // 筛选，导致“重复待确认”任务找不到而仍留在总数中；期间新产生的重复项也不会误删。
+    const targetIds = new Set(targets.map((job) => job.id));
+    const cancellationRequests = targets
+      .filter((job) => !["done", "skipped", "cancelled"].includes(job.status))
+      .map(cancelJob);
+    // 取消函数在首个 await 前已经中止活动请求并标记任务；服务端暂存对象清理可能较慢，
+    // 不应阻塞用户明确要求的本地队列清理和总数更新。
+    queue.clearJobIds(targetIds);
+    await Promise.allSettled(cancellationRequests);
   };
 
   const openLinkInput = async (inputMode: LinkInputMode) => {
