@@ -20,8 +20,11 @@ export function registerPublicAuthRoutes(app: Hono) {
   app.post(`${adminApiBasePath}/auth/login`, async (c) => {
     const body = await c.req.json().catch(() => ({}));
     await verifyCaptcha(c, String(body.captcha ?? ""));
-    const result = await login(c, String(body.username ?? ""), String(body.password ?? ""));
-    return c.json(ok(result));
+    return c.json(ok(await login(
+      c,
+      String(body.username ?? ""),
+      String(body.password ?? "")
+    )));
   });
 
   app.get(`${adminApiBasePath}/auth/me`, async (c) => {

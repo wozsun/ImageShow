@@ -111,7 +111,7 @@ export async function markImportFailed(id: string, error: unknown) {
   }
 }
 
-export async function getImportStatus(id: string) {
+async function getImportStatus(id: string) {
   const row = (await pool.query(
     "SELECT mode, status, error FROM import_session WHERE id=$1",
     [id]

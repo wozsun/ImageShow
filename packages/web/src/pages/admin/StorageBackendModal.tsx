@@ -37,8 +37,16 @@ export function StorageBackendModal({ target, busy, feedback, onClose, onSave, o
   const [slug, setSlug] = useState(backend?.slug ?? "");
   const [displayName, setDisplayName] = useState(backend?.display_name ?? "");
   const [type, setType] = useState<StorageType>(backend?.type ?? "s3");
-  const [s3, setS3] = useState<S3Settings>({ ...emptyS3, ...(backend?.s3 ?? {}), secret_access_key: "" });
-  const [webdav, setWebdav] = useState<WebdavSettings>({ ...emptyWebdav, ...(backend?.webdav ?? {}), password: "" });
+  const [s3, setS3] = useState<S3Settings>({
+    ...emptyS3,
+    ...(backend?.type === "s3" ? backend.s3 : {}),
+    secret_access_key: ""
+  });
+  const [webdav, setWebdav] = useState<WebdavSettings>({
+    ...emptyWebdav,
+    ...(backend?.type === "webdav" ? backend.webdav : {}),
+    password: ""
+  });
 
   const effectiveType: StorageType = creating ? type : backend!.type;
   const isWebdav = effectiveType === "webdav";
@@ -131,8 +139,8 @@ export function StorageBackendModal({ target, busy, feedback, onClose, onSave, o
           ) : (
             <>
               {isWebdav
-                ? <WebdavFields value={webdav} onChange={setWebdav} configured={backend?.webdav.password_configured} />
-                : <S3Fields value={s3} onChange={setS3} configured={backend?.s3.secret_access_key_configured} />}
+                ? <WebdavFields value={webdav} onChange={setWebdav} configured={backend?.type === "webdav" ? backend.webdav.password_configured : undefined} />
+                : <S3Fields value={s3} onChange={setS3} configured={backend?.type === "s3" ? backend.s3.secret_access_key_configured : undefined} />}
             </>
           )}
           {/* 保存中 / 保存成功 都改由 header pill 展示；body 这里只保留连接测试结果与各类错误（含保存失败）。 */}

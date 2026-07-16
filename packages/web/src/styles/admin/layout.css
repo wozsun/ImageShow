@@ -48,7 +48,10 @@
 }
 
 .admin button:not(:disabled):not(.select-trigger):not(.password-toggle):active {
-  transform: scale(var(--pressable-active-scale, .95));
+  transform: scale(var(--pressable-active-scale, var(--pressable-scale-medium, .98)));
+}
+.admin button.icon:not(:disabled) {
+  --pressable-active-scale: var(--pressable-scale-small, .97);
 }
 .login-site-title { color: inherit; border-radius: 6px; }
 .login-site-title:hover { color: #1f6feb; }
@@ -208,7 +211,13 @@
 .overview-card-label { font-size: 14px; color: #4a5563; }
 .overview-card-hint { font-size: 12px; color: #8a93a2; }
 
-a.overview-card-link { text-decoration: none; color: inherit; cursor: pointer; transition: border-color .15s ease, box-shadow .15s ease, transform .08s ease; }
+a.overview-card-link {
+  --pressable-active-scale: var(--pressable-scale-large, .99);
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  transition: border-color .15s ease, box-shadow .15s ease, transform .08s ease;
+}
 a.overview-card-link:hover { border-color: #b9c4d4; box-shadow: 0 4px 14px rgba(13, 18, 28, .08); }
 .overview-themes { display: flex; flex-wrap: wrap; gap: 8px; }
 .overview-theme-chip {

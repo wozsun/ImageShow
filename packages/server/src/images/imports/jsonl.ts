@@ -97,7 +97,7 @@ export function parseJsonlManifest(content: string, options: { maxItems: number;
       errors.push({ line: entry.line, raw: errorLinePreview(entry.raw), error: message });
     }
   }
-  return { items, errors, total: lines.length };
+  return { items, errors };
 }
 
 function errorLinePreview(value: string) {

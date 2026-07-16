@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { appConfig } from "@imageshow/shared";
+import type { AdminSettings } from "@imageshow/shared";
 import { ApiError } from "../core/http.ts";
 import {
   galleryLimit,
@@ -7,15 +7,9 @@ import {
   homeHeroBackground,
   homeTagline,
   imagePageSize,
-  importGlobalConcurrency,
-  jsonlImportMaxItems,
-  linkFetchTimeoutSeconds,
   linkImageConcurrency,
-  linkImportMaxItems,
   listPageSize,
   loginBackground,
-  maxFileSizeMb,
-  maxLongEdge,
   normalizeMaxLongEdge,
   normalizeMaxSizeKb,
   normalizeMinQuality,
@@ -31,8 +25,7 @@ import {
   skipWebpUnderKb,
   thumbnailLongEdge,
   thumbnailQuality,
-  uploadConcurrency,
-  uploadImportMaxItems
+  uploadConcurrency
 } from "./fields.ts";
 import {
   getRuntimeConfig,
@@ -40,64 +33,57 @@ import {
   updateRuntimeConfig,
   type RuntimeConfig
 } from "./runtime-config-store.ts";
+import type { RuntimeConfigPatch } from "./runtime-config.ts";
 
-const siteHomeConfigSchema = z.object({
-  enabled: z.boolean().default(appConfig.runtimeDefaults.site.home.enabled),
-  tagline: homeTagline.default(appConfig.runtimeDefaults.site.home.tagline),
-  hero_background: homeHeroBackground.default(appConfig.runtimeDefaults.site.home.hero_background),
-  preview_delay_ms: previewDelayMs.default(appConfig.runtimeDefaults.site.home.preview_delay_ms)
+const siteHomeConfigSchema = z.strictObject({
+  enabled: z.boolean().optional(),
+  tagline: homeTagline.optional(),
+  hero_background: homeHeroBackground.optional(),
+  preview_delay_ms: previewDelayMs.optional()
 });
 
-const appSettingsSchema = z.object({
-  site: z.object({
+const appSettingsSchema = z.strictObject({
+  site: z.strictObject({
     name: siteName.optional(),
     domain: siteDomain.optional(),
     icon_url: siteIconUrl.optional(),
     root_redirect: rootRedirect.optional(),
     docs_enabled: z.boolean().optional(),
     home: siteHomeConfigSchema.optional(),
-    gallery: z.object({
-      default_limit: galleryLimit.default(appConfig.runtimeDefaults.site.gallery.default_limit),
-      order: galleryOrder.default(appConfig.runtimeDefaults.site.gallery.order)
+    gallery: z.strictObject({
+      default_limit: galleryLimit.optional(),
+      order: galleryOrder.optional()
     }).optional(),
     random_default_method: randomMethod.optional()
   }).optional(),
-  upload: z.object({
-    max_items: uploadImportMaxItems.default(appConfig.runtimeDefaults.upload.max_items),
-    max_file_size_mb: maxFileSizeMb.default(appConfig.runtimeDefaults.upload.max_file_size_mb),
-    max_long_edge: maxLongEdge.default(appConfig.runtimeDefaults.upload.max_long_edge),
-    list_page_size: listPageSize.default(appConfig.runtimeDefaults.upload.list_page_size),
-    concurrency: uploadConcurrency.default(appConfig.runtimeDefaults.upload.concurrency),
-    global_concurrency: importGlobalConcurrency.default(appConfig.runtimeDefaults.upload.global_concurrency)
+  upload: z.strictObject({
+    list_page_size: listPageSize.optional(),
+    concurrency: uploadConcurrency.optional()
   }).optional(),
-  link_image: z.object({
-    fill_original_url: z.boolean().default(appConfig.runtimeDefaults.link_image.fill_original_url),
-    concurrency: linkImageConcurrency.default(appConfig.runtimeDefaults.link_image.concurrency),
-    global_concurrency: importGlobalConcurrency.default(appConfig.runtimeDefaults.link_image.global_concurrency),
-    fetch_timeout_seconds: linkFetchTimeoutSeconds.default(appConfig.runtimeDefaults.link_image.fetch_timeout_seconds),
-    url_list_max_items: linkImportMaxItems.default(appConfig.runtimeDefaults.link_image.url_list_max_items),
-    jsonl_max_items: jsonlImportMaxItems.default(appConfig.runtimeDefaults.link_image.jsonl_max_items)
+  link_image: z.strictObject({
+    fill_original_url: z.boolean().optional(),
+    concurrency: linkImageConcurrency.optional()
   }).optional(),
-  normalize: z.object({
-    quality: normalizeQuality.default(appConfig.runtimeDefaults.normalize.quality),
-    quality_step: normalizeQualityStep.default(appConfig.runtimeDefaults.normalize.quality_step),
-    min_quality: normalizeMinQuality.default(appConfig.runtimeDefaults.normalize.min_quality),
-    max_long_edge: normalizeMaxLongEdge.default(appConfig.runtimeDefaults.normalize.max_long_edge),
-    max_size_kb: normalizeMaxSizeKb.default(appConfig.runtimeDefaults.normalize.max_size_kb),
-    skip_webp_under_kb: skipWebpUnderKb.default(appConfig.runtimeDefaults.normalize.skip_webp_under_kb)
+  normalize: z.strictObject({
+    quality: normalizeQuality.optional(),
+    quality_step: normalizeQualityStep.optional(),
+    min_quality: normalizeMinQuality.optional(),
+    max_long_edge: normalizeMaxLongEdge.optional(),
+    max_size_kb: normalizeMaxSizeKb.optional(),
+    skip_webp_under_kb: skipWebpUnderKb.optional()
   }).optional(),
-  thumbnail: z.object({
-    long_edge: thumbnailLongEdge.default(appConfig.runtimeDefaults.thumbnail.long_edge),
-    quality: thumbnailQuality.default(appConfig.runtimeDefaults.thumbnail.quality)
+  thumbnail: z.strictObject({
+    long_edge: thumbnailLongEdge.optional(),
+    quality: thumbnailQuality.optional()
   }).optional(),
-  image_detail: z.object({
-    title_opens_image: z.boolean().default(appConfig.runtimeDefaults.image_detail.title_opens_image)
+  image_detail: z.strictObject({
+    title_opens_image: z.boolean().optional()
   }).optional(),
-  admin: z.object({
-    login_background: loginBackground.default(appConfig.runtimeDefaults.admin.login_background),
-    image_page_size: imagePageSize.default(appConfig.runtimeDefaults.admin.image_page_size),
-    recent_uploads: recentUploads.default(appConfig.runtimeDefaults.admin.recent_uploads),
-    show_unset_theme_card: z.boolean().default(appConfig.runtimeDefaults.admin.show_unset_theme_card)
+  admin: z.strictObject({
+    login_background: loginBackground.optional(),
+    image_page_size: imagePageSize.optional(),
+    recent_uploads: recentUploads.optional(),
+    show_unset_theme_card: z.boolean().optional()
   }).optional()
 });
 
@@ -109,21 +95,6 @@ export function parseSettingsInput(value: unknown) {
     throw new ApiError(400, "validation_error", "Validation failed", result.error.flatten());
   }
   return result.data;
-}
-
-function getAppSettings() {
-  const runtime = getRuntimeConfig();
-  return {
-    site: runtime.site,
-    upload: runtime.upload,
-    link_image: runtime.link_image,
-    normalize: runtime.normalize,
-    thumbnail: runtime.thumbnail,
-    import: runtime.import,
-    image_detail: runtime.image_detail,
-    admin: runtime.admin,
-    background_job: runtime.background_job
-  };
 }
 
 export function reloadAppConfig() {
@@ -142,19 +113,37 @@ export function getThumbnailSettings() {
   return getRuntimeConfig().thumbnail;
 }
 
-export function getSettingsForAdmin() {
-  const settings = getAppSettings();
+export function getSettingsForAdmin(): AdminSettings {
+  const settings = getRuntimeConfig();
   const { name, domain, icon_url, root_redirect, home, gallery, random_default_method, docs_enabled } = settings.site;
+  const { max_items, max_file_size_mb, list_page_size, concurrency: uploadConcurrencyValue } = settings.upload;
+  const {
+    fill_original_url,
+    concurrency: linkConcurrency,
+    url_list_max_items,
+    jsonl_max_items
+  } = settings.link_image;
+  const { commit_concurrency } = settings.import;
   const { login_background, image_page_size, recent_uploads, show_unset_theme_card } = settings.admin;
   return {
     site: { name, domain, icon_url, root_redirect, home, gallery, random_default_method, docs_enabled },
-    upload: settings.upload,
+    upload: {
+      max_items,
+      max_file_size_mb,
+      list_page_size,
+      concurrency: uploadConcurrencyValue
+    },
+    link_image: {
+      fill_original_url,
+      concurrency: linkConcurrency,
+      url_list_max_items,
+      jsonl_max_items
+    },
     normalize: settings.normalize,
     thumbnail: settings.thumbnail,
-    import: settings.import,
+    import: { commit_concurrency },
     image_detail: settings.image_detail,
-    admin: { login_background, image_page_size, recent_uploads, show_unset_theme_card },
-    link_image: settings.link_image
+    admin: { login_background, image_page_size, recent_uploads, show_unset_theme_card }
   };
 }
 
@@ -193,13 +182,13 @@ export function siteConfigPayload() {
 }
 
 export function saveAppSettings(input: AppSettingsInput) {
-  const runtimePatch: Partial<RuntimeConfig> = {};
-  if (input.site) runtimePatch.site = input.site as RuntimeConfig["site"];
-  if (input.upload) runtimePatch.upload = input.upload as RuntimeConfig["upload"];
-  if (input.link_image) runtimePatch.link_image = input.link_image as RuntimeConfig["link_image"];
-  if (input.normalize) runtimePatch.normalize = input.normalize as RuntimeConfig["normalize"];
-  if (input.thumbnail) runtimePatch.thumbnail = input.thumbnail as RuntimeConfig["thumbnail"];
+  const runtimePatch: RuntimeConfigPatch = {};
+  if (input.site) runtimePatch.site = input.site;
+  if (input.upload) runtimePatch.upload = input.upload;
+  if (input.link_image) runtimePatch.link_image = input.link_image;
+  if (input.normalize) runtimePatch.normalize = input.normalize;
+  if (input.thumbnail) runtimePatch.thumbnail = input.thumbnail;
   if (input.image_detail) runtimePatch.image_detail = input.image_detail;
-  if (input.admin) runtimePatch.admin = input.admin as RuntimeConfig["admin"];
+  if (input.admin) runtimePatch.admin = input.admin;
   if (Object.keys(runtimePatch).length) updateRuntimeConfig(runtimePatch);
 }

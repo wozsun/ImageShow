@@ -1,6 +1,7 @@
 import { pool } from "../../core/db.ts";
 import { decodeImageCursor, encodeImageCursor } from "../cursor.ts";
 import {
+  imagePresentationColumns,
   publicImageCards,
   publicImages,
   type ImageRecord,
@@ -68,7 +69,13 @@ export async function fetchAdminImagePage(
   limit: number,
   cursor?: string
 ) {
-  const page = await fetchImageRows(where, params, limit, cursor, "*");
+  const page = await fetchImageRows(
+    where,
+    params,
+    limit,
+    cursor,
+    imagePresentationColumns
+  );
   const rows = page.rows as Array<ImageRecord & CompleteImageLookupSource & { cursor_image_time: string }>;
   const items = await publicImages(rows);
   return { rows, items, hasNext: page.hasNext, nextCursor: page.nextCursor };
@@ -89,5 +96,5 @@ export async function fetchPublicImageCardPage(
   );
   const rows = page.rows as Array<PublicImageCardRecord & { cursor_image_time: string }>;
   const items = await publicImageCards(rows);
-  return { rows, items, hasNext: page.hasNext, nextCursor: page.nextCursor };
+  return { rows, items, nextCursor: page.nextCursor };
 }

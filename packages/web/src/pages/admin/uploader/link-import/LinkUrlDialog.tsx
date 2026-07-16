@@ -1,10 +1,11 @@
-import { useRef, useState } from "react";
+import { useRef, useState, type RefObject } from "react";
 import { Icon } from "../../../../components/icon/Icon.js";
 import { SelectMenu } from "../../../../components/form/SelectMenu.js";
 import { parseImportUrls } from "../import-job-utils.js";
 import { parseImportJsonl, type JsonlManifestParseError, type JsonlManifestResult } from "../import-api.js";
 import { linkInputLimitState, linkInputTextareaRows, type LinkInputMode } from "./link-input.js";
 import { OverlayScrollbar } from "../../../../components/layout/OverlayScrollbar.js";
+import { useDialogFocus } from "../../../../hooks/useDialogFocus.js";
 
 export type LinkImportMode = "download" | "proxy";
 export type { LinkInputMode } from "./link-input.js";
@@ -22,14 +23,16 @@ function parseErrorText(errors: JsonlManifestParseError[]) {
   return errors.map((error) => `第 ${error.line} 行：${error.error}\n${error.raw}`).join("\n\n");
 }
 
-export function LinkUrlDialog({ initialInputMode, urlListMaxItems, jsonlMaxItems, onClose, onSubmit }: {
+export function LinkUrlDialog({ initialInputMode, urlListMaxItems, jsonlMaxItems, onClose, onSubmit, returnFocusRef }: {
   initialInputMode: LinkInputMode;
   urlListMaxItems: number;
   jsonlMaxItems: number;
   onClose: () => void;
   onSubmit: (submission: LinkDialogSubmission) => void;
+  returnFocusRef?: RefObject<HTMLElement | null>;
 }) {
   const importCardRef = useRef<HTMLDivElement | null>(null);
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const [text, setText] = useState("");
   const [mode, setMode] = useState<LinkImportMode>("download");
   const [inputMode, setInputMode] = useState<LinkInputMode>(initialInputMode);
@@ -40,6 +43,12 @@ export function LinkUrlDialog({ initialInputMode, urlListMaxItems, jsonlMaxItems
   const urls = inputMode === "urls" ? parseImportUrls(text) : [];
   const limitState = linkInputLimitState(inputMode, text, { urlList: urlListMaxItems, jsonl: jsonlMaxItems });
   const manifestCurrent = inputMode === "jsonl" && parsedText === text ? manifest : null;
+  useDialogFocus({
+    containerRef: importCardRef,
+    initialFocusRef: closeButtonRef,
+    returnFocusRef,
+    onEscape: onClose,
+  });
 
   const changeText = (value: string) => {
     setText(value);
@@ -88,12 +97,12 @@ export function LinkUrlDialog({ initialInputMode, urlListMaxItems, jsonlMaxItems
   const submitCount = inputMode === "urls" ? urls.length : manifestCurrent?.items.length ?? 0;
 
   return (
-    <div className="modal link-url-overlay">
-      <div ref={importCardRef} className="link-import-card">
+    <div className="modal link-url-overlay" role="dialog" aria-modal="true" aria-label="链接导入输入">
+      <div ref={importCardRef} className="link-import-card" tabIndex={-1}>
         <div className="link-import-head">
           <h2><Icon name={inputMode === "jsonl" ? "file-copy-line" : "download-cloud-2-line"} />{inputMode === "jsonl" ? "批量导入" : "导入链接"}</h2>
           <div className="link-import-head-status">
-            <button type="button" className="icon close" title="关闭" onClick={onClose}>
+            <button ref={closeButtonRef} type="button" className="icon close" title="关闭" onClick={onClose}>
               <Icon name="close-line" />
             </button>
           </div>

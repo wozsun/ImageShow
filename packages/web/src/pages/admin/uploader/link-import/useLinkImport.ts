@@ -82,8 +82,7 @@ export function useLinkImport(options: {
       if (!result) return;
 
       const applied = result.acceptance;
-      const duplicateExists = result.prepared.duplicate_exists
-        || result.prepared.duplicates.length > 0;
+      const duplicateExists = result.prepared.duplicates.length > 0;
       const shouldSkip = applied.status === "duplicate"
         || (job.duplicatePolicy === "skip" && duplicateExists);
       if (shouldSkip) {

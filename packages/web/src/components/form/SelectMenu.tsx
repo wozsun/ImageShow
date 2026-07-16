@@ -15,14 +15,12 @@ export function SelectMenu({ value, options, onChange, disabled = false, ariaLab
   className?: string;
 }) {
   const triggerRef = useRef<HTMLButtonElement | null>(null);
-  const menuRef = useRef<HTMLDivElement | null>(null);
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const menuId = useId();
   const selectedIndex = Math.max(0, options.findIndex((option) => option.value === value));
   const selected = options[selectedIndex] ?? { value, label: value };
-  const { open, closing, position, opensUp, openMenu, requestClose, onAnimationEnd } = useAnchoredMenu({
+  const { open, closing, position, opensUp, menuRef, openMenu, requestClose, onAnimationEnd } = useAnchoredMenu({
     triggerRef,
-    menuRef,
     getSize: () => MENU_SIZE,
     initialMaxHeight: 240,
     disabled,

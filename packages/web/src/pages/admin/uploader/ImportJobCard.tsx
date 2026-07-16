@@ -47,24 +47,29 @@ export function ImportJobCard({ job, busy, storageDisplayName, themes, allTags, 
   const statusDetailText = job.message || statusLabels[job.status];
   const manifestLineText = job.manifestLine ? `JSONL 第 ${job.manifestLine} 行` : "";
   const metaText = [manifestLineText, storageDisplayName, dimensionsText, statusDetailText].filter(Boolean).join(" · ");
+  const sizeSummaryText = isProxy
+    ? `代理链接 · ${originalDimensionsText}`
+    : `${originalSizeText} → ${finalSizeText}${qualityText ? ` · ${qualityText}` : ""}`;
   const libraryDuplicate = job.status === "skipped" ? job.duplicates[0] : undefined;
   const batchDuplicate = job.status === "skipped" ? job.batchDuplicate : undefined;
   const previewSrc = libraryDuplicate?.thumb_url || (batchDuplicate ? batchDuplicate.preview : job.preview);
   const openPreview: ((opener: HTMLElement) => void) | undefined = libraryDuplicate
     ? (opener) => onOpenDetail(libraryDuplicate, opener)
     : batchDuplicate?.available
-      ? () => onPreview({
+      ? (opener) => onPreview({
           src: batchDuplicate.previewFull,
           thumbSrc: batchDuplicate.preview,
           width: batchDuplicate.width,
-          height: batchDuplicate.height
+          height: batchDuplicate.height,
+          opener,
         })
       : previewSrc
-        ? () => onPreview({
+        ? (opener) => onPreview({
             src: job.previewFull || previewSrc,
             thumbSrc: previewSrc,
             width: job.width,
-            height: job.height
+            height: job.height,
+            opener,
           })
         : undefined;
   const confirmDuplicate = job.status === "ready" && job.duplicateDecision === "undecided" && job.duplicates.length > 0;
@@ -99,6 +104,9 @@ export function ImportJobCard({ job, busy, storageDisplayName, themes, allTags, 
         </strong>
         <span className="import-job-meta">
           {metaText}
+        </span>
+        <span className="import-job-size-summary">
+          {sizeSummaryText}
         </span>
         {(job.status === "uploading" || job.status === "processing") && job.kind === "local" && (
           <div className="upload-progress" aria-label="上传进度"><span style={{ width: `${job.uploadProgress}%` }} /></div>

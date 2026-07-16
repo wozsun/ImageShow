@@ -32,11 +32,8 @@ export async function batchRestoreImages(ids: string[]) {
     ]);
   }
   return {
-    requested: ids.length,
     restored: restoredImages.length,
-    ignored: ids.length - restoredImages.length,
-    failed: 0,
-    failed_ids: []
+    ignored: ids.length - restoredImages.length
   };
 }
 
@@ -81,5 +78,4 @@ export async function purgeDeletedImage(id: string) {
   const result = await purgeDeletedImages([id]);
   if (!result.requested) throw new ApiError(404, "not_found", "Deleted image not found");
   if (result.failed) throw new ApiError(502, "storage_delete_failed", "Failed to permanently delete the stored image");
-  return result;
 }

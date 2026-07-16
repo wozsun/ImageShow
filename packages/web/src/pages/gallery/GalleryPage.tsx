@@ -19,7 +19,7 @@ import { LazyGalleryImage } from "./LazyGalleryImage.js";
 import { masonryColumns, nextRenderBatch, useGalleryColumnCount } from "./gallery-layout.js";
 
 type GalleryFilters = { device: string; brightness: string; theme: string; tag: string; author: string };
-type PublicImageListPage = { items: GalleryImageCard[]; has_next: boolean; next_cursor: string | null; limit?: number; total?: null };
+type PublicImageListPage = { items: GalleryImageCard[]; next_cursor: string | null };
 
 function gallerySearchParams(filters: GalleryFilters, order: string, cursor = "") {
   const params = new URLSearchParams();

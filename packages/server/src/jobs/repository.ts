@@ -31,7 +31,6 @@ export async function enqueue(
      ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING`,
     [id, type, targetId, JSON.stringify(payload), idempotencyKey ?? null]
   );
-  return id;
 }
 
 export async function claimBackgroundJob(type: string) {
@@ -46,7 +45,7 @@ export async function claimBackgroundJob(type: string) {
        FOR UPDATE SKIP LOCKED
        LIMIT 1
      )
-     RETURNING *`,
+     RETURNING id, type, target_id, payload, retry_count`,
     [type]
   );
   return result.rows[0] as BackgroundJob | undefined;

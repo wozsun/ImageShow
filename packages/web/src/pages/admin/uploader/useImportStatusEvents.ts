@@ -28,7 +28,6 @@ function applyStoredImportStatus(
   jobsRef: RefObject<ImportJob[]>,
   updateJob: (id: string, patch: Partial<ImportJob>) => void
 ) {
-  if (!state.id) return;
   const job = jobsRef.current.find((item) => item.sessionId === state.id);
   if (!job || terminalStatuses.has(job.status)) return;
   const patch = patchFromStatus(job, state);

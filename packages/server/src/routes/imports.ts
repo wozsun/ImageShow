@@ -4,7 +4,7 @@ import { ApiError, ok } from "../core/http.ts";
 import { importBatchCreateInput, importCommitInput, importCreateInput, jsonlManifestInput, parse, uuidInput } from "../core/validation.ts";
 import { commitImportSession } from "../images/imports/commit.ts";
 import { prepareImportSession } from "../images/imports/prepare.ts";
-import { getImportStatus, listImportStatuses, streamImportEvents } from "../images/imports/progress.ts";
+import { listImportStatuses, streamImportEvents } from "../images/imports/progress.ts";
 import {
   cancelImportSession,
   createImportSessions,
@@ -78,7 +78,8 @@ export function registerImportRoutes(app: Hono) {
   app.put(`${adminApiBasePath}/imports/:id/file`, async (c) => {
     const id = parse(uuidInput, c.req.param("id"));
     const body = c.req.raw.body ?? new Response(await c.req.arrayBuffer()).body;
-    return c.json(ok(await receiveImportFile(id, body, c.req.raw.signal)));
+    await receiveImportFile(id, body, c.req.raw.signal);
+    return c.json(ok());
   });
 
   app.post(`${adminApiBasePath}/imports/:id/prepare`, async (c) => {
@@ -91,10 +92,6 @@ export function registerImportRoutes(app: Hono) {
 
   app.get(`${adminApiBasePath}/imports/:id/preview`, async (c) => {
     return previewImportSession(parse(uuidInput, c.req.param("id")), "thumb");
-  });
-
-  app.get(`${adminApiBasePath}/imports/:id/status`, async (c) => {
-    return c.json(ok(await getImportStatus(parse(uuidInput, c.req.param("id")))));
   });
 
   app.get(`${adminApiBasePath}/imports/status`, async (c) => {
@@ -115,7 +112,7 @@ export function registerImportRoutes(app: Hono) {
 
   app.post(`${adminApiBasePath}/imports/:id/cancel`, async (c) => {
     await cancelImportSession(parse(uuidInput, c.req.param("id")));
-    return c.json(ok({ cancelled: true }));
+    return c.json(ok());
   });
 }
 

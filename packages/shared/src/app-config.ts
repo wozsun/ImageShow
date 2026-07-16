@@ -1,10 +1,19 @@
+import {
+  adminImagePageLimit,
+  imageDescriptionMaxLength,
+  imageTitleMaxLength,
+  importBatchHardLimit
+} from "./browser.ts";
+
+export * from "./browser.ts";
+
 export const appConfig = {
   devices: ["pc", "mb"] as const,
   brightness: ["dark", "light"] as const,
   themeMaxLength: 32,
   imageMetadata: {
-    titleMaxLength: 80,
-    descriptionMaxLength: 500
+    titleMaxLength: imageTitleMaxLength,
+    descriptionMaxLength: imageDescriptionMaxLength
   },
 
   pagination: {
@@ -20,7 +29,7 @@ export const appConfig = {
   trashBatchSize: 100,
 
   imports: {
-    batchHardLimit: 3_600,
+    batchHardLimit: importBatchHardLimit,
     uploadSoftLimitMax: 1_000,
     linkSoftLimitMax: 1_000,
     jsonlManifestMaxBytes: 128 * 1024 * 1024,
@@ -113,7 +122,7 @@ export const appConfig = {
     image_detail: { title_opens_image: true },
     admin: {
       login_background: "",
-      image_page_size: 60,
+      image_page_size: adminImagePageLimit,
       recent_uploads: 12,
       show_unset_theme_card: true
     },
@@ -134,16 +143,6 @@ export const appConfig = {
   } as const
 };
 
-export const importBatchHardLimit: number = appConfig.imports.batchHardLimit;
-
-export const slugPattern = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
-
-export const adminBasePath = "/admin";
-export const adminApiBasePath = "/api/admin";
-export const adminImagePageLimit: number = appConfig.runtimeDefaults.admin.image_page_size;
-
-export const reservedSubdomains = ["random", "static", "docs", "link"] as const;
-
 export type Device = (typeof appConfig.devices)[number];
 export type Brightness = (typeof appConfig.brightness)[number];
 export type ImageExt = "jpg" | "png" | "webp" | "gif" | "avif";
@@ -152,7 +151,6 @@ export type RootRedirect = "home" | "gallery";
 export type RandomMethod = "proxy" | "redirect";
 export type GalleryOrder = "latest" | "random";
 export type ImportMode = "upload" | "download" | "proxy";
-
 export type SiteHomeSettings = {
   enabled: boolean;
   tagline: string;
@@ -265,13 +263,25 @@ export type RuntimeConfig = {
 
 export type SiteSettings = Pick<RuntimeSiteSettings, "name" | "domain" | "icon_url" | "root_redirect" | "home" | "gallery" | "random_default_method" | "docs_enabled">;
 
+export type AdminUploadSettings = Pick<
+  UploadSettings,
+  "max_items" | "max_file_size_mb" | "list_page_size" | "concurrency"
+>;
+
+export type AdminLinkImageSettings = Pick<
+  LinkImageSettings,
+  "fill_original_url" | "concurrency" | "url_list_max_items" | "jsonl_max_items"
+>;
+
+export type AdminImportSettings = Pick<ImportSettings, "commit_concurrency">;
+
 export type AdminSettings = {
   site: SiteSettings;
-  upload: UploadSettings;
-  link_image: LinkImageSettings;
+  upload: AdminUploadSettings;
+  link_image: AdminLinkImageSettings;
   normalize: NormalizeSettings;
   thumbnail: ThumbnailSettings;
-  import: ImportSettings;
+  import: AdminImportSettings;
   image_detail: ImageDetailSettings;
   admin: AdminPanelSettings;
 };

@@ -18,13 +18,12 @@ import {
 import { batchDeleteImages } from "../images/batch-delete.ts";
 import { updateImagesBatch } from "../images/batch-update.ts";
 import {
-  getAdminImage,
   getAdminImageInfo,
   listAdminImages
 } from "../images/read-models/admin-images.ts";
 import { getOverviewStats } from "../images/read-models/overview.ts";
 import { serveAdminObject, serveAdminOriginalLink, serveAdminThumb } from "../images/serving.ts";
-import { deleteImage, migrateImagesStorage, updateImageMetadata } from "../images/service.ts";
+import { deleteImage, migrateImagesStorage } from "../images/service.ts";
 import { batchRestoreImages, purgeDeletedImage, purgeDeletedImages, restoreDeletedImage } from "../images/trash.ts";
 
 export function registerAdminImageRoutes(app: Hono) {
@@ -33,11 +32,6 @@ export function registerAdminImageRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/images`, async (c) => {
     const q = parse(adminImageListQuery, Object.fromEntries(new URL(c.req.url).searchParams));
     return c.json(ok(await listAdminImages(q)));
-  });
-
-  app.get(`${adminApiBasePath}/images/:id`, async (c) => {
-    const id = parse(uuidInput, c.req.param("id"));
-    return c.json(ok({ item: await getAdminImage(id) }));
   });
 
   app.get(`${adminApiBasePath}/images/:id/admin-info`, async (c) => {
@@ -92,11 +86,15 @@ export function registerAdminImageRoutes(app: Hono) {
     return c.json(ok(await batchDeleteImages(input.ids)));
   });
 
-  app.post(`${adminApiBasePath}/images/empty-trash`, async (c) => c.json(ok(await purgeDeletedImages())));
+  app.post(`${adminApiBasePath}/images/empty-trash`, async (c) => {
+    const result = await purgeDeletedImages();
+    return c.json(ok({ deleted: result.deleted, failed: result.failed }));
+  });
 
   app.post(`${adminApiBasePath}/images/:id/purge`, async (c) => {
     const id = parse(uuidInput, c.req.param("id"));
-    return c.json(ok(await purgeDeletedImage(id)));
+    await purgeDeletedImage(id);
+    return c.json(ok());
   });
 
   app.post(`${adminApiBasePath}/images/batch-migrate-storage`, async (c) => {
@@ -120,7 +118,11 @@ export function registerAdminImageRoutes(app: Hono) {
       entity_count_invalidation_triggered: false,
       random_pool_full_rebuild_triggered: randomPoolFullRebuildTriggered,
     });
-    return c.json(ok(result));
+    return c.json(ok({
+      migrated: result.migrated,
+      unchanged: result.unchanged,
+      failed: result.failed,
+    }));
   });
 
   app.post(batchImageUpdatePath, limitBatchImageUpdateBody, async (c) => {
@@ -146,11 +148,10 @@ export function registerAdminImageRoutes(app: Hono) {
       entity_count_invalidation_triggered: entityCountInvalidationTriggered,
       random_pool_full_rebuild_triggered: randomPoolFullRebuildTriggered,
     });
-    return c.json(ok(result));
-  });
-
-  app.post(`${adminApiBasePath}/images/:id`, async (c) => {
-    const id = parse(uuidInput, c.req.param("id"));
-    return c.json(ok({ item: await updateImageMetadata(id, await c.req.json().catch(() => ({}))) }));
+    return c.json(ok({
+      updated: result.updated,
+      failed: result.failed,
+      results: result.results
+    }));
   });
 }

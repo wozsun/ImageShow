@@ -1,6 +1,6 @@
 {
   "name": "@imageshow/server",
-  "version": "3.6.3",
+  "version": "3.7.0",
   "type": "module",
   "scripts": {
     "dev": "node --watch src/index.ts",
@@ -9,10 +9,10 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1086.0",
-    "@hono/node-server": "^2.0.8",
+    "@aws-sdk/client-s3": "^3.1088.0",
+    "@hono/node-server": "^2.0.10",
     "@imageshow/shared": "file:../shared",
-    "fast-xml-parser": "^5.10.0",
+    "fast-xml-parser": "^5.10.1",
     "file-type": "^22.0.1",
     "hono": "^4.12.30",
     "ioredis": "^5.11.1",

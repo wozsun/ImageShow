@@ -4,11 +4,7 @@ import { ApiError } from "../../core/http.ts";
 import { adminImageListQuery } from "../../core/validation.ts";
 import { resolveThemeSlugs } from "../../themes/query.ts";
 import { warmCompleteImageLookups } from "../image-cache.ts";
-import {
-  adminImageView,
-  publicImage,
-  type ImageRecord
-} from "../presenter.ts";
+import { adminImageView } from "../presenter.ts";
 import { fetchAdminImagePage } from "./pagination.ts";
 
 type AdminImageListQuery = z.infer<typeof adminImageListQuery>;
@@ -52,17 +48,10 @@ export async function listAdminImages(query: AdminImageListQuery) {
   await warmCompleteImageLookups(page.rows);
   return {
     items: page.items.map(adminImageView),
-    limit: query.limit,
     total: Number(countResult.rows[0]?.count ?? 0),
     has_next: page.hasNext,
     next_cursor: page.nextCursor
   };
-}
-
-export async function getAdminImage(id: string) {
-  const result = await pool.query("SELECT * FROM metadata WHERE id=$1", [id]);
-  if (!result.rows[0]) throw new ApiError(404, "not_found", "Image not found");
-  return adminImageView(await publicImage(result.rows[0] as ImageRecord));
 }
 
 export async function getAdminImageInfo(id: string) {
@@ -71,7 +60,6 @@ export async function getAdminImageInfo(id: string) {
             m.md5,
             m.storage_slug,
             m.is_link,
-            m.image_time::text AS image_time,
             m.created_at::text AS created_at,
             m.updated_at::text AS updated_at,
             COALESCE(sb.display_name, '') AS storage_display_name
@@ -85,7 +73,6 @@ export async function getAdminImageInfo(id: string) {
     md5: string;
     storage_slug: string;
     is_link: boolean;
-    image_time: string;
     created_at: string;
     updated_at: string;
     storage_display_name: string;
@@ -95,7 +82,6 @@ export async function getAdminImageInfo(id: string) {
     id: row.id,
     md5: row.md5,
     storage_label: imageStorageLabel(row),
-    image_time: row.image_time ?? "",
     created_at: row.created_at ?? "",
     updated_at: row.updated_at ?? ""
   };

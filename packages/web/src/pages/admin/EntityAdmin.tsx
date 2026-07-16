@@ -3,10 +3,17 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api/client.js";
 import { Icon } from "../../components/icon/Icon.js";
 import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
+import { AdminPagination } from "../../components/navigation/AdminPagination.js";
 import { ConfirmDialog } from "../../components/feedback/ConfirmDialog.js";
 import { EntityAdminCard } from "./EntityAdminCard.js";
 import { PageToast } from "../../components/feedback/PageToast.js";
-import { adminApiBasePath, queryKeys, slugFormatHint, slugPattern } from "../../lib/constants.js";
+import {
+  adminApiBasePath,
+  adminImagePageLimit,
+  queryKeys,
+  slugFormatHint,
+  slugPattern
+} from "../../lib/constants.js";
 import { errorMessage } from "../../lib/ui/formatters.js";
 import type { AdminSettings, Author, Tag, Theme } from "../../lib/types.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
@@ -75,7 +82,7 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
 
   const slugInvalid = slug.length > 0 && !slugPattern.test(slug);
 
-  const pageSize = settingsData?.settings.admin.image_page_size ?? 50;
+  const pageSize = settingsData?.settings.admin.image_page_size ?? adminImagePageLimit;
   // 主题页可隐藏钉住的「未设置 / none」占位卡片（设置页 admin 组的开关，默认显示）；其它类别无此卡片。
   // 只过滤展示用列表，order（含 none）保持完整，拖拽排序逻辑不受影响。
   const showUnsetCard = settingsData?.settings.admin.show_unset_theme_card ?? true;
@@ -236,11 +243,13 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
         {!listFailed && !order.length && !isFetching && <p className="muted">{copy.empty}</p>}
       </div>
       <OverlayScrollbar targetRef={listRef} pageEdge />
-      <nav className="admin-pagination" aria-label={`${copy.noun}分页`}>
-        <button type="button" disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>上一页</button>
-        <span>第 {page} / {totalPages} 页</span>
-        <button type="button" disabled={page >= totalPages} onClick={() => setPage((current) => Math.min(totalPages, current + 1))}>下一页</button>
-      </nav>
+      <AdminPagination
+        ariaLabel={`${copy.noun}分页`}
+        page={page}
+        totalPages={totalPages}
+        onPrevious={() => setPage((current) => Math.max(1, current - 1))}
+        onNext={() => setPage((current) => Math.min(totalPages, current + 1))}
+      />
       {confirmDelete && (
         <ConfirmDialog
           title={`删除${copy.noun}`}

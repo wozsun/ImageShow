@@ -22,13 +22,43 @@ export type ImageRecord = {
   description?: string | null;
   source?: string | null;
   original?: string | null;
-  extra?: Record<string, unknown> | null;
   status: string;
   deleted_at?: string | Date | null;
   image_time?: string | Date | null;
   created_at?: string | Date | null;
   updated_at?: string | Date | null;
 };
+
+/**
+ * 构造完整管理端图片 DTO 所需的数据库列。
+ *
+ * 集中维护可避免列表与判重查询重新退回 `SELECT *`，把仅供数据库内部
+ * 预留的字段或其他流程字段带入 Node.js。
+ */
+export const imagePresentationColumns = [
+  "id",
+  "device",
+  "brightness",
+  "theme",
+  "width",
+  "height",
+  "image_size",
+  "ext",
+  "md5",
+  "object_key",
+  "storage_slug",
+  "is_link",
+  "author",
+  "title",
+  "description",
+  "source",
+  "original",
+  "status",
+  "deleted_at",
+  "image_time",
+  "created_at",
+  "updated_at"
+].join(", ");
 
 export type PublicImage = Awaited<ReturnType<typeof publicImage>>;
 export type PublicImageDetail = Awaited<ReturnType<typeof publicImageDetail>>;
@@ -52,23 +82,18 @@ type PublicImageUrlRecord = Pick<
   "id" | "device" | "brightness" | "theme" | "ext" | "object_key" | "storage_slug" | "is_link"
 >;
 
+export type OverviewRecentImageRecord = PublicImageUrlRecord & Pick<ImageRecord, "title">;
+
 export type ImportSessionRecord = {
   id: string;
   mode: "upload" | "download" | "proxy";
-  status: string;
-  expires_at: string | Date;
 };
 
 export function importSessionResponse(row: ImportSessionRecord) {
   return {
     id: row.id,
-    mode: row.mode,
-    status: row.status,
     upload_url: row.mode === "upload" ? `${adminApiBasePath}/imports/${row.id}/file` : undefined,
-    prepare_url: `${adminApiBasePath}/imports/${row.id}/prepare`,
-    preview_url: `${adminApiBasePath}/imports/${row.id}/preview`,
-    preview_full_url: `${adminApiBasePath}/imports/${row.id}/preview/full`,
-    expires_at: new Date(row.expires_at).toISOString()
+    prepare_url: `${adminApiBasePath}/imports/${row.id}/prepare`
   };
 }
 
@@ -80,7 +105,24 @@ async function publicUrlsForRow(row: PublicImageUrlRecord) {
   return { storageSlug, isLink, urls };
 }
 
-export async function publicImage(row: ImageRecord, tags?: string[]) {
+export async function importCommitImage(row: PublicImageUrlRecord) {
+  const { urls } = await publicUrlsForRow(row);
+  return {
+    object_url: urls.object_url,
+    thumb_url: urls.thumb_url
+  };
+}
+
+export async function overviewRecentImage(row: OverviewRecentImageRecord) {
+  const { urls } = await publicUrlsForRow(row);
+  return {
+    id: row.id,
+    title: row.title ?? "",
+    thumb_url: urls.thumb_url
+  };
+}
+
+async function publicImage(row: ImageRecord, tags?: string[]) {
   const { storageSlug, isLink, urls } = await publicUrlsForRow(row);
   const original = row.original ?? "";
   const hasDistinctOriginal = hasDistinctOriginalUrl(original, isLink ? row.object_key : urls.object_url);
@@ -104,7 +146,6 @@ export async function publicImage(row: ImageRecord, tags?: string[]) {
     description: row.description ?? "",
     source: row.source ?? "",
     original,
-    extra: row.extra && typeof row.extra === "object" && !Array.isArray(row.extra) ? row.extra : {},
     diff_original: hasDistinctOriginal,
     status: row.status,
     tags: tagList,

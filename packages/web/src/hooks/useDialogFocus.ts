@@ -25,28 +25,53 @@ export function useDialogFocus({
   returnFocusRef,
   onEscape,
   active = true,
+  paused = false,
 }: {
   containerRef: RefObject<HTMLElement | null>;
   initialFocusRef?: RefObject<HTMLElement | null>;
   returnFocusRef?: RefObject<HTMLElement | null>;
   onEscape: () => void;
   active?: boolean;
+  paused?: boolean;
 }) {
   const onEscapeRef = useRef(onEscape);
   onEscapeRef.current = onEscape;
+  const returnFocusTargetRef = useRef<HTMLElement | null>(null);
+  const hasActivatedRef = useRef(false);
+  const wasActiveRef = useRef(false);
+
+  const restoreFocus = () => {
+    const returnFocus = returnFocusTargetRef.current;
+    if (returnFocus && returnFocus.isConnected) returnFocus.focus({ preventScroll: true });
+  };
+
+  // active 表示弹窗是否存在；paused 只暂停父级 trap，不归还焦点。Uploader 这类常驻组件
+  // 关闭条件渲染的弹窗时会把 active 置为 false，因此无需卸载整个组件也能正确归还焦点。
+  useLayoutEffect(() => {
+    if (active && !wasActiveRef.current) {
+      returnFocusTargetRef.current = returnFocusRef?.current
+        ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    } else if (!active && wasActiveRef.current) {
+      restoreFocus();
+      returnFocusTargetRef.current = null;
+      hasActivatedRef.current = false;
+    }
+    wasActiveRef.current = active;
+  }, [active, returnFocusRef]);
+
+  useLayoutEffect(() => () => restoreFocus(), []);
 
   useLayoutEffect(() => {
-    if (!active) return;
+    if (!active || paused) return;
 
     const container = containerRef.current;
     if (!container) return;
-    const previousFocus = document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null;
-    const returnFocus = returnFocusRef?.current ?? previousFocus;
 
     const initialFocus = initialFocusRef?.current ?? focusableElements(container)[0] ?? container;
-    initialFocus.focus({ preventScroll: true });
+    if (!hasActivatedRef.current || !container.contains(document.activeElement)) {
+      initialFocus.focus({ preventScroll: true });
+    }
+    hasActivatedRef.current = true;
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -75,11 +100,6 @@ export function useDialogFocus({
     };
 
     document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      if (returnFocus && returnFocus.isConnected) {
-        returnFocus.focus({ preventScroll: true });
-      }
-    };
-  }, [active, containerRef, initialFocusRef, returnFocusRef]);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [active, paused, containerRef, initialFocusRef]);
 }

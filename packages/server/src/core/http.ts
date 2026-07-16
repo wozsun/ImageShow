@@ -163,7 +163,7 @@ export async function login(c: Context, username: string, password: string) {
     path: "/",
     maxAge: sessionTtl
   });
-  return { username, csrf_token: csrf, role: user.role as "super" | "image" };
+  return { csrf_token: csrf };
 }
 
 export async function getSession(c: Context) {

@@ -2,6 +2,7 @@
 
 - 管理员密码使用 Node.js `node:crypto` 原生异步 Argon2id 派生，以 PHC 字符串写入 PostgreSQL；新密码使用 64 MiB 内存、3 轮、并行度 4、32 字节输出和 16 字节随机 salt。登录会解析 PHC 参数并先验证算法、版本及资源安全上下限，再使用恒定时间比较派生结果；安全范围内的旧参数可继续登录，并在成功后条件式升级为当前策略。
 - 管理会话存于 Redis，Cookie 为 `HttpOnly` + `SameSite=Lax`，识别为 HTTPS 时附加 `Secure`；所有写操作要求 `X-CSRF-Token` 并校验同源。管理员密码被后台重置或账号被删除时，服务端用 `SCAN + MGET` 定向清除该账号的全部会话；自行改密会保留当前会话并清除同账号的其他会话。紧急密码恢复以 PostgreSQL 密码更新为主流程，并在 Redis 可用时使用 `SCAN` 清除全部管理员会话；Redis 故障不会阻止密码更新，但会警告旧会话尚未清除。
+- 管理端界面偏好接口只使用鉴权会话中的用户名定位 Redis hash，不接受客户端传入目标账号；浏览器缓存键也按用户名隔离。`localStorage` 仅承担即时显示、断网兜底和待同步标记，不参与鉴权，也不保存会话或 CSRF token；删除管理员账号时会同时清理对应 Redis 偏好。
 - 登录失败限流：每 IP + 用户名 60 秒内 5 次失败即拦截，叠加 180 秒内 10 次尝试的全局兜底（阈值与窗口均可在 `config.json` 的 `security.*` 调整）。
 - 登录前置图形验证码（一次性，存于 Redis，校验即焚），可在 `config.json` 的 `captcha.enabled` 关闭；登录页通过 `/api/admin/auth/me` 的 `captcha_enabled` 决定是否展示验证码输入，并通过同一探针获取 `login_background`，最终是否校验仍只由服务端配置决定。
 - 公开页默认不显示后台入口，也不主动请求 `/api/admin/auth/me`；只有当前浏览器本地存在 `site_session_hint` 提示位时，顶栏才懒探测 `/api/admin/auth/me`，并仅在服务端确认已登录后显示入口。图片详情同样只在存在该提示位时请求 `/api/admin/images/:id/admin-info` 补充登录态管理信息，接口返回 401 会清除提示位并保持普通访客展示。该提示位只存在 `localStorage`，不参与鉴权，伪造它最多导致一次登录态探测或一次受保护接口的 401。

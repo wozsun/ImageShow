@@ -20,7 +20,7 @@ import {
   setImageLookupById
 } from "../image-cache.ts";
 import { resolveClassification } from "../classification.ts";
-import { publicImage, type ImageRecord } from "../presenter.ts";
+import { importCommitImage, type ImageRecord } from "../presenter.ts";
 import { notifyImportStatus, withImportLease } from "./progress.ts";
 import { runImportCommit } from "./execution.ts";
 import { stagingImageKey } from "./staging.ts";
@@ -31,8 +31,51 @@ import type {
   PreparedPayload
 } from "./types.ts";
 
+type CommittedImageRecord = Pick<
+  ImageRecord,
+  | "id"
+  | "author"
+  | "object_key"
+  | "original"
+  | "ext"
+  | "storage_slug"
+  | "is_link"
+  | "device"
+  | "brightness"
+  | "theme"
+  | "status"
+  | "description"
+  | "source"
+>;
+
+type CommitImportSessionRecord = Pick<
+  ImportSessionRow,
+  | "mode"
+  | "status"
+  | "storage_slug"
+  | "final_object_key"
+  | "prepared_payload"
+  | "image_time"
+>;
+
+const committedImageColumns = [
+  "id",
+  "author",
+  "object_key",
+  "original",
+  "ext",
+  "storage_slug",
+  "is_link",
+  "device",
+  "brightness",
+  "theme",
+  "status",
+  "description",
+  "source"
+].join(", ");
+
 async function finishImport(
-  image: ImageRecord,
+  image: CommittedImageRecord,
   payload: PreparedPayload,
   createdEntityKinds: Iterable<EntityCacheKind> = [],
 ) {
@@ -74,7 +117,7 @@ async function finishImport(
 
 async function commitStoredImageSession(
   id: string,
-  session: ImportSessionRow,
+  session: CommitImportSessionRecord,
   payload: PreparedPayload
 ) {
   const backend = session.storage_slug;
@@ -119,7 +162,7 @@ async function commitStoredImageSession(
         `INSERT INTO metadata(id, image_time, device, brightness, theme, width, height, image_size, ext,
          object_key, storage_slug, title, description, source, original, md5, thumbnail_size, author)
          VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
-         ON CONFLICT (id) DO NOTHING RETURNING *`,
+         ON CONFLICT (id) DO NOTHING RETURNING ${committedImageColumns}`,
         [
           id,
           session.image_time,
@@ -141,11 +184,13 @@ async function commitStoredImageSession(
           payload.author || null
         ]
       );
-      const inserted = Boolean(insertedRow.rowCount);
-      const image = (inserted
+      const image = (insertedRow.rowCount
         ? insertedRow.rows[0]
-        : (await client.query("SELECT * FROM metadata WHERE id=$1", [id])).rows[0]
-      ) as ImageRecord;
+        : (await client.query(
+            `SELECT ${committedImageColumns} FROM metadata WHERE id=$1`,
+            [id]
+          )).rows[0]
+      ) as CommittedImageRecord;
       if ((await replaceImageTags(client, image.id, resolvedTags)).createdTag) createdEntityKinds.add("tag");
       const finalized = await client.query(
         "UPDATE import_session SET status='finalized', updated_at=now() WHERE id=$1 AND status='committing'",
@@ -154,7 +199,7 @@ async function commitStoredImageSession(
       if (!finalized.rowCount) {
         throw new ApiError(409, "invalid_import_state", "导入任务提交状态已变化");
       }
-      return { image, inserted, createdEntityKinds };
+      return { image, createdEntityKinds };
     });
     databaseCommitted = true;
 
@@ -163,7 +208,7 @@ async function commitStoredImageSession(
       removeObject("_uploads", payload.prepared_thumbnail_key, backend).catch(() => undefined)
     ]);
     await finishImport(result.image, payload, result.createdEntityKinds);
-    return { status: "imported" as const, item: await publicImage(result.image) };
+    return { status: "imported" as const, item: await importCommitImage(result.image) };
   } catch (error) {
     if (!databaseCommitted) {
       await Promise.all([
@@ -181,7 +226,7 @@ async function commitStoredImageSession(
 
 async function commitProxySession(
   id: string,
-  session: ImportSessionRow,
+  session: CommitImportSessionRecord,
   payload: PreparedPayload
 ) {
   const backend = session.storage_slug;
@@ -222,7 +267,7 @@ async function commitProxySession(
         `INSERT INTO metadata(id, image_time, device, brightness, theme, width, height, ext,
          object_key, storage_slug, is_link, title, description, source, original, md5, thumbnail_size, author)
          VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,true,$11,$12,$13,$14,$15,$16,$17)
-         ON CONFLICT (object_key) DO NOTHING RETURNING *`,
+         ON CONFLICT (object_key) DO NOTHING RETURNING ${committedImageColumns}`,
         [
           id,
           session.image_time,
@@ -243,13 +288,12 @@ async function commitProxySession(
           payload.author || null
         ]
       );
-      const inserted = Boolean(insertedRow.rowCount);
-      const image = inserted
-        ? insertedRow.rows[0] as ImageRecord
+      const image = insertedRow.rowCount
+        ? insertedRow.rows[0] as CommittedImageRecord
         : (await client.query(
-            "SELECT * FROM metadata WHERE id=$1",
+            `SELECT ${committedImageColumns} FROM metadata WHERE id=$1`,
             [id]
-          )).rows[0] as ImageRecord | undefined;
+          )).rows[0] as CommittedImageRecord | undefined;
       if (image && (await replaceImageTags(client, image.id, resolvedTags)).createdTag) {
         createdEntityKinds.add("tag");
       }
@@ -260,7 +304,7 @@ async function commitProxySession(
       if (!finalized.rowCount) {
         throw new ApiError(409, "invalid_import_state", "导入任务提交状态已变化");
       }
-      return { image, inserted, createdEntityKinds };
+      return { image, createdEntityKinds };
     });
     databaseCommitted = true;
 
@@ -274,7 +318,7 @@ async function commitProxySession(
       return { status: "duplicate" as const };
     }
     await finishImport(result.image, payload, result.createdEntityKinds);
-    return { status: "imported" as const, item: await publicImage(result.image) };
+    return { status: "imported" as const, item: await importCommitImage(result.image) };
   } catch (error) {
     if (!databaseCommitted && copiedLink) {
       await removeObject("link", linkKey, backend).catch(() => undefined);
@@ -297,18 +341,20 @@ async function commitImportSessionWithinLimit(id: string, metadata: ImportMetada
 
   try {
     let session = (await pool.query(
-      "SELECT * FROM import_session WHERE id=$1",
+      `SELECT mode, status, storage_slug, final_object_key, prepared_payload, image_time
+         FROM import_session
+        WHERE id=$1`,
       [id]
-    )).rows[0] as ImportSessionRow | undefined;
+    )).rows[0] as CommitImportSessionRecord | undefined;
     if (!session) throw new ApiError(404, "not_found", "导入任务不存在");
     if (session.status === "finalized") {
       const image = (await pool.query(
-        "SELECT * FROM metadata WHERE id=$1",
+        `SELECT ${committedImageColumns} FROM metadata WHERE id=$1`,
         [id]
-      )).rows[0] as ImageRecord | undefined;
+      )).rows[0] as CommittedImageRecord | undefined;
       if (!image) return { status: "duplicate" as const };
       await finishImport(image, session.prepared_payload as PreparedPayload);
-      return { status: "imported" as const, item: await publicImage(image) };
+      return { status: "imported" as const, item: await importCommitImage(image) };
     }
     if (!["ready", "committing"].includes(session.status)) {
       throw new ApiError(409, "invalid_import_state", "图片尚未准备完成");
@@ -339,7 +385,7 @@ async function commitImportSessionWithinLimit(id: string, metadata: ImportMetada
            SET status='committing', metadata_payload=$2::jsonb, prepared_payload=$3::jsonb,
                final_object_key=$4, updated_at=now()
            WHERE id=$1 AND status='ready'
-           RETURNING *`,
+           RETURNING mode, status, storage_slug, final_object_key, prepared_payload, image_time`,
           [
             id,
             JSON.stringify(metadataPayload),
@@ -354,7 +400,7 @@ async function commitImportSessionWithinLimit(id: string, metadata: ImportMetada
             "Import is already being committed"
           );
         }
-        session = claimed.rows[0] as ImportSessionRow;
+        session = claimed.rows[0] as CommitImportSessionRecord;
         await notifyImportStatus(id);
       }
 

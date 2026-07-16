@@ -1,4 +1,4 @@
-import { appConfig } from "@imageshow/shared";
+import { imageDescriptionMaxLength, imageTitleMaxLength } from "@imageshow/shared/browser";
 import { SelectMenu } from "./SelectMenu.js";
 import { ThemeInput } from "./ThemeInput.js";
 import { TagInput } from "./TagInput.js";
@@ -40,7 +40,7 @@ export function ImageDraftFields({
           className={`image-fields-title${changedFields.title ? " is-changed" : ""}`}
           value={title ? title.value : draft.title}
           onChange={(event) => onPatch({ title: event.target.value })}
-          maxLength={appConfig.imageMetadata.titleMaxLength}
+          maxLength={imageTitleMaxLength}
           placeholder={title?.placeholder ?? "标题"}
           disabled={title ? title.disabled : disabled}
         />
@@ -69,15 +69,6 @@ export function ImageDraftFields({
           disabled={disabled}
           ariaLabel={`${ariaPrefix} 主题`}
         />
-        <TagInput
-          className={`image-fields-tags${changedFields.tags ? " is-changed" : ""}`}
-          value={draft.tags}
-          onChange={(tags) => onPatch({ tags })}
-          suggestions={allTags}
-          disabled={disabled}
-          ariaLabel={`${ariaPrefix} 标签`}
-          placeholder="标签"
-        />
         <AuthorInput
           className={`image-fields-author${changedFields.author ? " is-changed" : ""}`}
           value={draft.author}
@@ -86,6 +77,15 @@ export function ImageDraftFields({
           placeholder="作者"
           disabled={disabled}
           ariaLabel={`${ariaPrefix} 作者`}
+        />
+        <TagInput
+          className={`image-fields-tags${changedFields.tags ? " is-changed" : ""}`}
+          value={draft.tags}
+          onChange={(tags) => onPatch({ tags })}
+          suggestions={allTags}
+          disabled={disabled}
+          ariaLabel={`${ariaPrefix} 标签`}
+          placeholder="标签"
         />
       </div>
       <div className="image-fields-row image-fields-urls">
@@ -108,7 +108,7 @@ export function ImageDraftFields({
         className={`image-fields-desc${changedFields.description ? " is-changed" : ""}`}
         value={draft.description}
         onChange={(event) => onPatch({ description: event.target.value })}
-        maxLength={appConfig.imageMetadata.descriptionMaxLength}
+        maxLength={imageDescriptionMaxLength}
         placeholder="详情描述"
         disabled={disabled}
       />

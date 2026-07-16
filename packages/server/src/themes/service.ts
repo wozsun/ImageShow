@@ -175,13 +175,13 @@ export async function deleteTheme(slug: string) {
 
 export async function deleteThemes(slugs: string[]) {
   const targets = [...new Set(slugs)].filter((slug) => slug !== "none");
-  if (!targets.length) return { deleted: 0 };
+  if (!targets.length) return;
   const lookupInvalidations: ThemeLookupInvalidation[] = [];
-  let deleted = 0;
+  let deletedAny = false;
   for (const slug of targets) {
     const result = await withAdvisoryLock(themeMutationLockKey(slug), () => deleteThemeUnderLock(slug));
     lookupInvalidations.push(...result.lookupInvalidations);
-    if (result.deleted) deleted += 1;
+    if (result.deleted) deletedAny = true;
   }
   if (lookupInvalidations.length) {
     await rebuildRandomPool();
@@ -190,6 +190,5 @@ export async function deleteThemes(slugs: string[]) {
       invalidateImageReadCaches(),
       refreshThemeDefinitionCaches({ facets: false }),
     ]);
-  } else if (deleted) await refreshThemeDefinitionCaches();
-  return { deleted };
+  } else if (deletedAny) await refreshThemeDefinitionCaches();
 }

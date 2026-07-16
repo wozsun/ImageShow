@@ -4,7 +4,7 @@ import { api, clearCsrfToken, setCsrfToken } from "../../lib/api/client.js";
 import { Icon } from "../../components/icon/Icon.js";
 import { PasswordInput } from "../../components/form/PasswordInput.js";
 import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
-import { adminApiBasePath, adminBasePath, defaultSite } from "../../lib/constants.js";
+import { adminApiBasePath, adminBasePath } from "../../lib/constants.js";
 import { clearSessionProbeHint, rememberSessionProbeHint, useAuthMe, useSiteConfig } from "../../lib/api/site-data.js";
 import { cssUrl } from "../../lib/ui/formatters.js";
 import { MobileNavigation } from "../../components/navigation/MobileNavigation.js";
@@ -19,6 +19,7 @@ import { SettingsPage } from "./SettingsPage.js";
 import { StorageSettings } from "./StorageSettings.js";
 import { AccountSettings } from "./AccountSettings.js";
 import { LogPage } from "./LogPage.js";
+import { AdminPreferencesProvider } from "../../hooks/useAdminPreferences.js";
 // 后台样式在此引入（而非全局 styles.css），随 AdminShell 懒加载分块下载，公共页不会加载。
 import "../../styles/admin.css";
 
@@ -31,7 +32,7 @@ export function AdminShell() {
 
   const navScrollRef = useRef<HTMLDivElement | null>(null);
   const { data: siteConfig } = useSiteConfig();
-  const siteName = siteConfig?.site?.name ?? defaultSite.name;
+  const siteName = siteConfig?.site?.name || "ImageShow";
 
   const viewSite = { to: "/", icon: "home-4-line", label: "首页" } as const;
   const { data, error: authError, isError: authFailed, refetch } = useAuthMe();
@@ -59,7 +60,8 @@ export function AdminShell() {
     }
   };
   return (
-    <main className="admin">
+    <AdminPreferencesProvider key={data.username} username={data.username}>
+      <main className="admin">
       <aside>
         <Link className="brand" to={adminBasePath}>{siteName}</Link>
         <NavLink className={({ isActive }) => `home-link${isActive ? " active" : ""}`} to={viewSite.to}>
@@ -197,13 +199,14 @@ export function AdminShell() {
         {isSuper && <Route path="logs" element={<LogPage />} />}
         <Route path="*" element={<Navigate to={adminBasePath} replace />} />
       </Routes>
-    </main>
+      </main>
+    </AdminPreferencesProvider>
   );
 }
 
 function Login({ onLogin, captchaEnabled, loginBackground }: { onLogin: () => void; captchaEnabled: boolean; loginBackground: string }) {
   const { data: siteConfig } = useSiteConfig();
-  const siteName = siteConfig?.site?.name ?? defaultSite.name;
+  const siteName = siteConfig?.site?.name || "ImageShow";
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [captcha, setCaptcha] = useState("");
@@ -232,7 +235,13 @@ function Login({ onLogin, captchaEnabled, loginBackground }: { onLogin: () => vo
         }
       }}>
         <a className="login-site-title" href="/"><h1>{siteName}</h1></a>
-        <input value={username} onChange={(event) => setUsername(event.target.value)} placeholder="用户名" />
+        <input
+          name="username"
+          value={username}
+          onChange={(event) => setUsername(event.target.value)}
+          placeholder="用户名"
+          autoComplete="username"
+        />
         <PasswordInput value={password} onChange={setPassword} placeholder="密码" autoComplete="current-password" />
         {captchaEnabled && (
           <div className="login-captcha">

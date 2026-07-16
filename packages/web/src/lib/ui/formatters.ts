@@ -1,11 +1,25 @@
 import type { ImageItem } from "../types.js";
 
+export function shortImageId(id: string) {
+  return `#${id.replace(/-/g, "").slice(-12)}`;
+}
+
 export function imageDisplayTitle(item: { id: string; title?: string }) {
-  return item.title?.trim() || `#${item.id.replace(/-/g, "").slice(-12)}`;
+  return item.title?.trim() || shortImageId(item.id);
 }
 
 export function displayNameOrSlug(item: { slug: string; display_name?: string }) {
   return item.display_name?.trim() || item.slug;
+}
+
+export function facetDisplayName(
+  options: readonly { slug: string; display_name?: string }[],
+  slug: string,
+  fallback = slug,
+) {
+  if (!slug) return fallback;
+  const option = options.find((item) => item.slug === slug);
+  return option ? displayNameOrSlug(option) : slug;
 }
 
 export function formatImageClassification(item: ImageItem) {

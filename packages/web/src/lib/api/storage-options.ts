@@ -3,13 +3,10 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "./client.js";
 import { adminApiBasePath } from "../constants.js";
 import { storageBackendLabel } from "../ui/select-options.js";
-import type { StorageType } from "../types.js";
 
 type StorageBackendOption = {
   slug: string;
   display_name: string;
-  type: StorageType;
-
   enabled: boolean;
   is_default: boolean;
 };

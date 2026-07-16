@@ -1,4 +1,4 @@
-import { importBatchHardLimit } from "@imageshow/shared";
+import { importBatchHardLimit } from "@imageshow/shared/browser";
 import { parseImportUrls } from "../import-job-utils.js";
 
 export type LinkInputMode = "urls" | "jsonl";

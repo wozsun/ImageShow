@@ -1,3 +1,4 @@
+import type { RefObject } from "react";
 import type { FacetOption, ImageItem } from "../../lib/types.js";
 import { BatchMetadataModal } from "./BatchMetadataModal.js";
 
@@ -7,7 +8,8 @@ export function ImageEditModal({
   allTags,
   authors,
   onClose,
-  onSaved
+  onSaved,
+  returnFocusRef,
 }: {
   item: ImageItem;
   themes: FacetOption[];
@@ -15,6 +17,7 @@ export function ImageEditModal({
   authors: FacetOption[];
   onClose: () => void;
   onSaved: () => void;
+  returnFocusRef?: RefObject<HTMLElement | null>;
 }) {
   return (
     <BatchMetadataModal
@@ -26,6 +29,7 @@ export function ImageEditModal({
       authors={authors}
       onClose={onClose}
       onSaved={onSaved}
+      returnFocusRef={returnFocusRef}
     />
   );
 }

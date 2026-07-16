@@ -4,7 +4,6 @@ import { CopyButton } from "../../components/actions/CopyButton.js";
 import { Icon } from "../../components/icon/Icon.js";
 import { SelectMenu } from "../../components/form/SelectMenu.js";
 import { FacetSelector } from "../../components/data-display/FacetSelector.js";
-import { defaultSite } from "../../lib/constants.js";
 import { buildRandomUrl } from "../../lib/gallery/random-url.js";
 import { rootSiteOrigin } from "../../lib/gallery/theme-host.js";
 import { cssUrl } from "../../lib/ui/formatters.js";
@@ -31,8 +30,8 @@ export function HomePage() {
   const previewObjectUrlRef = useRef("");
   const { data: siteConfig } = useSiteConfig();
   const { data: galleryFacets } = useGalleryFacets();
-  const siteName = siteConfig?.site?.name ?? defaultSite.name;
-  const homeTagline = siteConfig?.site?.home.tagline ?? defaultSite.home.tagline;
+  const siteName = siteConfig?.site?.name || "ImageShow";
+  const homeTagline = siteConfig?.site?.home.tagline ?? "";
 
   const homeHeroBackground = siteConfig?.site?.home.hero_background || "/random?m=redirect";
   const previewDelayMs = siteConfig?.site?.home.preview_delay_ms ?? 1_000;

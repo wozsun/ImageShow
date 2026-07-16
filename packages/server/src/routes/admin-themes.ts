@@ -13,7 +13,6 @@ export function registerAdminThemeRoutes(app: Hono) {
     list: listThemesWithMeta,
     create: async (input) => {
       await upsertTheme(input.slug, input.display_name);
-      return {};
     },
     reorder: reorderThemes,
     batchDelete: deleteThemes,

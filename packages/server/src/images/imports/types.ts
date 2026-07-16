@@ -58,14 +58,12 @@ export type ImportSessionRow = {
 
 export type PreparedImportResult = {
   id: string;
-  mode: ImportMode;
   preview_url: string;
   preview_full_url: string;
   width: number;
   height: number;
   original_width: number;
   original_height: number;
-  ext: ImageExt;
   md5: string;
   original_size: number;
   size: number;
@@ -74,7 +72,6 @@ export type PreparedImportResult = {
   device: Device;
   brightness: Brightness;
   storage_slug: string;
-  duplicate_exists: boolean;
   duplicates: AdminImage[];
 };
 

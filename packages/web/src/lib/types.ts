@@ -1,5 +1,5 @@
 export type { AdminSettings, Brightness, Device, SiteSettings, StorageType } from "@imageshow/shared";
-import type { Brightness, Device, StorageType } from "@imageshow/shared";
+import type { Brightness, Device } from "@imageshow/shared";
 
 export type GalleryImageCard = {
   id: string;
@@ -32,7 +32,6 @@ export type ImageItem = PublicImageItem & {
   is_link: boolean;
   md5: string;
   original: string;
-  extra?: Record<string, unknown>;
   image_size?: number;
   deleted_at?: string;
   created_at?: string;
@@ -43,7 +42,6 @@ export type ImageAdminInfo = {
   id: string;
   md5: string;
   storage_label: string;
-  image_time: string;
   created_at: string;
   updated_at: string;
 };
@@ -104,15 +102,18 @@ export type WebdavSettings = {
   password_configured?: boolean;
 };
 
-export type StorageBackendAdmin = {
+type StorageBackendAdminBase = {
   slug: string;
   display_name: string;
-  type: StorageType;
   enabled: boolean;
   is_default: boolean;
-  s3: S3Settings;
-  webdav: WebdavSettings;
 };
+
+export type StorageBackendAdmin = StorageBackendAdminBase & (
+  | { type: "local" }
+  | { type: "s3"; s3: S3Settings }
+  | { type: "webdav"; webdav: WebdavSettings }
+);
 
 type AdvancedConfigBackendPreview = {
   slug: string;
@@ -143,7 +144,6 @@ type AdminRole = "super" | "image";
 export type AdminUser = {
   username: string;
   role: AdminRole;
-  created_at: string | null;
 };
 
 export type FacetOption = {

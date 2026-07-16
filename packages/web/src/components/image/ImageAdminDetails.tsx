@@ -36,7 +36,8 @@ export function ImageAdminDetails({
 }) {
   const admin = Boolean(adminItem);
   const queryClient = useQueryClient();
-  const [expanded, setExpanded] = useState(false);
+  // 后台详情已经拿到完整 ImageItem，无需等待二次请求；公共详情仍保持按需展开、按需查询。
+  const [expanded, setExpanded] = useState(() => admin);
   const [accessAvailable, setAccessAvailable] = useState(() => admin || hasSessionProbeHint());
   const adminInfoOptions = adminImageInfoQueryOptions(imageId);
   const query = useQuery({

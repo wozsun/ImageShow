@@ -40,7 +40,6 @@ export function PasswordInput({
         title={show ? "隐藏密码" : "显示密码"}
         aria-label={show ? "隐藏密码" : "显示密码"}
         disabled={disabled}
-
         tabIndex={-1}
         onClick={() => setShow((current) => !current)}
       >

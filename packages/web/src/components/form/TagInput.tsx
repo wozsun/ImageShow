@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { useAnchoredMenu } from "../../hooks/useAnchoredMenu.js";
 import { Icon } from "../icon/Icon.js";
 import { slugPattern } from "../../lib/constants.js";
+import { facetDisplayName } from "../../lib/ui/formatters.js";
 import type { AnchoredMenuSize } from "../../lib/ui/menu-position.js";
 import type { FacetOption } from "../../lib/types.js";
 
@@ -20,11 +21,9 @@ export function TagInput({ value, onChange, suggestions, disabled = false, ariaL
   const [text, setText] = useState("");
   const [activeIndex, setActiveIndex] = useState(-1);
   const wrapRef = useRef<HTMLDivElement | null>(null);
-  const menuRef = useRef<HTMLDivElement | null>(null);
   const listId = useId();
-  const { open, closing, position, opensUp, openMenu, requestClose, onAnimationEnd } = useAnchoredMenu({
+  const { open, closing, position, opensUp, menuRef, openMenu, requestClose, onAnimationEnd } = useAnchoredMenu({
     triggerRef: wrapRef,
-    menuRef,
     getSize: () => MENU_SIZE,
     initialMaxHeight: 260,
     disabled,
@@ -40,7 +39,6 @@ export function TagInput({ value, onChange, suggestions, disabled = false, ariaL
   const selected = new Set(value);
 
   const knownSlugs = new Set(suggestions.map((option) => option.slug));
-  const nameFor = (slug: string) => suggestions.find((option) => option.slug === slug)?.display_name || slug;
   const matches = suggestions
     .filter((tag) => !selected.has(tag.slug) && (query ? (tag.slug.includes(query) || tag.display_name.toLowerCase().includes(query)) : true))
     .slice(0, 50);
@@ -118,12 +116,12 @@ export function TagInput({ value, onChange, suggestions, disabled = false, ariaL
             className={`tag-chip${isNew ? " is-new" : ""}`}
             title={isNew ? `「${tag}」是新标签，提交后会自动创建` : undefined}
           >
-            {nameFor(tag)}
+            {facetDisplayName(suggestions, tag)}
             {!disabled && (
               <button
                 type="button"
                 className="tag-chip-remove"
-                aria-label={`移除标签 ${nameFor(tag)}`}
+                aria-label={`移除标签 ${facetDisplayName(suggestions, tag)}`}
                 onClick={() => removeTag(tag)}
               >
                 <Icon name="close-line" />

@@ -1,5 +1,11 @@
 import { z } from "zod";
-import { adminImagePageLimit, appConfig, importBatchHardLimit, slugPattern } from "@imageshow/shared";
+import {
+  adminImagePageLimit,
+  appConfig,
+  imageCardDensities,
+  importBatchHardLimit,
+  slugPattern
+} from "@imageshow/shared";
 import { adminPasswordInput, adminUsernameInput } from "../users/credentials.ts";
 import { ApiError } from "./http.ts";
 import { isHttpsUrl } from "./url-validation.ts";
@@ -72,10 +78,6 @@ export const tagSlugInput = slugInput;
 export const tagCreateInput = z.object({ slug: tagSlugInput, display_name: displayNameInput.optional().default("") });
 export const tagDisplayUpdateInput = z.object({ display_name: displayNameInput.default("") });
 
-export const imageTagsInput = z.object({
-  tags: z.array(tagSlugInput).max(50).optional().transform((tags) => [...new Set(tags ?? [])])
-});
-
 export const themeSlugInput = slugInput;
 const themeDisplayInput = displayNameInput;
 
@@ -140,6 +142,13 @@ export const passwordChangeInput = z.object({
   current_password: z.string().min(1).max(128),
   new_password: adminPasswordInput
 });
+
+export const adminPreferencesInput = z.strictObject({
+  image_card_density: z.enum(imageCardDensities).optional()
+}).refine(
+  (value) => Object.values(value).some((preference) => preference !== undefined),
+  "至少需要提供一项管理端偏好"
+);
 
 export const imageIdsInput = z.object({
   ids: z.array(uuidInput).min(1).max(200).transform((ids) => [...new Set(ids)])

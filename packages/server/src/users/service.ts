@@ -2,11 +2,11 @@ import { pool } from "../core/db.ts";
 import { ApiError } from "../core/http.ts";
 import { hashPassword, verifyPassword } from "../core/password.ts";
 
-export type AdminUserRecord = { username: string; role: string; created_at: string };
+export type AdminUserRecord = { username: string; role: string };
 
 export async function listAdminUsers(): Promise<AdminUserRecord[]> {
   return (await pool.query(
-    "SELECT username, role, created_at::text AS created_at FROM admin_account ORDER BY (role <> 'super'), username ASC"
+    "SELECT username, role FROM admin_account ORDER BY (role <> 'super'), username ASC"
   )).rows as AdminUserRecord[];
 }
 

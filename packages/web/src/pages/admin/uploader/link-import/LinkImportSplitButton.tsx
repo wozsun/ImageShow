@@ -2,11 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { Icon } from "../../../../components/icon/Icon.js";
 
 export function LinkImportSplitButton({ onOpenUrls, onOpenJsonl }: {
-  onOpenUrls: () => void;
-  onOpenJsonl: () => void;
+  onOpenUrls: (opener: HTMLButtonElement) => void;
+  onOpenJsonl: (opener: HTMLButtonElement) => void;
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const menuTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -26,15 +27,15 @@ export function LinkImportSplitButton({ onOpenUrls, onOpenJsonl }: {
 
   return (
     <div className="link-import-split" ref={rootRef}>
-      <button className="button secondary upload-trigger link-import-main" type="button" onClick={onOpenUrls}>
+      <button className="button secondary upload-trigger link-import-main" type="button" onClick={(event) => onOpenUrls(event.currentTarget)}>
         <Icon name="download-cloud-2-line" />链接导入
       </button>
-      <button className="button secondary link-import-menu-trigger" type="button" title="更多导入方式" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
+      <button ref={menuTriggerRef} className="button secondary link-import-menu-trigger" type="button" title="更多导入方式" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
         <Icon name="arrow-down-s-line" />
       </button>
       {open && (
         <div className="link-import-menu" role="menu">
-          <button type="button" role="menuitem" onClick={() => { setOpen(false); onOpenJsonl(); }}>
+          <button type="button" role="menuitem" onClick={(event) => { setOpen(false); onOpenJsonl(menuTriggerRef.current ?? event.currentTarget); }}>
             <Icon name="file-copy-line" />批量导入
           </button>
         </div>

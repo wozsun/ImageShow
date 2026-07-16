@@ -30,7 +30,7 @@ export function applyPreparedResult(queue: ImportQueueApi, jobId: string, attemp
   // 先认领 md5：同一批并发完成的重复文件不会同时进入“待提交”状态。
   const claim = queue.claimPreparedMd5(jobId, prepared.md5);
   const duplicates = prepared.duplicates ?? [];
-  const duplicateExists = prepared.duplicate_exists || duplicates.length > 0;
+  const duplicateExists = duplicates.length > 0;
   // 服务端已提供稳定预览地址后，释放本地 blob URL，避免上传几十张大图时占用浏览器内存。
   if (current.objectUrl?.startsWith("blob:")) URL.revokeObjectURL(current.objectUrl);
   const resolved = {
@@ -64,7 +64,7 @@ export function applyPreparedResult(queue: ImportQueueApi, jobId: string, attemp
   if (!claim.claimed) return { status: "duplicate", ownerId: claim.ownerId };
   let message = "已就绪，待提交";
   if (duplicateExists) {
-    message = duplicates.length > 0 ? `发现 ${duplicates.length} 张相同图片` : "发现重复图片";
+    message = `发现 ${duplicates.length} 张相同图片`;
   }
   queue.updateJob(jobId, {
     status: "ready",

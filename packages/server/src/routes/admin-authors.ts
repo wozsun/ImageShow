@@ -13,7 +13,6 @@ export function registerAdminAuthorRoutes(app: Hono) {
     list: listAuthorsWithMeta,
     create: async (input) => {
       await upsertAuthor(input.slug, input.display_name, input.link);
-      return {};
     },
     reorder: reorderAuthors,
     batchDelete: deleteAuthors,

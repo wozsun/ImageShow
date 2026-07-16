@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
-import { adminBasePath, defaultSite, publicRootPath } from "../../lib/constants.js";
+import { adminBasePath, publicRootPath } from "../../lib/constants.js";
 import { clearSessionProbeHint, hasSessionProbeHint, rememberSessionProbeHint, useAuthMe, useSiteConfig } from "../../lib/api/site-data.js";
 import { Icon } from "../icon/Icon.js";
 import { MobileNavigation } from "./MobileNavigation.js";
@@ -10,10 +10,10 @@ export function AppHeader() {
   const { data } = useSiteConfig();
   const [shouldProbeSession, setShouldProbeSession] = useState(hasSessionProbeHint);
   const { data: auth } = useAuthMe(shouldProbeSession);
-  const siteName = data?.site?.name ?? defaultSite.name;
+  const siteName = data?.site?.name || "ImageShow";
 
   const homeEnabled = data?.site?.home?.enabled ?? true;
-  const rootPath = publicRootPath(data?.site ?? defaultSite);
+  const rootPath = data?.site ? publicRootPath(data.site) : "/home";
   const showAdminEntry = Boolean(auth?.authenticated);
   const navClassName = (target: "/home" | "/gallery") => ({ isActive }: { isActive: boolean }) =>
     isActive || (pathname === "/" && rootPath === target) ? "active" : undefined;

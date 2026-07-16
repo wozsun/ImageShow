@@ -35,8 +35,8 @@ import type {
 } from "./types.ts";
 
 export type ImportSessionBatchItem =
-  | { idempotency_key: string; id: string; mode: "download" | "proxy"; status: string }
-  | { idempotency_key: string; error: string; code: string };
+  | { idempotency_key: string; id: string }
+  | { idempotency_key: string; error: string };
 
 type CreateImportSessionsOptions = {
   onItemComplete?: (durationMs: number) => void;
@@ -75,9 +75,15 @@ export async function createImportSession(input: ImportCreateInput) {
       `import.create:${input.idempotency_key}`
     ]);
     const existing = (await client.query(
-      "SELECT * FROM import_session WHERE idempotency_key=$1 LIMIT 1",
+      `SELECT id, mode, request_hash, image_time
+         FROM import_session
+        WHERE idempotency_key=$1
+        LIMIT 1`,
       [input.idempotency_key]
-    )).rows[0] as ImportSessionRow | undefined;
+    )).rows[0] as Pick<
+      ImportSessionRow,
+      "id" | "mode" | "request_hash" | "image_time"
+    > | undefined;
 
     let normalizedImageTime;
     try {
@@ -108,14 +114,14 @@ export async function createImportSession(input: ImportCreateInput) {
       if (existing.request_hash !== requestHash) {
         throw new ApiError(409, "idempotency_conflict", "同一幂等键已用于不同导入请求");
       }
-      return existing;
+      return { id: existing.id, mode: existing.mode };
     }
 
     const id = createImageId(normalizedImageTime.date, input.manifest_position);
     return (await client.query(
       `INSERT INTO import_session(id, mode, storage_slug, source_url, expected_size, metadata_payload, idempotency_key, request_hash, image_time, expires_at)
        VALUES($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9,$10)
-       RETURNING *`,
+       RETURNING id, mode`,
       [
         id,
         input.mode,
@@ -128,14 +134,14 @@ export async function createImportSession(input: ImportCreateInput) {
         normalizedImageTime.date,
         new Date(Date.now() + appConfig.uploadTtlSeconds * 1000)
       ]
-    )).rows[0] as ImportSessionRow;
+    )).rows[0] as ImportSessionRecord;
   });
 
   if (await importWasCancelled(result.id)) {
     await pool.query("DELETE FROM import_session WHERE id=$1 AND status='created'", [result.id]);
     throw new ApiError(409, "import_cancelled", "导入已取消");
   }
-  return importSessionResponse(result as ImportSessionRecord);
+  return importSessionResponse(result);
 }
 
 export async function createImportSessions(
@@ -151,15 +157,12 @@ export async function createImportSessions(
       const session = await createImportSession(input);
       return {
         idempotency_key: input.idempotency_key,
-        id: session.id,
-        mode: input.mode,
-        status: session.status
+        id: session.id
       };
     } catch (error) {
       return {
         idempotency_key: input.idempotency_key,
-        error: error instanceof ApiError ? error.message : "创建导入会话失败",
-        code: error instanceof ApiError ? error.code : "import_session_create_failed"
+        error: error instanceof ApiError ? error.message : "创建导入会话失败"
       };
     } finally {
       options.onItemComplete?.(performance.now() - startedAt);
@@ -187,7 +190,6 @@ export async function receiveImportFile(
       setImportPhase(id, "receiving", "服务端接收上传文件");
       await writeRawImport(id, body, Number(claimed.rows[0].expected_size), signal);
     });
-    return { id, status: "receiving" };
   } catch (error) {
     await removeRawImport(id);
     await markImportFailed(id, error);

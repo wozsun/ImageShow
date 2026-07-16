@@ -2,6 +2,7 @@ import { useId, useRef, useState, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import { useAnchoredMenu } from "../../hooks/useAnchoredMenu.js";
 import { reservedSubdomains, slugPattern } from "../../lib/constants.js";
+import { facetDisplayName } from "../../lib/ui/formatters.js";
 import type { AnchoredMenuSize } from "../../lib/ui/menu-position.js";
 import type { FacetOption } from "../../lib/types.js";
 
@@ -23,12 +24,9 @@ export function SlugComboInput({ value, onChange, options, noun, checkReserved =
   const [focused, setFocused] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const menuRef = useRef<HTMLDivElement | null>(null);
   const listId = useId();
-  const nameFor = (slug: string) => options.find((option) => option.slug === slug)?.display_name || slug;
-  const { open, closing, position, opensUp, openMenu, requestClose, onAnimationEnd } = useAnchoredMenu({
+  const { open, closing, position, opensUp, menuRef, openMenu, requestClose, onAnimationEnd } = useAnchoredMenu({
     triggerRef: wrapRef,
-    menuRef,
     getSize: () => MENU_SIZE,
     initialMaxHeight: 260,
     disabled,
@@ -110,7 +108,7 @@ export function SlugComboInput({ value, onChange, options, noun, checkReserved =
     <div className={`slug-combo-control ${className ?? ""}`.trim()} ref={wrapRef}>
       <input
         ref={inputRef}
-        value={focused ? value : nameFor(value)}
+        value={focused ? value : facetDisplayName(options, value)}
         maxLength={32}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}

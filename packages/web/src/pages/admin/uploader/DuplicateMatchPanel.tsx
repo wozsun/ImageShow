@@ -7,6 +7,7 @@ export type ImportPreviewTarget = {
   thumbSrc: string;
   width?: number;
   height?: number;
+  opener?: HTMLElement;
 };
 
 export function DuplicateMatchPanel({
@@ -57,11 +58,12 @@ export function DuplicateMatchPanel({
               type="button"
               className="duplicate-item batch-duplicate-item"
               disabled={!batchDuplicate.available}
-              onClick={() => onPreview({
+              onClick={(event) => onPreview({
                 src: batchDuplicate.previewFull,
                 thumbSrc: batchDuplicate.preview,
                 width: batchDuplicate.width,
-                height: batchDuplicate.height
+                height: batchDuplicate.height,
+                opener: event.currentTarget,
               })}
             >
               {batchDuplicate.preview

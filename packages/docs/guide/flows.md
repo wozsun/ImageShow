@@ -44,7 +44,7 @@ URL ──► 立即创建卡片
 
 ### URL 列表与 JSONL 清单
 
-链接导入按钮提供 URL 列表和 JSONL 清单两种输入方式，二者最终都进入上面的 download / proxy 生命周期。URL 列表按 `link_image.url_list_max_items` 限制单次输入数量；同一批任务通过一个精简控制请求创建会话，返回值只含 attempt 对应的 session 标识，prepare 仍逐任务执行以保留取消、重试和失败隔离。前端为一次选择生成共享 `batch_time`，所以并发 prepare 不会按请求到达时间打乱输入顺序。JSONL 每行一个对象，正式字段为 `original`、`source`、`image_time`、`author`、`tags`、`mode`、`title`、`description`、`theme`、`device`、`brightness`、`storage_slug`；`original` 同时作为下载 URL 和元数据原图 URL，`source` 仅表示来源页面。
+链接导入按钮提供 URL 列表和 JSONL 清单两种输入方式，二者最终都进入上面的 download / proxy 生命周期。URL 列表按 `link_image.url_list_max_items` 限制单次输入数量；同一批任务通过一个精简控制请求创建会话，成功项只返回 attempt 对应的 session ID，prepare 仍逐任务执行以保留取消、重试和失败隔离。单项创建也只返回继续流程所需的 ID、prepare URL，以及仅上传模式需要的 upload URL；模式、初始状态、尚不可用的预览 URL 和服务端过期时间不重复下发。前端为一次选择生成共享 `batch_time`，所以并发 prepare 不会按请求到达时间打乱输入顺序。JSONL 每行一个对象，正式字段为 `original`、`source`、`image_time`、`author`、`tags`、`mode`、`title`、`description`、`theme`、`device`、`brightness`、`storage_slug`；`original` 同时作为下载 URL 和元数据原图 URL，`source` 仅表示来源页面。
 
 JSONL 先请求管理端解析接口，服务端按 `link_image.jsonl_max_items` 限制数量、逐行严格校验并规范化 `image_time`。合法行才创建 `ImportJob`，错误行保留行号、截断后的原文预览和错误原因。字段优先级为“JSONL 行内字段 > 应用到全部默认值 > 系统默认值”；行内 `tags: []` 是显式空标签，不合并默认标签。JSONL 任务默认跳过重复图：判重发生在 prepare 完成并取得转码后最终 MD5 之后；图库重复会显示已有图片的缩略图、标题和分类，点击进入图片详情。JSONL、普通 URL 和代理链接在批内重复时均显示首个任务的转码结果、`original`、JSONL 行号（若有）和分类，点击打开该处理结果预览；随后重复任务立即 cancel 会话、清理自身暂存并记为“已跳过”，不会进入 commit。普通 URL 和代理链接与图库已有图片重复时仍等待用户确认，本地上传的重复处理不变。批内首个任务的预览若在提交后切换为持久图片地址，重复卡片会同步更新；清除首个已完成任务时仍保留该持久快照，提前移除未完成的首个任务则把重复卡片标为不可预览。
 
@@ -98,6 +98,8 @@ commit 不重新下载、不重新转码，也不从远端读回候选文件：
 3. 短事务写 `metadata`、标签关联与会话最终状态；
 4. 事务成功后清理 `_uploads` 候选对象；
 5. 更新随机池和图片读缓存，把相关实体计数列表标为 dirty；只有事务实际创建了新主题、标签或作者时才刷新对应词表。事务后的派生缓存操作可幂等重试。
+
+commit 成功响应只返回导入状态以及队列继续展示所需的最终展示图 URL 和缩略图 URL，不再构造或返回完整图片 DTO。
 
 单个后台页面用 `import.commit_concurrency` 并发调用 commit，服务端再用 `import.global_commit_concurrency` 统一限流。全局许可覆盖上述完整流程，任务成功、失败或请求在排队阶段取消都会释放名额。
 
@@ -162,7 +164,7 @@ GET /api/images?d=&b=&t=&tag=&a=&cursor=&limit=&shuffle=
 GET /api/images/:id
 ```
 
-画廊筛选维度由 `/api/gallery-facets` 单独返回；图片列表按 `image_time DESC, id DESC` 使用 `/api/images` 游标分页与 Redis 缓存，返回字段覆盖卡片与详情首帧展示所需的 `id`、缩略图 URL、标题、标签、主题、作者、设备、尺寸、图片时间和 `diff_original` 原图按钮标记。详情弹窗仍请求 `/api/images/:id`，但只补充 `id`、展示图 URL、描述和来源，不重复返回列表已有字段，也不返回对象键、存储后端、MD5、扩展 JSON 等后台 / 内部字段。浏览器存在登录 hint 时，公开详情会直接请求 `/api/admin/images/:id/admin-info` 获取 `md5`、`image_time`、`created_at`、`updated_at` 与后端算好的 `storage_label`，用于展示 UUID、MD5、存储后端、图片时间、导入时间和更新时间；若该轻量接口返回 401，则清除 hint 并保持普通访客展示。详情响应同样按 `public_images_gen + id` 进入 Redis 缓存。原图按钮会先尝试无 Referer 直连探测；探测结果按原图 URL 和浏览器家族短 TTL 缓存，失败时回退到 link 子域代理。`shuffle=1` 只在出口打乱当前批次，不影响游标和共享缓存。Redis 缓存 miss 时，同进程内会合并相同 key 的并发查询，避免冷启动或失效瞬间重复打 PostgreSQL。
+画廊筛选维度由 `/api/gallery-facets` 单独返回；图片列表按 `image_time DESC, id DESC` 使用 `/api/images` 游标分页与 Redis 缓存，响应只包含卡片数组 `items` 和继续分页所需的 `next_cursor`。卡片字段覆盖详情首帧展示所需的 `id`、缩略图 URL、标题、标签、主题、作者、设备、尺寸、图片时间和 `diff_original` 原图按钮标记。详情弹窗仍请求 `/api/images/:id`，但只补充 `id`、展示图 URL、描述和来源，不重复返回列表已有字段，也不返回对象键、存储后端、MD5、扩展 JSON 等后台 / 内部字段。浏览器存在登录 hint 时，公开详情会直接请求 `/api/admin/images/:id/admin-info` 获取 `md5`、`created_at`、`updated_at` 与后端算好的 `storage_label`，用于补充 UUID、MD5、存储后端、导入时间和更新时间；图片时间继续复用列表项已有的 `image_time`。若该轻量接口返回 401，则清除 hint 并保持普通访客展示。详情响应同样按 `public_images_gen + id` 进入 Redis 缓存。原图按钮会先尝试无 Referer 直连探测；探测结果按原图 URL 和浏览器家族短 TTL 缓存，失败时回退到 link 子域代理。`shuffle=1` 只在出口打乱当前批次，不影响游标和共享缓存。Redis 缓存 miss 时，同进程内会合并相同 key 的并发查询，避免冷启动或失效瞬间重复打 PostgreSQL。
 
 ## 后台管理
 
@@ -175,9 +177,9 @@ GET /api/images/:id
 
 只改标题、描述、来源、原图 URL 或作者时不搬对象。修改设备、明暗或主题时：事务外预拷贝候选对象键，事务内更新 metadata，提交后删除旧对象并重建缩略图；异常回滚会清理预拷贝。link 图片不搬外部原图，但会移动按分类组织的 `link` 缩略图。所有影响随机筛选的变更都会同步 Redis 随机池。
 
-批量编辑只提交实际发生变化的图片和字段；服务端拒绝重复图片 ID、没有 metadata/tags 的空更新项，以及去重后仍超过上限的 tags。不同图片以固定低并发 2 执行，同一图片仍严格保持 metadata 后 tags 的顺序；分类与对象路径变化继续服从存储 mutation lock，不使用覆盖整批的长事务。单项失败不会阻止后续图片，响应包含 `requested`、`updated`、`failed` 和与请求同序的 `results`。前端保存后移除成功项、保留失败项草稿并显示 ID 与公开错误信息，再次保存只提交失败或仍有变化的图片。
+批量编辑只提交实际发生变化的图片和字段；服务端拒绝重复图片 ID、没有 metadata/tags 的空更新项，以及去重后仍超过上限的 tags。不同图片以固定低并发 2 执行，同一图片仍严格保持 metadata 后 tags 的顺序；分类与对象路径变化继续服从存储 mutation lock，不使用覆盖整批的长事务。单项失败不会阻止后续图片，响应包含 `updated`、`failed` 和与请求同序的 `results`；请求数量可由请求项或两项统计直接得出，不重复返回。前端保存后移除成功项、保留失败项草稿并显示 ID 与公开错误信息，再次保存只提交失败或仍有变化的图片。
 
-metadata 与 tags 各自提交后只登记派生状态修复计划；批量专用调用不构造无人使用的完整单图 presenter，避免 metadata 后额外查询一次标签。整个批次完成数据库 / 存储步骤后，再把所有已提交图片合并为一次 `syncRandomImages()`、一次图片读缓存 generation 失效、一次 MD5 批量失效和一次 lookup 精确失效。即使 metadata 已成功而 tags 失败，该图片仍在最终修复计划内。新建 theme、tag、author 的词表及时刷新；实体计数缓存由并发安全的批处理收集器汇总，在批次末尾统一失效。单图 API 不经过该协调器，继续保持原有即时同步与返回行为。
+metadata 与 tags 各自提交后只登记派生状态修复计划；批量更新调用不构造无人使用的完整单图 presenter，避免 metadata 后额外查询一次标签。整个批次完成数据库 / 存储步骤后，再把所有已提交图片合并为一次 `syncRandomImages()`、一次图片读缓存 generation 失效、一次 MD5 批量失效和一次 lookup 精确失效。即使 metadata 已成功而 tags 失败，该图片仍在最终修复计划内。新建 theme、tag、author 的词表及时刷新；实体计数缓存由并发安全的批处理收集器汇总，在批次末尾统一失效。单图编辑同样向该端点提交一项，不再保留重复的单图元数据修改路由。
 
 ## 删除生命周期
 

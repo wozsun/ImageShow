@@ -6,13 +6,16 @@ import {
   publicImagesCacheGeneration,
   setAdminOverviewCache
 } from "../image-cache.ts";
-import { publicImages, type ImageRecord } from "../presenter.ts";
+import {
+  overviewRecentImage,
+  type OverviewRecentImageRecord
+} from "../presenter.ts";
 
 type OverviewStats = Awaited<ReturnType<typeof buildOverviewStats>>;
 
 export async function getOverviewStats() {
   const generation = await publicImagesCacheGeneration();
-  const cacheKey = generation;
+  const cacheKey = `v2:${generation}`;
   const cached = await getAdminOverviewCache<OverviewStats>(cacheKey);
   if (cached) return cached;
 
@@ -61,14 +64,20 @@ async function buildOverviewStats() {
       LIMIT 8
     `),
     pool.query(
-      "SELECT * FROM metadata WHERE status='ready' ORDER BY created_at DESC, id DESC LIMIT $1",
+      `SELECT id, device, brightness, theme, ext, object_key, storage_slug, is_link, title
+         FROM metadata
+        WHERE status='ready'
+        ORDER BY created_at DESC, id DESC
+        LIMIT $1`,
       [recentLimit]
     ),
     pool.query("SELECT count(*)::int AS n FROM storage_backend")
   ]);
 
   const row = statsResult.rows[0];
-  const recent = await publicImages(recentResult.rows as ImageRecord[]);
+  const recent = await Promise.all(
+    (recentResult.rows as OverviewRecentImageRecord[]).map(overviewRecentImage)
+  );
   return {
     gallery: row.gallery,
     theme_unset: row.theme_unset,
@@ -93,11 +102,6 @@ async function buildOverviewStats() {
       theme: item.theme,
       count: item.count
     })),
-    recent: recent.map((item) => ({
-      id: item.id,
-      title: item.title,
-      thumb_url: item.thumb_url,
-      created_at: item.created_at
-    }))
+    recent
   };
 }

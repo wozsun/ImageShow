@@ -1,6 +1,7 @@
 import { createPortal } from "react-dom";
 import { useEffect, useRef, useState } from "react";
 import { useAnchoredMenu } from "../../hooks/useAnchoredMenu.js";
+import { facetDisplayName } from "../../lib/ui/formatters.js";
 import type { AnchoredMenuSize } from "../../lib/ui/menu-position.js";
 import type { FacetOption } from "../../lib/types.js";
 
@@ -27,12 +28,9 @@ export function FacetSelector({ options, value, onChange, noun, disabled = false
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState<FacetMode>(parsed.exclude ? "exclude" : "include");
   const triggerRef = useRef<HTMLButtonElement | null>(null);
-  const menuRef = useRef<HTMLDivElement | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
-  const { open, closing, position, opensUp, openMenu, requestClose, onAnimationEnd } = useAnchoredMenu({
+  const { open, closing, position, opensUp, menuRef, openMenu, requestClose, onAnimationEnd } = useAnchoredMenu({
     triggerRef,
-    menuRef,
-
     getSize: (): AnchoredMenuSize => ({ minWidth: 300, maxWidth: window.innerWidth - 16, flipThreshold: 260, minAvailable: 180, maxHeight: 420 }),
     initialMaxHeight: 420,
     disabled,
@@ -41,7 +39,6 @@ export function FacetSelector({ options, value, onChange, noun, disabled = false
     closeOnFocusOutside: true,
     focusOnOpen: () => searchRef.current
   });
-  const nameFor = (slug: string) => options.find((option) => option.slug === slug)?.display_name || slug;
   const selectedSet = new Set(parsed.selected);
   const normalizedQuery = query.trim().toLowerCase();
   const results = normalizedQuery
@@ -100,10 +97,10 @@ export function FacetSelector({ options, value, onChange, noun, disabled = false
             <button
               type="button"
               key={slug}
-              title={`移除 ${nameFor(slug)}`}
+              title={`移除 ${facetDisplayName(options, slug)}`}
               onClick={() => emitSelection(parsed.selected.filter((item) => item !== slug))}
             >
-              {nameFor(slug)}<span aria-hidden="true">×</span>
+              {facetDisplayName(options, slug)}<span aria-hidden="true">×</span>
             </button>
           ))}
           {!parsed.selected.length && <span className="muted">尚未选择，默认使用全部{noun}</span>}

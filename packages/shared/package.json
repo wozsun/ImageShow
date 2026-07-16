@@ -1,9 +1,19 @@
 {
   "name": "@imageshow/shared",
-  "version": "3.6.3",
+  "version": "3.7.0",
   "type": "module",
   "main": "dist/app-config.js",
   "types": "dist/app-config.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/app-config.d.ts",
+      "default": "./dist/app-config.js"
+    },
+    "./browser": {
+      "types": "./dist/browser.d.ts",
+      "default": "./dist/browser.js"
+    }
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit"

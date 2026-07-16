@@ -11,9 +11,9 @@ type EntityRouteOptions<CreateSchema extends z.ZodType, UpdateSchema extends z.Z
   createInput: CreateSchema;
   updateInput: UpdateSchema;
   list: () => Promise<unknown[]>;
-  create: (input: z.infer<CreateSchema>) => Promise<Record<string, unknown>>;
+  create: (input: z.infer<CreateSchema>) => Promise<void>;
   reorder: (slugs: string[]) => Promise<void>;
-  batchDelete: (slugs: string[]) => Promise<Record<string, unknown>>;
+  batchDelete: (slugs: string[]) => Promise<void>;
   update: (slug: string, input: z.infer<UpdateSchema>) => Promise<void>;
   remove: (slug: string) => Promise<void>;
 };
@@ -27,7 +27,8 @@ export function registerAdminEntityRoutes<
 
   app.post(base, async (c) => {
     const input = parse(options.createInput, await c.req.json().catch(() => ({})));
-    return c.json(ok(await options.create(input)));
+    await options.create(input);
+    return c.json(ok());
   });
 
   app.post(`${base}/reorder`, async (c) => {
@@ -38,7 +39,8 @@ export function registerAdminEntityRoutes<
 
   app.post(`${base}/batch-delete`, async (c) => {
     const input = parse(slugListInput, await c.req.json().catch(() => ({})));
-    return c.json(ok(await options.batchDelete(input.slugs)));
+    await options.batchDelete(input.slugs);
+    return c.json(ok());
   });
 
   app.post(`${base}/:slug`, async (c) => {

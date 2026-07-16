@@ -65,7 +65,6 @@ export async function updateImagesBatch(
           await updateImageMetadata(id, metadata, {
             entityCountInvalidationBatch,
             mutationSyncBatch,
-            presentResult: false,
           });
         }
         if (tags !== undefined) {

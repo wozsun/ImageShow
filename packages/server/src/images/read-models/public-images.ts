@@ -29,10 +29,7 @@ import { fetchPublicImageCardPage } from "./pagination.ts";
 type PublicListQuery = z.infer<typeof listQuery>;
 type PublicImageListPayload = {
   items: PublicImageCard[];
-  limit: number;
-  has_next: boolean;
   next_cursor: string | null;
-  total: null;
 };
 
 function publicImageListCacheKey(q: {
@@ -95,7 +92,7 @@ export async function listPublicImages(
 ): Promise<PublicImageListPayload> {
   const limit = query.limit ?? getRuntimeConfig().site.gallery.default_limit;
   const generation = await publicImagesCacheGeneration();
-  const cacheKey = `${generation}:${publicImageListCacheKey({
+  const cacheKey = `v2:${generation}:${publicImageListCacheKey({
     ...query,
     limit
   })}`;
@@ -153,10 +150,7 @@ export async function listPublicImages(
     const page = await fetchPublicImageCardPage(where, params, limit, query.cursor);
     const fresh: PublicImageListPayload = {
       items: page.items,
-      limit,
-      has_next: page.hasNext,
-      next_cursor: page.nextCursor,
-      total: null
+      next_cursor: page.nextCursor
     };
     await Promise.all([
       warmObjectLookups(page.rows),

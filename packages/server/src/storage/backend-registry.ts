@@ -131,7 +131,6 @@ export async function listStorageBackendOptions() {
   return (await getStorageBackends()).map((backend) => ({
     slug: backend.slug,
     display_name: backend.display_name,
-    type: backend.type,
     enabled: backend.enabled,
     is_default: backend.is_default
   }));
@@ -139,23 +138,36 @@ export async function listStorageBackendOptions() {
 
 export async function getStorageBackendsForAdmin() {
   const backends = await getStorageBackends();
-  return backends.map((backend) => ({
-    slug: backend.slug,
-    display_name: backend.display_name,
-    type: backend.type,
-    enabled: backend.enabled,
-    is_default: backend.is_default,
-    s3: {
-      ...backend.s3,
-      secret_access_key: undefined,
-      secret_access_key_configured: Boolean(backend.s3.secret_access_key)
-    },
-    webdav: {
-      ...backend.webdav,
-      password: undefined,
-      password_configured: Boolean(backend.webdav.password)
+  return backends.map((backend) => {
+    const summary = {
+      slug: backend.slug,
+      display_name: backend.display_name,
+      type: backend.type,
+      enabled: backend.enabled,
+      is_default: backend.is_default
+    };
+    if (backend.type === "s3") {
+      const { secret_access_key, ...s3 } = backend.s3;
+      return {
+        ...summary,
+        s3: {
+          ...s3,
+          secret_access_key_configured: Boolean(secret_access_key)
+        }
+      };
     }
-  }));
+    if (backend.type === "webdav") {
+      const { password, ...webdav } = backend.webdav;
+      return {
+        ...summary,
+        webdav: {
+          ...webdav,
+          password_configured: Boolean(password)
+        }
+      };
+    }
+    return summary;
+  });
 }
 
 export async function createStorageBackend(input: StorageBackendCreateInput) {

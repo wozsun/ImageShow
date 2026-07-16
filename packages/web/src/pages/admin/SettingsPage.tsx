@@ -49,8 +49,14 @@ export function SettingsPage() {
         method: "POST",
         body: JSON.stringify({
           site,
-          upload: settings.upload,
-          link_image: settings.link_image,
+          upload: {
+            list_page_size: settings.upload.list_page_size,
+            concurrency: settings.upload.concurrency
+          },
+          link_image: {
+            fill_original_url: settings.link_image.fill_original_url,
+            concurrency: settings.link_image.concurrency
+          },
           normalize: settings.normalize,
           thumbnail: settings.thumbnail,
           admin: settings.admin,

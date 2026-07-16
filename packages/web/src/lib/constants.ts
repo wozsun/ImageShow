@@ -1,5 +1,11 @@
 import type { SiteSettings } from "./types.js";
-export { adminApiBasePath, adminBasePath, reservedSubdomains, slugPattern } from "@imageshow/shared";
+export {
+  adminApiBasePath,
+  adminBasePath,
+  adminImagePageLimit,
+  reservedSubdomains,
+  slugPattern
+} from "@imageshow/shared/browser";
 
 export const queryKeys = {
   siteConfig: ["site-config"] as const,
@@ -15,6 +21,7 @@ export const queryKeys = {
   importVocabulary: ["import-vocabulary"] as const,
   users: ["users"] as const,
   settings: ["settings"] as const,
+  adminPreferences: ["admin-preferences"] as const,
   logs: ["admin-logs"] as const,
   me: ["me"] as const
 };
@@ -27,21 +34,6 @@ export const eagerThumbnailCount = 12;
 
 export const galleryLazyRootMargin = "360px 0px";
 export const gallerySentinelRootMargin = "280px 0px";
-export const defaultSite: SiteSettings = {
-  name: "ImageShow",
-  domain: "img.example.com",
-  icon_url: "/assets/brand/favicon.svg",
-  root_redirect: "home",
-  home: {
-    enabled: true,
-    tagline: "个人图片管理、画廊展示和随机图片 API。",
-    hero_background: "",
-    preview_delay_ms: 1000
-  },
-  gallery: { default_limit: 60, order: "random" },
-  random_default_method: "redirect",
-  docs_enabled: true
-};
 
 export function publicRootPath(
   site: Pick<SiteSettings, "root_redirect" | "home">

@@ -340,7 +340,7 @@
   border-top: 1px solid #e3e8ef;
 }
 .image-detail-admin-toggle {
-  --pressable-active-scale: 1;
+  --pressable-active-scale: var(--pressable-scale-large, .99);
   width: 100%;
   min-height: 34px;
   justify-content: flex-start;

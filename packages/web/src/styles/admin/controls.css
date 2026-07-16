@@ -13,6 +13,9 @@
 }
 .proxy-image-note .app-icon { width: 11px; height: 11px; flex-basis: 11px; }
 
+/* 提交/保存的文案会在空闲与处理中切换；预留四个汉字的内容宽度，避免按钮跳动。 */
+.workflow-submit-button { min-width: calc(4em + 26px); }
+
 .action-feedback {
   margin: 12px 0 0;
   padding: 12px 14px;
@@ -109,7 +112,7 @@
   transition: color .16s ease, transform .1s ease;
 }
 .password-toggle:hover:not(:disabled) { color: #1f6feb; }
-.password-toggle:active:not(:disabled) { transform: scale(.96); }
+.password-toggle:active:not(:disabled) { transform: scale(var(--pressable-scale-small, .97)); }
 
 input.is-changed,
 textarea.is-changed,

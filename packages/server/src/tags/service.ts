@@ -11,7 +11,6 @@ import {
   refreshEntityVocabularies,
   type EntityCountCacheInvalidationBatch,
 } from "../vocab/vocab-cache.ts";
-import type { Tag } from "./types.ts";
 import { resolveTagNames } from "./query.ts";
 
 async function refreshTagDefinitionCaches(options: { facets?: boolean } = {}) {
@@ -23,21 +22,18 @@ async function refreshTagDefinitionCaches(options: { facets?: boolean } = {}) {
   await Promise.all(tasks);
 }
 
-export async function upsertTag(slug: string, displayName = ""): Promise<Tag> {
+export async function upsertTag(slug: string, displayName = "") {
   if (slug.length > 32 || !slugPattern.test(slug)) {
     throw new ApiError(400, "invalid_tag", "Tag slug must be a lowercase slug (a-z, 0-9, -), <=32 chars", { slug });
   }
 
-  const tag = (await pool.query(
+  await pool.query(
     `INSERT INTO tag(slug, display_name, sort_order)
      VALUES($1, $2, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM tag))
-     ON CONFLICT (slug) DO UPDATE SET display_name = EXCLUDED.display_name, updated_at = now()
-     RETURNING slug, display_name,
-               (SELECT count(*)::int FROM image_tag it WHERE it.tag_slug = tag.slug) AS image_count`,
+     ON CONFLICT (slug) DO UPDATE SET display_name = EXCLUDED.display_name, updated_at = now()`,
     [slug, displayName]
-  )).rows[0] as Tag;
+  );
   await refreshTagDefinitionCaches();
-  return tag;
 }
 
 export async function reorderTags(slugs: string[]) {
@@ -53,7 +49,7 @@ export async function reorderTags(slugs: string[]) {
 
 export async function deleteTags(slugs: string[]) {
   const targets = [...new Set(slugs)];
-  if (!targets.length) return { deleted: 0 };
+  if (!targets.length) return;
   const result = await pool.query("DELETE FROM tag WHERE slug = ANY($1::text[])", [targets]);
   if (result.rowCount) {
     await rebuildRandomPool();
@@ -62,7 +58,6 @@ export async function deleteTags(slugs: string[]) {
       refreshTagDefinitionCaches({ facets: false }),
     ]);
   }
-  return { deleted: result.rowCount ?? 0 };
 }
 
 export async function setTagDisplayName(slug: string, displayName: string) {
@@ -113,7 +108,7 @@ export async function replaceImageTags(client: PoolClient, imageId: string, slug
   };
 }
 
-export async function setImageTags(imageId: string, names: string[], options: SetImageTagsOptions = {}): Promise<string[]> {
+export async function setImageTags(imageId: string, names: string[], options: SetImageTagsOptions = {}) {
   const resolved = await resolveTagNames(names);
   const mutation = await withTransaction(async (client) => {
     return replaceImageTags(client, imageId, resolved);
@@ -134,5 +129,4 @@ export async function setImageTags(imageId: string, names: string[], options: Se
     (result): result is PromiseRejectedResult => result.status === "rejected"
   );
   if (failedRepair) throw failedRepair.reason;
-  return [...resolved].sort();
 }

@@ -6,7 +6,7 @@ import { adminApiBasePath, adminBasePath, queryKeys } from "../../lib/constants.
 import { formatBytes } from "../../lib/ui/formatters.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
 
-type RecentImage = { id: string; title: string; thumb_url: string; created_at: string | null };
+type RecentImage = { id: string; title: string; thumb_url: string };
 type ThemeCount = { theme: string; count: number };
 type OverviewStats = {
   gallery: number;

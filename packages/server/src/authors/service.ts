@@ -82,13 +82,14 @@ export async function deleteAuthor(slug: string) {
 
 export async function deleteAuthors(slugs: string[]) {
   const targets = [...new Set(slugs)];
-  if (!targets.length) return { deleted: 0 };
+  if (!targets.length) return;
   let cleared = false;
-  let deleted = 0;
+  let deletedAny = false;
   for (const slug of targets) {
     if (!(await pool.query("SELECT 1 FROM author WHERE slug=$1", [slug])).rowCount) continue;
     if (await authorHasImages(slug)) cleared = true;
-    deleted += (await pool.query("DELETE FROM author WHERE slug=$1", [slug])).rowCount ?? 0;
+    const result = await pool.query("DELETE FROM author WHERE slug=$1", [slug]);
+    deletedAny = Boolean(result.rowCount) || deletedAny;
   }
   if (cleared) {
     await rebuildRandomPool();
@@ -96,6 +97,5 @@ export async function deleteAuthors(slugs: string[]) {
       invalidateImageReadCaches(),
       refreshAuthorDefinitionCaches({ facets: false }),
     ]);
-  } else if (deleted) await refreshAuthorDefinitionCaches();
-  return { deleted };
+  } else if (deletedAny) await refreshAuthorDefinitionCaches();
 }

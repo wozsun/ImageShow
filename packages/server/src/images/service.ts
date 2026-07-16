@@ -23,20 +23,53 @@ import {
 } from "../vocab/vocab-cache.ts";
 import { detectBrightness } from "./brightness.ts";
 import { deviceFromDimensions, resolveOptionalBrightnessWith, resolveOptionalDeviceWith } from "./classification.ts";
-import { publicImage, type ImageRecord } from "./presenter.ts";
+import type { ImageRecord } from "./presenter.ts";
 import {
   applyOrCollectImageMutationSync,
   type ImageMutationSyncBatch,
 } from "./mutation-sync.ts";
 
-async function detectImageBrightness(image: ImageRecord) {
+type MutationImageRecord = Pick<
+  ImageRecord,
+  | "id"
+  | "device"
+  | "brightness"
+  | "theme"
+  | "width"
+  | "height"
+  | "ext"
+  | "md5"
+  | "object_key"
+  | "storage_slug"
+  | "is_link"
+  | "author"
+  | "status"
+>;
+
+const mutationImageColumns = [
+  "id",
+  "device",
+  "brightness",
+  "theme",
+  "width",
+  "height",
+  "ext",
+  "md5",
+  "object_key",
+  "storage_slug",
+  "is_link",
+  "author",
+  "status"
+].join(", ");
+
+async function detectImageBrightness(image: MutationImageRecord) {
   if (image.status !== "ready") return undefined;
   const thumb = thumbnailRef(image);
   if (!(await exists(thumb.prefix, thumb.key, thumb.slug))) return undefined;
   return detectBrightness(await readStorageBuffer(thumb.prefix, thumb.key, thumb.slug));
 }
 
-function detectImageDevice(image: ImageRecord) {
+function detectImageDevice(image: MutationImageRecord) {
   if (image.status !== "ready") return undefined;
   return deviceFromDimensions(image.width, image.height);
 }
@@ -44,7 +77,6 @@ function detectImageDevice(image: ImageRecord) {
 type ImageMutationOptions = {
   entityCountInvalidationBatch?: EntityCountCacheInvalidationBatch;
   mutationSyncBatch?: ImageMutationSyncBatch;
-  presentResult?: boolean;
 };
 
 async function applyImageFieldEdits(
@@ -58,12 +90,20 @@ async function applyImageFieldEdits(
   },
   authorValue: string | null,
   touchAuthor: boolean,
-): Promise<ImageRecord> {
+): Promise<MutationImageRecord> {
   const result = await executor.query(
-    "UPDATE metadata SET title=COALESCE($2,title), description=COALESCE($3,description), source=COALESCE($4,source), original=COALESCE($5,original), author=CASE WHEN $7::boolean THEN $6 ELSE author END, updated_at=now() WHERE id=$1 RETURNING *",
+    `UPDATE metadata
+        SET title=COALESCE($2,title),
+            description=COALESCE($3,description),
+            source=COALESCE($4,source),
+            original=COALESCE($5,original),
+            author=CASE WHEN $7::boolean THEN $6 ELSE author END,
+            updated_at=now()
+      WHERE id=$1
+      RETURNING ${mutationImageColumns}`,
     [id, fields.title, fields.description, fields.source, fields.original, authorValue, touchAuthor],
   );
-  return result.rows[0] as ImageRecord;
+  return result.rows[0] as MutationImageRecord;
 }
 
 export async function deleteImage(id: string) {
@@ -82,7 +122,10 @@ export async function deleteImage(id: string) {
 }
 
 export async function updateImageMetadata(id: string, body: unknown, options: ImageMutationOptions = {}) {
-  const current = (await pool.query("SELECT * FROM metadata WHERE id=$1", [id])).rows[0] as ImageRecord | undefined;
+  const current = (await pool.query(
+    `SELECT ${mutationImageColumns} FROM metadata WHERE id=$1`,
+    [id]
+  )).rows[0] as MutationImageRecord | undefined;
   if (!current) throw new ApiError(404, "not_found", "Image not found");
 
   const parsed = parse(metadataUpdateInput, body);
@@ -103,7 +146,7 @@ export async function updateImageMetadata(id: string, body: unknown, options: Im
 
   if (!classificationChanged) {
     const createdAuthor = next.author ? await ensureAuthor(pool, next.author) : false;
-    const updated = await applyImageFieldEdits(pool, id, next, authorValue, touchAuthor);
+    await applyImageFieldEdits(pool, id, next, authorValue, touchAuthor);
     const cacheTasks: Array<Promise<unknown>> = [applyOrCollectImageMutationSync({
       id,
       md5: current.md5 ?? "",
@@ -117,7 +160,7 @@ export async function updateImageMetadata(id: string, body: unknown, options: Im
     }
     if (createdAuthor) cacheTasks.push(refreshEntityVocabularies(["author"]));
     await Promise.all(cacheTasks);
-    return (options.presentResult ?? true) ? publicImage(updated) : undefined;
+    return;
   }
 
   return withStorageMutationLock(async () => {
@@ -155,13 +198,16 @@ export async function updateImageMetadata(id: string, body: unknown, options: Im
 
     const client = await pool.connect();
     let sourceImage = current;
-    let updated: ImageRecord | null = null;
+    let updated: MutationImageRecord | null = null;
     let committedObjectKey = "";
     let copiedObjectKey = "";
     const createdEntityKinds = new Set<EntityCacheKind>();
     try {
       await client.query("BEGIN");
-      const locked = (await client.query("SELECT * FROM metadata WHERE id=$1 FOR UPDATE", [id])).rows[0] as ImageRecord | undefined;
+      const locked = (await client.query(
+        `SELECT ${mutationImageColumns} FROM metadata WHERE id=$1 FOR UPDATE`,
+        [id]
+      )).rows[0] as MutationImageRecord | undefined;
       if (!locked) throw new ApiError(404, "not_found", "Image not found");
       if (locked.status !== "ready") throw new ApiError(409, "invalid_image_state", "Only ready images can change category");
       sourceImage = locked;
@@ -189,10 +235,22 @@ export async function updateImageMetadata(id: string, body: unknown, options: Im
         }
 
         const result = await client.query(
-          "UPDATE metadata SET device=$2, brightness=$3, theme=$4, object_key=$5, title=COALESCE($6,title), description=COALESCE($7,description), source=COALESCE($8,source), original=COALESCE($9,original), author=CASE WHEN $11::boolean THEN $10 ELSE author END, updated_at=now() WHERE id=$1 RETURNING *",
+          `UPDATE metadata
+              SET device=$2,
+                  brightness=$3,
+                  theme=$4,
+                  object_key=$5,
+                  title=COALESCE($6,title),
+                  description=COALESCE($7,description),
+                  source=COALESCE($8,source),
+                  original=COALESCE($9,original),
+                  author=CASE WHEN $11::boolean THEN $10 ELSE author END,
+                  updated_at=now()
+            WHERE id=$1
+            RETURNING ${mutationImageColumns}`,
           [id, device, brightness, theme, nextObjectKey, next.title, next.description, next.source, next.original, authorValue, touchAuthor],
         );
-        updated = result.rows[0] as ImageRecord;
+        updated = result.rows[0] as MutationImageRecord;
         await client.query("COMMIT");
         committedObjectKey = nextObjectKey;
       }
@@ -272,8 +330,6 @@ export async function updateImageMetadata(id: string, body: unknown, options: Im
       ),
       refreshEntityVocabularies(createdEntityKinds),
     ]);
-    if (!(options.presentResult ?? true)) return undefined;
-    return publicImage(updated ?? ((await pool.query("SELECT * FROM metadata WHERE id=$1", [id])).rows[0] as ImageRecord));
   });
 }
 
@@ -292,12 +348,9 @@ export async function migrateImagesStorage(
   options: BatchStorageMigrationOptions = {},
 ) {
   const rows = (await pool.query("SELECT id, object_key, ext, status, storage_slug, is_link, device, brightness, theme FROM metadata WHERE id = ANY($1::uuid[])", [ids])).rows;
-  const foundIds = new Set(rows.map((row) => String(row.id)));
-  const missingIds = ids.filter((id) => !foundIds.has(id));
   let migrated = 0;
   let unchanged = 0;
-  let failed = missingIds.length;
-  const failedIds: string[] = [...missingIds];
+  let failed = ids.length - rows.length;
   const migratedIds: string[] = [];
   let maxItemDurationMs = 0;
   let randomPoolFullRebuildTriggered = false;
@@ -312,13 +365,11 @@ export async function migrateImagesStorage(
         migratedIds.push(row.id);
       } else if (result === "missing") {
         failed += 1;
-        failedIds.push(row.id);
       } else {
         unchanged += 1;
       }
     } catch {
       failed += 1;
-      failedIds.push(row.id);
     } finally {
       maxItemDurationMs = Math.max(maxItemDurationMs, performance.now() - itemStartedAt);
     }
@@ -340,7 +391,6 @@ export async function migrateImagesStorage(
     requested: ids.length,
     migrated,
     unchanged,
-    failed,
-    failed_ids: failedIds,
+    failed
   };
 }

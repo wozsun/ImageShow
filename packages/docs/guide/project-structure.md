@@ -25,7 +25,8 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 
 | 文件 | 职责 |
 | --- | --- |
-| `app-config.ts` | 唯一的共享配置常量与纯类型源：`appConfig` 默认值、分页 / 缩略图 / 随机去重 / 链接导入超时 / 后台任务重试等常量；导出 `Device` / `Brightness` / `ImageExt` / `RuntimeConfig` / `AdminSettings` / `SiteSettings`、`reservedSubdomains`、`adminApiBasePath` 等前后端共用项。 |
+| `app-config.ts` | 服务端完整配置常量与共享类型源：`appConfig` 默认值、分页 / 缩略图 / 随机去重 / 链接导入超时 / 后台任务重试等常量；导出 `Device` / `Brightness` / `ImageExt` / `RuntimeConfig`、最小化后台响应 `AdminSettings` 与 `SiteSettings`。 |
+| `browser.ts` | 可安全进入浏览器产物的独立子入口：管理路径、校验长度、slug 规则、保留子域名与管理员界面偏好键和值域。Web 运行时值只从 `@imageshow/shared/browser` 导入，避免带入数据库、Redis 等服务端默认配置。 |
 
 ## packages/server —— 后端
 
@@ -41,7 +42,7 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | `config/config-package.ts` | `imageshow-config` 版本化配置包的构建、严格解析、敏感存储配置投影、slug 冲突预检和带普通异常补偿的导入编排。 |
 | `config/full-config.ts` | 完整运行时配置的危险字段差异、只读预检、共享写锁与精准保存编排。 |
 | `config/fields.ts` | 运行时配置字段的 zod 边界值：站点、上传、链接导入、标准化、缩略图、安全、验证码和日志等设置校验。 |
-| `config/app-settings.ts` | 可编辑应用设置的输入 schema、后台设置 DTO、公开站点配置和图片输入 / 缩略图运行时设置；不负责存储后端注册表。 |
+| `config/app-settings.ts` | 设置页可编辑字段的严格嵌套 patch schema、按前端实际用途投影的最小后台设置 DTO、公开站点配置和图片输入 / 缩略图运行时设置；不返回连接配置、完整默认值或纯服务端限流字段，也不负责存储后端注册表。 |
 
 ### core/ —— 基础设施
 
@@ -94,7 +95,7 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | `images/image-cache.ts` | 图片读缓存：公共列表 generation、公共列表 / 公开详情缓存、后台概览缓存、原图直连探测缓存、Redis 8 `HSETEX` 原子写入且字段 TTL 独立为 6 小时的对象键 / 缩略图键 / 图片 id lookup、MD5 判重缓存，以及公共 generation / facets / 定向 lookup 分层失效；不触发实体缓存刷新。 |
 | `images/serving.ts` | 存储对象、缩略图、link 与后台字节出口；集中处理 Content-Length、内容 / 对象版本 ETag、304、单段 Range / If-Range、外部回源代理、原图直连探测及其短 TTL 缓存、缓存策略和缩略图缺失时的乐观读取 / 补建。 |
 | `images/original-link.ts` | 原图入口判断工具：计算展示 URL、规范化比较 URL，并只在 `original` 为 HTTPS 且不同于展示图时开放原图按钮 / 跳转。 |
-| `images/presenter.ts` | `publicImage()` / `publicImages()` 把 DB 行变成后台可复用的完整图片视图、`publicImageDetail()`（公开详情字段白名单）、`publicImageCard()`（公共列表卡片白名单）、`adminImageView()`（后台投影：去 `ext`、已删除图改指鉴权字节端点）。缓存键与 lookup 预热归读取 / 缓存模块。 |
+| `images/presenter.ts` | `publicImage()` / `publicImages()` 把 DB 行变成后台可复用的完整图片视图、`publicImageDetail()`（公开详情字段白名单）、`publicImageCard()`（公共列表卡片白名单）、`importCommitImage()`（提交结果仅投影最终 URL）、`adminImageView()`（后台投影：去 `ext`、已删除图改指鉴权字节端点）。缓存键与 lookup 预热归读取 / 缓存模块。 |
 | `images/processing.ts` | sharp 封装：图片格式 / 尺寸探测、缩略图、`transcodeStoredImage()`、`generateStoredThumbnail()`，以及运行时 Sharp 并发配置。 |
 | `images/classification.ts` | 设备 / 明暗三态分类工具：`auto` 解析、按宽高落设备、导入与编辑共用的最终分类收敛。 |
 | `images/image-time.ts` | 图片展示时间专用解析与 UUIDv7 生成：用原生 Temporal 处理带偏移 ISO 8601、按 `TZ` 严格解析无偏移本地时间并拒绝夏令时歧义；JSONL 可把临时清单位置映射到 `rand_a`。 |
@@ -119,6 +120,7 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | `users/admin-bootstrap.ts` · `users/credentials.ts` | advisory lock 保护的首个 super 初始化，以及初始化、后台接口和恢复 CLI 共用的账号规则。 |
 | `users/password-{recovery,upgrade}.ts` | 紧急密码恢复与登录成功后的旧参数哈希条件升级。 |
 | `users/session-invalidation.ts` · `users/admin-password-command.ts` | Redis 管理会话全量 / 按账号失效和恢复命令参数解析。 |
+| `users/preferences.ts` | 按管理员用户名隔离的 Redis 界面偏好读写、已知值过滤与账号删除清理；不写 PostgreSQL。 |
 | `users/service.ts` | 后台管理员查询，以及 image 管理员创建、密码重置和删除。 |
 
 ### random/ —— 随机图 API
@@ -161,6 +163,7 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | `routes/admin-images.ts` | 后台图片增删改查、单请求批量元数据 / 标签编辑、迁移、回收站原图、登录态轻量 `admin-info` |
 | `routes/imports.ts` | 统一 `/api/admin/imports/*`：JSONL parse、create、PUT file、prepare、preview、status、SSE events、commit、cancel |
 | `routes/admin-tags.ts` · `admin-themes.ts` · `admin-authors.ts` · `admin-users.ts` | 标签 / 主题 / 作者 / 用户管理 |
+| `routes/admin-preferences.ts` | 当前登录管理员的界面偏好读取与局部更新；用户名只取自鉴权会话。 |
 | `routes/admin-entity-routes.ts` | 标签 / 主题 / 作者相同 CRUD 路由骨架及精简导入词表入口；删除副作用仍由各领域 service 承担。 |
 | `routes/settings.ts` | 读取、保存与重载应用设置 |
 | `routes/advanced-config.ts` | super 完整配置读取 / 预检 / 保存，以及配置包导出、导入预检和应用接口 |
@@ -180,7 +183,7 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | 公共页 | `pages/home/`（首页与专属预览进度）、`pages/gallery/`（画廊、懒加载图片和瀑布流布局；含设备 / 亮度 / 主题 / 标签 / 作者 / 排序筛选） |
 | 后台 | `pages/admin/AdminShell.tsx` 及同目录 Overview / ImageAdmin / Uploader（含 URL 列表与 JSONL 批量导入模式）/ EntityAdmin / SettingsPage / AdvancedConfigPage（`advanced-config/` 内含完整 JSON 编辑器和配置包导入模态窗口）/ StorageSettings / UserAdmin / AccountSettings / CheckPage / LogPage / `BatchMetadataModal` / `ImageEditModal` |
 | 组件 | `components/actions` / `data-display` / `feedback` / `form` / `icon` / `image` / `layout` / `navigation` 下的跨页面 UI 组件。 |
-| hooks | `hooks/` 下存放跨页面复用的交互 Hook，例如锚定菜单、动画关闭和滚动锁定。 |
+| hooks | `hooks/` 下存放跨页面复用的交互 Hook，例如锚定菜单、动画关闭、滚动锁定，以及 `useAdminPreferences.tsx` 提供的 Redis / 用户级 `localStorage` 界面偏好同步。 |
 | lib | 无界面代码，按 `api` / `auth` / `gallery` / `ui` / `upload` 分类；页面专属状态机留在对应页面目录。 |
 | styles | `styles/` 下存放全局样式入口，按 base / home / gallery / admin / responsive 拆分。 |
 | 导入队列 | `pages/admin/uploader/`（统一 ImportJob 队列；最终 MD5 只由服务端 prepared 阶段计算） |
