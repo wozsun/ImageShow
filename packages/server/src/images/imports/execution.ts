@@ -33,6 +33,11 @@ const linkPrepareLimiter = new ImportConcurrencyLimiter(
 const commitLimiter = new ImportConcurrencyLimiter(
   () => getRuntimeConfig().import.global_commit_concurrency
 );
+
+export function importCommitLockKey(id: string) {
+  return `import.commit:${id}`;
+}
+
 const activeImports = new Map<string, {
   controller: AbortController;
   promise: Promise<PreparedImportResult>;

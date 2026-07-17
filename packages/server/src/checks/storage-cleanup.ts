@@ -2,32 +2,38 @@ import { pool } from "../core/db.ts";
 import { errorMessage } from "../core/http.ts";
 import { listStorageKeys, pruneEmptyStorageDirs, removeObject, type StoragePrefix } from "../storage/storage.ts";
 import { withStorageMaintenanceLock } from "../storage/maintenance-lock.ts";
-import { expectedThumbs, storageBackends, type StorageRow } from "./storage-common.ts";
+import {
+  activeImportStorageReferences,
+  classifyStagingKeys,
+  expectedThumbs,
+  importFinalStorageReferences,
+  storageBackends,
+  type StorageRow
+} from "./storage-common.ts";
+
+type ProtectedFinalReferences = Record<"media" | "thumbs" | "link", Set<string>>;
+
+function emptyProtectedFinalReferences(): ProtectedFinalReferences {
+  return { media: new Set(), thumbs: new Set(), link: new Set() };
+}
 
 function objectKeyId(key: string) {
   return key.split("/").pop()?.replace(/\.[^./]+$/, "") ?? "";
 }
 
-function stagingSessionKey(key: string) {
-  return key.replace(/\.(?:image|thumb)\.webp$/, "");
-}
-
 async function cleanupStorageUnderLock() {
   const rows = (await pool.query("SELECT id, object_key, status, storage_slug, is_link, device, brightness, theme FROM metadata")).rows as StorageRow[];
-
-  const uploadRows = (await pool.query(
-    "SELECT id, final_object_key, storage_slug FROM import_session WHERE status IN ('created','receiving','preparing','ready','committing') AND expires_at >= now()"
-  )).rows as Array<{ id: string; final_object_key: string | null; storage_slug: string }>;
-  const activeUploads = new Map<string, Set<string>>();
-  const committingObjects = new Map<string, Set<string>>();
+  const { rows: uploadRows, sessionsByBackend } = await activeImportStorageReferences();
+  const committingReferences = new Map<string, ProtectedFinalReferences>();
   for (const row of uploadRows) {
-    let staging = activeUploads.get(row.storage_slug);
-    if (!staging) { staging = new Set<string>(); activeUploads.set(row.storage_slug, staging); }
-    staging.add(String(row.id));
-    if (row.final_object_key) {
-      let committing = committingObjects.get(row.storage_slug);
-      if (!committing) { committing = new Set<string>(); committingObjects.set(row.storage_slug, committing); }
-      committing.add(row.final_object_key);
+    const references = importFinalStorageReferences(row);
+    if (references.length) {
+      let committing = committingReferences.get(row.storage_slug);
+      if (!committing) {
+        committing = emptyProtectedFinalReferences();
+        committingReferences.set(row.storage_slug, committing);
+      }
+      for (const reference of references) committing[reference.prefix].add(reference.key);
     }
   }
   const { backends } = await storageBackends();
@@ -36,21 +42,40 @@ async function cleanupStorageUnderLock() {
   let removed = 0;
   let candidateCount = 0;
   let prunedDirs = 0;
+  const retainedStagingFiles: Array<Record<string, unknown>> = [];
   for (const backend of backends) {
     try {
       const ready = new Set(rows.filter((row) => row.storage_slug === backend && row.status === "ready").map((row) => row.object_key));
       const deleted = new Set(rows.filter((row) => row.storage_slug === backend && row.status === "deleted").map((row) => row.object_key));
 
       const knownOnBackend = new Set(rows.filter((row) => row.storage_slug === backend).map((row) => String(row.id)));
-      const activeUploadsOnBackend = activeUploads.get(backend) ?? new Set<string>();
-      const committingOnBackend = committingObjects.get(backend) ?? new Set<string>();
+      const activeUploadsOnBackend = sessionsByBackend.get(backend) ?? new Map();
+      const committingOnBackend = committingReferences.get(backend) ?? emptyProtectedFinalReferences();
       const readyThumbs = expected.thumbs.get(backend) ?? new Set<string>();
       const linkThumbs = expected.link.get(backend) ?? new Set<string>();
+      const [mediaKeys, thumbKeys, linkKeys, stagingKeys] = await Promise.all([
+        listStorageKeys("media", backend),
+        listStorageKeys("thumbs", backend),
+        listStorageKeys("link", backend),
+        listStorageKeys("_uploads", backend)
+      ]);
+      const staging = classifyStagingKeys(stagingKeys, activeUploadsOnBackend);
+      for (const { key, session } of staging.active) {
+        retainedStagingFiles.push({
+          prefix: "_uploads",
+          key,
+          backend,
+          session_id: session.id,
+          status: session.status,
+          expires_at: session.expires_at,
+          reason: "对应导入会话仍有效，已保留"
+        });
+      }
       const candidates: Array<readonly [StoragePrefix, string]> = [
-        ...(await listStorageKeys("media", backend)).filter((key) => !ready.has(key) && !deleted.has(key) && !committingOnBackend.has(key) && !knownOnBackend.has(objectKeyId(key))).map((key) => ["media", key] as const),
-        ...(await listStorageKeys("thumbs", backend)).filter((key) => !readyThumbs.has(key)).map((key) => ["thumbs", key] as const),
-        ...(await listStorageKeys("link", backend)).filter((key) => !linkThumbs.has(key)).map((key) => ["link", key] as const),
-        ...(await listStorageKeys("_uploads", backend)).filter((key) => !activeUploadsOnBackend.has(stagingSessionKey(key))).map((key) => ["_uploads", key] as const)
+        ...mediaKeys.filter((key) => !ready.has(key) && !deleted.has(key) && !committingOnBackend.media.has(key) && !knownOnBackend.has(objectKeyId(key))).map((key) => ["media", key] as const),
+        ...thumbKeys.filter((key) => !readyThumbs.has(key) && !committingOnBackend.thumbs.has(key)).map((key) => ["thumbs", key] as const),
+        ...linkKeys.filter((key) => !linkThumbs.has(key) && !committingOnBackend.link.has(key)).map((key) => ["link", key] as const),
+        ...staging.orphan.map((key) => ["_uploads", key] as const)
       ];
       candidateCount += candidates.length;
       for (const [prefix, key] of candidates) {
@@ -66,7 +91,15 @@ async function cleanupStorageUnderLock() {
       failures.push({ prefix: "*", key: "*", backend, error: errorMessage(error) });
     }
   }
-  return { removed, candidates: candidateCount, pruned_dirs: prunedDirs, failures };
+  return {
+    candidates: candidateCount,
+    removed,
+    retained: retainedStagingFiles.length,
+    failed: failures.length,
+    pruned_dirs: prunedDirs,
+    retained_items: retainedStagingFiles,
+    failures
+  };
 }
 
 export function cleanupStorage() {

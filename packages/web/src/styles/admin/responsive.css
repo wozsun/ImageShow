@@ -464,18 +464,18 @@
   }
   .admin-image-card-thumb { width: 72px; height: 72px; }
   .admin-image-card-actions { gap: 4px; }
-  .admin-image-grid[data-density="comfortable"] .admin-image-card {
+  .admin-image-grid[data-density="spacious"] .admin-image-card {
     min-height: 0;
     grid-template-columns: 20px minmax(0, 1fr);
     gap: 8px;
   }
-  .admin-image-grid[data-density="comfortable"] .admin-image-card-detail {
+  .admin-image-grid[data-density="spacious"] .admin-image-card-detail {
     min-height: 56px;
     grid-template-columns: 56px minmax(0, 1fr);
     gap: 12px;
   }
-  .admin-image-grid[data-density="comfortable"] .admin-image-card-thumb { width: 56px; height: 56px; }
-  .admin-image-grid[data-density="comfortable"] .admin-image-card-actions { gap: 8px; }
+  .admin-image-grid[data-density="spacious"] .admin-image-card-thumb { width: 56px; height: 56px; }
+  .admin-image-grid[data-density="spacious"] .admin-image-card-actions { gap: 8px; }
   /* 次级后台表单与弹窗（主题/标签/作者/用户管理的新建条、重置密码、检查操作 / 图片迁移弹窗、
      链接导入弹窗、账户设置）：每个输入/字段占一整行，动作按钮共享一行且 flex:1 铺满宽度（与
      上传/批量弹窗页脚一致），而非左对齐留参差或在默认宽度下右对齐；44px 高便于点按。存储编辑弹窗

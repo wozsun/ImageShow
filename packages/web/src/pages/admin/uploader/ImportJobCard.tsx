@@ -8,7 +8,7 @@ import { DuplicateMatchPanel, type ImportPreviewTarget } from "./DuplicateMatchP
 
 const statusLabels: Record<ImportJob["status"], string> = {
   queued: "等待中", uploading: "上传中", downloading: "下载中", processing: "处理中",
-  ready: "已就绪", committing: "正在提交", done: "已完成", skipped: "已跳过", failed: "失败", cancelled: "已取消"
+  ready: "已就绪", committing: "提交中", done: "已完成", skipped: "已跳过", failed: "失败", cancelled: "已取消"
 };
 
 function formatPixelDimensions(width?: number, height?: number) {

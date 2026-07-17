@@ -36,7 +36,7 @@ export function CheckPage() {
   return (
     <section className="workspace">
       <header className="workspace-head">
-        <div><h1>检查</h1><p>check</p></div>
+        <div><h1>检查</h1><p>检查数据库、Redis 与存储一致性</p></div>
         <div className="check-actions">
           <div className="actions">
             {checks.map((check) => (
@@ -114,7 +114,7 @@ function CheckOperationModal({ operation, running, source, target, options, onSo
   const title = isLocationMigration ? "迁移存储后端" : "清理无效存储";
   const description = isLocationMigration
     ? "复制图片和缩略图到目标存储后端，并更新数据库中的存储引用。"
-    : "删除数据库未引用的原图、缩略图、回收站对象和已失效的上传暂存文件。不会删除仍在使用的对象。";
+    : "删除数据库未引用的原图、缩略图及已失效的上传暂存文件。回收站中的图片文件和其他仍被引用的对象会保留。";
   const runningText = isLocationMigration ? "迁移中" : "清理中";
   const exit = useAnimatedClose(onClose);
   return (
@@ -185,11 +185,12 @@ function CheckResult({ result }: { result: unknown }) {
   const objectResult = result && typeof result === "object" ? result as Record<string, unknown> : { value: result };
   const entries = Object.entries(objectResult).filter(([key]) => key !== "ok");
   const totalIssues = countCheckIssues(objectResult);
+  const cleanupSummary = storageCleanupSummary(objectResult);
   return (
     <>
-      <div className={`check-summary ${totalIssues ? "warn" : "ok"}`}>
-        <strong>{totalIssues ? `发现 ${totalIssues} 项需要处理` : "检查结果正常"}</strong>
-        <span>下方卡片展示每项检查的摘要，展开 JSON 可查看原始明细。</span>
+      <div className={`check-summary ${cleanupSummary?.warning || totalIssues ? "warn" : "ok"}`}>
+        <strong>{cleanupSummary?.title ?? (totalIssues ? `发现 ${totalIssues} 项需要处理` : "检查结果正常")}</strong>
+        <span>{cleanupSummary?.detail ?? "下方卡片展示每项检查的摘要，展开 JSON 可查看原始明细。"}</span>
       </div>
       <div className="check-result">
         {entries.map(([key, value]) => {
@@ -220,10 +221,15 @@ const CHECK_RESULT_LABELS: Record<string, string> = {
   missing_thumbs: "缺失的缩略图",
   orphan_objects: "游离的原图",
   orphan_thumbs: "游离的缩略图",
-  staging_files: "上传暂存文件",
+  active_staging_files: "有效的导入暂存文件",
+  orphan_staging_files: "失效的导入暂存文件",
   unavailable_backends: "无法访问的后端",
   // 清理无效存储
-  removed: "已删除",
+  removed: "已删除对象",
+  retained: "因会话有效而保留",
+  failed: "删除失败数量",
+  pruned_dirs: "已回收空目录",
+  retained_items: "已保留项目及原因",
   failures: "失败项",
   migrated: "已迁移",
   unchanged: "无需迁移",
@@ -260,10 +266,36 @@ function checkResultLabel(key: string) {
 
 function isIssueKey(key: string) {
   return [
-    "issues", "operations", "failures", "unavailable_backends", "error", "errors", "error_count",
+    "issues", "operations", "failures", "failed", "unavailable_backends", "error", "errors", "error_count",
     "random_pool_mismatch", "random_pool_error", "missing_objects", "missing_thumbs",
-    "orphan_objects", "orphan_thumbs", "staging_files"
+    "orphan_objects", "orphan_thumbs", "orphan_staging_files"
   ].includes(key);
+}
+
+function storageCleanupSummary(result: Record<string, unknown>) {
+  if (!("removed" in result) || !("retained_items" in result) || !("failures" in result)) {
+    return null;
+  }
+  const removed = numericResult(result.removed);
+  const retained = numericResult(result.retained);
+  const failed = numericResult(result.failed);
+  const candidates = numericResult(result.candidates);
+  const prunedDirs = numericResult(result.pruned_dirs);
+  return {
+    warning: failed > 0,
+    title: failed
+      ? `清理完成，但有 ${failed} 项删除失败`
+      : `清理完成：删除 ${removed} 项，保留 ${retained} 项`,
+    detail: failed
+      ? `共发现 ${candidates} 个无效候选对象；失败项仍未清理，请根据下方错误明细处理。`
+      : retained
+        ? `保留项均对应尚未过期的导入会话，不属于无效存储；另回收 ${prunedDirs} 个空目录。`
+        : `共检查并处理 ${candidates} 个无效候选对象，另回收 ${prunedDirs} 个空目录。`
+  };
+}
+
+function numericResult(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
 function countCheckIssues(result: Record<string, unknown>) {

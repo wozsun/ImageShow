@@ -140,9 +140,9 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | --- | --- |
 | `checks/service.ts` | 检查领域出口：聚合数据库、随机池、存储后端和文件数量，重导出各检查 / 清理 / 迁移能力。 |
 | `checks/database-check.ts` | 数据库与随机池一致性检查、回收站候选抽样。 |
-| `checks/storage-check.ts` | 存储一致性检查：缺失原图 / 缩略图、孤儿对象、staging 文件和不可用后端。 |
-| `checks/storage-cleanup.ts` | 存储清理：删除孤儿 media / thumbs / link / _uploads 对象并回收本地空目录。 |
-| `checks/storage-common.ts` | 存储检查共享类型与 expected thumbs/link 缩略图集合计算。 |
+| `checks/storage-check.ts` | 存储一致性检查：缺失原图 / 缩略图、孤儿对象、有效 / 失效 `_uploads` 暂存和不可用后端；只有失效暂存作为问题报告。 |
+| `checks/storage-cleanup.ts` | 存储清理：删除孤儿 media / thumbs / link 与失效 `_uploads` 对象，保留有效导入会话暂存并回收本地空目录。 |
+| `checks/storage-common.ts` | 存储检查共享类型、有效导入会话引用索引、暂存会话 ID 提取 / 分类与 expected thumbs/link 缩略图集合计算。 |
 | `checks/storage-migrate.ts` | 后端迁移与旧对象路径迁移入口，完成后重建随机池并失效图片读缓存。 |
 
 ### jobs/ —— 后台 Worker
@@ -150,7 +150,7 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | 文件 | 职责 |
 | --- | --- |
 | `jobs/repository.ts` | `background_job` 数据库仓储：入队、领取、成功 / 忽略 / 失败状态、退避重试、僵尸任务恢复、导入清理排队和历史裁剪。 |
-| `jobs/handlers.ts` | `thumb.generate` / `move.cleanup` / `import.cleanup` / `cache.rebuild` 任务处理器，只返回统一 outcome，不直接写任务状态。 |
+| `jobs/handlers.ts` | `thumb.generate` / `move.cleanup` / `import.cleanup` / `cache.rebuild` 任务处理器；导入清理会先用会话提交锁确认并取消崩溃遗留的过期 `committing`，handler 只返回统一 outcome，不直接写后台任务状态。 |
 | `jobs/worker.ts` | 按任务类型并发轮询、执行 handler、统一落任务状态、定时恢复 / 导入清理 / 历史裁剪，以及启动、停止和优雅 drain。 |
 
 ### routes/ —— HTTP 薄层

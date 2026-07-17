@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { galleryRenderBatch } from "../../lib/constants.js";
 import type { Device, GalleryImageCard } from "../../lib/types.js";
 
-const galleryBreakpoints = { single: 520, double: 760, triple: 1080 } as const;
+const galleryBreakpoints = { single: 359, double: 760, triple: 1080 } as const;
 const galleryMaxColumns = 4;
 
 export function masonryColumns(items: GalleryImageCard[], columnCount: number) {
@@ -37,7 +37,8 @@ export function galleryImageRatio(device: Device, width = 0, height = 0) {
   return "1 / 1";
 }
 
-function galleryColumnCount(width: number) {
+/** @internal 导出仅用于验证响应式列数边界。 */
+export function galleryColumnCount(width: number) {
   if (width <= galleryBreakpoints.single) return 1;
   if (width <= galleryBreakpoints.double) return 2;
   if (width <= galleryBreakpoints.triple) return 3;

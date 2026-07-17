@@ -19,7 +19,7 @@ export const reservedSubdomains = ["random", "static", "docs", "link"] as const;
 
 // 管理端界面偏好由 Redis 跨设备同步，并由浏览器本地存储兜底。
 // 将键和值域集中在 shared，避免前端、接口校验和 Redis 解析各自维护字符串字面量。
-export const imageCardDensities = ["compact", "comfortable"] as const;
+export const imageCardDensities = ["compact", "spacious"] as const;
 export const adminPreferenceKeys = ["image_card_density"] as const;
 
 export type ImageCardDensity = (typeof imageCardDensities)[number];

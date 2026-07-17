@@ -315,12 +315,12 @@ export function ImageAdmin() {
         <div className="toolbar-actions image-list-toolbar-actions">
           <LabeledSwitch
             className="image-card-density-switch"
-            checked={cardDensity === "comfortable"}
-            checkedLabel="舒适"
+            checked={cardDensity === "spacious"}
+            checkedLabel="宽松"
             uncheckedLabel="紧凑"
             ariaLabel="图片卡片密度"
-            onChange={(comfortable) => {
-              setCardDensity(comfortable ? "comfortable" : "compact");
+            onChange={(spacious) => {
+              setCardDensity(spacious ? "spacious" : "compact");
             }}
           />
           {(view === "ready" || view === "unset") && (

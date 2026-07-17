@@ -1,6 +1,6 @@
 {
   "name": "@imageshow/server",
-  "version": "3.8.0",
+  "version": "3.8.1",
   "type": "module",
   "scripts": {
     "dev": "node --watch src/index.ts",

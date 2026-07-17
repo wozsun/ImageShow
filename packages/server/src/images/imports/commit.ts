@@ -22,7 +22,7 @@ import {
 import { resolveClassification } from "../classification.ts";
 import { importCommitImage, type ImageRecord } from "../presenter.ts";
 import { notifyImportStatus, withImportLease } from "./progress.ts";
-import { runImportCommit } from "./execution.ts";
+import { importCommitLockKey, runImportCommit } from "./execution.ts";
 import { stagingImageKey } from "./staging.ts";
 import type {
   ImportMetadata,
@@ -234,7 +234,7 @@ async function commitProxySession(
     device: payload.resolved_device,
     brightness: payload.resolved_brightness
   });
-  const linkKey = linkThumbnailKey(
+  const linkKey = session.final_object_key || linkThumbnailKey(
     classification.device,
     classification.brightness,
     payload.theme,
@@ -329,7 +329,7 @@ async function commitProxySession(
 
 async function commitImportSessionWithinLimit(id: string, metadata: ImportMetadata) {
   const lockClient = await pool.connect();
-  const lockKey = `import.commit:${id}`;
+  const lockKey = importCommitLockKey(id);
   const locked = Boolean((await lockClient.query(
     "SELECT pg_try_advisory_lock(hashtext($1)) AS locked",
     [lockKey]
@@ -372,7 +372,12 @@ async function commitImportSessionWithinLimit(id: string, metadata: ImportMetada
           brightness: payload.resolved_brightness
         });
         const finalKey = session.mode === "proxy"
-          ? ""
+          ? linkThumbnailKey(
+              classification.device,
+              classification.brightness,
+              metadata.theme,
+              id
+            )
           : storageObjectKey(
               classification.device,
               classification.brightness,

@@ -145,7 +145,7 @@ export async function login(c: Context, username: string, password: string) {
   const result = await pool.query("SELECT username, password_hash, role FROM admin_account WHERE username = $1", [username]);
   const user = result.rows[0];
   if (!user || !(await verifyPassword(user.password_hash, password))) {
-    throw new ApiError(401, "invalid_credentials", "Invalid credentials");
+    throw new ApiError(401, "invalid_credentials", "用户名或密码错误");
   }
   await rehashPasswordIfNeeded(
     (sql, params) => pool.query(sql, params),
