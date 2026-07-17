@@ -7,7 +7,11 @@ const jsonlManifestBodyMaxBytes = appConfig.imports.jsonlManifestMaxBytes;
 const advancedConfigMaxBytes =
   appConfig.imports.configPackageMaxBytes + 64 * 1024;
 const jsonlManifestPath = `${adminApiBasePath}/imports/jsonl/parse`;
+const weiboImportPath = `${adminApiBasePath}/imports/weibo/parse`;
 const importBatchCreatePath = `${adminApiBasePath}/imports/batch-create`;
+// Fifty maximum-length URLs occupy about 600 KiB after worst-case JSON
+// escaping. A 1 MiB tier accepts every legal request with finite headroom.
+const weiboImportBodyMaxBytes = appConfig.imports.weiboRequestBodyMaxBytes;
 // The schema accepts 3,600 items and its maximum-length fields can produce a
 // JSON document of about 147.5 MiB after worst-case escaping. Use the next
 // configured size tier so syntax and future compatible fields retain headroom.
@@ -91,6 +95,8 @@ const limitStandardApiBody = measuredBodyLimit(standardApiBodyMaxBytes);
 
 export const limitJsonlManifestBody = measuredBodyLimit(jsonlManifestBodyMaxBytes);
 
+export const limitWeiboImportBody = measuredBodyLimit(weiboImportBodyMaxBytes);
+
 export const limitImportBatchCreateBody = measuredBodyLimit(importBatchCreateBodyMaxBytes);
 
 const limitConfigPackageBody = measuredBodyLimit(advancedConfigMaxBytes);
@@ -101,6 +107,7 @@ export function limitApiRequestBody(c: Context, next: Next) {
   const path = new URL(c.req.url).pathname;
   if (
     path === jsonlManifestPath
+    || path === weiboImportPath
     || path === importBatchCreatePath
     || (c.req.method === "PUT" && importFilePath.test(path))
   ) {

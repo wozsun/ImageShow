@@ -100,7 +100,7 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | `images/classification.ts` | 设备 / 明暗三态分类工具：`auto` 解析、按宽高落设备、导入与编辑共用的最终分类收敛。 |
 | `images/image-time.ts` | 图片展示时间专用解析与 UUIDv7 生成：用原生 Temporal 处理带偏移 ISO 8601、按 `TZ` 严格解析无偏移本地时间并拒绝夏令时歧义；JSONL 可把临时清单位置映射到 `rand_a`。 |
 | `images/brightness.ts` | 明暗识别 `detectBrightness()`：缩小图片后用 CIELAB L\* 直方图计算平均值、分位数、亮暗像素比例，并按运行时常量判定 `dark` / `light`。 |
-| `images/imports/` | 统一 `import_session` 生命周期：`session.ts` 负责创建 / 接收 / 预览 / 取消，`prepare.ts` 与 `commit.ts` 分管处理和提交，`progress.ts` 管租约 / 状态 / SSE，`execution.ts` 统一管理 prepare / commit 动态并发限制与 active promise，`staging.ts` 管暂存对象；另含 JSONL、请求摘要、安全抓取和临时文件模块。 |
+| `images/imports/` | 统一 `import_session` 生命周期：`session.ts` 负责创建 / 接收 / 预览 / 取消，`prepare.ts` 与 `commit.ts` 分管处理和提交，`progress.ts` 管租约 / 状态 / SSE，`execution.ts` 统一管理 prepare / commit 动态并发限制与 active promise，`staging.ts` 管暂存对象；另含 JSONL、微博公开帖子解析、请求摘要、安全抓取和临时文件模块。 |
 | `images/batch-delete.ts` | 批量软删除 `batchDeleteImages()`：标记 `status='deleted'` 并从 Redis 随机池移除（不动文件）。 |
 | `images/batch-update.ts` | 批量编辑协调：不同图片固定低并发 2、单图 metadata→tags 有序，隔离业务错误并按请求顺序返回结果；批次末统一同步派生缓存与实体计数缓存。 |
 | `images/mutation-sync.ts` | 图片写入后的派生状态协调器：合并随机池、公共读缓存、MD5 与精确 lookup 失效；单图调用即时执行，批量编辑按请求收集后执行一次。 |
@@ -161,7 +161,7 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | `routes/random.ts` | `GET /random`、`GET /img-count`、`random.<域名>/`、`<theme>.<域名>/random` |
 | `routes/auth.ts` | 登录 / 登出 / `/api/admin/auth/me`（登录态、CSRF token、验证码开关、登录背景） |
 | `routes/admin-images.ts` | 后台图片增删改查、单请求批量元数据 / 标签编辑、迁移、回收站原图、登录态轻量 `admin-info` |
-| `routes/imports.ts` | 统一 `/api/admin/imports/*`：JSONL parse、create、PUT file、prepare、preview、status、SSE events、commit、cancel |
+| `routes/imports.ts` | 统一 `/api/admin/imports/*`：JSONL / 微博 parse、create、PUT file、prepare、preview、status、SSE events、commit、cancel |
 | `routes/admin-tags.ts` · `admin-themes.ts` · `admin-authors.ts` · `admin-users.ts` | 标签 / 主题 / 作者 / 用户管理 |
 | `routes/admin-preferences.ts` | 当前登录管理员的界面偏好读取与局部更新；用户名只取自鉴权会话。 |
 | `routes/admin-entity-routes.ts` | 标签 / 主题 / 作者相同 CRUD 路由骨架及精简导入词表入口；删除副作用仍由各领域 service 承担。 |
@@ -181,7 +181,7 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | --- | --- |
 | 入口 / 路由 | `main.tsx`、`AppRoutes.tsx` |
 | 公共页 | `pages/home/`（首页与专属预览进度）、`pages/gallery/`（画廊、懒加载图片和瀑布流布局；含设备 / 亮度 / 主题 / 标签 / 作者 / 排序筛选） |
-| 后台 | `pages/admin/AdminShell.tsx` 及同目录 Overview / ImageAdmin / Uploader（含 URL 列表与 JSONL 批量导入模式）/ EntityAdmin / SettingsPage / AdvancedConfigPage（`advanced-config/` 内含完整 JSON 编辑器和配置包导入模态窗口）/ StorageSettings / UserAdmin / AccountSettings / CheckPage / LogPage / `BatchMetadataModal` / `ImageEditModal` |
+| 后台 | `pages/admin/AdminShell.tsx` 及同目录 Overview / ImageAdmin / Uploader（共享 URL 列表、JSONL 清单、微博链接三标签输入窗口与 prepared import 队列）/ EntityAdmin / SettingsPage / AdvancedConfigPage（`advanced-config/` 内含完整 JSON 编辑器和配置包导入模态窗口）/ StorageSettings / UserAdmin / AccountSettings / CheckPage / LogPage / `BatchMetadataModal` / `ImageEditModal` |
 | 组件 | `components/actions` / `data-display` / `feedback` / `form` / `icon` / `image` / `layout` / `navigation` 下的跨页面 UI 组件。 |
 | hooks | `hooks/` 下存放跨页面复用的交互 Hook，例如锚定菜单、动画关闭、滚动锁定，以及 `useAdminPreferences.tsx` 提供的 Redis / 用户级 `localStorage` 界面偏好同步。 |
 | lib | 无界面代码，按 `api` / `auth` / `gallery` / `ui` / `upload` 分类；页面专属状态机留在对应页面目录。 |

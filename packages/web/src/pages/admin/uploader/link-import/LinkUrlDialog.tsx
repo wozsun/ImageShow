@@ -1,139 +1,279 @@
-import { useRef, useState, type RefObject } from "react";
-import { Icon } from "../../../../components/icon/Icon.js";
+import { useEffect, useRef, useState, type RefObject } from "react";
+import { Icon, type IconName } from "../../../../components/icon/Icon.js";
 import { SelectMenu } from "../../../../components/form/SelectMenu.js";
-import { parseImportUrls } from "../import-job-utils.js";
-import { parseImportJsonl, type JsonlManifestParseError, type JsonlManifestResult } from "../import-api.js";
-import { linkInputLimitState, linkInputTextareaRows, type LinkInputMode } from "./link-input.js";
 import { OverlayScrollbar } from "../../../../components/layout/OverlayScrollbar.js";
 import { useDialogFocus } from "../../../../hooks/useDialogFocus.js";
+import { parseImportUrls } from "../import-job-utils.js";
+import {
+  parseImportJsonl,
+  parseWeiboImport,
+  type JsonlManifestParseError,
+  type JsonlManifestResult,
+  type WeiboImportParseError,
+  type WeiboImportResult
+} from "../import-api.js";
+import {
+  linkInputLimitState,
+  linkInputTextareaRows,
+  parseWeiboImportLines,
+  type LinkInputMode
+} from "./link-input.js";
 
 export type LinkImportMode = "download" | "proxy";
 export type { LinkInputMode } from "./link-input.js";
 
 export type LinkDialogSubmission =
   | { inputMode: "urls"; urls: string[]; mode: LinkImportMode }
-  | { inputMode: "jsonl"; manifest: JsonlManifestResult; mode: LinkImportMode };
+  | { inputMode: "jsonl"; manifest: JsonlManifestResult; mode: LinkImportMode }
+  | { inputMode: "weibo"; result: WeiboImportResult; mode: LinkImportMode };
 
 const modeOptions = [
   { value: "download", label: "下载图片" },
   { value: "proxy", label: "代理链接" }
 ] as const;
 
+const inputModePresentation: Record<LinkInputMode, {
+  heading: string;
+  icon: IconName;
+  label: string;
+  placeholder: string;
+}> = {
+  urls: {
+    heading: "导入链接",
+    icon: "download-cloud-2-line",
+    label: "URL 列表",
+    placeholder: "https://example.com/a.jpg\nhttps://example.com/b.png"
+  },
+  jsonl: {
+    heading: "批量导入",
+    icon: "file-copy-line",
+    label: "JSONL 清单",
+    placeholder: '{"original":"https://img.example.com/a.jpg","source":"https://example.com/post/1","image_time":"2020-05-01T00:00:00+08:00","tags":["2020"]}'
+  },
+  weibo: {
+    heading: "微博导入",
+    icon: "weibo-line",
+    label: "微博链接",
+    placeholder: "https://weibo.com/用户ID/微博短码\nhttps://weibo.com/用户ID/另一条微博"
+  }
+};
+
 function parseErrorText(errors: JsonlManifestParseError[]) {
   return errors.map((error) => `第 ${error.line} 行：${error.error}\n${error.raw}`).join("\n\n");
 }
 
-export function LinkUrlDialog({ initialInputMode, urlListMaxItems, jsonlMaxItems, onClose, onSubmit, returnFocusRef }: {
+function weiboErrorText(errors: WeiboImportParseError[]) {
+  return errors.map((error) => `第 ${error.line} 行：${error.error}\n${error.url}`).join("\n\n");
+}
+
+export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClose, onSubmit, returnFocusRef }: {
   initialInputMode: LinkInputMode;
-  urlListMaxItems: number;
-  jsonlMaxItems: number;
+  maxItems: number;
+  weiboMaxItems: number;
   onClose: () => void;
   onSubmit: (submission: LinkDialogSubmission) => void;
   returnFocusRef?: RefObject<HTMLElement | null>;
 }) {
   const importCardRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const requestControllerRef = useRef<AbortController | null>(null);
   const [text, setText] = useState("");
   const [mode, setMode] = useState<LinkImportMode>("download");
   const [inputMode, setInputMode] = useState<LinkInputMode>(initialInputMode);
-  const [manifest, setManifest] = useState<JsonlManifestResult | null>(null);
+  const [jsonlManifest, setJsonlManifest] = useState<JsonlManifestResult | null>(null);
+  const [weiboResult, setWeiboResult] = useState<WeiboImportResult | null>(null);
   const [parsedText, setParsedText] = useState("");
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState("");
-  const urls = inputMode === "urls" ? parseImportUrls(text) : [];
-  const limitState = linkInputLimitState(inputMode, text, { urlList: urlListMaxItems, jsonl: jsonlMaxItems });
-  const manifestCurrent = inputMode === "jsonl" && parsedText === text ? manifest : null;
+
+  const close = () => {
+    requestControllerRef.current?.abort();
+    onClose();
+  };
+
   useDialogFocus({
     containerRef: importCardRef,
     initialFocusRef: closeButtonRef,
     returnFocusRef,
-    onEscape: onClose,
+    onEscape: close,
   });
+  useEffect(() => () => requestControllerRef.current?.abort(), []);
+
+  const urls = inputMode === "urls" ? parseImportUrls(text) : [];
+  const weiboInputLines = inputMode === "weibo" ? parseWeiboImportLines(text) : [];
+  const weiboUrls = weiboInputLines.map((entry) => entry.url);
+  const limitState = linkInputLimitState(inputMode, text, {
+    link: maxItems,
+    weibo: weiboMaxItems
+  });
+  const jsonlManifestCurrent = inputMode === "jsonl" && parsedText === text
+    ? jsonlManifest
+    : null;
+  const weiboResultCurrent = inputMode === "weibo" && parsedText === text
+    ? weiboResult
+    : null;
+  const manifestCurrent = jsonlManifestCurrent ?? weiboResultCurrent?.manifest ?? null;
+  const presentation = inputModePresentation[inputMode];
+
+  const resetParsedResult = () => {
+    setJsonlManifest(null);
+    setWeiboResult(null);
+    setParsedText("");
+    setParseError("");
+  };
 
   const changeText = (value: string) => {
     setText(value);
-    setParseError("");
+    resetParsedResult();
   };
 
   const changeInputMode = (value: LinkInputMode) => {
     setInputMode(value);
     setText("");
-    setManifest(null);
-    setParsedText("");
+    resetParsedResult();
+  };
+
+  const parseInput = async () => {
+    const controller = new AbortController();
+    requestControllerRef.current = controller;
+    setParsing(true);
     setParseError("");
+    try {
+      if (inputMode === "jsonl") {
+        setJsonlManifest(await parseImportJsonl(text, controller.signal));
+      } else if (inputMode === "weibo") {
+        const result = await parseWeiboImport(weiboUrls, controller.signal);
+        setWeiboResult({
+          ...result,
+          errors: result.errors.map((error) => ({
+            ...error,
+            line: weiboInputLines[error.line - 1]?.line ?? error.line
+          }))
+        });
+      }
+      if (!controller.signal.aborted) setParsedText(text);
+    } catch (error) {
+      if (!controller.signal.aborted) setParseError((error as Error).message);
+    } finally {
+      if (requestControllerRef.current === controller) requestControllerRef.current = null;
+      if (!controller.signal.aborted) setParsing(false);
+    }
   };
 
   const submit = async () => {
     if (limitState.overLimit) {
-      setParseError(`${inputMode === "urls" ? "URL 列表" : "JSONL 清单"}最多允许 ${limitState.maxItems} 条图片记录，请拆分后再导入`);
+      setParseError(`${presentation.label}最多允许 ${limitState.maxItems} 条，请拆分后再导入`);
       return;
     }
     if (inputMode === "urls") {
       if (!urls.length) return;
       onSubmit({ inputMode, urls, mode });
-      onClose();
+      close();
       return;
     }
     if (!text.trim()) return;
     if (!manifestCurrent) {
-      setParsing(true);
-      setParseError("");
-      try {
-        const result = await parseImportJsonl(text);
-        setManifest(result);
-        setParsedText(text);
-      } catch (error) {
-        setParseError((error as Error).message);
-      } finally {
-        setParsing(false);
-      }
+      await parseInput();
       return;
     }
     if (!manifestCurrent.items.length) return;
-    onSubmit({ inputMode, manifest: manifestCurrent, mode });
-    onClose();
+    if (inputMode === "jsonl" && jsonlManifestCurrent) {
+      onSubmit({ inputMode, manifest: jsonlManifestCurrent, mode });
+    }
+    if (inputMode === "weibo" && weiboResultCurrent) {
+      onSubmit({ inputMode, result: weiboResultCurrent, mode });
+    }
+    close();
   };
 
-  const submitCount = inputMode === "urls" ? urls.length : manifestCurrent?.items.length ?? 0;
+  const submitCount = inputMode === "urls"
+    ? urls.length
+    : manifestCurrent?.items.length ?? 0;
+  const missingInput = inputMode === "urls"
+    ? !urls.length
+    : inputMode === "weibo"
+      ? !weiboUrls.length
+      : !text.trim();
+  const parsedWithoutItems = Boolean(manifestCurrent && !manifestCurrent.items.length);
+  const submitText = parsing
+    ? "解析中"
+    : inputMode === "jsonl" && !jsonlManifestCurrent
+      ? "解析清单"
+      : inputMode === "weibo" && !weiboResultCurrent
+        ? "解析微博"
+        : `导入${submitCount ? ` ${submitCount} 个` : ""}`;
 
   return (
-    <div className="modal link-url-overlay" role="dialog" aria-modal="true" aria-label="链接导入输入">
-      <div ref={importCardRef} className="link-import-card" tabIndex={-1}>
+    <div className="modal link-url-overlay" role="dialog" aria-modal="true" aria-label="导入内容输入">
+      <div ref={importCardRef} className="link-import-card" tabIndex={-1} aria-busy={parsing}>
         <div className="link-import-head">
-          <h2><Icon name={inputMode === "jsonl" ? "file-copy-line" : "download-cloud-2-line"} />{inputMode === "jsonl" ? "批量导入" : "导入链接"}</h2>
+          <h2><Icon name={presentation.icon} />{presentation.heading}</h2>
           <div className="link-import-head-status">
-            <button ref={closeButtonRef} type="button" className="icon close" title="关闭" onClick={onClose}>
+            {parsing && <span>{inputMode === "weibo" ? "正在获取微博内容…" : "正在解析清单…"}</span>}
+            <button ref={closeButtonRef} type="button" className="icon close" title="关闭" onClick={close}>
               <Icon name="close-line" />
             </button>
           </div>
         </div>
         <div className="link-input-tabs" role="tablist" aria-label="输入模式">
-          <button type="button" role="tab" aria-selected={inputMode === "urls"} className={inputMode === "urls" ? "is-active" : ""} onClick={() => changeInputMode("urls")}>URL 列表</button>
-          <button type="button" role="tab" aria-selected={inputMode === "jsonl"} className={inputMode === "jsonl" ? "is-active" : ""} onClick={() => changeInputMode("jsonl")}>JSONL 清单</button>
+          {(["urls", "jsonl", "weibo"] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              role="tab"
+              disabled={parsing}
+              aria-selected={inputMode === value}
+              className={inputMode === value ? "is-active" : ""}
+              onClick={() => changeInputMode(value)}
+            >
+              {inputModePresentation[value].label}
+            </button>
+          ))}
         </div>
         <p className="hint link-input-hint">
           {inputMode === "jsonl"
-            ? `每行一个 JSON，最多 ${jsonlMaxItems} 条；行内字段优先于“应用到全部”。`
-            : `每行一个 URL，最多 ${urlListMaxItems} 条；缺省元数据项使用“应用到全部”。`}
+            ? `每行一个 JSON，最多 ${maxItems} 条；行内字段优先于“应用到全部”。`
+            : inputMode === "weibo"
+              ? `每行一条公开微博链接，最多 ${weiboMaxItems} 条微博。`
+              : `每行一个 URL，最多 ${maxItems} 条；缺省元数据项使用“应用到全部”。`}
         </p>
-        <textarea
-          className="link-import-urls"
-          value={text}
-          onChange={(event) => changeText(event.target.value)}
-          placeholder={inputMode === "jsonl"
-            ? '{"original":"https://img.example.com/a.jpg","source":"https://example.com/post/1","image_time":"2020-05-01T00:00:00+08:00","tags":["2020"]}'
-            : "https://example.com/a.jpg\nhttps://example.com/b.png"}
-          rows={linkInputTextareaRows}
-        />
+        <div className={`link-import-input-region${weiboResultCurrent ? " has-weibo-summary" : ""}`}>
+          <textarea
+            className="link-import-urls"
+            value={text}
+            disabled={parsing}
+            onChange={(event) => changeText(event.target.value)}
+            placeholder={presentation.placeholder}
+            rows={linkInputTextareaRows}
+          />
+          {weiboResultCurrent && (
+            <p className="hint weibo-import-summary" role="status">
+              已解析 {weiboResultCurrent.posts.length} 条微博，共 {weiboResultCurrent.manifest.items.length} 张可导入图片
+            </p>
+          )}
+        </div>
         {(parseError || limitState.overLimit) && (
           <p className="form-error">
             {parseError || `已输入 ${limitState.count} 条，最多允许 ${limitState.maxItems} 条，请拆分后再导入`}
           </p>
         )}
+        {weiboResultCurrent && weiboResultCurrent.errors.length > 0 && (
+          <div className="jsonl-preview">
+            <div className="jsonl-preview-summary">
+              <span>{weiboResultCurrent.errors.length} 条微博解析失败</span>
+              <button type="button" className="button secondary" onClick={() => void navigator.clipboard.writeText(weiboErrorText(weiboResultCurrent.errors)).catch(() => undefined)}>
+                <Icon name="file-copy-line" />复制 {weiboResultCurrent.errors.length} 条错误
+              </button>
+            </div>
+            <ol className="jsonl-error-list">
+              {weiboResultCurrent.errors.map((error) => <li key={`${error.line}:${error.url}`}><strong>第 {error.line} 行</strong><span>{error.error}</span></li>)}
+            </ol>
+          </div>
+        )}
         {manifestCurrent && manifestCurrent.errors.length > 0 && (
           <div className="jsonl-preview">
             <div className="jsonl-preview-summary">
-              <span>{manifestCurrent.errors.length} 条解析失败</span>
+              <span>{manifestCurrent.errors.length} 条图片清单解析失败</span>
               <button type="button" className="button secondary" onClick={() => void navigator.clipboard.writeText(parseErrorText(manifestCurrent.errors)).catch(() => undefined)}>
                 <Icon name="file-copy-line" />复制 {manifestCurrent.errors.length} 条错误
               </button>
@@ -157,10 +297,14 @@ export function LinkUrlDialog({ initialInputMode, urlListMaxItems, jsonlMaxItems
             ariaLabel="链接导入模式"
           />
           <div className="link-import-action-buttons">
-            <button type="button" onClick={onClose}>取消</button>
-            <button type="button" className="button" disabled={parsing || limitState.overLimit || (inputMode === "urls" ? !urls.length : !text.trim() || Boolean(manifestCurrent && !manifestCurrent.items.length))} onClick={() => void submit()}>
-              <Icon name={inputMode === "jsonl" ? "file-copy-line" : "download-cloud-2-line"} />
-              {parsing ? "解析中" : inputMode === "jsonl" && !manifestCurrent ? "解析清单" : `导入${submitCount ? ` ${submitCount} 个` : ""}`}
+            <button type="button" onClick={close}>取消</button>
+            <button
+              type="button"
+              className="button link-import-submit-button"
+              disabled={parsing || limitState.overLimit || missingInput || parsedWithoutItems}
+              onClick={() => void submit()}
+            >
+              <Icon name={presentation.icon} />{submitText}
             </button>
           </div>
         </div>

@@ -1,7 +1,15 @@
 import type { Hono } from "hono";
 import { adminApiBasePath, appConfig } from "@imageshow/shared";
 import { ApiError, ok } from "../core/http.ts";
-import { importBatchCreateInput, importCommitInput, importCreateInput, jsonlManifestInput, parse, uuidInput } from "../core/validation.ts";
+import {
+  importBatchCreateInput,
+  importCommitInput,
+  importCreateInput,
+  jsonlManifestInput,
+  parse,
+  uuidInput,
+  weiboImportInput
+} from "../core/validation.ts";
 import { commitImportSession } from "../images/imports/commit.ts";
 import { prepareImportSession } from "../images/imports/prepare.ts";
 import { listImportStatuses, streamImportEvents } from "../images/imports/progress.ts";
@@ -15,10 +23,12 @@ import {
 import { isReservedSubdomain } from "../themes/host.ts";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { JsonlManifestError, parseJsonlManifest } from "../images/imports/jsonl.ts";
+import { createWeiboImportBatchManifest, WeiboImportError } from "../images/imports/weibo.ts";
 import {
   getRequestBodyBytes,
   limitImportBatchCreateBody,
   limitJsonlManifestBody,
+  limitWeiboImportBody,
 } from "../core/request-body-limit.ts";
 import { logger } from "../core/logger.ts";
 
@@ -32,9 +42,7 @@ export function registerImportRoutes(app: Hono) {
     const startedAt = performance.now();
     const input = parse(importBatchCreateInput, await c.req.json().catch(() => ({})));
     const linkConfig = getRuntimeConfig().link_image;
-    const configuredLimit = Math.min(appConfig.imports.batchHardLimit, input.source === "jsonl"
-      ? linkConfig.jsonl_max_items
-      : linkConfig.url_list_max_items);
+    const configuredLimit = importBatchConfiguredLimit(input.source, linkConfig.max_items);
     if (input.items.length > configuredLimit) {
       throw new ApiError(
         400,
@@ -66,11 +74,58 @@ export function registerImportRoutes(app: Hono) {
     const input = parse(jsonlManifestInput, await c.req.json().catch(() => ({})));
     try {
       return c.json(ok(parseJsonlManifest(input.content, {
-        maxItems: getRuntimeConfig().link_image.jsonl_max_items,
+        maxItems: getRuntimeConfig().link_image.max_items,
         timeZone: process.env.TZ
       })));
     } catch (error) {
       if (error instanceof JsonlManifestError) throw new ApiError(400, error.code, error.message);
+      throw error;
+    }
+  });
+
+  app.post(`${adminApiBasePath}/imports/weibo/parse`, limitWeiboImportBody, async (c) => {
+    const input = parse(weiboImportInput, await c.req.json().catch(() => ({})));
+    const runtimeConfig = getRuntimeConfig();
+    const maxPosts = Math.min(
+      appConfig.imports.batchHardLimit,
+      runtimeConfig.weibo.max_items
+    );
+    if (input.urls.length > maxPosts) {
+      throw new ApiError(
+        400,
+        "weibo_batch_limit_exceeded",
+        `单批最多允许 ${maxPosts} 条微博链接`
+      );
+    }
+    try {
+      return c.json(ok(await createWeiboImportBatchManifest(
+        input.urls,
+        {
+          authorSlugs: runtimeConfig.weibo.author_slugs,
+          concurrency: runtimeConfig.weibo.concurrency,
+          timeZone: process.env.TZ,
+          signal: c.req.raw.signal
+        }
+      )));
+    } catch (error) {
+      if (error instanceof JsonlManifestError) throw new ApiError(400, error.code, error.message);
+      if (error instanceof WeiboImportError) {
+        let status: 400 | 422 | 502 = 422;
+        if (
+          error.code === "weibo_invalid_url"
+          || error.code === "weibo_image_limit_exceeded"
+        ) {
+          status = 400;
+        }
+        if (
+          error.code === "weibo_visitor_failed"
+          || error.code === "weibo_request_failed"
+          || error.code === "weibo_response_too_large"
+        ) {
+          status = 502;
+        }
+        throw new ApiError(status, error.code, error.message);
+      }
       throw error;
     }
   });
@@ -122,4 +177,17 @@ function parseImportIds(url: string) {
     .map((id) => id.trim())
     .filter(Boolean)
     .map((id) => parse(uuidInput, id));
+}
+
+/** @internal Exported only for focused import-source limit verification. */
+export function importBatchConfiguredLimit(
+  source: "urls" | "jsonl" | "weibo",
+  linkImageMaxItems: number
+) {
+  return Math.min(
+    appConfig.imports.batchHardLimit,
+    source === "weibo"
+      ? appConfig.imports.weiboImageHardLimit
+      : linkImageMaxItems
+  );
 }

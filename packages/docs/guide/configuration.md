@@ -12,7 +12,9 @@ ImageShow 的配置按持久化位置分为三类：数据库、`/app/data/confi
 
 完整字段清单、默认值和中英文注释见仓库根目录的 `config.example.jsonc`。实际运行文件是纯 JSON，不支持注释。启动和手动重载时会按当前 schema 归一化：缺少且有默认值的字段自动补齐，未知字段递归删除，已有有效值保留；归一化发生变化时原子写回完整配置。已有但类型错误、格式错误或超出范围的值仍会明确拒绝，数据库 `host`、`name`、`user`、`password` 等没有默认值的必填项也不会自动生成。
 
-管理端 `GET /api/admin/settings` 只返回设置页和图片工作流实际读取的最小字段集。除设置页可编辑字段外，仅保留上传数量 / 文件大小、链接列表 / JSONL 数量和页面 commit 并发等前端预检所需的只读值；不会返回完整 `appConfig`、应用端口、数据库 / Redis 连接配置、服务端全局并发、外链抓取超时或其他内部默认值。`POST /api/admin/settings` 同样只接受设置页公开的可编辑字段，并以嵌套 patch 合并，未公开配置不会因保存设置页而被默认值覆盖。
+`link_image.max_items` 合并旧的两项链接限制时刻意不迁移旧值。升级后首次启动或手动重载会把 `url_list_max_items`、`jsonl_max_items` 当作未知字段直接删除，也不会取两者的较大值、较小值或任一值；缺失的 `max_items` 使用默认值 200，并随规范化后的完整配置原子写回 `config.json`。因此旧配置即使曾为两个入口设置自定义值，升级后也统一回到 200，之后只维护 `max_items`。
+
+管理端 `GET /api/admin/settings` 只返回设置页和图片工作流实际读取的最小字段集。除设置页可编辑字段外，仅保留上传数量 / 文件大小、统一链接导入数量和页面 commit 并发等前端预检所需的只读值；不会返回完整 `appConfig`、应用端口、数据库 / Redis 连接配置、服务端全局并发、外链抓取超时或其他内部默认值。`POST /api/admin/settings` 同样只接受设置页公开的可编辑字段，并以嵌套 patch 合并，未公开配置不会因保存设置页而被默认值覆盖。
 
 ## 热加载边界
 
@@ -43,8 +45,11 @@ ImageShow 的配置按持久化位置分为三类：数据库、`/app/data/confi
 | `link_image.concurrency` | 单客户端 URL 导入队列并发数，覆盖“下载保存”和“代理链接”。 |
 | `link_image.global_concurrency` | 服务端 URL 导入 prepare 全局并发数，多个客户端共享；只在配置文件中维护。 |
 | `link_image.fetch_timeout_seconds` | 外链图片请求超时，单位秒；只覆盖下载和代理准备阶段的外部请求。 |
-| `link_image.url_list_max_items` | URL 列表单次输入软上限，默认 100；不在设置页展示，管理端只读返回该值供导入窗口预检，可配置范围为 1–1000。 |
-| `link_image.jsonl_max_items` | JSONL 清单单次图片软上限，默认 100；不在设置页展示，管理端只读返回该值供导入窗口预检，修改需编辑配置文件，可配置范围为 1–1000。 |
+| `link_image.max_items` | URL 列表、JSONL 清单的单次条目软上限，默认 200；不在设置页展示，管理端只读返回该值供导入窗口预检，修改需编辑配置文件，可配置范围为 1–1000。升级时旧的 `url_list_max_items` / `jsonl_max_items` 会被删除，不迁移旧值；缺失的 `max_items` 直接补默认值 200。微博导入不使用该限制。 |
+| `weibo.max_items` | 微博链接单次输入软上限，默认 20；不在设置页展示，管理端只读返回该值供导入窗口预检，可配置范围为 1–50。 |
+| `weibo.concurrency` | 服务端同时请求和解析的微博帖子数，默认 2，可配置范围为 1–16；空闲 worker 会持续补位，只在配置文件中维护。 |
+| `weibo.global_concurrency` | 单个服务端进程共享的微博上游请求并发数，默认 5，可配置范围为 1–32；访客身份和帖子详情请求共用，只在配置文件中维护。 |
+| `weibo.author_slugs` | 微博用户 ID 到作者 slug 的映射表。键必须是纯数字用户 ID，值必须是合法的小写 slug；微博导入只有命中映射时才填写作者。 |
 | `normalize.*` | 本地上传与下载导入共用的最终入库文件标准化策略。 |
 | `thumbnail.*` | 缩略图长边和压缩质量，只影响此后新生成的缩略图。 |
 | `import.commit_concurrency` | 单个管理页面同时执行的 commit 数，默认 5；只在配置文件中维护，管理端只读返回。 |
@@ -78,8 +83,10 @@ ImageShow 的配置按持久化位置分为三类：数据库、`/app/data/confi
 | `link_image.concurrency` | 2 | 1–128 |
 | `link_image.global_concurrency` | 5 | 1–512 |
 | `link_image.fetch_timeout_seconds` | 30 | 5–300 秒 |
-| `link_image.url_list_max_items` | 100 | 1–1000 |
-| `link_image.jsonl_max_items` | 100 | 1–1000 |
+| `link_image.max_items` | 200 | 1–1000 |
+| `weibo.max_items` | 20 | 1–50 |
+| `weibo.concurrency` | 2 | 1–16 |
+| `weibo.global_concurrency` | 5 | 1–32 |
 | `normalize.quality` | 80 | 1–100 |
 | `normalize.quality_step` | 5 | 1–50 |
 | `normalize.min_quality` | 20 | 1–100，且不能高于 `quality` |
@@ -129,8 +136,15 @@ ImageShow 的配置按持久化位置分为三类：数据库、`/app/data/confi
     "concurrency": 2,
     "global_concurrency": 5,
     "fetch_timeout_seconds": 30,
-    "url_list_max_items": 100,
-    "jsonl_max_items": 100
+    "max_items": 200
+  },
+  "weibo": {
+    "max_items": 20,
+    "concurrency": 2,
+    "global_concurrency": 5,
+    "author_slugs": {
+      "1234567890": "example-author"
+    }
   },
   "normalize": {
     "quality": 80,
@@ -149,10 +163,13 @@ ImageShow 的配置按持久化位置分为三类：数据库、`/app/data/confi
 
 commit 使用独立的 `import.commit_concurrency` / `import.global_commit_concurrency`，不再复用上传或 URL prepare 并发。前者限制单个后台页面，后者在取得会话 advisory lock、存储共享锁和数据库事务连接之前限制整个服务端进程。该许可覆盖正式对象复制、数据库事务、暂存清理和缓存更新，而不只是 `INSERT`。PostgreSQL 应用连接池上限为 30。
 
-URL 与 JSONL 的批量解析/会话创建接口有 3600 项服务端硬上限，并同时满足
-最高 1000 项的可配置软上限。超过限制会在创建会话前明确拒绝，不自动拆成多个
-`batch_time`。本地文件仅按 `upload.max_items` 做单次选择前端软限制；服务端逐文件
-创建会话，不维护本地选择批次，因此没有对应的服务端条目数硬上限。
+URL、JSONL 与微博的批量解析/会话创建接口有 3600 项服务端硬上限，并同时满足
+各自的可配置软上限：URL 与 JSONL 由 `link_image.max_items` 限制，最高 1000 项；
+微博链接条数由 `weibo.max_items` 限制，最高 50 条。微博解析后的图片数不受
+`link_image.max_items` 影响；按单条微博最多 18 张图片计算，合法配置最多产生
+900 张图片，服务端另保留不可配置的 1000 张安全上限。超过限制会在创建会话前
+明确拒绝，不自动拆成多个 `batch_time`。本地文件仅按 `upload.max_items` 做单次选择前端软限制；
+服务端逐文件创建会话，不维护本地选择批次，因此没有对应的服务端条目数硬上限。
 
 ## 高级配置
 
@@ -246,8 +263,10 @@ super 管理员可在「设置 → 高级配置」导出或导入版本化 JSON 
 | `link_image.concurrency` | `LINK_IMAGE_CONCURRENCY` |
 | `link_image.global_concurrency` | `LINK_IMAGE_GLOBAL_CONCURRENCY` |
 | `link_image.fetch_timeout_seconds` | `LINK_IMAGE_FETCH_TIMEOUT_SECONDS` |
-| `link_image.url_list_max_items` | `LINK_IMAGE_URL_LIST_MAX_ITEMS` |
-| `link_image.jsonl_max_items` | `LINK_IMAGE_JSONL_MAX_ITEMS` |
+| `link_image.max_items` | `LINK_IMAGE_MAX_ITEMS` |
+| `weibo.max_items` | `WEIBO_MAX_ITEMS` |
+| `weibo.concurrency` | `WEIBO_CONCURRENCY` |
+| `weibo.global_concurrency` | `WEIBO_GLOBAL_CONCURRENCY` |
 | `port` | `PORT` |
 
 仓库自带 `compose.yaml` 会以 5/10 注入两项 commit 并发变量，其他可选播种项需通过 Compose override 显式传入。配置文件已经生成后，环境变量不会覆盖已有值；请直接修改 `config.json` 并热加载，连接类配置仍需重启容器。

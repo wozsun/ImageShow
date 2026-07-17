@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "../../../../components/icon/Icon.js";
 
-export function LinkImportSplitButton({ onOpenUrls, onOpenJsonl }: {
+export function LinkImportSplitButton({ onOpenUrls, onOpenJsonl, onOpenWeibo }: {
   onOpenUrls: (opener: HTMLButtonElement) => void;
   onOpenJsonl: (opener: HTMLButtonElement) => void;
+  onOpenWeibo: (opener: HTMLButtonElement) => void;
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -37,6 +38,9 @@ export function LinkImportSplitButton({ onOpenUrls, onOpenJsonl }: {
         <div className="link-import-menu" role="menu">
           <button type="button" role="menuitem" onClick={(event) => { setOpen(false); onOpenJsonl(menuTriggerRef.current ?? event.currentTarget); }}>
             <Icon name="file-copy-line" />批量导入
+          </button>
+          <button type="button" role="menuitem" onClick={(event) => { setOpen(false); onOpenWeibo(menuTriggerRef.current ?? event.currentTarget); }}>
+            <Icon name="weibo-line" />微博导入
           </button>
         </div>
       )}

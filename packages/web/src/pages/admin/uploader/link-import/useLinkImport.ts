@@ -136,7 +136,10 @@ export function useLinkImport(options: {
     }
   }, [queue]);
 
-  const addBatch = useCallback(async (jobs: ImportJob[], source: "urls" | "jsonl") => {
+  const addBatch = useCallback(async (
+    jobs: ImportJob[],
+    source: "urls" | "jsonl" | "weibo"
+  ) => {
     queue.appendJobs(jobs);
     if (!jobs.length) return;
     for (const job of jobs) {
@@ -193,6 +196,10 @@ export function useLinkImport(options: {
     await addBatch(jobs, "jsonl");
   }, [addBatch]);
 
+  const addWeiboJobs = useCallback(async (jobs: ImportJob[]) => {
+    await addBatch(jobs, "weibo");
+  }, [addBatch]);
+
   const cancel = useCallback(async (job: ImportJob) => {
     controllers.current.get(job.id)?.abort();
     queue.updateJob(job.id, { status: "cancelled", message: "已取消" });
@@ -209,5 +216,5 @@ export function useLinkImport(options: {
     await prepare(next);
   }, [prepare, queue]);
 
-  return { addUrls, addJobs, cancel, retry };
+  return { addUrls, addJobs, addWeiboJobs, cancel, retry };
 }

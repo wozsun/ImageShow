@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { appConfig, type RuntimeConfig } from "@imageshow/shared";
+import { appConfig, slugPattern, type RuntimeConfig } from "@imageshow/shared";
 import {
   applicationPort,
   captchaCodeLength,
@@ -14,7 +14,6 @@ import {
   homeTagline,
   imagePageSize,
   importGlobalConcurrency,
-  jsonlImportMaxItems,
   linkFetchTimeoutSeconds,
   linkImageConcurrency,
   linkImportMaxItems,
@@ -49,13 +48,19 @@ import {
   thumbnailLongEdge,
   thumbnailQuality,
   uploadConcurrency,
-  uploadImportMaxItems
+  uploadImportMaxItems,
+  weiboGlobalConcurrency,
+  weiboImportMaxItems,
+  weiboMetadataConcurrency
 } from "./fields.ts";
 
 const subdomainLabel = z.string().trim().regex(
   /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/,
   "must be a lowercase DNS label"
 );
+
+const weiboUserId = z.string().regex(/^[1-9]\d{0,19}$/, "must be a numeric Weibo user ID");
+const weiboAuthorSlug = z.string().trim().toLowerCase().min(1).max(32).regex(slugPattern);
 
 const runtimeConfigSchema = z.strictObject({
   site: z.strictObject({
@@ -107,8 +112,13 @@ const runtimeConfigSchema = z.strictObject({
     concurrency: linkImageConcurrency,
     global_concurrency: importGlobalConcurrency,
     fetch_timeout_seconds: linkFetchTimeoutSeconds,
-    url_list_max_items: linkImportMaxItems,
-    jsonl_max_items: jsonlImportMaxItems
+    max_items: linkImportMaxItems
+  }),
+  weibo: z.strictObject({
+    max_items: weiboImportMaxItems,
+    concurrency: weiboMetadataConcurrency,
+    global_concurrency: weiboGlobalConcurrency,
+    author_slugs: z.record(weiboUserId, weiboAuthorSlug)
   }),
   normalize: z.strictObject({
     quality: normalizeQuality,
@@ -205,6 +215,11 @@ function projectKnownConfig(base: unknown, input: unknown): unknown {
   if (!isPlainRecord(base)) return input === undefined ? base : input;
   if (input === undefined) return structuredClone(base);
   if (!isPlainRecord(input)) return input;
+
+  // An empty default object denotes a validated dictionary rather than a
+  // fixed-shape config section. Preserve its user-defined keys and let the
+  // runtime schema validate each entry.
+  if (Object.keys(base).length === 0) return structuredClone(input);
 
   return Object.fromEntries(
     Object.entries(base).map(([key, defaultValue]) => [

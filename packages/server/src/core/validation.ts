@@ -182,7 +182,7 @@ export const importCreateInput = metadataInput.extend({
 });
 
 export const importBatchCreateInput = z.object({
-  source: z.enum(["urls", "jsonl"]),
+  source: z.enum(["urls", "jsonl", "weibo"]),
   items: z.array(importCreateInput).min(1).max(importBatchHardLimit)
 }).superRefine((value, ctx) => {
   const idempotencyKeys = new Set<string>();
@@ -217,6 +217,13 @@ export const jsonlManifestInput = z.object({
       (value) => Buffer.byteLength(value, "utf8") <= appConfig.imports.jsonlManifestMaxBytes,
       "JSONL 清单内容过大"
     )
+});
+
+export const weiboImportInput = z.strictObject({
+  urls: z.array(z.string().trim().min(1).max(2048))
+    .min(1)
+    .max(importBatchHardLimit)
+    .transform((urls) => [...new Set(urls)])
 });
 
 const imageListBase = z.object({

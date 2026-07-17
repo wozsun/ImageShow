@@ -32,6 +32,9 @@ export const appConfig = {
     batchHardLimit: importBatchHardLimit,
     uploadSoftLimitMax: 1_000,
     linkSoftLimitMax: 1_000,
+    weiboSoftLimitMax: 50,
+    weiboImageHardLimit: 1_000,
+    weiboRequestBodyMaxBytes: 1024 * 1024,
     jsonlManifestMaxBytes: 128 * 1024 * 1024,
     configPackageMaxBytes: 1024 * 1024,
     configPackageMaxBackends: 100
@@ -103,8 +106,13 @@ export const appConfig = {
       concurrency: 2,
       global_concurrency: 5,
       fetch_timeout_seconds: 30,
-      url_list_max_items: 100,
-      jsonl_max_items: 100
+      max_items: 200
+    },
+    weibo: {
+      max_items: 20,
+      concurrency: 2,
+      global_concurrency: 5,
+      author_slugs: {} as Record<string, string>
     },
     normalize: {
       quality: 80,
@@ -193,8 +201,14 @@ export type LinkImageSettings = {
   concurrency: number;
   global_concurrency: number;
   fetch_timeout_seconds: number;
-  url_list_max_items: number;
-  jsonl_max_items: number;
+  max_items: number;
+};
+
+export type WeiboSettings = {
+  max_items: number;
+  concurrency: number;
+  global_concurrency: number;
+  author_slugs: Record<string, string>;
 };
 
 export type NormalizeSettings = {
@@ -234,6 +248,7 @@ export type RuntimeConfig = {
   redis: { host: string; port: number; db: number };
   upload: UploadSettings;
   link_image: LinkImageSettings;
+  weibo: WeiboSettings;
   normalize: NormalizeSettings;
   thumbnail: ThumbnailSettings;
   import: ImportSettings;
@@ -270,8 +285,10 @@ export type AdminUploadSettings = Pick<
 
 export type AdminLinkImageSettings = Pick<
   LinkImageSettings,
-  "fill_original_url" | "concurrency" | "url_list_max_items" | "jsonl_max_items"
+  "fill_original_url" | "concurrency" | "max_items"
 >;
+
+export type AdminWeiboSettings = Pick<WeiboSettings, "max_items">;
 
 export type AdminImportSettings = Pick<ImportSettings, "commit_concurrency">;
 
@@ -279,6 +296,7 @@ export type AdminSettings = {
   site: SiteSettings;
   upload: AdminUploadSettings;
   link_image: AdminLinkImageSettings;
+  weibo: AdminWeiboSettings;
   normalize: NormalizeSettings;
   thumbnail: ThumbnailSettings;
   import: AdminImportSettings;

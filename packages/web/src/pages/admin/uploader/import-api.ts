@@ -70,6 +70,29 @@ export type JsonlManifestResult = {
   errors: JsonlManifestParseError[];
 };
 
+type WeiboImportPost = {
+  source_url: string;
+  weibo_id: string;
+  bid: string;
+  user_id: string;
+  author: string | null;
+  published_at: string;
+  image_count: number;
+};
+
+export type WeiboImportParseError = {
+  line: number;
+  url: string;
+  code: string;
+  error: string;
+};
+
+export type WeiboImportResult = {
+  posts: WeiboImportPost[];
+  errors: WeiboImportParseError[];
+  manifest: JsonlManifestResult;
+};
+
 export type StoredImportStatus = {
   id: string;
   status: string;
@@ -88,7 +111,7 @@ export function createImportSession(input: ImportSessionCreateInput, signal?: Ab
 }
 
 export function createImportSessionsBatch(
-  source: "urls" | "jsonl",
+  source: "urls" | "jsonl" | "weibo",
   items: ImportSessionCreateInput[],
   signal?: AbortSignal
 ) {
@@ -115,6 +138,14 @@ export function parseImportJsonl(content: string, signal?: AbortSignal) {
   return api<JsonlManifestResult>(`${adminApiBasePath}/imports/jsonl/parse`, {
     method: "POST",
     body: JSON.stringify({ content }),
+    signal
+  });
+}
+
+export function parseWeiboImport(urls: string[], signal?: AbortSignal) {
+  return api<WeiboImportResult>(`${adminApiBasePath}/imports/weibo/parse`, {
+    method: "POST",
+    body: JSON.stringify({ urls }),
     signal
   });
 }

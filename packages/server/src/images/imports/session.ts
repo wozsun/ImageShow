@@ -2,7 +2,7 @@ import { appConfig } from "@imageshow/shared";
 import { getInputImageMaxBytes } from "../../config/app-settings.ts";
 import { getRuntimeConfig } from "../../config/runtime-config-store.ts";
 import { pool, withTransaction } from "../../core/db.ts";
-import { mapWithConcurrency } from "../../core/concurrency.ts";
+import { mapWithWorkerPool } from "../../core/concurrency.ts";
 import { ApiError, privateNoStoreCacheControl } from "../../core/http.ts";
 import { assertStorageUploadable, getDefaultStorageSlug } from "../../storage/backend-registry.ts";
 import { contentType, readStorageBuffer } from "../../storage/storage.ts";
@@ -148,7 +148,7 @@ export async function createImportSessions(
   inputs: ImportCreateInput[],
   options: CreateImportSessionsOptions = {},
 ): Promise<ImportSessionBatchItem[]> {
-  return mapWithConcurrency(inputs, Math.min(16, appConfig.pgPool.max), async (input) => {
+  return mapWithWorkerPool(inputs, Math.min(16, appConfig.pgPool.max), async (input) => {
     const startedAt = performance.now();
     try {
       if (input.mode === "upload") {

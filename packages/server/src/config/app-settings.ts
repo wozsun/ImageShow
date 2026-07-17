@@ -120,9 +120,9 @@ export function getSettingsForAdmin(): AdminSettings {
   const {
     fill_original_url,
     concurrency: linkConcurrency,
-    url_list_max_items,
-    jsonl_max_items
+    max_items: linkMaxItems
   } = settings.link_image;
+  const { max_items: weiboMaxItems } = settings.weibo;
   const { commit_concurrency } = settings.import;
   const { login_background, image_page_size, recent_uploads, show_unset_theme_card } = settings.admin;
   return {
@@ -136,9 +136,9 @@ export function getSettingsForAdmin(): AdminSettings {
     link_image: {
       fill_original_url,
       concurrency: linkConcurrency,
-      url_list_max_items,
-      jsonl_max_items
+      max_items: linkMaxItems
     },
+    weibo: { max_items: weiboMaxItems },
     normalize: settings.normalize,
     thumbnail: settings.thumbnail,
     import: { commit_concurrency },

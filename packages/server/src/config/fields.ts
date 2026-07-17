@@ -63,8 +63,10 @@ export const linkImageConcurrency = z.coerce.number().int().min(1).max(128);
 export const linkFetchTimeoutSeconds = z.coerce.number().int().min(5).max(300);
 export const linkImportMaxItems = z.coerce.number().int().min(1)
   .max(appConfig.imports.linkSoftLimitMax);
-export const jsonlImportMaxItems = z.coerce.number().int().min(1)
-  .max(appConfig.imports.linkSoftLimitMax);
+export const weiboImportMaxItems = z.coerce.number().int().min(1)
+  .max(appConfig.imports.weiboSoftLimitMax);
+export const weiboMetadataConcurrency = z.coerce.number().int().min(1).max(16);
+export const weiboGlobalConcurrency = z.coerce.number().int().min(1).max(32);
 
 export const taskConcurrency = z.coerce.number().int().min(1).max(512);
 

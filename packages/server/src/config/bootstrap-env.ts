@@ -122,8 +122,12 @@ export function runtimeConfigFromEnvironment(): RuntimeConfig {
       concurrency: environmentNumber("LINK_IMAGE_CONCURRENCY"),
       global_concurrency: environmentNumber("LINK_IMAGE_GLOBAL_CONCURRENCY"),
       fetch_timeout_seconds: environmentNumber("LINK_IMAGE_FETCH_TIMEOUT_SECONDS"),
-      url_list_max_items: environmentNumber("LINK_IMAGE_URL_LIST_MAX_ITEMS"),
-      jsonl_max_items: environmentNumber("LINK_IMAGE_JSONL_MAX_ITEMS")
+      max_items: environmentNumber("LINK_IMAGE_MAX_ITEMS")
+    },
+    weibo: {
+      max_items: environmentNumber("WEIBO_MAX_ITEMS"),
+      concurrency: environmentNumber("WEIBO_CONCURRENCY"),
+      global_concurrency: environmentNumber("WEIBO_GLOBAL_CONCURRENCY")
     },
     normalize: {
       quality: environmentNumber("NORMALIZE_QUALITY"),

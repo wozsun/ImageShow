@@ -25,6 +25,7 @@ import type { ImportPreviewTarget } from "./DuplicateMatchPanel.js";
 import { LinkUrlDialog, type LinkDialogSubmission, type LinkInputMode } from "./link-import/LinkUrlDialog.js";
 import { LinkImportSplitButton } from "./link-import/LinkImportSplitButton.js";
 import { jsonlImportJobs } from "./link-import/jsonl-jobs.js";
+import { weiboImportJobs } from "./link-import/weibo-jobs.js";
 import type { JsonlManifestParseError } from "./import-api.js";
 import { useImportQueue } from "./useImportQueue.js";
 import { useLocalUploadImport } from "./useLocalUploadImport.js";
@@ -72,8 +73,8 @@ export function Uploader({ onDone }: { onDone: () => void }) {
   const downloadConcurrency = settingsData?.settings.link_image.concurrency ?? 2;
   const commitConcurrency = settingsData?.settings.import.commit_concurrency ?? 5;
   const fillOriginalUrl = settingsData?.settings.link_image.fill_original_url ?? false;
-  const urlListMaxItems = settingsData?.settings.link_image.url_list_max_items ?? 100;
-  const jsonlMaxItems = settingsData?.settings.link_image.jsonl_max_items ?? 100;
+  const linkMaxItems = settingsData?.settings.link_image.max_items ?? 200;
+  const weiboMaxItems = settingsData?.settings.weibo.max_items ?? 20;
   const queue = useImportQueue(pageSize);
 
   const { data: storageData } = useStorageOptions();
@@ -196,6 +197,25 @@ export function Uploader({ onDone }: { onDone: () => void }) {
       void linkImport.addUrls(submission.urls, submission.mode);
       return;
     }
+    if (submission.inputMode === "weibo") {
+      const postErrors: JsonlManifestParseError[] = submission.result.errors.map((error) => ({
+        line: error.line,
+        raw: error.url,
+        error: `微博解析失败：${error.error}`
+      }));
+      setJsonlErrors((current) => [
+        ...current,
+        ...postErrors,
+        ...submission.result.manifest.errors
+      ]);
+      void linkImport.addWeiboJobs(weiboImportJobs(
+        submission.result.manifest.items,
+        defaults,
+        submission.mode,
+        activeBackend
+      ));
+      return;
+    }
     setJsonlErrors((current) => [...current, ...submission.manifest.errors]);
     const jobs = jsonlImportJobs(submission.manifest.items, defaults, submission.mode, activeBackend);
     void linkImport.addJobs(jobs);
@@ -242,7 +262,11 @@ export function Uploader({ onDone }: { onDone: () => void }) {
   return (
     <>
       <div className="upload-triggers">
-        <LinkImportSplitButton onOpenUrls={(opener) => void openLinkInput("urls", opener)} onOpenJsonl={(opener) => void openLinkInput("jsonl", opener)} />
+        <LinkImportSplitButton
+          onOpenUrls={(opener) => void openLinkInput("urls", opener)}
+          onOpenJsonl={(opener) => void openLinkInput("jsonl", opener)}
+          onOpenWeibo={(opener) => void openLinkInput("weibo", opener)}
+        />
         <button className="button upload-trigger" type="button" onClick={(event) => void openInMode("file", event.currentTarget)}><Icon name="upload-cloud-2-line" />上传图片</button>
       </div>
       {open && (
@@ -382,7 +406,16 @@ export function Uploader({ onDone }: { onDone: () => void }) {
             />
           )}
           {preview && <ImagePreviewModal src={preview.src} thumbSrc={preview.thumbSrc} width={preview.width} height={preview.height} onClose={() => setPreview(null)} returnFocusRef={previewReturnFocusRef} />}
-          {urlInputOpen && <LinkUrlDialog initialInputMode={linkInputMode} urlListMaxItems={urlListMaxItems} jsonlMaxItems={jsonlMaxItems} onClose={() => setUrlInputOpen(false)} onSubmit={addLinks} returnFocusRef={linkPickerRef} />}
+          {urlInputOpen && (
+            <LinkUrlDialog
+              initialInputMode={linkInputMode}
+              maxItems={linkMaxItems}
+              weiboMaxItems={weiboMaxItems}
+              onClose={() => setUrlInputOpen(false)}
+              onSubmit={addLinks}
+              returnFocusRef={linkPickerRef}
+            />
+          )}
         </div>
       )}
     </>

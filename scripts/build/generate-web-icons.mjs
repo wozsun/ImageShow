@@ -49,7 +49,8 @@ const iconNames = [
   "star-fill",
   "star-line",
   "upload-cloud-2-line",
-  "user-add-line"
+  "user-add-line",
+  "weibo-line"
 ];
 
 const remixDir = [
