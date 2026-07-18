@@ -35,6 +35,17 @@ import { useImportCommit } from "./useImportCommit.js";
 import { useImportStatusEvents } from "./useImportStatusEvents.js";
 import { UploadCleanupMenu, type UploadCleanupAction } from "./UploadCleanupMenu.js";
 
+function isCompletedImportJob(job: ImportJob) {
+  return job.status === "done" || job.status === "skipped";
+}
+
+function needsImportCancellation(job: ImportJob) {
+  return job.status !== "cancelling"
+    && job.status !== "done"
+    && job.status !== "skipped"
+    && job.status !== "cancelled";
+}
+
 export function Uploader({ onDone }: { onDone: () => void }) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"file" | "link">("file");
@@ -114,7 +125,7 @@ export function Uploader({ onDone }: { onDone: () => void }) {
   const exit = useAnimatedClose(() => {
     setOpen(false);
     setDefaultsExpanded(false);
-    queue.clearJobs((job) => ["done", "skipped"].includes(job.status));
+    queue.clearJobs(isCompletedImportJob);
     setJsonlErrors([]);
   });
   useBodyScrollLock(open);
@@ -138,7 +149,7 @@ export function Uploader({ onDone }: { onDone: () => void }) {
   const openInMode = async (next: "file" | "link", opener?: HTMLElement) => {
     if (opener) workflowReturnFocusRef.current = opener;
     const discarded = queue.jobsRef.current.filter((job) => next === "file" ? job.kind !== "local" : job.kind === "local");
-    await Promise.all(discarded.filter((job) => !["cancelling", "done", "skipped", "cancelled"].includes(job.status)).map(cancelJob));
+    await Promise.all(discarded.filter(needsImportCancellation).map(cancelJob));
     queue.retainMode(next);
     setMode(next);
     setOpen(true);
@@ -180,7 +191,7 @@ export function Uploader({ onDone }: { onDone: () => void }) {
     // 筛选，导致“重复待确认”任务找不到而仍留在总数中；期间新产生的重复项也不会误删。
     const targetIds = new Set(targets.map((job) => job.id));
     const cancellationRequests = targets
-      .filter((job) => !["cancelling", "done", "skipped", "cancelled"].includes(job.status))
+      .filter(needsImportCancellation)
       .map(cancelJob);
     // 取消函数在首个 await 前已经中止活动请求并标记任务；服务端暂存对象清理可能较慢，
     // 不应阻塞用户明确要求的本地队列清理和总数更新。
@@ -243,14 +254,14 @@ export function Uploader({ onDone }: { onDone: () => void }) {
     {
       id: "uncommitted",
       label: "清空未提交",
-      enabled: queue.jobs.some((job) => !["done", "skipped"].includes(job.status)),
-      run: () => void clearJobs((job) => !["done", "skipped"].includes(job.status)),
+      enabled: queue.jobs.some((job) => !isCompletedImportJob(job)),
+      run: () => void clearJobs((job) => !isCompletedImportJob(job)),
     },
     {
       id: "completed",
       label: "清空已完成",
-      enabled: queue.jobs.some((job) => job.status === "done"),
-      run: () => void clearJobs((job) => job.status === "done"),
+      enabled: queue.jobs.some(isCompletedImportJob),
+      run: () => void clearJobs(isCompletedImportJob),
     },
   ];
   const defaultsSummary = [
@@ -281,10 +292,10 @@ export function Uploader({ onDone }: { onDone: () => void }) {
                 {queue.jobs.length ? (
                   <p className="upload-task-summary">
                     <span className="upload-summary-primary">
-                      {queue.jobs.length} 个任务，{runningJobs} 个处理中，{readyJobs.length} 个待提交；
+                      共 {queue.jobs.length} 张图片，{runningJobs} 张处理中，{readyJobs.length} 张待提交；
                     </span>
                     <span className="upload-summary-secondary">
-                      {doneJobs} 个成功，{skippedJobs} 个跳过，{failedJobs} 个失败，{duplicateJobs} 个重复待确认
+                      {doneJobs} 张成功，{skippedJobs} 张跳过，{failedJobs} 张失败，{duplicateJobs} 张重复待确认
                       {jsonlErrors.length ? `，${jsonlErrors.length} 行解析失败` : ""}
                     </span>
                   </p>
@@ -395,7 +406,7 @@ export function Uploader({ onDone }: { onDone: () => void }) {
               />
               <div className="modal-footer-actions">
                 <button type="button" onClick={() => void clearJobs(() => true).then(() => exit.requestClose())} disabled={busy}>取消</button>
-                <button className="button workflow-submit-button" type="button" disabled={!readyJobs.length || busy || duplicateJobs > 0} onClick={() => { setBusy(true); void commitImports(readyJobs).finally(() => setBusy(false)); }}>{busy ? "提交中" : readyJobs.length ? `提交 ${readyJobs.length}` : "提交"}</button>
+                <button className="button workflow-submit-button" type="button" disabled={!readyJobs.length || busy || duplicateJobs > 0} onClick={() => { setBusy(true); void commitImports(readyJobs).finally(() => setBusy(false)); }}>{busy ? "提交中" : readyJobs.length ? `提交 ${readyJobs.length} 张` : "提交"}</button>
               </div>
             </footer>
           </section>

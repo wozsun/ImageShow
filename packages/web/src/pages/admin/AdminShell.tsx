@@ -1,11 +1,13 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Link, Navigate, NavLink, Route, Routes, useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { api, clearCsrfToken, setCsrfToken } from "../../lib/api/client.js";
 import { Icon } from "../../components/icon/Icon.js";
 import { PasswordInput } from "../../components/form/PasswordInput.js";
 import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
 import { adminApiBasePath, adminBasePath } from "../../lib/constants.js";
 import { clearSessionProbeHint, rememberSessionProbeHint, useAuthMe, useSiteConfig } from "../../lib/api/site-data.js";
+import { clearAdminCacheAfterLogin } from "../../lib/api/query-invalidation.js";
 import { cssUrl } from "../../lib/ui/formatters.js";
 import { MobileNavigation } from "../../components/navigation/MobileNavigation.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
@@ -29,6 +31,7 @@ const AdvancedConfigPage = lazy(() => import("./AdvancedConfigPage.js").then((mo
 
 export function AdminShell() {
   const navigate = useNavigate();
+  const client = useQueryClient();
 
   const navScrollRef = useRef<HTMLDivElement | null>(null);
   const { data: siteConfig } = useSiteConfig();
@@ -47,7 +50,18 @@ export function AdminShell() {
   }, [data]);
   if (authFailed) return <QueryErrorState error={authError} onRetry={() => void refetch()} fullPage />;
   if (!data) return <div className="center">加载中</div>;
-  if (!data.authenticated) return <Login onLogin={() => refetch()} captchaEnabled={data.captcha_enabled} loginBackground={data.login_background} />;
+  if (!data.authenticated) return (
+    <Login
+      onLogin={() => {
+        // 先同步移除可能跨登录复用的后台缓存，再重新读取认证状态。移除操作
+        // 不主动取数；认证完成后由真正挂载的后台路由按需读取，避免显示旧会话数据。
+        clearAdminCacheAfterLogin(client);
+        void refetch();
+      }}
+      captchaEnabled={data.captcha_enabled}
+      loginBackground={data.login_background}
+    />
+  );
   const isSuper = data.role === "super";
   const logout = async () => {
     try {

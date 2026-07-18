@@ -13,6 +13,7 @@ const iconNames = [
   "arrow-down-s-line",
   "arrow-go-back-line",
   "arrow-left-right-line",
+  "arrow-up-line",
   "check-line",
   "checkbox-circle-line",
   "close-line",

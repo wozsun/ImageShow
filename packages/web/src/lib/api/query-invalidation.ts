@@ -5,6 +5,29 @@ function invalidate(client: QueryClient, queryKeysToInvalidate: readonly (readon
   return Promise.all(queryKeysToInvalidate.map((queryKey) => client.invalidateQueries({ queryKey })));
 }
 
+function removeQueries(client: QueryClient, queryKeysToRemove: readonly (readonly unknown[])[]) {
+  for (const queryKey of queryKeysToRemove) client.removeQueries({ queryKey });
+}
+
+export function clearAdminCacheAfterLogin(client: QueryClient) {
+  removeQueries(client, [
+    // 清除整个偏好 key 前缀，不依赖登录表单里的原始用户名与服务端最终会话名完全一致。
+    queryKeys.adminPreferences,
+    queryKeys.importVocabulary,
+    queryKeys.settings,
+    queryKeys.overview,
+    queryKeys.adminImages,
+    queryKeys.adminImageInfo,
+    queryKeys.tags,
+    queryKeys.themes,
+    queryKeys.authors,
+    queryKeys.users,
+    queryKeys.logs,
+    ["storage-backends"],
+    ["storage-options"]
+  ]);
+}
+
 export function invalidateImageData(client: QueryClient) {
   return invalidate(client, [
     queryKeys.publicImages,

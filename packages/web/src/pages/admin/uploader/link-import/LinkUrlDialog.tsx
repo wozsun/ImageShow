@@ -232,7 +232,7 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
         ? "解析清单"
         : inputMode === "weibo" && !weiboResultCurrent
           ? "解析微博"
-          : `导入${submitCount ? ` ${submitCount} 个` : ""}`;
+          : `导入${submitCount ? ` ${submitCount} 张` : ""}`;
 
   return (
     <div className="modal link-url-overlay" role="dialog" aria-modal="true" aria-label="导入内容输入">
@@ -343,7 +343,7 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
                 <span className="link-import-submit-label">
                   <span>导入</span>
                   <span className="link-import-submit-count">{submitCount}</span>
-                  <span>个</span>
+                  <span>张</span>
                 </span>
               ) : submitText}
             </button>

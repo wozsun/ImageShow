@@ -11,6 +11,7 @@ type Metrics = {
 const HIDE_DELAY = 900;
 const EDGE_ZONE = 24;
 const MIN_HANDLE = 36;
+const PAGE_TOP_INSET_SELECTOR = "[data-overlay-scrollbar-inset]";
 
 const ENABLE_QUERY = "(hover: hover) and (pointer: fine) and (forced-colors: none)";
 
@@ -85,11 +86,33 @@ function OverlayScrollbarHandle({
   useEffect(() => {
     const el = targetRef?.current ?? null;
     const windowMode = !targetRef;
+    const observedPageInsets = new Set<HTMLElement>();
+    let observer: ResizeObserver | null = null;
 
     if (targetRef && !el) return;
     if (el) el.classList.add("overlay-scroll-host");
 
     const isLocked = () => windowMode && document.body.style.position === "fixed";
+    const pageTopInset = () => {
+      if (!windowMode) return 0;
+      let inset = 0;
+      for (const element of observedPageInsets) {
+        if (element.isConnected && element.matches(PAGE_TOP_INSET_SELECTOR)) continue;
+        observer?.unobserve(element);
+        observedPageInsets.delete(element);
+      }
+      const elements = document.querySelectorAll<HTMLElement>(PAGE_TOP_INSET_SELECTOR);
+      elements.forEach((element) => {
+        if (observer && !observedPageInsets.has(element)) {
+          observedPageInsets.add(element);
+          observer.observe(element);
+        }
+        const rect = element.getBoundingClientRect();
+        // 只合并从视口顶部连续覆盖的吸顶区域，避免误把页面下方同名组件计入轨道边界。
+        if (rect.bottom > 0 && rect.top <= inset + 1) inset = Math.max(inset, rect.bottom);
+      });
+      return Math.min(window.innerHeight, Math.max(0, inset));
+    };
     const read = () => {
       if (el) {
         const rect = el.getBoundingClientRect();
@@ -114,11 +137,14 @@ function OverlayScrollbarHandle({
           edgeRight,
         };
       }
+      const insetHeight = pageTopInset();
+      const viewport = Math.max(0, window.innerHeight - insetHeight);
       return {
-        viewport: window.innerHeight,
-        total: document.documentElement.scrollHeight,
+        viewport,
+        // 同时扣除轨道顶部边界，使 total - viewport 仍等于页面真实最大滚动距离。
+        total: Math.max(viewport, document.documentElement.scrollHeight - insetHeight),
         scroll: window.scrollY,
-        offsetTop: 0,
+        offsetTop: insetHeight,
         right: 0,
         edgeRight: window.innerWidth,
       };
@@ -162,7 +188,6 @@ function OverlayScrollbarHandle({
       if (near >= 0 && near <= EDGE_ZONE && event.clientY >= offsetTop && event.clientY <= offsetTop + viewport) { scheduleRecompute(); reveal(); }
     };
 
-    recompute();
     const scrollTarget: EventTarget = el ?? window;
     scrollTarget.addEventListener("scroll", onScroll, { passive: true });
     // 浮动手柄使用 fixed 定位，任一祖先滚动都会改变目标元素的视口坐标。
@@ -170,16 +195,20 @@ function OverlayScrollbarHandle({
     window.addEventListener("resize", onResize);
     window.addEventListener("pointermove", onPointerMove, { passive: true });
 
-    const observer = new ResizeObserver(scheduleRecompute);
+    observer = new ResizeObserver(scheduleRecompute);
     observer.observe(el ?? document.body);
     if (containerRef?.current) observer.observe(containerRef.current);
     if (topInsetRef?.current) observer.observe(topInsetRef.current);
+    const domObserver = windowMode ? new MutationObserver(scheduleRecompute) : null;
+    domObserver?.observe(document.body, { childList: true, subtree: true });
+    recompute();
     return () => {
       scrollTarget.removeEventListener("scroll", onScroll);
       if (el) window.removeEventListener("scroll", onAncestorScroll, true);
       window.removeEventListener("resize", onResize);
       window.removeEventListener("pointermove", onPointerMove);
-      observer.disconnect();
+      observer?.disconnect();
+      domObserver?.disconnect();
       if (frame !== undefined) window.cancelAnimationFrame(frame);
       window.clearTimeout(hideTimer.current);
       if (el) el.classList.remove("overlay-scroll-host");
@@ -190,9 +219,9 @@ function OverlayScrollbarHandle({
     event.preventDefault();
     const el = targetRef?.current ?? null;
     const handleEl = event.currentTarget;
-    const viewport = el ? el.clientHeight : window.innerHeight;
-    const total = el ? el.scrollHeight : document.documentElement.scrollHeight;
-    const maxScroll = total - viewport;
+    const maxScroll = el
+      ? el.scrollHeight - el.clientHeight
+      : document.documentElement.scrollHeight - window.innerHeight;
     const travel = metricsRef.current.trackHeight - metricsRef.current.height;
     const startY = event.clientY;
     const startScroll = el ? el.scrollTop : window.scrollY;

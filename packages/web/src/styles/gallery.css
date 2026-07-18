@@ -1,7 +1,7 @@
 .gallery-toolbar {
   --gallery-control-height: 40px;
   position: sticky;
-  top: 0;
+  top: var(--app-header-height);
   z-index: 2;
   display: flex;
   flex-wrap: wrap;
@@ -11,6 +11,12 @@
   background: rgba(245, 246, 248, .94);
   border-bottom: 1px solid #dce2ea;
   backdrop-filter: blur(10px);
+  transition: transform .2s ease;
+  will-change: transform;
+}
+.gallery-toolbar.is-scroll-hidden {
+  pointer-events: none;
+  transform: translateY(-100%);
 }
 .gallery-toolbar label {
   display: grid;
@@ -28,20 +34,23 @@
   background: #f5f6f8;
 }
 .theme-toolbar {
+  top: 0;
   align-items: end;
 }
 .theme-title {
   min-width: 180px;
-  display: grid;
-  gap: 2px;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 }
 .theme-title strong {
-  font-size: 22px;
-  line-height: 1.1;
+  font-size: 32px;
+  line-height: 1;
 }
 .theme-title span {
   color: #66717f;
-  font-size: 13px;
+  font-size: 16px;
 }
 .theme-link {
   min-width: min(520px, 100%);
@@ -147,6 +156,38 @@
   margin: 0 28px 28px;
 }
 .gallery-sentinel { height: 1px; }
+.gallery-back-to-top {
+  position: fixed;
+  right: max(40px, calc(env(safe-area-inset-right) + 32px));
+  bottom: max(40px, calc(env(safe-area-inset-bottom) + 32px));
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 1px solid rgba(148, 161, 178, .72);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .94);
+  color: #2056e0;
+  box-shadow: 0 8px 24px rgba(20, 30, 44, .18);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(8px);
+  transition: opacity .16s ease, transform .16s ease, visibility 0s linear .16s;
+}
+.gallery-back-to-top.is-visible {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateY(0);
+  transition-delay: 0s;
+}
+.gallery-back-to-top .app-icon {
+  width: 22px;
+  height: 22px;
+}
 
 @keyframes image-detail-backdrop-in {
   from { background-color: rgba(13, 18, 28, 0); }

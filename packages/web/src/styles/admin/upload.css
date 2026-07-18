@@ -44,7 +44,8 @@
 }
 .upload-window {
   width: min(1180px, 96vw);
-  max-height: 92vh;
+  /* 桌面端直接占满既定的最大可用高度，避免任务增删时整个窗口上下跳动。 */
+  height: min(90vh, calc(100svh - 48px));
   container: upload-window / inline-size;
   display: flex;
   flex-direction: column;

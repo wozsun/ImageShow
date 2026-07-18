@@ -1,5 +1,5 @@
 .home-layout {
-  height: calc(100svh - 64px);
+  height: calc(100svh - var(--app-header-height));
   min-height: 0;
   overflow: hidden;
   display: grid;

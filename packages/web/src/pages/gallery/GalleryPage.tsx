@@ -20,6 +20,107 @@ import { masonryColumns, nextRenderBatch, useGalleryColumnCount } from "./galler
 
 type GalleryFilters = { device: string; brightness: string; theme: string; tag: string; author: string };
 type PublicImageListPage = { items: GalleryImageCard[]; next_cursor: string | null };
+const toolbarScrollDirectionThreshold = 8;
+const backToTopViewportThreshold = 2;
+
+function useGalleryToolbarVisibility(
+  toolbarRef: RefObject<HTMLElement | null>,
+  lockedOpen: boolean
+) {
+  const [visible, setVisible] = useState(true);
+  const scrollAnchorRef = useRef(0);
+  const toolbarHeightRef = useRef(0);
+
+  useEffect(() => {
+    const toolbar = toolbarRef.current;
+    if (!toolbar) return;
+    const updateToolbarHeight = () => {
+      toolbarHeightRef.current = toolbar.getBoundingClientRect().height;
+    };
+    const observer = new ResizeObserver(updateToolbarHeight);
+    observer.observe(toolbar);
+    updateToolbarHeight();
+
+    scrollAnchorRef.current = window.scrollY;
+    if (lockedOpen) {
+      setVisible(true);
+      return () => observer.disconnect();
+    }
+
+    let frame: number | undefined;
+    const update = () => {
+      frame = undefined;
+      const scrollTop = Math.max(0, window.scrollY);
+      // 下拉菜单通过 Portal 渲染在 body；菜单展开时保持其触发工具栏可见，
+      // 避免触发器被收起而浮层仍停留在页面上。
+      if (toolbar.querySelector('[aria-expanded="true"]')) {
+        scrollAnchorRef.current = scrollTop;
+        setVisible(true);
+        return;
+      }
+      if (scrollTop <= toolbarScrollDirectionThreshold) {
+        scrollAnchorRef.current = scrollTop;
+        setVisible(true);
+        return;
+      }
+      const delta = scrollTop - scrollAnchorRef.current;
+      if (Math.abs(delta) < toolbarScrollDirectionThreshold) return;
+      scrollAnchorRef.current = scrollTop;
+      if (delta < 0) {
+        setVisible(true);
+        return;
+      }
+      // 工具栏仍占据文档流高度。等页面至少滚过同等距离再隐藏，避免其原始
+      // 占位来不及滚出视口而暴露成一整块空白。
+      if (scrollTop >= toolbarHeightRef.current) setVisible(false);
+    };
+    const onScroll = () => {
+      if (frame !== undefined) return;
+      frame = window.requestAnimationFrame(update);
+    };
+
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (frame !== undefined) window.cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [lockedOpen, toolbarRef]);
+
+  return visible;
+}
+
+function useBackToTopVisibility() {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    let frame: number | undefined;
+    const update = () => {
+      frame = undefined;
+      setVisible(window.scrollY >= window.innerHeight * backToTopViewportThreshold);
+    };
+    const scheduleUpdate = () => {
+      if (frame !== undefined) return;
+      frame = window.requestAnimationFrame(update);
+    };
+
+    update();
+    window.addEventListener("scroll", scheduleUpdate, { passive: true });
+    window.addEventListener("resize", scheduleUpdate);
+    return () => {
+      window.removeEventListener("scroll", scheduleUpdate);
+      window.removeEventListener("resize", scheduleUpdate);
+      if (frame !== undefined) window.cancelAnimationFrame(frame);
+    };
+  }, []);
+
+  return visible;
+}
+
+function scrollGalleryToTop() {
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  window.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
+}
 
 function gallerySearchParams(filters: GalleryFilters, order: string, cursor = "") {
   const params = new URLSearchParams();
@@ -80,6 +181,9 @@ export function GalleryPage({ fixedTheme = "", standalone = false }: { fixedThem
   const [mode, setMode] = useState<RandomMode>("");
 
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const toolbarRef = useRef<HTMLElement | null>(null);
+  const toolbarVisible = useGalleryToolbarVisibility(toolbarRef, filtersOpen);
+  const backToTopVisible = useBackToTopVisibility();
   const [visibleCount, setVisibleCount] = useState(galleryRenderBatch);
   const detailReturnFocusRef = useRef<HTMLElement | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
@@ -160,11 +264,17 @@ export function GalleryPage({ fixedTheme = "", standalone = false }: { fixedThem
   const galleryHoverTitle = (item: GalleryImageCard) => item.title?.trim() || themeLabel(item.theme) || imageDisplayTitle(item);
   const galleryHoverTags = (item: GalleryImageCard) => item.tags.map((tag) => tagNames.get(tag) ?? tag).join(" · ");
   const loading = imagePages.isLoading || imagePages.isFetchingNextPage;
+  const showBackToTop = backToTopVisible && !selected;
 
   return (
     <main className={`page ${standalone ? "theme-page" : ""}`}>
       {!standalone && <AppHeader />}
-      <section className={`gallery-toolbar ${standalone ? "theme-toolbar" : ""}${filtersOpen ? " filters-open" : ""}`}>
+      <section
+        ref={toolbarRef}
+        className={`gallery-toolbar ${standalone ? "theme-toolbar" : ""}${filtersOpen ? " filters-open" : ""}${toolbarVisible ? "" : " is-scroll-hidden"}`}
+        aria-hidden={!toolbarVisible}
+        inert={!toolbarVisible}
+      >
         {standalone && (
           <div className="theme-title">
             <strong>{fixedTheme}</strong>
@@ -227,7 +337,7 @@ export function GalleryPage({ fixedTheme = "", standalone = false }: { fixedThem
             />
           </label>
         )}
-        <label>
+        <label className="gallery-tag-filter">
           标签
           <FacetSelector
             options={facets?.tags ?? []}
@@ -297,6 +407,20 @@ export function GalleryPage({ fixedTheme = "", standalone = false }: { fixedThem
       {!imagePages.isError && !loading && !items.length && <p className="empty-state gallery-empty">暂无图片</p>}
       {loading && <p className="gallery-loading">加载中</p>}
       <div ref={sentinelRef} className="gallery-sentinel" />
+      <button
+        type="button"
+        className={`gallery-back-to-top pressable${showBackToTop ? " is-visible" : ""}`}
+        aria-label="回到顶部"
+        title="回到顶部"
+        aria-hidden={!showBackToTop}
+        tabIndex={showBackToTop ? 0 : -1}
+        onClick={(event) => {
+          event.currentTarget.blur();
+          scrollGalleryToTop();
+        }}
+      >
+        <Icon name="arrow-up-line" />
+      </button>
       {selected && (
         <GalleryImageDetail
           card={selected}

@@ -29,7 +29,7 @@ export function AppHeader() {
   }, [auth]);
 
   return (
-    <header className="topbar">
+    <header className="topbar" data-overlay-scrollbar-inset>
       <Link className="brand" to="/">{siteName}</Link>
       <nav className="desktop-nav">
         {homeEnabled && <NavLink to="/home" className={navClassName("/home")}><Icon name="home-4-line" />首页</NavLink>}

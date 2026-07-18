@@ -96,7 +96,7 @@ export function useLocalUploadImport(options: {
       return true;
     });
     if (selected.length > maxItems) {
-      window.alert(`单次最多允许 ${maxItems} 个本地文件，请拆分后再导入`);
+      window.alert(`单次最多允许 ${maxItems} 张图片，请拆分后再导入`);
       return;
     }
     const batchTime = new Date().toISOString();

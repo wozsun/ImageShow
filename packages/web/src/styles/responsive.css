@@ -34,6 +34,8 @@
   .select-menu.is-closing,
   .facet-select-menu,
   .facet-select-menu.is-closing { animation: none; }
+  .gallery-toolbar { transition: none; }
+  .gallery-back-to-top { transition: none; }
 }
 
 @media (max-width: 1080px) {
@@ -41,7 +43,7 @@
 }
 
 @media (max-width: 760px) {
-  .topbar { padding: 0 16px; position: relative; z-index: 4; }
+  .topbar { padding: 0 16px; }
   .desktop-nav { display: none !important; }
   .mobile-navigation { display: block; }
 
@@ -76,7 +78,20 @@
     grid-template-columns: minmax(0, 1fr) auto auto;
     margin-top: 0;
   }
-  .gallery-toolbar { position: static; padding: 12px 16px; align-items: stretch; flex-direction: column; }
+  .gallery-toolbar {
+    position: sticky;
+    top: var(--app-header-height);
+    z-index: 2;
+    max-height: calc(100svh - var(--app-header-height));
+    padding: 12px 16px;
+    overflow-y: auto;
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .gallery-toolbar.theme-toolbar {
+    top: 0;
+    max-height: 100svh;
+  }
   .gallery-toolbar label { min-width: 0; }
 
   .gallery-filter-toggle {
@@ -123,13 +138,26 @@
   .gallery-toolbar.filters-open > label.gallery-axis { order: 1; width: auto; }
   .gallery-toolbar.filters-open > label:last-of-type { order: 2; }
   .gallery-toolbar.filters-open > .theme-link { order: 4; }
-  .theme-title { min-width: 0; }
+  .theme-title {
+    min-width: 0;
+    flex-direction: row;
+    justify-content: flex-start;
+    align-items: flex-end;
+    gap: 10px;
+  }
+  .theme-toolbar.filters-open > .gallery-tag-filter { grid-column: 1 / -1; }
   .theme-link { width: 100%; min-width: 0; flex: 0 0 auto; gap: 4px; }
   .theme-link > span { font-size: 13px; line-height: 18px; }
   .theme-link-row { grid-template-columns: minmax(0, 1fr) var(--gallery-control-height) auto; gap: 6px; }
   .theme-link-row .button { grid-column: auto; padding-inline: 10px; }
   .gallery { padding: 16px; gap: 12px; }
   .gallery-column { gap: 12px; }
+  .gallery-back-to-top {
+    right: max(24px, calc(env(safe-area-inset-right) + 20px));
+    bottom: max(24px, calc(env(safe-area-inset-bottom) + 20px));
+    width: 42px;
+    min-height: 42px;
+  }
 
   .modal { padding: 10px; }
   .modal-footer-actions > * { flex: 1; }
