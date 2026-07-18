@@ -40,7 +40,7 @@ const inputModePresentation: Record<LinkInputMode, {
 }> = {
   urls: {
     heading: "链接导入",
-    icon: "download-cloud-2-line",
+    icon: "link",
     label: "URL 列表",
     placeholder: "https://example.com/a.jpg\nhttps://example.com/b.png"
   },
@@ -189,6 +189,9 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
   const submitCount = inputMode === "urls"
     ? urls.length
     : manifestCurrent?.items.length ?? 0;
+  const readyToImport = inputMode === "urls"
+    ? submitCount > 0
+    : Boolean(manifestCurrent);
   const missingInput = inputMode === "urls"
     ? !urls.length
     : inputMode === "weibo"
@@ -197,11 +200,13 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
   const parsedWithoutItems = Boolean(manifestCurrent && !manifestCurrent.items.length);
   const submitText = parsing
     ? "解析中"
-    : inputMode === "jsonl" && !jsonlManifestCurrent
-      ? "解析清单"
-      : inputMode === "weibo" && !weiboResultCurrent
-        ? "解析微博"
-        : `导入${submitCount ? ` ${submitCount} 个` : ""}`;
+    : inputMode === "urls" && !urls.length
+      ? "自动解析"
+      : inputMode === "jsonl" && !jsonlManifestCurrent
+        ? "解析清单"
+        : inputMode === "weibo" && !weiboResultCurrent
+          ? "解析微博"
+          : `导入${submitCount ? ` ${submitCount} 个` : ""}`;
 
   return (
     <div className="modal link-url-overlay" role="dialog" aria-modal="true" aria-label="导入内容输入">
@@ -304,7 +309,14 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
               disabled={parsing || limitState.overLimit || missingInput || parsedWithoutItems}
               onClick={() => void submit()}
             >
-              <Icon name={presentation.icon} />{submitText}
+              {!readyToImport && <Icon name={presentation.icon} />}
+              {readyToImport ? (
+                <span className="link-import-submit-label">
+                  <span>导入</span>
+                  <span className="link-import-submit-count">{submitCount}</span>
+                  <span>个</span>
+                </span>
+              ) : submitText}
             </button>
           </div>
         </div>

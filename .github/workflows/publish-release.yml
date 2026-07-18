@@ -10,13 +10,17 @@ permissions:
   contents: read
 
 concurrency:
-  group: publish-release-${{ github.ref }}
-  cancel-in-progress: true
+  group: publish-release
+  cancel-in-progress: false
+  queue: max
 
 jobs:
   publish:
-    name: Build and push release image
+    name: Publish release image
     runs-on: ubuntu-latest
+    env:
+      DOCKER_HUB_IMAGE: ${{ secrets.DOCKER_HUB_USERNAME }}/imageshow
+      TCR_IMAGE: ccr.ccs.tencentyun.com/${{ secrets.TCR_NAMESPACE }}/imageshow
     steps:
       - name: Checkout source
         uses: actions/checkout@v6
@@ -64,18 +68,82 @@ jobs:
           username: ${{ secrets.TCR_USERNAME }}
           password: ${{ secrets.TCR_PASSWORD }}
 
-      - name: Build and push to both registries
+      - name: Check for reusable dev image
+        id: reusable_image
+        shell: bash
+        run: |
+          set -euo pipefail
+          revision_key="org.opencontainers.image.revision"
+
+          inspect_manifest() {
+            local image="$1"
+            docker buildx imagetools inspect "${image}:dev" \
+              --format '{{json .Manifest}}' 2>/dev/null
+          }
+
+          docker_hub_manifest="$(inspect_manifest "${DOCKER_HUB_IMAGE}" || true)"
+          tcr_manifest="$(inspect_manifest "${TCR_IMAGE}" || true)"
+          docker_hub_revision="$(jq -r --arg key "${revision_key}" \
+            '.annotations[$key] // empty' <<< "${docker_hub_manifest}" 2>/dev/null || true)"
+          tcr_revision="$(jq -r --arg key "${revision_key}" \
+            '.annotations[$key] // empty' <<< "${tcr_manifest}" 2>/dev/null || true)"
+          docker_hub_digest="$(jq -r '.digest // empty' \
+            <<< "${docker_hub_manifest}" 2>/dev/null || true)"
+          tcr_digest="$(jq -r '.digest // empty' \
+            <<< "${tcr_manifest}" 2>/dev/null || true)"
+          digest_pattern='^sha256:[0-9a-f]{64}$'
+
+          if [[ "${docker_hub_revision}" == "${GITHUB_SHA}" \
+            && "${tcr_revision}" == "${GITHUB_SHA}" \
+            && "${docker_hub_digest}" =~ ${digest_pattern} \
+            && "${tcr_digest}" =~ ${digest_pattern} ]]; then
+            {
+              echo "available=true"
+              echo "docker_hub_digest=${docker_hub_digest}"
+              echo "tcr_digest=${tcr_digest}"
+            } >> "${GITHUB_OUTPUT}"
+            echo "Reusing the current dev image from both registries."
+          else
+            echo "available=false" >> "${GITHUB_OUTPUT}"
+            echo "The current dev image does not match ${GITHUB_SHA}; falling back to a full build."
+            echo "Docker Hub revision: ${docker_hub_revision:-missing}"
+            echo "Tencent registry revision: ${tcr_revision:-missing}"
+          fi
+
+      - name: Add release tags to current dev image
+        if: steps.reusable_image.outputs.available == 'true'
+        shell: bash
+        env:
+          DOCKER_HUB_DIGEST: ${{ steps.reusable_image.outputs.docker_hub_digest }}
+          TCR_DIGEST: ${{ steps.reusable_image.outputs.tcr_digest }}
+        run: |
+          set -euo pipefail
+
+          docker buildx imagetools create \
+            --annotation "index:org.opencontainers.image.revision=${GITHUB_SHA}" \
+            --tag "${DOCKER_HUB_IMAGE}:${GITHUB_REF_NAME}" \
+            --tag "${DOCKER_HUB_IMAGE}:latest" \
+            "${DOCKER_HUB_IMAGE}@${DOCKER_HUB_DIGEST}"
+
+          docker buildx imagetools create \
+            --annotation "index:org.opencontainers.image.revision=${GITHUB_SHA}" \
+            --tag "${TCR_IMAGE}:${GITHUB_REF_NAME}" \
+            --tag "${TCR_IMAGE}:latest" \
+            "${TCR_IMAGE}@${TCR_DIGEST}"
+
+      - name: Build and push release image
+        if: steps.reusable_image.outputs.available != 'true'
         uses: docker/build-push-action@v7
         with:
           context: .
           push: true
           tags: |
-            ${{ secrets.DOCKER_HUB_USERNAME }}/imageshow:${{ github.ref_name }}
-            ccr.ccs.tencentyun.com/${{ secrets.TCR_NAMESPACE }}/imageshow:${{ github.ref_name }}
-            ${{ secrets.DOCKER_HUB_USERNAME }}/imageshow:latest
-            ccr.ccs.tencentyun.com/${{ secrets.TCR_NAMESPACE }}/imageshow:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+            ${{ env.DOCKER_HUB_IMAGE }}:${{ github.ref_name }}
+            ${{ env.DOCKER_HUB_IMAGE }}:latest
+            ${{ env.TCR_IMAGE }}:${{ github.ref_name }}
+            ${{ env.TCR_IMAGE }}:latest
+          annotations: |
+            index:org.opencontainers.image.revision=${{ github.sha }}
 
   release:
     name: Publish GitHub Release

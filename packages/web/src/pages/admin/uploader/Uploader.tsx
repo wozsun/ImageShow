@@ -263,6 +263,7 @@ export function Uploader({ onDone }: { onDone: () => void }) {
     <>
       <div className="upload-triggers">
         <LinkImportSplitButton
+          onOpenWorkflow={(opener) => void openInMode("link", opener)}
           onOpenUrls={(opener) => void openLinkInput("urls", opener)}
           onOpenJsonl={(opener) => void openLinkInput("jsonl", opener)}
           onOpenWeibo={(opener) => void openLinkInput("weibo", opener)}

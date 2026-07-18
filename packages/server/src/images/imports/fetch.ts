@@ -12,7 +12,12 @@ function declaredContentLength(headers: Headers) {
   return Number.isFinite(value) && value > 0 ? value : undefined;
 }
 
-/** @internal Exported only for local download-progress verification. */
+/**
+ * Returns a declared length only when it is comparable to the decoded bytes
+ * consumed by the import pipeline.
+ *
+ * @internal Exported only for local download-progress verification.
+ */
 export function downloadProgressLength(headers: Headers) {
   const contentEncoding = headers.get("content-encoding")?.trim().toLowerCase();
   return !contentEncoding || contentEncoding === "identity"
@@ -39,7 +44,7 @@ async function fetchImportResponse(url: string, limitBytes: number, externalSign
       await response.body?.cancel().catch(() => undefined);
       throw new ApiError(400, "link_fetch_failed", `下载失败（HTTP ${response.status}）`, { url });
     }
-    const declared = declaredContentLength(response.headers);
+    const declared = downloadProgressLength(response.headers);
     if (declared !== undefined && declared > limitBytes) {
       await response.body?.cancel().catch(() => undefined);
       throw new ApiError(400, "link_too_large", "图片大小超过限制", { limit: limitBytes });

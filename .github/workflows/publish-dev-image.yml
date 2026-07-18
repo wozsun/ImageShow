@@ -18,6 +18,9 @@ jobs:
     name: Build and push dev image
     if: github.ref == 'refs/heads/dev'
     runs-on: ubuntu-latest
+    env:
+      DOCKER_HUB_IMAGE: ${{ secrets.DOCKER_HUB_USERNAME }}/imageshow
+      TCR_IMAGE: ccr.ccs.tencentyun.com/${{ secrets.TCR_NAMESPACE }}/imageshow
     steps:
       - name: Checkout source
         uses: actions/checkout@v6
@@ -44,7 +47,9 @@ jobs:
           context: .
           push: true
           tags: |
-            ${{ secrets.DOCKER_HUB_USERNAME }}/imageshow:dev
-            ccr.ccs.tencentyun.com/${{ secrets.TCR_NAMESPACE }}/imageshow:dev
+            ${{ env.DOCKER_HUB_IMAGE }}:dev
+            ${{ env.TCR_IMAGE }}:dev
+          annotations: |
+            index:org.opencontainers.image.revision=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

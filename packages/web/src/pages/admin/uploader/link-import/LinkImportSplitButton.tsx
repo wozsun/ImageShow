@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "../../../../components/icon/Icon.js";
 
-export function LinkImportSplitButton({ onOpenUrls, onOpenJsonl, onOpenWeibo }: {
+export function LinkImportSplitButton({ onOpenWorkflow, onOpenUrls, onOpenJsonl, onOpenWeibo }: {
+  onOpenWorkflow: (opener: HTMLButtonElement) => void;
   onOpenUrls: (opener: HTMLButtonElement) => void;
   onOpenJsonl: (opener: HTMLButtonElement) => void;
   onOpenWeibo: (opener: HTMLButtonElement) => void;
@@ -28,7 +29,7 @@ export function LinkImportSplitButton({ onOpenUrls, onOpenJsonl, onOpenWeibo }: 
 
   return (
     <div className="link-import-split" ref={rootRef}>
-      <button className="button secondary upload-trigger link-import-main" type="button" onClick={(event) => onOpenUrls(event.currentTarget)}>
+      <button className="button secondary upload-trigger link-import-main" type="button" onClick={(event) => onOpenWorkflow(event.currentTarget)}>
         <Icon name="download-cloud-2-line" />导入图片
       </button>
       <button ref={menuTriggerRef} className="button secondary link-import-menu-trigger" type="button" title="更多导入方式" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
@@ -36,6 +37,9 @@ export function LinkImportSplitButton({ onOpenUrls, onOpenJsonl, onOpenWeibo }: 
       </button>
       {open && (
         <div className="link-import-menu" role="menu">
+          <button type="button" role="menuitem" onClick={(event) => { setOpen(false); onOpenUrls(menuTriggerRef.current ?? event.currentTarget); }}>
+            <Icon name="link" />链接导入
+          </button>
           <button type="button" role="menuitem" onClick={(event) => { setOpen(false); onOpenJsonl(menuTriggerRef.current ?? event.currentTarget); }}>
             <Icon name="file-list-line" />清单导入
           </button>

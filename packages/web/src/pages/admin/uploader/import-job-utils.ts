@@ -1,11 +1,34 @@
 import type { Device, ImageDraft, ImportJob } from "../../../lib/types.js";
 import { browserUuid, resolveUploadDefaultBrightness, type CommonImageAttributes } from "../../../lib/upload/upload-utils.js";
 
+function hasDirectIpHostname(hostname: string) {
+  const unwrappedHostname = hostname.replace(/^\[|\]$/g, "");
+  return unwrappedHostname.includes(":") || /^(?:\d{1,3}\.){3}\d{1,3}$/.test(unwrappedHostname);
+}
+
+function isPlausibleExternalImageUrl(value: string) {
+  try {
+    const parsed = new URL(value);
+    const hostname = parsed.hostname.toLowerCase().replace(/\.$/, "");
+    return parsed.protocol === "https:"
+      && Boolean(hostname)
+      && !parsed.username
+      && !parsed.password
+      && hostname !== "localhost"
+      && !hostname.endsWith(".localhost")
+      && hostname !== "metadata"
+      && hostname !== "metadata.google.internal"
+      && !hasDirectIpHostname(hostname);
+  } catch {
+    return false;
+  }
+}
+
 export function parseImportUrls(input: string | string[]) {
   const raw = Array.isArray(input) ? input : input.split(/\s+/);
   const seen = new Set<string>();
   return raw.map((url) => url.trim()).filter((url) => {
-    if (!/^https:\/\//i.test(url) || seen.has(url)) return false;
+    if (!isPlausibleExternalImageUrl(url) || seen.has(url)) return false;
     seen.add(url);
     return true;
   });

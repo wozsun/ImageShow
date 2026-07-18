@@ -37,6 +37,7 @@ const iconNames = [
   "image-line",
   "information-line",
   "key-2-line",
+  "link",
   "logout-box-r-line",
   "menu-line",
   "palette-line",
