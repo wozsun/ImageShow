@@ -24,6 +24,7 @@ export function invalidateStorageData(client: QueryClient) {
   return invalidate(client, [
     ["storage-backends"],
     ["storage-options"],
+    queryKeys.overview,
     queryKeys.publicImages,
     queryKeys.publicImageDetail,
     queryKeys.adminImages,
@@ -38,6 +39,7 @@ export function invalidateRuntimeData(client: QueryClient) {
     queryKeys.me,
     ["storage-backends"],
     ["storage-options"],
+    queryKeys.overview,
     queryKeys.publicImages,
     queryKeys.publicImageDetail,
     queryKeys.galleryFacets

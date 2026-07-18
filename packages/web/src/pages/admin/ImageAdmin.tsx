@@ -14,8 +14,9 @@ import {
   queryKeys
 } from "../../lib/constants.js";
 import { errorMessage, formatDate, formatImageClassification, imageDisplayTitle } from "../../lib/ui/formatters.js";
+import { useImportVocabulary } from "../../lib/api/import-vocabulary.js";
 import { useStorageNameResolver } from "../../lib/api/storage-options.js";
-import type { AdminSettings, FacetOption, ImageItem } from "../../lib/types.js";
+import type { AdminSettings, ImageItem } from "../../lib/types.js";
 import { ImageDetailModal } from "../../components/image/ImageDetailModal.js";
 import { ThumbImage } from "../../components/image/ThumbImage.js";
 import { BatchMetadataModal } from "./BatchMetadataModal.js";
@@ -84,12 +85,7 @@ export function ImageAdmin() {
   const { data: settingsData } = useQuery<{ settings: AdminSettings }>({ queryKey: queryKeys.settings, queryFn: () => api(`${adminApiBasePath}/settings`) });
 
   const editorDataNeeded = Boolean(editing || batchEditing);
-  const { data: vocabulary } = useQuery<{ themes: FacetOption[]; tags: FacetOption[]; authors: FacetOption[] }>({
-    queryKey: queryKeys.importVocabulary,
-    queryFn: () => api(`${adminApiBasePath}/import-vocabulary`),
-    enabled: editorDataNeeded,
-    staleTime: Number.POSITIVE_INFINITY
-  });
+  const { data: vocabulary } = useImportVocabulary(editorDataNeeded);
   const themes = vocabulary?.themes ?? [];
   const allTags = vocabulary?.tags ?? [];
   const authors = vocabulary?.authors ?? [];
@@ -111,7 +107,6 @@ export function ImageAdmin() {
     pageNavigationSequenceRef.current += 1;
     setPageNavigation(null);
     setSelected([]);
-    setCursorHistory([""]);
     await invalidateImageData(client);
   };
   const items = data?.items ?? [];
@@ -171,6 +166,17 @@ export function ImageAdmin() {
     // 视图和游标页不复用上一页的滚动位置，避免快速切换到回收站时首屏卡片只露出残片。
     gridRef.current?.scrollTo({ top: 0, left: 0 });
   }, [cursor, view]);
+  useEffect(() => {
+    if (isFetching || !data || pageNumber === 1) return;
+    if (data.items.length > 0 && pageNumber <= totalPages) return;
+
+    // 删除、恢复或分类编辑可能让最后一页消失。正常刷新保留当前游标；只有当前页
+    // 已经无效时才退回一页，并允许新页结果继续把游标夹紧到最后一个有效页。
+    pageNavigationSequenceRef.current += 1;
+    setPageNavigation(null);
+    setSelected([]);
+    setCursorHistory((current) => current.length > 1 ? current.slice(0, -1) : current);
+  }, [data, isFetching, pageNumber, totalPages]);
   const runRowAction = async (item: ImageItem, action: "delete" | "restore") => {
     if (operationBusy) return;
     setBusyIds([item.id]);

@@ -64,9 +64,8 @@ export function SettingsPage() {
         })
       });
       setFeedback({ scope: "application", text: "应用配置已保存", status: "success" });
-      await query.refetch();
-      // site-config 现为 staleTime:Infinity 的全局缓存，保存后必须显式失效，公共端（站点标题/图标、
-      // 画廊顺序、登录背景等）才会刷新到最新值，而不必整页刷新。
+      // 统一失效已包含 settings 和 site-config；活动查询会在这里完成一次刷新，避免先
+      // refetch settings、随后又因 invalidate 重复请求。
       await invalidateRuntimeData(client);
     } catch (error) {
       setFeedback({ scope: "application", text: `保存失败：${errorMessage(error)}`, status: "error" });
@@ -80,7 +79,6 @@ export function SettingsPage() {
     setFeedback({ scope: "application", text: "正在读取配置文件...", status: "pending" });
     try {
       await api(`${adminApiBasePath}/settings/reload`, { method: "POST" });
-      await query.refetch();
       await invalidateRuntimeData(client);
       setFeedback({ scope: "application", text: "已读取并应用最新配置文件", status: "success" });
     } catch (error) {

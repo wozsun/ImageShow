@@ -216,7 +216,7 @@ export function AdminPreferencesProvider({
           }
         }));
       } catch {
-        // Redis 或网络暂时不可用时保留 pending；重新聚焦、联网或下次登录会再次补同步。
+        // Redis 或网络暂时不可用时保留 pending；网络恢复或下次登录会再次补同步。
       } finally {
         for (const key of adminPreferenceKeys) {
           if (queuedPreferencesRef.current[key]?.version === ticketVersions[key]) {
@@ -230,9 +230,12 @@ export function AdminPreferencesProvider({
   const preferenceQuery = useQuery<AdminPreferenceResponse>({
     queryKey,
     queryFn: () => api(`${adminApiBasePath}/preferences`),
-    staleTime: 30_000,
-    refetchOnWindowFocus: "always",
-    refetchOnReconnect: "always",
+    // 当前页面内以本地状态和 PATCH 回执为准；刷新或重新登录后再读取服务端。
+    // 普通 reconnect 只会重试尚未成功加载的查询，不会刷新已经成功的无限新鲜数据。
+    staleTime: Number.POSITIVE_INFINITY,
+    gcTime: Number.POSITIVE_INFINITY,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
     retry: 1
   });
 
@@ -283,10 +286,8 @@ export function AdminPreferencesProvider({
       void queueRef.current.then(() => enqueueSync(cacheRef.current.pending));
     };
     window.addEventListener("online", retryPendingPreferences);
-    window.addEventListener("focus", retryPendingPreferences);
     return () => {
       window.removeEventListener("online", retryPendingPreferences);
-      window.removeEventListener("focus", retryPendingPreferences);
     };
   }, [enqueueSync]);
 

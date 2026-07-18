@@ -17,8 +17,9 @@ import { useDialogFocus } from "../../../hooks/useDialogFocus.js";
 import { adminApiBasePath, queryKeys } from "../../../lib/constants.js";
 import { facetDisplayName } from "../../../lib/ui/formatters.js";
 import { storageBackendLabel, uploadCommonBrightnessOptions, uploadCommonDeviceOptions } from "../../../lib/ui/select-options.js";
+import { useImportVocabulary } from "../../../lib/api/import-vocabulary.js";
 import { useStorageOptions } from "../../../lib/api/storage-options.js";
-import type { AdminSettings, FacetOption, ImageItem, ImportJob } from "../../../lib/types.js";
+import type { AdminSettings, ImageItem, ImportJob } from "../../../lib/types.js";
 import type { CommonImageAttributes } from "../../../lib/upload/upload-utils.js";
 import { ImportJobList } from "./ImportJobList.js";
 import type { ImportPreviewTarget } from "./DuplicateMatchPanel.js";
@@ -56,12 +57,7 @@ export function Uploader({ onDone }: { onDone: () => void }) {
   const previewReturnFocusRef = useRef<HTMLElement | null>(null);
 
   const { data: settingsData } = useQuery<{ settings: AdminSettings }>({ queryKey: queryKeys.settings, queryFn: () => api(`${adminApiBasePath}/settings`) });
-  const { data: vocabulary } = useQuery<{ themes: FacetOption[]; tags: FacetOption[]; authors: FacetOption[] }>({
-    queryKey: queryKeys.importVocabulary,
-    queryFn: () => api(`${adminApiBasePath}/import-vocabulary`),
-    enabled: open,
-    staleTime: Number.POSITIVE_INFINITY
-  });
+  const { data: vocabulary } = useImportVocabulary(open);
   const themes = vocabulary?.themes ?? [];
   const tags = vocabulary?.tags ?? [];
   const authors = vocabulary?.authors ?? [];
