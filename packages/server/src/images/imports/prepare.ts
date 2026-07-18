@@ -19,6 +19,7 @@ import {
   importWasCancelled,
   markImportFailed,
   notifyImportStatus,
+  setImportDownloadProgress,
   setImportPhase
 } from "./progress.ts";
 import {
@@ -195,7 +196,19 @@ async function prepareDownloadSession(id: string, signal: AbortSignal) {
   const url = String(claimed.rows[0].source_url ?? "");
   try {
     setImportPhase(id, "downloading", "服务端下载原图");
-    await fetchImportImageToFile(url, rawImportPath(id), getInputImageMaxBytes(), signal);
+    let lastProgressUpdateAt = 0;
+    await fetchImportImageToFile(
+      url,
+      rawImportPath(id),
+      getInputImageMaxBytes(),
+      signal,
+      (progress) => {
+        const now = Date.now();
+        if (progress < 100 && lastProgressUpdateAt && now - lastProgressUpdateAt < 250) return;
+        lastProgressUpdateAt = now;
+        setImportDownloadProgress(id, progress);
+      }
+    );
     setImportPhase(id, "processing", "下载完成，进入图片处理");
     const prepared = await pool.query(
       "UPDATE import_session SET status='preparing', updated_at=now() WHERE id=$1 AND status='receiving'",

@@ -39,7 +39,6 @@ export function jsonlImportJobs(
     draft: mergeJsonlDraft(item, defaults),
     width: 0,
     height: 0,
-    uploadProgress: 0,
     duplicates: [],
     duplicateDecision: "upload",
     url: item.original,

@@ -28,7 +28,7 @@ export function useLocalUploadImport(options: {
     const controller = new AbortController();
     activeRequests.current.set(job.id, { attemptKey, abort: () => controller.abort() });
     try {
-      queue.updateJob(job.id, { status: "queued", message: "创建上传会话", uploadProgress: 0 });
+      queue.updateJob(job.id, { status: "queued", message: "创建上传会话", transferProgress: 0 });
       const result = await runImportAttempt({
         queue,
         job,
@@ -46,14 +46,14 @@ export function useLocalUploadImport(options: {
         },
         onSession: (session) => queue.updateJob(job.id, { sessionId: session.id }),
         transfer: async (session) => {
-          queue.updateJob(job.id, { status: "uploading", message: "浏览器上传原文件", uploadProgress: 0 });
+          queue.updateJob(job.id, { status: "uploading", message: "浏览器上传原文件", transferProgress: 0 });
           const request = uploadLocalRaw(session, job.file!, {
-            onProgress: (uploadProgress) => {
-              if (isCurrentImportAttempt(queue, job.id, attemptKey)) queue.updateJob(job.id, { uploadProgress });
+            onProgress: (transferProgress) => {
+              if (isCurrentImportAttempt(queue, job.id, attemptKey)) queue.updateJob(job.id, { transferProgress });
             },
             onUploaded: () => {
               if (isCurrentImportAttempt(queue, job.id, attemptKey)) {
-                queue.updateJob(job.id, { status: "processing", message: "上传完成，等待服务端处理", uploadProgress: 100 });
+                queue.updateJob(job.id, { status: "processing", message: "上传完成，等待服务端处理", transferProgress: undefined });
               }
             }
           });
@@ -69,7 +69,7 @@ export function useLocalUploadImport(options: {
         },
         onPreparing: () => {
           activeRequests.current.set(job.id, { attemptKey, abort: () => controller.abort() });
-          queue.updateJob(job.id, { status: "processing", message: "上传完成，等待服务端处理", uploadProgress: 100 });
+          queue.updateJob(job.id, { status: "processing", message: "上传完成，等待服务端处理", transferProgress: undefined });
         }
       });
       if (!result) return;
@@ -120,7 +120,7 @@ export function useLocalUploadImport(options: {
         height: inferred.height,
         originalWidth: inferred.width,
         originalHeight: inferred.height,
-        uploadProgress: 0,
+        transferProgress: 0,
         duplicates: [],
         duplicateDecision: "upload",
         storageSlug,
@@ -141,7 +141,7 @@ export function useLocalUploadImport(options: {
     if (!job.file) return;
     if (job.sessionId) await cancelStoredImport(job.sessionId).catch(() => undefined);
     queue.releasePreparedMd5(job.id);
-    const next = { ...retryPrepareJob(job), uploadProgress: 0 };
+    const next = { ...retryPrepareJob(job), transferProgress: 0 };
     queue.updateJob(job.id, next);
     await prepare(next);
   }, [prepare, queue]);

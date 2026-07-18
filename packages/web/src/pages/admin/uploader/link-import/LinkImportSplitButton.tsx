@@ -29,7 +29,7 @@ export function LinkImportSplitButton({ onOpenUrls, onOpenJsonl, onOpenWeibo }: 
   return (
     <div className="link-import-split" ref={rootRef}>
       <button className="button secondary upload-trigger link-import-main" type="button" onClick={(event) => onOpenUrls(event.currentTarget)}>
-        <Icon name="download-cloud-2-line" />链接导入
+        <Icon name="download-cloud-2-line" />导入图片
       </button>
       <button ref={menuTriggerRef} className="button secondary link-import-menu-trigger" type="button" title="更多导入方式" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
         <Icon name="arrow-down-s-line" />
@@ -37,7 +37,7 @@ export function LinkImportSplitButton({ onOpenUrls, onOpenJsonl, onOpenWeibo }: 
       {open && (
         <div className="link-import-menu" role="menu">
           <button type="button" role="menuitem" onClick={(event) => { setOpen(false); onOpenJsonl(menuTriggerRef.current ?? event.currentTarget); }}>
-            <Icon name="file-copy-line" />批量导入
+            <Icon name="file-list-line" />清单导入
           </button>
           <button type="button" role="menuitem" onClick={(event) => { setOpen(false); onOpenWeibo(menuTriggerRef.current ?? event.currentTarget); }}>
             <Icon name="weibo-line" />微博导入

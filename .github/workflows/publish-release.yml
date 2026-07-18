@@ -1,4 +1,4 @@
-name: Docker Release Image
+name: Publish Release
 
 on:
   workflow_dispatch:
@@ -10,25 +10,21 @@ permissions:
   contents: read
 
 concurrency:
-  group: docker-release-${{ github.ref }}
+  group: publish-release-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   publish:
-    name: Build and publish release image
+    name: Build and push release image
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - name: Resolve image tags
-        id: image
+      - name: Validate release tag
         shell: bash
-        env:
-          DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
-          TCR_NAMESPACE: ${{ secrets.TCR_NAMESPACE }}
         run: |
           set -euo pipefail
           if [[ "${GITHUB_REF_TYPE}" != "tag" ]]; then
@@ -47,58 +43,49 @@ jobs:
               exit 1
             fi
           done
-          git fetch --no-tags origin main:refs/remotes/origin/main
           if ! git merge-base --is-ancestor "${GITHUB_SHA}" "origin/main"; then
             echo "Release tag ${GITHUB_REF_NAME} does not point to a commit on main" >&2
             exit 1
           fi
-          docker_hub_name="${DOCKER_HUB_USERNAME}/imageshow"
-          tcr_name="ccr.ccs.tencentyun.com/${TCR_NAMESPACE}/imageshow"
-          {
-            echo "tags<<EOF"
-            echo "${docker_hub_name}:${GITHUB_REF_NAME}"
-            echo "${tcr_name}:${GITHUB_REF_NAME}"
-            echo "${docker_hub_name}:latest"
-            echo "${tcr_name}:latest"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
 
-      - name: Configure Docker Buildx
+      - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
-      - name: Authenticate to Docker Hub
+      - name: Log in to Docker Hub
         uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
 
-      - name: Authenticate to Tencent Container Registry
+      - name: Log in to Tencent Container Registry
         uses: docker/login-action@v4
         with:
           registry: ccr.ccs.tencentyun.com
           username: ${{ secrets.TCR_USERNAME }}
           password: ${{ secrets.TCR_PASSWORD }}
 
-      - name: Build and publish to both registries
+      - name: Build and push to both registries
         uses: docker/build-push-action@v7
         with:
           context: .
           push: true
-          tags: ${{ steps.image.outputs.tags }}
+          tags: |
+            ${{ secrets.DOCKER_HUB_USERNAME }}/imageshow:${{ github.ref_name }}
+            ccr.ccs.tencentyun.com/${{ secrets.TCR_NAMESPACE }}/imageshow:${{ github.ref_name }}
+            ${{ secrets.DOCKER_HUB_USERNAME }}/imageshow:latest
+            ccr.ccs.tencentyun.com/${{ secrets.TCR_NAMESPACE }}/imageshow:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
   release:
-    name: Create GitHub Release
+    name: Publish GitHub Release
     needs: publish
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - name: Checkout source
-        uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
+        uses: actions/checkout@v6
 
       - name: Create or update GitHub Release
         shell: bash
@@ -107,11 +94,8 @@ jobs:
         run: |
           set -euo pipefail
           notes_file="${RUNNER_TEMP}/release-notes.md"
-          release_commit="$(git rev-list -n 1 "${GITHUB_REF_NAME}")"
-          git log -1 --format=%B "${release_commit}" \
-            | awk 'NR == 1 { next } NR == 2 && $0 == "" { next } { print }' \
-            > "${notes_file}"
-          if [[ ! -s "${notes_file}" ]]; then
+          git log -1 --format=%b > "${notes_file}"
+          if ! grep -q '[^[:space:]]' "${notes_file}"; then
             echo "${GITHUB_REF_NAME}" > "${notes_file}"
           fi
           if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then

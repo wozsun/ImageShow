@@ -227,10 +227,10 @@ export function Uploader({ onDone }: { onDone: () => void }) {
   const doneJobs = queue.jobs.filter((job) => job.status === "done").length;
   const failedJobs = queue.jobs.filter((job) => job.status === "failed").length;
   const skippedJobs = queue.jobs.filter((job) => job.status === "skipped").length;
-  const modeTitle = mode === "file" ? "上传图片" : "链接导入";
+  const modeTitle = mode === "file" ? "上传图片" : "导入图片";
   const emptySubtitle = mode === "file"
     ? "选择后立即上传并在服务端准备图片"
-    : "输入后立即下载并在服务端准备图片";
+    : "输入来源后立即创建并准备图片任务";
   const cleanupActions: UploadCleanupAction[] = [
     {
       id: "duplicates",
@@ -306,7 +306,7 @@ export function Uploader({ onDone }: { onDone: () => void }) {
                 <div className="upload-primary-actions">
                   <UploadCleanupMenu disabled={busy} actions={cleanupActions} />
                   {mode === "link" ? (
-                    <button ref={linkPickerRef} type="button" className="button secondary upload-picker pressable" disabled={busy} onClick={() => { setLinkInputMode("urls"); setUrlInputOpen(true); }}><Icon name="download-cloud-2-line" />导入链接</button>
+                    <button ref={linkPickerRef} type="button" className="button secondary upload-picker pressable" disabled={busy} onClick={() => { setLinkInputMode("urls"); setUrlInputOpen(true); }}><Icon name="download-cloud-2-line" />选择来源</button>
                   ) : (
                     <label
                       className={`button secondary upload-picker pressable${busy ? " is-disabled" : ""}`}
@@ -358,7 +358,7 @@ export function Uploader({ onDone }: { onDone: () => void }) {
                   setPreview(target);
                 }} />
               {!queue.jobs.length && (mode === "link" ? (
-                <button type="button" className="empty-state upload-dropzone" onClick={() => { setLinkInputMode("urls"); setUrlInputOpen(true); }}><Icon name="download-cloud-2-line" /><span>还没有导入链接，点击此处输入图片链接</span></button>
+                <button type="button" className="empty-state upload-dropzone" onClick={() => { setLinkInputMode("urls"); setUrlInputOpen(true); }}><Icon name="download-cloud-2-line" /><span>还没有导入任务，点击此处选择图片来源</span></button>
               ) : (
                 <button type="button" className={`empty-state upload-dropzone${dragOver ? " is-dragover" : ""}`} onClick={() => fileInputRef.current?.click()}
                   onDragOver={(event) => { event.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)}

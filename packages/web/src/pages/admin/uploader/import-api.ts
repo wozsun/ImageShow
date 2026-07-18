@@ -99,6 +99,7 @@ export type StoredImportStatus = {
   error: string;
   phase: string;
   message: string;
+  progress?: number;
 };
 
 export function getStoredImportStatuses(ids: string[], signal?: AbortSignal) {

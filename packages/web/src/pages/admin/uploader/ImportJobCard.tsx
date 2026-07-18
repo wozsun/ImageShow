@@ -44,6 +44,10 @@ export function ImportJobCard({ job, busy, storageDisplayName, themes, allTags, 
   const qualityText = job.quality != null
     ? String(job.quality)
     : !isProxy && job.transcoded === false ? "跳过转码" : "";
+  const showsTransferProgress = ["uploading", "downloading"].includes(job.status)
+    && typeof job.transferProgress === "number";
+  const transferProgress = Math.min(100, Math.max(0, Math.round(job.transferProgress ?? 0)));
+  const transferProgressLabel = job.status === "downloading" ? "下载进度" : "上传进度";
   const statusDetailText = job.message || statusLabels[job.status];
   const manifestLineText = job.manifestLine ? `JSONL 第 ${job.manifestLine} 行` : "";
   const metaText = [manifestLineText, storageDisplayName, dimensionsText, statusDetailText].filter(Boolean).join(" · ");
@@ -103,14 +107,16 @@ export function ImportJobCard({ job, busy, storageDisplayName, themes, allTags, 
           {displayName}
         </strong>
         <span className="import-job-meta">
-          {metaText}
+          <span className="import-job-meta-copy">{metaText}</span>
+          {showsTransferProgress && (
+            <output className="transfer-progress-value" aria-label={`${transferProgressLabel} ${transferProgress}%`}>
+              {transferProgress}%
+            </output>
+          )}
         </span>
         <span className="import-job-size-summary">
           {sizeSummaryText}
         </span>
-        {(job.status === "uploading" || job.status === "processing") && job.kind === "local" && (
-          <div className="upload-progress" aria-label="上传进度"><span style={{ width: `${job.uploadProgress}%` }} /></div>
-        )}
       </div>
       <div className="import-job-actions">
         {retryable && <button type="button" className="icon" title="重试" onClick={onRetry} disabled={busy}><Icon name="refresh-line" /></button>}

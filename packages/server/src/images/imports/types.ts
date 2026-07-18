@@ -81,4 +81,5 @@ export type ImportStatusEvent = {
   error: string;
   phase: string;
   message: string;
+  progress?: number;
 };

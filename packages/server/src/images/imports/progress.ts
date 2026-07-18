@@ -5,7 +5,7 @@ import { ApiError, errorMessage } from "../../core/http.ts";
 import { redis } from "../../core/redis-client.ts";
 import type { ImportMode, ImportStatus, ImportStatusEvent } from "./types.ts";
 
-const activeImportPhases = new Map<string, { phase: string; message: string }>();
+const activeImportPhases = new Map<string, { phase: string; message: string; progress?: number }>();
 const importStatusEvents = new EventEmitter();
 const cancelledImports = new Map<string, number>();
 const importLeaseHeartbeatMs = Math.max(
@@ -70,9 +70,31 @@ export async function notifyImportStatus(id: string) {
   emitImportStatus(await getImportStatusEvent(id));
 }
 
-export function setImportPhase(id: string, phase: string, message: string) {
-  activeImportPhases.set(id, { phase, message });
+export function setImportPhase(id: string, phase: string, message: string, progress?: number) {
+  activeImportPhases.set(id, { phase, message, progress });
   notifyImportStatus(id).catch(() => undefined);
+}
+
+// 下载开始时已经以条件 UPDATE 将会话认领为 receiving。中途百分比只更新内存阶段并
+// 发送这个已知状态，既供 SSE 实时推送，也让断线后的状态轮询读取最新进度；阶段切换
+// 仍通过 setImportPhase/notifyImportStatus 重新查询数据库确认权威状态。
+export function setImportDownloadProgress(id: string, progress: number) {
+  if ((cancelledImports.get(id) ?? 0) > Date.now()) return;
+  if (!Number.isFinite(progress)) return;
+  const activePhase = activeImportPhases.get(id);
+  if (activePhase?.phase !== "downloading") return;
+  const normalizedProgress = Math.min(100, Math.max(0, Math.round(progress)));
+  if (activePhase.progress === normalizedProgress) return;
+  const nextPhase = { ...activePhase, progress: normalizedProgress };
+  activeImportPhases.set(id, nextPhase);
+  emitImportStatus({
+    id,
+    status: "receiving",
+    error: "",
+    phase: nextPhase.phase,
+    message: nextPhase.message,
+    progress: normalizedProgress
+  });
 }
 
 export function clearImportPhase(id: string) {
@@ -124,7 +146,8 @@ async function getImportStatus(id: string) {
     status: row.status,
     error: row.error,
     phase: phase?.phase ?? row.status,
-    message: phase?.message ?? importMessage(row.status, row.mode, row.error)
+    message: phase?.message ?? importMessage(row.status, row.mode, row.error),
+    progress: phase?.progress
   };
 }
 

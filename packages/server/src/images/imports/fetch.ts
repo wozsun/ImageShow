@@ -7,20 +7,40 @@ import { safeFetchExternalImage } from "../../core/external-image-fetch.ts";
 import { getRuntimeConfig } from "../../config/runtime-config-store.ts";
 import { nodeReadableFromWeb } from "../../storage/stream-buffer.ts";
 
+function declaredContentLength(headers: Headers) {
+  const value = Number(headers.get("content-length") || 0);
+  return Number.isFinite(value) && value > 0 ? value : undefined;
+}
+
+/** @internal Exported only for local download-progress verification. */
+export function downloadProgressLength(headers: Headers) {
+  const contentEncoding = headers.get("content-encoding")?.trim().toLowerCase();
+  return !contentEncoding || contentEncoding === "identity"
+    ? declaredContentLength(headers)
+    : undefined;
+}
+
+/** @internal Exported only for local download-progress verification. */
+export function calculateDownloadProgress(receivedBytes: number, declaredBytes: number) {
+  if (!Number.isFinite(receivedBytes) || receivedBytes < 0) return undefined;
+  if (!Number.isFinite(declaredBytes) || declaredBytes <= 0) return undefined;
+  return Math.min(100, Math.floor((receivedBytes / declaredBytes) * 100));
+}
+
 async function fetchImportResponse(url: string, limitBytes: number, externalSignal?: AbortSignal) {
   try {
     const response = await safeFetchExternalImage(url, {
       signal: externalSignal,
       timeoutMs: getRuntimeConfig().link_image.fetch_timeout_seconds * 1000,
-      headers: { Accept: "image/*,*/*" },
+      headers: { Accept: "image/*,*/*", "Accept-Encoding": "identity" },
       imageValidation: "sniff"
     });
     if (!response.ok) {
       await response.body?.cancel().catch(() => undefined);
       throw new ApiError(400, "link_fetch_failed", `下载失败（HTTP ${response.status}）`, { url });
     }
-    const declared = Number(response.headers.get("content-length") || 0);
-    if (declared && declared > limitBytes) {
+    const declared = declaredContentLength(response.headers);
+    if (declared !== undefined && declared > limitBytes) {
       await response.body?.cancel().catch(() => undefined);
       throw new ApiError(400, "link_too_large", "图片大小超过限制", { limit: limitBytes });
     }
@@ -70,18 +90,36 @@ export async function fetchImportImage(url: string, limitBytes: number, signal?:
   }
 }
 
-export async function fetchImportImageToFile(url: string, target: string, limitBytes: number, signal?: AbortSignal) {
+export async function fetchImportImageToFile(
+  url: string,
+  target: string,
+  limitBytes: number,
+  signal?: AbortSignal,
+  onProgress?: (progress: number) => void
+) {
   const fetched = await fetchImportResponse(url, limitBytes, signal);
   if (!fetched.response.body) {
     throw new ApiError(400, "link_fetch_failed", "下载响应没有内容", { url });
   }
   await mkdir(dirname(target), { recursive: true });
   const part = `${target}.part`;
+  const declaredSize = downloadProgressLength(fetched.response.headers);
   let total = 0;
+  let lastProgress = -1;
+  const reportProgress = () => {
+    if (declaredSize === undefined || !onProgress) return;
+    const progress = calculateDownloadProgress(total, declaredSize);
+    if (progress === undefined) return;
+    if (progress === lastProgress) return;
+    lastProgress = progress;
+    onProgress(progress);
+  };
+  reportProgress();
   const limiter = new TransformStream<Uint8Array, Uint8Array>({
     transform(chunk, controller) {
       total += chunk.byteLength;
       if (total > limitBytes) throw new ApiError(400, "link_too_large", "图片大小超过限制", { limit: limitBytes });
+      reportProgress();
       controller.enqueue(chunk);
     }
   });

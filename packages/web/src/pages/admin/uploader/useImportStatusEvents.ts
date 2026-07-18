@@ -12,9 +12,12 @@ function patchFromStatus(job: ImportJob, state: StoredImportStatus): Partial<Imp
   const message = storedImportStatusMessage(state);
   if (state.phase === "prepare-waiting") return { status: "queued", message };
   if (state.status === "created") return { status: "queued", message };
-  if (state.status === "receiving") return { status: job.kind === "local" ? "uploading" : "downloading", message };
-  if (state.status === "preparing") return { status: "processing", message };
-  if (state.status === "ready") return { status: "processing", message };
+  if (state.status === "receiving") {
+    if (job.kind === "local") return { status: "uploading", message };
+    return { status: "downloading", message, transferProgress: state.progress };
+  }
+  if (state.status === "preparing") return { status: "processing", message, transferProgress: undefined };
+  if (state.status === "ready") return { status: "processing", message, transferProgress: undefined };
   if (state.status === "committing") return { status: "committing", message };
   if (state.status === "finalized") return { status: "done", message };
   if (state.status === "missing") return null;

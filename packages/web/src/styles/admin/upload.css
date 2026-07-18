@@ -220,21 +220,18 @@
 .import-job-head strong,
 .import-job-head span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .import-job-head span { color: #66717f; font-size: 14px; }
+.import-job-meta { display: flex; align-items: baseline; }
+.import-job-head .import-job-meta-copy { flex: 0 1 auto; }
+.transfer-progress-value {
+  flex: 0 0 auto;
+  color: #315f9f;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.transfer-progress-value::before { content: "·"; margin-inline: 6px; color: #66717f; }
 .import-job-head .import-job-size-summary { display: none; font-size: 13px; }
 .import-status-label { color: #315f9f; font-weight: 600; }
 .import-job-actions { display: flex; align-items: center; gap: 6px; }
-.upload-progress {
-  height: 5px;
-  overflow: hidden;
-  background: #dce7f6;
-  border-radius: 999px;
-}
-.upload-progress span {
-  display: block;
-  height: 100%;
-  background: #1f6feb;
-  transition: width .18s ease;
-}
 .import-job .image-fields { grid-column: 2 / 4; }
 .import-job .select-control.image-fields-device.is-changed .select-trigger,
 .import-job .select-control.image-fields-brightness.is-changed .select-trigger {

@@ -27,6 +27,7 @@ const iconNames = [
   "eye-off-line",
   "file-copy-line",
   "file-damage-line",
+  "file-list-line",
   "filter-3-line",
   "flask-line",
   "group-line",

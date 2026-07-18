@@ -43,7 +43,6 @@ export function linkImportJobs(
     draft: linkDraft(url, defaults, fillOriginalUrl),
     width: 0,
     height: 0,
-    uploadProgress: 0,
     duplicates: [],
     duplicateDecision: "upload",
     url,
@@ -60,7 +59,8 @@ export function retryPrepareJob(job: ImportJob): ImportJob {
     sessionId: undefined,
     status: "queued",
     failureStage: undefined,
-    message: "等待重试"
+    message: "等待重试",
+    transferProgress: undefined
   };
 }
 
@@ -70,6 +70,7 @@ export function retryLinkPrepareJob(job: ImportJob): ImportJob {
     ...job,
     status: "queued",
     failureStage: undefined,
-    message: "重新获取导入会话"
+    message: "重新获取导入会话",
+    transferProgress: undefined
   };
 }

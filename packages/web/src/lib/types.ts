@@ -189,7 +189,7 @@ export type ImportJob = {
   height: number;
   originalWidth?: number;
   originalHeight?: number;
-  uploadProgress: number;
+  transferProgress?: number;
   duplicates: ImageItem[];
   duplicateDecision: "upload" | "undecided";
   resolvedClassification?: { device: Device; brightness: Brightness };

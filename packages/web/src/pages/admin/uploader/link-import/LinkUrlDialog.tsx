@@ -39,14 +39,14 @@ const inputModePresentation: Record<LinkInputMode, {
   placeholder: string;
 }> = {
   urls: {
-    heading: "导入链接",
+    heading: "链接导入",
     icon: "download-cloud-2-line",
     label: "URL 列表",
     placeholder: "https://example.com/a.jpg\nhttps://example.com/b.png"
   },
   jsonl: {
-    heading: "批量导入",
-    icon: "file-copy-line",
+    heading: "清单导入",
+    icon: "file-list-line",
     label: "JSONL 清单",
     placeholder: '{"original":"https://img.example.com/a.jpg","source":"https://example.com/post/1","image_time":"2020-05-01T00:00:00+08:00","tags":["2020"]}'
   },
