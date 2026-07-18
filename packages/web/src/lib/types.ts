@@ -162,9 +162,13 @@ export type RandomLinkDraft = {
   mode: RandomMode;
 };
 
+export type ManifestImportSource = "jsonl" | "weibo";
+
 export type BatchDuplicateMatch = {
   ownerId: string | null;
+  manifestSource?: ManifestImportSource;
   manifestLine?: number;
+  manifestPosition?: number;
   original: string;
   preview: string;
   previewFull: string;
@@ -179,7 +183,7 @@ export type BatchDuplicateMatch = {
 export type ImportJob = {
   id: string;
   kind: "local" | "download" | "proxy";
-  status: "queued" | "uploading" | "downloading" | "processing" | "ready" | "committing" | "done" | "skipped" | "failed" | "cancelled";
+  status: "queued" | "uploading" | "downloading" | "processing" | "ready" | "committing" | "cancelling" | "done" | "skipped" | "failed" | "cancelled";
   message: string;
   preview: string;
   previewFull?: string;
@@ -204,6 +208,7 @@ export type ImportJob = {
   sessionId?: string;
   imageTime?: string;
   batchTime?: string;
+  manifestSource?: ManifestImportSource;
   manifestLine?: number;
   manifestPosition?: number;
   duplicatePolicy?: "confirm" | "skip";
@@ -214,5 +219,5 @@ export type ImportJob = {
   quality?: number | null;
   transcoded?: boolean;
   storageSlug: string;
-  failureStage?: "create" | "prepare" | "commit";
+  failureStage?: "create" | "prepare" | "commit" | "cancel";
 };

@@ -250,6 +250,7 @@
 .import-job.skipped { border-color: #d9bd72; background: #fffaf0; }
 .import-job.failed { border-color: #de8b83; background: #fff6f4; }
 .import-job.cancelled { border-color: #c7ccd3; background: #f4f5f7; opacity: .82; }
+.import-job.cancelling { border-color: #d8c188; background: #fffaf0; }
 .import-job.queued,
 .import-job.uploading,
 .import-job.downloading,

@@ -8,7 +8,13 @@ import {
   refreshBatchDuplicateMatches
 } from "./duplicate-match.js";
 
-const preparedMd5ReleaseStatuses = new Set<ImportJob["status"]>(["done", "skipped", "failed", "cancelled"]);
+const preparedMd5ReleaseStatuses = new Set<ImportJob["status"]>([
+  "cancelling",
+  "done",
+  "skipped",
+  "failed",
+  "cancelled"
+]);
 
 type QueueState = { jobs: ImportJob[]; page: number };
 type QueueAction =
@@ -40,7 +46,7 @@ function patchJobDraft(job: ImportJob, patch: Partial<ImageDraft>): ImportJob {
 
 /** @internal Exported only for local import queue verification. */
 export function applyDefaultsToJob(job: ImportJob, defaults: CommonImageAttributes): ImportJob {
-  if (["done", "skipped", "cancelled"].includes(job.status)) return job;
+  if (["cancelling", "done", "skipped", "cancelled"].includes(job.status)) return job;
   const inlineFields = new Set(job.inlineMetadataFields ?? []);
   const draftPatch: Partial<ImageDraft> = {
     ...(!inlineFields.has("device") && defaults.device ? { device: defaults.device as ImageDraft["device"] } : !inlineFields.has("device") && job.resolvedClassification ? { device: job.resolvedClassification.device } : {}),

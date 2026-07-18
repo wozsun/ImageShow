@@ -5,10 +5,12 @@ import { importCardBrightnessSelectOptions, importCardDeviceSelectOptions } from
 import { formatBytes } from "../../../lib/ui/formatters.js";
 import type { FacetOption, ImageDraft, ImageItem, ImportJob } from "../../../lib/types.js";
 import { DuplicateMatchPanel, type ImportPreviewTarget } from "./DuplicateMatchPanel.js";
+import { importPositionText } from "./import-job-utils.js";
 
 const statusLabels: Record<ImportJob["status"], string> = {
   queued: "等待中", uploading: "上传中", downloading: "下载中", processing: "处理中",
-  ready: "已就绪", committing: "提交中", done: "已完成", skipped: "已跳过", failed: "失败", cancelled: "已取消"
+  ready: "已就绪", committing: "提交中", cancelling: "取消中", done: "已完成",
+  skipped: "已跳过", failed: "失败", cancelled: "已取消"
 };
 
 function formatPixelDimensions(width?: number, height?: number) {
@@ -32,7 +34,10 @@ export function ImportJobCard({ job, busy, storageDisplayName, themes, allTags, 
 }) {
   const editable = job.status === "ready" && !busy;
   const running = ["queued", "uploading", "downloading", "processing"].includes(job.status);
-  const retryable = ["failed", "cancelled"].includes(job.status);
+  const cancelling = job.status === "cancelling";
+  const cancellationFailed = job.failureStage === "cancel";
+  const retryable = ["failed", "cancelled"].includes(job.status) && !cancellationFailed;
+  const statusLabel = cancellationFailed ? "取消失败" : statusLabels[job.status];
   const isProxy = job.kind === "proxy";
   const hasFinalSize = typeof job.finalSize === "number";
   const displayName = job.draft.title || job.file?.name || job.url || job.id;
@@ -48,9 +53,9 @@ export function ImportJobCard({ job, busy, storageDisplayName, themes, allTags, 
     && typeof job.transferProgress === "number";
   const transferProgress = Math.min(100, Math.max(0, Math.round(job.transferProgress ?? 0)));
   const transferProgressLabel = job.status === "downloading" ? "下载进度" : "上传进度";
-  const statusDetailText = job.message || statusLabels[job.status];
-  const manifestLineText = job.manifestLine ? `JSONL 第 ${job.manifestLine} 行` : "";
-  const metaText = [manifestLineText, storageDisplayName, dimensionsText, statusDetailText].filter(Boolean).join(" · ");
+  const statusDetailText = job.message || statusLabel;
+  const sourcePositionText = importPositionText(job);
+  const metaText = [sourcePositionText, storageDisplayName, dimensionsText, statusDetailText].filter(Boolean).join(" · ");
   const sizeSummaryText = isProxy
     ? `代理链接 · ${originalDimensionsText}`
     : `${originalSizeText} → ${finalSizeText}${qualityText ? ` · ${qualityText}` : ""}`;
@@ -103,7 +108,7 @@ export function ImportJobCard({ job, busy, storageDisplayName, themes, allTags, 
       </div>
       <div className="import-job-head">
         <strong>
-          <b className="import-status-label">【{statusLabels[job.status]}】</b>
+          <b className="import-status-label">【{statusLabel}】</b>
           {displayName}
         </strong>
         <span className="import-job-meta">
@@ -120,8 +125,9 @@ export function ImportJobCard({ job, busy, storageDisplayName, themes, allTags, 
       </div>
       <div className="import-job-actions">
         {retryable && <button type="button" className="icon" title="重试" onClick={onRetry} disabled={busy}><Icon name="refresh-line" /></button>}
+        {cancellationFailed && <button type="button" className="icon" title="重新取消" onClick={onCancel} disabled={busy}><Icon name="refresh-line" /></button>}
         {running && <button type="button" className="icon danger-button" title="取消" onClick={onCancel}><Icon name="close-line" /></button>}
-        {!running && <button type="button" className="icon danger-button" title="移除" onClick={onRemove} disabled={busy}><Icon name="close-line" /></button>}
+        {!running && !cancelling && !cancellationFailed && <button type="button" className="icon danger-button" title="移除" onClick={onRemove} disabled={busy}><Icon name="close-line" /></button>}
       </div>
       <ImageDraftFields
         draft={job.draft} onPatch={onPatch} themes={themes} allTags={allTags} authors={authors}

@@ -132,14 +132,17 @@ export function Uploader({ onDone }: { onDone: () => void }) {
   });
 
   const cancelJob = async (job: ImportJob) => {
-    if (job.kind === "local") await localImport.cancel(job);
-    else await linkImport.cancel(job);
+    const cancellationSucceeded = job.kind === "local"
+      ? await localImport.cancel(job)
+      : await linkImport.cancel(job);
+    if (cancellationSucceeded) queue.removeJob(job.id);
+    return cancellationSucceeded;
   };
 
   const openInMode = async (next: "file" | "link", opener?: HTMLElement) => {
     if (opener) workflowReturnFocusRef.current = opener;
     const discarded = queue.jobsRef.current.filter((job) => next === "file" ? job.kind !== "local" : job.kind === "local");
-    await Promise.all(discarded.filter((job) => !["done", "skipped", "cancelled"].includes(job.status)).map(cancelJob));
+    await Promise.all(discarded.filter((job) => !["cancelling", "done", "skipped", "cancelled"].includes(job.status)).map(cancelJob));
     queue.retainMode(next);
     setMode(next);
     setOpen(true);
@@ -168,17 +171,20 @@ export function Uploader({ onDone }: { onDone: () => void }) {
   };
 
   const removeJob = async (job: ImportJob) => {
-    if (!["done", "skipped", "cancelled"].includes(job.status)) await cancelJob(job);
-    queue.removeJob(job.id);
+    if (["done", "skipped", "cancelled"].includes(job.status)) {
+      queue.removeJob(job.id);
+      return;
+    }
+    await cancelJob(job);
   };
 
   const clearJobs = async (predicate: (job: ImportJob) => boolean) => {
     const targets = queue.jobsRef.current.filter(predicate);
-    // cancelJob 会先把任务改成 cancelled。固定本次 ID，避免取消完成后再次按旧状态条件
+    // cancelJob 会先把任务改成 cancelling。固定本次 ID，避免取消完成后再次按旧状态条件
     // 筛选，导致“重复待确认”任务找不到而仍留在总数中；期间新产生的重复项也不会误删。
     const targetIds = new Set(targets.map((job) => job.id));
     const cancellationRequests = targets
-      .filter((job) => !["done", "skipped", "cancelled"].includes(job.status))
+      .filter((job) => !["cancelling", "done", "skipped", "cancelled"].includes(job.status))
       .map(cancelJob);
     // 取消函数在首个 await 前已经中止活动请求并标记任务；服务端暂存对象清理可能较慢，
     // 不应阻塞用户明确要求的本地队列清理和总数更新。
@@ -223,7 +229,7 @@ export function Uploader({ onDone }: { onDone: () => void }) {
 
   const readyJobs = queue.jobs.filter((job) => job.status === "ready" && job.duplicateDecision !== "undecided");
   const duplicateJobs = queue.jobs.filter((job) => job.status === "ready" && job.duplicateDecision === "undecided").length;
-  const runningJobs = queue.jobs.filter((job) => ["queued", "uploading", "downloading", "processing", "committing"].includes(job.status)).length;
+  const runningJobs = queue.jobs.filter((job) => ["queued", "uploading", "downloading", "processing", "committing", "cancelling"].includes(job.status)).length;
   const doneJobs = queue.jobs.filter((job) => job.status === "done").length;
   const failedJobs = queue.jobs.filter((job) => job.status === "failed").length;
   const skippedJobs = queue.jobs.filter((job) => job.status === "skipped").length;

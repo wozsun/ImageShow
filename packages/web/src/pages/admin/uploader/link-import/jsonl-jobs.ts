@@ -45,6 +45,7 @@ export function jsonlImportJobs(
     storageSlug: item.storage_slug ?? defaultStorageSlug,
     imageTime: item.image_time,
     batchTime,
+    manifestSource: "jsonl",
     manifestLine: item.line,
     manifestPosition: item.manifest_position,
     duplicatePolicy: "skip",

@@ -4,7 +4,7 @@ import { browserUuid, draftFromFile, isUploadableImage, normalizeAuthor, normali
 import { retryPrepareJob } from "./import-job-utils.js";
 import { isCurrentImportAttempt, type AppendImportQueueApi } from "./prepared-result.js";
 import { cancelStoredImport, uploadLocalRaw } from "./import-api.js";
-import { applyImportAttemptFailure, runImportAttempt } from "./import-attempt.js";
+import { applyImportAttemptFailure, cancelImportAttempt, runImportAttempt } from "./import-attempt.js";
 
 function fileFingerprint(file: File) {
   // 这里只做浏览器内“同一文件重复选择”的快速去重；最终内容去重仍以服务端标准化后的 md5 为准。
@@ -132,9 +132,11 @@ export function useLocalUploadImport(options: {
   }, [concurrency, defaults, maxBytes, maxItems, prepare, queue, storageSlug]);
 
   const cancel = useCallback(async (job: ImportJob) => {
-    activeRequests.current.get(job.id)?.abort();
-    queue.updateJob(job.id, { status: "cancelled", message: "已取消" });
-    if (job.sessionId) await cancelStoredImport(job.sessionId).catch(() => undefined);
+    return cancelImportAttempt(
+      queue,
+      job,
+      activeRequests.current.get(job.id)?.abort
+    );
   }, [queue]);
 
   const retry = useCallback(async (job: ImportJob) => {

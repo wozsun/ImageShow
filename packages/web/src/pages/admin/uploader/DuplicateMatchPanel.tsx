@@ -1,6 +1,7 @@
 import { ImageThumbnail } from "../../../components/image/ImageThumbnail.js";
 import { formatImageClassification, imageDisplayTitle } from "../../../lib/ui/formatters.js";
 import type { BatchDuplicateMatch, ImageItem } from "../../../lib/types.js";
+import { importPositionText } from "./import-job-utils.js";
 
 export type ImportPreviewTarget = {
   src: string;
@@ -27,9 +28,10 @@ export function DuplicateMatchPanel({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const batchPositionText = batchDuplicate ? importPositionText(batchDuplicate) : "";
   const sourceText = batchDuplicate
-    ? batchDuplicate.manifestLine
-      ? `与 JSONL 第 ${batchDuplicate.manifestLine} 行的处理后文件重复`
+    ? batchPositionText
+      ? `与${batchPositionText}的处理后文件重复`
       : "与同批处理任务的最终文件重复"
     : `与图库中 ${libraryItems.length} 张图片的最终文件重复`;
 
@@ -75,7 +77,7 @@ export function DuplicateMatchPanel({
               <small>
                 {batchDuplicate.available
                   ? [
-                      batchDuplicate.manifestLine ? `JSONL 第 ${batchDuplicate.manifestLine} 行` : "同批处理任务",
+                      batchPositionText || "同批处理任务",
                       batchDuplicate.theme,
                       `${batchDuplicate.device}/${batchDuplicate.brightness}`
                     ].filter(Boolean).join(" · ")

@@ -516,9 +516,9 @@ async function extractWeiboPostWithVisitor(
     options.requestTimeoutMs
   );
   const status = asRecord(rawStatus);
-  const weiboId = scalarString(status?.idstr) || scalarString(status?.id);
+  const returnedWeiboId = scalarString(status?.idstr) || scalarString(status?.id);
   const createdAt = scalarString(status?.created_at);
-  if (!status || !weiboId || !createdAt) {
+  if (!status || !createdAt) {
     throw new WeiboImportError(
       "weibo_post_unavailable",
       "没有获得微博详情，微博可能不存在、不可见或要求登录"
@@ -540,10 +540,16 @@ async function extractWeiboPostWithVisitor(
   const mappedAuthor = Object.hasOwn(options.authorSlugs, userId)
     ? options.authorSlugs[userId]
     : undefined;
+  const mblogId = scalarString(status.mblogid);
+  const weiboId = returnedWeiboId || parsedUrl.identifier;
   return {
-    source_url: parsedUrl.sourceUrl,
+    source_url: mblogId
+      ? `https://weibo.com/${encodeURIComponent(userId)}/${encodeURIComponent(mblogId)}`
+      : returnedWeiboId
+        ? `https://weibo.com/${encodeURIComponent(userId)}/${encodeURIComponent(returnedWeiboId)}`
+        : parsedUrl.sourceUrl,
     weibo_id: weiboId,
-    bid: scalarString(status.mblogid) || parsedUrl.identifier,
+    bid: mblogId || parsedUrl.identifier,
     user_id: userId,
     published_at: publishedAt,
     original_image_urls: originalImageUrls,

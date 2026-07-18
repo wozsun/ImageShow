@@ -11,6 +11,7 @@ import {
   applyPreparedResult,
   isCurrentImportAttempt,
   type AppendImportQueueApi,
+  type ImportQueueApi,
   type PreparedApplyResult
 } from "./prepared-result.js";
 
@@ -19,6 +20,43 @@ export type ImportAttemptResult = {
   prepared: PreparedImport;
   acceptance: PreparedApplyResult;
 };
+
+export async function cancelImportAttempt(
+  queue: ImportQueueApi,
+  job: ImportJob,
+  abort: (() => void) | undefined,
+  cancelSession: (sessionId: string) => Promise<unknown> = cancelStoredImport
+): Promise<boolean> {
+  queue.updateJob(job.id, {
+    status: "cancelling",
+    failureStage: undefined,
+    message: "正在取消并清理暂存数据",
+    transferProgress: undefined
+  });
+  abort?.();
+
+  const sessionId = queue.jobsRef.current.find((item) => item.id === job.id)?.sessionId
+    ?? job.sessionId;
+  if (!sessionId) return true;
+
+  try {
+    await cancelSession(sessionId);
+    return true;
+  } catch (error) {
+    const current = queue.jobsRef.current.find((item) => item.id === job.id);
+    if (current?.status === "cancelling") {
+      const reason = error instanceof Error && error.message.trim()
+        ? error.message
+        : "未知错误";
+      queue.updateJob(job.id, {
+        status: "failed",
+        failureStage: "cancel",
+        message: `取消失败：${reason}`
+      });
+    }
+    return false;
+  }
+}
 
 export async function runImportAttempt(options: {
   queue: AppendImportQueueApi;
@@ -72,7 +110,7 @@ export function applyImportAttemptFailure(
   failureStage: "create" | "prepare" = "prepare"
 ) {
   const current = queue.jobsRef.current.find((item) => item.id === jobId);
-  if (current?.attemptKey === attemptKey && current.status !== "cancelled") {
+  if (current?.attemptKey === attemptKey && !["cancelling", "cancelled"].includes(current.status)) {
     queue.updateJob(jobId, {
       status: "failed",
       failureStage,

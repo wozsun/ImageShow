@@ -21,6 +21,7 @@ export function weiboImportJobs(
     storageSlug
   ).map((job) => ({
     ...job,
+    manifestSource: "weibo",
     inlineMetadataFields: [...new Set([
       ...(job.inlineMetadataFields ?? []),
       "author" as const

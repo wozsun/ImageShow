@@ -1,4 +1,4 @@
-import type { Device, ImageDraft, ImportJob } from "../../../lib/types.js";
+import type { Device, ImageDraft, ImportJob, ManifestImportSource } from "../../../lib/types.js";
 import { browserUuid, resolveUploadDefaultBrightness, type CommonImageAttributes } from "../../../lib/upload/upload-utils.js";
 
 function hasDirectIpHostname(hostname: string) {
@@ -30,6 +30,19 @@ export type ImportUrlParseResult = {
   duplicateCount: number;
 };
 
+export function importPositionText(item: {
+  manifestSource?: ManifestImportSource;
+  manifestLine?: number;
+  manifestPosition?: number;
+}) {
+  if (item.manifestSource === "weibo") {
+    const position = item.manifestPosition
+      ?? (item.manifestLine ? item.manifestLine - 1 : undefined);
+    return position === undefined ? "" : `微博第 ${position + 1} 张`;
+  }
+  return item.manifestLine ? `JSONL 第 ${item.manifestLine} 行` : "";
+}
+
 export function parseImportUrlInput(input: string | string[]): ImportUrlParseResult {
   const raw = Array.isArray(input) ? input : input.split(/\s+/);
   const urls: string[] = [];
@@ -55,10 +68,6 @@ export function parseImportUrlInput(input: string | string[]): ImportUrlParseRes
   return { urls, invalidCount, duplicateCount };
 }
 
-export function parseImportUrls(input: string | string[]) {
-  return parseImportUrlInput(input).urls;
-}
-
 function linkDraft(url: string, defaults: CommonImageAttributes, fillOriginalUrl: boolean): ImageDraft {
   return {
     title: "",
@@ -75,13 +84,13 @@ function linkDraft(url: string, defaults: CommonImageAttributes, fillOriginalUrl
 
 export function linkImportJobs(
   kind: "download" | "proxy",
-  urls: string[],
+  validatedUrls: string[],
   defaults: CommonImageAttributes,
   fillOriginalUrl: boolean,
   storageSlug: string
 ) {
   const batchTime = new Date().toISOString();
-  return parseImportUrls(urls).map((url, manifestPosition): ImportJob => ({
+  return validatedUrls.map((url, manifestPosition): ImportJob => ({
     id: browserUuid(),
     attemptKey: browserUuid(),
     kind,

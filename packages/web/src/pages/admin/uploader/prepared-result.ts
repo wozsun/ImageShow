@@ -21,12 +21,16 @@ export type PreparedApplyResult =
 
 export function isCurrentImportAttempt(queue: ImportQueueApi, jobId: string, attemptKey: string) {
   const current = queue.jobsRef.current.find((job) => job.id === jobId);
-  return Boolean(current && current.attemptKey === attemptKey && current.status !== "cancelled");
+  return Boolean(
+    current
+      && current.attemptKey === attemptKey
+      && !["cancelling", "cancelled"].includes(current.status)
+  );
 }
 
 export function applyPreparedResult(queue: ImportQueueApi, jobId: string, attemptKey: string, prepared: PreparedImport): PreparedApplyResult {
   const current = queue.jobsRef.current.find((job) => job.id === jobId);
-  if (!current || current.status === "cancelled" || current.attemptKey !== attemptKey || current.sessionId !== prepared.id) return { status: "stale" };
+  if (!current || ["cancelling", "cancelled"].includes(current.status) || current.attemptKey !== attemptKey || current.sessionId !== prepared.id) return { status: "stale" };
   // 先认领 md5：同一批并发完成的重复文件不会同时进入“待提交”状态。
   const claim = queue.claimPreparedMd5(jobId, prepared.md5);
   const duplicates = prepared.duplicates ?? [];

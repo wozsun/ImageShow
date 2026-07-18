@@ -7,7 +7,7 @@ import {
   runWithConcurrency,
   type CommonImageAttributes
 } from "../../../../lib/upload/upload-utils.js";
-import { linkImportJobs, retryLinkPrepareJob } from "../import-job-utils.js";
+import { importPositionText, linkImportJobs, retryLinkPrepareJob } from "../import-job-utils.js";
 import { batchDuplicateFromJob } from "../duplicate-match.js";
 import { isCurrentImportAttempt, type AppendImportQueueApi } from "../prepared-result.js";
 import {
@@ -16,7 +16,7 @@ import {
   type ImportSessionCreateInput,
   type ImportSessionHandle
 } from "../import-api.js";
-import { applyImportAttemptFailure, runImportAttempt } from "../import-attempt.js";
+import { applyImportAttemptFailure, cancelImportAttempt, runImportAttempt } from "../import-attempt.js";
 import type { LinkImportMode } from "./LinkUrlDialog.js";
 
 function linkSessionInput(job: ImportJob): ImportSessionCreateInput {
@@ -95,6 +95,7 @@ export function useLinkImport(options: {
           const owner = duplicateOwnerId
             ? queue.jobsRef.current.find((item) => item.id === duplicateOwnerId)
             : undefined;
+          const ownerPositionText = owner ? importPositionText(owner) : "";
           const batchDuplicate = !libraryDuplicate && owner
             ? batchDuplicateFromJob(owner)
             : undefined;
@@ -102,8 +103,8 @@ export function useLinkImport(options: {
             status: "skipped",
             message: libraryDuplicate
               ? `与图库中 ${duplicates.length} 张图片的最终文件重复，已跳过`
-              : owner?.manifestLine
-                ? `与 JSONL 第 ${owner.manifestLine} 行的处理后文件重复，已跳过`
+              : ownerPositionText
+                ? `与${ownerPositionText}的处理后文件重复，已跳过`
                 : "与同批处理任务的最终文件重复，已跳过",
             ...(libraryDuplicate ? {
               preview: libraryDuplicate.thumb_url,
@@ -201,9 +202,11 @@ export function useLinkImport(options: {
   }, [addBatch]);
 
   const cancel = useCallback(async (job: ImportJob) => {
-    controllers.current.get(job.id)?.abort();
-    queue.updateJob(job.id, { status: "cancelled", message: "已取消" });
-    if (job.sessionId) await cancelStoredImport(job.sessionId).catch(() => undefined);
+    return cancelImportAttempt(
+      queue,
+      job,
+      () => controllers.current.get(job.id)?.abort()
+    );
   }, [queue]);
 
   const retry = useCallback(async (job: ImportJob) => {

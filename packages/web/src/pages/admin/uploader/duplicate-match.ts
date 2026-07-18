@@ -29,7 +29,9 @@ export function batchDuplicateFromJob(owner: ImportJob): BatchDuplicateMatch {
   const previewFull = owner.previewFull || owner.preview;
   return {
     ownerId: owner.id,
+    manifestSource: owner.manifestSource,
     manifestLine: owner.manifestLine,
+    manifestPosition: owner.manifestPosition,
     original: owner.url || owner.draft.original,
     preview: owner.preview,
     previewFull,
