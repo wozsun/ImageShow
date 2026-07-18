@@ -128,13 +128,13 @@
 .link-import-mode-hint { margin-top: 2px; }
 .link-import-urls { width: 100%; height: 190px; min-height: 190px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; padding: 10px; }
 .link-import-input-region { width: 100%; min-height: 0; display: flex; flex-direction: column; }
-.link-import-input-region.has-weibo-summary {
+.link-import-input-region.has-result-summary {
   height: 190px;
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
   gap: 10px;
 }
-.link-import-input-region.has-weibo-summary .link-import-urls {
+.link-import-input-region.has-result-summary .link-import-urls {
   height: 100%;
   min-height: 0;
   resize: none;
@@ -152,7 +152,8 @@
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
-.weibo-import-summary { min-width: 0; margin: 0; color: #35653f; line-height: 20px; }
+.link-import-result-summary { min-width: 0; margin: 0; color: #35653f; line-height: 20px; }
+.link-import-result-summary.is-warning { color: #795d1d; }
 .jsonl-preview { display: grid; gap: 8px; min-height: 0; }
 .jsonl-preview-summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: #435062; font-size: 13px; }
 .jsonl-preview-summary button { min-height: 32px; padding: 6px 9px; }

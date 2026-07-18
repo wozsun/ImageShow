@@ -24,14 +24,39 @@ function isPlausibleExternalImageUrl(value: string) {
   }
 }
 
-export function parseImportUrls(input: string | string[]) {
+export type ImportUrlParseResult = {
+  urls: string[];
+  invalidCount: number;
+  duplicateCount: number;
+};
+
+export function parseImportUrlInput(input: string | string[]): ImportUrlParseResult {
   const raw = Array.isArray(input) ? input : input.split(/\s+/);
+  const urls: string[] = [];
+  let invalidCount = 0;
+  let duplicateCount = 0;
   const seen = new Set<string>();
-  return raw.map((url) => url.trim()).filter((url) => {
-    if (!isPlausibleExternalImageUrl(url) || seen.has(url)) return false;
+
+  for (const value of raw) {
+    const url = value.trim();
+    if (!url) continue;
+    if (!isPlausibleExternalImageUrl(url)) {
+      invalidCount += 1;
+      continue;
+    }
+    if (seen.has(url)) {
+      duplicateCount += 1;
+      continue;
+    }
     seen.add(url);
-    return true;
-  });
+    urls.push(url);
+  }
+
+  return { urls, invalidCount, duplicateCount };
+}
+
+export function parseImportUrls(input: string | string[]) {
+  return parseImportUrlInput(input).urls;
 }
 
 function linkDraft(url: string, defaults: CommonImageAttributes, fillOriginalUrl: boolean): ImageDraft {

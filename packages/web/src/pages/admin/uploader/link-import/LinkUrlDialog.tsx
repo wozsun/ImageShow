@@ -3,7 +3,7 @@ import { Icon, type IconName } from "../../../../components/icon/Icon.js";
 import { SelectMenu } from "../../../../components/form/SelectMenu.js";
 import { OverlayScrollbar } from "../../../../components/layout/OverlayScrollbar.js";
 import { useDialogFocus } from "../../../../hooks/useDialogFocus.js";
-import { parseImportUrls } from "../import-job-utils.js";
+import { parseImportUrlInput, type ImportUrlParseResult } from "../import-job-utils.js";
 import {
   parseImportJsonl,
   parseWeiboImport,
@@ -13,6 +13,7 @@ import {
   type WeiboImportResult
 } from "../import-api.js";
 import {
+  formatUrlImportSummary,
   linkInputLimitState,
   linkInputTextareaRows,
   parseWeiboImportLines,
@@ -80,6 +81,7 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
   const [text, setText] = useState("");
   const [mode, setMode] = useState<LinkImportMode>("download");
   const [inputMode, setInputMode] = useState<LinkInputMode>(initialInputMode);
+  const [urlParseResult, setUrlParseResult] = useState<ImportUrlParseResult | null>(null);
   const [jsonlManifest, setJsonlManifest] = useState<JsonlManifestResult | null>(null);
   const [weiboResult, setWeiboResult] = useState<WeiboImportResult | null>(null);
   const [parsedText, setParsedText] = useState("");
@@ -99,23 +101,34 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
   });
   useEffect(() => () => requestControllerRef.current?.abort(), []);
 
-  const urls = inputMode === "urls" ? parseImportUrls(text) : [];
   const weiboInputLines = inputMode === "weibo" ? parseWeiboImportLines(text) : [];
   const weiboUrls = weiboInputLines.map((entry) => entry.url);
-  const limitState = linkInputLimitState(inputMode, text, {
-    link: maxItems,
-    weibo: weiboMaxItems
-  });
+  const urlParseResultCurrent = inputMode === "urls" && parsedText === text
+    ? urlParseResult
+    : null;
   const jsonlManifestCurrent = inputMode === "jsonl" && parsedText === text
     ? jsonlManifest
     : null;
   const weiboResultCurrent = inputMode === "weibo" && parsedText === text
     ? weiboResult
     : null;
+  const limitState = linkInputLimitState(inputMode, text, {
+    link: maxItems,
+    weibo: weiboMaxItems
+  }, urlParseResultCurrent);
   const manifestCurrent = jsonlManifestCurrent ?? weiboResultCurrent?.manifest ?? null;
   const presentation = inputModePresentation[inputMode];
+  const noValidUrls = Boolean(urlParseResultCurrent && !urlParseResultCurrent.urls.length);
+  const resultSummary = urlParseResultCurrent
+    ? noValidUrls
+      ? "没有可导入的有效链接"
+      : formatUrlImportSummary(urlParseResultCurrent)
+    : weiboResultCurrent
+      ? `已解析 ${weiboResultCurrent.posts.length} 条微博，共 ${weiboResultCurrent.manifest.items.length} 张可导入图片`
+      : "";
 
   const resetParsedResult = () => {
+    setUrlParseResult(null);
     setJsonlManifest(null);
     setWeiboResult(null);
     setParsedText("");
@@ -134,6 +147,13 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
   };
 
   const parseInput = async () => {
+    if (inputMode === "urls") {
+      setParseError("");
+      setUrlParseResult(parseImportUrlInput(text));
+      setParsedText(text);
+      return;
+    }
+
     const controller = new AbortController();
     requestControllerRef.current = controller;
     setParsing(true);
@@ -166,8 +186,12 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
       return;
     }
     if (inputMode === "urls") {
-      if (!urls.length) return;
-      onSubmit({ inputMode, urls, mode });
+      if (!urlParseResultCurrent) {
+        await parseInput();
+        return;
+      }
+      if (!urlParseResultCurrent.urls.length) return;
+      onSubmit({ inputMode, urls: urlParseResultCurrent.urls, mode });
       close();
       return;
     }
@@ -187,21 +211,23 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
   };
 
   const submitCount = inputMode === "urls"
-    ? urls.length
+    ? urlParseResultCurrent?.urls.length ?? 0
     : manifestCurrent?.items.length ?? 0;
   const readyToImport = inputMode === "urls"
-    ? submitCount > 0
+    ? Boolean(urlParseResultCurrent)
     : Boolean(manifestCurrent);
   const missingInput = inputMode === "urls"
-    ? !urls.length
+    ? !text.trim()
     : inputMode === "weibo"
       ? !weiboUrls.length
       : !text.trim();
-  const parsedWithoutItems = Boolean(manifestCurrent && !manifestCurrent.items.length);
+  const parsedWithoutItems = inputMode === "urls"
+    ? Boolean(urlParseResultCurrent && !urlParseResultCurrent.urls.length)
+    : Boolean(manifestCurrent && !manifestCurrent.items.length);
   const submitText = parsing
     ? "解析中"
-    : inputMode === "urls" && !urls.length
-      ? "自动解析"
+    : inputMode === "urls" && !urlParseResultCurrent
+      ? "解析链接"
       : inputMode === "jsonl" && !jsonlManifestCurrent
         ? "解析清单"
         : inputMode === "weibo" && !weiboResultCurrent
@@ -239,10 +265,10 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
           {inputMode === "jsonl"
             ? `每行一个 JSON，最多 ${maxItems} 条；行内字段优先于“应用到全部”。`
             : inputMode === "weibo"
-              ? `每行一条公开微博链接，最多 ${weiboMaxItems} 条微博。`
+              ? `每行一条公开微博链接，最多 ${weiboMaxItems} 条；默认使用微博元数据。`
               : `每行一个 URL，最多 ${maxItems} 条；缺省元数据项使用“应用到全部”。`}
         </p>
-        <div className={`link-import-input-region${weiboResultCurrent ? " has-weibo-summary" : ""}`}>
+        <div className={`link-import-input-region${resultSummary ? " has-result-summary" : ""}`}>
           <textarea
             className="link-import-urls"
             value={text}
@@ -251,9 +277,12 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
             placeholder={presentation.placeholder}
             rows={linkInputTextareaRows}
           />
-          {weiboResultCurrent && (
-            <p className="hint weibo-import-summary" role="status">
-              已解析 {weiboResultCurrent.posts.length} 条微博，共 {weiboResultCurrent.manifest.items.length} 张可导入图片
+          {resultSummary && (
+            <p
+              className={`hint link-import-result-summary${noValidUrls ? " is-warning" : ""}`}
+              role="status"
+            >
+              {resultSummary}
             </p>
           )}
         </div>
