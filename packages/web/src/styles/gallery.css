@@ -18,6 +18,7 @@
   pointer-events: none;
   transform: translateY(-100%);
 }
+.gallery-filter-panel { display: contents; }
 .gallery-toolbar label {
   display: grid;
   gap: 6px;

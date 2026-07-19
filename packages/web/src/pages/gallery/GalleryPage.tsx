@@ -15,119 +15,13 @@ import { rootSiteOrigin } from "../../lib/gallery/theme-host.js";
 import type { GalleryImageCard, PublicImageDetail, PublicImageItem, RandomMode } from "../../lib/types.js";
 import { useGalleryFacets, useSiteConfig } from "../../lib/api/site-data.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
-import { isBodyScrollLocked } from "../../hooks/useBodyScrollLock.js";
+import { AnchoredMenuDismissSignalContext } from "../../hooks/useAnchoredMenu.js";
 import { LazyGalleryImage } from "./LazyGalleryImage.js";
 import { masonryColumns, nextRenderBatch, useGalleryColumnCount } from "./gallery-layout.js";
+import { scrollGalleryToTop, useGalleryViewportControls } from "./useGalleryViewportControls.js";
 
 type GalleryFilters = { device: string; brightness: string; theme: string; tag: string; author: string };
 type PublicImageListPage = { items: GalleryImageCard[]; next_cursor: string | null };
-const toolbarScrollDirectionThreshold = 8;
-const backToTopViewportThreshold = 2;
-// 与 styles/responsive.css 的画廊移动端断点保持一致。
-const mobileGalleryMediaQuery = "(max-width: 760px)";
-
-function useGalleryToolbarVisibility(
-  toolbarRef: RefObject<HTMLElement | null>,
-  lockedOpen: boolean
-) {
-  const [visible, setVisible] = useState(true);
-  const scrollAnchorRef = useRef(0);
-  const toolbarHeightRef = useRef(0);
-
-  useEffect(() => {
-    const toolbar = toolbarRef.current;
-    if (!toolbar) return;
-    const updateToolbarHeight = () => {
-      toolbarHeightRef.current = toolbar.getBoundingClientRect().height;
-    };
-    const observer = new ResizeObserver(updateToolbarHeight);
-    observer.observe(toolbar);
-    updateToolbarHeight();
-
-    scrollAnchorRef.current = window.scrollY;
-    if (lockedOpen) {
-      setVisible(true);
-      return () => observer.disconnect();
-    }
-
-    let frame: number | undefined;
-    const update = () => {
-      frame = undefined;
-      // 模态框固定 body 时 window.scrollY 会暂时归零。这不是用户滚动，不能据此
-      // 改变工具栏状态，否则关闭详情恢复原位置时会看到工具栏闪烁。
-      if (isBodyScrollLocked()) return;
-      const scrollTop = Math.max(0, window.scrollY);
-      // 下拉菜单通过 Portal 渲染在 body；菜单展开时保持其触发工具栏可见，
-      // 避免触发器被收起而浮层仍停留在页面上。
-      if (toolbar.querySelector('[aria-expanded="true"]')) {
-        scrollAnchorRef.current = scrollTop;
-        setVisible(true);
-        return;
-      }
-      if (scrollTop <= toolbarScrollDirectionThreshold) {
-        scrollAnchorRef.current = scrollTop;
-        setVisible(true);
-        return;
-      }
-      const delta = scrollTop - scrollAnchorRef.current;
-      if (Math.abs(delta) < toolbarScrollDirectionThreshold) return;
-      scrollAnchorRef.current = scrollTop;
-      if (delta < 0) {
-        setVisible(true);
-        return;
-      }
-      // 工具栏仍占据文档流高度。等页面至少滚过同等距离再隐藏，避免其原始
-      // 占位来不及滚出视口而暴露成一整块空白。
-      if (scrollTop >= toolbarHeightRef.current) setVisible(false);
-    };
-    const onScroll = () => {
-      if (frame !== undefined) return;
-      frame = window.requestAnimationFrame(update);
-    };
-
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => {
-      window.removeEventListener("scroll", onScroll);
-      if (frame !== undefined) window.cancelAnimationFrame(frame);
-      observer.disconnect();
-    };
-  }, [lockedOpen, toolbarRef]);
-
-  return visible;
-}
-
-function useBackToTopVisibility() {
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    let frame: number | undefined;
-    const update = () => {
-      frame = undefined;
-      if (isBodyScrollLocked()) return;
-      setVisible(window.scrollY >= window.innerHeight * backToTopViewportThreshold);
-    };
-    const scheduleUpdate = () => {
-      if (frame !== undefined) return;
-      frame = window.requestAnimationFrame(update);
-    };
-
-    update();
-    window.addEventListener("scroll", scheduleUpdate, { passive: true });
-    window.addEventListener("resize", scheduleUpdate);
-    return () => {
-      window.removeEventListener("scroll", scheduleUpdate);
-      window.removeEventListener("resize", scheduleUpdate);
-      if (frame !== undefined) window.cancelAnimationFrame(frame);
-    };
-  }, []);
-
-  return visible;
-}
-
-function scrollGalleryToTop() {
-  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  window.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
-}
 
 function gallerySearchParams(filters: GalleryFilters, order: string, cursor = "") {
   const params = new URLSearchParams();
@@ -187,26 +81,21 @@ export function GalleryPage({ fixedTheme = "", standalone = false }: { fixedThem
   const [filters, setFilters] = useState<GalleryFilters>({ device: "", brightness: "", theme: fixedTheme, tag: "", author: "" });
   const [mode, setMode] = useState<RandomMode>("");
 
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const toolbarRef = useRef<HTMLElement | null>(null);
-  const toolbarVisible = useGalleryToolbarVisibility(toolbarRef, filtersOpen);
-  const backToTopVisible = useBackToTopVisibility();
+  const {
+    backToTopVisible,
+    closeFilters,
+    filterPanelRef,
+    filterMenuDismissSignal,
+    filtersOpen,
+    toggleFilters,
+    toolbarRef,
+    toolbarVisible,
+  } = useGalleryViewportControls();
   const [visibleCount, setVisibleCount] = useState(galleryRenderBatch);
   const detailReturnFocusRef = useRef<HTMLElement | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const { data: facets } = useGalleryFacets();
   const { data: siteConfig } = useSiteConfig();
-
-  useEffect(() => {
-    const mobileViewport = window.matchMedia(mobileGalleryMediaQuery);
-    const closeFiltersOutsideMobileLayout = ({ matches }: MediaQueryListEvent) => {
-      if (!matches) setFiltersOpen(false);
-    };
-
-    if (!mobileViewport.matches) setFiltersOpen(false);
-    mobileViewport.addEventListener("change", closeFiltersOutsideMobileLayout);
-    return () => mobileViewport.removeEventListener("change", closeFiltersOutsideMobileLayout);
-  }, []);
 
   const order = siteConfig?.site.gallery.order ?? "latest";
   const imageQuery = useMemo(() => gallerySearchParams(filters, order).toString(), [filters, order]);
@@ -291,7 +180,6 @@ export function GalleryPage({ fixedTheme = "", standalone = false }: { fixedThem
         ref={toolbarRef}
         className={`gallery-toolbar ${standalone ? "theme-toolbar" : ""}${filtersOpen ? " filters-open" : ""}${toolbarVisible ? "" : " is-scroll-hidden"}`}
         data-scroll-lock-anchor
-        aria-hidden={!toolbarVisible}
         inert={!toolbarVisible}
       >
         {standalone && (
@@ -304,91 +192,102 @@ export function GalleryPage({ fixedTheme = "", standalone = false }: { fixedThem
           type="button"
           className="gallery-filter-toggle"
           aria-expanded={filtersOpen}
-          onClick={() => setFiltersOpen((open) => !open)}
+          aria-controls="gallery-filter-panel"
+          onClick={toggleFilters}
         >
           <Icon name="filter-3-line" />
           筛选
           {activeFilterCount > 0 && <span className="gallery-filter-count">{activeFilterCount}</span>}
           <span className="gallery-filter-chevron"><Icon name="arrow-down-s-line" /></span>
         </button>
-        <label className="gallery-axis">
-          设备
-          <SelectMenu
-            value={filters.device}
-            onChange={(value) => updateFilter("device", value)}
-            options={[
-              { value: "", label: "全部设备" },
-              { value: "r", label: "强制随机" },
-              ...(facets?.devices ?? ["pc", "mb"]).map((value) => ({ value, label: deviceOptionLabel(value) }))
-            ]}
-            ariaLabel="设备"
-          />
-        </label>
-        <label className="gallery-axis">
-          亮度
-          <SelectMenu
-            value={filters.brightness}
-            onChange={(value) => updateFilter("brightness", value)}
-            options={[
-              { value: "", label: "全部亮度" },
-              ...(facets?.brightnesses ?? ["light", "dark"]).map((value) => ({ value, label: brightnessOptionLabel(value) }))
-            ]}
-            ariaLabel="亮度"
-          />
-        </label>
-        <label className="gallery-axis">
-          模式
-          <SelectMenu
-            value={mode}
-            onChange={(value) => setMode(value as RandomMode)}
-            options={randomModeSelectOptions}
-            ariaLabel="模式"
-          />
-        </label>
-        {!fixedTheme && (
-          <label>
-            主题
-            <FacetSelector
-              options={facets?.themes ?? []}
-              value={filters.theme}
-              onChange={(value) => updateFilter("theme", value)}
-              noun="主题"
-            />
-          </label>
-        )}
-        <label className="gallery-tag-filter">
-          标签
-          <FacetSelector
-            options={facets?.tags ?? []}
-            value={filters.tag}
-            onChange={(value) => updateFilter("tag", value)}
-            noun="标签"
-          />
-        </label>
-        <label>
-          作者
-          <FacetSelector
-            options={facets?.authors ?? []}
-            value={filters.author}
-            onChange={(value) => updateFilter("author", value)}
-            noun="作者"
-          />
-        </label>
-        <div className="theme-link">
-          <span>随机图片链接</span>
-          <div className="theme-link-row">
-            <code>{randomUrl}</code>
-            <CopyButton value={randomUrl} ariaLabel="复制随机图片链接" />
-            <a
-              className="button secondary pressable"
-              href={randomUrl}
-              target="_blank"
-              rel="noreferrer noopener"
-            >
-              <Icon name="external-link-line" />打开
-            </a>
+        <AnchoredMenuDismissSignalContext.Provider value={filterMenuDismissSignal}>
+          <div
+            ref={filterPanelRef}
+            id="gallery-filter-panel"
+            className="gallery-filter-panel"
+            role="group"
+            aria-label="画廊筛选条件"
+          >
+            <label className="gallery-axis">
+              设备
+              <SelectMenu
+                value={filters.device}
+                onChange={(value) => updateFilter("device", value)}
+                options={[
+                  { value: "", label: "全部设备" },
+                  { value: "r", label: "强制随机" },
+                  ...(facets?.devices ?? ["pc", "mb"]).map((value) => ({ value, label: deviceOptionLabel(value) }))
+                ]}
+                ariaLabel="设备"
+              />
+            </label>
+            <label className="gallery-axis">
+              亮度
+              <SelectMenu
+                value={filters.brightness}
+                onChange={(value) => updateFilter("brightness", value)}
+                options={[
+                  { value: "", label: "全部亮度" },
+                  ...(facets?.brightnesses ?? ["light", "dark"]).map((value) => ({ value, label: brightnessOptionLabel(value) }))
+                ]}
+                ariaLabel="亮度"
+              />
+            </label>
+            <label className="gallery-axis">
+              模式
+              <SelectMenu
+                value={mode}
+                onChange={(value) => setMode(value as RandomMode)}
+                options={randomModeSelectOptions}
+                ariaLabel="模式"
+              />
+            </label>
+            {!fixedTheme && (
+              <label>
+                主题
+                <FacetSelector
+                  options={facets?.themes ?? []}
+                  value={filters.theme}
+                  onChange={(value) => updateFilter("theme", value)}
+                  noun="主题"
+                />
+              </label>
+            )}
+            <label className="gallery-tag-filter">
+              标签
+              <FacetSelector
+                options={facets?.tags ?? []}
+                value={filters.tag}
+                onChange={(value) => updateFilter("tag", value)}
+                noun="标签"
+              />
+            </label>
+            <label>
+              作者
+              <FacetSelector
+                options={facets?.authors ?? []}
+                value={filters.author}
+                onChange={(value) => updateFilter("author", value)}
+                noun="作者"
+              />
+            </label>
+            <div className="theme-link">
+              <span>随机图片链接</span>
+              <div className="theme-link-row">
+                <code>{randomUrl}</code>
+                <CopyButton value={randomUrl} ariaLabel="复制随机图片链接" />
+                <a
+                  className="button secondary pressable"
+                  href={randomUrl}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                >
+                  <Icon name="external-link-line" />打开
+                </a>
+              </div>
+            </div>
           </div>
-        </div>
+        </AnchoredMenuDismissSignalContext.Provider>
       </section>
       <section className="gallery" style={{ "--gallery-columns": columnCount } as CSSProperties}>
         {columns.map((column, columnIndex) => (
@@ -399,6 +298,7 @@ export function GalleryPage({ fixedTheme = "", standalone = false }: { fixedThem
                 key={item.id}
                 data-image-id={item.id}
                 onClick={(event) => {
+                  closeFilters();
                   detailReturnFocusRef.current = event.currentTarget;
                   setSelected(item);
                 }}

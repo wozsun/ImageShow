@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 import { useAnimatedClose } from "./useAnimatedClose.js";
 import {
   computeAnchoredPosition,
@@ -13,6 +22,10 @@ function naturalMenuHeight(menu: HTMLElement | null) {
   return menu.scrollHeight + Math.max(0, menu.offsetHeight - menu.clientHeight);
 }
 
+// Portal 不会脱离 React 上下文。折叠或隐藏一组触发器时更新此信号，组内所有
+// 锚定菜单都能同步退出，而无需由父组件逐一持有每个菜单的内部 open 状态。
+export const AnchoredMenuDismissSignalContext = createContext(0);
+
 export function useAnchoredMenu(options: {
   triggerRef: RefObject<HTMLElement | null>;
   getSize: () => AnchoredMenuSize;
@@ -24,6 +37,8 @@ export function useAnchoredMenu(options: {
   focusOnOpen?: () => HTMLElement | null | undefined;
 }) {
   const { triggerRef, disabled = false, closeOnEscape = false, closeOnFocusOutside = false } = options;
+  const dismissSignal = useContext(AnchoredMenuDismissSignalContext);
+  const previousDismissSignalRef = useRef(dismissSignal);
   const [open, setOpen] = useState(false);
   const menuNodeRef = useRef<HTMLElement | null>(null);
   const [menuNode, setMenuNode] = useState<HTMLElement | null>(null);
@@ -51,6 +66,23 @@ export function useAnchoredMenu(options: {
   const requestClose = useCallback((afterClose?: () => void) => {
     animRequestClose(() => { setOpen(false); onCloseRef.current?.(); afterClose?.(); });
   }, [animRequestClose]);
+
+  useEffect(() => {
+    if (Object.is(previousDismissSignalRef.current, dismissSignal)) return;
+    previousDismissSignalRef.current = dismissSignal;
+    if (!open) return;
+
+    // 父级作用域关闭时，菜单中的焦点不能继续留在即将 aria-hidden/inert 的
+    // Portal 内；这里不把焦点退回同样即将隐藏的子级触发器。
+    const activeElement = document.activeElement;
+    if (
+      activeElement instanceof HTMLElement
+      && (menuNodeRef.current?.contains(activeElement) || triggerRef.current?.contains(activeElement))
+    ) {
+      activeElement.blur();
+    }
+    requestClose();
+  }, [dismissSignal, open, requestClose, triggerRef]);
 
   const updatePosition = useCallback(() => {
     const trigger = triggerRef.current;
