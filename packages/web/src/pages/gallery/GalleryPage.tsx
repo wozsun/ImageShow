@@ -22,6 +22,8 @@ type GalleryFilters = { device: string; brightness: string; theme: string; tag: 
 type PublicImageListPage = { items: GalleryImageCard[]; next_cursor: string | null };
 const toolbarScrollDirectionThreshold = 8;
 const backToTopViewportThreshold = 2;
+// 与 styles/responsive.css 的画廊移动端断点保持一致。
+const mobileGalleryMediaQuery = "(max-width: 760px)";
 
 function useGalleryToolbarVisibility(
   toolbarRef: RefObject<HTMLElement | null>,
@@ -189,6 +191,17 @@ export function GalleryPage({ fixedTheme = "", standalone = false }: { fixedThem
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const { data: facets } = useGalleryFacets();
   const { data: siteConfig } = useSiteConfig();
+
+  useEffect(() => {
+    const mobileViewport = window.matchMedia(mobileGalleryMediaQuery);
+    const closeFiltersOutsideMobileLayout = ({ matches }: MediaQueryListEvent) => {
+      if (!matches) setFiltersOpen(false);
+    };
+
+    if (!mobileViewport.matches) setFiltersOpen(false);
+    mobileViewport.addEventListener("change", closeFiltersOutsideMobileLayout);
+    return () => mobileViewport.removeEventListener("change", closeFiltersOutsideMobileLayout);
+  }, []);
 
   const order = siteConfig?.site.gallery.order ?? "latest";
   const imageQuery = useMemo(() => gallerySearchParams(filters, order).toString(), [filters, order]);

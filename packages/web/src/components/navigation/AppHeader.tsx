@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { adminBasePath, publicRootPath } from "../../lib/constants.js";
 import { clearSessionProbeHint, hasSessionProbeHint, rememberSessionProbeHint, useAuthMe, useSiteConfig } from "../../lib/api/site-data.js";
+import { registerPageTopInset } from "../../lib/ui/page-scroll-insets.js";
 import { Icon } from "../icon/Icon.js";
 import { MobileNavigation } from "./MobileNavigation.js";
 
@@ -11,12 +12,19 @@ export function AppHeader() {
   const [shouldProbeSession, setShouldProbeSession] = useState(hasSessionProbeHint);
   const { data: auth } = useAuthMe(shouldProbeSession);
   const siteName = data?.site?.name || "ImageShow";
+  const headerRef = useRef<HTMLElement | null>(null);
 
   const homeEnabled = data?.site?.home?.enabled ?? true;
   const rootPath = data?.site ? publicRootPath(data.site) : "/home";
   const showAdminEntry = Boolean(auth?.authenticated);
   const navClassName = (target: "/home" | "/gallery") => ({ isActive }: { isActive: boolean }) =>
     isActive || (pathname === "/" && rootPath === target) ? "active" : undefined;
+
+  useLayoutEffect(() => {
+    const header = headerRef.current;
+    if (!header) return;
+    return registerPageTopInset(header);
+  }, []);
 
   useEffect(() => {
     if (!auth) return;
@@ -29,7 +37,7 @@ export function AppHeader() {
   }, [auth]);
 
   return (
-    <header className="topbar" data-overlay-scrollbar-inset>
+    <header ref={headerRef} className="topbar">
       <Link className="brand" to="/">{siteName}</Link>
       <nav className="desktop-nav">
         {homeEnabled && <NavLink to="/home" className={navClassName("/home")}><Icon name="home-4-line" />首页</NavLink>}

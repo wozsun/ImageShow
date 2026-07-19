@@ -57,9 +57,8 @@ export const appConfig = {
 
   authentication: {
     altcha: {
-      // ALTCHA itself defaults to 90 seconds. Keep configurable work bounded
-      // above the current default worst case (5000 * 5000), without admitting
-      // combinations that can run for minutes on ordinary clients.
+      // Give ordinary clients up to one minute to solve a challenge. Keep the
+      // configurable work bounded so a challenge cannot run for several minutes.
       solveTimeoutMs: altchaSolveTimeoutMs,
       challengeExpirySafetySeconds: 30,
       maximumWorkFactor: 100_000_000

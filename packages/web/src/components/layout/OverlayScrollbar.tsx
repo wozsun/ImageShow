@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
+import { getPageTopInsets, subscribePageTopInsets } from "../../lib/ui/page-scroll-insets.js";
 
 type Metrics = {
   visible: boolean;
@@ -11,7 +12,6 @@ type Metrics = {
 const HIDE_DELAY = 900;
 const EDGE_ZONE = 24;
 const MIN_HANDLE = 36;
-const PAGE_TOP_INSET_SELECTOR = "[data-overlay-scrollbar-inset]";
 
 const ENABLE_QUERY = "(hover: hover) and (pointer: fine) and (forced-colors: none)";
 
@@ -97,20 +97,11 @@ function OverlayScrollbarHandle({
       if (!windowMode) return 0;
       let inset = 0;
       for (const element of observedPageInsets) {
-        if (element.isConnected && element.matches(PAGE_TOP_INSET_SELECTOR)) continue;
-        observer?.unobserve(element);
-        observedPageInsets.delete(element);
-      }
-      const elements = document.querySelectorAll<HTMLElement>(PAGE_TOP_INSET_SELECTOR);
-      elements.forEach((element) => {
-        if (observer && !observedPageInsets.has(element)) {
-          observedPageInsets.add(element);
-          observer.observe(element);
-        }
+        if (!element.isConnected) continue;
         const rect = element.getBoundingClientRect();
         // 只合并从视口顶部连续覆盖的吸顶区域，避免误把页面下方同名组件计入轨道边界。
         if (rect.bottom > 0 && rect.top <= inset + 1) inset = Math.max(inset, rect.bottom);
-      });
+      }
       return Math.min(window.innerHeight, Math.max(0, inset));
     };
     const read = () => {
@@ -182,6 +173,10 @@ function OverlayScrollbarHandle({
     const onAncestorScroll = () => scheduleRecompute();
     const onResize = () => scheduleRecompute();
     const onPointerMove = (event: PointerEvent) => {
+      if (windowMode) {
+        const distanceFromPageEdge = window.innerWidth - event.clientX;
+        if (distanceFromPageEdge < 0 || distanceFromPageEdge > EDGE_ZONE) return;
+      }
       const { offsetTop, viewport, edgeRight } = read();
       const near = edgeRight - event.clientX;
       // 鼠标靠近目标滚动区域右边缘时才显示，避免浮层长期遮挡内容。
@@ -199,8 +194,34 @@ function OverlayScrollbarHandle({
     observer.observe(el ?? document.body);
     if (containerRef?.current) observer.observe(containerRef.current);
     if (topInsetRef?.current) observer.observe(topInsetRef.current);
-    const domObserver = windowMode ? new MutationObserver(scheduleRecompute) : null;
-    domObserver?.observe(document.body, { childList: true, subtree: true });
+    const syncObservedPageInsets = () => {
+      const registeredInsets = getPageTopInsets();
+      for (const element of observedPageInsets) {
+        if (registeredInsets.has(element)) continue;
+        observedPageInsets.delete(element);
+        observer?.unobserve(element);
+      }
+      for (const element of registeredInsets) {
+        if (observedPageInsets.has(element)) continue;
+        observedPageInsets.add(element);
+        observer?.observe(element);
+      }
+    };
+    const onPageTopInsetsChanged = () => {
+      syncObservedPageInsets();
+      scheduleRecompute();
+    };
+    const unsubscribePageTopInsets = windowMode
+      ? subscribePageTopInsets(onPageTopInsetsChanged)
+      : null;
+    if (windowMode) syncObservedPageInsets();
+    // 模态框通过 body 的内联 position 锁定页面。只观察该元素的 style，避免恢复
+    // 对整个页面子树的监听，同时确保锁定开始和结束时立即更新滚动条。
+    const bodyStyleObserver = windowMode ? new MutationObserver(scheduleRecompute) : null;
+    bodyStyleObserver?.observe(document.body, {
+      attributes: true,
+      attributeFilter: ["style"],
+    });
     recompute();
     return () => {
       scrollTarget.removeEventListener("scroll", onScroll);
@@ -208,7 +229,8 @@ function OverlayScrollbarHandle({
       window.removeEventListener("resize", onResize);
       window.removeEventListener("pointermove", onPointerMove);
       observer?.disconnect();
-      domObserver?.disconnect();
+      unsubscribePageTopInsets?.();
+      bodyStyleObserver?.disconnect();
       if (frame !== undefined) window.cancelAnimationFrame(frame);
       window.clearTimeout(hideTimer.current);
       if (el) el.classList.remove("overlay-scroll-host");
