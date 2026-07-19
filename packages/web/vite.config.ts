@@ -2,19 +2,22 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { appConfig } from "@imageshow/shared";
 
 function resolveProxyTarget() {
   const configPath = fileURLToPath(new URL("../../data/config.json", import.meta.url));
   if (existsSync(configPath)) {
     try {
-      const config = JSON.parse(readFileSync(configPath, "utf8")) as { site?: { domain?: string }; port?: number };
+      const config = JSON.parse(readFileSync(configPath, "utf8")) as { site?: { domain?: string } };
       const domain = config.site?.domain;
-      if (domain) return `http://${domain.replace(/:\d+$/, "")}:${config.port ?? 5518}`;
+      if (domain) return `http://${domain.replace(/:\d+$/, "")}:${appConfig.applicationPort}`;
     } catch {
     }
   }
-  if (process.env.SITE_DOMAIN) return `http://${process.env.SITE_DOMAIN.replace(/:\d+$/, "")}:${process.env.PORT ?? 5518}`;
-  return "http://localhost:5518";
+  if (process.env.SITE_DOMAIN) {
+    return `http://${process.env.SITE_DOMAIN.replace(/:\d+$/, "")}:${appConfig.applicationPort}`;
+  }
+  return `http://localhost:${appConfig.applicationPort}`;
 }
 
 const target = resolveProxyTarget();
@@ -56,7 +59,6 @@ export default defineConfig({
     }
   },
   server: {
-
     proxy: {
       "/api": target,
       "/random": target,

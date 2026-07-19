@@ -1,4 +1,5 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import type { AltchaWidgetElement } from "altcha";
 import { Link, Navigate, NavLink, Route, Routes, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { api, clearCsrfToken, setCsrfToken } from "../../lib/api/client.js";
@@ -21,6 +22,7 @@ import { SettingsPage } from "./SettingsPage.js";
 import { StorageSettings } from "./StorageSettings.js";
 import { AccountSettings } from "./AccountSettings.js";
 import { LogPage } from "./LogPage.js";
+import { LoginChallenge } from "./LoginChallenge.js";
 import { AdminPreferencesProvider } from "../../hooks/useAdminPreferences.js";
 // 后台样式在此引入（而非全局 styles.css），随 AdminShell 懒加载分块下载，公共页不会加载。
 import "../../styles/admin.css";
@@ -52,13 +54,16 @@ export function AdminShell() {
   if (!data) return <div className="center">加载中</div>;
   if (!data.authenticated) return (
     <Login
-      onLogin={() => {
+      onLogin={async () => {
         // 先同步移除可能跨登录复用的后台缓存，再重新读取认证状态。移除操作
         // 不主动取数；认证完成后由真正挂载的后台路由按需读取，避免显示旧会话数据。
         clearAdminCacheAfterLogin(client);
-        void refetch();
+        const result = await refetch({ throwOnError: true });
+        if (!result.data?.authenticated) {
+          throw new Error("登录状态确认失败，请重试");
+        }
       }}
-      captchaEnabled={data.captcha_enabled}
+      altchaEnabled={data.altcha_enabled}
       loginBackground={data.login_background}
     />
   );
@@ -218,18 +223,59 @@ export function AdminShell() {
   );
 }
 
-function Login({ onLogin, captchaEnabled, loginBackground }: { onLogin: () => void; captchaEnabled: boolean; loginBackground: string }) {
+function Login({
+  onLogin,
+  altchaEnabled,
+  loginBackground
+}: {
+  onLogin: () => Promise<void>;
+  altchaEnabled: boolean;
+  loginBackground: string;
+}) {
   const { data: siteConfig } = useSiteConfig();
   const siteName = siteConfig?.site?.name || "ImageShow";
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [captcha, setCaptcha] = useState("");
-
-  const [captchaNonce, setCaptchaNonce] = useState(() => Date.now());
   const [error, setError] = useState("");
-  const refreshCaptcha = () => { setCaptcha(""); setCaptchaNonce(Date.now()); };
+  const [loggingIn, setLoggingIn] = useState(false);
+  const [challengeLoaded, setChallengeLoaded] = useState(!altchaEnabled);
+  const [challengeVerified, setChallengeVerified] = useState(!altchaEnabled);
+  const [challengeLoadFailed, setChallengeLoadFailed] = useState(false);
+  const [challengeInstance, setChallengeInstance] = useState(0);
+  const challengeRef = useRef<AltchaWidgetElement | null>(null);
+  const submissionActiveRef = useRef(false);
+  const automaticChallengeRetryUsedRef = useRef(false);
+  const markChallengeReady = useCallback(() => {
+    setChallengeLoaded(true);
+    setChallengeLoadFailed(false);
+    automaticChallengeRetryUsedRef.current = false;
+  }, []);
+  const markChallengeError = useCallback(() => {
+    setChallengeLoaded(false);
+    setChallengeVerified(false);
+    if (!automaticChallengeRetryUsedRef.current) {
+      automaticChallengeRetryUsedRef.current = true;
+      setChallengeInstance((current) => current + 1);
+      return;
+    }
+    setChallengeLoadFailed(true);
+  }, []);
+  const retryChallenge = useCallback(() => {
+    automaticChallengeRetryUsedRef.current = true;
+    setChallengeLoadFailed(false);
+    setChallengeLoaded(false);
+    setChallengeVerified(false);
+    setChallengeInstance((current) => current + 1);
+  }, []);
 
   const background = loginBackground || "/random?m=redirect";
+  const credentialsComplete = username.trim().length > 0 && password.length > 0;
+  const buttonLabel = loggingIn
+    ? "登录中…"
+    : !challengeLoaded
+      ? "加载验证…"
+      : "登录";
+
   return (
     <main
       className="login"
@@ -237,15 +283,35 @@ function Login({ onLogin, captchaEnabled, loginBackground }: { onLogin: () => vo
     >
       <form onSubmit={async (event) => {
         event.preventDefault();
+        if (submissionActiveRef.current || !credentialsComplete) return;
+        let altcha: string | undefined;
+        if (altchaEnabled) {
+          const proof = new FormData(event.currentTarget).get("altcha");
+          if (typeof proof !== "string" || proof.length === 0) return;
+          altcha = proof;
+        }
+
+        submissionActiveRef.current = true;
         setError("");
+        setLoggingIn(true);
         try {
-          const res = await api<{ csrf_token: string }>(`${adminApiBasePath}/auth/login`, { method: "POST", body: JSON.stringify({ username, password, ...(captchaEnabled ? { captcha } : {}) }) });
+          const res = await api<{ csrf_token: string }>(`${adminApiBasePath}/auth/login`, {
+            method: "POST",
+            body: JSON.stringify({ username, password, ...(altcha ? { altcha } : {}) })
+          });
           setCsrfToken(res.csrf_token);
           rememberSessionProbeHint();
-          onLogin();
+          await onLogin();
         } catch (err) {
+          clearCsrfToken();
+          clearSessionProbeHint();
           setError((err as Error).message);
-          if (captchaEnabled) refreshCaptcha();
+          if (altchaEnabled) {
+            setChallengeVerified(false);
+            challengeRef.current?.reset();
+          }
+          submissionActiveRef.current = false;
+          setLoggingIn(false);
         }
       }}>
         <a className="login-site-title" href="/"><h1>{siteName}</h1></a>
@@ -257,24 +323,29 @@ function Login({ onLogin, captchaEnabled, loginBackground }: { onLogin: () => vo
           autoComplete="username"
         />
         <PasswordInput value={password} onChange={setPassword} placeholder="密码" autoComplete="current-password" />
-        {captchaEnabled && (
-          <div className="login-captcha">
-            <input
-              value={captcha}
-              onChange={(event) => setCaptcha(event.target.value)}
-              placeholder="验证码"
-              autoComplete="off"
-            />
-            <img
-              src={`${adminApiBasePath}/auth/captcha?n=${captchaNonce}`}
-              alt="验证码"
-              title="点击刷新验证码"
-              onClick={refreshCaptcha}
-            />
-          </div>
+        {altchaEnabled && (
+          <LoginChallenge
+            key={challengeInstance}
+            ref={challengeRef}
+            onError={markChallengeError}
+            onReady={markChallengeReady}
+            onVerificationChange={setChallengeVerified}
+          />
+        )}
+        {challengeLoadFailed && (
+          <button className="login-challenge-retry" type="button" onClick={retryChallenge}>
+            安全验证加载失败，点击重试
+          </button>
         )}
         {error && <p className="error">{error}</p>}
-        <button className="button">登录</button>
+        <button
+          id="admin-login-submit"
+          className="button"
+          disabled={!credentialsComplete || !challengeLoaded || !challengeVerified || loggingIn}
+          type="submit"
+        >
+          {buttonLabel}
+        </button>
       </form>
     </main>
   );

@@ -1,5 +1,6 @@
 import {
   adminImagePageLimit,
+  altchaSolveTimeoutMs,
   imageDescriptionMaxLength,
   imageTitleMaxLength,
   importBatchHardLimit
@@ -8,6 +9,8 @@ import {
 export * from "./browser.ts";
 
 export const appConfig = {
+  // Container-internal HTTP port. Keep Dockerfile and Compose target ports in sync.
+  applicationPort: 5518,
   devices: ["pc", "mb"] as const,
   brightness: ["dark", "light"] as const,
   themeMaxLength: 32,
@@ -52,6 +55,17 @@ export const appConfig = {
     maxLifetimeSeconds: 30 * 60
   },
 
+  authentication: {
+    altcha: {
+      // ALTCHA itself defaults to 90 seconds. Keep configurable work bounded
+      // above the current default worst case (5000 * 5000), without admitting
+      // combinations that can run for minutes on ordinary clients.
+      solveTimeoutMs: altchaSolveTimeoutMs,
+      challengeExpirySafetySeconds: 30,
+      maximumWorkFactor: 100_000_000
+    }
+  },
+
   backgroundJob: {
     maxRetries: 5,
     retryBackoffSeconds: [60, 300, 900, 3600, 21600],
@@ -90,9 +104,6 @@ export const appConfig = {
       link_subdomain: "link",
       robots_enabled: false
     },
-    port: 5518,
-    database: { port: 5432 },
-    redis: { host: "redis", port: 6379, db: 0 },
     upload: {
       max_items: 200,
       max_file_size_mb: 100,
@@ -146,7 +157,13 @@ export const appConfig = {
       login_global_window_seconds: 180,
       login_global_max_attempts: 10
     },
-    captcha: { enabled: true, code_length: 6, ttl_seconds: 60, noise_lines: 8, noise_dots: 50 },
+    altcha: {
+      enabled: true,
+      ttl_seconds: 5 * 60,
+      cost: 5000,
+      counter_min: 2000,
+      counter_max: 5000
+    },
     log: { level: "WARN", max_size_mb: 10, max_files: 5 }
   } as const
 };
@@ -243,9 +260,6 @@ export type AdminPanelSettings = {
 
 export type RuntimeConfig = {
   site: RuntimeSiteSettings;
-  port: number;
-  database: { host: string; port: number; name: string; user: string; password: string };
-  redis: { host: string; port: number; db: number };
   upload: UploadSettings;
   link_image: LinkImageSettings;
   weibo: WeiboSettings;
@@ -266,12 +280,12 @@ export type RuntimeConfig = {
     login_global_window_seconds: number;
     login_global_max_attempts: number;
   };
-  captcha: {
+  altcha: {
     enabled: boolean;
-    code_length: number;
     ttl_seconds: number;
-    noise_lines: number;
-    noise_dots: number;
+    cost: number;
+    counter_min: number;
+    counter_max: number;
   };
   log: { level: "DEBUG" | "INFO" | "WARN" | "ERROR" | "OFF"; max_size_mb: number; max_files: number };
 };

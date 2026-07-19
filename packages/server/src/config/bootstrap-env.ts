@@ -62,22 +62,8 @@ function environmentBoolean(name: string): boolean | undefined {
   throw new Error(`${name} must be true, false, 1, or 0.`);
 }
 
-function requiredBootstrapEnvironment(name: string) {
-  const value = environmentValue(name);
-  if (!value) {
-    throw new Error(`${name} is required when creating ${runtimePaths.configFile} for the first time.`);
-  }
-  return value;
-}
-
 export function runtimeConfigFromEnvironment(): RuntimeConfig {
-  const base = runtimeConfigDefaults({
-    host: requiredBootstrapEnvironment("DATABASE_HOST"),
-    port: environmentNumber("DATABASE_PORT") ?? 5432,
-    name: requiredBootstrapEnvironment("DATABASE_NAME"),
-    user: requiredBootstrapEnvironment("DATABASE_USER"),
-    password: requiredBootstrapEnvironment("DATABASE_PASSWORD")
-  });
+  const base = runtimeConfigDefaults();
 
   const patch: RuntimeConfigPatch = {
     site: {
@@ -102,12 +88,6 @@ export function runtimeConfigFromEnvironment(): RuntimeConfig {
       docs_enabled: environmentBoolean("SITE_DOCS_ENABLED"),
       link_subdomain: environmentValue("SITE_LINK_SUBDOMAIN"),
       robots_enabled: environmentBoolean("SITE_ROBOTS_ENABLED")
-    },
-    port: environmentNumber("PORT"),
-    redis: {
-      host: environmentValue("REDIS_HOST"),
-      port: environmentNumber("REDIS_PORT"),
-      db: environmentNumber("REDIS_DB")
     },
     upload: {
       max_items: environmentNumber("UPLOAD_MAX_ITEMS"),
@@ -166,12 +146,12 @@ export function runtimeConfigFromEnvironment(): RuntimeConfig {
       login_global_window_seconds: environmentNumber("SECURITY_LOGIN_GLOBAL_WINDOW_SECONDS"),
       login_global_max_attempts: environmentNumber("SECURITY_LOGIN_GLOBAL_MAX_ATTEMPTS")
     },
-    captcha: {
-      enabled: environmentBoolean("CAPTCHA_ENABLED"),
-      code_length: environmentNumber("CAPTCHA_CODE_LENGTH"),
-      ttl_seconds: environmentNumber("CAPTCHA_TTL_SECONDS"),
-      noise_lines: environmentNumber("CAPTCHA_NOISE_LINES"),
-      noise_dots: environmentNumber("CAPTCHA_NOISE_DOTS")
+    altcha: {
+      enabled: environmentBoolean("ALTCHA_ENABLED"),
+      ttl_seconds: environmentNumber("ALTCHA_TTL_SECONDS"),
+      cost: environmentNumber("ALTCHA_COST"),
+      counter_min: environmentNumber("ALTCHA_COUNTER_MIN"),
+      counter_max: environmentNumber("ALTCHA_COUNTER_MAX")
     },
     log: {
       level: environmentValue("LOG_LEVEL") as RuntimeConfig["log"]["level"] | undefined,

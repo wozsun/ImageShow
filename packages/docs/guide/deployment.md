@@ -12,10 +12,13 @@ docker run --rm -p 5518:5518 \
   -e DATABASE_USER=imageshow -e DATABASE_PASSWORD="${DATABASE_PASSWORD:?set DATABASE_PASSWORD first}" \
   -e REDIS_HOST=redis.example.internal \
   -v /srv/imageshow/data:/app/data \
-  your-user/imageshow:latest
+  wozsun/imageshow:latest
 ```
 
-应用数据统一落在 `/app/data` 下（`config.json` 配置文件、`storage/` 本地图片、`log/` 日志），因此只需挂载这一个目录。数据库密码会以 `0600` 权限写入配置文件，请限制宿主机目录访问。
+应用数据统一落在 `/app/data` 下（`config.json` 应用配置、`storage/` 本地图片、
+`log/` 日志），因此只需挂载这一个目录。PostgreSQL / Redis 连接只从容器环境或
+Secret 读取，不会写入 `config.json`。
+外部 Redis 需要密码时额外传入 `REDIS_PASSWORD`；留空或省略表示使用无密码连接。
 
 ## 管理员密码恢复
 
@@ -37,7 +40,7 @@ docker exec -it imageshow imageshow reset-password <username>
 npm run admin:reset-password -- <username>
 ```
 
-命令只要求当前 `data/config.json` 中的 PostgreSQL 连接可用。Redis 故障
+命令使用与主服务相同的 `DATABASE_*` / `REDIS_*` 部署环境。Redis 故障
 不会阻止密码更新，命令会输出警告；由于旧会话可能在 Redis 恢复后继续
 有效，应在 Redis 恢复后清空 `imageshow:session:*`，或使用相同新密码
 重新运行密码重置命令。用户不存在、密码不符合规则或 PostgreSQL 更新
@@ -73,7 +76,7 @@ server {
 
   proxy_set_header Host $host;
   proxy_set_header X-Real-IP $remote_addr;
-  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  proxy_set_header X-Forwarded-For $remote_addr;
   proxy_set_header X-Forwarded-Proto $scheme;
 
   location / {
@@ -107,7 +110,7 @@ server {
 
   proxy_set_header Host $host;
   proxy_set_header X-Real-IP $remote_addr;
-  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  proxy_set_header X-Forwarded-For $remote_addr;
   proxy_set_header X-Forwarded-Proto $scheme;
 
   location /api/admin/imports/ {
@@ -127,10 +130,23 @@ server {
 }
 ```
 
-不要把应用 HTTP 端口直接暴露到公网。若 `X-Forwarded-Proto` 缺失或错误，Secure Cookie、同源检查与生成的跳转 URL 都会不正确。Docker Compose 部署时，把示例中的 `127.0.0.1:5518` 改为 Compose 服务名，例如 `imageshow:5518`。反向代理的请求体上限不能低于应用内任一对应设置，否则请求会在到达应用鉴权和校验逻辑前被代理返回 413；修改 `upload.max_file_size_mb` 或其他请求体上限时，应同步调整 `client_max_body_size`。当前 JSONL 固定应用边界为 128 MiB，`batch-create` 为 256 MiB；最大值仍是 256 MiB，因此示例取 256m。若把单文件上传上限调得更高，代理值也必须随之提高。
+不要把应用 HTTP 端口直接暴露到公网。应用依次读取 Nginx 覆盖后的
+`X-Real-IP`、`X-Forwarded-For` 首项，并在两者都缺失时使用 `unknown`；这些头只在
+反向代理完整覆盖时可信。示例故意把两个来源头都设置为 `$remote_addr`，不要使用
+会把访客自带值拼入链路的 `$proxy_add_x_forwarded_for`。前置 CDN 场景应通过
+Nginx `real_ip_header` 与受信任 CDN 节点的 `set_real_ip_from` 恢复真实
+`$remote_addr`；也可以使用 CDN 保证删除访客同名头后重新写入的来源 IP 头，但必须
+同时覆盖传给应用的 `X-Real-IP` 和 `X-Forwarded-For`。
 
-当前支持单应用实例的停机部署，不支持多个应用实例滚动写入。Redis 中的随机池和业务缓存具备分布式锁 / revision 保护，但 storage backend 注册表与 driver 仍有进程内 TTL 缓存，没有跨实例失效协议；升级时先停止旧实例，再启动新实例。
+若 `X-Forwarded-Proto` 缺失或错误，Secure Cookie、同源检查与生成的跳转 URL 都会
+不正确。Docker Compose 部署时，把示例中的 `127.0.0.1:5518` 改为 Compose 服务名，
+例如 `imageshow:5518`。反向代理的请求体上限不能低于应用内任一对应设置，否则
+请求会在到达应用鉴权和校验逻辑前被代理返回 413；修改
+`upload.max_file_size_mb` 或其他请求体上限时，应同步调整
+`client_max_body_size`。当前 JSONL 固定应用边界为 128 MiB，`batch-create` 为
+256 MiB；最大值仍是 256 MiB，因此示例取 256m。若把单文件上传上限调得更高，
+代理值也必须随之提高。
 
-升级到 v3.6.2 时，应在停止旧实例后清空应用配置的 Redis 数据库，再启动新实例。v3.6.2 不再为旧版派生缓存格式保留判别字段；随机池和业务缓存会从 PostgreSQL 自动重建。清空 Redis 也会注销全部管理员会话，因此升级后需要重新登录，但不会删除 PostgreSQL 业务数据或图片对象。
+当前支持单应用实例的停机部署，不支持多个应用实例滚动写入。Redis 中的随机池和业务缓存具备分布式锁 / revision 保护，但 storage backend 注册表与 driver 使用进程内 TTL 缓存，没有跨实例失效协议；更新部署时先停止运行中的实例，再启动新实例。
 
 浏览器同源 PUT 的原始图片先写入容器 `data/tmp`，服务端 prepare 完成后才向选定后端写入候选文件；请求依赖管理员会话 Cookie 与 `X-CSRF-Token`，浏览器不直连对象存储，因此存储桶无需配置 CORS。

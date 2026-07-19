@@ -1,11 +1,9 @@
 import { z } from "zod";
 import { appConfig, slugPattern, type RuntimeConfig } from "@imageshow/shared";
 import {
-  applicationPort,
-  captchaCodeLength,
-  captchaNoiseDots,
-  captchaNoiseLines,
-  captchaTtlSeconds,
+  altchaCost,
+  altchaCounter,
+  altchaTtlSeconds,
   commitConcurrency,
   galleryLimit,
   galleryOrder,
@@ -36,10 +34,8 @@ import {
   previewDelayMs,
   randomMethod,
   recentUploads,
-  redisDatabase,
   rootRedirect,
   sessionTtlSeconds,
-  servicePort,
   siteDomain,
   siteIconUrl,
   siteName,
@@ -85,19 +81,6 @@ const runtimeConfigSchema = z.strictObject({
     docs_enabled: z.boolean(),
     link_subdomain: subdomainLabel,
     robots_enabled: z.boolean()
-  }),
-  port: applicationPort,
-  database: z.strictObject({
-    host: z.string().trim().min(1),
-    port: servicePort,
-    name: z.string().trim().min(1),
-    user: z.string().trim().min(1),
-    password: z.string().min(1)
-  }),
-  redis: z.strictObject({
-    host: z.string().trim().min(1),
-    port: servicePort,
-    db: redisDatabase
   }),
   upload: z.strictObject({
     max_items: uploadImportMaxItems,
@@ -155,21 +138,38 @@ const runtimeConfigSchema = z.strictObject({
     login_global_window_seconds: loginGlobalWindowSeconds,
     login_global_max_attempts: loginGlobalMaxAttempts
   }),
-  captcha: z.strictObject({
+  altcha: z.strictObject({
     enabled: z.boolean(),
-    code_length: captchaCodeLength,
-    ttl_seconds: captchaTtlSeconds,
-    noise_lines: captchaNoiseLines,
-    noise_dots: captchaNoiseDots
+    ttl_seconds: altchaTtlSeconds,
+    cost: altchaCost,
+    counter_min: altchaCounter,
+    counter_max: altchaCounter
+  }).superRefine((value, context) => {
+    if (value.counter_min > value.counter_max) {
+      context.addIssue({
+        code: "custom",
+        message: "counter_min must not exceed counter_max",
+        path: ["counter_min"]
+      });
+    }
+    if (
+      value.cost * value.counter_max >
+      appConfig.authentication.altcha.maximumWorkFactor
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: `cost * counter_max must not exceed ${appConfig.authentication.altcha.maximumWorkFactor}`,
+        path: ["counter_max"]
+      });
+    }
   }),
   log: z.strictObject({ level: logLevel, max_size_mb: logMaxSizeMb, max_files: logMaxFiles })
 });
 
 export const portableRuntimeConfigSchema = runtimeConfigSchema
-  .omit({ port: true, database: true, redis: true })
   .extend({ site: runtimeConfigSchema.shape.site.omit({ domain: true }) });
 
-export type PortableRuntimeConfig = Omit<RuntimeConfig, "port" | "database" | "redis" | "site"> & {
+export type PortableRuntimeConfig = Omit<RuntimeConfig, "site"> & {
   site: Omit<RuntimeConfig["site"], "domain">;
 };
 
@@ -199,16 +199,7 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function runtimeConfigNormalizationBase(): Record<string, unknown> {
-  return {
-    ...structuredClone(appConfig.runtimeDefaults),
-    database: {
-      host: undefined,
-      port: appConfig.runtimeDefaults.database.port,
-      name: undefined,
-      user: undefined,
-      password: undefined
-    }
-  };
+  return structuredClone(appConfig.runtimeDefaults);
 }
 
 function projectKnownConfig(base: unknown, input: unknown): unknown {
@@ -244,6 +235,6 @@ export function mergeRuntimeConfig(current: RuntimeConfig, patch: RuntimeConfigP
   ));
 }
 
-export function runtimeConfigDefaults(database: RuntimeConfig["database"]): RuntimeConfig {
-  return parseRuntimeConfig({ ...structuredClone(appConfig.runtimeDefaults), database });
+export function runtimeConfigDefaults(): RuntimeConfig {
+  return parseRuntimeConfig(structuredClone(appConfig.runtimeDefaults));
 }

@@ -20,8 +20,8 @@ export const securityHeaders: Record<string, string> = {
 
 export const spaDocumentHeaders: Record<string, string> = {
   ...securityHeaders,
-  "Content-Security-Policy": "script-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
-  "Content-Security-Policy-Report-Only": "require-trusted-types-for 'script'"
+  "Content-Security-Policy": "script-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+  "Content-Security-Policy-Report-Only": "require-trusted-types-for 'script'; trusted-types imageshow-altcha-worker svelte-trusted-html"
 };
 
 export const noStoreCacheControl = "no-store";
@@ -103,7 +103,7 @@ export function routeError(error: { status: number; message: string; code?: stri
   });
 }
 
-export function isSecure(c: Context) {
+function isSecure(c: Context) {
   return c.req.header("x-forwarded-proto") === "https" || new URL(c.req.url).protocol === "https:";
 }
 
@@ -118,6 +118,10 @@ function sameOrigin(c: Context) {
   } catch {
     return false;
   }
+}
+
+export function assertSameOrigin(c: Context) {
+  if (!sameOrigin(c)) throw new ApiError(403, "origin_forbidden", "Origin forbidden");
 }
 
 export function blockCrossSiteFetch(c: Context, next: Next) {
@@ -140,7 +144,7 @@ export function appendVaryHeader(c: Context, ...names: string[]) {
 }
 
 export async function login(c: Context, username: string, password: string) {
-  if (!sameOrigin(c)) throw new ApiError(403, "origin_forbidden", "Origin forbidden");
+  assertSameOrigin(c);
   await reserveLoginAttempt(c, username);
   const result = await pool.query("SELECT username, password_hash, role FROM admin_account WHERE username = $1", [username]);
   const user = result.rows[0];
@@ -202,8 +206,10 @@ export async function logout(c: Context) {
 }
 
 export function clientIp(c: Context): string {
+  const realIp = c.req.header("x-real-ip")?.trim();
+  if (realIp) return realIp;
   const forwarded = c.req.header("x-forwarded-for")?.split(",")[0]?.trim();
-  return forwarded || c.req.header("x-real-ip") || "unknown";
+  return forwarded || "unknown";
 }
 
 function loginRateLimitKey(c: Context, username: string) {
@@ -229,7 +235,7 @@ async function reserveLoginAttempt(c: Context, username: string) {
     limits.login_global_window_seconds
   )) as [number, number];
   if (Number(counts[0]) > limits.login_max_failures || Number(counts[1]) > limits.login_global_max_attempts) {
-    throw new ApiError(429, "too_many_login_attempts", "Too many login attempts. Try again later.");
+    throw new ApiError(429, "too_many_login_attempts", "登录尝试过于频繁，请稍后再试");
   }
 }
 

@@ -21,9 +21,7 @@ RUN npm ci --omit=dev --workspace @imageshow/shared --workspace @imageshow/serve
 
 FROM node:26.5.0-slim AS runtime
 WORKDIR /app
-ARG PORT=5518
 ENV NODE_ENV=production \
-    PORT=${PORT} \
     MALLOC_ARENA_MAX=2
 RUN apt-get update \
     && apt-get install -y --no-install-recommends gosu \
@@ -39,7 +37,7 @@ COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 COPY scripts/runtime/imageshow /usr/local/bin/imageshow
 RUN sed -i 's/\r$//' /usr/local/bin/docker-entrypoint.sh /usr/local/bin/imageshow \
     && chmod +x /usr/local/bin/docker-entrypoint.sh /usr/local/bin/imageshow
-EXPOSE ${PORT}
+EXPOSE 5518
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --start-interval=3s --retries=3 CMD node packages/server/dist/healthcheck-cli.js
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["node", "packages/server/dist/index.js"]

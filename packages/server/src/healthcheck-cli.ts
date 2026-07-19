@@ -1,9 +1,9 @@
 import { request } from "node:http";
+import { appConfig } from "@imageshow/shared";
 import { getRuntimeConfig } from "./config/runtime-config-store.ts";
-import { readActiveServerPort } from "./core/listening-port.ts";
 
 const runtimeConfig = getRuntimeConfig();
-const port = String(readActiveServerPort());
+const port = String(appConfig.applicationPort);
 const host = runtimeConfig.site.domain;
 const checks = ["/livez", "/readyz", "/", "/home", "/gallery", "/random?m=redirect", "/img-count"];
 

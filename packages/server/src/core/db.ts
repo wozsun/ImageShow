@@ -4,11 +4,11 @@ import { fileURLToPath } from "node:url";
 import pg, { type PoolClient } from "pg";
 import { appConfig } from "@imageshow/shared";
 import { bootstrapEnvironment } from "../config/bootstrap-env.ts";
-import { getRuntimeConfig } from "../config/runtime-config-store.ts";
+import { deploymentConfig } from "../config/deployment-config.ts";
 import { ensureSuperAdmin } from "../users/admin-bootstrap.ts";
 import { logger } from "./logger.ts";
 
-const databaseConfig = getRuntimeConfig().database;
+const databaseConfig = deploymentConfig.database;
 
 export const pool = new pg.Pool({
   host: databaseConfig.host,

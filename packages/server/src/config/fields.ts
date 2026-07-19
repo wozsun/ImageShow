@@ -36,9 +36,6 @@ export const homeHeroBackground = z.string().trim().max(2048)
 export const homeTagline = z.string().trim().max(200);
 
 export const previewDelayMs = z.coerce.number().int().min(0).max(10_000);
-export const applicationPort = z.coerce.number().int().min(1_000).max(65_535);
-export const servicePort = z.coerce.number().int().min(1).max(65_535);
-export const redisDatabase = z.coerce.number().int().min(0).max(15);
 export const maxFileSizeMb = z.coerce.number().positive().max(500);
 export const maxLongEdge = z.coerce.number().int().min(512).max(32_768);
 export const listPageSize = z.coerce.number().int().min(1).max(100);
@@ -71,18 +68,22 @@ export const weiboGlobalConcurrency = z.coerce.number().int().min(1).max(32);
 export const taskConcurrency = z.coerce.number().int().min(1).max(512);
 
 export const sessionTtlSeconds = z.coerce.number().int().min(5 * 60).max(365 * 24 * 60 * 60);
-export const loginFailureWindowSeconds = z.coerce.number().int().min(60).max(24 * 60 * 60);
-export const loginMaxFailures = z.coerce.number().int().min(1).max(500);
-export const loginGlobalWindowSeconds = z.coerce.number().int().min(10).max(60 * 60);
-export const loginGlobalMaxAttempts = z.coerce.number().int().min(1).max(100_000);
+export const loginFailureWindowSeconds = z.coerce.number().int().min(30).max(300);
+export const loginMaxFailures = z.coerce.number().int().min(3).max(500);
+export const loginGlobalWindowSeconds = z.coerce.number().int().min(60).max(600);
+export const loginGlobalMaxAttempts = z.coerce.number().int().min(5).max(1_000);
 
 export const thumbnailLongEdge = z.coerce.number().int().min(64).max(4096);
 export const thumbnailQuality = z.coerce.number().int().min(1).max(100);
 
-export const captchaCodeLength = z.coerce.number().int().min(3).max(8);
-export const captchaTtlSeconds = z.coerce.number().int().min(30).max(60 * 60);
-export const captchaNoiseLines = z.coerce.number().int().min(0).max(60);
-export const captchaNoiseDots = z.coerce.number().int().min(0).max(400);
+export const altchaTtlSeconds = z.coerce.number().int()
+  .min(
+    Math.ceil(appConfig.authentication.altcha.solveTimeoutMs / 1000) +
+    appConfig.authentication.altcha.challengeExpirySafetySeconds
+  )
+  .max(60 * 60);
+export const altchaCost = z.coerce.number().int().min(1000).max(100_000);
+export const altchaCounter = z.coerce.number().int().min(100).max(100_000);
 
 export const logLevel = z.enum(["DEBUG", "INFO", "WARN", "ERROR", "OFF"]);
 export const logMaxSizeMb = z.coerce.number().positive().max(1024);

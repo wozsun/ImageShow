@@ -8,7 +8,6 @@ import { invalidateImageReadCaches } from "./images/image-cache.ts";
 import { cleanupOrphanRawImports } from "./images/imports/temp-files.ts";
 import { initializeAdmin, pingDb, pool, runMigrations } from "./core/db.ts";
 import { pingRedis, redis } from "./core/redis-client.ts";
-import { writeActiveServerPort } from "./core/listening-port.ts";
 import { logger } from "./core/logger.ts";
 import { auditAdminMutation } from "./core/audit-log.ts";
 import { ensureRuntimeDirectories } from "./storage/storage.ts";
@@ -164,9 +163,8 @@ const startupRandomPool = rebuildRandomPool({ requireFresh: false }).catch((erro
   logger.warn("startup random pool warm-up failed", error);
 });
 
-const serverPort = getRuntimeConfig().port;
+const serverPort = appConfig.applicationPort;
 const server = serve({ fetch: app.fetch, port: serverPort });
-writeActiveServerPort(serverPort);
 logger.info(`ImageShow listening on :${serverPort}`);
 
 let shuttingDown = false;

@@ -9,6 +9,7 @@ export const imageTitleMaxLength = 80;
 export const imageDescriptionMaxLength = 500;
 export const importBatchHardLimit = 3_600;
 export const adminImagePageLimit = 60;
+export const altchaSolveTimeoutMs = 90_000;
 
 export const slugPattern = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 

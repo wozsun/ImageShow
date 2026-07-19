@@ -1,4 +1,4 @@
-import { getRuntimeConfig } from "../config/runtime-config-store.ts";
+import { deploymentConfig } from "../config/deployment-config.ts";
 import {
   GALLERY_FILTER_OPTIONS_KEY,
   RANDOM_CURRENT_KEY,
@@ -106,7 +106,7 @@ export async function inspectRedisState() {
   return {
     connection: {
       status: redis.status,
-      configured_db: getRuntimeConfig().redis.db,
+      configured_db: deploymentConfig.redis.db,
       redis_version: parseRedisInfo(serverInfo, new Set(["redis_version"])).redis_version ?? "unknown",
       hsetex_supported: hsetexSupported,
       dbsize,

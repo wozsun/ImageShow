@@ -1,7 +1,16 @@
 import type { Hono } from "hono";
 import { adminApiBasePath } from "@imageshow/shared";
-import { ApiError, login, logout, ok, requireCsrf, getSession } from "../core/http.ts";
-import { issueCaptcha, verifyCaptcha } from "../core/captcha.ts";
+import {
+  ApiError,
+  assertSameOrigin,
+  blockCrossSiteFetch,
+  getSession,
+  login,
+  logout,
+  ok,
+  requireCsrf
+} from "../core/http.ts";
+import { issueAltchaChallenge, verifyAltchaProof } from "../core/altcha.ts";
 import { redis } from "../core/redis-client.ts";
 import { parse, passwordChangeInput } from "../core/validation.ts";
 import { changeOwnPassword } from "../users/service.ts";
@@ -15,11 +24,14 @@ import { getEffectiveLoginBackground } from "../config/app-settings.ts";
 const sessionRedis = adminSessionRedisClient(redis);
 
 export function registerPublicAuthRoutes(app: Hono) {
-  app.get(`${adminApiBasePath}/auth/captcha`, (c) => issueCaptcha(c));
+  app.get(`${adminApiBasePath}/auth/challenge`, blockCrossSiteFetch, async (c) => {
+    return c.json(await issueAltchaChallenge(c));
+  });
 
   app.post(`${adminApiBasePath}/auth/login`, async (c) => {
     const body = await c.req.json().catch(() => ({}));
-    await verifyCaptcha(c, String(body.captcha ?? ""));
+    assertSameOrigin(c);
+    await verifyAltchaProof(body.altcha);
     return c.json(ok(await login(
       c,
       String(body.username ?? ""),
@@ -34,7 +46,7 @@ export function registerPublicAuthRoutes(app: Hono) {
       username: session?.username ?? "",
       role: session?.role ?? "",
       csrf_token: session?.csrf ?? "",
-      captcha_enabled: getRuntimeConfig().captcha.enabled,
+      altcha_enabled: getRuntimeConfig().altcha.enabled,
       login_background: getEffectiveLoginBackground()
     }));
   });

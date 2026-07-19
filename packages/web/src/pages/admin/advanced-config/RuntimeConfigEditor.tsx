@@ -24,19 +24,8 @@ type RuntimeConfigResponse = {
 const formatConfig = (config: unknown) => JSON.stringify(config, null, 2);
 const jsonExtensions = [json(), EditorView.lineWrapping];
 
-const restartLabels: Record<RuntimeConfigChangeSummary["restart_required"][number], string> = {
-  port: "监听端口",
-  database: "数据库连接",
-  redis: "Redis 连接"
-};
-
 function saveConfirmationDescription(changes: RuntimeConfigChangeSummary) {
   const messages = ["将使用编辑器内容完整替换当前 config.json。"];
-  if (changes.restart_required.length) {
-    messages.push(
-      `${changes.restart_required.map((field) => restartLabels[field]).join("、")}需要重启容器后完全生效。`
-    );
-  }
   if (changes.access_changes.length) {
     messages.push("站点域名将发生变化，保存后当前地址可能无法继续访问。 ");
   }
@@ -135,9 +124,8 @@ export function RuntimeConfigEditor({ reloadToken }: { reloadToken: number }) {
       setText(formatted);
       setBaseline(formatted);
       await invalidateRuntimeData(client);
-      const restartRequired = response.changes.restart_required.length > 0;
       setFeedback({
-        text: restartRequired ? "配置已保存；连接或端口变更需重启容器" : "完整配置已保存并应用",
+        text: "完整配置已保存并应用",
         status: "success"
       });
     } catch (error) {
@@ -219,7 +207,7 @@ export function RuntimeConfigEditor({ reloadToken }: { reloadToken: number }) {
           description={saveConfirmationDescription(changes)}
           confirmLabel="确认保存"
           confirmIcon="save-3-line"
-          danger={changes.restart_required.length > 0 || changes.access_changes.length > 0}
+          danger={changes.access_changes.length > 0}
           busy={action === "save"}
           onClose={closeSaveConfirmation}
           onConfirm={saveConfig}

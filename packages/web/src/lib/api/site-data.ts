@@ -14,7 +14,7 @@ export type AuthState = {
   username: string;
   role: AdminUser["role"] | "";
   csrf_token: string;
-  captcha_enabled: boolean;
+  altcha_enabled: boolean;
   login_background: string;
 };
 

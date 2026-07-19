@@ -1,7 +1,7 @@
 {
   "name": "imageshow",
   "private": true,
-  "version": "3.8.7",
+  "version": "3.9.0",
   "type": "module",
   "workspaces": [
     "packages/*"
@@ -12,7 +12,7 @@
     "build": "npm run clean && npm run build -w @imageshow/shared && npm run build -w @imageshow/web && npm run build -w @imageshow/docs && npm run build -w @imageshow/server",
     "check": "npm run build -w @imageshow/shared && npm --workspaces run check",
     "knip": "knip",
-    "admin:reset-password": "node packages/server/src/admin-password-cli.ts reset-password",
+    "admin:reset-password": "node --env-file-if-exists=.env packages/server/src/admin-password-cli.ts reset-password",
     "start": "npm run start -w @imageshow/server"
   },
   "engines": {

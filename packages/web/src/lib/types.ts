@@ -135,7 +135,6 @@ export type AdvancedConfigPreview = {
 };
 
 export type RuntimeConfigChangeSummary = {
-  restart_required: Array<"port" | "database" | "redis">;
   access_changes: Array<"site.domain">;
 };
 

@@ -19,22 +19,76 @@
   animation: surface-in .2s ease-out;
 }
 .login h1 { margin: 0 0 6px; }
-/*验证码行：答案输入框占据剩余宽度，挑战图紧随其后，点击可刷新。*/
-.login-captcha { display: flex; gap: 10px; align-items: stretch; }
-.login-captcha input { flex: 1; min-width: 0; }
-.login-captcha img {
-  flex: 0 0 auto;
-  /* 挑战图 SVG 的尺寸随（可配置的）验证码长度变化；固定高度、宽度自适应，
-     无论长度多少都保持纵横比。 */
-  height: 40px;
-  width: auto;
-  border: 1px solid #dce2ea;
+.login-altcha-shell {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+}
+.login-altcha {
+  /* ALTCHA 上游样式使用 light-dark()。这里显式设置登录页配色，避免构建器转换后的
+     颜色变量在不支持的环境中失效，同时把标准组件收成与表单一致的扁平验证条。 */
+  --altcha-border-color: #d0d5dd;
+  --altcha-border-radius: 6px;
+  --altcha-checkbox-border-color: #98a2b3;
+  --altcha-checkbox-size: 20px;
+  --altcha-color-base: #fff;
+  --altcha-color-base-content: #20242a;
+  --altcha-color-neutral: #d0d5dd;
+  --altcha-color-neutral-content: #667085;
+  --altcha-input-background-color: #fff;
+  --altcha-max-width: 100%;
+  --altcha-padding: 8px 10px;
+  --altcha-spinner-color: #667085;
+  display: block;
+  width: 100%;
+  overflow: visible;
+}
+.login-altcha .altcha,
+.login-altcha .altcha-main { width: 100%; }
+.login-altcha .altcha-main { padding-right: 40px; }
+.login-altcha .altcha-popover[data-variant="error"] {
+  --altcha-popover-color: #fda29b;
+  left: 0;
+  background: #fff4f2;
+  border-color: #fda29b;
+  color: #b42318;
+}
+.login-altcha .altcha-popover[data-variant="error"] .altcha-popover-content {
+  justify-content: flex-start;
+  padding: 7px 10px;
+  text-align: left;
+}
+.login-altcha .altcha-popover[data-variant="error"] .altcha-error {
+  width: 100%;
+  margin: 0;
+  text-align: left;
+}
+.login-altcha .altcha[data-state="verified"] .altcha-checkbox-wrap {
+  cursor: default;
+  pointer-events: none;
+}
+.login-altcha-mark {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  width: 20px;
+  height: 20px;
+  color: #667085;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+.login-challenge-retry {
+  min-height: 38px;
+  border: 1px solid #d92d20;
   border-radius: 6px;
-  background: #f1f3f6;
+  background: #fff;
+  color: #b42318;
   cursor: pointer;
 }
+.login-challenge-retry:hover { background: #fff4f2; }
 /*后台表单的错误提示（登录失败、账户设置校验、图片弹窗等，均在后台分块内）。*/
 .error { color: #b42318; margin: 0; }
+.login .error { line-height: 20px; }
 
 @media (max-width: 1080px) {
   .upload-defaults, .settings-grid { grid-template-columns: 1fr 1fr; }

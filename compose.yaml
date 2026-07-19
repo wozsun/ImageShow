@@ -1,11 +1,17 @@
+x-database-settings:
+  name: &database-name ${DATABASE_NAME:-imageshow}
+  username: &database-username ${DATABASE_USER:-imageshow}
+  password: &database-password ${DATABASE_PASSWORD:-imageshow}
+
 services:
   postgresql:
     image: postgres:18
     container_name: imageshow-postgresql
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: ${DATABASE_NAME}
-      POSTGRES_USER: ${DATABASE_USER}
-      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+      POSTGRES_DB: *database-name
+      POSTGRES_USER: *database-username
+      POSTGRES_PASSWORD: *database-password
     volumes:
       - postgresql18_data:/var/lib/postgresql
     healthcheck:
@@ -17,6 +23,7 @@ services:
   redis:
     image: redis:8
     container_name: imageshow-redis
+    restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - redis_data:/data
@@ -27,9 +34,7 @@ services:
       retries: 3
 
   imageshow:
-    build:
-      context: .
-    image: imageshow:latest
+    image: wozsun/imageshow:latest
     container_name: imageshow
     restart: unless-stopped
     depends_on:
@@ -38,14 +43,19 @@ services:
       redis:
         condition: service_healthy
     environment:
-      SITE_DOMAIN: ${SITE_DOMAIN}
+      SITE_DOMAIN: ${SITE_DOMAIN:-example.com}
       TZ: ${TZ:-UTC}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
-      DATABASE_HOST: postgresql
-      DATABASE_NAME: ${DATABASE_NAME}
-      DATABASE_USER: ${DATABASE_USER}
-      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      DATABASE_HOST: ${DATABASE_HOST:-postgresql}
+      DATABASE_PORT: ${DATABASE_PORT:-5432}
+      DATABASE_NAME: *database-name
+      DATABASE_USER: *database-username
+      DATABASE_PASSWORD: *database-password
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_DB: ${REDIS_DB:-0}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
     ports:
       - "${HOST_PORT:-5518}:5518"
     volumes:

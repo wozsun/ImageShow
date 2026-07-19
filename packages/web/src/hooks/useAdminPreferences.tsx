@@ -21,7 +21,6 @@ import { adminApiBasePath, queryKeys } from "../lib/constants.js";
 
 const localPreferenceVersion = 1;
 const localPreferenceKeyPrefix = "imageshow.admin.preferences.";
-const legacyImageCardDensityKey = "imageshow.admin.image-card-density";
 
 type CachedAdminPreferences = {
   values: AdminPreferences;
@@ -111,41 +110,22 @@ function writeCachedPreferences(username: string, cache: CachedAdminPreferences)
   }
 }
 
-function readCachedPreferences(
-  username: string,
-  migrateLegacyPreference = true
-): CachedAdminPreferences {
+function readCachedPreferences(username: string): CachedAdminPreferences {
   if (typeof window === "undefined") return emptyCache();
   try {
     const storage = window.localStorage;
     const raw = storage.getItem(localPreferenceKey(username));
-    if (raw !== null) {
-      const parsed = JSON.parse(raw) as unknown;
-      if (!isRecord(parsed) || parsed.version !== localPreferenceVersion) return emptyCache();
-      const pending = normalizeAdminPreferences(parsed.pending);
-      return {
-        values: {
-          ...normalizeAdminPreferences(parsed.values),
-          ...pending
-        },
-        pending
-      };
-    }
-
-    if (!migrateLegacyPreference) return emptyCache();
-    const legacyDensity = storage.getItem(legacyImageCardDensityKey);
-    if (!imageCardDensities.includes(legacyDensity as (typeof imageCardDensities)[number])) {
-      return emptyCache();
-    }
-
-    const migrated: CachedAdminPreferences = {
-      values: { image_card_density: legacyDensity as AdminPreferenceValues["image_card_density"] },
-      pending: { image_card_density: legacyDensity as AdminPreferenceValues["image_card_density"] }
+    if (raw === null) return emptyCache();
+    const parsed = JSON.parse(raw) as unknown;
+    if (!isRecord(parsed) || parsed.version !== localPreferenceVersion) return emptyCache();
+    const pending = normalizeAdminPreferences(parsed.pending);
+    return {
+      values: {
+        ...normalizeAdminPreferences(parsed.values),
+        ...pending
+      },
+      pending
     };
-    if (writeCachedPreferences(username, migrated)) {
-      storage.removeItem(legacyImageCardDensityKey);
-    }
-    return migrated;
   } catch {
     return emptyCache();
   }
@@ -270,7 +250,7 @@ export function AdminPreferencesProvider({
   useEffect(() => {
     const handleStorage = (event: StorageEvent) => {
       if (event.storageArea !== window.localStorage || event.key !== localPreferenceKey(username)) return;
-      const next = readCachedPreferences(username, false);
+      const next = readCachedPreferences(username);
       cacheRef.current = next;
       setCache(next);
       enqueueSync(next.pending);

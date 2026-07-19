@@ -36,12 +36,13 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | --- | --- |
 | `index.ts` | 应用装配：挂载安全响应头、多主机路由中间件、注册所有路由；启动时依次 `ensureRuntimeDirectories → pingDb → runMigrations → initializeAdmin → pingRedis → startWorker`，再异步确保随机池存在，并处理 SIGTERM 优雅退出。 |
 | `admin-password-cli.ts` | 宿主机/容器管理员密码恢复入口：隐藏读取新密码、更新 PostgreSQL 账号，并尽力清除 Redis 管理会话。 |
-| `config/bootstrap-env.ts` | 启动环境边界：解析 `NODE_ENV`、首次管理员凭据和首次生成 `config.json` 所需环境变量；集中导出数据、存储、临时文件和日志目录。环境变量只在配置文件首次生成时播种。 |
+| `config/bootstrap-env.ts` | 应用配置播种边界：解析 `NODE_ENV`、首次管理员凭据和首次生成 `config.json` 所需环境变量；集中导出数据、存储、临时文件和日志目录。应用字段只在配置文件首次生成时播种。 |
+| `config/deployment-config.ts` | 部署配置边界：每次启动严格解析 PostgreSQL 与 Redis 环境变量，供主进程、CLI 和检查功能统一使用。监听端口由共享代码常量固定。 |
 | `config/runtime-config.ts` | 完整运行时配置的严格 zod schema、可迁移配置投影、当前配置解析和嵌套 patch 合并。 |
 | `config/runtime-config-store.ts` | `data/config.json` 的读取、按 schema 归一化、原子写入、内存快照、热重载与变更监听；配置文件生成后成为运行时配置真相源。 |
 | `config/config-package.ts` | `imageshow-config` 版本化配置包的构建、严格解析、敏感存储配置投影、slug 冲突预检和带普通异常补偿的导入编排。 |
-| `config/full-config.ts` | 完整运行时配置的危险字段差异、只读预检、共享写锁与精准保存编排。 |
-| `config/fields.ts` | 运行时配置字段的 zod 边界值：站点、上传、链接导入、标准化、缩略图、安全、验证码和日志等设置校验。 |
+| `config/full-config.ts` | 完整运行时配置的访问地址差异、只读预检、共享写锁与精准保存编排。 |
+| `config/fields.ts` | 运行时配置字段的 zod 边界值：站点、上传、链接导入、标准化、缩略图、安全、ALTCHA 和日志等设置校验。 |
 | `config/app-settings.ts` | 设置页可编辑字段的严格嵌套 patch schema、按前端实际用途投影的最小后台设置 DTO、公开站点配置和图片输入 / 缩略图运行时设置；不返回连接配置、完整默认值或纯服务端限流字段，也不负责存储后端注册表。 |
 
 ### core/ —— 基础设施
@@ -49,7 +50,6 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | 文件 | 职责 |
 | --- | --- |
 | `core/db.ts` | PostgreSQL 连接池、事务与 advisory lock 工具、迁移串行执行，并把启动期 super 初始化交给 users 领域。 |
-| `core/listening-port.ts` | 原子记录并校验当前服务进程的实际监听端口，供独立 healthcheck 进程读取，避免待重启配置提前改变探测目标。 |
 | `core/password.ts` | Node.js 原生异步 Argon2id 密码派生与 PHC 编解码：当前参数生成、安全范围内的旧参数验证、升级判断和恒定时间比较。 |
 | `core/uuid.ts` | Node.js 原生 UUIDv7 封装：生成当前时间 ID，为历史 `image_time` 替换 48 位时间戳，并可显式写入 12 位 `rand_a`。 |
 | `core/redis-client.ts` | Redis 8 连接实例与 `pingRedis()`；业务缓存逻辑按领域拆到 `random/`、`images/`、`vocab/`。 |
@@ -64,7 +64,7 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | `core/validation.ts` | 请求体 / 查询参数的 zod schema：`listQuery`（含 `shuffle`）、`metadataInput`、导入 / 批量操作输入等。 |
 | `core/external-image-fetch.ts` | 外部图片 URL 安全边界：限制 HTTPS、要求域名、验证证书、用连接级受控 DNS lookup 阻断 rebinding 与内网 / metadata 地址、逐跳重定向校验、超时请求与图片内容嗅探，并对外统一安全拒绝提示，供链接导入和 link/original 代理复用。 |
 | `core/term-resolve.ts` · `core/selectors.ts` | 共享解析：`resolveTermMap` / `resolveSlugs`（主题 / 标签 / 作者「别名·显示名 → slug」的统一规则），`splitSelectors`（逗号分隔、`!` 排除选择子拆分，随机 API 与画廊筛选共用）。 |
-| `core/captcha.ts` | 登录验证码：生成并存 Redis、渲染带噪点 SVG、一次性校验。 |
+| `core/altcha.ts` | 登录安全验证：签发 ALTCHA 工作量挑战、验证签名，并用 Redis 原子防重放。 |
 | `core/logger.ts` | 站点日志：分级输出到 stdout/stderr，并按大小轮转写入 `data/log/app.log`。 |
 | `core/log-files.ts` | 后台日志页用的日志文件枚举、尾部读取和 `log.level` 热更新。 |
 
@@ -159,7 +159,7 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | --- | --- |
 | `routes/public.ts` | `GET /api/images`、`/api/images/:id`、`/api/images/:id/original`、`/api/site-config`、`/api/gallery-facets`、`/media/*`、`/thumbs/*`、`/original/:id` |
 | `routes/random.ts` | `GET /random`、`GET /img-count`、`random.<域名>/`、`<theme>.<域名>/random` |
-| `routes/auth.ts` | 登录 / 登出 / `/api/admin/auth/me`（登录态、CSRF token、验证码开关、登录背景） |
+| `routes/auth.ts` | 登录 / 登出 / ALTCHA 挑战 / `/api/admin/auth/me`（登录态、CSRF token、安全验证开关、登录背景） |
 | `routes/admin-images.ts` | 后台图片增删改查、单请求批量元数据 / 标签编辑、迁移、回收站原图、登录态轻量 `admin-info` |
 | `routes/imports.ts` | 统一 `/api/admin/imports/*`：JSONL / 微博 parse、create、PUT file、prepare、preview、status、SSE events、commit、cancel |
 | `routes/admin-tags.ts` · `admin-themes.ts` · `admin-authors.ts` · `admin-users.ts` | 标签 / 主题 / 作者 / 用户管理 |

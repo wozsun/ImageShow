@@ -26,7 +26,7 @@ import { advancedConfigWriteLockKey } from "./full-config.ts";
 /** @internal Exported for focused format tests. */
 export const configPackageFormat = "imageshow-config" as const;
 /** @internal Exported for focused format tests. */
-export const configPackageFormatVersion = 1 as const;
+export const configPackageFormatVersion = 2 as const;
 /** @internal Exported for focused format tests. */
 export const configPackageMaxBackends = appConfig.imports.configPackageMaxBackends;
 const configPackageMaxBytes = appConfig.imports.configPackageMaxBytes;
@@ -96,9 +96,8 @@ export type ConfigPackage = z.infer<typeof configPackageSchema>;
 export type ConfigPackageStorageBackend = ConfigPackage["storage_backends"][number];
 
 function portableConfig(runtime: RuntimeConfig): PortableRuntimeConfig {
-  const { port: _port, database: _database, redis: _redis, ...portable } = runtime;
-  const { domain: _domain, ...portableSite } = portable.site;
-  return portableRuntimeConfigSchema.parse({ ...portable, site: portableSite });
+  const { domain: _domain, ...portableSite } = runtime.site;
+  return portableRuntimeConfigSchema.parse({ ...runtime, site: portableSite });
 }
 
 function portableBackends(backends: StorageBackendRecord[]): ConfigPackageStorageBackend[] {
