@@ -12,6 +12,12 @@
 * { box-sizing: border-box; }
 html { overflow-y: auto; }
 html.modal-open, body.modal-open { overflow: hidden; }
+/* fixed body 会把文档按原滚动量上移；视口锚点显式声明需要保持原位，避免
+   iOS 在弹窗开合时让 sticky 元素退出再重入视口。独立的 translate 属性
+   不会覆盖组件自身的 transform。 */
+html.modal-open [data-scroll-lock-anchor] {
+  translate: 0 var(--page-scroll-lock-offset, 0px);
+}
 html.home-document { overflow-y: hidden; }
 /* clip 和 hidden 都会裁掉横向溢出；但 clip 不会像 hidden 那样把 body
    变成伪滚动容器，导致内部 sticky 元素错误绑定到静止的 body。 */

@@ -23,7 +23,7 @@ jobs:
       TCR_IMAGE: ccr.ccs.tencentyun.com/${{ secrets.TCR_NAMESPACE }}/imageshow
     steps:
       - name: Checkout source
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -153,7 +153,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout source
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Create or update GitHub Release
         shell: bash

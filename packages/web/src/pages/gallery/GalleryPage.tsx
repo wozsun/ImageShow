@@ -15,6 +15,7 @@ import { rootSiteOrigin } from "../../lib/gallery/theme-host.js";
 import type { GalleryImageCard, PublicImageDetail, PublicImageItem, RandomMode } from "../../lib/types.js";
 import { useGalleryFacets, useSiteConfig } from "../../lib/api/site-data.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
+import { isBodyScrollLocked } from "../../hooks/useBodyScrollLock.js";
 import { LazyGalleryImage } from "./LazyGalleryImage.js";
 import { masonryColumns, nextRenderBatch, useGalleryColumnCount } from "./gallery-layout.js";
 
@@ -52,6 +53,9 @@ function useGalleryToolbarVisibility(
     let frame: number | undefined;
     const update = () => {
       frame = undefined;
+      // 模态框固定 body 时 window.scrollY 会暂时归零。这不是用户滚动，不能据此
+      // 改变工具栏状态，否则关闭详情恢复原位置时会看到工具栏闪烁。
+      if (isBodyScrollLocked()) return;
       const scrollTop = Math.max(0, window.scrollY);
       // 下拉菜单通过 Portal 渲染在 body；菜单展开时保持其触发工具栏可见，
       // 避免触发器被收起而浮层仍停留在页面上。
@@ -99,6 +103,7 @@ function useBackToTopVisibility() {
     let frame: number | undefined;
     const update = () => {
       frame = undefined;
+      if (isBodyScrollLocked()) return;
       setVisible(window.scrollY >= window.innerHeight * backToTopViewportThreshold);
     };
     const scheduleUpdate = () => {
@@ -285,6 +290,7 @@ export function GalleryPage({ fixedTheme = "", standalone = false }: { fixedThem
       <section
         ref={toolbarRef}
         className={`gallery-toolbar ${standalone ? "theme-toolbar" : ""}${filtersOpen ? " filters-open" : ""}${toolbarVisible ? "" : " is-scroll-hidden"}`}
+        data-scroll-lock-anchor
         aria-hidden={!toolbarVisible}
         inert={!toolbarVisible}
       >

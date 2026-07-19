@@ -3,6 +3,11 @@ import { useLayoutEffect } from "react";
 let lockCount = 0;
 let lockedScrollY = 0;
 let previousBodyStyles: Pick<CSSStyleDeclaration, "position" | "top" | "left" | "right" | "width"> | null = null;
+const pageScrollLockOffsetProperty = "--page-scroll-lock-offset";
+
+export function isBodyScrollLocked() {
+  return lockCount > 0;
+}
 
 export function useBodyScrollLock(active = true) {
   useLayoutEffect(() => {
@@ -17,6 +22,7 @@ export function useBodyScrollLock(active = true) {
         right: document.body.style.right,
         width: document.body.style.width
       };
+      document.documentElement.style.setProperty(pageScrollLockOffsetProperty, `${lockedScrollY}px`);
       document.body.style.position = "fixed";
       document.body.style.top = `-${lockedScrollY}px`;
       document.body.style.left = "0";
@@ -35,6 +41,7 @@ export function useBodyScrollLock(active = true) {
         Object.assign(document.body.style, previousBodyStyles);
         previousBodyStyles = null;
       }
+      document.documentElement.style.removeProperty(pageScrollLockOffsetProperty);
       window.scrollTo(0, lockedScrollY);
     };
   }, [active]);

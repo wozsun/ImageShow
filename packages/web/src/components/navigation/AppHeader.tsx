@@ -37,7 +37,7 @@ export function AppHeader() {
   }, [auth]);
 
   return (
-    <header ref={headerRef} className="topbar">
+    <header ref={headerRef} className="topbar" data-scroll-lock-anchor>
       <Link className="brand" to="/">{siteName}</Link>
       <nav className="desktop-nav">
         {homeEnabled && <NavLink to="/home" className={navClassName("/home")}><Icon name="home-4-line" />首页</NavLink>}
