@@ -1,6 +1,6 @@
 import type { RandomMode } from "../types.js";
 
-export function buildRandomUrl(input: { origin?: string; device: string; brightness: string; theme: string; tag: string; author: string; mode: RandomMode }) {
+export function buildRandomUrl(input: { origin?: string; device: string; brightness: string; theme: string; tag: string; author: string; mode?: RandomMode }) {
   const params: string[] = [];
   if (input.device) params.push(`d=${encodeRandomParam(input.device)}`);
   if (input.brightness !== "random") params.push(`b=${encodeRandomParam(input.brightness)}`);

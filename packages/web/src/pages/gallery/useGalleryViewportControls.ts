@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
-import { isBodyScrollLocked } from "../../hooks/useBodyScrollLock.js";
+import { getPageScrollY, isBodyScrollLocked } from "../../hooks/useBodyScrollLock.js";
 
 const toolbarScrollDirectionThreshold = 8;
 const filterDismissGestureThreshold = 12;
@@ -52,7 +52,7 @@ function useGalleryToolbarVisibility(
     observer.observe(toolbar);
     updateToolbarHeight();
 
-    scrollAnchorRef.current = window.scrollY;
+    scrollAnchorRef.current = getPageScrollY();
     if (lockedOpen) {
       setVisible(true);
       return () => observer.disconnect();
@@ -64,7 +64,7 @@ function useGalleryToolbarVisibility(
       // 模态框固定 body 时 window.scrollY 会暂时归零。这不是用户滚动，不能据此
       // 改变工具栏状态，否则关闭详情恢复原位置时会看到工具栏闪烁。
       if (isBodyScrollLocked()) return;
-      const scrollTop = Math.max(0, window.scrollY);
+      const scrollTop = Math.max(0, getPageScrollY());
       // 下拉菜单通过 Portal 渲染在 body；菜单展开时保持其触发工具栏可见，
       // 避免触发器被收起而浮层仍停留在页面上。
       if (toolbar.querySelector('[aria-expanded="true"]')) {

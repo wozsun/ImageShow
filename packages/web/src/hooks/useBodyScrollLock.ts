@@ -9,6 +9,12 @@ export function isBodyScrollLocked() {
   return lockCount > 0;
 }
 
+// body 固定期间 window.scrollY 会暂时变成 0；需要比较页面滚动位置的组件
+// 应读取锁定前保存的逻辑位置，避免把模态框开关误判成用户滚动。
+export function getPageScrollY() {
+  return lockCount ? lockedScrollY : window.scrollY;
+}
+
 export function useBodyScrollLock(active = true) {
   useLayoutEffect(() => {
     if (!active) return;

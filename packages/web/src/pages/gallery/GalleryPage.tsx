@@ -10,9 +10,9 @@ import { FacetSelector } from "../../components/data-display/FacetSelector.js";
 import { eagerThumbnailCount, galleryRenderBatch, gallerySentinelRootMargin, queryKeys } from "../../lib/constants.js";
 import { displayNameOrSlug, errorMessage, imageDisplayTitle } from "../../lib/ui/formatters.js";
 import { buildRandomUrl } from "../../lib/gallery/random-url.js";
-import { brightnessOptionLabel, deviceOptionLabel, randomModeSelectOptions } from "../../lib/ui/select-options.js";
+import { brightnessOptionLabel, deviceOptionLabel } from "../../lib/ui/select-options.js";
 import { rootSiteOrigin } from "../../lib/gallery/theme-host.js";
-import type { GalleryImageCard, PublicImageDetail, PublicImageItem, RandomMode } from "../../lib/types.js";
+import type { GalleryImageCard, PublicImageDetail, PublicImageItem } from "../../lib/types.js";
 import { useGalleryFacets, useSiteConfig } from "../../lib/api/site-data.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
 import { AnchoredMenuDismissSignalContext } from "../../hooks/useAnchoredMenu.js";
@@ -79,8 +79,6 @@ function GalleryImageDetail({
 export function GalleryPage({ fixedTheme = "", standalone = false }: { fixedTheme?: string; standalone?: boolean }) {
   const [selected, setSelected] = useState<GalleryImageCard | null>(null);
   const [filters, setFilters] = useState<GalleryFilters>({ device: "", brightness: "", theme: fixedTheme, tag: "", author: "" });
-  const [mode, setMode] = useState<RandomMode>("");
-
   const {
     backToTopVisible,
     closeFilters,
@@ -123,14 +121,12 @@ export function GalleryPage({ fixedTheme = "", standalone = false }: { fixedThem
     brightness: filters.brightness || "random",
     theme: fixedTheme || filters.theme,
     tag: filters.tag,
-    author: filters.author,
-    mode
+    author: filters.author
   });
 
   const activeFilterCount =
     (filters.device ? 1 : 0) +
     (filters.brightness ? 1 : 0) +
-    (mode ? 1 : 0) +
     (!fixedTheme && filters.theme ? 1 : 0) +
     (filters.tag ? 1 : 0) +
     (filters.author ? 1 : 0);
@@ -233,17 +229,8 @@ export function GalleryPage({ fixedTheme = "", standalone = false }: { fixedThem
                 ariaLabel="亮度"
               />
             </label>
-            <label className="gallery-axis">
-              模式
-              <SelectMenu
-                value={mode}
-                onChange={(value) => setMode(value as RandomMode)}
-                options={randomModeSelectOptions}
-                ariaLabel="模式"
-              />
-            </label>
             {!fixedTheme && (
-              <label>
+              <label className="gallery-theme-filter">
                 主题
                 <FacetSelector
                   options={facets?.themes ?? []}
@@ -262,7 +249,7 @@ export function GalleryPage({ fixedTheme = "", standalone = false }: { fixedThem
                 noun="标签"
               />
             </label>
-            <label>
+            <label className="gallery-author-filter">
               作者
               <FacetSelector
                 options={facets?.authors ?? []}
