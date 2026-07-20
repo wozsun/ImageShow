@@ -5,11 +5,7 @@ import { pool } from "../../core/db.ts";
 import { ApiError } from "../../core/http.ts";
 import { contentType, writeStorageBuffer } from "../../storage/storage.ts";
 import { detectBrightness } from "../brightness.ts";
-import {
-  deviceFromDimensions,
-  resolveBrightnessWith,
-  resolveDeviceWith
-} from "../classification.ts";
+import { deviceFromDimensions } from "../classification.ts";
 import { createThumbnail, probeImageBytes, transcodeStoredImage } from "../processing.ts";
 import { getDuplicateImagesByMd5 } from "../read-models/duplicates.ts";
 import { runImportPreparation } from "./execution.ts";
@@ -68,8 +64,8 @@ async function preparedResult(
     size: payload.size,
     quality: payload.quality,
     transcoded: payload.transcoded,
-    device: payload.resolved_device,
-    brightness: payload.resolved_brightness,
+    detected_device: payload.detected_device,
+    detected_brightness: payload.detected_brightness,
     storage_slug: storageSlug,
     duplicates
   };
@@ -103,14 +99,11 @@ async function prepareStoredImageSession(
     await assertImportStillPreparing(id);
 
     setImportPhase(id, "detecting", "确认图片尺寸、设备类型和明暗");
-    const device = resolveDeviceWith(
-      session.metadata_payload.device,
-      () => requiredDeviceFromDimensions(normalized.width, normalized.height)
+    const detectedDevice = requiredDeviceFromDimensions(
+      normalized.width,
+      normalized.height
     );
-    const brightness = await resolveBrightnessWith(
-      session.metadata_payload.brightness,
-      () => detectBrightness(normalized.thumbnail)
-    );
+    const detectedBrightness = await detectBrightness(normalized.thumbnail);
 
     setImportPhase(id, "staging", "写入处理后的图片和缩略图");
     const writes = await Promise.allSettled([
@@ -150,8 +143,8 @@ async function prepareStoredImageSession(
       thumbnail_size: normalized.thumbnail.byteLength,
       quality: normalized.quality,
       transcoded: normalized.transcoded,
-      resolved_device: device,
-      resolved_brightness: brightness
+      detected_device: detectedDevice,
+      detected_brightness: detectedBrightness
     };
     const updated = await pool.query(
       `UPDATE import_session
@@ -247,14 +240,8 @@ async function prepareProxySession(id: string, signal: AbortSignal) {
     );
     const probe = await probeImageBytes(buffer);
     const thumbnail = await createThumbnail(buffer);
-    const device = resolveDeviceWith(
-      session.metadata_payload.device,
-      () => requiredDeviceFromDimensions(probe.width, probe.height)
-    );
-    const brightness = await resolveBrightnessWith(
-      session.metadata_payload.brightness,
-      () => detectBrightness(thumbnail)
-    );
+    const detectedDevice = requiredDeviceFromDimensions(probe.width, probe.height);
+    const detectedBrightness = await detectBrightness(thumbnail);
     await writeStorageBuffer(
       "_uploads",
       stagingThumbnailKey(id),
@@ -279,8 +266,8 @@ async function prepareProxySession(id: string, signal: AbortSignal) {
       thumbnail_size: thumbnail.byteLength,
       quality: null,
       transcoded: false,
-      resolved_device: device,
-      resolved_brightness: brightness
+      detected_device: detectedDevice,
+      detected_brightness: detectedBrightness
     };
     const updated = await pool.query(
       `UPDATE import_session

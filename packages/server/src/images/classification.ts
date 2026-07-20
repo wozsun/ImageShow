@@ -8,7 +8,7 @@ export type ClassificationSelection = {
   brightness: BrightnessSelection;
 };
 
-export type ResolvedClassification = {
+export type DetectedClassification = {
   device: Device;
   brightness: Brightness;
 };
@@ -20,12 +20,8 @@ export function deviceFromDimensions(width: string | number | null | undefined, 
   return actualWidth >= actualHeight ? "pc" : "mb";
 }
 
-function resolveDevice(input: DeviceSelection, resolved: Device): Device {
-  return input === "auto" ? resolved : input;
-}
-
-export function resolveDeviceWith(input: DeviceSelection, detect: () => Device): Device {
-  return input === "auto" ? detect() : input;
+function resolveDevice(input: DeviceSelection, detected: Device): Device {
+  return input === "auto" ? detected : input;
 }
 
 export function resolveOptionalDeviceWith(input: DeviceSelection | undefined, detect: () => Device | undefined): Device | undefined {
@@ -33,12 +29,8 @@ export function resolveOptionalDeviceWith(input: DeviceSelection | undefined, de
   return input === "auto" ? detect() : input;
 }
 
-function resolveBrightness(input: BrightnessSelection, resolved: Brightness): Brightness {
-  return input === "auto" ? resolved : input;
-}
-
-export async function resolveBrightnessWith(input: BrightnessSelection, detect: () => Promise<Brightness>): Promise<Brightness> {
-  return input === "auto" ? await detect() : input;
+function resolveBrightness(input: BrightnessSelection, detected: Brightness): Brightness {
+  return input === "auto" ? detected : input;
 }
 
 export async function resolveOptionalBrightnessWith(input: BrightnessSelection | undefined, detect: () => Promise<Brightness | undefined>): Promise<Brightness | undefined> {
@@ -46,9 +38,12 @@ export async function resolveOptionalBrightnessWith(input: BrightnessSelection |
   return input === "auto" ? await detect() : input;
 }
 
-export function resolveClassification(input: ClassificationSelection, resolved: ResolvedClassification): ResolvedClassification {
+export function resolveClassification(
+  input: ClassificationSelection,
+  detected: DetectedClassification
+): DetectedClassification {
   return {
-    device: resolveDevice(input.device, resolved.device),
-    brightness: resolveBrightness(input.brightness, resolved.brightness)
+    device: resolveDevice(input.device, detected.device),
+    brightness: resolveBrightness(input.brightness, detected.brightness)
   };
 }

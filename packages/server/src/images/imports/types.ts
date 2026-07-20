@@ -36,8 +36,8 @@ export type PreparedPayload = MetadataPayload & {
   thumbnail_size: number;
   quality: number | null;
   transcoded: boolean;
-  resolved_device: Device;
-  resolved_brightness: Brightness;
+  detected_device: Device;
+  detected_brightness: Brightness;
 };
 
 export type ImportSessionRow = {
@@ -69,8 +69,8 @@ export type PreparedImportResult = {
   size: number;
   quality: number | null;
   transcoded: boolean;
-  device: Device;
-  brightness: Brightness;
+  detected_device: Device;
+  detected_brightness: Brightness;
   storage_slug: string;
   duplicates: AdminImage[];
 };

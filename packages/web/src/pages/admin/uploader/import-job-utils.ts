@@ -1,5 +1,8 @@
-import type { Device, ImageDraft, ImportJob, ManifestImportSource } from "../../../lib/types.js";
-import { browserUuid, resolveUploadDefaultBrightness, type CommonImageAttributes } from "../../../lib/upload/upload-utils.js";
+import type { ImageDraft, ImportJob, ManifestImportSource } from "../../../lib/types.js";
+import {
+  browserUuid,
+  type ImportAttributeDefaults
+} from "../../../lib/upload/upload-utils.js";
 
 function hasDirectIpHostname(hostname: string) {
   const unwrappedHostname = hostname.replace(/^\[|\]$/g, "");
@@ -68,14 +71,18 @@ export function parseImportUrlInput(input: string | string[]): ImportUrlParseRes
   return { urls, invalidCount, duplicateCount };
 }
 
-function linkDraft(url: string, defaults: CommonImageAttributes, fillOriginalUrl: boolean): ImageDraft {
+function linkDraft(
+  url: string,
+  defaults: ImportAttributeDefaults,
+  fillOriginalUrl: boolean
+): ImageDraft {
   return {
     title: "",
     description: "",
     source: "",
     original: fillOriginalUrl ? url : "",
-    device: defaults.device ? defaults.device as Device : "auto",
-    brightness: resolveUploadDefaultBrightness(defaults.brightness, "auto"),
+    device: defaults.device,
+    brightness: defaults.brightness,
     theme: defaults.theme,
     author: defaults.author,
     tags: [...defaults.tags]
@@ -85,7 +92,7 @@ function linkDraft(url: string, defaults: CommonImageAttributes, fillOriginalUrl
 export function linkImportJobs(
   kind: "download" | "proxy",
   validatedUrls: string[],
-  defaults: CommonImageAttributes,
+  defaults: ImportAttributeDefaults,
   fillOriginalUrl: boolean,
   storageSlug: string
 ) {
@@ -116,18 +123,27 @@ export function retryPrepareJob(job: ImportJob): ImportJob {
     sessionId: undefined,
     status: "queued",
     failureStage: undefined,
+    commitFailureCheckpoint: undefined,
     message: "等待重试",
-    transferProgress: undefined
+    transferProgress: undefined,
+    md5: undefined,
+    detectedClassification: undefined,
+    classificationOverride: undefined,
+    duplicates: [],
+    duplicateDecision: "upload",
+    batchDuplicate: undefined,
+    finalSize: undefined,
+    quality: undefined,
+    transcoded: undefined
   };
 }
 
 export function retryLinkPrepareJob(job: ImportJob): ImportJob {
   if (job.failureStage !== "create" || job.sessionId) return retryPrepareJob(job);
   return {
-    ...job,
+    ...retryPrepareJob(job),
+    attemptKey: job.attemptKey,
     status: "queued",
-    failureStage: undefined,
     message: "重新获取导入会话",
-    transferProgress: undefined
   };
 }

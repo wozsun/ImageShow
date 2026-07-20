@@ -44,13 +44,13 @@ export function importCardBrightnessSelectOptions(value: string): readonly Selec
 }
 
 export const uploadCommonDeviceOptions: readonly SelectOption[] = [
-  { value: "", label: "自动设备" },
+  { value: "auto", label: "自动设备" },
   { value: "pc", label: deviceOptionLabel("pc") },
   { value: "mb", label: deviceOptionLabel("mb") }
 ];
 
 export const uploadCommonBrightnessOptions: readonly SelectOption[] = [
-  { value: "", label: "自动亮暗" },
+  { value: "auto", label: "自动亮暗" },
   { value: "light", label: brightnessOptionLabel("light") },
   { value: "dark", label: brightnessOptionLabel("dark") }
 ];

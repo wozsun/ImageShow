@@ -1,5 +1,12 @@
-import type { ImageDraft, ImportJob } from "../../../../lib/types.js";
-import { browserUuid, resolveUploadDefaultBrightness, type CommonImageAttributes } from "../../../../lib/upload/upload-utils.js";
+import type {
+  ImageDraft,
+  ImportCommonAttributeField,
+  ImportJob
+} from "../../../../lib/types.js";
+import {
+  browserUuid,
+  type ImportAttributeDefaults
+} from "../../../../lib/upload/upload-utils.js";
 import type { JsonlManifestItem } from "../import-api.js";
 import type { LinkImportMode } from "./LinkUrlDialog.js";
 
@@ -7,15 +14,30 @@ function valueOrDefault<T>(value: T | undefined, fallback: T) {
   return value === undefined ? fallback : value;
 }
 
+const manifestCommonAttributeFields: readonly ImportCommonAttributeField[] = [
+  "device",
+  "brightness",
+  "theme",
+  "author",
+  "tags"
+];
+
+function providedManifestCommonFields(item: JsonlManifestItem) {
+  return manifestCommonAttributeFields.filter((field) => Object.hasOwn(item, field));
+}
+
 /** @internal Exported only for local JSONL precedence verification. */
-export function mergeJsonlDraft(item: JsonlManifestItem, defaults: CommonImageAttributes): ImageDraft {
+export function mergeJsonlDraft(
+  item: JsonlManifestItem,
+  defaults: ImportAttributeDefaults
+): ImageDraft {
   return {
     title: item.title ?? "",
     description: item.description ?? "",
     source: item.source ?? "",
     original: item.original,
-    device: valueOrDefault(item.device, defaults.device ? defaults.device as ImageDraft["device"] : "auto"),
-    brightness: valueOrDefault(item.brightness, resolveUploadDefaultBrightness(defaults.brightness, "auto")),
+    device: valueOrDefault(item.device, defaults.device),
+    brightness: valueOrDefault(item.brightness, defaults.brightness),
     theme: valueOrDefault(item.theme, defaults.theme),
     author: valueOrDefault(item.author, defaults.author),
     tags: item.tags === undefined ? [...defaults.tags] : [...item.tags]
@@ -24,7 +46,7 @@ export function mergeJsonlDraft(item: JsonlManifestItem, defaults: CommonImageAt
 
 export function jsonlImportJobs(
   items: JsonlManifestItem[],
-  defaults: CommonImageAttributes,
+  defaults: ImportAttributeDefaults,
   defaultMode: LinkImportMode,
   defaultStorageSlug: string
 ): ImportJob[] {
@@ -46,10 +68,9 @@ export function jsonlImportJobs(
     imageTime: item.image_time,
     batchTime,
     manifestSource: "jsonl",
+    manifestProvidedCommonFields: providedManifestCommonFields(item),
     manifestLine: item.line,
     manifestPosition: item.manifest_position,
-    duplicatePolicy: "skip",
-    inlineMetadataFields: (["device", "brightness", "theme", "author", "tags"] as const)
-      .filter((field) => Object.hasOwn(item, field))
+    duplicatePolicy: "skip"
   }));
 }

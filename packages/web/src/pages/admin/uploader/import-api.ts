@@ -15,8 +15,8 @@ export type PreparedImport = {
   size: number;
   quality: number | null;
   transcoded: boolean;
-  device: Device;
-  brightness: Brightness;
+  detected_device: Device;
+  detected_brightness: Brightness;
   storage_slug: string;
   duplicates: ImageItem[];
 };
@@ -93,18 +93,39 @@ export type WeiboImportResult = {
   manifest: JsonlManifestResult;
 };
 
+type StoredImportServerStatus =
+  | "created"
+  | "receiving"
+  | "preparing"
+  | "ready"
+  | "committing"
+  | "finalized"
+  | "failed"
+  | "cancelled"
+  | "missing";
+
 export type StoredImportStatus = {
   id: string;
-  status: string;
+  status: StoredImportServerStatus;
   error: string;
   phase: string;
   message: string;
   progress?: number;
 };
 
+export type StoredImportCommitResult = {
+  status: "imported" | "duplicate";
+  item?: { object_url: string; thumb_url: string };
+};
+
 export function getStoredImportStatuses(ids: string[], signal?: AbortSignal) {
   const query = encodeURIComponent(ids.join(","));
   return api<{ items: StoredImportStatus[] }>(`${adminApiBasePath}/imports/status?ids=${query}`, { signal }).then((result) => result.items);
+}
+
+export async function getStoredImportStatus(id: string, signal?: AbortSignal) {
+  const states = await getStoredImportStatuses([id], signal);
+  return states[0];
 }
 
 export function createImportSession(input: ImportSessionCreateInput, signal?: AbortSignal) {
@@ -161,6 +182,21 @@ export function storedImportStatusMessage(state: StoredImportStatus) {
     : state.message;
 }
 
+/** @internal Exported only for local upload progress verification. */
+export function createIntegerProgressReporter(
+  onProgress: (progress: number) => void,
+  initialProgress = -1
+) {
+  let lastProgress = initialProgress;
+  return (progress: number) => {
+    if (!Number.isFinite(progress)) return;
+    const normalizedProgress = Math.min(100, Math.max(0, Math.round(progress)));
+    if (normalizedProgress === lastProgress) return;
+    lastProgress = normalizedProgress;
+    onProgress(normalizedProgress);
+  };
+}
+
 export function uploadLocalRaw(
   session: ImportSessionHandle,
   file: File,
@@ -168,12 +204,14 @@ export function uploadLocalRaw(
 ) {
   if (!session.upload_url) throw new Error("上传会话缺少 upload URL");
   const request = new XMLHttpRequest();
+  // 任务进入上传阶段时已经写入 0%，因此 XHR 只需报告之后真正变化的整数百分比。
+  const reportProgress = createIntegerProgressReporter(callbacks.onProgress, 0);
   const promise = new Promise<void>((resolve, reject) => {
     request.open("PUT", session.upload_url!);
     const csrf = getCsrfToken();
     if (csrf) request.setRequestHeader("x-csrf-token", csrf);
     request.upload.onprogress = (event) => {
-      if (event.lengthComputable && event.total > 0) callbacks.onProgress(Math.min(100, Math.round((event.loaded / event.total) * 100)));
+      if (event.lengthComputable && event.total > 0) reportProgress((event.loaded / event.total) * 100);
     };
     request.upload.onload = callbacks.onUploaded;
     request.onload = () => {
@@ -204,10 +242,7 @@ export function cancelStoredImport(sessionId: string) {
 }
 
 export function commitStoredImport(sessionId: string, draft: ImageDraft) {
-  return api<{
-    status: "imported" | "duplicate";
-    item?: { object_url: string; thumb_url: string };
-  }>(`${adminApiBasePath}/imports/${sessionId}/commit`, {
+  return api<StoredImportCommitResult>(`${adminApiBasePath}/imports/${sessionId}/commit`, {
     method: "POST",
     body: JSON.stringify(draft)
   });

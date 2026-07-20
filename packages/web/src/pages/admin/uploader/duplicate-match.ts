@@ -44,13 +44,44 @@ export function batchDuplicateFromJob(owner: ImportJob): BatchDuplicateMatch {
   };
 }
 
+export function batchDuplicateSnapshotChanged(previous: ImportJob, next: ImportJob) {
+  return previous.manifestSource !== next.manifestSource
+    || previous.manifestLine !== next.manifestLine
+    || previous.manifestPosition !== next.manifestPosition
+    || (previous.url || previous.draft.original) !== (next.url || next.draft.original)
+    || previous.preview !== next.preview
+    || (previous.previewFull || previous.preview) !== (next.previewFull || next.preview)
+    || previous.width !== next.width
+    || previous.height !== next.height
+    || previous.draft.device !== next.draft.device
+    || previous.draft.brightness !== next.draft.brightness
+    || previous.draft.theme !== next.draft.theme;
+}
+
+export function refreshBatchDuplicateMatchesForOwners(
+  jobs: ImportJob[],
+  ownerIds: ReadonlySet<string>
+): ImportJob[] {
+  if (!ownerIds.size) return jobs;
+  const owners = new Map<string, ImportJob>();
+  for (const job of jobs) {
+    if (ownerIds.has(job.id)) owners.set(job.id, job);
+  }
+  if (!owners.size) return jobs;
+
+  let changed = false;
+  const nextJobs = jobs.map((job) => {
+    const ownerId = job.batchDuplicate?.ownerId;
+    const owner = ownerId ? owners.get(ownerId) : undefined;
+    if (!owner) return job;
+    changed = true;
+    return { ...job, batchDuplicate: batchDuplicateFromJob(owner) };
+  });
+  return changed ? nextJobs : jobs;
+}
+
 export function refreshBatchDuplicateMatches(jobs: ImportJob[], ownerId: string): ImportJob[] {
-  const owner = jobs.find((job) => job.id === ownerId);
-  if (!owner) return jobs;
-  const snapshot = batchDuplicateFromJob(owner);
-  return jobs.map((job) => job.batchDuplicate?.ownerId === ownerId
-    ? { ...job, batchDuplicate: snapshot }
-    : job);
+  return refreshBatchDuplicateMatchesForOwners(jobs, new Set([ownerId]));
 }
 
 export function detachRemovedBatchDuplicateOwners(

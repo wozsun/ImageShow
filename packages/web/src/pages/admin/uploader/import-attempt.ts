@@ -30,6 +30,7 @@ export async function cancelImportAttempt(
   queue.updateJob(job.id, {
     status: "cancelling",
     failureStage: undefined,
+    commitFailureCheckpoint: undefined,
     message: "正在取消并清理暂存数据",
     transferProgress: undefined
   });
@@ -51,6 +52,7 @@ export async function cancelImportAttempt(
       queue.updateJob(job.id, {
         status: "failed",
         failureStage: "cancel",
+        commitFailureCheckpoint: undefined,
         message: `取消失败：${reason}`
       });
     }
@@ -114,6 +116,7 @@ export function applyImportAttemptFailure(
     queue.updateJob(jobId, {
       status: "failed",
       failureStage,
+      commitFailureCheckpoint: undefined,
       message: importAttemptErrorMessage(error)
     });
   }

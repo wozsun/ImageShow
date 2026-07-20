@@ -580,6 +580,8 @@ export function weiboPostToJsonl(post: ExtractedWeiboPost) {
     original,
     source: post.source_url,
     image_time: post.published_at,
+    device: "auto",
+    brightness: "auto",
     tags: [publicationYear],
     ...(post.author ? { author: post.author } : {})
   })).join("\n");

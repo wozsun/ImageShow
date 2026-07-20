@@ -1,4 +1,4 @@
-import type { Brightness, ImageDraft } from "../types.js";
+import type { Brightness, Device, ImageDraft } from "../types.js";
 
 export async function runWithConcurrency<T>(items: T[], limit: number, task: (item: T) => Promise<void>): Promise<void> {
   let cursor = 0;
@@ -24,9 +24,26 @@ const defaultDraft: ImageDraft = {
   tags: []
 };
 
-export type CommonImageAttributes = { device: string; brightness: string; theme: string; author: string; tags: string[] };
+export type ImportAttributeDefaults = {
+  device: Device | "auto";
+  brightness: Brightness | "auto";
+  theme: string;
+  author: string;
+  tags: string[];
+};
 
-export function mergeBatchEditCommonAttributes(draft: ImageDraft, common: CommonImageAttributes): ImageDraft {
+export type BatchEditCommonAttributes = {
+  device: "" | Device | "auto";
+  brightness: "" | Brightness | "auto";
+  theme: string;
+  author: string;
+  tags: string[];
+};
+
+export function mergeBatchEditCommonAttributes(
+  draft: ImageDraft,
+  common: BatchEditCommonAttributes
+): ImageDraft {
   return {
     ...draft,
     ...(common.device ? { device: common.device as ImageDraft["device"] } : {}),
@@ -35,11 +52,6 @@ export function mergeBatchEditCommonAttributes(draft: ImageDraft, common: Common
     ...(common.author.trim() ? { author: common.author } : {}),
     ...(common.tags.length ? { tags: [...new Set([...draft.tags, ...common.tags])] } : {})
   };
-}
-
-export function resolveUploadDefaultBrightness(value: string, fallback: Brightness | "auto"): Brightness | "auto" {
-  // 新任务默认“自动亮暗”表示不强制指定，使用服务端检测结果。
-  return value === "dark" || value === "light" ? value : fallback;
 }
 
 export function browserUuid() {
@@ -72,7 +84,11 @@ export function isUploadableImage(file: File) {
   return file.type.startsWith("image/") || ["jpg", "jpeg", "png", "webp", "gif", "avif"].includes(fileExt(file));
 }
 
-export async function draftFromFile(_file: File, defaults: CommonImageAttributes, previewUrl: string) {
+export async function draftFromFile(
+  _file: File,
+  defaults: ImportAttributeDefaults,
+  previewUrl: string
+) {
   const image = await loadImageDimensions(previewUrl);
   return { draft: applyUploadDefaults({
     ...defaultDraft,
@@ -98,11 +114,14 @@ async function loadImageDimensions(previewUrl: string): Promise<{ width: number;
   });
 }
 
-function applyUploadDefaults(inferred: ImageDraft, defaults: CommonImageAttributes): ImageDraft {
+function applyUploadDefaults(
+  inferred: ImageDraft,
+  defaults: ImportAttributeDefaults
+): ImageDraft {
   return {
     ...inferred,
-    device: defaults.device ? (defaults.device as ImageDraft["device"]) : inferred.device,
-    brightness: resolveUploadDefaultBrightness(defaults.brightness, inferred.brightness),
+    device: defaults.device,
+    brightness: defaults.brightness,
     theme: defaults.theme.trim() ? defaults.theme.trim().toLowerCase() : inferred.theme,
     author: defaults.author.trim() ? defaults.author.trim().toLowerCase() : inferred.author,
     tags: defaults.tags.length ? [...new Set([...inferred.tags, ...defaults.tags])] : inferred.tags

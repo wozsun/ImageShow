@@ -162,6 +162,9 @@ export type RandomLinkDraft = {
 };
 
 export type ManifestImportSource = "jsonl" | "weibo";
+export type ImportCommonAttributeField = "device" | "brightness" | "theme" | "author" | "tags";
+export type ImportDetectedClassification = { device: Device; brightness: Brightness };
+export type CommitFailureCheckpoint = "ready" | "committing" | "unknown";
 
 export type BatchDuplicateMatch = {
   ownerId: string | null;
@@ -195,7 +198,7 @@ export type ImportJob = {
   transferProgress?: number;
   duplicates: ImageItem[];
   duplicateDecision: "upload" | "undecided";
-  resolvedClassification?: { device: Device; brightness: Brightness };
+  detectedClassification?: ImportDetectedClassification;
   classificationOverride?: Partial<Record<"device" | "brightness", boolean>>;
   file?: File;
   fileFingerprint?: string;
@@ -208,15 +211,16 @@ export type ImportJob = {
   imageTime?: string;
   batchTime?: string;
   manifestSource?: ManifestImportSource;
+  manifestProvidedCommonFields?: ImportCommonAttributeField[];
   manifestLine?: number;
   manifestPosition?: number;
   duplicatePolicy?: "confirm" | "skip";
   batchDuplicate?: BatchDuplicateMatch;
-  inlineMetadataFields?: Array<keyof ImageDraft>;
   originalSize?: number;
   finalSize?: number;
   quality?: number | null;
   transcoded?: boolean;
   storageSlug: string;
   failureStage?: "create" | "prepare" | "commit" | "cancel";
+  commitFailureCheckpoint?: CommitFailureCheckpoint;
 };

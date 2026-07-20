@@ -151,8 +151,8 @@ async function commitStoredImageSession(
     }
 
     const classification = resolveClassification(payload, {
-      device: payload.resolved_device,
-      brightness: payload.resolved_brightness
+      device: payload.detected_device,
+      brightness: payload.detected_brightness
     });
     const result = await withTransaction(async (client) => {
       const createdEntityKinds = new Set<EntityCacheKind>();
@@ -231,8 +231,8 @@ async function commitProxySession(
 ) {
   const backend = session.storage_slug;
   const classification = resolveClassification(payload, {
-    device: payload.resolved_device,
-    brightness: payload.resolved_brightness
+    device: payload.detected_device,
+    brightness: payload.detected_brightness
   });
   const linkKey = session.final_object_key || linkThumbnailKey(
     classification.device,
@@ -368,8 +368,8 @@ async function commitImportSessionWithinLimit(id: string, metadata: ImportMetada
           image_time: new Date(session.image_time).toISOString()
         };
         const classification = resolveClassification(metadata, {
-          device: payload.resolved_device,
-          brightness: payload.resolved_brightness
+          device: payload.detected_device,
+          brightness: payload.detected_brightness
         });
         const finalKey = session.mode === "proxy"
           ? linkThumbnailKey(

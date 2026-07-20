@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../../lib/api/client.js";
 import { Icon } from "../../../components/icon/Icon.js";
@@ -19,8 +19,8 @@ import { facetDisplayName } from "../../../lib/ui/formatters.js";
 import { storageBackendLabel, uploadCommonBrightnessOptions, uploadCommonDeviceOptions } from "../../../lib/ui/select-options.js";
 import { useImportVocabulary } from "../../../lib/api/import-vocabulary.js";
 import { useStorageOptions } from "../../../lib/api/storage-options.js";
-import type { AdminSettings, ImageItem, ImportJob } from "../../../lib/types.js";
-import type { CommonImageAttributes } from "../../../lib/upload/upload-utils.js";
+import type { AdminSettings, FacetOption, ImageItem, ImportJob } from "../../../lib/types.js";
+import type { ImportAttributeDefaults } from "../../../lib/upload/upload-utils.js";
 import { ImportJobList } from "./ImportJobList.js";
 import type { ImportPreviewTarget } from "./DuplicateMatchPanel.js";
 import { LinkUrlDialog, type LinkDialogSubmission, type LinkInputMode } from "./link-import/LinkUrlDialog.js";
@@ -34,6 +34,9 @@ import { useLinkImport } from "./link-import/useLinkImport.js";
 import { useImportCommit } from "./useImportCommit.js";
 import { useImportStatusEvents } from "./useImportStatusEvents.js";
 import { UploadCleanupMenu, type UploadCleanupAction } from "./UploadCleanupMenu.js";
+import { canApplyImportAttributeDefaults } from "./import-attribute-policy.js";
+
+const EMPTY_FACET_OPTIONS: FacetOption[] = [];
 
 function isCompletedImportJob(job: ImportJob) {
   return job.status === "done" || job.status === "skipped";
@@ -53,7 +56,13 @@ export function Uploader({ onDone }: { onDone: () => void }) {
   const [linkInputMode, setLinkInputMode] = useState<LinkInputMode>("urls");
   const [jsonlErrors, setJsonlErrors] = useState<JsonlManifestParseError[]>([]);
   const [dragOver, setDragOver] = useState(false);
-  const [defaults, setDefaults] = useState<CommonImageAttributes>({ device: "", brightness: "", theme: "", author: "", tags: [] });
+  const [defaults, setDefaults] = useState<ImportAttributeDefaults>({
+    device: "auto",
+    brightness: "auto",
+    theme: "",
+    author: "",
+    tags: []
+  });
   const [defaultsExpanded, setDefaultsExpanded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [detailItem, setDetailItem] = useState<ImageItem | null>(null);
@@ -69,9 +78,9 @@ export function Uploader({ onDone }: { onDone: () => void }) {
 
   const { data: settingsData } = useQuery<{ settings: AdminSettings }>({ queryKey: queryKeys.settings, queryFn: () => api(`${adminApiBasePath}/settings`) });
   const { data: vocabulary } = useImportVocabulary(open);
-  const themes = vocabulary?.themes ?? [];
-  const tags = vocabulary?.tags ?? [];
-  const authors = vocabulary?.authors ?? [];
+  const themes = vocabulary?.themes ?? EMPTY_FACET_OPTIONS;
+  const tags = vocabulary?.tags ?? EMPTY_FACET_OPTIONS;
+  const authors = vocabulary?.authors ?? EMPTY_FACET_OPTIONS;
 
   const pageSize = settingsData?.settings.upload.list_page_size ?? 20;
   const uploadMaxItems = settingsData?.settings.upload.max_items ?? 200;
@@ -85,7 +94,7 @@ export function Uploader({ onDone }: { onDone: () => void }) {
   const queue = useImportQueue(pageSize);
 
   const { data: storageData } = useStorageOptions();
-  const storageBackends = storageData?.backends ?? [];
+  const storageBackends = useMemo(() => storageData?.backends ?? [], [storageData?.backends]);
   const defaultBackend = storageBackends.find((backend) => backend.is_default)?.slug ?? "local";
   const [backendChoice, setBackendChoice] = useState("");
   const activeBackend = backendChoice || defaultBackend;
@@ -104,21 +113,36 @@ export function Uploader({ onDone }: { onDone: () => void }) {
     () => new Map(backendOptions.map((backend) => [backend.value, backend.label] as const)),
     [backendOptions]
   );
-  const storageName = (slug: string) => storageNameBySlug.get(slug) || storageBackendLabel(slug);
+  const storageName = useCallback(
+    (slug: string) => storageNameBySlug.get(slug) || storageBackendLabel(slug),
+    [storageNameBySlug]
+  );
 
-  const queueApi = {
-    jobsRef: queue.jobsRef, appendJobs: queue.appendJobs, updateJob: queue.updateJob,
-    claimPreparedMd5: queue.claimPreparedMd5, releasePreparedMd5: queue.releasePreparedMd5
-  };
-  const localImport = useLocalUploadImport({
-    queue: queueApi,
+  const {
+    addFiles,
+    cancel: cancelLocalImport,
+    retry: retryLocalImport
+  } = useLocalUploadImport({
+    queue: queue.workerApi,
     defaults,
     storageSlug: activeBackend,
     maxItems: uploadMaxItems,
     maxBytes,
     concurrency: uploadConcurrency
   });
-  const linkImport = useLinkImport({ queue: queueApi, defaults, fillOriginalUrl, storageSlug: activeBackend, concurrency: downloadConcurrency });
+  const {
+    addUrls,
+    addJobs,
+    addWeiboJobs,
+    cancel: cancelLinkImport,
+    retry: retryLinkImport
+  } = useLinkImport({
+    queue: queue.workerApi,
+    defaults,
+    fillOriginalUrl,
+    storageSlug: activeBackend,
+    concurrency: downloadConcurrency
+  });
   const commitImports = useImportCommit({ updateJob: queue.updateJob, concurrency: commitConcurrency, onDone });
   useImportStatusEvents(queue.jobs, queue.jobsRef, queue.updateJob);
 
@@ -138,13 +162,13 @@ export function Uploader({ onDone }: { onDone: () => void }) {
     paused: Boolean(detailItem || preview || urlInputOpen),
   });
 
-  const cancelJob = async (job: ImportJob) => {
+  const cancelJob = useCallback(async (job: ImportJob) => {
     const cancellationSucceeded = job.kind === "local"
-      ? await localImport.cancel(job)
-      : await linkImport.cancel(job);
+      ? await cancelLocalImport(job)
+      : await cancelLinkImport(job);
     if (cancellationSucceeded) queue.removeJob(job.id);
     return cancellationSucceeded;
-  };
+  }, [cancelLinkImport, cancelLocalImport, queue.removeJob]);
 
   const openInMode = async (next: "file" | "link", opener?: HTMLElement) => {
     if (opener) workflowReturnFocusRef.current = opener;
@@ -155,7 +179,7 @@ export function Uploader({ onDone }: { onDone: () => void }) {
     setOpen(true);
   };
 
-  const retryJob = async (job: ImportJob) => {
+  const retryJob = useCallback(async (job: ImportJob) => {
     if (job.failureStage === "commit") {
       queue.releasePreparedMd5(job.id);
       if (job.md5) {
@@ -173,17 +197,24 @@ export function Uploader({ onDone }: { onDone: () => void }) {
       await commitImports([job]).finally(() => setBusy(false));
       return;
     }
-    if (job.kind === "local") await localImport.retry(job);
-    else await linkImport.retry(job);
-  };
+    if (job.kind === "local") await retryLocalImport(job);
+    else await retryLinkImport(job);
+  }, [
+    commitImports,
+    queue.claimPreparedMd5,
+    queue.releasePreparedMd5,
+    queue.updateJob,
+    retryLinkImport,
+    retryLocalImport
+  ]);
 
-  const removeJob = async (job: ImportJob) => {
+  const removeJob = useCallback(async (job: ImportJob) => {
     if (["done", "skipped", "cancelled"].includes(job.status)) {
       queue.removeJob(job.id);
       return;
     }
     await cancelJob(job);
-  };
+  }, [cancelJob, queue.removeJob]);
 
   const clearJobs = async (predicate: (job: ImportJob) => boolean) => {
     const targets = queue.jobsRef.current.filter(predicate);
@@ -207,7 +238,7 @@ export function Uploader({ onDone }: { onDone: () => void }) {
 
   const addLinks = (submission: LinkDialogSubmission) => {
     if (submission.inputMode === "urls") {
-      void linkImport.addUrls(submission.urls, submission.mode);
+      void addUrls(submission.urls, submission.mode);
       return;
     }
     if (submission.inputMode === "weibo") {
@@ -221,7 +252,7 @@ export function Uploader({ onDone }: { onDone: () => void }) {
         ...postErrors,
         ...submission.result.manifest.errors
       ]);
-      void linkImport.addWeiboJobs(weiboImportJobs(
+      void addWeiboJobs(weiboImportJobs(
         submission.result.manifest.items,
         defaults,
         submission.mode,
@@ -231,19 +262,22 @@ export function Uploader({ onDone }: { onDone: () => void }) {
     }
     setJsonlErrors((current) => [...current, ...submission.manifest.errors]);
     const jobs = jsonlImportJobs(submission.manifest.items, defaults, submission.mode, activeBackend);
-    void linkImport.addJobs(jobs);
+    void addJobs(jobs);
   };
 
-  const readyJobs = queue.jobs.filter((job) => job.status === "ready" && job.duplicateDecision !== "undecided");
-  const duplicateJobs = queue.jobs.filter((job) => job.status === "ready" && job.duplicateDecision === "undecided").length;
-  const runningJobs = queue.jobs.filter((job) => ["queued", "uploading", "downloading", "processing", "committing", "cancelling"].includes(job.status)).length;
-  const doneJobs = queue.jobs.filter((job) => job.status === "done").length;
-  const failedJobs = queue.jobs.filter((job) => job.status === "failed").length;
-  const skippedJobs = queue.jobs.filter((job) => job.status === "skipped").length;
+  const {
+    readyJobs,
+    duplicateJobs,
+    runningJobs,
+    doneJobs,
+    failedJobs,
+    skippedJobs
+  } = queue.summary;
   const modeTitle = mode === "file" ? "上传图片" : "导入图片";
   const emptySubtitle = mode === "file"
     ? "选择后立即上传并在服务端准备图片"
     : "输入来源后立即创建并准备图片任务";
+  const completedJobs = doneJobs + skippedJobs;
   const cleanupActions: UploadCleanupAction[] = [
     {
       id: "duplicates",
@@ -254,13 +288,13 @@ export function Uploader({ onDone }: { onDone: () => void }) {
     {
       id: "uncommitted",
       label: "清空未提交",
-      enabled: queue.jobs.some((job) => !isCompletedImportJob(job)),
+      enabled: queue.jobs.length > completedJobs,
       run: () => void clearJobs((job) => !isCompletedImportJob(job)),
     },
     {
       id: "completed",
       label: "清空已完成",
-      enabled: queue.jobs.some(isCompletedImportJob),
+      enabled: completedJobs > 0,
       run: () => void clearJobs(isCompletedImportJob),
     },
   ];
@@ -271,6 +305,33 @@ export function Uploader({ onDone }: { onDone: () => void }) {
     facetDisplayName(authors, defaults.author, "作者不设"),
     `${defaults.tags.length} 个标签`,
   ].join(" · ");
+  const canApplyDefaults = useMemo(
+    () => queue.jobs.some((job) => canApplyImportAttributeDefaults(job, defaults)),
+    [defaults, queue.jobs]
+  );
+  const patchJob = useCallback((job: ImportJob, patch: Partial<ImportJob["draft"]>) => {
+    queue.updateJobDraft(job.id, patch);
+  }, [queue.updateJobDraft]);
+  const requestCancelJob = useCallback((job: ImportJob) => {
+    void cancelJob(job);
+  }, [cancelJob]);
+  const requestRetryJob = useCallback((job: ImportJob) => {
+    void retryJob(job);
+  }, [retryJob]);
+  const requestRemoveJob = useCallback((job: ImportJob) => {
+    void removeJob(job);
+  }, [removeJob]);
+  const confirmDuplicateJob = useCallback((job: ImportJob) => {
+    queue.updateJob(job.id, { duplicateDecision: "upload", message: "已确认提交副本" });
+  }, [queue.updateJob]);
+  const openJobDetail = useCallback((item: ImageItem, opener: HTMLElement) => {
+    detailReturnFocusRef.current = opener;
+    setDetailItem(item);
+  }, []);
+  const openJobPreview = useCallback((target: ImportPreviewTarget) => {
+    previewReturnFocusRef.current = target.opener ?? null;
+    setPreview(target);
+  }, []);
 
   return (
     <>
@@ -326,7 +387,7 @@ export function Uploader({ onDone }: { onDone: () => void }) {
                       className={`button secondary upload-picker pressable${busy ? " is-disabled" : ""}`}
                       aria-disabled={busy}
                     >
-                      <Icon name="upload-cloud-2-line" /><input ref={fileInputRef} type="file" accept="image/*" multiple disabled={busy} onChange={(event) => { void localImport.addFiles(event.target.files); event.target.value = ""; }} />选择图片
+                      <Icon name="upload-cloud-2-line" /><input ref={fileInputRef} type="file" accept="image/*" multiple disabled={busy} onChange={(event) => { void addFiles(event.target.files); event.target.value = ""; }} />选择图片
                     </label>
                   )}
                   <button ref={closeButtonRef} className="icon close pressable upload-close-button" type="button" title="关闭" onClick={() => exit.requestClose()} disabled={busy}><Icon name="close-line" /></button>
@@ -342,14 +403,14 @@ export function Uploader({ onDone }: { onDone: () => void }) {
               expanded={defaultsExpanded}
               onExpandedChange={setDefaultsExpanded}
             >
-              <SelectMenu className="upload-default-select upload-default-device" value={defaults.device} onChange={(device) => setDefaults({ ...defaults, device })} options={uploadCommonDeviceOptions} ariaLabel="默认设备" />
-              <SelectMenu className="upload-default-select upload-default-brightness" value={defaults.brightness} onChange={(brightness) => setDefaults({ ...defaults, brightness })} options={uploadCommonBrightnessOptions} ariaLabel="默认亮度" />
+              <SelectMenu className="upload-default-select upload-default-device" value={defaults.device} onChange={(device) => setDefaults({ ...defaults, device: device as ImportAttributeDefaults["device"] })} options={uploadCommonDeviceOptions} ariaLabel="默认设备" />
+              <SelectMenu className="upload-default-select upload-default-brightness" value={defaults.brightness} onChange={(brightness) => setDefaults({ ...defaults, brightness: brightness as ImportAttributeDefaults["brightness"] })} options={uploadCommonBrightnessOptions} ariaLabel="默认亮度" />
               <div className="upload-default-pair">
                 <ThemeInput className="upload-default-theme" value={defaults.theme} onChange={(theme) => setDefaults({ ...defaults, theme })} themes={themes} placeholder="主题" ariaLabel="默认主题" />
                 <AuthorInput className="upload-default-author" value={defaults.author} onChange={(author) => setDefaults({ ...defaults, author })} authors={authors} placeholder="默认作者" ariaLabel="默认作者" />
                 <TagInput className="upload-default-tags" value={defaults.tags} onChange={(nextTags) => setDefaults({ ...defaults, tags: nextTags })} suggestions={tags} placeholder="默认标签" ariaLabel="默认标签" />
               </div>
-              <button type="button" className="apply-to-all-button" disabled={busy || !queue.jobs.length} onClick={() => queue.applyDefaultsToAll(defaults)}>应用到全部</button>
+              <button type="button" className="apply-to-all-button" disabled={busy || !canApplyDefaults} onClick={() => queue.applyDefaultsToAll(defaults)}>应用到全部</button>
             </WorkflowCollapsePanel>
 
             <div className="modal-scroll-list upload-list" ref={listRef}>
@@ -360,23 +421,27 @@ export function Uploader({ onDone }: { onDone: () => void }) {
                   <button type="button" onClick={() => setJsonlErrors([])}>清除</button>
                 </div>
               )}
-              <ImportJobList jobs={queue.visibleJobs} busy={busy} storageName={storageName} themes={themes} tags={tags} authors={authors}
-                onPatch={(job, patch) => queue.updateJobDraft(job.id, patch)} onCancel={(job) => void cancelJob(job)}
-                onRetry={(job) => void retryJob(job)} onRemove={(job) => void removeJob(job)}
-                onConfirmDuplicate={(job) => queue.updateJob(job.id, { duplicateDecision: "upload", message: "已确认提交副本" })}
-                onOpenDetail={(item, opener) => {
-                  detailReturnFocusRef.current = opener;
-                  setDetailItem(item);
-                }} onPreview={(target) => {
-                  previewReturnFocusRef.current = target.opener ?? null;
-                  setPreview(target);
-                }} />
+              <ImportJobList
+                jobs={queue.visibleJobs}
+                busy={busy}
+                storageName={storageName}
+                themes={themes}
+                tags={tags}
+                authors={authors}
+                onPatch={patchJob}
+                onCancel={requestCancelJob}
+                onRetry={requestRetryJob}
+                onRemove={requestRemoveJob}
+                onConfirmDuplicate={confirmDuplicateJob}
+                onOpenDetail={openJobDetail}
+                onPreview={openJobPreview}
+              />
               {!queue.jobs.length && (mode === "link" ? (
                 <button type="button" className="empty-state upload-dropzone" onClick={() => { setLinkInputMode("urls"); setUrlInputOpen(true); }}><Icon name="download-cloud-2-line" /><span>还没有导入任务，点击此处选择图片来源</span></button>
               ) : (
                 <button type="button" className={`empty-state upload-dropzone${dragOver ? " is-dragover" : ""}`} onClick={() => fileInputRef.current?.click()}
                   onDragOver={(event) => { event.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)}
-                  onDrop={(event) => { event.preventDefault(); setDragOver(false); void localImport.addFiles(event.dataTransfer.files); }}>
+                  onDrop={(event) => { event.preventDefault(); setDragOver(false); void addFiles(event.dataTransfer.files); }}>
                   <Icon name="image-line" /><span>还没有选择图片，点击此处选择，或将图片拖到这里</span>
                 </button>
               ))}

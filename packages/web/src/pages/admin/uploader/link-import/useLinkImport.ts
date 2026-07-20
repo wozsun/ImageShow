@@ -5,7 +5,7 @@ import {
   normalizeAuthor,
   normalizeTheme,
   runWithConcurrency,
-  type CommonImageAttributes
+  type ImportAttributeDefaults
 } from "../../../../lib/upload/upload-utils.js";
 import { importPositionText, linkImportJobs, retryLinkPrepareJob } from "../import-job-utils.js";
 import { batchDuplicateFromJob } from "../duplicate-match.js";
@@ -36,7 +36,7 @@ function linkSessionInput(job: ImportJob): ImportSessionCreateInput {
 
 export function useLinkImport(options: {
   queue: AppendImportQueueApi;
-  defaults: CommonImageAttributes;
+  defaults: ImportAttributeDefaults;
   fillOriginalUrl: boolean;
   storageSlug: string;
   concurrency: number;
@@ -214,7 +214,17 @@ export function useLinkImport(options: {
     queue.releasePreparedMd5(job.id);
     // If create completed on the server but its response was lost, retry with
     // the same idempotency key so the existing session can be recovered.
-    const next = retryLinkPrepareJob(job);
+    const next = {
+      ...retryLinkPrepareJob(job),
+      preview: "",
+      previewFull: undefined,
+      objectUrl: undefined,
+      width: 0,
+      height: 0,
+      originalWidth: undefined,
+      originalHeight: undefined,
+      originalSize: undefined
+    };
     queue.updateJob(job.id, next);
     await prepare(next);
   }, [prepare, queue]);

@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Icon } from "../../../components/icon/Icon.js";
 import { ImageThumbnail } from "../../../components/image/ImageThumbnail.js";
 import { ImageDraftFields } from "../../../components/form/ImageDraftFields.js";
@@ -5,6 +6,7 @@ import { importCardBrightnessSelectOptions, importCardDeviceSelectOptions } from
 import { formatBytes } from "../../../lib/ui/formatters.js";
 import type { FacetOption, ImageDraft, ImageItem, ImportJob } from "../../../lib/types.js";
 import { DuplicateMatchPanel, type ImportPreviewTarget } from "./DuplicateMatchPanel.js";
+import { importJobAttributesEditable } from "./import-attribute-policy.js";
 import { importPositionText } from "./import-job-utils.js";
 
 const statusLabels: Record<ImportJob["status"], string> = {
@@ -17,22 +19,38 @@ function formatPixelDimensions(width?: number, height?: number) {
   return width && height ? `${width}×${height}` : "0000×0000";
 }
 
-export function ImportJobCard({ job, busy, storageDisplayName, themes, allTags, authors, onPatch, onCancel, onRetry, onRemove, onConfirmDuplicate, onOpenDetail, onPreview }: {
+type ImportJobCardProps = {
   job: ImportJob;
   busy: boolean;
   storageDisplayName: string;
   themes: FacetOption[];
   allTags: FacetOption[];
   authors: FacetOption[];
-  onPatch: (patch: Partial<ImageDraft>) => void;
-  onCancel: () => void;
-  onRetry: () => void;
-  onRemove: () => void;
-  onConfirmDuplicate: () => void;
+  onPatch: (job: ImportJob, patch: Partial<ImageDraft>) => void;
+  onCancel: (job: ImportJob) => void;
+  onRetry: (job: ImportJob) => void;
+  onRemove: (job: ImportJob) => void;
+  onConfirmDuplicate: (job: ImportJob) => void;
   onOpenDetail: (item: ImageItem, opener: HTMLElement) => void;
   onPreview: (target: ImportPreviewTarget) => void;
-}) {
-  const editable = job.status === "ready" && !busy;
+};
+
+export const ImportJobCard = memo(function ImportJobCard({
+  job,
+  busy,
+  storageDisplayName,
+  themes,
+  allTags,
+  authors,
+  onPatch,
+  onCancel,
+  onRetry,
+  onRemove,
+  onConfirmDuplicate,
+  onOpenDetail,
+  onPreview
+}: ImportJobCardProps) {
+  const editable = importJobAttributesEditable(job) && !busy;
   const running = ["queued", "uploading", "downloading", "processing"].includes(job.status);
   const cancelling = job.status === "cancelling";
   const cancellationFailed = job.failureStage === "cancel";
@@ -124,16 +142,38 @@ export function ImportJobCard({ job, busy, storageDisplayName, themes, allTags, 
         </span>
       </div>
       <div className="import-job-actions">
-        {retryable && <button type="button" className="icon" title="重试" onClick={onRetry} disabled={busy}><Icon name="refresh-line" /></button>}
-        {cancellationFailed && <button type="button" className="icon" title="重新取消" onClick={onCancel} disabled={busy}><Icon name="refresh-line" /></button>}
-        {running && <button type="button" className="icon danger-button" title="取消" onClick={onCancel}><Icon name="close-line" /></button>}
-        {!running && !cancelling && !cancellationFailed && <button type="button" className="icon danger-button" title="移除" onClick={onRemove} disabled={busy}><Icon name="close-line" /></button>}
+        {retryable && (
+          <button type="button" className="icon" title="重试" onClick={() => onRetry(job)} disabled={busy}>
+            <Icon name="refresh-line" />
+          </button>
+        )}
+        {cancellationFailed && (
+          <button type="button" className="icon" title="重新取消" onClick={() => onCancel(job)} disabled={busy}>
+            <Icon name="refresh-line" />
+          </button>
+        )}
+        {running && (
+          <button type="button" className="icon danger-button" title="取消" onClick={() => onCancel(job)}>
+            <Icon name="close-line" />
+          </button>
+        )}
+        {!running && !cancelling && !cancellationFailed && (
+          <button type="button" className="icon danger-button" title="移除" onClick={() => onRemove(job)} disabled={busy}>
+            <Icon name="close-line" />
+          </button>
+        )}
       </div>
       <ImageDraftFields
-        draft={job.draft} onPatch={onPatch} themes={themes} allTags={allTags} authors={authors}
-        deviceOptions={importCardDeviceSelectOptions(job.draft.device)} brightnessOptions={importCardBrightnessSelectOptions(job.draft.brightness)}
+        draft={job.draft}
+        onPatch={(patch) => onPatch(job, patch)}
+        themes={themes}
+        allTags={allTags}
+        authors={authors}
+        deviceOptions={importCardDeviceSelectOptions(job.draft.device)}
+        brightnessOptions={importCardBrightnessSelectOptions(job.draft.brightness)}
         changed={{ device: job.classificationOverride?.device, brightness: job.classificationOverride?.brightness }}
-        disabled={!editable} ariaPrefix={job.url ?? job.file?.name ?? job.id}
+        disabled={!editable}
+        ariaPrefix={job.url ?? job.file?.name ?? job.id}
       />
       {(confirmDuplicate || skippedDuplicate) && (
         <DuplicateMatchPanel
@@ -142,10 +182,10 @@ export function ImportJobCard({ job, busy, storageDisplayName, themes, allTags, 
           confirmMode={confirmDuplicate}
           onOpenDetail={onOpenDetail}
           onPreview={onPreview}
-          onConfirm={onConfirmDuplicate}
-          onCancel={onCancel}
+          onConfirm={() => onConfirmDuplicate(job)}
+          onCancel={() => onCancel(job)}
         />
       )}
     </article>
   );
-}
+});

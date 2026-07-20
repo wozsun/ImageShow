@@ -1,6 +1,14 @@
 import { useCallback, useRef } from "react";
 import type { ImportJob } from "../../../lib/types.js";
-import { browserUuid, draftFromFile, isUploadableImage, normalizeAuthor, normalizeTheme, runWithConcurrency, type CommonImageAttributes } from "../../../lib/upload/upload-utils.js";
+import {
+  browserUuid,
+  draftFromFile,
+  isUploadableImage,
+  normalizeAuthor,
+  normalizeTheme,
+  runWithConcurrency,
+  type ImportAttributeDefaults
+} from "../../../lib/upload/upload-utils.js";
 import { retryPrepareJob } from "./import-job-utils.js";
 import { isCurrentImportAttempt, type AppendImportQueueApi } from "./prepared-result.js";
 import { cancelStoredImport, uploadLocalRaw } from "./import-api.js";
@@ -13,7 +21,7 @@ function fileFingerprint(file: File) {
 
 export function useLocalUploadImport(options: {
   queue: AppendImportQueueApi;
-  defaults: CommonImageAttributes;
+  defaults: ImportAttributeDefaults;
   storageSlug: string;
   maxItems: number;
   maxBytes: number;
@@ -143,7 +151,19 @@ export function useLocalUploadImport(options: {
     if (!job.file) return;
     if (job.sessionId) await cancelStoredImport(job.sessionId).catch(() => undefined);
     queue.releasePreparedMd5(job.id);
-    const next = { ...retryPrepareJob(job), transferProgress: 0 };
+    const objectUrl = job.objectUrl?.startsWith("blob:")
+      ? job.objectUrl
+      : URL.createObjectURL(job.file);
+    const next = {
+      ...retryPrepareJob(job),
+      preview: objectUrl,
+      previewFull: undefined,
+      objectUrl,
+      width: job.originalWidth ?? job.width,
+      height: job.originalHeight ?? job.height,
+      originalSize: job.file.size,
+      transferProgress: 0
+    };
     queue.updateJob(job.id, next);
     await prepare(next);
   }, [prepare, queue]);
