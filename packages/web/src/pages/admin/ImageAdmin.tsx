@@ -4,7 +4,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api/client.js";
 import { Icon } from "../../components/icon/Icon.js";
 import { ConfirmDialog } from "../../components/feedback/ConfirmDialog.js";
-import { PageToast } from "../../components/feedback/PageToast.js";
+import {
+  ActionFeedback,
+  createActionFeedback,
+  type ActionFeedbackState
+} from "../../components/feedback/ActionFeedback.js";
 import { LabeledSwitch } from "../../components/form/LabeledSwitch.js";
 import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
 import { AdminPagination } from "../../components/navigation/AdminPagination.js";
@@ -71,7 +75,7 @@ export function ImageAdmin() {
   const [batchEditing, setBatchEditing] = useState(false);
 
   const [operationText, setOperationText] = useState("");
-  const [toast, setToast] = useState<{ id: number; message: string; kind: "error" | "success" } | null>(null);
+  const [feedback, setFeedback] = useState<ActionFeedbackState | null>(null);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
   const [busyIds, setBusyIds] = useState<string[]>([]);
@@ -79,7 +83,6 @@ export function ImageAdmin() {
   const detailReturnFocusRef = useRef<HTMLElement | null>(null);
   const editReturnFocusRef = useRef<HTMLElement | null>(null);
   const batchEditReturnFocusRef = useRef<HTMLElement | null>(null);
-  const toastSequenceRef = useRef(0);
   const pageNavigationSequenceRef = useRef(0);
   const client = useQueryClient();
   const { data: settingsData } = useQuery<{ settings: AdminSettings }>({ queryKey: queryKeys.settings, queryFn: () => api(`${adminApiBasePath}/settings`) });
@@ -99,9 +102,8 @@ export function ImageAdmin() {
     ...adminImageListQuery(view, cursor, pageSize),
     enabled: Boolean(settingsData)
   });
-  const showToast = (message: string, kind: "error" | "success") => {
-    toastSequenceRef.current += 1;
-    setToast({ id: toastSequenceRef.current, message, kind });
+  const showFeedback = (text: string, status: "error" | "success") => {
+    setFeedback(createActionFeedback(text, status));
   };
   const refresh = async () => {
     pageNavigationSequenceRef.current += 1;
@@ -123,7 +125,7 @@ export function ImageAdmin() {
     setView(next);
     setCursorHistory([""]);
     setSelected([]);
-    setToast(null);
+    setFeedback(null);
 
     setSearchParams(next === "ready" ? {} : { view: next }, { replace: true });
   };
@@ -135,7 +137,7 @@ export function ImageAdmin() {
     const targetCursor = targetHistory.at(-1) ?? "";
     const requestSequence = ++pageNavigationSequenceRef.current;
     setPageNavigation(direction);
-    setToast(null);
+    setFeedback(null);
 
     try {
       // 当前页及页码保持不动；目标页完整返回并进入查询缓存后，再一次性提交游标。
@@ -145,7 +147,7 @@ export function ImageAdmin() {
       setCursorHistory(targetHistory);
     } catch (error) {
       if (requestSequence === pageNavigationSequenceRef.current) {
-        showToast(`页面加载失败：${errorMessage(error)}`, "error");
+        showFeedback(`页面加载失败：${errorMessage(error)}`, "error");
       }
     } finally {
       if (requestSequence === pageNavigationSequenceRef.current) {
@@ -180,14 +182,14 @@ export function ImageAdmin() {
   const runRowAction = async (item: ImageItem, action: "delete" | "restore") => {
     if (operationBusy) return;
     setBusyIds([item.id]);
-    setToast(null);
+    setFeedback(null);
     setOperationText(action === "delete" ? "正在删除图片…" : "正在恢复图片…");
     try {
       await api(`${adminApiBasePath}/images/${item.id}/${action}`, { method: "POST" });
       await refresh();
-      showToast(action === "delete" ? "图片已移入回收站" : "图片已恢复", "success");
+      showFeedback(action === "delete" ? "图片已移入回收站" : "图片已恢复", "success");
     } catch (error) {
-      showToast(`操作失败：${errorMessage(error)}`, "error");
+      showFeedback(`操作失败：${errorMessage(error)}`, "error");
     } finally {
       setOperationText("");
       setBusyIds([]);
@@ -202,7 +204,7 @@ export function ImageAdmin() {
         : [confirmAction.id];
     setActionBusy(true);
     setBusyIds(affectedIds);
-    setToast(null);
+    setFeedback(null);
     setOperationText(
       confirmAction.kind === "batch-delete"
         ? `正在批量删除 ${confirmAction.ids.length} 张图片…`
@@ -213,20 +215,20 @@ export function ImageAdmin() {
     try {
       if (confirmAction.kind === "batch-delete") {
         const result = await api<{ deleted: number; ignored: number }>(`${adminApiBasePath}/images/batch-delete`, { method: "POST", body: JSON.stringify({ ids: confirmAction.ids }) });
-        showToast(`已删除 ${result.deleted} 张，忽略 ${result.ignored} 张`, result.ignored ? "error" : "success");
+        showFeedback(`已删除 ${result.deleted} 张，忽略 ${result.ignored} 张`, result.ignored ? "error" : "success");
       } else if (confirmAction.kind === "empty-trash") {
         const result = await api<{ deleted: number; failed: number }>(`${adminApiBasePath}/images/empty-trash`, { method: "POST" });
-        showToast(
+        showFeedback(
           `已永久删除 ${result.deleted} 张图片${result.failed ? `，${result.failed} 张存储删除失败并保留在回收站` : ""}`,
           result.failed ? "error" : "success"
         );
       } else {
         await api(`${adminApiBasePath}/images/${confirmAction.id}/purge`, { method: "POST" });
-        showToast(`已永久删除 ${confirmAction.title}`, "success");
+        showFeedback(`已永久删除 ${confirmAction.title}`, "success");
       }
       await refresh();
     } catch (error) {
-      showToast(`操作失败：${errorMessage(error)}`, "error");
+      showFeedback(`操作失败：${errorMessage(error)}`, "error");
     } finally {
       setActionBusy(false);
       setOperationText("");
@@ -242,7 +244,7 @@ export function ImageAdmin() {
     if (!total) return;
     setActionBusy(true);
     setBusyIds(ids);
-    setToast(null);
+    setFeedback(null);
     setOperationText(`恢复中… 0 / ${total} 张`);
     let restored = 0;
     let ignored = 0;
@@ -257,12 +259,12 @@ export function ImageAdmin() {
         ignored += result.ignored;
         setOperationText(`恢复中… ${Math.min(start + chunk.length, total)} / ${total} 张`);
       }
-      showToast(
+      showFeedback(
         `已恢复 ${restored} 张，忽略 ${ignored} 张`,
         ignored ? "error" : "success"
       );
     } catch (error) {
-      showToast(`批量恢复失败：${errorMessage(error)}（已恢复 ${restored} 张）`, "error");
+      showFeedback(`批量恢复失败：${errorMessage(error)}（已恢复 ${restored} 张）`, "error");
     } finally {
       await refresh().catch(() => undefined);
       setActionBusy(false);
@@ -452,12 +454,11 @@ export function ImageAdmin() {
           onConfirm={runConfirmedAction}
         />
       )}
-      {toast && (
-        <PageToast
-          key={toast.id}
-          message={toast.message}
-          kind={toast.kind}
-          onClose={() => setToast(null)}
+      {feedback && (
+        <ActionFeedback
+          feedback={feedback}
+          placement="floating"
+          onClose={() => setFeedback(null)}
         />
       )}
     </section>

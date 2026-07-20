@@ -9,6 +9,14 @@ import { verifyPassword } from "./password.ts";
 import { rehashPasswordIfNeeded } from "../users/password-upgrade.ts";
 
 const loginGlobalKey = "imageshow:login_fail_global";
+export const cspReportPath = "/api/security/csp-report";
+const cspReportGroup = "imageshow-csp";
+const trustedTypePolicyNames = [
+  "imageshow-altcha-worker",
+  "svelte-trusted-html",
+  "decodeHTMLEntitiesPolicy",
+  "AGPolicy"
+].join(" ");
 
 export const securityHeaders: Record<string, string> = {
   "X-Content-Type-Options": "nosniff",
@@ -21,7 +29,8 @@ export const securityHeaders: Record<string, string> = {
 export const spaDocumentHeaders: Record<string, string> = {
   ...securityHeaders,
   "Content-Security-Policy": "script-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
-  "Content-Security-Policy-Report-Only": "require-trusted-types-for 'script'; trusted-types imageshow-altcha-worker svelte-trusted-html"
+  "Content-Security-Policy-Report-Only": `require-trusted-types-for 'script'; trusted-types ${trustedTypePolicyNames}; report-to ${cspReportGroup}; report-uri ${cspReportPath}`,
+  "Reporting-Endpoints": `${cspReportGroup}="${cspReportPath}"`
 };
 
 export const noStoreCacheControl = "no-store";

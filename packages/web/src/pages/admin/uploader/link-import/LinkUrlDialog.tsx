@@ -264,9 +264,9 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
         </div>
         <p className="hint link-input-hint">
           {inputMode === "jsonl"
-            ? `每行一个 JSON，最多 ${maxItems} 条；行内字段优先于当前默认属性，创建任务后可批量修改。`
+            ? `每行一个 JSON，最多 ${maxItems} 条；行内字段优先于当前默认属性。`
             : inputMode === "weibo"
-              ? `每行一条公开微博链接，最多 ${weiboMaxItems} 条；默认使用微博元数据，创建任务后可批量修改。`
+              ? `每行一条公开微博链接，最多 ${weiboMaxItems} 条；默认使用微博元数据。`
               : `每行一个 URL，最多 ${maxItems} 条；缺省元数据项使用当前默认属性。`}
         </p>
         <div className={`link-import-input-region${resultSummary ? " has-result-summary" : ""}`}>
@@ -289,7 +289,7 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
           )}
         </div>
         {(parseError || limitState.overLimit) && (
-          <p className="form-error">
+          <p className="form-error" role="alert" title={parseError || undefined}>
             {parseError || `已输入 ${limitState.count} 条，最多允许 ${limitState.maxItems} 条，请拆分后再导入`}
           </p>
         )}

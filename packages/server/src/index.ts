@@ -31,6 +31,7 @@ import { registerPublicRoutes } from "./routes/public.ts";
 import { serveRobotsTxt } from "./routes/robots.ts";
 import { handleRandomImage, handleThemeHostRandom, registerRandomRoutes } from "./routes/random.ts";
 import { registerSettingsRoutes } from "./routes/settings.ts";
+import { registerSecurityReportRoutes } from "./routes/security-reports.ts";
 import { registerStorageRoutes } from "./routes/storage.ts";
 import { registerSpaRoutes } from "./routes/spa.ts";
 import { registerImportRoutes } from "./routes/imports.ts";
@@ -114,6 +115,7 @@ registerHealthRoutes(app);
 registerPublicRoutes(app);
 registerRandomRoutes(app);
 registerPublicAuthRoutes(app);
+registerSecurityReportRoutes(app);
 
 app.use(`${adminApiBasePath}/*`, requireAuth);
 app.use(`${adminApiBasePath}/*`, auditAdminMutation);

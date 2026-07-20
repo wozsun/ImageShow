@@ -11,18 +11,18 @@ import { galleryOrderSelectOptions } from "../../lib/ui/select-options.js";
 import { errorMessage } from "../../lib/ui/formatters.js";
 import type { AdminSettings, SiteSettings } from "../../lib/types.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
-import { ActionFeedback, type ActionFeedbackState } from "../../components/feedback/ActionFeedback.js";
+import {
+  ActionFeedback,
+  createActionFeedback,
+  type ActionFeedbackState
+} from "../../components/feedback/ActionFeedback.js";
 import { invalidateRuntimeData } from "../../lib/api/query-invalidation.js";
-
-type ApplicationSettingsFeedbackState = ActionFeedbackState & {
-  scope: "application";
-};
 
 export function SettingsPage() {
   const query = useQuery<{ settings: AdminSettings }>({ queryKey: queryKeys.settings, queryFn: () => api(`${adminApiBasePath}/settings`) });
   const client = useQueryClient();
   const [settings, setSettings] = useState<AdminSettings | null>(null);
-  const [feedback, setFeedback] = useState<ApplicationSettingsFeedbackState | null>(null);
+  const [feedback, setFeedback] = useState<ActionFeedbackState | null>(null);
   const [action, setAction] = useState<"" | "save-application" | "reload">("");
   const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -42,7 +42,7 @@ export function SettingsPage() {
   const saveApplication = async () => {
     if (action) return;
     setAction("save-application");
-    setFeedback({ scope: "application", text: "正在保存应用配置...", status: "pending" });
+    setFeedback(createActionFeedback("正在保存应用配置...", "pending"));
     try {
       const site = settings.site.home.enabled ? settings.site : { ...settings.site, root_redirect: "gallery" as const };
       await api(`${adminApiBasePath}/settings`, {
@@ -63,12 +63,12 @@ export function SettingsPage() {
           image_detail: settings.image_detail
         })
       });
-      setFeedback({ scope: "application", text: "应用配置已保存", status: "success" });
+      setFeedback(createActionFeedback("应用配置已保存", "success"));
       // 统一失效已包含 settings 和 site-config；活动查询会在这里完成一次刷新，避免先
       // refetch settings、随后又因 invalidate 重复请求。
       await invalidateRuntimeData(client);
     } catch (error) {
-      setFeedback({ scope: "application", text: `保存失败：${errorMessage(error)}`, status: "error" });
+      setFeedback(createActionFeedback(`保存失败：${errorMessage(error)}`, "error"));
     } finally {
       setAction("");
     }
@@ -76,13 +76,13 @@ export function SettingsPage() {
   const reloadConfig = async () => {
     if (action) return;
     setAction("reload");
-    setFeedback({ scope: "application", text: "正在读取配置文件...", status: "pending" });
+    setFeedback(createActionFeedback("正在读取配置文件...", "pending"));
     try {
       await api(`${adminApiBasePath}/settings/reload`, { method: "POST" });
       await invalidateRuntimeData(client);
-      setFeedback({ scope: "application", text: "已读取并应用最新配置文件", status: "success" });
+      setFeedback(createActionFeedback("已读取并应用最新配置文件", "success"));
     } catch (error) {
-      setFeedback({ scope: "application", text: `读取失败：${errorMessage(error)}`, status: "error" });
+      setFeedback(createActionFeedback(`读取失败：${errorMessage(error)}`, "error"));
     } finally {
       setAction("");
     }
@@ -107,7 +107,6 @@ export function SettingsPage() {
           <p>站点信息与应用参数</p>
         </div>
         <div className="settings-head-actions">
-          {feedback?.scope === "application" && <ActionFeedback feedback={feedback} inline />}
           <button
             type="button"
             className="settings-config-button"
@@ -401,6 +400,9 @@ export function SettingsPage() {
         </div>
       </div>
       <OverlayScrollbar targetRef={scrollRef} pageEdge />
+      {feedback && (
+        <ActionFeedback feedback={feedback} placement="floating" onClose={() => setFeedback(null)} />
+      )}
     </section>
   );
 }

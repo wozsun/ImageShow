@@ -8,7 +8,6 @@
 }
 .advanced-config-page { display: flex; flex-direction: column; overflow: hidden; }
 .advanced-config-page > .workspace-head { flex: 0 0 auto; }
-.advanced-config-page > .action-feedback { margin: 0 0 12px; }
 .advanced-config-head-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-left: auto; }
 .advanced-config-editor {
   display: grid;
@@ -21,9 +20,25 @@
   border-radius: 8px;
   background: #fff;
 }
-.advanced-config-editor-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.advanced-config-editor-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 12px;
+}
+.advanced-config-editor-head > div:first-child { flex: 1 1 auto; min-width: 0; }
 .advanced-config-editor-head h2,
 .advanced-config-editor-head p { margin: 0; }
+.advanced-config-editor-head-status {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: min(460px, 50%);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.advanced-config-editor-head-status .action-feedback { flex: 1 1 auto; }
 .advanced-config-dirty { flex: 0 0 auto; padding: 3px 9px; border-radius: 999px; background: #fff3cd; color: #795d1d; font-size: 12px; font-weight: 700; }
 .advanced-config-code-editor {
   position: relative;
@@ -57,7 +72,6 @@
 .advanced-config-code-editor .cm-activeLineGutter { background: rgba(110, 118, 129, .12); }
 .advanced-config-editor-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .advanced-config-editor-actions { display: flex; align-items: center; gap: 8px; }
-.advanced-config-editor-footer .action-feedback.is-inline { height: 38px; }
 
 @media (min-width: 761px) {
   .admin:has(> .advanced-config-page) {
@@ -77,6 +91,7 @@
 .advanced-config-file-input { display: none; }
 .config-package-dialog form { width: min(900px, 100%); max-height: min(820px, 92vh); display: flex; flex-direction: column; overflow: hidden; }
 .config-package-dialog .operation-body { display: grid; gap: 12px; overflow-y: auto; }
+.config-package-dialog .operation-body > .action-feedback { justify-self: end; width: min(460px, 100%); }
 .advanced-config-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 0; }
 .advanced-config-summary div { min-width: 0; padding: 10px 12px; border-radius: 8px; background: #f5f7fa; }
 .advanced-config-summary dt { color: #66717f; font-size: 12px; }
@@ -164,7 +179,14 @@
   height: 16px;
   padding: 0;
 }
-.storage-test-button { min-width: 154px; }
+.storage-test-button {
+  width: 154px;
+  flex: 0 0 154px;
+  transition: color .16s ease, background-color .16s ease, border-color .16s ease;
+}
+.storage-test-button.is-testing { color: #285c93; background: #eef5ff; border-color: #a9c9ef; }
+.storage-test-button.is-success { color: #245236; background: #eaf8ee; border-color: #9fd3ad; }
+.storage-test-button.is-error { color: #8a2d24; background: #fff2f0; border-color: #de8b83; }
 .storage-default-note { display: flex; align-items: center; gap: 8px; margin: 0 0 14px; font-size: 14px; font-weight: 600; color: #20242a; }
 .storage-default-note strong { padding: 2px 10px; border-radius: 999px; background: #e8f1ff; color: #1f6feb; font-weight: 700; }
 
@@ -206,16 +228,6 @@
 .edit-modal form.storage-edit-modal { display: flex; flex-direction: column; overflow: hidden; }
 .storage-edit-modal .operation-body { display: flex; flex-direction: column; gap: 10px; flex: 1; min-height: 0; overflow: auto; }
 .storage-modal-left { display: flex; gap: 8px; margin-right: auto; }
-
-.storage-modal-header-right { display: flex; align-items: center; gap: 10px; }
-.storage-saved-pill { display: inline-flex; align-items: center; gap: 4px; color: #0f7b55; font-size: 13px; font-weight: 600; white-space: nowrap; }
-/*保存进行中的同位 pill：与「保存成功」同处（close 按钮左侧），用中性灰 + 旋转图标，与绿色成功态区分。*/
-.storage-saved-pill.is-pending { color: #66717f; }
-.storage-saved-pill.is-pending .app-icon { animation: storage-pill-spin .8s linear infinite; }
-@keyframes storage-pill-spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) {
-  .storage-saved-pill.is-pending .app-icon { animation: none; }
-}
 
 .storage-edit-modal footer { flex-wrap: wrap; row-gap: 10px; }
 .storage-edit-modal footer button { white-space: nowrap; }

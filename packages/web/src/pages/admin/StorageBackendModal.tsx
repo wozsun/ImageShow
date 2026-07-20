@@ -1,11 +1,10 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Icon } from "../../components/icon/Icon.js";
 import { SelectMenu } from "../../components/form/SelectMenu.js";
 import { useAnimatedClose } from "../../hooks/useAnimatedClose.js";
 import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
 import { storageBackendDisplay, storageTypeLabel } from "../../lib/ui/select-options.js";
 import type { S3Settings, StorageBackendAdmin, StorageType, WebdavSettings } from "../../lib/types.js";
-import { ActionFeedback, type ActionFeedbackState } from "../../components/feedback/ActionFeedback.js";
 
 const emptyS3: S3Settings = {
   endpoint: "", region: "auto", bucket: "", access_key_id: "",
@@ -22,14 +21,24 @@ const storageTypeOptions = [
   { value: "webdav", label: "WebDAV" }
 ];
 
-export function StorageBackendModal({ target, busy, feedback, onClose, onSave, onSetDefault, onTest }: {
+type StorageTestState = "idle" | "testing" | "success" | "error";
+
+const storageTestPresentation: Record<StorageTestState, { icon: "flask-line" | "check-line" | "close-line"; label: string }> = {
+  idle: { icon: "flask-line", label: "连接测试" },
+  testing: { icon: "flask-line", label: "测试中" },
+  success: { icon: "check-line", label: "连接成功" },
+  error: { icon: "close-line", label: "连接失败" }
+};
+
+const storageTestResultDurationMs = 3_000;
+
+export function StorageBackendModal({ target, busy, onClose, onSave, onSetDefault, onTest }: {
   target: StorageBackendAdmin | "new";
   busy: string;
-  feedback: ActionFeedbackState | null;
   onClose: () => void;
   onSave: (slug: string, payload: Record<string, unknown>, isCreate: boolean) => Promise<boolean>;
   onSetDefault: (slug: string) => Promise<boolean>;
-  onTest: (body: unknown) => void;
+  onTest: (body: unknown) => Promise<boolean>;
 }) {
   const creating = target === "new";
   const backend = creating ? null : target;
@@ -53,18 +62,17 @@ export function StorageBackendModal({ target, busy, feedback, onClose, onSave, o
   const exit = useAnimatedClose(onClose);
   const bodyRef = useRef<HTMLDivElement | null>(null);
 
-  const [lastAction, setLastAction] = useState<"save" | "default" | "test" | null>(null);
   const [isDefaultNow, setIsDefaultNow] = useState(backend?.is_default ?? false);
 
   const [createdSlug, setCreatedSlug] = useState<string | null>(null);
-  const savedOk = lastAction === "save" && feedback?.status === "success";
-  // 保存进行中也展示在 header pill（与「保存成功」同处），不再落到卡片下方的 body。
-  const saving = lastAction === "save" && feedback?.status === "pending";
+  const [testState, setTestState] = useState<StorageTestState>("idle");
+  const testResetTimer = useRef<number | undefined>(undefined);
+
+  useEffect(() => () => window.clearTimeout(testResetTimer.current), []);
 
   const isCreateForm = creating && createdSlug === null;
-  const configPayload = () => (isWebdav ? { webdav } : { s3 });
+  const configPayload = () => isLocal ? {} : isWebdav ? { webdav } : { s3 };
   const submit = async () => {
-    setLastAction("save");
     if (isCreateForm) {
       const ok = await onSave(slug, { slug, display_name: displayName, type: effectiveType, ...configPayload() }, true);
       if (ok) setCreatedSlug(slug);
@@ -74,7 +82,23 @@ export function StorageBackendModal({ target, busy, feedback, onClose, onSave, o
     const editSlug = createdSlug ?? backend!.slug;
     await onSave(editSlug, { display_name: displayName, ...(isLocal ? {} : configPayload()) }, false);
   };
-  const testBody = () => (creating ? { type: effectiveType, ...configPayload() } : { slug: backend!.slug });
+  const testBody = () => ({
+    ...(createdSlug || backend?.slug ? { slug: createdSlug ?? backend!.slug } : {}),
+    type: effectiveType,
+    ...configPayload()
+  });
+  const runConnectionTest = async () => {
+    window.clearTimeout(testResetTimer.current);
+    setTestState("testing");
+    const successful = await onTest(testBody());
+    setTestState(successful ? "success" : "error");
+    testResetTimer.current = window.setTimeout(() => setTestState("idle"), storageTestResultDurationMs);
+  };
+  const setAsDefault = async () => {
+    const ok = await onSetDefault(backend!.slug);
+    if (ok) setIsDefaultNow(true);
+  };
+
   return (
     <div
       className={`modal edit-modal ${exit.closing ? "is-closing" : ""}`}
@@ -89,19 +113,15 @@ export function StorageBackendModal({ target, busy, feedback, onClose, onSave, o
             <h2>{isCreateForm ? "新增存储后端" : `编辑：${storageBackendDisplay(backend ?? { slug: createdSlug!, display_name: displayName })}`}</h2>
             {!isCreateForm && <p>{createdSlug ?? backend!.slug} · {storageTypeLabel(effectiveType)}</p>}
           </div>
-          <div className="storage-modal-header-right">
-            {saving && <span className="storage-saved-pill is-pending"><Icon name="refresh-line" />正在保存…</span>}
-            {savedOk && <span className="storage-saved-pill"><Icon name="check-line" />保存成功</span>}
-            <button
-              className="icon close pressable"
-              type="button"
-              title="关闭"
-              disabled={Boolean(busy)}
-              onClick={() => exit.requestClose()}
-            >
-              <Icon name="close-line" />
-            </button>
-          </div>
+          <button
+            className="icon close pressable"
+            type="button"
+            title="关闭"
+            disabled={Boolean(busy)}
+            onClick={() => exit.requestClose()}
+          >
+            <Icon name="close-line" />
+          </button>
         </header>
         <div className="operation-body" ref={bodyRef}>
           {creating && (
@@ -143,28 +163,25 @@ export function StorageBackendModal({ target, busy, feedback, onClose, onSave, o
                 : <S3Fields value={s3} onChange={setS3} configured={backend?.type === "s3" ? backend.s3.secret_access_key_configured : undefined} />}
             </>
           )}
-          {/* 保存中 / 保存成功 都改由 header pill 展示；body 这里只保留连接测试结果与各类错误（含保存失败）。 */}
-          {feedback
-            && !(lastAction === "save" && feedback.status !== "error")
-            && !(lastAction === "default" && feedback.status === "success")
-            && <ActionFeedback feedback={feedback} />}
         </div>
         <OverlayScrollbar targetRef={bodyRef} />
         <footer>
           <div className="storage-modal-left">
             <button
               type="button"
-              className="storage-test-button"
+              className={`storage-test-button is-${testState}`}
               disabled={Boolean(busy)}
-              onClick={() => { setLastAction("test"); onTest(testBody()); }}
+              title={storageTestPresentation[testState].label}
+              onClick={() => void runConnectionTest()}
             >
-              <Icon name="flask-line" />连接测试
+              <Icon name={storageTestPresentation[testState].icon} />
+              <span aria-live="polite">{storageTestPresentation[testState].label}</span>
             </button>
             {!creating && backend!.enabled && (
               <button
                 type="button"
                 disabled={Boolean(busy) || isDefaultNow}
-                onClick={() => { setLastAction("default"); void onSetDefault(backend!.slug).then((ok) => { if (ok) setIsDefaultNow(true); }); }}
+                onClick={() => void setAsDefault()}
               >
                 {isDefaultNow ? "已是默认" : "设为默认"}
               </button>

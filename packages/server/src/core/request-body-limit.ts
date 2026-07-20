@@ -1,6 +1,6 @@
 import { adminApiBasePath, appConfig } from "@imageshow/shared";
 import type { Context, Next } from "hono";
-import { routeError } from "./http.ts";
+import { cspReportPath, routeError } from "./http.ts";
 
 const standardApiBodyMaxBytes = 128 * 1024;
 const jsonlManifestBodyMaxBytes = appConfig.imports.jsonlManifestMaxBytes;
@@ -105,6 +105,11 @@ export const limitBatchImageUpdateBody = measuredBodyLimit(batchImageUpdateBodyM
 
 export function limitApiRequestBody(c: Context, next: Next) {
   const path = new URL(c.req.url).pathname;
+  if (path === cspReportPath) {
+    // 浏览器报告端点默认只用于满足 Reporting API 的投递要求；路由不会
+    // 消费正文，因此这里也跳过分块请求的预读和重建，保持固定开销。
+    return next();
+  }
   if (
     path === jsonlManifestPath
     || path === weiboImportPath

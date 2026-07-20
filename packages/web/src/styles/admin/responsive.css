@@ -24,6 +24,7 @@
   width: 100%;
   min-width: 0;
 }
+.login-challenge-slot { position: relative; min-height: 40px; }
 .login-altcha {
   /* ALTCHA 上游样式使用 light-dark()。这里显式设置登录页配色，避免构建器转换后的
      颜色变量在不支持的环境中失效，同时把标准组件收成与表单一致的扁平验证条。 */
@@ -78,6 +79,10 @@
   transform: translateY(-50%);
 }
 .login-challenge-retry {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
   min-height: 38px;
   border: 1px solid #d92d20;
   border-radius: 6px;
@@ -383,9 +388,14 @@
   .advanced-config-ready { justify-self: start; }
   .advanced-config-head-actions { display: grid; grid-template-columns: 1fr 1fr; margin-left: 0; }
   .advanced-config-head-actions button { min-width: 0; }
-  .advanced-config-editor-head,
+  .advanced-config-editor-head {
+    display: block;
+  }
+  .advanced-config-editor-head-status {
+    max-width: none;
+    margin-top: 8px;
+  }
   .advanced-config-editor-footer { align-items: stretch; flex-direction: column; }
-  .advanced-config-editor-footer .action-feedback.is-inline { flex-basis: auto; }
   .advanced-config-editor-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .advanced-config-editor-actions .button { grid-column: 1 / -1; }
   /* iOS 动态工具栏压缩可见区域或反馈条出现时，由编辑区让出高度并保持内部滚动；

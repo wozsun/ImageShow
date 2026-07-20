@@ -32,13 +32,17 @@ function saveConfirmationDescription(changes: RuntimeConfigChangeSummary) {
   return messages.join(" ").trim();
 }
 
-export function RuntimeConfigEditor({ reloadToken }: { reloadToken: number }) {
+export function RuntimeConfigEditor({ reloadToken, feedback, onFeedback, onFeedbackClose }: {
+  reloadToken: number;
+  feedback: ActionFeedbackState | null;
+  onFeedback: (message: string, status: ActionFeedbackState["status"]) => void;
+  onFeedbackClose: () => void;
+}) {
   const client = useQueryClient();
   const editorScrollRef = useRef<HTMLElement | null>(null);
   const [text, setText] = useState("");
   const [baseline, setBaseline] = useState("");
   const [action, setAction] = useState<"" | "load" | "validate" | "save">("load");
-  const [feedback, setFeedback] = useState<ActionFeedbackState | null>(null);
   const [confirmation, setConfirmation] = useState<"" | "reload" | "save">("");
   const [candidate, setCandidate] = useState<RuntimeConfig | null>(null);
   const [changes, setChanges] = useState<RuntimeConfigChangeSummary | null>(null);
@@ -52,15 +56,15 @@ export function RuntimeConfigEditor({ reloadToken }: { reloadToken: number }) {
 
   const loadConfig = async (showFeedback: boolean) => {
     setAction("load");
-    if (showFeedback) setFeedback({ text: "正在重新读取完整配置…", status: "pending" });
+    if (showFeedback) onFeedback("正在重新读取完整配置…", "pending");
     try {
       const response = await api<RuntimeConfigResponse>(`${adminApiBasePath}/advanced-config/runtime`);
       const formatted = formatConfig(response.config);
       setText(formatted);
       setBaseline(formatted);
-      if (showFeedback) setFeedback({ text: "已重新读取当前配置", status: "success" });
+      if (showFeedback) onFeedback("已重新读取当前配置", "success");
     } catch (error) {
-      setFeedback({ text: `读取失败：${errorMessage(error)}`, status: "error" });
+      onFeedback(`读取失败：${errorMessage(error)}`, "error");
     } finally {
       setAction("");
     }
@@ -73,9 +77,9 @@ export function RuntimeConfigEditor({ reloadToken }: { reloadToken: number }) {
   const formatEditor = () => {
     try {
       setText(formatConfig(JSON.parse(text) as unknown));
-      setFeedback({ text: "JSON 已格式化", status: "success" });
+      onFeedback("JSON 已格式化", "success");
     } catch (error) {
-      setFeedback({ text: `JSON 语法错误：${errorMessage(error)}`, status: "error" });
+      onFeedback(`JSON 语法错误：${errorMessage(error)}`, "error");
     }
   };
 
@@ -89,12 +93,12 @@ export function RuntimeConfigEditor({ reloadToken }: { reloadToken: number }) {
     try {
       parsed = JSON.parse(text) as RuntimeConfig;
     } catch (error) {
-      setFeedback({ text: `JSON 语法错误：${errorMessage(error)}`, status: "error" });
+      onFeedback(`JSON 语法错误：${errorMessage(error)}`, "error");
       return;
     }
 
     setAction("validate");
-    setFeedback({ text: "正在校验完整配置…", status: "pending" });
+    onFeedback("正在校验完整配置…", "pending");
     try {
       const response = await api<{ changes: RuntimeConfigChangeSummary }>(
         `${adminApiBasePath}/advanced-config/runtime/validate`,
@@ -103,9 +107,9 @@ export function RuntimeConfigEditor({ reloadToken }: { reloadToken: number }) {
       setCandidate(parsed);
       setChanges(response.changes);
       setConfirmation("save");
-      setFeedback({ text: "配置校验通过，请确认保存", status: "success" });
+      onFeedback("配置校验通过，请确认保存", "info");
     } catch (error) {
-      setFeedback({ text: `配置校验失败：${errorMessage(error)}`, status: "error" });
+      onFeedback(`配置校验失败：${errorMessage(error)}`, "error");
     } finally {
       setAction("");
     }
@@ -114,7 +118,7 @@ export function RuntimeConfigEditor({ reloadToken }: { reloadToken: number }) {
   const saveConfig = async () => {
     if (!candidate) return;
     setAction("save");
-    setFeedback({ text: "正在保存完整配置…", status: "pending" });
+    onFeedback("正在保存完整配置…", "pending");
     try {
       const response = await api<Required<RuntimeConfigResponse>>(
         `${adminApiBasePath}/advanced-config/runtime`,
@@ -124,12 +128,9 @@ export function RuntimeConfigEditor({ reloadToken }: { reloadToken: number }) {
       setText(formatted);
       setBaseline(formatted);
       await invalidateRuntimeData(client);
-      setFeedback({
-        text: "完整配置已保存并应用",
-        status: "success"
-      });
+      onFeedback("完整配置已保存并应用", "success");
     } catch (error) {
-      setFeedback({ text: `保存失败：${errorMessage(error)}`, status: "error" });
+      onFeedback(`保存失败：${errorMessage(error)}`, "error");
     } finally {
       setAction("");
       setCandidate(null);
@@ -151,7 +152,14 @@ export function RuntimeConfigEditor({ reloadToken }: { reloadToken: number }) {
           <h2><Icon name="settings-3-line" />完整 config.json</h2>
           <p className="hint">精准编辑当前实例的全部运行时配置，缺少字段或多余字段均会拒绝保存。</p>
         </div>
-        {isDirty && <span className="advanced-config-dirty">未保存</span>}
+        {(feedback || isDirty) && (
+          <div className="advanced-config-editor-head-status">
+            {feedback && (
+              <ActionFeedback feedback={feedback} placement="inline" onClose={onFeedbackClose} />
+            )}
+            {isDirty && <span className="advanced-config-dirty">未保存</span>}
+          </div>
+        )}
       </div>
       <div className="advanced-config-code-editor">
         <CodeMirror
@@ -187,7 +195,6 @@ export function RuntimeConfigEditor({ reloadToken }: { reloadToken: number }) {
             <Icon name="save-3-line" />{action === "validate" ? "正在校验…" : "保存配置"}
           </button>
         </div>
-        {feedback && <ActionFeedback feedback={feedback} inline />}
       </div>
 
       {confirmation === "reload" && (

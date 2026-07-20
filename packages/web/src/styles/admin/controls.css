@@ -17,25 +17,83 @@
 .workflow-submit-button { min-width: calc(4em + 26px); }
 
 .action-feedback {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  overflow: hidden;
   margin: 12px 0 0;
   padding: 12px 14px;
-  border: 1px solid #cfe0fb;
+  border: 1px solid;
   border-radius: 8px;
-  color: #29415f;
-  background: #eef5ff;
+  background: var(--action-feedback-background);
   animation: surface-in .18s ease-out;
 }
-.action-feedback.ok {
-  color: #245236;
-  background: #f2fbf5;
-  border-color: #b9dec4;
+
+.action-feedback-info {
+  --action-feedback-background: #fff8df;
+  --action-feedback-progress: #f7e7ae;
+  color: #725700;
+  border-color: #e5cf82;
 }
-.action-feedback.error {
-  color: #8a2d24;
-  background: #fff6f4;
-  border-color: #de8b83;
+
+.action-feedback-pending {
+  --action-feedback-background: #eef5ff;
+  --action-feedback-progress: #d3e4ff;
+  color: #294f78;
+  border-color: #bdd5f5;
 }
-.action-feedback pre {
+
+.action-feedback-success {
+  --action-feedback-background: #e8f7ee;
+  --action-feedback-progress: #ccebd7;
+  color: #1b6f40;
+  border-color: #adddbf;
+}
+
+.action-feedback-error {
+  --action-feedback-background: #fdecec;
+  --action-feedback-progress: #f7cece;
+  color: #a42b23;
+  border-color: #ebb0b0;
+}
+
+.action-feedback-progress {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: var(--action-feedback-progress);
+  transform-origin: left center;
+}
+
+.action-feedback-progress.is-timed {
+  transform: scaleX(0);
+  animation: action-feedback-countdown var(--action-feedback-duration) linear forwards;
+}
+
+.action-feedback-progress.is-pending {
+  right: auto;
+  width: 42%;
+  transform: translateX(-110%);
+  animation: action-feedback-pending 1.4s ease-in-out infinite;
+}
+
+.action-feedback:hover .action-feedback-progress,
+.action-feedback:focus-within .action-feedback-progress {
+  animation-play-state: paused;
+}
+
+.action-feedback-content {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 auto;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.action-feedback-content pre {
   margin: 0;
   max-height: 280px;
   border: 0;
@@ -44,37 +102,38 @@
 }
 .action-feedback.is-inline {
   margin: 0;
-  padding: 7px 12px;
+  height: 38px;
+  padding: 7px 8px 7px 12px;
   min-width: 0;
-  max-width: 420px;
+  max-width: 460px;
+  align-items: center;
+}
+
+.action-feedback.is-inline .action-feedback-content {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  animation: none;
 }
-/*表单字段校验提示（slug 非法、密码不符合策略等）。*/
-.field-error { margin: 0; color: #d64545; font-size: 13px; }
 
-.page-toast {
+.action-feedback.is-floating {
   position: fixed;
   top: 16px;
-  right: 16px;
+  right: max(16px, env(safe-area-inset-right));
   z-index: 200;
+  pointer-events: auto;
+  margin: 0;
   max-width: min(380px, calc(100vw - 32px));
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 12px 14px;
-  border-radius: 10px;
+  gap: 8px;
+  padding: 8px 10px 8px 12px;
+  border-radius: 9px;
   box-shadow: 0 10px 30px rgba(20, 30, 44, .18);
   font-size: 14px;
-  line-height: 1.5;
-  animation: page-toast-in .18s ease-out;
+  line-height: 1.4;
 }
-.page-toast-error { background: #fdecec; border: 1px solid #f0b4b4; color: #b3261e; }
-.page-toast-success { background: #e8f7ee; border: 1px solid #b3e0c4; color: #1b7a43; }
-.page-toast-text { flex: 1 1 auto; min-width: 0; word-break: break-word; }
-.page-toast-close {
+
+.action-feedback-close {
+  position: relative;
+  z-index: 1;
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
@@ -91,8 +150,21 @@
   opacity: .65;
   cursor: pointer;
 }
-.page-toast-close:hover { opacity: 1; }
-@keyframes page-toast-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+
+.action-feedback-close:hover { opacity: 1; }
+
+@keyframes action-feedback-countdown {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@keyframes action-feedback-pending {
+  0% { transform: translateX(-110%); }
+  55%, 100% { transform: translateX(240%); }
+}
+
+/*表单字段校验提示（slug 非法、密码不符合策略等）。*/
+.field-error { margin: 0; color: #d64545; font-size: 13px; }
 
 .password-input { position: relative; width: 100%; min-width: 0; }
 .password-input input { width: 100%; padding-right: 38px; }

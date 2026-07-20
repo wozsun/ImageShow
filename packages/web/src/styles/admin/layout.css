@@ -166,6 +166,12 @@
 .segmented button { border: 0; border-radius: 0; }
 
 .image-admin-head-tools { display: flex; align-items: center; gap: 12px; }
+.image-admin-head > div:first-child p {
+  min-height: 20px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 @media (min-width: 761px) {
   .image-admin-head { align-items: center; }
 

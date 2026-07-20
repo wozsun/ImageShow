@@ -5,8 +5,12 @@ import { Icon } from "../../components/icon/Icon.js";
 import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
 import { AdminPagination } from "../../components/navigation/AdminPagination.js";
 import { ConfirmDialog } from "../../components/feedback/ConfirmDialog.js";
+import {
+  ActionFeedback,
+  createActionFeedback,
+  type ActionFeedbackState
+} from "../../components/feedback/ActionFeedback.js";
 import { EntityAdminCard } from "./EntityAdminCard.js";
-import { PageToast } from "../../components/feedback/PageToast.js";
 import {
   adminApiBasePath,
   adminImagePageLimit,
@@ -67,7 +71,7 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
   const [display, setDisplay] = useState("");
 
   const [link, setLink] = useState("");
-  const [error, setError] = useState("");
+  const [feedback, setFeedback] = useState<ActionFeedbackState | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<Entity | null>(null);
   const [confirmBatch, setConfirmBatch] = useState(false);
@@ -77,6 +81,9 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
   const [order, setOrder] = useState<Entity[]>([]);
   const dragSlug = useRef<string | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
+  const showError = (text: string) => {
+    setFeedback(text.trim() ? createActionFeedback(text, "error") : null);
+  };
 
   useEffect(() => { setOrder(data?.items ?? []); }, [data]);
 
@@ -98,7 +105,7 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
     const value = slug.trim().toLowerCase();
     if (!value || busy || slugInvalid) return;
     setBusy(true);
-    setError("");
+    setFeedback(null);
     try {
       const body = isAuthor ? { slug: value, display_name: display.trim(), link: link.trim() } : { slug: value, display_name: display.trim() };
       await api(`${adminApiBasePath}/${kind}`, { method: "POST", body: JSON.stringify(body) });
@@ -107,7 +114,7 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
       setLink("");
       refresh();
     } catch (err) {
-      setError(errorMessage(err));
+      showError(errorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -122,7 +129,7 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
       setSelected((current) => current.filter((s) => s !== confirmDelete.slug));
       refresh();
     } catch (err) {
-      setError(errorMessage(err));
+      showError(errorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -137,7 +144,7 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
       setSelected([]);
       refresh();
     } catch (err) {
-      setError(errorMessage(err));
+      showError(errorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -167,7 +174,7 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
       await api(`${adminApiBasePath}/${kind}/reorder`, { method: "POST", body: JSON.stringify({ slugs }) });
       refresh();
     } catch (err) {
-      setError(errorMessage(err));
+      showError(errorMessage(err));
       refresh();
     }
   };
@@ -221,7 +228,13 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
           <Icon name="delete-bin-6-line" />批量删除{selected.length ? `（${selected.length}）` : ""}
         </button>
       </form>
-      <PageToast message={error} onClose={() => setError("")} />
+      {feedback && (
+        <ActionFeedback
+          feedback={feedback}
+          placement="floating"
+          onClose={() => setFeedback(null)}
+        />
+      )}
       <div className="entity-admin-grid admin-scroll-region" ref={listRef}>
         {pageItems.map((item) => (
           <EntityAdminCard
@@ -233,7 +246,7 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
             onToggleSelect={(checked) => toggleSelect(item.slug, checked)}
             onChanged={refresh}
             onDelete={() => setConfirmDelete(item)}
-            onError={setError}
+            onError={showError}
             onDragStart={(s) => { dragSlug.current = s; }}
             onDragEnter={moveOver}
             onDragEnd={persistOrder}

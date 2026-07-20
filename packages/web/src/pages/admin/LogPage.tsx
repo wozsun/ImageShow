@@ -7,7 +7,11 @@ import { StableButtonLabel } from "../../components/data-display/StableButtonLab
 import { adminApiBasePath, queryKeys } from "../../lib/constants.js";
 import { errorMessage, formatBytes, formatDate } from "../../lib/ui/formatters.js";
 import type { SelectOption } from "../../lib/ui/select-options.js";
-import { ActionFeedback, type ActionFeedbackState } from "../../components/feedback/ActionFeedback.js";
+import {
+  ActionFeedback,
+  createActionFeedback,
+  type ActionFeedbackState
+} from "../../components/feedback/ActionFeedback.js";
 import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
 
 type LogLevel = "DEBUG" | "INFO" | "WARN" | "ERROR" | "OFF";
@@ -67,24 +71,29 @@ export function LogPage() {
   const effectiveFile = selectedFile || query.data?.selected || fileOptions[0]?.value || "app.log";
   const selectedSummary = query.data?.files.find((file) => file.name === effectiveFile);
   const loadError = query.error ? errorMessage(query.error) : "";
+  const visibleFeedback = feedback ?? (loadError ? {
+    id: query.errorUpdatedAt,
+    text: `读取失败：${loadError}`,
+    status: "error" as const
+  } : null);
 
   const changeLevel = async (nextLevel: string) => {
     if (savingLevel || nextLevel === level) return;
     const previousLevel = level;
     setLevel(nextLevel as LogLevel);
     setSavingLevel(true);
-    setFeedback({ text: "正在更新日志等级...", status: "pending" });
+    setFeedback(createActionFeedback("正在更新日志等级...", "pending"));
     try {
       const response = await api<{ level: LogLevel }>(`${adminApiBasePath}/logs/level`, {
         method: "POST",
         body: JSON.stringify({ level: nextLevel })
       });
       setLevel(response.level);
-      setFeedback({ text: `日志等级已切换为 ${response.level}`, status: "success" });
+      setFeedback(createActionFeedback(`日志等级已切换为 ${response.level}`, "success"));
       void query.refetch();
     } catch (error) {
       setLevel(previousLevel);
-      setFeedback({ text: `更新失败：${errorMessage(error)}`, status: "error" });
+      setFeedback(createActionFeedback(`更新失败：${errorMessage(error)}`, "error"));
     } finally {
       setSavingLevel(false);
     }
@@ -98,7 +107,6 @@ export function LogPage() {
           <p>查看应用日志，并实时调整写入等级</p>
         </div>
         <div className="log-head-actions">
-          {feedback && <ActionFeedback feedback={feedback} inline />}
           <label className="log-control">
             写入等级
             <SelectMenu
@@ -133,13 +141,19 @@ export function LogPage() {
           {query.data?.truncated && <span>已截取最近 {formatBytes(query.data.limit_bytes)}</span>}
         </div>
       </div>
-      {loadError && <ActionFeedback feedback={{ text: `读取失败：${loadError}`, status: "error" }} />}
       <div className="log-viewer-frame">
         <pre ref={logViewerRef} className={`log-viewer${query.data?.content ? "" : " is-empty"}`}>
           {query.data?.content || (query.isFetching ? "正在读取日志..." : "暂无日志")}
         </pre>
         <OverlayScrollbar targetRef={logViewerRef} tone="dark" />
       </div>
+      {visibleFeedback && (
+        <ActionFeedback
+          feedback={visibleFeedback}
+          placement="floating"
+          onClose={feedback ? () => setFeedback(null) : undefined}
+        />
+      )}
     </section>
   );
 }

@@ -10,7 +10,11 @@ import { adminApiBasePath, queryKeys, slugFormatHint, slugPattern } from "../../
 import { errorMessage } from "../../lib/ui/formatters.js";
 import { PasswordInput } from "../../components/form/PasswordInput.js";
 import { SlugChip } from "../../components/data-display/SlugChip.js";
-import { PageToast } from "../../components/feedback/PageToast.js";
+import {
+  ActionFeedback,
+  createActionFeedback,
+  type ActionFeedbackState
+} from "../../components/feedback/ActionFeedback.js";
 import { generateAdminPassword, isValidAdminPassword, passwordPolicyHint } from "../../lib/auth/password.js";
 import type { AdminUser } from "../../lib/types.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
@@ -23,13 +27,15 @@ export function UserAdmin() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
 
-  const [toast, setToast] = useState<{ message: string; kind: "error" | "success" }>({ message: "", kind: "error" });
+  const [feedback, setFeedback] = useState<ActionFeedbackState | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<AdminUser | null>(null);
   const [resetting, setResetting] = useState<AdminUser | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
-  const showError = (message: string) => setToast({ message, kind: "error" });
-  const clearToast = () => setToast((current) => ({ message: "", kind: current.kind }));
+  const showError = (text: string) => {
+    setFeedback(text.trim() ? createActionFeedback(text, "error") : null);
+  };
+  const clearFeedback = () => setFeedback(null);
 
   const usernameInvalid = username.length > 0 && !slugPattern.test(username);
   const usernameValid = username.trim().length > 0 && slugPattern.test(username.trim());
@@ -40,7 +46,7 @@ export function UserAdmin() {
     const name = username.trim();
     if (!usernameValid || !isValidAdminPassword(password) || busy) return;
     setBusy(true);
-    clearToast();
+    clearFeedback();
     try {
       await api(`${adminApiBasePath}/users`, { method: "POST", body: JSON.stringify({ username: name, password }) });
       setUsername("");
@@ -60,9 +66,12 @@ export function UserAdmin() {
     const name = username.trim();
     try {
       await navigator.clipboard.writeText(`用户名：${name}\n密码：${pwd}`);
-      setToast({ message: name ? "已生成随机密码，并复制用户名与密码" : "已生成随机密码并复制（用户名未填）", kind: "success" });
+      setFeedback(createActionFeedback(
+        name ? "已生成随机密码，并复制用户名与密码" : "已生成随机密码并复制（用户名未填）",
+        "success"
+      ));
     } catch {
-      setToast({ message: "已生成随机密码（自动复制失败，请手动复制）", kind: "error" });
+      setFeedback(createActionFeedback("已生成随机密码（自动复制失败，请手动复制）", "error"));
     }
   };
 
@@ -130,7 +139,13 @@ export function UserAdmin() {
           <Icon name="user-add-line" />新建图片管理员
         </button>
       </form>
-      <PageToast message={toast.message} kind={toast.kind} onClose={clearToast} />
+      {feedback && (
+        <ActionFeedback
+          feedback={feedback}
+          placement="floating"
+          onClose={clearFeedback}
+        />
+      )}
       <div className="entity-admin-grid admin-scroll-list" ref={listRef}>
         {users.map((user) => (
           <UserCard

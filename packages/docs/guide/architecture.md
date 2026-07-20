@@ -21,7 +21,7 @@ ImageShow 是一个 npm workspaces 单仓多包项目：自托管图库 + 随机
 | `docs.<域名>` | 本文档站（VitePress 构建产物） |
 | `<theme>.<域名>` | 该主题作用域的导航；`/random` 等价于 `/random?t=<theme>` |
 
-所有请求统一附带安全响应头：`Content-Security-Policy: frame-ancestors 'none'`、`X-Frame-Options: DENY`、`X-Content-Type-Options: nosniff`、`Referrer-Policy`、`Cross-Origin-Opener-Policy` 等。
+所有请求统一附带安全响应头：`Content-Security-Policy: frame-ancestors 'none'`、`X-Frame-Options: DENY`、`X-Content-Type-Options: nosniff`、`Referrer-Policy`、`Cross-Origin-Opener-Policy` 等。SPA 文档还以 report-only 模式观测 Trusted Types 兼容性，并通过同源 `/api/security/csp-report` 为浏览器 Reporting API / 旧版 CSP 报告提供接收地址。默认接收器直接返回 204，不读取正文、不解析 JSON、也不写日志；以后如需观测，可在应用装配处注入有界的异步接收器。`report-to` 指向 HTTP 端点而非邮箱地址。
 
 ## 分层
 

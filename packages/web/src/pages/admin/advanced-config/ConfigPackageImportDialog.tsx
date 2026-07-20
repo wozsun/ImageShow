@@ -26,12 +26,14 @@ export function ConfigPackageImportDialog({
   busy,
   feedback,
   onClose,
+  onFeedbackClose,
   onImport
 }: {
   preview: AdvancedConfigPreview;
   busy: boolean;
   feedback: ActionFeedbackState | null;
   onClose: () => void;
+  onFeedbackClose: () => void;
   onImport: (slugMappings: Record<string, string>) => Promise<boolean>;
 }) {
   const operationBodyRef = useRef<HTMLDivElement | null>(null);
@@ -82,6 +84,7 @@ export function ConfigPackageImportDialog({
           </button>
         </header>
         <div ref={operationBodyRef} className="operation-body">
+          {feedback && <ActionFeedback feedback={feedback} placement="inline" onClose={onFeedbackClose} />}
           <dl className="advanced-config-summary">
             <div><dt>格式版本</dt><dd>v{preview.format_version}</dd></div>
             <div><dt>应用版本</dt><dd>{preview.application_version}</dd></div>
@@ -119,7 +122,6 @@ export function ConfigPackageImportDialog({
               );
             }) : <p className="muted">配置包不包含自定义存储后端。</p>}
           </div>
-          {feedback && <ActionFeedback feedback={feedback} />}
         </div>
         <OverlayScrollbar targetRef={operationBodyRef} />
         <footer>

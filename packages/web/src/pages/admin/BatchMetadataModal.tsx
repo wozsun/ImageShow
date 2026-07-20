@@ -500,7 +500,7 @@ export function BatchMetadataModal({
               />
             </label>
             <p className="notice-line">迁移会复制对象与缩略图到目标后端、更新引用，并删除源副本；目标为对象存储时需先在设置页配置好该后端。</p>
-            {migrateError && <p className="error" role="alert">{migrateError}</p>}
+            {migrateError && <p className="error" role="alert" title={migrateError}>{migrateError}</p>}
           </div>
           <footer>
             <button type="button" disabled={migrateBusy} onClick={() => setMigrating(false)}>取消</button>

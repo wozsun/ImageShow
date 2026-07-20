@@ -6,7 +6,11 @@ import { adminApiBasePath } from "../../lib/constants.js";
 import { storageBackendDisplay, storageBackendLabel, storageTypeLabel } from "../../lib/ui/select-options.js";
 import { errorMessage } from "../../lib/ui/formatters.js";
 import type { StorageBackendAdmin } from "../../lib/types.js";
-import { ActionFeedback, type ActionFeedbackState } from "../../components/feedback/ActionFeedback.js";
+import {
+  ActionFeedback,
+  createActionFeedback,
+  type ActionFeedbackState
+} from "../../components/feedback/ActionFeedback.js";
 import { StorageBackendModal } from "./StorageBackendModal.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
 import { invalidateStorageData } from "../../lib/api/query-invalidation.js";
@@ -20,11 +24,12 @@ function StorageBackendsManager() {
   const client = useQueryClient();
   const query = useQuery<{ backends: StorageBackendAdmin[] }>({ queryKey: ["storage-backends"], queryFn: () => api(`${adminApiBasePath}/storage/backends`) });
   const [busy, setBusy] = useState("");
-  const [feedback, setFeedback] = useState<(ActionFeedbackState & { scope: "storage" }) | null>(null);
+  const [feedback, setFeedback] = useState<ActionFeedbackState | null>(null);
   const [editing, setEditing] = useState<StorageBackendAdmin | "new" | null>(null);
   const backends = query.data?.backends ?? [];
   const defaultBackend = backends.find((backend) => backend.is_default);
   const defaultSlug = defaultBackend?.slug ?? "local";
+  const hasNonLocalBackend = backends.some((backend) => backend.slug !== "local");
 
   const [order, setOrder] = useState<StorageBackendAdmin[]>([]);
   const dragSlug = useRef<string | null>(null);
@@ -59,29 +64,28 @@ function StorageBackendsManager() {
   const runStorageAction = async (key: string, action: () => Promise<unknown>, pending: string, success: string): Promise<boolean> => {
     if (busy) return false;
     setBusy(key);
-    setFeedback({ scope: "storage", text: pending, status: "pending" });
+    setFeedback(createActionFeedback(pending, "pending"));
     try {
       await action();
-      setFeedback({ scope: "storage", text: success, status: "success" });
+      setFeedback(createActionFeedback(success, "success"));
       await invalidateStorageData(client);
       return true;
     } catch (error) {
-      setFeedback({ scope: "storage", text: errorMessage(error), status: "error" });
+      setFeedback(createActionFeedback(errorMessage(error), "error"));
       return false;
     } finally {
       setBusy("");
     }
   };
 
-  const testConfig = async (body: unknown) => {
-    if (busy) return;
+  const testConfig = async (body: unknown): Promise<boolean> => {
+    if (busy) return false;
     setBusy("test");
-    setFeedback({ scope: "storage", text: "正在测试存储连接...", status: "pending" });
     try {
-      const data = await api(`${adminApiBasePath}/storage/test`, { method: "POST", body: JSON.stringify(body) });
-      setFeedback({ scope: "storage", text: JSON.stringify(data, null, 2), status: "success" });
-    } catch (error) {
-      setFeedback({ scope: "storage", text: `连接测试失败：${errorMessage(error)}`, status: "error" });
+      await api(`${adminApiBasePath}/storage/test`, { method: "POST", body: JSON.stringify(body) });
+      return true;
+    } catch {
+      return false;
     } finally {
       setBusy("");
     }
@@ -93,8 +97,8 @@ function StorageBackendsManager() {
     return runStorageAction(`default:${slug}`, () => api(`${adminApiBasePath}/storage/backends/${slug}/default`, { method: "POST" }), "正在切换默认后端...", `默认后端已设为 ${name}`);
   };
 
-  const openEditor = (target: StorageBackendAdmin | "new") => { setFeedback(null); setEditing(target); };
-  const closeEditor = () => { setFeedback(null); setEditing(null); };
+  const openEditor = (target: StorageBackendAdmin | "new") => setEditing(target);
+  const closeEditor = () => setEditing(null);
 
   return (
     <section className="workspace">
@@ -103,12 +107,6 @@ function StorageBackendsManager() {
           <h1>存储管理</h1>
           <p>命名存储后端：本地与多个对象存储桶可并存</p>
         </div>
-        {/* 顶部只展示列表级反馈（设默认、启停、删除、排序）；编辑弹窗打开时，保存/测试反馈改在弹窗内部展示。 */}
-        {!editing && feedback && (
-          <div className="settings-head-actions">
-            <ActionFeedback feedback={feedback} inline />
-          </div>
-        )}
       </header>
       <p className="hint">每张图片记录自己所在的存储后端，可定义多个（同类型也可，例如两个对象存储桶）。新上传写入“默认”后端；已有图片可在图片管理处迁移到任意后端。</p>
       <p className="storage-default-note">当前默认上传后端 <strong>{defaultBackend ? storageBackendDisplay(defaultBackend) : storageBackendLabel(defaultSlug)}</strong></p>
@@ -119,6 +117,7 @@ function StorageBackendsManager() {
           <BackendCard
             key={backend.slug}
             backend={backend}
+            hasNonLocalBackend={hasNonLocalBackend}
             busy={busy}
             onEdit={() => openEditor(backend)}
             onSetDefault={() => void setDefault(backend.slug)}
@@ -148,7 +147,6 @@ function StorageBackendsManager() {
           key={editing === "new" ? "new" : editing.slug}
           target={editing}
           busy={busy}
-          feedback={feedback}
           onClose={closeEditor}
           onTest={testConfig}
           onSetDefault={setDefault}
@@ -162,12 +160,20 @@ function StorageBackendsManager() {
           )}
         />
       )}
+      {feedback && (
+        <ActionFeedback
+          feedback={feedback}
+          placement="floating"
+          onClose={() => setFeedback(null)}
+        />
+      )}
     </section>
   );
 }
 
-function BackendCard({ backend, busy, onEdit, onSetDefault, onDelete, onToggleEnabled, onDragStart, onDragEnter, onDragEnd }: {
+function BackendCard({ backend, hasNonLocalBackend, busy, onEdit, onSetDefault, onDelete, onToggleEnabled, onDragStart, onDragEnter, onDragEnd }: {
   backend: StorageBackendAdmin;
+  hasNonLocalBackend: boolean;
   busy: string;
   onEdit: () => void;
   onSetDefault: () => void;
@@ -178,6 +184,7 @@ function BackendCard({ backend, busy, onEdit, onSetDefault, onDelete, onToggleEn
   onDragEnd: () => void;
 }) {
   const isLocal = backend.slug === "local";
+  const showEnabledToggle = !isLocal || hasNonLocalBackend;
 
   const [armed, setArmed] = useState(false);
   const title = backend.display_name || storageBackendLabel(backend.slug);
@@ -214,7 +221,7 @@ function BackendCard({ backend, busy, onEdit, onSetDefault, onDelete, onToggleEn
       </div>
       <div className="storage-card-actions">
         <span className="storage-card-actions-left">
-          {!isLocal && (
+          {showEnabledToggle && (
             <button
               type="button"
               className={`storage-enable-toggle${backend.enabled ? " is-on" : ""}`}

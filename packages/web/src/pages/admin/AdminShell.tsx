@@ -324,20 +324,22 @@ function Login({
         />
         <PasswordInput value={password} onChange={setPassword} placeholder="密码" autoComplete="current-password" />
         {altchaEnabled && (
-          <LoginChallenge
-            key={challengeInstance}
-            ref={challengeRef}
-            onError={markChallengeError}
-            onReady={markChallengeReady}
-            onVerificationChange={setChallengeVerified}
-          />
+          <div className="login-challenge-slot">
+            <LoginChallenge
+              key={challengeInstance}
+              ref={challengeRef}
+              onError={markChallengeError}
+              onReady={markChallengeReady}
+              onVerificationChange={setChallengeVerified}
+            />
+            {challengeLoadFailed && (
+              <button className="login-challenge-retry" type="button" onClick={retryChallenge}>
+                安全验证加载失败，点击重试
+              </button>
+            )}
+          </div>
         )}
-        {challengeLoadFailed && (
-          <button className="login-challenge-retry" type="button" onClick={retryChallenge}>
-            安全验证加载失败，点击重试
-          </button>
-        )}
-        {error && <p className="error">{error}</p>}
+        {error && <p className="error" role="alert" title={error}>{error}</p>}
         <button
           id="admin-login-submit"
           className="button"

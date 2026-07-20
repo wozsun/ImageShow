@@ -6,7 +6,7 @@ import { errorMessage } from "../../lib/ui/formatters.js";
 import type { AdvancedConfigPreview } from "../../lib/types.js";
 import { Icon } from "../../components/icon/Icon.js";
 import {
-  ActionFeedback,
+  createActionFeedback,
   type ActionFeedbackState
 } from "../../components/feedback/ActionFeedback.js";
 import { ConfirmDialog } from "../../components/feedback/ConfirmDialog.js";
@@ -26,6 +26,9 @@ export function AdvancedConfigPage() {
   const [feedback, setFeedback] = useState<ActionFeedbackState | null>(null);
   const [exportConfirmation, setExportConfirmation] = useState(false);
   const [runtimeConfigReloadToken, setRuntimeConfigReloadToken] = useState(0);
+  const showFeedback = (text: string, status: ActionFeedbackState["status"]) => {
+    setFeedback(createActionFeedback(text, status));
+  };
 
   const clearImport = () => {
     setSelectedPackage(null);
@@ -35,7 +38,7 @@ export function AdvancedConfigPage() {
 
   const downloadPackage = async () => {
     setBusy("export");
-    setFeedback({ text: "正在生成配置包…", status: "pending" });
+    showFeedback("正在生成配置包…", "pending");
     try {
       const response = await fetch(`${adminApiBasePath}/advanced-config/export`, {
         credentials: "same-origin"
@@ -54,9 +57,9 @@ export function AdvancedConfigPage() {
       anchor.click();
       anchor.remove();
       URL.revokeObjectURL(objectUrl);
-      setFeedback({ text: "配置包已生成", status: "success" });
+      showFeedback("配置包已生成", "success");
     } catch (error) {
-      setFeedback({ text: `导出失败：${errorMessage(error)}`, status: "error" });
+      showFeedback(`导出失败：${errorMessage(error)}`, "error");
     } finally {
       setBusy("");
       setExportConfirmation(false);
@@ -67,7 +70,7 @@ export function AdvancedConfigPage() {
     if (!file || busy) return;
     clearImport();
     setBusy("preview");
-    setFeedback({ text: "正在校验配置包…", status: "pending" });
+    showFeedback("正在校验配置包…", "pending");
     try {
       if (file.size > maxPackageBytes + packageFileReadOverheadBytes) {
         throw new Error("配置包文件过大");
@@ -81,7 +84,7 @@ export function AdvancedConfigPage() {
       setPreview(response.preview);
       setFeedback(null);
     } catch (error) {
-      setFeedback({ text: `配置包无效：${errorMessage(error)}`, status: "error" });
+      showFeedback(`配置包无效：${errorMessage(error)}`, "error");
     } finally {
       setBusy("");
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -91,7 +94,7 @@ export function AdvancedConfigPage() {
   const applyPackage = async (slugMappings: Record<string, string>) => {
     if (!selectedPackage || busy) return false;
     setBusy("import");
-    setFeedback({ text: "正在导入配置包…", status: "pending" });
+    showFeedback("正在导入配置包…", "pending");
     try {
       const response = await api<{ result: { imported_backends: string[] } }>(
         `${adminApiBasePath}/advanced-config/import`,
@@ -103,10 +106,10 @@ export function AdvancedConfigPage() {
       await invalidateRuntimeData(client);
       setRuntimeConfigReloadToken((current) => current + 1);
       const count = response.result.imported_backends.length;
-      setFeedback({ text: `配置导入成功，新增 ${count} 个存储后端`, status: "success" });
+      showFeedback(`配置导入成功，新增 ${count} 个存储后端`, "success");
       return true;
     } catch (error) {
-      setFeedback({ text: `导入失败：${errorMessage(error)}`, status: "error" });
+      showFeedback(`导入失败：${errorMessage(error)}`, "error");
       return false;
     } finally {
       setBusy("");
@@ -137,8 +140,12 @@ export function AdvancedConfigPage() {
         </div>
       </header>
 
-      {feedback && !preview && <ActionFeedback feedback={feedback} />}
-      <RuntimeConfigEditor reloadToken={runtimeConfigReloadToken} />
+      <RuntimeConfigEditor
+        reloadToken={runtimeConfigReloadToken}
+        feedback={preview ? null : feedback}
+        onFeedback={showFeedback}
+        onFeedbackClose={() => setFeedback(null)}
+      />
 
       {preview && (
         <ConfigPackageImportDialog
@@ -146,6 +153,7 @@ export function AdvancedConfigPage() {
           busy={busy === "import"}
           feedback={feedback}
           onClose={clearImport}
+          onFeedbackClose={() => setFeedback(null)}
           onImport={applyPackage}
         />
       )}

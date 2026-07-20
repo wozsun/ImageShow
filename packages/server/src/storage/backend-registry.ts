@@ -78,6 +78,16 @@ function toStorageConfig(record: StorageBackendRecord): StorageConfig {
   };
 }
 
+function withStoredS3Credential(candidate: StorageConfig["s3"], current?: StorageConfig["s3"]) {
+  if (candidate.secret_access_key || !current?.secret_access_key) return candidate;
+  return { ...candidate, secret_access_key: current.secret_access_key };
+}
+
+function withStoredWebdavCredential(candidate: StorageConfig["webdav"], current?: StorageConfig["webdav"]) {
+  if (candidate.password || !current?.password) return candidate;
+  return { ...candidate, password: current.password };
+}
+
 export async function listStorageBackends(): Promise<StorageBackendRecord[]> {
   return getStorageBackends();
 }
@@ -244,18 +254,35 @@ export async function updateStorageBackend(slug: string, input: StorageBackendUp
     if (input.enabled === false && row.is_default) {
       throw new ApiError(400, "storage_default_enabled", "默认后端不能停用，请先切换默认后端");
     }
+    if (input.enabled === false && row.slug === "local") {
+      const alternativeDefault = await client.query(
+        `SELECT 1
+         FROM storage_backend
+         WHERE slug <> 'local' AND enabled AND is_default
+         LIMIT 1`
+      );
+      if (!alternativeDefault.rowCount) {
+        throw new ApiError(
+          400,
+          "storage_local_requires_alternative",
+          "停用本地存储前，请先启用其他存储并将其设为默认后端"
+        );
+      }
+    }
 
     const rowConfig = typeof row.config === "object" && row.config ? row.config : {};
     let configJson: string | null = null;
     if (row.type === "s3") {
       const current = s3SettingsSchema.parse(rowConfig);
-      const next = input.s3 ? s3SettingsSchema.parse(input.s3) : current;
-      if (!next.secret_access_key) next.secret_access_key = current.secret_access_key;
+      const next = input.s3
+        ? withStoredS3Credential(s3SettingsSchema.parse(input.s3), current)
+        : current;
       configJson = JSON.stringify(next);
     } else if (row.type === "webdav") {
       const current = webdavSettingsSchema.parse(rowConfig);
-      const next = input.webdav ? webdavSettingsSchema.parse(input.webdav) : current;
-      if (!next.password) next.password = current.password;
+      const next = input.webdav
+        ? withStoredWebdavCredential(webdavSettingsSchema.parse(input.webdav), current)
+        : current;
       configJson = JSON.stringify(next);
     }
 
@@ -325,19 +352,25 @@ export async function resolveStorageTestConfig(input: {
   s3?: unknown;
   webdav?: unknown;
 }): Promise<StorageConfig> {
-  if (input.slug) return getStorageBackend(input.slug);
-  if (input.type === "webdav" || input.webdav) {
+  const current = input.slug ? await getStorageBackend(input.slug) : undefined;
+  if (current?.type === "local") return current;
+
+  const type = current?.type ?? (input.type === "webdav" || input.webdav ? "webdav" : "s3");
+  if (type === "webdav") {
+    const candidate = webdavSettingsSchema.parse(input.webdav ?? current?.webdav ?? {});
     return {
       slug: "(test)",
       type: "webdav",
       s3: defaultS3Settings,
-      webdav: webdavSettingsSchema.parse(input.webdav ?? {})
+      webdav: withStoredWebdavCredential(candidate, current?.type === "webdav" ? current.webdav : undefined)
     };
   }
+
+  const candidate = s3SettingsSchema.parse(input.s3 ?? current?.s3 ?? {});
   return {
     slug: "(test)",
     type: "s3",
-    s3: s3SettingsSchema.parse(input.s3 ?? {}),
+    s3: withStoredS3Credential(candidate, current?.type === "s3" ? current.s3 : undefined),
     webdav: defaultWebdavSettings
   };
 }
