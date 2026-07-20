@@ -71,7 +71,19 @@
   align-items: center;
 }
 .upload-window > header h1 { margin: 0; font-size: 24px; }
-.upload-window > header p { margin: 4px 0 0; color: #66717f; font-size: 14px; }
+.upload-window > header p {
+  /* 空状态只有一行说明，任务摘要固定为两行；预留完整两行避免任务加入后头部跳动。 */
+  height: 42px;
+  margin: 4px 0 0;
+  overflow: hidden;
+  color: #66717f;
+  font-size: 14px;
+  line-height: 20px;
+}
+.upload-empty-subtitle {
+  display: flex;
+  align-items: center;
+}
 .upload-window > footer {
   bottom: 0;
   border-top: 1px solid #dce2ea;

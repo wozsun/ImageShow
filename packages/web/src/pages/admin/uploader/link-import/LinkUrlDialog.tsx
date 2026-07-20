@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useId, useRef, useState, type RefObject } from "react";
 import { Icon, type IconName } from "../../../../components/icon/Icon.js";
 import { SelectMenu } from "../../../../components/form/SelectMenu.js";
 import { OverlayScrollbar } from "../../../../components/layout/OverlayScrollbar.js";
@@ -75,6 +75,7 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
   onSubmit: (submission: LinkDialogSubmission) => void;
   returnFocusRef?: RefObject<HTMLElement | null>;
 }) {
+  const inputId = useId();
   const importCardRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const requestControllerRef = useRef<AbortController | null>(null);
@@ -270,6 +271,7 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
         </p>
         <div className={`link-import-input-region${resultSummary ? " has-result-summary" : ""}`}>
           <textarea
+            id={inputId}
             className="link-import-urls"
             value={text}
             disabled={parsing}

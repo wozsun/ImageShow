@@ -309,6 +309,7 @@ export function ImageAdmin() {
         <div className="inline-actions">
           <label className="check-label">
             <input
+              id="admin-image-select-all"
               type="checkbox"
               checked={allSelected}
               disabled={operationBusy}
@@ -489,6 +490,7 @@ function AdminImageCard({ item, storageName, checked, busy, actionsDisabled, onC
       aria-busy={busy}
     >
       <input
+        id={`admin-image-select-${item.id}`}
         className="admin-image-card-checkbox"
         type="checkbox"
         checked={checked}

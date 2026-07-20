@@ -1,4 +1,5 @@
 import { imageDescriptionMaxLength, imageTitleMaxLength } from "@imageshow/shared/browser";
+import { useId } from "react";
 import { SelectMenu } from "./SelectMenu.js";
 import { ThemeInput } from "./ThemeInput.js";
 import { TagInput } from "./TagInput.js";
@@ -33,10 +34,12 @@ export function ImageDraftFields({
   changed?: Partial<Record<"title" | "device" | "brightness" | "theme" | "tags" | "author" | "original" | "source" | "description", boolean>>;
 }) {
   const changedFields = changed;
+  const fieldGroupId = useId();
   return (
     <div className="image-fields">
       <div className="image-fields-row image-fields-primary">
         <input
+          id={`${fieldGroupId}-title`}
           className={`image-fields-title${changedFields.title ? " is-changed" : ""}`}
           value={title ? title.value : draft.title}
           onChange={(event) => onPatch({ title: event.target.value })}
@@ -90,6 +93,7 @@ export function ImageDraftFields({
       </div>
       <div className="image-fields-row image-fields-urls">
         <input
+          id={`${fieldGroupId}-original`}
           className={changedFields.original ? "is-changed" : undefined}
           value={draft.original}
           onChange={(event) => onPatch({ original: event.target.value })}
@@ -97,6 +101,7 @@ export function ImageDraftFields({
           disabled={disabled}
         />
         <input
+          id={`${fieldGroupId}-source`}
           className={changedFields.source ? "is-changed" : undefined}
           value={draft.source}
           onChange={(event) => onPatch({ source: event.target.value })}
@@ -105,6 +110,7 @@ export function ImageDraftFields({
         />
       </div>
       <textarea
+        id={`${fieldGroupId}-description`}
         className={`image-fields-desc${changedFields.description ? " is-changed" : ""}`}
         value={draft.description}
         onChange={(event) => onPatch({ description: event.target.value })}

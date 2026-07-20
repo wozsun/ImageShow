@@ -25,6 +25,7 @@ export function SlugComboInput({ value, onChange, options, noun, checkReserved =
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const listId = useId();
+  const inputId = `${listId}-input`;
   const { open, closing, position, opensUp, menuRef, openMenu, requestClose, onAnimationEnd } = useAnchoredMenu({
     triggerRef: wrapRef,
     getSize: () => MENU_SIZE,
@@ -108,6 +109,7 @@ export function SlugComboInput({ value, onChange, options, noun, checkReserved =
     <div className={`slug-combo-control ${className ?? ""}`.trim()} ref={wrapRef}>
       <input
         ref={inputRef}
+        id={inputId}
         value={focused ? value : facetDisplayName(options, value)}
         maxLength={32}
         onFocus={() => setFocused(true)}

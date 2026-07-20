@@ -22,6 +22,7 @@ export function TagInput({ value, onChange, suggestions, disabled = false, ariaL
   const [activeIndex, setActiveIndex] = useState(-1);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const listId = useId();
+  const inputId = `${listId}-input`;
   const { open, closing, position, opensUp, menuRef, openMenu, requestClose, onAnimationEnd } = useAnchoredMenu({
     triggerRef: wrapRef,
     getSize: () => MENU_SIZE,
@@ -131,6 +132,7 @@ export function TagInput({ value, onChange, suggestions, disabled = false, ariaL
         );
       })}
       <input
+        id={inputId}
         className="tag-input-field"
         value={text}
         maxLength={32}

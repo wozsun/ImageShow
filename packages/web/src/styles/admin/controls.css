@@ -142,6 +142,8 @@ textarea.is-changed,
 .tag-input-control::-webkit-scrollbar { display: none; }
 .tag-input-field { flex: 1 1 80px; min-width: 80px; width: auto; border: 0; padding: 4px 2px; border-radius: 0; }
 .tag-input-field:focus { outline: none; }
+.tag-input-control:has(.tag-input-field:disabled) { opacity: .45; cursor: not-allowed; }
+.tag-input-control .tag-input-field:disabled { opacity: 1; }
 .tag-input-control:has(.tag-input-field:disabled) .tag-chip { padding: 3px 8px; }
 
 .tag-chip.is-new { background: #e7f7ee; border-color: #8fd6ab; color: #176c3c; }

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useId, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../../lib/api/client.js";
 import { Icon } from "../../../components/icon/Icon.js";
@@ -50,6 +50,7 @@ function needsImportCancellation(job: ImportJob) {
 }
 
 export function Uploader({ onDone }: { onDone: () => void }) {
+  const fileInputId = useId();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"file" | "link">("file");
   const [urlInputOpen, setUrlInputOpen] = useState(false);
@@ -361,7 +362,7 @@ export function Uploader({ onDone }: { onDone: () => void }) {
                     </span>
                   </p>
                 ) : (
-                  <p>{emptySubtitle}</p>
+                  <p className="upload-empty-subtitle">{emptySubtitle}</p>
                 )}
               </div>
               <div className="upload-head-actions">
@@ -387,7 +388,7 @@ export function Uploader({ onDone }: { onDone: () => void }) {
                       className={`button secondary upload-picker pressable${busy ? " is-disabled" : ""}`}
                       aria-disabled={busy}
                     >
-                      <Icon name="upload-cloud-2-line" /><input ref={fileInputRef} type="file" accept="image/*" multiple disabled={busy} onChange={(event) => { void addFiles(event.target.files); event.target.value = ""; }} />选择图片
+                      <Icon name="upload-cloud-2-line" /><input id={fileInputId} ref={fileInputRef} type="file" accept="image/*" multiple disabled={busy} onChange={(event) => { void addFiles(event.target.files); event.target.value = ""; }} />选择图片
                     </label>
                   )}
                   <button ref={closeButtonRef} className="icon close pressable upload-close-button" type="button" title="关闭" onClick={() => exit.requestClose()} disabled={busy}><Icon name="close-line" /></button>

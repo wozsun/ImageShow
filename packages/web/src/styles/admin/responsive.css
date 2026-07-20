@@ -265,6 +265,7 @@
     grid-column: 1;
     grid-row: 2;
     min-width: 0;
+    height: 40px;
     max-height: 40px;
     overflow: hidden;
     line-height: 20px;
