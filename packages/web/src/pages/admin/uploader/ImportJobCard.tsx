@@ -56,17 +56,16 @@ export const ImportJobCard = memo(function ImportJobCard({
   const cancellationFailed = job.failureStage === "cancel";
   const retryable = ["failed", "cancelled"].includes(job.status) && !cancellationFailed;
   const statusLabel = cancellationFailed ? "取消失败" : statusLabels[job.status];
-  const isProxy = job.kind === "proxy";
   const hasFinalSize = typeof job.finalSize === "number";
   const displayName = job.draft.title || job.file?.name || job.url || job.id;
   const originalSizeText = formatBytes(job.originalSize ?? job.file?.size ?? 0);
   const finalSizeText = hasFinalSize ? formatBytes(job.finalSize ?? 0) : "—";
   const originalDimensionsText = formatPixelDimensions(job.originalWidth ?? job.width, job.originalHeight ?? job.height);
   const finalDimensionsText = hasFinalSize ? formatPixelDimensions(job.width, job.height) : formatPixelDimensions();
-  const dimensionsText = isProxy ? originalDimensionsText : `${originalDimensionsText} → ${finalDimensionsText}`;
+  const dimensionsText = `${originalDimensionsText} → ${finalDimensionsText}`;
   const qualityText = job.quality != null
     ? String(job.quality)
-    : !isProxy && job.transcoded === false ? "跳过转码" : "";
+    : job.transcoded === false ? "跳过转码" : "";
   const showsTransferProgress = ["uploading", "downloading"].includes(job.status)
     && typeof job.transferProgress === "number";
   const transferProgress = Math.min(100, Math.max(0, Math.round(job.transferProgress ?? 0)));
@@ -74,9 +73,7 @@ export const ImportJobCard = memo(function ImportJobCard({
   const statusDetailText = job.message || statusLabel;
   const sourcePositionText = importPositionText(job);
   const metaText = [sourcePositionText, storageDisplayName, dimensionsText, statusDetailText].filter(Boolean).join(" · ");
-  const sizeSummaryText = isProxy
-    ? `代理链接 · ${originalDimensionsText}`
-    : `${originalSizeText} → ${finalSizeText}${qualityText ? ` · ${qualityText}` : ""}`;
+  const sizeSummaryText = `${originalSizeText} → ${finalSizeText}${qualityText ? ` · ${qualityText}` : ""}`;
   const libraryDuplicate = job.status === "skipped" ? job.duplicates[0] : undefined;
   const batchDuplicate = job.status === "skipped" ? job.batchDuplicate : undefined;
   const previewSrc = libraryDuplicate?.thumb_url || (batchDuplicate ? batchDuplicate.preview : job.preview);
@@ -110,19 +107,11 @@ export const ImportJobCard = memo(function ImportJobCard({
             ? <ImageThumbnail src={previewSrc} className="import-job-thumbnail" onClick={openPreview} />
             : <div className="image-thumbnail import-job-thumbnail" aria-hidden="true" />}
         </div>
-        {isProxy
-          ? (
-            <span className="import-job-size proxy-image-note" title="代理链接图片">
-              <Icon name="external-link-line" />代理链接
-            </span>
-          )
-          : (
-            <span className="import-job-size is-vertical">
-              <span>{originalSizeText}</span>
-              <small>{qualityText ? `↓ ${qualityText}` : "↓"}</small>
-              <span>{finalSizeText}</span>
-            </span>
-          )}
+        <span className="import-job-size is-vertical">
+          <span>{originalSizeText}</span>
+          <small>{qualityText ? `↓ ${qualityText}` : "↓"}</small>
+          <span>{finalSizeText}</span>
+        </span>
       </div>
       <div className="import-job-head">
         <strong>

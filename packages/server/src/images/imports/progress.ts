@@ -23,7 +23,9 @@ async function renewImportLease(id: string, required = false) {
   const renewed = await pool.query(
     `UPDATE import_session
      SET expires_at=now() + ($2 * interval '1 second')
-     WHERE id=$1 AND status IN ('created','receiving','preparing','ready','committing')`,
+     WHERE id=$1 AND status IN (
+       'created','materializing','received','preparing','ready','committing'
+     )`,
     [id, appConfig.uploadTtlSeconds]
   );
   if (required && !renewed.rowCount) {
@@ -47,9 +49,10 @@ export async function withImportLease<T>(id: string, work: () => Promise<T>): Pr
 }
 
 function importMessage(status: string, mode?: string, error?: string) {
-  if (status === "created") return mode === "upload" ? "等待接收原图" : "等待开始处理";
-  if (status === "receiving") return mode === "download" ? "服务端下载原图" : "服务端接收上传文件";
-  if (status === "preparing") return mode === "proxy" ? "探测外链并生成缩略图" : "标准化图片并生成缩略图";
+  if (status === "created") return mode === "upload" ? "等待浏览器上传原图" : "等待服务器下载原图";
+  if (status === "materializing") return mode === "download" ? "服务端下载原图" : "服务端接收上传文件";
+  if (status === "received") return "原图素材已接收，等待处理";
+  if (status === "preparing") return "标准化图片并生成缩略图";
   if (status === "ready") return "服务端处理完成";
   if (status === "committing") return "写入图库";
   if (status === "finalized") return "已写入图库";
@@ -75,7 +78,7 @@ export function setImportPhase(id: string, phase: string, message: string, progr
   notifyImportStatus(id).catch(() => undefined);
 }
 
-// 下载开始时已经以条件 UPDATE 将会话认领为 receiving。中途百分比只更新内存阶段并
+// 下载开始时已经以条件 UPDATE 将会话认领为 materializing。中途百分比只更新内存阶段并
 // 发送这个已知状态，既供 SSE 实时推送，也让断线后的状态轮询读取最新进度；阶段切换
 // 仍通过 setImportPhase/notifyImportStatus 重新查询数据库确认权威状态。
 export function setImportDownloadProgress(id: string, progress: number) {
@@ -89,7 +92,7 @@ export function setImportDownloadProgress(id: string, progress: number) {
   activeImportPhases.set(id, nextPhase);
   emitImportStatus({
     id,
-    status: "receiving",
+    status: "materializing",
     error: "",
     phase: nextPhase.phase,
     message: nextPhase.message,
@@ -113,6 +116,11 @@ export async function markImportCancelled(id: string) {
   await redis.set(cancelledImportKey(id), "1", "EX", appConfig.uploadTtlSeconds).catch(() => undefined);
 }
 
+export async function clearImportCancelled(id: string) {
+  cancelledImports.delete(id);
+  await redis.del(cancelledImportKey(id)).catch(() => undefined);
+}
+
 export async function assertImportStillPreparing(id: string) {
   const row = (await pool.query("SELECT status FROM import_session WHERE id=$1", [id])).rows[0] as {
     status?: ImportStatus;
@@ -124,12 +132,35 @@ export async function assertImportStillPreparing(id: string) {
 }
 
 export async function markImportFailed(id: string, error: unknown) {
-  const failed = await pool.query(
-    "UPDATE import_session SET status='failed', error=$2, updated_at=now() WHERE id=$1 AND status IN ('receiving','preparing')",
-    [id, errorMessage(error)]
-  ).catch(() => undefined);
-  if (failed && "rowCount" in failed && failed.rowCount) {
+  let failedRowCount: number | null | undefined;
+  try {
+    failedRowCount = (await pool.query(
+      `UPDATE import_session
+       SET status='failed', error=$2, updated_at=now()
+       WHERE id=$1 AND status IN ('materializing','preparing')`,
+      [id, errorMessage(error)]
+    )).rowCount;
+  } catch {
+    // The UPDATE may have committed before the client observed the failure.
+  }
+  if (failedRowCount) {
     await notifyImportStatus(id).catch(() => undefined);
+    return true;
+  }
+
+  try {
+    const current = (await pool.query(
+      "SELECT status FROM import_session WHERE id=$1",
+      [id]
+    )).rows[0] as { status: ImportStatus } | undefined;
+    const safeToClean = !current || ["failed", "cancelled"].includes(current.status);
+    if (current?.status === "failed") {
+      await notifyImportStatus(id).catch(() => undefined);
+    }
+    return safeToClean;
+  } catch {
+    // Without an authoritative read, callers must preserve raw/staged objects.
+    return false;
   }
 }
 
@@ -139,7 +170,7 @@ async function getImportStatus(id: string) {
     [id]
   )).rows[0] as { mode: ImportMode; status: ImportStatus; error: string } | undefined;
   if (!row) throw new ApiError(404, "not_found", "导入任务不存在");
-  const phase = ["created", "receiving", "preparing"].includes(row.status)
+  const phase = ["created", "materializing", "preparing"].includes(row.status)
     ? activeImportPhases.get(id)
     : undefined;
   return {

@@ -9,9 +9,9 @@ export const PUBLIC_IMAGES_CACHE_PREFIX = "imageshow:public_images:";
 export const ORIGINAL_DIRECT_CACHE_PREFIX = "imageshow:original_direct:";
 export const ADMIN_OVERVIEW_CACHE_PREFIX = "imageshow:admin_overview:";
 export const IMAGE_CACHE_REVISION_KEY = "imageshow:image_cache_revision";
-export const IMAGE_LOOKUP_MEDIA_KEY = "imageshow:image_lookup:media";
-export const IMAGE_LOOKUP_THUMBS_KEY = "imageshow:image_lookup:thumbs";
-export const IMAGE_LOOKUP_ID_KEY = "imageshow:image_lookup:id";
+export const IMAGE_LOOKUP_MEDIA_KEY = "imageshow:image_lookup:v2:media";
+export const IMAGE_LOOKUP_THUMBS_KEY = "imageshow:image_lookup:v2:thumbs";
+export const IMAGE_LOOKUP_ID_KEY = "imageshow:image_lookup:v2:id";
 const GALLERY_FACETS_KEY = "imageshow:gallery_facets";
 const ORIGINAL_DIRECT_CACHE_TTL_SECONDS = 60 * 60;
 const ADMIN_OVERVIEW_CACHE_TTL_SECONDS = 60;
@@ -30,7 +30,6 @@ export type ImageLookupByIdItem = {
   original: string;
   ext: string;
   storage_slug: string;
-  is_link: boolean;
   device: Device;
   brightness: Brightness;
   theme: string;
@@ -39,7 +38,6 @@ export type ImageLookupByIdItem = {
   source: string;
 };
 type ImageObjectLookupSource = {
-  is_link?: boolean;
   object_key: string;
   ext: string;
   storage_slug: string;
@@ -51,7 +49,6 @@ export type CompleteImageLookupSource = {
   original: string | null;
   ext: string;
   storage_slug: string;
-  is_link: boolean;
   device: Device;
   brightness: Brightness;
   theme: string;
@@ -121,8 +118,9 @@ function lookupHashKey(baseKey: string, revision: string) {
 /** @internal Exported only for local cache-shape verification. */
 export function parseImageLookup(raw: string): ImageLookupItem | null {
   try {
-    const value = JSON.parse(raw) as Partial<ImageLookupItem>;
+    const value = JSON.parse(raw) as Partial<ImageLookupItem> & { is_link?: unknown };
     if (
+      "is_link" in value ||
       typeof value.object_key !== "string" || !value.object_key ||
       typeof value.thumb_key !== "string" || !value.thumb_key ||
       typeof value.ext !== "string" || !imageLookupExtensions.has(value.ext) ||
@@ -138,10 +136,11 @@ export function parseImageLookup(raw: string): ImageLookupItem | null {
 /** @internal Exported only for local cache-shape verification. */
 export function parseImageLookupById(raw: string): ImageLookupByIdItem | null {
   try {
-    const value = JSON.parse(raw) as Partial<ImageLookupByIdItem>;
-    if (typeof value.id !== "string" || typeof value.object_key !== "string" || typeof value.original !== "string"
+    const value = JSON.parse(raw) as Partial<ImageLookupByIdItem> & { is_link?: unknown };
+    if ("is_link" in value
+      || typeof value.id !== "string" || typeof value.object_key !== "string" || typeof value.original !== "string"
       || typeof value.ext !== "string" || !imageLookupExtensions.has(value.ext)
-      || typeof value.storage_slug !== "string" || typeof value.is_link !== "boolean"
+      || typeof value.storage_slug !== "string"
       || !appConfig.devices.includes(value.device as Device) || !appConfig.brightness.includes(value.brightness as Brightness)
       || typeof value.theme !== "string" || typeof value.status !== "string" || !imageLookupStatuses.has(value.status)
       || typeof value.description !== "string" || typeof value.source !== "string") return null;
@@ -270,7 +269,6 @@ function imageLookupByIdItem(item: CompleteImageLookupSource): ImageLookupByIdIt
     original: item.original ?? "",
     ext: item.ext,
     storage_slug: item.storage_slug,
-    is_link: item.is_link,
     device: item.device,
     brightness: item.brightness,
     theme: item.theme,
@@ -322,7 +320,7 @@ async function setImageLookupsById(items: ImageLookupByIdItem[], expectedRevisio
 export async function warmObjectLookups(items: readonly ImageObjectLookupSource[], expectedRevision?: string | null) {
   const objectLookups: ImageLookupItem[] = [];
   for (const item of items) {
-    if (!item.is_link && item.status === "ready") {
+    if (item.status === "ready") {
       objectLookups.push({
         object_key: item.object_key,
         thumb_key: thumbnailObjectKey(item.object_key),

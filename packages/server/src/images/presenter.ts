@@ -22,7 +22,6 @@ export type ImageRecord = {
   md5?: string | null;
   object_key: string;
   storage_slug: string;
-  is_link: boolean;
 
   author?: string | null;
   title?: string | null;
@@ -54,7 +53,6 @@ export const imagePresentationColumns = [
   "md5",
   "object_key",
   "storage_slug",
-  "is_link",
   "author",
   "title",
   "description",
@@ -72,12 +70,12 @@ export type PublicImageDetail = PublicImageDetailDto;
 
 export type PublicImageCardRecord = Pick<
   ImageRecord,
-  "id" | "device" | "brightness" | "theme" | "width" | "height" | "ext" | "object_key" | "storage_slug" | "is_link" | "author" | "title" | "original" | "image_time" | "status"
+  "id" | "device" | "brightness" | "theme" | "width" | "height" | "ext" | "object_key" | "storage_slug" | "author" | "title" | "original" | "image_time" | "status"
 >;
 
 export type PublicImageDetailRecord = Pick<
   ImageRecord,
-  "id" | "device" | "brightness" | "theme" | "ext" | "object_key" | "storage_slug" | "is_link" | "status"
+  "id" | "device" | "brightness" | "theme" | "ext" | "object_key" | "storage_slug" | "status"
 > & {
   description: string | null;
   source: string | null;
@@ -86,30 +84,31 @@ export type PublicImageDetailRecord = Pick<
 
 type PublicImageUrlRecord = Pick<
   ImageRecord,
-  "id" | "device" | "brightness" | "theme" | "ext" | "object_key" | "storage_slug" | "is_link"
+  "id" | "device" | "brightness" | "theme" | "ext" | "object_key" | "storage_slug"
 >;
 
 export type OverviewRecentImageRecord = PublicImageUrlRecord & Pick<ImageRecord, "title">;
 
 export type ImportSessionRecord = {
   id: string;
-  mode: "upload" | "download" | "proxy";
+  mode: "upload" | "download";
 };
 
 export function importSessionResponse(row: ImportSessionRecord) {
   return {
     id: row.id,
     upload_url: row.mode === "upload" ? `${adminApiBasePath}/imports/${row.id}/file` : undefined,
+    materialize_url: row.mode === "download"
+      ? `${adminApiBasePath}/imports/${row.id}/materialize`
+      : undefined,
     prepare_url: `${adminApiBasePath}/imports/${row.id}/prepare`
   };
 }
 
 async function publicUrlsForRow(row: PublicImageUrlRecord) {
   const storageSlug = row.storage_slug;
-  const isLink = Boolean(row.is_link);
-  const linkParams = isLink ? { id: row.id, device: row.device, brightness: row.brightness, theme: row.theme, ext: row.ext } : undefined;
-  const urls = await publicImageUrls(row.object_key, storageSlug, isLink, linkParams);
-  return { storageSlug, isLink, urls };
+  const urls = await publicImageUrls(row.object_key, storageSlug);
+  return { storageSlug, urls };
 }
 
 function serializeTimestamp(value: string | Date | null | undefined) {
@@ -138,9 +137,9 @@ async function publicImage(
   row: ImageRecord,
   tags?: string[]
 ): Promise<PublicImage> {
-  const { storageSlug, isLink, urls } = await publicUrlsForRow(row);
+  const { storageSlug, urls } = await publicUrlsForRow(row);
   const original = row.original ?? "";
-  const hasDistinctOriginal = hasDistinctOriginalUrl(original, isLink ? row.object_key : urls.object_url);
+  const hasDistinctOriginal = hasDistinctOriginalUrl(original, urls.object_url);
 
   const tagList = tags ?? (await getTagsForImages([row.id])).get(row.id) ?? [];
   return {
@@ -156,7 +155,6 @@ async function publicImage(
     md5: row.md5 ?? "",
     object_key: row.object_key,
     storage_slug: storageSlug,
-    is_link: isLink,
     title: row.title ?? "",
     description: row.description ?? "",
     source: row.source ?? "",
@@ -196,9 +194,9 @@ async function publicImageCard(
   row: PublicImageCardRecord,
   tags: string[] = []
 ): Promise<GalleryImageCardDto> {
-  const { isLink, urls } = await publicUrlsForRow(row);
+  const { urls } = await publicUrlsForRow(row);
   const original = row.original ?? "";
-  const hasDistinctOriginal = hasDistinctOriginalUrl(original, isLink ? row.object_key : urls.object_url);
+  const hasDistinctOriginal = hasDistinctOriginalUrl(original, urls.object_url);
   return {
     id: row.id,
     device: row.device,

@@ -109,7 +109,6 @@ export type AdminImageItemDto = PublicImageItemDto & {
   status: "ready" | "deleted";
   object_key: string;
   storage_slug: string;
-  is_link: boolean;
   md5: string;
   original: string;
   image_size?: number;

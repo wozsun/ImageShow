@@ -25,10 +25,9 @@ import {
   type StorageDriver
 } from "./storage-backend.ts";
 import {
-  withStorageLocationReadLock,
-  withStorageLocationWriteLock
+  withStorageLocationReadAndAdvisoryLock,
+  withStorageLocationWriteAndAdvisoryLock
 } from "./maintenance-lock.ts";
-import { thumbnailRef } from "./image-paths.ts";
 import { storageNamespaceIdentity } from "./storage-namespace.ts";
 
 const storageCacheTtlMs = appConfig.derivedCacheTtlSeconds * 1000;
@@ -506,10 +505,6 @@ type ExistingStorageProbe = {
   id: string;
   object_key: string;
   storage_slug: string;
-  is_link: boolean;
-  device: string;
-  brightness: string;
-  theme: string;
 };
 
 async function validateStorageUpdate(
@@ -520,9 +515,10 @@ async function validateStorageUpdate(
   const driver = storageDriverForConfig(testConfig);
   try {
     if (existingObject) {
-      const reference = existingObject.is_link
-        ? thumbnailRef(existingObject)
-        : { prefix: "media" as const, key: existingObject.object_key };
+      const reference = {
+        prefix: "media" as const,
+        key: existingObject.object_key
+      };
       if (!await driver.exists(reference.prefix, reference.key)) {
         throw new ApiError(
           502,
@@ -578,7 +574,7 @@ async function updateStorageBackendUnderLock(
 
   const existingObject = snapshotUsage.image_count > 0
     ? (await pool.query(
-        `SELECT id, object_key, storage_slug, is_link, device, brightness, theme
+        `SELECT id, object_key, storage_slug
            FROM metadata
           WHERE storage_slug=$1
           ORDER BY id
@@ -656,8 +652,9 @@ async function updateStorageBackendUnderLock(
 }
 
 export async function updateStorageBackend(slug: string, input: StorageBackendUpdateInput) {
+  const backendLockKey = `imageshow:storage-backend:${slug}`;
   const updateWithBackendLock = (allowPhysicalLocationChange: boolean) =>
-    withAdvisoryLock(`imageshow:storage-backend:${slug}`, () =>
+    withAdvisoryLock(backendLockKey, () =>
       updateStorageBackendUnderLock(slug, input, allowPhysicalLocationChange)
     );
 
@@ -672,15 +669,24 @@ export async function updateStorageBackend(slug: string, input: StorageBackendUp
   const requiresWriteLock = storageNamespaceIdentity(currentConfig)
     !== storageNamespaceIdentity(nextConfig);
   if (requiresWriteLock) {
-    await withStorageLocationWriteLock(() => updateWithBackendLock(true));
+    await withStorageLocationWriteAndAdvisoryLock(
+      backendLockKey,
+      () => updateStorageBackendUnderLock(slug, input, true)
+    );
     return;
   }
 
   try {
-    await withStorageLocationReadLock(() => updateWithBackendLock(false));
+    await withStorageLocationReadAndAdvisoryLock(
+      backendLockKey,
+      () => updateStorageBackendUnderLock(slug, input, false)
+    );
   } catch (error) {
     if (!(error instanceof StorageLocationWriteLockRequired)) throw error;
-    await withStorageLocationWriteLock(() => updateWithBackendLock(true));
+    await withStorageLocationWriteAndAdvisoryLock(
+      backendLockKey,
+      () => updateStorageBackendUnderLock(slug, input, true)
+    );
   }
 }
 
@@ -688,8 +694,9 @@ export async function deleteStorageBackend(slug: string) {
   if (slug === "local") {
     throw new ApiError(400, "storage_backend_reserved", "'local' 是内置后端，不能删除");
   }
-  await withStorageLocationWriteLock(() =>
-    withAdvisoryLock(`imageshow:storage-backend:${slug}`, async () => {
+  await withStorageLocationWriteAndAdvisoryLock(
+    `imageshow:storage-backend:${slug}`,
+    async () => {
       const snapshot = await storageBackendSnapshot(slug);
       if (snapshot.is_default) {
         throw new ApiError(
@@ -749,7 +756,7 @@ export async function deleteStorageBackend(slug: string) {
         );
       }
       invalidateStorageBackendCache();
-    })
+    }
   );
 }
 

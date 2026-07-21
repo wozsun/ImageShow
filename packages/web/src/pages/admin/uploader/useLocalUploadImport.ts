@@ -53,7 +53,7 @@ export function useLocalUploadImport(options: {
           manifest_position: job.manifestPosition
         },
         onSession: (session) => queue.updateJob(job.id, { sessionId: session.id }),
-        transfer: async (session) => {
+        materialize: async (session) => {
           queue.updateJob(job.id, { status: "uploading", message: "浏览器上传原文件", transferProgress: 0 });
           const request = uploadLocalRaw(session, job.file!, {
             onProgress: (transferProgress) => {

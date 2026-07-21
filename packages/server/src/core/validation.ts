@@ -162,7 +162,7 @@ export const batchMigrateStorageInput = z.object({
 });
 
 export const importCreateInput = metadataInput.extend({
-  mode: z.enum(["upload", "download", "proxy"]),
+  mode: z.enum(["upload", "download"]),
   brightness: z.enum(["dark", "light", "auto"]).default("auto"),
   source_url: optionalHttpsDomainUrlField(externalImageRejectedMessage),
   image_time: z.string().trim().min(1).max(64).optional(),
@@ -176,7 +176,7 @@ export const importCreateInput = metadataInput.extend({
   if (value.mode === "upload" && !value.size) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["size"], message: "上传模式需要文件大小" });
   }
-  if (value.mode !== "upload" && !value.source_url) {
+  if (value.mode === "download" && !value.source_url) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["source_url"], message: "链接导入模式需要图片链接" });
   }
 });

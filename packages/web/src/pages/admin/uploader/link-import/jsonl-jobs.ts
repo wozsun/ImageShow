@@ -8,7 +8,6 @@ import {
   type ImportAttributeDefaults
 } from "../../../../lib/upload/upload-utils.js";
 import type { JsonlManifestItem } from "../import-api.js";
-import type { LinkImportMode } from "./LinkUrlDialog.js";
 
 function valueOrDefault<T>(value: T | undefined, fallback: T) {
   return value === undefined ? fallback : value;
@@ -47,14 +46,13 @@ export function mergeJsonlDraft(
 export function jsonlImportJobs(
   items: JsonlManifestItem[],
   defaults: ImportAttributeDefaults,
-  defaultMode: LinkImportMode,
   defaultStorageSlug: string
 ): ImportJob[] {
   const batchTime = new Date().toISOString();
   return items.map((item) => ({
     id: browserUuid(),
     attemptKey: browserUuid(),
-    kind: item.mode ?? defaultMode,
+    kind: "download",
     status: "queued",
     message: "等待下载",
     preview: "",

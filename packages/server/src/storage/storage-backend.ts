@@ -16,7 +16,7 @@ export type OpenedRead = {
   backend: StorageType;
 };
 
-export type CopyPrefix = "media" | "thumbs" | "link" | "_uploads";
+export type CopyPrefix = "media" | "thumbs" | "_uploads";
 
 export type StorageSelfTest = {
   backend: StorageType;

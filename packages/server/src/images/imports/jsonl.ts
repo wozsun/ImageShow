@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { appConfig, slugPattern, type Brightness, type Device, type ImportMode } from "@imageshow/shared";
+import { appConfig, slugPattern, type Brightness, type Device } from "@imageshow/shared";
 import { ImageTimeError, parseImageTime } from "../image-time.ts";
 
 const httpsUrl = z.string().trim().max(2048).url().refine((value) => new URL(value).protocol === "https:", "必须使用 HTTPS URL");
@@ -10,7 +10,6 @@ const jsonlRowSchema = z.object({
   original: httpsUrl,
   source: pageUrl.optional(),
   image_time: z.string().trim().min(1).max(64).optional(),
-  mode: z.enum(["download", "proxy"]).optional(),
   author: slug.optional(),
   tags: z.array(slug).max(50).transform((tags) => [...new Set(tags)]).optional(),
   title: z.string().trim().max(appConfig.imageMetadata.titleMaxLength).optional(),
@@ -27,7 +26,6 @@ type JsonlManifestItem = {
   original: string;
   source?: string;
   image_time?: string;
-  mode?: Extract<ImportMode, "download" | "proxy">;
   author?: string;
   tags?: string[];
   title?: string;

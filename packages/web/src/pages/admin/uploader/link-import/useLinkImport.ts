@@ -13,16 +13,16 @@ import { isCurrentImportAttempt, type AppendImportQueueApi } from "../prepared-r
 import {
   cancelStoredImport,
   createImportSessionsBatch,
+  materializeImportSession,
   type ImportSessionCreateInput,
   type ImportSessionHandle
 } from "../import-api.js";
 import { applyImportAttemptFailure, cancelImportAttempt, runImportAttempt } from "../import-attempt.js";
-import type { LinkImportMode } from "./LinkUrlDialog.js";
 
 function linkSessionInput(job: ImportJob): ImportSessionCreateInput {
   return {
     ...job.draft,
-    mode: job.kind === "proxy" ? "proxy" : "download",
+    mode: "download",
     source_url: job.url,
     theme: normalizeTheme(job.draft.theme),
     author: normalizeAuthor(job.draft.author),
@@ -47,7 +47,6 @@ export function useLinkImport(options: {
   const prepare = useCallback(async (job: ImportJob, existingSession?: ImportSessionHandle) => {
     if (!job.url || job.kind === "local") return;
     const attemptKey = job.attemptKey;
-    const isProxy = job.kind === "proxy";
     let sessionCreated = Boolean(existingSession);
     const controller = new AbortController();
     controllers.current.set(job.id, controller);
@@ -55,7 +54,7 @@ export function useLinkImport(options: {
       if (!existingSession) {
         queue.updateJob(job.id, {
           status: "queued",
-          message: isProxy ? "创建代理导入会话" : "创建下载会话"
+          message: "创建下载会话"
         });
       }
       const result = await runImportAttempt({
@@ -67,15 +66,19 @@ export function useLinkImport(options: {
         onSession: (session) => {
           sessionCreated = true;
           queue.updateJob(job.id, {
-            status: isProxy ? "processing" : "downloading",
-            message: isProxy ? "探测外链并生成代理缩略图" : "服务端下载原图",
+            status: "downloading",
+            message: "服务端下载原图",
             sessionId: session.id
           });
         },
+        materialize: (session) => materializeImportSession(
+          session,
+          controller.signal
+        ),
         onPreparing: () => {
           queue.updateJob(job.id, {
-            status: isProxy ? "processing" : "downloading",
-            message: isProxy ? "探测外链并生成代理缩略图" : "服务端下载原图"
+            status: "processing",
+            message: "下载完成，等待服务端处理"
           });
         }
       });
@@ -188,8 +191,8 @@ export function useLinkImport(options: {
     await runWithConcurrency(accepted, concurrency, ({ job, session }) => prepare(job, session));
   }, [concurrency, prepare, queue]);
 
-  const addUrls = useCallback(async (urls: string[], mode: LinkImportMode) => {
-    const jobs = linkImportJobs(mode, urls, defaults, fillOriginalUrl, storageSlug);
+  const addUrls = useCallback(async (urls: string[]) => {
+    const jobs = linkImportJobs(urls, defaults, fillOriginalUrl, storageSlug);
     await addBatch(jobs, "urls");
   }, [addBatch, defaults, fillOriginalUrl, storageSlug]);
 

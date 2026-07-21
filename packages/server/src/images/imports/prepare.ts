@@ -1,5 +1,5 @@
 import type { Device } from "@imageshow/shared";
-import { getInputImageMaxBytes, getInputImageMaxLongEdge } from "../../config/app-settings.ts";
+import { getInputImageMaxLongEdge } from "../../config/app-settings.ts";
 import { getRuntimeConfig } from "../../config/runtime-config-store.ts";
 import { pool } from "../../core/db.ts";
 import { ApiError } from "../../core/api-error.ts";
@@ -7,20 +7,17 @@ import { contentType, writeStorageBuffer } from "../../storage/storage.ts";
 import { detectBrightness } from "../brightness.ts";
 import { deviceFromDimensions } from "../classification.ts";
 import {
-  createThumbnail,
-  probeImageBytes,
   sha256Buffer,
   transcodeStoredImage
 } from "../processing.ts";
 import { getDuplicateImagesByMd5 } from "../read-models/duplicates.ts";
 import { runImportPreparation } from "./execution.ts";
-import { fetchImportImage, fetchImportImageToFile } from "./fetch.ts";
+import { recoverCompletedMaterialization } from "./materialize.ts";
 import {
   assertImportStillPreparing,
   importWasCancelled,
   markImportFailed,
   notifyImportStatus,
-  setImportDownloadProgress,
   setImportPhase
 } from "./progress.ts";
 import {
@@ -32,6 +29,7 @@ import { rawImportPath, removeRawImport } from "./temp-files.ts";
 import type {
   ImportMode,
   ImportSessionRow,
+  ImportStatus,
   PreparedImportResult,
   PreparedPayload
 } from "./types.ts";
@@ -39,11 +37,6 @@ import type {
 type StoredPreparationSession = Pick<
   ImportSessionRow,
   "mode" | "status" | "metadata_payload" | "source_url" | "storage_slug"
->;
-
-type ProxyPreparationSession = Pick<
-  ImportSessionRow,
-  "metadata_payload" | "source_url" | "storage_slug"
 >;
 
 function requiredDeviceFromDimensions(width: number, height: number): Device {
@@ -76,6 +69,62 @@ async function preparedResult(
   };
 }
 
+const publishedPreparationStatuses = new Set<ImportStatus>([
+  "ready",
+  "committing",
+  "finalized"
+]);
+
+async function finishPreparation(
+  id: string,
+  storageSlug: string,
+  payload: PreparedPayload
+) {
+  let finalizationError: unknown;
+  try {
+    const updated = await pool.query(
+      `UPDATE import_session
+       SET status='ready', prepared_payload=$2::jsonb, error='', updated_at=now()
+       WHERE id=$1 AND status='preparing'`,
+      [id, JSON.stringify(payload)]
+    );
+    if (!updated.rowCount) {
+      finalizationError = new ApiError(409, "import_cancelled", "导入已取消");
+    }
+  } catch (error) {
+    finalizationError = error;
+  }
+
+  if (!finalizationError) {
+    await notifyImportStatus(id).catch(() => undefined);
+    return;
+  }
+
+  let current: { status: ImportStatus } | undefined;
+  try {
+    current = (await pool.query(
+      "SELECT status FROM import_session WHERE id=$1",
+      [id]
+    )).rows[0] as { status: ImportStatus } | undefined;
+  } catch {
+    // The ready UPDATE may already have committed. Preserve raw and prepared
+    // objects until PostgreSQL can resolve the authoritative state.
+    throw finalizationError;
+  }
+  if (current && publishedPreparationStatuses.has(current.status)) {
+    await notifyImportStatus(id).catch(() => undefined);
+    return;
+  }
+
+  if (await markImportFailed(id, finalizationError)) {
+    await Promise.all([
+      cleanupStagedObjects(id, storageSlug).catch(() => undefined),
+      removeRawImport(id).catch(() => undefined)
+    ]);
+  }
+  throw finalizationError;
+}
+
 async function prepareStoredImageSession(
   id: string,
   mode: Extract<ImportMode, "upload" | "download">,
@@ -92,6 +141,8 @@ async function prepareStoredImageSession(
   }
 
   const sourcePath = rawImportPath(id);
+  let payload: PreparedPayload;
+  let result: PreparedImportResult;
   try {
     if (signal.aborted) throw new ApiError(409, "import_cancelled", "导入已取消");
     const runtime = getRuntimeConfig();
@@ -132,7 +183,7 @@ async function prepareStoredImageSession(
     );
     if (writeFailure) throw writeFailure.reason;
 
-    const payload: PreparedPayload = {
+    payload = {
       ...session.metadata_payload,
       mode,
       source_url: session.source_url,
@@ -153,164 +204,122 @@ async function prepareStoredImageSession(
       detected_device: detectedDevice,
       detected_brightness: detectedBrightness
     };
-    const updated = await pool.query(
-      `UPDATE import_session
-       SET status='ready', prepared_payload=$2::jsonb, error='', updated_at=now()
-       WHERE id=$1 AND status='preparing'`,
-      [id, JSON.stringify(payload)]
-    );
-    if (!updated.rowCount) throw new ApiError(409, "import_cancelled", "导入已取消");
-    await notifyImportStatus(id);
-    return preparedResult(id, session.storage_slug, payload);
+    result = await preparedResult(id, session.storage_slug, payload);
   } catch (error) {
-    await cleanupStagedObjects(id, session.storage_slug).catch(() => undefined);
-    await markImportFailed(id, error);
-    throw error;
-  } finally {
-    await removeRawImport(id);
-  }
-}
-
-async function prepareUploadSession(id: string, signal: AbortSignal) {
-  const prepared = await pool.query(
-    "UPDATE import_session SET status='preparing', updated_at=now() WHERE id=$1 AND mode='upload' AND status='receiving'",
-    [id]
-  );
-  if (!prepared.rowCount) {
-    throw new ApiError(409, "invalid_import_state", "上传任务尚未接收文件");
-  }
-  await notifyImportStatus(id);
-  return prepareStoredImageSession(id, "upload", signal);
-}
-
-async function prepareDownloadSession(id: string, signal: AbortSignal) {
-  const claimed = await pool.query(
-    "UPDATE import_session SET status='receiving', updated_at=now() WHERE id=$1 AND mode='download' AND status='created' RETURNING source_url",
-    [id]
-  );
-  if (!claimed.rowCount) {
-    throw new ApiError(409, "invalid_import_state", "下载导入任务不能开始");
-  }
-  await notifyImportStatus(id);
-
-  const url = String(claimed.rows[0].source_url ?? "");
-  try {
-    setImportPhase(id, "downloading", "服务端下载原图");
-    let lastProgressUpdateAt = 0;
-    await fetchImportImageToFile(
-      url,
-      rawImportPath(id),
-      getInputImageMaxBytes(),
-      signal,
-      (progress) => {
-        const now = Date.now();
-        if (progress < 100 && lastProgressUpdateAt && now - lastProgressUpdateAt < 250) return;
-        lastProgressUpdateAt = now;
-        setImportDownloadProgress(id, progress);
-      }
-    );
-    setImportPhase(id, "processing", "下载完成，进入图片处理");
-    const prepared = await pool.query(
-      "UPDATE import_session SET status='preparing', updated_at=now() WHERE id=$1 AND status='receiving'",
-      [id]
-    );
-    if (!prepared.rowCount) throw new ApiError(409, "import_cancelled", "导入已取消");
-    await notifyImportStatus(id);
-    return prepareStoredImageSession(id, "download", signal);
-  } catch (error) {
-    await removeRawImport(id);
-    await markImportFailed(id, error);
+    if (await markImportFailed(id, error)) {
+      await Promise.all([
+        cleanupStagedObjects(id, session.storage_slug).catch(() => undefined),
+        removeRawImport(id).catch(() => undefined)
+      ]);
+    }
     throw error;
   }
+
+  await finishPreparation(id, session.storage_slug, payload);
+  await removeRawImport(id).catch(() => undefined);
+  return result;
 }
 
-async function prepareProxySession(id: string, signal: AbortSignal) {
-  const claimed = await pool.query(
-    `UPDATE import_session
-        SET status='preparing', updated_at=now()
-      WHERE id=$1 AND mode='proxy' AND status='created'
-      RETURNING metadata_payload, source_url, storage_slug`,
-    [id]
-  );
-  if (!claimed.rowCount) {
-    throw new ApiError(409, "invalid_import_state", "代理链接导入任务不能开始");
-  }
-  await notifyImportStatus(id);
-  const session = claimed.rows[0] as ProxyPreparationSession;
+type PreparationSessionState = Pick<
+  ImportSessionRow,
+  "mode" | "status" | "storage_slug" | "prepared_payload"
+>;
 
-  try {
-    setImportPhase(id, "probing", "下载外链用于探测尺寸和生成缩略图");
-    const buffer = await fetchImportImage(
-      session.source_url,
-      getInputImageMaxBytes(),
-      signal
-    );
-    const probe = await probeImageBytes(buffer);
-    const thumbnail = await createThumbnail(buffer);
-    const detectedDevice = requiredDeviceFromDimensions(probe.width, probe.height);
-    const detectedBrightness = await detectBrightness(thumbnail);
-    await writeStorageBuffer(
-      "_uploads",
-      stagingThumbnailKey(id),
-      thumbnail,
-      "image/webp",
-      session.storage_slug
-    );
-
-    const payload: PreparedPayload = {
-      ...session.metadata_payload,
-      mode: "proxy",
-      source_url: session.source_url,
-      prepared_thumbnail_key: stagingThumbnailKey(id),
-      original_size: probe.size,
-      original_width: probe.width,
-      original_height: probe.height,
-      width: probe.width,
-      height: probe.height,
-      ext: probe.ext,
-      md5: probe.md5,
-      prepared_thumbnail_sha256: sha256Buffer(thumbnail),
-      size: probe.size,
-      thumbnail_size: thumbnail.byteLength,
-      quality: null,
-      transcoded: false,
-      detected_device: detectedDevice,
-      detected_brightness: detectedBrightness
-    };
-    const updated = await pool.query(
-      `UPDATE import_session
-       SET status='ready', prepared_payload=$2::jsonb, error='', updated_at=now()
-       WHERE id=$1 AND status='preparing'`,
-      [id, JSON.stringify(payload)]
-    );
-    if (!updated.rowCount) throw new ApiError(409, "import_cancelled", "导入已取消");
-    await notifyImportStatus(id);
-    return preparedResult(id, session.storage_slug, payload);
-  } catch (error) {
-    await cleanupStagedObjects(id, session.storage_slug).catch(() => undefined);
-    await markImportFailed(id, error);
-    throw error;
-  }
-}
-
-export async function prepareImportSession(id: string) {
-  const session = (await pool.query(
+async function preparationSessionState(id: string) {
+  return (await pool.query(
     `SELECT mode, status, storage_slug, prepared_payload
        FROM import_session
       WHERE id=$1`,
     [id]
-  )).rows[0] as Pick<
-    ImportSessionRow,
-    "mode" | "status" | "storage_slug" | "prepared_payload"
-  > | undefined;
+  )).rows[0] as PreparationSessionState | undefined;
+}
+
+async function readyPreparationResult(id: string, session: PreparationSessionState) {
+  const result = await preparedResult(
+    id,
+    session.storage_slug,
+    session.prepared_payload as PreparedPayload
+  );
+  await removeRawImport(id).catch(() => undefined);
+  return result;
+}
+
+async function prepareCurrentSession(
+  id: string,
+  mode: ImportMode,
+  signal: AbortSignal
+) {
+  let session = await preparationSessionState(id);
   if (!session) throw new ApiError(404, "not_found", "导入任务不存在");
-  if (session.status === "ready") {
-    return preparedResult(
-      id,
-      session.storage_slug,
-      session.prepared_payload as PreparedPayload
-    );
+  if (session.mode !== mode) {
+    throw new ApiError(409, "invalid_import_state", "导入任务处理模式不匹配");
   }
+  if (session.status === "ready") return readyPreparationResult(id, session);
+  if (session.status === "finalized") {
+    throw new ApiError(409, "import_finalized", "导入任务已完成");
+  }
+  if (await importWasCancelled(id)) {
+    throw new ApiError(409, "import_cancelled", "导入已取消");
+  }
+
+  if (session.status === "materializing") {
+    if (!await recoverCompletedMaterialization(id, mode)) {
+      throw new ApiError(409, "invalid_import_state", "导入素材尚未接收完成");
+    }
+    session = await preparationSessionState(id);
+    if (!session) throw new ApiError(404, "not_found", "导入任务不存在");
+  }
+
+  const recovering = session.status === "preparing";
+  if (session.status === "received") {
+    let claimError: unknown;
+    try {
+      const prepared = await pool.query(
+        `UPDATE import_session
+         SET status='preparing', error='', updated_at=now()
+         WHERE id=$1 AND mode=$2 AND status='received'`,
+        [id, mode]
+      );
+      if (!prepared.rowCount) {
+        claimError = new ApiError(
+          409,
+          "invalid_import_state",
+          "导入素材尚未接收完成"
+        );
+      }
+    } catch (error) {
+      claimError = error;
+    }
+
+    if (claimError) {
+      let current: PreparationSessionState | undefined;
+      try {
+        current = await preparationSessionState(id);
+      } catch {
+        // The claim may already have committed. Preserve raw and let a retry
+        // resolve the authoritative status if PostgreSQL cannot answer now.
+        throw claimError;
+      }
+      if (current?.status === "ready") return readyPreparationResult(id, current);
+      if (current?.status !== "preparing") throw claimError;
+    }
+    await notifyImportStatus(id).catch(() => undefined);
+  } else if (!recovering) {
+    throw new ApiError(409, "invalid_import_state", "导入素材尚未接收完成");
+  }
+
+  if (recovering) {
+    // Owning the session advisory lock proves that no live materialize/prepare
+    // execution can still publish these attempt-scoped staging objects.
+    await cleanupStagedObjects(id, session.storage_slug);
+  }
+  return prepareStoredImageSession(id, mode, signal);
+}
+
+export async function prepareImportSession(id: string, requestSignal?: AbortSignal) {
+  const session = await preparationSessionState(id);
+  if (!session) throw new ApiError(404, "not_found", "导入任务不存在");
+  if (session.status === "ready") return readyPreparationResult(id, session);
   if (session.status === "finalized") {
     throw new ApiError(409, "import_finalized", "导入任务已完成");
   }
@@ -319,8 +328,6 @@ export async function prepareImportSession(id: string) {
   }
 
   return runImportPreparation(id, session.mode, (signal) => {
-    if (session.mode === "upload") return prepareUploadSession(id, signal);
-    if (session.mode === "download") return prepareDownloadSession(id, signal);
-    return prepareProxySession(id, signal);
-  });
+    return prepareCurrentSession(id, session.mode, signal);
+  }, requestSignal);
 }

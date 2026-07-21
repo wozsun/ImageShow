@@ -4,7 +4,6 @@ import { pool } from "../core/db.ts";
 import { logger } from "../core/logger.ts";
 import { createThumbnail, md5Buffer } from "../images/processing.ts";
 import {
-  linkThumbnailKey,
   storageObjectKey,
   thumbnailObjectKey
 } from "./image-paths.ts";
@@ -28,7 +27,6 @@ export type RelocatableImage = {
   md5?: string | null;
   object_key: string;
   storage_slug: string;
-  is_link: boolean;
 };
 
 export type ImageClassificationTarget = Pick<
@@ -81,15 +79,13 @@ export async function prepareVerifiedImageRelocation(
   const storage = await resolveStorageAccess(image.storage_slug);
   const createdObjects: MoveCleanupObjectInput[] = [];
   const sourceObjects: MoveCleanupObjectInput[] = [];
-  const nextObjectKey = image.is_link
-    ? image.object_key
-    : storageObjectKey(
-        target.device,
-        target.brightness,
-        target.theme,
-        image.id,
-        image.ext
-      );
+  const nextObjectKey = storageObjectKey(
+    target.device,
+    target.brightness,
+    target.theme,
+    image.id,
+    image.ext
+  );
   const cleanupCandidate = (object: MoveCleanupObjectInput) =>
     removeObjectsOrEnqueueCleanup(
       image.id,
@@ -98,45 +94,7 @@ export async function prepareVerifiedImageRelocation(
     );
 
   try {
-    if (image.is_link) {
-      const sourceKey = linkThumbnailKey(
-        image.device,
-        image.brightness,
-        image.theme,
-        image.id
-      );
-      const targetKey = linkThumbnailKey(
-        target.device,
-        target.brightness,
-        target.theme,
-        image.id
-      );
-      if (sourceKey !== targetKey) {
-        if (!await storage.driver.exists("link", sourceKey)) {
-          throw sourceMissingError(image, "link", sourceKey);
-        }
-        const result = await copyVerifiedObjectWithinStorage({
-          storage,
-          fromPrefix: "link",
-          fromKey: sourceKey,
-          toPrefix: "link",
-          toKey: targetKey,
-          cleanupCandidate
-        });
-        if (result.created) {
-          createdObjects.push({
-            prefix: "link",
-            key: targetKey,
-            backend: image.storage_slug
-          });
-        }
-        sourceObjects.push({
-          prefix: "link",
-          key: sourceKey,
-          backend: image.storage_slug
-        });
-      }
-    } else if (nextObjectKey !== image.object_key) {
+    if (nextObjectKey !== image.object_key) {
       if (!await storage.driver.exists("media", image.object_key)) {
         throw sourceMissingError(image, "media", image.object_key);
       }

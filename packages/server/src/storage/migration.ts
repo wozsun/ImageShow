@@ -1,7 +1,7 @@
 import { pool } from "../core/db.ts";
 import { ApiError, errorMessage } from "../core/api-error.ts";
 import { createThumbnail, md5Buffer } from "../images/processing.ts";
-import { thumbnailObjectKey, thumbnailRef } from "./image-paths.ts";
+import { thumbnailObjectKey } from "./image-paths.ts";
 import {
   assertStorageWritable,
   getStorageBackend,
@@ -23,7 +23,6 @@ export type MigrateRecord = {
   ext: string;
   status: string;
   storage_slug: string;
-  is_link: boolean;
   device: string;
   brightness: string;
   theme: string;
@@ -39,7 +38,6 @@ const migrateColumns = [
   "ext",
   "status",
   "storage_slug",
-  "is_link",
   "device",
   "brightness",
   "theme",
@@ -104,58 +102,40 @@ async function migrateImageStorageUnlocked(
   };
 
   try {
-    if (current.is_link) {
-      const thumb = thumbnailRef(current);
-      if (!(await sourceAccess.driver.exists(thumb.prefix, thumb.key))) return "missing";
-      await materialize(
-        thumb.prefix,
-        thumb.key,
-        await sourceAccess.driver.readBuffer(thumb.prefix, thumb.key),
-        "image/webp"
+    if (!(await sourceAccess.driver.exists("media", current.object_key))) return "missing";
+    const image = await sourceAccess.driver.readBuffer("media", current.object_key);
+    if (current.md5 && md5Buffer(image) !== current.md5) {
+      throw new ApiError(
+        502,
+        "storage_source_integrity_failed",
+        "源存储对象与数据库记录的 MD5 不一致",
+        { image_id: current.id, object_key: current.object_key }
       );
-      if (!sharedNamespace) {
-        sourceObjects.push({
-          prefix: thumb.prefix,
-          key: thumb.key,
-          backend: current.storage_slug
-        });
-      }
-    } else {
-      if (!(await sourceAccess.driver.exists("media", current.object_key))) return "missing";
-      const image = await sourceAccess.driver.readBuffer("media", current.object_key);
-      if (current.md5 && md5Buffer(image) !== current.md5) {
-        throw new ApiError(
-          502,
-          "storage_source_integrity_failed",
-          "源存储对象与数据库记录的 MD5 不一致",
-          { image_id: current.id, object_key: current.object_key }
-        );
-      }
-      await materialize(
-        "media",
-        current.object_key,
-        image,
-        contentType(current.ext)
-      );
+    }
+    await materialize(
+      "media",
+      current.object_key,
+      image,
+      contentType(current.ext)
+    );
 
-      const thumbKey = thumbnailObjectKey(current.object_key);
-      const sourceThumbExists = await sourceAccess.driver.exists("thumbs", thumbKey);
-      const thumb = sourceThumbExists
-        ? await sourceAccess.driver.readBuffer("thumbs", thumbKey)
-        : await createThumbnail(image);
-      await materialize(
-        "thumbs",
-        thumbKey,
-        thumb,
-        "image/webp",
-        sourceThumbExists
+    const thumbKey = thumbnailObjectKey(current.object_key);
+    const sourceThumbExists = await sourceAccess.driver.exists("thumbs", thumbKey);
+    const thumb = sourceThumbExists
+      ? await sourceAccess.driver.readBuffer("thumbs", thumbKey)
+      : await createThumbnail(image);
+    await materialize(
+      "thumbs",
+      thumbKey,
+      thumb,
+      "image/webp",
+      sourceThumbExists
+    );
+    if (!sharedNamespace) {
+      sourceObjects.push(
+        { prefix: "media", key: current.object_key, backend: current.storage_slug },
+        { prefix: "thumbs", key: thumbKey, backend: current.storage_slug }
       );
-      if (!sharedNamespace) {
-        sourceObjects.push(
-          { prefix: "media", key: current.object_key, backend: current.storage_slug },
-          { prefix: "thumbs", key: thumbKey, backend: current.storage_slug }
-        );
-      }
     }
 
     // The switch is conditional on the exact location that was copied. A

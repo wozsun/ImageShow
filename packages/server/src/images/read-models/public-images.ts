@@ -92,7 +92,7 @@ export async function listPublicImages(
 ): Promise<PublicImageListPayload> {
   const limit = query.limit ?? getRuntimeConfig().site.gallery.default_limit;
   const generation = await publicImagesCacheGeneration();
-  const cacheKey = `v2:${generation}:${publicImageListCacheKey({
+  const cacheKey = `v3:${generation}:${publicImageListCacheKey({
     ...query,
     limit
   })}`;
@@ -163,7 +163,7 @@ export async function listPublicImages(
 
 export async function getPublicImage(id: string) {
   const generation = await publicImagesCacheGeneration();
-  const cacheKey = `${generation}:${id}`;
+  const cacheKey = `v3:${generation}:${id}`;
   const cached = await getPublicImageDetailCache<PublicImageDetail>(cacheKey, generation);
   if (cached) return cached;
 
@@ -186,7 +186,6 @@ export async function getPublicImage(id: string) {
               ext,
               object_key,
               storage_slug,
-              is_link,
               description,
               source,
               original,

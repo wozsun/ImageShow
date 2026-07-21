@@ -1,6 +1,5 @@
 import { useEffect, useId, useRef, useState, type RefObject } from "react";
 import { Icon, type IconName } from "../../../../components/icon/Icon.js";
-import { SelectMenu } from "../../../../components/form/SelectMenu.js";
 import { OverlayScrollbar } from "../../../../components/layout/OverlayScrollbar.js";
 import { useDialogFocus } from "../../../../hooks/useDialogFocus.js";
 import { parseImportUrlInput, type ImportUrlParseResult } from "../import-job-utils.js";
@@ -20,18 +19,12 @@ import {
   type LinkInputMode
 } from "./link-input.js";
 
-export type LinkImportMode = "download" | "proxy";
 export type { LinkInputMode } from "./link-input.js";
 
 export type LinkDialogSubmission =
-  | { inputMode: "urls"; urls: string[]; mode: LinkImportMode }
-  | { inputMode: "jsonl"; manifest: JsonlManifestResult; mode: LinkImportMode }
-  | { inputMode: "weibo"; result: WeiboImportResult; mode: LinkImportMode };
-
-const modeOptions = [
-  { value: "download", label: "下载图片" },
-  { value: "proxy", label: "代理链接" }
-] as const;
+  | { inputMode: "urls"; urls: string[] }
+  | { inputMode: "jsonl"; manifest: JsonlManifestResult }
+  | { inputMode: "weibo"; result: WeiboImportResult };
 
 const inputModePresentation: Record<LinkInputMode, {
   heading: string;
@@ -80,7 +73,6 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const requestControllerRef = useRef<AbortController | null>(null);
   const [text, setText] = useState("");
-  const [mode, setMode] = useState<LinkImportMode>("download");
   const [inputMode, setInputMode] = useState<LinkInputMode>(initialInputMode);
   const [urlParseResult, setUrlParseResult] = useState<ImportUrlParseResult | null>(null);
   const [jsonlManifest, setJsonlManifest] = useState<JsonlManifestResult | null>(null);
@@ -192,7 +184,7 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
         return;
       }
       if (!urlParseResultCurrent.urls.length) return;
-      onSubmit({ inputMode, urls: urlParseResultCurrent.urls, mode });
+      onSubmit({ inputMode, urls: urlParseResultCurrent.urls });
       close();
       return;
     }
@@ -203,10 +195,10 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
     }
     if (!manifestCurrent.items.length) return;
     if (inputMode === "jsonl" && jsonlManifestCurrent) {
-      onSubmit({ inputMode, manifest: jsonlManifestCurrent, mode });
+      onSubmit({ inputMode, manifest: jsonlManifestCurrent });
     }
     if (inputMode === "weibo" && weiboResultCurrent) {
-      onSubmit({ inputMode, result: weiboResultCurrent, mode });
+      onSubmit({ inputMode, result: weiboResultCurrent });
     }
     close();
   };
@@ -320,18 +312,9 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
           </div>
         )}
         <p className="hint link-import-mode-hint">
-          {mode === "download"
-            ? "下载图片：服务端下载、压缩并保存图片，原始下载数据不会保留。"
-            : "代理链接：仅保存缩略图和外链，查看图片时由服务端代理访问。"}
+          服务端会下载、压缩并保存图片，原始下载数据不会保留。
         </p>
         <div className="link-import-actions">
-          <SelectMenu
-            className="link-import-mode"
-            value={mode}
-            onChange={(value) => setMode(value as LinkImportMode)}
-            options={modeOptions}
-            ariaLabel="链接导入模式"
-          />
           <div className="link-import-action-buttons">
             <button type="button" onClick={close}>取消</button>
             <button

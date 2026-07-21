@@ -13,13 +13,16 @@ import {
 } from "../core/validation.ts";
 import { commitImportSession } from "../images/imports/commit.ts";
 import { prepareImportSession } from "../images/imports/prepare.ts";
+import {
+  materializeDownloadSession,
+  receiveImportFile
+} from "../images/imports/materialize.ts";
 import { listImportStatuses, streamImportEvents } from "../images/imports/progress.ts";
 import {
   cancelImportSession,
   createImportSessions,
   createImportSession,
-  previewImportSession,
-  receiveImportFile
+  previewImportSession
 } from "../images/imports/session.ts";
 import { isReservedSubdomain } from "../themes/host.ts";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
@@ -138,8 +141,19 @@ export function registerImportRoutes(app: Hono) {
     return c.json(ok());
   });
 
+  app.post(`${adminApiBasePath}/imports/:id/materialize`, async (c) => {
+    await materializeDownloadSession(
+      parse(uuidInput, c.req.param("id")),
+      c.req.raw.signal
+    );
+    return c.json(ok());
+  });
+
   app.post(`${adminApiBasePath}/imports/:id/prepare`, async (c) => {
-    return c.json(ok(await prepareImportSession(parse(uuidInput, c.req.param("id")))));
+    return c.json(ok(await prepareImportSession(
+      parse(uuidInput, c.req.param("id")),
+      c.req.raw.signal
+    )));
   });
 
   app.get(`${adminApiBasePath}/imports/:id/preview/full`, async (c) => {

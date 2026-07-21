@@ -67,7 +67,7 @@ export async function runImportAttempt(options: {
   createInput: ImportSessionCreateInput;
   session?: ImportSessionHandle;
   onSession: (session: ImportSessionHandle) => void;
-  transfer?: (session: ImportSessionHandle) => Promise<void>;
+  materialize: (session: ImportSessionHandle) => Promise<void>;
   onPreparing: () => void;
 }): Promise<ImportAttemptResult | null> {
   const { queue, job, controller } = options;
@@ -80,12 +80,10 @@ export async function runImportAttempt(options: {
   }
 
   options.onSession(session);
-  if (options.transfer) {
-    await options.transfer(session);
-    if (!isCurrentImportAttempt(queue, job.id, attemptKey)) {
-      await cancelStoredImport(session.id).catch(() => undefined);
-      return null;
-    }
+  await options.materialize(session);
+  if (!isCurrentImportAttempt(queue, job.id, attemptKey)) {
+    await cancelStoredImport(session.id).catch(() => undefined);
+    return null;
   }
 
   options.onPreparing();

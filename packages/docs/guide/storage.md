@@ -6,7 +6,7 @@
 - **S3 兼容存储**：填写 HTTPS endpoint、region、bucket、access key、secret key、根目录与可选 HTTPS 公开访问域名（public base URL），可点击「设为默认上传位置」。
 - **WebDAV 存储**：填写 HTTPS base URL、用户名、密码（HTTP Basic）、根目录与可选 HTTPS 公开访问域名（public base URL）。连接 / 首字节超时默认 15 秒，流读取空闲超时默认 15 秒，任务总超时默认 300 秒，三者均可在后端编辑窗口调整；持续收到数据的大文件不会只因传输超过 15 秒被中断。服务器用标准 WebDAV 动词（PROPFIND/MKCOL/PUT/GET/DELETE/COPY）读写，按需自动创建父目录；PROPFIND 响应用 XML parser 解析，并只接受与配置端点同源且位于当前列举根目录内的资源链接，避免将认证信息发送到服务端响应指定的其他地址。临时性 429/5xx、连接 / 首字节 / 空闲超时或网络失败会有限重试和退避，调用方 Abort、Range 流切片和流取消仍向下传递。后端内复制优先使用原生 COPY，异常时退化为 GET+PUT。GET / HEAD 固定请求 `Accept-Encoding: identity`；若服务端忽略 Range 并返回完整 200，ImageShow 用流式跳过与截取产生 206，不缓冲完整对象。**Depth: infinity 列举**默认关闭；关闭时并发递归 `Depth: 1`，开启后单次列举整棵子树，两种方式都有最大结果数保护。
 
-多个后端可同时存在：每张图片记录自己所在的后端（`storage_slug`），读取、缩略图与删除都通过注册表统一解析该图自身的配置和 driver。在**图片编辑窗口**可把单张图迁移到另一后端，在**批量编辑窗口**可批量迁移。批量迁移响应返回 `migrated`、`unchanged` 与 `failed`；管理端仅在 `failed=0` 时按完全成功关闭窗口，部分或全部失败会保留迁移窗口并显示统计结果。在用的后端无法删除；图片、任何尚未清理的导入会话、未解决的 `move.cleanup` 或 `_uploads` 暂存对象均需先移走或清理。**链接图片同样可迁移**——它没有我们的原图，迁移即把其缩略图搬到目标后端（缩略图仍存于独立的 `link/` 前缀，不与本地图的 `thumbs/` 缩略图混放），随后翻转 `storage_slug`。
+多个后端可同时存在：每张图片记录自己所在的后端（`storage_slug`），读取、缩略图与删除都通过注册表统一解析该图自身的配置和 driver。在**图片编辑窗口**可把单张图迁移到另一后端，在**批量编辑窗口**可批量迁移。批量迁移响应返回 `migrated`、`unchanged` 与 `failed`；管理端仅在 `failed=0` 时按完全成功关闭窗口，部分或全部失败会保留迁移窗口并显示统计结果。在用的后端无法删除；图片、任何尚未清理的导入会话、未解决的 `move.cleanup` 或 `_uploads` 暂存对象均需先移走或清理。
 
 所有会改变图片对象位置的操作共用“全局共享维护锁 + 单图独占锁”。进入锁后重新读取
 当前 `storage_slug`、对象键和分类，先流式读取源对象并把原图 / 缩略图复制到目标位置，
@@ -60,8 +60,8 @@ prepare 会保存 processed image 与缩略图的 SHA-256（图片同时保存 M
 对象已存在但内容不同返回 `storage_object_conflict`；本次复制成功后回读不一致返回
 `storage_transfer_integrity_failed`，便于区分存量冲突与存储端完整性故障。异常补偿只
 删除本次实际创建的候选；若 PostgreSQL 提交回包不确定，会先重读所有权，宁可保留无害
-副本也不删除已经成为正式位置的对象。所有 media / thumbs / link 删除失败都进入统一
+副本也不删除已经成为正式位置的对象。所有 media / thumbs 删除失败都进入统一
 清理追踪。事务完成后重新读取 PostgreSQL 当前位置，推进图片 cache revision，并仅在
 revision 仍未变化时预热 lookup，避免并发迁移后写回旧 `storage_slug`。
 
-本地上传与链接下载的原始字节统一先进入服务端 `data/tmp`。服务端在本地完成校验、标准化、缩略图与最终 MD5 后，才把 processed image 和 prepared thumbnail 写入目标后端 `_uploads`；代理链接只写 prepared thumbnail。因此无需为存储桶配置浏览器 CORS，远端后端也不会发生“上传 raw 后再下载回来处理”的重复传输。详见[功能与流程](./flows#三种图片导入模式)。
+本地上传与链接下载的原始字节统一先进入服务端 `data/tmp`。服务端在本地完成校验、标准化、缩略图与最终 MD5 后，才把 processed image 和 prepared thumbnail 写入目标后端 `_uploads`。因此无需为存储桶配置浏览器 CORS，远端后端也不会发生“上传 raw 后再下载回来处理”的重复传输。详见[功能与流程](./flows#四种导入入口与两种底层模式)。

@@ -15,10 +15,6 @@ type PurgeRow = {
   object_key: string;
   md5: string;
   storage_slug: string;
-  is_link: boolean;
-  device: string;
-  brightness: string;
-  theme: string;
   purge_attempts: number;
 };
 
@@ -27,10 +23,6 @@ const purgeReturnColumns = [
   "metadata.object_key",
   "metadata.md5",
   "metadata.storage_slug",
-  "metadata.is_link",
-  "metadata.device",
-  "metadata.brightness",
-  "metadata.theme",
   "metadata.purge_attempts"
 ].join(", ");
 
@@ -163,11 +155,10 @@ async function purgeClaimedRow(claim: PurgeRow): Promise<PurgeRow | null> {
     if (!row) return null;
 
     const thumb = thumbnailRef(row);
-    const removals = [removeObject(thumb.prefix, thumb.key, thumb.slug)];
-    if (!row.is_link) {
-      removals.push(removeObject("media", row.object_key, row.storage_slug));
-    }
-    await Promise.all(removals);
+    await Promise.all([
+      removeObject(thumb.prefix, thumb.key, thumb.slug),
+      removeObject("media", row.object_key, row.storage_slug)
+    ]);
 
     const deleted = await pool.query(
       `DELETE FROM metadata

@@ -176,7 +176,7 @@ export type ImageExt = "jpg" | "png" | "webp" | "gif" | "avif";
 export type RootRedirect = "home" | "gallery";
 export type RandomMethod = "proxy" | "redirect";
 export type GalleryOrder = "latest" | "random";
-export type ImportMode = "upload" | "download" | "proxy";
+export type ImportMode = "upload" | "download";
 export type SiteHomeSettings = {
   enabled: boolean;
   tagline: string;

@@ -41,7 +41,7 @@
     "docs_subdomain": "docs",
     // 是否启用文档站子域；关闭后 docs.<主域名> 返回 404，前缀仍保留且主题不可占用。
     "docs_enabled": true,
-    // 外链图片代理资源子域名前缀，对应 link.<主域名>。
+    // 外部原图安全代理子域名前缀，对应 link.<主域名>。
     "link_subdomain": "link",
     // 是否提供 robots.txt；关闭时 /robots.txt 对所有主机返回 404。
     // 开启后主站仅放行首页和文档站，其余资源域与主题子域默认禁抓。
@@ -60,19 +60,19 @@
     "list_page_size": 20,
     // 单客户端本地上传队列并发数，范围 1-128。
     "concurrency": 2,
-    // 服务端本地上传 prepare 全局并发数，范围 1-512；多个客户端共享此上限。
+    // 服务端本地上传 materialize 与 prepare 各自复用的全局并发数，范围 1-512。
     "global_concurrency": 5
   },
 
-  // 链接图片导入配置。
+  // URL、JSONL 与微博图片下载配置。
   "link_image": {
     // 链接导入时是否自动把输入 URL 填入“原图 URL”字段；不做可直达探测。
     "fill_original_url": false,
-    // 单客户端 URL 导入队列并发数，范围 1-128，覆盖“下载保存”和“代理链接”。
+    // 单客户端 URL 下载导入队列并发数，范围 1-128。
     "concurrency": 2,
-    // 服务端 URL 导入 prepare 全局并发数，范围 1-512；多个客户端共享此上限。
+    // 服务端 URL materialize 与 prepare 各自复用的全局并发数，范围 1-512。
     "global_concurrency": 5,
-    // 外链图片请求超时，单位秒；只覆盖下载和代理准备阶段的外部请求。
+    // 外链图片请求超时，单位秒；只覆盖服务器下载素材的外部请求。
     "fetch_timeout_seconds": 30,
     // URL 列表与 JSONL 清单的单次软上限，范围 1-1000；设置页不提供编辑控件。
     "max_items": 200

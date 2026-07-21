@@ -1,6 +1,5 @@
 import type { Context, Hono } from "hono";
 import { getRandomCategoryCounts } from "../random/random-cache.ts";
-import { proxyExternalImage } from "../images/serving.ts";
 import { contentType, publicImageUrls, resolveReadableObject } from "../storage/storage.ts";
 import { clientIp, noStoreCacheControl, publicMetadataCacheControl, routeError } from "../core/http.ts";
 import { pickRandom } from "../random/service.ts";
@@ -32,8 +31,6 @@ async function respondRandom(c: Context, url: URL) {
   const imageInfo = `${picked.device}-${picked.brightness}-${picked.theme}-${picked.id}`;
   const baseHeaders = { "Cache-Control": noStoreCacheControl, "X-Image-Info": imageInfo };
   if (picked.method === "proxy") {
-
-    if (picked.is_link) return proxyExternalImage(picked.object_key, picked.ext, c.req.method === "HEAD", baseHeaders);
     const opened = await (
       await resolveReadableObject("media", picked.object_key, picked.storage_slug)
     ).open();
@@ -46,9 +43,7 @@ async function respondRandom(c: Context, url: URL) {
 
   const { object_url: location } = await publicImageUrls(
     picked.object_key,
-    picked.storage_slug,
-    picked.is_link,
-    picked.is_link ? { id: picked.id, device: picked.device, brightness: picked.brightness, theme: picked.theme, ext: picked.ext } : undefined
+    picked.storage_slug
   );
   return new Response(null, { status: 302, headers: { ...baseHeaders, Location: location, "Referrer-Policy": "no-referrer" } });
 }

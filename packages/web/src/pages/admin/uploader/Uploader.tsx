@@ -241,7 +241,7 @@ export function Uploader({ onDone }: { onDone: () => void }) {
 
   const addLinks = (submission: LinkDialogSubmission) => {
     if (submission.inputMode === "urls") {
-      void addUrls(submission.urls, submission.mode);
+      void addUrls(submission.urls);
       return;
     }
     if (submission.inputMode === "weibo") {
@@ -258,13 +258,16 @@ export function Uploader({ onDone }: { onDone: () => void }) {
       void addWeiboJobs(weiboImportJobs(
         submission.result.manifest.items,
         defaults,
-        submission.mode,
         activeBackend
       ));
       return;
     }
     setJsonlErrors((current) => [...current, ...submission.manifest.errors]);
-    const jobs = jsonlImportJobs(submission.manifest.items, defaults, submission.mode, activeBackend);
+    const jobs = jsonlImportJobs(
+      submission.manifest.items,
+      defaults,
+      activeBackend
+    );
     void addJobs(jobs);
   };
 

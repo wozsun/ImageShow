@@ -9,7 +9,7 @@ import { logger } from "./logger.ts";
 
 const databaseConfig = deploymentConfig.database;
 
-export const pool = new pg.Pool({
+const poolConfig = {
   host: databaseConfig.host,
   port: databaseConfig.port,
   database: databaseConfig.name,
@@ -19,9 +19,19 @@ export const pool = new pg.Pool({
   idleTimeoutMillis: appConfig.pgPool.idleTimeoutMillis,
   connectionTimeoutMillis: appConfig.pgPool.connectionTimeoutMillis,
   maxLifetimeSeconds: appConfig.pgPool.maxLifetimeSeconds
+} satisfies pg.PoolConfig;
+
+export const pool = new pg.Pool(poolConfig);
+const advisoryLockPool = new pg.Pool({
+  ...poolConfig,
+  application_name: "imageshow-advisory-locks",
+  allowExitOnIdle: true
 });
 
 pool.on("error", (error) => logger.error("idle PostgreSQL client error", error));
+advisoryLockPool.on("error", (error) => {
+  logger.error("idle PostgreSQL advisory-lock client error", error);
+});
 
 export async function withTransaction<T>(work: (client: PoolClient) => Promise<T>): Promise<T> {
   const client = await pool.connect();
@@ -38,20 +48,96 @@ export async function withTransaction<T>(work: (client: PoolClient) => Promise<T
   }
 }
 
-export async function withAdvisoryLock<T>(key: string, work: () => Promise<T>, mode: "exclusive" | "shared" = "exclusive"): Promise<T> {
-  const client = await pool.connect();
-  const lockFunction = mode === "shared" ? "pg_advisory_lock_shared" : "pg_advisory_lock";
-  const unlockFunction = mode === "shared" ? "pg_advisory_unlock_shared" : "pg_advisory_unlock";
+export type AdvisoryLockRequest = {
+  key: string;
+  mode?: "exclusive" | "shared";
+  acquisition?: "wait" | "try";
+};
+
+export type AdvisoryLockAttempt<T> =
+  | { acquired: true; value: T }
+  | { acquired: false };
+
+async function runWithAdvisoryLocks<T>(
+  locks: readonly AdvisoryLockRequest[],
+  work: () => Promise<T>
+): Promise<AdvisoryLockAttempt<T>> {
+  const client = await advisoryLockPool.connect();
+  const acquired: AdvisoryLockRequest[] = [];
+  let destroyClient = false;
   try {
-    await client.query(`SELECT ${lockFunction}(hashtext($1))`, [key]);
-    return await work();
+    for (const lock of locks) {
+      const tryAcquire = lock.acquisition === "try";
+      const lockFunction = lock.mode === "shared"
+        ? tryAcquire ? "pg_try_advisory_lock_shared" : "pg_advisory_lock_shared"
+        : tryAcquire ? "pg_try_advisory_lock" : "pg_advisory_lock";
+      let result;
+      try {
+        result = await client.query(
+          `SELECT ${lockFunction}(hashtext($1)) AS acquired`,
+          [lock.key]
+        );
+      } catch (error) {
+        // The server may have acquired the lock before the response was lost.
+        // Destroying the session is the only reliable unlock in that case.
+        destroyClient = true;
+        throw error;
+      }
+      if (tryAcquire && result.rows[0]?.acquired !== true) {
+        return { acquired: false };
+      }
+      acquired.push(lock);
+    }
+    return { acquired: true, value: await work() };
   } finally {
-    await client.query(`SELECT ${unlockFunction}(hashtext($1))`, [key]).catch(() => undefined);
-    client.release();
+    for (const lock of acquired.reverse()) {
+      if (destroyClient) break;
+      const unlockFunction = lock.mode === "shared"
+        ? "pg_advisory_unlock_shared"
+        : "pg_advisory_unlock";
+      try {
+        const result = await client.query(
+          `SELECT ${unlockFunction}(hashtext($1)) AS unlocked`,
+          [lock.key]
+        );
+        if (result.rows[0]?.unlocked !== true) destroyClient = true;
+      } catch {
+        destroyClient = true;
+      }
+    }
+    client.release(destroyClient);
   }
 }
 
-export async function runMigrations() {
+export async function withAdvisoryLocks<T>(
+  locks: readonly Omit<AdvisoryLockRequest, "acquisition">[],
+  work: () => Promise<T>
+): Promise<T> {
+  const attempt = await runWithAdvisoryLocks(locks, work);
+  if (!attempt.acquired) throw new Error("Blocking advisory lock was not acquired");
+  return attempt.value;
+}
+
+export function tryWithAdvisoryLocks<T>(
+  locks: readonly AdvisoryLockRequest[],
+  work: () => Promise<T>
+): Promise<AdvisoryLockAttempt<T>> {
+  return runWithAdvisoryLocks(locks, work);
+}
+
+export function withAdvisoryLock<T>(
+  key: string,
+  work: () => Promise<T>,
+  mode: "exclusive" | "shared" = "exclusive"
+): Promise<T> {
+  return withAdvisoryLocks([{ key, mode }], work);
+}
+
+export function runMigrations() {
+  return withAdvisoryLock("imageshow:migrations", runMigrationsUnderLock);
+}
+
+async function runMigrationsUnderLock() {
   const here = dirname(fileURLToPath(import.meta.url));
   const bundledMigrationDir = join(here, "..", "migrations");
   const migrationDir = existsSync(bundledMigrationDir)
@@ -60,7 +146,6 @@ export async function runMigrations() {
   const files = (await readdir(migrationDir)).filter((file) => file.endsWith(".sql")).sort();
   const client = await pool.connect();
   try {
-    await client.query("SELECT pg_advisory_lock(hashtext('imageshow:migrations'))");
     for (const file of files) {
       const version = file.replace(/\.sql$/, "");
       let applied = false;
@@ -86,11 +171,14 @@ export async function runMigrations() {
       }
     }
   } finally {
-    await client.query("SELECT pg_advisory_unlock(hashtext('imageshow:migrations'))").catch(() => undefined);
     client.release();
   }
 }
 
 export async function pingDb() {
   await pool.query("SELECT 1");
+}
+
+export async function closeDatabasePools() {
+  await Promise.allSettled([pool.end(), advisoryLockPool.end()]);
 }

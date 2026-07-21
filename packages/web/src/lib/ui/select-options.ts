@@ -85,7 +85,7 @@ export const randomBrightnessSelectOptions: readonly SelectOption[] = [
 export const randomModeSelectOptions: readonly SelectOption[] = [
   { value: "", label: "默认模式" },
   { value: "redirect", label: "302 跳转" },
-  { value: "proxy", label: "代理模式" }
+  { value: "proxy", label: "代理输出" }
 ];
 
 export const galleryOrderSelectOptions: readonly SelectOption[] = [

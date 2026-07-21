@@ -17,11 +17,16 @@ const terminalStatuses = new Set<ImportJob["status"]>([
 
 function patchFromStatus(job: ImportJob, state: StoredImportStatus): Partial<ImportJob> | null {
   const message = storedImportStatusMessage(state);
-  if (state.phase === "prepare-waiting") return { status: "queued", message };
+  if (["materialize-waiting", "prepare-waiting"].includes(state.phase)) {
+    return { status: "queued", message };
+  }
   if (state.status === "created") return { status: "queued", message };
-  if (state.status === "receiving") {
+  if (state.status === "materializing") {
     if (job.kind === "local") return { status: "uploading", message };
     return { status: "downloading", message, transferProgress: state.progress };
+  }
+  if (state.status === "received") {
+    return { status: "processing", message, transferProgress: undefined };
   }
   if (state.status === "preparing") return { status: "processing", message, transferProgress: undefined };
   if (state.status === "ready") return { status: "processing", message, transferProgress: undefined };

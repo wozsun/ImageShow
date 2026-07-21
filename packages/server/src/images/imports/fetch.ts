@@ -56,45 +56,6 @@ async function fetchImportResponse(url: string, limitBytes: number, externalSign
   }
 }
 
-async function readLimitedImageBuffer(response: Response, limitBytes: number, signal: AbortSignal | undefined, url: string) {
-  if (!response.body) throw new ApiError(400, "link_fetch_failed", "下载响应没有内容", { url });
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  let completed = false;
-  const abort = () => reader.cancel().catch(() => undefined);
-  signal?.addEventListener("abort", abort, { once: true });
-  try {
-    for (;;) {
-      if (signal?.aborted) throw new ApiError(409, "import_cancelled", "导入已取消", { url });
-      const { done, value } = await reader.read();
-      if (signal?.aborted) throw new ApiError(409, "import_cancelled", "导入已取消", { url });
-      if (done) {
-        completed = true;
-        break;
-      }
-      chunks.push(value);
-      total += value.byteLength;
-      if (total > limitBytes) throw new ApiError(400, "link_too_large", "图片大小超过限制", { limit: limitBytes });
-    }
-    return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk)), total);
-  } finally {
-    signal?.removeEventListener("abort", abort);
-    if (!completed) await reader.cancel().catch(() => undefined);
-  }
-}
-
-export async function fetchImportImage(url: string, limitBytes: number, signal?: AbortSignal): Promise<Buffer> {
-  const fetched = await fetchImportResponse(url, limitBytes, signal);
-  try {
-    return await readLimitedImageBuffer(fetched.response, limitBytes, signal, url);
-  } catch (error) {
-    if (error instanceof ApiError) throw error;
-    if ((error as Error).name === "AbortError") throw new ApiError(signal?.aborted ? 409 : 400, signal?.aborted ? "import_cancelled" : "link_timeout", signal?.aborted ? "导入已取消" : "下载超时", { url });
-    throw new ApiError(400, "link_fetch_failed", "下载失败", { url });
-  }
-}
-
 export async function fetchImportImageToFile(
   url: string,
   target: string,

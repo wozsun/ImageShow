@@ -18,9 +18,7 @@ const storageBackendLabels: Record<string, string> = { local: "本地存储" };
 function imageStorageLabel(row: {
   storage_slug: string;
   storage_display_name?: string | null;
-  is_link?: boolean | null;
 }) {
-  if (row.is_link) return "外部链接";
   return row.storage_display_name?.trim()
     || storageBackendLabels[row.storage_slug]
     || row.storage_slug;
@@ -66,7 +64,6 @@ export async function getAdminImageInfo(id: string): Promise<ImageAdminInfoDto> 
     `SELECT m.id,
             m.md5,
             m.storage_slug,
-            m.is_link,
             m.created_at::text AS created_at,
             m.updated_at::text AS updated_at,
             COALESCE(sb.display_name, '') AS storage_display_name
@@ -79,7 +76,6 @@ export async function getAdminImageInfo(id: string): Promise<ImageAdminInfoDto> 
     id: string;
     md5: string;
     storage_slug: string;
-    is_link: boolean;
     created_at: string;
     updated_at: string;
     storage_display_name: string;

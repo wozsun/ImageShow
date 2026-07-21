@@ -3,7 +3,6 @@ import { publicImageUrls } from "../storage/storage.ts";
 type OriginalComparableImage = {
   object_key: string;
   storage_slug: string;
-  is_link: boolean;
 };
 
 function equivalentUrl(left: string, right: string) {
@@ -20,8 +19,7 @@ function equivalentUrl(left: string, right: string) {
 }
 
 export async function displayUrlForOriginalComparison(image: OriginalComparableImage) {
-  if (image.is_link) return image.object_key;
-  const urls = await publicImageUrls(image.object_key, image.storage_slug, false);
+  const urls = await publicImageUrls(image.object_key, image.storage_slug);
   return urls.object_url;
 }
 

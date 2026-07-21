@@ -10,7 +10,6 @@ import {
 type AdminImageCardProps = {
   item: ImageItem;
   storageName: (item: {
-    is_link: boolean;
     storage_slug: string;
   }) => string;
   checked: boolean;

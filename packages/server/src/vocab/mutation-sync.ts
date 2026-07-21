@@ -29,6 +29,16 @@ export function vocabularyMutationLockKey(
   return `imageshow:${entity}:${slug}`;
 }
 
+export function vocabularyMutationLockRequests(
+  entries: readonly { entity: VocabularyEntity; slug: string }[]
+) {
+  return [...new Set(entries.map(({ entity, slug }) => (
+    vocabularyMutationLockKey(entity, slug)
+  )))]
+    .sort()
+    .map((key) => ({ key }));
+}
+
 export function withVocabularyMutationLock<T>(
   entity: VocabularyEntity,
   slug: string,

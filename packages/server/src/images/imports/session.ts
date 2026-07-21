@@ -10,24 +10,21 @@ import { withStorageLocationReadLock } from "../../storage/maintenance-lock.ts";
 import { contentType, readStorageBuffer } from "../../storage/storage.ts";
 import { createImageId, ImageTimeError, parseImageTime } from "../image-time.ts";
 import { importSessionResponse, type ImportSessionRecord } from "../presenter.ts";
-import { proxyExternalImage } from "../serving.ts";
 import { abortActiveImport } from "./execution.ts";
 import {
+  clearImportCancelled,
   emitCancelledImportStatus,
   importWasCancelled,
-  markImportCancelled,
-  markImportFailed,
-  notifyImportStatus,
-  setImportPhase,
-  withImportLease
+  markImportCancelled
 } from "./progress.ts";
 import { importRequestHash } from "./request-hash.ts";
+import { withImportSessionLock } from "./session-lock.ts";
 import {
   cleanupStagedObjects,
   preparedThumbnailResponse,
   stagingImageKey
 } from "./staging.ts";
-import { removeRawImport, writeRawImport } from "./temp-files.ts";
+import { removeRawImport } from "./temp-files.ts";
 import type {
   ImportCreateInput,
   ImportSessionRow,
@@ -176,33 +173,6 @@ export async function createImportSessions(
   });
 }
 
-export async function receiveImportFile(
-  id: string,
-  body: ReadableStream<Uint8Array> | null,
-  signal?: AbortSignal
-) {
-  if (!body) throw new ApiError(400, "empty_body", "Empty body");
-  const claimed = await pool.query(
-    "UPDATE import_session SET status='receiving', updated_at=now() WHERE id=$1 AND mode='upload' AND status='created' RETURNING expected_size",
-    [id]
-  );
-  if (!claimed.rowCount) {
-    throw new ApiError(409, "invalid_import_state", "上传任务不能接收文件");
-  }
-  await notifyImportStatus(id);
-
-  try {
-    await withImportLease(id, async () => {
-      setImportPhase(id, "receiving", "服务端接收上传文件");
-      await writeRawImport(id, body, Number(claimed.rows[0].expected_size), signal);
-    });
-  } catch (error) {
-    await removeRawImport(id);
-    await markImportFailed(id, error);
-    throw error;
-  }
-}
-
 export async function previewImportSession(id: string, variant: "thumb" | "full" = "thumb") {
   const session = (await pool.query(
     "SELECT mode, source_url, storage_slug, status, prepared_payload FROM import_session WHERE id=$1",
@@ -217,16 +187,6 @@ export async function previewImportSession(id: string, variant: "thumb" | "full"
 
   const payload = session.prepared_payload as PreparedPayload;
   if (variant === "thumb") return preparedThumbnailResponse(payload, session.storage_slug);
-  if (session.mode === "proxy") {
-    return proxyExternalImage(
-      session.source_url,
-      payload.ext || "jpg",
-      false,
-      { "Cache-Control": privateNoStoreCacheControl },
-      undefined,
-      () => preparedThumbnailResponse(payload, session.storage_slug)
-    );
-  }
 
   const buffer = await readStorageBuffer("_uploads", stagingImageKey(id), session.storage_slug);
   return new Response(buffer as unknown as BodyInit, {
@@ -237,48 +197,60 @@ export async function previewImportSession(id: string, variant: "thumb" | "full"
   });
 }
 
-async function cancelImportSessionUnderLocationLock(id: string) {
+export async function cancelImportSession(id: string) {
   await markImportCancelled(id);
-  emitCancelledImportStatus(id);
   const activePromise = abortActiveImport(id);
-  const session = (await pool.query(
+  const cancelled = (await pool.query(
     `UPDATE import_session
      SET status='cancelled', expires_at=now(), updated_at=now()
-     WHERE id=$1 AND status IN ('created','receiving','preparing','ready','failed','cancelled')
-     RETURNING storage_slug, prepared_payload`,
+     WHERE id=$1 AND status IN (
+       'created','materializing','received','preparing','ready','failed','cancelled'
+     )
+     RETURNING id`,
     [id]
-  )).rows[0] as Pick<ImportSessionRow, "storage_slug" | "prepared_payload"> | undefined;
+  )).rows[0] as { id: string } | undefined;
 
-  if (!session) {
+  if (cancelled) emitCancelledImportStatus(id);
+  await activePromise?.catch(() => undefined);
+  if (!cancelled) {
     const existing = (await pool.query(
       "SELECT status FROM import_session WHERE id=$1",
       [id]
     )).rows[0] as { status?: ImportStatus } | undefined;
+    await clearImportCancelled(id);
     if (existing?.status === "finalized") return;
     if (existing) throw new ApiError(409, "invalid_import_state", "导入任务正在提交，无法取消");
     return;
   }
-
-  await activePromise?.catch(() => undefined);
-  try {
-    await Promise.all([
-      cleanupStagedObjects(id, session.storage_slug),
-      removeRawImport(id)
-    ]);
-  } catch (error) {
-    throw new ApiError(
-      502,
-      "import_cleanup_failed",
-      "导入已取消，但暂存文件清理失败；后台任务将继续重试",
-      { cause: error instanceof Error ? error.message : String(error) }
+  return withImportSessionLock(id, async () => {
+    const session = (await pool.query(
+      "SELECT status, storage_slug FROM import_session WHERE id=$1",
+      [id]
+    )).rows[0] as Pick<ImportSessionRow, "status" | "storage_slug"> | undefined;
+    if (!session) {
+      await clearImportCancelled(id);
+      return;
+    }
+    if (session.status !== "cancelled") {
+      throw new ApiError(409, "invalid_import_state", "导入任务状态已变化");
+    }
+    try {
+      await Promise.all([
+        cleanupStagedObjects(id, session.storage_slug),
+        removeRawImport(id)
+      ]);
+    } catch (error) {
+      throw new ApiError(
+        502,
+        "import_cleanup_failed",
+        "导入已取消，但暂存文件清理失败；后台任务将继续重试",
+        { cause: error instanceof Error ? error.message : String(error) }
+      );
+    }
+    await pool.query(
+      "DELETE FROM import_session WHERE id=$1 AND status='cancelled'",
+      [id]
     );
-  }
-  await pool.query(
-    "DELETE FROM import_session WHERE id=$1 AND status='cancelled'",
-    [id]
-  );
-}
-
-export function cancelImportSession(id: string) {
-  return withStorageLocationReadLock(() => cancelImportSessionUnderLocationLock(id));
+    await clearImportCancelled(id);
+  });
 }

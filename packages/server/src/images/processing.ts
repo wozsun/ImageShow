@@ -53,6 +53,7 @@ async function imageDimensions(input: ImageInput) {
   return { width, height };
 }
 
+/** @internal Exported for focused image-probe verification. */
 export async function probeImageBytes(input: Buffer) {
   const ext = await detectImageExt(input);
   if (!ext) throw new ApiError(400, "unsupported_file_type", "Unsupported file type");

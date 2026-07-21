@@ -3,16 +3,6 @@
 .slug-combo-control input[aria-invalid="true"] { border-color: #d64545; box-shadow: 0 0 0 1px #d64545; }
 .slug-combo-control input[data-new-slug="true"] { border-color: #1f9d57; box-shadow: 0 0 0 1px #1f9d57; }
 
-.proxy-image-note {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  color: #66717f;
-  font-weight: 600;
-}
-.proxy-image-note .app-icon { width: 11px; height: 11px; flex-basis: 11px; }
-
 /* 提交/保存的文案会在空闲与处理中切换；预留四个汉字的内容宽度，避免按钮跳动。 */
 .workflow-submit-button { min-width: calc(4em + 26px); }
 

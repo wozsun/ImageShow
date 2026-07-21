@@ -11,7 +11,10 @@ import {
   vocabularyMutationLockKey,
   withVocabularyMutationLock
 } from "../vocab/mutation-sync.ts";
-import { withImageStorageMutationLock } from "../storage/maintenance-lock.ts";
+import {
+  imageStorageMutationLockKey,
+  withStorageLocationReadAndAdvisoryLocks
+} from "../storage/maintenance-lock.ts";
 import {
   completePreparedImageRelocation,
   discardPreparedImageRelocation,
@@ -32,16 +35,10 @@ async function insertTheme(client: PoolClient, slug: string) {
   return Boolean(result.rowCount);
 }
 
-export async function ensureTheme(client: PoolClient, slug: string) {
-  if (!slug || slug === "none") return false;
-  await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [vocabularyMutationLockKey("theme", slug)]);
-  return insertTheme(client, slug);
-}
-
 /**
  * Use only while the caller owns vocabularyMutationLockKey("theme", slug).
- * This avoids reacquiring the same advisory lock from a different pool
- * connection when an image-location mutation also needs the theme lock.
+ * This avoids acquiring the same advisory lock from the transaction client
+ * after the storage/vocabulary/image compound lease is already held.
  */
 export function ensureThemeWithMutationLockHeld(
   client: PoolClient,
@@ -92,7 +89,7 @@ type ThemeLookupInvalidation = {
 async function reassignThemeImagesToNone(theme: string): Promise<ThemeLookupInvalidation[]> {
   const images = (await pool.query(
     `SELECT id, device, brightness, theme, ext, md5, object_key,
-            storage_slug, is_link
+            storage_slug
        FROM metadata
       WHERE theme=$1
       ORDER BY device, brightness, id`,
@@ -102,10 +99,16 @@ async function reassignThemeImagesToNone(theme: string): Promise<ThemeLookupInva
   const concurrency = getRuntimeConfig().background_job.theme_reassign_concurrency;
 
   const results = await mapWithConcurrency(images, concurrency, (candidate) =>
-    withImageStorageMutationLock(candidate.id, async () => {
+    withStorageLocationReadAndAdvisoryLocks([
+      {
+        key: vocabularyMutationLockKey("theme", theme),
+        mode: "shared"
+      },
+      { key: imageStorageMutationLockKey(candidate.id) }
+    ], async () => {
       const image = (await pool.query(
         `SELECT id, device, brightness, theme, ext, md5, object_key,
-                storage_slug, is_link
+                storage_slug
            FROM metadata
           WHERE id=$1 AND theme=$2`,
         [candidate.id, theme]
@@ -160,7 +163,7 @@ async function reassignThemeImagesToNone(theme: string): Promise<ThemeLookupInva
         relocation,
         "theme_reassign_source_cleanup"
       );
-      return image.is_link || relocation.nextObjectKey === image.object_key
+      return relocation.nextObjectKey === image.object_key
         ? [{ id: image.id }]
         : [
             { id: image.id, object_key: image.object_key },
@@ -171,24 +174,42 @@ async function reassignThemeImagesToNone(theme: string): Promise<ThemeLookupInva
   return results.flat();
 }
 
-async function deleteThemeUnderLock(slug: string) {
-  const exists = (await pool.query("SELECT 1 FROM theme WHERE slug=$1", [slug])).rowCount;
-  if (!exists) return { deleted: false, lookupInvalidations: [] as ThemeLookupInvalidation[] };
+async function deleteThemeWhenUnreferencedUnderLock(slug: string) {
+  const state = (await pool.query(
+    `SELECT EXISTS(SELECT 1 FROM theme WHERE slug=$1) AS theme_exists,
+            EXISTS(SELECT 1 FROM metadata WHERE theme=$1) AS image_exists`,
+    [slug]
+  )).rows[0] as { theme_exists: boolean; image_exists: boolean };
+  if (!state.theme_exists) return { deleted: false, retry: false };
+  if (state.image_exists) return { deleted: false, retry: true };
 
-  const lookupInvalidations = await reassignThemeImagesToNone(slug);
-  const deleted = Boolean((await pool.query("DELETE FROM theme WHERE slug = $1", [slug])).rowCount);
-  return { deleted, lookupInvalidations };
+  const deleted = Boolean((await pool.query(
+    "DELETE FROM theme WHERE slug=$1",
+    [slug]
+  )).rowCount);
+  return { deleted, retry: false };
+}
+
+async function deleteThemeAndReassign(slug: string) {
+  const lookupInvalidations: ThemeLookupInvalidation[] = [];
+  while (true) {
+    lookupInvalidations.push(...await reassignThemeImagesToNone(slug));
+    const result = await withVocabularyMutationLock(
+      "theme",
+      slug,
+      () => deleteThemeWhenUnreferencedUnderLock(slug)
+    );
+    if (!result.retry) {
+      return { deleted: result.deleted, lookupInvalidations };
+    }
+  }
 }
 
 export async function deleteTheme(slug: string) {
   if (slug === "none") {
     throw new ApiError(400, "invalid_theme", "The reserved 'none' theme cannot be deleted", { slug });
   }
-  const result = await withVocabularyMutationLock(
-    "theme",
-    slug,
-    () => deleteThemeUnderLock(slug)
-  );
+  const result = await deleteThemeAndReassign(slug);
   assertVocabularyFound("theme", result.deleted ? 1 : 0);
   if (result.lookupInvalidations.length) {
     await synchronizeVocabularyMutation({
@@ -206,11 +227,7 @@ export async function deleteThemes(slugs: string[]) {
   const lookupInvalidations: ThemeLookupInvalidation[] = [];
   let deletedAny = false;
   for (const slug of targets) {
-    const result = await withVocabularyMutationLock(
-      "theme",
-      slug,
-      () => deleteThemeUnderLock(slug)
-    );
+    const result = await deleteThemeAndReassign(slug);
     lookupInvalidations.push(...result.lookupInvalidations);
     if (result.deleted) deletedAny = true;
   }

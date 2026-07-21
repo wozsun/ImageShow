@@ -90,7 +90,6 @@ function linkDraft(
 }
 
 export function linkImportJobs(
-  kind: "download" | "proxy",
   validatedUrls: string[],
   defaults: ImportAttributeDefaults,
   fillOriginalUrl: boolean,
@@ -100,7 +99,7 @@ export function linkImportJobs(
   return validatedUrls.map((url, manifestPosition): ImportJob => ({
     id: browserUuid(),
     attemptKey: browserUuid(),
-    kind,
+    kind: "download",
     status: "queued",
     message: "等待下载",
     preview: "",

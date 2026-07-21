@@ -9,7 +9,11 @@ import { syncRandomImage, syncRandomImages } from "../random/random-cache.ts";
 import { thumbnailRef } from "../storage/image-paths.ts";
 import { exists, readStorageBuffer } from "../storage/storage.ts";
 import { migrateImageStorage, type MigrateRecord } from "../storage/migration.ts";
-import { withImageStorageMutationLock } from "../storage/maintenance-lock.ts";
+import {
+  imageStorageMutationLockKey,
+  withImageStorageMutationLock,
+  withStorageLocationReadAndAdvisoryLocks
+} from "../storage/maintenance-lock.ts";
 import {
   completePreparedImageRelocation,
   discardPreparedImageRelocationIfUnreferenced,
@@ -19,7 +23,10 @@ import { isReservedSubdomain } from "../themes/host.ts";
 import {
   ensureThemeWithMutationLockHeld
 } from "../themes/service.ts";
-import { ensureAuthor } from "../authors/service.ts";
+import {
+  ensureAuthor,
+  ensureAuthorWithMutationLockHeld
+} from "../authors/service.ts";
 import {
   invalidateEntityCountCaches,
   invalidateOrCollectEntityCountCaches,
@@ -27,7 +34,7 @@ import {
   type EntityCacheKind,
   type EntityCountCacheInvalidationBatch,
 } from "../vocab/vocab-cache.ts";
-import { withVocabularyMutationLock } from "../vocab/mutation-sync.ts";
+import { vocabularyMutationLockRequests } from "../vocab/mutation-sync.ts";
 import { detectBrightness } from "./brightness.ts";
 import { deviceFromDimensions, resolveOptionalBrightnessWith, resolveOptionalDeviceWith } from "./classification.ts";
 import type { ImageRecord } from "./presenter.ts";
@@ -48,7 +55,6 @@ type MutationImageRecord = Pick<
   | "md5"
   | "object_key"
   | "storage_slug"
-  | "is_link"
   | "author"
   | "status"
 >;
@@ -64,7 +70,6 @@ const mutationImageColumns = [
   "md5",
   "object_key",
   "storage_slug",
-  "is_link",
   "author",
   "status"
 ].join(", ");
@@ -178,7 +183,7 @@ export async function updateImageMetadata(id: string, body: unknown, options: Im
     return;
   }
 
-  const mutateImageLocation = () => withImageStorageMutationLock(id, async () => {
+  const mutateImageLocation = async () => {
     // Derive omitted fields only after owning the image location. This keeps a
     // concurrent storage migration from being overwritten by an old snapshot.
     const sourceImage = (await pool.query(
@@ -255,7 +260,10 @@ export async function updateImageMetadata(id: string, body: unknown, options: Im
       ) {
         createdEntityKinds.add("theme");
       }
-      if (next.author && await ensureAuthor(client, next.author)) {
+      if (
+        next.author
+        && await ensureAuthorWithMutationLockHeld(client, next.author)
+      ) {
         createdEntityKinds.add("author");
       }
 
@@ -345,20 +353,23 @@ export async function updateImageMetadata(id: string, body: unknown, options: Im
       ),
       refreshEntityVocabularies(createdEntityKinds)
     ]);
-  });
+  };
 
-  // Theme deletion acquires the vocabulary lock before each image-location
-  // lock. Explicit reassignment follows the same order, preventing the two
-  // operations from deadlocking while also keeping a theme alive until the
-  // metadata switch commits.
-  if (parsed.theme && parsed.theme !== "none") {
-    return withVocabularyMutationLock(
-      "theme",
-      parsed.theme,
+  const vocabularyLocks = vocabularyMutationLockRequests([
+    ...(parsed.author
+      ? [{ entity: "author" as const, slug: parsed.author }]
+      : []),
+    ...(parsed.theme && parsed.theme !== "none"
+      ? [{ entity: "theme" as const, slug: parsed.theme }]
+      : [])
+  ]);
+  if (vocabularyLocks.length) {
+    return withStorageLocationReadAndAdvisoryLocks(
+      [...vocabularyLocks, { key: imageStorageMutationLockKey(id) }],
       mutateImageLocation
     );
   }
-  return mutateImageLocation();
+  return withImageStorageMutationLock(id, mutateImageLocation);
 }
 
 type BatchStorageMigrationMetrics = {
@@ -375,7 +386,7 @@ export async function migrateImagesStorage(
   target: string,
   options: BatchStorageMigrationOptions = {},
 ) {
-  const rows = (await pool.query("SELECT id, object_key, ext, status, storage_slug, is_link, device, brightness, theme, md5 FROM metadata WHERE id = ANY($1::uuid[])", [ids])).rows;
+  const rows = (await pool.query("SELECT id, object_key, ext, status, storage_slug, device, brightness, theme, md5 FROM metadata WHERE id = ANY($1::uuid[])", [ids])).rows;
   let migrated = 0;
   let unchanged = 0;
   let failed = ids.length - rows.length;

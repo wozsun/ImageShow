@@ -2,12 +2,13 @@ import { createHash } from "node:crypto";
 import type { Redis } from "ioredis";
 import type { Brightness, Device } from "@imageshow/shared";
 
-export const RANDOM_CURRENT_KEY = "imageshow:random:current";
-export const RANDOM_MUTATION_REVISION_KEY = "imageshow:random:version";
-export const RANDOM_UPDATE_LOCK_KEY = "imageshow:random:update_lock";
-export const RANDOM_REBUILD_LOCK_KEY = "imageshow:random:rebuild_lock";
-export const RANDOM_REBUILD_COMPLETED_KEY = "imageshow:random:rebuild_completed";
-export const GALLERY_FILTER_OPTIONS_KEY = "imageshow:gallery_filter_options";
+export const RANDOM_CACHE_NAMESPACE = "imageshow:random:v2";
+export const RANDOM_CURRENT_KEY = `${RANDOM_CACHE_NAMESPACE}:current`;
+export const RANDOM_MUTATION_REVISION_KEY = `${RANDOM_CACHE_NAMESPACE}:version`;
+export const RANDOM_UPDATE_LOCK_KEY = `${RANDOM_CACHE_NAMESPACE}:update_lock`;
+export const RANDOM_REBUILD_LOCK_KEY = `${RANDOM_CACHE_NAMESPACE}:rebuild_lock`;
+export const RANDOM_REBUILD_COMPLETED_KEY = `${RANDOM_CACHE_NAMESPACE}:rebuild_completed`;
+export const GALLERY_FILTER_OPTIONS_KEY = "imageshow:gallery_filter_options:v2";
 
 export const RANDOM_UPDATE_LOCK_TTL_MS = 30_000;
 export const RANDOM_UPDATE_LOCK_RENEW_INTERVAL_MS = 10_000;
@@ -130,7 +131,6 @@ export type RandomPoolItem = {
   brightness: Brightness;
   theme: string;
   storage_slug: string;
-  is_link: boolean;
   author: string;
   tags: string[];
 };
@@ -164,7 +164,7 @@ export function randomPoolRetryAfterSeconds(error: unknown) {
 }
 
 export function randomKey(generation: string, ...parts: string[]) {
-  return ["imageshow:random", generation, ...parts].join(":");
+  return [RANDOM_CACHE_NAMESPACE, generation, ...parts].join(":");
 }
 
 export function randomManifestKey(generation: string) {
@@ -216,7 +216,22 @@ export function randomFilterKey(
 export function parseRandomItem(raw: string | null): RandomPoolItem | null {
   if (!raw) return null;
   try {
-    return JSON.parse(raw) as RandomPoolItem;
+    const value = JSON.parse(raw) as Partial<RandomPoolItem> & { is_link?: unknown };
+    if (
+      "is_link" in value
+      || typeof value.id !== "string" || !value.id
+      || typeof value.object_key !== "string" || !value.object_key
+      || typeof value.ext !== "string" || !["jpg", "png", "webp", "gif", "avif"].includes(value.ext)
+      || !["pc", "mb"].includes(String(value.device))
+      || !["dark", "light"].includes(String(value.brightness))
+      || typeof value.theme !== "string"
+      || typeof value.storage_slug !== "string" || !value.storage_slug
+      || typeof value.author !== "string"
+      || !Array.isArray(value.tags)
+      || value.tags.length > 50
+      || value.tags.some((tag) => typeof tag !== "string")
+    ) return null;
+    return value as RandomPoolItem;
   } catch {
     return null;
   }
@@ -277,7 +292,6 @@ export function mapRandomItems(
     brightness: row.brightness as Brightness,
     theme: String(row.theme),
     storage_slug: String(row.storage_slug),
-    is_link: Boolean(row.is_link),
     author: typeof row.author === "string" ? row.author : "",
     tags: Array.isArray(row.tags) ? row.tags as string[] : []
   }));

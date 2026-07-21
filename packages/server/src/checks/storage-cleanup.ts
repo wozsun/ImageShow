@@ -11,10 +11,10 @@ import {
   type StorageRow
 } from "./storage-common.ts";
 
-type ProtectedFinalReferences = Record<"media" | "thumbs" | "link", Set<string>>;
+type ProtectedFinalReferences = Record<"media" | "thumbs", Set<string>>;
 
 function emptyProtectedFinalReferences(): ProtectedFinalReferences {
-  return { media: new Set(), thumbs: new Set(), link: new Set() };
+  return { media: new Set(), thumbs: new Set() };
 }
 
 function objectKeyId(key: string) {
@@ -22,7 +22,7 @@ function objectKeyId(key: string) {
 }
 
 async function cleanupStorageUnderLock() {
-  const rows = (await pool.query("SELECT id, object_key, status, storage_slug, is_link, device, brightness, theme FROM metadata")).rows as StorageRow[];
+  const rows = (await pool.query("SELECT id, object_key, status, storage_slug FROM metadata")).rows as StorageRow[];
   const { rows: uploadRows, sessionsByBackend } = await activeImportStorageReferences();
   const committingReferences = new Map<string, ProtectedFinalReferences>();
   for (const row of uploadRows) {
@@ -52,11 +52,9 @@ async function cleanupStorageUnderLock() {
       const activeUploadsOnBackend = sessionsByBackend.get(backend) ?? new Map();
       const committingOnBackend = committingReferences.get(backend) ?? emptyProtectedFinalReferences();
       const readyThumbs = expected.thumbs.get(backend) ?? new Set<string>();
-      const linkThumbs = expected.link.get(backend) ?? new Set<string>();
-      const [mediaKeys, thumbKeys, linkKeys, stagingKeys] = await Promise.all([
+      const [mediaKeys, thumbKeys, stagingKeys] = await Promise.all([
         listStorageKeys("media", backend),
         listStorageKeys("thumbs", backend),
-        listStorageKeys("link", backend),
         listStorageKeys("_uploads", backend)
       ]);
       const staging = classifyStagingKeys(stagingKeys, activeUploadsOnBackend);
@@ -74,7 +72,6 @@ async function cleanupStorageUnderLock() {
       const candidates: Array<readonly [StoragePrefix, string]> = [
         ...mediaKeys.filter((key) => !ready.has(key) && !deleted.has(key) && !committingOnBackend.media.has(key) && !knownOnBackend.has(objectKeyId(key))).map((key) => ["media", key] as const),
         ...thumbKeys.filter((key) => !readyThumbs.has(key) && !committingOnBackend.thumbs.has(key)).map((key) => ["thumbs", key] as const),
-        ...linkKeys.filter((key) => !linkThumbs.has(key) && !committingOnBackend.link.has(key)).map((key) => ["link", key] as const),
         ...staging.orphan.map((key) => ["_uploads", key] as const)
       ];
       candidateCount += candidates.length;

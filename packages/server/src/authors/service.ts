@@ -5,27 +5,32 @@ import {
   assertVocabularyFound,
   assertVocabularySlug,
   synchronizeVocabularyMutation,
-  vocabularyMutationLockKey,
   withVocabularyMutationLock
 } from "../vocab/mutation-sync.ts";
 
-export async function ensureAuthor(client: Pool | PoolClient, slug: string) {
+export async function ensureAuthor(client: Pool, slug: string) {
   if (!slug) return false;
-  const insert = async () => {
-    const result = await client.query(
-      `INSERT INTO author(slug, sort_order)
-       VALUES($1, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM author))
-       ON CONFLICT (slug) DO NOTHING
-       RETURNING slug`,
-      [slug]
-    );
-    return Boolean(result.rowCount);
-  };
-  if ("release" in client) {
-    await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [vocabularyMutationLockKey("author", slug)]);
-    return insert();
-  }
-  return withVocabularyMutationLock("author", slug, insert);
+  return withVocabularyMutationLock(
+    "author",
+    slug,
+    () => ensureAuthorWithMutationLockHeld(client, slug)
+  );
+}
+
+/** Use only while the caller owns the author vocabulary mutation lock. */
+export async function ensureAuthorWithMutationLockHeld(
+  client: Pool | PoolClient,
+  slug: string
+) {
+  if (!slug) return false;
+  const result = await client.query(
+    `INSERT INTO author(slug, sort_order)
+     VALUES($1, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM author))
+     ON CONFLICT (slug) DO NOTHING
+     RETURNING slug`,
+    [slug]
+  );
+  return Boolean(result.rowCount);
 }
 
 export async function createAuthor(slug: string, displayName: string, link: string) {

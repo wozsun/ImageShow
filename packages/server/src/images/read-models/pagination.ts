@@ -19,7 +19,6 @@ const publicImageCardColumns = [
   "ext",
   "object_key",
   "storage_slug",
-  "is_link",
   "author",
   "title",
   "original",

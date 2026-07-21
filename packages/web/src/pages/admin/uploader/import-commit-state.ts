@@ -6,7 +6,8 @@ import type { StoredImportStatus } from "./import-api.js";
 
 const preReadyServerStatuses = new Set<StoredImportStatus["status"]>([
   "created",
-  "receiving",
+  "materializing",
+  "received",
   "preparing",
   "failed",
   "missing"

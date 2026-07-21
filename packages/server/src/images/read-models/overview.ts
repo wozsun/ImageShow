@@ -15,7 +15,7 @@ type OverviewStats = Awaited<ReturnType<typeof buildOverviewStats>>;
 
 export async function getOverviewStats() {
   const generation = await publicImagesCacheGeneration();
-  const cacheKey = `v2:${generation}`;
+  const cacheKey = `v3:${generation}`;
   const cached = await getAdminOverviewCache<OverviewStats>(cacheKey, generation);
   if (cached) return cached;
 
@@ -38,15 +38,12 @@ async function buildOverviewStats() {
         count(*) FILTER (WHERE status='ready' AND theme='none')::int AS theme_unset,
         count(*) FILTER (WHERE status='deleted')::int AS trash,
         count(*)::int AS total,
-        count(*) FILTER (WHERE NOT m.is_link AND sb.type='local')::int AS local,
-        count(*) FILTER (WHERE NOT m.is_link AND sb.type<>'local')::int AS nonlocal,
-        count(*) FILTER (WHERE m.is_link)::int AS link_count,
-        COALESCE(sum(image_size) FILTER (WHERE NOT m.is_link AND sb.type='local'), 0)::bigint AS local_image_size,
-        COALESCE(sum(thumbnail_size) FILTER (WHERE NOT m.is_link AND sb.type='local'), 0)::bigint AS local_thumb_size,
-        COALESCE(sum(image_size) FILTER (WHERE NOT m.is_link AND sb.type<>'local'), 0)::bigint AS nonlocal_image_size,
-        COALESCE(sum(thumbnail_size) FILTER (WHERE NOT m.is_link AND sb.type<>'local'), 0)::bigint AS nonlocal_thumb_size,
-        COALESCE(sum(thumbnail_size) FILTER (WHERE m.is_link AND sb.type='local'), 0)::bigint AS link_local_size,
-        COALESCE(sum(thumbnail_size) FILTER (WHERE m.is_link AND sb.type<>'local'), 0)::bigint AS link_nonlocal_size,
+        count(*) FILTER (WHERE sb.type='local')::int AS local,
+        count(*) FILTER (WHERE sb.type<>'local')::int AS nonlocal,
+        COALESCE(sum(image_size) FILTER (WHERE sb.type='local'), 0)::bigint AS local_image_size,
+        COALESCE(sum(thumbnail_size) FILTER (WHERE sb.type='local'), 0)::bigint AS local_thumb_size,
+        COALESCE(sum(image_size) FILTER (WHERE sb.type<>'local'), 0)::bigint AS nonlocal_image_size,
+        COALESCE(sum(thumbnail_size) FILTER (WHERE sb.type<>'local'), 0)::bigint AS nonlocal_thumb_size,
         count(DISTINCT theme) FILTER (WHERE status='ready')::int AS theme_count,
         count(*) FILTER (WHERE status='ready' AND device='pc')::int AS pc,
         count(*) FILTER (WHERE status='ready' AND device='mb')::int AS mb,
@@ -64,7 +61,7 @@ async function buildOverviewStats() {
       LIMIT 8
     `),
     pool.query(
-      `SELECT id, device, brightness, theme, ext, object_key, storage_slug, is_link, title
+      `SELECT id, device, brightness, theme, ext, object_key, storage_slug, title
          FROM metadata
         WHERE status='ready'
         ORDER BY created_at DESC, id DESC
@@ -85,13 +82,10 @@ async function buildOverviewStats() {
     total: row.total,
     local: row.local,
     nonlocal: row.nonlocal,
-    link_count: row.link_count,
     local_image_size: Number(row.local_image_size),
     local_thumb_size: Number(row.local_thumb_size),
     nonlocal_image_size: Number(row.nonlocal_image_size),
     nonlocal_thumb_size: Number(row.nonlocal_thumb_size),
-    link_local_size: Number(row.link_local_size),
-    link_nonlocal_size: Number(row.link_nonlocal_size),
     theme_count: row.theme_count,
     backend_count: backendResult.rows[0].n,
     pc: row.pc,

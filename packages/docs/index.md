@@ -29,7 +29,7 @@ features:
     details: 缩略图补建、移动清理、缓存重建和上传清理进入后台任务队列。
   - icon: 🛡️
     title: Host 隔离
-    details: 主站、随机图、静态资源、代理链接和文档站按子域隔离，降低跨域与 Cookie 风险。
+    details: 主站、随机图、静态资源、外部原图代理和文档站按子域隔离，降低跨域与 Cookie 风险。
 ---
 <section class="home-section">
   <div class="home-section__header">
@@ -51,7 +51,7 @@ features:
     <a class="docs-map-card" href="/guide/flows">
       <span class="docs-card-kicker">03</span>
       <h3>看懂流程</h3>
-      <p>追踪本地上传、链接下载、代理链接、提交入库、删除生命周期和缓存策略。</p>
+      <p>追踪本地上传、链接下载、提交入库、删除生命周期和缓存策略。</p>
     </a>
     <a class="docs-map-card" href="/guide/random-api">
       <span class="docs-card-kicker">04</span>

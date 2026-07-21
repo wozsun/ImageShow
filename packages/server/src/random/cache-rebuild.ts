@@ -11,6 +11,7 @@ import {
 } from "./rebuild-spool.ts";
 import {
   GALLERY_FILTER_OPTIONS_KEY,
+  RANDOM_CACHE_NAMESPACE,
   RANDOM_CLEANUP_BATCH_SIZE,
   RANDOM_CURRENT_KEY,
   RANDOM_GENERATION_PUBLISH_SCRIPT,
@@ -49,7 +50,7 @@ async function readyRandomItemBatch(
   const rows = (await client.query(
     `WITH ready AS (
        SELECT m.id, m.object_key, m.ext, m.device, m.brightness, m.theme,
-              m.storage_slug, m.is_link, m.author
+              m.storage_slug, m.author
          FROM metadata m
         WHERE m.status='ready'
           AND ($1::uuid IS NULL OR m.id > $1::uuid)
@@ -57,13 +58,13 @@ async function readyRandomItemBatch(
         LIMIT $2
      )
      SELECT ready.id, ready.object_key, ready.ext, ready.device, ready.brightness,
-            ready.theme, ready.storage_slug, ready.is_link,
+            ready.theme, ready.storage_slug,
             COALESCE(ready.author, '') AS author,
             COALESCE(array_remove(array_agg(it.tag_slug ORDER BY it.tag_slug), NULL), '{}') AS tags
        FROM ready
        LEFT JOIN image_tag it ON it.image_id = ready.id
       GROUP BY ready.id, ready.object_key, ready.ext, ready.device, ready.brightness,
-               ready.theme, ready.storage_slug, ready.is_link, ready.author
+               ready.theme, ready.storage_slug, ready.author
       ORDER BY ready.id`,
     [afterId, RANDOM_REBUILD_BATCH_SIZE]
   )).rows;
@@ -171,7 +172,6 @@ function validateRandomPoolItemBatch(value: unknown): RandomPoolItem[] {
       || !["dark", "light"].includes(String(item.brightness))
       || typeof item.theme !== "string"
       || typeof item.storage_slug !== "string"
-      || typeof item.is_link !== "boolean"
       || typeof item.author !== "string"
       || !Array.isArray(item.tags)
       || item.tags.length > 50
@@ -295,7 +295,7 @@ export async function readRandomPoolSnapshot(): Promise<
      return { generation, raw }`,
     1,
     RANDOM_CURRENT_KEY,
-    "imageshow:random:",
+    `${RANDOM_CACHE_NAMESPACE}:`,
     ":snapshot"
   ) as string[];
   const [generation, raw] = result;

@@ -1,6 +1,7 @@
 import { deploymentConfig } from "../config/deployment-config.ts";
 import {
   GALLERY_FILTER_OPTIONS_KEY,
+  RANDOM_CACHE_NAMESPACE,
   RANDOM_CURRENT_KEY,
   RANDOM_MUTATION_REVISION_KEY,
   RANDOM_REBUILD_COMPLETED_KEY,
@@ -25,7 +26,7 @@ import { pingRedis, redis } from "../core/redis-client.ts";
 
 const SESSION_KEY_PREFIX = "imageshow:session:";
 const LOGIN_FAIL_KEY_PREFIX = "imageshow:login_fail:";
-const RANDOM_GENERATION_PREFIX = "imageshow:random:";
+const RANDOM_GENERATION_PREFIX = `${RANDOM_CACHE_NAMESPACE}:`;
 const RANDOM_GLOBAL_PARTS = new Set([
   "current",
   "version",

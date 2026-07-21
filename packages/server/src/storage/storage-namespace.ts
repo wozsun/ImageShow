@@ -34,7 +34,7 @@ function canonicalWebdavRoot(config: StorageConfig) {
 
 /**
  * Return an opaque identity for the physical namespace that owns every
- * `media/`, `thumbs/`, `link/` and `_uploads/` key. Credentials, public URLs,
+ * `media/`, `thumbs/` and `_uploads/` key. Credentials, public URLs,
  * timeouts and display settings intentionally do not participate.
  */
 export function storageNamespaceIdentity(config: StorageConfig) {

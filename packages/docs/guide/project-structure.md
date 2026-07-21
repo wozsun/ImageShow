@@ -34,7 +34,7 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 
 | 文件 | 职责 |
 | --- | --- |
-| `index.ts` | 应用装配：挂载安全响应头、多主机路由中间件、注册所有路由；启动时依次 `ensureRuntimeDirectories → pingDb → runMigrations → initializeAdmin → pingRedis → startWorker`，再异步确保随机池存在，并处理 SIGTERM 优雅退出。 |
+| `index.ts` | 应用装配：挂载安全响应头、多主机路由中间件、注册所有路由；启动时先准备运行目录 / 清理随机池 spool，再依次 `pingDb → runMigrations → cleanupOrphanRawImports → initializeAdmin → pingRedis → startWorker`，随后异步确保随机池存在，并处理 SIGTERM 优雅退出。 |
 | `admin-password-cli.ts` | 宿主机/容器管理员密码恢复入口：隐藏读取新密码、更新 PostgreSQL 账号，并尽力清除 Redis 管理会话。 |
 | `config/bootstrap-env.ts` | 应用配置播种边界：解析 `NODE_ENV`、首次管理员凭据和首次生成 `config.json` 所需环境变量；集中导出数据、存储、临时文件和日志目录。应用字段只在配置文件首次生成时播种。 |
 | `config/deployment-config.ts` | 部署配置边界：每次启动严格解析 PostgreSQL 与 Redis 环境变量，供主进程、CLI 和检查功能统一使用。监听端口由共享代码常量固定。 |
@@ -49,7 +49,7 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 
 | 文件 | 职责 |
 | --- | --- |
-| `core/db.ts` | PostgreSQL 连接池、事务与 advisory lock 工具、迁移串行执行；迁移目录优先使用生产 bundle，源码运行时回退到仓库 migrations，账号初始化由入口显式交给 users 领域。 |
+| `core/db.ts` | PostgreSQL 主查询池、独立长生命周期 advisory-lock 池、事务与可靠的组合锁工具、迁移串行执行；锁取得或释放结果不确定时销毁连接，迁移目录优先使用生产 bundle，源码运行时回退到仓库 migrations，账号初始化由入口显式交给 users 领域。 |
 | `core/api-error.ts` | 与 HTTP 路由解耦的领域错误 `ApiError`、普通错误消息和 details 边界。 |
 | `core/credentials.ts` | 首次管理员环境凭据的纯校验与规范化，供配置播种和 users 初始化复用。 |
 | `core/byte-range.ts` | 存储 driver 与 HTTP serving 共用的单段 Range 解析，不依赖图片领域。 |
@@ -83,12 +83,12 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | `storage/storage-namespace.ts` | 本地 / S3 / WebDAV 统一物理命名空间 identity；排除凭据等访问参数，并识别两个 slug 是否共享对象键空间。 |
 | `storage/object-transfer.ts` | 流式计算对象 SHA-256 / MD5，区分既有目标冲突与写后完整性故障，并优先使用驱动原生复制；共享命名空间禁止重复写入。 |
 | `storage/image-relocation.ts` | 图片重分类与主题重分配共用的 verified transfer 计划：源校验、候选跟踪、CAS 前准备及提交后清源。 |
-| `storage/storage-backend.ts` | Local / S3 / WebDAV driver 接口、打开结果类型与工厂；缓存和关闭生命周期由注册表拥有，链接图仍由图片层的 `is_link` 处理。 |
-| `storage/local-backend.ts` | 本地磁盘后端（`/app/data/storage` 下 media / thumbs / _uploads / link），含空目录回收 `pruneEmptyDirs()`。 |
+| `storage/storage-backend.ts` | Local / S3 / WebDAV driver 接口、打开结果类型与工厂；缓存和关闭生命周期由注册表拥有。 |
+| `storage/local-backend.ts` | 本地磁盘后端（`/app/data/storage` 下 media / thumbs / _uploads），含空目录回收 `pruneEmptyDirs()`。 |
 | `storage/s3-backend.ts` | S3 / COS 后端：processed image / thumbnail 读写删与服务端复制/移动、`root_path` 前缀。 |
 | `storage/webdav-backend.ts` | WebDAV 后端：PROPFIND/MKCOL/PUT/GET/DELETE/COPY，HTTP Basic 认证，XML parser 解析 PROPFIND，`base_url + root_path` 前缀，统一 timeout / 临时错误重试、有界目录遍历，以及服务端忽略 Range 时的流式切片。 |
-| `storage/image-paths.ts` | 键名规则：`storageObjectKey()`、`thumbnailObjectKey()`、`linkThumbnailKey(device,brightness,theme,id)`，以及集中助手 `thumbnailRef(row)`——link 缩略图按分类分文件夹存在该图自己的存储后端的 `link/` 前缀下。所有清理 / 检查路径都走它，避免孤儿。 |
-| `storage/object-keys.ts` | 路径 / 键名映射与防穿越：本地 `safeStoragePath()`、S3 `storageS3ObjectName()` 等，物理布局 `<root_path>/<media｜thumbs｜_uploads｜link>/<key>`。 |
+| `storage/image-paths.ts` | 图片正式键名规则：`storageObjectKey()`、`thumbnailObjectKey()` 与集中助手 `thumbnailRef(row)`；所有清理 / 检查路径都走它，避免孤儿。 |
+| `storage/object-keys.ts` | 路径 / 键名映射与防穿越：本地 `safeStoragePath()`、S3 `storageS3ObjectName()` 等，物理布局 `<root_path>/<media｜thumbs｜_uploads>/<key>`。 |
 | `storage/object-validator.ts` | 规范化 S3 / WebDAV 实体标签，并按本地文件版本元数据生成对象 ETag。 |
 | `storage/migration.ts` | 单图位置锁、锁内真值重读、物理 identity 判断、verified copy→CAS→旧对象清理协议，以及任意后端间的单图 / 整后端迁移。 |
 | `storage/stream-buffer.ts` | 流 ↔ Buffer、Node ↔ Web Stream 与有界流式切片辅助。 |
@@ -97,17 +97,17 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 
 | 文件 | 职责 |
 | --- | --- |
-| `images/service.ts` | 软删除 `deleteImage()`、改元数据 / 换分类 `updateImageMetadata()`（换分类＝移动对象键并同步 Redis 随机池，link 只移动缩略图）、单 / 批量迁移存储。 |
+| `images/service.ts` | 软删除 `deleteImage()`、改元数据 / 换分类 `updateImageMetadata()`（换分类＝移动对象键并同步 Redis 随机池）、单 / 批量迁移存储。 |
 | `images/read-models/` | 图片读取模型：`public-images.ts`（公共列表 / 详情与 Redis 缓存）、`admin-images.ts`（后台列表 / 详情）、`duplicates.ts`（MD5 判重）、`facets.ts`、`overview.ts`，以及复用的 `pagination.ts`；Redis miss 后按场景做同进程 in-flight 合并。 |
-| `images/image-cache.ts` | 统一 `image_cache_revision` 下的公共列表 / 详情、facets、后台概览、MD5 与 Redis 8 `HSETEX` lookup；写前 revision 校验、本地 dirty fence 和“先推进代际、再精确清理”避免旧读回填。原图直连探测另用短 TTL。 |
-| `images/serving.ts` | 存储对象、缩略图、link 与后台字节出口；集中处理 Content-Length、内容 / 对象版本 ETag、304、单段 Range / If-Range、外部回源代理、原图直连探测及其短 TTL 缓存、缓存策略和缩略图缺失时的乐观读取 / 补建。 |
+| `images/image-cache.ts` | 统一 `image_cache_revision` 下的公共列表 / 详情、facets、后台概览、MD5 与 Redis 8 `HSETEX` lookup；lookup 另带响应 schema 版本，写前 revision 校验、本地 dirty fence 和“先推进代际、再精确清理”避免旧读回填。原图直连探测另用短 TTL。 |
+| `images/serving.ts` | 存储对象、缩略图、外部原图代理与后台字节出口；集中处理 Content-Length、内容 / 对象版本 ETag、304、单段 Range / If-Range、外部回源代理、原图直连探测及其短 TTL 缓存、缓存策略和缩略图缺失时的乐观读取 / 补建。 |
 | `images/original-link.ts` | 原图入口判断工具：计算展示 URL、规范化比较 URL，并只在 `original` 为 HTTPS 且不同于展示图时开放原图按钮 / 跳转。 |
 | `images/presenter.ts` | `publicImage()` / `publicImages()` 把 DB 行变成后台可复用的完整图片视图、`publicImageDetail()`（公开详情字段白名单）、`publicImageCard()`（公共列表卡片白名单）、`importCommitImage()`（提交结果仅投影最终 URL）、`adminImageView()`（后台投影：去 `ext`、已删除图改指鉴权字节端点）。缓存键与 lookup 预热归读取 / 缓存模块。 |
 | `images/processing.ts` | sharp 封装：图片格式 / 尺寸探测、缩略图、`transcodeStoredImage()`、`generateStoredThumbnail()`，以及运行时 Sharp 并发配置。 |
 | `images/classification.ts` | 设备 / 明暗三态分类工具：`auto` 解析、按宽高落设备、导入与编辑共用的最终分类收敛。 |
 | `images/image-time.ts` | 图片展示时间专用解析与 UUIDv7 生成：用原生 Temporal 处理带偏移 ISO 8601、按 `TZ` 严格解析无偏移本地时间并拒绝夏令时歧义；JSONL 可把临时清单位置映射到 `rand_a`。 |
 | `images/brightness.ts` | 明暗识别 `detectBrightness()`：缩小图片后用 CIELAB L\* 直方图计算平均值、分位数、亮暗像素比例，并按运行时常量判定 `dark` / `light`。 |
-| `images/imports/` | 统一 `import_session` 生命周期：`session.ts` 负责创建 / 接收 / 预览 / 取消，`prepare.ts` 与 `commit.ts` 分管处理和提交，`progress.ts` 管租约 / 状态 / SSE，`execution.ts` 统一管理 prepare / commit 动态并发限制与 active promise，`staging.ts` 管暂存对象；另含 JSONL、微博公开帖子解析、请求摘要、安全抓取和临时文件模块。 |
+| `images/imports/` | 统一 `import_session` 生命周期：`session.ts` 负责创建 / 预览 / 取消，`materialize.ts` 负责浏览器上传与服务器下载素材化，`prepare.ts` 与 `commit.ts` 分管处理和提交，`progress.ts` 管租约 / 状态 / SSE，`execution.ts` 管动态并发与 active promise，`session-lock.ts` 提供跨进程生命周期锁，`staging.ts` 管暂存对象；另含 JSONL、微博公开帖子解析、请求摘要、安全抓取和临时文件模块。 |
 | `images/batch-delete.ts` | 批量软删除 `batchDeleteImages()`：标记 `status='deleted'` 并从 Redis 随机池移除（不动文件）。 |
 | `images/batch-update.ts` | 批量编辑协调：不同图片固定低并发 2、单图 metadata→tags 有序，隔离业务错误并按请求顺序返回结果；批次末统一同步派生缓存与实体计数缓存。 |
 | `images/mutation-sync.ts` | 图片写入后的派生状态协调器：合并随机池、公共读缓存、MD5 与精确 lookup 失效；单图调用即时执行，批量编辑按请求收集后执行一次。 |
@@ -137,7 +137,7 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | --- | --- |
 | `random/service.ts` | 编排一次随机：校验→解析主题 / 标签 / 作者别名→定候选轴→取最近已服务列表→Redis 池取→记录已服务 id。 |
 | `random/random-cache.ts` | 随机池领域的稳定门面，只重导出 schema、读取、重建和增量同步能力；其他领域不依赖内部 Redis 实现文件。 |
-| `random/cache-schema.ts` · `cache-lock.ts` | generation key / Lua / 数据映射协议，以及带 token 续租和所有权校验的更新 / 重建锁。 |
+| `random/cache-schema.ts` · `cache-lock.ts` | 带 schema 版本的 generation key / Lua / 数据映射协议，以及带 token 续租和所有权校验的更新 / 重建锁。 |
 | `random/cache-rebuild.ts` · `cache-sync.ts` · `cache-read.ts` | 分别负责 PostgreSQL 快照全量重建、图片增量同步和 generation 读取 / 临时筛选集合；不再由单个超大模块混合承担。 |
 | `random/cache-consistency.ts` | 原子读取 requested/completed revision 与增量锁，用有界退避抖动等待合法同步完成，并区分陈旧缓存和更新中状态。 |
 | `random/rebuild-spool.ts` | 随机池全量重建的受控内存 / NDJSON spool：16 MiB 阈值、格式和大小校验、活动文件及启动遗留清理。 |
@@ -153,8 +153,8 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | `checks/redis-inspect.ts` | 后台“检查”页的 Redis 健康、随机代际和图片缓存 revision 键值巡检。 |
 | `checks/database-check.ts` | 数据库与随机池一致性检查、回收站候选抽样。 |
 | `checks/storage-check.ts` | 存储一致性检查：缺失原图 / 缩略图、孤儿对象、有效 / 失效 `_uploads` 暂存和不可用后端；只有失效暂存作为问题报告。 |
-| `checks/storage-cleanup.ts` | 存储清理：删除孤儿 media / thumbs / link 与失效 `_uploads` 对象，保留有效导入会话暂存并回收本地空目录。 |
-| `checks/storage-common.ts` | 存储检查共享类型、有效导入会话引用索引、暂存会话 ID 提取 / 分类与 expected thumbs/link 缩略图集合计算。 |
+| `checks/storage-cleanup.ts` | 存储清理：删除孤儿 media / thumbs 与失效 `_uploads` 对象，保留有效导入会话暂存并回收本地空目录。 |
+| `checks/storage-common.ts` | 存储检查共享类型、有效导入会话引用索引、暂存会话 ID 提取 / 分类与 expected media / thumbs 集合计算。 |
 | `checks/storage-migrate.ts` | 后端迁移与旧对象路径迁移入口，完成后重建随机池并失效图片读缓存。 |
 
 ### jobs/ —— 后台 Worker
@@ -173,7 +173,7 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | `routes/random.ts` | `GET /random`、`GET /img-count`、`random.<域名>/`、`<theme>.<域名>/random` |
 | `routes/auth.ts` | 登录 / 登出 / ALTCHA 挑战 / `/api/admin/auth/me`（登录态、CSRF token、安全验证开关、登录背景） |
 | `routes/admin-images.ts` | 后台图片增删改查、单请求批量元数据 / 标签编辑、迁移、回收站原图、登录态轻量 `admin-info` |
-| `routes/imports.ts` | 统一 `/api/admin/imports/*`：JSONL / 微博 parse、create、PUT file、prepare、preview、status、SSE events、commit、cancel |
+| `routes/imports.ts` | 统一 `/api/admin/imports/*`：JSONL / 微博 parse、create、PUT file、download materialize、prepare、preview、status、SSE events、commit、cancel |
 | `routes/admin-tags.ts` · `admin-themes.ts` · `admin-authors.ts` · `admin-users.ts` | 标签 / 主题 / 作者 / 用户管理 |
 | `routes/admin-preferences.ts` | 当前登录管理员的界面偏好读取与局部更新；用户名只取自鉴权会话。 |
 | `routes/admin-entity-routes.ts` | 标签 / 主题 / 作者相同 CRUD 路由骨架及精简导入词表入口；删除副作用仍由各领域 service 承担。 |

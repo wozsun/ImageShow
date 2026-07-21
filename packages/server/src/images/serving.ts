@@ -6,7 +6,7 @@ import { isExternalImageRejection, safeFetchExternalImage } from "../core/extern
 import { coalesce } from "../core/coalesce.ts";
 import { ifNoneMatchMatches, ifRangeMatches } from "../core/http-validator.ts";
 import { generateStoredThumbnail } from "./processing.ts";
-import { linkThumbnailKey, thumbnailObjectKey } from "../storage/image-paths.ts";
+import { thumbnailObjectKey } from "../storage/image-paths.ts";
 import {
   contentType,
   exists,
@@ -46,6 +46,7 @@ function shouldNotRedirectExternalError(error: unknown) {
   return isExternalImageRejection(error);
 }
 
+/** @internal Exported for regression tests of the retained external proxy. */
 export async function proxyExternalImage(
   externalUrl: string,
   ext: string,
@@ -180,7 +181,7 @@ function sameObjectVersion(left: OpenedRead, right: OpenedRead) {
 }
 
 async function streamStoredObject(
-  prefix: "media" | "thumbs" | "link",
+  prefix: "media" | "thumbs",
   key: string,
   backend: string,
   contentTypeValue: string,
@@ -273,21 +274,12 @@ async function streamThumbEnsuring(
   });
 }
 
-async function linkThumbFallback(id: string, row: { storage_slug: string; device: string; brightness: string; theme: string }, cacheControl: string) {
-  const backend = row.storage_slug;
-  const key = linkThumbnailKey(row.device, row.brightness, row.theme, id);
-  return streamStoredObject("link", key, backend, "image/webp", cacheControl).catch((error: unknown) => {
-    if (isStorageNotFoundError(error)) throw new ApiError(404, "not_found", "Link thumbnail not found");
-    throw error;
-  });
-}
-
 async function imageLookupById(id: string): Promise<ImageLookupByIdItem | null> {
   const revision = await imageCacheRevision();
   const cached = await getImageLookupById(id, revision);
   if (cached) return cached;
   const row = (await pool.query(
-    `SELECT id, object_key, original, ext, storage_slug, is_link, device, brightness, theme,
+    `SELECT id, object_key, original, ext, storage_slug, device, brightness, theme,
             status, description, source
        FROM metadata
       WHERE id=$1
@@ -301,7 +293,6 @@ async function imageLookupById(id: string): Promise<ImageLookupByIdItem | null> 
     original: String(row.original ?? ""),
     ext: String(row.ext ?? ""),
     storage_slug: String(row.storage_slug),
-    is_link: Boolean(row.is_link),
     device: row.device as ImageLookupByIdItem["device"],
     brightness: row.brightness as ImageLookupByIdItem["brightness"],
     theme: String(row.theme ?? "none"),
@@ -393,35 +384,6 @@ function immutableRedirect(location: string) {
   return new Response(null, { status: 302, headers: { Location: location, "Cache-Control": publicRedirectCacheControl } });
 }
 
-export async function serveLinkThumb(key: string, request: StoredResponseRequest = {}): Promise<Response> {
-  const id = (key.split("/").pop() ?? key).replace(/\.[^/.]+$/, "");
-  const row = await imageLookupById(id);
-  if (!row || !row.is_link || row.status !== "ready") throw new ApiError(404, "not_found", "Thumbnail not found");
-  const backend = row.storage_slug;
-  const object = await resolveReadableObject("link", key, backend);
-  if (object.publicUrl) return immutableRedirect(object.publicUrl);
-  return streamResolvedObject(object, "image/webp", immutableCacheControl, request).catch((error: unknown) => {
-    if (isStorageNotFoundError(error)) throw new ApiError(404, "not_found", "Thumbnail not found");
-    throw error;
-  });
-}
-
-export async function serveLinkMedia(key: string, isHead = false): Promise<Response> {
-  const id = key.replace(/\.[^/.]+$/, "");
-  const row = await imageLookupById(id);
-
-  if (!row || !row.is_link || row.status !== "ready") throw new ApiError(404, "not_found", "Link image not found");
-
-  return proxyExternalImage(
-    row.object_key as string,
-    (row.ext as string) || "jpg",
-    isHead,
-    { "Cache-Control": noStoreCacheControl },
-    publicProxyImageCacheControl,
-    () => linkThumbFallback(id, row, publicProxyFallbackThumbCacheControl)
-  );
-}
-
 export async function redirectOriginalLink(id: string, userAgent: string) {
   const row = await imageLookupById(id);
   const original = String(row?.original ?? "");
@@ -469,10 +431,6 @@ export async function serveAdminThumb(id: string, request: StoredResponseRequest
   const row = await imageLookupById(id);
   if (!row) throw new ApiError(404, "not_found", "Image not found");
   const backend = row.storage_slug;
-  if (row.is_link) {
-    const linkKey = linkThumbnailKey(row.device, row.brightness, row.theme, id);
-    return streamStoredObject("link", linkKey, backend, "image/webp", privateNoStoreCacheControl, request);
-  }
   const thumbKey = thumbnailObjectKey(row.object_key);
   const streamed = await streamThumbEnsuring(row.object_key, thumbKey, backend, privateNoStoreCacheControl, request);
   if (streamed) return streamed;
@@ -482,7 +440,6 @@ export async function serveAdminThumb(id: string, request: StoredResponseRequest
 export async function serveAdminObject(id: string, request: StoredResponseRequest = {}): Promise<Response> {
   const row = await imageLookupById(id);
   if (!row) throw new ApiError(404, "not_found", "Image not found");
-  if (row.is_link) return proxyExternalImage(row.object_key as string, (row.ext as string) || "jpg", Boolean(request.isHead), { "Cache-Control": privateNoStoreCacheControl }, undefined, () => linkThumbFallback(id, row, privateNoStoreCacheControl));
   const backend = row.storage_slug;
   return streamStoredObject("media", row.object_key, backend, contentType(row.ext), privateNoStoreCacheControl, request);
 }

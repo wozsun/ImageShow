@@ -4,7 +4,7 @@ import type { ImportMode } from "../images/imports/types.ts";
 import { thumbnailObjectKey, thumbnailRef } from "../storage/image-paths.ts";
 import { listStorageBackends } from "../storage/backend-registry.ts";
 
-export type StorageRow = { id: string; object_key: string; status: string; storage_slug: string; is_link: boolean; device: string; brightness: string; theme: string };
+export type StorageRow = { id: string; object_key: string; status: string; storage_slug: string };
 
 export type ActiveImportStorageReference = {
   id: string;
@@ -16,7 +16,7 @@ export type ActiveImportStorageReference = {
 };
 
 type ImportFinalStorageReference = {
-  prefix: "media" | "thumbs" | "link";
+  prefix: "media" | "thumbs";
   key: string;
 };
 
@@ -27,7 +27,8 @@ type ClassifiedStagingKey = {
 
 const ACTIVE_IMPORT_STORAGE_STATUSES = [
   "created",
-  "receiving",
+  "materializing",
+  "received",
   "preparing",
   "ready",
   "committing"
@@ -38,7 +39,6 @@ export function importFinalStorageReferences(
 ): ImportFinalStorageReference[] {
   const key = session.final_object_key;
   if (!key) return [];
-  if (session.mode === "proxy") return [{ prefix: "link", key }];
   return [
     { prefix: "media", key },
     { prefix: "thumbs", key: thumbnailObjectKey(key) }
@@ -116,14 +116,12 @@ export async function storageBackends() {
 
 export function expectedThumbs(rows: StorageRow[]) {
   const thumbs = new Map<string, Set<string>>();
-  const link = new Map<string, Set<string>>();
   for (const row of rows) {
     if (row.status !== "ready" && row.status !== "deleted") continue;
     const ref = thumbnailRef(row);
-    const target = ref.prefix === "link" ? link : thumbs;
-    let set = target.get(ref.slug);
-    if (!set) { set = new Set<string>(); target.set(ref.slug, set); }
+    let set = thumbs.get(ref.slug);
+    if (!set) { set = new Set<string>(); thumbs.set(ref.slug, set); }
     set.add(ref.key);
   }
-  return { thumbs, link };
+  return { thumbs };
 }

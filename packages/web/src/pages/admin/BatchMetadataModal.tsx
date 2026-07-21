@@ -312,15 +312,9 @@ export function BatchMetadataModal({
                     previewReturnFocusRef.current = opener;
                     setPreview({ src: item.object_url, thumbSrc: item.thumb_url, width: item.width, height: item.height });
                   }} />
-                  {item.is_link
-                    ? (
-                      <span className="batch-edit-preview-size proxy-image-note" title="代理链接图片">
-                        <Icon name="external-link-line" />代理链接
-                      </span>
-                    )
-                    : item.image_size
-                      ? <span className="batch-edit-preview-size">{formatBytes(item.image_size)}</span>
-                      : null}
+                  {item.image_size
+                    ? <span className="batch-edit-preview-size">{formatBytes(item.image_size)}</span>
+                    : null}
                 </div>
                 <div className="batch-edit-content">
                   <div className="batch-edit-head">
@@ -337,7 +331,7 @@ export function BatchMetadataModal({
                         {formatDimensions(item.width, item.height)} · {item.device}/{item.brightness} · {item.theme}
                       </span>
                       <span className="batch-edit-summary-line batch-edit-mobile-summary">
-                        {item.is_link ? "代理链接" : item.image_size ? formatBytes(item.image_size) : "大小未记录"} · {resolveStorageName(item)}
+                        {item.image_size ? formatBytes(item.image_size) : "大小未记录"} · {resolveStorageName(item)}
                       </span>
                     </div>
                     {!single && (

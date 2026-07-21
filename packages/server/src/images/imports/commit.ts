@@ -1,9 +1,9 @@
-import { ensureAuthor } from "../../authors/service.ts";
+import { ensureAuthorWithMutationLockHeld } from "../../authors/service.ts";
 import { pool, withTransaction } from "../../core/db.ts";
 import { ApiError, errorMessage } from "../../core/api-error.ts";
 import { logger } from "../../core/logger.ts";
 import { syncRandomImage } from "../../random/random-cache.ts";
-import { ensureTheme } from "../../themes/service.ts";
+import { ensureThemeWithMutationLockHeld } from "../../themes/service.ts";
 import { resolveTagNames } from "../../tags/query.ts";
 import { replaceImageTags } from "../../tags/service.ts";
 import {
@@ -11,9 +11,13 @@ import {
   refreshEntityVocabularies,
   type EntityCacheKind,
 } from "../../vocab/vocab-cache.ts";
+import { vocabularyMutationLockRequests } from "../../vocab/mutation-sync.ts";
 import { resolveStorageAccess } from "../../storage/backend-registry.ts";
-import { linkThumbnailKey, storageObjectKey, thumbnailObjectKey } from "../../storage/image-paths.ts";
-import { withImageStorageMutationLock } from "../../storage/maintenance-lock.ts";
+import { storageObjectKey, thumbnailObjectKey } from "../../storage/image-paths.ts";
+import {
+  imageStorageMutationLockKey,
+  tryWithStorageLocationReadAndAdvisoryLocks
+} from "../../storage/maintenance-lock.ts";
 import { copyVerifiedObjectWithinStorage } from "../../storage/object-transfer.ts";
 import { removeObjectsOrEnqueueCleanup } from "../../storage/move-cleanup.ts";
 import { removeObject } from "../../storage/storage.ts";
@@ -25,10 +29,10 @@ import { resolveClassification } from "../classification.ts";
 import { importCommitImage, type ImageRecord } from "../presenter.ts";
 import { notifyImportStatus, withImportLease } from "./progress.ts";
 import {
-  importCommitLockKey,
   runImportCommit,
   runImportCommitWithinByteBudget
 } from "./execution.ts";
+import { importSessionLockKey } from "./session-lock.ts";
 import { stagingImageKey } from "./staging.ts";
 import type {
   ImportMetadata,
@@ -45,7 +49,6 @@ type CommittedImageRecord = Pick<
   | "original"
   | "ext"
   | "storage_slug"
-  | "is_link"
   | "device"
   | "brightness"
   | "theme"
@@ -56,7 +59,6 @@ type CommittedImageRecord = Pick<
 
 type CommitImportSessionRecord = Pick<
   ImportSessionRow,
-  | "mode"
   | "status"
   | "storage_slug"
   | "final_object_key"
@@ -65,7 +67,7 @@ type CommitImportSessionRecord = Pick<
 >;
 
 type ImportCandidateObject = {
-  prefix: "media" | "thumbs" | "link" | "_uploads";
+  prefix: "media" | "thumbs" | "_uploads";
   key: string;
   backend: string;
 };
@@ -77,7 +79,6 @@ const committedImageColumns = [
   "original",
   "ext",
   "storage_slug",
-  "is_link",
   "device",
   "brightness",
   "theme",
@@ -249,8 +250,12 @@ async function commitStoredImageSession(
     });
     const result = await withTransaction(async (client) => {
       const createdEntityKinds = new Set<EntityCacheKind>();
-      if (await ensureTheme(client, payload.theme)) createdEntityKinds.add("theme");
-      if (await ensureAuthor(client, payload.author)) createdEntityKinds.add("author");
+      if (await ensureThemeWithMutationLockHeld(client, payload.theme)) {
+        createdEntityKinds.add("theme");
+      }
+      if (await ensureAuthorWithMutationLockHeld(client, payload.author)) {
+        createdEntityKinds.add("author");
+      }
       const insertedRow = await client.query(
         `INSERT INTO metadata(id, image_time, device, brightness, theme, width, height, image_size, ext,
          object_key, storage_slug, title, description, source, original, md5, thumbnail_size, author)
@@ -321,155 +326,8 @@ async function commitStoredImageSession(
              FROM metadata
             WHERE id=$1
               AND storage_slug=$2
-              AND object_key=$3
-              AND is_link=false`,
+              AND object_key=$3`,
           [id, backend, finalKey]
-        )).rowCount)
-      );
-    }
-    throw error;
-  }
-}
-
-async function commitProxySession(
-  id: string,
-  session: CommitImportSessionRecord,
-  payload: PreparedPayload
-) {
-  const backend = session.storage_slug;
-  const classification = resolveClassification(payload, {
-    device: payload.detected_device,
-    brightness: payload.detected_brightness
-  });
-  const linkKey = session.final_object_key || linkThumbnailKey(
-    classification.device,
-    classification.brightness,
-    payload.theme,
-    id
-  );
-  let copiedLink = false;
-  let databaseCommitted = false;
-
-  try {
-    const resolvedTags = await resolveTagNames(payload.tags ?? []);
-    const storage = await resolveStorageAccess(backend);
-    await assertPreparedObjectExists(
-      storage,
-      payload.prepared_thumbnail_key,
-      "prepared_thumbnail_missing",
-      "准备好的缩略图不存在"
-    );
-    copiedLink = (await copyVerifiedObjectWithinStorage({
-      storage,
-      fromPrefix: "_uploads",
-      fromKey: payload.prepared_thumbnail_key,
-      toPrefix: "link",
-      toKey: linkKey,
-      expectedSource: {
-        size: payload.thumbnail_size,
-        sha256: payload.prepared_thumbnail_sha256
-      },
-      sourceMismatch: {
-        status: 409,
-        code: "storage_object_conflict",
-        message: "准备好的缩略图与已记录的完整性信息不一致"
-      },
-      cleanupCandidate: cleanupImportCandidate(
-        id,
-        "import_link_integrity_failure"
-      )
-    })).created;
-
-    const result = await withTransaction(async (client) => {
-      const createdEntityKinds = new Set<EntityCacheKind>();
-      if (await ensureTheme(client, payload.theme)) createdEntityKinds.add("theme");
-      if (await ensureAuthor(client, payload.author)) createdEntityKinds.add("author");
-      const insertedRow = await client.query(
-        `INSERT INTO metadata(id, image_time, device, brightness, theme, width, height, ext,
-         object_key, storage_slug, is_link, title, description, source, original, md5, thumbnail_size, author)
-         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,true,$11,$12,$13,$14,$15,$16,$17)
-         ON CONFLICT (object_key) DO NOTHING RETURNING ${committedImageColumns}`,
-        [
-          id,
-          session.image_time,
-          classification.device,
-          classification.brightness,
-          payload.theme,
-          payload.width,
-          payload.height,
-          payload.ext,
-          payload.source_url,
-          backend,
-          payload.title,
-          payload.description,
-          payload.source,
-          payload.original,
-          payload.md5,
-          payload.thumbnail_size,
-          payload.author || null
-        ]
-      );
-      const image = insertedRow.rowCount
-        ? insertedRow.rows[0] as CommittedImageRecord
-        : (await client.query(
-            `SELECT ${committedImageColumns} FROM metadata WHERE id=$1`,
-            [id]
-          )).rows[0] as CommittedImageRecord | undefined;
-      if (image && (await replaceImageTags(client, image.id, resolvedTags)).createdTag) {
-        createdEntityKinds.add("tag");
-      }
-      const finalized = await client.query(
-        "UPDATE import_session SET status='finalized', updated_at=now() WHERE id=$1 AND status='committing'",
-        [id]
-      );
-      if (!finalized.rowCount) {
-        throw new ApiError(409, "invalid_import_state", "导入任务提交状态已变化");
-      }
-      return { image, createdEntityKinds };
-    });
-    databaseCommitted = true;
-
-    await removeObject("_uploads", payload.prepared_thumbnail_key, backend).catch(() => undefined);
-    if (!result.image) {
-      if (copiedLink) {
-        await removeObjectsOrEnqueueCleanup(
-          id,
-          [{ prefix: "link", key: linkKey, backend }],
-          "duplicate_import_candidate_cleanup"
-        );
-      }
-      await Promise.all([
-        refreshEntityVocabularies(result.createdEntityKinds),
-        invalidateEntityCountCaches(result.createdEntityKinds),
-      ]);
-      return { status: "duplicate" as const };
-    }
-    const image = await finishImport(result.image.id, payload, result.createdEntityKinds);
-    return { status: "imported" as const, item: await importCommitImage(image) };
-  } catch (error) {
-    if (!databaseCommitted && copiedLink) {
-      await cleanupImportCandidatesIfUnreferenced(
-        id,
-        [{ prefix: "link", key: linkKey, backend }],
-        "import_commit_rollback",
-        async () => Boolean((await pool.query(
-          `SELECT 1
-             FROM metadata
-            WHERE id=$1
-              AND object_key=$2
-              AND storage_slug=$3
-              AND is_link=true
-              AND device=$4
-              AND brightness=$5
-              AND theme=$6`,
-          [
-            id,
-            payload.source_url,
-            backend,
-            classification.device,
-            classification.brightness,
-            payload.theme
-          ]
         )).rowCount)
       );
     }
@@ -482,7 +340,7 @@ async function commitImportSessionWhileLocationStable(
   metadata: ImportMetadata
 ) {
   let session = (await pool.query(
-      `SELECT mode, status, storage_slug, final_object_key, prepared_payload, image_time
+      `SELECT status, storage_slug, final_object_key, prepared_payload, image_time
          FROM import_session
         WHERE id=$1`,
       [id]
@@ -515,26 +373,19 @@ async function commitImportSessionWhileLocationStable(
         device: payload.detected_device,
         brightness: payload.detected_brightness
       });
-      const finalKey = session.mode === "proxy"
-        ? linkThumbnailKey(
-            classification.device,
-            classification.brightness,
-            metadata.theme,
-            id
-          )
-        : storageObjectKey(
-            classification.device,
-            classification.brightness,
-            metadata.theme,
-            id,
-            payload.ext
-          );
+      const finalKey = storageObjectKey(
+        classification.device,
+        classification.brightness,
+        metadata.theme,
+        id,
+        payload.ext
+      );
       const claimed = await pool.query(
         `UPDATE import_session
          SET status='committing', metadata_payload=$2::jsonb, prepared_payload=$3::jsonb,
              final_object_key=$4, updated_at=now()
          WHERE id=$1 AND status='ready'
-         RETURNING mode, status, storage_slug, final_object_key, prepared_payload, image_time`,
+         RETURNING status, storage_slug, final_object_key, prepared_payload, image_time`,
         [
           id,
           JSON.stringify(metadataPayload),
@@ -550,53 +401,61 @@ async function commitImportSessionWhileLocationStable(
         );
       }
       session = claimed.rows[0] as CommitImportSessionRecord;
-      await notifyImportStatus(id);
+      await notifyImportStatus(id).catch(() => undefined);
     }
 
     if (!session) throw new ApiError(404, "not_found", "导入任务不存在");
     const currentSession = session;
     const payload = currentSession.prepared_payload as PreparedPayload;
-    const result = await (currentSession.mode === "proxy"
-      ? commitProxySession(id, currentSession, payload)
-      : commitStoredImageSession(id, currentSession, payload));
-    await notifyImportStatus(id);
+    const result = await commitStoredImageSession(id, currentSession, payload);
+    await notifyImportStatus(id).catch(() => undefined);
     return result;
   });
 }
 
+async function importCommitVocabularyLocks(
+  id: string,
+  metadata: ImportMetadata
+) {
+  const row = (await pool.query(
+    "SELECT prepared_payload FROM import_session WHERE id=$1",
+    [id]
+  )).rows[0] as Pick<ImportSessionRow, "prepared_payload"> | undefined;
+  const prepared = row?.prepared_payload as Partial<PreparedPayload> | undefined;
+  const themes = [metadata.theme, prepared?.theme]
+    .filter((slug): slug is string => Boolean(slug && slug !== "none"));
+  const authors = [metadata.author, prepared?.author]
+    .filter((slug): slug is string => Boolean(slug));
+  return vocabularyMutationLockRequests([
+    ...themes.map((slug) => ({ entity: "theme" as const, slug })),
+    ...authors.map((slug) => ({ entity: "author" as const, slug }))
+  ]);
+}
+
 async function commitImportSessionWithinLimit(id: string, metadata: ImportMetadata) {
-  const lockClient = await pool.connect();
-  const lockKey = importCommitLockKey(id);
-  const locked = Boolean((await lockClient.query(
-    "SELECT pg_try_advisory_lock(hashtext($1)) AS locked",
-    [lockKey]
-  )).rows[0]?.locked);
-  if (!locked) {
-    lockClient.release();
+  const vocabularyLocks = await importCommitVocabularyLocks(id, metadata);
+  const attempt = await tryWithStorageLocationReadAndAdvisoryLocks(
+    [
+      ...vocabularyLocks,
+      { key: importSessionLockKey(id), acquisition: "try" },
+      { key: imageStorageMutationLockKey(id) }
+    ],
+    () => commitImportSessionWhileLocationStable(id, metadata)
+  );
+  if (!attempt.acquired) {
     throw new ApiError(409, "import_already_finalizing", "Import is already being committed");
   }
-
-  try {
-    return await withImageStorageMutationLock(id, () =>
-      commitImportSessionWhileLocationStable(id, metadata)
-    );
-  } finally {
-    await lockClient.query(
-      "SELECT pg_advisory_unlock(hashtext($1))",
-      [lockKey]
-    ).catch(() => undefined);
-    lockClient.release();
-  }
+  return attempt.value;
 }
 
 async function importCommitByteWeight(id: string) {
   const row = (await pool.query(
-    "SELECT mode, prepared_payload FROM import_session WHERE id=$1",
+    "SELECT prepared_payload FROM import_session WHERE id=$1",
     [id]
-  )).rows[0] as Pick<ImportSessionRow, "mode" | "prepared_payload"> | undefined;
+  )).rows[0] as Pick<ImportSessionRow, "prepared_payload"> | undefined;
   if (!row) return 1;
   const payload = row.prepared_payload as Partial<PreparedPayload>;
-  const imageBytes = row.mode === "proxy" ? 0 : Number(payload.size ?? 0);
+  const imageBytes = Number(payload.size ?? 0);
   const thumbnailBytes = Number(payload.thumbnail_size ?? 0);
   const total = imageBytes + thumbnailBytes;
   return Number.isFinite(total) ? Math.max(1, total) : 1;

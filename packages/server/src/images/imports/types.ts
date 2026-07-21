@@ -6,10 +6,11 @@ import type { AdminImage } from "../presenter.ts";
 export type ImportCreateInput = z.infer<typeof importCreateInput>;
 type ImportCommitInput = z.infer<typeof importCommitInput>;
 export type ImportMetadata = ImportCommitInput;
-export type ImportMode = "upload" | "download" | "proxy";
+export type ImportMode = "upload" | "download";
 export type ImportStatus =
   | "created"
-  | "receiving"
+  | "materializing"
+  | "received"
   | "preparing"
   | "ready"
   | "committing"

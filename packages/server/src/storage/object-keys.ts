@@ -3,9 +3,9 @@ import { runtimePaths } from "../config/bootstrap-env.ts";
 import { ApiError } from "../core/api-error.ts";
 import type { StorageConfig } from "./backend-config.ts";
 
-export const STORAGE_PREFIXES = ["media", "thumbs", "_uploads", "link"] as const;
+export const STORAGE_PREFIXES = ["media", "thumbs", "_uploads"] as const;
 export type StoragePrefix = typeof STORAGE_PREFIXES[number];
-export type ReadablePrefix = "media" | "thumbs" | "link";
+export type ReadablePrefix = "media" | "thumbs";
 
 const reservedRootPrefixPattern = new RegExp(`^(${STORAGE_PREFIXES.join("|")})/`);
 function isReservedRootKey(key: string) {

@@ -155,7 +155,7 @@ export type BatchDuplicateMatch = {
 
 export type ImportJob = {
   id: string;
-  kind: "local" | "download" | "proxy";
+  kind: "local" | "download";
   status: "queued" | "uploading" | "downloading" | "processing" | "ready" | "committing" | "cancelling" | "done" | "skipped" | "failed" | "cancelled";
   message: string;
   preview: string;

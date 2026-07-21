@@ -6,7 +6,7 @@ import { getRuntimeConfig, onRuntimeConfigChange } from "./config/runtime-config
 import { configureSharpConcurrency } from "./images/processing.ts";
 import { invalidateImageCaches } from "./images/image-cache.ts";
 import { cleanupOrphanRawImports } from "./images/imports/temp-files.ts";
-import { pingDb, pool, runMigrations } from "./core/db.ts";
+import { closeDatabasePools, pingDb, runMigrations } from "./core/db.ts";
 import { initializeAdmin } from "./users/admin-initialize.ts";
 import { pingRedis, redis } from "./core/redis-client.ts";
 import { logger } from "./core/logger.ts";
@@ -72,7 +72,9 @@ app.use("*", async (c, next) => {
   }
   if (special === "static" || special === "link") {
     const path = new URL(c.req.url).pathname;
-    const allowed = path.startsWith("/media/") || path.startsWith("/thumbs/") || (special === "link" && path.startsWith("/original/"));
+    const allowed = special === "static"
+      ? path.startsWith("/media/") || path.startsWith("/thumbs/")
+      : path.startsWith("/original/");
     if (!allowed) return routeError({ status: 404, message: "Not Found" });
   }
   const theme = themeFromHost(host);
@@ -143,10 +145,10 @@ registerSpaRoutes(app);
 app.notFound(() => routeError({ status: 404, message: "Not Found" }));
 
 await ensureRuntimeDirectories();
-await cleanupOrphanRawImports(appConfig.uploadTtlSeconds * 1000);
 await cleanupOrphanRandomRebuildSpools();
 await pingDb();
 await runMigrations();
+await cleanupOrphanRawImports(appConfig.uploadTtlSeconds * 1000);
 await initializeAdmin();
 await pingRedis();
 configureSharpConcurrency();
@@ -184,7 +186,7 @@ async function shutdown(signal: string) {
     await startupRandomPool;
     await cleanupActiveRandomRebuildSpools();
     await redis.quit().catch(() => redis.disconnect());
-    await pool.end().catch(() => undefined);
+    await closeDatabasePools();
   } finally {
     clearTimeout(hardExit);
     process.exit(0);

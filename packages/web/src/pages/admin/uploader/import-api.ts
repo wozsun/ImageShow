@@ -24,11 +24,12 @@ export type PreparedImport = {
 export type ImportSessionHandle = {
   id: string;
   upload_url?: string;
+  materialize_url?: string;
   prepare_url: string;
 };
 
 export type ImportSessionCreateInput = ImageDraft & {
-  mode: "upload" | "download" | "proxy";
+  mode: "upload" | "download";
   size?: number;
   source_url?: string;
   image_time?: string;
@@ -48,7 +49,6 @@ export type JsonlManifestItem = {
   original: string;
   source?: string;
   image_time?: string;
-  mode?: "download" | "proxy";
   author?: string;
   tags?: string[];
   title?: string;
@@ -95,7 +95,8 @@ export type WeiboImportResult = {
 
 type StoredImportServerStatus =
   | "created"
-  | "receiving"
+  | "materializing"
+  | "received"
   | "preparing"
   | "ready"
   | "committing"
@@ -150,6 +151,7 @@ export function createImportSessionsBatch(
       idempotency_key: result.idempotency_key,
       session: {
         id: result.id,
+        materialize_url: `${adminApiBasePath}/imports/${result.id}/materialize`,
         prepare_url: `${adminApiBasePath}/imports/${result.id}/prepare`
       }
     };
@@ -174,6 +176,14 @@ export function parseWeiboImport(urls: string[], signal?: AbortSignal) {
 
 export function prepareImportSession(session: ImportSessionHandle, signal?: AbortSignal) {
   return api<PreparedImport>(session.prepare_url, { method: "POST", signal });
+}
+
+export async function materializeImportSession(
+  session: ImportSessionHandle,
+  signal?: AbortSignal
+) {
+  if (!session.materialize_url) throw new Error("下载会话缺少 materialize URL");
+  await api(session.materialize_url, { method: "POST", signal });
 }
 
 export function storedImportStatusMessage(state: StoredImportStatus) {

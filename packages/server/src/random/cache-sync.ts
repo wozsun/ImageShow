@@ -29,7 +29,7 @@ import {
 async function readyRandomItems(ids: string[]): Promise<RandomPoolItem[]> {
   const rows = (await pool.query(
     `SELECT m.id, m.object_key, m.ext, m.device, m.brightness, m.theme,
-            m.storage_slug, m.is_link,
+            m.storage_slug,
             COALESCE(m.author, '') AS author,
             COALESCE(array_remove(array_agg(it.tag_slug ORDER BY it.tag_slug), NULL), '{}') AS tags
        FROM metadata m

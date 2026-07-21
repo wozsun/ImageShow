@@ -1,14 +1,14 @@
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { runtimePaths } from "../config/bootstrap-env.ts";
-import { linkBaseUrl, staticLocalBaseUrl } from "../themes/host.ts";
+import { staticLocalBaseUrl } from "../themes/host.ts";
 import type { StorageConfig } from "./backend-config.ts";
 import {
   getDefaultStorageBackend,
   resolveStorageAccess,
   resolveStorageAccessForConfig
 } from "./backend-registry.ts";
-import { linkThumbnailKey, thumbnailObjectKey } from "./image-paths.ts";
+import { thumbnailObjectKey } from "./image-paths.ts";
 import type { OpenedRead } from "./storage-backend.ts";
 import { STORAGE_PREFIXES, type ReadablePrefix, type StoragePrefix } from "./object-keys.ts";
 
@@ -79,20 +79,7 @@ function localMediaUrl(prefix: ReadablePrefix, key: string) {
   return `/${route}/${encodeKeyPath(key)}`;
 }
 
-type LinkImageUrlParts = { id: string; device: string; brightness: string; theme: string; ext: string };
-
-export async function publicImageUrls(objectKey: string, slug: string, isLink: boolean, link?: LinkImageUrlParts) {
-  if (isLink) {
-    const { driver: thumbDriver } = await resolveStorageAccess(slug);
-    const linkInfo = link ?? { id: "", device: "pc", brightness: "dark", theme: "none", ext: "jpg" };
-    const thumbKey = linkThumbnailKey(linkInfo.device, linkInfo.brightness, linkInfo.theme, linkInfo.id);
-    const directThumb = thumbDriver.publicObjectUrl("link", thumbKey);
-    const linkBase = linkBaseUrl();
-    return {
-      object_url: `${linkBase}/media/${encodeURIComponent(linkInfo.id)}.${linkInfo.ext}`,
-      thumb_url: directThumb || `${linkBase}/thumbs/${encodeKeyPath(thumbKey)}`
-    };
-  }
+export async function publicImageUrls(objectKey: string, slug: string) {
   const { driver } = await resolveStorageAccess(slug);
   const thumbKey = thumbnailObjectKey(objectKey);
 
