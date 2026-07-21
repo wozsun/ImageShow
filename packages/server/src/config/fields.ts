@@ -49,6 +49,7 @@ export const uploadConcurrency = z.coerce.number().int().min(1).max(128);
 export const importGlobalConcurrency = z.coerce.number().int().min(1).max(512);
 export const commitConcurrency = z.coerce.number().int().min(1).max(128);
 export const globalCommitConcurrency = z.coerce.number().int().min(1).max(512);
+export const globalCommitByteBudgetMb = z.coerce.number().int().min(16).max(4096);
 
 export const normalizeQuality = z.coerce.number().int().min(1).max(100);
 export const normalizeQualityStep = z.coerce.number().int().min(1).max(50);

@@ -6,12 +6,15 @@ import { mapWithConcurrency } from "../core/concurrency.ts";
 import { metadataUpdateInput, parse } from "../core/validation.ts";
 import { invalidateImageCaches } from "./image-cache.ts";
 import { syncRandomImage, syncRandomImages } from "../random/random-cache.ts";
-import { enqueue } from "../jobs/repository.ts";
-import { storageObjectKey, thumbnailObjectKey, thumbnailRef } from "../storage/image-paths.ts";
-import { copyObject, exists, readStorageBuffer, removeObject } from "../storage/storage.ts";
+import { thumbnailRef } from "../storage/image-paths.ts";
+import { exists, readStorageBuffer } from "../storage/storage.ts";
 import { migrateImageStorage, type MigrateRecord } from "../storage/migration.ts";
 import { withImageStorageMutationLock } from "../storage/maintenance-lock.ts";
-import { removeObjectsOrEnqueueCleanup } from "../storage/move-cleanup.ts";
+import {
+  completePreparedImageRelocation,
+  discardPreparedImageRelocationIfUnreferenced,
+  prepareVerifiedImageRelocation
+} from "../storage/image-relocation.ts";
 import { isReservedSubdomain } from "../themes/host.ts";
 import {
   ensureThemeWithMutationLockHeld
@@ -176,76 +179,47 @@ export async function updateImageMetadata(id: string, body: unknown, options: Im
   }
 
   const mutateImageLocation = () => withImageStorageMutationLock(id, async () => {
-    // The image may have moved while this request parsed or classified its
-    // input. Re-read after acquiring ownership and derive omitted fields from
-    // the current row rather than reverting a concurrent mutation.
-    const locationSnapshot = (await pool.query(
+    // Derive omitted fields only after owning the image location. This keeps a
+    // concurrent storage migration from being overwritten by an old snapshot.
+    const sourceImage = (await pool.query(
       `SELECT ${mutationImageColumns} FROM metadata WHERE id=$1`,
       [id]
     )).rows[0] as MutationImageRecord | undefined;
-    if (!locationSnapshot) throw new ApiError(404, "not_found", "Image not found");
-    if (locationSnapshot.status !== "ready") {
-      throw new ApiError(409, "invalid_image_state", "Only ready images can change category");
+    if (!sourceImage) throw new ApiError(404, "not_found", "Image not found");
+    if (sourceImage.status !== "ready") {
+      throw new ApiError(
+        409,
+        "invalid_image_state",
+        "Only ready images can change category"
+      );
     }
+
     const next = {
       ...parsed,
       device: resolveOptionalDeviceWith(
         parsed.device,
-        () => detectImageDevice(locationSnapshot)
+        () => detectImageDevice(sourceImage)
       ),
       brightness: await resolveOptionalBrightnessWith(
         parsed.brightness,
-        () => detectImageBrightness(locationSnapshot)
+        () => detectImageBrightness(sourceImage)
       )
     };
-    const targetDevice = next.device ?? locationSnapshot.device;
-    const targetBrightness = next.brightness ?? locationSnapshot.brightness;
-    const targetTheme = next.theme ?? locationSnapshot.theme;
-    const sourceIsLink = Boolean(locationSnapshot.is_link);
-    const sourceSlug = locationSnapshot.storage_slug;
-    const predictedKey = sourceIsLink
-      ? locationSnapshot.object_key
-      : storageObjectKey(
-          targetDevice,
-          targetBrightness,
-          targetTheme,
-          id,
-          locationSnapshot.ext
-        );
-    let preCopiedObjectKey = "";
-    let preCopiedLinkThumbKey = "";
-
-    if (!sourceIsLink && predictedKey !== locationSnapshot.object_key) {
-      await copyObject("media", locationSnapshot.object_key, "media", predictedKey, sourceSlug);
-      preCopiedObjectKey = predictedKey;
-    }
-
-    if (sourceIsLink) {
-      const oldThumb = thumbnailRef({
-          ...locationSnapshot,
-        storage_slug: sourceSlug,
-        is_link: true,
-      });
-      const newThumb = thumbnailRef({
-          ...locationSnapshot,
-        device: targetDevice,
-        brightness: targetBrightness,
-        theme: targetTheme,
-        storage_slug: sourceSlug,
-        is_link: true,
-      });
-      if (oldThumb.key !== newThumb.key) {
-        await copyObject("link", oldThumb.key, "link", newThumb.key, sourceSlug);
-        preCopiedLinkThumbKey = newThumb.key;
-      }
-    }
-
-    const client = await pool.connect();
-    let sourceImage = locationSnapshot;
-    let updated: MutationImageRecord | null = null;
-    let committedObjectKey = "";
-    let copiedObjectKey = "";
+    const target = {
+      device: next.device ?? sourceImage.device,
+      brightness: next.brightness ?? sourceImage.brightness,
+      theme: next.theme ?? sourceImage.theme
+    };
+    const classificationChanged = target.device !== sourceImage.device
+      || target.brightness !== sourceImage.brightness
+      || target.theme !== sourceImage.theme;
+    const relocation = classificationChanged
+      ? await prepareVerifiedImageRelocation(sourceImage, target, "category_move")
+      : null;
     const createdEntityKinds = new Set<EntityCacheKind>();
+    const client = await pool.connect();
+    let updated: MutationImageRecord;
+
     try {
       await client.query("BEGIN");
       const locked = (await client.query(
@@ -253,10 +227,19 @@ export async function updateImageMetadata(id: string, body: unknown, options: Im
         [id]
       )).rows[0] as MutationImageRecord | undefined;
       if (!locked) throw new ApiError(404, "not_found", "Image not found");
-      if (locked.status !== "ready") throw new ApiError(409, "invalid_image_state", "Only ready images can change category");
+      if (locked.status !== "ready") {
+        throw new ApiError(
+          409,
+          "invalid_image_state",
+          "Only ready images can change category"
+        );
+      }
       if (
-        locked.storage_slug !== locationSnapshot.storage_slug
-        || locked.object_key !== locationSnapshot.object_key
+        locked.storage_slug !== sourceImage.storage_slug
+        || locked.object_key !== sourceImage.object_key
+        || locked.device !== sourceImage.device
+        || locked.brightness !== sourceImage.brightness
+        || locked.theme !== sourceImage.theme
       ) {
         throw new ApiError(
           409,
@@ -264,165 +247,103 @@ export async function updateImageMetadata(id: string, body: unknown, options: Im
           "Image location changed while preparing the category update"
         );
       }
-      sourceImage = locked;
 
-      const device = next.device ?? locked.device;
-      const brightness = next.brightness ?? locked.brightness;
-      const theme = next.theme ?? locked.theme;
-      const isLink = Boolean(locked.is_link);
-      const nextObjectKey = isLink ? locked.object_key : storageObjectKey(device, brightness, theme, id, locked.ext);
+      if (
+        parsed.theme
+        && parsed.theme !== "none"
+        && await ensureThemeWithMutationLockHeld(client, target.theme)
+      ) {
+        createdEntityKinds.add("theme");
+      }
+      if (next.author && await ensureAuthor(client, next.author)) {
+        createdEntityKinds.add("author");
+      }
 
-      if (device === locked.device && brightness === locked.brightness && theme === locked.theme) {
-        if (next.author && await ensureAuthor(client, next.author)) createdEntityKinds.add("author");
-        updated = await applyImageFieldEdits(client, id, next, authorValue, touchAuthor);
-        await client.query("COMMIT");
-        committedObjectKey = locked.object_key;
-      } else {
-        if (
-          parsed.theme
-          && parsed.theme !== "none"
-          && await ensureThemeWithMutationLockHeld(client, theme)
-        ) {
-          createdEntityKinds.add("theme");
-        }
-        if (next.author && await ensureAuthor(client, next.author)) createdEntityKinds.add("author");
-
-        if (!isLink && nextObjectKey !== locked.object_key) {
-          if (preCopiedObjectKey !== nextObjectKey) {
-            await copyObject("media", locked.object_key, "media", nextObjectKey, locked.storage_slug);
-            copiedObjectKey = nextObjectKey;
-          }
-        }
-
-        const result = await client.query(
-          `UPDATE metadata
-              SET device=$2,
-                  brightness=$3,
-                  theme=$4,
-                  object_key=$5,
-                  title=COALESCE($6,title),
-                  description=COALESCE($7,description),
-                  source=COALESCE($8,source),
-                  original=COALESCE($9,original),
-                  author=CASE WHEN $11::boolean THEN $10 ELSE author END,
-                  updated_at=now()
-            WHERE id=$1 AND storage_slug=$12 AND object_key=$13
-            RETURNING ${mutationImageColumns}`,
-          [
-            id,
-            device,
-            brightness,
-            theme,
-            nextObjectKey,
-            next.title,
-            next.description,
-            next.source,
-            next.original,
-            authorValue,
-            touchAuthor,
-            locked.storage_slug,
-            locked.object_key
-          ],
+      const result = await client.query(
+        `UPDATE metadata
+            SET device=$2,
+                brightness=$3,
+                theme=$4,
+                object_key=$5,
+                title=COALESCE($6,title),
+                description=COALESCE($7,description),
+                source=COALESCE($8,source),
+                original=COALESCE($9,original),
+                author=CASE WHEN $11::boolean THEN $10 ELSE author END,
+                updated_at=now()
+          WHERE id=$1
+            AND storage_slug=$12
+            AND object_key=$13
+            AND device=$14
+            AND brightness=$15
+            AND theme=$16
+          RETURNING ${mutationImageColumns}`,
+        [
+          id,
+          target.device,
+          target.brightness,
+          target.theme,
+          relocation?.nextObjectKey ?? locked.object_key,
+          next.title,
+          next.description,
+          next.source,
+          next.original,
+          authorValue,
+          touchAuthor,
+          sourceImage.storage_slug,
+          sourceImage.object_key,
+          sourceImage.device,
+          sourceImage.brightness,
+          sourceImage.theme
+        ]
+      );
+      const updatedRow = result.rows[0] as MutationImageRecord | undefined;
+      if (!updatedRow) {
+        throw new ApiError(
+          409,
+          "image_location_changed",
+          "Image location changed before the category update was committed"
         );
-        updated = (result.rows[0] as MutationImageRecord | undefined) ?? null;
-        if (!updated) {
-          throw new ApiError(
-            409,
-            "image_location_changed",
-            "Image location changed before the category update was committed"
-          );
-        }
-        await client.query("COMMIT");
-        committedObjectKey = nextObjectKey;
       }
+      updated = updatedRow;
+      await client.query("COMMIT");
     } catch (error) {
-      await client.query("ROLLBACK");
-      const orphanKeys = new Set<string>();
-      if (preCopiedObjectKey) orphanKeys.add(preCopiedObjectKey);
-      if (copiedObjectKey) orphanKeys.add(copiedObjectKey);
-      for (const key of orphanKeys) {
-        const adopted = await pool
-          .query("SELECT 1 FROM metadata WHERE id=$1 AND object_key=$2", [id, key])
-          .then((result) => Boolean(result.rowCount))
-          .catch(() => false);
-        if (!adopted) {
-          await removeObjectsOrEnqueueCleanup(
-            id,
-            [{ prefix: "media", key, backend: sourceImage.storage_slug }],
-            "category_move_rollback"
-          );
-        }
+      await client.query("ROLLBACK").catch(() => undefined);
+      if (relocation) {
+        await discardPreparedImageRelocationIfUnreferenced(
+          relocation,
+          "category_move_compare_and_swap_failed"
+        );
       }
-      if (preCopiedLinkThumbKey) await removeObject("link", preCopiedLinkThumbKey, sourceImage.storage_slug).catch(() => undefined);
       throw error;
     } finally {
       client.release();
     }
 
-    if (preCopiedObjectKey && preCopiedObjectKey !== committedObjectKey) {
-      await removeObjectsOrEnqueueCleanup(
-        id,
-        [{
-          prefix: "media",
-          key: preCopiedObjectKey,
-          backend: sourceImage.storage_slug
-        }],
-        "category_move_unused_candidate"
-      );
-    }
-
-    if (committedObjectKey && committedObjectKey !== sourceImage.object_key) {
-      const oldThumbKey = thumbnailObjectKey(sourceImage.object_key);
-      await copyObject("thumbs", oldThumbKey, "thumbs", thumbnailObjectKey(committedObjectKey), sourceImage.storage_slug).catch(() =>
-        enqueue("thumb.generate", id).catch(() => undefined),
-      );
-      await removeObjectsOrEnqueueCleanup(
-        id,
-        [
-          {
-            prefix: "media",
-            key: sourceImage.object_key,
-            backend: sourceImage.storage_slug
-          },
-          {
-            prefix: "thumbs",
-            key: oldThumbKey,
-            backend: sourceImage.storage_slug
-          }
-        ],
+    if (relocation) {
+      await completePreparedImageRelocation(
+        relocation,
         "category_move_source_cleanup"
       );
     }
 
-    if (sourceImage.is_link && updated) {
-      const oldThumbKey = thumbnailRef(sourceImage).key;
-      const newThumbKey = thumbnailRef(updated).key;
-      if (oldThumbKey !== newThumbKey) {
-        if (preCopiedLinkThumbKey !== newThumbKey) {
-          await copyObject("link", oldThumbKey, "link", newThumbKey, sourceImage.storage_slug).catch(() => undefined);
-          if (preCopiedLinkThumbKey) await removeObject("link", preCopiedLinkThumbKey, sourceImage.storage_slug).catch(() => undefined);
-        }
-        await removeObject("link", oldThumbKey, sourceImage.storage_slug).catch(() => undefined);
-      }
-    }
-
     const changedEntityKinds: EntityCacheKind[] = [];
-    if (updated && sourceImage.theme !== updated.theme) changedEntityKinds.push("theme");
-    if (updated && sourceImage.author !== updated.author) changedEntityKinds.push("author");
+    if (sourceImage.theme !== updated.theme) changedEntityKinds.push("theme");
+    if (sourceImage.author !== updated.author) changedEntityKinds.push("author");
     await Promise.all([
       applyOrCollectImageMutationSync({
         id,
         md5: sourceImage.md5 ?? "",
         lookupEntries: [
           { id, object_key: sourceImage.object_key },
-          { object_key: committedObjectKey },
-        ],
+          { object_key: updated.object_key }
+        ]
       }, options.mutationSyncBatch),
       invalidateOrCollectEntityCountCaches(
         changedEntityKinds,
-        options.entityCountInvalidationBatch,
+        options.entityCountInvalidationBatch
       ),
-      refreshEntityVocabularies(createdEntityKinds),
+      refreshEntityVocabularies(createdEntityKinds)
     ]);
   });
 

@@ -6,7 +6,12 @@ import { ApiError } from "../../core/api-error.ts";
 import { contentType, writeStorageBuffer } from "../../storage/storage.ts";
 import { detectBrightness } from "../brightness.ts";
 import { deviceFromDimensions } from "../classification.ts";
-import { createThumbnail, probeImageBytes, transcodeStoredImage } from "../processing.ts";
+import {
+  createThumbnail,
+  probeImageBytes,
+  sha256Buffer,
+  transcodeStoredImage
+} from "../processing.ts";
 import { getDuplicateImagesByMd5 } from "../read-models/duplicates.ts";
 import { runImportPreparation } from "./execution.ts";
 import { fetchImportImage, fetchImportImageToFile } from "./fetch.ts";
@@ -139,6 +144,8 @@ async function prepareStoredImageSession(
       height: normalized.height,
       ext: normalized.ext,
       md5: normalized.md5,
+      prepared_image_sha256: sha256Buffer(normalized.processed),
+      prepared_thumbnail_sha256: sha256Buffer(normalized.thumbnail),
       size: normalized.size,
       thumbnail_size: normalized.thumbnail.byteLength,
       quality: normalized.quality,
@@ -262,6 +269,7 @@ async function prepareProxySession(id: string, signal: AbortSignal) {
       height: probe.height,
       ext: probe.ext,
       md5: probe.md5,
+      prepared_thumbnail_sha256: sha256Buffer(thumbnail),
       size: probe.size,
       thumbnail_size: thumbnail.byteLength,
       quality: null,

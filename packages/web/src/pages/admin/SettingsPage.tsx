@@ -31,7 +31,10 @@ const saveSettingsPresentation = {
 } as const;
 
 export function SettingsPage() {
-  const query = useQuery<{ settings: AdminSettings }>({ queryKey: queryKeys.settings, queryFn: ({ signal }) => api(`${adminApiBasePath}/settings`, { signal }) });
+  const query = useQuery<{
+    settings: AdminSettings;
+    application_version: string;
+  }>({ queryKey: queryKeys.settings, queryFn: ({ signal }) => api(`${adminApiBasePath}/settings`, { signal }) });
   const client = useQueryClient();
   const [settings, setSettings] = useState<AdminSettings | null>(null);
   const reloadConfigStatus = useAsyncActionStatus();
@@ -109,11 +112,15 @@ export function SettingsPage() {
   const updateNormalize = (patch: Partial<AdminSettings["normalize"]>) => setSettings({ ...settings, normalize: { ...settings.normalize, ...patch } });
   const updateThumbnail = (patch: Partial<AdminSettings["thumbnail"]>) => setSettings({ ...settings, thumbnail: { ...settings.thumbnail, ...patch } });
   const updateAdmin = (patch: Partial<AdminSettings["admin"]>) => setSettings({ ...settings, admin: { ...settings.admin, ...patch } });
+  const applicationVersion = query.data?.application_version;
+  const settingsDescription = applicationVersion && applicationVersion !== "unknown"
+    ? `v${applicationVersion} · 站点信息与应用参数`
+    : "站点信息与应用参数";
   return (
     <section className="workspace settings-page">
       <WorkspaceHeader
         title="站点配置"
-        description="站点信息与应用参数"
+        description={settingsDescription}
         actionsClassName="settings-head-actions"
         actions={
           <>

@@ -67,7 +67,10 @@ export function StorageBackendModal({ target, busy, defaultStatus, defaultAction
           ? `${backend.import_session_count} 个未清理导入会话`
           : "",
         backend.cleanup_job_count
-          ? `${backend.cleanup_job_count} 个待处理清理任务`
+          ? `${backend.cleanup_job_count} 个旧对象删除任务`
+          : "",
+        backend.failed_cleanup_job_count
+          ? `${backend.failed_cleanup_job_count} 个删除任务失败`
           : ""
       ].filter(Boolean).join("、")
     : "";
@@ -75,7 +78,11 @@ export function StorageBackendModal({ target, busy, defaultStatus, defaultAction
     ? [
         backend.image_count ? "通过图片存储迁移搬空后端" : "",
         backend.import_session_count ? "等待导入会话完成清理" : "",
-        backend.cleanup_job_count ? "等待对象清理任务解决" : ""
+        backend.exhausted_cleanup_job_count
+          ? "关闭窗口后在存储卡片重试已停止自动重试的旧对象删除任务"
+          : backend.cleanup_job_count
+            ? "等待旧对象删除任务完成"
+            : ""
       ].filter(Boolean).join("，并")
     : "";
   const [slug, setSlug] = useState(backend?.slug ?? "");

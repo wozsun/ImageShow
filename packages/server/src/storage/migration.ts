@@ -93,7 +93,12 @@ async function migrateImageStorageUnlocked(
       key,
       body,
       contentType: objectContentType,
-      sourceObjectExists
+      sourceObjectExists,
+      cleanupCandidate: (object) => removeObjectsOrEnqueueCleanup(
+        current.id,
+        [object],
+        "storage_migration_integrity_failure"
+      )
     });
     if (result.created) created.push({ prefix, key, backend: target });
   };

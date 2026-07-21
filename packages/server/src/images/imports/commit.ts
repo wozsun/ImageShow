@@ -1,6 +1,7 @@
 import { ensureAuthor } from "../../authors/service.ts";
 import { pool, withTransaction } from "../../core/db.ts";
-import { ApiError } from "../../core/api-error.ts";
+import { ApiError, errorMessage } from "../../core/api-error.ts";
+import { logger } from "../../core/logger.ts";
 import { syncRandomImage } from "../../random/random-cache.ts";
 import { ensureTheme } from "../../themes/service.ts";
 import { resolveTagNames } from "../../tags/query.ts";
@@ -13,17 +14,21 @@ import {
 import { resolveStorageAccess } from "../../storage/backend-registry.ts";
 import { linkThumbnailKey, storageObjectKey, thumbnailObjectKey } from "../../storage/image-paths.ts";
 import { withImageStorageMutationLock } from "../../storage/maintenance-lock.ts";
-import { ensureVerifiedObjectAtTarget, type StorageEndpoint } from "../../storage/object-transfer.ts";
-import { contentType, removeObject } from "../../storage/storage.ts";
+import { copyVerifiedObjectWithinStorage } from "../../storage/object-transfer.ts";
+import { removeObjectsOrEnqueueCleanup } from "../../storage/move-cleanup.ts";
+import { removeObject } from "../../storage/storage.ts";
 import {
   invalidateImageCaches,
   warmCompleteImageLookups
 } from "../image-cache.ts";
 import { resolveClassification } from "../classification.ts";
 import { importCommitImage, type ImageRecord } from "../presenter.ts";
-import { md5Buffer } from "../processing.ts";
 import { notifyImportStatus, withImportLease } from "./progress.ts";
-import { importCommitLockKey, runImportCommit } from "./execution.ts";
+import {
+  importCommitLockKey,
+  runImportCommit,
+  runImportCommitWithinByteBudget
+} from "./execution.ts";
 import { stagingImageKey } from "./staging.ts";
 import type {
   ImportMetadata,
@@ -58,6 +63,12 @@ type CommitImportSessionRecord = Pick<
   | "prepared_payload"
   | "image_time"
 >;
+
+type ImportCandidateObject = {
+  prefix: "media" | "thumbs" | "link" | "_uploads";
+  key: string;
+  backend: string;
+};
 
 const committedImageColumns = [
   "id",
@@ -114,8 +125,8 @@ async function finishImport(
   return image;
 }
 
-async function readPreparedObject(
-  storage: StorageEndpoint,
+async function assertPreparedObjectExists(
+  storage: Awaited<ReturnType<typeof resolveStorageAccess>>,
   key: string,
   errorCode: "prepared_object_missing" | "prepared_thumbnail_missing",
   errorMessage: string
@@ -123,7 +134,43 @@ async function readPreparedObject(
   if (!await storage.driver.exists("_uploads", key)) {
     throw new ApiError(409, errorCode, errorMessage);
   }
-  return storage.driver.readBuffer("_uploads", key);
+}
+
+function cleanupImportCandidate(imageId: string, reason: string) {
+  return (object: ImportCandidateObject) =>
+    removeObjectsOrEnqueueCleanup(imageId, [object], reason);
+}
+
+async function cleanupImportCandidatesIfUnreferenced(
+  imageId: string,
+  candidates: ImportCandidateObject[],
+  reason: string,
+  isReferenced: () => Promise<boolean>
+) {
+  if (!candidates.length) return;
+
+  try {
+    if (await isReferenced()) return;
+  } catch (error) {
+    logger.error("import_candidate_ownership_unknown", {
+      image_id: imageId,
+      reason,
+      error: errorMessage(error),
+      candidates
+    });
+    return;
+  }
+
+  try {
+    await removeObjectsOrEnqueueCleanup(imageId, candidates, reason);
+  } catch (error) {
+    logger.error("import_candidate_cleanup_failed", {
+      image_id: imageId,
+      reason,
+      error: errorMessage(error),
+      candidates
+    });
+  }
 }
 
 async function commitStoredImageSession(
@@ -141,39 +188,59 @@ async function commitStoredImageSession(
   try {
     const resolvedTags = await resolveTagNames(payload.tags ?? []);
     const storage = await resolveStorageAccess(backend);
-    const preparedImage = await readPreparedObject(
+    const preparedImageKey = stagingImageKey(id);
+    await assertPreparedObjectExists(
       storage,
-      stagingImageKey(id),
+      preparedImageKey,
       "prepared_object_missing",
       "准备好的图片文件不存在"
     );
-    if (md5Buffer(preparedImage) !== payload.md5) {
-      throw new ApiError(
-        409,
-        "storage_object_conflict",
-        "准备好的图片文件与已记录的 MD5 不一致",
-        { prefix: "_uploads", key: stagingImageKey(id), target: backend }
-      );
-    }
-    const preparedThumbnail = await readPreparedObject(
+    await assertPreparedObjectExists(
       storage,
       payload.prepared_thumbnail_key,
       "prepared_thumbnail_missing",
       "准备好的缩略图不存在"
     );
-    copiedImage = (await ensureVerifiedObjectAtTarget({
-      target: storage,
-      prefix: "media",
-      key: finalKey,
-      body: preparedImage,
-      contentType: contentType(payload.ext)
+    copiedImage = (await copyVerifiedObjectWithinStorage({
+      storage,
+      fromPrefix: "_uploads",
+      fromKey: preparedImageKey,
+      toPrefix: "media",
+      toKey: finalKey,
+      expectedSource: {
+        size: payload.size,
+        sha256: payload.prepared_image_sha256,
+        md5: payload.md5
+      },
+      sourceMismatch: {
+        status: 409,
+        code: "storage_object_conflict",
+        message: "准备好的图片文件与已记录的完整性信息不一致"
+      },
+      cleanupCandidate: cleanupImportCandidate(
+        id,
+        "import_media_integrity_failure"
+      )
     })).created;
-    copiedThumbnail = (await ensureVerifiedObjectAtTarget({
-      target: storage,
-      prefix: "thumbs",
-      key: thumbKey,
-      body: preparedThumbnail,
-      contentType: "image/webp"
+    copiedThumbnail = (await copyVerifiedObjectWithinStorage({
+      storage,
+      fromPrefix: "_uploads",
+      fromKey: payload.prepared_thumbnail_key,
+      toPrefix: "thumbs",
+      toKey: thumbKey,
+      expectedSource: {
+        size: payload.thumbnail_size,
+        sha256: payload.prepared_thumbnail_sha256
+      },
+      sourceMismatch: {
+        status: 409,
+        code: "storage_object_conflict",
+        message: "准备好的缩略图与已记录的完整性信息不一致"
+      },
+      cleanupCandidate: cleanupImportCandidate(
+        id,
+        "import_thumbnail_integrity_failure"
+      )
     })).created;
 
     const classification = resolveClassification(payload, {
@@ -237,14 +304,28 @@ async function commitStoredImageSession(
     return { status: "imported" as const, item: await importCommitImage(image) };
   } catch (error) {
     if (!databaseCommitted) {
-      await Promise.all([
-        copiedImage
-          ? removeObject("media", finalKey, backend).catch(() => undefined)
-          : Promise.resolve(),
-        copiedThumbnail
-          ? removeObject("thumbs", thumbKey, backend).catch(() => undefined)
-          : Promise.resolve()
-      ]);
+      const candidates: ImportCandidateObject[] = [
+        ...(copiedImage
+          ? [{ prefix: "media" as const, key: finalKey, backend }]
+          : []),
+        ...(copiedThumbnail
+          ? [{ prefix: "thumbs" as const, key: thumbKey, backend }]
+          : [])
+      ];
+      await cleanupImportCandidatesIfUnreferenced(
+        id,
+        candidates,
+        "import_commit_rollback",
+        async () => Boolean((await pool.query(
+          `SELECT 1
+             FROM metadata
+            WHERE id=$1
+              AND storage_slug=$2
+              AND object_key=$3
+              AND is_link=false`,
+          [id, backend, finalKey]
+        )).rowCount)
+      );
     }
     throw error;
   }
@@ -272,18 +353,31 @@ async function commitProxySession(
   try {
     const resolvedTags = await resolveTagNames(payload.tags ?? []);
     const storage = await resolveStorageAccess(backend);
-    const preparedThumbnail = await readPreparedObject(
+    await assertPreparedObjectExists(
       storage,
       payload.prepared_thumbnail_key,
       "prepared_thumbnail_missing",
       "准备好的缩略图不存在"
     );
-    copiedLink = (await ensureVerifiedObjectAtTarget({
-      target: storage,
-      prefix: "link",
-      key: linkKey,
-      body: preparedThumbnail,
-      contentType: "image/webp"
+    copiedLink = (await copyVerifiedObjectWithinStorage({
+      storage,
+      fromPrefix: "_uploads",
+      fromKey: payload.prepared_thumbnail_key,
+      toPrefix: "link",
+      toKey: linkKey,
+      expectedSource: {
+        size: payload.thumbnail_size,
+        sha256: payload.prepared_thumbnail_sha256
+      },
+      sourceMismatch: {
+        status: 409,
+        code: "storage_object_conflict",
+        message: "准备好的缩略图与已记录的完整性信息不一致"
+      },
+      cleanupCandidate: cleanupImportCandidate(
+        id,
+        "import_link_integrity_failure"
+      )
     })).created;
 
     const result = await withTransaction(async (client) => {
@@ -338,7 +432,11 @@ async function commitProxySession(
     await removeObject("_uploads", payload.prepared_thumbnail_key, backend).catch(() => undefined);
     if (!result.image) {
       if (copiedLink) {
-        await removeObject("link", linkKey, backend).catch(() => undefined);
+        await removeObjectsOrEnqueueCleanup(
+          id,
+          [{ prefix: "link", key: linkKey, backend }],
+          "duplicate_import_candidate_cleanup"
+        );
       }
       await Promise.all([
         refreshEntityVocabularies(result.createdEntityKinds),
@@ -350,7 +448,30 @@ async function commitProxySession(
     return { status: "imported" as const, item: await importCommitImage(image) };
   } catch (error) {
     if (!databaseCommitted && copiedLink) {
-      await removeObject("link", linkKey, backend).catch(() => undefined);
+      await cleanupImportCandidatesIfUnreferenced(
+        id,
+        [{ prefix: "link", key: linkKey, backend }],
+        "import_commit_rollback",
+        async () => Boolean((await pool.query(
+          `SELECT 1
+             FROM metadata
+            WHERE id=$1
+              AND object_key=$2
+              AND storage_slug=$3
+              AND is_link=true
+              AND device=$4
+              AND brightness=$5
+              AND theme=$6`,
+          [
+            id,
+            payload.source_url,
+            backend,
+            classification.device,
+            classification.brightness,
+            payload.theme
+          ]
+        )).rowCount)
+      );
     }
     throw error;
   }
@@ -468,6 +589,27 @@ async function commitImportSessionWithinLimit(id: string, metadata: ImportMetada
   }
 }
 
+async function importCommitByteWeight(id: string) {
+  const row = (await pool.query(
+    "SELECT mode, prepared_payload FROM import_session WHERE id=$1",
+    [id]
+  )).rows[0] as Pick<ImportSessionRow, "mode" | "prepared_payload"> | undefined;
+  if (!row) return 1;
+  const payload = row.prepared_payload as Partial<PreparedPayload>;
+  const imageBytes = row.mode === "proxy" ? 0 : Number(payload.size ?? 0);
+  const thumbnailBytes = Number(payload.thumbnail_size ?? 0);
+  const total = imageBytes + thumbnailBytes;
+  return Number.isFinite(total) ? Math.max(1, total) : 1;
+}
+
 export function commitImportSession(id: string, metadata: ImportMetadata, signal?: AbortSignal) {
-  return runImportCommit(() => commitImportSessionWithinLimit(id, metadata), signal);
+  const commitSignal = signal ?? new AbortController().signal;
+  return runImportCommit(async () => {
+    const bytes = await importCommitByteWeight(id);
+    return runImportCommitWithinByteBudget(
+      bytes,
+      () => commitImportSessionWithinLimit(id, metadata),
+      commitSignal
+    );
+  }, commitSignal);
 }

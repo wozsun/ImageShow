@@ -63,7 +63,8 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | `core/coalesce.ts` | 进程内 in-flight 合并工具，用于公共列表 / 详情 / facets / 概览 / MD5 等缓存 miss 后避免重复查询。 |
 | `core/redis-json.ts` | PostgreSQL 派生 JSON 缓存的类型化 GET / SET EX / 删除 helper；Redis 故障只产生 cache miss。 |
 | `core/http-validator.ts` | 静态资源与图片字节出口共用的 ETag 强弱比较、条件请求、If-Range 和 HTTP 日期语义。 |
-| `core/concurrency.ts` | 简单有界并发遍历工具，用于存储检查 / 清理等批量操作。 |
+| `core/concurrency.ts` | 有界并发遍历、动态数量限流与 FIFO 动态字节加权限流，用于导入、存储检查 / 清理等批量操作。 |
+| `core/application-version.ts` | 从根包读取并缓存当前应用版本，供配置包与后台站点配置共同展示。 |
 | `core/validation.ts` | 请求体 / 查询参数的 zod schema：`listQuery`（含 `shuffle`）、`metadataInput`、导入 / 批量操作输入等。 |
 | `core/external-image-fetch.ts` | 外部图片 URL 安全边界：限制 HTTPS、要求域名、验证证书、用连接级受控 DNS lookup 阻断 rebinding 与内网 / metadata 地址、逐跳重定向校验、超时请求与图片内容嗅探，并对外统一安全拒绝提示，供链接导入和 link/original 代理复用。 |
 | `core/term-resolve.ts` · `core/selectors.ts` | 共享解析：`resolveTermMap` / `resolveSlugs`（主题 / 标签 / 作者「别名·显示名 → slug」的统一规则），`splitSelectors`（逗号分隔、`!` 排除选择子拆分，随机 API 与画廊筛选共用）。 |
@@ -75,12 +76,13 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 
 | 文件 | 职责 |
 | --- | --- |
-| `storage/storage.ts` | 存储操作门面：统一 buffer / copy / remove / list、`resolveReadableObject()`、`publicImageUrls()`、`testStorageBackend()` 与运行目录初始化；serving 不再维护第二套打开对象和公开 URL 分支。 |
+| `storage/storage.ts` | 存储操作门面：统一 buffer / remove / list、`resolveReadableObject()`、`publicImageUrls()`、`testStorageBackend()` 与运行目录初始化；verified copy 由 `object-transfer.ts` 统一承载。 |
 | `storage/backend-config.ts` | S3 / WebDAV 配置 schema、`StorageConfig` / 输入类型、默认值和完整性校验。 |
 | `storage/backend-registry.ts` | `storage_backend` 数据库注册表、默认后端、CRUD、排序、启停、脱敏后台 DTO、配置快照与 driver 生命周期；在用物理字段保护、既有对象访问探测和变更后的实例关闭也集中于此。 |
 | `storage/maintenance-lock.ts` | 存储变更共享锁与维护独占锁，避免导入、重分类、迁移和全盘清理互相删除对象。 |
 | `storage/storage-namespace.ts` | 本地 / S3 / WebDAV 统一物理命名空间 identity；排除凭据等访问参数，并识别两个 slug 是否共享对象键空间。 |
-| `storage/object-transfer.ts` | 迁移对象的逐字节既有目标校验、写后回读校验和失败补偿；共享命名空间禁止重复写入。 |
+| `storage/object-transfer.ts` | 流式计算对象 SHA-256 / MD5，区分既有目标冲突与写后完整性故障，并优先使用驱动原生复制；共享命名空间禁止重复写入。 |
+| `storage/image-relocation.ts` | 图片重分类与主题重分配共用的 verified transfer 计划：源校验、候选跟踪、CAS 前准备及提交后清源。 |
 | `storage/storage-backend.ts` | Local / S3 / WebDAV driver 接口、打开结果类型与工厂；缓存和关闭生命周期由注册表拥有，链接图仍由图片层的 `is_link` 处理。 |
 | `storage/local-backend.ts` | 本地磁盘后端（`/app/data/storage` 下 media / thumbs / _uploads / link），含空目录回收 `pruneEmptyDirs()`。 |
 | `storage/s3-backend.ts` | S3 / COS 后端：processed image / thumbnail 读写删与服务端复制/移动、`root_path` 前缀。 |
@@ -159,8 +161,8 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 
 | 文件 | 职责 |
 | --- | --- |
-| `jobs/repository.ts` | `background_job` 数据库仓储：按 created_at 领取、各类型 backlog / oldest wait 统计、终态幂等记录重置、退避重试、显式重新调度、僵尸恢复、导入 / 回收站清理排队和历史裁剪。 |
-| `jobs/handlers.ts` | `thumb.generate` / `move.cleanup` / `import.cleanup` / `trash.purge` / `cache.rebuild` 任务处理器；缩略图生成与 `move.cleanup` 都持有单图位置锁，后者还会按当前命名空间保留已重新采用的对象；导入清理会先用会话提交锁确认并取消崩溃遗留的过期 `committing`，回收站任务每次只处理一个有界批次，handler 只返回统一 outcome。 |
+| `jobs/repository.ts` | `background_job` 数据库仓储：按 created_at 领取、各类型 backlog / oldest wait 统计、运行中清理 rerun、按后端恢复耗尽任务、退避重试、僵尸恢复和历史裁剪；未解决 `move.cleanup` 不随历史过期。 |
+| `jobs/handlers.ts` | `thumb.generate` / `move.cleanup` / `import.cleanup` / `trash.purge` / `cache.rebuild` 任务处理器；缩略图生成与 `move.cleanup` 都持有单图位置锁，后者按当前命名空间保留已重新采用的对象，并把已不存在对象视为核验完成；导入清理会先用会话提交锁确认并取消崩溃遗留的过期 `committing`，回收站任务每次只处理一个有界批次。 |
 | `jobs/worker.ts` | 先运行到期维护，再并行调度各任务类型的 50 项 / 2 秒公平时间片；记录队列压力指标，并负责启动、停止和优雅 drain。 |
 
 ### routes/ —— HTTP 薄层

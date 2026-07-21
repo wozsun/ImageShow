@@ -32,6 +32,8 @@ export type PreparedPayload = MetadataPayload & {
   height: number;
   ext: ImageExt;
   md5: string;
+  prepared_image_sha256?: string;
+  prepared_thumbnail_sha256?: string;
   size: number;
   thumbnail_size: number;
   quality: number | null;

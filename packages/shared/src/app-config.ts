@@ -139,7 +139,8 @@ export const appConfig = {
     thumbnail: { long_edge: 512, quality: 75 },
     import: {
       commit_concurrency: 5,
-      global_commit_concurrency: 10
+      global_commit_concurrency: 10,
+      global_commit_byte_budget_mb: 512
     },
     image_detail: { title_opens_image: true },
     admin: {
@@ -245,6 +246,7 @@ export type ThumbnailSettings = {
 export type ImportSettings = {
   commit_concurrency: number;
   global_commit_concurrency: number;
+  global_commit_byte_budget_mb: number;
 };
 
 export type ImageDetailSettings = {

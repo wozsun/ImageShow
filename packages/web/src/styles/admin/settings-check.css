@@ -220,6 +220,8 @@
 .storage-enable-toggle { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; border: 1px solid #d0d5dd; background: #f3f4f6; color: #6b7280; font-size: 12px; font-weight: 600; cursor: pointer; }
 .storage-enable-toggle.is-on { background: #e8f7ee; border-color: #b9dec4; color: #1f9d57; }
 .storage-enable-toggle:disabled { cursor: default; opacity: .7; }
+.storage-cleanup-retry { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; border: 1px solid #f2c27b; background: #fff7e8; color: #a75b00; font-size: 12px; font-weight: 600; cursor: pointer; }
+.storage-cleanup-retry:disabled { cursor: default; opacity: .7; }
 .storage-card-actions-right { display: flex; align-items: center; gap: 6px; }
 .storage-card-actions .icon.is-danger { color: #d23b3b; }
 

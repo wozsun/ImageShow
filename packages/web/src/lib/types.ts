@@ -81,6 +81,8 @@ type StorageBackendAdminBase = {
   image_count: number;
   import_session_count: number;
   cleanup_job_count: number;
+  failed_cleanup_job_count: number;
+  exhausted_cleanup_job_count: number;
 };
 
 export type StorageBackendAdmin = StorageBackendAdminBase & (

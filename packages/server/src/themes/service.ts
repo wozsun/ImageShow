@@ -1,5 +1,4 @@
 import type { PoolClient } from "pg";
-import type { Brightness, Device } from "@imageshow/shared";
 import { pool } from "../core/db.ts";
 import { ApiError } from "../core/api-error.ts";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
@@ -12,11 +11,14 @@ import {
   vocabularyMutationLockKey,
   withVocabularyMutationLock
 } from "../vocab/mutation-sync.ts";
-import { linkThumbnailKey, storageObjectKey, thumbnailObjectKey } from "../storage/image-paths.ts";
-import { copyObject, pruneEmptyStorageDirs } from "../storage/storage.ts";
 import { withImageStorageMutationLock } from "../storage/maintenance-lock.ts";
-import type { StoragePrefix } from "../storage/object-keys.ts";
-import { removeObjectsOrEnqueueCleanup } from "../storage/move-cleanup.ts";
+import {
+  completePreparedImageRelocation,
+  discardPreparedImageRelocation,
+  discardPreparedImageRelocationIfUnreferenced,
+  prepareVerifiedImageRelocation,
+  type RelocatableImage
+} from "../storage/image-relocation.ts";
 
 async function insertTheme(client: PoolClient, slug: string) {
   if (!slug || slug === "none") return false;
@@ -89,144 +91,84 @@ type ThemeLookupInvalidation = {
 
 async function reassignThemeImagesToNone(theme: string): Promise<ThemeLookupInvalidation[]> {
   const images = (await pool.query(
-    "SELECT id, device, brightness, ext, object_key, storage_slug, is_link, status FROM metadata WHERE theme=$1 ORDER BY device, brightness, id",
+    `SELECT id, device, brightness, theme, ext, md5, object_key,
+            storage_slug, is_link
+       FROM metadata
+      WHERE theme=$1
+      ORDER BY device, brightness, id`,
     [theme]
-  )).rows as Array<{ id: string; device: Device; brightness: Brightness; ext: string; object_key: string; storage_slug: string; is_link: boolean; status: string }>;
+  )).rows as Array<RelocatableImage>;
   if (!images.length) return [];
   const concurrency = getRuntimeConfig().background_job.theme_reassign_concurrency;
 
   const results = await mapWithConcurrency(images, concurrency, (candidate) =>
     withImageStorageMutationLock(candidate.id, async () => {
       const image = (await pool.query(
-        `SELECT id, device, brightness, ext, object_key, storage_slug, is_link, status
+        `SELECT id, device, brightness, theme, ext, md5, object_key,
+                storage_slug, is_link
            FROM metadata
           WHERE id=$1 AND theme=$2`,
         [candidate.id, theme]
-      )).rows[0] as typeof candidate | undefined;
+      )).rows[0] as RelocatableImage | undefined;
       if (!image) return [] as ThemeLookupInvalidation[];
 
-      const destinationObjects: Array<{
-        prefix: StoragePrefix;
-        key: string;
-        backend: string;
-      }> = [];
-      const sourceObjects: typeof destinationObjects = [];
-      const nextObjectKey = image.is_link
-        ? image.object_key
-        : storageObjectKey(
-            image.device,
-            image.brightness,
-            "none",
-            image.id,
-            image.ext
-          );
-
+      const relocation = await prepareVerifiedImageRelocation(
+        image,
+        {
+          device: image.device,
+          brightness: image.brightness,
+          theme: "none"
+        },
+        "theme_reassign"
+      );
       try {
-        if (image.is_link) {
-          const oldThumbKey = linkThumbnailKey(
-            image.device,
-            image.brightness,
-            theme,
-            image.id
-          );
-          const newThumbKey = linkThumbnailKey(
-            image.device,
-            image.brightness,
-            "none",
-            image.id
-          );
-          if (oldThumbKey !== newThumbKey) {
-            await copyObject("link", oldThumbKey, "link", newThumbKey, image.storage_slug);
-            destinationObjects.push({
-              prefix: "link",
-              key: newThumbKey,
-              backend: image.storage_slug
-            });
-            sourceObjects.push({
-              prefix: "link",
-              key: oldThumbKey,
-              backend: image.storage_slug
-            });
-          }
-        } else if (nextObjectKey !== image.object_key) {
-          const oldThumbKey = thumbnailObjectKey(image.object_key);
-          const newThumbKey = thumbnailObjectKey(nextObjectKey);
-          await copyObject(
-            "media",
-            image.object_key,
-            "media",
-            nextObjectKey,
-            image.storage_slug
-          );
-          destinationObjects.push({
-            prefix: "media",
-            key: nextObjectKey,
-            backend: image.storage_slug
-          });
-          await copyObject(
-            "thumbs",
-            oldThumbKey,
-            "thumbs",
-            newThumbKey,
-            image.storage_slug
-          );
-          destinationObjects.push({
-            prefix: "thumbs",
-            key: newThumbKey,
-            backend: image.storage_slug
-          });
-          sourceObjects.push(
-            { prefix: "media", key: image.object_key, backend: image.storage_slug },
-            { prefix: "thumbs", key: oldThumbKey, backend: image.storage_slug }
-          );
-        }
-
         const switched = await pool.query(
           `UPDATE metadata
               SET theme='none', object_key=$3, updated_at=now()
-            WHERE id=$1 AND theme=$2 AND storage_slug=$4 AND object_key=$5`,
-          [image.id, theme, nextObjectKey, image.storage_slug, image.object_key]
+            WHERE id=$1
+              AND theme=$2
+              AND storage_slug=$4
+              AND object_key=$5
+              AND device=$6
+              AND brightness=$7`,
+          [
+            image.id,
+            theme,
+            relocation.nextObjectKey,
+            image.storage_slug,
+            image.object_key,
+            image.device,
+            image.brightness
+          ]
         );
         if (!switched.rowCount) {
-          await cleanupThemeMoveObjects(
-            image.id,
-            destinationObjects,
+          await discardPreparedImageRelocation(
+            relocation,
             "theme_reassign_compare_and_swap_failed"
           );
           return [];
         }
       } catch (error) {
-        await cleanupThemeMoveObjects(
-          image.id,
-          destinationObjects,
+        await discardPreparedImageRelocationIfUnreferenced(
+          relocation,
           "theme_reassign_failed"
         );
         throw error;
       }
 
-      await cleanupThemeMoveObjects(
-        image.id,
-        sourceObjects,
+      await completePreparedImageRelocation(
+        relocation,
         "theme_reassign_source_cleanup"
       );
-      await pruneEmptyStorageDirs(image.storage_slug).catch(() => undefined);
-      return image.is_link || nextObjectKey === image.object_key
+      return image.is_link || relocation.nextObjectKey === image.object_key
         ? [{ id: image.id }]
         : [
             { id: image.id, object_key: image.object_key },
-            { id: image.id, object_key: nextObjectKey }
+            { id: image.id, object_key: relocation.nextObjectKey }
           ];
     })
   );
   return results.flat();
-}
-
-async function cleanupThemeMoveObjects(
-  imageId: string,
-  objects: Array<{ prefix: StoragePrefix; key: string; backend: string }>,
-  reason: string
-) {
-  await removeObjectsOrEnqueueCleanup(imageId, objects, reason);
 }
 
 async function deleteThemeUnderLock(slug: string) {

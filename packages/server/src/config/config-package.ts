@@ -1,9 +1,8 @@
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { appConfig, slugPattern, type RuntimeConfig } from "@imageshow/shared";
 import { withAdvisoryLock } from "../core/db.ts";
 import { ApiError } from "../core/api-error.ts";
+import { applicationVersion } from "../core/application-version.ts";
 import {
   s3SettingsSchema,
   webdavSettingsSchema,
@@ -215,16 +214,6 @@ export function resolveImportedStorageBackends(
     targets.add(targetSlug);
     return { ...backend, slug: targetSlug };
   });
-}
-
-function applicationVersion() {
-  try {
-    const packagePath = fileURLToPath(new URL("../../../../package.json", import.meta.url));
-    const value = JSON.parse(readFileSync(packagePath, "utf8")) as { version?: unknown };
-    return typeof value.version === "string" && value.version ? value.version : "unknown";
-  } catch {
-    return "unknown";
-  }
 }
 
 export async function createConfigPackage() {

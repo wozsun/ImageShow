@@ -9,9 +9,8 @@ import {
   resolveStorageAccessForConfig
 } from "./backend-registry.ts";
 import { linkThumbnailKey, thumbnailObjectKey } from "./image-paths.ts";
-import type { CopyPrefix, OpenedRead } from "./storage-backend.ts";
-import { contentTypeForKey, STORAGE_PREFIXES, type ReadablePrefix, type StoragePrefix } from "./object-keys.ts";
-import { logger } from "../core/logger.ts";
+import type { OpenedRead } from "./storage-backend.ts";
+import { STORAGE_PREFIXES, type ReadablePrefix, type StoragePrefix } from "./object-keys.ts";
 
 export { contentType, safeStoragePath } from "./object-keys.ts";
 export type { StoragePrefix } from "./object-keys.ts";
@@ -39,16 +38,6 @@ export async function removeObject(prefix: StoragePrefix, key: string, slug?: st
   return (await resolveStorageAccess(slug)).driver.remove(prefix, key);
 }
 
-export async function copyObject(fromPrefix: CopyPrefix, fromKey: string, toPrefix: CopyPrefix, toKey: string, slug?: string) {
-  if (fromPrefix === toPrefix && fromKey === toKey) return;
-  const { driver } = await resolveStorageAccess(slug);
-  try {
-    await driver.copy(fromPrefix, fromKey, toPrefix, toKey);
-  } catch (error) {
-    logger.debug(`native copy failed; using read+write fallback: ${fromPrefix}/${fromKey} -> ${toPrefix}/${toKey}`, error);
-    await driver.writeBuffer(toPrefix, toKey, await driver.readBuffer(fromPrefix, fromKey), contentTypeForKey(toKey));
-  }
-}
 export async function listStorageKeys(prefix: StoragePrefix, slug?: string) {
   return (await resolveStorageAccess(slug)).driver.listKeys(prefix);
 }

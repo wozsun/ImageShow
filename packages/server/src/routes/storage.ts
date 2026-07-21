@@ -13,6 +13,7 @@ import {
   listStorageBackendOptions,
   reorderStorageBackends,
   resolveStorageTestConfig,
+  retryStorageBackendCleanup,
   setDefaultStorageBackend,
   updateStorageBackend
 } from "../storage/backend-registry.ts";
@@ -49,6 +50,12 @@ export function registerStorageRoutes(app: Hono) {
     const slug = parse(storageSlugInput, c.req.param("slug"));
     await deleteStorageBackend(slug);
     return c.json(ok());
+  });
+
+  app.post(`${adminApiBasePath}/storage/backends/:slug/cleanup/retry`, requireSuper, async (c) => {
+    const slug = parse(storageSlugInput, c.req.param("slug"));
+    const retried = await retryStorageBackendCleanup(slug);
+    return c.json(ok({ retried }));
   });
 
   app.post(`${adminApiBasePath}/storage/backends/:slug`, requireSuper, async (c) => {

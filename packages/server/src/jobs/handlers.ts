@@ -231,6 +231,7 @@ async function cleanupMovedObjects(job: BackgroundJob): Promise<BackgroundJobOut
 
     let removed = 0;
     let retained = 0;
+    let missing = 0;
     const seen = new Set<string>();
     for (const object of objects) {
       const identity = `${object.backend}:${object.prefix}:${object.key}`;
@@ -267,10 +268,26 @@ async function cleanupMovedObjects(job: BackgroundJob): Promise<BackgroundJobOut
         retained += 1;
         continue;
       }
+      if (!await exists(object.prefix, object.key, object.backend)) {
+        missing += 1;
+        continue;
+      }
       await removeObject(object.prefix, object.key, object.backend);
+      if (await exists(object.prefix, object.key, object.backend)) {
+        throw new ApiError(
+          502,
+          "storage_cleanup_incomplete",
+          "存储后端未确认待清理对象已经删除",
+          {
+            backend: object.backend,
+            prefix: object.prefix,
+            key: object.key
+          }
+        );
+      }
       removed += 1;
     }
-    return succeeded({ removed, retained });
+    return succeeded({ removed, retained, missing });
   });
 }
 

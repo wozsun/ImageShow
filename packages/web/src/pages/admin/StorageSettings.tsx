@@ -33,7 +33,13 @@ export function StorageSettings() {
 
 function StorageBackendsManager() {
   const client = useQueryClient();
-  const query = useQuery<{ backends: StorageBackendAdmin[] }>({ queryKey: queryKeys.storageBackends, queryFn: ({ signal }) => api(`${adminApiBasePath}/storage/backends`, { signal }) });
+  const query = useQuery<{ backends: StorageBackendAdmin[] }>({
+    queryKey: queryKeys.storageBackends,
+    queryFn: ({ signal }) => api(`${adminApiBasePath}/storage/backends`, { signal }),
+    refetchInterval: (currentQuery) => currentQuery.state.data?.backends.some(
+      (backend) => backend.cleanup_job_count > backend.exhausted_cleanup_job_count
+    ) ? 2_000 : false
+  });
   const [busy, setBusy] = useState("");
   const [feedback, setFeedback] = useState<ActionFeedbackState | null>(null);
   const feedbackTarget = useActionFeedbackTarget("storage-settings");
@@ -151,6 +157,13 @@ function StorageBackendsManager() {
     }
   };
 
+  const retryCleanup = (slug: string) => runStorageAction(
+    `cleanup-retry:${slug}`,
+    () => api(`${adminApiBasePath}/storage/backends/${slug}/cleanup/retry`, {
+      method: "POST"
+    })
+  );
+
   const openEditor = (target: StorageBackendAdmin | "new") => setEditing(target);
   const closeEditor = () => setEditing(null);
   const editingTarget = editing === "new"
@@ -190,6 +203,7 @@ function StorageBackendsManager() {
                 body: JSON.stringify({ enabled: !backend.enabled })
               })
             )}
+            onRetryCleanup={() => retryCleanup(backend.slug)}
             onDelete={() => void deleteBackend(backend.slug)}
             onDragStart={(slug) => { dragSlug.current = slug; }}
             onDragEnter={moveOver}
@@ -232,7 +246,7 @@ function StorageBackendsManager() {
   );
 }
 
-function BackendCard({ backend, hasNonLocalBackend, busy, defaultStatus, defaultActionPending, onEdit, onSetDefault, onDelete, onToggleEnabled, onDragStart, onDragEnter, onDragEnd }: {
+function BackendCard({ backend, hasNonLocalBackend, busy, defaultStatus, defaultActionPending, onEdit, onSetDefault, onDelete, onToggleEnabled, onRetryCleanup, onDragStart, onDragEnter, onDragEnd }: {
   backend: StorageBackendAdmin;
   hasNonLocalBackend: boolean;
   busy: string;
@@ -242,6 +256,7 @@ function BackendCard({ backend, hasNonLocalBackend, busy, defaultStatus, default
   onSetDefault: () => Promise<boolean>;
   onDelete: () => void;
   onToggleEnabled: () => Promise<boolean>;
+  onRetryCleanup: () => Promise<boolean>;
   onDragStart: (slug: string) => void;
   onDragEnter: (slug: string) => void;
   onDragEnd: () => void;
@@ -251,10 +266,12 @@ function BackendCard({ backend, hasNonLocalBackend, busy, defaultStatus, default
 
   const [armed, setArmed] = useState(false);
   const enabledStatus = useAsyncActionStatus({ successDurationMs: null });
+  const cleanupRetryStatus = useAsyncActionStatus();
   const title = backend.display_name || storageBackendLabel(backend.slug);
   const cardBusy = Boolean(busy)
     || defaultActionPending
-    || enabledStatus.pending;
+    || enabledStatus.pending
+    || cleanupRetryStatus.pending;
   const defaultPresentation = {
     idle: {
       icon: backend.is_default ? "star-fill" : "star-line",
@@ -279,6 +296,15 @@ function BackendCard({ backend, hasNonLocalBackend, busy, defaultStatus, default
     },
     error: { icon: "close-line", label: "操作失败" }
   } as const;
+  const cleanupRetryPresentation = {
+    idle: { icon: "refresh-line", label: "重试删除" },
+    pending: { icon: "refresh-line", label: "排队中" },
+    success: { icon: "check-line", label: "已排队" },
+    error: { icon: "close-line", label: "重试失败" }
+  } as const;
+  const cleanupRetryTitle = backend.exhausted_cleanup_job_count > 0
+    ? `将 ${backend.exhausted_cleanup_job_count} 个已停止自动重试的旧对象删除任务重新加入后台队列；不会执行存储检查`
+    : "旧对象删除任务已重新排队；不会执行存储检查";
   const begin = (event: DragEvent<HTMLDivElement>) => {
     event.dataTransfer.effectAllowed = "move";
     event.dataTransfer.setData("text/plain", backend.slug);
@@ -313,7 +339,10 @@ function BackendCard({ backend, hasNonLocalBackend, busy, defaultStatus, default
             ? ` · ${backend.import_session_count} 个未清理导入会话`
             : ""}
           {backend.cleanup_job_count > 0
-            ? ` · ${backend.cleanup_job_count} 个待处理清理任务`
+            ? ` · 旧对象删除 ${backend.cleanup_job_count} 项`
+            : ""}
+          {backend.failed_cleanup_job_count > 0
+            ? `（${backend.failed_cleanup_job_count} 项失败）`
             : ""}
         </div>
       </div>
@@ -328,6 +357,18 @@ function BackendCard({ backend, hasNonLocalBackend, busy, defaultStatus, default
               disabled={cardBusy || backend.is_default}
               title={backend.is_default ? "默认后端不能停用" : backend.enabled ? "已启用：新图片可写入此存储。点击停用（不影响读取与迁移）" : "已停用：新图片不能写入。点击启用"}
               onClick={() => void enabledStatus.run(onToggleEnabled)}
+            />
+          )}
+          {(backend.exhausted_cleanup_job_count > 0
+            || cleanupRetryStatus.status !== "idle") && (
+            <AsyncActionButton
+              type="button"
+              className="storage-cleanup-retry"
+              status={cleanupRetryStatus.status}
+              presentation={cleanupRetryPresentation}
+              disabled={cardBusy}
+              title={cleanupRetryTitle}
+              onClick={() => void cleanupRetryStatus.run(onRetryCleanup)}
             />
           )}
         </span>

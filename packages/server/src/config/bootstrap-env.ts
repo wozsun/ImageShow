@@ -123,7 +123,10 @@ export function runtimeConfigFromEnvironment(): RuntimeConfig {
     },
     import: {
       commit_concurrency: environmentNumber("IMPORT_COMMIT_CONCURRENCY"),
-      global_commit_concurrency: environmentNumber("IMPORT_GLOBAL_COMMIT_CONCURRENCY")
+      global_commit_concurrency: environmentNumber("IMPORT_GLOBAL_COMMIT_CONCURRENCY"),
+      global_commit_byte_budget_mb: environmentNumber(
+        "IMPORT_GLOBAL_COMMIT_BYTE_BUDGET_MB"
+      )
     },
     image_detail: {
       title_opens_image: environmentBoolean("IMAGE_DETAIL_TITLE_OPENS_IMAGE")

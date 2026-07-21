@@ -1,5 +1,8 @@
 import { ApiError } from "../../core/api-error.ts";
-import { DynamicConcurrencyLimiter } from "../../core/concurrency.ts";
+import {
+  DynamicConcurrencyLimiter,
+  DynamicWeightedLimiter
+} from "../../core/concurrency.ts";
 import { getRuntimeConfig } from "../../config/runtime-config-store.ts";
 import { withStorageLocationReadLock } from "../../storage/maintenance-lock.ts";
 import { clearImportPhase, setImportPhase, withImportLease } from "./progress.ts";
@@ -32,6 +35,10 @@ const linkPrepareLimiter = new ImportConcurrencyLimiter(
 );
 const commitLimiter = new ImportConcurrencyLimiter(
   () => getRuntimeConfig().import.global_commit_concurrency
+);
+const commitByteLimiter = new DynamicWeightedLimiter(
+  () => getRuntimeConfig().import.global_commit_byte_budget_mb * 1024 * 1024,
+  () => new ApiError(409, "import_cancelled", "导入已取消")
 );
 
 export function importCommitLockKey(id: string) {
@@ -71,6 +78,14 @@ export async function runImportPreparation(
 
 export function runImportCommit<T>(work: () => Promise<T>, signal = new AbortController().signal) {
   return commitLimiter.run(signal, work);
+}
+
+export function runImportCommitWithinByteBudget<T>(
+  bytes: number,
+  work: () => Promise<T>,
+  signal = new AbortController().signal
+) {
+  return commitByteLimiter.run(bytes, signal, work);
 }
 
 export function abortActiveImport(id: string) {

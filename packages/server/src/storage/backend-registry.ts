@@ -3,7 +3,8 @@ import { pool, withAdvisoryLock, withTransaction } from "../core/db.ts";
 import { ApiError } from "../core/api-error.ts";
 import {
   countUnresolvedMoveCleanupJobs,
-  listUnresolvedMoveCleanupJobCounts
+  listUnresolvedMoveCleanupJobCounts,
+  retryExhaustedMoveCleanupJobs
 } from "../jobs/repository.ts";
 import {
   defaultS3Settings,
@@ -216,11 +217,12 @@ export async function getStorageBackendsForAdmin() {
     String(row.storage_slug),
     Number(row.import_session_count ?? 0)
   ]));
-  const cleanupJobCounts = new Map<string, number>(cleanupCountRows.map((row) => [
+  const cleanupJobCounts = new Map(cleanupCountRows.map((row) => [
     row.storage_slug,
-    row.cleanup_job_count
+    row
   ]));
   return backends.map((backend) => {
+    const cleanupCounts = cleanupJobCounts.get(backend.slug);
     const summary = {
       slug: backend.slug,
       display_name: backend.display_name,
@@ -229,7 +231,10 @@ export async function getStorageBackendsForAdmin() {
       is_default: backend.is_default,
       image_count: imageCounts.get(backend.slug) ?? 0,
       import_session_count: importSessionCounts.get(backend.slug) ?? 0,
-      cleanup_job_count: cleanupJobCounts.get(backend.slug) ?? 0
+      cleanup_job_count: cleanupCounts?.cleanup_job_count ?? 0,
+      failed_cleanup_job_count: cleanupCounts?.failed_cleanup_job_count ?? 0,
+      exhausted_cleanup_job_count:
+        cleanupCounts?.exhausted_cleanup_job_count ?? 0
     };
     if (backend.type === "s3") {
       const { secret_access_key, ...s3 } = backend.s3;
@@ -252,6 +257,13 @@ export async function getStorageBackendsForAdmin() {
       };
     }
     return summary;
+  });
+}
+
+export function retryStorageBackendCleanup(slug: string) {
+  return withAdvisoryLock(`imageshow:storage-backend:${slug}`, async () => {
+    await getStorageBackend(slug);
+    return retryExhaustedMoveCleanupJobs(slug);
   });
 }
 
@@ -457,7 +469,7 @@ function assertPhysicalLocationChangeAllowed(
   throw new ApiError(
     409,
     "storage_location_change_requires_migration",
-    "该后端仍有图片、未清理导入会话、待处理清理任务或暂存对象，物理位置暂不可变更",
+    "该后端仍有图片、未清理导入会话、旧对象删除任务或暂存对象，物理位置暂不可变更",
     { fields: changedFields, ...usage }
   );
 }
@@ -706,7 +718,7 @@ export async function deleteStorageBackend(slug: string) {
         throw new ApiError(
           409,
           "storage_backend_in_use",
-          "该存储后端仍有图片、未清理导入会话、待处理清理任务或暂存对象，无法删除",
+          "该存储后端仍有图片、未清理导入会话、旧对象删除任务或暂存对象，无法删除",
           usage
         );
       }

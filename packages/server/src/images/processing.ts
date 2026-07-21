@@ -34,6 +34,10 @@ export function md5Buffer(input: Buffer) {
   return createHash("md5").update(input).digest("hex");
 }
 
+export function sha256Buffer(input: Buffer) {
+  return createHash("sha256").update(input).digest("hex");
+}
+
 async function imageDimensions(input: ImageInput) {
   const meta = await sharp(input).metadata();
   // sharp 的 metadata 宽高是原始像素方向；带 EXIF 旋转的手机图在展示时会互换宽高，因此这里返回展示方向。

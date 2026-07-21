@@ -1,4 +1,6 @@
-import { ApiError } from "../core/api-error.ts";
+import { createHash, type Hash } from "node:crypto";
+import { ApiError, errorMessage } from "../core/api-error.ts";
+import { logger } from "../core/logger.ts";
 import type { StorageConfig } from "./backend-config.ts";
 import type { StorageDriver } from "./storage-backend.ts";
 import type { StoragePrefix } from "./object-keys.ts";
@@ -12,6 +14,32 @@ export type StorageEndpoint = {
 export type VerifiedObjectTransfer = {
   created: boolean;
   sharedNamespace: boolean;
+};
+
+export type StorageObjectDigest = {
+  size: number;
+  sha256: string;
+  md5?: string;
+};
+
+type CandidateObject = {
+  prefix: StoragePrefix;
+  key: string;
+  backend: string;
+};
+
+type CandidateCleanup = (object: CandidateObject) => Promise<void>;
+
+type SourceDigestExpectation = {
+  size?: number;
+  sha256?: string;
+  md5?: string;
+};
+
+type SourceMismatchError = {
+  status: number;
+  code: string;
+  message: string;
 };
 
 function objectConflict(
@@ -33,11 +61,127 @@ function objectConflict(
   );
 }
 
+function transferIntegrityFailure(
+  target: StorageEndpoint,
+  prefix: StoragePrefix,
+  key: string,
+  sourceSlug?: string
+) {
+  return new ApiError(
+    502,
+    "storage_transfer_integrity_failed",
+    "存储对象写入后完整性校验失败",
+    {
+      prefix,
+      key,
+      ...(sourceSlug ? { source: sourceSlug } : {}),
+      target: target.config.slug
+    }
+  );
+}
+
+function updateHashes(hashes: Hash[], chunk: unknown) {
+  const bytes = Buffer.isBuffer(chunk)
+    ? chunk
+    : Buffer.from(chunk as Uint8Array);
+  for (const hash of hashes) hash.update(bytes);
+  return bytes.byteLength;
+}
+
+/** Read an object as a stream and calculate strong integrity metadata. */
+async function digestStorageObject(
+  endpoint: StorageEndpoint,
+  prefix: StoragePrefix,
+  key: string,
+  options: { includeMd5?: boolean } = {}
+): Promise<StorageObjectDigest> {
+  const sha256 = createHash("sha256");
+  const md5 = options.includeMd5 ? createHash("md5") : undefined;
+  const hashes = md5 ? [sha256, md5] : [sha256];
+  const opened = await endpoint.driver.openRead(prefix, key);
+  let size = 0;
+  for await (const chunk of opened.body) {
+    size += updateHashes(hashes, chunk);
+  }
+  return {
+    size,
+    sha256: sha256.digest("hex"),
+    ...(md5 ? { md5: md5.digest("hex") } : {})
+  };
+}
+
+function sameDigest(left: StorageObjectDigest, right: StorageObjectDigest) {
+  return left.size === right.size && left.sha256 === right.sha256;
+}
+
+function digestMatchesExpected(
+  digest: StorageObjectDigest,
+  expected: SourceDigestExpectation
+) {
+  return (expected.size === undefined || digest.size === expected.size)
+    && (!expected.sha256 || digest.sha256 === expected.sha256.toLowerCase())
+    && (!expected.md5 || digest.md5 === expected.md5.toLowerCase());
+}
+
+async function cleanupCandidate(
+  target: StorageEndpoint,
+  object: CandidateObject,
+  cleanup: CandidateCleanup | undefined,
+  transferError: unknown
+) {
+  if (cleanup) {
+    try {
+      await cleanup(object);
+    } catch (cleanupError) {
+      logger.error("storage_transfer_candidate_cleanup_failed", {
+        backend: object.backend,
+        prefix: object.prefix,
+        key: object.key,
+        transfer_error: errorMessage(transferError),
+        cleanup_error: errorMessage(cleanupError)
+      });
+    }
+    return;
+  }
+  try {
+    await target.driver.remove(object.prefix, object.key);
+  } catch (cleanupError) {
+    logger.error("storage_transfer_candidate_cleanup_failed", {
+      backend: object.backend,
+      prefix: object.prefix,
+      key: object.key,
+      transfer_error: errorMessage(transferError),
+      cleanup_error: errorMessage(cleanupError)
+    });
+  }
+}
+
+async function cleanupAttemptedCandidate(
+  target: StorageEndpoint,
+  object: CandidateObject,
+  cleanup: CandidateCleanup | undefined,
+  transferError: unknown
+) {
+  try {
+    if (!await target.driver.exists(object.prefix, object.key)) return;
+  } catch (probeError) {
+    logger.error("storage_transfer_candidate_probe_failed", {
+      backend: object.backend,
+      prefix: object.prefix,
+      key: object.key,
+      transfer_error: errorMessage(transferError),
+      probe_error: errorMessage(probeError)
+    });
+    return;
+  }
+  await cleanupCandidate(target, object, cleanup, transferError);
+}
+
 /**
- * Materialize an already-read object at one target and verify the exact bytes.
- * Existing objects are never overwritten or removed. A candidate written by
- * this invocation is read back before ownership may move to it, and only that
- * candidate is removed if verification fails.
+ * Materialize an already-read object at one target and verify its exact
+ * content without reading the target into another full Buffer. Existing
+ * objects are never overwritten. A post-write mismatch is an upstream
+ * integrity failure (502), not a pre-existing object conflict (409).
  */
 export async function ensureVerifiedObjectAtTarget(input: {
   target: StorageEndpoint;
@@ -46,41 +190,142 @@ export async function ensureVerifiedObjectAtTarget(input: {
   body: Buffer;
   contentType: string;
   sourceSlug?: string;
+  cleanupCandidate?: CandidateCleanup;
 }): Promise<{ created: boolean }> {
-  const { target, prefix, key, body, contentType, sourceSlug } = input;
+  const {
+    target,
+    prefix,
+    key,
+    body,
+    contentType,
+    sourceSlug,
+    cleanupCandidate: candidateCleanup
+  } = input;
+  const expected: StorageObjectDigest = {
+    size: body.byteLength,
+    sha256: createHash("sha256").update(body).digest("hex")
+  };
   if (await target.driver.exists(prefix, key)) {
-    const existing = await target.driver.readBuffer(prefix, key);
-    if (!existing.equals(body)) {
+    const existing = await digestStorageObject(target, prefix, key);
+    if (!sameDigest(existing, expected)) {
       throw objectConflict(target, prefix, key, sourceSlug);
     }
     return { created: false };
   }
 
-  let writeCompleted = false;
   try {
     await target.driver.writeBuffer(prefix, key, body, contentType);
-    writeCompleted = true;
-    const stored = await target.driver.readBuffer(prefix, key);
-    if (!stored.equals(body)) {
-      throw objectConflict(target, prefix, key, sourceSlug);
+    const stored = await digestStorageObject(target, prefix, key).catch(() => {
+      throw transferIntegrityFailure(target, prefix, key, sourceSlug);
+    });
+    if (!sameDigest(stored, expected)) {
+      throw transferIntegrityFailure(target, prefix, key, sourceSlug);
     }
     return { created: true };
   } catch (error) {
-    // Only a successfully materialized candidate is owned by this invocation.
-    // A failed write is not enough evidence to remove an object at this key.
-    if (writeCompleted) {
-      await target.driver.remove(prefix, key).catch(() => undefined);
-    }
+    await cleanupAttemptedCandidate(
+      target,
+      { prefix, key, backend: target.config.slug },
+      candidateCleanup,
+      error
+    );
     throw error;
   }
 }
 
 /**
- * Materialize one already-read source object at the destination and verify the
- * exact bytes before the caller changes database ownership. An equivalent
- * namespace is a metadata-only switch after the target credentials have read
- * and verified the shared object: writing the target would overwrite the
- * source object and later cleanup could delete the live object.
+ * Copy within one physical backend using the driver's native copy primitive.
+ * Source and target are streamed for hashing, which avoids a second full
+ * in-memory copy for S3/WebDAV import commits and category moves.
+ */
+export async function copyVerifiedObjectWithinStorage(input: {
+  storage: StorageEndpoint;
+  fromPrefix: StoragePrefix;
+  fromKey: string;
+  toPrefix: StoragePrefix;
+  toKey: string;
+  expectedSource?: SourceDigestExpectation;
+  sourceMismatch?: SourceMismatchError;
+  cleanupCandidate?: CandidateCleanup;
+}): Promise<{ created: boolean; sourceDigest: StorageObjectDigest }> {
+  const {
+    storage,
+    fromPrefix,
+    fromKey,
+    toPrefix,
+    toKey,
+    expectedSource = {},
+    sourceMismatch = {
+      status: 502,
+      code: "storage_source_integrity_failed",
+      message: "源存储对象与记录的完整性信息不一致"
+    },
+    cleanupCandidate: candidateCleanup
+  } = input;
+  const sourceDigest = await digestStorageObject(
+    storage,
+    fromPrefix,
+    fromKey,
+    { includeMd5: Boolean(expectedSource.md5) }
+  );
+  if (!digestMatchesExpected(sourceDigest, expectedSource)) {
+    throw new ApiError(
+      sourceMismatch.status,
+      sourceMismatch.code,
+      sourceMismatch.message,
+      {
+        backend: storage.config.slug,
+        prefix: fromPrefix,
+        key: fromKey
+      }
+    );
+  }
+
+  if (fromPrefix === toPrefix && fromKey === toKey) {
+    return { created: false, sourceDigest };
+  }
+  if (await storage.driver.exists(toPrefix, toKey)) {
+    const existing = await digestStorageObject(storage, toPrefix, toKey);
+    if (!sameDigest(existing, sourceDigest)) {
+      throw objectConflict(storage, toPrefix, toKey, storage.config.slug);
+    }
+    return { created: false, sourceDigest };
+  }
+
+  try {
+    await storage.driver.copy(fromPrefix, fromKey, toPrefix, toKey);
+    const copied = await digestStorageObject(storage, toPrefix, toKey).catch(() => {
+      throw transferIntegrityFailure(
+        storage,
+        toPrefix,
+        toKey,
+        storage.config.slug
+      );
+    });
+    if (!sameDigest(copied, sourceDigest)) {
+      throw transferIntegrityFailure(
+        storage,
+        toPrefix,
+        toKey,
+        storage.config.slug
+      );
+    }
+    return { created: true, sourceDigest };
+  } catch (error) {
+    await cleanupAttemptedCandidate(
+      storage,
+      { prefix: toPrefix, key: toKey, backend: storage.config.slug },
+      candidateCleanup,
+      error
+    );
+    throw error;
+  }
+}
+
+/**
+ * Materialize one already-read source object at another backend. Equivalent
+ * namespaces are metadata-only switches after the target credentials verify
+ * the shared object.
  */
 export async function ensureVerifiedObjectAtDestination(input: {
   source: StorageEndpoint;
@@ -90,6 +335,7 @@ export async function ensureVerifiedObjectAtDestination(input: {
   body: Buffer;
   contentType: string;
   sourceObjectExists?: boolean;
+  cleanupCandidate?: CandidateCleanup;
 }): Promise<VerifiedObjectTransfer> {
   const { source, target, prefix, key, body, contentType } = input;
   const sharedNamespace = shareStorageNamespace(source.config, target.config);
@@ -107,8 +353,12 @@ export async function ensureVerifiedObjectAtDestination(input: {
         }
       );
     }
-    const existing = await target.driver.readBuffer(prefix, key);
-    if (!existing.equals(body)) {
+    const expected: StorageObjectDigest = {
+      size: body.byteLength,
+      sha256: createHash("sha256").update(body).digest("hex")
+    };
+    const existing = await digestStorageObject(target, prefix, key);
+    if (!sameDigest(existing, expected)) {
       throw objectConflict(target, prefix, key, source.config.slug);
     }
     return { created: false, sharedNamespace: true };
@@ -120,7 +370,8 @@ export async function ensureVerifiedObjectAtDestination(input: {
     key,
     body,
     contentType,
-    sourceSlug: source.config.slug
+    sourceSlug: source.config.slug,
+    cleanupCandidate: input.cleanupCandidate
   });
   return { ...result, sharedNamespace };
 }

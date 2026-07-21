@@ -7,6 +7,7 @@ import {
   commitConcurrency,
   galleryLimit,
   galleryOrder,
+  globalCommitByteBudgetMb,
   globalCommitConcurrency,
   homeHeroBackground,
   homeTagline,
@@ -117,7 +118,8 @@ const runtimeConfigSchema = z.strictObject({
   thumbnail: z.strictObject({ long_edge: thumbnailLongEdge, quality: thumbnailQuality }),
   import: z.strictObject({
     commit_concurrency: commitConcurrency,
-    global_commit_concurrency: globalCommitConcurrency
+    global_commit_concurrency: globalCommitConcurrency,
+    global_commit_byte_budget_mb: globalCommitByteBudgetMb
   }),
   image_detail: z.strictObject({ title_opens_image: z.boolean() }),
   admin: z.strictObject({
