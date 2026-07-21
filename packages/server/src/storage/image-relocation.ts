@@ -13,7 +13,7 @@ import {
   ensureVerifiedObjectAtTarget
 } from "./object-transfer.ts";
 import {
-  removeObjectsOrEnqueueCleanup,
+  enqueueObjectsForCleanup,
   type MoveCleanupObjectInput
 } from "./move-cleanup.ts";
 import { pruneEmptyStorageDirs } from "./storage.ts";
@@ -74,9 +74,12 @@ function uniqueObjects(objects: MoveCleanupObjectInput[]) {
 export async function prepareVerifiedImageRelocation(
   image: RelocatableImage,
   target: ImageClassificationTarget,
-  operation: string
+  operation: string,
+  signal?: AbortSignal
 ): Promise<PreparedImageRelocation> {
+  signal?.throwIfAborted();
   const storage = await resolveStorageAccess(image.storage_slug);
+  signal?.throwIfAborted();
   const createdObjects: MoveCleanupObjectInput[] = [];
   const sourceObjects: MoveCleanupObjectInput[] = [];
   const nextObjectKey = storageObjectKey(
@@ -87,13 +90,14 @@ export async function prepareVerifiedImageRelocation(
     image.ext
   );
   const cleanupCandidate = (object: MoveCleanupObjectInput) =>
-    removeObjectsOrEnqueueCleanup(
+    enqueueObjectsForCleanup(
       image.id,
       [object],
       `${operation}_candidate_integrity_failure`
     );
 
   try {
+    signal?.throwIfAborted();
     if (nextObjectKey !== image.object_key) {
       if (!await storage.driver.exists("media", image.object_key)) {
         throw sourceMissingError(image, "media", image.object_key);
@@ -107,6 +111,7 @@ export async function prepareVerifiedImageRelocation(
         expectedSource: { md5: image.md5 ?? undefined },
         cleanupCandidate
       });
+      signal?.throwIfAborted();
       if (mediaResult.created) {
         createdObjects.push({
           prefix: "media",
@@ -131,6 +136,7 @@ export async function prepareVerifiedImageRelocation(
           toKey: targetThumbnailKey,
           cleanupCandidate
         });
+        signal?.throwIfAborted();
         if (thumbnailResult.created) {
           createdObjects.push({
             prefix: "thumbs",
@@ -145,6 +151,7 @@ export async function prepareVerifiedImageRelocation(
         });
       } else {
         const media = await storage.driver.readBuffer("media", image.object_key);
+        signal?.throwIfAborted();
         if (image.md5 && md5Buffer(media) !== image.md5) {
           throw new ApiError(
             502,
@@ -154,6 +161,7 @@ export async function prepareVerifiedImageRelocation(
           );
         }
         const thumbnail = await createThumbnail(media);
+        signal?.throwIfAborted();
         const thumbnailResult = await ensureVerifiedObjectAtTarget({
           target: storage,
           prefix: "thumbs",
@@ -162,6 +170,7 @@ export async function prepareVerifiedImageRelocation(
           contentType: "image/webp",
           cleanupCandidate
         });
+        signal?.throwIfAborted();
         if (thumbnailResult.created) {
           createdObjects.push({
             prefix: "thumbs",
@@ -172,11 +181,11 @@ export async function prepareVerifiedImageRelocation(
       }
     }
   } catch (error) {
-    await removeObjectsOrEnqueueCleanup(
+    await enqueueObjectsForCleanup(
       image.id,
       uniqueObjects(createdObjects),
       `${operation}_prepare_failed`
-    );
+    ).catch(() => undefined);
     throw error;
   }
 
@@ -195,7 +204,7 @@ export function discardPreparedImageRelocation(
   relocation: PreparedImageRelocation,
   reason: string
 ) {
-  return removeObjectsOrEnqueueCleanup(
+  return enqueueObjectsForCleanup(
     relocation.imageId,
     relocation.createdObjects,
     reason
@@ -254,7 +263,7 @@ export async function completePreparedImageRelocation(
   relocation: PreparedImageRelocation,
   reason: string
 ) {
-  await removeObjectsOrEnqueueCleanup(
+  await enqueueObjectsForCleanup(
     relocation.imageId,
     relocation.sourceObjects,
     reason

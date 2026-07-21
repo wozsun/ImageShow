@@ -13,7 +13,7 @@ import type { StoragePrefix } from "./object-keys.ts";
 import { ensureVerifiedObjectAtDestination } from "./object-transfer.ts";
 import { shareStorageNamespace } from "./storage-namespace.ts";
 import {
-  removeObjectsOrEnqueueCleanup,
+  enqueueObjectsForCleanup,
   type MoveCleanupObjectInput
 } from "./move-cleanup.ts";
 
@@ -45,11 +45,11 @@ const migrateColumns = [
 ].join(", ");
 
 async function removeCreatedObjects(imageId: string, objects: CreatedObject[], reason: string) {
-  await removeObjectsOrEnqueueCleanup(imageId, objects, reason);
+  await enqueueObjectsForCleanup(imageId, objects, reason);
 }
 
 async function removeSourceObjects(imageId: string, objects: CreatedObject[]) {
-  await removeObjectsOrEnqueueCleanup(
+  await enqueueObjectsForCleanup(
     imageId,
     objects,
     "source_cleanup_after_storage_switch"
@@ -59,18 +59,22 @@ async function removeSourceObjects(imageId: string, objects: CreatedObject[]) {
 async function migrateImageStorageUnlocked(
   requested: MigrateRecord,
   target: string,
-  expectedSource?: string
+  expectedSource: string | undefined,
+  signal: AbortSignal
 ): Promise<MigrateResult> {
+  signal.throwIfAborted();
   const current = (await pool.query(
     `SELECT ${migrateColumns} FROM metadata WHERE id=$1`,
     [requested.id]
   )).rows[0] as MigrateRecord | undefined;
+  signal.throwIfAborted();
   if (!current) return "missing";
   if (expectedSource && current.storage_slug !== expectedSource) return "unchanged";
   if (current.storage_slug === target) return "unchanged";
 
   const source = await getStorageBackend(current.storage_slug);
   const destination = await assertStorageWritable(target);
+  signal.throwIfAborted();
   const sourceAccess = resolveStorageAccessForConfig(source);
   const destinationAccess = resolveStorageAccessForConfig(destination);
   const sharedNamespace = shareStorageNamespace(source, destination);
@@ -84,6 +88,7 @@ async function migrateImageStorageUnlocked(
     objectContentType: string,
     sourceObjectExists = true
   ) => {
+    signal.throwIfAborted();
     const result = await ensureVerifiedObjectAtDestination({
       source: sourceAccess,
       target: destinationAccess,
@@ -92,18 +97,21 @@ async function migrateImageStorageUnlocked(
       body,
       contentType: objectContentType,
       sourceObjectExists,
-      cleanupCandidate: (object) => removeObjectsOrEnqueueCleanup(
+      cleanupCandidate: (object) => enqueueObjectsForCleanup(
         current.id,
         [object],
         "storage_migration_integrity_failure"
       )
     });
+    signal.throwIfAborted();
     if (result.created) created.push({ prefix, key, backend: target });
   };
 
   try {
+    signal.throwIfAborted();
     if (!(await sourceAccess.driver.exists("media", current.object_key))) return "missing";
     const image = await sourceAccess.driver.readBuffer("media", current.object_key);
+    signal.throwIfAborted();
     if (current.md5 && md5Buffer(image) !== current.md5) {
       throw new ApiError(
         502,
@@ -124,6 +132,7 @@ async function migrateImageStorageUnlocked(
     const thumb = sourceThumbExists
       ? await sourceAccess.driver.readBuffer("thumbs", thumbKey)
       : await createThumbnail(image);
+    signal.throwIfAborted();
     await materialize(
       "thumbs",
       thumbKey,
@@ -141,25 +150,37 @@ async function migrateImageStorageUnlocked(
     // The switch is conditional on the exact location that was copied. A
     // future writer that bypasses the advisory protocol still cannot make this
     // operation delete an object adopted at another location.
+    signal.throwIfAborted();
     const switched = await pool.query(
       `UPDATE metadata
           SET storage_slug=$2, updated_at=now()
         WHERE id=$1 AND storage_slug=$3 AND object_key=$4`,
       [current.id, target, current.storage_slug, current.object_key]
     );
+    signal.throwIfAborted();
     if (!switched.rowCount) {
-      await removeCreatedObjects(current.id, created, "location_compare_and_swap_failed");
+      await removeCreatedObjects(
+        current.id,
+        created,
+        "location_compare_and_swap_failed"
+      ).catch(() => undefined);
       return "unchanged";
     }
   } catch (error) {
-    await removeCreatedObjects(current.id, created, "storage_migration_failed");
+    await removeCreatedObjects(
+      current.id,
+      created,
+      "storage_migration_failed"
+    ).catch(() => undefined);
     throw error;
   }
 
   // Source deletion happens only after the database points at a complete
   // destination copy. Failure leaves a harmless duplicate and a retryable job.
   if (!sharedNamespace) {
+    signal.throwIfAborted();
     await removeSourceObjects(current.id, sourceObjects);
+    signal.throwIfAborted();
   }
   return "migrated";
 }
@@ -169,8 +190,8 @@ export function migrateImageStorage(
   target: string,
   options: { expectedSource?: string } = {}
 ): Promise<MigrateResult> {
-  return withImageStorageMutationLock(row.id, () =>
-    migrateImageStorageUnlocked(row, target, options.expectedSource)
+  return withImageStorageMutationLock(row.id, (signal) =>
+    migrateImageStorageUnlocked(row, target, options.expectedSource, signal)
   );
 }
 

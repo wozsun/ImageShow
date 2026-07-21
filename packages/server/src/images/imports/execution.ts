@@ -51,6 +51,10 @@ function queueSignal(internal: AbortSignal, request?: AbortSignal) {
   return request ? AbortSignal.any([internal, request]) : internal;
 }
 
+function executionSignal(queue: AbortSignal, lock: AbortSignal) {
+  return queue === lock ? queue : AbortSignal.any([queue, lock]);
+}
+
 const activeMaterializations = new Map<string, {
   mode: ImportMode;
   controller: AbortController;
@@ -84,7 +88,9 @@ export async function runImportMaterialization(
   const promise = Promise.resolve().then(() => withImportLease(id, () =>
     limiter.run(
       limiterSignal,
-      () => withImportSessionLock(id, () => work(controller.signal)),
+      () => withImportSessionLock(id, (lockSignal) => work(
+        executionSignal(limiterSignal, lockSignal)
+      )),
       {
         onQueued: () => setImportPhase(
           id,
@@ -122,7 +128,7 @@ export async function runImportPreparation(
   const promise = Promise.resolve().then(() => withImportLease(id, () =>
     limiter.run(limiterSignal, () => withImportSessionLock(
       id,
-      () => work(controller.signal)
+      (lockSignal) => work(executionSignal(limiterSignal, lockSignal))
     ), {
       onQueued: () => setImportPhase(id, "prepare-waiting", "服务端全局处理名额已满，等待空闲名额"),
       onStarted: () => clearImportPhase(id)

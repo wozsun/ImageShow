@@ -21,8 +21,7 @@ import { importRequestHash } from "./request-hash.ts";
 import { withImportSessionLock } from "./session-lock.ts";
 import {
   cleanupStagedObjects,
-  preparedThumbnailResponse,
-  stagingImageKey
+  preparedThumbnailResponse
 } from "./staging.ts";
 import { removeRawImport } from "./temp-files.ts";
 import type {
@@ -56,9 +55,14 @@ function defaultMetadata(input: ImportCreateInput, imageTime: string): MetadataP
   };
 }
 
-async function createImportSessionUnderLocationLock(input: ImportCreateInput) {
+async function createImportSessionUnderLocationLock(
+  input: ImportCreateInput,
+  signal: AbortSignal
+) {
+  signal.throwIfAborted();
   const storageSlug = input.storage_slug ?? await getDefaultStorageSlug();
   await assertStorageUploadable(storageSlug);
+  signal.throwIfAborted();
 
   if (input.mode === "upload") {
     const limit = getInputImageMaxBytes();
@@ -70,6 +74,7 @@ async function createImportSessionUnderLocationLock(input: ImportCreateInput) {
   const runtime = getRuntimeConfig();
   const sourceUrl = input.source_url ?? "";
   const result = await withTransaction(async (client) => {
+    signal.throwIfAborted();
     await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [
       `import.create:${input.idempotency_key}`
     ]);
@@ -83,6 +88,7 @@ async function createImportSessionUnderLocationLock(input: ImportCreateInput) {
       ImportSessionRow,
       "id" | "mode" | "request_hash" | "image_time"
     > | undefined;
+    signal.throwIfAborted();
 
     let normalizedImageTime;
     try {
@@ -117,7 +123,8 @@ async function createImportSessionUnderLocationLock(input: ImportCreateInput) {
     }
 
     const id = createImageId(normalizedImageTime.date, input.manifest_position);
-    return (await client.query(
+    signal.throwIfAborted();
+    const created = (await client.query(
       `INSERT INTO import_session(id, mode, storage_slug, source_url, expected_size, metadata_payload, idempotency_key, request_hash, image_time, expires_at)
        VALUES($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9,$10)
        RETURNING id, mode`,
@@ -134,8 +141,11 @@ async function createImportSessionUnderLocationLock(input: ImportCreateInput) {
         new Date(Date.now() + appConfig.uploadTtlSeconds * 1000)
       ]
     )).rows[0] as ImportSessionRecord;
+    signal.throwIfAborted();
+    return created;
   });
 
+  signal.throwIfAborted();
   if (await importWasCancelled(result.id)) {
     await pool.query("DELETE FROM import_session WHERE id=$1 AND status='created'", [result.id]);
     throw new ApiError(409, "import_cancelled", "导入已取消");
@@ -144,7 +154,9 @@ async function createImportSessionUnderLocationLock(input: ImportCreateInput) {
 }
 
 export function createImportSession(input: ImportCreateInput) {
-  return withStorageLocationReadLock(() => createImportSessionUnderLocationLock(input));
+  return withStorageLocationReadLock((signal) =>
+    createImportSessionUnderLocationLock(input, signal)
+  );
 }
 
 export async function createImportSessions(
@@ -188,7 +200,11 @@ export async function previewImportSession(id: string, variant: "thumb" | "full"
   const payload = session.prepared_payload as PreparedPayload;
   if (variant === "thumb") return preparedThumbnailResponse(payload, session.storage_slug);
 
-  const buffer = await readStorageBuffer("_uploads", stagingImageKey(id), session.storage_slug);
+  const buffer = await readStorageBuffer(
+    "_uploads",
+    payload.prepared_image_key,
+    session.storage_slug
+  );
   return new Response(buffer as unknown as BodyInit, {
     headers: {
       "Content-Type": contentType(payload.ext),
@@ -202,7 +218,8 @@ export async function cancelImportSession(id: string) {
   const activePromise = abortActiveImport(id);
   const cancelled = (await pool.query(
     `UPDATE import_session
-     SET status='cancelled', expires_at=now(), updated_at=now()
+     SET status='cancelled', execution_token=NULL, raw_token=NULL,
+         expires_at=now(), updated_at=now()
      WHERE id=$1 AND status IN (
        'created','materializing','received','preparing','ready','failed','cancelled'
      )
@@ -222,7 +239,8 @@ export async function cancelImportSession(id: string) {
     if (existing) throw new ApiError(409, "invalid_import_state", "导入任务正在提交，无法取消");
     return;
   }
-  return withImportSessionLock(id, async () => {
+  return withImportSessionLock(id, async (signal) => {
+    signal.throwIfAborted();
     const session = (await pool.query(
       "SELECT status, storage_slug FROM import_session WHERE id=$1",
       [id]
@@ -235,10 +253,18 @@ export async function cancelImportSession(id: string) {
       throw new ApiError(409, "invalid_import_state", "导入任务状态已变化");
     }
     try {
-      await Promise.all([
+      signal.throwIfAborted();
+      const cleanups = await Promise.allSettled([
         cleanupStagedObjects(id, session.storage_slug),
         removeRawImport(id)
       ]);
+      const failures = cleanups
+        .filter((result): result is PromiseRejectedResult => result.status === "rejected")
+        .map((result) => result.reason);
+      if (failures.length) {
+        throw new AggregateError(failures, "Cancelled import cleanup failed");
+      }
+      signal.throwIfAborted();
     } catch (error) {
       throw new ApiError(
         502,

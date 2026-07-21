@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { AsyncLocalStorage } from "node:async_hooks";
 import type { RuntimeConfig } from "@imageshow/shared";
 import { runtimeConfigFromEnvironment, runtimePaths } from "./bootstrap-env.ts";
 import {
@@ -47,6 +48,9 @@ function writeRuntimeConfigFile(value: RuntimeConfig) {
 const existingRuntimeConfig = readRuntimeConfigFile();
 let runtimeConfig = existingRuntimeConfig ?? runtimeConfigFromEnvironment();
 if (!existingRuntimeConfig) writeRuntimeConfigFile(runtimeConfig);
+let runtimeConfigRevision = 0;
+const runtimeConfigWriteLeaseContext = new AsyncLocalStorage<boolean>();
+let runtimeConfigWriteLeaseTail = Promise.resolve();
 
 export function getRuntimeConfig() {
   return runtimeConfig;
@@ -63,27 +67,74 @@ function notifyRuntimeConfigChange() {
   for (const listener of runtimeConfigListeners) listener();
 }
 
-export function updateRuntimeConfig(patch: RuntimeConfigPatch) {
-  const next = mergeRuntimeConfig(runtimeConfig, patch);
+/** Serialize every in-process writer, including a config import's compensation window. */
+export async function withRuntimeConfigWriteLease<T>(
+  work: () => T | Promise<T>
+): Promise<T> {
+  if (runtimeConfigWriteLeaseContext.getStore()) return await work();
+
+  const predecessor = runtimeConfigWriteLeaseTail;
+  let release: () => void = () => undefined;
+  runtimeConfigWriteLeaseTail = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await predecessor;
+  try {
+    return await runtimeConfigWriteLeaseContext.run(true, work);
+  } finally {
+    release();
+  }
+}
+
+function commitRuntimeConfig(next: RuntimeConfig) {
   writeRuntimeConfigFile(next);
   runtimeConfig = next;
+  runtimeConfigRevision += 1;
+  const revision = runtimeConfigRevision;
   notifyRuntimeConfigChange();
-  return runtimeConfig;
+  return { config: next, revision };
+}
+
+export function updateRuntimeConfig(patch: RuntimeConfigPatch) {
+  return withRuntimeConfigWriteLease(() => {
+    const next = mergeRuntimeConfig(runtimeConfig, patch);
+    return commitRuntimeConfig(next).config;
+  });
+}
+
+/** Apply a patch and return the exact in-process write revision for rollback fencing. */
+export function updateRuntimeConfigWithRevision(patch: RuntimeConfigPatch) {
+  return withRuntimeConfigWriteLease(() => {
+    const next = mergeRuntimeConfig(runtimeConfig, patch);
+    return commitRuntimeConfig(next);
+  });
 }
 
 export function replaceRuntimeConfig(next: RuntimeConfig) {
-  writeRuntimeConfigFile(next);
-  runtimeConfig = next;
-  notifyRuntimeConfigChange();
-  return runtimeConfig;
+  return withRuntimeConfigWriteLease(() => commitRuntimeConfig(next).config);
+}
+
+/** Replace an earlier write only if its exact revision is still current. */
+export function replaceRuntimeConfigIfRevision(
+  expectedRevision: number,
+  next: RuntimeConfig
+) {
+  return withRuntimeConfigWriteLease(() => {
+    if (runtimeConfigRevision !== expectedRevision) return false;
+    commitRuntimeConfig(next);
+    return true;
+  });
 }
 
 export function reloadRuntimeConfig() {
-  const fromDisk = readRuntimeConfigFile();
-  if (!fromDisk) throw new Error(`Runtime config ${runtimePaths.configFile} does not exist`);
-  runtimeConfig = fromDisk;
-  notifyRuntimeConfigChange();
-  return runtimeConfig;
+  return withRuntimeConfigWriteLease(() => {
+    const fromDisk = readRuntimeConfigFile();
+    if (!fromDisk) throw new Error(`Runtime config ${runtimePaths.configFile} does not exist`);
+    runtimeConfig = fromDisk;
+    runtimeConfigRevision += 1;
+    notifyRuntimeConfigChange();
+    return runtimeConfig;
+  });
 }
 
 export type { RuntimeConfig } from "@imageshow/shared";

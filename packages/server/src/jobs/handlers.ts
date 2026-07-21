@@ -1,5 +1,8 @@
 import { appConfig } from "@imageshow/shared";
-import { getStorageBackend } from "../storage/backend-registry.ts";
+import {
+  getStorageBackend,
+  resolveStorageAccess
+} from "../storage/backend-registry.ts";
 import { pool } from "../core/db.ts";
 import { ApiError, errorMessage } from "../core/api-error.ts";
 import { abortActiveImport } from "../images/imports/execution.ts";
@@ -8,7 +11,10 @@ import {
   withImportSessionLock
 } from "../images/imports/session-lock.ts";
 import { cleanupOrphanRawImports, removeRawImport } from "../images/imports/temp-files.ts";
-import { cleanupStagedObjects } from "../images/imports/staging.ts";
+import {
+  cleanupFinalImportObjects,
+  cleanupStagedObjects
+} from "../images/imports/staging.ts";
 import { purgeDeletedImages } from "../images/trash.ts";
 import {
   createThumbnail,
@@ -27,10 +33,8 @@ import {
 } from "../storage/storage-namespace.ts";
 import {
   exists,
-  readStorageBuffer,
   removeObject,
-  type StoragePrefix,
-  writeStorageBuffer
+  type StoragePrefix
 } from "../storage/storage.ts";
 import type { BackgroundJob } from "./repository.ts";
 
@@ -79,14 +83,19 @@ async function cancelExpiredCommittingImports() {
   for (const candidate of candidates) {
     const attempt = await tryWithStorageLocationReadAndAdvisoryLocks(
       [{ key: importSessionLockKey(candidate.id), acquisition: "try" }],
-      () => pool.query(
+      (signal) => {
+        signal.throwIfAborted();
+        return pool.query(
           `UPDATE import_session
            SET status='cancelled',
+               execution_token=NULL,
+               raw_token=NULL,
                error='提交进程中断且会话已过期',
                updated_at=now()
            WHERE id=$1 AND status='committing' AND expires_at < now()`,
           [candidate.id]
-      )
+        );
+      }
     );
     if (attempt.acquired) cancelled += attempt.value.rowCount ?? 0;
   }
@@ -94,50 +103,62 @@ async function cancelExpiredCommittingImports() {
 }
 
 async function generateThumbnailUnlocked(
-  job: BackgroundJob
+  job: BackgroundJob,
+  signal: AbortSignal
 ): Promise<BackgroundJobOutcome> {
+  signal.throwIfAborted();
   const row = (await pool.query(
     "SELECT object_key, status, storage_slug, md5 FROM metadata WHERE id=$1",
     [job.target_id]
   )).rows[0];
+  signal.throwIfAborted();
   if (!row) return ignored("metadata missing");
   if (row.status !== "ready") return ignored("image not ready");
-  if (!await exists("media", row.object_key, row.storage_slug)) {
+  const storage = await resolveStorageAccess(row.storage_slug);
+  signal.throwIfAborted();
+  if (!await storage.driver.exists("media", row.object_key)) {
     return ignored("object missing");
   }
+  signal.throwIfAborted();
 
   let thumbnailSize: number;
-  const config = await getStorageBackend(row.storage_slug);
-  if (config.type !== "local") {
-    const buffer = await readStorageBuffer("media", row.object_key, row.storage_slug);
+  if (storage.config.type !== "local") {
+    const buffer = await storage.driver.readBuffer("media", row.object_key);
+    signal.throwIfAborted();
     if (row.md5 && md5Buffer(buffer) !== row.md5) {
       throw new Error(
         `integrity check failed: stored object md5 does not match recorded md5 (${row.md5})`
       );
     }
     const thumbnail = await createThumbnail(buffer);
-    await writeStorageBuffer(
+    signal.throwIfAborted();
+    await storage.driver.writeBuffer(
       "thumbs",
       thumbnailObjectKey(row.object_key),
       thumbnail,
-      "image/webp",
-      row.storage_slug
+      "image/webp"
     );
+    signal.throwIfAborted();
     thumbnailSize = thumbnail.byteLength;
   } else {
     thumbnailSize = await generateStoredThumbnail(row.object_key, row.storage_slug);
+    signal.throwIfAborted();
   }
 
-  await pool.query(
-    "UPDATE metadata SET thumbnail_size=$2 WHERE id=$1",
-    [job.target_id, thumbnailSize]
+  const updated = await pool.query(
+    `UPDATE metadata
+        SET thumbnail_size=$2
+      WHERE id=$1 AND status='ready' AND storage_slug=$3 AND object_key=$4`,
+    [job.target_id, thumbnailSize, row.storage_slug, row.object_key]
   );
+  signal.throwIfAborted();
+  if (!updated.rowCount) return ignored("image location changed");
   return succeeded({ thumbnail_size: thumbnailSize });
 }
 
 function generateThumbnail(job: BackgroundJob): Promise<BackgroundJobOutcome> {
-  return withImageStorageMutationLock(job.target_id, () =>
-    generateThumbnailUnlocked(job)
+  return withImageStorageMutationLock(job.target_id, (signal) =>
+    generateThumbnailUnlocked(job, signal)
   );
 }
 
@@ -180,7 +201,8 @@ async function cleanupMovedObjects(job: BackgroundJob): Promise<BackgroundJobOut
   }
   if (!objects.length) return ignored("invalid or empty move cleanup payload");
 
-  return withImageStorageMutationLock(job.target_id, async () => {
+  return withImageStorageMutationLock(job.target_id, async (signal) => {
+    signal.throwIfAborted();
     const row = (await pool.query(
       `SELECT id, object_key, storage_slug
          FROM metadata
@@ -199,11 +221,14 @@ async function cleanupMovedObjects(job: BackgroundJob): Promise<BackgroundJobOut
     const currentBackend = row
       ? await getStorageBackend(row.storage_slug)
       : undefined;
+    signal.throwIfAborted();
     const candidateBackends = new Map<string, Awaited<ReturnType<typeof getStorageBackend>>>();
     const candidateBackend = async (slug: string) => {
       let config = candidateBackends.get(slug);
       if (!config) {
+        signal.throwIfAborted();
         config = await getStorageBackend(slug);
+        signal.throwIfAborted();
         candidateBackends.set(slug, config);
       }
       return config;
@@ -214,6 +239,7 @@ async function cleanupMovedObjects(job: BackgroundJob): Promise<BackgroundJobOut
     let missing = 0;
     const seen = new Set<string>();
     for (const object of objects) {
+      signal.throwIfAborted();
       const identity = `${object.backend}:${object.prefix}:${object.key}`;
       if (seen.has(identity)) continue;
       seen.add(identity);
@@ -248,11 +274,45 @@ async function cleanupMovedObjects(job: BackgroundJob): Promise<BackgroundJobOut
         retained += 1;
         continue;
       }
+      // The earlier snapshot is only an optimization. Re-read PostgreSQL at
+      // the deletion boundary so a lock-loss successor cannot make this key
+      // authoritative between the first check and the irreversible remove.
+      const latest = (await pool.query(
+        `SELECT object_key, storage_slug
+           FROM metadata
+          WHERE id=$1`,
+        [job.target_id]
+      )).rows[0] as {
+        object_key: string;
+        storage_slug: string;
+      } | undefined;
+      signal.throwIfAborted();
+      const latestMatches = latest && (
+        (object.prefix === "media" && latest.object_key === object.key)
+        || (
+          object.prefix === "thumbs"
+          && thumbnailObjectKey(latest.object_key) === object.key
+        )
+      );
+      if (latestMatches) {
+        const latestBackend = await getStorageBackend(latest.storage_slug);
+        const objectBackend = await candidateBackend(object.backend);
+        signal.throwIfAborted();
+        if (
+          object.backend === latest.storage_slug
+          || shareStorageNamespace(objectBackend, latestBackend)
+        ) {
+          retained += 1;
+          continue;
+        }
+      }
       if (!await exists(object.prefix, object.key, object.backend)) {
         missing += 1;
         continue;
       }
+      signal.throwIfAborted();
       await removeObject(object.prefix, object.key, object.backend);
+      signal.throwIfAborted();
       if (await exists(object.prefix, object.key, object.backend)) {
         throw new ApiError(
           502,
@@ -291,6 +351,8 @@ async function cleanupExpiredImports(): Promise<BackgroundJobOutcome> {
              WHEN session.status='finalized' THEN 'finalized'
              ELSE 'cancelled'
            END,
+           execution_token=NULL,
+           raw_token=NULL,
            updated_at=now()
        FROM expired
        WHERE session.id=expired.id
@@ -303,16 +365,36 @@ async function cleanupExpiredImports(): Promise<BackgroundJobOutcome> {
   for (const row of rows) {
     try {
       await abortActiveImport(row.id);
-      await withImportSessionLock(row.id, async () => {
+      await withImportSessionLock(row.id, async (signal) => {
+        signal.throwIfAborted();
         const session = (await pool.query(
-          "SELECT status, storage_slug FROM import_session WHERE id=$1",
+          `SELECT status, storage_slug, final_object_key
+             FROM import_session
+            WHERE id=$1`,
           [row.id]
-        )).rows[0] as { status: string; storage_slug: string } | undefined;
+        )).rows[0] as {
+          status: string;
+          storage_slug: string;
+          final_object_key: string;
+        } | undefined;
         if (!session || !["cancelled", "finalized"].includes(session.status)) return;
-        await Promise.all([
+        signal.throwIfAborted();
+        const cleanups = await Promise.allSettled([
           cleanupStagedObjects(row.id, session.storage_slug),
+          cleanupFinalImportObjects(
+            row.id,
+            session.final_object_key,
+            session.storage_slug
+          ),
           removeRawImport(row.id)
         ]);
+        const failures = cleanups
+          .filter((result): result is PromiseRejectedResult => result.status === "rejected")
+          .map((result) => result.reason);
+        if (failures.length) {
+          throw new AggregateError(failures, "Expired import cleanup failed");
+        }
+        signal.throwIfAborted();
         cleanedIds.push(row.id);
       });
     } catch (error) {

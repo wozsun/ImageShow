@@ -19,12 +19,12 @@ export function registerSettingsRoutes(app: Hono) {
 
   app.post(`${adminApiBasePath}/settings`, requireSuper, async (c) => {
     const input = parseSettingsInput(await c.req.json().catch(() => ({})));
-    saveAppSettings(input);
+    await saveAppSettings(input);
     return c.json(ok());
   });
 
-  app.post(`${adminApiBasePath}/settings/reload`, requireSuper, (c) => {
-    reloadAppConfig();
+  app.post(`${adminApiBasePath}/settings/reload`, requireSuper, async (c) => {
+    await reloadAppConfig();
     return c.json(ok());
   });
 

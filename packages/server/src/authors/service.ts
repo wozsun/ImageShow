@@ -8,16 +8,7 @@ import {
   withVocabularyMutationLock
 } from "../vocab/mutation-sync.ts";
 
-export async function ensureAuthor(client: Pool, slug: string) {
-  if (!slug) return false;
-  return withVocabularyMutationLock(
-    "author",
-    slug,
-    () => ensureAuthorWithMutationLockHeld(client, slug)
-  );
-}
-
-/** Use only while the caller owns the author vocabulary mutation lock. */
+/** Use only while the caller owns a shared association or exclusive mutation lock. */
 export async function ensureAuthorWithMutationLockHeld(
   client: Pool | PoolClient,
   slug: string
@@ -36,15 +27,18 @@ export async function ensureAuthorWithMutationLockHeld(
 export async function createAuthor(slug: string, displayName: string, link: string) {
   assertVocabularySlug("author", slug);
 
-  const result = await withVocabularyMutationLock("author", slug, () =>
-    pool.query(
+  const result = await withVocabularyMutationLock("author", slug, async (signal) => {
+    signal.throwIfAborted();
+    const created = await pool.query(
       `INSERT INTO author(slug, display_name, link, sort_order)
        VALUES($1, $2, $3, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM author))
        ON CONFLICT (slug) DO NOTHING
        RETURNING slug`,
       [slug, displayName, link]
-    )
-  );
+    );
+    signal.throwIfAborted();
+    return created;
+  });
   assertVocabularyCreated("author", slug, result.rowCount);
   await synchronizeVocabularyMutation({ entity: "author" });
 }
@@ -68,12 +62,14 @@ export async function reorderAuthors(slugs: string[]) {
 
 type ClearedAuthorImage = { id: string; object_key: string };
 
-async function deleteAuthorUnderLock(slug: string) {
+async function deleteAuthorUnderLock(slug: string, signal: AbortSignal) {
   return withTransaction(async (client) => {
+    signal.throwIfAborted();
     const author = await client.query(
       "SELECT slug FROM author WHERE slug=$1 FOR UPDATE",
       [slug]
     );
+    signal.throwIfAborted();
     if (!author.rowCount) {
       return { deleted: false, affected: [] as ClearedAuthorImage[] };
     }
@@ -84,10 +80,12 @@ async function deleteAuthorUnderLock(slug: string) {
         RETURNING id, object_key`,
       [slug]
     )).rows as ClearedAuthorImage[];
+    signal.throwIfAborted();
     const deleted = Boolean((await client.query(
       "DELETE FROM author WHERE slug=$1",
       [slug]
     )).rowCount);
+    signal.throwIfAborted();
     return { deleted, affected };
   });
 }
@@ -105,7 +103,7 @@ export async function deleteAuthor(slug: string) {
   const result = await withVocabularyMutationLock(
     "author",
     slug,
-    () => deleteAuthorUnderLock(slug)
+    (signal) => deleteAuthorUnderLock(slug, signal)
   );
   assertVocabularyFound("author", result.deleted ? 1 : 0);
   await synchronizeAuthorDeletion(result.affected);
@@ -120,7 +118,7 @@ export async function deleteAuthors(slugs: string[]) {
     const result = await withVocabularyMutationLock(
       "author",
       slug,
-      () => deleteAuthorUnderLock(slug)
+      (signal) => deleteAuthorUnderLock(slug, signal)
     );
     affected.push(...result.affected);
     deletedAny = result.deleted || deletedAny;

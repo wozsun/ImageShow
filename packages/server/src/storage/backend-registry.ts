@@ -1,5 +1,11 @@
 import { appConfig } from "@imageshow/shared";
-import { pool, withAdvisoryLock, withTransaction } from "../core/db.ts";
+import type { PoolClient } from "pg";
+import {
+  pool,
+  withAdvisoryLock,
+  withTransaction,
+  withTransactionOnClient
+} from "../core/db.ts";
 import { ApiError } from "../core/api-error.ts";
 import {
   countUnresolvedMoveCleanupJobs,
@@ -34,6 +40,7 @@ const storageCacheTtlMs = appConfig.derivedCacheTtlSeconds * 1000;
 let storageCache: StorageBackendRecord[] | null = null;
 let storageCacheExpiresAt = 0;
 let storageLoad: Promise<StorageBackendRecord[]> | null = null;
+let storageCacheGeneration = 0;
 const storageBackendChangeListeners = new Set<() => void>();
 const storageDriverCache = new Map<string, StorageDriver>();
 
@@ -81,12 +88,15 @@ async function loadStorageBackends(): Promise<StorageBackendRecord[]> {
 
 async function getStorageBackends(): Promise<StorageBackendRecord[]> {
   if (storageCache && Date.now() < storageCacheExpiresAt) return storageCache;
+  const loadGeneration = storageCacheGeneration;
   if (!storageLoad) storageLoad = loadStorageBackends();
   const currentLoad = storageLoad;
   try {
     const loaded = await currentLoad;
-    storageCache = loaded;
-    storageCacheExpiresAt = Date.now() + storageCacheTtlMs;
+    if (storageCacheGeneration === loadGeneration) {
+      storageCache = loaded;
+      storageCacheExpiresAt = Date.now() + storageCacheTtlMs;
+    }
     return loaded;
   } finally {
     if (storageLoad === currentLoad) storageLoad = null;
@@ -94,8 +104,12 @@ async function getStorageBackends(): Promise<StorageBackendRecord[]> {
 }
 
 function invalidateStorageBackendCache() {
+  storageCacheGeneration += 1;
   storageCache = null;
   storageCacheExpiresAt = 0;
+  // A caller that started before this invalidation may still await its own
+  // snapshot, but no later caller may join or publish that stale load.
+  storageLoad = null;
   clearStorageDriverCache();
   for (const listener of storageBackendChangeListeners) listener();
 }
@@ -260,9 +274,13 @@ export async function getStorageBackendsForAdmin() {
 }
 
 export function retryStorageBackendCleanup(slug: string) {
-  return withAdvisoryLock(`imageshow:storage-backend:${slug}`, async () => {
+  return withAdvisoryLock(`imageshow:storage-backend:${slug}`, async (signal) => {
+    signal.throwIfAborted();
     await getStorageBackend(slug);
-    return retryExhaustedMoveCleanupJobs(slug);
+    signal.throwIfAborted();
+    const retried = await retryExhaustedMoveCleanupJobs(slug);
+    signal.throwIfAborted();
+    return retried;
   });
 }
 
@@ -287,47 +305,57 @@ export async function createStorageBackend(input: StorageBackendCreateInput) {
 
 export async function importStorageBackends(
   backends: StorageBackendImportInput[],
-  beforeCommit: () => void | Promise<void>
+  beforeCommit: () => void | Promise<void>,
+  lockClient: PoolClient,
+  onTransactionId: (transactionId: string) => void
 ) {
   try {
-    await withTransaction(async (client) => {
-      const highestSortOrder = Number((await client.query(
-        "SELECT COALESCE(MAX(sort_order), 0) AS value FROM storage_backend"
-      )).rows[0]?.value ?? 0);
+    await withTransactionOnClient(
+      lockClient,
+      async (client) => {
+        const highestSortOrder = Number((await client.query(
+          "SELECT COALESCE(MAX(sort_order), 0) AS value FROM storage_backend"
+        )).rows[0]?.value ?? 0);
 
-      for (const [index, backend] of backends.entries()) {
-        await client.query(
-          `INSERT INTO storage_backend(slug, display_name, type, config, enabled, is_default, sort_order)
-           VALUES($1, $2, $3, $4::jsonb, $5, false, $6)`,
-          [
-            backend.slug,
-            backend.display_name,
-            backend.type,
-            JSON.stringify(backend.config),
-            backend.enabled,
-            highestSortOrder + index + 1
-          ]
-        );
-      }
+        for (const [index, backend] of backends.entries()) {
+          await client.query(
+            `INSERT INTO storage_backend(slug, display_name, type, config, enabled, is_default, sort_order)
+             VALUES($1, $2, $3, $4::jsonb, $5, false, $6)`,
+            [
+              backend.slug,
+              backend.display_name,
+              backend.type,
+              JSON.stringify(backend.config),
+              backend.enabled,
+              highestSortOrder + index + 1
+            ]
+          );
+        }
 
-      const importedDefault = backends.find((backend) => backend.is_default);
-      if (importedDefault) {
-        await client.query("UPDATE storage_backend SET is_default=false, updated_at=now() WHERE is_default");
-        await client.query(
-          "UPDATE storage_backend SET is_default=true, updated_at=now() WHERE slug=$1",
-          [importedDefault.slug]
-        );
-      }
+        const importedDefault = backends.find((backend) => backend.is_default);
+        if (importedDefault) {
+          await client.query("UPDATE storage_backend SET is_default=false, updated_at=now() WHERE is_default");
+          await client.query(
+            "UPDATE storage_backend SET is_default=true, updated_at=now() WHERE slug=$1",
+            [importedDefault.slug]
+          );
+        }
 
-      await beforeCommit();
-    });
+        await beforeCommit();
+      },
+      { onTransactionId }
+    );
   } catch (error) {
     if (error && typeof error === "object" && (error as { code?: string }).code === "23505") {
       throw new ApiError(409, "storage_backend_exists", "导入的存储后端 slug 已存在");
     }
     throw error;
+  } finally {
+    // A successful COMMIT response can be lost with the lock connection.
+    // Invalidate on every outcome so a committed import/default change cannot
+    // leave an older registry load or driver cache authoritative.
+    invalidateStorageBackendCache();
   }
-  invalidateStorageBackendCache();
 }
 
 function storageConfigFromRow(row: {
@@ -546,9 +574,13 @@ class StorageLocationWriteLockRequired extends Error {}
 async function updateStorageBackendUnderLock(
   slug: string,
   input: StorageBackendUpdateInput,
-  allowPhysicalLocationChange: boolean
+  allowPhysicalLocationChange: boolean,
+  signal: AbortSignal,
+  lockClient: PoolClient
 ) {
+  signal.throwIfAborted();
   const snapshot = await storageBackendSnapshot(slug);
+  signal.throwIfAborted();
   const currentConfig = storageConfigFromRow(snapshot);
   const nextConfig = updatedStorageConfig(currentConfig, input);
   const configChanged = currentConfig.type === "s3"
@@ -569,6 +601,7 @@ async function updateStorageBackendUnderLock(
   if (physicalLocationChanged) {
     assertPhysicalLocationChangeAllowed(changedFields, snapshotUsage);
     snapshotUsage.staging_object_count = await countStagingObjects(currentConfig);
+    signal.throwIfAborted();
     assertPhysicalLocationChangeAllowed(changedFields, snapshotUsage);
   }
 
@@ -580,82 +613,99 @@ async function updateStorageBackendUnderLock(
           ORDER BY id
           LIMIT 1`,
         [slug]
-      )).rows[0] as ExistingStorageProbe | undefined
+    )).rows[0] as ExistingStorageProbe | undefined
     : undefined;
+  signal.throwIfAborted();
   if (configChanged) {
     await validateStorageUpdate(nextConfig, existingObject);
+    signal.throwIfAborted();
   }
 
-  await withTransaction(async (client) => {
-    const row = (await client.query(
+  try {
+    await withTransactionOnClient(lockClient, async (client) => {
+      signal.throwIfAborted();
+      const row = (await client.query(
       `SELECT slug, type, config, is_default
          FROM storage_backend
         WHERE slug=$1
         FOR UPDATE`,
       [slug]
-    )).rows[0];
-    if (!row) throw new ApiError(404, "storage_backend_not_found", `Unknown storage backend: ${slug}`);
-    const lockedConfig = storageConfigFromRow(row as {
-      slug: string;
-      type: StorageType;
-      config: unknown;
-    });
-    if (
-      row.type !== snapshot.type
-      || storageNamespaceIdentity(lockedConfig)
-        !== storageNamespaceIdentity(currentConfig)
-    ) {
-      throw new ApiError(
-        409,
-        "storage_backend_changed",
-        "存储后端配置已被其他请求修改，请刷新后重试"
-      );
-    }
-    if (input.enabled === false && row.is_default) {
-      throw new ApiError(400, "storage_default_enabled", "默认后端不能停用，请先切换默认后端");
-    }
-    if (input.enabled === false && row.slug === "local") {
-      const alternativeDefault = await client.query(
-        `SELECT 1
-         FROM storage_backend
-         WHERE slug <> 'local' AND enabled AND is_default
-         LIMIT 1`
-      );
-      if (!alternativeDefault.rowCount) {
+      )).rows[0];
+      signal.throwIfAborted();
+      if (!row) throw new ApiError(404, "storage_backend_not_found", `Unknown storage backend: ${slug}`);
+      const lockedConfig = storageConfigFromRow(row as {
+        slug: string;
+        type: StorageType;
+        config: unknown;
+      });
+      if (
+        row.type !== snapshot.type
+        || storageNamespaceIdentity(lockedConfig)
+          !== storageNamespaceIdentity(currentConfig)
+      ) {
         throw new ApiError(
-          400,
-          "storage_local_requires_alternative",
-          "停用本地存储前，请先启用其他存储并将其设为默认后端"
+          409,
+          "storage_backend_changed",
+          "存储后端配置已被其他请求修改，请刷新后重试"
         );
       }
-    }
+      if (input.enabled === false && row.is_default) {
+        throw new ApiError(400, "storage_default_enabled", "默认后端不能停用，请先切换默认后端");
+      }
+      if (input.enabled === false && row.slug === "local") {
+        const alternativeDefault = await client.query(
+          `SELECT 1
+           FROM storage_backend
+           WHERE slug <> 'local' AND enabled AND is_default
+           LIMIT 1`
+        );
+        if (!alternativeDefault.rowCount) {
+          throw new ApiError(
+            400,
+            "storage_local_requires_alternative",
+            "停用本地存储前，请先启用其他存储并将其设为默认后端"
+          );
+        }
+      }
 
-    const configJson = !configChanged
-      ? null
-      : nextConfig.type === "s3"
-        ? JSON.stringify(nextConfig.s3)
-        : nextConfig.type === "webdav"
-          ? JSON.stringify(nextConfig.webdav)
-          : null;
+      const configJson = !configChanged
+        ? null
+        : nextConfig.type === "s3"
+          ? JSON.stringify(nextConfig.s3)
+          : nextConfig.type === "webdav"
+            ? JSON.stringify(nextConfig.webdav)
+            : null;
 
-    await client.query(
-      `UPDATE storage_backend
-       SET display_name=COALESCE($2, display_name),
-           enabled=COALESCE($3, enabled),
-           config=COALESCE($4::jsonb, config),
-           updated_at=now()
-       WHERE slug=$1`,
-      [slug, input.display_name ?? null, input.enabled ?? null, configJson]
-    );
-  });
-  invalidateStorageBackendCache();
+      await client.query(
+        `UPDATE storage_backend
+         SET display_name=COALESCE($2, display_name),
+             enabled=COALESCE($3, enabled),
+             config=COALESCE($4::jsonb, config),
+             updated_at=now()
+         WHERE slug=$1`,
+        [slug, input.display_name ?? null, input.enabled ?? null, configJson]
+      );
+      signal.throwIfAborted();
+    });
+  } finally {
+    // COMMIT acknowledgement can be lost together with the lock connection.
+    // Dropping cached drivers is harmless after a rollback and essential when
+    // the database update actually committed before the error was observed.
+    invalidateStorageBackendCache();
+  }
 }
 
 export async function updateStorageBackend(slug: string, input: StorageBackendUpdateInput) {
   const backendLockKey = `imageshow:storage-backend:${slug}`;
   const updateWithBackendLock = (allowPhysicalLocationChange: boolean) =>
-    withAdvisoryLock(backendLockKey, () =>
-      updateStorageBackendUnderLock(slug, input, allowPhysicalLocationChange)
+    withAdvisoryLock(backendLockKey, (signal, lockClient) =>
+      updateStorageBackendUnderLock(
+        slug,
+        input,
+        allowPhysicalLocationChange,
+        signal,
+        lockClient
+      )
     );
 
   if (!input.s3 && !input.webdav) {
@@ -671,7 +721,13 @@ export async function updateStorageBackend(slug: string, input: StorageBackendUp
   if (requiresWriteLock) {
     await withStorageLocationWriteAndAdvisoryLock(
       backendLockKey,
-      () => updateStorageBackendUnderLock(slug, input, true)
+      (signal, lockClient) => updateStorageBackendUnderLock(
+        slug,
+        input,
+        true,
+        signal,
+        lockClient
+      )
     );
     return;
   }
@@ -679,13 +735,25 @@ export async function updateStorageBackend(slug: string, input: StorageBackendUp
   try {
     await withStorageLocationReadAndAdvisoryLock(
       backendLockKey,
-      () => updateStorageBackendUnderLock(slug, input, false)
+      (signal, lockClient) => updateStorageBackendUnderLock(
+        slug,
+        input,
+        false,
+        signal,
+        lockClient
+      )
     );
   } catch (error) {
     if (!(error instanceof StorageLocationWriteLockRequired)) throw error;
     await withStorageLocationWriteAndAdvisoryLock(
       backendLockKey,
-      () => updateStorageBackendUnderLock(slug, input, true)
+      (signal, lockClient) => updateStorageBackendUnderLock(
+        slug,
+        input,
+        true,
+        signal,
+        lockClient
+      )
     );
   }
 }
@@ -696,8 +764,10 @@ export async function deleteStorageBackend(slug: string) {
   }
   await withStorageLocationWriteAndAdvisoryLock(
     `imageshow:storage-backend:${slug}`,
-    async () => {
+    async (signal, lockClient) => {
+      signal.throwIfAborted();
       const snapshot = await storageBackendSnapshot(slug);
+      signal.throwIfAborted();
       if (snapshot.is_default) {
         throw new ApiError(
           400,
@@ -715,6 +785,7 @@ export async function deleteStorageBackend(slug: string) {
         usage.staging_object_count = await countStagingObjects(
           storageConfigFromRow(snapshot)
         );
+        signal.throwIfAborted();
       }
       if (
         usage.image_count
@@ -730,32 +801,42 @@ export async function deleteStorageBackend(slug: string) {
         );
       }
 
-      const deleted = await pool.query(
-        "DELETE FROM storage_backend WHERE slug=$1 AND NOT is_default RETURNING slug",
-        [slug]
-      )
-        .catch((error: unknown) => {
-          if (
-            error
-            && typeof error === "object"
-            && (error as { code?: string }).code === "23503"
-          ) {
+      signal.throwIfAborted();
+      try {
+        await withTransactionOnClient(lockClient, async (client) => {
+          signal.throwIfAborted();
+          const deleted = await client.query(
+            "DELETE FROM storage_backend WHERE slug=$1 AND NOT is_default RETURNING slug",
+            [slug]
+          )
+            .catch((error: unknown) => {
+              if (
+                error
+                && typeof error === "object"
+                && (error as { code?: string }).code === "23503"
+              ) {
+                throw new ApiError(
+                  409,
+                  "storage_backend_in_use",
+                  "该存储后端在删除时被新的数据引用，请刷新后重试"
+                );
+              }
+              throw error;
+            });
+          signal.throwIfAborted();
+          if (!deleted.rowCount) {
             throw new ApiError(
-              409,
-              "storage_backend_in_use",
-              "该存储后端在删除时被新的数据引用，请刷新后重试"
+              400,
+              "storage_default_delete",
+              "后端已被设为默认，不能删除；请刷新后重试"
             );
           }
-          throw error;
         });
-      if (!deleted.rowCount) {
-        throw new ApiError(
-          400,
-          "storage_default_delete",
-          "后端已被设为默认，不能删除；请刷新后重试"
-        );
+      } finally {
+        // The DELETE may commit even if its acknowledgement is lost with the
+        // advisory-lock connection. Never leave an old registry snapshot live.
+        invalidateStorageBackendCache();
       }
-      invalidateStorageBackendCache();
     }
   );
 }

@@ -39,8 +39,8 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | `config/bootstrap-env.ts` | 应用配置播种边界：解析 `NODE_ENV`、首次管理员凭据和首次生成 `config.json` 所需环境变量；集中导出数据、存储、临时文件和日志目录。应用字段只在配置文件首次生成时播种。 |
 | `config/deployment-config.ts` | 部署配置边界：每次启动严格解析 PostgreSQL 与 Redis 环境变量，供主进程、CLI 和检查功能统一使用。监听端口由共享代码常量固定。 |
 | `config/runtime-config.ts` | 完整运行时配置的严格 zod schema、可迁移配置投影、当前配置解析和嵌套 patch 合并。 |
-| `config/runtime-config-store.ts` | `data/config.json` 的读取、按 schema 归一化、原子写入、内存快照、热重载与变更监听；配置文件生成后成为运行时配置真相源。 |
-| `config/config-package.ts` | `imageshow-config` 版本化配置包的构建、严格解析、敏感存储配置投影、slug 冲突预检和带普通异常补偿的导入编排。 |
+| `config/runtime-config-store.ts` | `data/config.json` 的读取、按 schema 归一化、原子写入、内存快照、进程内写租约、revision 补偿、热重载与变更监听；配置文件生成后成为运行时配置真相源。 |
+| `config/config-package.ts` | `imageshow-config` 版本化配置包的构建、严格解析、敏感存储配置投影、slug 冲突预检，以及用同会话 xid8 receipt 判定数据库结果的补偿式导入编排。 |
 | `config/full-config.ts` | 完整运行时配置的访问地址差异、只读预检、共享写锁与精准保存编排。 |
 | `config/fields.ts` | 运行时配置字段的 zod 边界值：站点、上传、链接导入、标准化、缩略图、安全、ALTCHA 和日志等设置校验。 |
 | `config/app-settings.ts` | 设置页可编辑字段的严格嵌套 patch schema、按前端实际用途投影的最小后台设置 DTO、公开站点配置和图片输入 / 缩略图运行时设置；不返回连接配置、完整默认值或纯服务端限流字段，也不负责存储后端注册表。 |
@@ -49,7 +49,7 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 
 | 文件 | 职责 |
 | --- | --- |
-| `core/db.ts` | PostgreSQL 主查询池、独立长生命周期 advisory-lock 池、事务与可靠的组合锁工具、迁移串行执行；锁取得或释放结果不确定时销毁连接，迁移目录优先使用生产 bundle，源码运行时回退到仓库 migrations，账号初始化由入口显式交给 users 领域。 |
+| `core/db.ts` | PostgreSQL 主查询池、独立长生命周期 advisory-lock 池、事务与可靠的组合锁工具、迁移串行执行；持锁连接丢失会发送中止信号并等待回调协作式收口，锁取得或释放结果不确定时销毁连接，迁移 DDL 与版本记录使用持锁的同一会话，迁移目录优先使用生产 bundle，源码运行时回退到仓库 migrations，账号初始化由入口显式交给 users 领域。 |
 | `core/api-error.ts` | 与 HTTP 路由解耦的领域错误 `ApiError`、普通错误消息和 details 边界。 |
 | `core/credentials.ts` | 首次管理员环境凭据的纯校验与规范化，供配置播种和 users 初始化复用。 |
 | `core/byte-range.ts` | 存储 driver 与 HTTP serving 共用的单段 Range 解析，不依赖图片领域。 |
@@ -78,11 +78,12 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | --- | --- |
 | `storage/storage.ts` | 存储操作门面：统一 buffer / remove / list、`resolveReadableObject()`、`publicImageUrls()`、`testStorageBackend()` 与运行目录初始化；verified copy 由 `object-transfer.ts` 统一承载。 |
 | `storage/backend-config.ts` | S3 / WebDAV 配置 schema、`StorageConfig` / 输入类型、默认值和完整性校验。 |
-| `storage/backend-registry.ts` | `storage_backend` 数据库注册表、默认后端、CRUD、排序、启停、脱敏后台 DTO、配置快照与 driver 生命周期；在用物理字段保护、既有对象访问探测和变更后的实例关闭也集中于此。 |
-| `storage/maintenance-lock.ts` | 存储变更共享锁与维护独占锁，避免导入、重分类、迁移和全盘清理互相删除对象。 |
+| `storage/backend-registry.ts` | `storage_backend` 数据库注册表、默认后端、CRUD、排序、启停、脱敏后台 DTO、generation 化配置快照与 driver 生命周期；在用物理字段保护、既有对象访问探测、同锁会话配置事务和变更后的实例关闭也集中于此。 |
+| `storage/maintenance-lock.ts` | 存储变更共享锁与维护独占锁，并把锁连接和失锁 Signal 贯穿组合锁回调，避免导入、重分类、迁移和全盘清理互相删除对象。 |
 | `storage/storage-namespace.ts` | 本地 / S3 / WebDAV 统一物理命名空间 identity；排除凭据等访问参数，并识别两个 slug 是否共享对象键空间。 |
-| `storage/object-transfer.ts` | 流式计算对象 SHA-256 / MD5，区分既有目标冲突与写后完整性故障，并优先使用驱动原生复制；共享命名空间禁止重复写入。 |
+| `storage/object-transfer.ts` | 流式计算对象 SHA-256 / MD5，区分既有目标冲突与写后完整性故障，并优先使用驱动原生复制；共享命名空间禁止重复写入，正式目标采用前检查持久删除租约。 |
 | `storage/image-relocation.ts` | 图片重分类与主题重分配共用的 verified transfer 计划：源校验、候选跟踪、CAS 前准备及提交后清源。 |
+| `storage/move-cleanup.ts` | 固化待删对象的物理命名空间并可靠入队；未解决任务同时作为正式对象键的删除租约，阻止迟到 DELETE 与后继采用并发。 |
 | `storage/storage-backend.ts` | Local / S3 / WebDAV driver 接口、打开结果类型与工厂；缓存和关闭生命周期由注册表拥有。 |
 | `storage/local-backend.ts` | 本地磁盘后端（`/app/data/storage` 下 media / thumbs / _uploads），含空目录回收 `pruneEmptyDirs()`。 |
 | `storage/s3-backend.ts` | S3 / COS 后端：processed image / thumbnail 读写删与服务端复制/移动、`root_path` 前缀。 |
@@ -153,7 +154,7 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | `checks/redis-inspect.ts` | 后台“检查”页的 Redis 健康、随机代际和图片缓存 revision 键值巡检。 |
 | `checks/database-check.ts` | 数据库与随机池一致性检查、回收站候选抽样。 |
 | `checks/storage-check.ts` | 存储一致性检查：缺失原图 / 缩略图、孤儿对象、有效 / 失效 `_uploads` 暂存和不可用后端；只有失效暂存作为问题报告。 |
-| `checks/storage-cleanup.ts` | 存储清理：删除孤儿 media / thumbs 与失效 `_uploads` 对象，保留有效导入会话暂存并回收本地空目录。 |
+| `checks/storage-cleanup.ts` | 存储清理：只删除已无 PostgreSQL 所有者的 media / thumbs / `_uploads`，保留任意图片或导入会话 UUID 对应对象并回收本地空目录。 |
 | `checks/storage-common.ts` | 存储检查共享类型、有效导入会话引用索引、暂存会话 ID 提取 / 分类与 expected media / thumbs 集合计算。 |
 | `checks/storage-migrate.ts` | 后端迁移与旧对象路径迁移入口，完成后重建随机池并失效图片读缓存。 |
 
@@ -198,7 +199,7 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | hooks | `hooks/` 下存放跨页面复用的交互 Hook，例如锚定菜单、动画关闭、滚动锁定；`useAsyncActionStatus.ts` 管理按钮的最短进行态，并按操作边界选择三秒结果态或自然结果，`useAdminPreferences.tsx` 提供 Redis / 用户级 `localStorage` 界面偏好同步。 |
 | lib | 无界面代码，按 `api` / `auth` / `gallery` / `ui` / `upload` 分类；`api/client.ts` 统一解析 JSON / 非 JSON 错误、details 与 401 失效事件，`api/query-keys.ts` 集中查询 key，页面专属状态机留在对应页面目录。 |
 | styles | `styles/` 下存放全局样式入口，按 base / home / gallery / admin / responsive 拆分；后台图片组件和对应移动端规则集中在 `styles/admin/images.css`，不再跨多个 responsive 文件重复覆盖。 |
-| 导入队列 | `pages/admin/uploader/`（统一 ImportJob 队列；最终 MD5 只由服务端 prepared 阶段计算） |
+| 导入队列 | `pages/admin/uploader/`（统一 ImportJob 队列；`materialization-pipeline.ts` 为 upload / download 提供每 lane 单项前瞻调度，最终 MD5 只由服务端 prepared 阶段计算） |
 
 按钮绑定反馈由所在组件持有；只有按钮持续可见、结果未被页面状态自然表达且适合原位
 重试时才保留完整四态。没有唯一按钮承载点的页面反馈由功能父组件持有，二者

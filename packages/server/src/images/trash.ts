@@ -1,7 +1,7 @@
 import { appConfig } from "@imageshow/shared";
 import { pool } from "../core/db.ts";
 import { ApiError, errorMessage } from "../core/api-error.ts";
-import { removeObject } from "../storage/storage.ts";
+import { resolveStorageAccess } from "../storage/backend-registry.ts";
 import { thumbnailRef } from "../storage/image-paths.ts";
 import { withImageStorageMutationLock } from "../storage/maintenance-lock.ts";
 import { restoreImageFromTrash, restoreImagesFromTrash } from "./restore.ts";
@@ -138,7 +138,8 @@ async function markPurgeFailed(row: PurgeRow, error: unknown) {
 }
 
 async function purgeClaimedRow(claim: PurgeRow): Promise<PurgeRow | null> {
-  return withImageStorageMutationLock(claim.id, async () => {
+  return withImageStorageMutationLock(claim.id, async (signal) => {
+    signal.throwIfAborted();
     // A storage migration or theme reassignment may have completed while this
     // purge waited for the per-image location lock. Always delete from the
     // current location owned by this exact purge attempt, never from the claim
@@ -152,13 +153,23 @@ async function purgeClaimedRow(claim: PurgeRow): Promise<PurgeRow | null> {
           AND purge_attempts=$2`,
       [claim.id, claim.purge_attempts]
     )).rows[0] as PurgeRow | undefined;
+    signal.throwIfAborted();
     if (!row) return null;
 
     const thumb = thumbnailRef(row);
-    await Promise.all([
-      removeObject(thumb.prefix, thumb.key, thumb.slug),
-      removeObject("media", row.object_key, row.storage_slug)
+    const storage = await resolveStorageAccess(row.storage_slug);
+    signal.throwIfAborted();
+    const removals = await Promise.allSettled([
+      storage.driver.remove(thumb.prefix, thumb.key),
+      storage.driver.remove("media", row.object_key)
     ]);
+    const removalErrors = removals.flatMap((result) =>
+      result.status === "rejected" ? [result.reason] : []
+    );
+    if (removalErrors.length) {
+      throw new AggregateError(removalErrors, "Failed to remove all image objects");
+    }
+    signal.throwIfAborted();
 
     const deleted = await pool.query(
       `DELETE FROM metadata
@@ -171,6 +182,7 @@ async function purgeClaimedRow(claim: PurgeRow): Promise<PurgeRow | null> {
         RETURNING id`,
       [row.id, row.purge_attempts, row.storage_slug, row.object_key]
     );
+    signal.throwIfAborted();
     return deleted.rowCount ? row : null;
   });
 }

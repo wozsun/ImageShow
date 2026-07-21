@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import type { PoolClient } from "pg";
 import {
   tryWithAdvisoryLocks,
   withAdvisoryLock,
@@ -8,7 +9,20 @@ import {
 } from "../core/db.ts";
 
 const storageLocationLockKey = "imageshow:storage-location";
-const storageLocationLockContext = new AsyncLocalStorage<"read" | "write">();
+type StorageLocationLockContext = {
+  mode: "read" | "write";
+  signal: AbortSignal;
+  lockClient: PoolClient;
+};
+type StorageLockWork<T> = (
+  signal: AbortSignal,
+  lockClient: PoolClient
+) => Promise<T>;
+const storageLocationLockContext = new AsyncLocalStorage<StorageLocationLockContext>();
+
+function combineSignals(first: AbortSignal, second: AbortSignal) {
+  return first === second ? first : AbortSignal.any([first, second]);
+}
 
 /**
  * Hold a shared lease while code resolves a storage slug and reads or mutates
@@ -16,51 +30,80 @@ const storageLocationLockContext = new AsyncLocalStorage<"read" | "write">();
  * helpers can enforce the boundary themselves without consuming another pool
  * connection when their caller already owns it.
  */
-export function withStorageLocationReadLock<T>(work: () => Promise<T>): Promise<T> {
-  if (storageLocationLockContext.getStore()) return work();
+export function withStorageLocationReadLock<T>(work: StorageLockWork<T>): Promise<T> {
+  const held = storageLocationLockContext.getStore();
+  if (held) {
+    held.signal.throwIfAborted();
+    return work(held.signal, held.lockClient);
+  }
   return withAdvisoryLock(
     storageLocationLockKey,
-    () => storageLocationLockContext.run("read", work),
+    (signal, lockClient) => storageLocationLockContext.run(
+      { mode: "read", signal, lockClient },
+      () => work(signal, lockClient)
+    ),
     "shared"
   );
 }
 
 export function withStorageLocationReadAndAdvisoryLock<T>(
   key: string,
-  work: () => Promise<T>
+  work: StorageLockWork<T>
 ): Promise<T> {
   return withStorageLocationReadAndAdvisoryLocks([{ key }], work);
 }
 
 export function withStorageLocationReadAndAdvisoryLocks<T>(
   locks: readonly Omit<AdvisoryLockRequest, "acquisition">[],
-  work: () => Promise<T>
+  work: StorageLockWork<T>
 ): Promise<T> {
-  if (storageLocationLockContext.getStore()) {
-    return withAdvisoryLocks(locks, work);
+  const held = storageLocationLockContext.getStore();
+  if (held) {
+    held.signal.throwIfAborted();
+    return withAdvisoryLocks(locks, (signal, lockClient) => {
+      const combinedSignal = combineSignals(held.signal, signal);
+      return storageLocationLockContext.run(
+        { mode: held.mode, signal: combinedSignal, lockClient },
+        () => work(combinedSignal, lockClient)
+      );
+    });
   }
   return withAdvisoryLocks(
     [
       { key: storageLocationLockKey, mode: "shared" },
       ...locks
     ],
-    () => storageLocationLockContext.run("read", work)
+    (signal, lockClient) => storageLocationLockContext.run(
+      { mode: "read", signal, lockClient },
+      () => work(signal, lockClient)
+    )
   );
 }
 
 export function tryWithStorageLocationReadAndAdvisoryLocks<T>(
   locks: readonly AdvisoryLockRequest[],
-  work: () => Promise<T>
+  work: StorageLockWork<T>
 ): Promise<AdvisoryLockAttempt<T>> {
-  if (storageLocationLockContext.getStore()) {
-    return tryWithAdvisoryLocks(locks, work);
+  const held = storageLocationLockContext.getStore();
+  if (held) {
+    held.signal.throwIfAborted();
+    return tryWithAdvisoryLocks(locks, (signal, lockClient) => {
+      const combinedSignal = combineSignals(held.signal, signal);
+      return storageLocationLockContext.run(
+        { mode: held.mode, signal: combinedSignal, lockClient },
+        () => work(combinedSignal, lockClient)
+      );
+    });
   }
   return tryWithAdvisoryLocks(
     [
       { key: storageLocationLockKey, mode: "shared" },
       ...locks
     ],
-    () => storageLocationLockContext.run("read", work)
+    (signal, lockClient) => storageLocationLockContext.run(
+      { mode: "read", signal, lockClient },
+      () => work(signal, lockClient)
+    )
   );
 }
 
@@ -75,7 +118,7 @@ export function imageStorageMutationLockKey(imageId: string) {
  */
 export function withImageStorageMutationLock<T>(
   imageId: string,
-  work: () => Promise<T>
+  work: StorageLockWork<T>
 ): Promise<T> {
   return withStorageLocationReadAndAdvisoryLock(
     imageStorageMutationLockKey(imageId),
@@ -89,32 +132,50 @@ export function withImageStorageMutationLock<T>(
  * read lease would deadlock in PostgreSQL, so fail loudly if a caller violates
  * the lock ordering contract.
  */
-export function withStorageLocationWriteLock<T>(work: () => Promise<T>): Promise<T> {
+export function withStorageLocationWriteLock<T>(work: StorageLockWork<T>): Promise<T> {
   const held = storageLocationLockContext.getStore();
-  if (held === "write") return work();
-  if (held === "read") {
+  if (held?.mode === "write") {
+    held.signal.throwIfAborted();
+    return work(held.signal, held.lockClient);
+  }
+  if (held?.mode === "read") {
     throw new Error("Cannot upgrade a storage location read lock to a write lock");
   }
   return withAdvisoryLock(
     storageLocationLockKey,
-    () => storageLocationLockContext.run("write", work)
+    (signal, lockClient) => storageLocationLockContext.run(
+      { mode: "write", signal, lockClient },
+      () => work(signal, lockClient)
+    )
   );
 }
 
 export function withStorageLocationWriteAndAdvisoryLock<T>(
   key: string,
-  work: () => Promise<T>
+  work: StorageLockWork<T>
 ): Promise<T> {
   const held = storageLocationLockContext.getStore();
-  if (held === "read") {
+  if (held?.mode === "read") {
     throw new Error("Cannot upgrade a storage location read lock to a write lock");
   }
-  if (held === "write") return withAdvisoryLock(key, work);
+  if (held?.mode === "write") {
+    held.signal.throwIfAborted();
+    return withAdvisoryLock(key, (signal, lockClient) => {
+      const combinedSignal = combineSignals(held.signal, signal);
+      return storageLocationLockContext.run(
+        { mode: "write", signal: combinedSignal, lockClient },
+        () => work(combinedSignal, lockClient)
+      );
+    });
+  }
   return withAdvisoryLocks(
     [
       { key: storageLocationLockKey },
       { key }
     ],
-    () => storageLocationLockContext.run("write", work)
+    (signal, lockClient) => storageLocationLockContext.run(
+      { mode: "write", signal, lockClient },
+      () => work(signal, lockClient)
+    )
   );
 }

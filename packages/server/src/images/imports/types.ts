@@ -25,6 +25,7 @@ export type MetadataPayload = ImportMetadata & {
 export type PreparedPayload = MetadataPayload & {
   mode: ImportMode;
   source_url: string;
+  prepared_image_key: string;
   prepared_thumbnail_key: string;
   original_size: number;
   original_width: number;
@@ -51,6 +52,8 @@ export type ImportSessionRow = {
   source_url: string;
   expected_size: string | number | null;
   final_object_key: string;
+  execution_token: string | null;
+  raw_token: string | null;
   metadata_payload: MetadataPayload;
   prepared_payload: Partial<PreparedPayload>;
   request_hash: string;

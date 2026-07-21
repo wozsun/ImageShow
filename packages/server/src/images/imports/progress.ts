@@ -121,24 +121,38 @@ export async function clearImportCancelled(id: string) {
   await redis.del(cancelledImportKey(id)).catch(() => undefined);
 }
 
-export async function assertImportStillPreparing(id: string) {
-  const row = (await pool.query("SELECT status FROM import_session WHERE id=$1", [id])).rows[0] as {
+export async function assertImportStillPreparing(id: string, executionToken: string) {
+  const row = (await pool.query(
+    "SELECT status, execution_token FROM import_session WHERE id=$1",
+    [id]
+  )).rows[0] as {
     status?: ImportStatus;
+    execution_token?: string | null;
   } | undefined;
   if (!row || row.status === "cancelled") throw new ApiError(409, "import_cancelled", "导入已取消");
   if (row.status !== "preparing") {
     throw new ApiError(409, "invalid_import_state", "导入任务状态已变化");
   }
+  if (row.execution_token !== executionToken) {
+    throw new ApiError(409, "import_execution_fenced", "导入处理执行权已转移");
+  }
 }
 
-export async function markImportFailed(id: string, error: unknown) {
+export async function markImportFailed(
+  id: string,
+  error: unknown,
+  executionToken: string
+) {
   let failedRowCount: number | null | undefined;
   try {
     failedRowCount = (await pool.query(
       `UPDATE import_session
-       SET status='failed', error=$2, updated_at=now()
-       WHERE id=$1 AND status IN ('materializing','preparing')`,
-      [id, errorMessage(error)]
+       SET status='failed', execution_token=NULL, raw_token=NULL,
+           error=$2, updated_at=now()
+       WHERE id=$1
+         AND status IN ('materializing','preparing')
+         AND execution_token=$3::uuid`,
+      [id, errorMessage(error), executionToken]
     )).rowCount;
   } catch {
     // The UPDATE may have committed before the client observed the failure.

@@ -318,6 +318,70 @@ export async function countUnresolvedMoveCleanupJobs(storageSlug: string) {
     ?.cleanup_job_count ?? 0;
 }
 
+export type UnresolvedMoveCleanupReference = {
+  backend: string;
+  prefix: "media" | "thumbs";
+  key: string;
+  namespace_identity: string | null;
+};
+
+/** Unresolved rows are deletion leases for the exact physical object. */
+export async function listUnresolvedMoveCleanupReferences(
+  prefix: "media" | "thumbs",
+  key: string
+): Promise<UnresolvedMoveCleanupReference[]> {
+  const rows = (await pool.query(
+    `WITH unresolved AS (
+       SELECT payload,
+              CASE
+                WHEN jsonb_typeof(payload->'objects')='array'
+                  THEN payload->'objects'
+                ELSE '[]'::jsonb
+              END AS objects
+         FROM background_job
+        WHERE type='move.cleanup'
+          AND status IN ('pending', 'running', 'failed')
+     ), cleanup_references AS (
+       SELECT NULLIF(object->>'backend', '') AS backend,
+              object->>'prefix' AS prefix,
+              object->>'key' AS key,
+              NULLIF(object->>'namespace_identity', '') AS namespace_identity
+         FROM unresolved
+         CROSS JOIN LATERAL jsonb_array_elements(objects) AS object
+       UNION ALL
+       SELECT NULLIF(payload->>'backend', ''),
+              'media',
+              payload->>'object_key',
+              NULL
+         FROM unresolved
+        WHERE jsonb_array_length(objects)=0
+          AND payload->>'object_key' IS NOT NULL
+       UNION ALL
+       SELECT NULLIF(payload->>'backend', ''),
+              'thumbs',
+              regexp_replace(payload->>'object_key', '\\.[^/.]+$', '.webp'),
+              NULL
+         FROM unresolved
+        WHERE jsonb_array_length(objects)=0
+          AND payload->>'object_key' IS NOT NULL
+     )
+     SELECT DISTINCT backend, prefix, key, namespace_identity
+       FROM cleanup_references
+      WHERE backend IS NOT NULL
+        AND prefix=$1
+        AND key=$2`,
+    [prefix, key]
+  )).rows;
+  return rows.map((row) => ({
+    backend: String(row.backend),
+    prefix: row.prefix as "media" | "thumbs",
+    key: String(row.key),
+    namespace_identity: row.namespace_identity
+      ? String(row.namespace_identity)
+      : null
+  }));
+}
+
 /** Reset only permanently exhausted cleanup work that references one backend. */
 export async function retryExhaustedMoveCleanupJobs(storageSlug: string) {
   const result = await pool.query(

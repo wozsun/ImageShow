@@ -1,7 +1,11 @@
 import { open, readdir, stat } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { runtimePaths } from "../config/bootstrap-env.ts";
-import { getRuntimeConfig, updateRuntimeConfig } from "../config/runtime-config-store.ts";
+import {
+  getRuntimeConfig,
+  updateRuntimeConfig,
+  withRuntimeConfigWriteLease
+} from "../config/runtime-config-store.ts";
 import { ApiError } from "./api-error.ts";
 
 const logFilePattern = /^app\.log(?:\.\d+)?$/;
@@ -75,10 +79,12 @@ export async function readRecentLogFile(input: { file?: string | null; limit?: s
   };
 }
 
-export function updateLogLevel(level: string) {
+export async function updateLogLevel(level: string) {
   if (!logLevels.includes(level as LogLevel)) {
     throw new ApiError(400, "invalid_log_level", "日志等级无效");
   }
-  updateRuntimeConfig({ log: { ...getRuntimeConfig().log, level: level as LogLevel } });
-  return { level: getRuntimeConfig().log.level };
+  return withRuntimeConfigWriteLease(async () => {
+    await updateRuntimeConfig({ log: { ...getRuntimeConfig().log, level: level as LogLevel } });
+    return { level: getRuntimeConfig().log.level };
+  });
 }

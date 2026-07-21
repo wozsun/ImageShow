@@ -2,6 +2,7 @@ import type { ImportJob } from "../../../lib/types.js";
 import {
   cancelStoredImport,
   createImportSession,
+  getStoredImportStatus,
   prepareImportSession,
   type ImportSessionCreateInput,
   type ImportSessionHandle,
@@ -20,6 +21,67 @@ export type ImportAttemptResult = {
   prepared: PreparedImport;
   acceptance: PreparedApplyResult;
 };
+
+const preparationAdmissionStatuses = new Set([
+  "preparing",
+  "ready",
+  "committing",
+  "finalized"
+]);
+
+function abortableDelay(milliseconds: number, signal: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    if (signal.aborted) {
+      reject(signal.reason);
+      return;
+    }
+    const timer = globalThis.setTimeout(done, milliseconds);
+    function done() {
+      signal.removeEventListener("abort", aborted);
+      resolve();
+    }
+    function aborted() {
+      globalThis.clearTimeout(timer);
+      reject(signal.reason);
+    }
+    signal.addEventListener("abort", aborted, { once: true });
+  });
+}
+
+async function waitForPreparationAdmission<T>(
+  sessionId: string,
+  preparation: Promise<T>,
+  signal: AbortSignal,
+  onAdmitted: () => void
+) {
+  const completion = preparation.then(
+    (value) => ({ kind: "complete" as const, ok: true as const, value }),
+    (error: unknown) => ({ kind: "complete" as const, ok: false as const, error })
+  );
+  while (true) {
+    const observed = await Promise.race([
+      completion,
+      getStoredImportStatus(sessionId, signal).then(
+        (status) => ({ kind: "status" as const, status }),
+        () => ({ kind: "status" as const, status: undefined })
+      )
+    ]);
+    if (observed.kind === "complete") {
+      onAdmitted();
+      if (!observed.ok) throw observed.error;
+      return observed.value;
+    }
+    if (observed.status
+      && preparationAdmissionStatuses.has(observed.status.status)) {
+      onAdmitted();
+      return completion.then((result) => {
+        if (!result.ok) throw result.error;
+        return result.value;
+      });
+    }
+    await abortableDelay(50, signal);
+  }
+}
 
 export async function cancelImportAttempt(
   queue: ImportQueueApi,
@@ -60,7 +122,7 @@ export async function cancelImportAttempt(
   }
 }
 
-export async function runImportAttempt(options: {
+export async function materializeImportAttempt(options: {
   queue: AppendImportQueueApi;
   job: ImportJob;
   controller: AbortController;
@@ -68,8 +130,7 @@ export async function runImportAttempt(options: {
   session?: ImportSessionHandle;
   onSession: (session: ImportSessionHandle) => void;
   materialize: (session: ImportSessionHandle) => Promise<void>;
-  onPreparing: () => void;
-}): Promise<ImportAttemptResult | null> {
+}): Promise<ImportSessionHandle | null> {
   const { queue, job, controller } = options;
   const attemptKey = job.attemptKey;
   const session = options.session
@@ -85,9 +146,35 @@ export async function runImportAttempt(options: {
     await cancelStoredImport(session.id).catch(() => undefined);
     return null;
   }
+  return session;
+}
 
+export async function prepareMaterializedImportAttempt(options: {
+  queue: AppendImportQueueApi;
+  job: ImportJob;
+  controller: AbortController;
+  session: ImportSessionHandle;
+  onPreparing: () => void;
+  startSuccessor: () => void;
+}): Promise<ImportAttemptResult | null> {
+  const { queue, job, controller, session } = options;
+  const attemptKey = job.attemptKey;
+  if (!isCurrentImportAttempt(queue, job.id, attemptKey)) {
+    await cancelStoredImport(session.id).catch(() => undefined);
+    return null;
+  }
   options.onPreparing();
-  const prepared = await prepareImportSession(session, controller.signal);
+  const preparation = prepareImportSession(session, controller.signal);
+  // The server can queue a prepare request behind its global limiter while the
+  // session remains received. Open lookahead only after authoritative status
+  // proves that this item entered (or already exited) preparing.
+  const preparedPromise = waitForPreparationAdmission(
+    session.id,
+    preparation,
+    controller.signal,
+    options.startSuccessor
+  );
+  const prepared = await preparedPromise;
   const acceptance = applyPreparedResult(queue, job.id, attemptKey, prepared);
   if (acceptance.status === "stale") {
     await cancelStoredImport(session.id).catch(() => undefined);

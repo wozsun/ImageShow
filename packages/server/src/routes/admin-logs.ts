@@ -29,7 +29,7 @@ export function registerAdminLogRoutes(app: Hono) {
 
   app.post(`${adminApiBasePath}/logs/level`, requireSuper, async (c) => {
     const body = await c.req.json().catch(() => ({}));
-    return c.json(ok(updateLogLevel(String(body.level ?? ""))));
+    return c.json(ok(await updateLogLevel(String(body.level ?? ""))));
   });
 
   app.post(`${adminApiBasePath}/logs/client-errors`, async (c) => {

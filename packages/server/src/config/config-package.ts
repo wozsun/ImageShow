@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { appConfig, slugPattern, type RuntimeConfig } from "@imageshow/shared";
-import { withAdvisoryLock } from "../core/db.ts";
+import { inspectTransactionOutcome, withAdvisoryLock } from "../core/db.ts";
 import { ApiError } from "../core/api-error.ts";
 import { applicationVersion } from "../core/application-version.ts";
 import {
@@ -18,7 +18,9 @@ import {
 } from "./runtime-config.ts";
 import {
   getRuntimeConfig,
-  updateRuntimeConfig
+  replaceRuntimeConfigIfRevision,
+  updateRuntimeConfigWithRevision,
+  withRuntimeConfigWriteLease
 } from "./runtime-config-store.ts";
 import { advancedConfigWriteLockKey } from "./full-config.ts";
 
@@ -230,42 +232,65 @@ export async function previewConfigPackage(value: unknown) {
 }
 
 export async function importConfigPackage(value: unknown, slugMappings: Record<string, string>) {
-  return withAdvisoryLock(advancedConfigWriteLockKey, async () => {
-    const pkg = parseConfigPackage(value);
-    const existingSlugs = new Set((await listStorageBackends()).map((backend) => backend.slug));
-    const resolved = resolveImportedStorageBackends(pkg, existingSlugs, slugMappings);
-    const previousRuntimeConfig = structuredClone(getRuntimeConfig());
-    let runtimeConfigUpdated = false;
+  return withRuntimeConfigWriteLease(() => withAdvisoryLock(
+    advancedConfigWriteLockKey,
+    async (signal, lockClient) => {
+      signal.throwIfAborted();
+      const pkg = parseConfigPackage(value);
+      const existingSlugs = new Set((await listStorageBackends()).map((backend) => backend.slug));
+      signal.throwIfAborted();
+      const resolved = resolveImportedStorageBackends(pkg, existingSlugs, slugMappings);
+      const previousRuntimeConfig = structuredClone(getRuntimeConfig());
+      const importedBackends = resolved.map((backend) => ({
+        slug: backend.slug,
+        display_name: backend.display_name,
+        type: backend.type,
+        enabled: backend.enabled,
+        is_default: backend.is_default,
+        config: backend.type === "s3" ? backend.s3 : backend.webdav
+      }));
+      let appliedRuntimeConfigRevision: number | null = null;
+      let importTransactionId: string | null = null;
 
-    try {
-      await importStorageBackends(
-        resolved.map((backend) => ({
-          slug: backend.slug,
-          display_name: backend.display_name,
-          type: backend.type,
-          enabled: backend.enabled,
-          is_default: backend.is_default,
-          config: backend.type === "s3" ? backend.s3 : backend.webdav
-        })),
-        () => {
-          runtimeConfigUpdated = true;
-          updateRuntimeConfig(pkg.config);
+      try {
+        await importStorageBackends(
+          importedBackends,
+          async () => {
+            signal.throwIfAborted();
+            appliedRuntimeConfigRevision = (
+              await updateRuntimeConfigWithRevision(pkg.config)
+            ).revision;
+          },
+          lockClient,
+          (transactionId) => {
+            importTransactionId = transactionId;
+          }
+        );
+        signal.throwIfAborted();
+      } catch (error) {
+        if (appliedRuntimeConfigRevision !== null) {
+          const outcome = importTransactionId
+            ? await inspectTransactionOutcome(importTransactionId)
+              .catch(() => "unknown" as const)
+            : "unknown";
+          try {
+            if (outcome === "rolled_back") {
+              await replaceRuntimeConfigIfRevision(
+                appliedRuntimeConfigRevision,
+                previousRuntimeConfig
+              );
+            }
+          } catch (restoreError) {
+            throw new AggregateError([error, restoreError], "导入失败，且无法恢复原运行时配置");
+          }
         }
-      );
-    } catch (error) {
-      if (runtimeConfigUpdated) {
-        try {
-          updateRuntimeConfig(previousRuntimeConfig);
-        } catch (restoreError) {
-          throw new AggregateError([error, restoreError], "导入失败，且无法恢复原运行时配置");
-        }
+        throw error;
       }
-      throw error;
-    }
 
-    return {
-      imported_backends: resolved.map((backend) => backend.slug),
-      default_backend: resolved.find((backend) => backend.is_default)?.slug ?? null
-    };
-  });
+      return {
+        imported_backends: resolved.map((backend) => backend.slug),
+        default_backend: resolved.find((backend) => backend.is_default)?.slug ?? null
+      };
+    }
+  ));
 }

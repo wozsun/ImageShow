@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { ImportJob } from "../../../lib/types.js";
 import {
   browserUuid,
@@ -6,13 +6,25 @@ import {
   isUploadableImage,
   normalizeAuthor,
   normalizeTheme,
-  runWithConcurrency,
   type ImportAttributeDefaults
 } from "../../../lib/upload/upload-utils.js";
 import { retryPrepareJob } from "./import-job-utils.js";
 import { isCurrentImportAttempt, type AppendImportQueueApi } from "./prepared-result.js";
-import { cancelStoredImport, uploadLocalRaw } from "./import-api.js";
-import { applyImportAttemptFailure, cancelImportAttempt, runImportAttempt } from "./import-attempt.js";
+import {
+  cancelStoredImport,
+  uploadLocalRaw,
+  type ImportSessionHandle
+} from "./import-api.js";
+import {
+  applyImportAttemptFailure,
+  cancelImportAttempt,
+  materializeImportAttempt,
+  prepareMaterializedImportAttempt
+} from "./import-attempt.js";
+import {
+  MaterializationPipeline,
+  type MaterializationPipelineTask
+} from "./materialization-pipeline.js";
 
 function fileFingerprint(file: File) {
   // 这里只做浏览器内“同一文件重复选择”的快速去重；最终内容去重仍以服务端标准化后的 md5 为准。
@@ -29,70 +41,144 @@ export function useLocalUploadImport(options: {
 }) {
   const { queue, defaults, storageSlug, maxItems, maxBytes, concurrency } = options;
   const activeRequests = useRef(new Map<string, { attemptKey: string; abort: () => void }>());
+  const mounted = useRef(true);
+  const pipelineRef = useRef<MaterializationPipeline<ImportSessionHandle> | null>(null);
+  if (!pipelineRef.current) {
+    pipelineRef.current = new MaterializationPipeline<ImportSessionHandle>(concurrency);
+  }
+  const pipeline = pipelineRef.current;
 
-  const prepare = useCallback(async (job: ImportJob) => {
-    if (!job.file) return;
+  useEffect(() => {
+    pipeline.setConcurrency(concurrency);
+  }, [concurrency, pipeline]);
+
+  useEffect(() => {
+    mounted.current = true;
+    pipeline.resume();
+    return () => {
+      mounted.current = false;
+      for (const request of activeRequests.current.values()) request.abort();
+      activeRequests.current.clear();
+      pipeline.dispose();
+      const sessionIds = queue.jobsRef.current
+        .filter((job) => job.kind === "local" && job.sessionId)
+        .filter((job) => !["done", "skipped", "cancelled"].includes(job.status))
+        .map((job) => job.sessionId!);
+      for (const sessionId of new Set(sessionIds)) {
+        void cancelStoredImport(sessionId).catch(() => undefined);
+      }
+    };
+  }, [pipeline, queue]);
+
+  const pipelineTask = useCallback((job: ImportJob): MaterializationPipelineTask<ImportSessionHandle> => {
     const attemptKey = job.attemptKey;
-    const controller = new AbortController();
-    activeRequests.current.set(job.id, { attemptKey, abort: () => controller.abort() });
-    try {
-      queue.updateJob(job.id, { status: "queued", message: "创建上传会话", transferProgress: 0 });
-      const result = await runImportAttempt({
-        queue,
-        job,
-        controller,
-        createInput: {
-          ...job.draft,
-          mode: "upload",
-          theme: normalizeTheme(job.draft.theme),
-          author: normalizeAuthor(job.draft.author),
-          size: job.file.size,
-          idempotency_key: attemptKey,
-          storage_slug: job.storageSlug,
-          batch_time: job.batchTime,
-          manifest_position: job.manifestPosition
-        },
-        onSession: (session) => queue.updateJob(job.id, { sessionId: session.id }),
-        materialize: async (session) => {
-          queue.updateJob(job.id, { status: "uploading", message: "浏览器上传原文件", transferProgress: 0 });
-          const request = uploadLocalRaw(session, job.file!, {
-            onProgress: (transferProgress) => {
-              if (isCurrentImportAttempt(queue, job.id, attemptKey)) queue.updateJob(job.id, { transferProgress });
-            },
-            onUploaded: () => {
-              if (isCurrentImportAttempt(queue, job.id, attemptKey)) {
-                queue.updateJob(job.id, { status: "processing", message: "上传完成，等待服务端处理", transferProgress: undefined });
-              }
-            }
-          });
-          // XHR 才能提供上传进度；取消时同时中断会话请求和文件传输。
-          activeRequests.current.set(job.id, {
-            attemptKey,
-            abort: () => {
-              controller.abort();
-              request.abort();
-            }
-          });
-          await request.promise;
-        },
-        onPreparing: () => {
-          activeRequests.current.set(job.id, { attemptKey, abort: () => controller.abort() });
-          queue.updateJob(job.id, { status: "processing", message: "上传完成，等待服务端处理", transferProgress: undefined });
+    let controller: AbortController | undefined;
+    let sessionId: string | undefined;
+    let sessionKnown: Promise<string | undefined> | undefined;
+    let resolveSessionKnown: ((id: string | undefined) => void) | undefined;
+    return {
+      materialize: async () => {
+        if (!job.file || !mounted.current || !isCurrentImportAttempt(queue, job.id, attemptKey)) {
+          return null;
         }
-      });
-      if (!result) return;
-      if (result.acceptance.status === "duplicate") {
-        await cancelStoredImport(result.session.id).catch(() => undefined);
-        if (isCurrentImportAttempt(queue, job.id, attemptKey)) {
-          queue.updateJob(job.id, { status: "cancelled", message: "批次内最终文件重复，已取消" });
+        controller = new AbortController();
+        sessionKnown = new Promise((resolve) => {
+          resolveSessionKnown = resolve;
+        });
+        activeRequests.current.set(job.id, { attemptKey, abort: () => controller?.abort() });
+        queue.updateJob(job.id, { status: "queued", message: "创建上传会话", transferProgress: 0 });
+        try {
+          return await materializeImportAttempt({
+            queue,
+            job,
+            controller,
+            createInput: {
+              ...job.draft,
+              mode: "upload",
+              theme: normalizeTheme(job.draft.theme),
+              author: normalizeAuthor(job.draft.author),
+              size: job.file.size,
+              idempotency_key: attemptKey,
+              storage_slug: job.storageSlug,
+              batch_time: job.batchTime,
+              manifest_position: job.manifestPosition
+            },
+            onSession: (session) => {
+              sessionId = session.id;
+              resolveSessionKnown?.(session.id);
+              resolveSessionKnown = undefined;
+              queue.updateJob(job.id, { sessionId: session.id });
+            },
+            materialize: async (session) => {
+              queue.updateJob(job.id, { status: "uploading", message: "浏览器上传原文件", transferProgress: 0 });
+              const request = uploadLocalRaw(session, job.file!, {
+                onProgress: (transferProgress) => {
+                  if (isCurrentImportAttempt(queue, job.id, attemptKey)) queue.updateJob(job.id, { transferProgress });
+                },
+                onUploaded: () => {
+                  if (isCurrentImportAttempt(queue, job.id, attemptKey)) {
+                    queue.updateJob(job.id, { status: "processing", message: "上传完成，等待服务端处理", transferProgress: undefined });
+                  }
+                }
+              });
+              // XHR 才能提供上传进度；取消时同时中断会话请求和文件传输。
+              activeRequests.current.set(job.id, {
+                attemptKey,
+                abort: () => {
+                  controller?.abort();
+                  request.abort();
+                }
+              });
+              await request.promise;
+            }
+          });
+        } finally {
+          resolveSessionKnown?.(sessionId);
+          resolveSessionKnown = undefined;
+        }
+      },
+      prepare: async (session, startSuccessor) => {
+        if (!controller) return;
+        activeRequests.current.set(job.id, { attemptKey, abort: () => controller?.abort() });
+        const result = await prepareMaterializedImportAttempt({
+          queue,
+          job,
+          controller,
+          session,
+          startSuccessor,
+          onPreparing: () => {
+            queue.updateJob(job.id, { status: "processing", message: "上传完成，等待服务端处理", transferProgress: undefined });
+          }
+        });
+        if (!result) return;
+        if (result.acceptance.status === "duplicate") {
+          await cancelStoredImport(result.session.id).catch(() => undefined);
+          if (isCurrentImportAttempt(queue, job.id, attemptKey)) {
+            queue.updateJob(job.id, { status: "cancelled", message: "批次内最终文件重复，已取消" });
+          }
+        }
+      },
+      onError: (error) => {
+        applyImportAttemptFailure(queue, job.id, attemptKey, error);
+      },
+      onDiscard: async () => {
+        if (activeRequests.current.get(job.id)?.attemptKey === attemptKey) {
+          activeRequests.current.get(job.id)?.abort();
+        }
+        const knownSessionId = sessionId ?? await sessionKnown;
+        if (knownSessionId) await cancelStoredImport(knownSessionId).catch(() => undefined);
+      },
+      onSettled: () => {
+        if (activeRequests.current.get(job.id)?.attemptKey === attemptKey) {
+          activeRequests.current.delete(job.id);
         }
       }
-    } catch (error) {
-      applyImportAttemptFailure(queue, job.id, attemptKey, error);
-    } finally {
-      if (activeRequests.current.get(job.id)?.attemptKey === attemptKey) activeRequests.current.delete(job.id);
-    }
+    };
   }, [queue]);
+
+  const enqueue = useCallback((job: ImportJob) => {
+    return pipeline.enqueue([pipelineTask(job)]);
+  }, [pipeline, pipelineTask]);
 
   const addFiles = useCallback(async (files: FileList | null) => {
     const existing = new Set(queue.jobsRef.current.map((job) => job.fileFingerprint).filter(Boolean));
@@ -135,9 +221,17 @@ export function useLocalUploadImport(options: {
         originalSize: file.size
       };
     }));
+    if (!mounted.current) {
+      for (const job of jobs) {
+        if (job.objectUrl?.startsWith("blob:")) URL.revokeObjectURL(job.objectUrl);
+      }
+      return;
+    }
     queue.appendJobs(jobs);
-    void runWithConcurrency(jobs.filter((job) => job.status === "queued"), concurrency, prepare);
-  }, [concurrency, defaults, maxBytes, maxItems, prepare, queue, storageSlug]);
+    void pipeline.enqueue(
+      jobs.filter((job) => job.status === "queued").map(pipelineTask)
+    );
+  }, [defaults, maxBytes, maxItems, pipeline, pipelineTask, queue, storageSlug]);
 
   const cancel = useCallback(async (job: ImportJob) => {
     return cancelImportAttempt(
@@ -165,8 +259,8 @@ export function useLocalUploadImport(options: {
       transferProgress: 0
     };
     queue.updateJob(job.id, next);
-    await prepare(next);
-  }, [prepare, queue]);
+    await enqueue(next);
+  }, [enqueue, queue]);
 
   return { addFiles, cancel, retry };
 }

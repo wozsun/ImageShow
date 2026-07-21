@@ -1,5 +1,5 @@
 import { createWriteStream } from "node:fs";
-import { mkdir, readdir, rename, rm, stat } from "node:fs/promises";
+import { link, mkdir, readdir, rm, stat } from "node:fs/promises";
 import { dirname, join, normalize, sep } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { runtimePaths } from "../../config/bootstrap-env.ts";
@@ -8,7 +8,12 @@ import { pool } from "../../core/db.ts";
 import { nodeReadableFromWeb } from "../../storage/stream-buffer.ts";
 import { tryWithImportSessionLock } from "./session-lock.ts";
 
-const rawImportFilePattern = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.raw(?:\.part)?$/i;
+const uuidPattern = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+const uuidOnlyPattern = new RegExp(`^${uuidPattern}$`, "i");
+const rawImportFilePattern = new RegExp(
+  `^(${uuidPattern})\\.raw(?:\\.part|\\.${uuidPattern}(?:\\.part)?)?$`,
+  "i"
+);
 
 async function statIfExists(path: string) {
   try {
@@ -26,14 +31,47 @@ export function rawImportPath(id: string) {
   return path;
 }
 
+export function rawImportPartPath(id: string, executionToken: string) {
+  return `${rawImportAttemptPath(id, executionToken)}.part`;
+}
+
+export function rawImportAttemptPath(id: string, executionToken: string) {
+  const target = rawImportPath(id);
+  if (!uuidOnlyPattern.test(executionToken)) {
+    throw new ApiError(400, "unsafe_path", "Unsafe temporary path");
+  }
+  return `${target}.${executionToken}`;
+}
+
+export async function publishRawImportPart(
+  part: string,
+  target: string,
+  signal?: AbortSignal
+) {
+  signal?.throwIfAborted();
+  try {
+    // Both paths are in the same temp directory. Each execution token owns a
+    // unique complete key, so a hard link publishes atomically without any
+    // cross-executor first-wins ambiguity.
+    await link(part, target);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    const existing = await statIfExists(target);
+    if (!existing?.isFile()) throw error;
+  }
+  await rm(part, { force: true }).catch(() => undefined);
+  return target;
+}
+
 export async function writeRawImport(
   id: string,
   body: ReadableStream<Uint8Array>,
   expectedSize: number,
+  executionToken: string,
   signal?: AbortSignal
 ) {
-  const target = rawImportPath(id);
-  const part = `${target}.part`;
+  const target = rawImportAttemptPath(id, executionToken);
+  const part = rawImportPartPath(id, executionToken);
   await mkdir(dirname(target), { recursive: true });
   let total = 0;
   const limiter = new TransformStream<Uint8Array, Uint8Array>({
@@ -54,21 +92,74 @@ export async function writeRawImport(
     if (total !== expectedSize) {
       throw new ApiError(400, "size_mismatch", "Upload size mismatch", { expected: expectedSize, actual: total });
     }
-    await rename(part, target);
-    return target;
+    return await publishRawImportPart(part, target, signal);
   } catch (error) {
-    await Promise.all([rm(part, { force: true }), rm(target, { force: true })]);
+    // This attempt owns both names because execution tokens never share them.
+    await rm(part, { force: true });
     throw error;
   }
 }
 
-export async function removeRawImport(id: string) {
-  const path = rawImportPath(id);
-  await Promise.all([rm(path, { force: true }), rm(`${path}.part`, { force: true })]);
+export async function adoptLegacyRawImport(
+  id: string,
+  executionToken: string
+) {
+  const legacy = rawImportPath(id);
+  const target = rawImportAttemptPath(id, executionToken);
+  try {
+    await link(legacy, target);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    const existing = await statIfExists(target);
+    if (!existing?.isFile()) throw error;
+  }
+  await rm(legacy, { force: true });
+  return target;
 }
 
-export async function rawImportExists(id: string) {
-  const info = await statIfExists(rawImportPath(id));
+export async function removeRawImportAttempt(
+  id: string,
+  executionToken: string
+) {
+  const results = await Promise.allSettled([
+    rm(rawImportAttemptPath(id, executionToken), { force: true }),
+    rm(rawImportPartPath(id, executionToken), { force: true })
+  ]);
+  const failures = results
+    .filter((result): result is PromiseRejectedResult => result.status === "rejected")
+    .map((result) => result.reason);
+  if (failures.length) {
+    throw new AggregateError(failures, "Import raw attempt cleanup failed");
+  }
+}
+
+export async function removeRawImport(id: string) {
+  const target = rawImportPath(id);
+  const root = dirname(target);
+  const names = await readdir(root).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === "ENOENT") return [];
+    throw error;
+  });
+  const prefix = `${id}.raw.`;
+  const results = await Promise.allSettled([
+    rm(target, { force: true }),
+    rm(`${target}.part`, { force: true }),
+    ...names
+      .filter((name) => name.startsWith(prefix) && rawImportFilePattern.test(name))
+      .map((name) => rm(join(root, name), { force: true }))
+  ]);
+  const failures = results
+    .filter((result): result is PromiseRejectedResult => result.status === "rejected")
+    .map((result) => result.reason);
+  if (failures.length) {
+    throw new AggregateError(failures, "Import raw cleanup failed");
+  }
+}
+
+export async function rawImportExists(id: string, executionToken?: string) {
+  const info = await statIfExists(executionToken
+    ? rawImportAttemptPath(id, executionToken)
+    : rawImportPath(id));
   return Boolean(info?.isFile());
 }
 
@@ -87,7 +178,8 @@ export async function cleanupOrphanRawImports(maxAgeMs: number) {
     const info = await statIfExists(path);
     if (!info || info.mtimeMs >= cutoff) continue;
 
-    const attempt = await tryWithImportSessionLock(id, async () => {
+    const attempt = await tryWithImportSessionLock(id, async (signal) => {
+      signal.throwIfAborted();
       const referenced = await pool.query(
         "SELECT 1 FROM import_session WHERE id=$1",
         [id]
@@ -98,6 +190,7 @@ export async function cleanupOrphanRawImports(maxAgeMs: number) {
       // cannot be removed using stale directory metadata.
       const current = await statIfExists(path);
       if (!current || current.mtimeMs >= cutoff) return false;
+      signal.throwIfAborted();
       await rm(path, { force: true });
       return true;
     });

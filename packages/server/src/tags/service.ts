@@ -19,15 +19,18 @@ import { resolveTagNames } from "./query.ts";
 export async function createTag(slug: string, displayName = "") {
   assertVocabularySlug("tag", slug);
 
-  const result = await withVocabularyMutationLock("tag", slug, () =>
-    pool.query(
+  const result = await withVocabularyMutationLock("tag", slug, async (signal) => {
+    signal.throwIfAborted();
+    const created = await pool.query(
       `INSERT INTO tag(slug, display_name, sort_order)
        VALUES($1, $2, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM tag))
        ON CONFLICT (slug) DO NOTHING
        RETURNING slug`,
       [slug, displayName]
-    )
-  );
+    );
+    signal.throwIfAborted();
+    return created;
+  });
   assertVocabularyCreated("tag", slug, result.rowCount);
   await synchronizeVocabularyMutation({ entity: "tag" });
 }

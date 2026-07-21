@@ -24,7 +24,6 @@ import {
   ensureThemeWithMutationLockHeld
 } from "../themes/service.ts";
 import {
-  ensureAuthor,
   ensureAuthorWithMutationLockHeld
 } from "../authors/service.ts";
 import {
@@ -34,7 +33,10 @@ import {
   type EntityCacheKind,
   type EntityCountCacheInvalidationBatch,
 } from "../vocab/vocab-cache.ts";
-import { vocabularyMutationLockRequests } from "../vocab/mutation-sync.ts";
+import {
+  vocabularyAssociationLockRequests,
+  withVocabularyAssociationLock
+} from "../vocab/mutation-sync.ts";
 import { detectBrightness } from "./brightness.ts";
 import { deviceFromDimensions, resolveOptionalBrightnessWith, resolveOptionalDeviceWith } from "./classification.ts";
 import type { ImageRecord } from "./presenter.ts";
@@ -163,10 +165,18 @@ export async function updateImageMetadata(id: string, body: unknown, options: Im
 
   if (!classificationRequested) {
     const authorChanged = touchAuthor && authorValue !== current.author;
+    const applyFields = async (signal?: AbortSignal) => {
+      signal?.throwIfAborted();
+      const createdAuthor = parsed.author
+        ? await ensureAuthorWithMutationLockHeld(pool, parsed.author)
+        : false;
+      signal?.throwIfAborted();
+      await applyImageFieldEdits(pool, id, parsed, authorValue, touchAuthor);
+      return createdAuthor;
+    };
     const createdAuthor = parsed.author
-      ? await ensureAuthor(pool, parsed.author)
-      : false;
-    await applyImageFieldEdits(pool, id, parsed, authorValue, touchAuthor);
+      ? await withVocabularyAssociationLock("author", parsed.author, applyFields)
+      : await applyFields();
     const cacheTasks: Array<Promise<unknown>> = [applyOrCollectImageMutationSync({
       id,
       md5: current.md5 ?? "",
@@ -183,13 +193,15 @@ export async function updateImageMetadata(id: string, body: unknown, options: Im
     return;
   }
 
-  const mutateImageLocation = async () => {
+  const mutateImageLocation = async (signal: AbortSignal) => {
+    signal.throwIfAborted();
     // Derive omitted fields only after owning the image location. This keeps a
     // concurrent storage migration from being overwritten by an old snapshot.
     const sourceImage = (await pool.query(
       `SELECT ${mutationImageColumns} FROM metadata WHERE id=$1`,
       [id]
     )).rows[0] as MutationImageRecord | undefined;
+    signal.throwIfAborted();
     if (!sourceImage) throw new ApiError(404, "not_found", "Image not found");
     if (sourceImage.status !== "ready") {
       throw new ApiError(
@@ -210,6 +222,7 @@ export async function updateImageMetadata(id: string, body: unknown, options: Im
         () => detectImageBrightness(sourceImage)
       )
     };
+    signal.throwIfAborted();
     const target = {
       device: next.device ?? sourceImage.device,
       brightness: next.brightness ?? sourceImage.brightness,
@@ -219,18 +232,27 @@ export async function updateImageMetadata(id: string, body: unknown, options: Im
       || target.brightness !== sourceImage.brightness
       || target.theme !== sourceImage.theme;
     const relocation = classificationChanged
-      ? await prepareVerifiedImageRelocation(sourceImage, target, "category_move")
+      ? await prepareVerifiedImageRelocation(
+          sourceImage,
+          target,
+          "category_move",
+          signal
+        )
       : null;
     const createdEntityKinds = new Set<EntityCacheKind>();
-    const client = await pool.connect();
+    let client: PoolClient | undefined;
     let updated: MutationImageRecord;
 
     try {
+      signal.throwIfAborted();
+      client = await pool.connect();
+      signal.throwIfAborted();
       await client.query("BEGIN");
       const locked = (await client.query(
         `SELECT ${mutationImageColumns} FROM metadata WHERE id=$1 FOR UPDATE`,
         [id]
       )).rows[0] as MutationImageRecord | undefined;
+      signal.throwIfAborted();
       if (!locked) throw new ApiError(404, "not_found", "Image not found");
       if (locked.status !== "ready") {
         throw new ApiError(
@@ -267,6 +289,7 @@ export async function updateImageMetadata(id: string, body: unknown, options: Im
         createdEntityKinds.add("author");
       }
 
+      signal.throwIfAborted();
       const result = await client.query(
         `UPDATE metadata
             SET device=$2,
@@ -314,9 +337,10 @@ export async function updateImageMetadata(id: string, body: unknown, options: Im
         );
       }
       updated = updatedRow;
+      signal.throwIfAborted();
       await client.query("COMMIT");
     } catch (error) {
-      await client.query("ROLLBACK").catch(() => undefined);
+      await client?.query("ROLLBACK").catch(() => undefined);
       if (relocation) {
         await discardPreparedImageRelocationIfUnreferenced(
           relocation,
@@ -325,7 +349,7 @@ export async function updateImageMetadata(id: string, body: unknown, options: Im
       }
       throw error;
     } finally {
-      client.release();
+      client?.release();
     }
 
     if (relocation) {
@@ -355,7 +379,7 @@ export async function updateImageMetadata(id: string, body: unknown, options: Im
     ]);
   };
 
-  const vocabularyLocks = vocabularyMutationLockRequests([
+  const vocabularyLocks = vocabularyAssociationLockRequests([
     ...(parsed.author
       ? [{ entity: "author" as const, slug: parsed.author }]
       : []),

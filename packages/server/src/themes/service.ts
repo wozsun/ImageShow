@@ -50,7 +50,8 @@ export function ensureThemeWithMutationLockHeld(
 export async function createTheme(slug: string, displayName: string) {
   assertVocabularySlug("theme", slug, { reserved: ["none"] });
 
-  await withVocabularyMutationLock("theme", slug, async () => {
+  await withVocabularyMutationLock("theme", slug, async (signal) => {
+    signal.throwIfAborted();
     const result = await pool.query(
       `INSERT INTO theme(slug, display_name, sort_order)
        VALUES($1, $2, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM theme))
@@ -58,6 +59,7 @@ export async function createTheme(slug: string, displayName: string) {
        RETURNING slug`,
       [slug, displayName]
     );
+    signal.throwIfAborted();
     assertVocabularyCreated("theme", slug, result.rowCount);
   });
   await synchronizeVocabularyMutation({ entity: "theme" });
@@ -105,7 +107,8 @@ async function reassignThemeImagesToNone(theme: string): Promise<ThemeLookupInva
         mode: "shared"
       },
       { key: imageStorageMutationLockKey(candidate.id) }
-    ], async () => {
+    ], async (signal) => {
+      signal.throwIfAborted();
       const image = (await pool.query(
         `SELECT id, device, brightness, theme, ext, md5, object_key,
                 storage_slug
@@ -113,6 +116,7 @@ async function reassignThemeImagesToNone(theme: string): Promise<ThemeLookupInva
           WHERE id=$1 AND theme=$2`,
         [candidate.id, theme]
       )).rows[0] as RelocatableImage | undefined;
+      signal.throwIfAborted();
       if (!image) return [] as ThemeLookupInvalidation[];
 
       const relocation = await prepareVerifiedImageRelocation(
@@ -122,9 +126,11 @@ async function reassignThemeImagesToNone(theme: string): Promise<ThemeLookupInva
           brightness: image.brightness,
           theme: "none"
         },
-        "theme_reassign"
+        "theme_reassign",
+        signal
       );
       try {
+        signal.throwIfAborted();
         const switched = await pool.query(
           `UPDATE metadata
               SET theme='none', object_key=$3, updated_at=now()
@@ -174,12 +180,17 @@ async function reassignThemeImagesToNone(theme: string): Promise<ThemeLookupInva
   return results.flat();
 }
 
-async function deleteThemeWhenUnreferencedUnderLock(slug: string) {
+async function deleteThemeWhenUnreferencedUnderLock(
+  slug: string,
+  signal: AbortSignal
+) {
+  signal.throwIfAborted();
   const state = (await pool.query(
     `SELECT EXISTS(SELECT 1 FROM theme WHERE slug=$1) AS theme_exists,
             EXISTS(SELECT 1 FROM metadata WHERE theme=$1) AS image_exists`,
     [slug]
   )).rows[0] as { theme_exists: boolean; image_exists: boolean };
+  signal.throwIfAborted();
   if (!state.theme_exists) return { deleted: false, retry: false };
   if (state.image_exists) return { deleted: false, retry: true };
 
@@ -187,6 +198,7 @@ async function deleteThemeWhenUnreferencedUnderLock(slug: string) {
     "DELETE FROM theme WHERE slug=$1",
     [slug]
   )).rowCount);
+  signal.throwIfAborted();
   return { deleted, retry: false };
 }
 
@@ -197,7 +209,7 @@ async function deleteThemeAndReassign(slug: string) {
     const result = await withVocabularyMutationLock(
       "theme",
       slug,
-      () => deleteThemeWhenUnreferencedUnderLock(slug)
+      (signal) => deleteThemeWhenUnreferencedUnderLock(slug, signal)
     );
     if (!result.retry) {
       return { deleted: result.deleted, lookupInvalidations };

@@ -1,10 +1,9 @@
-import { errorMessage } from "../core/api-error.ts";
-import { logger } from "../core/logger.ts";
+import { ApiError } from "../core/api-error.ts";
 import { enqueue } from "../jobs/repository.ts";
+import { listUnresolvedMoveCleanupReferences } from "../jobs/repository.ts";
 import { getStorageBackend } from "./backend-registry.ts";
 import { withStorageLocationReadLock } from "./maintenance-lock.ts";
 import type { StoragePrefix } from "./object-keys.ts";
-import { removeObject } from "./storage.ts";
 import { storageNamespaceIdentity } from "./storage-namespace.ts";
 
 export type MoveCleanupObjectInput = {
@@ -18,10 +17,57 @@ type MoveCleanupObject = MoveCleanupObjectInput & {
   namespace_identity: string;
 };
 
-type FailedRemoval = {
-  object: MoveCleanupObject;
-  error: unknown;
-};
+/**
+ * An unresolved cleanup row owns deletion of its captured physical object.
+ * A successor must not adopt that key until the handler has reached a terminal
+ * state, otherwise a non-cancellable remote DELETE could land after adoption.
+ */
+export async function assertObjectNotPendingCleanup(
+  target: Awaited<ReturnType<typeof getStorageBackend>>,
+  prefix: "media" | "thumbs",
+  key: string
+) {
+  const references = await listUnresolvedMoveCleanupReferences(prefix, key);
+  if (!references.length) return;
+  const targetIdentity = storageNamespaceIdentity(target);
+  const identities = new Map<string, string>();
+
+  for (const reference of references) {
+    let matchesTarget = reference.namespace_identity === targetIdentity;
+    if (!reference.namespace_identity) {
+      if (reference.backend === target.slug) {
+        matchesTarget = true;
+      } else {
+        try {
+          let identity = identities.get(reference.backend);
+          if (!identity) {
+            identity = storageNamespaceIdentity(
+              await getStorageBackend(reference.backend)
+            );
+            identities.set(reference.backend, identity);
+          }
+          matchesTarget = identity === targetIdentity;
+        } catch {
+          // Legacy payloads did not capture a namespace. If their backend can
+          // no longer be resolved, refusing reuse is safer than racing DELETE.
+          matchesTarget = true;
+        }
+      }
+    }
+    if (!matchesTarget) continue;
+    throw new ApiError(
+      409,
+      "storage_object_cleanup_pending",
+      "该存储对象仍由未完成的删除任务占用，请等待清理完成后重试",
+      {
+        backend: target.slug,
+        prefix,
+        key,
+        cleanup_backend: reference.backend
+      }
+    );
+  }
+}
 
 const cleanupEnqueueRetryDelaysMs = [0, 50, 150] as const;
 
@@ -69,64 +115,44 @@ function wait(delayMs: number) {
     : Promise.resolve();
 }
 
-async function enqueueFailedRemovals(
+async function enqueueMoveCleanupWithRetry(
   imageId: string,
-  failures: readonly FailedRemoval[],
-  reason: string
+  objects: readonly MoveCleanupObject[],
+  reason: string,
+  signal: AbortSignal
 ) {
   let lastError: unknown;
   for (const delayMs of cleanupEnqueueRetryDelaysMs) {
+    signal.throwIfAborted();
     await wait(delayMs);
+    signal.throwIfAborted();
     try {
-      await enqueueMoveCleanup(
-        imageId,
-        failures.map((failure) => failure.object),
-        reason
-      );
+      await enqueueMoveCleanup(imageId, objects, reason);
+      signal.throwIfAborted();
       return;
     } catch (error) {
       lastError = error;
     }
   }
-
-  for (const failure of failures) {
-    logger.error("move_cleanup_enqueue_failed", {
-      image_id: imageId,
-      backend: failure.object.backend,
-      namespace_identity: failure.object.namespace_identity,
-      prefix: failure.object.prefix,
-      key: failure.object.key,
-      reason,
-      delete_error: errorMessage(failure.error),
-      enqueue_error: errorMessage(lastError),
-      attempts: cleanupEnqueueRetryDelaysMs.length
-    });
-  }
+  throw lastError;
 }
 
-/** Remove each object independently and preserve every failed deletion. */
-export async function removeObjectsOrEnqueueCleanup(
+/**
+ * Defer deletion to the move.cleanup handler. The handler reacquires the image
+ * lock and re-reads PostgreSQL immediately before removal, so candidates that
+ * a lock-loss successor adopts are retained.
+ */
+export async function enqueueObjectsForCleanup(
   imageId: string,
   objects: readonly MoveCleanupObjectInput[],
   reason: string
 ) {
-  await withStorageLocationReadLock(async () => {
-    // Capture every namespace before deleting anything. If a later removal
-    // fails, its durable task can never follow a mutable slug to a new place.
+  if (!objects.length) return;
+  await withStorageLocationReadLock(async (signal) => {
+    signal.throwIfAborted();
     const captured = await captureCleanupNamespaces(objects);
-    const failed: FailedRemoval[] = [];
-    for (const object of captured) {
-      try {
-        await removeObject(object.prefix, object.key, object.backend);
-      } catch (error) {
-        failed.push({ object, error });
-      }
-    }
-    if (failed.length) {
-      // The database location switch has already succeeded at most call sites.
-      // Preserve that truth and surface a durable operational error if the
-      // bounded queue retries all fail.
-      await enqueueFailedRemovals(imageId, failed, reason);
-    }
+    signal.throwIfAborted();
+    await enqueueMoveCleanupWithRetry(imageId, captured, reason, signal);
+    signal.throwIfAborted();
   });
 }

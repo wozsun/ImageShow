@@ -97,8 +97,8 @@ export function parseSettingsInput(value: unknown) {
   return result.data;
 }
 
-export function reloadAppConfig() {
-  reloadRuntimeConfig();
+export async function reloadAppConfig() {
+  await reloadRuntimeConfig();
 }
 
 export function getInputImageMaxBytes() {
@@ -181,7 +181,7 @@ export function siteConfigPayload() {
   };
 }
 
-export function saveAppSettings(input: AppSettingsInput) {
+export async function saveAppSettings(input: AppSettingsInput) {
   const runtimePatch: RuntimeConfigPatch = {};
   if (input.site) runtimePatch.site = input.site;
   if (input.upload) runtimePatch.upload = input.upload;
@@ -190,5 +190,5 @@ export function saveAppSettings(input: AppSettingsInput) {
   if (input.thumbnail) runtimePatch.thumbnail = input.thumbnail;
   if (input.image_detail) runtimePatch.image_detail = input.image_detail;
   if (input.admin) runtimePatch.admin = input.admin;
-  if (Object.keys(runtimePatch).length) updateRuntimeConfig(runtimePatch);
+  if (Object.keys(runtimePatch).length) await updateRuntimeConfig(runtimePatch);
 }

@@ -29,20 +29,32 @@ export function vocabularyMutationLockKey(
   return `imageshow:${entity}:${slug}`;
 }
 
-export function vocabularyMutationLockRequests(
+export function vocabularyAssociationLockRequests(
   entries: readonly { entity: VocabularyEntity; slug: string }[]
 ) {
   return [...new Set(entries.map(({ entity, slug }) => (
     vocabularyMutationLockKey(entity, slug)
   )))]
     .sort()
-    .map((key) => ({ key }));
+    .map((key) => ({ key, mode: "shared" as const }));
+}
+
+export function withVocabularyAssociationLock<T>(
+  entity: VocabularyEntity,
+  slug: string,
+  work: (signal: AbortSignal) => Promise<T>
+) {
+  return withAdvisoryLock(
+    vocabularyMutationLockKey(entity, slug),
+    work,
+    "shared"
+  );
 }
 
 export function withVocabularyMutationLock<T>(
   entity: VocabularyEntity,
   slug: string,
-  work: () => Promise<T>
+  work: (signal: AbortSignal) => Promise<T>
 ) {
   return withAdvisoryLock(vocabularyMutationLockKey(entity, slug), work);
 }
