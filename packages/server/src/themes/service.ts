@@ -13,10 +13,10 @@ import {
   withVocabularyMutationLock
 } from "../vocab/mutation-sync.ts";
 import { linkThumbnailKey, storageObjectKey, thumbnailObjectKey } from "../storage/image-paths.ts";
-import { copyObject, pruneEmptyStorageDirs, removeObject } from "../storage/storage.ts";
+import { copyObject, pruneEmptyStorageDirs } from "../storage/storage.ts";
 import { withImageStorageMutationLock } from "../storage/maintenance-lock.ts";
-import { enqueue } from "../jobs/repository.ts";
 import type { StoragePrefix } from "../storage/object-keys.ts";
+import { removeObjectsOrEnqueueCleanup } from "../storage/move-cleanup.ts";
 
 async function insertTheme(client: PoolClient, slug: string) {
   if (!slug || slug === "none") return false;
@@ -226,21 +226,7 @@ async function cleanupThemeMoveObjects(
   objects: Array<{ prefix: StoragePrefix; key: string; backend: string }>,
   reason: string
 ) {
-  const failed: typeof objects = [];
-  for (const object of objects) {
-    await removeObject(object.prefix, object.key, object.backend).catch(() => {
-      failed.push(object);
-    });
-  }
-  if (!failed.length) return;
-  await enqueue(
-    "move.cleanup",
-    imageId,
-    { objects: failed, reason },
-    `move.cleanup:${imageId}:${failed.map((object) => (
-      `${object.backend}:${object.prefix}:${object.key}`
-    )).join("|")}`
-  ).catch(() => undefined);
+  await removeObjectsOrEnqueueCleanup(imageId, objects, reason);
 }
 
 async function deleteThemeUnderLock(slug: string) {

@@ -35,10 +35,10 @@ ImageShow 是一个 npm workspaces 单仓多包项目：自托管图库 + 随机
 ## 数据与缓存
 
 - PostgreSQL 是唯一真相源，承载图片元数据、标签 / 主题 / 作者（含 `image_tag` 关联表）、统一导入会话、后台任务、存储后端注册表与管理员账号，共 9 张业务表（见[数据库结构](./database)）。
-- Redis 8 承载两套彼此独立的代际协议。随机池使用 `random:<generation>:*` 的 snapshot 与 axis/category/tag/author 集合；全量与增量更新共享 mutation revision，只有 Lua 原子确认 revision 未变化才发布新 generation。图片读缓存使用统一 `image_cache_revision`：公共列表 / 详情、gallery facets、后台概览、MD5 和对象键 / 缩略图键 / 图片 id lookup 都写入取得的 revision，写入前再次校验，任何图片写操作先推进 revision 再做精确清理。若 Redis 暂时无法确认新 revision，本实例的 dirty fence 会让这些读路径直接回源 PostgreSQL 并跳过缓存写入，修复成功后才恢复命中，因此不会重新发布写操作前的旧快照。原图直连探测、后台实体计数、词表、随机去重历史和管理员界面偏好仍按各自 TTL / revision 管理；界面偏好同时缓存到浏览器 `localStorage`，不进入 PostgreSQL。正常 `/random` 不依赖 PostgreSQL；Redis 为空时启动阶段异步重建随机池，Redis 不可用时随机 API 返回 503，其他读路径按场景降级到 PostgreSQL。
+- Redis 8 承载两套彼此独立的代际协议。随机池使用 `random:<generation>:*` 的 snapshot 与 axis/category/tag/author 集合；全量与增量更新共享 mutation revision，只有 Lua 原子确认 revision 未变化才发布新 generation。图片读缓存使用统一 `image_cache_revision`：公共列表 / 详情、gallery facets、后台概览、MD5 和对象键 / 缩略图键 / 图片 id lookup 都写入取得的 revision，写入前再次校验，任何图片写操作先推进 revision 再做精确清理。import commit 在事务后重读 PostgreSQL 位置，只使用本次失效返回的 expected revision 预热 lookup；revision 已前进时跳过。若 Redis 暂时无法确认新 revision，本实例的 dirty fence 会让这些读路径直接回源 PostgreSQL 并跳过缓存写入，修复成功后才恢复命中，因此不会重新发布写操作前的旧快照。原图直连探测、后台实体计数、词表、随机去重历史和管理员界面偏好仍按各自 TTL / revision 管理；界面偏好同时缓存到浏览器 `localStorage`，不进入 PostgreSQL。正常 `/random` 不依赖 PostgreSQL；Redis 为空时启动阶段异步重建随机池，Redis 不可用时随机 API 返回 503，其他读路径按场景降级到 PostgreSQL。
 - 存储后端按图片记录的 `storage_slug`（外键 → `storage_backend` 注册表）决定：本地磁盘、S3 兼容对象存储或 WebDAV；外部链接（link，自身不存字节，仅缩略图落于某后端）由 `is_link` 标记。注册表同时拥有配置快照、driver 生命周期和统一读写解析入口；图片 serving 只消费已解析的可读对象，不自行拼装第二套后端访问逻辑。详见[存储](./storage)。
 
-分类移动、主题重分配、单图 / 整后端迁移、彻底删除等会改变图片对象位置的操作共用单图 advisory lock。锁内重新读取数据库真值，先复制并回读校验候选对象，再用旧 `storage_slug + object_key` 条件更新翻转引用，最后清理旧对象；失败只清理本次候选。两个 slug 的物理命名空间 identity 相同时先用目标凭据回读校验共享对象，再只切换数据库归属，不复制也不删除。延迟 `move.cleanup` 同样在单图锁内重读当前位置，已被图片重新采用的对象会保留。导入创建、prepared 暂存写入、commit 和暂存清理使用全局共享位置锁；物理位置变更与全盘清理使用独占位置锁。
+import commit、分类移动、主题重分配、单图 / 整后端迁移、彻底删除等会改变图片对象位置的操作共用单图 advisory lock。锁内重新读取数据库真值，候选对象写入后必须回读验证，再用旧 `storage_slug + object_key` 条件更新翻转引用，最后清理旧对象；失败只清理本次候选。两个 slug 的物理命名空间 identity 相同时先用目标凭据回读校验共享对象，再只切换数据库归属，不复制也不删除。延迟 `move.cleanup` 固化原 identity 并在单图锁内重读当前位置；未解决任务会阻止后端改址或删除，已被图片重新采用的对象会保留。导入创建、prepared 暂存写入、commit 和暂存清理使用全局共享位置锁；物理位置变更与全盘清理使用独占位置锁。
 
 生产支持边界为单应用实例停机部署。存储后端注册表和 driver 使用进程内 TTL 缓存，管理端在本实例修改后会即时清理；系统没有跨实例 Redis version / generation 失效协议，因此不要用滚动多实例方式同时写配置或存储注册表。
 

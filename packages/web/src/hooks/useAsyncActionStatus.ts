@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   defaultAsyncActionMinimumPendingMs,
+  defaultUiFeedbackDurationMs,
   waitForMinimumPendingDuration
 } from "../lib/ui/async-action-timing.js";
 
 export type AsyncActionStatus = "idle" | "pending" | "success" | "error";
 
 const defaultMinimumPendingMs = defaultAsyncActionMinimumPendingMs;
-const defaultResultDurationMs = 5_000;
+const defaultResultDurationMs = defaultUiFeedbackDurationMs;
 
 /**
  * 管理按钮型异步操作的短生命周期。pending 至少展示指定时长以避免闪屏，

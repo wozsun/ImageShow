@@ -193,7 +193,7 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | 公共页 | `pages/home/`（首页与专属预览进度）、`pages/gallery/`（画廊、懒加载图片和瀑布流布局；含设备 / 亮度 / 主题 / 标签 / 作者 / 排序筛选） |
 | 后台 | `pages/admin/AdminShell.tsx` 及同目录 Overview / ImageAdmin（列表编排）/ `AdminImageCard` / `useImageAdminOperations` / Uploader（共享 URL 列表、JSONL 清单、微博链接三标签输入窗口与 prepared import 队列）/ EntityAdmin / SettingsPage / AdvancedConfigPage（`advanced-config/` 内含完整 JSON 编辑器和配置包导入模态窗口）/ StorageSettings / UserAdmin / AccountSettings / CheckPage / LogPage / `BatchMetadataModal` / `BatchMetadataSaveSummary` / `useBatchMetadataOperations` / `ImageEditModal` |
 | 组件 | `components/actions` / `data-display` / `feedback` / `form` / `icon` / `image` / `layout` / `navigation` 下的跨页面 UI 组件；`actions/AsyncActionButton.tsx` 用重叠文案稳定异步按钮宽度，`feedback/ActionFeedback.tsx` 只管理单条消息展示与关闭生命周期，`ActionFeedbackRegion.tsx` 管理显式宿主注册、目标路由和缺失区域降级，`layout/WorkspaceHeader.tsx` 提供稳定页头。 |
-| hooks | `hooks/` 下存放跨页面复用的交互 Hook，例如锚定菜单、动画关闭、滚动锁定；`useAsyncActionStatus.ts` 管理按钮的最短进行态，并按操作边界选择五秒结果态或自然结果，`useAdminPreferences.tsx` 提供 Redis / 用户级 `localStorage` 界面偏好同步。 |
+| hooks | `hooks/` 下存放跨页面复用的交互 Hook，例如锚定菜单、动画关闭、滚动锁定；`useAsyncActionStatus.ts` 管理按钮的最短进行态，并按操作边界选择三秒结果态或自然结果，`useAdminPreferences.tsx` 提供 Redis / 用户级 `localStorage` 界面偏好同步。 |
 | lib | 无界面代码，按 `api` / `auth` / `gallery` / `ui` / `upload` 分类；`api/client.ts` 统一解析 JSON / 非 JSON 错误、details 与 401 失效事件，`api/query-keys.ts` 集中查询 key，页面专属状态机留在对应页面目录。 |
 | styles | `styles/` 下存放全局样式入口，按 base / home / gallery / admin / responsive 拆分；后台图片组件和对应移动端规则集中在 `styles/admin/images.css`，不再跨多个 responsive 文件重复覆盖。 |
 | 导入队列 | `pages/admin/uploader/`（统一 ImportJob 队列；最终 MD5 只由服务端 prepared 阶段计算） |

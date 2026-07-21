@@ -140,6 +140,60 @@ export async function listRunnableBackgroundJobCounts() {
   }));
 }
 
+export type MoveCleanupJobCount = {
+  storage_slug: string;
+  cleanup_job_count: number;
+};
+
+async function unresolvedMoveCleanupJobCounts(
+  storageSlug: string | null
+): Promise<MoveCleanupJobCount[]> {
+  const rows = (await pool.query(
+    `WITH unresolved AS (
+       SELECT id, payload
+         FROM background_job
+        WHERE type='move.cleanup'
+          AND status IN ('pending', 'running', 'failed')
+     ), cleanup_references AS (
+       SELECT unresolved.id, reference.backend
+         FROM unresolved
+         CROSS JOIN LATERAL (
+           SELECT NULLIF(unresolved.payload->>'backend', '') AS backend
+           UNION
+           SELECT NULLIF(object->>'backend', '') AS backend
+             FROM jsonb_array_elements(
+               CASE
+                 WHEN jsonb_typeof(unresolved.payload->'objects')='array'
+                   THEN unresolved.payload->'objects'
+                 ELSE '[]'::jsonb
+               END
+             ) AS object
+         ) AS reference
+        WHERE reference.backend IS NOT NULL
+          AND ($1::text IS NULL OR reference.backend=$1)
+     )
+     SELECT backend AS storage_slug,
+            count(DISTINCT id)::int AS cleanup_job_count
+       FROM cleanup_references
+      GROUP BY backend`,
+    [storageSlug]
+  )).rows;
+  return rows.map((row) => ({
+    storage_slug: String(row.storage_slug),
+    cleanup_job_count: Number(row.cleanup_job_count ?? 0)
+  }));
+}
+
+/** Pending, running and every failed cleanup remain physical references. */
+export function listUnresolvedMoveCleanupJobCounts() {
+  return unresolvedMoveCleanupJobCounts(null);
+}
+
+export async function countUnresolvedMoveCleanupJobs(storageSlug: string) {
+  return (await unresolvedMoveCleanupJobCounts(storageSlug))[0]
+    ?.cleanup_job_count ?? 0;
+}
+
 export async function recoverStaleBackgroundJobs() {
   await pool.query(
     `UPDATE background_job

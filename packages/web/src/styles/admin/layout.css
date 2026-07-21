@@ -150,24 +150,31 @@
 .workspace h2 { margin: 0 0 12px; font-size: 16px; display: flex; align-items: center; gap: 8px; }
 .workspace p { margin: 4px 0 0; color: #66717f; }
 
-/* 标题、反馈和操作组使用互不重叠的轨道；空反馈区域不占位。 */
+/* 标题和反馈组成一个不可拆散的首行；操作组在外层拥有独立轨道。 */
 .workspace-grid-head {
   display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   grid-template-areas:
-    "title feedback"
-    "description description";
+    "heading"
+    "description";
   align-items: center;
   row-gap: 0;
 }
 .workspace-grid-head.has-actions {
-  grid-template-columns: max-content minmax(0, 1fr) max-content;
+  grid-template-columns: minmax(0, 1fr) max-content;
   grid-template-areas:
-    "title feedback actions"
-    "description description actions";
+    "heading actions"
+    "description actions";
 }
-.workspace-grid-head > h1 {
-  grid-area: title;
+.workspace-header-title-row {
+  grid-area: heading;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+}
+.workspace-header-title-row > h1 {
   min-height: 36px;
   display: flex;
   align-items: center;
@@ -179,8 +186,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.workspace-grid-head > .action-feedback-region {
-  grid-area: feedback;
+.workspace-header-title-row > .action-feedback-region {
   width: min(460px, 100%);
   max-width: 100%;
   justify-self: end;

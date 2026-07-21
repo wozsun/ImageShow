@@ -56,20 +56,26 @@ export function StorageBackendModal({ target, busy, defaultStatus, defaultAction
   const backend = creating ? null : target;
   const isLocal = backend?.type === "local";
   const locationLocked = Boolean(
-    backend?.image_count || backend?.import_session_count
+    backend?.image_count
+      || backend?.import_session_count
+      || backend?.cleanup_job_count
   );
   const locationUsage = backend
     ? [
         backend.image_count ? `${backend.image_count} 张图片` : "",
         backend.import_session_count
           ? `${backend.import_session_count} 个未清理导入会话`
+          : "",
+        backend.cleanup_job_count
+          ? `${backend.cleanup_job_count} 个待处理清理任务`
           : ""
-      ].filter(Boolean).join("和")
+      ].filter(Boolean).join("、")
     : "";
   const locationUnlockGuidance = backend
     ? [
         backend.image_count ? "通过图片存储迁移搬空后端" : "",
-        backend.import_session_count ? "等待导入会话完成清理" : ""
+        backend.import_session_count ? "等待导入会话完成清理" : "",
+        backend.cleanup_job_count ? "等待对象清理任务解决" : ""
       ].filter(Boolean).join("，并")
     : "";
   const [slug, setSlug] = useState(backend?.slug ?? "");
@@ -211,7 +217,7 @@ export function StorageBackendModal({ target, busy, defaultStatus, defaultAction
             <>
               {locationLocked && (
                 <p className="notice-line" role="note">
-                  此后端仍被 {locationUsage}引用。Endpoint / Bucket /
+                  此后端仍有 {locationUsage}。Endpoint / Bucket /
                   Base URL / 根目录等物理位置字段已锁定；请先{locationUnlockGuidance}。
                   凭据及访问参数仍可轮换，保存前服务端会验证读写能力。
                 </p>

@@ -278,25 +278,27 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
           onClose={() => setFeedback(null)}
         />
       )}
-      <div className="entity-admin-grid admin-scroll-region" ref={listRef}>
-        {pageItems.map((item) => (
-          <EntityAdminCard
-            key={item.slug}
-            kind={kind}
-            item={item}
-            pinned={item.slug === "none"}
-            selected={selected.includes(item.slug)}
-            onToggleSelect={(checked) => toggleSelect(item.slug, checked)}
-            onChanged={() => void refresh()}
-            onDelete={() => setConfirmDelete(item)}
-            onError={(error) => reportAdminUiError(`entity_admin.${kind}.update`, error)}
-            onDragStart={(s) => { dragSlug.current = s; }}
-            onDragEnter={moveOver}
-            onDragEnd={persistOrder}
-          />
-        ))}
-        {listFailed && <QueryErrorState error={listError} onRetry={() => void refetch()} reportContext={`entity_admin.${kind}.load`} />}
-        {!listFailed && !order.length && !isFetching && <p className="muted">{copy.empty}</p>}
+      <div className="admin-scroll-region" ref={listRef}>
+        <div className="entity-admin-grid">
+          {pageItems.map((item) => (
+            <EntityAdminCard
+              key={item.slug}
+              kind={kind}
+              item={item}
+              pinned={item.slug === "none"}
+              selected={selected.includes(item.slug)}
+              onToggleSelect={(checked) => toggleSelect(item.slug, checked)}
+              onChanged={() => void refresh()}
+              onDelete={() => setConfirmDelete(item)}
+              onError={(error) => reportAdminUiError(`entity_admin.${kind}.update`, error)}
+              onDragStart={(s) => { dragSlug.current = s; }}
+              onDragEnter={moveOver}
+              onDragEnd={persistOrder}
+            />
+          ))}
+          {listFailed && <QueryErrorState error={listError} onRetry={() => void refetch()} reportContext={`entity_admin.${kind}.load`} />}
+          {!listFailed && !order.length && !isFetching && <p className="muted">{copy.empty}</p>}
+        </div>
       </div>
       <OverlayScrollbar targetRef={listRef} pageEdge />
       <AdminPagination

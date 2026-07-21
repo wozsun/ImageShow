@@ -188,8 +188,17 @@
   html:has(.workspace-paged),
   body:has(.workspace-paged) { min-height: 0; height: 100svh; overflow: hidden; }
   .workspace-paged { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; padding-bottom: 16px; }
-  /* overscroll-behavior 阻断滚动链，避免卡片区滚到尽头时把橡皮筋回弹传给文档。 */
-  .workspace-paged > .admin-scroll-region { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-right: 2px; align-content: start; }
+  /* 图片与实体管理共用同一滚动视口：内容保留 16px 右侧留白和 2px 滚动间距，
+     视口本身延伸到页面末端，使原生或浮层滚动条都贴住最右侧。 */
+  .workspace-paged > .admin-scroll-region {
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+    margin-inline-end: -16px;
+    padding-inline-end: 18px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
   /*通栏分隔线：先抵消移动端工作区的 16px 侧边内边距使横线铺满整个区域，再补回内边距让分页器内容保持对齐。*/
   .workspace-paged > .admin-pagination { margin: 0 -16px; padding: 12px 16px 0; border-top: 1px solid #e2e8f0; }
   .workspace-head:not(.workspace-grid-head),
@@ -197,20 +206,24 @@
   .workspace-grid-head {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
-      "title"
-      "description"
-      "feedback"
-      "actions";
+      "heading"
+      "description";
     align-items: stretch;
     row-gap: 8px;
   }
-  .workspace-grid-head:not(.has-actions) {
+  /* 与桌面 .has-actions 保持同等选择器优先级，避免窄屏继续沿用桌面双列。 */
+  .workspace-grid-head.has-actions {
+    grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
-      "title"
+      "heading"
       "description"
-      "feedback";
+      "actions";
   }
-  .workspace-grid-head > .action-feedback-region {
+  .workspace-header-title-row {
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 12px;
+  }
+  .workspace-header-title-row > .action-feedback-region {
     width: 100%;
     max-width: none;
     justify-self: stretch;
@@ -367,7 +380,6 @@
   .advanced-config-ready { justify-self: start; }
   .advanced-config-head-actions { display: grid; grid-template-columns: 1fr 1fr; margin-left: 0; }
   .advanced-config-head-actions button { min-width: 0; }
-  .advanced-config-page > .workspace-grid-head > p { display: none; }
   .advanced-config-editor-head {
     grid-template-columns: max-content minmax(0, 1fr);
   }

@@ -312,6 +312,9 @@ function BackendCard({ backend, hasNonLocalBackend, busy, defaultStatus, default
           {backend.import_session_count > 0
             ? ` · ${backend.import_session_count} 个未清理导入会话`
             : ""}
+          {backend.cleanup_job_count > 0
+            ? ` · ${backend.cleanup_job_count} 个待处理清理任务`
+            : ""}
         </div>
       </div>
       <div className="storage-card-actions">

@@ -33,6 +33,10 @@ import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
 import { invalidateImageData } from "../../lib/api/query-invalidation.js";
 import { useAdminPreference } from "../../hooks/useAdminPreferences.js";
 import {
+  mobileViewportMediaQuery,
+  useMediaQuery
+} from "../../hooks/useMediaQuery.js";
+import {
   imageAdminConfirmationCopy,
   useImageAdminOperations,
   type ImageAdminView
@@ -62,6 +66,7 @@ export function ImageAdmin() {
   const [detail, setDetail] = useState<ImageItem | null>(null);
   const [editing, setEditing] = useState<ImageItem | null>(null);
   const [batchEditing, setBatchEditing] = useState(false);
+  const mobileLayout = useMediaQuery(mobileViewportMediaQuery);
 
   const feedbackTarget = useActionFeedbackTarget("image-admin");
   const gridRef = useRef<HTMLDivElement | null>(null);
@@ -182,7 +187,16 @@ export function ImageAdmin() {
     <section className="workspace workspace-paged">
       <header className="workspace-head image-admin-head">
         <div className="image-admin-head-copy">
-          <h1>图片</h1>
+          <div className="image-admin-title-row">
+            <h1>图片</h1>
+            {mobileLayout && (
+              <ActionFeedbackRegion
+                className="image-admin-feedback-region"
+                target={feedbackTarget}
+                variant="page"
+              />
+            )}
+          </div>
           <p role="status" aria-live="polite" aria-atomic="true">
             {operationText || (
               `第 ${pageNumber} / ${totalPages} 页 · 共 ${data?.total ?? 0} 项 · 本页 ${items.length} 项${
@@ -221,11 +235,13 @@ export function ImageAdmin() {
           {selected.length > 0 && <span>已选 {selected.length}</span>}
         </div>
         <div className="toolbar-actions image-list-toolbar-actions">
-          <ActionFeedbackRegion
-            className="image-admin-feedback-region"
-            target={feedbackTarget}
-            variant="page"
-          />
+          {!mobileLayout && (
+            <ActionFeedbackRegion
+              className="image-admin-feedback-region"
+              target={feedbackTarget}
+              variant="page"
+            />
+          )}
           <LabeledSwitch
             className="image-card-density-switch"
             checked={cardDensity === "spacious"}
@@ -282,35 +298,36 @@ export function ImageAdmin() {
       </div>
       <div
         key={`grid:${view}:${cursor}`}
-        className="table admin-image-grid admin-scroll-region"
-        data-density={cardDensity}
+        className="admin-scroll-region"
         ref={gridRef}
       >
-        {items.map((item) => (
-          <AdminImageCard
-            key={item.id}
-            item={item}
-            storageName={storageName}
-            checked={selected.includes(item.id)}
-            onCheck={(checked) => setSelected((current) => checked ? [...current, item.id] : current.filter((id) => id !== item.id))}
-            onDetail={(opener) => {
-              detailReturnFocusRef.current = opener;
-              setDetail(item);
-            }}
-            onEdit={(opener) => {
-              editReturnFocusRef.current = opener;
-              setEditing(item);
-            }}
-            onPurge={() => setConfirmAction({ kind: "purge", id: item.id, title: imageDisplayTitle(item) })}
-            busy={busyIds.includes(item.id)}
-            actionsDisabled={operationBusy}
-            onDelete={() => void runRowAction(item, "delete")}
-            onRestore={() => void runRowAction(item, "restore")}
-          />
-        ))}
-        {listFailed && <QueryErrorState error={listError} onRetry={() => void refetchList()} reportContext="image_admin.list_load" />}
-        {isFetching && !items.length && <p className="muted">加载中</p>}
-        {!listFailed && !isFetching && !items.length && <p className="muted">暂无记录</p>}
+        <div className="table admin-image-grid" data-density={cardDensity}>
+          {items.map((item) => (
+            <AdminImageCard
+              key={item.id}
+              item={item}
+              storageName={storageName}
+              checked={selected.includes(item.id)}
+              onCheck={(checked) => setSelected((current) => checked ? [...current, item.id] : current.filter((id) => id !== item.id))}
+              onDetail={(opener) => {
+                detailReturnFocusRef.current = opener;
+                setDetail(item);
+              }}
+              onEdit={(opener) => {
+                editReturnFocusRef.current = opener;
+                setEditing(item);
+              }}
+              onPurge={() => setConfirmAction({ kind: "purge", id: item.id, title: imageDisplayTitle(item) })}
+              busy={busyIds.includes(item.id)}
+              actionsDisabled={operationBusy}
+              onDelete={() => void runRowAction(item, "delete")}
+              onRestore={() => void runRowAction(item, "restore")}
+            />
+          ))}
+          {listFailed && <QueryErrorState error={listError} onRetry={() => void refetchList()} reportContext="image_admin.list_load" />}
+          {isFetching && !items.length && <p className="muted">加载中</p>}
+          {!listFailed && !isFetching && !items.length && <p className="muted">暂无记录</p>}
+        </div>
       </div>
       <OverlayScrollbar key={`scrollbar:${view}:${cursor}`} targetRef={gridRef} pageEdge />
       <AdminPagination

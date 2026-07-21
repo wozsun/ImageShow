@@ -2,6 +2,10 @@ import { appConfig } from "@imageshow/shared";
 import { pool, withAdvisoryLock, withTransaction } from "../core/db.ts";
 import { ApiError } from "../core/api-error.ts";
 import {
+  countUnresolvedMoveCleanupJobs,
+  listUnresolvedMoveCleanupJobCounts
+} from "../jobs/repository.ts";
+import {
   defaultS3Settings,
   defaultWebdavSettings,
   missingS3Fields,
@@ -191,7 +195,7 @@ export async function listStorageBackendOptions() {
 
 export async function getStorageBackendsForAdmin() {
   const backends = await getStorageBackends();
-  const [imageCountRows, importSessionCountRows] = await Promise.all([
+  const [imageCountRows, importSessionCountRows, cleanupCountRows] = await Promise.all([
     pool.query(
       `SELECT storage_slug, count(*)::int AS image_count
          FROM metadata
@@ -201,7 +205,8 @@ export async function getStorageBackendsForAdmin() {
       `SELECT storage_slug, count(*)::int AS import_session_count
          FROM import_session
         GROUP BY storage_slug`
-    )
+    ),
+    listUnresolvedMoveCleanupJobCounts()
   ]);
   const imageCounts = new Map<string, number>(imageCountRows.rows.map((row) => [
     String(row.storage_slug),
@@ -211,6 +216,10 @@ export async function getStorageBackendsForAdmin() {
     String(row.storage_slug),
     Number(row.import_session_count ?? 0)
   ]));
+  const cleanupJobCounts = new Map<string, number>(cleanupCountRows.map((row) => [
+    row.storage_slug,
+    row.cleanup_job_count
+  ]));
   return backends.map((backend) => {
     const summary = {
       slug: backend.slug,
@@ -219,7 +228,8 @@ export async function getStorageBackendsForAdmin() {
       enabled: backend.enabled,
       is_default: backend.is_default,
       image_count: imageCounts.get(backend.slug) ?? 0,
-      import_session_count: importSessionCounts.get(backend.slug) ?? 0
+      import_session_count: importSessionCounts.get(backend.slug) ?? 0,
+      cleanup_job_count: cleanupJobCounts.get(backend.slug) ?? 0
     };
     if (backend.type === "s3") {
       const { secret_access_key, ...s3 } = backend.s3;
@@ -405,6 +415,7 @@ function changedPhysicalLocationFields(
 type StorageBackendUsage = {
   image_count: number;
   import_session_count: number;
+  cleanup_job_count: number;
   staging_object_count: number;
 };
 
@@ -415,6 +426,7 @@ type StorageBackendSnapshot = {
   is_default: boolean;
   image_count: number;
   import_session_count: number;
+  cleanup_job_count: number;
 };
 
 function storageBackendUsage(
@@ -424,6 +436,7 @@ function storageBackendUsage(
   return {
     image_count: Number(row.image_count ?? 0),
     import_session_count: Number(row.import_session_count ?? 0),
+    cleanup_job_count: Number(row.cleanup_job_count ?? 0),
     staging_object_count: stagingObjectCount
   };
 }
@@ -436,6 +449,7 @@ function assertPhysicalLocationChangeAllowed(
     !changedFields.length
     || (!usage.image_count
       && !usage.import_session_count
+      && !usage.cleanup_job_count
       && !usage.staging_object_count)
   ) {
     return;
@@ -443,7 +457,7 @@ function assertPhysicalLocationChangeAllowed(
   throw new ApiError(
     409,
     "storage_location_change_requires_migration",
-    "该后端仍有图片、未清理导入会话或暂存对象，物理位置暂不可变更",
+    "该后端仍有图片、未清理导入会话、待处理清理任务或暂存对象，物理位置暂不可变更",
     { fields: changedFields, ...usage }
   );
 }
@@ -467,6 +481,7 @@ async function storageBackendSnapshot(slug: string): Promise<StorageBackendSnaps
   if (!row) {
     throw new ApiError(404, "storage_backend_not_found", `Unknown storage backend: ${slug}`);
   }
+  row.cleanup_job_count = await countUnresolvedMoveCleanupJobs(slug);
   return row;
 }
 
@@ -673,7 +688,11 @@ export async function deleteStorageBackend(slug: string) {
       }
 
       const usage = storageBackendUsage(snapshot);
-      if (!usage.image_count && !usage.import_session_count) {
+      if (
+        !usage.image_count
+        && !usage.import_session_count
+        && !usage.cleanup_job_count
+      ) {
         usage.staging_object_count = await countStagingObjects(
           storageConfigFromRow(snapshot)
         );
@@ -681,12 +700,13 @@ export async function deleteStorageBackend(slug: string) {
       if (
         usage.image_count
         || usage.import_session_count
+        || usage.cleanup_job_count
         || usage.staging_object_count
       ) {
         throw new ApiError(
           409,
           "storage_backend_in_use",
-          "该存储后端仍有图片、未清理导入会话或暂存对象，无法删除",
+          "该存储后端仍有图片、未清理导入会话、待处理清理任务或暂存对象，无法删除",
           usage
         );
       }

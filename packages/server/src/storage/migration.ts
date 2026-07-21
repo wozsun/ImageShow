@@ -1,6 +1,5 @@
 import { pool } from "../core/db.ts";
 import { ApiError, errorMessage } from "../core/api-error.ts";
-import { enqueue } from "../jobs/repository.ts";
 import { createThumbnail, md5Buffer } from "../images/processing.ts";
 import { thumbnailObjectKey, thumbnailRef } from "./image-paths.ts";
 import {
@@ -8,11 +7,15 @@ import {
   getStorageBackend,
   resolveStorageAccessForConfig
 } from "./backend-registry.ts";
-import { contentType, removeObject } from "./storage.ts";
+import { contentType } from "./storage.ts";
 import { withImageStorageMutationLock } from "./maintenance-lock.ts";
 import type { StoragePrefix } from "./object-keys.ts";
 import { ensureVerifiedObjectAtDestination } from "./object-transfer.ts";
 import { shareStorageNamespace } from "./storage-namespace.ts";
+import {
+  removeObjectsOrEnqueueCleanup,
+  type MoveCleanupObjectInput
+} from "./move-cleanup.ts";
 
 export type MigrateRecord = {
   id: string;
@@ -28,7 +31,7 @@ export type MigrateRecord = {
 };
 
 type MigrateResult = "migrated" | "unchanged" | "missing";
-type CreatedObject = { prefix: StoragePrefix; key: string; backend: string };
+type CreatedObject = MoveCleanupObjectInput;
 
 const migrateColumns = [
   "id",
@@ -43,41 +46,16 @@ const migrateColumns = [
   "md5"
 ].join(", ");
 
-async function enqueueObjectCleanup(
-  imageId: string,
-  objects: CreatedObject[],
-  reason: string
-) {
-  if (!objects.length) return;
-  const cleanupKey = objects
-    .map((object) => `${object.backend}:${object.prefix}:${object.key}`)
-    .join("|");
-  await enqueue(
-    "move.cleanup",
-    imageId,
-    { objects, reason },
-    `move.cleanup:${imageId}:${cleanupKey}`
-  ).catch(() => undefined);
-}
-
 async function removeCreatedObjects(imageId: string, objects: CreatedObject[], reason: string) {
-  const failed: CreatedObject[] = [];
-  for (const object of objects) {
-    await removeObject(object.prefix, object.key, object.backend).catch(() => {
-      failed.push(object);
-    });
-  }
-  await enqueueObjectCleanup(imageId, failed, reason);
+  await removeObjectsOrEnqueueCleanup(imageId, objects, reason);
 }
 
 async function removeSourceObjects(imageId: string, objects: CreatedObject[]) {
-  const failed: CreatedObject[] = [];
-  for (const object of objects) {
-    await removeObject(object.prefix, object.key, object.backend).catch(() => {
-      failed.push(object);
-    });
-  }
-  await enqueueObjectCleanup(imageId, failed, "source_cleanup_after_storage_switch");
+  await removeObjectsOrEnqueueCleanup(
+    imageId,
+    objects,
+    "source_cleanup_after_storage_switch"
+  );
 }
 
 async function migrateImageStorageUnlocked(

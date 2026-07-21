@@ -10,16 +10,18 @@ import {
   refreshEntityVocabularies,
   type EntityCacheKind,
 } from "../../vocab/vocab-cache.ts";
+import { resolveStorageAccess } from "../../storage/backend-registry.ts";
 import { linkThumbnailKey, storageObjectKey, thumbnailObjectKey } from "../../storage/image-paths.ts";
-import { withStorageLocationReadLock } from "../../storage/maintenance-lock.ts";
-import { copyObject, exists, removeObject } from "../../storage/storage.ts";
+import { withImageStorageMutationLock } from "../../storage/maintenance-lock.ts";
+import { ensureVerifiedObjectAtTarget, type StorageEndpoint } from "../../storage/object-transfer.ts";
+import { contentType, removeObject } from "../../storage/storage.ts";
 import {
   invalidateImageCaches,
-  setImageLookup,
-  setImageLookupById
+  warmCompleteImageLookups
 } from "../image-cache.ts";
 import { resolveClassification } from "../classification.ts";
 import { importCommitImage, type ImageRecord } from "../presenter.ts";
+import { md5Buffer } from "../processing.ts";
 import { notifyImportStatus, withImportLease } from "./progress.ts";
 import { importCommitLockKey, runImportCommit } from "./execution.ts";
 import { stagingImageKey } from "./staging.ts";
@@ -74,12 +76,24 @@ const committedImageColumns = [
 ].join(", ");
 
 async function finishImport(
-  image: CommittedImageRecord,
+  imageId: string,
   payload: PreparedPayload,
   createdEntityKinds: Iterable<EntityCacheKind> = [],
 ) {
+  const image = (await pool.query(
+    `SELECT ${committedImageColumns} FROM metadata WHERE id=$1`,
+    [imageId]
+  )).rows[0] as CommittedImageRecord | undefined;
+  if (!image) {
+    throw new ApiError(
+      409,
+      "committed_image_missing",
+      "导入已提交，但图片记录不存在"
+    );
+  }
+
   await syncRandomImage(image.id);
-  await Promise.all([
+  const [cacheRevision] = await Promise.all([
     invalidateImageCaches({
       lookupEntries: [{ id: image.id, object_key: image.object_key }],
       md5s: [payload.md5]
@@ -91,29 +105,25 @@ async function finishImport(
     ]),
     refreshEntityVocabularies(createdEntityKinds),
   ]);
-  await setImageLookupById({
-    id: image.id,
-    object_key: image.object_key,
-    original: image.original ?? "",
-    ext: image.ext,
-    storage_slug: image.storage_slug,
-    is_link: Boolean(image.is_link),
-    device: image.device,
-    brightness: image.brightness,
-    theme: image.theme,
-    status: image.status,
-    description: image.description ?? "",
-    source: image.source ?? ""
-  });
-  if (!image.is_link) {
-    await setImageLookup({
-      object_key: image.object_key,
-      thumb_key: thumbnailObjectKey(image.object_key),
-      ext: image.ext,
-      storage_slug: image.storage_slug,
-      status: "ready"
-    });
+  await warmCompleteImageLookups([{
+    ...image,
+    original: image.original ?? null,
+    description: image.description ?? null,
+    source: image.source ?? null
+  }], cacheRevision);
+  return image;
+}
+
+async function readPreparedObject(
+  storage: StorageEndpoint,
+  key: string,
+  errorCode: "prepared_object_missing" | "prepared_thumbnail_missing",
+  errorMessage: string
+) {
+  if (!await storage.driver.exists("_uploads", key)) {
+    throw new ApiError(409, errorCode, errorMessage);
   }
+  return storage.driver.readBuffer("_uploads", key);
 }
 
 async function commitStoredImageSession(
@@ -130,26 +140,41 @@ async function commitStoredImageSession(
 
   try {
     const resolvedTags = await resolveTagNames(payload.tags ?? []);
-    if (!(await exists("media", finalKey, backend))) {
-      if (!(await exists("_uploads", stagingImageKey(id), backend))) {
-        throw new ApiError(409, "prepared_object_missing", "准备好的图片文件不存在");
-      }
-      await copyObject("_uploads", stagingImageKey(id), "media", finalKey, backend);
-      copiedImage = true;
-    }
-    if (!(await exists("thumbs", thumbKey, backend))) {
-      if (!(await exists("_uploads", payload.prepared_thumbnail_key, backend))) {
-        throw new ApiError(409, "prepared_thumbnail_missing", "准备好的缩略图不存在");
-      }
-      await copyObject(
-        "_uploads",
-        payload.prepared_thumbnail_key,
-        "thumbs",
-        thumbKey,
-        backend
+    const storage = await resolveStorageAccess(backend);
+    const preparedImage = await readPreparedObject(
+      storage,
+      stagingImageKey(id),
+      "prepared_object_missing",
+      "准备好的图片文件不存在"
+    );
+    if (md5Buffer(preparedImage) !== payload.md5) {
+      throw new ApiError(
+        409,
+        "storage_object_conflict",
+        "准备好的图片文件与已记录的 MD5 不一致",
+        { prefix: "_uploads", key: stagingImageKey(id), target: backend }
       );
-      copiedThumbnail = true;
     }
+    const preparedThumbnail = await readPreparedObject(
+      storage,
+      payload.prepared_thumbnail_key,
+      "prepared_thumbnail_missing",
+      "准备好的缩略图不存在"
+    );
+    copiedImage = (await ensureVerifiedObjectAtTarget({
+      target: storage,
+      prefix: "media",
+      key: finalKey,
+      body: preparedImage,
+      contentType: contentType(payload.ext)
+    })).created;
+    copiedThumbnail = (await ensureVerifiedObjectAtTarget({
+      target: storage,
+      prefix: "thumbs",
+      key: thumbKey,
+      body: preparedThumbnail,
+      contentType: "image/webp"
+    })).created;
 
     const classification = resolveClassification(payload, {
       device: payload.detected_device,
@@ -208,8 +233,8 @@ async function commitStoredImageSession(
       removeObject("_uploads", stagingImageKey(id), backend).catch(() => undefined),
       removeObject("_uploads", payload.prepared_thumbnail_key, backend).catch(() => undefined)
     ]);
-    await finishImport(result.image, payload, result.createdEntityKinds);
-    return { status: "imported" as const, item: await importCommitImage(result.image) };
+    const image = await finishImport(id, payload, result.createdEntityKinds);
+    return { status: "imported" as const, item: await importCommitImage(image) };
   } catch (error) {
     if (!databaseCommitted) {
       await Promise.all([
@@ -246,19 +271,20 @@ async function commitProxySession(
 
   try {
     const resolvedTags = await resolveTagNames(payload.tags ?? []);
-    if (!(await exists("link", linkKey, backend))) {
-      if (!(await exists("_uploads", payload.prepared_thumbnail_key, backend))) {
-        throw new ApiError(409, "prepared_thumbnail_missing", "准备好的缩略图不存在");
-      }
-      await copyObject(
-        "_uploads",
-        payload.prepared_thumbnail_key,
-        "link",
-        linkKey,
-        backend
-      );
-      copiedLink = true;
-    }
+    const storage = await resolveStorageAccess(backend);
+    const preparedThumbnail = await readPreparedObject(
+      storage,
+      payload.prepared_thumbnail_key,
+      "prepared_thumbnail_missing",
+      "准备好的缩略图不存在"
+    );
+    copiedLink = (await ensureVerifiedObjectAtTarget({
+      target: storage,
+      prefix: "link",
+      key: linkKey,
+      body: preparedThumbnail,
+      contentType: "image/webp"
+    })).created;
 
     const result = await withTransaction(async (client) => {
       const createdEntityKinds = new Set<EntityCacheKind>();
@@ -311,15 +337,17 @@ async function commitProxySession(
 
     await removeObject("_uploads", payload.prepared_thumbnail_key, backend).catch(() => undefined);
     if (!result.image) {
-      await removeObject("link", linkKey, backend).catch(() => undefined);
+      if (copiedLink) {
+        await removeObject("link", linkKey, backend).catch(() => undefined);
+      }
       await Promise.all([
         refreshEntityVocabularies(result.createdEntityKinds),
         invalidateEntityCountCaches(result.createdEntityKinds),
       ]);
       return { status: "duplicate" as const };
     }
-    await finishImport(result.image, payload, result.createdEntityKinds);
-    return { status: "imported" as const, item: await importCommitImage(result.image) };
+    const image = await finishImport(result.image.id, payload, result.createdEntityKinds);
+    return { status: "imported" as const, item: await importCommitImage(image) };
   } catch (error) {
     if (!databaseCommitted && copiedLink) {
       await removeObject("link", linkKey, backend).catch(() => undefined);
@@ -345,8 +373,11 @@ async function commitImportSessionWhileLocationStable(
       [id]
     )).rows[0] as CommittedImageRecord | undefined;
     if (!image) return { status: "duplicate" as const };
-    await finishImport(image, session.prepared_payload as PreparedPayload);
-    return { status: "imported" as const, item: await importCommitImage(image) };
+    const current = await finishImport(
+      image.id,
+      session.prepared_payload as PreparedPayload
+    );
+    return { status: "imported" as const, item: await importCommitImage(current) };
   }
   if (!["ready", "committing"].includes(session.status)) {
     throw new ApiError(409, "invalid_import_state", "图片尚未准备完成");
@@ -425,7 +456,7 @@ async function commitImportSessionWithinLimit(id: string, metadata: ImportMetada
   }
 
   try {
-    return await withStorageLocationReadLock(() =>
+    return await withImageStorageMutationLock(id, () =>
       commitImportSessionWhileLocationStable(id, metadata)
     );
   } finally {

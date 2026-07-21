@@ -80,6 +80,7 @@ type StorageBackendAdminBase = {
   is_default: boolean;
   image_count: number;
   import_session_count: number;
+  cleanup_job_count: number;
 };
 
 export type StorageBackendAdmin = StorageBackendAdminBase & (

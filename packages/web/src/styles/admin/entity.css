@@ -20,7 +20,9 @@
 /*.password-input 包裹仍是字段全宽（360px），导致绝对定位在包裹右缘的显示密码按钮落到输入框外。*/
 .admin-create-form .password-input input { max-width: none; }
 
+/* 滚动视口与卡片网格分层：视口可以延伸到页面边缘，网格独立维护内容留白和列布局。 */
 .entity-admin-grid {
+  min-width: 0;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr));
   gap: 8px;

@@ -366,7 +366,7 @@ export async function invalidateImageCaches({
   // Redis is unavailable, localMutationEpoch keeps all reads cache-cold until a
   // later request successfully advances the shared revision.
   const previousRevision = await imageCacheRevision();
-  await advanceImageCacheRevision();
+  const nextRevision = await advanceImageCacheRevision();
 
   const ids = [...new Set(lookupEntries.flatMap((item) => item.id ? [item.id] : []))];
   const objectKeys = [...new Set(lookupEntries.flatMap((item) => item.object_key ? [item.object_key] : []))];
@@ -393,6 +393,7 @@ export async function invalidateImageCaches({
     // Revision advancement is the correctness boundary. Concrete cleanup only
     // reclaims old fields sooner and may safely wait for TTL after a failure.
   }
+  return nextRevision;
 }
 
 export async function getMd5Cache(md5: string, expectedRevision?: string | null) {

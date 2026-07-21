@@ -179,8 +179,12 @@
   justify-content: center;
   width: 22px;
   height: 22px;
-  /* 负外边距只收紧视觉占位，按钮本身仍保留完整的 22px 点击区域。 */
-  margin-inline: -3px;
+  /*
+   * close-line 的 24px viewBox 两侧各有约 5.6px 留白。末端多收 3px，
+   * 让图形墨迹到边框的距离与文字左侧留白相等，同时保留 22px 点击区。
+   */
+  margin-inline-start: -3px;
+  margin-inline-end: -6px;
 
   min-height: 0;
   padding: 0;

@@ -1,7 +1,7 @@
 import { appConfig } from "@imageshow/shared";
 import { getStorageBackend } from "../storage/backend-registry.ts";
 import { pool } from "../core/db.ts";
-import { errorMessage } from "../core/api-error.ts";
+import { ApiError, errorMessage } from "../core/api-error.ts";
 import { importCommitLockKey } from "../images/imports/execution.ts";
 import { cleanupOrphanRawImports, removeRawImport } from "../images/imports/temp-files.ts";
 import { cleanupStagedObjects } from "../images/imports/staging.ts";
@@ -17,7 +17,10 @@ import {
   withImageStorageMutationLock,
   withStorageLocationReadLock
 } from "../storage/maintenance-lock.ts";
-import { shareStorageNamespace } from "../storage/storage-namespace.ts";
+import {
+  shareStorageNamespace,
+  storageNamespaceIdentity
+} from "../storage/storage-namespace.ts";
 import {
   exists,
   readStorageBuffer,
@@ -156,6 +159,7 @@ async function cleanupMovedObjects(job: BackgroundJob): Promise<BackgroundJobOut
     prefix: StoragePrefix;
     key: string;
     backend: string;
+    namespace_identity?: string;
   };
 
   const objects: CleanupObject[] = Array.isArray(job.payload.objects)
@@ -163,11 +167,14 @@ async function cleanupMovedObjects(job: BackgroundJob): Promise<BackgroundJobOut
         prefix: StoragePrefix;
         key: string;
         backend: string;
+        namespace_identity?: string;
       } => {
         if (!candidate || typeof candidate !== "object") return false;
         const object = candidate as Record<string, unknown>;
         return typeof object.key === "string"
           && typeof object.backend === "string"
+          && (object.namespace_identity === undefined
+            || typeof object.namespace_identity === "string")
           && ["media", "thumbs", "link"].includes(String(object.prefix));
       })
     : [];
@@ -213,6 +220,14 @@ async function cleanupMovedObjects(job: BackgroundJob): Promise<BackgroundJobOut
       ? await getStorageBackend(row.storage_slug)
       : undefined;
     const candidateBackends = new Map<string, Awaited<ReturnType<typeof getStorageBackend>>>();
+    const candidateBackend = async (slug: string) => {
+      let config = candidateBackends.get(slug);
+      if (!config) {
+        config = await getStorageBackend(slug);
+        candidateBackends.set(slug, config);
+      }
+      return config;
+    };
 
     let removed = 0;
     let retained = 0;
@@ -221,18 +236,30 @@ async function cleanupMovedObjects(job: BackgroundJob): Promise<BackgroundJobOut
       const identity = `${object.backend}:${object.prefix}:${object.key}`;
       if (seen.has(identity)) continue;
       seen.add(identity);
+      if (object.namespace_identity) {
+        const currentIdentity = storageNamespaceIdentity(
+          await candidateBackend(object.backend)
+        );
+        if (currentIdentity !== object.namespace_identity) {
+          throw new ApiError(
+            409,
+            "storage_cleanup_namespace_changed",
+            "待清理对象所属的物理存储位置已经变化，已停止删除",
+            {
+              backend: object.backend,
+              prefix: object.prefix,
+              key: object.key
+            }
+          );
+        }
+      }
       const matchesCurrentObject = currentReferences.has(
         `${object.prefix}:${object.key}`
       );
       let sharesCurrentNamespace = object.backend === row?.storage_slug;
       if (matchesCurrentObject && currentBackend && !sharesCurrentNamespace) {
-        let candidateBackend = candidateBackends.get(object.backend);
-        if (!candidateBackend) {
-          candidateBackend = await getStorageBackend(object.backend);
-          candidateBackends.set(object.backend, candidateBackend);
-        }
         sharesCurrentNamespace = shareStorageNamespace(
-          candidateBackend,
+          await candidateBackend(object.backend),
           currentBackend
         );
       }

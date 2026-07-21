@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { defaultUiFeedbackDurationMs } from "../../lib/ui/async-action-timing.js";
 import { Icon } from "../icon/Icon.js";
 
 async function copyText(value: string) {
@@ -38,7 +39,10 @@ export function CopyButton({ value, ariaLabel = "复制内容" }: { value: strin
       setStatus("failed");
     }
     window.clearTimeout(resetTimer.current);
-    resetTimer.current = window.setTimeout(() => setStatus("idle"), 3000);
+    resetTimer.current = window.setTimeout(
+      () => setStatus("idle"),
+      defaultUiFeedbackDurationMs
+    );
   };
 
   const copied = status === "copied";

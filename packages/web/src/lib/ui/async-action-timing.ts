@@ -1,4 +1,5 @@
 export const defaultAsyncActionMinimumPendingMs = 500;
+export const defaultUiFeedbackDurationMs = 3_000;
 
 /**
  * 让已经显示的进行态至少保留指定时长，避免快速操作造成视觉闪烁。

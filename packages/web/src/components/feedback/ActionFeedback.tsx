@@ -6,6 +6,7 @@ import {
   type CSSProperties,
   type FocusEvent
 } from "react";
+import { defaultUiFeedbackDurationMs } from "../../lib/ui/async-action-timing.js";
 import { Icon } from "../icon/Icon.js";
 
 export type ActionFeedbackStatus = "info" | "pending" | "success" | "error";
@@ -15,13 +16,12 @@ export type ActionFeedbackState = {
   text: string;
   status: ActionFeedbackStatus;
   /**
-   * 终态消息的自动关闭时间。省略时使用五秒，null 或非正数表示不自动关闭。
+   * 终态消息的自动关闭时间。省略时使用三秒，null 或非正数表示不自动关闭。
    * pending 始终跟随业务操作生命周期，不会因为此配置而自动关闭。
    */
   autoDismissMs?: number | null;
 };
 
-const actionFeedbackDefaultDurationMs = 5_000;
 const actionFeedbackExitDurationMs = 110;
 
 let actionFeedbackSequence = 0;
@@ -46,7 +46,7 @@ type ActionFeedbackStyle = CSSProperties & {
 
 function resolveAutoDismissMs(feedback: ActionFeedbackState) {
   if (feedback.autoDismissMs !== undefined) return feedback.autoDismissMs;
-  return actionFeedbackDefaultDurationMs;
+  return defaultUiFeedbackDurationMs;
 }
 
 /**

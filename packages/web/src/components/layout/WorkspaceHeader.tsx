@@ -12,7 +12,7 @@ type WorkspaceHeaderProps = {
   actionsClassName?: string;
 };
 
-/** 后台工作区页头：标题、反馈与操作组各有独立 Grid 轨道。 */
+/** 后台工作区页头：标题与反馈共享稳定首行，描述和操作组使用独立轨道。 */
 export function WorkspaceHeader({
   title,
   description,
@@ -38,9 +38,11 @@ export function WorkspaceHeader({
 
   return (
     <header className={headerClasses}>
-      <h1>{title}</h1>
+      <div className="workspace-header-title-row">
+        <h1>{title}</h1>
+        {feedbackRegion}
+      </div>
       <p>{description}</p>
-      {feedbackRegion}
       {hasActions && <div className={actionClasses}>{actions}</div>}
     </header>
   );

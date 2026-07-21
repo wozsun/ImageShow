@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { getPageScrollY, isBodyScrollLocked } from "../../hooks/useBodyScrollLock.js";
+import {
+  mobileViewportMediaQuery,
+  useMediaQuery
+} from "../../hooks/useMediaQuery.js";
 
 const toolbarScrollDirectionThreshold = 8;
 const filterDismissGestureThreshold = 12;
 const filterWheelGestureGap = 600;
 const backToTopViewportThreshold = 1;
-// 与 styles/responsive.css 的画廊移动端断点保持一致。
-const mobileGalleryMediaQuery = "(max-width: 760px)";
-
 function blurFocusedToolbarElement(toolbar: HTMLElement) {
   const activeElement = document.activeElement;
   if (activeElement instanceof HTMLElement && toolbar.contains(activeElement)) {
@@ -16,20 +17,11 @@ function blurFocusedToolbarElement(toolbar: HTMLElement) {
 }
 
 function useMobileGalleryLayout(closeFilters: () => void) {
-  const [mobileLayout, setMobileLayout] = useState(false);
+  const mobileLayout = useMediaQuery(mobileViewportMediaQuery);
 
   useEffect(() => {
-    const viewport = window.matchMedia(mobileGalleryMediaQuery);
-    const updateLayout = (matches: boolean) => {
-      setMobileLayout(matches);
-      if (!matches) closeFilters();
-    };
-    const onLayoutChange = (event: MediaQueryListEvent) => updateLayout(event.matches);
-
-    updateLayout(viewport.matches);
-    viewport.addEventListener("change", onLayoutChange);
-    return () => viewport.removeEventListener("change", onLayoutChange);
-  }, [closeFilters]);
+    if (!mobileLayout) closeFilters();
+  }, [closeFilters, mobileLayout]);
 
   return mobileLayout;
 }

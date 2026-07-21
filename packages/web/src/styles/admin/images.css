@@ -200,6 +200,7 @@
   gap: 12px;
 }
 .image-admin-head-copy { flex: 1 1 0; min-width: 0; }
+.image-admin-title-row { min-width: 0; }
 .image-admin-head-copy > p {
   min-height: 20px;
   overflow: hidden;
@@ -255,15 +256,22 @@
 }
 
 @media (max-width: 760px) {
-  /* 内容仍与 16px 工作区对齐，触控滚动条延伸到视口右缘。 */
-  .workspace-paged > .admin-image-grid.admin-scroll-region {
-    margin-right: -16px;
-    padding-right: 18px;
+  .image-admin-title-row {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
   }
-  .image-admin-head-copy > h1 {
+  .image-admin-title-row > h1 {
     min-height: 36px;
     display: flex;
     align-items: center;
+  }
+  .image-admin-title-row > .image-admin-feedback-region {
+    width: 100%;
+    max-width: none;
+    justify-self: stretch;
+    overflow: hidden;
   }
   .image-admin-head .segmented {
     width: 100%;
@@ -298,13 +306,6 @@
     display: flex;
     flex-wrap: wrap;
     gap: 4px;
-  }
-  .image-list-toolbar-actions > .image-admin-feedback-region {
-    position: static;
-    order: -1;
-    flex: 1 0 100%;
-    width: 100%;
-    max-width: none;
   }
   .image-list-toolbar-actions > .image-card-density-switch + button {
     margin-left: auto;

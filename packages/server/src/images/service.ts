@@ -11,6 +11,7 @@ import { storageObjectKey, thumbnailObjectKey, thumbnailRef } from "../storage/i
 import { copyObject, exists, readStorageBuffer, removeObject } from "../storage/storage.ts";
 import { migrateImageStorage, type MigrateRecord } from "../storage/migration.ts";
 import { withImageStorageMutationLock } from "../storage/maintenance-lock.ts";
+import { removeObjectsOrEnqueueCleanup } from "../storage/move-cleanup.ts";
 import { isReservedSubdomain } from "../themes/host.ts";
 import {
   ensureThemeWithMutationLockHeld
@@ -345,13 +346,10 @@ export async function updateImageMetadata(id: string, body: unknown, options: Im
           .then((result) => Boolean(result.rowCount))
           .catch(() => false);
         if (!adopted) {
-          await removeObject("media", key, sourceImage.storage_slug).catch(() =>
-            enqueue(
-              "move.cleanup",
-              id,
-              { object_key: key, backend: sourceImage.storage_slug },
-              `move.cleanup:${id}:${sourceImage.storage_slug}:${key}`
-            ).catch(() => undefined),
+          await removeObjectsOrEnqueueCleanup(
+            id,
+            [{ prefix: "media", key, backend: sourceImage.storage_slug }],
+            "category_move_rollback"
           );
         }
       }
@@ -362,13 +360,14 @@ export async function updateImageMetadata(id: string, body: unknown, options: Im
     }
 
     if (preCopiedObjectKey && preCopiedObjectKey !== committedObjectKey) {
-      await removeObject("media", preCopiedObjectKey, sourceImage.storage_slug).catch(() =>
-        enqueue(
-          "move.cleanup",
-          id,
-          { object_key: preCopiedObjectKey, backend: sourceImage.storage_slug },
-          `move.cleanup:${id}:${sourceImage.storage_slug}:${preCopiedObjectKey}`
-        ).catch(() => undefined),
+      await removeObjectsOrEnqueueCleanup(
+        id,
+        [{
+          prefix: "media",
+          key: preCopiedObjectKey,
+          backend: sourceImage.storage_slug
+        }],
+        "category_move_unused_candidate"
       );
     }
 
@@ -377,16 +376,21 @@ export async function updateImageMetadata(id: string, body: unknown, options: Im
       await copyObject("thumbs", oldThumbKey, "thumbs", thumbnailObjectKey(committedObjectKey), sourceImage.storage_slug).catch(() =>
         enqueue("thumb.generate", id).catch(() => undefined),
       );
-      await Promise.all([removeObject("media", sourceImage.object_key, sourceImage.storage_slug), removeObject("thumbs", oldThumbKey, sourceImage.storage_slug)]).catch(() =>
-        enqueue(
-          "move.cleanup",
-          id,
+      await removeObjectsOrEnqueueCleanup(
+        id,
+        [
           {
-            object_key: sourceImage.object_key,
-            backend: sourceImage.storage_slug,
+            prefix: "media",
+            key: sourceImage.object_key,
+            backend: sourceImage.storage_slug
           },
-          `move.cleanup:${id}:${sourceImage.storage_slug}:${sourceImage.object_key}`,
-        ).catch(() => undefined),
+          {
+            prefix: "thumbs",
+            key: oldThumbKey,
+            backend: sourceImage.storage_slug
+          }
+        ],
+        "category_move_source_cleanup"
       );
     }
 
