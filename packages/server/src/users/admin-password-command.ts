@@ -1,4 +1,4 @@
-import { adminUsernameInput } from "./credentials.ts";
+import { adminUsernameInput } from "../core/credentials.ts";
 
 const adminPasswordCommandUsage = "用法: imageshow reset-password <username>";
 

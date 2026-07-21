@@ -136,17 +136,62 @@
   padding-right: 2px;
 }
 .workspace-head {
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.workspace-head:not(.workspace-grid-head) {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 16px;
-  margin-bottom: 16px;
 }
 .workspace-head > .actions { margin-left: auto; justify-content: flex-end; }
 .workspace h1 { margin: 0; font-size: 28px; white-space: nowrap; }
 .workspace-head > div:first-child { min-width: 0; }
 .workspace h2 { margin: 0 0 12px; font-size: 16px; display: flex; align-items: center; gap: 8px; }
 .workspace p { margin: 4px 0 0; color: #66717f; }
+
+/* 标题、反馈和操作组使用互不重叠的轨道；空反馈区域不占位。 */
+.workspace-grid-head {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  grid-template-areas:
+    "title feedback"
+    "description description";
+  align-items: center;
+  row-gap: 0;
+}
+.workspace-grid-head.has-actions {
+  grid-template-columns: max-content minmax(0, 1fr) max-content;
+  grid-template-areas:
+    "title feedback actions"
+    "description description actions";
+}
+.workspace-grid-head > h1 {
+  grid-area: title;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+}
+.workspace-grid-head > p {
+  grid-area: description;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workspace-grid-head > .action-feedback-region {
+  grid-area: feedback;
+  width: min(460px, 100%);
+  max-width: 100%;
+  justify-self: end;
+  overflow: hidden;
+}
+.workspace-header-actions {
+  grid-area: actions;
+  min-width: 0;
+  margin-left: 0;
+  align-self: center;
+}
 
 @media (min-width: 761px) {
 
@@ -164,36 +209,6 @@
   overflow: hidden;
 }
 .segmented button { border: 0; border-radius: 0; }
-
-.image-admin-head-tools { display: flex; align-items: center; gap: 12px; }
-.image-admin-head > div:first-child p {
-  min-height: 20px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-@media (min-width: 761px) {
-  .image-admin-head { align-items: center; }
-
-  .image-admin-head .segmented { flex: 0 0 auto; }
-  .image-admin-head .segmented button { flex: 1 1 0; min-width: 76px; }
-
-  .image-admin-head-tools .upload-triggers { flex: 0 1 auto; min-width: 0; flex-wrap: wrap; justify-content: flex-end; }
-  .image-admin-head-tools .upload-trigger { flex: 0 0 auto; }
-}
-
-@media (min-width: 761px) and (max-width: 1080px) {
-  .image-admin-head { align-items: flex-start; }
-  .image-admin-head-tools { flex-direction: column; align-items: flex-end; }
-  .image-admin-head-tools .segmented { order: -1; }
-  .image-admin-head-tools .upload-triggers { flex-wrap: nowrap; }
-  .image-admin-head-tools .link-import-split { flex: 0 0 auto; }
-  .image-admin-head-tools .upload-triggers .link-import-main,
-  .image-admin-head-tools .upload-triggers > .upload-trigger {
-    min-width: 0;
-    padding-inline: 8px;
-  }
-}
 
 .overview-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; align-items: start; }
 .overview-grid > div { min-width: 0; }

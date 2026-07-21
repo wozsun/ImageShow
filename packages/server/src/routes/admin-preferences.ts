@@ -1,6 +1,7 @@
 import type { Context, Hono } from "hono";
 import { adminApiBasePath } from "@imageshow/shared";
-import { ApiError, ok } from "../core/http.ts";
+import { ApiError } from "../core/api-error.ts";
+import { ok } from "../core/http.ts";
 import { adminPreferencesInput, parse } from "../core/validation.ts";
 import {
   readAdminPreferences,

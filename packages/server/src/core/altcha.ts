@@ -8,8 +8,10 @@ import {
 } from "altcha-lib";
 import { deriveKey } from "altcha-lib/algorithms/pbkdf2";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
-import { ApiError, clientIp, noStoreCacheControl } from "./http.ts";
+import { ApiError } from "./api-error.ts";
+import { clientIp, noStoreCacheControl } from "./http.ts";
 import { redis } from "./redis-client.ts";
+import { volatileKey } from "./runtime-key-namespace.ts";
 
 const altchaAlgorithm = "PBKDF2/SHA-256";
 const maximumPayloadLength = 16 * 1024;
@@ -66,7 +68,7 @@ function getAltchaSecrets() {
 }
 
 function temporaryKey(kind: string, id: string) {
-  return `imageshow:tmp:altcha:${kind}:${id}`;
+  return volatileKey("tmp", "altcha", kind, id);
 }
 
 /** @internal Exported only for focused rate-limit verification. */

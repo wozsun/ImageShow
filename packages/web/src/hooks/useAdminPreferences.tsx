@@ -17,7 +17,8 @@ import {
   type AdminPreferenceValues
 } from "@imageshow/shared/browser";
 import { api } from "../lib/api/client.js";
-import { adminApiBasePath, queryKeys } from "../lib/constants.js";
+import { adminApiBasePath } from "../lib/constants.js";
+import { queryKeys } from "../lib/api/query-keys.js";
 
 const localPreferenceVersion = 1;
 const localPreferenceKeyPrefix = "imageshow.admin.preferences.";
@@ -209,7 +210,7 @@ export function AdminPreferencesProvider({
 
   const preferenceQuery = useQuery<AdminPreferenceResponse>({
     queryKey,
-    queryFn: () => api(`${adminApiBasePath}/preferences`),
+    queryFn: ({ signal }) => api(`${adminApiBasePath}/preferences`, { signal }),
     // 当前页面内以本地状态和 PATCH 回执为准；刷新或重新登录后再读取服务端。
     // 普通 reconnect 只会重试尚未成功加载的查询，不会刷新已经成功的无限新鲜数据。
     staleTime: Number.POSITIVE_INFINITY,

@@ -26,7 +26,7 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | 文件 | 职责 |
 | --- | --- |
 | `app-config.ts` | 服务端完整配置常量与共享类型源：`appConfig` 默认值、分页 / 缩略图 / 随机去重 / 链接导入超时 / 后台任务重试等常量；导出 `Device` / `Brightness` / `ImageExt` / `RuntimeConfig`、最小化后台响应 `AdminSettings` 与 `SiteSettings`。 |
-| `browser.ts` | 可安全进入浏览器产物的独立子入口：管理路径、校验长度、slug 规则、保留子域名与管理员界面偏好键和值域。Web 运行时值只从 `@imageshow/shared/browser` 导入，避免带入数据库、Redis 等服务端默认配置。 |
+| `browser.ts` | 可安全进入浏览器产物的独立子入口：管理路径、校验规则、界面偏好，以及前后端共享的图片、鉴权、facets、批量更新 / 迁移和统一错误 DTO。Web 运行时值只从 `@imageshow/shared/browser` 导入，避免带入数据库、Redis 等服务端默认配置。 |
 
 ## packages/server —— 后端
 
@@ -49,13 +49,16 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 
 | 文件 | 职责 |
 | --- | --- |
-| `core/db.ts` | PostgreSQL 连接池、事务与 advisory lock 工具、迁移串行执行，并把启动期 super 初始化交给 users 领域。 |
+| `core/db.ts` | PostgreSQL 连接池、事务与 advisory lock 工具、迁移串行执行；迁移目录优先使用生产 bundle，源码运行时回退到仓库 migrations，账号初始化由入口显式交给 users 领域。 |
+| `core/api-error.ts` | 与 HTTP 路由解耦的领域错误 `ApiError`、普通错误消息和 details 边界。 |
+| `core/credentials.ts` | 首次管理员环境凭据的纯校验与规范化，供配置播种和 users 初始化复用。 |
+| `core/byte-range.ts` | 存储 driver 与 HTTP serving 共用的单段 Range 解析，不依赖图片领域。 |
 | `core/password.ts` | Node.js 原生异步 Argon2id 密码派生与 PHC 编解码：当前参数生成、安全范围内的旧参数验证、升级判断和恒定时间比较。 |
 | `core/uuid.ts` | Node.js 原生 UUIDv7 封装：生成当前时间 ID，为历史 `image_time` 替换 48 位时间戳，并可显式写入 12 位 `rand_a`。 |
 | `core/redis-client.ts` | Redis 8 连接实例与 `pingRedis()`；业务缓存逻辑按领域拆到 `random/`、`images/`、`vocab/`。 |
 | `core/redis-pipeline.ts` | 执行 pipeline 并检查每条命令返回的错误，避免只等待 `exec()` 而漏掉部分失败。 |
-| `core/redis-inspect.ts` | 后台“检查”页用的 Redis 健康 / 键值巡检。 |
-| `core/http.ts` | HTTP 工具：`ok()` / `fail()` / `routeError()`、`ApiError`、`requireAuth` / `requireCsrf` / `requireSuper`、会话 cookie、登录限流、`clientIp()`。 |
+| `core/http.ts` | HTTP 工具：`ok()` / `fail()` / `routeError()`、`requireAuth` / `requireCsrf` / `requireSuper`、会话 cookie 和 `clientIp()`；领域错误定义不再由 HTTP 模块反向承载。 |
+| `core/login-rate-limit.ts` · `core/runtime-key-namespace.ts` | 可注入命名空间的登录限流与 ALTCHA 临时键隔离；测试进程使用唯一 volatile namespace，不复用生产 Redis 状态。 |
 | `core/audit-log.ts` | 后台非 GET 写操作审计：记录操作者、角色、路径、状态、耗时、IP，失败时附带响应 code/error。 |
 | `core/coalesce.ts` | 进程内 in-flight 合并工具，用于公共列表 / 详情 / facets / 概览 / MD5 等缓存 miss 后避免重复查询。 |
 | `core/redis-json.ts` | PostgreSQL 派生 JSON 缓存的类型化 GET / SET EX / 删除 helper；Redis 故障只产生 cache miss。 |
@@ -72,18 +75,18 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 
 | 文件 | 职责 |
 | --- | --- |
-| `storage/storage.ts` | 门面：`openObject` / `removeObject` / `copyObject` / `exists`、`publicImageUrls()`、`testStorageBackend()`、`ensureRuntimeDirectories()`。 |
+| `storage/storage.ts` | 存储操作门面：统一 buffer / copy / remove / list、`resolveReadableObject()`、`publicImageUrls()`、`testStorageBackend()` 与运行目录初始化；serving 不再维护第二套打开对象和公开 URL 分支。 |
 | `storage/backend-config.ts` | S3 / WebDAV 配置 schema、`StorageConfig` / 输入类型、默认值和完整性校验。 |
-| `storage/backend-registry.ts` | `storage_backend` 数据库注册表、默认后端、CRUD、排序、启停、脱敏后台 DTO 与进程内 TTL 缓存；变更时同步失效 driver cache，并通知公共图片 URL 读缓存失效。 |
+| `storage/backend-registry.ts` | `storage_backend` 数据库注册表、默认后端、CRUD、排序、启停、脱敏后台 DTO、配置快照与 driver 生命周期；在用物理字段保护、既有对象访问探测和变更后的实例关闭也集中于此。 |
 | `storage/maintenance-lock.ts` | 存储变更共享锁与维护独占锁，避免导入、重分类、迁移和全盘清理互相删除对象。 |
-| `storage/storage-backend.ts` | `driverFor(config)` 按配置签名缓存并返回 Local / S3 / WebDAV 驱动，避免热路径反复创建 S3/WebDAV client；链接图由图片层的 `is_link` 处理，无独立驱动。 |
+| `storage/storage-backend.ts` | Local / S3 / WebDAV driver 接口、打开结果类型与工厂；缓存和关闭生命周期由注册表拥有，链接图仍由图片层的 `is_link` 处理。 |
 | `storage/local-backend.ts` | 本地磁盘后端（`/app/data/storage` 下 media / thumbs / _uploads / link），含空目录回收 `pruneEmptyDirs()`。 |
 | `storage/s3-backend.ts` | S3 / COS 后端：processed image / thumbnail 读写删与服务端复制/移动、`root_path` 前缀。 |
 | `storage/webdav-backend.ts` | WebDAV 后端：PROPFIND/MKCOL/PUT/GET/DELETE/COPY，HTTP Basic 认证，XML parser 解析 PROPFIND，`base_url + root_path` 前缀，统一 timeout / 临时错误重试、有界目录遍历，以及服务端忽略 Range 时的流式切片。 |
 | `storage/image-paths.ts` | 键名规则：`storageObjectKey()`、`thumbnailObjectKey()`、`linkThumbnailKey(device,brightness,theme,id)`，以及集中助手 `thumbnailRef(row)`——link 缩略图按分类分文件夹存在该图自己的存储后端的 `link/` 前缀下。所有清理 / 检查路径都走它，避免孤儿。 |
 | `storage/object-keys.ts` | 路径 / 键名映射与防穿越：本地 `safeStoragePath()`、S3 `storageS3ObjectName()` 等，物理布局 `<root_path>/<media｜thumbs｜_uploads｜link>/<key>`。 |
 | `storage/object-validator.ts` | 规范化 S3 / WebDAV 实体标签，并按本地文件版本元数据生成对象 ETag。 |
-| `storage/migration.ts` | 单图在任意后端间（local / s3 / webdav）迁移字节（含缩略图），以及整后端批量迁移 `migrateStorageBackend()`。 |
+| `storage/migration.ts` | 单图位置锁、锁内真值重读、copy→CAS→旧对象清理协议，以及任意后端间的单图 / 整后端迁移。 |
 | `storage/stream-buffer.ts` | 流 ↔ Buffer、Node ↔ Web Stream 与有界流式切片辅助。 |
 
 ### images/ —— 图片领域
@@ -92,7 +95,7 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | --- | --- |
 | `images/service.ts` | 软删除 `deleteImage()`、改元数据 / 换分类 `updateImageMetadata()`（换分类＝移动对象键并同步 Redis 随机池，link 只移动缩略图）、单 / 批量迁移存储。 |
 | `images/read-models/` | 图片读取模型：`public-images.ts`（公共列表 / 详情与 Redis 缓存）、`admin-images.ts`（后台列表 / 详情）、`duplicates.ts`（MD5 判重）、`facets.ts`、`overview.ts`，以及复用的 `pagination.ts`；Redis miss 后按场景做同进程 in-flight 合并。 |
-| `images/image-cache.ts` | 图片读缓存：公共列表 generation、公共列表 / 公开详情缓存、后台概览缓存、原图直连探测缓存、Redis 8 `HSETEX` 原子写入且字段 TTL 独立为 6 小时的对象键 / 缩略图键 / 图片 id lookup、MD5 判重缓存，以及公共 generation / facets / 定向 lookup 分层失效；不触发实体缓存刷新。 |
+| `images/image-cache.ts` | 统一 `image_cache_revision` 下的公共列表 / 详情、facets、后台概览、MD5 与 Redis 8 `HSETEX` lookup；写前 revision 校验、本地 dirty fence 和“先推进代际、再精确清理”避免旧读回填。原图直连探测另用短 TTL。 |
 | `images/serving.ts` | 存储对象、缩略图、link 与后台字节出口；集中处理 Content-Length、内容 / 对象版本 ETag、304、单段 Range / If-Range、外部回源代理、原图直连探测及其短 TTL 缓存、缓存策略和缩略图缺失时的乐观读取 / 补建。 |
 | `images/original-link.ts` | 原图入口判断工具：计算展示 URL、规范化比较 URL，并只在 `original` 为 HTTPS 且不同于展示图时开放原图按钮 / 跳转。 |
 | `images/presenter.ts` | `publicImage()` / `publicImages()` 把 DB 行变成后台可复用的完整图片视图、`publicImageDetail()`（公开详情字段白名单）、`publicImageCard()`（公共列表卡片白名单）、`importCommitImage()`（提交结果仅投影最终 URL）、`adminImageView()`（后台投影：去 `ext`、已删除图改指鉴权字节端点）。缓存键与 lookup 预热归读取 / 缓存模块。 |
@@ -105,8 +108,8 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | `images/batch-update.ts` | 批量编辑协调：不同图片固定低并发 2、单图 metadata→tags 有序，隔离业务错误并按请求顺序返回结果；批次末统一同步派生缓存与实体计数缓存。 |
 | `images/mutation-sync.ts` | 图片写入后的派生状态协调器：合并随机池、公共读缓存、MD5 与精确 lookup 失效；单图调用即时执行，批量编辑按请求收集后执行一次。 |
 | `images/cursor.ts` | 游标编解码（稳定分页）。 |
-| `images/trash.ts` | 回收站编排：单图 / 批量恢复后统一失效 MD5 与图片读缓存；彻底清除时删除本站持有的对象，本地图删除原图和缩略图，link 图只删除本站缩略图。 |
-| `images/restore.ts` | 单图 / 批量恢复数据库状态，并把恢复后的图片增量同步回 Redis 随机池。 |
+| `images/trash.ts` | 回收站彻底删除：SKIP LOCKED 原子认领、尝试号所有权令牌、单图位置锁、对象删除与位置 CAS；失败可重试，旧执行者不能覆盖新认领。 |
+| `images/restore.ts` | 只恢复 `purge_state=idle` 的单图 / 批量数据库状态，并把实际恢复图片增量同步回 Redis 随机池。 |
 
 ### tags / themes / authors / users —— 配套领域
 
@@ -117,7 +120,8 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | `themes/host.ts` | 主机名解析：`specialHost()`、`themeFromHost()`、`enforceThemeHostNavigation`、`isReservedSubdomain()`。 |
 | `authors/{types,query,service}.ts` | 作者：注册表、`resolveAuthorTermMap` 别名 / 显示名解析。一图一作者，多一个 `link` 字段，不参与分类键。 |
 | `vocab/vocab-cache.ts` | 主题 / 标签 / 作者词表和后台带计数列表的六个独立 Redis 读模型；缓存值携带单实例进程 epoch 与本地 revision，失效失败或进程重启后的遗留值不会重新命中；词表只在实体定义变化时刷新，计数列表用 dirty revision 合并重复失效并在 miss 时按实体类型 `coalesce()` 单飞回源；提供批量失效收集器。 |
-| `users/admin-bootstrap.ts` · `users/credentials.ts` | advisory lock 保护的首个 super 初始化，以及初始化、后台接口和恢复 CLI 共用的账号规则。 |
+| `vocab/mutation-sync.ts` | 标签 / 主题 / 作者共享的 slug 校验、实体 advisory lock、冲突 / 不存在错误和“随机池→词表 / 计数→图片 revision”派生修复顺序。 |
+| `users/admin-bootstrap.ts` | advisory lock 保护的首个 super 初始化；基础凭据规则来自 `core/credentials.ts`。 |
 | `users/password-{recovery,upgrade}.ts` | 紧急密码恢复与登录成功后的旧参数哈希条件升级。 |
 | `users/session-invalidation.ts` · `users/admin-password-command.ts` | Redis 管理会话全量 / 按账号失效和恢复命令参数解析。 |
 | `users/preferences.ts` | 按管理员用户名隔离的 Redis 界面偏好读写、已知值过滤与账号删除清理；不写 PostgreSQL。 |
@@ -128,7 +132,9 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | 文件 | 职责 |
 | --- | --- |
 | `random/service.ts` | 编排一次随机：校验→解析主题 / 标签 / 作者别名→定候选轴→取最近已服务列表→Redis 池取→记录已服务 id。 |
-| `random/random-cache.ts` | Redis generation 随机池、axis/category/tag/author 集合与 `RandomCategoryCounts` 分类计数、随机池派生的画廊筛选轴、单飞全量重建、带 token 续租的增量同步及 Lua 合并读；数据库快照提交后才写 generation，随机池不预热 lookup，Redis 更新不确定时排 `cache.rebuild`。 |
+| `random/random-cache.ts` | 随机池领域的稳定门面，只重导出 schema、读取、重建和增量同步能力；其他领域不依赖内部 Redis 实现文件。 |
+| `random/cache-schema.ts` · `cache-lock.ts` | generation key / Lua / 数据映射协议，以及带 token 续租和所有权校验的更新 / 重建锁。 |
+| `random/cache-rebuild.ts` · `cache-sync.ts` · `cache-read.ts` | 分别负责 PostgreSQL 快照全量重建、图片增量同步和 generation 读取 / 临时筛选集合；不再由单个超大模块混合承担。 |
 | `random/rebuild-spool.ts` | 随机池全量重建的受控内存 / NDJSON spool：16 MiB 阈值、格式和大小校验、活动文件及启动遗留清理。 |
 | `random/picker.ts` | `resolveCandidateAxes()`（按 UA 推设备）、`pickFromRedisPool()`（按 axis/category 计数加权选集合，tag/author 用 Redis 临时过滤集合，跳过最近项并保留 fallback）。 |
 | `random/dedupe.ts` | 短时不重复：`filterSignature()`、`recentlyServedIds()`、`rememberServedId()`（Redis LPUSH + LTRIM + EXPIRE）。 |
@@ -139,6 +145,7 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | 文件 | 职责 |
 | --- | --- |
 | `checks/service.ts` | 检查领域出口：聚合数据库、随机池、存储后端和文件数量，重导出各检查 / 清理 / 迁移能力。 |
+| `checks/redis-inspect.ts` | 后台“检查”页的 Redis 健康、随机代际和图片缓存 revision 键值巡检。 |
 | `checks/database-check.ts` | 数据库与随机池一致性检查、回收站候选抽样。 |
 | `checks/storage-check.ts` | 存储一致性检查：缺失原图 / 缩略图、孤儿对象、有效 / 失效 `_uploads` 暂存和不可用后端；只有失效暂存作为问题报告。 |
 | `checks/storage-cleanup.ts` | 存储清理：删除孤儿 media / thumbs / link 与失效 `_uploads` 对象，保留有效导入会话暂存并回收本地空目录。 |
@@ -149,9 +156,9 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 
 | 文件 | 职责 |
 | --- | --- |
-| `jobs/repository.ts` | `background_job` 数据库仓储：入队、领取、成功 / 忽略 / 失败状态、退避重试、僵尸任务恢复、导入清理排队和历史裁剪。 |
+| `jobs/repository.ts` | `background_job` 数据库仓储：按 created_at 领取、各类型 backlog / oldest wait 统计、成功 / 忽略 / 失败状态、退避重试、僵尸恢复、导入清理排队和历史裁剪。 |
 | `jobs/handlers.ts` | `thumb.generate` / `move.cleanup` / `import.cleanup` / `cache.rebuild` 任务处理器；导入清理会先用会话提交锁确认并取消崩溃遗留的过期 `committing`，handler 只返回统一 outcome，不直接写后台任务状态。 |
-| `jobs/worker.ts` | 按任务类型并发轮询、执行 handler、统一落任务状态、定时恢复 / 导入清理 / 历史裁剪，以及启动、停止和优雅 drain。 |
+| `jobs/worker.ts` | 先运行到期维护，再并行调度各任务类型的 50 项 / 2 秒公平时间片；记录队列压力指标，并负责启动、停止和优雅 drain。 |
 
 ### routes/ —— HTTP 薄层
 
@@ -169,7 +176,7 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | `routes/advanced-config.ts` | super 完整配置读取 / 预检 / 保存，以及配置包导出、导入预检和应用接口 |
 | `routes/storage.ts` | 存储后端选项、CRUD、排序、默认后端切换与 `POST /storage/test` 自检 |
 | `routes/check.ts` | 数据库、Redis、随机池和存储一致性检查，以及存储清理 / 迁移 |
-| `routes/admin-logs.ts` | 超级管理员日志页：读取 `app.log` / 轮转日志尾部内容、实时修改 `log.level` |
+| `routes/admin-logs.ts` | 超级管理员日志页：读取 `app.log` / 轮转日志尾部内容、实时修改 `log.level`；已登录管理页可把有界客户端错误详情写入应用日志。 |
 | `routes/health.ts` | `/livez`、`/readyz` |
 | `routes/docs.ts` | `docs.<域名>` 提供文档站（`site.docs_enabled=false` 时该域名返回 404） |
 | `routes/spa.ts` | 前端 SPA 静态资源与 fallback |
@@ -181,12 +188,22 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | --- | --- |
 | 入口 / 路由 | `main.tsx`、`AppRoutes.tsx` |
 | 公共页 | `pages/home/`（首页与专属预览进度）、`pages/gallery/`（画廊、懒加载图片和瀑布流布局；含设备 / 亮度 / 主题 / 标签 / 作者 / 排序筛选） |
-| 后台 | `pages/admin/AdminShell.tsx` 及同目录 Overview / ImageAdmin / Uploader（共享 URL 列表、JSONL 清单、微博链接三标签输入窗口与 prepared import 队列）/ EntityAdmin / SettingsPage / AdvancedConfigPage（`advanced-config/` 内含完整 JSON 编辑器和配置包导入模态窗口）/ StorageSettings / UserAdmin / AccountSettings / CheckPage / LogPage / `BatchMetadataModal` / `ImageEditModal` |
-| 组件 | `components/actions` / `data-display` / `feedback` / `form` / `icon` / `image` / `layout` / `navigation` 下的跨页面 UI 组件。 |
-| hooks | `hooks/` 下存放跨页面复用的交互 Hook，例如锚定菜单、动画关闭、滚动锁定，以及 `useAdminPreferences.tsx` 提供的 Redis / 用户级 `localStorage` 界面偏好同步。 |
-| lib | 无界面代码，按 `api` / `auth` / `gallery` / `ui` / `upload` 分类；页面专属状态机留在对应页面目录。 |
-| styles | `styles/` 下存放全局样式入口，按 base / home / gallery / admin / responsive 拆分。 |
+| 后台 | `pages/admin/AdminShell.tsx` 及同目录 Overview / ImageAdmin（列表编排）/ `AdminImageCard` / `useImageAdminOperations` / Uploader（共享 URL 列表、JSONL 清单、微博链接三标签输入窗口与 prepared import 队列）/ EntityAdmin / SettingsPage / AdvancedConfigPage（`advanced-config/` 内含完整 JSON 编辑器和配置包导入模态窗口）/ StorageSettings / UserAdmin / AccountSettings / CheckPage / LogPage / `BatchMetadataModal` / `BatchMetadataSaveSummary` / `useBatchMetadataOperations` / `ImageEditModal` |
+| 组件 | `components/actions` / `data-display` / `feedback` / `form` / `icon` / `image` / `layout` / `navigation` 下的跨页面 UI 组件；`actions/AsyncActionButton.tsx` 用重叠文案稳定异步按钮宽度，`feedback/ActionFeedback.tsx` 只管理单条消息展示与关闭生命周期，`ActionFeedbackRegion.tsx` 管理显式宿主注册、目标路由和缺失区域降级，`layout/WorkspaceHeader.tsx` 提供稳定页头。 |
+| hooks | `hooks/` 下存放跨页面复用的交互 Hook，例如锚定菜单、动画关闭、滚动锁定；`useAsyncActionStatus.ts` 管理按钮的最短进行态，并按操作边界选择五秒结果态或自然结果，`useAdminPreferences.tsx` 提供 Redis / 用户级 `localStorage` 界面偏好同步。 |
+| lib | 无界面代码，按 `api` / `auth` / `gallery` / `ui` / `upload` 分类；`api/client.ts` 统一解析 JSON / 非 JSON 错误、details 与 401 失效事件，`api/query-keys.ts` 集中查询 key，页面专属状态机留在对应页面目录。 |
+| styles | `styles/` 下存放全局样式入口，按 base / home / gallery / admin / responsive 拆分；后台图片组件和对应移动端规则集中在 `styles/admin/images.css`，不再跨多个 responsive 文件重复覆盖。 |
 | 导入队列 | `pages/admin/uploader/`（统一 ImportJob 队列；最终 MD5 只由服务端 prepared 阶段计算） |
+
+按钮绑定反馈由所在组件持有；只有按钮持续可见、结果未被页面状态自然表达且适合原位
+重试时才保留完整四态。没有唯一按钮承载点的页面反馈由功能父组件持有，二者
+都不进入全局消息总线。页面和卡片通过实例安全的目标对象注册区域，展示层只把消息 portal 到指定
+宿主；宿主尚未挂载或已经卸载时，统一降级到视口右上角。区域生命周期完全由
+React 驱动，不扫描页面选择器、不测量空白，也不注册全局 DOM 观察器或滚动监听。
+通用 `WorkspaceHeader` 用明确的 Grid area 分隔标题、反馈、说明和操作组；
+图片工具栏与高级配置头部按各自已知空白单独声明网格，反馈出现或消失不改变原布局。
+管理页通过 `lib/ui/error-reporting.ts` 上报原始页面异常，服务端日志路由补充操作者、页面
+路径和客户端信息后写入应用错误日志；展示组件只使用短中文错误文案。
 
 ## packages/docs —— 文档站
 

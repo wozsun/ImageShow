@@ -12,6 +12,7 @@ import {
 } from "../random/random-cache.ts";
 import {
   ADMIN_OVERVIEW_CACHE_PREFIX,
+  IMAGE_CACHE_REVISION_KEY,
   IMAGE_LOOKUP_ID_KEY,
   IMAGE_LOOKUP_MEDIA_KEY,
   IMAGE_LOOKUP_THUMBS_KEY,
@@ -20,7 +21,7 @@ import {
   ORIGINAL_DIRECT_CACHE_PREFIX,
   PUBLIC_IMAGES_CACHE_PREFIX
 } from "../images/image-cache.ts";
-import { pingRedis, redis } from "./redis-client.ts";
+import { pingRedis, redis } from "../core/redis-client.ts";
 
 const SESSION_KEY_PREFIX = "imageshow:session:";
 const LOGIN_FAIL_KEY_PREFIX = "imageshow:login_fail:";
@@ -41,11 +42,18 @@ type RandomPoolSnapshotValue = {
 
 export async function inspectRedisState() {
   await pingRedis();
-  const [generation, requestedRaw, completedRaw] = await Promise.all([
+  const [generation, requestedRaw, completedRaw, imageRevisionRaw] = await Promise.all([
     redis.get(RANDOM_CURRENT_KEY),
     redis.get(RANDOM_MUTATION_REVISION_KEY).catch(() => null),
-    redis.get(RANDOM_REBUILD_COMPLETED_KEY).catch(() => null)
+    redis.get(RANDOM_REBUILD_COMPLETED_KEY).catch(() => null),
+    redis.get(IMAGE_CACHE_REVISION_KEY).catch(() => null)
   ]);
+  const imageRevision = imageRevisionRaw ?? "0";
+  const imageLookupKeys = {
+    media: `${IMAGE_LOOKUP_MEDIA_KEY}:${imageRevision}`,
+    thumbs: `${IMAGE_LOOKUP_THUMBS_KEY}:${imageRevision}`,
+    id: `${IMAGE_LOOKUP_ID_KEY}:${imageRevision}`
+  };
   const snapshotKey = generation ? randomSnapshotKey(generation) : "";
   const itemKey = generation ? randomItemKey(generation) : "";
   const [snapshotRaw, galleryRaw, dbsize, serverInfo, memoryInfo, keyspaceInfo, scanned] = await Promise.all([
@@ -68,15 +76,16 @@ export async function inspectRedisState() {
     RANDOM_CURRENT_KEY,
     ...(generation ? [snapshotKey, itemKey, randomManifestKey(generation)] : []),
     GALLERY_FILTER_OPTIONS_KEY,
-    IMAGE_LOOKUP_MEDIA_KEY,
-    IMAGE_LOOKUP_THUMBS_KEY,
-    IMAGE_LOOKUP_ID_KEY
+    IMAGE_CACHE_REVISION_KEY,
+    imageLookupKeys.media,
+    imageLookupKeys.thumbs,
+    imageLookupKeys.id
   ];
   const [coreKeys, randomItemIds, hsetexSupported, lookupFieldTtls, generationInspection] = await Promise.all([
     Promise.all(coreKeyNames.map((key) => redisKeySummary(key).catch(() => missingKeySummary(key)))),
     itemKey ? sampleHashFields(itemKey, 12).catch(() => []) : Promise.resolve([]),
     inspectHsetexCapability(),
-    inspectLookupFieldTtls(),
+    inspectLookupFieldTtls(Object.values(imageLookupKeys)),
     inspectGenerations(generation, scanned.generations)
   ]);
   const randomObjectCount = itemKey
@@ -116,10 +125,11 @@ export async function inspectRedisState() {
     prefix_counts: scanned.counts,
     core_keys: coreKeys,
     lookup_fields: {
+      revision: imageRevision,
       configured_ttl_seconds: IMAGE_LOOKUP_TTL_SECONDS,
-      media: keyLength(coreKeys, IMAGE_LOOKUP_MEDIA_KEY),
-      thumbs: keyLength(coreKeys, IMAGE_LOOKUP_THUMBS_KEY),
-      id: keyLength(coreKeys, IMAGE_LOOKUP_ID_KEY),
+      media: keyLength(coreKeys, imageLookupKeys.media),
+      thumbs: keyLength(coreKeys, imageLookupKeys.thumbs),
+      id: keyLength(coreKeys, imageLookupKeys.id),
       ttl_samples: lookupFieldTtls
     },
     random_generation: generation ?? "",
@@ -253,9 +263,9 @@ async function sampleHashFields(key: string, limit: number): Promise<string[]> {
   return typeof raw === "string" ? [raw] : [];
 }
 
-async function inspectLookupFieldTtls() {
+async function inspectLookupFieldTtls(keys: string[]) {
   const result: Record<string, Array<{ field: string; ttl_seconds: number | null }>> = {};
-  for (const key of [IMAGE_LOOKUP_MEDIA_KEY, IMAGE_LOOKUP_THUMBS_KEY, IMAGE_LOOKUP_ID_KEY]) {
+  for (const key of keys) {
     const fields = await sampleHashFields(key, 5).catch(() => []);
     if (!fields.length) {
       result[key] = [];

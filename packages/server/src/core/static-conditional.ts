@@ -1,6 +1,6 @@
 import { Context as HonoContext, type Context, type Handler } from "hono";
 import { conditionalRequestNotModified, ifRangeMatches } from "./http-validator.ts";
-import { parseSingleByteRange } from "../storage/byte-range.ts";
+import { parseSingleByteRange } from "./byte-range.ts";
 
 /** @internal Exported only for static Range validator verification. */
 export function staticEtag(headers: Headers) {

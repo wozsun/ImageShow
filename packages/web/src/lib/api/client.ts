@@ -1,3 +1,5 @@
+import type { ApiErrorResponse } from "@imageshow/shared/browser";
+
 let csrfToken = "";
 export const authExpiredEvent = "imageshow:auth-expired";
 
@@ -5,7 +7,8 @@ export class ApiClientError extends Error {
   constructor(
     message: string,
     readonly status: number,
-    readonly code = ""
+    readonly code = "",
+    readonly details: unknown = {}
   ) {
     super(message);
     this.name = "ApiClientError";
@@ -44,11 +47,29 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const method = String(init.method ?? "GET").toUpperCase();
   const credentials = init.credentials ?? (publicCacheableRequest(path, method) ? "omit" : "same-origin");
   const response = await fetch(path, { ...init, headers, credentials });
-  const data = await response.json().catch(() => ({}));
+  const body = await response.text();
+  let data: Record<string, unknown> = {};
+  if (body) {
+    try {
+      data = JSON.parse(body) as Record<string, unknown>;
+    } catch {
+      // 非 JSON 错误由统一 HTTP fallback 展示，不泄露代理层 HTML 响应。
+    }
+  }
   if (response.status === 401 && !path.includes("/auth/login") && !path.includes("/auth/me")) {
     clearCsrfToken();
     if (typeof window !== "undefined") window.dispatchEvent(new Event(authExpiredEvent));
   }
-  if (!response.ok || data.ok === false) throw new ApiClientError(data.error || `HTTP ${response.status}`, response.status, data.code || "");
-  return data;
+  if (!response.ok || data.ok === false) {
+    const failure = data as Partial<ApiErrorResponse>;
+    throw new ApiClientError(
+      typeof failure.error === "string"
+        ? failure.error
+        : `HTTP ${response.status}`,
+      response.status,
+      typeof failure.code === "string" ? failure.code : "",
+      failure.details ?? {}
+    );
+  }
+  return data as T;
 }

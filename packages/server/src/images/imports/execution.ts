@@ -1,4 +1,4 @@
-import { ApiError } from "../../core/http.ts";
+import { ApiError } from "../../core/api-error.ts";
 import { DynamicConcurrencyLimiter } from "../../core/concurrency.ts";
 import { getRuntimeConfig } from "../../config/runtime-config-store.ts";
 import { withStorageMutationLock } from "../../storage/maintenance-lock.ts";

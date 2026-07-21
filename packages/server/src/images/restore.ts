@@ -12,7 +12,7 @@ export async function restoreImageFromTrash(id: string): Promise<RestoreResult> 
   const result = await pool.query(
     `UPDATE metadata
         SET status='ready', deleted_at=NULL, updated_at=now()
-      WHERE id=$1 AND status='deleted'
+      WHERE id=$1 AND status='deleted' AND purge_state='idle'
       RETURNING id, object_key, md5`,
     [id]
   );
@@ -27,7 +27,7 @@ export async function restoreImagesFromTrash(ids: string[]): Promise<RestoredIma
   const result = await pool.query(
     `UPDATE metadata
         SET status='ready', deleted_at=NULL, updated_at=now()
-      WHERE id = ANY($1::uuid[]) AND status='deleted'
+      WHERE id = ANY($1::uuid[]) AND status='deleted' AND purge_state='idle'
       RETURNING id, object_key, md5`,
     [ids]
   );

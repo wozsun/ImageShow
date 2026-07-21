@@ -1,53 +1,53 @@
 import type { Pool, PoolClient } from "pg";
-import { slugPattern } from "@imageshow/shared";
-import { pool } from "../core/db.ts";
-import { ApiError } from "../core/http.ts";
-import { invalidateGalleryFacetsCache, invalidateImageReadCaches } from "../images/image-cache.ts";
-import { rebuildRandomPool } from "../random/random-cache.ts";
+import { pool, withTransaction } from "../core/db.ts";
 import {
-  invalidateEntityCountCaches,
-  refreshEntityVocabularies,
-} from "../vocab/vocab-cache.ts";
+  assertVocabularyCreated,
+  assertVocabularyFound,
+  assertVocabularySlug,
+  synchronizeVocabularyMutation,
+  vocabularyMutationLockKey,
+  withVocabularyMutationLock
+} from "../vocab/mutation-sync.ts";
 
 export async function ensureAuthor(client: Pool | PoolClient, slug: string) {
   if (!slug) return false;
-  const result = await client.query(
-    `INSERT INTO author(slug, sort_order)
-     VALUES($1, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM author))
-     ON CONFLICT (slug) DO NOTHING
-     RETURNING slug`,
-    [slug]
-  );
-  return Boolean(result.rowCount);
-}
-
-async function refreshAuthorDefinitionCaches(options: { facets?: boolean } = {}) {
-  const tasks: Array<Promise<unknown>> = [
-    refreshEntityVocabularies(["author"]),
-    invalidateEntityCountCaches(["author"]),
-  ];
-  if (options.facets ?? true) tasks.push(invalidateGalleryFacetsCache());
-  await Promise.all(tasks);
-}
-
-export async function upsertAuthor(slug: string, displayName: string, link: string) {
-  if (slug.length > 32 || !slugPattern.test(slug)) {
-    throw new ApiError(400, "invalid_author", "Author slug must be a lowercase slug (a-z, 0-9, -), <=32 chars", { slug });
+  const insert = async () => {
+    const result = await client.query(
+      `INSERT INTO author(slug, sort_order)
+       VALUES($1, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM author))
+       ON CONFLICT (slug) DO NOTHING
+       RETURNING slug`,
+      [slug]
+    );
+    return Boolean(result.rowCount);
+  };
+  if ("release" in client) {
+    await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [vocabularyMutationLockKey("author", slug)]);
+    return insert();
   }
+  return withVocabularyMutationLock("author", slug, insert);
+}
 
-  await pool.query(
-    `INSERT INTO author(slug, display_name, link, sort_order)
-     VALUES($1, $2, $3, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM author))
-     ON CONFLICT (slug) DO UPDATE SET display_name = EXCLUDED.display_name, link = EXCLUDED.link, updated_at = now()`,
-    [slug, displayName, link]
+export async function createAuthor(slug: string, displayName: string, link: string) {
+  assertVocabularySlug("author", slug);
+
+  const result = await withVocabularyMutationLock("author", slug, () =>
+    pool.query(
+      `INSERT INTO author(slug, display_name, link, sort_order)
+       VALUES($1, $2, $3, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM author))
+       ON CONFLICT (slug) DO NOTHING
+       RETURNING slug`,
+      [slug, displayName, link]
+    )
   );
-  await refreshAuthorDefinitionCaches();
+  assertVocabularyCreated("author", slug, result.rowCount);
+  await synchronizeVocabularyMutation({ entity: "author" });
 }
 
 export async function setAuthorMeta(slug: string, displayName: string, link: string) {
   const result = await pool.query("UPDATE author SET display_name = $2, link = $3, updated_at = now() WHERE slug = $1", [slug, displayName, link]);
-  if (!result.rowCount) throw new ApiError(404, "not_found", "Author not found");
-  await refreshAuthorDefinitionCaches();
+  assertVocabularyFound("author", result.rowCount);
+  await synchronizeVocabularyMutation({ entity: "author" });
 }
 
 export async function reorderAuthors(slugs: string[]) {
@@ -58,44 +58,67 @@ export async function reorderAuthors(slugs: string[]) {
      WHERE a.slug = v.slug`,
     [slugs]
   );
-  await refreshAuthorDefinitionCaches();
+  await synchronizeVocabularyMutation({ entity: "author" });
 }
 
-async function authorHasImages(slug: string): Promise<boolean> {
-  return Boolean((await pool.query("SELECT 1 FROM metadata WHERE author=$1 LIMIT 1", [slug])).rowCount);
+type ClearedAuthorImage = { id: string; object_key: string };
+
+async function deleteAuthorUnderLock(slug: string) {
+  return withTransaction(async (client) => {
+    const author = await client.query(
+      "SELECT slug FROM author WHERE slug=$1 FOR UPDATE",
+      [slug]
+    );
+    if (!author.rowCount) {
+      return { deleted: false, affected: [] as ClearedAuthorImage[] };
+    }
+    const affected = (await client.query(
+      `UPDATE metadata
+          SET author=NULL, updated_at=now()
+        WHERE author=$1
+        RETURNING id, object_key`,
+      [slug]
+    )).rows as ClearedAuthorImage[];
+    const deleted = Boolean((await client.query(
+      "DELETE FROM author WHERE slug=$1",
+      [slug]
+    )).rowCount);
+    return { deleted, affected };
+  });
+}
+
+async function synchronizeAuthorDeletion(affected: ClearedAuthorImage[]) {
+  await synchronizeVocabularyMutation({
+    entity: "author",
+    lookupEntries: affected,
+    imageDataChanged: Boolean(affected.length),
+    random: { mode: "images", ids: affected.map((image) => image.id) }
+  });
 }
 
 export async function deleteAuthor(slug: string) {
-  const exists = (await pool.query("SELECT 1 FROM author WHERE slug=$1", [slug])).rowCount;
-  if (!exists) throw new ApiError(404, "not_found", "Author not found");
-
-  const cleared = await authorHasImages(slug);
-  await pool.query("DELETE FROM author WHERE slug = $1", [slug]);
-  if (cleared) {
-    await rebuildRandomPool();
-    await Promise.all([
-      invalidateImageReadCaches(),
-      refreshAuthorDefinitionCaches({ facets: false }),
-    ]);
-  } else await refreshAuthorDefinitionCaches();
+  const result = await withVocabularyMutationLock(
+    "author",
+    slug,
+    () => deleteAuthorUnderLock(slug)
+  );
+  assertVocabularyFound("author", result.deleted ? 1 : 0);
+  await synchronizeAuthorDeletion(result.affected);
 }
 
 export async function deleteAuthors(slugs: string[]) {
   const targets = [...new Set(slugs)];
   if (!targets.length) return;
-  let cleared = false;
+  const affected: ClearedAuthorImage[] = [];
   let deletedAny = false;
   for (const slug of targets) {
-    if (!(await pool.query("SELECT 1 FROM author WHERE slug=$1", [slug])).rowCount) continue;
-    if (await authorHasImages(slug)) cleared = true;
-    const result = await pool.query("DELETE FROM author WHERE slug=$1", [slug]);
-    deletedAny = Boolean(result.rowCount) || deletedAny;
+    const result = await withVocabularyMutationLock(
+      "author",
+      slug,
+      () => deleteAuthorUnderLock(slug)
+    );
+    affected.push(...result.affected);
+    deletedAny = result.deleted || deletedAny;
   }
-  if (cleared) {
-    await rebuildRandomPool();
-    await Promise.all([
-      invalidateImageReadCaches(),
-      refreshAuthorDefinitionCaches({ facets: false }),
-    ]);
-  } else if (deletedAny) await refreshAuthorDefinitionCaches();
+  if (deletedAny) await synchronizeAuthorDeletion(affected);
 }

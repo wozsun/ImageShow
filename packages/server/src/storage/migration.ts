@@ -1,8 +1,9 @@
 import { pool } from "../core/db.ts";
-import { errorMessage } from "../core/http.ts";
+import { errorMessage } from "../core/api-error.ts";
+import { enqueue } from "../jobs/repository.ts";
+import { createThumbnail } from "../images/processing.ts";
 import { thumbnailObjectKey, thumbnailRef } from "./image-paths.ts";
 import { assertStorageWritable, getStorageBackend } from "./backend-registry.ts";
-import { createThumbnail } from "../images/processing.ts";
 import {
   contentType,
   readStorageBufferWithConfig,
@@ -10,63 +11,174 @@ import {
   storageExistsWithConfig,
   writeStorageBufferWithConfig
 } from "./storage.ts";
-import { withStorageMutationLock } from "./maintenance-lock.ts";
+import { withImageStorageMutationLock } from "./maintenance-lock.ts";
+import type { StoragePrefix } from "./object-keys.ts";
 
-export type MigrateRecord = { id: string; object_key: string; ext: string; status: string; storage_slug: string; is_link: boolean; device: string; brightness: string; theme: string };
+export type MigrateRecord = {
+  id: string;
+  object_key: string;
+  ext: string;
+  status: string;
+  storage_slug: string;
+  is_link: boolean;
+  device: string;
+  brightness: string;
+  theme: string;
+};
+
 type MigrateResult = "migrated" | "unchanged" | "missing";
+type CreatedObject = { prefix: StoragePrefix; key: string; backend: string };
 
-async function migrateImageStorageUnlocked(row: MigrateRecord, target: string): Promise<MigrateResult> {
-  if (row.storage_slug === target) return "unchanged";
-  const source = await getStorageBackend(row.storage_slug);
-  const dest = await assertStorageWritable(target);
+const migrateColumns = [
+  "id",
+  "object_key",
+  "ext",
+  "status",
+  "storage_slug",
+  "is_link",
+  "device",
+  "brightness",
+  "theme"
+].join(", ");
 
-  if (row.is_link) {
-    const thumb = thumbnailRef(row);
-    if (!(await storageExistsWithConfig(source, thumb.prefix, thumb.key))) return "missing";
-    if (!(await storageExistsWithConfig(dest, thumb.prefix, thumb.key))) {
-      await writeStorageBufferWithConfig(dest, thumb.prefix, thumb.key, await readStorageBufferWithConfig(source, thumb.prefix, thumb.key), "image/webp");
+async function enqueueObjectCleanup(
+  imageId: string,
+  objects: CreatedObject[],
+  reason: string
+) {
+  if (!objects.length) return;
+  const cleanupKey = objects
+    .map((object) => `${object.backend}:${object.prefix}:${object.key}`)
+    .join("|");
+  await enqueue(
+    "move.cleanup",
+    imageId,
+    { objects, reason },
+    `move.cleanup:${imageId}:${cleanupKey}`
+  ).catch(() => undefined);
+}
+
+async function removeCreatedObjects(imageId: string, objects: CreatedObject[], reason: string) {
+  const failed: CreatedObject[] = [];
+  for (const object of objects) {
+    await removeObject(object.prefix, object.key, object.backend).catch(() => {
+      failed.push(object);
+    });
+  }
+  await enqueueObjectCleanup(imageId, failed, reason);
+}
+
+async function removeSourceObjects(imageId: string, objects: CreatedObject[]) {
+  const failed: CreatedObject[] = [];
+  for (const object of objects) {
+    await removeObject(object.prefix, object.key, object.backend).catch(() => {
+      failed.push(object);
+    });
+  }
+  await enqueueObjectCleanup(imageId, failed, "source_cleanup_after_storage_switch");
+}
+
+async function migrateImageStorageUnlocked(
+  requested: MigrateRecord,
+  target: string,
+  expectedSource?: string
+): Promise<MigrateResult> {
+  const current = (await pool.query(
+    `SELECT ${migrateColumns} FROM metadata WHERE id=$1`,
+    [requested.id]
+  )).rows[0] as MigrateRecord | undefined;
+  if (!current) return "missing";
+  if (expectedSource && current.storage_slug !== expectedSource) return "unchanged";
+  if (current.storage_slug === target) return "unchanged";
+
+  const source = await getStorageBackend(current.storage_slug);
+  const destination = await assertStorageWritable(target);
+  const created: CreatedObject[] = [];
+  const sourceObjects: CreatedObject[] = [];
+
+  try {
+    if (current.is_link) {
+      const thumb = thumbnailRef(current);
+      if (!(await storageExistsWithConfig(source, thumb.prefix, thumb.key))) return "missing";
+      if (!(await storageExistsWithConfig(destination, thumb.prefix, thumb.key))) {
+        await writeStorageBufferWithConfig(
+          destination,
+          thumb.prefix,
+          thumb.key,
+          await readStorageBufferWithConfig(source, thumb.prefix, thumb.key),
+          "image/webp"
+        );
+        created.push({ prefix: thumb.prefix, key: thumb.key, backend: target });
+      }
+      sourceObjects.push({ prefix: thumb.prefix, key: thumb.key, backend: current.storage_slug });
+    } else {
+      if (!(await storageExistsWithConfig(source, "media", current.object_key))) return "missing";
+      if (!(await storageExistsWithConfig(destination, "media", current.object_key))) {
+        await writeStorageBufferWithConfig(
+          destination,
+          "media",
+          current.object_key,
+          await readStorageBufferWithConfig(source, "media", current.object_key),
+          contentType(current.ext)
+        );
+        created.push({ prefix: "media", key: current.object_key, backend: target });
+      }
+
+      const thumbKey = thumbnailObjectKey(current.object_key);
+      if (!(await storageExistsWithConfig(destination, "thumbs", thumbKey))) {
+        const thumb = await storageExistsWithConfig(source, "thumbs", thumbKey)
+          ? await readStorageBufferWithConfig(source, "thumbs", thumbKey)
+          : await createThumbnail(
+              await readStorageBufferWithConfig(source, "media", current.object_key)
+            );
+        await writeStorageBufferWithConfig(destination, "thumbs", thumbKey, thumb, "image/webp");
+        created.push({ prefix: "thumbs", key: thumbKey, backend: target });
+      }
+      sourceObjects.push(
+        { prefix: "media", key: current.object_key, backend: current.storage_slug },
+        { prefix: "thumbs", key: thumbKey, backend: current.storage_slug }
+      );
     }
-    const moved = await pool.query(
-      "UPDATE metadata SET storage_slug=$2, updated_at=now() WHERE id=$1 AND storage_slug=$3",
-      [row.id, target, row.storage_slug]
+
+    // The switch is conditional on the exact location that was copied. A
+    // future writer that bypasses the advisory protocol still cannot make this
+    // operation delete an object adopted at another location.
+    const switched = await pool.query(
+      `UPDATE metadata
+          SET storage_slug=$2, updated_at=now()
+        WHERE id=$1 AND storage_slug=$3 AND object_key=$4`,
+      [current.id, target, current.storage_slug, current.object_key]
     );
-    if (!moved.rowCount) return "unchanged";
-    await removeObject(thumb.prefix, thumb.key, row.storage_slug).catch(() => undefined);
-    return "migrated";
+    if (!switched.rowCount) {
+      await removeCreatedObjects(current.id, created, "location_compare_and_swap_failed");
+      return "unchanged";
+    }
+  } catch (error) {
+    await removeCreatedObjects(current.id, created, "storage_migration_failed");
+    throw error;
   }
 
-  if (!(await storageExistsWithConfig(source, "media", row.object_key))) return "missing";
-  if (!(await storageExistsWithConfig(dest, "media", row.object_key))) {
-    await writeStorageBufferWithConfig(
-      dest,
-      "media",
-      row.object_key,
-      await readStorageBufferWithConfig(source, "media", row.object_key),
-      contentType(row.ext)
-    );
-  }
-  const thumbKey = thumbnailObjectKey(row.object_key);
-  if (!(await storageExistsWithConfig(dest, "thumbs", thumbKey))) {
-    const thumb = await storageExistsWithConfig(source, "thumbs", thumbKey)
-      ? await readStorageBufferWithConfig(source, "thumbs", thumbKey)
-      : await createThumbnail(await readStorageBufferWithConfig(source, "media", row.object_key));
-    await writeStorageBufferWithConfig(dest, "thumbs", thumbKey, thumb, "image/webp");
-  }
-  const updated = await pool.query(
-    "UPDATE metadata SET storage_slug=$2, updated_at=now() WHERE id=$1 AND storage_slug=$3",
-    [row.id, target, row.storage_slug]
-  );
-  if (!updated.rowCount) return "unchanged";
-  await removeObject("media", row.object_key, row.storage_slug).catch(() => undefined);
-  await removeObject("thumbs", thumbKey, row.storage_slug).catch(() => undefined);
+  // Source deletion happens only after the database points at a complete
+  // destination copy. Failure leaves a harmless duplicate and a retryable job.
+  await removeSourceObjects(current.id, sourceObjects);
   return "migrated";
 }
 
-export function migrateImageStorage(row: MigrateRecord, target: string): Promise<MigrateResult> {
-  return withStorageMutationLock(() => migrateImageStorageUnlocked(row, target));
+export function migrateImageStorage(
+  row: MigrateRecord,
+  target: string,
+  options: { expectedSource?: string } = {}
+): Promise<MigrateResult> {
+  return withImageStorageMutationLock(row.id, () =>
+    migrateImageStorageUnlocked(row, target, options.expectedSource)
+  );
 }
 
-export async function migrateStorageBackend(sourceSlug: string, targetSlug: string, entries: MigrateRecord[]) {
+export async function migrateStorageBackend(
+  sourceSlug: string,
+  targetSlug: string,
+  entries: MigrateRecord[]
+) {
   let migrated = 0;
   let unchanged = 0;
   let missing = 0;
@@ -78,19 +190,28 @@ export async function migrateStorageBackend(sourceSlug: string, targetSlug: stri
       continue;
     }
     try {
-      const result = await migrateImageStorage(entry, targetSlug);
+      const result = await migrateImageStorage(entry, targetSlug, {
+        expectedSource: sourceSlug
+      });
       if (result === "migrated") {
         migrated += 1;
         migratedEntries.push(entry);
-      }
-      else if (result === "missing") {
+      } else if (result === "missing") {
         missing += 1;
-        errors.push({ id: entry.id, object_key: entry.object_key, reason: "source_object_missing" });
+        errors.push({
+          id: entry.id,
+          object_key: entry.object_key,
+          reason: "source_object_missing"
+        });
       } else {
         unchanged += 1;
       }
     } catch (error) {
-      errors.push({ id: entry.id, object_key: entry.object_key, reason: errorMessage(error) });
+      errors.push({
+        id: entry.id,
+        object_key: entry.object_key,
+        reason: errorMessage(error)
+      });
     }
   }
   return {
@@ -101,6 +222,6 @@ export async function migrateStorageBackend(sourceSlug: string, targetSlug: stri
     unchanged,
     missing,
     errors: errors.slice(0, 100),
-    error_count: errors.length,
+    error_count: errors.length
   };
 }

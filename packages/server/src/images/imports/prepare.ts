@@ -2,7 +2,7 @@ import type { Device } from "@imageshow/shared";
 import { getInputImageMaxBytes, getInputImageMaxLongEdge } from "../../config/app-settings.ts";
 import { getRuntimeConfig } from "../../config/runtime-config-store.ts";
 import { pool } from "../../core/db.ts";
-import { ApiError } from "../../core/http.ts";
+import { ApiError } from "../../core/api-error.ts";
 import { contentType, writeStorageBuffer } from "../../storage/storage.ts";
 import { detectBrightness } from "../brightness.ts";
 import { deviceFromDimensions } from "../classification.ts";

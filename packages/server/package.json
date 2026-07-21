@@ -1,10 +1,11 @@
 {
   "name": "@imageshow/server",
-  "version": "3.9.7",
+  "version": "3.10.0",
   "type": "module",
   "scripts": {
     "dev": "node --env-file-if-exists=../../.env --watch src/index.ts",
-    "build": "tsc -p tsconfig.json && node ../../scripts/build/copy-server-assets.mjs",
+    "build": "tsc -p tsconfig.json",
+    "assemble": "node ../../scripts/build/copy-server-assets.mjs",
     "check": "tsc -p tsconfig.json --noEmit",
     "start": "node --env-file-if-exists=../../.env dist/index.js"
   },

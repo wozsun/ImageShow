@@ -1,26 +1,25 @@
 import type { PoolClient } from "pg";
-import { slugPattern, type Brightness, type Device } from "@imageshow/shared";
-import { pool, withAdvisoryLock, withTransaction } from "../core/db.ts";
-import { ApiError } from "../core/http.ts";
+import type { Brightness, Device } from "@imageshow/shared";
+import { pool } from "../core/db.ts";
+import { ApiError } from "../core/api-error.ts";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { mapWithConcurrency } from "../core/concurrency.ts";
 import {
-  invalidateGalleryFacetsCache,
-  invalidateImageLookupEntries,
-  invalidateImageReadCaches,
-} from "../images/image-cache.ts";
-import { rebuildRandomPool } from "../random/random-cache.ts";
-import {
-  invalidateEntityCountCaches,
-  refreshEntityVocabularies,
-} from "../vocab/vocab-cache.ts";
+  assertVocabularyCreated,
+  assertVocabularyFound,
+  assertVocabularySlug,
+  synchronizeVocabularyMutation,
+  vocabularyMutationLockKey,
+  withVocabularyMutationLock
+} from "../vocab/mutation-sync.ts";
 import { linkThumbnailKey, storageObjectKey, thumbnailObjectKey } from "../storage/image-paths.ts";
 import { copyObject, pruneEmptyStorageDirs, removeObject } from "../storage/storage.ts";
-import { withStorageMutationLock } from "../storage/maintenance-lock.ts";
+import { withImageStorageMutationLock } from "../storage/maintenance-lock.ts";
+import { enqueue } from "../jobs/repository.ts";
+import type { StoragePrefix } from "../storage/object-keys.ts";
 
-export async function ensureTheme(client: PoolClient, slug: string) {
+async function insertTheme(client: PoolClient, slug: string) {
   if (!slug || slug === "none") return false;
-  await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [themeMutationLockKey(slug)]);
   const result = await client.query(
     `INSERT INTO theme(slug, sort_order)
      VALUES($1, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM theme))
@@ -31,40 +30,45 @@ export async function ensureTheme(client: PoolClient, slug: string) {
   return Boolean(result.rowCount);
 }
 
-function themeMutationLockKey(slug: string) {
-  return `imageshow:theme:${slug}`;
+export async function ensureTheme(client: PoolClient, slug: string) {
+  if (!slug || slug === "none") return false;
+  await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [vocabularyMutationLockKey("theme", slug)]);
+  return insertTheme(client, slug);
 }
 
-async function refreshThemeDefinitionCaches(options: { facets?: boolean } = {}) {
-  const tasks: Array<Promise<unknown>> = [
-    refreshEntityVocabularies(["theme"]),
-    invalidateEntityCountCaches(["theme"]),
-  ];
-  if (options.facets ?? true) tasks.push(invalidateGalleryFacetsCache());
-  await Promise.all(tasks);
+/**
+ * Use only while the caller owns vocabularyMutationLockKey("theme", slug).
+ * This avoids reacquiring the same advisory lock from a different pool
+ * connection when an image-location mutation also needs the theme lock.
+ */
+export function ensureThemeWithMutationLockHeld(
+  client: PoolClient,
+  slug: string
+) {
+  return insertTheme(client, slug);
 }
 
-export async function upsertTheme(slug: string, displayName: string) {
-  if (slug === "none" || slug.length > 32 || !slugPattern.test(slug)) {
-    throw new ApiError(400, "invalid_theme", "Theme slug must be a lowercase slug (a-z, 0-9, -), <=32 chars", { slug });
-  }
+export async function createTheme(slug: string, displayName: string) {
+  assertVocabularySlug("theme", slug, { reserved: ["none"] });
 
-  await withAdvisoryLock(themeMutationLockKey(slug), async () => {
-    await pool.query(
+  await withVocabularyMutationLock("theme", slug, async () => {
+    const result = await pool.query(
       `INSERT INTO theme(slug, display_name, sort_order)
        VALUES($1, $2, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM theme))
-       ON CONFLICT (slug) DO UPDATE SET display_name = EXCLUDED.display_name, updated_at = now()`,
+       ON CONFLICT (slug) DO NOTHING
+       RETURNING slug`,
       [slug, displayName]
     );
+    assertVocabularyCreated("theme", slug, result.rowCount);
   });
-  await refreshThemeDefinitionCaches();
+  await synchronizeVocabularyMutation({ entity: "theme" });
 }
 
 export async function setThemeDisplayName(slug: string, displayName: string) {
   if (slug === "none") throw new ApiError(400, "invalid_theme", "The reserved 'none' theme cannot be renamed", { slug });
   const result = await pool.query("UPDATE theme SET display_name = $2, updated_at = now() WHERE slug = $1", [slug, displayName]);
-  if (!result.rowCount) throw new ApiError(404, "not_found", "Theme not found");
-  await refreshThemeDefinitionCaches();
+  assertVocabularyFound("theme", result.rowCount);
+  await synchronizeVocabularyMutation({ entity: "theme" });
 }
 
 export async function reorderThemes(slugs: string[]) {
@@ -75,7 +79,7 @@ export async function reorderThemes(slugs: string[]) {
      WHERE t.slug = v.slug AND t.slug <> 'none'`,
     [slugs]
   );
-  await refreshThemeDefinitionCaches();
+  await synchronizeVocabularyMutation({ entity: "theme" });
 }
 
 type ThemeLookupInvalidation = {
@@ -89,70 +93,159 @@ async function reassignThemeImagesToNone(theme: string): Promise<ThemeLookupInva
     [theme]
   )).rows as Array<{ id: string; device: Device; brightness: Brightness; ext: string; object_key: string; storage_slug: string; is_link: boolean; status: string }>;
   if (!images.length) return [];
-
-  const moves = images
-    .filter((image) => !image.is_link)
-    .map((image) => ({ ...image, newKey: storageObjectKey(image.device, image.brightness, "none", image.id, image.ext) }))
-    .filter((move) => move.newKey !== move.object_key);
-  const newKeyById = new Map(moves.map((move) => [move.id, move.newKey]));
-
-  const linkThumbMoves = images
-    .filter((image) => image.is_link)
-    .map((image) => ({
-      storage_slug: image.storage_slug,
-      oldThumbKey: linkThumbnailKey(image.device, image.brightness, theme, image.id),
-      newThumbKey: linkThumbnailKey(image.device, image.brightness, "none", image.id)
-    }))
-    .filter((move) => move.oldThumbKey !== move.newThumbKey);
   const concurrency = getRuntimeConfig().background_job.theme_reassign_concurrency;
 
-  await mapWithConcurrency(moves, concurrency, async (move) => {
-    await copyObject("media", move.object_key, "media", move.newKey, move.storage_slug);
-    await copyObject("thumbs", thumbnailObjectKey(move.object_key), "thumbs", thumbnailObjectKey(move.newKey), move.storage_slug);
-  });
+  const results = await mapWithConcurrency(images, concurrency, (candidate) =>
+    withImageStorageMutationLock(candidate.id, async () => {
+      const image = (await pool.query(
+        `SELECT id, device, brightness, ext, object_key, storage_slug, is_link, status
+           FROM metadata
+          WHERE id=$1 AND theme=$2`,
+        [candidate.id, theme]
+      )).rows[0] as typeof candidate | undefined;
+      if (!image) return [] as ThemeLookupInvalidation[];
 
-  await mapWithConcurrency(linkThumbMoves, concurrency, async (move) => {
-    await copyObject("link", move.oldThumbKey, "link", move.newThumbKey, move.storage_slug);
-  });
+      const destinationObjects: Array<{
+        prefix: StoragePrefix;
+        key: string;
+        backend: string;
+      }> = [];
+      const sourceObjects: typeof destinationObjects = [];
+      const nextObjectKey = image.is_link
+        ? image.object_key
+        : storageObjectKey(
+            image.device,
+            image.brightness,
+            "none",
+            image.id,
+            image.ext
+          );
 
-  await withTransaction(async (client) => {
-    const locked = (await client.query("SELECT id FROM metadata WHERE theme=$1 FOR UPDATE", [theme])).rows as Array<{ id: string }>;
-    if (!locked.length) return;
-    for (const row of locked) {
-      await client.query(
-        "UPDATE metadata SET theme='none', object_key=COALESCE($2, object_key), updated_at=now() WHERE id=$1",
-        [row.id, newKeyById.get(row.id) ?? null]
+      try {
+        if (image.is_link) {
+          const oldThumbKey = linkThumbnailKey(
+            image.device,
+            image.brightness,
+            theme,
+            image.id
+          );
+          const newThumbKey = linkThumbnailKey(
+            image.device,
+            image.brightness,
+            "none",
+            image.id
+          );
+          if (oldThumbKey !== newThumbKey) {
+            await copyObject("link", oldThumbKey, "link", newThumbKey, image.storage_slug);
+            destinationObjects.push({
+              prefix: "link",
+              key: newThumbKey,
+              backend: image.storage_slug
+            });
+            sourceObjects.push({
+              prefix: "link",
+              key: oldThumbKey,
+              backend: image.storage_slug
+            });
+          }
+        } else if (nextObjectKey !== image.object_key) {
+          const oldThumbKey = thumbnailObjectKey(image.object_key);
+          const newThumbKey = thumbnailObjectKey(nextObjectKey);
+          await copyObject(
+            "media",
+            image.object_key,
+            "media",
+            nextObjectKey,
+            image.storage_slug
+          );
+          destinationObjects.push({
+            prefix: "media",
+            key: nextObjectKey,
+            backend: image.storage_slug
+          });
+          await copyObject(
+            "thumbs",
+            oldThumbKey,
+            "thumbs",
+            newThumbKey,
+            image.storage_slug
+          );
+          destinationObjects.push({
+            prefix: "thumbs",
+            key: newThumbKey,
+            backend: image.storage_slug
+          });
+          sourceObjects.push(
+            { prefix: "media", key: image.object_key, backend: image.storage_slug },
+            { prefix: "thumbs", key: oldThumbKey, backend: image.storage_slug }
+          );
+        }
+
+        const switched = await pool.query(
+          `UPDATE metadata
+              SET theme='none', object_key=$3, updated_at=now()
+            WHERE id=$1 AND theme=$2 AND storage_slug=$4 AND object_key=$5`,
+          [image.id, theme, nextObjectKey, image.storage_slug, image.object_key]
+        );
+        if (!switched.rowCount) {
+          await cleanupThemeMoveObjects(
+            image.id,
+            destinationObjects,
+            "theme_reassign_compare_and_swap_failed"
+          );
+          return [];
+        }
+      } catch (error) {
+        await cleanupThemeMoveObjects(
+          image.id,
+          destinationObjects,
+          "theme_reassign_failed"
+        );
+        throw error;
+      }
+
+      await cleanupThemeMoveObjects(
+        image.id,
+        sourceObjects,
+        "theme_reassign_source_cleanup"
       );
-    }
-  });
+      await pruneEmptyStorageDirs(image.storage_slug).catch(() => undefined);
+      return image.is_link || nextObjectKey === image.object_key
+        ? [{ id: image.id }]
+        : [
+            { id: image.id, object_key: image.object_key },
+            { id: image.id, object_key: nextObjectKey }
+          ];
+    })
+  );
+  return results.flat();
+}
 
-  await mapWithConcurrency(moves, concurrency, async (move) => {
-    await removeObject("media", move.object_key, move.storage_slug).catch(() => undefined);
-    await removeObject("thumbs", thumbnailObjectKey(move.object_key), move.storage_slug).catch(() => undefined);
-  });
-  await mapWithConcurrency(linkThumbMoves, concurrency, async (move) => {
-    await removeObject("link", move.oldThumbKey, move.storage_slug).catch(() => undefined);
-  });
-  for (const slug of new Set([...moves, ...linkThumbMoves].map((move) => move.storage_slug))) {
-    await pruneEmptyStorageDirs(slug).catch(() => undefined);
+async function cleanupThemeMoveObjects(
+  imageId: string,
+  objects: Array<{ prefix: StoragePrefix; key: string; backend: string }>,
+  reason: string
+) {
+  const failed: typeof objects = [];
+  for (const object of objects) {
+    await removeObject(object.prefix, object.key, object.backend).catch(() => {
+      failed.push(object);
+    });
   }
-  return images.flatMap((image) => {
-    if (image.is_link) return [{ id: image.id }];
-    const newKey = newKeyById.get(image.id);
-    return newKey && newKey !== image.object_key
-      ? [
-          { id: image.id, object_key: image.object_key },
-          { id: image.id, object_key: newKey },
-        ]
-      : [{ id: image.id, object_key: image.object_key }];
-  });
+  if (!failed.length) return;
+  await enqueue(
+    "move.cleanup",
+    imageId,
+    { objects: failed, reason },
+    `move.cleanup:${imageId}:${failed.map((object) => `${object.prefix}:${object.key}`).join("|")}`
+  ).catch(() => undefined);
 }
 
 async function deleteThemeUnderLock(slug: string) {
   const exists = (await pool.query("SELECT 1 FROM theme WHERE slug=$1", [slug])).rowCount;
   if (!exists) return { deleted: false, lookupInvalidations: [] as ThemeLookupInvalidation[] };
 
-  const lookupInvalidations = await withStorageMutationLock(() => reassignThemeImagesToNone(slug));
+  const lookupInvalidations = await reassignThemeImagesToNone(slug);
   const deleted = Boolean((await pool.query("DELETE FROM theme WHERE slug = $1", [slug])).rowCount);
   return { deleted, lookupInvalidations };
 }
@@ -161,16 +254,20 @@ export async function deleteTheme(slug: string) {
   if (slug === "none") {
     throw new ApiError(400, "invalid_theme", "The reserved 'none' theme cannot be deleted", { slug });
   }
-  const result = await withAdvisoryLock(themeMutationLockKey(slug), () => deleteThemeUnderLock(slug));
-  if (!result.deleted) throw new ApiError(404, "not_found", "Theme not found");
+  const result = await withVocabularyMutationLock(
+    "theme",
+    slug,
+    () => deleteThemeUnderLock(slug)
+  );
+  assertVocabularyFound("theme", result.deleted ? 1 : 0);
   if (result.lookupInvalidations.length) {
-    await rebuildRandomPool();
-    await Promise.all([
-      invalidateImageLookupEntries(result.lookupInvalidations),
-      invalidateImageReadCaches(),
-      refreshThemeDefinitionCaches({ facets: false }),
-    ]);
-  } else await refreshThemeDefinitionCaches();
+    await synchronizeVocabularyMutation({
+      entity: "theme",
+      lookupEntries: result.lookupInvalidations,
+      imageDataChanged: true,
+      random: { mode: "rebuild" }
+    });
+  } else await synchronizeVocabularyMutation({ entity: "theme" });
 }
 
 export async function deleteThemes(slugs: string[]) {
@@ -179,16 +276,22 @@ export async function deleteThemes(slugs: string[]) {
   const lookupInvalidations: ThemeLookupInvalidation[] = [];
   let deletedAny = false;
   for (const slug of targets) {
-    const result = await withAdvisoryLock(themeMutationLockKey(slug), () => deleteThemeUnderLock(slug));
+    const result = await withVocabularyMutationLock(
+      "theme",
+      slug,
+      () => deleteThemeUnderLock(slug)
+    );
     lookupInvalidations.push(...result.lookupInvalidations);
     if (result.deleted) deletedAny = true;
   }
   if (lookupInvalidations.length) {
-    await rebuildRandomPool();
-    await Promise.all([
-      invalidateImageLookupEntries(lookupInvalidations),
-      invalidateImageReadCaches(),
-      refreshThemeDefinitionCaches({ facets: false }),
-    ]);
-  } else if (deletedAny) await refreshThemeDefinitionCaches();
+    await synchronizeVocabularyMutation({
+      entity: "theme",
+      lookupEntries: lookupInvalidations,
+      imageDataChanged: true,
+      random: { mode: "rebuild" }
+    });
+  } else if (deletedAny) {
+    await synchronizeVocabularyMutation({ entity: "theme" });
+  }
 }

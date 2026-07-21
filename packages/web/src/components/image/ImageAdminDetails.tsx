@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, isApiClientError } from "../../lib/api/client.js";
-import { adminApiBasePath, queryKeys } from "../../lib/constants.js";
+import { adminApiBasePath } from "../../lib/constants.js";
+import { queryKeys } from "../../lib/api/query-keys.js";
 import { clearSessionProbeHint, hasSessionProbeHint } from "../../lib/api/site-data.js";
 import { errorMessage, formatDate } from "../../lib/ui/formatters.js";
 import type { ImageAdminInfo, ImageItem } from "../../lib/types.js";

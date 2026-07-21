@@ -2,18 +2,26 @@ import { useEffect, useRef, useState, type DragEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api/client.js";
 import { Icon } from "../../components/icon/Icon.js";
+import { AsyncActionButton } from "../../components/actions/AsyncActionButton.js";
 import { adminApiBasePath } from "../../lib/constants.js";
 import { storageBackendDisplay, storageBackendLabel, storageTypeLabel } from "../../lib/ui/select-options.js";
-import { errorMessage } from "../../lib/ui/formatters.js";
+import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
+import { waitForMinimumPendingDuration } from "../../lib/ui/async-action-timing.js";
 import type { StorageBackendAdmin } from "../../lib/types.js";
 import {
-  ActionFeedback,
   createActionFeedback,
   type ActionFeedbackState
 } from "../../components/feedback/ActionFeedback.js";
+import {
+  ActionFeedbackOutlet,
+  useActionFeedbackTarget
+} from "../../components/feedback/ActionFeedbackRegion.js";
+import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.js";
 import { StorageBackendModal } from "./StorageBackendModal.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
 import { invalidateStorageData } from "../../lib/api/query-invalidation.js";
+import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
+import { queryKeys } from "../../lib/api/query-keys.js";
 
 // 存储管理：命名存储后端的注册表 CRUD（卡片列表 + 拖动排序），新建/编辑走 StorageBackendModal。
 export function StorageSettings() {
@@ -22,9 +30,10 @@ export function StorageSettings() {
 
 function StorageBackendsManager() {
   const client = useQueryClient();
-  const query = useQuery<{ backends: StorageBackendAdmin[] }>({ queryKey: ["storage-backends"], queryFn: () => api(`${adminApiBasePath}/storage/backends`) });
+  const query = useQuery<{ backends: StorageBackendAdmin[] }>({ queryKey: queryKeys.storageBackends, queryFn: ({ signal }) => api(`${adminApiBasePath}/storage/backends`, { signal }) });
   const [busy, setBusy] = useState("");
   const [feedback, setFeedback] = useState<ActionFeedbackState | null>(null);
+  const feedbackTarget = useActionFeedbackTarget("storage-settings");
   const [editing, setEditing] = useState<StorageBackendAdmin | "new" | null>(null);
   const backends = query.data?.backends ?? [];
   const defaultBackend = backends.find((backend) => backend.is_default);
@@ -49,29 +58,48 @@ function StorageBackendsManager() {
     });
   };
 
-  const persistOrder = () => {
+  const persistOrder = async () => {
     if (!dragSlug.current) return;
+    if (busy) {
+      dragSlug.current = null;
+      setOrder(query.data?.backends ?? []);
+      return;
+    }
     dragSlug.current = null;
+    const persistedOrder = query.data?.backends ?? [];
     const slugs = order.filter((backend) => backend.slug !== "local").map((backend) => backend.slug);
-    void runStorageAction(
+    setFeedback(createActionFeedback("正在保存排序...", "pending"));
+    const startedAt = Date.now();
+    const succeeded = await runStorageAction(
       "reorder",
-      () => api(`${adminApiBasePath}/storage/backends/reorder`, { method: "POST", body: JSON.stringify({ slugs }) }),
-      "正在保存排序...",
-      "排序已保存"
+      () => api(`${adminApiBasePath}/storage/backends/reorder`, {
+        method: "POST",
+        body: JSON.stringify({ slugs })
+      })
     );
+    await waitForMinimumPendingDuration(startedAt);
+    if (!succeeded) {
+      setOrder(persistedOrder);
+      void query.refetch();
+    }
+    setFeedback(createActionFeedback(
+      succeeded ? "排序已保存" : "排序保存失败，请稍后重试",
+      succeeded ? "success" : "error"
+    ));
   };
 
-  const runStorageAction = async (key: string, action: () => Promise<unknown>, pending: string, success: string): Promise<boolean> => {
+  const runStorageAction = async (
+    key: string,
+    action: () => Promise<unknown>
+  ): Promise<boolean> => {
     if (busy) return false;
     setBusy(key);
-    setFeedback(createActionFeedback(pending, "pending"));
     try {
       await action();
-      setFeedback(createActionFeedback(success, "success"));
       await invalidateStorageData(client);
       return true;
     } catch (error) {
-      setFeedback(createActionFeedback(errorMessage(error), "error"));
+      reportAdminUiError(`storage.${key}`, error);
       return false;
     } finally {
       setBusy("");
@@ -84,7 +112,8 @@ function StorageBackendsManager() {
     try {
       await api(`${adminApiBasePath}/storage/test`, { method: "POST", body: JSON.stringify(body) });
       return true;
-    } catch {
+    } catch (error) {
+      reportAdminUiError("storage.connection_test", error);
       return false;
     } finally {
       setBusy("");
@@ -92,9 +121,21 @@ function StorageBackendsManager() {
   };
 
   const setDefault = (slug: string) => {
-    const backend = backends.find((item) => item.slug === slug);
-    const name = backend ? storageBackendDisplay(backend) : storageBackendLabel(slug);
-    return runStorageAction(`default:${slug}`, () => api(`${adminApiBasePath}/storage/backends/${slug}/default`, { method: "POST" }), "正在切换默认后端...", `默认后端已设为 ${name}`);
+    return runStorageAction(
+      `default:${slug}`,
+      () => api(`${adminApiBasePath}/storage/backends/${slug}/default`, { method: "POST" })
+    );
+  };
+
+  const deleteBackend = async (slug: string) => {
+    if (busy) return;
+    const succeeded = await runStorageAction(
+      `delete:${slug}`,
+      () => api(`${adminApiBasePath}/storage/backends/${slug}/delete`, { method: "POST" })
+    );
+    if (!succeeded) {
+      setFeedback(createActionFeedback("存储后端删除失败，请稍后重试", "error"));
+    }
   };
 
   const openEditor = (target: StorageBackendAdmin | "new") => setEditing(target);
@@ -102,16 +143,15 @@ function StorageBackendsManager() {
 
   return (
     <section className="workspace">
-      <header className="workspace-head">
-        <div>
-          <h1>存储管理</h1>
-          <p>命名存储后端：本地与多个对象存储桶可并存</p>
-        </div>
-      </header>
+      <WorkspaceHeader
+        title="存储管理"
+        description="命名存储后端：本地与多个对象存储桶可并存"
+        feedbackTarget={feedbackTarget}
+      />
       <p className="hint">每张图片记录自己所在的存储后端，可定义多个（同类型也可，例如两个对象存储桶）。新上传写入“默认”后端；已有图片可在图片管理处迁移到任意后端。</p>
       <p className="storage-default-note">当前默认上传后端 <strong>{defaultBackend ? storageBackendDisplay(defaultBackend) : storageBackendLabel(defaultSlug)}</strong></p>
       {query.isLoading && <p className="muted">加载中</p>}
-      {query.isError && <QueryErrorState error={query.error} onRetry={() => void query.refetch()} />}
+      {query.isError && <QueryErrorState error={query.error} onRetry={() => void query.refetch()} reportContext="storage.load" />}
       <div className="storage-card-grid">
         {order.map((backend) => (
           <BackendCard
@@ -120,22 +160,18 @@ function StorageBackendsManager() {
             hasNonLocalBackend={hasNonLocalBackend}
             busy={busy}
             onEdit={() => openEditor(backend)}
-            onSetDefault={() => void setDefault(backend.slug)}
-            onToggleEnabled={() => void runStorageAction(
+            onSetDefault={() => setDefault(backend.slug)}
+            onToggleEnabled={() => runStorageAction(
               `enable:${backend.slug}`,
-              () => api(`${adminApiBasePath}/storage/backends/${backend.slug}`, { method: "POST", body: JSON.stringify({ enabled: !backend.enabled }) }),
-              backend.enabled ? "正在停用后端..." : "正在启用后端...",
-              backend.enabled ? "存储后端已停用" : "存储后端已启用"
+              () => api(`${adminApiBasePath}/storage/backends/${backend.slug}`, {
+                method: "POST",
+                body: JSON.stringify({ enabled: !backend.enabled })
+              })
             )}
-            onDelete={() => void runStorageAction(
-              `delete:${backend.slug}`,
-              () => api(`${adminApiBasePath}/storage/backends/${backend.slug}/delete`, { method: "POST" }),
-              "正在删除后端...",
-              "存储后端已删除"
-            )}
+            onDelete={() => void deleteBackend(backend.slug)}
             onDragStart={(slug) => { dragSlug.current = slug; }}
             onDragEnter={moveOver}
-            onDragEnd={persistOrder}
+            onDragEnd={() => void persistOrder()}
           />
         ))}
         <button type="button" className="storage-add-card" disabled={Boolean(busy)} onClick={() => openEditor("new")}>
@@ -154,16 +190,14 @@ function StorageBackendsManager() {
             isCreate ? "create" : `save:${slug}`,
             () => isCreate
               ? api(`${adminApiBasePath}/storage/backends`, { method: "POST", body: JSON.stringify(payload) })
-              : api(`${adminApiBasePath}/storage/backends/${slug}`, { method: "POST", body: JSON.stringify(payload) }),
-            isCreate ? "正在新建后端..." : "正在保存后端...",
-            isCreate ? "存储后端已新建" : "存储后端已保存"
+              : api(`${adminApiBasePath}/storage/backends/${slug}`, { method: "POST", body: JSON.stringify(payload) })
           )}
         />
       )}
       {feedback && (
-        <ActionFeedback
+        <ActionFeedbackOutlet
           feedback={feedback}
-          placement="floating"
+          target={feedbackTarget}
           onClose={() => setFeedback(null)}
         />
       )}
@@ -176,9 +210,9 @@ function BackendCard({ backend, hasNonLocalBackend, busy, onEdit, onSetDefault, 
   hasNonLocalBackend: boolean;
   busy: string;
   onEdit: () => void;
-  onSetDefault: () => void;
+  onSetDefault: () => Promise<boolean>;
   onDelete: () => void;
-  onToggleEnabled: () => void;
+  onToggleEnabled: () => Promise<boolean>;
   onDragStart: (slug: string) => void;
   onDragEnter: (slug: string) => void;
   onDragEnd: () => void;
@@ -187,8 +221,36 @@ function BackendCard({ backend, hasNonLocalBackend, busy, onEdit, onSetDefault, 
   const showEnabledToggle = !isLocal || hasNonLocalBackend;
 
   const [armed, setArmed] = useState(false);
+  const defaultStatus = useAsyncActionStatus();
+  const enabledStatus = useAsyncActionStatus();
   const title = backend.display_name || storageBackendLabel(backend.slug);
-
+  const cardBusy = Boolean(busy)
+    || defaultStatus.pending
+    || enabledStatus.pending;
+  const defaultPresentation = {
+    idle: {
+      icon: backend.is_default ? "star-fill" : "star-line",
+      label: backend.is_default ? "默认" : "设为默认"
+    },
+    pending: { icon: "star-line", label: "设置中" },
+    success: { icon: "check-line", label: "已设默认" },
+    error: { icon: "close-line", label: "设置失败" }
+  } as const;
+  const enabledPresentation = {
+    idle: {
+      icon: backend.enabled ? "check-line" : "close-line",
+      label: backend.enabled ? "已启用" : "已停用"
+    },
+    pending: {
+      icon: "refresh-line",
+      label: "切换中"
+    },
+    success: {
+      icon: "check-line",
+      label: backend.enabled ? "已启用" : "已停用"
+    },
+    error: { icon: "close-line", label: "操作失败" }
+  } as const;
   const begin = (event: DragEvent<HTMLDivElement>) => {
     event.dataTransfer.effectAllowed = "move";
     event.dataTransfer.setData("text/plain", backend.slug);
@@ -207,30 +269,35 @@ function BackendCard({ backend, hasNonLocalBackend, busy, onEdit, onSetDefault, 
       <div className="storage-card-body">
         <div className="storage-card-title">
           <strong title={title}>{title}</strong>
-          <button
+          <AsyncActionButton
             type="button"
             className={`storage-default-toggle${backend.is_default ? " is-default" : ""}`}
-            disabled={Boolean(busy) || backend.is_default || !backend.enabled}
+            status={defaultStatus.status}
+            presentation={defaultPresentation}
+            disabled={cardBusy || backend.is_default || !backend.enabled}
             title={backend.is_default ? "当前默认上传后端" : backend.enabled ? "设为默认上传后端" : "启用后才能设为默认"}
-            onClick={onSetDefault}
-          >
-            <Icon name={backend.is_default ? "star-fill" : "star-line"} />{backend.is_default ? "默认" : "设为默认"}
-          </button>
+            onClick={() => void defaultStatus.run(onSetDefault)}
+          />
         </div>
-        <div className="storage-card-meta">{backend.slug} · {storageTypeLabel(backend.type)}</div>
+        <div className="storage-card-meta">
+          {backend.slug} · {storageTypeLabel(backend.type)} · {backend.image_count} 张图片
+          {backend.active_import_count > 0
+            ? ` · ${backend.active_import_count} 个活动导入`
+            : ""}
+        </div>
       </div>
       <div className="storage-card-actions">
         <span className="storage-card-actions-left">
           {showEnabledToggle && (
-            <button
+            <AsyncActionButton
               type="button"
-              className={`storage-enable-toggle${backend.enabled ? " is-on" : ""}`}
-              disabled={Boolean(busy) || backend.is_default}
+              className={`storage-enable-toggle${backend.enabled && enabledStatus.status === "idle" ? " is-on" : ""}`}
+              status={enabledStatus.status}
+              presentation={enabledPresentation}
+              disabled={cardBusy || backend.is_default}
               title={backend.is_default ? "默认后端不能停用" : backend.enabled ? "已启用：新图片可写入此存储。点击停用（不影响读取与迁移）" : "已停用：新图片不能写入。点击启用"}
-              onClick={onToggleEnabled}
-            >
-              <span className="storage-enable-dot" />{backend.enabled ? "已启用" : "已停用"}
-            </button>
+              onClick={() => void enabledStatus.run(onToggleEnabled)}
+            />
           )}
         </span>
         <span className="storage-card-actions-right">
@@ -240,6 +307,7 @@ function BackendCard({ backend, hasNonLocalBackend, busy, onEdit, onSetDefault, 
               className="icon storage-drag-handle"
               title="按住拖动排序"
               aria-label="拖动排序"
+              disabled={cardBusy}
               onMouseDown={() => setArmed(true)}
               onMouseUp={() => setArmed(false)}
             >
@@ -250,7 +318,7 @@ function BackendCard({ backend, hasNonLocalBackend, busy, onEdit, onSetDefault, 
             type="button"
             className="icon"
             title="编辑"
-            disabled={Boolean(busy)}
+            disabled={cardBusy}
             onClick={onEdit}
           >
             <Icon name="pencil-line" />
@@ -260,7 +328,7 @@ function BackendCard({ backend, hasNonLocalBackend, busy, onEdit, onSetDefault, 
               type="button"
               className="icon is-danger"
               title={backend.is_default ? "默认后端不能删除（请先切换默认）" : "删除"}
-              disabled={Boolean(busy) || backend.is_default}
+              disabled={cardBusy || backend.is_default}
               onClick={onDelete}
             >
               <Icon name="delete-bin-6-line" />

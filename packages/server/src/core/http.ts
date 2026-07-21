@@ -6,9 +6,23 @@ import { pool } from "./db.ts";
 import { redis } from "./redis-client.ts";
 import { logger } from "./logger.ts";
 import { verifyPassword } from "./password.ts";
-import { rehashPasswordIfNeeded } from "../users/password-upgrade.ts";
+import { ApiError } from "./api-error.ts";
+import {
+  loginRateLimiter,
+  type LoginRateLimiter
+} from "./login-rate-limit.ts";
 
-const loginGlobalKey = "imageshow:login_fail_global";
+type PasswordHashUpgrade = (input: {
+  username: string;
+  password: string;
+  currentHash: string;
+}) => Promise<unknown>;
+
+export type LoginDependencies = {
+  upgradePasswordHash?: PasswordHashUpgrade;
+  rateLimiter?: LoginRateLimiter;
+};
+
 export const cspReportPath = "/api/security/csp-report";
 const cspReportGroup = "imageshow-csp";
 const trustedTypePolicyNames = [
@@ -48,30 +62,8 @@ export const publicMetadataCacheControl = publicApiCacheControl;
 export const publicConfigCacheControl = publicApiCacheControl;
 export const robotsCacheControl = "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400, stale-if-error=86400";
 
-export class ApiError extends Error {
-  status: number;
-  code: string;
-  details: unknown;
-
-  constructor(
-    status: number,
-    code: string,
-    message: string,
-    details: unknown = {}
-  ) {
-    super(message);
-    this.status = status;
-    this.code = code;
-    this.details = details;
-  }
-}
-
 export function ok(data: Record<string, unknown> = {}) {
   return { ok: true, ...data };
-}
-
-export function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
 }
 
 export function fail(c: Context, error: unknown) {
@@ -152,19 +144,27 @@ export function appendVaryHeader(c: Context, ...names: string[]) {
   c.header("Vary", [...normalized.values()].join(", "));
 }
 
-export async function login(c: Context, username: string, password: string) {
+export async function login(
+  c: Context,
+  username: string,
+  password: string,
+  dependencies: LoginDependencies = {}
+) {
   assertSameOrigin(c);
-  await reserveLoginAttempt(c, username);
+  const rateLimiter = dependencies.rateLimiter ?? loginRateLimiter;
+  const ip = clientIp(c);
+  await rateLimiter.reserve(ip, username);
   const result = await pool.query("SELECT username, password_hash, role FROM admin_account WHERE username = $1", [username]);
   const user = result.rows[0];
   if (!user || !(await verifyPassword(user.password_hash, password))) {
     throw new ApiError(401, "invalid_credentials", "用户名或密码错误");
   }
-  await rehashPasswordIfNeeded(
-    (sql, params) => pool.query(sql, params),
-    { username: user.username, password, currentHash: user.password_hash }
-  ).catch((error) => logger.warn("could not upgrade administrator password hash", error));
-  await clearLoginFailures(c, username);
+  await dependencies.upgradePasswordHash?.({
+    username: user.username,
+    password,
+    currentHash: user.password_hash
+  }).catch((error) => logger.warn("could not upgrade administrator password hash", error));
+  await rateLimiter.clear(ip, username);
   const sessionId = randomBytes(32).toString("base64url");
   const csrf = randomBytes(32).toString("base64url");
   const sessionTtl = getRuntimeConfig().security.session_ttl_seconds;
@@ -219,35 +219,4 @@ export function clientIp(c: Context): string {
   if (realIp) return realIp;
   const forwarded = c.req.header("x-forwarded-for")?.split(",")[0]?.trim();
   return forwarded || "unknown";
-}
-
-function loginRateLimitKey(c: Context, username: string) {
-  const normalizedUser = username.trim().toLowerCase().slice(0, 80) || "empty";
-  return `imageshow:login_fail:${clientIp(c)}:${normalizedUser}`;
-}
-
-async function reserveLoginAttempt(c: Context, username: string) {
-  const limits = getRuntimeConfig().security;
-  const key = loginRateLimitKey(c, username);
-  const counts = (await redis.eval(
-    `local function bump(name, ttl)
-       local total = redis.call('INCR', name)
-       local remaining = redis.call('TTL', name)
-       if total == 1 or remaining < 0 then redis.call('EXPIRE', name, ttl) end
-       return total
-     end
-     return { bump(KEYS[1], ARGV[1]), bump(KEYS[2], ARGV[2]) }`,
-    2,
-    key,
-    loginGlobalKey,
-    limits.login_failure_window_seconds,
-    limits.login_global_window_seconds
-  )) as [number, number];
-  if (Number(counts[0]) > limits.login_max_failures || Number(counts[1]) > limits.login_global_max_attempts) {
-    throw new ApiError(429, "too_many_login_attempts", "登录尝试过于频繁，请稍后再试");
-  }
-}
-
-async function clearLoginFailures(c: Context, username: string) {
-  await redis.del(loginRateLimitKey(c, username));
 }

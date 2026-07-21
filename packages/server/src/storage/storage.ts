@@ -3,9 +3,13 @@ import { join } from "node:path";
 import { runtimePaths } from "../config/bootstrap-env.ts";
 import { linkBaseUrl, staticLocalBaseUrl } from "../themes/host.ts";
 import type { StorageConfig } from "./backend-config.ts";
-import { getDefaultStorageBackend, getStorageBackend } from "./backend-registry.ts";
+import {
+  getDefaultStorageBackend,
+  resolveStorageAccess,
+  resolveStorageAccessForConfig
+} from "./backend-registry.ts";
 import { linkThumbnailKey, thumbnailObjectKey } from "./image-paths.ts";
-import { driverFor, type CopyPrefix } from "./storage-backend.ts";
+import type { CopyPrefix, OpenedRead } from "./storage-backend.ts";
 import { contentTypeForKey, STORAGE_PREFIXES, type ReadablePrefix, type StoragePrefix } from "./object-keys.ts";
 import { logger } from "../core/logger.ts";
 
@@ -22,36 +26,32 @@ export async function ensureRuntimeDirectories() {
   }
 }
 
-async function resolveConfig(slug?: string) {
-  return slug ? getStorageBackend(slug) : getDefaultStorageBackend();
-}
-
 export function storageExistsWithConfig(config: StorageConfig, prefix: StoragePrefix, key: string) {
-  return driverFor(config).exists(prefix, key);
+  return resolveStorageAccessForConfig(config).driver.exists(prefix, key);
 }
 export function readStorageBufferWithConfig(config: StorageConfig, prefix: StoragePrefix, key: string) {
-  return driverFor(config).readBuffer(prefix, key);
+  return resolveStorageAccessForConfig(config).driver.readBuffer(prefix, key);
 }
 export function writeStorageBufferWithConfig(config: StorageConfig, prefix: StoragePrefix, key: string, body: Buffer, type: string) {
-  return driverFor(config).writeBuffer(prefix, key, body, type);
+  return resolveStorageAccessForConfig(config).driver.writeBuffer(prefix, key, body, type);
 }
 
 export async function exists(prefix: StoragePrefix, key: string, slug?: string) {
-  return driverFor(await resolveConfig(slug)).exists(prefix, key);
+  return (await resolveStorageAccess(slug)).driver.exists(prefix, key);
 }
 export async function readStorageBuffer(prefix: StoragePrefix, key: string, slug?: string) {
-  return driverFor(await resolveConfig(slug)).readBuffer(prefix, key);
+  return (await resolveStorageAccess(slug)).driver.readBuffer(prefix, key);
 }
 export async function writeStorageBuffer(prefix: StoragePrefix, key: string, body: Buffer, type: string, slug?: string) {
-  return driverFor(await resolveConfig(slug)).writeBuffer(prefix, key, body, type);
+  return (await resolveStorageAccess(slug)).driver.writeBuffer(prefix, key, body, type);
 }
 export async function removeObject(prefix: StoragePrefix, key: string, slug?: string) {
-  return driverFor(await resolveConfig(slug)).remove(prefix, key);
+  return (await resolveStorageAccess(slug)).driver.remove(prefix, key);
 }
 
 export async function copyObject(fromPrefix: CopyPrefix, fromKey: string, toPrefix: CopyPrefix, toKey: string, slug?: string) {
   if (fromPrefix === toPrefix && fromKey === toKey) return;
-  const driver = driverFor(await resolveConfig(slug));
+  const { driver } = await resolveStorageAccess(slug);
   try {
     await driver.copy(fromPrefix, fromKey, toPrefix, toKey);
   } catch (error) {
@@ -59,18 +59,36 @@ export async function copyObject(fromPrefix: CopyPrefix, fromKey: string, toPref
     await driver.writeBuffer(toPrefix, toKey, await driver.readBuffer(fromPrefix, fromKey), contentTypeForKey(toKey));
   }
 }
-export async function openObject(prefix: ReadablePrefix, key: string, slug?: string, range?: string) {
-  return driverFor(await resolveConfig(slug)).openRead(prefix, key, range);
-}
 export async function listStorageKeys(prefix: StoragePrefix, slug?: string) {
-  return driverFor(await resolveConfig(slug)).listKeys(prefix);
+  return (await resolveStorageAccess(slug)).driver.listKeys(prefix);
 }
-export async function publicObjectUrl(prefix: ReadablePrefix, key: string, slug?: string) {
-  return driverFor(await resolveConfig(slug)).publicObjectUrl(prefix, key);
+export async function pruneEmptyStorageDirs(slug?: string) {
+  return (await resolveStorageAccess(slug)).driver.pruneEmptyDirs();
 }
 
-export async function pruneEmptyStorageDirs(slug?: string) {
-  return driverFor(await resolveConfig(slug)).pruneEmptyDirs();
+export type ResolvedReadableObject = {
+  prefix: ReadablePrefix;
+  key: string;
+  storageSlug: string;
+  publicUrl: string;
+  exists: () => Promise<boolean>;
+  open: (range?: string) => Promise<OpenedRead>;
+};
+
+export async function resolveReadableObject(
+  prefix: ReadablePrefix,
+  key: string,
+  slug?: string
+): Promise<ResolvedReadableObject> {
+  const { config, driver } = await resolveStorageAccess(slug);
+  return {
+    prefix,
+    key,
+    storageSlug: config.slug,
+    publicUrl: driver.publicObjectUrl(prefix, key),
+    exists: () => driver.exists(prefix, key),
+    open: (range) => driver.openRead(prefix, key, range)
+  };
 }
 
 function encodeKeyPath(key: string) {
@@ -86,7 +104,7 @@ type LinkImageUrlParts = { id: string; device: string; brightness: string; theme
 
 export async function publicImageUrls(objectKey: string, slug: string, isLink: boolean, link?: LinkImageUrlParts) {
   if (isLink) {
-    const thumbDriver = driverFor(await resolveConfig(slug));
+    const { driver: thumbDriver } = await resolveStorageAccess(slug);
     const linkInfo = link ?? { id: "", device: "pc", brightness: "dark", theme: "none", ext: "jpg" };
     const thumbKey = linkThumbnailKey(linkInfo.device, linkInfo.brightness, linkInfo.theme, linkInfo.id);
     const directThumb = thumbDriver.publicObjectUrl("link", thumbKey);
@@ -96,7 +114,7 @@ export async function publicImageUrls(objectKey: string, slug: string, isLink: b
       thumb_url: directThumb || `${linkBase}/thumbs/${encodeKeyPath(thumbKey)}`
     };
   }
-  const driver = driverFor(await resolveConfig(slug));
+  const { driver } = await resolveStorageAccess(slug);
   const thumbKey = thumbnailObjectKey(objectKey);
 
   const staticBase = staticLocalBaseUrl();
@@ -108,7 +126,7 @@ export async function publicImageUrls(objectKey: string, slug: string, isLink: b
 
 export async function testStorageBackend(config?: StorageConfig) {
   const effective = config ?? await getDefaultStorageBackend();
-  const driver = driverFor(effective);
+  const driver = resolveStorageAccessForConfig(effective).driver;
   try {
     return await driver.selfTest();
   } finally {

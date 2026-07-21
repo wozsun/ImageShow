@@ -3,7 +3,7 @@ import { mkdir, readdir, rename, rm, stat } from "node:fs/promises";
 import { dirname, join, normalize, sep } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { runtimePaths } from "../../config/bootstrap-env.ts";
-import { ApiError } from "../../core/http.ts";
+import { ApiError } from "../../core/api-error.ts";
 import { nodeReadableFromWeb } from "../../storage/stream-buffer.ts";
 
 export function rawImportPath(id: string) {

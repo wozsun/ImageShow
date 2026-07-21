@@ -2,7 +2,7 @@ import { open, readdir, stat } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { runtimePaths } from "../config/bootstrap-env.ts";
 import { getRuntimeConfig, updateRuntimeConfig } from "../config/runtime-config-store.ts";
-import { ApiError } from "./http.ts";
+import { ApiError } from "./api-error.ts";
 
 const logFilePattern = /^app\.log(?:\.\d+)?$/;
 const defaultTailBytes = 200_000;

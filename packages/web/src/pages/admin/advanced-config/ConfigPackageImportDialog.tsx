@@ -3,13 +3,18 @@ import { slugFormatHint, slugPattern } from "../../../lib/constants.js";
 import { storageTypeLabel } from "../../../lib/ui/select-options.js";
 import type { AdvancedConfigPreview } from "../../../lib/types.js";
 import { Icon } from "../../../components/icon/Icon.js";
-import {
-  ActionFeedback,
-  type ActionFeedbackState
-} from "../../../components/feedback/ActionFeedback.js";
+import { AsyncActionButton } from "../../../components/actions/AsyncActionButton.js";
 import { useAnimatedClose } from "../../../hooks/useAnimatedClose.js";
 import { useBodyScrollLock } from "../../../hooks/useBodyScrollLock.js";
 import { OverlayScrollbar } from "../../../components/layout/OverlayScrollbar.js";
+import { useAsyncActionStatus } from "../../../hooks/useAsyncActionStatus.js";
+
+const importPackagePresentation = {
+  idle: { icon: "upload-cloud-2-line", label: "确认导入" },
+  pending: { icon: "upload-cloud-2-line", label: "正在导入" },
+  success: { icon: "check-line", label: "导入成功" },
+  error: { icon: "close-line", label: "导入失败" }
+} as const;
 
 function previewDate(value: string) {
   const date = new Date(value);
@@ -24,16 +29,12 @@ function suggestedSlug(slug: string) {
 export function ConfigPackageImportDialog({
   preview,
   busy,
-  feedback,
   onClose,
-  onFeedbackClose,
   onImport
 }: {
   preview: AdvancedConfigPreview;
   busy: boolean;
-  feedback: ActionFeedbackState | null;
   onClose: () => void;
-  onFeedbackClose: () => void;
   onImport: (slugMappings: Record<string, string>) => Promise<boolean>;
 }) {
   const operationBodyRef = useRef<HTMLDivElement | null>(null);
@@ -41,6 +42,8 @@ export function ConfigPackageImportDialog({
     preview.conflicts.map((slug) => [slug, suggestedSlug(slug)])
   ));
   const exit = useAnimatedClose(onClose);
+  const importStatus = useAsyncActionStatus({ successDurationMs: null });
+  const blocked = busy || importStatus.pending;
   useBodyScrollLock();
 
   const mappingError = (sourceSlug: string) => {
@@ -62,7 +65,7 @@ export function ConfigPackageImportDialog({
     const normalized = Object.fromEntries(
       Object.entries(slugMappings).map(([slug, replacement]) => [slug, replacement.trim().toLowerCase()])
     );
-    if (await onImport(normalized)) exit.requestClose();
+    if (await importStatus.run(() => onImport(normalized))) exit.requestClose();
   };
 
   return (
@@ -75,16 +78,15 @@ export function ConfigPackageImportDialog({
     >
       <form onSubmit={(event) => { event.preventDefault(); void submit(); }}>
         <header>
-          <div>
+          <div className="config-package-dialog-copy">
             <h2>导入配置包</h2>
             <p>确认可迁移配置和即将新增的自定义存储后端。</p>
           </div>
-          <button className="icon close pressable" type="button" title="关闭" disabled={busy} onClick={() => exit.requestClose()}>
+          <button className="icon close pressable" type="button" title="关闭" disabled={blocked} onClick={() => exit.requestClose()}>
             <Icon name="close-line" />
           </button>
         </header>
         <div ref={operationBodyRef} className="operation-body">
-          {feedback && <ActionFeedback feedback={feedback} placement="inline" onClose={onFeedbackClose} />}
           <dl className="advanced-config-summary">
             <div><dt>格式版本</dt><dd>v{preview.format_version}</dd></div>
             <div><dt>应用版本</dt><dd>{preview.application_version}</dd></div>
@@ -114,6 +116,7 @@ export function ConfigPackageImportDialog({
                           [backend.slug]: event.target.value.toLowerCase()
                         }))}
                         aria-invalid={Boolean(error)}
+                        disabled={blocked}
                       />
                       {error && <small className="error">{error}</small>}
                     </label>
@@ -125,10 +128,14 @@ export function ConfigPackageImportDialog({
         </div>
         <OverlayScrollbar targetRef={operationBodyRef} />
         <footer>
-          <button type="button" disabled={busy} onClick={() => exit.requestClose()}>取消</button>
-          <button className="button" type="submit" disabled={busy || mappingErrors.length > 0}>
-            <Icon name="upload-cloud-2-line" />{busy ? "正在导入…" : "确认导入"}
-          </button>
+          <button type="button" disabled={blocked} onClick={() => exit.requestClose()}>取消</button>
+          <AsyncActionButton
+            className="button"
+            type="submit"
+            status={importStatus.status}
+            presentation={importPackagePresentation}
+            disabled={blocked || mappingErrors.length > 0}
+          />
         </footer>
       </form>
     </div>

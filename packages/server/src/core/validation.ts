@@ -6,8 +6,8 @@ import {
   importBatchHardLimit,
   slugPattern
 } from "@imageshow/shared";
-import { adminPasswordInput, adminUsernameInput } from "../users/credentials.ts";
-import { ApiError } from "./http.ts";
+import { adminPasswordInput, adminUsernameInput } from "./credentials.ts";
+import { ApiError } from "./api-error.ts";
 import { isHttpsUrl } from "./url-validation.ts";
 
 const externalImageRejectedMessage = "外部图片请求未通过安全校验";
@@ -134,7 +134,7 @@ export const batchImageUpdateInput = z.object({
   }
 });
 
-export { adminUsernameInput } from "../users/credentials.ts";
+export { adminUsernameInput } from "./credentials.ts";
 export const userCreateInput = z.object({ username: adminUsernameInput, password: adminPasswordInput });
 export const userPasswordInput = z.object({ password: adminPasswordInput });
 

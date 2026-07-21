@@ -1,4 +1,4 @@
-import { ApiError } from "../core/http.ts";
+import { ApiError } from "../core/api-error.ts";
 import { uuidInput } from "../core/validation.ts";
 
 export function encodeImageCursor(row: { cursor_image_time: string; id: string }) {

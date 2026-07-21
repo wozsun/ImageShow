@@ -2,7 +2,7 @@ import { createWriteStream } from "node:fs";
 import { mkdir, rename, rm } from "node:fs/promises";
 import { dirname } from "node:path";
 import { pipeline } from "node:stream/promises";
-import { ApiError } from "../../core/http.ts";
+import { ApiError } from "../../core/api-error.ts";
 import { safeFetchExternalImage } from "../../core/external-image-fetch.ts";
 import { getRuntimeConfig } from "../../config/runtime-config-store.ts";
 import { nodeReadableFromWeb } from "../../storage/stream-buffer.ts";

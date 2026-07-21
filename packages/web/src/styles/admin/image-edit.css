@@ -75,8 +75,7 @@
 }
 .admin-pagination.batch-edit-pagination { display: none; }
 .batch-edit-pagination button { min-height: 38px; }
-.batch-edit-save-summary,
-.batch-edit-error { padding: 10px; border-radius: 6px; }
+.batch-edit-save-summary { padding: 10px; border-radius: 6px; }
 
 .batch-edit-row {
   width: 100%;

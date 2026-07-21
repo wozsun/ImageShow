@@ -1,50 +1,21 @@
 export type { AdminSettings, Brightness, Device, SiteSettings, StorageType } from "@imageshow/shared";
-import type { Brightness, Device } from "@imageshow/shared";
+import type {
+  AdminImageItemDto,
+  AdminRole,
+  Brightness,
+  Device,
+  FacetOptionDto,
+  GalleryImageCardDto,
+  ImageAdminInfoDto,
+  PublicImageDetailDto,
+  PublicImageItemDto
+} from "@imageshow/shared";
 
-export type GalleryImageCard = {
-  id: string;
-  title: string;
-  device: Device;
-  brightness: Brightness;
-  theme: string;
-  author: string;
-  thumb_url: string;
-  width: number;
-  height: number;
-  tags: string[];
-  diff_original: boolean;
-  image_time: string;
-};
-
-export type PublicImageDetail = {
-  id: string;
-  description: string;
-  object_url: string;
-  source: string;
-};
-
-export type PublicImageItem = GalleryImageCard & PublicImageDetail;
-
-export type ImageItem = PublicImageItem & {
-  status: "ready" | "deleted";
-  object_key: string;
-  storage_slug: string;
-  is_link: boolean;
-  md5: string;
-  original: string;
-  image_size?: number;
-  deleted_at?: string;
-  created_at?: string;
-  updated_at?: string;
-};
-
-export type ImageAdminInfo = {
-  id: string;
-  md5: string;
-  storage_label: string;
-  created_at: string;
-  updated_at: string;
-};
+export type GalleryImageCard = GalleryImageCardDto;
+export type PublicImageDetail = PublicImageDetailDto;
+export type PublicImageItem = PublicImageItemDto;
+export type ImageItem = AdminImageItemDto;
+export type ImageAdminInfo = ImageAdminInfoDto;
 
 export type Tag = {
   slug: string;
@@ -107,6 +78,8 @@ type StorageBackendAdminBase = {
   display_name: string;
   enabled: boolean;
   is_default: boolean;
+  image_count: number;
+  active_import_count: number;
 };
 
 export type StorageBackendAdmin = StorageBackendAdminBase & (
@@ -138,17 +111,12 @@ export type RuntimeConfigChangeSummary = {
   access_changes: Array<"site.domain">;
 };
 
-type AdminRole = "super" | "image";
-
 export type AdminUser = {
   username: string;
   role: AdminRole;
 };
 
-export type FacetOption = {
-  slug: string;
-  display_name: string;
-};
+export type FacetOption = FacetOptionDto;
 
 export type RandomMode = "" | "redirect" | "proxy";
 

@@ -1,5 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
-import { queryKeys } from "../constants.js";
+import { queryKeys } from "./query-keys.js";
 
 function invalidate(client: QueryClient, queryKeysToInvalidate: readonly (readonly unknown[])[]) {
   return Promise.all(queryKeysToInvalidate.map((queryKey) => client.invalidateQueries({ queryKey })));
@@ -23,8 +23,8 @@ export function clearAdminCacheAfterLogin(client: QueryClient) {
     queryKeys.authors,
     queryKeys.users,
     queryKeys.logs,
-    ["storage-backends"],
-    ["storage-options"]
+    queryKeys.storageBackends,
+    queryKeys.storageOptions
   ]);
 }
 
@@ -45,8 +45,8 @@ export function invalidateImageData(client: QueryClient) {
 
 export function invalidateStorageData(client: QueryClient) {
   return invalidate(client, [
-    ["storage-backends"],
-    ["storage-options"],
+    queryKeys.storageBackends,
+    queryKeys.storageOptions,
     queryKeys.overview,
     queryKeys.publicImages,
     queryKeys.publicImageDetail,
@@ -60,8 +60,8 @@ export function invalidateRuntimeData(client: QueryClient) {
     queryKeys.settings,
     queryKeys.siteConfig,
     queryKeys.me,
-    ["storage-backends"],
-    ["storage-options"],
+    queryKeys.storageBackends,
+    queryKeys.storageOptions,
     queryKeys.overview,
     queryKeys.publicImages,
     queryKeys.publicImageDetail,

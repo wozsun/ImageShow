@@ -1,6 +1,6 @@
 import { appConfig } from "@imageshow/shared";
 import { pool } from "../core/db.ts";
-import { errorMessage } from "../core/http.ts";
+import { errorMessage } from "../core/api-error.ts";
 import { logger } from "../core/logger.ts";
 import { randomUuidV7 } from "../core/uuid.ts";
 
@@ -16,6 +16,7 @@ export type BackgroundJob = {
   target_id: string;
   payload: Record<string, unknown>;
   retry_count: number;
+  created_at: Date | string;
 };
 
 export async function enqueue(
@@ -45,7 +46,7 @@ export async function claimBackgroundJob(type: string) {
        FOR UPDATE SKIP LOCKED
        LIMIT 1
      )
-     RETURNING id, type, target_id, payload, retry_count`,
+     RETURNING id, type, target_id, payload, retry_count, created_at`,
     [type]
   );
   return result.rows[0] as BackgroundJob | undefined;
@@ -88,10 +89,17 @@ export async function markBackgroundJobFailed(job: BackgroundJob, error: unknown
 
 export async function listRunnableBackgroundJobCounts() {
   return (await pool.query(
-    `SELECT type, count(*)::int AS n FROM background_job
+    `SELECT type,
+            count(*)::int AS n,
+            floor(extract(epoch FROM (now() - min(created_at))) * 1000)::bigint AS oldest_wait_ms
+       FROM background_job
      WHERE status='pending' OR (status='failed' AND next_retry_at <= now())
      GROUP BY type`
-  )).rows as Array<{ type: string; n: number }>;
+  )).rows.map((row) => ({
+    type: String(row.type),
+    n: Number(row.n),
+    oldest_wait_ms: Number(row.oldest_wait_ms ?? 0)
+  }));
 }
 
 export async function recoverStaleBackgroundJobs() {

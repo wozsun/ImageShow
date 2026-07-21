@@ -21,24 +21,27 @@
   background: #fff;
 }
 .advanced-config-editor-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: start;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) minmax(0, 460px);
+  grid-template-areas: "title status";
+  align-items: center;
+  column-gap: 12px;
 }
-.advanced-config-editor-head > div:first-child { flex: 1 1 auto; min-width: 0; }
-.advanced-config-editor-head h2,
-.advanced-config-editor-head p { margin: 0; }
+.advanced-config-editor-head h2 {
+  grid-area: title;
+  min-height: 36px;
+  margin: 0;
+}
 .advanced-config-editor-head-status {
-  flex: 0 1 auto;
+  grid-area: status;
+  width: 100%;
   min-width: 0;
-  max-width: min(460px, 50%);
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
 }
-.advanced-config-editor-head-status .action-feedback { flex: 1 1 auto; }
+.advanced-config-editor-head-status .advanced-config-feedback-region { flex: 1 1 auto; }
 .advanced-config-dirty { flex: 0 0 auto; padding: 3px 9px; border-radius: 999px; background: #fff3cd; color: #795d1d; font-size: 12px; font-weight: 700; }
 .advanced-config-code-editor {
   position: relative;
@@ -90,8 +93,15 @@
 
 .advanced-config-file-input { display: none; }
 .config-package-dialog form { width: min(900px, 100%); max-height: min(820px, 92vh); display: flex; flex-direction: column; overflow: hidden; }
+.config-package-dialog header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 36px;
+  grid-template-areas: "copy close";
+  align-items: center;
+}
+.config-package-dialog-copy { grid-area: copy; }
+.config-package-dialog header > .close { grid-area: close; }
 .config-package-dialog .operation-body { display: grid; gap: 12px; overflow-y: auto; }
-.config-package-dialog .operation-body > .action-feedback { justify-self: end; width: min(460px, 100%); }
 .advanced-config-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 0; }
 .advanced-config-summary div { min-width: 0; padding: 10px 12px; border-radius: 8px; background: #f5f7fa; }
 .advanced-config-summary dt { color: #66717f; font-size: 12px; }
@@ -132,7 +142,6 @@
 }
 
 .settings-head-actions {
-  margin-left: auto;
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -182,15 +191,11 @@
 .storage-test-button {
   width: 154px;
   flex: 0 0 154px;
-  transition: color .16s ease, background-color .16s ease, border-color .16s ease;
 }
-.storage-test-button.is-testing { color: #285c93; background: #eef5ff; border-color: #a9c9ef; }
-.storage-test-button.is-success { color: #245236; background: #eaf8ee; border-color: #9fd3ad; }
-.storage-test-button.is-error { color: #8a2d24; background: #fff2f0; border-color: #de8b83; }
 .storage-default-note { display: flex; align-items: center; gap: 8px; margin: 0 0 14px; font-size: 14px; font-weight: 600; color: #20242a; }
 .storage-default-note strong { padding: 2px 10px; border-radius: 999px; background: #e8f1ff; color: #1f6feb; font-weight: 700; }
 
-.storage-card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 8px; margin: 4px 0 14px; }
+.storage-card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr)); gap: 8px; margin: 4px 0 14px; }
 .storage-backend-card { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border: 1px solid #e2e6ec; border-radius: 12px; background: #fff; }
 .storage-backend-card.is-default { border-color: #1f6feb; box-shadow: 0 0 0 1px rgba(31, 111, 235, 0.25); }
 .storage-backend-card.is-off { opacity: 0.7; }
@@ -213,9 +218,7 @@
 .storage-card-actions .icon { width: 36px; flex: 0 0 36px; }
 
 .storage-enable-toggle { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; border: 1px solid #d0d5dd; background: #f3f4f6; color: #6b7280; font-size: 12px; font-weight: 600; cursor: pointer; }
-.storage-enable-toggle .storage-enable-dot { width: 8px; height: 8px; border-radius: 50%; background: #9ca3af; }
 .storage-enable-toggle.is-on { background: #e8f7ee; border-color: #b9dec4; color: #1f9d57; }
-.storage-enable-toggle.is-on .storage-enable-dot { background: #1f9d57; }
 .storage-enable-toggle:disabled { cursor: default; opacity: .7; }
 .storage-card-actions-right { display: flex; align-items: center; gap: 6px; }
 .storage-card-actions .icon.is-danger { color: #d23b3b; }
@@ -262,7 +265,6 @@
 .account-form label { display: grid; gap: 6px; color: #495260; }
 .account-form .button { justify-self: start; }
 .account-note { margin: 0; font-size: 13px; line-height: 1.5; }
-.form-success { display: flex; align-items: center; gap: 6px; margin: 0; color: #1a7f37; }
 .check-summary {
   margin-bottom: 16px;
   padding: 14px;

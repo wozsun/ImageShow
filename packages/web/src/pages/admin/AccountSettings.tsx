@@ -1,43 +1,53 @@
 import { useState, type FormEvent } from "react";
 import { api } from "../../lib/api/client.js";
-import { Icon } from "../../components/icon/Icon.js";
+import { AsyncActionButton } from "../../components/actions/AsyncActionButton.js";
 import { PasswordInput } from "../../components/form/PasswordInput.js";
 import { adminApiBasePath } from "../../lib/constants.js";
-import { errorMessage } from "../../lib/ui/formatters.js";
+import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
 import { isValidAdminPassword, passwordPolicyHint } from "../../lib/auth/password.js";
 import { useAuthMe } from "../../lib/api/site-data.js";
+import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
+
+const updatePasswordPresentation = {
+  idle: { icon: "key-2-line", label: "修改密码" },
+  pending: { icon: "key-2-line", label: "保存中" },
+  success: { icon: "check-line", label: "密码已更新" },
+  error: { icon: "close-line", label: "密码修改失败" }
+} as const;
 
 export function AccountSettings() {
   const { data: auth } = useAuthMe();
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
-  const [error, setError] = useState("");
-  const [done, setDone] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const updatePasswordStatus = useAsyncActionStatus();
   const isSuper = auth?.role === "super";
 
   const nextInvalid = next.length > 0 && !isValidAdminPassword(next);
   const mismatch = confirm.length > 0 && next !== confirm;
-  const canSubmit = current.length > 0 && isValidAdminPassword(next) && next === confirm && !busy;
+  const canSubmit = current.length > 0
+    && isValidAdminPassword(next)
+    && next === confirm
+    && !updatePasswordStatus.pending;
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (!canSubmit) return;
-    setBusy(true);
-    setError("");
-    setDone(false);
-    try {
-      await api(`${adminApiBasePath}/auth/password`, { method: "POST", body: JSON.stringify({ current_password: current, new_password: next }) });
-      setCurrent("");
-      setNext("");
-      setConfirm("");
-      setDone(true);
-    } catch (err) {
-      setError(errorMessage(err));
-    } finally {
-      setBusy(false);
-    }
+    await updatePasswordStatus.run(async () => {
+      try {
+        await api(`${adminApiBasePath}/auth/password`, {
+          method: "POST",
+          body: JSON.stringify({ current_password: current, new_password: next })
+        });
+        setCurrent("");
+        setNext("");
+        setConfirm("");
+        return true;
+      } catch (error) {
+        reportAdminUiError("account.password_update", error);
+        return false;
+      }
+    });
   };
 
   return (
@@ -53,9 +63,9 @@ export function AccountSettings() {
           当前密码
           <PasswordInput
             value={current}
-            onChange={(value) => { setCurrent(value); setDone(false); }}
+            onChange={setCurrent}
             placeholder="输入当前密码"
-            disabled={busy}
+            disabled={updatePasswordStatus.pending}
             maxLength={128}
             autoComplete="current-password"
           />
@@ -64,9 +74,9 @@ export function AccountSettings() {
           新密码
           <PasswordInput
             value={next}
-            onChange={(value) => { setNext(value); setDone(false); }}
+            onChange={setNext}
             placeholder={passwordPolicyHint}
-            disabled={busy}
+            disabled={updatePasswordStatus.pending}
             maxLength={128}
             autoComplete="new-password"
             ariaInvalid={nextInvalid}
@@ -77,27 +87,22 @@ export function AccountSettings() {
           确认新密码
           <PasswordInput
             value={confirm}
-            onChange={(value) => { setConfirm(value); setDone(false); }}
+            onChange={setConfirm}
             placeholder="再次输入新密码"
-            disabled={busy}
+            disabled={updatePasswordStatus.pending}
             maxLength={128}
             autoComplete="new-password"
           />
         </label>
-        {(mismatch || error || done) && (
-          <p
-            className={done ? "form-success" : "error"}
-            role={mismatch || error ? "alert" : "status"}
-            title={error || undefined}
-          >
-            {done && <Icon name="checkbox-circle-line" />}
-            {mismatch ? "两次输入的新密码不一致。" : error || "密码已更新。"}
-          </p>
-        )}
+        {mismatch && <p className="error" role="alert">两次输入的新密码不一致。</p>}
         {isSuper && <p className="muted account-note">无法登录时，可在容器终端使用 imageshow reset-password 恢复超级管理员密码。</p>}
-        <button className="button" type="submit" disabled={!canSubmit}>
-          <Icon name="key-2-line" />{busy ? "保存中…" : "修改密码"}
-        </button>
+        <AsyncActionButton
+          className="button"
+          type="submit"
+          status={updatePasswordStatus.status}
+          presentation={updatePasswordPresentation}
+          disabled={!canSubmit}
+        />
       </form>
     </section>
   );

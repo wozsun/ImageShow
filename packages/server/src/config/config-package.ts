@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { appConfig, slugPattern, type RuntimeConfig } from "@imageshow/shared";
 import { withAdvisoryLock } from "../core/db.ts";
-import { ApiError } from "../core/http.ts";
+import { ApiError } from "../core/api-error.ts";
 import {
   s3SettingsSchema,
   webdavSettingsSchema,

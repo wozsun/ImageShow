@@ -2,6 +2,7 @@ import { useCallback, useId, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../../lib/api/client.js";
 import { Icon } from "../../../components/icon/Icon.js";
+import { StableButtonLabel } from "../../../components/data-display/StableButtonLabel.js";
 import { WorkflowCollapsePanel } from "../../../components/layout/WorkflowCollapsePanel.js";
 import { ImageDetailModal } from "../../../components/image/ImageDetailModal.js";
 import { ImagePreviewModal } from "../../../components/image/ImagePreviewModal.js";
@@ -14,7 +15,8 @@ import { OverlayScrollbar } from "../../../components/layout/OverlayScrollbar.js
 import { useAnimatedClose } from "../../../hooks/useAnimatedClose.js";
 import { useBodyScrollLock } from "../../../hooks/useBodyScrollLock.js";
 import { useDialogFocus } from "../../../hooks/useDialogFocus.js";
-import { adminApiBasePath, queryKeys } from "../../../lib/constants.js";
+import { adminApiBasePath } from "../../../lib/constants.js";
+import { queryKeys } from "../../../lib/api/query-keys.js";
 import { facetDisplayName } from "../../../lib/ui/formatters.js";
 import { storageBackendLabel, uploadCommonBrightnessOptions, uploadCommonDeviceOptions } from "../../../lib/ui/select-options.js";
 import { useImportVocabulary } from "../../../lib/api/import-vocabulary.js";
@@ -77,7 +79,7 @@ export function Uploader({ onDone }: { onDone: () => void }) {
   const detailReturnFocusRef = useRef<HTMLElement | null>(null);
   const previewReturnFocusRef = useRef<HTMLElement | null>(null);
 
-  const { data: settingsData } = useQuery<{ settings: AdminSettings }>({ queryKey: queryKeys.settings, queryFn: () => api(`${adminApiBasePath}/settings`) });
+  const { data: settingsData } = useQuery<{ settings: AdminSettings }>({ queryKey: queryKeys.settings, queryFn: ({ signal }) => api(`${adminApiBasePath}/settings`, { signal }) });
   const { data: vocabulary } = useImportVocabulary(open);
   const themes = vocabulary?.themes ?? EMPTY_FACET_OPTIONS;
   const tags = vocabulary?.tags ?? EMPTY_FACET_OPTIONS;
@@ -472,7 +474,21 @@ export function Uploader({ onDone }: { onDone: () => void }) {
               />
               <div className="modal-footer-actions">
                 <button type="button" onClick={() => void clearJobs(() => true).then(() => exit.requestClose())} disabled={busy}>取消</button>
-                <button className="button workflow-submit-button" type="button" disabled={!readyJobs.length || busy || duplicateJobs > 0} onClick={() => { setBusy(true); void commitImports(readyJobs).finally(() => setBusy(false)); }}>{busy ? "提交中" : readyJobs.length ? `提交 ${readyJobs.length} 张` : "提交"}</button>
+                <button
+                  className="button workflow-submit-button"
+                  type="button"
+                  disabled={!readyJobs.length || busy || duplicateJobs > 0}
+                  onClick={() => {
+                    setBusy(true);
+                    void commitImports(readyJobs).finally(() => setBusy(false));
+                  }}
+                >
+                  <StableButtonLabel
+                    idle={readyJobs.length ? `提交 ${readyJobs.length} 张` : "提交"}
+                    busyText="提交中"
+                    busy={busy}
+                  />
+                </button>
               </div>
             </footer>
           </section>

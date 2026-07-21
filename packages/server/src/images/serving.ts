@@ -1,12 +1,18 @@
 import { createHash } from "node:crypto";
 import { pool } from "../core/db.ts";
-import { ApiError, immutableCacheControl, noStoreCacheControl, privateNoStoreCacheControl, publicProxyFallbackThumbCacheControl, publicProxyImageCacheControl, publicRedirectCacheControl } from "../core/http.ts";
+import { ApiError } from "../core/api-error.ts";
+import { immutableCacheControl, noStoreCacheControl, privateNoStoreCacheControl, publicProxyFallbackThumbCacheControl, publicProxyImageCacheControl, publicRedirectCacheControl } from "../core/http.ts";
 import { isExternalImageRejection, safeFetchExternalImage } from "../core/external-image-fetch.ts";
 import { coalesce } from "../core/coalesce.ts";
 import { ifNoneMatchMatches, ifRangeMatches } from "../core/http-validator.ts";
 import { generateStoredThumbnail } from "./processing.ts";
 import { linkThumbnailKey, thumbnailObjectKey } from "../storage/image-paths.ts";
-import { contentType, exists, openObject, publicObjectUrl } from "../storage/storage.ts";
+import {
+  contentType,
+  exists,
+  resolveReadableObject,
+  type ResolvedReadableObject
+} from "../storage/storage.ts";
 import { isStorageNotFoundError } from "../storage/storage-backend.ts";
 import type { OpenedRead } from "../storage/storage-backend.ts";
 import { webReadableFromNode } from "../storage/stream-buffer.ts";
@@ -15,6 +21,7 @@ import {
   getImageLookupByObjectKey,
   getImageLookupByThumbKey,
   getOriginalDirectCache,
+  imageCacheRevision,
   setImageLookup,
   setImageLookupById,
   setOriginalDirectCache,
@@ -180,8 +187,24 @@ async function streamStoredObject(
   cacheControl: string,
   request: StoredResponseRequest = {}
 ) {
+  return streamResolvedObject(
+    await resolveReadableObject(prefix, key, backend),
+    contentTypeValue,
+    cacheControl,
+    request
+  );
+}
+
+async function streamResolvedObject(
+  object: ResolvedReadableObject,
+  contentTypeValue: string,
+  cacheControl: string,
+  request: StoredResponseRequest = {}
+) {
   const validateBeforeRange = Boolean(request.range && (request.ifNoneMatch || request.ifRange));
-  let opened = await openObject(prefix, key, backend, validateBeforeRange ? undefined : request.range);
+  let opened = await object.open(
+    validateBeforeRange ? undefined : request.range
+  );
   if (ifNoneMatchMatches(request.ifNoneMatch, opened.etag)) {
     opened.body.destroy();
     const headers = new Headers({ "Cache-Control": cacheControl, "Accept-Ranges": "bytes" });
@@ -193,10 +216,10 @@ async function streamStoredObject(
   if (validateBeforeRange && shouldApplyRange) {
     const full = opened;
     full.body.destroy();
-    opened = await openObject(prefix, key, backend, request.range);
+    opened = await object.open(request.range);
     if (!sameObjectVersion(full, opened)) {
       opened.body.destroy();
-      opened = await openObject(prefix, key, backend);
+      opened = await object.open();
     }
   }
   const headers = new Headers({
@@ -219,9 +242,23 @@ async function streamThumb(key: string, backend: string, cacheControl = immutabl
   return streamStoredObject("thumbs", key, backend, "image/webp", cacheControl, request);
 }
 
-async function streamThumbEnsuring(objectKey: string, thumbKey: string, backend: string, cacheControl = immutableCacheControl, request: StoredResponseRequest = {}): Promise<Response | null> {
+async function streamThumbEnsuring(
+  objectKey: string,
+  thumbKey: string,
+  backend: string,
+  cacheControl = immutableCacheControl,
+  request: StoredResponseRequest = {},
+  resolvedThumb?: ResolvedReadableObject
+): Promise<Response | null> {
   try {
-    return await streamThumb(thumbKey, backend, cacheControl, request);
+    return resolvedThumb
+      ? await streamResolvedObject(
+          resolvedThumb,
+          "image/webp",
+          cacheControl,
+          request
+        )
+      : await streamThumb(thumbKey, backend, cacheControl, request);
   } catch (error) {
     if (!isStorageNotFoundError(error)) throw error;
   }
@@ -246,7 +283,8 @@ async function linkThumbFallback(id: string, row: { storage_slug: string; device
 }
 
 async function imageLookupById(id: string): Promise<ImageLookupByIdItem | null> {
-  const cached = await getImageLookupById(id);
+  const revision = await imageCacheRevision();
+  const cached = await getImageLookupById(id, revision);
   if (cached) return cached;
   const row = (await pool.query(
     `SELECT id, object_key, original, ext, storage_slug, is_link, device, brightness, theme,
@@ -270,11 +308,12 @@ async function imageLookupById(id: string): Promise<ImageLookupByIdItem | null> 
     status: String(row.status ?? ""),
     description: String(row.description ?? ""),
     source: String(row.source ?? "")
-  });
+  }, revision);
 }
 
 export async function serveObject(key: string, request: StoredResponseRequest = {}) {
-  const cached = await getImageLookupByObjectKey(key);
+  const revision = await imageCacheRevision();
+  const cached = await getImageLookupByObjectKey(key, revision);
   let ext = cached?.ext;
   let storageSlug = cached?.storage_slug;
   if (!cached) {
@@ -293,25 +332,33 @@ export async function serveObject(key: string, request: StoredResponseRequest = 
       ext,
       storage_slug: storageSlug,
       status: "ready"
-    });
+    }, revision);
   }
   if (!ext || !storageSlug) throw new ApiError(404, "not_found", "Object not found");
-  const publicUrl = await publicObjectUrl("media", key, storageSlug);
-  if (publicUrl) return immutableRedirect(publicUrl);
-  return streamStoredObject("media", key, storageSlug, contentType(ext), immutableCacheControl, request).catch((error: unknown) => {
+  const object = await resolveReadableObject("media", key, storageSlug);
+  if (object.publicUrl) return immutableRedirect(object.publicUrl);
+  return streamResolvedObject(object, contentType(ext), immutableCacheControl, request).catch((error: unknown) => {
     if (isStorageNotFoundError(error)) throw new ApiError(404, "not_found", "Object not found");
     throw error;
   });
 }
 
 export async function serveThumb(key: string, request: StoredResponseRequest = {}): Promise<Response> {
-  const cached = await getImageLookupByThumbKey(key);
+  const revision = await imageCacheRevision();
+  const cached = await getImageLookupByThumbKey(key, revision);
   if (cached) {
     const backend = cached.storage_slug;
-    const publicUrl = await publicObjectUrl("thumbs", key, backend);
-    if (publicUrl) return immutableRedirect(publicUrl);
+    const object = await resolveReadableObject("thumbs", key, backend);
+    if (object.publicUrl) return immutableRedirect(object.publicUrl);
 
-    const streamed = await streamThumbEnsuring(cached.object_key, key, backend, immutableCacheControl, request);
+    const streamed = await streamThumbEnsuring(
+      cached.object_key,
+      key,
+      backend,
+      immutableCacheControl,
+      request,
+      object
+    );
     if (streamed) return streamed;
 
     return streamStoredObject("media", cached.object_key, backend, contentType(cached.ext), publicProxyFallbackThumbCacheControl, request);
@@ -323,10 +370,20 @@ export async function serveThumb(key: string, request: StoredResponseRequest = {
   const thumbKey = thumbnailObjectKey(objectKey);
   const ext = row.ext;
   const backend = row.storage_slug;
-  await setImageLookup({ object_key: objectKey, thumb_key: thumbKey, ext, storage_slug: backend, status: "ready" });
-  const publicUrl = await publicObjectUrl("thumbs", thumbKey, backend);
-  if (publicUrl) return immutableRedirect(publicUrl);
-  const streamed = await streamThumbEnsuring(objectKey, thumbKey, backend, immutableCacheControl, request);
+  await setImageLookup(
+    { object_key: objectKey, thumb_key: thumbKey, ext, storage_slug: backend, status: "ready" },
+    revision
+  );
+  const object = await resolveReadableObject("thumbs", thumbKey, backend);
+  if (object.publicUrl) return immutableRedirect(object.publicUrl);
+  const streamed = await streamThumbEnsuring(
+    objectKey,
+    thumbKey,
+    backend,
+    immutableCacheControl,
+    request,
+    object
+  );
   if (streamed) return streamed;
 
   return streamStoredObject("media", objectKey, backend, contentType(ext), publicProxyFallbackThumbCacheControl, request);
@@ -341,9 +398,9 @@ export async function serveLinkThumb(key: string, request: StoredResponseRequest
   const row = await imageLookupById(id);
   if (!row || !row.is_link || row.status !== "ready") throw new ApiError(404, "not_found", "Thumbnail not found");
   const backend = row.storage_slug;
-  const publicUrl = await publicObjectUrl("link", key, backend);
-  if (publicUrl) return immutableRedirect(publicUrl);
-  return streamStoredObject("link", key, backend, "image/webp", immutableCacheControl, request).catch((error: unknown) => {
+  const object = await resolveReadableObject("link", key, backend);
+  if (object.publicUrl) return immutableRedirect(object.publicUrl);
+  return streamResolvedObject(object, "image/webp", immutableCacheControl, request).catch((error: unknown) => {
     if (isStorageNotFoundError(error)) throw new ApiError(404, "not_found", "Thumbnail not found");
     throw error;
   });

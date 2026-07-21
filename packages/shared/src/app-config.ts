@@ -1,6 +1,8 @@
 import {
   adminImagePageLimit,
   altchaSolveTimeoutMs,
+  brightnesses,
+  devices,
   imageDescriptionMaxLength,
   imageTitleMaxLength,
   importBatchHardLimit
@@ -11,8 +13,8 @@ export * from "./browser.ts";
 export const appConfig = {
   // Container-internal HTTP port. Keep Dockerfile and Compose target ports in sync.
   applicationPort: 5518,
-  devices: ["pc", "mb"] as const,
-  brightness: ["dark", "light"] as const,
+  devices,
+  brightness: brightnesses,
   themeMaxLength: 32,
   imageMetadata: {
     titleMaxLength: imageTitleMaxLength,
@@ -76,6 +78,8 @@ export const appConfig = {
     failedRetentionSeconds: 90 * 24 * 60 * 60,
     historyCleanupBatchSize: 1000,
     tickIntervalMs: 5_000,
+    queueSliceMaxJobs: 50,
+    queueSliceMaxMs: 2_000,
     drainTimeoutMs: 10_000,
     shutdownHardExitMs: 15_000,
 
@@ -167,10 +171,7 @@ export const appConfig = {
   } as const
 };
 
-export type Device = (typeof appConfig.devices)[number];
-export type Brightness = (typeof appConfig.brightness)[number];
 export type ImageExt = "jpg" | "png" | "webp" | "gif" | "avif";
-export type StorageType = "local" | "s3" | "webdav";
 export type RootRedirect = "home" | "gallery";
 export type RandomMethod = "proxy" | "redirect";
 export type GalleryOrder = "latest" | "random";

@@ -1,7 +1,7 @@
 import type { Context, Hono } from "hono";
 import { getRandomCategoryCounts } from "../random/random-cache.ts";
 import { proxyExternalImage } from "../images/serving.ts";
-import { contentType, openObject, publicImageUrls } from "../storage/storage.ts";
+import { contentType, publicImageUrls, resolveReadableObject } from "../storage/storage.ts";
 import { clientIp, noStoreCacheControl, publicMetadataCacheControl, routeError } from "../core/http.ts";
 import { pickRandom } from "../random/service.ts";
 import { buildRandomImageCountData } from "../random/query.ts";
@@ -34,7 +34,9 @@ async function respondRandom(c: Context, url: URL) {
   if (picked.method === "proxy") {
 
     if (picked.is_link) return proxyExternalImage(picked.object_key, picked.ext, c.req.method === "HEAD", baseHeaders);
-    const opened = await openObject("media", picked.object_key, picked.storage_slug);
+    const opened = await (
+      await resolveReadableObject("media", picked.object_key, picked.storage_slug)
+    ).open();
     // 每次请求都会重新抽图，后续 Range 请求不保证命中同一对象，因此不声明字节范围能力。
     const headers = new Headers({ ...baseHeaders, "Content-Type": contentType(picked.ext) });
     if (opened.size !== undefined) headers.set("Content-Length", String(opened.size));

@@ -1,5 +1,6 @@
 import type { Context, Next } from "hono";
-import { ApiError, clientIp, errorMessage } from "./http.ts";
+import { ApiError, errorMessage } from "./api-error.ts";
+import { clientIp } from "./http.ts";
 import { logger } from "./logger.ts";
 
 function adminSession(c: Context) {

@@ -1,6 +1,6 @@
 import { join, normalize, sep } from "node:path";
 import { runtimePaths } from "../config/bootstrap-env.ts";
-import { ApiError } from "../core/http.ts";
+import { ApiError } from "../core/api-error.ts";
 import type { StorageConfig } from "./backend-config.ts";
 
 export const STORAGE_PREFIXES = ["media", "thumbs", "_uploads", "link"] as const;

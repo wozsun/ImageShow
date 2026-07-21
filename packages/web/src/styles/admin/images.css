@@ -191,3 +191,166 @@
   min-height: 34px;
   height: 34px;
 }
+
+/* 图片管理页只在本文件维护桌面、窄桌面和移动端三档布局。 */
+.image-admin-head-tools {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.image-admin-head-copy { flex: 1 1 0; min-width: 0; }
+.image-admin-head-copy > p {
+  min-height: 20px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.image-list-toolbar {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: center;
+}
+.image-list-toolbar > .image-list-toolbar-actions {
+  min-width: 0;
+  margin-left: 0;
+  justify-content: flex-end;
+}
+.image-list-toolbar-actions > .image-admin-feedback-region {
+  flex: 1 1 300px;
+  width: min(460px, 100%);
+  max-width: 460px;
+}
+
+@media (min-width: 761px) {
+  .image-admin-head { align-items: center; }
+  .image-admin-head .segmented { flex: 0 0 auto; }
+  .image-admin-head .segmented button {
+    flex: 1 1 0;
+    min-width: 76px;
+  }
+  .image-admin-head-tools .upload-triggers {
+    flex: 0 1 auto;
+    min-width: 0;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .image-admin-head-tools .upload-trigger { flex: 0 0 auto; }
+}
+
+@media (min-width: 761px) and (max-width: 1080px) {
+  .image-admin-head { align-items: flex-start; }
+  .image-admin-head-tools {
+    flex-direction: column;
+    align-items: flex-end;
+  }
+  .image-admin-head-tools .segmented { order: -1; }
+  .image-admin-head-tools .upload-triggers { flex-wrap: nowrap; }
+  .image-admin-head-tools .link-import-split { flex: 0 0 auto; }
+  .image-admin-head-tools .upload-triggers .link-import-main,
+  .image-admin-head-tools .upload-triggers > .upload-trigger {
+    min-width: 0;
+    padding-inline: 8px;
+  }
+}
+
+@media (max-width: 760px) {
+  /* 内容仍与 16px 工作区对齐，触控滚动条延伸到视口右缘。 */
+  .workspace-paged > .admin-image-grid.admin-scroll-region {
+    margin-right: -16px;
+    padding-right: 18px;
+  }
+  .image-admin-head-copy > h1 {
+    min-height: 36px;
+    display: flex;
+    align-items: center;
+  }
+  .image-admin-head .segmented {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .image-admin-head .segmented button { width: 100%; }
+  .image-admin-head-tools {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .image-admin-head-tools .segmented { order: -1; }
+  .image-admin-head-tools .upload-triggers {
+    width: 100%;
+    flex-wrap: nowrap;
+  }
+  .image-admin-head-tools .link-import-split {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .image-admin-head-tools .link-import-main,
+  .image-admin-head-tools .upload-trigger {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .image-list-toolbar { display: flex; }
+  .image-list-toolbar-actions {
+    width: 100%;
+    max-width: 100%;
+    align-self: stretch;
+    margin-left: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .image-list-toolbar-actions > .image-admin-feedback-region {
+    position: static;
+    order: -1;
+    flex: 1 0 100%;
+    width: 100%;
+    max-width: none;
+  }
+  .image-list-toolbar-actions > .image-card-density-switch + button {
+    margin-left: auto;
+  }
+  .image-list-toolbar-actions > button:not(.image-card-density-switch) {
+    width: auto;
+    min-width: 0;
+    padding-inline: 8px;
+    gap: 4px;
+    font-size: 15px;
+  }
+  .image-list-toolbar-actions > .image-card-density-switch {
+    --labeled-switch-width: 56px;
+    --labeled-switch-thumb-width: 12px;
+    --labeled-switch-thumb-height: 20px;
+    --labeled-switch-edge-gap: 4px;
+    --labeled-switch-label-gap: 3px;
+    font-size: 12px;
+  }
+  .admin-image-grid[data-density] { grid-template-columns: 1fr; }
+  .admin-image-card {
+    grid-template-columns: 20px minmax(0, 1fr) 36px;
+    gap: 8px;
+  }
+  .admin-image-card-detail {
+    min-height: 72px;
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 10px;
+  }
+  .admin-image-card-thumb { width: 72px; height: 72px; }
+  .admin-image-card-actions { gap: 4px; }
+  .admin-image-grid[data-density="spacious"] .admin-image-card {
+    min-height: 0;
+    grid-template-columns: 20px minmax(0, 1fr);
+    gap: 8px;
+  }
+  .admin-image-grid[data-density="spacious"] .admin-image-card-detail {
+    min-height: 56px;
+    grid-template-columns: 56px minmax(0, 1fr);
+    gap: 12px;
+  }
+  .admin-image-grid[data-density="spacious"] .admin-image-card-thumb {
+    width: 56px;
+    height: 56px;
+  }
+  .admin-image-grid[data-density="spacious"] .admin-image-card-actions {
+    gap: 8px;
+  }
+}

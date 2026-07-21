@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events";
 import { appConfig } from "@imageshow/shared";
 import { pool } from "../../core/db.ts";
-import { ApiError, errorMessage } from "../../core/http.ts";
+import { ApiError, errorMessage } from "../../core/api-error.ts";
 import { redis } from "../../core/redis-client.ts";
 import type { ImportMode, ImportStatus, ImportStatusEvent } from "./types.ts";
 

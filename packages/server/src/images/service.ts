@@ -1,18 +1,20 @@
 import type { Pool, PoolClient } from "pg";
 import { pool, withTransaction } from "../core/db.ts";
-import { ApiError } from "../core/http.ts";
+import { ApiError } from "../core/api-error.ts";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { mapWithConcurrency } from "../core/concurrency.ts";
 import { metadataUpdateInput, parse } from "../core/validation.ts";
-import { invalidateImageLookupEntries, invalidateImageReadCaches, invalidateMd5Cache } from "./image-cache.ts";
+import { invalidateImageCaches } from "./image-cache.ts";
 import { syncRandomImage, syncRandomImages } from "../random/random-cache.ts";
 import { enqueue } from "../jobs/repository.ts";
 import { storageObjectKey, thumbnailObjectKey, thumbnailRef } from "../storage/image-paths.ts";
 import { copyObject, exists, readStorageBuffer, removeObject } from "../storage/storage.ts";
 import { migrateImageStorage, type MigrateRecord } from "../storage/migration.ts";
-import { withStorageMutationLock } from "../storage/maintenance-lock.ts";
+import { withImageStorageMutationLock } from "../storage/maintenance-lock.ts";
 import { isReservedSubdomain } from "../themes/host.ts";
-import { ensureTheme } from "../themes/service.ts";
+import {
+  ensureThemeWithMutationLockHeld
+} from "../themes/service.ts";
 import { ensureAuthor } from "../authors/service.ts";
 import {
   invalidateEntityCountCaches,
@@ -21,6 +23,7 @@ import {
   type EntityCacheKind,
   type EntityCountCacheInvalidationBatch,
 } from "../vocab/vocab-cache.ts";
+import { withVocabularyMutationLock } from "../vocab/mutation-sync.ts";
 import { detectBrightness } from "./brightness.ts";
 import { deviceFromDimensions, resolveOptionalBrightnessWith, resolveOptionalDeviceWith } from "./classification.ts";
 import type { ImageRecord } from "./presenter.ts";
@@ -108,15 +111,27 @@ async function applyImageFieldEdits(
 
 export async function deleteImage(id: string) {
   const deleted = await withTransaction(async (client) => {
-    const result = await client.query("UPDATE metadata SET status='deleted', deleted_at=now(), updated_at=now() WHERE id=$1 AND status='ready' RETURNING id, object_key, md5", [id]);
+    const result = await client.query(
+      `UPDATE metadata
+          SET status='deleted',
+              deleted_at=now(),
+              purge_state='idle',
+              purge_started_at=NULL,
+              purge_error=NULL,
+              updated_at=now()
+        WHERE id=$1 AND status='ready'
+        RETURNING id, object_key, md5`,
+      [id]
+    );
     if (!result.rowCount) throw new ApiError(404, "not_found", "Ready image not found");
     return result.rows[0] as { id: string; object_key: string; md5: string | null };
   });
   await syncRandomImage(deleted.id);
-  await invalidateMd5Cache(deleted.md5 ?? "");
-  await invalidateImageLookupEntries([deleted]);
   await Promise.all([
-    invalidateImageReadCaches(),
+    invalidateImageCaches({
+      lookupEntries: [deleted],
+      md5s: [deleted.md5 ?? ""]
+    }),
     invalidateEntityCountCaches(["theme", "author"]),
   ]);
 }
@@ -131,22 +146,18 @@ export async function updateImageMetadata(id: string, body: unknown, options: Im
   const parsed = parse(metadataUpdateInput, body);
   if (parsed.theme && isReservedSubdomain(parsed.theme)) throw new ApiError(400, "theme_reserved", "Theme conflicts with a reserved subdomain prefix", { theme: parsed.theme });
 
-  const next = {
-    ...parsed,
-    device: resolveOptionalDeviceWith(parsed.device, () => detectImageDevice(current)),
-    brightness: await resolveOptionalBrightnessWith(parsed.brightness, () => detectImageBrightness(current)),
-  };
-  const touchAuthor = next.author !== undefined;
-  const authorValue = next.author ? next.author : null;
-  const targetDevice = next.device ?? current.device;
-  const targetBrightness = next.brightness ?? current.brightness;
-  const targetTheme = next.theme ?? current.theme;
-  const classificationChanged = targetDevice !== current.device || targetBrightness !== current.brightness || targetTheme !== current.theme;
-  const authorChanged = touchAuthor && authorValue !== current.author;
+  const touchAuthor = parsed.author !== undefined;
+  const authorValue = parsed.author ? parsed.author : null;
+  const classificationRequested = parsed.device !== undefined
+    || parsed.brightness !== undefined
+    || parsed.theme !== undefined;
 
-  if (!classificationChanged) {
-    const createdAuthor = next.author ? await ensureAuthor(pool, next.author) : false;
-    await applyImageFieldEdits(pool, id, next, authorValue, touchAuthor);
+  if (!classificationRequested) {
+    const authorChanged = touchAuthor && authorValue !== current.author;
+    const createdAuthor = parsed.author
+      ? await ensureAuthor(pool, parsed.author)
+      : false;
+    await applyImageFieldEdits(pool, id, parsed, authorValue, touchAuthor);
     const cacheTasks: Array<Promise<unknown>> = [applyOrCollectImageMutationSync({
       id,
       md5: current.md5 ?? "",
@@ -163,27 +174,59 @@ export async function updateImageMetadata(id: string, body: unknown, options: Im
     return;
   }
 
-  return withStorageMutationLock(async () => {
-    if (current.status !== "ready") throw new ApiError(409, "invalid_image_state", "Only ready images can change category");
-    const sourceIsLink = Boolean(current.is_link);
-    const sourceSlug = current.storage_slug;
-    const predictedKey = sourceIsLink ? current.object_key : storageObjectKey(targetDevice, targetBrightness, targetTheme, id, current.ext);
+  const mutateImageLocation = () => withImageStorageMutationLock(id, async () => {
+    // The image may have moved while this request parsed or classified its
+    // input. Re-read after acquiring ownership and derive omitted fields from
+    // the current row rather than reverting a concurrent mutation.
+    const locationSnapshot = (await pool.query(
+      `SELECT ${mutationImageColumns} FROM metadata WHERE id=$1`,
+      [id]
+    )).rows[0] as MutationImageRecord | undefined;
+    if (!locationSnapshot) throw new ApiError(404, "not_found", "Image not found");
+    if (locationSnapshot.status !== "ready") {
+      throw new ApiError(409, "invalid_image_state", "Only ready images can change category");
+    }
+    const next = {
+      ...parsed,
+      device: resolveOptionalDeviceWith(
+        parsed.device,
+        () => detectImageDevice(locationSnapshot)
+      ),
+      brightness: await resolveOptionalBrightnessWith(
+        parsed.brightness,
+        () => detectImageBrightness(locationSnapshot)
+      )
+    };
+    const targetDevice = next.device ?? locationSnapshot.device;
+    const targetBrightness = next.brightness ?? locationSnapshot.brightness;
+    const targetTheme = next.theme ?? locationSnapshot.theme;
+    const sourceIsLink = Boolean(locationSnapshot.is_link);
+    const sourceSlug = locationSnapshot.storage_slug;
+    const predictedKey = sourceIsLink
+      ? locationSnapshot.object_key
+      : storageObjectKey(
+          targetDevice,
+          targetBrightness,
+          targetTheme,
+          id,
+          locationSnapshot.ext
+        );
     let preCopiedObjectKey = "";
     let preCopiedLinkThumbKey = "";
 
-    if (!sourceIsLink && predictedKey !== current.object_key) {
-      await copyObject("media", current.object_key, "media", predictedKey, sourceSlug);
+    if (!sourceIsLink && predictedKey !== locationSnapshot.object_key) {
+      await copyObject("media", locationSnapshot.object_key, "media", predictedKey, sourceSlug);
       preCopiedObjectKey = predictedKey;
     }
 
     if (sourceIsLink) {
       const oldThumb = thumbnailRef({
-        ...current,
+          ...locationSnapshot,
         storage_slug: sourceSlug,
         is_link: true,
       });
       const newThumb = thumbnailRef({
-        ...current,
+          ...locationSnapshot,
         device: targetDevice,
         brightness: targetBrightness,
         theme: targetTheme,
@@ -197,7 +240,7 @@ export async function updateImageMetadata(id: string, body: unknown, options: Im
     }
 
     const client = await pool.connect();
-    let sourceImage = current;
+    let sourceImage = locationSnapshot;
     let updated: MutationImageRecord | null = null;
     let committedObjectKey = "";
     let copiedObjectKey = "";
@@ -210,6 +253,16 @@ export async function updateImageMetadata(id: string, body: unknown, options: Im
       )).rows[0] as MutationImageRecord | undefined;
       if (!locked) throw new ApiError(404, "not_found", "Image not found");
       if (locked.status !== "ready") throw new ApiError(409, "invalid_image_state", "Only ready images can change category");
+      if (
+        locked.storage_slug !== locationSnapshot.storage_slug
+        || locked.object_key !== locationSnapshot.object_key
+      ) {
+        throw new ApiError(
+          409,
+          "image_location_changed",
+          "Image location changed while preparing the category update"
+        );
+      }
       sourceImage = locked;
 
       const device = next.device ?? locked.device;
@@ -224,7 +277,13 @@ export async function updateImageMetadata(id: string, body: unknown, options: Im
         await client.query("COMMIT");
         committedObjectKey = locked.object_key;
       } else {
-        if (await ensureTheme(client, theme)) createdEntityKinds.add("theme");
+        if (
+          parsed.theme
+          && parsed.theme !== "none"
+          && await ensureThemeWithMutationLockHeld(client, theme)
+        ) {
+          createdEntityKinds.add("theme");
+        }
         if (next.author && await ensureAuthor(client, next.author)) createdEntityKinds.add("author");
 
         if (!isLink && nextObjectKey !== locked.object_key) {
@@ -246,11 +305,32 @@ export async function updateImageMetadata(id: string, body: unknown, options: Im
                   original=COALESCE($9,original),
                   author=CASE WHEN $11::boolean THEN $10 ELSE author END,
                   updated_at=now()
-            WHERE id=$1
+            WHERE id=$1 AND storage_slug=$12 AND object_key=$13
             RETURNING ${mutationImageColumns}`,
-          [id, device, brightness, theme, nextObjectKey, next.title, next.description, next.source, next.original, authorValue, touchAuthor],
+          [
+            id,
+            device,
+            brightness,
+            theme,
+            nextObjectKey,
+            next.title,
+            next.description,
+            next.source,
+            next.original,
+            authorValue,
+            touchAuthor,
+            locked.storage_slug,
+            locked.object_key
+          ],
         );
-        updated = result.rows[0] as MutationImageRecord;
+        updated = (result.rows[0] as MutationImageRecord | undefined) ?? null;
+        if (!updated) {
+          throw new ApiError(
+            409,
+            "image_location_changed",
+            "Image location changed before the category update was committed"
+          );
+        }
         await client.query("COMMIT");
         committedObjectKey = nextObjectKey;
       }
@@ -331,6 +411,19 @@ export async function updateImageMetadata(id: string, body: unknown, options: Im
       refreshEntityVocabularies(createdEntityKinds),
     ]);
   });
+
+  // Theme deletion acquires the vocabulary lock before each image-location
+  // lock. Explicit reassignment follows the same order, preventing the two
+  // operations from deadlocking while also keeping a theme alive until the
+  // metadata switch commits.
+  if (parsed.theme && parsed.theme !== "none") {
+    return withVocabularyMutationLock(
+      "theme",
+      parsed.theme,
+      mutateImageLocation
+    );
+  }
+  return mutateImageLocation();
 }
 
 type BatchStorageMigrationMetrics = {
@@ -378,10 +471,11 @@ export async function migrateImagesStorage(
     const migratedIdSet = new Set(migratedIds);
     const randomSync = await syncRandomImages(migratedIds);
     randomPoolFullRebuildTriggered = randomSync.fullRebuildTriggered;
-    await invalidateImageLookupEntries(rows
-      .filter((row) => migratedIdSet.has(row.id))
-      .map((row) => ({ id: row.id, object_key: row.object_key })));
-    await invalidateImageReadCaches();
+    await invalidateImageCaches({
+      lookupEntries: rows
+        .filter((row) => migratedIdSet.has(row.id))
+        .map((row) => ({ id: row.id, object_key: row.object_key }))
+    });
   }
   options.onMetrics?.({
     maxItemDurationMs,

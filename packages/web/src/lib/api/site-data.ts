@@ -1,30 +1,21 @@
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, authExpiredEvent } from "./client.js";
-import { adminApiBasePath, queryKeys } from "../constants.js";
-import type { AdminUser, FacetOption, SiteSettings } from "../types.js";
+import { adminApiBasePath } from "../constants.js";
+import { queryKeys } from "./query-keys.js";
+import type {
+  AuthStateDto,
+  GalleryFacetsDto
+} from "@imageshow/shared/browser";
+import type { SiteSettings } from "../types.js";
 
 export type SiteConfig = {
   site: SiteSettings;
   image_detail: { title_opens_image: boolean };
 };
 
-export type AuthState = {
-  authenticated: boolean;
-  username: string;
-  role: AdminUser["role"] | "";
-  csrf_token: string;
-  altcha_enabled: boolean;
-  login_background: string;
-};
-
-export type GalleryFacets = {
-  devices: string[];
-  brightnesses: string[];
-  themes: FacetOption[];
-  tags: FacetOption[];
-  authors: Array<FacetOption & { link: string }>;
-};
+export type AuthState = AuthStateDto;
+export type GalleryFacets = GalleryFacetsDto;
 
 // site-config 与 gallery-facets 是「会话级近乎不变」的全局数据：只有在管理员保存站点设置、
 // 改动主题 / 标签 / 作者或导入图片后才需要显式失效。这里关闭自动后台刷新，避免组件重挂、
@@ -79,7 +70,7 @@ const inlinedSiteConfig: SiteConfig | undefined = (() => {
 export function useSiteConfig() {
   return useQuery<SiteConfig>({
     queryKey: queryKeys.siteConfig,
-    queryFn: () => api("/api/site-config"),
+    queryFn: ({ signal }) => api("/api/site-config", { signal }),
     initialData: inlinedSiteConfig,
     ...sessionGlobalQuery
   });
@@ -88,7 +79,7 @@ export function useSiteConfig() {
 export function useGalleryFacets(enabled = true) {
   return useQuery<GalleryFacets>({
     queryKey: queryKeys.galleryFacets,
-    queryFn: () => api("/api/gallery-facets"),
+    queryFn: ({ signal }) => api("/api/gallery-facets", { signal }),
     enabled,
     ...sessionGlobalQuery
   });
@@ -102,7 +93,7 @@ export function useGalleryFacets(enabled = true) {
 export function useAuthMe(enabled = true) {
   const query = useQuery<AuthState>({
     queryKey: queryKeys.me,
-    queryFn: () => api(`${adminApiBasePath}/auth/me`),
+    queryFn: ({ signal }) => api(`${adminApiBasePath}/auth/me`, { signal }),
     enabled,
     refetchOnWindowFocus: false
   });

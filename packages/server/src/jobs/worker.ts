@@ -32,9 +32,27 @@ function jobTypeConcurrency(type: string): number {
   }
 }
 
-async function runBackgroundJobType(type: string, lanes: number) {
+type QueueSliceResult = {
+  processed: number;
+  durationMs: number;
+  budgetExhausted: boolean;
+};
+
+async function runBackgroundJobType(type: string, lanes: number): Promise<QueueSliceResult> {
+  const startedAt = performance.now();
+  const deadline = startedAt + appConfig.backgroundJob.queueSliceMaxMs;
+  let claimed = 0;
+  let processed = 0;
+
+  const reserveClaim = () => {
+    if (claimed >= appConfig.backgroundJob.queueSliceMaxJobs) return false;
+    if (performance.now() >= deadline) return false;
+    claimed += 1;
+    return true;
+  };
+
   async function runLane() {
-    for (;;) {
+    while (reserveClaim()) {
       const job = await claimBackgroundJob(type);
       if (!job) return;
       try {
@@ -46,10 +64,18 @@ async function runBackgroundJobType(type: string, lanes: number) {
         }
       } catch (error) {
         await markBackgroundJobFailed(job, error);
+      } finally {
+        processed += 1;
       }
     }
   }
   await Promise.all(Array.from({ length: lanes }, runLane));
+  return {
+    processed,
+    durationMs: performance.now() - startedAt,
+    budgetExhausted: claimed >= appConfig.backgroundJob.queueSliceMaxJobs
+      || performance.now() >= deadline
+  };
 }
 
 async function scheduleExpiredImportCleanup() {
@@ -60,23 +86,45 @@ async function scheduleExpiredImportCleanup() {
 async function runWorkerTick() {
   const now = Date.now();
   if (now - lastStaleRecovery >= appConfig.backgroundJob.staleRecoveryIntervalMs) {
+    const delayMs = lastStaleRecovery
+      ? Math.max(0, now - lastStaleRecovery - appConfig.backgroundJob.staleRecoveryIntervalMs)
+      : 0;
     lastStaleRecovery = now;
     await recoverStaleBackgroundJobs();
+    logger.debug("worker_periodic_task", { task: "stale_recovery", delay_ms: delayMs });
   }
   if (now - lastImportCleanup >= appConfig.backgroundJob.expireUploadsIntervalMs) {
+    const delayMs = lastImportCleanup
+      ? Math.max(0, now - lastImportCleanup - appConfig.backgroundJob.expireUploadsIntervalMs)
+      : 0;
     lastImportCleanup = now;
     await scheduleExpiredImportCleanup();
+    logger.debug("worker_periodic_task", { task: "import_cleanup", delay_ms: delayMs });
   }
   if (now - lastHistoryCleanup >= appConfig.backgroundJob.historyCleanupIntervalMs) {
+    const delayMs = lastHistoryCleanup
+      ? Math.max(0, now - lastHistoryCleanup - appConfig.backgroundJob.historyCleanupIntervalMs)
+      : 0;
     lastHistoryCleanup = now;
     await cleanupBackgroundJobHistory();
+    logger.debug("worker_periodic_task", { task: "history_cleanup", delay_ms: delayMs });
   }
 
   const pending = await listRunnableBackgroundJobCounts();
-  await Promise.all(pending.map((row) => runBackgroundJobType(
-    row.type,
-    Math.min(jobTypeConcurrency(row.type), row.n)
-  )));
+  await Promise.all(pending.map(async (row) => {
+    const result = await runBackgroundJobType(
+      row.type,
+      Math.min(jobTypeConcurrency(row.type), row.n)
+    );
+    logger.debug("worker_queue_slice", {
+      type: row.type,
+      backlog: row.n,
+      oldest_wait_ms: row.oldest_wait_ms,
+      processed: result.processed,
+      duration_ms: Math.round(result.durationMs * 100) / 100,
+      budget_exhausted: result.budgetExhausted
+    });
+  }));
 }
 
 function tick() {

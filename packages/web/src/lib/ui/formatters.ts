@@ -35,7 +35,29 @@ export function formatDimensions(width: number, height: number) {
 }
 
 export function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
+  const message = (err instanceof Error ? err.message : String(err)).trim();
+
+  if (!message) return "未知错误";
+  if (err instanceof Error && err.name === "AbortError") return "请求已取消";
+  if (err instanceof Error && err.name === "TimeoutError") {
+    return "请求超时，请稍后重试";
+  }
+  if (
+    /failed to fetch|network(?:error| request failed)|load failed|internet connection.*offline|err_(?:network|internet|connection|name_not_resolved)/i.test(message)
+  ) {
+    return "网络请求失败，请检查网络连接后重试";
+  }
+  if (
+    err instanceof SyntaxError
+    && /json|unexpected|expected|unterminated|end of/i.test(message)
+  ) {
+    return "JSON 格式不正确，请检查语法";
+  }
+
+  const httpStatus = /^HTTP\s+(\d{3})$/i.exec(message)?.[1];
+  if (httpStatus) return `请求失败（服务器返回 ${httpStatus}）`;
+
+  return message;
 }
 
 export function formatBytes(bytes: number) {

@@ -2,7 +2,7 @@ import type { z } from "zod";
 import { getRuntimeConfig } from "../../config/runtime-config-store.ts";
 import { coalesce } from "../../core/coalesce.ts";
 import { pool } from "../../core/db.ts";
-import { ApiError } from "../../core/http.ts";
+import { ApiError } from "../../core/api-error.ts";
 import { splitSelectors } from "../../core/selectors.ts";
 import { listQuery } from "../../core/validation.ts";
 import { resolveAuthorSlugs } from "../../authors/query.ts";
@@ -96,11 +96,11 @@ export async function listPublicImages(
     ...query,
     limit
   })}`;
-  const cached = await getPublicImagesCache<PublicImageListPayload>(cacheKey);
+  const cached = await getPublicImagesCache<PublicImageListPayload>(cacheKey, generation);
   if (cached) return withShuffle(query, cached);
 
   const payload = await coalesce(`public-images:${cacheKey}`, async () => {
-    const raced = await getPublicImagesCache<PublicImageListPayload>(cacheKey);
+    const raced = await getPublicImagesCache<PublicImageListPayload>(cacheKey, generation);
     if (raced) return raced;
 
     const params: unknown[] = [query.status];
@@ -153,8 +153,8 @@ export async function listPublicImages(
       next_cursor: page.nextCursor
     };
     await Promise.all([
-      warmObjectLookups(page.rows),
-      setPublicImagesCache(cacheKey, fresh)
+      warmObjectLookups(page.rows, generation),
+      setPublicImagesCache(cacheKey, fresh, generation)
     ]);
     return fresh;
   });
@@ -164,17 +164,17 @@ export async function listPublicImages(
 export async function getPublicImage(id: string) {
   const generation = await publicImagesCacheGeneration();
   const cacheKey = `${generation}:${id}`;
-  const cached = await getPublicImageDetailCache<PublicImageDetail>(cacheKey);
+  const cached = await getPublicImageDetailCache<PublicImageDetail>(cacheKey, generation);
   if (cached) return cached;
 
   return coalesce(`public-image:${cacheKey}`, async () => {
-    const raced = await getPublicImageDetailCache<PublicImageDetail>(cacheKey);
+    const raced = await getPublicImageDetailCache<PublicImageDetail>(cacheKey, generation);
     if (raced) return raced;
 
-    const lookup = await getImageLookupById(id);
+    const lookup = await getImageLookupById(id, generation);
     if (lookup?.status === "ready") {
       const image = await publicImageDetail(lookup);
-      await setPublicImageDetailCache(cacheKey, image);
+      await setPublicImageDetailCache(cacheKey, image, generation);
       return image;
     }
 
@@ -200,8 +200,8 @@ export async function getPublicImage(id: string) {
     const row = result.rows[0] as PublicImageDetailRecord;
     const image = await publicImageDetail(row);
     await Promise.all([
-      warmCompleteImageLookups([row]),
-      setPublicImageDetailCache(cacheKey, image)
+      warmCompleteImageLookups([row], generation),
+      setPublicImageDetailCache(cacheKey, image, generation)
     ]);
     return image;
   });

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { AdminSettings } from "@imageshow/shared";
-import { ApiError } from "../core/http.ts";
+import { ApiError } from "../core/api-error.ts";
 import {
   galleryLimit,
   galleryOrder,

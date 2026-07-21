@@ -16,15 +16,15 @@ type OverviewStats = Awaited<ReturnType<typeof buildOverviewStats>>;
 export async function getOverviewStats() {
   const generation = await publicImagesCacheGeneration();
   const cacheKey = `v2:${generation}`;
-  const cached = await getAdminOverviewCache<OverviewStats>(cacheKey);
+  const cached = await getAdminOverviewCache<OverviewStats>(cacheKey, generation);
   if (cached) return cached;
 
   return coalesce(`admin-overview:${cacheKey}`, async () => {
-    const raced = await getAdminOverviewCache<OverviewStats>(cacheKey);
+    const raced = await getAdminOverviewCache<OverviewStats>(cacheKey, generation);
     if (raced) return raced;
 
     const stats = await buildOverviewStats();
-    await setAdminOverviewCache(cacheKey, stats);
+    await setAdminOverviewCache(cacheKey, stats, generation);
     return stats;
   });
 }

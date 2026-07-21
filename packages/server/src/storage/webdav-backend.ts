@@ -1,6 +1,6 @@
 import { XMLParser } from "fast-xml-parser";
 import { Agent } from "undici";
-import { ApiError } from "../core/http.ts";
+import { ApiError } from "../core/api-error.ts";
 import { getInputImageMaxBytes } from "../config/app-settings.ts";
 import type { StorageConfig } from "./backend-config.ts";
 import { contentTypeForKey, storageObjectName, type ReadablePrefix, type StoragePrefix } from "./object-keys.ts";
@@ -11,7 +11,7 @@ import type {
   StorageDriver,
   StorageSelfTest
 } from "./storage-backend.ts";
-import { assertSingleByteRangeSyntax, parseSingleByteRange, totalSizeFromContentRange } from "./byte-range.ts";
+import { assertSingleByteRangeSyntax, parseSingleByteRange, totalSizeFromContentRange } from "../core/byte-range.ts";
 import { normalizeObjectEtag } from "./object-validator.ts";
 
 const PROPFIND_BODY = '<?xml version="1.0" encoding="utf-8"?><propfind xmlns="DAV:"><prop><resourcetype/></prop></propfind>';
@@ -252,7 +252,11 @@ export class WebdavBackend implements StorageDriver {
         : undefined;
       throw new ApiError(
         status,
-        status === 416 ? "range_not_satisfiable" : "storage_read_failed",
+        status === 404
+          ? "storage_object_not_found"
+          : status === 416
+            ? "range_not_satisfiable"
+            : "storage_read_failed",
         `WebDAV GET failed (${res.status})`,
         totalSize === undefined ? {} : { total_size: totalSize }
       );
@@ -481,11 +485,18 @@ export class WebdavBackend implements StorageDriver {
   async selfTest(): Promise<StorageSelfTest> {
     if (!this.config.webdav.base_url) throw new ApiError(400, "storage_config_incomplete", "Storage config incomplete", { missing: ["base_url"] });
     const key = `.storage-test-${Date.now()}`;
-    await this.writeBuffer("_uploads", key, Buffer.from("ok"), "text/plain");
-    const present = await this.exists("_uploads", key);
-    await this.remove("_uploads", key).catch(() => undefined);
-    if (!present) throw new ApiError(502, "storage_test_failed", "WebDAV self-test: the written object could not be read back");
-    return { backend: "webdav", writable: true, endpoint: this.config.webdav.base_url, public_base_url: this.config.webdav.public_base_url };
+    let written = false;
+    try {
+      await this.writeBuffer("_uploads", key, Buffer.from("ok"), "text/plain");
+      written = true;
+      const present = await this.exists("_uploads", key);
+      if (!present) throw new ApiError(502, "storage_test_failed", "WebDAV self-test: the written object could not be read back");
+      return { backend: "webdav", writable: true, endpoint: this.config.webdav.base_url, public_base_url: this.config.webdav.public_base_url };
+    } finally {
+      if (written) {
+        await this.remove("_uploads", key).catch(() => undefined);
+      }
+    }
   }
 
   async pruneEmptyDirs(): Promise<number> {

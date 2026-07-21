@@ -1,6 +1,6 @@
 import { appConfig } from "@imageshow/shared";
 import { pool, withTransaction } from "../core/db.ts";
-import { ApiError } from "../core/http.ts";
+import { ApiError } from "../core/api-error.ts";
 import {
   defaultS3Settings,
   defaultWebdavSettings,
@@ -15,13 +15,48 @@ import {
   type StorageConfig,
   type StorageType
 } from "./backend-config.ts";
-import { clearStorageDriverCache } from "./storage-backend.ts";
+import {
+  createStorageDriver,
+  type StorageDriver
+} from "./storage-backend.ts";
+import { withStorageMaintenanceLock } from "./maintenance-lock.ts";
+import { thumbnailRef } from "./image-paths.ts";
 
 const storageCacheTtlMs = appConfig.derivedCacheTtlSeconds * 1000;
+const activeImportStorageStatuses = [
+  "created",
+  "receiving",
+  "preparing",
+  "ready",
+  "committing"
+] as const;
 let storageCache: StorageBackendRecord[] | null = null;
 let storageCacheExpiresAt = 0;
 let storageLoad: Promise<StorageBackendRecord[]> | null = null;
 const storageBackendChangeListeners = new Set<() => void>();
+const storageDriverCache = new Map<string, StorageDriver>();
+
+function storageDriverCacheKey(config: StorageConfig) {
+  return JSON.stringify(config);
+}
+
+function storageDriverForConfig(config: StorageConfig) {
+  if (config.slug === "(test)") return createStorageDriver(config);
+  const key = storageDriverCacheKey(config);
+  const cached = storageDriverCache.get(key);
+  if (cached) return cached;
+  const driver = createStorageDriver(config);
+  storageDriverCache.set(key, driver);
+  return driver;
+}
+
+function clearStorageDriverCache() {
+  const drivers = [...storageDriverCache.values()];
+  storageDriverCache.clear();
+  for (const driver of drivers) {
+    void Promise.resolve(driver.close?.()).catch(() => undefined);
+  }
+}
 
 async function loadStorageBackends(): Promise<StorageBackendRecord[]> {
   const rows = (await pool.query(
@@ -133,6 +168,17 @@ export async function getDefaultStorageBackend(): Promise<StorageConfig> {
   return toStorageConfig(await getDefaultStorageRecord());
 }
 
+export async function resolveStorageAccess(slug?: string) {
+  const config = slug
+    ? await getStorageBackend(slug)
+    : await getDefaultStorageBackend();
+  return { config, driver: storageDriverForConfig(config) };
+}
+
+export function resolveStorageAccessForConfig(config: StorageConfig) {
+  return { config, driver: storageDriverForConfig(config) };
+}
+
 export async function getDefaultStorageSlug(): Promise<string> {
   return (await getDefaultStorageRecord()).slug;
 }
@@ -148,13 +194,38 @@ export async function listStorageBackendOptions() {
 
 export async function getStorageBackendsForAdmin() {
   const backends = await getStorageBackends();
+  const [imageCountRows, activeImportCountRows] = await Promise.all([
+    pool.query(
+      `SELECT storage_slug, count(*)::int AS image_count
+         FROM metadata
+        GROUP BY storage_slug`
+    ),
+    pool.query(
+      `SELECT storage_slug, count(*)::int AS active_import_count
+         FROM import_session
+        WHERE status = ANY($1::text[])
+          AND expires_at >= now()
+        GROUP BY storage_slug`,
+      [activeImportStorageStatuses]
+    )
+  ]);
+  const imageCounts = new Map<string, number>(imageCountRows.rows.map((row) => [
+    String(row.storage_slug),
+    Number(row.image_count ?? 0)
+  ]));
+  const activeImportCounts = new Map<string, number>(activeImportCountRows.rows.map((row) => [
+    String(row.storage_slug),
+    Number(row.active_import_count ?? 0)
+  ]));
   return backends.map((backend) => {
     const summary = {
       slug: backend.slug,
       display_name: backend.display_name,
       type: backend.type,
       enabled: backend.enabled,
-      is_default: backend.is_default
+      is_default: backend.is_default,
+      image_count: imageCounts.get(backend.slug) ?? 0,
+      active_import_count: activeImportCounts.get(backend.slug) ?? 0
     };
     if (backend.type === "s3") {
       const { secret_access_key, ...s3 } = backend.s3;
@@ -244,13 +315,180 @@ export async function importStorageBackends(
   invalidateStorageBackendCache();
 }
 
-export async function updateStorageBackend(slug: string, input: StorageBackendUpdateInput) {
+function changedPhysicalLocationFields(
+  type: StorageType,
+  current: StorageConfig["s3"] | StorageConfig["webdav"],
+  next: StorageConfig["s3"] | StorageConfig["webdav"]
+) {
+  const fields = type === "s3"
+    ? ["endpoint", "region", "bucket", "root_path"] as const
+    : ["base_url", "root_path"] as const;
+  const currentRecord = current as unknown as Record<string, unknown>;
+  const nextRecord = next as unknown as Record<string, unknown>;
+  return fields.filter((field) => currentRecord[field] !== nextRecord[field]);
+}
+
+type StorageBackendUsage = {
+  image_count: number;
+  active_import_count: number;
+};
+
+function storageBackendUsage(row: Record<string, unknown>): StorageBackendUsage {
+  return {
+    image_count: Number(row.image_count ?? 0),
+    active_import_count: Number(row.active_import_count ?? 0)
+  };
+}
+
+function assertPhysicalLocationChangeAllowed(
+  changedFields: readonly string[],
+  usage: StorageBackendUsage
+) {
+  if (!changedFields.length || (!usage.image_count && !usage.active_import_count)) return;
+  throw new ApiError(
+    409,
+    "storage_location_change_requires_migration",
+    "该后端仍有图片或活动导入任务引用，物理位置字段暂不可变更",
+    { fields: changedFields, ...usage }
+  );
+}
+
+type ExistingStorageProbe = {
+  id: string;
+  object_key: string;
+  storage_slug: string;
+  is_link: boolean;
+  device: string;
+  brightness: string;
+  theme: string;
+};
+
+async function validateStorageUpdate(
+  config: StorageConfig,
+  existingObject?: ExistingStorageProbe
+) {
+  const testConfig = { ...config, slug: "(test)" };
+  const driver = storageDriverForConfig(testConfig);
+  try {
+    if (existingObject) {
+      const reference = existingObject.is_link
+        ? thumbnailRef(existingObject)
+        : { prefix: "media" as const, key: existingObject.object_key };
+      if (!await driver.exists(reference.prefix, reference.key)) {
+        throw new ApiError(
+          502,
+          "storage_access_probe_failed",
+          "Storage backend could not access an existing referenced object",
+          { image_id: existingObject.id }
+        );
+      }
+    }
+    const result = await driver.selfTest();
+    if (!result.writable) {
+      throw new ApiError(
+        502,
+        "storage_test_failed",
+        "Storage backend did not confirm write access"
+      );
+    }
+  } finally {
+    await Promise.resolve(driver.close?.()).catch(() => undefined);
+  }
+}
+
+async function updateStorageBackendUnderLock(
+  slug: string,
+  input: StorageBackendUpdateInput
+) {
+  const snapshot = (await pool.query(
+    `SELECT backend.slug,
+            backend.type,
+            backend.config,
+            (SELECT count(*)::int
+               FROM metadata
+              WHERE metadata.storage_slug=backend.slug) AS image_count,
+            (SELECT count(*)::int
+               FROM import_session
+              WHERE import_session.storage_slug=backend.slug
+                AND import_session.status = ANY($2::text[])
+                AND import_session.expires_at >= now()) AS active_import_count
+       FROM storage_backend AS backend
+      WHERE backend.slug=$1`,
+    [slug, activeImportStorageStatuses]
+  )).rows[0];
+  if (!snapshot) {
+    throw new ApiError(404, "storage_backend_not_found", `Unknown storage backend: ${slug}`);
+  }
+
+  const snapshotConfig = typeof snapshot.config === "object" && snapshot.config
+    ? snapshot.config
+    : {};
+  const snapshotUsage = storageBackendUsage(snapshot);
+  let validatedConfig: StorageConfig | null = null;
+  const existingObject = snapshotUsage.image_count > 0
+    ? (await pool.query(
+        `SELECT id, object_key, storage_slug, is_link, device, brightness, theme
+           FROM metadata
+          WHERE storage_slug=$1
+          ORDER BY id
+          LIMIT 1`,
+        [slug]
+      )).rows[0] as ExistingStorageProbe | undefined
+    : undefined;
+  if (snapshot.type === "s3" && input.s3) {
+    const current = s3SettingsSchema.parse(snapshotConfig);
+    const next = withStoredS3Credential(s3SettingsSchema.parse(input.s3), current);
+    const changedFields = changedPhysicalLocationFields("s3", current, next);
+    assertPhysicalLocationChangeAllowed(changedFields, snapshotUsage);
+    if (JSON.stringify(next) !== JSON.stringify(current)) {
+      validatedConfig = {
+        slug,
+        type: "s3",
+        s3: next,
+        webdav: defaultWebdavSettings
+      };
+    }
+  } else if (snapshot.type === "webdav" && input.webdav) {
+    const current = webdavSettingsSchema.parse(snapshotConfig);
+    const next = withStoredWebdavCredential(
+      webdavSettingsSchema.parse(input.webdav),
+      current
+    );
+    const changedFields = changedPhysicalLocationFields("webdav", current, next);
+    assertPhysicalLocationChangeAllowed(changedFields, snapshotUsage);
+    if (JSON.stringify(next) !== JSON.stringify(current)) {
+      validatedConfig = {
+        slug,
+        type: "webdav",
+        s3: defaultS3Settings,
+        webdav: next
+      };
+    }
+  }
+  if (validatedConfig) {
+    await validateStorageUpdate(validatedConfig, existingObject);
+  }
+
   await withTransaction(async (client) => {
     const row = (await client.query(
-      "SELECT slug, type, config, is_default FROM storage_backend WHERE slug=$1 FOR UPDATE",
+      `SELECT slug, type, config, is_default
+         FROM storage_backend
+        WHERE slug=$1
+        FOR UPDATE`,
       [slug]
     )).rows[0];
     if (!row) throw new ApiError(404, "storage_backend_not_found", `Unknown storage backend: ${slug}`);
+    const usage = storageBackendUsage((await client.query(
+      `SELECT (SELECT count(*)::int
+                 FROM metadata
+                WHERE storage_slug=$1) AS image_count,
+              (SELECT count(*)::int
+                 FROM import_session
+                WHERE storage_slug=$1
+                  AND status = ANY($2::text[])
+                  AND expires_at >= now()) AS active_import_count`,
+      [slug, activeImportStorageStatuses]
+    )).rows[0] ?? {});
     if (input.enabled === false && row.is_default) {
       throw new ApiError(400, "storage_default_enabled", "默认后端不能停用，请先切换默认后端");
     }
@@ -277,12 +515,16 @@ export async function updateStorageBackend(slug: string, input: StorageBackendUp
       const next = input.s3
         ? withStoredS3Credential(s3SettingsSchema.parse(input.s3), current)
         : current;
+      const changedFields = changedPhysicalLocationFields("s3", current, next);
+      assertPhysicalLocationChangeAllowed(changedFields, usage);
       configJson = JSON.stringify(next);
     } else if (row.type === "webdav") {
       const current = webdavSettingsSchema.parse(rowConfig);
       const next = input.webdav
         ? withStoredWebdavCredential(webdavSettingsSchema.parse(input.webdav), current)
         : current;
+      const changedFields = changedPhysicalLocationFields("webdav", current, next);
+      assertPhysicalLocationChangeAllowed(changedFields, usage);
       configJson = JSON.stringify(next);
     }
 
@@ -297,6 +539,13 @@ export async function updateStorageBackend(slug: string, input: StorageBackendUp
     );
   });
   invalidateStorageBackendCache();
+}
+
+export async function updateStorageBackend(slug: string, input: StorageBackendUpdateInput) {
+  if (input.s3 || input.webdav) {
+    return withStorageMaintenanceLock(() => updateStorageBackendUnderLock(slug, input));
+  }
+  return updateStorageBackendUnderLock(slug, input);
 }
 
 export async function deleteStorageBackend(slug: string) {

@@ -1,11 +1,10 @@
 import { readdir, readFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import pg, { type PoolClient } from "pg";
 import { appConfig } from "@imageshow/shared";
-import { bootstrapEnvironment } from "../config/bootstrap-env.ts";
 import { deploymentConfig } from "../config/deployment-config.ts";
-import { ensureSuperAdmin } from "../users/admin-bootstrap.ts";
 import { logger } from "./logger.ts";
 
 const databaseConfig = deploymentConfig.database;
@@ -54,7 +53,10 @@ export async function withAdvisoryLock<T>(key: string, work: () => Promise<T>, m
 
 export async function runMigrations() {
   const here = dirname(fileURLToPath(import.meta.url));
-  const migrationDir = join(here, "..", "migrations");
+  const bundledMigrationDir = join(here, "..", "migrations");
+  const migrationDir = existsSync(bundledMigrationDir)
+    ? bundledMigrationDir
+    : join(here, "..", "..", "migrations");
   const files = (await readdir(migrationDir)).filter((file) => file.endsWith(".sql")).sort();
   const client = await pool.connect();
   try {
@@ -85,21 +87,6 @@ export async function runMigrations() {
     }
   } finally {
     await client.query("SELECT pg_advisory_unlock(hashtext('imageshow:migrations'))").catch(() => undefined);
-    client.release();
-  }
-}
-
-export async function initializeAdmin() {
-  const client = await pool.connect();
-  try {
-    await ensureSuperAdmin(
-      (sql, params) => client.query(sql, params),
-      {
-        username: bootstrapEnvironment.adminUsername,
-        password: bootstrapEnvironment.adminPassword
-      }
-    );
-  } finally {
     client.release();
   }
 }

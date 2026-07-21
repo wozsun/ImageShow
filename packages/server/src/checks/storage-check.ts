@@ -1,5 +1,5 @@
 import { pool } from "../core/db.ts";
-import { errorMessage } from "../core/http.ts";
+import { errorMessage } from "../core/api-error.ts";
 import { thumbnailRef } from "../storage/image-paths.ts";
 import { listStorageKeys } from "../storage/storage.ts";
 import {

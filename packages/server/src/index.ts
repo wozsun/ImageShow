@@ -4,9 +4,10 @@ import { compress } from "hono/compress";
 import { adminApiBasePath, appConfig } from "@imageshow/shared";
 import { getRuntimeConfig, onRuntimeConfigChange } from "./config/runtime-config-store.ts";
 import { configureSharpConcurrency } from "./images/processing.ts";
-import { invalidateImageReadCaches } from "./images/image-cache.ts";
+import { invalidateImageCaches } from "./images/image-cache.ts";
 import { cleanupOrphanRawImports } from "./images/imports/temp-files.ts";
-import { initializeAdmin, pingDb, pool, runMigrations } from "./core/db.ts";
+import { pingDb, pool, runMigrations } from "./core/db.ts";
+import { initializeAdmin } from "./users/admin-initialize.ts";
 import { pingRedis, redis } from "./core/redis-client.ts";
 import { logger } from "./core/logger.ts";
 import { auditAdminMutation } from "./core/audit-log.ts";
@@ -155,9 +156,9 @@ onRuntimeConfigChange(() => {
   const nextSignature = publicUrlConfigCacheSignature();
   if (nextSignature === publicUrlConfigSignature) return;
   publicUrlConfigSignature = nextSignature;
-  void invalidateImageReadCaches();
+  void invalidateImageCaches();
 });
-onStorageBackendChange(() => void invalidateImageReadCaches());
+onStorageBackendChange(() => void invalidateImageCaches());
 startWorker();
 const startupRandomPool = rebuildRandomPool({ requireFresh: false }).catch((error) => {
   // Redis is a derived layer. A failed warm-up is retried by normal reads and

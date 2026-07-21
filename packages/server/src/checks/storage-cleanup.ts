@@ -1,5 +1,5 @@
 import { pool } from "../core/db.ts";
-import { errorMessage } from "../core/http.ts";
+import { errorMessage } from "../core/api-error.ts";
 import { listStorageKeys, pruneEmptyStorageDirs, removeObject, type StoragePrefix } from "../storage/storage.ts";
 import { withStorageMaintenanceLock } from "../storage/maintenance-lock.ts";
 import {

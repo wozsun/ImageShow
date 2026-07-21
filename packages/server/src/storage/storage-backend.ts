@@ -1,5 +1,5 @@
 import type { Readable } from "node:stream";
-import { ApiError } from "../core/http.ts";
+import { ApiError } from "../core/api-error.ts";
 import type { StorageType, StorageConfig } from "./backend-config.ts";
 import type { ReadablePrefix, StoragePrefix } from "./object-keys.ts";
 import { LocalBackend } from "./local-backend.ts";
@@ -47,32 +47,8 @@ export function isStorageNotFoundError(error: unknown) {
   return error instanceof ApiError && error.status === 404;
 }
 
-const driverCache = new Map<string, StorageDriver>();
-
-function driverCacheKey(config: StorageConfig) {
-  return JSON.stringify(config);
-}
-
-function createDriver(config: StorageConfig): StorageDriver {
+export function createStorageDriver(config: StorageConfig): StorageDriver {
   if (config.type === "s3") return new S3Backend(config);
   if (config.type === "webdav") return new WebdavBackend(config);
   return new LocalBackend();
-}
-
-export function clearStorageDriverCache() {
-  const drivers = [...driverCache.values()];
-  driverCache.clear();
-  for (const driver of drivers) {
-    void Promise.resolve(driver.close?.()).catch(() => undefined);
-  }
-}
-
-export function driverFor(config: StorageConfig): StorageDriver {
-  if (config.slug === "(test)") return createDriver(config);
-  const key = driverCacheKey(config);
-  const cached = driverCache.get(key);
-  if (cached) return cached;
-  const driver = createDriver(config);
-  driverCache.set(key, driver);
-  return driver;
 }

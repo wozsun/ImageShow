@@ -23,11 +23,9 @@
 
 .log-page > .workspace-head {
   flex: 0 0 auto;
-  align-items: center;
 }
 
 .log-head-actions {
-  margin-left: auto;
   display: flex;
   align-items: end;
   justify-content: flex-end;
@@ -105,17 +103,10 @@
 }
 
 @media (max-width: 760px) {
-  .log-page > .workspace-head {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
   .log-head-actions {
-    margin-left: 0;
     justify-content: stretch;
   }
 
-  .log-head-actions .action-feedback.is-inline,
   .log-head-actions .log-control,
   .log-head-actions button {
     flex: 1 1 100%;

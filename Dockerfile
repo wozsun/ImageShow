@@ -10,7 +10,7 @@ RUN npm ci
 FROM deps AS build
 WORKDIR /app
 COPY . .
-RUN npm run check && npm run build
+RUN npm run build && npm run knip
 
 FROM node:26.5.0 AS prod-deps
 WORKDIR /app

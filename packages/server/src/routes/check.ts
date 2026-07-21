@@ -1,7 +1,7 @@
 import type { Hono } from "hono";
 import { adminApiBasePath } from "@imageshow/shared";
 import { ok, requireSuper } from "../core/http.ts";
-import { inspectRedisState } from "../core/redis-inspect.ts";
+import { inspectRedisState } from "../checks/redis-inspect.ts";
 import { checkAll, checkDatabase, checkStorage, checkTrash, cleanupStorage, migrateStorageLocation } from "../checks/service.ts";
 
 export function registerCheckRoutes(app: Hono) {

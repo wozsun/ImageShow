@@ -1,15 +1,8 @@
 import { syncRandomImages } from "../random/random-cache.ts";
 import {
-  invalidateImageLookupEntries,
-  invalidateImageReadCaches,
-  invalidateMd5Caches,
+  invalidateImageCaches,
+  type ImageLookupInvalidationEntry,
 } from "./image-cache.ts";
-
-type ImageLookupInvalidationEntry = {
-  id?: string;
-  object_key?: string;
-  thumb_key?: string;
-};
 
 export type ImageMutationSyncPlan = {
   id: string;
@@ -69,11 +62,12 @@ export function createImageMutationSyncBatch(): ImageMutationSyncBatch {
 
       const repairs = await Promise.allSettled([
         syncRandomImages(pendingImageIds),
-        pendingMd5s.length ? invalidateMd5Caches(pendingMd5s) : Promise.resolve(),
-        pendingLookupEntries.length
-          ? invalidateImageLookupEntries(pendingLookupEntries)
-          : Promise.resolve(),
-        invalidateImageReads ? invalidateImageReadCaches() : Promise.resolve(),
+        invalidateImageReads
+          ? invalidateImageCaches({
+              lookupEntries: pendingLookupEntries,
+              md5s: pendingMd5s
+            })
+          : Promise.resolve()
       ]);
       const failedRepair = repairs.find(
         (result): result is PromiseRejectedResult => result.status === "rejected",

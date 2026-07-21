@@ -1,7 +1,7 @@
 import type { Hono } from "hono";
-import { adminApiBasePath } from "@imageshow/shared";
+import { adminApiBasePath, type AuthStateDto } from "@imageshow/shared";
+import { ApiError } from "../core/api-error.ts";
 import {
-  ApiError,
   assertSameOrigin,
   blockCrossSiteFetch,
   getSession,
@@ -20,6 +20,8 @@ import {
 } from "../users/session-invalidation.ts";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { getEffectiveLoginBackground } from "../config/app-settings.ts";
+import { pool } from "../core/db.ts";
+import { rehashPasswordIfNeeded } from "../users/password-upgrade.ts";
 
 const sessionRedis = adminSessionRedisClient(redis);
 
@@ -35,20 +37,27 @@ export function registerPublicAuthRoutes(app: Hono) {
     return c.json(ok(await login(
       c,
       String(body.username ?? ""),
-      String(body.password ?? "")
+      String(body.password ?? ""),
+      {
+        upgradePasswordHash: (input) => rehashPasswordIfNeeded(
+          (sql, params) => pool.query(sql, params),
+          input
+        )
+      }
     )));
   });
 
   app.get(`${adminApiBasePath}/auth/me`, async (c) => {
     const session = await getSession(c);
-    return c.json(ok({
+    const authState = {
       authenticated: Boolean(session),
       username: session?.username ?? "",
       role: session?.role ?? "",
       csrf_token: session?.csrf ?? "",
       altcha_enabled: getRuntimeConfig().altcha.enabled,
       login_background: getEffectiveLoginBackground()
-    }));
+    } satisfies AuthStateDto;
+    return c.json(ok(authState));
   });
 }
 

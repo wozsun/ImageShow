@@ -5,16 +5,23 @@ import { json } from "@codemirror/lang-json";
 import { api } from "../../../lib/api/client.js";
 import { invalidateRuntimeData } from "../../../lib/api/query-invalidation.js";
 import { adminApiBasePath } from "../../../lib/constants.js";
-import { errorMessage } from "../../../lib/ui/formatters.js";
+import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
 import type { RuntimeConfigChangeSummary } from "../../../lib/types.js";
 import { Icon } from "../../../components/icon/Icon.js";
+import { AsyncActionButton } from "../../../components/actions/AsyncActionButton.js";
 import {
-  ActionFeedback,
+  createActionFeedback,
   type ActionFeedbackState
 } from "../../../components/feedback/ActionFeedback.js";
+import {
+  ActionFeedbackOutlet,
+  ActionFeedbackRegion,
+  useActionFeedbackTarget
+} from "../../../components/feedback/ActionFeedbackRegion.js";
 import { ConfirmDialog } from "../../../components/feedback/ConfirmDialog.js";
 import { OverlayScrollbar } from "../../../components/layout/OverlayScrollbar.js";
 import { useQueryClient } from "@tanstack/react-query";
+import { useAsyncActionStatus } from "../../../hooks/useAsyncActionStatus.js";
 
 type RuntimeConfigResponse = {
   config: RuntimeConfig;
@@ -24,6 +31,27 @@ type RuntimeConfigResponse = {
 const formatConfig = (config: unknown) => JSON.stringify(config, null, 2);
 const jsonExtensions = [json(), EditorView.lineWrapping];
 
+const formatPresentation = {
+  idle: { icon: "file-list-line", label: "格式化" },
+  pending: { icon: "file-list-line", label: "格式化中" },
+  success: { icon: "check-line", label: "格式化完成" },
+  error: { icon: "close-line", label: "格式错误" }
+} as const;
+
+const reloadPresentation = {
+  idle: { icon: "refresh-line", label: "重新读取" },
+  pending: { icon: "refresh-line", label: "读取中" },
+  success: { icon: "check-line", label: "读取成功" },
+  error: { icon: "close-line", label: "读取失败" }
+} as const;
+
+const validatePresentation = {
+  idle: { icon: "save-3-line", label: "保存配置" },
+  pending: { icon: "save-3-line", label: "校验中" },
+  success: { icon: "check-line", label: "校验通过" },
+  error: { icon: "close-line", label: "校验失败" }
+} as const;
+
 function saveConfirmationDescription(changes: RuntimeConfigChangeSummary) {
   const messages = ["将使用编辑器内容完整替换当前 config.json。"];
   if (changes.access_changes.length) {
@@ -32,11 +60,8 @@ function saveConfirmationDescription(changes: RuntimeConfigChangeSummary) {
   return messages.join(" ").trim();
 }
 
-export function RuntimeConfigEditor({ reloadToken, feedback, onFeedback, onFeedbackClose }: {
+export function RuntimeConfigEditor({ reloadToken }: {
   reloadToken: number;
-  feedback: ActionFeedbackState | null;
-  onFeedback: (message: string, status: ActionFeedbackState["status"]) => void;
-  onFeedbackClose: () => void;
 }) {
   const client = useQueryClient();
   const editorScrollRef = useRef<HTMLElement | null>(null);
@@ -47,45 +72,63 @@ export function RuntimeConfigEditor({ reloadToken, feedback, onFeedback, onFeedb
   const [candidate, setCandidate] = useState<RuntimeConfig | null>(null);
   const [changes, setChanges] = useState<RuntimeConfigChangeSummary | null>(null);
   const [editorScrollReady, setEditorScrollReady] = useState(false);
+  const [loadFeedback, setLoadFeedback] = useState<ActionFeedbackState | null>(null);
+  const loadFeedbackTarget = useActionFeedbackTarget("advanced-config-card");
+  const formatStatus = useAsyncActionStatus();
+  const reloadStatus = useAsyncActionStatus();
+  const validateStatus = useAsyncActionStatus({ successDurationMs: null });
   const isDirty = text !== baseline;
+  const actionPending = Boolean(action)
+    || formatStatus.pending
+    || reloadStatus.pending
+    || validateStatus.pending;
 
   const bindEditorScroll = (view: EditorView) => {
     editorScrollRef.current = view.scrollDOM;
     setEditorScrollReady(true);
   };
 
-  const loadConfig = async (showFeedback: boolean) => {
+  const loadConfig = async (origin: "automatic" | "manual"): Promise<boolean> => {
     setAction("load");
-    if (showFeedback) onFeedback("正在重新读取完整配置…", "pending");
+    if (origin === "manual") setLoadFeedback(null);
     try {
       const response = await api<RuntimeConfigResponse>(`${adminApiBasePath}/advanced-config/runtime`);
       const formatted = formatConfig(response.config);
       setText(formatted);
       setBaseline(formatted);
-      if (showFeedback) onFeedback("已重新读取当前配置", "success");
+      setLoadFeedback(null);
+      return true;
     } catch (error) {
-      onFeedback(`读取失败：${errorMessage(error)}`, "error");
+      reportAdminUiError("advanced_config.runtime_load", error);
+      if (origin === "automatic") {
+        setLoadFeedback(createActionFeedback("完整配置读取失败，请稍后重试", "error"));
+      }
+      return false;
     } finally {
       setAction("");
     }
   };
 
   useEffect(() => {
-    void loadConfig(reloadToken > 0);
+    void loadConfig("automatic");
   }, [reloadToken]);
 
-  const formatEditor = () => {
-    try {
-      setText(formatConfig(JSON.parse(text) as unknown));
-      onFeedback("JSON 已格式化", "success");
-    } catch (error) {
-      onFeedback(`JSON 语法错误：${errorMessage(error)}`, "error");
-    }
+  const formatEditor = async () => {
+    await formatStatus.run(async () => {
+      try {
+        setText(formatConfig(JSON.parse(text) as unknown));
+        return true;
+      } catch (error) {
+        reportAdminUiError("advanced_config.json_format", error);
+        return false;
+      }
+    });
   };
 
   const requestReload = () => {
+    setLoadFeedback(null);
     if (isDirty) setConfirmation("reload");
-    else void loadConfig(true);
+    else void reloadStatus.run(() => loadConfig("manual"));
   };
 
   const validateForSave = async () => {
@@ -93,32 +136,34 @@ export function RuntimeConfigEditor({ reloadToken, feedback, onFeedback, onFeedb
     try {
       parsed = JSON.parse(text) as RuntimeConfig;
     } catch (error) {
-      onFeedback(`JSON 语法错误：${errorMessage(error)}`, "error");
+      reportAdminUiError("advanced_config.json_parse", error);
+      await validateStatus.run(async () => false);
       return;
     }
 
-    setAction("validate");
-    onFeedback("正在校验完整配置…", "pending");
-    try {
-      const response = await api<{ changes: RuntimeConfigChangeSummary }>(
-        `${adminApiBasePath}/advanced-config/runtime/validate`,
-        { method: "POST", body: JSON.stringify({ config: parsed }) }
-      );
-      setCandidate(parsed);
-      setChanges(response.changes);
-      setConfirmation("save");
-      onFeedback("配置校验通过，请确认保存", "info");
-    } catch (error) {
-      onFeedback(`配置校验失败：${errorMessage(error)}`, "error");
-    } finally {
-      setAction("");
-    }
+    await validateStatus.run(async () => {
+      setAction("validate");
+      try {
+        const response = await api<{ changes: RuntimeConfigChangeSummary }>(
+          `${adminApiBasePath}/advanced-config/runtime/validate`,
+          { method: "POST", body: JSON.stringify({ config: parsed }) }
+        );
+        setCandidate(parsed);
+        setChanges(response.changes);
+        setConfirmation("save");
+        return true;
+      } catch (error) {
+        reportAdminUiError("advanced_config.runtime_validate", error);
+        return false;
+      } finally {
+        setAction("");
+      }
+    });
   };
 
-  const saveConfig = async () => {
-    if (!candidate) return;
+  const saveConfig = async (): Promise<boolean> => {
+    if (!candidate) return false;
     setAction("save");
-    onFeedback("正在保存完整配置…", "pending");
     try {
       const response = await api<Required<RuntimeConfigResponse>>(
         `${adminApiBasePath}/advanced-config/runtime`,
@@ -128,14 +173,12 @@ export function RuntimeConfigEditor({ reloadToken, feedback, onFeedback, onFeedb
       setText(formatted);
       setBaseline(formatted);
       await invalidateRuntimeData(client);
-      onFeedback("完整配置已保存并应用", "success");
+      return true;
     } catch (error) {
-      onFeedback(`保存失败：${errorMessage(error)}`, "error");
+      reportAdminUiError("advanced_config.runtime_save", error);
+      return false;
     } finally {
       setAction("");
-      setCandidate(null);
-      setChanges(null);
-      setConfirmation("");
     }
   };
 
@@ -148,18 +191,20 @@ export function RuntimeConfigEditor({ reloadToken, feedback, onFeedback, onFeedb
   return (
     <section className="advanced-config-editor">
       <div className="advanced-config-editor-head">
-        <div>
-          <h2><Icon name="settings-3-line" />完整 config.json</h2>
-          <p className="hint">精准编辑当前实例的全部运行时配置，缺少字段或多余字段均会拒绝保存。</p>
+        <h2
+          title="精准编辑当前实例的全部运行时配置，缺少字段或多余字段均会拒绝保存。"
+          aria-description="精准编辑当前实例的全部运行时配置，缺少字段或多余字段均会拒绝保存。"
+        >
+          <Icon name="settings-3-line" />完整 config.json
+        </h2>
+        <div className="advanced-config-editor-head-status">
+          <ActionFeedbackRegion
+            className="advanced-config-feedback-region"
+            target={loadFeedbackTarget}
+            variant="card"
+          />
+          {isDirty && <span className="advanced-config-dirty">未保存</span>}
         </div>
-        {(feedback || isDirty) && (
-          <div className="advanced-config-editor-head-status">
-            {feedback && (
-              <ActionFeedback feedback={feedback} placement="inline" onClose={onFeedbackClose} />
-            )}
-            {isDirty && <span className="advanced-config-dirty">未保存</span>}
-          </div>
-        )}
       </div>
       <div className="advanced-config-code-editor">
         <CodeMirror
@@ -187,15 +232,38 @@ export function RuntimeConfigEditor({ reloadToken, feedback, onFeedback, onFeedb
       </div>
       <div className="advanced-config-editor-footer">
         <div className="advanced-config-editor-actions">
-          <button type="button" disabled={Boolean(action) || !text} onClick={formatEditor}>格式化</button>
-          <button type="button" disabled={Boolean(action)} onClick={requestReload}>
-            <Icon name="refresh-line" />重新读取
-          </button>
-          <button className="button" type="button" disabled={Boolean(action) || !isDirty} onClick={() => void validateForSave()}>
-            <Icon name="save-3-line" />{action === "validate" ? "正在校验…" : "保存配置"}
-          </button>
+          <AsyncActionButton
+            type="button"
+            status={formatStatus.status}
+            presentation={formatPresentation}
+            disabled={actionPending || !text}
+            onClick={() => void formatEditor()}
+          />
+          <AsyncActionButton
+            type="button"
+            status={reloadStatus.status}
+            presentation={reloadPresentation}
+            disabled={actionPending}
+            onClick={requestReload}
+          />
+          <AsyncActionButton
+            className="button"
+            type="button"
+            status={validateStatus.status}
+            presentation={validatePresentation}
+            disabled={actionPending || !isDirty}
+            onClick={() => void validateForSave()}
+          />
         </div>
       </div>
+
+      {loadFeedback && (
+        <ActionFeedbackOutlet
+          feedback={loadFeedback}
+          target={loadFeedbackTarget}
+          onClose={() => setLoadFeedback(null)}
+        />
+      )}
 
       {confirmation === "reload" && (
         <ConfirmDialog
@@ -205,7 +273,7 @@ export function RuntimeConfigEditor({ reloadToken, feedback, onFeedback, onFeedb
           confirmIcon="refresh-line"
           busy={action === "load"}
           onClose={() => setConfirmation("")}
-          onConfirm={() => loadConfig(true)}
+          onConfirm={() => reloadStatus.run(() => loadConfig("manual"))}
         />
       )}
       {confirmation === "save" && changes && (

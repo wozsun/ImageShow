@@ -3,7 +3,7 @@ import { isIP } from "node:net";
 import type { LookupFunction } from "node:net";
 import { fileTypeFromBuffer } from "file-type";
 import { Agent } from "undici";
-import { ApiError } from "./http.ts";
+import { ApiError } from "./api-error.ts";
 import { logger } from "./logger.ts";
 
 const maxExternalRedirects = 5;

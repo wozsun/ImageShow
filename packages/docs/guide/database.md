@@ -25,11 +25,21 @@ PostgreSQL 是唯一真相源，Redis 随机池、列表缓存和判重缓存均
 | `author` | 作者 slug，可空，外键 → `author.slug`，删除作者时自动置空 |
 | `status` | `ready` / `deleted` |
 | `deleted_at` | 软删时间 |
+| `purge_state` | 彻底删除认领状态：`idle` / `purging` / `failed`；只有 `idle` 可恢复 |
+| `purge_started_at` | 当前彻底删除认领开始时间，用于回收崩溃遗留的过期认领 |
+| `purge_attempts` | 单调递增的彻底删除尝试号，同时作为当前执行者的所有权令牌 |
+| `purge_error` | 最近一次彻底删除失败的有界错误信息 |
 | `image_time` | 图片展示 / 图库排序时间；JSONL 可指定，同一前端批次未指定时共享 `batch_time`，省略时使用会话创建时间 |
 | `created_at` | 实际导入 ImageShow 的时间 |
 | `updated_at` | 图片元数据最后更新时间 |
 
 图片分类直接由 `device`、`brightness` 与 `theme` 表达，人工可读目录也使用这三项；随机候选由 Redis 集合维护，PostgreSQL 不保存分类连续编号。
+
+彻底删除先用 `FOR UPDATE SKIP LOCKED` 把 deleted 行原子认领为 `purging` 并增加
+`purge_attempts`，随后在该图的存储 mutation lock 内再次核对状态、尝试号和对象位置。
+对象删除完成后，数据库删除仍以尝试号、`storage_slug` 和 `object_key` 做条件更新；恢复只
+接受 `purge_state='idle'`。进程崩溃留下的过期 `purging` 可重新认领，旧执行者不能用过期
+令牌删除或覆盖新执行者的结果。
 
 关键索引：`ready` 状态下的随机轴 `(device, brightness, theme, id)`；前后台图库按 `image_time DESC, id DESC` 游标分页，并为常用筛选预建 ready 部分索引：无筛选、单设备、单亮度、设备+亮度、单主题、设备+主题、亮度+主题、设备+亮度+主题、作者。标签查询依赖 `image_tag(tag_slug, image_id)` 命中标签集合，结合 `metadata` 的 ready/图片时间与主题等索引完成分页；另有 MD5、缩略图反查、主题、作者和存储后端索引。
 
@@ -81,7 +91,11 @@ PostgreSQL 是唯一真相源，Redis 随机池、列表缓存和判重缓存均
 | `sort_order` | 后台排序 |
 | `created_at` / `updated_at` | 时间戳 |
 
-`metadata.storage_slug` 以外键引用它；在用后端需先迁走图片才能删除。后端配置按签名缓存 driver/client，配置或默认后端变化会清理缓存。
+`metadata.storage_slug` 以外键引用它；在用后端需先迁走图片才能删除。后端注册表同时
+管理配置快照与按签名复用的 driver/client 生命周期，配置或默认后端变化会关闭并清理
+相关实例。仍有图片引用时，S3 的 endpoint / region / bucket / root_path 与 WebDAV 的
+base_url / root_path 不允许原地修改，必须显式迁移，避免同一个 slug 静默指向另一物理
+位置。
 
 ## admin_account —— 管理员
 
@@ -98,8 +112,13 @@ PostgreSQL 是唯一真相源，Redis 随机池、列表缓存和判重缓存均
 
 `tag` 与 `theme` 都使用小写 slug、显示名、排序和时间戳。主题是一图一值，直接存在 `metadata.theme`；标签是一图多值，通过 `image_tag(image_id, tag_slug)` 关联。
 
-删除标签会级联删除 `image_tag`，随后重建 Redis 随机池，保证 `tag=` 随机过滤即时准确。
+标签写操作按实体 slug advisory lock 串行化。删除标签会级联删除 `image_tag`，并按
+“随机池 → 词表 / 计数 → 图片缓存代际”顺序修复派生状态，保证 `tag=` 随机过滤和
+gallery facets 不会重新物化旧值。
 
 ## author —— 作者
 
-作者有 `slug`、`display_name`、`link`、排序和时间戳。一图最多一个作者，存在 `metadata.author`。删除作者由外键把图片作者置空，随后重建 Redis 随机池。
+作者有 `slug`、`display_name`、`link`、排序和时间戳。一图最多一个作者，存在
+`metadata.author`。作者创建、关联和删除共用 slug advisory lock；删除事务返回本次实际
+置空的图片 id，事务后只用这组真值修复随机池、词表和图片缓存，避免删除与并发关联
+互相覆盖。

@@ -1,7 +1,7 @@
 import { appConfig } from "@imageshow/shared";
 import { getStorageBackend } from "../storage/backend-registry.ts";
 import { pool } from "../core/db.ts";
-import { errorMessage } from "../core/http.ts";
+import { errorMessage } from "../core/api-error.ts";
 import { importCommitLockKey } from "../images/imports/execution.ts";
 import { cleanupOrphanRawImports, removeRawImport } from "../images/imports/temp-files.ts";
 import { stagingImageKey, stagingThumbnailKey } from "../images/imports/staging.ts";
@@ -16,6 +16,7 @@ import {
   exists,
   readStorageBuffer,
   removeObject,
+  type StoragePrefix,
   writeStorageBuffer
 } from "../storage/storage.ts";
 import type { BackgroundJob } from "./repository.ts";
@@ -119,6 +120,26 @@ async function generateThumbnail(job: BackgroundJob): Promise<BackgroundJobOutco
 }
 
 async function cleanupMovedObjects(job: BackgroundJob): Promise<BackgroundJobOutcome> {
+  const objects = Array.isArray(job.payload.objects)
+    ? job.payload.objects.filter((candidate): candidate is {
+        prefix: StoragePrefix;
+        key: string;
+        backend: string;
+      } => {
+        if (!candidate || typeof candidate !== "object") return false;
+        const object = candidate as Record<string, unknown>;
+        return typeof object.key === "string"
+          && typeof object.backend === "string"
+          && ["media", "thumbs", "link", "_uploads"].includes(String(object.prefix));
+      })
+    : [];
+  if (objects.length) {
+    for (const object of objects) {
+      await removeObject(object.prefix, object.key, object.backend);
+    }
+    return succeeded({ removed: objects.length });
+  }
+
   const objectKey = typeof job.payload.object_key === "string"
     ? job.payload.object_key
     : "";

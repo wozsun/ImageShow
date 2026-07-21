@@ -1,7 +1,7 @@
 {
   "name": "imageshow",
   "private": true,
-  "version": "3.9.7",
+  "version": "3.10.0",
   "type": "module",
   "workspaces": [
     "packages/*"
@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "npm run build -w @imageshow/shared && npm run dev -w @imageshow/server",
     "clean": "node -e \"const fs=require('node:fs'); ['dist','packages/shared/dist','packages/server/dist','packages/web/dist','packages/docs/.vitepress/dist','packages/docs/.vitepress/cache'].forEach((path)=>fs.rmSync(path,{recursive:true,force:true}))\"",
-    "build": "npm run clean && npm run build -w @imageshow/shared && npm run build -w @imageshow/web && npm run build -w @imageshow/docs && npm run build -w @imageshow/server",
+    "build": "npm run clean && npm run build -w @imageshow/shared && npm run build -w @imageshow/web && npm run build -w @imageshow/docs && npm run build -w @imageshow/server && npm run assemble -w @imageshow/server",
     "check": "npm run build -w @imageshow/shared && npm --workspaces run check",
     "knip": "knip",
     "admin:reset-password": "node --env-file-if-exists=.env packages/server/src/admin-password-cli.ts reset-password",

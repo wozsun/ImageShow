@@ -2,7 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api } from "../../lib/api/client.js";
 import { ThumbImage } from "../../components/image/ThumbImage.js";
-import { adminApiBasePath, adminBasePath, queryKeys } from "../../lib/constants.js";
+import { adminApiBasePath, adminBasePath } from "../../lib/constants.js";
+import { queryKeys } from "../../lib/api/query-keys.js";
 import { formatBytes } from "../../lib/ui/formatters.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
 
@@ -58,9 +59,9 @@ function OverviewMetricCards({ items }: { items: OverviewMetric[] }) {
 }
 
 export function Overview() {
-  const query = useQuery<OverviewStats>({ queryKey: queryKeys.overview, queryFn: () => api(`${adminApiBasePath}/overview`) });
+  const query = useQuery<OverviewStats>({ queryKey: queryKeys.overview, queryFn: ({ signal }) => api(`${adminApiBasePath}/overview`, { signal }) });
   const { data } = query;
-  if (query.isError) return <QueryErrorState error={query.error} onRetry={() => void query.refetch()} fullPage />;
+  if (query.isError) return <QueryErrorState error={query.error} onRetry={() => void query.refetch()} fullPage reportContext="overview.load" />;
   const imageCards: OverviewMetric[] = [
     { label: "图库", value: data?.gallery, hint: "已分类展示", to: `${adminBasePath}/images` },
     { label: "未设置主题", value: data?.theme_unset, hint: "缺少主题", to: `${adminBasePath}/images?view=unset` },

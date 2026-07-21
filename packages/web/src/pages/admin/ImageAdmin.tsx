@@ -1,48 +1,42 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api/client.js";
 import { Icon } from "../../components/icon/Icon.js";
+import { StableButtonLabel } from "../../components/data-display/StableButtonLabel.js";
 import { ConfirmDialog } from "../../components/feedback/ConfirmDialog.js";
 import {
-  ActionFeedback,
-  createActionFeedback,
-  type ActionFeedbackState
-} from "../../components/feedback/ActionFeedback.js";
+  ActionFeedbackOutlet,
+  ActionFeedbackRegion,
+  useActionFeedbackTarget
+} from "../../components/feedback/ActionFeedbackRegion.js";
 import { LabeledSwitch } from "../../components/form/LabeledSwitch.js";
 import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
 import { AdminPagination } from "../../components/navigation/AdminPagination.js";
 import {
   adminApiBasePath,
-  adminImagePageLimit,
-  queryKeys
+  adminImagePageLimit
 } from "../../lib/constants.js";
-import { errorMessage, formatDate, formatImageClassification, imageDisplayTitle } from "../../lib/ui/formatters.js";
+import { queryKeys } from "../../lib/api/query-keys.js";
+import { imageDisplayTitle } from "../../lib/ui/formatters.js";
+import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
 import { useImportVocabulary } from "../../lib/api/import-vocabulary.js";
 import { useStorageNameResolver } from "../../lib/api/storage-options.js";
 import type { AdminSettings, ImageItem } from "../../lib/types.js";
+import type { AdminImageListResponse } from "@imageshow/shared/browser";
 import { ImageDetailModal } from "../../components/image/ImageDetailModal.js";
-import { ThumbImage } from "../../components/image/ThumbImage.js";
+import { AdminImageCard } from "./AdminImageCard.js";
 import { BatchMetadataModal } from "./BatchMetadataModal.js";
 import { ImageEditModal } from "./ImageEditModal.js";
 import { Uploader } from "./uploader/Uploader.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
 import { invalidateImageData } from "../../lib/api/query-invalidation.js";
 import { useAdminPreference } from "../../hooks/useAdminPreferences.js";
-
-type ConfirmAction =
-  | { kind: "batch-delete"; ids: string[] }
-  | { kind: "empty-trash" }
-  | { kind: "purge"; id: string; title: string };
-
-type ImageAdminView = "ready" | "unset" | "deleted";
-type AdminImageListResult = {
-  items: ImageItem[];
-  total: number;
-  has_next: boolean;
-  next_cursor: string | null;
-};
-
+import {
+  imageAdminConfirmationCopy,
+  useImageAdminOperations,
+  type ImageAdminView
+} from "./useImageAdminOperations.js";
 function adminImageListQuery(view: ImageAdminView, cursor: string, pageSize: number) {
   const params = new URLSearchParams({
     status: view === "deleted" ? "deleted" : "ready",
@@ -54,13 +48,9 @@ function adminImageListQuery(view: ImageAdminView, cursor: string, pageSize: num
 
   return {
     queryKey: [...queryKeys.adminImages, view, cursor, pageSize] as const,
-    queryFn: () => api<AdminImageListResult>(`${adminApiBasePath}/images?${params}`)
+    queryFn: ({ signal }: { signal: AbortSignal }) => api<AdminImageListResponse>(`${adminApiBasePath}/images?${params}`, { signal })
   };
 }
-
-// 批量恢复每批提交的张数。恢复现在是纯数据库操作（不动文件），但仍分小批依次提交：让进度
-// 「恢复中… X/N」能逐批刷新、单请求有界，避免一次性大批量时按钮长时间无响应。
-const restoreChunkSize = 10;
 
 export function ImageAdmin() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -68,24 +58,19 @@ export function ImageAdmin() {
   const [view, setView] = useState<ImageAdminView>(viewParam === "unset" || viewParam === "deleted" ? viewParam : "ready");
   const [cursorHistory, setCursorHistory] = useState<string[]>([""]);
   const [pageNavigation, setPageNavigation] = useState<"previous" | "next" | null>(null);
-  const [selected, setSelected] = useState<string[]>([]);
   const [cardDensity, setCardDensity] = useAdminPreference("image_card_density", "compact");
   const [detail, setDetail] = useState<ImageItem | null>(null);
   const [editing, setEditing] = useState<ImageItem | null>(null);
   const [batchEditing, setBatchEditing] = useState(false);
 
-  const [operationText, setOperationText] = useState("");
-  const [feedback, setFeedback] = useState<ActionFeedbackState | null>(null);
-  const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
-  const [actionBusy, setActionBusy] = useState(false);
-  const [busyIds, setBusyIds] = useState<string[]>([]);
+  const feedbackTarget = useActionFeedbackTarget("image-admin");
   const gridRef = useRef<HTMLDivElement | null>(null);
   const detailReturnFocusRef = useRef<HTMLElement | null>(null);
   const editReturnFocusRef = useRef<HTMLElement | null>(null);
   const batchEditReturnFocusRef = useRef<HTMLElement | null>(null);
   const pageNavigationSequenceRef = useRef(0);
   const client = useQueryClient();
-  const { data: settingsData } = useQuery<{ settings: AdminSettings }>({ queryKey: queryKeys.settings, queryFn: () => api(`${adminApiBasePath}/settings`) });
+  const { data: settingsData } = useQuery<{ settings: AdminSettings }>({ queryKey: queryKeys.settings, queryFn: ({ signal }) => api(`${adminApiBasePath}/settings`, { signal }) });
 
   const editorDataNeeded = Boolean(editing || batchEditing);
   const { data: vocabulary } = useImportVocabulary(editorDataNeeded);
@@ -102,20 +87,33 @@ export function ImageAdmin() {
     ...adminImageListQuery(view, cursor, pageSize),
     enabled: Boolean(settingsData)
   });
-  const showFeedback = (text: string, status: "error" | "success") => {
-    setFeedback(createActionFeedback(text, status));
-  };
-  const refresh = async () => {
+  const items = data?.items ?? [];
+  const invalidateData = useCallback(async () => {
     pageNavigationSequenceRef.current += 1;
     setPageNavigation(null);
-    setSelected([]);
     await invalidateImageData(client);
-  };
-  const items = data?.items ?? [];
+  }, [client]);
+  const {
+    selected,
+    setSelected,
+    selectedItems,
+    allSelected,
+    operationText,
+    feedback,
+    setFeedback,
+    showFeedback,
+    confirmAction,
+    setConfirmAction,
+    actionBusy,
+    busyIds,
+    operationBusy,
+    refresh,
+    resetTransientState,
+    runRowAction,
+    runConfirmedAction,
+    restoreSelected
+  } = useImageAdminOperations({ items, invalidateData });
   const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / pageSize));
-  const selectedItems = items.filter((item) => selected.includes(item.id));
-  const allSelected = items.length > 0 && selected.length === items.length;
-  const operationBusy = actionBusy || busyIds.length > 0;
   const canDeleteReadyItems = view !== "deleted";
   const changeView = (next: typeof view) => {
     if (next === view || operationBusy) return;
@@ -124,8 +122,7 @@ export function ImageAdmin() {
     gridRef.current?.scrollTo({ top: 0, left: 0 });
     setView(next);
     setCursorHistory([""]);
-    setSelected([]);
-    setFeedback(null);
+    resetTransientState();
 
     setSearchParams(next === "ready" ? {} : { view: next }, { replace: true });
   };
@@ -147,7 +144,8 @@ export function ImageAdmin() {
       setCursorHistory(targetHistory);
     } catch (error) {
       if (requestSequence === pageNavigationSequenceRef.current) {
-        showFeedback(`页面加载失败：${errorMessage(error)}`, "error");
+        reportAdminUiError("image_admin.page_navigation", error);
+        showFeedback("页面加载失败，请稍后重试", "error");
       }
     } finally {
       if (requestSequence === pageNavigationSequenceRef.current) {
@@ -179,110 +177,11 @@ export function ImageAdmin() {
     setSelected([]);
     setCursorHistory((current) => current.length > 1 ? current.slice(0, -1) : current);
   }, [data, isFetching, pageNumber, totalPages]);
-  const runRowAction = async (item: ImageItem, action: "delete" | "restore") => {
-    if (operationBusy) return;
-    setBusyIds([item.id]);
-    setFeedback(null);
-    setOperationText(action === "delete" ? "正在删除图片…" : "正在恢复图片…");
-    try {
-      await api(`${adminApiBasePath}/images/${item.id}/${action}`, { method: "POST" });
-      await refresh();
-      showFeedback(action === "delete" ? "图片已移入回收站" : "图片已恢复", "success");
-    } catch (error) {
-      showFeedback(`操作失败：${errorMessage(error)}`, "error");
-    } finally {
-      setOperationText("");
-      setBusyIds([]);
-    }
-  };
-  const runConfirmedAction = async () => {
-    if (!confirmAction) return;
-    const affectedIds = confirmAction.kind === "batch-delete"
-      ? confirmAction.ids
-      : confirmAction.kind === "empty-trash"
-        ? items.map((item) => item.id)
-        : [confirmAction.id];
-    setActionBusy(true);
-    setBusyIds(affectedIds);
-    setFeedback(null);
-    setOperationText(
-      confirmAction.kind === "batch-delete"
-        ? `正在批量删除 ${confirmAction.ids.length} 张图片…`
-        : confirmAction.kind === "empty-trash"
-          ? "正在清空回收站…"
-          : "正在永久删除图片…"
-    );
-    try {
-      if (confirmAction.kind === "batch-delete") {
-        const result = await api<{ deleted: number; ignored: number }>(`${adminApiBasePath}/images/batch-delete`, { method: "POST", body: JSON.stringify({ ids: confirmAction.ids }) });
-        showFeedback(`已删除 ${result.deleted} 张，忽略 ${result.ignored} 张`, result.ignored ? "error" : "success");
-      } else if (confirmAction.kind === "empty-trash") {
-        const result = await api<{ deleted: number; failed: number }>(`${adminApiBasePath}/images/empty-trash`, { method: "POST" });
-        showFeedback(
-          `已永久删除 ${result.deleted} 张图片${result.failed ? `，${result.failed} 张存储删除失败并保留在回收站` : ""}`,
-          result.failed ? "error" : "success"
-        );
-      } else {
-        await api(`${adminApiBasePath}/images/${confirmAction.id}/purge`, { method: "POST" });
-        showFeedback(`已永久删除 ${confirmAction.title}`, "success");
-      }
-      await refresh();
-    } catch (error) {
-      showFeedback(`操作失败：${errorMessage(error)}`, "error");
-    } finally {
-      setActionBusy(false);
-      setOperationText("");
-      setBusyIds([]);
-    }
-  };
-  // 批量恢复：把选中项切成小批依次提交，每批后更新「恢复中… X/N」进度，全程 actionBusy 禁用按钮，
-  // 结束再汇总恢复/忽略数。请求级错误由 catch 处理；出错时也走 refresh，
-  // 让已成功恢复的部分如实反映到列表。
-  const restoreSelected = async () => {
-    const ids = [...selected];
-    const total = ids.length;
-    if (!total) return;
-    setActionBusy(true);
-    setBusyIds(ids);
-    setFeedback(null);
-    setOperationText(`恢复中… 0 / ${total} 张`);
-    let restored = 0;
-    let ignored = 0;
-    try {
-      for (let start = 0; start < total; start += restoreChunkSize) {
-        const chunk = ids.slice(start, start + restoreChunkSize);
-        const result = await api<{ restored: number; ignored: number }>(
-          `${adminApiBasePath}/images/batch-restore`,
-          { method: "POST", body: JSON.stringify({ ids: chunk }) }
-        );
-        restored += result.restored;
-        ignored += result.ignored;
-        setOperationText(`恢复中… ${Math.min(start + chunk.length, total)} / ${total} 张`);
-      }
-      showFeedback(
-        `已恢复 ${restored} 张，忽略 ${ignored} 张`,
-        ignored ? "error" : "success"
-      );
-    } catch (error) {
-      showFeedback(`批量恢复失败：${errorMessage(error)}（已恢复 ${restored} 张）`, "error");
-    } finally {
-      await refresh().catch(() => undefined);
-      setActionBusy(false);
-      setOperationText("");
-      setBusyIds([]);
-    }
-  };
-  const confirmCopy = confirmAction?.kind === "batch-delete"
-    ? { title: "确认批量删除", description: `将选中的 ${confirmAction.ids.length} 张图片移入回收站，可以稍后恢复。`, label: "确认删除" }
-    : confirmAction?.kind === "empty-trash"
-      ? { title: "确认清空回收站", description: "回收站内的所有图片及存储对象将被永久删除，此操作无法撤销。", label: "永久清空" }
-      : confirmAction?.kind === "purge"
-        ? { title: "确认永久删除", description: `“${confirmAction.title}”将从回收站和存储中永久删除，此操作无法撤销。`, label: "永久删除" }
-        : null;
+  const confirmCopy = imageAdminConfirmationCopy(confirmAction);
   return (
     <section className="workspace workspace-paged">
       <header className="workspace-head image-admin-head">
-        <div>
+        <div className="image-admin-head-copy">
           <h1>图片</h1>
           <p role="status" aria-live="polite" aria-atomic="true">
             {operationText || (
@@ -307,7 +206,7 @@ export function ImageAdmin() {
           </div>
         </div>
       </header>
-      <div className="toolbar">
+      <div className="toolbar image-list-toolbar">
         <div className="inline-actions">
           <label className="check-label">
             <input
@@ -319,9 +218,14 @@ export function ImageAdmin() {
             />
             全选
           </label>
-          <span>{selected.length ? `已选 ${selected.length}` : "点击缩略图或标题查看详情"}</span>
+          {selected.length > 0 && <span>已选 {selected.length}</span>}
         </div>
         <div className="toolbar-actions image-list-toolbar-actions">
+          <ActionFeedbackRegion
+            className="image-admin-feedback-region"
+            target={feedbackTarget}
+            variant="page"
+          />
           <LabeledSwitch
             className="image-card-density-switch"
             checked={cardDensity === "spacious"}
@@ -366,7 +270,12 @@ export function ImageAdmin() {
               disabled={operationBusy || !items.length}
               onClick={() => setConfirmAction({ kind: "empty-trash" })}
             >
-              <Icon name="delete-bin-7-line" />{actionBusy && confirmAction?.kind === "empty-trash" ? "正在清空…" : "清空回收站"}
+              <Icon name="delete-bin-7-line" />
+              <StableButtonLabel
+                idle="清空回收站"
+                busyText="正在清空"
+                busy={actionBusy && confirmAction?.kind === "empty-trash"}
+              />
             </button>
           )}
         </div>
@@ -399,7 +308,7 @@ export function ImageAdmin() {
             onRestore={() => void runRowAction(item, "restore")}
           />
         ))}
-        {listFailed && <QueryErrorState error={listError} onRetry={() => void refetchList()} />}
+        {listFailed && <QueryErrorState error={listError} onRetry={() => void refetchList()} reportContext="image_admin.list_load" />}
         {isFetching && !items.length && <p className="muted">加载中</p>}
         {!listFailed && !isFetching && !items.length && <p className="muted">暂无记录</p>}
       </div>
@@ -455,136 +364,12 @@ export function ImageAdmin() {
         />
       )}
       {feedback && (
-        <ActionFeedback
+        <ActionFeedbackOutlet
           feedback={feedback}
-          placement="floating"
+          target={feedbackTarget}
           onClose={() => setFeedback(null)}
         />
       )}
     </section>
   );
-}
-
-function AdminImageCard({ item, storageName, checked, busy, actionsDisabled, onCheck, onDetail, onEdit, onPurge, onDelete, onRestore }: {
-  item: ImageItem;
-  storageName: (item: { is_link: boolean; storage_slug: string }) => string;
-  checked: boolean;
-  busy: boolean;
-  actionsDisabled: boolean;
-  onCheck: (checked: boolean) => void;
-  onDetail: (opener: HTMLElement) => void;
-  onEdit: (opener: HTMLElement) => void;
-  onPurge: () => void;
-  onDelete: () => void;
-  onRestore: () => void;
-}) {
-  const title = imageDisplayTitle(item);
-  const classification = formatImageClassification(item);
-  const storage = item.status === "ready" ? storageName(item) : "";
-  const deletedAt = item.status === "deleted" && item.deleted_at
-    ? `删除于 ${formatDate(item.deleted_at)}`
-    : "";
-
-  return (
-    <article
-      className={`admin-image-card${busy ? " is-busy" : ""}`}
-      aria-busy={busy}
-    >
-      <input
-        id={`admin-image-select-${item.id}`}
-        className="admin-image-card-checkbox"
-        type="checkbox"
-        checked={checked}
-        disabled={busy || actionsDisabled}
-        aria-label={`选择图片：${title}`}
-        onChange={(event) => onCheck(event.target.checked)}
-      />
-      <button
-        type="button"
-        className="admin-image-card-detail"
-        disabled={busy}
-        aria-label={`查看图片详情：${title}`}
-        onClick={(event) => onDetail(event.currentTarget)}
-      >
-        <span className="admin-image-card-thumb">
-          <ThumbImage src={item.thumb_url} alt="" />
-        </span>
-        <span className="admin-image-card-main">
-          <strong title={title}>{title}</strong>
-          <span title={classification}>{classification}</span>
-          <AdminImageCardMetadata placement="inline" storage={storage} deletedAt={deletedAt} />
-        </span>
-      </button>
-      <footer className="admin-image-card-footer">
-        <AdminImageCardMetadata placement="footer" storage={storage} deletedAt={deletedAt} />
-        <div className="admin-image-card-actions">
-          {item.status === "ready" ? (
-            <>
-              <button
-                type="button"
-                title="编辑"
-                aria-label={`编辑图片：${title}`}
-                disabled={actionsDisabled}
-                onClick={(event) => onEdit(event.currentTarget)}
-              >
-                <Icon name="pencil-line" />
-              </button>
-              <button
-                type="button"
-                className="danger-button"
-                title="删除"
-                aria-label={`删除图片：${title}`}
-                disabled={actionsDisabled}
-                onClick={onDelete}
-              >
-                <Icon name="delete-bin-6-line" />
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                type="button"
-                title="恢复"
-                aria-label={`恢复图片：${title}`}
-                disabled={actionsDisabled}
-                onClick={onRestore}
-              >
-                <Icon name="arrow-go-back-line" />
-              </button>
-              <button
-                type="button"
-                className="danger-button"
-                title="永久删除"
-                aria-label={`永久删除图片：${title}`}
-                disabled={actionsDisabled}
-                onClick={onPurge}
-              >
-                <Icon name="delete-bin-7-line" />
-              </button>
-            </>
-          )}
-        </div>
-      </footer>
-    </article>
-  );
-}
-
-function AdminImageCardMetadata({ placement, storage, deletedAt }: {
-  placement: "inline" | "footer";
-  storage: string;
-  deletedAt: string;
-}) {
-  const className = `admin-image-card-meta is-${placement}`;
-
-  if (storage) {
-    return (
-      <span className={className} title={`存储：${storage}`}>
-        <Icon name="hard-drive-2-line" />
-        <span>{storage}</span>
-      </span>
-    );
-  }
-
-  if (deletedAt) return <span className={className} title={deletedAt}>{deletedAt}</span>;
-  return null;
 }

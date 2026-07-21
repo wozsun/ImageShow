@@ -1,4 +1,11 @@
-import { adminApiBasePath, type Brightness, type Device } from "@imageshow/shared";
+import {
+  adminApiBasePath,
+  type AdminImageItemDto,
+  type Brightness,
+  type Device,
+  type GalleryImageCardDto,
+  type PublicImageDetailDto
+} from "@imageshow/shared";
 import { publicImageUrls } from "../storage/storage.ts";
 import { getTagsForImages } from "../tags/query.ts";
 import { hasDistinctOriginalUrl } from "./original-link.ts";
@@ -60,8 +67,8 @@ export const imagePresentationColumns = [
   "updated_at"
 ].join(", ");
 
-export type PublicImage = Awaited<ReturnType<typeof publicImage>>;
-export type PublicImageDetail = Awaited<ReturnType<typeof publicImageDetail>>;
+export type PublicImage = AdminImageItemDto & { ext: string };
+export type PublicImageDetail = PublicImageDetailDto;
 
 export type PublicImageCardRecord = Pick<
   ImageRecord,
@@ -105,6 +112,11 @@ async function publicUrlsForRow(row: PublicImageUrlRecord) {
   return { storageSlug, isLink, urls };
 }
 
+function serializeTimestamp(value: string | Date | null | undefined) {
+  if (value instanceof Date) return value.toISOString();
+  return value ?? null;
+}
+
 export async function importCommitImage(row: PublicImageUrlRecord) {
   const { urls } = await publicUrlsForRow(row);
   return {
@@ -122,7 +134,10 @@ export async function overviewRecentImage(row: OverviewRecentImageRecord) {
   };
 }
 
-async function publicImage(row: ImageRecord, tags?: string[]) {
+async function publicImage(
+  row: ImageRecord,
+  tags?: string[]
+): Promise<PublicImage> {
   const { storageSlug, isLink, urls } = await publicUrlsForRow(row);
   const original = row.original ?? "";
   const hasDistinctOriginal = hasDistinctOriginalUrl(original, isLink ? row.object_key : urls.object_url);
@@ -147,12 +162,12 @@ async function publicImage(row: ImageRecord, tags?: string[]) {
     source: row.source ?? "",
     original,
     diff_original: hasDistinctOriginal,
-    status: row.status,
+    status: row.status === "deleted" ? "deleted" : "ready",
     tags: tagList,
-    deleted_at: row.deleted_at ?? null,
-    image_time: row.image_time ?? null,
-    created_at: row.created_at ?? null,
-    updated_at: row.updated_at ?? null,
+    deleted_at: serializeTimestamp(row.deleted_at),
+    image_time: serializeTimestamp(row.image_time),
+    created_at: serializeTimestamp(row.created_at),
+    updated_at: serializeTimestamp(row.updated_at),
     ...urls
   };
 }
@@ -162,7 +177,9 @@ export async function publicImages(rows: ImageRecord[]) {
   return Promise.all(rows.map((row) => publicImage(row, tagMap.get(row.id) ?? [])));
 }
 
-export async function publicImageDetail(row: PublicImageDetailRecord) {
+export async function publicImageDetail(
+  row: PublicImageDetailRecord
+): Promise<PublicImageDetailDto> {
   const { urls } = await publicUrlsForRow(row);
 
   return {
@@ -173,9 +190,12 @@ export async function publicImageDetail(row: PublicImageDetailRecord) {
   };
 }
 
-export type PublicImageCard = Awaited<ReturnType<typeof publicImageCard>>;
+export type PublicImageCard = GalleryImageCardDto;
 
-async function publicImageCard(row: PublicImageCardRecord, tags: string[] = []) {
+async function publicImageCard(
+  row: PublicImageCardRecord,
+  tags: string[] = []
+): Promise<GalleryImageCardDto> {
   const { isLink, urls } = await publicUrlsForRow(row);
   const original = row.original ?? "";
   const hasDistinctOriginal = hasDistinctOriginalUrl(original, isLink ? row.object_key : urls.object_url);
@@ -190,7 +210,7 @@ async function publicImageCard(row: PublicImageCardRecord, tags: string[] = []) 
     title: row.title ?? "",
     tags,
     diff_original: hasDistinctOriginal,
-    image_time: row.image_time ?? null,
+    image_time: serializeTimestamp(row.image_time),
     thumb_url: urls.thumb_url
   };
 }

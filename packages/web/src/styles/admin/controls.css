@@ -16,19 +16,95 @@
 /* 提交/保存的文案会在空闲与处理中切换；预留四个汉字的内容宽度，避免按钮跳动。 */
 .workflow-submit-button { min-width: calc(4em + 26px); }
 
+.async-action-button {
+  transition: color .16s ease, background-color .16s ease, border-color .16s ease;
+}
+.async-action-label-slot { display: inline-grid; min-width: 0; }
+.async-action-label {
+  grid-area: 1 / 1;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.async-action-label.is-hidden { visibility: hidden; }
+.async-action-button.is-pending { color: #285c93; background: #eef5ff; border-color: #a9c9ef; }
+.async-action-button.is-success { color: #245236; background: #eaf8ee; border-color: #9fd3ad; }
+.async-action-button.is-error { color: #8a2d24; background: #fff2f0; border-color: #de8b83; }
+
+.action-feedback-region {
+  min-width: 0;
+  display: flex;
+  justify-content: flex-end;
+  pointer-events: none;
+}
+
+/* 空区域不占位；portal 子节点写入后 :empty 自动失效，区域才参与正常布局。 */
+.action-feedback-region:empty { display: none; }
+
+.action-feedback-region.is-page {
+  flex: 1 1 300px;
+  width: min(460px, 100%);
+  max-width: 460px;
+  align-self: center;
+}
+
+.action-feedback-region.is-card { width: min(460px, 100%); }
+
+.action-feedback-fallback-region {
+  position: fixed;
+  z-index: 200;
+  top: max(16px, env(safe-area-inset-top));
+  right: max(16px, env(safe-area-inset-right));
+  width: min(380px, calc(100vw - 32px));
+}
+
 .action-feedback {
   position: relative;
   isolation: isolate;
+  width: fit-content;
+  max-width: 100%;
+  min-width: 0;
   display: flex;
-  align-items: flex-start;
-  gap: 10px;
+  align-items: center;
+  gap: 8px;
   overflow: hidden;
-  margin: 12px 0 0;
-  padding: 12px 14px;
+  margin: 0;
+  /* 22px 关闭按钮 + 上下 6px + 边框 = 36px，不会撑高高级配置页头的 40.8px 基线。 */
+  padding: 6px 10px 6px 12px;
   border: 1px solid;
-  border-radius: 8px;
+  border-radius: 9px;
   background: var(--action-feedback-background);
-  animation: surface-in .18s ease-out;
+  font-size: 14px;
+  line-height: 1.4;
+  pointer-events: auto;
+  animation: action-feedback-in .12s cubic-bezier(.2, .8, .2, 1);
+}
+
+.action-feedback.is-closing {
+  pointer-events: none;
+  animation: action-feedback-out .11s ease-in forwards;
+}
+
+.action-feedback.is-closing .action-feedback-progress { animation-play-state: paused; }
+
+/*
+ * 页面与卡片内的反馈只占一条 36px 稳定轨道。长文案保留在 DOM 与 title 中，
+ * 视觉上省略；只有不参与页面排版的顶层/降级浮层允许按内容换行。
+ */
+.action-feedback-region:not(.action-feedback-fallback-region) > .action-feedback {
+  height: 36px;
+}
+.action-feedback-region:not(.action-feedback-fallback-region) > .action-feedback .action-feedback-content,
+.action-feedback-region:not(.action-feedback-fallback-region) > .action-feedback .action-feedback-content > span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.action-feedback-fallback-region > .action-feedback {
+  box-shadow: 0 10px 30px rgba(20, 30, 44, .18);
 }
 
 .action-feedback-info {
@@ -80,8 +156,9 @@
   animation: action-feedback-pending 1.4s ease-in-out infinite;
 }
 
-.action-feedback:hover .action-feedback-progress,
-.action-feedback:focus-within .action-feedback-progress {
+.action-feedback:hover .action-feedback-progress.is-timed,
+.action-feedback:focus-within .action-feedback-progress.is-timed,
+.action-feedback.is-countdown-paused .action-feedback-progress.is-timed {
   animation-play-state: paused;
 }
 
@@ -91,44 +168,6 @@
   flex: 1 1 auto;
   min-width: 0;
   word-break: break-word;
-}
-
-.action-feedback-content pre {
-  margin: 0;
-  max-height: 280px;
-  border: 0;
-  padding: 0;
-  background: transparent;
-}
-.action-feedback.is-inline {
-  margin: 0;
-  height: 38px;
-  padding: 7px 8px 7px 12px;
-  min-width: 0;
-  max-width: 460px;
-  align-items: center;
-}
-
-.action-feedback.is-inline .action-feedback-content {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.action-feedback.is-floating {
-  position: fixed;
-  top: 16px;
-  right: max(16px, env(safe-area-inset-right));
-  z-index: 200;
-  pointer-events: auto;
-  margin: 0;
-  max-width: min(380px, calc(100vw - 32px));
-  gap: 8px;
-  padding: 8px 10px 8px 12px;
-  border-radius: 9px;
-  box-shadow: 0 10px 30px rgba(20, 30, 44, .18);
-  font-size: 14px;
-  line-height: 1.4;
 }
 
 .action-feedback-close {
@@ -158,9 +197,35 @@
   to { transform: scaleX(1); }
 }
 
+@keyframes action-feedback-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes action-feedback-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
 @keyframes action-feedback-pending {
   0% { transform: translateX(-110%); }
   55%, 100% { transform: translateX(240%); }
+}
+
+@media (max-width: 760px) {
+  .action-feedback-region.is-page {
+    flex: 0 0 auto;
+    width: 100%;
+    max-width: none;
+    align-self: stretch;
+  }
+
+  /* 固定 64px 后台导航下方的降级位置；不读取导航运行时几何。 */
+  .action-feedback-fallback-region {
+    top: calc(64px + 12px);
+    right: max(12px, env(safe-area-inset-right));
+    width: min(380px, calc(100vw - 24px));
+  }
 }
 
 /*表单字段校验提示（slug 非法、密码不符合策略等）。*/

@@ -1,4 +1,4 @@
-import { ApiError } from "../core/http.ts";
+import { ApiError } from "./api-error.ts";
 
 export type ByteRange = { start: number; end: number };
 

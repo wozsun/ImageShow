@@ -1,6 +1,6 @@
 import { ensureAuthor } from "../../authors/service.ts";
 import { pool, withTransaction } from "../../core/db.ts";
-import { ApiError } from "../../core/http.ts";
+import { ApiError } from "../../core/api-error.ts";
 import { syncRandomImage } from "../../random/random-cache.ts";
 import { ensureTheme } from "../../themes/service.ts";
 import { resolveTagNames } from "../../tags/query.ts";
@@ -14,8 +14,7 @@ import { linkThumbnailKey, storageObjectKey, thumbnailObjectKey } from "../../st
 import { withStorageMutationLock } from "../../storage/maintenance-lock.ts";
 import { copyObject, exists, removeObject } from "../../storage/storage.ts";
 import {
-  invalidateImageReadCaches,
-  invalidateMd5Cache,
+  invalidateImageCaches,
   setImageLookup,
   setImageLookupById
 } from "../image-cache.ts";
@@ -81,14 +80,16 @@ async function finishImport(
 ) {
   await syncRandomImage(image.id);
   await Promise.all([
-    invalidateImageReadCaches(),
+    invalidateImageCaches({
+      lookupEntries: [{ id: image.id, object_key: image.object_key }],
+      md5s: [payload.md5]
+    }),
     invalidateEntityCountCaches([
       "theme",
       ...(image.author ? ["author" as const] : []),
       ...((payload.tags?.length ?? 0) ? ["tag" as const] : []),
     ]),
     refreshEntityVocabularies(createdEntityKinds),
-    invalidateMd5Cache(payload.md5),
   ]);
   await setImageLookupById({
     id: image.id,

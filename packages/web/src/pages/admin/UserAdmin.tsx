@@ -1,161 +1,198 @@
 import { useRef, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "../../lib/api/client.js";
+import { api, isApiClientError } from "../../lib/api/client.js";
 import { Icon } from "../../components/icon/Icon.js";
+import { AsyncActionButton } from "../../components/actions/AsyncActionButton.js";
+import { StableButtonLabel } from "../../components/data-display/StableButtonLabel.js";
 import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
 import { ConfirmDialog } from "../../components/feedback/ConfirmDialog.js";
 import { useAnimatedClose } from "../../hooks/useAnimatedClose.js";
 import { useBodyScrollLock } from "../../hooks/useBodyScrollLock.js";
-import { adminApiBasePath, queryKeys, slugFormatHint, slugPattern } from "../../lib/constants.js";
-import { errorMessage } from "../../lib/ui/formatters.js";
+import { adminApiBasePath, slugFormatHint, slugPattern } from "../../lib/constants.js";
+import { queryKeys } from "../../lib/api/query-keys.js";
+import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
 import { PasswordInput } from "../../components/form/PasswordInput.js";
 import { SlugChip } from "../../components/data-display/SlugChip.js";
-import {
-  ActionFeedback,
-  createActionFeedback,
-  type ActionFeedbackState
-} from "../../components/feedback/ActionFeedback.js";
+import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.js";
 import { generateAdminPassword, isValidAdminPassword, passwordPolicyHint } from "../../lib/auth/password.js";
 import type { AdminUser } from "../../lib/types.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
+import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
+
+const generatePasswordPresentation = {
+  idle: { icon: "shuffle-line", label: "生成随机密码" },
+  pending: { icon: "shuffle-line", label: "正在生成密码" },
+  success: { icon: "check-line", label: "密码生成成功" },
+  error: { icon: "close-line", label: "密码复制失败" }
+} as const;
+
+const resetPasswordPresentation = {
+  idle: { icon: "key-2-line", label: "重置密码" },
+  pending: { icon: "key-2-line", label: "重置中" },
+  success: { icon: "check-line", label: "重置成功" },
+  error: { icon: "close-line", label: "重置失败" }
+} as const;
 
 export function UserAdmin() {
   const client = useQueryClient();
-  const { data, error: listError, isError: listFailed, isFetching, refetch } = useQuery<{ items: AdminUser[] }>({ queryKey: queryKeys.users, queryFn: () => api(`${adminApiBasePath}/users`) });
+  const { data, error: listError, isError: listFailed, isFetching, refetch } = useQuery<{ items: AdminUser[] }>({ queryKey: queryKeys.users, queryFn: ({ signal }) => api(`${adminApiBasePath}/users`, { signal }) });
   const users = data?.items ?? [];
   const refresh = () => client.invalidateQueries({ queryKey: queryKeys.users });
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
 
-  const [feedback, setFeedback] = useState<ActionFeedbackState | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [mutation, setMutation] = useState<"" | "delete">("");
+  const [createError, setCreateError] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<AdminUser | null>(null);
   const [resetting, setResetting] = useState<AdminUser | null>(null);
+  const createAction = useAsyncActionStatus({ resultDurationMs: null });
+  const generatePasswordStatus = useAsyncActionStatus();
   const listRef = useRef<HTMLDivElement | null>(null);
-  const showError = (text: string) => {
-    setFeedback(text.trim() ? createActionFeedback(text, "error") : null);
-  };
-  const clearFeedback = () => setFeedback(null);
-
   const usernameInvalid = username.length > 0 && !slugPattern.test(username);
+  const usernameError = usernameInvalid ? slugFormatHint : createError;
   const usernameValid = username.trim().length > 0 && slugPattern.test(username.trim());
   const passwordInvalid = password.length > 0 && !isValidAdminPassword(password);
+  const createFormBusy = Boolean(mutation)
+    || createAction.pending
+    || generatePasswordStatus.pending;
 
   const create = async (event: FormEvent) => {
     event.preventDefault();
     const name = username.trim();
-    if (!usernameValid || !isValidAdminPassword(password) || busy) return;
-    setBusy(true);
-    clearFeedback();
-    try {
-      await api(`${adminApiBasePath}/users`, { method: "POST", body: JSON.stringify({ username: name, password }) });
-      setUsername("");
-      setPassword("");
-      refresh();
-    } catch (err) {
-      showError(errorMessage(err));
-    } finally {
-      setBusy(false);
+    if (
+      !usernameValid
+      || !isValidAdminPassword(password)
+      || Boolean(mutation)
+      || createAction.pending
+      || generatePasswordStatus.pending
+    ) return;
+    if (users.some((user) => user.username === name)) {
+      setCreateError("用户名已存在");
+      return;
     }
+
+    setCreateError("");
+    await createAction.run(async () => {
+      try {
+        await api(`${adminApiBasePath}/users`, {
+          method: "POST",
+          body: JSON.stringify({ username: name, password })
+        });
+        setUsername("");
+        setPassword("");
+        await refresh();
+        return true;
+      } catch (error) {
+        reportAdminUiError("user_admin.create", error);
+        setCreateError(
+          isApiClientError(error) && (error.status === 409 || error.code === "username_taken")
+            ? "用户名已存在"
+            : "管理员创建失败，请稍后重试"
+        );
+        return false;
+      }
+    });
   };
 
   const generatePassword = async () => {
-    if (busy) return;
+    if (mutation || createAction.pending || generatePasswordStatus.pending) return;
     const pwd = generateAdminPassword();
     setPassword(pwd);
     const name = username.trim();
-    try {
-      await navigator.clipboard.writeText(`用户名：${name}\n密码：${pwd}`);
-      setFeedback(createActionFeedback(
-        name ? "已生成随机密码，并复制用户名与密码" : "已生成随机密码并复制（用户名未填）",
-        "success"
-      ));
-    } catch {
-      setFeedback(createActionFeedback("已生成随机密码（自动复制失败，请手动复制）", "error"));
-    }
+    await generatePasswordStatus.run(async () => {
+      try {
+        await navigator.clipboard.writeText(`用户名：${name}\n密码：${pwd}`);
+        return true;
+      } catch (error) {
+        reportAdminUiError("user_admin.copy_generated_password", error);
+        return false;
+      }
+    });
   };
 
   const remove = async () => {
-    if (!confirmDelete) return;
-    setBusy(true);
+    if (!confirmDelete) return false;
+    setMutation("delete");
     try {
       await api(`${adminApiBasePath}/users/${encodeURIComponent(confirmDelete.username)}/delete`, { method: "POST" });
-      setConfirmDelete(null);
-      refresh();
+      await refresh();
+      return true;
     } catch (err) {
-      showError(errorMessage(err));
+      reportAdminUiError("user_admin.delete", err);
+      return false;
     } finally {
-      setBusy(false);
+      setMutation("");
     }
   };
 
   return (
     <section className="workspace">
-      <header className="workspace-head">
-        <div>
-          <h1>用户管理</h1>
-          <p>共 {users.length} 个管理员{isFetching ? " · 加载中" : ""} · 在此新增与管理图片管理员</p>
-        </div>
-      </header>
+      <WorkspaceHeader
+        title="用户管理"
+        description={`共 ${users.length} 个管理员${isFetching ? " · 加载中" : ""} · 在此新增与管理图片管理员`}
+      />
       <form className="admin-create-form" onSubmit={create}>
         <div className="admin-create-field entity-slug-field">
           <input
             className="entity-create-slug"
             value={username}
-            onChange={(event) => setUsername(event.target.value.toLowerCase())}
+            onChange={(event) => {
+              setUsername(event.target.value.toLowerCase());
+              setCreateError("");
+            }}
             placeholder="用户名"
-            disabled={busy}
+            disabled={createFormBusy}
             maxLength={32}
             autoComplete="off"
-            aria-invalid={usernameInvalid}
+            aria-invalid={Boolean(usernameError)}
           />
-          {usernameInvalid && <p className="field-error">{slugFormatHint}</p>}
+          {usernameError && <p className="field-error" role="alert">{usernameError}</p>}
         </div>
         <div className="admin-create-field user-password-field">
           <PasswordInput
             value={password}
             onChange={setPassword}
             placeholder={`密码（${passwordPolicyHint}）`}
-            disabled={busy}
+            disabled={createFormBusy}
             maxLength={128}
             autoComplete="new-password"
             ariaInvalid={passwordInvalid}
           />
           {passwordInvalid && <p className="field-error">{passwordPolicyHint}</p>}
         </div>
-        <button
+        <AsyncActionButton
           type="button"
           className="button secondary"
-          disabled={busy}
-          onClick={generatePassword}
-        >
-          <Icon name="shuffle-line" />生成随机密码
-        </button>
+          status={generatePasswordStatus.status}
+          presentation={generatePasswordPresentation}
+          disabled={createFormBusy}
+          onClick={() => void generatePassword()}
+        />
         <button
           className="button"
           type="submit"
-          disabled={busy || !usernameValid || !isValidAdminPassword(password)}
+          disabled={createFormBusy || !usernameValid || !isValidAdminPassword(password)}
         >
-          <Icon name="user-add-line" />新建图片管理员
+          <Icon name="user-add-line" />
+          <StableButtonLabel
+            idle="新建图片管理员"
+            busyText="新建中"
+            busy={createAction.pending}
+          />
         </button>
       </form>
-      {feedback && (
-        <ActionFeedback
-          feedback={feedback}
-          placement="floating"
-          onClose={clearFeedback}
-        />
-      )}
       <div className="entity-admin-grid admin-scroll-list" ref={listRef}>
         {users.map((user) => (
           <UserCard
             key={user.username}
             user={user}
-            onResetPassword={() => setResetting(user)}
+            onResetPassword={() => {
+              setResetting(user);
+            }}
             onDelete={() => setConfirmDelete(user)}
           />
         ))}
-        {listFailed && <QueryErrorState error={listError} onRetry={() => void refetch()} />}
+        {listFailed && <QueryErrorState error={listError} onRetry={() => void refetch()} reportContext="user_admin.load" />}
         {!listFailed && !users.length && !isFetching && <p className="muted">还没有管理员</p>}
       </div>
       <OverlayScrollbar targetRef={listRef} />
@@ -164,7 +201,7 @@ export function UserAdmin() {
           title="删除管理员"
           description={`删除图片管理员「${confirmDelete.username}」，该账号将无法再登录，此操作无法撤销。`}
           confirmLabel="删除"
-          busy={busy}
+          busy={mutation === "delete"}
           onClose={() => setConfirmDelete(null)}
           onConfirm={remove}
         />
@@ -173,7 +210,7 @@ export function UserAdmin() {
         <ResetPasswordModal
           username={resetting.username}
           onClose={() => setResetting(null)}
-          onError={showError}
+          onError={(error) => reportAdminUiError("user_admin.reset_password", error)}
         />
       )}
     </section>
@@ -216,25 +253,29 @@ function UserCard({ user, onResetPassword, onDelete }: { user: AdminUser; onRese
   );
 }
 
-function ResetPasswordModal({ username, onClose, onError }: { username: string; onClose: () => void; onError: (message: string) => void }) {
+function ResetPasswordModal({ username, onClose, onError }: { username: string; onClose: () => void; onError: (error: unknown) => void }) {
   const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
+  const resetPasswordStatus = useAsyncActionStatus({ successDurationMs: null });
   const passwordInvalid = password.length > 0 && !isValidAdminPassword(password);
   const exit = useAnimatedClose(onClose);
   useBodyScrollLock();
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!isValidAdminPassword(password) || busy) return;
-    setBusy(true);
-    onError("");
-    try {
-      await api(`${adminApiBasePath}/users/${encodeURIComponent(username)}/password`, { method: "POST", body: JSON.stringify({ password }) });
-      exit.requestClose();
-    } catch (err) {
-      onError(errorMessage(err));
-      setBusy(false);
-    }
+    if (!isValidAdminPassword(password) || resetPasswordStatus.pending) return;
+    const succeeded = await resetPasswordStatus.run(async () => {
+      try {
+        await api(`${adminApiBasePath}/users/${encodeURIComponent(username)}/password`, {
+          method: "POST",
+          body: JSON.stringify({ password })
+        });
+        return true;
+      } catch (error) {
+        onError(error);
+        return false;
+      }
+    });
+    if (succeeded) exit.requestClose();
   };
 
   return (
@@ -255,7 +296,7 @@ function ResetPasswordModal({ username, onClose, onError }: { username: string; 
             className="icon close pressable"
             type="button"
             title="关闭"
-            disabled={busy}
+            disabled={resetPasswordStatus.pending}
             onClick={() => exit.requestClose()}
           >
             <Icon name="close-line" />
@@ -268,7 +309,7 @@ function ResetPasswordModal({ username, onClose, onError }: { username: string; 
               value={password}
               onChange={setPassword}
               placeholder={passwordPolicyHint}
-              disabled={busy}
+              disabled={resetPasswordStatus.pending}
               maxLength={128}
               autoComplete="new-password"
               autoFocus
@@ -278,10 +319,14 @@ function ResetPasswordModal({ username, onClose, onError }: { username: string; 
           </label>
         </div>
         <footer>
-          <button type="button" disabled={busy} onClick={() => exit.requestClose()}>取消</button>
-          <button className="button" type="submit" disabled={busy || !isValidAdminPassword(password)}>
-            <Icon name="key-2-line" />{busy ? "重置中…" : "重置密码"}
-          </button>
+          <button type="button" disabled={resetPasswordStatus.pending} onClick={() => exit.requestClose()}>取消</button>
+          <AsyncActionButton
+            className="button"
+            type="submit"
+            status={resetPasswordStatus.status}
+            presentation={resetPasswordPresentation}
+            disabled={resetPasswordStatus.pending || !isValidAdminPassword(password)}
+          />
         </footer>
       </form>
     </div>

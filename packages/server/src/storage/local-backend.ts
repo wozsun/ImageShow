@@ -1,7 +1,7 @@
 import { copyFile, mkdir, open, readFile, readdir, rm, rmdir, writeFile, access } from "node:fs/promises";
 import { dirname, join, relative, sep } from "node:path";
 import { runtimePaths } from "../config/bootstrap-env.ts";
-import { ApiError } from "../core/http.ts";
+import { ApiError } from "../core/api-error.ts";
 import { safeStoragePath, STORAGE_PREFIXES, type ReadablePrefix, type StoragePrefix } from "./object-keys.ts";
 import type {
   CopyPrefix,
@@ -9,7 +9,7 @@ import type {
   StorageDriver,
   StorageSelfTest
 } from "./storage-backend.ts";
-import { parseSingleByteRange } from "./byte-range.ts";
+import { parseSingleByteRange } from "../core/byte-range.ts";
 import { localObjectEtag } from "./object-validator.ts";
 
 /** @internal Exported only for local storage error verification. */

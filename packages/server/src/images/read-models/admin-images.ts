@@ -1,9 +1,13 @@
 import type { z } from "zod";
+import type {
+  AdminImageListResponse,
+  ImageAdminInfoDto
+} from "@imageshow/shared";
 import { pool } from "../../core/db.ts";
-import { ApiError } from "../../core/http.ts";
+import { ApiError } from "../../core/api-error.ts";
 import { adminImageListQuery } from "../../core/validation.ts";
 import { resolveThemeSlugs } from "../../themes/query.ts";
-import { warmCompleteImageLookups } from "../image-cache.ts";
+import { imageCacheRevision, warmCompleteImageLookups } from "../image-cache.ts";
 import { adminImageView } from "../presenter.ts";
 import { fetchAdminImagePage } from "./pagination.ts";
 
@@ -22,7 +26,10 @@ function imageStorageLabel(row: {
     || row.storage_slug;
 }
 
-export async function listAdminImages(query: AdminImageListQuery) {
+export async function listAdminImages(
+  query: AdminImageListQuery
+): Promise<AdminImageListResponse> {
+  const cacheRevision = await imageCacheRevision();
   const params: unknown[] = [query.status];
   const where = ["status = $1"];
   if (query.d) {
@@ -45,7 +52,7 @@ export async function listAdminImages(query: AdminImageListQuery) {
     ),
     fetchAdminImagePage([...where], [...params], query.limit, query.cursor)
   ]);
-  await warmCompleteImageLookups(page.rows);
+  await warmCompleteImageLookups(page.rows, cacheRevision);
   return {
     items: page.items.map(adminImageView),
     total: Number(countResult.rows[0]?.count ?? 0),
@@ -54,7 +61,7 @@ export async function listAdminImages(query: AdminImageListQuery) {
   };
 }
 
-export async function getAdminImageInfo(id: string) {
+export async function getAdminImageInfo(id: string): Promise<ImageAdminInfoDto> {
   const row = (await pool.query(
     `SELECT m.id,
             m.md5,

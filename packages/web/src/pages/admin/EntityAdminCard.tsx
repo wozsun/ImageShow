@@ -1,9 +1,10 @@
 import { useState, type DragEvent } from "react";
 import { api } from "../../lib/api/client.js";
 import { Icon } from "../../components/icon/Icon.js";
+import { AsyncActionButton } from "../../components/actions/AsyncActionButton.js";
 import { SlugChip } from "../../components/data-display/SlugChip.js";
 import { adminApiBasePath } from "../../lib/constants.js";
-import { errorMessage } from "../../lib/ui/formatters.js";
+import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
 
 type Entity = { slug: string; display_name: string; image_count: number; link?: string };
 
@@ -12,7 +13,7 @@ export function EntityAdminCard({ kind, item, onChanged, onDelete, onError, pinn
   item: Entity;
   onChanged: () => void;
   onDelete: () => void;
-  onError: (message: string) => void;
+  onError: (error: unknown) => void;
   pinned?: boolean;
   selected?: boolean;
   onToggleSelect?: (checked: boolean) => void;
@@ -25,23 +26,34 @@ export function EntityAdminCard({ kind, item, onChanged, onDelete, onError, pinn
   const isAuthor = kind === "authors";
   const [display, setDisplay] = useState(item.display_name);
   const [link, setLink] = useState(item.link ?? "");
-  const [busy, setBusy] = useState(false);
+  const saveStatus = useAsyncActionStatus();
 
   const [armed, setArmed] = useState(false);
   const dirty = display !== item.display_name || (isAuthor && link.trim() !== (item.link ?? ""));
+  const savePresentation = {
+    idle: { icon: "save-3-line", label: "保存" },
+    pending: { icon: "save-3-line", label: "保存中" },
+    success: { icon: "check-line", label: "已保存" },
+    error: { icon: "close-line", label: "保存失败" }
+  } as const;
 
   const save = async () => {
-    setBusy(true);
-    onError("");
-    try {
-      const body = isAuthor ? { display_name: display.trim(), link: link.trim() } : { display_name: display.trim() };
-      await api(`${adminApiBasePath}/${kind}/${item.slug}`, { method: "POST", body: JSON.stringify(body) });
-      onChanged();
-    } catch (err) {
-      onError(errorMessage(err));
-    } finally {
-      setBusy(false);
-    }
+    await saveStatus.run(async () => {
+      try {
+        const body = isAuthor
+          ? { display_name: display.trim(), link: link.trim() }
+          : { display_name: display.trim() };
+        await api(`${adminApiBasePath}/${kind}/${item.slug}`, {
+          method: "POST",
+          body: JSON.stringify(body)
+        });
+        onChanged();
+        return true;
+      } catch (error) {
+        onError(error);
+        return false;
+      }
+    });
   };
 
   const begin = (event: DragEvent<HTMLDivElement>) => {
@@ -88,7 +100,7 @@ export function EntityAdminCard({ kind, item, onChanged, onDelete, onError, pinn
               value={display}
               onChange={(event) => setDisplay(event.target.value)}
               placeholder="显示名"
-              disabled={busy}
+              disabled={saveStatus.pending}
               maxLength={64}
             />
           )}
@@ -100,7 +112,7 @@ export function EntityAdminCard({ kind, item, onChanged, onDelete, onError, pinn
             value={link}
             onChange={(event) => setLink(event.target.value)}
             placeholder="链接 URL（HTTPS，可选）"
-            disabled={busy}
+            disabled={saveStatus.pending}
             maxLength={2048}
             aria-label={`作者 ${item.slug} 链接`}
           />
@@ -112,10 +124,15 @@ export function EntityAdminCard({ kind, item, onChanged, onDelete, onError, pinn
           ? <span className="muted entity-pinned-note">未设置主题的图片归于此</span>
           : (
             <>
-              {dirty && (
-                <button type="button" className="button" disabled={busy} onClick={save}>
-                  <Icon name="save-3-line" />保存
-                </button>
+              {(dirty || saveStatus.status !== "idle") && (
+                <AsyncActionButton
+                  type="button"
+                  className="button"
+                  status={saveStatus.status}
+                  presentation={savePresentation}
+                  disabled={saveStatus.pending || (!dirty && saveStatus.status === "idle")}
+                  onClick={() => void save()}
+                />
               )}
               <button
                 type="button"
@@ -130,7 +147,7 @@ export function EntityAdminCard({ kind, item, onChanged, onDelete, onError, pinn
               <button
                 className="icon danger-button"
                 type="button"
-                disabled={busy}
+                disabled={saveStatus.pending}
                 title={`删除${noun}`}
                 onClick={onDelete}
               >

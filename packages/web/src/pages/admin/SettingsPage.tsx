@@ -2,28 +2,40 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api/client.js";
 import { Icon } from "../../components/icon/Icon.js";
+import { AsyncActionButton } from "../../components/actions/AsyncActionButton.js";
 import { NumberInput } from "../../components/form/NumberInput.js";
 import { SelectMenu } from "../../components/form/SelectMenu.js";
-import { StableButtonLabel } from "../../components/data-display/StableButtonLabel.js";
 import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
-import { adminApiBasePath, queryKeys } from "../../lib/constants.js";
+import { adminApiBasePath } from "../../lib/constants.js";
+import { queryKeys } from "../../lib/api/query-keys.js";
 import { galleryOrderSelectOptions } from "../../lib/ui/select-options.js";
-import { errorMessage } from "../../lib/ui/formatters.js";
+import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
 import type { AdminSettings, SiteSettings } from "../../lib/types.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
-import {
-  ActionFeedback,
-  createActionFeedback,
-  type ActionFeedbackState
-} from "../../components/feedback/ActionFeedback.js";
+import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.js";
+import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
 import { invalidateRuntimeData } from "../../lib/api/query-invalidation.js";
 
+const reloadConfigPresentation = {
+  idle: { icon: "refresh-line", label: "读取配置文件" },
+  pending: { icon: "refresh-line", label: "读取中" },
+  success: { icon: "check-line", label: "读取配置成功" },
+  error: { icon: "close-line", label: "读取配置失败" }
+} as const;
+
+const saveSettingsPresentation = {
+  idle: { icon: "save-3-line", label: "保存应用配置" },
+  pending: { icon: "save-3-line", label: "保存中" },
+  success: { icon: "check-line", label: "保存配置成功" },
+  error: { icon: "close-line", label: "保存配置失败" }
+} as const;
+
 export function SettingsPage() {
-  const query = useQuery<{ settings: AdminSettings }>({ queryKey: queryKeys.settings, queryFn: () => api(`${adminApiBasePath}/settings`) });
+  const query = useQuery<{ settings: AdminSettings }>({ queryKey: queryKeys.settings, queryFn: ({ signal }) => api(`${adminApiBasePath}/settings`, { signal }) });
   const client = useQueryClient();
   const [settings, setSettings] = useState<AdminSettings | null>(null);
-  const [feedback, setFeedback] = useState<ActionFeedbackState | null>(null);
-  const [action, setAction] = useState<"" | "save-application" | "reload">("");
+  const reloadConfigStatus = useAsyncActionStatus();
+  const saveSettingsStatus = useAsyncActionStatus();
   const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (query.data?.settings) {
@@ -31,7 +43,7 @@ export function SettingsPage() {
     }
   }, [query.data]);
   if (!settings) {
-    if (query.isError) return <QueryErrorState error={query.error} onRetry={() => void query.refetch()} fullPage />;
+    if (query.isError) return <QueryErrorState error={query.error} onRetry={() => void query.refetch()} fullPage reportContext="settings.load" />;
     return (
       <section className="workspace">
         <h1>站点配置</h1>
@@ -40,52 +52,50 @@ export function SettingsPage() {
     );
   }
   const saveApplication = async () => {
-    if (action) return;
-    setAction("save-application");
-    setFeedback(createActionFeedback("正在保存应用配置...", "pending"));
-    try {
-      const site = settings.site.home.enabled ? settings.site : { ...settings.site, root_redirect: "gallery" as const };
-      await api(`${adminApiBasePath}/settings`, {
-        method: "POST",
-        body: JSON.stringify({
-          site,
-          upload: {
-            list_page_size: settings.upload.list_page_size,
-            concurrency: settings.upload.concurrency
-          },
-          link_image: {
-            fill_original_url: settings.link_image.fill_original_url,
-            concurrency: settings.link_image.concurrency
-          },
-          normalize: settings.normalize,
-          thumbnail: settings.thumbnail,
-          admin: settings.admin,
-          image_detail: settings.image_detail
-        })
-      });
-      setFeedback(createActionFeedback("应用配置已保存", "success"));
-      // 统一失效已包含 settings 和 site-config；活动查询会在这里完成一次刷新，避免先
-      // refetch settings、随后又因 invalidate 重复请求。
-      await invalidateRuntimeData(client);
-    } catch (error) {
-      setFeedback(createActionFeedback(`保存失败：${errorMessage(error)}`, "error"));
-    } finally {
-      setAction("");
-    }
+    if (reloadConfigStatus.pending || saveSettingsStatus.pending) return;
+    await saveSettingsStatus.run(async () => {
+      try {
+        const site = settings.site.home.enabled ? settings.site : { ...settings.site, root_redirect: "gallery" as const };
+        await api(`${adminApiBasePath}/settings`, {
+          method: "POST",
+          body: JSON.stringify({
+            site,
+            upload: {
+              list_page_size: settings.upload.list_page_size,
+              concurrency: settings.upload.concurrency
+            },
+            link_image: {
+              fill_original_url: settings.link_image.fill_original_url,
+              concurrency: settings.link_image.concurrency
+            },
+            normalize: settings.normalize,
+            thumbnail: settings.thumbnail,
+            admin: settings.admin,
+            image_detail: settings.image_detail
+          })
+        });
+        // 统一失效已包含 settings 和 site-config；活动查询会在这里完成一次刷新，避免先
+        // refetch settings、随后又因 invalidate 重复请求。
+        await invalidateRuntimeData(client);
+        return true;
+      } catch (error) {
+        reportAdminUiError("settings.save", error);
+        return false;
+      }
+    });
   };
   const reloadConfig = async () => {
-    if (action) return;
-    setAction("reload");
-    setFeedback(createActionFeedback("正在读取配置文件...", "pending"));
-    try {
-      await api(`${adminApiBasePath}/settings/reload`, { method: "POST" });
-      await invalidateRuntimeData(client);
-      setFeedback(createActionFeedback("已读取并应用最新配置文件", "success"));
-    } catch (error) {
-      setFeedback(createActionFeedback(`读取失败：${errorMessage(error)}`, "error"));
-    } finally {
-      setAction("");
-    }
+    if (reloadConfigStatus.pending || saveSettingsStatus.pending) return;
+    await reloadConfigStatus.run(async () => {
+      try {
+        await api(`${adminApiBasePath}/settings/reload`, { method: "POST" });
+        await invalidateRuntimeData(client);
+        return true;
+      } catch (error) {
+        reportAdminUiError("settings.reload", error);
+        return false;
+      }
+    });
   };
   const updateSite = (patch: Partial<AdminSettings["site"]>) => setSettings({ ...settings, site: { ...settings.site, ...patch } });
   const updateSiteHome = (patch: Partial<AdminSettings["site"]["home"]>) => updateSite({ home: { ...settings.site.home, ...patch } });
@@ -101,32 +111,31 @@ export function SettingsPage() {
   const updateAdmin = (patch: Partial<AdminSettings["admin"]>) => setSettings({ ...settings, admin: { ...settings.admin, ...patch } });
   return (
     <section className="workspace settings-page">
-      <header className="workspace-head">
-        <div>
-          <h1>站点配置</h1>
-          <p>站点信息与应用参数</p>
-        </div>
-        <div className="settings-head-actions">
-          <button
-            type="button"
-            className="settings-config-button"
-            disabled={action === "reload"}
-            onClick={reloadConfig}
-          >
-            <Icon name="refresh-line" />
-            <StableButtonLabel idle="读取配置文件" busyText="读取中" busy={action === "reload"} />
-          </button>
-          <button
-            className="button settings-config-button"
-            type="button"
-            disabled={action === "save-application"}
-            onClick={saveApplication}
-          >
-            <Icon name="save-3-line" />
-            <StableButtonLabel idle="保存应用配置" busyText="保存中" busy={action === "save-application"} />
-          </button>
-        </div>
-      </header>
+      <WorkspaceHeader
+        title="站点配置"
+        description="站点信息与应用参数"
+        actionsClassName="settings-head-actions"
+        actions={
+          <>
+            <AsyncActionButton
+              type="button"
+              className="settings-config-button"
+              status={reloadConfigStatus.status}
+              presentation={reloadConfigPresentation}
+              disabled={reloadConfigStatus.pending || saveSettingsStatus.pending}
+              onClick={() => void reloadConfig()}
+            />
+            <AsyncActionButton
+              className="button settings-config-button"
+              type="button"
+              status={saveSettingsStatus.status}
+              presentation={saveSettingsPresentation}
+              disabled={reloadConfigStatus.pending || saveSettingsStatus.pending}
+              onClick={() => void saveApplication()}
+            />
+          </>
+        }
+      />
       <div className="settings-scroll-region" ref={scrollRef}>
         <div className="settings-grid">
           <section>
@@ -400,9 +409,6 @@ export function SettingsPage() {
         </div>
       </div>
       <OverlayScrollbar targetRef={scrollRef} pageEdge />
-      {feedback && (
-        <ActionFeedback feedback={feedback} placement="floating" onClose={() => setFeedback(null)} />
-      )}
     </section>
   );
 }

@@ -12,6 +12,7 @@ import { clearAdminCacheAfterLogin } from "../../lib/api/query-invalidation.js";
 import { cssUrl } from "../../lib/ui/formatters.js";
 import { MobileNavigation } from "../../components/navigation/MobileNavigation.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
+import { ActionFeedbackProvider } from "../../components/feedback/ActionFeedbackRegion.js";
 import { AdminNavGroup } from "./AdminNavGroup.js";
 import { CheckPage } from "./CheckPage.js";
 import { ImageAdmin } from "./ImageAdmin.js";
@@ -194,30 +195,32 @@ export function AdminShell() {
           </button>
         </MobileNavigation>
       </header>
-      <Routes>
-        <Route index element={<Overview />} />
-        <Route path="images" element={<ImageAdmin />} />
-        <Route path="tags" element={<EntityAdmin kind="tags" />} />
-        <Route path="themes" element={<EntityAdmin kind="themes" />} />
-        <Route path="authors" element={<EntityAdmin kind="authors" />} />
-        <Route path="account" element={<AccountSettings />} />
-        {isSuper && <Route path="site" element={<SettingsPage />} />}
-        {isSuper && (
-          <Route
-            path="advanced-config"
-            element={(
-              <Suspense fallback={<div className="center">正在加载高级配置…</div>}>
-                <AdvancedConfigPage />
-              </Suspense>
-            )}
-          />
-        )}
-        {isSuper && <Route path="storage" element={<StorageSettings />} />}
-        {isSuper && <Route path="users" element={<UserAdmin />} />}
-        {isSuper && <Route path="check" element={<CheckPage />} />}
-        {isSuper && <Route path="logs" element={<LogPage />} />}
-        <Route path="*" element={<Navigate to={adminBasePath} replace />} />
-      </Routes>
+      <ActionFeedbackProvider>
+        <Routes>
+          <Route index element={<Overview />} />
+          <Route path="images" element={<ImageAdmin />} />
+          <Route path="tags" element={<EntityAdmin kind="tags" />} />
+          <Route path="themes" element={<EntityAdmin kind="themes" />} />
+          <Route path="authors" element={<EntityAdmin kind="authors" />} />
+          <Route path="account" element={<AccountSettings />} />
+          {isSuper && <Route path="site" element={<SettingsPage />} />}
+          {isSuper && (
+            <Route
+              path="advanced-config"
+              element={(
+                <Suspense fallback={<div className="center">正在加载高级配置…</div>}>
+                  <AdvancedConfigPage />
+                </Suspense>
+              )}
+            />
+          )}
+          {isSuper && <Route path="storage" element={<StorageSettings />} />}
+          {isSuper && <Route path="users" element={<UserAdmin />} />}
+          {isSuper && <Route path="check" element={<CheckPage />} />}
+          {isSuper && <Route path="logs" element={<LogPage />} />}
+          <Route path="*" element={<Navigate to={adminBasePath} replace />} />
+        </Routes>
+      </ActionFeedbackProvider>
       </main>
     </AdminPreferencesProvider>
   );

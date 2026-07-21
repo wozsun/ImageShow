@@ -1,22 +1,11 @@
-import { ApiError } from "../core/http.ts";
+import { ApiError } from "../core/api-error.ts";
 import { mapWithConcurrency } from "../core/concurrency.ts";
 import type { BatchImageUpdateItemInput } from "../core/validation.ts";
 import { setImageTags } from "../tags/service.ts";
 import { createEntityCountCacheInvalidationBatch } from "../vocab/vocab-cache.ts";
 import { createImageMutationSyncBatch } from "./mutation-sync.ts";
 import { updateImageMetadata } from "./service.ts";
-
-export type BatchUpdateItemResult =
-  | {
-      id: string;
-      status: "updated";
-    }
-  | {
-      id: string;
-      status: "failed";
-      code: string;
-      message: string;
-    };
+import type { BatchImageUpdateItemResult } from "@imageshow/shared/browser";
 
 type BatchUpdateExecutionMetrics = {
   maxItemDurationMs: number;
@@ -30,7 +19,7 @@ type BatchUpdateOptions = {
 
 const batchUpdateConcurrency = 2;
 
-function publicItemError(error: unknown): Pick<Extract<BatchUpdateItemResult, { status: "failed" }>, "code" | "message"> {
+function publicItemError(error: unknown): Pick<Extract<BatchImageUpdateItemResult, { status: "failed" }>, "code" | "message"> {
   if (error instanceof ApiError && error.status >= 400 && error.status < 500) {
     return { code: error.code, message: error.message };
   }
@@ -46,7 +35,7 @@ export async function updateImagesBatch(
 ) {
   const entityCountInvalidationBatch = createEntityCountCacheInvalidationBatch();
   const mutationSyncBatch = createImageMutationSyncBatch();
-  let results: BatchUpdateItemResult[] = [];
+  let results: BatchImageUpdateItemResult[] = [];
   let maxItemDurationMs = 0;
   let entityCountInvalidationTriggered = false;
   let randomPoolFullRebuildTriggered = false;
@@ -76,7 +65,7 @@ export async function updateImagesBatch(
       } catch (error) {
         itemError = error;
       }
-      const result: BatchUpdateItemResult = itemError
+      const result: BatchImageUpdateItemResult = itemError
         ? { id, status: "failed", ...publicItemError(itemError) }
         : { id, status: "updated" };
       maxItemDurationMs = Math.max(maxItemDurationMs, performance.now() - itemStartedAt);

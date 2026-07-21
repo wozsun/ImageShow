@@ -1,5 +1,5 @@
 import { pool } from "../core/db.ts";
-import { ApiError } from "../core/http.ts";
+import { ApiError } from "../core/api-error.ts";
 import { hashPassword, verifyPassword } from "../core/password.ts";
 
 export type AdminUserRecord = { username: string; role: string };

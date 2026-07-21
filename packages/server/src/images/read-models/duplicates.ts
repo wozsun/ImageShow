@@ -1,6 +1,6 @@
 import { coalesce } from "../../core/coalesce.ts";
 import { pool } from "../../core/db.ts";
-import { getMd5Cache, setMd5Cache } from "../image-cache.ts";
+import { getMd5Cache, imageCacheRevision, setMd5Cache } from "../image-cache.ts";
 import {
   adminImageView,
   imagePresentationColumns,
@@ -10,13 +10,14 @@ import {
 } from "../presenter.ts";
 
 export async function getDuplicateImagesByMd5(md5: string) {
-  const cached = await getMd5Cache(md5) as PublicImage[] | null;
+  const revision = await imageCacheRevision();
+  const cached = await getMd5Cache(md5, revision) as PublicImage[] | null;
   if (cached) {
     return cached.map(adminImageView);
   }
 
-  return coalesce(`md5:${md5}`, async () => {
-    const raced = await getMd5Cache(md5) as PublicImage[] | null;
+  return coalesce(`md5:${revision}:${md5}`, async () => {
+    const raced = await getMd5Cache(md5, revision) as PublicImage[] | null;
     if (raced) {
       return raced.map(adminImageView);
     }
@@ -29,7 +30,7 @@ export async function getDuplicateImagesByMd5(md5: string) {
         LIMIT 20`,
       [md5]
     )).rows as ImageRecord[]);
-    await setMd5Cache(md5, rows);
+    await setMd5Cache(md5, rows, revision);
     return rows.map(adminImageView);
   });
 }

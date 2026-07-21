@@ -1,6 +1,6 @@
 import { appConfig, type Brightness, type Device } from "@imageshow/shared";
 import { redis } from "../core/redis-client.ts";
-import { deleteRedisKeys, getRedisJson, setRedisJson } from "../core/redis-json.ts";
+import { getRedisJson, setRedisJson } from "../core/redis-json.ts";
 import { execRedisPipeline } from "../core/redis-pipeline.ts";
 import { thumbnailObjectKey } from "../storage/image-paths.ts";
 
@@ -8,7 +8,7 @@ export const MD5_CACHE_PREFIX = "imageshow:md5:";
 export const PUBLIC_IMAGES_CACHE_PREFIX = "imageshow:public_images:";
 export const ORIGINAL_DIRECT_CACHE_PREFIX = "imageshow:original_direct:";
 export const ADMIN_OVERVIEW_CACHE_PREFIX = "imageshow:admin_overview:";
-const PUBLIC_IMAGES_GEN_KEY = "imageshow:public_images_gen";
+export const IMAGE_CACHE_REVISION_KEY = "imageshow:image_cache_revision";
 export const IMAGE_LOOKUP_MEDIA_KEY = "imageshow:image_lookup:media";
 export const IMAGE_LOOKUP_THUMBS_KEY = "imageshow:image_lookup:thumbs";
 export const IMAGE_LOOKUP_ID_KEY = "imageshow:image_lookup:id";
@@ -63,6 +63,60 @@ type OriginalDirectCacheValue = { direct: boolean };
 
 const imageLookupExtensions = new Set(["jpg", "png", "webp", "gif", "avif"]);
 const imageLookupStatuses = new Set(["ready", "deleted"]);
+let localMutationEpoch = 0;
+let synchronizedMutationEpoch = 0;
+let revisionQueue: Promise<void> = Promise.resolve();
+
+function synchronizeImageCacheRevision(targetEpoch: number): Promise<string | null> {
+  let result: string | null = null;
+  const operation = revisionQueue.then(async () => {
+    try {
+      result = String(await redis.incr(IMAGE_CACHE_REVISION_KEY));
+      synchronizedMutationEpoch = Math.max(synchronizedMutationEpoch, targetEpoch);
+    } catch {
+      result = null;
+    }
+  });
+  revisionQueue = operation.catch(() => undefined);
+  return operation.then(() => result);
+}
+
+/**
+ * Returns null whenever Redis cannot prove the current cache generation. Read
+ * paths must then use PostgreSQL and skip cache writes.
+ */
+export async function imageCacheRevision(): Promise<string | null> {
+  const requiredEpoch = localMutationEpoch;
+  if (synchronizedMutationEpoch < requiredEpoch) {
+    await synchronizeImageCacheRevision(requiredEpoch);
+  }
+  if (synchronizedMutationEpoch < localMutationEpoch) return null;
+  try {
+    return (await redis.get(IMAGE_CACHE_REVISION_KEY)) ?? "0";
+  } catch {
+    return null;
+  }
+}
+
+async function advanceImageCacheRevision() {
+  localMutationEpoch += 1;
+  return synchronizeImageCacheRevision(localMutationEpoch);
+}
+
+async function usableRevision(expectedRevision?: string | null) {
+  const current = await imageCacheRevision();
+  if (!current) return null;
+  if (expectedRevision !== undefined && expectedRevision !== current) return null;
+  return current;
+}
+
+function revisionKey(prefix: string, revision: string, key = "") {
+  return `${prefix}${revision}${key ? `:${key}` : ""}`;
+}
+
+function lookupHashKey(baseKey: string, revision: string) {
+  return `${baseKey}:${revision}`;
+}
 
 /** @internal Exported only for local cache-shape verification. */
 export function parseImageLookup(raw: string): ImageLookupItem | null {
@@ -97,28 +151,28 @@ export function parseImageLookupById(raw: string): ImageLookupByIdItem | null {
   }
 }
 
-export async function publicImagesCacheGeneration(): Promise<string> {
-  try {
-    return (await redis.get(PUBLIC_IMAGES_GEN_KEY)) ?? "0";
-  } catch {
-    return "0";
-  }
+export async function publicImagesCacheGeneration(): Promise<string | null> {
+  return imageCacheRevision();
 }
 
-export async function getPublicImagesCache<T>(key: string) {
-  return getRedisJson<T>(`${PUBLIC_IMAGES_CACHE_PREFIX}${key}`);
+export async function getPublicImagesCache<T>(key: string, expectedRevision?: string | null) {
+  const revision = await usableRevision(expectedRevision);
+  if (!revision) return null;
+  return getRedisJson<T>(revisionKey(PUBLIC_IMAGES_CACHE_PREFIX, revision, key));
 }
 
-export async function setPublicImagesCache(key: string, value: unknown) {
-  await setRedisJson(`${PUBLIC_IMAGES_CACHE_PREFIX}${key}`, value);
+export async function setPublicImagesCache(key: string, value: unknown, expectedRevision?: string | null) {
+  const revision = await usableRevision(expectedRevision);
+  if (!revision) return;
+  await setRedisJson(revisionKey(PUBLIC_IMAGES_CACHE_PREFIX, revision, key), value);
 }
 
-export async function getPublicImageDetailCache<T>(key: string) {
-  return getPublicImagesCache<T>(`detail:${key}`);
+export async function getPublicImageDetailCache<T>(key: string, expectedRevision?: string | null) {
+  return getPublicImagesCache<T>(`detail:${key}`, expectedRevision);
 }
 
-export async function setPublicImageDetailCache(key: string, value: unknown) {
-  await setPublicImagesCache(`detail:${key}`, value);
+export async function setPublicImageDetailCache(key: string, value: unknown, expectedRevision?: string | null) {
+  await setPublicImagesCache(`detail:${key}`, value, expectedRevision);
 }
 
 export async function getOriginalDirectCache(key: string) {
@@ -130,53 +184,65 @@ export async function setOriginalDirectCache(key: string, direct: boolean) {
   await setRedisJson(`${ORIGINAL_DIRECT_CACHE_PREFIX}${key}`, { direct }, ORIGINAL_DIRECT_CACHE_TTL_SECONDS);
 }
 
-export async function getAdminOverviewCache<T>(key: string) {
-  return getRedisJson<T>(`${ADMIN_OVERVIEW_CACHE_PREFIX}${key}`);
+export async function getAdminOverviewCache<T>(key: string, expectedRevision?: string | null) {
+  const revision = await usableRevision(expectedRevision);
+  if (!revision) return null;
+  return getRedisJson<T>(revisionKey(ADMIN_OVERVIEW_CACHE_PREFIX, revision, key));
 }
 
-export async function setAdminOverviewCache(key: string, value: unknown) {
-  await setRedisJson(`${ADMIN_OVERVIEW_CACHE_PREFIX}${key}`, value, ADMIN_OVERVIEW_CACHE_TTL_SECONDS);
+export async function setAdminOverviewCache(key: string, value: unknown, expectedRevision?: string | null) {
+  const revision = await usableRevision(expectedRevision);
+  if (!revision) return;
+  await setRedisJson(revisionKey(ADMIN_OVERVIEW_CACHE_PREFIX, revision, key), value, ADMIN_OVERVIEW_CACHE_TTL_SECONDS);
 }
 
-export async function getImageLookupByThumbKey(thumbKey: string) {
+export async function getImageLookupByThumbKey(thumbKey: string, expectedRevision?: string | null) {
+  const revision = await usableRevision(expectedRevision);
+  if (!revision) return null;
   try {
-    const raw = await redis.hget(IMAGE_LOOKUP_THUMBS_KEY, thumbKey);
+    const raw = await redis.hget(lookupHashKey(IMAGE_LOOKUP_THUMBS_KEY, revision), thumbKey);
     return raw ? parseImageLookup(raw) : null;
   } catch {
     return null;
   }
 }
 
-export async function getImageLookupByObjectKey(objectKey: string) {
+export async function getImageLookupByObjectKey(objectKey: string, expectedRevision?: string | null) {
+  const revision = await usableRevision(expectedRevision);
+  if (!revision) return null;
   try {
-    const raw = await redis.hget(IMAGE_LOOKUP_MEDIA_KEY, objectKey);
+    const raw = await redis.hget(lookupHashKey(IMAGE_LOOKUP_MEDIA_KEY, revision), objectKey);
     return raw ? parseImageLookup(raw) : null;
   } catch {
     return null;
   }
 }
 
-export async function getImageLookupById(id: string) {
+export async function getImageLookupById(id: string, expectedRevision?: string | null) {
+  const revision = await usableRevision(expectedRevision);
+  if (!revision) return null;
   try {
-    const raw = await redis.hget(IMAGE_LOOKUP_ID_KEY, id);
+    const raw = await redis.hget(lookupHashKey(IMAGE_LOOKUP_ID_KEY, revision), id);
     return raw ? parseImageLookupById(raw) : null;
   } catch {
     return null;
   }
 }
 
-export async function setImageLookup(item: ImageLookupItem) {
-  await setImageLookups([item]);
+export async function setImageLookup(item: ImageLookupItem, expectedRevision?: string | null) {
+  await setImageLookups([item], expectedRevision);
 }
 
-async function setImageLookups(items: ImageLookupItem[]) {
+async function setImageLookups(items: ImageLookupItem[], expectedRevision?: string | null) {
   if (!items.length) return;
+  const revision = await usableRevision(expectedRevision);
+  if (!revision) return;
   try {
     const pipeline = redis.pipeline();
     const mediaFieldValues = items.flatMap((item) => [item.object_key, JSON.stringify(item)]);
     const thumbFieldValues = items.flatMap((item) => [item.thumb_key, JSON.stringify(item)]);
     pipeline.hsetex(
-      IMAGE_LOOKUP_MEDIA_KEY,
+      lookupHashKey(IMAGE_LOOKUP_MEDIA_KEY, revision),
       "EX",
       IMAGE_LOOKUP_TTL_SECONDS,
       "FIELDS",
@@ -184,7 +250,7 @@ async function setImageLookups(items: ImageLookupItem[]) {
       ...mediaFieldValues
     );
     pipeline.hsetex(
-      IMAGE_LOOKUP_THUMBS_KEY,
+      lookupHashKey(IMAGE_LOOKUP_THUMBS_KEY, revision),
       "EX",
       IMAGE_LOOKUP_TTL_SECONDS,
       "FIELDS",
@@ -214,11 +280,13 @@ function imageLookupByIdItem(item: CompleteImageLookupSource): ImageLookupByIdIt
   };
 }
 
-export async function setImageLookupById(item: CompleteImageLookupSource): Promise<ImageLookupByIdItem> {
+export async function setImageLookupById(item: CompleteImageLookupSource, expectedRevision?: string | null): Promise<ImageLookupByIdItem> {
   const lookup = imageLookupByIdItem(item);
+  const revision = await usableRevision(expectedRevision);
+  if (!revision) return lookup;
   try {
     await redis.hsetex(
-      IMAGE_LOOKUP_ID_KEY,
+      lookupHashKey(IMAGE_LOOKUP_ID_KEY, revision),
       "EX",
       IMAGE_LOOKUP_TTL_SECONDS,
       "FIELDS",
@@ -232,12 +300,14 @@ export async function setImageLookupById(item: CompleteImageLookupSource): Promi
   return lookup;
 }
 
-async function setImageLookupsById(items: ImageLookupByIdItem[]) {
+async function setImageLookupsById(items: ImageLookupByIdItem[], expectedRevision?: string | null) {
   if (!items.length) return;
+  const revision = await usableRevision(expectedRevision);
+  if (!revision) return;
   try {
     const fieldValues = items.flatMap((item) => [item.id, JSON.stringify(item)]);
     await redis.hsetex(
-      IMAGE_LOOKUP_ID_KEY,
+      lookupHashKey(IMAGE_LOOKUP_ID_KEY, revision),
       "EX",
       IMAGE_LOOKUP_TTL_SECONDS,
       "FIELDS",
@@ -249,7 +319,7 @@ async function setImageLookupsById(items: ImageLookupByIdItem[]) {
   }
 }
 
-export async function warmObjectLookups(items: readonly ImageObjectLookupSource[]) {
+export async function warmObjectLookups(items: readonly ImageObjectLookupSource[], expectedRevision?: string | null) {
   const objectLookups: ImageLookupItem[] = [];
   for (const item of items) {
     if (!item.is_link && item.status === "ready") {
@@ -262,80 +332,89 @@ export async function warmObjectLookups(items: readonly ImageObjectLookupSource[
       });
     }
   }
-  await setImageLookups(objectLookups);
+  await setImageLookups(objectLookups, expectedRevision);
 }
 
-async function warmImageIdLookups(items: readonly CompleteImageLookupSource[]) {
+async function warmImageIdLookups(items: readonly CompleteImageLookupSource[], expectedRevision?: string | null) {
   const idLookups = items.map(imageLookupByIdItem);
-  await setImageLookupsById(idLookups);
+  await setImageLookupsById(idLookups, expectedRevision);
 }
 
-export async function warmCompleteImageLookups(items: readonly CompleteImageLookupSource[]) {
+export async function warmCompleteImageLookups(items: readonly CompleteImageLookupSource[], expectedRevision?: string | null) {
   await Promise.all([
-    warmObjectLookups(items),
-    warmImageIdLookups(items)
+    warmObjectLookups(items, expectedRevision),
+    warmImageIdLookups(items, expectedRevision)
   ]);
 }
 
-export async function invalidateImageReadCaches(options: { facets?: boolean } = {}) {
-  try {
-    const pipeline = redis.pipeline().incr(PUBLIC_IMAGES_GEN_KEY);
-    if (options.facets ?? true) pipeline.del(GALLERY_FACETS_KEY);
-    await execRedisPipeline(pipeline);
-  } catch {
-    // 写入路径已提交到 PostgreSQL，缓存失效失败不影响正确性。
-  }
-}
-
-export async function invalidateImageLookupEntries(items: Array<{
+export type ImageLookupInvalidationEntry = {
   id?: string;
   object_key?: string;
   thumb_key?: string;
-}>) {
-  const ids = [...new Set(items.flatMap((item) => item.id ? [item.id] : []))];
-  const objectKeys = [...new Set(items.flatMap((item) => item.object_key ? [item.object_key] : []))];
-  const thumbKeys = [...new Set(items.flatMap((item) => item.thumb_key
+};
+
+export async function invalidateImageCaches({
+  lookupEntries = [],
+  md5s = [],
+  facets = true
+}: {
+  lookupEntries?: readonly ImageLookupInvalidationEntry[];
+  md5s?: readonly string[];
+  facets?: boolean;
+} = {}) {
+  // Capture the old scope, then advance before deleting any concrete keys. If
+  // Redis is unavailable, localMutationEpoch keeps all reads cache-cold until a
+  // later request successfully advances the shared revision.
+  const previousRevision = await imageCacheRevision();
+  await advanceImageCacheRevision();
+
+  const ids = [...new Set(lookupEntries.flatMap((item) => item.id ? [item.id] : []))];
+  const objectKeys = [...new Set(lookupEntries.flatMap((item) => item.object_key ? [item.object_key] : []))];
+  const thumbKeys = [...new Set(lookupEntries.flatMap((item) => item.thumb_key
     ? [item.thumb_key]
     : item.object_key ? [thumbnailObjectKey(item.object_key)] : []))];
-  if (!ids.length && !objectKeys.length && !thumbKeys.length) return;
+  const uniqueMd5s = [...new Set(md5s.filter(Boolean))];
+
   try {
     const pipeline = redis.pipeline();
-    if (ids.length) pipeline.hdel(IMAGE_LOOKUP_ID_KEY, ...ids);
-    if (objectKeys.length) pipeline.hdel(IMAGE_LOOKUP_MEDIA_KEY, ...objectKeys);
-    if (thumbKeys.length) pipeline.hdel(IMAGE_LOOKUP_THUMBS_KEY, ...thumbKeys);
+    const revisions = previousRevision ? [previousRevision] : [];
+    for (const revision of revisions) {
+      if (ids.length) pipeline.hdel(lookupHashKey(IMAGE_LOOKUP_ID_KEY, revision), ...ids);
+      if (objectKeys.length) pipeline.hdel(lookupHashKey(IMAGE_LOOKUP_MEDIA_KEY, revision), ...objectKeys);
+      if (thumbKeys.length) pipeline.hdel(lookupHashKey(IMAGE_LOOKUP_THUMBS_KEY, revision), ...thumbKeys);
+      if (facets) pipeline.del(revisionKey(GALLERY_FACETS_KEY, revision));
+      if (uniqueMd5s.length) {
+        pipeline.del(...uniqueMd5s.map((md5) => revisionKey(MD5_CACHE_PREFIX, revision, md5)));
+      }
+    }
+
     await execRedisPipeline(pipeline);
   } catch {
-    // 字段有独立 TTL；失效失败不会延长同一 hash 中其他字段的寿命。
+    // Revision advancement is the correctness boundary. Concrete cleanup only
+    // reclaims old fields sooner and may safely wait for TTL after a failure.
   }
 }
 
-export async function getMd5Cache(md5: string) {
-  return getRedisJson<unknown[]>(`${MD5_CACHE_PREFIX}${md5}`);
+export async function getMd5Cache(md5: string, expectedRevision?: string | null) {
+  const revision = await usableRevision(expectedRevision);
+  if (!revision) return null;
+  return getRedisJson<unknown[]>(revisionKey(MD5_CACHE_PREFIX, revision, md5));
 }
 
-export async function setMd5Cache(md5: string, items: unknown[]) {
-  await setRedisJson(`${MD5_CACHE_PREFIX}${md5}`, items);
+export async function setMd5Cache(md5: string, items: unknown[], expectedRevision?: string | null) {
+  const revision = await usableRevision(expectedRevision);
+  if (!revision) return;
+  await setRedisJson(revisionKey(MD5_CACHE_PREFIX, revision, md5), items);
 }
 
-export async function invalidateMd5Cache(md5: string) {
-  if (!md5) return;
-  await deleteRedisKeys(`${MD5_CACHE_PREFIX}${md5}`);
+export async function getGalleryFacetsCache<T>(expectedRevision?: string | null): Promise<T | null> {
+  const revision = await usableRevision(expectedRevision);
+  if (!revision) return null;
+  return getRedisJson<T>(revisionKey(GALLERY_FACETS_KEY, revision));
 }
 
-export async function invalidateMd5Caches(md5s: string[]) {
-  const keys = [...new Set(md5s.filter(Boolean))].map((md5) => `${MD5_CACHE_PREFIX}${md5}`);
-  if (!keys.length) return;
-  await deleteRedisKeys(...keys);
-}
-
-export async function getGalleryFacetsCache<T>(): Promise<T | null> {
-  return getRedisJson<T>(GALLERY_FACETS_KEY);
-}
-
-export async function setGalleryFacetsCache(value: unknown) {
-  await setRedisJson(GALLERY_FACETS_KEY, value);
-}
-
-export async function invalidateGalleryFacetsCache() {
-  await deleteRedisKeys(GALLERY_FACETS_KEY);
+export async function setGalleryFacetsCache(value: unknown, expectedRevision?: string | null) {
+  const revision = await usableRevision(expectedRevision);
+  if (!revision) return;
+  await setRedisJson(revisionKey(GALLERY_FACETS_KEY, revision), value);
 }

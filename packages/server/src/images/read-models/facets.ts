@@ -1,28 +1,23 @@
 import { coalesce } from "../../core/coalesce.ts";
+import type { FacetOptionDto, GalleryFacetsDto } from "@imageshow/shared";
 import { pool } from "../../core/db.ts";
 import { getGalleryFilterOptions } from "../../random/random-cache.ts";
 import { getThemeVocab } from "../../vocab/vocab-cache.ts";
 import {
   getGalleryFacetsCache,
+  imageCacheRevision,
   setGalleryFacetsCache
 } from "../image-cache.ts";
 
-type FacetOption = { slug: string; display_name: string };
 type AuthorOption = { slug: string; display_name: string; link: string };
-type GalleryFacets = {
-  devices: string[];
-  brightnesses: string[];
-  themes: FacetOption[];
-  tags: FacetOption[];
-  authors: AuthorOption[];
-};
 
-export async function getPublicGalleryFacets(): Promise<GalleryFacets> {
-  const cached = await getGalleryFacetsCache<GalleryFacets>();
+export async function getPublicGalleryFacets(): Promise<GalleryFacetsDto> {
+  const revision = await imageCacheRevision();
+  const cached = await getGalleryFacetsCache<GalleryFacetsDto>(revision);
   if (cached) return cached;
 
-  return coalesce("gallery-facets", async () => {
-    const raced = await getGalleryFacetsCache<GalleryFacets>();
+  return coalesce(`gallery-facets:${revision}`, async () => {
+    const raced = await getGalleryFacetsCache<GalleryFacetsDto>(revision);
     if (raced) return raced;
 
     const [base, themeVocab, tagResult, authorResult] = await Promise.all([
@@ -48,18 +43,18 @@ export async function getPublicGalleryFacets(): Promise<GalleryFacets> {
     const themeNames = new Map(
       themeVocab.map((entry) => [entry.slug, entry.display_name])
     );
-    const themes: FacetOption[] = base.themes.map((slug) => ({
+    const themes: FacetOptionDto[] = base.themes.map((slug) => ({
       slug,
       display_name: themeNames.get(slug) || ""
     }));
-    const facets: GalleryFacets = {
+    const facets: GalleryFacetsDto = {
       devices: base.devices,
       brightnesses: base.brightnesses,
       themes,
-      tags: tagResult.rows as FacetOption[],
+      tags: tagResult.rows as FacetOptionDto[],
       authors: authorResult.rows as AuthorOption[]
     };
-    await setGalleryFacetsCache(facets);
+    await setGalleryFacetsCache(facets, revision);
     return facets;
   });
 }

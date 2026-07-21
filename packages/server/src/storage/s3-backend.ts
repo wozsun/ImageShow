@@ -9,7 +9,7 @@ import {
   S3Client,
   type GetObjectCommandOutput
 } from "@aws-sdk/client-s3";
-import { ApiError } from "../core/http.ts";
+import { ApiError } from "../core/api-error.ts";
 import { getInputImageMaxBytes } from "../config/app-settings.ts";
 import { missingS3Fields, type StorageConfig } from "./backend-config.ts";
 import { s3CopySource, s3ListPrefix, storageS3ObjectName, type ReadablePrefix, type StoragePrefix } from "./object-keys.ts";
@@ -20,7 +20,7 @@ import type {
   StorageDriver,
   StorageSelfTest
 } from "./storage-backend.ts";
-import { assertSingleByteRangeSyntax, totalSizeFromContentRange } from "./byte-range.ts";
+import { assertSingleByteRangeSyntax, totalSizeFromContentRange } from "../core/byte-range.ts";
 import { normalizeObjectEtag } from "./object-validator.ts";
 
 function storageS3Client(config: StorageConfig) {
@@ -177,16 +177,25 @@ export class S3Backend implements StorageDriver {
     const missing = missingS3Fields(this.config.s3);
     if (missing.length) throw new ApiError(400, "storage_config_incomplete", "Storage config incomplete", { missing });
     const key = storageS3ObjectName(this.config, "_uploads", `.storage-test-${Date.now()}`);
-    await this.client.send(new PutObjectCommand({ Bucket: this.bucket, Key: key, Body: "ok", ContentType: "text/plain" }));
-    await this.client.send(new HeadObjectCommand({ Bucket: this.bucket, Key: key }));
-    await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
-    return {
-      backend: "s3",
-      writable: true,
-      bucket: this.config.s3.bucket,
-      endpoint: this.config.s3.endpoint,
-      public_base_url: this.config.s3.public_base_url
-    };
+    let written = false;
+    try {
+      await this.client.send(new PutObjectCommand({ Bucket: this.bucket, Key: key, Body: "ok", ContentType: "text/plain" }));
+      written = true;
+      await this.client.send(new HeadObjectCommand({ Bucket: this.bucket, Key: key }));
+      return {
+        backend: "s3",
+        writable: true,
+        bucket: this.config.s3.bucket,
+        endpoint: this.config.s3.endpoint,
+        public_base_url: this.config.s3.public_base_url
+      };
+    } finally {
+      if (written) {
+        await this.client.send(
+          new DeleteObjectCommand({ Bucket: this.bucket, Key: key })
+        ).catch(() => undefined);
+      }
+    }
   }
 
   async pruneEmptyDirs(): Promise<number> {

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { api } from "../../lib/api/client.js";
 import { adminApiBasePath } from "../../lib/constants.js";
-import { errorMessage } from "../../lib/ui/formatters.js";
+import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
 import { Icon } from "../../components/icon/Icon.js";
 import { SelectMenu } from "../../components/form/SelectMenu.js";
 import { StableButtonLabel } from "../../components/data-display/StableButtonLabel.js";
@@ -28,7 +28,8 @@ export function CheckPage() {
     try {
       setResult(await api(`${adminApiBasePath}/check/${name}`, { method: "POST", body: body ? JSON.stringify(body) : undefined }));
     } catch (error) {
-      setResult({ ok: false, error: errorMessage(error) });
+      reportAdminUiError(`check.${name}`, error);
+      setResult({ ok: false, error: "检查执行失败，请稍后重试" });
     } finally {
       setRunning("");
     }

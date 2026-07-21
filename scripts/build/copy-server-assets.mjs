@@ -12,6 +12,18 @@ const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, "..", "..");
 const serverPackage = resolve(repo, "packages", "server");
 const serverDist = resolve(serverPackage, "dist");
+const webDist = resolve(repo, "packages", "web", "dist");
+const docsDist = resolve(repo, "packages", "docs", ".vitepress", "dist");
+
+for (const [label, input] of [
+  ["server compilation", serverDist],
+  ["web build", webDist],
+  ["documentation build", docsDist]
+]) {
+  if (!existsSync(input)) {
+    throw new Error(`assemble-server: missing ${label} input at ${relative(repo, input)}`);
+  }
+}
 
 function importPath(fromFile, targetFile) {
   const path = relative(dirname(fromFile), targetFile).split(sep).join("/");
@@ -83,18 +95,15 @@ await cp(
   resolve(serverDist, "migrations"),
   { recursive: true }
 );
-const webDist = resolve(repo, "packages", "web", "dist");
-if (existsSync(webDist)) {
-  await cp(webDist, resolve(serverDist, "public"), { recursive: true });
-}
-
-const docsDist = resolve(repo, "packages", "docs", ".vitepress", "dist");
-if (existsSync(docsDist)) {
-  await cp(docsDist, resolve(serverDist, "docs"), { recursive: true });
-}
+await cp(webDist, resolve(serverDist, "public"), { recursive: true });
+await cp(docsDist, resolve(serverDist, "docs"), { recursive: true });
 
 // 最后一步：对最终汇集的静态目录做预压缩（public 含 SPA 资源；docs 为文档站。图标已内联进
 // JS 包，不再作为 /assets/icons 静态文件单独发布）。
 await precompressDir(resolve(serverDist, "public"));
 const docsOut = resolve(serverDist, "docs");
 if (existsSync(docsOut)) await precompressDir(docsOut);
+
+console.log(
+  "assemble-server: migrations -> dist/migrations, web -> dist/public, docs -> dist/docs"
+);

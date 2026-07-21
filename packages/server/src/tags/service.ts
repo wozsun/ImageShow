@@ -1,39 +1,35 @@
-import { slugPattern } from "@imageshow/shared";
 import type { PoolClient } from "pg";
 import { pool, withTransaction } from "../core/db.ts";
-import { ApiError } from "../core/http.ts";
-import { invalidateGalleryFacetsCache, invalidateImageReadCaches } from "../images/image-cache.ts";
+import { ApiError } from "../core/api-error.ts";
 import { applyOrCollectImageMutationSync, type ImageMutationSyncBatch } from "../images/mutation-sync.ts";
-import { rebuildRandomPool } from "../random/random-cache.ts";
 import {
-  invalidateEntityCountCaches,
   invalidateOrCollectEntityCountCaches,
   refreshEntityVocabularies,
   type EntityCountCacheInvalidationBatch,
 } from "../vocab/vocab-cache.ts";
+import {
+  assertVocabularyCreated,
+  assertVocabularyFound,
+  assertVocabularySlug,
+  synchronizeVocabularyMutation,
+  withVocabularyMutationLock
+} from "../vocab/mutation-sync.ts";
 import { resolveTagNames } from "./query.ts";
 
-async function refreshTagDefinitionCaches(options: { facets?: boolean } = {}) {
-  const tasks: Array<Promise<unknown>> = [
-    refreshEntityVocabularies(["tag"]),
-    invalidateEntityCountCaches(["tag"]),
-  ];
-  if (options.facets ?? true) tasks.push(invalidateGalleryFacetsCache());
-  await Promise.all(tasks);
-}
+export async function createTag(slug: string, displayName = "") {
+  assertVocabularySlug("tag", slug);
 
-export async function upsertTag(slug: string, displayName = "") {
-  if (slug.length > 32 || !slugPattern.test(slug)) {
-    throw new ApiError(400, "invalid_tag", "Tag slug must be a lowercase slug (a-z, 0-9, -), <=32 chars", { slug });
-  }
-
-  await pool.query(
-    `INSERT INTO tag(slug, display_name, sort_order)
-     VALUES($1, $2, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM tag))
-     ON CONFLICT (slug) DO UPDATE SET display_name = EXCLUDED.display_name, updated_at = now()`,
-    [slug, displayName]
+  const result = await withVocabularyMutationLock("tag", slug, () =>
+    pool.query(
+      `INSERT INTO tag(slug, display_name, sort_order)
+       VALUES($1, $2, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM tag))
+       ON CONFLICT (slug) DO NOTHING
+       RETURNING slug`,
+      [slug, displayName]
+    )
   );
-  await refreshTagDefinitionCaches();
+  assertVocabularyCreated("tag", slug, result.rowCount);
+  await synchronizeVocabularyMutation({ entity: "tag" });
 }
 
 export async function reorderTags(slugs: string[]) {
@@ -44,7 +40,7 @@ export async function reorderTags(slugs: string[]) {
      WHERE t.slug = v.slug`,
     [slugs]
   );
-  await refreshTagDefinitionCaches();
+  await synchronizeVocabularyMutation({ entity: "tag" });
 }
 
 export async function deleteTags(slugs: string[]) {
@@ -52,28 +48,28 @@ export async function deleteTags(slugs: string[]) {
   if (!targets.length) return;
   const result = await pool.query("DELETE FROM tag WHERE slug = ANY($1::text[])", [targets]);
   if (result.rowCount) {
-    await rebuildRandomPool();
-    await Promise.all([
-      invalidateImageReadCaches(),
-      refreshTagDefinitionCaches({ facets: false }),
-    ]);
+    await synchronizeVocabularyMutation({
+      entity: "tag",
+      imageDataChanged: true,
+      random: { mode: "rebuild" }
+    });
   }
 }
 
 export async function setTagDisplayName(slug: string, displayName: string) {
   const result = await pool.query("UPDATE tag SET display_name = $2, updated_at = now() WHERE slug = $1", [slug, displayName]);
-  if (!result.rowCount) throw new ApiError(404, "not_found", "Tag not found");
-  await refreshTagDefinitionCaches();
+  assertVocabularyFound("tag", result.rowCount);
+  await synchronizeVocabularyMutation({ entity: "tag" });
 }
 
 export async function deleteTag(slug: string) {
   const result = await pool.query("DELETE FROM tag WHERE slug = $1", [slug]);
-  if (!result.rowCount) throw new ApiError(404, "not_found", "Tag not found");
-  await rebuildRandomPool();
-  await Promise.all([
-    invalidateImageReadCaches(),
-    refreshTagDefinitionCaches({ facets: false }),
-  ]);
+  assertVocabularyFound("tag", result.rowCount);
+  await synchronizeVocabularyMutation({
+    entity: "tag",
+    imageDataChanged: true,
+    random: { mode: "rebuild" }
+  });
 }
 
 type SetImageTagsOptions = {

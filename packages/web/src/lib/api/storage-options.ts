@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "./client.js";
 import { adminApiBasePath } from "../constants.js";
 import { storageBackendLabel } from "../ui/select-options.js";
+import { queryKeys } from "./query-keys.js";
 
 type StorageBackendOption = {
   slug: string;
@@ -27,8 +28,8 @@ export function storageNameResolver(backends: StorageBackendOption[]) {
 // enabled=false 时（公共画廊里未登录的访客、未打开的上传窗口等）不发请求，仍可安全调用。
 export function useStorageOptions(enabled = true) {
   return useQuery<{ backends: StorageBackendOption[] }>({
-    queryKey: ["storage-options"],
-    queryFn: () => api(`${adminApiBasePath}/storage/options`),
+    queryKey: queryKeys.storageOptions,
+    queryFn: ({ signal }) => api(`${adminApiBasePath}/storage/options`, { signal }),
     enabled,
     staleTime: 5 * 60 * 1000
   });

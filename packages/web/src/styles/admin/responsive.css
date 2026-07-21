@@ -190,56 +190,35 @@
   .workspace-paged { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; padding-bottom: 16px; }
   /* overscroll-behavior 阻断滚动链，避免卡片区滚到尽头时把橡皮筋回弹传给文档。 */
   .workspace-paged > .admin-scroll-region { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-right: 2px; align-content: start; }
-  /* 图片列表把滚动容器延伸到视口右缘，同时把增加的宽度补进内容内边距：卡片仍与页面内容
-     对齐，iOS 等触控设备的原生滚动指示器则贴住页面最右侧。 */
-  .workspace-paged > .admin-image-grid.admin-scroll-region {
-    margin-right: -16px;
-    padding-right: 18px;
-  }
   /*通栏分隔线：先抵消移动端工作区的 16px 侧边内边距使横线铺满整个区域，再补回内边距让分页器内容保持对齐。*/
   .workspace-paged > .admin-pagination { margin: 0 -16px; padding: 12px 16px 0; border-top: 1px solid #e2e8f0; }
-  .workspace-head, .toolbar { align-items: stretch; flex-direction: column; }
-  .image-list-toolbar-actions {
+  .workspace-head:not(.workspace-grid-head),
+  .toolbar { align-items: stretch; flex-direction: column; }
+  .workspace-grid-head {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "title"
+      "description"
+      "feedback"
+      "actions";
+    align-items: stretch;
+    row-gap: 8px;
+  }
+  .workspace-grid-head:not(.has-actions) {
+    grid-template-areas:
+      "title"
+      "description"
+      "feedback";
+  }
+  .workspace-grid-head > .action-feedback-region {
     width: 100%;
-    max-width: 100%;
+    max-width: none;
+    justify-self: stretch;
+  }
+  .workspace-header-actions {
+    width: 100%;
     align-self: stretch;
-    margin-left: 0;
-    display: flex;
-    gap: 4px;
   }
-  .image-list-toolbar-actions > .image-card-density-switch + button { margin-left: auto; }
-  .image-list-toolbar-actions > button:not(.image-card-density-switch) {
-    width: auto;
-    min-width: 0;
-    padding-inline: 8px;
-    gap: 4px;
-    font-size: 15px;
-  }
-  .image-list-toolbar-actions > .image-card-density-switch {
-    --labeled-switch-width: 56px;
-    --labeled-switch-thumb-width: 12px;
-    --labeled-switch-thumb-height: 20px;
-    --labeled-switch-edge-gap: 4px;
-    --labeled-switch-label-gap: 3px;
-
-    font-size: 12px;
-  }
-  .workspace-head .segmented {
-    width: 100%;
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-  .workspace-head .segmented button { width: 100%; }
-  .image-admin-head-tools { flex-direction: column; align-items: stretch; }
-  /*移动端堆叠顺序：视图切换标签置顶，两个触发按钮在其下。*/
-  .image-admin-head-tools .segmented { order: -1; }
-  .image-admin-head-tools .upload-triggers {
-    width: 100%;
-    flex-wrap: nowrap;
-  }
-  .link-import-split { flex: 1 1 auto; min-width: 0; }
-  .link-import-split .link-import-main { flex: 1 1 auto; min-width: 0; }
-  .upload-triggers > .upload-trigger { flex: 1 1 auto; min-width: 0; }
   /* 四个图片工作流在手机上共享全屏固定框架：头部、默认属性、分页和底栏固定，
      只有卡片列表承担纵向滚动。 */
   .upload-overlay,
@@ -388,12 +367,9 @@
   .advanced-config-ready { justify-self: start; }
   .advanced-config-head-actions { display: grid; grid-template-columns: 1fr 1fr; margin-left: 0; }
   .advanced-config-head-actions button { min-width: 0; }
+  .advanced-config-page > .workspace-head > div:first-child > p { display: none; }
   .advanced-config-editor-head {
-    display: block;
-  }
-  .advanced-config-editor-head-status {
-    max-width: none;
-    margin-top: 8px;
+    grid-template-columns: max-content minmax(0, 1fr);
   }
   .advanced-config-editor-footer { align-items: stretch; flex-direction: column; }
   .advanced-config-editor-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -452,10 +428,9 @@
   .batch-edit-common .apply-to-all-button {
     --pressable-active-scale: var(--pressable-scale-large, .99);
   }
-  /*头部堆叠在标题之下：两个配置按钮共享一行（无固定宽度），反馈在其下整宽换行。*/
-  .settings-head-actions { margin-left: 0; flex-wrap: wrap; }
+  /*头部堆叠在标题之下：两个配置按钮共享一行（无固定宽度）。反馈区域是独立布局单元。*/
+  .settings-head-actions { flex-wrap: wrap; }
   .settings-head-actions .settings-config-button { flex: 1 1 auto; min-width: 0; }
-  .action-feedback.is-inline { order: 3; flex-basis: 100%; max-width: none; }
   /*检查页按钮组改为均匀的 2 列 grid，而非右对齐换行留下参差的行间空隙。*/
   .check-actions { margin-left: 0; }
   .check-actions .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -520,27 +495,6 @@
   /*太窄无法把 300px 卡片与按钮并排——堆叠它们，动作右对齐在列表下方。*/
   .duplicate-body { flex-direction: column; align-items: stretch; }
   .duplicate-body .inline-actions { justify-content: flex-end; }
-  .admin-image-grid[data-density] { grid-template-columns: 1fr; }
-  .admin-image-card { grid-template-columns: 20px minmax(0, 1fr) 36px; gap: 8px; }
-  .admin-image-card-detail {
-    min-height: 72px;
-    grid-template-columns: 72px minmax(0, 1fr);
-    gap: 10px;
-  }
-  .admin-image-card-thumb { width: 72px; height: 72px; }
-  .admin-image-card-actions { gap: 4px; }
-  .admin-image-grid[data-density="spacious"] .admin-image-card {
-    min-height: 0;
-    grid-template-columns: 20px minmax(0, 1fr);
-    gap: 8px;
-  }
-  .admin-image-grid[data-density="spacious"] .admin-image-card-detail {
-    min-height: 56px;
-    grid-template-columns: 56px minmax(0, 1fr);
-    gap: 12px;
-  }
-  .admin-image-grid[data-density="spacious"] .admin-image-card-thumb { width: 56px; height: 56px; }
-  .admin-image-grid[data-density="spacious"] .admin-image-card-actions { gap: 8px; }
   /* 次级后台表单与弹窗（主题/标签/作者/用户管理的新建条、重置密码、检查操作 / 图片迁移弹窗、
      链接导入弹窗、账户设置）：每个输入/字段占一整行，动作按钮共享一行且 flex:1 铺满宽度（与
      上传/批量弹窗页脚一致），而非左对齐留参差或在默认宽度下右对齐；44px 高便于点按。存储编辑弹窗
@@ -589,6 +543,7 @@
   .upload-overlay,
   .upload-window,
   .action-feedback,
+  .action-feedback-progress,
   .check-summary,
   .check-card,
   .login form { animation: none; }
