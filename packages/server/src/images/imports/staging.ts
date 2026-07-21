@@ -1,4 +1,5 @@
 import { privateNoStoreCacheControl } from "../../core/http.ts";
+import { withStorageLocationReadLock } from "../../storage/maintenance-lock.ts";
 import { readStorageBuffer, removeObject } from "../../storage/storage.ts";
 import type { PreparedPayload } from "./types.ts";
 
@@ -32,8 +33,16 @@ export async function preparedThumbnailResponse(
 }
 
 export async function cleanupStagedObjects(id: string, storageSlug: string) {
-  await Promise.all([
-    removeObject("_uploads", stagingImageKey(id), storageSlug).catch(() => undefined),
-    removeObject("_uploads", stagingThumbnailKey(id), storageSlug).catch(() => undefined)
-  ]);
+  return withStorageLocationReadLock(async () => {
+    const results = await Promise.allSettled([
+      removeObject("_uploads", stagingImageKey(id), storageSlug),
+      removeObject("_uploads", stagingThumbnailKey(id), storageSlug)
+    ]);
+    const failures = results
+      .filter((result): result is PromiseRejectedResult => result.status === "rejected")
+      .map((result) => result.reason);
+    if (failures.length) {
+      throw new AggregateError(failures, "Import staging cleanup failed");
+    }
+  });
 }

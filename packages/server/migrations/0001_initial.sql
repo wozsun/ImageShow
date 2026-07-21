@@ -85,6 +85,10 @@ CREATE TABLE metadata (
   author TEXT,
   status TEXT NOT NULL DEFAULT 'ready',
   deleted_at TIMESTAMPTZ DEFAULT NULL,
+  purge_state TEXT NOT NULL DEFAULT 'idle',
+  purge_started_at TIMESTAMPTZ,
+  purge_attempts INTEGER NOT NULL DEFAULT 0,
+  purge_error TEXT,
   image_time TIMESTAMPTZ NOT NULL DEFAULT now(),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -107,6 +111,7 @@ CREATE TABLE metadata (
   CHECK (length(author) <= 32),
   CHECK (author ~ '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'),
   CHECK (status IN ('ready', 'deleted')),
+  CHECK (purge_state IN ('idle', 'purging', 'failed')),
   CONSTRAINT fk_metadata_theme    FOREIGN KEY (theme)        REFERENCES theme(slug)            ON DELETE RESTRICT,
   CONSTRAINT fk_metadata_storage  FOREIGN KEY (storage_slug) REFERENCES storage_backend(slug)  ON DELETE RESTRICT,
   CONSTRAINT fk_metadata_author   FOREIGN KEY (author)       REFERENCES author(slug)           ON DELETE SET NULL
@@ -157,6 +162,10 @@ ON metadata((regexp_replace(object_key, '\.[^/.]+$', '.webp')));
 CREATE INDEX idx_metadata_theme ON metadata(theme);
 CREATE INDEX idx_metadata_author ON metadata(author);
 CREATE INDEX idx_metadata_storage_slug ON metadata(storage_slug);
+
+CREATE INDEX idx_metadata_trash_purge
+ON metadata(purge_state, deleted_at, id)
+WHERE status = 'deleted';
 
 CREATE TABLE image_tag (
   image_id UUID NOT NULL REFERENCES metadata(id) ON DELETE CASCADE,
@@ -209,7 +218,7 @@ CREATE TABLE background_job (
   next_retry_at TIMESTAMPTZ DEFAULT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  CHECK (type IN ('thumb.generate','move.cleanup','import.cleanup','cache.rebuild')),
+  CHECK (type IN ('thumb.generate','move.cleanup','import.cleanup','trash.purge','cache.rebuild')),
   CHECK (status IN ('pending', 'running', 'succeeded', 'failed', 'ignored'))
 );
 

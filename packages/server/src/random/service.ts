@@ -7,6 +7,7 @@ import { getRandomPoolSnapshot } from "./random-cache.ts";
 import { resolveThemeTermMap } from "../themes/query.ts";
 import { resolveTagTermMap } from "../tags/query.ts";
 import { resolveAuthorTermMap } from "../authors/query.ts";
+import { randomPoolRetryAfterSeconds } from "./cache-schema.ts";
 
 export type { PickedImage } from "./picker.ts";
 
@@ -48,8 +49,14 @@ export async function pickRandom(url: URL, userAgent = "", clientId = ""): Promi
     ]);
     picked = await pickFromRedisPool(resolvedUrl, method, axes, recent, snapshot);
   } catch (error) {
-    if ((error as Error).name !== "redis_unavailable") throw error;
-    return routeError({ status: 503, message: "Service Unavailable: Random pool is unavailable" });
+    const retryAfterSeconds = randomPoolRetryAfterSeconds(error);
+    if (retryAfterSeconds === undefined) throw error;
+    const response = routeError({
+      status: 503,
+      message: "Service Unavailable: Random pool is temporarily unavailable"
+    });
+    response.headers.set("Retry-After", String(retryAfterSeconds));
+    return response;
   }
   if (picked && !(picked instanceof Response)) {
     await rememberServedId(clientId, signature, picked.id);

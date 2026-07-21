@@ -79,7 +79,7 @@ type StorageBackendAdminBase = {
   enabled: boolean;
   is_default: boolean;
   image_count: number;
-  active_import_count: number;
+  import_session_count: number;
 };
 
 export type StorageBackendAdmin = StorageBackendAdminBase & (

@@ -1,9 +1,22 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { withAdvisoryLock } from "../core/db.ts";
 
-const storageMaintenanceLockKey = "imageshow:storage-maintenance";
+const storageLocationLockKey = "imageshow:storage-location";
+const storageLocationLockContext = new AsyncLocalStorage<"read" | "write">();
 
-export function withStorageMutationLock<T>(work: () => Promise<T>): Promise<T> {
-  return withAdvisoryLock(storageMaintenanceLockKey, work, "shared");
+/**
+ * Hold a shared lease while code resolves a storage slug and reads or mutates
+ * objects at that physical location. Shared leases are re-entrant so import
+ * helpers can enforce the boundary themselves without consuming another pool
+ * connection when their caller already owns it.
+ */
+export function withStorageLocationReadLock<T>(work: () => Promise<T>): Promise<T> {
+  if (storageLocationLockContext.getStore()) return work();
+  return withAdvisoryLock(
+    storageLocationLockKey,
+    () => storageLocationLockContext.run("read", work),
+    "shared"
+  );
 }
 
 /**
@@ -15,11 +28,25 @@ export function withImageStorageMutationLock<T>(
   imageId: string,
   work: () => Promise<T>
 ): Promise<T> {
-  return withStorageMutationLock(() =>
+  return withStorageLocationReadLock(() =>
     withAdvisoryLock(`imageshow:image-storage:${imageId}`, work)
   );
 }
 
-export function withStorageMaintenanceLock<T>(work: () => Promise<T>): Promise<T> {
-  return withAdvisoryLock(storageMaintenanceLockKey, work);
+/**
+ * Exclusively own every configurable storage location. This is reserved for
+ * physical-location changes and whole-storage maintenance. Upgrading a held
+ * read lease would deadlock in PostgreSQL, so fail loudly if a caller violates
+ * the lock ordering contract.
+ */
+export function withStorageLocationWriteLock<T>(work: () => Promise<T>): Promise<T> {
+  const held = storageLocationLockContext.getStore();
+  if (held === "write") return work();
+  if (held === "read") {
+    throw new Error("Cannot upgrade a storage location read lock to a write lock");
+  }
+  return withAdvisoryLock(
+    storageLocationLockKey,
+    () => storageLocationLockContext.run("write", work)
+  );
 }

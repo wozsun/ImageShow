@@ -67,11 +67,11 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   overflow: hidden;
   margin: 0;
   /* 22px 关闭按钮 + 上下 6px + 边框 = 36px，不会撑高高级配置页头的 40.8px 基线。 */
-  padding: 6px 10px 6px 12px;
+  padding: 6px 12px;
   border: 1px solid;
   border-radius: 9px;
   background: var(--action-feedback-background);
@@ -179,6 +179,8 @@
   justify-content: center;
   width: 22px;
   height: 22px;
+  /* 负外边距只收紧视觉占位，按钮本身仍保留完整的 22px 点击区域。 */
+  margin-inline: -3px;
 
   min-height: 0;
   padding: 0;

@@ -237,7 +237,9 @@ async function cleanupThemeMoveObjects(
     "move.cleanup",
     imageId,
     { objects: failed, reason },
-    `move.cleanup:${imageId}:${failed.map((object) => `${object.prefix}:${object.key}`).join("|")}`
+    `move.cleanup:${imageId}:${failed.map((object) => (
+      `${object.backend}:${object.prefix}:${object.key}`
+    )).join("|")}`
   ).catch(() => undefined);
 }
 

@@ -190,7 +190,8 @@
   grid-area: actions;
   min-width: 0;
   margin-left: 0;
-  align-self: center;
+  align-self: start;
+  justify-self: end;
 }
 
 @media (min-width: 761px) {

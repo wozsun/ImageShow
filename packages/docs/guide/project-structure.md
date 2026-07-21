@@ -79,6 +79,8 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | `storage/backend-config.ts` | S3 / WebDAV 配置 schema、`StorageConfig` / 输入类型、默认值和完整性校验。 |
 | `storage/backend-registry.ts` | `storage_backend` 数据库注册表、默认后端、CRUD、排序、启停、脱敏后台 DTO、配置快照与 driver 生命周期；在用物理字段保护、既有对象访问探测和变更后的实例关闭也集中于此。 |
 | `storage/maintenance-lock.ts` | 存储变更共享锁与维护独占锁，避免导入、重分类、迁移和全盘清理互相删除对象。 |
+| `storage/storage-namespace.ts` | 本地 / S3 / WebDAV 统一物理命名空间 identity；排除凭据等访问参数，并识别两个 slug 是否共享对象键空间。 |
+| `storage/object-transfer.ts` | 迁移对象的逐字节既有目标校验、写后回读校验和失败补偿；共享命名空间禁止重复写入。 |
 | `storage/storage-backend.ts` | Local / S3 / WebDAV driver 接口、打开结果类型与工厂；缓存和关闭生命周期由注册表拥有，链接图仍由图片层的 `is_link` 处理。 |
 | `storage/local-backend.ts` | 本地磁盘后端（`/app/data/storage` 下 media / thumbs / _uploads / link），含空目录回收 `pruneEmptyDirs()`。 |
 | `storage/s3-backend.ts` | S3 / COS 后端：processed image / thumbnail 读写删与服务端复制/移动、`root_path` 前缀。 |
@@ -86,7 +88,7 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | `storage/image-paths.ts` | 键名规则：`storageObjectKey()`、`thumbnailObjectKey()`、`linkThumbnailKey(device,brightness,theme,id)`，以及集中助手 `thumbnailRef(row)`——link 缩略图按分类分文件夹存在该图自己的存储后端的 `link/` 前缀下。所有清理 / 检查路径都走它，避免孤儿。 |
 | `storage/object-keys.ts` | 路径 / 键名映射与防穿越：本地 `safeStoragePath()`、S3 `storageS3ObjectName()` 等，物理布局 `<root_path>/<media｜thumbs｜_uploads｜link>/<key>`。 |
 | `storage/object-validator.ts` | 规范化 S3 / WebDAV 实体标签，并按本地文件版本元数据生成对象 ETag。 |
-| `storage/migration.ts` | 单图位置锁、锁内真值重读、copy→CAS→旧对象清理协议，以及任意后端间的单图 / 整后端迁移。 |
+| `storage/migration.ts` | 单图位置锁、锁内真值重读、物理 identity 判断、verified copy→CAS→旧对象清理协议，以及任意后端间的单图 / 整后端迁移。 |
 | `storage/stream-buffer.ts` | 流 ↔ Buffer、Node ↔ Web Stream 与有界流式切片辅助。 |
 
 ### images/ —— 图片领域
@@ -108,7 +110,7 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | `images/batch-update.ts` | 批量编辑协调：不同图片固定低并发 2、单图 metadata→tags 有序，隔离业务错误并按请求顺序返回结果；批次末统一同步派生缓存与实体计数缓存。 |
 | `images/mutation-sync.ts` | 图片写入后的派生状态协调器：合并随机池、公共读缓存、MD5 与精确 lookup 失效；单图调用即时执行，批量编辑按请求收集后执行一次。 |
 | `images/cursor.ts` | 游标编解码（稳定分页）。 |
-| `images/trash.ts` | 回收站彻底删除：SKIP LOCKED 原子认领、尝试号所有权令牌、单图位置锁、对象删除与位置 CAS；失败可重试，旧执行者不能覆盖新认领。 |
+| `images/trash.ts` | 回收站彻底删除：每次最多认领 `trashBatchSize`、SKIP LOCKED、尝试号所有权令牌、单图位置锁、对象删除与位置 CAS；失败可重试，旧执行者不能覆盖新认领。 |
 | `images/restore.ts` | 只恢复 `purge_state=idle` 的单图 / 批量数据库状态，并把实际恢复图片增量同步回 Redis 随机池。 |
 
 ### tags / themes / authors / users —— 配套领域
@@ -135,6 +137,7 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | `random/random-cache.ts` | 随机池领域的稳定门面，只重导出 schema、读取、重建和增量同步能力；其他领域不依赖内部 Redis 实现文件。 |
 | `random/cache-schema.ts` · `cache-lock.ts` | generation key / Lua / 数据映射协议，以及带 token 续租和所有权校验的更新 / 重建锁。 |
 | `random/cache-rebuild.ts` · `cache-sync.ts` · `cache-read.ts` | 分别负责 PostgreSQL 快照全量重建、图片增量同步和 generation 读取 / 临时筛选集合；不再由单个超大模块混合承担。 |
+| `random/cache-consistency.ts` | 原子读取 requested/completed revision 与增量锁，用有界退避抖动等待合法同步完成，并区分陈旧缓存和更新中状态。 |
 | `random/rebuild-spool.ts` | 随机池全量重建的受控内存 / NDJSON spool：16 MiB 阈值、格式和大小校验、活动文件及启动遗留清理。 |
 | `random/picker.ts` | `resolveCandidateAxes()`（按 UA 推设备）、`pickFromRedisPool()`（按 axis/category 计数加权选集合，tag/author 用 Redis 临时过滤集合，跳过最近项并保留 fallback）。 |
 | `random/dedupe.ts` | 短时不重复：`filterSignature()`、`recentlyServedIds()`、`rememberServedId()`（Redis LPUSH + LTRIM + EXPIRE）。 |
@@ -156,8 +159,8 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 
 | 文件 | 职责 |
 | --- | --- |
-| `jobs/repository.ts` | `background_job` 数据库仓储：按 created_at 领取、各类型 backlog / oldest wait 统计、成功 / 忽略 / 失败状态、退避重试、僵尸恢复、导入清理排队和历史裁剪。 |
-| `jobs/handlers.ts` | `thumb.generate` / `move.cleanup` / `import.cleanup` / `cache.rebuild` 任务处理器；导入清理会先用会话提交锁确认并取消崩溃遗留的过期 `committing`，handler 只返回统一 outcome，不直接写后台任务状态。 |
+| `jobs/repository.ts` | `background_job` 数据库仓储：按 created_at 领取、各类型 backlog / oldest wait 统计、终态幂等记录重置、退避重试、显式重新调度、僵尸恢复、导入 / 回收站清理排队和历史裁剪。 |
+| `jobs/handlers.ts` | `thumb.generate` / `move.cleanup` / `import.cleanup` / `trash.purge` / `cache.rebuild` 任务处理器；缩略图生成与 `move.cleanup` 都持有单图位置锁，后者还会按当前命名空间保留已重新采用的对象；导入清理会先用会话提交锁确认并取消崩溃遗留的过期 `committing`，回收站任务每次只处理一个有界批次，handler 只返回统一 outcome。 |
 | `jobs/worker.ts` | 先运行到期维护，再并行调度各任务类型的 50 项 / 2 秒公平时间片；记录队列压力指标，并负责启动、停止和优雅 drain。 |
 
 ### routes/ —— HTTP 薄层

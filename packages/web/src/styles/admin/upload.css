@@ -221,13 +221,17 @@
 .clear-button { color: #d0473a; }
 .clear-button:not(:disabled):hover { color: #bd3c30; background: #f4f6f8; }
 .import-job {
+  --import-job-border: #c7cdd6;
+  --import-job-background: #f5f6f8;
+  --import-job-status: #586474;
+  --import-job-progress: #2563a9;
   display: grid;
   grid-template-columns: 72px minmax(0, 1fr) auto;
   gap: 10px;
   align-items: start;
-  border: 1px solid #dce2ea;
+  border: 1px solid var(--import-job-border);
   border-radius: 8px;
-  background: #f7f8fa;
+  background: var(--import-job-background);
   padding: 10px;
 }
 .import-job-aside { grid-row: span 2; display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
@@ -244,13 +248,13 @@
 .import-job-head .import-job-meta-copy { flex: 0 1 auto; }
 .transfer-progress-value {
   flex: 0 0 auto;
-  color: #315f9f;
+  color: var(--import-job-progress);
   font-size: 14px;
   font-variant-numeric: tabular-nums;
 }
 .transfer-progress-value::before { content: "·"; margin-inline: 6px; color: #66717f; }
 .import-job-head .import-job-size-summary { display: none; font-size: 13px; }
-.import-status-label { color: #315f9f; font-weight: 600; }
+.import-status-label { color: var(--import-job-status); font-weight: 600; }
 .import-job-actions { display: flex; align-items: center; gap: 6px; }
 .import-job .image-fields { grid-column: 2 / 4; }
 .import-job .select-control.image-fields-device.is-changed .select-trigger,
@@ -259,16 +263,46 @@
   background: #fff;
   box-shadow: 0 0 0 1px rgba(228, 189, 88, .34);
 }
-.import-job.done { border-color: #78b78a; background: #f2fbf5; }
-.import-job.skipped { border-color: #d9bd72; background: #fffaf0; }
-.import-job.failed { border-color: #de8b83; background: #fff6f4; }
-.import-job.cancelled { border-color: #c7ccd3; background: #f4f5f7; opacity: .82; }
-.import-job.cancelling { border-color: #d8c188; background: #fffaf0; }
-.import-job.queued,
+.import-job.ready {
+  --import-job-border: #86afe8;
+  --import-job-background: #edf5ff;
+  --import-job-status: #245eaa;
+}
 .import-job.uploading,
 .import-job.downloading,
 .import-job.processing,
-.import-job.committing { border-color: #9bb9e8; background: #f5f9ff; }
+.import-job.committing {
+  --import-job-border: #b5cae7;
+  --import-job-background: #f6f9fe;
+  --import-job-status: #2b65ad;
+  --import-job-progress: #1f63bd;
+}
+.import-job.cancelling,
+.import-job.skipped {
+  --import-job-border: #d8bc70;
+  --import-job-background: #fff9e9;
+  --import-job-status: #795a0a;
+}
+.import-job.done {
+  --import-job-border: #78b78a;
+  --import-job-background: #f2fbf5;
+  --import-job-status: #24723c;
+}
+.import-job.failed {
+  --import-job-border: #de8b83;
+  --import-job-background: #fff4f2;
+  --import-job-status: #a12f25;
+}
+.import-job.cancelled {
+  --import-job-border: #c7ccd3;
+  --import-job-background: #f3f4f6;
+  --import-job-status: #68717d;
+}
+.import-job.queued {
+  --import-job-border: #c7cdd6;
+  --import-job-background: #f5f6f8;
+  --import-job-status: #586474;
+}
 .duplicate-panel {
   grid-column: 2 / 4;
   display: grid;

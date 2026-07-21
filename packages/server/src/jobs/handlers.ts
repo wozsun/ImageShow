@@ -4,14 +4,20 @@ import { pool } from "../core/db.ts";
 import { errorMessage } from "../core/api-error.ts";
 import { importCommitLockKey } from "../images/imports/execution.ts";
 import { cleanupOrphanRawImports, removeRawImport } from "../images/imports/temp-files.ts";
-import { stagingImageKey, stagingThumbnailKey } from "../images/imports/staging.ts";
+import { cleanupStagedObjects } from "../images/imports/staging.ts";
+import { purgeDeletedImages } from "../images/trash.ts";
 import {
   createThumbnail,
   generateStoredThumbnail,
   md5Buffer
 } from "../images/processing.ts";
 import { rebuildRandomPool } from "../random/random-cache.ts";
-import { thumbnailObjectKey } from "../storage/image-paths.ts";
+import { thumbnailObjectKey, thumbnailRef } from "../storage/image-paths.ts";
+import {
+  withImageStorageMutationLock,
+  withStorageLocationReadLock
+} from "../storage/maintenance-lock.ts";
+import { shareStorageNamespace } from "../storage/storage-namespace.ts";
 import {
   exists,
   readStorageBuffer,
@@ -23,7 +29,8 @@ import type { BackgroundJob } from "./repository.ts";
 
 export type BackgroundJobOutcome =
   | { status: "succeeded"; result?: unknown }
-  | { status: "ignored"; reason: string };
+  | { status: "ignored"; reason: string }
+  | { status: "reschedule"; delayMs: number; result?: unknown };
 
 function succeeded(result?: unknown): BackgroundJobOutcome {
   return { status: "succeeded", result };
@@ -31,6 +38,23 @@ function succeeded(result?: unknown): BackgroundJobOutcome {
 
 function ignored(reason: string): BackgroundJobOutcome {
   return { status: "ignored", reason };
+}
+
+async function purgeTrashBatch(): Promise<BackgroundJobOutcome> {
+  const result = await purgeDeletedImages();
+  if (result.failed) {
+    throw new Error(
+      `trash purge batch failed for ${result.failed} of ${result.requested} claimed images`
+    );
+  }
+  if (result.remaining) {
+    return {
+      status: "reschedule",
+      delayMs: result.requested ? 0 : 1_000,
+      result
+    };
+  }
+  return succeeded(result);
 }
 
 async function cancelExpiredCommittingImports() {
@@ -78,7 +102,9 @@ async function cancelExpiredCommittingImports() {
   return cancelled;
 }
 
-async function generateThumbnail(job: BackgroundJob): Promise<BackgroundJobOutcome> {
+async function generateThumbnailUnlocked(
+  job: BackgroundJob
+): Promise<BackgroundJobOutcome> {
   const row = (await pool.query(
     "SELECT object_key, status, storage_slug, is_link, md5 FROM metadata WHERE id=$1",
     [job.target_id]
@@ -119,8 +145,20 @@ async function generateThumbnail(job: BackgroundJob): Promise<BackgroundJobOutco
   return succeeded({ thumbnail_size: thumbnailSize });
 }
 
+function generateThumbnail(job: BackgroundJob): Promise<BackgroundJobOutcome> {
+  return withImageStorageMutationLock(job.target_id, () =>
+    generateThumbnailUnlocked(job)
+  );
+}
+
 async function cleanupMovedObjects(job: BackgroundJob): Promise<BackgroundJobOutcome> {
-  const objects = Array.isArray(job.payload.objects)
+  type CleanupObject = {
+    prefix: StoragePrefix;
+    key: string;
+    backend: string;
+  };
+
+  const objects: CleanupObject[] = Array.isArray(job.payload.objects)
     ? job.payload.objects.filter((candidate): candidate is {
         prefix: StoragePrefix;
         key: string;
@@ -130,79 +168,141 @@ async function cleanupMovedObjects(job: BackgroundJob): Promise<BackgroundJobOut
         const object = candidate as Record<string, unknown>;
         return typeof object.key === "string"
           && typeof object.backend === "string"
-          && ["media", "thumbs", "link", "_uploads"].includes(String(object.prefix));
+          && ["media", "thumbs", "link"].includes(String(object.prefix));
       })
     : [];
-  if (objects.length) {
-    for (const object of objects) {
-      await removeObject(object.prefix, object.key, object.backend);
-    }
-    return succeeded({ removed: objects.length });
-  }
 
   const objectKey = typeof job.payload.object_key === "string"
     ? job.payload.object_key
     : "";
   const backend = typeof job.payload.backend === "string"
     ? job.payload.backend
-    : undefined;
-  if (objectKey) {
-    await removeObject("media", objectKey, backend);
-    await removeObject("thumbs", thumbnailObjectKey(objectKey), backend);
+    : "";
+  if (!objects.length && objectKey && backend) {
+    objects.push(
+      { prefix: "media", key: objectKey, backend },
+      { prefix: "thumbs", key: thumbnailObjectKey(objectKey), backend }
+    );
   }
-  return succeeded();
+  if (!objects.length) return ignored("invalid or empty move cleanup payload");
+
+  return withImageStorageMutationLock(job.target_id, async () => {
+    const row = (await pool.query(
+      `SELECT id, object_key, storage_slug, is_link, device, brightness, theme
+         FROM metadata
+        WHERE id=$1`,
+      [job.target_id]
+    )).rows[0] as {
+      id: string;
+      object_key: string;
+      storage_slug: string;
+      is_link: boolean;
+      device: string;
+      brightness: string;
+      theme: string;
+    } | undefined;
+    const currentReferences = new Set<string>();
+    if (row?.is_link) {
+      const thumb = thumbnailRef(row);
+      currentReferences.add(`${thumb.prefix}:${thumb.key}`);
+    } else if (row) {
+      currentReferences.add(`media:${row.object_key}`);
+      currentReferences.add(`thumbs:${thumbnailObjectKey(row.object_key)}`);
+    }
+    const currentBackend = row
+      ? await getStorageBackend(row.storage_slug)
+      : undefined;
+    const candidateBackends = new Map<string, Awaited<ReturnType<typeof getStorageBackend>>>();
+
+    let removed = 0;
+    let retained = 0;
+    const seen = new Set<string>();
+    for (const object of objects) {
+      const identity = `${object.backend}:${object.prefix}:${object.key}`;
+      if (seen.has(identity)) continue;
+      seen.add(identity);
+      const matchesCurrentObject = currentReferences.has(
+        `${object.prefix}:${object.key}`
+      );
+      let sharesCurrentNamespace = object.backend === row?.storage_slug;
+      if (matchesCurrentObject && currentBackend && !sharesCurrentNamespace) {
+        let candidateBackend = candidateBackends.get(object.backend);
+        if (!candidateBackend) {
+          candidateBackend = await getStorageBackend(object.backend);
+          candidateBackends.set(object.backend, candidateBackend);
+        }
+        sharesCurrentNamespace = shareStorageNamespace(
+          candidateBackend,
+          currentBackend
+        );
+      }
+      if (matchesCurrentObject && sharesCurrentNamespace) {
+        retained += 1;
+        continue;
+      }
+      await removeObject(object.prefix, object.key, object.backend);
+      removed += 1;
+    }
+    return succeeded({ removed, retained });
+  });
 }
 
 async function cleanupExpiredImports(): Promise<BackgroundJobOutcome> {
-  const cancelledCommitting = await cancelExpiredCommittingImports();
-  const rows = (await pool.query(
-    `WITH expired AS (
-       SELECT id
-       FROM import_session
-       WHERE status IN ('created','receiving','preparing','ready','failed','cancelled')
-         AND expires_at < now()
-       ORDER BY expires_at ASC
-       FOR UPDATE SKIP LOCKED
-       LIMIT $1
-     )
-     UPDATE import_session AS session
-     SET status='cancelled', updated_at=now()
-     FROM expired
-     WHERE session.id=expired.id
-     RETURNING session.id, session.storage_slug`,
-    [appConfig.trashBatchSize]
-  )).rows as Array<{ id: string; storage_slug: string }>;
+  return withStorageLocationReadLock(async () => {
+    const cancelledCommitting = await cancelExpiredCommittingImports();
+    const rows = (await pool.query(
+      `WITH expired AS (
+         SELECT id
+         FROM import_session
+         WHERE status IN (
+           'created','receiving','preparing','ready','finalized','failed','cancelled'
+         )
+           AND expires_at < now()
+         ORDER BY expires_at ASC
+         FOR UPDATE SKIP LOCKED
+         LIMIT $1
+       )
+       UPDATE import_session AS session
+       SET status=CASE
+             WHEN session.status='finalized' THEN 'finalized'
+             ELSE 'cancelled'
+           END,
+           updated_at=now()
+       FROM expired
+       WHERE session.id=expired.id
+       RETURNING session.id, session.storage_slug`,
+      [appConfig.trashBatchSize]
+    )).rows as Array<{ id: string; storage_slug: string }>;
 
-  const cleanedIds: string[] = [];
-  const failures: string[] = [];
-  for (const row of rows) {
-    try {
-      await Promise.all([
-        removeObject("_uploads", stagingImageKey(row.id), row.storage_slug),
-        removeObject("_uploads", stagingThumbnailKey(row.id), row.storage_slug),
-        removeRawImport(row.id)
-      ]);
-      cleanedIds.push(row.id);
-    } catch (error) {
-      failures.push(`${row.storage_slug}/${row.id}: ${errorMessage(error)}`);
+    const cleanedIds: string[] = [];
+    const failures: string[] = [];
+    for (const row of rows) {
+      try {
+        await Promise.all([
+          cleanupStagedObjects(row.id, row.storage_slug),
+          removeRawImport(row.id)
+        ]);
+        cleanedIds.push(row.id);
+      } catch (error) {
+        failures.push(`${row.storage_slug}/${row.id}: ${errorMessage(error)}`);
+      }
     }
-  }
 
-  const deletedExpired = await pool.query(
-    "DELETE FROM import_session WHERE id = ANY($1::uuid[]) AND status='cancelled'",
-    [cleanedIds]
-  );
-  const deletedFinalized = await pool.query(
-    "DELETE FROM import_session WHERE status='finalized' AND expires_at < now()"
-  );
-  await cleanupOrphanRawImports(appConfig.uploadTtlSeconds * 1000);
+    const deletedExpired = await pool.query(
+      `DELETE FROM import_session
+       WHERE id = ANY($1::uuid[])
+         AND status IN ('cancelled','finalized')`,
+      [cleanedIds]
+    );
+    await cleanupOrphanRawImports(appConfig.uploadTtlSeconds * 1000);
 
-  if (failures.length) {
-    throw new Error(`import staging cleanup failed: ${failures.join("; ")}`);
-  }
-  return succeeded({
-    cleaned: (deletedExpired.rowCount ?? 0) + (deletedFinalized.rowCount ?? 0),
-    cancelled_committing: cancelledCommitting
+    if (failures.length) {
+      throw new Error(`import staging cleanup failed: ${failures.join("; ")}`);
+    }
+    return succeeded({
+      cleaned: deletedExpired.rowCount ?? 0,
+      cancelled_committing: cancelledCommitting
+    });
   });
 }
 
@@ -216,6 +316,8 @@ export async function handleBackgroundJob(
       return cleanupMovedObjects(job);
     case "import.cleanup":
       return cleanupExpiredImports();
+    case "trash.purge":
+      return purgeTrashBatch();
     case "cache.rebuild":
       await rebuildRandomPool();
       return succeeded();

@@ -1,7 +1,7 @@
 import { pool } from "../core/db.ts";
 import { errorMessage } from "../core/api-error.ts";
 import { listStorageKeys, pruneEmptyStorageDirs, removeObject, type StoragePrefix } from "../storage/storage.ts";
-import { withStorageMaintenanceLock } from "../storage/maintenance-lock.ts";
+import { withStorageLocationWriteLock } from "../storage/maintenance-lock.ts";
 import {
   activeImportStorageReferences,
   classifyStagingKeys,
@@ -103,5 +103,5 @@ async function cleanupStorageUnderLock() {
 }
 
 export function cleanupStorage() {
-  return withStorageMaintenanceLock(cleanupStorageUnderLock);
+  return withStorageLocationWriteLock(cleanupStorageUnderLock);
 }

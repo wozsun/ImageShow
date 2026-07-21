@@ -1,7 +1,7 @@
 import { ApiError } from "../../core/api-error.ts";
 import { DynamicConcurrencyLimiter } from "../../core/concurrency.ts";
 import { getRuntimeConfig } from "../../config/runtime-config-store.ts";
-import { withStorageMutationLock } from "../../storage/maintenance-lock.ts";
+import { withStorageLocationReadLock } from "../../storage/maintenance-lock.ts";
 import { clearImportPhase, setImportPhase, withImportLease } from "./progress.ts";
 import type { ImportMode, PreparedImportResult } from "./types.ts";
 
@@ -53,7 +53,7 @@ export async function runImportPreparation(
 
   const controller = new AbortController();
   const limiter = mode === "upload" ? uploadPrepareLimiter : linkPrepareLimiter;
-  const promise = Promise.resolve().then(() => withImportLease(id, () => withStorageMutationLock(
+  const promise = Promise.resolve().then(() => withImportLease(id, () => withStorageLocationReadLock(
     () => limiter.run(controller.signal, () => work(controller.signal), {
       onQueued: () => setImportPhase(id, "prepare-waiting", "服务端全局处理名额已满，等待空闲名额"),
       onStarted: () => clearImportPhase(id)

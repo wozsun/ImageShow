@@ -346,7 +346,12 @@ export async function updateImageMetadata(id: string, body: unknown, options: Im
           .catch(() => false);
         if (!adopted) {
           await removeObject("media", key, sourceImage.storage_slug).catch(() =>
-            enqueue("move.cleanup", id, { object_key: key, backend: sourceImage.storage_slug }, `move.cleanup:${id}:${key}`).catch(() => undefined),
+            enqueue(
+              "move.cleanup",
+              id,
+              { object_key: key, backend: sourceImage.storage_slug },
+              `move.cleanup:${id}:${sourceImage.storage_slug}:${key}`
+            ).catch(() => undefined),
           );
         }
       }
@@ -358,7 +363,12 @@ export async function updateImageMetadata(id: string, body: unknown, options: Im
 
     if (preCopiedObjectKey && preCopiedObjectKey !== committedObjectKey) {
       await removeObject("media", preCopiedObjectKey, sourceImage.storage_slug).catch(() =>
-        enqueue("move.cleanup", id, { object_key: preCopiedObjectKey, backend: sourceImage.storage_slug }, `move.cleanup:${id}:${preCopiedObjectKey}`).catch(() => undefined),
+        enqueue(
+          "move.cleanup",
+          id,
+          { object_key: preCopiedObjectKey, backend: sourceImage.storage_slug },
+          `move.cleanup:${id}:${sourceImage.storage_slug}:${preCopiedObjectKey}`
+        ).catch(() => undefined),
       );
     }
 
@@ -375,7 +385,7 @@ export async function updateImageMetadata(id: string, body: unknown, options: Im
             object_key: sourceImage.object_key,
             backend: sourceImage.storage_slug,
           },
-          `move.cleanup:${id}:${sourceImage.object_key}`,
+          `move.cleanup:${id}:${sourceImage.storage_slug}:${sourceImage.object_key}`,
         ).catch(() => undefined),
       );
     }
@@ -440,7 +450,7 @@ export async function migrateImagesStorage(
   target: string,
   options: BatchStorageMigrationOptions = {},
 ) {
-  const rows = (await pool.query("SELECT id, object_key, ext, status, storage_slug, is_link, device, brightness, theme FROM metadata WHERE id = ANY($1::uuid[])", [ids])).rows;
+  const rows = (await pool.query("SELECT id, object_key, ext, status, storage_slug, is_link, device, brightness, theme, md5 FROM metadata WHERE id = ANY($1::uuid[])", [ids])).rows;
   let migrated = 0;
   let unchanged = 0;
   let failed = ids.length - rows.length;

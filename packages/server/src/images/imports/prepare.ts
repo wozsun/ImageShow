@@ -156,7 +156,7 @@ async function prepareStoredImageSession(
     await notifyImportStatus(id);
     return preparedResult(id, session.storage_slug, payload);
   } catch (error) {
-    await cleanupStagedObjects(id, session.storage_slug);
+    await cleanupStagedObjects(id, session.storage_slug).catch(() => undefined);
     await markImportFailed(id, error);
     throw error;
   } finally {
@@ -279,7 +279,7 @@ async function prepareProxySession(id: string, signal: AbortSignal) {
     await notifyImportStatus(id);
     return preparedResult(id, session.storage_slug, payload);
   } catch (error) {
-    await cleanupStagedObjects(id, session.storage_slug);
+    await cleanupStagedObjects(id, session.storage_slug).catch(() => undefined);
     await markImportFailed(id, error);
     throw error;
   }

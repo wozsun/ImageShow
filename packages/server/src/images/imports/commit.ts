@@ -11,7 +11,7 @@ import {
   type EntityCacheKind,
 } from "../../vocab/vocab-cache.ts";
 import { linkThumbnailKey, storageObjectKey, thumbnailObjectKey } from "../../storage/image-paths.ts";
-import { withStorageMutationLock } from "../../storage/maintenance-lock.ts";
+import { withStorageLocationReadLock } from "../../storage/maintenance-lock.ts";
 import { copyObject, exists, removeObject } from "../../storage/storage.ts";
 import {
   invalidateImageCaches,
@@ -328,6 +328,90 @@ async function commitProxySession(
   }
 }
 
+async function commitImportSessionWhileLocationStable(
+  id: string,
+  metadata: ImportMetadata
+) {
+  let session = (await pool.query(
+      `SELECT mode, status, storage_slug, final_object_key, prepared_payload, image_time
+         FROM import_session
+        WHERE id=$1`,
+      [id]
+  )).rows[0] as CommitImportSessionRecord | undefined;
+  if (!session) throw new ApiError(404, "not_found", "导入任务不存在");
+  if (session.status === "finalized") {
+    const image = (await pool.query(
+      `SELECT ${committedImageColumns} FROM metadata WHERE id=$1`,
+      [id]
+    )).rows[0] as CommittedImageRecord | undefined;
+    if (!image) return { status: "duplicate" as const };
+    await finishImport(image, session.prepared_payload as PreparedPayload);
+    return { status: "imported" as const, item: await importCommitImage(image) };
+  }
+  if (!["ready", "committing"].includes(session.status)) {
+    throw new ApiError(409, "invalid_import_state", "图片尚未准备完成");
+  }
+
+  return withImportLease(id, async () => {
+    if (session?.status === "ready") {
+      const payload = { ...session.prepared_payload, ...metadata } as PreparedPayload;
+      const metadataPayload: MetadataPayload = {
+        ...metadata,
+        image_time: new Date(session.image_time).toISOString()
+      };
+      const classification = resolveClassification(metadata, {
+        device: payload.detected_device,
+        brightness: payload.detected_brightness
+      });
+      const finalKey = session.mode === "proxy"
+        ? linkThumbnailKey(
+            classification.device,
+            classification.brightness,
+            metadata.theme,
+            id
+          )
+        : storageObjectKey(
+            classification.device,
+            classification.brightness,
+            metadata.theme,
+            id,
+            payload.ext
+          );
+      const claimed = await pool.query(
+        `UPDATE import_session
+         SET status='committing', metadata_payload=$2::jsonb, prepared_payload=$3::jsonb,
+             final_object_key=$4, updated_at=now()
+         WHERE id=$1 AND status='ready'
+         RETURNING mode, status, storage_slug, final_object_key, prepared_payload, image_time`,
+        [
+          id,
+          JSON.stringify(metadataPayload),
+          JSON.stringify(payload),
+          finalKey
+        ]
+      );
+      if (!claimed.rowCount) {
+        throw new ApiError(
+          409,
+          "import_already_finalizing",
+          "Import is already being committed"
+        );
+      }
+      session = claimed.rows[0] as CommitImportSessionRecord;
+      await notifyImportStatus(id);
+    }
+
+    if (!session) throw new ApiError(404, "not_found", "导入任务不存在");
+    const currentSession = session;
+    const payload = currentSession.prepared_payload as PreparedPayload;
+    const result = await (currentSession.mode === "proxy"
+      ? commitProxySession(id, currentSession, payload)
+      : commitStoredImageSession(id, currentSession, payload));
+    await notifyImportStatus(id);
+    return result;
+  });
+}
+
 async function commitImportSessionWithinLimit(id: string, metadata: ImportMetadata) {
   const lockClient = await pool.connect();
   const lockKey = importCommitLockKey(id);
@@ -341,84 +425,9 @@ async function commitImportSessionWithinLimit(id: string, metadata: ImportMetada
   }
 
   try {
-    let session = (await pool.query(
-      `SELECT mode, status, storage_slug, final_object_key, prepared_payload, image_time
-         FROM import_session
-        WHERE id=$1`,
-      [id]
-    )).rows[0] as CommitImportSessionRecord | undefined;
-    if (!session) throw new ApiError(404, "not_found", "导入任务不存在");
-    if (session.status === "finalized") {
-      const image = (await pool.query(
-        `SELECT ${committedImageColumns} FROM metadata WHERE id=$1`,
-        [id]
-      )).rows[0] as CommittedImageRecord | undefined;
-      if (!image) return { status: "duplicate" as const };
-      await finishImport(image, session.prepared_payload as PreparedPayload);
-      return { status: "imported" as const, item: await importCommitImage(image) };
-    }
-    if (!["ready", "committing"].includes(session.status)) {
-      throw new ApiError(409, "invalid_import_state", "图片尚未准备完成");
-    }
-
-    return await withImportLease(id, async () => {
-      if (session?.status === "ready") {
-        const payload = { ...session.prepared_payload, ...metadata } as PreparedPayload;
-        const metadataPayload: MetadataPayload = {
-          ...metadata,
-          image_time: new Date(session.image_time).toISOString()
-        };
-        const classification = resolveClassification(metadata, {
-          device: payload.detected_device,
-          brightness: payload.detected_brightness
-        });
-        const finalKey = session.mode === "proxy"
-          ? linkThumbnailKey(
-              classification.device,
-              classification.brightness,
-              metadata.theme,
-              id
-            )
-          : storageObjectKey(
-              classification.device,
-              classification.brightness,
-              metadata.theme,
-              id,
-              payload.ext
-            );
-        const claimed = await pool.query(
-          `UPDATE import_session
-           SET status='committing', metadata_payload=$2::jsonb, prepared_payload=$3::jsonb,
-               final_object_key=$4, updated_at=now()
-           WHERE id=$1 AND status='ready'
-           RETURNING mode, status, storage_slug, final_object_key, prepared_payload, image_time`,
-          [
-            id,
-            JSON.stringify(metadataPayload),
-            JSON.stringify(payload),
-            finalKey
-          ]
-        );
-        if (!claimed.rowCount) {
-          throw new ApiError(
-            409,
-            "import_already_finalizing",
-            "Import is already being committed"
-          );
-        }
-        session = claimed.rows[0] as CommitImportSessionRecord;
-        await notifyImportStatus(id);
-      }
-
-      if (!session) throw new ApiError(404, "not_found", "导入任务不存在");
-      const currentSession = session;
-      const payload = currentSession.prepared_payload as PreparedPayload;
-      const result = await withStorageMutationLock(() => currentSession.mode === "proxy"
-        ? commitProxySession(id, currentSession, payload)
-        : commitStoredImageSession(id, currentSession, payload));
-      await notifyImportStatus(id);
-      return result;
-    });
+    return await withStorageLocationReadLock(() =>
+      commitImportSessionWhileLocationStable(id, metadata)
+    );
   } finally {
     await lockClient.query(
       "SELECT pg_advisory_unlock(hashtext($1))",

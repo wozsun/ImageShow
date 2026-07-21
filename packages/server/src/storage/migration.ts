@@ -1,18 +1,18 @@
 import { pool } from "../core/db.ts";
-import { errorMessage } from "../core/api-error.ts";
+import { ApiError, errorMessage } from "../core/api-error.ts";
 import { enqueue } from "../jobs/repository.ts";
-import { createThumbnail } from "../images/processing.ts";
+import { createThumbnail, md5Buffer } from "../images/processing.ts";
 import { thumbnailObjectKey, thumbnailRef } from "./image-paths.ts";
-import { assertStorageWritable, getStorageBackend } from "./backend-registry.ts";
 import {
-  contentType,
-  readStorageBufferWithConfig,
-  removeObject,
-  storageExistsWithConfig,
-  writeStorageBufferWithConfig
-} from "./storage.ts";
+  assertStorageWritable,
+  getStorageBackend,
+  resolveStorageAccessForConfig
+} from "./backend-registry.ts";
+import { contentType, removeObject } from "./storage.ts";
 import { withImageStorageMutationLock } from "./maintenance-lock.ts";
 import type { StoragePrefix } from "./object-keys.ts";
+import { ensureVerifiedObjectAtDestination } from "./object-transfer.ts";
+import { shareStorageNamespace } from "./storage-namespace.ts";
 
 export type MigrateRecord = {
   id: string;
@@ -24,6 +24,7 @@ export type MigrateRecord = {
   device: string;
   brightness: string;
   theme: string;
+  md5: string;
 };
 
 type MigrateResult = "migrated" | "unchanged" | "missing";
@@ -38,7 +39,8 @@ const migrateColumns = [
   "is_link",
   "device",
   "brightness",
-  "theme"
+  "theme",
+  "md5"
 ].join(", ");
 
 async function enqueueObjectCleanup(
@@ -93,51 +95,84 @@ async function migrateImageStorageUnlocked(
 
   const source = await getStorageBackend(current.storage_slug);
   const destination = await assertStorageWritable(target);
+  const sourceAccess = resolveStorageAccessForConfig(source);
+  const destinationAccess = resolveStorageAccessForConfig(destination);
+  const sharedNamespace = shareStorageNamespace(source, destination);
   const created: CreatedObject[] = [];
   const sourceObjects: CreatedObject[] = [];
+
+  const materialize = async (
+    prefix: StoragePrefix,
+    key: string,
+    body: Buffer,
+    objectContentType: string,
+    sourceObjectExists = true
+  ) => {
+    const result = await ensureVerifiedObjectAtDestination({
+      source: sourceAccess,
+      target: destinationAccess,
+      prefix,
+      key,
+      body,
+      contentType: objectContentType,
+      sourceObjectExists
+    });
+    if (result.created) created.push({ prefix, key, backend: target });
+  };
 
   try {
     if (current.is_link) {
       const thumb = thumbnailRef(current);
-      if (!(await storageExistsWithConfig(source, thumb.prefix, thumb.key))) return "missing";
-      if (!(await storageExistsWithConfig(destination, thumb.prefix, thumb.key))) {
-        await writeStorageBufferWithConfig(
-          destination,
-          thumb.prefix,
-          thumb.key,
-          await readStorageBufferWithConfig(source, thumb.prefix, thumb.key),
-          "image/webp"
-        );
-        created.push({ prefix: thumb.prefix, key: thumb.key, backend: target });
+      if (!(await sourceAccess.driver.exists(thumb.prefix, thumb.key))) return "missing";
+      await materialize(
+        thumb.prefix,
+        thumb.key,
+        await sourceAccess.driver.readBuffer(thumb.prefix, thumb.key),
+        "image/webp"
+      );
+      if (!sharedNamespace) {
+        sourceObjects.push({
+          prefix: thumb.prefix,
+          key: thumb.key,
+          backend: current.storage_slug
+        });
       }
-      sourceObjects.push({ prefix: thumb.prefix, key: thumb.key, backend: current.storage_slug });
     } else {
-      if (!(await storageExistsWithConfig(source, "media", current.object_key))) return "missing";
-      if (!(await storageExistsWithConfig(destination, "media", current.object_key))) {
-        await writeStorageBufferWithConfig(
-          destination,
-          "media",
-          current.object_key,
-          await readStorageBufferWithConfig(source, "media", current.object_key),
-          contentType(current.ext)
+      if (!(await sourceAccess.driver.exists("media", current.object_key))) return "missing";
+      const image = await sourceAccess.driver.readBuffer("media", current.object_key);
+      if (current.md5 && md5Buffer(image) !== current.md5) {
+        throw new ApiError(
+          502,
+          "storage_source_integrity_failed",
+          "源存储对象与数据库记录的 MD5 不一致",
+          { image_id: current.id, object_key: current.object_key }
         );
-        created.push({ prefix: "media", key: current.object_key, backend: target });
       }
+      await materialize(
+        "media",
+        current.object_key,
+        image,
+        contentType(current.ext)
+      );
 
       const thumbKey = thumbnailObjectKey(current.object_key);
-      if (!(await storageExistsWithConfig(destination, "thumbs", thumbKey))) {
-        const thumb = await storageExistsWithConfig(source, "thumbs", thumbKey)
-          ? await readStorageBufferWithConfig(source, "thumbs", thumbKey)
-          : await createThumbnail(
-              await readStorageBufferWithConfig(source, "media", current.object_key)
-            );
-        await writeStorageBufferWithConfig(destination, "thumbs", thumbKey, thumb, "image/webp");
-        created.push({ prefix: "thumbs", key: thumbKey, backend: target });
-      }
-      sourceObjects.push(
-        { prefix: "media", key: current.object_key, backend: current.storage_slug },
-        { prefix: "thumbs", key: thumbKey, backend: current.storage_slug }
+      const sourceThumbExists = await sourceAccess.driver.exists("thumbs", thumbKey);
+      const thumb = sourceThumbExists
+        ? await sourceAccess.driver.readBuffer("thumbs", thumbKey)
+        : await createThumbnail(image);
+      await materialize(
+        "thumbs",
+        thumbKey,
+        thumb,
+        "image/webp",
+        sourceThumbExists
       );
+      if (!sharedNamespace) {
+        sourceObjects.push(
+          { prefix: "media", key: current.object_key, backend: current.storage_slug },
+          { prefix: "thumbs", key: thumbKey, backend: current.storage_slug }
+        );
+      }
     }
 
     // The switch is conditional on the exact location that was copied. A
@@ -160,7 +195,9 @@ async function migrateImageStorageUnlocked(
 
   // Source deletion happens only after the database points at a complete
   // destination copy. Failure leaves a harmless duplicate and a retryable job.
-  await removeSourceObjects(current.id, sourceObjects);
+  if (!sharedNamespace) {
+    await removeSourceObjects(current.id, sourceObjects);
+  }
   return "migrated";
 }
 

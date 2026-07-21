@@ -6,6 +6,7 @@ import { mapWithWorkerPool } from "../../core/concurrency.ts";
 import { ApiError } from "../../core/api-error.ts";
 import { privateNoStoreCacheControl } from "../../core/http.ts";
 import { assertStorageUploadable, getDefaultStorageSlug } from "../../storage/backend-registry.ts";
+import { withStorageLocationReadLock } from "../../storage/maintenance-lock.ts";
 import { contentType, readStorageBuffer } from "../../storage/storage.ts";
 import { createImageId, ImageTimeError, parseImageTime } from "../image-time.ts";
 import { importSessionResponse, type ImportSessionRecord } from "../presenter.ts";
@@ -58,7 +59,7 @@ function defaultMetadata(input: ImportCreateInput, imageTime: string): MetadataP
   };
 }
 
-export async function createImportSession(input: ImportCreateInput) {
+async function createImportSessionUnderLocationLock(input: ImportCreateInput) {
   const storageSlug = input.storage_slug ?? await getDefaultStorageSlug();
   await assertStorageUploadable(storageSlug);
 
@@ -143,6 +144,10 @@ export async function createImportSession(input: ImportCreateInput) {
     throw new ApiError(409, "import_cancelled", "导入已取消");
   }
   return importSessionResponse(result);
+}
+
+export function createImportSession(input: ImportCreateInput) {
+  return withStorageLocationReadLock(() => createImportSessionUnderLocationLock(input));
 }
 
 export async function createImportSessions(
@@ -232,12 +237,13 @@ export async function previewImportSession(id: string, variant: "thumb" | "full"
   });
 }
 
-export async function cancelImportSession(id: string) {
+async function cancelImportSessionUnderLocationLock(id: string) {
   await markImportCancelled(id);
   emitCancelledImportStatus(id);
   const activePromise = abortActiveImport(id);
   const session = (await pool.query(
-    `DELETE FROM import_session
+    `UPDATE import_session
+     SET status='cancelled', expires_at=now(), updated_at=now()
      WHERE id=$1 AND status IN ('created','receiving','preparing','ready','failed','cancelled')
      RETURNING storage_slug, prepared_payload`,
     [id]
@@ -254,8 +260,25 @@ export async function cancelImportSession(id: string) {
   }
 
   await activePromise?.catch(() => undefined);
-  await Promise.all([
-    cleanupStagedObjects(id, session.storage_slug),
-    removeRawImport(id)
-  ]);
+  try {
+    await Promise.all([
+      cleanupStagedObjects(id, session.storage_slug),
+      removeRawImport(id)
+    ]);
+  } catch (error) {
+    throw new ApiError(
+      502,
+      "import_cleanup_failed",
+      "导入已取消，但暂存文件清理失败；后台任务将继续重试",
+      { cause: error instanceof Error ? error.message : String(error) }
+    );
+  }
+  await pool.query(
+    "DELETE FROM import_session WHERE id=$1 AND status='cancelled'",
+    [id]
+  );
+}
+
+export function cancelImportSession(id: string) {
+  return withStorageLocationReadLock(() => cancelImportSessionUnderLocationLock(id));
 }

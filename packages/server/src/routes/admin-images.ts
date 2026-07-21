@@ -25,6 +25,7 @@ import { getOverviewStats } from "../images/read-models/overview.ts";
 import { serveAdminObject, serveAdminOriginalLink, serveAdminThumb } from "../images/serving.ts";
 import { deleteImage, migrateImagesStorage } from "../images/service.ts";
 import { batchRestoreImages, purgeDeletedImage, purgeDeletedImages, restoreDeletedImage } from "../images/trash.ts";
+import { scheduleTrashPurge } from "../jobs/repository.ts";
 
 export function registerAdminImageRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/overview`, async (c) => c.json(ok(await getOverviewStats())));
@@ -88,7 +89,12 @@ export function registerAdminImageRoutes(app: Hono) {
 
   app.post(`${adminApiBasePath}/images/empty-trash`, async (c) => {
     const result = await purgeDeletedImages();
-    return c.json(ok({ deleted: result.deleted, failed: result.failed }));
+    if (result.remaining) await scheduleTrashPurge();
+    return c.json(ok({
+      deleted: result.deleted,
+      failed: result.failed,
+      remaining: result.remaining
+    }));
   });
 
   app.post(`${adminApiBasePath}/images/:id/purge`, async (c) => {

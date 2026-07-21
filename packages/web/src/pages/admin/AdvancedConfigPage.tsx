@@ -11,6 +11,7 @@ import { ConfigPackageImportDialog } from "./advanced-config/ConfigPackageImport
 import { RuntimeConfigEditor } from "./advanced-config/RuntimeConfigEditor.js";
 import { invalidateRuntimeData } from "../../lib/api/query-invalidation.js";
 import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
+import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.js";
 
 const maxPackageBytes = 1024 * 1024;
 const packageFileReadOverheadBytes = 64 * 1024;
@@ -118,31 +119,37 @@ export function AdvancedConfigPage() {
 
   return (
     <section className="workspace advanced-config-page">
-      <header className="workspace-head">
-        <div>
-          <h1>高级配置</h1>
-          <p className="muted">编辑当前实例完整配置，或通过版本化配置包迁移可移植设置。</p>
-        </div>
-        <div className="advanced-config-head-actions">
-          <input
-            ref={fileInputRef}
-            className="advanced-config-file-input"
-            type="file"
-            accept=".json"
-            onChange={(event) => void selectPackage(event.target.files?.[0])}
-          />
-          <AsyncActionButton
-            type="button"
-            status={previewPackageStatus.status}
-            presentation={previewPackagePresentation}
-            disabled={Boolean(busy) || previewPackageStatus.pending}
-            onClick={() => fileInputRef.current?.click()}
-          />
-          <button className="button" type="button" disabled={Boolean(busy)} onClick={() => setExportConfirmation(true)}>
-            <Icon name="download-cloud-2-line" />导出配置包
-          </button>
-        </div>
-      </header>
+      <WorkspaceHeader
+        title="高级配置"
+        description="编辑当前实例完整配置，或通过版本化配置包迁移可移植设置。"
+        actionsClassName="advanced-config-head-actions"
+        actions={
+          <>
+            <input
+              ref={fileInputRef}
+              className="advanced-config-file-input"
+              type="file"
+              accept=".json"
+              onChange={(event) => void selectPackage(event.target.files?.[0])}
+            />
+            <AsyncActionButton
+              type="button"
+              status={previewPackageStatus.status}
+              presentation={previewPackagePresentation}
+              disabled={Boolean(busy) || previewPackageStatus.pending}
+              onClick={() => fileInputRef.current?.click()}
+            />
+            <button
+              className="button"
+              type="button"
+              disabled={Boolean(busy)}
+              onClick={() => setExportConfirmation(true)}
+            >
+              <Icon name="download-cloud-2-line" />导出配置包
+            </button>
+          </>
+        }
+      />
 
       <RuntimeConfigEditor reloadToken={runtimeConfigReloadToken} />
 

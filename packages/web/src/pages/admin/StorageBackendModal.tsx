@@ -6,7 +6,10 @@ import { useAnimatedClose } from "../../hooks/useAnimatedClose.js";
 import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
 import { storageBackendDisplay, storageTypeLabel } from "../../lib/ui/select-options.js";
 import type { S3Settings, StorageBackendAdmin, StorageType, WebdavSettings } from "../../lib/types.js";
-import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
+import {
+  useAsyncActionStatus,
+  type AsyncActionStatus
+} from "../../hooks/useAsyncActionStatus.js";
 
 const emptyS3: S3Settings = {
   endpoint: "", region: "auto", bucket: "", access_key_id: "",
@@ -39,9 +42,11 @@ const setDefaultPresentation = {
 
 type StorageSaveOperation = "create" | "save";
 
-export function StorageBackendModal({ target, busy, onClose, onSave, onSetDefault, onTest }: {
+export function StorageBackendModal({ target, busy, defaultStatus, defaultActionPending, onClose, onSave, onSetDefault, onTest }: {
   target: StorageBackendAdmin | "new";
   busy: string;
+  defaultStatus: AsyncActionStatus;
+  defaultActionPending: boolean;
   onClose: () => void;
   onSave: (slug: string, payload: Record<string, unknown>, isCreate: boolean) => Promise<boolean>;
   onSetDefault: (slug: string) => Promise<boolean>;
@@ -51,20 +56,20 @@ export function StorageBackendModal({ target, busy, onClose, onSave, onSetDefaul
   const backend = creating ? null : target;
   const isLocal = backend?.type === "local";
   const locationLocked = Boolean(
-    backend?.image_count || backend?.active_import_count
+    backend?.image_count || backend?.import_session_count
   );
   const locationUsage = backend
     ? [
         backend.image_count ? `${backend.image_count} 张图片` : "",
-        backend.active_import_count
-          ? `${backend.active_import_count} 个活动导入任务`
+        backend.import_session_count
+          ? `${backend.import_session_count} 个未清理导入会话`
           : ""
       ].filter(Boolean).join("和")
     : "";
   const locationUnlockGuidance = backend
     ? [
         backend.image_count ? "通过图片存储迁移搬空后端" : "",
-        backend.active_import_count ? "完成或取消活动导入任务" : ""
+        backend.import_session_count ? "等待导入会话完成清理" : ""
       ].filter(Boolean).join("，并")
     : "";
   const [slug, setSlug] = useState(backend?.slug ?? "");
@@ -86,21 +91,18 @@ export function StorageBackendModal({ target, busy, onClose, onSave, onSetDefaul
   const exit = useAnimatedClose(onClose);
   const bodyRef = useRef<HTMLDivElement | null>(null);
 
-  const [isDefaultNow, setIsDefaultNow] = useState(backend?.is_default ?? false);
-
   const [createdSlug, setCreatedSlug] = useState<string | null>(null);
   const [saveOperation, setSaveOperation] = useState<StorageSaveOperation>(
     creating ? "create" : "save"
   );
   const connectionTest = useAsyncActionStatus();
   const saveStatus = useAsyncActionStatus();
-  const defaultStatus = useAsyncActionStatus();
 
   const isCreateForm = creating && createdSlug === null;
   const formBusy = Boolean(busy)
     || connectionTest.pending
     || saveStatus.pending
-    || defaultStatus.pending;
+    || defaultActionPending;
   const savePresentation = {
     idle: {
       icon: "save-3-line",
@@ -139,9 +141,14 @@ export function StorageBackendModal({ target, busy, onClose, onSave, onSetDefaul
     await connectionTest.run(() => onTest(testBody()));
   };
   const setAsDefault = async () => {
-    const ok = await defaultStatus.run(() => onSetDefault(backend!.slug));
-    if (ok) setIsDefaultNow(true);
+    await onSetDefault(backend!.slug);
   };
+  const currentDefaultPresentation = {
+    ...setDefaultPresentation,
+    idle: backend?.is_default
+      ? { icon: "star-fill" as const, label: "默认" }
+      : setDefaultPresentation.idle
+  } as const;
 
   return (
     <div
@@ -204,7 +211,7 @@ export function StorageBackendModal({ target, busy, onClose, onSave, onSetDefaul
             <>
               {locationLocked && (
                 <p className="notice-line" role="note">
-                  此后端仍被 {locationUsage} 引用。Endpoint / Region / Bucket /
+                  此后端仍被 {locationUsage}引用。Endpoint / Bucket /
                   Base URL / 根目录等物理位置字段已锁定；请先{locationUnlockGuidance}。
                   凭据及访问参数仍可轮换，保存前服务端会验证读写能力。
                 </p>
@@ -229,9 +236,9 @@ export function StorageBackendModal({ target, busy, onClose, onSave, onSetDefaul
             {!creating && backend!.enabled && (
               <AsyncActionButton
                 type="button"
-                status={defaultStatus.status}
-                presentation={setDefaultPresentation}
-                disabled={formBusy || isDefaultNow}
+                status={defaultStatus}
+                presentation={currentDefaultPresentation}
+                disabled={formBusy || backend!.is_default}
                 onClick={() => void setAsDefault()}
               />
             )}
@@ -256,14 +263,16 @@ function S3Fields({ value, onChange, configured, locationLocked }: { value: S3Se
   const patch = (next: Partial<S3Settings>) => onChange({ ...value, ...next });
   return (
     <>
-      <p className="hint">Secret Key 保存后只显示“已配置”；上传统一经服务器转发到 S3（不使用浏览器直传），无需为存储桶配置 CORS。</p>
       <label>
         Endpoint
         <input value={value.endpoint} onChange={(event) => patch({ endpoint: event.target.value })} placeholder="（https://）s3.example.com" disabled={locationLocked} />
       </label>
       <label>
         Region
-        <input value={value.region} onChange={(event) => patch({ region: event.target.value })} disabled={locationLocked} />
+        <input
+          value={value.region}
+          onChange={(event) => patch({ region: event.target.value })}
+        />
       </label>
       <label>
         Bucket

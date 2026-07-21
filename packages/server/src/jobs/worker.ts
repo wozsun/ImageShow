@@ -10,6 +10,7 @@ import {
   markBackgroundJobFailed,
   markBackgroundJobIgnored,
   markBackgroundJobSucceeded,
+  rescheduleBackgroundJob,
   recoverStaleBackgroundJobs,
   scheduleImportCleanup
 } from "./repository.ts";
@@ -59,6 +60,8 @@ async function runBackgroundJobType(type: string, lanes: number): Promise<QueueS
         const outcome = await handleBackgroundJob(job);
         if (outcome.status === "ignored") {
           await markBackgroundJobIgnored(job.id, outcome.reason);
+        } else if (outcome.status === "reschedule") {
+          await rescheduleBackgroundJob(job.id, outcome.delayMs, outcome.result);
         } else {
           await markBackgroundJobSucceeded(job.id, outcome.result);
         }

@@ -155,7 +155,7 @@ export function useImageAdminOperations({
           status: result.ignored ? "error" : "success"
         };
       } else if (confirmAction.kind === "empty-trash") {
-        const result = await api<{ deleted: number; failed: number }>(
+        const result = await api<{ deleted: number; failed: number; remaining: number }>(
           `${adminApiBasePath}/images/empty-trash`,
           { method: "POST" }
         );
@@ -170,7 +170,7 @@ export function useImageAdminOperations({
         resultFeedback = {
           text: `已永久删除 ${result.deleted} 张${
             result.failed ? `，${result.failed} 张失败` : ""
-          }`,
+          }${result.remaining ? `，剩余 ${result.remaining} 张由后台继续处理` : ""}`,
           status: result.failed ? "error" : "success"
         };
       } else {

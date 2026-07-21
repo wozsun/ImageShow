@@ -20,7 +20,10 @@ import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.js";
 import { StorageBackendModal } from "./StorageBackendModal.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
 import { invalidateStorageData } from "../../lib/api/query-invalidation.js";
-import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
+import {
+  useAsyncActionStatus,
+  type AsyncActionStatus
+} from "../../hooks/useAsyncActionStatus.js";
 import { queryKeys } from "../../lib/api/query-keys.js";
 
 // 存储管理：命名存储后端的注册表 CRUD（卡片列表 + 拖动排序），新建/编辑走 StorageBackendModal。
@@ -34,6 +37,9 @@ function StorageBackendsManager() {
   const [busy, setBusy] = useState("");
   const [feedback, setFeedback] = useState<ActionFeedbackState | null>(null);
   const feedbackTarget = useActionFeedbackTarget("storage-settings");
+  const defaultAction = useAsyncActionStatus();
+  const defaultActionRunning = useRef(false);
+  const [defaultActionSlug, setDefaultActionSlug] = useState("");
   const [editing, setEditing] = useState<StorageBackendAdmin | "new" | null>(null);
   const backends = query.data?.backends ?? [];
   const defaultBackend = backends.find((backend) => backend.is_default);
@@ -120,11 +126,18 @@ function StorageBackendsManager() {
     }
   };
 
-  const setDefault = (slug: string) => {
-    return runStorageAction(
-      `default:${slug}`,
-      () => api(`${adminApiBasePath}/storage/backends/${slug}/default`, { method: "POST" })
-    );
+  const setDefault = async (slug: string) => {
+    if (defaultActionRunning.current || busy) return false;
+    defaultActionRunning.current = true;
+    setDefaultActionSlug(slug);
+    try {
+      return await defaultAction.run(() => runStorageAction(
+        `default:${slug}`,
+        () => api(`${adminApiBasePath}/storage/backends/${slug}/default`, { method: "POST" })
+      ));
+    } finally {
+      defaultActionRunning.current = false;
+    }
   };
 
   const deleteBackend = async (slug: string) => {
@@ -140,6 +153,11 @@ function StorageBackendsManager() {
 
   const openEditor = (target: StorageBackendAdmin | "new") => setEditing(target);
   const closeEditor = () => setEditing(null);
+  const editingTarget = editing === "new"
+    ? editing
+    : editing
+      ? backends.find((backend) => backend.slug === editing.slug) ?? editing
+      : null;
 
   return (
     <section className="workspace">
@@ -159,6 +177,10 @@ function StorageBackendsManager() {
             backend={backend}
             hasNonLocalBackend={hasNonLocalBackend}
             busy={busy}
+            defaultStatus={defaultActionSlug === backend.slug
+              ? defaultAction.status
+              : "idle"}
+            defaultActionPending={defaultAction.pending}
             onEdit={() => openEditor(backend)}
             onSetDefault={() => setDefault(backend.slug)}
             onToggleEnabled={() => runStorageAction(
@@ -178,11 +200,16 @@ function StorageBackendsManager() {
           <Icon name="add-line" /><span>新增存储后端</span>
         </button>
       </div>
-      {editing && (
+      {editingTarget && (
         <StorageBackendModal
-          key={editing === "new" ? "new" : editing.slug}
-          target={editing}
+          key={editingTarget === "new" ? "new" : editingTarget.slug}
+          target={editingTarget}
           busy={busy}
+          defaultStatus={editingTarget !== "new"
+            && defaultActionSlug === editingTarget.slug
+            ? defaultAction.status
+            : "idle"}
+          defaultActionPending={defaultAction.pending}
           onClose={closeEditor}
           onTest={testConfig}
           onSetDefault={setDefault}
@@ -205,10 +232,12 @@ function StorageBackendsManager() {
   );
 }
 
-function BackendCard({ backend, hasNonLocalBackend, busy, onEdit, onSetDefault, onDelete, onToggleEnabled, onDragStart, onDragEnter, onDragEnd }: {
+function BackendCard({ backend, hasNonLocalBackend, busy, defaultStatus, defaultActionPending, onEdit, onSetDefault, onDelete, onToggleEnabled, onDragStart, onDragEnter, onDragEnd }: {
   backend: StorageBackendAdmin;
   hasNonLocalBackend: boolean;
   busy: string;
+  defaultStatus: AsyncActionStatus;
+  defaultActionPending: boolean;
   onEdit: () => void;
   onSetDefault: () => Promise<boolean>;
   onDelete: () => void;
@@ -221,11 +250,10 @@ function BackendCard({ backend, hasNonLocalBackend, busy, onEdit, onSetDefault, 
   const showEnabledToggle = !isLocal || hasNonLocalBackend;
 
   const [armed, setArmed] = useState(false);
-  const defaultStatus = useAsyncActionStatus();
-  const enabledStatus = useAsyncActionStatus();
+  const enabledStatus = useAsyncActionStatus({ successDurationMs: null });
   const title = backend.display_name || storageBackendLabel(backend.slug);
   const cardBusy = Boolean(busy)
-    || defaultStatus.pending
+    || defaultActionPending
     || enabledStatus.pending;
   const defaultPresentation = {
     idle: {
@@ -272,17 +300,17 @@ function BackendCard({ backend, hasNonLocalBackend, busy, onEdit, onSetDefault, 
           <AsyncActionButton
             type="button"
             className={`storage-default-toggle${backend.is_default ? " is-default" : ""}`}
-            status={defaultStatus.status}
+            status={defaultStatus}
             presentation={defaultPresentation}
             disabled={cardBusy || backend.is_default || !backend.enabled}
             title={backend.is_default ? "当前默认上传后端" : backend.enabled ? "设为默认上传后端" : "启用后才能设为默认"}
-            onClick={() => void defaultStatus.run(onSetDefault)}
+            onClick={() => void onSetDefault()}
           />
         </div>
         <div className="storage-card-meta">
           {backend.slug} · {storageTypeLabel(backend.type)} · {backend.image_count} 张图片
-          {backend.active_import_count > 0
-            ? ` · ${backend.active_import_count} 个活动导入`
+          {backend.import_session_count > 0
+            ? ` · ${backend.import_session_count} 个未清理导入会话`
             : ""}
         </div>
       </div>

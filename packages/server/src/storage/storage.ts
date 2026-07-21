@@ -26,16 +26,6 @@ export async function ensureRuntimeDirectories() {
   }
 }
 
-export function storageExistsWithConfig(config: StorageConfig, prefix: StoragePrefix, key: string) {
-  return resolveStorageAccessForConfig(config).driver.exists(prefix, key);
-}
-export function readStorageBufferWithConfig(config: StorageConfig, prefix: StoragePrefix, key: string) {
-  return resolveStorageAccessForConfig(config).driver.readBuffer(prefix, key);
-}
-export function writeStorageBufferWithConfig(config: StorageConfig, prefix: StoragePrefix, key: string, body: Buffer, type: string) {
-  return resolveStorageAccessForConfig(config).driver.writeBuffer(prefix, key, body, type);
-}
-
 export async function exists(prefix: StoragePrefix, key: string, slug?: string) {
   return (await resolveStorageAccess(slug)).driver.exists(prefix, key);
 }

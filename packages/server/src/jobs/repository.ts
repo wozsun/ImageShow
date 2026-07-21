@@ -8,6 +8,7 @@ export type BackgroundJobType =
   | "thumb.generate"
   | "move.cleanup"
   | "import.cleanup"
+  | "trash.purge"
   | "cache.rebuild";
 
 export type BackgroundJob = {
@@ -29,7 +30,22 @@ export async function enqueue(
   await pool.query(
     `INSERT INTO background_job(id, type, target_id, payload, idempotency_key)
      VALUES($1, $2, $3, $4::jsonb, $5)
-     ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING`,
+     ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO UPDATE
+     SET type=EXCLUDED.type,
+         target_id=EXCLUDED.target_id,
+         payload=EXCLUDED.payload,
+         status='pending',
+         result='{}'::jsonb,
+         error='',
+         retry_count=0,
+         next_retry_at=NULL,
+         created_at=now(),
+         updated_at=now()
+     WHERE background_job.status IN ('succeeded','ignored')
+        OR (
+          background_job.status='failed'
+          AND background_job.next_retry_at IS NULL
+        )`,
     [id, type, targetId, JSON.stringify(payload), idempotencyKey ?? null]
   );
 }
@@ -40,7 +56,10 @@ export async function claimBackgroundJob(type: string) {
      SET status = 'running', updated_at = now()
      WHERE id = (
        SELECT id FROM background_job
-       WHERE (status = 'pending' OR (status = 'failed' AND next_retry_at <= now()))
+       WHERE (
+         (status = 'pending' AND (next_retry_at IS NULL OR next_retry_at <= now()))
+         OR (status = 'failed' AND next_retry_at <= now())
+       )
          AND type = $1
        ORDER BY created_at
        FOR UPDATE SKIP LOCKED
@@ -63,6 +82,23 @@ export async function markBackgroundJobIgnored(id: string, reason: string) {
   await pool.query(
     "UPDATE background_job SET status='ignored', error=$2, updated_at=now() WHERE id=$1",
     [id, reason]
+  );
+}
+
+export async function rescheduleBackgroundJob(
+  id: string,
+  delayMs: number,
+  result: unknown = {}
+) {
+  await pool.query(
+    `UPDATE background_job
+     SET status='pending',
+         result=$2::jsonb,
+         error='',
+         next_retry_at=$3,
+         updated_at=now()
+     WHERE id=$1`,
+    [id, JSON.stringify(result), new Date(Date.now() + Math.max(0, delayMs))]
   );
 }
 
@@ -93,7 +129,9 @@ export async function listRunnableBackgroundJobCounts() {
             count(*)::int AS n,
             floor(extract(epoch FROM (now() - min(created_at))) * 1000)::bigint AS oldest_wait_ms
        FROM background_job
-     WHERE status='pending' OR (status='failed' AND next_retry_at <= now())
+     WHERE (
+       status='pending' AND (next_retry_at IS NULL OR next_retry_at <= now())
+     ) OR (status='failed' AND next_retry_at <= now())
      GROUP BY type`
   )).rows.map((row) => ({
     type: String(row.type),
@@ -127,6 +165,14 @@ export async function scheduleImportCleanup() {
        )`,
     [randomUuidV7()]
   ).catch(() => undefined);
+}
+
+export function scheduleTrashPurge() {
+  // Do not reuse the running purge row here. A concurrent empty-trash request
+  // can discover more work after that row has already counted zero remaining;
+  // an independent pending row preserves the wake-up instead of losing it to
+  // the idempotency conflict while the older handler is still finishing.
+  return enqueue("trash.purge");
 }
 
 export async function cleanupBackgroundJobHistory() {

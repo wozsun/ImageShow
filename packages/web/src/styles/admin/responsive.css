@@ -367,7 +367,7 @@
   .advanced-config-ready { justify-self: start; }
   .advanced-config-head-actions { display: grid; grid-template-columns: 1fr 1fr; margin-left: 0; }
   .advanced-config-head-actions button { min-width: 0; }
-  .advanced-config-page > .workspace-head > div:first-child > p { display: none; }
+  .advanced-config-page > .workspace-grid-head > p { display: none; }
   .advanced-config-editor-head {
     grid-template-columns: max-content minmax(0, 1fr);
   }

@@ -1,3 +1,4 @@
+import { appConfig } from "@imageshow/shared";
 import { pool } from "../core/db.ts";
 import { ApiError, errorMessage } from "../core/api-error.ts";
 import { removeObject } from "../storage/storage.ts";
@@ -80,8 +81,14 @@ export async function batchRestoreImages(ids: string[]) {
 }
 
 async function claimPurgeRows(ids?: string[]) {
-  const idPredicate = ids?.length ? "AND id = ANY($1::uuid[])" : "";
-  const params = ids?.length ? [ids] : [];
+  if (ids && !ids.length) return [];
+  const params: unknown[] = [];
+  const idPredicate = ids
+    ? `AND id = ANY($${params.push(ids)}::uuid[])`
+    : "";
+  const limitParameter = params.push(
+    Math.min(appConfig.trashBatchSize, ids?.length ?? appConfig.trashBatchSize)
+  );
   return (await pool.query(
     `WITH candidates AS (
        SELECT id
@@ -97,6 +104,7 @@ async function claimPurgeRows(ids?: string[]) {
           ${idPredicate}
         ORDER BY deleted_at ASC, id ASC
         FOR UPDATE SKIP LOCKED
+        LIMIT $${limitParameter}
      )
      UPDATE metadata
         SET purge_state='purging',
@@ -109,6 +117,19 @@ async function claimPurgeRows(ids?: string[]) {
       RETURNING ${purgeReturnColumns}`,
     params
   )).rows as PurgeRow[];
+}
+
+async function countRemainingPurgeRows(ids?: string[]) {
+  if (ids && !ids.length) return 0;
+  const result = ids
+    ? await pool.query(
+        "SELECT count(*)::int AS count FROM metadata WHERE status='deleted' AND id = ANY($1::uuid[])",
+        [ids]
+      )
+    : await pool.query(
+        "SELECT count(*)::int AS count FROM metadata WHERE status='deleted'"
+      );
+  return Number(result.rows[0]?.count ?? 0);
 }
 
 async function markPurgeFailed(row: PurgeRow, error: unknown) {
@@ -196,7 +217,12 @@ export async function purgeDeletedImages(ids?: string[]) {
       invalidateEntityCountCaches(["tag"])
     ]);
   }
-  return { requested: rows.length, deleted: deletedRows.length, failed };
+  return {
+    requested: rows.length,
+    deleted: deletedRows.length,
+    failed,
+    remaining: await countRemainingPurgeRows(ids)
+  };
 }
 
 export async function purgeDeletedImage(id: string) {

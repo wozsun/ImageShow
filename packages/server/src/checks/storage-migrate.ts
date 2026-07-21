@@ -8,7 +8,7 @@ export async function migrateStorageLocation(input: { source?: unknown; target?:
   const source = typeof input?.source === "string" ? input.source : "";
   const target = typeof input?.target === "string" ? input.target : "";
   if (!source || !target || source === target) throw new ApiError(400, "validation_error", "Invalid migration source/target");
-  const rows = (await pool.query("SELECT id, object_key, ext, status, storage_slug, is_link, device, brightness, theme FROM metadata ORDER BY created_at ASC")).rows as MigrateRecord[];
+  const rows = (await pool.query("SELECT id, object_key, ext, status, storage_slug, is_link, device, brightness, theme, md5 FROM metadata ORDER BY created_at ASC")).rows as MigrateRecord[];
   const { migratedEntries, ...migration } = await migrateStorageBackend(source, target, rows);
   if (migration.migrated) {
     await rebuildRandomPool();
