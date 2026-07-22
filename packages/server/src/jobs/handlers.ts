@@ -29,7 +29,7 @@ import {
 } from "../storage/maintenance-lock.ts";
 import {
   shareStorageNamespace,
-  storageNamespaceIdentity
+  storageNamespaceIncludesIdentity
 } from "../storage/storage-namespace.ts";
 import {
   exists,
@@ -244,10 +244,10 @@ async function cleanupMovedObjects(job: BackgroundJob): Promise<BackgroundJobOut
       if (seen.has(identity)) continue;
       seen.add(identity);
       if (object.namespace_identity) {
-        const currentIdentity = storageNamespaceIdentity(
-          await candidateBackend(object.backend)
-        );
-        if (currentIdentity !== object.namespace_identity) {
+        if (!storageNamespaceIncludesIdentity(
+          await candidateBackend(object.backend),
+          object.namespace_identity
+        )) {
           throw new ApiError(
             409,
             "storage_cleanup_namespace_changed",

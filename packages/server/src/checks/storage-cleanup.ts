@@ -1,6 +1,6 @@
 import { pool } from "../core/db.ts";
 import { errorMessage } from "../core/api-error.ts";
-import { stagingSessionId } from "../images/imports/staging.ts";
+import { stagingSessionId } from "../images/imports/staging-keys.ts";
 import { listStorageKeys, pruneEmptyStorageDirs, removeObject, type StoragePrefix } from "../storage/storage.ts";
 import { withStorageLocationWriteLock } from "../storage/maintenance-lock.ts";
 import {

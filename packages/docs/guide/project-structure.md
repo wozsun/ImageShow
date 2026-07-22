@@ -49,7 +49,7 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 
 | 文件 | 职责 |
 | --- | --- |
-| `core/db.ts` | PostgreSQL 主查询池、独立长生命周期 advisory-lock 池、事务与可靠的组合锁工具、迁移串行执行；持锁连接丢失会发送中止信号并等待回调协作式收口，锁取得或释放结果不确定时销毁连接，迁移 DDL 与版本记录使用持锁的同一会话，迁移目录优先使用生产 bundle，源码运行时回退到仓库 migrations，账号初始化由入口显式交给 users 领域。 |
+| `core/db.ts` | PostgreSQL 主查询池、独立长生命周期 advisory-lock 池、事务与可靠的组合锁工具、同会话附加锁及迁移串行执行；持锁连接丢失会发送中止信号并等待回调协作式收口，锁取得或释放结果不确定时销毁连接，迁移 DDL 与版本记录使用持锁的同一会话，迁移目录优先使用生产 bundle，源码运行时回退到仓库 migrations，账号初始化由入口显式交给 users 领域。 |
 | `core/api-error.ts` | 与 HTTP 路由解耦的领域错误 `ApiError`、普通错误消息和 details 边界。 |
 | `core/credentials.ts` | 首次管理员环境凭据的纯校验与规范化，供配置播种和 users 初始化复用。 |
 | `core/byte-range.ts` | 存储 driver 与 HTTP serving 共用的单段 Range 解析，不依赖图片领域。 |
@@ -78,9 +78,10 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | --- | --- |
 | `storage/storage.ts` | 存储操作门面：统一 buffer / remove / list、`resolveReadableObject()`、`publicImageUrls()`、`testStorageBackend()` 与运行目录初始化；verified copy 由 `object-transfer.ts` 统一承载。 |
 | `storage/backend-config.ts` | S3 / WebDAV 配置 schema、`StorageConfig` / 输入类型、默认值和完整性校验。 |
-| `storage/backend-registry.ts` | `storage_backend` 数据库注册表、默认后端、CRUD、排序、启停、脱敏后台 DTO、generation 化配置快照与 driver 生命周期；在用物理字段保护、既有对象访问探测、同锁会话配置事务和变更后的实例关闭也集中于此。 |
-| `storage/maintenance-lock.ts` | 存储变更共享锁与维护独占锁，并把锁连接和失锁 Signal 贯穿组合锁回调，避免导入、重分类、迁移和全盘清理互相删除对象。 |
-| `storage/storage-namespace.ts` | 本地 / S3 / WebDAV 统一物理命名空间 identity；排除凭据等访问参数，并识别两个 slug 是否共享对象键空间。 |
+| `storage/backend-registry.ts` | `storage_backend` 数据库注册表、默认后端、CRUD、排序、启停、脱敏后台 DTO、generation 化配置快照与 driver 生命周期；在用物理字段保护、S3 Endpoint 安全重绑定、既有对象访问探测、同锁会话配置事务和变更后的实例关闭也集中于此。 |
+| `storage/endpoint-rebind.ts` | S3 Endpoint 别名证明：每端一次 `_uploads` 快照、attempt 会话映射、既有对象探测配合双向随机读写挑战与精确探针清理。 |
+| `storage/maintenance-lock.ts` | 存储变更共享锁与维护独占锁，并把锁连接和失锁 Signal 贯穿组合锁回调；已持有位置锁时，同会话 FIFO 追加附加锁，避免锁池嵌套自饿。 |
+| `storage/storage-namespace.ts` | 本地 / S3 / WebDAV 配置 identity、布局 identity 与经验证的 identity 集合；排除凭据等访问参数，并以集合交集识别两个 slug 是否共享对象键空间。 |
 | `storage/object-transfer.ts` | 流式计算对象 SHA-256 / MD5，区分既有目标冲突与写后完整性故障，并优先使用驱动原生复制；共享命名空间禁止重复写入，正式目标采用前检查持久删除租约。 |
 | `storage/image-relocation.ts` | 图片重分类与主题重分配共用的 verified transfer 计划：源校验、候选跟踪、CAS 前准备及提交后清源。 |
 | `storage/move-cleanup.ts` | 固化待删对象的物理命名空间并可靠入队；未解决任务同时作为正式对象键的删除租约，阻止迟到 DELETE 与后继采用并发。 |
@@ -108,7 +109,7 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | `images/classification.ts` | 设备 / 明暗三态分类工具：`auto` 解析、按宽高落设备、导入与编辑共用的最终分类收敛。 |
 | `images/image-time.ts` | 图片展示时间专用解析与 UUIDv7 生成：用原生 Temporal 处理带偏移 ISO 8601、按 `TZ` 严格解析无偏移本地时间并拒绝夏令时歧义；JSONL 可把临时清单位置映射到 `rand_a`。 |
 | `images/brightness.ts` | 明暗识别 `detectBrightness()`：缩小图片后用 CIELAB L\* 直方图计算平均值、分位数、亮暗像素比例，并按运行时常量判定 `dark` / `light`。 |
-| `images/imports/` | 统一 `import_session` 生命周期：`session.ts` 负责创建 / 预览 / 取消，`materialize.ts` 负责浏览器上传与服务器下载素材化，`prepare.ts` 与 `commit.ts` 分管处理和提交，`progress.ts` 管租约 / 状态 / SSE，`execution.ts` 管动态并发与 active promise，`session-lock.ts` 提供跨进程生命周期锁，`staging.ts` 管暂存对象；另含 JSONL、微博公开帖子解析、请求摘要、安全抓取和临时文件模块。 |
+| `images/imports/` | 统一 `import_session` 生命周期：`session.ts` 负责创建 / 预览 / 取消，`materialize.ts` 负责浏览器上传与服务器下载素材化，`prepare.ts` 与 `commit.ts` 分管处理和提交，`progress.ts` 管租约 / 状态 / SSE，`execution.ts` 管动态并发与 active promise，`session-lock.ts` 提供跨进程生命周期锁，`staging.ts` 管暂存对象，`staging-keys.ts` 独立承载 attempt 键名与会话解析，避免存储检查反向加载导入领域；另含 JSONL、微博公开帖子解析、请求摘要、安全抓取和临时文件模块。 |
 | `images/batch-delete.ts` | 批量软删除 `batchDeleteImages()`：标记 `status='deleted'` 并从 Redis 随机池移除（不动文件）。 |
 | `images/batch-update.ts` | 批量编辑协调：不同图片固定低并发 2、单图 metadata→tags 有序，隔离业务错误并按请求顺序返回结果；批次末统一同步派生缓存与实体计数缓存。 |
 | `images/mutation-sync.ts` | 图片写入后的派生状态协调器：合并随机池、公共读缓存、MD5 与精确 lookup 失效；单图调用即时执行，批量编辑按请求收集后执行一次。 |

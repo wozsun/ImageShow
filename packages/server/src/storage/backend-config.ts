@@ -40,6 +40,8 @@ export type WebdavSettings = z.infer<typeof webdavSettingsSchema>;
 export type StorageConfig = {
   slug: string;
   type: StorageType;
+  /** Configured identities proven to be aliases of the current namespace. */
+  namespace_identities?: string[];
   s3: S3Settings;
   webdav: WebdavSettings;
 };

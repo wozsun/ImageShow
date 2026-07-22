@@ -4,7 +4,11 @@ import { listUnresolvedMoveCleanupReferences } from "../jobs/repository.ts";
 import { getStorageBackend } from "./backend-registry.ts";
 import { withStorageLocationReadLock } from "./maintenance-lock.ts";
 import type { StoragePrefix } from "./object-keys.ts";
-import { storageNamespaceIdentity } from "./storage-namespace.ts";
+import {
+  shareStorageNamespace,
+  storageNamespaceIdentity,
+  storageNamespaceIncludesIdentity
+} from "./storage-namespace.ts";
 
 export type MoveCleanupObjectInput = {
   prefix: StoragePrefix;
@@ -29,29 +33,39 @@ export async function assertObjectNotPendingCleanup(
 ) {
   const references = await listUnresolvedMoveCleanupReferences(prefix, key);
   if (!references.length) return;
-  const targetIdentity = storageNamespaceIdentity(target);
-  const identities = new Map<string, string>();
+  const backends = new Map<
+    string,
+    Awaited<ReturnType<typeof getStorageBackend>>
+  >();
+  const cleanupBackend = async (slug: string) => {
+    let backend = backends.get(slug);
+    if (!backend) {
+      backend = await getStorageBackend(slug);
+      backends.set(slug, backend);
+    }
+    return backend;
+  };
 
   for (const reference of references) {
-    let matchesTarget = reference.namespace_identity === targetIdentity;
-    if (!reference.namespace_identity) {
-      if (reference.backend === target.slug) {
+    let matchesTarget = reference.backend === target.slug || (
+      reference.namespace_identity
+        ? storageNamespaceIncludesIdentity(target, reference.namespace_identity)
+        : false
+    );
+    if (!matchesTarget && reference.backend !== target.slug) {
+      try {
+        const backend = await cleanupBackend(reference.backend);
+        matchesTarget = reference.namespace_identity
+          ? storageNamespaceIncludesIdentity(
+              backend,
+              reference.namespace_identity
+            ) && shareStorageNamespace(backend, target)
+          : shareStorageNamespace(backend, target);
+      } catch {
+        // If the lease owner can no longer be resolved, refusing reuse is
+        // safer than racing an already-issued remote DELETE. This also covers
+        // legacy payloads that did not capture a namespace identity.
         matchesTarget = true;
-      } else {
-        try {
-          let identity = identities.get(reference.backend);
-          if (!identity) {
-            identity = storageNamespaceIdentity(
-              await getStorageBackend(reference.backend)
-            );
-            identities.set(reference.backend, identity);
-          }
-          matchesTarget = identity === targetIdentity;
-        } catch {
-          // Legacy payloads did not capture a namespace. If their backend can
-          // no longer be resolved, refusing reuse is safer than racing DELETE.
-          matchesTarget = true;
-        }
       }
     }
     if (!matchesTarget) continue;

@@ -28,6 +28,13 @@ const preparationAdmissionStatuses = new Set([
   "committing",
   "finalized"
 ]);
+const preparationAdmissionPollDelays = [100, 200, 400, 800, 1_000] as const;
+
+function preparationAdmissionPollDelay(attempt: number) {
+  return preparationAdmissionPollDelays[
+    Math.min(Math.max(0, attempt), preparationAdmissionPollDelays.length - 1)
+  ];
+}
 
 function abortableDelay(milliseconds: number, signal: AbortSignal) {
   return new Promise<void>((resolve, reject) => {
@@ -58,6 +65,7 @@ async function waitForPreparationAdmission<T>(
     (value) => ({ kind: "complete" as const, ok: true as const, value }),
     (error: unknown) => ({ kind: "complete" as const, ok: false as const, error })
   );
+  let pollAttempt = 0;
   while (true) {
     const observed = await Promise.race([
       completion,
@@ -79,7 +87,19 @@ async function waitForPreparationAdmission<T>(
         return result.value;
       });
     }
-    await abortableDelay(50, signal);
+    // Back off status polling while still returning immediately when the
+    // prepare request completes during the delay.
+    const delayed = await Promise.race([
+      completion,
+      abortableDelay(preparationAdmissionPollDelay(pollAttempt), signal)
+        .then(() => ({ kind: "retry" as const }))
+    ]);
+    if (delayed.kind === "complete") {
+      onAdmitted();
+      if (!delayed.ok) throw delayed.error;
+      return delayed.value;
+    }
+    pollAttempt += 1;
   }
 }
 

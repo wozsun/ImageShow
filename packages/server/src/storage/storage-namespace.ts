@@ -37,7 +37,7 @@ function canonicalWebdavRoot(config: StorageConfig) {
  * `media/`, `thumbs/` and `_uploads/` key. Credentials, public URLs,
  * timeouts and display settings intentionally do not participate.
  */
-export function storageNamespaceIdentity(config: StorageConfig) {
+export function configuredStorageNamespaceIdentity(config: StorageConfig) {
   if (config.type === "s3") {
     return JSON.stringify([
       "s3",
@@ -57,6 +57,44 @@ export function storageNamespaceIdentity(config: StorageConfig) {
   ]);
 }
 
+/**
+ * Compare physical layout while treating an S3 endpoint as an access address.
+ * WebDAV base paths remain part of the layout and cannot be rebound in place.
+ */
+export function storageNamespaceLayoutIdentity(config: StorageConfig) {
+  if (config.type === "s3") {
+    return JSON.stringify([
+      "s3",
+      config.s3.bucket.trim(),
+      normalizedRootPath(config.s3.root_path)
+    ]);
+  }
+  return configuredStorageNamespaceIdentity(config);
+}
+
+export function storageNamespaceIdentities(config: StorageConfig) {
+  return new Set([
+    configuredStorageNamespaceIdentity(config),
+    ...(config.namespace_identities ?? [])
+      .map((identity) => identity.trim())
+      .filter(Boolean)
+  ]);
+}
+
+/** Capture the access identity that owns a cleanup object at this moment. */
+export function storageNamespaceIdentity(config: StorageConfig) {
+  return configuredStorageNamespaceIdentity(config);
+}
+
+export function storageNamespaceIncludesIdentity(
+  config: StorageConfig,
+  identity: string
+) {
+  return storageNamespaceIdentities(config).has(identity);
+}
+
 export function shareStorageNamespace(source: StorageConfig, target: StorageConfig) {
-  return storageNamespaceIdentity(source) === storageNamespaceIdentity(target);
+  const sourceIdentities = storageNamespaceIdentities(source);
+  return [...storageNamespaceIdentities(target)]
+    .some((identity) => sourceIdentities.has(identity));
 }

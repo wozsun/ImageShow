@@ -105,6 +105,7 @@ type AdvisoryLockWork<T> = (
   lockClient: PoolClient
 ) => Promise<T>;
 const advisoryLockSignalContext = new AsyncLocalStorage<AbortSignal>();
+const poisonedAdvisoryClients = new WeakSet<PoolClient>();
 
 function signalError(signal: AbortSignal) {
   return signal.reason instanceof Error
@@ -131,13 +132,106 @@ function combinedLockSignal(signal: AbortSignal) {
   return parent ? AbortSignal.any([parent, signal]) : signal;
 }
 
+function advisoryLockFunction(lock: AdvisoryLockRequest) {
+  const tryAcquire = lock.acquisition === "try";
+  if (lock.mode === "shared") {
+    return tryAcquire ? "pg_try_advisory_lock_shared" : "pg_advisory_lock_shared";
+  }
+  return tryAcquire ? "pg_try_advisory_lock" : "pg_advisory_lock";
+}
+
+function advisoryUnlockFunction(lock: AdvisoryLockRequest) {
+  return lock.mode === "shared"
+    ? "pg_advisory_unlock_shared"
+    : "pg_advisory_unlock";
+}
+
+async function runAdvisoryLockWork<T>(
+  signal: AbortSignal,
+  client: PoolClient,
+  work: AdvisoryLockWork<T>
+) {
+  const operation = Promise.resolve().then(() => (
+    advisoryLockSignalContext.run(signal, () => {
+      signal.throwIfAborted();
+      return work(signal, client);
+    })
+  ));
+  try {
+    const value = await raceWithSignal(signal, operation);
+    signal.throwIfAborted();
+    return value;
+  } catch (error) {
+    if (signal.aborted) {
+      // Keep same-process limiters and active-operation registries occupied
+      // until cooperative cleanup has actually stopped.
+      await operation.catch(() => undefined);
+      throw signalError(signal);
+    }
+    throw error;
+  }
+}
+
+async function runWithAdvisoryLocksOnClient<T>(
+  client: PoolClient,
+  signal: AbortSignal,
+  locks: readonly AdvisoryLockRequest[],
+  work: AdvisoryLockWork<T>
+): Promise<AdvisoryLockAttempt<T>> {
+  signal.throwIfAborted();
+  if (poisonedAdvisoryClients.has(client)) throw new AdvisoryLockLostError();
+  const acquired: AdvisoryLockRequest[] = [];
+  try {
+    for (const lock of locks) {
+      let result;
+      try {
+        signal.throwIfAborted();
+        result = await raceWithSignal(
+          signal,
+          client.query(
+            `SELECT ${advisoryLockFunction(lock)}(hashtext($1)) AS acquired`,
+            [lock.key]
+          )
+        );
+      } catch (error) {
+        // The server may have acquired the lock before the response was lost.
+        // The owning outer scope must destroy this session rather than reuse it.
+        poisonedAdvisoryClients.add(client);
+        throw error;
+      }
+      if (lock.acquisition === "try" && result.rows[0]?.acquired !== true) {
+        return { acquired: false };
+      }
+      acquired.push(lock);
+    }
+    return {
+      acquired: true,
+      value: await runAdvisoryLockWork(signal, client, work)
+    };
+  } finally {
+    for (const lock of acquired.reverse()) {
+      if (poisonedAdvisoryClients.has(client)) break;
+      try {
+        const result = await client.query(
+          `SELECT ${advisoryUnlockFunction(lock)}(hashtext($1)) AS unlocked`,
+          [lock.key]
+        );
+        if (result.rows[0]?.unlocked !== true) {
+          poisonedAdvisoryClients.add(client);
+        }
+      } catch {
+        poisonedAdvisoryClients.add(client);
+      }
+    }
+  }
+}
+
 async function runWithAdvisoryLocks<T>(
   locks: readonly AdvisoryLockRequest[],
   work: AdvisoryLockWork<T>
 ): Promise<AdvisoryLockAttempt<T>> {
   advisoryLockSignalContext.getStore()?.throwIfAborted();
   const client = await advisoryLockPool.connect();
-  const acquired: AdvisoryLockRequest[] = [];
   let destroyClient = false;
   const connectionLoss = new AbortController();
   const lockSignal = combinedLockSignal(connectionLoss.signal);
@@ -152,70 +246,9 @@ async function runWithAdvisoryLocks<T>(
   client.on("error", onClientError);
   client.on("end", onClientEnd);
   try {
-    for (const lock of locks) {
-      const tryAcquire = lock.acquisition === "try";
-      const lockFunction = lock.mode === "shared"
-        ? tryAcquire ? "pg_try_advisory_lock_shared" : "pg_advisory_lock_shared"
-        : tryAcquire ? "pg_try_advisory_lock" : "pg_advisory_lock";
-      let result;
-      try {
-        lockSignal.throwIfAborted();
-        result = await raceWithSignal(
-          lockSignal,
-          client.query(
-            `SELECT ${lockFunction}(hashtext($1)) AS acquired`,
-            [lock.key]
-          )
-        );
-      } catch (error) {
-        // The server may have acquired the lock before the response was lost.
-        // Destroying the session is the only reliable unlock in that case.
-        destroyClient = true;
-        throw error;
-      }
-      if (tryAcquire && result.rows[0]?.acquired !== true) {
-        return { acquired: false };
-      }
-      acquired.push(lock);
-    }
-    const operation = Promise.resolve().then(() => (
-      advisoryLockSignalContext.run(lockSignal, () => {
-        lockSignal.throwIfAborted();
-        return work(lockSignal, client);
-      })
-    ));
-    let value: T;
-    try {
-      value = await raceWithSignal(lockSignal, operation);
-    } catch (error) {
-      if (lockSignal.aborted) {
-        // Keep same-process limiters and active-operation registries occupied
-        // until cooperative cleanup has actually stopped. The PostgreSQL
-        // session lock is already gone, so publication still needs its own
-        // fencing, but a second local executor must not overlap the old one.
-        await operation.catch(() => undefined);
-        throw signalError(lockSignal);
-      }
-      throw error;
-    }
-    lockSignal.throwIfAborted();
-    return { acquired: true, value };
+    return await runWithAdvisoryLocksOnClient(client, lockSignal, locks, work);
   } finally {
-    for (const lock of acquired.reverse()) {
-      if (destroyClient) break;
-      const unlockFunction = lock.mode === "shared"
-        ? "pg_advisory_unlock_shared"
-        : "pg_advisory_unlock";
-      try {
-        const result = await client.query(
-          `SELECT ${unlockFunction}(hashtext($1)) AS unlocked`,
-          [lock.key]
-        );
-        if (result.rows[0]?.unlocked !== true) destroyClient = true;
-      } catch {
-        destroyClient = true;
-      }
-    }
+    destroyClient ||= poisonedAdvisoryClients.has(client);
     try {
       client.release(destroyClient);
     } finally {
@@ -223,6 +256,28 @@ async function runWithAdvisoryLocks<T>(
       client.off("end", onClientEnd);
     }
   }
+}
+
+/** Acquire additional advisory locks on an already-owned lock session. */
+export async function withAdvisoryLocksOnClient<T>(
+  client: PoolClient,
+  signal: AbortSignal,
+  locks: readonly Omit<AdvisoryLockRequest, "acquisition">[],
+  work: AdvisoryLockWork<T>
+): Promise<T> {
+  const attempt = await runWithAdvisoryLocksOnClient(client, signal, locks, work);
+  if (!attempt.acquired) throw new Error("Blocking advisory lock was not acquired");
+  return attempt.value;
+}
+
+/** Try additional advisory locks without borrowing a second pool session. */
+export function tryWithAdvisoryLocksOnClient<T>(
+  client: PoolClient,
+  signal: AbortSignal,
+  locks: readonly AdvisoryLockRequest[],
+  work: AdvisoryLockWork<T>
+): Promise<AdvisoryLockAttempt<T>> {
+  return runWithAdvisoryLocksOnClient(client, signal, locks, work);
 }
 
 export async function withAdvisoryLocks<T>(

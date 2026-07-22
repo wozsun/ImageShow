@@ -224,9 +224,19 @@ export function StorageBackendModal({ target, busy, defaultStatus, defaultAction
             <>
               {locationLocked && (
                 <p className="notice-line" role="note">
-                  此后端仍有 {locationUsage}。Endpoint / Bucket /
-                  Base URL / 根目录等物理位置字段已锁定；请先{locationUnlockGuidance}。
-                  凭据及访问参数仍可轮换，保存前服务端会验证读写能力。
+                  {isWebdav ? (
+                    <>
+                      此后端仍有 {locationUsage}。Base URL / 根目录已锁定；
+                      请先{locationUnlockGuidance}。凭据及访问参数仍可轮换，
+                      保存前服务端会验证读写能力。
+                    </>
+                  ) : (
+                    <>
+                      此后端仍有 {locationUsage}。Bucket / 根目录已锁定；
+                      如需改变请先{locationUnlockGuidance}。Endpoint 仍可修改，
+                      保存时服务端会证明新旧地址指向同一命名空间；验证失败会保留原配置。
+                    </>
+                  )}
                 </p>
               )}
               {isWebdav
@@ -278,7 +288,7 @@ function S3Fields({ value, onChange, configured, locationLocked }: { value: S3Se
     <>
       <label>
         Endpoint
-        <input value={value.endpoint} onChange={(event) => patch({ endpoint: event.target.value })} placeholder="（https://）s3.example.com" disabled={locationLocked} />
+        <input value={value.endpoint} onChange={(event) => patch({ endpoint: event.target.value })} placeholder="（https://）s3.example.com" />
       </label>
       <label>
         Region

@@ -53,11 +53,18 @@ const legacyRandomControlKeys = [
 ] as const;
 const legacyRandomGenerationPattern = /^imageshow:random:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:/i;
 const legacyRandomCleanupCursorKey = `${RANDOM_CACHE_NAMESPACE}:v1_cleanup_cursor`;
+const legacyRandomCleanupCompleteKey = `${RANDOM_CACHE_NAMESPACE}:v1_cleanup_complete`;
+const legacyRandomCleanupCompleteScript = `
+redis.call("DEL", KEYS[1])
+redis.call("SET", KEYS[2], "1")
+return 1
+`;
 const legacyRandomCleanupScanCount = 250;
 const legacyRandomCleanupMaxScans = 8;
 const legacyRandomCleanupMaxKeys = RANDOM_CLEANUP_BATCH_SIZE;
 
 async function cleanupLegacyRandomCacheSlice() {
+  if (await redis.get(legacyRandomCleanupCompleteKey)) return true;
   await redis.unlink(...legacyRandomControlKeys);
 
   let cursor = await redis.get(legacyRandomCleanupCursorKey) ?? "0";
@@ -87,8 +94,16 @@ async function cleanupLegacyRandomCacheSlice() {
     await redis.unlink(...batch);
   }
   const complete = cursor === "0" && !truncated;
-  if (complete) await redis.unlink(legacyRandomCleanupCursorKey);
-  else await redis.set(legacyRandomCleanupCursorKey, cursor);
+  if (complete) {
+    await redis.eval(
+      legacyRandomCleanupCompleteScript,
+      2,
+      legacyRandomCleanupCursorKey,
+      legacyRandomCleanupCompleteKey
+    );
+  } else {
+    await redis.set(legacyRandomCleanupCursorKey, cursor);
+  }
   return complete;
 }
 
