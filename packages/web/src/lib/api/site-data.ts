@@ -7,10 +7,10 @@ import type {
   AuthStateDto,
   GalleryFacetsDto
 } from "@imageshow/shared/browser";
-import type { SiteSettings } from "../types.js";
+import type { PublicSiteSettings } from "@imageshow/shared";
 
 export type SiteConfig = {
-  site: SiteSettings;
+  site: PublicSiteSettings;
   image_detail: { title_opens_image: boolean };
 };
 

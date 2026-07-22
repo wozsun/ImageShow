@@ -25,19 +25,39 @@ export type Brightness = (typeof brightnesses)[number];
 export type StorageType = "local" | "s3" | "webdav";
 export type AdminRole = "super" | "image";
 
-// 管理端界面偏好由 Redis 跨设备同步，并由浏览器本地存储兜底。
-// 将键和值域集中在 shared，避免前端、接口校验和 Redis 解析各自维护字符串字面量。
+// 管理端界面偏好以 PostgreSQL 为权威，并由浏览器本地存储提供首帧与离线兜底。
+// 将键和值域集中在 shared；新增偏好时，类型、服务端校验和前端投影会同步暴露缺口。
 export const imageCardDensities = ["compact", "spacious"] as const;
-export const adminPreferenceKeys = ["image_card_density"] as const;
+export const adminPreferenceValueOptions = {
+  image_card_density: imageCardDensities
+} as const;
+export const adminPreferencesMaxBytes = 4 * 1024;
 
 export type ImageCardDensity = (typeof imageCardDensities)[number];
-export type AdminPreferenceKey = (typeof adminPreferenceKeys)[number];
+export type AdminPreferenceKey = keyof typeof adminPreferenceValueOptions;
+export const adminPreferenceKeys = Object.freeze(
+  Object.keys(adminPreferenceValueOptions) as AdminPreferenceKey[]
+);
 
 export type AdminPreferenceValues = {
-  image_card_density: ImageCardDensity;
+  [Key in AdminPreferenceKey]: (typeof adminPreferenceValueOptions)[Key][number];
 };
 
 export type AdminPreferences = Partial<AdminPreferenceValues>;
+
+export function normalizeAdminPreferences(value: unknown): AdminPreferences {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const input = value as Record<string, unknown>;
+  const preferences: Record<string, string> = {};
+  for (const key of adminPreferenceKeys) {
+    const candidate = input[key];
+    const options = adminPreferenceValueOptions[key] as readonly string[];
+    if (typeof candidate === "string" && options.includes(candidate)) {
+      preferences[key] = candidate;
+    }
+  }
+  return preferences as AdminPreferences;
+}
 
 /** Stable admin image mutation contracts shared by the HTTP service and SPA. */
 export type BatchImageUpdateItemResult =
@@ -137,6 +157,7 @@ export type AuthStateDto = {
   username: string;
   role: AdminRole | "";
   csrf_token: string;
+  application_version: string;
   altcha_enabled: boolean;
   login_background: string;
 };

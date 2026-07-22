@@ -165,12 +165,23 @@ export function getEffectiveLoginBackground() {
 
 export function siteConfigPayload() {
   const runtime = getRuntimeConfig();
-  const { name, domain, icon_url, root_redirect, home, gallery, random_default_method, docs_enabled } = runtime.site;
+  const {
+    name,
+    domain,
+    icon_url,
+    version,
+    root_redirect,
+    home,
+    gallery,
+    random_default_method,
+    docs_enabled
+  } = runtime.site;
   return {
     site: {
       name,
       domain,
       icon_url,
+      version,
       root_redirect,
       home: { ...home, hero_background: effectiveHomeHeroBackground(runtime.site) },
       gallery,

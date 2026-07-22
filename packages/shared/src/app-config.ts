@@ -91,6 +91,10 @@ export const appConfig = {
       name: "ImageShow",
       domain: "example.com",
       icon_url: "/assets/brand/favicon.svg",
+      version: {
+        enabled: true,
+        link_enabled: true
+      },
       root_redirect: "home",
       home: {
         enabled: true,
@@ -189,10 +193,16 @@ export type SiteGallerySettings = {
   order: GalleryOrder;
 };
 
+export type SiteVersionSettings = {
+  enabled: boolean;
+  link_enabled: boolean;
+};
+
 export type RuntimeSiteSettings = {
   name: string;
   domain: string;
   icon_url: string;
+  version: SiteVersionSettings;
   root_redirect: RootRedirect;
   home: SiteHomeSettings;
   gallery: SiteGallerySettings;
@@ -293,6 +303,8 @@ export type RuntimeConfig = {
 };
 
 export type SiteSettings = Pick<RuntimeSiteSettings, "name" | "domain" | "icon_url" | "root_redirect" | "home" | "gallery" | "random_default_method" | "docs_enabled">;
+
+export type PublicSiteSettings = SiteSettings & Pick<RuntimeSiteSettings, "version">;
 
 export type AdminUploadSettings = Pick<
   UploadSettings,

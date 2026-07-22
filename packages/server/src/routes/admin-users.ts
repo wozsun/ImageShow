@@ -8,7 +8,6 @@ import {
   adminSessionRedisClient,
   invalidateAdminSessionsByUsername
 } from "../users/session-invalidation.ts";
-import { deleteAdminPreferences } from "../users/preferences.ts";
 
 const sessionRedis = adminSessionRedisClient(redis);
 
@@ -35,10 +34,7 @@ export function registerAdminUserRoutes(app: Hono) {
   app.post(`${adminApiBasePath}/users/:username/delete`, async (c) => {
     const username = parse(adminUsernameInput, c.req.param("username"));
     await deleteAdminUser(username);
-    await Promise.all([
-      invalidateAdminSessionsByUsername(sessionRedis, username),
-      deleteAdminPreferences(username)
-    ]);
+    await invalidateAdminSessionsByUsername(sessionRedis, username);
     return c.json(ok());
   });
 }

@@ -2,6 +2,7 @@ import type { Context, Hono } from "hono";
 import { adminApiBasePath } from "@imageshow/shared";
 import { ApiError } from "../core/api-error.ts";
 import { ok } from "../core/http.ts";
+import { limitAdminPreferencesBody } from "../core/request-body-limit.ts";
 import { adminPreferencesInput, parse } from "../core/validation.ts";
 import {
   readAdminPreferences,
@@ -22,15 +23,15 @@ export function registerAdminPreferenceRoutes(app: Hono) {
     return c.json(ok({ preferences }));
   });
 
-  app.patch(`${adminApiBasePath}/preferences`, async (c) => {
+  app.patch(`${adminApiBasePath}/preferences`, limitAdminPreferencesBody, async (c) => {
     const preferences = parse(
       adminPreferencesInput,
       await c.req.json().catch(() => ({}))
     );
-    await updateAdminPreferences(
+    const savedPreferences = await updateAdminPreferences(
       authenticatedUsername(c),
       preferences
     );
-    return c.json(ok({ preferences }));
+    return c.json(ok({ preferences: savedPreferences }));
   });
 }

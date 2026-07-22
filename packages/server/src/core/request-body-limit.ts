@@ -1,4 +1,8 @@
-import { adminApiBasePath, appConfig } from "@imageshow/shared";
+import {
+  adminApiBasePath,
+  adminPreferencesMaxBytes,
+  appConfig
+} from "@imageshow/shared";
 import type { Context, Next } from "hono";
 import { cspReportPath, routeError } from "./http.ts";
 
@@ -6,6 +10,7 @@ const standardApiBodyMaxBytes = 128 * 1024;
 const jsonlManifestBodyMaxBytes = appConfig.imports.jsonlManifestMaxBytes;
 const advancedConfigMaxBytes =
   appConfig.imports.configPackageMaxBytes + 64 * 1024;
+const adminPreferencesBodyMaxBytes = adminPreferencesMaxBytes + 1024;
 const jsonlManifestPath = `${adminApiBasePath}/imports/jsonl/parse`;
 const weiboImportPath = `${adminApiBasePath}/imports/weibo/parse`;
 const importBatchCreatePath = `${adminApiBasePath}/imports/batch-create`;
@@ -102,6 +107,8 @@ export const limitImportBatchCreateBody = measuredBodyLimit(importBatchCreateBod
 const limitConfigPackageBody = measuredBodyLimit(advancedConfigMaxBytes);
 
 export const limitBatchImageUpdateBody = measuredBodyLimit(batchImageUpdateBodyMaxBytes);
+
+export const limitAdminPreferencesBody = measuredBodyLimit(adminPreferencesBodyMaxBytes);
 
 export function limitApiRequestBody(c: Context, next: Next) {
   const path = new URL(c.req.url).pathname;

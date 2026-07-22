@@ -64,6 +64,10 @@ const runtimeConfigSchema = z.strictObject({
     name: siteName,
     domain: siteDomain,
     icon_url: siteIconUrl,
+    version: z.strictObject({
+      enabled: z.boolean(),
+      link_enabled: z.boolean()
+    }),
     root_redirect: rootRedirect,
     home: z.strictObject({
       enabled: z.boolean(),
@@ -168,12 +172,19 @@ const runtimeConfigSchema = z.strictObject({
   log: z.strictObject({ level: logLevel, max_size_mb: logMaxSizeMb, max_files: logMaxFiles })
 });
 
-export const portableRuntimeConfigSchema = runtimeConfigSchema
-  .extend({ site: runtimeConfigSchema.shape.site.omit({ domain: true }) });
+const portableSiteConfigSchema = runtimeConfigSchema.shape.site
+  .omit({ domain: true })
+  .extend({
+    // format_version=2 predates this group. Omission must remain valid so old
+    // packages preserve the target instance's current setting when imported.
+    version: runtimeConfigSchema.shape.site.shape.version.optional()
+  });
 
-export type PortableRuntimeConfig = Omit<RuntimeConfig, "site"> & {
-  site: Omit<RuntimeConfig["site"], "domain">;
-};
+export const portableRuntimeConfigSchema = runtimeConfigSchema.extend({
+  site: portableSiteConfigSchema
+});
+
+export type PortableRuntimeConfig = z.infer<typeof portableRuntimeConfigSchema>;
 
 export type RuntimeConfigPatch<T = RuntimeConfig> = {
   [K in keyof T]?: T[K] extends Record<string, unknown> ? RuntimeConfigPatch<T[K]> : T[K];

@@ -11,7 +11,7 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   adminPreferenceKeys,
-  imageCardDensities,
+  normalizeAdminPreferences,
   type AdminPreferenceKey,
   type AdminPreferences,
   type AdminPreferenceValues
@@ -57,18 +57,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-function normalizeAdminPreferences(value: unknown): AdminPreferences {
-  if (!isRecord(value)) return {};
-  const preferences: AdminPreferences = {};
-  if (
-    typeof value.image_card_density === "string"
-    && imageCardDensities.includes(value.image_card_density as (typeof imageCardDensities)[number])
-  ) {
-    preferences.image_card_density = value.image_card_density as AdminPreferenceValues["image_card_density"];
-  }
-  return preferences;
-}
-
 function assignPreference<Key extends AdminPreferenceKey>(
   preferences: AdminPreferences,
   key: Key,
@@ -106,7 +94,7 @@ function writeCachedPreferences(username: string, cache: CachedAdminPreferences)
     );
     return true;
   } catch {
-    // 浏览器禁用 localStorage 时仍保留内存状态，并继续尝试 Redis 同步。
+    // 浏览器禁用 localStorage 时仍保留内存状态，并继续尝试 PostgreSQL 同步。
     return false;
   }
 }
@@ -184,20 +172,26 @@ export function AdminPreferencesProvider({
         for (const key of adminPreferenceKeys) {
           const sentValue = patch[key];
           const isLatestRequest = queuedPreferencesRef.current[key]?.version === ticketVersions[key];
-          if (!isLatestRequest || sentValue === undefined || current.pending[key] !== sentValue) continue;
-          delete pending[key];
-          assignPreference(values, key, acknowledged[key] ?? sentValue);
+          if (isLatestRequest && sentValue !== undefined && current.pending[key] === sentValue) {
+            delete pending[key];
+            assignPreference(values, key, acknowledged[key] ?? sentValue);
+            continue;
+          }
+
+          // PATCH 返回 PostgreSQL 中当前完整投影。未被本地更新占用的其他键也在此
+          // 对齐服务端，但不能覆盖同一页面稍后排队或仍待同步的值。
+          if (current.pending[key] !== undefined || queuedPreferencesRef.current[key]) continue;
+          const acknowledgedValue = acknowledged[key];
+          if (acknowledgedValue === undefined) delete values[key];
+          else assignPreference(values, key, acknowledgedValue);
         }
         commitCache({ values, pending });
 
-        queryClient.setQueryData<AdminPreferenceResponse>(queryKey, (currentResponse) => ({
-          preferences: {
-            ...currentResponse?.preferences,
-            ...acknowledged
-          }
-        }));
+        queryClient.setQueryData<AdminPreferenceResponse>(queryKey, {
+          preferences: acknowledged
+        });
       } catch {
-        // Redis 或网络暂时不可用时保留 pending；网络恢复或下次登录会再次补同步。
+        // PostgreSQL 或网络暂时不可用时保留 pending；网络恢复或下次登录会再次补同步。
       } finally {
         for (const key of adminPreferenceKeys) {
           if (queuedPreferencesRef.current[key]?.version === ticketVersions[key]) {

@@ -10,6 +10,7 @@ import {
   ok,
   requireCsrf
 } from "../core/http.ts";
+import { applicationVersion } from "../core/application-version.ts";
 import { issueAltchaChallenge, verifyAltchaProof } from "../core/altcha.ts";
 import { redis } from "../core/redis-client.ts";
 import { parse, passwordChangeInput } from "../core/validation.ts";
@@ -54,6 +55,7 @@ export function registerPublicAuthRoutes(app: Hono) {
       username: session?.username ?? "",
       role: session?.role ?? "",
       csrf_token: session?.csrf ?? "",
+      application_version: session ? applicationVersion() : "",
       altcha_enabled: getRuntimeConfig().altcha.enabled,
       login_background: getEffectiveLoginBackground()
     } satisfies AuthStateDto;

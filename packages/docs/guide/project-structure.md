@@ -130,7 +130,8 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | `users/admin-bootstrap.ts` | advisory lock 保护的首个 super 初始化；基础凭据规则来自 `core/credentials.ts`。 |
 | `users/password-{recovery,upgrade}.ts` | 紧急密码恢复与登录成功后的旧参数哈希条件升级。 |
 | `users/session-invalidation.ts` · `users/admin-password-command.ts` | Redis 管理会话全量 / 按账号失效和恢复命令参数解析。 |
-| `users/preferences.ts` | 按管理员用户名隔离的 Redis 界面偏好读写、已知值过滤与账号删除清理；不写 PostgreSQL。 |
+| `users/preferences.ts` | 按管理员用户名读取 PostgreSQL 偏好、原子合并局部 PATCH，并按 shared 注册表投影已知值；不依赖 Redis。 |
+| `users/legacy-preferences-cleanup.ts` | 一次性、失败不阻塞启动地扫描并删除旧管理员偏好 Redis hash，以完成 PostgreSQL 权威存储切换。 |
 | `users/service.ts` | 后台管理员查询，以及 image 管理员创建、密码重置和删除。 |
 
 ### random/ —— 随机图 API
@@ -173,7 +174,7 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | --- | --- |
 | `routes/public.ts` | `GET /api/images`、`/api/images/:id`、`/api/images/:id/original`、`/api/site-config`、`/api/gallery-facets`、`/media/*`、`/thumbs/*`、`/original/:id` |
 | `routes/random.ts` | `GET /random`、`GET /img-count`、`random.<域名>/`、`<theme>.<域名>/random` |
-| `routes/auth.ts` | 登录 / 登出 / ALTCHA 挑战 / `/api/admin/auth/me`（登录态、CSRF token、安全验证开关、登录背景） |
+| `routes/auth.ts` | 登录 / 登出 / ALTCHA 挑战 / `/api/admin/auth/me`（登录态、CSRF token、应用版本、安全验证开关、登录背景） |
 | `routes/admin-images.ts` | 后台图片增删改查、单请求批量元数据 / 标签编辑、迁移、回收站原图、登录态轻量 `admin-info` |
 | `routes/imports.ts` | 统一 `/api/admin/imports/*`：JSONL / 微博 parse、create、PUT file、download materialize、prepare、preview、status、SSE events、commit、cancel |
 | `routes/admin-tags.ts` · `admin-themes.ts` · `admin-authors.ts` · `admin-users.ts` | 标签 / 主题 / 作者 / 用户管理 |
@@ -197,7 +198,7 @@ GitHub Actions 只执行 Docker 生产构建和镜像 / Release 发布。
 | 公共页 | `pages/home/`（首页与专属预览进度）、`pages/gallery/`（画廊、懒加载图片和瀑布流布局；含设备 / 亮度 / 主题 / 标签 / 作者 / 排序筛选） |
 | 后台 | `pages/admin/AdminShell.tsx` 及同目录 Overview / ImageAdmin（列表编排）/ `AdminImageCard` / `useImageAdminOperations` / Uploader（共享 URL 列表、JSONL 清单、微博链接三标签输入窗口与 prepared import 队列）/ EntityAdmin / SettingsPage / AdvancedConfigPage（`advanced-config/` 内含完整 JSON 编辑器和配置包导入模态窗口）/ StorageSettings / UserAdmin / AccountSettings / CheckPage / LogPage / `BatchMetadataModal` / `BatchMetadataSaveSummary` / `useBatchMetadataOperations` / `ImageEditModal` |
 | 组件 | `components/actions` / `data-display` / `feedback` / `form` / `icon` / `image` / `layout` / `navigation` 下的跨页面 UI 组件；`actions/AsyncActionButton.tsx` 用重叠文案稳定异步按钮宽度，`feedback/ActionFeedback.tsx` 只管理单条消息展示与关闭生命周期，`ActionFeedbackRegion.tsx` 管理显式宿主注册、目标路由和缺失区域降级，`layout/WorkspaceHeader.tsx` 提供稳定页头。 |
-| hooks | `hooks/` 下存放跨页面复用的交互 Hook，例如锚定菜单、动画关闭、滚动锁定；`useAsyncActionStatus.ts` 管理按钮的最短进行态，并按操作边界选择三秒结果态或自然结果，`useAdminPreferences.tsx` 提供 Redis / 用户级 `localStorage` 界面偏好同步。 |
+| hooks | `hooks/` 下存放跨页面复用的交互 Hook，例如锚定菜单、动画关闭、滚动锁定；`useAsyncActionStatus.ts` 管理按钮的最短进行态，并按操作边界选择三秒结果态或自然结果，`useAdminPreferences.tsx` 提供 PostgreSQL / 用户级 `localStorage` 界面偏好同步。 |
 | lib | 无界面代码，按 `api` / `auth` / `gallery` / `ui` / `upload` 分类；`api/client.ts` 统一解析 JSON / 非 JSON 错误、details 与 401 失效事件，`api/query-keys.ts` 集中查询 key，页面专属状态机留在对应页面目录。 |
 | styles | `styles/` 下存放全局样式入口，按 base / home / gallery / admin / responsive 拆分；后台图片组件和对应移动端规则集中在 `styles/admin/images.css`，不再跨多个 responsive 文件重复覆盖。 |
 | 导入队列 | `pages/admin/uploader/`（统一 ImportJob 队列；`materialization-pipeline.ts` 为 upload / download 提供每 lane 单项前瞻调度，最终 MD5 只由服务端 prepared 阶段计算） |

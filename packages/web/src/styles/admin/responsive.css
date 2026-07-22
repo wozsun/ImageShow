@@ -147,6 +147,12 @@
     background: #171b22;
     border-bottom: 1px solid #2c333d;
   }
+  .admin-mobile-header > .admin-brand {
+    flex: 0 0 190px;
+    width: 190px;
+    height: 44px;
+  }
+  .admin-mobile-navigation { flex: 0 0 auto; }
   .admin-mobile-navigation .mobile-nav-toggle {
     color: #f6f7f9;
     background: #242a33;
@@ -521,8 +527,7 @@
   .operation-modal:not(.storage-edit-modal) footer button { flex: 1; min-height: 44px; }
   .link-input-hint { white-space: normal; }
   .link-import-actions { align-items: stretch; flex-direction: column; }
-  .link-import-mode { width: 100%; }
-  .link-import-action-buttons { width: 100%; }
+  .link-import-action-buttons { width: 100%; margin-left: 0; }
   .link-import-action-buttons button { flex: 1; min-height: 44px; }
   .account-form .button { justify-self: stretch; min-height: 44px; }
 }

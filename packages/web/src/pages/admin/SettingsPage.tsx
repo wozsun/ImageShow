@@ -112,15 +112,11 @@ export function SettingsPage() {
   const updateNormalize = (patch: Partial<AdminSettings["normalize"]>) => setSettings({ ...settings, normalize: { ...settings.normalize, ...patch } });
   const updateThumbnail = (patch: Partial<AdminSettings["thumbnail"]>) => setSettings({ ...settings, thumbnail: { ...settings.thumbnail, ...patch } });
   const updateAdmin = (patch: Partial<AdminSettings["admin"]>) => setSettings({ ...settings, admin: { ...settings.admin, ...patch } });
-  const applicationVersion = query.data?.application_version;
-  const settingsDescription = applicationVersion && applicationVersion !== "unknown"
-    ? `v${applicationVersion} · 站点信息与应用参数`
-    : "站点信息与应用参数";
   return (
     <section className="workspace settings-page">
       <WorkspaceHeader
         title="站点配置"
-        description={settingsDescription}
+        description="站点信息与应用参数"
         actionsClassName="settings-head-actions"
         actions={
           <>

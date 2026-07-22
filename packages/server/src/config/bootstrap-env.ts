@@ -70,6 +70,10 @@ export function runtimeConfigFromEnvironment(): RuntimeConfig {
       name: environmentValue("SITE_NAME"),
       domain: environmentValue("SITE_DOMAIN"),
       icon_url: environmentValue("SITE_ICON_URL"),
+      version: {
+        enabled: environmentBoolean("SITE_VERSION_ENABLED"),
+        link_enabled: environmentBoolean("SITE_VERSION_LINK_ENABLED")
+      },
       root_redirect: environmentValue("SITE_ROOT_REDIRECT") as RuntimeConfig["site"]["root_redirect"] | undefined,
       home: {
         enabled: environmentBoolean("SITE_HOME_ENABLED"),

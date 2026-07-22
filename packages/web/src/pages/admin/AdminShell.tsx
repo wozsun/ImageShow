@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import type { AltchaWidgetElement } from "altcha";
-import { Link, Navigate, NavLink, Route, Routes, useNavigate } from "react-router-dom";
+import { Navigate, NavLink, Route, Routes, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { api, clearCsrfToken, setCsrfToken } from "../../lib/api/client.js";
 import { Icon } from "../../components/icon/Icon.js";
@@ -14,6 +14,7 @@ import { MobileNavigation } from "../../components/navigation/MobileNavigation.j
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
 import { ActionFeedbackProvider } from "../../components/feedback/ActionFeedbackRegion.js";
 import { AdminNavGroup } from "./AdminNavGroup.js";
+import { AdminBrand } from "./AdminBrand.js";
 import { CheckPage } from "./CheckPage.js";
 import { ImageAdmin } from "./ImageAdmin.js";
 import { EntityAdmin } from "./EntityAdmin.js";
@@ -39,6 +40,8 @@ export function AdminShell() {
   const navScrollRef = useRef<HTMLDivElement | null>(null);
   const { data: siteConfig } = useSiteConfig();
   const siteName = siteConfig?.site?.name || "ImageShow";
+  const versionEnabled = siteConfig?.site?.version?.enabled ?? true;
+  const versionLinkEnabled = siteConfig?.site?.version?.link_enabled ?? true;
 
   const viewSite = { to: "/", icon: "home-4-line", label: "首页" } as const;
   const { data, error: authError, isError: authFailed, refetch } = useAuthMe();
@@ -83,7 +86,13 @@ export function AdminShell() {
     <AdminPreferencesProvider key={data.username} username={data.username}>
       <main className="admin">
       <aside>
-        <Link className="brand" to={adminBasePath}>{siteName}</Link>
+        <AdminBrand
+          siteName={siteName}
+          applicationVersion={data.application_version}
+          versionEnabled={versionEnabled}
+          versionLinkEnabled={versionLinkEnabled}
+          to={adminBasePath}
+        />
         <NavLink className={({ isActive }) => `home-link${isActive ? " active" : ""}`} to={viewSite.to}>
           <Icon name={viewSite.icon} />{viewSite.label}
         </NavLink>
@@ -135,7 +144,13 @@ export function AdminShell() {
         </button>
       </aside>
       <header className="admin-mobile-header">
-        <Link className="brand" to={adminBasePath}>{siteName}</Link>
+        <AdminBrand
+          siteName={siteName}
+          applicationVersion={data.application_version}
+          versionEnabled={versionEnabled}
+          versionLinkEnabled={versionLinkEnabled}
+          to={adminBasePath}
+        />
         <MobileNavigation className="admin-mobile-navigation">
           <NavLink className={({ isActive }) => isActive ? "active" : ""} to={viewSite.to}>
             <Icon name={viewSite.icon} />{viewSite.label}

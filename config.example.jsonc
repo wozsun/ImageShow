@@ -11,6 +11,13 @@
     "domain": "example.com",
     // 站点图标地址，可使用站内绝对路径或 HTTPS 图片地址。
     "icon_url": "/assets/brand/favicon.svg",
+    // 后台版本卡片；仅通过配置文件、高级配置或首次启动环境变量维护，不进入站点配置页。
+    "version": {
+      // 是否显示版本卡片。
+      "enabled": true,
+      // 是否链接到对应的 GitHub Release；关闭后版本卡片仍显示但不可点击。
+      "link_enabled": true
+    },
     // 根路径直接显示的页面：home 为首页，gallery 为画廊；关闭首页时固定显示画廊。
     "root_redirect": "home",
     // 公共首页配置。

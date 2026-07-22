@@ -1,8 +1,9 @@
 import { z } from "zod";
 import {
   adminImagePageLimit,
+  adminPreferenceValueOptions,
+  adminPreferencesMaxBytes,
   appConfig,
-  imageCardDensities,
   importBatchHardLimit,
   slugPattern
 } from "@imageshow/shared";
@@ -143,12 +144,19 @@ export const passwordChangeInput = z.object({
   new_password: adminPasswordInput
 });
 
-export const adminPreferencesInput = z.strictObject({
-  image_card_density: z.enum(imageCardDensities).optional()
-}).refine(
-  (value) => Object.values(value).some((preference) => preference !== undefined),
-  "至少需要提供一项管理端偏好"
-);
+const adminPreferenceInputFields = {
+  image_card_density: z.enum(adminPreferenceValueOptions.image_card_density).optional()
+} satisfies Record<keyof typeof adminPreferenceValueOptions, z.ZodType>;
+
+export const adminPreferencesInput = z.strictObject(adminPreferenceInputFields)
+  .refine(
+    (value) => Object.values(value).some((preference) => preference !== undefined),
+    "至少需要提供一项管理端偏好"
+  )
+  .refine(
+    (value) => Buffer.byteLength(JSON.stringify(value), "utf8") <= adminPreferencesMaxBytes,
+    "管理端偏好过大"
+  );
 
 export const imageIdsInput = z.object({
   ids: z.array(uuidInput).min(1).max(200).transform((ids) => [...new Set(ids)])
