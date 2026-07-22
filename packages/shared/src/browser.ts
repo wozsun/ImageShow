@@ -65,7 +65,6 @@ export type BatchImageUpdateItemResult =
   | { id: string; status: "failed"; code: string; message: string };
 
 export type BatchImageUpdateResponse = {
-  requested: number;
   updated: number;
   failed: number;
   results: BatchImageUpdateItemResult[];

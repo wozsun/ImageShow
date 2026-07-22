@@ -1,23 +1,13 @@
 # 数据库结构
 
 PostgreSQL 共 9 张业务表，另有迁移记录表 `schema_migrations`。全新数据库从
-`packages/server/migrations/0001_initial.sql` 初始化，后续 schema 变化通过按
-文件名顺序执行的前向迁移应用；已经发布并可能执行过的迁移不得改写。
+`packages/server/migrations/0001_initial.sql` 初始化。当前仓库只保留这一份已确认的
+全新安装基线；后续 schema 变化仍通过按文件名顺序执行的新前向迁移应用。
 PostgreSQL 是唯一真相源，Redis 随机池、列表缓存和判重缓存均可重建。
 
-v3.10.2 开发前已确认所有生产实例完成旧 `0002_trash_purge_state` 与
-`0003_trash_purge_job`，因此两次变更均已压入 `0001_initial.sql`。既有实例继续保留
-`schema_migrations` 中已经执行过的历史记录，不需要重建数据库或回放已折叠脚本。
-v3.11.0 起，后续结构变化继续以新的前向迁移追加；`0004` 负责统一导入素材生命周期
-并移除代理链接图片结构。该迁移在检查代理图片、proxy 会话和 link 清理任务前，
-按固定顺序独占锁定 `metadata`、`import_session` 与 `background_job`，避免滚动升级期间
-旧进程在检查与删列之间写入新的代理状态。
-`0005` 为导入会话增加执行栅栏与 raw 所有权 token，并给升级时已经 prepared 的会话
-补齐显式图片暂存键。
-`0006` 为存储后端增加 `namespace_identities` 集合；旧行以空集合起步并继续从现有
-配置推导当前身份，只有通过同命名空间证明的 S3 Endpoint 重绑定才合并访问别名。
-`0007` 为 `admin_account` 增加受限 `preferences` JSONB，将管理员界面偏好从
-Redis 运行时状态收回 PostgreSQL 真相源。
+已经执行过折叠前迁移的实例继续保留自己的 `schema_migrations` 历史记录；不要删除记录、
+重建数据库或回放 `0001`。迁移器只执行当前目录中尚未记录的文件，因此这些实例会直接
+沿用与当前基线等价的 schema，全新实例则只记录 `0001_initial`。
 
 ## metadata —— 图片主表
 

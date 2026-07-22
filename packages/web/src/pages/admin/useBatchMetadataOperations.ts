@@ -39,7 +39,7 @@ export function summarizeBatchUpdateFailures(response: BatchImageUpdateResponse)
   }
 
   return {
-    requested: response.requested,
+    requested: response.results.length,
     failed: failures.length,
     codes: Object.fromEntries(
       [...codeCounts.entries()]

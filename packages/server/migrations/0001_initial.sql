@@ -8,6 +8,7 @@ CREATE TABLE storage_backend (
   display_name TEXT NOT NULL DEFAULT '',
   type TEXT NOT NULL DEFAULT 'local',
   config JSONB NOT NULL DEFAULT '{}'::jsonb,
+  namespace_identities TEXT[] NOT NULL DEFAULT '{}',
   enabled BOOLEAN NOT NULL DEFAULT true,
   is_default BOOLEAN NOT NULL DEFAULT false,
   sort_order INTEGER NOT NULL DEFAULT 0,
@@ -70,7 +71,6 @@ CREATE TABLE metadata (
   theme TEXT NOT NULL DEFAULT 'none',
   ext TEXT NOT NULL,
   object_key TEXT NOT NULL UNIQUE,
-  is_link BOOLEAN NOT NULL DEFAULT false,
   storage_slug TEXT NOT NULL,
   md5 TEXT NOT NULL,
   width INTEGER NOT NULL DEFAULT 0,
@@ -185,6 +185,8 @@ CREATE TABLE import_session (
   expected_size BIGINT,
   metadata_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
   prepared_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+  execution_token UUID,
+  raw_token UUID,
   status TEXT NOT NULL DEFAULT 'created',
   idempotency_key TEXT NOT NULL UNIQUE,
   request_hash TEXT NOT NULL DEFAULT '',
@@ -193,10 +195,13 @@ CREATE TABLE import_session (
   expires_at TIMESTAMPTZ NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  CHECK (mode IN ('upload', 'download', 'proxy')),
+  CHECK (mode IN ('upload', 'download')),
   CHECK (expected_size IS NULL OR expected_size > 0),
   CHECK (source_url = '' OR source_url ~* '^https://'),
-  CHECK (status IN ('created', 'receiving', 'preparing', 'ready', 'committing', 'finalized', 'failed', 'cancelled'))
+  CHECK (status IN (
+    'created', 'materializing', 'received', 'preparing', 'ready',
+    'committing', 'finalized', 'failed', 'cancelled'
+  ))
 );
 
 CREATE INDEX idx_import_session_status_expires
@@ -238,13 +243,18 @@ CREATE TABLE admin_account (
   username TEXT PRIMARY KEY,
   password_hash TEXT NOT NULL,
   role TEXT NOT NULL DEFAULT 'image',
+  preferences JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   CHECK (role IN ('super', 'image')),
   CHECK (
     char_length(password_hash) BETWEEN 64 AND 512
     AND password_hash ~ '^\$argon2id\$v=[0-9]+\$m=[0-9]+,t=[0-9]+,p=[0-9]+\$[A-Za-z0-9+/]+\$[A-Za-z0-9+/]+$'
-  )
+  ),
+  CONSTRAINT admin_account_preferences_object_check
+    CHECK (jsonb_typeof(preferences) = 'object'),
+  CONSTRAINT admin_account_preferences_size_check
+    CHECK (octet_length(preferences::text) <= 4096)
 );
 
 CREATE UNIQUE INDEX idx_admin_single_super

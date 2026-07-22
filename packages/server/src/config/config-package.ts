@@ -96,6 +96,38 @@ export const configPackageSchema = z.strictObject({
 export type ConfigPackage = z.infer<typeof configPackageSchema>;
 export type ConfigPackageStorageBackend = ConfigPackage["storage_backends"][number];
 
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+// format_version=2 is still current. Normalize its one newly required import
+// budget before the strict schema runs; every unrelated omission or extra key
+// remains visible to zod and is rejected.
+function normalizeVersion2Package(value: unknown): unknown {
+  if (
+    !isPlainRecord(value)
+    || value.format !== configPackageFormat
+    || value.format_version !== configPackageFormatVersion
+    || !isPlainRecord(value.config)
+    || !isPlainRecord(value.config.import)
+    || Object.hasOwn(value.config.import, "global_commit_byte_budget_mb")
+  ) {
+    return value;
+  }
+
+  return {
+    ...value,
+    config: {
+      ...value.config,
+      import: {
+        ...value.config.import,
+        global_commit_byte_budget_mb:
+          appConfig.runtimeDefaults.import.global_commit_byte_budget_mb
+      }
+    }
+  };
+}
+
 function portableConfig(runtime: RuntimeConfig): PortableRuntimeConfig {
   const { domain: _domain, ...portableSite } = runtime.site;
   return portableRuntimeConfigSchema.parse({ ...runtime, site: portableSite });
@@ -137,7 +169,9 @@ export function buildConfigPackage(
 
 /** @internal Exported for focused schema tests. */
 export function parseConfigPackage(value: unknown): ConfigPackage {
-  const configPackage = configPackageSchema.parse(value);
+  const configPackage = configPackageSchema.parse(
+    normalizeVersion2Package(value)
+  );
   if (
     Buffer.byteLength(JSON.stringify(configPackage), "utf8") >
     configPackageMaxBytes
@@ -154,6 +188,10 @@ export function parseConfigPackage(value: unknown): ConfigPackage {
 /** @internal Exported for focused preview tests. */
 export function previewParsedConfigPackage(value: unknown, existingSlugs: Set<string>) {
   const pkg = parseConfigPackage(value);
+  return projectConfigPackagePreview(pkg, existingSlugs);
+}
+
+function projectConfigPackagePreview(pkg: ConfigPackage, existingSlugs: Set<string>) {
   return {
     format: pkg.format,
     format_version: pkg.format_version,
@@ -176,14 +214,11 @@ export function previewParsedConfigPackage(value: unknown, existingSlugs: Set<st
 
 const slugMappingsSchema = z.record(z.string(), packageSlug);
 
-/** @internal Exported for focused conflict-resolution tests. */
-export function resolveImportedStorageBackends(
-  value: unknown,
+function resolveParsedImportedStorageBackends(
+  pkg: ConfigPackage,
   existingSlugs: Set<string>,
-  slugMappings: Record<string, string>
+  mappings: z.infer<typeof slugMappingsSchema>
 ): ConfigPackageStorageBackend[] {
-  const pkg = parseConfigPackage(value);
-  const mappings = slugMappingsSchema.parse(slugMappings);
   const importedSlugs = new Set(pkg.storage_backends.map((backend) => backend.slug));
   const conflicts = new Set(
     pkg.storage_backends.filter((backend) => existingSlugs.has(backend.slug)).map((backend) => backend.slug)
@@ -218,6 +253,17 @@ export function resolveImportedStorageBackends(
   });
 }
 
+/** @internal Exported for focused conflict-resolution tests. */
+export function resolveImportedStorageBackends(
+  value: unknown,
+  existingSlugs: Set<string>,
+  slugMappings: Record<string, string>
+): ConfigPackageStorageBackend[] {
+  const pkg = parseConfigPackage(value);
+  const mappings = slugMappingsSchema.parse(slugMappings);
+  return resolveParsedImportedStorageBackends(pkg, existingSlugs, mappings);
+}
+
 export async function createConfigPackage() {
   return buildConfigPackage(
     getRuntimeConfig(),
@@ -227,19 +273,21 @@ export async function createConfigPackage() {
 }
 
 export async function previewConfigPackage(value: unknown) {
+  const pkg = parseConfigPackage(value);
   const existingSlugs = new Set((await listStorageBackends()).map((backend) => backend.slug));
-  return previewParsedConfigPackage(value, existingSlugs);
+  return projectConfigPackagePreview(pkg, existingSlugs);
 }
 
 export async function importConfigPackage(value: unknown, slugMappings: Record<string, string>) {
+  const pkg = parseConfigPackage(value);
+  const mappings = slugMappingsSchema.parse(slugMappings);
   return withRuntimeConfigWriteLease(() => withAdvisoryLock(
     advancedConfigWriteLockKey,
     async (signal, lockClient) => {
       signal.throwIfAborted();
-      const pkg = parseConfigPackage(value);
       const existingSlugs = new Set((await listStorageBackends()).map((backend) => backend.slug));
       signal.throwIfAborted();
-      const resolved = resolveImportedStorageBackends(pkg, existingSlugs, slugMappings);
+      const resolved = resolveParsedImportedStorageBackends(pkg, existingSlugs, mappings);
       const previousRuntimeConfig = structuredClone(getRuntimeConfig());
       const importedBackends = resolved.map((backend) => ({
         slug: backend.slug,

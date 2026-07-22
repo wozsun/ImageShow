@@ -171,7 +171,9 @@ onRuntimeConfigChange(() => {
   void invalidateImageCaches();
 });
 onStorageBackendChange(() => void invalidateImageCaches());
-startWorker();
+const backgroundWorkerDisabledForTests = process.env.NODE_ENV === "test"
+  && process.env.IMAGESHOW_TEST_DISABLE_BACKGROUND_WORKER === "1";
+if (!backgroundWorkerDisabledForTests) startWorker();
 const startupRandomPool = rebuildRandomPool({ requireFresh: false }).catch((error) => {
   // Redis is a derived layer. A failed warm-up is retried by normal reads and
   // queued rebuild jobs without preventing the HTTP service from starting.

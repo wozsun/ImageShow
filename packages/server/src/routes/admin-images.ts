@@ -1,5 +1,8 @@
 import type { Hono } from "hono";
-import { adminApiBasePath } from "@imageshow/shared";
+import {
+  adminApiBasePath,
+  type BatchImageUpdateResponse
+} from "@imageshow/shared";
 import { ok } from "../core/http.ts";
 import { logger } from "../core/logger.ts";
 import {
@@ -145,7 +148,7 @@ export function registerAdminImageRoutes(app: Hono) {
       },
     });
     logger.info("batch_image_update_summary", {
-      requested: result.requested,
+      requested: input.items.length,
       succeeded: result.updated,
       failed: result.failed,
       total_duration_ms: Math.round((performance.now() - startedAt) * 100) / 100,
@@ -154,10 +157,11 @@ export function registerAdminImageRoutes(app: Hono) {
       entity_count_invalidation_triggered: entityCountInvalidationTriggered,
       random_pool_full_rebuild_triggered: randomPoolFullRebuildTriggered,
     });
-    return c.json(ok({
+    const response = {
       updated: result.updated,
       failed: result.failed,
       results: result.results
-    }));
+    } satisfies BatchImageUpdateResponse;
+    return c.json(ok(response));
   });
 }

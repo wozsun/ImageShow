@@ -5,7 +5,10 @@ import { setImageTags } from "../tags/service.ts";
 import { createEntityCountCacheInvalidationBatch } from "../vocab/vocab-cache.ts";
 import { createImageMutationSyncBatch } from "./mutation-sync.ts";
 import { updateImageMetadata } from "./service.ts";
-import type { BatchImageUpdateItemResult } from "@imageshow/shared/browser";
+import type {
+  BatchImageUpdateItemResult,
+  BatchImageUpdateResponse
+} from "@imageshow/shared/browser";
 
 type BatchUpdateExecutionMetrics = {
   maxItemDurationMs: number;
@@ -32,7 +35,7 @@ function publicItemError(error: unknown): Pick<Extract<BatchImageUpdateItemResul
 export async function updateImagesBatch(
   items: BatchImageUpdateItemInput[],
   options: BatchUpdateOptions = {},
-) {
+): Promise<BatchImageUpdateResponse> {
   const entityCountInvalidationBatch = createEntityCountCacheInvalidationBatch();
   const mutationSyncBatch = createImageMutationSyncBatch();
   let results: BatchImageUpdateItemResult[] = [];
@@ -90,7 +93,6 @@ export async function updateImagesBatch(
 
   const updated = results.filter((result) => result.status === "updated").length;
   return {
-    requested: items.length,
     updated,
     failed: items.length - updated,
     results,
