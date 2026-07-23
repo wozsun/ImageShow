@@ -14,7 +14,7 @@ type StorageBackendOption = {
 
 // 由后端选项列表构建「图片 → 所在存储显示名」的解析函数，并回退到 slug 标签
 // （本地存储→「本地存储」，其余→slug 本身）。纯函数，供已自行持有后端列表的调用方
-// （如批量编辑弹窗，它本就为迁移目标选择器拉过该列表）直接复用，无需再开一份查询。
+// （如批量编辑列表，它本就为所在存储名称拉过该列表）直接复用，无需再开一份查询。
 export function storageNameResolver(backends: StorageBackendOption[]) {
   const nameBySlug = new Map(
     backends.map((backend) => [backend.slug, backend.display_name || storageBackendLabel(backend.slug)] as const)

@@ -20,6 +20,7 @@ export function DialogFrame({
   ariaLabel,
   busy = false,
   paused = false,
+  animateClose = true,
   initialFocusRef,
   returnFocusRef,
   onClose,
@@ -31,6 +32,7 @@ export function DialogFrame({
   ariaLabel?: string;
   busy?: boolean;
   paused?: boolean;
+  animateClose?: boolean;
   initialFocusRef?: RefObject<HTMLElement | null>;
   returnFocusRef?: RefObject<HTMLElement | null>;
   onClose: () => void;
@@ -39,8 +41,13 @@ export function DialogFrame({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const { closing, requestClose: requestAnimatedClose, onAnimationEnd } = useAnimatedClose(onClose);
   const requestClose = useCallback((afterClose?: () => void) => {
-    if (!busy) requestAnimatedClose(afterClose);
-  }, [busy, requestAnimatedClose]);
+    if (busy) return;
+    if (animateClose) {
+      requestAnimatedClose(afterClose);
+      return;
+    }
+    (afterClose ?? onClose)();
+  }, [animateClose, busy, onClose, requestAnimatedClose]);
 
   useBodyScrollLock();
   useDialogFocus({

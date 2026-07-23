@@ -1,8 +1,5 @@
 import { useMemo, useState } from "react";
-import type {
-  BatchImageUpdateResponse,
-  BatchStorageMigrationResponse
-} from "@imageshow/shared/browser";
+import type { BatchImageUpdateResponse } from "@imageshow/shared/browser";
 import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
 import { api } from "../../lib/api/client.js";
 import { adminApiBasePath } from "../../lib/constants.js";
@@ -41,9 +38,7 @@ export function useBatchMetadataOperations({
 }) {
   const [activeIds, setActiveIds] = useState(initialIds);
   const [saveSummary, setSaveSummary] = useState<BatchImageUpdateResponse | null>(null);
-  const [migrateError, setMigrateError] = useState("");
   const saveStatus = useAsyncActionStatus({ successDurationMs: null });
-  const migrateStatus = useAsyncActionStatus({ successDurationMs: null });
   const activeIdSet = useMemo(() => new Set(activeIds), [activeIds]);
 
   const remove = (id: string) => {
@@ -79,52 +74,12 @@ export function useBatchMetadataOperations({
     });
   };
 
-  const migrate = async (target: string) => {
-    setMigrateError("");
-    return migrateStatus.run(async () => {
-      try {
-        const response = await api<BatchStorageMigrationResponse>(
-          `${adminApiBasePath}/images/batch-migrate-storage`,
-          {
-            method: "POST",
-            body: JSON.stringify({ ids: activeIds, target })
-          }
-        );
-        if (response.migrated) onSaved();
-        if (response.failed) {
-          const unchanged = Math.max(
-            0,
-            activeIds.length - response.migrated - response.failed
-          );
-          reportAdminUiError(
-            "image_metadata.storage_migration_partial",
-            new Error(`批量存储迁移失败 ${response.failed}/${activeIds.length}`),
-            response
-          );
-          setMigrateError(
-            `迁移未全部完成：已迁移 ${response.migrated} 项，`
-            + `未变化 ${unchanged} 项，失败 ${response.failed} 项。`
-          );
-          return false;
-        }
-        return true;
-      } catch (error) {
-        reportAdminUiError("image_metadata.storage_migration", error);
-        return false;
-      }
-    });
-  };
-
   return {
     activeIds,
     activeIdSet,
     remove,
     save,
     saveStatus,
-    saveSummary,
-    migrate,
-    migrateError,
-    clearMigrateError: () => setMigrateError(""),
-    migrateStatus
+    saveSummary
   };
 }
