@@ -151,3 +151,5 @@ export function useImportQueue(pageSize: number) {
     applyDefaultsToAll
   };
 }
+
+export type ImportQueueController = ReturnType<typeof useImportQueue>;
