@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type RefObject } from "react";
 import { Icon } from "../icon/Icon.js";
 
 export function PasswordInput({
@@ -9,7 +9,8 @@ export function PasswordInput({
   maxLength,
   autoComplete,
   autoFocus = false,
-  ariaInvalid = false
+  ariaInvalid = false,
+  inputRef
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -19,11 +20,13 @@ export function PasswordInput({
   autoComplete?: string;
   autoFocus?: boolean;
   ariaInvalid?: boolean;
+  inputRef?: RefObject<HTMLInputElement | null>;
 }) {
   const [show, setShow] = useState(false);
   return (
     <div className="password-input">
       <input
+        ref={inputRef}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         type={show ? "text" : "password"}

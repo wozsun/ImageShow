@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from "react";
+import { useId, useRef, useState, type FormEvent, type RefObject } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, isApiClientError } from "../../lib/api/client.js";
 import { Icon } from "../../components/icon/Icon.js";
@@ -6,8 +6,7 @@ import { AsyncActionButton } from "../../components/actions/AsyncActionButton.js
 import { StableButtonLabel } from "../../components/data-display/StableButtonLabel.js";
 import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
 import { ConfirmDialog } from "../../components/feedback/ConfirmDialog.js";
-import { useAnimatedClose } from "../../hooks/useAnimatedClose.js";
-import { useBodyScrollLock } from "../../hooks/useBodyScrollLock.js";
+import { DialogFrame } from "../../components/feedback/DialogFrame.js";
 import { adminApiBasePath, slugFormatHint, slugPattern } from "../../lib/constants.js";
 import { queryKeys } from "../../lib/api/query-keys.js";
 import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
@@ -45,6 +44,7 @@ export function UserAdmin() {
   const [createError, setCreateError] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<AdminUser | null>(null);
   const [resetting, setResetting] = useState<AdminUser | null>(null);
+  const resetPasswordTriggerRef = useRef<HTMLButtonElement | null>(null);
   const createAction = useAsyncActionStatus({ resultDurationMs: null });
   const generatePasswordStatus = useAsyncActionStatus();
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -186,7 +186,8 @@ export function UserAdmin() {
           <UserCard
             key={user.username}
             user={user}
-            onResetPassword={() => {
+            onResetPassword={(trigger) => {
+              resetPasswordTriggerRef.current = trigger;
               setResetting(user);
             }}
             onDelete={() => setConfirmDelete(user)}
@@ -209,6 +210,7 @@ export function UserAdmin() {
       {resetting && (
         <ResetPasswordModal
           username={resetting.username}
+          returnFocusRef={resetPasswordTriggerRef}
           onClose={() => setResetting(null)}
           onError={(error) => reportAdminUiError("user_admin.reset_password", error)}
         />
@@ -217,7 +219,11 @@ export function UserAdmin() {
   );
 }
 
-function UserCard({ user, onResetPassword, onDelete }: { user: AdminUser; onResetPassword: () => void; onDelete: () => void }) {
+function UserCard({ user, onResetPassword, onDelete }: {
+  user: AdminUser;
+  onResetPassword: (trigger: HTMLButtonElement) => void;
+  onDelete: () => void;
+}) {
   const isSuper = user.role === "super";
   return (
     <div className={`entity-card user-card${isSuper ? " is-pinned" : ""}`}>
@@ -234,7 +240,7 @@ function UserCard({ user, onResetPassword, onDelete }: { user: AdminUser; onRese
               className="icon"
               type="button"
               title="重置密码"
-              onClick={onResetPassword}
+              onClick={(event) => onResetPassword(event.currentTarget)}
             >
               <Icon name="key-2-line" />
             </button>
@@ -253,14 +259,20 @@ function UserCard({ user, onResetPassword, onDelete }: { user: AdminUser; onRese
   );
 }
 
-function ResetPasswordModal({ username, onClose, onError }: { username: string; onClose: () => void; onError: (error: unknown) => void }) {
+function ResetPasswordModal({ username, returnFocusRef, onClose, onError }: {
+  username: string;
+  returnFocusRef: RefObject<HTMLElement | null>;
+  onClose: () => void;
+  onError: (error: unknown) => void;
+}) {
+  const titleId = useId();
+  const descriptionId = useId();
+  const passwordInputRef = useRef<HTMLInputElement | null>(null);
   const [password, setPassword] = useState("");
   const resetPasswordStatus = useAsyncActionStatus({ successDurationMs: null });
   const passwordInvalid = password.length > 0 && !isValidAdminPassword(password);
-  const exit = useAnimatedClose(onClose);
-  useBodyScrollLock();
 
-  const submit = async (event: FormEvent) => {
+  const submit = async (event: FormEvent, requestClose: () => void) => {
     event.preventDefault();
     if (!isValidAdminPassword(password) || resetPasswordStatus.pending) return;
     const succeeded = await resetPasswordStatus.run(async () => {
@@ -275,60 +287,67 @@ function ResetPasswordModal({ username, onClose, onError }: { username: string; 
         return false;
       }
     });
-    if (succeeded) exit.requestClose();
+    if (succeeded) requestClose();
   };
 
   return (
-    <div
-      className={`modal edit-modal ${exit.closing ? "is-closing" : ""}`}
-      role="dialog"
-      aria-modal="true"
-      aria-label="重置密码"
-      onAnimationEnd={exit.onAnimationEnd}
+    <DialogFrame
+      className="modal edit-modal"
+      titleId={titleId}
+      descriptionId={descriptionId}
+      busy={resetPasswordStatus.pending}
+      initialFocusRef={passwordInputRef}
+      returnFocusRef={returnFocusRef}
+      onClose={onClose}
     >
-      <form className="operation-modal" onSubmit={submit}>
-        <header>
-          <div>
-            <h2>重置密码</h2>
-            <p>为图片管理员「{username}」设置新密码（{passwordPolicyHint}）。</p>
-          </div>
-          <button
-            className="icon close pressable"
-            type="button"
-            title="关闭"
-            disabled={resetPasswordStatus.pending}
-            onClick={() => exit.requestClose()}
-          >
-            <Icon name="close-line" />
-          </button>
-        </header>
-        <div className="operation-body">
-          <label>
-            新密码
-            <PasswordInput
-              value={password}
-              onChange={setPassword}
-              placeholder={passwordPolicyHint}
+      {({ requestClose }) => (
+        <form className="operation-modal" onSubmit={(event) => void submit(event, requestClose)}>
+          <header>
+            <div>
+              <h2 id={titleId}>重置密码</h2>
+              <p id={descriptionId}>
+                为图片管理员「{username}」设置新密码（{passwordPolicyHint}）。
+              </p>
+            </div>
+            <button
+              className="icon close pressable"
+              type="button"
+              title="关闭"
               disabled={resetPasswordStatus.pending}
-              maxLength={128}
-              autoComplete="new-password"
-              autoFocus
-              ariaInvalid={passwordInvalid}
+              onClick={() => requestClose()}
+            >
+              <Icon name="close-line" />
+            </button>
+          </header>
+          <div className="operation-body">
+            <label>
+              新密码
+              <PasswordInput
+                inputRef={passwordInputRef}
+                value={password}
+                onChange={setPassword}
+                placeholder={passwordPolicyHint}
+                disabled={resetPasswordStatus.pending}
+                maxLength={128}
+                autoComplete="new-password"
+                autoFocus
+                ariaInvalid={passwordInvalid}
+              />
+              {passwordInvalid && <p className="field-error">{passwordPolicyHint}</p>}
+            </label>
+          </div>
+          <footer>
+            <button type="button" disabled={resetPasswordStatus.pending} onClick={() => requestClose()}>取消</button>
+            <AsyncActionButton
+              className="button"
+              type="submit"
+              status={resetPasswordStatus.status}
+              presentation={resetPasswordPresentation}
+              disabled={resetPasswordStatus.pending || !isValidAdminPassword(password)}
             />
-            {passwordInvalid && <p className="field-error">{passwordPolicyHint}</p>}
-          </label>
-        </div>
-        <footer>
-          <button type="button" disabled={resetPasswordStatus.pending} onClick={() => exit.requestClose()}>取消</button>
-          <AsyncActionButton
-            className="button"
-            type="submit"
-            status={resetPasswordStatus.status}
-            presentation={resetPasswordPresentation}
-            disabled={resetPasswordStatus.pending || !isValidAdminPassword(password)}
-          />
-        </footer>
-      </form>
-    </div>
+          </footer>
+        </form>
+      )}
+    </DialogFrame>
   );
 }

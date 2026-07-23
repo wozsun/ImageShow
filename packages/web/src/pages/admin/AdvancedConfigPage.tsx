@@ -26,6 +26,7 @@ const previewPackagePresentation = {
 export function AdvancedConfigPage() {
   const client = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const packageImportTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [selectedPackage, setSelectedPackage] = useState<unknown | null>(null);
   const [preview, setPreview] = useState<AdvancedConfigPreview | null>(null);
   const [busy, setBusy] = useState<"" | "export" | "preview" | "import">("");
@@ -137,7 +138,10 @@ export function AdvancedConfigPage() {
               status={previewPackageStatus.status}
               presentation={previewPackagePresentation}
               disabled={Boolean(busy) || previewPackageStatus.pending}
-              onClick={() => fileInputRef.current?.click()}
+              onClick={(event) => {
+                packageImportTriggerRef.current = event.currentTarget;
+                fileInputRef.current?.click();
+              }}
             />
             <button
               className="button"
@@ -157,6 +161,7 @@ export function AdvancedConfigPage() {
         <ConfigPackageImportDialog
           preview={preview}
           busy={busy === "import"}
+          returnFocusRef={packageImportTriggerRef}
           onClose={clearImport}
           onImport={applyPackage}
         />
