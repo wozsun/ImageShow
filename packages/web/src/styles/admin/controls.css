@@ -6,6 +6,18 @@
 /* 提交/保存的文案会在空闲与处理中切换；预留四个汉字的内容宽度，避免按钮跳动。 */
 .workflow-submit-button { min-width: calc(4em + 26px); }
 
+.workflow-collapse-toggle { display: none; }
+
+.apply-to-all-button {
+  align-self: end;
+  min-height: 38px;
+  padding: 9px 10px;
+  white-space: nowrap;
+}
+.admin button.apply-to-all-button:not(:disabled):not(.select-trigger):active {
+  transform: scale(var(--pressable-active-scale, var(--pressable-scale-medium, .98)));
+}
+
 .async-action-button {
   transition: color .16s ease, background-color .16s ease, border-color .16s ease;
 }
@@ -227,6 +239,9 @@
 /*表单字段校验提示（slug 非法、密码不符合策略等）。*/
 .field-error { margin: 0; color: #d64545; font-size: 13px; }
 
+/*后台表单的错误提示（登录失败、账户设置校验、图片弹窗等，均在后台分块内）。*/
+.error { color: #b42318; margin: 0; }
+
 .password-input { position: relative; width: 100%; min-width: 0; }
 .password-input input { width: 100%; padding-right: 38px; }
 .password-toggle {
@@ -289,8 +304,6 @@ textarea.is-changed,
 }
 .tag-chip-remove:hover { background: #d8dee7; color: #384150; }
 .tag-chip-remove .app-icon { width: 12px; height: 12px; flex-basis: 12px; }
-
-.tag-input-control.upload-default-tags { flex: 2 1 0; min-width: 200px; align-self: end; }
 
 .select-control.is-storage-select { width: 120px; min-width: 120px; flex: 0 0 auto; }
 

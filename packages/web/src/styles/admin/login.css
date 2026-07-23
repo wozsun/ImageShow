@@ -1,0 +1,98 @@
+.login {
+  /* 用 svh（小视口高度）而非 vh：iOS Safari 的 100vh 是工具栏收起后的「大视口」，比初始可见区域高，
+     在其中垂直居中会把登录框推到可见中线之下、底部还可能被地址栏遮挡。svh 对齐可见区域，居中才正确。 */
+  min-height: 100svh;
+  display: grid;
+  place-items: center;
+  background-size: cover;
+  background-position: center;
+}
+
+.login form {
+  width: min(360px, calc(100vw - 32px));
+  display: grid;
+  gap: 12px;
+  background: rgba(255, 255, 255, .94);
+  padding: 24px;
+  border: 1px solid #dce2ea;
+  border-radius: 8px;
+  animation: surface-in .2s ease-out;
+}
+.login h1 { margin: 0 0 6px; }
+.login-altcha-shell {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+}
+.login-challenge-slot { position: relative; min-height: 40px; }
+.login-altcha {
+  /* ALTCHA 上游样式使用 light-dark()。这里显式设置登录页配色，避免构建器转换后的
+     颜色变量在不支持的环境中失效，同时把标准组件收成与表单一致的扁平验证条。 */
+  --altcha-border-color: #d0d5dd;
+  --altcha-border-radius: 6px;
+  --altcha-checkbox-border-color: #98a2b3;
+  --altcha-checkbox-size: 20px;
+  --altcha-color-base: #fff;
+  --altcha-color-base-content: #20242a;
+  --altcha-color-neutral: #d0d5dd;
+  --altcha-color-neutral-content: #667085;
+  --altcha-input-background-color: #fff;
+  --altcha-max-width: 100%;
+  --altcha-padding: 8px 10px;
+  --altcha-spinner-color: #667085;
+  display: block;
+  width: 100%;
+  overflow: visible;
+}
+.login-altcha .altcha,
+.login-altcha .altcha-main { width: 100%; }
+.login-altcha .altcha-main { padding-right: 40px; }
+.login-altcha .altcha-popover[data-variant="error"] {
+  --altcha-popover-color: #fda29b;
+  left: 0;
+  background: #fff4f2;
+  border-color: #fda29b;
+  color: #b42318;
+}
+.login-altcha .altcha-popover[data-variant="error"] .altcha-popover-content {
+  justify-content: flex-start;
+  padding: 7px 10px;
+  text-align: left;
+}
+.login-altcha .altcha-popover[data-variant="error"] .altcha-error {
+  width: 100%;
+  margin: 0;
+  text-align: left;
+}
+.login-altcha .altcha[data-state="verified"] .altcha-checkbox-wrap {
+  cursor: default;
+  pointer-events: none;
+}
+.login-altcha-mark {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  width: 20px;
+  height: 20px;
+  color: #667085;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+.login-challenge-retry {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid #d92d20;
+  border-radius: 6px;
+  background: #fff;
+  color: #b42318;
+  cursor: pointer;
+}
+.login-challenge-retry:hover { background: #fff4f2; }
+.login .error { line-height: 20px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .login form { animation: none; }
+}

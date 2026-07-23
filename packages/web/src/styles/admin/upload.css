@@ -109,7 +109,6 @@
   gap: 8px;
   border-bottom: 1px solid #dce2ea;
 }
-.workflow-collapse-toggle { display: none; }
 .select-control.upload-default-select { flex: 0 0 auto; }
 .upload-default-select .select-trigger { padding-right: 30px; }
 .select-control.upload-default-device { width: 120px; }
@@ -117,10 +116,7 @@
 .upload-default-pair { display: contents; }
 .slug-combo-control.upload-default-theme { flex: 1 1 0; min-width: 150px; }
 .slug-combo-control.upload-default-author { flex: 1 1 0; min-width: 150px; }
-.apply-to-all-button { align-self: end; min-height: 38px; padding: 9px 10px; white-space: nowrap; }
-.admin button.apply-to-all-button:not(:disabled):not(.select-trigger):active {
-  transform: scale(var(--pressable-active-scale, var(--pressable-scale-medium, .98)));
-}
+.tag-input-control.upload-default-tags { flex: 2 1 0; min-width: 200px; align-self: end; }
 .upload-picker {
   --pressable-active-scale: var(--pressable-scale-large, .99);
   width: 200px;
@@ -359,4 +355,208 @@ button.empty-state.upload-dropzone:not(:disabled):hover,
 .upload-dropzone.is-dragover { border-style: solid; }
 .admin button.upload-dropzone:not(:disabled):not(.select-trigger):active {
   transform: scale(var(--pressable-scale-large, .99));
+}
+
+@media (max-width: 1080px) {
+  .upload-defaults { grid-template-columns: 1fr 1fr; }
+}
+
+/* 中等宽度（高于移动端、又不足以让默认条在一行排下）：把主题 + 标签
+   这一对作为整体落到第二行，应用到全部留在第一行与选择器并排。 */
+@media (min-width: 761px) and (max-width: 1023px) {
+  .upload-default-pair {
+    order: 2;
+    flex: 1 1 100%;
+    min-width: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: 8px;
+  }
+  .upload-defaults .apply-to-all-button { order: 1; }
+}
+
+@media (max-width: 760px) {
+  .upload-overlay { padding: 0; place-items: stretch; }
+  .upload-window {
+    width: 100%;
+    height: 100svh;
+    height: 100dvh;
+    max-height: none;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+    border-radius: 0;
+  }
+  .upload-window > header.upload-window-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-rows: auto auto;
+    align-items: center;
+    gap: 8px;
+    padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) 10px max(10px, env(safe-area-inset-left));
+  }
+  .upload-head-copy,
+  .upload-head-actions,
+  .upload-primary-actions { display: contents; }
+  .upload-window-header h1 {
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
+    font-size: 21px;
+  }
+  .upload-window-header p {
+    grid-column: 1;
+    grid-row: 2;
+    min-width: 0;
+    height: 40px;
+    max-height: 40px;
+    overflow: hidden;
+    line-height: 20px;
+  }
+  .upload-task-summary { display: block; }
+  .upload-summary-primary,
+  .upload-summary-secondary { display: inline; }
+  .upload-clear-actions { display: none; }
+  .upload-cleanup-trigger {
+    grid-column: 2;
+    grid-row: 1;
+    display: inline-flex;
+    width: 44px;
+    height: 44px;
+    color: #a13a32;
+  }
+  .upload-primary-actions .upload-picker {
+    grid-column: 2 / 4;
+    grid-row: 2;
+    width: auto;
+    min-width: 116px;
+    min-height: 44px;
+    white-space: nowrap;
+  }
+  .upload-close-button {
+    grid-column: 3;
+    grid-row: 1;
+    width: 44px;
+    height: 44px;
+    justify-self: end;
+  }
+  .upload-list {
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .upload-pagination {
+    min-height: 52px;
+    margin: 0;
+    padding: 6px max(10px, env(safe-area-inset-right)) 6px max(10px, env(safe-area-inset-left));
+  }
+  .admin-pagination.upload-pagination { display: flex; margin: 0; }
+  .upload-window > footer .upload-footer-pagination { display: none; }
+  .upload-pagination button { flex: 1; min-height: 40px; }
+  .upload-window > footer {
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 8px;
+    padding: 8px max(10px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+  }
+  .upload-window > footer .upload-footer-left,
+  .upload-window > footer .modal-footer-actions {
+    min-width: 0;
+    justify-self: stretch;
+  }
+  .upload-window > footer .modal-footer-actions { grid-column: 2; }
+  .upload-window > footer button,
+  .upload-window > footer .select-trigger { min-height: 44px; }
+  .upload-window > footer .select-control.is-storage-select {
+    width: 120px;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .upload-window > footer .upload-storage-hint { display: none; }
+  .upload-window > footer .modal-footer-actions { gap: 6px; }
+  .upload-window > footer .modal-footer-actions button { white-space: nowrap; }
+
+  .upload-defaults-panel.is-expanded .workflow-collapse-toggle > .app-icon {
+    transform: rotate(180deg);
+  }
+  .upload-defaults-panel .upload-defaults { display: none; }
+  .upload-defaults-panel.is-expanded .upload-defaults {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+    gap: 8px;
+    padding: 10px max(12px, env(safe-area-inset-right)) 10px max(12px, env(safe-area-inset-left));
+  }
+  .upload-default-pair { display: contents; }
+  .select-control.upload-default-select,
+  .slug-combo-control.upload-default-theme,
+  .slug-combo-control.upload-default-author,
+  .tag-input-control.upload-default-tags {
+    width: auto;
+    min-width: 0;
+  }
+  .tag-input-control.upload-default-tags,
+  .upload-defaults .apply-to-all-button { grid-column: 1 / -1; }
+  .upload-defaults .apply-to-all-button {
+    --pressable-active-scale: var(--pressable-scale-large, .99);
+  }
+
+  .upload-list { padding: 10px; }
+  .import-job {
+    grid-template-columns: 56px minmax(0, 1fr) auto;
+    grid-template-areas:
+      "aside head actions"
+      "fields fields fields"
+      "duplicate duplicate duplicate";
+    gap: 8px;
+    padding: 8px;
+  }
+  .import-job-aside { grid-area: aside; grid-row: auto; }
+  .import-job-aside > .import-job-size { display: none; }
+  .import-job-head { grid-area: head; gap: 2px; }
+  .import-job-head .import-job-size-summary { display: block; }
+  .import-job-actions { grid-area: actions; }
+  .import-job-preview,
+  .import-job-thumbnail {
+    width: 56px;
+    height: 56px;
+    flex-basis: 56px;
+  }
+  .import-job > .image-fields { grid-area: fields; }
+  .import-job > .duplicate-panel { grid-area: duplicate; }
+  .import-job-head strong,
+  .import-job-head span { line-height: 17px; }
+  .duplicate-body { flex-direction: column; align-items: stretch; }
+  .duplicate-body .inline-actions { justify-content: flex-end; }
+
+  .link-input-hint { white-space: normal; }
+  .link-import-actions { align-items: stretch; flex-direction: column; }
+  .link-import-action-buttons { width: 100%; margin-left: 0; }
+  .link-import-action-buttons button { flex: 1; min-height: 44px; }
+}
+
+/* 矮屏横屏无法同时容纳展开的默认属性、卡片区、分页和底栏。
+   仅在这个极端尺寸内限制属性区高度，让属性内容自身滚动，保证分页与底栏始终可达。 */
+@media (max-width: 760px) and (max-height: 480px) and (orientation: landscape) {
+  .upload-defaults-panel.is-expanded {
+    min-height: 0;
+    max-height: 32dvh;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    overflow: hidden;
+  }
+
+  .upload-defaults-panel.is-expanded .upload-defaults {
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .upload-overlay,
+  .upload-window { animation: none; }
 }
