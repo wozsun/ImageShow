@@ -25,7 +25,6 @@ import { useAsyncActionStatus } from "../../../hooks/useAsyncActionStatus.js";
 
 type RuntimeConfigResponse = {
   config: RuntimeConfig;
-  changes?: RuntimeConfigChangeSummary;
 };
 
 const formatConfig = (config: unknown) => JSON.stringify(config, null, 2);
@@ -165,7 +164,7 @@ export function RuntimeConfigEditor({ reloadToken }: {
     if (!candidate) return false;
     setAction("save");
     try {
-      const response = await api<Required<RuntimeConfigResponse>>(
+      const response = await api<RuntimeConfigResponse>(
         `${adminApiBasePath}/advanced-config/runtime`,
         { method: "POST", body: JSON.stringify({ config: candidate }) }
       );

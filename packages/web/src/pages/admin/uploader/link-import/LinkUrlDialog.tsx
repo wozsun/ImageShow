@@ -117,7 +117,7 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
       ? "没有可导入的有效链接"
       : formatUrlImportSummary(urlParseResultCurrent)
     : weiboResultCurrent
-      ? `已解析 ${weiboResultCurrent.posts.length} 条微博，共 ${weiboResultCurrent.manifest.items.length} 张可导入图片`
+      ? `已解析 ${weiboResultCurrent.post_count} 条微博，共 ${weiboResultCurrent.manifest.items.length} 张可导入图片`
       : "";
 
   const resetParsedResult = () => {
@@ -311,9 +311,6 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
             </ol>
           </div>
         )}
-        <p className="hint link-import-mode-hint">
-          服务端会下载、压缩并保存图片，原始下载数据不会保留。
-        </p>
         <div className="link-import-actions">
           <div className="link-import-action-buttons">
             <button type="button" onClick={close}>取消</button>

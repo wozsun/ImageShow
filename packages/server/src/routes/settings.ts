@@ -2,7 +2,6 @@ import type { Hono } from "hono";
 import { adminApiBasePath } from "@imageshow/shared";
 import { apiSuccess } from "../core/http/responses.ts";
 import { requireSuperAdmin } from "../users/admin-session.ts";
-import { applicationVersion } from "../core/application-version.ts";
 import {
   getSettingsForAdmin,
   parseSettingsInput,
@@ -13,8 +12,7 @@ import {
 export function registerSettingsRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/settings`, (c) => {
     return c.json(apiSuccess({
-      settings: getSettingsForAdmin(),
-      application_version: applicationVersion()
+      settings: getSettingsForAdmin()
     }));
   });
 

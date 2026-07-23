@@ -154,7 +154,7 @@ export async function listUnresolvedMoveCleanupReferences(
 
 /** Reset only permanently exhausted cleanup work that references one backend. */
 export async function retryExhaustedMoveCleanupJobs(storageSlug: string) {
-  const result = await pool.query(
+  await pool.query(
     `UPDATE background_job AS job
      SET status='pending',
          payload=job.payload - 'rerun_requested',
@@ -184,5 +184,4 @@ export async function retryExhaustedMoveCleanupJobs(storageSlug: string) {
        )`,
     [storageSlug]
   );
-  return result.rowCount ?? 0;
 }

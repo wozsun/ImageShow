@@ -12,6 +12,7 @@ const jsonlManifestBodyMaxBytes = appConfig.imports.jsonlManifestMaxBytes;
 const advancedConfigMaxBytes =
   appConfig.imports.configPackageMaxBytes + 64 * 1024;
 const adminPreferencesBodyMaxBytes = adminPreferencesMaxBytes + 1024;
+const adminPreferencesPath = `${adminApiBasePath}/preferences`;
 const jsonlManifestPath = `${adminApiBasePath}/imports/jsonl/parse`;
 const weiboImportPath = `${adminApiBasePath}/imports/weibo/parse`;
 // Fifty maximum-length URLs occupy about 600 KiB after worst-case JSON
@@ -94,11 +95,13 @@ export function getRequestBodyBytes(c: Context) {
 
 const limitStandardApiBody = measuredBodyLimit(standardApiBodyMaxBytes);
 
+export const limitAdminLoginBody = measuredBodyLimit(standardApiBodyMaxBytes);
+
 export const limitJsonlManifestBody = measuredBodyLimit(jsonlManifestBodyMaxBytes);
 
 export const limitWeiboImportBody = measuredBodyLimit(weiboImportBodyMaxBytes);
 
-const limitConfigPackageBody = measuredBodyLimit(advancedConfigMaxBytes);
+export const limitAdvancedConfigBody = measuredBodyLimit(advancedConfigMaxBytes);
 
 export const limitBatchImageUpdateBody = measuredBodyLimit(batchImageUpdateBodyMaxBytes);
 
@@ -111,6 +114,16 @@ export function limitApiRequestBody(c: Context, next: Next) {
     // 消费正文，因此这里也跳过分块请求的预读和重建，保持固定开销。
     return next();
   }
+  if (path.startsWith(`${adminApiBasePath}/`)) {
+    // Admin routes select their body tier after same-origin checks or session
+    // authentication. This also keeps anonymous large requests off the body.
+    return next();
+  }
+  return limitStandardApiBody(c, next);
+}
+
+export function limitProtectedAdminRequestBody(c: Context, next: Next) {
+  const path = new URL(c.req.url).pathname;
   if (
     path === jsonlManifestPath
     || path === weiboImportPath
@@ -121,8 +134,11 @@ export function limitApiRequestBody(c: Context, next: Next) {
   if (c.req.method === "POST" && path === batchImageUpdatePath) {
     return next();
   }
+  if (c.req.method === "PATCH" && path === adminPreferencesPath) {
+    return next();
+  }
   if (c.req.method === "POST" && advancedConfigLargeBodyPath.test(path)) {
-    return limitConfigPackageBody(c, next);
+    return next();
   }
   return limitStandardApiBody(c, next);
 }

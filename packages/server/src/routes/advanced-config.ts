@@ -3,6 +3,7 @@ import { z } from "zod";
 import { adminApiBasePath } from "@imageshow/shared";
 import { apiSuccess } from "../core/http/responses.ts";
 import { privateNoStoreCacheControl } from "../core/http/headers.ts";
+import { limitAdvancedConfigBody } from "../core/http/request-body-limit.ts";
 import { requireSuperAdmin } from "../users/admin-session.ts";
 import { parse } from "../core/validation.ts";
 import {
@@ -34,14 +35,14 @@ export function registerAdvancedConfigRoutes(app: Hono) {
     return c.json(apiSuccess({ config: getFullRuntimeConfig() }));
   });
 
-  app.post(`${adminApiBasePath}/advanced-config/runtime/validate`, requireSuperAdmin, async (c) => {
+  app.post(`${adminApiBasePath}/advanced-config/runtime/validate`, requireSuperAdmin, limitAdvancedConfigBody, async (c) => {
     const input = parse(runtimeInput, await c.req.json().catch(() => ({})));
     const result = validateFullRuntimeConfig(input.config);
     c.header("Cache-Control", privateNoStoreCacheControl);
     return c.json(apiSuccess({ changes: result.changes }));
   });
 
-  app.post(`${adminApiBasePath}/advanced-config/runtime`, requireSuperAdmin, async (c) => {
+  app.post(`${adminApiBasePath}/advanced-config/runtime`, requireSuperAdmin, limitAdvancedConfigBody, async (c) => {
     const input = parse(runtimeInput, await c.req.json().catch(() => ({})));
     const result = await saveFullRuntimeConfig(input.config);
     c.header("Cache-Control", privateNoStoreCacheControl);
@@ -56,13 +57,14 @@ export function registerAdvancedConfigRoutes(app: Hono) {
     return c.body(`${JSON.stringify(pkg, null, 2)}\n`);
   });
 
-  app.post(`${adminApiBasePath}/advanced-config/preview`, requireSuperAdmin, async (c) => {
+  app.post(`${adminApiBasePath}/advanced-config/preview`, requireSuperAdmin, limitAdvancedConfigBody, async (c) => {
     const input = parse(previewInput, await c.req.json().catch(() => ({})));
     return c.json(apiSuccess({ preview: await previewConfigPackage(input.package) }));
   });
 
-  app.post(`${adminApiBasePath}/advanced-config/import`, requireSuperAdmin, async (c) => {
+  app.post(`${adminApiBasePath}/advanced-config/import`, requireSuperAdmin, limitAdvancedConfigBody, async (c) => {
     const input = parse(importInput, await c.req.json().catch(() => ({})));
-    return c.json(apiSuccess({ result: await importConfigPackage(input.package, input.slug_mappings) }));
+    await importConfigPackage(input.package, input.slug_mappings);
+    return c.json(apiSuccess());
   });
 }

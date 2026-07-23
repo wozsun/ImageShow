@@ -23,7 +23,10 @@ import {
   requireAdminCsrf,
   requireAdminSession
 } from "./users/admin-session.ts";
-import { limitApiRequestBody } from "./core/http/request-body-limit.ts";
+import {
+  limitApiRequestBody,
+  limitProtectedAdminRequestBody
+} from "./core/http/request-body-limit.ts";
 import { prepareCompressionThreshold } from "./core/http/compression-threshold.ts";
 import { registerAdminLogRoutes } from "./routes/admin-logs.ts";
 import { registerAdvancedConfigRoutes } from "./routes/advanced-config.ts";
@@ -134,11 +137,12 @@ registerSecurityReportRoutes(app);
 
 app.use(`${adminApiBasePath}/*`, requireAdminSession);
 app.use(`${adminApiBasePath}/*`, auditAdminMutation);
-registerProtectedAuthRoutes(app);
 app.use(`${adminApiBasePath}/*`, async (c, next) => {
   if (c.req.method !== "GET") return requireAdminCsrf(c, next);
   await next();
 });
+app.use(`${adminApiBasePath}/*`, limitProtectedAdminRequestBody);
+registerProtectedAuthRoutes(app);
 
 registerAdminImageRoutes(app);
 registerAdminTagRoutes(app);

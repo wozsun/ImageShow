@@ -99,7 +99,7 @@ export function AdvancedConfigPage() {
     if (!selectedPackage || busy) return false;
     setBusy("import");
     try {
-      await api<{ result: { imported_backends: string[] } }>(
+      await api(
         `${adminApiBasePath}/advanced-config/import`,
         {
           method: "POST",

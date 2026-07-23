@@ -57,8 +57,8 @@ export function registerStorageRoutes(app: Hono) {
 
   app.post(`${adminApiBasePath}/storage/backends/:slug/cleanup/retry`, requireSuperAdmin, async (c) => {
     const slug = parse(storageSlugInput, c.req.param("slug"));
-    const retried = await retryStorageBackendCleanup(slug);
-    return c.json(apiSuccess({ retried }));
+    await retryStorageBackendCleanup(slug);
+    return c.json(apiSuccess());
   });
 
   app.post(`${adminApiBasePath}/storage/backends/:slug`, requireSuperAdmin, async (c) => {
@@ -71,6 +71,7 @@ export function registerStorageRoutes(app: Hono) {
   app.post(`${adminApiBasePath}/storage/test`, requireSuperAdmin, async (c) => {
     const body = await c.req.json().catch(() => ({}));
     const config = await resolveStorageTestConfig(body);
-    return c.json(apiSuccess({ result: await testStorageBackend(config) }));
+    await testStorageBackend(config);
+    return c.json(apiSuccess());
   });
 }

@@ -2,6 +2,7 @@ import type { Hono } from "hono";
 import { adminApiBasePath, type AuthStateDto } from "@imageshow/shared";
 import { ApiError } from "../core/api-error.ts";
 import { apiSuccess } from "../core/http/responses.ts";
+import { limitAdminLoginBody } from "../core/http/request-body-limit.ts";
 import {
   assertSameOrigin,
   blockCrossSiteFetch
@@ -20,8 +21,7 @@ import { getEffectiveLoginBackground } from "../config/app-settings.ts";
 import {
   createAdminSession,
   deleteAdminSession,
-  readAdminSession,
-  requireAdminCsrf
+  readAdminSession
 } from "../users/admin-session.ts";
 
 const sessionRedis = adminSessionRedisClient(redis);
@@ -31,16 +31,23 @@ export function registerPublicAuthRoutes(app: Hono) {
     return c.json(await issueAltchaChallenge(c));
   });
 
-  app.post(`${adminApiBasePath}/auth/login`, async (c) => {
-    const body = await c.req.json().catch(() => ({}));
-    assertSameOrigin(c);
-    await verifyAltchaProof(body.altcha);
-    return c.json(apiSuccess(await createAdminSession(
-      c,
-      String(body.username ?? ""),
-      String(body.password ?? "")
-    )));
-  });
+  app.post(
+    `${adminApiBasePath}/auth/login`,
+    async (c, next) => {
+      assertSameOrigin(c);
+      await next();
+    },
+    limitAdminLoginBody,
+    async (c) => {
+      const body = await c.req.json().catch(() => ({}));
+      await verifyAltchaProof(body.altcha);
+      return c.json(apiSuccess(await createAdminSession(
+        c,
+        String(body.username ?? ""),
+        String(body.password ?? "")
+      )));
+    }
+  );
 
   app.get(`${adminApiBasePath}/auth/me`, async (c) => {
     const session = await readAdminSession(c);
@@ -58,12 +65,12 @@ export function registerPublicAuthRoutes(app: Hono) {
 }
 
 export function registerProtectedAuthRoutes(app: Hono) {
-  app.post(`${adminApiBasePath}/auth/logout`, requireAdminCsrf, async (c) => {
+  app.post(`${adminApiBasePath}/auth/logout`, async (c) => {
     await deleteAdminSession(c);
     return c.json(apiSuccess());
   });
 
-  app.post(`${adminApiBasePath}/auth/password`, requireAdminCsrf, async (c) => {
+  app.post(`${adminApiBasePath}/auth/password`, async (c) => {
     const session = await readAdminSession(c);
     if (!session) throw new ApiError(401, "unauthorized", "Unauthorized");
     const input = parse(passwordChangeInput, await c.req.json().catch(() => ({})));

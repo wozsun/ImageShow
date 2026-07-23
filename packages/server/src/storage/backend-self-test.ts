@@ -10,7 +10,7 @@ export async function testStorageBackend(config?: StorageConfig) {
   const effective = config ?? await getDefaultStorageBackend();
   const driver = resolveStorageAccessForConfig(effective).driver;
   try {
-    return await driver.selfTest();
+    await driver.selfTest();
   } finally {
     if (effective.slug === "(test)") {
       await Promise.resolve().then(() => driver.close?.()).catch((error) => {

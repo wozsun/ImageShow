@@ -56,13 +56,6 @@ async function createImportSessionUnderLocationLock(
   await assertStorageUploadable(storageSlug);
   signal.throwIfAborted();
 
-  if (input.mode === "upload") {
-    const limit = getInputImageMaxBytes();
-    if (!input.size || input.size > limit) {
-      throw new ApiError(400, "upload_too_large", "图片大小超过限制", { limit });
-    }
-  }
-
   const runtime = getRuntimeConfig();
   const sourceUrl = input.source_url ?? "";
   const result = await withTransaction(async (client) => {
@@ -146,6 +139,12 @@ async function createImportSessionUnderLocationLock(
 }
 
 export function createImportSession(input: ImportCreateInput) {
+  if (input.mode === "upload") {
+    const limit = getInputImageMaxBytes();
+    if (!input.size || input.size > limit) {
+      throw new ApiError(400, "upload_too_large", "图片大小超过限制", { limit });
+    }
+  }
   return withStorageLocationReadLock((signal) =>
     createImportSessionUnderLocationLock(input, signal)
   );

@@ -54,7 +54,6 @@ export async function listAdminImages(
   return {
     items: page.items.map(adminImageView),
     total: Number(countResult.rows[0]?.count ?? 0),
-    has_next: page.hasNext,
     next_cursor: page.nextCursor
   };
 }

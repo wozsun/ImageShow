@@ -77,7 +77,7 @@ export async function fetchAdminImagePage(
   );
   const rows = page.rows as Array<ImageRecord & CompleteImageLookupSource & { cursor_image_time: string }>;
   const items = await publicImages(rows);
-  return { rows, items, hasNext: page.hasNext, nextCursor: page.nextCursor };
+  return { rows, items, nextCursor: page.nextCursor };
 }
 
 export async function fetchPublicImageCardPage(

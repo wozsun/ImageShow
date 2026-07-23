@@ -70,18 +70,6 @@ function assertWeiboImageCountWithinHardLimit(imageCount: number) {
   );
 }
 
-function presentWeiboPost(post: ExtractedWeiboPost) {
-  return {
-    source_url: post.source_url,
-    weibo_id: post.weibo_id,
-    bid: post.bid,
-    user_id: post.user_id,
-    author: post.author ?? null,
-    published_at: post.published_at,
-    image_count: post.image_count
-  };
-}
-
 function createWeiboPostParseError(
   error: unknown,
   line: number,
@@ -174,8 +162,8 @@ export async function createWeiboImportBatchManifest(
   );
 
   return {
-    posts: posts.map(presentWeiboPost),
-    errors,
+    post_count: posts.length,
+    errors: errors.map(({ line, url, error }) => ({ line, url, error })),
     manifest
   };
 }

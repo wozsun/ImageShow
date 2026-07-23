@@ -24,10 +24,11 @@
 - 全站响应头包含 `X-Content-Type-Options`、`X-Frame-Options`、`Referrer-Policy`、`Cross-Origin-Opener-Policy` 与 CSP；SPA 以 report-only 模式监测脚本 Trusted Types，白名单只列出实际出现的 `imageshow-altcha-worker`、`svelte-trusted-html`、`decodeHTMLEntitiesPolicy` 与 `AGPolicy`，不放行任意策略名，也不提供放行任意脚本 URL 或 HTML 的默认策略；同源 `/api/security/csp-report` 默认只返回 204，不读取或记录报告正文。登录页在 ALTCHA 首次挂载前预设隐藏 footer 与 logo，使组件不渲染会被 Trusted Types 拒绝的动态 HTML footer；应用只接受 `site.domain` 及其一级保留/主题子域名，未知 `Host` 直接返回不可缓存的 404。
 - 普通 API 请求体在解析前限制为 128 KiB；管理员偏好 PATCH 在鉴权与 CSRF
   通过后使用独立的 5 KiB 传输上限，解析并规范化后的完整 JSONB 另受 4 KiB
-  上限约束。微博解析、JSONL 清单和批量图片编辑分别使用独立的 1 MiB、
-  128 MiB、6 MiB 上限。导入会话随前端 lane 推进逐项创建，每个创建请求仍走
-  普通 API 上限，不存在可一次提交全部任务的批量会话入口。URL 输入窗口与
-  JSONL 解析最多允许 1000 项，微博输入最多 50 条；JSONL / 微博 schema 另有
+  上限约束。完整配置、微博解析、JSONL 清单和批量图片编辑分别使用独立的
+  1088 KiB、1 MiB、128 MiB、6 MiB 传输上限。导入会话随前端 lane 推进逐项
+  创建，每个创建请求仍走普通 API 上限，不存在可一次提交全部任务的批量会话入口。
+  URL 输入窗口与 JSONL 解析最多允许 1000 项，微博输入最多 50 条；JSONL / 微博
+  schema 另有
   3600 项通用硬边界，微博解析结果还有固定 1000 张图片安全上限。微博链接单项
   最多 2048 字符，50 个最大长度字符串按最坏六字节 JSON 转义约为
   0.586 MiB，因此 1 MiB 可覆盖全部合法请求并保留余量。逐条微博失败不会回显

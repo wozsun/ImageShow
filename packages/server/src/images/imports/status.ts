@@ -14,6 +14,23 @@ const activeImportPhases = new Map<
 const importStatusEvents = new EventEmitter();
 importStatusEvents.setMaxListeners(0);
 
+function canonicalImportId(id: string) {
+  return id.toLowerCase();
+}
+
+function uniqueImportIds(ids: string[]) {
+  const seen = new Set<string>();
+  const unique: string[] = [];
+  for (const id of ids) {
+    const canonicalId = canonicalImportId(id);
+    if (seen.has(canonicalId)) continue;
+    seen.add(canonicalId);
+    unique.push(id);
+    if (unique.length === 100) break;
+  }
+  return unique;
+}
+
 function importMessage(status: string, mode?: string, error?: string) {
   if (status === "created") {
     return mode === "upload"
@@ -57,18 +74,19 @@ export function setImportPhase(
   message: string,
   progress?: number
 ) {
-  activeImportPhases.set(id, { phase, message, progress });
+  activeImportPhases.set(canonicalImportId(id), { phase, message, progress });
   notifyImportStatus(id).catch(() => undefined);
 }
 
 export function setImportDownloadProgress(id: string, progress: number) {
   if (!Number.isFinite(progress)) return;
-  const activePhase = activeImportPhases.get(id);
+  const canonicalId = canonicalImportId(id);
+  const activePhase = activeImportPhases.get(canonicalId);
   if (activePhase?.phase !== "downloading") return;
   const normalizedProgress = Math.min(100, Math.max(0, Math.round(progress)));
   if (activePhase.progress === normalizedProgress) return;
   const nextPhase = { ...activePhase, progress: normalizedProgress };
-  activeImportPhases.set(id, nextPhase);
+  activeImportPhases.set(canonicalId, nextPhase);
   emitImportStatus({
     id,
     status: "materializing",
@@ -80,7 +98,7 @@ export function setImportDownloadProgress(id: string, progress: number) {
 }
 
 export function clearImportPhase(id: string) {
-  activeImportPhases.delete(id);
+  activeImportPhases.delete(canonicalImportId(id));
 }
 
 async function getImportStatus(id: string) {
@@ -93,8 +111,19 @@ async function getImportStatus(id: string) {
     error: string;
   } | undefined;
   if (!row) throw new ApiError(404, "not_found", "导入任务不存在");
+  return presentImportStatus(id, row);
+}
+
+function presentImportStatus(
+  id: string,
+  row: {
+    mode: ImportMode;
+    status: ImportStatus;
+    error: string;
+  }
+) {
   const phase = ["created", "materializing", "preparing"].includes(row.status)
-    ? activeImportPhases.get(id)
+    ? activeImportPhases.get(canonicalImportId(id))
     : undefined;
   return {
     status: row.status,
@@ -120,17 +149,31 @@ function missingImportStatus(id: string): ImportStatusEvent {
 }
 
 export async function listImportStatuses(ids: string[]) {
-  const uniqueIds = [...new Set(ids)].slice(0, 100);
-  return Promise.all(uniqueIds.map(async (id) => {
-    try {
-      return await getImportStatusEvent(id);
-    } catch (error) {
-      if (error instanceof ApiError && error.status === 404) {
-        return missingImportStatus(id);
-      }
-      throw error;
-    }
-  }));
+  const uniqueIds = uniqueImportIds(ids);
+  if (!uniqueIds.length) return [];
+  const rows = (await pool.query(
+    `SELECT id, mode, status, error
+       FROM import_session
+      WHERE id = ANY($1::uuid[])`,
+    [uniqueIds]
+  )).rows as Array<{
+    id: string;
+    mode: ImportMode;
+    status: ImportStatus;
+    error: string;
+  }>;
+  // PostgreSQL serializes uuid values in lowercase while the UUID parser also
+  // accepts uppercase input. Keep the caller's ID in the response, but use a
+  // canonical lookup key so a valid uppercase ID is not reported as missing.
+  const rowsById = new Map(
+    rows.map((row) => [canonicalImportId(row.id), row])
+  );
+  return uniqueIds.map((id) => {
+    const row = rowsById.get(canonicalImportId(id));
+    return row
+      ? { id, ...presentImportStatus(id, row) }
+      : missingImportStatus(id);
+  });
 }
 
 function encodeServerSentEvent(event: string, data: unknown) {
@@ -138,8 +181,10 @@ function encodeServerSentEvent(event: string, data: unknown) {
 }
 
 export function streamImportEvents(ids: string[]): Response {
-  const uniqueIds = [...new Set(ids)].slice(0, 100);
-  const watched = new Set(uniqueIds);
+  const uniqueIds = uniqueImportIds(ids);
+  const watched = new Map(
+    uniqueIds.map((id) => [canonicalImportId(id), id])
+  );
   const encoder = new TextEncoder();
   let closed = false;
   let heartbeat: ReturnType<typeof setInterval> | undefined;
@@ -157,16 +202,24 @@ export function streamImportEvents(ids: string[]): Response {
       };
 
       listener = (status) => {
-        if (watched.has(status.id)) send("import-status", status);
+        const responseId = watched.get(canonicalImportId(status.id));
+        if (!responseId) return;
+        send("import-status", responseId === status.id
+          ? status
+          : { ...status, id: responseId });
       };
       importStatusEvents.on("status", listener);
       send("ready", { ids: uniqueIds });
 
-      for (const id of uniqueIds) {
-        getImportStatusEvent(id)
-          .then((status) => send("import-status", status))
-          .catch(() => send("import-status", missingImportStatus(id)));
-      }
+      void listImportStatuses(uniqueIds)
+        .then((statuses) => {
+          for (const status of statuses) send("import-status", status);
+        })
+        .catch(() => {
+          for (const id of uniqueIds) {
+            send("import-status", missingImportStatus(id));
+          }
+        });
 
       heartbeat = setInterval(() => {
         send("ping", { now: Date.now() });

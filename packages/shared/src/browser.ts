@@ -72,7 +72,6 @@ export type BatchImageUpdateResponse = {
 
 export type BatchStorageMigrationResponse = {
   migrated: number;
-  unchanged: number;
   failed: number;
 };
 
@@ -139,7 +138,6 @@ export type AdminImageItemDto = PublicImageItemDto & {
 export type AdminImageListResponse = {
   items: AdminImageItemDto[];
   total: number;
-  has_next: boolean;
   next_cursor: string | null;
 };
 

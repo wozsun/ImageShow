@@ -335,7 +335,7 @@ export function ImageAdmin() {
         page={pageNumber}
         totalPages={totalPages}
         previousDisabled={operationBusy || cursorHistory.length === 1 || isFetching || pageNavigation !== null}
-        nextDisabled={operationBusy || !data?.has_next || !data.next_cursor || isFetching || pageNavigation !== null}
+        nextDisabled={operationBusy || !data?.next_cursor || isFetching || pageNavigation !== null}
         onPrevious={previousPage}
         onNext={nextPage}
       />

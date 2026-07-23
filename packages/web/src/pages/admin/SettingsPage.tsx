@@ -31,10 +31,10 @@ const saveSettingsPresentation = {
 } as const;
 
 export function SettingsPage() {
-  const query = useQuery<{
-    settings: AdminSettings;
-    application_version: string;
-  }>({ queryKey: queryKeys.settings, queryFn: ({ signal }) => api(`${adminApiBasePath}/settings`, { signal }) });
+  const query = useQuery<{ settings: AdminSettings }>({
+    queryKey: queryKeys.settings,
+    queryFn: ({ signal }) => api(`${adminApiBasePath}/settings`, { signal })
+  });
   const client = useQueryClient();
   const [settings, setSettings] = useState<AdminSettings | null>(null);
   const reloadConfigStatus = useAsyncActionStatus();

@@ -135,10 +135,8 @@
 .link-input-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-bottom: 1px solid #dce2ea; }
 .link-input-tabs button { border: 0; border-radius: 0; background: transparent; color: #66717f; }
 .link-input-tabs button.is-active { color: #1f5fae; box-shadow: inset 0 -2px #1f6feb; }
-.link-input-hint,
-.link-import-mode-hint { margin: 0; line-height: 20px; }
+.link-input-hint { margin: 0; line-height: 20px; }
 .link-input-hint { white-space: normal; }
-.link-import-mode-hint { margin-top: 2px; }
 .link-import-urls { width: 100%; height: 190px; min-height: 190px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; padding: 10px; }
 .link-import-input-region { width: 100%; min-height: 0; display: flex; flex-direction: column; }
 .link-import-input-region.has-result-summary {

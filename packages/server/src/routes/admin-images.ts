@@ -125,7 +125,7 @@ export function registerAdminImageRoutes(app: Hono) {
     });
     logger.info("batch_storage_migration_summary", {
       requested: result.requested,
-      succeeded: result.migrated + result.unchanged,
+      succeeded: result.succeeded,
       failed: result.failed,
       total_duration_ms: Math.round((performance.now() - startedAt) * 100) / 100,
       max_item_duration_ms: Math.round(maxItemDurationMs * 100) / 100,
@@ -135,7 +135,6 @@ export function registerAdminImageRoutes(app: Hono) {
     });
     return c.json(apiSuccess({
       migrated: result.migrated,
-      unchanged: result.unchanged,
       failed: result.failed,
     }));
   });

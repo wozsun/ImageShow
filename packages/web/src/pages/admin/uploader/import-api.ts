@@ -67,25 +67,14 @@ export type JsonlManifestResult = {
   errors: JsonlManifestParseError[];
 };
 
-type WeiboImportPost = {
-  source_url: string;
-  weibo_id: string;
-  bid: string;
-  user_id: string;
-  author: string | null;
-  published_at: string;
-  image_count: number;
-};
-
 export type WeiboImportParseError = {
   line: number;
   url: string;
-  code: string;
   error: string;
 };
 
 export type WeiboImportResult = {
-  posts: WeiboImportPost[];
+  post_count: number;
   errors: WeiboImportParseError[];
   manifest: JsonlManifestResult;
 };

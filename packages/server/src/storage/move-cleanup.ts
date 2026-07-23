@@ -176,16 +176,15 @@ export async function enqueueObjectsForCleanup(
   });
 }
 
-export function retryStorageBackendCleanup(slug: string) {
-  return withAdvisoryLock(
+export async function retryStorageBackendCleanup(slug: string) {
+  await withAdvisoryLock(
     `imageshow:storage-backend:${slug}`,
     async (signal) => {
       signal.throwIfAborted();
       await getStorageBackend(slug);
       signal.throwIfAborted();
-      const retried = await retryExhaustedMoveCleanupJobs(slug);
+      await retryExhaustedMoveCleanupJobs(slug);
       signal.throwIfAborted();
-      return retried;
     }
   );
 }

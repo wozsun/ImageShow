@@ -35,6 +35,7 @@ export const appConfig = {
 
   imports: {
     batchHardLimit: importBatchHardLimit,
+    maxInputFileSizeMiB: 200,
     uploadSoftLimitMax: 1_000,
     linkSoftLimitMax: 1_000,
     weiboSoftLimitMax: 50,

@@ -38,11 +38,9 @@ export function saveFullRuntimeConfig(value: unknown) {
     async (signal) => {
       signal.throwIfAborted();
       const config = parseRuntimeConfig(value);
-      const changes = summarizeRuntimeConfigChanges(getRuntimeConfig(), config);
       signal.throwIfAborted();
       return {
-        config: structuredClone(await replaceRuntimeConfig(config)),
-        changes
+        config: structuredClone(await replaceRuntimeConfig(config))
       };
     }
   ));

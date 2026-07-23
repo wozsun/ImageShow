@@ -36,7 +36,8 @@ export const homeHeroBackground = z.string().trim().max(2048)
 export const homeTagline = z.string().trim().max(200);
 
 export const previewDelayMs = z.coerce.number().int().min(0).max(10_000);
-export const maxFileSizeMb = z.coerce.number().positive().max(500);
+export const maxFileSizeMb = z.coerce.number().positive()
+  .max(appConfig.imports.maxInputFileSizeMiB);
 export const maxLongEdge = z.coerce.number().int().min(512).max(32_768);
 export const listPageSize = z.coerce.number().int().min(1).max(100);
 export const uploadImportMaxItems = z.coerce.number().int().min(1)

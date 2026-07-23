@@ -92,13 +92,18 @@ export function useBatchMetadataOperations({
         );
         if (response.migrated) onSaved();
         if (response.failed) {
+          const unchanged = Math.max(
+            0,
+            activeIds.length - response.migrated - response.failed
+          );
           reportAdminUiError(
             "image_metadata.storage_migration_partial",
             new Error(`批量存储迁移失败 ${response.failed}/${activeIds.length}`),
             response
           );
           setMigrateError(
-            `迁移未全部完成：成功 ${response.migrated} 项，失败 ${response.failed} 项。`
+            `迁移未全部完成：已迁移 ${response.migrated} 项，`
+            + `未变化 ${unchanged} 项，失败 ${response.failed} 项。`
           );
           return false;
         }

@@ -101,11 +101,6 @@ export async function importConfigPackage(
         }
         throw error;
       }
-
-      return {
-        imported_backends: resolved.map((backend) => backend.slug),
-        default_backend: resolved.find((backend) => backend.is_default)?.slug ?? null
-      };
     }
   ));
 }
