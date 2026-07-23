@@ -3,6 +3,22 @@ export type HttpValidators = {
   lastModified?: string;
 };
 
+export function staticResponseEtag(headers: Headers) {
+  const modified = headers.get("Last-Modified");
+  const contentRange = headers.get("Content-Range");
+  const rangeTotal = contentRange?.match(/^bytes\s+\d+-\d+\/(\d+)$/i)?.[1];
+  const length = rangeTotal ?? headers.get("Content-Length");
+  const modifiedTime = modified ? new Date(modified).getTime() : Number.NaN;
+  const resourceLength = length === null ? Number.NaN : Number(length);
+  if (
+    !Number.isFinite(modifiedTime)
+    || !Number.isSafeInteger(resourceLength)
+    || resourceLength < 0
+  ) return "";
+  const encoding = headers.get("Content-Encoding") ?? "identity";
+  return `W/"${modifiedTime.toString(16)}-${resourceLength.toString(16)}-${encoding}"`;
+}
+
 function stripWeakPrefix(etag: string) {
   return etag.startsWith("W/") ? etag.slice(2) : etag;
 }

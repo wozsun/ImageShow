@@ -29,7 +29,6 @@ import {
 } from "./staging.ts";
 import {
   rawImportAttemptPath,
-  rawImportPath,
   removeRawImport
 } from "./temp-files.ts";
 import type {
@@ -190,13 +189,12 @@ async function prepareStoredImageSession(
     || session.mode !== mode
     || session.status !== "preparing"
     || session.execution_token !== executionToken
+    || !session.raw_token
   ) {
     throw new ApiError(409, "invalid_import_state", "导入任务不能进入处理阶段");
   }
 
-  const sourcePath = session.raw_token
-    ? rawImportAttemptPath(id, session.raw_token)
-    : rawImportPath(id);
+  const sourcePath = rawImportAttemptPath(id, session.raw_token);
   const preparationAttempt = randomUuidV7();
   const preparedImageKey = stagingImageKey(id, preparationAttempt);
   const preparedThumbnailKey = stagingThumbnailKey(id, preparationAttempt);

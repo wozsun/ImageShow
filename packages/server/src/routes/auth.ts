@@ -21,8 +21,6 @@ import {
 } from "../users/session-invalidation.ts";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { getEffectiveLoginBackground } from "../config/app-settings.ts";
-import { pool } from "../core/db.ts";
-import { rehashPasswordIfNeeded } from "../users/password-upgrade.ts";
 
 const sessionRedis = adminSessionRedisClient(redis);
 
@@ -38,13 +36,7 @@ export function registerPublicAuthRoutes(app: Hono) {
     return c.json(ok(await login(
       c,
       String(body.username ?? ""),
-      String(body.password ?? ""),
-      {
-        upgradePasswordHash: (input) => rehashPasswordIfNeeded(
-          (sql, params) => pool.query(sql, params),
-          input
-        )
-      }
+      String(body.password ?? "")
     )));
   });
 

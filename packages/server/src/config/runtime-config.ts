@@ -172,13 +172,7 @@ const runtimeConfigSchema = z.strictObject({
   log: z.strictObject({ level: logLevel, max_size_mb: logMaxSizeMb, max_files: logMaxFiles })
 });
 
-const portableSiteConfigSchema = runtimeConfigSchema.shape.site
-  .omit({ domain: true })
-  .extend({
-    // format_version=2 predates this group. Omission must remain valid so old
-    // packages preserve the target instance's current setting when imported.
-    version: runtimeConfigSchema.shape.site.shape.version.optional()
-  });
+const portableSiteConfigSchema = runtimeConfigSchema.shape.site.omit({ domain: true });
 
 export const portableRuntimeConfigSchema = runtimeConfigSchema.extend({
   site: portableSiteConfigSchema
@@ -207,38 +201,8 @@ function mergeDefined(base: Record<string, unknown>, patch: Record<string, unkno
   return result;
 }
 
-function isPlainRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
-function runtimeConfigNormalizationBase(): Record<string, unknown> {
-  return structuredClone(appConfig.runtimeDefaults);
-}
-
-function projectKnownConfig(base: unknown, input: unknown): unknown {
-  if (!isPlainRecord(base)) return input === undefined ? base : input;
-  if (input === undefined) return structuredClone(base);
-  if (!isPlainRecord(input)) return input;
-
-  // An empty default object denotes a validated dictionary rather than a
-  // fixed-shape config section. Preserve its user-defined keys and let the
-  // runtime schema validate each entry.
-  if (Object.keys(base).length === 0) return structuredClone(input);
-
-  return Object.fromEntries(
-    Object.entries(base).map(([key, defaultValue]) => [
-      key,
-      projectKnownConfig(defaultValue, input[key])
-    ])
-  );
-}
-
 export function parseRuntimeConfig(value: unknown): RuntimeConfig {
   return runtimeConfigSchema.parse(value);
-}
-
-export function normalizeRuntimeConfig(value: unknown): RuntimeConfig {
-  return runtimeConfigSchema.parse(projectKnownConfig(runtimeConfigNormalizationBase(), value));
 }
 
 export function mergeRuntimeConfig(current: RuntimeConfig, patch: RuntimeConfigPatch): RuntimeConfig {

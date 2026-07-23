@@ -2,13 +2,13 @@ import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { compress } from "hono/compress";
 import { adminApiBasePath, appConfig } from "@imageshow/shared";
+import { bootstrapEnvironment } from "./config/bootstrap-env.ts";
 import { getRuntimeConfig, onRuntimeConfigChange } from "./config/runtime-config-store.ts";
 import { configureSharpConcurrency } from "./images/processing.ts";
 import { invalidateImageCaches } from "./images/image-cache.ts";
 import { cleanupOrphanRawImports } from "./images/imports/temp-files.ts";
 import { closeDatabasePools, pingDb, runMigrations } from "./core/db.ts";
-import { initializeAdmin } from "./users/admin-initialize.ts";
-import { cleanupLegacyAdminPreferences } from "./users/legacy-preferences-cleanup.ts";
+import { ensureSuperAdmin } from "./users/admin-bootstrap.ts";
 import { pingRedis, redis } from "./core/redis-client.ts";
 import { logger } from "./core/logger.ts";
 import { auditAdminMutation } from "./core/audit-log.ts";
@@ -150,17 +150,11 @@ await cleanupOrphanRandomRebuildSpools();
 await pingDb();
 await runMigrations();
 await cleanupOrphanRawImports(appConfig.uploadTtlSeconds * 1000);
-await initializeAdmin();
+await ensureSuperAdmin({
+  username: bootstrapEnvironment.adminUsername,
+  password: bootstrapEnvironment.adminPassword
+});
 await pingRedis();
-const legacyAdminPreferenceCleanup = cleanupLegacyAdminPreferences(redis)
-  .then(({ completedNow, deleted }) => {
-    if (completedNow) logger.info("legacy admin preference cleanup completed", { deleted });
-  })
-  .catch((error) => {
-    // Preferences are authoritative in PostgreSQL. A failed legacy Redis
-    // cleanup is retried on the next start and must not block the application.
-    logger.warn("legacy admin preference cleanup failed", error);
-  });
 configureSharpConcurrency();
 onRuntimeConfigChange(configureSharpConcurrency);
 let publicUrlConfigSignature = publicUrlConfigCacheSignature();
@@ -171,9 +165,7 @@ onRuntimeConfigChange(() => {
   void invalidateImageCaches();
 });
 onStorageBackendChange(() => void invalidateImageCaches());
-const backgroundWorkerDisabledForTests = process.env.NODE_ENV === "test"
-  && process.env.IMAGESHOW_TEST_DISABLE_BACKGROUND_WORKER === "1";
-if (!backgroundWorkerDisabledForTests) startWorker();
+startWorker();
 const startupRandomPool = rebuildRandomPool({ requireFresh: false }).catch((error) => {
   // Redis is a derived layer. A failed warm-up is retried by normal reads and
   // queued rebuild jobs without preventing the HTTP service from starting.
@@ -196,7 +188,6 @@ async function shutdown(signal: string) {
     stopWorker();
     await drainWorker();
     await startupRandomPool;
-    await legacyAdminPreferenceCleanup;
     await cleanupActiveRandomRebuildSpools();
     await redis.quit().catch(() => redis.disconnect());
     await closeDatabasePools();

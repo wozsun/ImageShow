@@ -5,14 +5,13 @@ import { getRuntimeConfig } from "./config/runtime-config-store.ts";
 const runtimeConfig = getRuntimeConfig();
 const port = String(appConfig.applicationPort);
 const host = runtimeConfig.site.domain;
-const checks = ["/livez", "/readyz", "/", "/home", "/gallery", "/random?m=redirect", "/img-count"];
 
-function requestStatus(path: string) {
+function requestReadiness() {
   return new Promise<number>((resolve, reject) => {
     const outgoing = request({
       hostname: "127.0.0.1",
       port,
-      path,
+      path: "/readyz",
       method: "GET",
       headers: { Host: host }
     }, (incoming) => {
@@ -24,13 +23,8 @@ function requestStatus(path: string) {
   });
 }
 
-for (const path of checks) {
-  const status = await requestStatus(path);
-  const ok = path.startsWith("/random?m=")
-    ? [200, 302, 404].includes(status)
-    : status >= 200 && status < 300;
-  if (!ok) {
-    console.error(`${path} returned ${status}`);
-    process.exit(1);
-  }
+const status = await requestReadiness();
+if (status < 200 || status >= 300) {
+  console.error(`/readyz returned ${status}`);
+  process.exit(1);
 }

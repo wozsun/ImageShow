@@ -7,21 +7,7 @@ import { redis } from "./redis-client.ts";
 import { logger } from "./logger.ts";
 import { verifyPassword } from "./password.ts";
 import { ApiError } from "./api-error.ts";
-import {
-  loginRateLimiter,
-  type LoginRateLimiter
-} from "./login-rate-limit.ts";
-
-type PasswordHashUpgrade = (input: {
-  username: string;
-  password: string;
-  currentHash: string;
-}) => Promise<unknown>;
-
-export type LoginDependencies = {
-  upgradePasswordHash?: PasswordHashUpgrade;
-  rateLimiter?: LoginRateLimiter;
-};
+import { loginRateLimiter } from "./login-rate-limit.ts";
 
 export const cspReportPath = "/api/security/csp-report";
 const cspReportGroup = "imageshow-csp";
@@ -43,7 +29,7 @@ export const securityHeaders: Record<string, string> = {
 export const spaDocumentHeaders: Record<string, string> = {
   ...securityHeaders,
   "Content-Security-Policy": "script-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
-  "Content-Security-Policy-Report-Only": `require-trusted-types-for 'script'; trusted-types ${trustedTypePolicyNames}; report-to ${cspReportGroup}; report-uri ${cspReportPath}`,
+  "Content-Security-Policy-Report-Only": `require-trusted-types-for 'script'; trusted-types ${trustedTypePolicyNames}; report-to ${cspReportGroup}`,
   "Reporting-Endpoints": `${cspReportGroup}="${cspReportPath}"`
 };
 
@@ -147,24 +133,17 @@ export function appendVaryHeader(c: Context, ...names: string[]) {
 export async function login(
   c: Context,
   username: string,
-  password: string,
-  dependencies: LoginDependencies = {}
+  password: string
 ) {
   assertSameOrigin(c);
-  const rateLimiter = dependencies.rateLimiter ?? loginRateLimiter;
   const ip = clientIp(c);
-  await rateLimiter.reserve(ip, username);
+  await loginRateLimiter.reserve(ip, username);
   const result = await pool.query("SELECT username, password_hash, role FROM admin_account WHERE username = $1", [username]);
   const user = result.rows[0];
   if (!user || !(await verifyPassword(user.password_hash, password))) {
     throw new ApiError(401, "invalid_credentials", "用户名或密码错误");
   }
-  await dependencies.upgradePasswordHash?.({
-    username: user.username,
-    password,
-    currentHash: user.password_hash
-  }).catch((error) => logger.warn("could not upgrade administrator password hash", error));
-  await rateLimiter.clear(ip, username);
+  await loginRateLimiter.clear(ip, username);
   const sessionId = randomBytes(32).toString("base64url");
   const csrf = randomBytes(32).toString("base64url");
   const sessionTtl = getRuntimeConfig().security.session_ttl_seconds;

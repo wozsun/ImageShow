@@ -53,7 +53,7 @@ const altchaInitialDisplayDefaults = {
 
 // ALTCHA applies the per-widget `configuration` attribute in an effect after
 // its first render. Seed the same values globally so that initial render never
-// mounts its dynamic-HTML footer, which is not compatible with Trusted Types.
+// mounts a dynamic-HTML footer that Trusted Types would reject.
 altchaGlobal.defaults.set(altchaInitialDisplayDefaults);
 altchaGlobal.algorithms.set("PBKDF2/SHA-256", createPbkdf2Worker);
 

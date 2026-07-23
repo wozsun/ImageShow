@@ -167,7 +167,7 @@ async function cleanupMovedObjects(job: BackgroundJob): Promise<BackgroundJobOut
     prefix: StoragePrefix;
     key: string;
     backend: string;
-    namespace_identity?: string;
+    namespace_identity: string;
   };
 
   const objects: CleanupObject[] = Array.isArray(job.payload.objects)
@@ -175,30 +175,17 @@ async function cleanupMovedObjects(job: BackgroundJob): Promise<BackgroundJobOut
         prefix: StoragePrefix;
         key: string;
         backend: string;
-        namespace_identity?: string;
+        namespace_identity: string;
       } => {
         if (!candidate || typeof candidate !== "object") return false;
         const object = candidate as Record<string, unknown>;
         return typeof object.key === "string"
           && typeof object.backend === "string"
-          && (object.namespace_identity === undefined
-            || typeof object.namespace_identity === "string")
+          && typeof object.namespace_identity === "string"
+          && object.namespace_identity.length > 0
           && ["media", "thumbs"].includes(String(object.prefix));
       })
     : [];
-
-  const objectKey = typeof job.payload.object_key === "string"
-    ? job.payload.object_key
-    : "";
-  const backend = typeof job.payload.backend === "string"
-    ? job.payload.backend
-    : "";
-  if (!objects.length && objectKey && backend) {
-    objects.push(
-      { prefix: "media", key: objectKey, backend },
-      { prefix: "thumbs", key: thumbnailObjectKey(objectKey), backend }
-    );
-  }
   if (!objects.length) return ignored("invalid or empty move cleanup payload");
 
   return withImageStorageMutationLock(job.target_id, async (signal) => {
@@ -243,22 +230,20 @@ async function cleanupMovedObjects(job: BackgroundJob): Promise<BackgroundJobOut
       const identity = `${object.backend}:${object.prefix}:${object.key}`;
       if (seen.has(identity)) continue;
       seen.add(identity);
-      if (object.namespace_identity) {
-        if (!storageNamespaceIncludesIdentity(
-          await candidateBackend(object.backend),
-          object.namespace_identity
-        )) {
-          throw new ApiError(
-            409,
-            "storage_cleanup_namespace_changed",
-            "待清理对象所属的物理存储位置已经变化，已停止删除",
-            {
-              backend: object.backend,
-              prefix: object.prefix,
-              key: object.key
-            }
-          );
-        }
+      if (!storageNamespaceIncludesIdentity(
+        await candidateBackend(object.backend),
+        object.namespace_identity
+      )) {
+        throw new ApiError(
+          409,
+          "storage_cleanup_namespace_changed",
+          "待清理对象所属的物理存储位置已经变化，已停止删除",
+          {
+            backend: object.backend,
+            prefix: object.prefix,
+            key: object.key
+          }
+        );
       }
       const matchesCurrentObject = currentReferences.has(
         `${object.prefix}:${object.key}`

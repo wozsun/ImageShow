@@ -4,7 +4,7 @@ import type { RuntimeConfig } from "@imageshow/shared";
 import { runtimeConfigFromEnvironment, runtimePaths } from "./bootstrap-env.ts";
 import {
   mergeRuntimeConfig,
-  normalizeRuntimeConfig,
+  parseRuntimeConfig,
   type RuntimeConfigPatch
 } from "./runtime-config.ts";
 
@@ -20,18 +20,15 @@ function readRuntimeConfigFile(): RuntimeConfig | null {
     );
   }
 
-  let normalized: RuntimeConfig;
+  let parsed: RuntimeConfig;
   try {
-    normalized = normalizeRuntimeConfig(value);
+    parsed = parseRuntimeConfig(value);
   } catch (error) {
     throw new Error(
       `Invalid runtime config ${runtimePaths.configFile}: ${error instanceof Error ? error.message : String(error)}`
     );
   }
-  if (JSON.stringify(value) !== JSON.stringify(normalized)) {
-    writeRuntimeConfigFile(normalized);
-  }
-  return normalized;
+  return parsed;
 }
 
 function writeRuntimeConfigFile(value: RuntimeConfig) {

@@ -29,11 +29,6 @@ type CandidateObject = {
 };
 
 type CandidateCleanup = (object: CandidateObject) => Promise<void>;
-type CleanupLeaseCheck = (
-  target: StorageConfig,
-  prefix: "media" | "thumbs",
-  key: string
-) => Promise<void>;
 
 type SourceDigestExpectation = {
   size?: number;
@@ -202,8 +197,6 @@ export async function ensureVerifiedObjectAtTarget(input: {
   contentType: string;
   sourceSlug?: string;
   cleanupCandidate?: CandidateCleanup;
-  /** @internal Allows isolated transfer tests to supply a non-database guard. */
-  cleanupLeaseCheck?: CleanupLeaseCheck;
 }): Promise<{ created: boolean }> {
   const {
     target,
@@ -212,15 +205,14 @@ export async function ensureVerifiedObjectAtTarget(input: {
     body,
     contentType,
     sourceSlug,
-    cleanupCandidate: candidateCleanup,
-    cleanupLeaseCheck = defaultCleanupLeaseCheck
+    cleanupCandidate: candidateCleanup
   } = input;
   const expected: StorageObjectDigest = {
     size: body.byteLength,
     sha256: createHash("sha256").update(body).digest("hex")
   };
   if (prefix !== "_uploads") {
-    await cleanupLeaseCheck(target.config, prefix, key);
+    await defaultCleanupLeaseCheck(target.config, prefix, key);
   }
   if (await target.driver.exists(prefix, key)) {
     const existing = await digestStorageObject(target, prefix, key);
@@ -264,8 +256,6 @@ export async function copyVerifiedObjectWithinStorage(input: {
   expectedSource?: SourceDigestExpectation;
   sourceMismatch?: SourceMismatchError;
   cleanupCandidate?: CandidateCleanup;
-  /** @internal Allows isolated transfer tests to supply a non-database guard. */
-  cleanupLeaseCheck?: CleanupLeaseCheck;
 }): Promise<{ created: boolean; sourceDigest: StorageObjectDigest }> {
   const {
     storage,
@@ -279,8 +269,7 @@ export async function copyVerifiedObjectWithinStorage(input: {
       code: "storage_source_integrity_failed",
       message: "源存储对象与记录的完整性信息不一致"
     },
-    cleanupCandidate: candidateCleanup,
-    cleanupLeaseCheck = defaultCleanupLeaseCheck
+    cleanupCandidate: candidateCleanup
   } = input;
   const sourceDigest = await digestStorageObject(
     storage,
@@ -305,7 +294,7 @@ export async function copyVerifiedObjectWithinStorage(input: {
     return { created: false, sourceDigest };
   }
   if (toPrefix !== "_uploads") {
-    await cleanupLeaseCheck(storage.config, toPrefix, toKey);
+    await defaultCleanupLeaseCheck(storage.config, toPrefix, toKey);
   }
   if (await storage.driver.exists(toPrefix, toKey)) {
     const existing = await digestStorageObject(storage, toPrefix, toKey);
@@ -359,14 +348,12 @@ export async function ensureVerifiedObjectAtDestination(input: {
   contentType: string;
   sourceObjectExists?: boolean;
   cleanupCandidate?: CandidateCleanup;
-  /** @internal Allows isolated transfer tests to supply a non-database guard. */
-  cleanupLeaseCheck?: CleanupLeaseCheck;
 }): Promise<VerifiedObjectTransfer> {
   const { source, target, prefix, key, body, contentType } = input;
   const sharedNamespace = shareStorageNamespace(source.config, target.config);
   if (sharedNamespace && input.sourceObjectExists !== false) {
     if (prefix !== "_uploads") {
-      await (input.cleanupLeaseCheck ?? defaultCleanupLeaseCheck)(
+      await defaultCleanupLeaseCheck(
         target.config,
         prefix,
         key
@@ -403,8 +390,7 @@ export async function ensureVerifiedObjectAtDestination(input: {
     body,
     contentType,
     sourceSlug: source.config.slug,
-    cleanupCandidate: input.cleanupCandidate,
-    cleanupLeaseCheck: input.cleanupLeaseCheck
+    cleanupCandidate: input.cleanupCandidate
   });
   return { ...result, sharedNamespace };
 }

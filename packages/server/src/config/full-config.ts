@@ -9,17 +9,14 @@ import {
 
 export const advancedConfigWriteLockKey = "advanced-config-write";
 
-export type RuntimeConfigChangeSummary = {
-  access_changes: Array<"site.domain">;
-};
-
-/** @internal Exported for focused change-summary tests. */
-export function summarizeRuntimeConfigChanges(
+function summarizeRuntimeConfigChanges(
   current: RuntimeConfig,
   candidate: RuntimeConfig
-): RuntimeConfigChangeSummary {
+) {
   return {
-    access_changes: current.site.domain === candidate.site.domain ? [] : ["site.domain"]
+    access_changes: current.site.domain === candidate.site.domain
+      ? []
+      : ["site.domain" as const]
   };
 }
 

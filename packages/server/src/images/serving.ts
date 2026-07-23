@@ -26,8 +26,8 @@ import {
   setImageLookupById,
   setOriginalDirectCache,
   type CompleteImageLookupSource,
-  type ImageLookupByIdItem
 } from "./image-cache.ts";
+import type { ImageLookupByIdItem } from "./image-cache-schema.ts";
 import { linkBaseUrl } from "../themes/host.ts";
 import { displayUrlForOriginalComparison, hasDistinctOriginalUrl } from "./original-link.ts";
 
@@ -46,8 +46,7 @@ function shouldNotRedirectExternalError(error: unknown) {
   return isExternalImageRejection(error);
 }
 
-/** @internal Exported for regression tests of the retained external proxy. */
-export async function proxyExternalImage(
+async function proxyExternalImage(
   externalUrl: string,
   ext: string,
   isHead: boolean,
@@ -162,14 +161,6 @@ async function cachedOriginalSupportsDirectAccess(url: string, userAgent: string
     return direct;
   });
 }
-
-/** @internal Exported only for HTTP validator verification. */
-export function etagMatches(header: string | undefined, etag: string) {
-  return ifNoneMatchMatches(header, etag);
-}
-
-/** @internal Exported only for HTTP validator verification. */
-export { ifRangeMatches };
 
 function sameObjectVersion(left: OpenedRead, right: OpenedRead) {
   if (left.etag || right.etag) return Boolean(left.etag && right.etag && left.etag === right.etag);

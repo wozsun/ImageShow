@@ -48,23 +48,18 @@ export async function assertObjectNotPendingCleanup(
 
   for (const reference of references) {
     let matchesTarget = reference.backend === target.slug || (
-      reference.namespace_identity
-        ? storageNamespaceIncludesIdentity(target, reference.namespace_identity)
-        : false
+      storageNamespaceIncludesIdentity(target, reference.namespace_identity)
     );
     if (!matchesTarget && reference.backend !== target.slug) {
       try {
         const backend = await cleanupBackend(reference.backend);
-        matchesTarget = reference.namespace_identity
-          ? storageNamespaceIncludesIdentity(
-              backend,
-              reference.namespace_identity
-            ) && shareStorageNamespace(backend, target)
-          : shareStorageNamespace(backend, target);
+        matchesTarget = storageNamespaceIncludesIdentity(
+          backend,
+          reference.namespace_identity
+        ) && shareStorageNamespace(backend, target);
       } catch {
         // If the lease owner can no longer be resolved, refusing reuse is
-        // safer than racing an already-issued remote DELETE. This also covers
-        // legacy payloads that did not capture a namespace identity.
+        // safer than racing an already-issued remote DELETE.
         matchesTarget = true;
       }
     }

@@ -25,8 +25,7 @@ function providedManifestCommonFields(item: JsonlManifestItem) {
   return manifestCommonAttributeFields.filter((field) => Object.hasOwn(item, field));
 }
 
-/** @internal Exported only for local JSONL precedence verification. */
-export function mergeJsonlDraft(
+function mergeJsonlDraft(
   item: JsonlManifestItem,
   defaults: ImportAttributeDefaults
 ): ImageDraft {

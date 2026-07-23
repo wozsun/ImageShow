@@ -274,8 +274,6 @@ async function unresolvedMoveCleanupJobCounts(
               reference.backend
          FROM unresolved
          CROSS JOIN LATERAL (
-           SELECT NULLIF(unresolved.payload->>'backend', '') AS backend
-           UNION
            SELECT NULLIF(object->>'backend', '') AS backend
              FROM jsonb_array_elements(
                CASE
@@ -322,7 +320,7 @@ export type UnresolvedMoveCleanupReference = {
   backend: string;
   prefix: "media" | "thumbs";
   key: string;
-  namespace_identity: string | null;
+  namespace_identity: string;
 };
 
 /** Unresolved rows are deletion leases for the exact physical object. */
@@ -348,26 +346,11 @@ export async function listUnresolvedMoveCleanupReferences(
               NULLIF(object->>'namespace_identity', '') AS namespace_identity
          FROM unresolved
          CROSS JOIN LATERAL jsonb_array_elements(objects) AS object
-       UNION ALL
-       SELECT NULLIF(payload->>'backend', ''),
-              'media',
-              payload->>'object_key',
-              NULL
-         FROM unresolved
-        WHERE jsonb_array_length(objects)=0
-          AND payload->>'object_key' IS NOT NULL
-       UNION ALL
-       SELECT NULLIF(payload->>'backend', ''),
-              'thumbs',
-              regexp_replace(payload->>'object_key', '\\.[^/.]+$', '.webp'),
-              NULL
-         FROM unresolved
-        WHERE jsonb_array_length(objects)=0
-          AND payload->>'object_key' IS NOT NULL
      )
      SELECT DISTINCT backend, prefix, key, namespace_identity
        FROM cleanup_references
       WHERE backend IS NOT NULL
+        AND namespace_identity IS NOT NULL
         AND prefix=$1
         AND key=$2`,
     [prefix, key]
@@ -376,9 +359,7 @@ export async function listUnresolvedMoveCleanupReferences(
     backend: String(row.backend),
     prefix: row.prefix as "media" | "thumbs",
     key: String(row.key),
-    namespace_identity: row.namespace_identity
-      ? String(row.namespace_identity)
-      : null
+    namespace_identity: String(row.namespace_identity)
   }));
 }
 
@@ -400,8 +381,6 @@ export async function retryExhaustedMoveCleanupJobs(storageSlug: string) {
        AND EXISTS (
          SELECT 1
            FROM (
-             SELECT NULLIF(job.payload->>'backend', '') AS backend
-             UNION
              SELECT NULLIF(object->>'backend', '') AS backend
                FROM jsonb_array_elements(
                  CASE
@@ -410,6 +389,7 @@ export async function retryExhaustedMoveCleanupJobs(storageSlug: string) {
                    ELSE '[]'::jsonb
                  END
                ) AS object
+              WHERE NULLIF(object->>'namespace_identity', '') IS NOT NULL
            ) AS reference
           WHERE reference.backend=$1
        )`,

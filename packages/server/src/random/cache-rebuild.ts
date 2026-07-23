@@ -43,87 +43,6 @@ import {
   startRandomRebuildLockRenewal
 } from "./cache-lock.ts";
 
-const legacyRandomControlKeys = [
-  "imageshow:random:current",
-  "imageshow:random:version",
-  "imageshow:random:update_lock",
-  "imageshow:random:rebuild_lock",
-  "imageshow:random:rebuild_completed",
-  "imageshow:gallery_filter_options"
-] as const;
-const legacyRandomGenerationPattern = /^imageshow:random:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:/i;
-const legacyRandomCleanupCursorKey = `${RANDOM_CACHE_NAMESPACE}:v1_cleanup_cursor`;
-const legacyRandomCleanupCompleteKey = `${RANDOM_CACHE_NAMESPACE}:v1_cleanup_complete`;
-const legacyRandomCleanupCompleteScript = `
-redis.call("DEL", KEYS[1])
-redis.call("SET", KEYS[2], "1")
-return 1
-`;
-const legacyRandomCleanupScanCount = 250;
-const legacyRandomCleanupMaxScans = 8;
-const legacyRandomCleanupMaxKeys = RANDOM_CLEANUP_BATCH_SIZE;
-
-async function cleanupLegacyRandomCacheSlice() {
-  if (await redis.get(legacyRandomCleanupCompleteKey)) return true;
-  await redis.unlink(...legacyRandomControlKeys);
-
-  let cursor = await redis.get(legacyRandomCleanupCursorKey) ?? "0";
-  const candidates = new Set<string>();
-  let truncated = false;
-  for (let scan = 0; scan < legacyRandomCleanupMaxScans; scan += 1) {
-    const scanCursor = cursor;
-    const [nextCursor, keys] = await redis.scan(
-      cursor,
-      "MATCH",
-      "imageshow:random:*",
-      "COUNT",
-      legacyRandomCleanupScanCount
-    );
-    for (const key of keys) {
-      if (legacyRandomGenerationPattern.test(key)) candidates.add(key);
-      if (candidates.size >= legacyRandomCleanupMaxKeys) break;
-    }
-    // If one SCAN reply exceeded the deletion budget, revisit that cursor on
-    // the next successful v2 publication after the selected keys are gone.
-    truncated = candidates.size >= legacyRandomCleanupMaxKeys;
-    cursor = truncated ? scanCursor : nextCursor;
-    if (cursor === "0" || candidates.size >= legacyRandomCleanupMaxKeys) break;
-  }
-
-  for (const batch of chunks([...candidates], RANDOM_CLEANUP_BATCH_SIZE)) {
-    await redis.unlink(...batch);
-  }
-  const complete = cursor === "0" && !truncated;
-  if (complete) {
-    await redis.eval(
-      legacyRandomCleanupCompleteScript,
-      2,
-      legacyRandomCleanupCursorKey,
-      legacyRandomCleanupCompleteKey
-    );
-  } else {
-    await redis.set(legacyRandomCleanupCursorKey, cursor);
-  }
-  return complete;
-}
-
-let legacyRandomCleanup: Promise<void> | undefined;
-
-function continueLegacyRandomCacheCleanup() {
-  if (legacyRandomCleanup) return;
-  legacyRandomCleanup = (async () => {
-    while (!await cleanupLegacyRandomCacheSlice()) {
-      await new Promise<void>((resolve) => setImmediate(resolve));
-    }
-  })().catch((error) => {
-    logger.warn("legacy_random_cache_cleanup_failed", {
-      error: error instanceof Error ? error.message : String(error)
-    });
-  }).finally(() => {
-    legacyRandomCleanup = undefined;
-  });
-}
-
 async function readyRandomItemBatch(
   client: PoolClient,
   afterId: string | null
@@ -351,16 +270,6 @@ async function performRandomPoolRebuild(targetRevision: number): Promise<{
     const published = Number(publication[0]) === 1;
     if (published) {
       await expireOldGeneration(publication[1] || null).catch(() => undefined);
-      try {
-        if (!legacyRandomCleanup
-          && !await cleanupLegacyRandomCacheSlice()) {
-          continueLegacyRandomCacheCleanup();
-        }
-      } catch (error) {
-        logger.warn("legacy_random_cache_cleanup_failed", {
-          error: error instanceof Error ? error.message : String(error)
-        });
-      }
     } else {
       await cleanupFailedGeneration(generation, keys);
     }

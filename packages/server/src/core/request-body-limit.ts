@@ -19,7 +19,7 @@ const importBatchCreatePath = `${adminApiBasePath}/imports/batch-create`;
 const weiboImportBodyMaxBytes = appConfig.imports.weiboRequestBodyMaxBytes;
 // The schema accepts 3,600 items and its maximum-length fields can produce a
 // JSON document of about 147.5 MiB after worst-case escaping. Use the next
-// configured size tier so syntax and future compatible fields retain headroom.
+// configured size tier so JSON syntax and bounded metadata retain headroom.
 const importBatchCreateBodyMaxBytes = 256 * 1024 * 1024;
 export const batchImageUpdatePath = `${adminApiBasePath}/images/batch-update`;
 // Two hundred maximum-field items occupy about 5.692 MiB after worst-case JSON

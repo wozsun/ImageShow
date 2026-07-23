@@ -135,6 +135,18 @@ export type RandomPoolItem = {
   tags: string[];
 };
 
+const randomPoolItemFields = new Set<keyof RandomPoolItem>([
+  "id",
+  "object_key",
+  "ext",
+  "device",
+  "brightness",
+  "theme",
+  "storage_slug",
+  "author",
+  "tags"
+]);
+
 type RetryableRandomPoolError = Error & { retryAfterSeconds: number };
 
 export function redisUnavailable(): RetryableRandomPoolError {
@@ -216,9 +228,9 @@ export function randomFilterKey(
 export function parseRandomItem(raw: string | null): RandomPoolItem | null {
   if (!raw) return null;
   try {
-    const value = JSON.parse(raw) as Partial<RandomPoolItem> & { is_link?: unknown };
+    const value = JSON.parse(raw) as Partial<RandomPoolItem>;
     if (
-      "is_link" in value
+      Object.keys(value).some((field) => !randomPoolItemFields.has(field as keyof RandomPoolItem))
       || typeof value.id !== "string" || !value.id
       || typeof value.object_key !== "string" || !value.object_key
       || typeof value.ext !== "string" || !["jpg", "png", "webp", "gif", "avif"].includes(value.ext)

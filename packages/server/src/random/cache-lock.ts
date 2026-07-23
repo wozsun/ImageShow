@@ -65,8 +65,7 @@ export async function releaseRandomUpdateLock(token: string) {
   await releaseOwnedRandomLock(RANDOM_UPDATE_LOCK_KEY, token);
 }
 
-/** @internal Exported for lock lease verification. */
-export async function renewRandomUpdateLock(token: string) {
+async function renewRandomUpdateLock(token: string) {
   const renewed = await redis.eval(
     RANDOM_UPDATE_LOCK_RENEW_SCRIPT,
     1,

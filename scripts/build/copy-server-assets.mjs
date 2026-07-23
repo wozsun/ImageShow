@@ -1,6 +1,6 @@
 import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { dirname, relative, resolve, sep } from "node:path";
+import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { brotliCompress, gzip, constants as zlibConstants } from "node:zlib";
 import { promisify } from "node:util";
@@ -23,31 +23,6 @@ for (const [label, input] of [
   if (!existsSync(input)) {
     throw new Error(`assemble-server: missing ${label} input at ${relative(repo, input)}`);
   }
-}
-
-function importPath(fromFile, targetFile) {
-  const path = relative(dirname(fromFile), targetFile).split(sep).join("/");
-  return path.startsWith(".") ? path : `./${path}`;
-}
-
-async function rewriteWorkspaceImports(root) {
-  const sharedEntry = resolve(repo, "packages", "shared", "dist", "app-config.js");
-
-  async function walk(dir) {
-    const entries = await readdir(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      const fullPath = resolve(dir, entry.name);
-      if (entry.isDirectory()) {
-        await walk(fullPath);
-      } else if (entry.isFile() && entry.name.endsWith(".js")) {
-        const source = await readFile(fullPath, "utf8");
-        const rewritten = source.replace(/(["'])@imageshow\/shared\1/g, (_match, quote) => `${quote}${importPath(fullPath, sharedEntry)}${quote}`);
-        if (rewritten !== source) await writeFile(fullPath, rewritten);
-      }
-    }
-  }
-
-  await walk(root);
 }
 
 // 可预压缩的文本类资源；图片/字体等已是压缩格式，不重复压缩。
@@ -86,7 +61,6 @@ async function precompressDir(dir) {
 }
 
 await mkdir(serverDist, { recursive: true });
-await rewriteWorkspaceImports(serverDist);
 await rm(resolve(serverDist, "migrations"), { recursive: true, force: true });
 await rm(resolve(serverDist, "public"), { recursive: true, force: true });
 await rm(resolve(serverDist, "docs"), { recursive: true, force: true });

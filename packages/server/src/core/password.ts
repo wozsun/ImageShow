@@ -9,20 +9,7 @@ const CURRENT_PASSWORD_HASH_POLICY = Object.freeze({
   tagLength: 32,
   saltLength: 16
 });
-
-const ACCEPTED_PASSWORD_HASH_LIMITS = Object.freeze({
-  minMemory: 16_384,
-  maxMemory: 131_072,
-  minPasses: 1,
-  maxPasses: 10,
-  minParallelism: 1,
-  maxParallelism: 16,
-  minSaltLength: 16,
-  maxSaltLength: 64,
-  minTagLength: 16,
-  maxTagLength: 64,
-  maxEncodedLength: 512
-});
+const MAX_ENCODED_PASSWORD_HASH_LENGTH = 256;
 
 const encodedHashPattern = /^\$argon2id\$v=(\d+)\$m=(\d+),t=(\d+),p=(\d+)\$([A-Za-z0-9+/]+)\$([A-Za-z0-9+/]+)$/;
 
@@ -53,13 +40,9 @@ function parsePositiveInteger(value: string) {
   return parsed;
 }
 
-function within(value: number, minimum: number, maximum: number) {
-  return value >= minimum && value <= maximum;
-}
-
 function parsePasswordHash(encoded: string): PasswordHashParameters | null {
   try {
-    if (encoded.length > ACCEPTED_PASSWORD_HASH_LIMITS.maxEncodedLength) return null;
+    if (encoded.length > MAX_ENCODED_PASSWORD_HASH_LENGTH) return null;
     const match = encoded.match(encodedHashPattern);
     if (!match) return null;
 
@@ -69,15 +52,16 @@ function parsePasswordHash(encoded: string): PasswordHashParameters | null {
     const parallelism = parsePositiveInteger(match[4]);
     const salt = decodeBase64(match[5]);
     const expected = decodeBase64(match[6]);
-    const limits = ACCEPTED_PASSWORD_HASH_LIMITS;
+    const policy = CURRENT_PASSWORD_HASH_POLICY;
 
-    if (version !== CURRENT_PASSWORD_HASH_POLICY.version) return null;
-    if (!within(memory, limits.minMemory, limits.maxMemory)) return null;
-    if (!within(passes, limits.minPasses, limits.maxPasses)) return null;
-    if (!within(parallelism, limits.minParallelism, limits.maxParallelism)) return null;
-    if (memory < parallelism * 8) return null;
-    if (!within(salt.length, limits.minSaltLength, limits.maxSaltLength)) return null;
-    if (!within(expected.length, limits.minTagLength, limits.maxTagLength)) return null;
+    if (
+      version !== policy.version
+      || memory !== policy.memory
+      || passes !== policy.passes
+      || parallelism !== policy.parallelism
+      || salt.length !== policy.saltLength
+      || expected.length !== policy.tagLength
+    ) return null;
 
     return {
       algorithm: "argon2id",
@@ -137,16 +121,4 @@ export async function verifyPassword(encoded: string, password: string) {
   } catch {
     return false;
   }
-}
-
-export function passwordHashNeedsUpgrade(encoded: string) {
-  const parameters = parsePasswordHash(encoded);
-  if (!parameters) return true;
-  const policy = CURRENT_PASSWORD_HASH_POLICY;
-  return parameters.version !== policy.version ||
-    parameters.memory !== policy.memory ||
-    parameters.passes !== policy.passes ||
-    parameters.parallelism !== policy.parallelism ||
-    parameters.salt.length !== policy.saltLength ||
-    parameters.expected.length !== policy.tagLength;
 }

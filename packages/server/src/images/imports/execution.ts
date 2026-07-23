@@ -8,43 +8,35 @@ import { clearImportPhase, setImportPhase, withImportLease } from "./progress.ts
 import { withImportSessionLock } from "./session-lock.ts";
 import type { ImportMode, PreparedImportResult } from "./types.ts";
 
-/** @internal Shared dynamic limiter, exported only for local concurrency verification. */
-export class ImportConcurrencyLimiter {
-  private readonly limiter: DynamicConcurrencyLimiter;
+const importCancellationError = () => new ApiError(
+  409,
+  "import_cancelled",
+  "导入已取消"
+);
 
-  constructor(limit: () => number) {
-    this.limiter = new DynamicConcurrencyLimiter(
-      limit,
-      () => new ApiError(409, "import_cancelled", "导入已取消")
-    );
-  }
-
-  async run<T>(signal: AbortSignal, work: () => Promise<T>, hooks: {
-    onQueued?: () => void;
-    onStarted?: () => void;
-  } = {}): Promise<T> {
-    return this.limiter.run(signal, work, hooks);
-  }
-}
-
-const uploadPrepareLimiter = new ImportConcurrencyLimiter(
-  () => getRuntimeConfig().upload.global_concurrency
+const uploadPrepareLimiter = new DynamicConcurrencyLimiter(
+  () => getRuntimeConfig().upload.global_concurrency,
+  importCancellationError
 );
-const linkPrepareLimiter = new ImportConcurrencyLimiter(
-  () => getRuntimeConfig().link_image.global_concurrency
+const linkPrepareLimiter = new DynamicConcurrencyLimiter(
+  () => getRuntimeConfig().link_image.global_concurrency,
+  importCancellationError
 );
-const uploadMaterializeLimiter = new ImportConcurrencyLimiter(
-  () => getRuntimeConfig().upload.global_concurrency
+const uploadMaterializeLimiter = new DynamicConcurrencyLimiter(
+  () => getRuntimeConfig().upload.global_concurrency,
+  importCancellationError
 );
-const linkMaterializeLimiter = new ImportConcurrencyLimiter(
-  () => getRuntimeConfig().link_image.global_concurrency
+const linkMaterializeLimiter = new DynamicConcurrencyLimiter(
+  () => getRuntimeConfig().link_image.global_concurrency,
+  importCancellationError
 );
-const commitLimiter = new ImportConcurrencyLimiter(
-  () => getRuntimeConfig().import.global_commit_concurrency
+const commitLimiter = new DynamicConcurrencyLimiter(
+  () => getRuntimeConfig().import.global_commit_concurrency,
+  importCancellationError
 );
 const commitByteLimiter = new DynamicWeightedLimiter(
   () => getRuntimeConfig().import.global_commit_byte_budget_mb * 1024 * 1024,
-  () => new ApiError(409, "import_cancelled", "导入已取消")
+  importCancellationError
 );
 
 function queueSignal(internal: AbortSignal, request?: AbortSignal) {

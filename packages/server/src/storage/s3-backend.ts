@@ -22,6 +22,7 @@ import type {
 } from "./storage-backend.ts";
 import { assertSingleByteRangeSyntax, totalSizeFromContentRange } from "../core/byte-range.ts";
 import { normalizeObjectEtag } from "./object-validator.ts";
+import { isS3NotFound } from "./not-found.ts";
 
 function storageS3Client(config: StorageConfig) {
   const endpoint = /^https:\/\//i.test(config.s3.endpoint) ? config.s3.endpoint : `https://${config.s3.endpoint}`;
@@ -34,12 +35,6 @@ function storageS3Client(config: StorageConfig) {
       secretAccessKey: config.s3.secret_access_key ?? ""
     }
   });
-}
-
-/** @internal Exported only for local storage error verification. */
-export function isS3NotFound(error: unknown) {
-  const maybe = error as { name?: string; Code?: string; $metadata?: { httpStatusCode?: number } };
-  return maybe?.$metadata?.httpStatusCode === 404 || maybe?.name === "NoSuchKey" || maybe?.name === "NotFound" || maybe?.Code === "NoSuchKey";
 }
 
 export class S3Backend implements StorageDriver {

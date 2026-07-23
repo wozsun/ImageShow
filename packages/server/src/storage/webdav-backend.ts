@@ -13,6 +13,7 @@ import type {
 } from "./storage-backend.ts";
 import { assertSingleByteRangeSyntax, parseSingleByteRange, totalSizeFromContentRange } from "../core/byte-range.ts";
 import { normalizeObjectEtag } from "./object-validator.ts";
+import { isWebdavNotFoundStatus } from "./not-found.ts";
 
 const PROPFIND_BODY = '<?xml version="1.0" encoding="utf-8"?><propfind xmlns="DAV:"><prop><resourcetype/></prop></propfind>';
 const WEBDAV_RETRY_ATTEMPTS = 3;
@@ -153,11 +154,6 @@ async function requestWebdav(input: string, init: RequestInit, runtime: WebdavRe
 
 function trimSlashes(value: string) {
   return value.replace(/^\/+|\/+$/g, "");
-}
-
-/** @internal Exported only for local storage error verification. */
-export function isWebdavNotFoundStatus(status: number) {
-  return status === 404;
 }
 
 export class WebdavBackend implements StorageDriver {

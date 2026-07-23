@@ -11,7 +11,6 @@ import {
   setImportPhase
 } from "./progress.ts";
 import {
-  adoptLegacyRawImport,
   rawImportAttemptPath,
   rawImportExists,
   rawImportPartPath,
@@ -154,22 +153,6 @@ export async function recoverCompletedMaterialization(
       && await rawImportExists(id, existing.execution_token)
     ) {
       await finishMaterialization(id, existing.execution_token, signal);
-      return true;
-    }
-    // Rows created by pre-fencing versions may have published the legacy
-    // shared raw name. Adopt it into a token-owned name before publication.
-    if (!existing.execution_token && await rawImportExists(id)) {
-      const executionToken = randomUuidV7();
-      const claimed = await pool.query(
-        `UPDATE import_session
-            SET execution_token=$3::uuid, updated_at=now()
-          WHERE id=$1 AND mode=$2 AND status='materializing'
-            AND execution_token IS NULL`,
-        [id, mode, executionToken]
-      );
-      if (!claimed.rowCount) return false;
-      await adoptLegacyRawImport(id, executionToken);
-      await finishMaterialization(id, executionToken, signal);
       return true;
     }
   }

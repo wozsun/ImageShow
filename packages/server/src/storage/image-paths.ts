@@ -1,5 +1,4 @@
 export function storageObjectKey(device: string, brightness: string, theme: string, id: string, ext: string) {
-
   return `${device}-${brightness}/${theme || "none"}/${id}.${ext}`;
 }
 

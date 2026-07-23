@@ -194,8 +194,7 @@ function parseImportIds(url: string) {
     .map((id) => parse(uuidInput, id));
 }
 
-/** @internal Exported only for focused import-source limit verification. */
-export function importBatchConfiguredLimit(
+function importBatchConfiguredLimit(
   source: "urls" | "jsonl" | "weibo",
   linkImageMaxItems: number
 ) {

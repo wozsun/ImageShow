@@ -71,8 +71,7 @@ function temporaryKey(kind: string, id: string) {
   return volatileKey("tmp", "altcha", kind, id);
 }
 
-/** @internal Exported only for focused rate-limit verification. */
-export async function reserveChallengeRequest(c: Context) {
+async function reserveChallengeRequest(c: Context) {
   const security = getRuntimeConfig().security;
   const ipLimit = security.login_max_failures * 3;
   const globalLimit = security.login_global_max_attempts * 5;

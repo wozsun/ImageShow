@@ -25,8 +25,7 @@ const deploymentEnvironmentSchema = z.preprocess(
   })
 );
 
-/** @internal Exported only for focused deployment-environment verification. */
-export function parseDeploymentConfig(environment: NodeJS.ProcessEnv) {
+function parseDeploymentConfig(environment: NodeJS.ProcessEnv) {
   const parsed = deploymentEnvironmentSchema.parse(environment);
   return Object.freeze({
     database: Object.freeze({

@@ -48,10 +48,3 @@ REDIS_PASSWORD=
 ```bash
 sudo install -d -o 1000 -g 1000 data
 ```
-
-升级 Redis 镜像后：
-
-```bash
-docker compose pull redis
-docker compose up -d --force-recreate
-```

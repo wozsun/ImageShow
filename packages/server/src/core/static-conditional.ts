@@ -1,19 +1,10 @@
 import { Context as HonoContext, type Context, type Handler } from "hono";
-import { conditionalRequestNotModified, ifRangeMatches } from "./http-validator.ts";
+import {
+  conditionalRequestNotModified,
+  ifRangeMatches,
+  staticResponseEtag
+} from "./http-validator.ts";
 import { parseSingleByteRange } from "./byte-range.ts";
-
-/** @internal Exported only for static Range validator verification. */
-export function staticEtag(headers: Headers) {
-  const modified = headers.get("Last-Modified");
-  const contentRange = headers.get("Content-Range");
-  const rangeTotal = contentRange?.match(/^bytes\s+\d+-\d+\/(\d+)$/i)?.[1];
-  const length = rangeTotal ?? headers.get("Content-Length");
-  const modifiedTime = modified ? new Date(modified).getTime() : Number.NaN;
-  const resourceLength = length === null ? Number.NaN : Number(length);
-  if (!Number.isFinite(modifiedTime) || !Number.isSafeInteger(resourceLength) || resourceLength < 0) return "";
-  const encoding = headers.get("Content-Encoding") ?? "identity";
-  return `W/"${modifiedTime.toString(16)}-${resourceLength.toString(16)}-${encoding}"`;
-}
 
 function requestWithRange(request: Request, range?: string) {
   const headers = new Headers(request.headers);
@@ -30,7 +21,7 @@ async function invokeStaticHandler(c: Context, handler: Handler) {
 }
 
 function applyStaticEtag(response: Response) {
-  const etag = staticEtag(response.headers);
+  const etag = staticResponseEtag(response.headers);
   if (etag) response.headers.set("ETag", etag);
   return etag;
 }

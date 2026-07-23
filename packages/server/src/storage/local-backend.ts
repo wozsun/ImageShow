@@ -11,11 +11,7 @@ import type {
 } from "./storage-backend.ts";
 import { parseSingleByteRange } from "../core/byte-range.ts";
 import { localObjectEtag } from "./object-validator.ts";
-
-/** @internal Exported only for local storage error verification. */
-export function isMissingFileError(error: unknown) {
-  return (error as NodeJS.ErrnoException | undefined)?.code === "ENOENT";
-}
+import { isMissingFileError } from "./not-found.ts";
 
 export class LocalBackend implements StorageDriver {
   async exists(prefix: StoragePrefix, key: string) {

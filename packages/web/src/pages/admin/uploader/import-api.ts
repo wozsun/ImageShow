@@ -1,6 +1,7 @@
 import { api, getCsrfToken } from "../../../lib/api/client.js";
 import { adminApiBasePath } from "../../../lib/constants.js";
 import type { Brightness, Device, ImageDraft, ImageItem } from "../../../lib/types.js";
+import { createIntegerProgressReporter } from "./upload-progress.js";
 
 export type PreparedImport = {
   id: string;
@@ -190,21 +191,6 @@ export function storedImportStatusMessage(state: StoredImportStatus) {
   return state.status === "failed"
     ? state.error || state.message
     : state.message;
-}
-
-/** @internal Exported only for local upload progress verification. */
-export function createIntegerProgressReporter(
-  onProgress: (progress: number) => void,
-  initialProgress = -1
-) {
-  let lastProgress = initialProgress;
-  return (progress: number) => {
-    if (!Number.isFinite(progress)) return;
-    const normalizedProgress = Math.min(100, Math.max(0, Math.round(progress)));
-    if (normalizedProgress === lastProgress) return;
-    lastProgress = normalizedProgress;
-    onProgress(normalizedProgress);
-  };
 }
 
 export function uploadLocalRaw(

@@ -3,6 +3,12 @@ import { redis } from "../core/redis-client.ts";
 import { getRedisJson, setRedisJson } from "../core/redis-json.ts";
 import { execRedisPipeline } from "../core/redis-pipeline.ts";
 import { thumbnailObjectKey } from "../storage/image-paths.ts";
+import {
+  parseImageLookup,
+  parseImageLookupById,
+  type ImageLookupByIdItem,
+  type ImageLookupItem
+} from "./image-cache-schema.ts";
 
 export const MD5_CACHE_PREFIX = "imageshow:md5:";
 export const PUBLIC_IMAGES_CACHE_PREFIX = "imageshow:public_images:";
@@ -17,26 +23,6 @@ const ORIGINAL_DIRECT_CACHE_TTL_SECONDS = 60 * 60;
 const ADMIN_OVERVIEW_CACHE_TTL_SECONDS = 60;
 export const IMAGE_LOOKUP_TTL_SECONDS = appConfig.imageLookup.ttlSeconds;
 
-export type ImageLookupItem = {
-  object_key: string;
-  thumb_key: string;
-  ext: string;
-  storage_slug: string;
-  status: "ready";
-};
-export type ImageLookupByIdItem = {
-  id: string;
-  object_key: string;
-  original: string;
-  ext: string;
-  storage_slug: string;
-  device: Device;
-  brightness: Brightness;
-  theme: string;
-  status: string;
-  description: string;
-  source: string;
-};
 type ImageObjectLookupSource = {
   object_key: string;
   ext: string;
@@ -58,8 +44,6 @@ export type CompleteImageLookupSource = {
 };
 type OriginalDirectCacheValue = { direct: boolean };
 
-const imageLookupExtensions = new Set(["jpg", "png", "webp", "gif", "avif"]);
-const imageLookupStatuses = new Set(["ready", "deleted"]);
 let localMutationEpoch = 0;
 let synchronizedMutationEpoch = 0;
 let revisionQueue: Promise<void> = Promise.resolve();
@@ -113,41 +97,6 @@ function revisionKey(prefix: string, revision: string, key = "") {
 
 function lookupHashKey(baseKey: string, revision: string) {
   return `${baseKey}:${revision}`;
-}
-
-/** @internal Exported only for local cache-shape verification. */
-export function parseImageLookup(raw: string): ImageLookupItem | null {
-  try {
-    const value = JSON.parse(raw) as Partial<ImageLookupItem> & { is_link?: unknown };
-    if (
-      "is_link" in value ||
-      typeof value.object_key !== "string" || !value.object_key ||
-      typeof value.thumb_key !== "string" || !value.thumb_key ||
-      typeof value.ext !== "string" || !imageLookupExtensions.has(value.ext) ||
-      typeof value.storage_slug !== "string" || !value.storage_slug ||
-      value.status !== "ready"
-    ) return null;
-    return value as ImageLookupItem;
-  } catch {
-    return null;
-  }
-}
-
-/** @internal Exported only for local cache-shape verification. */
-export function parseImageLookupById(raw: string): ImageLookupByIdItem | null {
-  try {
-    const value = JSON.parse(raw) as Partial<ImageLookupByIdItem> & { is_link?: unknown };
-    if ("is_link" in value
-      || typeof value.id !== "string" || typeof value.object_key !== "string" || typeof value.original !== "string"
-      || typeof value.ext !== "string" || !imageLookupExtensions.has(value.ext)
-      || typeof value.storage_slug !== "string"
-      || !appConfig.devices.includes(value.device as Device) || !appConfig.brightness.includes(value.brightness as Brightness)
-      || typeof value.theme !== "string" || typeof value.status !== "string" || !imageLookupStatuses.has(value.status)
-      || typeof value.description !== "string" || typeof value.source !== "string") return null;
-    return value as ImageLookupByIdItem;
-  } catch {
-    return null;
-  }
 }
 
 export async function publicImagesCacheGeneration(): Promise<string | null> {

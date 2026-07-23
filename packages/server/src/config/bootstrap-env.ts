@@ -18,8 +18,7 @@ const processEnvironmentSchema = z.object({
   ADMIN_PASSWORD: optionalEnvironmentString
 });
 
-/** @internal Exported only for local bootstrap-order verification. */
-export function parseBootstrapAdminEnvironment(environment: NodeJS.ProcessEnv) {
+function parseBootstrapAdminEnvironment(environment: NodeJS.ProcessEnv) {
   const parsed = processEnvironmentSchema.parse(environment);
   return {
     nodeEnvironment: parsed.NODE_ENV,

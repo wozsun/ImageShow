@@ -1,6 +1,5 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "tags": ["-@internal"],
   "workspaces": {
     "packages/shared": {
       "ignoreBinaries": ["tsc"]

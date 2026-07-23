@@ -11,7 +11,7 @@ import { tryWithImportSessionLock } from "./session-lock.ts";
 const uuidPattern = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 const uuidOnlyPattern = new RegExp(`^${uuidPattern}$`, "i");
 const rawImportFilePattern = new RegExp(
-  `^(${uuidPattern})\\.raw(?:\\.part|\\.${uuidPattern}(?:\\.part)?)?$`,
+  `^(${uuidPattern})\\.raw\\.${uuidPattern}(?:\\.part)?$`,
   "i"
 );
 
@@ -24,7 +24,7 @@ async function statIfExists(path: string) {
   }
 }
 
-export function rawImportPath(id: string) {
+function rawImportBasePath(id: string) {
   const root = runtimePaths.tempDirectory;
   const path = normalize(join(root, `${id}.raw`));
   if (!path.startsWith(`${root}${sep}`)) throw new ApiError(400, "unsafe_path", "Unsafe temporary path");
@@ -36,7 +36,7 @@ export function rawImportPartPath(id: string, executionToken: string) {
 }
 
 export function rawImportAttemptPath(id: string, executionToken: string) {
-  const target = rawImportPath(id);
+  const target = rawImportBasePath(id);
   if (!uuidOnlyPattern.test(executionToken)) {
     throw new ApiError(400, "unsafe_path", "Unsafe temporary path");
   }
@@ -100,23 +100,6 @@ export async function writeRawImport(
   }
 }
 
-export async function adoptLegacyRawImport(
-  id: string,
-  executionToken: string
-) {
-  const legacy = rawImportPath(id);
-  const target = rawImportAttemptPath(id, executionToken);
-  try {
-    await link(legacy, target);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-    const existing = await statIfExists(target);
-    if (!existing?.isFile()) throw error;
-  }
-  await rm(legacy, { force: true });
-  return target;
-}
-
 export async function removeRawImportAttempt(
   id: string,
   executionToken: string
@@ -134,20 +117,15 @@ export async function removeRawImportAttempt(
 }
 
 export async function removeRawImport(id: string) {
-  const target = rawImportPath(id);
-  const root = dirname(target);
+  const root = dirname(rawImportBasePath(id));
   const names = await readdir(root).catch((error: NodeJS.ErrnoException) => {
     if (error.code === "ENOENT") return [];
     throw error;
   });
   const prefix = `${id}.raw.`;
-  const results = await Promise.allSettled([
-    rm(target, { force: true }),
-    rm(`${target}.part`, { force: true }),
-    ...names
-      .filter((name) => name.startsWith(prefix) && rawImportFilePattern.test(name))
-      .map((name) => rm(join(root, name), { force: true }))
-  ]);
+  const results = await Promise.allSettled(names
+    .filter((name) => name.startsWith(prefix) && rawImportFilePattern.test(name))
+    .map((name) => rm(join(root, name), { force: true })));
   const failures = results
     .filter((result): result is PromiseRejectedResult => result.status === "rejected")
     .map((result) => result.reason);
@@ -156,10 +134,8 @@ export async function removeRawImport(id: string) {
   }
 }
 
-export async function rawImportExists(id: string, executionToken?: string) {
-  const info = await statIfExists(executionToken
-    ? rawImportAttemptPath(id, executionToken)
-    : rawImportPath(id));
+export async function rawImportExists(id: string, executionToken: string) {
+  const info = await statIfExists(rawImportAttemptPath(id, executionToken));
   return Boolean(info?.isFile());
 }
 

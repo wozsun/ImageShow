@@ -20,6 +20,29 @@ docker run --rm -p 5518:5518 \
 Secret 读取，不会写入 `config.json`。
 外部 Redis 需要密码时额外传入 `REDIS_PASSWORD`；留空或省略表示使用无密码连接。
 
+## 健康检查与镜像清理
+
+容器健康检查只调用 `/readyz`。该端点同时检查 PostgreSQL、Redis 与数据库迁移版本；
+任一依赖不可用都会返回非 2xx，Docker 随即把容器标为 unhealthy。`/livez` 只表示进程
+仍在运行，适合人工区分“进程退出”和“依赖未就绪”，不作为镜像切换成功的依据。
+
+清理本地镜像必须先确认新容器 healthy，并且只处理 ImageShow 仓库和已经人工确认的
+精确 image ID / digest：
+
+```bash
+docker inspect --format '{{.State.Health.Status}} {{.Image}}' imageshow
+docker image ls --digests --no-trunc wozsun/imageshow
+docker image ls --digests --no-trunc ccr.ccs.tencentyun.com/<namespace>/imageshow
+docker ps -a --no-trunc --filter ancestor=<sha256:image-id>
+docker image rm <sha256:image-id>
+```
+
+最后一条只能填写前面核对过、且没有任何容器引用的旧 ImageShow image ID。不要使用
+`docker image prune`、仓库名通配符、模糊标签或构建缓存全量清理；这些操作会越过项目
+边界。远端仓库中的发布镜像同样先用
+`docker buildx imagetools inspect REPOSITORY@SHA256_DIGEST` 核对精确 digest，再在对应
+仓库中删除明确废弃的 tag 或 manifest；`latest`、当前版本标签和仍用于回滚的版本不删除。
+
 ## 管理员密码恢复
 
 首次安装时，`ADMIN_USERNAME` / `ADMIN_PASSWORD` 只在数据库没有 super

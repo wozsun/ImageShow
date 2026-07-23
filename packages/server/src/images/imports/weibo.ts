@@ -13,7 +13,6 @@ const weiboVisitorResponseMaxBytes = 64 * 1024;
 const weiboStatusResponseMaxBytes = 4 * 1024 * 1024;
 
 type UnknownRecord = Record<string, unknown>;
-type FetchImplementation = typeof fetch;
 
 export type WeiboImportErrorCode =
   | "weibo_invalid_url"
@@ -56,9 +55,7 @@ export type WeiboPostParseError = {
 
 type WeiboExtractionOptions = {
   authorSlugs: Readonly<Record<string, string>>;
-  fetchImplementation?: FetchImplementation;
   concurrency?: number;
-  requestTimeoutMs?: number;
   signal?: AbortSignal;
 };
 
@@ -92,7 +89,7 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** Exported for focused URL verification and reused by batch parsing. */
+/** Parses one supported Weibo post URL into its canonical identifiers. */
 export function parseWeiboPostUrl(input: string) {
   const value = input.trim();
   let url: URL;
@@ -141,8 +138,7 @@ export function parseWeiboPostUrl(input: string) {
   return { identifier, sourceUrl: url.toString() };
 }
 
-/** @internal Exported only for focused Weibo date verification. */
-export function normalizeWeiboDate(value: unknown): string | null {
+function normalizeWeiboDate(value: unknown): string | null {
   if (typeof value !== "string" || !value.trim()) return null;
   const trimmed = value.trim();
 
@@ -175,8 +171,7 @@ export function normalizeWeiboDate(value: unknown): string | null {
   return Number.isNaN(parsed.valueOf()) ? null : parsed.toISOString();
 }
 
-/** @internal Exported only for focused Weibo image URL verification. */
-export function toOriginalWeiboImageUrl(value: unknown): string | null {
+function toOriginalWeiboImageUrl(value: unknown): string | null {
   if (typeof value !== "string" || !value) return null;
   return value.replace(
     /\/(?:wap\d+|thumb\d+|thumbnail|bmiddle|mw\d+|orj\d+|woriginal|large)\//i,
@@ -199,8 +194,7 @@ function bestImageUrl(value: unknown): string | null {
   );
 }
 
-/** @internal Exported only for focused Weibo response verification. */
-export function extractOriginalWeiboImageUrls(value: unknown) {
+function extractOriginalWeiboImageUrls(value: unknown) {
   const result: string[] = [];
   const seen = new Set<string>();
 
@@ -319,27 +313,22 @@ async function readWeiboResponseText(
 }
 
 async function requestAndParseWeiboResponse<Result>(
-  fetchImplementation: FetchImplementation,
   input: string | URL,
   init: RequestInit,
   code: Extract<WeiboImportErrorCode, "weibo_visitor_failed" | "weibo_request_failed">,
   context: string,
   maxResponseBytes: number,
-  parseResponse: (response: Response, text: string) => Result,
-  timeoutMs = weiboRequestTimeoutMs
+  parseResponse: (response: Response, text: string) => Result
 ) {
   const callerSignal = init.signal ?? undefined;
-  const effectiveTimeoutMs = Number.isFinite(timeoutMs)
-    ? Math.max(1, Math.floor(timeoutMs))
-    : weiboRequestTimeoutMs;
 
   try {
     return await runWeiboRequestWithinGlobalLimit(callerSignal, async () => {
-      const timeoutSignal = AbortSignal.timeout(effectiveTimeoutMs);
+      const timeoutSignal = AbortSignal.timeout(weiboRequestTimeoutMs);
       const requestSignal = callerSignal
         ? AbortSignal.any([callerSignal, timeoutSignal])
         : timeoutSignal;
-      const response = await fetchImplementation(input, {
+      const response = await fetch(input, {
         ...init,
         signal: requestSignal
       });
@@ -361,11 +350,8 @@ async function requestAndParseWeiboResponse<Result>(
   }
 }
 
-/** @internal Exported only for focused Weibo visitor protocol verification. */
-export async function createWeiboVisitorCookie(
-  fetchImplementation: FetchImplementation = fetch,
-  signal?: AbortSignal,
-  requestTimeoutMs = weiboRequestTimeoutMs
+async function createWeiboVisitorCookie(
+  signal?: AbortSignal
 ) {
   const fingerprint = JSON.stringify({
     os: "1",
@@ -379,7 +365,6 @@ export async function createWeiboVisitorCookie(
     referer: "https://passport.weibo.com/"
   };
   const generated = await requestAndParseWeiboResponse(
-    fetchImplementation,
     "https://passport.weibo.com/visitor/genvisitor",
     {
       method: "POST",
@@ -396,8 +381,7 @@ export async function createWeiboVisitorCookie(
     (response, text) => ({
       response,
       data: asRecord(parseCallbackJson(text))
-    }),
-    requestTimeoutMs
+    })
   );
   const generatedData = generated.data;
   const generatedPayload = asRecord(generatedData?.data);
@@ -425,7 +409,6 @@ export async function createWeiboVisitorCookie(
   }
 
   const incarnated = await requestAndParseWeiboResponse(
-    fetchImplementation,
     incarnateUrl,
     { headers: commonHeaders, redirect: "manual", signal },
     "weibo_visitor_failed",
@@ -434,8 +417,7 @@ export async function createWeiboVisitorCookie(
     (response, text) => ({
       response,
       data: asRecord(parseCallbackJson(text))
-    }),
-    requestTimeoutMs
+    })
   );
   const identity = incarnated.data;
   const identityPayload = asRecord(identity?.data);
@@ -452,17 +434,13 @@ export async function createWeiboVisitorCookie(
   return `SUB=${sub}; SUBP=${subp}`;
 }
 
-/** @internal Exported only for focused Weibo status protocol verification. */
-export async function fetchWeiboStatus(
+async function fetchWeiboStatus(
   identifier: string,
   cookie: string,
-  fetchImplementation: FetchImplementation = fetch,
-  signal?: AbortSignal,
-  requestTimeoutMs = weiboRequestTimeoutMs
+  signal?: AbortSignal
 ) {
   const endpoint = `https://weibo.com/ajax/statuses/show?id=${encodeURIComponent(identifier)}`;
   return requestAndParseWeiboResponse(
-    fetchImplementation,
     endpoint,
     {
       headers: {
@@ -497,8 +475,7 @@ export async function fetchWeiboStatus(
           "微博没有返回 JSON，可能触发了登录验证或访问限制"
         );
       }
-    },
-    requestTimeoutMs
+    }
   );
 }
 
@@ -507,13 +484,10 @@ async function extractWeiboPostWithVisitor(
   visitorCookie: string,
   options: WeiboExtractionOptions
 ): Promise<ExtractedWeiboPost> {
-  const fetchImplementation = options.fetchImplementation ?? fetch;
   const rawStatus = await fetchWeiboStatus(
     parsedUrl.identifier,
     visitorCookie,
-    fetchImplementation,
-    options.signal,
-    options.requestTimeoutMs
+    options.signal
   );
   const status = asRecord(rawStatus);
   const returnedWeiboId = scalarString(status?.idstr) || scalarString(status?.id);
@@ -558,23 +532,7 @@ async function extractWeiboPostWithVisitor(
   };
 }
 
-/** @internal Exported only for focused Weibo extraction verification. */
-export async function extractWeiboPost(
-  inputUrl: string,
-  options: WeiboExtractionOptions
-): Promise<ExtractedWeiboPost> {
-  const parsedUrl = parseWeiboPostUrl(inputUrl);
-  const fetchImplementation = options.fetchImplementation ?? fetch;
-  const visitorCookie = await createWeiboVisitorCookie(
-    fetchImplementation,
-    options.signal,
-    options.requestTimeoutMs
-  );
-  return extractWeiboPostWithVisitor(parsedUrl, visitorCookie, options);
-}
-
-/** @internal Exported only for focused generated JSONL verification. */
-export function weiboPostToJsonl(post: ExtractedWeiboPost) {
+function weiboPostToJsonl(post: ExtractedWeiboPost) {
   const publicationYear = post.published_at.slice(0, 4);
   return post.original_image_urls.map((original) => JSON.stringify({
     original,
@@ -616,30 +574,6 @@ function createWeiboPostParseError(
   return { line, url, code: error.code, error: error.message };
 }
 
-/** @internal Exported only for focused single-post manifest verification. */
-export async function createWeiboImportManifest(
-  inputUrl: string,
-  options: WeiboManifestOptions
-) {
-  const post = await extractWeiboPost(inputUrl, options);
-  assertWeiboImageCountWithinHardLimit(post.image_count);
-  const manifest = parseJsonlManifest(weiboPostToJsonl(post), {
-    maxItems: appConfig.imports.weiboImageHardLimit,
-    timeZone: options.timeZone
-  });
-  if (!manifest.items.length) {
-    throw new WeiboImportError(
-      "weibo_no_importable_images",
-      "微博图片链接无法转换为有效的 JSONL 导入清单"
-    );
-  }
-
-  return {
-    post: presentWeiboPost(post),
-    manifest
-  };
-}
-
 export async function createWeiboImportBatchManifest(
   inputUrls: string[],
   options: WeiboManifestOptions
@@ -664,12 +598,7 @@ export async function createWeiboImportBatchManifest(
   });
 
   if (validUrls.length) {
-    const fetchImplementation = options.fetchImplementation ?? fetch;
-    const visitorCookie = await createWeiboVisitorCookie(
-      fetchImplementation,
-      options.signal,
-      options.requestTimeoutMs
-    );
+    const visitorCookie = await createWeiboVisitorCookie(options.signal);
     let fetchedImageCount = 0;
     const fetched = await mapWithWorkerPool(
       validUrls,
