@@ -1,6 +1,6 @@
 {
   "name": "@imageshow/server",
-  "version": "3.11.9",
+  "version": "3.11.10",
   "type": "module",
   "scripts": {
     "dev": "node --env-file-if-exists=../../.env --watch src/index.ts",

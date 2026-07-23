@@ -7,7 +7,7 @@ type AdminNavGroupItem = { to: string; label: string; end?: boolean };
 export function AdminNavGroup({ icon, label, items }: {
   icon: IconName;
   label: string;
-  items: AdminNavGroupItem[];
+  items: readonly AdminNavGroupItem[];
 }) {
   const location = useLocation();
   const navigate = useNavigate();
