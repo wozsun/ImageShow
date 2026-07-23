@@ -75,6 +75,7 @@ export function useDialogFocus({
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        if (event.isComposing || event.keyCode === 229) return;
         event.preventDefault();
         event.stopPropagation();
         onEscapeRef.current();

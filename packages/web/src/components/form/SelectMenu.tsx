@@ -1,21 +1,40 @@
-import { useId, useRef, type KeyboardEvent } from "react";
+import { useContext, useEffect, useId, useRef, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
+import { DialogPortalTargetContext } from "../feedback/DialogPortalContext.js";
 import { useAnchoredMenu } from "../../hooks/useAnchoredMenu.js";
 import type { AnchoredMenuSize } from "../../lib/ui/menu-position.js";
 import type { SelectOption } from "../../lib/ui/select-options.js";
 
 const MENU_SIZE: AnchoredMenuSize = { minWidth: 120, flipThreshold: 180, minAvailable: 96, maxHeight: 240 };
 
-export function SelectMenu({ value, options, onChange, disabled = false, ariaLabel, className }: {
+export function SelectMenu({
+  value,
+  options,
+  onChange,
+  onOpenChange,
+  disabled = false,
+  ariaLabel,
+  className
+}: {
   value: string;
   options: readonly SelectOption[];
   onChange: (value: string) => void;
+  onOpenChange?: (open: boolean) => void;
   disabled?: boolean;
   ariaLabel?: string;
   className?: string;
 }) {
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const dialogPortalTargetRef = useContext(DialogPortalTargetContext);
+  const onOpenChangeRef = useRef(onOpenChange);
+  const reportedOpenRef = useRef(false);
+  onOpenChangeRef.current = onOpenChange;
+  const reportOpen = (nextOpen: boolean) => {
+    if (reportedOpenRef.current === nextOpen) return;
+    reportedOpenRef.current = nextOpen;
+    onOpenChangeRef.current?.(nextOpen);
+  };
   const menuId = useId();
   const selectedIndex = Math.max(0, options.findIndex((option) => option.value === value));
   const selected = options[selectedIndex] ?? { value, label: value };
@@ -24,10 +43,16 @@ export function SelectMenu({ value, options, onChange, disabled = false, ariaLab
     getSize: () => MENU_SIZE,
     initialMaxHeight: 240,
     disabled,
+    onClose: () => reportOpen(false),
     closeOnEscape: true,
     closeOnFocusOutside: true,
     focusOnOpen: () => optionRefs.current[selectedIndex]
   });
+  const handleOpen = () => {
+    reportOpen(true);
+    openMenu();
+  };
+  useEffect(() => () => reportOpen(false), []);
 
   const choose = (nextValue: string) => {
     if (nextValue !== value) onChange(nextValue);
@@ -51,6 +76,7 @@ export function SelectMenu({ value, options, onChange, disabled = false, ariaLab
         ref={menuRef}
         id={menuId}
         className={`select-menu ${opensUp ? "opens-up" : ""} ${closing ? "is-closing" : ""}`}
+        data-dialog-portal-menu={dialogPortalTargetRef?.current ? "" : undefined}
         role="listbox"
         aria-label={ariaLabel}
         aria-hidden={closing}
@@ -73,7 +99,7 @@ export function SelectMenu({ value, options, onChange, disabled = false, ariaLab
           </button>
         ))}
       </div>,
-      document.body
+      dialogPortalTargetRef?.current ?? document.body
     ) : null;
 
   return (
@@ -90,9 +116,9 @@ export function SelectMenu({ value, options, onChange, disabled = false, ariaLab
         onKeyDown={(event) => {
           if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
           event.preventDefault();
-          if (!open) openMenu();
+          if (!open) handleOpen();
         }}
-        onClick={() => open ? requestClose() : openMenu()}
+        onClick={() => open ? requestClose() : handleOpen()}
       >
         <span>{selected.label}</span>
       </button>

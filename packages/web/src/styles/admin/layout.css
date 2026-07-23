@@ -50,6 +50,13 @@
 .admin button:not(:disabled):not(.select-trigger):not(.password-toggle):active {
   transform: scale(var(--pressable-active-scale, var(--pressable-scale-medium, .98)));
 }
+/* Dialog 内的浮层菜单仍保持原先挂在 body 时的按钮反馈，不继承后台按压动效。 */
+.admin [data-dialog-portal-menu] > button:not(:disabled) {
+  transition: all 0s ease 0s;
+}
+.admin [data-dialog-portal-menu] > button:not(:disabled):active {
+  transform: none;
+}
 .admin button.icon:not(:disabled) {
   --pressable-active-scale: var(--pressable-scale-small, .97);
 }

@@ -1,8 +1,8 @@
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { Icon } from "../../components/icon/Icon.js";
 import { AsyncActionButton } from "../../components/actions/AsyncActionButton.js";
+import { DialogFrame } from "../../components/feedback/DialogFrame.js";
 import { SelectMenu } from "../../components/form/SelectMenu.js";
-import { useAnimatedClose } from "../../hooks/useAnimatedClose.js";
 import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
 import { storageBackendDisplay, storageTypeLabel } from "../../lib/ui/select-options.js";
 import type { S3Settings, StorageBackendAdmin, StorageType, WebdavSettings } from "../../lib/types.js";
@@ -88,6 +88,7 @@ export function StorageBackendModal({ target, busy, defaultStatus, defaultAction
   const [slug, setSlug] = useState(backend?.slug ?? "");
   const [displayName, setDisplayName] = useState(backend?.display_name ?? "");
   const [type, setType] = useState<StorageType>(backend?.type ?? "s3");
+  const [storageTypeMenuOpen, setStorageTypeMenuOpen] = useState(false);
   const [s3, setS3] = useState<S3Settings>({
     ...emptyS3,
     ...(backend?.type === "s3" ? backend.s3 : {}),
@@ -101,7 +102,9 @@ export function StorageBackendModal({ target, busy, defaultStatus, defaultAction
 
   const effectiveType: StorageType = creating ? type : backend!.type;
   const isWebdav = effectiveType === "webdav";
-  const exit = useAnimatedClose(onClose);
+  const titleId = useId();
+  const descriptionId = useId();
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const bodyRef = useRef<HTMLDivElement | null>(null);
 
   const [createdSlug, setCreatedSlug] = useState<string | null>(null);
@@ -164,121 +167,130 @@ export function StorageBackendModal({ target, busy, defaultStatus, defaultAction
   } as const;
 
   return (
-    <div
-      className={`modal edit-modal ${exit.closing ? "is-closing" : ""}`}
-      onAnimationEnd={exit.onAnimationEnd}
+    <DialogFrame
+      className="modal edit-modal"
+      titleId={titleId}
+      descriptionId={isCreateForm ? undefined : descriptionId}
+      busy={formBusy}
+      paused={storageTypeMenuOpen}
+      initialFocusRef={closeButtonRef}
+      onClose={onClose}
     >
-      <form
-        className="operation-modal storage-edit-modal"
-        onSubmit={(event) => { event.preventDefault(); void submit(); }}
-      >
-        <header>
-          <div>
-            <h2>{isCreateForm ? "新增存储后端" : `编辑：${storageBackendDisplay(backend ?? { slug: createdSlug!, display_name: displayName })}`}</h2>
-            {!isCreateForm && <p>{createdSlug ?? backend!.slug} · {storageTypeLabel(effectiveType)}</p>}
-          </div>
-          <button
-            className="icon close pressable"
-            type="button"
-            title="关闭"
-            disabled={formBusy}
-            onClick={() => exit.requestClose()}
-          >
-            <Icon name="close-line" />
-          </button>
-        </header>
-        <div className="operation-body" ref={bodyRef}>
-          {creating && (
-            <label>
-              标识 slug
-              <input
-                value={slug}
-                onChange={(event) => setSlug(event.target.value)}
-                placeholder="小写字母/数字/连字符"
-                disabled={!isCreateForm}
-              />
-            </label>
-          )}
-          <label>
-            显示名
-            <input
-              value={displayName}
-              onChange={(event) => setDisplayName(event.target.value)}
-              placeholder={creating ? "存储后端名称" : backend!.slug}
-            />
-          </label>
-          {isCreateForm && (
-            <label>
-              存储类型
-              <SelectMenu
-                value={type}
-                onChange={(value) => setType(value as StorageType)}
-                options={storageTypeOptions}
-                ariaLabel="存储类型"
-              />
-            </label>
-          )}
-          {isLocal ? (
-            <p className="hint">本地存储无需额外配置，图片保存在容器的存储目录。</p>
-          ) : (
-            <>
-              {locationLocked && (
-                <p className="notice-line" role="note">
-                  {isWebdav ? (
-                    <>
-                      此后端仍有 {locationUsage}。Base URL / 根目录已锁定；
-                      请先{locationUnlockGuidance}。凭据及访问参数仍可轮换，
-                      保存前服务端会验证读写能力。
-                    </>
-                  ) : (
-                    <>
-                      此后端仍有 {locationUsage}。Bucket / 根目录已锁定；
-                      如需改变请先{locationUnlockGuidance}。Endpoint 仍可修改，
-                      保存时服务端会证明新旧地址指向同一命名空间；验证失败会保留原配置。
-                    </>
-                  )}
-                </p>
-              )}
-              {isWebdav
-                ? <WebdavFields value={webdav} onChange={setWebdav} configured={backend?.type === "webdav" ? backend.webdav.password_configured : undefined} locationLocked={locationLocked} />
-                : <S3Fields value={s3} onChange={setS3} configured={backend?.type === "s3" ? backend.s3.secret_access_key_configured : undefined} locationLocked={locationLocked} />}
-            </>
-          )}
-        </div>
-        <OverlayScrollbar targetRef={bodyRef} />
-        <footer>
-          <div className="storage-modal-left">
-            <AsyncActionButton
+      {({ requestClose }) => (
+        <form
+          className="operation-modal storage-edit-modal"
+          onSubmit={(event) => { event.preventDefault(); void submit(); }}
+        >
+          <header>
+            <div>
+              <h2 id={titleId}>{isCreateForm ? "新增存储后端" : `编辑：${storageBackendDisplay(backend ?? { slug: createdSlug!, display_name: displayName })}`}</h2>
+              {!isCreateForm && <p id={descriptionId}>{createdSlug ?? backend!.slug} · {storageTypeLabel(effectiveType)}</p>}
+            </div>
+            <button
+              ref={closeButtonRef}
+              className="icon close pressable"
               type="button"
-              className="storage-test-button"
-              status={connectionTest.status}
-              presentation={storageTestPresentation}
+              title="关闭"
               disabled={formBusy}
-              onClick={() => void runConnectionTest()}
-            />
-            {!creating && backend!.enabled && (
-              <AsyncActionButton
-                type="button"
-                status={defaultStatus}
-                presentation={currentDefaultPresentation}
-                disabled={formBusy || backend!.is_default}
-                onClick={() => void setAsDefault()}
+              onClick={() => requestClose()}
+            >
+              <Icon name="close-line" />
+            </button>
+          </header>
+          <div className="operation-body" ref={bodyRef}>
+            {creating && (
+              <label>
+                标识 slug
+                <input
+                  value={slug}
+                  onChange={(event) => setSlug(event.target.value)}
+                  placeholder="小写字母/数字/连字符"
+                  disabled={!isCreateForm}
+                />
+              </label>
+            )}
+            <label>
+              显示名
+              <input
+                value={displayName}
+                onChange={(event) => setDisplayName(event.target.value)}
+                placeholder={creating ? "存储后端名称" : backend!.slug}
               />
+            </label>
+            {isCreateForm && (
+              <label>
+                存储类型
+                <SelectMenu
+                  value={type}
+                  onChange={(value) => setType(value as StorageType)}
+                  onOpenChange={setStorageTypeMenuOpen}
+                  options={storageTypeOptions}
+                  ariaLabel="存储类型"
+                />
+              </label>
+            )}
+            {isLocal ? (
+              <p className="hint">本地存储无需额外配置，图片保存在容器的存储目录。</p>
+            ) : (
+              <>
+                {locationLocked && (
+                  <p className="notice-line" role="note">
+                    {isWebdav ? (
+                      <>
+                        此后端仍有 {locationUsage}。Base URL / 根目录已锁定；
+                        请先{locationUnlockGuidance}。凭据及访问参数仍可轮换，
+                        保存前服务端会验证读写能力。
+                      </>
+                    ) : (
+                      <>
+                        此后端仍有 {locationUsage}。Bucket / 根目录已锁定；
+                        如需改变请先{locationUnlockGuidance}。Endpoint 仍可修改，
+                        保存时服务端会证明新旧地址指向同一命名空间；验证失败会保留原配置。
+                      </>
+                    )}
+                  </p>
+                )}
+                {isWebdav
+                  ? <WebdavFields value={webdav} onChange={setWebdav} configured={backend?.type === "webdav" ? backend.webdav.password_configured : undefined} locationLocked={locationLocked} />
+                  : <S3Fields value={s3} onChange={setS3} configured={backend?.type === "s3" ? backend.s3.secret_access_key_configured : undefined} locationLocked={locationLocked} />}
+              </>
             )}
           </div>
-          <div className="modal-footer-actions">
-            <button type="button" disabled={formBusy} onClick={() => exit.requestClose()}>取消</button>
-            <AsyncActionButton
-              className="button"
-              type="submit"
-              status={saveStatus.status}
-              presentation={savePresentation}
-              disabled={formBusy || (isCreateForm && !slug)}
-            />
-          </div>
-        </footer>
-      </form>
-    </div>
+          <OverlayScrollbar targetRef={bodyRef} />
+          <footer>
+            <div className="storage-modal-left">
+              <AsyncActionButton
+                type="button"
+                className="storage-test-button"
+                status={connectionTest.status}
+                presentation={storageTestPresentation}
+                disabled={formBusy}
+                onClick={() => void runConnectionTest()}
+              />
+              {!creating && backend!.enabled && (
+                <AsyncActionButton
+                  type="button"
+                  status={defaultStatus}
+                  presentation={currentDefaultPresentation}
+                  disabled={formBusy || backend!.is_default}
+                  onClick={() => void setAsDefault()}
+                />
+              )}
+            </div>
+            <div className="modal-footer-actions">
+              <button type="button" disabled={formBusy} onClick={() => requestClose()}>取消</button>
+              <AsyncActionButton
+                className="button"
+                type="submit"
+                status={saveStatus.status}
+                presentation={savePresentation}
+                disabled={formBusy || (isCreateForm && !slug)}
+              />
+            </div>
+          </footer>
+        </form>
+      )}
+    </DialogFrame>
   );
 }
 
