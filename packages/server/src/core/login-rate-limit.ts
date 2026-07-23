@@ -1,13 +1,13 @@
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { ApiError } from "./api-error.ts";
 import { redis } from "./redis-client.ts";
-import { volatileKey } from "./runtime-key-namespace.ts";
 
-const globalKey = volatileKey("login_fail_global");
+const loginFailureKeyPrefix = "imageshow:login_fail";
+const globalKey = `${loginFailureKeyPrefix}:global`;
 
 function identityKey(ip: string, username: string) {
   const normalizedUser = username.trim().toLowerCase().slice(0, 80) || "empty";
-  return volatileKey("login_fail", ip, normalizedUser);
+  return `${loginFailureKeyPrefix}:${ip}:${normalizedUser}`;
 }
 
 export const loginRateLimiter = {

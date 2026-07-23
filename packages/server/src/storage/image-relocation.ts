@@ -16,7 +16,7 @@ import {
   enqueueObjectsForCleanup,
   type MoveCleanupObjectInput
 } from "./move-cleanup.ts";
-import { pruneEmptyStorageDirs } from "./storage.ts";
+import { pruneEmptyStorageDirs } from "./object-access.ts";
 
 export type RelocatableImage = {
   id: string;

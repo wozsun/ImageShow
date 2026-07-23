@@ -1,7 +1,13 @@
 import type { Hono } from "hono";
 import { themeCreateInput, themeDisplayUpdateInput, themeSlugInput } from "../core/validation.ts";
 import { listThemesWithMeta } from "../themes/query.ts";
-import { createTheme, deleteTheme, deleteThemes, reorderThemes, setThemeDisplayName } from "../themes/service.ts";
+import {
+  createTheme,
+  deleteTheme,
+  deleteThemes,
+  reorderThemes,
+  updateThemeDisplayName
+} from "../themes/mutations.ts";
 import { registerAdminEntityRoutes } from "./admin-entity-routes.ts";
 
 export function registerAdminThemeRoutes(app: Hono) {
@@ -16,7 +22,7 @@ export function registerAdminThemeRoutes(app: Hono) {
     },
     reorder: reorderThemes,
     batchDelete: deleteThemes,
-    update: async (slug, input) => setThemeDisplayName(slug, input.display_name),
+    update: async (slug, input) => updateThemeDisplayName(slug, input.display_name),
     remove: deleteTheme
   });
 }

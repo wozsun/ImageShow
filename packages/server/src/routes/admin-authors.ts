@@ -1,7 +1,13 @@
 import type { Hono } from "hono";
 import { authorCreateInput, authorMetaUpdateInput, authorSlugInput } from "../core/validation.ts";
 import { listAuthorsWithMeta } from "../authors/query.ts";
-import { createAuthor, deleteAuthor, deleteAuthors, reorderAuthors, setAuthorMeta } from "../authors/service.ts";
+import {
+  createAuthor,
+  deleteAuthor,
+  deleteAuthors,
+  reorderAuthors,
+  updateAuthorProfile
+} from "../authors/mutations.ts";
 import { registerAdminEntityRoutes } from "./admin-entity-routes.ts";
 
 export function registerAdminAuthorRoutes(app: Hono) {
@@ -16,7 +22,7 @@ export function registerAdminAuthorRoutes(app: Hono) {
     },
     reorder: reorderAuthors,
     batchDelete: deleteAuthors,
-    update: async (slug, input) => setAuthorMeta(slug, input.display_name, input.link),
+    update: async (slug, input) => updateAuthorProfile(slug, input.display_name, input.link),
     remove: deleteAuthor
   });
 }

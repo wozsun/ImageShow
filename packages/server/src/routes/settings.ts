@@ -1,6 +1,7 @@
 import type { Hono } from "hono";
 import { adminApiBasePath } from "@imageshow/shared";
-import { ok, requireSuper } from "../core/http.ts";
+import { apiSuccess } from "../core/http/responses.ts";
+import { requireSuperAdmin } from "../users/admin-session.ts";
 import { applicationVersion } from "../core/application-version.ts";
 import {
   getSettingsForAdmin,
@@ -11,21 +12,21 @@ import {
 
 export function registerSettingsRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/settings`, (c) => {
-    return c.json(ok({
+    return c.json(apiSuccess({
       settings: getSettingsForAdmin(),
       application_version: applicationVersion()
     }));
   });
 
-  app.post(`${adminApiBasePath}/settings`, requireSuper, async (c) => {
+  app.post(`${adminApiBasePath}/settings`, requireSuperAdmin, async (c) => {
     const input = parseSettingsInput(await c.req.json().catch(() => ({})));
     await saveAppSettings(input);
-    return c.json(ok());
+    return c.json(apiSuccess());
   });
 
-  app.post(`${adminApiBasePath}/settings/reload`, requireSuper, async (c) => {
+  app.post(`${adminApiBasePath}/settings/reload`, requireSuperAdmin, async (c) => {
     await reloadAppConfig();
-    return c.json(ok());
+    return c.json(apiSuccess());
   });
 
 }

@@ -14,23 +14,29 @@ import {
 type OverviewStats = Awaited<ReturnType<typeof buildOverviewStats>>;
 
 export async function getOverviewStats() {
+  const recentLimit = getRuntimeConfig().admin.recent_uploads;
   const generation = await publicImagesCacheGeneration();
-  const cacheKey = `v3:${generation}`;
+  const cacheKey = `recent:${recentLimit}`;
   const cached = await getAdminOverviewCache<OverviewStats>(cacheKey, generation);
   if (cached) return cached;
 
-  return coalesce(`admin-overview:${cacheKey}`, async () => {
-    const raced = await getAdminOverviewCache<OverviewStats>(cacheKey, generation);
-    if (raced) return raced;
+  return coalesce(
+    `admin-overview:${generation ?? "uncached"}:${cacheKey}`,
+    async () => {
+      const raced = await getAdminOverviewCache<OverviewStats>(
+        cacheKey,
+        generation
+      );
+      if (raced) return raced;
 
-    const stats = await buildOverviewStats();
-    await setAdminOverviewCache(cacheKey, stats, generation);
-    return stats;
-  });
+      const stats = await buildOverviewStats(recentLimit);
+      await setAdminOverviewCache(cacheKey, stats, generation);
+      return stats;
+    }
+  );
 }
 
-async function buildOverviewStats() {
-  const recentLimit = getRuntimeConfig().admin.recent_uploads;
+async function buildOverviewStats(recentLimit: number) {
   const [statsResult, topThemesResult, recentResult, backendResult] = await Promise.all([
     pool.query(`
       SELECT

@@ -1,14 +1,12 @@
 import type { Pool, PoolClient } from "pg";
-import { pool, withTransaction } from "../core/db.ts";
+import { pool } from "../core/db.ts";
 import { ApiError } from "../core/api-error.ts";
-import { getRuntimeConfig } from "../config/runtime-config-store.ts";
-import { mapWithConcurrency } from "../core/concurrency.ts";
 import { metadataUpdateInput, parse } from "../core/validation.ts";
-import { invalidateImageCaches } from "./image-cache.ts";
-import { syncRandomImage, syncRandomImages } from "../random/random-cache.ts";
 import { thumbnailRef } from "../storage/image-paths.ts";
-import { exists, readStorageBuffer } from "../storage/storage.ts";
-import { migrateImageStorage, type MigrateRecord } from "../storage/migration.ts";
+import {
+  readStorageBuffer,
+  storageObjectExists
+} from "../storage/object-access.ts";
 import {
   imageStorageMutationLockKey,
   withImageStorageMutationLock,
@@ -20,29 +18,28 @@ import {
   prepareVerifiedImageRelocation
 } from "../storage/image-relocation.ts";
 import { isReservedSubdomain } from "../themes/host.ts";
+import { ensureThemeWithMutationLockHeld } from "../themes/mutations.ts";
+import { ensureAuthorWithMutationLockHeld } from "../authors/mutations.ts";
 import {
-  ensureThemeWithMutationLockHeld
-} from "../themes/service.ts";
-import {
-  ensureAuthorWithMutationLockHeld
-} from "../authors/service.ts";
-import {
-  invalidateEntityCountCaches,
   invalidateOrCollectEntityCountCaches,
   refreshEntityVocabularies,
   type EntityCacheKind,
-  type EntityCountCacheInvalidationBatch,
+  type EntityCountCacheInvalidationBatch
 } from "../vocab/vocab-cache.ts";
 import {
   vocabularyAssociationLockRequests,
   withVocabularyAssociationLock
 } from "../vocab/mutation-sync.ts";
 import { detectBrightness } from "./brightness.ts";
-import { deviceFromDimensions, resolveOptionalBrightnessWith, resolveOptionalDeviceWith } from "./classification.ts";
+import {
+  deviceFromDimensions,
+  resolveOptionalBrightnessWith,
+  resolveOptionalDeviceWith
+} from "./classification.ts";
 import type { ImageRecord } from "./presenter.ts";
 import {
   applyOrCollectImageMutationSync,
-  type ImageMutationSyncBatch,
+  type ImageMutationSyncBatch
 } from "./mutation-sync.ts";
 
 type MutationImageRecord = Pick<
@@ -79,8 +76,12 @@ const mutationImageColumns = [
 async function detectImageBrightness(image: MutationImageRecord) {
   if (image.status !== "ready") return undefined;
   const thumb = thumbnailRef(image);
-  if (!(await exists(thumb.prefix, thumb.key, thumb.slug))) return undefined;
-  return detectBrightness(await readStorageBuffer(thumb.prefix, thumb.key, thumb.slug));
+  if (!(await storageObjectExists(thumb.prefix, thumb.key, thumb.slug))) {
+    return undefined;
+  }
+  return detectBrightness(
+    await readStorageBuffer(thumb.prefix, thumb.key, thumb.slug)
+  );
 }
 
 function detectImageDevice(image: MutationImageRecord) {
@@ -103,7 +104,7 @@ async function applyImageFieldEdits(
     original?: string;
   },
   authorValue: string | null,
-  touchAuthor: boolean,
+  touchAuthor: boolean
 ): Promise<MutationImageRecord> {
   const result = await executor.query(
     `UPDATE metadata
@@ -115,39 +116,24 @@ async function applyImageFieldEdits(
             updated_at=now()
       WHERE id=$1
       RETURNING ${mutationImageColumns}`,
-    [id, fields.title, fields.description, fields.source, fields.original, authorValue, touchAuthor],
+    [
+      id,
+      fields.title,
+      fields.description,
+      fields.source,
+      fields.original,
+      authorValue,
+      touchAuthor
+    ]
   );
   return result.rows[0] as MutationImageRecord;
 }
 
-export async function deleteImage(id: string) {
-  const deleted = await withTransaction(async (client) => {
-    const result = await client.query(
-      `UPDATE metadata
-          SET status='deleted',
-              deleted_at=now(),
-              purge_state='idle',
-              purge_started_at=NULL,
-              purge_error=NULL,
-              updated_at=now()
-        WHERE id=$1 AND status='ready'
-        RETURNING id, object_key, md5`,
-      [id]
-    );
-    if (!result.rowCount) throw new ApiError(404, "not_found", "Ready image not found");
-    return result.rows[0] as { id: string; object_key: string; md5: string | null };
-  });
-  await syncRandomImage(deleted.id);
-  await Promise.all([
-    invalidateImageCaches({
-      lookupEntries: [deleted],
-      md5s: [deleted.md5 ?? ""]
-    }),
-    invalidateEntityCountCaches(["theme", "author"]),
-  ]);
-}
-
-export async function updateImageMetadata(id: string, body: unknown, options: ImageMutationOptions = {}) {
+export async function updateImageMetadata(
+  id: string,
+  body: unknown,
+  options: ImageMutationOptions = {}
+) {
   const current = (await pool.query(
     `SELECT ${mutationImageColumns} FROM metadata WHERE id=$1`,
     [id]
@@ -155,7 +141,14 @@ export async function updateImageMetadata(id: string, body: unknown, options: Im
   if (!current) throw new ApiError(404, "not_found", "Image not found");
 
   const parsed = parse(metadataUpdateInput, body);
-  if (parsed.theme && isReservedSubdomain(parsed.theme)) throw new ApiError(400, "theme_reserved", "Theme conflicts with a reserved subdomain prefix", { theme: parsed.theme });
+  if (parsed.theme && isReservedSubdomain(parsed.theme)) {
+    throw new ApiError(
+      400,
+      "theme_reserved",
+      "Theme conflicts with a reserved subdomain prefix",
+      { theme: parsed.theme }
+    );
+  }
 
   const touchAuthor = parsed.author !== undefined;
   const authorValue = parsed.author ? parsed.author : null;
@@ -177,15 +170,20 @@ export async function updateImageMetadata(id: string, body: unknown, options: Im
     const createdAuthor = parsed.author
       ? await withVocabularyAssociationLock("author", parsed.author, applyFields)
       : await applyFields();
-    const cacheTasks: Array<Promise<unknown>> = [applyOrCollectImageMutationSync({
-      id,
-      md5: current.md5 ?? "",
-      lookupEntries: [{ id, object_key: current.object_key }],
-    }, options.mutationSyncBatch)];
+    const cacheTasks: Array<Promise<unknown>> = [
+      applyOrCollectImageMutationSync(
+        {
+          id,
+          md5: current.md5 ?? "",
+          lookupEntries: [{ id, object_key: current.object_key }]
+        },
+        options.mutationSyncBatch
+      )
+    ];
     if (authorChanged) {
       cacheTasks.push(invalidateOrCollectEntityCountCaches(
         ["author"],
-        options.entityCountInvalidationBatch,
+        options.entityCountInvalidationBatch
       ));
     }
     if (createdAuthor) cacheTasks.push(refreshEntityVocabularies(["author"]));
@@ -394,67 +392,4 @@ export async function updateImageMetadata(id: string, body: unknown, options: Im
     );
   }
   return withImageStorageMutationLock(id, mutateImageLocation);
-}
-
-type BatchStorageMigrationMetrics = {
-  maxItemDurationMs: number;
-  randomPoolFullRebuildTriggered: boolean;
-};
-
-type BatchStorageMigrationOptions = {
-  onMetrics?: (metrics: BatchStorageMigrationMetrics) => void;
-};
-
-export async function migrateImagesStorage(
-  ids: string[],
-  target: string,
-  options: BatchStorageMigrationOptions = {},
-) {
-  const rows = (await pool.query("SELECT id, object_key, ext, status, storage_slug, device, brightness, theme, md5 FROM metadata WHERE id = ANY($1::uuid[])", [ids])).rows;
-  let migrated = 0;
-  let unchanged = 0;
-  let failed = ids.length - rows.length;
-  const migratedIds: string[] = [];
-  let maxItemDurationMs = 0;
-  let randomPoolFullRebuildTriggered = false;
-
-  const concurrency = getRuntimeConfig().background_job.migrate_concurrency;
-  await mapWithConcurrency(rows, concurrency, async (row) => {
-    const itemStartedAt = performance.now();
-    try {
-      const result = await migrateImageStorage(row as MigrateRecord, target);
-      if (result === "migrated") {
-        migrated += 1;
-        migratedIds.push(row.id);
-      } else if (result === "missing") {
-        failed += 1;
-      } else {
-        unchanged += 1;
-      }
-    } catch {
-      failed += 1;
-    } finally {
-      maxItemDurationMs = Math.max(maxItemDurationMs, performance.now() - itemStartedAt);
-    }
-  });
-  if (migratedIds.length) {
-    const migratedIdSet = new Set(migratedIds);
-    const randomSync = await syncRandomImages(migratedIds);
-    randomPoolFullRebuildTriggered = randomSync.fullRebuildTriggered;
-    await invalidateImageCaches({
-      lookupEntries: rows
-        .filter((row) => migratedIdSet.has(row.id))
-        .map((row) => ({ id: row.id, object_key: row.object_key }))
-    });
-  }
-  options.onMetrics?.({
-    maxItemDurationMs,
-    randomPoolFullRebuildTriggered,
-  });
-  return {
-    requested: ids.length,
-    migrated,
-    unchanged,
-    failed
-  };
 }

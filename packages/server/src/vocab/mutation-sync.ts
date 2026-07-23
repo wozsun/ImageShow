@@ -5,10 +5,8 @@ import {
   invalidateImageCaches,
   type ImageLookupInvalidationEntry
 } from "../images/image-cache.ts";
-import {
-  rebuildRandomPool,
-  syncRandomImages
-} from "../random/random-cache.ts";
+import { rebuildRandomPool } from "../random/cache-rebuild.ts";
+import { syncRandomImages } from "../random/cache-sync.ts";
 import {
   invalidateEntityCountCaches,
   refreshEntityVocabularies

@@ -1,7 +1,7 @@
 import { coalesce } from "../../core/coalesce.ts";
 import type { FacetOptionDto, GalleryFacetsDto } from "@imageshow/shared";
 import { pool } from "../../core/db.ts";
-import { getGalleryFilterOptions } from "../../random/random-cache.ts";
+import { getGalleryFilterOptions } from "../../random/cache-read.ts";
 import { getThemeVocab } from "../../vocab/vocab-cache.ts";
 import {
   getGalleryFacetsCache,

@@ -1,7 +1,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { ApiError, errorMessage } from "../core/api-error.ts";
 import { stagingSessionId } from "../images/imports/staging-keys.ts";
-import type { StorageDriver } from "./storage-backend.ts";
+import type { StorageDriver } from "./driver.ts";
 
 const storageProbePrefix = ".storage-test-";
 

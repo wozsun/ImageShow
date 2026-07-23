@@ -1,6 +1,6 @@
 import type { Context, Next } from "hono";
 import { ApiError, errorMessage } from "./api-error.ts";
-import { clientIp } from "./http.ts";
+import { requestClientIp } from "./http/request-security.ts";
 import { logger } from "./logger.ts";
 
 function adminSession(c: Context) {
@@ -42,7 +42,7 @@ export async function auditAdminMutation(c: Context, next: Next) {
     role: session?.role ?? "unknown",
     method,
     path,
-    ip: clientIp(c)
+    ip: requestClientIp(c)
   };
 
   try {

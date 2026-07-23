@@ -4,7 +4,8 @@ import { getRuntimeConfig } from "../../config/runtime-config-store.ts";
 import { pool } from "../../core/db.ts";
 import { ApiError } from "../../core/api-error.ts";
 import { randomUuidV7 } from "../../core/uuid.ts";
-import { contentType, writeStorageBuffer } from "../../storage/storage.ts";
+import { writeStorageBuffer } from "../../storage/object-access.ts";
+import { contentType } from "../../storage/object-keys.ts";
 import { detectBrightness } from "../brightness.ts";
 import { deviceFromDimensions } from "../classification.ts";
 import {
@@ -23,10 +24,12 @@ import {
 } from "./progress.ts";
 import {
   cleanupStagedAttempt,
-  cleanupStagedObjects,
+  cleanupStagedObjects
+} from "./staging.ts";
+import {
   stagingImageKey,
   stagingThumbnailKey
-} from "./staging.ts";
+} from "./staging-keys.ts";
 import {
   rawImportAttemptPath,
   removeRawImport

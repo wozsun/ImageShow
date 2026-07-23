@@ -1,6 +1,12 @@
 import type { Hono } from "hono";
 import { tagCreateInput, tagDisplayUpdateInput, tagSlugInput } from "../core/validation.ts";
-import { createTag, deleteTag, deleteTags, reorderTags, setTagDisplayName } from "../tags/service.ts";
+import {
+  createTag,
+  deleteTag,
+  deleteTags,
+  reorderTags,
+  setTagDisplayName
+} from "../tags/mutations.ts";
 import { listTagsWithCounts } from "../tags/query.ts";
 import { registerAdminEntityRoutes } from "./admin-entity-routes.ts";
 

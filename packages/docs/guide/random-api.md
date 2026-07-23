@@ -13,7 +13,7 @@
 
 `t` / `tag` / `a` 均可填 slug 或显示名（自动解析为 slug）。基础随机、主题筛选、标签筛选和作者筛选都在 Redis 随机池中完成：先按 axis/category 计数加权选集合，`tag` / `a` 再通过短期 Redis 过滤集合做包含或排除。
 
-正常 `/random` 请求不依赖 PostgreSQL，不使用 `ORDER BY random()`，也不使用 count + offset。随机池使用 `random:v2` schema 命名空间；快照 generation 与内容通过单次 Redis 脚本读取，随机集合抽样与 item hash 读取也合并为一次往返；主题 / 标签 / 作者显示名并行解析。相同标签 / 作者筛选签名的并发临时集合构建会在进程内合并；空结果由短 TTL 哨兵缓存。过滤集合先写候选键，并在读取缓存和发布候选时同时核对 mutation revision、completed revision 与增量锁，不发布过期筛选结果。
+正常 `/random` 请求不依赖 PostgreSQL，不使用 `ORDER BY random()`，也不使用 count + offset。随机池使用 `imageshow:random:<generation>:*` 命名空间；快照 generation 与内容通过单次 Redis 脚本读取，随机集合抽样与 item hash 读取也合并为一次往返；主题 / 标签 / 作者显示名并行解析。相同标签 / 作者筛选签名的并发临时集合构建会在进程内合并；空结果由短 TTL 哨兵缓存。过滤集合先写候选键，并在读取缓存和发布候选时同时核对 mutation revision、completed revision 与增量锁，不发布过期筛选结果。
 
 检测到合法增量锁时，筛选请求会用有界指数退避和抖动等待 completed revision 前进，
 最长约 3 秒，足以覆盖正常 1–2 秒增量同步；等待期间不会误排队全量重建。锁消失但

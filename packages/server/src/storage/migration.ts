@@ -7,7 +7,7 @@ import {
   getStorageBackend,
   resolveStorageAccessForConfig
 } from "./backend-registry.ts";
-import { contentType } from "./storage.ts";
+import { contentType } from "./object-keys.ts";
 import { withImageStorageMutationLock } from "./maintenance-lock.ts";
 import type { StoragePrefix } from "./object-keys.ts";
 import { ensureVerifiedObjectAtDestination } from "./object-transfer.ts";

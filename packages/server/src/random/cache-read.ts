@@ -11,25 +11,31 @@ import {
 } from "./cache-rebuild.ts";
 import {
   GALLERY_FILTER_OPTIONS_KEY,
-  RANDOM_FILTER_CONSISTENCY_WAIT_MS,
-  RANDOM_FILTER_CACHE_READ_SCRIPT,
-  RANDOM_FILTER_PUBLISH_SCRIPT,
-  RANDOM_FILTER_TTL_SECONDS,
   RANDOM_MUTATION_REVISION_KEY,
   RANDOM_REBUILD_COMPLETED_KEY,
   RANDOM_UPDATE_LOCK_KEY,
-  filterOptionsFromCategoryCounts,
-  parseRandomItem,
   randomAuthorSetKey,
   randomFilterKey,
   randomItemKey,
-  randomTagSetKey,
-  randomPoolUpdating,
-  redisUnavailable,
+  randomTagSetKey
+} from "./cache-keys.ts";
+import {
+  filterOptionsFromCategoryCounts,
+  parseRandomPoolItem,
   type GalleryFilterOptions,
   type RandomPoolItem,
   type RandomPoolSnapshot
-} from "./cache-schema.ts";
+} from "./cache-model.ts";
+import {
+  RANDOM_FILTER_CONSISTENCY_WAIT_MS,
+  RANDOM_FILTER_TTL_SECONDS,
+  randomPoolUpdating,
+  redisUnavailable
+} from "./cache-policy.ts";
+import {
+  RANDOM_FILTER_CACHE_READ_SCRIPT,
+  RANDOM_FILTER_PUBLISH_SCRIPT
+} from "./cache-scripts.ts";
 
 export async function getRandomPoolSnapshot(): Promise<RandomPoolSnapshot> {
   try {
@@ -78,7 +84,7 @@ export async function sampleRandomPoolItems(
     Math.max(1, count)
   ) as Array<string | null>;
   return raws
-    .map(parseRandomItem)
+    .map(parseRandomPoolItem)
     .filter((item): item is RandomPoolItem => Boolean(item));
 }
 

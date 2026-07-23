@@ -5,12 +5,16 @@ import {
   RANDOM_CURRENT_KEY,
   RANDOM_MUTATION_REVISION_KEY,
   RANDOM_REBUILD_COMPLETED_KEY,
+  RANDOM_REBUILD_LOCK_KEY,
+  RANDOM_UPDATE_LOCK_KEY,
   randomItemKey,
   randomManifestKey,
-  randomSnapshotKey,
-  type GalleryFilterOptions,
-  type RandomCategoryCounts
-} from "../random/random-cache.ts";
+  randomSnapshotKey
+} from "../random/cache-keys.ts";
+import type {
+  GalleryFilterOptions,
+  RandomCategoryCounts
+} from "../random/cache-model.ts";
 import {
   ADMIN_OVERVIEW_CACHE_PREFIX,
   IMAGE_CACHE_REVISION_KEY,
@@ -27,13 +31,15 @@ import { pingRedis, redis } from "../core/redis-client.ts";
 const SESSION_KEY_PREFIX = "imageshow:session:";
 const LOGIN_FAIL_KEY_PREFIX = "imageshow:login_fail:";
 const RANDOM_GENERATION_PREFIX = `${RANDOM_CACHE_NAMESPACE}:`;
-const RANDOM_GLOBAL_PARTS = new Set([
-  "current",
-  "version",
-  "update_lock",
-  "rebuild_lock",
-  "rebuild_completed"
-]);
+const RANDOM_GLOBAL_PARTS = new Set(
+  [
+    RANDOM_CURRENT_KEY,
+    RANDOM_MUTATION_REVISION_KEY,
+    RANDOM_UPDATE_LOCK_KEY,
+    RANDOM_REBUILD_LOCK_KEY,
+    RANDOM_REBUILD_COMPLETED_KEY
+  ].map((key) => key.slice(RANDOM_GENERATION_PREFIX.length))
+);
 const RANDOM_GENERATION_TTL_SAMPLE_SIZE = 25;
 const generationTtlSampleOffsets = new Map<string, number>();
 

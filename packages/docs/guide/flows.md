@@ -329,11 +329,11 @@ slug 上恢复默认状态。
 
 ## 缓存策略
 
-PostgreSQL 18 是真相源，Redis 8 是可丢弃的加速层：随机池、画廊筛选、公共列表、公开详情、后台实体计数列表、导入词表、后台概览、原图直连探测、MD5 判重与对象键 / 缩略图键 / 图片 id lookup 走缓存。任意筛选与游标组合按需缓存，并用进程内 `coalesce()` 合并同一 key 的首次回源。随机池与图片读模型使用独立代际：前者在 `random:v2` schema 命名空间按 generation / mutation revision 发布；后者把列表、详情、facets、概览、MD5 与 `image_lookup:v2` 统一放入 `image_cache_revision`。正常写入在落 Redis 前复核 revision，失效时先推进 revision。随机标签 / 作者筛选的空结果使用短 TTL 哨兵，避免 Redis 空 set 消失后重复物化；过滤集合先写不可见候选键，Lua 在缓存读取和候选发布时都要求 mutation revision 不变、completed revision 已追平且增量锁不存在。若增量锁仍存在，读取方最长等待约 3 秒并使用退避抖动；超时返回带 `Retry-After` 的临时 503，不立即触发全量重建。
+PostgreSQL 18 是真相源，Redis 8 是可丢弃的加速层：随机池、画廊筛选、公共列表、公开详情、后台实体计数列表、导入词表、后台概览、原图直连探测、MD5 判重与对象键 / 缩略图键 / 图片 id lookup 走缓存。任意筛选与游标组合按需缓存，并用进程内 `coalesce()` 合并同一 key 的首次回源。随机池与图片读模型使用独立代际：前者在 `imageshow:random:<generation>:*` 命名空间按 generation / mutation revision 发布；后者把列表、详情、facets、概览、MD5 与 `imageshow:image_lookup:*` 统一放入 `image_cache_revision`。正常写入在落 Redis 前复核 revision，失效时先推进 revision。随机标签 / 作者筛选的空结果使用短 TTL 哨兵，避免 Redis 空 set 消失后重复物化；过滤集合先写不可见候选键，Lua 在缓存读取和发布候选时都要求 mutation revision 不变、completed revision 已追平且增量锁不存在。若增量锁仍存在，读取方最长等待约 3 秒并使用退避抖动；超时返回带 `Retry-After` 的临时 503，不立即触发全量重建。
 
 主题、标签和作者的词表与带 `image_count` 的后台列表分开加载。图片导入、归属编辑、删除和恢复只将实际受影响的计数列表标为 dirty；同一列表在下一次成功回源前只发送一次 Redis 删除。后台列表 miss 时按实体类型 `coalesce()` 单飞查询 PostgreSQL。批量编辑使用一个请求、派生状态协调器和显式失效收集器，在全部图片处理后统一同步；实体 slug、显示名、排序或作者链接变化时才刷新对应词表并失效 gallery facets。
 
-lookup 使用 `HSETEX` 在单条命令中原子写入一个或多个字段值及其 TTL，字段 TTL 当前为 6 小时。lookup hash 名称同时包含 schema 版本与图片 revision，并严格校验缓存值的当前字段。随机池全量和增量同步不预热 lookup，公开列表、详情或资源接口 miss 时才从 PostgreSQL 回源并回填。图片写路径先推进统一 revision，再批量删除前一 revision 中受影响图片的 id、对象键和缩略图键字段；主题迁移与存储迁移同样收集精准 lookup 项。Redis 失效失败时，本实例的 dirty fence 让所有 revision 读保持 miss 并禁止回填，直到能够成功推进 revision；lookup JSON 损坏时资源出口仍可回退 PostgreSQL。
+lookup 使用 `HSETEX` 在单条命令中原子写入一个或多个字段值及其 TTL，字段 TTL 当前为 6 小时。lookup hash 名称包含图片 revision，并严格校验缓存值的当前字段。随机池全量和增量同步不预热 lookup，公开列表、详情或资源接口 miss 时才从 PostgreSQL 回源并回填。图片写路径先推进统一 revision，再批量删除前一 revision 中受影响图片的 id、对象键和缩略图键字段；主题迁移与存储迁移同样收集精准 lookup 项。Redis 失效失败时，本实例的 dirty fence 让所有 revision 读保持 miss 并禁止回填，直到能够成功推进 revision；lookup JSON 损坏时资源出口仍可回退 PostgreSQL。
 
 随机 API 的正常路径依赖 Redis 随机池。全量重建在 PostgreSQL repeatable-read 快照中按每批 500 条只读取所需字段，并把批次序列化载荷保存在受控内存中；累计超过 16 MiB 时自动切换到 `data/tmp` 下随机命名、权限受限的 NDJSON spool。数据库提交后才校验并逐批读取内存 / spool 写 Redis generation，因此 Redis 网络等待不会占用数据库快照事务。spool 限制单批与总文件大小，核对批次数、条目数和文件字节数，并在成功、失败、优雅退出和下次启动时清理。全量与 `syncRandomImages` 共用 mutation revision；Lua 只在 revision 未变化时原子发布 generation，失败 pipeline 定向清理未发布 generation 或设置 TTL，不会删除当前及有效历史 generation。增量更新锁使用 token 所有权、30 秒租期和每 10 秒续租；completed revision 的 Lua 同时校验 generation、mutation revision 与锁 token，锁丢失时只排队全量重建。
 

@@ -1,8 +1,15 @@
 import type { Context, Hono } from "hono";
-import { getRandomCategoryCounts } from "../random/random-cache.ts";
-import { contentType, publicImageUrls, resolveReadableObject } from "../storage/storage.ts";
-import { clientIp, noStoreCacheControl, publicMetadataCacheControl, routeError } from "../core/http.ts";
-import { pickRandom } from "../random/service.ts";
+import { getRandomCategoryCounts } from "../random/cache-read.ts";
+import { resolveReadableObject } from "../storage/object-access.ts";
+import { contentType } from "../storage/object-keys.ts";
+import { publicImageUrls } from "../storage/public-urls.ts";
+import { apiErrorResponse } from "../core/http/responses.ts";
+import { requestClientIp } from "../core/http/request-security.ts";
+import {
+  noStoreCacheControl,
+  publicMetadataCacheControl
+} from "../core/http/headers.ts";
+import { selectRandomImage } from "../random/selection.ts";
 import { buildRandomImageCountData } from "../random/query.ts";
 import { webReadableFromNode } from "../storage/stream-buffer.ts";
 
@@ -12,12 +19,12 @@ export function registerRandomRoutes(app: Hono) {
 }
 
 export async function handleRandomImage(c: Context) {
-  if (c.req.method !== "GET" && c.req.method !== "HEAD") return routeError({ status: 405, message: "Method Not Allowed" });
+  if (c.req.method !== "GET" && c.req.method !== "HEAD") return apiErrorResponse({ status: 405, message: "Method Not Allowed" });
   return respondRandom(c, new URL(c.req.url));
 }
 
 export async function handleThemeHostRandom(c: Context, theme: string) {
-  if (c.req.method !== "GET" && c.req.method !== "HEAD") return routeError({ status: 405, message: "Method Not Allowed" });
+  if (c.req.method !== "GET" && c.req.method !== "HEAD") return apiErrorResponse({ status: 405, message: "Method Not Allowed" });
   const url = new URL(c.req.url);
   url.searchParams.delete("t");
   url.searchParams.set("t", theme);
@@ -25,9 +32,13 @@ export async function handleThemeHostRandom(c: Context, theme: string) {
 }
 
 async function respondRandom(c: Context, url: URL) {
-  const picked = await pickRandom(url, c.req.header("user-agent") ?? "", clientIp(c));
+  const picked = await selectRandomImage(
+    url,
+    c.req.header("user-agent") ?? "",
+    requestClientIp(c)
+  );
   if (picked instanceof Response) return picked;
-  if (!picked) return routeError({ status: 404, message: "Not Found: No available images" });
+  if (!picked) return apiErrorResponse({ status: 404, message: "Not Found: No available images" });
   const imageInfo = `${picked.device}-${picked.brightness}-${picked.theme}-${picked.id}`;
   const baseHeaders = { "Cache-Control": noStoreCacheControl, "X-Image-Info": imageInfo };
   if (picked.method === "proxy") {
@@ -49,8 +60,8 @@ async function respondRandom(c: Context, url: URL) {
 }
 
 async function handleRandomImageCount(c: Context) {
-  if (c.req.method !== "GET") return routeError({ status: 405, message: "Method Not Allowed" });
-  if (new URL(c.req.url).search) return routeError({ status: 403, message: "Forbidden: Query parameters are not allowed on this route" });
+  if (c.req.method !== "GET") return apiErrorResponse({ status: 405, message: "Method Not Allowed" });
+  if (new URL(c.req.url).search) return apiErrorResponse({ status: 403, message: "Forbidden: Query parameters are not allowed on this route" });
   c.header("Cache-Control", publicMetadataCacheControl);
   return c.json(buildRandomImageCountData(await getRandomCategoryCounts()));
 }

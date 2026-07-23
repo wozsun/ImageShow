@@ -1,4 +1,4 @@
-export type HttpValidators = {
+type HttpResponseValidators = {
   etag?: string;
   lastModified?: string;
 };
@@ -78,7 +78,7 @@ function ifModifiedSinceMatches(
 
 export function ifRangeMatches(
   header: string | null | undefined,
-  validators: HttpValidators
+  validators: HttpResponseValidators
 ) {
   const candidate = header?.trim();
   if (!candidate) return true;

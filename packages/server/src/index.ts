@@ -12,10 +12,19 @@ import { ensureSuperAdmin } from "./users/admin-bootstrap.ts";
 import { pingRedis, redis } from "./core/redis-client.ts";
 import { logger } from "./core/logger.ts";
 import { auditAdminMutation } from "./core/audit-log.ts";
-import { ensureRuntimeDirectories } from "./storage/storage.ts";
-import { appendVaryHeader, fail, noStoreCacheControl, requireAuth, requireCsrf, routeError, securityHeaders } from "./core/http.ts";
-import { limitApiRequestBody } from "./core/request-body-limit.ts";
-import { prepareCompressionThreshold } from "./core/compression-threshold.ts";
+import { ensureRuntimeDirectories } from "./storage/runtime-directories.ts";
+import { apiErrorResponse, handleApiError } from "./core/http/responses.ts";
+import {
+  appendVaryHeader,
+  noStoreCacheControl,
+  securityHeaders
+} from "./core/http/headers.ts";
+import {
+  requireAdminCsrf,
+  requireAdminSession
+} from "./users/admin-session.ts";
+import { limitApiRequestBody } from "./core/http/request-body-limit.ts";
+import { prepareCompressionThreshold } from "./core/http/compression-threshold.ts";
 import { registerAdminLogRoutes } from "./routes/admin-logs.ts";
 import { registerAdvancedConfigRoutes } from "./routes/advanced-config.ts";
 import { registerAdminImageRoutes } from "./routes/admin-images.ts";
@@ -40,7 +49,7 @@ import { registerImportRoutes } from "./routes/imports.ts";
 import { drainWorker, startWorker, stopWorker } from "./jobs/worker.ts";
 import { enforceThemeHostNavigation, isAllowedSiteHost, specialHost, themeFromHost } from "./themes/host.ts";
 import { onStorageBackendChange } from "./storage/backend-registry.ts";
-import { rebuildRandomPool } from "./random/random-cache.ts";
+import { rebuildRandomPool } from "./random/cache-rebuild.ts";
 import {
   cleanupActiveRandomRebuildSpools,
   cleanupOrphanRandomRebuildSpools,
@@ -48,14 +57,14 @@ import {
 
 const app = new Hono();
 
-app.onError((error, c) => fail(c, error));
+app.onError((error, c) => handleApiError(c, error));
 app.use("*", async (c, next) => {
   for (const [name, value] of Object.entries(securityHeaders)) c.header(name, value);
   await next();
 });
 app.use("*", async (c, next) => {
   if (!isAllowedSiteHost(c.req.header("host") ?? "")) {
-    return routeError({ status: 404, message: "Not Found" });
+    return apiErrorResponse({ status: 404, message: "Not Found" });
   }
   await next();
 });
@@ -67,8 +76,8 @@ app.use("*", async (c, next) => {
   const host = c.req.header("host") ?? "";
   const special = specialHost(host);
   if (special === "random") {
-    if (c.req.method !== "GET" && c.req.method !== "HEAD") return routeError({ status: 405, message: "Method Not Allowed" });
-    if (new URL(c.req.url).pathname !== "/") return routeError({ status: 404, message: "Not Found" });
+    if (c.req.method !== "GET" && c.req.method !== "HEAD") return apiErrorResponse({ status: 405, message: "Method Not Allowed" });
+    if (new URL(c.req.url).pathname !== "/") return apiErrorResponse({ status: 404, message: "Not Found" });
     return handleRandomImage(c);
   }
   if (special === "static" || special === "link") {
@@ -76,7 +85,7 @@ app.use("*", async (c, next) => {
     const allowed = special === "static"
       ? path.startsWith("/media/") || path.startsWith("/thumbs/")
       : path.startsWith("/original/");
-    if (!allowed) return routeError({ status: 404, message: "Not Found" });
+    if (!allowed) return apiErrorResponse({ status: 404, message: "Not Found" });
   }
   const theme = themeFromHost(host);
   if (theme && new URL(c.req.url).pathname === "/random") return handleThemeHostRandom(c, theme);
@@ -86,7 +95,7 @@ app.use("*", async (c, next) => {
 const mediaHostGuard = async (c: Parameters<typeof enforceThemeHostNavigation>[0], next: Parameters<typeof enforceThemeHostNavigation>[1]) => {
   const special = specialHost(c.req.header("host") ?? "");
   if (special === "static" || special === "link") return next();
-  return routeError({ status: 404, message: "Not Found" });
+  return apiErrorResponse({ status: 404, message: "Not Found" });
 };
 app.use("/media/*", mediaHostGuard);
 app.use("/thumbs/*", mediaHostGuard);
@@ -121,11 +130,11 @@ registerRandomRoutes(app);
 registerPublicAuthRoutes(app);
 registerSecurityReportRoutes(app);
 
-app.use(`${adminApiBasePath}/*`, requireAuth);
+app.use(`${adminApiBasePath}/*`, requireAdminSession);
 app.use(`${adminApiBasePath}/*`, auditAdminMutation);
 registerProtectedAuthRoutes(app);
 app.use(`${adminApiBasePath}/*`, async (c, next) => {
-  if (c.req.method !== "GET") return requireCsrf(c, next);
+  if (c.req.method !== "GET") return requireAdminCsrf(c, next);
   await next();
 });
 
@@ -143,7 +152,7 @@ registerSettingsRoutes(app);
 registerStorageRoutes(app);
 registerCheckRoutes(app);
 registerSpaRoutes(app);
-app.notFound(() => routeError({ status: 404, message: "Not Found" }));
+app.notFound(() => apiErrorResponse({ status: 404, message: "Not Found" }));
 
 await ensureRuntimeDirectories();
 await cleanupOrphanRandomRebuildSpools();

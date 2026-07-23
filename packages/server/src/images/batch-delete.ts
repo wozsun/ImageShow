@@ -1,6 +1,6 @@
 import { pool } from "../core/db.ts";
 import { invalidateImageCaches } from "./image-cache.ts";
-import { syncRandomImages } from "../random/random-cache.ts";
+import { syncRandomImages } from "../random/cache-sync.ts";
 import { invalidateEntityCountCaches } from "../vocab/vocab-cache.ts";
 import type { ImageRecord } from "./presenter.ts";
 

@@ -1,4 +1,4 @@
-import { publicImageUrls } from "../storage/storage.ts";
+import { publicImageUrls } from "../storage/public-urls.ts";
 
 type OriginalComparableImage = {
   object_key: string;

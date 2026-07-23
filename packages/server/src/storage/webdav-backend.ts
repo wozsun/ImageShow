@@ -10,8 +10,8 @@ import type {
   OpenedRead,
   StorageDriver,
   StorageSelfTest
-} from "./storage-backend.ts";
-import { assertSingleByteRangeSyntax, parseSingleByteRange, totalSizeFromContentRange } from "../core/byte-range.ts";
+} from "./driver.ts";
+import { assertSingleByteRangeSyntax, parseSingleByteRange, totalSizeFromContentRange } from "../core/http/byte-range.ts";
 import { normalizeObjectEtag } from "./object-validator.ts";
 import { isWebdavNotFoundStatus } from "./not-found.ts";
 

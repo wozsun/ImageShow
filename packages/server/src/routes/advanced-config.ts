@@ -1,7 +1,9 @@
 import type { Hono } from "hono";
 import { z } from "zod";
 import { adminApiBasePath } from "@imageshow/shared";
-import { ok, privateNoStoreCacheControl, requireSuper } from "../core/http.ts";
+import { apiSuccess } from "../core/http/responses.ts";
+import { privateNoStoreCacheControl } from "../core/http/headers.ts";
+import { requireSuperAdmin } from "../users/admin-session.ts";
 import { parse } from "../core/validation.ts";
 import {
   createConfigPackage,
@@ -27,26 +29,26 @@ function exportFilename(exportedAt: string) {
 }
 
 export function registerAdvancedConfigRoutes(app: Hono) {
-  app.get(`${adminApiBasePath}/advanced-config/runtime`, requireSuper, (c) => {
+  app.get(`${adminApiBasePath}/advanced-config/runtime`, requireSuperAdmin, (c) => {
     c.header("Cache-Control", privateNoStoreCacheControl);
-    return c.json(ok({ config: getFullRuntimeConfig() }));
+    return c.json(apiSuccess({ config: getFullRuntimeConfig() }));
   });
 
-  app.post(`${adminApiBasePath}/advanced-config/runtime/validate`, requireSuper, async (c) => {
+  app.post(`${adminApiBasePath}/advanced-config/runtime/validate`, requireSuperAdmin, async (c) => {
     const input = parse(runtimeInput, await c.req.json().catch(() => ({})));
     const result = validateFullRuntimeConfig(input.config);
     c.header("Cache-Control", privateNoStoreCacheControl);
-    return c.json(ok({ changes: result.changes }));
+    return c.json(apiSuccess({ changes: result.changes }));
   });
 
-  app.post(`${adminApiBasePath}/advanced-config/runtime`, requireSuper, async (c) => {
+  app.post(`${adminApiBasePath}/advanced-config/runtime`, requireSuperAdmin, async (c) => {
     const input = parse(runtimeInput, await c.req.json().catch(() => ({})));
     const result = await saveFullRuntimeConfig(input.config);
     c.header("Cache-Control", privateNoStoreCacheControl);
-    return c.json(ok(result));
+    return c.json(apiSuccess(result));
   });
 
-  app.get(`${adminApiBasePath}/advanced-config/export`, requireSuper, async (c) => {
+  app.get(`${adminApiBasePath}/advanced-config/export`, requireSuperAdmin, async (c) => {
     const pkg = await createConfigPackage();
     c.header("Content-Type", "application/json; charset=utf-8");
     c.header("Content-Disposition", `attachment; filename="${exportFilename(pkg.exported_at)}"`);
@@ -54,13 +56,13 @@ export function registerAdvancedConfigRoutes(app: Hono) {
     return c.body(`${JSON.stringify(pkg, null, 2)}\n`);
   });
 
-  app.post(`${adminApiBasePath}/advanced-config/preview`, requireSuper, async (c) => {
+  app.post(`${adminApiBasePath}/advanced-config/preview`, requireSuperAdmin, async (c) => {
     const input = parse(previewInput, await c.req.json().catch(() => ({})));
-    return c.json(ok({ preview: await previewConfigPackage(input.package) }));
+    return c.json(apiSuccess({ preview: await previewConfigPackage(input.package) }));
   });
 
-  app.post(`${adminApiBasePath}/advanced-config/import`, requireSuper, async (c) => {
+  app.post(`${adminApiBasePath}/advanced-config/import`, requireSuperAdmin, async (c) => {
     const input = parse(importInput, await c.req.json().catch(() => ({})));
-    return c.json(ok({ result: await importConfigPackage(input.package, input.slug_mappings) }));
+    return c.json(apiSuccess({ result: await importConfigPackage(input.package, input.slug_mappings) }));
   });
 }

@@ -2,7 +2,7 @@ import { createHash, type Hash } from "node:crypto";
 import { ApiError, errorMessage } from "../core/api-error.ts";
 import { logger } from "../core/logger.ts";
 import type { StorageConfig } from "./backend-config.ts";
-import type { StorageDriver } from "./storage-backend.ts";
+import type { StorageDriver } from "./driver.ts";
 import type { StoragePrefix } from "./object-keys.ts";
 import { shareStorageNamespace } from "./storage-namespace.ts";
 

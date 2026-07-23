@@ -92,94 +92,99 @@ export async function listPublicImages(
 ): Promise<PublicImageListPayload> {
   const limit = query.limit ?? getRuntimeConfig().site.gallery.default_limit;
   const generation = await publicImagesCacheGeneration();
-  const cacheKey = `v3:${generation}:${publicImageListCacheKey({
+  const cacheKey = publicImageListCacheKey({
     ...query,
     limit
-  })}`;
+  });
   const cached = await getPublicImagesCache<PublicImageListPayload>(cacheKey, generation);
   if (cached) return withShuffle(query, cached);
 
-  const payload = await coalesce(`public-images:${cacheKey}`, async () => {
-    const raced = await getPublicImagesCache<PublicImageListPayload>(cacheKey, generation);
-    if (raced) return raced;
+  const payload = await coalesce(
+    `public-images:${generation ?? "uncached"}:${cacheKey}`,
+    async () => {
+      const raced = await getPublicImagesCache<PublicImageListPayload>(cacheKey, generation);
+      if (raced) return raced;
 
-    const params: unknown[] = [query.status];
-    const where = ["status = $1"];
-    if (query.d) {
-      params.push(query.d);
-      where.push(`device = $${params.length}`);
-    }
-    if (query.b) {
-      params.push(query.b);
-      where.push(`brightness = $${params.length}`);
-    }
-    if (query.t) {
-      where.push(await selectorFilter(
-        query.t,
-        params,
-        resolveThemeSlugs,
-        "theme",
-        (index, exclude) => exclude
-          ? `NOT (theme = ANY($${index}::text[]))`
-          : `theme = ANY($${index}::text[])`
-      ));
-    }
-    if (query.tag) {
-      where.push(await selectorFilter(
-        query.tag,
-        params,
-        resolveTagNames,
-        "tag",
-        (index, exclude) => exclude
-          ? `NOT (id IN (SELECT image_id FROM image_tag WHERE tag_slug = ANY($${index}::text[])))`
-          : `id IN (SELECT image_id FROM image_tag WHERE tag_slug = ANY($${index}::text[]))`
-      ));
-    }
-    if (query.a) {
-      where.push(await selectorFilter(
-        query.a,
-        params,
-        resolveAuthorSlugs,
-        "author",
-        (index, exclude) => exclude
-          ? `(author IS NULL OR NOT (author = ANY($${index}::text[])))`
-          : `author = ANY($${index}::text[])`
-      ));
-    }
+      const params: unknown[] = [query.status];
+      const where = ["status = $1"];
+      if (query.d) {
+        params.push(query.d);
+        where.push(`device = $${params.length}`);
+      }
+      if (query.b) {
+        params.push(query.b);
+        where.push(`brightness = $${params.length}`);
+      }
+      if (query.t) {
+        where.push(await selectorFilter(
+          query.t,
+          params,
+          resolveThemeSlugs,
+          "theme",
+          (index, exclude) => exclude
+            ? `NOT (theme = ANY($${index}::text[]))`
+            : `theme = ANY($${index}::text[])`
+        ));
+      }
+      if (query.tag) {
+        where.push(await selectorFilter(
+          query.tag,
+          params,
+          resolveTagNames,
+          "tag",
+          (index, exclude) => exclude
+            ? `NOT (id IN (SELECT image_id FROM image_tag WHERE tag_slug = ANY($${index}::text[])))`
+            : `id IN (SELECT image_id FROM image_tag WHERE tag_slug = ANY($${index}::text[]))`
+        ));
+      }
+      if (query.a) {
+        where.push(await selectorFilter(
+          query.a,
+          params,
+          resolveAuthorSlugs,
+          "author",
+          (index, exclude) => exclude
+            ? `(author IS NULL OR NOT (author = ANY($${index}::text[])))`
+            : `author = ANY($${index}::text[])`
+        ));
+      }
 
-    const page = await fetchPublicImageCardPage(where, params, limit, query.cursor);
-    const fresh: PublicImageListPayload = {
-      items: page.items,
-      next_cursor: page.nextCursor
-    };
-    await Promise.all([
-      warmObjectLookups(page.rows, generation),
-      setPublicImagesCache(cacheKey, fresh, generation)
-    ]);
-    return fresh;
-  });
+      const page = await fetchPublicImageCardPage(where, params, limit, query.cursor);
+      const fresh: PublicImageListPayload = {
+        items: page.items,
+        next_cursor: page.nextCursor
+      };
+      await Promise.all([
+        warmObjectLookups(page.rows, generation),
+        setPublicImagesCache(cacheKey, fresh, generation)
+      ]);
+      return fresh;
+    }
+  );
   return withShuffle(query, payload);
 }
 
 export async function getPublicImage(id: string) {
   const generation = await publicImagesCacheGeneration();
-  const cacheKey = `v3:${generation}:${id}`;
+  const cacheKey = id;
   const cached = await getPublicImageDetailCache<PublicImageDetail>(cacheKey, generation);
   if (cached) return cached;
 
-  return coalesce(`public-image:${cacheKey}`, async () => {
-    const raced = await getPublicImageDetailCache<PublicImageDetail>(cacheKey, generation);
-    if (raced) return raced;
+  return coalesce(
+    `public-image:${generation ?? "uncached"}:${cacheKey}`,
+    async () => {
+      const raced = await getPublicImageDetailCache<PublicImageDetail>(cacheKey, generation);
+      if (raced) return raced;
 
-    const lookup = await getImageLookupById(id, generation);
-    if (lookup?.status === "ready") {
-      const image = await publicImageDetail(lookup);
-      await setPublicImageDetailCache(cacheKey, image, generation);
-      return image;
-    }
+      const lookup = await getImageLookupById(id, generation);
+      if (lookup?.status === "ready") {
+        const image = await publicImageDetail(lookup);
+        await setPublicImageDetailCache(cacheKey, image, generation);
+        return image;
+      }
 
-    const result = await pool.query(
-      `SELECT id,
+      const result = await pool.query(
+        `SELECT id,
               device,
               brightness,
               theme,
@@ -190,18 +195,19 @@ export async function getPublicImage(id: string) {
               source,
               original,
               status
-         FROM metadata
+        FROM metadata
         WHERE id=$1 AND status='ready'
         LIMIT 1`,
-      [id]
-    );
-    if (!result.rows[0]) throw new ApiError(404, "not_found", "Image not found");
-    const row = result.rows[0] as PublicImageDetailRecord;
-    const image = await publicImageDetail(row);
-    await Promise.all([
-      warmCompleteImageLookups([row], generation),
-      setPublicImageDetailCache(cacheKey, image, generation)
-    ]);
-    return image;
-  });
+        [id]
+      );
+      if (!result.rows[0]) throw new ApiError(404, "not_found", "Image not found");
+      const row = result.rows[0] as PublicImageDetailRecord;
+      const image = await publicImageDetail(row);
+      await Promise.all([
+        warmCompleteImageLookups([row], generation),
+        setPublicImageDetailCache(cacheKey, image, generation)
+      ]);
+      return image;
+    }
+  );
 }

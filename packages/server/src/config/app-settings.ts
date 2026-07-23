@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { AdminSettings } from "@imageshow/shared";
+import type { AdminSettings, RuntimeConfig } from "@imageshow/shared";
 import { ApiError } from "../core/api-error.ts";
 import {
   galleryLimit,
@@ -30,8 +30,7 @@ import {
 import {
   getRuntimeConfig,
   reloadRuntimeConfig,
-  updateRuntimeConfig,
-  type RuntimeConfig
+  updateRuntimeConfig
 } from "./runtime-config-store.ts";
 import type { RuntimeConfigPatch } from "./runtime-config.ts";
 

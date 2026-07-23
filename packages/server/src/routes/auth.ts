@@ -1,26 +1,28 @@
 import type { Hono } from "hono";
 import { adminApiBasePath, type AuthStateDto } from "@imageshow/shared";
 import { ApiError } from "../core/api-error.ts";
+import { apiSuccess } from "../core/http/responses.ts";
 import {
   assertSameOrigin,
-  blockCrossSiteFetch,
-  getSession,
-  login,
-  logout,
-  ok,
-  requireCsrf
-} from "../core/http.ts";
+  blockCrossSiteFetch
+} from "../core/http/request-security.ts";
 import { applicationVersion } from "../core/application-version.ts";
 import { issueAltchaChallenge, verifyAltchaProof } from "../core/altcha.ts";
 import { redis } from "../core/redis-client.ts";
 import { parse, passwordChangeInput } from "../core/validation.ts";
-import { changeOwnPassword } from "../users/service.ts";
+import { changeAdminPassword } from "../users/admin-accounts.ts";
 import {
   adminSessionRedisClient,
   invalidateAdminSessionsByUsername
 } from "../users/session-invalidation.ts";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { getEffectiveLoginBackground } from "../config/app-settings.ts";
+import {
+  createAdminSession,
+  deleteAdminSession,
+  readAdminSession,
+  requireAdminCsrf
+} from "../users/admin-session.ts";
 
 const sessionRedis = adminSessionRedisClient(redis);
 
@@ -33,7 +35,7 @@ export function registerPublicAuthRoutes(app: Hono) {
     const body = await c.req.json().catch(() => ({}));
     assertSameOrigin(c);
     await verifyAltchaProof(body.altcha);
-    return c.json(ok(await login(
+    return c.json(apiSuccess(await createAdminSession(
       c,
       String(body.username ?? ""),
       String(body.password ?? "")
@@ -41,7 +43,7 @@ export function registerPublicAuthRoutes(app: Hono) {
   });
 
   app.get(`${adminApiBasePath}/auth/me`, async (c) => {
-    const session = await getSession(c);
+    const session = await readAdminSession(c);
     const authState = {
       authenticated: Boolean(session),
       username: session?.username ?? "",
@@ -51,22 +53,22 @@ export function registerPublicAuthRoutes(app: Hono) {
       altcha_enabled: getRuntimeConfig().altcha.enabled,
       login_background: getEffectiveLoginBackground()
     } satisfies AuthStateDto;
-    return c.json(ok(authState));
+    return c.json(apiSuccess(authState));
   });
 }
 
 export function registerProtectedAuthRoutes(app: Hono) {
-  app.post(`${adminApiBasePath}/auth/logout`, requireCsrf, async (c) => {
-    await logout(c);
-    return c.json(ok());
+  app.post(`${adminApiBasePath}/auth/logout`, requireAdminCsrf, async (c) => {
+    await deleteAdminSession(c);
+    return c.json(apiSuccess());
   });
 
-  app.post(`${adminApiBasePath}/auth/password`, requireCsrf, async (c) => {
-    const session = await getSession(c);
+  app.post(`${adminApiBasePath}/auth/password`, requireAdminCsrf, async (c) => {
+    const session = await readAdminSession(c);
     if (!session) throw new ApiError(401, "unauthorized", "Unauthorized");
     const input = parse(passwordChangeInput, await c.req.json().catch(() => ({})));
-    await changeOwnPassword(session.username, input.current_password, input.new_password);
+    await changeAdminPassword(session.username, input.current_password, input.new_password);
     await invalidateAdminSessionsByUsername(sessionRedis, session.username, session.id);
-    return c.json(ok());
+    return c.json(apiSuccess());
   });
 }

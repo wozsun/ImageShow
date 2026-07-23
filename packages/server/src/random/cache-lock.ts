@@ -2,12 +2,14 @@ import { redis } from "../core/redis-client.ts";
 import { randomUuidV7 } from "../core/uuid.ts";
 import {
   RANDOM_REBUILD_LOCK_KEY,
+  RANDOM_UPDATE_LOCK_KEY
+} from "./cache-keys.ts";
+import {
   RANDOM_REBUILD_LOCK_TTL_MS,
-  RANDOM_UPDATE_LOCK_KEY,
   RANDOM_UPDATE_LOCK_RENEW_INTERVAL_MS,
-  RANDOM_UPDATE_LOCK_RENEW_SCRIPT,
   RANDOM_UPDATE_LOCK_TTL_MS
-} from "./cache-schema.ts";
+} from "./cache-policy.ts";
+import { RANDOM_UPDATE_LOCK_RENEW_SCRIPT } from "./cache-scripts.ts";
 
 async function releaseOwnedRandomLock(key: string, token: string) {
   const script = `

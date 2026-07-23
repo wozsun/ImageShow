@@ -19,8 +19,8 @@ import type {
   OpenedRead,
   StorageDriver,
   StorageSelfTest
-} from "./storage-backend.ts";
-import { assertSingleByteRangeSyntax, totalSizeFromContentRange } from "../core/byte-range.ts";
+} from "./driver.ts";
+import { assertSingleByteRangeSyntax, totalSizeFromContentRange } from "../core/http/byte-range.ts";
 import { normalizeObjectEtag } from "./object-validator.ts";
 import { isS3NotFound } from "./not-found.ts";
 

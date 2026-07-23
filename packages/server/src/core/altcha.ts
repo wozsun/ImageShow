@@ -9,14 +9,15 @@ import {
 import { deriveKey } from "altcha-lib/algorithms/pbkdf2";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { ApiError } from "./api-error.ts";
-import { clientIp, noStoreCacheControl } from "./http.ts";
+import { requestClientIp } from "./http/request-security.ts";
+import { noStoreCacheControl } from "./http/headers.ts";
 import { redis } from "./redis-client.ts";
-import { volatileKey } from "./runtime-key-namespace.ts";
 
 const altchaAlgorithm = "PBKDF2/SHA-256";
 const maximumPayloadLength = 16 * 1024;
 const hex32Bytes = /^[a-f0-9]{64}$/;
 const hex16Bytes = /^[a-f0-9]{32}$/;
+const altchaTemporaryKeyPrefix = "imageshow:tmp:altcha";
 
 const challengeParametersSchema = z.strictObject({
   algorithm: z.literal(altchaAlgorithm),
@@ -68,14 +69,14 @@ function getAltchaSecrets() {
 }
 
 function temporaryKey(kind: string, id: string) {
-  return volatileKey("tmp", "altcha", kind, id);
+  return `${altchaTemporaryKeyPrefix}:${kind}:${id}`;
 }
 
 async function reserveChallengeRequest(c: Context) {
   const security = getRuntimeConfig().security;
   const ipLimit = security.login_max_failures * 3;
   const globalLimit = security.login_global_max_attempts * 5;
-  const source = createHash("sha256").update(clientIp(c)).digest("base64url");
+  const source = createHash("sha256").update(requestClientIp(c)).digest("base64url");
   const [ipCount, globalCount] = (await redis.eval(
     `local function bump(name, ttl)
        local total = redis.call('INCR', name)

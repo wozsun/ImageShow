@@ -1,12 +1,12 @@
-import { ensureAuthorWithMutationLockHeld } from "../../authors/service.ts";
+import { ensureAuthorWithMutationLockHeld } from "../../authors/mutations.ts";
 import { pool, withTransaction } from "../../core/db.ts";
 import { ApiError, errorMessage } from "../../core/api-error.ts";
 import { logger } from "../../core/logger.ts";
 import { randomUuidV7 } from "../../core/uuid.ts";
-import { syncRandomImage } from "../../random/random-cache.ts";
-import { ensureThemeWithMutationLockHeld } from "../../themes/service.ts";
+import { syncRandomImage } from "../../random/cache-sync.ts";
+import { ensureThemeWithMutationLockHeld } from "../../themes/mutations.ts";
 import { resolveTagNames } from "../../tags/query.ts";
-import { replaceImageTags } from "../../tags/service.ts";
+import { replaceImageTags } from "../../tags/mutations.ts";
 import {
   invalidateEntityCountCaches,
   refreshEntityVocabularies,
@@ -21,7 +21,7 @@ import {
 } from "../../storage/maintenance-lock.ts";
 import { copyVerifiedObjectWithinStorage } from "../../storage/object-transfer.ts";
 import { enqueueObjectsForCleanup } from "../../storage/move-cleanup.ts";
-import { removeObject } from "../../storage/storage.ts";
+import { removeStorageObject } from "../../storage/object-access.ts";
 import {
   invalidateImageCaches,
   warmCompleteImageLookups
@@ -374,8 +374,8 @@ async function commitStoredImageSession(
     databaseCommitted = true;
 
     await Promise.all([
-      removeObject("_uploads", payload.prepared_image_key, backend).catch(() => undefined),
-      removeObject("_uploads", payload.prepared_thumbnail_key, backend).catch(() => undefined)
+      removeStorageObject("_uploads", payload.prepared_image_key, backend).catch(() => undefined),
+      removeStorageObject("_uploads", payload.prepared_thumbnail_key, backend).catch(() => undefined)
     ]);
     const image = await finishImport(id, payload, result.createdEntityKinds);
     return { status: "imported" as const, item: await importCommitImage(image) };

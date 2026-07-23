@@ -14,9 +14,9 @@ export function configureSharpConcurrency() {
 }
 import {
   readStorageBuffer,
-  safeStoragePath,
   writeStorageBuffer
-} from "../storage/storage.ts";
+} from "../storage/object-access.ts";
+import { safeStoragePath } from "../storage/object-keys.ts";
 
 type ImageInput = Buffer | string;
 

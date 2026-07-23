@@ -43,7 +43,7 @@ export async function createAuthor(slug: string, displayName: string, link: stri
   await synchronizeVocabularyMutation({ entity: "author" });
 }
 
-export async function setAuthorMeta(slug: string, displayName: string, link: string) {
+export async function updateAuthorProfile(slug: string, displayName: string, link: string) {
   const result = await pool.query("UPDATE author SET display_name = $2, link = $3, updated_at = now() WHERE slug = $1", [slug, displayName, link]);
   assertVocabularyFound("author", result.rowCount);
   await synchronizeVocabularyMutation({ entity: "author" });

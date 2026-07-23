@@ -1,5 +1,5 @@
 import { appConfig } from "@imageshow/shared";
-import { pool } from "../core/db.ts";
+import { pool, withTransaction } from "../core/db.ts";
 import { ApiError, errorMessage } from "../core/api-error.ts";
 import { resolveStorageAccess } from "../storage/backend-registry.ts";
 import { thumbnailRef } from "../storage/image-paths.ts";
@@ -9,6 +9,7 @@ import {
   invalidateImageCaches
 } from "./image-cache.ts";
 import { invalidateEntityCountCaches } from "../vocab/vocab-cache.ts";
+import { syncRandomImage } from "../random/cache-sync.ts";
 
 type PurgeRow = {
   id: string;
@@ -25,6 +26,39 @@ const purgeReturnColumns = [
   "metadata.storage_slug",
   "metadata.purge_attempts"
 ].join(", ");
+
+export async function moveImageToTrash(id: string) {
+  const deleted = await withTransaction(async (client) => {
+    const result = await client.query(
+      `UPDATE metadata
+          SET status='deleted',
+              deleted_at=now(),
+              purge_state='idle',
+              purge_started_at=NULL,
+              purge_error=NULL,
+              updated_at=now()
+        WHERE id=$1 AND status='ready'
+        RETURNING id, object_key, md5`,
+      [id]
+    );
+    if (!result.rowCount) {
+      throw new ApiError(404, "not_found", "Ready image not found");
+    }
+    return result.rows[0] as {
+      id: string;
+      object_key: string;
+      md5: string | null;
+    };
+  });
+  await syncRandomImage(deleted.id);
+  await Promise.all([
+    invalidateImageCaches({
+      lookupEntries: [deleted],
+      md5s: [deleted.md5 ?? ""]
+    }),
+    invalidateEntityCountCaches(["theme", "author"])
+  ]);
+}
 
 export async function restoreDeletedImage(id: string, missingIsError = true) {
   const result = await restoreImageFromTrash(id);

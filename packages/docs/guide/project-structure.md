@@ -61,21 +61,23 @@ core / config
 
 | 目录 | 职责与允许依赖 |
 | --- | --- |
-| `core/` | PostgreSQL、Redis、鉴权、安全抓取、日志、密码、UUID、并发和通用校验；不依赖业务路由。 |
+| `core/` | PostgreSQL、Redis、安全抓取、日志、密码、UUID、并发和通用校验；不依赖业务领域或路由。 |
+| `core/http/` | HTTP 响应与响应头、请求来源和请求体限制、压缩阈值、条件请求、静态响应与 Range 解析。 |
 | `config/` | 部署环境、首次播种、运行时配置 schema、`config.json` 存储和配置包。 |
 | `routes/` | HTTP 方法、鉴权、CSRF、输入解析和响应投影；业务工作委托给领域模块。 |
-| `images/` | 图片读写、展示投影、缓存、分类、删除与恢复；`imports/` 拥有完整导入会话生命周期，`read-models/` 只读 PostgreSQL。 |
-| `storage/` | local、S3、WebDAV driver，后端注册表，对象键、强摘要传输、位置锁、迁移与补偿删除。 |
-| `random/` | 随机筛选、Redis generation、增量同步、全量重建、去重和随机出口读模型。 |
+| `images/` | 图片读写、展示投影、缓存、分类与元数据变更、回收站、批量存储迁移；`imports/` 拥有完整导入会话生命周期，`read-models/` 只读 PostgreSQL。 |
+| `storage/` | local、S3、WebDAV driver 及无环工厂，后端注册表、对象访问、公开 URL、运行目录、后端自检、对象键、强摘要传输、位置锁、迁移与补偿删除。 |
+| `random/` | 随机筛选、Redis generation、增量同步、全量重建、去重和随机出口读模型；缓存键、策略、Lua、序列化模型与批量写入分别维护。 |
 | `jobs/` | `background_job` 仓储、任务 handler 和公平调度 Worker；不拥有导入会话。 |
 | `checks/` | 数据库、Redis 与存储一致性检查，以及显式触发的存储维护。 |
-| `authors/`、`tags/`、`themes/`、`vocab/` | 词表查询、写服务、关联锁与派生缓存。 |
-| `users/` | 管理员初始化、账号、密码恢复、偏好和会话失效。 |
+| `authors/`、`tags/`、`themes/`、`vocab/` | 词表查询、变更、关联锁与派生缓存。 |
+| `users/` | 管理员初始化、账号变更、登录会话、权限中间件、密码恢复、偏好和会话失效。 |
 | `types/` | 仅放缺失的编译期声明，不承载运行时代码。 |
 
-领域模块可以依赖 `core/` 和 `config/`，但基础设施不能反向导入具体路由。跨领域调用应使用
-对方明确的领域入口，不能通过路由或测试工具绕行。PostgreSQL 始终是业务真相源；Redis
-模块只实现可重建读模型与运行时状态。
+领域模块可以依赖 `core/` 和 `config/`，但基础设施不能反向导入具体路由。跨领域调用直接
+指向对方表达职责的模块，不通过泛化 `service`、`storage` 或 barrel 隐藏真实依赖，也不能
+通过路由或测试工具绕行。PostgreSQL 始终是业务真相源；Redis 模块只实现可重建读模型与
+运行时状态。
 
 ## packages/web
 

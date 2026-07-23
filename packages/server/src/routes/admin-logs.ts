@@ -1,7 +1,9 @@
 import type { Context, Hono } from "hono";
 import { adminApiBasePath } from "@imageshow/shared";
 import { ApiError } from "../core/api-error.ts";
-import { clientIp, ok, requireSuper } from "../core/http.ts";
+import { apiSuccess } from "../core/http/responses.ts";
+import { requestClientIp } from "../core/http/request-security.ts";
+import { requireSuperAdmin } from "../users/admin-session.ts";
 import { readRecentLogFile, updateLogLevel } from "../core/log-files.ts";
 import { logger } from "../core/logger.ts";
 
@@ -19,17 +21,17 @@ function adminSession(c: Context) {
 }
 
 export function registerAdminLogRoutes(app: Hono) {
-  app.get(`${adminApiBasePath}/logs`, requireSuper, async (c) => {
+  app.get(`${adminApiBasePath}/logs`, requireSuperAdmin, async (c) => {
     const url = new URL(c.req.url);
-    return c.json(ok(await readRecentLogFile({
+    return c.json(apiSuccess(await readRecentLogFile({
       file: url.searchParams.get("file"),
       limit: url.searchParams.get("limit")
     })));
   });
 
-  app.post(`${adminApiBasePath}/logs/level`, requireSuper, async (c) => {
+  app.post(`${adminApiBasePath}/logs/level`, requireSuperAdmin, async (c) => {
     const body = await c.req.json().catch(() => ({}));
-    return c.json(ok(await updateLogLevel(String(body.level ?? ""))));
+    return c.json(apiSuccess(await updateLogLevel(String(body.level ?? ""))));
   });
 
   app.post(`${adminApiBasePath}/logs/client-errors`, async (c) => {
@@ -51,8 +53,8 @@ export function registerAdminLogRoutes(app: Hono) {
       details: boundedText(body.details, 2_000),
       page_path: boundedText(body.page_path, 500),
       user_agent: boundedText(c.req.header("user-agent"), 500),
-      ip: clientIp(c)
+      ip: requestClientIp(c)
     });
-    return c.json(ok());
+    return c.json(apiSuccess());
   });
 }

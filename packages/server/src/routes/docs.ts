@@ -4,8 +4,13 @@ import { createReadStream, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
-import { immutableCacheControl, noStoreCacheControl, publicDocsCacheControl, routeError } from "../core/http.ts";
-import { serveStaticWithValidators } from "../core/static-conditional.ts";
+import { apiErrorResponse } from "../core/http/responses.ts";
+import {
+  immutableCacheControl,
+  noStoreCacheControl,
+  publicDocsCacheControl
+} from "../core/http/headers.ts";
+import { serveStaticWithValidators } from "../core/http/static-conditional.ts";
 import { specialHost } from "../themes/host.ts";
 
 const docsDir = join(dirname(fileURLToPath(import.meta.url)), "../docs");
@@ -15,25 +20,38 @@ export function registerDocsRoutes(app: Hono) {
     root: docsDir,
 
     precompressed: true,
-    onFound: (path, c) => {
-
-      c.header("Cache-Control", path.includes("/assets/") ? immutableCacheControl : publicDocsCacheControl);
+    onFound: (path, context) => {
+      context.header(
+        "Cache-Control",
+        path.includes("/assets/")
+          ? immutableCacheControl
+          : publicDocsCacheControl
+      );
     },
-    onNotFound: (_path, c) => {
+    onNotFound: (_path, context) => {
       const notFoundPage = join(docsDir, "404.html");
       if (existsSync(notFoundPage)) {
-        c.res = new Response(createReadStream(notFoundPage) as unknown as BodyInit, {
-          status: 404,
-          headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": noStoreCacheControl }
-        });
+        context.res = new Response(
+          createReadStream(notFoundPage) as unknown as BodyInit,
+          {
+            status: 404,
+            headers: {
+              "Content-Type": "text/html; charset=utf-8",
+              "Cache-Control": noStoreCacheControl
+            }
+          }
+        );
       }
     }
   });
 
-  app.use("*", async (c, next) => {
-    if (specialHost(c.req.header("host") ?? "") !== "docs") return next();
-
-    if (!getRuntimeConfig().site.docs_enabled) return routeError({ status: 404, message: "Not Found" });
-    return await serveStaticWithValidators(c, docsStatic) ?? next();
+  app.use("*", async (context, next) => {
+    if (specialHost(context.req.header("host") ?? "") !== "docs") {
+      return next();
+    }
+    if (!getRuntimeConfig().site.docs_enabled) {
+      return apiErrorResponse({ status: 404, message: "Not Found" });
+    }
+    return await serveStaticWithValidators(context, docsStatic) ?? next();
   });
 }

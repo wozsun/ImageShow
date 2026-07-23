@@ -65,7 +65,7 @@ export async function createTheme(slug: string, displayName: string) {
   await synchronizeVocabularyMutation({ entity: "theme" });
 }
 
-export async function setThemeDisplayName(slug: string, displayName: string) {
+export async function updateThemeDisplayName(slug: string, displayName: string) {
   if (slug === "none") throw new ApiError(400, "invalid_theme", "The reserved 'none' theme cannot be renamed", { slug });
   const result = await pool.query("UPDATE theme SET display_name = $2, updated_at = now() WHERE slug = $1", [slug, displayName]);
   assertVocabularyFound("theme", result.rowCount);

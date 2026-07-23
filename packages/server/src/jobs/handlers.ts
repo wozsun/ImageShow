@@ -21,7 +21,7 @@ import {
   generateStoredThumbnail,
   md5Buffer
 } from "../images/processing.ts";
-import { rebuildRandomPool } from "../random/random-cache.ts";
+import { rebuildRandomPool } from "../random/cache-rebuild.ts";
 import { thumbnailObjectKey } from "../storage/image-paths.ts";
 import {
   tryWithStorageLocationReadAndAdvisoryLocks,
@@ -32,10 +32,10 @@ import {
   storageNamespaceIncludesIdentity
 } from "../storage/storage-namespace.ts";
 import {
-  exists,
-  removeObject,
-  type StoragePrefix
-} from "../storage/storage.ts";
+  removeStorageObject,
+  storageObjectExists
+} from "../storage/object-access.ts";
+import type { StoragePrefix } from "../storage/object-keys.ts";
 import type { BackgroundJob } from "./repository.ts";
 
 export type BackgroundJobOutcome =
@@ -291,14 +291,14 @@ async function cleanupMovedObjects(job: BackgroundJob): Promise<BackgroundJobOut
           continue;
         }
       }
-      if (!await exists(object.prefix, object.key, object.backend)) {
+      if (!await storageObjectExists(object.prefix, object.key, object.backend)) {
         missing += 1;
         continue;
       }
       signal.throwIfAborted();
-      await removeObject(object.prefix, object.key, object.backend);
+      await removeStorageObject(object.prefix, object.key, object.backend);
       signal.throwIfAborted();
-      if (await exists(object.prefix, object.key, object.backend)) {
+      if (await storageObjectExists(object.prefix, object.key, object.backend)) {
         throw new ApiError(
           502,
           "storage_cleanup_incomplete",

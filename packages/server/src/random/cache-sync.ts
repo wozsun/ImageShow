@@ -9,22 +9,26 @@ import {
 import { rebuildRandomPool, scheduleRandomRebuild } from "./cache-rebuild.ts";
 import {
   RANDOM_CURRENT_KEY,
-  RANDOM_INCREMENTAL_COMPLETE_SCRIPT,
   RANDOM_MUTATION_REVISION_KEY,
   RANDOM_REBUILD_COMPLETED_KEY,
   RANDOM_UPDATE_LOCK_KEY,
-  adjustCategoryCounts,
-  collectMembership,
-  mapRandomItems,
-  parseRandomItem,
-  queueMembershipMap,
-  queueSnapshot,
   randomItemKey,
   randomManifestKey,
-  randomSnapshotKey,
+  randomSnapshotKey
+} from "./cache-keys.ts";
+import {
+  adjustCategoryCounts,
+  parseRandomPoolItem,
+  randomPoolItemsFromRows,
   type RandomCategoryCounts,
   type RandomPoolItem
-} from "./cache-schema.ts";
+} from "./cache-model.ts";
+import { RANDOM_INCREMENTAL_COMPLETE_SCRIPT } from "./cache-scripts.ts";
+import {
+  collectRandomMemberships,
+  queueRandomMemberships,
+  queueRandomSnapshot
+} from "./cache-writes.ts";
 
 async function readyRandomItems(ids: string[]): Promise<RandomPoolItem[]> {
   const rows = (await pool.query(
@@ -39,7 +43,7 @@ async function readyRandomItems(ids: string[]): Promise<RandomPoolItem[]> {
       ORDER BY m.id`,
     [ids]
   )).rows;
-  return mapRandomItems(rows);
+  return randomPoolItemsFromRows(rows);
 }
 
 type RandomSyncResult = {
@@ -104,30 +108,30 @@ export async function syncRandomImages(
 
       for (let index = 0; index < uniqueIds.length; index += 1) {
         const id = uniqueIds[index];
-        const oldItem = parseRandomItem(oldItemsRaw[index]);
+        const oldItem = parseRandomPoolItem(oldItemsRaw[index]);
         const currentItem = currentById.get(id);
         if (oldItem) {
-          collectMembership(removals, generation, oldItem, touchedKeys);
+          collectRandomMemberships(removals, generation, oldItem, touchedKeys);
           adjustCategoryCounts(categoryCounts, oldItem, -1);
         }
         if (currentItem) {
           itemValues.push(currentItem.id, JSON.stringify(currentItem));
-          collectMembership(additions, generation, currentItem, touchedKeys);
+          collectRandomMemberships(additions, generation, currentItem, touchedKeys);
           adjustCategoryCounts(categoryCounts, currentItem, 1);
         } else {
           removedIds.push(id);
         }
       }
 
-      queueMembershipMap(pipeline, "srem", removals);
-      queueMembershipMap(pipeline, "sadd", additions);
+      queueRandomMemberships(pipeline, "srem", removals);
+      queueRandomMemberships(pipeline, "sadd", additions);
       if (itemValues.length) {
         pipeline.hset(randomItemKey(generation), ...itemValues);
       }
       if (removedIds.length) {
         pipeline.hdel(randomItemKey(generation), ...removedIds);
       }
-      queueSnapshot(pipeline, generation, categoryCounts);
+      queueRandomSnapshot(pipeline, generation, categoryCounts);
       if (touchedKeys.size) {
         pipeline.sadd(randomManifestKey(generation), ...touchedKeys);
       }

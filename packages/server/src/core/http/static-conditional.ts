@@ -3,7 +3,7 @@ import {
   conditionalRequestNotModified,
   ifRangeMatches,
   staticResponseEtag
-} from "./http-validator.ts";
+} from "./validators.ts";
 import { parseSingleByteRange } from "./byte-range.ts";
 
 function requestWithRange(request: Request, range?: string) {

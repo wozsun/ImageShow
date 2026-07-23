@@ -1,7 +1,12 @@
 import { pool } from "../core/db.ts";
 import { errorMessage } from "../core/api-error.ts";
 import { stagingSessionId } from "../images/imports/staging-keys.ts";
-import { listStorageKeys, pruneEmptyStorageDirs, removeObject, type StoragePrefix } from "../storage/storage.ts";
+import {
+  listStorageKeys,
+  pruneEmptyStorageDirs,
+  removeStorageObject
+} from "../storage/object-access.ts";
+import type { StoragePrefix } from "../storage/object-keys.ts";
 import { withStorageLocationWriteLock } from "../storage/maintenance-lock.ts";
 import {
   activeImportStorageReferences,
@@ -130,7 +135,7 @@ async function cleanupStorageUnderLock(signal: AbortSignal) {
       for (const [prefix, key] of candidates) {
         try {
           signal.throwIfAborted();
-          await removeObject(prefix, key, backend);
+          await removeStorageObject(prefix, key, backend);
           signal.throwIfAborted();
           removed += 1;
         } catch (error) {

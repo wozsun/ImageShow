@@ -1,9 +1,9 @@
 import { appConfig } from "@imageshow/shared";
 import { pool } from "../core/db.ts";
 import {
-  getRandomCategoryCounts,
-  type RandomCategoryCounts
-} from "../random/random-cache.ts";
+  getRandomCategoryCounts
+} from "../random/cache-read.ts";
+import type { RandomCategoryCounts } from "../random/cache-model.ts";
 
 function categoryTotal(counts: RandomCategoryCounts) {
   let total = 0;

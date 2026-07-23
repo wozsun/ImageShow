@@ -1,17 +1,13 @@
 import { pool } from "../core/db.ts";
 import { errorMessage } from "../core/api-error.ts";
-import { getRandomCategoryCounts } from "../random/random-cache.ts";
-import { listStorageKeys } from "../storage/storage.ts";
+import { getRandomCategoryCounts } from "../random/cache-read.ts";
+import { listStorageKeys } from "../storage/object-access.ts";
 import { storageBackends } from "./storage-common.ts";
 
-export * from "./storage-common.ts";
-export * from "./database-check.ts";
-export * from "./storage-check.ts";
-export * from "./storage-cleanup.ts";
-export * from "./storage-migrate.ts";
-
-export async function checkAll() {
-  const dbCheck = (await pool.query("SELECT count(*)::int FROM metadata")).rows[0].count;
+export async function checkSystemState() {
+  const dbCheck = (
+    await pool.query("SELECT count(*)::int FROM metadata")
+  ).rows[0].count;
   const categoryCounts = await getRandomCategoryCounts();
   const { defaultBackend, backends } = await storageBackends();
   const storage: Record<string, unknown> = {};

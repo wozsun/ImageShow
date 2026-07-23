@@ -1,6 +1,6 @@
-import { ApiError } from "./api-error.ts";
+import { ApiError } from "../api-error.ts";
 
-export type ByteRange = { start: number; end: number };
+type ByteRange = { start: number; end: number };
 
 export function totalSizeFromContentRange(header: string | null | undefined) {
   if (!header) return undefined;

@@ -2,13 +2,17 @@ import { appConfig } from "@imageshow/shared";
 import {
   buildRandomFilterSet,
   getRandomPoolSnapshot,
+  sampleRandomPoolItems
+} from "./cache-read.ts";
+import {
   randomAxisSetKey,
-  randomCategorySetKey,
-  sampleRandomPoolItems,
+  randomCategorySetKey
+} from "./cache-keys.ts";
+import {
   type RandomPoolItem,
   type RandomPoolSnapshot
-} from "./random-cache.ts";
-import { routeError } from "../core/http.ts";
+} from "./cache-model.ts";
+import { apiErrorResponse } from "../core/http/responses.ts";
 import { isRandomBrightness, parseAuthorSelectors, parseTagSelectors, parseThemeSelectors, randomBrightnesses, randomDevices } from "./query.ts";
 
 export type PickedImage = RandomPoolItem & { method: "proxy" | "redirect" };
@@ -41,7 +45,7 @@ function noCandidatesError(url: URL, axes: CandidateAxes) {
     hasSelector(url.searchParams, "tag") ||
     hasSelector(url.searchParams, "a")
   );
-  return routeError({ status: 404, message: hasFilters ? "Not Found: No available images for the selected filters" : "Not Found: No available images" });
+  return apiErrorResponse({ status: 404, message: hasFilters ? "Not Found: No available images for the selected filters" : "Not Found: No available images" });
 }
 
 function weightedPick<T extends { count: number }>(candidates: T[]): T | null {

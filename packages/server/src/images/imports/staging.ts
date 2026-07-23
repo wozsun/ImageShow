@@ -1,4 +1,4 @@
-import { privateNoStoreCacheControl } from "../../core/http.ts";
+import { privateNoStoreCacheControl } from "../../core/http/headers.ts";
 import { pool } from "../../core/db.ts";
 import { thumbnailObjectKey } from "../../storage/image-paths.ts";
 import { withStorageLocationReadLock } from "../../storage/maintenance-lock.ts";
@@ -6,12 +6,10 @@ import { enqueueObjectsForCleanup } from "../../storage/move-cleanup.ts";
 import {
   listStorageKeys,
   readStorageBuffer,
-  removeObject
-} from "../../storage/storage.ts";
+  removeStorageObject
+} from "../../storage/object-access.ts";
 import type { PreparedPayload } from "./types.ts";
 import { stagingSessionId } from "./staging-keys.ts";
-
-export { stagingImageKey, stagingThumbnailKey } from "./staging-keys.ts";
 
 export async function preparedThumbnailResponse(
   payload: Pick<PreparedPayload, "prepared_thumbnail_key">,
@@ -27,7 +25,7 @@ async function removeStagingKeys(keys: string[], storageSlug: string) {
   return withStorageLocationReadLock(async (signal) => {
     const results = await Promise.allSettled(keys.map(async (key) => {
       signal.throwIfAborted();
-      await removeObject("_uploads", key, storageSlug);
+      await removeStorageObject("_uploads", key, storageSlug);
     }));
     const failures = results
       .filter((result): result is PromiseRejectedResult => result.status === "rejected")

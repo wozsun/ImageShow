@@ -6,8 +6,14 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { siteConfigPayload } from "../config/app-settings.ts";
-import { immutableCacheControl, noStoreCacheControl, publicDocumentCacheControl, publicStaticCacheControl, spaDocumentHeaders } from "../core/http.ts";
-import { serveStaticWithValidators } from "../core/static-conditional.ts";
+import {
+  immutableCacheControl,
+  noStoreCacheControl,
+  publicDocumentCacheControl,
+  publicStaticCacheControl,
+  spaDocumentHeaders
+} from "../core/http/headers.ts";
+import { serveStaticWithValidators } from "../core/http/static-conditional.ts";
 import { existingThemeFromHost, isValidatedThemeRequest, rootSiteUrl, themeFromHost } from "../themes/host.ts";
 
 const publicDir = join(dirname(fileURLToPath(import.meta.url)), "../public");

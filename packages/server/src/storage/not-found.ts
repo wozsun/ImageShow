@@ -1,3 +1,9 @@
+import { ApiError } from "../core/api-error.ts";
+
+export function isStorageObjectNotFound(error: unknown) {
+  return error instanceof ApiError && error.status === 404;
+}
+
 export function isMissingFileError(error: unknown) {
   return (error as NodeJS.ErrnoException | undefined)?.code === "ENOENT";
 }

@@ -1,7 +1,7 @@
 import { pool } from "../core/db.ts";
 import { errorMessage } from "../core/api-error.ts";
 import { thumbnailRef } from "../storage/image-paths.ts";
-import { listStorageKeys } from "../storage/storage.ts";
+import { listStorageKeys } from "../storage/object-access.ts";
 import {
   activeImportStorageReferences,
   classifyStagingKeys,

@@ -1,5 +1,5 @@
 import { pool } from "../core/db.ts";
-import { syncRandomImage, syncRandomImages } from "../random/random-cache.ts";
+import { syncRandomImage, syncRandomImages } from "../random/cache-sync.ts";
 import type { ImageRecord } from "./presenter.ts";
 
 type RestoredImage = Pick<ImageRecord, "id" | "object_key" | "md5">;

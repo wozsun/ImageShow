@@ -1,7 +1,7 @@
 import type { Hono } from "hono";
 import { adminApiBasePath, appConfig } from "@imageshow/shared";
 import { ApiError } from "../core/api-error.ts";
-import { ok } from "../core/http.ts";
+import { apiSuccess } from "../core/http/responses.ts";
 import {
   importBatchCreateInput,
   importCommitInput,
@@ -33,13 +33,13 @@ import {
   limitImportBatchCreateBody,
   limitJsonlManifestBody,
   limitWeiboImportBody,
-} from "../core/request-body-limit.ts";
+} from "../core/http/request-body-limit.ts";
 import { logger } from "../core/logger.ts";
 
 export function registerImportRoutes(app: Hono) {
   app.post(`${adminApiBasePath}/imports/create`, async (c) => {
     const input = parse(importCreateInput, await c.req.json().catch(() => ({})));
-    return c.json(ok(await createImportSession(input)));
+    return c.json(apiSuccess(await createImportSession(input)));
   });
 
   app.post(`${adminApiBasePath}/imports/batch-create`, limitImportBatchCreateBody, async (c) => {
@@ -71,13 +71,13 @@ export function registerImportRoutes(app: Hono) {
       entity_count_invalidation_triggered: false,
       random_pool_full_rebuild_triggered: false,
     });
-    return c.json(ok({ items }));
+    return c.json(apiSuccess({ items }));
   });
 
   app.post(`${adminApiBasePath}/imports/jsonl/parse`, limitJsonlManifestBody, async (c) => {
     const input = parse(jsonlManifestInput, await c.req.json().catch(() => ({})));
     try {
-      return c.json(ok(parseJsonlManifest(input.content, {
+      return c.json(apiSuccess(parseJsonlManifest(input.content, {
         maxItems: getRuntimeConfig().link_image.max_items,
         timeZone: process.env.TZ
       })));
@@ -102,7 +102,7 @@ export function registerImportRoutes(app: Hono) {
       );
     }
     try {
-      return c.json(ok(await createWeiboImportBatchManifest(
+      return c.json(apiSuccess(await createWeiboImportBatchManifest(
         input.urls,
         {
           authorSlugs: runtimeConfig.weibo.author_slugs,
@@ -138,7 +138,7 @@ export function registerImportRoutes(app: Hono) {
     const id = parse(uuidInput, c.req.param("id"));
     const body = c.req.raw.body ?? new Response(await c.req.arrayBuffer()).body;
     await receiveImportFile(id, body, c.req.raw.signal);
-    return c.json(ok());
+    return c.json(apiSuccess());
   });
 
   app.post(`${adminApiBasePath}/imports/:id/materialize`, async (c) => {
@@ -146,11 +146,11 @@ export function registerImportRoutes(app: Hono) {
       parse(uuidInput, c.req.param("id")),
       c.req.raw.signal
     );
-    return c.json(ok());
+    return c.json(apiSuccess());
   });
 
   app.post(`${adminApiBasePath}/imports/:id/prepare`, async (c) => {
-    return c.json(ok(await prepareImportSession(
+    return c.json(apiSuccess(await prepareImportSession(
       parse(uuidInput, c.req.param("id")),
       c.req.raw.signal
     )));
@@ -166,7 +166,7 @@ export function registerImportRoutes(app: Hono) {
 
   app.get(`${adminApiBasePath}/imports/status`, async (c) => {
     const ids = parseImportIds(c.req.url);
-    return c.json(ok({ items: await listImportStatuses(ids) }));
+    return c.json(apiSuccess({ items: await listImportStatuses(ids) }));
   });
 
   app.get(`${adminApiBasePath}/imports/events`, async (c) => {
@@ -177,12 +177,12 @@ export function registerImportRoutes(app: Hono) {
     const id = parse(uuidInput, c.req.param("id"));
     const input = parse(importCommitInput, await c.req.json().catch(() => ({})));
     if (isReservedSubdomain(input.theme)) throw new ApiError(400, "theme_reserved", "Theme conflicts with a reserved subdomain prefix", { theme: input.theme });
-    return c.json(ok(await commitImportSession(id, input, c.req.raw.signal)));
+    return c.json(apiSuccess(await commitImportSession(id, input, c.req.raw.signal)));
   });
 
   app.post(`${adminApiBasePath}/imports/:id/cancel`, async (c) => {
     await cancelImportSession(parse(uuidInput, c.req.param("id")));
-    return c.json(ok());
+    return c.json(apiSuccess());
   });
 }
 

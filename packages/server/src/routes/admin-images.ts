@@ -3,13 +3,13 @@ import {
   adminApiBasePath,
   type BatchImageUpdateResponse
 } from "@imageshow/shared";
-import { ok } from "../core/http.ts";
+import { apiSuccess } from "../core/http/responses.ts";
 import { logger } from "../core/logger.ts";
 import {
   batchImageUpdatePath,
   getRequestBodyBytes,
   limitBatchImageUpdateBody,
-} from "../core/request-body-limit.ts";
+} from "../core/http/request-body-limit.ts";
 import {
   adminImageListQuery,
   batchImageUpdateInput,
@@ -19,6 +19,7 @@ import {
   uuidInput,
 } from "../core/validation.ts";
 import { batchDeleteImages } from "../images/batch-delete.ts";
+import { migrateImageBatchStorage } from "../images/batch-storage-migration.ts";
 import { updateImagesBatch } from "../images/batch-update.ts";
 import {
   getAdminImageInfo,
@@ -26,21 +27,26 @@ import {
 } from "../images/read-models/admin-images.ts";
 import { getOverviewStats } from "../images/read-models/overview.ts";
 import { serveAdminObject, serveAdminOriginalLink, serveAdminThumb } from "../images/serving.ts";
-import { deleteImage, migrateImagesStorage } from "../images/service.ts";
-import { batchRestoreImages, purgeDeletedImage, purgeDeletedImages, restoreDeletedImage } from "../images/trash.ts";
+import {
+  batchRestoreImages,
+  moveImageToTrash,
+  purgeDeletedImage,
+  purgeDeletedImages,
+  restoreDeletedImage
+} from "../images/trash.ts";
 import { scheduleTrashPurge } from "../jobs/repository.ts";
 
 export function registerAdminImageRoutes(app: Hono) {
-  app.get(`${adminApiBasePath}/overview`, async (c) => c.json(ok(await getOverviewStats())));
+  app.get(`${adminApiBasePath}/overview`, async (c) => c.json(apiSuccess(await getOverviewStats())));
 
   app.get(`${adminApiBasePath}/images`, async (c) => {
     const q = parse(adminImageListQuery, Object.fromEntries(new URL(c.req.url).searchParams));
-    return c.json(ok(await listAdminImages(q)));
+    return c.json(apiSuccess(await listAdminImages(q)));
   });
 
   app.get(`${adminApiBasePath}/images/:id/admin-info`, async (c) => {
     const id = parse(uuidInput, c.req.param("id"));
-    return c.json(ok(await getAdminImageInfo(id)));
+    return c.json(apiSuccess(await getAdminImageInfo(id)));
   });
 
   app.get(`${adminApiBasePath}/images/:id/thumb`, async (c) => {
@@ -70,30 +76,30 @@ export function registerAdminImageRoutes(app: Hono) {
 
   app.post(`${adminApiBasePath}/images/:id/delete`, async (c) => {
     const id = parse(uuidInput, c.req.param("id"));
-    await deleteImage(id);
-    return c.json(ok());
+    await moveImageToTrash(id);
+    return c.json(apiSuccess());
   });
 
   app.post(`${adminApiBasePath}/images/:id/restore`, async (c) => {
     const id = parse(uuidInput, c.req.param("id"));
     await restoreDeletedImage(id);
-    return c.json(ok());
+    return c.json(apiSuccess());
   });
 
   app.post(`${adminApiBasePath}/images/batch-restore`, async (c) => {
     const input = parse(imageIdsInput, await c.req.json().catch(() => ({})));
-    return c.json(ok(await batchRestoreImages(input.ids)));
+    return c.json(apiSuccess(await batchRestoreImages(input.ids)));
   });
 
   app.post(`${adminApiBasePath}/images/batch-delete`, async (c) => {
     const input = parse(imageIdsInput, await c.req.json().catch(() => ({})));
-    return c.json(ok(await batchDeleteImages(input.ids)));
+    return c.json(apiSuccess(await batchDeleteImages(input.ids)));
   });
 
   app.post(`${adminApiBasePath}/images/empty-trash`, async (c) => {
     const result = await purgeDeletedImages();
     if (result.remaining) await scheduleTrashPurge();
-    return c.json(ok({
+    return c.json(apiSuccess({
       deleted: result.deleted,
       failed: result.failed,
       remaining: result.remaining
@@ -103,7 +109,7 @@ export function registerAdminImageRoutes(app: Hono) {
   app.post(`${adminApiBasePath}/images/:id/purge`, async (c) => {
     const id = parse(uuidInput, c.req.param("id"));
     await purgeDeletedImage(id);
-    return c.json(ok());
+    return c.json(apiSuccess());
   });
 
   app.post(`${adminApiBasePath}/images/batch-migrate-storage`, async (c) => {
@@ -111,9 +117,9 @@ export function registerAdminImageRoutes(app: Hono) {
     const input = parse(batchMigrateStorageInput, await c.req.json().catch(() => ({})));
     let maxItemDurationMs = 0;
     let randomPoolFullRebuildTriggered = false;
-    const result = await migrateImagesStorage(input.ids, input.target, {
+    const result = await migrateImageBatchStorage(input.ids, input.target, {
       onMetrics(metrics) {
-        maxItemDurationMs = metrics.maxItemDurationMs;
+        maxItemDurationMs = metrics.maxImageDurationMs;
         randomPoolFullRebuildTriggered = metrics.randomPoolFullRebuildTriggered;
       },
     });
@@ -127,7 +133,7 @@ export function registerAdminImageRoutes(app: Hono) {
       entity_count_invalidation_triggered: false,
       random_pool_full_rebuild_triggered: randomPoolFullRebuildTriggered,
     });
-    return c.json(ok({
+    return c.json(apiSuccess({
       migrated: result.migrated,
       unchanged: result.unchanged,
       failed: result.failed,
@@ -162,6 +168,6 @@ export function registerAdminImageRoutes(app: Hono) {
       failed: result.failed,
       results: result.results
     } satisfies BatchImageUpdateResponse;
-    return c.json(ok(response));
+    return c.json(apiSuccess(response));
   });
 }

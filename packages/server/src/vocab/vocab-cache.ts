@@ -287,7 +287,7 @@ export async function invalidateEntityCountCaches(kinds: Iterable<EntityCacheKin
 }
 
 /**
- * Collects entity-list invalidations across a multi-image service operation.
+ * Collects entity-list invalidations across a multi-image mutation.
  * Single-image callers omit the batch and keep immediate invalidation behavior.
  */
 export function createEntityCountCacheInvalidationBatch(): EntityCountCacheInvalidationBatch {

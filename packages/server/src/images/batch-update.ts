@@ -1,10 +1,10 @@
 import { ApiError } from "../core/api-error.ts";
 import { mapWithConcurrency } from "../core/concurrency.ts";
 import type { BatchImageUpdateItemInput } from "../core/validation.ts";
-import { setImageTags } from "../tags/service.ts";
+import { updateImageTags } from "../tags/mutations.ts";
 import { createEntityCountCacheInvalidationBatch } from "../vocab/vocab-cache.ts";
 import { createImageMutationSyncBatch } from "./mutation-sync.ts";
-import { updateImageMetadata } from "./service.ts";
+import { updateImageMetadata } from "./metadata-mutations.ts";
 import type {
   BatchImageUpdateItemResult,
   BatchImageUpdateResponse
@@ -60,7 +60,7 @@ export async function updateImagesBatch(
           });
         }
         if (tags !== undefined) {
-          await setImageTags(id, tags, {
+          await updateImageTags(id, tags, {
             entityCountInvalidationBatch,
             mutationSyncBatch,
           });

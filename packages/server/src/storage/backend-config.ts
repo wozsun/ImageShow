@@ -98,5 +98,3 @@ export function missingS3Fields(settings: S3Settings): string[] {
 export function missingWebdavFields(settings: WebdavSettings): string[] {
   return settings.base_url ? [] : ["base_url"];
 }
-
-export type { StorageType } from "@imageshow/shared";

@@ -1,20 +1,27 @@
 import { createHash } from "node:crypto";
 import { pool } from "../core/db.ts";
 import { ApiError } from "../core/api-error.ts";
-import { immutableCacheControl, noStoreCacheControl, privateNoStoreCacheControl, publicProxyFallbackThumbCacheControl, publicProxyImageCacheControl, publicRedirectCacheControl } from "../core/http.ts";
+import {
+  immutableCacheControl,
+  noStoreCacheControl,
+  privateNoStoreCacheControl,
+  publicProxyFallbackThumbCacheControl,
+  publicProxyImageCacheControl,
+  publicRedirectCacheControl
+} from "../core/http/headers.ts";
 import { isExternalImageRejection, safeFetchExternalImage } from "../core/external-image-fetch.ts";
 import { coalesce } from "../core/coalesce.ts";
-import { ifNoneMatchMatches, ifRangeMatches } from "../core/http-validator.ts";
+import { ifNoneMatchMatches, ifRangeMatches } from "../core/http/validators.ts";
 import { generateStoredThumbnail } from "./processing.ts";
 import { thumbnailObjectKey } from "../storage/image-paths.ts";
 import {
-  contentType,
-  exists,
   resolveReadableObject,
+  storageObjectExists,
   type ResolvedReadableObject
-} from "../storage/storage.ts";
-import { isStorageNotFoundError } from "../storage/storage-backend.ts";
-import type { OpenedRead } from "../storage/storage-backend.ts";
+} from "../storage/object-access.ts";
+import { contentType } from "../storage/object-keys.ts";
+import type { OpenedRead } from "../storage/driver.ts";
+import { isStorageObjectNotFound } from "../storage/not-found.ts";
 import { webReadableFromNode } from "../storage/stream-buffer.ts";
 import {
   getImageLookupById,
@@ -252,15 +259,15 @@ async function streamThumbEnsuring(
         )
       : await streamThumb(thumbKey, backend, cacheControl, request);
   } catch (error) {
-    if (!isStorageNotFoundError(error)) throw error;
+    if (!isStorageObjectNotFound(error)) throw error;
   }
 
   // 缩略图缺失但原图仍在时即时补建，修复历史数据或迁移中断造成的缩略图空洞。
-  if (await exists("media", objectKey, backend)) {
+  if (await storageObjectExists("media", objectKey, backend)) {
     await generateStoredThumbnail(objectKey, backend).catch(() => undefined);
   }
   return streamThumb(thumbKey, backend, cacheControl, request).catch((error: unknown) => {
-    if (isStorageNotFoundError(error)) return null;
+    if (isStorageObjectNotFound(error)) return null;
     throw error;
   });
 }
@@ -320,7 +327,7 @@ export async function serveObject(key: string, request: StoredResponseRequest = 
   const object = await resolveReadableObject("media", key, storageSlug);
   if (object.publicUrl) return immutableRedirect(object.publicUrl);
   return streamResolvedObject(object, contentType(ext), immutableCacheControl, request).catch((error: unknown) => {
-    if (isStorageNotFoundError(error)) throw new ApiError(404, "not_found", "Object not found");
+    if (isStorageObjectNotFound(error)) throw new ApiError(404, "not_found", "Object not found");
     throw error;
   });
 }

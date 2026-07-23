@@ -133,5 +133,3 @@ export function reloadRuntimeConfig() {
     return runtimeConfig;
   });
 }
-
-export type { RuntimeConfig } from "@imageshow/shared";

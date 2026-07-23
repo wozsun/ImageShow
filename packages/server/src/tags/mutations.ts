@@ -107,7 +107,7 @@ export async function replaceImageTags(client: PoolClient, imageId: string, slug
   };
 }
 
-export async function setImageTags(imageId: string, names: string[], options: SetImageTagsOptions = {}) {
+export async function updateImageTags(imageId: string, names: string[], options: SetImageTagsOptions = {}) {
   const resolved = await resolveTagNames(names);
   const mutation = await withTransaction(async (client) => {
     return replaceImageTags(client, imageId, resolved);

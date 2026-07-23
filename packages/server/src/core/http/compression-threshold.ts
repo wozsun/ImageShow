@@ -7,7 +7,7 @@ const noTransformPattern = /(?:^|,)\s*no-transform\s*(?:,|$)/i;
  * Gives Hono's compression middleware a real size for small responses without
  * cloning and fully draining every large response first. For a large stream the
  * temporary Content-Length only communicates that the threshold was reached;
- * callers must remove it when no content encoding was selected.
+ * the caller must remove it when no content encoding was selected.
  */
 export async function prepareCompressionThreshold(c: Context, threshold: number) {
   if (!c.res.body || c.req.method === "HEAD" || c.res.status === 206) return false;

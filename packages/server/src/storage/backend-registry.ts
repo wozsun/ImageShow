@@ -1,4 +1,4 @@
-import { appConfig } from "@imageshow/shared";
+import { appConfig, type StorageType } from "@imageshow/shared";
 import type { PoolClient } from "pg";
 import {
   inspectTransactionOutcome,
@@ -24,13 +24,10 @@ import {
   type StorageBackendImportInput,
   type StorageBackendRecord,
   type StorageBackendUpdateInput,
-  type StorageConfig,
-  type StorageType
+  type StorageConfig
 } from "./backend-config.ts";
-import {
-  createStorageDriver,
-  type StorageDriver
-} from "./storage-backend.ts";
+import type { StorageDriver } from "./driver.ts";
+import { createStorageDriver } from "./driver-factory.ts";
 import {
   withStorageLocationReadAndAdvisoryLock,
   withStorageLocationWriteAndAdvisoryLock

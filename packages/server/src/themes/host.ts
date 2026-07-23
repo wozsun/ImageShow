@@ -1,7 +1,7 @@
 import type { Context, Next } from "hono";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
-import { getGalleryFilterOptions } from "../random/random-cache.ts";
-import { noStoreCacheControl } from "../core/http.ts";
+import { getGalleryFilterOptions } from "../random/cache-read.ts";
+import { noStoreCacheControl } from "../core/http/headers.ts";
 
 type HostParts = { hostname: string; port: string };
 const validatedThemeRequests = new WeakSet<Request>();

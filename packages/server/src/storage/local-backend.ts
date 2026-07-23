@@ -8,8 +8,8 @@ import type {
   OpenedRead,
   StorageDriver,
   StorageSelfTest
-} from "./storage-backend.ts";
-import { parseSingleByteRange } from "../core/byte-range.ts";
+} from "./driver.ts";
+import { parseSingleByteRange } from "../core/http/byte-range.ts";
 import { localObjectEtag } from "./object-validator.ts";
 import { isMissingFileError } from "./not-found.ts";
 

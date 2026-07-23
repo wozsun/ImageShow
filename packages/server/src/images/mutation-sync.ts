@@ -1,4 +1,4 @@
-import { syncRandomImages } from "../random/random-cache.ts";
+import { syncRandomImages } from "../random/cache-sync.ts";
 import {
   invalidateImageCaches,
   type ImageLookupInvalidationEntry,

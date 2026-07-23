@@ -4,7 +4,8 @@ import {
   appConfig
 } from "@imageshow/shared";
 import type { Context, Next } from "hono";
-import { cspReportPath, routeError } from "./http.ts";
+import { apiErrorResponse } from "./responses.ts";
+import { cspReportPath } from "./headers.ts";
 
 const standardApiBodyMaxBytes = 128 * 1024;
 const jsonlManifestBodyMaxBytes = appConfig.imports.jsonlManifestMaxBytes;
@@ -31,7 +32,7 @@ const advancedConfigLargeBodyPath = new RegExp(
 );
 
 function tooLarge(_c: Context) {
-  return routeError({
+  return apiErrorResponse({
     status: 413,
     code: "request_body_too_large",
     message: "Request body too large"

@@ -12,36 +12,49 @@ import {
 import {
   GALLERY_FILTER_OPTIONS_KEY,
   RANDOM_CACHE_NAMESPACE,
-  RANDOM_CLEANUP_BATCH_SIZE,
   RANDOM_CURRENT_KEY,
-  RANDOM_GENERATION_PUBLISH_SCRIPT,
   RANDOM_MUTATION_REVISION_KEY,
-  RANDOM_OLD_GENERATION_TTL_SECONDS,
-  RANDOM_REBUILD_BATCH_SIZE,
   RANDOM_REBUILD_COMPLETED_KEY,
-  RANDOM_REBUILD_WAIT_ATTEMPTS,
-  RANDOM_REBUILD_WAIT_INTERVAL_MS,
-  adjustCategoryCounts,
-  chunks,
-  collectMembership,
-  filterOptionsFromCategoryCounts,
-  mapRandomItems,
-  queueMembershipMap,
-  queueSnapshot,
+  randomGenerationPrefix,
   randomItemKey,
-  randomKey,
-  randomManifestKey,
-  redisRevision,
-  redisUnavailable,
-  registerRandomKeys,
+  randomManifestKey
+} from "./cache-keys.ts";
+import {
+  adjustCategoryCounts,
+  filterOptionsFromCategoryCounts,
+  randomPoolItemsFromRows,
   type RandomCategoryCounts,
   type RandomPoolItem,
   type RandomPoolSnapshot
-} from "./cache-schema.ts";
+} from "./cache-model.ts";
+import {
+  RANDOM_CLEANUP_BATCH_SIZE,
+  RANDOM_OLD_GENERATION_TTL_SECONDS,
+  RANDOM_REBUILD_BATCH_SIZE,
+  RANDOM_REBUILD_WAIT_ATTEMPTS,
+  RANDOM_REBUILD_WAIT_INTERVAL_MS,
+  redisRevision,
+  redisUnavailable
+} from "./cache-policy.ts";
+import { RANDOM_GENERATION_PUBLISH_SCRIPT } from "./cache-scripts.ts";
+import {
+  collectRandomMemberships,
+  queueRandomMemberships,
+  queueRandomSnapshot,
+  registerRandomGenerationKeys
+} from "./cache-writes.ts";
 import {
   acquireRandomRebuildLock,
   startRandomRebuildLockRenewal
 } from "./cache-lock.ts";
+
+function chunkArray<T>(items: T[], size: number): T[][] {
+  const batches: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    batches.push(items.slice(index, index + size));
+  }
+  return batches;
+}
 
 async function readyRandomItemBatch(
   client: PoolClient,
@@ -68,7 +81,7 @@ async function readyRandomItemBatch(
       ORDER BY ready.id`,
     [afterId, RANDOM_REBUILD_BATCH_SIZE]
   )).rows;
-  return mapRandomItems(rows);
+  return randomPoolItemsFromRows(rows);
 }
 
 async function cleanupFailedGeneration(
@@ -87,7 +100,7 @@ async function cleanupFailedGeneration(
 
   const manifest = randomManifestKey(generation);
   const manifestKeys = await redis.smembers(manifest).catch(() => []);
-  const prefix = randomKey(generation, "");
+  const prefix = randomGenerationPrefix(generation);
   const keys = [...new Set([
     ...knownKeys,
     ...manifestKeys.filter((key) => key.startsWith(prefix)),
@@ -105,7 +118,7 @@ async function cleanupFailedGeneration(
   }
 
   try {
-    for (const batch of chunks(keys, RANDOM_CLEANUP_BATCH_SIZE)) {
+    for (const batch of chunkArray(keys, RANDOM_CLEANUP_BATCH_SIZE)) {
       await redis.unlink(...batch);
     }
   } catch {
@@ -129,11 +142,11 @@ async function writeRandomGenerationBatch(
   for (const item of items) {
     adjustCategoryCounts(categoryCounts, item, 1);
     itemValues.push(item.id, JSON.stringify(item));
-    collectMembership(memberships, generation, item, keys);
+    collectRandomMemberships(memberships, generation, item, keys);
   }
   const pipeline = redis.pipeline();
   pipeline.hset(randomItemKey(generation), ...itemValues);
-  queueMembershipMap(pipeline, "sadd", memberships);
+  queueRandomMemberships(pipeline, "sadd", memberships);
   await execRedisPipeline(pipeline);
 }
 
@@ -143,7 +156,7 @@ async function expireOldGeneration(generation: string | null) {
   const keys = await redis.smembers(manifest).catch(() => []);
   if (!keys.length) return;
   const pipeline = redis.pipeline();
-  const generationPrefix = randomKey(generation, "");
+  const generationPrefix = randomGenerationPrefix(generation);
   for (const key of keys) {
     if (key.startsWith(generationPrefix)) {
       pipeline.expire(key, RANDOM_OLD_GENERATION_TTL_SECONDS);
@@ -219,7 +232,7 @@ async function performRandomPoolRebuild(targetRevision: number): Promise<{
   const generation = randomUuidV7();
   const categoryCounts: RandomCategoryCounts = {};
   const keys = new Set<string>();
-  registerRandomKeys(generation, keys);
+  registerRandomGenerationKeys(generation, keys);
   let publicationAttempted = false;
   try {
     // PostgreSQL 快照只覆盖数据库读取；COMMIT 后才开始向 Redis 写 generation。
@@ -247,8 +260,8 @@ async function performRandomPoolRebuild(targetRevision: number): Promise<{
     }
 
     const finalPipeline = redis.pipeline();
-    queueSnapshot(finalPipeline, generation, categoryCounts, false);
-    for (const batch of chunks([...keys], RANDOM_CLEANUP_BATCH_SIZE)) {
+    queueRandomSnapshot(finalPipeline, generation, categoryCounts, false);
+    for (const batch of chunkArray([...keys], RANDOM_CLEANUP_BATCH_SIZE)) {
       finalPipeline.sadd(randomManifestKey(generation), ...batch);
     }
     await execRedisPipeline(finalPipeline);

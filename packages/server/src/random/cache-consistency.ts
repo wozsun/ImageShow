@@ -1,14 +1,16 @@
 import { redis } from "../core/redis-client.ts";
 import {
-  RANDOM_FILTER_CONSISTENCY_SCRIPT,
+  RANDOM_MUTATION_REVISION_KEY,
+  RANDOM_REBUILD_COMPLETED_KEY,
+  RANDOM_UPDATE_LOCK_KEY
+} from "./cache-keys.ts";
+import {
   RANDOM_FILTER_CONSISTENCY_WAIT_MS,
   RANDOM_FILTER_WAIT_BASE_MS,
   RANDOM_FILTER_WAIT_MAX_MS,
-  RANDOM_MUTATION_REVISION_KEY,
-  RANDOM_REBUILD_COMPLETED_KEY,
-  RANDOM_UPDATE_LOCK_KEY,
   redisRevision
-} from "./cache-schema.ts";
+} from "./cache-policy.ts";
+import { RANDOM_FILTER_CONSISTENCY_SCRIPT } from "./cache-scripts.ts";
 
 export type RandomFilterConsistencyKeys = {
   requestedRevision: string;

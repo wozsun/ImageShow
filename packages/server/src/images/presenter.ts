@@ -6,7 +6,7 @@ import {
   type GalleryImageCardDto,
   type PublicImageDetailDto
 } from "@imageshow/shared";
-import { publicImageUrls } from "../storage/storage.ts";
+import { publicImageUrls } from "../storage/public-urls.ts";
 import { getTagsForImages } from "../tags/query.ts";
 import { hasDistinctOriginalUrl } from "./original-link.ts";
 

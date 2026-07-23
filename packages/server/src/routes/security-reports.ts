@@ -1,5 +1,6 @@
 import type { Hono } from "hono";
-import { blockCrossSiteFetch, cspReportPath } from "../core/http.ts";
+import { blockCrossSiteFetch } from "../core/http/request-security.ts";
+import { cspReportPath } from "../core/http/headers.ts";
 
 export function registerSecurityReportRoutes(app: Hono) {
   app.post(cspReportPath, blockCrossSiteFetch, async () => {

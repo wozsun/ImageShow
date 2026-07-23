@@ -1,5 +1,5 @@
-import type { RandomCategoryCounts } from "./random-cache.ts";
-import { routeError } from "../core/http.ts";
+import type { RandomCategoryCounts } from "./cache-model.ts";
+import { apiErrorResponse } from "../core/http/responses.ts";
 import { splitSelectors } from "../core/selectors.ts";
 
 export const randomDevices = ["pc", "mb"] as const;
@@ -19,7 +19,7 @@ export function isRandomBrightness(value: string): value is RandomBrightness {
 export function validateRandomQuery(query: URLSearchParams) {
   for (const key of query.keys()) {
     if (!randomAllowedQuery.has(key)) {
-      return routeError(
+      return apiErrorResponse(
         { status: 400, message: "Bad Request: Invalid query parameters" },
         { invalidQuery: [key], allowedQuery: [...randomAllowedQuery] }
       );
@@ -27,7 +27,7 @@ export function validateRandomQuery(query: URLSearchParams) {
   }
   for (const key of query.keys()) {
     if (randomSingleValueQuery.has(key) && query.getAll(key).length > 1) {
-      return routeError(
+      return apiErrorResponse(
         { status: 400, message: "Bad Request: Duplicate query parameter" },
         { field: key, hint: "This parameter only accepts a single value" }
       );
@@ -38,7 +38,7 @@ export function validateRandomQuery(query: URLSearchParams) {
 
 function mixedSelectorsError(noun: string, include: string[], exclude: string[]) {
   if (!include.length || !exclude.length) return null;
-  return routeError(
+  return apiErrorResponse(
     { status: 400, message: `Bad Request: Cannot mix include and exclude ${noun} selectors` },
     { include, exclude, hint: `Use either include ${noun}s or exclude ${noun}s, not both` }
   );
@@ -50,7 +50,7 @@ export function parseThemeSelectors(query: URLSearchParams, validThemes: string[
   const mixed = mixedSelectorsError("theme", include, exclude);
   if (mixed) return mixed;
   const invalidTheme = [...include, ...exclude].find((theme) => !themeSet.has(theme));
-  if (invalidTheme) return routeError({ status: 400, message: "Bad Request: Invalid theme" }, { field: "t", value: invalidTheme });
+  if (invalidTheme) return apiErrorResponse({ status: 400, message: "Bad Request: Invalid theme" }, { field: "t", value: invalidTheme });
   if (include.length) return include;
   if (exclude.length) {
     const excluded = new Set(exclude);

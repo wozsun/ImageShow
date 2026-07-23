@@ -135,7 +135,6 @@ export const batchImageUpdateInput = z.object({
   }
 });
 
-export { adminUsernameInput } from "./credentials.ts";
 export const userCreateInput = z.object({ username: adminUsernameInput, password: adminPasswordInput });
 export const userPasswordInput = z.object({ password: adminPasswordInput });
 
