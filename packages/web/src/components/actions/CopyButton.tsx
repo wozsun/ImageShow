@@ -1,29 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { defaultUiFeedbackDurationMs } from "../../lib/ui/async-action-timing.js";
+import { copyTextToClipboard } from "../../lib/ui/clipboard.js";
 import { Icon } from "../icon/Icon.js";
-
-async function copyText(value: string) {
-  if (navigator.clipboard?.writeText) {
-    try {
-      await navigator.clipboard.writeText(value);
-      return;
-    } catch {
-
-    }
-  }
-  const textarea = document.createElement("textarea");
-  textarea.value = value;
-  textarea.readOnly = true;
-  textarea.style.cssText = "position:fixed;opacity:0;pointer-events:none;";
-  document.body.append(textarea);
-  textarea.focus();
-  textarea.select();
-  try {
-    if (!document.execCommand("copy")) throw new Error("Copy command was rejected");
-  } finally {
-    textarea.remove();
-  }
-}
 
 export function CopyButton({ value, ariaLabel = "复制内容" }: { value: string; ariaLabel?: string }) {
   const [status, setStatus] = useState<"idle" | "copied" | "failed">("idle");
@@ -33,7 +11,7 @@ export function CopyButton({ value, ariaLabel = "复制内容" }: { value: strin
 
   const handleCopy = async () => {
     try {
-      await copyText(value);
+      await copyTextToClipboard(value);
       setStatus("copied");
     } catch {
       setStatus("failed");

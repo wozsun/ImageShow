@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState, type RefObject } from "react";
 import { Icon, type IconName } from "../../../../components/icon/Icon.js";
 import { OverlayScrollbar } from "../../../../components/layout/OverlayScrollbar.js";
 import { useDialogFocus } from "../../../../hooks/useDialogFocus.js";
+import { copyTextToClipboard } from "../../../../lib/ui/clipboard.js";
 import { parseImportUrlInput, type ImportUrlParseResult } from "../import-job-utils.js";
 import {
   parseImportJsonl,
@@ -102,7 +103,7 @@ function ImportIssuePreview({ summary, copyLabel, getCopyText, items }: {
         <button
           type="button"
           className="button secondary"
-          onClick={() => void navigator.clipboard.writeText(getCopyText()).catch(() => undefined)}
+          onClick={() => void copyTextToClipboard(getCopyText()).catch(() => undefined)}
         >
           <Icon name="file-copy-line" />{copyLabel}
         </button>

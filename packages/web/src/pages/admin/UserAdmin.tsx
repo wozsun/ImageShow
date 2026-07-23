@@ -9,6 +9,7 @@ import { ConfirmDialog } from "../../components/feedback/ConfirmDialog.js";
 import { DialogFrame } from "../../components/feedback/DialogFrame.js";
 import { adminApiBasePath, slugFormatHint, slugPattern } from "../../lib/constants.js";
 import { queryKeys } from "../../lib/api/query-keys.js";
+import { copyTextToClipboard } from "../../lib/ui/clipboard.js";
 import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
 import { PasswordInput } from "../../components/form/PasswordInput.js";
 import { SlugChip } from "../../components/data-display/SlugChip.js";
@@ -101,7 +102,7 @@ export function UserAdmin() {
     const name = username.trim();
     await generatePasswordStatus.run(async () => {
       try {
-        await navigator.clipboard.writeText(`用户名：${name}\n密码：${pwd}`);
+        await copyTextToClipboard(`用户名：${name}\n密码：${pwd}`);
         return true;
       } catch (error) {
         reportAdminUiError("user_admin.copy_generated_password", error);

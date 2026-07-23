@@ -20,6 +20,7 @@ import {
   uploadCommonDeviceOptions,
   type SelectOption
 } from "../../../lib/ui/select-options.js";
+import { copyTextToClipboard } from "../../../lib/ui/clipboard.js";
 import type { FacetOption, ImageDraft, ImageItem, ImportJob } from "../../../lib/types.js";
 import type { ImportAttributeDefaults } from "../../../lib/upload/upload-utils.js";
 import type { ImportPreviewTarget } from "./DuplicateMatchPanel.js";
@@ -318,7 +319,7 @@ export function UploadWorkflowWindow({
               <span>{jsonlErrors.length} 行未创建任务</span>
               <button
                 type="button"
-                onClick={() => void navigator.clipboard.writeText(
+                onClick={() => void copyTextToClipboard(
                   jsonlErrors
                     .map((error) => `第 ${error.line} 行：${error.error}\n${error.raw}`)
                     .join("\n\n")
