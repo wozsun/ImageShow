@@ -4,12 +4,15 @@ import {
   type ImportAttributeDefaults
 } from "../../../lib/upload/upload-utils.js";
 
+const externalImageUrlMaxLength = 2048;
+
 function hasDirectIpHostname(hostname: string) {
   const unwrappedHostname = hostname.replace(/^\[|\]$/g, "");
   return unwrappedHostname.includes(":") || /^(?:\d{1,3}\.){3}\d{1,3}$/.test(unwrappedHostname);
 }
 
 function isPlausibleExternalImageUrl(value: string) {
+  if (value.length > externalImageUrlMaxLength) return false;
   try {
     const parsed = new URL(value);
     const hostname = parsed.hostname.toLowerCase().replace(/\.$/, "");
@@ -27,10 +30,24 @@ function isPlausibleExternalImageUrl(value: string) {
   }
 }
 
+export type ImportUrlParseIssue =
+  | {
+    type: "invalid";
+    line: number;
+    raw: string;
+  }
+  | {
+    type: "duplicate";
+    line: number;
+    raw: string;
+    firstLine: number;
+  };
+
 export type ImportUrlParseResult = {
   urls: string[];
   invalidCount: number;
   duplicateCount: number;
+  issues: ImportUrlParseIssue[];
 };
 
 export function importPositionText(item: {
@@ -47,28 +64,36 @@ export function importPositionText(item: {
 }
 
 export function parseImportUrlInput(input: string | string[]): ImportUrlParseResult {
-  const raw = Array.isArray(input) ? input : input.split(/\s+/);
+  const lines = Array.isArray(input) ? input : input.split(/\r?\n/);
   const urls: string[] = [];
   let invalidCount = 0;
   let duplicateCount = 0;
-  const seen = new Set<string>();
+  const issues: ImportUrlParseIssue[] = [];
+  const firstLineByUrl = new Map<string, number>();
 
-  for (const value of raw) {
-    const url = value.trim();
-    if (!url) continue;
-    if (!isPlausibleExternalImageUrl(url)) {
-      invalidCount += 1;
-      continue;
+  for (const [lineIndex, value] of lines.entries()) {
+    // 保留既有的空白分隔兼容，同时把每个值关联到其输入行；界面仍引导每行一个 URL。
+    for (const raw of value.split(/\s+/)) {
+      const url = raw.trim();
+      if (!url) continue;
+      const line = lineIndex + 1;
+      if (!isPlausibleExternalImageUrl(url)) {
+        invalidCount += 1;
+        issues.push({ type: "invalid", line, raw });
+        continue;
+      }
+      const firstLine = firstLineByUrl.get(url);
+      if (firstLine !== undefined) {
+        duplicateCount += 1;
+        issues.push({ type: "duplicate", line, raw, firstLine });
+        continue;
+      }
+      firstLineByUrl.set(url, line);
+      urls.push(url);
     }
-    if (seen.has(url)) {
-      duplicateCount += 1;
-      continue;
-    }
-    seen.add(url);
-    urls.push(url);
   }
 
-  return { urls, invalidCount, duplicateCount };
+  return { urls, invalidCount, duplicateCount, issues };
 }
 
 function linkDraft(

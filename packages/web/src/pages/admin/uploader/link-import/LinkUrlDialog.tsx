@@ -16,6 +16,8 @@ import {
   linkInputLimitState,
   linkInputTextareaRows,
   parseWeiboImportLines,
+  urlImportIssuePreviewMessage,
+  urlImportIssueText,
   type LinkInputMode
 } from "./link-input.js";
 
@@ -52,12 +54,71 @@ const inputModePresentation: Record<LinkInputMode, {
   }
 };
 
+const emptySubmitText: Record<LinkInputMode, string> = {
+  urls: "无有效链接",
+  jsonl: "无有效清单",
+  weibo: "无微博图片"
+};
+const importIssuePreviewMaxItems = 200;
+
+function issuePreviewSuffix(totalCount: number, visibleCount: number) {
+  if (visibleCount >= totalCount) return "";
+  return visibleCount > 0
+    ? `（仅显示前 ${visibleCount} 条）`
+    : "（明细未显示）";
+}
+
 function parseErrorText(errors: JsonlManifestParseError[]) {
   return errors.map((error) => `第 ${error.line} 行：${error.error}\n${error.raw}`).join("\n\n");
 }
 
 function weiboErrorText(errors: WeiboImportParseError[]) {
   return errors.map((error) => `第 ${error.line} 行：${error.error}\n${error.url}`).join("\n\n");
+}
+
+function jsonlResultSummary(result: JsonlManifestResult) {
+  if (!result.items.length) return "没有可导入的有效清单项";
+  const invalidPart = result.errors.length ? `、无效 ${result.errors.length}` : "";
+  return `共解析 ${result.items.length + result.errors.length} 行，其中有效 ${result.items.length}${invalidPart}`;
+}
+
+function weiboResultSummary(result: WeiboImportResult) {
+  if (!result.manifest.items.length) return "没有可导入的微博图片";
+  const issueCount = result.errors.length + result.manifest.errors.length;
+  const issuePart = issueCount ? `，另有 ${issueCount} 项失败` : "";
+  return `已解析 ${result.post_count} 条微博，共 ${result.manifest.items.length} 张可导入图片${issuePart}`;
+}
+
+function ImportIssuePreview({ summary, copyLabel, getCopyText, items }: {
+  summary: string;
+  copyLabel: string;
+  getCopyText: () => string;
+  items: Array<{ key: string; line: number; message: string }>;
+}) {
+  return (
+    <div className="jsonl-preview">
+      <div className="jsonl-preview-summary">
+        <span>{summary}</span>
+        <button
+          type="button"
+          className="button secondary"
+          onClick={() => void navigator.clipboard.writeText(getCopyText()).catch(() => undefined)}
+        >
+          <Icon name="file-copy-line" />{copyLabel}
+        </button>
+      </div>
+      {items.length > 0 && (
+        <ol className="jsonl-error-list">
+          {items.slice(0, importIssuePreviewMaxItems).map((item) => (
+            <li key={item.key}>
+              <strong>第 {item.line} 行</strong>
+              <span>{item.message}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  );
 }
 
 export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClose, onSubmit, returnFocusRef }: {
@@ -111,14 +172,36 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
   }, urlParseResultCurrent);
   const manifestCurrent = jsonlManifestCurrent ?? weiboResultCurrent?.manifest ?? null;
   const presentation = inputModePresentation[inputMode];
-  const noValidUrls = Boolean(urlParseResultCurrent && !urlParseResultCurrent.urls.length);
+  const submitCount = inputMode === "urls"
+    ? urlParseResultCurrent?.urls.length ?? 0
+    : manifestCurrent?.items.length ?? 0;
+  const readyToImport = inputMode === "urls"
+    ? Boolean(urlParseResultCurrent)
+    : Boolean(manifestCurrent);
+  const parsedWithoutItems = readyToImport && submitCount === 0;
+  const resultIssueCount = inputMode === "urls"
+    ? urlParseResultCurrent?.issues.length ?? 0
+    : inputMode === "jsonl"
+      ? jsonlManifestCurrent?.errors.length ?? 0
+      : (weiboResultCurrent?.errors.length ?? 0) + (weiboResultCurrent?.manifest.errors.length ?? 0);
+  const resultIsWarning = parsedWithoutItems || resultIssueCount > 0;
+  const urlIssues = urlParseResultCurrent?.issues ?? [];
+  const visibleUrlIssues = urlIssues.slice(0, importIssuePreviewMaxItems);
+  const visibleWeiboErrors = weiboResultCurrent?.errors.slice(0, importIssuePreviewMaxItems) ?? [];
+  const manifestIssuePreviewBudget = inputMode === "weibo"
+    ? importIssuePreviewMaxItems - visibleWeiboErrors.length
+    : importIssuePreviewMaxItems;
+  const visibleManifestErrors = manifestCurrent?.errors.slice(0, manifestIssuePreviewBudget) ?? [];
+  const urlIssuePreviewSuffix = issuePreviewSuffix(urlIssues.length, visibleUrlIssues.length);
   const resultSummary = urlParseResultCurrent
-    ? noValidUrls
+    ? parsedWithoutItems
       ? "没有可导入的有效链接"
       : formatUrlImportSummary(urlParseResultCurrent)
-    : weiboResultCurrent
-      ? `已解析 ${weiboResultCurrent.post_count} 条微博，共 ${weiboResultCurrent.manifest.items.length} 张可导入图片`
-      : "";
+    : jsonlManifestCurrent
+      ? jsonlResultSummary(jsonlManifestCurrent)
+      : weiboResultCurrent
+        ? weiboResultSummary(weiboResultCurrent)
+        : "";
 
   const resetParsedResult = () => {
     setUrlParseResult(null);
@@ -203,20 +286,11 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
     close();
   };
 
-  const submitCount = inputMode === "urls"
-    ? urlParseResultCurrent?.urls.length ?? 0
-    : manifestCurrent?.items.length ?? 0;
-  const readyToImport = inputMode === "urls"
-    ? Boolean(urlParseResultCurrent)
-    : Boolean(manifestCurrent);
   const missingInput = inputMode === "urls"
     ? !text.trim()
     : inputMode === "weibo"
       ? !weiboUrls.length
       : !text.trim();
-  const parsedWithoutItems = inputMode === "urls"
-    ? Boolean(urlParseResultCurrent && !urlParseResultCurrent.urls.length)
-    : Boolean(manifestCurrent && !manifestCurrent.items.length);
   const submitText = parsing
     ? "解析中"
     : inputMode === "urls" && !urlParseResultCurrent
@@ -273,7 +347,7 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
           />
           {resultSummary && (
             <p
-              className={`hint link-import-result-summary${noValidUrls ? " is-warning" : ""}`}
+              className={`hint link-import-result-summary${resultIsWarning ? " is-warning" : ""}`}
               role="status"
             >
               {resultSummary}
@@ -285,31 +359,41 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
             {parseError || `已输入 ${limitState.count} 条，最多允许 ${limitState.maxItems} 条，请拆分后再导入`}
           </p>
         )}
+        {urlIssues.length > 0 && (
+          <ImportIssuePreview
+            summary={`${urlIssues.length} 条链接已忽略${urlIssuePreviewSuffix}`}
+            copyLabel={`复制 ${urlIssues.length} 条问题`}
+            getCopyText={() => urlImportIssueText(urlIssues)}
+            items={visibleUrlIssues.map((issue, index) => ({
+              key: `${issue.line}:${issue.type}:${index}`,
+              line: issue.line,
+              message: urlImportIssuePreviewMessage(issue)
+            }))}
+          />
+        )}
         {weiboResultCurrent && weiboResultCurrent.errors.length > 0 && (
-          <div className="jsonl-preview">
-            <div className="jsonl-preview-summary">
-              <span>{weiboResultCurrent.errors.length} 条微博解析失败</span>
-              <button type="button" className="button secondary" onClick={() => void navigator.clipboard.writeText(weiboErrorText(weiboResultCurrent.errors)).catch(() => undefined)}>
-                <Icon name="file-copy-line" />复制 {weiboResultCurrent.errors.length} 条错误
-              </button>
-            </div>
-            <ol className="jsonl-error-list">
-              {weiboResultCurrent.errors.map((error) => <li key={`${error.line}:${error.url}`}><strong>第 {error.line} 行</strong><span>{error.error}</span></li>)}
-            </ol>
-          </div>
+          <ImportIssuePreview
+            summary={`${weiboResultCurrent.errors.length} 条微博解析失败${issuePreviewSuffix(weiboResultCurrent.errors.length, visibleWeiboErrors.length)}`}
+            copyLabel={`复制 ${weiboResultCurrent.errors.length} 条错误`}
+            getCopyText={() => weiboErrorText(weiboResultCurrent.errors)}
+            items={visibleWeiboErrors.map((error) => ({
+              key: `${error.line}:${error.url}`,
+              line: error.line,
+              message: error.error
+            }))}
+          />
         )}
         {manifestCurrent && manifestCurrent.errors.length > 0 && (
-          <div className="jsonl-preview">
-            <div className="jsonl-preview-summary">
-              <span>{manifestCurrent.errors.length} 条图片清单解析失败</span>
-              <button type="button" className="button secondary" onClick={() => void navigator.clipboard.writeText(parseErrorText(manifestCurrent.errors)).catch(() => undefined)}>
-                <Icon name="file-copy-line" />复制 {manifestCurrent.errors.length} 条错误
-              </button>
-            </div>
-            <ol className="jsonl-error-list">
-              {manifestCurrent.errors.map((error) => <li key={error.line}><strong>第 {error.line} 行</strong><span>{error.error}</span></li>)}
-            </ol>
-          </div>
+          <ImportIssuePreview
+            summary={`${manifestCurrent.errors.length} 条图片清单解析失败${issuePreviewSuffix(manifestCurrent.errors.length, visibleManifestErrors.length)}`}
+            copyLabel={`复制 ${manifestCurrent.errors.length} 条错误`}
+            getCopyText={() => parseErrorText(manifestCurrent.errors)}
+            items={visibleManifestErrors.map((error) => ({
+              key: String(error.line),
+              line: error.line,
+              message: error.error
+            }))}
+          />
         )}
         <div className="link-import-actions">
           <div className="link-import-action-buttons">
@@ -321,7 +405,7 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
               onClick={() => void submit()}
             >
               {!readyToImport && <Icon name={presentation.icon} />}
-              {readyToImport ? (
+              {parsedWithoutItems ? emptySubmitText[inputMode] : readyToImport ? (
                 <span className="link-import-submit-label">
                   <span>导入</span>
                   <span className="link-import-submit-count">{submitCount}</span>
