@@ -4,7 +4,9 @@ import { dirname, join, normalize, sep } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { runtimePaths } from "../../config/bootstrap-env.ts";
 import { ApiError } from "../../core/api-error.ts";
+import { mapWithWorkerPool } from "../../core/concurrency.ts";
 import { pool } from "../../core/db.ts";
+import { getRuntimeConfig } from "../../config/runtime-config-store.ts";
 import { nodeReadableFromWeb } from "../../storage/stream-buffer.ts";
 import { tryWithImportSessionLock } from "./session-lock.ts";
 
@@ -116,21 +118,50 @@ export async function removeRawImportAttempt(
   }
 }
 
-export async function removeRawImport(id: string) {
-  const root = dirname(rawImportBasePath(id));
+function appendRawCleanupFailure(
+  failures: Map<string, unknown[]>,
+  id: string,
+  error: unknown
+) {
+  const current = failures.get(id);
+  if (current) current.push(error);
+  else failures.set(id, [error]);
+}
+
+export async function removeRawImports(ids: readonly string[]) {
+  const targets = new Set(ids);
+  const failures = new Map<string, unknown[]>();
+  if (!targets.size) return failures;
+
+  const root = runtimePaths.tempDirectory;
   const names = await readdir(root).catch((error: NodeJS.ErrnoException) => {
     if (error.code === "ENOENT") return [];
     throw error;
   });
-  const prefix = `${id}.raw.`;
-  const results = await Promise.allSettled(names
-    .filter((name) => name.startsWith(prefix) && rawImportFilePattern.test(name))
-    .map((name) => rm(join(root, name), { force: true })));
-  const failures = results
-    .filter((result): result is PromiseRejectedResult => result.status === "rejected")
-    .map((result) => result.reason);
-  if (failures.length) {
-    throw new AggregateError(failures, "Import raw cleanup failed");
+  const entries = names.flatMap((name) => {
+    const match = rawImportFilePattern.exec(name);
+    const id = match?.[1] ?? "";
+    return targets.has(id) ? [{ id, path: join(root, name) }] : [];
+  });
+  await mapWithWorkerPool(
+    entries,
+    getRuntimeConfig().background_job.move_cleanup_concurrency,
+    async ({ id, path }) => {
+      try {
+        await rm(path, { force: true });
+      } catch (error) {
+        appendRawCleanupFailure(failures, id, error);
+      }
+    }
+  );
+  return failures;
+}
+
+export async function removeRawImport(id: string) {
+  const failures = await removeRawImports([id]);
+  const reasons = failures.get(id) ?? [];
+  if (reasons.length) {
+    throw new AggregateError(reasons, "Import raw cleanup failed");
   }
 }
 

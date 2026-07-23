@@ -11,7 +11,6 @@ import { batchDuplicateFromJob } from "../duplicate-match.js";
 import { isCurrentImportAttempt, type AppendImportQueueApi } from "../prepared-result.js";
 import {
   cancelStoredImport,
-  createImportSessionsBatch,
   materializeImportSession,
   type ImportSessionCreateInput,
   type ImportSessionHandle
@@ -51,7 +50,6 @@ export function useLinkImport(options: {
 }) {
   const { queue, defaults, fillOriginalUrl, storageSlug, concurrency } = options;
   const controllers = useRef(new Map<string, AbortController>());
-  const batchControllers = useRef(new Set<AbortController>());
   const mounted = useRef(true);
   const pipelineRef = useRef<MaterializationPipeline<ImportSessionHandle> | null>(null);
   if (!pipelineRef.current) {
@@ -70,8 +68,6 @@ export function useLinkImport(options: {
       mounted.current = false;
       for (const controller of controllers.current.values()) controller.abort();
       controllers.current.clear();
-      for (const controller of batchControllers.current) controller.abort();
-      batchControllers.current.clear();
       pipeline.dispose();
       const sessionIds = queue.jobsRef.current
         .filter((job) => job.kind === "download" && job.sessionId)
@@ -84,8 +80,7 @@ export function useLinkImport(options: {
   }, [pipeline, queue]);
 
   const pipelineTask = useCallback((
-    job: ImportJob,
-    sessionSource?: () => Promise<ImportSessionHandle | null>
+    job: ImportJob
   ): MaterializationPipelineTask<ImportSessionHandle> => {
     const attemptKey = job.attemptKey;
     let controller: AbortController | undefined;
@@ -105,22 +100,15 @@ export function useLinkImport(options: {
         });
         controllers.current.set(job.id, controller);
         try {
-          const existingSession = sessionSource
-            ? (await sessionSource() ?? undefined)
-            : undefined;
-          if (sessionSource && !existingSession) return null;
-          if (!existingSession) {
-            queue.updateJob(job.id, {
-              status: "queued",
-              message: "创建下载会话"
-            });
-          }
+          queue.updateJob(job.id, {
+            status: "queued",
+            message: "创建下载会话"
+          });
           return await materializeImportAttempt({
             queue,
             job,
             controller,
             createInput: linkSessionInput(job),
-            session: existingSession,
             onSession: (session) => {
               sessionId = session.id;
               sessionCreated = true;
@@ -224,88 +212,27 @@ export function useLinkImport(options: {
   }, [queue]);
 
   const addBatch = useCallback(async (
-    jobs: ImportJob[],
-    source: "urls" | "jsonl" | "weibo"
+    jobs: ImportJob[]
   ) => {
     queue.appendJobs(jobs);
     if (!jobs.length) return;
     for (const job of jobs) {
-      queue.updateJob(job.id, { status: "queued", message: "批量创建导入会话" });
+      queue.updateJob(job.id, { status: "queued", message: "等待下载" });
     }
-
-    const controller = new AbortController();
-    batchControllers.current.add(controller);
-    const sessions = new Map<string, ImportSessionHandle | null>();
-    const batchReady = createImportSessionsBatch(
-      source,
-      jobs.map(linkSessionInput),
-      controller.signal
-    ).then(async (results) => {
-      const jobByAttempt = new Map(jobs.map((job) => [job.attemptKey, job] as const));
-      const returnedAttempts = new Set<string>();
-      for (const result of results) {
-        returnedAttempts.add(result.idempotency_key);
-        const job = jobByAttempt.get(result.idempotency_key);
-        if (!job) {
-          if (!("error" in result)) await cancelStoredImport(result.session.id).catch(() => undefined);
-          continue;
-        }
-        if ("error" in result) {
-          sessions.set(job.attemptKey, null);
-          applyImportAttemptFailure(queue, job.id, job.attemptKey, new Error(result.error));
-          continue;
-        }
-        sessions.set(job.attemptKey, result.session);
-        if (!mounted.current || !isCurrentImportAttempt(queue, job.id, job.attemptKey)) {
-          await cancelStoredImport(result.session.id).catch(() => undefined);
-          continue;
-        }
-        queue.updateJob(job.id, { sessionId: result.session.id });
-      }
-      for (const job of jobs) {
-        if (returnedAttempts.has(job.attemptKey)) continue;
-        sessions.set(job.attemptKey, null);
-        applyImportAttemptFailure(
-          queue,
-          job.id,
-          job.attemptKey,
-          new Error("服务端未返回导入会话结果"),
-          "create"
-        );
-      }
-    }, (error) => {
-      const failureStage = isApiClientError(error) ? "prepare" : "create";
-      for (const job of jobs) {
-        sessions.set(job.attemptKey, null);
-        if (mounted.current) {
-          applyImportAttemptFailure(queue, job.id, job.attemptKey, error, failureStage);
-        }
-      }
-    }).finally(() => {
-      batchControllers.current.delete(controller);
-    });
-
-    void pipeline.enqueue(jobs.map((job) => pipelineTask(
-      job,
-      async () => {
-        await batchReady;
-        return sessions.get(job.attemptKey) ?? null;
-      }
-    )));
-    await batchReady;
+    void pipeline.enqueue(jobs.map(pipelineTask));
   }, [pipeline, pipelineTask, queue]);
 
   const addUrls = useCallback(async (urls: string[]) => {
     const jobs = linkImportJobs(urls, defaults, fillOriginalUrl, storageSlug);
-    await addBatch(jobs, "urls");
+    await addBatch(jobs);
   }, [addBatch, defaults, fillOriginalUrl, storageSlug]);
 
   const addJobs = useCallback(async (jobs: ImportJob[]) => {
-    await addBatch(jobs, "jsonl");
+    await addBatch(jobs);
   }, [addBatch]);
 
   const addWeiboJobs = useCallback(async (jobs: ImportJob[]) => {
-    await addBatch(jobs, "weibo");
+    await addBatch(jobs);
   }, [addBatch]);
 
   const cancel = useCallback(async (job: ImportJob) => {

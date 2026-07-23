@@ -1,17 +1,8 @@
-import { ensureAuthorWithMutationLockHeld } from "../../authors/mutations.ts";
-import { pool, withTransaction } from "../../core/db.ts";
+import { pool } from "../../core/db.ts";
 import { ApiError, errorMessage } from "../../core/api-error.ts";
 import { logger } from "../../core/logger.ts";
 import { randomUuidV7 } from "../../core/uuid.ts";
-import { syncRandomImage } from "../../random/cache-sync.ts";
-import { ensureThemeWithMutationLockHeld } from "../../themes/mutations.ts";
 import { resolveTagNames } from "../../tags/query.ts";
-import { replaceImageTags } from "../../tags/mutations.ts";
-import {
-  invalidateEntityCountCaches,
-  refreshEntityVocabularies,
-  type EntityCacheKind,
-} from "../../vocab/vocab-cache.ts";
 import { vocabularyAssociationLockRequests } from "../../vocab/mutation-sync.ts";
 import { resolveStorageAccess } from "../../storage/backend-registry.ts";
 import { storageObjectKey, thumbnailObjectKey } from "../../storage/image-paths.ts";
@@ -20,17 +11,24 @@ import {
   tryWithStorageLocationReadAndAdvisoryLocks
 } from "../../storage/maintenance-lock.ts";
 import { copyVerifiedObjectWithinStorage } from "../../storage/object-transfer.ts";
-import { enqueueObjectsForCleanup } from "../../storage/move-cleanup.ts";
 import {
   removeStorageObjectAndConfirm
 } from "../../storage/object-access.ts";
-import {
-  invalidateImageCaches,
-  warmCompleteImageLookups
-} from "../image-cache.ts";
 import { resolveClassification } from "../classification.ts";
-import { importCommitImage, type ImageRecord } from "../presenter.ts";
-import { notifyImportStatus, withImportLease } from "./progress.ts";
+import { importCommitImage } from "../presenter.ts";
+import {
+  cleanupImportCandidate,
+  cleanupImportCandidatesIfUnreferenced,
+  importCandidateIsPublishedOrRecoverable,
+  type ImportCandidateObject
+} from "./commit-candidates.ts";
+import {
+  persistCommittedImage,
+  readCommittedImage
+} from "./commit-persistence.ts";
+import { synchronizeCommittedImport } from "./commit-sync.ts";
+import { withImportLease } from "./lifecycle.ts";
+import { notifyImportStatus } from "./status.ts";
 import {
   runImportCommit,
   runImportCommitWithinByteBudget
@@ -43,22 +41,6 @@ import type {
   PreparedPayload
 } from "./types.ts";
 
-type CommittedImageRecord = Pick<
-  ImageRecord,
-  | "id"
-  | "author"
-  | "object_key"
-  | "original"
-  | "ext"
-  | "storage_slug"
-  | "device"
-  | "brightness"
-  | "theme"
-  | "status"
-  | "description"
-  | "source"
->;
-
 type CommitImportSessionRecord = Pick<
   ImportSessionRow,
   | "status"
@@ -68,66 +50,6 @@ type CommitImportSessionRecord = Pick<
   | "image_time"
   | "execution_token"
 >;
-
-type ImportCandidateObject = {
-  prefix: "media" | "thumbs" | "_uploads";
-  key: string;
-  backend: string;
-};
-
-const committedImageColumns = [
-  "id",
-  "author",
-  "object_key",
-  "original",
-  "ext",
-  "storage_slug",
-  "device",
-  "brightness",
-  "theme",
-  "status",
-  "description",
-  "source"
-].join(", ");
-
-async function finishImport(
-  imageId: string,
-  payload: PreparedPayload,
-  createdEntityKinds: Iterable<EntityCacheKind> = [],
-) {
-  const image = (await pool.query(
-    `SELECT ${committedImageColumns} FROM metadata WHERE id=$1`,
-    [imageId]
-  )).rows[0] as CommittedImageRecord | undefined;
-  if (!image) {
-    throw new ApiError(
-      409,
-      "committed_image_missing",
-      "导入已提交，但图片记录不存在"
-    );
-  }
-
-  await syncRandomImage(image.id);
-  const [cacheRevision] = await Promise.all([
-    invalidateImageCaches({
-      lookupEntries: [{ id: image.id, object_key: image.object_key }],
-      md5s: [payload.md5]
-    }),
-    invalidateEntityCountCaches([
-      "theme",
-      ...(image.author ? ["author" as const] : []),
-      ...((payload.tags?.length ?? 0) ? ["tag" as const] : []),
-    ]),
-    refreshEntityVocabularies(createdEntityKinds),
-  ]);
-  await warmCompleteImageLookups([{
-    ...image,
-    original: image.original ?? null,
-    description: image.description ?? null,
-    source: image.source ?? null
-  }], cacheRevision);
-  return image;
-}
 
 async function assertPreparedObjectExists(
   storage: Awaited<ReturnType<typeof resolveStorageAccess>>,
@@ -140,100 +62,12 @@ async function assertPreparedObjectExists(
   }
 }
 
-async function cleanupImportCandidatesIfUnreferenced(
-  imageId: string,
-  candidates: ImportCandidateObject[],
-  reason: string,
-  isReferenced: () => Promise<boolean>
-) {
-  if (!candidates.length) return;
-
-  try {
-    if (await isReferenced()) return;
-  } catch (error) {
-    logger.error("import_candidate_ownership_unknown", {
-      image_id: imageId,
-      reason,
-      error: errorMessage(error),
-      candidates
-    });
-    return;
-  }
-
-  try {
-    await enqueueObjectsForCleanup(imageId, candidates, reason);
-  } catch (error) {
-    logger.error("import_candidate_cleanup_failed", {
-      image_id: imageId,
-      reason,
-      error: errorMessage(error),
-      candidates
-    });
-    throw error;
-  }
-}
-
-async function importCandidateIsPublishedOrRecoverable(
-  id: string,
-  backend: string,
-  finalKey: string,
-  executionToken: string,
-  signal: AbortSignal
-) {
-  const referenced = await pool.query(
-    `SELECT 1
-       FROM metadata
-      WHERE storage_slug=$1 AND object_key=$2
-      LIMIT 1`,
-    [backend, finalKey]
-  );
-  if (referenced.rowCount) return true;
-  const owner = (await pool.query(
-    "SELECT status, execution_token FROM import_session WHERE id=$1",
-    [id]
-  )).rows[0] as {
-    status: string;
-    execution_token: string | null;
-  } | undefined;
-  // An interrupted commit remains recoverable, and a lock-loss successor may
-  // already be adopting the same deterministic final keys.
-  return Boolean(owner && (
-    owner.status === "finalized"
-    || (
-      owner.status === "committing"
-      && (signal.aborted || owner.execution_token !== executionToken)
-    )
-  ));
-}
-
-function cleanupImportCandidate(
-  id: string,
-  backend: string,
-  finalKey: string,
-  executionToken: string,
-  signal: AbortSignal,
-  reason: string
-) {
-  return (object: ImportCandidateObject) =>
-    cleanupImportCandidatesIfUnreferenced(
-      id,
-      [object],
-      reason,
-      () => importCandidateIsPublishedOrRecoverable(
-        id,
-        backend,
-        finalKey,
-        executionToken,
-        signal
-      )
-    );
-}
-
 async function commitStoredImageSession(
   id: string,
   session: CommitImportSessionRecord,
   payload: PreparedPayload,
   executionToken: string,
+  resolvedTags: string[],
   signal: AbortSignal
 ) {
   const backend = session.storage_slug;
@@ -245,7 +79,6 @@ async function commitStoredImageSession(
 
   try {
     signal.throwIfAborted();
-    const resolvedTags = await resolveTagNames(payload.tags ?? []);
     const storage = await resolveStorageAccess(backend);
     const preparedImageKey = payload.prepared_image_key;
     signal.throwIfAborted();
@@ -314,66 +147,14 @@ async function commitStoredImageSession(
     })).created;
     signal.throwIfAborted();
 
-    const classification = resolveClassification(payload, {
-      device: payload.detected_device,
-      brightness: payload.detected_brightness
-    });
-    const result = await withTransaction(async (client) => {
-      signal.throwIfAborted();
-      const createdEntityKinds = new Set<EntityCacheKind>();
-      if (await ensureThemeWithMutationLockHeld(client, payload.theme)) {
-        createdEntityKinds.add("theme");
-      }
-      if (await ensureAuthorWithMutationLockHeld(client, payload.author)) {
-        createdEntityKinds.add("author");
-      }
-      signal.throwIfAborted();
-      const insertedRow = await client.query(
-        `INSERT INTO metadata(id, image_time, device, brightness, theme, width, height, image_size, ext,
-         object_key, storage_slug, title, description, source, original, md5, thumbnail_size, author)
-         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
-         ON CONFLICT (id) DO NOTHING RETURNING ${committedImageColumns}`,
-        [
-          id,
-          session.image_time,
-          classification.device,
-          classification.brightness,
-          payload.theme,
-          payload.width,
-          payload.height,
-          payload.size,
-          payload.ext,
-          finalKey,
-          backend,
-          payload.title,
-          payload.description,
-          payload.source,
-          payload.original,
-          payload.md5,
-          payload.thumbnail_size,
-          payload.author || null
-        ]
-      );
-      const image = (insertedRow.rowCount
-        ? insertedRow.rows[0]
-        : (await client.query(
-            `SELECT ${committedImageColumns} FROM metadata WHERE id=$1`,
-            [id]
-          )).rows[0]
-      ) as CommittedImageRecord;
-      if ((await replaceImageTags(client, image.id, resolvedTags)).createdTag) createdEntityKinds.add("tag");
-      signal.throwIfAborted();
-      const finalized = await client.query(
-        `UPDATE import_session
-            SET status='finalized', execution_token=NULL, updated_at=now()
-          WHERE id=$1 AND status='committing' AND execution_token=$2::uuid`,
-        [id, executionToken]
-      );
-      if (!finalized.rowCount) {
-        throw new ApiError(409, "invalid_import_state", "导入任务提交状态已变化");
-      }
-      return { image, createdEntityKinds };
-    });
+    const result = await persistCommittedImage(
+      id,
+      session,
+      payload,
+      executionToken,
+      resolvedTags,
+      signal
+    );
     databaseCommitted = true;
 
     const stagingCleanup = await Promise.allSettled([
@@ -399,7 +180,11 @@ async function commitStoredImageSession(
         error: errorMessage(cleanup.reason)
       });
     }
-    const image = await finishImport(id, payload, result.createdEntityKinds);
+    const image = await synchronizeCommittedImport(
+      id,
+      payload,
+      result.createdEntityKinds
+    );
     return { status: "imported" as const, item: await importCommitImage(image) };
   } catch (error) {
     if (!databaseCommitted) {
@@ -438,6 +223,7 @@ async function commitStoredImageSession(
 async function commitImportSessionWhileLocationStable(
   id: string,
   metadata: ImportMetadata,
+  resolvedTags: string[],
   signal: AbortSignal
 ) {
   signal.throwIfAborted();
@@ -450,12 +236,9 @@ async function commitImportSessionWhileLocationStable(
   )).rows[0] as CommitImportSessionRecord | undefined;
   if (!session) throw new ApiError(404, "not_found", "导入任务不存在");
   if (session.status === "finalized") {
-    const image = (await pool.query(
-      `SELECT ${committedImageColumns} FROM metadata WHERE id=$1`,
-      [id]
-    )).rows[0] as CommittedImageRecord | undefined;
+    const image = await readCommittedImage(id);
     if (!image) return { status: "duplicate" as const };
-    const current = await finishImport(
+    const current = await synchronizeCommittedImport(
       image.id,
       session.prepared_payload as PreparedPayload
     );
@@ -537,6 +320,7 @@ async function commitImportSessionWhileLocationStable(
       currentSession,
       payload,
       executionToken,
+      resolvedTags,
       signal
     );
     await notifyImportStatus(id).catch(() => undefined);
@@ -549,18 +333,30 @@ async function importCommitVocabularyLocks(
   metadata: ImportMetadata
 ) {
   const row = (await pool.query(
-    "SELECT prepared_payload FROM import_session WHERE id=$1",
+    "SELECT status, prepared_payload FROM import_session WHERE id=$1",
     [id]
-  )).rows[0] as Pick<ImportSessionRow, "prepared_payload"> | undefined;
+  )).rows[0] as Pick<
+    ImportSessionRow,
+    "status" | "prepared_payload"
+  > | undefined;
   const prepared = row?.prepared_payload as Partial<PreparedPayload> | undefined;
-  const themes = [metadata.theme, prepared?.theme]
-    .filter((slug): slug is string => Boolean(slug && slug !== "none"));
-  const authors = [metadata.author, prepared?.author]
-    .filter((slug): slug is string => Boolean(slug));
-  return vocabularyAssociationLockRequests([
-    ...themes.map((slug) => ({ entity: "theme" as const, slug })),
-    ...authors.map((slug) => ({ entity: "author" as const, slug }))
-  ]);
+  const finalPayload = row?.status === "ready"
+    ? { ...prepared, ...metadata }
+    : prepared ?? metadata;
+  const resolvedTags = await resolveTagNames(finalPayload.tags ?? []);
+  const entries = [
+    ...(finalPayload.theme && finalPayload.theme !== "none"
+      ? [{ entity: "theme" as const, slug: finalPayload.theme }]
+      : []),
+    ...(finalPayload.author
+      ? [{ entity: "author" as const, slug: finalPayload.author }]
+      : []),
+    ...resolvedTags.map((slug) => ({ entity: "tag" as const, slug }))
+  ];
+  return {
+    locks: vocabularyAssociationLockRequests(entries),
+    resolvedTags
+  };
 }
 
 async function commitImportSessionWithinLimit(
@@ -568,16 +364,17 @@ async function commitImportSessionWithinLimit(
   metadata: ImportMetadata,
   commitSignal: AbortSignal
 ) {
-  const vocabularyLocks = await importCommitVocabularyLocks(id, metadata);
+  const vocabulary = await importCommitVocabularyLocks(id, metadata);
   const attempt = await tryWithStorageLocationReadAndAdvisoryLocks(
     [
-      ...vocabularyLocks,
+      ...vocabulary.locks,
       { key: importSessionLockKey(id), acquisition: "try" },
       { key: imageStorageMutationLockKey(id) }
     ],
     (lockSignal) => commitImportSessionWhileLocationStable(
       id,
       metadata,
+      vocabulary.resolvedTags,
       AbortSignal.any([commitSignal, lockSignal])
     )
   );

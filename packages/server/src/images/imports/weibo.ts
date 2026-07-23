@@ -1,57 +1,20 @@
 import { appConfig } from "@imageshow/shared";
 import { mapWithWorkerPool } from "../../core/concurrency.ts";
 import { parseJsonlManifest } from "./jsonl.ts";
-import { runWeiboRequestWithinGlobalLimit } from "./weibo-request-limiter.ts";
-
-const weiboUserAgent = [
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-  "AppleWebKit/537.36 (KHTML, like Gecko)",
-  "Chrome/136.0.0.0 Safari/537.36"
-].join(" ");
-const weiboRequestTimeoutMs = 15_000;
-const weiboVisitorResponseMaxBytes = 64 * 1024;
-const weiboStatusResponseMaxBytes = 4 * 1024 * 1024;
-
-type UnknownRecord = Record<string, unknown>;
-
-export type WeiboImportErrorCode =
-  | "weibo_invalid_url"
-  | "weibo_visitor_failed"
-  | "weibo_request_failed"
-  | "weibo_response_too_large"
-  | "weibo_image_limit_exceeded"
-  | "weibo_post_unavailable"
-  | "weibo_post_incomplete"
-  | "weibo_no_images"
-  | "weibo_no_importable_images";
-
-export class WeiboImportError extends Error {
-  readonly code: WeiboImportErrorCode;
-
-  constructor(code: WeiboImportErrorCode, message: string) {
-    super(message);
-    this.name = "WeiboImportError";
-    this.code = code;
-  }
-}
-
-export type ExtractedWeiboPost = {
-  source_url: string;
-  weibo_id: string;
-  bid: string;
-  user_id: string;
-  published_at: string;
-  original_image_urls: string[];
-  image_count: number;
-  author?: string;
-};
-
-export type WeiboPostParseError = {
-  line: number;
-  url: string;
-  code: WeiboImportErrorCode;
-  error: string;
-};
+import {
+  createWeiboVisitorCookie,
+  fetchWeiboStatus
+} from "./weibo-client.ts";
+import {
+  extractWeiboPost,
+  parseWeiboPostUrl
+} from "./weibo-parser.ts";
+import {
+  WeiboImportError,
+  type ExtractedWeiboPost,
+  type ParsedWeiboPostUrl,
+  type WeiboPostParseError
+} from "./weibo-types.ts";
 
 type WeiboExtractionOptions = {
   authorSlugs: Readonly<Record<string, string>>;
@@ -66,470 +29,24 @@ type WeiboManifestOptions = WeiboExtractionOptions & {
 type IndexedWeiboUrl = {
   line: number;
   url: string;
-  parsedUrl: ReturnType<typeof parseWeiboPostUrl>;
+  parsedUrl: ParsedWeiboPostUrl;
 };
 
 type WeiboBatchExtraction =
   | { line: number; post: ExtractedWeiboPost; error?: never }
   | { line: number; post?: never; error: WeiboPostParseError };
 
-function asRecord(value: unknown): UnknownRecord | null {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-    ? value as UnknownRecord
-    : null;
-}
-
-function scalarString(value: unknown) {
-  if (typeof value === "string") return value.trim();
-  if (typeof value === "number" && Number.isFinite(value)) return String(value);
-  return "";
-}
-
-function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : String(error);
-}
-
-/** Parses one supported Weibo post URL into its canonical identifiers. */
-export function parseWeiboPostUrl(input: string) {
-  const value = input.trim();
-  let url: URL;
-  try {
-    url = new URL(value);
-  } catch {
-    throw new WeiboImportError(
-      "weibo_invalid_url",
-      "请输入完整的微博链接，例如 https://weibo.com/用户ID/微博短码"
-    );
-  }
-
-  const hostname = url.hostname.toLowerCase();
-  if (
-    url.protocol !== "https:" ||
-    url.username ||
-    url.password ||
-    url.port ||
-    !/(^|\.)weibo\.(com|cn)$/.test(hostname)
-  ) {
-    throw new WeiboImportError("weibo_invalid_url", "仅支持公开的 HTTPS 微博链接");
-  }
-
-  let segments: string[];
-  try {
-    segments = url.pathname.split("/").filter(Boolean).map((part) => decodeURIComponent(part));
-  } catch {
-    throw new WeiboImportError("weibo_invalid_url", "微博链接路径无法解析");
-  }
-
-  let identifier = url.searchParams.get("id") ?? "";
-  for (const marker of ["detail", "status"]) {
-    const markerIndex = segments.findIndex((part) => part.toLowerCase() === marker);
-    if (!identifier && markerIndex >= 0 && segments[markerIndex + 1]) {
-      identifier = segments[markerIndex + 1];
-    }
-  }
-
-  // 典型网页链接为 https://weibo.com/{uid}/{bid}。
-  if (!identifier && segments.length >= 2) identifier = segments.at(-1) ?? "";
-  identifier = identifier.replace(/\.html$/i, "");
-  if (!/^[A-Za-z0-9]{1,32}$/.test(identifier)) {
-    throw new WeiboImportError("weibo_invalid_url", "无法从链接中识别微博 ID 或短码");
-  }
-
-  return { identifier, sourceUrl: url.toString() };
-}
-
-function normalizeWeiboDate(value: unknown): string | null {
-  if (typeof value !== "string" || !value.trim()) return null;
-  const trimmed = value.trim();
-
-  // 微博公开接口通常返回：Thu Jul 02 21:19:54 +0800 2026。
-  const englishDate = trimmed.match(
-    /^\w{3}\s+(\w{3})\s+(\d{1,2})\s+(\d{2}:\d{2}:\d{2})\s+([+-]\d{4})\s+(\d{4})$/
-  );
-  if (englishDate) {
-    const months: Record<string, string> = {
-      Jan: "01", Feb: "02", Mar: "03", Apr: "04", May: "05", Jun: "06",
-      Jul: "07", Aug: "08", Sep: "09", Oct: "10", Nov: "11", Dec: "12"
-    };
-    const [, monthName, day, time, offset, year] = englishDate;
-    const month = months[monthName];
-    if (month) {
-      return `${year}-${month}-${day.padStart(2, "0")}T${time}${offset.slice(0, 3)}:${offset.slice(3)}`;
-    }
-  }
-
-  // 部分接口会返回没有时区的东八区本地时间。
-  const localDate = trimmed.match(
-    /^(\d{4})[/-](\d{1,2})[/-](\d{1,2})[ T](\d{1,2}):(\d{2}):(\d{2})$/
-  );
-  if (localDate) {
-    const [, year, month, day, hour, minute, second] = localDate;
-    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}T${hour.padStart(2, "0")}:${minute}:${second}+08:00`;
-  }
-
-  const parsed = new Date(trimmed);
-  return Number.isNaN(parsed.valueOf()) ? null : parsed.toISOString();
-}
-
-function toOriginalWeiboImageUrl(value: unknown): string | null {
-  if (typeof value !== "string" || !value) return null;
-  return value.replace(
-    /\/(?:wap\d+|thumb\d+|thumbnail|bmiddle|mw\d+|orj\d+|woriginal|large)\//i,
-    "/large/"
-  );
-}
-
-function imageVariantUrl(info: UnknownRecord, name: string) {
-  return scalarString(asRecord(info[name])?.url);
-}
-
-function bestImageUrl(value: unknown): string | null {
-  const info = asRecord(value);
-  if (!info || info.type === "video") return null;
-  return toOriginalWeiboImageUrl(
-    imageVariantUrl(info, "largest") ||
-    imageVariantUrl(info, "original") ||
-    imageVariantUrl(info, "large") ||
-    scalarString(info.url)
-  );
-}
-
-function extractOriginalWeiboImageUrls(value: unknown) {
-  const result: string[] = [];
-  const seen = new Set<string>();
-
-  const add = (candidate: unknown) => {
-    const originalUrl = toOriginalWeiboImageUrl(candidate);
-    if (!originalUrl || seen.has(originalUrl)) return;
-    seen.add(originalUrl);
-    result.push(originalUrl);
-  };
-
-  const visit = (candidate: unknown) => {
-    const post = asRecord(candidate);
-    if (!post) return;
-
-    const picInfos = asRecord(post.pic_infos) ?? {};
-    const orderedIds = Array.isArray(post.pic_ids) ? post.pic_ids : [];
-    for (const id of orderedIds) add(bestImageUrl(picInfos[scalarString(id)]));
-    for (const info of Object.values(picInfos)) add(bestImageUrl(info));
-
-    if (Array.isArray(post.pics)) {
-      for (const pic of post.pics) add(bestImageUrl(pic));
-    }
-
-    const mixedItems = asRecord(post.mix_media_info)?.items;
-    if (Array.isArray(mixedItems)) {
-      for (const itemValue of mixedItems) {
-        const item = asRecord(itemValue);
-        const data = asRecord(item?.data);
-        if (item?.type === "pic" || data?.type !== "video") add(bestImageUrl(data));
-      }
-    }
-
-    // 转发微博的配图位于 retweeted_status，沿用原脚本的顺序继续追加。
-    visit(post.retweeted_status);
-  };
-
-  visit(value);
-  return result;
-}
-
-function parseCallbackJson(text: string) {
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start < 0 || end <= start) {
-    throw new WeiboImportError("weibo_visitor_failed", "微博访客接口返回了无法识别的数据");
-  }
-  try {
-    return JSON.parse(text.slice(start, end + 1)) as unknown;
-  } catch {
-    throw new WeiboImportError("weibo_visitor_failed", "微博访客接口返回了无效数据");
-  }
-}
-
-async function readResponseChunk(
-  reader: ReadableStreamDefaultReader<Uint8Array>,
-  signal: AbortSignal
-) {
-  signal.throwIfAborted();
-
-  let rejectForAbort: (() => void) | undefined;
-  const aborted = new Promise<never>((_resolve, reject) => {
-    rejectForAbort = () => reject(signal.reason);
-    signal.addEventListener("abort", rejectForAbort, { once: true });
-    if (signal.aborted) rejectForAbort();
-  });
-  try {
-    return await Promise.race([reader.read(), aborted]);
-  } finally {
-    if (rejectForAbort) signal.removeEventListener("abort", rejectForAbort);
-  }
-}
-
-function responseLimitLabel(maxBytes: number) {
-  return maxBytes % (1024 * 1024) === 0
-    ? `${maxBytes / (1024 * 1024)} MiB`
-    : `${maxBytes / 1024} KiB`;
-}
-
-async function readWeiboResponseText(
-  response: Response,
-  maxBytes: number,
-  signal: AbortSignal,
-  context: string
-) {
-  signal.throwIfAborted();
-  const tooLarge = () => new WeiboImportError(
-    "weibo_response_too_large",
-    `${context}：响应正文超过 ${responseLimitLabel(maxBytes)} 安全上限`
-  );
-  const declaredLength = Number(response.headers.get("content-length"));
-  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
-    await response.body?.cancel().catch(() => undefined);
-    throw tooLarge();
-  }
-  if (!response.body) return "";
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let size = 0;
-  let text = "";
-  try {
-    for (;;) {
-      const { done, value } = await readResponseChunk(reader, signal);
-      if (done) break;
-      size += value.byteLength;
-      if (size > maxBytes) throw tooLarge();
-      text += decoder.decode(value, { stream: true });
-    }
-    return text + decoder.decode();
-  } catch (error) {
-    await reader.cancel(error).catch(() => undefined);
-    throw error;
-  } finally {
-    reader.releaseLock();
-  }
-}
-
-async function requestAndParseWeiboResponse<Result>(
-  input: string | URL,
-  init: RequestInit,
-  code: Extract<WeiboImportErrorCode, "weibo_visitor_failed" | "weibo_request_failed">,
-  context: string,
-  maxResponseBytes: number,
-  parseResponse: (response: Response, text: string) => Result
-) {
-  const callerSignal = init.signal ?? undefined;
-
-  try {
-    return await runWeiboRequestWithinGlobalLimit(callerSignal, async () => {
-      const timeoutSignal = AbortSignal.timeout(weiboRequestTimeoutMs);
-      const requestSignal = callerSignal
-        ? AbortSignal.any([callerSignal, timeoutSignal])
-        : timeoutSignal;
-      const response = await fetch(input, {
-        ...init,
-        signal: requestSignal
-      });
-      const text = await readWeiboResponseText(
-        response,
-        maxResponseBytes,
-        requestSignal,
-        context
-      );
-      return parseResponse(response, text);
-    });
-  } catch (error) {
-    // A client cancellation must stop the whole batch instead of being
-    // downgraded to one failed post. Timeout, connection and body read errors
-    // remain typed Weibo errors and can be isolated to the affected post.
-    if (callerSignal?.aborted) throw callerSignal.reason ?? error;
-    if (error instanceof WeiboImportError) throw error;
-    throw new WeiboImportError(code, `${context}：${errorMessage(error)}`);
-  }
-}
-
-async function createWeiboVisitorCookie(
-  signal?: AbortSignal
-) {
-  const fingerprint = JSON.stringify({
-    os: "1",
-    browser: "Chrome136,0,0,0",
-    fonts: "undefined",
-    screenInfo: "1920*1080*24",
-    plugins: ""
-  });
-  const commonHeaders = {
-    "user-agent": weiboUserAgent,
-    referer: "https://passport.weibo.com/"
-  };
-  const generated = await requestAndParseWeiboResponse(
-    "https://passport.weibo.com/visitor/genvisitor",
-    {
-      method: "POST",
-      headers: {
-        ...commonHeaders,
-        "content-type": "application/x-www-form-urlencoded"
-      },
-      body: new URLSearchParams({ cb: "gen_callback", fp: fingerprint }),
-      signal
-    },
-    "weibo_visitor_failed",
-    "初始化微博访客身份失败",
-    weiboVisitorResponseMaxBytes,
-    (response, text) => ({
-      response,
-      data: asRecord(parseCallbackJson(text))
-    })
-  );
-  const generatedData = generated.data;
-  const generatedPayload = asRecord(generatedData?.data);
-  const tid = scalarString(generatedPayload?.tid);
-  if (!generated.response.ok || Number(generatedData?.retcode) !== 20_000_000 || !tid) {
-    throw new WeiboImportError(
-      "weibo_visitor_failed",
-      `初始化微博访客身份失败：${scalarString(generatedData?.msg) || generated.response.status}`
-    );
-  }
-
-  const incarnateUrl = new URL("https://passport.weibo.com/visitor/visitor");
-  const incarnateParameters = {
-    a: "incarnate",
-    t: tid,
-    w: "2",
-    c: "095",
-    gc: "",
-    cb: "cross_domain",
-    from: "weibo",
-    _rand: String(Math.random())
-  };
-  for (const [name, parameter] of Object.entries(incarnateParameters)) {
-    incarnateUrl.searchParams.set(name, parameter);
-  }
-
-  const incarnated = await requestAndParseWeiboResponse(
-    incarnateUrl,
-    { headers: commonHeaders, redirect: "manual", signal },
-    "weibo_visitor_failed",
-    "获取微博访客身份失败",
-    weiboVisitorResponseMaxBytes,
-    (response, text) => ({
-      response,
-      data: asRecord(parseCallbackJson(text))
-    })
-  );
-  const identity = incarnated.data;
-  const identityPayload = asRecord(identity?.data);
-  const sub = scalarString(identityPayload?.sub);
-  const subp = scalarString(identityPayload?.subp);
-  if (!incarnated.response.ok || Number(identity?.retcode) !== 20_000_000 || !sub || !subp) {
-    throw new WeiboImportError(
-      "weibo_visitor_failed",
-      `获取微博访客身份失败：${scalarString(identity?.msg) || incarnated.response.status}`
-    );
-  }
-
-  // 访客身份只存在当前请求内，不写入配置、日志或磁盘。
-  return `SUB=${sub}; SUBP=${subp}`;
-}
-
-async function fetchWeiboStatus(
-  identifier: string,
-  cookie: string,
-  signal?: AbortSignal
-) {
-  const endpoint = `https://weibo.com/ajax/statuses/show?id=${encodeURIComponent(identifier)}`;
-  return requestAndParseWeiboResponse(
-    endpoint,
-    {
-      headers: {
-        accept: "application/json, text/plain, */*",
-        referer: "https://weibo.com/",
-        "user-agent": weiboUserAgent,
-        "x-requested-with": "XMLHttpRequest",
-        cookie
-      },
-      redirect: "manual",
-      signal
-    },
-    "weibo_request_failed",
-    "请求微博失败",
-    weiboStatusResponseMaxBytes,
-    (response, text) => {
-      const location = response.headers.get("location") ?? "";
-      if (response.status >= 300 && response.status < 400) {
-        const message = /passport\.weibo\.(com|cn)/.test(location)
-          ? "微博要求登录验证，当前仅支持无需登录即可访问的公开微博"
-          : `微博接口返回重定向：${location || response.status}`;
-        throw new WeiboImportError("weibo_post_unavailable", message);
-      }
-      if (!response.ok) {
-        throw new WeiboImportError("weibo_request_failed", `微博接口返回 HTTP ${response.status}`);
-      }
-      try {
-        return JSON.parse(text) as unknown;
-      } catch {
-        throw new WeiboImportError(
-          "weibo_request_failed",
-          "微博没有返回 JSON，可能触发了登录验证或访问限制"
-        );
-      }
-    }
-  );
-}
-
 async function extractWeiboPostWithVisitor(
-  parsedUrl: ReturnType<typeof parseWeiboPostUrl>,
+  parsedUrl: ParsedWeiboPostUrl,
   visitorCookie: string,
   options: WeiboExtractionOptions
-): Promise<ExtractedWeiboPost> {
+) {
   const rawStatus = await fetchWeiboStatus(
     parsedUrl.identifier,
     visitorCookie,
     options.signal
   );
-  const status = asRecord(rawStatus);
-  const returnedWeiboId = scalarString(status?.idstr) || scalarString(status?.id);
-  const createdAt = scalarString(status?.created_at);
-  if (!status || !createdAt) {
-    throw new WeiboImportError(
-      "weibo_post_unavailable",
-      "没有获得微博详情，微博可能不存在、不可见或要求登录"
-    );
-  }
-
-  const publishedAt = normalizeWeiboDate(createdAt);
-  const user = asRecord(status.user);
-  const userId = scalarString(user?.idstr) || scalarString(user?.id);
-  if (!publishedAt || !userId) {
-    throw new WeiboImportError("weibo_post_incomplete", "微博缺少可识别的发布时间或用户 ID");
-  }
-
-  const originalImageUrls = extractOriginalWeiboImageUrls(status);
-  if (!originalImageUrls.length) {
-    throw new WeiboImportError("weibo_no_images", "这条微博没有可导入的公开图片");
-  }
-
-  const mappedAuthor = Object.hasOwn(options.authorSlugs, userId)
-    ? options.authorSlugs[userId]
-    : undefined;
-  const mblogId = scalarString(status.mblogid);
-  const weiboId = returnedWeiboId || parsedUrl.identifier;
-  return {
-    source_url: mblogId
-      ? `https://weibo.com/${encodeURIComponent(userId)}/${encodeURIComponent(mblogId)}`
-      : returnedWeiboId
-        ? `https://weibo.com/${encodeURIComponent(userId)}/${encodeURIComponent(returnedWeiboId)}`
-        : parsedUrl.sourceUrl,
-    weibo_id: weiboId,
-    bid: mblogId || parsedUrl.identifier,
-    user_id: userId,
-    published_at: publishedAt,
-    original_image_urls: originalImageUrls,
-    image_count: originalImageUrls.length,
-    ...(mappedAuthor ? { author: mappedAuthor } : {})
-  };
+  return extractWeiboPost(rawStatus, parsedUrl, options.authorSlugs);
 }
 
 function weiboPostToJsonl(post: ExtractedWeiboPost) {
@@ -605,13 +122,14 @@ export async function createWeiboImportBatchManifest(
       options.concurrency ?? appConfig.runtimeDefaults.weibo.concurrency,
       async ({ line, url, parsedUrl }): Promise<WeiboBatchExtraction> => {
         try {
-          const post = await extractWeiboPostWithVisitor(parsedUrl, visitorCookie, options);
+          const post = await extractWeiboPostWithVisitor(
+            parsedUrl,
+            visitorCookie,
+            options
+          );
           fetchedImageCount += post.image_count;
           assertWeiboImageCountWithinHardLimit(fetchedImageCount);
-          return {
-            line,
-            post
-          };
+          return { line, post };
         } catch (error) {
           if (
             error instanceof WeiboImportError
@@ -627,7 +145,9 @@ export async function createWeiboImportBatchManifest(
       },
       { signal: options.signal }
     );
-    for (const extraction of fetched) extractionByLine.set(extraction.line, extraction);
+    for (const extraction of fetched) {
+      extractionByLine.set(extraction.line, extraction);
+    }
   }
 
   const posts: ExtractedWeiboPost[] = [];
@@ -645,14 +165,13 @@ export async function createWeiboImportBatchManifest(
   assertWeiboImageCountWithinHardLimit(
     posts.reduce((total, post) => total + post.image_count, 0)
   );
-
-  // 每条微博内部按接口返回的图片顺序展开；全局 JSONL 行号继续递增。
-  // 相同发布时间下，靠后的图片会获得更大的 manifest_position，并在
-  // image_time DESC, id DESC 的图库排序中显示为更新。
-  const manifest = parseJsonlManifest(posts.map(weiboPostToJsonl).join("\n"), {
-    maxItems: appConfig.imports.weiboImageHardLimit,
-    timeZone: options.timeZone
-  });
+  const manifest = parseJsonlManifest(
+    posts.map(weiboPostToJsonl).join("\n"),
+    {
+      maxItems: appConfig.imports.weiboImageHardLimit,
+      timeZone: options.timeZone
+    }
+  );
 
   return {
     posts: posts.map(presentWeiboPost),

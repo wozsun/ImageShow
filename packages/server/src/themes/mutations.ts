@@ -2,7 +2,7 @@ import type { PoolClient } from "pg";
 import { pool, withTransaction } from "../core/db.ts";
 import { ApiError } from "../core/api-error.ts";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
-import { mapWithConcurrency } from "../core/concurrency.ts";
+import { mapWithWorkerPool } from "../core/concurrency.ts";
 import {
   assertVocabularyCreated,
   assertVocabularyFound,
@@ -100,7 +100,7 @@ async function reassignThemeImagesToNone(theme: string): Promise<ThemeLookupInva
   if (!images.length) return [];
   const concurrency = getRuntimeConfig().background_job.theme_reassign_concurrency;
 
-  const results = await mapWithConcurrency(images, concurrency, (candidate) =>
+  const results = await mapWithWorkerPool(images, concurrency, (candidate) =>
     withStorageLocationReadAndAdvisoryLocks([
       {
         key: vocabularyMutationLockKey("theme", theme),

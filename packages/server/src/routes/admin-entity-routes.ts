@@ -3,7 +3,6 @@ import type { Hono } from "hono";
 import type { z } from "zod";
 import { apiSuccess } from "../core/http/responses.ts";
 import { parse, slugListInput } from "../core/validation.ts";
-import { getImportVocabulary } from "../vocab/vocab-cache.ts";
 
 type EntityRouteOptions<CreateSchema extends z.ZodType, UpdateSchema extends z.ZodType> = {
   path: string;
@@ -54,11 +53,5 @@ export function registerAdminEntityRoutes<
     const slug = parse(options.slugInput, c.req.param("slug"));
     await options.remove(slug);
     return c.json(apiSuccess());
-  });
-}
-
-export function registerAdminImportVocabularyRoute(app: Hono) {
-  app.get(`${adminApiBasePath}/import-vocabulary`, async (c) => {
-    return c.json(apiSuccess(await getImportVocabulary()));
   });
 }

@@ -3,7 +3,6 @@ import { adminApiBasePath, appConfig } from "@imageshow/shared";
 import { ApiError } from "../core/api-error.ts";
 import { apiSuccess } from "../core/http/responses.ts";
 import {
-  importBatchCreateInput,
   importCommitInput,
   importCreateInput,
   jsonlManifestInput,
@@ -17,61 +16,31 @@ import {
   materializeDownloadSession,
   receiveImportFile
 } from "../images/imports/materialize.ts";
-import { listImportStatuses, streamImportEvents } from "../images/imports/progress.ts";
+import { listImportStatuses, streamImportEvents } from "../images/imports/status.ts";
 import {
   cancelImportSession,
-  createImportSessions,
   createImportSession,
   previewImportSession
 } from "../images/imports/session.ts";
 import { isReservedSubdomain } from "../themes/host.ts";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { JsonlManifestError, parseJsonlManifest } from "../images/imports/jsonl.ts";
-import { createWeiboImportBatchManifest, WeiboImportError } from "../images/imports/weibo.ts";
+import { createWeiboImportBatchManifest } from "../images/imports/weibo.ts";
+import { WeiboImportError } from "../images/imports/weibo-types.ts";
+import { getImportVocabulary } from "../vocab/vocab-cache.ts";
 import {
-  getRequestBodyBytes,
-  limitImportBatchCreateBody,
   limitJsonlManifestBody,
   limitWeiboImportBody,
 } from "../core/http/request-body-limit.ts";
-import { logger } from "../core/logger.ts";
 
 export function registerImportRoutes(app: Hono) {
+  app.get(`${adminApiBasePath}/import-vocabulary`, async (c) => {
+    return c.json(apiSuccess(await getImportVocabulary()));
+  });
+
   app.post(`${adminApiBasePath}/imports/create`, async (c) => {
     const input = parse(importCreateInput, await c.req.json().catch(() => ({})));
     return c.json(apiSuccess(await createImportSession(input)));
-  });
-
-  app.post(`${adminApiBasePath}/imports/batch-create`, limitImportBatchCreateBody, async (c) => {
-    const startedAt = performance.now();
-    const input = parse(importBatchCreateInput, await c.req.json().catch(() => ({})));
-    const linkConfig = getRuntimeConfig().link_image;
-    const configuredLimit = importBatchConfiguredLimit(input.source, linkConfig.max_items);
-    if (input.items.length > configuredLimit) {
-      throw new ApiError(
-        400,
-        "import_batch_limit_exceeded",
-        `单批最多允许 ${configuredLimit} 项`
-      );
-    }
-    let maxItemDurationMs = 0;
-    const items = await createImportSessions(input.items, {
-      onItemComplete(durationMs) {
-        maxItemDurationMs = Math.max(maxItemDurationMs, durationMs);
-      },
-    });
-    const failed = items.filter((item) => "error" in item).length;
-    logger.info("import_batch_create_summary", {
-      requested: input.items.length,
-      succeeded: input.items.length - failed,
-      failed,
-      total_duration_ms: Math.round((performance.now() - startedAt) * 100) / 100,
-      max_item_duration_ms: Math.round(maxItemDurationMs * 100) / 100,
-      request_body_bytes: getRequestBodyBytes(c),
-      entity_count_invalidation_triggered: false,
-      random_pool_full_rebuild_triggered: false,
-    });
-    return c.json(apiSuccess({ items }));
   });
 
   app.post(`${adminApiBasePath}/imports/jsonl/parse`, limitJsonlManifestBody, async (c) => {
@@ -192,16 +161,4 @@ function parseImportIds(url: string) {
     .map((id) => id.trim())
     .filter(Boolean)
     .map((id) => parse(uuidInput, id));
-}
-
-function importBatchConfiguredLimit(
-  source: "urls" | "jsonl" | "weibo",
-  linkImageMaxItems: number
-) {
-  return Math.min(
-    appConfig.imports.batchHardLimit,
-    source === "weibo"
-      ? appConfig.imports.weiboImageHardLimit
-      : linkImageMaxItems
-  );
 }

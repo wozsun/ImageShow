@@ -1,6 +1,8 @@
 import { appConfig } from "@imageshow/shared";
 import { errorMessage } from "../../core/api-error.ts";
+import { mapWithWorkerPool } from "../../core/concurrency.ts";
 import { pool } from "../../core/db.ts";
+import { getRuntimeConfig } from "../../config/runtime-config-store.ts";
 import { randomUuidV7 } from "../../core/uuid.ts";
 import {
   jobSucceeded,
@@ -16,12 +18,28 @@ import {
 } from "./session-lock.ts";
 import {
   cleanupFinalImportObjects,
-  cleanupStagedObjects
+  cleanupStagedObjectsBatch
 } from "./staging.ts";
 import {
   cleanupOrphanRawImports,
-  removeRawImport
+  removeRawImports
 } from "./temp-files.ts";
+
+type ExpiredImportCleanup = {
+  id: string;
+  storageSlug: string;
+  finalObjectKey: string;
+};
+
+function appendFailure(
+  failures: Map<string, unknown[]>,
+  id: string,
+  error: unknown
+) {
+  const current = failures.get(id);
+  if (current) current.push(error);
+  else failures.set(id, [error]);
+}
 
 async function cancelExpiredCommittingImports() {
   const candidates = (await pool.query(
@@ -90,8 +108,8 @@ export async function handleImportCleanupJob(): Promise<BackgroundJobOutcome> {
     [appConfig.trashBatchSize]
   )).rows as Array<{ id: string }>;
 
-  const cleanedIds: string[] = [];
-  const failures: string[] = [];
+  const cleanups: ExpiredImportCleanup[] = [];
+  const failures = new Map<string, unknown[]>();
   for (const row of rows) {
     try {
       await abortActiveImport(row.id);
@@ -114,34 +132,53 @@ export async function handleImportCleanupJob(): Promise<BackgroundJobOutcome> {
           return;
         }
         signal.throwIfAborted();
-        const cleanups = await Promise.allSettled([
-          cleanupStagedObjects(row.id, session.storage_slug),
-          cleanupFinalImportObjects(
-            row.id,
-            session.final_object_key,
-            session.storage_slug
-          ),
-          removeRawImport(row.id)
-        ]);
-        const cleanupFailures = cleanups
-          .filter(
-            (result): result is PromiseRejectedResult =>
-              result.status === "rejected"
-          )
-          .map((result) => result.reason);
-        if (cleanupFailures.length) {
-          throw new AggregateError(
-            cleanupFailures,
-            "Expired import cleanup failed"
-          );
-        }
-        signal.throwIfAborted();
-        cleanedIds.push(row.id);
+        cleanups.push({
+          id: row.id,
+          storageSlug: session.storage_slug,
+          finalObjectKey: session.final_object_key
+        });
       });
     } catch (error) {
-      failures.push(`${row.id}: ${errorMessage(error)}`);
+      appendFailure(failures, row.id, error);
     }
   }
+
+  const cleanupIds = cleanups.map(({ id }) => id);
+  const byStorage = new Map<string, string[]>();
+  for (const cleanup of cleanups) {
+    const ids = byStorage.get(cleanup.storageSlug);
+    if (ids) ids.push(cleanup.id);
+    else byStorage.set(cleanup.storageSlug, [cleanup.id]);
+  }
+  for (const [storageSlug, ids] of byStorage) {
+    const stagingFailures = await cleanupStagedObjectsBatch(ids, storageSlug);
+    for (const [id, errors] of stagingFailures) {
+      for (const error of errors) appendFailure(failures, id, error);
+    }
+  }
+
+  try {
+    const rawFailures = await removeRawImports(cleanupIds);
+    for (const [id, errors] of rawFailures) {
+      for (const error of errors) appendFailure(failures, id, error);
+    }
+  } catch (error) {
+    for (const id of cleanupIds) appendFailure(failures, id, error);
+  }
+
+  await mapWithWorkerPool(
+    cleanups,
+    getRuntimeConfig().background_job.move_cleanup_concurrency,
+    async ({ id, finalObjectKey, storageSlug }) => {
+      try {
+        await cleanupFinalImportObjects(id, finalObjectKey, storageSlug);
+      } catch (error) {
+        appendFailure(failures, id, error);
+      }
+    }
+  );
+
+  const cleanedIds = cleanupIds.filter((id) => !failures.has(id));
 
   const deletedExpired = await pool.query(
     `DELETE FROM import_session
@@ -151,10 +188,11 @@ export async function handleImportCleanupJob(): Promise<BackgroundJobOutcome> {
   );
   await cleanupOrphanRawImports(appConfig.uploadTtlSeconds * 1000);
 
-  if (failures.length) {
-    throw new Error(
-      `import staging cleanup failed: ${failures.join("; ")}`
-    );
+  if (failures.size) {
+    const messages = [...failures].map(([id, errors]) => (
+      `${id}: ${errors.map(errorMessage).join(", ")}`
+    ));
+    throw new Error(`import cleanup failed: ${messages.join("; ")}`);
   }
   return jobSucceeded({
     cleaned: deletedExpired.rowCount ?? 0,

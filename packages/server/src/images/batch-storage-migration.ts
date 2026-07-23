@@ -1,5 +1,5 @@
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
-import { mapWithConcurrency } from "../core/concurrency.ts";
+import { mapWithWorkerPool } from "../core/concurrency.ts";
 import { pool } from "../core/db.ts";
 import { syncRandomImages } from "../random/cache-sync.ts";
 import {
@@ -37,7 +37,7 @@ export async function migrateImageBatchStorage(
   let randomPoolFullRebuildTriggered = false;
 
   const concurrency = getRuntimeConfig().background_job.migrate_concurrency;
-  await mapWithConcurrency(rows, concurrency, async (row) => {
+  await mapWithWorkerPool(rows, concurrency, async (row) => {
     const imageStartedAt = performance.now();
     try {
       const result = await migrateImageStorage(row as MigrateRecord, target);

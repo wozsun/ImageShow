@@ -1,16 +1,3 @@
-export async function mapWithConcurrency<T, Result>(
-  items: T[],
-  limit: number,
-  task: (item: T) => Promise<Result>
-): Promise<Result[]> {
-  const size = Math.max(1, limit);
-  const results: Result[] = [];
-  for (let offset = 0; offset < items.length; offset += size) {
-    results.push(...await Promise.all(items.slice(offset, offset + size).map(task)));
-  }
-  return results;
-}
-
 export async function mapWithWorkerPool<T, Result>(
   items: readonly T[],
   limit: number,
@@ -214,8 +201,8 @@ export class DynamicWeightedLimiter {
     onQueued?: () => void
   ): Promise<number> {
     if (signal.aborted) throw this.cancellationError(signal);
-    const weight = this.currentWeight(requestedWeight);
-    if (!this.queue.length && this.activeWeight + weight <= this.currentLimit()) {
+    const weight = this.normalizedWeight(requestedWeight);
+    if (!this.queue.length && this.canStart(weight)) {
       this.activeWeight += weight;
       return Promise.resolve(weight);
     }
@@ -255,11 +242,16 @@ export class DynamicWeightedLimiter {
       : 1;
   }
 
-  private currentWeight(requestedWeight: number) {
-    const normalized = Number.isFinite(requestedWeight)
+  private normalizedWeight(requestedWeight: number) {
+    return Number.isFinite(requestedWeight)
       ? Math.max(1, Math.floor(requestedWeight))
       : 1;
-    return Math.min(normalized, this.currentLimit());
+  }
+
+  private canStart(weight: number) {
+    const limit = this.currentLimit();
+    return this.activeWeight + weight <= limit
+      || (this.activeWeight === 0 && weight > limit);
   }
 
   private drain() {
@@ -271,8 +263,8 @@ export class DynamicWeightedLimiter {
         next.abort();
         continue;
       }
-      const weight = this.currentWeight(next.requestedWeight);
-      if (this.activeWeight + weight > this.currentLimit()) return;
+      const weight = this.normalizedWeight(next.requestedWeight);
+      if (!this.canStart(weight)) return;
       this.queue.shift();
       next.run(weight);
     }

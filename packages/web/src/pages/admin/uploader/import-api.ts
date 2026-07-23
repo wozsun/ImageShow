@@ -40,10 +40,6 @@ export type ImportSessionCreateInput = ImageDraft & {
   storage_slug: string;
 };
 
-export type BatchImportSessionResult =
-  | { idempotency_key: string; session: ImportSessionHandle }
-  | { idempotency_key: string; error: string };
-
 export type JsonlManifestItem = {
   line: number;
   manifest_position: number;
@@ -132,31 +128,6 @@ export async function getStoredImportStatus(id: string, signal?: AbortSignal) {
 
 export function createImportSession(input: ImportSessionCreateInput, signal?: AbortSignal) {
   return api<ImportSessionHandle>(`${adminApiBasePath}/imports/create`, { method: "POST", body: JSON.stringify(input), signal });
-}
-
-export function createImportSessionsBatch(
-  source: "urls" | "jsonl" | "weibo",
-  items: ImportSessionCreateInput[],
-  signal?: AbortSignal
-) {
-  type RawResult =
-    | { idempotency_key: string; id: string }
-    | { idempotency_key: string; error: string };
-  return api<{ items: RawResult[] }>(`${adminApiBasePath}/imports/batch-create`, {
-    method: "POST",
-    body: JSON.stringify({ source, items }),
-    signal
-  }).then(({ items: results }): BatchImportSessionResult[] => results.map((result) => {
-    if ("error" in result) return result;
-    return {
-      idempotency_key: result.idempotency_key,
-      session: {
-        id: result.id,
-        materialize_url: `${adminApiBasePath}/imports/${result.id}/materialize`,
-        prepare_url: `${adminApiBasePath}/imports/${result.id}/prepare`
-      }
-    };
-  }));
 }
 
 export function parseImportJsonl(content: string, signal?: AbortSignal) {

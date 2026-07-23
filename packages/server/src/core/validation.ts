@@ -188,31 +188,6 @@ export const importCreateInput = metadataInput.extend({
   }
 });
 
-export const importBatchCreateInput = z.object({
-  source: z.enum(["urls", "jsonl", "weibo"]),
-  items: z.array(importCreateInput).min(1).max(importBatchHardLimit)
-}).superRefine((value, ctx) => {
-  const idempotencyKeys = new Set<string>();
-  for (let index = 0; index < value.items.length; index += 1) {
-    const item = value.items[index];
-    if (item.mode === "upload") {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["items", index, "mode"],
-        message: "批量入口仅支持链接导入"
-      });
-    }
-    if (idempotencyKeys.has(item.idempotency_key)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["items", index, "idempotency_key"],
-        message: "批量导入幂等键不能重复"
-      });
-    }
-    idempotencyKeys.add(item.idempotency_key);
-  }
-});
-
 export const importCommitInput = metadataInput.extend({
   brightness: z.enum(["dark", "light", "auto"]).default("auto"),
   tags: z.array(tagSlugInput).max(50).optional().transform((tags) => [...new Set(tags ?? [])])

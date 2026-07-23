@@ -1,11 +1,8 @@
 # 数据库结构
 
 PostgreSQL 共 9 张业务表，另有迁移记录表 `schema_migrations`。全新数据库从
-`packages/server/migrations/0001_initial.sql` 初始化；这份文件是 v3.11.6 的已确认
-基线。当前迁移集还包含 `0002_move_cleanup_retention.sql`，用于给既有
-`move.cleanup` 任务补上耗尽后继续保留的标记，因此迁移记录应依次包含
-`0001_initial` 与 `0002_move_cleanup_retention`。后续 schema 变化从 `0003` 开始，
-通过按文件名顺序执行的新前向迁移应用，已发布的迁移不再改写。
+`packages/server/migrations/0001_initial.sql` 初始化；当前迁移集只有这一份完整基线。
+后续 schema 变化从 `0002` 开始，通过按文件名顺序执行的新前向迁移应用。
 PostgreSQL 是唯一真相源，Redis 随机池、列表缓存和判重缓存均可重建。
 
 ## metadata —— 图片主表
@@ -141,9 +138,12 @@ bucket / root_path 与 WebDAV 的 base_url / root_path 是物理布局；仍有
 
 `tag` 与 `theme` 都使用小写 slug、显示名、排序和时间戳。主题是一图一值，直接存在 `metadata.theme`；标签是一图多值，通过 `image_tag(image_id, tag_slug)` 关联。
 
-标签写操作按实体 slug advisory lock 串行化。删除标签会级联删除 `image_tag`，并按
-“随机池 → 词表 / 计数 → 图片缓存代际”顺序修复派生状态，保证 `tag=` 随机过滤和
-gallery facets 不会重新物化旧值。
+图片标签关联与 import commit 对最终解析、去重后的 tag slug 按排序顺序组合取得
+共享 advisory lock，并在锁内使用同一列表幂等确保缺失标签存在、替换
+`image_tag`。单标签删除取得对应独占锁，批量删除对排序、去重后的 slug 组合取得
+独占锁，因此删除不能穿过并发关联或在外键写入中途执行。删除标签会级联删除
+`image_tag`，并按“随机池 → 词表 / 计数 → 图片缓存代际”顺序修复派生状态，保证
+`tag=` 随机过滤和 gallery facets 不会重新物化旧值。
 
 ## author —— 作者
 

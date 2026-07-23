@@ -1,27 +1,17 @@
-import type { Device } from "@imageshow/shared";
-import { getInputImageMaxLongEdge } from "../../config/app-settings.ts";
-import { getRuntimeConfig } from "../../config/runtime-config-store.ts";
 import { pool } from "../../core/db.ts";
 import { ApiError } from "../../core/api-error.ts";
 import { randomUuidV7 } from "../../core/uuid.ts";
-import { writeStorageBuffer } from "../../storage/object-access.ts";
-import { contentType } from "../../storage/object-keys.ts";
-import { detectBrightness } from "../brightness.ts";
-import { deviceFromDimensions } from "../classification.ts";
-import {
-  sha256Buffer,
-  transcodeStoredImage
-} from "../processing.ts";
-import { getDuplicateImagesByMd5 } from "../read-models/duplicates.ts";
 import { runImportPreparation } from "./execution.ts";
 import { recoverCompletedMaterialization } from "./materialize.ts";
 import {
-  assertImportStillPreparing,
   importWasCancelled,
-  markImportFailed,
-  notifyImportStatus,
-  setImportPhase
-} from "./progress.ts";
+  markImportFailed
+} from "./lifecycle.ts";
+import { notifyImportStatus } from "./status.ts";
+import {
+  preparedImportResult,
+  prepareImportArtifacts
+} from "./prepare-artifacts.ts";
 import {
   cleanupStagedAttempt,
   cleanupStagedObjects
@@ -52,36 +42,6 @@ type StoredPreparationSession = Pick<
   | "execution_token"
   | "raw_token"
 >;
-
-function requiredDeviceFromDimensions(width: number, height: number): Device {
-  return deviceFromDimensions(width, height) ?? "pc";
-}
-
-async function preparedResult(
-  id: string,
-  storageSlug: string,
-  payload: PreparedPayload
-): Promise<PreparedImportResult> {
-  const duplicates = await getDuplicateImagesByMd5(payload.md5);
-  return {
-    id,
-    preview_url: `/api/admin/imports/${id}/preview`,
-    preview_full_url: `/api/admin/imports/${id}/preview/full`,
-    width: payload.width,
-    height: payload.height,
-    original_width: payload.original_width,
-    original_height: payload.original_height,
-    md5: payload.md5,
-    original_size: payload.original_size,
-    size: payload.size,
-    quality: payload.quality,
-    transcoded: payload.transcoded,
-    detected_device: payload.detected_device,
-    detected_brightness: payload.detected_brightness,
-    storage_slug: storageSlug,
-    duplicates
-  };
-}
 
 const publishedPreparationStatuses = new Set<ImportStatus>([
   "ready",
@@ -205,69 +165,20 @@ async function prepareStoredImageSession(
   let result: PreparedImportResult;
   try {
     signal.throwIfAborted();
-    const runtime = getRuntimeConfig();
-    setImportPhase(id, "normalizing", "校验格式、压缩原图并生成缩略图");
-    const normalized = await transcodeStoredImage(sourcePath, {
-      ...runtime.normalize,
-      max_long_edge: Math.min(runtime.normalize.max_long_edge, getInputImageMaxLongEdge())
-    });
-    signal.throwIfAborted();
-    await assertImportStillPreparing(id, executionToken);
-
-    setImportPhase(id, "detecting", "确认图片尺寸、设备类型和明暗");
-    const detectedDevice = requiredDeviceFromDimensions(
-      normalized.width,
-      normalized.height
-    );
-    const detectedBrightness = await detectBrightness(normalized.thumbnail);
-    signal.throwIfAborted();
-
-    setImportPhase(id, "staging", "写入处理后的图片和缩略图");
-    const writes = await Promise.allSettled([
-      writeStorageBuffer(
-        "_uploads",
-        preparedImageKey,
-        normalized.processed,
-        contentType(normalized.ext),
-        session.storage_slug
-      ),
-      writeStorageBuffer(
-        "_uploads",
-        preparedThumbnailKey,
-        normalized.thumbnail,
-        "image/webp",
-        session.storage_slug
-      )
-    ]);
-    const writeFailure = writes.find(
-      (result): result is PromiseRejectedResult => result.status === "rejected"
-    );
-    if (writeFailure) throw writeFailure.reason;
-    signal.throwIfAborted();
-
-    payload = {
-      ...session.metadata_payload,
+    const prepared = await prepareImportArtifacts({
+      id,
       mode,
-      source_url: session.source_url,
-      prepared_image_key: preparedImageKey,
-      prepared_thumbnail_key: preparedThumbnailKey,
-      original_size: normalized.sourceSize,
-      original_width: normalized.sourceWidth,
-      original_height: normalized.sourceHeight,
-      width: normalized.width,
-      height: normalized.height,
-      ext: normalized.ext,
-      md5: normalized.md5,
-      prepared_image_sha256: sha256Buffer(normalized.processed),
-      prepared_thumbnail_sha256: sha256Buffer(normalized.thumbnail),
-      size: normalized.size,
-      thumbnail_size: normalized.thumbnail.byteLength,
-      quality: normalized.quality,
-      transcoded: normalized.transcoded,
-      detected_device: detectedDevice,
-      detected_brightness: detectedBrightness
-    };
-    result = await preparedResult(id, session.storage_slug, payload);
+      executionToken,
+      sourcePath,
+      sourceUrl: session.source_url,
+      storageSlug: session.storage_slug,
+      metadata: session.metadata_payload,
+      preparedImageKey,
+      preparedThumbnailKey,
+      signal
+    });
+    payload = prepared.payload;
+    result = prepared.result;
   } catch (error) {
     if (signal.aborted) {
       await cleanupStagedAttempt(
@@ -319,7 +230,7 @@ async function preparationSessionState(id: string) {
 }
 
 async function readyPreparationResult(id: string, session: PreparationSessionState) {
-  const result = await preparedResult(
+  const result = await preparedImportResult(
     id,
     session.storage_slug,
     session.prepared_payload as PreparedPayload

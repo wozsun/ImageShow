@@ -1,5 +1,5 @@
 import { ApiError } from "../core/api-error.ts";
-import { mapWithConcurrency } from "../core/concurrency.ts";
+import { mapWithWorkerPool } from "../core/concurrency.ts";
 import type { BatchImageUpdateItemInput } from "../core/validation.ts";
 import { updateImageTags } from "../tags/mutations.ts";
 import { createEntityCountCacheInvalidationBatch } from "../vocab/vocab-cache.ts";
@@ -48,7 +48,7 @@ export async function updateImagesBatch(
     // remain ordered, while classification/object moves still serialize on the
     // existing storage mutation lock. Redis repair is flushed once below, so
     // concurrent items never contend for the random-pool incremental lock.
-    results = await mapWithConcurrency(items, batchUpdateConcurrency, async (item) => {
+    results = await mapWithWorkerPool(items, batchUpdateConcurrency, async (item) => {
       const itemStartedAt = performance.now();
       const { id, tags, ...metadata } = item;
       let itemError: unknown;

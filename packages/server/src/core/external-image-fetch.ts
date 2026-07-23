@@ -31,6 +31,7 @@ type ImageValidation = "sniff" | "header" | "none";
 export type SafeExternalImageFetchOptions = {
   method?: "GET" | "HEAD";
   headers?: HeadersInit;
+  targetOriginReferer?: boolean;
   timeoutMs: number;
   signal?: AbortSignal;
   imageValidation?: ImageValidation;
@@ -241,9 +242,16 @@ async function fetchWithTimeout(url: URL, options: SafeExternalImageFetchOptions
     options.signal?.removeEventListener("abort", abort);
   };
   try {
+    const headers = new Headers(options.headers);
+    if (options.targetOriginReferer) {
+      // Derive the anti-hotlink Referer only from the URL that has already
+      // passed validation. Redirects call this function again and therefore
+      // receive their own origin without leaking a path, query, or metadata.
+      headers.set("Referer", `${url.origin}/`);
+    }
     const response = await fetch(url, {
       method: options.method ?? "GET",
-      headers: options.headers,
+      headers,
       redirect: "manual",
       signal: controller.signal,
       dispatcher: externalImageDispatcher

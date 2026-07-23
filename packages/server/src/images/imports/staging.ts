@@ -1,5 +1,7 @@
 import { privateNoStoreCacheControl } from "../../core/http/headers.ts";
 import { pool } from "../../core/db.ts";
+import { mapWithWorkerPool } from "../../core/concurrency.ts";
+import { getRuntimeConfig } from "../../config/runtime-config-store.ts";
 import { thumbnailObjectKey } from "../../storage/image-paths.ts";
 import { withStorageLocationReadLock } from "../../storage/maintenance-lock.ts";
 import { enqueueObjectsForCleanup } from "../../storage/move-cleanup.ts";
@@ -21,19 +23,80 @@ export async function preparedThumbnailResponse(
   });
 }
 
+function appendCleanupFailure(
+  failures: Map<string, unknown[]>,
+  id: string,
+  error: unknown
+) {
+  const current = failures.get(id);
+  if (current) current.push(error);
+  else failures.set(id, [error]);
+}
+
+async function removeStagingKeysWithinLock(
+  entries: readonly { id: string; key: string }[],
+  storageSlug: string,
+  signal: AbortSignal
+) {
+  const failures = new Map<string, unknown[]>();
+  await mapWithWorkerPool(
+    entries,
+    getRuntimeConfig().background_job.move_cleanup_concurrency,
+    async ({ id, key }) => {
+      try {
+        signal.throwIfAborted();
+        await removeStorageObjectAndConfirm("_uploads", key, storageSlug);
+      } catch (error) {
+        appendCleanupFailure(failures, id, error);
+      }
+    },
+    { signal }
+  );
+  return failures;
+}
+
 async function removeStagingKeys(keys: string[], storageSlug: string) {
   return withStorageLocationReadLock(async (signal) => {
-    const results = await Promise.allSettled(keys.map(async (key) => {
-      signal.throwIfAborted();
-      await removeStorageObjectAndConfirm("_uploads", key, storageSlug);
-    }));
-    const failures = results
-      .filter((result): result is PromiseRejectedResult => result.status === "rejected")
-      .map((result) => result.reason);
-    if (failures.length) {
-      throw new AggregateError(failures, "Import staging cleanup failed");
+    const failures = await removeStagingKeysWithinLock(
+      keys.map((key) => ({ id: stagingSessionId(key), key })),
+      storageSlug,
+      signal
+    );
+    const reasons = [...failures.values()].flat();
+    if (reasons.length) {
+      throw new AggregateError(reasons, "Import staging cleanup failed");
     }
   });
+}
+
+export async function cleanupStagedObjectsBatch(
+  ids: readonly string[],
+  storageSlug: string
+) {
+  const targets = new Set(ids);
+  const failures = new Map<string, unknown[]>();
+  if (!targets.size) return failures;
+
+  try {
+    await withStorageLocationReadLock(async (signal) => {
+      signal.throwIfAborted();
+      const entries = (await listStorageKeys("_uploads", storageSlug))
+        .map((key) => ({ id: stagingSessionId(key), key }))
+        .filter(({ id }) => targets.has(id));
+      signal.throwIfAborted();
+      const deleteFailures = await removeStagingKeysWithinLock(
+        entries,
+        storageSlug,
+        signal
+      );
+      for (const [id, errors] of deleteFailures) {
+        failures.set(id, errors);
+      }
+    });
+  } catch (error) {
+    for (const id of targets) appendCleanupFailure(failures, id, error);
+  }
+  return failures;
 }
 
 export function cleanupStagedAttempt(
@@ -45,13 +108,11 @@ export function cleanupStagedAttempt(
 }
 
 export async function cleanupStagedObjects(id: string, storageSlug: string) {
-  return withStorageLocationReadLock(async (signal) => {
-    signal.throwIfAborted();
-    const keys = (await listStorageKeys("_uploads", storageSlug))
-      .filter((key) => stagingSessionId(key) === id);
-    signal.throwIfAborted();
-    await removeStagingKeys(keys, storageSlug);
-  });
+  const failures = await cleanupStagedObjectsBatch([id], storageSlug);
+  const reasons = failures.get(id) ?? [];
+  if (reasons.length) {
+    throw new AggregateError(reasons, "Import staging cleanup failed");
+  }
 }
 
 export async function cleanupFinalImportObjects(

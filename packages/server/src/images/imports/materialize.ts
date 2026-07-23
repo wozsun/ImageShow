@@ -5,11 +5,11 @@ import { randomUuidV7 } from "../../core/uuid.ts";
 import { runImportMaterialization } from "./execution.ts";
 import { fetchImportImageToFile } from "./fetch.ts";
 import {
-  markImportFailed,
   notifyImportStatus,
   setImportDownloadProgress,
   setImportPhase
-} from "./progress.ts";
+} from "./status.ts";
+import { markImportFailed } from "./lifecycle.ts";
 import {
   rawImportAttemptPath,
   rawImportExists,

@@ -18,6 +18,7 @@ async function fetchImportResponse(url: string, limitBytes: number, externalSign
       signal: externalSignal,
       timeoutMs: getRuntimeConfig().link_image.fetch_timeout_seconds * 1000,
       headers: { Accept: "image/*,*/*", "Accept-Encoding": "identity" },
+      targetOriginReferer: true,
       imageValidation: "sniff"
     });
     if (!response.ok) {

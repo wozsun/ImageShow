@@ -12,7 +12,9 @@ import {
   assertVocabularyFound,
   assertVocabularySlug,
   synchronizeVocabularyMutation,
-  withVocabularyMutationLock
+  withVocabularyAssociationLocks,
+  withVocabularyMutationLock,
+  withVocabularyMutationLocks
 } from "../vocab/mutation-sync.ts";
 import { resolveTagNames } from "./query.ts";
 
@@ -47,9 +49,20 @@ export async function reorderTags(slugs: string[]) {
 }
 
 export async function deleteTags(slugs: string[]) {
-  const targets = [...new Set(slugs)];
+  const targets = [...new Set(slugs)].sort();
   if (!targets.length) return;
-  const result = await pool.query("DELETE FROM tag WHERE slug = ANY($1::text[])", [targets]);
+  const result = await withVocabularyMutationLocks(
+    targets.map((slug) => ({ entity: "tag", slug })),
+    async (signal) => {
+      signal.throwIfAborted();
+      const deleted = await pool.query(
+        "DELETE FROM tag WHERE slug = ANY($1::text[])",
+        [targets]
+      );
+      signal.throwIfAborted();
+      return deleted;
+    }
+  );
   if (result.rowCount) {
     await synchronizeVocabularyMutation({
       entity: "tag",
@@ -66,7 +79,16 @@ export async function setTagDisplayName(slug: string, displayName: string) {
 }
 
 export async function deleteTag(slug: string) {
-  const result = await pool.query("DELETE FROM tag WHERE slug = $1", [slug]);
+  const result = await withVocabularyMutationLock(
+    "tag",
+    slug,
+    async (signal) => {
+      signal.throwIfAborted();
+      const deleted = await pool.query("DELETE FROM tag WHERE slug = $1", [slug]);
+      signal.throwIfAborted();
+      return deleted;
+    }
+  );
   assertVocabularyFound("tag", result.rowCount);
   await synchronizeVocabularyMutation({
     entity: "tag",
@@ -80,11 +102,18 @@ type SetImageTagsOptions = {
   mutationSyncBatch?: ImageMutationSyncBatch;
 };
 
-export async function replaceImageTags(client: PoolClient, imageId: string, slugs: string[]) {
+export async function replaceImageTags(
+  client: PoolClient,
+  imageId: string,
+  slugs: string[],
+  signal?: AbortSignal
+) {
+  signal?.throwIfAborted();
   const image = await client.query("SELECT md5 FROM metadata WHERE id = $1", [imageId]);
   if (!image.rowCount) throw new ApiError(404, "not_found", "Image not found");
   let createdTag = false;
   for (const slug of slugs) {
+    signal?.throwIfAborted();
     const inserted = await client.query(
       `INSERT INTO tag(slug, sort_order)
        VALUES($1, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM tag))
@@ -94,13 +123,16 @@ export async function replaceImageTags(client: PoolClient, imageId: string, slug
     );
     if (inserted.rowCount) createdTag = true;
   }
+  signal?.throwIfAborted();
   await client.query("DELETE FROM image_tag WHERE image_id = $1", [imageId]);
   for (const slug of slugs) {
+    signal?.throwIfAborted();
     await client.query(
       "INSERT INTO image_tag(image_id, tag_slug) VALUES($1, $2) ON CONFLICT DO NOTHING",
       [imageId, slug]
     );
   }
+  signal?.throwIfAborted();
   return {
     createdTag,
     md5: String(image.rows[0]?.md5 ?? ""),
@@ -109,9 +141,19 @@ export async function replaceImageTags(client: PoolClient, imageId: string, slug
 
 export async function updateImageTags(imageId: string, names: string[], options: SetImageTagsOptions = {}) {
   const resolved = await resolveTagNames(names);
-  const mutation = await withTransaction(async (client) => {
-    return replaceImageTags(client, imageId, resolved);
+  const persist = (signal?: AbortSignal) => withTransaction(async (client) => {
+    signal?.throwIfAborted();
+    const result = await replaceImageTags(client, imageId, resolved, signal);
+    signal?.throwIfAborted();
+    return result;
   });
+  const mutation = await (resolved.length
+    ? withVocabularyAssociationLocks(
+      resolved.map((slug) => ({ entity: "tag", slug })),
+      (signal) => persist(signal)
+    )
+    : persist()
+  );
 
   // The database transaction has committed. Attempt every derived-cache
   // repair even if one cache backend operation fails, so callers never observe

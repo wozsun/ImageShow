@@ -4,7 +4,8 @@ import {
   DynamicWeightedLimiter
 } from "../../core/concurrency.ts";
 import { getRuntimeConfig } from "../../config/runtime-config-store.ts";
-import { clearImportPhase, setImportPhase, withImportLease } from "./progress.ts";
+import { withImportLease } from "./lifecycle.ts";
+import { clearImportPhase, setImportPhase } from "./status.ts";
 import { withImportSessionLock } from "./session-lock.ts";
 import type { ImportMode, PreparedImportResult } from "./types.ts";
 

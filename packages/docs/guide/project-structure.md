@@ -74,6 +74,19 @@ core / config
 | `users/` | 管理员初始化、账号变更、登录会话、权限中间件、密码恢复、偏好和会话失效。 |
 | `types/` | 仅放缺失的编译期声明，不承载运行时代码。 |
 
+`images/imports/` 内部继续保持单一编排入口，但按稳定职责分开：
+
+- `session.ts` 创建、预览和取消会话；`materialize.ts` 只把 upload/download 原始素材
+  原子发布到 `data/tmp`。
+- `status.ts` 负责进程内 phase、状态投影与 SSE；`lifecycle.ts` 负责租约、取消标记、
+  execution fence 和失败落库，PostgreSQL 状态仍是唯一权威来源。
+- `prepare.ts` 只编排会话认领、恢复和清理，图片处理与 prepared 结果由
+  `prepare-artifacts.ts` 完成。
+- `commit.ts` 只编排锁、对象落位与补偿；数据库事务、提交后缓存同步和候选对象所有权
+  分别位于 `commit-persistence.ts`、`commit-sync.ts`、`commit-candidates.ts`。
+- `weibo.ts` 只编排批次和 JSONL 清单，链接/时间/响应提取、受限上游协议及公开类型
+  分别位于 `weibo-parser.ts`、`weibo-client.ts`、`weibo-types.ts`。
+
 领域模块可以依赖 `core/` 和 `config/`，但基础设施不能反向导入具体路由。跨领域调用直接
 指向对方表达职责的模块，不通过泛化 `service`、`storage` 或 barrel 隐藏真实依赖，也不能
 通过路由或测试工具绕行。PostgreSQL 始终是业务真相源；Redis 模块只实现可重建读模型与

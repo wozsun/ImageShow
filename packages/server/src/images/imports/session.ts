@@ -2,7 +2,6 @@ import { appConfig } from "@imageshow/shared";
 import { getInputImageMaxBytes } from "../../config/app-settings.ts";
 import { getRuntimeConfig } from "../../config/runtime-config-store.ts";
 import { pool, withTransaction } from "../../core/db.ts";
-import { mapWithWorkerPool } from "../../core/concurrency.ts";
 import { ApiError } from "../../core/api-error.ts";
 import { privateNoStoreCacheControl } from "../../core/http/headers.ts";
 import { assertStorageUploadable, getDefaultStorageSlug } from "../../storage/backend-registry.ts";
@@ -14,10 +13,10 @@ import { importSessionResponse, type ImportSessionRecord } from "../presenter.ts
 import { abortActiveImport } from "./execution.ts";
 import {
   clearImportCancelled,
-  emitCancelledImportStatus,
   importWasCancelled,
   markImportCancelled
-} from "./progress.ts";
+} from "./lifecycle.ts";
+import { emitCancelledImportStatus } from "./status.ts";
 import { importRequestHash } from "./request-hash.ts";
 import { withImportSessionLock } from "./session-lock.ts";
 import {
@@ -32,14 +31,6 @@ import type {
   MetadataPayload,
   PreparedPayload
 } from "./types.ts";
-
-export type ImportSessionBatchItem =
-  | { idempotency_key: string; id: string }
-  | { idempotency_key: string; error: string };
-
-type CreateImportSessionsOptions = {
-  onItemComplete?: (durationMs: number) => void;
-};
 
 function defaultMetadata(input: ImportCreateInput, imageTime: string): MetadataPayload {
   return {
@@ -158,32 +149,6 @@ export function createImportSession(input: ImportCreateInput) {
   return withStorageLocationReadLock((signal) =>
     createImportSessionUnderLocationLock(input, signal)
   );
-}
-
-export async function createImportSessions(
-  inputs: ImportCreateInput[],
-  options: CreateImportSessionsOptions = {},
-): Promise<ImportSessionBatchItem[]> {
-  return mapWithWorkerPool(inputs, Math.min(16, appConfig.pgPool.max), async (input) => {
-    const startedAt = performance.now();
-    try {
-      if (input.mode === "upload") {
-        throw new ApiError(400, "invalid_import_mode", "批量入口仅支持链接导入");
-      }
-      const session = await createImportSession(input);
-      return {
-        idempotency_key: input.idempotency_key,
-        id: session.id
-      };
-    } catch (error) {
-      return {
-        idempotency_key: input.idempotency_key,
-        error: error instanceof ApiError ? error.message : "创建导入会话失败"
-      };
-    } finally {
-      options.onItemComplete?.(performance.now() - startedAt);
-    }
-  });
 }
 
 export async function previewImportSession(id: string, variant: "thumb" | "full" = "thumb") {
