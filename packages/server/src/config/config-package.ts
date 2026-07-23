@@ -1,9 +1,9 @@
 import { inspectTransactionOutcome, withAdvisoryLock } from "../core/db.ts";
 import { applicationVersion } from "../core/application-version.ts";
 import {
-  importStorageBackends,
   listStorageBackends
 } from "../storage/backend-registry.ts";
+import { importStorageBackends } from "../storage/backend-mutations.ts";
 import {
   buildConfigPackage,
   parseConfigPackage,

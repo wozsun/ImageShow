@@ -1,6 +1,7 @@
 import { XMLParser } from "fast-xml-parser";
+import { randomUUID } from "node:crypto";
 import { Agent } from "undici";
-import { ApiError } from "../core/api-error.ts";
+import { ApiError, errorMessage } from "../core/api-error.ts";
 import { getInputImageMaxBytes } from "../config/app-settings.ts";
 import type { StorageConfig } from "./backend-config.ts";
 import { contentTypeForKey, storageObjectName, type ReadablePrefix, type StoragePrefix } from "./object-keys.ts";
@@ -349,7 +350,13 @@ export class WebdavBackend implements StorageDriver {
   async copy(fromPrefix: CopyPrefix, fromKey: string, toPrefix: CopyPrefix, toKey: string) {
     try {
       await this.copyNative(fromPrefix, fromKey, toPrefix, toKey);
-    } catch {
+    } catch (error) {
+      if (
+        error instanceof ApiError
+        && error.code === "storage_transfer_cleanup_failed"
+      ) {
+        throw error;
+      }
       await this.writeBuffer(toPrefix, toKey, await this.readBuffer(fromPrefix, fromKey), contentTypeForKey(toKey));
     }
   }
@@ -376,7 +383,23 @@ export class WebdavBackend implements StorageDriver {
 
     const targetExists = await this.exists(toPrefix, toKey);
     if (!sideEffectExisted && sideEffectKey !== toKey) {
-      await this.remove(toPrefix, sideEffectKey).catch(() => undefined);
+      try {
+        await this.remove(toPrefix, sideEffectKey);
+        if (await this.exists(toPrefix, sideEffectKey)) {
+          throw new Error("WebDAV COPY side-effect object still exists");
+        }
+      } catch (error) {
+        throw new ApiError(
+          502,
+          "storage_transfer_cleanup_failed",
+          "WebDAV COPY 产生的额外对象未能完全清理",
+          {
+            prefix: toPrefix,
+            key: sideEffectKey,
+            reason: errorMessage(error)
+          }
+        );
+      }
     }
     if (status >= 200 && status < 300 && targetExists) {
       if (!targetExisted) return;
@@ -480,19 +503,44 @@ export class WebdavBackend implements StorageDriver {
 
   async selfTest(): Promise<StorageSelfTest> {
     if (!this.config.webdav.base_url) throw new ApiError(400, "storage_config_incomplete", "Storage config incomplete", { missing: ["base_url"] });
-    const key = `.storage-test-${Date.now()}`;
-    let written = false;
+    const key = `.storage-test-${randomUUID()}`;
+    let result: StorageSelfTest | undefined;
+    let testError: unknown;
     try {
       await this.writeBuffer("_uploads", key, Buffer.from("ok"), "text/plain");
-      written = true;
       const present = await this.exists("_uploads", key);
       if (!present) throw new ApiError(502, "storage_test_failed", "WebDAV self-test: the written object could not be read back");
-      return { backend: "webdav", writable: true, endpoint: this.config.webdav.base_url, public_base_url: this.config.webdav.public_base_url };
-    } finally {
-      if (written) {
-        await this.remove("_uploads", key).catch(() => undefined);
-      }
+      result = { backend: "webdav", writable: true, endpoint: this.config.webdav.base_url, public_base_url: this.config.webdav.public_base_url };
+    } catch (error) {
+      testError = error;
     }
+
+    let cleanupError: unknown;
+    try {
+      await this.remove("_uploads", key);
+      if (await this.exists("_uploads", key)) {
+        throw new Error("WebDAV self-test object still exists after deletion");
+      }
+    } catch (error) {
+      cleanupError = error;
+    }
+    if (cleanupError) {
+      const failure = new ApiError(
+        502,
+        "storage_test_cleanup_failed",
+        "WebDAV self-test object could not be fully removed",
+        { reason: errorMessage(cleanupError) }
+      );
+      if (testError) {
+        throw new AggregateError(
+          [testError, failure],
+          "WebDAV self-test and cleanup both failed"
+        );
+      }
+      throw failure;
+    }
+    if (testError) throw testError;
+    return result!;
   }
 
   async pruneEmptyDirs(): Promise<number> {

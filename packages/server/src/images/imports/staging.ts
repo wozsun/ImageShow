@@ -6,7 +6,7 @@ import { enqueueObjectsForCleanup } from "../../storage/move-cleanup.ts";
 import {
   listStorageKeys,
   readStorageBuffer,
-  removeStorageObject
+  removeStorageObjectAndConfirm
 } from "../../storage/object-access.ts";
 import type { PreparedPayload } from "./types.ts";
 import { stagingSessionId } from "./staging-keys.ts";
@@ -25,7 +25,7 @@ async function removeStagingKeys(keys: string[], storageSlug: string) {
   return withStorageLocationReadLock(async (signal) => {
     const results = await Promise.allSettled(keys.map(async (key) => {
       signal.throwIfAborted();
-      await removeStorageObject("_uploads", key, storageSlug);
+      await removeStorageObjectAndConfirm("_uploads", key, storageSlug);
     }));
     const failures = results
       .filter((result): result is PromiseRejectedResult => result.status === "rejected")

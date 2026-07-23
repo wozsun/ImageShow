@@ -148,6 +148,10 @@ async function cleanupCandidate(
         transfer_error: errorMessage(transferError),
         cleanup_error: errorMessage(cleanupError)
       });
+      throw new AggregateError(
+        [transferError, cleanupError],
+        "Storage transfer failed and candidate cleanup could not be queued"
+      );
     }
     return;
   }
@@ -163,23 +167,13 @@ async function cleanupCandidate(
 }
 
 async function cleanupAttemptedCandidate(
-  target: StorageEndpoint,
   object: CandidateObject,
   cleanup: CandidateCleanup | undefined,
   transferError: unknown
 ) {
-  try {
-    if (!await target.driver.exists(object.prefix, object.key)) return;
-  } catch (probeError) {
-    logger.error("storage_transfer_candidate_probe_failed", {
-      backend: object.backend,
-      prefix: object.prefix,
-      key: object.key,
-      transfer_error: errorMessage(transferError),
-      probe_error: errorMessage(probeError)
-    });
-    return;
-  }
+  // A write/copy acknowledgement can be lost after the object materializes.
+  // Queue the deterministic candidate unconditionally; the ownership-aware
+  // cleanup handler treats a truly missing object as an idempotent success.
   await cleanupCandidate(object, cleanup, transferError);
 }
 
@@ -233,7 +227,6 @@ export async function ensureVerifiedObjectAtTarget(input: {
     return { created: true };
   } catch (error) {
     await cleanupAttemptedCandidate(
-      target,
       { prefix, key, backend: target.config.slug },
       candidateCleanup,
       error
@@ -325,7 +318,6 @@ export async function copyVerifiedObjectWithinStorage(input: {
     return { created: true, sourceDigest };
   } catch (error) {
     await cleanupAttemptedCandidate(
-      storage,
       { prefix: toPrefix, key: toKey, backend: storage.config.slug },
       candidateCleanup,
       error

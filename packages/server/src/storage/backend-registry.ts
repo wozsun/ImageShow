@@ -1,48 +1,19 @@
-import { appConfig, type StorageType } from "@imageshow/shared";
-import type { PoolClient } from "pg";
-import {
-  inspectTransactionOutcome,
-  pool,
-  withAdvisoryLock,
-  withTransaction,
-  withTransactionOnClient
-} from "../core/db.ts";
+import { appConfig } from "@imageshow/shared";
 import { ApiError, errorMessage } from "../core/api-error.ts";
+import { pool } from "../core/db.ts";
+import { logger } from "../core/logger.ts";
 import {
-  countUnresolvedMoveCleanupJobs,
-  listUnresolvedMoveCleanupJobCounts,
-  retryExhaustedMoveCleanupJobs
-} from "../jobs/repository.ts";
-import {
-  defaultS3Settings,
-  defaultWebdavSettings,
   missingS3Fields,
   missingWebdavFields,
-  s3SettingsSchema,
-  webdavSettingsSchema,
-  type StorageBackendCreateInput,
-  type StorageBackendImportInput,
   type StorageBackendRecord,
-  type StorageBackendUpdateInput,
   type StorageConfig
 } from "./backend-config.ts";
-import type { StorageDriver } from "./driver.ts";
+import {
+  storageBackendRecordFromRow,
+  storageConfigFromRecord
+} from "./backend-record.ts";
 import { createStorageDriver } from "./driver-factory.ts";
-import {
-  withStorageLocationReadAndAdvisoryLock,
-  withStorageLocationWriteAndAdvisoryLock
-} from "./maintenance-lock.ts";
-import {
-  captureStagingNamespaceSnapshot,
-  verifyStorageEndpointRebind,
-  type StagingNamespaceSnapshot
-} from "./endpoint-rebind.ts";
-import {
-  configuredStorageNamespaceIdentity,
-  shareStorageNamespace,
-  storageNamespaceIdentities,
-  storageNamespaceLayoutIdentity
-} from "./storage-namespace.ts";
+import type { StorageDriver } from "./driver.ts";
 
 const storageCacheTtlMs = appConfig.derivedCacheTtlSeconds * 1000;
 let storageCache: StorageBackendRecord[] | null = null;
@@ -51,6 +22,7 @@ let storageLoad: Promise<StorageBackendRecord[]> | null = null;
 let storageCacheGeneration = 0;
 const storageBackendChangeListeners = new Set<() => void>();
 const storageDriverCache = new Map<string, StorageDriver>();
+let storageDriverCloseQueue = Promise.resolve();
 
 function storageDriverCacheKey(config: StorageConfig) {
   return JSON.stringify(config);
@@ -66,12 +38,21 @@ function storageDriverForConfig(config: StorageConfig) {
   return driver;
 }
 
-function clearStorageDriverCache() {
+function retireStorageDrivers() {
   const drivers = [...storageDriverCache.values()];
   storageDriverCache.clear();
-  for (const driver of drivers) {
-    void Promise.resolve(driver.close?.()).catch(() => undefined);
-  }
+  if (!drivers.length) return;
+  storageDriverCloseQueue = storageDriverCloseQueue.then(async () => {
+    const results = await Promise.allSettled(
+      drivers.map((driver) => Promise.resolve().then(() => driver.close?.()))
+    );
+    for (const result of results) {
+      if (result.status === "fulfilled") continue;
+      logger.warn("storage_driver_close_failed", {
+        error: errorMessage(result.reason)
+      });
+    }
+  });
 }
 
 async function loadStorageBackends(): Promise<StorageBackendRecord[]> {
@@ -81,21 +62,7 @@ async function loadStorageBackends(): Promise<StorageBackendRecord[]> {
        FROM storage_backend
       ORDER BY (slug = 'local') DESC, sort_order ASC, slug ASC`
   )).rows;
-
-  return rows.map((row) => {
-    const config = typeof row.config === "object" && row.config ? row.config : {};
-    const type = row.type as StorageType;
-    return {
-      slug: row.slug as string,
-      display_name: row.display_name as string,
-      type,
-      namespace_identities: normalizedNamespaceIdentities(row.namespace_identities),
-      enabled: Boolean(row.enabled),
-      is_default: Boolean(row.is_default),
-      s3: type === "s3" ? s3SettingsSchema.parse(config) : defaultS3Settings,
-      webdav: type === "webdav" ? webdavSettingsSchema.parse(config) : defaultWebdavSettings
-    };
-  });
+  return rows.map((row) => storageBackendRecordFromRow(row));
 }
 
 async function getStorageBackends(): Promise<StorageBackendRecord[]> {
@@ -115,15 +82,34 @@ async function getStorageBackends(): Promise<StorageBackendRecord[]> {
   }
 }
 
-function invalidateStorageBackendCache() {
+export function invalidateStorageBackendRegistry(
+  options: { retireDrivers?: boolean } = {}
+) {
   storageCacheGeneration += 1;
   storageCache = null;
   storageCacheExpiresAt = 0;
   // A caller that started before this invalidation may still await its own
   // snapshot, but no later caller may join or publish that stale load.
   storageLoad = null;
-  clearStorageDriverCache();
-  for (const listener of storageBackendChangeListeners) listener();
+  if (options.retireDrivers) retireStorageDrivers();
+  for (const listener of storageBackendChangeListeners) {
+    try {
+      listener();
+    } catch (error) {
+      logger.error("storage_backend_change_listener_failed", {
+        error: errorMessage(error)
+      });
+    }
+  }
+}
+
+export async function closeStorageBackendRegistry() {
+  storageCacheGeneration += 1;
+  storageCache = null;
+  storageCacheExpiresAt = 0;
+  storageLoad = null;
+  retireStorageDrivers();
+  await storageDriverCloseQueue;
 }
 
 export function onStorageBackendChange(listener: () => void) {
@@ -131,63 +117,68 @@ export function onStorageBackendChange(listener: () => void) {
   return () => storageBackendChangeListeners.delete(listener);
 }
 
-function toStorageConfig(record: StorageBackendRecord): StorageConfig {
-  return {
-    slug: record.slug,
-    type: record.type,
-    namespace_identities: record.namespace_identities,
-    s3: record.s3,
-    webdav: record.webdav
-  };
-}
-
-function normalizedNamespaceIdentities(value: unknown) {
-  if (!Array.isArray(value)) return [];
-  return [...new Set(value
-    .map((identity) => String(identity).trim())
-    .filter(Boolean))].sort();
-}
-
-function withStoredS3Credential(candidate: StorageConfig["s3"], current?: StorageConfig["s3"]) {
-  if (candidate.secret_access_key || !current?.secret_access_key) return candidate;
-  return { ...candidate, secret_access_key: current.secret_access_key };
-}
-
-function withStoredWebdavCredential(candidate: StorageConfig["webdav"], current?: StorageConfig["webdav"]) {
-  if (candidate.password || !current?.password) return candidate;
-  return { ...candidate, password: current.password };
-}
-
 export async function listStorageBackends(): Promise<StorageBackendRecord[]> {
   return getStorageBackends();
 }
 
 export async function getStorageBackend(slug: string): Promise<StorageConfig> {
-  const record = (await getStorageBackends()).find((backend) => backend.slug === slug);
-  if (!record) throw new ApiError(404, "storage_backend_not_found", `Unknown storage backend: ${slug}`);
-  return toStorageConfig(record);
+  const record = (await getStorageBackends()).find(
+    (backend) => backend.slug === slug
+  );
+  if (!record) {
+    throw new ApiError(
+      404,
+      "storage_backend_not_found",
+      `Unknown storage backend: ${slug}`
+    );
+  }
+  return storageConfigFromRecord(record);
 }
 
-export async function assertStorageWritable(slug: string): Promise<StorageConfig> {
-  const config = await getStorageBackend(slug);
+function assertStorageConfigComplete(config: StorageConfig) {
   const missing = config.type === "s3"
     ? missingS3Fields(config.s3)
     : config.type === "webdav"
       ? missingWebdavFields(config.webdav)
       : [];
   if (missing.length) {
-    throw new ApiError(400, "storage_config_incomplete", "Storage config incomplete", { missing });
+    throw new ApiError(
+      400,
+      "storage_config_incomplete",
+      "Storage config incomplete",
+      { missing }
+    );
   }
   return config;
 }
 
-export async function assertStorageUploadable(slug: string): Promise<StorageConfig> {
-  const record = (await getStorageBackends()).find((backend) => backend.slug === slug);
-  if (!record) throw new ApiError(404, "storage_backend_not_found", `Unknown storage backend: ${slug}`);
-  if (!record.enabled) {
-    throw new ApiError(400, "storage_backend_disabled", "该存储后端已停用，不能作为新图片的写入目标");
+export async function assertStorageWritable(
+  slug: string
+): Promise<StorageConfig> {
+  return assertStorageConfigComplete(await getStorageBackend(slug));
+}
+
+export async function assertStorageUploadable(
+  slug: string
+): Promise<StorageConfig> {
+  const record = (await getStorageBackends()).find(
+    (backend) => backend.slug === slug
+  );
+  if (!record) {
+    throw new ApiError(
+      404,
+      "storage_backend_not_found",
+      `Unknown storage backend: ${slug}`
+    );
   }
-  return assertStorageWritable(slug);
+  if (!record.enabled) {
+    throw new ApiError(
+      400,
+      "storage_backend_disabled",
+      "该存储后端已停用，不能作为新图片的写入目标"
+    );
+  }
+  return assertStorageConfigComplete(storageConfigFromRecord(record));
 }
 
 async function getDefaultStorageRecord(): Promise<StorageBackendRecord> {
@@ -195,12 +186,18 @@ async function getDefaultStorageRecord(): Promise<StorageBackendRecord> {
   const record = backends.find((backend) => backend.is_default)
     ?? backends.find((backend) => backend.slug === "local")
     ?? backends[0];
-  if (!record) throw new ApiError(503, "storage_unconfigured", "No storage backend configured");
+  if (!record) {
+    throw new ApiError(
+      503,
+      "storage_unconfigured",
+      "No storage backend configured"
+    );
+  }
   return record;
 }
 
 export async function getDefaultStorageBackend(): Promise<StorageConfig> {
-  return toStorageConfig(await getDefaultStorageRecord());
+  return storageConfigFromRecord(await getDefaultStorageRecord());
 }
 
 export async function resolveStorageAccess(slug?: string) {
@@ -216,946 +213,4 @@ export function resolveStorageAccessForConfig(config: StorageConfig) {
 
 export async function getDefaultStorageSlug(): Promise<string> {
   return (await getDefaultStorageRecord()).slug;
-}
-
-export async function listStorageBackendOptions() {
-  return (await getStorageBackends()).map((backend) => ({
-    slug: backend.slug,
-    display_name: backend.display_name,
-    enabled: backend.enabled,
-    is_default: backend.is_default
-  }));
-}
-
-export async function getStorageBackendsForAdmin() {
-  const backends = await getStorageBackends();
-  const [imageCountRows, importSessionCountRows, cleanupCountRows] = await Promise.all([
-    pool.query(
-      `SELECT storage_slug, count(*)::int AS image_count
-         FROM metadata
-        GROUP BY storage_slug`
-    ),
-    pool.query(
-      `SELECT storage_slug, count(*)::int AS import_session_count
-         FROM import_session
-        GROUP BY storage_slug`
-    ),
-    listUnresolvedMoveCleanupJobCounts()
-  ]);
-  const imageCounts = new Map<string, number>(imageCountRows.rows.map((row) => [
-    String(row.storage_slug),
-    Number(row.image_count ?? 0)
-  ]));
-  const importSessionCounts = new Map<string, number>(importSessionCountRows.rows.map((row) => [
-    String(row.storage_slug),
-    Number(row.import_session_count ?? 0)
-  ]));
-  const cleanupJobCounts = new Map(cleanupCountRows.map((row) => [
-    row.storage_slug,
-    row
-  ]));
-  return backends.map((backend) => {
-    const cleanupCounts = cleanupJobCounts.get(backend.slug);
-    const summary = {
-      slug: backend.slug,
-      display_name: backend.display_name,
-      type: backend.type,
-      enabled: backend.enabled,
-      is_default: backend.is_default,
-      image_count: imageCounts.get(backend.slug) ?? 0,
-      import_session_count: importSessionCounts.get(backend.slug) ?? 0,
-      cleanup_job_count: cleanupCounts?.cleanup_job_count ?? 0,
-      failed_cleanup_job_count: cleanupCounts?.failed_cleanup_job_count ?? 0,
-      exhausted_cleanup_job_count:
-        cleanupCounts?.exhausted_cleanup_job_count ?? 0
-    };
-    if (backend.type === "s3") {
-      const { secret_access_key, ...s3 } = backend.s3;
-      return {
-        ...summary,
-        s3: {
-          ...s3,
-          secret_access_key_configured: Boolean(secret_access_key)
-        }
-      };
-    }
-    if (backend.type === "webdav") {
-      const { password, ...webdav } = backend.webdav;
-      return {
-        ...summary,
-        webdav: {
-          ...webdav,
-          password_configured: Boolean(password)
-        }
-      };
-    }
-    return summary;
-  });
-}
-
-export function retryStorageBackendCleanup(slug: string) {
-  return withAdvisoryLock(`imageshow:storage-backend:${slug}`, async (signal) => {
-    signal.throwIfAborted();
-    await getStorageBackend(slug);
-    signal.throwIfAborted();
-    const retried = await retryExhaustedMoveCleanupJobs(slug);
-    signal.throwIfAborted();
-    return retried;
-  });
-}
-
-export async function createStorageBackend(input: StorageBackendCreateInput) {
-  if (input.slug === "local") {
-    throw new ApiError(400, "storage_backend_reserved", "'local' 是内置后端，不能新建");
-  }
-  const config = input.type === "webdav" ? input.webdav : input.s3;
-
-  await pool.query(
-    `INSERT INTO storage_backend(slug, display_name, type, config, enabled, sort_order)
-     VALUES($1, $2, $3, $4::jsonb, true, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM storage_backend))`,
-    [input.slug, input.display_name, input.type, JSON.stringify(config)]
-  ).catch((error: unknown) => {
-    if (error && typeof error === "object" && (error as { code?: string }).code === "23505") {
-      throw new ApiError(409, "storage_backend_exists", `存储后端已存在: ${input.slug}`);
-    }
-    throw error;
-  });
-  invalidateStorageBackendCache();
-}
-
-export async function importStorageBackends(
-  backends: StorageBackendImportInput[],
-  beforeCommit: () => void | Promise<void>,
-  lockClient: PoolClient,
-  onTransactionId: (transactionId: string) => void
-) {
-  try {
-    await withTransactionOnClient(
-      lockClient,
-      async (client) => {
-        const highestSortOrder = Number((await client.query(
-          "SELECT COALESCE(MAX(sort_order), 0) AS value FROM storage_backend"
-        )).rows[0]?.value ?? 0);
-
-        for (const [index, backend] of backends.entries()) {
-          await client.query(
-            `INSERT INTO storage_backend(slug, display_name, type, config, enabled, is_default, sort_order)
-             VALUES($1, $2, $3, $4::jsonb, $5, false, $6)`,
-            [
-              backend.slug,
-              backend.display_name,
-              backend.type,
-              JSON.stringify(backend.config),
-              backend.enabled,
-              highestSortOrder + index + 1
-            ]
-          );
-        }
-
-        const importedDefault = backends.find((backend) => backend.is_default);
-        if (importedDefault) {
-          await client.query("UPDATE storage_backend SET is_default=false, updated_at=now() WHERE is_default");
-          await client.query(
-            "UPDATE storage_backend SET is_default=true, updated_at=now() WHERE slug=$1",
-            [importedDefault.slug]
-          );
-        }
-
-        await beforeCommit();
-      },
-      { onTransactionId }
-    );
-  } catch (error) {
-    if (error && typeof error === "object" && (error as { code?: string }).code === "23505") {
-      throw new ApiError(409, "storage_backend_exists", "导入的存储后端 slug 已存在");
-    }
-    throw error;
-  } finally {
-    // A successful COMMIT response can be lost with the lock connection.
-    // Invalidate on every outcome so a committed import/default change cannot
-    // leave an older registry load or driver cache authoritative.
-    invalidateStorageBackendCache();
-  }
-}
-
-function storageConfigFromRow(row: {
-  slug: string;
-  type: StorageType;
-  config: unknown;
-  namespace_identities?: unknown;
-}): StorageConfig {
-  const raw = typeof row.config === "object" && row.config ? row.config : {};
-  if (row.type === "s3") {
-    return {
-      slug: row.slug,
-      type: "s3",
-      namespace_identities: normalizedNamespaceIdentities(row.namespace_identities),
-      s3: s3SettingsSchema.parse(raw),
-      webdav: defaultWebdavSettings
-    };
-  }
-  if (row.type === "webdav") {
-    return {
-      slug: row.slug,
-      type: "webdav",
-      namespace_identities: normalizedNamespaceIdentities(row.namespace_identities),
-      s3: defaultS3Settings,
-      webdav: webdavSettingsSchema.parse(raw)
-    };
-  }
-  return {
-    slug: row.slug,
-    type: "local",
-    namespace_identities: normalizedNamespaceIdentities(row.namespace_identities),
-    s3: defaultS3Settings,
-    webdav: defaultWebdavSettings
-  };
-}
-
-function updatedStorageConfig(
-  current: StorageConfig,
-  input: StorageBackendUpdateInput
-): StorageConfig {
-  if (current.type === "s3") {
-    if (input.webdav) {
-      throw new ApiError(
-        400,
-        "storage_backend_type_mismatch",
-        "S3 后端不能接收 WebDAV 配置"
-      );
-    }
-    return input.s3
-      ? {
-          ...current,
-          s3: withStoredS3Credential(s3SettingsSchema.parse(input.s3), current.s3)
-        }
-      : current;
-  }
-  if (current.type === "webdav") {
-    if (input.s3) {
-      throw new ApiError(
-        400,
-        "storage_backend_type_mismatch",
-        "WebDAV 后端不能接收 S3 配置"
-      );
-    }
-    return input.webdav
-      ? {
-          ...current,
-          webdav: withStoredWebdavCredential(
-            webdavSettingsSchema.parse(input.webdav),
-            current.webdav
-          )
-        }
-      : current;
-  }
-  if (input.s3 || input.webdav) {
-    throw new ApiError(
-      400,
-      "storage_backend_reserved",
-      "内置本地后端没有可编辑的远程存储配置"
-    );
-  }
-  return current;
-}
-
-function changedPhysicalLocationFields(
-  current: StorageConfig,
-  next: StorageConfig
-) {
-  const currentSettings = current.type === "s3" ? current.s3 : current.webdav;
-  const nextSettings = next.type === "s3" ? next.s3 : next.webdav;
-  const fields = current.type === "s3"
-    ? ["endpoint", "bucket", "root_path"] as const
-    : current.type === "webdav"
-      ? ["base_url", "root_path"] as const
-      : [];
-  const currentRecord = currentSettings as unknown as Record<string, unknown>;
-  const nextRecord = nextSettings as unknown as Record<string, unknown>;
-  return fields.filter((field) => currentRecord[field] !== nextRecord[field]);
-}
-
-type StorageBackendUsage = {
-  image_count: number;
-  import_session_count: number;
-  cleanup_job_count: number;
-  staging_object_count: number;
-};
-
-type StorageBackendSnapshot = {
-  slug: string;
-  type: StorageType;
-  config: unknown;
-  namespace_identities: string[];
-  is_default: boolean;
-  image_count: number;
-  import_session_count: number;
-  cleanup_job_count: number;
-};
-
-function storageBackendUsage(
-  row: Record<string, unknown>,
-  stagingObjectCount = 0
-): StorageBackendUsage {
-  return {
-    image_count: Number(row.image_count ?? 0),
-    import_session_count: Number(row.import_session_count ?? 0),
-    cleanup_job_count: Number(row.cleanup_job_count ?? 0),
-    staging_object_count: stagingObjectCount
-  };
-}
-
-function assertPhysicalLocationChangeAllowed(
-  changedFields: readonly string[],
-  usage: StorageBackendUsage
-) {
-  if (
-    !changedFields.length
-    || (!usage.image_count
-      && !usage.import_session_count
-      && !usage.cleanup_job_count
-      && !usage.staging_object_count)
-  ) {
-    return;
-  }
-  throw new ApiError(
-    409,
-    "storage_location_change_requires_migration",
-    "该后端仍有图片、未清理导入会话、旧对象删除任务或暂存对象，物理位置暂不可变更",
-    { fields: changedFields, ...usage }
-  );
-}
-
-async function storageBackendSnapshot(slug: string): Promise<StorageBackendSnapshot> {
-  const row = (await pool.query(
-    `SELECT backend.slug,
-            backend.type,
-            backend.config,
-            backend.namespace_identities,
-            backend.is_default,
-            (SELECT count(*)::int
-               FROM metadata
-              WHERE metadata.storage_slug=backend.slug) AS image_count,
-            (SELECT count(*)::int
-               FROM import_session
-              WHERE import_session.storage_slug=backend.slug) AS import_session_count
-       FROM storage_backend AS backend
-      WHERE backend.slug=$1`,
-    [slug]
-  )).rows[0] as StorageBackendSnapshot | undefined;
-  if (!row) {
-    throw new ApiError(404, "storage_backend_not_found", `Unknown storage backend: ${slug}`);
-  }
-  row.cleanup_job_count = await countUnresolvedMoveCleanupJobs(slug);
-  return row;
-}
-
-type ExistingStorageProbe = {
-  id: string;
-  object_key: string;
-  storage_slug: string;
-};
-
-async function assertExistingObjectReadable(
-  driver: StorageDriver,
-  existingObject: ExistingStorageProbe
-) {
-  try {
-    const opened = await driver.openRead(
-      "media",
-      existingObject.object_key,
-      "bytes=0-0"
-    );
-    let received = false;
-    try {
-      for await (const chunk of opened.body) {
-        if (Buffer.byteLength(chunk) > 0) {
-          received = true;
-          break;
-        }
-      }
-    } finally {
-      opened.body.destroy();
-    }
-    if (received) return;
-    throw new Error("Storage returned an empty object probe");
-  } catch (error) {
-    throw new ApiError(
-      502,
-      "storage_access_probe_failed",
-      "Storage backend could not read an existing referenced object",
-      { image_id: existingObject.id, reason: errorMessage(error) }
-    );
-  }
-}
-
-async function validateStorageUpdate(
-  config: StorageConfig,
-  existingObject?: ExistingStorageProbe,
-  endpointRebind?: {
-    currentConfig: StorageConfig;
-    currentStaging: StagingNamespaceSnapshot;
-  }
-) {
-  const testConfig = { ...config, slug: "(test)" };
-  const driver = storageDriverForConfig(testConfig);
-  try {
-    if (existingObject) {
-      await assertExistingObjectReadable(driver, existingObject);
-    }
-    if (endpointRebind) {
-      await verifyStorageEndpointRebind({
-        current: storageDriverForConfig(endpointRebind.currentConfig),
-        candidate: driver,
-        currentStaging: endpointRebind.currentStaging
-      });
-      return;
-    }
-    const result = await driver.selfTest();
-    if (!result.writable) {
-      throw new ApiError(
-        502,
-        "storage_test_failed",
-        "Storage backend did not confirm write access"
-      );
-    }
-  } finally {
-    await Promise.resolve(driver.close?.()).catch(() => undefined);
-  }
-}
-
-class StorageLocationWriteLockRequired extends Error {}
-
-type StorageUpdateReceipt = { transactionId: string | null };
-
-type StorageNamespaceRow = {
-  slug: string;
-  type: StorageType;
-  config: unknown;
-  namespace_identities?: unknown;
-};
-
-function namespaceSetsOverlap(
-  first: ReadonlySet<string>,
-  second: ReadonlySet<string>
-) {
-  return [...first].some((identity) => second.has(identity));
-}
-
-function mergedStorageNamespaceComponent(
-  rows: readonly StorageNamespaceRow[],
-  current: StorageConfig,
-  candidate: StorageConfig
-) {
-  const identities = new Set([
-    ...storageNamespaceIdentities(current),
-    ...storageNamespaceIdentities(candidate)
-  ]);
-  const slugs = new Set([current.slug]);
-  let expanded = true;
-  while (expanded) {
-    expanded = false;
-    for (const row of rows) {
-      if (slugs.has(row.slug)) continue;
-      const rowIdentities = storageNamespaceIdentities(storageConfigFromRow(row));
-      if (!namespaceSetsOverlap(identities, rowIdentities)) continue;
-      slugs.add(row.slug);
-      for (const identity of rowIdentities) {
-        if (!identities.has(identity)) expanded = true;
-        identities.add(identity);
-      }
-    }
-  }
-  return {
-    identities: [...identities].sort(),
-    slugs: [...slugs].sort()
-  };
-}
-
-async function hasRegisteredNamespacePeer(
-  client: PoolClient,
-  current: StorageConfig
-) {
-  const rows = (await client.query(
-    `SELECT slug, type, config, namespace_identities
-       FROM storage_backend
-      WHERE slug <> $1`,
-    [current.slug]
-  )).rows as StorageNamespaceRow[];
-  return rows.some((row) => shareStorageNamespace(
-    current,
-    storageConfigFromRow(row)
-  ));
-}
-
-function sameStorageBackendConfig(
-  snapshot: StorageBackendSnapshot,
-  locked: {
-    slug: string;
-    type: StorageType;
-    config: unknown;
-    namespace_identities?: unknown;
-  }
-) {
-  if (
-    locked.type !== snapshot.type
-    || JSON.stringify(normalizedNamespaceIdentities(locked.namespace_identities))
-      !== JSON.stringify(normalizedNamespaceIdentities(snapshot.namespace_identities))
-  ) {
-    return false;
-  }
-  const snapshotConfig = storageConfigFromRow(snapshot);
-  const lockedConfig = storageConfigFromRow(locked);
-  if (snapshotConfig.type === "s3" && lockedConfig.type === "s3") {
-    return JSON.stringify(snapshotConfig.s3) === JSON.stringify(lockedConfig.s3);
-  }
-  if (snapshotConfig.type === "webdav" && lockedConfig.type === "webdav") {
-    return JSON.stringify(snapshotConfig.webdav) === JSON.stringify(lockedConfig.webdav);
-  }
-  return snapshotConfig.type === lockedConfig.type;
-}
-
-async function updateStorageBackendUnderLock(
-  slug: string,
-  input: StorageBackendUpdateInput,
-  allowPhysicalLocationChange: boolean,
-  signal: AbortSignal,
-  lockClient: PoolClient,
-  receipt: StorageUpdateReceipt
-) {
-  signal.throwIfAborted();
-  const snapshot = await storageBackendSnapshot(slug);
-  signal.throwIfAborted();
-  const currentConfig = storageConfigFromRow(snapshot);
-  const nextConfig = updatedStorageConfig(currentConfig, input);
-  const configChanged = currentConfig.type === "s3"
-    ? JSON.stringify(currentConfig.s3) !== JSON.stringify(nextConfig.s3)
-    : currentConfig.type === "webdav"
-      ? JSON.stringify(currentConfig.webdav) !== JSON.stringify(nextConfig.webdav)
-      : false;
-  const configuredNamespaceChanged = configuredStorageNamespaceIdentity(currentConfig)
-    !== configuredStorageNamespaceIdentity(nextConfig);
-  const layoutChanged = storageNamespaceLayoutIdentity(currentConfig)
-    !== storageNamespaceLayoutIdentity(nextConfig);
-  const endpointRebindCandidate = currentConfig.type === "s3"
-    && nextConfig.type === "s3"
-    && configuredNamespaceChanged
-    && !layoutChanged;
-  if (configuredNamespaceChanged && !allowPhysicalLocationChange) {
-    throw new StorageLocationWriteLockRequired();
-  }
-
-  const changedFields = configuredNamespaceChanged
-    ? changedPhysicalLocationFields(currentConfig, nextConfig)
-    : [];
-  const snapshotUsage = storageBackendUsage(snapshot);
-  let currentStaging: StagingNamespaceSnapshot | undefined;
-  let verifiedEndpointRebind = false;
-  if (configuredNamespaceChanged) {
-    // A non-alias location change can be rejected from PostgreSQL truth
-    // without touching a remote backend. Endpoint aliases require one current
-    // snapshot so an otherwise-empty namespace remains distinguishable from
-    // one that only contains prepared imports.
-    if (!endpointRebindCandidate) {
-      assertPhysicalLocationChangeAllowed(changedFields, snapshotUsage);
-    }
-    currentStaging = await captureStagingNamespaceSnapshot(
-      storageDriverForConfig(currentConfig)
-    );
-    snapshotUsage.staging_object_count = currentStaging.keys.size;
-    signal.throwIfAborted();
-    if (endpointRebindCandidate) {
-      verifiedEndpointRebind = Boolean(
-        snapshotUsage.image_count
-        || snapshotUsage.import_session_count
-        || snapshotUsage.cleanup_job_count
-        || snapshotUsage.staging_object_count
-      );
-      if (
-        !verifiedEndpointRebind
-        && (
-          normalizedNamespaceIdentities(snapshot.namespace_identities).length
-          || await hasRegisteredNamespacePeer(lockClient, currentConfig)
-        )
-      ) {
-        // An otherwise-empty slug can still share objects owned by another
-        // registered slug. Do not discard an established alias component and
-        // later let a migration mistake one physical object for two copies.
-        verifiedEndpointRebind = true;
-      }
-    } else {
-      assertPhysicalLocationChangeAllowed(changedFields, snapshotUsage);
-    }
-  }
-
-  const existingObject = snapshotUsage.image_count > 0
-    ? (await pool.query(
-        `SELECT id, object_key, storage_slug
-           FROM metadata
-          WHERE storage_slug=$1
-          ORDER BY id
-          LIMIT 1`,
-        [slug]
-    )).rows[0] as ExistingStorageProbe | undefined
-    : undefined;
-  signal.throwIfAborted();
-  if (configChanged) {
-    await validateStorageUpdate(
-      nextConfig,
-      existingObject,
-      verifiedEndpointRebind && currentStaging
-        ? { currentConfig, currentStaging }
-        : undefined
-    );
-    signal.throwIfAborted();
-  }
-
-  let nextNamespaceIdentities = normalizedNamespaceIdentities(
-    snapshot.namespace_identities
-  );
-  if (configuredNamespaceChanged && !verifiedEndpointRebind) {
-    // An empty backend may move to a genuinely new namespace. It has no
-    // cleanup receipt to preserve, so discard aliases from the old location.
-    nextNamespaceIdentities = [];
-  }
-
-  try {
-    await withTransactionOnClient(lockClient, async (client) => {
-      signal.throwIfAborted();
-      const row = (await client.query(
-      `SELECT slug, type, config, namespace_identities, is_default
-         FROM storage_backend
-        WHERE slug=$1
-        FOR UPDATE`,
-      [slug]
-      )).rows[0];
-      signal.throwIfAborted();
-      if (!row) throw new ApiError(404, "storage_backend_not_found", `Unknown storage backend: ${slug}`);
-      if (!sameStorageBackendConfig(snapshot, row as {
-        slug: string;
-        type: StorageType;
-        config: unknown;
-        namespace_identities?: unknown;
-      })) {
-        throw new ApiError(
-          409,
-          "storage_backend_changed",
-          "存储后端配置已被其他请求修改，请刷新后重试"
-        );
-      }
-      if (input.enabled === false && row.is_default) {
-        throw new ApiError(400, "storage_default_enabled", "默认后端不能停用，请先切换默认后端");
-      }
-      if (input.enabled === false && row.slug === "local") {
-        const alternativeDefault = await client.query(
-          `SELECT 1
-           FROM storage_backend
-           WHERE slug <> 'local' AND enabled AND is_default
-           LIMIT 1`
-        );
-        if (!alternativeDefault.rowCount) {
-          throw new ApiError(
-            400,
-            "storage_local_requires_alternative",
-            "停用本地存储前，请先启用其他存储并将其设为默认后端"
-          );
-        }
-      }
-
-      if (verifiedEndpointRebind) {
-        const namespaceRows = (await client.query(
-          `SELECT slug, type, config, namespace_identities
-             FROM storage_backend
-            FOR UPDATE`
-        )).rows as StorageNamespaceRow[];
-        const component = mergedStorageNamespaceComponent(
-          namespaceRows,
-          currentConfig,
-          nextConfig
-        );
-        nextNamespaceIdentities = component.identities;
-        await client.query(
-          `UPDATE storage_backend
-              SET namespace_identities=$2::text[]
-            WHERE slug = ANY($1::text[])`,
-          [component.slugs, component.identities]
-        );
-      }
-
-      const configJson = !configChanged
-        ? null
-        : nextConfig.type === "s3"
-          ? JSON.stringify(nextConfig.s3)
-          : nextConfig.type === "webdav"
-            ? JSON.stringify(nextConfig.webdav)
-            : null;
-
-      await client.query(
-        `UPDATE storage_backend
-         SET display_name=COALESCE($2, display_name),
-             enabled=COALESCE($3, enabled),
-             config=COALESCE($4::jsonb, config),
-             namespace_identities=$5::text[],
-             updated_at=now()
-         WHERE slug=$1`,
-        [
-          slug,
-          input.display_name ?? null,
-          input.enabled ?? null,
-          configJson,
-          nextNamespaceIdentities
-        ]
-      );
-      signal.throwIfAborted();
-    }, {
-      onTransactionId: (transactionId) => {
-        receipt.transactionId = transactionId;
-      }
-    });
-  } finally {
-    // COMMIT acknowledgement can be lost together with the lock connection.
-    // Dropping cached drivers is harmless after a rollback and essential when
-    // the database update actually committed before the error was observed.
-    invalidateStorageBackendCache();
-  }
-}
-
-async function settleStorageBackendUpdate(
-  work: (receipt: StorageUpdateReceipt) => Promise<void>
-) {
-  const receipt: StorageUpdateReceipt = { transactionId: null };
-  try {
-    await work(receipt);
-  } catch (error) {
-    if (!receipt.transactionId) throw error;
-    const outcome = await inspectTransactionOutcome(receipt.transactionId)
-      .catch(() => "unknown" as const);
-    if (outcome === "committed") return;
-    if (outcome === "rolled_back") throw error;
-    throw new ApiError(
-      503,
-      "storage_update_outcome_unknown",
-      "存储配置事务结果暂时无法确认，请刷新后核对当前配置",
-      {
-        transaction_id: receipt.transactionId,
-        original_error: errorMessage(error)
-      }
-    );
-  }
-}
-
-export async function updateStorageBackend(slug: string, input: StorageBackendUpdateInput) {
-  const backendLockKey = `imageshow:storage-backend:${slug}`;
-  const updateWithBackendLock = (allowPhysicalLocationChange: boolean) =>
-    settleStorageBackendUpdate((receipt) =>
-      withAdvisoryLock(backendLockKey, (signal, lockClient) =>
-        updateStorageBackendUnderLock(
-          slug,
-          input,
-          allowPhysicalLocationChange,
-          signal,
-          lockClient,
-          receipt
-        )
-      )
-    );
-
-  if (!input.s3 && !input.webdav) {
-    await updateWithBackendLock(false);
-    return;
-  }
-
-  const snapshot = await storageBackendSnapshot(slug);
-  const currentConfig = storageConfigFromRow(snapshot);
-  const nextConfig = updatedStorageConfig(currentConfig, input);
-  const requiresWriteLock = configuredStorageNamespaceIdentity(currentConfig)
-    !== configuredStorageNamespaceIdentity(nextConfig);
-  if (requiresWriteLock) {
-    await settleStorageBackendUpdate((receipt) =>
-      withStorageLocationWriteAndAdvisoryLock(
-        backendLockKey,
-        (signal, lockClient) => updateStorageBackendUnderLock(
-          slug,
-          input,
-          true,
-          signal,
-          lockClient,
-          receipt
-        )
-      )
-    );
-    return;
-  }
-
-  try {
-    await settleStorageBackendUpdate((receipt) =>
-      withStorageLocationReadAndAdvisoryLock(
-        backendLockKey,
-        (signal, lockClient) => updateStorageBackendUnderLock(
-          slug,
-          input,
-          false,
-          signal,
-          lockClient,
-          receipt
-        )
-      )
-    );
-  } catch (error) {
-    if (!(error instanceof StorageLocationWriteLockRequired)) throw error;
-    await settleStorageBackendUpdate((receipt) =>
-      withStorageLocationWriteAndAdvisoryLock(
-        backendLockKey,
-        (signal, lockClient) => updateStorageBackendUnderLock(
-          slug,
-          input,
-          true,
-          signal,
-          lockClient,
-          receipt
-        )
-      )
-    );
-  }
-}
-
-export async function deleteStorageBackend(slug: string) {
-  if (slug === "local") {
-    throw new ApiError(400, "storage_backend_reserved", "'local' 是内置后端，不能删除");
-  }
-  await withStorageLocationWriteAndAdvisoryLock(
-    `imageshow:storage-backend:${slug}`,
-    async (signal, lockClient) => {
-      signal.throwIfAborted();
-      const snapshot = await storageBackendSnapshot(slug);
-      signal.throwIfAborted();
-      if (snapshot.is_default) {
-        throw new ApiError(
-          400,
-          "storage_default_delete",
-          "默认后端不能删除，请先切换默认后端"
-        );
-      }
-
-      const usage = storageBackendUsage(snapshot);
-      if (
-        !usage.image_count
-        && !usage.import_session_count
-        && !usage.cleanup_job_count
-      ) {
-        const staging = await captureStagingNamespaceSnapshot(
-          storageDriverForConfig(storageConfigFromRow(snapshot))
-        );
-        usage.staging_object_count = staging.keys.size;
-        signal.throwIfAborted();
-      }
-      if (
-        usage.image_count
-        || usage.import_session_count
-        || usage.cleanup_job_count
-        || usage.staging_object_count
-      ) {
-        throw new ApiError(
-          409,
-          "storage_backend_in_use",
-          "该存储后端仍有图片、未清理导入会话、旧对象删除任务或暂存对象，无法删除",
-          usage
-        );
-      }
-
-      signal.throwIfAborted();
-      try {
-        await withTransactionOnClient(lockClient, async (client) => {
-          signal.throwIfAborted();
-          const deleted = await client.query(
-            "DELETE FROM storage_backend WHERE slug=$1 AND NOT is_default RETURNING slug",
-            [slug]
-          )
-            .catch((error: unknown) => {
-              if (
-                error
-                && typeof error === "object"
-                && (error as { code?: string }).code === "23503"
-              ) {
-                throw new ApiError(
-                  409,
-                  "storage_backend_in_use",
-                  "该存储后端在删除时被新的数据引用，请刷新后重试"
-                );
-              }
-              throw error;
-            });
-          signal.throwIfAborted();
-          if (!deleted.rowCount) {
-            throw new ApiError(
-              400,
-              "storage_default_delete",
-              "后端已被设为默认，不能删除；请刷新后重试"
-            );
-          }
-        });
-      } finally {
-        // The DELETE may commit even if its acknowledgement is lost with the
-        // advisory-lock connection. Never leave an old registry snapshot live.
-        invalidateStorageBackendCache();
-      }
-    }
-  );
-}
-
-export async function setDefaultStorageBackend(slug: string) {
-  await withTransaction(async (client) => {
-    const row = (await client.query(
-      "SELECT enabled FROM storage_backend WHERE slug=$1 FOR UPDATE",
-      [slug]
-    )).rows[0];
-    if (!row) throw new ApiError(404, "storage_backend_not_found", `Unknown storage backend: ${slug}`);
-    if (!row.enabled) {
-      throw new ApiError(400, "storage_default_disabled", "不能将已停用的后端设为默认");
-    }
-
-    await client.query("UPDATE storage_backend SET is_default=false, updated_at=now() WHERE is_default");
-    await client.query("UPDATE storage_backend SET is_default=true, updated_at=now() WHERE slug=$1", [slug]);
-  });
-  invalidateStorageBackendCache();
-}
-
-export async function reorderStorageBackends(slugs: string[]) {
-  if (!slugs.length) return;
-  await pool.query(
-    `UPDATE storage_backend b SET sort_order = v.ord, updated_at = now()
-     FROM unnest($1::text[]) WITH ORDINALITY AS v(slug, ord)
-     WHERE b.slug = v.slug AND b.slug <> 'local'`,
-    [slugs]
-  );
-  invalidateStorageBackendCache();
-}
-
-export async function resolveStorageTestConfig(input: {
-  slug?: string;
-  type?: string;
-  s3?: unknown;
-  webdav?: unknown;
-}): Promise<StorageConfig> {
-  const current = input.slug ? await getStorageBackend(input.slug) : undefined;
-  if (current?.type === "local") return current;
-
-  const type = current?.type ?? (input.type === "webdav" || input.webdav ? "webdav" : "s3");
-  if (type === "webdav") {
-    const candidate = webdavSettingsSchema.parse(input.webdav ?? current?.webdav ?? {});
-    return {
-      slug: "(test)",
-      type: "webdav",
-      s3: defaultS3Settings,
-      webdav: withStoredWebdavCredential(candidate, current?.type === "webdav" ? current.webdav : undefined)
-    };
-  }
-
-  const candidate = s3SettingsSchema.parse(input.s3 ?? current?.s3 ?? {});
-  return {
-    slug: "(test)",
-    type: "s3",
-    s3: withStoredS3Credential(candidate, current?.type === "s3" ? current.s3 : undefined),
-    webdav: defaultWebdavSettings
-  };
 }

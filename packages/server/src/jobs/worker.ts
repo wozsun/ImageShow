@@ -2,6 +2,7 @@ import { appConfig } from "@imageshow/shared";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { logger } from "../core/logger.ts";
 import { cleanupOrphanRawImports } from "../images/imports/temp-files.ts";
+import { scheduleImportCleanupJob } from "../images/imports/cleanup-job.ts";
 import { handleBackgroundJob } from "./handlers.ts";
 import {
   claimBackgroundJob,
@@ -11,8 +12,7 @@ import {
   markBackgroundJobIgnored,
   markBackgroundJobSucceeded,
   rescheduleBackgroundJob,
-  recoverStaleBackgroundJobs,
-  scheduleImportCleanup
+  recoverStaleBackgroundJobs
 } from "./repository.ts";
 
 let timer: NodeJS.Timeout | undefined;
@@ -83,7 +83,7 @@ async function runBackgroundJobType(type: string, lanes: number): Promise<QueueS
 
 async function scheduleExpiredImportCleanup() {
   await cleanupOrphanRawImports(appConfig.uploadTtlSeconds * 1000);
-  await scheduleImportCleanup();
+  await scheduleImportCleanupJob();
 }
 
 async function runWorkerTick() {

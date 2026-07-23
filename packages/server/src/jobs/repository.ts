@@ -1,24 +1,12 @@
 import { appConfig } from "@imageshow/shared";
-import { pool } from "../core/db.ts";
+import type { PoolClient } from "pg";
 import { errorMessage } from "../core/api-error.ts";
+import { pool } from "../core/db.ts";
 import { logger } from "../core/logger.ts";
 import { randomUuidV7 } from "../core/uuid.ts";
+import type { BackgroundJob, BackgroundJobType } from "./types.ts";
 
-export type BackgroundJobType =
-  | "thumb.generate"
-  | "move.cleanup"
-  | "import.cleanup"
-  | "trash.purge"
-  | "cache.rebuild";
-
-export type BackgroundJob = {
-  id: string;
-  type: string;
-  target_id: string;
-  payload: Record<string, unknown>;
-  retry_count: number;
-  created_at: Date | string;
-};
+export type { BackgroundJob, BackgroundJobType } from "./types.ts";
 
 export async function enqueue(
   type: BackgroundJobType,
@@ -26,11 +14,6 @@ export async function enqueue(
   payload: unknown = {},
   idempotencyKey?: string
 ) {
-  const id = randomUuidV7();
-  if (type === "move.cleanup" && idempotencyKey) {
-    await enqueueMoveCleanupJob(id, targetId, payload, idempotencyKey);
-    return;
-  }
   await pool.query(
     `INSERT INTO background_job(id, type, target_id, payload, idempotency_key)
      VALUES($1, $2, $3, $4::jsonb, $5)
@@ -50,76 +33,106 @@ export async function enqueue(
           background_job.status='failed'
           AND background_job.next_retry_at IS NULL
         )`,
-    [id, type, targetId, JSON.stringify(payload), idempotencyKey ?? null]
+    [
+      randomUuidV7(),
+      type,
+      targetId,
+      JSON.stringify(payload),
+      idempotencyKey ?? null
+    ]
   );
 }
 
 /**
- * A cleanup enqueue that races with its current handler must survive the
- * running -> succeeded transition. Keep the in-flight payload intact and
- * leave a durable rerun marker; the success transition consumes that marker
- * by returning the same row to pending. Terminal rows instead start a fresh
- * operation with the newly captured physical namespace.
+ * Deterministic work that races with its current handler must survive the
+ * running -> succeeded transition. The in-flight payload remains immutable
+ * and receives a durable rerun marker. The generic success transition consumes
+ * that marker by returning the same row to pending.
  */
-async function enqueueMoveCleanupJob(
-  id: string,
+export async function enqueueRerunnableJob(
+  type: BackgroundJobType,
   targetId: string,
   payload: unknown,
-  idempotencyKey: string
+  idempotencyKey: string,
+  client?: PoolClient
 ) {
-  await pool.query(
-    `INSERT INTO background_job(id, type, target_id, payload, idempotency_key)
-     VALUES($1, 'move.cleanup', $2, $3::jsonb, $4)
-     ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO UPDATE
-     SET type=CASE
-           WHEN background_job.status='running' THEN background_job.type
-           ELSE EXCLUDED.type
-         END,
-         target_id=CASE
-           WHEN background_job.status='running' THEN background_job.target_id
-           ELSE EXCLUDED.target_id
-         END,
-         payload=CASE
-           WHEN background_job.status='running'
-             THEN jsonb_set(background_job.payload, '{rerun_requested}', 'true'::jsonb, true)
-           ELSE EXCLUDED.payload
-         END,
-         status=CASE
-           WHEN background_job.status='running' THEN background_job.status
-           ELSE 'pending'
-         END,
-         result=CASE
-           WHEN background_job.status='running' THEN background_job.result
-           ELSE '{}'::jsonb
-         END,
-         error=CASE
-           WHEN background_job.status='running' THEN background_job.error
-           ELSE ''
-         END,
-         retry_count=CASE
-           WHEN background_job.status='running' THEN background_job.retry_count
-           ELSE 0
-         END,
-         next_retry_at=CASE
-           WHEN background_job.status='running' THEN background_job.next_retry_at
-           ELSE NULL
-         END,
-         created_at=CASE
-           WHEN background_job.status='running' THEN background_job.created_at
-           ELSE now()
-         END,
-         updated_at=CASE
-           WHEN background_job.status='running' THEN background_job.updated_at
-           ELSE now()
-         END
-     WHERE background_job.status='running'
-        OR background_job.status IN ('succeeded', 'ignored')
-        OR (
-          background_job.status='failed'
-          AND background_job.next_retry_at IS NULL
-        )`,
-    [id, targetId, JSON.stringify(payload), idempotencyKey]
-  );
+  const values = [
+    randomUuidV7(),
+    type,
+    targetId,
+    JSON.stringify(payload),
+    idempotencyKey
+  ];
+  const query = `INSERT INTO background_job(
+                   id, type, target_id, payload, idempotency_key
+                 )
+                 VALUES($1, $2, $3, $4::jsonb, $5)
+                 ON CONFLICT (idempotency_key)
+                   WHERE idempotency_key IS NOT NULL
+                 DO UPDATE
+                 SET type=CASE
+                       WHEN background_job.status='running'
+                         THEN background_job.type
+                       ELSE EXCLUDED.type
+                     END,
+                     target_id=CASE
+                       WHEN background_job.status='running'
+                         THEN background_job.target_id
+                       ELSE EXCLUDED.target_id
+                     END,
+                     payload=CASE
+                       WHEN background_job.status='running'
+                         THEN jsonb_set(
+                           background_job.payload,
+                           '{rerun_requested}',
+                           'true'::jsonb,
+                           true
+                         )
+                       ELSE EXCLUDED.payload
+                     END,
+                     status=CASE
+                       WHEN background_job.status='running'
+                         THEN background_job.status
+                       ELSE 'pending'
+                     END,
+                     result=CASE
+                       WHEN background_job.status='running'
+                         THEN background_job.result
+                       ELSE '{}'::jsonb
+                     END,
+                     error=CASE
+                       WHEN background_job.status='running'
+                         THEN background_job.error
+                       ELSE ''
+                     END,
+                     retry_count=CASE
+                       WHEN background_job.status='running'
+                         THEN background_job.retry_count
+                       ELSE 0
+                     END,
+                     next_retry_at=CASE
+                       WHEN background_job.status='running'
+                         THEN background_job.next_retry_at
+                       ELSE NULL
+                     END,
+                     created_at=CASE
+                       WHEN background_job.status='running'
+                         THEN background_job.created_at
+                       ELSE now()
+                     END,
+                     updated_at=CASE
+                       WHEN background_job.status='running'
+                         THEN background_job.updated_at
+                       ELSE now()
+                     END
+                 WHERE background_job.status='running'
+                    OR background_job.status IN ('succeeded', 'ignored')
+                    OR (
+                      background_job.status='failed'
+                      AND background_job.next_retry_at IS NULL
+                    )`;
+  if (client) await client.query(query, values);
+  else await pool.query(query, values);
 }
 
 export async function claimBackgroundJob(type: string) {
@@ -143,34 +156,29 @@ export async function claimBackgroundJob(type: string) {
   return result.rows[0] as BackgroundJob | undefined;
 }
 
-export async function markBackgroundJobSucceeded(id: string, result: unknown = {}) {
+export async function markBackgroundJobSucceeded(
+  id: string,
+  result: unknown = {}
+) {
   await pool.query(
     `UPDATE background_job
      SET status=CASE
-           WHEN type='move.cleanup' AND payload->>'rerun_requested'='true'
-             THEN 'pending'
+           WHEN payload->>'rerun_requested'='true' THEN 'pending'
            ELSE 'succeeded'
          END,
-         payload=CASE
-           WHEN type='move.cleanup' AND payload ? 'rerun_requested'
-             THEN payload - 'rerun_requested'
-           ELSE payload
-         END,
+         payload=payload - 'rerun_requested',
          result=CASE
-           WHEN type='move.cleanup' AND payload->>'rerun_requested'='true'
-             THEN '{}'::jsonb
+           WHEN payload->>'rerun_requested'='true' THEN '{}'::jsonb
            ELSE $2::jsonb
          END,
          error='',
          retry_count=CASE
-           WHEN type='move.cleanup' AND payload->>'rerun_requested'='true'
-             THEN 0
+           WHEN payload->>'rerun_requested'='true' THEN 0
            ELSE retry_count
          END,
          next_retry_at=NULL,
          created_at=CASE
-           WHEN type='move.cleanup' AND payload->>'rerun_requested'='true'
-             THEN now()
+           WHEN payload->>'rerun_requested'='true' THEN now()
            ELSE created_at
          END,
          updated_at=now()
@@ -203,7 +211,10 @@ export async function rescheduleBackgroundJob(
   );
 }
 
-export async function markBackgroundJobFailed(job: BackgroundJob, error: unknown) {
+export async function markBackgroundJobFailed(
+  job: BackgroundJob,
+  error: unknown
+) {
   const retry = job.retry_count + 1;
   const maxRetries = appConfig.backgroundJob.maxRetries;
   const backoff = appConfig.backgroundJob.retryBackoffSeconds;
@@ -211,15 +222,14 @@ export async function markBackgroundJobFailed(job: BackgroundJob, error: unknown
   const exhausted = retry >= maxRetries;
 
   logger[exhausted ? "error" : "warn"](
-    `task ${job.type} ${exhausted ? "gave up" : `will retry (${retry}/${maxRetries})`} id=${job.id.slice(0, 8)}: ${errorMessage(error)}`
+    `task ${job.type} ${
+      exhausted ? "gave up" : `will retry (${retry}/${maxRetries})`
+    } id=${job.id.slice(0, 8)}: ${errorMessage(error)}`
   );
   await pool.query(
     `UPDATE background_job
      SET status='failed',
-         payload=CASE
-           WHEN type='move.cleanup' THEN payload - 'rerun_requested'
-           ELSE payload
-         END,
+         payload=payload - 'rerun_requested',
          retry_count=$2,
          next_retry_at=$3,
          error=$4,
@@ -238,7 +248,9 @@ export async function listRunnableBackgroundJobCounts() {
   return (await pool.query(
     `SELECT type,
             count(*)::int AS n,
-            floor(extract(epoch FROM (now() - min(created_at))) * 1000)::bigint AS oldest_wait_ms
+            floor(
+              extract(epoch FROM (now() - min(created_at))) * 1000
+            )::bigint AS oldest_wait_ms
        FROM background_job
      WHERE (
        status='pending' AND (next_retry_at IS NULL OR next_retry_at <= now())
@@ -251,186 +263,24 @@ export async function listRunnableBackgroundJobCounts() {
   }));
 }
 
-export type MoveCleanupJobCount = {
-  storage_slug: string;
-  cleanup_job_count: number;
-  failed_cleanup_job_count: number;
-  exhausted_cleanup_job_count: number;
-};
-
-async function unresolvedMoveCleanupJobCounts(
-  storageSlug: string | null
-): Promise<MoveCleanupJobCount[]> {
-  const rows = (await pool.query(
-    `WITH unresolved AS (
-       SELECT id, payload, status, next_retry_at
-         FROM background_job
-        WHERE type='move.cleanup'
-          AND status IN ('pending', 'running', 'failed')
-     ), cleanup_references AS (
-       SELECT unresolved.id,
-              unresolved.status,
-              unresolved.next_retry_at,
-              reference.backend
-         FROM unresolved
-         CROSS JOIN LATERAL (
-           SELECT NULLIF(object->>'backend', '') AS backend
-             FROM jsonb_array_elements(
-               CASE
-                 WHEN jsonb_typeof(unresolved.payload->'objects')='array'
-                   THEN unresolved.payload->'objects'
-                 ELSE '[]'::jsonb
-               END
-             ) AS object
-         ) AS reference
-        WHERE reference.backend IS NOT NULL
-          AND ($1::text IS NULL OR reference.backend=$1)
-     )
-     SELECT backend AS storage_slug,
-            count(DISTINCT id)::int AS cleanup_job_count,
-            count(DISTINCT id) FILTER (
-              WHERE status='failed'
-            )::int AS failed_cleanup_job_count,
-            count(DISTINCT id) FILTER (
-              WHERE status='failed' AND next_retry_at IS NULL
-            )::int AS exhausted_cleanup_job_count
-       FROM cleanup_references
-      GROUP BY backend`,
-    [storageSlug]
-  )).rows;
-  return rows.map((row) => ({
-    storage_slug: String(row.storage_slug),
-    cleanup_job_count: Number(row.cleanup_job_count ?? 0),
-    failed_cleanup_job_count: Number(row.failed_cleanup_job_count ?? 0),
-    exhausted_cleanup_job_count: Number(row.exhausted_cleanup_job_count ?? 0)
-  }));
-}
-
-/** Pending, running and every failed cleanup remain physical references. */
-export function listUnresolvedMoveCleanupJobCounts() {
-  return unresolvedMoveCleanupJobCounts(null);
-}
-
-export async function countUnresolvedMoveCleanupJobs(storageSlug: string) {
-  return (await unresolvedMoveCleanupJobCounts(storageSlug))[0]
-    ?.cleanup_job_count ?? 0;
-}
-
-export type UnresolvedMoveCleanupReference = {
-  backend: string;
-  prefix: "media" | "thumbs";
-  key: string;
-  namespace_identity: string;
-};
-
-/** Unresolved rows are deletion leases for the exact physical object. */
-export async function listUnresolvedMoveCleanupReferences(
-  prefix: "media" | "thumbs",
-  key: string
-): Promise<UnresolvedMoveCleanupReference[]> {
-  const rows = (await pool.query(
-    `WITH unresolved AS (
-       SELECT payload,
-              CASE
-                WHEN jsonb_typeof(payload->'objects')='array'
-                  THEN payload->'objects'
-                ELSE '[]'::jsonb
-              END AS objects
-         FROM background_job
-        WHERE type='move.cleanup'
-          AND status IN ('pending', 'running', 'failed')
-     ), cleanup_references AS (
-       SELECT NULLIF(object->>'backend', '') AS backend,
-              object->>'prefix' AS prefix,
-              object->>'key' AS key,
-              NULLIF(object->>'namespace_identity', '') AS namespace_identity
-         FROM unresolved
-         CROSS JOIN LATERAL jsonb_array_elements(objects) AS object
-     )
-     SELECT DISTINCT backend, prefix, key, namespace_identity
-       FROM cleanup_references
-      WHERE backend IS NOT NULL
-        AND namespace_identity IS NOT NULL
-        AND prefix=$1
-        AND key=$2`,
-    [prefix, key]
-  )).rows;
-  return rows.map((row) => ({
-    backend: String(row.backend),
-    prefix: row.prefix as "media" | "thumbs",
-    key: String(row.key),
-    namespace_identity: String(row.namespace_identity)
-  }));
-}
-
-/** Reset only permanently exhausted cleanup work that references one backend. */
-export async function retryExhaustedMoveCleanupJobs(storageSlug: string) {
-  const result = await pool.query(
-    `UPDATE background_job AS job
-     SET status='pending',
-         payload=job.payload - 'rerun_requested',
-         result='{}'::jsonb,
-         error='',
-         retry_count=0,
-         next_retry_at=NULL,
-         created_at=now(),
-         updated_at=now()
-     WHERE job.type='move.cleanup'
-       AND job.status='failed'
-       AND job.next_retry_at IS NULL
-       AND EXISTS (
-         SELECT 1
-           FROM (
-             SELECT NULLIF(object->>'backend', '') AS backend
-               FROM jsonb_array_elements(
-                 CASE
-                   WHEN jsonb_typeof(job.payload->'objects')='array'
-                     THEN job.payload->'objects'
-                   ELSE '[]'::jsonb
-                 END
-               ) AS object
-              WHERE NULLIF(object->>'namespace_identity', '') IS NOT NULL
-           ) AS reference
-          WHERE reference.backend=$1
-       )`,
-    [storageSlug]
-  );
-  return result.rowCount ?? 0;
-}
-
 export async function recoverStaleBackgroundJobs() {
   await pool.query(
     `UPDATE background_job
      SET status='failed',
          retry_count=retry_count+1,
-         next_retry_at=CASE WHEN retry_count + 1 >= $2 THEN NULL ELSE now() END,
+         next_retry_at=CASE
+           WHEN retry_count + 1 >= $2 THEN NULL
+           ELSE now()
+         END,
          error='Recovered stale running task',
          updated_at=now()
      WHERE status='running'
        AND updated_at < now() - ($1 || ' seconds')::interval`,
-    [appConfig.backgroundJob.taskTimeoutSeconds, appConfig.backgroundJob.maxRetries]
+    [
+      appConfig.backgroundJob.taskTimeoutSeconds,
+      appConfig.backgroundJob.maxRetries
+    ]
   );
-}
-
-export async function scheduleImportCleanup() {
-  await pool.query(
-    `INSERT INTO background_job(id, type, status)
-     SELECT $1, 'import.cleanup', 'pending'
-     WHERE EXISTS (SELECT 1 FROM import_session WHERE expires_at < now())
-       AND NOT EXISTS (
-         SELECT 1 FROM background_job
-         WHERE type='import.cleanup' AND status IN ('pending', 'running')
-       )`,
-    [randomUuidV7()]
-  ).catch(() => undefined);
-}
-
-export function scheduleTrashPurge() {
-  // Do not reuse the running purge row here. A concurrent empty-trash request
-  // can discover more work after that row has already counted zero remaining;
-  // an independent pending row preserves the wake-up instead of losing it to
-  // the idempotency conflict while the older handler is still finishing.
-  return enqueue("trash.purge");
 }
 
 export async function cleanupBackgroundJobHistory() {
@@ -446,7 +296,7 @@ export async function cleanupBackgroundJobHistory() {
            OR (
              status = 'failed'
              AND next_retry_at IS NULL
-             AND type <> 'move.cleanup'
+             AND payload->>'retain_exhausted' IS DISTINCT FROM 'true'
              AND updated_at < now() - ($2 || ' seconds')::interval
            )
          ORDER BY updated_at ASC

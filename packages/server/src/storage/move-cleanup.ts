@@ -1,25 +1,27 @@
 import { ApiError } from "../core/api-error.ts";
-import { enqueue } from "../jobs/repository.ts";
-import { listUnresolvedMoveCleanupReferences } from "../jobs/repository.ts";
+import { withAdvisoryLock } from "../core/db.ts";
+import type { PoolClient } from "pg";
 import { getStorageBackend } from "./backend-registry.ts";
 import { withStorageLocationReadLock } from "./maintenance-lock.ts";
-import type { StoragePrefix } from "./object-keys.ts";
+import {
+  enqueueMoveCleanupJob,
+  listUnresolvedMoveCleanupReferences,
+  retryExhaustedMoveCleanupJobs
+} from "./move-cleanup-repository.ts";
+import type {
+  CapturedMoveCleanupObject,
+  MoveCleanupObjectInput
+} from "./move-cleanup-types.ts";
 import {
   shareStorageNamespace,
   storageNamespaceIdentity,
   storageNamespaceIncludesIdentity
 } from "./storage-namespace.ts";
 
-export type MoveCleanupObjectInput = {
-  prefix: StoragePrefix;
-  key: string;
-  backend: string;
-};
-
-type MoveCleanupObject = MoveCleanupObjectInput & {
-  /** Physical namespace captured when the old object became unreferenced. */
-  namespace_identity: string;
-};
+export type {
+  CapturedMoveCleanupObject,
+  MoveCleanupObjectInput
+} from "./move-cleanup-types.ts";
 
 /**
  * An unresolved cleanup row owns deletion of its captured physical object.
@@ -80,12 +82,16 @@ export async function assertObjectNotPendingCleanup(
 
 const cleanupEnqueueRetryDelaysMs = [0, 50, 150] as const;
 
-async function captureCleanupNamespaces(
+export async function captureMoveCleanupObjects(
   objects: readonly MoveCleanupObjectInput[]
-): Promise<MoveCleanupObject[]> {
+): Promise<CapturedMoveCleanupObject[]> {
   const identities = new Map<string, string>();
-  const captured: MoveCleanupObject[] = [];
+  const captured: CapturedMoveCleanupObject[] = [];
+  const seen = new Set<string>();
   for (const object of objects) {
+    const objectIdentity = `${object.backend}:${object.prefix}:${object.key}`;
+    if (seen.has(objectIdentity)) continue;
+    seen.add(objectIdentity);
     let identity = identities.get(object.backend);
     if (!identity) {
       identity = storageNamespaceIdentity(await getStorageBackend(object.backend));
@@ -96,28 +102,32 @@ async function captureCleanupNamespaces(
   return captured;
 }
 
+export function enqueueCapturedObjectsForCleanup(
+  imageId: string,
+  objects: readonly CapturedMoveCleanupObject[],
+  reason: string,
+  client?: PoolClient
+) {
+  if (client) {
+    return enqueueMoveCleanupJob(imageId, objects, reason, client);
+  }
+  return withStorageLocationReadLock(async (signal) => {
+    signal.throwIfAborted();
+    await enqueueMoveCleanupWithRetry(
+      imageId,
+      objects,
+      reason,
+      signal
+    );
+    signal.throwIfAborted();
+  });
+}
+
 /**
  * Queue cleanup against the physical namespace observed at enqueue time. The
  * deterministic key still deduplicates active work; terminal history can be
  * reset by the repository when the same object needs cleanup again.
  */
-async function enqueueMoveCleanup(
-  imageId: string,
-  objects: readonly MoveCleanupObject[],
-  reason: string
-) {
-  if (!objects.length) return;
-  const cleanupKey = objects
-    .map((object) => `${object.backend}:${object.prefix}:${object.key}`)
-    .join("|");
-  await enqueue(
-    "move.cleanup",
-    imageId,
-    { objects, reason },
-    `move.cleanup:${imageId}:${cleanupKey}`
-  );
-}
-
 function wait(delayMs: number) {
   return delayMs > 0
     ? new Promise<void>((resolve) => setTimeout(resolve, delayMs))
@@ -126,7 +136,7 @@ function wait(delayMs: number) {
 
 async function enqueueMoveCleanupWithRetry(
   imageId: string,
-  objects: readonly MoveCleanupObject[],
+  objects: readonly CapturedMoveCleanupObject[],
   reason: string,
   signal: AbortSignal
 ) {
@@ -136,7 +146,7 @@ async function enqueueMoveCleanupWithRetry(
     await wait(delayMs);
     signal.throwIfAborted();
     try {
-      await enqueueMoveCleanup(imageId, objects, reason);
+      await enqueueMoveCleanupJob(imageId, objects, reason);
       signal.throwIfAborted();
       return;
     } catch (error) {
@@ -159,9 +169,23 @@ export async function enqueueObjectsForCleanup(
   if (!objects.length) return;
   await withStorageLocationReadLock(async (signal) => {
     signal.throwIfAborted();
-    const captured = await captureCleanupNamespaces(objects);
+    const captured = await captureMoveCleanupObjects(objects);
     signal.throwIfAborted();
     await enqueueMoveCleanupWithRetry(imageId, captured, reason, signal);
     signal.throwIfAborted();
   });
+}
+
+export function retryStorageBackendCleanup(slug: string) {
+  return withAdvisoryLock(
+    `imageshow:storage-backend:${slug}`,
+    async (signal) => {
+      signal.throwIfAborted();
+      await getStorageBackend(slug);
+      signal.throwIfAborted();
+      const retried = await retryExhaustedMoveCleanupJobs(slug);
+      signal.throwIfAborted();
+      return retried;
+    }
+  );
 }

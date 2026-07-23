@@ -1,5 +1,5 @@
 import type { PoolClient } from "pg";
-import { pool } from "../core/db.ts";
+import { pool, withTransaction } from "../core/db.ts";
 import { ApiError } from "../core/api-error.ts";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { mapWithConcurrency } from "../core/concurrency.ts";
@@ -16,9 +16,9 @@ import {
   withStorageLocationReadAndAdvisoryLocks
 } from "../storage/maintenance-lock.ts";
 import {
-  completePreparedImageRelocation,
   discardPreparedImageRelocation,
   discardPreparedImageRelocationIfUnreferenced,
+  enqueuePreparedImageSourceCleanup,
   prepareVerifiedImageRelocation,
   type RelocatableImage
 } from "../storage/image-relocation.ts";
@@ -131,26 +131,36 @@ async function reassignThemeImagesToNone(theme: string): Promise<ThemeLookupInva
       );
       try {
         signal.throwIfAborted();
-        const switched = await pool.query(
-          `UPDATE metadata
-              SET theme='none', object_key=$3, updated_at=now()
-            WHERE id=$1
-              AND theme=$2
-              AND storage_slug=$4
-              AND object_key=$5
-              AND device=$6
-              AND brightness=$7`,
-          [
-            image.id,
-            theme,
-            relocation.nextObjectKey,
-            image.storage_slug,
-            image.object_key,
-            image.device,
-            image.brightness
-          ]
-        );
-        if (!switched.rowCount) {
+        const switched = await withTransaction(async (client) => {
+          const result = await client.query(
+            `UPDATE metadata
+                SET theme='none', object_key=$3, updated_at=now()
+              WHERE id=$1
+                AND theme=$2
+                AND storage_slug=$4
+                AND object_key=$5
+                AND device=$6
+                AND brightness=$7`,
+            [
+              image.id,
+              theme,
+              relocation.nextObjectKey,
+              image.storage_slug,
+              image.object_key,
+              image.device,
+              image.brightness
+            ]
+          );
+          if (!result.rowCount) return false;
+          await enqueuePreparedImageSourceCleanup(
+            client,
+            relocation,
+            "theme_reassign_source_cleanup"
+          );
+          signal.throwIfAborted();
+          return true;
+        });
+        if (!switched) {
           await discardPreparedImageRelocation(
             relocation,
             "theme_reassign_compare_and_swap_failed"
@@ -158,17 +168,19 @@ async function reassignThemeImagesToNone(theme: string): Promise<ThemeLookupInva
           return [];
         }
       } catch (error) {
-        await discardPreparedImageRelocationIfUnreferenced(
-          relocation,
-          "theme_reassign_failed"
-        );
+        try {
+          await discardPreparedImageRelocationIfUnreferenced(
+            relocation,
+            "theme_reassign_failed"
+          );
+        } catch (cleanupError) {
+          throw new AggregateError(
+            [error, cleanupError],
+            "Theme reassignment failed and candidate cleanup could not be queued"
+          );
+        }
         throw error;
       }
-
-      await completePreparedImageRelocation(
-        relocation,
-        "theme_reassign_source_cleanup"
-      );
       return relocation.nextObjectKey === image.object_key
         ? [{ id: image.id }]
         : [

@@ -10,14 +10,16 @@ import {
 import {
   createStorageBackend,
   deleteStorageBackend,
-  getStorageBackendsForAdmin,
-  listStorageBackendOptions,
   reorderStorageBackends,
-  resolveStorageTestConfig,
-  retryStorageBackendCleanup,
-  setDefaultStorageBackend,
-  updateStorageBackend
-} from "../storage/backend-registry.ts";
+  setDefaultStorageBackend
+} from "../storage/backend-mutations.ts";
+import {
+  getStorageBackendsForAdmin,
+  listStorageBackendOptions
+} from "../storage/backend-read-model.ts";
+import { resolveStorageTestConfig } from "../storage/backend-probe.ts";
+import { updateStorageBackend } from "../storage/backend-update.ts";
+import { retryStorageBackendCleanup } from "../storage/move-cleanup.ts";
 import { testStorageBackend } from "../storage/backend-self-test.ts";
 
 export function registerStorageRoutes(app: Hono) {

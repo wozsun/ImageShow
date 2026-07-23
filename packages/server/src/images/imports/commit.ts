@@ -21,7 +21,9 @@ import {
 } from "../../storage/maintenance-lock.ts";
 import { copyVerifiedObjectWithinStorage } from "../../storage/object-transfer.ts";
 import { enqueueObjectsForCleanup } from "../../storage/move-cleanup.ts";
-import { removeStorageObject } from "../../storage/object-access.ts";
+import {
+  removeStorageObjectAndConfirm
+} from "../../storage/object-access.ts";
 import {
   invalidateImageCaches,
   warmCompleteImageLookups
@@ -167,6 +169,7 @@ async function cleanupImportCandidatesIfUnreferenced(
       error: errorMessage(error),
       candidates
     });
+    throw error;
   }
 }
 
@@ -373,10 +376,29 @@ async function commitStoredImageSession(
     });
     databaseCommitted = true;
 
-    await Promise.all([
-      removeStorageObject("_uploads", payload.prepared_image_key, backend).catch(() => undefined),
-      removeStorageObject("_uploads", payload.prepared_thumbnail_key, backend).catch(() => undefined)
+    const stagingCleanup = await Promise.allSettled([
+      removeStorageObjectAndConfirm(
+        "_uploads",
+        payload.prepared_image_key,
+        backend
+      ),
+      removeStorageObjectAndConfirm(
+        "_uploads",
+        payload.prepared_thumbnail_key,
+        backend
+      )
     ]);
+    for (const [index, cleanup] of stagingCleanup.entries()) {
+      if (cleanup.status === "fulfilled") continue;
+      logger.warn("import_staging_cleanup_deferred", {
+        import_id: id,
+        backend,
+        key: index === 0
+          ? payload.prepared_image_key
+          : payload.prepared_thumbnail_key,
+        error: errorMessage(cleanup.reason)
+      });
+    }
     const image = await finishImport(id, payload, result.createdEntityKinds);
     return { status: "imported" as const, item: await importCommitImage(image) };
   } catch (error) {
@@ -389,18 +411,25 @@ async function commitStoredImageSession(
           ? [{ prefix: "thumbs" as const, key: thumbKey, backend }]
           : [])
       ];
-      await cleanupImportCandidatesIfUnreferenced(
-        id,
-        candidates,
-        "import_commit_rollback",
-        () => importCandidateIsPublishedOrRecoverable(
+      try {
+        await cleanupImportCandidatesIfUnreferenced(
           id,
-          backend,
-          finalKey,
-          executionToken,
-          signal
-        )
-      );
+          candidates,
+          "import_commit_rollback",
+          () => importCandidateIsPublishedOrRecoverable(
+            id,
+            backend,
+            finalKey,
+            executionToken,
+            signal
+          )
+        );
+      } catch (cleanupError) {
+        throw new AggregateError(
+          [error, cleanupError],
+          "Import commit failed and candidate cleanup could not be queued"
+        );
+      }
     }
     throw error;
   }

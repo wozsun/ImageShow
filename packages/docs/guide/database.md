@@ -1,8 +1,10 @@
 # 数据库结构
 
 PostgreSQL 共 9 张业务表，另有迁移记录表 `schema_migrations`。全新数据库从
-`packages/server/migrations/0001_initial.sql` 初始化。当前仓库只保留这一份已确认的
-当前基线；数据库的迁移记录应为 `0001_initial`。后续 schema 变化从 `0002` 开始，
+`packages/server/migrations/0001_initial.sql` 初始化；这份文件是 v3.11.6 的已确认
+基线。当前迁移集还包含 `0002_move_cleanup_retention.sql`，用于给既有
+`move.cleanup` 任务补上耗尽后继续保留的标记，因此迁移记录应依次包含
+`0001_initial` 与 `0002_move_cleanup_retention`。后续 schema 变化从 `0003` 开始，
 通过按文件名顺序执行的新前向迁移应用，已发布的迁移不再改写。
 PostgreSQL 是唯一真相源，Redis 随机池、列表缓存和判重缓存均可重建。
 
@@ -111,15 +113,17 @@ DELETE 发出后失锁时由后继重新采用同一对象。
 
 `metadata.storage_slug` 与 `import_session.storage_slug` 以外键引用它；后端需先迁走图片、
 清理全部导入会话、未解决 `move.cleanup` 和 `_uploads` 暂存对象才能删除。后端注册表同时
-管理配置快照与按签名复用的 driver/client 生命周期，配置或默认后端变化会关闭并清理
-相关实例。S3 的 bucket / root_path 与 WebDAV 的 base_url / root_path 是物理布局；仍有
+管理配置快照与按签名复用的 driver/client 生命周期；只有 driver 连接参数变化或后端
+删除才会安全退役相关实例，显示名、启停、默认项和排序变化只刷新注册表快照。S3 的
+bucket / root_path 与 WebDAV 的 base_url / root_path 是物理布局；仍有
 图片、任意导入会话、未解决清理任务或暂存对象时不允许原地修改。S3 endpoint 可在
 独占位置锁内通过 `_uploads` 完整快照、既有对象的有界 Range 读取和双向随机挑战证明
 为同一命名空间的访问别名；成功后合并全部相交后端的 `namespace_identities`，使别名
 等价关系保持传递性；已在集合中或与其他注册项共享 identity 的空后端也不得无证明地
 脱离该集合。验证失败不写配置；COMMIT 回包丢失时按事务 ID 查询确定结果，
 无法确认则明确要求刷新核对。region、凭据、公开 URL 等访问参数不改变物理 identity，
-可在共享位置锁下验证并轮换。
+但会改变 driver；保存时仍取得独占位置锁，在没有并发多请求存储操作的边界完成验证、
+提交和旧 driver 退役。
 
 ## admin_account —— 管理员
 

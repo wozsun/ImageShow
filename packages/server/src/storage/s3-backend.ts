@@ -9,7 +9,8 @@ import {
   S3Client,
   type GetObjectCommandOutput
 } from "@aws-sdk/client-s3";
-import { ApiError } from "../core/api-error.ts";
+import { randomUUID } from "node:crypto";
+import { ApiError, errorMessage } from "../core/api-error.ts";
 import { getInputImageMaxBytes } from "../config/app-settings.ts";
 import { missingS3Fields, type StorageConfig } from "./backend-config.ts";
 import { s3CopySource, s3ListPrefix, storageS3ObjectName, type ReadablePrefix, type StoragePrefix } from "./object-keys.ts";
@@ -46,6 +47,10 @@ export class S3Backend implements StorageDriver {
     this.config = config;
     this.client = storageS3Client(config);
     this.bucket = config.s3.bucket;
+  }
+
+  close() {
+    this.client.destroy();
   }
 
   private name(prefix: StoragePrefix, key: string) {
@@ -171,26 +176,61 @@ export class S3Backend implements StorageDriver {
   async selfTest(): Promise<StorageSelfTest> {
     const missing = missingS3Fields(this.config.s3);
     if (missing.length) throw new ApiError(400, "storage_config_incomplete", "Storage config incomplete", { missing });
-    const key = storageS3ObjectName(this.config, "_uploads", `.storage-test-${Date.now()}`);
-    let written = false;
+    const key = `.storage-test-${randomUUID()}`;
+    let result: StorageSelfTest | undefined;
+    let testError: unknown;
     try {
-      await this.client.send(new PutObjectCommand({ Bucket: this.bucket, Key: key, Body: "ok", ContentType: "text/plain" }));
-      written = true;
-      await this.client.send(new HeadObjectCommand({ Bucket: this.bucket, Key: key }));
-      return {
+      await this.writeBuffer(
+        "_uploads",
+        key,
+        Buffer.from("ok"),
+        "text/plain"
+      );
+      if (!await this.exists("_uploads", key)) {
+        throw new ApiError(
+          502,
+          "storage_test_failed",
+          "S3 self-test object could not be read back"
+        );
+      }
+      result = {
         backend: "s3",
         writable: true,
         bucket: this.config.s3.bucket,
         endpoint: this.config.s3.endpoint,
         public_base_url: this.config.s3.public_base_url
       };
-    } finally {
-      if (written) {
-        await this.client.send(
-          new DeleteObjectCommand({ Bucket: this.bucket, Key: key })
-        ).catch(() => undefined);
-      }
+    } catch (error) {
+      testError = error;
     }
+
+    let cleanupError: unknown;
+    try {
+      // A PUT can materialize before its response is lost, so always delete.
+      await this.remove("_uploads", key);
+      if (await this.exists("_uploads", key)) {
+        throw new Error("S3 self-test object still exists after deletion");
+      }
+    } catch (error) {
+      cleanupError = error;
+    }
+    if (cleanupError) {
+      const failure = new ApiError(
+        502,
+        "storage_test_cleanup_failed",
+        "S3 self-test object could not be fully removed",
+        { reason: errorMessage(cleanupError) }
+      );
+      if (testError) {
+        throw new AggregateError(
+          [testError, failure],
+          "S3 self-test and cleanup both failed"
+        );
+      }
+      throw failure;
+    }
+    if (testError) throw testError;
+    return result!;
   }
 
   async pruneEmptyDirs(): Promise<number> {

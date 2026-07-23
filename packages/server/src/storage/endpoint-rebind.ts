@@ -58,6 +58,13 @@ function endpointMismatch(reason: string) {
   );
 }
 
+async function removeChallengeObject(driver: StorageDriver, key: string) {
+  await driver.remove("_uploads", key);
+  if (await driver.exists("_uploads", key)) {
+    throw new Error(`Endpoint rebind probe still exists: ${key}`);
+  }
+}
+
 async function verifyBidirectionalChallenge(
   current: StorageDriver,
   candidate: StorageDriver
@@ -93,8 +100,8 @@ async function verifyBidirectionalChallenge(
   const cleanupResults = await Promise.allSettled([
     // A remote write can succeed even when its acknowledgement is lost, so
     // always remove both unique probe keys rather than relying on local flags.
-    current.remove("_uploads", currentKey),
-    candidate.remove("_uploads", candidateKey)
+    removeChallengeObject(current, currentKey),
+    removeChallengeObject(candidate, candidateKey)
   ]);
   const cleanupFailures = cleanupResults
     .filter((result): result is PromiseRejectedResult => result.status === "rejected")

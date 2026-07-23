@@ -13,8 +13,8 @@ import {
   withStorageLocationReadAndAdvisoryLocks
 } from "../storage/maintenance-lock.ts";
 import {
-  completePreparedImageRelocation,
   discardPreparedImageRelocationIfUnreferenced,
+  enqueuePreparedImageSourceCleanup,
   prepareVerifiedImageRelocation
 } from "../storage/image-relocation.ts";
 import { isReservedSubdomain } from "../themes/host.ts";
@@ -334,27 +334,34 @@ export async function updateImageMetadata(
           "Image location changed before the category update was committed"
         );
       }
+      if (relocation) {
+        await enqueuePreparedImageSourceCleanup(
+          client,
+          relocation,
+          "category_move_source_cleanup"
+        );
+      }
       updated = updatedRow;
       signal.throwIfAborted();
       await client.query("COMMIT");
     } catch (error) {
       await client?.query("ROLLBACK").catch(() => undefined);
       if (relocation) {
-        await discardPreparedImageRelocationIfUnreferenced(
-          relocation,
-          "category_move_compare_and_swap_failed"
-        );
+        try {
+          await discardPreparedImageRelocationIfUnreferenced(
+            relocation,
+            "category_move_compare_and_swap_failed"
+          );
+        } catch (cleanupError) {
+          throw new AggregateError(
+            [error, cleanupError],
+            "Category move failed and candidate cleanup could not be queued"
+          );
+        }
       }
       throw error;
     } finally {
       client?.release();
-    }
-
-    if (relocation) {
-      await completePreparedImageRelocation(
-        relocation,
-        "category_move_source_cleanup"
-      );
     }
 
     const changedEntityKinds: EntityCacheKind[] = [];

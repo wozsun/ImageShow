@@ -48,7 +48,10 @@ import { registerSpaRoutes } from "./routes/spa.ts";
 import { registerImportRoutes } from "./routes/imports.ts";
 import { drainWorker, startWorker, stopWorker } from "./jobs/worker.ts";
 import { enforceThemeHostNavigation, isAllowedSiteHost, specialHost, themeFromHost } from "./themes/host.ts";
-import { onStorageBackendChange } from "./storage/backend-registry.ts";
+import {
+  closeStorageBackendRegistry,
+  onStorageBackendChange
+} from "./storage/backend-registry.ts";
 import { rebuildRandomPool } from "./random/cache-rebuild.ts";
 import {
   cleanupActiveRandomRebuildSpools,
@@ -173,7 +176,11 @@ onRuntimeConfigChange(() => {
   publicUrlConfigSignature = nextSignature;
   void invalidateImageCaches();
 });
-onStorageBackendChange(() => void invalidateImageCaches());
+onStorageBackendChange(() => {
+  void invalidateImageCaches().catch((error) => {
+    logger.warn("storage change cache invalidation failed", error);
+  });
+});
 startWorker();
 const startupRandomPool = rebuildRandomPool({ requireFresh: false }).catch((error) => {
   // Redis is a derived layer. A failed warm-up is retried by normal reads and
@@ -198,6 +205,7 @@ async function shutdown(signal: string) {
     await drainWorker();
     await startupRandomPool;
     await cleanupActiveRandomRebuildSpools();
+    await closeStorageBackendRegistry();
     await redis.quit().catch(() => redis.disconnect());
     await closeDatabasePools();
   } finally {

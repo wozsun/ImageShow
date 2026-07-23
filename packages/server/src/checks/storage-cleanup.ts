@@ -4,7 +4,7 @@ import { stagingSessionId } from "../images/imports/staging-keys.ts";
 import {
   listStorageKeys,
   pruneEmptyStorageDirs,
-  removeStorageObject
+  removeStorageObjectAndConfirm
 } from "../storage/object-access.ts";
 import type { StoragePrefix } from "../storage/object-keys.ts";
 import { withStorageLocationWriteLock } from "../storage/maintenance-lock.ts";
@@ -135,7 +135,7 @@ async function cleanupStorageUnderLock(signal: AbortSignal) {
       for (const [prefix, key] of candidates) {
         try {
           signal.throwIfAborted();
-          await removeStorageObject(prefix, key, backend);
+          await removeStorageObjectAndConfirm(prefix, key, backend);
           signal.throwIfAborted();
           removed += 1;
         } catch (error) {

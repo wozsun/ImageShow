@@ -1,4 +1,5 @@
 import type { Brightness, Device } from "@imageshow/shared";
+import type { PoolClient } from "pg";
 import { ApiError, errorMessage } from "../core/api-error.ts";
 import { pool } from "../core/db.ts";
 import { logger } from "../core/logger.ts";
@@ -13,10 +14,12 @@ import {
   ensureVerifiedObjectAtTarget
 } from "./object-transfer.ts";
 import {
+  captureMoveCleanupObjects,
   enqueueObjectsForCleanup,
+  enqueueCapturedObjectsForCleanup,
+  type CapturedMoveCleanupObject,
   type MoveCleanupObjectInput
 } from "./move-cleanup.ts";
-import { pruneEmptyStorageDirs } from "./object-access.ts";
 
 export type RelocatableImage = {
   id: string;
@@ -40,7 +43,7 @@ export type PreparedImageRelocation = {
   backend: string;
   target: ImageClassificationTarget;
   createdObjects: MoveCleanupObjectInput[];
-  sourceObjects: MoveCleanupObjectInput[];
+  sourceObjects: CapturedMoveCleanupObject[];
 };
 
 function sourceMissingError(image: RelocatableImage, prefix: string, key: string) {
@@ -82,6 +85,7 @@ export async function prepareVerifiedImageRelocation(
   signal?.throwIfAborted();
   const createdObjects: MoveCleanupObjectInput[] = [];
   const sourceObjects: MoveCleanupObjectInput[] = [];
+  let capturedSourceObjects: CapturedMoveCleanupObject[] = [];
   const nextObjectKey = storageObjectKey(
     target.device,
     target.brightness,
@@ -180,12 +184,30 @@ export async function prepareVerifiedImageRelocation(
         }
       }
     }
+    capturedSourceObjects = await captureMoveCleanupObjects(
+      uniqueObjects(sourceObjects)
+    );
   } catch (error) {
-    await enqueueObjectsForCleanup(
-      image.id,
-      uniqueObjects(createdObjects),
-      `${operation}_prepare_failed`
-    ).catch(() => undefined);
+    try {
+      await enqueueObjectsForCleanup(
+        image.id,
+        uniqueObjects(createdObjects),
+        `${operation}_prepare_failed`
+      );
+    } catch (cleanupError) {
+      logger.error("image_relocation_candidate_enqueue_failed", {
+        image_id: image.id,
+        backend: image.storage_slug,
+        operation,
+        error: errorMessage(error),
+        cleanup_error: errorMessage(cleanupError),
+        candidates: uniqueObjects(createdObjects)
+      });
+      throw new AggregateError(
+        [error, cleanupError],
+        "Image relocation failed and candidate cleanup could not be queued"
+      );
+    }
     throw error;
   }
 
@@ -195,7 +217,7 @@ export async function prepareVerifiedImageRelocation(
     backend: image.storage_slug,
     target,
     createdObjects: uniqueObjects(createdObjects),
-    sourceObjects: uniqueObjects(sourceObjects)
+    sourceObjects: capturedSourceObjects
   };
 }
 
@@ -258,15 +280,20 @@ export async function discardPreparedImageRelocationIfUnreferenced(
   await discardPreparedImageRelocation(relocation, reason);
 }
 
-/** Delete old objects only after the metadata CAS has committed. */
-export async function completePreparedImageRelocation(
+/**
+ * Persist old-object deletion in the same PostgreSQL transaction that switches
+ * metadata ownership. A lost COMMIT response therefore cannot leave an adopted
+ * destination without its durable cleanup receipt.
+ */
+export function enqueuePreparedImageSourceCleanup(
+  client: PoolClient,
   relocation: PreparedImageRelocation,
   reason: string
 ) {
-  await enqueueObjectsForCleanup(
+  return enqueueCapturedObjectsForCleanup(
     relocation.imageId,
     relocation.sourceObjects,
-    reason
+    reason,
+    client
   );
-  await pruneEmptyStorageDirs(relocation.backend).catch(() => undefined);
 }

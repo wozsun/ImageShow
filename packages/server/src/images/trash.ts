@@ -1,9 +1,12 @@
 import { appConfig } from "@imageshow/shared";
 import { pool, withTransaction } from "../core/db.ts";
 import { ApiError, errorMessage } from "../core/api-error.ts";
-import { resolveStorageAccess } from "../storage/backend-registry.ts";
+import { logger } from "../core/logger.ts";
 import { thumbnailRef } from "../storage/image-paths.ts";
 import { withImageStorageMutationLock } from "../storage/maintenance-lock.ts";
+import {
+  removeStorageObjectAndConfirm
+} from "../storage/object-access.ts";
 import { restoreImageFromTrash, restoreImagesFromTrash } from "./restore.ts";
 import {
   invalidateImageCaches
@@ -171,6 +174,19 @@ async function markPurgeFailed(row: PurgeRow, error: unknown) {
   );
 }
 
+async function recordPurgeFailure(row: PurgeRow, error: unknown) {
+  try {
+    await markPurgeFailed(row, error);
+  } catch (stateError) {
+    logger.error("trash_purge_failure_state_update_failed", {
+      image_id: row.id,
+      purge_attempt: row.purge_attempts,
+      purge_error: errorMessage(error),
+      state_error: errorMessage(stateError)
+    });
+  }
+}
+
 async function purgeClaimedRow(claim: PurgeRow): Promise<PurgeRow | null> {
   return withImageStorageMutationLock(claim.id, async (signal) => {
     signal.throwIfAborted();
@@ -191,11 +207,17 @@ async function purgeClaimedRow(claim: PurgeRow): Promise<PurgeRow | null> {
     if (!row) return null;
 
     const thumb = thumbnailRef(row);
-    const storage = await resolveStorageAccess(row.storage_slug);
-    signal.throwIfAborted();
     const removals = await Promise.allSettled([
-      storage.driver.remove(thumb.prefix, thumb.key),
-      storage.driver.remove("media", row.object_key)
+      removeStorageObjectAndConfirm(
+        thumb.prefix,
+        thumb.key,
+        row.storage_slug
+      ),
+      removeStorageObjectAndConfirm(
+        "media",
+        row.object_key,
+        row.storage_slug
+      )
     ]);
     const removalErrors = removals.flatMap((result) =>
       result.status === "rejected" ? [result.reason] : []
@@ -233,14 +255,14 @@ export async function purgeDeletedImages(ids?: string[]) {
         if (deleted) deletedRows.push(deleted);
         else {
           failed += 1;
-          await markPurgeFailed(
+          await recordPurgeFailure(
             row,
             new Error("Purge ownership was lost before metadata deletion")
-          ).catch(() => undefined);
+          );
         }
       } catch (error) {
         failed += 1;
-        await markPurgeFailed(row, error).catch(() => undefined);
+        await recordPurgeFailure(row, error);
       }
     }));
   }

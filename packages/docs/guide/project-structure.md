@@ -65,10 +65,10 @@ core / config
 | `core/http/` | HTTP 响应与响应头、请求来源和请求体限制、压缩阈值、条件请求、静态响应与 Range 解析。 |
 | `config/` | 部署环境、首次播种、运行时配置 schema、`config.json` 存储和配置包。 |
 | `routes/` | HTTP 方法、鉴权、CSRF、输入解析和响应投影；业务工作委托给领域模块。 |
-| `images/` | 图片读写、展示投影、缓存、分类与元数据变更、回收站、批量存储迁移；`imports/` 拥有完整导入会话生命周期，`read-models/` 只读 PostgreSQL。 |
-| `storage/` | local、S3、WebDAV driver 及无环工厂，后端注册表、对象访问、公开 URL、运行目录、后端自检、对象键、强摘要传输、位置锁、迁移与补偿删除。 |
+| `images/` | 图片读写、展示投影、缓存、分类与元数据变更、回收站、缩略图与回收站任务；`imports/` 拥有完整导入会话生命周期及清理任务，`read-models/` 只读 PostgreSQL。 |
+| `storage/` | local、S3、WebDAV driver 及无环工厂；注册表缓存与 driver、管理读模型、配置变更、探测和占用统计分开维护，并拥有对象访问、强摘要传输、位置锁、迁移及 `move.cleanup` 仓储与 handler。 |
 | `random/` | 随机筛选、Redis generation、增量同步、全量重建、去重和随机出口读模型；缓存键、策略、Lua、序列化模型与批量写入分别维护。 |
-| `jobs/` | `background_job` 仓储、任务 handler 和公平调度 Worker；不拥有导入会话。 |
+| `jobs/` | 仅拥有通用 `background_job` 生命周期、小型类型分派与公平调度 Worker；各领域拥有自己的 handler、payload 和结果语义。 |
 | `checks/` | 数据库、Redis 与存储一致性检查，以及显式触发的存储维护。 |
 | `authors/`、`tags/`、`themes/`、`vocab/` | 词表查询、变更、关联锁与派生缓存。 |
 | `users/` | 管理员初始化、账号变更、登录会话、权限中间件、密码恢复、偏好和会话失效。 |

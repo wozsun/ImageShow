@@ -34,7 +34,7 @@ import {
   purgeDeletedImages,
   restoreDeletedImage
 } from "../images/trash.ts";
-import { scheduleTrashPurge } from "../jobs/repository.ts";
+import { scheduleTrashPurge } from "../images/trash-purge-job.ts";
 
 export function registerAdminImageRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/overview`, async (c) => c.json(apiSuccess(await getOverviewStats())));
