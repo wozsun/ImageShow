@@ -311,7 +311,16 @@
 
   .workspace-paged { height: 100svh; display: flex; flex-direction: column; overflow: hidden; padding-bottom: 16px; }
 
-  .workspace-paged > .admin-scroll-region { flex: 1; min-height: 0; overflow-y: auto; padding-right: 2px; align-content: start; }
+  /* 分页管理页共用贴右滚动视口：负 margin 抵消 24px 工作区留白，
+     26px 内边距再为列表内容补回原留白与 2px 滚动间距。 */
+  .workspace-paged > .admin-scroll-region {
+    flex: 1;
+    min-height: 0;
+    margin-inline-end: -24px;
+    padding-inline-end: 26px;
+    overflow-y: auto;
+    align-content: start;
+  }
 
   .workspace-paged > .admin-pagination { margin: 0 -24px; padding: 12px 24px 0; border-top: 1px solid #e2e8f0; }
 }

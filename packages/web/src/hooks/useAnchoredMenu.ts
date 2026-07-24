@@ -64,6 +64,15 @@ export function useAnchoredMenu(options: {
   }, 160);
 
   const requestClose = useCallback((afterClose?: () => void) => {
+    // 关闭动画会把 Portal 标记为 aria-hidden/inert；必须先同步移走其中的焦点，
+    // 否则浏览器会拒绝隐藏仍包含焦点的无障碍子树。
+    const activeElement = document.activeElement;
+    if (
+      activeElement instanceof HTMLElement
+      && menuNodeRef.current?.contains(activeElement)
+    ) {
+      activeElement.blur();
+    }
     animRequestClose(() => { setOpen(false); onCloseRef.current?.(); afterClose?.(); });
   }, [animRequestClose]);
 

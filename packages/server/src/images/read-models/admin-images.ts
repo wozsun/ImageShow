@@ -6,9 +6,9 @@ import type {
 import { pool } from "../../core/db.ts";
 import { ApiError } from "../../core/api-error.ts";
 import { adminImageListQuery } from "../../core/validation.ts";
-import { resolveThemeSlugs } from "../../themes/query.ts";
 import { imageCacheRevision, warmCompleteImageLookups } from "../image-cache.ts";
 import { adminImageView } from "../presenter.ts";
+import { buildImageListFilters } from "./list-filters.ts";
 import { fetchAdminImagePage } from "./pagination.ts";
 
 type AdminImageListQuery = z.infer<typeof adminImageListQuery>;
@@ -28,20 +28,7 @@ export async function listAdminImages(
   query: AdminImageListQuery
 ): Promise<AdminImageListResponse> {
   const cacheRevision = await imageCacheRevision();
-  const params: unknown[] = [query.status];
-  const where = ["status = $1"];
-  if (query.d) {
-    params.push(query.d);
-    where.push(`device = $${params.length}`);
-  }
-  if (query.b) {
-    params.push(query.b);
-    where.push(`brightness = $${params.length}`);
-  }
-  if (query.t) {
-    params.push(await resolveThemeSlugs([query.t]));
-    where.push(`theme = ANY($${params.length}::text[])`);
-  }
+  const { params, where } = await buildImageListFilters(query);
 
   const [countResult, page] = await Promise.all([
     pool.query(
