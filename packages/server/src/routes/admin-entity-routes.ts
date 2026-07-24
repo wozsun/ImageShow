@@ -17,7 +17,6 @@ type EntityRouteOptions<CreateSchema extends z.ZodType, UpdateSchema extends z.Z
   list: () => Promise<unknown[]>;
   create: (input: z.infer<CreateSchema>) => Promise<void>;
   reorder: (slugs: string[]) => Promise<void>;
-  batchDelete: (slugs: string[]) => Promise<void>;
   update: (slug: string, input: z.infer<UpdateSchema>) => Promise<void>;
   remove: (slug: string) => Promise<void>;
 };
@@ -40,16 +39,6 @@ export function registerAdminEntityRoutes<
     await options.reorder(input.slugs);
     return c.json(apiSuccess());
   });
-
-  app.post(
-    `${base}/batch-delete`,
-    requireAdminPermission(options.deletePermission),
-    async (c) => {
-      const input = parse(slugListInput, await c.req.json().catch(() => ({})));
-      await options.batchDelete(input.slugs);
-      return c.json(apiSuccess());
-    }
-  );
 
   app.post(`${base}/:slug`, async (c) => {
     const slug = parse(options.slugInput, c.req.param("slug"));

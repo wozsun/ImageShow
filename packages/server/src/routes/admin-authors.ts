@@ -5,7 +5,6 @@ import { listAuthorsWithMeta } from "../authors/query.ts";
 import {
   createAuthor,
   deleteAuthor,
-  deleteAuthors,
   reorderAuthors,
   updateAuthorProfile
 } from "../authors/mutations.ts";
@@ -23,7 +22,6 @@ export function registerAdminAuthorRoutes(app: Hono) {
       await createAuthor(input.slug, input.display_name, input.link);
     },
     reorder: reorderAuthors,
-    batchDelete: deleteAuthors,
     update: async (slug, input) => updateAuthorProfile(slug, input.display_name, input.link),
     remove: deleteAuthor
   });

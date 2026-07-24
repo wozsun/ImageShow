@@ -192,9 +192,7 @@
   .admin-create-form input,
   .admin-create-form .admin-create-field,
   .admin-create-form .entity-slug-field { flex-basis: 100%; max-width: none; }
-  /*撤销桌面端右对齐的 批量删除，使该行像其余行一样堆叠（slug 字段的整宽来自上面的*/
   .admin-create-form > button { flex: 1; min-height: 44px; }
-  .admin-create-form .danger-button { margin-left: 0; }
   .operation-modal:not(.storage-edit-modal) footer { gap: 10px; }
   .operation-modal:not(.storage-edit-modal) footer button { flex: 1; min-height: 44px; }
   .account-form .button { justify-self: stretch; min-height: 44px; }

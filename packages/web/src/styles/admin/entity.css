@@ -1,23 +1,21 @@
 .admin-scroll-list { max-height: calc(100svh - 210px); overflow-y: auto; padding-right: 2px; }
 
-/*主题 / 标签 / 用户管理：卡片网格（共用 .entity-* 类）*/
+/* 主题 / 标签 / 用户管理：卡片网格（共用 .entity-* 类）。 */
 .admin-create-form { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
 .admin-create-form input { flex: 1 1 200px; max-width: 280px; }
 /* slug 输入框在列向的 .entity-slug-field 包裹内（下方堆叠校验提示），所以重置基础规则给 input 的
    flex（否则 flex-basis:200px 会被当成列主轴=高度，把输入框撑成 200px 高）：自然高度、填满包裹宽。 */
 .admin-create-form .entity-create-slug { flex: 0 0 auto; max-width: none; }
-/*批量删除按钮推到行尾右对齐（新建按钮仍紧跟输入框）。*/
-.admin-create-form .danger-button { margin-left: auto; }
 
 .admin-create-field { flex: 1 1 200px; max-width: 280px; display: flex; flex-direction: column; gap: 4px; }
 .admin-create-form:has(.admin-create-field) { align-items: flex-start; }
-/*主题/标签/作者 的 slug 字段：以显示名框（最宽 280px）为基准取约 3/5 ≈ 170px。不随行宽增长，*/
+/* 主题 / 标签 / 作者的 slug 字段以显示名框（最宽 280px）为基准取约 3/5，即 170px。 */
 .entity-slug-field { flex: 0 1 170px; max-width: 170px; }
-/*校验提示保持单行，溢出到右侧（显示名输入框下方的空白）而不是在 170px 窄框里折行。*/
+/* 校验提示保持单行，利用显示名输入框下方的空白，而不在 170px 窄框内折行。 */
 .entity-slug-field .field-error { white-space: nowrap; }
-/*用户管理的密码框比通用字段略宽，让“密码（至少 8 位…）”的提示连同显示密码按钮能完整显示。*/
+/* 用户管理的密码框略宽，完整容纳密码提示和显示密码按钮。 */
 .user-password-field { flex: 1 1 300px; max-width: 360px; }
-/*.password-input 包裹仍是字段全宽（360px），导致绝对定位在包裹右缘的显示密码按钮落到输入框外。*/
+/* 密码输入框填满字段包裹，使绝对定位的显示按钮保持在输入框内。 */
 .admin-create-form .password-input input { max-width: none; }
 
 /* 滚动视口与卡片网格分层：视口可以延伸到页面边缘，网格独立维护内容留白和列布局。 */
@@ -61,10 +59,7 @@
 .entity-display-input { flex: 1 1 0; min-width: 0; }
 
 .entity-link-input { flex: 1 1 0; min-width: 0; }
-.entity-select { width: 16px; height: 16px; flex: 0 0 auto; margin: 0; }
-/* none 固定卡片没有复选框：用等宽占位撑出复选框的位置，配合行 gap 让其 slug/显示名与其他卡片对齐。 */
-.entity-select-placeholder { width: 16px; flex: 0 0 auto; }
-/*仅文字、无按钮）也靠这条 min-height 与其他卡片保持同高。*/
+/* 页脚只有文字时也以相同最小高度保持卡片对齐。 */
 .entity-card-foot { display: flex; align-items: center; gap: 8px; margin-top: auto; min-height: 34px; }
 /* 页脚所有按钮固定 34px 高、图标按钮 36px 宽（对齐图片管理卡片页脚）。保存按钮带文字行高，仅用
    min-height 仍会高于 34px 把页脚（和卡片）顶高，故用 height 钉死并去掉纵向内边距（box-sizing 为
@@ -79,7 +74,6 @@
 .entity-drag-handle { cursor: grab; }
 .entity-drag-handle:active { cursor: grabbing; }
 .entity-card.is-pinned { background: #f7f9fc; border-style: dashed; }
-.entity-card.is-selected { border-color: #2d6cdf; box-shadow: inset 0 0 0 1px #2d6cdf; }
 .entity-card.is-dragging { opacity: .55; }
 .role-badge { font-size: 12px; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
 .role-super { background: #fef3c7; color: #92400e; }

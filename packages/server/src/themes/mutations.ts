@@ -244,25 +244,3 @@ export async function deleteTheme(slug: string) {
     });
   } else await synchronizeVocabularyMutation({ entity: "theme" });
 }
-
-export async function deleteThemes(slugs: string[]) {
-  const targets = [...new Set(slugs)].filter((slug) => slug !== "none");
-  if (!targets.length) return;
-  const lookupInvalidations: ThemeLookupInvalidation[] = [];
-  let deletedAny = false;
-  for (const slug of targets) {
-    const result = await deleteThemeAndReassign(slug);
-    lookupInvalidations.push(...result.lookupInvalidations);
-    if (result.deleted) deletedAny = true;
-  }
-  if (lookupInvalidations.length) {
-    await synchronizeVocabularyMutation({
-      entity: "theme",
-      lookupEntries: lookupInvalidations,
-      imageDataChanged: true,
-      random: { mode: "rebuild" }
-    });
-  } else if (deletedAny) {
-    await synchronizeVocabularyMutation({ entity: "theme" });
-  }
-}

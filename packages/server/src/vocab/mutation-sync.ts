@@ -37,28 +37,11 @@ export function vocabularyAssociationLockRequests(
     .map((key) => ({ key, mode: "shared" as const }));
 }
 
-function vocabularyMutationLockRequests(
-  entries: readonly { entity: VocabularyEntity; slug: string }[]
-) {
-  return [...new Set(entries.map(({ entity, slug }) => (
-    vocabularyMutationLockKey(entity, slug)
-  )))]
-    .sort()
-    .map((key) => ({ key, mode: "exclusive" as const }));
-}
-
 export function withVocabularyAssociationLocks<T>(
   entries: readonly { entity: VocabularyEntity; slug: string }[],
   work: (signal: AbortSignal) => Promise<T>
 ) {
   return withAdvisoryLocks(vocabularyAssociationLockRequests(entries), work);
-}
-
-export function withVocabularyMutationLocks<T>(
-  entries: readonly { entity: VocabularyEntity; slug: string }[],
-  work: (signal: AbortSignal) => Promise<T>
-) {
-  return withAdvisoryLocks(vocabularyMutationLockRequests(entries), work);
 }
 
 export function withVocabularyAssociationLock<T>(

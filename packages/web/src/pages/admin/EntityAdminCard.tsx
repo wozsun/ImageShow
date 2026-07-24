@@ -8,7 +8,7 @@ import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
 
 type Entity = { slug: string; display_name: string; image_count: number; link?: string };
 
-export function EntityAdminCard({ kind, item, onChanged, onDelete, onError, pinned = false, canDelete = false, selected = false, onToggleSelect, onDragStart, onDragEnter, onDragEnd }: {
+export function EntityAdminCard({ kind, item, onChanged, onDelete, onError, pinned = false, canDelete = false, onDragStart, onDragEnter, onDragEnd }: {
   kind: "themes" | "tags" | "authors";
   item: Entity;
   onChanged: () => void;
@@ -16,8 +16,6 @@ export function EntityAdminCard({ kind, item, onChanged, onDelete, onError, pinn
   onError: (error: unknown) => void;
   pinned?: boolean;
   canDelete?: boolean;
-  selected?: boolean;
-  onToggleSelect?: (checked: boolean) => void;
   onDragStart?: (slug: string) => void;
   onDragEnter?: (slug: string) => void;
   onDragEnd?: () => void;
@@ -65,7 +63,7 @@ export function EntityAdminCard({ kind, item, onChanged, onDelete, onError, pinn
 
   return (
     <div
-      className={`entity-card${pinned ? " is-pinned" : ""}${selected ? " is-selected" : ""}${armed ? " is-dragging" : ""}`}
+      className={`entity-card${pinned ? " is-pinned" : ""}${armed ? " is-dragging" : ""}`}
       draggable={armed}
       onDragStart={begin}
       onDragEnter={() => { if (!pinned) onDragEnter?.(item.slug); }}
@@ -73,17 +71,6 @@ export function EntityAdminCard({ kind, item, onChanged, onDelete, onError, pinn
       onDragEnd={() => { setArmed(false); onDragEnd?.(); }}
     >
       <div className="entity-card-row">
-        {pinned || !canDelete
-          ? <span className="entity-select-placeholder" aria-hidden="true" />
-          : (
-            <input
-              type="checkbox"
-              className="entity-select"
-              checked={selected}
-              onChange={(event) => onToggleSelect?.(event.target.checked)}
-              aria-label={`选择${noun} ${item.slug}`}
-            />
-          )}
         <SlugChip value={item.slug} ariaLabel={`${noun} slug`} />
         {pinned
           ? (

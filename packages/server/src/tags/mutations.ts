@@ -13,8 +13,7 @@ import {
   assertVocabularySlug,
   synchronizeVocabularyMutation,
   withVocabularyAssociationLocks,
-  withVocabularyMutationLock,
-  withVocabularyMutationLocks
+  withVocabularyMutationLock
 } from "../vocab/mutation-sync.ts";
 import { resolveTagNames } from "./query.ts";
 
@@ -46,30 +45,6 @@ export async function reorderTags(slugs: string[]) {
     [slugs]
   );
   await synchronizeVocabularyMutation({ entity: "tag" });
-}
-
-export async function deleteTags(slugs: string[]) {
-  const targets = [...new Set(slugs)].sort();
-  if (!targets.length) return;
-  const result = await withVocabularyMutationLocks(
-    targets.map((slug) => ({ entity: "tag", slug })),
-    async (signal) => {
-      signal.throwIfAborted();
-      const deleted = await pool.query(
-        "DELETE FROM tag WHERE slug = ANY($1::text[])",
-        [targets]
-      );
-      signal.throwIfAborted();
-      return deleted;
-    }
-  );
-  if (result.rowCount) {
-    await synchronizeVocabularyMutation({
-      entity: "tag",
-      imageDataChanged: true,
-      random: { mode: "rebuild" }
-    });
-  }
 }
 
 export async function setTagDisplayName(slug: string, displayName: string) {

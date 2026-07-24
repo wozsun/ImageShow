@@ -36,7 +36,7 @@ import { useAdminPermissions } from "../../lib/api/site-data.js";
 
 type EntityKind = "tags" | "themes" | "authors";
 type Entity = Tag | Theme | Author;
-type EntityMutation = "" | "delete" | "batch-delete";
+type EntityMutation = "" | "delete";
 
 const COPY = {
   tags: {
@@ -94,9 +94,7 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
   const [createError, setCreateError] = useState("");
   const createAction = useAsyncActionStatus({ resultDurationMs: null });
   const [confirmDelete, setConfirmDelete] = useState<Entity | null>(null);
-  const [confirmBatch, setConfirmBatch] = useState(false);
   const [page, setPage] = useState(1);
-  const [selected, setSelected] = useState<string[]>([]);
 
   const [order, setOrder] = useState<Entity[]>([]);
   const dragSlug = useRef<string | null>(null);
@@ -109,9 +107,7 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
   useEffect(() => { setOrder(data?.items ?? []); }, [data]);
   useEffect(() => {
     if (canDelete) return;
-    setSelected([]);
     setConfirmDelete(null);
-    setConfirmBatch(false);
   }, [canDelete]);
 
   const slugInvalid = slug.length > 0 && !slugPattern.test(slug);
@@ -171,7 +167,6 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
     setMutation("delete");
     try {
       await api(`${adminApiBasePath}/${kind}/${confirmDelete.slug}/delete`, { method: "POST" });
-      setSelected((current) => current.filter((s) => s !== confirmDelete.slug));
       await refresh();
       return true;
     } catch (err) {
@@ -181,24 +176,6 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
       setMutation("");
     }
   };
-
-  const removeSelected = async () => {
-    if (!canDelete || !selected.length) return false;
-    setMutation("batch-delete");
-    try {
-      await api(`${adminApiBasePath}/${kind}/batch-delete`, { method: "POST", body: JSON.stringify({ slugs: selected }) });
-      setSelected([]);
-      await refresh();
-      return true;
-    } catch (err) {
-      reportAdminUiError(`entity_admin.${kind}.batch_delete`, err);
-      return false;
-    } finally {
-      setMutation("");
-    }
-  };
-
-  const toggleSelect = (s: string, checked: boolean) => setSelected((current) => checked ? [...new Set([...current, s])] : current.filter((x) => x !== s));
 
   const moveOver = (targetSlug: string) => {
     const from = dragSlug.current;
@@ -280,16 +257,6 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
             busy={createAction.pending}
           />
         </button>
-        {canDelete && (
-          <button
-            className="danger-button"
-            type="button"
-            disabled={operationBusy || !selected.length}
-            onClick={() => setConfirmBatch(true)}
-          >
-            <Icon name="delete-bin-6-line" />批量删除{selected.length ? `（${selected.length}）` : ""}
-          </button>
-        )}
       </form>
       {feedback && (
         <ActionFeedbackOutlet
@@ -307,8 +274,6 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
               item={item}
               pinned={item.slug === "none"}
               canDelete={canDelete}
-              selected={selected.includes(item.slug)}
-              onToggleSelect={(checked) => toggleSelect(item.slug, checked)}
               onChanged={() => void refresh()}
               onDelete={() => setConfirmDelete(item)}
               onError={(error) => reportAdminUiError(`entity_admin.${kind}.update`, error)}
@@ -337,20 +302,6 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
           busy={mutation === "delete"}
           onClose={() => setConfirmDelete(null)}
           onConfirm={remove}
-        />
-      )}
-      {canDelete && confirmBatch && (
-        <ConfirmDialog
-          title={`批量删除${copy.noun}`}
-          description={kind === "tags"
-            ? `删除选中的 ${selected.length} 个标签，并从相关图片上移除，此操作无法撤销。`
-            : kind === "authors"
-              ? `删除选中的 ${selected.length} 个作者，相关图片的作者属性将被清除，此操作无法撤销。`
-              : `删除选中的 ${selected.length} 个${copy.noun}，它们的图片都将归为「未设置」，此操作无法撤销。`}
-          confirmLabel="删除"
-          busy={mutation === "batch-delete"}
-          onClose={() => setConfirmBatch(false)}
-          onConfirm={removeSelected}
         />
       )}
     </section>

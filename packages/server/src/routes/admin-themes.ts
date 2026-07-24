@@ -5,7 +5,6 @@ import { listThemesWithMeta } from "../themes/query.ts";
 import {
   createTheme,
   deleteTheme,
-  deleteThemes,
   reorderThemes,
   updateThemeDisplayName
 } from "../themes/mutations.ts";
@@ -23,7 +22,6 @@ export function registerAdminThemeRoutes(app: Hono) {
       await createTheme(input.slug, input.display_name);
     },
     reorder: reorderThemes,
-    batchDelete: deleteThemes,
     update: async (slug, input) => updateThemeDisplayName(slug, input.display_name),
     remove: deleteTheme
   });

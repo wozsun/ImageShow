@@ -108,20 +108,3 @@ export async function deleteAuthor(slug: string) {
   assertVocabularyFound("author", result.deleted ? 1 : 0);
   await synchronizeAuthorDeletion(result.affected);
 }
-
-export async function deleteAuthors(slugs: string[]) {
-  const targets = [...new Set(slugs)];
-  if (!targets.length) return;
-  const affected: ClearedAuthorImage[] = [];
-  let deletedAny = false;
-  for (const slug of targets) {
-    const result = await withVocabularyMutationLock(
-      "author",
-      slug,
-      (signal) => deleteAuthorUnderLock(slug, signal)
-    );
-    affected.push(...result.affected);
-    deletedAny = result.deleted || deletedAny;
-  }
-  if (deletedAny) await synchronizeAuthorDeletion(affected);
-}

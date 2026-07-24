@@ -4,7 +4,6 @@ import { tagCreateInput, tagDisplayUpdateInput, tagSlugInput } from "../core/val
 import {
   createTag,
   deleteTag,
-  deleteTags,
   reorderTags,
   setTagDisplayName
 } from "../tags/mutations.ts";
@@ -21,7 +20,6 @@ export function registerAdminTagRoutes(app: Hono) {
     list: listTagsWithCounts,
     create: async (input) => { await createTag(input.slug, input.display_name); },
     reorder: reorderTags,
-    batchDelete: deleteTags,
     update: async (slug, input) => setTagDisplayName(slug, input.display_name),
     remove: deleteTag
   });
