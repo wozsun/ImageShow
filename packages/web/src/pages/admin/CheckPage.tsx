@@ -9,6 +9,7 @@ import { StableButtonLabel } from "../../components/data-display/StableButtonLab
 import { useAnimatedClose } from "../../hooks/useAnimatedClose.js";
 import { useStorageOptions } from "../../lib/api/storage-options.js";
 import { useAdminPermissions } from "../../lib/api/site-data.js";
+import "../../styles/admin/check.css";
 
 export function CheckPage() {
   const [result, setResult] = useState<unknown>(null);

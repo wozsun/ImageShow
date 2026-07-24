@@ -1,4 +1,11 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type RefObject
+} from "react";
 import { getPageTopInsets, subscribePageTopInsets } from "../../lib/ui/page-scroll-insets.js";
 
 type Metrics = {
@@ -49,6 +56,13 @@ export function OverlayScrollbar({
     document.documentElement.classList.add("has-overlay-scrollbar");
     return () => document.documentElement.classList.remove("has-overlay-scrollbar");
   }, [enabled, targetRef]);
+
+  useLayoutEffect(() => {
+    const target = pageEdge ? targetRef?.current : null;
+    if (!target) return;
+    target.classList.add("page-edge-scroll-host");
+    return () => target.classList.remove("page-edge-scroll-host");
+  }, [pageEdge, targetRef]);
 
   if (!enabled) return null;
   return (

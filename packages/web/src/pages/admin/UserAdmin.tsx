@@ -18,6 +18,7 @@ import { generateAdminPassword, isValidAdminPassword, passwordPolicyHint } from 
 import type { AdminUser } from "../../lib/types.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
 import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
+import "../../styles/admin/entity.css";
 
 const generatePasswordPresentation = {
   idle: { icon: "shuffle-line", label: "生成随机密码" },

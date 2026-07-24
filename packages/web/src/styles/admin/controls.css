@@ -6,8 +6,6 @@
 /* 提交/保存的文案会在空闲与处理中切换；预留四个汉字的内容宽度，避免按钮跳动。 */
 .workflow-submit-button { min-width: calc(4em + 26px); }
 
-.workflow-collapse-toggle { display: none; }
-
 .apply-to-all-button {
   align-self: end;
   min-height: 38px;
@@ -307,6 +305,84 @@ textarea.is-changed,
 
 .select-control.is-storage-select { width: 120px; min-width: 120px; flex: 0 0 auto; }
 
+.btn-label-slot { display: inline-grid; }
+.btn-label-slot > .btn-label-cell { grid-area: 1 / 1; text-align: center; white-space: nowrap; }
+.btn-label-slot > .btn-label-cell.is-hidden { visibility: hidden; }
+
+.hint {
+  margin: 0 0 12px;
+  color: #66717f;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+pre {
+  background: #fff;
+  border: 1px solid #dce2ea;
+  border-radius: 8px;
+  padding: 14px;
+  overflow: auto;
+  max-height: 420px;
+}
+
+.operation-modal { width: min(620px, 96vw); }
+.operation-body {
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+}
+.operation-body label {
+  display: grid;
+  gap: 6px;
+  color: #495260;
+}
+.operation-body label:has(input[type="checkbox"]) {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+}
+.operation-body input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+}
+
+/* 后台页面共用的表单弹窗骨架。具体页面只维护自身的内容和尺寸规则。 */
+.edit-modal form {
+  margin: 0;
+  width: min(860px, 100%);
+  max-width: 100%;
+  max-height: 92vh;
+  overflow: auto;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, .28);
+  animation: modal-pop .18s cubic-bezier(.2, .8, .2, 1);
+  overscroll-behavior: contain;
+}
+.edit-modal header, .edit-modal footer {
+  padding: 14px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  border-bottom: 1px solid #dce2ea;
+}
+.edit-modal footer { border-top: 1px solid #dce2ea; border-bottom: 0; justify-content: flex-end; }
+.edit-modal header > div { min-width: 0; }
+.edit-modal header h2 { margin: 0; font-size: 24px; }
+.edit-modal header p { margin: 4px 0 0; color: #66717f; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.confirm-dialog form { width: min(520px, 100%); }
+.confirm-dialog form > footer { border-top: 0; }
+.confirm-dialog header h2 { font-size: 19px; }
+.confirm-dialog header p {
+  overflow: visible;
+  white-space: normal;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+  font-size: 15px;
+}
+
 /*危险动作按钮（删除等）。*/
 .danger-button, button.danger-button {
   color: #a13a32;
@@ -314,3 +390,7 @@ textarea.is-changed,
   border-color: #e8aaa4;
 }
 .danger-button:hover, button.danger-button:hover { color: #84271f; background: #ffe7e3; border-color: #d98179; }
+
+@media (prefers-reduced-motion: reduce) {
+  .edit-modal form { animation: none; }
+}

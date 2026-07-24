@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, type RefObject } from "react";
 import { adminPermissions } from "@imageshow/shared/browser";
 import { Icon } from "../../components/icon/Icon.js";
 import { AsyncActionButton } from "../../components/actions/AsyncActionButton.js";
@@ -22,11 +22,18 @@ import { storageNameResolver, useStorageOptions } from "../../lib/api/storage-op
 import type { Brightness, Device, FacetOption, ImageDraft, ImageItem } from "../../lib/types.js";
 import { mergeBatchEditCommonAttributes, normalizeAuthor, normalizeTheme } from "../../lib/upload/upload-utils.js";
 import { BatchMetadataSaveSummary } from "./BatchMetadataSaveSummary.js";
-import { BatchStorageMigrationDialog } from "./BatchStorageMigrationDialog.js";
 import {
   useBatchMetadataOperations,
   type BatchMetadataUpdate
 } from "./useBatchMetadataOperations.js";
+
+const loadBatchStorageMigrationDialog = () => import("./BatchStorageMigrationDialog.js");
+const preloadBatchStorageMigrationDialog = () => {
+  void loadBatchStorageMigrationDialog().catch(() => undefined);
+};
+const BatchStorageMigrationDialog = lazy(() => loadBatchStorageMigrationDialog().then((module) => ({
+  default: module.BatchStorageMigrationDialog
+})));
 
 type BatchMetadataChanges = Record<keyof ImageDraft, boolean>;
 
@@ -359,6 +366,9 @@ export function BatchMetadataModal({
               className="batch-edit-migrate-trigger"
               type="button"
               disabled={saving || !activeItems.length}
+              onPointerEnter={preloadBatchStorageMigrationDialog}
+              onPointerDown={preloadBatchStorageMigrationDialog}
+              onFocus={preloadBatchStorageMigrationDialog}
               onClick={() => setMigrating(true)}
             >
               <Icon name="arrow-left-right-line" />{single ? "迁移存储" : "批量迁移存储"}
@@ -389,19 +399,21 @@ export function BatchMetadataModal({
       </form>
       <OverlayScrollbar targetRef={listRef} />
     </div>
-    {canMigrateStorage && (
-      <BatchStorageMigrationDialog
-        open={migrating}
-        imageIds={activeItems.map((item) => item.id)}
-        single={single}
-        returnFocusRef={migrateTriggerRef}
-        onClose={() => setMigrating(false)}
-        onSaved={onSaved}
-        onSucceeded={() => {
-          setMigrating(false);
-          exit.requestClose();
-        }}
-      />
+    {canMigrateStorage && migrating && (
+      <Suspense fallback={null}>
+        <BatchStorageMigrationDialog
+          open
+          imageIds={activeItems.map((item) => item.id)}
+          single={single}
+          returnFocusRef={migrateTriggerRef}
+          onClose={() => setMigrating(false)}
+          onSaved={onSaved}
+          onSucceeded={() => {
+            setMigrating(false);
+            exit.requestClose();
+          }}
+        />
+      </Suspense>
     )}
     {preview && <ImagePreviewModal src={preview.src} thumbSrc={preview.thumbSrc} width={preview.width} height={preview.height} onClose={() => setPreview(null)} returnFocusRef={previewReturnFocusRef} />}
     </>

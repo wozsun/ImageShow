@@ -1,17 +1,19 @@
-import { useMemo, useRef, type RefObject } from "react";
+import { lazy, Suspense, useMemo, useRef, type RefObject } from "react";
 import { Icon } from "../icon/Icon.js";
 import { ProgressiveImage } from "./ProgressiveImage.js";
 import { displayNameOrSlug, imageDisplayTitle, formatDate, formatDimensions } from "../../lib/ui/formatters.js";
 import { brightnessOptionLabel, deviceOptionLabel } from "../../lib/ui/select-options.js";
 import type { ImageItem, PublicImageItem } from "../../lib/types.js";
-import { useGalleryFacets, useSiteConfig } from "../../lib/api/site-data.js";
-import { useStorageNameResolver } from "../../lib/api/storage-options.js";
+import { hasSessionProbeHint, useGalleryFacets, useSiteConfig } from "../../lib/api/site-data.js";
 import { useAnimatedClose } from "../../hooks/useAnimatedClose.js";
 import { useBodyScrollLock } from "../../hooks/useBodyScrollLock.js";
 import { useDialogFocus } from "../../hooks/useDialogFocus.js";
 import { OverlayScrollbar } from "../layout/OverlayScrollbar.js";
 import { ImageDescriptionSlot } from "./ImageDescriptionSlot.js";
-import { ImageAdminDetails } from "./ImageAdminDetails.js";
+
+const ImageAdminDetails = lazy(() => import("./ImageAdminDetails.js").then((module) => ({
+  default: module.ImageAdminDetails
+})));
 
 type ImageDetailModalProps =
   | {
@@ -34,6 +36,7 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
   const { item, onClose } = props;
   const admin = props.admin === true;
   const adminItem = admin ? props.item : null;
+  const showAdminDetails = admin || hasSessionProbeHint();
   const detailLoading = !admin && props.detailLoading === true;
   const detailError = !admin ? props.detailError?.trim() ?? "" : "";
   const onDetailRetry = !admin ? props.onDetailRetry : undefined;
@@ -52,8 +55,6 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
   });
   const { data: siteConfig } = useSiteConfig();
   const { data: facets } = useGalleryFacets();
-  // 后台完整详情只有 storage_slug，需拉取后端列表来解析显示名。
-  const storageName = useStorageNameResolver(admin);
   const themeNames = useMemo(() => new Map((facets?.themes ?? []).map((option) => [option.slug, displayNameOrSlug(option)])), [facets]);
   const tagNames = useMemo(() => new Map((facets?.tags ?? []).map((option) => [option.slug, displayNameOrSlug(option)])), [facets]);
   const authorMap = useMemo(() => new Map((facets?.authors ?? []).map((option) => [option.slug, option])), [facets]);
@@ -197,12 +198,15 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
                   <Icon name="external-link-line" />来源
                 </a>
               </div>
-              <ImageAdminDetails
-                key={item.id}
-                imageId={item.id}
-                adminItem={adminItem}
-                storageLabel={adminItem ? storageName(adminItem) : ""}
-              />
+              {showAdminDetails && (
+                <Suspense fallback={null}>
+                  <ImageAdminDetails
+                    key={item.id}
+                    imageId={item.id}
+                    adminItem={adminItem}
+                  />
+                </Suspense>
+              )}
             </div>
           </div>
           <OverlayScrollbar

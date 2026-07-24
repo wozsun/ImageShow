@@ -16,6 +16,7 @@
 
 .toolbar-actions button { white-space: nowrap; flex-shrink: 0; }
 .image-card-density-switch { flex: 0 0 auto; }
+.workflow-collapse-toggle { display: none; }
 .check-label {
   display: inline-flex;
   align-items: center;
@@ -51,15 +52,6 @@
   filter: grayscale(.18);
   cursor: wait;
 }
-.admin-pagination {
-  margin-top: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-}
-.admin-pagination span { min-width: 72px; color: #66717f; text-align: center; }
-
 .batch-edit-common { padding: 12px 16px; display: flex; flex-wrap: wrap; align-items: end; gap: 8px; border-bottom: 1px solid #dce2ea; }
 .select-control.batch-common-select { width: 120px; flex: 0 0 auto; }
 
@@ -118,7 +110,6 @@
   white-space: nowrap;
 }
 .admin-image-card-main > span,
-.muted { color: #66717f; }
 .admin-image-card-meta {
   min-width: 0;
   display: flex;
@@ -339,6 +330,25 @@
 }
 
 @media (max-width: 760px) {
+  .workflow-collapse-toggle {
+    --pressable-active-scale: var(--pressable-scale-large, .99);
+    width: 100%;
+    min-height: 48px;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    padding: 8px max(12px, env(safe-area-inset-right)) 8px max(12px, env(safe-area-inset-left));
+    border: 0;
+    border-bottom: 1px solid #dce2ea;
+    border-radius: 0;
+    background: #f8fafc;
+    text-align: left;
+  }
+  .workflow-collapse-toggle > span { font-weight: 600; white-space: nowrap; }
+  .workflow-collapse-toggle > small { min-width: 0; overflow: hidden; color: #66717f; text-overflow: ellipsis; white-space: nowrap; }
+  .workflow-collapse-toggle > .app-icon { transition: transform .16s ease; }
+
   .image-admin-title-row {
     display: grid;
     grid-template-columns: max-content minmax(0, 1fr);
@@ -522,6 +532,7 @@
   .admin-image-grid[data-density="spacious"] .admin-image-card-actions {
     gap: 8px;
   }
+  .toolbar { align-items: stretch; flex-direction: column; }
 }
 
 @media (max-width: 492px) {

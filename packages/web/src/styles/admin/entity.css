@@ -78,3 +78,10 @@
 .role-badge { font-size: 12px; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
 .role-super { background: #fef3c7; color: #92400e; }
 .role-image { background: #e0e7ff; color: #3730a3; }
+
+@media (max-width: 760px) {
+  .admin-create-form input,
+  .admin-create-form .admin-create-field,
+  .admin-create-form .entity-slug-field { flex-basis: 100%; max-width: none; }
+  .admin-create-form > button { flex: 1; min-height: 44px; }
+}

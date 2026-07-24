@@ -12,6 +12,7 @@ import {
   createActionFeedback,
   type ActionFeedbackState
 } from "../../components/feedback/ActionFeedback.js";
+import "../../styles/admin/storage.css";
 import {
   ActionFeedbackOutlet,
   useActionFeedbackTarget

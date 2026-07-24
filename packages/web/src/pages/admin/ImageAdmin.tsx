@@ -50,6 +50,9 @@ import {
   useImageAdminOperations,
   type ImageAdminView
 } from "./useImageAdminOperations.js";
+import "../../styles/admin/upload.css";
+import "../../styles/admin/images.css";
+import "../../styles/admin/image-edit.css";
 
 function adminImageListQuery(
   view: ImageAdminView,
@@ -147,6 +150,9 @@ export function ImageAdmin() {
     runConfirmedAction,
     restoreSelected
   } = useImageAdminOperations({ items, invalidateData });
+  const finishImportBatch = useCallback(() => {
+    setSelected([]);
+  }, [setSelected]);
   const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / pageSize));
   const canDeleteReadyItems = view !== "deleted";
   const changeFilter = (
@@ -249,7 +255,7 @@ export function ImageAdmin() {
           </p>
         </div>
         <div className="image-admin-head-tools">
-          {view === "ready" && <Uploader onDone={refresh} />}
+          {view === "ready" && <Uploader onDone={finishImportBatch} />}
           <div className="segmented">
             <button type="button" className={view === "ready" ? "active" : ""} disabled={operationBusy} onClick={() => changeView("ready")}>
               图库

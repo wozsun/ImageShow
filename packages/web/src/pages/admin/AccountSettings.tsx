@@ -7,6 +7,7 @@ import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
 import { isValidAdminPassword, passwordPolicyHint } from "../../lib/auth/password.js";
 import { useAuthMe } from "../../lib/api/site-data.js";
 import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
+import "../../styles/admin/account.css";
 
 const updatePasswordPresentation = {
   idle: { icon: "key-2-line", label: "修改密码" },

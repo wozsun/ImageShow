@@ -1,0 +1,8 @@
+.account-form { max-width: 420px; display: grid; gap: 14px; }
+.account-form label { display: grid; gap: 6px; color: #495260; }
+.account-form .button { justify-self: start; }
+.account-note { margin: 0; font-size: 13px; line-height: 1.5; }
+
+@media (max-width: 760px) {
+  .account-form .button { justify-self: stretch; min-height: 44px; }
+}

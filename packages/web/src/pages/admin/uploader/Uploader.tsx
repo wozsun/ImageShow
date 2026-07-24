@@ -378,8 +378,8 @@ export function Uploader({ onDone }: { onDone: () => void }) {
           onConfirmDuplicateJob={confirmDuplicateJob}
           onOpenDetail={openJobDetail}
           onOpenPreview={openJobPreview}
-          onOpenLinkInput={() => {
-            setLinkInputMode("urls");
+          onOpenLinkInput={(inputMode) => {
+            setLinkInputMode(inputMode);
             setUrlInputOpen(true);
           }}
           onBackendChange={setBackendChoice}

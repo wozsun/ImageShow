@@ -20,6 +20,7 @@ import {
 import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
 import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.js";
 import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
+import "../../styles/admin/logs.css";
 
 type LogLevel = "DEBUG" | "INFO" | "WARN" | "ERROR" | "OFF";
 

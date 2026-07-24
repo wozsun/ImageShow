@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef } from "react";
-import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { api, clearCsrfToken, setCsrfToken } from "../../lib/api/client.js";
 import { Icon } from "../../components/icon/Icon.js";
@@ -9,6 +9,7 @@ import { clearSessionProbeHint, rememberSessionProbeHint, useAuthMe, useSiteConf
 import { clearAdminCacheAfterLogin } from "../../lib/api/query-invalidation.js";
 import { MobileNavigation } from "../../components/navigation/MobileNavigation.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
+import { RouteLoadBoundary } from "../../components/feedback/RouteLoadBoundary.js";
 import { ActionFeedbackProvider } from "../../components/feedback/ActionFeedbackRegion.js";
 import { AdminLogin } from "./AdminLogin.js";
 import {
@@ -16,25 +17,50 @@ import {
   adminNavigationForRole
 } from "./AdminNavigation.js";
 import { AdminBrand } from "./AdminBrand.js";
-import { CheckPage } from "./CheckPage.js";
-import { ImageAdmin } from "./ImageAdmin.js";
-import { EntityAdmin } from "./EntityAdmin.js";
-import { UserAdmin } from "./UserAdmin.js";
-import { Overview } from "./Overview.js";
-import { SettingsPage } from "./SettingsPage.js";
-import { StorageSettings } from "./StorageSettings.js";
-import { AccountSettings } from "./AccountSettings.js";
-import { LogPage } from "./LogPage.js";
 import { AdminPreferencesProvider } from "../../hooks/useAdminPreferences.js";
 // 后台样式在此引入（而非全局 styles.css），随 AdminShell 懒加载分块下载，公共页不会加载。
 import "../../styles/admin.css";
 
+const Overview = lazy(() => import("./Overview.js").then((module) => ({
+  default: module.Overview
+})));
+const ImageAdmin = lazy(() => {
+  // 后台详情默认展开；与图片页并行预载管理信息，避免首次开卡时再插入整块内容。
+  // 公共详情仍保留自身的按需 import，不会因此加载后台管理模块。
+  const adminDetailsReady = import("../../components/image/ImageAdminDetails.js");
+  return import("./ImageAdmin.js").then(async (module) => {
+    await adminDetailsReady;
+    return { default: module.ImageAdmin };
+  });
+});
+const EntityAdmin = lazy(() => import("./EntityAdmin.js").then((module) => ({
+  default: module.EntityAdmin
+})));
+const AccountSettings = lazy(() => import("./AccountSettings.js").then((module) => ({
+  default: module.AccountSettings
+})));
+const SettingsPage = lazy(() => import("./SettingsPage.js").then((module) => ({
+  default: module.SettingsPage
+})));
 const AdvancedConfigPage = lazy(() => import("./AdvancedConfigPage.js").then((module) => ({
   default: module.AdvancedConfigPage
+})));
+const StorageSettings = lazy(() => import("./StorageSettings.js").then((module) => ({
+  default: module.StorageSettings
+})));
+const UserAdmin = lazy(() => import("./UserAdmin.js").then((module) => ({
+  default: module.UserAdmin
+})));
+const CheckPage = lazy(() => import("./CheckPage.js").then((module) => ({
+  default: module.CheckPage
+})));
+const LogPage = lazy(() => import("./LogPage.js").then((module) => ({
+  default: module.LogPage
 })));
 
 export function AdminShell() {
   const navigate = useNavigate();
+  const routeLocation = useLocation();
   const client = useQueryClient();
 
   const navScrollRef = useRef<HTMLDivElement | null>(null);
@@ -127,30 +153,25 @@ export function AdminShell() {
         </MobileNavigation>
       </header>
       <ActionFeedbackProvider>
-        <Routes>
-          <Route index element={<Overview />} />
-          <Route path="images" element={<ImageAdmin />} />
-          <Route path="tags" element={<EntityAdmin kind="tags" />} />
-          <Route path="themes" element={<EntityAdmin kind="themes" />} />
-          <Route path="authors" element={<EntityAdmin kind="authors" />} />
-          <Route path="account" element={<AccountSettings />} />
-          {isSuper && <Route path="site" element={<SettingsPage />} />}
-          {isSuper && (
-            <Route
-              path="advanced-config"
-              element={(
-                <Suspense fallback={<div className="center">正在加载高级配置…</div>}>
-                  <AdvancedConfigPage />
-                </Suspense>
-              )}
-            />
-          )}
-          {isSuper && <Route path="storage" element={<StorageSettings />} />}
-          {isSuper && <Route path="users" element={<UserAdmin />} />}
-          <Route path="check" element={<CheckPage />} />
-          {isSuper && <Route path="logs" element={<LogPage />} />}
-          <Route path="*" element={<Navigate to={adminBasePath} replace />} />
-        </Routes>
+        <RouteLoadBoundary resetKey={routeLocation.pathname}>
+          <Suspense fallback={<div className="center">加载中</div>}>
+            <Routes>
+              <Route index element={<Overview />} />
+              <Route path="images" element={<ImageAdmin />} />
+              <Route path="tags" element={<EntityAdmin kind="tags" />} />
+              <Route path="themes" element={<EntityAdmin kind="themes" />} />
+              <Route path="authors" element={<EntityAdmin kind="authors" />} />
+              <Route path="account" element={<AccountSettings />} />
+              {isSuper && <Route path="site" element={<SettingsPage />} />}
+              {isSuper && <Route path="advanced-config" element={<AdvancedConfigPage />} />}
+              {isSuper && <Route path="storage" element={<StorageSettings />} />}
+              {isSuper && <Route path="users" element={<UserAdmin />} />}
+              <Route path="check" element={<CheckPage />} />
+              {isSuper && <Route path="logs" element={<LogPage />} />}
+              <Route path="*" element={<Navigate to={adminBasePath} replace />} />
+            </Routes>
+          </Suspense>
+        </RouteLoadBoundary>
       </ActionFeedbackProvider>
       </main>
     </AdminPreferencesProvider>

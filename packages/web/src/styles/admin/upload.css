@@ -122,6 +122,31 @@
   width: 200px;
   flex: 0 0 auto;
 }
+.upload-source-picker {
+  width: 200px;
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid #c9d1dc;
+  border-radius: 6px;
+  background: #fff;
+}
+.upload-source-picker > button {
+  min-width: 0;
+  padding-inline: 6px;
+  border: 0;
+  border-radius: 0;
+}
+.upload-source-picker > button + button { border-left: 1px solid #c9d1dc; }
+.upload-source-picker > button:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 2px solid #1f6feb;
+  outline-offset: -2px;
+}
+.upload-source-picker.is-disabled { opacity: .45; }
+.upload-source-picker.is-disabled > button { opacity: 1; }
 .upload-picker.is-disabled { opacity: .45; cursor: not-allowed; }
 .upload-picker input { display: none; }
 .link-import-card { width: min(560px, 96vw); max-height: 90vh; overflow: auto; background: #fff; border-radius: 8px; padding: 18px; display: flex; flex-direction: column; gap: 10px; animation: modal-pop .18s cubic-bezier(.2, .8, .2, 1); }
@@ -373,7 +398,10 @@ button.empty-state.upload-dropzone:not(:disabled):hover,
     align-items: end;
     gap: 8px;
   }
-  .upload-defaults .apply-to-all-button { order: 1; }
+  .upload-defaults .apply-to-all-button {
+    order: 1;
+    margin-inline-start: auto;
+  }
 }
 
 @media (max-width: 760px) {
@@ -437,7 +465,8 @@ button.empty-state.upload-dropzone:not(:disabled):hover,
     height: 44px;
     color: #a13a32;
   }
-  .upload-primary-actions .upload-picker {
+  .upload-primary-actions .upload-picker,
+  .upload-primary-actions .upload-source-picker {
     grid-column: 2 / 4;
     grid-row: 2;
     width: auto;

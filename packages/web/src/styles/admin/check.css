@@ -1,0 +1,60 @@
+.check-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  margin-left: auto;
+}
+.check-actions .actions { justify-content: flex-end; }
+.check-result {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+.check-result section {
+  background: #fff;
+  border: 1px solid #dce2ea;
+  border-radius: 8px;
+  padding: 14px;
+}
+.check-summary {
+  margin-bottom: 16px;
+  padding: 14px;
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  animation: surface-in .18s ease-out;
+}
+.check-card { animation: surface-in .2s ease-out; }
+.check-summary.ok, .check-card.ok { border: 1px solid #b9dec4; background: #f2fbf5; }
+.check-summary.warn, .check-card.warn { border: 1px solid #f0d38a; background: #fff8e8; }
+.check-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.check-card-head h2 { margin: 0; }
+.check-card-head span {
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.check-card.ok .check-card-head span { color: #245236; background: #dff3e5; }
+.check-card.warn .check-card-head span { color: #765314; background: #f9e7af; }
+.check-result pre { border: 0; padding: 0; max-height: 360px; }
+
+@media (max-width: 760px) {
+  /* 检查项保持两列，只有汇总性的“全部”独占末行；维护动作仍共享一行。 */
+  .check-actions { margin-left: 0; }
+  .check-actions .actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .check-actions .actions button { width: 100%; }
+  .check-actions .actions .check-all-action { grid-column: 1 / -1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .check-summary,
+  .check-card { animation: none; }
+}

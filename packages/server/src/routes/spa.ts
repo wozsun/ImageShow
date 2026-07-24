@@ -9,12 +9,14 @@ import { siteConfigPayload } from "../config/app-settings.ts";
 import {
   immutableCacheControl,
   noStoreCacheControl,
-  publicDocumentCacheControl,
-  publicStaticCacheControl,
-  spaDocumentHeaders
+  publicStaticCacheControl
 } from "../core/http/headers.ts";
 import { serveStaticWithValidators } from "../core/http/static-conditional.ts";
 import { existingThemeFromHost, isValidatedThemeRequest, rootSiteUrl, themeFromHost } from "../themes/host.ts";
+import {
+  createSpaDocumentRepresentation,
+  spaDocumentResponse
+} from "./spa-response.ts";
 
 const publicDir = join(dirname(fileURLToPath(import.meta.url)), "../public");
 
@@ -54,6 +56,7 @@ export function registerSpaRoutes(app: Hono) {
 }
 
 let spaTemplate: string | null = null;
+let cachedSpaRepresentation: ReturnType<typeof createSpaDocumentRepresentation> | null = null;
 
 function escapeHtmlText(value: string) {
   return value
@@ -85,14 +88,18 @@ function buildSpaDocument(): string {
     .replace("</head>", `${head}</head>`);
 }
 
-async function spaHandler(_c: Context) {
-  return new Response(buildSpaDocument(), {
-    headers: {
-      "Content-Type": "text/html; charset=utf-8",
-      "Cache-Control": publicDocumentCacheControl,
-      ...spaDocumentHeaders
-    }
-  });
+function currentSpaRepresentation() {
+  const body = buildSpaDocument();
+  if (cachedSpaRepresentation?.body === body) return cachedSpaRepresentation;
+  cachedSpaRepresentation = createSpaDocumentRepresentation(body);
+  return cachedSpaRepresentation;
+}
+
+async function spaHandler(c: Context) {
+  return spaDocumentResponse(
+    currentSpaRepresentation(),
+    c.req.header("if-none-match")
+  );
 }
 
 async function themeAwareSpaHandler(c: Context) {

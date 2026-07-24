@@ -6,6 +6,7 @@ import { adminApiBasePath, adminBasePath } from "../../lib/constants.js";
 import { queryKeys } from "../../lib/api/query-keys.js";
 import { formatBytes } from "../../lib/ui/formatters.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
+import "../../styles/admin/overview.css";
 
 type RecentImage = { id: string; title: string; thumb_url: string };
 type ThemeCount = { theme: string; count: number };

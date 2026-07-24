@@ -1,0 +1,39 @@
+.storage-test-button {
+  width: 154px;
+  flex: 0 0 154px;
+}
+.storage-default-note { display: flex; align-items: center; gap: 8px; margin: 0 0 14px; font-size: 14px; font-weight: 600; color: #20242a; }
+.storage-default-note strong { padding: 2px 10px; border-radius: 999px; background: #e8f1ff; color: #1f6feb; font-weight: 700; }
+.storage-card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr)); gap: 8px; margin: 4px 0 14px; }
+.storage-backend-card { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border: 1px solid #e2e6ec; border-radius: 12px; background: #fff; }
+.storage-backend-card.is-default { border-color: #1f6feb; box-shadow: 0 0 0 1px rgba(31, 111, 235, 0.25); }
+.storage-backend-card.is-off { opacity: 0.7; }
+.storage-backend-card.is-dragging { opacity: 0.55; }
+.storage-card-body { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+.storage-card-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 16px; color: #20242a; }
+.storage-card-title strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.storage-card-meta { font-size: 13px; color: #8a93a0; }
+.storage-default-toggle { flex: 0 0 auto; min-height: 28px; gap: 5px; padding: 3px 10px; border-radius: 999px; border: 1px solid #d0d5dd; background: #fff; color: #4a525d; font-size: 12px; font-weight: 600; }
+.storage-default-toggle.is-default { border-color: #9fc2f5; background: #e8f1ff; color: #1f6feb; }
+.storage-default-toggle.is-default:disabled { opacity: 1; cursor: default; }
+.storage-default-toggle .app-icon { width: 14px; height: 14px; flex-basis: 14px; }
+.storage-card-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; border-top: 1px solid #eef1f5; padding-top: 8px; }
+.storage-card-actions-left { display: flex; align-items: center; gap: 8px; min-height: 30px; }
+.storage-card-actions button { min-height: 34px; }
+.storage-card-actions .icon { width: 36px; flex: 0 0 36px; }
+.storage-enable-toggle { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; border: 1px solid #d0d5dd; background: #f3f4f6; color: #6b7280; font-size: 12px; font-weight: 600; cursor: pointer; }
+.storage-enable-toggle.is-on { background: #e8f7ee; border-color: #b9dec4; color: #1f9d57; }
+.storage-enable-toggle:disabled { cursor: default; opacity: .7; }
+.storage-cleanup-retry { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; border: 1px solid #f2c27b; background: #fff7e8; color: #a75b00; font-size: 12px; font-weight: 600; cursor: pointer; }
+.storage-cleanup-retry:disabled { cursor: default; opacity: .7; }
+.storage-card-actions-right { display: flex; align-items: center; gap: 6px; }
+.storage-card-actions .icon.is-danger { color: #d23b3b; }
+.storage-drag-handle { cursor: grab; }
+.storage-drag-handle:active { cursor: grabbing; }
+.storage-add-card { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 132px; border: 1px dashed #c4ccd6; border-radius: 12px; background: #fafbfc; color: #4a525d; font-size: 14px; cursor: pointer; }
+.storage-add-card:hover:not(:disabled) { border-color: #1f6feb; color: #1f6feb; }
+.edit-modal form.storage-edit-modal { display: flex; flex-direction: column; overflow: hidden; }
+.storage-edit-modal .operation-body { display: flex; flex-direction: column; gap: 10px; flex: 1; min-height: 0; overflow: auto; }
+.storage-modal-left { display: flex; gap: 8px; margin-right: auto; }
+.storage-edit-modal footer { flex-wrap: wrap; row-gap: 10px; }
+.storage-edit-modal footer button { white-space: nowrap; }

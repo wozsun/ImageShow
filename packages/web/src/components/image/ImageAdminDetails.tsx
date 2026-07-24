@@ -4,8 +4,10 @@ import { api, isApiClientError } from "../../lib/api/client.js";
 import { adminApiBasePath } from "../../lib/constants.js";
 import { queryKeys } from "../../lib/api/query-keys.js";
 import { clearSessionProbeHint, hasSessionProbeHint } from "../../lib/api/site-data.js";
+import { useStorageNameResolver } from "../../lib/api/storage-options.js";
 import { errorMessage, formatDate } from "../../lib/ui/formatters.js";
 import type { ImageAdminInfo, ImageItem } from "../../lib/types.js";
+import "../../styles/admin/image-details.css";
 
 const MD5_RESERVE = "0".repeat(32);
 
@@ -28,14 +30,14 @@ function unresolvedValue(admin: boolean, loading: boolean, failed: boolean) {
 
 export function ImageAdminDetails({
   imageId,
-  adminItem,
-  storageLabel
+  adminItem
 }: {
   imageId: string;
   adminItem: ImageItem | null;
-  storageLabel: string;
 }) {
   const admin = Boolean(adminItem);
+  // 存储选项只属于管理信息；留在这个按需块内，匿名公开详情不会下载后台查询实现。
+  const storageName = useStorageNameResolver(admin);
   const queryClient = useQueryClient();
   // 后台详情已经拿到完整 ImageItem，无需等待二次请求；公共详情仍保持按需展开、按需查询。
   const [expanded, setExpanded] = useState(() => admin);
@@ -60,7 +62,7 @@ export function ImageAdminDetails({
   const failed = !admin && query.isError && !query.isFetching;
   const fallback = unresolvedValue(admin, loading, failed);
   const md5 = adminItem?.md5 || adminInfo?.md5 || fallback;
-  const storage = adminItem ? storageLabel || fallback : adminInfo?.storage_label || fallback;
+  const storage = adminItem ? storageName(adminItem) || fallback : adminInfo?.storage_label || fallback;
   const createdAt = adminItem?.created_at ?? adminInfo?.created_at;
   const updatedAt = adminItem?.updated_at ?? adminInfo?.updated_at;
   const prefetchAdminInfo = () => {

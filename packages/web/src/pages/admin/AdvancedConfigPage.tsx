@@ -10,6 +10,7 @@ import { ConfirmDialog } from "../../components/feedback/ConfirmDialog.js";
 import { ConfigPackageImportDialog } from "./advanced-config/ConfigPackageImportDialog.js";
 import { RuntimeConfigEditor } from "./advanced-config/RuntimeConfigEditor.js";
 import { invalidateRuntimeData } from "../../lib/api/query-invalidation.js";
+import "../../styles/admin/advanced-config.css";
 import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
 import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.js";
 

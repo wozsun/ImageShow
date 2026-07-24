@@ -137,7 +137,7 @@ export function UploadWorkflowWindow({
   onConfirmDuplicateJob: (job: ImportJob) => void;
   onOpenDetail: (item: ImageItem, opener: HTMLElement) => void;
   onOpenPreview: (target: ImportPreviewTarget) => void;
-  onOpenLinkInput: () => void;
+  onOpenLinkInput: (inputMode: LinkInputMode) => void;
   onBackendChange: (backend: string) => void;
   onCancelAndClose: () => void;
   onCommitReady: () => void;
@@ -202,15 +202,29 @@ export function UploadWorkflowWindow({
             <div className="upload-primary-actions">
               <UploadCleanupMenu disabled={busy} actions={cleanupActions} />
               {mode === "link" ? (
-                <button
-                  ref={linkPickerRef}
-                  type="button"
-                  className="button secondary upload-picker pressable"
-                  disabled={busy}
-                  onClick={onOpenLinkInput}
+                <div
+                  className={`upload-source-picker${busy ? " is-disabled" : ""}`}
+                  role="group"
+                  aria-label="选择导入来源"
+                  aria-disabled={busy}
                 >
-                  <Icon name="download-cloud-2-line" />选择来源
-                </button>
+                  {([
+                    ["urls", "链接"],
+                    ["jsonl", "清单"],
+                    ["weibo", "微博"]
+                  ] as const).map(([inputMode, label]) => (
+                    <button
+                      key={inputMode}
+                      ref={linkInputMode === inputMode ? linkPickerRef : undefined}
+                      type="button"
+                      className="upload-source-option pressable"
+                      disabled={busy}
+                      onClick={() => onOpenLinkInput(inputMode)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
               ) : (
                 <label
                   className={`button secondary upload-picker pressable${busy ? " is-disabled" : ""}`}
@@ -349,7 +363,7 @@ export function UploadWorkflowWindow({
             <button
               type="button"
               className="empty-state upload-dropzone"
-              onClick={onOpenLinkInput}
+              onClick={() => onOpenLinkInput("urls")}
             >
               <Icon name="download-cloud-2-line" />
               <span>还没有导入任务，点击此处选择图片来源</span>

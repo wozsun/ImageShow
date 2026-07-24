@@ -13,6 +13,7 @@ import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
 import type { AdminSettings, SiteSettings } from "../../lib/types.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
 import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.js";
+import "../../styles/admin/settings.css";
 import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
 import { invalidateRuntimeData } from "../../lib/api/query-invalidation.js";
 

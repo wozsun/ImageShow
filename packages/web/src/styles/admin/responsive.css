@@ -1,21 +1,4 @@
-@media (max-width: 1080px) {
-  .settings-grid { grid-template-columns: 1fr 1fr; }
-}
-
 @media (max-width: 760px) {
-  .admin:has(> .advanced-config-page) {
-    height: 100dvh;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
-  .admin:has(> .advanced-config-page) > .admin-mobile-header { flex: 0 0 auto; }
-  .admin:has(> .advanced-config-page) > .advanced-config-page {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-  }
   .admin { padding-left: 0; }
   .admin > aside { display: none; }
   .admin-mobile-header {
@@ -65,7 +48,7 @@
     margin: 4px;
     border-top: 1px solid #343b46;
   }
-  .workspace { padding: 16px; }
+  .workspace { --workspace-inline-padding: 16px; padding: 16px; }
   /* 分页型后台页（图片列表 / 主题 / 标签 / 作者管理，均为 .workspace-paged）在移动端也保持桌面
      行为：卡片区域内部滚动、分页器固定在底部，而非整页滚动。.admin 变为 flex 列，让分页型工作区
      填满 64px sticky 移动头部以下的空间（无魔法数字）。其高度固定为 100svh（固定盒——使内层可滚动，
@@ -85,15 +68,12 @@
     flex: 1;
     min-height: 0;
     min-width: 0;
-    margin-inline-end: -16px;
-    padding-inline-end: 18px;
     overflow-y: auto;
     overscroll-behavior: contain;
   }
   /*通栏分隔线：先抵消移动端工作区的 16px 侧边内边距使横线铺满整个区域，再补回内边距让分页器内容保持对齐。*/
   .workspace-paged > .admin-pagination { margin: 0 -16px; padding: 12px 16px 0; border-top: 1px solid #e2e8f0; }
-  .workspace-head:not(.workspace-grid-head),
-  .toolbar { align-items: stretch; flex-direction: column; }
+  .workspace-head:not(.workspace-grid-head) { align-items: stretch; flex-direction: column; }
   .workspace-grid-head {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
@@ -129,82 +109,17 @@
   .admin button:not(:disabled):not(.select-trigger):not(.password-toggle):active {
     transform: scale(var(--pressable-active-scale, var(--pressable-scale-medium, .98)));
   }
-  .settings-grid, .overview-grid { grid-template-columns: 1fr; }
-  .advanced-config-summary { grid-template-columns: 1fr 1fr; }
-  .advanced-config-backend { grid-template-columns: 1fr; }
-  .advanced-config-ready { justify-self: start; }
-  .advanced-config-head-actions { display: grid; grid-template-columns: 1fr 1fr; margin-left: 0; }
-  .advanced-config-head-actions button { min-width: 0; }
-  .advanced-config-editor-head {
-    grid-template-columns: max-content minmax(0, 1fr);
-  }
-  .advanced-config-editor-footer { align-items: stretch; flex-direction: column; }
-  .advanced-config-editor-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .advanced-config-editor-actions .button { grid-column: 1 / -1; }
-  /* iOS 动态工具栏压缩可见区域或反馈条出现时，由编辑区让出高度并保持内部滚动；
-     页脚仍留在卡片边框内，不把 CodeMirror 的完整内容计入卡片固有高度。 */
-  .advanced-config-editor {
-    grid-template-rows: auto minmax(0, 1fr) auto;
-  }
-  .advanced-config-code-editor .cm-editor { font-size: 12px; }
-  .workflow-collapse-toggle {
-    --pressable-active-scale: var(--pressable-scale-large, .99);
-    width: 100%;
-    min-height: 48px;
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 8px;
-    padding: 8px max(12px, env(safe-area-inset-right)) 8px max(12px, env(safe-area-inset-left));
-    border: 0;
-    border-bottom: 1px solid #dce2ea;
-    border-radius: 0;
-    background: #f8fafc;
-    text-align: left;
-  }
-  .workflow-collapse-toggle > span { font-weight: 600; white-space: nowrap; }
-  .workflow-collapse-toggle > small { min-width: 0; overflow: hidden; color: #66717f; text-overflow: ellipsis; white-space: nowrap; }
-  .workflow-collapse-toggle > .app-icon { transition: transform .16s ease; }
-  /*头部堆叠在标题之下：两个配置按钮共享一行（无固定宽度）。反馈区域是独立布局单元。*/
-  .settings-head-actions { flex-wrap: wrap; }
-  .settings-head-actions .settings-config-button { flex: 1 1 auto; min-width: 0; }
-  /* 检查项保持两列，只有汇总性的“全部”独占末行；维护动作仍共享一行。 */
-  .check-actions { margin-left: 0; }
-  .check-actions .actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-  .check-actions .actions button { width: 100%; }
-  .check-actions .actions .check-all-action { grid-column: 1 / -1; }
-  .image-fields-primary {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .image-fields-primary > * { min-width: 0; }
-  .image-fields-title { grid-column: 1 / -1; width: 100%; }
-  .select-control.image-fields-device,
-  .select-control.image-fields-brightness,
-  .slug-combo-control.image-fields-theme,
-  .slug-combo-control.image-fields-author { width: auto; min-width: 0; }
-  .tag-input-control.image-fields-tags { grid-column: 1 / -1; width: auto; min-width: 0; }
-  .image-fields-urls { display: grid; grid-template-columns: minmax(0, 1fr); }
-  .image-fields-urls > input { width: 100%; min-width: 0; }
-  /* 次级后台表单与弹窗（主题/标签/作者/用户管理的新建条、重置密码、检查操作 / 图片迁移弹窗、
-     账户设置）：每个输入/字段占一整行，动作按钮共享一行且 flex:1 铺满宽度，而非左对齐留参差
-     或在默认宽度下右对齐；44px 高便于点按。存储编辑弹窗保留其自己的多按钮换行规则（此处排除）。 */
-  .admin-create-form input,
-  .admin-create-form .admin-create-field,
-  .admin-create-form .entity-slug-field { flex-basis: 100%; max-width: none; }
-  .admin-create-form > button { flex: 1; min-height: 44px; }
+  /* 次级后台弹窗的动作按钮共享一行且 flex:1 铺满宽度。
+     页面专属移动端规则由各自按需样式维护。 */
   .operation-modal:not(.storage-edit-modal) footer { gap: 10px; }
   .operation-modal:not(.storage-edit-modal) footer button { flex: 1; min-height: 44px; }
-  .account-form .button { justify-self: stretch; min-height: 44px; }
 }
 
 /* 后台共享的“减少动态效果”项放在所有尺寸规则之后，避免移动端
    :active 规则重新启用缩放。 */
 @media (prefers-reduced-motion: reduce) {
   .action-feedback,
-  .action-feedback-progress,
-  .check-summary,
-  .check-card { animation: none; }
+  .action-feedback-progress { animation: none; }
   .admin button:not(:disabled):active { transform: none; }
   .admin button:not(:disabled):not(.select-trigger):not(.password-toggle):active {
     transform: none;
