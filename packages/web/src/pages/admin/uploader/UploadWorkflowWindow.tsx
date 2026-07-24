@@ -145,8 +145,7 @@ export function UploadWorkflowWindow({
     duplicateJobs,
     runningJobs,
     doneJobs,
-    failedJobs,
-    skippedJobs
+    failedJobs
   } = queue.summary;
   const modeTitle = mode === "file" ? "上传图片" : "导入图片";
   const emptySubtitle = mode === "file"
@@ -175,7 +174,7 @@ export function UploadWorkflowWindow({
                   共 {queue.jobs.length} 张图片，{runningJobs} 张处理中，{readyJobs.length} 张待提交；
                 </span>
                 <span className="upload-summary-secondary">
-                  {doneJobs} 张成功，{skippedJobs} 张跳过，{failedJobs} 张失败，{duplicateJobs} 张重复待确认
+                  {doneJobs} 张成功，{failedJobs} 张失败，{duplicateJobs} 张重复待确认
                   {jsonlErrors.length ? `，${jsonlErrors.length} 行解析失败` : ""}
                 </span>
               </p>

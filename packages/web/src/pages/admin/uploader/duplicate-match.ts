@@ -1,38 +1,25 @@
 import type { BatchDuplicateMatch, ImportJob } from "../../../lib/types.js";
+import { importPositionText } from "./import-job-utils.js";
 
-export type PreparedMd5Claim =
-  | { claimed: true }
-  | { claimed: false; ownerId: string };
-
-export function claimPreparedMd5Owner(
-  owners: Map<string, string>,
-  id: string,
-  md5: string
-): PreparedMd5Claim {
-  const ownerId = owners.get(md5);
-  if (ownerId && ownerId !== id) return { claimed: false, ownerId };
-  owners.set(md5, id);
-  return { claimed: true };
+function batchDuplicatePreviewAvailable(owner: ImportJob) {
+  const previewFull = owner.previewFull || owner.preview;
+  const previewReadable = owner.previewPersistent
+    || ["ready", "committing"].includes(owner.status);
+  return Boolean(owner.preview && previewFull && previewReadable);
 }
 
-export function releasePreparedMd5Owner(
-  owners: Map<string, string>,
-  id: string,
-  md5: string
-) {
-  if (owners.get(md5) !== id) return false;
-  owners.delete(md5);
-  return true;
-}
-
-export function batchDuplicateFromJob(owner: ImportJob): BatchDuplicateMatch {
+function batchDuplicateFromJob(owner: ImportJob): BatchDuplicateMatch {
   const previewFull = owner.previewFull || owner.preview;
   return {
     ownerId: owner.id,
     manifestSource: owner.manifestSource,
     manifestLine: owner.manifestLine,
     manifestPosition: owner.manifestPosition,
-    original: owner.url || owner.draft.original,
+    original: owner.url
+      || owner.file?.webkitRelativePath
+      || owner.file?.name
+      || owner.draft.original
+      || owner.id,
     preview: owner.preview,
     previewFull,
     width: owner.width,
@@ -40,8 +27,45 @@ export function batchDuplicateFromJob(owner: ImportJob): BatchDuplicateMatch {
     device: owner.draft.device,
     brightness: owner.draft.brightness,
     theme: owner.draft.theme,
-    available: Boolean(owner.preview && previewFull)
+    available: batchDuplicatePreviewAvailable(owner)
   };
+}
+
+export function preparedBatchDuplicateMatch(
+  jobs: readonly ImportJob[],
+  currentId: string,
+  md5: string
+) {
+  const candidates = jobs.filter((job) => (
+    job.id !== currentId
+    && job.md5 === md5
+  ));
+  const detached = candidates
+    .map((job) => job.batchDuplicate)
+    .find((match) => match?.ownerId === null);
+  if (detached) return detached;
+  const owner = candidates.find((job) => !job.batchDuplicate)
+    ?? candidates[0];
+  return owner ? batchDuplicateFromJob(owner) : undefined;
+}
+
+export function importDuplicateMessage(
+  libraryCount: number,
+  batchDuplicate?: BatchDuplicateMatch
+) {
+  const batchPosition = batchDuplicate ? importPositionText(batchDuplicate) : "";
+  if (libraryCount && batchDuplicate) {
+    return batchPosition
+      ? `与图库中 ${libraryCount} 张图片及${batchPosition}的最终文件重复`
+      : `与图库中 ${libraryCount} 张图片及同批任务的最终文件重复`;
+  }
+  if (libraryCount) return `与图库中 ${libraryCount} 张图片的最终文件重复`;
+  if (batchDuplicate) {
+    return batchPosition
+      ? `与${batchPosition}的最终文件重复`
+      : "与同批任务的最终文件重复";
+  }
+  return "已就绪，待提交";
 }
 
 export function batchDuplicateSnapshotChanged(previous: ImportJob, next: ImportJob) {
@@ -55,7 +79,8 @@ export function batchDuplicateSnapshotChanged(previous: ImportJob, next: ImportJ
     || previous.height !== next.height
     || previous.draft.device !== next.draft.device
     || previous.draft.brightness !== next.draft.brightness
-    || previous.draft.theme !== next.draft.theme;
+    || previous.draft.theme !== next.draft.theme
+    || batchDuplicatePreviewAvailable(previous) !== batchDuplicatePreviewAvailable(next);
 }
 
 export function refreshBatchDuplicateMatchesForOwners(
@@ -84,34 +109,121 @@ export function refreshBatchDuplicateMatches(jobs: ImportJob[], ownerId: string)
   return refreshBatchDuplicateMatchesForOwners(jobs, new Set([ownerId]));
 }
 
+function withBatchDuplicate(
+  job: ImportJob,
+  batchDuplicate: BatchDuplicateMatch | undefined
+): ImportJob {
+  if (job.status !== "ready") {
+    return { ...job, batchDuplicate };
+  }
+  const previousDuplicateExists = job.duplicates.length > 0
+    || Boolean(job.batchDuplicate);
+  const duplicateExists = job.duplicates.length > 0
+    || Boolean(batchDuplicate);
+  const duplicateDecision = !previousDuplicateExists && duplicateExists
+    ? "undecided"
+    : job.duplicateDecision === "undecided" && !duplicateExists
+      ? "upload"
+      : job.duplicateDecision;
+  if (
+    duplicateDecision === job.duplicateDecision
+    && duplicateDecision !== "undecided"
+    && duplicateExists
+  ) {
+    return { ...job, batchDuplicate };
+  }
+  return {
+    ...job,
+    batchDuplicate,
+    duplicateDecision,
+    message: importDuplicateMessage(job.duplicates.length, batchDuplicate)
+  };
+}
+
 export function detachRemovedBatchDuplicateOwners(
   jobs: ImportJob[],
   removedIds: Set<string>
 ): ImportJob[] {
-  const removed = new Map(
-    jobs.filter((job) => removedIds.has(job.id)).map((job) => [job.id, job])
-  );
-  return jobs
-    .filter((job) => !removedIds.has(job.id))
-    .map((job) => {
-      const currentMatch = job.batchDuplicate;
-      const ownerId = currentMatch?.ownerId;
-      if (!currentMatch || !ownerId || !removedIds.has(ownerId)) return job;
-      const owner = removed.get(ownerId);
-      const hasStablePreview = Boolean(
-        owner && (owner.status === "done" || owner.duplicates.length > 0)
-      );
-      return {
-        ...job,
-        batchDuplicate: hasStablePreview
-          ? { ...batchDuplicateFromJob(owner!), ownerId: null }
+  const removed = jobs.filter((job) => removedIds.has(job.id));
+  const remaining = jobs.filter((job) => !removedIds.has(job.id));
+  const removedById = new Map(removed.map((job) => [job.id, job]));
+  const resolutions = new Map<string, {
+    canonical?: ImportJob;
+    detached?: BatchDuplicateMatch;
+  }>();
+
+  for (const owner of removed) {
+    if (!owner.md5 || resolutions.has(owner.md5)) continue;
+    const group = remaining.filter((job) => (
+      job.md5 === owner.md5
+      && !["cancelling", "cancelled"].includes(job.status)
+    ));
+    const detached = [
+      ...removed
+        .filter((job) => job.md5 === owner.md5)
+        .map((job) => job.batchDuplicate),
+      ...group.map((job) => job.batchDuplicate)
+    ].find((match) => match?.ownerId === null);
+    if (detached) {
+      resolutions.set(owner.md5, { detached });
+      continue;
+    }
+    const removedDoneOwner = removed.find((job) => (
+      job.md5 === owner.md5
+      && job.status === "done"
+      && job.previewPersistent
+    )) ?? removed.find((job) => (
+      job.md5 === owner.md5 && job.status === "done"
+    ));
+    if (removedDoneOwner) {
+      const snapshot = batchDuplicateFromJob(removedDoneOwner);
+      resolutions.set(owner.md5, {
+        detached: removedDoneOwner.previewPersistent
+          ? { ...snapshot, ownerId: null }
           : {
-              ...currentMatch,
+              ...snapshot,
               ownerId: null,
               preview: "",
               previewFull: "",
               available: false
             }
-      };
+      });
+      continue;
+    }
+    const canonical = group.find((job) => !job.batchDuplicate)
+      ?? group[0];
+    resolutions.set(owner.md5, { canonical });
+  }
+
+  return remaining.map((job) => {
+    const currentMatch = job.batchDuplicate;
+    const ownerId = currentMatch?.ownerId;
+    const resolution = job.md5 ? resolutions.get(job.md5) : undefined;
+    if (resolution?.detached) {
+      return withBatchDuplicate(job, resolution.detached);
+    }
+    if (resolution?.canonical) {
+      return withBatchDuplicate(
+        job,
+        resolution.canonical.id === job.id
+          ? undefined
+          : batchDuplicateFromJob(resolution.canonical)
+      );
+    }
+    if (!currentMatch || !ownerId || !removedIds.has(ownerId)) return job;
+    const owner = removedById.get(ownerId);
+    if (owner?.status === "done" && owner.previewPersistent) {
+      return withBatchDuplicate(job, {
+        ...batchDuplicateFromJob(owner),
+        ownerId: null
+      });
+    }
+    return withBatchDuplicate(job, {
+      ...(owner ? batchDuplicateFromJob(owner) : currentMatch),
+      ownerId: null,
+      preview: "",
+      previewFull: "",
+      available: false
     });
+  });
 }

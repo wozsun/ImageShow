@@ -5,22 +5,14 @@ import {
   getStoredImportStatus,
   prepareImportSession,
   type ImportSessionCreateInput,
-  type ImportSessionHandle,
-  type PreparedImport
+  type ImportSessionHandle
 } from "./import-api.js";
 import {
   applyPreparedResult,
   isCurrentImportAttempt,
   type AppendImportQueueApi,
-  type ImportQueueApi,
-  type PreparedApplyResult
+  type ImportQueueApi
 } from "./prepared-result.js";
-
-export type ImportAttemptResult = {
-  session: ImportSessionHandle;
-  prepared: PreparedImport;
-  acceptance: PreparedApplyResult;
-};
 
 const preparationAdmissionStatuses = new Set([
   "preparing",
@@ -176,12 +168,12 @@ export async function prepareMaterializedImportAttempt(options: {
   session: ImportSessionHandle;
   onPreparing: () => void;
   startSuccessor: () => void;
-}): Promise<ImportAttemptResult | null> {
+}): Promise<void> {
   const { queue, job, controller, session } = options;
   const attemptKey = job.attemptKey;
   if (!isCurrentImportAttempt(queue, job.id, attemptKey)) {
     await cancelStoredImport(session.id).catch(() => undefined);
-    return null;
+    return;
   }
   options.onPreparing();
   const preparation = prepareImportSession(session, controller.signal);
@@ -198,9 +190,7 @@ export async function prepareMaterializedImportAttempt(options: {
   const acceptance = applyPreparedResult(queue, job.id, attemptKey, prepared);
   if (acceptance.status === "stale") {
     await cancelStoredImport(session.id).catch(() => undefined);
-    return null;
   }
-  return { session, prepared, acceptance };
 }
 
 function importAttemptErrorMessage(error: unknown) {

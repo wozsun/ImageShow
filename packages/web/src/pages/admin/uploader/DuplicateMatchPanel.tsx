@@ -14,7 +14,6 @@ export type ImportPreviewTarget = {
 export function DuplicateMatchPanel({
   libraryItems,
   batchDuplicate,
-  confirmMode,
   onOpenDetail,
   onPreview,
   onConfirm,
@@ -22,24 +21,18 @@ export function DuplicateMatchPanel({
 }: {
   libraryItems: ImageItem[];
   batchDuplicate?: BatchDuplicateMatch;
-  confirmMode: boolean;
   onOpenDetail: (item: ImageItem, opener: HTMLElement) => void;
   onPreview: (target: ImportPreviewTarget) => void;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
   const batchPositionText = batchDuplicate ? importPositionText(batchDuplicate) : "";
-  const sourceText = batchDuplicate
-    ? batchPositionText
-      ? `与${batchPositionText}的处理后文件重复`
-      : "与同批处理任务的最终文件重复"
-    : `与图库中 ${libraryItems.length} 张图片的最终文件重复`;
 
   return (
     <div className="duplicate-panel">
       <div className="duplicate-note">
-        <strong>{confirmMode ? "已存在相同的最终入库文件" : "检测到重复图片，已自动跳过"}</strong>
-        <span>{confirmMode ? "确认后可继续提交副本，或取消此任务。" : sourceText}</span>
+        <strong>已存在相同的最终入库文件</strong>
+        <span>确认后可继续提交副本，或取消此任务。</span>
       </div>
       <div className="duplicate-body">
         <div className="duplicate-list">
@@ -81,17 +74,15 @@ export function DuplicateMatchPanel({
                       batchDuplicate.theme,
                       `${batchDuplicate.device}/${batchDuplicate.brightness}`
                     ].filter(Boolean).join(" · ")
-                  : "对应处理任务已移除"}
+                  : "来源预览暂不可用"}
               </small>
             </button>
           )}
         </div>
-        {confirmMode && (
-          <div className="inline-actions">
-            <button type="button" onClick={onConfirm}>仍然提交</button>
-            <button className="danger-button" type="button" onClick={onCancel}>取消</button>
-          </div>
-        )}
+        <div className="inline-actions">
+          <button type="button" onClick={onConfirm}>仍然提交</button>
+          <button className="danger-button" type="button" onClick={onCancel}>取消</button>
+        </div>
       </div>
     </div>
   );

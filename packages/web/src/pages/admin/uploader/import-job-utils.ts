@@ -11,12 +11,12 @@ function hasDirectIpHostname(hostname: string) {
   return unwrappedHostname.includes(":") || /^(?:\d{1,3}\.){3}\d{1,3}$/.test(unwrappedHostname);
 }
 
-function isPlausibleExternalImageUrl(value: string) {
-  if (value.length > externalImageUrlMaxLength) return false;
+function normalizeImportSourceUrl(value: string) {
+  if (value.length > externalImageUrlMaxLength) return null;
   try {
     const parsed = new URL(value);
     const hostname = parsed.hostname.toLowerCase().replace(/\.$/, "");
-    return parsed.protocol === "https:"
+    const allowed = parsed.protocol === "https:"
       && Boolean(hostname)
       && !parsed.username
       && !parsed.password
@@ -25,8 +25,12 @@ function isPlausibleExternalImageUrl(value: string) {
       && hostname !== "metadata"
       && hostname !== "metadata.google.internal"
       && !hasDirectIpHostname(hostname);
+    if (!allowed) return null;
+    parsed.hostname = hostname;
+    parsed.hash = "";
+    return parsed.href;
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -77,23 +81,74 @@ export function parseImportUrlInput(input: string | string[]): ImportUrlParseRes
       const url = raw.trim();
       if (!url) continue;
       const line = lineIndex + 1;
-      if (!isPlausibleExternalImageUrl(url)) {
+      const normalizedUrl = normalizeImportSourceUrl(url);
+      if (!normalizedUrl) {
         invalidCount += 1;
         issues.push({ type: "invalid", line, raw });
         continue;
       }
-      const firstLine = firstLineByUrl.get(url);
+      const firstLine = firstLineByUrl.get(normalizedUrl);
       if (firstLine !== undefined) {
         duplicateCount += 1;
         issues.push({ type: "duplicate", line, raw, firstLine });
         continue;
       }
-      firstLineByUrl.set(url, line);
-      urls.push(url);
+      firstLineByUrl.set(normalizedUrl, line);
+      urls.push(normalizedUrl);
     }
   }
 
   return { urls, invalidCount, duplicateCount, issues };
+}
+
+export function localImportFileFingerprint(file: File) {
+  // 浏览器不会暴露普通文件选择器中的绝对路径。目录选择时使用相对路径，
+  // 其他入口以名称、大小和修改时间识别同一次选择的文件。
+  return [
+    file.webkitRelativePath || file.name,
+    file.size,
+    file.lastModified
+  ].join("\u0000");
+}
+
+export function filterNewLocalImportFiles(
+  existingJobs: readonly ImportJob[],
+  files: readonly File[],
+  reservedFingerprints: ReadonlySet<string> = new Set()
+) {
+  const fingerprints = new Set(
+    existingJobs
+      .filter((job) => job.kind === "local")
+      .map((job) => job.fileFingerprint)
+      .filter((fingerprint): fingerprint is string => Boolean(fingerprint))
+  );
+  for (const fingerprint of reservedFingerprints) fingerprints.add(fingerprint);
+  return files.filter((file) => {
+    const fingerprint = localImportFileFingerprint(file);
+    if (fingerprints.has(fingerprint)) return false;
+    fingerprints.add(fingerprint);
+    return true;
+  });
+}
+
+export function filterNewDownloadImportJobs(
+  existingJobs: readonly ImportJob[],
+  incomingJobs: readonly ImportJob[]
+) {
+  const sourceUrls = new Set(
+    existingJobs
+      .filter((job) => job.kind === "download" && job.url)
+      .map((job) => normalizeImportSourceUrl(job.url!))
+      .filter((url): url is string => Boolean(url))
+  );
+  return incomingJobs.filter((job) => {
+    if (job.kind !== "download" || !job.url) return true;
+    const sourceUrl = normalizeImportSourceUrl(job.url);
+    if (!sourceUrl) return true;
+    if (sourceUrls.has(sourceUrl)) return false;
+    sourceUrls.add(sourceUrl);
+    return true;
+  });
 }
 
 function linkDraft(
@@ -151,6 +206,7 @@ export function retryPrepareJob(job: ImportJob): ImportJob {
     message: "等待重试",
     transferProgress: undefined,
     md5: undefined,
+    previewPersistent: undefined,
     detectedClassification: undefined,
     classificationOverride: undefined,
     duplicates: [],

@@ -8,7 +8,11 @@ import {
   normalizeTheme,
   type ImportAttributeDefaults
 } from "../../../lib/upload/upload-utils.js";
-import { retryPrepareJob } from "./import-job-utils.js";
+import {
+  filterNewLocalImportFiles,
+  localImportFileFingerprint,
+  retryPrepareJob
+} from "./import-job-utils.js";
 import { isCurrentImportAttempt, type AppendImportQueueApi } from "./prepared-result.js";
 import {
   cancelStoredImport,
@@ -26,11 +30,6 @@ import {
   type MaterializationPipelineTask
 } from "./materialization-pipeline.js";
 
-function fileFingerprint(file: File) {
-  // 这里只做浏览器内“同一文件重复选择”的快速去重；最终内容去重仍以服务端标准化后的 md5 为准。
-  return [file.name, file.size, file.lastModified, file.webkitRelativePath || ""].join("\u0000");
-}
-
 export function useLocalUploadImport(options: {
   queue: AppendImportQueueApi;
   defaults: ImportAttributeDefaults;
@@ -41,6 +40,7 @@ export function useLocalUploadImport(options: {
 }) {
   const { queue, defaults, storageSlug, maxItems, maxBytes, concurrency } = options;
   const activeRequests = useRef(new Map<string, { attemptKey: string; abort: () => void }>());
+  const pendingFileFingerprints = useRef(new Set<string>());
   const mounted = useRef(true);
   const pipelineRef = useRef<MaterializationPipeline<ImportSessionHandle> | null>(null);
   if (!pipelineRef.current) {
@@ -62,7 +62,7 @@ export function useLocalUploadImport(options: {
       pipeline.dispose();
       const sessionIds = queue.jobsRef.current
         .filter((job) => job.kind === "local" && job.sessionId)
-        .filter((job) => !["done", "skipped", "cancelled"].includes(job.status))
+        .filter((job) => !["done", "cancelled"].includes(job.status))
         .map((job) => job.sessionId!);
       for (const sessionId of new Set(sessionIds)) {
         void cancelStoredImport(sessionId).catch(() => undefined);
@@ -140,7 +140,7 @@ export function useLocalUploadImport(options: {
       prepare: async (session, startSuccessor) => {
         if (!controller) return;
         activeRequests.current.set(job.id, { attemptKey, abort: () => controller?.abort() });
-        const result = await prepareMaterializedImportAttempt({
+        await prepareMaterializedImportAttempt({
           queue,
           job,
           controller,
@@ -150,13 +150,6 @@ export function useLocalUploadImport(options: {
             queue.updateJob(job.id, { status: "processing", message: "上传完成，等待服务端处理", transferProgress: undefined });
           }
         });
-        if (!result) return;
-        if (result.acceptance.status === "duplicate") {
-          await cancelStoredImport(result.session.id).catch(() => undefined);
-          if (isCurrentImportAttempt(queue, job.id, attemptKey)) {
-            queue.updateJob(job.id, { status: "cancelled", message: "批次内最终文件重复，已取消" });
-          }
-        }
       },
       onError: (error) => {
         applyImportAttemptFailure(queue, job.id, attemptKey, error);
@@ -181,56 +174,59 @@ export function useLocalUploadImport(options: {
   }, [pipeline, pipelineTask]);
 
   const addFiles = useCallback(async (files: FileList | null) => {
-    const existing = new Set(queue.jobsRef.current.map((job) => job.fileFingerprint).filter(Boolean));
-    const selected = Array.from(files ?? []).filter(isUploadableImage).filter((file) => {
-      // 新选择的文件也纳入 existing，避免一次选择框里重复文件生成两张任务卡。
-      const fingerprint = fileFingerprint(file);
-      if (existing.has(fingerprint)) return false;
-      existing.add(fingerprint);
-      return true;
-    });
+    const selected = filterNewLocalImportFiles(
+      queue.jobsRef.current,
+      Array.from(files ?? []).filter(isUploadableImage),
+      pendingFileFingerprints.current
+    );
     if (selected.length > maxItems) {
       window.alert(`单次最多允许 ${maxItems} 张图片，请拆分后再导入`);
       return;
     }
+    const selectedFingerprints = selected.map(localImportFileFingerprint);
+    selectedFingerprints.forEach((fingerprint) => pendingFileFingerprints.current.add(fingerprint));
     const batchTime = new Date().toISOString();
-    const jobs = await Promise.all(selected.map(async (file, manifestPosition): Promise<ImportJob> => {
-      const objectUrl = URL.createObjectURL(file);
-      const inferred = await draftFromFile(file, defaults, objectUrl);
-      return {
-        id: browserUuid(),
-        attemptKey: browserUuid(),
-        batchTime,
-        manifestPosition,
-        kind: "local",
-        file,
-        fileFingerprint: fileFingerprint(file),
-        status: file.size > maxBytes ? "failed" : "queued",
-        message: file.size > maxBytes ? "图片大小超过限制" : "等待上传",
-        preview: objectUrl,
-        objectUrl,
-        draft: inferred.draft,
-        width: inferred.width,
-        height: inferred.height,
-        originalWidth: inferred.width,
-        originalHeight: inferred.height,
-        transferProgress: 0,
-        duplicates: [],
-        duplicateDecision: "upload",
-        storageSlug,
-        originalSize: file.size
-      };
-    }));
-    if (!mounted.current) {
-      for (const job of jobs) {
-        if (job.objectUrl?.startsWith("blob:")) URL.revokeObjectURL(job.objectUrl);
+    try {
+      const jobs = await Promise.all(selected.map(async (file, manifestPosition): Promise<ImportJob> => {
+        const objectUrl = URL.createObjectURL(file);
+        const inferred = await draftFromFile(file, defaults, objectUrl);
+        return {
+          id: browserUuid(),
+          attemptKey: browserUuid(),
+          batchTime,
+          manifestPosition,
+          kind: "local",
+          file,
+          fileFingerprint: localImportFileFingerprint(file),
+          status: file.size > maxBytes ? "failed" : "queued",
+          message: file.size > maxBytes ? "图片大小超过限制" : "等待上传",
+          preview: objectUrl,
+          objectUrl,
+          draft: inferred.draft,
+          width: inferred.width,
+          height: inferred.height,
+          originalWidth: inferred.width,
+          originalHeight: inferred.height,
+          transferProgress: 0,
+          duplicates: [],
+          duplicateDecision: "upload",
+          storageSlug,
+          originalSize: file.size
+        };
+      }));
+      if (!mounted.current) {
+        for (const job of jobs) {
+          if (job.objectUrl?.startsWith("blob:")) URL.revokeObjectURL(job.objectUrl);
+        }
+        return;
       }
-      return;
+      queue.appendJobs(jobs);
+      void pipeline.enqueue(
+        jobs.filter((job) => job.status === "queued").map(pipelineTask)
+      );
+    } finally {
+      selectedFingerprints.forEach((fingerprint) => pendingFileFingerprints.current.delete(fingerprint));
     }
-    queue.appendJobs(jobs);
-    void pipeline.enqueue(
-      jobs.filter((job) => job.status === "queued").map(pipelineTask)
-    );
   }, [defaults, maxBytes, maxItems, pipeline, pipelineTask, queue, storageSlug]);
 
   const cancel = useCallback(async (job: ImportJob) => {
@@ -244,7 +240,6 @@ export function useLocalUploadImport(options: {
   const retry = useCallback(async (job: ImportJob) => {
     if (!job.file) return;
     if (job.sessionId) await cancelStoredImport(job.sessionId).catch(() => undefined);
-    queue.releasePreparedMd5(job.id);
     const objectUrl = job.objectUrl?.startsWith("blob:")
       ? job.objectUrl
       : URL.createObjectURL(job.file);

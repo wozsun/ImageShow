@@ -10,7 +10,6 @@ const terminalStatuses = new Set<ImportJob["status"]>([
   "ready",
   "cancelling",
   "done",
-  "skipped",
   "failed",
   "cancelled"
 ]);

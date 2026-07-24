@@ -67,7 +67,6 @@ export function jsonlImportJobs(
     manifestSource: "jsonl",
     manifestProvidedCommonFields: providedManifestCommonFields(item),
     manifestLine: item.line,
-    manifestPosition: item.manifest_position,
-    duplicatePolicy: "skip"
+    manifestPosition: item.manifest_position
   }));
 }

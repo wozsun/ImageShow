@@ -276,8 +276,7 @@
   --import-job-status: #2b65ad;
   --import-job-progress: #1f63bd;
 }
-.import-job.cancelling,
-.import-job.skipped {
+.import-job.cancelling {
   --import-job-border: #d8bc70;
   --import-job-background: #fff9e9;
   --import-job-status: #795a0a;

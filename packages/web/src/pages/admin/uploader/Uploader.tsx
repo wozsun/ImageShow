@@ -24,13 +24,12 @@ import { UploadWorkflowWindow } from "./UploadWorkflowWindow.js";
 const EMPTY_FACET_OPTIONS: FacetOption[] = [];
 
 function isCompletedImportJob(job: ImportJob) {
-  return job.status === "done" || job.status === "skipped";
+  return job.status === "done";
 }
 
 function needsImportCancellation(job: ImportJob) {
   return job.status !== "cancelling"
     && job.status !== "done"
-    && job.status !== "skipped"
     && job.status !== "cancelled";
 }
 
@@ -157,18 +156,6 @@ export function Uploader({ onDone }: { onDone: () => void }) {
 
   const retryJob = useCallback(async (job: ImportJob) => {
     if (job.failureStage === "commit") {
-      queue.releasePreparedMd5(job.id);
-      if (job.md5) {
-        const claim = queue.claimPreparedMd5(job.id, job.md5);
-        if (!claim.claimed) {
-          queue.updateJob(job.id, {
-            status: "failed",
-            failureStage: "commit",
-            message: "同批相同图片已由其他任务占用，请稍后重试"
-          });
-          return;
-        }
-      }
       setBusy(true);
       await commitImports([job]).finally(() => setBusy(false));
       return;
@@ -177,15 +164,12 @@ export function Uploader({ onDone }: { onDone: () => void }) {
     else await retryLinkImport(job);
   }, [
     commitImports,
-    queue.claimPreparedMd5,
-    queue.releasePreparedMd5,
-    queue.updateJob,
     retryLinkImport,
     retryLocalImport
   ]);
 
   const removeJob = useCallback(async (job: ImportJob) => {
-    if (["done", "skipped", "cancelled"].includes(job.status)) {
+    if (["done", "cancelled"].includes(job.status)) {
       queue.removeJob(job.id);
       return;
     }
@@ -247,10 +231,9 @@ export function Uploader({ onDone }: { onDone: () => void }) {
   const {
     readyJobs,
     duplicateJobs,
-    doneJobs,
-    skippedJobs
+    doneJobs
   } = queue.summary;
-  const completedJobs = doneJobs + skippedJobs;
+  const completedJobs = doneJobs;
   const cleanupActions: UploadCleanupAction[] = [
     {
       id: "duplicates",

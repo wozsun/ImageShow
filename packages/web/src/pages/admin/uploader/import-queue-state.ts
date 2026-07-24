@@ -37,7 +37,6 @@ type ImportJobSummary = {
   runningJobs: number;
   doneJobs: number;
   failedJobs: number;
-  skippedJobs: number;
 };
 
 export function importQueuePageCount(length: number, pageSize: number) {
@@ -86,11 +85,21 @@ function updateQueueJob(
   const nextJob = updater(currentJob);
   if (nextJob === currentJob) return state;
 
-  const jobs = [...state.jobs];
-  jobs[jobIndex] = nextJob;
+  let jobs: ImportJob[];
+  if (currentJob.md5 && currentJob.md5 !== nextJob.md5) {
+    jobs = detachRemovedBatchDuplicateOwners(
+      state.jobs,
+      new Set([currentJob.id])
+    );
+    jobs.splice(jobIndex, 0, nextJob);
+  } else {
+    jobs = [...state.jobs];
+    jobs[jobIndex] = nextJob;
+  }
   return {
     ...state,
-    jobs: batchDuplicateSnapshotChanged(currentJob, nextJob)
+    jobs: currentJob.md5 === nextJob.md5
+      && batchDuplicateSnapshotChanged(currentJob, nextJob)
       ? refreshBatchDuplicateMatches(jobs, id)
       : jobs
   };
@@ -102,8 +111,7 @@ export function summarizeImportJobs(jobs: ImportJob[]): ImportJobSummary {
     duplicateJobs: 0,
     runningJobs: 0,
     doneJobs: 0,
-    failedJobs: 0,
-    skippedJobs: 0
+    failedJobs: 0
   };
 
   for (const job of jobs) {
@@ -118,7 +126,6 @@ export function summarizeImportJobs(jobs: ImportJob[]): ImportJobSummary {
     }
     if (job.status === "done") summary.doneJobs += 1;
     else if (job.status === "failed") summary.failedJobs += 1;
-    else if (job.status === "skipped") summary.skippedJobs += 1;
   }
 
   return summary;

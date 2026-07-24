@@ -29,10 +29,11 @@ function completedImportPatch(
     failureStage: undefined,
     commitFailureCheckpoint: undefined,
     message: result.status === "duplicate"
-      ? "图片已存在（跳过）"
+      ? "图片已存在"
       : importedMessage,
     preview: result.item?.thumb_url ?? job.preview,
-    previewFull: result.item?.object_url ?? job.previewFull ?? job.preview
+    previewFull: result.item?.object_url ?? job.previewFull ?? job.preview,
+    previewPersistent: Boolean(result.item)
   };
 }
 

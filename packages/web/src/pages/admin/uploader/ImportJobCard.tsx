@@ -12,7 +12,7 @@ import { importPositionText } from "./import-job-utils.js";
 const statusLabels: Record<ImportJob["status"], string> = {
   queued: "等待中", uploading: "上传中", downloading: "下载中", processing: "处理中",
   ready: "已就绪", committing: "提交中", cancelling: "取消中", done: "已完成",
-  skipped: "已跳过", failed: "失败", cancelled: "已取消"
+  failed: "失败", cancelled: "已取消"
 };
 
 function formatPixelDimensions(width?: number, height?: number) {
@@ -74,30 +74,19 @@ export const ImportJobCard = memo(function ImportJobCard({
   const sourcePositionText = importPositionText(job);
   const metaText = [sourcePositionText, storageDisplayName, dimensionsText, statusDetailText].filter(Boolean).join(" · ");
   const sizeSummaryText = `${originalSizeText} → ${finalSizeText}${qualityText ? ` · ${qualityText}` : ""}`;
-  const libraryDuplicate = job.status === "skipped" ? job.duplicates[0] : undefined;
-  const batchDuplicate = job.status === "skipped" ? job.batchDuplicate : undefined;
-  const previewSrc = libraryDuplicate?.thumb_url || (batchDuplicate ? batchDuplicate.preview : job.preview);
-  const openPreview: ((opener: HTMLElement) => void) | undefined = libraryDuplicate
-    ? (opener) => onOpenDetail(libraryDuplicate, opener)
-    : batchDuplicate?.available
-      ? (opener) => onPreview({
-          src: batchDuplicate.previewFull,
-          thumbSrc: batchDuplicate.preview,
-          width: batchDuplicate.width,
-          height: batchDuplicate.height,
-          opener,
-        })
-      : previewSrc
-        ? (opener) => onPreview({
-            src: job.previewFull || previewSrc,
-            thumbSrc: previewSrc,
-            width: job.width,
-            height: job.height,
-            opener,
-          })
-        : undefined;
-  const confirmDuplicate = job.status === "ready" && job.duplicateDecision === "undecided" && job.duplicates.length > 0;
-  const skippedDuplicate = job.status === "skipped" && (job.duplicates.length > 0 || Boolean(job.batchDuplicate));
+  const previewSrc = job.preview;
+  const openPreview: ((opener: HTMLElement) => void) | undefined = previewSrc
+    ? (opener) => onPreview({
+        src: job.previewFull || previewSrc,
+        thumbSrc: previewSrc,
+        width: job.width,
+        height: job.height,
+        opener,
+      })
+    : undefined;
+  const confirmDuplicate = job.status === "ready"
+    && job.duplicateDecision === "undecided"
+    && (job.duplicates.length > 0 || Boolean(job.batchDuplicate));
 
   return (
     <article className={`import-job ${job.status}`}>
@@ -164,11 +153,10 @@ export const ImportJobCard = memo(function ImportJobCard({
         disabled={!editable}
         ariaPrefix={job.url ?? job.file?.name ?? job.id}
       />
-      {(confirmDuplicate || skippedDuplicate) && (
+      {confirmDuplicate && (
         <DuplicateMatchPanel
           libraryItems={job.duplicates}
           batchDuplicate={job.batchDuplicate}
-          confirmMode={confirmDuplicate}
           onOpenDetail={onOpenDetail}
           onPreview={onPreview}
           onConfirm={() => onConfirmDuplicate(job)}

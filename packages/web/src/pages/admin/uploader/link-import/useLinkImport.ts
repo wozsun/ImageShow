@@ -6,8 +6,11 @@ import {
   normalizeTheme,
   type ImportAttributeDefaults
 } from "../../../../lib/upload/upload-utils.js";
-import { importPositionText, linkImportJobs, retryLinkPrepareJob } from "../import-job-utils.js";
-import { batchDuplicateFromJob } from "../duplicate-match.js";
+import {
+  filterNewDownloadImportJobs,
+  linkImportJobs,
+  retryLinkPrepareJob
+} from "../import-job-utils.js";
 import { isCurrentImportAttempt, type AppendImportQueueApi } from "../prepared-result.js";
 import {
   cancelStoredImport,
@@ -71,7 +74,7 @@ export function useLinkImport(options: {
       pipeline.dispose();
       const sessionIds = queue.jobsRef.current
         .filter((job) => job.kind === "download" && job.sessionId)
-        .filter((job) => !["done", "skipped", "cancelled"].includes(job.status))
+        .filter((job) => !["done", "cancelled"].includes(job.status))
         .map((job) => job.sessionId!);
       for (const sessionId of new Set(sessionIds)) {
         void cancelStoredImport(sessionId).catch(() => undefined);
@@ -132,7 +135,7 @@ export function useLinkImport(options: {
       },
       prepare: async (session, startSuccessor) => {
         if (!controller) return;
-        const result = await prepareMaterializedImportAttempt({
+        await prepareMaterializedImportAttempt({
           queue,
           job,
           controller,
@@ -145,51 +148,6 @@ export function useLinkImport(options: {
             });
           }
         });
-        if (!result) return;
-
-        const applied = result.acceptance;
-        const duplicateExists = result.prepared.duplicates.length > 0;
-        const shouldSkip = applied.status === "duplicate"
-          || (job.duplicatePolicy === "skip" && duplicateExists);
-        if (shouldSkip) {
-          if (isCurrentImportAttempt(queue, job.id, attemptKey)) {
-            const duplicates = result.prepared.duplicates ?? [];
-            const libraryDuplicate = duplicates[0];
-            const duplicateOwnerId = applied.status === "duplicate"
-              ? applied.ownerId
-              : "";
-            const owner = duplicateOwnerId
-              ? queue.jobsRef.current.find((item) => item.id === duplicateOwnerId)
-              : undefined;
-            const ownerPositionText = owner ? importPositionText(owner) : "";
-            const batchDuplicate = !libraryDuplicate && owner
-              ? batchDuplicateFromJob(owner)
-              : undefined;
-            queue.updateJob(job.id, {
-              status: "skipped",
-              message: libraryDuplicate
-                ? `与图库中 ${duplicates.length} 张图片的最终文件重复，已跳过`
-                : ownerPositionText
-                  ? `与${ownerPositionText}的处理后文件重复，已跳过`
-                  : "与同批处理任务的最终文件重复，已跳过",
-              ...(libraryDuplicate ? {
-                preview: libraryDuplicate.thumb_url,
-                previewFull: libraryDuplicate.object_url,
-                width: libraryDuplicate.width,
-                height: libraryDuplicate.height,
-                batchDuplicate: undefined
-              } : batchDuplicate ? {
-                preview: batchDuplicate.preview,
-                previewFull: batchDuplicate.previewFull,
-                width: batchDuplicate.width,
-                height: batchDuplicate.height,
-                batchDuplicate
-              } : {}),
-              duplicateDecision: "upload"
-            });
-          }
-          await cancelStoredImport(result.session.id).catch(() => undefined);
-        }
       },
       onError: (error) => {
         applyImportAttemptFailure(
@@ -214,12 +172,13 @@ export function useLinkImport(options: {
   const addBatch = useCallback(async (
     jobs: ImportJob[]
   ) => {
-    queue.appendJobs(jobs);
-    if (!jobs.length) return;
-    for (const job of jobs) {
+    const acceptedJobs = filterNewDownloadImportJobs(queue.jobsRef.current, jobs);
+    queue.appendJobs(acceptedJobs);
+    if (!acceptedJobs.length) return;
+    for (const job of acceptedJobs) {
       queue.updateJob(job.id, { status: "queued", message: "等待下载" });
     }
-    void pipeline.enqueue(jobs.map(pipelineTask));
+    void pipeline.enqueue(acceptedJobs.map(pipelineTask));
   }, [pipeline, pipelineTask, queue]);
 
   const addUrls = useCallback(async (urls: string[]) => {
@@ -245,7 +204,6 @@ export function useLinkImport(options: {
 
   const retry = useCallback(async (job: ImportJob) => {
     if (job.sessionId) await cancelStoredImport(job.sessionId).catch(() => undefined);
-    queue.releasePreparedMd5(job.id);
     // If create completed on the server but its response was lost, retry with
     // the same idempotency key so the existing session can be recovered.
     const next = {

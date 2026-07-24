@@ -156,10 +156,11 @@ export type BatchDuplicateMatch = {
 export type ImportJob = {
   id: string;
   kind: "local" | "download";
-  status: "queued" | "uploading" | "downloading" | "processing" | "ready" | "committing" | "cancelling" | "done" | "skipped" | "failed" | "cancelled";
+  status: "queued" | "uploading" | "downloading" | "processing" | "ready" | "committing" | "cancelling" | "done" | "failed" | "cancelled";
   message: string;
   preview: string;
   previewFull?: string;
+  previewPersistent?: boolean;
   objectUrl?: string;
   draft: ImageDraft;
   width: number;
@@ -185,7 +186,6 @@ export type ImportJob = {
   manifestProvidedCommonFields?: ImportCommonAttributeField[];
   manifestLine?: number;
   manifestPosition?: number;
-  duplicatePolicy?: "confirm" | "skip";
   batchDuplicate?: BatchDuplicateMatch;
   originalSize?: number;
   finalSize?: number;

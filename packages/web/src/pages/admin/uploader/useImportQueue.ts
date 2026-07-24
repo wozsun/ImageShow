@@ -2,10 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ImageDraft, ImportJob } from "../../../lib/types.js";
 import type { ImportAttributeDefaults } from "../../../lib/upload/upload-utils.js";
 import {
-  claimPreparedMd5Owner,
-  releasePreparedMd5Owner
-} from "./duplicate-match.js";
-import {
   importQueuePageCount,
   reduceImportQueue,
   summarizeImportJobs,
@@ -13,14 +9,6 @@ import {
   type ImportQueueState
 } from "./import-queue-state.js";
 import type { AppendImportQueueApi } from "./prepared-result.js";
-
-const preparedMd5ReleaseStatuses = new Set<ImportJob["status"]>([
-  "cancelling",
-  "done",
-  "skipped",
-  "failed",
-  "cancelled"
-]);
 
 function revokeObjectUrl(job: ImportJob) {
   if (job.objectUrl?.startsWith("blob:")) URL.revokeObjectURL(job.objectUrl);
@@ -30,7 +18,6 @@ export function useImportQueue(pageSize: number) {
   const [state, setState] = useState<ImportQueueState>({ jobs: [], page: 1 });
   const stateRef = useRef(state);
   const jobsRef = useRef(state.jobs);
-  const md5OwnersRef = useRef(new Map<string, string>());
 
   const dispatch = useCallback((action: ImportQueueAction) => {
     // 上传/下载是异步并发流程，回调触发时 React state 可能已落后；ref 里同步维护最新队列供所有回调用。
@@ -51,18 +38,7 @@ export function useImportQueue(pageSize: number) {
     if (jobs.length) dispatch({ type: "append", jobs });
   }, [dispatch]);
 
-  const releasePreparedMd5 = useCallback((id: string) => {
-    const job = jobsRef.current.find((item) => item.id === id);
-    if (!job?.md5) return false;
-    return releasePreparedMd5Owner(md5OwnersRef.current, id, job.md5);
-  }, []);
-
   const updateJob = useCallback((id: string, patch: Partial<ImportJob>) => {
-    if (patch.status && preparedMd5ReleaseStatuses.has(patch.status)) {
-      const current = jobsRef.current.find((item) => item.id === id);
-      const md5 = patch.md5 ?? current?.md5;
-      if (md5) releasePreparedMd5Owner(md5OwnersRef.current, id, md5);
-    }
     dispatch({ type: "patch", id, patch });
   }, [dispatch]);
 
@@ -70,17 +46,8 @@ export function useImportQueue(pageSize: number) {
     dispatch({ type: "patch-draft", id, patch });
   }, [dispatch]);
 
-  const claimPreparedMd5 = useCallback((id: string, md5: string) => {
-    // 同一批次内最终文件 md5 重复时，只保留第一个任务进入“待提交”，其余任务取消服务端暂存。
-    const claim = claimPreparedMd5Owner(md5OwnersRef.current, id, md5);
-    if (!claim.claimed) return claim;
-    dispatch({ type: "patch", id, patch: { md5 } });
-    return claim;
-  }, [dispatch]);
-
   const releaseJob = useCallback((job: ImportJob) => {
     // 本地预览 URL 由前端创建，任务离队时必须释放；服务端 preview_url 不需要 revoke。
-    if (job.md5) releasePreparedMd5Owner(md5OwnersRef.current, job.id, job.md5);
     revokeObjectUrl(job);
   }, []);
 
@@ -125,10 +92,8 @@ export function useImportQueue(pageSize: number) {
   const workerApi = useMemo<AppendImportQueueApi>(() => ({
     jobsRef,
     appendJobs,
-    updateJob,
-    claimPreparedMd5,
-    releasePreparedMd5
-  }), [appendJobs, claimPreparedMd5, jobsRef, releasePreparedMd5, updateJob]);
+    updateJob
+  }), [appendJobs, jobsRef, updateJob]);
 
   return {
     jobs: state.jobs,
@@ -143,8 +108,6 @@ export function useImportQueue(pageSize: number) {
     retainMode,
     updateJob,
     updateJobDraft,
-    claimPreparedMd5,
-    releasePreparedMd5,
     removeJob,
     clearJobIds,
     clearJobs,
