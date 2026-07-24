@@ -6,8 +6,13 @@
   权限标识，前端据此隐藏不可用入口，但权限列表只用于界面呈现，服务端路由中间件
   才是最终授权边界。图片管理员仍可上传、编辑元数据、移入回收站和恢复图片；
   单张及批量迁移存储需要 `image.storage.migrate`，单张永久删除需要
-  `image.trash.purge`，清空回收站需要 `image.trash.empty`，这三项权限当前只授予
-  超级管理员。直接构造对应请求同样返回 403，且在解析正文或进入存储操作前终止。
+  `image.trash.purge`，清空回收站需要 `image.trash.empty`。图片管理员可以执行
+  主题、标签和作者的查看、新建、编辑及排序，但相应的单项与批量删除分别需要
+  `theme.delete`、`tag.delete` 和 `author.delete`。图片管理员还可以执行
+  数据库、存储、Redis、回收站和全部五项只读检查；存储后端迁移需要
+  `storage.maintenance.migrate`，无效存储清理需要 `storage.maintenance.cleanup`。
+  以上八项高风险操作权限当前只授予超级管理员；直接构造对应请求同样返回 403，
+  且在解析正文或进入存储维护操作前终止。
 - Compose 内置 Redis 只连接项目私有网络、不发布宿主机端口且不设置密码。连接启用了认证的外部 Redis 时，可通过 `REDIS_PASSWORD` 向应用提供密码。
 - 管理端界面偏好接口只使用鉴权会话中的用户名定位 `admin_account.preferences`，不接受客户端传入目标账号。接口只接受 shared 注册的键与值域，PATCH 在 PostgreSQL 行内原子合并并返回完整投影；JSONB 顶层必须是对象且最大 4 KiB。浏览器缓存键按用户名隔离，`localStorage` 仅承担首帧显示、断网 pending 和多标签同步，不参与鉴权，也不保存会话或 CSRF token。PostgreSQL 尚无某键时，已校验的本地值可补写一次；删除账号时偏好随该行自然删除。
 - 登录失败限流：每 IP + 用户名 60 秒内 5 次失败即拦截，叠加 180 秒内 10 次尝试的全局兜底（阈值与窗口均可在 `config.json` 的 `security.*` 调整）。

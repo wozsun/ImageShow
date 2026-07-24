@@ -353,7 +353,7 @@ export function BatchMetadataModal({
           />
         )}
         <footer>
-          {canMigrateStorage ? (
+          {canMigrateStorage && (
             <button
               ref={migrateTriggerRef}
               className="batch-edit-migrate-trigger"
@@ -363,8 +363,6 @@ export function BatchMetadataModal({
             >
               <Icon name="arrow-left-right-line" />{single ? "迁移存储" : "批量迁移存储"}
             </button>
-          ) : (
-            <span aria-hidden="true" />
           )}
           {!single && (
             <AdminPagination

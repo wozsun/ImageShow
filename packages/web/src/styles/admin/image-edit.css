@@ -39,9 +39,15 @@
 
 .edit-modal form.batch-edit-modal { width: min(1180px, 96vw); display: flex; flex-direction: column; overflow: hidden; }
 
-.batch-edit-modal footer { display: grid; grid-template-columns: 1fr auto 1fr; }
-.batch-edit-modal footer > button { justify-self: start; }
-.batch-edit-modal footer .batch-edit-footer-pagination { justify-self: center; }
+.batch-edit-modal footer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+}
+.batch-edit-modal footer > button { grid-column: 1; justify-self: start; }
+.batch-edit-modal footer .batch-edit-footer-pagination {
+  grid-column: 2;
+  justify-self: center;
+}
 
 .batch-edit-modal footer .modal-footer-actions { grid-column: 3; justify-self: end; }
 

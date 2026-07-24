@@ -8,13 +8,14 @@ import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
 
 type Entity = { slug: string; display_name: string; image_count: number; link?: string };
 
-export function EntityAdminCard({ kind, item, onChanged, onDelete, onError, pinned = false, selected = false, onToggleSelect, onDragStart, onDragEnter, onDragEnd }: {
+export function EntityAdminCard({ kind, item, onChanged, onDelete, onError, pinned = false, canDelete = false, selected = false, onToggleSelect, onDragStart, onDragEnter, onDragEnd }: {
   kind: "themes" | "tags" | "authors";
   item: Entity;
   onChanged: () => void;
   onDelete: () => void;
   onError: (error: unknown) => void;
   pinned?: boolean;
+  canDelete?: boolean;
   selected?: boolean;
   onToggleSelect?: (checked: boolean) => void;
   onDragStart?: (slug: string) => void;
@@ -72,7 +73,7 @@ export function EntityAdminCard({ kind, item, onChanged, onDelete, onError, pinn
       onDragEnd={() => { setArmed(false); onDragEnd?.(); }}
     >
       <div className="entity-card-row">
-        {pinned
+        {pinned || !canDelete
           ? <span className="entity-select-placeholder" aria-hidden="true" />
           : (
             <input
@@ -144,15 +145,17 @@ export function EntityAdminCard({ kind, item, onChanged, onDelete, onError, pinn
               >
                 <Icon name="drag-move-2-fill" />
               </button>
-              <button
-                className="icon danger-button"
-                type="button"
-                disabled={saveStatus.pending}
-                title={`删除${noun}`}
-                onClick={onDelete}
-              >
-                <Icon name="delete-bin-6-line" />
-              </button>
+              {canDelete && (
+                <button
+                  className="icon danger-button"
+                  type="button"
+                  disabled={saveStatus.pending}
+                  title={`删除${noun}`}
+                  onClick={onDelete}
+                >
+                  <Icon name="delete-bin-6-line" />
+                </button>
+              )}
             </>
           )}
       </div>

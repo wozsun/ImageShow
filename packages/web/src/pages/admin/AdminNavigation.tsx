@@ -1,5 +1,6 @@
 import { Fragment } from "react";
 import { NavLink } from "react-router-dom";
+import type { AdminRole } from "@imageshow/shared/browser";
 import { Icon, type IconName } from "../../components/icon/Icon.js";
 import { adminBasePath } from "../../lib/constants.js";
 import { AdminNavGroup } from "./AdminNavGroup.js";
@@ -21,6 +22,8 @@ type AdminNavigationGroup = {
   icon: IconName;
   items: readonly AdminNavigationLink[];
   superOnly?: boolean;
+  desktopDefaultOpenRoles?: readonly AdminRole[];
+  desktopDefaultOpen?: boolean;
 };
 
 type AdminNavigationEntry = AdminNavigationLink | AdminNavigationGroup;
@@ -54,6 +57,7 @@ const adminNavigationModel = {
       id: "images",
       icon: "image-line",
       label: "图片",
+      desktopDefaultOpenRoles: ["image"],
       items: [
         {
           kind: "link",
@@ -119,8 +123,7 @@ const adminNavigationModel = {
       kind: "link",
       to: `${adminBasePath}/check`,
       icon: "checkbox-circle-line",
-      label: "检查",
-      superOnly: true
+      label: "检查"
     },
     {
       kind: "link",
@@ -142,8 +145,9 @@ const adminNavigationModel = {
 
 function navigationEntriesForRole(
   entries: readonly AdminNavigationEntry[],
-  isSuper: boolean
+  role: AdminRole
 ): AdminNavigationEntry[] {
+  const isSuper = role === "super";
   const visibleEntries: AdminNavigationEntry[] = [];
   for (const entry of entries) {
     if (entry.superOnly && !isSuper) continue;
@@ -152,16 +156,23 @@ function navigationEntriesForRole(
       continue;
     }
     const items = entry.items.filter((item) => !item.superOnly || isSuper);
-    if (items.length) visibleEntries.push({ ...entry, items });
+    if (items.length) {
+      visibleEntries.push({
+        ...entry,
+        items,
+        desktopDefaultOpen:
+          entry.desktopDefaultOpenRoles?.includes(role) ?? false
+      });
+    }
   }
   return visibleEntries;
 }
 
-export function adminNavigationForRole(isSuper: boolean): AdminNavigationSections {
+export function adminNavigationForRole(role: AdminRole): AdminNavigationSections {
   return {
-    site: navigationEntriesForRole(adminNavigationModel.site, isSuper),
-    main: navigationEntriesForRole(adminNavigationModel.main, isSuper),
-    account: navigationEntriesForRole(adminNavigationModel.account, isSuper)
+    site: navigationEntriesForRole(adminNavigationModel.site, role),
+    main: navigationEntriesForRole(adminNavigationModel.main, role),
+    account: navigationEntriesForRole(adminNavigationModel.account, role)
   };
 }
 
@@ -204,6 +215,7 @@ export function AdminNavigationLinks({
           icon={entry.icon}
           label={entry.label}
           items={entry.items}
+          defaultOpen={entry.desktopDefaultOpen}
         />
       );
     }

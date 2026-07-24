@@ -168,10 +168,11 @@
   /*头部堆叠在标题之下：两个配置按钮共享一行（无固定宽度）。反馈区域是独立布局单元。*/
   .settings-head-actions { flex-wrap: wrap; }
   .settings-head-actions .settings-config-button { flex: 1 1 auto; min-width: 0; }
-  /*检查页按钮组改为均匀的 2 列 grid，而非右对齐换行留下参差的行间空隙。*/
+  /* 检查项保持两列，只有汇总性的“全部”独占末行；维护动作仍共享一行。 */
   .check-actions { margin-left: 0; }
-  .check-actions .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .check-actions .actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .check-actions .actions button { width: 100%; }
+  .check-actions .actions .check-all-action { grid-column: 1 / -1; }
   .image-fields-primary {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));

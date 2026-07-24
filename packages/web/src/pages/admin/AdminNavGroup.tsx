@@ -4,15 +4,16 @@ import { Icon, type IconName } from "../../components/icon/Icon.js";
 
 type AdminNavGroupItem = { to: string; label: string; end?: boolean };
 
-export function AdminNavGroup({ icon, label, items }: {
+export function AdminNavGroup({ icon, label, items, defaultOpen = false }: {
   icon: IconName;
   label: string;
   items: readonly AdminNavGroupItem[];
+  defaultOpen?: boolean;
 }) {
   const location = useLocation();
   const navigate = useNavigate();
   const sectionActive = items.some((item) => location.pathname === item.to || location.pathname.startsWith(`${item.to}/`));
-  const [open, setOpen] = useState(sectionActive);
+  const [open, setOpen] = useState(sectionActive || defaultOpen);
   useEffect(() => { if (sectionActive) setOpen(true); }, [sectionActive]);
   const enter = () => { setOpen(true); if (items[0]) navigate(items[0].to); };
   return (

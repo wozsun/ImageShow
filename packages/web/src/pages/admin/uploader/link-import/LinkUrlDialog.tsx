@@ -2,6 +2,10 @@ import { useEffect, useId, useRef, useState, type RefObject } from "react";
 import { Icon, type IconName } from "../../../../components/icon/Icon.js";
 import { OverlayScrollbar } from "../../../../components/layout/OverlayScrollbar.js";
 import { useDialogFocus } from "../../../../hooks/useDialogFocus.js";
+import {
+  mobileViewportMediaQuery,
+  useMediaQuery
+} from "../../../../hooks/useMediaQuery.js";
 import { copyTextToClipboard } from "../../../../lib/ui/clipboard.js";
 import { parseImportUrlInput, type ImportUrlParseResult } from "../import-job-utils.js";
 import {
@@ -90,6 +94,24 @@ function weiboResultSummary(result: WeiboImportResult) {
   return `已解析 ${result.post_count} 条微博，共 ${result.manifest.items.length} 张可导入图片${issuePart}`;
 }
 
+function ImportResultSummary({
+  summary,
+  warning
+}: {
+  summary: string;
+  warning: boolean;
+}) {
+  return (
+    <p
+      className={`hint link-import-result-summary${warning ? " is-warning" : ""}`}
+      role="status"
+      title={summary}
+    >
+      {summary}
+    </p>
+  );
+}
+
 function ImportIssuePreview({ summary, copyLabel, getCopyText, items }: {
   summary: string;
   copyLabel: string;
@@ -142,6 +164,7 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
   const [parsedText, setParsedText] = useState("");
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState("");
+  const mobileLayout = useMediaQuery(mobileViewportMediaQuery);
 
   const close = () => {
     requestControllerRef.current?.abort();
@@ -346,13 +369,11 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
             placeholder={presentation.placeholder}
             rows={linkInputTextareaRows}
           />
-          {resultSummary && (
-            <p
-              className={`hint link-import-result-summary${resultIsWarning ? " is-warning" : ""}`}
-              role="status"
-            >
-              {resultSummary}
-            </p>
+          {mobileLayout && resultSummary && (
+            <ImportResultSummary
+              summary={resultSummary}
+              warning={resultIsWarning}
+            />
           )}
         </div>
         {(parseError || limitState.overLimit) && (
@@ -397,6 +418,12 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
           />
         )}
         <div className="link-import-actions">
+          {!mobileLayout && resultSummary && (
+            <ImportResultSummary
+              summary={resultSummary}
+              warning={resultIsWarning}
+            />
+          )}
           <div className="link-import-action-buttons">
             <button type="button" onClick={close}>取消</button>
             <button

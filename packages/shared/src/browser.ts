@@ -27,7 +27,12 @@ export type AdminRole = "super" | "image";
 export const adminPermissions = {
   imageStorageMigrate: "image.storage.migrate",
   imageTrashPurge: "image.trash.purge",
-  imageTrashEmpty: "image.trash.empty"
+  imageTrashEmpty: "image.trash.empty",
+  tagDelete: "tag.delete",
+  themeDelete: "theme.delete",
+  authorDelete: "author.delete",
+  storageMaintenanceMigrate: "storage.maintenance.migrate",
+  storageMaintenanceCleanup: "storage.maintenance.cleanup"
 } as const;
 export type AdminPermission =
   (typeof adminPermissions)[keyof typeof adminPermissions];

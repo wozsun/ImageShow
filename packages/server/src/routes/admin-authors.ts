@@ -1,3 +1,4 @@
+import { adminPermissions } from "@imageshow/shared";
 import type { Hono } from "hono";
 import { authorCreateInput, authorMetaUpdateInput, authorSlugInput } from "../core/validation.ts";
 import { listAuthorsWithMeta } from "../authors/query.ts";
@@ -16,6 +17,7 @@ export function registerAdminAuthorRoutes(app: Hono) {
     slugInput: authorSlugInput,
     createInput: authorCreateInput,
     updateInput: authorMetaUpdateInput,
+    deletePermission: adminPermissions.authorDelete,
     list: listAuthorsWithMeta,
     create: async (input) => {
       await createAuthor(input.slug, input.display_name, input.link);

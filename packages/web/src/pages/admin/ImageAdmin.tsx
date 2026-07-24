@@ -271,7 +271,7 @@ export function ImageAdmin() {
               <Icon name="pencil-line" />批量编辑
             </button>
           )}
-          {view === "deleted" && canEmptyTrash && (
+          {view === "deleted" && (
             <button
               type="button"
               disabled={!selected.length || operationBusy}
@@ -290,7 +290,7 @@ export function ImageAdmin() {
               <Icon name="delete-bin-6-line" />批量删除
             </button>
           )}
-          {view === "deleted" && (
+          {view === "deleted" && canEmptyTrash && (
             <button
               className="danger-button"
               type="button"

@@ -1,14 +1,19 @@
-import { adminApiBasePath } from "@imageshow/shared";
+import {
+  adminApiBasePath,
+  type AdminPermission
+} from "@imageshow/shared";
 import type { Hono } from "hono";
 import type { z } from "zod";
 import { apiSuccess } from "../core/http/responses.ts";
 import { parse, slugListInput } from "../core/validation.ts";
+import { requireAdminPermission } from "../users/admin-authorization.ts";
 
 type EntityRouteOptions<CreateSchema extends z.ZodType, UpdateSchema extends z.ZodType> = {
   path: string;
   slugInput: z.ZodType<string>;
   createInput: CreateSchema;
   updateInput: UpdateSchema;
+  deletePermission: AdminPermission;
   list: () => Promise<unknown[]>;
   create: (input: z.infer<CreateSchema>) => Promise<void>;
   reorder: (slugs: string[]) => Promise<void>;
@@ -36,11 +41,15 @@ export function registerAdminEntityRoutes<
     return c.json(apiSuccess());
   });
 
-  app.post(`${base}/batch-delete`, async (c) => {
-    const input = parse(slugListInput, await c.req.json().catch(() => ({})));
-    await options.batchDelete(input.slugs);
-    return c.json(apiSuccess());
-  });
+  app.post(
+    `${base}/batch-delete`,
+    requireAdminPermission(options.deletePermission),
+    async (c) => {
+      const input = parse(slugListInput, await c.req.json().catch(() => ({})));
+      await options.batchDelete(input.slugs);
+      return c.json(apiSuccess());
+    }
+  );
 
   app.post(`${base}/:slug`, async (c) => {
     const slug = parse(options.slugInput, c.req.param("slug"));
@@ -49,9 +58,13 @@ export function registerAdminEntityRoutes<
     return c.json(apiSuccess());
   });
 
-  app.post(`${base}/:slug/delete`, async (c) => {
-    const slug = parse(options.slugInput, c.req.param("slug"));
-    await options.remove(slug);
-    return c.json(apiSuccess());
-  });
+  app.post(
+    `${base}/:slug/delete`,
+    requireAdminPermission(options.deletePermission),
+    async (c) => {
+      const slug = parse(options.slugInput, c.req.param("slug"));
+      await options.remove(slug);
+      return c.json(apiSuccess());
+    }
+  );
 }

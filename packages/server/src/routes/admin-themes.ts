@@ -1,3 +1,4 @@
+import { adminPermissions } from "@imageshow/shared";
 import type { Hono } from "hono";
 import { themeCreateInput, themeDisplayUpdateInput, themeSlugInput } from "../core/validation.ts";
 import { listThemesWithMeta } from "../themes/query.ts";
@@ -16,6 +17,7 @@ export function registerAdminThemeRoutes(app: Hono) {
     slugInput: themeSlugInput,
     createInput: themeCreateInput,
     updateInput: themeDisplayUpdateInput,
+    deletePermission: adminPermissions.themeDelete,
     list: listThemesWithMeta,
     create: async (input) => {
       await createTheme(input.slug, input.display_name);

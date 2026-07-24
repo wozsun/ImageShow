@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { adminPermissions } from "@imageshow/shared/browser";
 import { api } from "../../lib/api/client.js";
 import { adminApiBasePath } from "../../lib/constants.js";
 import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
@@ -7,13 +8,21 @@ import { SelectMenu } from "../../components/form/SelectMenu.js";
 import { StableButtonLabel } from "../../components/data-display/StableButtonLabel.js";
 import { useAnimatedClose } from "../../hooks/useAnimatedClose.js";
 import { useStorageOptions } from "../../lib/api/storage-options.js";
+import { useAdminPermissions } from "../../lib/api/site-data.js";
 
 export function CheckPage() {
   const [result, setResult] = useState<unknown>(null);
   const [running, setRunning] = useState("");
   const [migrateSource, setMigrateSource] = useState("");
   const [migrateTarget, setMigrateTarget] = useState("");
-  const { data: storageOptionsData } = useStorageOptions();
+  const permissions = useAdminPermissions();
+  const canMigrateStorage = permissions.includes(
+    adminPermissions.storageMaintenanceMigrate
+  );
+  const canCleanupStorage = permissions.includes(
+    adminPermissions.storageMaintenanceCleanup
+  );
+  const { data: storageOptionsData } = useStorageOptions(canMigrateStorage);
   const storageOptions = (storageOptionsData?.backends ?? []).map((backend) => ({ value: backend.slug, label: backend.display_name || backend.slug }));
   const [operationModal, setOperationModal] = useState<"migrate-storage-location" | "storage-cleanup" | null>(null);
   const checks = useMemo(() => [
@@ -23,6 +32,11 @@ export function CheckPage() {
     { name: "trash", label: "回收站" },
     { name: "all", label: "全部" }
   ], []);
+  const operationAllowed = operationModal === "migrate-storage-location"
+    ? canMigrateStorage
+    : operationModal === "storage-cleanup"
+      ? canCleanupStorage
+      : false;
   const runCheck = async (name: string, body?: Record<string, unknown>) => {
     setRunning(name);
     try {
@@ -44,6 +58,7 @@ export function CheckPage() {
               <button
                 type="button"
                 key={check.name}
+                className={check.name === "all" ? "check-all-action" : undefined}
                 disabled={Boolean(running)}
                 onClick={() => void runCheck(check.name)}
               >
@@ -51,32 +66,38 @@ export function CheckPage() {
               </button>
             ))}
           </div>
-          <div className="actions">
-            <button
-              type="button"
-              disabled={Boolean(running)}
-              onClick={() => {
-                setOperationModal("migrate-storage-location");
-                if (storageOptions.length) {
-                  setMigrateSource((value) => value || storageOptions[0].value);
-                  setMigrateTarget((value) => value || (storageOptions[1]?.value ?? storageOptions[0].value));
-                }
-              }}
-            >
-              <Icon name="database-2-line" /><StableButtonLabel idle="迁移存储后端" busyText="迁移中" busy={running === "migrate-storage-location"} />
-            </button>
-            <button
-              className="danger-button"
-              type="button"
-              disabled={Boolean(running)}
-              onClick={() => setOperationModal("storage-cleanup")}
-            >
-              <Icon name="delete-bin-6-line" /><StableButtonLabel idle="清理无效存储" busyText="清理中" busy={running === "storage-cleanup"} />
-            </button>
-          </div>
+          {(canMigrateStorage || canCleanupStorage) && (
+            <div className="actions">
+              {canMigrateStorage && (
+                <button
+                  type="button"
+                  disabled={Boolean(running)}
+                  onClick={() => {
+                    setOperationModal("migrate-storage-location");
+                    if (storageOptions.length) {
+                      setMigrateSource((value) => value || storageOptions[0].value);
+                      setMigrateTarget((value) => value || (storageOptions[1]?.value ?? storageOptions[0].value));
+                    }
+                  }}
+                >
+                  <Icon name="database-2-line" /><StableButtonLabel idle="迁移存储后端" busyText="迁移中" busy={running === "migrate-storage-location"} />
+                </button>
+              )}
+              {canCleanupStorage && (
+                <button
+                  className="danger-button"
+                  type="button"
+                  disabled={Boolean(running)}
+                  onClick={() => setOperationModal("storage-cleanup")}
+                >
+                  <Icon name="delete-bin-6-line" /><StableButtonLabel idle="清理无效存储" busyText="清理中" busy={running === "storage-cleanup"} />
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </header>
-      {operationModal && (
+      {operationModal && operationAllowed && (
         <CheckOperationModal
           operation={operationModal}
           running={running}

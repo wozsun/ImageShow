@@ -1,3 +1,4 @@
+import { adminPermissions } from "@imageshow/shared";
 import type { Hono } from "hono";
 import { tagCreateInput, tagDisplayUpdateInput, tagSlugInput } from "../core/validation.ts";
 import {
@@ -16,6 +17,7 @@ export function registerAdminTagRoutes(app: Hono) {
     slugInput: tagSlugInput,
     createInput: tagCreateInput,
     updateInput: tagDisplayUpdateInput,
+    deletePermission: adminPermissions.tagDelete,
     list: listTagsWithCounts,
     create: async (input) => { await createTag(input.slug, input.display_name); },
     reorder: reorderTags,

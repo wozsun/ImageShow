@@ -71,8 +71,9 @@ export function AdminShell() {
       loginBackground={data.login_background}
     />
   );
-  const isSuper = data.role === "super";
-  const navigation = adminNavigationForRole(isSuper);
+  const role = data.role === "super" ? "super" : "image";
+  const isSuper = role === "super";
+  const navigation = adminNavigationForRole(role);
   const logout = async () => {
     try {
       await api(`${adminApiBasePath}/auth/logout`, { method: "POST" });
@@ -146,7 +147,7 @@ export function AdminShell() {
           )}
           {isSuper && <Route path="storage" element={<StorageSettings />} />}
           {isSuper && <Route path="users" element={<UserAdmin />} />}
-          {isSuper && <Route path="check" element={<CheckPage />} />}
+          <Route path="check" element={<CheckPage />} />
           {isSuper && <Route path="logs" element={<LogPage />} />}
           <Route path="*" element={<Navigate to={adminBasePath} replace />} />
         </Routes>

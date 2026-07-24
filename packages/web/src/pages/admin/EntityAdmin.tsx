@@ -1,4 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import {
+  adminPermissions,
+  type AdminPermission
+} from "@imageshow/shared/browser";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, isApiClientError } from "../../lib/api/client.js";
 import { Icon } from "../../components/icon/Icon.js";
@@ -28,6 +32,7 @@ import type { AdminSettings, Author, Tag, Theme } from "../../lib/types.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
 import { invalidateImageData } from "../../lib/api/query-invalidation.js";
 import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
+import { useAdminPermissions } from "../../lib/api/site-data.js";
 
 type EntityKind = "tags" | "themes" | "authors";
 type Entity = Tag | Theme | Author;
@@ -61,11 +66,18 @@ const COPY = {
 } as const;
 
 const QUERY_KEYS = { tags: queryKeys.tags, themes: queryKeys.themes, authors: queryKeys.authors } as const;
+const DELETE_PERMISSIONS = {
+  tags: adminPermissions.tagDelete,
+  themes: adminPermissions.themeDelete,
+  authors: adminPermissions.authorDelete
+} satisfies Record<EntityKind, AdminPermission>;
 
 export function EntityAdmin({ kind }: { kind: EntityKind }) {
   const copy = COPY[kind];
   const isAuthor = kind === "authors";
   const queryKey = QUERY_KEYS[kind];
+  const permissions = useAdminPermissions();
+  const canDelete = permissions.includes(DELETE_PERMISSIONS[kind]);
   const client = useQueryClient();
   const { data, error: listError, isError: listFailed, isFetching, refetch } = useQuery<{ items: Entity[] }>({ queryKey, queryFn: ({ signal }) => api(`${adminApiBasePath}/${kind}`, { signal }) });
   const { data: settingsData } = useQuery<{ settings: AdminSettings }>({ queryKey: queryKeys.settings, queryFn: ({ signal }) => api(`${adminApiBasePath}/settings`, { signal }) });
@@ -95,6 +107,12 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
   };
 
   useEffect(() => { setOrder(data?.items ?? []); }, [data]);
+  useEffect(() => {
+    if (canDelete) return;
+    setSelected([]);
+    setConfirmDelete(null);
+    setConfirmBatch(false);
+  }, [canDelete]);
 
   const slugInvalid = slug.length > 0 && !slugPattern.test(slug);
   const slugError = slugInvalid ? slugFormatHint : createError;
@@ -149,7 +167,7 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
   };
 
   const remove = async () => {
-    if (!confirmDelete) return false;
+    if (!canDelete || !confirmDelete) return false;
     setMutation("delete");
     try {
       await api(`${adminApiBasePath}/${kind}/${confirmDelete.slug}/delete`, { method: "POST" });
@@ -165,7 +183,7 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
   };
 
   const removeSelected = async () => {
-    if (!selected.length) return false;
+    if (!canDelete || !selected.length) return false;
     setMutation("batch-delete");
     try {
       await api(`${adminApiBasePath}/${kind}/batch-delete`, { method: "POST", body: JSON.stringify({ slugs: selected }) });
@@ -262,14 +280,16 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
             busy={createAction.pending}
           />
         </button>
-        <button
-          className="danger-button"
-          type="button"
-          disabled={operationBusy || !selected.length}
-          onClick={() => setConfirmBatch(true)}
-        >
-          <Icon name="delete-bin-6-line" />批量删除{selected.length ? `（${selected.length}）` : ""}
-        </button>
+        {canDelete && (
+          <button
+            className="danger-button"
+            type="button"
+            disabled={operationBusy || !selected.length}
+            onClick={() => setConfirmBatch(true)}
+          >
+            <Icon name="delete-bin-6-line" />批量删除{selected.length ? `（${selected.length}）` : ""}
+          </button>
+        )}
       </form>
       {feedback && (
         <ActionFeedbackOutlet
@@ -286,6 +306,7 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
               kind={kind}
               item={item}
               pinned={item.slug === "none"}
+              canDelete={canDelete}
               selected={selected.includes(item.slug)}
               onToggleSelect={(checked) => toggleSelect(item.slug, checked)}
               onChanged={() => void refresh()}
@@ -308,7 +329,7 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
         onPrevious={() => setPage((current) => Math.max(1, current - 1))}
         onNext={() => setPage((current) => Math.min(totalPages, current + 1))}
       />
-      {confirmDelete && (
+      {canDelete && confirmDelete && (
         <ConfirmDialog
           title={`删除${copy.noun}`}
           description={copy.deleteDescription(confirmDelete)}
@@ -318,7 +339,7 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
           onConfirm={remove}
         />
       )}
-      {confirmBatch && (
+      {canDelete && confirmBatch && (
         <ConfirmDialog
           title={`批量删除${copy.noun}`}
           description={kind === "tags"
