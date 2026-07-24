@@ -27,8 +27,10 @@ import {
   slugPattern
 } from "../../lib/constants.js";
 import { queryKeys } from "../../lib/api/query-keys.js";
+import { useAdminSettings } from "../../lib/api/admin-settings.js";
 import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
-import type { AdminSettings, Author, Tag, Theme } from "../../lib/types.js";
+import { moveItemByKey } from "../../lib/ui/reorder.js";
+import type { Author, Tag, Theme } from "../../lib/types.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
 import { invalidateImageData } from "../../lib/api/query-invalidation.js";
 import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
@@ -81,7 +83,7 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
   const canDelete = permissions.includes(DELETE_PERMISSIONS[kind]);
   const client = useQueryClient();
   const { data, error: listError, isError: listFailed, isFetching, refetch } = useQuery<{ items: Entity[] }>({ queryKey, queryFn: ({ signal }) => api(`${adminApiBasePath}/${kind}`, { signal }) });
-  const { data: settingsData } = useQuery<{ settings: AdminSettings }>({ queryKey: queryKeys.settings, queryFn: ({ signal }) => api(`${adminApiBasePath}/settings`, { signal }) });
+  const { data: settingsData } = useAdminSettings();
   // 新建/删除词条会改动公共画廊的筛选词表（gallery-facets，staleTime:Infinity 不会自动刷新），
   // 删除还会清除关联图片上的该属性，故一并失效后台图片列表，与 ImageAdmin.refresh 的失效集对齐。
   const refresh = () => invalidateImageData(client);
@@ -181,15 +183,12 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
   const moveOver = (targetSlug: string) => {
     const from = dragSlug.current;
     if (!from || from === targetSlug || from === "none" || targetSlug === "none") return;
-    setOrder((current) => {
-      const fromIdx = current.findIndex((item) => item.slug === from);
-      const toIdx = current.findIndex((item) => item.slug === targetSlug);
-      if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return current;
-      const next = [...current];
-      const [moved] = next.splice(fromIdx, 1);
-      next.splice(toIdx, 0, moved);
-      return next;
-    });
+    setOrder((current) => moveItemByKey(
+      current,
+      from,
+      targetSlug,
+      (item) => item.slug
+    ));
   };
 
   const persistOrder = async () => {

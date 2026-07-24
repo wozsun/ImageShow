@@ -1,5 +1,5 @@
 import { useRef, type KeyboardEvent } from "react";
-import { createPortal } from "react-dom";
+import { AnchoredPopup } from "../../../components/feedback/AnchoredPopup.js";
 import { Icon } from "../../../components/icon/Icon.js";
 import { useAnchoredMenu } from "../../../hooks/useAnchoredMenu.js";
 import type { AnchoredMenuSize } from "../../../lib/ui/menu-position.js";
@@ -60,9 +60,9 @@ export function UploadCleanupMenu({
     itemRefs.current[enabledIndexes[nextPosition]]?.focus();
   };
 
-  const popup = menu.open && typeof document !== "undefined" ? createPortal(
-    <div
-      ref={menu.menuRef}
+  const popup = menu.open ? (
+    <AnchoredPopup
+      popupRef={menu.menuRef}
       className={`select-menu upload-cleanup-menu${menu.opensUp ? " opens-up" : ""}${menu.closing ? " is-closing" : ""}`}
       role="menu"
       aria-label="清理任务"
@@ -84,8 +84,7 @@ export function UploadCleanupMenu({
           {action.label}
         </button>
       ))}
-    </div>,
-    document.body
+    </AnchoredPopup>
   ) : null;
 
   return (

@@ -1,16 +1,10 @@
 import { useCallback, useId, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { api } from "../../../lib/api/client.js";
-import { useAnimatedClose } from "../../../hooks/useAnimatedClose.js";
-import { useBodyScrollLock } from "../../../hooks/useBodyScrollLock.js";
-import { useDialogFocus } from "../../../hooks/useDialogFocus.js";
-import { adminApiBasePath } from "../../../lib/constants.js";
-import { queryKeys } from "../../../lib/api/query-keys.js";
+import { useAdminSettings } from "../../../lib/api/admin-settings.js";
 import { facetDisplayName } from "../../../lib/ui/formatters.js";
 import { storageBackendLabel, uploadCommonBrightnessOptions, uploadCommonDeviceOptions } from "../../../lib/ui/select-options.js";
 import { useImportVocabulary } from "../../../lib/api/import-vocabulary.js";
 import { useStorageOptions } from "../../../lib/api/storage-options.js";
-import type { AdminSettings, FacetOption, ImageItem, ImportJob } from "../../../lib/types.js";
+import type { FacetOption, ImageItem, ImportJob } from "../../../lib/types.js";
 import type { ImportAttributeDefaults } from "../../../lib/upload/upload-utils.js";
 import type { ImportPreviewTarget } from "./DuplicateMatchPanel.js";
 import type { LinkDialogSubmission, LinkInputMode } from "./link-import/LinkUrlDialog.js";
@@ -60,7 +54,6 @@ export function Uploader({ onDone }: { onDone: () => void }) {
   const [detailItem, setDetailItem] = useState<ImageItem | null>(null);
   const [preview, setPreview] = useState<ImportPreviewTarget | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
-  const dialogRef = useRef<HTMLElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const linkPickerRef = useRef<HTMLButtonElement | null>(null);
@@ -68,7 +61,7 @@ export function Uploader({ onDone }: { onDone: () => void }) {
   const detailReturnFocusRef = useRef<HTMLElement | null>(null);
   const previewReturnFocusRef = useRef<HTMLElement | null>(null);
 
-  const { data: settingsData } = useQuery<{ settings: AdminSettings }>({ queryKey: queryKeys.settings, queryFn: ({ signal }) => api(`${adminApiBasePath}/settings`, { signal }) });
+  const { data: settingsData } = useAdminSettings();
   const { data: vocabulary } = useImportVocabulary(open);
   const themes = vocabulary?.themes ?? EMPTY_FACET_OPTIONS;
   const tags = vocabulary?.tags ?? EMPTY_FACET_OPTIONS;
@@ -138,21 +131,12 @@ export function Uploader({ onDone }: { onDone: () => void }) {
   const commitImports = useImportCommit({ updateJob: queue.updateJob, concurrency: commitConcurrency, onDone });
   useImportStatusEvents(queue.jobs, queue.jobsRef, queue.updateJob);
 
-  const exit = useAnimatedClose(() => {
+  const closeWorkflow = () => {
     setOpen(false);
     setDefaultsExpanded(false);
     queue.clearJobs(isCompletedImportJob);
     setJsonlErrors([]);
-  });
-  useBodyScrollLock(open);
-  useDialogFocus({
-    containerRef: dialogRef,
-    initialFocusRef: closeButtonRef,
-    returnFocusRef: workflowReturnFocusRef,
-    onEscape: () => exit.requestClose(),
-    active: open,
-    paused: Boolean(detailItem || preview || urlInputOpen),
-  });
+  };
 
   const cancelJob = useCallback(async (job: ImportJob) => {
     const cancellationSucceeded = job.kind === "local"
@@ -335,9 +319,6 @@ export function Uploader({ onDone }: { onDone: () => void }) {
         <UploadWorkflowWindow
           mode={mode}
           fileInputId={fileInputId}
-          closing={exit.closing}
-          onAnimationEnd={exit.onAnimationEnd}
-          dialogRef={dialogRef}
           listRef={listRef}
           closeButtonRef={closeButtonRef}
           fileInputRef={fileInputRef}
@@ -365,7 +346,8 @@ export function Uploader({ onDone }: { onDone: () => void }) {
           linkInputMode={linkInputMode}
           linkMaxItems={linkMaxItems}
           weiboMaxItems={weiboMaxItems}
-          onRequestClose={() => exit.requestClose()}
+          returnFocusRef={workflowReturnFocusRef}
+          onClose={closeWorkflow}
           onAddFiles={(files) => void addFiles(files)}
           onClearJsonlErrors={() => setJsonlErrors([])}
           onDefaultsChange={setDefaults}
@@ -383,9 +365,7 @@ export function Uploader({ onDone }: { onDone: () => void }) {
             setUrlInputOpen(true);
           }}
           onBackendChange={setBackendChoice}
-          onCancelAndClose={() => {
-            void clearJobs(() => true).then(() => exit.requestClose());
-          }}
+          onCancelAll={() => clearJobs(() => true)}
           onCommitReady={() => {
             setBusy(true);
             void commitImports(readyJobs).finally(() => setBusy(false));

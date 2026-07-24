@@ -12,6 +12,10 @@ import {
 } from "../../storage/object-access.ts";
 import type { PreparedPayload } from "./types.ts";
 import { stagingSessionId } from "./staging-keys.ts";
+import {
+  appendImportCleanupFailure,
+  type ImportCleanupFailures
+} from "./cleanup-failures.ts";
 
 export async function preparedThumbnailResponse(
   payload: Pick<PreparedPayload, "prepared_thumbnail_key">,
@@ -23,22 +27,12 @@ export async function preparedThumbnailResponse(
   });
 }
 
-function appendCleanupFailure(
-  failures: Map<string, unknown[]>,
-  id: string,
-  error: unknown
-) {
-  const current = failures.get(id);
-  if (current) current.push(error);
-  else failures.set(id, [error]);
-}
-
 async function removeStagingKeysWithinLock(
   entries: readonly { id: string; key: string }[],
   storageSlug: string,
   signal: AbortSignal
 ) {
-  const failures = new Map<string, unknown[]>();
+  const failures: ImportCleanupFailures = new Map();
   await mapWithWorkerPool(
     entries,
     getRuntimeConfig().background_job.move_cleanup_concurrency,
@@ -47,7 +41,7 @@ async function removeStagingKeysWithinLock(
         signal.throwIfAborted();
         await removeStorageObjectAndConfirm("_uploads", key, storageSlug);
       } catch (error) {
-        appendCleanupFailure(failures, id, error);
+        appendImportCleanupFailure(failures, id, error);
       }
     },
     { signal }
@@ -74,7 +68,7 @@ export async function cleanupStagedObjectsBatch(
   storageSlug: string
 ) {
   const targets = new Set(ids);
-  const failures = new Map<string, unknown[]>();
+  const failures: ImportCleanupFailures = new Map();
   if (!targets.size) return failures;
 
   try {
@@ -94,7 +88,9 @@ export async function cleanupStagedObjectsBatch(
       }
     });
   } catch (error) {
-    for (const id of targets) appendCleanupFailure(failures, id, error);
+    for (const id of targets) {
+      appendImportCleanupFailure(failures, id, error);
+    }
   }
   return failures;
 }

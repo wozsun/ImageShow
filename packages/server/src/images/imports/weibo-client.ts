@@ -3,6 +3,7 @@ import {
   WeiboImportError,
   type WeiboImportErrorCode
 } from "./weibo-types.ts";
+import { asRecord, scalarString } from "./weibo-values.ts";
 
 const weiboUserAgent = [
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
@@ -12,20 +13,6 @@ const weiboUserAgent = [
 const weiboRequestTimeoutMs = 15_000;
 const weiboVisitorResponseMaxBytes = 64 * 1024;
 const weiboStatusResponseMaxBytes = 4 * 1024 * 1024;
-
-type UnknownRecord = Record<string, unknown>;
-
-function asRecord(value: unknown): UnknownRecord | null {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-    ? value as UnknownRecord
-    : null;
-}
-
-function scalarString(value: unknown) {
-  if (typeof value === "string") return value.trim();
-  if (typeof value === "number" && Number.isFinite(value)) return String(value);
-  return "";
-}
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);

@@ -1,13 +1,14 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
-import { createPortal } from "react-dom";
 import { useAnchoredMenu } from "../../hooks/useAnchoredMenu.js";
 import { Icon } from "../icon/Icon.js";
 import { slugPattern } from "../../lib/constants.js";
 import { facetDisplayName } from "../../lib/ui/formatters.js";
-import type { AnchoredMenuSize } from "../../lib/ui/menu-position.js";
 import type { FacetOption } from "../../lib/types.js";
-
-const MENU_SIZE: AnchoredMenuSize = { minWidth: 0, flipThreshold: 180, minAvailable: 96, maxHeight: 260 };
+import {
+  handleSuggestionNavigationKey,
+  SuggestionList,
+  suggestionMenuSize
+} from "./SuggestionList.js";
 
 export function TagInput({ value, onChange, suggestions, disabled = false, ariaLabel, className, placeholder = "添加标签" }: {
   value: string[];
@@ -25,7 +26,7 @@ export function TagInput({ value, onChange, suggestions, disabled = false, ariaL
   const inputId = `${listId}-input`;
   const { open, closing, position, opensUp, menuRef, openMenu, requestClose, onAnimationEnd } = useAnchoredMenu({
     triggerRef: wrapRef,
-    getSize: () => MENU_SIZE,
+    getSize: () => suggestionMenuSize,
     initialMaxHeight: 260,
     disabled,
     onClose: () => setActiveIndex(-1)
@@ -54,58 +55,39 @@ export function TagInput({ value, onChange, suggestions, disabled = false, ariaL
   const removeTag = (tag: string) => onChange(value.filter((item) => item !== tag));
 
   const handleKey = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "ArrowDown") {
-      event.preventDefault();
-      if (!open) { openMenu(); return; }
-      setActiveIndex((current) => Math.min(current + 1, matches.length - 1));
-    } else if (event.key === "ArrowUp") {
-      if (!open) return;
-      event.preventDefault();
-      setActiveIndex((current) => Math.max(current - 1, 0));
-    } else if (event.key === "Enter" || event.key === "," || (event.key === " " && !event.nativeEvent.isComposing)) {
+    if (handleSuggestionNavigationKey(event, {
+      open,
+      matchCount: matches.length,
+      setActiveIndex,
+      openMenu,
+      requestClose
+    })) return;
 
+    if (event.key === "Enter" || event.key === "," || (event.key === " " && !event.nativeEvent.isComposing)) {
       event.preventDefault();
       if (open && activeIndex >= 0 && matches[activeIndex]) addTag(matches[activeIndex].slug);
       else if (text.trim()) addTag(text);
     } else if (event.key === "Backspace" && !text && value.length) {
       removeTag(value[value.length - 1]);
-    } else if (event.key === "Escape" && open) {
-      event.preventDefault();
-      requestClose();
     }
   };
 
-  const menu = open && matches.length && typeof document !== "undefined" ? createPortal(
-    <div
-      ref={menuRef}
-      id={listId}
-      className={`select-menu suggestion-menu ${opensUp ? "opens-up" : ""} ${closing ? "is-closing" : ""}`}
-      role="listbox"
-      aria-label={ariaLabel}
-      aria-hidden={closing}
-      style={position}
+  const menu = (
+    <SuggestionList
+      open={open}
+      matches={matches}
+      activeIndex={activeIndex}
+      ariaLabel={ariaLabel}
+      listId={listId}
+      closing={closing}
+      opensUp={opensUp}
+      position={position}
+      popupRef={menuRef}
       onAnimationEnd={onAnimationEnd}
-    >
-      {matches.map((tag, index) => (
-        <button
-          key={tag.slug}
-          type="button"
-          role="option"
-          aria-selected={index === activeIndex}
-          className={index === activeIndex ? "is-active" : ""}
-          onMouseEnter={() => setActiveIndex(index)}
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => addTag(tag.slug)}
-        >
-          <span>{tag.slug}</span>
-          {tag.display_name && tag.display_name !== tag.slug && (
-            <span className="option-display-name">{tag.display_name}</span>
-          )}
-        </button>
-      ))}
-    </div>,
-    document.body
-  ) : null;
+      onActiveIndexChange={setActiveIndex}
+      onChoose={addTag}
+    />
+  );
 
   return (
     <div className={`tag-input-control ${className ?? ""}`.trim()} ref={wrapRef}>

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api/client.js";
 import { Icon } from "../../components/icon/Icon.js";
 import { AsyncActionButton } from "../../components/actions/AsyncActionButton.js";
@@ -7,7 +7,7 @@ import { NumberInput } from "../../components/form/NumberInput.js";
 import { SelectMenu } from "../../components/form/SelectMenu.js";
 import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
 import { adminApiBasePath } from "../../lib/constants.js";
-import { queryKeys } from "../../lib/api/query-keys.js";
+import { useAdminSettings } from "../../lib/api/admin-settings.js";
 import { galleryOrderSelectOptions } from "../../lib/ui/select-options.js";
 import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
 import type { AdminSettings, SiteSettings } from "../../lib/types.js";
@@ -32,10 +32,7 @@ const saveSettingsPresentation = {
 } as const;
 
 export function SettingsPage() {
-  const query = useQuery<{ settings: AdminSettings }>({
-    queryKey: queryKeys.settings,
-    queryFn: ({ signal }) => api(`${adminApiBasePath}/settings`, { signal })
-  });
+  const query = useAdminSettings();
   const client = useQueryClient();
   const [settings, setSettings] = useState<AdminSettings | null>(null);
   const reloadConfigStatus = useAsyncActionStatus();

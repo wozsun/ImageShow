@@ -7,6 +7,7 @@ import { adminApiBasePath } from "../../lib/constants.js";
 import { storageBackendDisplay, storageBackendLabel, storageTypeLabel } from "../../lib/ui/select-options.js";
 import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
 import { waitForMinimumPendingDuration } from "../../lib/ui/async-action-timing.js";
+import { moveItemByKey } from "../../lib/ui/reorder.js";
 import type { StorageBackendAdmin } from "../../lib/types.js";
 import {
   createActionFeedback,
@@ -60,15 +61,12 @@ function StorageBackendsManager() {
   const moveOver = (targetSlug: string) => {
     const from = dragSlug.current;
     if (!from || from === targetSlug || from === "local" || targetSlug === "local") return;
-    setOrder((current) => {
-      const fromIdx = current.findIndex((backend) => backend.slug === from);
-      const toIdx = current.findIndex((backend) => backend.slug === targetSlug);
-      if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return current;
-      const next = [...current];
-      const [moved] = next.splice(fromIdx, 1);
-      next.splice(toIdx, 0, moved);
-      return next;
-    });
+    setOrder((current) => moveItemByKey(
+      current,
+      from,
+      targetSlug,
+      (backend) => backend.slug
+    ));
   };
 
   const persistOrder = async () => {

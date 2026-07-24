@@ -84,8 +84,9 @@ core / config
   `prepare-artifacts.ts` 完成。
 - `commit.ts` 只编排锁、对象落位与补偿；数据库事务、提交后缓存同步和候选对象所有权
   分别位于 `commit-persistence.ts`、`commit-sync.ts`、`commit-candidates.ts`。
-- `weibo.ts` 只编排批次和 JSONL 清单，链接/时间/响应提取、受限上游协议及公开类型
-  分别位于 `weibo-parser.ts`、`weibo-client.ts`、`weibo-types.ts`。
+- `weibo.ts` 只编排批次和 JSONL 清单，链接/时间/响应提取、受限上游协议、未知响应值
+  归一化及公开类型分别位于 `weibo-parser.ts`、`weibo-client.ts`、
+  `weibo-values.ts`、`weibo-types.ts`。
 
 领域模块可以依赖 `core/` 和 `config/`，但基础设施不能反向导入具体路由。跨领域调用直接
 指向对方表达职责的模块，不通过泛化 `service`、`storage` 或 barrel 隐藏真实依赖，也不能

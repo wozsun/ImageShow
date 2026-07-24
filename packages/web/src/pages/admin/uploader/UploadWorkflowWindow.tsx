@@ -1,14 +1,12 @@
 import type {
-  AnimationEventHandler,
   Dispatch,
   RefObject,
   SetStateAction
 } from "react";
 import { StableButtonLabel } from "../../../components/data-display/StableButtonLabel.js";
-import { AuthorInput } from "../../../components/form/AuthorInput.js";
+import { DialogFrame } from "../../../components/feedback/DialogFrame.js";
 import { SelectMenu } from "../../../components/form/SelectMenu.js";
-import { TagInput } from "../../../components/form/TagInput.js";
-import { ThemeInput } from "../../../components/form/ThemeInput.js";
+import { WorkflowDefaultFields } from "../../../components/form/WorkflowDefaultFields.js";
 import { Icon } from "../../../components/icon/Icon.js";
 import { ImageDetailModal } from "../../../components/image/ImageDetailModal.js";
 import { ImagePreviewModal } from "../../../components/image/ImagePreviewModal.js";
@@ -40,9 +38,6 @@ import type { ImportQueueController } from "./useImportQueue.js";
 export function UploadWorkflowWindow({
   mode,
   fileInputId,
-  closing,
-  onAnimationEnd,
-  dialogRef,
   listRef,
   closeButtonRef,
   fileInputRef,
@@ -70,7 +65,8 @@ export function UploadWorkflowWindow({
   linkInputMode,
   linkMaxItems,
   weiboMaxItems,
-  onRequestClose,
+  returnFocusRef,
+  onClose,
   onAddFiles,
   onClearJsonlErrors,
   onDefaultsChange,
@@ -85,7 +81,7 @@ export function UploadWorkflowWindow({
   onOpenPreview,
   onOpenLinkInput,
   onBackendChange,
-  onCancelAndClose,
+  onCancelAll,
   onCommitReady,
   onCloseDetail,
   onClosePreview,
@@ -94,9 +90,6 @@ export function UploadWorkflowWindow({
 }: {
   mode: "file" | "link";
   fileInputId: string;
-  closing: boolean;
-  onAnimationEnd: AnimationEventHandler<HTMLDivElement>;
-  dialogRef: RefObject<HTMLElement | null>;
   listRef: RefObject<HTMLDivElement | null>;
   closeButtonRef: RefObject<HTMLButtonElement | null>;
   fileInputRef: RefObject<HTMLInputElement | null>;
@@ -124,7 +117,8 @@ export function UploadWorkflowWindow({
   linkInputMode: LinkInputMode;
   linkMaxItems: number;
   weiboMaxItems: number;
-  onRequestClose: () => void;
+  returnFocusRef: RefObject<HTMLElement | null>;
+  onClose: () => void;
   onAddFiles: (files: FileList | null) => void;
   onClearJsonlErrors: () => void;
   onDefaultsChange: Dispatch<SetStateAction<ImportAttributeDefaults>>;
@@ -139,7 +133,7 @@ export function UploadWorkflowWindow({
   onOpenPreview: (target: ImportPreviewTarget) => void;
   onOpenLinkInput: (inputMode: LinkInputMode) => void;
   onBackendChange: (backend: string) => void;
-  onCancelAndClose: () => void;
+  onCancelAll: () => Promise<void>;
   onCommitReady: () => void;
   onCloseDetail: () => void;
   onClosePreview: () => void;
@@ -160,14 +154,18 @@ export function UploadWorkflowWindow({
     : "输入来源后立即创建并准备图片任务";
 
   return (
-    <div
-      className={`upload-overlay ${closing ? "is-closing" : ""}`}
-      role="dialog"
-      aria-modal="true"
-      aria-label={modeTitle}
-      onAnimationEnd={onAnimationEnd}
+    <DialogFrame
+      className="upload-overlay"
+      ariaLabel={modeTitle}
+      busy={busy}
+      paused={Boolean(detailItem || preview || urlInputOpen)}
+      initialFocusRef={closeButtonRef}
+      returnFocusRef={returnFocusRef}
+      onClose={onClose}
     >
-      <section ref={dialogRef} className="upload-window" tabIndex={-1}>
+      {({ requestClose }) => (
+      <>
+      <section className="upload-window" tabIndex={-1}>
         <header className="upload-window-header">
           <div className="upload-head-copy">
             <h1>{modeTitle}</h1>
@@ -251,7 +249,7 @@ export function UploadWorkflowWindow({
                 className="icon close pressable upload-close-button"
                 type="button"
                 title="关闭"
-                onClick={onRequestClose}
+                onClick={() => requestClose()}
                 disabled={busy}
               >
                 <Icon name="close-line" />
@@ -268,63 +266,44 @@ export function UploadWorkflowWindow({
           expanded={defaultsExpanded}
           onExpandedChange={onDefaultsExpandedChange}
         >
-          <SelectMenu
-            className="upload-default-select upload-default-device"
-            value={defaults.device}
-            onChange={(device) => onDefaultsChange({
-              ...defaults,
-              device: device as ImportAttributeDefaults["device"]
-            })}
-            options={uploadCommonDeviceOptions}
-            ariaLabel="默认设备"
-          />
-          <SelectMenu
-            className="upload-default-select upload-default-brightness"
-            value={defaults.brightness}
-            onChange={(brightness) => onDefaultsChange({
-              ...defaults,
-              brightness: brightness as ImportAttributeDefaults["brightness"]
-            })}
-            options={uploadCommonBrightnessOptions}
-            ariaLabel="默认亮度"
-          />
-          <div className="workflow-default-pair">
-            <ThemeInput
-              className="upload-default-theme"
-              value={defaults.theme}
-              onChange={(theme) => onDefaultsChange({ ...defaults, theme })}
-              themes={themes}
-              placeholder="主题"
-              ariaLabel="默认主题"
-            />
-            <AuthorInput
-              className="upload-default-author"
-              value={defaults.author}
-              onChange={(author) => onDefaultsChange({ ...defaults, author })}
-              authors={authors}
-              placeholder="默认作者"
-              ariaLabel="默认作者"
-            />
-            <TagInput
-              className="upload-default-tags"
-              value={defaults.tags}
-              onChange={(nextTags) => onDefaultsChange({
+          <WorkflowDefaultFields
+            values={defaults}
+            onChange={{
+              device: (device) => onDefaultsChange({
+                ...defaults,
+                device: device as ImportAttributeDefaults["device"]
+              }),
+              brightness: (brightness) => onDefaultsChange({
+                ...defaults,
+                brightness: brightness as ImportAttributeDefaults["brightness"]
+              }),
+              theme: (theme) => onDefaultsChange({ ...defaults, theme }),
+              author: (author) => onDefaultsChange({ ...defaults, author }),
+              tags: (nextTags) => onDefaultsChange({
                 ...defaults,
                 tags: nextTags
-              })}
-              suggestions={tags}
-              placeholder="默认标签"
-              ariaLabel="默认标签"
-            />
-          </div>
-          <button
-            type="button"
-            className="apply-to-all-button"
-            disabled={busy || !canApplyDefaults}
-            onClick={() => queue.applyDefaultsToAll(defaults)}
-          >
-            应用到全部
-          </button>
+              })
+            }}
+            deviceOptions={uploadCommonDeviceOptions}
+            brightnessOptions={uploadCommonBrightnessOptions}
+            themes={themes}
+            authors={authors}
+            tags={tags}
+            placeholders={{
+              theme: "主题",
+              author: "默认作者",
+              tags: "默认标签"
+            }}
+            ariaLabels={{
+              device: "默认设备",
+              brightness: "默认亮度",
+              theme: "默认主题",
+              author: "默认作者",
+              tags: "默认标签"
+            }}
+            applyDisabled={busy || !canApplyDefaults}
+            onApply={() => queue.applyDefaultsToAll(defaults)}
+          />
         </WorkflowCollapsePanel>
 
         <div className="modal-scroll-list upload-list" ref={listRef}>
@@ -421,7 +400,11 @@ export function UploadWorkflowWindow({
             onNext={() => queue.setPage((page) => page + 1)}
           />
           <div className="modal-footer-actions">
-            <button type="button" onClick={onCancelAndClose} disabled={busy}>
+            <button
+              type="button"
+              onClick={() => void onCancelAll().then(() => requestClose())}
+              disabled={busy}
+            >
               取消
             </button>
             <button
@@ -468,6 +451,8 @@ export function UploadWorkflowWindow({
           returnFocusRef={linkPickerRef}
         />
       )}
-    </div>
+      </>
+      )}
+    </DialogFrame>
   );
 }

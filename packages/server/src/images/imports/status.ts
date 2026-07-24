@@ -43,7 +43,7 @@ function importMessage(status: string, mode?: string, error?: string) {
   if (status === "received") return "原图素材已接收，等待处理";
   if (status === "preparing") return "标准化图片并生成缩略图";
   if (status === "ready") return "服务端处理完成";
-  if (status === "committing") return "写入图库";
+  if (status === "committing") return "写入图库中";
   if (status === "finalized") return "已写入图库";
   if (status === "failed") return error || "处理失败";
   if (status === "cancelled") return "已取消";

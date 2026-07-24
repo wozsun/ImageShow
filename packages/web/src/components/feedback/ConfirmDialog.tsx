@@ -1,10 +1,8 @@
 import { useRef } from "react";
 import type { IconName } from "../icon/Icon.js";
 import { AsyncActionButton } from "../actions/AsyncActionButton.js";
-import { useAnimatedClose } from "../../hooks/useAnimatedClose.js";
-import { useBodyScrollLock } from "../../hooks/useBodyScrollLock.js";
-import { useDialogFocus } from "../../hooks/useDialogFocus.js";
 import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
+import { DialogFrame } from "./DialogFrame.js";
 
 export function ConfirmDialog({
   title,
@@ -31,9 +29,7 @@ export function ConfirmDialog({
   onClose: () => void;
   onConfirm: () => Promise<boolean | void>;
 }) {
-  const exit = useAnimatedClose(onClose);
   const confirmStatus = useAsyncActionStatus({ successDurationMs: null });
-  const formRef = useRef<HTMLFormElement | null>(null);
   const cancelButtonRef = useRef<HTMLButtonElement | null>(null);
   const blocked = busy || confirmStatus.pending;
   const confirmPresentation = {
@@ -42,48 +38,46 @@ export function ConfirmDialog({
     success: { icon: "check-line", label: successLabel },
     error: { icon: "close-line", label: errorLabel }
   } as const;
-  useBodyScrollLock();
-  useDialogFocus({
-    containerRef: formRef,
-    initialFocusRef: cancelButtonRef,
-    onEscape: () => { if (!blocked) exit.requestClose(); },
-  });
-  const submit = async () => {
+  const submit = async (requestClose: () => void) => {
     try {
       const succeeded = await confirmStatus.run(async () => {
         const result = await onConfirm();
         return result !== false;
       });
-      if (succeeded) exit.requestClose();
+      if (succeeded) requestClose();
     } catch {
       // 调用方负责记录业务错误；按钮保留失败状态并允许直接重试。
     }
   };
   return (
-    <div
-      className={`modal edit-modal confirm-dialog ${exit.closing ? "is-closing" : ""}`}
-      role="dialog"
-      aria-modal="true"
-      aria-label={title}
-      onAnimationEnd={exit.onAnimationEnd}
+    <DialogFrame
+      className="modal edit-modal confirm-dialog"
+      ariaLabel={title}
+      busy={blocked}
+      initialFocusRef={cancelButtonRef}
+      onClose={onClose}
     >
-      <form
-        ref={formRef}
-        tabIndex={-1}
-        onSubmit={(event) => { event.preventDefault(); void submit(); }}
-      >
-        <header><div><h2>{title}</h2><p>{description}</p></div></header>
-        <footer>
-          <button ref={cancelButtonRef} type="button" disabled={blocked} onClick={() => exit.requestClose()}>取消</button>
-          <AsyncActionButton
-            className={danger ? "danger-button" : "button"}
-            type="submit"
-            status={confirmStatus.status}
-            presentation={confirmPresentation}
-            disabled={blocked}
-          />
-        </footer>
-      </form>
-    </div>
+      {({ requestClose }) => (
+        <form
+          tabIndex={-1}
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submit(requestClose);
+          }}
+        >
+          <header><div><h2>{title}</h2><p>{description}</p></div></header>
+          <footer>
+            <button ref={cancelButtonRef} type="button" disabled={blocked} onClick={() => requestClose()}>取消</button>
+            <AsyncActionButton
+              className={danger ? "danger-button" : "button"}
+              type="submit"
+              status={confirmStatus.status}
+              presentation={confirmPresentation}
+              disabled={blocked}
+            />
+          </footer>
+        </form>
+      )}
+    </DialogFrame>
   );
 }

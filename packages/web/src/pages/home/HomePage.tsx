@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AppHeader } from "../../components/navigation/AppHeader.js";
-import { CopyButton } from "../../components/actions/CopyButton.js";
+import { GeneratedLinkActions } from "../../components/actions/GeneratedLinkActions.js";
 import { Icon } from "../../components/icon/Icon.js";
 import { SelectMenu } from "../../components/form/SelectMenu.js";
 import { FacetSelector } from "../../components/data-display/FacetSelector.js";
@@ -229,16 +229,7 @@ export function HomePage() {
             </div>
             <p className="builder-hint">可搜索并多选主题、标签或作者，筛选方式可切换为包含或排除。</p>
             <div className="generated-link">
-              <code>{randomUrl}</code>
-              <CopyButton value={randomUrl} ariaLabel="复制随机图片链接" />
-              <a
-                className="button secondary pressable"
-                href={randomUrl}
-                target="_blank"
-                rel="noreferrer noopener"
-              >
-                <Icon name="external-link-line" />打开
-              </a>
+              <GeneratedLinkActions url={randomUrl} />
             </div>
           </div>
         </section>

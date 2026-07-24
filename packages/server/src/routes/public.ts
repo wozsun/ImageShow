@@ -12,6 +12,7 @@ import { siteConfigPayload } from "../config/app-settings.ts";
 import { getPublicGalleryFacets } from "../images/read-models/facets.ts";
 import { getPublicImage, listPublicImages } from "../images/read-models/public-images.ts";
 import { redirectOriginalLink, serveObject, serveOriginalLinkProxy, serveThumb } from "../images/serving.ts";
+import { storedResponseRequest } from "./stored-response-request.ts";
 
 export function registerPublicRoutes(app: Hono) {
 
@@ -44,22 +45,11 @@ export function registerPublicRoutes(app: Hono) {
 
   app.get("/media/*", async (c) => {
     const key = c.req.path.replace(/^\/media\//, "");
-    return serveObject(key, {
-      range: c.req.header("range"),
-      ifNoneMatch: c.req.header("if-none-match"),
-      ifRange: c.req.header("if-range"),
-      isHead: c.req.method === "HEAD"
-    });
+    return serveObject(key, storedResponseRequest(c));
   });
   app.get("/thumbs/*", async (c) => {
     const key = c.req.path.replace(/^\/thumbs\//, "");
-    const request = {
-      range: c.req.header("range"),
-      ifNoneMatch: c.req.header("if-none-match"),
-      ifRange: c.req.header("if-range"),
-      isHead: c.req.method === "HEAD"
-    };
-    return serveThumb(key, request);
+    return serveThumb(key, storedResponseRequest(c));
   });
   app.get("/original/:id", async (c) => serveOriginalLinkProxy(parse(uuidInput, c.req.param("id")), c.req.method === "HEAD"));
 }

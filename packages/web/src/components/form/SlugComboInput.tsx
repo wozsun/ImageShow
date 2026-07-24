@@ -1,12 +1,13 @@
 import { useId, useRef, useState, type KeyboardEvent } from "react";
-import { createPortal } from "react-dom";
 import { useAnchoredMenu } from "../../hooks/useAnchoredMenu.js";
 import { reservedSubdomains, slugPattern } from "../../lib/constants.js";
 import { facetDisplayName } from "../../lib/ui/formatters.js";
-import type { AnchoredMenuSize } from "../../lib/ui/menu-position.js";
 import type { FacetOption } from "../../lib/types.js";
-
-const MENU_SIZE: AnchoredMenuSize = { minWidth: 0, flipThreshold: 180, minAvailable: 96, maxHeight: 260 };
+import {
+  handleSuggestionNavigationKey,
+  SuggestionList,
+  suggestionMenuSize
+} from "./SuggestionList.js";
 
 export function SlugComboInput({ value, onChange, options, noun, checkReserved = false, placeholder, disabled = false, ariaLabel, className }: {
   value: string;
@@ -28,7 +29,7 @@ export function SlugComboInput({ value, onChange, options, noun, checkReserved =
   const inputId = `${listId}-input`;
   const { open, closing, position, opensUp, menuRef, openMenu, requestClose, onAnimationEnd } = useAnchoredMenu({
     triggerRef: wrapRef,
-    getSize: () => MENU_SIZE,
+    getSize: () => suggestionMenuSize,
     initialMaxHeight: 260,
     disabled,
     onClose: () => setActiveIndex(-1)
@@ -53,57 +54,39 @@ export function SlugComboInput({ value, onChange, options, noun, checkReserved =
   };
 
   const handleKey = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "ArrowDown") {
-      event.preventDefault();
-      if (!open) { openMenu(); return; }
-      setActiveIndex((current) => Math.min(current + 1, matches.length - 1));
-    } else if (event.key === "ArrowUp") {
-      if (!open) return;
-      event.preventDefault();
-      setActiveIndex((current) => Math.max(current - 1, 0));
-    } else if (event.key === "Enter") {
+    if (handleSuggestionNavigationKey(event, {
+      open,
+      matchCount: matches.length,
+      setActiveIndex,
+      openMenu,
+      requestClose
+    })) return;
+
+    if (event.key === "Enter") {
       if (!open) return;
       event.preventDefault();
       if (activeIndex >= 0 && matches[activeIndex]) choose(matches[activeIndex].slug);
       else requestClose();
-    } else if (event.key === "Escape") {
-      if (!open) return;
-      event.preventDefault();
-      requestClose();
     }
   };
 
-  const menu = open && matches.length && typeof document !== "undefined" ? createPortal(
-    <div
-      ref={menuRef}
-      id={listId}
-      className={`select-menu suggestion-menu ${opensUp ? "opens-up" : ""} ${closing ? "is-closing" : ""}`}
-      role="listbox"
-      aria-label={ariaLabel}
-      aria-hidden={closing}
-      style={position}
+  const menu = (
+    <SuggestionList
+      open={open}
+      matches={matches}
+      activeIndex={activeIndex}
+      selectedSlug={value}
+      ariaLabel={ariaLabel}
+      listId={listId}
+      closing={closing}
+      opensUp={opensUp}
+      position={position}
+      popupRef={menuRef}
       onAnimationEnd={onAnimationEnd}
-    >
-      {matches.map((option, index) => (
-        <button
-          key={option.slug}
-          type="button"
-          role="option"
-          aria-selected={option.slug === value}
-          className={`${option.slug === value ? "is-selected" : ""} ${index === activeIndex ? "is-active" : ""}`}
-          onMouseEnter={() => setActiveIndex(index)}
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => choose(option.slug)}
-        >
-          <span>{option.slug}</span>
-          {option.display_name && option.display_name !== option.slug && (
-              <span className="option-display-name">{option.display_name}</span>
-          )}
-        </button>
-      ))}
-    </div>,
-    document.body
-  ) : null;
+      onActiveIndexChange={setActiveIndex}
+      onChoose={choose}
+    />
+  );
 
   return (
     <div className={`slug-combo-control ${className ?? ""}`.trim()} ref={wrapRef}>

@@ -2,6 +2,7 @@ import { useId, useRef, useState } from "react";
 import { Icon } from "../../components/icon/Icon.js";
 import { AsyncActionButton } from "../../components/actions/AsyncActionButton.js";
 import { DialogFrame } from "../../components/feedback/DialogFrame.js";
+import { NumberInput } from "../../components/form/NumberInput.js";
 import { SelectMenu } from "../../components/form/SelectMenu.js";
 import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
 import { storageBackendDisplay, storageTypeLabel } from "../../lib/ui/select-options.js";
@@ -326,14 +327,12 @@ function S3Fields({ value, onChange, configured, locationLocked }: { value: S3Se
           onChange={(event) => patch({ secret_access_key: event.target.value })}
         />
       </label>
-      <label>
-        根目录
-        <input value={value.root_path} onChange={(event) => patch({ root_path: event.target.value })} placeholder="/ 或 /imageshow" disabled={locationLocked} />
-      </label>
-      <label>
-        Public Base URL
-        <input value={value.public_base_url} onChange={(event) => patch({ public_base_url: event.target.value })} placeholder="https://cdn.example.com" />
-      </label>
+      <StorageLocationFields
+        rootPath={value.root_path}
+        publicBaseUrl={value.public_base_url}
+        locationLocked={locationLocked}
+        onChange={patch}
+      />
       <label>
         <input type="checkbox" checked={value.force_path_style} onChange={(event) => patch({ force_path_style: event.target.checked })} />
         Path-style
@@ -364,29 +363,87 @@ function WebdavFields({ value, onChange, configured, locationLocked }: { value: 
           onChange={(event) => patch({ password: event.target.value })}
         />
       </label>
-      <label>
-        根目录
-        <input value={value.root_path} onChange={(event) => patch({ root_path: event.target.value })} placeholder="/ 或 /imageshow" disabled={locationLocked} />
-      </label>
-      <label>
-        Public Base URL
-        <input value={value.public_base_url} onChange={(event) => patch({ public_base_url: event.target.value })} placeholder="https://cdn.example.com" />
-      </label>
+      <StorageLocationFields
+        rootPath={value.root_path}
+        publicBaseUrl={value.public_base_url}
+        locationLocked={locationLocked}
+        onChange={patch}
+      />
       <label>
         连接 / 首字节超时（秒）
-        <input type="number" min="1" max="120" value={value.connect_timeout_seconds} onChange={(event) => patch({ connect_timeout_seconds: Number(event.target.value) })} />
+        <NumberInput
+          min={1}
+          max={120}
+          value={value.connect_timeout_seconds}
+          onChange={(connect_timeout_seconds) => patch({
+            connect_timeout_seconds
+          })}
+        />
       </label>
       <label>
         流读取空闲超时（秒）
-        <input type="number" min="1" max="300" value={value.idle_timeout_seconds} onChange={(event) => patch({ idle_timeout_seconds: Number(event.target.value) })} />
+        <NumberInput
+          min={1}
+          max={300}
+          value={value.idle_timeout_seconds}
+          onChange={(idle_timeout_seconds) => patch({
+            idle_timeout_seconds
+          })}
+        />
       </label>
       <label>
         单次任务总超时（秒）
-        <input type="number" min="15" max="3600" value={value.task_timeout_seconds} onChange={(event) => patch({ task_timeout_seconds: Number(event.target.value) })} />
+        <NumberInput
+          min={15}
+          max={3600}
+          value={value.task_timeout_seconds}
+          onChange={(task_timeout_seconds) => patch({
+            task_timeout_seconds
+          })}
+        />
       </label>
       <label>
         <input type="checkbox" checked={value.list_depth_infinity} onChange={(event) => patch({ list_depth_infinity: event.target.checked })} />
         Depth: infinity 列举（更快；部分 WebDAV 服务器不支持，默认关闭）
+      </label>
+    </>
+  );
+}
+
+function StorageLocationFields({
+  rootPath,
+  publicBaseUrl,
+  locationLocked,
+  onChange
+}: {
+  rootPath: string;
+  publicBaseUrl: string;
+  locationLocked: boolean;
+  onChange: (patch: {
+    root_path?: string;
+    public_base_url?: string;
+  }) => void;
+}) {
+  return (
+    <>
+      <label>
+        根目录
+        <input
+          value={rootPath}
+          onChange={(event) => onChange({ root_path: event.target.value })}
+          placeholder="/ 或 /imageshow"
+          disabled={locationLocked}
+        />
+      </label>
+      <label>
+        Public Base URL
+        <input
+          value={publicBaseUrl}
+          onChange={(event) => onChange({
+            public_base_url: event.target.value
+          })}
+          placeholder="https://cdn.example.com"
+        />
       </label>
     </>
   );

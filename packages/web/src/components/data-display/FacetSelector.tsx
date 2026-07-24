@@ -1,5 +1,5 @@
-import { createPortal } from "react-dom";
 import { useEffect, useRef, useState } from "react";
+import { AnchoredPopup } from "../feedback/AnchoredPopup.js";
 import { useAnchoredMenu } from "../../hooks/useAnchoredMenu.js";
 import { facetDisplayName } from "../../lib/ui/formatters.js";
 import type { AnchoredMenuSize } from "../../lib/ui/menu-position.js";
@@ -54,9 +54,9 @@ export function FacetSelector({ options, value, onChange, noun, disabled = false
     onChange(selected.map((slug) => nextMode === "exclude" ? `!${slug}` : slug).join(","));
   };
 
-  const menu = open && typeof document !== "undefined" ? createPortal(
-    <div
-      ref={menuRef}
+  const menu = open ? (
+    <AnchoredPopup
+      popupRef={menuRef}
       className={`facet-select-menu ${opensUp ? "opens-up" : ""} ${closing ? "is-closing" : ""}`}
       role="dialog"
       aria-label={`${resolvedAriaLabel}筛选`}
@@ -119,8 +119,7 @@ export function FacetSelector({ options, value, onChange, noun, disabled = false
           </button>
         ))}
       </div>
-    </div>,
-    document.body
+    </AnchoredPopup>
   ) : null;
 
   const label = parsed.selected.length

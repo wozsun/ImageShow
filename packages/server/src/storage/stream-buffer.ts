@@ -1,7 +1,8 @@
 import { Readable } from "node:stream";
 import { ApiError } from "../core/api-error.ts";
+import type { OpenedRead } from "./driver.ts";
 
-export async function streamToBuffer(stream: Readable, limit = Number.MAX_SAFE_INTEGER) {
+async function streamToBuffer(stream: Readable, limit = Number.MAX_SAFE_INTEGER) {
   const chunks: Buffer[] = [];
   let total = 0;
   for await (const chunk of stream) {
@@ -11,6 +12,27 @@ export async function streamToBuffer(stream: Readable, limit = Number.MAX_SAFE_I
     chunks.push(buffer);
   }
   return Buffer.concat(chunks);
+}
+
+export async function openedReadToBuffer(
+  opened: OpenedRead,
+  limit: number
+) {
+  if (opened.size !== undefined && opened.size > limit) {
+    opened.body.destroy();
+    throw new ApiError(
+      400,
+      "object_too_large",
+      "图片大小超过限制",
+      { limit }
+    );
+  }
+  try {
+    return await streamToBuffer(opened.body, limit);
+  } catch (error) {
+    opened.body.destroy();
+    throw error;
+  }
 }
 
 export function nodeReadableFromWeb(stream: ReadableStream<Uint8Array>) {

@@ -2,19 +2,14 @@ import { lazy, Suspense, useEffect, useRef, useState, type RefObject } from "rea
 import { adminPermissions } from "@imageshow/shared/browser";
 import { Icon } from "../../components/icon/Icon.js";
 import { AsyncActionButton } from "../../components/actions/AsyncActionButton.js";
+import { DialogFrame } from "../../components/feedback/DialogFrame.js";
+import { WorkflowDefaultFields } from "../../components/form/WorkflowDefaultFields.js";
 import { WorkflowCollapsePanel } from "../../components/layout/WorkflowCollapsePanel.js";
 import { ImageThumbnail } from "../../components/image/ImageThumbnail.js";
 import { ImagePreviewModal } from "../../components/image/ImagePreviewModal.js";
 import { AdminPagination } from "../../components/navigation/AdminPagination.js";
 import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
-import { SelectMenu } from "../../components/form/SelectMenu.js";
-import { ThemeInput } from "../../components/form/ThemeInput.js";
-import { TagInput } from "../../components/form/TagInput.js";
-import { AuthorInput } from "../../components/form/AuthorInput.js";
 import { ImageDraftFields } from "../../components/form/ImageDraftFields.js";
-import { useAnimatedClose } from "../../hooks/useAnimatedClose.js";
-import { useBodyScrollLock } from "../../hooks/useBodyScrollLock.js";
-import { useDialogFocus } from "../../hooks/useDialogFocus.js";
 import { useAdminPermissions } from "../../lib/api/site-data.js";
 import { facetDisplayName, formatBytes, formatDimensions, shortImageId } from "../../lib/ui/formatters.js";
 import { batchCommonBrightnessOptions, batchCommonDeviceOptions, cardBrightnessSelectOptions, editCardDeviceSelectOptions } from "../../lib/ui/select-options.js";
@@ -94,10 +89,7 @@ export function BatchMetadataModal({
   returnFocusRef?: RefObject<HTMLElement | null>;
   single?: boolean;
 }) {
-  const exit = useAnimatedClose(onClose);
-  useBodyScrollLock();
   const listRef = useRef<HTMLDivElement | null>(null);
-  const dialogRef = useRef<HTMLFormElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const migrateTriggerRef = useRef<HTMLButtonElement | null>(null);
   const previewReturnFocusRef = useRef<HTMLElement | null>(null);
@@ -171,13 +163,6 @@ export function BatchMetadataModal({
     facetDisplayName(authors, common.author, "作者不变"),
     `${common.tags.length} 个标签`,
   ].join(" · ");
-  useDialogFocus({
-    containerRef: dialogRef,
-    initialFocusRef: closeButtonRef,
-    returnFocusRef,
-    onEscape: () => exit.requestClose(),
-    paused: Boolean((canMigrateStorage && migrating) || preview),
-  });
   const saveAll = async () => {
     const changedItems = activeItems.flatMap((item) => {
       const changed = changedByItem.get(item.id)!;
@@ -186,24 +171,27 @@ export function BatchMetadataModal({
     });
     if (!changedItems.length) return false;
 
-    const succeeded = await save(changedItems);
-    if (succeeded) exit.requestClose();
-    return succeeded;
+    return save(changedItems);
   };
   return (
-    <>
-    <div
-      className={`modal edit-modal batch-edit-overlay ${exit.closing ? "is-closing" : ""}`}
-      role="dialog"
-      aria-modal="true"
-      aria-label={single ? "编辑图片" : "批量编辑图片"}
-      onAnimationEnd={exit.onAnimationEnd}
+    <DialogFrame
+      className="modal edit-modal batch-edit-overlay"
+      ariaLabel={single ? "编辑图片" : "批量编辑图片"}
+      busy={saving}
+      paused={Boolean((canMigrateStorage && migrating) || preview)}
+      initialFocusRef={closeButtonRef}
+      returnFocusRef={returnFocusRef}
+      onClose={onClose}
     >
+      {({ requestClose }) => (
+      <>
       <form
-        ref={dialogRef}
         className={`batch-edit-modal${single ? " is-single" : ""}`}
         tabIndex={-1}
-        onSubmit={async (event) => { event.preventDefault(); await saveAll(); }}
+        onSubmit={async (event) => {
+          event.preventDefault();
+          if (await saveAll()) requestClose();
+        }}
       >
         <header>
           <div>
@@ -216,7 +204,7 @@ export function BatchMetadataModal({
             type="button"
             title="关闭"
             disabled={saving}
-            onClick={() => exit.requestClose()}
+            onClick={() => requestClose()}
           >
             <Icon name="close-line" />
           </button>
@@ -230,57 +218,48 @@ export function BatchMetadataModal({
             expanded={commonExpanded}
             onExpandedChange={setCommonExpanded}
           >
-            <SelectMenu
-              className={`batch-common-select${commonChanged.device ? " is-changed" : ""}`}
-              value={common.device}
-              onChange={(value) => setCommon({ ...common, device: value as "" | "auto" | Device })}
-              options={batchCommonDeviceOptions}
-              ariaLabel="批量设备"
+            <WorkflowDefaultFields
+              values={common}
+              onChange={{
+                device: (device) => setCommon({
+                  ...common,
+                  device: device as "" | "auto" | Device
+                }),
+                brightness: (brightness) => setCommon({
+                  ...common,
+                  brightness: brightness as "" | "auto" | Brightness
+                }),
+                theme: (theme) => setCommon({ ...common, theme }),
+                author: (author) => setCommon({ ...common, author }),
+                tags: (tags) => setCommon({ ...common, tags })
+              }}
+              deviceOptions={batchCommonDeviceOptions}
+              brightnessOptions={batchCommonBrightnessOptions}
+              themes={themes}
+              authors={authors}
+              tags={allTags}
+              placeholders={{
+                theme: "主题不变",
+                author: "作者不变",
+                tags: "追加标签"
+              }}
+              ariaLabels={{
+                device: "批量设备",
+                brightness: "批量亮度",
+                theme: "批量主题",
+                author: "批量作者",
+                tags: "批量标签"
+              }}
+              changed={commonChanged}
+              applyDisabled={saving}
+              applyReady={commonHasValue}
+              onApply={() => setDrafts((current) => Object.fromEntries(
+                Object.entries(current).map(([id, draft]) => {
+                  if (!activeIdSet.has(id)) return [id, draft];
+                  return [id, mergeBatchEditCommonAttributes(draft, common)];
+                })
+              ))}
             />
-            <SelectMenu
-              className={`batch-common-select${commonChanged.brightness ? " is-changed" : ""}`}
-              value={common.brightness}
-              onChange={(value) => setCommon({ ...common, brightness: value as "" | "auto" | Brightness })}
-              options={batchCommonBrightnessOptions}
-              ariaLabel="批量亮度"
-            />
-            <div className="workflow-default-pair">
-              <ThemeInput
-                className={`batch-common-theme${commonChanged.theme ? " is-changed" : ""}`}
-                value={common.theme}
-                onChange={(theme) => setCommon({ ...common, theme })}
-                themes={themes}
-                placeholder="主题不变"
-                ariaLabel="批量主题"
-              />
-              <AuthorInput
-                className={`batch-common-author${commonChanged.author ? " is-changed" : ""}`}
-                value={common.author}
-                onChange={(author) => setCommon({ ...common, author })}
-                authors={authors}
-                placeholder="作者不变"
-                ariaLabel="批量作者"
-              />
-              <TagInput
-                className={`batch-common-tags${commonChanged.tags ? " is-changed" : ""}`}
-                value={common.tags}
-                onChange={(tags) => setCommon({ ...common, tags })}
-                suggestions={allTags}
-                placeholder="追加标签"
-                ariaLabel="批量标签"
-              />
-            </div>
-            <button
-              type="button"
-              className={`apply-to-all-button${commonHasValue ? " is-ready" : ""}`}
-              disabled={saving}
-              onClick={() => setDrafts((current) => Object.fromEntries(Object.entries(current).map(([id, draft]) => {
-                if (!activeIdSet.has(id)) return [id, draft];
-                return [id, mergeBatchEditCommonAttributes(draft, common)];
-              })))}
-            >
-              应用到全部
-            </button>
           </WorkflowCollapsePanel>
         )}
         <div className="modal-scroll-list batch-edit-list" ref={listRef}>
@@ -386,7 +365,7 @@ export function BatchMetadataModal({
             />
           )}
           <div className="modal-footer-actions">
-            <button type="button" disabled={saving} onClick={() => exit.requestClose()}>取消</button>
+            <button type="button" disabled={saving} onClick={() => requestClose()}>取消</button>
             <AsyncActionButton
               className="button workflow-submit-button"
               type="submit"
@@ -398,24 +377,25 @@ export function BatchMetadataModal({
         </footer>
       </form>
       <OverlayScrollbar targetRef={listRef} />
-    </div>
-    {canMigrateStorage && migrating && (
-      <Suspense fallback={null}>
-        <BatchStorageMigrationDialog
-          open
-          imageIds={activeItems.map((item) => item.id)}
-          single={single}
-          returnFocusRef={migrateTriggerRef}
-          onClose={() => setMigrating(false)}
-          onSaved={onSaved}
-          onSucceeded={() => {
-            setMigrating(false);
-            exit.requestClose();
-          }}
-        />
-      </Suspense>
-    )}
-    {preview && <ImagePreviewModal src={preview.src} thumbSrc={preview.thumbSrc} width={preview.width} height={preview.height} onClose={() => setPreview(null)} returnFocusRef={previewReturnFocusRef} />}
-    </>
+      {canMigrateStorage && migrating && (
+        <Suspense fallback={null}>
+          <BatchStorageMigrationDialog
+            open
+            imageIds={activeItems.map((item) => item.id)}
+            single={single}
+            returnFocusRef={migrateTriggerRef}
+            onClose={() => setMigrating(false)}
+            onSaved={onSaved}
+            onSucceeded={() => {
+              setMigrating(false);
+              requestClose();
+            }}
+          />
+        </Suspense>
+      )}
+      {preview && <ImagePreviewModal src={preview.src} thumbSrc={preview.thumbSrc} width={preview.width} height={preview.height} onClose={() => setPreview(null)} returnFocusRef={previewReturnFocusRef} />}
+      </>
+      )}
+    </DialogFrame>
   );
 }

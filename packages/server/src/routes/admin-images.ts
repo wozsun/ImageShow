@@ -37,6 +37,7 @@ import {
 } from "../images/trash.ts";
 import { scheduleTrashPurge } from "../images/trash-purge-job.ts";
 import { requireAdminPermission } from "../users/admin-authorization.ts";
+import { storedResponseRequest } from "./stored-response-request.ts";
 
 export function registerAdminImageRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/overview`, async (c) => c.json(apiSuccess(await getOverviewStats())));
@@ -53,22 +54,12 @@ export function registerAdminImageRoutes(app: Hono) {
 
   app.get(`${adminApiBasePath}/images/:id/thumb`, async (c) => {
     const id = parse(uuidInput, c.req.param("id"));
-    return serveAdminThumb(id, {
-      range: c.req.header("range"),
-      ifNoneMatch: c.req.header("if-none-match"),
-      ifRange: c.req.header("if-range"),
-      isHead: c.req.method === "HEAD"
-    });
+    return serveAdminThumb(id, storedResponseRequest(c));
   });
 
   app.get(`${adminApiBasePath}/images/:id/raw`, async (c) => {
     const id = parse(uuidInput, c.req.param("id"));
-    return serveAdminObject(id, {
-      range: c.req.header("range"),
-      ifNoneMatch: c.req.header("if-none-match"),
-      ifRange: c.req.header("if-range"),
-      isHead: c.req.method === "HEAD"
-    });
+    return serveAdminObject(id, storedResponseRequest(c));
   });
 
   app.get(`${adminApiBasePath}/images/:id/original`, async (c) => {

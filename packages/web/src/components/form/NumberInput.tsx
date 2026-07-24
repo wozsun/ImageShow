@@ -1,5 +1,17 @@
 import { useEffect, useState } from "react";
 
+type FormSubmitter = HTMLButtonElement | HTMLInputElement;
+
+function isFormSubmitter(element: Element): element is FormSubmitter {
+  if (element instanceof HTMLButtonElement) return element.type === "submit";
+  return element instanceof HTMLInputElement
+    && (element.type === "submit" || element.type === "image");
+}
+
+function defaultFormSubmitter(form: HTMLFormElement) {
+  return Array.from(form.elements).find(isFormSubmitter);
+}
+
 type NumberInputProps = {
   value: number;
   onChange: (value: number) => void;
@@ -46,6 +58,28 @@ export function NumberInput({ value, onChange, min, max, placeholder, disabled, 
       value={draft}
       onFocus={() => setEditing(true)}
       onChange={(event) => setDraft(event.target.value)}
+      onKeyDown={(event) => {
+        if (event.key !== "Enter" || event.nativeEvent.isComposing || event.keyCode === 229) return;
+
+        const form = event.currentTarget.form;
+        if (!form) {
+          commit(event.currentTarget.value);
+          return;
+        }
+
+        event.preventDefault();
+        commit(event.currentTarget.value);
+        window.setTimeout(() => {
+          if (!form.isConnected) return;
+          const submitter = defaultFormSubmitter(form);
+          if (submitter) {
+            if (submitter.matches(":disabled") || submitter.form !== form) return;
+            form.requestSubmit(submitter);
+            return;
+          }
+          form.requestSubmit();
+        });
+      }}
       onBlur={(event) => commit(event.target.value)}
     />
   );

@@ -24,22 +24,17 @@ import {
   cleanupOrphanRawImports,
   removeRawImports
 } from "./temp-files.ts";
+import {
+  appendImportCleanupFailure,
+  mergeImportCleanupFailures,
+  type ImportCleanupFailures
+} from "./cleanup-failures.ts";
 
 type ExpiredImportCleanup = {
   id: string;
   storageSlug: string;
   finalObjectKey: string;
 };
-
-function appendFailure(
-  failures: Map<string, unknown[]>,
-  id: string,
-  error: unknown
-) {
-  const current = failures.get(id);
-  if (current) current.push(error);
-  else failures.set(id, [error]);
-}
 
 async function cancelExpiredCommittingImports() {
   const candidates = (await pool.query(
@@ -109,7 +104,7 @@ export async function handleImportCleanupJob(): Promise<BackgroundJobOutcome> {
   )).rows as Array<{ id: string }>;
 
   const cleanups: ExpiredImportCleanup[] = [];
-  const failures = new Map<string, unknown[]>();
+  const failures: ImportCleanupFailures = new Map();
   for (const row of rows) {
     try {
       await abortActiveImport(row.id);
@@ -139,7 +134,7 @@ export async function handleImportCleanupJob(): Promise<BackgroundJobOutcome> {
         });
       });
     } catch (error) {
-      appendFailure(failures, row.id, error);
+      appendImportCleanupFailure(failures, row.id, error);
     }
   }
 
@@ -152,18 +147,16 @@ export async function handleImportCleanupJob(): Promise<BackgroundJobOutcome> {
   }
   for (const [storageSlug, ids] of byStorage) {
     const stagingFailures = await cleanupStagedObjectsBatch(ids, storageSlug);
-    for (const [id, errors] of stagingFailures) {
-      for (const error of errors) appendFailure(failures, id, error);
-    }
+    mergeImportCleanupFailures(failures, stagingFailures);
   }
 
   try {
     const rawFailures = await removeRawImports(cleanupIds);
-    for (const [id, errors] of rawFailures) {
-      for (const error of errors) appendFailure(failures, id, error);
-    }
+    mergeImportCleanupFailures(failures, rawFailures);
   } catch (error) {
-    for (const id of cleanupIds) appendFailure(failures, id, error);
+    for (const id of cleanupIds) {
+      appendImportCleanupFailure(failures, id, error);
+    }
   }
 
   await mapWithWorkerPool(
@@ -173,7 +166,7 @@ export async function handleImportCleanupJob(): Promise<BackgroundJobOutcome> {
       try {
         await cleanupFinalImportObjects(id, finalObjectKey, storageSlug);
       } catch (error) {
-        appendFailure(failures, id, error);
+        appendImportCleanupFailure(failures, id, error);
       }
     }
   );

@@ -1,6 +1,5 @@
-import { useContext, useEffect, useId, useRef, type KeyboardEvent } from "react";
-import { createPortal } from "react-dom";
-import { DialogPortalTargetContext } from "../feedback/DialogPortalContext.js";
+import { useEffect, useId, useRef, type KeyboardEvent } from "react";
+import { AnchoredPopup } from "../feedback/AnchoredPopup.js";
 import { useAnchoredMenu } from "../../hooks/useAnchoredMenu.js";
 import type { AnchoredMenuSize } from "../../lib/ui/menu-position.js";
 import type { SelectOption } from "../../lib/ui/select-options.js";
@@ -26,7 +25,6 @@ export function SelectMenu({
 }) {
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
-  const dialogPortalTargetRef = useContext(DialogPortalTargetContext);
   const onOpenChangeRef = useRef(onOpenChange);
   const reportedOpenRef = useRef(false);
   onOpenChangeRef.current = onOpenChange;
@@ -71,12 +69,11 @@ export function SelectMenu({
     optionRefs.current[next]?.focus();
   };
 
-  const menu = open && typeof document !== "undefined" ? createPortal(
-      <div
-        ref={menuRef}
+  const menu = open ? (
+      <AnchoredPopup
+        popupRef={menuRef}
         id={menuId}
         className={`select-menu ${opensUp ? "opens-up" : ""} ${closing ? "is-closing" : ""}`}
-        data-dialog-portal-menu={dialogPortalTargetRef?.current ? "" : undefined}
         role="listbox"
         aria-label={ariaLabel}
         aria-hidden={closing}
@@ -98,8 +95,7 @@ export function SelectMenu({
             <span>{option.label}</span>
           </button>
         ))}
-      </div>,
-      dialogPortalTargetRef?.current ?? document.body
+      </AnchoredPopup>
     ) : null;
 
   return (

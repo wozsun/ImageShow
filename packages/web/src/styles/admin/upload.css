@@ -4,11 +4,8 @@
 .link-import-split .link-import-main { min-width: 100px; border-radius: 6px 0 0 6px; }
 .link-import-menu-trigger { width: 34px; min-width: 34px; padding: 0; border-left: 0; border-radius: 0 6px 6px 0; }
 .link-import-menu {
-  position: absolute;
+  position: fixed;
   z-index: 12;
-  top: calc(100% + 6px);
-  right: 0;
-  min-width: 136px;
   padding: 5px;
   border: 1px solid #d5dce5;
   border-radius: 6px;
@@ -101,21 +98,6 @@
 .upload-window > footer button { min-height: 38px; }
 .upload-window > footer .select-trigger { height: 38px; }
 .upload-defaults-panel { flex-shrink: 0; }
-.upload-defaults {
-  padding: 12px 16px;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: end;
-  gap: 8px;
-  border-bottom: 1px solid #dce2ea;
-}
-.select-control.upload-default-select { flex: 0 0 auto; }
-.upload-default-select .select-trigger { padding-right: 30px; }
-.select-control.upload-default-device { width: 120px; }
-.select-control.upload-default-brightness { width: 120px; }
-.slug-combo-control.upload-default-theme { flex: 1 1 0; min-width: 150px; }
-.slug-combo-control.upload-default-author { flex: 1 1 0; min-width: 150px; }
-.tag-input-control.upload-default-tags { flex: 2 1 0; min-width: 197px; align-self: end; }
 .upload-picker {
   --pressable-active-scale: var(--pressable-scale-large, .99);
   width: 200px;
@@ -495,30 +477,6 @@ button.empty-state.upload-dropzone:not(:disabled):hover,
   .upload-window > footer .modal-footer-actions { gap: 6px; }
   .upload-window > footer .modal-footer-actions button { white-space: nowrap; }
 
-  .upload-defaults-panel.is-expanded .workflow-collapse-toggle > .app-icon {
-    transform: rotate(180deg);
-  }
-  .upload-defaults-panel .upload-defaults { display: none; }
-  .upload-defaults-panel.is-expanded .upload-defaults {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    align-items: stretch;
-    gap: 8px;
-    padding: 10px max(12px, env(safe-area-inset-right)) 10px max(12px, env(safe-area-inset-left));
-  }
-  .select-control.upload-default-select,
-  .slug-combo-control.upload-default-theme,
-  .slug-combo-control.upload-default-author,
-  .tag-input-control.upload-default-tags {
-    width: auto;
-    min-width: 0;
-  }
-  .tag-input-control.upload-default-tags,
-  .upload-defaults .apply-to-all-button { grid-column: 1 / -1; }
-  .upload-defaults .apply-to-all-button {
-    --pressable-active-scale: var(--pressable-scale-large, .99);
-  }
-
   .upload-list { padding: 10px; }
   .import-job {
     grid-template-columns: 56px minmax(0, 1fr) auto;
@@ -551,25 +509,6 @@ button.empty-state.upload-dropzone:not(:disabled):hover,
   .link-import-actions { align-items: stretch; flex-direction: column; }
   .link-import-action-buttons { width: 100%; margin-left: 0; }
   .link-import-action-buttons button { flex: 1; min-height: 44px; }
-}
-
-/* 矮屏横屏无法同时容纳展开的默认属性、卡片区、分页和底栏。
-   仅在这个极端尺寸内限制属性区高度，让属性内容自身滚动，保证分页与底栏始终可达。 */
-@media (max-width: 760px) and (max-height: 480px) and (orientation: landscape) {
-  .upload-defaults-panel.is-expanded {
-    min-height: 0;
-    max-height: 32dvh;
-    display: grid;
-    grid-template-rows: auto minmax(0, 1fr);
-    overflow: hidden;
-  }
-
-  .upload-defaults-panel.is-expanded .upload-defaults {
-    min-height: 0;
-    overflow-x: hidden;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

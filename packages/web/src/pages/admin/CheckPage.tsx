@@ -4,9 +4,9 @@ import { api } from "../../lib/api/client.js";
 import { adminApiBasePath } from "../../lib/constants.js";
 import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
 import { Icon } from "../../components/icon/Icon.js";
+import { DialogFrame } from "../../components/feedback/DialogFrame.js";
 import { SelectMenu } from "../../components/form/SelectMenu.js";
 import { StableButtonLabel } from "../../components/data-display/StableButtonLabel.js";
-import { useAnimatedClose } from "../../hooks/useAnimatedClose.js";
 import { useStorageOptions } from "../../lib/api/storage-options.js";
 import { useAdminPermissions } from "../../lib/api/site-data.js";
 import "../../styles/admin/check.css";
@@ -139,68 +139,75 @@ function CheckOperationModal({ operation, running, source, target, options, onSo
     ? "复制图片和缩略图到目标存储后端，并更新数据库中的存储引用。"
     : "删除数据库未引用的原图、缩略图及已失效的上传暂存文件。回收站中的图片文件和其他仍被引用的对象会保留。";
   const runningText = isLocationMigration ? "迁移中" : "清理中";
-  const exit = useAnimatedClose(onClose);
   return (
-    <div
-      className={`modal edit-modal ${exit.closing ? "is-closing" : ""}`}
-      onAnimationEnd={exit.onAnimationEnd}
+    <DialogFrame
+      className="modal edit-modal"
+      ariaLabel={title}
+      busy={Boolean(running)}
+      onClose={onClose}
     >
-      <form
-        className="operation-modal"
-        onSubmit={async (event) => { event.preventDefault(); await onRun(); exit.requestClose(); }}
-      >
-        <header>
-          <div>
-            <h2>{title}</h2>
-            <p>{description}</p>
+      {({ requestClose }) => (
+        <form
+          className="operation-modal"
+          onSubmit={async (event) => {
+            event.preventDefault();
+            await onRun();
+            requestClose();
+          }}
+        >
+          <header>
+            <div>
+              <h2>{title}</h2>
+              <p>{description}</p>
+            </div>
+            <button
+              className="icon close pressable"
+              type="button"
+              title="关闭"
+              disabled={Boolean(running)}
+              onClick={() => requestClose()}
+            >
+              <Icon name="close-line" />
+            </button>
+          </header>
+          <div className="operation-body">
+            {isLocationMigration && (
+              <>
+                <label>
+                  源后端
+                  <SelectMenu
+                    value={source}
+                    onChange={onSourceChange}
+                    options={options}
+                    ariaLabel="源后端"
+                  />
+                </label>
+                <label>
+                  目标后端
+                  <SelectMenu
+                    value={target}
+                    onChange={onTargetChange}
+                    options={options}
+                    ariaLabel="目标后端"
+                  />
+                </label>
+              </>
+            )}
+            <p className="notice-line">此操作会修改存储对象。执行前请先运行存储检查，确认检查结果，并避免同时上传或批量编辑图片。</p>
           </div>
-          <button
-            className="icon close pressable"
-            type="button"
-            title="关闭"
-            disabled={Boolean(running)}
-            onClick={() => exit.requestClose()}
-          >
-            <Icon name="close-line" />
-          </button>
-        </header>
-        <div className="operation-body">
-          {isLocationMigration && (
-            <>
-              <label>
-                源后端
-                <SelectMenu
-                  value={source}
-                  onChange={onSourceChange}
-                  options={options}
-                  ariaLabel="源后端"
-                />
-              </label>
-              <label>
-                目标后端
-                <SelectMenu
-                  value={target}
-                  onChange={onTargetChange}
-                  options={options}
-                  ariaLabel="目标后端"
-                />
-              </label>
-            </>
-          )}
-          <p className="notice-line">此操作会修改存储对象。执行前请先运行存储检查，确认检查结果，并避免同时上传或批量编辑图片。</p>
-        </div>
-        <footer>
-          <button type="button" disabled={Boolean(running)} onClick={() => exit.requestClose()}>取消</button>
-          <button
-            className="button"
-            type="submit"
-            disabled={Boolean(running) || (isLocationMigration && (!source || !target || source === target))}
-          >
-            <Icon name="refresh-line" /><StableButtonLabel idle="开始执行" busyText={runningText} busy={running === operation} />
-          </button>
-        </footer>
-      </form>
-    </div>
+          <footer>
+            <button type="button" disabled={Boolean(running)} onClick={() => requestClose()}>取消</button>
+            <button
+              className="button"
+              type="submit"
+              disabled={Boolean(running) || (isLocationMigration && (!source || !target || source === target))}
+            >
+              <Icon name="refresh-line" /><StableButtonLabel idle="开始执行" busyText={runningText} busy={running === operation} />
+            </button>
+          </footer>
+        </form>
+      )}
+    </DialogFrame>
   );
 }
 

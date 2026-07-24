@@ -8,6 +8,7 @@ import {
   externalImageLookupErrorCode
 } from "./external-image-lookup.ts";
 import { logger } from "./logger.ts";
+import { responseWithCleanup } from "./http/response-lifecycle.ts";
 
 const maxExternalRedirects = 5;
 const imageSniffBytes = 4100;
@@ -192,44 +193,6 @@ function abortError(signal?: AbortSignal) {
   return new ApiError(400, "external_url_timeout", "外部图片请求超时");
 }
 
-function responseWithAbortScope(
-  response: Response,
-  cleanup: () => void
-) {
-  if (!response.body) {
-    cleanup();
-    return response;
-  }
-  const reader = response.body.getReader();
-  let closed = false;
-  const close = () => {
-    if (closed) return;
-    closed = true;
-    cleanup();
-  };
-  const body = new ReadableStream<Uint8Array>({
-    async pull(controller) {
-      try {
-        const { done, value } = await reader.read();
-        if (done) {
-          close();
-          controller.close();
-          return;
-        }
-        controller.enqueue(value);
-      } catch (error) {
-        close();
-        controller.error(error);
-      }
-    },
-    cancel(reason) {
-      close();
-      return reader.cancel(reason);
-    }
-  });
-  return new Response(body, { status: response.status, statusText: response.statusText, headers: response.headers });
-}
-
 async function fetchWithTimeout(url: URL, options: SafeExternalImageFetchOptions) {
   assertTlsCertificateVerificationEnabled();
   const controller = new AbortController();
@@ -257,7 +220,7 @@ async function fetchWithTimeout(url: URL, options: SafeExternalImageFetchOptions
       dispatcher: externalImageDispatcher
     } as RequestInit & { dispatcher: Agent });
     handedOff = Boolean(response.body);
-    return responseWithAbortScope(response, cleanup);
+    return responseWithCleanup(response, cleanup);
   } catch (error) {
     if ((error as Error).name === "AbortError") throw abortError(options.signal);
     if (hasErrorCode(error, externalImageLookupErrorCode)) {

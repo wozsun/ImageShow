@@ -14,7 +14,7 @@ import { ApiError, errorMessage } from "../core/api-error.ts";
 import { getInputImageMaxBytes } from "../config/app-settings.ts";
 import { missingS3Fields, type StorageConfig } from "./backend-config.ts";
 import { s3CopySource, s3ListPrefix, storageS3ObjectName, type ReadablePrefix, type StoragePrefix } from "./object-keys.ts";
-import { streamToBuffer } from "./stream-buffer.ts";
+import { openedReadToBuffer } from "./stream-buffer.ts";
 import type {
   CopyPrefix,
   OpenedRead,
@@ -121,17 +121,7 @@ export class S3Backend implements StorageDriver {
 
   async readBuffer(prefix: StoragePrefix, key: string) {
     const limit = await getInputImageMaxBytes();
-    const opened = await this.openRead(prefix, key);
-    if (opened.size !== undefined && opened.size > limit) {
-      opened.body.destroy();
-      throw new ApiError(400, "object_too_large", "图片大小超过限制", { limit });
-    }
-    try {
-      return await streamToBuffer(opened.body, limit);
-    } catch (error) {
-      opened.body.destroy();
-      throw error;
-    }
+    return openedReadToBuffer(await this.openRead(prefix, key), limit);
   }
 
   async writeBuffer(prefix: StoragePrefix, key: string, body: Buffer, type: string) {

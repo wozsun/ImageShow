@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type RefObjec
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { api } from "../../lib/api/client.js";
 import { AppHeader } from "../../components/navigation/AppHeader.js";
-import { CopyButton } from "../../components/actions/CopyButton.js";
+import { GeneratedLinkActions } from "../../components/actions/GeneratedLinkActions.js";
 import { Icon } from "../../components/icon/Icon.js";
 import { ImageDetailModal } from "../../components/image/ImageDetailModal.js";
 import { SelectMenu } from "../../components/form/SelectMenu.js";
@@ -262,16 +262,7 @@ export function GalleryPage({ fixedTheme = "", standalone = false }: { fixedThem
             <div className="theme-link">
               <span>随机图片链接</span>
               <div className="theme-link-row">
-                <code>{randomUrl}</code>
-                <CopyButton value={randomUrl} ariaLabel="复制随机图片链接" />
-                <a
-                  className="button secondary pressable"
-                  href={randomUrl}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                >
-                  <Icon name="external-link-line" />打开
-                </a>
+                <GeneratedLinkActions url={randomUrl} />
               </div>
             </div>
           </div>

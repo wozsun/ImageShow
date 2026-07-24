@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState, type RefObject } from "react";
+import { DialogFrame } from "../../../../components/feedback/DialogFrame.js";
 import { Icon, type IconName } from "../../../../components/icon/Icon.js";
 import { OverlayScrollbar } from "../../../../components/layout/OverlayScrollbar.js";
-import { useDialogFocus } from "../../../../hooks/useDialogFocus.js";
 import {
   mobileViewportMediaQuery,
   useMediaQuery
@@ -171,12 +171,6 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
     onClose();
   };
 
-  useDialogFocus({
-    containerRef: importCardRef,
-    initialFocusRef: closeButtonRef,
-    returnFocusRef,
-    onEscape: close,
-  });
   useEffect(() => () => requestControllerRef.current?.abort(), []);
 
   const weiboInputLines = inputMode === "weibo" ? parseWeiboImportLines(text) : [];
@@ -280,7 +274,7 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
     }
   };
 
-  const submit = async () => {
+  const submit = async (requestClose: () => void) => {
     if (limitState.overLimit) {
       setParseError(`${presentation.label}最多允许 ${limitState.maxItems} 条，请拆分后再导入`);
       return;
@@ -292,7 +286,7 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
       }
       if (!urlParseResultCurrent.urls.length) return;
       onSubmit({ inputMode, urls: urlParseResultCurrent.urls });
-      close();
+      requestClose();
       return;
     }
     if (!text.trim()) return;
@@ -307,7 +301,7 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
     if (inputMode === "weibo" && weiboResultCurrent) {
       onSubmit({ inputMode, result: weiboResultCurrent });
     }
-    close();
+    requestClose();
   };
 
   const missingInput = inputMode === "urls"
@@ -326,13 +320,22 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
           : `导入${submitCount ? ` ${submitCount} 张` : ""}`;
 
   return (
-    <div className="modal link-url-overlay" role="dialog" aria-modal="true" aria-label="导入内容输入">
+    <DialogFrame
+      className="modal link-url-overlay"
+      ariaLabel="导入内容输入"
+      animateClose={false}
+      initialFocusRef={closeButtonRef}
+      returnFocusRef={returnFocusRef}
+      onClose={close}
+    >
+      {({ requestClose }) => (
+      <>
       <div ref={importCardRef} className="link-import-card" tabIndex={-1} aria-busy={parsing}>
         <div className="link-import-head">
           <h2><Icon name={presentation.icon} />{presentation.heading}</h2>
           <div className="link-import-head-status">
             {parsing && <span>{inputMode === "weibo" ? "正在获取微博内容…" : "正在解析清单…"}</span>}
-            <button ref={closeButtonRef} type="button" className="icon close" title="关闭" onClick={close}>
+            <button ref={closeButtonRef} type="button" className="icon close" title="关闭" onClick={() => requestClose()}>
               <Icon name="close-line" />
             </button>
           </div>
@@ -425,12 +428,12 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
             />
           )}
           <div className="link-import-action-buttons">
-            <button type="button" onClick={close}>取消</button>
+            <button type="button" onClick={() => requestClose()}>取消</button>
             <button
               type="button"
               className="button link-import-submit-button"
               disabled={parsing || limitState.overLimit || missingInput || parsedWithoutItems}
-              onClick={() => void submit()}
+              onClick={() => void submit(requestClose)}
             >
               {!readyToImport && <Icon name={presentation.icon} />}
               {parsedWithoutItems ? emptySubmitText[inputMode] : readyToImport ? (
@@ -445,6 +448,8 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
         </div>
       </div>
       <OverlayScrollbar targetRef={importCardRef} />
-    </div>
+      </>
+      )}
+    </DialogFrame>
   );
 }

@@ -5,7 +5,11 @@ import { ApiError, errorMessage } from "../core/api-error.ts";
 import { getInputImageMaxBytes } from "../config/app-settings.ts";
 import type { StorageConfig } from "./backend-config.ts";
 import { contentTypeForKey, storageObjectName, type ReadablePrefix, type StoragePrefix } from "./object-keys.ts";
-import { nodeReadableFromWeb, sliceReadable, streamToBuffer } from "./stream-buffer.ts";
+import {
+  nodeReadableFromWeb,
+  openedReadToBuffer,
+  sliceReadable
+} from "./stream-buffer.ts";
 import type {
   CopyPrefix,
   OpenedRead,
@@ -15,6 +19,7 @@ import type {
 import { assertSingleByteRangeSyntax, parseSingleByteRange, totalSizeFromContentRange } from "../core/http/byte-range.ts";
 import { normalizeObjectEtag } from "./object-validator.ts";
 import { isWebdavNotFoundStatus } from "./not-found.ts";
+import { responseWithCleanup } from "../core/http/response-lifecycle.ts";
 
 const PROPFIND_BODY = '<?xml version="1.0" encoding="utf-8"?><propfind xmlns="DAV:"><prop><resourcetype/></prop></propfind>';
 const WEBDAV_RETRY_ATTEMPTS = 3;
@@ -54,41 +59,6 @@ type WebdavRequestRuntime = {
   dispatcher: Agent;
   taskTimeoutMs: number;
 };
-
-function responseWithTaskTimeout(response: Response, timer: ReturnType<typeof setTimeout>) {
-  if (!response.body) {
-    clearTimeout(timer);
-    return response;
-  }
-  const reader = response.body.getReader();
-  let closed = false;
-  const closeTimer = () => {
-    if (closed) return;
-    closed = true;
-    clearTimeout(timer);
-  };
-  const body = new ReadableStream<Uint8Array>({
-    async pull(controller) {
-      try {
-        const { done, value } = await reader.read();
-        if (done) {
-          closeTimer();
-          controller.close();
-          return;
-        }
-        controller.enqueue(value);
-      } catch (error) {
-        closeTimer();
-        controller.error(error);
-      }
-    },
-    cancel(reason) {
-      closeTimer();
-      return reader.cancel(reason);
-    }
-  });
-  return new Response(body, { status: response.status, statusText: response.statusText, headers: response.headers });
-}
 
 function transportTimeout(error: unknown) {
   const code = error && typeof error === "object"
@@ -132,7 +102,10 @@ async function requestWebdav(input: string, init: RequestInit, runtime: WebdavRe
             return response;
           }
           handedOffTimer = Boolean(response.body);
-          return responseWithTaskTimeout(response, taskTimer);
+          return responseWithCleanup(
+            response,
+            () => clearTimeout(taskTimer)
+          );
         }
         const delayMs = retryAfterMs(response, attempt);
         await response.body?.cancel().catch(() => undefined);
@@ -315,14 +288,9 @@ export class WebdavBackend implements StorageDriver {
   async readBuffer(prefix: StoragePrefix, key: string) {
     const limit = await getInputImageMaxBytes();
     const opened = await this.openRead(prefix, key);
-    if (opened.size !== undefined && opened.size > limit) {
-      opened.body.destroy();
-      throw new ApiError(400, "object_too_large", "图片大小超过限制", { limit });
-    }
     try {
-      return await streamToBuffer(opened.body, limit);
+      return await openedReadToBuffer(opened, limit);
     } catch (error) {
-      opened.body.destroy();
       if (error instanceof ApiError) throw error;
       throw new ApiError(502, "storage_read_failed", "WebDAV GET failed while reading response body");
     }

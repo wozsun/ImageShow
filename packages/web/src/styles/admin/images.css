@@ -52,14 +52,6 @@
   filter: grayscale(.18);
   cursor: wait;
 }
-.batch-edit-common { padding: 12px 16px; display: flex; flex-wrap: wrap; align-items: end; gap: 8px; border-bottom: 1px solid #dce2ea; }
-.select-control.batch-common-select { width: 120px; flex: 0 0 auto; }
-
-.slug-combo-control.batch-common-theme { flex: 1 1 0; min-width: 150px; }
-
-.tag-input-control.batch-common-tags { flex: 2 1 0; min-width: 197px; align-self: end; }
-.slug-combo-control.batch-common-author { flex: 1 1 0; min-width: 150px; align-self: end; }
-
 .apply-to-all-button.is-ready { background: #1f6feb; border-color: #1f6feb; color: #fff; }
 .image-thumbnail { width: 72px; height: 72px; flex: 0 0 72px; overflow: hidden; border-radius: 6px; background: #e8edf3; }
 .image-thumbnail.is-small { width: 44px; height: 44px; flex-basis: 44px; }
@@ -346,7 +338,71 @@
   }
   .workflow-collapse-toggle > span { font-weight: 600; white-space: nowrap; }
   .workflow-collapse-toggle > small { min-width: 0; overflow: hidden; color: #66717f; text-overflow: ellipsis; white-space: nowrap; }
-  .workflow-collapse-toggle > .app-icon { transition: transform .16s ease; }
+  .workflow-collapse-toggle > .app-icon { transition: transform 120ms ease-out; }
+  .workflow-collapse-panel {
+    position: relative;
+  }
+  .workflow-collapse-panel.is-expanded {
+    z-index: 20;
+  }
+  .workflow-collapse-panel.is-expanded .workflow-collapse-toggle > .app-icon {
+    transform: rotate(180deg);
+  }
+  .workflow-collapse-panel > .workflow-collapse-content {
+    position: absolute;
+    z-index: 20;
+    top: calc(100% + 8px);
+    right: max(8px, env(safe-area-inset-right));
+    left: max(8px, env(safe-area-inset-left));
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+    gap: 8px;
+    width: auto;
+    min-width: 0;
+    padding: 10px;
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+    background: #f8fafc;
+    border: 1px solid #dce2ea;
+    border-radius: 8px;
+    box-shadow: 0 12px 32px rgba(32, 42, 56, .16);
+    transform: translateY(-4px) scale(.99);
+    transform-origin: top center;
+    transition: none;
+  }
+  .workflow-collapse-panel.is-motion-enabled > .workflow-collapse-content {
+    transition:
+      opacity 80ms ease-out,
+      transform 80ms ease-out,
+      visibility 0s linear 80ms;
+  }
+  .workflow-collapse-panel.is-expanded > .workflow-collapse-content {
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0) scale(1);
+    transition-delay: 0s;
+  }
+  .workflow-collapse-panel > .workflow-collapse-content :is(
+    .select-control.workflow-default-select,
+    .slug-combo-control.workflow-default-theme,
+    .slug-combo-control.workflow-default-author,
+    .tag-input-control.workflow-default-tags
+  ) {
+    width: auto;
+    min-width: 0;
+  }
+  .workflow-collapse-panel > .workflow-collapse-content :is(
+    .tag-input-control.workflow-default-tags,
+    .apply-to-all-button
+  ) {
+    grid-column: 1 / -1;
+  }
+  .workflow-collapse-panel > .workflow-collapse-content .apply-to-all-button {
+    --pressable-active-scale: var(--pressable-scale-large, .99);
+  }
 
   .image-admin-title-row {
     display: grid;
@@ -563,6 +619,21 @@
 }
 
 @media (max-width: 760px) and (max-height: 560px) {
+  .workflow-collapse-panel > .workflow-collapse-content {
+    position: fixed;
+    top: 50%;
+    right: max(8px, env(safe-area-inset-right));
+    left: max(8px, env(safe-area-inset-left));
+    max-height: calc(100dvh - 16px);
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    transform: translateY(calc(-50% - 4px)) scale(.99);
+    transform-origin: center;
+  }
+  .workflow-collapse-panel.is-expanded > .workflow-collapse-content {
+    transform: translateY(-50%) scale(1);
+  }
   .image-list-filter-panel {
     position: fixed;
     top: 50%;
@@ -605,7 +676,9 @@
     transition: none;
   }
   .image-list-filter-panel,
-  .image-list-filter-bar.filters-motion-enabled > .image-list-filter-panel {
+  .image-list-filter-bar.filters-motion-enabled > .image-list-filter-panel,
+  .workflow-collapse-panel > .workflow-collapse-content,
+  .workflow-collapse-panel.is-motion-enabled > .workflow-collapse-content {
     transition: none;
   }
 }

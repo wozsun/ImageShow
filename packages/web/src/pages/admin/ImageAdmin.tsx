@@ -24,9 +24,10 @@ import {
 import { queryKeys } from "../../lib/api/query-keys.js";
 import { imageDisplayTitle } from "../../lib/ui/formatters.js";
 import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
+import { useAdminSettings } from "../../lib/api/admin-settings.js";
 import { useImportVocabulary } from "../../lib/api/import-vocabulary.js";
 import { useStorageNameResolver } from "../../lib/api/storage-options.js";
-import type { AdminSettings, ImageItem } from "../../lib/types.js";
+import type { ImageItem } from "../../lib/types.js";
 import { ImageDetailModal } from "../../components/image/ImageDetailModal.js";
 import { AdminImageCard } from "./AdminImageCard.js";
 import { BatchMetadataModal } from "./BatchMetadataModal.js";
@@ -108,7 +109,7 @@ export function ImageAdmin() {
   const batchEditReturnFocusRef = useRef<HTMLElement | null>(null);
   const pageNavigationSequenceRef = useRef(0);
   const client = useQueryClient();
-  const { data: settingsData } = useQuery<{ settings: AdminSettings }>({ queryKey: queryKeys.settings, queryFn: ({ signal }) => api(`${adminApiBasePath}/settings`, { signal }) });
+  const { data: settingsData } = useAdminSettings();
 
   const { data: vocabulary } = useImportVocabulary();
   const themes = vocabulary?.themes ?? [];

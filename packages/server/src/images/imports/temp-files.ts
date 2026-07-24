@@ -5,6 +5,10 @@ import { pipeline } from "node:stream/promises";
 import { runtimePaths } from "../../config/bootstrap-env.ts";
 import { ApiError } from "../../core/api-error.ts";
 import { mapWithWorkerPool } from "../../core/concurrency.ts";
+import {
+  appendImportCleanupFailure,
+  type ImportCleanupFailures
+} from "./cleanup-failures.ts";
 import { pool } from "../../core/db.ts";
 import { getRuntimeConfig } from "../../config/runtime-config-store.ts";
 import { nodeReadableFromWeb } from "../../storage/stream-buffer.ts";
@@ -118,19 +122,9 @@ export async function removeRawImportAttempt(
   }
 }
 
-function appendRawCleanupFailure(
-  failures: Map<string, unknown[]>,
-  id: string,
-  error: unknown
-) {
-  const current = failures.get(id);
-  if (current) current.push(error);
-  else failures.set(id, [error]);
-}
-
 export async function removeRawImports(ids: readonly string[]) {
   const targets = new Set(ids);
-  const failures = new Map<string, unknown[]>();
+  const failures: ImportCleanupFailures = new Map();
   if (!targets.size) return failures;
 
   const root = runtimePaths.tempDirectory;
@@ -150,7 +144,7 @@ export async function removeRawImports(ids: readonly string[]) {
       try {
         await rm(path, { force: true });
       } catch (error) {
-        appendRawCleanupFailure(failures, id, error);
+        appendImportCleanupFailure(failures, id, error);
       }
     }
   );

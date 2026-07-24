@@ -34,9 +34,16 @@ export function useAnchoredMenu(options: {
   onClose?: () => void;
   closeOnEscape?: boolean;
   closeOnFocusOutside?: boolean;
+  animateClose?: boolean;
   focusOnOpen?: () => HTMLElement | null | undefined;
 }) {
-  const { triggerRef, disabled = false, closeOnEscape = false, closeOnFocusOutside = false } = options;
+  const {
+    triggerRef,
+    disabled = false,
+    closeOnEscape = false,
+    closeOnFocusOutside = false,
+    animateClose = true
+  } = options;
   const dismissSignal = useContext(AnchoredMenuDismissSignalContext);
   const previousDismissSignalRef = useRef(dismissSignal);
   const [open, setOpen] = useState(false);
@@ -73,8 +80,14 @@ export function useAnchoredMenu(options: {
     ) {
       activeElement.blur();
     }
+    if (!animateClose) {
+      setOpen(false);
+      onCloseRef.current?.();
+      afterClose?.();
+      return;
+    }
     animRequestClose(() => { setOpen(false); onCloseRef.current?.(); afterClose?.(); });
-  }, [animRequestClose]);
+  }, [animateClose, animRequestClose]);
 
   useEffect(() => {
     if (Object.is(previousDismissSignalRef.current, dismissSignal)) return;

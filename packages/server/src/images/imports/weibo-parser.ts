@@ -3,20 +3,11 @@ import {
   type ExtractedWeiboPost,
   type ParsedWeiboPostUrl
 } from "./weibo-types.ts";
-
-type UnknownRecord = Record<string, unknown>;
-
-function asRecord(value: unknown): UnknownRecord | null {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-    ? value as UnknownRecord
-    : null;
-}
-
-function scalarString(value: unknown) {
-  if (typeof value === "string") return value.trim();
-  if (typeof value === "number" && Number.isFinite(value)) return String(value);
-  return "";
-}
+import {
+  asRecord,
+  scalarString,
+  type UnknownRecord
+} from "./weibo-values.ts";
 
 /** Parses one supported Weibo post URL into its canonical identifiers. */
 export function parseWeiboPostUrl(input: string): ParsedWeiboPostUrl {
