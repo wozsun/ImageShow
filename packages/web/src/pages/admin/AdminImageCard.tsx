@@ -15,6 +15,7 @@ type AdminImageCardProps = {
   checked: boolean;
   busy: boolean;
   actionsDisabled: boolean;
+  canPurge: boolean;
   onCheck: (checked: boolean) => void;
   onDetail: (opener: HTMLElement) => void;
   onEdit: (opener: HTMLElement) => void;
@@ -29,6 +30,7 @@ export function AdminImageCard({
   checked,
   busy,
   actionsDisabled,
+  canPurge,
   onCheck,
   onDetail,
   onEdit,
@@ -117,16 +119,18 @@ export function AdminImageCard({
               >
                 <Icon name="arrow-go-back-line" />
               </button>
-              <button
-                type="button"
-                className="danger-button"
-                title="永久删除"
-                aria-label={`永久删除图片：${title}`}
-                disabled={actionsDisabled}
-                onClick={onPurge}
-              >
-                <Icon name="delete-bin-7-line" />
-              </button>
+              {canPurge && (
+                <button
+                  type="button"
+                  className="danger-button"
+                  title="永久删除"
+                  aria-label={`永久删除图片：${title}`}
+                  disabled={actionsDisabled}
+                  onClick={onPurge}
+                >
+                  <Icon name="delete-bin-7-line" />
+                </button>
+              )}
             </>
           )}
         </div>

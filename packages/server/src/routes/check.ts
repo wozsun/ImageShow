@@ -1,7 +1,7 @@
 import type { Hono } from "hono";
 import { adminApiBasePath } from "@imageshow/shared";
 import { apiSuccess } from "../core/http/responses.ts";
-import { requireSuperAdmin } from "../users/admin-session.ts";
+import { requireSuperAdmin } from "../users/admin-authorization.ts";
 import { inspectRedisState } from "../checks/redis-inspect.ts";
 import { checkDatabase, checkTrash } from "../checks/database-check.ts";
 import { cleanupStorage } from "../checks/storage-cleanup.ts";

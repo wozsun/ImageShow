@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  adminPermissions,
+  type AdminImageListResponse
+} from "@imageshow/shared/browser";
 import { api } from "../../lib/api/client.js";
 import { Icon } from "../../components/icon/Icon.js";
 import { StableButtonLabel } from "../../components/data-display/StableButtonLabel.js";
@@ -23,7 +27,6 @@ import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
 import { useImportVocabulary } from "../../lib/api/import-vocabulary.js";
 import { useStorageNameResolver } from "../../lib/api/storage-options.js";
 import type { AdminSettings, ImageItem } from "../../lib/types.js";
-import type { AdminImageListResponse } from "@imageshow/shared/browser";
 import { ImageDetailModal } from "../../components/image/ImageDetailModal.js";
 import { AdminImageCard } from "./AdminImageCard.js";
 import { BatchMetadataModal } from "./BatchMetadataModal.js";
@@ -32,6 +35,7 @@ import { Uploader } from "./uploader/Uploader.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
 import { invalidateImageData } from "../../lib/api/query-invalidation.js";
 import { useAdminPreference } from "../../hooks/useAdminPreferences.js";
+import { useAdminPermissions } from "../../lib/api/site-data.js";
 import {
   mobileViewportMediaQuery,
   useMediaQuery
@@ -67,6 +71,13 @@ export function ImageAdmin() {
   const [editing, setEditing] = useState<ImageItem | null>(null);
   const [batchEditing, setBatchEditing] = useState(false);
   const mobileLayout = useMediaQuery(mobileViewportMediaQuery);
+  const permissions = useAdminPermissions();
+  const canPurgeImage = permissions.includes(
+    adminPermissions.imageTrashPurge
+  );
+  const canEmptyTrash = permissions.includes(
+    adminPermissions.imageTrashEmpty
+  );
 
   const feedbackTarget = useActionFeedbackTarget("image-admin");
   const gridRef = useRef<HTMLDivElement | null>(null);
@@ -260,7 +271,7 @@ export function ImageAdmin() {
               <Icon name="pencil-line" />批量编辑
             </button>
           )}
-          {view === "deleted" && (
+          {view === "deleted" && canEmptyTrash && (
             <button
               type="button"
               disabled={!selected.length || operationBusy}
@@ -317,6 +328,7 @@ export function ImageAdmin() {
                 editReturnFocusRef.current = opener;
                 setEditing(item);
               }}
+              canPurge={canPurgeImage}
               onPurge={() => setConfirmAction({ kind: "purge", id: item.id, title: imageDisplayTitle(item) })}
               busy={busyIds.includes(item.id)}
               actionsDisabled={operationBusy}

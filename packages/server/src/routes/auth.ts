@@ -23,6 +23,7 @@ import {
   deleteAdminSession,
   readAdminSession
 } from "../users/admin-session.ts";
+import { adminPermissionsForRole } from "../users/admin-authorization.ts";
 
 const sessionRedis = adminSessionRedisClient(redis);
 
@@ -55,6 +56,9 @@ export function registerPublicAuthRoutes(app: Hono) {
       authenticated: Boolean(session),
       username: session?.username ?? "",
       role: session?.role ?? "",
+      permissions: session
+        ? adminPermissionsForRole(session.role)
+        : [],
       csrf_token: session?.csrf ?? "",
       application_version: session ? applicationVersion() : "",
       altcha_enabled: getRuntimeConfig().altcha.enabled,

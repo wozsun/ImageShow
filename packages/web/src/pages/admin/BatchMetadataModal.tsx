@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
+import { adminPermissions } from "@imageshow/shared/browser";
 import { Icon } from "../../components/icon/Icon.js";
 import { AsyncActionButton } from "../../components/actions/AsyncActionButton.js";
 import { WorkflowCollapsePanel } from "../../components/layout/WorkflowCollapsePanel.js";
@@ -14,6 +15,7 @@ import { ImageDraftFields } from "../../components/form/ImageDraftFields.js";
 import { useAnimatedClose } from "../../hooks/useAnimatedClose.js";
 import { useBodyScrollLock } from "../../hooks/useBodyScrollLock.js";
 import { useDialogFocus } from "../../hooks/useDialogFocus.js";
+import { useAdminPermissions } from "../../lib/api/site-data.js";
 import { facetDisplayName, formatBytes, formatDimensions, shortImageId } from "../../lib/ui/formatters.js";
 import { batchCommonBrightnessOptions, batchCommonDeviceOptions, cardBrightnessSelectOptions, editCardDeviceSelectOptions } from "../../lib/ui/select-options.js";
 import { storageNameResolver, useStorageOptions } from "../../lib/api/storage-options.js";
@@ -124,6 +126,10 @@ export function BatchMetadataModal({
   const [common, setCommon] = useState({ device: "" as "" | "auto" | Device, brightness: "" as "" | "auto" | Brightness, theme: "", author: "", tags: [] as string[] });
   const [commonExpanded, setCommonExpanded] = useState(false);
   const [migrating, setMigrating] = useState(false);
+  const permissions = useAdminPermissions();
+  const canMigrateStorage = permissions.includes(
+    adminPermissions.imageStorageMigrate
+  );
   const { data: storageOptionsData } = useStorageOptions();
   // 列表行左下角的「所在存储」展示后端显示名。
   const resolveStorageName = storageNameResolver(storageOptionsData?.backends ?? []);
@@ -163,7 +169,7 @@ export function BatchMetadataModal({
     initialFocusRef: closeButtonRef,
     returnFocusRef,
     onEscape: () => exit.requestClose(),
-    paused: Boolean(migrating || preview),
+    paused: Boolean((canMigrateStorage && migrating) || preview),
   });
   const saveAll = async () => {
     const changedItems = activeItems.flatMap((item) => {
@@ -347,15 +353,19 @@ export function BatchMetadataModal({
           />
         )}
         <footer>
-          <button
-            ref={migrateTriggerRef}
-            className="batch-edit-migrate-trigger"
-            type="button"
-            disabled={saving || !activeItems.length}
-            onClick={() => setMigrating(true)}
-          >
-            <Icon name="arrow-left-right-line" />{single ? "迁移存储" : "批量迁移存储"}
-          </button>
+          {canMigrateStorage ? (
+            <button
+              ref={migrateTriggerRef}
+              className="batch-edit-migrate-trigger"
+              type="button"
+              disabled={saving || !activeItems.length}
+              onClick={() => setMigrating(true)}
+            >
+              <Icon name="arrow-left-right-line" />{single ? "迁移存储" : "批量迁移存储"}
+            </button>
+          ) : (
+            <span aria-hidden="true" />
+          )}
           {!single && (
             <AdminPagination
               className="batch-edit-footer-pagination"
@@ -381,18 +391,20 @@ export function BatchMetadataModal({
       </form>
       <OverlayScrollbar targetRef={listRef} />
     </div>
-    <BatchStorageMigrationDialog
-      open={migrating}
-      imageIds={activeItems.map((item) => item.id)}
-      single={single}
-      returnFocusRef={migrateTriggerRef}
-      onClose={() => setMigrating(false)}
-      onSaved={onSaved}
-      onSucceeded={() => {
-        setMigrating(false);
-        exit.requestClose();
-      }}
-    />
+    {canMigrateStorage && (
+      <BatchStorageMigrationDialog
+        open={migrating}
+        imageIds={activeItems.map((item) => item.id)}
+        single={single}
+        returnFocusRef={migrateTriggerRef}
+        onClose={() => setMigrating(false)}
+        onSaved={onSaved}
+        onSucceeded={() => {
+          setMigrating(false);
+          exit.requestClose();
+        }}
+      />
+    )}
     {preview && <ImagePreviewModal src={preview.src} thumbSrc={preview.thumbSrc} width={preview.width} height={preview.height} onClose={() => setPreview(null)} returnFocusRef={previewReturnFocusRef} />}
     </>
   );

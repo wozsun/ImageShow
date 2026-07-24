@@ -3,7 +3,7 @@ import { adminApiBasePath } from "@imageshow/shared";
 import { ApiError } from "../core/api-error.ts";
 import { apiSuccess } from "../core/http/responses.ts";
 import { requestClientIp } from "../core/http/request-security.ts";
-import { requireSuperAdmin } from "../users/admin-session.ts";
+import { requireSuperAdmin } from "../users/admin-authorization.ts";
 import { readRecentLogFile, updateLogLevel } from "../core/log-files.ts";
 import { logger } from "../core/logger.ts";
 

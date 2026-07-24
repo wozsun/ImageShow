@@ -4,6 +4,7 @@ import { api, authExpiredEvent } from "./client.js";
 import { adminApiBasePath } from "../constants.js";
 import { queryKeys } from "./query-keys.js";
 import type {
+  AdminPermission,
   AuthStateDto,
   GalleryFacetsDto
 } from "@imageshow/shared/browser";
@@ -107,4 +108,11 @@ export function useAuthMe(enabled = true) {
     return () => window.removeEventListener(authExpiredEvent, refreshAuth);
   }, [enabled, query.refetch]);
   return query;
+}
+
+const noAdminPermissions: readonly AdminPermission[] = [];
+
+export function useAdminPermissions(): readonly AdminPermission[] {
+  const { data } = useAuthMe();
+  return data?.permissions ?? noAdminPermissions;
 }

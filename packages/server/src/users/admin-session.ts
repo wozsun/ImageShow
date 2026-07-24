@@ -1,4 +1,5 @@
 import type { Context, Next } from "hono";
+import type { AdminRole } from "@imageshow/shared";
 import { randomBytes } from "node:crypto";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
@@ -16,7 +17,7 @@ type AdminSession = {
   id: string;
   username: string;
   csrf: string;
-  role: "super" | "image";
+  role: AdminRole;
 };
 
 function requestIsSecure(context: Context) {
@@ -39,7 +40,7 @@ export async function createAdminSession(
   const user = result.rows[0] as {
     username: string;
     password_hash: string;
-    role: "super" | "image";
+    role: AdminRole;
   } | undefined;
   if (!user || !(await verifyPassword(user.password_hash, password))) {
     throw new ApiError(
@@ -92,14 +93,6 @@ export async function requireAdminCsrf(context: Context, next: Next) {
   const session = context.get("session") as { csrf: string } | undefined;
   if (!session || context.req.header("x-csrf-token") !== session.csrf) {
     throw new ApiError(403, "csrf_invalid", "CSRF token invalid");
-  }
-  await next();
-}
-
-export async function requireSuperAdmin(context: Context, next: Next) {
-  const session = context.get("session") as { role?: string } | undefined;
-  if (session?.role !== "super") {
-    throw new ApiError(403, "forbidden", "Super admin only");
   }
   await next();
 }

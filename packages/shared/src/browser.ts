@@ -24,6 +24,13 @@ export type Device = (typeof devices)[number];
 export type Brightness = (typeof brightnesses)[number];
 export type StorageType = "local" | "s3" | "webdav";
 export type AdminRole = "super" | "image";
+export const adminPermissions = {
+  imageStorageMigrate: "image.storage.migrate",
+  imageTrashPurge: "image.trash.purge",
+  imageTrashEmpty: "image.trash.empty"
+} as const;
+export type AdminPermission =
+  (typeof adminPermissions)[keyof typeof adminPermissions];
 
 // 管理端界面偏好以 PostgreSQL 为权威，并由浏览器本地存储提供首帧与离线兜底。
 // 将键和值域集中在 shared；新增偏好时，类型、服务端校验和前端投影会同步暴露缺口。
@@ -153,6 +160,7 @@ export type AuthStateDto = {
   authenticated: boolean;
   username: string;
   role: AdminRole | "";
+  permissions: AdminPermission[];
   csrf_token: string;
   application_version: string;
   altcha_enabled: boolean;

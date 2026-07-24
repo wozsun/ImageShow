@@ -1,6 +1,7 @@
 import type { Hono } from "hono";
 import {
   adminApiBasePath,
+  adminPermissions,
   type BatchImageUpdateResponse
 } from "@imageshow/shared";
 import { apiSuccess } from "../core/http/responses.ts";
@@ -35,6 +36,7 @@ import {
   restoreDeletedImage
 } from "../images/trash.ts";
 import { scheduleTrashPurge } from "../images/trash-purge-job.ts";
+import { requireAdminPermission } from "../users/admin-authorization.ts";
 
 export function registerAdminImageRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/overview`, async (c) => c.json(apiSuccess(await getOverviewStats())));
@@ -96,48 +98,60 @@ export function registerAdminImageRoutes(app: Hono) {
     return c.json(apiSuccess(await batchDeleteImages(input.ids)));
   });
 
-  app.post(`${adminApiBasePath}/images/empty-trash`, async (c) => {
-    const result = await purgeDeletedImages();
-    if (result.remaining) await scheduleTrashPurge();
-    return c.json(apiSuccess({
-      deleted: result.deleted,
-      failed: result.failed,
-      remaining: result.remaining
-    }));
-  });
+  app.post(
+    `${adminApiBasePath}/images/empty-trash`,
+    requireAdminPermission(adminPermissions.imageTrashEmpty),
+    async (c) => {
+      const result = await purgeDeletedImages();
+      if (result.remaining) await scheduleTrashPurge();
+      return c.json(apiSuccess({
+        deleted: result.deleted,
+        failed: result.failed,
+        remaining: result.remaining
+      }));
+    }
+  );
 
-  app.post(`${adminApiBasePath}/images/:id/purge`, async (c) => {
-    const id = parse(uuidInput, c.req.param("id"));
-    await purgeDeletedImage(id);
-    return c.json(apiSuccess());
-  });
+  app.post(
+    `${adminApiBasePath}/images/:id/purge`,
+    requireAdminPermission(adminPermissions.imageTrashPurge),
+    async (c) => {
+      const id = parse(uuidInput, c.req.param("id"));
+      await purgeDeletedImage(id);
+      return c.json(apiSuccess());
+    }
+  );
 
-  app.post(`${adminApiBasePath}/images/batch-migrate-storage`, async (c) => {
-    const startedAt = performance.now();
-    const input = parse(batchMigrateStorageInput, await c.req.json().catch(() => ({})));
-    let maxItemDurationMs = 0;
-    let randomPoolFullRebuildTriggered = false;
-    const result = await migrateImageBatchStorage(input.ids, input.target, {
-      onMetrics(metrics) {
-        maxItemDurationMs = metrics.maxImageDurationMs;
-        randomPoolFullRebuildTriggered = metrics.randomPoolFullRebuildTriggered;
-      },
-    });
-    logger.info("batch_storage_migration_summary", {
-      requested: result.requested,
-      succeeded: result.succeeded,
-      failed: result.failed,
-      total_duration_ms: Math.round((performance.now() - startedAt) * 100) / 100,
-      max_item_duration_ms: Math.round(maxItemDurationMs * 100) / 100,
-      request_body_bytes: getRequestBodyBytes(c),
-      entity_count_invalidation_triggered: false,
-      random_pool_full_rebuild_triggered: randomPoolFullRebuildTriggered,
-    });
-    return c.json(apiSuccess({
-      migrated: result.migrated,
-      failed: result.failed,
-    }));
-  });
+  app.post(
+    `${adminApiBasePath}/images/batch-migrate-storage`,
+    requireAdminPermission(adminPermissions.imageStorageMigrate),
+    async (c) => {
+      const startedAt = performance.now();
+      const input = parse(batchMigrateStorageInput, await c.req.json().catch(() => ({})));
+      let maxItemDurationMs = 0;
+      let randomPoolFullRebuildTriggered = false;
+      const result = await migrateImageBatchStorage(input.ids, input.target, {
+        onMetrics(metrics) {
+          maxItemDurationMs = metrics.maxImageDurationMs;
+          randomPoolFullRebuildTriggered = metrics.randomPoolFullRebuildTriggered;
+        },
+      });
+      logger.info("batch_storage_migration_summary", {
+        requested: result.requested,
+        succeeded: result.succeeded,
+        failed: result.failed,
+        total_duration_ms: Math.round((performance.now() - startedAt) * 100) / 100,
+        max_item_duration_ms: Math.round(maxItemDurationMs * 100) / 100,
+        request_body_bytes: getRequestBodyBytes(c),
+        entity_count_invalidation_triggered: false,
+        random_pool_full_rebuild_triggered: randomPoolFullRebuildTriggered,
+      });
+      return c.json(apiSuccess({
+        migrated: result.migrated,
+        failed: result.failed,
+      }));
+    }
+  );
 
   app.post(batchImageUpdatePath, limitBatchImageUpdateBody, async (c) => {
     const startedAt = performance.now();

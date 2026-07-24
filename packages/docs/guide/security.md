@@ -2,6 +2,12 @@
 
 - 管理员密码使用 Node.js `node:crypto` 原生异步 Argon2id 派生，以 PHC 字符串写入 PostgreSQL；固定参数为 64 MiB 内存、3 轮、并行度 4、32 字节输出和 16 字节随机 salt。登录只接受完整匹配该策略的 PHC 参数，并使用恒定时间比较派生结果。
 - 管理会话存于 Redis，Cookie 为 `HttpOnly` + `SameSite=Lax`，识别为 HTTPS 时附加 `Secure`；所有写操作要求 `X-CSRF-Token` 并校验同源。管理员密码被后台重置或账号被删除时，服务端用 `SCAN + MGET` 定向清除该账号的全部会话；自行改密会保留当前会话并清除同账号的其他会话。紧急密码恢复以 PostgreSQL 密码更新为主流程，并在 Redis 可用时使用 `SCAN` 清除全部管理员会话；Redis 故障不会阻止密码更新，但会警告旧会话尚未清除。
+- 管理员授权在角色之上使用集中定义的操作权限。`/api/admin/auth/me` 返回当前会话的
+  权限标识，前端据此隐藏不可用入口，但权限列表只用于界面呈现，服务端路由中间件
+  才是最终授权边界。图片管理员仍可上传、编辑元数据、移入回收站和恢复图片；
+  单张及批量迁移存储需要 `image.storage.migrate`，单张永久删除需要
+  `image.trash.purge`，清空回收站需要 `image.trash.empty`，这三项权限当前只授予
+  超级管理员。直接构造对应请求同样返回 403，且在解析正文或进入存储操作前终止。
 - Compose 内置 Redis 只连接项目私有网络、不发布宿主机端口且不设置密码。连接启用了认证的外部 Redis 时，可通过 `REDIS_PASSWORD` 向应用提供密码。
 - 管理端界面偏好接口只使用鉴权会话中的用户名定位 `admin_account.preferences`，不接受客户端传入目标账号。接口只接受 shared 注册的键与值域，PATCH 在 PostgreSQL 行内原子合并并返回完整投影；JSONB 顶层必须是对象且最大 4 KiB。浏览器缓存键按用户名隔离，`localStorage` 仅承担首帧显示、断网 pending 和多标签同步，不参与鉴权，也不保存会话或 CSRF token。PostgreSQL 尚无某键时，已校验的本地值可补写一次；删除账号时偏好随该行自然删除。
 - 登录失败限流：每 IP + 用户名 60 秒内 5 次失败即拦截，叠加 180 秒内 10 次尝试的全局兜底（阈值与窗口均可在 `config.json` 的 `security.*` 调整）。

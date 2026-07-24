@@ -4,7 +4,7 @@ import { adminApiBasePath } from "@imageshow/shared";
 import { apiSuccess } from "../core/http/responses.ts";
 import { privateNoStoreCacheControl } from "../core/http/headers.ts";
 import { limitAdvancedConfigBody } from "../core/http/request-body-limit.ts";
-import { requireSuperAdmin } from "../users/admin-session.ts";
+import { requireSuperAdmin } from "../users/admin-authorization.ts";
 import { parse } from "../core/validation.ts";
 import {
   createConfigPackage,
