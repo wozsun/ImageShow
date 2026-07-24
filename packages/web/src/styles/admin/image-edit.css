@@ -11,7 +11,13 @@
 .image-preview-modal.is-closing .image-preview-image { animation: modal-pop-out .12s ease-in forwards; }
 .image-preview-modal .image-preview-close { position: fixed; top: 16px; right: 16px; background: rgba(255, 255, 255, .92); }
 
-.edit-modal form.batch-edit-modal { width: min(1180px, 96vw); display: flex; flex-direction: column; overflow: hidden; }
+.edit-modal form.batch-edit-modal {
+  width: min(1180px, 96vw);
+  container: image-workflow / inline-size;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
 
 .batch-edit-modal footer {
   display: grid;
@@ -110,29 +116,84 @@
 
 .image-fields-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: start; }
 
-.image-fields-title { flex: 1 1 0; min-width: 150px; }
-.select-control.image-fields-device { width: 120px; flex: 0 0 auto; }
-.select-control.image-fields-brightness { width: 120px; flex: 0 0 auto; }
-.slug-combo-control.image-fields-theme { width: 150px; flex: 0 0 auto; }
+.workflow-default-pair { display: contents; }
 
-.tag-input-control.image-fields-tags { flex: 0 1 300px; min-width: 200px; }
-.slug-combo-control.image-fields-author { width: 150px; flex: 0 0 auto; }
 .image-fields-urls > input { flex: 1 1 0; min-width: 0; }
 .image-fields-desc { min-height: 62px; }
 
-/* 中等宽度（高于移动端、又不足以让批量默认条在一行排下）：把主题 + 标签
-   这一对作为整体落到第二行，应用到全部留在第一行与选择器并排。 */
-@media (min-width: 761px) and (max-width: 1023px) {
-  .batch-common-pair {
-    order: 2;
-    flex: 1 1 100%;
-    min-width: 0;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: end;
-    gap: 8px;
+/* 上传、导入、单图编辑和批量编辑共用这一套字段结构。
+   窗口较宽时六项同排，固定设备与亮度宽度，其余项按比例分配空间。 */
+@media (min-width: 761px) {
+  .image-fields-primary {
+    display: grid;
+    grid-template-columns:
+      minmax(0, 2fr)
+      110px
+      120px
+      minmax(0, 1.3fr)
+      minmax(0, 1.3fr)
+      minmax(0, 2fr);
   }
-  .batch-edit-common .apply-to-all-button { order: 1; }
+  .image-fields-primary :is(
+    .image-fields-title,
+    .image-fields-device,
+    .image-fields-brightness,
+    .image-fields-theme,
+    .image-fields-author,
+    .image-fields-tags
+  ) {
+    width: auto;
+    min-width: 0;
+  }
+  .image-fields-primary > .image-fields-title { grid-column: 1; grid-row: 1; }
+  .image-fields-primary > .image-fields-device { grid-column: 2; grid-row: 1; }
+  .image-fields-primary > .image-fields-brightness { grid-column: 3; grid-row: 1; }
+  .image-fields-primary > .image-fields-theme { grid-column: 4; grid-row: 1; }
+  .image-fields-primary > .image-fields-author { grid-column: 5; grid-row: 1; }
+  .image-fields-primary > .image-fields-tags { grid-column: 6; grid-row: 1; }
+
+  /* 与上传窗口标题栏共用容器断点。紧凑布局的第一排包含标题、设备、
+     亮度和作者，第二排的主题与标签按 1:2 分配。两种默认属性区同步换行。 */
+  @container image-workflow (max-width: 980px) {
+    .image-fields-primary {
+      grid-template-columns:
+        minmax(0, 2fr)
+        110px
+        120px
+        minmax(0, 1.5fr);
+      reading-flow: grid-rows;
+    }
+    .image-fields-primary > .image-fields-title { grid-column: 1; grid-row: 1; }
+    .image-fields-primary > .image-fields-device { grid-column: 2; grid-row: 1; }
+    .image-fields-primary > .image-fields-brightness { grid-column: 3; grid-row: 1; }
+    .image-fields-primary > .image-fields-author { grid-column: 4; grid-row: 1; }
+    .image-fields-primary > .image-fields-theme {
+      grid-column: 1 / -1;
+      grid-row: 2;
+      width: calc(33.333333% - 2.666667px);
+      justify-self: start;
+    }
+    .image-fields-primary > .image-fields-tags {
+      grid-column: 1 / -1;
+      grid-row: 2;
+      width: calc(66.666667% - 5.333333px);
+      justify-self: end;
+    }
+
+    .workflow-default-pair {
+      order: 2;
+      flex: 1 1 100%;
+      min-width: 0;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: end;
+      gap: 8px;
+    }
+    .workflow-defaults .apply-to-all-button {
+      order: 1;
+      margin-inline-start: auto;
+    }
+  }
 }
 
 @media (max-width: 760px) {
@@ -140,13 +201,41 @@
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .image-fields-primary > * { min-width: 0; }
-  .image-fields-title { grid-column: 1 / -1; width: 100%; }
-  .select-control.image-fields-device,
-  .select-control.image-fields-brightness,
-  .slug-combo-control.image-fields-theme,
-  .slug-combo-control.image-fields-author { width: auto; min-width: 0; }
-  .tag-input-control.image-fields-tags { grid-column: 1 / -1; width: auto; min-width: 0; }
+  .image-fields-primary :is(
+    .image-fields-title,
+    .image-fields-device,
+    .image-fields-brightness,
+    .image-fields-theme,
+    .image-fields-author,
+    .image-fields-tags
+  ) {
+    width: auto;
+    min-width: 0;
+  }
+  .image-fields-primary > .image-fields-title {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+  .image-fields-primary > .image-fields-device {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .image-fields-primary > .image-fields-brightness {
+    grid-column: 2;
+    grid-row: 2;
+  }
+  .image-fields-primary > .image-fields-theme {
+    grid-column: 1;
+    grid-row: 3;
+  }
+  .image-fields-primary > .image-fields-author {
+    grid-column: 2;
+    grid-row: 3;
+  }
+  .image-fields-primary > .image-fields-tags {
+    grid-column: 1 / -1;
+    grid-row: 4;
+  }
   .image-fields-urls { display: grid; grid-template-columns: minmax(0, 1fr); }
   .image-fields-urls > input { width: 100%; min-width: 0; }
 
@@ -225,7 +314,6 @@
     gap: 8px;
     padding: 10px max(12px, env(safe-area-inset-right)) 10px max(12px, env(safe-area-inset-left));
   }
-  .batch-common-pair { display: contents; }
   .select-control.batch-common-select,
   .slug-combo-control.batch-common-theme,
   .slug-combo-control.batch-common-author,

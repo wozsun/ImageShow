@@ -262,7 +262,7 @@ export function UploadWorkflowWindow({
 
         <WorkflowCollapsePanel
           className="upload-defaults-panel"
-          contentClassName="upload-defaults"
+          contentClassName="upload-defaults workflow-defaults"
           title="默认属性"
           summary={defaultsSummary}
           expanded={defaultsExpanded}
@@ -288,7 +288,7 @@ export function UploadWorkflowWindow({
             options={uploadCommonBrightnessOptions}
             ariaLabel="默认亮度"
           />
-          <div className="upload-default-pair">
+          <div className="workflow-default-pair">
             <ThemeInput
               className="upload-default-theme"
               value={defaults.theme}

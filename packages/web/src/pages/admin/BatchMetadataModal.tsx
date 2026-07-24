@@ -224,7 +224,7 @@ export function BatchMetadataModal({
         {!single && (
           <WorkflowCollapsePanel
             className="batch-edit-common-panel"
-            contentClassName="batch-edit-common"
+            contentClassName="batch-edit-common workflow-defaults"
             title="批量默认属性"
             summary={commonSummary}
             expanded={commonExpanded}
@@ -244,7 +244,7 @@ export function BatchMetadataModal({
               options={batchCommonBrightnessOptions}
               ariaLabel="批量亮度"
             />
-            <div className="batch-common-pair">
+            <div className="workflow-default-pair">
               <ThemeInput
                 className={`batch-common-theme${commonChanged.theme ? " is-changed" : ""}`}
                 value={common.theme}

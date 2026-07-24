@@ -46,7 +46,7 @@
   width: min(1180px, 96vw);
   /* 桌面端直接占满既定的最大可用高度，避免任务增删时整个窗口上下跳动。 */
   height: min(90vh, calc(100svh - 48px));
-  container: upload-window / inline-size;
+  container: image-workflow / inline-size;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -113,10 +113,9 @@
 .upload-default-select .select-trigger { padding-right: 30px; }
 .select-control.upload-default-device { width: 120px; }
 .select-control.upload-default-brightness { width: 120px; }
-.upload-default-pair { display: contents; }
 .slug-combo-control.upload-default-theme { flex: 1 1 0; min-width: 150px; }
 .slug-combo-control.upload-default-author { flex: 1 1 0; min-width: 150px; }
-.tag-input-control.upload-default-tags { flex: 2 1 0; min-width: 200px; align-self: end; }
+.tag-input-control.upload-default-tags { flex: 2 1 0; min-width: 197px; align-self: end; }
 .upload-picker {
   --pressable-active-scale: var(--pressable-scale-large, .99);
   width: 200px;
@@ -225,7 +224,7 @@
 .upload-clear-actions { flex-wrap: nowrap; }
 .upload-cleanup-trigger { display: none; }
 .upload-cleanup-menu > button { color: #a13a32; }
-@container upload-window (max-width: 980px) {
+@container image-workflow (max-width: 980px) {
   .upload-head-actions {
     display: grid;
     justify-items: end;
@@ -382,28 +381,6 @@ button.empty-state.upload-dropzone:not(:disabled):hover,
   transform: scale(var(--pressable-scale-large, .99));
 }
 
-@media (max-width: 1080px) {
-  .upload-defaults { grid-template-columns: 1fr 1fr; }
-}
-
-/* 中等宽度（高于移动端、又不足以让默认条在一行排下）：把主题 + 标签
-   这一对作为整体落到第二行，应用到全部留在第一行与选择器并排。 */
-@media (min-width: 761px) and (max-width: 1023px) {
-  .upload-default-pair {
-    order: 2;
-    flex: 1 1 100%;
-    min-width: 0;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: end;
-    gap: 8px;
-  }
-  .upload-defaults .apply-to-all-button {
-    order: 1;
-    margin-inline-start: auto;
-  }
-}
-
 @media (max-width: 760px) {
   .link-import-input-region.has-result-summary {
     height: 190px;
@@ -529,7 +506,6 @@ button.empty-state.upload-dropzone:not(:disabled):hover,
     gap: 8px;
     padding: 10px max(12px, env(safe-area-inset-right)) 10px max(12px, env(safe-area-inset-left));
   }
-  .upload-default-pair { display: contents; }
   .select-control.upload-default-select,
   .slug-combo-control.upload-default-theme,
   .slug-combo-control.upload-default-author,

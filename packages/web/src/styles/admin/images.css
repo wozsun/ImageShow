@@ -55,10 +55,9 @@
 .batch-edit-common { padding: 12px 16px; display: flex; flex-wrap: wrap; align-items: end; gap: 8px; border-bottom: 1px solid #dce2ea; }
 .select-control.batch-common-select { width: 120px; flex: 0 0 auto; }
 
-.batch-common-pair { display: contents; }
 .slug-combo-control.batch-common-theme { flex: 1 1 0; min-width: 150px; }
 
-.tag-input-control.batch-common-tags { flex: 2 1 0; min-width: 200px; align-self: end; }
+.tag-input-control.batch-common-tags { flex: 2 1 0; min-width: 197px; align-self: end; }
 .slug-combo-control.batch-common-author { flex: 1 1 0; min-width: 150px; align-self: end; }
 
 .apply-to-all-button.is-ready { background: #1f6feb; border-color: #1f6feb; color: #fff; }
