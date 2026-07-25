@@ -155,7 +155,7 @@ export function LogPage() {
   };
 
   return (
-    <section className="workspace log-page">
+    <section className="workspace workspace-contained log-page">
       <WorkspaceHeader
         title="日志"
         description="查看应用日志，并实时调整写入等级"

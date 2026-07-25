@@ -174,10 +174,8 @@ export function UploadWorkflowWindow({
       action.run();
       return;
     }
-    return () => {
-      cleanupReturnFocusRef.current = returnFocusTarget;
-      setPendingCleanupActionId(actionId);
-    };
+    cleanupReturnFocusRef.current = returnFocusTarget;
+    setPendingCleanupActionId(actionId);
   }, []);
   const confirmCleanupAction = useCallback(async () => {
     const action = cleanupActionsRef.current.find(
@@ -237,7 +235,7 @@ export function UploadWorkflowWindow({
                     selectCleanupAction(
                       action.id,
                       event.currentTarget
-                    )?.();
+                    );
                   }}
                 >
                   {action.label}

@@ -44,11 +44,20 @@ export function SettingsPage() {
     }
   }, [query.data]);
   if (!settings) {
-    if (query.isError) return <QueryErrorState error={query.error} onRetry={() => void query.refetch()} fullPage reportContext="settings.load" />;
     return (
-      <section className="workspace">
-        <h1>站点配置</h1>
-        <p className="muted">加载中</p>
+      <section className="workspace workspace-contained settings-page">
+        {query.isError ? (
+          <QueryErrorState
+            error={query.error}
+            onRetry={() => void query.refetch()}
+            reportContext="settings.load"
+          />
+        ) : (
+          <>
+            <h1>站点配置</h1>
+            <p className="muted">加载中</p>
+          </>
+        )}
       </section>
     );
   }
@@ -111,7 +120,7 @@ export function SettingsPage() {
   const updateThumbnail = (patch: Partial<AdminSettings["thumbnail"]>) => setSettings({ ...settings, thumbnail: { ...settings.thumbnail, ...patch } });
   const updateAdmin = (patch: Partial<AdminSettings["admin"]>) => setSettings({ ...settings, admin: { ...settings.admin, ...patch } });
   return (
-    <section className="workspace settings-page">
+    <section className="workspace workspace-contained settings-page">
       <WorkspaceHeader
         title="站点配置"
         description="站点信息与应用参数"

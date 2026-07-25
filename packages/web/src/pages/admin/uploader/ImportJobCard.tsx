@@ -10,7 +10,10 @@ import {
   importJobNeedsDuplicateConfirmation,
   importJobPreviewAvailable
 } from "./duplicate-match.js";
-import { importJobAttributesEditable } from "./import-attribute-policy.js";
+import {
+  importAutomaticClassificationLabel,
+  importJobAttributesEditable
+} from "./import-attribute-policy.js";
 import { importPositionText } from "./import-job-utils.js";
 
 const statusLabels: Record<ImportJob["status"], string> = {
@@ -84,6 +87,7 @@ export const ImportJobCard = memo(function ImportJobCard({
   const sourcePositionText = importPositionText(job);
   const metaText = [sourcePositionText, storageDisplayName, dimensionsText, statusDetailText].filter(Boolean).join(" · ");
   const sizeSummaryText = `${originalSizeText} → ${finalSizeText}${qualityText ? ` · ${qualityText}` : ""}`;
+  const automaticClassificationLabel = importAutomaticClassificationLabel(job);
   const previewSrc = job.preview;
   const openPreview: ((opener: HTMLElement) => void) | undefined = importJobPreviewAvailable(job)
     ? (opener) => onPreview({
@@ -153,8 +157,14 @@ export const ImportJobCard = memo(function ImportJobCard({
         themes={themes}
         allTags={allTags}
         authors={authors}
-        deviceOptions={importCardDeviceSelectOptions(job.draft.device)}
-        brightnessOptions={importCardBrightnessSelectOptions(job.draft.brightness)}
+        deviceOptions={importCardDeviceSelectOptions(
+          job.draft.device,
+          automaticClassificationLabel
+        )}
+        brightnessOptions={importCardBrightnessSelectOptions(
+          job.draft.brightness,
+          automaticClassificationLabel
+        )}
         changed={{ device: job.classificationOverride?.device, brightness: job.classificationOverride?.brightness }}
         disabled={!editable}
         ariaPrefix={job.url ?? job.file?.name ?? job.id}

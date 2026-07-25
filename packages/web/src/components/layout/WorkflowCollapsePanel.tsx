@@ -39,6 +39,7 @@ export function WorkflowCollapsePanel({
       className={`workflow-collapse-panel ${className}${expanded ? " is-expanded" : ""}${disclosure.motionEnabled ? " is-motion-enabled" : ""}`}
     >
       <button
+        ref={disclosure.triggerRef}
         type="button"
         className="workflow-collapse-toggle"
         aria-expanded={expanded}
@@ -53,10 +54,11 @@ export function WorkflowCollapsePanel({
         value={disclosure.menuDismissSignal}
       >
         <div
+          ref={disclosure.panelRef}
           id={contentId}
           className={`workflow-collapse-content ${contentClassName}`}
-          aria-hidden={mobileLayout && !expanded}
-          inert={mobileLayout && !expanded}
+          aria-hidden={disclosure.panelHidden}
+          inert={disclosure.panelHidden}
         >
           {children}
         </div>

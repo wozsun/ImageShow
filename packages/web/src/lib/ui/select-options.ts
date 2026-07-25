@@ -21,9 +21,12 @@ export const editCardDeviceSelectOptions: readonly SelectOption[] = [
   ...cardDeviceSelectOptions
 ];
 
-export function importCardDeviceSelectOptions(value: string): readonly SelectOption[] {
+export function importCardDeviceSelectOptions(
+  value: string,
+  automaticLabel: string
+): readonly SelectOption[] {
   return value === "auto"
-    ? [{ value: "auto", label: "识别中" }, ...cardDeviceSelectOptions]
+    ? [{ value: "auto", label: automaticLabel }, ...cardDeviceSelectOptions]
     : cardDeviceSelectOptions;
 }
 
@@ -37,9 +40,12 @@ export const cardBrightnessSelectOptions: readonly SelectOption[] = [
   ...manualBrightnessSelectOptions
 ];
 
-export function importCardBrightnessSelectOptions(value: string): readonly SelectOption[] {
+export function importCardBrightnessSelectOptions(
+  value: string,
+  automaticLabel: string
+): readonly SelectOption[] {
   return value === "auto"
-    ? [{ value: "auto", label: "识别中" }, ...manualBrightnessSelectOptions]
+    ? [{ value: "auto", label: automaticLabel }, ...manualBrightnessSelectOptions]
     : manualBrightnessSelectOptions;
 }
 

@@ -120,7 +120,7 @@ export function AdvancedConfigPage() {
   };
 
   return (
-    <section className="workspace advanced-config-page">
+    <section className="workspace workspace-contained advanced-config-page">
       <WorkspaceHeader
         title="高级配置"
         description="编辑当前实例完整配置，或通过版本化配置包迁移可移植设置。"

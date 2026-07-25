@@ -9,6 +9,7 @@ import {
 } from "../../lib/api/site-data.js";
 import { cssUrl } from "../../lib/ui/formatters.js";
 import { LoginChallenge } from "./LoginChallenge.js";
+import { useLoginVisualViewport } from "./useLoginVisualViewport.js";
 
 export function AdminLogin({
   siteName,
@@ -29,6 +30,7 @@ export function AdminLogin({
   const [challengeVerified, setChallengeVerified] = useState(!altchaEnabled);
   const [challengeLoadFailed, setChallengeLoadFailed] = useState(false);
   const [challengeInstance, setChallengeInstance] = useState(0);
+  const loginRef = useLoginVisualViewport();
   const challengeRef = useRef<AltchaWidgetElement | null>(null);
   const submissionActiveRef = useRef(false);
   const automaticChallengeRetryUsedRef = useRef(false);
@@ -65,6 +67,7 @@ export function AdminLogin({
 
   return (
     <main
+      ref={loginRef}
       className="login"
       style={{ backgroundImage: `linear-gradient(rgba(12, 18, 28, .45), rgba(12, 18, 28, .72)), ${cssUrl(background)}` }}
     >

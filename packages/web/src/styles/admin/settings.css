@@ -24,6 +24,10 @@
   gap: 10px;
   min-width: 0;
 }
+.settings-page > .query-error-state {
+  flex: 1;
+  min-height: 0;
+}
 .settings-grid section {
   background: #fff;
   border: 1px solid #dce2ea;

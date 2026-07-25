@@ -7,6 +7,12 @@ import type {
 import type { ImportAttributeDefaults } from "../../../lib/upload/upload-utils.js";
 
 type ImportAttributePhase = "initial" | "ready" | "locked";
+export type ImportAutomaticClassificationLabel =
+  | "待上传"
+  | "待下载"
+  | "待识别"
+  | "识别中"
+  | "自动识别";
 
 const initialAttributeStatuses = new Set<ImportJob["status"]>([
   "queued",
@@ -25,6 +31,19 @@ function importAttributePhase(job: ImportJob): ImportAttributePhase {
   }
   if (job.failureStage === "cancel") return "locked";
   return "initial";
+}
+
+export function importAutomaticClassificationLabel(
+  job: Pick<ImportJob, "kind" | "status">
+): ImportAutomaticClassificationLabel {
+  if (job.status === "queued") {
+    return job.kind === "local" ? "待上传" : "待下载";
+  }
+  if (job.status === "uploading") return "待上传";
+  if (job.status === "downloading") return "待下载";
+  if (job.status === "received") return "待识别";
+  if (job.status === "processing") return "识别中";
+  return "自动识别";
 }
 
 export function importJobAttributesEditable(job: ImportJob) {

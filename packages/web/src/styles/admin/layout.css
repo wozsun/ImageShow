@@ -218,19 +218,26 @@
   min-width: 0;
 }
 .muted { color: #66717f; }
-.admin:has(> .settings-page) {
-  height: 100svh;
+.admin:has(> .workspace-contained) {
+  height: 100dvh;
   min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
-.admin:has(> .settings-page) > .admin-mobile-header {
+.admin:has(> .workspace-contained) > .admin-mobile-header {
   flex: 0 0 auto;
 }
-.admin:has(> .settings-page) > .settings-page {
+.admin:has(> .workspace-contained) > .workspace-contained {
   flex: 1;
   min-height: 0;
+}
+html:has(.admin > .workspace-contained),
+body:has(.admin > .workspace-contained) {
+  width: 100%;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
 }
 .settings-page {
   display: flex;

@@ -1,20 +1,3 @@
-.admin:has(> .log-page) {
-  height: 100svh;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.admin:has(> .log-page) > .admin-mobile-header {
-  flex: 0 0 auto;
-}
-
-.admin:has(> .log-page) > .log-page {
-  flex: 1;
-  min-height: 0;
-}
-
 .log-page {
   display: flex;
   flex-direction: column;

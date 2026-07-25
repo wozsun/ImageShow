@@ -51,16 +51,18 @@
   .workspace { --workspace-inline-padding: 16px; padding: 16px; }
   /* 分页型后台页（图片列表 / 主题 / 标签 / 作者管理，均为 .workspace-paged）在移动端也保持桌面
      行为：卡片区域内部滚动、分页器固定在底部，而非整页滚动。.admin 变为 flex 列，让分页型工作区
-     填满 64px sticky 移动头部以下的空间（无魔法数字）。其高度固定为 100svh（固定盒——使内层可滚动，
-     且避免大/小视口的整页滚动落差）；overflow 保持 visible（非 hidden）以免高的 导航 下拉被裁剪。
-     非分页页（概览/设置/检查/账户/用户）保持正常整页滚动。桌面端见 admin/layout.css。 */
-  .admin:has(> .workspace-paged) { height: 100svh; min-height: 0; display: flex; flex-direction: column; }
+     填满 64px sticky 移动头部以下的空间（无魔法数字）。其高度使用 100dvh 跟随当前可见视口，
+     浏览器工具栏收放时由内部滚动区吸收高度变化；overflow 保持 visible（非 hidden），
+     以免较高的导航下拉被裁剪。
+     概览/检查/账户/用户等普通非分页页保持正常整页滚动；站点配置等拥有内部滚动区的页面
+     另由 .workspace-contained 统一占用动态视口。桌面端见 admin/layout.css。 */
+  .admin:has(> .workspace-paged) { height: 100dvh; min-height: 0; display: flex; flex-direction: column; }
   .admin:has(> .workspace-paged) > .admin-mobile-header { flex: 0 0 auto; }
-  /*     分页型 .admin 更高，多出的一截让整页能被滚动一小段——于是「固定」的分页器看起来还能向上滑。分页页
-     挂载时把文档锁到小视口、禁止整页滚动，只让内部卡片区域滚动（:has 仅在存在 .workspace-paged 时命中，
-     不影响概览/设置等可整页滚动的非分页页）。 */
+  /* 分页页挂载时把文档锁到当前动态视口、禁止整页滚动，只让内部卡片区域滚动
+     （:has 仅在存在 .workspace-paged 时命中，
+     不影响其他非分页页；其是否锁定文档由各自明确的工作区契约决定）。 */
   html:has(.workspace-paged),
-  body:has(.workspace-paged) { min-height: 0; height: 100svh; overflow: hidden; }
+  body:has(.workspace-paged) { min-height: 0; height: 100dvh; overflow: hidden; }
   .workspace-paged { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; padding-bottom: 16px; }
   /* 图片与实体管理共用同一滚动视口：内容保留 16px 右侧留白和 2px 滚动间距，
      视口本身延伸到页面末端，使原生或浮层滚动条都贴住最右侧。 */

@@ -100,34 +100,8 @@
 .advanced-config-backend label small { font-size: 12px; }
 .advanced-config-ready { display: inline-flex; align-items: center; justify-self: end; gap: 5px; color: #1a7f37; font-size: 13px; font-weight: 600; }
 
-@media (min-width: 761px) {
-  .admin:has(> .advanced-config-page) {
-    height: 100svh;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
-  .admin:has(> .advanced-config-page) > .advanced-config-page {
-    flex: 1;
-    min-height: 0;
-  }
-}
-
 @media (max-width: 760px) {
-  .admin:has(> .advanced-config-page) {
-    height: 100dvh;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
-  .admin:has(> .advanced-config-page) > .admin-mobile-header { flex: 0 0 auto; }
-  .admin:has(> .advanced-config-page) > .advanced-config-page {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-  }
+  .advanced-config-page { overflow-y: auto; }
   .advanced-config-summary { grid-template-columns: 1fr 1fr; }
   .advanced-config-backend { grid-template-columns: 1fr; }
   .advanced-config-ready { justify-self: start; }
