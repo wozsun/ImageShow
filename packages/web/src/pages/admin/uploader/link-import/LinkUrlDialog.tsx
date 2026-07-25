@@ -154,7 +154,7 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
 }) {
   const inputId = useId();
   const importCardRef = useRef<HTMLDivElement | null>(null);
-  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const requestControllerRef = useRef<AbortController | null>(null);
   const [text, setText] = useState("");
   const [inputMode, setInputMode] = useState<LinkInputMode>(initialInputMode);
@@ -324,7 +324,7 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
       className="modal link-url-overlay"
       ariaLabel="导入内容输入"
       animateClose={false}
-      initialFocusRef={closeButtonRef}
+      initialFocusRef={inputRef}
       returnFocusRef={returnFocusRef}
       onClose={close}
     >
@@ -335,7 +335,7 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
           <h2><Icon name={presentation.icon} />{presentation.heading}</h2>
           <div className="link-import-head-status">
             {parsing && <span>{inputMode === "weibo" ? "正在获取微博内容…" : "正在解析清单…"}</span>}
-            <button ref={closeButtonRef} type="button" className="icon close" title="关闭" onClick={() => requestClose()}>
+            <button type="button" className="icon close" title="关闭" onClick={() => requestClose()}>
               <Icon name="close-line" />
             </button>
           </div>
@@ -364,6 +364,7 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
         </p>
         <div className={`link-import-input-region${resultSummary ? " has-result-summary" : ""}`}>
           <textarea
+            ref={inputRef}
             id={inputId}
             className="link-import-urls"
             value={text}
