@@ -56,6 +56,7 @@ export function ImageAdminFilters({
   const disclosure = useDismissiblePanel({
     open,
     onOpenChange: setOpen,
+    enabled: mobileLayout,
     resetKey: mobileLayout
   });
   const themeDisabled = disabled || view === "unset";
@@ -72,11 +73,14 @@ export function ImageAdminFilters({
       className={`image-list-filter-bar${open ? " filters-open" : ""}${disclosure.motionEnabled ? " filters-motion-enabled" : ""}`}
     >
       <button
+        ref={disclosure.triggerRef}
         type="button"
         className="image-list-filter-toggle"
         aria-expanded={open}
         aria-controls="admin-image-filter-panel"
-        onClick={() => disclosure.setOpen(!open)}
+        onClick={() => open
+          ? disclosure.setOpen(false, { restoreFocus: true })
+          : disclosure.setOpen(true)}
       >
         <Icon name="filter-3-line" />
         筛选
@@ -92,15 +96,18 @@ export function ImageAdminFilters({
         value={disclosure.menuDismissSignal}
       >
         <div
+          ref={disclosure.panelRef}
           id="admin-image-filter-panel"
           className="image-list-filter-panel"
           role="group"
           aria-label="图片列表筛选条件"
+          aria-hidden={disclosure.panelHidden}
+          inert={disclosure.panelHidden}
         >
           <button
             type="button"
             className="image-list-filter-panel-close"
-            onClick={() => disclosure.setOpen(false)}
+            onClick={() => disclosure.setOpen(false, { restoreFocus: true })}
           >
             <Icon name="close-line" />
             收起筛选

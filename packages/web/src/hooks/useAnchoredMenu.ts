@@ -89,7 +89,7 @@ export function useAnchoredMenu(options: {
     animRequestClose(() => { setOpen(false); onCloseRef.current?.(); afterClose?.(); });
   }, [animateClose, animRequestClose]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (Object.is(previousDismissSignalRef.current, dismissSignal)) return;
     previousDismissSignalRef.current = dismissSignal;
     if (!open) return;

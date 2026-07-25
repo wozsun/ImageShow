@@ -16,6 +16,67 @@ const outsideInteractionEvents = [
 const defaultPortalSelector =
   ".select-menu, .facet-select-menu, [data-dialog-portal-menu]";
 
+export type TransientPanelCloseOptions = {
+  restoreFocus?: boolean;
+};
+
+/**
+ * Shared accessibility state and focus cleanup for mobile-only panels.
+ *
+ * Closing callers run prepareForClose before changing state so React can add
+ * inert/aria-hidden without leaving focus in the subtree being hidden.
+ */
+export function useTransientPanelSemantics({
+  open,
+  transient
+}: {
+  open: boolean;
+  transient: boolean;
+}) {
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const [transientStateReady, setTransientStateReady] = useState(transient);
+
+  const prepareForClose = useCallback(({
+    restoreFocus = false
+  }: TransientPanelCloseOptions = {}) => {
+    if (!transient || typeof document === "undefined") return;
+
+    const panel = panelRef.current;
+    const activeElement = document.activeElement;
+    if (restoreFocus) {
+      const trigger = triggerRef.current;
+      trigger?.focus();
+      if (trigger && document.activeElement === trigger) return;
+    }
+    if (
+      panel
+      && activeElement instanceof HTMLElement
+      && panel.contains(activeElement)
+    ) {
+      activeElement.blur();
+    }
+  }, [transient]);
+
+  useLayoutEffect(() => {
+    if (transientStateReady === transient) return;
+    // 桌面常驻面板切为移动浮层时，先在仍暴露的这一帧清理现有焦点，
+    // 再于同步重渲染中添加 inert/aria-hidden。
+    if (transient && !open) prepareForClose();
+    setTransientStateReady(transient);
+  }, [open, prepareForClose, transient, transientStateReady]);
+
+  const panelHidden =
+    transient && transientStateReady && !open ? true : undefined;
+
+  return {
+    panelHidden,
+    panelRef,
+    prepareForClose,
+    triggerRef
+  };
+}
+
 function isWithinPanelSurface(
   root: HTMLElement,
   event: Pick<Event, "composedPath" | "target">,
@@ -61,12 +122,20 @@ export function useDismissiblePanel({
   const motionTimerRef = useRef<number | undefined>(undefined);
   const [motionEnabled, setMotionEnabled] = useState(false);
   const [menuDismissSignal, setMenuDismissSignal] = useState(0);
+  const semantics = useTransientPanelSemantics({
+    open,
+    transient: enabled
+  });
   openRef.current = open;
   onOpenChangeRef.current = onOpenChange;
 
-  const setOpen = useCallback((nextOpen: boolean) => {
+  const setOpen = useCallback((
+    nextOpen: boolean,
+    closeOptions?: TransientPanelCloseOptions
+  ) => {
     window.clearTimeout(motionTimerRef.current);
     if (!nextOpen) {
+      semantics.prepareForClose(closeOptions);
       setMenuDismissSignal((current) => current + 1);
     }
     setMotionEnabled(enabled);
@@ -78,14 +147,17 @@ export function useDismissiblePanel({
         100
       );
     }
-  }, [enabled]);
+  }, [enabled, semantics.prepareForClose]);
 
   useLayoutEffect(() => {
     window.clearTimeout(motionTimerRef.current);
     setMenuDismissSignal((current) => current + 1);
     setMotionEnabled(false);
-    if (openRef.current) onOpenChangeRef.current(false);
-  }, [resetKey]);
+    if (openRef.current) {
+      semantics.prepareForClose();
+      onOpenChangeRef.current(false);
+    }
+  }, [resetKey, semantics.prepareForClose]);
 
   useEffect(() => () => {
     window.clearTimeout(motionTimerRef.current);
@@ -113,8 +185,11 @@ export function useDismissiblePanel({
 
   return {
     rootRef,
+    panelHidden: semantics.panelHidden,
+    panelRef: semantics.panelRef,
     motionEnabled,
     menuDismissSignal,
-    setOpen
+    setOpen,
+    triggerRef: semantics.triggerRef
   };
 }

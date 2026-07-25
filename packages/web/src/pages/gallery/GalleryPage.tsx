@@ -83,8 +83,10 @@ export function GalleryPage({ fixedTheme = "", standalone = false }: { fixedThem
   const {
     backToTopVisible,
     closeFilters,
+    filterPanelHidden,
     filterPanelRef,
     filterMenuDismissSignal,
+    filterToggleRef,
     filtersOpen,
     toggleFilters,
     toolbarRef,
@@ -186,6 +188,7 @@ export function GalleryPage({ fixedTheme = "", standalone = false }: { fixedThem
           </div>
         )}
         <button
+          ref={filterToggleRef}
           type="button"
           className="gallery-filter-toggle"
           aria-expanded={filtersOpen}
@@ -204,6 +207,8 @@ export function GalleryPage({ fixedTheme = "", standalone = false }: { fixedThem
             className="gallery-filter-panel"
             role="group"
             aria-label="画廊筛选条件"
+            aria-hidden={filterPanelHidden}
+            inert={filterPanelHidden}
           >
             <label className="gallery-axis">
               设备

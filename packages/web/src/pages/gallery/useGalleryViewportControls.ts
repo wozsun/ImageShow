@@ -1,9 +1,20 @@
-import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type RefObject
+} from "react";
 import { getPageScrollY, isBodyScrollLocked } from "../../hooks/useBodyScrollLock.js";
 import {
   mobileViewportMediaQuery,
   useMediaQuery
 } from "../../hooks/useMediaQuery.js";
+import {
+  useTransientPanelSemantics,
+  type TransientPanelCloseOptions
+} from "../../hooks/useDismissiblePanel.js";
 
 const toolbarScrollDirectionThreshold = 8;
 const filterDismissGestureThreshold = 12;
@@ -14,16 +25,6 @@ function blurFocusedToolbarElement(toolbar: HTMLElement) {
   if (activeElement instanceof HTMLElement && toolbar.contains(activeElement)) {
     activeElement.blur();
   }
-}
-
-function useMobileGalleryLayout(closeFilters: () => void) {
-  const mobileLayout = useMediaQuery(mobileViewportMediaQuery);
-
-  useEffect(() => {
-    if (!mobileLayout) closeFilters();
-  }, [closeFilters, mobileLayout]);
-
-  return mobileLayout;
 }
 
 function useGalleryToolbarVisibility(
@@ -100,7 +101,11 @@ function useGalleryToolbarVisibility(
   return visible;
 }
 
-function isWithinGalleryFilterSurface(panel: HTMLElement, target: EventTarget | null) {
+function isWithinGalleryFilterSurface(
+  panel: HTMLElement,
+  trigger: HTMLElement | null,
+  target: EventTarget | null
+) {
   const targetElement = target instanceof Element
     ? target
     : target instanceof Node
@@ -108,6 +113,7 @@ function isWithinGalleryFilterSurface(panel: HTMLElement, target: EventTarget | 
       : null;
   return Boolean(targetElement && (
     panel.contains(targetElement)
+    || trigger?.contains(targetElement)
     // SelectMenu 与 FacetSelector 的菜单通过 Portal 挂到 body，仍属于筛选交互。
     || targetElement.closest(".select-menu, .facet-select-menu")
   ));
@@ -115,6 +121,7 @@ function isWithinGalleryFilterSurface(panel: HTMLElement, target: EventTarget | 
 
 function useCloseMobileFiltersOnOutsideScroll(
   panelRef: RefObject<HTMLElement | null>,
+  triggerRef: RefObject<HTMLElement | null>,
   active: boolean,
   closeFilters: () => void
 ) {
@@ -143,7 +150,10 @@ function useCloseMobileFiltersOnOutsideScroll(
     };
     const onPointerDown = (event: PointerEvent) => {
       resetOutsideIntent();
-      if (!event.isPrimary || isWithinGalleryFilterSurface(panel, event.target)) return;
+      if (
+        !event.isPrimary
+        || isWithinGalleryFilterSurface(panel, triggerRef.current, event.target)
+      ) return;
       pointerGesture = {
         pointerId: event.pointerId,
         startX: event.clientX,
@@ -171,8 +181,16 @@ function useCloseMobileFiltersOnOutsideScroll(
       // sticky 工具栏在等待后续 scrollY 更新期间仍被展开状态锁定。
       dismiss();
     };
+    const onClick = (event: MouseEvent) => {
+      if (isWithinGalleryFilterSurface(panel, triggerRef.current, event.target)) return;
+      dismiss();
+    };
+    const onFocusIn = (event: FocusEvent) => {
+      if (isWithinGalleryFilterSurface(panel, triggerRef.current, event.target)) return;
+      dismiss();
+    };
     const onWheel = (event: WheelEvent) => {
-      if (isWithinGalleryFilterSurface(panel, event.target)) {
+      if (isWithinGalleryFilterSurface(panel, triggerRef.current, event.target)) {
         resetOutsideIntent();
         return;
       }
@@ -203,6 +221,8 @@ function useCloseMobileFiltersOnOutsideScroll(
     document.addEventListener("pointermove", onPointerMove, { capture: true, passive: true });
     document.addEventListener("pointerup", onPointerUp, true);
     document.addEventListener("pointercancel", onPointerCancel, true);
+    document.addEventListener("click", onClick, true);
+    document.addEventListener("focusin", onFocusIn, true);
     document.addEventListener("wheel", onWheel, { capture: true, passive: true });
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => {
@@ -210,10 +230,12 @@ function useCloseMobileFiltersOnOutsideScroll(
       document.removeEventListener("pointermove", onPointerMove, true);
       document.removeEventListener("pointerup", onPointerUp, true);
       document.removeEventListener("pointercancel", onPointerCancel, true);
+      document.removeEventListener("click", onClick, true);
+      document.removeEventListener("focusin", onFocusIn, true);
       document.removeEventListener("wheel", onWheel, true);
       window.removeEventListener("scroll", onScroll);
     };
-  }, [active, closeFilters, panelRef]);
+  }, [active, closeFilters, panelRef, triggerRef]);
 }
 
 function useBackToTopVisibility() {
@@ -255,29 +277,61 @@ export function useGalleryViewportControls() {
     menuDismissSignal: 0,
   });
   const toolbarRef = useRef<HTMLElement | null>(null);
-  const filterPanelRef = useRef<HTMLDivElement | null>(null);
-  const closeFilters = useCallback(() => {
+  const previousMobileLayoutRef = useRef<boolean | undefined>(undefined);
+  const filtersOpen = filterPanelState.open;
+  const mobileLayout = useMediaQuery(mobileViewportMediaQuery);
+  const semantics = useTransientPanelSemantics({
+    open: filtersOpen,
+    transient: mobileLayout
+  });
+  const closeFilters = useCallback((
+    options?: TransientPanelCloseOptions
+  ) => {
+    semantics.prepareForClose(options);
     setFilterPanelState((current) => current.open
       ? { open: false, menuDismissSignal: current.menuDismissSignal + 1 }
       : current);
-  }, []);
+  }, [semantics.prepareForClose]);
   const toggleFilters = useCallback(() => {
-    setFilterPanelState((current) => current.open
-      ? { open: false, menuDismissSignal: current.menuDismissSignal + 1 }
-      : { ...current, open: true });
-  }, []);
-  const filtersOpen = filterPanelState.open;
-  const mobileLayout = useMobileGalleryLayout(closeFilters);
+    if (filtersOpen) {
+      closeFilters({ restoreFocus: true });
+      return;
+    }
+    setFilterPanelState((current) => ({ ...current, open: true }));
+  }, [closeFilters, filtersOpen]);
+
+  useLayoutEffect(() => {
+    if (previousMobileLayoutRef.current === undefined) {
+      previousMobileLayoutRef.current = mobileLayout;
+      return;
+    }
+    if (previousMobileLayoutRef.current === mobileLayout) return;
+    previousMobileLayoutRef.current = mobileLayout;
+    // 两个方向切换断点都关闭当前 Portal。桌面常驻面板本身没有 open
+    // 状态，因此即使 current.open 已为 false 也必须推进关闭信号。
+    setFilterPanelState((current) => ({
+      open: false,
+      menuDismissSignal: current.menuDismissSignal + 1
+    }));
+  }, [mobileLayout]);
+
   const mobileFiltersOpen = mobileLayout && filtersOpen;
   const toolbarVisible = useGalleryToolbarVisibility(toolbarRef, mobileFiltersOpen);
-  useCloseMobileFiltersOnOutsideScroll(filterPanelRef, mobileFiltersOpen, closeFilters);
+  useCloseMobileFiltersOnOutsideScroll(
+    semantics.panelRef,
+    semantics.triggerRef,
+    mobileFiltersOpen,
+    closeFilters
+  );
   const backToTopVisible = useBackToTopVisibility();
 
   return {
     backToTopVisible,
     closeFilters,
-    filterPanelRef,
+    filterPanelHidden: semantics.panelHidden,
+    filterPanelRef: semantics.panelRef,
     filterMenuDismissSignal: filterPanelState.menuDismissSignal,
+    filterToggleRef: semantics.triggerRef,
     filtersOpen,
     toggleFilters,
     toolbarRef,
