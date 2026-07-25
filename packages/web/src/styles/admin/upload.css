@@ -270,6 +270,7 @@
 }
 .import-job.uploading,
 .import-job.downloading,
+.import-job.received,
 .import-job.processing,
 .import-job.committing {
   --import-job-border: #b5cae7;

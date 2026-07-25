@@ -67,8 +67,8 @@ async function waitForPreparationAdmission<T>(
       )
     ]);
     if (observed.kind === "complete") {
-      onAdmitted();
       if (!observed.ok) throw observed.error;
+      onAdmitted();
       return observed.value;
     }
     if (observed.status
@@ -87,8 +87,8 @@ async function waitForPreparationAdmission<T>(
         .then(() => ({ kind: "retry" as const }))
     ]);
     if (delayed.kind === "complete") {
-      onAdmitted();
       if (!delayed.ok) throw delayed.error;
+      onAdmitted();
       return delayed.value;
     }
     pollAttempt += 1;
@@ -152,12 +152,20 @@ export async function materializeImportAttempt(options: {
     return null;
   }
 
+  // Session creation only publishes its identity. The materialize request can
+  // still be waiting for the server's global permit, so status events own the
+  // queued -> uploading/downloading transition.
   options.onSession(session);
   await options.materialize(session);
   if (!isCurrentImportAttempt(queue, job.id, attemptKey)) {
     await cancelStoredImport(session.id).catch(() => undefined);
     return null;
   }
+  queue.updateJob(job.id, {
+    status: "received",
+    message: "原图素材已接收，等待处理",
+    transferProgress: undefined
+  });
   return session;
 }
 
@@ -166,7 +174,6 @@ export async function prepareMaterializedImportAttempt(options: {
   job: ImportJob;
   controller: AbortController;
   session: ImportSessionHandle;
-  onPreparing: () => void;
   startSuccessor: () => void;
 }): Promise<void> {
   const { queue, job, controller, session } = options;
@@ -175,7 +182,6 @@ export async function prepareMaterializedImportAttempt(options: {
     await cancelStoredImport(session.id).catch(() => undefined);
     return;
   }
-  options.onPreparing();
   const preparation = prepareImportSession(session, controller.signal);
   // The server can queue a prepare request behind its global limiter while the
   // session remains received. Open lookahead only after authoritative status
@@ -184,7 +190,15 @@ export async function prepareMaterializedImportAttempt(options: {
     session.id,
     preparation,
     controller.signal,
-    options.startSuccessor
+    () => {
+      if (!isCurrentImportAttempt(queue, job.id, attemptKey)) return;
+      queue.updateJob(job.id, {
+        status: "processing",
+        message: "标准化图片并生成缩略图",
+        transferProgress: undefined
+      });
+      options.startSuccessor();
+    }
   );
   const prepared = await preparedPromise;
   if (!isCurrentImportAttempt(queue, job.id, attemptKey)) {

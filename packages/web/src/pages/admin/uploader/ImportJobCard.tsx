@@ -14,7 +14,7 @@ import { importJobAttributesEditable } from "./import-attribute-policy.js";
 import { importPositionText } from "./import-job-utils.js";
 
 const statusLabels: Record<ImportJob["status"], string> = {
-  queued: "等待中", uploading: "上传中", downloading: "下载中", processing: "处理中",
+  queued: "等待中", uploading: "上传中", downloading: "下载中", received: "待处理", processing: "处理中",
   ready: "已就绪", committing: "提交中", cancelling: "取消中", done: "已完成",
   failed: "失败", cancelled: "已取消"
 };
@@ -57,7 +57,7 @@ export const ImportJobCard = memo(function ImportJobCard({
   onPreview
 }: ImportJobCardProps) {
   const editable = importJobAttributesEditable(job) && !busy;
-  const running = ["queued", "uploading", "downloading", "processing"].includes(job.status);
+  const running = ["queued", "uploading", "downloading", "received", "processing"].includes(job.status);
   const cancelling = job.status === "cancelling";
   const cancellationFailed = job.failureStage === "cancel";
   const confirmDuplicate = importJobNeedsDuplicateConfirmation(job)

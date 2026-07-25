@@ -156,7 +156,7 @@ export function storedImportStatusMessage(state: StoredImportStatus) {
 export function uploadLocalRaw(
   session: ImportSessionHandle,
   file: File,
-  callbacks: { onProgress: (progress: number) => void; onUploaded: () => void }
+  callbacks: { onProgress: (progress: number) => void }
 ) {
   if (!session.upload_url) throw new Error("上传会话缺少 upload URL");
   const request = new XMLHttpRequest();
@@ -169,7 +169,6 @@ export function uploadLocalRaw(
     request.upload.onprogress = (event) => {
       if (event.lengthComputable && event.total > 0) reportProgress((event.loaded / event.total) * 100);
     };
-    request.upload.onload = callbacks.onUploaded;
     request.onload = () => {
       const data = parseUploadResponse(request.responseText);
       if (request.status >= 200 && request.status < 300 && data.ok !== false) {

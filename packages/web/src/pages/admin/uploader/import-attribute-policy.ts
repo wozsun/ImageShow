@@ -11,7 +11,8 @@ type ImportAttributePhase = "initial" | "ready" | "locked";
 const initialAttributeStatuses = new Set<ImportJob["status"]>([
   "queued",
   "uploading",
-  "downloading"
+  "downloading",
+  "received"
 ]);
 
 function importAttributePhase(job: ImportJob): ImportAttributePhase {

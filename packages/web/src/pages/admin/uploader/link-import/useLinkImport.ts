@@ -117,11 +117,7 @@ export function useLinkImport(options: {
               sessionCreated = true;
               resolveSessionKnown?.(session.id);
               resolveSessionKnown = undefined;
-              queue.updateJob(job.id, {
-                status: "downloading",
-                message: "服务端下载原图",
-                sessionId: session.id
-              });
+              queue.updateJob(job.id, { sessionId: session.id });
             },
             materialize: (session) => materializeImportSession(
               session,
@@ -140,13 +136,7 @@ export function useLinkImport(options: {
           job,
           controller,
           session,
-          startSuccessor,
-          onPreparing: () => {
-            queue.updateJob(job.id, {
-              status: "processing",
-              message: "下载完成，等待服务端处理"
-            });
-          }
+          startSuccessor
         });
       },
       onError: (error) => {

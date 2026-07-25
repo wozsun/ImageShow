@@ -110,15 +110,9 @@ export function useLocalUploadImport(options: {
               queue.updateJob(job.id, { sessionId: session.id });
             },
             materialize: async (session) => {
-              queue.updateJob(job.id, { status: "uploading", message: "浏览器上传原文件", transferProgress: 0 });
               const request = uploadLocalRaw(session, job.file!, {
                 onProgress: (transferProgress) => {
                   if (isCurrentImportAttempt(queue, job.id, attemptKey)) queue.updateJob(job.id, { transferProgress });
-                },
-                onUploaded: () => {
-                  if (isCurrentImportAttempt(queue, job.id, attemptKey)) {
-                    queue.updateJob(job.id, { status: "processing", message: "上传完成，等待服务端处理", transferProgress: undefined });
-                  }
                 }
               });
               // XHR 才能提供上传进度；取消时同时中断会话请求和文件传输。
@@ -145,10 +139,7 @@ export function useLocalUploadImport(options: {
           job,
           controller,
           session,
-          startSuccessor,
-          onPreparing: () => {
-            queue.updateJob(job.id, { status: "processing", message: "上传完成，等待服务端处理", transferProgress: undefined });
-          }
+          startSuccessor
         });
       },
       onError: (error) => {

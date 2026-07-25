@@ -15,6 +15,7 @@ import {
 const processingImportStatuses = new Set<ImportJob["status"]>([
   "uploading",
   "downloading",
+  "received",
   "processing",
   "committing",
   "cancelling"

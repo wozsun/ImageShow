@@ -140,7 +140,7 @@ export type CommitFailureCheckpoint = "ready" | "committing" | "unknown";
 export type ImportJob = {
   id: string;
   kind: "local" | "download";
-  status: "queued" | "uploading" | "downloading" | "processing" | "ready" | "committing" | "cancelling" | "done" | "failed" | "cancelled";
+  status: "queued" | "uploading" | "downloading" | "received" | "processing" | "ready" | "committing" | "cancelling" | "done" | "failed" | "cancelled";
   message: string;
   preview: string;
   previewFull?: string;

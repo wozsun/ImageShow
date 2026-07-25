@@ -14,6 +14,16 @@ const activeImportPhases = new Map<
 const importStatusEvents = new EventEmitter();
 importStatusEvents.setMaxListeners(0);
 
+const importPhaseStatuses = new Map<string, ImportStatus>([
+  ["materialize-waiting", "created"],
+  ["uploading", "materializing"],
+  ["downloading", "materializing"],
+  ["prepare-waiting", "received"],
+  ["normalizing", "preparing"],
+  ["detecting", "preparing"],
+  ["staging", "preparing"]
+]);
+
 function canonicalImportId(id: string) {
   return id.toLowerCase();
 }
@@ -122,8 +132,10 @@ function presentImportStatus(
     error: string;
   }
 ) {
-  const phase = ["created", "materializing", "preparing"].includes(row.status)
-    ? activeImportPhases.get(canonicalImportId(id))
+  const activePhase = activeImportPhases.get(canonicalImportId(id));
+  const phase = activePhase
+    && importPhaseStatuses.get(activePhase.phase) === row.status
+    ? activePhase
     : undefined;
   return {
     status: row.status,
