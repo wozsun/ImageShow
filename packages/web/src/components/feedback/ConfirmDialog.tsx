@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, type RefObject } from "react";
 import type { IconName } from "../icon/Icon.js";
 import { AsyncActionButton } from "../actions/AsyncActionButton.js";
 import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
@@ -9,11 +9,14 @@ export function ConfirmDialog({
   description,
   confirmLabel,
   busy = false,
+  confirmDisabled = false,
+  closeOnBackdrop = false,
   danger = true,
   confirmIcon = "delete-bin-6-line",
   pendingLabel = "处理中",
   successLabel = "操作成功",
   errorLabel = "操作失败",
+  returnFocusRef,
   onClose,
   onConfirm
 }: {
@@ -21,11 +24,14 @@ export function ConfirmDialog({
   description: string;
   confirmLabel: string;
   busy?: boolean;
+  confirmDisabled?: boolean;
+  closeOnBackdrop?: boolean;
   danger?: boolean;
   confirmIcon?: IconName;
   pendingLabel?: string;
   successLabel?: string;
   errorLabel?: string;
+  returnFocusRef?: RefObject<HTMLElement | null>;
   onClose: () => void;
   onConfirm: () => Promise<boolean | void>;
 }) {
@@ -54,7 +60,9 @@ export function ConfirmDialog({
       className="modal edit-modal confirm-dialog"
       ariaLabel={title}
       busy={blocked}
+      closeOnBackdrop={closeOnBackdrop}
       initialFocusRef={cancelButtonRef}
+      returnFocusRef={returnFocusRef}
       onClose={onClose}
     >
       {({ requestClose }) => (
@@ -73,7 +81,7 @@ export function ConfirmDialog({
               type="submit"
               status={confirmStatus.status}
               presentation={confirmPresentation}
-              disabled={blocked}
+              disabled={blocked || confirmDisabled}
             />
           </footer>
         </form>

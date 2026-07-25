@@ -3,7 +3,9 @@ import type {
   RefObject,
   SetStateAction
 } from "react";
+import { useCallback, useRef, useState } from "react";
 import { StableButtonLabel } from "../../../components/data-display/StableButtonLabel.js";
+import { ConfirmDialog } from "../../../components/feedback/ConfirmDialog.js";
 import { DialogFrame } from "../../../components/feedback/DialogFrame.js";
 import { SelectMenu } from "../../../components/form/SelectMenu.js";
 import { WorkflowDefaultFields } from "../../../components/form/WorkflowDefaultFields.js";
@@ -29,10 +31,11 @@ import {
   type LinkDialogSubmission,
   type LinkInputMode
 } from "./link-import/LinkUrlDialog.js";
-import {
-  UploadCleanupMenu,
-  type UploadCleanupAction
-} from "./UploadCleanupMenu.js";
+import { UploadCleanupMenu } from "./UploadCleanupMenu.js";
+import type {
+  UploadCleanupAction,
+  UploadCleanupActionId
+} from "./upload-cleanup-actions.js";
 import type { ImportQueueController } from "./useImportQueue.js";
 
 export function UploadWorkflowWindow({
@@ -151,13 +154,53 @@ export function UploadWorkflowWindow({
   const emptySubtitle = mode === "file"
     ? "选择后立即上传并在服务端准备图片"
     : "输入来源后立即创建并准备图片任务";
+  const [pendingCleanupActionId, setPendingCleanupActionId] =
+    useState<UploadCleanupActionId | null>(null);
+  const cleanupReturnFocusRef = useRef<HTMLElement | null>(null);
+  const cleanupActionsRef = useRef(cleanupActions);
+  cleanupActionsRef.current = cleanupActions;
+  const pendingCleanupAction = pendingCleanupActionId
+    ? cleanupActions.find((action) => action.id === pendingCleanupActionId)
+    : undefined;
+  const selectCleanupAction = useCallback((
+    actionId: UploadCleanupActionId,
+    returnFocusTarget: HTMLElement
+  ) => {
+    const action = cleanupActionsRef.current.find(
+      (candidate) => candidate.id === actionId
+    );
+    if (!action?.enabled) return;
+    if (!action.confirmation) {
+      action.run();
+      return;
+    }
+    return () => {
+      cleanupReturnFocusRef.current = returnFocusTarget;
+      setPendingCleanupActionId(actionId);
+    };
+  }, []);
+  const confirmCleanupAction = useCallback(async () => {
+    const action = cleanupActionsRef.current.find(
+      (candidate) => candidate.id === pendingCleanupActionId
+    );
+    if (!action?.confirmation || !action.enabled || action.count === 0) {
+      return false;
+    }
+    action.run();
+    return true;
+  }, [pendingCleanupActionId]);
 
   return (
     <DialogFrame
       className="upload-overlay"
       ariaLabel={modeTitle}
       busy={busy}
-      paused={Boolean(detailItem || preview || urlInputOpen)}
+      paused={Boolean(
+        detailItem
+        || preview
+        || urlInputOpen
+        || pendingCleanupActionId
+      )}
       initialFocusRef={closeButtonRef}
       returnFocusRef={returnFocusRef}
       onClose={onClose}
@@ -189,15 +232,23 @@ export function UploadWorkflowWindow({
                   key={action.id}
                   type="button"
                   className="clear-button"
-                  disabled={busy || !action.enabled}
-                  onClick={action.run}
+                  disabled={!action.enabled}
+                  onClick={(event) => {
+                    selectCleanupAction(
+                      action.id,
+                      event.currentTarget
+                    )?.();
+                  }}
                 >
                   {action.label}
                 </button>
               ))}
             </div>
             <div className="upload-primary-actions">
-              <UploadCleanupMenu disabled={busy} actions={cleanupActions} />
+              <UploadCleanupMenu
+                actions={cleanupActions}
+                onSelect={selectCleanupAction}
+              />
               {mode === "link" ? (
                 <div
                   className={`upload-source-picker${busy ? " is-disabled" : ""}`}
@@ -449,6 +500,24 @@ export function UploadWorkflowWindow({
           onClose={onCloseLinkInput}
           onSubmit={onSubmitLinks}
           returnFocusRef={linkPickerRef}
+        />
+      )}
+      {pendingCleanupAction?.confirmation && (
+        <ConfirmDialog
+          title={pendingCleanupAction.confirmation.title}
+          description={pendingCleanupAction.confirmation.description(
+            pendingCleanupAction.count
+          )}
+          confirmLabel={pendingCleanupAction.confirmation.confirmLabel(
+            pendingCleanupAction.count
+          )}
+          pendingLabel="清空中"
+          successLabel="已清空"
+          confirmDisabled={!pendingCleanupAction.enabled}
+          closeOnBackdrop
+          returnFocusRef={cleanupReturnFocusRef}
+          onClose={() => setPendingCleanupActionId(null)}
+          onConfirm={confirmCleanupAction}
         />
       )}
       </>

@@ -21,6 +21,7 @@ export function DialogFrame({
   busy = false,
   paused = false,
   animateClose = true,
+  closeOnBackdrop = false,
   initialFocusRef,
   returnFocusRef,
   onClose,
@@ -33,6 +34,7 @@ export function DialogFrame({
   busy?: boolean;
   paused?: boolean;
   animateClose?: boolean;
+  closeOnBackdrop?: boolean;
   initialFocusRef?: RefObject<HTMLElement | null>;
   returnFocusRef?: RefObject<HTMLElement | null>;
   onClose: () => void;
@@ -68,6 +70,11 @@ export function DialogFrame({
       aria-describedby={descriptionId}
       aria-label={titleId ? undefined : ariaLabel}
       tabIndex={-1}
+      onPointerDown={closeOnBackdrop
+        ? (event) => {
+            if (event.target === event.currentTarget) requestClose();
+          }
+        : undefined}
       onAnimationEnd={onAnimationEnd}
     >
       <DialogPortalTargetContext.Provider value={containerRef}>

@@ -3,6 +3,10 @@ import { AnchoredPopup } from "../../../components/feedback/AnchoredPopup.js";
 import { Icon } from "../../../components/icon/Icon.js";
 import { useAnchoredMenu } from "../../../hooks/useAnchoredMenu.js";
 import type { AnchoredMenuSize } from "../../../lib/ui/menu-position.js";
+import type {
+  UploadCleanupAction,
+  UploadCleanupActionId
+} from "./upload-cleanup-actions.js";
 
 const CLEANUP_MENU_SIZE: AnchoredMenuSize = {
   minWidth: 184,
@@ -13,19 +17,15 @@ const CLEANUP_MENU_SIZE: AnchoredMenuSize = {
   maxHeight: 220,
 };
 
-export type UploadCleanupAction = {
-  id: string;
-  label: string;
-  enabled: boolean;
-  run: () => void;
-};
-
 export function UploadCleanupMenu({
-  disabled,
   actions,
+  onSelect
 }: {
-  disabled: boolean;
   actions: UploadCleanupAction[];
+  onSelect: (
+    actionId: UploadCleanupActionId,
+    returnFocusTarget: HTMLButtonElement
+  ) => (() => void) | void;
 }) {
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -34,7 +34,7 @@ export function UploadCleanupMenu({
     triggerRef,
     getSize: () => CLEANUP_MENU_SIZE,
     initialMaxHeight: CLEANUP_MENU_SIZE.maxHeight,
-    disabled: disabled || allDisabled,
+    disabled: allDisabled,
     closeOnEscape: true,
     closeOnFocusOutside: true,
     focusOnOpen: () => itemRefs.current.find((item) => item && !item.disabled),
@@ -42,7 +42,13 @@ export function UploadCleanupMenu({
 
   const choose = (action: UploadCleanupAction) => {
     if (!action.enabled) return;
-    menu.requestClose(action.run);
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+    const afterClose = onSelect(action.id, trigger);
+    menu.requestClose(() => {
+      trigger.focus({ preventScroll: true });
+      afterClose?.();
+    });
   };
   const moveFocus = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
     if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
@@ -97,7 +103,7 @@ export function UploadCleanupMenu({
         aria-label="清理任务"
         aria-haspopup="menu"
         aria-expanded={menu.open && !menu.closing}
-        disabled={disabled || allDisabled}
+        disabled={allDisabled}
         onClick={() => menu.open ? menu.requestClose() : menu.openMenu()}
       >
         <Icon name="delete-bin-6-line" />

@@ -21,16 +21,15 @@ import { useLocalUploadImport } from "./useLocalUploadImport.js";
 import { useLinkImport } from "./link-import/useLinkImport.js";
 import { useImportCommit } from "./useImportCommit.js";
 import { useImportStatusEvents } from "./useImportStatusEvents.js";
-import type { UploadCleanupAction } from "./UploadCleanupMenu.js";
+import {
+  createUploadCleanupActions,
+  isCompletedImportJob
+} from "./upload-cleanup-actions.js";
 import { canApplyImportAttributeDefaults } from "./import-attribute-policy.js";
 import { UploaderTriggers } from "./UploaderTriggers.js";
 import { UploadWorkflowWindow } from "./UploadWorkflowWindow.js";
 
 const EMPTY_FACET_OPTIONS: FacetOption[] = [];
-
-function isCompletedImportJob(job: ImportJob) {
-  return job.status === "done";
-}
 
 function needsImportCancellation(job: ImportJob) {
   return job.status !== "cancelling"
@@ -250,31 +249,11 @@ export function Uploader({ onDone }: { onDone: () => void }) {
     void addJobs(jobs);
   };
 
-  const {
-    duplicateJobs,
-    doneJobs
-  } = queue.summary;
-  const completedJobs = doneJobs;
-  const cleanupActions: UploadCleanupAction[] = [
-    {
-      id: "duplicates",
-      label: "清空重复待确认",
-      enabled: duplicateJobs > 0,
-      run: () => void clearJobs(importJobNeedsDuplicateConfirmation),
-    },
-    {
-      id: "uncommitted",
-      label: "清空未提交",
-      enabled: queue.jobs.length > completedJobs,
-      run: () => void clearJobs((job) => !isCompletedImportJob(job)),
-    },
-    {
-      id: "completed",
-      label: "清空已完成",
-      enabled: completedJobs > 0,
-      run: () => void clearJobs(isCompletedImportJob),
-    },
-  ];
+  const cleanupActions = createUploadCleanupActions({
+    jobs: queue.jobs,
+    busy,
+    onClear: (predicate) => void clearJobs(predicate)
+  });
   const defaultsSummary = [
     uploadCommonDeviceOptions.find((option) => option.value === defaults.device)?.label ?? "设备不设",
     uploadCommonBrightnessOptions.find((option) => option.value === defaults.brightness)?.label ?? "亮暗不设",
