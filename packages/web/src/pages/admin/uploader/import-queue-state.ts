@@ -1,10 +1,10 @@
-import type { ImageDraft, ImportJob } from "../../../lib/types.js";
+import type { ImageDraft, ImageItem, ImportJob } from "../../../lib/types.js";
 import type { ImportAttributeDefaults } from "../../../lib/upload/upload-utils.js";
 import {
-  batchDuplicateSnapshotChanged,
-  detachRemovedBatchDuplicateOwners,
-  refreshBatchDuplicateMatches,
-  refreshBatchDuplicateMatchesForOwners
+  importJobNeedsDuplicateConfirmation,
+  importQueueDuplicateStateChanged,
+  isQueueDuplicateCandidate,
+  reconcileImportQueueDuplicates
 } from "./duplicate-match.js";
 import {
   classificationOverrideFor,
@@ -22,10 +22,12 @@ const runningImportStatuses = new Set<ImportJob["status"]>([
 ]);
 
 export type ImportQueueState = { jobs: ImportJob[]; page: number };
+export type ImportCommitIntent = "ready" | "retry";
 export type ImportQueueAction =
   | { type: "append"; jobs: ImportJob[] }
   | { type: "retain-mode"; mode: "file" | "link" }
   | { type: "patch"; id: string; patch: Partial<ImportJob> }
+  | { type: "complete"; id: string; patch: Partial<ImportJob>; item: ImageItem }
   | { type: "patch-draft"; id: string; patch: Partial<ImageDraft> }
   | { type: "remove"; ids: Set<string>; pageSize: number }
   | { type: "apply-defaults"; defaults: ImportAttributeDefaults }
@@ -41,6 +43,16 @@ type ImportJobSummary = {
 
 export function importQueuePageCount(length: number, pageSize: number) {
   return Math.max(1, Math.ceil(length / pageSize));
+}
+
+export function importJobCanStartCommit(
+  job: ImportJob,
+  intent: ImportCommitIntent
+) {
+  if (job.duplicateDecision === "undecided") return false;
+  return intent === "ready"
+    ? job.status === "ready"
+    : job.status === "failed" && job.failureStage === "commit";
 }
 
 function patchJobDraft(job: ImportJob, patch: Partial<ImageDraft>): ImportJob {
@@ -84,24 +96,48 @@ function updateQueueJob(
   const currentJob = state.jobs[jobIndex]!;
   const nextJob = updater(currentJob);
   if (nextJob === currentJob) return state;
-
-  let jobs: ImportJob[];
-  if (currentJob.md5 && currentJob.md5 !== nextJob.md5) {
-    jobs = detachRemovedBatchDuplicateOwners(
-      state.jobs,
-      new Set([currentJob.id])
-    );
-    jobs.splice(jobIndex, 0, nextJob);
-  } else {
-    jobs = [...state.jobs];
-    jobs[jobIndex] = nextJob;
-  }
+  const jobs = [...state.jobs];
+  jobs[jobIndex] = nextJob;
   return {
     ...state,
-    jobs: currentJob.md5 === nextJob.md5
-      && batchDuplicateSnapshotChanged(currentJob, nextJob)
-      ? refreshBatchDuplicateMatches(jobs, id)
+    jobs: importQueueDuplicateStateChanged(currentJob, nextJob)
+      ? reconcileImportQueueDuplicates(jobs)
       : jobs
+  };
+}
+
+function completeQueueJob(
+  state: ImportQueueState,
+  id: string,
+  patch: Partial<ImportJob>,
+  item: ImageItem
+) {
+  const jobIndex = state.jobs.findIndex((job) => job.id === id);
+  const completed = jobIndex >= 0
+    ? patchJob(state.jobs[jobIndex]!, { ...patch, md5: item.md5 })
+    : undefined;
+  let changed = Boolean(
+    completed && completed !== state.jobs[jobIndex]
+  );
+  const jobs = state.jobs.map((job, index) => {
+    if (index === jobIndex && completed) return completed;
+    if (
+      job.md5 !== item.md5
+      || (
+        !isQueueDuplicateCandidate(job)
+        && job.status !== "processing"
+      )
+      || job.duplicates.some((duplicate) => duplicate.id === item.id)
+    ) {
+      return job;
+    }
+    changed = true;
+    return { ...job, duplicates: [...job.duplicates, item] };
+  });
+  if (!changed) return state;
+  return {
+    ...state,
+    jobs: reconcileImportQueueDuplicates(jobs)
   };
 }
 
@@ -115,9 +151,12 @@ export function summarizeImportJobs(jobs: ImportJob[]): ImportJobSummary {
   };
 
   for (const job of jobs) {
+    if (importJobNeedsDuplicateConfirmation(job)) {
+      summary.duplicateJobs += 1;
+      continue;
+    }
     if (job.status === "ready") {
-      if (job.duplicateDecision === "undecided") summary.duplicateJobs += 1;
-      else summary.readyJobs.push(job);
+      if (importJobCanStartCommit(job, "ready")) summary.readyJobs.push(job);
       continue;
     }
     if (runningImportStatuses.has(job.status)) {
@@ -137,45 +176,41 @@ export function reduceImportQueue(
 ): ImportQueueState {
   switch (action.type) {
     case "append": {
-      const jobs = [...action.jobs, ...state.jobs];
+      const jobs = reconcileImportQueueDuplicates([...action.jobs, ...state.jobs]);
       return { jobs, page: 1 };
     }
     case "retain-mode": {
-      const jobs = state.jobs.filter((job) => (
-        action.mode === "file" ? job.kind === "local" : job.kind !== "local"
-      ));
+      const jobs = reconcileImportQueueDuplicates(
+        state.jobs.filter((job) => (
+          action.mode === "file" ? job.kind === "local" : job.kind !== "local"
+        ))
+      );
       return jobs.length === state.jobs.length && state.page === 1
         ? state
         : { jobs, page: 1 };
     }
     case "patch":
       return updateQueueJob(state, action.id, (job) => patchJob(job, action.patch));
+    case "complete":
+      return completeQueueJob(state, action.id, action.patch, action.item);
     case "patch-draft":
       return updateQueueJob(state, action.id, (job) => patchJobDraft(job, action.patch));
     case "remove": {
       if (!action.ids.size || !state.jobs.some((job) => action.ids.has(job.id))) return state;
-      const jobs = detachRemovedBatchDuplicateOwners(state.jobs, action.ids);
+      const jobs = reconcileImportQueueDuplicates(
+        state.jobs.filter((job) => !action.ids.has(job.id))
+      );
       return { jobs, page: Math.min(state.page, importQueuePageCount(jobs.length, action.pageSize)) };
     }
     case "apply-defaults": {
-      const changedOwnerIds = new Set<string>();
       const jobs = mapJobsWithIdentity(
         state.jobs,
-        (job) => {
-          const nextJob = patchJobDraft(
-            job,
-            importAttributeDefaultsPatch(job, action.defaults)
-          );
-          if (nextJob !== job && batchDuplicateSnapshotChanged(job, nextJob)) {
-            changedOwnerIds.add(job.id);
-          }
-          return nextJob;
-        }
+        (job) => patchJobDraft(
+          job,
+          importAttributeDefaultsPatch(job, action.defaults)
+        )
       );
-      return jobs === state.jobs ? state : {
-        ...state,
-        jobs: refreshBatchDuplicateMatchesForOwners(jobs, changedOwnerIds)
-      };
+      return jobs === state.jobs ? state : { ...state, jobs };
     }
     case "set-page": {
       const page = Math.max(

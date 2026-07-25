@@ -324,6 +324,7 @@ export function UploadWorkflowWindow({
           )}
           <ImportJobList
             jobs={queue.visibleJobs}
+            allJobs={queue.jobs}
             busy={busy}
             storageName={storageName}
             themes={themes}

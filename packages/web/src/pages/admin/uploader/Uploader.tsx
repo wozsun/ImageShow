@@ -7,6 +7,11 @@ import { useStorageOptions } from "../../../lib/api/storage-options.js";
 import type { FacetOption, ImageItem, ImportJob } from "../../../lib/types.js";
 import type { ImportAttributeDefaults } from "../../../lib/upload/upload-utils.js";
 import type { ImportPreviewTarget } from "./DuplicateMatchPanel.js";
+import { importJobNeedsDuplicateConfirmation } from "./duplicate-match.js";
+import {
+  importJobCanStartCommit,
+  summarizeImportJobs
+} from "./import-queue-state.js";
 import type { LinkDialogSubmission, LinkInputMode } from "./link-import/LinkUrlDialog.js";
 import { jsonlImportJobs } from "./link-import/jsonl-jobs.js";
 import { weiboImportJobs } from "./link-import/weibo-jobs.js";
@@ -127,7 +132,13 @@ export function Uploader({ onDone }: { onDone: () => void }) {
     storageSlug: activeBackend,
     concurrency: downloadConcurrency
   });
-  const commitImports = useImportCommit({ updateJob: queue.updateJob, concurrency: commitConcurrency, onDone });
+  const commitImports = useImportCommit({
+    jobsRef: queue.jobsRef,
+    updateJob: queue.updateJob,
+    completeJob: queue.completeJob,
+    concurrency: commitConcurrency,
+    onDone
+  });
   useImportStatusEvents(queue.jobs, queue.jobsRef, queue.updateJob);
 
   const closeWorkflow = () => {
@@ -154,16 +165,27 @@ export function Uploader({ onDone }: { onDone: () => void }) {
     setOpen(true);
   };
 
-  const retryJob = useCallback(async (job: ImportJob) => {
-    if (job.failureStage === "commit") {
-      setBusy(true);
-      await commitImports([job]).finally(() => setBusy(false));
+  const retryJob = useCallback(async (jobId: string) => {
+    const current = queue.jobsRef.current.find((job) => job.id === jobId);
+    if (
+      !current
+      || !["failed", "cancelled"].includes(current.status)
+      || current.failureStage === "cancel"
+    ) {
       return;
     }
-    if (job.kind === "local") await retryLocalImport(job);
-    else await retryLinkImport(job);
+    if (current.failureStage === "commit") {
+      if (importJobNeedsDuplicateConfirmation(current)) return;
+      if (!importJobCanStartCommit(current, "retry")) return;
+      setBusy(true);
+      await commitImports([current]).finally(() => setBusy(false));
+      return;
+    }
+    if (current.kind === "local") await retryLocalImport(current);
+    else await retryLinkImport(current);
   }, [
     commitImports,
+    queue.jobsRef,
     retryLinkImport,
     retryLocalImport
   ]);
@@ -229,7 +251,6 @@ export function Uploader({ onDone }: { onDone: () => void }) {
   };
 
   const {
-    readyJobs,
     duplicateJobs,
     doneJobs
   } = queue.summary;
@@ -239,7 +260,7 @@ export function Uploader({ onDone }: { onDone: () => void }) {
       id: "duplicates",
       label: "清空重复待确认",
       enabled: duplicateJobs > 0,
-      run: () => void clearJobs((job) => job.status === "ready" && job.duplicateDecision === "undecided"),
+      run: () => void clearJobs(importJobNeedsDuplicateConfirmation),
     },
     {
       id: "uncommitted",
@@ -272,13 +293,13 @@ export function Uploader({ onDone }: { onDone: () => void }) {
     void cancelJob(job);
   }, [cancelJob]);
   const requestRetryJob = useCallback((job: ImportJob) => {
-    void retryJob(job);
+    void retryJob(job.id);
   }, [retryJob]);
   const requestRemoveJob = useCallback((job: ImportJob) => {
     void removeJob(job);
   }, [removeJob]);
   const confirmDuplicateJob = useCallback((job: ImportJob) => {
-    queue.updateJob(job.id, { duplicateDecision: "upload", message: "已确认提交副本" });
+    queue.updateJob(job.id, { duplicateDecision: "confirmed" });
   }, [queue.updateJob]);
   const openJobDetail = useCallback((item: ImageItem, opener: HTMLElement) => {
     detailReturnFocusRef.current = opener;
@@ -350,8 +371,12 @@ export function Uploader({ onDone }: { onDone: () => void }) {
           onBackendChange={setBackendChoice}
           onCancelAll={() => clearJobs(() => true)}
           onCommitReady={() => {
+            const currentReadyJobs = summarizeImportJobs(
+              queue.jobsRef.current
+            ).readyJobs;
+            if (!currentReadyJobs.length) return;
             setBusy(true);
-            void commitImports(readyJobs).finally(() => setBusy(false));
+            void commitImports(currentReadyJobs).finally(() => setBusy(false));
           }}
           onCloseDetail={() => setDetailItem(null)}
           onClosePreview={() => setPreview(null)}

@@ -206,12 +206,11 @@ export function retryPrepareJob(job: ImportJob): ImportJob {
     message: "等待重试",
     transferProgress: undefined,
     md5: undefined,
-    previewPersistent: undefined,
+    preparedOrder: undefined,
     detectedClassification: undefined,
     classificationOverride: undefined,
     duplicates: [],
     duplicateDecision: "upload",
-    batchDuplicate: undefined,
     finalSize: undefined,
     quality: undefined,
     transcoded: undefined

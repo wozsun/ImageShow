@@ -101,8 +101,8 @@ export type StoredImportStatus = {
 };
 
 export type StoredImportCommitResult = {
-  status: "imported" | "duplicate";
-  item?: { object_url: string; thumb_url: string };
+  status: "imported";
+  item: ImageItem;
 };
 
 export function getStoredImportStatuses(ids: string[], signal?: AbortSignal) {

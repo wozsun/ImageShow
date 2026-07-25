@@ -1,6 +1,10 @@
 import { ImageThumbnail } from "../../../components/image/ImageThumbnail.js";
 import { formatImageClassification, imageDisplayTitle } from "../../../lib/ui/formatters.js";
-import type { BatchDuplicateMatch, ImageItem } from "../../../lib/types.js";
+import type { ImageItem, ImportJob } from "../../../lib/types.js";
+import {
+  importJobPreviewAvailable,
+  importJobSourceLabel
+} from "./duplicate-match.js";
 import { importPositionText } from "./import-job-utils.js";
 
 export type ImportPreviewTarget = {
@@ -13,20 +17,30 @@ export type ImportPreviewTarget = {
 
 export function DuplicateMatchPanel({
   libraryItems,
-  batchDuplicate,
+  queueDuplicate,
   onOpenDetail,
   onPreview,
   onConfirm,
   onCancel
 }: {
   libraryItems: ImageItem[];
-  batchDuplicate?: BatchDuplicateMatch;
+  queueDuplicate?: ImportJob;
   onOpenDetail: (item: ImageItem, opener: HTMLElement) => void;
   onPreview: (target: ImportPreviewTarget) => void;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
-  const batchPositionText = batchDuplicate ? importPositionText(batchDuplicate) : "";
+  const queuePositionText = queueDuplicate
+    ? importPositionText(queueDuplicate)
+    : "";
+  const queueSource = queueDuplicate
+    ? importJobSourceLabel(queueDuplicate)
+    : "";
+  const queuePreview = queueDuplicate?.preview ?? "";
+  const queuePreviewFull = queueDuplicate?.previewFull || queuePreview;
+  const queuePreviewAvailable = Boolean(
+    queueDuplicate && importJobPreviewAvailable(queueDuplicate)
+  );
 
   return (
     <div className="duplicate-panel">
@@ -48,31 +62,31 @@ export function DuplicateMatchPanel({
               <small>{formatImageClassification(item)}</small>
             </button>
           ))}
-          {batchDuplicate && (
+          {queueDuplicate && (
             <button
               type="button"
               className="duplicate-item batch-duplicate-item"
-              disabled={!batchDuplicate.available}
+              disabled={!queuePreviewAvailable}
               onClick={(event) => onPreview({
-                src: batchDuplicate.previewFull,
-                thumbSrc: batchDuplicate.preview,
-                width: batchDuplicate.width,
-                height: batchDuplicate.height,
+                src: queuePreviewFull,
+                thumbSrc: queuePreview,
+                width: queueDuplicate.width,
+                height: queueDuplicate.height,
                 opener: event.currentTarget,
               })}
             >
-              {batchDuplicate.preview
-                ? <ImageThumbnail src={batchDuplicate.preview} size="small" />
+              {queuePreview
+                ? <ImageThumbnail src={queuePreview} size="small" />
                 : <span className="image-thumbnail is-small" aria-hidden="true" />}
-              <span className="duplicate-item-source" title={batchDuplicate.original}>
-                {batchDuplicate.original}
+              <span className="duplicate-item-source" title={queueSource}>
+                {queueSource}
               </span>
               <small>
-                {batchDuplicate.available
+                {queuePreviewAvailable
                   ? [
-                      batchPositionText || "同批处理任务",
-                      batchDuplicate.theme,
-                      `${batchDuplicate.device}/${batchDuplicate.brightness}`
+                      queuePositionText || "同批处理任务",
+                      queueDuplicate.draft.theme,
+                      `${queueDuplicate.draft.device}/${queueDuplicate.draft.brightness}`
                     ].filter(Boolean).join(" · ")
                   : "来源预览暂不可用"}
               </small>

@@ -1,6 +1,7 @@
 import { useCallback } from "react";
+import type { RefObject } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import type { ImportJob } from "../../../lib/types.js";
+import type { ImageItem, ImportJob } from "../../../lib/types.js";
 import { normalizeAuthor, normalizeTheme, runWithConcurrency } from "../../../lib/upload/upload-utils.js";
 import {
   commitStoredImport,
@@ -9,7 +10,14 @@ import {
   type StoredImportStatus
 } from "./import-api.js";
 import { invalidateImageData } from "../../../lib/api/query-invalidation.js";
-import { commitFailurePatchForStatus } from "./import-commit-state.js";
+import {
+  commitFailurePatchForStatus,
+  resolveCommitRetry
+} from "./import-status-state.js";
+import {
+  importJobCanStartCommit,
+  type ImportCommitIntent
+} from "./import-queue-state.js";
 
 function normalizedCommitDraft(job: ImportJob) {
   return {
@@ -19,34 +27,48 @@ function normalizedCommitDraft(job: ImportJob) {
   };
 }
 
-function completedImportPatch(
-  job: ImportJob,
+type CompletedImport = {
+  kind: "completed";
+  patch: Partial<ImportJob>;
+  item: ImageItem;
+};
+
+type FailedImport = {
+  kind: "failed";
+  patch: Partial<ImportJob>;
+};
+
+function completedImport(
   result: StoredImportCommitResult,
   importedMessage: string
-): Partial<ImportJob> {
+): CompletedImport {
   return {
-    status: "done",
-    failureStage: undefined,
-    commitFailureCheckpoint: undefined,
-    message: result.status === "duplicate"
-      ? "图片已存在"
-      : importedMessage,
-    preview: result.item?.thumb_url ?? job.preview,
-    previewFull: result.item?.object_url ?? job.previewFull ?? job.preview,
-    previewPersistent: Boolean(result.item)
+    kind: "completed",
+    patch: {
+      status: "done",
+      failureStage: undefined,
+      commitFailureCheckpoint: undefined,
+      message: importedMessage,
+      preview: result.item.thumb_url,
+      previewFull: result.item.object_url
+    },
+    item: result.item
   };
 }
 
-async function commitFailurePatch(
+async function commitFailure(
   job: ImportJob,
   error: unknown
-): Promise<Partial<ImportJob>> {
+): Promise<CompletedImport | FailedImport> {
   if (!job.sessionId) {
     return {
-      status: "failed",
-      failureStage: "prepare",
-      commitFailureCheckpoint: undefined,
-      message: "提交会话不存在，需要重新处理"
+      kind: "failed",
+      patch: {
+        status: "failed",
+        failureStage: "prepare",
+        commitFailureCheckpoint: undefined,
+        message: "提交会话不存在，需要重新处理"
+      }
     };
   }
 
@@ -63,25 +85,66 @@ async function commitFailurePatch(
         job.sessionId,
         normalizedCommitDraft(job)
       );
-      return completedImportPatch(job, result, "服务端已完成提交");
-    } catch {
-      // 状态查询已确认提交完成；补取最终展示地址失败不应把任务降级为失败。
+      return completedImport(result, "服务端已完成提交");
+    } catch (recoveryError) {
+      return {
+        kind: "failed",
+        patch: commitFailurePatchForStatus(status, recoveryError)
+      };
     }
   }
 
-  return commitFailurePatchForStatus(status, error);
+  return {
+    kind: "failed",
+    patch: commitFailurePatchForStatus(status, error)
+  };
 }
 
 export function useImportCommit(options: {
+  jobsRef: RefObject<ImportJob[]>;
   updateJob: (id: string, patch: Partial<ImportJob>) => void;
+  completeJob: (id: string, patch: Partial<ImportJob>, item: ImageItem) => void;
   concurrency: number;
   onDone: () => void;
 }) {
-  const { updateJob, concurrency, onDone } = options;
+  const {
+    jobsRef,
+    updateJob,
+    completeJob,
+    concurrency,
+    onDone
+  } = options;
   const client = useQueryClient();
   return useCallback(async (jobs: ImportJob[]) => {
     let imported = false;
-    await runWithConcurrency(jobs, concurrency, async (job) => {
+    await runWithConcurrency(jobs, concurrency, async (requestedJob) => {
+      const intent: ImportCommitIntent = requestedJob.status === "failed"
+        && requestedJob.failureStage === "commit"
+        ? "retry"
+        : "ready";
+      let job = jobsRef.current.find((item) => item.id === requestedJob.id);
+      if (!job || !importJobCanStartCommit(job, intent)) return;
+      if (
+        intent === "retry"
+        && job.commitFailureCheckpoint === "unknown"
+      ) {
+        let status: StoredImportStatus | undefined;
+        let statusError: unknown;
+        try {
+          if (!job.sessionId) throw new Error("提交会话不存在");
+          status = await getStoredImportStatus(job.sessionId);
+        } catch (error) {
+          statusError = error;
+        }
+        const resolution = resolveCommitRetry(
+          status,
+          statusError ?? new Error("重试前状态校验未通过")
+        );
+        if ("patch" in resolution) updateJob(job.id, resolution.patch);
+        if (resolution.action === "stop") return;
+      }
+      job = jobsRef.current.find((item) => item.id === requestedJob.id);
+      if (!job || !importJobCanStartCommit(job, intent)) return;
       try {
         updateJob(job.id, {
           status: "committing",
@@ -94,15 +157,27 @@ export function useImportCommit(options: {
           job.sessionId,
           normalizedCommitDraft(job)
         );
-        if (result.status === "imported") imported = true;
-        updateJob(job.id, completedImportPatch(job, result, "已完成"));
+        imported = true;
+        const completed = completedImport(result, "已完成");
+        completeJob(job.id, completed.patch, completed.item);
       } catch (error) {
-        const patch = await commitFailurePatch(job, error);
-        if (patch.status === "done") imported = true;
-        updateJob(job.id, patch);
+        const outcome = await commitFailure(job, error);
+        if (outcome.kind === "completed") {
+          imported = true;
+          completeJob(job.id, outcome.patch, outcome.item);
+        } else {
+          updateJob(job.id, outcome.patch);
+        }
       }
     });
     if (imported) await invalidateImageData(client);
     onDone();
-  }, [client, concurrency, onDone, updateJob]);
+  }, [
+    client,
+    completeJob,
+    concurrency,
+    jobsRef,
+    onDone,
+    updateJob
+  ]);
 }

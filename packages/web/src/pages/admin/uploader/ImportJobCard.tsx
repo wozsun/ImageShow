@@ -6,6 +6,10 @@ import { importCardBrightnessSelectOptions, importCardDeviceSelectOptions } from
 import { formatBytes } from "../../../lib/ui/formatters.js";
 import type { FacetOption, ImageDraft, ImageItem, ImportJob } from "../../../lib/types.js";
 import { DuplicateMatchPanel, type ImportPreviewTarget } from "./DuplicateMatchPanel.js";
+import {
+  importJobNeedsDuplicateConfirmation,
+  importJobPreviewAvailable
+} from "./duplicate-match.js";
 import { importJobAttributesEditable } from "./import-attribute-policy.js";
 import { importPositionText } from "./import-job-utils.js";
 
@@ -21,6 +25,7 @@ function formatPixelDimensions(width?: number, height?: number) {
 
 type ImportJobCardProps = {
   job: ImportJob;
+  queueDuplicate?: ImportJob;
   busy: boolean;
   storageDisplayName: string;
   themes: FacetOption[];
@@ -37,6 +42,7 @@ type ImportJobCardProps = {
 
 export const ImportJobCard = memo(function ImportJobCard({
   job,
+  queueDuplicate,
   busy,
   storageDisplayName,
   themes,
@@ -54,7 +60,11 @@ export const ImportJobCard = memo(function ImportJobCard({
   const running = ["queued", "uploading", "downloading", "processing"].includes(job.status);
   const cancelling = job.status === "cancelling";
   const cancellationFailed = job.failureStage === "cancel";
-  const retryable = ["failed", "cancelled"].includes(job.status) && !cancellationFailed;
+  const confirmDuplicate = importJobNeedsDuplicateConfirmation(job)
+    && (job.duplicates.length > 0 || Boolean(queueDuplicate));
+  const retryable = ["failed", "cancelled"].includes(job.status)
+    && !cancellationFailed
+    && !confirmDuplicate;
   const statusLabel = cancellationFailed ? "取消失败" : statusLabels[job.status];
   const hasFinalSize = typeof job.finalSize === "number";
   const displayName = job.draft.title || job.file?.name || job.url || job.id;
@@ -75,7 +85,7 @@ export const ImportJobCard = memo(function ImportJobCard({
   const metaText = [sourcePositionText, storageDisplayName, dimensionsText, statusDetailText].filter(Boolean).join(" · ");
   const sizeSummaryText = `${originalSizeText} → ${finalSizeText}${qualityText ? ` · ${qualityText}` : ""}`;
   const previewSrc = job.preview;
-  const openPreview: ((opener: HTMLElement) => void) | undefined = previewSrc
+  const openPreview: ((opener: HTMLElement) => void) | undefined = importJobPreviewAvailable(job)
     ? (opener) => onPreview({
         src: job.previewFull || previewSrc,
         thumbSrc: previewSrc,
@@ -84,10 +94,6 @@ export const ImportJobCard = memo(function ImportJobCard({
         opener,
       })
     : undefined;
-  const confirmDuplicate = job.status === "ready"
-    && job.duplicateDecision === "undecided"
-    && (job.duplicates.length > 0 || Boolean(job.batchDuplicate));
-
   return (
     <article className={`import-job ${job.status}`}>
       <div className="import-job-aside">
@@ -156,7 +162,7 @@ export const ImportJobCard = memo(function ImportJobCard({
       {confirmDuplicate && (
         <DuplicateMatchPanel
           libraryItems={job.duplicates}
-          batchDuplicate={job.batchDuplicate}
+          queueDuplicate={queueDuplicate}
           onOpenDetail={onOpenDetail}
           onPreview={onPreview}
           onConfirm={() => onConfirmDuplicate(job)}

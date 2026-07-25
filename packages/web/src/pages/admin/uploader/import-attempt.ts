@@ -187,7 +187,25 @@ export async function prepareMaterializedImportAttempt(options: {
     options.startSuccessor
   );
   const prepared = await preparedPromise;
-  const acceptance = applyPreparedResult(queue, job.id, attemptKey, prepared);
+  if (!isCurrentImportAttempt(queue, job.id, attemptKey)) {
+    await cancelStoredImport(session.id).catch(() => undefined);
+    return;
+  }
+  // 先把最终 MD5 发布到实时队列：更早完成的 commit 会被下面的集合捕获，
+  // 更晚完成的 commit 则能把完整 ImageItem 直接汇入当前 processing 任务。
+  queue.updateJob(job.id, { md5: prepared.md5 });
+  let currentPrepared = prepared;
+  if (queue.committedMd5sRef.current.has(prepared.md5)) {
+    // commit 可能在本次 prepare 的图库查询之前或期间完成；ready 会话可幂等
+    // 重读图库真值，不在前端保存已离队任务的属性或预览。
+    currentPrepared = await prepareImportSession(session, controller.signal);
+  }
+  const acceptance = applyPreparedResult(
+    queue,
+    job.id,
+    attemptKey,
+    currentPrepared
+  );
   if (acceptance.status === "stale") {
     await cancelStoredImport(session.id).catch(() => undefined);
   }

@@ -137,22 +137,6 @@ export type ImportCommonAttributeField = "device" | "brightness" | "theme" | "au
 export type ImportDetectedClassification = { device: Device; brightness: Brightness };
 export type CommitFailureCheckpoint = "ready" | "committing" | "unknown";
 
-export type BatchDuplicateMatch = {
-  ownerId: string | null;
-  manifestSource?: ManifestImportSource;
-  manifestLine?: number;
-  manifestPosition?: number;
-  original: string;
-  preview: string;
-  previewFull: string;
-  width: number;
-  height: number;
-  device: ImageDraft["device"];
-  brightness: ImageDraft["brightness"];
-  theme: string;
-  available: boolean;
-};
-
 export type ImportJob = {
   id: string;
   kind: "local" | "download";
@@ -160,7 +144,6 @@ export type ImportJob = {
   message: string;
   preview: string;
   previewFull?: string;
-  previewPersistent?: boolean;
   objectUrl?: string;
   draft: ImageDraft;
   width: number;
@@ -169,12 +152,13 @@ export type ImportJob = {
   originalHeight?: number;
   transferProgress?: number;
   duplicates: ImageItem[];
-  duplicateDecision: "upload" | "undecided";
+  duplicateDecision: "upload" | "undecided" | "confirmed";
   detectedClassification?: ImportDetectedClassification;
   classificationOverride?: Partial<Record<"device" | "brightness", boolean>>;
   file?: File;
   fileFingerprint?: string;
   md5?: string;
+  preparedOrder?: number;
   url?: string;
   // 当前前端处理尝试，同时作为 create 请求幂等键；重试时会更新。
   attemptKey: string;
@@ -186,7 +170,6 @@ export type ImportJob = {
   manifestProvidedCommonFields?: ImportCommonAttributeField[];
   manifestLine?: number;
   manifestPosition?: number;
-  batchDuplicate?: BatchDuplicateMatch;
   originalSize?: number;
   finalSize?: number;
   quality?: number | null;

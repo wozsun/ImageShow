@@ -116,12 +116,8 @@ function serializeTimestamp(value: string | Date | null | undefined) {
   return value ?? null;
 }
 
-export async function importCommitImage(row: PublicImageUrlRecord) {
-  const { urls } = await publicUrlsForRow(row);
-  return {
-    object_url: urls.object_url,
-    thumb_url: urls.thumb_url
-  };
+export async function importCommitImage(row: ImageRecord) {
+  return adminImageView(await publicImage(row));
 }
 
 export async function overviewRecentImage(row: OverviewRecentImageRecord) {

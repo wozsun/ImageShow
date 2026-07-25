@@ -2,7 +2,8 @@ import { useEffect, useMemo } from "react";
 import type { RefObject } from "react";
 import { adminApiBasePath } from "../../../lib/constants.js";
 import type { ImportJob } from "../../../lib/types.js";
-import { getStoredImportStatuses, storedImportStatusMessage, type StoredImportStatus } from "./import-api.js";
+import { getStoredImportStatuses, type StoredImportStatus } from "./import-api.js";
+import { importStatusEventPatch } from "./import-status-state.js";
 
 const STATUS_POLL_INTERVAL_MS = 2_000;
 const SSE_CONNECT_TIMEOUT_MS = 5_000;
@@ -14,29 +15,6 @@ const terminalStatuses = new Set<ImportJob["status"]>([
   "cancelled"
 ]);
 
-function patchFromStatus(job: ImportJob, state: StoredImportStatus): Partial<ImportJob> | null {
-  const message = storedImportStatusMessage(state);
-  if (["materialize-waiting", "prepare-waiting"].includes(state.phase)) {
-    return { status: "queued", message };
-  }
-  if (state.status === "created") return { status: "queued", message };
-  if (state.status === "materializing") {
-    if (job.kind === "local") return { status: "uploading", message };
-    return { status: "downloading", message, transferProgress: state.progress };
-  }
-  if (state.status === "received") {
-    return { status: "processing", message, transferProgress: undefined };
-  }
-  if (state.status === "preparing") return { status: "processing", message, transferProgress: undefined };
-  if (state.status === "ready") return { status: "processing", message, transferProgress: undefined };
-  if (state.status === "committing") return { status: "committing", message };
-  if (state.status === "finalized") return { status: "done", message };
-  if (state.status === "missing") return null;
-  if (state.status === "failed") return { status: "failed", failureStage: "prepare", message };
-  if (state.status === "cancelled") return { status: "cancelled", message };
-  return null;
-}
-
 function applyStoredImportStatus(
   state: StoredImportStatus,
   jobsRef: RefObject<ImportJob[]>,
@@ -44,7 +22,7 @@ function applyStoredImportStatus(
 ) {
   const job = jobsRef.current.find((item) => item.sessionId === state.id);
   if (!job || terminalStatuses.has(job.status)) return;
-  const patch = patchFromStatus(job, state);
+  const patch = importStatusEventPatch(job, state);
   if (patch) updateJob(job.id, patch);
 }
 

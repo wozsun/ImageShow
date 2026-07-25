@@ -23,8 +23,7 @@ import {
   type ImportCandidateObject
 } from "./commit-candidates.ts";
 import {
-  persistCommittedImage,
-  readCommittedImage
+  persistCommittedImage
 } from "./commit-persistence.ts";
 import { synchronizeCommittedImport } from "./commit-sync.ts";
 import { withImportLease } from "./lifecycle.ts";
@@ -236,10 +235,8 @@ async function commitImportSessionWhileLocationStable(
   )).rows[0] as CommitImportSessionRecord | undefined;
   if (!session) throw new ApiError(404, "not_found", "导入任务不存在");
   if (session.status === "finalized") {
-    const image = await readCommittedImage(id);
-    if (!image) return { status: "duplicate" as const };
     const current = await synchronizeCommittedImport(
-      image.id,
+      id,
       session.prepared_payload as PreparedPayload
     );
     return { status: "imported" as const, item: await importCommitImage(current) };

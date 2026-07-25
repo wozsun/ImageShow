@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ImageDraft, ImportJob } from "../../../lib/types.js";
+import type { ImageDraft, ImageItem, ImportJob } from "../../../lib/types.js";
 import type { ImportAttributeDefaults } from "../../../lib/upload/upload-utils.js";
 import {
   importQueuePageCount,
@@ -18,6 +18,7 @@ export function useImportQueue(pageSize: number) {
   const [state, setState] = useState<ImportQueueState>({ jobs: [], page: 1 });
   const stateRef = useRef(state);
   const jobsRef = useRef(state.jobs);
+  const committedMd5sRef = useRef(new Set<string>());
 
   const dispatch = useCallback((action: ImportQueueAction) => {
     // 上传/下载是异步并发流程，回调触发时 React state 可能已落后；ref 里同步维护最新队列供所有回调用。
@@ -26,6 +27,7 @@ export function useImportQueue(pageSize: number) {
     if (next === current) return;
     stateRef.current = next;
     jobsRef.current = next.jobs;
+    if (!next.jobs.length) committedMd5sRef.current.clear();
     setState(next);
   }, []);
 
@@ -40,6 +42,15 @@ export function useImportQueue(pageSize: number) {
 
   const updateJob = useCallback((id: string, patch: Partial<ImportJob>) => {
     dispatch({ type: "patch", id, patch });
+  }, [dispatch]);
+
+  const completeJob = useCallback((
+    id: string,
+    patch: Partial<ImportJob>,
+    item: ImageItem
+  ) => {
+    if (jobsRef.current.length) committedMd5sRef.current.add(item.md5);
+    dispatch({ type: "complete", id, patch, item });
   }, [dispatch]);
 
   const updateJobDraft = useCallback((id: string, patch: Partial<ImageDraft>) => {
@@ -91,9 +102,10 @@ export function useImportQueue(pageSize: number) {
   const summary = useMemo(() => summarizeImportJobs(state.jobs), [state.jobs]);
   const workerApi = useMemo<AppendImportQueueApi>(() => ({
     jobsRef,
+    committedMd5sRef,
     appendJobs,
     updateJob
-  }), [appendJobs, jobsRef, updateJob]);
+  }), [appendJobs, committedMd5sRef, jobsRef, updateJob]);
 
   return {
     jobs: state.jobs,
@@ -107,6 +119,7 @@ export function useImportQueue(pageSize: number) {
     appendJobs,
     retainMode,
     updateJob,
+    completeJob,
     updateJobDraft,
     removeJob,
     clearJobIds,

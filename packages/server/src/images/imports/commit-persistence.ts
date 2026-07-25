@@ -6,53 +6,25 @@ import { replaceImageTags } from "../../tags/mutations.ts";
 import { ensureThemeWithMutationLockHeld } from "../../themes/mutations.ts";
 import type { EntityCacheKind } from "../../vocab/vocab-cache.ts";
 import { resolveClassification } from "../classification.ts";
-import type { ImageRecord } from "../presenter.ts";
+import {
+  imagePresentationColumns,
+  type ImageRecord
+} from "../presenter.ts";
 import type {
   ImportSessionRow,
   PreparedPayload
 } from "./types.ts";
-
-type CommittedImageRecord = Pick<
-  ImageRecord,
-  | "id"
-  | "author"
-  | "object_key"
-  | "original"
-  | "ext"
-  | "storage_slug"
-  | "device"
-  | "brightness"
-  | "theme"
-  | "status"
-  | "description"
-  | "source"
->;
 
 type CommitPersistenceSession = Pick<
   ImportSessionRow,
   "storage_slug" | "final_object_key" | "image_time"
 >;
 
-const committedImageColumns = [
-  "id",
-  "author",
-  "object_key",
-  "original",
-  "ext",
-  "storage_slug",
-  "device",
-  "brightness",
-  "theme",
-  "status",
-  "description",
-  "source"
-].join(", ");
-
 export async function readCommittedImage(id: string) {
   return (await pool.query(
-    `SELECT ${committedImageColumns} FROM metadata WHERE id=$1`,
+    `SELECT ${imagePresentationColumns} FROM metadata WHERE id=$1`,
     [id]
-  )).rows[0] as CommittedImageRecord | undefined;
+  )).rows[0] as ImageRecord | undefined;
 }
 
 export function persistCommittedImage(
@@ -88,7 +60,7 @@ export function persistCommittedImage(
          $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18
        )
        ON CONFLICT (id) DO NOTHING
-       RETURNING ${committedImageColumns}`,
+       RETURNING ${imagePresentationColumns}`,
       [
         id,
         session.image_time,
@@ -113,7 +85,7 @@ export function persistCommittedImage(
     const image = (insertedRow.rowCount
       ? insertedRow.rows[0]
       : await readCommittedImageWithClient(client, id)
-    ) as CommittedImageRecord;
+    ) as ImageRecord;
     if ((await replaceImageTags(
       client,
       image.id,
@@ -146,7 +118,7 @@ async function readCommittedImageWithClient(
   id: string
 ) {
   return (await client.query(
-    `SELECT ${committedImageColumns} FROM metadata WHERE id=$1`,
+    `SELECT ${imagePresentationColumns} FROM metadata WHERE id=$1`,
     [id]
-  )).rows[0] as CommittedImageRecord | undefined;
+  )).rows[0] as ImageRecord | undefined;
 }
