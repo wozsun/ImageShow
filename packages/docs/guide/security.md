@@ -55,7 +55,22 @@
   且不低于实际业务请求的限制。站点域名只接受 DNS 名称（开发环境可带端口），
   外部图片、来源、作者、站点资源和远端存储地址只接受 HTTPS。
 - 大请求路由的中间件顺序是：Host / 安全响应头 → 普通全局 limiter 路径豁免 → 管理员会话认证 → 审计入口 → CSRF → 路由专用字节 limiter → JSON 解析 → schema / 业务处理。匿名请求因此在读取大请求体前返回 401；已登录但缺少或错误 CSRF 的请求在专用 limiter 前返回 403。limiter 同时记录实际检查或可信 `Content-Length` 声明的字节数供摘要日志使用，不保存或输出正文。
-- 外部图片抓取统一走安全 fetch：只允许 `https` 且必须使用域名，不接受直接 IP；请求前和每次重定向后都校验主机，实际连接使用受控 DNS lookup 并再次校验连接地址，阻断 DNS rebinding、localhost、内网、链路本地、组播和云 metadata 地址；运行时必须启用 TLS 证书校验，证书无效时拒绝下载/代理；下载/代理会通过响应内容确认是支持的图片格式，非图片不会入库或转发。安全拒绝对外统一返回通用提示，内部 debug 日志保留拒绝原因。
+- 外部图片抓取统一走安全 fetch：只允许 `https` 且必须使用域名，不接受直接 IP；
+  请求前和每次重定向后都校验主机，实际连接使用受控 DNS lookup 并再次校验连接
+  地址，阻断 DNS rebinding。连接地址按 IANA 当前
+  [IPv4](https://www.iana.org/assignments/iana-ipv4-special-registry/iana-ipv4-special-registry.xhtml) /
+  [IPv6](https://www.iana.org/assignments/iana-ipv6-special-registry/iana-ipv6-special-registry.xhtml)
+  special-purpose registry 的 `Globally Reachable` 语义和
+  [IPv6 当前地址空间](https://www.iana.org/assignments/ipv6-address-space/ipv6-address-space.xhtml)
+  集中分类，更具体
+  前缀优先；非 `True`、已终止、组播、位于当前全局单播范围外或无法可靠判断的地址
+  均拒绝。只有
+  IPv4-mapped 与 `64:ff9b::/96` 两种固定形式会提取嵌入 IPv4 并复用同一分类，
+  因此代理 / Fake-IP DNS 不能借 benchmarking、私网、loopback、link-local、ULA、
+  metadata、文档、translation 或 tunnel 地址绕过边界。运行时必须启用 TLS 证书
+  校验，证书无效时拒绝下载 / 代理；下载 / 代理会通过响应内容确认是支持的图片格式，
+  非图片不会入库或转发。安全拒绝对外统一返回通用提示，内部 debug 日志只保留拒绝
+  原因、协议与规范化主机名，不记录路径、查询参数或凭据。
 - 外链导入下载会为每个已通过安全校验的当前目标生成仅含 `https` origin 的
   `Referer`，用于微博图床等基础防盗链。重定向后按新目标重新生成，不透传图片
   路径、查询参数、来源页面或管理员输入的任意 Referer。
