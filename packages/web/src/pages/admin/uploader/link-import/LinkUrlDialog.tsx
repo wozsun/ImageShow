@@ -1,7 +1,12 @@
 import { useEffect, useId, useRef, useState, type RefObject } from "react";
+import {
+  AsyncActionButton,
+  type AsyncActionPresentation
+} from "../../../../components/actions/AsyncActionButton.js";
 import { DialogFrame } from "../../../../components/feedback/DialogFrame.js";
 import { Icon, type IconName } from "../../../../components/icon/Icon.js";
 import { OverlayScrollbar } from "../../../../components/layout/OverlayScrollbar.js";
+import { useAsyncActionStatus } from "../../../../hooks/useAsyncActionStatus.js";
 import {
   mobileViewportMediaQuery,
   useMediaQuery
@@ -162,8 +167,11 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
   const [jsonlManifest, setJsonlManifest] = useState<JsonlManifestResult | null>(null);
   const [weiboResult, setWeiboResult] = useState<WeiboImportResult | null>(null);
   const [parsedText, setParsedText] = useState("");
-  const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState("");
+  const parseAction = useAsyncActionStatus({
+    minimumPendingMs: 0,
+    resultDurationMs: null
+  });
   const mobileLayout = useMediaQuery(mobileViewportMediaQuery);
 
   const close = () => {
@@ -245,18 +253,20 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
       setParseError("");
       setUrlParseResult(parseImportUrlInput(text));
       setParsedText(text);
-      return;
+      return true;
     }
 
     const controller = new AbortController();
     requestControllerRef.current = controller;
-    setParsing(true);
     setParseError("");
     try {
       if (inputMode === "jsonl") {
-        setJsonlManifest(await parseImportJsonl(text, controller.signal));
+        const manifest = await parseImportJsonl(text, controller.signal);
+        if (controller.signal.aborted) return false;
+        setJsonlManifest(manifest);
       } else if (inputMode === "weibo") {
         const result = await parseWeiboImport(weiboUrls, controller.signal);
+        if (controller.signal.aborted) return false;
         setWeiboResult({
           ...result,
           errors: result.errors.map((error) => ({
@@ -265,12 +275,13 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
           }))
         });
       }
-      if (!controller.signal.aborted) setParsedText(text);
+      setParsedText(text);
+      return true;
     } catch (error) {
       if (!controller.signal.aborted) setParseError((error as Error).message);
+      return false;
     } finally {
       if (requestControllerRef.current === controller) requestControllerRef.current = null;
-      if (!controller.signal.aborted) setParsing(false);
     }
   };
 
@@ -291,7 +302,7 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
     }
     if (!text.trim()) return;
     if (!manifestCurrent) {
-      await parseInput();
+      await parseAction.run(parseInput);
       return;
     }
     if (!manifestCurrent.items.length) return;
@@ -309,15 +320,31 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
     : inputMode === "weibo"
       ? !weiboUrls.length
       : !text.trim();
-  const submitText = parsing
-    ? "解析中"
-    : inputMode === "urls" && !urlParseResultCurrent
-      ? "解析链接"
-      : inputMode === "jsonl" && !jsonlManifestCurrent
-        ? "解析清单"
-        : inputMode === "weibo" && !weiboResultCurrent
-          ? "解析微博"
-          : `导入${submitCount ? ` ${submitCount} 张` : ""}`;
+  const parseText = inputMode === "urls"
+    ? "解析链接"
+    : inputMode === "jsonl"
+      ? "解析清单"
+      : "解析微博";
+  const idleActionPresentation: AsyncActionPresentation["idle"] = parsedWithoutItems
+    ? { label: emptySubmitText[inputMode] }
+    : readyToImport
+      ? {
+          label: (
+            <span className="link-import-submit-label">
+              <span>导入</span>
+              <span className="link-import-submit-count">{submitCount}</span>
+              <span>张</span>
+            </span>
+          ),
+          ariaLabel: `导入 ${submitCount} 张`
+        }
+      : { icon: presentation.icon, label: parseText };
+  const actionPresentation: AsyncActionPresentation = {
+    idle: idleActionPresentation,
+    pending: { icon: presentation.icon, label: "解析中" },
+    success: { icon: "check-line", label: "解析完成" },
+    error: { icon: "close-line", label: "解析失败" }
+  };
 
   return (
     <DialogFrame
@@ -330,15 +357,12 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
     >
       {({ requestClose }) => (
       <>
-      <div ref={importCardRef} className="link-import-card" tabIndex={-1} aria-busy={parsing}>
+      <div ref={importCardRef} className="link-import-card" tabIndex={-1} aria-busy={parseAction.pending}>
         <div className="link-import-head">
           <h2><Icon name={presentation.icon} />{presentation.heading}</h2>
-          <div className="link-import-head-status">
-            {parsing && <span>{inputMode === "weibo" ? "正在获取微博内容…" : "正在解析清单…"}</span>}
-            <button type="button" className="icon close" title="关闭" onClick={() => requestClose()}>
-              <Icon name="close-line" />
-            </button>
-          </div>
+          <button type="button" className="icon close" title="关闭" onClick={() => requestClose()}>
+            <Icon name="close-line" />
+          </button>
         </div>
         <div className="link-input-tabs" role="tablist" aria-label="输入模式">
           {(["urls", "jsonl", "weibo"] as const).map((value) => (
@@ -346,7 +370,7 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
               key={value}
               type="button"
               role="tab"
-              disabled={parsing}
+              disabled={parseAction.pending}
               aria-selected={inputMode === value}
               className={inputMode === value ? "is-active" : ""}
               onClick={() => changeInputMode(value)}
@@ -368,7 +392,7 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
             id={inputId}
             className="link-import-urls"
             value={text}
-            disabled={parsing}
+            disabled={parseAction.pending}
             onChange={(event) => changeText(event.target.value)}
             placeholder={presentation.placeholder}
             rows={linkInputTextareaRows}
@@ -430,21 +454,14 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
           )}
           <div className="link-import-action-buttons">
             <button type="button" onClick={() => requestClose()}>取消</button>
-            <button
+            <AsyncActionButton
               type="button"
               className="button link-import-submit-button"
-              disabled={parsing || limitState.overLimit || missingInput || parsedWithoutItems}
+              status={parseAction.status}
+              presentation={actionPresentation}
+              disabled={parseAction.pending || limitState.overLimit || missingInput || parsedWithoutItems}
               onClick={() => void submit(requestClose)}
-            >
-              {!readyToImport && <Icon name={presentation.icon} />}
-              {parsedWithoutItems ? emptySubmitText[inputMode] : readyToImport ? (
-                <span className="link-import-submit-label">
-                  <span>导入</span>
-                  <span className="link-import-submit-count">{submitCount}</span>
-                  <span>张</span>
-                </span>
-              ) : submitText}
-            </button>
+            />
           </div>
         </div>
       </div>

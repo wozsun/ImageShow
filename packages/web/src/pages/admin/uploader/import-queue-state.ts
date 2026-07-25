@@ -12,8 +12,7 @@ import {
   importAttributeDefaultsPatch
 } from "./import-attribute-policy.js";
 
-const runningImportStatuses = new Set<ImportJob["status"]>([
-  "queued",
+const processingImportStatuses = new Set<ImportJob["status"]>([
   "uploading",
   "downloading",
   "processing",
@@ -159,7 +158,7 @@ export function summarizeImportJobs(jobs: ImportJob[]): ImportJobSummary {
       if (importJobCanStartCommit(job, "ready")) summary.readyJobs.push(job);
       continue;
     }
-    if (runningImportStatuses.has(job.status)) {
+    if (processingImportStatuses.has(job.status)) {
       summary.runningJobs += 1;
       continue;
     }

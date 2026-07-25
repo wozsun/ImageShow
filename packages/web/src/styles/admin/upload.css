@@ -96,6 +96,7 @@
 .upload-window > footer .upload-footer-pagination { justify-self: center; }
 .upload-window > footer .modal-footer-actions { justify-self: end; }
 .upload-window > footer button { min-height: 38px; }
+.upload-window .workflow-submit-button { min-width: calc(4em + 3ch + 26px); }
 .upload-window > footer .select-trigger { height: 38px; }
 .upload-defaults-panel { flex-shrink: 0; }
 .upload-picker {
@@ -133,7 +134,6 @@
 .link-import-card { width: min(560px, 96vw); max-height: 90vh; overflow: auto; background: #fff; border-radius: 8px; padding: 18px; display: flex; flex-direction: column; gap: 10px; animation: modal-pop .18s cubic-bezier(.2, .8, .2, 1); }
 .link-import-head { display: flex; align-items: center; justify-content: space-between; }
 .link-import-head h2 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 20px; }
-.link-import-head-status { display: flex; align-items: center; gap: 10px; color: #2563eb; font-size: 13px; font-variant-numeric: tabular-nums; }
 .link-input-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-bottom: 1px solid #dce2ea; }
 .link-input-tabs button { border: 0; border-radius: 0; background: transparent; color: #66717f; }
 .link-input-tabs button.is-active { color: #1f5fae; box-shadow: inset 0 -2px #1f6feb; }
@@ -158,6 +158,7 @@
   /* 统一容纳四字解析文案与图标，也容纳三位导入数量，避免状态切换时按钮跳动。 */
   min-width: calc(4em + 52px);
 }
+.link-import-submit-button.async-action-button.is-pending { color: #fff; background: #1f6feb; border-color: #1f6feb; }
 .link-import-submit-label { display: inline-flex; align-items: center; gap: .25em; }
 .link-import-submit-count {
   min-width: 3ch;

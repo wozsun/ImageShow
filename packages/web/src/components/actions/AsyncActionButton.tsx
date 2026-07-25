@@ -1,10 +1,17 @@
-import type { ButtonHTMLAttributes } from "react";
+import type { ButtonHTMLAttributes, ReactElement } from "react";
 import { Icon, type IconName } from "../icon/Icon.js";
 import type { AsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
 
-type AsyncActionPresentation = Record<
+type AsyncActionPresentationItem = {
+  icon?: IconName;
+} & (
+  | { label: string; ariaLabel?: never }
+  | { label: ReactElement; ariaLabel: string }
+);
+
+export type AsyncActionPresentation = Record<
   AsyncActionStatus,
-  { icon: IconName; label: string }
+  AsyncActionPresentationItem
 >;
 
 const asyncActionStatuses: AsyncActionStatus[] = [
@@ -35,6 +42,9 @@ export function AsyncActionButton({
   ...buttonProps
 }: AsyncActionButtonProps) {
   const current = presentation[status];
+  const currentAriaLabel = typeof current.label === "string"
+    ? current.label
+    : current.ariaLabel;
   const classes = ["async-action-button", `is-${status}`, className]
     .filter(Boolean)
     .join(" ");
@@ -43,12 +53,12 @@ export function AsyncActionButton({
     <button
       {...buttonProps}
       className={classes}
-      title={status === "idle" && title ? title : current.label}
+      title={status === "idle" && title ? title : currentAriaLabel}
       aria-label={ariaLabel
-        ? status === "idle" ? ariaLabel : `${ariaLabel}，${current.label}`
-        : current.label}
+        ? status === "idle" ? ariaLabel : `${ariaLabel}，${currentAriaLabel}`
+        : currentAriaLabel}
     >
-      <Icon name={current.icon} />
+      {current.icon && <Icon name={current.icon} />}
       <span className="async-action-label-slot" aria-live="polite" aria-atomic="true">
         {asyncActionStatuses.map((candidate) => (
           <span
