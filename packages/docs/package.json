@@ -1,6 +1,6 @@
 {
   "name": "@imageshow/docs",
-  "version": "3.11.34",
+  "version": "3.11.35",
   "private": true,
   "type": "module",
   "scripts": {

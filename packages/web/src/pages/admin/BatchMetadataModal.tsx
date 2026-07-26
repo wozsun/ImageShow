@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useRef, useState, type RefObject } from "rea
 import { adminPermissions } from "@imageshow/shared/browser";
 import { Icon } from "../../components/icon/Icon.js";
 import { AsyncActionButton } from "../../components/actions/AsyncActionButton.js";
+import { ConfirmDialog } from "../../components/feedback/ConfirmDialog.js";
 import { DialogFrame } from "../../components/feedback/DialogFrame.js";
 import { WorkflowDefaultFields } from "../../components/form/WorkflowDefaultFields.js";
 import { WorkflowCollapsePanel } from "../../components/layout/WorkflowCollapsePanel.js";
@@ -14,7 +15,14 @@ import { useAdminPermissions } from "../../lib/api/site-data.js";
 import { facetDisplayName, formatBytes, formatDimensions, shortImageId } from "../../lib/ui/formatters.js";
 import { batchCommonBrightnessOptions, batchCommonDeviceOptions, cardBrightnessSelectOptions, editCardDeviceSelectOptions } from "../../lib/ui/select-options.js";
 import { storageNameResolver, useStorageOptions } from "../../lib/api/storage-options.js";
-import type { Brightness, Device, FacetOption, ImageDraft, ImageItem } from "../../lib/types.js";
+import type {
+  BatchEditableImageSnapshot,
+  Brightness,
+  Device,
+  FacetOption,
+  ImageDraft,
+  ImageItem
+} from "../../lib/types.js";
 import { mergeBatchEditCommonAttributes, normalizeAuthor, normalizeTheme } from "../../lib/upload/upload-utils.js";
 import { BatchMetadataSaveSummary } from "./BatchMetadataSaveSummary.js";
 import {
@@ -32,11 +40,42 @@ const BatchStorageMigrationDialog = lazy(() => loadBatchStorageMigrationDialog()
 
 type BatchMetadataChanges = Record<keyof ImageDraft, boolean>;
 
+function draftFromImage(item: BatchEditableImageSnapshot): ImageDraft {
+  return {
+    title: item.title,
+    description: item.description,
+    source: item.source,
+    original: item.original,
+    device: item.device,
+    brightness: item.brightness,
+    theme: item.theme === "none" ? "" : item.theme,
+    author: item.author === "none" ? "" : item.author,
+    tags: item.tags
+  };
+}
+
+function draftsFromImages(items: BatchEditableImageSnapshot[]) {
+  return Object.fromEntries(items.map((item) => [item.id, draftFromImage(item)]));
+}
+
+function emptyCommonAttributes() {
+  return {
+    device: "" as "" | "auto" | Device,
+    brightness: "" as "" | "auto" | Brightness,
+    theme: "",
+    author: "",
+    tags: [] as string[]
+  };
+}
+
 function tagsChanged(draftTags: string[], savedTags: string[]) {
   return JSON.stringify([...draftTags].sort()) !== JSON.stringify([...savedTags].sort());
 }
 
-function fieldsChangedFor(item: ImageItem, draft: ImageDraft): BatchMetadataChanges {
+function fieldsChangedFor(
+  item: BatchEditableImageSnapshot,
+  draft: ImageDraft
+): BatchMetadataChanges {
   return {
     title: draft.title !== item.title,
     description: draft.description !== item.description,
@@ -51,7 +90,7 @@ function fieldsChangedFor(item: ImageItem, draft: ImageDraft): BatchMetadataChan
 }
 
 function changedMetadataUpdate(
-  item: ImageItem,
+  item: BatchEditableImageSnapshot,
   draft: ImageDraft,
   changed: BatchMetadataChanges
 ): BatchMetadataUpdate {
@@ -85,45 +124,46 @@ export function BatchMetadataModal({
   allTags: FacetOption[];
   authors: FacetOption[];
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: () => void | Promise<void>;
   returnFocusRef?: RefObject<HTMLElement | null>;
   single?: boolean;
 }) {
   const listRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const restoreTriggerRef = useRef<HTMLButtonElement | null>(null);
   const migrateTriggerRef = useRef<HTMLButtonElement | null>(null);
   const previewReturnFocusRef = useRef<HTMLElement | null>(null);
-  // 保存成功后父级会刷新列表并清空选择。弹窗必须继续持有打开时的图片快照，
-  // 否则部分成功会让仍失败的项目连同草稿一起从弹窗中消失。
-  const [initialItems] = useState(() => items);
+  // 父级刷新会清空选择；弹窗独立持有会话 ID 和权威基线。保存结果不确定时，
+  // 基线会从 PostgreSQL 重新读取，避免把已经落库的部分修改伪装成本地撤销。
+  const [sessionItemIds] = useState(() => items.map((item) => item.id));
+  const [baselineItems, setBaselineItems] =
+    useState<BatchEditableImageSnapshot[]>(() => items);
   const operations = useBatchMetadataOperations({
-    initialIds: initialItems.map((item) => item.id),
+    initialIds: sessionItemIds,
     onSaved
   });
   const {
     activeIdSet,
+    restorableRemovedCount,
     remove,
+    readAuthoritativeSnapshot,
+    reconcileAvailableItems,
+    restoreActiveItems,
     save,
     saveStatus,
     saveSummary
   } = operations;
   const saving = saveStatus.pending;
-  const [drafts, setDrafts] = useState<Record<string, ImageDraft>>(() => Object.fromEntries(initialItems.map((item) => [item.id, {
-    title: item.title,
-    description: item.description,
-    source: item.source,
-    original: item.original,
-    device: item.device,
-    brightness: item.brightness,
-    theme: item.theme === "none" ? "" : item.theme,
-    author: item.author === "none" ? "" : item.author,
-    tags: item.tags
-  }])));
+  const [drafts, setDrafts] = useState<Record<string, ImageDraft>>(
+    () => draftsFromImages(items)
+  );
   const [preview, setPreview] = useState<{ src: string; thumbSrc: string; width: number; height: number } | null>(null);
   const [page, setPage] = useState(1);
 
-  const [common, setCommon] = useState({ device: "" as "" | "auto" | Device, brightness: "" as "" | "auto" | Brightness, theme: "", author: "", tags: [] as string[] });
+  const [common, setCommon] = useState(emptyCommonAttributes);
   const [commonExpanded, setCommonExpanded] = useState(false);
+  const [restoreConfirmation, setRestoreConfirmation] = useState(false);
+  const [baselineRefreshRequired, setBaselineRefreshRequired] = useState(false);
   const [migrating, setMigrating] = useState(false);
   const permissions = useAdminPermissions();
   const canMigrateStorage = permissions.includes(
@@ -132,7 +172,7 @@ export function BatchMetadataModal({
   const { data: storageOptionsData } = useStorageOptions();
   // 列表行左下角的「所在存储」展示后端显示名。
   const resolveStorageName = storageNameResolver(storageOptionsData?.backends ?? []);
-  const activeItems = initialItems.filter((item) => activeIdSet.has(item.id));
+  const activeItems = baselineItems.filter((item) => activeIdSet.has(item.id));
   const totalPages = Math.max(1, Math.ceil(activeItems.length / pageSize));
   const visibleItems = activeItems.slice((page - 1) * pageSize, page * pageSize);
   useEffect(() => setPage((current) => Math.min(current, totalPages)), [totalPages]);
@@ -151,10 +191,15 @@ export function BatchMetadataModal({
     success: { icon: "check-line", label: "保存成功" },
     error: { icon: "close-line", label: "保存失败" }
   } as const;
-  const modalSubtitle = single ? (initialItems[0]?.object_key ?? "") : `${activeItems.length} 张图片`;
+  const modalSubtitle = single ? (baselineItems[0]?.object_key ?? "") : `${activeItems.length} 张图片`;
 
   const commonChanged = { device: common.device !== "", brightness: common.brightness !== "", theme: common.theme.trim() !== "", author: common.author.trim() !== "", tags: common.tags.length > 0 };
   const commonHasValue = commonChanged.device || commonChanged.brightness || commonChanged.theme || commonChanged.author || commonChanged.tags;
+  const restoreAvailable = changedCount > 0
+    || commonHasValue
+    || restorableRemovedCount > 0
+    || baselineRefreshRequired
+    || Boolean(saveSummary);
   const commonSummary = [
     batchCommonDeviceOptions.find((option) => option.value === common.device)?.label ?? "设备不变",
     batchCommonBrightnessOptions.find((option) => option.value === common.brightness)?.label ?? "亮暗不变",
@@ -162,6 +207,15 @@ export function BatchMetadataModal({
     facetDisplayName(authors, common.author, "作者不变"),
     `${common.tags.length} 个标签`,
   ].join(" · ");
+  const reconcileAuthoritativeBaseline = async () => {
+    setBaselineRefreshRequired(true);
+    const snapshot = await readAuthoritativeSnapshot();
+    if (!snapshot) return null;
+    setBaselineItems(snapshot.items);
+    reconcileAvailableItems(snapshot.items.map((item) => item.id));
+    setBaselineRefreshRequired(false);
+    return snapshot.items;
+  };
   const saveAll = async () => {
     const changedItems = activeItems.flatMap((item) => {
       const changed = changedByItem.get(item.id)!;
@@ -170,14 +224,33 @@ export function BatchMetadataModal({
     });
     if (!changedItems.length) return false;
 
-    return save(changedItems);
+    setBaselineRefreshRequired(true);
+    return save(changedItems, async () => {
+      await reconcileAuthoritativeBaseline();
+    });
+  };
+  const restoreAllChanges = async () => {
+    let restoreItems = baselineItems;
+    if (baselineRefreshRequired) {
+      const refreshed = await reconcileAuthoritativeBaseline();
+      if (!refreshed) return false;
+      restoreItems = refreshed;
+    }
+    restoreActiveItems(restoreItems.map((item) => item.id));
+    setDrafts(draftsFromImages(restoreItems));
+    setCommon(emptyCommonAttributes());
+    return true;
   };
   return (
     <DialogFrame
       className="modal edit-modal batch-edit-overlay"
       ariaLabel={single ? "编辑图片" : "批量编辑图片"}
       busy={saving}
-      paused={Boolean((canMigrateStorage && migrating) || preview)}
+      paused={Boolean(
+        (canMigrateStorage && migrating)
+        || preview
+        || restoreConfirmation
+      )}
       initialFocusRef={closeButtonRef}
       returnFocusRef={returnFocusRef}
       onClose={onClose}
@@ -197,16 +270,30 @@ export function BatchMetadataModal({
             <h2>{single ? "编辑图片" : "批量编辑图片"}</h2>
             <p title={single ? modalSubtitle : undefined}>{modalSubtitle}</p>
           </div>
-          <button
-            ref={closeButtonRef}
-            className="icon close pressable"
-            type="button"
-            title="关闭"
-            disabled={saving}
-            onClick={() => requestClose()}
-          >
-            <Icon name="close-line" />
-          </button>
+          <div className="batch-edit-header-actions">
+            {!single && (
+              <button
+                ref={restoreTriggerRef}
+                className="batch-edit-restore-button"
+                type="button"
+                title="撤销所有未保存修改"
+                disabled={saving || !restoreAvailable}
+                onClick={() => setRestoreConfirmation(true)}
+              >
+                <Icon name="history-line" />复原
+              </button>
+            )}
+            <button
+              ref={closeButtonRef}
+              className="icon close pressable"
+              type="button"
+              title="关闭"
+              disabled={saving}
+              onClick={() => requestClose()}
+            >
+              <Icon name="close-line" />
+            </button>
+          </div>
         </header>
         {!single && (
           <WorkflowCollapsePanel
@@ -393,6 +480,21 @@ export function BatchMetadataModal({
         </Suspense>
       )}
       {preview && <ImagePreviewModal src={preview.src} thumbSrc={preview.thumbSrc} width={preview.width} height={preview.height} onClose={() => setPreview(null)} returnFocusRef={previewReturnFocusRef} />}
+      {restoreConfirmation && (
+        <ConfirmDialog
+          title="确认复原全部修改"
+          description="将撤销本弹窗中尚未保存的属性修改，并恢复从批量编辑列表移出的图片；已经保存的修改不会回退。"
+          confirmLabel="确认复原"
+          pendingLabel="复原中"
+          successLabel="已复原"
+          danger={false}
+          confirmIcon="history-line"
+          closeOnBackdrop
+          returnFocusRef={restoreTriggerRef}
+          onClose={() => setRestoreConfirmation(false)}
+          onConfirm={restoreAllChanges}
+        />
+      )}
       </>
       )}
     </DialogFrame>

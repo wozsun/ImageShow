@@ -43,11 +43,14 @@ a.overview-card-link:hover { border-color: #b9c4d4; box-shadow: 0 4px 14px rgba(
 .overview-recent { display: grid; grid-template-columns: repeat(auto-fill, minmax(82px, 1fr)); gap: 10px; }
 .overview-recent-item {
   display: block;
+  width: 100%;
+  padding: 0;
   aspect-ratio: 1;
   border-radius: 10px;
   overflow: hidden;
   border: 1px solid #e2e8f0;
   background: #f1f4f8;
+  cursor: pointer;
 }
 .overview-recent-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
 

@@ -1,13 +1,21 @@
 import type { z } from "zod";
 import type {
   AdminImageListResponse,
+  BatchImageSnapshotResponse,
   ImageAdminInfoDto
 } from "@imageshow/shared";
-import { pool } from "../../core/db.ts";
+import { pool, withAdvisoryLocks } from "../../core/db.ts";
 import { ApiError } from "../../core/api-error.ts";
 import { adminImageListQuery } from "../../core/validation.ts";
 import { imageCacheRevision, warmCompleteImageLookups } from "../image-cache.ts";
-import { adminImageView } from "../presenter.ts";
+import { batchImageUpdateLockRequests } from "../batch-update-lock.ts";
+import {
+  adminImageView,
+  batchEditableImagePresentationColumnsWithTags,
+  batchEditableImageSnapshotView,
+  publicImagesWithTags,
+  type ImageRecordWithTags
+} from "../presenter.ts";
 import { buildImageListFilters } from "./list-filters.ts";
 import { fetchAdminImagePage } from "./pagination.ts";
 
@@ -43,6 +51,38 @@ export async function listAdminImages(
     total: Number(countResult.rows[0]?.count ?? 0),
     next_cursor: page.nextCursor
   };
+}
+
+export async function getAdminImageSnapshots(
+  ids: string[]
+): Promise<BatchImageSnapshotResponse> {
+  const canonicalIds = [...new Set(ids.map((id) => id.toLowerCase()))];
+  return withAdvisoryLocks(
+    batchImageUpdateLockRequests(canonicalIds),
+    async () => {
+      const result = await pool.query(
+        `SELECT ${batchEditableImagePresentationColumnsWithTags}
+           FROM metadata
+          WHERE id = ANY($1::uuid[])
+            AND status = 'ready'`,
+        [canonicalIds]
+      );
+      // Metadata and tags come from one SQL statement, so this is an
+      // authoritative point-in-time projection even if another admin mutates
+      // the image immediately before or after the snapshot.
+      const projected = (await publicImagesWithTags(
+        result.rows as ImageRecordWithTags[]
+      ))
+        .map(batchEditableImageSnapshotView);
+      const itemsById = new Map(projected.map((item) => [item.id, item]));
+      return {
+        items: canonicalIds.flatMap((id) => {
+          const item = itemsById.get(id);
+          return item ? [item] : [];
+        })
+      };
+    }
+  );
 }
 
 export async function getAdminImageInfo(id: string): Promise<ImageAdminInfoDto> {

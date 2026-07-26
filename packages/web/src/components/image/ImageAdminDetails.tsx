@@ -6,7 +6,10 @@ import { queryKeys } from "../../lib/api/query-keys.js";
 import { clearSessionProbeHint, hasSessionProbeHint } from "../../lib/api/site-data.js";
 import { useStorageNameResolver } from "../../lib/api/storage-options.js";
 import { errorMessage, formatDate } from "../../lib/ui/formatters.js";
-import type { ImageAdminInfo, ImageItem } from "../../lib/types.js";
+import type {
+  AdminImageDetailItem,
+  ImageAdminInfo
+} from "../../lib/types.js";
 import "../../styles/admin/image-details.css";
 
 const MD5_RESERVE = "0".repeat(32);
@@ -33,7 +36,7 @@ export function ImageAdminDetails({
   adminItem
 }: {
   imageId: string;
-  adminItem: ImageItem | null;
+  adminItem: AdminImageDetailItem | null;
 }) {
   const admin = Boolean(adminItem);
   // 存储选项只属于管理信息；留在这个按需块内，匿名公开详情不会下载后台查询实现。

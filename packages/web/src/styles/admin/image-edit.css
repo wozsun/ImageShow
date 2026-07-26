@@ -19,6 +19,17 @@
   overflow: hidden;
 }
 
+.batch-edit-header-actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.batch-edit-restore-button {
+  min-height: 38px;
+  white-space: nowrap;
+}
+
 .batch-edit-modal footer {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
@@ -288,6 +299,10 @@
     padding: max(10px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 10px max(12px, env(safe-area-inset-left));
   }
   .batch-edit-modal > header h2 { font-size: 21px; }
+  .batch-edit-modal > header .batch-edit-restore-button {
+    min-height: 44px;
+    padding-inline: 12px;
+  }
   .batch-edit-modal > header .close {
     width: 44px;
     height: 44px;

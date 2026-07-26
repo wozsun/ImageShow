@@ -97,6 +97,7 @@ const runtimeConfigSchema = z.strictObject({
   }),
   link_image: z.strictObject({
     fill_original_url: z.boolean(),
+    auto_import: z.boolean(),
     concurrency: linkImageConcurrency,
     global_concurrency: importGlobalConcurrency,
     fetch_timeout_seconds: linkFetchTimeoutSeconds,
@@ -184,6 +185,28 @@ export type RuntimeConfigPatch<T = RuntimeConfig> = {
   [K in keyof T]?: T[K] extends Record<string, unknown> ? RuntimeConfigPatch<T[K]> : T[K];
 };
 
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function projectKnownConfig(base: unknown, input: unknown): unknown {
+  if (!isPlainRecord(base)) return input === undefined ? base : input;
+  if (input === undefined) return structuredClone(base);
+  if (!isPlainRecord(input)) return input;
+
+  // An empty default object denotes a validated dictionary rather than a
+  // fixed-shape config section. Preserve its user-defined keys and let the
+  // runtime schema validate each entry.
+  if (Object.keys(base).length === 0) return structuredClone(input);
+
+  return Object.fromEntries(
+    Object.entries(base).map(([key, defaultValue]) => [
+      key,
+      projectKnownConfig(defaultValue, input[key])
+    ])
+  );
+}
+
 function mergeDefined(base: Record<string, unknown>, patch: Record<string, unknown>) {
   const result: Record<string, unknown> = { ...base };
   for (const [key, value] of Object.entries(patch)) {
@@ -203,6 +226,10 @@ function mergeDefined(base: Record<string, unknown>, patch: Record<string, unkno
 
 export function parseRuntimeConfig(value: unknown): RuntimeConfig {
   return runtimeConfigSchema.parse(value);
+}
+
+export function normalizeRuntimeConfig(value: unknown): RuntimeConfig {
+  return runtimeConfigSchema.parse(projectKnownConfig(appConfig.runtimeDefaults, value));
 }
 
 export function mergeRuntimeConfig(current: RuntimeConfig, patch: RuntimeConfigPatch): RuntimeConfig {

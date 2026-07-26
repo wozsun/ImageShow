@@ -1,7 +1,9 @@
 export type { AdminSettings, Brightness, Device, SiteSettings, StorageType } from "@imageshow/shared";
 import type {
+  AdminImageDetailItemDto,
   AdminImageItemDto,
   AdminRole,
+  BatchEditableImageSnapshotDto,
   Brightness,
   Device,
   FacetOptionDto,
@@ -14,6 +16,8 @@ import type {
 export type GalleryImageCard = GalleryImageCardDto;
 export type PublicImageDetail = PublicImageDetailDto;
 export type PublicImageItem = PublicImageItemDto;
+export type AdminImageDetailItem = AdminImageDetailItemDto;
+export type BatchEditableImageSnapshot = BatchEditableImageSnapshotDto;
 export type ImageItem = AdminImageItemDto;
 export type ImageAdminInfo = ImageAdminInfoDto;
 

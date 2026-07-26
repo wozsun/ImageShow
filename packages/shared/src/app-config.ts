@@ -122,6 +122,7 @@ export const appConfig = {
     },
     link_image: {
       fill_original_url: false,
+      auto_import: true,
       concurrency: 2,
       global_concurrency: 5,
       fetch_timeout_seconds: 30,
@@ -227,6 +228,7 @@ export type UploadSettings = {
 
 export type LinkImageSettings = {
   fill_original_url: boolean;
+  auto_import: boolean;
   concurrency: number;
   global_concurrency: number;
   fetch_timeout_seconds: number;
@@ -314,7 +316,7 @@ export type AdminUploadSettings = Pick<
 
 export type AdminLinkImageSettings = Pick<
   LinkImageSettings,
-  "fill_original_url" | "concurrency" | "max_items"
+  "fill_original_url" | "auto_import" | "concurrency" | "max_items"
 >;
 
 export type AdminWeiboSettings = Pick<WeiboSettings, "max_items">;

@@ -76,6 +76,7 @@ export function SettingsPage() {
             },
             link_image: {
               fill_original_url: settings.link_image.fill_original_url,
+              auto_import: settings.link_image.auto_import,
               concurrency: settings.link_image.concurrency
             },
             normalize: settings.normalize,
@@ -413,6 +414,16 @@ export function SettingsPage() {
                   onChange={(event) => updateLinkImage({ fill_original_url: event.target.checked })}
                 />
                 链接导入自动填入原图 URL
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={settings.link_image.auto_import}
+                  onChange={(event) => updateLinkImage({
+                    auto_import: event.target.checked
+                  })}
+                />
+                解析无错误时自动开始导入
               </label>
             </div>
           </section>

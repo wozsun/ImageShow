@@ -66,6 +66,7 @@ export function UploadWorkflowWindow({
   previewReturnFocusRef,
   urlInputOpen,
   linkInputMode,
+  autoImportAfterParse,
   linkMaxItems,
   weiboMaxItems,
   returnFocusRef,
@@ -118,6 +119,7 @@ export function UploadWorkflowWindow({
   previewReturnFocusRef: RefObject<HTMLElement | null>;
   urlInputOpen: boolean;
   linkInputMode: LinkInputMode;
+  autoImportAfterParse: boolean;
   linkMaxItems: number;
   weiboMaxItems: number;
   returnFocusRef: RefObject<HTMLElement | null>;
@@ -493,6 +495,7 @@ export function UploadWorkflowWindow({
       {urlInputOpen && (
         <LinkUrlDialog
           initialInputMode={linkInputMode}
+          autoImportAfterParse={autoImportAfterParse}
           maxItems={linkMaxItems}
           weiboMaxItems={weiboMaxItems}
           onClose={onCloseLinkInput}

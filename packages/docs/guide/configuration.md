@@ -14,9 +14,10 @@ PostgreSQL。排查配置时先确认“这项配置由谁管理”，再判断�
 
 完整应用字段清单、默认值和中英文注释见仓库根目录的
 `config.example.jsonc`；部署字段见 `.env.example`。实际运行配置文件是纯 JSON，
-不支持注释。启动和手动重载都按当前完整 schema 严格解析；缺少字段、未知字段、
-类型错误或越界值会直接失败，不会自动改写配置。PostgreSQL 与 Redis 连接值必须由
-环境变量提供。
+不支持注释。启动和手动重载时会按当前 schema 归一化：缺少且有默认值的字段
+自动补齐，未知字段递归删除，已有有效值保留；归一化发生变化时原子写回完整配置。
+只有已知字段值不符合自身规定的合法范围时才会失败。PostgreSQL 与 Redis 连接值
+必须由环境变量提供。
 
 管理端 `GET /api/admin/settings` 只返回设置页和图片工作流实际读取的最小字段集。
 除设置页可编辑字段外，仅保留上传数量 / 文件大小、统一链接导入数量和页面
@@ -59,6 +60,7 @@ Dockerfile 的 `EXPOSE` 与 Compose 目标端口；回归测试会校验三者�
 | `upload.*` | 本地文件单次选择软上限、上传文件大小、图片长边限制、上传列表分页、单客户端上传队列并发，以及服务端 materialize / prepare 分阶段复用的全局并发；其中 `upload.max_items`、`upload.max_file_size_mb`、`upload.max_long_edge` 和 `upload.global_concurrency` 只在配置文件中维护。 |
 | `upload.max_items` | 本地文件单次选择软上限，默认 200，可配置范围为 1–1000；只由前端限制，服务端仍逐文件创建会话，没有本地批次条目数硬上限。 |
 | `link_image.fill_original_url` | URL 下载导入是否自动把输入 URL 填入「原图 URL」字段；不做可直达探测。 |
+| `link_image.auto_import` | 链接、JSONL 清单或微博解析出有效图片且没有任何问题项时，是否省略二次确认并直接建立导入队列，默认 `true`；出现问题项时始终停留在解析结果页，由管理员确认是否导入有效部分。 |
 | `link_image.concurrency` | 单客户端 URL 下载导入队列并发数。 |
 | `link_image.global_concurrency` | 服务端 URL materialize 与 prepare 分阶段复用的全局并发数；只在配置文件中维护。 |
 | `link_image.fetch_timeout_seconds` | 外链图片请求超时，单位秒；只覆盖 download 素材化的外部请求。 |
@@ -82,7 +84,7 @@ Dockerfile 的 `EXPOSE` 与 Compose 目标端口；回归测试会校验三者�
 
 ## 数值配置范围
 
-除 `upload.max_file_size_mb` 和 `log.max_size_mb` 可使用小数外，下列数值字段都必须是整数。这里的默认值用于首次生成配置或补齐缺失字段，不会覆盖已有配置文件中的有效值。
+除 `upload.max_file_size_mb` 和 `log.max_size_mb` 可使用小数外，下列数值字段都必须是整数。这里的默认值用于首次生成配置，并在启动或手动重载时补齐 `config.json` 中缺失的字段，不会覆盖已有有效值；高级配置编辑器和配置包仍要求提交当前完整 schema。
 
 | 配置路径 | 默认值 | 合法范围 |
 | --- | ---: | ---: |
@@ -153,6 +155,7 @@ Dockerfile 的 `EXPOSE` 与 Compose 目标端口；回归测试会校验三者�
   },
   "link_image": {
     "fill_original_url": false,
+    "auto_import": true,
     "concurrency": 2,
     "global_concurrency": 5,
     "fetch_timeout_seconds": 30,
@@ -303,6 +306,7 @@ PostgreSQL 提交状态，不根据可能已被后继修改的业务行猜测；
 | `upload.concurrency` | `UPLOAD_CONCURRENCY` |
 | `upload.global_concurrency` | `UPLOAD_GLOBAL_CONCURRENCY` |
 | `link_image.concurrency` | `LINK_IMAGE_CONCURRENCY` |
+| `link_image.auto_import` | `LINK_IMAGE_AUTO_IMPORT` |
 | `link_image.global_concurrency` | `LINK_IMAGE_GLOBAL_CONCURRENCY` |
 | `link_image.fetch_timeout_seconds` | `LINK_IMAGE_FETCH_TIMEOUT_SECONDS` |
 | `link_image.max_items` | `LINK_IMAGE_MAX_ITEMS` |

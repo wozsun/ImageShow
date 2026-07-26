@@ -82,6 +82,10 @@ export type BatchImageUpdateResponse = {
   results: BatchImageUpdateItemResult[];
 };
 
+export type BatchImageSnapshotResponse = {
+  items: BatchEditableImageSnapshotDto[];
+};
+
 export type BatchStorageMigrationResponse = {
   migrated: number;
   failed: number;
@@ -146,6 +150,39 @@ export type AdminImageItemDto = PublicImageItemDto & {
   created_at?: string | null;
   updated_at?: string | null;
 };
+
+/**
+ * Fields consumed by the shared admin detail dialog.
+ *
+ * This deliberately excludes list/edit-only fields such as object_key,
+ * original, image_size and status so compact callers do not over-fetch.
+ */
+export type AdminImageDetailItemDto = PublicImageItemDto & Pick<
+  AdminImageItemDto,
+  "storage_slug" | "md5" | "created_at" | "updated_at" | "deleted_at"
+>;
+
+/** Exact recovery payload consumed by the batch metadata editor. */
+export type BatchEditableImageSnapshotDto = Pick<
+  AdminImageItemDto,
+  | "id"
+  | "title"
+  | "description"
+  | "source"
+  | "original"
+  | "device"
+  | "brightness"
+  | "theme"
+  | "author"
+  | "tags"
+  | "thumb_url"
+  | "object_url"
+  | "width"
+  | "height"
+  | "image_size"
+  | "object_key"
+  | "storage_slug"
+>;
 
 export type AdminImageListResponse = {
   items: AdminImageItemDto[];

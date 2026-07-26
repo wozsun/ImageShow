@@ -7,16 +7,21 @@ import {
   setAdminOverviewCache
 } from "../image-cache.ts";
 import {
-  overviewRecentImage,
-  type OverviewRecentImageRecord
+  adminImageDetailView,
+  imageDetailPresentationColumnsWithTags,
+  publicImagesWithTags,
+  type ImageRecordWithTags
 } from "../presenter.ts";
 
 type OverviewStats = Awaited<ReturnType<typeof buildOverviewStats>>;
+const overviewProjectionVersion = 2;
 
 export async function getOverviewStats() {
   const recentLimit = getRuntimeConfig().admin.recent_uploads;
   const generation = await publicImagesCacheGeneration();
-  const cacheKey = `recent:${recentLimit}`;
+  // Version the value shape so a rolling upgrade never feeds the former
+  // thumbnail-only projection to the full detail dialog.
+  const cacheKey = `projection:${overviewProjectionVersion}:recent:${recentLimit}`;
   const cached = await getAdminOverviewCache<OverviewStats>(cacheKey, generation);
   if (cached) return cached;
 
@@ -67,7 +72,7 @@ async function buildOverviewStats(recentLimit: number) {
       LIMIT 8
     `),
     pool.query(
-      `SELECT id, device, brightness, theme, ext, object_key, storage_slug, title
+      `SELECT ${imageDetailPresentationColumnsWithTags}
          FROM metadata
         WHERE status='ready'
         ORDER BY created_at DESC, id DESC
@@ -78,9 +83,10 @@ async function buildOverviewStats(recentLimit: number) {
   ]);
 
   const row = statsResult.rows[0];
-  const recent = await Promise.all(
-    (recentResult.rows as OverviewRecentImageRecord[]).map(overviewRecentImage)
-  );
+  const recent = (await publicImagesWithTags(
+    recentResult.rows as ImageRecordWithTags[]
+  ))
+    .map(adminImageDetailView);
   return {
     gallery: row.gallery,
     theme_unset: row.theme_unset,

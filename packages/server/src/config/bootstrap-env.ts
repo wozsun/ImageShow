@@ -102,6 +102,7 @@ export function runtimeConfigFromEnvironment(): RuntimeConfig {
     },
     link_image: {
       fill_original_url: environmentBoolean("LINK_IMAGE_FILL_ORIGINAL_URL"),
+      auto_import: environmentBoolean("LINK_IMAGE_AUTO_IMPORT"),
       concurrency: environmentNumber("LINK_IMAGE_CONCURRENCY"),
       global_concurrency: environmentNumber("LINK_IMAGE_GLOBAL_CONCURRENCY"),
       fetch_timeout_seconds: environmentNumber("LINK_IMAGE_FETCH_TIMEOUT_SECONDS"),

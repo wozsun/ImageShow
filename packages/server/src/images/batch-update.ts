@@ -1,10 +1,12 @@
 import { ApiError } from "../core/api-error.ts";
 import { mapWithWorkerPool } from "../core/concurrency.ts";
+import { withAdvisoryLocks } from "../core/db.ts";
 import type { BatchImageUpdateItemInput } from "../core/validation.ts";
 import { updateImageTags } from "../tags/mutations.ts";
 import { createEntityCountCacheInvalidationBatch } from "../vocab/vocab-cache.ts";
 import { createImageMutationSyncBatch } from "./mutation-sync.ts";
 import { updateImageMetadata } from "./metadata-mutations.ts";
+import { batchImageUpdateLockRequests } from "./batch-update-lock.ts";
 import type {
   BatchImageUpdateItemResult,
   BatchImageUpdateResponse
@@ -43,58 +45,62 @@ export async function updateImagesBatch(
   let entityCountInvalidationTriggered = false;
   let randomPoolFullRebuildTriggered = false;
 
-  try {
-    // Different IDs may run at low concurrency. Metadata and tags for one ID
-    // remain ordered, while classification/object moves still serialize on the
-    // existing storage mutation lock. Redis repair is flushed once below, so
-    // concurrent items never contend for the random-pool incremental lock.
-    results = await mapWithWorkerPool(items, batchUpdateConcurrency, async (item) => {
-      const itemStartedAt = performance.now();
-      const { id, tags, ...metadata } = item;
-      let itemError: unknown;
+  return withAdvisoryLocks(
+    batchImageUpdateLockRequests(items.map((item) => item.id)),
+    async () => {
       try {
-        if (Object.keys(metadata).length) {
-          await updateImageMetadata(id, metadata, {
-            entityCountInvalidationBatch,
-            mutationSyncBatch,
+        // Different IDs may run at low concurrency. The request owns every
+        // selected image until all PostgreSQL and derived-cache work settles,
+        // allowing a recovery snapshot to wait for one authoritative boundary.
+        results = await mapWithWorkerPool(items, batchUpdateConcurrency, async (item) => {
+          const itemStartedAt = performance.now();
+          const { id, tags, ...metadata } = item;
+          let itemError: unknown;
+          try {
+            if (Object.keys(metadata).length) {
+              await updateImageMetadata(id, metadata, {
+                entityCountInvalidationBatch,
+                mutationSyncBatch,
+              });
+            }
+            if (tags !== undefined) {
+              await updateImageTags(id, tags, {
+                entityCountInvalidationBatch,
+                mutationSyncBatch,
+              });
+            }
+          } catch (error) {
+            itemError = error;
+          }
+          const result: BatchImageUpdateItemResult = itemError
+            ? { id, status: "failed", ...publicItemError(itemError) }
+            : { id, status: "updated" };
+          maxItemDurationMs = Math.max(maxItemDurationMs, performance.now() - itemStartedAt);
+          return result;
+        });
+
+        // This also repairs committed metadata when a later tag mutation failed.
+        const syncSummary = await mutationSyncBatch.flush();
+        randomPoolFullRebuildTriggered = syncSummary.randomPoolFullRebuildTriggered;
+      } finally {
+        entityCountInvalidationTriggered = entityCountInvalidationBatch.hasWork();
+        try {
+          await entityCountInvalidationBatch.flush();
+        } finally {
+          options.onMetrics?.({
+            maxItemDurationMs,
+            entityCountInvalidationTriggered,
+            randomPoolFullRebuildTriggered,
           });
         }
-        if (tags !== undefined) {
-          await updateImageTags(id, tags, {
-            entityCountInvalidationBatch,
-            mutationSyncBatch,
-          });
-        }
-      } catch (error) {
-        itemError = error;
       }
-      const result: BatchImageUpdateItemResult = itemError
-        ? { id, status: "failed", ...publicItemError(itemError) }
-        : { id, status: "updated" };
-      maxItemDurationMs = Math.max(maxItemDurationMs, performance.now() - itemStartedAt);
-      return result;
-    });
 
-    // This also repairs committed metadata when a later tag mutation failed.
-    const syncSummary = await mutationSyncBatch.flush();
-    randomPoolFullRebuildTriggered = syncSummary.randomPoolFullRebuildTriggered;
-  } finally {
-    entityCountInvalidationTriggered = entityCountInvalidationBatch.hasWork();
-    try {
-      await entityCountInvalidationBatch.flush();
-    } finally {
-      options.onMetrics?.({
-        maxItemDurationMs,
-        entityCountInvalidationTriggered,
-        randomPoolFullRebuildTriggered,
-      });
+      const updated = results.filter((result) => result.status === "updated").length;
+      return {
+        updated,
+        failed: items.length - updated,
+        results,
+      };
     }
-  }
-
-  const updated = results.filter((result) => result.status === "updated").length;
-  return {
-    updated,
-    failed: items.length - updated,
-    results,
-  };
+  );
 }

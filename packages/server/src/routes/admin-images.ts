@@ -2,6 +2,7 @@ import type { Hono } from "hono";
 import {
   adminApiBasePath,
   adminPermissions,
+  type BatchImageSnapshotResponse,
   type BatchImageUpdateResponse
 } from "@imageshow/shared";
 import { apiSuccess } from "../core/http/responses.ts";
@@ -23,6 +24,7 @@ import { batchDeleteImages } from "../images/batch-delete.ts";
 import { migrateImageBatchStorage } from "../images/batch-storage-migration.ts";
 import { updateImagesBatch } from "../images/batch-update.ts";
 import {
+  getAdminImageSnapshots,
   getAdminImageInfo,
   listAdminImages
 } from "../images/read-models/admin-images.ts";
@@ -45,6 +47,13 @@ export function registerAdminImageRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/images`, async (c) => {
     const q = parse(adminImageListQuery, Object.fromEntries(new URL(c.req.url).searchParams));
     return c.json(apiSuccess(await listAdminImages(q)));
+  });
+
+  app.post(`${adminApiBasePath}/images/batch-snapshot`, async (c) => {
+    const input = parse(imageIdsInput, await c.req.json().catch(() => ({})));
+    const response: BatchImageSnapshotResponse =
+      await getAdminImageSnapshots(input.ids);
+    return c.json(apiSuccess(response));
   });
 
   app.get(`${adminApiBasePath}/images/:id/admin-info`, async (c) => {

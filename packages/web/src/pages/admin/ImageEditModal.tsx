@@ -16,7 +16,7 @@ export function ImageEditModal({
   allTags: FacetOption[];
   authors: FacetOption[];
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: () => void | Promise<void>;
   returnFocusRef?: RefObject<HTMLElement | null>;
 }) {
   return (

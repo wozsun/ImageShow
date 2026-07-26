@@ -61,6 +61,7 @@ const appSettingsSchema = z.strictObject({
   }).optional(),
   link_image: z.strictObject({
     fill_original_url: z.boolean().optional(),
+    auto_import: z.boolean().optional(),
     concurrency: linkImageConcurrency.optional()
   }).optional(),
   normalize: z.strictObject({
@@ -118,6 +119,7 @@ export function getSettingsForAdmin(): AdminSettings {
   const { max_items, max_file_size_mb, list_page_size, concurrency: uploadConcurrencyValue } = settings.upload;
   const {
     fill_original_url,
+    auto_import,
     concurrency: linkConcurrency,
     max_items: linkMaxItems
   } = settings.link_image;
@@ -134,6 +136,7 @@ export function getSettingsForAdmin(): AdminSettings {
     },
     link_image: {
       fill_original_url,
+      auto_import,
       concurrency: linkConcurrency,
       max_items: linkMaxItems
     },

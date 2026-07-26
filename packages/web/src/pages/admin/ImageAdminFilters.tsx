@@ -57,7 +57,6 @@ export function ImageAdminFilters({
     open,
     onOpenChange: setOpen,
     enabled: mobileLayout,
-    dismissOnOutsideScroll: true,
     resetKey: mobileLayout
   });
   const themeDisabled = disabled || view === "unset";

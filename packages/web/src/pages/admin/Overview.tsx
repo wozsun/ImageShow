@@ -1,14 +1,16 @@
+import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api } from "../../lib/api/client.js";
 import { ThumbImage } from "../../components/image/ThumbImage.js";
+import { ImageDetailModal } from "../../components/image/ImageDetailModal.js";
 import { adminApiBasePath, adminBasePath } from "../../lib/constants.js";
 import { queryKeys } from "../../lib/api/query-keys.js";
 import { formatBytes } from "../../lib/ui/formatters.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
+import type { AdminImageDetailItem } from "../../lib/types.js";
 import "../../styles/admin/overview.css";
 
-type RecentImage = { id: string; title: string; thumb_url: string };
 type ThemeCount = { theme: string; count: number };
 type OverviewStats = {
   gallery: number;
@@ -28,7 +30,7 @@ type OverviewStats = {
   dark: number;
   light: number;
   top_themes: ThemeCount[];
-  recent: RecentImage[];
+  recent: AdminImageDetailItem[];
 };
 
 type OverviewMetric = { label: string; value?: number | string; hint?: string; hintTitle?: string; to?: string };
@@ -57,6 +59,8 @@ function OverviewMetricCards({ items }: { items: OverviewMetric[] }) {
 }
 
 export function Overview() {
+  const [detail, setDetail] = useState<AdminImageDetailItem | null>(null);
+  const detailReturnFocusRef = useRef<HTMLElement | null>(null);
   const query = useQuery<OverviewStats>({ queryKey: queryKeys.overview, queryFn: ({ signal }) => api(`${adminApiBasePath}/overview`, { signal }) });
   const { data } = query;
   if (query.isError) return <QueryErrorState error={query.error} onRetry={() => void query.refetch()} fullPage reportContext="overview.load" />;
@@ -129,20 +133,33 @@ export function Overview() {
               <h2>最近上传</h2>
               <div className="overview-recent">
                 {data.recent.map((img) => (
-                  <Link
+                  <button
+                    type="button"
                     className="overview-recent-item"
                     key={img.id}
-                    to={`${adminBasePath}/images`}
+                    aria-label={`查看图片详情：${img.title || img.id}`}
                     title={img.title || img.id}
+                    onClick={(event) => {
+                      detailReturnFocusRef.current = event.currentTarget;
+                      setDetail(img);
+                    }}
                   >
                     <ThumbImage src={img.thumb_url} alt="" />
-                  </Link>
+                  </button>
                 ))}
               </div>
             </div>
           )}
         </div>
       </div>
+      {detail && (
+        <ImageDetailModal
+          item={detail}
+          onClose={() => setDetail(null)}
+          returnFocusRef={detailReturnFocusRef}
+          admin
+        />
+      )}
     </section>
   );
 }

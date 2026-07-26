@@ -136,7 +136,6 @@ export function useGalleryViewportControls() {
     open: filtersOpen,
     onOpenChange: setFiltersOpen,
     enabled: mobileLayout,
-    dismissOnOutsideScroll: true,
     resetKey: mobileLayout
   });
   const toggleFilters = useCallback(() => {

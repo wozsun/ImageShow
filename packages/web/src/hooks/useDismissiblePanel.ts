@@ -17,11 +17,8 @@ const outsideInteractionEvents = [
 
 const defaultPortalSelector =
   ".select-menu, .facet-select-menu, [data-dialog-portal-menu]";
-const scrollSequenceIdleMs = 120;
 const availableHeightProperty =
   "--dismissible-panel-available-height";
-const editableElementSelector =
-  'input, textarea, [contenteditable]:not([contenteditable="false"])';
 
 type TransientPanelCloseOptions = {
   restoreFocus?: boolean;
@@ -107,54 +104,22 @@ function isWithinPanelSurface(
   });
 }
 
-function isElementWithinPanelSurface(
-  panel: HTMLElement,
-  trigger: HTMLElement,
-  element: Element,
-  portalSelector: string
-) {
-  return panel.contains(element)
-    || trigger.contains(element)
-    || Boolean(element.closest(portalSelector));
-}
-
-function isEditingWithinPanelSurface(
-  panel: HTMLElement,
-  trigger: HTMLElement,
-  portalSelector: string
-) {
-  const activeElement = panel.ownerDocument.activeElement;
-  return activeElement instanceof HTMLElement
-    && activeElement.matches(editableElementSelector)
-    && isElementWithinPanelSurface(
-      panel,
-      trigger,
-      activeElement,
-      portalSelector
-    );
-}
-
 /**
  * Shared disclosure behavior for transient filter/default panels.
  *
  * Pointer, focus and wheel interactions outside the panel close it while
  * anchored Portal menus remain part of the panel's interactive surface.
- * Filter surfaces can also opt into result-scroll dismissal. Opening the panel
- * claims any already-running scroll sequence; a later external gesture or a
- * new raw scroll sequence still dismisses it.
  */
 export function useDismissiblePanel({
   open,
   onOpenChange,
   enabled = true,
-  dismissOnOutsideScroll = false,
   resetKey,
   portalSelector = defaultPortalSelector
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   enabled?: boolean;
-  dismissOnOutsideScroll?: boolean;
   resetKey?: unknown;
   portalSelector?: string;
 }) {
@@ -250,27 +215,8 @@ export function useDismissiblePanel({
     const trigger = semantics.triggerRef.current;
     if (!enabled || !open || !panel || !trigger) return;
 
-    let ownedScrollSequenceActive = dismissOnOutsideScroll;
-    let ownedScrollSequenceTimer: number | undefined;
-    const finishOwnedScrollSequence = () => {
-      ownedScrollSequenceActive = false;
-      ownedScrollSequenceTimer = undefined;
-    };
-    const ownScrollSequence = () => {
-      if (!dismissOnOutsideScroll) return;
-      ownedScrollSequenceActive = true;
-      window.clearTimeout(ownedScrollSequenceTimer);
-      ownedScrollSequenceTimer = window.setTimeout(
-        finishOwnedScrollSequence,
-        scrollSequenceIdleMs
-      );
-    };
-    ownScrollSequence();
     const closeOnOutsideInteraction = (event: Event) => {
-      if (isWithinPanelSurface(panel, trigger, event, portalSelector)) {
-        ownScrollSequence();
-        return;
-      }
+      if (isWithinPanelSurface(panel, trigger, event, portalSelector)) return;
       if (
         event.type === "focusin"
         && isDocumentFallbackFocusTarget(
@@ -279,56 +225,10 @@ export function useDismissiblePanel({
         )
       ) {
         // iOS can move focus to body/html while dismissing the keyboard.
-        // The following viewport scroll still belongs to that internal edit;
-        // a later physical touch outside is handled independently below.
-        ownScrollSequence();
+        // A later physical interaction outside is handled independently.
         return;
       }
       setOpen(false);
-    };
-    const ownInternalFocusTransition = (event: FocusEvent) => {
-      const target = event.target;
-      if (
-        target instanceof HTMLElement
-        && target.matches(editableElementSelector)
-        && isElementWithinPanelSurface(
-          panel,
-          trigger,
-          target,
-          portalSelector
-        )
-      ) {
-        ownScrollSequence();
-      }
-    };
-    const closeOnOutsideScroll = (event: Event) => {
-      if (
-        isWithinPanelSurface(panel, trigger, event, portalSelector)
-        || isEditingWithinPanelSurface(panel, trigger, portalSelector)
-      ) {
-        ownScrollSequence();
-        return;
-      }
-
-      // Opening claims an already-running momentum sequence. Internal edits,
-      // Portal choices and virtual-keyboard viewport changes claim their own
-      // resulting scroll sequence as well. Raw scroll events keep that claim
-      // alive until idle; any new outside touch/pointer/wheel closes earlier
-      // in capture instead of being mistaken for the claimed tail.
-      if (ownedScrollSequenceActive) {
-        ownScrollSequence();
-        return;
-      }
-      setOpen(false);
-    };
-    const closeOnOutsideElementScroll = (event: Event) => {
-      // 页面滚动由 window 监听；这里只处理后台列表等独立滚动容器。
-      if (
-        event.target === document
-        || event.target === document.documentElement
-        || event.target === document.body
-      ) return;
-      closeOnOutsideScroll(event);
     };
     // touchstart covers iOS scroll gestures whose pointerdown is delayed or
     // omitted. Pointer/wheel/click/focus retain mouse, keyboard and assistive
@@ -342,59 +242,12 @@ export function useDismissiblePanel({
           : true
       );
     }
-    if (dismissOnOutsideScroll) {
-      document.addEventListener(
-        "focusout",
-        ownInternalFocusTransition,
-        true
-      );
-      document.addEventListener("scroll", closeOnOutsideElementScroll, {
-        capture: true,
-        passive: true
-      });
-      window.addEventListener("scroll", closeOnOutsideScroll, {
-        passive: true
-      });
-      window.addEventListener("resize", ownScrollSequence);
-      window.visualViewport?.addEventListener(
-        "resize",
-        ownScrollSequence
-      );
-      window.visualViewport?.addEventListener(
-        "scroll",
-        ownScrollSequence
-      );
-    }
     return () => {
-      window.clearTimeout(ownedScrollSequenceTimer);
       for (const eventName of outsideInteractionEvents) {
         document.removeEventListener(eventName, closeOnOutsideInteraction, true);
       }
-      if (dismissOnOutsideScroll) {
-        document.removeEventListener(
-          "focusout",
-          ownInternalFocusTransition,
-          true
-        );
-        document.removeEventListener(
-          "scroll",
-          closeOnOutsideElementScroll,
-          true
-        );
-        window.removeEventListener("scroll", closeOnOutsideScroll);
-        window.removeEventListener("resize", ownScrollSequence);
-        window.visualViewport?.removeEventListener(
-          "resize",
-          ownScrollSequence
-        );
-        window.visualViewport?.removeEventListener(
-          "scroll",
-          ownScrollSequence
-        );
-      }
     };
   }, [
-    dismissOnOutsideScroll,
     enabled,
     open,
     portalSelector,

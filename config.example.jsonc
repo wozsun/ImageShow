@@ -75,6 +75,8 @@
   "link_image": {
     // 链接导入时是否自动把输入 URL 填入“原图 URL”字段；不做可直达探测。
     "fill_original_url": false,
+    // 链接、清单或微博解析无错误且有有效图片时，是否直接开始导入。
+    "auto_import": true,
     // 单客户端 URL 下载导入队列并发数，范围 1-128。
     "concurrency": 2,
     // 服务端 URL materialize 与 prepare 各自复用的全局并发数，范围 1-512。
@@ -85,7 +87,7 @@
     "max_items": 200
   },
 
-  // 微博导入配置。
+  // 微博解析独立配置。
   "weibo": {
     // 微博链接单次输入软上限，范围 1-50。
     "max_items": 20,

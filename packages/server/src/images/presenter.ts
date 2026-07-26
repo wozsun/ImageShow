@@ -1,6 +1,8 @@
 import {
   adminApiBasePath,
+  type AdminImageDetailItemDto,
   type AdminImageItemDto,
+  type BatchEditableImageSnapshotDto,
   type Brightness,
   type Device,
   type GalleryImageCardDto,
@@ -65,8 +67,65 @@ export const imagePresentationColumns = [
   "updated_at"
 ].join(", ");
 
+/**
+ * Full image projection with tags read in the same PostgreSQL statement.
+ *
+ * Small snapshot-style read models use this to avoid a second round trip and
+ * to keep metadata and tags on one statement-level MVCC snapshot.
+ */
+const imageTagsPresentationColumn = `ARRAY(
+  SELECT it.tag_slug
+    FROM image_tag it
+   WHERE it.image_id = metadata.id
+   ORDER BY it.tag_slug
+) AS tags`;
+
+export const imageDetailPresentationColumnsWithTags = [
+  "id",
+  "device",
+  "brightness",
+  "theme",
+  "width",
+  "height",
+  "ext",
+  "md5",
+  "object_key",
+  "storage_slug",
+  "author",
+  "title",
+  "description",
+  "source",
+  "original",
+  "status",
+  "image_time",
+  "created_at",
+  "updated_at",
+  imageTagsPresentationColumn
+].join(", ");
+
+export const batchEditableImagePresentationColumnsWithTags = [
+  "id",
+  "device",
+  "brightness",
+  "theme",
+  "width",
+  "height",
+  "image_size",
+  "ext",
+  "object_key",
+  "storage_slug",
+  "author",
+  "title",
+  "description",
+  "source",
+  "original",
+  "status",
+  imageTagsPresentationColumn
+].join(", ");
+
 export type PublicImage = AdminImageItemDto & { ext: string };
 export type PublicImageDetail = PublicImageDetailDto;
+export type ImageRecordWithTags = ImageRecord & { tags: string[] };
 
 export type PublicImageCardRecord = Pick<
   ImageRecord,
@@ -86,8 +145,6 @@ type PublicImageUrlRecord = Pick<
   ImageRecord,
   "id" | "device" | "brightness" | "theme" | "ext" | "object_key" | "storage_slug"
 >;
-
-export type OverviewRecentImageRecord = PublicImageUrlRecord & Pick<ImageRecord, "title">;
 
 export type ImportSessionRecord = {
   id: string;
@@ -118,15 +175,6 @@ function serializeTimestamp(value: string | Date | null | undefined) {
 
 export async function importCommitImage(row: ImageRecord) {
   return adminImageView(await publicImage(row));
-}
-
-export async function overviewRecentImage(row: OverviewRecentImageRecord) {
-  const { urls } = await publicUrlsForRow(row);
-  return {
-    id: row.id,
-    title: row.title ?? "",
-    thumb_url: urls.thumb_url
-  };
 }
 
 async function publicImage(
@@ -169,6 +217,10 @@ async function publicImage(
 export async function publicImages(rows: ImageRecord[]) {
   const tagMap = await getTagsForImages(rows.map((row) => row.id));
   return Promise.all(rows.map((row) => publicImage(row, tagMap.get(row.id) ?? [])));
+}
+
+export function publicImagesWithTags(rows: ImageRecordWithTags[]) {
+  return Promise.all(rows.map((row) => publicImage(row, row.tags)));
 }
 
 export async function publicImageDetail(
@@ -223,5 +275,55 @@ export function adminImageView(image: PublicImage): AdminImage {
     ...rest,
     object_url: `${adminApiBasePath}/images/${image.id}/raw`,
     thumb_url: `${adminApiBasePath}/images/${image.id}/thumb`
+  };
+}
+
+export function adminImageDetailView(
+  image: PublicImage
+): AdminImageDetailItemDto {
+  return {
+    id: image.id,
+    title: image.title,
+    device: image.device,
+    brightness: image.brightness,
+    theme: image.theme,
+    author: image.author,
+    thumb_url: image.thumb_url,
+    width: image.width,
+    height: image.height,
+    tags: image.tags,
+    diff_original: image.diff_original,
+    image_time: image.image_time,
+    description: image.description,
+    object_url: image.object_url,
+    source: image.source,
+    storage_slug: image.storage_slug,
+    md5: image.md5,
+    created_at: image.created_at,
+    updated_at: image.updated_at
+  };
+}
+
+export function batchEditableImageSnapshotView(
+  image: PublicImage
+): BatchEditableImageSnapshotDto {
+  return {
+    id: image.id,
+    title: image.title,
+    description: image.description,
+    source: image.source,
+    original: image.original,
+    device: image.device,
+    brightness: image.brightness,
+    theme: image.theme,
+    author: image.author,
+    tags: image.tags,
+    thumb_url: image.thumb_url,
+    object_url: image.object_url,
+    width: image.width,
+    height: image.height,
+    image_size: image.image_size,
+    object_key: image.object_key,
+    storage_slug: image.storage_slug
   };
 }

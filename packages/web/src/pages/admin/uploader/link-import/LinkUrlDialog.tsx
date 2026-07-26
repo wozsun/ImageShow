@@ -38,6 +38,11 @@ export type LinkDialogSubmission =
   | { inputMode: "jsonl"; manifest: JsonlManifestResult }
   | { inputMode: "weibo"; result: WeiboImportResult };
 
+type ParsedLinkDialogResult = {
+  submission: LinkDialogSubmission | null;
+  blockingIssueCount: number;
+};
+
 const inputModePresentation: Record<LinkInputMode, {
   heading: string;
   icon: IconName;
@@ -149,8 +154,17 @@ function ImportIssuePreview({ summary, copyLabel, getCopyText, items }: {
   );
 }
 
-export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClose, onSubmit, returnFocusRef }: {
+export function LinkUrlDialog({
+  initialInputMode,
+  autoImportAfterParse,
+  maxItems,
+  weiboMaxItems,
+  onClose,
+  onSubmit,
+  returnFocusRef
+}: {
   initialInputMode: LinkInputMode;
+  autoImportAfterParse: boolean;
   maxItems: number;
   weiboMaxItems: number;
   onClose: () => void;
@@ -161,6 +175,7 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
   const importCardRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const requestControllerRef = useRef<AbortController | null>(null);
+  const submittedRef = useRef(false);
   const [text, setText] = useState("");
   const [inputMode, setInputMode] = useState<LinkInputMode>(initialInputMode);
   const [urlParseResult, setUrlParseResult] = useState<ImportUrlParseResult | null>(null);
@@ -204,14 +219,28 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
   const readyToImport = inputMode === "urls"
     ? Boolean(urlParseResultCurrent)
     : Boolean(manifestCurrent);
+  const currentSubmission: LinkDialogSubmission | null =
+    urlParseResultCurrent?.urls.length
+      ? { inputMode: "urls", urls: urlParseResultCurrent.urls }
+      : jsonlManifestCurrent?.items.length
+        ? { inputMode: "jsonl", manifest: jsonlManifestCurrent }
+        : weiboResultCurrent?.manifest.items.length
+          ? { inputMode: "weibo", result: weiboResultCurrent }
+          : null;
   const parsedWithoutItems = readyToImport && submitCount === 0;
-  const resultIssueCount = inputMode === "urls"
-    ? urlParseResultCurrent?.issues.length ?? 0
+  const resultBlockingIssueCount = inputMode === "urls"
+    ? urlParseResultCurrent?.invalidCount ?? 0
     : inputMode === "jsonl"
       ? jsonlManifestCurrent?.errors.length ?? 0
       : (weiboResultCurrent?.errors.length ?? 0) + (weiboResultCurrent?.manifest.errors.length ?? 0);
-  const resultIsWarning = parsedWithoutItems || resultIssueCount > 0;
-  const urlIssues = urlParseResultCurrent?.issues ?? [];
+  const resultIsWarning =
+    parsedWithoutItems || resultBlockingIssueCount > 0;
+  // Repeated links are normal input deduplication. Keep their count in the
+  // summary, but only invalid links belong in the problem list or block
+  // automatic import.
+  const urlIssues = urlParseResultCurrent?.issues.filter(
+    (issue) => issue.type === "invalid"
+  ) ?? [];
   const visibleUrlIssues = urlIssues.slice(0, importIssuePreviewMaxItems);
   const visibleWeiboErrors = weiboResultCurrent?.errors.slice(0, importIssuePreviewMaxItems) ?? [];
   const manifestIssuePreviewBudget = inputMode === "weibo"
@@ -248,12 +277,18 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
     resetParsedResult();
   };
 
-  const parseInput = async () => {
+  const parseInput = async (): Promise<ParsedLinkDialogResult | null> => {
     if (inputMode === "urls") {
+      const result = parseImportUrlInput(text);
       setParseError("");
-      setUrlParseResult(parseImportUrlInput(text));
+      setUrlParseResult(result);
       setParsedText(text);
-      return true;
+      return {
+        submission: result.urls.length
+          ? { inputMode: "urls", urls: result.urls }
+          : null,
+        blockingIssueCount: result.invalidCount
+      };
     }
 
     const controller = new AbortController();
@@ -262,27 +297,67 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
     try {
       if (inputMode === "jsonl") {
         const manifest = await parseImportJsonl(text, controller.signal);
-        if (controller.signal.aborted) return false;
+        if (controller.signal.aborted) return null;
         setJsonlManifest(manifest);
+        setParsedText(text);
+        return {
+          submission: manifest.items.length
+            ? { inputMode: "jsonl", manifest }
+            : null,
+          blockingIssueCount: manifest.errors.length
+        };
       } else if (inputMode === "weibo") {
         const result = await parseWeiboImport(weiboUrls, controller.signal);
-        if (controller.signal.aborted) return false;
-        setWeiboResult({
+        if (controller.signal.aborted) return null;
+        const normalizedResult = {
           ...result,
           errors: result.errors.map((error) => ({
             ...error,
             line: weiboInputLines[error.line - 1]?.line ?? error.line
           }))
-        });
+        };
+        setWeiboResult(normalizedResult);
+        setParsedText(text);
+        return {
+          submission: normalizedResult.manifest.items.length
+            ? { inputMode: "weibo", result: normalizedResult }
+            : null,
+          blockingIssueCount:
+            normalizedResult.errors.length
+            + normalizedResult.manifest.errors.length
+        };
       }
-      setParsedText(text);
-      return true;
+      return null;
     } catch (error) {
       if (!controller.signal.aborted) setParseError((error as Error).message);
-      return false;
+      return null;
     } finally {
       if (requestControllerRef.current === controller) requestControllerRef.current = null;
     }
+  };
+
+  const importSubmission = (
+    submission: LinkDialogSubmission,
+    requestClose: () => void
+  ) => {
+    if (submittedRef.current) return;
+    submittedRef.current = true;
+    onSubmit(submission);
+    requestClose();
+  };
+
+  const importParsedResultWhenEnabled = (
+    result: ParsedLinkDialogResult,
+    requestClose: () => void
+  ) => {
+    if (
+      !autoImportAfterParse
+      || result.blockingIssueCount > 0
+      || !result.submission
+    ) {
+      return;
+    }
+    importSubmission(result.submission, requestClose);
   };
 
   const submit = async (requestClose: () => void) => {
@@ -290,29 +365,18 @@ export function LinkUrlDialog({ initialInputMode, maxItems, weiboMaxItems, onClo
       setParseError(`${presentation.label}最多允许 ${limitState.maxItems} 条，请拆分后再导入`);
       return;
     }
-    if (inputMode === "urls") {
-      if (!urlParseResultCurrent) {
-        await parseInput();
-        return;
+    if (!readyToImport) {
+      const parsedResult = { current: null as ParsedLinkDialogResult | null };
+      const parsed = await parseAction.run(async () => {
+        parsedResult.current = await parseInput();
+        return parsedResult.current !== null;
+      });
+      if (parsed && parsedResult.current) {
+        importParsedResultWhenEnabled(parsedResult.current, requestClose);
       }
-      if (!urlParseResultCurrent.urls.length) return;
-      onSubmit({ inputMode, urls: urlParseResultCurrent.urls });
-      requestClose();
       return;
     }
-    if (!text.trim()) return;
-    if (!manifestCurrent) {
-      await parseAction.run(parseInput);
-      return;
-    }
-    if (!manifestCurrent.items.length) return;
-    if (inputMode === "jsonl" && jsonlManifestCurrent) {
-      onSubmit({ inputMode, manifest: jsonlManifestCurrent });
-    }
-    if (inputMode === "weibo" && weiboResultCurrent) {
-      onSubmit({ inputMode, result: weiboResultCurrent });
-    }
-    requestClose();
+    if (currentSubmission) importSubmission(currentSubmission, requestClose);
   };
 
   const missingInput = inputMode === "urls"

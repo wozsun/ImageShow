@@ -402,6 +402,11 @@ pre {
   overflow-wrap: anywhere;
   font-size: 15px;
 }
+.confirm-dialog .async-action-button.button.is-pending {
+  color: #fff;
+  background: #1f6feb;
+  border-color: #1f6feb;
+}
 
 /*危险动作按钮（删除等）。*/
 .danger-button, button.danger-button {

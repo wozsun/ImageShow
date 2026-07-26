@@ -3,7 +3,10 @@ import { Icon } from "../icon/Icon.js";
 import { ProgressiveImage } from "./ProgressiveImage.js";
 import { displayNameOrSlug, imageDisplayTitle, formatDate, formatDimensions } from "../../lib/ui/formatters.js";
 import { brightnessOptionLabel, deviceOptionLabel } from "../../lib/ui/select-options.js";
-import type { ImageItem, PublicImageItem } from "../../lib/types.js";
+import type {
+  AdminImageDetailItem,
+  PublicImageItem
+} from "../../lib/types.js";
 import { hasSessionProbeHint, useGalleryFacets, useSiteConfig } from "../../lib/api/site-data.js";
 import { useAnimatedClose } from "../../hooks/useAnimatedClose.js";
 import { usePageScrollLock } from "../../hooks/usePageScrollLock.js";
@@ -27,7 +30,7 @@ type ImageDetailModalProps =
       returnFocusRef?: RefObject<HTMLElement | null>;
     }
   | {
-      item: ImageItem;
+      item: AdminImageDetailItem;
       onClose: () => void;
       admin: true;
       returnFocusRef?: RefObject<HTMLElement | null>;

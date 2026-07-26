@@ -77,6 +77,8 @@ export function Uploader({ onDone }: { onDone: () => void }) {
   const downloadConcurrency = settingsData?.settings.link_image.concurrency ?? 2;
   const commitConcurrency = settingsData?.settings.import.commit_concurrency ?? 5;
   const fillOriginalUrl = settingsData?.settings.link_image.fill_original_url ?? false;
+  const autoImportAfterParse =
+    settingsData?.settings.link_image.auto_import === true;
   const linkMaxItems = settingsData?.settings.link_image.max_items ?? 200;
   const weiboMaxItems = settingsData?.settings.weibo.max_items ?? 20;
   const queue = useImportQueue(pageSize);
@@ -327,6 +329,7 @@ export function Uploader({ onDone }: { onDone: () => void }) {
           previewReturnFocusRef={previewReturnFocusRef}
           urlInputOpen={urlInputOpen}
           linkInputMode={linkInputMode}
+          autoImportAfterParse={autoImportAfterParse}
           linkMaxItems={linkMaxItems}
           weiboMaxItems={weiboMaxItems}
           returnFocusRef={workflowReturnFocusRef}
