@@ -36,7 +36,7 @@ const appFoundationModuleSuffixes = [
   "/components/layout/OverlayScrollbar.tsx",
   "/components/navigation/MobileNavigation.tsx",
   "/hooks/useAnimatedClose.ts",
-  "/hooks/useBodyScrollLock.ts",
+  "/hooks/usePageScrollLock.ts",
   "/hooks/useDialogFocus.ts",
   "/lib/api/client.ts",
   "/lib/api/query-keys.ts",

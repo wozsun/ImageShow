@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AnchoredPopup } from "../feedback/AnchoredPopup.js";
+import { DirectActivationButton } from "../feedback/DirectActivationButton.js";
+import { MenuItemButton } from "../feedback/MenuItemButton.js";
 import { useAnchoredMenu } from "../../hooks/useAnchoredMenu.js";
 import { facetDisplayName } from "../../lib/ui/formatters.js";
 import type { AnchoredMenuSize } from "../../lib/ui/menu-position.js";
@@ -75,17 +77,17 @@ export function FacetSelector({ options, value, onChange, noun, disabled = false
       <div className="facet-search-results" aria-label={`待选${noun}`}>
         {!normalizedQuery && <span className="muted">输入关键字搜索{noun}</span>}
         {normalizedQuery && results.map((option) => (
-          <button
+          <MenuItemButton
             className="facet-search-option"
             type="button"
             key={option.slug}
-            onClick={() => emitSelection([...parsed.selected, option.slug])}
+            onActivate={() => emitSelection([...parsed.selected, option.slug])}
           >
             <span>{option.slug}</span>
             {option.display_name && option.display_name !== option.slug && (
               <span className="option-display-name">{option.display_name}</span>
             )}
-          </button>
+          </MenuItemButton>
         ))}
         {normalizedQuery && !results.length && <span className="muted">没有可添加的{noun}</span>}
       </div>
@@ -94,29 +96,29 @@ export function FacetSelector({ options, value, onChange, noun, disabled = false
         <strong>已选{noun}</strong>
         <div>
           {parsed.selected.map((slug) => (
-            <button
+            <MenuItemButton
               type="button"
               key={slug}
               title={`移除 ${facetDisplayName(options, slug)}`}
-              onClick={() => emitSelection(parsed.selected.filter((item) => item !== slug))}
+              onActivate={() => emitSelection(parsed.selected.filter((item) => item !== slug))}
             >
               {facetDisplayName(options, slug)}<span aria-hidden="true">×</span>
-            </button>
+            </MenuItemButton>
           ))}
           {!parsed.selected.length && <span className="muted">尚未选择，默认使用全部{noun}</span>}
         </div>
       </div>
       <div className="facet-mode-switch" aria-label={`${noun}筛选方式`}>
         {(["include", "exclude"] as const).map((nextMode) => (
-          <button
+          <MenuItemButton
             type="button"
             key={nextMode}
             className={mode === nextMode ? "active" : ""}
             aria-pressed={mode === nextMode}
-            onClick={() => { setMode(nextMode); if (parsed.selected.length) emitSelection(parsed.selected, nextMode); }}
+            onActivate={() => { setMode(nextMode); if (parsed.selected.length) emitSelection(parsed.selected, nextMode); }}
           >
             {mode === nextMode ? "✓ " : ""}{nextMode === "include" ? "包含" : "排除"}
-          </button>
+          </MenuItemButton>
         ))}
       </div>
     </AnchoredPopup>
@@ -127,7 +129,7 @@ export function FacetSelector({ options, value, onChange, noun, disabled = false
     : `全部${noun}`;
   return (
     <div className="select-control facet-select-control">
-      <button
+      <DirectActivationButton
         ref={triggerRef}
         className={`select-trigger ${open && !closing ? "is-open" : ""}`}
         type="button"
@@ -135,10 +137,10 @@ export function FacetSelector({ options, value, onChange, noun, disabled = false
         aria-haspopup="dialog"
         aria-expanded={open && !closing}
         disabled={disabled}
-        onClick={() => open ? requestClose() : openMenu()}
+        onActivate={() => open ? requestClose() : openMenu()}
       >
         <span>{label}</span>
-      </button>
+      </DirectActivationButton>
       {menu}
     </div>
   );

@@ -144,10 +144,9 @@ export function BatchMetadataModal({
   ]));
   const changedCount = activeItems.filter((item) => Object.values(changedByItem.get(item.id)!).some(Boolean)).length;
   const savePresentation = {
-    idle: {
-      icon: "save-3-line",
-      label: !single && changedCount ? `保存 (${changedCount})` : "保存"
-    },
+    idle: !single && changedCount
+      ? { label: `保存${changedCount}项` }
+      : { icon: "save-3-line" as const, label: "保存" },
     pending: { icon: "save-3-line", label: "保存中" },
     success: { icon: "check-line", label: "保存成功" },
     error: { icon: "close-line", label: "保存失败" }
@@ -367,7 +366,7 @@ export function BatchMetadataModal({
           <div className="modal-footer-actions">
             <button type="button" disabled={saving} onClick={() => requestClose()}>取消</button>
             <AsyncActionButton
-              className="button workflow-submit-button"
+              className={`button workflow-submit-button${single ? "" : " batch-edit-save-button"}`}
               type="submit"
               status={saveStatus.status}
               presentation={savePresentation}

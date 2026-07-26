@@ -35,7 +35,6 @@ export function WorkflowCollapsePanel({
 
   return (
     <div
-      ref={disclosure.rootRef}
       className={`workflow-collapse-panel ${className}${expanded ? " is-expanded" : ""}${disclosure.motionEnabled ? " is-motion-enabled" : ""}`}
     >
       <button

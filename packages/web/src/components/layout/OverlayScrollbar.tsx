@@ -6,6 +6,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type RefObject
 } from "react";
+import { isPageScrollLocked } from "../../hooks/usePageScrollLock.js";
 import { getPageTopInsets, subscribePageTopInsets } from "../../lib/ui/page-scroll-insets.js";
 
 type Metrics = {
@@ -106,7 +107,7 @@ function OverlayScrollbarHandle({
     if (targetRef && !el) return;
     if (el) el.classList.add("overlay-scroll-host");
 
-    const isLocked = () => windowMode && document.body.style.position === "fixed";
+    const isLocked = () => windowMode && isPageScrollLocked();
     const pageTopInset = () => {
       if (!windowMode) return 0;
       let inset = 0;
@@ -229,12 +230,12 @@ function OverlayScrollbarHandle({
       ? subscribePageTopInsets(onPageTopInsetsChanged)
       : null;
     if (windowMode) syncObservedPageInsets();
-    // 模态框通过 body 的内联 position 锁定页面。只观察该元素的 style，避免恢复
+    // 页面锁的权威状态由 html.modal-open 表达。只观察根元素 class，避免恢复
     // 对整个页面子树的监听，同时确保锁定开始和结束时立即更新滚动条。
-    const bodyStyleObserver = windowMode ? new MutationObserver(scheduleRecompute) : null;
-    bodyStyleObserver?.observe(document.body, {
+    const pageLockObserver = windowMode ? new MutationObserver(scheduleRecompute) : null;
+    pageLockObserver?.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ["style"],
+      attributeFilter: ["class"],
     });
     recompute();
     return () => {
@@ -244,7 +245,7 @@ function OverlayScrollbarHandle({
       window.removeEventListener("pointermove", onPointerMove);
       observer?.disconnect();
       unsubscribePageTopInsets?.();
-      bodyStyleObserver?.disconnect();
+      pageLockObserver?.disconnect();
       if (frame !== undefined) window.cancelAnimationFrame(frame);
       window.clearTimeout(hideTimer.current);
       if (el) el.classList.remove("overlay-scroll-host");

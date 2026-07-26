@@ -57,6 +57,7 @@ export function ImageAdminFilters({
     open,
     onOpenChange: setOpen,
     enabled: mobileLayout,
+    dismissOnOutsideScroll: true,
     resetKey: mobileLayout
   });
   const themeDisabled = disabled || view === "unset";
@@ -69,7 +70,6 @@ export function ImageAdminFilters({
 
   return (
     <div
-      ref={disclosure.rootRef}
       className={`image-list-filter-bar${open ? " filters-open" : ""}${disclosure.motionEnabled ? " filters-motion-enabled" : ""}`}
     >
       <button

@@ -26,8 +26,6 @@
 .link-import-menu button:focus-visible { background: #f1f4f8; }
 
 .upload-overlay {
-  position: fixed;
-  inset: 0;
   z-index: 20;
   display: grid;
   place-items: center;
@@ -360,7 +358,7 @@ button.empty-state.upload-dropzone:not(:disabled):hover,
   color: #1f6feb;
 }
 .upload-dropzone.is-dragover { border-style: solid; }
-.admin button.upload-dropzone:not(:disabled):not(.select-trigger):active {
+:is(.admin, [data-admin-dialog]) button.upload-dropzone:not(:disabled):not(.select-trigger):active {
   transform: scale(var(--pressable-scale-large, .99));
 }
 

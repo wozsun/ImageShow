@@ -5,8 +5,9 @@ import {
   type RefObject
 } from "react";
 import { useAnimatedClose } from "../../hooks/useAnimatedClose.js";
-import { useBodyScrollLock } from "../../hooks/useBodyScrollLock.js";
+import { usePageScrollLock } from "../../hooks/usePageScrollLock.js";
 import { useDialogFocus } from "../../hooks/useDialogFocus.js";
+import { DialogLayerPortal } from "./DialogLayerPortal.js";
 import { DialogPortalTargetContext } from "./DialogPortalContext.js";
 
 type DialogFrameControls = {
@@ -51,7 +52,7 @@ export function DialogFrame({
     (afterClose ?? onClose)();
   }, [animateClose, busy, onClose, requestAnimatedClose]);
 
-  useBodyScrollLock();
+  usePageScrollLock();
   useDialogFocus({
     containerRef,
     initialFocusRef,
@@ -60,10 +61,12 @@ export function DialogFrame({
     paused
   });
 
-  return (
+  const frame = (
     <div
       ref={containerRef}
       className={`${className} ${closing ? "is-closing" : ""}`}
+      data-dialog-frame=""
+      data-admin-dialog=""
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
@@ -84,4 +87,8 @@ export function DialogFrame({
       </DialogPortalTargetContext.Provider>
     </div>
   );
+
+  // 最外层表单弹窗与被冻结的 #root 并列，弹窗及其输入控件不会再落入 fixed
+  // 祖先的 WebKit 命中坐标系。嵌套弹窗留在父弹窗中，继续继承既有层级与样式。
+  return <DialogLayerPortal>{frame}</DialogLayerPortal>;
 }

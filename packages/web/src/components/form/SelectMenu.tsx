@@ -1,5 +1,7 @@
 import { useEffect, useId, useRef, type KeyboardEvent } from "react";
 import { AnchoredPopup } from "../feedback/AnchoredPopup.js";
+import { DirectActivationButton } from "../feedback/DirectActivationButton.js";
+import { MenuItemButton } from "../feedback/MenuItemButton.js";
 import { useAnchoredMenu } from "../../hooks/useAnchoredMenu.js";
 import type { AnchoredMenuSize } from "../../lib/ui/menu-position.js";
 import type { SelectOption } from "../../lib/ui/select-options.js";
@@ -82,7 +84,7 @@ export function SelectMenu({
         onAnimationEnd={onAnimationEnd}
       >
         {options.map((option, index) => (
-          <button
+          <MenuItemButton
             ref={(element) => { optionRefs.current[index] = element; }}
             key={option.value}
             className={option.value === value ? "is-selected" : ""}
@@ -90,17 +92,17 @@ export function SelectMenu({
             role="option"
             aria-selected={option.value === value}
             onKeyDown={(event) => handleOptionKey(event, index)}
-            onClick={() => choose(option.value)}
+            onActivate={() => choose(option.value)}
           >
             <span>{option.label}</span>
-          </button>
+          </MenuItemButton>
         ))}
       </AnchoredPopup>
     ) : null;
 
   return (
     <div className={`select-control ${className ?? ""}`.trim()}>
-      <button
+      <DirectActivationButton
         ref={triggerRef}
         className={`select-trigger ${open && !closing ? "is-open" : ""}`}
         type="button"
@@ -114,10 +116,10 @@ export function SelectMenu({
           event.preventDefault();
           if (!open) handleOpen();
         }}
-        onClick={() => open ? requestClose() : handleOpen()}
+        onActivate={() => open ? requestClose() : handleOpen()}
       >
         <span>{selected.label}</span>
-      </button>
+      </DirectActivationButton>
       {menu}
     </div>
   );

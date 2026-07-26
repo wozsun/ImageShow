@@ -5,9 +5,11 @@ import {
   useRef,
   useState
 } from "react";
+import { isDocumentFallbackFocusTarget } from "../lib/ui/focus-target.js";
 
 const outsideInteractionEvents = [
   "pointerdown",
+  "touchstart",
   "click",
   "focusin",
   "wheel"
@@ -15,8 +17,13 @@ const outsideInteractionEvents = [
 
 const defaultPortalSelector =
   ".select-menu, .facet-select-menu, [data-dialog-portal-menu]";
+const scrollSequenceIdleMs = 120;
+const availableHeightProperty =
+  "--dismissible-panel-available-height";
+const editableElementSelector =
+  'input, textarea, [contenteditable]:not([contenteditable="false"])';
 
-export type TransientPanelCloseOptions = {
+type TransientPanelCloseOptions = {
   restoreFocus?: boolean;
 };
 
@@ -26,7 +33,7 @@ export type TransientPanelCloseOptions = {
  * Closing callers run prepareForClose before changing state so React can add
  * inert/aria-hidden without leaving focus in the subtree being hidden.
  */
-export function useTransientPanelSemantics({
+function useTransientPanelSemantics({
   open,
   transient
 }: {
@@ -78,18 +85,21 @@ export function useTransientPanelSemantics({
 }
 
 function isWithinPanelSurface(
-  root: HTMLElement,
+  panel: HTMLElement,
+  trigger: HTMLElement,
   event: Pick<Event, "composedPath" | "target">,
   portalSelector: string
 ) {
   const path = event.composedPath?.() ?? (event.target ? [event.target] : []);
   return path.some((entry) => {
-    if (entry === root) return true;
+    if (entry === panel || entry === trigger) return true;
     if (
       typeof Node !== "undefined"
       && entry instanceof Node
-      && root.contains(entry)
-    ) return true;
+      && (panel.contains(entry) || trigger.contains(entry))
+    ) {
+      return true;
+    }
 
     const matches = (entry as Partial<Element>).matches;
     return typeof matches === "function"
@@ -97,26 +107,57 @@ function isWithinPanelSurface(
   });
 }
 
+function isElementWithinPanelSurface(
+  panel: HTMLElement,
+  trigger: HTMLElement,
+  element: Element,
+  portalSelector: string
+) {
+  return panel.contains(element)
+    || trigger.contains(element)
+    || Boolean(element.closest(portalSelector));
+}
+
+function isEditingWithinPanelSurface(
+  panel: HTMLElement,
+  trigger: HTMLElement,
+  portalSelector: string
+) {
+  const activeElement = panel.ownerDocument.activeElement;
+  return activeElement instanceof HTMLElement
+    && activeElement.matches(editableElementSelector)
+    && isElementWithinPanelSurface(
+      panel,
+      trigger,
+      activeElement,
+      portalSelector
+    );
+}
+
 /**
  * Shared disclosure behavior for transient filter/default panels.
  *
  * Pointer, focus and wheel interactions outside the panel close it while
  * anchored Portal menus remain part of the panel's interactive surface.
+ * Filter surfaces can also opt into result-scroll dismissal. Opening the panel
+ * claims any already-running scroll sequence; a later external gesture or a
+ * new raw scroll sequence still dismisses it.
  */
 export function useDismissiblePanel({
   open,
   onOpenChange,
   enabled = true,
+  dismissOnOutsideScroll = false,
   resetKey,
   portalSelector = defaultPortalSelector
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   enabled?: boolean;
+  dismissOnOutsideScroll?: boolean;
   resetKey?: unknown;
   portalSelector?: string;
 }) {
-  const rootRef = useRef<HTMLDivElement | null>(null);
   const openRef = useRef(open);
   const onOpenChangeRef = useRef(onOpenChange);
   const motionTimerRef = useRef<number | undefined>(undefined);
@@ -163,28 +204,204 @@ export function useDismissiblePanel({
     window.clearTimeout(motionTimerRef.current);
   }, []);
 
-  useEffect(() => {
-    const root = rootRef.current;
-    if (!enabled || !open || !root) return;
+  useLayoutEffect(() => {
+    const panel = semantics.panelRef.current;
+    const trigger = semantics.triggerRef.current;
+    if (!enabled || !open || !panel || !trigger) return;
 
+    let frame: number | undefined;
+    const updateAvailableHeight = () => {
+      frame = undefined;
+      const visualViewport = window.visualViewport;
+      const viewportBottom = visualViewport
+        ? visualViewport.offsetTop + visualViewport.height
+        : window.innerHeight;
+      const availableHeight = Math.max(
+        0,
+        viewportBottom - trigger.getBoundingClientRect().bottom
+      );
+      panel.style.setProperty(
+        availableHeightProperty,
+        `${availableHeight}px`
+      );
+    };
+    const scheduleUpdate = () => {
+      if (frame !== undefined) return;
+      frame = window.requestAnimationFrame(updateAvailableHeight);
+    };
+
+    updateAvailableHeight();
+    window.addEventListener("resize", scheduleUpdate);
+    window.visualViewport?.addEventListener("resize", scheduleUpdate);
+    window.visualViewport?.addEventListener("scroll", scheduleUpdate);
+    const resizeObserver = new ResizeObserver(scheduleUpdate);
+    resizeObserver.observe(trigger);
+    return () => {
+      if (frame !== undefined) window.cancelAnimationFrame(frame);
+      window.removeEventListener("resize", scheduleUpdate);
+      window.visualViewport?.removeEventListener("resize", scheduleUpdate);
+      window.visualViewport?.removeEventListener("scroll", scheduleUpdate);
+      resizeObserver.disconnect();
+    };
+  }, [enabled, open, semantics.panelRef, semantics.triggerRef]);
+
+  useEffect(() => {
+    const panel = semantics.panelRef.current;
+    const trigger = semantics.triggerRef.current;
+    if (!enabled || !open || !panel || !trigger) return;
+
+    let ownedScrollSequenceActive = dismissOnOutsideScroll;
+    let ownedScrollSequenceTimer: number | undefined;
+    const finishOwnedScrollSequence = () => {
+      ownedScrollSequenceActive = false;
+      ownedScrollSequenceTimer = undefined;
+    };
+    const ownScrollSequence = () => {
+      if (!dismissOnOutsideScroll) return;
+      ownedScrollSequenceActive = true;
+      window.clearTimeout(ownedScrollSequenceTimer);
+      ownedScrollSequenceTimer = window.setTimeout(
+        finishOwnedScrollSequence,
+        scrollSequenceIdleMs
+      );
+    };
+    ownScrollSequence();
     const closeOnOutsideInteraction = (event: Event) => {
-      if (isWithinPanelSurface(root, event, portalSelector)) return;
+      if (isWithinPanelSurface(panel, trigger, event, portalSelector)) {
+        ownScrollSequence();
+        return;
+      }
+      if (
+        event.type === "focusin"
+        && isDocumentFallbackFocusTarget(
+          panel.ownerDocument,
+          event.target
+        )
+      ) {
+        // iOS can move focus to body/html while dismissing the keyboard.
+        // The following viewport scroll still belongs to that internal edit;
+        // a later physical touch outside is handled independently below.
+        ownScrollSequence();
+        return;
+      }
       setOpen(false);
     };
-    // pointerdown 覆盖触控与滚动条拖动，wheel 覆盖鼠标滚动；不监听结果性的
-    // scroll，避免移动键盘、视口重排或程序性滚动误关。
+    const ownInternalFocusTransition = (event: FocusEvent) => {
+      const target = event.target;
+      if (
+        target instanceof HTMLElement
+        && target.matches(editableElementSelector)
+        && isElementWithinPanelSurface(
+          panel,
+          trigger,
+          target,
+          portalSelector
+        )
+      ) {
+        ownScrollSequence();
+      }
+    };
+    const closeOnOutsideScroll = (event: Event) => {
+      if (
+        isWithinPanelSurface(panel, trigger, event, portalSelector)
+        || isEditingWithinPanelSurface(panel, trigger, portalSelector)
+      ) {
+        ownScrollSequence();
+        return;
+      }
+
+      // Opening claims an already-running momentum sequence. Internal edits,
+      // Portal choices and virtual-keyboard viewport changes claim their own
+      // resulting scroll sequence as well. Raw scroll events keep that claim
+      // alive until idle; any new outside touch/pointer/wheel closes earlier
+      // in capture instead of being mistaken for the claimed tail.
+      if (ownedScrollSequenceActive) {
+        ownScrollSequence();
+        return;
+      }
+      setOpen(false);
+    };
+    const closeOnOutsideElementScroll = (event: Event) => {
+      // 页面滚动由 window 监听；这里只处理后台列表等独立滚动容器。
+      if (
+        event.target === document
+        || event.target === document.documentElement
+        || event.target === document.body
+      ) return;
+      closeOnOutsideScroll(event);
+    };
+    // touchstart covers iOS scroll gestures whose pointerdown is delayed or
+    // omitted. Pointer/wheel/click/focus retain mouse, keyboard and assistive
+    // input semantics.
     for (const eventName of outsideInteractionEvents) {
-      document.addEventListener(eventName, closeOnOutsideInteraction, true);
+      document.addEventListener(
+        eventName,
+        closeOnOutsideInteraction,
+        eventName === "touchstart"
+          ? { capture: true, passive: true }
+          : true
+      );
+    }
+    if (dismissOnOutsideScroll) {
+      document.addEventListener(
+        "focusout",
+        ownInternalFocusTransition,
+        true
+      );
+      document.addEventListener("scroll", closeOnOutsideElementScroll, {
+        capture: true,
+        passive: true
+      });
+      window.addEventListener("scroll", closeOnOutsideScroll, {
+        passive: true
+      });
+      window.addEventListener("resize", ownScrollSequence);
+      window.visualViewport?.addEventListener(
+        "resize",
+        ownScrollSequence
+      );
+      window.visualViewport?.addEventListener(
+        "scroll",
+        ownScrollSequence
+      );
     }
     return () => {
+      window.clearTimeout(ownedScrollSequenceTimer);
       for (const eventName of outsideInteractionEvents) {
         document.removeEventListener(eventName, closeOnOutsideInteraction, true);
       }
+      if (dismissOnOutsideScroll) {
+        document.removeEventListener(
+          "focusout",
+          ownInternalFocusTransition,
+          true
+        );
+        document.removeEventListener(
+          "scroll",
+          closeOnOutsideElementScroll,
+          true
+        );
+        window.removeEventListener("scroll", closeOnOutsideScroll);
+        window.removeEventListener("resize", ownScrollSequence);
+        window.visualViewport?.removeEventListener(
+          "resize",
+          ownScrollSequence
+        );
+        window.visualViewport?.removeEventListener(
+          "scroll",
+          ownScrollSequence
+        );
+      }
     };
-  }, [enabled, open, portalSelector, setOpen]);
+  }, [
+    dismissOnOutsideScroll,
+    enabled,
+    open,
+    portalSelector,
+    setOpen
+  ]);
 
   return {
-    rootRef,
     panelHidden: semantics.panelHidden,
     panelRef: semantics.panelRef,
     motionEnabled,

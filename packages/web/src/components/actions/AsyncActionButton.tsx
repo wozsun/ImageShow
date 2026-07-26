@@ -58,17 +58,25 @@ export function AsyncActionButton({
         ? status === "idle" ? ariaLabel : `${ariaLabel}，${currentAriaLabel}`
         : currentAriaLabel}
     >
-      {current.icon && <Icon name={current.icon} />}
       <span className="async-action-label-slot" aria-live="polite" aria-atomic="true">
-        {asyncActionStatuses.map((candidate) => (
-          <span
-            key={candidate}
-            className={`async-action-label${candidate === status ? "" : " is-hidden"}`}
-            aria-hidden={candidate !== status}
-          >
-            {presentation[candidate].label}
-          </span>
-        ))}
+        {asyncActionStatuses.map((candidate) => {
+          const item = presentation[candidate];
+          const currentState = candidate === status;
+          return (
+            <span
+              key={candidate}
+              className={`async-action-state${currentState ? "" : " is-hidden"}`}
+              aria-hidden={!currentState}
+            >
+              {item.icon && (
+                currentState
+                  ? <Icon name={item.icon} />
+                  : <span className="async-action-icon-placeholder" aria-hidden="true" />
+              )}
+              <span className="async-action-label">{item.label}</span>
+            </span>
+          );
+        })}
       </span>
     </button>
   );

@@ -12,22 +12,42 @@
   padding: 9px 10px;
   white-space: nowrap;
 }
-.admin button.apply-to-all-button:not(:disabled):not(.select-trigger):active {
+:is(.admin, [data-admin-dialog]) button.apply-to-all-button:not(:disabled):not(.select-trigger):active {
   transform: scale(var(--pressable-active-scale, var(--pressable-scale-medium, .98)));
 }
 
 .async-action-button {
   transition: color .16s ease, background-color .16s ease, border-color .16s ease;
 }
-.async-action-label-slot { display: inline-grid; min-width: 0; }
-.async-action-label {
+.async-action-label-slot {
+  display: inline-grid;
+  width: max-content;
+  min-width: max-content;
+  flex: 0 0 auto;
+}
+.async-action-state {
   grid-area: 1 / 1;
+  width: max-content;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-self: center;
+  justify-content: center;
+  gap: 8px;
+}
+.async-action-state.is-hidden { visibility: hidden; }
+.async-action-icon-placeholder {
+  width: 1.125rem;
+  height: 1.125rem;
+  flex: 0 0 1.125rem;
+}
+.async-action-label {
+  min-width: 0;
   overflow: hidden;
   text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.async-action-label.is-hidden { visibility: hidden; }
 .async-action-button.is-pending { color: #285c93; background: #eef5ff; border-color: #a9c9ef; }
 .async-action-button.is-success { color: #245236; background: #eaf8ee; border-color: #9fd3ad; }
 .async-action-button.is-error { color: #8a2d24; background: #fff2f0; border-color: #de8b83; }

@@ -1,24 +1,18 @@
 import {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useRef,
   useState,
   type RefObject
 } from "react";
-import { getPageScrollY, isBodyScrollLocked } from "../../hooks/useBodyScrollLock.js";
+import { getPageScrollY, isPageScrollLocked } from "../../hooks/usePageScrollLock.js";
 import {
   mobileViewportMediaQuery,
   useMediaQuery
 } from "../../hooks/useMediaQuery.js";
-import {
-  useTransientPanelSemantics,
-  type TransientPanelCloseOptions
-} from "../../hooks/useDismissiblePanel.js";
+import { useDismissiblePanel } from "../../hooks/useDismissiblePanel.js";
 
 const toolbarScrollDirectionThreshold = 8;
-const filterDismissGestureThreshold = 12;
-const filterWheelGestureGap = 600;
 const backToTopViewportThreshold = 1;
 function blurFocusedToolbarElement(toolbar: HTMLElement) {
   const activeElement = document.activeElement;
@@ -54,9 +48,9 @@ function useGalleryToolbarVisibility(
     let frame: number | undefined;
     const update = () => {
       frame = undefined;
-      // 模态框固定 body 时 window.scrollY 会暂时归零。这不是用户滚动，不能据此
+      // 模态框固定页面根节点时 window.scrollY 会暂时归零。这不是用户滚动，不能据此
       // 改变工具栏状态，否则关闭详情恢复原位置时会看到工具栏闪烁。
-      if (isBodyScrollLocked()) return;
+      if (isPageScrollLocked()) return;
       const scrollTop = Math.max(0, getPageScrollY());
       // 下拉菜单通过 Portal 渲染在 body；菜单展开时保持其触发工具栏可见，
       // 避免触发器被收起而浮层仍停留在页面上。
@@ -101,143 +95,6 @@ function useGalleryToolbarVisibility(
   return visible;
 }
 
-function isWithinGalleryFilterSurface(
-  panel: HTMLElement,
-  trigger: HTMLElement | null,
-  target: EventTarget | null
-) {
-  const targetElement = target instanceof Element
-    ? target
-    : target instanceof Node
-      ? target.parentElement
-      : null;
-  return Boolean(targetElement && (
-    panel.contains(targetElement)
-    || trigger?.contains(targetElement)
-    // SelectMenu 与 FacetSelector 的菜单通过 Portal 挂到 body，仍属于筛选交互。
-    || targetElement.closest(".select-menu, .facet-select-menu")
-  ));
-}
-
-function useCloseMobileFiltersOnOutsideScroll(
-  panelRef: RefObject<HTMLElement | null>,
-  triggerRef: RefObject<HTMLElement | null>,
-  active: boolean,
-  closeFilters: () => void
-) {
-  useEffect(() => {
-    const panel = panelRef.current;
-    if (!active || !panel) return;
-
-    let pointerGesture: {
-      pointerId: number;
-      startX: number;
-      startY: number;
-    } | null = null;
-    let outsideScrollAnchor: number | null = null;
-    let outsideWheelDelta = 0;
-    let lastWheelEventAt = 0;
-
-    const resetOutsideIntent = () => {
-      pointerGesture = null;
-      outsideScrollAnchor = null;
-      outsideWheelDelta = 0;
-      lastWheelEventAt = 0;
-    };
-    const dismiss = () => {
-      resetOutsideIntent();
-      closeFilters();
-    };
-    const onPointerDown = (event: PointerEvent) => {
-      resetOutsideIntent();
-      if (
-        !event.isPrimary
-        || isWithinGalleryFilterSurface(panel, triggerRef.current, event.target)
-      ) return;
-      pointerGesture = {
-        pointerId: event.pointerId,
-        startX: event.clientX,
-        startY: event.clientY,
-      };
-      outsideScrollAnchor = window.scrollY;
-    };
-    const onPointerMove = (event: PointerEvent) => {
-      if (!pointerGesture || event.pointerId !== pointerGesture.pointerId) return;
-      const horizontalDistance = Math.abs(event.clientX - pointerGesture.startX);
-      const verticalDistance = Math.abs(event.clientY - pointerGesture.startY);
-      if (
-        verticalDistance >= filterDismissGestureThreshold
-        && verticalDistance > horizontalDistance
-      ) {
-        dismiss();
-      }
-    };
-    const onPointerUp = (event: PointerEvent) => {
-      if (pointerGesture?.pointerId === event.pointerId) pointerGesture = null;
-    };
-    const onPointerCancel = (event: PointerEvent) => {
-      if (pointerGesture?.pointerId !== event.pointerId) return;
-      // 浏览器接管触控并开始原生滚动时会发出 pointercancel。直接关闭可避免
-      // sticky 工具栏在等待后续 scrollY 更新期间仍被展开状态锁定。
-      dismiss();
-    };
-    const onClick = (event: MouseEvent) => {
-      if (isWithinGalleryFilterSurface(panel, triggerRef.current, event.target)) return;
-      dismiss();
-    };
-    const onFocusIn = (event: FocusEvent) => {
-      if (isWithinGalleryFilterSurface(panel, triggerRef.current, event.target)) return;
-      dismiss();
-    };
-    const onWheel = (event: WheelEvent) => {
-      if (isWithinGalleryFilterSurface(panel, triggerRef.current, event.target)) {
-        resetOutsideIntent();
-        return;
-      }
-      const maxScrollY = Math.max(
-        0,
-        document.documentElement.scrollHeight - window.innerHeight
-      );
-      const canScrollPage = event.deltaY < 0
-        ? window.scrollY > 0
-        : window.scrollY < maxScrollY;
-      if (!canScrollPage) {
-        resetOutsideIntent();
-        return;
-      }
-      const now = performance.now();
-      if (now - lastWheelEventAt > filterWheelGestureGap) outsideWheelDelta = 0;
-      lastWheelEventAt = now;
-      outsideWheelDelta += Math.abs(event.deltaY);
-      if (outsideWheelDelta >= filterDismissGestureThreshold) dismiss();
-    };
-    const onScroll = () => {
-      if (outsideScrollAnchor === null || isBodyScrollLocked()) return;
-      if (Math.abs(window.scrollY - outsideScrollAnchor) < filterDismissGestureThreshold) return;
-      dismiss();
-    };
-
-    document.addEventListener("pointerdown", onPointerDown, true);
-    document.addEventListener("pointermove", onPointerMove, { capture: true, passive: true });
-    document.addEventListener("pointerup", onPointerUp, true);
-    document.addEventListener("pointercancel", onPointerCancel, true);
-    document.addEventListener("click", onClick, true);
-    document.addEventListener("focusin", onFocusIn, true);
-    document.addEventListener("wheel", onWheel, { capture: true, passive: true });
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown, true);
-      document.removeEventListener("pointermove", onPointerMove, true);
-      document.removeEventListener("pointerup", onPointerUp, true);
-      document.removeEventListener("pointercancel", onPointerCancel, true);
-      document.removeEventListener("click", onClick, true);
-      document.removeEventListener("focusin", onFocusIn, true);
-      document.removeEventListener("wheel", onWheel, true);
-      window.removeEventListener("scroll", onScroll);
-    };
-  }, [active, closeFilters, panelRef, triggerRef]);
-}
-
 function useBackToTopVisibility() {
   const [visible, setVisible] = useState(false);
 
@@ -245,7 +102,7 @@ function useBackToTopVisibility() {
     let frame: number | undefined;
     const update = () => {
       frame = undefined;
-      if (isBodyScrollLocked()) return;
+      if (isPageScrollLocked()) return;
       setVisible(window.scrollY >= window.innerHeight * backToTopViewportThreshold);
     };
     const scheduleUpdate = () => {
@@ -272,66 +129,35 @@ export function scrollGalleryToTop() {
 }
 
 export function useGalleryViewportControls() {
-  const [filterPanelState, setFilterPanelState] = useState({
-    open: false,
-    menuDismissSignal: 0,
-  });
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const toolbarRef = useRef<HTMLElement | null>(null);
-  const previousMobileLayoutRef = useRef<boolean | undefined>(undefined);
-  const filtersOpen = filterPanelState.open;
   const mobileLayout = useMediaQuery(mobileViewportMediaQuery);
-  const semantics = useTransientPanelSemantics({
+  const disclosure = useDismissiblePanel({
     open: filtersOpen,
-    transient: mobileLayout
+    onOpenChange: setFiltersOpen,
+    enabled: mobileLayout,
+    dismissOnOutsideScroll: true,
+    resetKey: mobileLayout
   });
-  const closeFilters = useCallback((
-    options?: TransientPanelCloseOptions
-  ) => {
-    semantics.prepareForClose(options);
-    setFilterPanelState((current) => current.open
-      ? { open: false, menuDismissSignal: current.menuDismissSignal + 1 }
-      : current);
-  }, [semantics.prepareForClose]);
   const toggleFilters = useCallback(() => {
-    if (filtersOpen) {
-      closeFilters({ restoreFocus: true });
-      return;
-    }
-    setFilterPanelState((current) => ({ ...current, open: true }));
-  }, [closeFilters, filtersOpen]);
-
-  useLayoutEffect(() => {
-    if (previousMobileLayoutRef.current === undefined) {
-      previousMobileLayoutRef.current = mobileLayout;
-      return;
-    }
-    if (previousMobileLayoutRef.current === mobileLayout) return;
-    previousMobileLayoutRef.current = mobileLayout;
-    // 两个方向切换断点都关闭当前 Portal。桌面常驻面板本身没有 open
-    // 状态，因此即使 current.open 已为 false 也必须推进关闭信号。
-    setFilterPanelState((current) => ({
-      open: false,
-      menuDismissSignal: current.menuDismissSignal + 1
-    }));
-  }, [mobileLayout]);
+    disclosure.setOpen(!filtersOpen, filtersOpen
+      ? { restoreFocus: true }
+      : undefined);
+  }, [disclosure.setOpen, filtersOpen]);
 
   const mobileFiltersOpen = mobileLayout && filtersOpen;
-  const toolbarVisible = useGalleryToolbarVisibility(toolbarRef, mobileFiltersOpen);
-  useCloseMobileFiltersOnOutsideScroll(
-    semantics.panelRef,
-    semantics.triggerRef,
-    mobileFiltersOpen,
-    closeFilters
+  const toolbarVisible = useGalleryToolbarVisibility(
+    toolbarRef,
+    mobileFiltersOpen
   );
   const backToTopVisible = useBackToTopVisibility();
 
   return {
     backToTopVisible,
-    closeFilters,
-    filterPanelHidden: semantics.panelHidden,
-    filterPanelRef: semantics.panelRef,
-    filterMenuDismissSignal: filterPanelState.menuDismissSignal,
-    filterToggleRef: semantics.triggerRef,
+    filterPanelHidden: disclosure.panelHidden,
+    filterPanelRef: disclosure.panelRef,
+    filterMenuDismissSignal: disclosure.menuDismissSignal,
+    filterToggleRef: disclosure.triggerRef,
     filtersOpen,
     toggleFilters,
     toolbarRef,

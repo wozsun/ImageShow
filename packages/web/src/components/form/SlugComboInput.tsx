@@ -1,6 +1,14 @@
-import { useId, useRef, useState, type KeyboardEvent } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type KeyboardEvent
+} from "react";
 import { useAnchoredMenu } from "../../hooks/useAnchoredMenu.js";
+import { useImeInputSession } from "../../hooks/useImeInputSession.js";
 import { reservedSubdomains, slugPattern } from "../../lib/constants.js";
+import { normalizeFacetInput } from "../../lib/ui/facet-input.js";
 import { facetDisplayName } from "../../lib/ui/formatters.js";
 import type { FacetOption } from "../../lib/types.js";
 import {
@@ -23,8 +31,14 @@ export function SlugComboInput({ value, onChange, options, noun, checkReserved =
   const [activeIndex, setActiveIndex] = useState(-1);
 
   const [focused, setFocused] = useState(false);
+  const [editingValue, setEditingValue] = useState(value);
+  const publishedValueRef = useRef(value);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const renderedValue = focused
+    ? editingValue
+    : facetDisplayName(options, value);
+  const imeSession = useImeInputSession(renderedValue);
   const listId = useId();
   const inputId = `${listId}-input`;
   const { open, closing, position, opensUp, menuRef, openMenu, requestClose, onAnimationEnd } = useAnchoredMenu({
@@ -35,7 +49,24 @@ export function SlugComboInput({ value, onChange, options, noun, checkReserved =
     onClose: () => setActiveIndex(-1)
   });
 
-  const query = value.trim().toLowerCase();
+  useEffect(() => {
+    publishedValueRef.current = value;
+    if (!imeSession.isComposing()) setEditingValue(value);
+  }, [value]);
+
+  const publishValue = (raw: string, showSuggestions = true) => {
+    const normalized = normalizeFacetInput(raw);
+    setEditingValue(normalized);
+    if (normalized !== publishedValueRef.current) {
+      publishedValueRef.current = normalized;
+      onChange(normalized);
+    }
+    setActiveIndex(-1);
+    if (showSuggestions && !open) openMenu();
+    return normalized;
+  };
+
+  const query = (focused ? editingValue : value).trim().toLowerCase();
 
   const matches = query
     ? options.filter((option) => option.slug !== "none" && (option.slug.includes(query) || option.display_name.toLowerCase().includes(query))).slice(0, 50)
@@ -46,7 +77,8 @@ export function SlugComboInput({ value, onChange, options, noun, checkReserved =
   const isNew = slugPattern.test(query) && query.length <= 32 && !reserved && !options.some((option) => option.slug === query);
 
   const choose = (slug: string) => {
-    onChange(slug);
+    const normalized = publishValue(slug, false);
+    imeSession.settleEditing(facetDisplayName(options, normalized));
     requestClose();
 
     setFocused(false);
@@ -54,6 +86,11 @@ export function SlugComboInput({ value, onChange, options, noun, checkReserved =
   };
 
   const handleKey = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (
+      imeSession.isComposing(event.nativeEvent.isComposing)
+      || event.keyCode === 229
+    ) return;
+
     if (handleSuggestionNavigationKey(event, {
       open,
       matchCount: matches.length,
@@ -93,11 +130,42 @@ export function SlugComboInput({ value, onChange, options, noun, checkReserved =
       <input
         ref={inputRef}
         id={inputId}
-        value={focused ? value : facetDisplayName(options, value)}
+        value={renderedValue}
         maxLength={32}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
-        onChange={(event) => { onChange(event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "")); setActiveIndex(-1); if (!open) openMenu(); }}
+        onFocus={() => {
+          setEditingValue(value);
+          publishedValueRef.current = value;
+          imeSession.beginEditing();
+          setFocused(true);
+        }}
+        onBlur={(event) => {
+          const normalized = imeSession.isComposing()
+            ? publishValue(event.currentTarget.value, false)
+            : publishedValueRef.current;
+          imeSession.settleEditing(facetDisplayName(options, normalized));
+          setFocused(false);
+        }}
+        onChange={(event) => {
+          if (!imeSession.acceptInput(event.currentTarget)) return;
+          const raw = event.currentTarget.value;
+          if (imeSession.isComposing(
+            (event.nativeEvent as InputEvent).isComposing
+          )) {
+            setEditingValue(raw);
+            return;
+          }
+          publishValue(raw);
+        }}
+        onCompositionStart={() => {
+          imeSession.beginComposition();
+        }}
+        onCompositionEnd={(event) => {
+          if (!imeSession.endComposition(event.currentTarget)) return;
+          publishValue(
+            event.currentTarget.value,
+            document.activeElement === event.currentTarget
+          );
+        }}
         onKeyDown={handleKey}
         placeholder={placeholder ?? noun}
         disabled={disabled}

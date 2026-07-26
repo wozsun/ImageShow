@@ -454,6 +454,9 @@
   .image-list-filter-bar {
     position: relative;
   }
+  .image-list-filter-bar:is(.filters-open, .filters-motion-enabled) {
+    z-index: 20;
+  }
   .image-list-filter-toggle {
     --pressable-active-scale: var(--pressable-scale-large, .99);
 
@@ -469,6 +472,10 @@
     border: 1px solid #c9d1dc;
     border-radius: 8px;
     font-weight: 600;
+  }
+  .image-list-filter-bar.filters-open > .image-list-filter-toggle {
+    border-bottom-right-radius: 0;
+    border-bottom-left-radius: 0;
   }
   .image-list-filter-count {
     min-width: 20px;
@@ -493,7 +500,7 @@
   .image-list-filter-panel {
     position: absolute;
     z-index: 20;
-    top: calc(100% + 8px);
+    top: 100%;
     right: 0;
     left: 0;
     display: grid;
@@ -508,11 +515,12 @@
     visibility: hidden;
     opacity: 0;
     pointer-events: none;
-    background: #f8fafc;
-    border: 1px solid #dce2ea;
-    border-radius: 8px;
+    background: #f3f6fa;
+    border: 1px solid #c9d1dc;
+    border-top: 0;
+    border-radius: 0 0 8px 8px;
     box-shadow: 0 12px 32px rgba(32, 42, 56, .16);
-    transform: translateY(-4px) scale(.99);
+    transform: scaleY(.98);
     transform-origin: top center;
     transition: none;
   }
@@ -526,7 +534,7 @@
     visibility: visible;
     opacity: 1;
     pointer-events: auto;
-    transform: translateY(0) scale(1);
+    transform: scaleY(1);
     transition-delay: 0s;
   }
   .image-list-toolbar {
@@ -626,18 +634,19 @@
 
 @media (max-width: 760px) and (max-height: 560px) {
   .workflow-collapse-panel > .workflow-collapse-content {
-    max-height: 50dvh;
+    max-height: min(
+      50dvh,
+      var(--dismissible-panel-available-height, 50dvh)
+    );
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior: contain;
   }
   .image-list-filter-panel {
-    position: fixed;
-    top: 50%;
-    right: max(8px, env(safe-area-inset-right));
-    left: max(8px, env(safe-area-inset-left));
-    width: auto;
-    max-height: calc(100dvh - 16px);
+    max-height: min(
+      50dvh,
+      var(--dismissible-panel-available-height, 50dvh)
+    );
     overflow-y: auto;
     overscroll-behavior: contain;
     grid-template-areas:
@@ -645,8 +654,6 @@
       "device brightness"
       "theme author"
       "tag tag";
-    transform: translateY(calc(-50% - 4px)) scale(.99);
-    transform-origin: center;
   }
   .image-list-filter-panel-close {
     grid-area: close;
@@ -659,10 +666,7 @@
     align-items: center;
     justify-content: center;
     gap: 6px;
-    background: #fff;
-  }
-  .image-list-filter-bar.filters-open > .image-list-filter-panel {
-    transform: translateY(-50%) scale(1);
+    background: #f3f6fa;
   }
 }
 

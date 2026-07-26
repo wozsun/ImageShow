@@ -73,7 +73,7 @@ Dockerfile 的 `EXPOSE` 与 Compose 目标端口；回归测试会校验三者�
 | `import.global_commit_concurrency` | 单个服务端进程同时执行的 commit 数，默认 10；所有客户端和直接 API 请求共享，只在配置文件中维护。 |
 | `import.global_commit_byte_budget_mb` | 单个服务端进程中处于 commit 的 prepared 图片与缩略图总字节预算，默认 512 MiB；与数量并发限制同时生效，只在配置文件中维护。 |
 | `image_detail.title_opens_image` | 图片详情弹窗标题是否链接到图片直链。 |
-| `admin.login_background` | 后台登录页背景，仅允许站内绝对路径或 HTTPS；留空时使用站点自身随机图。登录表单整体以 80% 不透明度覆盖背景，让图片适度透出；背景层固定于当前动态视口且完全不滚动，独立定位的卡片按 visual viewport 可见中线放置，在工具栏或软键盘压缩可见高度时通过快速过渡整体上移。 |
+| `admin.login_background` | 后台登录页背景，仅允许站内绝对路径或 HTTPS；留空时使用站点自身随机图。登录表单整体以 75% 不透明度覆盖背景，让图片适度透出；背景层固定于当前动态视口且完全不滚动，独立定位的卡片按 visual viewport 可见中线放置，在工具栏或软键盘压缩可见高度时通过快速过渡整体上移。 |
 | `admin.image_page_size` / `admin.recent_uploads` / `admin.show_unset_theme_card` | 后台图片分页、概览最近上传数量、主题页「未设置」占位卡片开关。 |
 | `background_job.*` | 后台任务并发：移动清理、删除主题时图片搬运、批量迁移存储拷贝。默认各 5。 |
 | `security.*` | 登录会话有效期和登录限流阈值；ALTCHA 挑战签发复用两组时间窗口，单 IP 使用登录阈值的三倍，全局使用登录阈值的五倍。 |

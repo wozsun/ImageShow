@@ -32,6 +32,12 @@
 .batch-edit-modal footer .modal-footer-actions { grid-column: 3; justify-self: end; }
 
 .batch-edit-modal footer button { min-height: 38px; }
+.batch-edit-save-button {
+  min-width: max(
+    calc(3em + 3ch + 26px),
+    calc(4em + 1.125rem + 34px)
+  );
+}
 .batch-edit-list {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

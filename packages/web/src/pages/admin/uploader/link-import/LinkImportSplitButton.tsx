@@ -1,5 +1,7 @@
 import { useRef } from "react";
 import { AnchoredPopup } from "../../../../components/feedback/AnchoredPopup.js";
+import { DirectActivationButton } from "../../../../components/feedback/DirectActivationButton.js";
+import { MenuItemButton } from "../../../../components/feedback/MenuItemButton.js";
 import { Icon } from "../../../../components/icon/Icon.js";
 import { useAnchoredMenu } from "../../../../hooks/useAnchoredMenu.js";
 import type { AnchoredMenuSize } from "../../../../lib/ui/menu-position.js";
@@ -27,11 +29,10 @@ export function LinkImportSplitButton({ onOpenWorkflow, onOpenUrls, onOpenJsonl,
     animateClose: false
   });
 
-  const choose = (
-    action: (opener: HTMLButtonElement) => void,
-    fallback: HTMLButtonElement
-  ) => {
-    menu.requestClose(() => action(menuTriggerRef.current ?? fallback));
+  const choose = (action: (opener: HTMLButtonElement) => void) => {
+    const opener = menuTriggerRef.current;
+    if (!opener) return;
+    menu.requestClose(() => action(opener));
   };
 
   return (
@@ -39,9 +40,9 @@ export function LinkImportSplitButton({ onOpenWorkflow, onOpenUrls, onOpenJsonl,
       <button className="button secondary upload-trigger link-import-main" type="button" onClick={(event) => onOpenWorkflow(event.currentTarget)}>
         <Icon name="download-cloud-2-line" />导入图片
       </button>
-      <button ref={menuTriggerRef} className="button secondary link-import-menu-trigger" type="button" title="更多导入方式" aria-haspopup="menu" aria-expanded={menu.open} onClick={() => menu.open ? menu.requestClose() : menu.openMenu()}>
+      <DirectActivationButton ref={menuTriggerRef} className="button secondary link-import-menu-trigger" type="button" title="更多导入方式" aria-haspopup="menu" aria-expanded={menu.open} onActivate={() => menu.open ? menu.requestClose() : menu.openMenu()}>
         <Icon name="arrow-down-s-line" />
-      </button>
+      </DirectActivationButton>
       {menu.open && (
         <AnchoredPopup
           popupRef={menu.menuRef}
@@ -50,15 +51,15 @@ export function LinkImportSplitButton({ onOpenWorkflow, onOpenUrls, onOpenJsonl,
           aria-label="更多导入方式"
           style={menu.position}
         >
-          <button type="button" role="menuitem" onClick={(event) => choose(onOpenUrls, event.currentTarget)}>
+          <MenuItemButton type="button" role="menuitem" onActivate={() => choose(onOpenUrls)}>
             <Icon name="link" />链接导入
-          </button>
-          <button type="button" role="menuitem" onClick={(event) => choose(onOpenJsonl, event.currentTarget)}>
+          </MenuItemButton>
+          <MenuItemButton type="button" role="menuitem" onActivate={() => choose(onOpenJsonl)}>
             <Icon name="file-list-line" />清单导入
-          </button>
-          <button type="button" role="menuitem" onClick={(event) => choose(onOpenWeibo, event.currentTarget)}>
+          </MenuItemButton>
+          <MenuItemButton type="button" role="menuitem" onActivate={() => choose(onOpenWeibo)}>
             <Icon name="weibo-line" />微博导入
-          </button>
+          </MenuItemButton>
         </AnchoredPopup>
       )}
     </div>

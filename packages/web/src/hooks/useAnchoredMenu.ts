@@ -14,6 +14,9 @@ import {
   type AnchoredMenuPosition,
   type AnchoredMenuSize
 } from "../lib/ui/menu-position.js";
+import { isDocumentFallbackFocusTarget } from "../lib/ui/focus-target.js";
+
+const outsidePressEvents = ["pointerdown", "touchstart"] as const;
 
 function naturalMenuHeight(menu: HTMLElement | null) {
   if (!menu) return undefined;
@@ -134,15 +137,29 @@ export function useAnchoredMenu(options: {
         updatePosition();
       });
     };
-    const onPointerDown = (event: PointerEvent) => {
-      const target = event.target as Node;
-      if (!triggerRef.current?.contains(target) && !menuNodeRef.current?.contains(target)) requestClose();
+    const onOutsidePress = (event: Event) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (
+        !triggerRef.current?.contains(target)
+        && !menuNodeRef.current?.contains(target)
+      ) {
+        requestClose();
+      }
     };
     window.addEventListener("resize", update);
     window.addEventListener("scroll", update, true);
     window.visualViewport?.addEventListener("resize", update);
     window.visualViewport?.addEventListener("scroll", update);
-    document.addEventListener("pointerdown", onPointerDown);
+    for (const eventName of outsidePressEvents) {
+      document.addEventListener(
+        eventName,
+        onOutsidePress,
+        eventName === "touchstart"
+          ? { capture: true, passive: true }
+          : true
+      );
+    }
 
     // 折叠区、标签 chip 或字体加载改变锚点/菜单尺寸时也重新测量；只在共享层处理，
     // ThemeInput、AuthorInput、TagInput 无需分别补丁。
@@ -162,8 +179,15 @@ export function useAnchoredMenu(options: {
     let onFocusIn: ((event: FocusEvent) => void) | undefined;
     if (closeOnFocusOutside) {
       onFocusIn = (event) => {
-        const target = event.target as Node;
-        if (!triggerRef.current?.contains(target) && !menuNodeRef.current?.contains(target)) requestClose();
+        const target = event.target;
+        if (isDocumentFallbackFocusTarget(document, target)) return;
+        if (!(target instanceof Node)) return;
+        if (
+          !triggerRef.current?.contains(target)
+          && !menuNodeRef.current?.contains(target)
+        ) {
+          requestClose();
+        }
       };
       document.addEventListener("focusin", onFocusIn);
     }
@@ -173,7 +197,9 @@ export function useAnchoredMenu(options: {
       window.removeEventListener("scroll", update, true);
       window.visualViewport?.removeEventListener("resize", update);
       window.visualViewport?.removeEventListener("scroll", update);
-      document.removeEventListener("pointerdown", onPointerDown);
+      for (const eventName of outsidePressEvents) {
+        document.removeEventListener(eventName, onOutsidePress, true);
+      }
       resizeObserver.disconnect();
       if (onKeyDown) document.removeEventListener("keydown", onKeyDown);
       if (onFocusIn) document.removeEventListener("focusin", onFocusIn);

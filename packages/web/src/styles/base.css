@@ -12,7 +12,17 @@
 * { box-sizing: border-box; }
 html { overflow-y: auto; }
 html.modal-open, body.modal-open { overflow: hidden; }
-/* fixed body 会把文档按原滚动量上移；视口锚点显式声明需要保持原位，避免
+/* DialogLayerPortal is the single owner of dialog positioning. The root layer
+   follows Safari's current dynamic viewport while nested dialogs fill their
+   parent layer without escaping its stacking context. */
+[data-dialog-layer="root"] {
+  position: fixed;
+  inset: 0 0 auto;
+  height: 100vh;
+  height: 100dvh;
+}
+[data-dialog-layer="nested"] { position: absolute; inset: 0; }
+/* fixed 页面根节点会把文档按原滚动量上移；视口锚点显式声明需要保持原位，避免
    iOS 在弹窗开合时让 sticky 元素退出再重入视口。独立的 translate 属性
    不会覆盖组件自身的 transform。 */
 html.modal-open [data-scroll-lock-anchor] {

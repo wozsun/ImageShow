@@ -82,7 +82,6 @@ export function GalleryPage({ fixedTheme = "", standalone = false }: { fixedThem
   const [filters, setFilters] = useState<GalleryFilters>({ device: "", brightness: "", theme: fixedTheme, tag: "", author: "" });
   const {
     backToTopVisible,
-    closeFilters,
     filterPanelHidden,
     filterPanelRef,
     filterMenuDismissSignal,
@@ -282,7 +281,6 @@ export function GalleryPage({ fixedTheme = "", standalone = false }: { fixedThem
                 key={item.id}
                 data-image-id={item.id}
                 onClick={(event) => {
-                  closeFilters();
                   detailReturnFocusRef.current = event.currentTarget;
                   setSelected(item);
                 }}

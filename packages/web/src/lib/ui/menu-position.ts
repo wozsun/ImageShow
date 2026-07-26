@@ -16,6 +16,27 @@ export type AnchoredMenuSize = {
   maxHeight: number;
 };
 
+export function localizeAnchoredPosition(
+  style: CSSProperties,
+  origin: {
+    left: number;
+    top: number;
+    scrollLeft?: number;
+    scrollTop?: number;
+  }
+): CSSProperties {
+  return {
+    ...style,
+    position: "absolute",
+    left: typeof style.left === "number"
+      ? style.left - origin.left + (origin.scrollLeft ?? 0)
+      : style.left,
+    top: typeof style.top === "number"
+      ? style.top - origin.top + (origin.scrollTop ?? 0)
+      : style.top
+  };
+}
+
 export function computeAnchoredPosition(
   rect: DOMRect,
   size: AnchoredMenuSize,

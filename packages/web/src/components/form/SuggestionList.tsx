@@ -6,6 +6,7 @@ import type {
   SetStateAction
 } from "react";
 import { AnchoredPopup } from "../feedback/AnchoredPopup.js";
+import { MenuItemButton } from "../feedback/MenuItemButton.js";
 import type { AnchoredMenuSize } from "../../lib/ui/menu-position.js";
 import type { FacetOption } from "../../lib/types.js";
 
@@ -105,15 +106,15 @@ export function SuggestionList({
         ].filter(Boolean).join(" ");
 
         return (
-          <button
+          <MenuItemButton
             key={option.slug}
             type="button"
             role="option"
             aria-selected={selectedSlug === undefined ? active : selected}
             className={className}
             onMouseEnter={() => onActiveIndexChange(index)}
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => onChoose(option.slug)}
+            preserveFocusOnPress
+            onActivate={() => onChoose(option.slug)}
           >
             <span>{option.slug}</span>
             {option.display_name && option.display_name !== option.slug && (
@@ -121,7 +122,7 @@ export function SuggestionList({
                 {option.display_name}
               </span>
             )}
-          </button>
+          </MenuItemButton>
         );
       })}
     </AnchoredPopup>

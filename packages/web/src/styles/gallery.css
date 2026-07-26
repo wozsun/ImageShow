@@ -201,8 +201,6 @@
 }
 
 .modal {
-  position: fixed;
-  inset: 0;
   z-index: 10;
   background: rgba(13, 18, 28, .76);
   display: grid;

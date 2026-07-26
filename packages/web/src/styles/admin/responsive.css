@@ -105,10 +105,10 @@
     width: 100%;
     align-self: stretch;
   }
-  .admin button:not(:disabled) {
+  :is(.admin, [data-admin-dialog]) button:not(:disabled) {
     transition-duration: var(--pressable-transition-duration, .08s);
   }
-  .admin button:not(:disabled):not(.select-trigger):not(.password-toggle):active {
+  :is(.admin, [data-admin-dialog]) button:not(:disabled):not(.select-trigger):not(.password-toggle):not(.anchored-menu-item):active {
     transform: scale(var(--pressable-active-scale, var(--pressable-scale-medium, .98)));
   }
   /* 次级后台弹窗的动作按钮共享一行且 flex:1 铺满宽度。
@@ -122,8 +122,8 @@
 @media (prefers-reduced-motion: reduce) {
   .action-feedback,
   .action-feedback-progress { animation: none; }
-  .admin button:not(:disabled):active { transform: none; }
-  .admin button:not(:disabled):not(.select-trigger):not(.password-toggle):active {
+  :is(.admin, [data-admin-dialog]) button:not(:disabled):active { transform: none; }
+  :is(.admin, [data-admin-dialog]) button:not(:disabled):not(.select-trigger):not(.password-toggle):not(.anchored-menu-item):active {
     transform: none;
   }
 }

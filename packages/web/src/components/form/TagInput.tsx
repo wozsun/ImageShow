@@ -1,7 +1,9 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { useAnchoredMenu } from "../../hooks/useAnchoredMenu.js";
+import { useImeInputSession } from "../../hooks/useImeInputSession.js";
 import { Icon } from "../icon/Icon.js";
 import { slugPattern } from "../../lib/constants.js";
+import { normalizeFacetInput } from "../../lib/ui/facet-input.js";
 import { facetDisplayName } from "../../lib/ui/formatters.js";
 import type { FacetOption } from "../../lib/types.js";
 import {
@@ -21,6 +23,7 @@ export function TagInput({ value, onChange, suggestions, disabled = false, ariaL
 }) {
   const [text, setText] = useState("");
   const [activeIndex, setActiveIndex] = useState(-1);
+  const imeSession = useImeInputSession(text);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const listId = useId();
   const inputId = `${listId}-input`;
@@ -47,14 +50,25 @@ export function TagInput({ value, onChange, suggestions, disabled = false, ariaL
 
   const addTag = (raw: string) => {
     const tag = raw.trim().toLowerCase();
-    if (!tag || selected.has(tag) || tag.length > 32 || !slugPattern.test(tag)) return;
+    if (
+      !tag
+      || selected.has(tag)
+      || tag.length > 32
+      || !slugPattern.test(tag)
+    ) return false;
     onChange([...value, tag]);
     setText("");
     setActiveIndex(-1);
+    return true;
   };
   const removeTag = (tag: string) => onChange(value.filter((item) => item !== tag));
 
   const handleKey = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (
+      imeSession.isComposing(event.nativeEvent.isComposing)
+      || event.keyCode === 229
+    ) return;
+
     if (handleSuggestionNavigationKey(event, {
       open,
       matchCount: matches.length,
@@ -118,9 +132,39 @@ export function TagInput({ value, onChange, suggestions, disabled = false, ariaL
         className="tag-input-field"
         value={text}
         maxLength={32}
-        onChange={(event) => { setText(event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "")); setActiveIndex(-1); if (!open) openMenu(); }}
+        onFocus={() => {
+          imeSession.beginEditing();
+        }}
+        onChange={(event) => {
+          if (!imeSession.acceptInput(event.currentTarget)) return;
+          const raw = event.currentTarget.value;
+          if (imeSession.isComposing(
+            (event.nativeEvent as InputEvent).isComposing
+          )) {
+            setText(raw);
+            return;
+          }
+          setText(normalizeFacetInput(raw));
+          setActiveIndex(-1);
+          if (!open) openMenu();
+        }}
+        onCompositionStart={() => {
+          imeSession.beginComposition();
+        }}
+        onCompositionEnd={(event) => {
+          if (!imeSession.endComposition(event.currentTarget)) return;
+          setText(normalizeFacetInput(event.currentTarget.value));
+          setActiveIndex(-1);
+          if (!open) openMenu();
+        }}
         onKeyDown={handleKey}
-        onBlur={() => { if (text.trim()) addTag(text); }}
+        onBlur={(event) => {
+          const normalized = normalizeFacetInput(event.currentTarget.value);
+          const added = normalized.trim() ? addTag(normalized) : false;
+          const settledValue = added ? "" : normalized;
+          if (!added) setText(normalized);
+          imeSession.settleEditing(settledValue);
+        }}
         placeholder={value.length ? "" : placeholder}
         disabled={disabled}
         aria-label={ariaLabel}

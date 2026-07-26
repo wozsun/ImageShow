@@ -1,3 +1,4 @@
+import { DirectActivationButton } from "../feedback/DirectActivationButton.js";
 import { AuthorInput } from "./AuthorInput.js";
 import { SelectMenu } from "./SelectMenu.js";
 import { TagInput } from "./TagInput.js";
@@ -107,14 +108,14 @@ export function WorkflowDefaultFields({
           disabled={disabled}
         />
       </div>
-      <button
+      <DirectActivationButton
         type="button"
         className={`apply-to-all-button${applyReady ? " is-ready" : ""}`}
         disabled={applyDisabled}
-        onClick={onApply}
+        onActivate={onApply}
       >
         应用到全部
-      </button>
+      </DirectActivationButton>
     </>
   );
 }

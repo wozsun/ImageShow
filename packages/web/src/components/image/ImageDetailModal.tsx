@@ -6,10 +6,11 @@ import { brightnessOptionLabel, deviceOptionLabel } from "../../lib/ui/select-op
 import type { ImageItem, PublicImageItem } from "../../lib/types.js";
 import { hasSessionProbeHint, useGalleryFacets, useSiteConfig } from "../../lib/api/site-data.js";
 import { useAnimatedClose } from "../../hooks/useAnimatedClose.js";
-import { useBodyScrollLock } from "../../hooks/useBodyScrollLock.js";
+import { usePageScrollLock } from "../../hooks/usePageScrollLock.js";
 import { useDialogFocus } from "../../hooks/useDialogFocus.js";
 import { OverlayScrollbar } from "../layout/OverlayScrollbar.js";
 import { ImageDescriptionSlot } from "./ImageDescriptionSlot.js";
+import { DialogLayerPortal } from "../feedback/DialogLayerPortal.js";
 
 const ImageAdminDetails = lazy(() => import("./ImageAdminDetails.js").then((module) => ({
   default: module.ImageAdminDetails
@@ -41,7 +42,7 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
   const detailError = !admin ? props.detailError?.trim() ?? "" : "";
   const onDetailRetry = !admin ? props.onDetailRetry : undefined;
   const exit = useAnimatedClose(onClose);
-  useBodyScrollLock();
+  usePageScrollLock();
   const dialogRef = useRef<HTMLElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const detailContentRef = useRef<HTMLDivElement | null>(null);
@@ -77,15 +78,18 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
     : `/api/images/${encodeURIComponent(item.id)}/original`;
 
   return (
-    <div
-      className={`modal image-detail-modal ${exit.closing ? "is-closing" : ""}`}
-      role="dialog"
-      aria-modal="true"
-      aria-label="图片详情"
-      onAnimationEnd={exit.onAnimationEnd}
-      onClick={() => exit.requestClose()}
-    >
-      <article ref={dialogRef} tabIndex={-1} onClick={(event) => event.stopPropagation()}>
+    <DialogLayerPortal>
+      <div
+        className={`modal image-detail-modal ${exit.closing ? "is-closing" : ""}`}
+        data-dialog-frame=""
+        data-admin-dialog={admin ? "" : undefined}
+        role="dialog"
+        aria-modal="true"
+        aria-label="图片详情"
+        onAnimationEnd={exit.onAnimationEnd}
+        onClick={() => exit.requestClose()}
+      >
+        <article ref={dialogRef} tabIndex={-1} onClick={(event) => event.stopPropagation()}>
         <ProgressiveImage
           key={item.id}
           imageKey={item.id}
@@ -215,7 +219,8 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
             enableOnTouch
           />
         </div>
-      </article>
-    </div>
+        </article>
+      </div>
+    </DialogLayerPortal>
   );
 }
