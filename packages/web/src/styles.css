@@ -1,4 +1,6 @@
 @import "./styles/base.css";
 @import "./styles/home.css";
+@import "./styles/home-catalog.css";
+@import "./styles/home-responsive.css";
 @import "./styles/gallery.css";
 @import "./styles/responsive.css";

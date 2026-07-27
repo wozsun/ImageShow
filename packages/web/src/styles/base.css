@@ -442,13 +442,17 @@ button:not(:disabled):not(.select-trigger):not([data-availability-locked="true"]
 
 .home-page,
 .gallery-page {
+  padding-top: var(--app-header-height);
   color-scheme: dark;
 }
 
 .topbar {
-  position: sticky;
+  position: fixed;
   top: 0;
+  right: 0;
+  left: 0;
   z-index: 7;
+  width: 100%;
   height: var(--app-header-height);
   padding: 0 28px;
   display: flex;

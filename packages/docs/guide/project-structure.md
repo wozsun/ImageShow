@@ -107,9 +107,12 @@ hooks ──► lib
 - `hooks/` 保存跨页面且主要管理 React 生命周期或交互行为的 Hook。
 - `lib/` 保存无界面代码；HTTP 客户端、query key 和共享查询 Hook 集中在 `lib/api/`。
 - `pages/` 保存路由页面与页面级编排，页面专属组件、状态机和 Hook 就近维护。
+- `pages/home/HomePage.tsx` 只编排查询、筛选状态和页面生命周期；首屏、筛选摘要栏
+  与候选目录由同目录组件分别维护，避免路由组件同时掌握全部首页交互。
 - `pages/admin/uploader/` 管理统一 prepared import 队列；其中 `link-import/` 负责 URL、
   JSONL 与微博输入。
-- `styles/` 按 base、home、gallery、admin 和 responsive 组织全局样式。
+- `styles/` 按 base、home、gallery、admin 和 responsive 组织全局样式；首页进一步
+  将页面 / 首屏基础、候选目录基础及共享响应式交互分文件，并按该顺序引入。
 
 `lib/`、`hooks/` 和通用组件不得反向导入具体页面。只有形成稳定跨页面职责的代码才上移，
 页面内部的小组件无需为目录对称而拆分。

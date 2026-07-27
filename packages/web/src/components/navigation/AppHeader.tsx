@@ -113,7 +113,6 @@ export function AppHeader() {
     <header
       ref={headerRef}
       className={`topbar${headerVisible ? "" : " is-scroll-hidden"}`}
-      data-scroll-lock-anchor
       inert={!headerVisible}
     >
       <Link className="brand" to="/">{siteName}</Link>
