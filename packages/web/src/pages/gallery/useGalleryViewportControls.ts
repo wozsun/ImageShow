@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type RefObject
@@ -12,7 +13,7 @@ import {
 } from "../../hooks/useMediaQuery.js";
 import { useDismissiblePanel } from "../../hooks/useDismissiblePanel.js";
 
-const toolbarScrollDirectionThreshold = 8;
+const toolbarScrollDirectionThreshold = 12;
 const backToTopViewportThreshold = 1;
 function blurFocusedToolbarElement(toolbar: HTMLElement) {
   const activeElement = document.activeElement;
@@ -26,16 +27,19 @@ function useGalleryToolbarVisibility(
   lockedOpen: boolean
 ) {
   const [visible, setVisible] = useState(true);
+  const [height, setHeight] = useState(0);
   const previousScrollTopRef = useRef(0);
   const upwardDistanceRef = useRef(0);
   const downwardDistanceRef = useRef(0);
   const toolbarHeightRef = useRef(0);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const toolbar = toolbarRef.current;
     if (!toolbar) return;
     const updateToolbarHeight = () => {
-      toolbarHeightRef.current = toolbar.getBoundingClientRect().height;
+      const nextHeight = Math.ceil(toolbar.getBoundingClientRect().height);
+      toolbarHeightRef.current = nextHeight;
+      setHeight((current) => current === nextHeight ? current : nextHeight);
     };
     const observer = new ResizeObserver(updateToolbarHeight);
     observer.observe(toolbar);
@@ -94,8 +98,8 @@ function useGalleryToolbarVisibility(
       if (downwardDistanceRef.current < toolbarScrollDirectionThreshold) return;
       upwardDistanceRef.current = 0;
       downwardDistanceRef.current = 0;
-      // 工具栏仍占据文档流高度。等页面至少滚过同等距离再隐藏，避免其原始
-      // 占位来不及滚出视口而暴露成一整块空白。
+      // 工具栏的流内占位保留真实高度。等页面至少滚过同等距离再隐藏，
+      // 避免占位来不及滚出视口而暴露成一整块空白。
       if (scrollTop < toolbarHeightRef.current) return;
       // inert 会把隐藏工具栏移出交互与无障碍树；先释放内部焦点，避免浏览器
       // 保留一个已不可见的焦点目标，也无需再叠加容易产生时序警告的 aria-hidden。
@@ -115,7 +119,7 @@ function useGalleryToolbarVisibility(
     };
   }, [lockedOpen, toolbarRef]);
 
-  return visible;
+  return { height, visible };
 }
 
 function useBackToTopVisibility() {
@@ -168,7 +172,10 @@ export function useGalleryViewportControls() {
   }, [disclosure.setOpen, filtersOpen]);
 
   const mobileFiltersOpen = mobileLayout && filtersOpen;
-  const toolbarVisible = useGalleryToolbarVisibility(
+  const {
+    height: toolbarHeight,
+    visible: toolbarVisible
+  } = useGalleryToolbarVisibility(
     toolbarRef,
     mobileFiltersOpen
   );
@@ -182,6 +189,7 @@ export function useGalleryViewportControls() {
     filterToggleRef: disclosure.triggerRef,
     filtersOpen,
     toggleFilters,
+    toolbarHeight,
     toolbarRef,
     toolbarVisible,
   };

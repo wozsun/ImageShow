@@ -1,4 +1,10 @@
-import { lazy, Suspense, useMemo, useRef, type RefObject } from "react";
+import {
+  lazy,
+  Suspense,
+  useMemo,
+  useRef,
+  type RefObject
+} from "react";
 import { Icon } from "../icon/Icon.js";
 import { ProgressiveImage } from "./ProgressiveImage.js";
 import { displayNameOrSlug, imageDisplayTitle, formatDate, formatDimensions } from "../../lib/ui/formatters.js";
@@ -11,6 +17,10 @@ import { hasSessionProbeHint, useGalleryFacets, useSiteConfig } from "../../lib/
 import { useAnimatedClose } from "../../hooks/useAnimatedClose.js";
 import { usePageScrollLock } from "../../hooks/usePageScrollLock.js";
 import { useDialogFocus } from "../../hooks/useDialogFocus.js";
+import {
+  mobileViewportMediaQuery,
+  useMediaQuery
+} from "../../hooks/useMediaQuery.js";
 import { OverlayScrollbar } from "../layout/OverlayScrollbar.js";
 import { ImageDescriptionSlot } from "./ImageDescriptionSlot.js";
 import { DialogLayerPortal } from "../feedback/DialogLayerPortal.js";
@@ -46,6 +56,7 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
   const onDetailRetry = !admin ? props.onDetailRetry : undefined;
   const exit = useAnimatedClose(onClose);
   usePageScrollLock();
+  const mobileLayout = useMediaQuery(mobileViewportMediaQuery);
   const dialogRef = useRef<HTMLElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const detailContentRef = useRef<HTMLDivElement | null>(null);
@@ -79,6 +90,9 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
   const originalHref = adminItem?.deleted_at
     ? `/api/admin/images/${encodeURIComponent(item.id)}/original`
     : `/api/images/${encodeURIComponent(item.id)}/original`;
+  const imageAspectRatio = item.width > 0 && item.height > 0
+    ? `${item.width} / ${item.height}`
+    : "16 / 9";
 
   return (
     <DialogLayerPortal>
@@ -100,6 +114,7 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
           fullSrc={item.object_url}
           alt={title}
           className="image-detail-image"
+          style={{ aspectRatio: imageAspectRatio }}
         />
         <div className="image-detail-panel">
           <div className="image-detail-content" ref={detailContentRef}>
@@ -137,6 +152,7 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
               error={detailError}
               onRetry={onDetailRetry}
               boundaryRef={actionsRef}
+              inlineExpansion={mobileLayout}
             />
             <div className="image-detail-scroll-body">
               <dl className="image-detail-public-properties">
@@ -217,8 +233,8 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
             </div>
           </div>
           <OverlayScrollbar
-            targetRef={detailContentRef}
-            topInsetRef={titleHeaderRef}
+            targetRef={mobileLayout ? dialogRef : detailContentRef}
+            topInsetRef={mobileLayout ? undefined : titleHeaderRef}
             enableOnTouch
           />
         </div>

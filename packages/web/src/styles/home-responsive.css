@@ -70,8 +70,12 @@
 }
 
 @media (max-width: 760px) {
+  .home-page {
+    --home-filter-bar-height: 76px;
+  }
+
   .home-filter-bar {
-    min-height: 76px;
+    min-height: var(--home-filter-bar-height);
     padding: 10px 16px;
     gap: 8px;
   }
@@ -111,7 +115,9 @@
   }
 
   .home-banner {
-    min-height: calc(100svh - var(--app-header-height) - 76px);
+    min-height: calc(
+      100svh - var(--app-header-height) - var(--home-filter-bar-height)
+    );
     padding: 58px 20px 54px;
   }
 

@@ -18,12 +18,14 @@ export function ImageDescriptionSlot({
   error = "",
   onRetry,
   boundaryRef,
+  inlineExpansion = false,
 }: {
   description: string;
   loading: boolean;
   error?: string;
   onRetry?: () => void;
   boundaryRef: RefObject<HTMLElement | null>;
+  inlineExpansion?: boolean;
 }) {
   const slotRef = useRef<HTMLDivElement | null>(null);
   const cardRef = useRef<HTMLElement | null>(null);
@@ -73,7 +75,7 @@ export function ImageDescriptionSlot({
   }, [collapseDescription, description, loading, normalizedError]);
 
   useEffect(() => {
-    if (!expanded) return;
+    if (!expanded || inlineExpansion) return;
 
     const collapseFromOutsideTouch = (event: TouchEvent) => {
       if (cardRef.current?.contains(event.target as Node)) return;
@@ -87,7 +89,7 @@ export function ImageDescriptionSlot({
     return () => {
       document.removeEventListener("touchstart", collapseFromOutsideTouch, true);
     };
-  }, [collapseDescription, expanded]);
+  }, [collapseDescription, expanded, inlineExpansion]);
 
   useLayoutEffect(() => {
     const textElement = textRef.current;
@@ -107,7 +109,7 @@ export function ImageDescriptionSlot({
   }, [expanded, loading, normalizedDescription, normalizedError]);
 
   useLayoutEffect(() => {
-    if (!expanded) return;
+    if (!expanded || inlineExpansion) return;
 
     const contentElement = slotRef.current?.closest(".image-detail-content");
     if (!(contentElement instanceof HTMLElement)) return;
@@ -125,15 +127,23 @@ export function ImageDescriptionSlot({
       window.removeEventListener("resize", measureExpandedHeight);
       contentElement.removeEventListener("scroll", measureExpandedHeight);
     };
-  }, [boundaryRef, expanded, measureExpandedHeight]);
+  }, [boundaryRef, expanded, inlineExpansion, measureExpandedHeight]);
 
   return (
-    <div ref={slotRef} className="image-detail-description-slot" aria-busy={loading}>
+    <div
+      ref={slotRef}
+      className={`image-detail-description-slot${
+        inlineExpansion && expanded ? " is-inline-expanded" : ""
+      }`}
+      aria-busy={loading}
+    >
       <section
         ref={cardRef}
         className={`image-detail-description-card${expanded ? " is-expanded" : ""}`}
         aria-label="图片描述"
-        style={{ height: `${expanded ? expandedHeight : COLLAPSED_CARD_HEIGHT}px` }}
+        style={inlineExpansion && expanded
+          ? undefined
+          : { height: `${expanded ? expandedHeight : COLLAPSED_CARD_HEIGHT}px` }}
       >
         <div ref={cardBodyRef} className="image-detail-description-card-body">
           <p
@@ -172,7 +182,7 @@ export function ImageDescriptionSlot({
             {expanded ? "收起" : "展开"}
           </button>
         )}
-        {expanded && (
+        {expanded && !inlineExpansion && (
           <OverlayScrollbar
             targetRef={cardBodyRef}
             containerRef={cardRef}

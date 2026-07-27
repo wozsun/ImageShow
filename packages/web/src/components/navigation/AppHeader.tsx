@@ -6,7 +6,7 @@ import { getPageScrollY, isPageScrollLocked } from "../../hooks/usePageScrollLoc
 import { Icon } from "../icon/Icon.js";
 import { MobileNavigation } from "./MobileNavigation.js";
 
-const headerScrollDirectionThreshold = 8;
+const headerScrollDirectionThreshold = 12;
 const galleryHeaderSecondStageDistance = 48;
 
 export function AppHeader() {

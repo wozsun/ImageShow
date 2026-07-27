@@ -85,6 +85,7 @@ export function GalleryPage() {
     filterToggleRef,
     filtersOpen,
     toggleFilters,
+    toolbarHeight,
     toolbarRef,
     toolbarVisible,
   } = useGalleryViewportControls();
@@ -169,12 +170,18 @@ export function GalleryPage() {
   const showBackToTop = backToTopVisible && !selected;
 
   return (
-    <main className="page gallery-page">
+    <main
+      className="page gallery-page"
+      style={{
+        "--gallery-toolbar-height": toolbarHeight
+          ? `${toolbarHeight}px`
+          : undefined
+      } as CSSProperties}
+    >
       <AppHeader />
       <section
         ref={toolbarRef}
         className={`gallery-toolbar${filtersOpen ? " filters-open" : ""}${toolbarVisible ? "" : " is-scroll-hidden"}`}
-        data-scroll-lock-anchor
         inert={!toolbarVisible}
       >
         <button
@@ -269,6 +276,7 @@ export function GalleryPage() {
           </div>
         </AnchoredMenuDismissSignalContext.Provider>
       </section>
+      <div className="gallery-toolbar-spacer" aria-hidden="true" />
       <section className="gallery" style={{ "--gallery-columns": columnCount } as CSSProperties}>
         {columns.map((column, columnIndex) => (
           <div className="gallery-column" key={columnIndex}>

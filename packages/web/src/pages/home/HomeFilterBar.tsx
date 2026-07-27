@@ -44,7 +44,6 @@ export function HomeFilterBar({
     <section
       className="home-filter-bar"
       aria-label="当前画廊筛选"
-      data-scroll-lock-anchor
     >
       <div>
         <span>GALLERY FILTER</span>

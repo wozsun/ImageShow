@@ -59,6 +59,7 @@ export function HomePage() {
         isPlaceholderData={statsQuery.isPlaceholderData}
         onFiltersChange={setFilters}
       />
+      <div className="home-filter-bar-spacer" aria-hidden="true" />
       <HomeHero
         bannerLabel={bannerLabel}
         bannerTitle={bannerTitle}

@@ -1,6 +1,7 @@
 .gallery-page {
   --gallery-sky-left: #151820;
   --gallery-sky-blue: #101c2a;
+  --gallery-toolbar-height: 99px;
   position: relative;
   isolation: isolate;
   color: var(--public-text);
@@ -103,9 +104,12 @@
   --gallery-control-height: 40px;
   --gallery-toolbar-shift: 0%;
   --gallery-header-shift: 0px;
-  position: sticky;
+  position: fixed;
   top: var(--app-header-height);
-  z-index: 2;
+  right: 0;
+  left: 0;
+  z-index: 6;
+  width: 100%;
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
@@ -126,6 +130,9 @@
     transform var(--public-nav-motion-duration)
     var(--public-nav-motion-easing);
   will-change: transform;
+}
+.gallery-toolbar-spacer {
+  height: var(--gallery-toolbar-height);
 }
 .page > .topbar.is-scroll-hidden + .gallery-toolbar {
   --gallery-header-shift: calc(-1 * var(--app-header-height));
