@@ -1,4 +1,10 @@
 .center { min-height: 100svh; display: grid; place-items: center; }
+.app-loading-screen {
+  width: 100%;
+  min-height: 100dvh;
+  color: #f2f7ff;
+  background: #000;
+}
 
 /* modal-* 动画被公共页与后台弹窗共同引用，需留在全局样式包中。 */
 @keyframes modal-fade {
@@ -168,19 +174,6 @@
   }
   .image-detail-modal .image-detail-panel {
     flex: 1 1 auto;
-  }
-  .image-detail-modal .image-detail-panel::before {
-    content: "";
-    position: absolute;
-    inset: 0 0 auto;
-    z-index: 5;
-    /* 保留足够的 iOS 接缝遮罩，但不要进入从 20px 处开始的标题控件区域。 */
-    height: 16px;
-    background: #fff;
-    pointer-events: none;
-  }
-  .image-detail-modal:not([data-admin-dialog]) .image-detail-panel::before {
-    background: var(--public-space-deep);
   }
   .image-detail-modal .image-detail-content {
     flex: 1 1 auto;

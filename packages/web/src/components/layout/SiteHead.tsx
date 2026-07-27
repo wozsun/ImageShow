@@ -1,18 +1,51 @@
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect } from "react";
+import { useLocation } from "react-router-dom";
+import { adminBasePath } from "../../lib/constants.js";
 import { useSiteConfig } from "../../lib/api/site-data.js";
 
+type BrowserAppearance = "dark" | "light";
+
+const browserSurfaceFallback: Record<BrowserAppearance, string> = {
+  dark: "#070b15",
+  light: "#f5f6f8"
+};
+
+function ensureMeta(name: string) {
+  let meta = document.querySelector<HTMLMetaElement>(`meta[name="${name}"]`);
+  if (!meta) {
+    meta = document.createElement("meta");
+    meta.name = name;
+    document.head.appendChild(meta);
+  }
+  return meta;
+}
+
+function routeAppearance(pathname: string): BrowserAppearance {
+  return pathname === adminBasePath || pathname.startsWith(`${adminBasePath}/`)
+    ? "light"
+    : "dark";
+}
+
 export function SiteHead() {
+  const { pathname } = useLocation();
   const { data } = useSiteConfig();
   const site = data?.site;
+
+  useLayoutEffect(() => {
+    const appearance = routeAppearance(pathname);
+    const root = document.documentElement;
+    root.dataset.colorScheme = appearance;
+    ensureMeta("color-scheme").content = appearance;
+
+    const browserSurface = getComputedStyle(root).backgroundColor.trim()
+      || browserSurfaceFallback[appearance];
+    ensureMeta("theme-color").content = browserSurface;
+  }, [pathname]);
+
   useEffect(() => {
     if (!site) return;
     document.title = site.name || "ImageShow";
-    let description = document.querySelector<HTMLMetaElement>('meta[name="description"]');
-    if (!description) {
-      description = document.createElement("meta");
-      description.name = "description";
-      document.head.appendChild(description);
-    }
+    const description = ensureMeta("description");
     description.content = site.home.tagline || site.name || "ImageShow";
 
     let link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');

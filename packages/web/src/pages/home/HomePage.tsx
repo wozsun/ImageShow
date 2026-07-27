@@ -22,6 +22,7 @@ import {
 } from "../../lib/gallery/gallery-query.js";
 import { useGalleryStats, useSiteConfig } from "../../lib/api/site-data.js";
 import { displayNameOrSlug } from "../../lib/ui/formatters.js";
+import { useTouchScrollBoundaryHandoff } from "./useTouchScrollBoundaryHandoff.js";
 
 const deviceLabels: Record<string, string> = {
   "": "全部设备",
@@ -61,6 +62,7 @@ function SelectorOptions({
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  useTouchScrollBoundaryHandoff(scrollRef);
 
   return (
     <div ref={containerRef} className={`home-selector-scroll-shell ${className}`}>

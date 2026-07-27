@@ -303,10 +303,6 @@
   scroll-margin-top: 86px;
   min-height: 100svh;
   padding: 72px max(28px, calc((100% - 1180px) / 2)) 96px;
-  background:
-    radial-gradient(circle at 8% 24%, rgba(162, 74, 116, .12), transparent 32%),
-    radial-gradient(circle at 94% 72%, rgba(55, 103, 174, .18), transparent 36%),
-    linear-gradient(180deg, rgba(7, 12, 23, .56), rgba(6, 11, 21, .78));
 }
 
 .home-catalog.is-refreshing .home-axes-card,

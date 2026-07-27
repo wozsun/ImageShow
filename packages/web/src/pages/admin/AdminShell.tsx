@@ -10,6 +10,7 @@ import { clearAdminCacheAfterLogin } from "../../lib/api/query-invalidation.js";
 import { MobileNavigation } from "../../components/navigation/MobileNavigation.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
 import { RouteLoadBoundary } from "../../components/feedback/RouteLoadBoundary.js";
+import { AppLoadingScreen } from "../../components/feedback/AppLoadingScreen.js";
 import { ActionFeedbackProvider } from "../../components/feedback/ActionFeedbackRegion.js";
 import { AdminLogin } from "./AdminLogin.js";
 import {
@@ -80,7 +81,7 @@ export function AdminShell() {
     }
   }, [data]);
   if (authFailed) return <QueryErrorState error={authError} onRetry={() => void refetch()} fullPage />;
-  if (!data) return <div className="center">加载中</div>;
+  if (!data) return <AppLoadingScreen />;
   if (!data.authenticated) return (
     <AdminLogin
       siteName={siteName}
