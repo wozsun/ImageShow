@@ -99,9 +99,10 @@ export const appConfig = {
       root_redirect: "home",
       home: {
         enabled: true,
-        tagline: "个人图片管理、画廊展示和随机图片 API。",
-        hero_background: "",
-        preview_delay_ms: 1000
+        background: "",
+        banner_label: "ImageShow · A FAN-MADE PHOTO HANDBOOK",
+        banner_title: "我们一起，\n收藏这些瞬间。",
+        tagline: "个人图片管理、画廊展示和随机图片 API。"
       },
       gallery: { default_limit: 60, order: "random" },
       random_default_method: "redirect",
@@ -185,9 +186,10 @@ export type GalleryOrder = "latest" | "random";
 export type ImportMode = "upload" | "download";
 export type SiteHomeSettings = {
   enabled: boolean;
+  background: string;
+  banner_label: string;
+  banner_title: string;
   tagline: string;
-  hero_background: string;
-  preview_delay_ms: number;
 };
 
 export type SiteGallerySettings = {
@@ -309,6 +311,13 @@ export type SiteSettings = Pick<RuntimeSiteSettings, "name" | "domain" | "icon_u
 
 export type PublicSiteSettings = SiteSettings & Pick<RuntimeSiteSettings, "version">;
 
+export type AdminSiteSettings = Omit<SiteSettings, "home" | "docs_enabled"> & {
+  home: Pick<
+    SiteHomeSettings,
+    "background" | "banner_label" | "banner_title" | "tagline"
+  >;
+};
+
 export type AdminUploadSettings = Pick<
   UploadSettings,
   "max_items" | "max_file_size_mb" | "list_page_size" | "concurrency"
@@ -324,7 +333,7 @@ export type AdminWeiboSettings = Pick<WeiboSettings, "max_items">;
 export type AdminImportSettings = Pick<ImportSettings, "commit_concurrency">;
 
 export type AdminSettings = {
-  site: SiteSettings;
+  site: AdminSiteSettings;
   upload: AdminUploadSettings;
   link_image: AdminLinkImageSettings;
   weibo: AdminWeiboSettings;

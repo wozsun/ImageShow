@@ -1,14 +1,31 @@
 import { appConfig } from "@imageshow/shared";
 import { redis } from "./redis-client.ts";
 
-export async function getRedisJson<T>(key: string): Promise<T | null> {
+export type RedisJsonLookup<T> =
+  | { status: "hit"; value: T }
+  | { status: "miss" }
+  | { status: "unavailable" };
+
+export async function getRedisJsonLookup<T>(
+  key: string
+): Promise<RedisJsonLookup<T>> {
+  let raw: string | null;
   try {
-    const raw = await redis.get(key);
-    if (!raw) return null;
-    return JSON.parse(raw) as T;
+    raw = await redis.get(key);
   } catch {
-    return null;
+    return { status: "unavailable" };
   }
+  if (!raw) return { status: "miss" };
+  try {
+    return { status: "hit", value: JSON.parse(raw) as T };
+  } catch {
+    return { status: "miss" };
+  }
+}
+
+export async function getRedisJson<T>(key: string): Promise<T | null> {
+  const result = await getRedisJsonLookup<T>(key);
+  return result.status === "hit" ? result.value : null;
 }
 
 export async function setRedisJson(

@@ -35,6 +35,7 @@ import {
   moveImageToTrash,
   purgeDeletedImage,
   purgeDeletedImages,
+  purgeSelectedDeletedImages,
   restoreDeletedImage
 } from "../images/trash.ts";
 import { scheduleTrashPurge } from "../images/trash-purge-job.ts";
@@ -97,6 +98,24 @@ export function registerAdminImageRoutes(app: Hono) {
     const input = parse(imageIdsInput, await c.req.json().catch(() => ({})));
     return c.json(apiSuccess(await batchDeleteImages(input.ids)));
   });
+
+  app.post(
+    `${adminApiBasePath}/images/batch-purge`,
+    requireAdminPermission(adminPermissions.imageTrashEmpty),
+    async (c) => {
+      const input = parse(imageIdsInput, await c.req.json().catch(() => ({})));
+      const result = await purgeSelectedDeletedImages(input.ids);
+      return c.json(apiSuccess({
+        deleted: result.deleted,
+        failed: result.failed,
+        remaining: result.remaining,
+        ignored: Math.max(
+          0,
+          input.ids.length - result.deleted - result.remaining
+        )
+      }));
+    }
+  );
 
   app.post(
     `${adminApiBasePath}/images/empty-trash`,

@@ -35,7 +35,7 @@ import {
   type CompleteImageLookupSource,
 } from "./image-cache.ts";
 import type { ImageLookupByIdItem } from "./image-cache-schema.ts";
-import { linkBaseUrl } from "../themes/host.ts";
+import { linkBaseUrl } from "../config/site-host.ts";
 import { displayUrlForOriginalComparison, hasDistinctOriginalUrl } from "./original-link.ts";
 
 const proxyTimeoutMs = 12_000;

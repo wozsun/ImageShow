@@ -7,7 +7,7 @@ import {
 } from "react";
 import { useAnchoredMenu } from "../../hooks/useAnchoredMenu.js";
 import { useImeInputSession } from "../../hooks/useImeInputSession.js";
-import { reservedSubdomains, slugPattern } from "../../lib/constants.js";
+import { slugPattern } from "../../lib/constants.js";
 import { normalizeFacetInput } from "../../lib/ui/facet-input.js";
 import { facetDisplayName } from "../../lib/ui/formatters.js";
 import type { FacetOption } from "../../lib/types.js";
@@ -17,12 +17,11 @@ import {
   suggestionMenuSize
 } from "./SuggestionList.js";
 
-export function SlugComboInput({ value, onChange, options, noun, checkReserved = false, placeholder, disabled = false, ariaLabel, className }: {
+export function SlugComboInput({ value, onChange, options, noun, placeholder, disabled = false, ariaLabel, className }: {
   value: string;
   onChange: (value: string) => void;
   options: FacetOption[];
   noun: string;
-  checkReserved?: boolean;
   placeholder?: string;
   disabled?: boolean;
   ariaLabel?: string;
@@ -72,9 +71,7 @@ export function SlugComboInput({ value, onChange, options, noun, checkReserved =
     ? options.filter((option) => option.slug !== "none" && (option.slug.includes(query) || option.display_name.toLowerCase().includes(query))).slice(0, 50)
     : [];
 
-  const reserved = checkReserved && (reservedSubdomains as readonly string[]).includes(query);
-
-  const isNew = slugPattern.test(query) && query.length <= 32 && !reserved && !options.some((option) => option.slug === query);
+  const isNew = slugPattern.test(query) && query.length <= 32 && !options.some((option) => option.slug === query);
 
   const choose = (slug: string) => {
     const normalized = publishValue(slug, false);
@@ -174,9 +171,8 @@ export function SlugComboInput({ value, onChange, options, noun, checkReserved =
         aria-expanded={open && !closing}
         aria-controls={open ? listId : undefined}
         aria-autocomplete="list"
-        aria-invalid={reserved || undefined}
         data-new-slug={isNew || undefined}
-        title={reserved ? `「${query}」是保留子域名前缀，不能作为${noun}` : isNew ? `「${query}」是新${noun}，提交后会自动创建` : undefined}
+        title={isNew ? `「${query}」是新${noun}，提交后会自动创建` : undefined}
         autoComplete="off"
       />
       {menu}

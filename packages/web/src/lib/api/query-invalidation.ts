@@ -33,6 +33,7 @@ export function invalidateImageData(client: QueryClient) {
     queryKeys.publicImages,
     queryKeys.publicImageDetail,
     queryKeys.galleryFacets,
+    queryKeys.galleryStats,
     queryKeys.adminImages,
     queryKeys.adminImageInfo,
     queryKeys.overview,

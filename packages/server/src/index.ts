@@ -1,5 +1,5 @@
 import { serve } from "@hono/node-server";
-import { Hono } from "hono";
+import { Hono, type Context, type Next } from "hono";
 import { compress } from "hono/compress";
 import { adminApiBasePath, appConfig } from "@imageshow/shared";
 import { bootstrapEnvironment } from "./config/bootstrap-env.ts";
@@ -42,14 +42,14 @@ import { registerHealthRoutes } from "./routes/health.ts";
 import { registerProtectedAuthRoutes, registerPublicAuthRoutes } from "./routes/auth.ts";
 import { registerPublicRoutes } from "./routes/public.ts";
 import { serveRobotsTxt } from "./routes/robots.ts";
-import { handleRandomImage, handleThemeHostRandom, registerRandomRoutes } from "./routes/random.ts";
+import { handleRandomImage, registerRandomRoutes } from "./routes/random.ts";
 import { registerSettingsRoutes } from "./routes/settings.ts";
 import { registerSecurityReportRoutes } from "./routes/security-reports.ts";
 import { registerStorageRoutes } from "./routes/storage.ts";
 import { registerSpaRoutes } from "./routes/spa.ts";
 import { registerImportRoutes } from "./routes/imports.ts";
 import { drainWorker, startWorker, stopWorker } from "./jobs/worker.ts";
-import { enforceThemeHostNavigation, isAllowedSiteHost, specialHost, themeFromHost } from "./themes/host.ts";
+import { isAllowedSiteHost, specialHost } from "./config/site-host.ts";
 import {
   closeStorageBackendRegistry,
   onStorageBackendChange
@@ -92,12 +92,10 @@ app.use("*", async (c, next) => {
       : path.startsWith("/original/");
     if (!allowed) return apiErrorResponse({ status: 404, message: "Not Found" });
   }
-  const theme = themeFromHost(host);
-  if (theme && new URL(c.req.url).pathname === "/random") return handleThemeHostRandom(c, theme);
   return next();
 });
 
-const mediaHostGuard = async (c: Parameters<typeof enforceThemeHostNavigation>[0], next: Parameters<typeof enforceThemeHostNavigation>[1]) => {
+const mediaHostGuard = async (c: Context, next: Next) => {
   const special = specialHost(c.req.header("host") ?? "");
   if (special === "static" || special === "link") return next();
   return apiErrorResponse({ status: 404, message: "Not Found" });
@@ -105,7 +103,6 @@ const mediaHostGuard = async (c: Parameters<typeof enforceThemeHostNavigation>[0
 app.use("/media/*", mediaHostGuard);
 app.use("/thumbs/*", mediaHostGuard);
 app.use("/original/*", mediaHostGuard);
-app.use("*", enforceThemeHostNavigation);
 
 app.use("/api/*", limitApiRequestBody);
 app.use("/api/*", async (c, next) => {

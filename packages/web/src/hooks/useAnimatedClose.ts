@@ -30,9 +30,16 @@ export function useAnimatedClose(onClose: () => void, fallbackMs = 170) {
     fallbackTimer.current = window.setTimeout(finishClose, fallbackMs);
   }, [fallbackMs, finishClose]);
 
+  const cancelClose = useCallback(() => {
+    if (!closingRef.current) return;
+    closingRef.current = false;
+    window.clearTimeout(fallbackTimer.current);
+    setClosing(false);
+  }, []);
+
   const onAnimationEnd = useCallback((event: AnimationEvent<HTMLElement>) => {
     if (event.currentTarget === event.target) finishClose();
   }, [finishClose]);
 
-  return { closing, requestClose, onAnimationEnd };
+  return { closing, requestClose, cancelClose, onAnimationEnd };
 }

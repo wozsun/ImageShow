@@ -13,6 +13,7 @@ export type ImageAdminView = "ready" | "unset" | "deleted";
 
 export type ImageAdminConfirmAction =
   | { kind: "batch-delete"; ids: string[] }
+  | { kind: "purge-selected"; ids: string[] }
   | { kind: "empty-trash" }
   | { kind: "purge"; id: string; title: string };
 
@@ -33,6 +34,13 @@ export function imageAdminConfirmationCopy(
       title: "确认清空回收站",
       description: "回收站内的所有图片及存储对象将被永久删除，此操作无法撤销。",
       label: "永久清空"
+    };
+  }
+  if (action?.kind === "purge-selected") {
+    return {
+      title: "确认删除已选图片",
+      description: `选中的 ${action.ids.length} 张图片及其存储对象将被永久删除，此操作无法撤销。`,
+      label: "永久删除"
     };
   }
   if (action?.kind === "purge") {
@@ -116,6 +124,7 @@ export function useImageAdminOperations({
   const runConfirmedAction = useCallback(async () => {
     if (!confirmAction) return false;
     const affectedIds = confirmAction.kind === "batch-delete"
+      || confirmAction.kind === "purge-selected"
       ? confirmAction.ids
       : confirmAction.kind === "empty-trash"
         ? items.map((item) => item.id)
@@ -126,6 +135,8 @@ export function useImageAdminOperations({
     setOperationText(
       confirmAction.kind === "batch-delete"
         ? `正在批量删除 ${confirmAction.ids.length} 张图片…`
+        : confirmAction.kind === "purge-selected"
+          ? `正在永久删除 ${confirmAction.ids.length} 张图片…`
         : confirmAction.kind === "empty-trash"
           ? "正在清空回收站…"
           : "正在永久删除图片…"
@@ -153,6 +164,37 @@ export function useImageAdminOperations({
         resultFeedback = {
           text: `已删除 ${result.deleted} 张，${result.ignored} 张未处理`,
           status: result.ignored ? "error" : "success"
+        };
+      } else if (confirmAction.kind === "purge-selected") {
+        const result = await api<{
+          deleted: number;
+          failed: number;
+          remaining: number;
+          ignored: number;
+        }>(
+          `${adminApiBasePath}/images/batch-purge`,
+          {
+            method: "POST",
+            body: JSON.stringify({ ids: confirmAction.ids })
+          }
+        );
+        const pending = Math.max(0, result.remaining - result.failed);
+        if (result.failed || pending || result.ignored) {
+          reportAdminUiError(
+            "image_admin.batch_purge_partial",
+            new Error(
+              `批量永久删除完成，但有 ${result.failed} 张删除失败、`
+              + `${pending} 张暂未删除、${result.ignored} 张未处理`
+            )
+          );
+        }
+        resultFeedback = {
+          text: `已永久删除 ${result.deleted} 张${
+            result.failed ? `，${result.failed} 张删除失败` : ""
+          }${
+            pending ? `，${pending} 张暂未删除` : ""
+          }${result.ignored ? `，${result.ignored} 张未处理` : ""}`,
+          status: result.failed || pending || result.ignored ? "error" : "success"
         };
       } else if (confirmAction.kind === "empty-trash") {
         const result = await api<{ deleted: number; failed: number; remaining: number }>(
@@ -189,7 +231,27 @@ export function useImageAdminOperations({
       return true;
     } catch (error) {
       reportAdminUiError("image_admin.confirmed_action", error);
+      let refreshFailed = false;
+      if (confirmAction.kind === "purge-selected") {
+        try {
+          await refresh();
+        } catch (refreshError) {
+          refreshFailed = true;
+          reportAdminUiError(
+            "image_admin.batch_purge_refresh",
+            refreshError
+          );
+        }
+      }
       await waitForMinimumPendingDuration(startedAt);
+      if (confirmAction.kind === "purge-selected") {
+        showFeedback(
+          refreshFailed
+            ? "永久删除中断，且图片列表刷新失败，请重新加载页面后确认"
+            : "永久删除中断，图片列表已刷新，请确认剩余图片后重试",
+          "error"
+        );
+      }
       return false;
     } finally {
       setActionBusy(false);

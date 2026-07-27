@@ -19,7 +19,6 @@ ImageShow 是一个 npm workspaces 单仓多包项目：自托管图库 + 随机
 | `static.<域名>` | 只提供对象字节 `/media/*`、`/thumbs/*`（cookie 隔离，主站从不直接吐字节） |
 | `link.<域名>` | 外部原图安全代理：仅开放 `/original/*`，且只代理与展示图不同的 HTTPS `original` 字段 |
 | `docs.<域名>` | 本文档站（VitePress 构建产物） |
-| `<theme>.<域名>` | 该主题作用域的导航；`/random` 等价于 `/random?t=<theme>` |
 
 所有请求统一附带安全响应头：`Content-Security-Policy: frame-ancestors 'none'`、`X-Frame-Options: DENY`、`X-Content-Type-Options: nosniff`、`Referrer-Policy`、`Cross-Origin-Opener-Policy` 等。SPA 文档以 report-only 模式观测 Trusted Types，并通过 `Reporting-Endpoints` 与 CSP `report-to` 把报告投递到同源 `/api/security/csp-report`。接收端只返回 204，不读取正文、不解析 JSON、也不写日志。
 

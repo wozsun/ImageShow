@@ -1,12 +1,13 @@
 import { useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { api, authExpiredEvent } from "./client.js";
 import { adminApiBasePath } from "../constants.js";
 import { queryKeys } from "./query-keys.js";
 import type {
   AdminPermission,
   AuthStateDto,
-  GalleryFacetsDto
+  GalleryFacetsDto,
+  GalleryStatsDto
 } from "@imageshow/shared/browser";
 import type { PublicSiteSettings } from "@imageshow/shared";
 
@@ -17,6 +18,7 @@ export type SiteConfig = {
 
 export type AuthState = AuthStateDto;
 export type GalleryFacets = GalleryFacetsDto;
+export type GalleryStats = GalleryStatsDto;
 
 // site-config 与 gallery-facets 是「会话级近乎不变」的全局数据：只有在管理员保存站点设置、
 // 改动主题 / 标签 / 作者或导入图片后才需要显式失效。这里关闭自动后台刷新，避免组件重挂、
@@ -86,11 +88,25 @@ export function useGalleryFacets(enabled = true) {
   });
 }
 
+export function useGalleryStats(search = "") {
+  return useQuery<GalleryStats>({
+    queryKey: [...queryKeys.galleryStats, search],
+    queryFn: ({ signal }) => api(
+      search ? `/api/gallery-stats?${search}` : "/api/gallery-stats",
+      { signal }
+    ),
+    placeholderData: keepPreviousData,
+    staleTime: 30_000,
+    gcTime: 5 * 60_000,
+    refetchOnWindowFocus: false
+  });
+}
+
 // /me（登录态 + CSRF 探针）。集中到这里有两个目的：① 消除 AdminShell
 // AccountSettings 四处内联 useQuery 的重复（它们共用同一 queryKey，本就去重为一次请求，但代码各写一遍）；
 // ② 唯独给它关掉「窗口重新聚焦时重拉」——切回标签页不该反复打 /auth/me。会话过期不依赖焦点重拉兜底：
 // 任何后台写操作命中 401 时由 api 层处理，登录/登出后各调用点用 refetch/invalidate 显式刷新；staleTime
-// 沿用全局默认即可。enabled 供公共画廊在独立主题域（standalone）下跳过这次鉴权探测。
+// 沿用全局默认即可。enabled 供无需鉴权探针的公共入口显式跳过请求。
 export function useAuthMe(enabled = true) {
   const query = useQuery<AuthState>({
     queryKey: queryKeys.me,

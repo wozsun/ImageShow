@@ -16,7 +16,6 @@ export const slugPattern = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 export const adminBasePath = "/admin";
 export const adminApiBasePath = "/api/admin";
 
-export const reservedSubdomains = ["random", "static", "docs", "link"] as const;
 export const devices = ["pc", "mb"] as const;
 export const brightnesses = ["dark", "light"] as const;
 
@@ -113,6 +112,25 @@ export type GalleryFacetsDto = {
   themes: FacetOptionDto[];
   tags: FacetOptionDto[];
   authors: Array<FacetOptionDto & { link: string }>;
+};
+
+export type GalleryStatsFacetDto = FacetOptionDto & {
+  image_count: number;
+};
+
+export type GalleryStatsDto = {
+  total_images: number;
+  matching_images: number;
+  devices: Array<{ device: Device; image_count: number }>;
+  brightnesses: Array<{ brightness: Brightness; image_count: number }>;
+  categories: Array<{
+    device: Device;
+    brightness: Brightness;
+    image_count: number;
+  }>;
+  themes: GalleryStatsFacetDto[];
+  tags: GalleryStatsFacetDto[];
+  authors: Array<GalleryStatsFacetDto & { link: string }>;
 };
 
 export type GalleryImageCardDto = {

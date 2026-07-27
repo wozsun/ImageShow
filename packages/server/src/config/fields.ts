@@ -31,11 +31,12 @@ export const siteIconUrl = z.string().trim().min(1).max(2048)
 export const loginBackground = z.string().trim().max(2048)
   .refine((value) => !value || isRootRelativeOrHttpsUrl(value), "登录背景必须是站内绝对路径或 HTTPS URL");
 
-export const homeHeroBackground = z.string().trim().max(2048)
+export const homeBackground = z.string().trim().max(2048)
   .refine((value) => !value || isRootRelativeOrHttpsUrl(value), "首页背景必须是站内绝对路径或 HTTPS URL");
+export const homeBannerLabel = z.string().trim().min(1).max(160);
+export const homeBannerTitle = z.string().trim().min(1).max(160);
 export const homeTagline = z.string().trim().max(200);
 
-export const previewDelayMs = z.coerce.number().int().min(0).max(10_000);
 export const maxFileSizeMb = z.coerce.number().positive()
   .max(appConfig.imports.maxInputFileSizeMiB);
 export const maxLongEdge = z.coerce.number().int().min(512).max(32_768);

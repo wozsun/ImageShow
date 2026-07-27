@@ -3,7 +3,6 @@ export {
   adminApiBasePath,
   adminBasePath,
   adminImagePageLimit,
-  reservedSubdomains,
   slugPattern
 } from "@imageshow/shared/browser";
 

@@ -1,6 +1,11 @@
 import { appConfig, type Brightness, type Device } from "@imageshow/shared";
 import { redis } from "../core/redis-client.ts";
-import { getRedisJson, setRedisJson } from "../core/redis-json.ts";
+import {
+  getRedisJson,
+  getRedisJsonLookup,
+  setRedisJson,
+  type RedisJsonLookup
+} from "../core/redis-json.ts";
 import { execRedisPipeline } from "../core/redis-pipeline.ts";
 import { thumbnailObjectKey } from "../storage/image-paths.ts";
 import {
@@ -19,6 +24,7 @@ export const IMAGE_LOOKUP_MEDIA_KEY = "imageshow:image_lookup:media";
 export const IMAGE_LOOKUP_THUMBS_KEY = "imageshow:image_lookup:thumbs";
 export const IMAGE_LOOKUP_ID_KEY = "imageshow:image_lookup:id";
 const GALLERY_FACETS_KEY = "imageshow:gallery_facets";
+const GALLERY_STATS_CACHE_PREFIX = "imageshow:gallery_stats:";
 const ORIGINAL_DIRECT_CACHE_TTL_SECONDS = 60 * 60;
 const ADMIN_OVERVIEW_CACHE_TTL_SECONDS = 60;
 export const IMAGE_LOOKUP_TTL_SECONDS = appConfig.imageLookup.ttlSeconds;
@@ -121,6 +127,30 @@ export async function getPublicImageDetailCache<T>(key: string, expectedRevision
 
 export async function setPublicImageDetailCache(key: string, value: unknown, expectedRevision?: string | null) {
   await setPublicImagesCache(`detail:${key}`, value, expectedRevision);
+}
+
+export async function getGalleryStatsCache<T>(
+  key: string,
+  expectedRevision?: string | null
+): Promise<RedisJsonLookup<T>> {
+  const revision = await usableRevision(expectedRevision);
+  if (!revision) return { status: "unavailable" };
+  return getRedisJsonLookup<T>(
+    revisionKey(GALLERY_STATS_CACHE_PREFIX, revision, key)
+  );
+}
+
+export async function setGalleryStatsCache(
+  key: string,
+  value: unknown,
+  expectedRevision?: string | null
+) {
+  const revision = await usableRevision(expectedRevision);
+  if (!revision) return;
+  await setRedisJson(
+    revisionKey(GALLERY_STATS_CACHE_PREFIX, revision, key),
+    value
+  );
 }
 
 export async function getOriginalDirectCache(key: string) {

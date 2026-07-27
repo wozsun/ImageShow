@@ -10,7 +10,7 @@ import { adminApiBasePath } from "../../lib/constants.js";
 import { useAdminSettings } from "../../lib/api/admin-settings.js";
 import { galleryOrderSelectOptions } from "../../lib/ui/select-options.js";
 import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
-import type { AdminSettings, SiteSettings } from "../../lib/types.js";
+import type { AdminSettings } from "../../lib/types.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
 import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.js";
 import "../../styles/admin/settings.css";
@@ -65,11 +65,10 @@ export function SettingsPage() {
     if (reloadConfigStatus.pending || saveSettingsStatus.pending) return;
     await saveSettingsStatus.run(async () => {
       try {
-        const site = settings.site.home.enabled ? settings.site : { ...settings.site, root_redirect: "gallery" as const };
         await api(`${adminApiBasePath}/settings`, {
           method: "POST",
           body: JSON.stringify({
-            site,
+            site: settings.site,
             upload: {
               list_page_size: settings.upload.list_page_size,
               concurrency: settings.upload.concurrency
@@ -110,10 +109,6 @@ export function SettingsPage() {
   };
   const updateSite = (patch: Partial<AdminSettings["site"]>) => setSettings({ ...settings, site: { ...settings.site, ...patch } });
   const updateSiteHome = (patch: Partial<AdminSettings["site"]["home"]>) => updateSite({ home: { ...settings.site.home, ...patch } });
-  const updateHomeEnabled = (enabled: boolean) => updateSite({
-    home: { ...settings.site.home, enabled },
-    ...(enabled ? {} : { root_redirect: "gallery" as const })
-  });
   const updateSiteGallery = (patch: Partial<AdminSettings["site"]["gallery"]>) => updateSite({ gallery: { ...settings.site.gallery, ...patch } });
   const updateUpload = (patch: Partial<AdminSettings["upload"]>) => setSettings({ ...settings, upload: { ...settings.upload, ...patch } });
   const updateLinkImage = (patch: Partial<AdminSettings["link_image"]>) => setSettings({ ...settings, link_image: { ...settings.link_image, ...patch } });
@@ -177,6 +172,31 @@ export function SettingsPage() {
               />
             </label>
             <label>
+              首页背景图
+              <input
+                value={settings.site.home.background}
+                onChange={(event) => updateSiteHome({ background: event.target.value })}
+                placeholder="留空＝站点随机图 API（/random?m=redirect）"
+              />
+            </label>
+            <label>
+              首页 Banner 上方标识
+              <input
+                value={settings.site.home.banner_label}
+                onChange={(event) => updateSiteHome({ banner_label: event.target.value })}
+                placeholder="ImageShow · A FAN-MADE PHOTO HANDBOOK"
+              />
+            </label>
+            <label>
+              首页 Banner 标题
+              <textarea
+                rows={2}
+                value={settings.site.home.banner_title}
+                onChange={(event) => updateSiteHome({ banner_title: event.target.value })}
+                placeholder={"我们一起，\n收藏这些瞬间。"}
+              />
+            </label>
+            <label>
               站点描述
               <input
                 value={settings.site.home.tagline}
@@ -192,52 +212,16 @@ export function SettingsPage() {
                 placeholder="留空＝站点域名的随机图 API（/random?m=redirect）"
               />
             </label>
-            <label>
-              首页 hero 背景图
-              <input
-                value={settings.site.home.hero_background}
-                onChange={(event) => updateSiteHome({ hero_background: event.target.value })}
-                placeholder="留空＝站点域名的随机图 API（/random?m=redirect）"
-              />
-            </label>
           </section>
           <section>
             <h2><Icon name="settings-3-line" />页面行为</h2>
-            <div className="settings-toggle-grid">
-              <label>
-                <input
-                  type="checkbox"
-                  checked={settings.site.home.enabled}
-                  onChange={(event) => updateHomeEnabled(event.target.checked)}
-                />
-                启用主页
-              </label>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={settings.site.docs_enabled}
-                  onChange={(event) => updateSite({ docs_enabled: event.target.checked })}
-                />
-                启用 docs 站
-              </label>
-            </div>
             <label>
               根路径页面
               <SelectMenu
-                value={settings.site.home.enabled ? settings.site.root_redirect : "gallery"}
-                onChange={(value) => updateSite({ root_redirect: value as SiteSettings["root_redirect"] })}
+                value={settings.site.root_redirect}
+                onChange={(value) => updateSite({ root_redirect: value as AdminSettings["site"]["root_redirect"] })}
                 options={[{ value: "home", label: "首页 /home" }, { value: "gallery", label: "画廊 /gallery" }]}
                 ariaLabel="根路径页面"
-                disabled={!settings.site.home.enabled}
-              />
-            </label>
-            <label>
-              首页预览切换间隔 ms
-              <NumberInput
-                min={0}
-                max={10000}
-                value={settings.site.home.preview_delay_ms}
-                onChange={(value) => updateSiteHome({ preview_delay_ms: value })}
               />
             </label>
             <label>

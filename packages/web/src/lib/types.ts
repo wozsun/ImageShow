@@ -127,15 +127,6 @@ export type FacetOption = FacetOptionDto;
 
 export type RandomMode = "" | "redirect" | "proxy";
 
-export type RandomLinkDraft = {
-  device: string;
-  brightness: string;
-  theme: string;
-  tag: string;
-  author: string;
-  mode: RandomMode;
-};
-
 export type ManifestImportSource = "jsonl" | "weibo";
 export type ImportCommonAttributeField = "device" | "brightness" | "theme" | "author" | "tags";
 export type ImportDetectedClassification = { device: Device; brightness: Brightness };

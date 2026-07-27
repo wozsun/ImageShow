@@ -1,4 +1,15 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import {
+  closeSync,
+  existsSync,
+  fsyncSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync
+} from "node:fs";
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { RuntimeConfig } from "@imageshow/shared";
 import { runtimeConfigFromEnvironment, runtimePaths } from "./bootstrap-env.ts";
@@ -36,12 +47,32 @@ function readRuntimeConfigFile(): RuntimeConfig | null {
 
 function writeRuntimeConfigFile(value: RuntimeConfig) {
   mkdirSync(runtimePaths.configDirectory, { recursive: true });
-  const temporaryPath = `${runtimePaths.configFile}.${process.pid}.tmp`;
+  const temporaryPath =
+    `${runtimePaths.configFile}.${process.pid}.${randomUUID()}.tmp`;
   try {
-    writeFileSync(temporaryPath, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
+    const temporaryFile = openSync(temporaryPath, "wx", 0o600);
+    try {
+      writeFileSync(temporaryFile, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+      fsyncSync(temporaryFile);
+    } finally {
+      closeSync(temporaryFile);
+    }
     renameSync(temporaryPath, runtimePaths.configFile);
+    syncRuntimeConfigDirectory();
   } finally {
     rmSync(temporaryPath, { force: true });
+  }
+}
+
+function syncRuntimeConfigDirectory() {
+  // Node cannot open directory handles on Windows. The production container is
+  // Linux, where syncing the parent makes the rename durable as well as atomic.
+  if (process.platform === "win32") return;
+  const directory = openSync(runtimePaths.configDirectory, "r");
+  try {
+    fsyncSync(directory);
+  } finally {
+    closeSync(directory);
   }
 }
 

@@ -1,238 +1,524 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { AppHeader } from "../../components/navigation/AppHeader.js";
-import { GeneratedLinkActions } from "../../components/actions/GeneratedLinkActions.js";
+import {
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode
+} from "react";
+import { Link } from "react-router-dom";
+import type {
+  GalleryStatsDto,
+  GalleryStatsFacetDto
+} from "@imageshow/shared/browser";
+import { OverflowMarqueeText } from "../../components/data-display/OverflowMarqueeText.js";
 import { Icon } from "../../components/icon/Icon.js";
-import { SelectMenu } from "../../components/form/SelectMenu.js";
-import { FacetSelector } from "../../components/data-display/FacetSelector.js";
-import { buildRandomUrl } from "../../lib/gallery/random-url.js";
-import { rootSiteOrigin } from "../../lib/gallery/theme-host.js";
-import { cssUrl } from "../../lib/ui/formatters.js";
-import { randomBrightnessSelectOptions, randomDeviceSelectOptions, randomModeSelectOptions } from "../../lib/ui/select-options.js";
-import type { RandomLinkDraft, RandomMode } from "../../lib/types.js";
-import { useGalleryFacets, useSiteConfig } from "../../lib/api/site-data.js";
-import { PreviewProgress } from "./PreviewProgress.js";
+import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
+import { AppHeader } from "../../components/navigation/AppHeader.js";
+import {
+  emptyGalleryFilters,
+  galleryRouteSearchParams,
+  galleryHref,
+  type GalleryFilters
+} from "../../lib/gallery/gallery-query.js";
+import { useGalleryStats, useSiteConfig } from "../../lib/api/site-data.js";
+import { displayNameOrSlug } from "../../lib/ui/formatters.js";
+
+const deviceLabels: Record<string, string> = {
+  "": "全部设备",
+  pc: "桌面端",
+  mb: "移动端"
+};
+
+const brightnessLabels: Record<string, string> = {
+  "": "全部明暗",
+  dark: "暗色系",
+  light: "亮色系"
+};
+
+const deviceOptions = ["", "pc", "mb"] as const;
+const brightnessOptions = ["", "dark", "light"] as const;
+const numberFormatter = new Intl.NumberFormat("zh-CN");
+
+function selectedSlugs(value: string) {
+  return value.split(",").filter(Boolean);
+}
+
+function facetLabel(item: { slug: string; display_name?: string }) {
+  if (item.slug === "none" && !item.display_name?.trim()) return "未设置";
+  return displayNameOrSlug(item);
+}
+
+function countLabel(count: number) {
+  return `${numberFormatter.format(count)} 张`;
+}
+
+function SelectorOptions({
+  className,
+  children
+}: {
+  className: string;
+  children: ReactNode;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  return (
+    <div ref={containerRef} className={`home-selector-scroll-shell ${className}`}>
+      <div ref={scrollRef} className="home-selector-options">
+        {children}
+      </div>
+      <OverlayScrollbar
+        targetRef={scrollRef}
+        containerRef={containerRef}
+        enableOnTouch
+      />
+    </div>
+  );
+}
+
+function selectedFacetLabels(
+  items: readonly GalleryStatsFacetDto[],
+  value: string
+) {
+  const names = new Map(items.map((item) => [item.slug, facetLabel(item)]));
+  return value
+    .split(",")
+    .map((slug) => slug.replace(/^!/, ""))
+    .filter(Boolean)
+    .map((slug) => names.get(slug) ?? slug);
+}
+
+function AxisButton({
+  selected,
+  disabled,
+  locked,
+  label,
+  onClick
+}: {
+  selected: boolean;
+  disabled: boolean;
+  locked: boolean;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={selected ? "is-selected" : undefined}
+      aria-pressed={selected}
+      aria-disabled={locked || undefined}
+      data-availability-locked={locked || undefined}
+      disabled={disabled}
+      title={
+        disabled
+          ? "当前组合下没有图片"
+          : locked
+            ? "当前候选数量尚未验证"
+            : undefined
+      }
+      onClick={locked ? undefined : onClick}
+    >
+      <span>{selected ? "✓ " : ""}{label}</span>
+    </button>
+  );
+}
+
+function SectionHeading({
+  index,
+  eyebrow,
+  title,
+  count
+}: {
+  index: string;
+  eyebrow: string;
+  title: string;
+  count: number;
+}) {
+  return (
+    <header className="home-section-heading">
+      <div>
+        <span>{index} / {eyebrow}</span>
+        <h2>{title}</h2>
+      </div>
+      <small>{count} 项</small>
+    </header>
+  );
+}
 
 export function HomePage() {
-  const [device, setDevice] = useState("");
-  const [brightness, setBrightness] = useState("random");
-  const [themeInput, setThemeInput] = useState("");
-  const [tagInput, setTagInput] = useState("");
-  const [authorInput, setAuthorInput] = useState("");
-  const [mode, setMode] = useState<RandomMode>("");
-  const [committed, setCommitted] = useState<RandomLinkDraft>({ device: "", brightness: "random", theme: "", tag: "", author: "", mode: "" });
-  const [previewState, setPreviewState] = useState<"loading" | "ready" | "error">("loading");
-  const [hasPreview, setHasPreview] = useState(false);
-  const [previewObjectUrl, setPreviewObjectUrl] = useState("");
-  const [facetPending, setFacetPending] = useState(false);
-  const [facetProgressKey, setFacetProgressKey] = useState(0);
-  const [nonce, setNonce] = useState(0);
-  const facetTimerRef = useRef<number | undefined>(undefined);
-  const previewObjectUrlRef = useRef("");
-  const { data: siteConfig } = useSiteConfig();
-  const { data: galleryFacets } = useGalleryFacets();
-  const siteName = siteConfig?.site?.name || "ImageShow";
-  const homeTagline = siteConfig?.site?.home.tagline ?? "";
+  const catalogRef = useRef<HTMLElement>(null);
+  const lastSuccessfulStatsRef = useRef<GalleryStatsDto | undefined>(undefined);
+  const [filters, setFilters] = useState<GalleryFilters>({
+    ...emptyGalleryFilters
+  });
+  const siteQuery = useSiteConfig();
+  const statsSearch = useMemo(
+    () => galleryRouteSearchParams(filters).toString(),
+    [filters]
+  );
+  const statsQuery = useGalleryStats(statsSearch);
+  const currentStats = statsQuery.data;
+  useLayoutEffect(() => {
+    if (currentStats && !statsQuery.isPlaceholderData) {
+      lastSuccessfulStatsRef.current = currentStats;
+    }
+  }, [currentStats, statsQuery.isPlaceholderData]);
+  const stats = currentStats ?? lastSuccessfulStatsRef.current;
+  const background = siteQuery.data?.site.home.background
+    || "/random?m=redirect";
+  const bannerLabel = siteQuery.data?.site.home.banner_label
+    || "ImageShow · A FAN-MADE PHOTO HANDBOOK";
+  const bannerTitle = siteQuery.data?.site.home.banner_title
+    || "我们一起，\n收藏这些瞬间。";
+  const tagline = siteQuery.data?.site.home.tagline
+    ?? "一个由粉丝共同整理、投稿和维护的图片收藏站。";
+  const themeSet = new Set(selectedSlugs(filters.theme));
+  const tagSet = new Set(selectedSlugs(filters.tag));
+  const authorSet = new Set(selectedSlugs(filters.author));
+  const deviceCounts = new Map(
+    stats?.devices.map((item) => [item.device, item.image_count]) ?? []
+  );
+  const brightnessCounts = new Map(
+    stats?.brightnesses.map((item) => [item.brightness, item.image_count]) ?? []
+  );
+  const availabilityRefreshing = statsQuery.isFetching;
+  const availabilityUnverified = availabilityRefreshing || statsQuery.isError;
+  const isUnavailable = (selected: boolean, count: number) =>
+    !selected && count === 0;
 
-  const homeHeroBackground = siteConfig?.site?.home.hero_background || "/random?m=redirect";
-  const previewDelayMs = siteConfig?.site?.home.preview_delay_ms ?? 1_000;
+  const selectedLabels = useMemo(() => {
+    if (!stats) return [];
+    return [
+      filters.device ? deviceLabels[filters.device] : "",
+      filters.brightness ? brightnessLabels[filters.brightness] : "",
+      ...selectedFacetLabels(stats.themes, filters.theme),
+      ...selectedFacetLabels(stats.tags, filters.tag),
+      ...selectedFacetLabels(stats.authors, filters.author)
+    ].filter(Boolean);
+  }, [filters, stats]);
 
-  const linkOrigin = siteConfig?.site.domain
-    ? rootSiteOrigin(siteConfig.site.domain).replace(/\/$/, "")
-    : window.location.origin;
-  const randomUrl = buildRandomUrl({ ...committed, origin: linkOrigin });
-  const previewUrl = buildRandomUrl({ ...committed, mode: "proxy" });
+  const destination = galleryHref(filters);
+  const hasFilters = Object.values(filters).some(Boolean);
+  const totalImages = stats?.total_images ?? 0;
+  const themeCount = stats?.themes.filter((item) => item.slug !== "none").length ?? 0;
+  const siteStats = [
+    { label: "全站图片", value: totalImages, unit: "张" },
+    { label: "主题", value: themeCount, unit: "个" },
+    { label: "标签", value: stats?.tags.length ?? 0, unit: "个" },
+    { label: "作者", value: stats?.authors.length ?? 0, unit: "位" }
+  ];
 
-  const applyRandomDraft = (next: RandomLinkDraft) => {
-    window.clearTimeout(facetTimerRef.current);
-    setFacetPending(false);
-    setCommitted(next);
-    setPreviewState("loading");
-    setNonce((value) => value + 1);
+  const updateFilter = (key: keyof GalleryFilters, value: string) => {
+    setFilters((current) => ({ ...current, [key]: value }));
   };
 
-  const refreshPreview = () => {
-    setPreviewState("loading");
-    setNonce((value) => value + 1);
+  const toggleMultiFacet = (key: "theme" | "tag" | "author", slug: string) => {
+    const selected = selectedSlugs(filters[key]);
+    if (availabilityUnverified && !selected.includes(slug)) return;
+    const next = selected.includes(slug)
+      ? selected.filter((item) => item !== slug)
+      : [...selected, slug];
+    updateFilter(key, next.join(","));
   };
 
-  const updateDevice = (value: string) => {
-    setDevice(value);
-    applyRandomDraft({ device: value, brightness, theme: themeInput, tag: tagInput, author: authorInput, mode });
+  const scrollToCatalog = () => {
+    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    catalogRef.current?.scrollIntoView({
+      behavior: prefersReducedMotion ? "auto" : "smooth",
+      block: "start"
+    });
   };
 
-  const updateBrightness = (value: string) => {
-    setBrightness(value);
-    applyRandomDraft({ device, brightness: value, theme: themeInput, tag: tagInput, author: authorInput, mode });
-  };
-
-  const updateMode = (value: RandomMode) => {
-    setMode(value);
-    applyRandomDraft({ device, brightness, theme: themeInput, tag: tagInput, author: authorInput, mode: value });
-  };
-
-  const scheduleFacets = (next: RandomLinkDraft) => {
-    setFacetPending(true);
-    setFacetProgressKey((current) => current + 1);
-    window.clearTimeout(facetTimerRef.current);
-    facetTimerRef.current = window.setTimeout(() => applyRandomDraft(next), previewDelayMs);
-  };
-
-  const updateThemeInput = (value: string) => {
-    const normalized = value.toLowerCase();
-    setThemeInput(normalized);
-    scheduleFacets({ device, brightness, theme: normalized, tag: tagInput, author: authorInput, mode });
-  };
-
-  const updateTagInput = (value: string) => {
-    const normalized = value.toLowerCase();
-    setTagInput(normalized);
-    scheduleFacets({ device, brightness, theme: themeInput, tag: normalized, author: authorInput, mode });
-  };
-
-  const updateAuthorInput = (value: string) => {
-    const normalized = value.toLowerCase();
-    setAuthorInput(normalized);
-    scheduleFacets({ device, brightness, theme: themeInput, tag: tagInput, author: normalized, mode });
-  };
-
-  useEffect(() => {
-    let cancelled = false;
-    setPreviewState("loading");
-    fetch(previewUrl, { cache: "no-store" })
-      .then(async (response) => {
-        if (!response.ok) throw new Error(`preview ${response.status}`);
-        const objectUrl = URL.createObjectURL(await response.blob());
-        if (cancelled) {
-          URL.revokeObjectURL(objectUrl);
-          return;
-        }
-        if (previewObjectUrlRef.current) URL.revokeObjectURL(previewObjectUrlRef.current);
-        previewObjectUrlRef.current = objectUrl;
-        setPreviewObjectUrl(objectUrl);
-        setHasPreview(true);
-        setPreviewState("ready");
-      })
-      .catch(() => {
-        if (cancelled) return;
-        if (previewObjectUrlRef.current) URL.revokeObjectURL(previewObjectUrlRef.current);
-        previewObjectUrlRef.current = "";
-        setPreviewObjectUrl("");
-        setHasPreview(false);
-        setPreviewState("error");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [previewUrl, nonce]);
-
-  useEffect(() => () => window.clearTimeout(facetTimerRef.current), []);
   useLayoutEffect(() => {
     const root = document.documentElement;
     root.classList.add("home-document");
-    return () => {
-      root.classList.remove("home-document");
-    };
-  }, []);
-  useEffect(() => () => {
-    if (previewObjectUrlRef.current) URL.revokeObjectURL(previewObjectUrlRef.current);
+    return () => root.classList.remove("home-document");
   }, []);
 
   return (
     <main className="page home-page">
       <AppHeader />
-      <section className="home-layout">
-        <section className="home-hero" style={{ backgroundImage: cssUrl(homeHeroBackground) }}>
-          <div>
-            <h1>{siteName}</h1>
-            {homeTagline && <p>{homeTagline}</p>}
-          </div>
-        </section>
-        <section className="home-bottom">
-          <div className="random-preview">
-            <div className="panel-head">
-              <h2><Icon name="shuffle-line" />随机图片预览</h2>
-              <button className="pressable" type="button" onClick={refreshPreview}>
-                <Icon name="refresh-line" />刷新
-              </button>
+      <div className="home-random-background" aria-hidden="true">
+        <img src={background} alt="" fetchPriority="high" />
+      </div>
+
+      <section className="home-filter-bar" aria-label="当前画廊筛选" data-scroll-lock-anchor>
+        <div>
+          <span>GALLERY FILTER</span>
+          <strong>选择后进入画廊</strong>
+          <small>
+            {statsQuery.isPending
+              ? "正在读取图库目录"
+              : statsQuery.isError
+                ? "所选组合暂时无法验证"
+              : statsQuery.isPlaceholderData
+                ? "正在检查所选组合"
+              : hasFilters
+                ? `已选择：${selectedLabels.join(" · ")} · 共有 ${countLabel(stats?.matching_images ?? 0)}`
+                : "未设置筛选条件，将浏览全部图片"}
+          </small>
+        </div>
+        <button
+          type="button"
+          className="home-filter-reset"
+          disabled={!hasFilters}
+          onClick={() => setFilters({ ...emptyGalleryFilters })}
+        >
+          <span className="home-filter-reset-icon" aria-hidden="true">
+            <Icon name="refresh-line" />
+          </span>
+          <span className="home-filter-reset-label">重置</span>
+        </button>
+        <Link className="home-gallery-entry" to={destination}>
+          进入画廊 <span aria-hidden="true">→</span>
+        </Link>
+      </section>
+
+      <section className="home-banner" aria-labelledby="home-title">
+        <div className="home-banner-copy">
+          <span>{bannerLabel}</span>
+          <h1 id="home-title">{bannerTitle}</h1>
+          {tagline && <p>{tagline}</p>}
+        </div>
+        <aside className="home-site-stats" aria-label="全站图库统计" aria-live="polite">
+          <span>LIBRARY STATS</span>
+          <ul>
+            {siteStats.map((item) => (
+              <li key={item.label}>
+                <strong>{stats ? numberFormatter.format(item.value) : "—"}</strong>
+                <span>{item.unit}</span>
+                <small>{item.label}</small>
+              </li>
+            ))}
+          </ul>
+        </aside>
+        <button type="button" className="home-scroll-cue" onClick={scrollToCatalog}>
+          向下浏览与筛选 <span aria-hidden="true">↓</span>
+        </button>
+      </section>
+
+      <section
+        ref={catalogRef}
+        className={`home-catalog${availabilityRefreshing ? " is-refreshing" : ""}`}
+        aria-label="图库分类目录"
+        aria-busy={availabilityRefreshing}
+      >
+        {statsQuery.isError && (
+          <section className="home-glass-card home-stats-state" role="alert">
+            <strong>图库目录暂时无法读取</strong>
+            <p>仍可直接进入完整画廊，或重新尝试加载分类数量。</p>
+            <button type="button" onClick={() => void statsQuery.refetch()}>
+              重新加载
+            </button>
+          </section>
+        )}
+
+        {statsQuery.isPending && (
+          <section className="home-glass-card home-stats-state" aria-live="polite">
+            <strong>正在整理图库目录</strong>
+            <p>主题、标签和作者会在读取完成后全部显示。</p>
+            <div className="home-loading-lines" aria-hidden="true">
+              <span />
+              <span />
+              <span />
             </div>
-            <div className={`preview-frame ${previewState === "error" ? "error" : ""}`}>
-              {hasPreview && previewObjectUrl && (
-                <img
-                  src={previewObjectUrl}
-                  alt="随机图片预览"
+          </section>
+        )}
+
+        {stats && (
+          <>
+            <section className="home-glass-card home-axes-card" aria-labelledby="home-axes-title">
+              <div className="home-axes-intro">
+                <span>OPTIONAL FILTER</span>
+                <strong id="home-axes-title">设备与明暗</strong>
+              </div>
+              <div className="home-axis-groups">
+                <div className="home-axis-group">
+                  <strong>设备</strong>
+                  <div>
+                    {deviceOptions.map((value) => (
+                      <AxisButton
+                        key={value || "all"}
+                        selected={filters.device === value}
+                        locked={
+                          availabilityUnverified
+                          && value !== ""
+                          && filters.device !== value
+                        }
+                        disabled={value !== "" && isUnavailable(
+                          filters.device === value,
+                          deviceCounts.get(value) ?? 0
+                        )}
+                        label={deviceLabels[value]}
+                        onClick={() => updateFilter("device", value)}
+                      />
+                    ))}
+                  </div>
+                </div>
+                <div className="home-axis-group">
+                  <strong>明暗</strong>
+                  <div>
+                    {brightnessOptions.map((value) => (
+                      <AxisButton
+                        key={value || "all"}
+                        selected={filters.brightness === value}
+                        locked={
+                          availabilityUnverified
+                          && value !== ""
+                          && filters.brightness !== value
+                        }
+                        disabled={value !== "" && isUnavailable(
+                          filters.brightness === value,
+                          brightnessCounts.get(value) ?? 0
+                        )}
+                        label={brightnessLabels[value]}
+                        onClick={() => updateFilter("brightness", value)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <div className="home-selector-layout">
+              <section className="home-glass-card home-theme-selector">
+                <SectionHeading
+                  index="01"
+                  eyebrow="THEMES"
+                  title="主题"
+                  count={stats.themes.length}
                 />
-              )}
-              {previewState === "error" && <div className="preview-message">当前组合没有可用图片，请调整设备、亮度或主题</div>}
-              {facetPending && <PreviewProgress key={`facet-${facetProgressKey}`} durationMs={previewDelayMs} />}
-              {!facetPending && previewState === "loading" && <PreviewProgress indeterminate />}
+                <SelectorOptions className="home-theme-options">
+                  {stats.themes.map((item, index) => {
+                    const selected = themeSet.has(item.slug);
+                    const disabled = isUnavailable(selected, item.image_count);
+                    const locked = availabilityUnverified && !selected;
+                    const label = facetLabel(item);
+                    return (
+                      <button
+                        type="button"
+                        className={selected ? "is-selected" : undefined}
+                        key={item.slug}
+                        aria-pressed={selected}
+                        aria-disabled={locked || undefined}
+                        data-availability-locked={locked || undefined}
+                        disabled={disabled}
+                        title={
+                          disabled
+                            ? "当前组合下没有图片"
+                            : locked
+                              ? "当前候选数量尚未验证"
+                              : undefined
+                        }
+                        onClick={
+                          locked
+                            ? undefined
+                            : () => toggleMultiFacet("theme", item.slug)
+                        }
+                      >
+                        <small>{String(index + 1).padStart(2, "0")}</small>
+                        <span className={`home-theme-mark home-accent-${index % 5}`} aria-hidden="true" />
+                        <OverflowMarqueeText as="strong" text={label} />
+                        <span>{countLabel(item.image_count)}</span>
+                        <i aria-hidden="true">{selected ? "✓" : "+"}</i>
+                      </button>
+                    );
+                  })}
+                </SelectorOptions>
+              </section>
+
+              <div className="home-selector-side">
+                <section className="home-glass-card home-tag-selector">
+                  <SectionHeading
+                    index="02"
+                    eyebrow="TAGS"
+                    title="标签"
+                    count={stats.tags.length}
+                  />
+                  <SelectorOptions className="home-tag-options">
+                    {stats.tags.map((item) => {
+                      const selected = tagSet.has(item.slug);
+                      const disabled = isUnavailable(selected, item.image_count);
+                      const locked = availabilityUnverified && !selected;
+                      const label = facetLabel(item);
+                      return (
+                        <button
+                          type="button"
+                          className={`${selected ? "is-selected" : ""}${item.image_count === 0 ? " is-empty" : ""}`.trim()}
+                          key={item.slug}
+                          aria-pressed={selected}
+                          aria-disabled={locked || undefined}
+                          data-availability-locked={locked || undefined}
+                          disabled={disabled}
+                          title={
+                            disabled
+                              ? "当前组合下没有图片"
+                              : locked
+                                ? "当前候选数量尚未验证"
+                                : undefined
+                          }
+                          onClick={
+                            locked
+                              ? undefined
+                              : () => toggleMultiFacet("tag", item.slug)
+                          }
+                        >
+                          <span aria-hidden="true">{selected ? "✓" : "#"}</span>
+                          <OverflowMarqueeText as="strong" text={label} />
+                          <small>{countLabel(item.image_count)}</small>
+                        </button>
+                      );
+                    })}
+                  </SelectorOptions>
+                </section>
+
+                <section className="home-glass-card home-author-selector">
+                  <SectionHeading
+                    index="03"
+                    eyebrow="CONTRIBUTORS"
+                    title="作者"
+                    count={stats.authors.length}
+                  />
+                  <SelectorOptions className="home-author-options">
+                    {stats.authors.map((item) => {
+                      const selected = authorSet.has(item.slug);
+                      const disabled = isUnavailable(selected, item.image_count);
+                      const locked = availabilityUnverified && !selected;
+                      const label = facetLabel(item);
+                      return (
+                        <button
+                          type="button"
+                          className={selected ? "is-selected" : undefined}
+                          key={item.slug}
+                          aria-pressed={selected}
+                          aria-disabled={locked || undefined}
+                          data-availability-locked={locked || undefined}
+                          disabled={disabled}
+                          title={
+                            disabled
+                              ? "当前组合下没有图片"
+                              : locked
+                                ? "当前候选数量尚未验证"
+                                : undefined
+                          }
+                          onClick={
+                            locked
+                              ? undefined
+                              : () => toggleMultiFacet("author", item.slug)
+                          }
+                        >
+                          <OverflowMarqueeText as="strong" text={label} />
+                          <small>{countLabel(item.image_count)}</small>
+                          <i aria-hidden="true">{selected ? "✓" : "+"}</i>
+                        </button>
+                      );
+                    })}
+                  </SelectorOptions>
+                </section>
+              </div>
             </div>
-          </div>
-          <div className="random-builder">
-            <h2>生成随机图链接</h2>
-            <div className="builder-grid builder-grid-axes">
-              <label>
-                设备
-                <SelectMenu
-                  value={device}
-                  onChange={updateDevice}
-                  options={randomDeviceSelectOptions}
-                  ariaLabel="设备"
-                />
-              </label>
-              <label>
-                亮度
-                <SelectMenu
-                  value={brightness}
-                  onChange={updateBrightness}
-                  options={randomBrightnessSelectOptions}
-                  ariaLabel="亮度"
-                />
-              </label>
-              <label>
-                模式
-                <SelectMenu
-                  value={mode}
-                  onChange={(value) => updateMode(value as RandomMode)}
-                  options={randomModeSelectOptions}
-                  ariaLabel="模式"
-                />
-              </label>
-            </div>
-            <div className="builder-grid builder-grid-facets">
-              <label>
-                主题
-                <FacetSelector
-                  options={galleryFacets?.themes ?? []}
-                  value={themeInput}
-                  onChange={updateThemeInput}
-                  noun="主题"
-                />
-              </label>
-              <label>
-                标签
-                <FacetSelector
-                  options={galleryFacets?.tags ?? []}
-                  value={tagInput}
-                  onChange={updateTagInput}
-                  noun="标签"
-                />
-              </label>
-              <label>
-                作者
-                <FacetSelector
-                  options={galleryFacets?.authors ?? []}
-                  value={authorInput}
-                  onChange={updateAuthorInput}
-                  noun="作者"
-                />
-              </label>
-            </div>
-            <p className="builder-hint">可搜索并多选主题、标签或作者，筛选方式可切换为包含或排除。</p>
-            <div className="generated-link">
-              <GeneratedLinkActions url={randomUrl} />
-            </div>
-          </div>
-        </section>
+          </>
+        )}
       </section>
     </main>
   );

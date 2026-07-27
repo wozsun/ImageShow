@@ -218,6 +218,46 @@ const imageListBase = z.object({
   cursor: z.string().trim().min(1).max(512).optional()
 });
 
+function galleryStatsSelector(noun: string) {
+  return z.string().trim().toLowerCase().min(1).max(1024)
+    .transform((value, ctx) => {
+      const tokens = [...new Set(
+        value.split(",").map((token) => token.trim()).filter(Boolean)
+      )];
+      if (
+        tokens.length === 0
+        || tokens.some((token) => {
+          const slug = token.replace(/^!/, "");
+          return slug.length > 32 || !slugPattern.test(slug);
+        })
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `${noun}筛选必须由合法的 slug 组成`
+        });
+        return z.NEVER;
+      }
+      const hasIncludes = tokens.some((token) => !token.startsWith("!"));
+      const hasExcludes = tokens.some((token) => token.startsWith("!"));
+      if (hasIncludes && hasExcludes) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `${noun}筛选不能混用包含与排除模式`
+        });
+        return z.NEVER;
+      }
+      return tokens.join(",");
+    });
+}
+
+export const galleryStatsQuery = z.strictObject({
+  d: z.enum(appConfig.devices).optional(),
+  b: z.enum(appConfig.brightness).optional(),
+  t: galleryStatsSelector("主题").optional(),
+  tag: galleryStatsSelector("标签").optional(),
+  a: galleryStatsSelector("作者").optional()
+});
+
 export const listQuery = imageListBase.extend({
   status: z.literal("ready").default("ready"),
   limit: z.coerce.number().int().positive().max(appConfig.pagination.maxLimit).optional(),

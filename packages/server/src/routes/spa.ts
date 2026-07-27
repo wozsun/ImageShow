@@ -12,7 +12,6 @@ import {
   publicStaticCacheControl
 } from "../core/http/headers.ts";
 import { serveStaticWithValidators } from "../core/http/static-conditional.ts";
-import { existingThemeFromHost, isValidatedThemeRequest, rootSiteUrl, themeFromHost } from "../themes/host.ts";
 import {
   createSpaDocumentRepresentation,
   spaDocumentResponse
@@ -40,19 +39,11 @@ export function registerSpaRoutes(app: Hono) {
     return await serveStaticWithValidators(c, faviconStatic) ?? next();
   });
 
-  app.get("/", async (c) => {
-    const hostHeader = c.req.header("host") ?? "";
-    const requestedTheme = themeFromHost(hostHeader);
-    if (!requestedTheme) return spaHandler(c);
-    return isValidatedThemeRequest(c) || await existingThemeFromHost(hostHeader) ? spaHandler(c) : new Response(null, {
-      status: 302,
-      headers: { Location: rootSiteUrl(c), "Cache-Control": noStoreCacheControl }
-    });
-  });
-  app.get("/home", themeAwareSpaHandler);
-  app.get("/gallery", themeAwareSpaHandler);
-  app.get(adminBasePath, themeAwareSpaHandler);
-  app.get(`${adminBasePath}/*`, themeAwareSpaHandler);
+  app.get("/", spaHandler);
+  app.get("/home", spaHandler);
+  app.get("/gallery", spaHandler);
+  app.get(adminBasePath, spaHandler);
+  app.get(`${adminBasePath}/*`, spaHandler);
 }
 
 let spaTemplate: string | null = null;
@@ -100,14 +91,4 @@ async function spaHandler(c: Context) {
     currentSpaRepresentation(),
     c.req.header("if-none-match")
   );
-}
-
-async function themeAwareSpaHandler(c: Context) {
-  const hostHeader = c.req.header("host") ?? "";
-  const requestedTheme = themeFromHost(hostHeader);
-  if (!requestedTheme) return spaHandler(c);
-  return isValidatedThemeRequest(c) || await existingThemeFromHost(hostHeader) ? spaHandler(c) : new Response(null, {
-    status: 302,
-    headers: { Location: rootSiteUrl(c), "Cache-Control": noStoreCacheControl }
-  });
 }

@@ -1,5 +1,5 @@
 import type { Hono } from "hono";
-import { apiSuccess } from "../core/http/responses.ts";
+import { apiErrorResponse, apiSuccess } from "../core/http/responses.ts";
 import { blockCrossSiteFetch } from "../core/http/request-security.ts";
 import {
   noStoreCacheControl,
@@ -7,12 +7,21 @@ import {
   publicListCacheControl,
   publicMetadataCacheControl
 } from "../core/http/headers.ts";
-import { listQuery, parse, uuidInput } from "../core/validation.ts";
+import {
+  galleryStatsQuery,
+  listQuery,
+  parse,
+  uuidInput
+} from "../core/validation.ts";
 import { siteConfigPayload } from "../config/app-settings.ts";
 import { getPublicGalleryFacets } from "../images/read-models/facets.ts";
+import { getPublicGalleryStats } from "../images/read-models/gallery-stats.ts";
 import { getPublicImage, listPublicImages } from "../images/read-models/public-images.ts";
 import { redirectOriginalLink, serveObject, serveOriginalLinkProxy, serveThumb } from "../images/serving.ts";
 import { storedResponseRequest } from "./stored-response-request.ts";
+
+const galleryStatsQueryKeys = ["d", "b", "t", "tag", "a"] as const;
+const galleryStatsQueryKeySet = new Set<string>(galleryStatsQueryKeys);
 
 export function registerPublicRoutes(app: Hono) {
 
@@ -30,6 +39,31 @@ export function registerPublicRoutes(app: Hono) {
   app.get("/api/gallery-facets", blockCrossSiteFetch, async (c) => {
     c.header("Cache-Control", publicMetadataCacheControl);
     return c.json(apiSuccess(await getPublicGalleryFacets()));
+  });
+
+  app.all("/api/gallery-stats", blockCrossSiteFetch, async (c) => {
+    if (c.req.method !== "GET") {
+      return apiErrorResponse({
+        status: 405,
+        message: "Method Not Allowed"
+      });
+    }
+    const searchParams = new URL(c.req.url).searchParams;
+    if ([...searchParams.keys()].some((key) => !galleryStatsQueryKeySet.has(key))) {
+      return apiErrorResponse({
+        status: 403,
+        message: "Forbidden: Unknown query parameter"
+      });
+    }
+    const rawQuery = Object.fromEntries(
+      galleryStatsQueryKeys.flatMap((key) => {
+        const values = searchParams.getAll(key);
+        return values.length ? [[key, values.join(",")]] : [];
+      })
+    );
+    const query = parse(galleryStatsQuery, rawQuery);
+    c.header("Cache-Control", publicMetadataCacheControl);
+    return c.json(apiSuccess(await getPublicGalleryStats(query)));
   });
 
   app.get("/api/images/:id", blockCrossSiteFetch, async (c) => {

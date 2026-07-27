@@ -45,7 +45,6 @@ const appFoundationModuleSuffixes = [
   "/lib/ui/async-action-timing.ts",
   "/lib/ui/error-reporting.ts",
   "/lib/ui/formatters.ts",
-  "/lib/ui/page-scroll-insets.ts",
   "/lib/ui/select-options.ts"
 ] as const;
 
@@ -164,8 +163,7 @@ export default defineConfig({
   server: {
     proxy: {
       "/api": target,
-      "/random": target,
-      "/img-count": target
+      "/random": target
     }
   }
 });

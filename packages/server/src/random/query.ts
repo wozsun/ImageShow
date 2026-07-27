@@ -1,4 +1,3 @@
-import type { RandomCategoryCounts } from "./cache-model.ts";
 import { apiErrorResponse } from "../core/http/responses.ts";
 import { splitSelectors } from "../core/selectors.ts";
 
@@ -67,31 +66,4 @@ export function parseTagSelectors(query: URLSearchParams) {
 export function parseAuthorSelectors(query: URLSearchParams) {
   const { include, exclude } = splitSelectors(query.getAll("a"));
   return mixedSelectorsError("author", include, exclude) ?? { include, exclude };
-}
-
-export function buildRandomImageCountData(categoryCounts: RandomCategoryCounts) {
-  const groupTotals: Record<string, number> = {};
-  const themeDetails: Record<string, Record<string, number>> = {};
-  let totalImages = 0;
-  for (const device of Object.keys(categoryCounts).sort()) {
-    const deviceEntry = categoryCounts[device];
-    if (!deviceEntry || typeof deviceEntry !== "object") continue;
-    for (const brightness of Object.keys(deviceEntry).sort()) {
-      const brightnessEntry = deviceEntry[brightness];
-      if (!brightnessEntry || typeof brightnessEntry !== "object") continue;
-      const groupKey = `${device}-${brightness}`;
-      let groupTotal = 0;
-      for (const theme of Object.keys(brightnessEntry).sort()) {
-        const count = Number(brightnessEntry[theme] ?? 0);
-        if (!Number.isFinite(count) || count <= 0) continue;
-        groupTotal += count;
-        totalImages += count;
-        themeDetails[theme] ??= { total: 0 };
-        themeDetails[theme].total += count;
-        themeDetails[theme][groupKey] = count;
-      }
-      groupTotals[groupKey] = groupTotal;
-    }
-  }
-  return { totalImages, groupTotals, themeDetails };
 }

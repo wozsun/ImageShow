@@ -26,7 +26,9 @@ function useGalleryToolbarVisibility(
   lockedOpen: boolean
 ) {
   const [visible, setVisible] = useState(true);
-  const scrollAnchorRef = useRef(0);
+  const previousScrollTopRef = useRef(0);
+  const upwardDistanceRef = useRef(0);
+  const downwardDistanceRef = useRef(0);
   const toolbarHeightRef = useRef(0);
 
   useEffect(() => {
@@ -39,7 +41,7 @@ function useGalleryToolbarVisibility(
     observer.observe(toolbar);
     updateToolbarHeight();
 
-    scrollAnchorRef.current = getPageScrollY();
+    previousScrollTopRef.current = getPageScrollY();
     if (lockedOpen) {
       setVisible(true);
       return () => observer.disconnect();
@@ -52,25 +54,46 @@ function useGalleryToolbarVisibility(
       // 改变工具栏状态，否则关闭详情恢复原位置时会看到工具栏闪烁。
       if (isPageScrollLocked()) return;
       const scrollTop = Math.max(0, getPageScrollY());
+      const scrollStep = scrollTop - previousScrollTopRef.current;
+      previousScrollTopRef.current = scrollTop;
+      if (scrollStep < 0) {
+        upwardDistanceRef.current += -scrollStep;
+        downwardDistanceRef.current = 0;
+      } else if (scrollStep > 0) {
+        downwardDistanceRef.current += scrollStep;
+        upwardDistanceRef.current = 0;
+      }
       // 下拉菜单通过 Portal 渲染在 body；菜单展开时保持其触发工具栏可见，
       // 避免触发器被收起而浮层仍停留在页面上。
       if (toolbar.querySelector('[aria-expanded="true"]')) {
-        scrollAnchorRef.current = scrollTop;
+        upwardDistanceRef.current = 0;
+        downwardDistanceRef.current = 0;
         setVisible(true);
         return;
       }
       if (scrollTop <= toolbarScrollDirectionThreshold) {
-        scrollAnchorRef.current = scrollTop;
+        upwardDistanceRef.current = 0;
+        downwardDistanceRef.current = 0;
         setVisible(true);
         return;
       }
-      const delta = scrollTop - scrollAnchorRef.current;
-      if (Math.abs(delta) < toolbarScrollDirectionThreshold) return;
-      scrollAnchorRef.current = scrollTop;
-      if (delta < 0) {
+      if (upwardDistanceRef.current >= toolbarScrollDirectionThreshold) {
+        const header = document.querySelector<HTMLElement>(".topbar");
+        if (
+          toolbar.classList.contains("is-scroll-hidden")
+          && header
+          && header.getBoundingClientRect().bottom < header.offsetHeight - 0.5
+        ) {
+          return;
+        }
+        upwardDistanceRef.current = 0;
+        downwardDistanceRef.current = 0;
         setVisible(true);
         return;
       }
+      if (downwardDistanceRef.current < toolbarScrollDirectionThreshold) return;
+      upwardDistanceRef.current = 0;
+      downwardDistanceRef.current = 0;
       // 工具栏仍占据文档流高度。等页面至少滚过同等距离再隐藏，避免其原始
       // 占位来不及滚出视口而暴露成一整块空白。
       if (scrollTop < toolbarHeightRef.current) return;

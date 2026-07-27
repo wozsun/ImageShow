@@ -7,7 +7,6 @@ import {
   type RefObject
 } from "react";
 import { isPageScrollLocked } from "../../hooks/usePageScrollLock.js";
-import { getPageTopInsets, subscribePageTopInsets } from "../../lib/ui/page-scroll-insets.js";
 
 type Metrics = {
   visible: boolean;
@@ -98,27 +97,22 @@ function OverlayScrollbarHandle({
   const metricsRef = useRef(metrics);
   metricsRef.current = metrics;
 
+  const scheduleHide = () => {
+    window.clearTimeout(hideTimer.current);
+    hideTimer.current = window.setTimeout(() => {
+      if (!draggingRef.current) setActive(false);
+    }, HIDE_DELAY);
+  };
+
   useEffect(() => {
     const el = targetRef?.current ?? null;
     const windowMode = !targetRef;
-    const observedPageInsets = new Set<HTMLElement>();
     let observer: ResizeObserver | null = null;
 
     if (targetRef && !el) return;
     if (el) el.classList.add("overlay-scroll-host");
 
     const isLocked = () => windowMode && isPageScrollLocked();
-    const pageTopInset = () => {
-      if (!windowMode) return 0;
-      let inset = 0;
-      for (const element of observedPageInsets) {
-        if (!element.isConnected) continue;
-        const rect = element.getBoundingClientRect();
-        // 只合并从视口顶部连续覆盖的吸顶区域，避免误把页面下方同名组件计入轨道边界。
-        if (rect.bottom > 0 && rect.top <= inset + 1) inset = Math.max(inset, rect.bottom);
-      }
-      return Math.min(window.innerHeight, Math.max(0, inset));
-    };
     const read = () => {
       if (el) {
         const rect = el.getBoundingClientRect();
@@ -128,13 +122,15 @@ function OverlayScrollbarHandle({
         // 扣除固定头部后，总高度与视口高度仍保留相同的最大滚动距离。
         const total = Math.max(viewport, el.scrollHeight - insetHeight);
         const edgeRight = pageEdge ? window.innerWidth : rect.right;
+        const hitTop = rect.top + insetHeight;
         return {
           viewport,
           total,
           scroll: el.scrollTop,
           offsetTop: containerRect
             ? rect.top - containerRect.top + insetHeight
-            : rect.top + insetHeight,
+            : hitTop,
+          hitTop,
           right: containerRect
             ? Math.max(0, containerRect.right - rect.right)
             : pageEdge
@@ -143,14 +139,13 @@ function OverlayScrollbarHandle({
           edgeRight,
         };
       }
-      const insetHeight = pageTopInset();
-      const viewport = Math.max(0, window.innerHeight - insetHeight);
+      const viewport = window.innerHeight;
       return {
         viewport,
-        // 同时扣除轨道顶部边界，使 total - viewport 仍等于页面真实最大滚动距离。
-        total: Math.max(viewport, document.documentElement.scrollHeight - insetHeight),
+        total: Math.max(viewport, document.documentElement.scrollHeight),
         scroll: window.scrollY,
-        offsetTop: insetHeight,
+        offsetTop: 0,
+        hitTop: 0,
         right: 0,
         edgeRight: window.innerWidth,
       };
@@ -180,8 +175,7 @@ function OverlayScrollbarHandle({
 
     const reveal = () => {
       setActive(true);
-      window.clearTimeout(hideTimer.current);
-      hideTimer.current = window.setTimeout(() => { if (!draggingRef.current) setActive(false); }, HIDE_DELAY);
+      scheduleHide();
     };
 
     const onScroll = () => { scheduleRecompute(); reveal(); };
@@ -192,10 +186,10 @@ function OverlayScrollbarHandle({
         const distanceFromPageEdge = window.innerWidth - event.clientX;
         if (distanceFromPageEdge < 0 || distanceFromPageEdge > EDGE_ZONE) return;
       }
-      const { offsetTop, viewport, edgeRight } = read();
+      const { hitTop, viewport, edgeRight } = read();
       const near = edgeRight - event.clientX;
       // 鼠标靠近目标滚动区域右边缘时才显示，避免浮层长期遮挡内容。
-      if (near >= 0 && near <= EDGE_ZONE && event.clientY >= offsetTop && event.clientY <= offsetTop + viewport) { scheduleRecompute(); reveal(); }
+      if (near >= 0 && near <= EDGE_ZONE && event.clientY >= hitTop && event.clientY <= hitTop + viewport) { scheduleRecompute(); reveal(); }
     };
 
     const scrollTarget: EventTarget = el ?? window;
@@ -209,27 +203,6 @@ function OverlayScrollbarHandle({
     observer.observe(el ?? document.body);
     if (containerRef?.current) observer.observe(containerRef.current);
     if (topInsetRef?.current) observer.observe(topInsetRef.current);
-    const syncObservedPageInsets = () => {
-      const registeredInsets = getPageTopInsets();
-      for (const element of observedPageInsets) {
-        if (registeredInsets.has(element)) continue;
-        observedPageInsets.delete(element);
-        observer?.unobserve(element);
-      }
-      for (const element of registeredInsets) {
-        if (observedPageInsets.has(element)) continue;
-        observedPageInsets.add(element);
-        observer?.observe(element);
-      }
-    };
-    const onPageTopInsetsChanged = () => {
-      syncObservedPageInsets();
-      scheduleRecompute();
-    };
-    const unsubscribePageTopInsets = windowMode
-      ? subscribePageTopInsets(onPageTopInsetsChanged)
-      : null;
-    if (windowMode) syncObservedPageInsets();
     // 页面锁的权威状态由 html.modal-open 表达。只观察根元素 class，避免恢复
     // 对整个页面子树的监听，同时确保锁定开始和结束时立即更新滚动条。
     const pageLockObserver = windowMode ? new MutationObserver(scheduleRecompute) : null;
@@ -244,7 +217,6 @@ function OverlayScrollbarHandle({
       window.removeEventListener("resize", onResize);
       window.removeEventListener("pointermove", onPointerMove);
       observer?.disconnect();
-      unsubscribePageTopInsets?.();
       pageLockObserver?.disconnect();
       if (frame !== undefined) window.cancelAnimationFrame(frame);
       window.clearTimeout(hideTimer.current);
@@ -265,6 +237,7 @@ function OverlayScrollbarHandle({
 
     handleEl.setPointerCapture(event.pointerId);
     draggingRef.current = true;
+    window.clearTimeout(hideTimer.current);
     setDragging(true);
     setActive(true);
     const onMove = (moveEvent: PointerEvent) => {
@@ -280,6 +253,7 @@ function OverlayScrollbarHandle({
       handleEl.removeEventListener("pointermove", onMove);
       handleEl.removeEventListener("pointerup", onUp);
       handleEl.removeEventListener("pointercancel", onUp);
+      scheduleHide();
     };
     handleEl.addEventListener("pointermove", onMove);
     handleEl.addEventListener("pointerup", onUp);

@@ -10,5 +10,5 @@ export function ThemeInput({ themes, ...rest }: {
   ariaLabel?: string;
   className?: string;
 }) {
-  return <SlugComboInput options={themes} noun="主题" checkReserved {...rest} />;
+  return <SlugComboInput options={themes} noun="主题" {...rest} />;
 }

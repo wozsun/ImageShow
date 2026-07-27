@@ -17,7 +17,6 @@ import {
   enqueuePreparedImageSourceCleanup,
   prepareVerifiedImageRelocation
 } from "../storage/image-relocation.ts";
-import { isReservedSubdomain } from "../themes/host.ts";
 import { ensureThemeWithMutationLockHeld } from "../themes/mutations.ts";
 import { ensureAuthorWithMutationLockHeld } from "../authors/mutations.ts";
 import {
@@ -141,15 +140,6 @@ export async function updateImageMetadata(
   if (!current) throw new ApiError(404, "not_found", "Image not found");
 
   const parsed = parse(metadataUpdateInput, body);
-  if (parsed.theme && isReservedSubdomain(parsed.theme)) {
-    throw new ApiError(
-      400,
-      "theme_reserved",
-      "Theme conflicts with a reserved subdomain prefix",
-      { theme: parsed.theme }
-    );
-  }
-
   const touchAuthor = parsed.author !== undefined;
   const authorValue = parsed.author ? parsed.author : null;
   const classificationRequested = parsed.device !== undefined

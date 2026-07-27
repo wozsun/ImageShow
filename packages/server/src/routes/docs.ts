@@ -11,7 +11,7 @@ import {
   publicDocsCacheControl
 } from "../core/http/headers.ts";
 import { serveStaticWithValidators } from "../core/http/static-conditional.ts";
-import { specialHost } from "../themes/host.ts";
+import { specialHost } from "../config/site-host.ts";
 
 const docsDir = join(dirname(fileURLToPath(import.meta.url)), "../docs");
 

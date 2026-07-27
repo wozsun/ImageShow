@@ -22,14 +22,18 @@
     "root_redirect": "home",
     // 公共首页配置。
     "home": {
-      // 是否启用公共首页 /home；关闭后首页入口会指向画廊。
+      // 是否启用公共首页 /home；关闭后首页入口会指向画廊。仅通过本文件、
+      // 高级配置或首次启动环境变量维护，不进入普通设置页。
       "enabled": true,
+      // 首页固定全屏背景图；可使用站内绝对路径或 HTTPS 图片地址，留空时使用
+      // 站点随机图 API（/random?m=redirect）。
+      "background": "",
+      // 首页 Banner 主标题上方的短标识。
+      "banner_label": "ImageShow · A FAN-MADE PHOTO HANDBOOK",
+      // 首页 Banner 主标题；字符串中的 \n 会显示为换行。
+      "banner_title": "我们一起，\n收藏这些瞬间。",
       // 站点描述；用于首页 banner 下方说明文案和 HTML description。
-      "tagline": "个人图片管理、画廊展示和随机图片 API。",
-      // 首页 hero 背景图；仅支持站内绝对路径或 HTTPS，留空时使用站点自身随机图。
-      "hero_background": "",
-      // 首页随机预览图切换延迟，单位毫秒，范围 0-10000。
-      "preview_delay_ms": 1000
+      "tagline": "个人图片管理、画廊展示和随机图片 API。"
     },
     // 公共画廊配置。
     "gallery": {
@@ -46,12 +50,13 @@
     "static_subdomain": "static",
     // 文档站子域名前缀，对应 docs.<主域名>。
     "docs_subdomain": "docs",
-    // 是否启用文档站子域；关闭后 docs.<主域名> 返回 404，前缀仍保留且主题不可占用。
+    // 是否启用文档站子域；关闭后 docs.<主域名> 返回 404，前缀仍保留。
+    // 仅通过本文件、高级配置或首次启动环境变量维护，不进入普通设置页。
     "docs_enabled": true,
     // 外部原图安全代理子域名前缀，对应 link.<主域名>。
     "link_subdomain": "link",
     // 是否提供 robots.txt；关闭时 /robots.txt 对所有主机返回 404。
-    // 开启后主站仅放行首页和文档站，其余资源域与主题子域默认禁抓。
+    // 开启后主站仅放行首页和文档站，其余资源域默认禁抓。
     "robots_enabled": false
   },
 

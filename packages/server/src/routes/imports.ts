@@ -22,7 +22,6 @@ import {
   createImportSession,
   previewImportSession
 } from "../images/imports/session.ts";
-import { isReservedSubdomain } from "../themes/host.ts";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { JsonlManifestError, parseJsonlManifest } from "../images/imports/jsonl.ts";
 import { createWeiboImportBatchManifest } from "../images/imports/weibo.ts";
@@ -145,7 +144,6 @@ export function registerImportRoutes(app: Hono) {
   app.post(`${adminApiBasePath}/imports/:id/commit`, async (c) => {
     const id = parse(uuidInput, c.req.param("id"));
     const input = parse(importCommitInput, await c.req.json().catch(() => ({})));
-    if (isReservedSubdomain(input.theme)) throw new ApiError(400, "theme_reserved", "Theme conflicts with a reserved subdomain prefix", { theme: input.theme });
     return c.json(apiSuccess(await commitImportSession(id, input, c.req.raw.signal)));
   });
 

@@ -36,7 +36,7 @@ function publicCacheableRequest(path: string, method: string) {
   const pathname = new URL(path, "https://imageshow.invalid").pathname;
   return pathname === "/api/site-config"
     || pathname === "/api/gallery-facets"
-    || pathname === "/img-count"
+    || pathname === "/api/gallery-stats"
     || /^\/api\/images(?:\/[^/]+)?$/.test(pathname);
 }
 

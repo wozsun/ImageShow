@@ -76,9 +76,10 @@ export function runtimeConfigFromEnvironment(): RuntimeConfig {
       root_redirect: environmentValue("SITE_ROOT_REDIRECT") as RuntimeConfig["site"]["root_redirect"] | undefined,
       home: {
         enabled: environmentBoolean("SITE_HOME_ENABLED"),
-        tagline: environmentValue("SITE_HOME_TAGLINE"),
-        hero_background: environmentValue("SITE_HOME_HERO_BACKGROUND"),
-        preview_delay_ms: environmentNumber("SITE_HOME_PREVIEW_DELAY_MS")
+        background: environmentValue("SITE_HOME_BACKGROUND"),
+        banner_label: environmentValue("SITE_HOME_BANNER_LABEL"),
+        banner_title: environmentValue("SITE_HOME_BANNER_TITLE"),
+        tagline: environmentValue("SITE_HOME_TAGLINE")
       },
       gallery: {
         default_limit: environmentNumber("SITE_GALLERY_DEFAULT_LIMIT"),

@@ -2,7 +2,7 @@ import type { Context } from "hono";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { apiErrorResponse } from "../core/http/responses.ts";
 import { robotsCacheControl } from "../core/http/headers.ts";
-import { specialHost, themeFromHost } from "../themes/host.ts";
+import { specialHost } from "../config/site-host.ts";
 
 export function serveRobotsTxt(context: Context) {
   if (!getRuntimeConfig().site.robots_enabled) {
@@ -14,7 +14,7 @@ export function serveRobotsTxt(context: Context) {
   if (special === "docs") {
     return robotsResponse(context, "User-agent: *\nAllow: /\n");
   }
-  if (special || themeFromHost(host)) {
+  if (special) {
     return robotsResponse(context, "User-agent: *\nDisallow: /\n");
   }
 

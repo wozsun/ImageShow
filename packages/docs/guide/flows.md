@@ -322,11 +322,39 @@ GET /random?d=&b=&t=&tag=&a=&m=
 ## 画廊浏览
 
 ```text
+GET /gallery?d=&b=&t=&tag=&a=
 GET /api/images?d=&b=&t=&tag=&a=&cursor=&limit=&shuffle=
 GET /api/images/:id
+GET /api/gallery-stats
 ```
 
-画廊筛选维度由 `/api/gallery-facets` 单独返回；图片列表按 `image_time DESC, id DESC` 使用 `/api/images` 游标分页与 Redis 缓存，响应只包含卡片数组 `items` 和继续分页所需的 `next_cursor`。卡片字段覆盖详情首帧展示所需的 `id`、缩略图 URL、标题、标签、主题、作者、设备、尺寸、图片时间和 `diff_original` 原图按钮标记。详情弹窗仍请求 `/api/images/:id`，但只补充 `id`、展示图 URL、描述和来源，不重复返回列表已有字段，也不返回对象键、存储后端、MD5、扩展 JSON 等后台 / 内部字段。浏览器存在登录 hint 时，公开详情会直接请求 `/api/admin/images/:id/admin-info` 获取 `md5`、`created_at`、`updated_at` 与后端算好的 `storage_label`，用于补充 UUID、MD5、存储后端、导入时间和更新时间；图片时间继续复用列表项已有的 `image_time`。若该轻量接口返回 401，则清除 hint 并保持普通访客展示。列表、详情、facets、后台概览、MD5 与对象 lookup 共用一个图片缓存 revision；读请求先捕获 revision，回源后只有 revision 仍相同才写入。图片写操作先推进 revision，Redis 无法确认时本实例保持冷读，避免旧查询在失效之后回填成新缓存。原图直连探测另按原图 URL 和浏览器家族使用短 TTL，失败时回退到 link 子域代理。`shuffle=1` 只在出口打乱当前批次，不影响游标和共享缓存。Redis 缓存 miss 时，同进程内会合并相同 key 的并发查询，避免冷启动或失效瞬间重复打 PostgreSQL。
+首页固定使用 `/random?m=redirect` 作为全屏背景，并读取 `/api/gallery-stats`
+完整展示设备、明暗、主题、标签和作者候选项及图片数。五种属性在首页只更新本地
+选择；常驻的第二导航栏汇总当前选择，并以 `/gallery` 查询参数进入画廊。
+
+画廊筛选维度由 `/api/gallery-facets` 单独返回；`/api/gallery-stats` 在同一个
+PostgreSQL repeatable-read 只读事务中返回 ready 图片总量、设备与明暗轴、四种
+组合以及全部主题、标签和作者的计数。词表中的零图片项仍会返回，标签使用不同图片
+ID 计数，作者同时保留公开链接；该接口不依赖 Redis。
+
+`/gallery` 的查询参数是页面筛选状态的唯一来源；直达、刷新、前进后退及首页跳转
+都还原同一组控件。顶部“随机图片API”地址由同组属性生成，复制按钮位于链接框内部，
+不再提供“打开”按钮。图片列表按 `image_time DESC, id DESC` 使用 `/api/images`
+游标分页与 Redis 缓存，响应只包含卡片数组 `items` 和继续分页所需的
+`next_cursor`。卡片字段覆盖详情首帧展示所需的 `id`、缩略图 URL、标题、标签、
+主题、作者、设备、尺寸、图片时间和 `diff_original` 原图按钮标记。详情弹窗仍请求
+`/api/images/:id`，但只补充 `id`、展示图 URL、描述和来源，不重复返回列表已有字段，
+也不返回对象键、存储后端、MD5、扩展 JSON 等后台 / 内部字段。浏览器存在登录 hint
+时，公开详情会直接请求 `/api/admin/images/:id/admin-info` 获取 `md5`、
+`created_at`、`updated_at` 与后端算好的 `storage_label`，用于补充 UUID、MD5、
+存储后端、导入时间和更新时间；图片时间继续复用列表项已有的 `image_time`。若该
+轻量接口返回 401，则清除 hint 并保持普通访客展示。列表、详情、facets、后台概览、
+MD5 和对象 lookup 共用一个图片缓存 revision；读请求先捕获 revision，回源后只有
+revision 仍相同才写入。图片写操作先推进 revision，Redis 无法确认时本实例保持冷读，
+避免旧查询在失效之后回填成新缓存。原图直连探测另按原图 URL 和浏览器家族使用短
+TTL，失败时回退到 link 子域代理。`shuffle=1` 只在出口打乱当前批次，不影响游标和
+共享缓存。Redis 缓存 miss 时，同进程内会合并相同 key 的并发查询，避免冷启动或
+失效瞬间重复打 PostgreSQL。
 
 画廊筛选在桌面保持常驻，`760px` 及以下改为浮层；浮层关闭的状态变更当帧会添加
 `inert` 与 `aria-hidden`。触发器再次关闭时焦点回到触发器；浮层外的指针、点击和
@@ -343,6 +371,10 @@ Portal 与父浮层同步关闭，跨越桌面 /
 
 ## 后台管理
 
+- 图片列表“导入图片”右侧的小箭头按钮是独立的更多来源入口：鼠标悬浮临时展开，
+  从按钮移入菜单保持展开，移开后关闭；点击则锁定菜单，直到再次点击、选择、
+  `Escape` 或外部点击。左侧主按钮的悬浮不触发菜单。菜单只使用垂直下落 / 上浮
+  与淡入动效，不做横向展开。
 - 后台概览的「最近上传」只返回共享管理端详情实际消费的图片投影；标签与元数据由
   同一条 PostgreSQL 查询读取，响应按投影版本缓存，不返回对象键、原图配置、图片
   体积或列表状态等详情未使用字段。点击缩略图在当前页打开详情弹窗，重复打开复用
@@ -540,7 +572,7 @@ lookup 使用 `HSETEX` 在单条命令中原子写入一个或多个字段值及
 HTTP 缓存按 CDN 友好但不泄露私有数据分层：
 
 - `/assets/*` 的 Vite 构建产物和稳定的 `/media/*`、`/thumbs/*` 图片对象使用一年 `immutable`；`/assets/brand/*`、`/favicon.ico` 不是 hash 路径，只给短浏览器缓存和较长 CDN 缓存。构建会为可压缩静态文本生成 Brotli / gzip 版本，服务端按 `Accept-Encoding` 选择并附带 `Vary`，同时支持 ETag / Last-Modified 条件请求。前端分块遵循 `公开基础层 ⊂ 图片管理员层 ⊂ 超级管理员层`：公开入口不加载后台基础块，图片管理员入口不加载仅超级管理员页面的实现；纯通用机制和跨后台页面的小控件分别合并为全站基础块与后台基础块，路由专有实现仍按实际入口集合精确拆分。后台页面专属样式只在首次进入对应页面时加载，公开图片详情中的管理信息只在后台详情或已有管理员会话提示时加载，批量迁移存储对话框也只为拥有权限且表达操作意图的超级管理员预取。同一会话复用已解析模块，完整刷新则复用带 hash 的 immutable 资源。部署后旧会话若引用已失效的 hash 资源，路由错误边界会保留外层界面并提供整页重载。静态出口与图片字节出口共用单段 Range 语义，包括后缀范围、不可满足范围的 416 以及 `If-Range`；静态 206 的 ETag 使用完整表示长度，因此不同 Range 与完整响应共用同一验证器。`If-None-Match` 实体标签列表按 quoted opaque-tag 解析，标签内逗号不会被误拆。存储后端的公开 URL 可能被管理员修改，因此指向该 URL 的 302 只短期缓存；缩略图缺失时临时回退原图也不使用 immutable。
-- `/api/images`、`/api/images/:id`、`/api/site-config`、`/api/gallery-facets` 与 `/img-count` 是公共动态数据：浏览器不持有，CDN 的新鲜、重验证和错误兜底窗口均不超过 30 秒。SPA HTML 使用由完整文档内容生成的 ETag 和 `max-age=0` 重验证，匹配 `If-None-Match` 时返回 304；文档站 HTML 保持独立短缓存策略，不与动态 API 共用时长。
+- `/api/images`、`/api/images/:id`、`/api/site-config`、`/api/gallery-facets` 与 `/api/gallery-stats` 是公共动态数据：浏览器不持有，CDN 的新鲜、重验证和错误兜底窗口均不超过 30 秒。SPA HTML 使用由完整文档内容生成的 ETag 和 `max-age=0` 重验证，匹配 `If-None-Match` 时返回 304；文档站 HTML 保持独立短缓存策略，不与动态 API 共用时长。
 - `/random` 和 `random.<域名>` 永远 `no-store`，避免 CDN 把随机图固定成同一张；每次请求都会重新抽图，因此 proxy 响应不声明 `Accept-Ranges`。
 - `/api/admin/*`、登录 / ALTCHA 挑战 / 上传暂存预览 / SSE、后台图片字节、健康检查和错误响应使用 `no-store` 或 `private, no-store`，不应被 CDN 缓存。
 - `link.<域名>/original` 公共代理成功响应优先继承源站 `Cache-Control` / `Expires`；源站未声明时使用站内 CDN fallback：浏览器缓存 1 天、共享缓存 1 年，并允许 stale 回源兜底。后台原图代理仍为 `private, no-store`。

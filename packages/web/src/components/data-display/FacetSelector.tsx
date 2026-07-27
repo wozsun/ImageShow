@@ -17,13 +17,14 @@ function parseValue(value: string) {
   };
 }
 
-export function FacetSelector({ options, value, onChange, noun, disabled = false, ariaLabel }: {
+export function FacetSelector({ options, value, onChange, noun, disabled = false, ariaLabel, menuClassName }: {
   options: FacetOption[];
   value: string;
   onChange: (value: string) => void;
   noun: string;
   disabled?: boolean;
   ariaLabel?: string;
+  menuClassName?: string;
 }) {
   const resolvedAriaLabel = ariaLabel ?? noun;
   const parsed = parseValue(value);
@@ -59,7 +60,12 @@ export function FacetSelector({ options, value, onChange, noun, disabled = false
   const menu = open ? (
     <AnchoredPopup
       popupRef={menuRef}
-      className={`facet-select-menu ${opensUp ? "opens-up" : ""} ${closing ? "is-closing" : ""}`}
+      className={[
+        "facet-select-menu",
+        menuClassName,
+        opensUp ? "opens-up" : "",
+        closing ? "is-closing" : ""
+      ].filter(Boolean).join(" ")}
       role="dialog"
       aria-label={`${resolvedAriaLabel}筛选`}
       aria-hidden={closing}

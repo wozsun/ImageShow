@@ -1,4 +1,4 @@
-import { staticLocalBaseUrl } from "../themes/host.ts";
+import { staticLocalBaseUrl } from "../config/site-host.ts";
 import { resolveStorageAccess } from "./backend-registry.ts";
 import { thumbnailObjectKey } from "./image-paths.ts";
 import type { ReadablePrefix } from "./object-keys.ts";

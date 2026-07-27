@@ -15,7 +15,8 @@ export function SelectMenu({
   onOpenChange,
   disabled = false,
   ariaLabel,
-  className
+  className,
+  menuClassName
 }: {
   value: string;
   options: readonly SelectOption[];
@@ -24,6 +25,7 @@ export function SelectMenu({
   disabled?: boolean;
   ariaLabel?: string;
   className?: string;
+  menuClassName?: string;
 }) {
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -75,7 +77,12 @@ export function SelectMenu({
       <AnchoredPopup
         popupRef={menuRef}
         id={menuId}
-        className={`select-menu ${opensUp ? "opens-up" : ""} ${closing ? "is-closing" : ""}`}
+        className={[
+          "select-menu",
+          menuClassName,
+          opensUp ? "opens-up" : "",
+          closing ? "is-closing" : ""
+        ].filter(Boolean).join(" ")}
         role="listbox"
         aria-label={ariaLabel}
         aria-hidden={closing}

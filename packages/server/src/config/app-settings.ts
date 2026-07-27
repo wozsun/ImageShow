@@ -1,10 +1,12 @@
 import { z } from "zod";
-import type { AdminSettings, RuntimeConfig } from "@imageshow/shared";
+import type { AdminSettings } from "@imageshow/shared";
 import { ApiError } from "../core/api-error.ts";
 import {
   galleryLimit,
   galleryOrder,
-  homeHeroBackground,
+  homeBackground,
+  homeBannerLabel,
+  homeBannerTitle,
   homeTagline,
   imagePageSize,
   linkImageConcurrency,
@@ -15,7 +17,6 @@ import {
   normalizeMinQuality,
   normalizeQuality,
   normalizeQualityStep,
-  previewDelayMs,
   randomMethod,
   recentUploads,
   rootRedirect,
@@ -35,10 +36,10 @@ import {
 import type { RuntimeConfigPatch } from "./runtime-config.ts";
 
 const siteHomeConfigSchema = z.strictObject({
-  enabled: z.boolean().optional(),
-  tagline: homeTagline.optional(),
-  hero_background: homeHeroBackground.optional(),
-  preview_delay_ms: previewDelayMs.optional()
+  background: homeBackground.optional(),
+  banner_label: homeBannerLabel.optional(),
+  banner_title: homeBannerTitle.optional(),
+  tagline: homeTagline.optional()
 });
 
 const appSettingsSchema = z.strictObject({
@@ -47,7 +48,6 @@ const appSettingsSchema = z.strictObject({
     domain: siteDomain.optional(),
     icon_url: siteIconUrl.optional(),
     root_redirect: rootRedirect.optional(),
-    docs_enabled: z.boolean().optional(),
     home: siteHomeConfigSchema.optional(),
     gallery: z.strictObject({
       default_limit: galleryLimit.optional(),
@@ -115,7 +115,15 @@ export function getThumbnailSettings() {
 
 export function getSettingsForAdmin(): AdminSettings {
   const settings = getRuntimeConfig();
-  const { name, domain, icon_url, root_redirect, home, gallery, random_default_method, docs_enabled } = settings.site;
+  const {
+    name,
+    domain,
+    icon_url,
+    root_redirect,
+    home,
+    gallery,
+    random_default_method
+  } = settings.site;
   const { max_items, max_file_size_mb, list_page_size, concurrency: uploadConcurrencyValue } = settings.upload;
   const {
     fill_original_url,
@@ -127,7 +135,20 @@ export function getSettingsForAdmin(): AdminSettings {
   const { commit_concurrency } = settings.import;
   const { login_background, image_page_size, recent_uploads, show_unset_theme_card } = settings.admin;
   return {
-    site: { name, domain, icon_url, root_redirect, home, gallery, random_default_method, docs_enabled },
+    site: {
+      name,
+      domain,
+      icon_url,
+      root_redirect,
+      home: {
+        background: home.background,
+        banner_label: home.banner_label,
+        banner_title: home.banner_title,
+        tagline: home.tagline
+      },
+      gallery,
+      random_default_method
+    },
     upload: {
       max_items,
       max_file_size_mb,
@@ -149,16 +170,8 @@ export function getSettingsForAdmin(): AdminSettings {
   };
 }
 
-function randomApiBackground(domain: string) {
-  return `https://${domain}/random?m=redirect`;
-}
-
 function effectiveLoginBackground(loginBackgroundValue?: string) {
   return loginBackgroundValue?.trim() || "/random?m=redirect";
-}
-
-function effectiveHomeHeroBackground(site: RuntimeConfig["site"]) {
-  return site.home.hero_background?.trim() || randomApiBackground(site.domain);
 }
 
 export function getEffectiveLoginBackground() {
@@ -185,7 +198,7 @@ export function siteConfigPayload() {
       icon_url,
       version,
       root_redirect,
-      home: { ...home, hero_background: effectiveHomeHeroBackground(runtime.site) },
+      home,
       gallery,
       random_default_method,
       docs_enabled

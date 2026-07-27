@@ -2,6 +2,7 @@
 export const queryKeys = {
   siteConfig: ["site-config"] as const,
   galleryFacets: ["gallery-facets"] as const,
+  galleryStats: ["gallery-stats"] as const,
   publicImages: ["public-images"] as const,
   publicImageDetail: ["public-image-detail"] as const,
   adminImageInfo: ["admin-image-info"] as const,

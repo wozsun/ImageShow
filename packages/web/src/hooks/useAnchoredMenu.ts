@@ -68,7 +68,12 @@ export function useAnchoredMenu(options: {
     setMenuNode((current) => current === node ? current : node);
   }, []);
 
-  const { closing, requestClose: animRequestClose, onAnimationEnd } = useAnimatedClose(() => {
+  const {
+    closing,
+    requestClose: animRequestClose,
+    cancelClose,
+    onAnimationEnd
+  } = useAnimatedClose(() => {
     setOpen(false);
     onCloseRef.current?.();
   }, 160);
@@ -224,6 +229,7 @@ export function useAnchoredMenu(options: {
     menuRef,
     openMenu,
     requestClose,
+    cancelClose,
     onAnimationEnd
   };
 }

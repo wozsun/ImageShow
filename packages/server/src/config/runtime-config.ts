@@ -9,7 +9,9 @@ import {
   galleryOrder,
   globalCommitByteBudgetMb,
   globalCommitConcurrency,
-  homeHeroBackground,
+  homeBackground,
+  homeBannerLabel,
+  homeBannerTitle,
   homeTagline,
   imagePageSize,
   importGlobalConcurrency,
@@ -32,7 +34,6 @@ import {
   normalizeMinQuality,
   normalizeQuality,
   normalizeQualityStep,
-  previewDelayMs,
   randomMethod,
   recentUploads,
   rootRedirect,
@@ -71,9 +72,10 @@ const runtimeConfigSchema = z.strictObject({
     root_redirect: rootRedirect,
     home: z.strictObject({
       enabled: z.boolean(),
-      tagline: homeTagline,
-      hero_background: homeHeroBackground,
-      preview_delay_ms: previewDelayMs
+      background: homeBackground,
+      banner_label: homeBannerLabel,
+      banner_title: homeBannerTitle,
+      tagline: homeTagline
     }),
     gallery: z.strictObject({
       default_limit: galleryLimit,
@@ -207,6 +209,29 @@ function projectKnownConfig(base: unknown, input: unknown): unknown {
   );
 }
 
+function migrateRenamedConfigFields(value: unknown): unknown {
+  if (!isPlainRecord(value)) return value;
+  const site = value.site;
+  if (!isPlainRecord(site) || !isPlainRecord(site.home)) return value;
+  const home = site.home;
+  if (
+    home.background !== undefined
+    || typeof home.hero_background !== "string"
+  ) {
+    return value;
+  }
+  return {
+    ...value,
+    site: {
+      ...site,
+      home: {
+        ...home,
+        background: home.hero_background
+      }
+    }
+  };
+}
+
 function mergeDefined(base: Record<string, unknown>, patch: Record<string, unknown>) {
   const result: Record<string, unknown> = { ...base };
   for (const [key, value] of Object.entries(patch)) {
@@ -229,7 +254,10 @@ export function parseRuntimeConfig(value: unknown): RuntimeConfig {
 }
 
 export function normalizeRuntimeConfig(value: unknown): RuntimeConfig {
-  return runtimeConfigSchema.parse(projectKnownConfig(appConfig.runtimeDefaults, value));
+  return runtimeConfigSchema.parse(projectKnownConfig(
+    appConfig.runtimeDefaults,
+    migrateRenamedConfigFields(value)
+  ));
 }
 
 export function mergeRuntimeConfig(current: RuntimeConfig, patch: RuntimeConfigPatch): RuntimeConfig {

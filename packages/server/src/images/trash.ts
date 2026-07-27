@@ -284,6 +284,25 @@ export async function purgeDeletedImages(ids?: string[]) {
   };
 }
 
+export async function purgeSelectedDeletedImages(ids: string[]) {
+  let requested = 0;
+  let deleted = 0;
+  let failed = 0;
+  let remaining = 0;
+
+  for (let offset = 0; offset < ids.length; offset += appConfig.trashBatchSize) {
+    const result = await purgeDeletedImages(
+      ids.slice(offset, offset + appConfig.trashBatchSize)
+    );
+    requested += result.requested;
+    deleted += result.deleted;
+    failed += result.failed;
+    remaining += result.remaining;
+  }
+
+  return { requested, deleted, failed, remaining };
+}
+
 export async function purgeDeletedImage(id: string) {
   const result = await purgeDeletedImages([id]);
   if (!result.requested) {

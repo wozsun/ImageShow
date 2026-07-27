@@ -343,14 +343,21 @@ export function ImageAdmin() {
                 <button
                   className="danger-button"
                   type="button"
-                  disabled={operationBusy || !items.length}
-                  onClick={() => setConfirmAction({ kind: "empty-trash" })}
+                  disabled={operationBusy || (!selected.length && !items.length)}
+                  onClick={() => setConfirmAction(
+                    selected.length
+                      ? { kind: "purge-selected", ids: [...selected] }
+                      : { kind: "empty-trash" }
+                  )}
                 >
                   <Icon name="delete-bin-7-line" />
                   <StableButtonLabel
-                    idle="清空回收站"
-                    busyText="正在清空"
-                    busy={actionBusy && confirmAction?.kind === "empty-trash"}
+                    idle={selected.length ? "删除已选图" : "清空回收站"}
+                    busyText={confirmAction?.kind === "purge-selected" ? "正在删除" : "正在清空"}
+                    busy={actionBusy && (
+                      confirmAction?.kind === "purge-selected"
+                      || confirmAction?.kind === "empty-trash"
+                    )}
                   />
                 </button>
               )}

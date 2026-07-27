@@ -75,25 +75,6 @@ export const batchCommonBrightnessOptions: readonly SelectOption[] = [
   { value: "dark", label: brightnessOptionLabel("dark") }
 ];
 
-export const randomDeviceSelectOptions: readonly SelectOption[] = [
-  { value: "", label: "自动识别" },
-  { value: "r", label: "强制随机" },
-  { value: "pc", label: deviceOptionLabel("pc") },
-  { value: "mb", label: deviceOptionLabel("mb") }
-];
-
-export const randomBrightnessSelectOptions: readonly SelectOption[] = [
-  { value: "random", label: "随机亮度" },
-  { value: "light", label: "亮色图片" },
-  { value: "dark", label: "暗色图片" }
-];
-
-export const randomModeSelectOptions: readonly SelectOption[] = [
-  { value: "", label: "默认模式" },
-  { value: "redirect", label: "302 跳转" },
-  { value: "proxy", label: "代理输出" }
-];
-
 export const galleryOrderSelectOptions: readonly SelectOption[] = [
   { value: "latest", label: "最新优先" },
   { value: "random", label: "随机打乱" }
