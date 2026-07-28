@@ -8,19 +8,10 @@ export {
 
 export const slugFormatHint = "只能包含小写字母、数字、连字符";
 
-export const galleryRenderBatch = 12;
-
-export const eagerThumbnailCount = 12;
-
-const galleryLazyViewportBufferScreens = 1;
-export function galleryLazyRootMargin(viewportHeight: number) {
-  const verticalBuffer = Math.max(
-    1,
-    Math.ceil(viewportHeight * galleryLazyViewportBufferScreens)
-  );
-  return `${verticalBuffer}px 0px`;
-}
-export const galleryViewportResizeSettleMs = 180;
+export const galleryLoadBufferScreens = 1;
+export const galleryResidenceBufferScreens = 2;
+export const galleryVirtualOverscanScreens = 2.5;
+export const galleryMaxMountedTiles = 160;
 export const gallerySentinelRootMargin = "280px 0px";
 
 export function publicRootPath(

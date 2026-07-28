@@ -11,6 +11,7 @@ export type AnchoredMenuSize = {
   minWidth: number;
   maxWidth?: number;
   align?: "start" | "end";
+  gap?: number;
   flipThreshold: number;
   minAvailable: number;
   maxHeight: number;
@@ -42,7 +43,7 @@ export function computeAnchoredPosition(
   size: AnchoredMenuSize,
   naturalMenuHeight = size.maxHeight
 ): AnchoredMenuPosition {
-  const gap = 6;
+  const gap = size.gap ?? 6;
   // DOMRect 的 top/left 可直接用于 fixed 的 top/left；visualViewport 的 offset
   // 只用于建立当前真正可见的边界，不能再次叠加到锚点坐标。这样软键盘平移
   // 视觉视口后，上下可用高度和左右夹取范围都会同步更新。

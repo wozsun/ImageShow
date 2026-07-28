@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { pool } from "../core/db.ts";
 import { ApiError } from "../core/api-error.ts";
+import { logger } from "../core/logger.ts";
 import {
   immutableCacheControl,
   noStoreCacheControl,
@@ -11,7 +12,6 @@ import {
 } from "../core/http/headers.ts";
 import { isExternalImageRejection, safeFetchExternalImage } from "../core/external-image-fetch.ts";
 import { coalesce } from "../core/coalesce.ts";
-import { ifNoneMatchMatches, ifRangeMatches } from "../core/http/validators.ts";
 import { generateStoredThumbnail } from "./processing.ts";
 import { thumbnailObjectKey } from "../storage/image-paths.ts";
 import {
@@ -20,9 +20,7 @@ import {
   type ResolvedReadableObject
 } from "../storage/object-access.ts";
 import { contentType } from "../storage/object-keys.ts";
-import type { OpenedRead } from "../storage/driver.ts";
 import { isStorageObjectNotFound } from "../storage/not-found.ts";
-import { webReadableFromNode } from "../storage/stream-buffer.ts";
 import {
   getImageLookupById,
   getImageLookupByObjectKey,
@@ -37,17 +35,22 @@ import {
 import type { ImageLookupByIdItem } from "./image-cache-schema.ts";
 import { linkBaseUrl } from "../config/site-host.ts";
 import { displayUrlForOriginalComparison, hasDistinctOriginalUrl } from "./original-link.ts";
+import {
+  readablePublicThumbnailUrl,
+  recoverStoredThumbnail,
+  thumbnailFallbackOrNotFound
+} from "./thumbnail-serving-lifecycle.ts";
+import {
+  streamResolvedObject,
+  type StoredResponseRequest
+} from "./stored-object-response.ts";
+
+export type { StoredResponseRequest } from "./stored-object-response.ts";
 
 const proxyTimeoutMs = 12_000;
 const proxyUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 
 type ProxyFallback = () => Response | Promise<Response>;
-export type StoredResponseRequest = {
-  range?: string;
-  ifNoneMatch?: string;
-  ifRange?: string;
-  isHead?: boolean;
-};
 
 function shouldNotRedirectExternalError(error: unknown) {
   return isExternalImageRejection(error);
@@ -169,15 +172,6 @@ async function cachedOriginalSupportsDirectAccess(url: string, userAgent: string
   });
 }
 
-function sameObjectVersion(left: OpenedRead, right: OpenedRead) {
-  if (left.etag || right.etag) return Boolean(left.etag && right.etag && left.etag === right.etag);
-  return Boolean(
-    left.lastModified && right.lastModified &&
-    left.lastModified === right.lastModified &&
-    left.totalSize !== undefined && left.totalSize === right.totalSize
-  );
-}
-
 async function streamStoredObject(
   prefix: "media" | "thumbs",
   key: string,
@@ -194,49 +188,6 @@ async function streamStoredObject(
   );
 }
 
-async function streamResolvedObject(
-  object: ResolvedReadableObject,
-  contentTypeValue: string,
-  cacheControl: string,
-  request: StoredResponseRequest = {}
-) {
-  const validateBeforeRange = Boolean(request.range && (request.ifNoneMatch || request.ifRange));
-  let opened = await object.open(
-    validateBeforeRange ? undefined : request.range
-  );
-  if (ifNoneMatchMatches(request.ifNoneMatch, opened.etag)) {
-    opened.body.destroy();
-    const headers = new Headers({ "Cache-Control": cacheControl, "Accept-Ranges": "bytes" });
-    if (opened.etag) headers.set("ETag", opened.etag);
-    if (opened.lastModified) headers.set("Last-Modified", opened.lastModified);
-    return new Response(null, { status: 304, headers });
-  }
-  const shouldApplyRange = Boolean(request.range && (!request.ifRange || ifRangeMatches(request.ifRange, opened)));
-  if (validateBeforeRange && shouldApplyRange) {
-    const full = opened;
-    full.body.destroy();
-    opened = await object.open(request.range);
-    if (!sameObjectVersion(full, opened)) {
-      opened.body.destroy();
-      opened = await object.open();
-    }
-  }
-  const headers = new Headers({
-    "Content-Type": contentTypeValue,
-    "Cache-Control": cacheControl,
-    "Accept-Ranges": "bytes"
-  });
-  if (opened.etag) headers.set("ETag", opened.etag);
-  if (opened.lastModified) headers.set("Last-Modified", opened.lastModified);
-  if (opened.size !== undefined) headers.set("Content-Length", String(opened.size));
-  if (opened.contentRange) headers.set("Content-Range", opened.contentRange);
-  if (request.isHead) opened.body.destroy();
-  return new Response(request.isHead ? null : webReadableFromNode(opened.body), {
-    status: opened.contentRange ? 206 : 200,
-    headers
-  });
-}
-
 async function streamThumb(key: string, backend: string, cacheControl = immutableCacheControl, request: StoredResponseRequest = {}) {
   return streamStoredObject("thumbs", key, backend, "image/webp", cacheControl, request);
 }
@@ -249,27 +200,57 @@ async function streamThumbEnsuring(
   request: StoredResponseRequest = {},
   resolvedThumb?: ResolvedReadableObject
 ): Promise<Response | null> {
-  try {
-    return resolvedThumb
-      ? await streamResolvedObject(
+  const readThumbnail = () => (
+    resolvedThumb
+      ? streamResolvedObject(
           resolvedThumb,
           "image/webp",
           cacheControl,
           request
         )
-      : await streamThumb(thumbKey, backend, cacheControl, request);
-  } catch (error) {
-    if (!isStorageObjectNotFound(error)) throw error;
-  }
-
-  // 缩略图缺失但原图仍在时即时补建，修复历史数据或迁移中断造成的缩略图空洞。
-  if (await storageObjectExists("media", objectKey, backend)) {
-    await generateStoredThumbnail(objectKey, backend).catch(() => undefined);
-  }
-  return streamThumb(thumbKey, backend, cacheControl, request).catch((error: unknown) => {
-    if (isStorageObjectNotFound(error)) return null;
-    throw error;
+      : streamThumb(thumbKey, backend, cacheControl, request)
+  );
+  return recoverStoredThumbnail({
+    context: { objectKey, thumbKey, backend },
+    readThumbnail,
+    sourceExists: () => storageObjectExists("media", objectKey, backend),
+    rebuild: () => generateStoredThumbnail(objectKey, backend),
+    isNotFound: isStorageObjectNotFound,
+    log: logger
   });
+}
+
+async function readablePublicThumbUrl(
+  object: ResolvedReadableObject,
+  objectKey: string,
+  thumbKey: string,
+  backend: string
+) {
+  return readablePublicThumbnailUrl({
+    publicUrl: object.publicUrl,
+    exists: object.exists,
+    context: { objectKey, thumbKey, backend },
+    log: logger
+  });
+}
+
+async function streamOriginalThumbnailFallback(
+  objectKey: string,
+  ext: string,
+  backend: string,
+  request: StoredResponseRequest
+) {
+  return thumbnailFallbackOrNotFound(
+    () => streamStoredObject(
+      "media",
+      objectKey,
+      backend,
+      contentType(ext),
+      publicProxyFallbackThumbCacheControl,
+      request
+    ),
+    isStorageObjectNotFound
+  );
 }
 
 async function imageLookupById(id: string): Promise<ImageLookupByIdItem | null> {
@@ -338,7 +319,13 @@ export async function serveThumb(key: string, request: StoredResponseRequest = {
   if (cached) {
     const backend = cached.storage_slug;
     const object = await resolveReadableObject("thumbs", key, backend);
-    if (object.publicUrl) return immutableRedirect(object.publicUrl);
+    const publicUrl = await readablePublicThumbUrl(
+      object,
+      cached.object_key,
+      key,
+      backend
+    );
+    if (publicUrl) return immutableRedirect(publicUrl);
 
     const streamed = await streamThumbEnsuring(
       cached.object_key,
@@ -350,7 +337,12 @@ export async function serveThumb(key: string, request: StoredResponseRequest = {
     );
     if (streamed) return streamed;
 
-    return streamStoredObject("media", cached.object_key, backend, contentType(cached.ext), publicProxyFallbackThumbCacheControl, request);
+    return streamOriginalThumbnailFallback(
+      cached.object_key,
+      cached.ext,
+      backend,
+      request
+    );
   }
   const row = (await pool.query("SELECT object_key, ext, storage_slug, status FROM metadata WHERE object_key=$1 OR regexp_replace(object_key, '\\.[^/.]+$', '.webp')=$1 LIMIT 1", [key])).rows[0];
 
@@ -364,7 +356,13 @@ export async function serveThumb(key: string, request: StoredResponseRequest = {
     revision
   );
   const object = await resolveReadableObject("thumbs", thumbKey, backend);
-  if (object.publicUrl) return immutableRedirect(object.publicUrl);
+  const publicUrl = await readablePublicThumbUrl(
+    object,
+    objectKey,
+    thumbKey,
+    backend
+  );
+  if (publicUrl) return immutableRedirect(publicUrl);
   const streamed = await streamThumbEnsuring(
     objectKey,
     thumbKey,
@@ -375,7 +373,12 @@ export async function serveThumb(key: string, request: StoredResponseRequest = {
   );
   if (streamed) return streamed;
 
-  return streamStoredObject("media", objectKey, backend, contentType(ext), publicProxyFallbackThumbCacheControl, request);
+  return streamOriginalThumbnailFallback(
+    objectKey,
+    ext,
+    backend,
+    request
+  );
 }
 
 function immutableRedirect(location: string) {

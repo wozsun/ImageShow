@@ -31,6 +31,7 @@ export const AnchoredMenuDismissSignalContext = createContext(0);
 
 export function useAnchoredMenu(options: {
   triggerRef: RefObject<HTMLElement | null>;
+  getAnchor?: () => HTMLElement | null;
   getSize: () => AnchoredMenuSize;
   initialMaxHeight: number;
   disabled?: boolean;
@@ -58,6 +59,7 @@ export function useAnchoredMenu(options: {
   });
 
   const getSizeRef = useRef(options.getSize); getSizeRef.current = options.getSize;
+  const getAnchorRef = useRef(options.getAnchor); getAnchorRef.current = options.getAnchor;
   const onCloseRef = useRef(options.onClose); onCloseRef.current = options.onClose;
   const focusOnOpenRef = useRef(options.focusOnOpen); focusOnOpenRef.current = options.focusOnOpen;
 
@@ -115,10 +117,10 @@ export function useAnchoredMenu(options: {
   }, [dismissSignal, open, requestClose, triggerRef]);
 
   const updatePosition = useCallback(() => {
-    const trigger = triggerRef.current;
-    if (!trigger) return;
+    const anchor = getAnchorRef.current?.() ?? triggerRef.current;
+    if (!anchor) return;
     setPosition(computeAnchoredPosition(
-      trigger.getBoundingClientRect(),
+      anchor.getBoundingClientRect(),
       getSizeRef.current(),
       naturalMenuHeight(menuNodeRef.current)
     ));
@@ -135,7 +137,17 @@ export function useAnchoredMenu(options: {
   useEffect(() => {
     if (!open) return;
     let positionFrame: number | undefined;
+    let observedAnchor: HTMLElement | null = null;
+    let resizeObserver: ResizeObserver;
+    const syncObservedAnchor = () => {
+      const nextAnchor = getAnchorRef.current?.() ?? triggerRef.current;
+      if (nextAnchor === observedAnchor) return;
+      if (observedAnchor) resizeObserver.unobserve(observedAnchor);
+      observedAnchor = nextAnchor;
+      if (observedAnchor) resizeObserver.observe(observedAnchor);
+    };
     const update = () => {
+      syncObservedAnchor();
       if (positionFrame !== undefined) return;
       positionFrame = window.requestAnimationFrame(() => {
         positionFrame = undefined;
@@ -168,8 +180,8 @@ export function useAnchoredMenu(options: {
 
     // 折叠区、标签 chip 或字体加载改变锚点/菜单尺寸时也重新测量；只在共享层处理，
     // ThemeInput、AuthorInput、TagInput 无需分别补丁。
-    const resizeObserver = new ResizeObserver(update);
-    if (triggerRef.current) resizeObserver.observe(triggerRef.current);
+    resizeObserver = new ResizeObserver(update);
+    syncObservedAnchor();
     if (menuNode) resizeObserver.observe(menuNode);
 
     let onKeyDown: ((event: KeyboardEvent) => void) | undefined;

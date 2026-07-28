@@ -10,6 +10,8 @@ let previousPageRootStyles: Pick<
 let restoringPageScroll = false;
 let restorationFrame: number | undefined;
 
+export const pageScrollRestoredEvent = "imageshow:page-scroll-restored";
+
 function cancelPageScrollRestoration() {
   if (restorationFrame !== undefined) {
     window.cancelAnimationFrame(restorationFrame);
@@ -31,6 +33,7 @@ function restorePageScroll() {
       restorationFrame = undefined;
       restoringPageScroll = false;
       document.documentElement.classList.remove("page-scroll-restoring");
+      window.dispatchEvent(new Event(pageScrollRestoredEvent));
     });
   });
 }

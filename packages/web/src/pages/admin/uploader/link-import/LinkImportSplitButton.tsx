@@ -7,12 +7,14 @@ import { useAnchoredMenu } from "../../../../hooks/useAnchoredMenu.js";
 import type { AnchoredMenuSize } from "../../../../lib/ui/menu-position.js";
 
 const IMPORT_MENU_SIZE: AnchoredMenuSize = {
-  minWidth: 150,
+  minWidth: 0,
   align: "end",
+  gap: 0,
   flipThreshold: 180,
   minAvailable: 96,
   maxHeight: 240
 };
+const DESKTOP_MENU_QUERY = "(min-width: 761px)";
 
 export function LinkImportSplitButton({ onOpenWorkflow, onOpenUrls, onOpenJsonl, onOpenWeibo }: {
   onOpenWorkflow: (opener: HTMLButtonElement) => void;
@@ -20,13 +22,20 @@ export function LinkImportSplitButton({ onOpenWorkflow, onOpenUrls, onOpenJsonl,
   onOpenJsonl: (opener: HTMLButtonElement) => void;
   onOpenWeibo: (opener: HTMLButtonElement) => void;
 }) {
+  const splitRef = useRef<HTMLDivElement | null>(null);
   const menuTriggerRef = useRef<HTMLButtonElement | null>(null);
   const hoverCloseTimerRef = useRef<number | undefined>(undefined);
   const pinnedOpenRef = useRef(false);
   const selectionPendingRef = useRef(false);
   const menu = useAnchoredMenu({
     triggerRef: menuTriggerRef,
-    getSize: () => IMPORT_MENU_SIZE,
+    getAnchor: () => window.matchMedia(DESKTOP_MENU_QUERY).matches
+      ? splitRef.current
+      : menuTriggerRef.current,
+    getSize: () => ({
+      ...IMPORT_MENU_SIZE,
+      minWidth: window.matchMedia(DESKTOP_MENU_QUERY).matches ? 0 : 150
+    }),
     initialMaxHeight: IMPORT_MENU_SIZE.maxHeight,
     closeOnEscape: true,
     animateClose: true,
@@ -60,7 +69,7 @@ export function LinkImportSplitButton({ onOpenWorkflow, onOpenUrls, onOpenJsonl,
     hoverCloseTimerRef.current = window.setTimeout(() => {
       hoverCloseTimerRef.current = undefined;
       if (!pinnedOpenRef.current) menu.requestClose();
-    }, 120);
+    }, 150);
   };
 
   const togglePinnedMenu = () => {
@@ -97,7 +106,7 @@ export function LinkImportSplitButton({ onOpenWorkflow, onOpenUrls, onOpenJsonl,
   };
 
   return (
-    <div className="link-import-split">
+    <div ref={splitRef} className="link-import-split">
       <button className="button secondary upload-trigger link-import-main" type="button" onClick={(event) => onOpenWorkflow(event.currentTarget)}>
         <Icon name="download-cloud-2-line" />导入图片
       </button>
@@ -139,15 +148,17 @@ export function LinkImportSplitButton({ onOpenWorkflow, onOpenUrls, onOpenJsonl,
             if (event.pointerType === "mouse") closeAfterHover();
           }}
         >
-          <MenuItemButton type="button" role="menuitem" onActivate={() => choose(onOpenUrls)}>
-            <Icon name="link" />链接导入
-          </MenuItemButton>
-          <MenuItemButton type="button" role="menuitem" onActivate={() => choose(onOpenJsonl)}>
-            <Icon name="file-list-line" />清单导入
-          </MenuItemButton>
-          <MenuItemButton type="button" role="menuitem" onActivate={() => choose(onOpenWeibo)}>
-            <Icon name="weibo-line" />微博导入
-          </MenuItemButton>
+          <div className="link-import-menu-surface">
+            <MenuItemButton type="button" role="menuitem" onActivate={() => choose(onOpenUrls)}>
+              <Icon name="link" />链接导入
+            </MenuItemButton>
+            <MenuItemButton type="button" role="menuitem" onActivate={() => choose(onOpenJsonl)}>
+              <Icon name="file-list-line" />清单导入
+            </MenuItemButton>
+            <MenuItemButton type="button" role="menuitem" onActivate={() => choose(onOpenWeibo)}>
+              <Icon name="weibo-line" />微博导入
+            </MenuItemButton>
+          </div>
         </AnchoredPopup>
       )}
     </div>

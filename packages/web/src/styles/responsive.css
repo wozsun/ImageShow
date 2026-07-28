@@ -35,7 +35,10 @@
   .overlay-scrollbar-handle { transition: none; }
   .pressable:active { transform: none; }
   .progressive-image-thumb { transition: none; }
-  .progressive-image-full-frame { animation: none; }
+  .progressive-image-full-frame.is-ready {
+    opacity: 1;
+    animation: none;
+  }
   .select-menu,
   .select-menu.is-closing,
   .facet-select-menu,
@@ -134,8 +137,10 @@
   .gallery-filter-panel > .theme-link { order: 4; grid-column: 1 / -1; }
   .theme-link { width: 100%; min-width: 0; flex: 0 0 auto; gap: 4px; }
   .theme-link > span { font-size: 13px; line-height: 18px; }
-  .gallery { padding: 16px; gap: 12px; }
-  .gallery-column { gap: 12px; }
+  .gallery {
+    --gallery-gap: 12px;
+    padding: 16px;
+  }
   .gallery-back-to-top {
     right: max(24px, calc(env(safe-area-inset-right) + 20px));
     bottom: max(24px, calc(env(safe-area-inset-bottom) + 20px));

@@ -26,14 +26,19 @@
   contain: paint;
   background:
     radial-gradient(
-      ellipse 54% 42% at -8% 16%,
-      rgba(108, 104, 122, .26),
-      transparent 72%
+      ellipse 52% 40% at -9% 18%,
+      rgba(106, 103, 124, .24),
+      transparent 73%
     ),
     radial-gradient(
-      ellipse 52% 46% at 108% 62%,
-      rgba(52, 88, 128, .42),
-      transparent 72%
+      ellipse 48% 40% at 106% 29%,
+      rgba(55, 83, 119, .27),
+      transparent 74%
+    ),
+    radial-gradient(
+      ellipse 58% 38% at 68% 108%,
+      rgba(49, 70, 105, .16),
+      transparent 76%
     ),
     linear-gradient(
       135deg,
@@ -50,39 +55,49 @@
 
 .gallery-page::before {
   z-index: -2;
-  opacity: .62;
+  opacity: .68;
   background-image:
     radial-gradient(
-      circle at 14px 18px,
-      rgba(255, 255, 255, .9) 0 .8px,
-      rgba(157, 151, 174, .28) 1px,
-      transparent 1.55px
+      circle at 19px 37px,
+      rgba(255, 255, 255, .82) 0 .72px,
+      rgba(164, 171, 194, .24) .92px,
+      transparent 1.48px
     ),
     radial-gradient(
-      circle at 38px 31px,
-      rgba(255, 255, 255, .72) 0 .65px,
-      rgba(142, 162, 183, .2) .9px,
-      transparent 1.4px
+      circle at 83px 29px,
+      rgba(182, 205, 231, .68) 0 .58px,
+      rgba(116, 147, 184, .2) .86px,
+      transparent 1.34px
+    ),
+    radial-gradient(
+      circle at 47px 113px,
+      rgba(218, 215, 233, .58) 0 .5px,
+      rgba(151, 143, 178, .18) .78px,
+      transparent 1.22px
     );
-  background-position: 0 0, 23px 11px;
-  background-size: 79px 91px, 121px 107px;
+  background-position:
+    7px 13px,
+    -41px 67px,
+    103px -31px;
+  background-size:
+    223px 191px,
+    347px 269px,
+    487px 383px;
   -webkit-mask-image: linear-gradient(
-    90deg,
-    #000 0%,
-    rgba(0, 0, 0, .72) 15%,
-    transparent 34%,
-    transparent 66%,
-    rgba(0, 0, 0, .72) 85%,
-    #000 100%
+    117deg,
+    rgba(0, 0, 0, .92),
+    rgba(0, 0, 0, .58) 31%,
+    rgba(0, 0, 0, .84) 59%,
+    rgba(0, 0, 0, .52) 82%,
+    rgba(0, 0, 0, .9)
   );
   mask-image: linear-gradient(
-    90deg,
-    #000 0%,
-    rgba(0, 0, 0, .72) 15%,
-    transparent 34%,
-    transparent 66%,
-    rgba(0, 0, 0, .72) 85%,
-    #000 100%
+    117deg,
+    rgba(0, 0, 0, .92),
+    rgba(0, 0, 0, .58) 31%,
+    rgba(0, 0, 0, .84) 59%,
+    rgba(0, 0, 0, .52) 82%,
+    rgba(0, 0, 0, .9)
   );
 }
 
@@ -105,13 +120,13 @@
     radial-gradient(
       ellipse 70% 32% at 128% 76%,
       transparent 68%,
-      rgba(112, 167, 226, .14) 68.5%,
+      rgba(112, 167, 226, .17) 68.5%,
       transparent 69.2%
     ),
     radial-gradient(
       ellipse 78% 38% at 132% 72%,
       transparent 73%,
-      rgba(156, 161, 211, .1) 73.4%,
+      rgba(156, 161, 211, .12) 73.4%,
       transparent 74%
     );
 }
@@ -285,17 +300,14 @@
   border: 0;
 }
 .gallery {
+  --gallery-gap: 16px;
   padding: 28px;
-  display: grid;
-  grid-template-columns: repeat(var(--gallery-columns, 4), minmax(0, 1fr));
-  gap: 16px;
-  align-items: start;
 }
-.gallery-column {
-  min-width: 0;
-  display: grid;
-  gap: 16px;
-  align-content: start;
+.gallery-window {
+  position: relative;
+  width: 100%;
+  min-height: 0;
+  contain: layout style;
 }
 .tile {
   position: relative;
@@ -309,6 +321,14 @@
   background: var(--public-space-surface);
   border-color: var(--public-line);
   box-shadow: 0 8px 22px rgba(0, 3, 10, .28);
+}
+.gallery-virtual-tile {
+  position: absolute;
+}
+.gallery-virtual-tile .tile-image-shell {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
 }
 .tile-image-shell {
   aspect-ratio: var(--tile-ratio, 16 / 9);

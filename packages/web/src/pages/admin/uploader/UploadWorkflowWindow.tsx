@@ -461,7 +461,7 @@ export function UploadWorkflowWindow({
             <button
               className="button workflow-submit-button"
               type="button"
-              disabled={!readyJobs.length || busy || duplicateJobs > 0}
+              disabled={!readyJobs.length || busy}
               onClick={onCommitReady}
             >
               <StableButtonLabel

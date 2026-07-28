@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient
+} from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../../lib/api/client.js";
 import { AppHeader } from "../../components/navigation/AppHeader.js";
@@ -8,7 +12,7 @@ import { Icon } from "../../components/icon/Icon.js";
 import { ImageDetailModal } from "../../components/image/ImageDetailModal.js";
 import { SelectMenu } from "../../components/form/SelectMenu.js";
 import { FacetSelector } from "../../components/data-display/FacetSelector.js";
-import { eagerThumbnailCount, galleryRenderBatch, gallerySentinelRootMargin } from "../../lib/constants.js";
+import { gallerySentinelRootMargin } from "../../lib/constants.js";
 import { queryKeys } from "../../lib/api/query-keys.js";
 import { displayNameOrSlug, errorMessage, imageDisplayTitle } from "../../lib/ui/formatters.js";
 import { buildRandomUrl } from "../../lib/gallery/random-url.js";
@@ -17,8 +21,19 @@ import type { GalleryImageCard, PublicImageDetail, PublicImageItem } from "../..
 import { useGalleryFacets, useSiteConfig } from "../../lib/api/site-data.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
 import { AnchoredMenuDismissSignalContext } from "../../hooks/useAnchoredMenu.js";
+import { pageScrollRestoredEvent } from "../../hooks/usePageScrollLock.js";
 import { LazyGalleryImage } from "./LazyGalleryImage.js";
-import { masonryColumns, nextRenderBatch, useGalleryColumnCount } from "./gallery-layout.js";
+import {
+  computeMasonryLayout,
+  useGalleryColumnCount,
+  useGalleryGeometry,
+  useMasonryWindow,
+  type MasonryItemPosition
+} from "./gallery-layout.js";
+import {
+  GalleryImageRuntime,
+  useGalleryImageRuntime
+} from "./GalleryImageRuntime.js";
 import { scrollGalleryToTop, useGalleryViewportControls } from "./useGalleryViewportControls.js";
 import {
   galleryApiSearchParams,
@@ -28,6 +43,55 @@ import {
 } from "../../lib/gallery/gallery-query.js";
 
 type PublicImageListPage = { items: GalleryImageCard[]; next_cursor: string | null };
+
+function GalleryTileDevelopmentStats() {
+  const { debug } = useGalleryImageRuntime();
+  useEffect(() => debug?.mountTile(), [debug]);
+  return null;
+}
+
+function GalleryTile({
+  position,
+  title,
+  tags,
+  onOpen
+}: {
+  position: MasonryItemPosition;
+  title: string;
+  tags: string;
+  onOpen: (
+    card: GalleryImageCard,
+    opener: HTMLButtonElement
+  ) => void;
+}) {
+  const { item } = position;
+  return (
+    <button
+      className="tile gallery-virtual-tile"
+      style={{
+        left: position.x,
+        top: position.y,
+        width: position.width,
+        height: position.height
+      }}
+      data-image-id={item.id}
+      onClick={(event) => onOpen(item, event.currentTarget)}
+    >
+      {import.meta.env?.DEV === true && <GalleryTileDevelopmentStats />}
+      <LazyGalleryImage
+        src={item.thumb_url}
+        alt={title}
+        device={item.device}
+        width={item.width}
+        height={item.height}
+      />
+      <span className="tile-info">
+        <strong>{title}</strong>
+        {item.tags.length > 0 && <small>{tags}</small>}
+      </span>
+    </button>
+  );
+}
 
 function imagePlaceholder(card: GalleryImageCard): PublicImageItem {
   return {
@@ -50,7 +114,11 @@ function GalleryImageDetail({
   const placeholder = useMemo(() => imagePlaceholder(card), [card]);
   const { data, isPending, isFetching, isError, error, refetch } = useQuery<{ item: PublicImageDetail }>({
     queryKey: [...queryKeys.publicImageDetail, card.id],
-    queryFn: ({ signal }) => api(`/api/images/${encodeURIComponent(card.id)}`, { signal })
+    // 详情元数据很小，不把 React StrictMode 的模拟卸载传给 fetch；
+    // 重放会继续复用同一 Promise，真正关闭后则立即回收零驻留期查询。
+    // 原图请求仍由下方 DOM 图片调度器同步取消和清理。
+    queryFn: () => api(`/api/images/${encodeURIComponent(card.id)}`),
+    gcTime: 0
   });
   const detail = data?.item.id === card.id ? data.item : null;
   const item = useMemo(() => ({ ...placeholder, ...(detail ?? {}) }), [placeholder, detail]);
@@ -71,6 +139,8 @@ function GalleryImageDetail({
 
 export function GalleryPage() {
   const [selected, setSelected] = useState<GalleryImageCard | null>(null);
+  const [pinnedImageId, setPinnedImageId] = useState<string | null>(null);
+  const queryClient = useQueryClient();
   const [routeSearchParams, setRouteSearchParams] = useSearchParams();
   const routeQuery = routeSearchParams.toString();
   const filters = useMemo(
@@ -89,9 +159,11 @@ export function GalleryPage() {
     toolbarRef,
     toolbarVisible,
   } = useGalleryViewportControls();
-  const [visibleCount, setVisibleCount] = useState(galleryRenderBatch);
   const detailReturnFocusRef = useRef<HTMLElement | null>(null);
+  const galleryRef = useRef<HTMLElement | null>(null);
+  const galleryWindowRef = useRef<HTMLDivElement | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const previousImageQueryRef = useRef<string | null>(null);
   const { data: facets } = useGalleryFacets();
   const { data: siteConfig } = useSiteConfig();
 
@@ -109,13 +181,26 @@ export function GalleryPage() {
       if (pageParam) params.set("cursor", pageParam);
       return api(`/api/images?${params}`, { signal });
     },
-    getNextPageParam: (lastPage) => lastPage.next_cursor || undefined
+    getNextPageParam: (lastPage) => lastPage.next_cursor || undefined,
+    gcTime: 0
   });
 
   useEffect(() => {
-    setVisibleCount(galleryRenderBatch);
+    const previous = previousImageQueryRef.current;
+    previousImageQueryRef.current = imageQuery;
+    if (previous !== null && previous !== imageQuery) {
+      const previousKey = [...queryKeys.publicImages, previous];
+      void queryClient.cancelQueries({
+        queryKey: previousKey,
+        exact: true
+      });
+      queryClient.removeQueries({
+        queryKey: previousKey,
+        exact: true
+      });
+    }
     window.scrollTo({ top: 0 });
-  }, [imageQuery]);
+  }, [imageQuery, queryClient]);
 
   const randomUrl = buildRandomUrl({
     origin: window.location.origin,
@@ -145,31 +230,95 @@ export function GalleryPage() {
     const target = sentinelRef.current;
     if (!target) return;
     const observer = new IntersectionObserver((entries) => {
-      if (!entries.some((entry) => entry.isIntersecting) || items.length === 0 || imagePages.isFetchingNextPage) return;
-      if (visibleCount < items.length) {
-        setVisibleCount((current) => nextRenderBatch(current, items.length));
+      if (
+        !entries.some((entry) => entry.isIntersecting)
+        || items.length === 0
+        || imagePages.isFetchingNextPage
+        || !imagePages.hasNextPage
+      ) {
         return;
       }
-      if (imagePages.hasNextPage) void imagePages.fetchNextPage();
+      void imagePages.fetchNextPage();
     }, { rootMargin: gallerySentinelRootMargin });
     observer.observe(target);
     return () => observer.disconnect();
-  }, [imagePages.fetchNextPage, imagePages.hasNextPage, imagePages.isFetchingNextPage, items.length, visibleCount]);
+  }, [
+    imagePages.fetchNextPage,
+    imagePages.hasNextPage,
+    imagePages.isFetchingNextPage,
+    items.length
+  ]);
 
   const columnCount = useGalleryColumnCount();
-  const visibleItems = useMemo(() => items.slice(0, visibleCount), [items, visibleCount]);
-  const columns = useMemo(() => masonryColumns(visibleItems, columnCount), [visibleItems, columnCount]);
+  const geometry = useGalleryGeometry(galleryRef);
+  const layout = useMemo(
+    () => computeMasonryLayout(items, { ...geometry, columnCount }),
+    [columnCount, geometry, items]
+  );
+  const mountedPositions = useMasonryWindow(
+    galleryWindowRef,
+    layout,
+    pinnedImageId
+  );
   const themeNames = useMemo(() => new Map((facets?.themes ?? []).map((option) => [option.slug, displayNameOrSlug(option)])), [facets]);
   const tagNames = useMemo(() => new Map((facets?.tags ?? []).map((option) => [option.slug, displayNameOrSlug(option)])), [facets]);
 
-  const eagerIds = useMemo(() => new Set(visibleItems.slice(0, eagerThumbnailCount).map((item) => item.id)), [visibleItems]);
   const themeLabel = (slug: string) => slug === "none" ? "" : themeNames.get(slug) ?? slug;
   const galleryHoverTitle = (item: GalleryImageCard) => item.title?.trim() || themeLabel(item.theme) || imageDisplayTitle(item);
   const galleryHoverTags = (item: GalleryImageCard) => item.tags.map((tag) => tagNames.get(tag) ?? tag).join(" · ");
   const loading = imagePages.isLoading || imagePages.isFetchingNextPage;
   const showBackToTop = backToTopVisible && !selected;
 
+  const openDetail = (
+    card: GalleryImageCard,
+    opener: HTMLButtonElement
+  ) => {
+    detailReturnFocusRef.current = opener;
+    setPinnedImageId(card.id);
+    setSelected(card);
+  };
+
+  useEffect(() => {
+    if (!pinnedImageId) return;
+    let focusFrame: number | undefined;
+    let releaseFrame: number | undefined;
+    let settleFrame: number | undefined;
+    const releasePinnedOpener = () => {
+      const opener = detailReturnFocusRef.current;
+      focusFrame = window.requestAnimationFrame(() => {
+        focusFrame = undefined;
+        if (opener?.isConnected) {
+          opener.scrollIntoView({ block: "nearest" });
+          opener.focus({ preventScroll: true });
+        }
+        releaseFrame = window.requestAnimationFrame(() => {
+          releaseFrame = undefined;
+          settleFrame = window.requestAnimationFrame(() => {
+            settleFrame = undefined;
+            setPinnedImageId((current) => (
+              current === pinnedImageId ? null : current
+            ));
+            if (detailReturnFocusRef.current === opener) {
+              detailReturnFocusRef.current = null;
+            }
+          });
+        });
+      });
+    };
+    window.addEventListener(pageScrollRestoredEvent, releasePinnedOpener);
+    return () => {
+      window.removeEventListener(pageScrollRestoredEvent, releasePinnedOpener);
+      if (focusFrame !== undefined) window.cancelAnimationFrame(focusFrame);
+      if (releaseFrame !== undefined) window.cancelAnimationFrame(releaseFrame);
+      if (settleFrame !== undefined) window.cancelAnimationFrame(settleFrame);
+    };
+  }, [pinnedImageId]);
+
   return (
+    <GalleryImageRuntime
+      detailOpen={Boolean(selected)}
+      resetKey={imageQuery}
+    >
     <main
       className="page gallery-page"
       style={{
@@ -278,35 +427,22 @@ export function GalleryPage() {
         </AnchoredMenuDismissSignalContext.Provider>
       </section>
       <div className="gallery-toolbar-spacer" aria-hidden="true" />
-      <section className="gallery" style={{ "--gallery-columns": columnCount } as CSSProperties}>
-        {columns.map((column, columnIndex) => (
-          <div className="gallery-column" key={columnIndex}>
-            {column.map((item) => (
-              <button
-                className="tile"
-                key={item.id}
-                data-image-id={item.id}
-                onClick={(event) => {
-                  detailReturnFocusRef.current = event.currentTarget;
-                  setSelected(item);
-                }}
-              >
-                <LazyGalleryImage
-                  src={item.thumb_url}
-                  alt={galleryHoverTitle(item)}
-                  device={item.device}
-                  width={item.width}
-                  height={item.height}
-                  priority={eagerIds.has(item.id)}
-                />
-                <span className="tile-info">
-                  <strong>{galleryHoverTitle(item)}</strong>
-                  {item.tags.length > 0 && <small>{galleryHoverTags(item)}</small>}
-                </span>
-              </button>
-            ))}
-          </div>
-        ))}
+      <section ref={galleryRef} className="gallery">
+        <div
+          ref={galleryWindowRef}
+          className="gallery-window"
+          style={{ height: layout.totalHeight }}
+        >
+          {mountedPositions.map((position) => (
+            <GalleryTile
+              key={position.item.id}
+              position={position}
+              title={galleryHoverTitle(position.item)}
+              tags={galleryHoverTags(position.item)}
+              onOpen={openDetail}
+            />
+          ))}
+        </div>
       </section>
       {imagePages.isError && (
         <QueryErrorState error={imagePages.error} onRetry={() => void imagePages.refetch()} />
@@ -336,5 +472,6 @@ export function GalleryPage() {
         />
       )}
     </main>
+    </GalleryImageRuntime>
   );
 }

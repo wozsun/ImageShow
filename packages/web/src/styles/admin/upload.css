@@ -4,23 +4,30 @@
 .link-import-split .link-import-main { min-width: 100px; border-radius: 6px 0 0 6px; }
 .link-import-menu-trigger { width: 34px; min-width: 34px; padding: 0; border-left: 0; border-radius: 0 6px 6px 0; }
 .link-import-menu {
+  --link-import-menu-gap: 6px;
+
   position: fixed;
   z-index: 12;
+  padding-top: var(--link-import-menu-gap);
+  transform-origin: top center;
+  animation: link-import-menu-in 80ms cubic-bezier(.2, .8, .2, 1);
+}
+.link-import-menu-surface {
   padding: 5px;
   border: 1px solid #d5dce5;
   border-radius: 6px;
   background: #fff;
   box-shadow: 0 8px 24px rgba(13, 18, 28, .16);
-  transform-origin: top center;
-  animation: link-import-menu-in 80ms cubic-bezier(.2, .8, .2, 1);
 }
 .link-import-menu.opens-up {
+  padding-top: 0;
+  padding-bottom: var(--link-import-menu-gap);
   transform-origin: bottom center;
   animation-name: link-import-menu-in-up;
 }
 .link-import-menu.is-closing {
   pointer-events: none;
-  animation: link-import-menu-out 80ms ease-in forwards;
+  animation: link-import-menu-out 60ms ease-in forwards;
 }
 .link-import-menu.opens-up.is-closing {
   animation-name: link-import-menu-out-up;

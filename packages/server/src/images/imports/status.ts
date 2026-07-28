@@ -51,7 +51,7 @@ function importMessage(status: string, mode?: string, error?: string) {
     return mode === "download" ? "服务端下载原图" : "服务端接收上传文件";
   }
   if (status === "received") return "原图素材已接收，等待处理";
-  if (status === "preparing") return "标准化图片并生成缩略图";
+  if (status === "preparing") return "准备标准化图片并生成缩略图";
   if (status === "ready") return "服务端处理完成";
   if (status === "committing") return "写入图库中";
   if (status === "finalized") return "已写入图库";

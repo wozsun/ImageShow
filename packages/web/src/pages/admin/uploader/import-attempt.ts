@@ -194,7 +194,7 @@ export async function prepareMaterializedImportAttempt(options: {
       if (!isCurrentImportAttempt(queue, job.id, attemptKey)) return;
       queue.updateJob(job.id, {
         status: "processing",
-        message: "标准化图片并生成缩略图",
+        message: "准备标准化图片并生成缩略图",
         transferProgress: undefined
       });
       options.startSuccessor();

@@ -427,8 +427,15 @@ button:not(:disabled):not(.select-trigger):not([data-availability-locked="true"]
   position: absolute;
   inset: 0;
   overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+.progressive-image-full-frame.is-ready {
   animation: progressive-image-full-in .16s ease-out both;
-  will-change: opacity;
+}
+.progressive-image.is-direct .progressive-image-full-frame.is-ready {
+  opacity: 1;
+  animation: none;
 }
 
 .page { min-height: 100vh; }
