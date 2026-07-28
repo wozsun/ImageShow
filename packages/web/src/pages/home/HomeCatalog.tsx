@@ -67,7 +67,8 @@ function AxisButton({
       }
       onClick={locked ? undefined : onClick}
     >
-      <span>{selected ? "✓ " : ""}{label}</span>
+      <span className="home-axis-check" aria-hidden="true">✓</span>
+      <span className="home-axis-label">{label}</span>
     </button>
   );
 }

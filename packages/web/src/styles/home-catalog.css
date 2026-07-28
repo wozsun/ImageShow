@@ -116,12 +116,12 @@
 }
 
 .home-axis-group button {
+  position: relative;
   min-width: 0;
   min-height: 42px;
   padding: 7px 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  place-items: center;
   color: var(--home-ink);
   background: rgba(107, 151, 211, .14);
   border: 1px solid var(--home-line);
@@ -134,12 +134,29 @@
     transform .1s ease;
 }
 
-.home-axis-group button > span {
+.home-axis-label {
   overflow: hidden;
   font-size: 13px;
   font-weight: 750;
+  line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.home-axis-check {
+  position: absolute;
+  top: 50%;
+  left: 10px;
+  color: currentColor;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1;
+  opacity: 0;
+  transform: translateY(-50%);
+}
+
+.home-axis-group button.is-selected .home-axis-check {
+  opacity: 1;
 }
 
 .home-axis-group button.is-selected {
@@ -318,7 +335,7 @@
   min-height: 58px;
   padding: 9px 11px;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: 12px minmax(0, 1fr);
   gap: 2px 7px;
   align-content: center;
   color: var(--home-ink);
@@ -336,9 +353,15 @@
 
 .home-tag-selector button > span {
   grid-row: 1 / 3;
+  width: 12px;
   align-self: center;
   color: var(--home-primary);
   font-weight: 800;
+  text-align: center;
+}
+
+.home-tag-selector button.is-selected > span {
+  transform: translateX(-2px);
 }
 
 .home-tag-selector button > strong,
@@ -420,14 +443,14 @@
   background: rgba(73, 91, 119, .12);
   border-color: rgba(132, 166, 218, .1);
   box-shadow: none;
-  cursor: not-allowed;
+  cursor: default;
   filter: grayscale(.72);
   opacity: .48;
 }
 
 .home-axis-group button[data-availability-locked="true"],
 .home-selector-options button[data-availability-locked="true"] {
-  cursor: not-allowed;
+  cursor: default;
 }
 
 .home-catalog.is-refreshing

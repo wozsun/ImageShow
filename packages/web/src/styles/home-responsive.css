@@ -22,6 +22,12 @@
   }
 }
 
+@media (hover: hover) and (pointer: fine) {
+  .home-selector-options {
+    overscroll-behavior-y: auto;
+  }
+}
+
 .home-gallery-entry:active,
 .home-filter-reset:not(:disabled):active,
 .home-axis-group button:not(:disabled):not([data-availability-locked="true"]):active,
@@ -328,6 +334,11 @@
 @media (max-width: 380px) {
   .home-filter-bar {
     padding-inline: 10px;
+  }
+
+  .home-axis-group button > .home-axis-check {
+    left: 2px;
+    font-size: 12px;
   }
 
   .home-filter-bar > div > strong {

@@ -4,6 +4,95 @@ import { Icon } from "../../components/icon/Icon.js";
 import type { Device } from "../../lib/types.js";
 import { galleryImageRatio } from "./gallery-layout.js";
 
+type GalleryVisibilityListener = (visible: boolean) => void;
+
+const galleryVisibilityListeners = new Map<Element, GalleryVisibilityListener>();
+let galleryVisibilityObserver: IntersectionObserver | undefined;
+let galleryVisibilityViewportHeight = 0;
+let galleryVisibilityResizeFrame: number | undefined;
+
+function currentGalleryViewportHeight() {
+  return window.visualViewport?.height ?? window.innerHeight;
+}
+
+function createGalleryVisibilityObserver() {
+  galleryVisibilityViewportHeight = currentGalleryViewportHeight();
+  const observer = new IntersectionObserver((entries) => {
+    if (galleryVisibilityObserver !== observer) return;
+    for (const entry of entries) {
+      galleryVisibilityListeners.get(entry.target)?.(entry.isIntersecting);
+    }
+  }, {
+    rootMargin: galleryLazyRootMargin(galleryVisibilityViewportHeight)
+  });
+  galleryVisibilityObserver = observer;
+  for (const target of galleryVisibilityListeners.keys()) {
+    observer.observe(target);
+  }
+}
+
+function updateGalleryVisibilityObserver() {
+  galleryVisibilityResizeFrame = undefined;
+  if (galleryVisibilityListeners.size === 0) return;
+  const nextViewportHeight = currentGalleryViewportHeight();
+  if (Math.abs(nextViewportHeight - galleryVisibilityViewportHeight) < 1) return;
+  galleryVisibilityObserver?.disconnect();
+  createGalleryVisibilityObserver();
+}
+
+function scheduleGalleryVisibilityUpdate() {
+  if (galleryVisibilityResizeFrame !== undefined) return;
+  galleryVisibilityResizeFrame = window.requestAnimationFrame(
+    updateGalleryVisibilityObserver
+  );
+}
+
+function stopGalleryVisibilityObserver() {
+  const observer = galleryVisibilityObserver;
+  galleryVisibilityObserver = undefined;
+  observer?.disconnect();
+  window.removeEventListener("resize", scheduleGalleryVisibilityUpdate);
+  window.visualViewport?.removeEventListener(
+    "resize",
+    scheduleGalleryVisibilityUpdate
+  );
+  if (galleryVisibilityResizeFrame !== undefined) {
+    window.cancelAnimationFrame(galleryVisibilityResizeFrame);
+    galleryVisibilityResizeFrame = undefined;
+  }
+  galleryVisibilityViewportHeight = 0;
+}
+
+function observeGalleryVisibility(
+  target: Element,
+  listener: GalleryVisibilityListener
+) {
+  if (typeof IntersectionObserver === "undefined") {
+    listener(true);
+    return () => undefined;
+  }
+
+  galleryVisibilityListeners.set(target, listener);
+  if (!galleryVisibilityObserver) {
+    window.addEventListener("resize", scheduleGalleryVisibilityUpdate);
+    window.visualViewport?.addEventListener(
+      "resize",
+      scheduleGalleryVisibilityUpdate
+    );
+    createGalleryVisibilityObserver();
+  } else {
+    galleryVisibilityObserver.observe(target);
+  }
+
+  return () => {
+    galleryVisibilityObserver?.unobserve(target);
+    galleryVisibilityListeners.delete(target);
+    if (galleryVisibilityListeners.size === 0) {
+      stopGalleryVisibilityObserver();
+    }
+  };
+}
+
 export function LazyGalleryImage({ src, alt, device, width, height, priority = false }: { src: string; alt: string; device: Device; width: number; height: number; priority?: boolean }) {
   const holderRef = useRef<HTMLDivElement | null>(null);
 
@@ -11,18 +100,10 @@ export function LazyGalleryImage({ src, alt, device, width, height, priority = f
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
-    if (active) return;
     const target = holderRef.current;
     if (!target) return;
-    const observer = new IntersectionObserver((entries) => {
-      if (entries.some((entry) => entry.isIntersecting)) {
-        setActive(true);
-        observer.disconnect();
-      }
-    }, { rootMargin: galleryLazyRootMargin });
-    observer.observe(target);
-    return () => observer.disconnect();
-  }, [active]);
+    return observeGalleryVisibility(target, setActive);
+  }, []);
   return (
     <div
       ref={holderRef}

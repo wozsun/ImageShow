@@ -111,15 +111,9 @@ export function OverflowMarqueeText({
       ], {
         duration,
         easing: "linear",
-        iterations: 1
+        iterations: Infinity
       });
       animation = nextAnimation;
-      nextAnimation.onfinish = () => {
-        if (animation !== nextAnimation) return;
-        nextAnimation.cancel();
-        animation = undefined;
-        setAnimating(false);
-      };
       if (pauseReasons.size > 0) animation.pause();
       setAnimating(true);
     };

@@ -12,7 +12,14 @@ export const galleryRenderBatch = 12;
 
 export const eagerThumbnailCount = 12;
 
-export const galleryLazyRootMargin = "360px 0px";
+const galleryLazyViewportBufferScreens = 1;
+export function galleryLazyRootMargin(viewportHeight: number) {
+  const verticalBuffer = Math.max(
+    1,
+    Math.ceil(viewportHeight * galleryLazyViewportBufferScreens)
+  );
+  return `${verticalBuffer}px 0px`;
+}
 export const gallerySentinelRootMargin = "280px 0px";
 
 export function publicRootPath(

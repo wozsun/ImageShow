@@ -31,10 +31,12 @@ export function HomeFilterBar({
   const selectedLabels = stats
     ? [
         filters.device ? deviceLabels[filters.device] : "",
-        filters.brightness ? brightnessLabels[filters.brightness] : "",
-        ...selectedFacetLabels(stats.themes, filters.theme),
-        ...selectedFacetLabels(stats.tags, filters.tag),
-        ...selectedFacetLabels(stats.authors, filters.author)
+        filters.brightness
+          ? brightnessLabels[filters.brightness]
+          : "",
+        selectedFacetLabels(stats.themes, filters.theme).join("/"),
+        selectedFacetLabels(stats.tags, filters.tag).join("/"),
+        selectedFacetLabels(stats.authors, filters.author).join("/")
       ].filter(Boolean)
     : [];
   const destination = galleryHref(filters);
@@ -44,6 +46,7 @@ export function HomeFilterBar({
     <section
       className="home-filter-bar"
       aria-label="当前画廊筛选"
+      aria-busy={isPending || isPlaceholderData}
     >
       <div>
         <span>GALLERY FILTER</span>
@@ -53,11 +56,13 @@ export function HomeFilterBar({
             ? "正在读取图库目录"
             : isError
               ? "所选组合暂时无法验证"
-              : isPlaceholderData
-                ? "正在检查所选组合"
-                : hasFilters
-                  ? `已选择：${selectedLabels.join(" · ")} · 共有 ${countLabel(stats?.matching_images ?? 0)}`
-                  : "未设置筛选条件，将浏览全部图片"}
+              : hasFilters
+                ? `已选择：${selectedLabels.join(" · ")} · ${
+                    isPlaceholderData
+                      ? "正在检查"
+                      : `共有 ${countLabel(stats?.matching_images ?? 0)}`
+                  }`
+                : "未设置筛选条件，将浏览全部图片"}
         </small>
       </div>
       <button
