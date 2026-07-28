@@ -7,9 +7,14 @@ import { Icon } from "../icon/Icon.js";
 import { MobileNavigation } from "./MobileNavigation.js";
 
 const headerScrollDirectionThreshold = 12;
-const galleryHeaderSecondStageDistance = 48;
 
-export function AppHeader() {
+export function AppHeader({
+  onMenuExpandedChange,
+  visible
+}: {
+  onMenuExpandedChange?: (expanded: boolean) => void;
+  visible?: boolean;
+} = {}) {
   const { pathname } = useLocation();
   const { data } = useSiteConfig();
   const [shouldProbeSession, setShouldProbeSession] = useState(hasSessionProbeHint);
@@ -19,7 +24,8 @@ export function AppHeader() {
   const previousScrollTopRef = useRef(0);
   const upwardDistanceRef = useRef(0);
   const downwardDistanceRef = useRef(0);
-  const [headerVisible, setHeaderVisible] = useState(true);
+  const [standaloneVisible, setStandaloneVisible] = useState(true);
+  const headerVisible = visible ?? standaloneVisible;
 
   const homeEnabled = data?.site?.home?.enabled ?? true;
   const rootPath = data?.site ? publicRootPath(data.site) : "/home";
@@ -38,6 +44,7 @@ export function AppHeader() {
   }, [auth]);
 
   useEffect(() => {
+    if (visible !== undefined) return;
     const header = headerRef.current;
     if (!header) return;
     previousScrollTopRef.current = getPageScrollY();
@@ -59,43 +66,33 @@ export function AppHeader() {
       if (header.querySelector('[aria-expanded="true"]')) {
         upwardDistanceRef.current = 0;
         downwardDistanceRef.current = 0;
-        setHeaderVisible(true);
+        setStandaloneVisible(true);
         return;
       }
       if (scrollTop <= headerScrollDirectionThreshold) {
         upwardDistanceRef.current = 0;
         downwardDistanceRef.current = 0;
-        setHeaderVisible(true);
-        return;
-      }
-      const galleryToolbar = document.querySelector<HTMLElement>(".gallery-toolbar");
-      if (galleryToolbar && !galleryToolbar.classList.contains("is-scroll-hidden")) {
-        upwardDistanceRef.current = 0;
-        downwardDistanceRef.current = 0;
-        setHeaderVisible(true);
+        setStandaloneVisible(true);
         return;
       }
       if (upwardDistanceRef.current >= headerScrollDirectionThreshold) {
         upwardDistanceRef.current = 0;
         downwardDistanceRef.current = 0;
-        setHeaderVisible(true);
+        setStandaloneVisible(true);
         return;
       }
-      const downwardDistance = galleryToolbar
-        ? galleryHeaderSecondStageDistance
-        : headerScrollDirectionThreshold;
-      if (downwardDistanceRef.current < downwardDistance) return;
+      if (downwardDistanceRef.current < headerScrollDirectionThreshold) return;
       upwardDistanceRef.current = 0;
       downwardDistanceRef.current = 0;
       if (scrollTop < header.offsetHeight) {
-        setHeaderVisible(true);
+        setStandaloneVisible(true);
         return;
       }
       const activeElement = document.activeElement;
       if (activeElement instanceof HTMLElement && header.contains(activeElement)) {
         activeElement.blur();
       }
-      setHeaderVisible(false);
+      setStandaloneVisible(false);
     };
     const onScroll = () => {
       if (frame !== undefined) return;
@@ -107,7 +104,7 @@ export function AppHeader() {
       window.removeEventListener("scroll", onScroll);
       if (frame !== undefined) window.cancelAnimationFrame(frame);
     };
-  }, []);
+  }, [visible]);
 
   return (
     <header
@@ -121,7 +118,7 @@ export function AppHeader() {
         <NavLink to="/gallery" className={navClassName("/gallery")}><Icon name="image-line" />画廊</NavLink>
         {showAdminEntry && <NavLink to={adminBasePath}><Icon name="settings-3-line" />管理</NavLink>}
       </nav>
-      <MobileNavigation>
+      <MobileNavigation onExpandedChange={onMenuExpandedChange}>
         {homeEnabled && <NavLink to="/home" className={navClassName("/home")}><Icon name="home-4-line" />首页</NavLink>}
         <NavLink to="/gallery" className={navClassName("/gallery")}><Icon name="image-line" />画廊</NavLink>
         {showAdminEntry && <NavLink to={adminBasePath}><Icon name="settings-3-line" />管理</NavLink>}

@@ -12,26 +12,45 @@ import {
   useMediaQuery
 } from "../../hooks/useMediaQuery.js";
 import { useDismissiblePanel } from "../../hooks/useDismissiblePanel.js";
+import {
+  normalizePageScrollPosition,
+  pageScrollDelta
+} from "../../lib/ui/page-scroll-position.js";
+import {
+  advanceGalleryNavigation,
+  initialGalleryNavigationState,
+  type GalleryNavigationStage
+} from "./gallery-navigation-visibility.js";
 
-const toolbarScrollDirectionThreshold = 12;
 const backToTopViewportThreshold = 1;
-function blurFocusedToolbarElement(toolbar: HTMLElement) {
+
+function blurFocusedElement(element: HTMLElement) {
   const activeElement = document.activeElement;
-  if (activeElement instanceof HTMLElement && toolbar.contains(activeElement)) {
+  if (activeElement instanceof HTMLElement && element.contains(activeElement)) {
     activeElement.blur();
   }
 }
 
-function useGalleryToolbarVisibility(
+function currentPageScrollPosition() {
+  const contentHeight = Math.max(
+    document.documentElement.scrollHeight,
+    document.body?.scrollHeight ?? 0
+  );
+  return normalizePageScrollPosition(
+    getPageScrollY(),
+    contentHeight,
+    window.innerHeight
+  );
+}
+
+function useGalleryNavigationVisibility(
   toolbarRef: RefObject<HTMLElement | null>,
   lockedOpen: boolean
 ) {
-  const [visible, setVisible] = useState(true);
   const [height, setHeight] = useState(0);
-  const previousScrollTopRef = useRef(0);
-  const upwardDistanceRef = useRef(0);
-  const downwardDistanceRef = useRef(0);
+  const [stage, setStage] = useState<GalleryNavigationStage>("visible");
   const toolbarHeightRef = useRef(0);
+  const navigationStateRef = useRef({ ...initialGalleryNavigationState });
 
   useLayoutEffect(() => {
     const toolbar = toolbarRef.current;
@@ -44,11 +63,17 @@ function useGalleryToolbarVisibility(
     const observer = new ResizeObserver(updateToolbarHeight);
     observer.observe(toolbar);
     updateToolbarHeight();
+    return () => observer.disconnect();
+  }, [toolbarRef]);
 
-    previousScrollTopRef.current = getPageScrollY();
+  useLayoutEffect(() => {
+    const toolbar = toolbarRef.current;
+    if (!toolbar) return;
+    let previousPosition = currentPageScrollPosition();
     if (lockedOpen) {
-      setVisible(true);
-      return () => observer.disconnect();
+      navigationStateRef.current = { ...initialGalleryNavigationState };
+      setStage("visible");
+      return;
     }
 
     let frame: number | undefined;
@@ -57,54 +82,44 @@ function useGalleryToolbarVisibility(
       // 模态框固定页面根节点时 window.scrollY 会暂时归零。这不是用户滚动，不能据此
       // 改变工具栏状态，否则关闭详情恢复原位置时会看到工具栏闪烁。
       if (isPageScrollLocked()) return;
-      const scrollTop = Math.max(0, getPageScrollY());
-      const scrollStep = scrollTop - previousScrollTopRef.current;
-      previousScrollTopRef.current = scrollTop;
-      if (scrollStep < 0) {
-        upwardDistanceRef.current += -scrollStep;
-        downwardDistanceRef.current = 0;
-      } else if (scrollStep > 0) {
-        downwardDistanceRef.current += scrollStep;
-        upwardDistanceRef.current = 0;
+      const position = currentPageScrollPosition();
+      const delta = pageScrollDelta(previousPosition, position);
+      previousPosition = position;
+      const header = document.querySelector<HTMLElement>(
+        ".gallery-page > .topbar"
+      );
+      // Select / Facet 菜单通过 Portal 渲染在 body；任一导航中的菜单展开时
+      // 保持两级导航完整可见，避免触发器与浮层分离。
+      const menuOpen = Boolean(
+        toolbar.querySelector('[aria-expanded="true"]')
+        || header?.querySelector('[aria-expanded="true"]')
+      );
+      const currentState = navigationStateRef.current;
+      const nextState = advanceGalleryNavigation(currentState, {
+        delta,
+        scrollTop: position.top,
+        toolbarHeight: toolbarHeightRef.current,
+        lockedOpen: menuOpen
+      });
+      navigationStateRef.current = nextState;
+      if (nextState.stage === currentState.stage) return;
+
+      // inert 会把隐藏导航移出交互与无障碍树；先释放内部焦点，避免浏览器
+      // 保留一个已不可见的焦点目标。
+      if (
+        currentState.stage === "visible"
+        && nextState.stage !== "visible"
+      ) {
+        blurFocusedElement(toolbar);
       }
-      // 下拉菜单通过 Portal 渲染在 body；菜单展开时保持其触发工具栏可见，
-      // 避免触发器被收起而浮层仍停留在页面上。
-      if (toolbar.querySelector('[aria-expanded="true"]')) {
-        upwardDistanceRef.current = 0;
-        downwardDistanceRef.current = 0;
-        setVisible(true);
-        return;
+      if (
+        nextState.stage === "hidden"
+        && currentState.stage !== "hidden"
+        && header
+      ) {
+        blurFocusedElement(header);
       }
-      if (scrollTop <= toolbarScrollDirectionThreshold) {
-        upwardDistanceRef.current = 0;
-        downwardDistanceRef.current = 0;
-        setVisible(true);
-        return;
-      }
-      if (upwardDistanceRef.current >= toolbarScrollDirectionThreshold) {
-        const header = document.querySelector<HTMLElement>(".topbar");
-        if (
-          toolbar.classList.contains("is-scroll-hidden")
-          && header
-          && header.getBoundingClientRect().bottom < header.offsetHeight - 0.5
-        ) {
-          return;
-        }
-        upwardDistanceRef.current = 0;
-        downwardDistanceRef.current = 0;
-        setVisible(true);
-        return;
-      }
-      if (downwardDistanceRef.current < toolbarScrollDirectionThreshold) return;
-      upwardDistanceRef.current = 0;
-      downwardDistanceRef.current = 0;
-      // 工具栏的流内占位保留真实高度。等页面至少滚过同等距离再隐藏，
-      // 避免占位来不及滚出视口而暴露成一整块空白。
-      if (scrollTop < toolbarHeightRef.current) return;
-      // inert 会把隐藏工具栏移出交互与无障碍树；先释放内部焦点，避免浏览器
-      // 保留一个已不可见的焦点目标，也无需再叠加容易产生时序警告的 aria-hidden。
-      blurFocusedToolbarElement(toolbar);
-      setVisible(false);
+      setStage(nextState.stage);
     };
     const onScroll = () => {
       if (frame !== undefined) return;
@@ -115,11 +130,14 @@ function useGalleryToolbarVisibility(
     return () => {
       window.removeEventListener("scroll", onScroll);
       if (frame !== undefined) window.cancelAnimationFrame(frame);
-      observer.disconnect();
     };
   }, [lockedOpen, toolbarRef]);
 
-  return { height, visible };
+  return {
+    headerVisible: stage !== "hidden",
+    height,
+    toolbarVisible: stage === "visible"
+  };
 }
 
 function useBackToTopVisibility() {
@@ -157,6 +175,7 @@ export function scrollGalleryToTop() {
 
 export function useGalleryViewportControls() {
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [headerMenuExpanded, setHeaderMenuExpanded] = useState(false);
   const toolbarRef = useRef<HTMLElement | null>(null);
   const mobileLayout = useMediaQuery(mobileViewportMediaQuery);
   const disclosure = useDismissiblePanel({
@@ -172,12 +191,14 @@ export function useGalleryViewportControls() {
   }, [disclosure.setOpen, filtersOpen]);
 
   const mobileFiltersOpen = mobileLayout && filtersOpen;
+  const navigationLockedOpen = mobileFiltersOpen || headerMenuExpanded;
   const {
+    headerVisible,
     height: toolbarHeight,
-    visible: toolbarVisible
-  } = useGalleryToolbarVisibility(
+    toolbarVisible
+  } = useGalleryNavigationVisibility(
     toolbarRef,
-    mobileFiltersOpen
+    navigationLockedOpen
   );
   const backToTopVisible = useBackToTopVisibility();
 
@@ -188,6 +209,8 @@ export function useGalleryViewportControls() {
     filterMenuDismissSignal: disclosure.menuDismissSignal,
     filterToggleRef: disclosure.triggerRef,
     filtersOpen,
+    headerVisible,
+    onHeaderMenuExpandedChange: setHeaderMenuExpanded,
     toggleFilters,
     toolbarHeight,
     toolbarRef,

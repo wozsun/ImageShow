@@ -112,9 +112,10 @@ hooks ──► lib
 - `pages/` 保存路由页面与页面级编排，页面专属组件、状态机和 Hook 就近维护。
 - `pages/home/HomePage.tsx` 只编排查询、筛选状态和页面生命周期；首屏、筛选摘要栏
   与候选目录由同目录组件分别维护，避免路由组件同时掌握全部首页交互。
-- `pages/gallery/` 就近拥有瀑布流位置模型、虚拟窗口、共享可见性观察器与开发统计；
-  跨页面可复用的 DOM 图片加载、解码和并发调度留在 `components/image/`，页面层只
-  设置画廊任务的优先级、暂停和驻留边界。
+- `pages/gallery/` 就近拥有瀑布流位置模型、虚拟窗口、共享可见性观察器、三级导航
+  状态机与开发统计；跨页面可复用的 DOM 图片加载、解码和并发调度留在
+  `components/image/`，页面层只设置画廊任务的优先级、暂停和驻留边界。无界面的
+  页面滚动边界归一化放在 `lib/ui/`，供交互状态机消费。
 - `pages/admin/uploader/` 管理统一 prepared import 队列；其中 `link-import/` 负责 URL、
   JSONL 与微博输入。
 - `styles/` 按 base、home、gallery、admin 和 responsive 组织全局样式；首页进一步

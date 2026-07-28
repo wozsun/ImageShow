@@ -154,6 +154,8 @@ export function GalleryPage() {
     filterMenuDismissSignal,
     filterToggleRef,
     filtersOpen,
+    headerVisible,
+    onHeaderMenuExpandedChange,
     toggleFilters,
     toolbarHeight,
     toolbarRef,
@@ -328,7 +330,10 @@ export function GalleryPage() {
       } as CSSProperties}
     >
       <span className="gallery-atmosphere" aria-hidden="true" />
-      <AppHeader />
+      <AppHeader
+        onMenuExpandedChange={onHeaderMenuExpandedChange}
+        visible={headerVisible}
+      />
       <section
         ref={toolbarRef}
         className={`gallery-toolbar${filtersOpen ? " filters-open" : ""}${toolbarVisible ? "" : " is-scroll-hidden"}`}

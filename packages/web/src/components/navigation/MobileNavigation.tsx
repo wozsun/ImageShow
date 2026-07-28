@@ -1,16 +1,43 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode
+} from "react";
 import { useLocation } from "react-router-dom";
 import { Icon } from "../icon/Icon.js";
 import { useAnimatedClose } from "../../hooks/useAnimatedClose.js";
+import {
+  mobileViewportMediaQuery,
+  useMediaQuery
+} from "../../hooks/useMediaQuery.js";
 
-export function MobileNavigation({ children, className = "" }: { children: ReactNode; className?: string }) {
+export function MobileNavigation({
+  children,
+  className = "",
+  onExpandedChange
+}: {
+  children: ReactNode;
+  className?: string;
+  onExpandedChange?: (expanded: boolean) => void;
+}) {
   const [open, setOpen] = useState(false);
   const location = useLocation();
   const menuId = useId();
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const mobileLayout = useMediaQuery(mobileViewportMediaQuery);
   const exit = useAnimatedClose(() => setOpen(false), 160);
+  const expanded = mobileLayout && open && !exit.closing;
 
   useEffect(() => { if (open) exit.requestClose(); }, [location.pathname]);
+  useEffect(() => {
+    if (!mobileLayout && open) exit.requestClose();
+  }, [exit.requestClose, mobileLayout, open]);
+  useLayoutEffect(() => {
+    onExpandedChange?.(expanded);
+  }, [expanded, onExpandedChange]);
   useEffect(() => {
     if (!open) return;
     const closeOutside = (event: PointerEvent) => {
@@ -32,8 +59,8 @@ export function MobileNavigation({ children, className = "" }: { children: React
       <button
         className="mobile-nav-toggle"
         type="button"
-        aria-label={open && !exit.closing ? "关闭导航菜单" : "打开导航菜单"}
-        aria-expanded={open && !exit.closing}
+        aria-label={expanded ? "关闭导航菜单" : "打开导航菜单"}
+        aria-expanded={expanded}
         aria-controls={menuId}
         onClick={() => open ? exit.requestClose() : setOpen(true)}
       >

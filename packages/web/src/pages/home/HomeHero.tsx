@@ -28,7 +28,7 @@ export function HomeHero({
     (item) => item.slug !== "none"
   ).length ?? 0;
   const siteStats = [
-    { label: "全站图片", value: totalImages, unit: "张" },
+    { label: "全站图片", value: totalImages, unit: "张", primary: true },
     { label: "主题", value: themeCount, unit: "个" },
     { label: "标签", value: stats?.tags.length ?? 0, unit: "个" },
     { label: "作者", value: stats?.authors.length ?? 0, unit: "位" }
@@ -58,17 +58,31 @@ export function HomeHero({
       >
         <span>LIBRARY STATS</span>
         <ul>
-          {siteStats.map((item) => (
-            <li key={item.label}>
-              <div className="home-stat-value">
-                <strong>
-                  {stats ? homeNumberFormatter.format(item.value) : "—"}
-                </strong>
-                <span>{item.unit}</span>
-              </div>
-              <small>{item.label}</small>
-            </li>
-          ))}
+          {siteStats.map((item) => {
+            const value = stats
+              ? homeNumberFormatter.format(item.value)
+              : "—";
+            const longValueLength = item.primary ? 10 : 6;
+            const wideValueLength = item.primary ? 7 : 4;
+            const valueWidth = value.length >= longValueLength
+              ? "long"
+              : value.length >= wideValueLength
+                ? "wide"
+                : undefined;
+            return (
+              <li
+                key={item.label}
+                className={item.primary ? "is-primary" : undefined}
+                data-value-width={valueWidth}
+              >
+                <div className="home-stat-value">
+                  <strong>{value}</strong>
+                  <span>{item.unit}</span>
+                </div>
+                <small>{item.label}</small>
+              </li>
+            );
+          })}
         </ul>
       </aside>
       <button

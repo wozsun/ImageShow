@@ -145,7 +145,7 @@
   flex-wrap: wrap;
   gap: 12px;
   align-items: end;
-  padding: 16px 28px;
+  padding: 10px 28px 16px;
   color: var(--public-text);
   background: rgba(9, 15, 28, .88);
   border-bottom: 1px solid rgba(255, 255, 255, .12);
