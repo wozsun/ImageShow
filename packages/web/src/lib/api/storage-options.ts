@@ -5,7 +5,7 @@ import { adminApiBasePath } from "../constants.js";
 import { storageBackendLabel } from "../ui/select-options.js";
 import { queryKeys } from "./query-keys.js";
 
-type StorageBackendOption = {
+export type StorageBackendOption = {
   slug: string;
   display_name: string;
   enabled: boolean;

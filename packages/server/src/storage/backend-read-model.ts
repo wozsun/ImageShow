@@ -1,6 +1,7 @@
 import { pool } from "../core/db.ts";
 import { listStorageBackends } from "./backend-registry.ts";
 import { listUnresolvedMoveCleanupJobCounts } from "./move-cleanup-repository.ts";
+import { resolveStorageBackendDeletionState } from "./backend-deletion.ts";
 
 export async function listStorageBackendOptions() {
   return (await listStorageBackends()).map((backend) => ({
@@ -58,10 +59,12 @@ export async function getStorageBackendsForAdmin() {
       exhausted_cleanup_job_count:
         cleanupCounts?.exhausted_cleanup_job_count ?? 0
     };
+    const deletion = resolveStorageBackendDeletionState(summary);
     if (backend.type === "s3") {
       const { secret_access_key, ...s3 } = backend.s3;
       return {
         ...summary,
+        deletion,
         s3: {
           ...s3,
           secret_access_key_configured: Boolean(secret_access_key)
@@ -72,12 +75,13 @@ export async function getStorageBackendsForAdmin() {
       const { password, ...webdav } = backend.webdav;
       return {
         ...summary,
+        deletion,
         webdav: {
           ...webdav,
           password_configured: Boolean(password)
         }
       };
     }
-    return summary;
+    return { ...summary, deletion };
   });
 }

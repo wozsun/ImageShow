@@ -22,6 +22,31 @@ export const brightnesses = ["dark", "light"] as const;
 export type Device = (typeof devices)[number];
 export type Brightness = (typeof brightnesses)[number];
 export type StorageType = "local" | "s3" | "webdav";
+export type StorageBackendDeleteBlocker =
+  | "built_in"
+  | "default"
+  | "images"
+  | "import_sessions"
+  | "cleanup_jobs"
+  | "staging_objects";
+export type StorageBackendDeleteAction = "delete" | "migrate" | "blocked";
+export type StorageBackendDeletionState = {
+  action: StorageBackendDeleteAction;
+  blockers: StorageBackendDeleteBlocker[];
+};
+export function storageBackendDeletionStateFromBlockers(
+  blockers: readonly StorageBackendDeleteBlocker[]
+): StorageBackendDeletionState {
+  const uniqueBlockers = [...new Set(blockers)];
+  return {
+    action: uniqueBlockers.includes("images")
+      ? "migrate"
+      : uniqueBlockers.length
+        ? "blocked"
+        : "delete",
+    blockers: uniqueBlockers
+  };
+}
 export type AdminRole = "super" | "image";
 export const adminPermissions = {
   imageStorageMigrate: "image.storage.migrate",
@@ -89,6 +114,20 @@ export type BatchStorageMigrationResponse = {
   migrated: number;
   failed: number;
 };
+
+export type StorageLocationMigrationResult = {
+  source: string;
+  target: string;
+  migrated: number;
+  unchanged: number;
+  missing: number;
+  errors: Array<Record<string, unknown>>;
+  error_count: number;
+};
+
+export type StorageLocationMigrationResponse = ApiSuccessResponse<{
+  migration: StorageLocationMigrationResult;
+}>;
 
 export type ApiErrorResponse = {
   ok: false;

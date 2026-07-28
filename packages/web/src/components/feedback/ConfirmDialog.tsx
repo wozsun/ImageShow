@@ -16,6 +16,7 @@ export function ConfirmDialog({
   pendingLabel = "处理中",
   successLabel = "操作成功",
   errorLabel = "操作失败",
+  errorMessage = "",
   returnFocusRef,
   onClose,
   onConfirm
@@ -31,6 +32,7 @@ export function ConfirmDialog({
   pendingLabel?: string;
   successLabel?: string;
   errorLabel?: string;
+  errorMessage?: string;
   returnFocusRef?: RefObject<HTMLElement | null>;
   onClose: () => void;
   onConfirm: () => Promise<boolean | void>;
@@ -74,6 +76,11 @@ export function ConfirmDialog({
           }}
         >
           <header><div><h2>{title}</h2><p>{description}</p></div></header>
+          {errorMessage && (
+            <p className="confirm-dialog-error error" role="alert">
+              {errorMessage}
+            </p>
+          )}
           <footer>
             <button ref={cancelButtonRef} type="button" disabled={blocked} onClick={() => requestClose()}>取消</button>
             <AsyncActionButton

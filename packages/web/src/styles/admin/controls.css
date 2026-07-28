@@ -402,6 +402,11 @@ pre {
   overflow-wrap: anywhere;
   font-size: 15px;
 }
+.confirm-dialog-error {
+  margin: 0;
+  padding: 0 16px 12px;
+  overflow-wrap: anywhere;
+}
 .confirm-dialog .async-action-button.button.is-pending {
   color: #fff;
   background: #1f6feb;

@@ -18,8 +18,17 @@ import {
   readStorageBackendSnapshot,
   storageBackendUsage
 } from "./backend-usage.ts";
+import { resolveStorageBackendDeletionState } from "./backend-deletion.ts";
 import { captureStagingNamespaceSnapshot } from "./endpoint-rebind.ts";
 import { withStorageLocationWriteAndAdvisoryLock } from "./maintenance-lock.ts";
+
+function isForeignKeyViolation(error: unknown) {
+  return Boolean(
+    error
+    && typeof error === "object"
+    && (error as { code?: string }).code === "23503"
+  );
+}
 
 export async function createStorageBackend(input: StorageBackendCreateInput) {
   if (input.slug === "local") {
@@ -145,15 +154,20 @@ export async function deleteStorageBackend(slug: string) {
       signal.throwIfAborted();
       const snapshot = await readStorageBackendSnapshot(slug);
       signal.throwIfAborted();
+      const usage = storageBackendUsage(snapshot);
       if (snapshot.is_default) {
+        const deletion = resolveStorageBackendDeletionState({
+          ...snapshot,
+          ...usage
+        });
         throw new ApiError(
           400,
           "storage_default_delete",
-          "默认后端不能删除，请先切换默认后端"
+          "默认后端不能删除，请先切换默认后端",
+          { ...usage, deletion }
         );
       }
 
-      const usage = storageBackendUsage(snapshot);
       if (
         !usage.image_count
         && !usage.import_session_count
@@ -172,46 +186,61 @@ export async function deleteStorageBackend(slug: string) {
         || usage.cleanup_job_count
         || usage.staging_object_count
       ) {
+        const deletion = resolveStorageBackendDeletionState({
+          ...snapshot,
+          ...usage
+        });
         throw new ApiError(
           409,
           "storage_backend_in_use",
           "该存储后端仍有图片、未清理导入会话、旧对象删除任务或暂存对象，无法删除",
-          usage
+          { ...usage, deletion }
         );
       }
 
       signal.throwIfAborted();
       try {
-        await withTransactionOnClient(lockClient, async (client) => {
-          signal.throwIfAborted();
-          const deleted = await client.query(
-            `DELETE FROM storage_backend
-              WHERE slug=$1 AND NOT is_default
-              RETURNING slug`,
-            [slug]
-          ).catch((error: unknown) => {
-            if (
-              error
-              && typeof error === "object"
-              && (error as { code?: string }).code === "23503"
-            ) {
+        try {
+          await withTransactionOnClient(lockClient, async (client) => {
+            signal.throwIfAborted();
+            const deleted = await client.query(
+              `DELETE FROM storage_backend
+                WHERE slug=$1 AND NOT is_default
+                RETURNING slug`,
+              [slug]
+            );
+            signal.throwIfAborted();
+            if (!deleted.rowCount) {
+              const deletion = resolveStorageBackendDeletionState({
+                ...snapshot,
+                ...usage,
+                is_default: true
+              });
               throw new ApiError(
-                409,
-                "storage_backend_in_use",
-                "该存储后端在删除时被新的数据引用，请刷新后重试"
+                400,
+                "storage_default_delete",
+                "后端已被设为默认，不能删除；请刷新后重试",
+                { ...usage, deletion }
               );
             }
-            throw error;
           });
+        } catch (error) {
+          if (!isForeignKeyViolation(error)) throw error;
           signal.throwIfAborted();
-          if (!deleted.rowCount) {
-            throw new ApiError(
-              400,
-              "storage_default_delete",
-              "后端已被设为默认，不能删除；请刷新后重试"
-            );
-          }
-        });
+          const latestSnapshot = await readStorageBackendSnapshot(slug);
+          signal.throwIfAborted();
+          const latestUsage = storageBackendUsage(latestSnapshot);
+          const deletion = resolveStorageBackendDeletionState({
+            ...latestSnapshot,
+            ...latestUsage
+          });
+          throw new ApiError(
+            409,
+            "storage_backend_in_use",
+            "该存储后端在删除时被新的数据引用，请刷新后重试",
+            { ...latestUsage, deletion }
+          );
+        }
       } finally {
         // The DELETE may commit even if its acknowledgement is lost.
         invalidateStorageBackendRegistry({ retireDrivers: true });

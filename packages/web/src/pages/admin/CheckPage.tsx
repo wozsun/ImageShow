@@ -1,21 +1,22 @@
 import { useMemo, useState } from "react";
 import { adminPermissions } from "@imageshow/shared/browser";
+import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api/client.js";
 import { adminApiBasePath } from "../../lib/constants.js";
 import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
 import { Icon } from "../../components/icon/Icon.js";
 import { DialogFrame } from "../../components/feedback/DialogFrame.js";
-import { SelectMenu } from "../../components/form/SelectMenu.js";
 import { StableButtonLabel } from "../../components/data-display/StableButtonLabel.js";
-import { useStorageOptions } from "../../lib/api/storage-options.js";
+import { migrateStorageLocation } from "../../lib/api/storage-migration.js";
+import { invalidateStorageData } from "../../lib/api/query-invalidation.js";
 import { useAdminPermissions } from "../../lib/api/site-data.js";
+import { StorageLocationMigrationDialog } from "./StorageLocationMigrationDialog.js";
 import "../../styles/admin/check.css";
 
 export function CheckPage() {
+  const client = useQueryClient();
   const [result, setResult] = useState<unknown>(null);
   const [running, setRunning] = useState("");
-  const [migrateSource, setMigrateSource] = useState("");
-  const [migrateTarget, setMigrateTarget] = useState("");
   const permissions = useAdminPermissions();
   const canMigrateStorage = permissions.includes(
     adminPermissions.storageMaintenanceMigrate
@@ -23,8 +24,6 @@ export function CheckPage() {
   const canCleanupStorage = permissions.includes(
     adminPermissions.storageMaintenanceCleanup
   );
-  const { data: storageOptionsData } = useStorageOptions(canMigrateStorage);
-  const storageOptions = (storageOptionsData?.backends ?? []).map((backend) => ({ value: backend.slug, label: backend.display_name || backend.slug }));
   const [operationModal, setOperationModal] = useState<"migrate-storage-location" | "storage-cleanup" | null>(null);
   const checks = useMemo(() => [
     { name: "db", label: "数据库" },
@@ -33,19 +32,32 @@ export function CheckPage() {
     { name: "trash", label: "回收站" },
     { name: "all", label: "全部" }
   ], []);
-  const operationAllowed = operationModal === "migrate-storage-location"
-    ? canMigrateStorage
-    : operationModal === "storage-cleanup"
-      ? canCleanupStorage
-      : false;
   const runCheck = async (name: string, body?: Record<string, unknown>) => {
     setRunning(name);
     try {
       setResult(await api(`${adminApiBasePath}/check/${name}`, { method: "POST", body: body ? JSON.stringify(body) : undefined }));
+      return true;
     } catch (error) {
       reportAdminUiError(`check.${name}`, error);
       setResult({ ok: false, error: "检查执行失败，请稍后重试" });
+      return false;
     } finally {
+      setRunning("");
+    }
+  };
+  const runStorageMigration = async (source: string, target: string) => {
+    setRunning("migrate-storage-location");
+    try {
+      setResult(await migrateStorageLocation(source, target));
+      return true;
+    } catch (error) {
+      reportAdminUiError("check.migrate-storage-location", error);
+      setResult({ ok: false, error: "迁移执行失败，请检查存储配置后重试" });
+      return false;
+    } finally {
+      await invalidateStorageData(client).catch((error) => {
+        reportAdminUiError("check.migrate-storage-location.refresh", error);
+      });
       setRunning("");
     }
   };
@@ -73,13 +85,7 @@ export function CheckPage() {
                 <button
                   type="button"
                   disabled={Boolean(running)}
-                  onClick={() => {
-                    setOperationModal("migrate-storage-location");
-                    if (storageOptions.length) {
-                      setMigrateSource((value) => value || storageOptions[0].value);
-                      setMigrateTarget((value) => value || (storageOptions[1]?.value ?? storageOptions[0].value));
-                    }
-                  }}
+                  onClick={() => setOperationModal("migrate-storage-location")}
                 >
                   <Icon name="database-2-line" /><StableButtonLabel idle="迁移存储后端" busyText="迁移中" busy={running === "migrate-storage-location"} />
                 </button>
@@ -98,23 +104,18 @@ export function CheckPage() {
           )}
         </div>
       </header>
-      {operationModal && operationAllowed && (
-        <CheckOperationModal
-          operation={operationModal}
-          running={running}
-          source={migrateSource}
-          target={migrateTarget}
-          options={storageOptions}
-          onSourceChange={setMigrateSource}
-          onTargetChange={setMigrateTarget}
+      {operationModal === "migrate-storage-location" && canMigrateStorage && (
+        <StorageLocationMigrationDialog
+          busy={Boolean(running)}
           onClose={() => setOperationModal(null)}
-          onRun={async () => {
-            if (operationModal === "migrate-storage-location") {
-              await runCheck("migrate-storage-location", { source: migrateSource, target: migrateTarget });
-            } else {
-              await runCheck(operationModal);
-            }
-          }}
+          onRun={runStorageMigration}
+        />
+      )}
+      {operationModal === "storage-cleanup" && canCleanupStorage && (
+        <StorageCleanupDialog
+          running={running}
+          onClose={() => setOperationModal(null)}
+          onRun={() => runCheck("storage-cleanup")}
         />
       )}
       {result !== null && <CheckResult result={result} />}
@@ -122,23 +123,14 @@ export function CheckPage() {
   );
 }
 
-function CheckOperationModal({ operation, running, source, target, options, onSourceChange, onTargetChange, onClose, onRun }: {
-  operation: "migrate-storage-location" | "storage-cleanup";
+function StorageCleanupDialog({ running, onClose, onRun }: {
   running: string;
-  source: string;
-  target: string;
-  options: { value: string; label: string }[];
-  onSourceChange: (value: string) => void;
-  onTargetChange: (value: string) => void;
   onClose: () => void;
-  onRun: () => Promise<void>;
+  onRun: () => Promise<boolean>;
 }) {
-  const isLocationMigration = operation === "migrate-storage-location";
-  const title = isLocationMigration ? "迁移存储后端" : "清理无效存储";
-  const description = isLocationMigration
-    ? "复制图片和缩略图到目标存储后端，并更新数据库中的存储引用。"
-    : "删除数据库未引用的原图、缩略图及已失效的上传暂存文件。回收站中的图片文件和其他仍被引用的对象会保留。";
-  const runningText = isLocationMigration ? "迁移中" : "清理中";
+  const [errorMessage, setErrorMessage] = useState("");
+  const title = "清理无效存储";
+  const description = "删除数据库未引用的原图、缩略图及已失效的上传暂存文件。回收站中的图片文件和其他仍被引用的对象会保留。";
   return (
     <DialogFrame
       className="modal edit-modal"
@@ -151,8 +143,12 @@ function CheckOperationModal({ operation, running, source, target, options, onSo
           className="operation-modal"
           onSubmit={async (event) => {
             event.preventDefault();
-            await onRun();
-            requestClose();
+            setErrorMessage("");
+            if (await onRun()) {
+              requestClose();
+            } else {
+              setErrorMessage("清理执行失败，请稍后重试。");
+            }
           }}
         >
           <header>
@@ -171,38 +167,19 @@ function CheckOperationModal({ operation, running, source, target, options, onSo
             </button>
           </header>
           <div className="operation-body">
-            {isLocationMigration && (
-              <>
-                <label>
-                  源后端
-                  <SelectMenu
-                    value={source}
-                    onChange={onSourceChange}
-                    options={options}
-                    ariaLabel="源后端"
-                  />
-                </label>
-                <label>
-                  目标后端
-                  <SelectMenu
-                    value={target}
-                    onChange={onTargetChange}
-                    options={options}
-                    ariaLabel="目标后端"
-                  />
-                </label>
-              </>
-            )}
             <p className="notice-line">此操作会修改存储对象。执行前请先运行存储检查，确认检查结果，并避免同时上传或批量编辑图片。</p>
+            {errorMessage && (
+              <p className="error" role="alert">{errorMessage}</p>
+            )}
           </div>
           <footer>
             <button type="button" disabled={Boolean(running)} onClick={() => requestClose()}>取消</button>
             <button
               className="button"
               type="submit"
-              disabled={Boolean(running) || (isLocationMigration && (!source || !target || source === target))}
+              disabled={Boolean(running)}
             >
-              <Icon name="refresh-line" /><StableButtonLabel idle="开始执行" busyText={runningText} busy={running === operation} />
+              <Icon name="refresh-line" /><StableButtonLabel idle="开始执行" busyText="清理中" busy={running === "storage-cleanup"} />
             </button>
           </footer>
         </form>

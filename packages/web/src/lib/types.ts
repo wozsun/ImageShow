@@ -10,7 +10,8 @@ import type {
   GalleryImageCardDto,
   ImageAdminInfoDto,
   PublicImageDetailDto,
-  PublicImageItemDto
+  PublicImageItemDto,
+  StorageBackendDeletionState
 } from "@imageshow/shared";
 
 export type GalleryImageCard = GalleryImageCardDto;
@@ -87,6 +88,7 @@ type StorageBackendAdminBase = {
   cleanup_job_count: number;
   failed_cleanup_job_count: number;
   exhausted_cleanup_job_count: number;
+  deletion: StorageBackendDeletionState;
 };
 
 export type StorageBackendAdmin = StorageBackendAdminBase & (
