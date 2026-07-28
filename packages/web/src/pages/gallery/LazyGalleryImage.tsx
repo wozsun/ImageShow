@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { galleryLazyRootMargin } from "../../lib/constants.js";
+import {
+  galleryLazyRootMargin,
+  galleryViewportResizeSettleMs
+} from "../../lib/constants.js";
 import { Icon } from "../../components/icon/Icon.js";
 import type { Device } from "../../lib/types.js";
 import { galleryImageRatio } from "./gallery-layout.js";
@@ -9,10 +12,13 @@ type GalleryVisibilityListener = (visible: boolean) => void;
 const galleryVisibilityListeners = new Map<Element, GalleryVisibilityListener>();
 let galleryVisibilityObserver: IntersectionObserver | undefined;
 let galleryVisibilityViewportHeight = 0;
-let galleryVisibilityResizeFrame: number | undefined;
+let galleryVisibilityResizeTimer: number | undefined;
 
 function currentGalleryViewportHeight() {
-  return window.visualViewport?.height ?? window.innerHeight;
+  const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+  return Number.isFinite(viewportHeight) && viewportHeight > 0
+    ? viewportHeight
+    : window.innerHeight;
 }
 
 function createGalleryVisibilityObserver() {
@@ -32,7 +38,7 @@ function createGalleryVisibilityObserver() {
 }
 
 function updateGalleryVisibilityObserver() {
-  galleryVisibilityResizeFrame = undefined;
+  galleryVisibilityResizeTimer = undefined;
   if (galleryVisibilityListeners.size === 0) return;
   const nextViewportHeight = currentGalleryViewportHeight();
   if (Math.abs(nextViewportHeight - galleryVisibilityViewportHeight) < 1) return;
@@ -41,9 +47,12 @@ function updateGalleryVisibilityObserver() {
 }
 
 function scheduleGalleryVisibilityUpdate() {
-  if (galleryVisibilityResizeFrame !== undefined) return;
-  galleryVisibilityResizeFrame = window.requestAnimationFrame(
-    updateGalleryVisibilityObserver
+  if (galleryVisibilityResizeTimer !== undefined) {
+    window.clearTimeout(galleryVisibilityResizeTimer);
+  }
+  galleryVisibilityResizeTimer = window.setTimeout(
+    updateGalleryVisibilityObserver,
+    galleryViewportResizeSettleMs
   );
 }
 
@@ -56,9 +65,9 @@ function stopGalleryVisibilityObserver() {
     "resize",
     scheduleGalleryVisibilityUpdate
   );
-  if (galleryVisibilityResizeFrame !== undefined) {
-    window.cancelAnimationFrame(galleryVisibilityResizeFrame);
-    galleryVisibilityResizeFrame = undefined;
+  if (galleryVisibilityResizeTimer !== undefined) {
+    window.clearTimeout(galleryVisibilityResizeTimer);
+    galleryVisibilityResizeTimer = undefined;
   }
   galleryVisibilityViewportHeight = 0;
 }

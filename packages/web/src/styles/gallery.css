@@ -5,6 +5,25 @@
   position: relative;
   isolation: isolate;
   color: var(--public-text);
+  background: var(--gallery-sky-left);
+}
+
+.gallery-atmosphere,
+.gallery-page::before,
+.gallery-page::after {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 0;
+  width: 100%;
+  height: 100vh;
+  height: 100lvh;
+  pointer-events: none;
+}
+
+.gallery-atmosphere {
+  z-index: -3;
+  contain: paint;
   background:
     radial-gradient(
       ellipse 54% 42% at -8% 16%,
@@ -27,9 +46,6 @@
 .gallery-page::before,
 .gallery-page::after {
   content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
 }
 
 .gallery-page::before {

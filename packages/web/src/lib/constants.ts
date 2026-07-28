@@ -20,6 +20,7 @@ export function galleryLazyRootMargin(viewportHeight: number) {
   );
   return `${verticalBuffer}px 0px`;
 }
+export const galleryViewportResizeSettleMs = 180;
 export const gallerySentinelRootMargin = "280px 0px";
 
 export function publicRootPath(

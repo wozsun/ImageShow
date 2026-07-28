@@ -178,6 +178,7 @@ export function GalleryPage() {
           : undefined
       } as CSSProperties}
     >
+      <span className="gallery-atmosphere" aria-hidden="true" />
       <AppHeader />
       <section
         ref={toolbarRef}
