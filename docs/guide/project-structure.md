@@ -78,8 +78,9 @@ core / config
 
 - `session.ts` 创建、预览和取消会话；`materialize.ts` 只把 upload/download 原始素材
   原子发布到 `data/tmp`。
-- `status.ts` 负责进程内 phase、状态投影与 SSE；`lifecycle.ts` 负责租约、取消标记、
-  execution fence 和失败落库，PostgreSQL 状态仍是唯一权威来源。
+- `status.ts` 负责进程内 phase、状态投影与 SSE，并以请求信号和响应流共用的幂等
+  cleanup 管理监听器、heartbeat、快照与写入失败；`lifecycle.ts` 负责租约、取消
+  标记、execution fence 和失败落库，PostgreSQL 状态仍是唯一权威来源。
 - `prepare.ts` 只编排会话认领、恢复和清理，图片处理与 prepared 结果由
   `prepare-artifacts.ts` 完成。
 - `commit.ts` 只编排锁、对象落位与补偿；数据库事务、提交后缓存同步和候选对象所有权

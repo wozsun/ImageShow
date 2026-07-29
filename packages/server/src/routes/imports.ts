@@ -138,7 +138,7 @@ export function registerImportRoutes(app: Hono) {
   });
 
   app.get(`${adminApiBasePath}/imports/events`, async (c) => {
-    return streamImportEvents(parseImportIds(c.req.url));
+    return streamImportEvents(parseImportIds(c.req.url), c.req.raw.signal);
   });
 
   app.post(`${adminApiBasePath}/imports/:id/commit`, async (c) => {

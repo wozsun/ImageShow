@@ -192,26 +192,73 @@ function encodeServerSentEvent(event: string, data: unknown) {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 }
 
-export function streamImportEvents(ids: string[]): Response {
+export function streamImportEvents(
+  ids: string[],
+  requestSignal: AbortSignal
+): Response {
   const uniqueIds = uniqueImportIds(ids);
   const watched = new Map(
     uniqueIds.map((id) => [canonicalImportId(id), id])
   );
   const encoder = new TextEncoder();
-  let closed = false;
+  let controller: ReadableStreamDefaultController<Uint8Array> | undefined;
+  let cleaned = false;
   let heartbeat: ReturnType<typeof setInterval> | undefined;
   let listener: ((status: ImportStatusEvent) => void) | undefined;
 
+  function cleanup() {
+    if (cleaned) return;
+    cleaned = true;
+    requestSignal.removeEventListener("abort", closeStream);
+    if (heartbeat) {
+      clearInterval(heartbeat);
+      heartbeat = undefined;
+    }
+    if (listener) {
+      importStatusEvents.off("status", listener);
+      listener = undefined;
+    }
+  }
+
+  function closeStream() {
+    if (cleaned) return;
+    cleanup();
+    try {
+      controller?.close();
+    } catch {
+      // The consumer may have cancelled the stream at the same time.
+    }
+  }
+
+  function failStream(error: unknown) {
+    if (cleaned) return;
+    cleanup();
+    try {
+      controller?.error(error);
+    } catch {
+      // The stream may already be closed or errored.
+    }
+  }
+
+  function send(event: string, data: unknown) {
+    if (cleaned || !controller) return false;
+    try {
+      controller.enqueue(encoder.encode(encodeServerSentEvent(event, data)));
+      return true;
+    } catch (error) {
+      failStream(error);
+      return false;
+    }
+  }
+
   const stream = new ReadableStream<Uint8Array>({
-    start(controller) {
-      const send = (event: string, data: unknown) => {
-        if (closed) return;
-        try {
-          controller.enqueue(encoder.encode(encodeServerSentEvent(event, data)));
-        } catch {
-          closed = true;
-        }
-      };
+    start(streamController) {
+      controller = streamController;
+      if (requestSignal.aborted) {
+        closeStream();
+        return;
+      }
+      requestSignal.addEventListener("abort", closeStream, { once: true });
 
       listener = (status) => {
         const responseId = watched.get(canonicalImportId(status.id));
@@ -221,26 +268,23 @@ export function streamImportEvents(ids: string[]): Response {
           : { ...status, id: responseId });
       };
       importStatusEvents.on("status", listener);
-      send("ready", { ids: uniqueIds });
+      if (!send("ready", { ids: uniqueIds })) return;
 
       void listImportStatuses(uniqueIds)
         .then((statuses) => {
-          for (const status of statuses) send("import-status", status);
-        })
-        .catch(() => {
-          for (const id of uniqueIds) {
-            send("import-status", missingImportStatus(id));
+          if (cleaned) return;
+          for (const status of statuses) {
+            if (!send("import-status", status)) return;
           }
-        });
+        })
+        .catch(failStream);
 
       heartbeat = setInterval(() => {
         send("ping", { now: Date.now() });
       }, 15_000);
     },
     cancel() {
-      closed = true;
-      if (heartbeat) clearInterval(heartbeat);
-      if (listener) importStatusEvents.off("status", listener);
+      cleanup();
     }
   });
 
