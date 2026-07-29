@@ -1,13 +1,15 @@
 import {
-  publicNavigationHeaderScrollThreshold
+  publicNavigationHeaderHideThreshold,
+  publicNavigationHeaderRevealThreshold,
+  publicNavigationTopRevealThreshold
 } from "../../lib/ui/public-navigation.js";
 
 const galleryNavigationThresholds = {
-  hideHeader: publicNavigationHeaderScrollThreshold,
-  hideToolbar: 48,
-  revealToolbar: 16,
-  revealHeader: publicNavigationHeaderScrollThreshold,
-  revealAtTop: publicNavigationHeaderScrollThreshold
+  hideHeader: publicNavigationHeaderHideThreshold,
+  hideToolbar: 56,
+  revealToolbar: 28,
+  revealHeader: publicNavigationHeaderRevealThreshold,
+  revealAtTop: publicNavigationTopRevealThreshold
 } as const;
 
 export type GalleryNavigationStage = "visible" | "toolbar-only" | "hidden";

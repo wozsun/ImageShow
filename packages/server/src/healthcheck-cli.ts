@@ -1,10 +1,14 @@
 import { request } from "node:http";
 import { appConfig } from "@imageshow/shared";
-import { getRuntimeConfig } from "./config/runtime-config-store.ts";
+import { runtimePaths } from "./config/bootstrap-env.ts";
+import { readRuntimeConfigFile } from "./config/runtime-config-file.ts";
 
-const runtimeConfig = getRuntimeConfig();
+const runtimeConfig = readRuntimeConfigFile();
+if (!runtimeConfig) {
+  throw new Error(`Runtime config ${runtimePaths.configFile} does not exist`);
+}
 const port = String(appConfig.applicationPort);
-const host = runtimeConfig.site.domain;
+const host = runtimeConfig.config.site.domain;
 
 function requestReadiness() {
   return new Promise<number>((resolve, reject) => {

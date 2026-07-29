@@ -1,89 +1,36 @@
-import { randomUUID } from "node:crypto";
-import {
-  closeSync,
-  existsSync,
-  fsyncSync,
-  mkdirSync,
-  openSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  writeFileSync
-} from "node:fs";
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { RuntimeConfig } from "@imageshow/shared";
 import { runtimeConfigFromEnvironment, runtimePaths } from "./bootstrap-env.ts";
 import {
+  readRuntimeConfigFile,
+  writeRuntimeConfigFile
+} from "./runtime-config-file.ts";
+import {
   mergeRuntimeConfig,
-  normalizeRuntimeConfig,
   type RuntimeConfigPatch
 } from "./runtime-config.ts";
 
-function readRuntimeConfigFile(): RuntimeConfig | null {
-  if (!existsSync(runtimePaths.configFile)) return null;
-
-  let value: unknown;
-  try {
-    value = JSON.parse(readFileSync(runtimePaths.configFile, "utf8"));
-  } catch (error) {
-    throw new Error(
-      `Cannot parse runtime config ${runtimePaths.configFile}: ${error instanceof Error ? error.message : String(error)}`
-    );
-  }
-
-  let normalized: RuntimeConfig;
-  try {
-    normalized = normalizeRuntimeConfig(value);
-  } catch (error) {
-    throw new Error(
-      `Invalid runtime config ${runtimePaths.configFile}: ${error instanceof Error ? error.message : String(error)}`
-    );
-  }
-  if (JSON.stringify(value) !== JSON.stringify(normalized)) {
-    writeRuntimeConfigFile(normalized);
-  }
-  return normalized;
-}
-
-function writeRuntimeConfigFile(value: RuntimeConfig) {
-  mkdirSync(runtimePaths.configDirectory, { recursive: true });
-  const temporaryPath =
-    `${runtimePaths.configFile}.${process.pid}.${randomUUID()}.tmp`;
-  try {
-    const temporaryFile = openSync(temporaryPath, "wx", 0o600);
-    try {
-      writeFileSync(temporaryFile, `${JSON.stringify(value, null, 2)}\n`, "utf8");
-      fsyncSync(temporaryFile);
-    } finally {
-      closeSync(temporaryFile);
-    }
-    renameSync(temporaryPath, runtimePaths.configFile);
-    syncRuntimeConfigDirectory();
-  } finally {
-    rmSync(temporaryPath, { force: true });
-  }
-}
-
-function syncRuntimeConfigDirectory() {
-  // Node cannot open directory handles on Windows. The production container is
-  // Linux, where syncing the parent makes the rename durable as well as atomic.
-  if (process.platform === "win32") return;
-  const directory = openSync(runtimePaths.configDirectory, "r");
-  try {
-    fsyncSync(directory);
-  } finally {
-    closeSync(directory);
-  }
-}
-
-const existingRuntimeConfig = readRuntimeConfigFile();
-let runtimeConfig = existingRuntimeConfig ?? runtimeConfigFromEnvironment();
-if (!existingRuntimeConfig) writeRuntimeConfigFile(runtimeConfig);
+let runtimeConfig: RuntimeConfig | undefined;
 let runtimeConfigRevision = 0;
 const runtimeConfigWriteLeaseContext = new AsyncLocalStorage<boolean>();
 let runtimeConfigWriteLeaseTail = Promise.resolve();
 
+export function initializeRuntimeConfig() {
+  if (runtimeConfig) return runtimeConfig;
+
+  const existing = readRuntimeConfigFile();
+  const initial = existing?.config ?? runtimeConfigFromEnvironment();
+  if (!existing || existing.needsWriteBack) writeRuntimeConfigFile(initial);
+  runtimeConfig = initial;
+  return runtimeConfig;
+}
+
 export function getRuntimeConfig() {
+  if (!runtimeConfig) {
+    throw new Error(
+      "Runtime config has not been initialized. Call initializeRuntimeConfig() first."
+    );
+  }
   return runtimeConfig;
 }
 
@@ -118,6 +65,7 @@ export async function withRuntimeConfigWriteLease<T>(
 }
 
 function commitRuntimeConfig(next: RuntimeConfig) {
+  getRuntimeConfig();
   writeRuntimeConfigFile(next);
   runtimeConfig = next;
   runtimeConfigRevision += 1;
@@ -128,7 +76,7 @@ function commitRuntimeConfig(next: RuntimeConfig) {
 
 export function updateRuntimeConfig(patch: RuntimeConfigPatch) {
   return withRuntimeConfigWriteLease(() => {
-    const next = mergeRuntimeConfig(runtimeConfig, patch);
+    const next = mergeRuntimeConfig(getRuntimeConfig(), patch);
     return commitRuntimeConfig(next).config;
   });
 }
@@ -136,7 +84,7 @@ export function updateRuntimeConfig(patch: RuntimeConfigPatch) {
 /** Apply a patch and return the exact in-process write revision for rollback fencing. */
 export function updateRuntimeConfigWithRevision(patch: RuntimeConfigPatch) {
   return withRuntimeConfigWriteLease(() => {
-    const next = mergeRuntimeConfig(runtimeConfig, patch);
+    const next = mergeRuntimeConfig(getRuntimeConfig(), patch);
     return commitRuntimeConfig(next);
   });
 }
@@ -151,6 +99,7 @@ export function replaceRuntimeConfigIfRevision(
   next: RuntimeConfig
 ) {
   return withRuntimeConfigWriteLease(() => {
+    getRuntimeConfig();
     if (runtimeConfigRevision !== expectedRevision) return false;
     commitRuntimeConfig(next);
     return true;
@@ -159,9 +108,13 @@ export function replaceRuntimeConfigIfRevision(
 
 export function reloadRuntimeConfig() {
   return withRuntimeConfigWriteLease(() => {
-    const fromDisk = readRuntimeConfigFile();
-    if (!fromDisk) throw new Error(`Runtime config ${runtimePaths.configFile} does not exist`);
-    runtimeConfig = fromDisk;
+    getRuntimeConfig();
+    const snapshot = readRuntimeConfigFile();
+    if (!snapshot) {
+      throw new Error(`Runtime config ${runtimePaths.configFile} does not exist`);
+    }
+    if (snapshot.needsWriteBack) writeRuntimeConfigFile(snapshot.config);
+    runtimeConfig = snapshot.config;
     runtimeConfigRevision += 1;
     notifyRuntimeConfigChange();
     return runtimeConfig;

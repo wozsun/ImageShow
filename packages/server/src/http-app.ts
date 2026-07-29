@@ -1,0 +1,168 @@
+import { Hono, type Context, type Next } from "hono";
+import { compress } from "hono/compress";
+import { adminApiBasePath } from "@imageshow/shared";
+import { getRuntimeConfig } from "./config/runtime-config-store.ts";
+import { apiErrorResponse, handleApiError } from "./core/http/responses.ts";
+import {
+  appendVaryHeader,
+  noStoreCacheControl,
+  securityHeaders
+} from "./core/http/headers.ts";
+import {
+  requireAdminCsrf,
+  requireAdminSession
+} from "./users/admin-session.ts";
+import {
+  limitApiRequestBody,
+  limitProtectedAdminRequestBody
+} from "./core/http/request-body-limit.ts";
+import { prepareCompressionThreshold } from "./core/http/compression-threshold.ts";
+import { registerAdminLogRoutes } from "./routes/admin-logs.ts";
+import { registerAdvancedConfigRoutes } from "./routes/advanced-config.ts";
+import { registerAdminImageRoutes } from "./routes/admin-images.ts";
+import { registerAdminTagRoutes } from "./routes/admin-tags.ts";
+import { registerAdminThemeRoutes } from "./routes/admin-themes.ts";
+import { registerAdminAuthorRoutes } from "./routes/admin-authors.ts";
+import { registerAdminUserRoutes } from "./routes/admin-users.ts";
+import { registerAdminPreferenceRoutes } from "./routes/admin-preferences.ts";
+import { registerCheckRoutes } from "./routes/check.ts";
+import { registerHealthRoutes } from "./routes/health.ts";
+import {
+  registerProtectedAuthRoutes,
+  registerPublicAuthRoutes
+} from "./routes/auth.ts";
+import { registerPublicRoutes } from "./routes/public.ts";
+import { serveRobotsTxt } from "./routes/robots.ts";
+import { handleRandomImage, registerRandomRoutes } from "./routes/random.ts";
+import { registerSettingsRoutes } from "./routes/settings.ts";
+import { registerSecurityReportRoutes } from "./routes/security-reports.ts";
+import { registerStorageRoutes } from "./routes/storage.ts";
+import { registerSpaRoutes } from "./routes/spa.ts";
+import { registerImportRoutes } from "./routes/imports.ts";
+import { isAllowedSiteHost, specialHost } from "./config/site-host.ts";
+import { auditAdminMutation } from "./core/audit-log.ts";
+
+export function createHttpApp() {
+  // Route handlers depend on the process-wide runtime snapshot. Keep assembly
+  // explicit so importing this module remains pure while incorrect startup
+  // order fails before the application can accept requests.
+  getRuntimeConfig();
+
+  const app = new Hono();
+
+  app.onError((error, c) => handleApiError(c, error));
+  app.use("*", async (c, next) => {
+    for (const [name, value] of Object.entries(securityHeaders)) {
+      c.header(name, value);
+    }
+    await next();
+  });
+  app.use("*", async (c, next) => {
+    if (!isAllowedSiteHost(c.req.header("host") ?? "")) {
+      return apiErrorResponse({ status: 404, message: "Not Found" });
+    }
+    await next();
+  });
+  app.options("*", async () => new Response(null, {
+    status: 204,
+    headers: { "Cache-Control": noStoreCacheControl }
+  }));
+  app.get("/robots.txt", serveRobotsTxt);
+
+  app.use("*", async (c, next) => {
+    const host = c.req.header("host") ?? "";
+    const special = specialHost(host);
+    if (special === "random") {
+      if (c.req.method !== "GET" && c.req.method !== "HEAD") {
+        return apiErrorResponse({ status: 405, message: "Method Not Allowed" });
+      }
+      if (new URL(c.req.url).pathname !== "/") {
+        return apiErrorResponse({ status: 404, message: "Not Found" });
+      }
+      return handleRandomImage(c);
+    }
+    if (special === "static" || special === "link") {
+      const path = new URL(c.req.url).pathname;
+      const allowed = special === "static"
+        ? path.startsWith("/media/") || path.startsWith("/thumbs/")
+        : path.startsWith("/original/");
+      if (!allowed) {
+        return apiErrorResponse({ status: 404, message: "Not Found" });
+      }
+    }
+    return next();
+  });
+
+  const mediaHostGuard = async (c: Context, next: Next) => {
+    const special = specialHost(c.req.header("host") ?? "");
+    if (special === "static" || special === "link") return next();
+    return apiErrorResponse({ status: 404, message: "Not Found" });
+  };
+  app.use("/media/*", mediaHostGuard);
+  app.use("/thumbs/*", mediaHostGuard);
+  app.use("/original/*", mediaHostGuard);
+
+  app.use("/api/*", limitApiRequestBody);
+  app.use("/api/*", async (c, next) => {
+    await next();
+    appendVaryHeader(c, "Accept-Encoding");
+  });
+  const apiCompress = compress({ threshold: 1024 });
+  app.use("/api/*", async (c, next) => {
+    if (
+      new URL(c.req.url).pathname ===
+        `${adminApiBasePath}/imports/events`
+    ) {
+      return next();
+    }
+    let temporaryContentLength = false;
+    await apiCompress(c, async () => {
+      await next();
+      temporaryContentLength = await prepareCompressionThreshold(c, 1024);
+    });
+    if (
+      temporaryContentLength
+      && !c.res.headers.has("Content-Encoding")
+    ) {
+      c.res.headers.delete("Content-Length");
+    }
+  });
+  app.use("/api/*", async (c, next) => {
+    await next();
+    if (!c.res.headers.has("Cache-Control")) {
+      c.header("Cache-Control", noStoreCacheControl);
+    }
+  });
+
+  registerHealthRoutes(app);
+  registerPublicRoutes(app);
+  registerRandomRoutes(app);
+  registerPublicAuthRoutes(app);
+  registerSecurityReportRoutes(app);
+
+  app.use(`${adminApiBasePath}/*`, requireAdminSession);
+  app.use(`${adminApiBasePath}/*`, auditAdminMutation);
+  app.use(`${adminApiBasePath}/*`, async (c, next) => {
+    if (c.req.method !== "GET") return requireAdminCsrf(c, next);
+    await next();
+  });
+  app.use(`${adminApiBasePath}/*`, limitProtectedAdminRequestBody);
+  registerProtectedAuthRoutes(app);
+
+  registerAdminImageRoutes(app);
+  registerAdminTagRoutes(app);
+  registerAdminThemeRoutes(app);
+  registerAdminAuthorRoutes(app);
+  registerAdminUserRoutes(app);
+  registerAdminPreferenceRoutes(app);
+  registerImportRoutes(app);
+  registerAdminLogRoutes(app);
+  registerAdvancedConfigRoutes(app);
+  registerSettingsRoutes(app);
+  registerStorageRoutes(app);
+  registerCheckRoutes(app);
+  registerSpaRoutes(app);
+  app.notFound(() => apiErrorResponse({ status: 404, message: "Not Found" }));
+
+  return app;
+}

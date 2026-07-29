@@ -50,12 +50,15 @@ core / config
 
 ### 应用装配与特殊入口
 
-- `src/index.ts` 只装配中间件和路由，执行迁移与管理员初始化，启动 Worker 和 HTTP 服务，
-  并处理优雅退出。
+- `src/http-app.ts` 只构造 Hono 应用、装配中间件和路由；导入模块不会初始化配置、
+  创建目录或启动服务。
+- `src/index.ts` 显式初始化运行时配置和日志来源，再创建 HTTP 应用，执行迁移与
+  管理员初始化，启动 Worker 和 HTTP 服务，并处理优雅退出。
 - `src/admin-password-cli.ts` 是管理员密码恢复入口。
 - `src/healthcheck-cli.ts` 是容器 readiness 检查入口。
 
-两个 CLI 都直接依赖所需基础设施，不导入 HTTP 应用，也不会触发主服务启动。
+两个 CLI 都直接依赖所需基础设施，不导入 HTTP 应用，也不会触发主服务启动；
+healthcheck 只读现有配置快照，密码恢复不初始化运行时配置。
 
 ### 稳定领域边界
 
@@ -63,7 +66,7 @@ core / config
 | --- | --- |
 | `core/` | PostgreSQL、Redis、安全抓取、日志、密码、UUID、并发和通用校验；不依赖业务领域或路由。 |
 | `core/http/` | HTTP 响应与响应头、请求来源和请求体限制、压缩阈值、条件请求、静态响应与 Range 解析。 |
-| `config/` | 部署环境、首次播种、运行时配置 schema、`config.json` 存储和配置包。 |
+| `config/` | 部署环境、首次播种、运行时配置 schema、无导入副作用的文件读写与显式进程内 store，以及配置包。 |
 | `routes/` | HTTP 方法、鉴权、CSRF、输入解析和响应投影；业务工作委托给领域模块。 |
 | `images/` | 图片读写、展示投影、缓存、分类与元数据变更、回收站、缩略图与回收站任务；`imports/` 拥有完整导入会话生命周期及清理任务，`read-models/` 只读 PostgreSQL。 |
 | `storage/` | local、S3、WebDAV driver 及无环工厂；注册表缓存与 driver、管理读模型、配置变更、探测和占用统计分开维护，并拥有对象访问、强摘要传输、位置锁、迁移及 `move.cleanup` 仓储与 handler。 |

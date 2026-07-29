@@ -1,15 +1,23 @@
 import { appendFileSync, existsSync, mkdirSync, renameSync, statSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
+import { appConfig, type RuntimeConfig } from "@imageshow/shared";
 import { runtimePaths } from "../config/bootstrap-env.ts";
-import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 
 const LEVELS = { DEBUG: 10, INFO: 20, WARN: 30, ERROR: 40, OFF: 100 } as const;
 type LevelName = keyof typeof LEVELS;
+type RuntimeLogConfig = RuntimeConfig["log"];
 
 const logPath = join(runtimePaths.logDirectory, "app.log");
 let logDirReady = false;
+let runtimeLogConfig = () => appConfig.runtimeDefaults.log as RuntimeLogConfig;
 
 let currentLogBytes = 0;
+
+export function configureRuntimeLogger(
+  getLogConfig: () => RuntimeLogConfig
+) {
+  runtimeLogConfig = getLogConfig;
+}
 
 function ensureLogDir() {
   if (logDirReady) return;
@@ -56,7 +64,7 @@ function localTimestamp() {
 }
 
 function write(level: LevelName, message: string, context?: unknown) {
-  const config = getRuntimeConfig().log;
+  const config = runtimeLogConfig();
   const threshold = LEVELS[config.level as LevelName] ?? LEVELS.WARN;
   if (LEVELS[level] < threshold) return;
 
