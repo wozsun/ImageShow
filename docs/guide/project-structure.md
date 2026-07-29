@@ -108,7 +108,8 @@ hooks ──► lib
 ```
 
 - `components/` 按稳定 UI 职责保存跨页面组件。
-- `hooks/` 保存跨页面且主要管理 React 生命周期或交互行为的 Hook。
+- `hooks/` 保存跨页面且主要管理 React 生命周期或交互行为的 Hook；首页与画廊的导航
+  共用 `usePageScrollMovement.ts` 管理 RAF 合并、页面锁定和有界滚动位移采样。
 - `lib/` 保存无界面代码；HTTP 客户端、query key 和共享查询 Hook 集中在 `lib/api/`。
 - `pages/` 保存路由页面与页面级编排，页面专属组件、状态机和 Hook 就近维护。
 - `pages/home/HomePage.tsx` 只编排查询、筛选状态和页面生命周期；首屏、筛选摘要栏
@@ -116,11 +117,13 @@ hooks ──► lib
 - `pages/gallery/` 就近拥有瀑布流位置模型、虚拟窗口、共享可见性观察器、三级导航
   状态机与开发统计；跨页面可复用的 DOM 图片加载、解码和并发调度留在
   `components/image/`，页面层只设置画廊任务的优先级、暂停和驻留边界。无界面的
-  页面滚动边界归一化放在 `lib/ui/`，供交互状态机消费。
+  页面滚动边界归一化放在 `lib/ui/`，由共享采样 Hook 提供给各页面交互状态机。
 - `pages/admin/uploader/` 管理统一 prepared import 队列；其中 `link-import/` 负责 URL、
   JSONL 与微博输入。
 - `styles/` 按 base、home、gallery、admin 和 responsive 组织全局样式；首页进一步
-  将页面 / 首屏基础、候选目录基础及共享响应式交互分文件，并按该顺序引入。
+  将页面 / 首屏基础、候选目录基础及共享响应式交互分文件，并按该顺序引入。公开页
+  的单一 fixed 导航框架、共享主导航位移变量和根滚动回弹边界集中在 `base.css`，
+  页面样式只负责各自第二导航栏的尺寸与自身显隐位移。
 
 `lib/`、`hooks/` 和通用组件不得反向导入具体页面。只有形成稳定跨页面职责的代码才上移，
 页面内部的小组件无需为目录对称而拆分。

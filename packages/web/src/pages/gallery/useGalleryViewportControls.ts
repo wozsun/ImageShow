@@ -6,16 +6,13 @@ import {
   useState,
   type RefObject
 } from "react";
-import { getPageScrollY, isPageScrollLocked } from "../../hooks/usePageScrollLock.js";
+import { isPageScrollLocked } from "../../hooks/usePageScrollLock.js";
+import { usePageScrollMovement } from "../../hooks/usePageScrollMovement.js";
 import {
   mobileViewportMediaQuery,
   useMediaQuery
 } from "../../hooks/useMediaQuery.js";
 import { useDismissiblePanel } from "../../hooks/useDismissiblePanel.js";
-import {
-  normalizePageScrollPosition,
-  pageScrollDelta
-} from "../../lib/ui/page-scroll-position.js";
 import {
   advanceGalleryNavigation,
   initialGalleryNavigationState,
@@ -29,18 +26,6 @@ function blurFocusedElement(element: HTMLElement) {
   if (activeElement instanceof HTMLElement && element.contains(activeElement)) {
     activeElement.blur();
   }
-}
-
-function currentPageScrollPosition() {
-  const contentHeight = Math.max(
-    document.documentElement.scrollHeight,
-    document.body?.scrollHeight ?? 0
-  );
-  return normalizePageScrollPosition(
-    getPageScrollY(),
-    contentHeight,
-    window.innerHeight
-  );
 }
 
 function useGalleryNavigationVisibility(
@@ -67,71 +52,39 @@ function useGalleryNavigationVisibility(
   }, [toolbarRef]);
 
   useLayoutEffect(() => {
+    if (!lockedOpen) return;
+    navigationStateRef.current = { ...initialGalleryNavigationState };
+    setStage("visible");
+  }, [lockedOpen]);
+
+  usePageScrollMovement(({ delta, position }) => {
     const toolbar = toolbarRef.current;
     if (!toolbar) return;
-    let previousPosition = currentPageScrollPosition();
-    if (lockedOpen) {
-      navigationStateRef.current = { ...initialGalleryNavigationState };
-      setStage("visible");
-      return;
+    // 属性栏的 Select / Facet 菜单通过 Portal 渲染在 body；主导航菜单
+    // 由 lockedOpen 暂停采样，二者都保持触发器与浮层处于同一可见状态。
+    const menuOpen = Boolean(
+      toolbar.querySelector('[aria-expanded="true"]')
+    );
+    const currentState = navigationStateRef.current;
+    const nextState = advanceGalleryNavigation(currentState, {
+      delta,
+      scrollTop: position.top,
+      toolbarHeight: toolbarHeightRef.current,
+      lockedOpen: menuOpen
+    });
+    navigationStateRef.current = nextState;
+    if (nextState.stage === currentState.stage) return;
+
+    // inert 会把隐藏导航移出交互与无障碍树；先释放内部焦点，避免浏览器
+    // 保留一个已不可见的焦点目标。
+    if (
+      currentState.stage === "visible"
+      && nextState.stage !== "visible"
+    ) {
+      blurFocusedElement(toolbar);
     }
-
-    let frame: number | undefined;
-    const update = () => {
-      frame = undefined;
-      // 模态框固定页面根节点时 window.scrollY 会暂时归零。这不是用户滚动，不能据此
-      // 改变工具栏状态，否则关闭详情恢复原位置时会看到工具栏闪烁。
-      if (isPageScrollLocked()) return;
-      const position = currentPageScrollPosition();
-      const delta = pageScrollDelta(previousPosition, position);
-      previousPosition = position;
-      const header = document.querySelector<HTMLElement>(
-        ".gallery-page > .topbar"
-      );
-      // Select / Facet 菜单通过 Portal 渲染在 body；任一导航中的菜单展开时
-      // 保持两级导航完整可见，避免触发器与浮层分离。
-      const menuOpen = Boolean(
-        toolbar.querySelector('[aria-expanded="true"]')
-        || header?.querySelector('[aria-expanded="true"]')
-      );
-      const currentState = navigationStateRef.current;
-      const nextState = advanceGalleryNavigation(currentState, {
-        delta,
-        scrollTop: position.top,
-        toolbarHeight: toolbarHeightRef.current,
-        lockedOpen: menuOpen
-      });
-      navigationStateRef.current = nextState;
-      if (nextState.stage === currentState.stage) return;
-
-      // inert 会把隐藏导航移出交互与无障碍树；先释放内部焦点，避免浏览器
-      // 保留一个已不可见的焦点目标。
-      if (
-        currentState.stage === "visible"
-        && nextState.stage !== "visible"
-      ) {
-        blurFocusedElement(toolbar);
-      }
-      if (
-        nextState.stage === "hidden"
-        && currentState.stage !== "hidden"
-        && header
-      ) {
-        blurFocusedElement(header);
-      }
-      setStage(nextState.stage);
-    };
-    const onScroll = () => {
-      if (frame !== undefined) return;
-      frame = window.requestAnimationFrame(update);
-    };
-
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => {
-      window.removeEventListener("scroll", onScroll);
-      if (frame !== undefined) window.cancelAnimationFrame(frame);
-    };
-  }, [lockedOpen, toolbarRef]);
+    setStage(nextState.stage);
+  }, !lockedOpen);
 
   return {
     headerVisible: stage !== "hidden",

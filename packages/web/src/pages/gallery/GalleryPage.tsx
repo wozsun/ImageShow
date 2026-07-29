@@ -330,107 +330,109 @@ export function GalleryPage() {
       } as CSSProperties}
     >
       <span className="gallery-atmosphere" aria-hidden="true" />
-      <AppHeader
-        onMenuExpandedChange={onHeaderMenuExpandedChange}
-        visible={headerVisible}
-      />
-      <section
-        ref={toolbarRef}
-        className={`gallery-toolbar${filtersOpen ? " filters-open" : ""}${toolbarVisible ? "" : " is-scroll-hidden"}`}
-        inert={!toolbarVisible}
-      >
-        <button
-          ref={filterToggleRef}
-          type="button"
-          className="gallery-filter-toggle"
-          aria-expanded={filtersOpen}
-          aria-controls="gallery-filter-panel"
-          onClick={toggleFilters}
+      <div className="public-navigation-frame">
+        <AppHeader
+          onMenuExpandedChange={onHeaderMenuExpandedChange}
+          visible={headerVisible}
+        />
+        <section
+          ref={toolbarRef}
+          className={`gallery-toolbar public-navigation-secondary${filtersOpen ? " filters-open" : ""}${toolbarVisible ? "" : " is-scroll-hidden"}`}
+          inert={!toolbarVisible}
         >
-          <Icon name="filter-3-line" />
-          筛选
-          {activeFilterCount > 0 && <span className="gallery-filter-count">{activeFilterCount}</span>}
-          <span className="gallery-filter-chevron"><Icon name="arrow-down-s-line" /></span>
-        </button>
-        <AnchoredMenuDismissSignalContext.Provider value={filterMenuDismissSignal}>
-          <div
-            ref={filterPanelRef}
-            id="gallery-filter-panel"
-            className="gallery-filter-panel"
-            role="group"
-            aria-label="画廊筛选条件"
-            aria-hidden={filterPanelHidden}
-            inert={filterPanelHidden}
+          <button
+            ref={filterToggleRef}
+            type="button"
+            className="gallery-filter-toggle"
+            aria-expanded={filtersOpen}
+            aria-controls="gallery-filter-panel"
+            onClick={toggleFilters}
           >
-            <label className="gallery-axis">
-              设备
-              <SelectMenu
-                value={filters.device}
-                onChange={(value) => updateFilter("device", value)}
-                options={[
-                  { value: "", label: "全部设备" },
-                  { value: "r", label: "强制随机" },
-                  ...(facets?.devices ?? ["pc", "mb"]).map((value) => ({ value, label: deviceOptionLabel(value) }))
-                ]}
-                ariaLabel="设备"
-                menuClassName="public-gallery-menu"
-              />
-            </label>
-            <label className="gallery-axis">
-              亮度
-              <SelectMenu
-                value={filters.brightness}
-                onChange={(value) => updateFilter("brightness", value)}
-                options={[
-                  { value: "", label: "全部亮度" },
-                  ...(facets?.brightnesses ?? ["light", "dark"]).map((value) => ({ value, label: brightnessOptionLabel(value) }))
-                ]}
-                ariaLabel="亮度"
-                menuClassName="public-gallery-menu"
-              />
-            </label>
-            <label className="gallery-theme-filter">
-              主题
-              <FacetSelector
-                options={facets?.themes ?? []}
-                value={filters.theme}
-                onChange={(value) => updateFilter("theme", value)}
-                noun="主题"
-                menuClassName="public-gallery-menu"
-              />
-            </label>
-            <label className="gallery-tag-filter">
-              标签
-              <FacetSelector
-                options={facets?.tags ?? []}
-                value={filters.tag}
-                onChange={(value) => updateFilter("tag", value)}
-                noun="标签"
-                menuClassName="public-gallery-menu"
-              />
-            </label>
-            <label className="gallery-author-filter">
-              作者
-              <FacetSelector
-                options={facets?.authors ?? []}
-                value={filters.author}
-                onChange={(value) => updateFilter("author", value)}
-                noun="作者"
-                menuClassName="public-gallery-menu"
-              />
-            </label>
-            <div className="theme-link">
-              <span>随机图片API</span>
-              <div className="theme-link-row">
-                <div className="generated-link-field">
-                  <code>{randomUrl}</code>
-                  <CopyButton value={randomUrl} ariaLabel="复制随机图片链接" />
+            <Icon name="filter-3-line" />
+            筛选
+            {activeFilterCount > 0 && <span className="gallery-filter-count">{activeFilterCount}</span>}
+            <span className="gallery-filter-chevron"><Icon name="arrow-down-s-line" /></span>
+          </button>
+          <AnchoredMenuDismissSignalContext.Provider value={filterMenuDismissSignal}>
+            <div
+              ref={filterPanelRef}
+              id="gallery-filter-panel"
+              className="gallery-filter-panel"
+              role="group"
+              aria-label="画廊筛选条件"
+              aria-hidden={filterPanelHidden}
+              inert={filterPanelHidden}
+            >
+              <label className="gallery-axis">
+                设备
+                <SelectMenu
+                  value={filters.device}
+                  onChange={(value) => updateFilter("device", value)}
+                  options={[
+                    { value: "", label: "全部设备" },
+                    { value: "r", label: "强制随机" },
+                    ...(facets?.devices ?? ["pc", "mb"]).map((value) => ({ value, label: deviceOptionLabel(value) }))
+                  ]}
+                  ariaLabel="设备"
+                  menuClassName="public-gallery-menu"
+                />
+              </label>
+              <label className="gallery-axis">
+                亮度
+                <SelectMenu
+                  value={filters.brightness}
+                  onChange={(value) => updateFilter("brightness", value)}
+                  options={[
+                    { value: "", label: "全部亮度" },
+                    ...(facets?.brightnesses ?? ["light", "dark"]).map((value) => ({ value, label: brightnessOptionLabel(value) }))
+                  ]}
+                  ariaLabel="亮度"
+                  menuClassName="public-gallery-menu"
+                />
+              </label>
+              <label className="gallery-theme-filter">
+                主题
+                <FacetSelector
+                  options={facets?.themes ?? []}
+                  value={filters.theme}
+                  onChange={(value) => updateFilter("theme", value)}
+                  noun="主题"
+                  menuClassName="public-gallery-menu"
+                />
+              </label>
+              <label className="gallery-tag-filter">
+                标签
+                <FacetSelector
+                  options={facets?.tags ?? []}
+                  value={filters.tag}
+                  onChange={(value) => updateFilter("tag", value)}
+                  noun="标签"
+                  menuClassName="public-gallery-menu"
+                />
+              </label>
+              <label className="gallery-author-filter">
+                作者
+                <FacetSelector
+                  options={facets?.authors ?? []}
+                  value={filters.author}
+                  onChange={(value) => updateFilter("author", value)}
+                  noun="作者"
+                  menuClassName="public-gallery-menu"
+                />
+              </label>
+              <div className="theme-link">
+                <span>随机图片API</span>
+                <div className="theme-link-row">
+                  <div className="generated-link-field">
+                    <code>{randomUrl}</code>
+                    <CopyButton value={randomUrl} ariaLabel="复制随机图片链接" />
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        </AnchoredMenuDismissSignalContext.Provider>
-      </section>
+          </AnchoredMenuDismissSignalContext.Provider>
+        </section>
+      </div>
       <div className="gallery-toolbar-spacer" aria-hidden="true" />
       <section ref={galleryRef} className="gallery">
         <div

@@ -31,12 +31,6 @@ export function HomePage() {
     }
   }, [currentStats, statsQuery.isPlaceholderData]);
 
-  useLayoutEffect(() => {
-    const root = document.documentElement;
-    root.classList.add("home-document");
-    return () => root.classList.remove("home-document");
-  }, []);
-
   const stats = currentStats ?? lastSuccessfulStatsRef.current;
   const background = siteQuery.data?.site.home.background
     || "/random?m=redirect";
@@ -49,16 +43,18 @@ export function HomePage() {
 
   return (
     <main className="page home-page">
-      <AppHeader />
       <HomeBackground source={background} />
-      <HomeFilterBar
-        filters={filters}
-        stats={stats}
-        isPending={statsQuery.isPending}
-        isError={statsQuery.isError}
-        isPlaceholderData={statsQuery.isPlaceholderData}
-        onFiltersChange={setFilters}
-      />
+      <div className="public-navigation-frame">
+        <AppHeader />
+        <HomeFilterBar
+          filters={filters}
+          stats={stats}
+          isPending={statsQuery.isPending}
+          isError={statsQuery.isError}
+          isPlaceholderData={statsQuery.isPlaceholderData}
+          onFiltersChange={setFilters}
+        />
+      </div>
       <div className="home-filter-bar-spacer" aria-hidden="true" />
       <HomeHero
         bannerLabel={bannerLabel}

@@ -20,10 +20,13 @@ function ensureMeta(name: string) {
   return meta;
 }
 
+function isAdminRoute(pathname: string) {
+  return pathname === adminBasePath
+    || pathname.startsWith(`${adminBasePath}/`);
+}
+
 function routeAppearance(pathname: string): BrowserAppearance {
-  return pathname === adminBasePath || pathname.startsWith(`${adminBasePath}/`)
-    ? "light"
-    : "dark";
+  return isAdminRoute(pathname) ? "light" : "dark";
 }
 
 export function SiteHead() {
@@ -35,6 +38,7 @@ export function SiteHead() {
     const appearance = routeAppearance(pathname);
     const root = document.documentElement;
     root.dataset.colorScheme = appearance;
+    root.classList.toggle("public-page-document", !isAdminRoute(pathname));
     ensureMeta("color-scheme").content = appearance;
 
     const browserSurface = getComputedStyle(root).backgroundColor.trim()

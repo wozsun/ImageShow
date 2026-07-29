@@ -38,6 +38,9 @@
 
 * { box-sizing: border-box; }
 html { overflow-y: auto; }
+/* Safari 的根弹性滚动会暂时错绘 fixed 导航。公开页不依赖下拉刷新，
+   因此只在公开路由关闭纵向边界回弹。 */
+html.public-page-document { overscroll-behavior-y: none; }
 html.modal-open, body.modal-open { overflow: hidden; }
 /* DialogLayerPortal is the single owner of dialog positioning. The root layer
    follows Safari's current dynamic viewport while nested dialogs fill their
@@ -49,7 +52,6 @@ html.modal-open, body.modal-open { overflow: hidden; }
   height: 100dvh;
 }
 [data-dialog-layer="nested"] { position: absolute; inset: 0; }
-html.home-document { overflow-y: auto; }
 /* clip 和 hidden 都会裁掉横向溢出；但 clip 不会像 hidden 那样把 body
    变成伪滚动容器，导致内部 sticky 元素错误绑定到静止的 body。 */
 body {
@@ -447,11 +449,32 @@ button:not(:disabled):not(.select-trigger):not([data-availability-locked="true"]
   color-scheme: dark;
 }
 
-.topbar {
+.public-navigation-frame {
   position: fixed;
   top: 0;
   right: 0;
   left: 0;
+  z-index: 7;
+  width: 100%;
+  pointer-events: none;
+}
+
+.public-navigation-frame > .topbar,
+.public-navigation-frame > .public-navigation-secondary {
+  position: relative;
+  pointer-events: auto;
+}
+
+.public-navigation-secondary {
+  --public-navigation-header-shift: 0px;
+}
+
+.public-navigation-frame > .topbar.is-scroll-hidden
+  + .public-navigation-secondary {
+  --public-navigation-header-shift: calc(-1 * var(--app-header-height));
+}
+
+.topbar {
   z-index: 7;
   width: 100%;
   height: var(--app-header-height);
@@ -468,7 +491,6 @@ button:not(:disabled):not(.select-trigger):not([data-availability-locked="true"]
   transition:
     transform var(--public-nav-motion-duration)
     var(--public-nav-motion-easing);
-  will-change: transform;
 }
 .topbar::before {
   content: "";

@@ -44,7 +44,7 @@ export function HomeFilterBar({
 
   return (
     <section
-      className="home-filter-bar"
+      className="home-filter-bar public-navigation-secondary"
       aria-label="当前画廊筛选"
       aria-busy={isPending || isPlaceholderData}
     >

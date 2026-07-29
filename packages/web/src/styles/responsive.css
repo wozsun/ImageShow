@@ -61,7 +61,8 @@
     align-items: stretch;
     flex-direction: column;
   }
-  .page > .topbar.is-scroll-hidden + .gallery-toolbar {
+  .public-navigation-frame > .topbar.is-scroll-hidden
+    + .gallery-toolbar {
     max-height: 100svh;
   }
   .gallery-toolbar label { min-width: 0; }

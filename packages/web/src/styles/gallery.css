@@ -134,11 +134,6 @@
 .gallery-toolbar {
   --gallery-control-height: 40px;
   --gallery-toolbar-shift: 0%;
-  --gallery-header-shift: 0px;
-  position: fixed;
-  top: var(--app-header-height);
-  right: 0;
-  left: 0;
   z-index: 6;
   width: 100%;
   display: flex;
@@ -155,18 +150,14 @@
   -webkit-backdrop-filter: blur(24px) saturate(128%);
   backdrop-filter: blur(24px) saturate(128%);
   transform: translateY(calc(
-    var(--gallery-toolbar-shift) + var(--gallery-header-shift)
+    var(--gallery-toolbar-shift) + var(--public-navigation-header-shift)
   ));
   transition:
     transform var(--public-nav-motion-duration)
     var(--public-nav-motion-easing);
-  will-change: transform;
 }
 .gallery-toolbar-spacer {
   height: var(--gallery-toolbar-height);
-}
-.page > .topbar.is-scroll-hidden + .gallery-toolbar {
-  --gallery-header-shift: calc(-1 * var(--app-header-height));
 }
 .gallery-toolbar.is-scroll-hidden {
   --gallery-toolbar-shift: -100%;

@@ -1,12 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { adminBasePath, publicRootPath } from "../../lib/constants.js";
 import { clearSessionProbeHint, hasSessionProbeHint, rememberSessionProbeHint, useAuthMe, useSiteConfig } from "../../lib/api/site-data.js";
-import { getPageScrollY, isPageScrollLocked } from "../../hooks/usePageScrollLock.js";
+import { usePageScrollMovement } from "../../hooks/usePageScrollMovement.js";
 import { Icon } from "../icon/Icon.js";
 import { MobileNavigation } from "./MobileNavigation.js";
 
-const headerScrollDirectionThreshold = 12;
+const headerScrollDirectionThreshold = 18;
 
 export function AppHeader({
   onMenuExpandedChange,
@@ -21,11 +21,19 @@ export function AppHeader({
   const { data: auth } = useAuthMe(shouldProbeSession);
   const siteName = data?.site?.name || "ImageShow";
   const headerRef = useRef<HTMLElement | null>(null);
-  const previousScrollTopRef = useRef(0);
   const upwardDistanceRef = useRef(0);
   const downwardDistanceRef = useRef(0);
   const [standaloneVisible, setStandaloneVisible] = useState(true);
   const headerVisible = visible ?? standaloneVisible;
+
+  useLayoutEffect(() => {
+    const header = headerRef.current;
+    if (!header || headerVisible) return;
+    const activeElement = document.activeElement;
+    if (activeElement instanceof HTMLElement && header.contains(activeElement)) {
+      activeElement.blur();
+    }
+  }, [headerVisible]);
 
   const homeEnabled = data?.site?.home?.enabled ?? true;
   const rootPath = data?.site ? publicRootPath(data.site) : "/home";
@@ -43,68 +51,44 @@ export function AppHeader({
     setShouldProbeSession(false);
   }, [auth]);
 
-  useEffect(() => {
-    if (visible !== undefined) return;
+  usePageScrollMovement(({ delta: scrollStep, position }) => {
     const header = headerRef.current;
     if (!header) return;
-    previousScrollTopRef.current = getPageScrollY();
-    let frame: number | undefined;
-
-    const update = () => {
-      frame = undefined;
-      if (isPageScrollLocked()) return;
-      const scrollTop = Math.max(0, getPageScrollY());
-      const scrollStep = scrollTop - previousScrollTopRef.current;
-      previousScrollTopRef.current = scrollTop;
-      if (scrollStep < 0) {
-        upwardDistanceRef.current += -scrollStep;
-        downwardDistanceRef.current = 0;
-      } else if (scrollStep > 0) {
-        downwardDistanceRef.current += scrollStep;
-        upwardDistanceRef.current = 0;
-      }
-      if (header.querySelector('[aria-expanded="true"]')) {
-        upwardDistanceRef.current = 0;
-        downwardDistanceRef.current = 0;
-        setStandaloneVisible(true);
-        return;
-      }
-      if (scrollTop <= headerScrollDirectionThreshold) {
-        upwardDistanceRef.current = 0;
-        downwardDistanceRef.current = 0;
-        setStandaloneVisible(true);
-        return;
-      }
-      if (upwardDistanceRef.current >= headerScrollDirectionThreshold) {
-        upwardDistanceRef.current = 0;
-        downwardDistanceRef.current = 0;
-        setStandaloneVisible(true);
-        return;
-      }
-      if (downwardDistanceRef.current < headerScrollDirectionThreshold) return;
+    const scrollTop = position.top;
+    if (scrollStep < 0) {
+      upwardDistanceRef.current += -scrollStep;
+      downwardDistanceRef.current = 0;
+    } else if (scrollStep > 0) {
+      downwardDistanceRef.current += scrollStep;
+      upwardDistanceRef.current = 0;
+    }
+    if (header.querySelector('[aria-expanded="true"]')) {
       upwardDistanceRef.current = 0;
       downwardDistanceRef.current = 0;
-      if (scrollTop < header.offsetHeight) {
-        setStandaloneVisible(true);
-        return;
-      }
-      const activeElement = document.activeElement;
-      if (activeElement instanceof HTMLElement && header.contains(activeElement)) {
-        activeElement.blur();
-      }
-      setStandaloneVisible(false);
-    };
-    const onScroll = () => {
-      if (frame !== undefined) return;
-      frame = window.requestAnimationFrame(update);
-    };
-
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => {
-      window.removeEventListener("scroll", onScroll);
-      if (frame !== undefined) window.cancelAnimationFrame(frame);
-    };
-  }, [visible]);
+      setStandaloneVisible(true);
+      return;
+    }
+    if (scrollTop <= headerScrollDirectionThreshold) {
+      upwardDistanceRef.current = 0;
+      downwardDistanceRef.current = 0;
+      setStandaloneVisible(true);
+      return;
+    }
+    if (upwardDistanceRef.current >= headerScrollDirectionThreshold) {
+      upwardDistanceRef.current = 0;
+      downwardDistanceRef.current = 0;
+      setStandaloneVisible(true);
+      return;
+    }
+    if (downwardDistanceRef.current < headerScrollDirectionThreshold) return;
+    upwardDistanceRef.current = 0;
+    downwardDistanceRef.current = 0;
+    if (scrollTop < header.offsetHeight) {
+      setStandaloneVisible(true);
+      return;
+    }
+    setStandaloneVisible(false);
+  }, visible === undefined);
 
   return (
     <header

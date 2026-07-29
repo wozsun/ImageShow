@@ -62,10 +62,6 @@
 }
 
 .home-filter-bar {
-  position: fixed;
-  top: var(--app-header-height);
-  right: 0;
-  left: 0;
   z-index: 6;
   width: 100%;
   min-height: var(--home-filter-bar-height);
@@ -85,15 +81,11 @@
   transition:
     transform var(--public-nav-motion-duration)
     var(--public-nav-motion-easing);
-  will-change: transform;
+  transform: translateY(var(--public-navigation-header-shift));
 }
 
 .home-filter-bar-spacer {
   height: var(--home-filter-bar-height);
-}
-
-.home-page > .topbar.is-scroll-hidden ~ .home-filter-bar {
-  transform: translateY(calc(-1 * var(--app-header-height)));
 }
 
 .home-filter-bar > div {
