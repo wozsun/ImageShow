@@ -1,4 +1,8 @@
-import type { Device } from "@imageshow/shared";
+import type {
+  Device,
+  ImportMode,
+  PreparedImportDto
+} from "@imageshow/shared/browser";
 import { getInputImageMaxLongEdge } from "../../config/app-settings.ts";
 import { getRuntimeConfig } from "../../config/runtime-config-store.ts";
 import { writeStorageBuffer } from "../../storage/object-access.ts";
@@ -15,9 +19,7 @@ import {
 } from "./status.ts";
 import { assertImportStillPreparing } from "./lifecycle.ts";
 import type {
-  ImportMode,
   MetadataPayload,
-  PreparedImportResult,
   PreparedPayload
 } from "./types.ts";
 
@@ -29,7 +31,7 @@ export async function preparedImportResult(
   id: string,
   storageSlug: string,
   payload: PreparedPayload
-): Promise<PreparedImportResult> {
+): Promise<PreparedImportDto> {
   const duplicates = await getDuplicateImagesByMd5(payload.md5);
   return {
     id,

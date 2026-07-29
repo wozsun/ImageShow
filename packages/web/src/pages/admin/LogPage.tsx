@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import {
+  logLevels,
+  type AdminLogLevelDto,
+  type AdminLogPayloadDto,
+  type LogLevel
+} from "@imageshow/shared/browser";
 import { api, isApiClientError } from "../../lib/api/client.js";
 import { SelectMenu } from "../../components/form/SelectMenu.js";
 import { AsyncActionButton } from "../../components/actions/AsyncActionButton.js";
@@ -22,31 +28,10 @@ import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.js";
 import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
 import "../../styles/admin/logs.css";
 
-type LogLevel = "DEBUG" | "INFO" | "WARN" | "ERROR" | "OFF";
-
-type LogFileSummary = {
-  name: string;
-  size: number;
-  modified_at: string;
-};
-
-type AdminLogPayload = {
-  level: LogLevel;
-  files: LogFileSummary[];
-  selected: string;
-  limit_bytes: number;
-  content: string;
-  truncated: boolean;
-  bytes_read: number;
-};
-
-const logLevelOptions: SelectOption[] = [
-  { value: "DEBUG", label: "DEBUG" },
-  { value: "INFO", label: "INFO" },
-  { value: "WARN", label: "WARN" },
-  { value: "ERROR", label: "ERROR" },
-  { value: "OFF", label: "OFF" }
-];
+const logLevelOptions: SelectOption[] = logLevels.map((level) => ({
+  value: level,
+  label: level
+}));
 
 const refreshLogsPresentation = {
   idle: { icon: "refresh-line", label: "刷新" },
@@ -81,7 +66,7 @@ export function LogPage() {
   const refreshLogsStatus = useAsyncActionStatus();
   const [feedback, setFeedback] = useState<ActionFeedbackState | null>(null);
   const feedbackTarget = useActionFeedbackTarget("admin-logs");
-  const query = useQuery<AdminLogPayload>({
+  const query = useQuery<AdminLogPayloadDto>({
     queryKey: [...queryKeys.logs, selectedFile],
     queryFn: ({ signal }) => api(logsPath(selectedFile), { signal })
   });
@@ -136,7 +121,7 @@ export function LogPage() {
     setFeedback(createActionFeedback("正在更新日志等级...", "pending"));
     const startedAt = Date.now();
     try {
-      const response = await api<{ level: LogLevel }>(`${adminApiBasePath}/logs/level`, {
+      const response = await api<AdminLogLevelDto>(`${adminApiBasePath}/logs/level`, {
         method: "POST",
         body: JSON.stringify({ level: nextLevel })
       });

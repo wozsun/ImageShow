@@ -1,5 +1,8 @@
 import type { Context, Next } from "hono";
-import type { AdminRole } from "@imageshow/shared";
+import type {
+  AdminLoginResultDto,
+  AdminRole
+} from "@imageshow/shared/browser";
 import { randomBytes } from "node:crypto";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
@@ -29,7 +32,7 @@ export async function createAdminSession(
   context: Context,
   username: string,
   password: string
-) {
+): Promise<AdminLoginResultDto> {
   assertSameOrigin(context);
   const ip = requestClientIp(context);
   await loginRateLimiter.reserve(ip, username);

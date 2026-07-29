@@ -30,6 +30,9 @@ const smallSharedMergeThreshold = 2 * 1024;
 // 这一块；这里只列通用机制，不纳入任何后台 API、后台组件或路由页面实现。
 const appFoundationModuleSuffixes = [
   "/packages/shared/dist/browser.js",
+  "/packages/shared/dist/browser/common.js",
+  "/packages/shared/dist/browser/imports.js",
+  "/packages/shared/dist/browser/storage.js",
   "/components/feedback/QueryErrorState.tsx",
   "/components/icon/Icon.tsx",
   "/components/icon/icons.generated.ts",

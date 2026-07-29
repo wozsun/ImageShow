@@ -30,9 +30,13 @@ fixture、网络模拟和清理编排均留在 `tests/`。
 
 共享包是前后端唯一共同依赖，只承载稳定的配置默认值、类型、校验常量和 DTO。
 
-- 默认入口包含服务端完整配置与共享类型。
-- `@imageshow/shared/browser` 是浏览器安全子入口，只暴露可进入 Web bundle 的内容。
-- 数据库、Redis、Node.js 文件系统或服务端密钥不得进入共享包。
+- 默认入口只导出服务端与构建配置使用的完整 `appConfig`；Web 运行时代码不得导入。
+- `@imageshow/shared/browser` 是图片、分类、导入、存储和管理设置等双端 HTTP/SSE
+  契约的唯一来源，并按 `browser/` 下的真实领域拆分后由 `browser.ts` 汇总。
+- 浏览器入口只含可进入 Web bundle 的 DTO、枚举、纯函数和输入限制，不得反向引入
+  完整运行时默认值、Node.js、数据库或 Redis。
+- 服务端数据库行型、执行所有权和存储凭据留在所属领域；存储读取 DTO 只描述已经
+  脱敏的配置，含密码或密钥的编辑表单与写入请求不作为共享浏览器契约。
 
 ## packages/server
 

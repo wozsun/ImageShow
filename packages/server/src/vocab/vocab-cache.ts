@@ -2,9 +2,13 @@ import { randomUUID } from "node:crypto";
 import { coalesce } from "../core/coalesce.ts";
 import { pool } from "../core/db.ts";
 import { deleteRedisKeys, getRedisJson, setRedisJson } from "../core/redis-json.ts";
-import type { Author } from "../authors/types.ts";
-import type { Tag } from "../tags/types.ts";
-import type { Theme } from "../themes/types.ts";
+import type {
+  AuthorDto as Author,
+  FacetOptionDto,
+  ImportVocabularyDto,
+  TagDto as Tag,
+  ThemeDto as Theme
+} from "@imageshow/shared/browser";
 
 const THEME_VOCAB_KEY = "imageshow:theme_vocab";
 const TAG_VOCAB_KEY = "imageshow:tag_vocab";
@@ -14,13 +18,8 @@ const ADMIN_TAG_LIST_KEY = "imageshow:admin:tags";
 const ADMIN_AUTHOR_LIST_KEY = "imageshow:admin:authors";
 
 export type EntityCacheKind = "theme" | "tag" | "author";
-export type VocabEntry = { slug: string; display_name: string };
+export type VocabEntry = FacetOptionDto;
 export type AuthorVocabEntry = VocabEntry & { link: string };
-export type ImportVocabulary = {
-  themes: VocabEntry[];
-  tags: VocabEntry[];
-  authors: VocabEntry[];
-};
 
 type EntityCountCacheInvalidationBatch = {
   add: (kinds: Iterable<EntityCacheKind>) => void;
@@ -231,7 +230,7 @@ export function getAdminAuthorList(): Promise<Author[]> {
   );
 }
 
-export async function getImportVocabulary(): Promise<ImportVocabulary> {
+export async function getImportVocabulary(): Promise<ImportVocabularyDto> {
   const [themes, tags, authors] = await Promise.all([
     getThemeVocab(),
     getTagVocab(),

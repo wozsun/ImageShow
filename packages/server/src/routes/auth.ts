@@ -1,5 +1,5 @@
 import type { Hono } from "hono";
-import { adminApiBasePath, type AuthStateDto } from "@imageshow/shared";
+import { adminApiBasePath, type AuthStateDto } from "@imageshow/shared/browser";
 import { ApiError } from "../core/api-error.ts";
 import { apiSuccess } from "../core/http/responses.ts";
 import { limitAdminLoginBody } from "../core/http/request-body-limit.ts";

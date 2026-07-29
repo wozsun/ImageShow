@@ -1,4 +1,5 @@
 import { appConfig } from "@imageshow/shared";
+import type { BatchImageRestoreResponseDto } from "@imageshow/shared/browser";
 import { pool, withTransaction } from "../core/db.ts";
 import { ApiError, errorMessage } from "../core/api-error.ts";
 import { logger } from "../core/logger.ts";
@@ -92,7 +93,9 @@ export async function restoreDeletedImage(id: string, missingIsError = true) {
   return true;
 }
 
-export async function batchRestoreImages(ids: string[]) {
+export async function batchRestoreImages(
+  ids: string[]
+): Promise<BatchImageRestoreResponseDto> {
   const restoredImages = await restoreImagesFromTrash(ids);
   if (restoredImages.length) {
     await Promise.all([

@@ -1,4 +1,5 @@
 import type { Hono } from "hono";
+import type { PublicImageDetailResponseDto } from "@imageshow/shared/browser";
 import { apiErrorResponse, apiSuccess } from "../core/http/responses.ts";
 import { blockCrossSiteFetch } from "../core/http/request-security.ts";
 import {
@@ -69,7 +70,10 @@ export function registerPublicRoutes(app: Hono) {
   app.get("/api/images/:id", blockCrossSiteFetch, async (c) => {
     const id = parse(uuidInput, c.req.param("id"));
     c.header("Cache-Control", publicMetadataCacheControl);
-    return c.json(apiSuccess({ item: await getPublicImage(id) }));
+    const response = {
+      item: await getPublicImage(id)
+    } satisfies PublicImageDetailResponseDto;
+    return c.json(apiSuccess(response));
   });
 
   app.get("/api/images/:id/original", async (c) => redirectOriginalLink(

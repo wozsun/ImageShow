@@ -14,6 +14,7 @@ import {
   normalizeAdminPreferences,
   type AdminPreferenceKey,
   type AdminPreferences,
+  type AdminPreferencesResponseDto,
   type AdminPreferenceValues
 } from "@imageshow/shared/browser";
 import { api } from "../lib/api/client.js";
@@ -26,10 +27,6 @@ const localPreferenceKeyPrefix = "imageshow.admin.preferences.";
 type CachedAdminPreferences = {
   values: AdminPreferences;
   pending: AdminPreferences;
-};
-
-type AdminPreferenceResponse = {
-  preferences: AdminPreferences;
 };
 
 type SetAdminPreference = <Key extends AdminPreferenceKey>(
@@ -160,7 +157,7 @@ export function AdminPreferencesProvider({
 
     queueRef.current = queueRef.current.then(async () => {
       try {
-        const response = await api<AdminPreferenceResponse>(`${adminApiBasePath}/preferences`, {
+        const response = await api<AdminPreferencesResponseDto>(`${adminApiBasePath}/preferences`, {
           method: "PATCH",
           body: JSON.stringify(patch)
         });
@@ -187,7 +184,7 @@ export function AdminPreferencesProvider({
         }
         commitCache({ values, pending });
 
-        queryClient.setQueryData<AdminPreferenceResponse>(queryKey, {
+        queryClient.setQueryData<AdminPreferencesResponseDto>(queryKey, {
           preferences: acknowledged
         });
       } catch {
@@ -202,7 +199,7 @@ export function AdminPreferencesProvider({
     });
   }, [commitCache, queryClient, queryKey]);
 
-  const preferenceQuery = useQuery<AdminPreferenceResponse>({
+  const preferenceQuery = useQuery<AdminPreferencesResponseDto>({
     queryKey,
     queryFn: ({ signal }) => api(`${adminApiBasePath}/preferences`, { signal }),
     // 当前页面内以本地状态和 PATCH 回执为准；刷新或重新登录后再读取服务端。

@@ -1,22 +1,15 @@
-import type { z } from "zod";
-import type { Brightness, Device, ImageExt } from "@imageshow/shared";
-import { importCommitInput, importCreateInput } from "../../core/validation.ts";
-import type { AdminImage } from "../presenter.ts";
+import type {
+  Brightness,
+  Device,
+  ImageDraftDto,
+  ImportMode,
+  ImportSessionCreateDto,
+  ImportStatus
+} from "@imageshow/shared/browser";
+import type { ImageExt } from "../processing.ts";
 
-export type ImportCreateInput = z.infer<typeof importCreateInput>;
-type ImportCommitInput = z.infer<typeof importCommitInput>;
-export type ImportMetadata = ImportCommitInput;
-export type ImportMode = "upload" | "download";
-export type ImportStatus =
-  | "created"
-  | "materializing"
-  | "received"
-  | "preparing"
-  | "ready"
-  | "committing"
-  | "finalized"
-  | "failed"
-  | "cancelled";
+export type ImportCreateInput = ImportSessionCreateDto;
+export type ImportMetadata = ImageDraftDto;
 
 export type MetadataPayload = ImportMetadata & {
   image_time: string;
@@ -60,32 +53,4 @@ export type ImportSessionRow = {
   image_time: string | Date;
   error: string;
   expires_at: string | Date;
-};
-
-export type PreparedImportResult = {
-  id: string;
-  preview_url: string;
-  preview_full_url: string;
-  width: number;
-  height: number;
-  original_width: number;
-  original_height: number;
-  md5: string;
-  original_size: number;
-  size: number;
-  quality: number | null;
-  transcoded: boolean;
-  detected_device: Device;
-  detected_brightness: Brightness;
-  storage_slug: string;
-  duplicates: AdminImage[];
-};
-
-export type ImportStatusEvent = {
-  id: string;
-  status: string;
-  error: string;
-  phase: string;
-  message: string;
-  progress?: number;
 };

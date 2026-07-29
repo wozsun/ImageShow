@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { appConfig, slugPattern, type RuntimeConfig } from "@imageshow/shared";
+import { appConfig } from "@imageshow/shared";
+import {
+  type AdvancedConfigPreviewDto,
+  slugPattern,
+  type RuntimeConfig
+} from "@imageshow/shared/browser";
 import { ApiError } from "../core/api-error.ts";
 import {
   s3SettingsSchema,
@@ -135,7 +140,7 @@ export function parseConfigPackage(value: unknown): ConfigPackage {
 export function projectConfigPackagePreview(
   pkg: ConfigPackage,
   existingSlugs: Set<string>
-) {
+): AdvancedConfigPreviewDto {
   return {
     format: pkg.format,
     format_version: pkg.format_version,

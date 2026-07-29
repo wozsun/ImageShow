@@ -4,8 +4,8 @@ import { ApiError } from "../../core/api-error.ts";
 import type {
   ImportMode,
   ImportStatus,
-  ImportStatusEvent
-} from "./types.ts";
+  StoredImportStatusDto
+} from "@imageshow/shared/browser";
 
 const activeImportPhases = new Map<
   string,
@@ -60,7 +60,7 @@ function importMessage(status: string, mode?: string, error?: string) {
   return "等待处理";
 }
 
-function emitImportStatus(status: ImportStatusEvent) {
+function emitImportStatus(status: StoredImportStatusDto) {
   importStatusEvents.emit("status", status);
 }
 
@@ -146,11 +146,11 @@ function presentImportStatus(
   };
 }
 
-async function getImportStatusEvent(id: string): Promise<ImportStatusEvent> {
+async function getImportStatusEvent(id: string): Promise<StoredImportStatusDto> {
   return { id, ...await getImportStatus(id) };
 }
 
-function missingImportStatus(id: string): ImportStatusEvent {
+function missingImportStatus(id: string): StoredImportStatusDto {
   return {
     id,
     status: "missing",
@@ -204,7 +204,7 @@ export function streamImportEvents(
   let controller: ReadableStreamDefaultController<Uint8Array> | undefined;
   let cleaned = false;
   let heartbeat: ReturnType<typeof setInterval> | undefined;
-  let listener: ((status: ImportStatusEvent) => void) | undefined;
+  let listener: ((status: StoredImportStatusDto) => void) | undefined;
 
   function cleanup() {
     if (cleaned) return;

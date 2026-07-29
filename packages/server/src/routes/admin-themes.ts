@@ -1,4 +1,4 @@
-import { adminPermissions } from "@imageshow/shared";
+import { adminPermissions } from "@imageshow/shared/browser";
 import type { Hono } from "hono";
 import { themeCreateInput, themeDisplayUpdateInput, themeSlugInput } from "../core/validation.ts";
 import { listThemesWithMeta } from "../themes/query.ts";

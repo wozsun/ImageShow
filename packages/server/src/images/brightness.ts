@@ -1,5 +1,5 @@
 import sharp from "sharp";
-import type { Brightness } from "@imageshow/shared";
+import type { Brightness } from "@imageshow/shared/browser";
 
 const BRIGHTNESS_THUMBNAIL = 1024;
 

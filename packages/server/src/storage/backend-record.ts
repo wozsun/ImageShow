@@ -1,4 +1,4 @@
-import type { StorageType } from "@imageshow/shared";
+import type { StorageType } from "@imageshow/shared/browser";
 import {
   defaultS3Settings,
   defaultWebdavSettings,

@@ -1,5 +1,5 @@
 import type { Context, Hono } from "hono";
-import { adminApiBasePath } from "@imageshow/shared";
+import { adminApiBasePath } from "@imageshow/shared/browser";
 import { ApiError } from "../core/api-error.ts";
 import { apiSuccess } from "../core/http/responses.ts";
 import { requestClientIp } from "../core/http/request-security.ts";

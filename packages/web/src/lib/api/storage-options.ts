@@ -4,13 +4,12 @@ import { api } from "./client.js";
 import { adminApiBasePath } from "../constants.js";
 import { storageBackendLabel } from "../ui/select-options.js";
 import { queryKeys } from "./query-keys.js";
+import type {
+  StorageBackendOptionDto,
+  StorageBackendOptionsResponseDto
+} from "@imageshow/shared/browser";
 
-export type StorageBackendOption = {
-  slug: string;
-  display_name: string;
-  enabled: boolean;
-  is_default: boolean;
-};
+export type StorageBackendOption = StorageBackendOptionDto;
 
 // 由后端选项列表构建「图片 → 所在存储显示名」的解析函数，并回退到 slug 标签
 // （本地存储→「本地存储」，其余→slug 本身）。纯函数，供已自行持有后端列表的调用方
@@ -27,7 +26,7 @@ export function storageNameResolver(backends: StorageBackendOption[]) {
 // 调用方统一走这一个 queryKey 与 staleTime，从而自动去重、缓存一致（后端很少变动，缓存 5 分钟）。
 // enabled=false 时（公共画廊里未登录的访客、未打开的上传窗口等）不发请求，仍可安全调用。
 export function useStorageOptions(enabled = true) {
-  return useQuery<{ backends: StorageBackendOption[] }>({
+  return useQuery<StorageBackendOptionsResponseDto>({
     queryKey: queryKeys.storageOptions,
     queryFn: ({ signal }) => api(`${adminApiBasePath}/storage/options`, { signal }),
     enabled,

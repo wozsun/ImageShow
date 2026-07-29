@@ -3,8 +3,12 @@ import {
   adminApiBasePath,
   adminPermissions,
   type BatchImageSnapshotResponse,
-  type BatchImageUpdateResponse
-} from "@imageshow/shared";
+  type BatchStorageMigrationResponse,
+  type BatchImageUpdateRequestDto,
+  type BatchImageUpdateResponse,
+  type SelectedTrashPurgeResponseDto,
+  type TrashPurgeResponseDto
+} from "@imageshow/shared/browser";
 import { apiSuccess } from "../core/http/responses.ts";
 import { logger } from "../core/logger.ts";
 import {
@@ -105,7 +109,7 @@ export function registerAdminImageRoutes(app: Hono) {
     async (c) => {
       const input = parse(imageIdsInput, await c.req.json().catch(() => ({})));
       const result = await purgeSelectedDeletedImages(input.ids);
-      return c.json(apiSuccess({
+      const response = {
         deleted: result.deleted,
         failed: result.failed,
         remaining: result.remaining,
@@ -113,7 +117,8 @@ export function registerAdminImageRoutes(app: Hono) {
           0,
           input.ids.length - result.deleted - result.remaining
         )
-      }));
+      } satisfies SelectedTrashPurgeResponseDto;
+      return c.json(apiSuccess(response));
     }
   );
 
@@ -123,11 +128,12 @@ export function registerAdminImageRoutes(app: Hono) {
     async (c) => {
       const result = await purgeDeletedImages();
       if (result.remaining) await scheduleTrashPurge();
-      return c.json(apiSuccess({
+      const response = {
         deleted: result.deleted,
         failed: result.failed,
         remaining: result.remaining
-      }));
+      } satisfies TrashPurgeResponseDto;
+      return c.json(apiSuccess(response));
     }
   );
 
@@ -165,16 +171,20 @@ export function registerAdminImageRoutes(app: Hono) {
         entity_count_invalidation_triggered: false,
         random_pool_full_rebuild_triggered: randomPoolFullRebuildTriggered,
       });
-      return c.json(apiSuccess({
+      const response = {
         migrated: result.migrated,
         failed: result.failed,
-      }));
+      } satisfies BatchStorageMigrationResponse;
+      return c.json(apiSuccess(response));
     }
   );
 
   app.post(batchImageUpdatePath, limitBatchImageUpdateBody, async (c) => {
     const startedAt = performance.now();
-    const input = parse(batchImageUpdateInput, await c.req.json().catch(() => ({})));
+    const input = parse(
+      batchImageUpdateInput,
+      await c.req.json().catch(() => ({}))
+    ) satisfies BatchImageUpdateRequestDto;
     let maxItemDurationMs = 0;
     let entityCountInvalidationTriggered = false;
     let randomPoolFullRebuildTriggered = false;

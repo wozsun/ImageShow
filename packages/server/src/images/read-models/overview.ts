@@ -1,3 +1,4 @@
+import type { AdminOverviewDto } from "@imageshow/shared/browser";
 import { getRuntimeConfig } from "../../config/runtime-config-store.ts";
 import { coalesce } from "../../core/coalesce.ts";
 import { pool } from "../../core/db.ts";
@@ -13,10 +14,10 @@ import {
   type ImageRecordWithTags
 } from "../presenter.ts";
 
-type OverviewStats = Awaited<ReturnType<typeof buildOverviewStats>>;
+type OverviewStats = AdminOverviewDto;
 const overviewProjectionVersion = 2;
 
-export async function getOverviewStats() {
+export async function getOverviewStats(): Promise<AdminOverviewDto> {
   const recentLimit = getRuntimeConfig().admin.recent_uploads;
   const generation = await publicImagesCacheGeneration();
   // Version the value shape so a rolling upgrade never feeds the former
@@ -41,7 +42,9 @@ export async function getOverviewStats() {
   );
 }
 
-async function buildOverviewStats(recentLimit: number) {
+async function buildOverviewStats(
+  recentLimit: number
+): Promise<AdminOverviewDto> {
   const [statsResult, topThemesResult, recentResult, backendResult] = await Promise.all([
     pool.query(`
       SELECT

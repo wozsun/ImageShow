@@ -1,13 +1,12 @@
 import { pool } from "../core/db.ts";
 import { ApiError } from "../core/api-error.ts";
 import { hashPassword, verifyPassword } from "../core/password.ts";
+import type { AdminUserDto } from "@imageshow/shared/browser";
 
-type AdminAccountSummary = { username: string; role: string };
-
-export async function listAdminAccounts(): Promise<AdminAccountSummary[]> {
+export async function listAdminAccounts(): Promise<AdminUserDto[]> {
   return (await pool.query(
     "SELECT username, role FROM admin_account ORDER BY (role <> 'super'), username ASC"
-  )).rows as AdminAccountSummary[];
+  )).rows as AdminUserDto[];
 }
 
 export async function createImageAdmin(username: string, password: string) {

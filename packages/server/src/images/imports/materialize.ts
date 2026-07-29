@@ -18,7 +18,11 @@ import {
   removeRawImportAttempt,
   writeRawImport
 } from "./temp-files.ts";
-import type { ImportMode, ImportSessionRow, ImportStatus } from "./types.ts";
+import type {
+  ImportMode,
+  ImportStatus
+} from "@imageshow/shared/browser";
+import type { ImportSessionRow } from "./types.ts";
 
 const publishedMaterializationStatuses = new Set<ImportStatus>([
   "received",

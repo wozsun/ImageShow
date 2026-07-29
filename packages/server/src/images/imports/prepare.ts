@@ -26,9 +26,11 @@ import {
 } from "./temp-files.ts";
 import type {
   ImportMode,
-  ImportSessionRow,
   ImportStatus,
-  PreparedImportResult,
+  PreparedImportDto
+} from "@imageshow/shared/browser";
+import type {
+  ImportSessionRow,
   PreparedPayload
 } from "./types.ts";
 
@@ -139,7 +141,7 @@ async function prepareStoredImageSession(
   mode: Extract<ImportMode, "upload" | "download">,
   executionToken: string,
   signal: AbortSignal
-): Promise<PreparedImportResult> {
+): Promise<PreparedImportDto> {
   const session = (await pool.query(
     `SELECT mode, status, metadata_payload, source_url, storage_slug,
             execution_token, raw_token
@@ -162,7 +164,7 @@ async function prepareStoredImageSession(
   const preparedImageKey = stagingImageKey(id, preparationAttempt);
   const preparedThumbnailKey = stagingThumbnailKey(id, preparationAttempt);
   let payload: PreparedPayload;
-  let result: PreparedImportResult;
+  let result: PreparedImportDto;
   try {
     signal.throwIfAborted();
     const prepared = await prepareImportArtifacts({

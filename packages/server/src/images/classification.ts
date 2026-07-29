@@ -1,4 +1,4 @@
-import type { Brightness, Device } from "@imageshow/shared";
+import type { Brightness, Device } from "@imageshow/shared/browser";
 
 export type DeviceSelection = Device | "auto";
 export type BrightnessSelection = Brightness | "auto";

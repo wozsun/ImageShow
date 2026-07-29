@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { appConfig, slugPattern, type RuntimeConfig } from "@imageshow/shared";
+import { appConfig } from "@imageshow/shared";
+import {
+  slugPattern,
+  type RuntimeConfig
+} from "@imageshow/shared/browser";
 import {
   altchaCost,
   altchaCounter,

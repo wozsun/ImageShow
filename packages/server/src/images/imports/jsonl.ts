@@ -1,5 +1,11 @@
 import { z } from "zod";
-import { appConfig, slugPattern, type Brightness, type Device } from "@imageshow/shared";
+import { appConfig } from "@imageshow/shared";
+import {
+  type JsonlManifestItemDto,
+  type JsonlManifestParseErrorDto,
+  type JsonlManifestResultDto,
+  slugPattern
+} from "@imageshow/shared/browser";
 import { ImageTimeError, parseImageTime } from "../image-time.ts";
 
 const httpsUrl = z.string().trim().max(2048).url().refine((value) => new URL(value).protocol === "https:", "必须使用 HTTPS URL");
@@ -20,28 +26,6 @@ const jsonlRowSchema = z.object({
   storage_slug: slug.optional()
 }).strict();
 
-type JsonlManifestItem = {
-  line: number;
-  manifest_position: number;
-  original: string;
-  source?: string;
-  image_time?: string;
-  author?: string;
-  tags?: string[];
-  title?: string;
-  description?: string;
-  theme?: string;
-  device?: Device | "auto";
-  brightness?: Brightness | "auto";
-  storage_slug?: string;
-};
-
-type JsonlManifestErrorItem = {
-  line: number;
-  raw: string;
-  error: string;
-};
-
 export class JsonlManifestError extends Error {
   readonly code: "jsonl_limit_exceeded" | "jsonl_too_large";
 
@@ -58,7 +42,10 @@ function zodErrorMessage(error: z.ZodError) {
   }))].join("；");
 }
 
-export function parseJsonlManifest(content: string, options: { maxItems: number; timeZone?: string }) {
+export function parseJsonlManifest(
+  content: string,
+  options: { maxItems: number; timeZone?: string }
+): JsonlManifestResultDto {
   const maxItems = Math.min(
     appConfig.imports.batchHardLimit,
     Math.max(1, Math.floor(options.maxItems))
@@ -74,8 +61,8 @@ export function parseJsonlManifest(content: string, options: { maxItems: number;
     throw new JsonlManifestError("jsonl_limit_exceeded", `JSONL 清单最多允许 ${maxItems} 条图片记录`);
   }
 
-  const items: JsonlManifestItem[] = [];
-  const errors: JsonlManifestErrorItem[] = [];
+  const items: JsonlManifestItemDto[] = [];
+  const errors: JsonlManifestParseErrorDto[] = [];
   for (const entry of lines) {
     try {
       const value = jsonlRowSchema.parse(JSON.parse(entry.raw));

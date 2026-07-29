@@ -1,10 +1,13 @@
 import { pool } from "../core/db.ts";
+import type { BatchImageDeleteResponseDto } from "@imageshow/shared/browser";
 import { invalidateImageCaches } from "./image-cache.ts";
 import { syncRandomImages } from "../random/cache-sync.ts";
 import { invalidateEntityCountCaches } from "../vocab/vocab-cache.ts";
 import type { ImageRecord } from "./presenter.ts";
 
-export async function batchDeleteImages(ids: string[]) {
+export async function batchDeleteImages(
+  ids: string[]
+): Promise<BatchImageDeleteResponseDto> {
   if (!ids.length) return { deleted: 0, ignored: 0 };
   const result = await pool.query(
     `UPDATE metadata

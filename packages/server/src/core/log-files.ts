@@ -1,5 +1,12 @@
 import { open, readdir, stat } from "node:fs/promises";
 import { basename, join } from "node:path";
+import {
+  logLevels,
+  type AdminLogLevelDto,
+  type AdminLogPayloadDto,
+  type LogFileSummaryDto,
+  type LogLevel
+} from "@imageshow/shared/browser";
 import { runtimePaths } from "../config/bootstrap-env.ts";
 import {
   getRuntimeConfig,
@@ -11,15 +18,6 @@ import { ApiError } from "./api-error.ts";
 const logFilePattern = /^app\.log(?:\.\d+)?$/;
 const defaultTailBytes = 200_000;
 const maxTailBytes = 1_000_000;
-const logLevels = ["DEBUG", "INFO", "WARN", "ERROR", "OFF"] as const;
-
-type LogLevel = (typeof logLevels)[number];
-
-export type LogFileSummary = {
-  name: string;
-  size: number;
-  modified_at: string;
-};
 
 function normalizeLimit(value: string | null) {
   const parsed = Number(value ?? defaultTailBytes);
@@ -33,7 +31,7 @@ function logFileSortKey(name: string) {
   return Number.isFinite(index) ? index : Number.MAX_SAFE_INTEGER;
 }
 
-async function listLogFiles(): Promise<LogFileSummary[]> {
+async function listLogFiles(): Promise<LogFileSummaryDto[]> {
   const names = await readdir(runtimePaths.logDirectory).catch(() => []);
   const files = await Promise.all(names
     .filter((name) => logFilePattern.test(name))
@@ -43,7 +41,7 @@ async function listLogFiles(): Promise<LogFileSummary[]> {
       if (!info?.isFile()) return null;
       return { name, size: info.size, modified_at: info.mtime.toISOString() };
     }));
-  return files.filter((file): file is LogFileSummary => file !== null);
+  return files.filter((file): file is LogFileSummaryDto => file !== null);
 }
 
 async function tailFile(name: string, limitBytes: number) {
@@ -65,7 +63,9 @@ async function tailFile(name: string, limitBytes: number) {
   return { content: buffer.toString("utf8"), truncated: start > 0, bytes_read: size };
 }
 
-export async function readRecentLogFile(input: { file?: string | null; limit?: string | null }) {
+export async function readRecentLogFile(
+  input: { file?: string | null; limit?: string | null }
+): Promise<AdminLogPayloadDto> {
   const files = await listLogFiles();
   const selected = input.file && logFilePattern.test(input.file) ? input.file : files[0]?.name ?? "app.log";
   const limitBytes = normalizeLimit(input.limit ?? null);
@@ -79,7 +79,7 @@ export async function readRecentLogFile(input: { file?: string | null; limit?: s
   };
 }
 
-export async function updateLogLevel(level: string) {
+export async function updateLogLevel(level: string): Promise<AdminLogLevelDto> {
   if (!logLevels.includes(level as LogLevel)) {
     throw new ApiError(400, "invalid_log_level", "日志等级无效");
   }

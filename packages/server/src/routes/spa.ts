@@ -1,6 +1,6 @@
 import { serveStatic } from "@hono/node-server/serve-static";
 import type { Context, Hono } from "hono";
-import { adminBasePath } from "@imageshow/shared";
+import { adminBasePath } from "@imageshow/shared/browser";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";

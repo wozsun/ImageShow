@@ -1,5 +1,9 @@
 import type { Hono } from "hono";
-import { adminApiBasePath, appConfig } from "@imageshow/shared";
+import { appConfig } from "@imageshow/shared";
+import {
+  adminApiBasePath,
+  type StoredImportStatusListDto
+} from "@imageshow/shared/browser";
 import { ApiError } from "../core/api-error.ts";
 import { apiSuccess } from "../core/http/responses.ts";
 import {
@@ -138,7 +142,10 @@ export function registerImportRoutes(app: Hono) {
 
   app.get(`${adminApiBasePath}/imports/status`, async (c) => {
     const ids = parseImportIds(c.req.url);
-    return c.json(apiSuccess({ items: await listImportStatuses(ids) }));
+    const response = {
+      items: await listImportStatuses(ids)
+    } satisfies StoredImportStatusListDto;
+    return c.json(apiSuccess(response));
   });
 
   app.get(`${adminApiBasePath}/imports/events`, async (c) => {

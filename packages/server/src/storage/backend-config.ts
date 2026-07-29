@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { slugPattern, type StorageType } from "@imageshow/shared";
+import { slugPattern, type StorageType } from "@imageshow/shared/browser";
 import { isHttpsEndpoint, isHttpsUrl } from "../core/url-validation.ts";
 
 const httpsEndpoint = z.string().trim().max(2048)

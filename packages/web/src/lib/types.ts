@@ -1,133 +1,69 @@
-export type { AdminSettings, Brightness, Device, SiteSettings, StorageType } from "@imageshow/shared";
+export type {
+  AdminSettings,
+  Brightness,
+  Device,
+  SiteSettings,
+  StorageType
+} from "@imageshow/shared/browser";
 import type {
+  AdminUserDto,
+  AdvancedConfigPreviewDto,
   AdminImageDetailItemDto,
   AdminImageItemDto,
-  AdminRole,
+  AuthorDto,
   BatchEditableImageSnapshotDto,
   Brightness,
   Device,
   FacetOptionDto,
   GalleryImageCardDto,
+  ImageDraftDto,
   ImageAdminInfoDto,
-  PublicImageDetailDto,
   PublicImageItemDto,
-  StorageBackendDeletionState
-} from "@imageshow/shared";
+  RandomMethod,
+  RuntimeConfigChangeSummaryDto,
+  StorageBackendAdminDto,
+  StorageBackendS3Dto,
+  StorageBackendWebdavDto,
+  TagDto,
+  ThemeDto
+} from "@imageshow/shared/browser";
 
 export type GalleryImageCard = GalleryImageCardDto;
-export type PublicImageDetail = PublicImageDetailDto;
 export type PublicImageItem = PublicImageItemDto;
 export type AdminImageDetailItem = AdminImageDetailItemDto;
 export type BatchEditableImageSnapshot = BatchEditableImageSnapshotDto;
 export type ImageItem = AdminImageItemDto;
 export type ImageAdminInfo = ImageAdminInfoDto;
 
-export type Tag = {
-  slug: string;
-  display_name: string;
-  image_count: number;
-};
+export type Tag = TagDto;
+export type Theme = ThemeDto;
+export type Author = AuthorDto;
+export type ImageDraft = ImageDraftDto;
 
-export type Theme = {
-  slug: string;
-  display_name: string;
-  image_count: number;
-};
-
-export type Author = {
-  slug: string;
-  display_name: string;
-  link: string;
-  image_count: number;
-};
-
-export type ImageDraft = {
-  device: Device | "auto";
-  brightness: Brightness | "auto";
-  theme: string;
-  author: string;
-  title: string;
-  description: string;
-  source: string;
-  original: string;
-  tags: string[];
-};
-
-export type S3Settings = {
-  endpoint: string;
-  region: string;
-  bucket: string;
-  access_key_id: string;
-  force_path_style: boolean;
-  root_path: string;
-  public_base_url: string;
+// 写入表单中的秘密只存在于 Web 页面和提交请求；共享 DTO 只描述服务端已脱敏的读取结果。
+export type S3Settings = Omit<
+  StorageBackendS3Dto,
+  "secret_access_key_configured"
+> & {
   secret_access_key?: string;
   secret_access_key_configured?: boolean;
 };
-
-export type WebdavSettings = {
-  base_url: string;
-  username: string;
-  root_path: string;
-  public_base_url: string;
-  list_depth_infinity: boolean;
-  connect_timeout_seconds: number;
-  idle_timeout_seconds: number;
-  task_timeout_seconds: number;
+export type WebdavSettings = Omit<
+  StorageBackendWebdavDto,
+  "password_configured"
+> & {
   password?: string;
   password_configured?: boolean;
 };
 
-type StorageBackendAdminBase = {
-  slug: string;
-  display_name: string;
-  enabled: boolean;
-  is_default: boolean;
-  image_count: number;
-  import_session_count: number;
-  cleanup_job_count: number;
-  failed_cleanup_job_count: number;
-  exhausted_cleanup_job_count: number;
-  deletion: StorageBackendDeletionState;
-};
-
-export type StorageBackendAdmin = StorageBackendAdminBase & (
-  | { type: "local" }
-  | { type: "s3"; s3: S3Settings }
-  | { type: "webdav"; webdav: WebdavSettings }
-);
-
-type AdvancedConfigBackendPreview = {
-  slug: string;
-  display_name: string;
-  type: "s3" | "webdav";
-  enabled: boolean;
-  is_default: boolean;
-};
-
-export type AdvancedConfigPreview = {
-  format: "imageshow-config";
-  format_version: number;
-  application_version: string;
-  exported_at: string;
-  config_groups: number;
-  storage_backends: AdvancedConfigBackendPreview[];
-  conflicts: string[];
-  existing_slugs: string[];
-};
-
-export type RuntimeConfigChangeSummary = {
-  access_changes: Array<"site.domain">;
-};
-
-export type AdminUser = {
-  username: string;
-  role: AdminRole;
-};
+export type StorageBackendAdmin = StorageBackendAdminDto;
+export type AdvancedConfigPreview = AdvancedConfigPreviewDto;
+export type RuntimeConfigChangeSummary = RuntimeConfigChangeSummaryDto;
+export type AdminUser = AdminUserDto;
 
 export type FacetOption = FacetOptionDto;
 
-export type RandomMode = "" | "redirect" | "proxy";
+export type RandomMode = "" | RandomMethod;
 
 export type ManifestImportSource = "jsonl" | "weibo";
 export type ImportCommonAttributeField = "device" | "brightness" | "theme" | "author" | "tags";

@@ -1,4 +1,5 @@
 import { appConfig } from "@imageshow/shared";
+import type { ImportStatus } from "@imageshow/shared/browser";
 import { getInputImageMaxBytes } from "../../config/app-settings.ts";
 import { getRuntimeConfig } from "../../config/runtime-config-store.ts";
 import { pool, withTransaction } from "../../core/db.ts";
@@ -27,7 +28,6 @@ import { removeRawImport } from "./temp-files.ts";
 import type {
   ImportCreateInput,
   ImportSessionRow,
-  ImportStatus,
   MetadataPayload,
   PreparedPayload
 } from "./types.ts";

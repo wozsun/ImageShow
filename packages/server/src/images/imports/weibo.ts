@@ -1,4 +1,5 @@
 import { appConfig } from "@imageshow/shared";
+import type { WeiboImportResultDto } from "@imageshow/shared/browser";
 import { mapWithWorkerPool } from "../../core/concurrency.ts";
 import { parseJsonlManifest } from "./jsonl.ts";
 import {
@@ -82,7 +83,7 @@ function createWeiboPostParseError(
 export async function createWeiboImportBatchManifest(
   inputUrls: string[],
   options: WeiboManifestOptions
-) {
+): Promise<WeiboImportResultDto> {
   const extractionByLine = new Map<number, WeiboBatchExtraction>();
   const validUrls: IndexedWeiboUrl[] = [];
   const seenIdentifiers = new Set<string>();

@@ -1,9 +1,15 @@
 import { pool } from "../core/db.ts";
+import type {
+  StorageBackendAdminDto,
+  StorageBackendOptionDto
+} from "@imageshow/shared/browser";
 import { listStorageBackends } from "./backend-registry.ts";
 import { listUnresolvedMoveCleanupJobCounts } from "./move-cleanup-repository.ts";
 import { resolveStorageBackendDeletionState } from "./backend-deletion.ts";
 
-export async function listStorageBackendOptions() {
+export async function listStorageBackendOptions(): Promise<
+  StorageBackendOptionDto[]
+> {
   return (await listStorageBackends()).map((backend) => ({
     slug: backend.slug,
     display_name: backend.display_name,
@@ -12,7 +18,9 @@ export async function listStorageBackendOptions() {
   }));
 }
 
-export async function getStorageBackendsForAdmin() {
+export async function getStorageBackendsForAdmin(): Promise<
+  StorageBackendAdminDto[]
+> {
   const backends = await listStorageBackends();
   const [imageCountRows, importSessionCountRows, cleanupCountRows] =
     await Promise.all([
@@ -48,7 +56,6 @@ export async function getStorageBackendsForAdmin() {
     const summary = {
       slug: backend.slug,
       display_name: backend.display_name,
-      type: backend.type,
       enabled: backend.enabled,
       is_default: backend.is_default,
       image_count: imageCounts.get(backend.slug) ?? 0,
@@ -64,6 +71,7 @@ export async function getStorageBackendsForAdmin() {
       const { secret_access_key, ...s3 } = backend.s3;
       return {
         ...summary,
+        type: "s3" as const,
         deletion,
         s3: {
           ...s3,
@@ -75,6 +83,7 @@ export async function getStorageBackendsForAdmin() {
       const { password, ...webdav } = backend.webdav;
       return {
         ...summary,
+        type: "webdav" as const,
         deletion,
         webdav: {
           ...webdav,
@@ -82,6 +91,6 @@ export async function getStorageBackendsForAdmin() {
         }
       };
     }
-    return { ...summary, deletion };
+    return { ...summary, type: "local" as const, deletion };
   });
 }

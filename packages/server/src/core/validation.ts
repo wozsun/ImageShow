@@ -1,12 +1,14 @@
 import { z } from "zod";
+import { appConfig } from "@imageshow/shared";
 import {
   adminImagePageLimit,
   adminPreferenceValueOptions,
   adminPreferencesMaxBytes,
-  appConfig,
+  type BatchImageUpdateItemInputDto,
   importBatchHardLimit,
+  importModes,
   slugPattern
-} from "@imageshow/shared";
+} from "@imageshow/shared/browser";
 import { adminPasswordInput, adminUsernameInput } from "./credentials.ts";
 import { ApiError } from "./api-error.ts";
 import { isHttpsUrl } from "./url-validation.ts";
@@ -116,7 +118,7 @@ const batchImageUpdateItemInput = metadataUpdateInput.extend({
   }
 });
 
-export type BatchImageUpdateItemInput = z.infer<typeof batchImageUpdateItemInput>;
+export type BatchImageUpdateItemInput = BatchImageUpdateItemInputDto;
 
 export const batchImageUpdateInput = z.object({
   items: z.array(batchImageUpdateItemInput).min(1).max(200),
@@ -169,7 +171,7 @@ export const batchMigrateStorageInput = z.object({
 });
 
 export const importCreateInput = metadataInput.extend({
-  mode: z.enum(["upload", "download"]),
+  mode: z.enum(importModes),
   brightness: z.enum(["dark", "light", "auto"]).default("auto"),
   source_url: optionalHttpsDomainUrlField(externalImageRejectedMessage),
   image_time: z.string().trim().min(1).max(64).optional(),

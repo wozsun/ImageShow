@@ -2,7 +2,6 @@ import { createHash } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { fileTypeFromBuffer, fileTypeFromFile } from "file-type";
 import sharp from "sharp";
-import { type ImageExt } from "@imageshow/shared";
 import { ApiError } from "../core/api-error.ts";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { thumbnailObjectKey } from "../storage/image-paths.ts";
@@ -19,6 +18,7 @@ import {
 import { safeStoragePath } from "../storage/object-keys.ts";
 
 type ImageInput = Buffer | string;
+export type ImageExt = "jpg" | "png" | "webp" | "gif" | "avif";
 
 function normalizeImageExt(ext?: string): ImageExt | undefined {
   const value = ext === "jpeg" ? "jpg" : ext;

@@ -1,5 +1,8 @@
 import type { Hono } from "hono";
-import { adminApiBasePath } from "@imageshow/shared";
+import {
+  adminApiBasePath,
+  type AdminUsersResponseDto
+} from "@imageshow/shared/browser";
 import { apiSuccess } from "../core/http/responses.ts";
 import { requireSuperAdmin } from "../users/admin-authorization.ts";
 import { redis } from "../core/redis-client.ts";
@@ -22,7 +25,12 @@ export function registerAdminUserRoutes(app: Hono) {
   app.use(`${adminApiBasePath}/users`, requireSuperAdmin);
   app.use(`${adminApiBasePath}/users/*`, requireSuperAdmin);
 
-  app.get(`${adminApiBasePath}/users`, async (c) => c.json(apiSuccess({ items: await listAdminAccounts() })));
+  app.get(`${adminApiBasePath}/users`, async (c) => {
+    const response = {
+      items: await listAdminAccounts()
+    } satisfies AdminUsersResponseDto;
+    return c.json(apiSuccess(response));
+  });
 
   app.post(`${adminApiBasePath}/users`, async (c) => {
     const input = parse(userCreateInput, await c.req.json().catch(() => ({})));

@@ -1,4 +1,7 @@
-import type { RuntimeConfig } from "@imageshow/shared";
+import type {
+  RuntimeConfig,
+  RuntimeConfigChangeSummaryDto
+} from "@imageshow/shared/browser";
 import { withAdvisoryLock } from "../core/db.ts";
 import { parseRuntimeConfig } from "./runtime-config.ts";
 import {
@@ -12,7 +15,7 @@ export const advancedConfigWriteLockKey = "advanced-config-write";
 function summarizeRuntimeConfigChanges(
   current: RuntimeConfig,
   candidate: RuntimeConfig
-) {
+): RuntimeConfigChangeSummaryDto {
   return {
     access_changes: current.site.domain === candidate.site.domain
       ? []

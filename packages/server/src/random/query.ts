@@ -1,3 +1,4 @@
+import { randomMethods as randomMethodValues } from "@imageshow/shared/browser";
 import { apiErrorResponse } from "../core/http/responses.ts";
 import { splitSelectors } from "../core/selectors.ts";
 
@@ -6,7 +7,7 @@ export const randomBrightnesses = ["dark", "light"] as const;
 export type RandomBrightness = (typeof randomBrightnesses)[number];
 
 export const randomRequestDevices = new Set(["pc", "mb", "r"]);
-export const randomMethods = new Set(["proxy", "redirect"]);
+export const randomMethods: ReadonlySet<string> = new Set(randomMethodValues);
 const randomAllowedQuery = new Set(["d", "b", "t", "tag", "a", "m"]);
 const randomSingleValueQuery = new Set(["d", "b", "m"]);
 const randomBrightnessSet = new Set(randomBrightnesses);

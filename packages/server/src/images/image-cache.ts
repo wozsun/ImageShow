@@ -1,4 +1,5 @@
-import { appConfig, type Brightness, type Device } from "@imageshow/shared";
+import { appConfig } from "@imageshow/shared";
+import type { Brightness, Device } from "@imageshow/shared/browser";
 import { redis } from "../core/redis-client.ts";
 import {
   getRedisJson,

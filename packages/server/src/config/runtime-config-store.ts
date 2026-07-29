@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import type { RuntimeConfig } from "@imageshow/shared";
+import type { RuntimeConfig } from "@imageshow/shared/browser";
 import { runtimeConfigFromEnvironment, runtimePaths } from "./bootstrap-env.ts";
 import {
   readRuntimeConfigFile,

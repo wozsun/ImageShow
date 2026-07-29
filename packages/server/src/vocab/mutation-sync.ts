@@ -1,4 +1,4 @@
-import { slugPattern } from "@imageshow/shared";
+import { slugPattern } from "@imageshow/shared/browser";
 import { withAdvisoryLock, withAdvisoryLocks } from "../core/db.ts";
 import { ApiError } from "../core/api-error.ts";
 import {

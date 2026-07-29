@@ -1,4 +1,4 @@
-import type { StorageType } from "@imageshow/shared";
+import type { StorageType } from "@imageshow/shared/browser";
 import { ApiError } from "../core/api-error.ts";
 import { pool } from "../core/db.ts";
 import { countUnresolvedMoveCleanupJobs } from "./move-cleanup-repository.ts";

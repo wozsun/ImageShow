@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import type { RuntimeConfig } from "@imageshow/shared";
+import type {
+  RuntimeConfig,
+  RuntimeConfigResponseDto,
+  RuntimeConfigValidationResponseDto
+} from "@imageshow/shared/browser";
 import CodeMirror, { EditorView } from "@uiw/react-codemirror";
 import { json } from "@codemirror/lang-json";
 import { api } from "../../../lib/api/client.js";
@@ -22,10 +26,6 @@ import { ConfirmDialog } from "../../../components/feedback/ConfirmDialog.js";
 import { OverlayScrollbar } from "../../../components/layout/OverlayScrollbar.js";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAsyncActionStatus } from "../../../hooks/useAsyncActionStatus.js";
-
-type RuntimeConfigResponse = {
-  config: RuntimeConfig;
-};
 
 const formatConfig = (config: unknown) => JSON.stringify(config, null, 2);
 const jsonExtensions = [json(), EditorView.lineWrapping];
@@ -91,7 +91,7 @@ export function RuntimeConfigEditor({ reloadToken }: {
     setAction("load");
     if (origin === "manual") setLoadFeedback(null);
     try {
-      const response = await api<RuntimeConfigResponse>(`${adminApiBasePath}/advanced-config/runtime`);
+      const response = await api<RuntimeConfigResponseDto>(`${adminApiBasePath}/advanced-config/runtime`);
       const formatted = formatConfig(response.config);
       setText(formatted);
       setBaseline(formatted);
@@ -143,7 +143,7 @@ export function RuntimeConfigEditor({ reloadToken }: {
     await validateStatus.run(async () => {
       setAction("validate");
       try {
-        const response = await api<{ changes: RuntimeConfigChangeSummary }>(
+        const response = await api<RuntimeConfigValidationResponseDto>(
           `${adminApiBasePath}/advanced-config/runtime/validate`,
           { method: "POST", body: JSON.stringify({ config: parsed }) }
         );
@@ -164,7 +164,7 @@ export function RuntimeConfigEditor({ reloadToken }: {
     if (!candidate) return false;
     setAction("save");
     try {
-      const response = await api<RuntimeConfigResponse>(
+      const response = await api<RuntimeConfigResponseDto>(
         `${adminApiBasePath}/advanced-config/runtime`,
         { method: "POST", body: JSON.stringify({ config: candidate }) }
       );

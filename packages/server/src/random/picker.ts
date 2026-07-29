@@ -1,4 +1,5 @@
 import { appConfig } from "@imageshow/shared";
+import type { RandomMethod } from "@imageshow/shared/browser";
 import {
   buildRandomFilterSet,
   getRandomPoolSnapshot,
@@ -15,7 +16,7 @@ import {
 import { apiErrorResponse } from "../core/http/responses.ts";
 import { isRandomBrightness, parseAuthorSelectors, parseTagSelectors, parseThemeSelectors, randomBrightnesses, randomDevices } from "./query.ts";
 
-export type PickedImage = RandomPoolItem & { method: "proxy" | "redirect" };
+export type PickedImage = RandomPoolItem & { method: RandomMethod };
 
 function inferDevice(ua: string) {
   if (!ua) return "r";
@@ -91,7 +92,12 @@ function categoryCandidates(snapshot: RandomPoolSnapshot, axes: CandidateAxes, t
   return candidates;
 }
 
-async function pickFromSet(generation: string, setKey: string, method: "proxy" | "redirect", recent: Set<string>) {
+async function pickFromSet(
+  generation: string,
+  setKey: string,
+  method: RandomMethod,
+  recent: Set<string>
+) {
   const batchSize = Math.max(8, Math.min(64, appConfig.randomDedupe.historySize + 1));
   let fallback: RandomPoolItem | null = null;
   for (let attempt = 0; attempt < appConfig.randomDedupe.maxAttempts; attempt += 1) {
@@ -105,7 +111,13 @@ async function pickFromSet(generation: string, setKey: string, method: "proxy" |
   return fallback ? { ...fallback, method } : null;
 }
 
-export async function pickFromRedisPool(url: URL, method: "proxy" | "redirect", axes: CandidateAxes, recent: Set<string> = new Set(), prefetchedSnapshot?: RandomPoolSnapshot): Promise<PickedImage | Response | null> {
+export async function pickFromRedisPool(
+  url: URL,
+  method: RandomMethod,
+  axes: CandidateAxes,
+  recent: Set<string> = new Set(),
+  prefetchedSnapshot?: RandomPoolSnapshot
+): Promise<PickedImage | Response | null> {
   const snapshot = prefetchedSnapshot ?? await getRandomPoolSnapshot();
   const themeCandidates = parseThemeSelectors(url.searchParams, snapshot.themes);
   if (themeCandidates instanceof Response) return themeCandidates;

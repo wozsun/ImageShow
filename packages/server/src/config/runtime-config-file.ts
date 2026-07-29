@@ -10,7 +10,7 @@ import {
   rmSync,
   writeFileSync
 } from "node:fs";
-import type { RuntimeConfig } from "@imageshow/shared";
+import type { RuntimeConfig } from "@imageshow/shared/browser";
 import { runtimePaths } from "./bootstrap-env.ts";
 import { normalizeRuntimeConfig } from "./runtime-config.ts";
 

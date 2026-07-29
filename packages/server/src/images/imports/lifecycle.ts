@@ -3,7 +3,7 @@ import { appConfig } from "@imageshow/shared";
 import { pool } from "../../core/db.ts";
 import { ApiError, errorMessage } from "../../core/api-error.ts";
 import { redis } from "../../core/redis-client.ts";
-import type { ImportStatus } from "./types.ts";
+import type { ImportStatus } from "@imageshow/shared/browser";
 import {
   clearImportPhase,
   notifyImportStatus

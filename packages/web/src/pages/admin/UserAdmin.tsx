@@ -1,5 +1,6 @@
 import { useId, useRef, useState, type FormEvent, type RefObject } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import type { AdminUsersResponseDto } from "@imageshow/shared/browser";
 import { api, isApiClientError } from "../../lib/api/client.js";
 import { Icon } from "../../components/icon/Icon.js";
 import { AsyncActionButton } from "../../components/actions/AsyncActionButton.js";
@@ -36,7 +37,7 @@ const resetPasswordPresentation = {
 
 export function UserAdmin() {
   const client = useQueryClient();
-  const { data, error: listError, isError: listFailed, isFetching, refetch } = useQuery<{ items: AdminUser[] }>({ queryKey: queryKeys.users, queryFn: ({ signal }) => api(`${adminApiBasePath}/users`, { signal }) });
+  const { data, error: listError, isError: listFailed, isFetching, refetch } = useQuery<AdminUsersResponseDto>({ queryKey: queryKeys.users, queryFn: ({ signal }) => api(`${adminApiBasePath}/users`, { signal }) });
   const users = data?.items ?? [];
   const refresh = () => client.invalidateQueries({ queryKey: queryKeys.users });
   const [username, setUsername] = useState("");

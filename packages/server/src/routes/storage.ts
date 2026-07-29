@@ -1,5 +1,9 @@
 import type { Hono } from "hono";
-import { adminApiBasePath } from "@imageshow/shared";
+import {
+  adminApiBasePath,
+  type StorageBackendOptionsResponseDto,
+  type StorageBackendsAdminResponseDto
+} from "@imageshow/shared/browser";
 import { apiSuccess } from "../core/http/responses.ts";
 import { requireSuperAdmin } from "../users/admin-authorization.ts";
 import { parse, slugListInput, storageSlugInput } from "../core/validation.ts";
@@ -24,11 +28,17 @@ import { testStorageBackend } from "../storage/backend-self-test.ts";
 
 export function registerStorageRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/storage/options`, async (c) => {
-    return c.json(apiSuccess({ backends: await listStorageBackendOptions() }));
+    const response = {
+      backends: await listStorageBackendOptions()
+    } satisfies StorageBackendOptionsResponseDto;
+    return c.json(apiSuccess(response));
   });
 
   app.get(`${adminApiBasePath}/storage/backends`, requireSuperAdmin, async (c) => {
-    return c.json(apiSuccess({ backends: await getStorageBackendsForAdmin() }));
+    const response = {
+      backends: await getStorageBackendsForAdmin()
+    } satisfies StorageBackendsAdminResponseDto;
+    return c.json(apiSuccess(response));
   });
 
   app.post(`${adminApiBasePath}/storage/backends`, requireSuperAdmin, async (c) => {

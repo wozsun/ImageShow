@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import type {
   BatchImageSnapshotResponse,
+  BatchImageUpdateItemInputDto,
+  BatchImageUpdateRequestDto,
   BatchImageUpdateResponse
 } from "@imageshow/shared/browser";
 import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
@@ -9,18 +11,7 @@ import { adminApiBasePath } from "../../lib/constants.js";
 import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
 import { summarizeBatchUpdateFailures } from "./batch-update-failures.js";
 
-export type BatchMetadataUpdate = {
-  id: string;
-  title?: string;
-  description?: string;
-  source?: string;
-  original?: string;
-  device?: "pc" | "mb" | "auto";
-  brightness?: "dark" | "light" | "auto";
-  theme?: string;
-  author?: string;
-  tags?: string[];
-};
+export type BatchMetadataUpdate = BatchImageUpdateItemInputDto;
 
 function reportBatchUpdateFailures(response: BatchImageUpdateResponse) {
   if (!response.failed) return;
@@ -82,9 +73,10 @@ export function useBatchMetadataOperations({
     return saveStatus.run(async () => {
       let response: BatchImageUpdateResponse | null = null;
       try {
+        const request = { items } satisfies BatchImageUpdateRequestDto;
         response = await api<BatchImageUpdateResponse>(
           `${adminApiBasePath}/images/batch-update`,
-          { method: "POST", body: JSON.stringify({ items }) }
+          { method: "POST", body: JSON.stringify(request) }
         );
         setSaveSummary(response);
         const updatedIds = new Set(

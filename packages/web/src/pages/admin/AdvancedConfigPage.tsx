@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import type { AdvancedConfigPreviewResponseDto } from "@imageshow/shared/browser";
 import { api } from "../../lib/api/client.js";
 import { adminApiBasePath } from "../../lib/constants.js";
 import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
@@ -13,9 +14,7 @@ import { invalidateRuntimeData } from "../../lib/api/query-invalidation.js";
 import "../../styles/admin/advanced-config.css";
 import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
 import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.js";
-
-const maxPackageBytes = 1024 * 1024;
-const packageFileReadOverheadBytes = 64 * 1024;
+import { configPackageRequestMaxBytes } from "@imageshow/shared/browser";
 
 const previewPackagePresentation = {
   idle: { icon: "upload-cloud-2-line", label: "导入配置包" },
@@ -76,11 +75,11 @@ export function AdvancedConfigPage() {
     await previewPackageStatus.run(async () => {
       setBusy("preview");
       try {
-        if (file.size > maxPackageBytes + packageFileReadOverheadBytes) {
+        if (file.size > configPackageRequestMaxBytes) {
           throw new Error("配置包文件过大");
         }
         const parsed = JSON.parse(await file.text()) as unknown;
-        const response = await api<{ preview: AdvancedConfigPreview }>(
+        const response = await api<AdvancedConfigPreviewResponseDto>(
           `${adminApiBasePath}/advanced-config/preview`,
           { method: "POST", body: JSON.stringify({ package: parsed }) }
         );

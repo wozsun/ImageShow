@@ -7,7 +7,10 @@ import { getRuntimeConfig } from "../../config/runtime-config-store.ts";
 import { withImportLease } from "./lifecycle.ts";
 import { clearImportPhase, setImportPhase } from "./status.ts";
 import { withImportSessionLock } from "./session-lock.ts";
-import type { ImportMode, PreparedImportResult } from "./types.ts";
+import type {
+  ImportMode,
+  PreparedImportDto
+} from "@imageshow/shared/browser";
 
 const importCancellationError = () => new ApiError(
   409,
@@ -56,7 +59,7 @@ const activeMaterializations = new Map<string, {
 
 const activePreparations = new Map<string, {
   controller: AbortController;
-  promise: Promise<PreparedImportResult>;
+  promise: Promise<PreparedImportDto>;
 }>();
 
 export async function runImportMaterialization(
@@ -109,7 +112,7 @@ export async function runImportMaterialization(
 export async function runImportPreparation(
   id: string,
   mode: ImportMode,
-  work: (signal: AbortSignal) => Promise<PreparedImportResult>,
+  work: (signal: AbortSignal) => Promise<PreparedImportDto>,
   requestSignal?: AbortSignal
 ) {
   const active = activePreparations.get(id);

@@ -1,7 +1,7 @@
 import { pool } from "../core/db.ts";
 import { getAdminTagList, getTagVocab } from "../vocab/vocab-cache.ts";
 import { resolveSlugs, resolveTermMap } from "../core/term-resolve.ts";
-import type { Tag } from "./types.ts";
+import type { TagDto } from "@imageshow/shared/browser";
 
 export async function getTagsForImages(ids: string[]): Promise<Map<string, string[]>> {
   const map = new Map<string, string[]>();
@@ -21,7 +21,7 @@ export async function getTagsForImages(ids: string[]): Promise<Map<string, strin
   return map;
 }
 
-export async function listTagsWithCounts(): Promise<Tag[]> {
+export async function listTagsWithCounts(): Promise<TagDto[]> {
   return getAdminTagList();
 }
 

@@ -1,6 +1,6 @@
 import { pool } from "../core/db.ts";
 import { stagingSessionId } from "../images/imports/staging-keys.ts";
-import type { ImportMode } from "../images/imports/types.ts";
+import type { ImportMode } from "@imageshow/shared/browser";
 import { thumbnailObjectKey, thumbnailRef } from "../storage/image-paths.ts";
 import { listStorageBackends } from "../storage/backend-registry.ts";
 

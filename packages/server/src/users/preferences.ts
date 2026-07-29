@@ -2,7 +2,7 @@ import {
   adminPreferencesMaxBytes,
   normalizeAdminPreferences,
   type AdminPreferences
-} from "@imageshow/shared";
+} from "@imageshow/shared/browser";
 import { ApiError } from "../core/api-error.ts";
 import { pool } from "../core/db.ts";
 

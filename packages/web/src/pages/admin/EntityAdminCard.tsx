@@ -1,4 +1,5 @@
 import { useState, type DragEvent } from "react";
+import type { AdminEntityDto } from "@imageshow/shared/browser";
 import { api } from "../../lib/api/client.js";
 import { Icon } from "../../components/icon/Icon.js";
 import { AsyncActionButton } from "../../components/actions/AsyncActionButton.js";
@@ -6,11 +7,9 @@ import { SlugChip } from "../../components/data-display/SlugChip.js";
 import { adminApiBasePath } from "../../lib/constants.js";
 import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
 
-type Entity = { slug: string; display_name: string; image_count: number; link?: string };
-
 export function EntityAdminCard({ kind, item, onChanged, onDelete, onError, pinned = false, canDelete = false, onDragStart, onDragEnter, onDragEnd }: {
   kind: "themes" | "tags" | "authors";
-  item: Entity;
+  item: AdminEntityDto;
   onChanged: () => void;
   onDelete: () => void;
   onError: (error: unknown) => void;

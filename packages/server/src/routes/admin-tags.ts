@@ -1,4 +1,4 @@
-import { adminPermissions } from "@imageshow/shared";
+import { adminPermissions } from "@imageshow/shared/browser";
 import type { Hono } from "hono";
 import { tagCreateInput, tagDisplayUpdateInput, tagSlugInput } from "../core/validation.ts";
 import {

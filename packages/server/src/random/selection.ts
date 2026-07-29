@@ -1,3 +1,4 @@
+import type { RandomMethod } from "@imageshow/shared/browser";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { apiErrorResponse } from "../core/http/responses.ts";
 import { resolveAuthorTermMap } from "../authors/query.ts";
@@ -39,7 +40,7 @@ export async function selectRandomImage(
   }
   const method = (
     explicitMethod ?? getRuntimeConfig().site.random_default_method
-  ) as "proxy" | "redirect";
+  ) as RandomMethod;
   const requestedBrightness = url.searchParams.get("b")?.toLowerCase() || null;
   if (requestedBrightness && !isRandomBrightness(requestedBrightness)) {
     return apiErrorResponse({ status: 400, message: "Bad Request: Invalid brightness" }, { field: "b" });

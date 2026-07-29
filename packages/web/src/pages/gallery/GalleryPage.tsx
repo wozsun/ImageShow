@@ -4,6 +4,10 @@ import {
   useQuery,
   useQueryClient
 } from "@tanstack/react-query";
+import type {
+  PublicImageDetailResponseDto,
+  PublicImageListResponseDto
+} from "@imageshow/shared/browser";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../../lib/api/client.js";
 import { AppHeader } from "../../components/navigation/AppHeader.js";
@@ -17,7 +21,7 @@ import { queryKeys } from "../../lib/api/query-keys.js";
 import { displayNameOrSlug, errorMessage, imageDisplayTitle } from "../../lib/ui/formatters.js";
 import { buildRandomUrl } from "../../lib/gallery/random-url.js";
 import { brightnessOptionLabel, deviceOptionLabel } from "../../lib/ui/select-options.js";
-import type { GalleryImageCard, PublicImageDetail, PublicImageItem } from "../../lib/types.js";
+import type { GalleryImageCard, PublicImageItem } from "../../lib/types.js";
 import { useGalleryFacets, useSiteConfig } from "../../lib/api/site-data.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
 import { AnchoredMenuDismissSignalContext } from "../../hooks/useAnchoredMenu.js";
@@ -41,8 +45,6 @@ import {
   galleryRouteSearchParams,
   type GalleryFilters
 } from "../../lib/gallery/gallery-query.js";
-
-type PublicImageListPage = { items: GalleryImageCard[]; next_cursor: string | null };
 
 function GalleryTileDevelopmentStats() {
   const { debug } = useGalleryImageRuntime();
@@ -112,7 +114,7 @@ function GalleryImageDetail({
   returnFocusRef: RefObject<HTMLElement | null>;
 }) {
   const placeholder = useMemo(() => imagePlaceholder(card), [card]);
-  const { data, isPending, isFetching, isError, error, refetch } = useQuery<{ item: PublicImageDetail }>({
+  const { data, isPending, isFetching, isError, error, refetch } = useQuery<PublicImageDetailResponseDto>({
     queryKey: [...queryKeys.publicImageDetail, card.id],
     // 详情元数据很小，不把 React StrictMode 的模拟卸载传给 fetch；
     // 重放会继续复用同一 Promise，真正关闭后则立即回收零驻留期查询。
@@ -175,7 +177,7 @@ export function GalleryPage() {
     [filters, order]
   );
 
-  const imagePages = useInfiniteQuery<PublicImageListPage, Error, { pages: PublicImageListPage[]; pageParams: string[] }, readonly unknown[], string>({
+  const imagePages = useInfiniteQuery<PublicImageListResponseDto, Error, { pages: PublicImageListResponseDto[]; pageParams: string[] }, readonly unknown[], string>({
     queryKey: [...queryKeys.publicImages, imageQuery],
     initialPageParam: "",
     queryFn: ({ pageParam, signal }) => {

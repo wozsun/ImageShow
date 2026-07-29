@@ -7,14 +7,11 @@ import type {
   AdminPermission,
   AuthStateDto,
   GalleryFacetsDto,
-  GalleryStatsDto
+  GalleryStatsDto,
+  SiteConfigDto
 } from "@imageshow/shared/browser";
-import type { PublicSiteSettings } from "@imageshow/shared";
 
-export type SiteConfig = {
-  site: PublicSiteSettings;
-  image_detail: { title_opens_image: boolean };
-};
+export type SiteConfig = SiteConfigDto;
 
 export type AuthState = AuthStateDto;
 export type GalleryFacets = GalleryFacetsDto;

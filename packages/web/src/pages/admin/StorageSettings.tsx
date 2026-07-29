@@ -3,7 +3,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   storageBackendDeletionStateFromBlockers,
   type StorageBackendDeleteAction,
-  type StorageBackendDeleteBlocker
+  type StorageBackendDeleteBlocker,
+  type StorageBackendsAdminResponseDto
 } from "@imageshow/shared/browser";
 import { api, isApiClientError } from "../../lib/api/client.js";
 import { Icon } from "../../components/icon/Icon.js";
@@ -49,7 +50,7 @@ export function StorageSettings() {
 
 function StorageBackendsManager() {
   const client = useQueryClient();
-  const query = useQuery<{ backends: StorageBackendAdmin[] }>({
+  const query = useQuery<StorageBackendsAdminResponseDto>({
     queryKey: queryKeys.storageBackends,
     queryFn: ({ signal }) => api(`${adminApiBasePath}/storage/backends`, { signal }),
     refetchInterval: (currentQuery) => currentQuery.state.data?.backends.some(
@@ -106,7 +107,7 @@ function StorageBackendsManager() {
     await waitForMinimumPendingDuration(startedAt);
     if (!succeeded) {
       setOrder(
-        client.getQueryData<{ backends: StorageBackendAdmin[] }>(
+        client.getQueryData<StorageBackendsAdminResponseDto>(
           queryKeys.storageBackends
         )?.backends ?? persistedOrder
       );
@@ -180,9 +181,9 @@ function StorageBackendsManager() {
       () => api(`${adminApiBasePath}/storage/backends/${backend.slug}/delete`, { method: "POST" })
     );
     if (!result.succeeded) {
-      const refreshedBackends = client.getQueryData<{
-        backends: StorageBackendAdmin[];
-      }>(queryKeys.storageBackends)?.backends;
+      const refreshedBackends = client.getQueryData<
+        StorageBackendsAdminResponseDto
+      >(queryKeys.storageBackends)?.backends;
       const refreshedBackend = refreshedBackends?.find(
         (candidate) => candidate.slug === backend.slug
       );

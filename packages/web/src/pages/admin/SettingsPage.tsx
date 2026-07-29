@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import {
+  randomMethods,
+  rootRedirects,
+  type RandomMethod,
+  type RootRedirect
+} from "@imageshow/shared/browser";
 import { api } from "../../lib/api/client.js";
 import { Icon } from "../../components/icon/Icon.js";
 import { AsyncActionButton } from "../../components/actions/AsyncActionButton.js";
@@ -30,6 +36,24 @@ const saveSettingsPresentation = {
   success: { icon: "check-line", label: "保存配置成功" },
   error: { icon: "close-line", label: "保存配置失败" }
 } as const;
+
+const rootRedirectLabels: Record<RootRedirect, string> = {
+  home: "首页 /home",
+  gallery: "画廊 /gallery"
+};
+const rootRedirectOptions = rootRedirects.map((value) => ({
+  value,
+  label: rootRedirectLabels[value]
+}));
+
+const randomMethodLabels: Record<RandomMethod, string> = {
+  proxy: "代理返回",
+  redirect: "302 跳转"
+};
+const randomMethodOptions = randomMethods.map((value) => ({
+  value,
+  label: randomMethodLabels[value]
+}));
 
 export function SettingsPage() {
   const query = useAdminSettings();
@@ -219,8 +243,8 @@ export function SettingsPage() {
               根路径页面
               <SelectMenu
                 value={settings.site.root_redirect}
-                onChange={(value) => updateSite({ root_redirect: value as AdminSettings["site"]["root_redirect"] })}
-                options={[{ value: "home", label: "首页 /home" }, { value: "gallery", label: "画廊 /gallery" }]}
+                onChange={(value) => updateSite({ root_redirect: value as RootRedirect })}
+                options={rootRedirectOptions}
                 ariaLabel="根路径页面"
               />
             </label>
@@ -255,8 +279,10 @@ export function SettingsPage() {
               随机图默认模式
               <SelectMenu
                 value={settings.site.random_default_method}
-                onChange={(value) => updateSite({ random_default_method: value as "proxy" | "redirect" })}
-                options={[{ value: "proxy", label: "代理返回" }, { value: "redirect", label: "302 跳转" }]}
+                onChange={(value) => updateSite({
+                  random_default_method: value as RandomMethod
+                })}
+                options={randomMethodOptions}
                 ariaLabel="随机图默认模式"
               />
             </label>

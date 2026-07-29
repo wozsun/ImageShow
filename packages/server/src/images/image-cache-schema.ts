@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { Brightness, Device } from "@imageshow/shared";
+import type { Brightness, Device } from "@imageshow/shared/browser";
 
 export type ImageLookupItem = {
   object_key: string;

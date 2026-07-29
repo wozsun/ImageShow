@@ -6,8 +6,10 @@ import {
   type Brightness,
   type Device,
   type GalleryImageCardDto,
+  type ImportMode,
+  type ImportSessionHandleDto,
   type PublicImageDetailDto
-} from "@imageshow/shared";
+} from "@imageshow/shared/browser";
 import { publicImageUrls } from "../storage/public-urls.ts";
 import { getTagsForImages } from "../tags/query.ts";
 import { hasDistinctOriginalUrl } from "./original-link.ts";
@@ -124,7 +126,6 @@ export const batchEditableImagePresentationColumnsWithTags = [
 ].join(", ");
 
 export type PublicImage = AdminImageItemDto & { ext: string };
-export type PublicImageDetail = PublicImageDetailDto;
 export type ImageRecordWithTags = ImageRecord & { tags: string[] };
 
 export type PublicImageCardRecord = Pick<
@@ -148,10 +149,12 @@ type PublicImageUrlRecord = Pick<
 
 export type ImportSessionRecord = {
   id: string;
-  mode: "upload" | "download";
+  mode: ImportMode;
 };
 
-export function importSessionResponse(row: ImportSessionRecord) {
+export function importSessionResponse(
+  row: ImportSessionRecord
+): ImportSessionHandleDto {
   return {
     id: row.id,
     upload_url: row.mode === "upload" ? `${adminApiBasePath}/imports/${row.id}/file` : undefined,
@@ -236,7 +239,6 @@ export async function publicImageDetail(
   };
 }
 
-export type PublicImageCard = GalleryImageCardDto;
 
 async function publicImageCard(
   row: PublicImageCardRecord,

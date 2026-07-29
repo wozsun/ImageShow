@@ -3,7 +3,7 @@ import type {
   AdminImageListResponse,
   BatchImageSnapshotResponse,
   ImageAdminInfoDto
-} from "@imageshow/shared";
+} from "@imageshow/shared/browser";
 import { pool, withAdvisoryLocks } from "../../core/db.ts";
 import { ApiError } from "../../core/api-error.ts";
 import { adminImageListQuery } from "../../core/validation.ts";

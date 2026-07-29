@@ -1,4 +1,4 @@
-import { adminPermissions } from "@imageshow/shared";
+import { adminPermissions } from "@imageshow/shared/browser";
 import type { Hono } from "hono";
 import { authorCreateInput, authorMetaUpdateInput, authorSlugInput } from "../core/validation.ts";
 import { listAuthorsWithMeta } from "../authors/query.ts";

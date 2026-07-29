@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   adminPermissions,
+  type AdminEntityListResponseDto,
   type AdminPermission
 } from "@imageshow/shared/browser";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -82,7 +83,7 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
   const permissions = useAdminPermissions();
   const canDelete = permissions.includes(DELETE_PERMISSIONS[kind]);
   const client = useQueryClient();
-  const { data, error: listError, isError: listFailed, isFetching, refetch } = useQuery<{ items: Entity[] }>({ queryKey, queryFn: ({ signal }) => api(`${adminApiBasePath}/${kind}`, { signal }) });
+  const { data, error: listError, isError: listFailed, isFetching, refetch } = useQuery<AdminEntityListResponseDto>({ queryKey, queryFn: ({ signal }) => api(`${adminApiBasePath}/${kind}`, { signal }) });
   const { data: settingsData } = useAdminSettings();
   // 新建/删除词条会改动公共画廊的筛选词表（gallery-facets，staleTime:Infinity 不会自动刷新），
   // 删除还会清除关联图片上的该属性，故一并失效后台图片列表，与 ImageAdmin.refresh 的失效集对齐。

@@ -1,11 +1,17 @@
 import { z } from "zod";
 import { isIP } from "node:net";
 import { appConfig } from "@imageshow/shared";
+import {
+  galleryOrders,
+  logLevels,
+  randomMethods,
+  rootRedirects
+} from "@imageshow/shared/browser";
 import { isRootRelativeOrHttpsUrl } from "../core/url-validation.ts";
 
-export const rootRedirect = z.enum(["home", "gallery"]);
-export const randomMethod = z.enum(["proxy", "redirect"]);
-export const galleryOrder = z.enum(["latest", "random"]);
+export const rootRedirect = z.enum(rootRedirects);
+export const randomMethod = z.enum(randomMethods);
+export const galleryOrder = z.enum(galleryOrders);
 
 export const siteName = z.string().trim().min(1);
 export const siteDomain = z.string().trim().toLowerCase().min(1).max(259).refine((value) => {
@@ -88,6 +94,6 @@ export const altchaTtlSeconds = z.coerce.number().int()
 export const altchaCost = z.coerce.number().int().min(1000).max(100_000);
 export const altchaCounter = z.coerce.number().int().min(100).max(100_000);
 
-export const logLevel = z.enum(["DEBUG", "INFO", "WARN", "ERROR", "OFF"]);
+export const logLevel = z.enum(logLevels);
 export const logMaxSizeMb = z.coerce.number().positive().max(1024);
 export const logMaxFiles = z.coerce.number().int().min(1).max(100);

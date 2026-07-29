@@ -1,7 +1,9 @@
 import {
   adminApiBasePath,
+  type AdminEntityDto,
+  type AdminEntityListResponseDto,
   type AdminPermission
-} from "@imageshow/shared";
+} from "@imageshow/shared/browser";
 import type { Hono } from "hono";
 import type { z } from "zod";
 import { apiSuccess } from "../core/http/responses.ts";
@@ -14,7 +16,7 @@ type EntityRouteOptions<CreateSchema extends z.ZodType, UpdateSchema extends z.Z
   createInput: CreateSchema;
   updateInput: UpdateSchema;
   deletePermission: AdminPermission;
-  list: () => Promise<unknown[]>;
+  list: () => Promise<AdminEntityDto[]>;
   create: (input: z.infer<CreateSchema>) => Promise<void>;
   reorder: (slugs: string[]) => Promise<void>;
   update: (slug: string, input: z.infer<UpdateSchema>) => Promise<void>;
@@ -26,7 +28,12 @@ export function registerAdminEntityRoutes<
   UpdateSchema extends z.ZodType
 >(app: Hono, options: EntityRouteOptions<CreateSchema, UpdateSchema>) {
   const base = `${adminApiBasePath}/${options.path}`;
-  app.get(base, async (c) => c.json(apiSuccess({ items: await options.list() })));
+  app.get(base, async (c) => {
+    const response = {
+      items: await options.list()
+    } satisfies AdminEntityListResponseDto;
+    return c.json(apiSuccess(response));
+  });
 
   app.post(base, async (c) => {
     const input = parse(options.createInput, await c.req.json().catch(() => ({})));

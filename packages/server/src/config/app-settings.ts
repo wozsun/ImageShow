@@ -1,5 +1,8 @@
 import { z } from "zod";
-import type { AdminSettings } from "@imageshow/shared";
+import type {
+  AdminSettings,
+  SiteConfigDto
+} from "@imageshow/shared/browser";
 import { ApiError } from "../core/api-error.ts";
 import {
   galleryLimit,
@@ -178,7 +181,7 @@ export function getEffectiveLoginBackground() {
   return effectiveLoginBackground(getRuntimeConfig().admin.login_background);
 }
 
-export function siteConfigPayload() {
+export function siteConfigPayload(): SiteConfigDto {
   const runtime = getRuntimeConfig();
   const {
     name,

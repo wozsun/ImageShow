@@ -1,6 +1,7 @@
 import { appendFileSync, existsSync, mkdirSync, renameSync, statSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
-import { appConfig, type RuntimeConfig } from "@imageshow/shared";
+import { appConfig } from "@imageshow/shared";
+import type { RuntimeConfig } from "@imageshow/shared/browser";
 import { runtimePaths } from "../config/bootstrap-env.ts";
 
 const LEVELS = { DEBUG: 10, INFO: 20, WARN: 30, ERROR: 40, OFF: 100 } as const;

@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
+import type { AdminOverviewDto } from "@imageshow/shared/browser";
 import { api } from "../../lib/api/client.js";
 import { ThumbImage } from "../../components/image/ThumbImage.js";
 import { ImageDetailModal } from "../../components/image/ImageDetailModal.js";
@@ -8,30 +9,7 @@ import { adminApiBasePath, adminBasePath } from "../../lib/constants.js";
 import { queryKeys } from "../../lib/api/query-keys.js";
 import { formatBytes } from "../../lib/ui/formatters.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
-import type { AdminImageDetailItem } from "../../lib/types.js";
 import "../../styles/admin/overview.css";
-
-type ThemeCount = { theme: string; count: number };
-type OverviewStats = {
-  gallery: number;
-  theme_unset: number;
-  trash: number;
-  total: number;
-  local: number;
-  nonlocal: number;
-  local_image_size: number;
-  local_thumb_size: number;
-  nonlocal_image_size: number;
-  nonlocal_thumb_size: number;
-  theme_count: number;
-  backend_count: number;
-  pc: number;
-  mb: number;
-  dark: number;
-  light: number;
-  top_themes: ThemeCount[];
-  recent: AdminImageDetailItem[];
-};
 
 type OverviewMetric = { label: string; value?: number | string; hint?: string; hintTitle?: string; to?: string };
 
@@ -59,9 +37,11 @@ function OverviewMetricCards({ items }: { items: OverviewMetric[] }) {
 }
 
 export function Overview() {
-  const [detail, setDetail] = useState<AdminImageDetailItem | null>(null);
+  const [detail, setDetail] = useState<
+    AdminOverviewDto["recent"][number] | null
+  >(null);
   const detailReturnFocusRef = useRef<HTMLElement | null>(null);
-  const query = useQuery<OverviewStats>({ queryKey: queryKeys.overview, queryFn: ({ signal }) => api(`${adminApiBasePath}/overview`, { signal }) });
+  const query = useQuery<AdminOverviewDto>({ queryKey: queryKeys.overview, queryFn: ({ signal }) => api(`${adminApiBasePath}/overview`, { signal }) });
   const { data } = query;
   if (query.isError) return <QueryErrorState error={query.error} onRetry={() => void query.refetch()} fullPage reportContext="overview.load" />;
   const imageCards: OverviewMetric[] = [

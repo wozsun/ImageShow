@@ -1,10 +1,18 @@
 import type { Context } from "hono";
+import type {
+  ApiErrorResponse,
+  ApiSuccessResponse
+} from "@imageshow/shared/browser";
 import { ApiError } from "../api-error.ts";
 import { logger } from "../logger.ts";
 import { noStoreCacheControl } from "./headers.ts";
 
+export function apiSuccess(): { ok: true };
+export function apiSuccess<T extends Record<string, unknown>>(
+  fields: T
+): ApiSuccessResponse<T>;
 export function apiSuccess(fields: Record<string, unknown> = {}) {
-  return { ok: true, ...fields };
+  return { ok: true as const, ...fields };
 }
 
 export function handleApiError(context: Context, error: unknown) {
@@ -19,42 +27,36 @@ export function handleApiError(context: Context, error: unknown) {
         `bytes */${(error.details as { total_size: number }).total_size}`
       );
     }
-    return context.json(
-      {
-        ok: false,
-        code: error.code,
-        error: error.message,
-        details: error.details
-      },
-      error.status as never
-    );
+    const payload = {
+      ok: false,
+      code: error.code,
+      error: error.message,
+      details: error.details
+    } satisfies ApiErrorResponse;
+    return context.json(payload, error.status as never);
   }
   const unhandled = error as { name?: string };
   if (unhandled?.name === "redis_unavailable") {
-    return context.json(
-      {
-        ok: false,
-        code: "redis_unavailable",
-        error: "Redis unavailable",
-        details: {}
-      },
-      503
-    );
+    const payload = {
+      ok: false,
+      code: "redis_unavailable",
+      error: "Redis unavailable",
+      details: {}
+    } satisfies ApiErrorResponse;
+    return context.json(payload, 503);
   }
 
   logger.error(
     `unhandled ${context.req.method} ${new URL(context.req.url).pathname}`,
     error
   );
-  return context.json(
-    {
-      ok: false,
-      code: "internal_error",
-      error: "Internal server error",
-      details: {}
-    },
-    500
-  );
+  const payload = {
+    ok: false,
+    code: "internal_error",
+    error: "Internal server error",
+    details: {}
+  } satisfies ApiErrorResponse;
+  return context.json(payload, 500);
 }
 
 function codeForStatus(status: number): string {
@@ -73,12 +75,12 @@ export function apiErrorResponse(
   error: { status: number; message: string; code?: string },
   details: Record<string, unknown> = {}
 ) {
-  const payload: Record<string, unknown> = {
+  const payload: ApiErrorResponse = {
     ok: false,
     code: error.code ?? codeForStatus(error.status),
-    error: error.message
+    error: error.message,
+    ...(Object.keys(details).length ? { details } : {})
   };
-  if (Object.keys(details).length) payload.details = details;
   return new Response(JSON.stringify(payload), {
     status: error.status,
     headers: {

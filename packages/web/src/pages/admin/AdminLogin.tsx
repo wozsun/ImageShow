@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import type { AltchaWidgetElement } from "altcha";
+import type { AdminLoginResultDto } from "@imageshow/shared/browser";
 import { api, clearCsrfToken, setCsrfToken } from "../../lib/api/client.js";
 import { PasswordInput } from "../../components/form/PasswordInput.js";
 import { adminApiBasePath } from "../../lib/constants.js";
@@ -85,7 +86,7 @@ export function AdminLogin({
         setError("");
         setLoggingIn(true);
         try {
-          const response = await api<{ csrf_token: string }>(`${adminApiBasePath}/auth/login`, {
+          const response = await api<AdminLoginResultDto>(`${adminApiBasePath}/auth/login`, {
             method: "POST",
             body: JSON.stringify({ username, password, ...(altcha ? { altcha } : {}) })
           });

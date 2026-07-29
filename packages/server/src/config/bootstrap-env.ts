@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { z } from "zod";
-import type { RuntimeConfig } from "@imageshow/shared";
+import type { RuntimeConfig } from "@imageshow/shared/browser";
 import {
   mergeRuntimeConfig,
   runtimeConfigDefaults,

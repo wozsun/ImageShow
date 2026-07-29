@@ -1,4 +1,10 @@
 import { useCallback, useMemo, useState } from "react";
+import type {
+  BatchImageDeleteResponseDto,
+  BatchImageRestoreResponseDto,
+  SelectedTrashPurgeResponseDto,
+  TrashPurgeResponseDto
+} from "@imageshow/shared/browser";
 import { adminApiBasePath } from "../../lib/constants.js";
 import { api } from "../../lib/api/client.js";
 import type { ImageItem } from "../../lib/types.js";
@@ -148,7 +154,7 @@ export function useImageAdminOperations({
         status: "error" | "success";
       };
       if (confirmAction.kind === "batch-delete") {
-        const result = await api<{ deleted: number; ignored: number }>(
+        const result = await api<BatchImageDeleteResponseDto>(
           `${adminApiBasePath}/images/batch-delete`,
           {
             method: "POST",
@@ -166,12 +172,7 @@ export function useImageAdminOperations({
           status: result.ignored ? "error" : "success"
         };
       } else if (confirmAction.kind === "purge-selected") {
-        const result = await api<{
-          deleted: number;
-          failed: number;
-          remaining: number;
-          ignored: number;
-        }>(
+        const result = await api<SelectedTrashPurgeResponseDto>(
           `${adminApiBasePath}/images/batch-purge`,
           {
             method: "POST",
@@ -197,7 +198,7 @@ export function useImageAdminOperations({
           status: result.failed || pending || result.ignored ? "error" : "success"
         };
       } else if (confirmAction.kind === "empty-trash") {
-        const result = await api<{ deleted: number; failed: number; remaining: number }>(
+        const result = await api<TrashPurgeResponseDto>(
           `${adminApiBasePath}/images/empty-trash`,
           { method: "POST" }
         );
@@ -274,7 +275,7 @@ export function useImageAdminOperations({
     try {
       for (let start = 0; start < total; start += restoreChunkSize) {
         const chunk = ids.slice(start, start + restoreChunkSize);
-        const result = await api<{ restored: number; ignored: number }>(
+        const result = await api<BatchImageRestoreResponseDto>(
           `${adminApiBasePath}/images/batch-restore`,
           { method: "POST", body: JSON.stringify({ ids: chunk }) }
         );

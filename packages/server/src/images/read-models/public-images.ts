@@ -1,4 +1,8 @@
 import type { z } from "zod";
+import type {
+  PublicImageDetailDto,
+  PublicImageListResponseDto
+} from "@imageshow/shared/browser";
 import { getRuntimeConfig } from "../../config/runtime-config-store.ts";
 import { ApiError } from "../../core/api-error.ts";
 import { coalesce } from "../../core/coalesce.ts";
@@ -16,19 +20,12 @@ import {
 } from "../image-cache.ts";
 import {
   publicImageDetail,
-  type PublicImageCard,
-  type PublicImageDetail,
   type PublicImageDetailRecord
 } from "../presenter.ts";
 import { buildImageListFilters } from "./list-filters.ts";
 import { fetchPublicImageCardPage } from "./pagination.ts";
 
 type PublicListQuery = z.infer<typeof listQuery>;
-type PublicImageListPayload = {
-  items: PublicImageCard[];
-  next_cursor: string | null;
-};
-
 function publicImageListCacheKey(q: {
   status: string;
   d?: string;
@@ -53,8 +50,8 @@ function publicImageListCacheKey(q: {
 
 function withShuffle(
   query: PublicListQuery,
-  payload: PublicImageListPayload
-): PublicImageListPayload {
+  payload: PublicImageListResponseDto
+): PublicImageListResponseDto {
   if (!query.shuffle || payload.items.length < 2) return payload;
   const items = [...payload.items];
   for (let index = items.length - 1; index > 0; index -= 1) {
@@ -66,26 +63,32 @@ function withShuffle(
 
 export async function listPublicImages(
   query: PublicListQuery
-): Promise<PublicImageListPayload> {
+): Promise<PublicImageListResponseDto> {
   const limit = query.limit ?? getRuntimeConfig().site.gallery.default_limit;
   const generation = await publicImagesCacheGeneration();
   const cacheKey = publicImageListCacheKey({
     ...query,
     limit
   });
-  const cached = await getPublicImagesCache<PublicImageListPayload>(cacheKey, generation);
+  const cached = await getPublicImagesCache<PublicImageListResponseDto>(
+    cacheKey,
+    generation
+  );
   if (cached) return withShuffle(query, cached);
 
   const payload = await coalesce(
     `public-images:${generation ?? "uncached"}:${cacheKey}`,
     async () => {
-      const raced = await getPublicImagesCache<PublicImageListPayload>(cacheKey, generation);
+      const raced = await getPublicImagesCache<PublicImageListResponseDto>(
+        cacheKey,
+        generation
+      );
       if (raced) return raced;
 
       const { params, where } = await buildImageListFilters(query);
 
       const page = await fetchPublicImageCardPage(where, params, limit, query.cursor);
-      const fresh: PublicImageListPayload = {
+      const fresh: PublicImageListResponseDto = {
         items: page.items,
         next_cursor: page.nextCursor
       };
@@ -99,16 +102,22 @@ export async function listPublicImages(
   return withShuffle(query, payload);
 }
 
-export async function getPublicImage(id: string) {
+export async function getPublicImage(id: string): Promise<PublicImageDetailDto> {
   const generation = await publicImagesCacheGeneration();
   const cacheKey = id;
-  const cached = await getPublicImageDetailCache<PublicImageDetail>(cacheKey, generation);
+  const cached = await getPublicImageDetailCache<PublicImageDetailDto>(
+    cacheKey,
+    generation
+  );
   if (cached) return cached;
 
   return coalesce(
     `public-image:${generation ?? "uncached"}:${cacheKey}`,
     async () => {
-      const raced = await getPublicImageDetailCache<PublicImageDetail>(cacheKey, generation);
+      const raced = await getPublicImageDetailCache<PublicImageDetailDto>(
+        cacheKey,
+        generation
+      );
       if (raced) return raced;
 
       const lookup = await getImageLookupById(id, generation);

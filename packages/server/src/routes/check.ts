@@ -1,5 +1,9 @@
 import type { Hono } from "hono";
-import { adminApiBasePath, adminPermissions } from "@imageshow/shared";
+import {
+  adminApiBasePath,
+  adminPermissions,
+  type StorageLocationMigrationResponse
+} from "@imageshow/shared/browser";
 import { apiSuccess } from "../core/http/responses.ts";
 import { requireAdminPermission } from "../users/admin-authorization.ts";
 import { inspectRedisState } from "../checks/redis-inspect.ts";
@@ -26,7 +30,10 @@ export function registerCheckRoutes(app: Hono) {
     requireAdminPermission(adminPermissions.storageMaintenanceMigrate),
     async (c) => {
       const body = await c.req.json().catch(() => ({}));
-      return c.json(apiSuccess(await migrateStorageLocation(body)));
+      const response = (
+        apiSuccess(await migrateStorageLocation(body))
+      ) satisfies StorageLocationMigrationResponse;
+      return c.json(response);
     }
   );
 }

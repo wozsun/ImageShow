@@ -1,7 +1,8 @@
 import { useState } from "react";
 import {
   brightnesses as imageBrightnesses,
-  devices as imageDevices
+  devices as imageDevices,
+  type ImportVocabularyDto
 } from "@imageshow/shared/browser";
 import { FacetSelector } from "../../components/data-display/FacetSelector.js";
 import { Icon } from "../../components/icon/Icon.js";
@@ -10,7 +11,6 @@ import {
   brightnessOptionLabel,
   deviceOptionLabel
 } from "../../lib/ui/select-options.js";
-import type { FacetOption } from "../../lib/types.js";
 import { AnchoredMenuDismissSignalContext } from "../../hooks/useAnchoredMenu.js";
 import { useDismissiblePanel } from "../../hooks/useDismissiblePanel.js";
 import type { ImageAdminView } from "./useImageAdminOperations.js";
@@ -31,12 +31,6 @@ export const emptyImageAdminFilters: ImageAdminFilterValues = {
   author: ""
 };
 
-type ImageAdminFilterVocabulary = {
-  themes: FacetOption[];
-  tags: FacetOption[];
-  authors: FacetOption[];
-};
-
 export function ImageAdminFilters({
   value,
   vocabulary,
@@ -46,7 +40,7 @@ export function ImageAdminFilters({
   onChange
 }: {
   value: ImageAdminFilterValues;
-  vocabulary?: ImageAdminFilterVocabulary;
+  vocabulary?: ImportVocabularyDto;
   view: ImageAdminView;
   mobileLayout: boolean;
   disabled: boolean;

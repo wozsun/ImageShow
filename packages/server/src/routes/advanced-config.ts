@@ -1,6 +1,11 @@
 import type { Hono } from "hono";
 import { z } from "zod";
-import { adminApiBasePath } from "@imageshow/shared";
+import {
+  adminApiBasePath,
+  type AdvancedConfigPreviewResponseDto,
+  type RuntimeConfigResponseDto,
+  type RuntimeConfigValidationResponseDto
+} from "@imageshow/shared/browser";
 import { apiSuccess } from "../core/http/responses.ts";
 import { privateNoStoreCacheControl } from "../core/http/headers.ts";
 import { limitAdvancedConfigBody } from "../core/http/request-body-limit.ts";
@@ -32,21 +37,27 @@ function exportFilename(exportedAt: string) {
 export function registerAdvancedConfigRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/advanced-config/runtime`, requireSuperAdmin, (c) => {
     c.header("Cache-Control", privateNoStoreCacheControl);
-    return c.json(apiSuccess({ config: getFullRuntimeConfig() }));
+    const response = {
+      config: getFullRuntimeConfig()
+    } satisfies RuntimeConfigResponseDto;
+    return c.json(apiSuccess(response));
   });
 
   app.post(`${adminApiBasePath}/advanced-config/runtime/validate`, requireSuperAdmin, limitAdvancedConfigBody, async (c) => {
     const input = parse(runtimeInput, await c.req.json().catch(() => ({})));
     const result = validateFullRuntimeConfig(input.config);
     c.header("Cache-Control", privateNoStoreCacheControl);
-    return c.json(apiSuccess({ changes: result.changes }));
+    const response = {
+      changes: result.changes
+    } satisfies RuntimeConfigValidationResponseDto;
+    return c.json(apiSuccess(response));
   });
 
   app.post(`${adminApiBasePath}/advanced-config/runtime`, requireSuperAdmin, limitAdvancedConfigBody, async (c) => {
     const input = parse(runtimeInput, await c.req.json().catch(() => ({})));
     const result = await saveFullRuntimeConfig(input.config);
     c.header("Cache-Control", privateNoStoreCacheControl);
-    return c.json(apiSuccess(result));
+    return c.json(apiSuccess(result satisfies RuntimeConfigResponseDto));
   });
 
   app.get(`${adminApiBasePath}/advanced-config/export`, requireSuperAdmin, async (c) => {
@@ -59,7 +70,10 @@ export function registerAdvancedConfigRoutes(app: Hono) {
 
   app.post(`${adminApiBasePath}/advanced-config/preview`, requireSuperAdmin, limitAdvancedConfigBody, async (c) => {
     const input = parse(previewInput, await c.req.json().catch(() => ({})));
-    return c.json(apiSuccess({ preview: await previewConfigPackage(input.package) }));
+    const response = {
+      preview: await previewConfigPackage(input.package)
+    } satisfies AdvancedConfigPreviewResponseDto;
+    return c.json(apiSuccess(response));
   });
 
   app.post(`${adminApiBasePath}/advanced-config/import`, requireSuperAdmin, limitAdvancedConfigBody, async (c) => {

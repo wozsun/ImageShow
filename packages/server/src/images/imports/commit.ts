@@ -2,6 +2,7 @@ import { pool } from "../../core/db.ts";
 import { ApiError, errorMessage } from "../../core/api-error.ts";
 import { logger } from "../../core/logger.ts";
 import { randomUuidV7 } from "../../core/uuid.ts";
+import type { StoredImportCommitResultDto } from "@imageshow/shared/browser";
 import { resolveTagNames } from "../../tags/query.ts";
 import { vocabularyAssociationLockRequests } from "../../vocab/mutation-sync.ts";
 import { resolveStorageAccess } from "../../storage/backend-registry.ts";
@@ -394,7 +395,11 @@ async function importCommitByteWeight(id: string) {
   return Number.isFinite(total) ? Math.max(1, total) : 1;
 }
 
-export function commitImportSession(id: string, metadata: ImportMetadata, signal?: AbortSignal) {
+export function commitImportSession(
+  id: string,
+  metadata: ImportMetadata,
+  signal?: AbortSignal
+): Promise<StoredImportCommitResultDto> {
   const commitSignal = signal ?? new AbortController().signal;
   return runImportCommit(async () => {
     const bytes = await importCommitByteWeight(id);

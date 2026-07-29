@@ -1,4 +1,4 @@
-import type { Brightness, Device } from "@imageshow/shared";
+import type { Brightness, Device } from "@imageshow/shared/browser";
 
 export type RandomCategoryCounts = Record<
   string,

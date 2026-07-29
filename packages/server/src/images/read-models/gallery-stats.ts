@@ -6,7 +6,7 @@ import {
   type Brightness,
   type Device,
   type GalleryStatsDto
-} from "@imageshow/shared";
+} from "@imageshow/shared/browser";
 import { ApiError } from "../../core/api-error.ts";
 import { coalesce } from "../../core/coalesce.ts";
 import { pool } from "../../core/db.ts";

@@ -1,5 +1,8 @@
 import type { Hono } from "hono";
-import { adminApiBasePath } from "@imageshow/shared";
+import {
+  adminApiBasePath,
+  type AdminSettingsResponseDto
+} from "@imageshow/shared/browser";
 import { apiSuccess } from "../core/http/responses.ts";
 import { requireSuperAdmin } from "../users/admin-authorization.ts";
 import {
@@ -11,9 +14,10 @@ import {
 
 export function registerSettingsRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/settings`, (c) => {
-    return c.json(apiSuccess({
+    const response = {
       settings: getSettingsForAdmin()
-    }));
+    } satisfies AdminSettingsResponseDto;
+    return c.json(apiSuccess(response));
   });
 
   app.post(`${adminApiBasePath}/settings`, requireSuperAdmin, async (c) => {

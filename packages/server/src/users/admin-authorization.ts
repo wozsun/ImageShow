@@ -2,7 +2,7 @@ import {
   adminPermissions,
   type AdminPermission,
   type AdminRole
-} from "@imageshow/shared";
+} from "@imageshow/shared/browser";
 import type { Context, MiddlewareHandler, Next } from "hono";
 import { ApiError } from "../core/api-error.ts";
 

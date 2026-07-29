@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { slugPattern } from "@imageshow/shared";
+import { slugPattern } from "@imageshow/shared/browser";
 
 export const adminUsernameInput = z.string().trim().toLowerCase()
   .min(1, "用户名不能为空")

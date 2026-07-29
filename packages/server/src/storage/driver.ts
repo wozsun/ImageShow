@@ -1,5 +1,5 @@
 import type { Readable } from "node:stream";
-import type { StorageType } from "@imageshow/shared";
+import type { StorageType } from "@imageshow/shared/browser";
 import type { ReadablePrefix, StoragePrefix } from "./object-keys.ts";
 
 export type OpenedRead = {

@@ -1,3 +1,8 @@
+import {
+  galleryOrders,
+  type GalleryOrder
+} from "@imageshow/shared/browser";
+
 export type SelectOption = { value: string; label: string };
 
 const deviceLabels: Record<string, string> = { pc: "桌面端", mb: "移动端" };
@@ -75,10 +80,16 @@ export const batchCommonBrightnessOptions: readonly SelectOption[] = [
   { value: "dark", label: brightnessOptionLabel("dark") }
 ];
 
-export const galleryOrderSelectOptions: readonly SelectOption[] = [
-  { value: "latest", label: "最新优先" },
-  { value: "random", label: "随机打乱" }
-];
+const galleryOrderLabels: Record<GalleryOrder, string> = {
+  latest: "最新优先",
+  random: "随机打乱"
+};
+
+export const galleryOrderSelectOptions: readonly SelectOption[] =
+  galleryOrders.map((value) => ({
+    value,
+    label: galleryOrderLabels[value]
+  }));
 
 const storageBackendLabels: Record<string, string> = { local: "本地存储" };
 

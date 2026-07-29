@@ -1,6 +1,6 @@
 import { Hono, type Context, type Next } from "hono";
 import { compress } from "hono/compress";
-import { adminApiBasePath } from "@imageshow/shared";
+import { adminApiBasePath } from "@imageshow/shared/browser";
 import { getRuntimeConfig } from "./config/runtime-config-store.ts";
 import { apiErrorResponse, handleApiError } from "./core/http/responses.ts";
 import {

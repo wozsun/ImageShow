@@ -1,16 +1,16 @@
+import { appConfig } from "@imageshow/shared";
 import {
   adminApiBasePath,
   adminPreferencesMaxBytes,
-  appConfig
-} from "@imageshow/shared";
+  configPackageRequestMaxBytes
+} from "@imageshow/shared/browser";
 import type { Context, Next } from "hono";
 import { apiErrorResponse } from "./responses.ts";
 import { cspReportPath } from "./headers.ts";
 
 const standardApiBodyMaxBytes = 128 * 1024;
 const jsonlManifestBodyMaxBytes = appConfig.imports.jsonlManifestMaxBytes;
-const advancedConfigMaxBytes =
-  appConfig.imports.configPackageMaxBytes + 64 * 1024;
+const advancedConfigMaxBytes = configPackageRequestMaxBytes;
 const adminPreferencesBodyMaxBytes = adminPreferencesMaxBytes + 1024;
 const adminPreferencesPath = `${adminApiBasePath}/preferences`;
 const jsonlManifestPath = `${adminApiBasePath}/imports/jsonl/parse`;

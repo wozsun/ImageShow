@@ -1,4 +1,4 @@
-import type { Brightness, Device } from "@imageshow/shared";
+import type { Brightness, Device } from "@imageshow/shared/browser";
 import type { PoolClient } from "pg";
 import { ApiError, errorMessage } from "../core/api-error.ts";
 import { pool } from "../core/db.ts";

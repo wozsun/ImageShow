@@ -1,113 +1,38 @@
 import { api, getCsrfToken } from "../../../lib/api/client.js";
 import { adminApiBasePath } from "../../../lib/constants.js";
-import type { Brightness, Device, ImageDraft, ImageItem } from "../../../lib/types.js";
+import type { ImageDraft } from "../../../lib/types.js";
 import { createIntegerProgressReporter } from "./upload-progress.js";
+import type {
+  ImportSessionCreateDto,
+  ImportSessionHandleDto,
+  JsonlManifestItemDto,
+  JsonlManifestParseErrorDto,
+  JsonlManifestResultDto,
+  PreparedImportDto,
+  StoredImportCommitResultDto,
+  StoredImportStatusListDto,
+  StoredImportStatusDto,
+  WeiboImportParseErrorDto,
+  WeiboImportResultDto
+} from "@imageshow/shared/browser";
 
-export type PreparedImport = {
-  id: string;
-  preview_url: string;
-  preview_full_url: string;
-  width: number;
-  height: number;
-  original_width: number;
-  original_height: number;
-  md5: string;
-  original_size: number;
-  size: number;
-  quality: number | null;
-  transcoded: boolean;
-  detected_device: Device;
-  detected_brightness: Brightness;
-  storage_slug: string;
-  duplicates: ImageItem[];
-};
-
-export type ImportSessionHandle = {
-  id: string;
-  upload_url?: string;
-  materialize_url?: string;
-  prepare_url: string;
-};
-
-export type ImportSessionCreateInput = ImageDraft & {
-  mode: "upload" | "download";
-  size?: number;
-  source_url?: string;
-  image_time?: string;
-  batch_time?: string;
-  manifest_position?: number;
-  idempotency_key: string;
-  storage_slug: string;
-};
-
-export type JsonlManifestItem = {
-  line: number;
-  manifest_position: number;
-  original: string;
-  source?: string;
-  image_time?: string;
-  author?: string;
-  tags?: string[];
-  title?: string;
-  description?: string;
-  theme?: string;
-  device?: Device | "auto";
-  brightness?: Brightness | "auto";
-  storage_slug?: string;
-};
-
-export type JsonlManifestParseError = {
-  line: number;
-  raw: string;
-  error: string;
-};
-
-export type JsonlManifestResult = {
-  items: JsonlManifestItem[];
-  errors: JsonlManifestParseError[];
-};
-
-export type WeiboImportParseError = {
-  line: number;
-  url: string;
-  error: string;
-};
-
-export type WeiboImportResult = {
-  post_count: number;
-  errors: WeiboImportParseError[];
-  manifest: JsonlManifestResult;
-};
-
-type StoredImportServerStatus =
-  | "created"
-  | "materializing"
-  | "received"
-  | "preparing"
-  | "ready"
-  | "committing"
-  | "finalized"
-  | "failed"
-  | "cancelled"
-  | "missing";
-
-export type StoredImportStatus = {
-  id: string;
-  status: StoredImportServerStatus;
-  error: string;
-  phase: string;
-  message: string;
-  progress?: number;
-};
-
-export type StoredImportCommitResult = {
-  status: "imported";
-  item: ImageItem;
-};
+export type PreparedImport = PreparedImportDto;
+export type ImportSessionHandle = ImportSessionHandleDto;
+export type ImportSessionCreateInput = ImportSessionCreateDto;
+export type JsonlManifestItem = JsonlManifestItemDto;
+export type JsonlManifestParseError = JsonlManifestParseErrorDto;
+export type JsonlManifestResult = JsonlManifestResultDto;
+export type WeiboImportParseError = WeiboImportParseErrorDto;
+export type WeiboImportResult = WeiboImportResultDto;
+export type StoredImportStatus = StoredImportStatusDto;
+export type StoredImportCommitResult = StoredImportCommitResultDto;
 
 export function getStoredImportStatuses(ids: string[], signal?: AbortSignal) {
   const query = encodeURIComponent(ids.join(","));
-  return api<{ items: StoredImportStatus[] }>(`${adminApiBasePath}/imports/status?ids=${query}`, { signal }).then((result) => result.items);
+  return api<StoredImportStatusListDto>(
+    `${adminApiBasePath}/imports/status?ids=${query}`,
+    { signal }
+  ).then((result) => result.items);
 }
 
 export async function getStoredImportStatus(id: string, signal?: AbortSignal) {

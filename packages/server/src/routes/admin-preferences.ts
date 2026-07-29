@@ -1,5 +1,8 @@
 import type { Context, Hono } from "hono";
-import { adminApiBasePath } from "@imageshow/shared";
+import {
+  adminApiBasePath,
+  type AdminPreferencesResponseDto
+} from "@imageshow/shared/browser";
 import { ApiError } from "../core/api-error.ts";
 import { apiSuccess } from "../core/http/responses.ts";
 import { limitAdminPreferencesBody } from "../core/http/request-body-limit.ts";
@@ -20,7 +23,8 @@ function authenticatedUsername(c: Context) {
 export function registerAdminPreferenceRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/preferences`, async (c) => {
     const preferences = await readAdminPreferences(authenticatedUsername(c));
-    return c.json(apiSuccess({ preferences }));
+    const response = { preferences } satisfies AdminPreferencesResponseDto;
+    return c.json(apiSuccess(response));
   });
 
   app.patch(`${adminApiBasePath}/preferences`, limitAdminPreferencesBody, async (c) => {
@@ -32,6 +36,9 @@ export function registerAdminPreferenceRoutes(app: Hono) {
       authenticatedUsername(c),
       preferences
     );
-    return c.json(apiSuccess({ preferences: savedPreferences }));
+    const response = {
+      preferences: savedPreferences
+    } satisfies AdminPreferencesResponseDto;
+    return c.json(apiSuccess(response));
   });
 }
