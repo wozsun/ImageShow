@@ -36,7 +36,7 @@ REDIS_PASSWORD=
 `data/config.json`，也不能从后台高级配置修改。应用在代码中固定监听容器内
 `5518`；`HOST_PORT` 只控制映射到该端口的宿主机端口，默认同为 `5518`。
 
-应用默认监听 `5518` 端口，由反向代理对外提供 HTTPS（见 [反向代理与部署](./deployment)）。以站点域名访问（下例以 `img.example.com` 为站点域名）：
+应用默认监听 `5518` 端口，由反向代理对外提供 HTTPS（见 [反向代理与部署](./deployment.md)）。以站点域名访问（下例以 `img.example.com` 为站点域名）：
 
 - 首页：`https://img.example.com/home`
 - 画廊：`https://img.example.com/gallery`

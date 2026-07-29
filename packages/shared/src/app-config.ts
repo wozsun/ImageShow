@@ -108,8 +108,6 @@ export const appConfig = {
       random_default_method: "redirect",
       random_subdomain: "random",
       static_subdomain: "static",
-      docs_subdomain: "docs",
-      docs_enabled: true,
       link_subdomain: "link",
       robots_enabled: false
     },
@@ -213,8 +211,6 @@ export type RuntimeSiteSettings = {
   random_default_method: RandomMethod;
   random_subdomain: string;
   static_subdomain: string;
-  docs_subdomain: string;
-  docs_enabled: boolean;
   link_subdomain: string;
   robots_enabled: boolean;
 };
@@ -307,11 +303,11 @@ export type RuntimeConfig = {
   log: { level: "DEBUG" | "INFO" | "WARN" | "ERROR" | "OFF"; max_size_mb: number; max_files: number };
 };
 
-export type SiteSettings = Pick<RuntimeSiteSettings, "name" | "domain" | "icon_url" | "root_redirect" | "home" | "gallery" | "random_default_method" | "docs_enabled">;
+export type SiteSettings = Pick<RuntimeSiteSettings, "name" | "domain" | "icon_url" | "root_redirect" | "home" | "gallery" | "random_default_method">;
 
 export type PublicSiteSettings = SiteSettings & Pick<RuntimeSiteSettings, "version">;
 
-export type AdminSiteSettings = Omit<SiteSettings, "home" | "docs_enabled"> & {
+export type AdminSiteSettings = Omit<SiteSettings, "home"> & {
   home: Pick<
     SiteHomeSettings,
     "background" | "banner_label" | "banner_title" | "tagline"

@@ -28,7 +28,6 @@ export const noStoreCacheControl = "no-store";
 export const privateNoStoreCacheControl = "private, no-store";
 export const immutableCacheControl = "public, max-age=31536000, immutable";
 export const publicDocumentCacheControl = "public, max-age=0, s-maxage=60, stale-while-revalidate=300, stale-if-error=600";
-export const publicDocsCacheControl = "public, max-age=0, s-maxage=600, stale-while-revalidate=3600, stale-if-error=86400";
 export const publicStaticCacheControl = "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800, stale-if-error=604800";
 export const publicProxyImageCacheControl = "public, max-age=86400, s-maxage=31536000, stale-while-revalidate=604800, stale-if-error=2592000";
 export const publicProxyFallbackThumbCacheControl = "public, max-age=604800, s-maxage=604800";

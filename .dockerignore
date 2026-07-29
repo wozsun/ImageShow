@@ -1,7 +1,6 @@
 # Dependencies and generated output
 **/node_modules
 **/dist
-packages/docs/.vitepress/cache
 *.tsbuildinfo
 *.log
 
@@ -25,4 +24,5 @@ nginx
 # Repository and non-build project assets
 .git
 .github
+/docs
 .DS_Store

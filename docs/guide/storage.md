@@ -96,4 +96,4 @@ prepare 会保存 processed image 与缩略图的 SHA-256（图片同时保存 M
 对象不存在。事务完成后重新读取 PostgreSQL 当前位置，推进图片 cache revision，并仅在
 revision 仍未变化时预热 lookup，避免并发迁移后写回旧 `storage_slug`。
 
-本地上传与链接下载的原始字节统一先进入服务端 `data/tmp`。服务端在本地完成校验、标准化、缩略图与最终 MD5 后，才把 processed image 和 prepared thumbnail 写入目标后端 `_uploads`。因此无需为存储桶配置浏览器 CORS，远端后端也不会发生“上传 raw 后再下载回来处理”的重复传输。详见[功能与流程](./flows#四种导入入口与两种底层模式)。
+本地上传与链接下载的原始字节统一先进入服务端 `data/tmp`。服务端在本地完成校验、标准化、缩略图与最终 MD5 后，才把 processed image 和 prepared thumbnail 写入目标后端 `_uploads`。因此无需为存储桶配置浏览器 CORS，远端后端也不会发生“上传 raw 后再下载回来处理”的重复传输。详见[功能与流程](./flows.md#四种导入入口与两种底层模式)。

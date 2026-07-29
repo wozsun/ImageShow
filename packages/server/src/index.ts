@@ -37,7 +37,6 @@ import { registerAdminAuthorRoutes } from "./routes/admin-authors.ts";
 import { registerAdminUserRoutes } from "./routes/admin-users.ts";
 import { registerAdminPreferenceRoutes } from "./routes/admin-preferences.ts";
 import { registerCheckRoutes } from "./routes/check.ts";
-import { registerDocsRoutes } from "./routes/docs.ts";
 import { registerHealthRoutes } from "./routes/health.ts";
 import { registerProtectedAuthRoutes, registerPublicAuthRoutes } from "./routes/auth.ts";
 import { registerPublicRoutes } from "./routes/public.ts";
@@ -75,7 +74,6 @@ app.use("*", async (c, next) => {
 });
 app.options("*", async () => new Response(null, { status: 204, headers: { "Cache-Control": noStoreCacheControl } }));
 app.get("/robots.txt", serveRobotsTxt);
-registerDocsRoutes(app);
 
 app.use("*", async (c, next) => {
   const host = c.req.header("host") ?? "";

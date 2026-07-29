@@ -1,26 +1,26 @@
 # 项目结构
 
-ImageShow 使用 npm workspaces 管理四个包。依赖方向固定为：
+ImageShow 使用 npm workspaces 管理三个包。依赖方向固定为：
 
 ```text
 packages/server ──► packages/shared
 packages/web ─────► packages/shared
-
-packages/docs ──► 独立构建为静态站点
 ```
 
-`server` 与 `web` 不能互相导入；`shared` 不能依赖其他 workspace。文档构建产物与 Web
-构建产物最终由服务端镜像提供，但它们在源码层仍是独立包。
+`server` 与 `web` 不能互相导入；`shared` 不能依赖其他 workspace。Web 构建产物最终
+由服务端镜像提供；根目录 `docs/guide/` 只是普通仓库文档，不参与 workspace 或生产构建。
 
 ## 根目录职责
 
 - `package.json` 只编排 workspace 构建、类型检查、死代码检查和运维入口。
-- `scripts/build/` 只生成 Web 图标并汇集服务端迁移、SPA 与文档静态资产。
+- `scripts/build/` 只生成 Web 图标并汇集服务端迁移与 SPA 静态资产。
 - `scripts/runtime/` 只放容器内的命令包装；容器启动由 `docker-entrypoint.sh` 负责权限
   收敛后直接执行传入命令。
-- `Dockerfile` 先安装完整依赖并构建四个 workspace，再单独安装 server/shared 的生产依赖，
+- `Dockerfile` 先安装完整依赖并构建三个 workspace，再单独安装 server/shared 的生产依赖，
   运行镜像只携带生产依赖、编译产物和运维入口。
 - `compose.yaml` 提供单实例 ImageShow、PostgreSQL 与 Redis 的标准部署。
+- `docs/guide/` 保存架构、配置、数据库、流程、部署和 API 说明，使用相对 Markdown
+  链接，可直接在仓库中阅读。
 
 本地测试统一位于根目录 `tests/`，由 Git 忽略且不进入 Docker build context、生产镜像或
 GitHub Actions。测试从外部启动与生产镜像相同的服务入口；测试数据库、Redis、Compose、
@@ -124,7 +124,7 @@ hooks ──► lib
 `lib/`、`hooks/` 和通用组件不得反向导入具体页面。只有形成稳定跨页面职责的代码才上移，
 页面内部的小组件无需为目录对称而拆分。
 
-## packages/docs
+## docs/guide
 
-文档包是 VitePress 静态站点。`guide/` 描述当前架构、配置、数据库、流程、部署和 API；
-产品文档只陈述当前可用行为，不承担版本更新记录。构建后由服务端的 `docs` 子域路由提供。
+这里保存普通 Markdown 仓库文档，描述当前架构、配置、数据库、流程、部署和 API。
+文档只陈述当前可用行为，不承担版本更新记录，也不生成或提供在线站点。

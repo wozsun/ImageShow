@@ -188,8 +188,7 @@ export function siteConfigPayload() {
     root_redirect,
     home,
     gallery,
-    random_default_method,
-    docs_enabled
+    random_default_method
   } = runtime.site;
   return {
     site: {
@@ -200,8 +199,7 @@ export function siteConfigPayload() {
       root_redirect,
       home,
       gallery,
-      random_default_method,
-      docs_enabled
+      random_default_method
     },
     image_detail: runtime.image_detail
   };

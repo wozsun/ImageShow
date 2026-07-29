@@ -4,7 +4,6 @@ COPY package.json package-lock.json* ./
 COPY packages/shared/package.json packages/shared/package.json
 COPY packages/server/package.json packages/server/package.json
 COPY packages/web/package.json packages/web/package.json
-COPY packages/docs/package.json packages/docs/package.json
 RUN npm ci
 
 FROM deps AS build

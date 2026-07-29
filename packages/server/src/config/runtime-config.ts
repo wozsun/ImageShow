@@ -84,8 +84,6 @@ const runtimeConfigSchema = z.strictObject({
     random_default_method: randomMethod,
     random_subdomain: subdomainLabel,
     static_subdomain: subdomainLabel,
-    docs_subdomain: subdomainLabel,
-    docs_enabled: z.boolean(),
     link_subdomain: subdomainLabel,
     robots_enabled: z.boolean()
   }),

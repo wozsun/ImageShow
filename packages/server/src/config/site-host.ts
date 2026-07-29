@@ -4,12 +4,16 @@ type HostParts = { hostname: string; port: string };
 
 function reservedPrefixes() {
   const site = getRuntimeConfig().site;
-  return { random: site.random_subdomain, static: site.static_subdomain, docs: site.docs_subdomain, link: site.link_subdomain };
+  return {
+    random: site.random_subdomain,
+    static: site.static_subdomain,
+    link: site.link_subdomain
+  };
 }
 
 function reservedPrefixList() {
   const reserved = reservedPrefixes();
-  return [reserved.random, reserved.static, reserved.docs, reserved.link];
+  return [reserved.random, reserved.static, reserved.link];
 }
 
 function hostPrefix(hostHeader: string) {
@@ -33,13 +37,12 @@ export function isAllowedSiteHost(hostHeader: string) {
   return reservedPrefixList().includes(prefix);
 }
 
-export function specialHost(hostHeader: string): "random" | "static" | "docs" | "link" | "" {
+export function specialHost(hostHeader: string): "random" | "static" | "link" | "" {
   const prefix = hostPrefix(hostHeader);
   if (!prefix) return "";
   const reserved = reservedPrefixes();
   if (prefix === reserved.random) return "random";
   if (prefix === reserved.static) return "static";
-  if (prefix === reserved.docs) return "docs";
   if (prefix === reserved.link) return "link";
   return "";
 }

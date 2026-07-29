@@ -11,9 +11,6 @@ export function serveRobotsTxt(context: Context) {
   const host = context.req.header("host") ?? "";
   const special = specialHost(host);
 
-  if (special === "docs") {
-    return robotsResponse(context, "User-agent: *\nAllow: /\n");
-  }
   if (special) {
     return robotsResponse(context, "User-agent: *\nDisallow: /\n");
   }

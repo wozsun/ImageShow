@@ -1,6 +1,6 @@
 # 功能与流程
 
-本页描述 ImageShow 的主要端到端流程。底层表结构见[数据库结构](./database)，组件边界见[项目结构](./project-structure)。
+本页描述 ImageShow 的主要端到端流程。底层表结构见[数据库结构](./database.md)，组件边界见[项目结构](./project-structure.md)。
 
 ## 四种导入入口与两种底层模式
 
@@ -318,7 +318,7 @@ GET /random?d=&b=&t=&tag=&a=&m=
 4. 在 Redis generation 随机池中按 axis/category 计数加权选集合；标签和作者筛选通过 Redis 临时过滤集合完成。合法增量更新期间有界等待 completed revision；Redis 不可用或等待超时时返回带 `Retry-After` 的 503。
 5. `m=proxy` 从图片所属存储后端代理字节，否则 302 到对象 URL。
 
-参数细节见[随机图 API](./random-api)。
+参数细节见[随机图 API](./random-api.md)。
 
 ## 画廊浏览
 
@@ -662,7 +662,7 @@ lookup 使用 `HSETEX` 在单条命令中原子写入一个或多个字段值及
 HTTP 缓存按 CDN 友好但不泄露私有数据分层：
 
 - `/assets/*` 的 Vite 构建产物和稳定的 `/media/*`、`/thumbs/*` 图片对象使用一年 `immutable`；`/assets/brand/*`、`/favicon.ico` 不是 hash 路径，只给短浏览器缓存和较长 CDN 缓存。构建会为可压缩静态文本生成 Brotli / gzip 版本，服务端按 `Accept-Encoding` 选择并附带 `Vary`，同时支持 ETag / Last-Modified 条件请求。前端分块遵循 `公开基础层 ⊂ 图片管理员层 ⊂ 超级管理员层`：公开入口不加载后台基础块，图片管理员入口不加载仅超级管理员页面的实现；纯通用机制和跨后台页面的小控件分别合并为全站基础块与后台基础块，路由专有实现仍按实际入口集合精确拆分。后台页面专属样式只在首次进入对应页面时加载，公开图片详情中的管理信息只在后台详情或已有管理员会话提示时加载，批量迁移存储对话框也只为拥有权限且表达操作意图的超级管理员预取。同一会话复用已解析模块，完整刷新则复用带 hash 的 immutable 资源。部署后旧会话若引用已失效的 hash 资源，路由错误边界会保留外层界面并提供整页重载。静态出口与图片字节出口共用单段 Range 语义，包括后缀范围、不可满足范围的 416 以及 `If-Range`；静态 206 的 ETag 使用完整表示长度，因此不同 Range 与完整响应共用同一验证器。`If-None-Match` 实体标签列表按 quoted opaque-tag 解析，标签内逗号不会被误拆。存储后端的公开 URL 可能被管理员修改，因此指向该 URL 的 302 只短期缓存；缩略图缺失时会按当前尺寸与质量配置补建，失败会记录对象键、存储后端和原因，公开出口仍临时回退原图且不使用 immutable。
-- `/api/images`、`/api/images/:id`、`/api/site-config`、`/api/gallery-facets` 与 `/api/gallery-stats` 是公共动态数据：浏览器不持有，CDN 的新鲜、重验证和错误兜底窗口均不超过 30 秒。SPA HTML 使用由完整文档内容生成的 ETag 和 `max-age=0` 重验证，匹配 `If-None-Match` 时返回 304；文档站 HTML 保持独立短缓存策略，不与动态 API 共用时长。
+- `/api/images`、`/api/images/:id`、`/api/site-config`、`/api/gallery-facets` 与 `/api/gallery-stats` 是公共动态数据：浏览器不持有，CDN 的新鲜、重验证和错误兜底窗口均不超过 30 秒。SPA HTML 使用由完整文档内容生成的 ETag 和 `max-age=0` 重验证，匹配 `If-None-Match` 时返回 304。
 - `/random` 和 `random.<域名>` 永远 `no-store`，避免 CDN 把随机图固定成同一张；每次请求都会重新抽图，因此 proxy 响应不声明 `Accept-Ranges`。
 - `/api/admin/*`、登录 / ALTCHA 挑战 / 上传暂存预览 / SSE、后台图片字节、健康检查和错误响应使用 `no-store` 或 `private, no-store`，不应被 CDN 缓存。
 - `link.<域名>/original` 公共代理成功响应优先继承源站 `Cache-Control` / `Expires`；源站未声明时使用站内 CDN fallback：浏览器缓存 1 天、共享缓存 1 年，并允许 stale 回源兜底。后台原图代理仍为 `private, no-store`。

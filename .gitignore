@@ -11,7 +11,6 @@ TODO.md
 # Dependencies and generated output
 node_modules/
 dist/
-packages/docs/.vitepress/cache/
 *.tsbuildinfo
 *.log
 
@@ -27,4 +26,3 @@ cert/
 nginx/
 .codex/
 .agents/
-/docs/

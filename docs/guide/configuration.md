@@ -25,8 +25,8 @@ PostgreSQL。排查配置时先确认“这项配置由谁管理”，再判断�
 commit 并发等前端预检所需的只读值；不会返回部署配置、完整 `appConfig`、
 服务端全局并发、外链抓取超时或其他内部默认值。`POST /api/admin/settings`
 同样只接受设置页公开的可编辑字段，并以嵌套 patch 合并，未公开配置不会因保存
-设置页而被默认值覆盖。`site.home.enabled` 与 `site.docs_enabled` 保留在运行时
-配置中，但不再进入普通设置页及其读写 DTO；需要通过配置文件或高级配置维护。
+设置页而被默认值覆盖。`site.home.enabled` 保留在运行时配置中，但不进入普通
+设置页及其读写 DTO；需要通过配置文件或高级配置维护。
 
 设置页的「读取配置文件」与「保存应用配置」直接在各自按钮内显示进行中、成功或失败，
 并预留最长状态文案宽度。进行态至少展示 500ms，结果保留三秒；成功状态不会阻止再次
@@ -56,9 +56,8 @@ Dockerfile 的 `EXPOSE` 与 Compose 目标端口；回归测试会校验三者�
 | `site.home.tagline` | 首页 banner 的站点描述，也会写入 SPA HTML 的 description。首页全屏背景固定使用站点自身的随机图 API。 |
 | `site.gallery.default_limit` / `site.gallery.order` | 画廊默认分页数量与排序。 |
 | `site.random_default_method` | `/random` 默认返回方式：`redirect` 或 `proxy`。 |
-| `site.random_subdomain` / `site.static_subdomain` / `site.docs_subdomain` / `site.link_subdomain` | 保留子域名前缀。 |
-| `site.docs_enabled` | 是否启用 `docs.<域名>` 文档站，默认 `true`。关闭后该主机返回 404，但前缀仍保留；只通过配置文件、高级配置或首次启动环境变量维护。 |
-| `site.robots_enabled` | 是否提供 `robots.txt`，默认 `false`。开启后主站首页与文档站可抓取，资源域禁抓。 |
+| `site.random_subdomain` / `site.static_subdomain` / `site.link_subdomain` | 保留子域名前缀。 |
+| `site.robots_enabled` | 是否提供 `robots.txt`，默认 `false`。开启后主站首页可抓取，资源域禁抓。 |
 | `upload.*` | 本地文件单次选择软上限、上传文件大小、图片长边限制、上传列表分页、单客户端上传队列并发，以及服务端 materialize / prepare 分阶段复用的全局并发；其中 `upload.max_items`、`upload.max_file_size_mb`、`upload.max_long_edge` 和 `upload.global_concurrency` 只在配置文件中维护。 |
 | `upload.max_items` | 本地文件单次选择软上限，默认 200，可配置范围为 1–1000；只由前端限制，服务端仍逐文件创建会话，没有本地批次条目数硬上限。 |
 | `link_image.fill_original_url` | URL 下载导入是否自动把输入 URL 填入「原图 URL」字段；不做可直达探测。 |
@@ -292,7 +291,6 @@ PostgreSQL 提交状态，不根据可能已被后继修改的业务行猜测；
 | `site.domain` | `SITE_DOMAIN` |
 | `site.version.enabled` | `SITE_VERSION_ENABLED` |
 | `site.version.link_enabled` | `SITE_VERSION_LINK_ENABLED` |
-| `site.docs_enabled` | `SITE_DOCS_ENABLED` |
 | `site.robots_enabled` | `SITE_ROBOTS_ENABLED` |
 | `site.home.enabled` | `SITE_HOME_ENABLED` |
 | `site.home.tagline` | `SITE_HOME_TAGLINE` |

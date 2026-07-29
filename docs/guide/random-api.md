@@ -28,5 +28,5 @@ revision 仍落后才按陈旧状态调度重建。Redis 访问失败或合法�
 `m=proxy` 从图片所属的 local、S3 或 WebDAV 后端读取已入库图片字节，并附带 `X-Image-Info` 头；由于每次请求都会重新抽图，它不声明 `Accept-Ranges`。`m=redirect` 返回 302 跳转到图片的公开 URL。这里的 `proxy` 只是随机接口的返回传输方式，与图片导入模式无关。
 
 随机图也可直接通过 `https://random.<域名>/` 访问（根路径 `/`，见
-[子域名](./subdomains)）。图库总量和分类数量不从随机池推导，统一由主站
+[子域名](./subdomains.md)）。图库总量和分类数量不从随机池推导，统一由主站
 `GET /api/gallery-stats` 从 PostgreSQL 一致快照返回。
