@@ -2,11 +2,10 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { adminBasePath, publicRootPath } from "../../lib/constants.js";
 import { clearSessionProbeHint, hasSessionProbeHint, rememberSessionProbeHint, useAuthMe, useSiteConfig } from "../../lib/api/site-data.js";
+import { publicNavigationHeaderScrollThreshold } from "../../lib/ui/public-navigation.js";
 import { usePageScrollMovement } from "../../hooks/usePageScrollMovement.js";
 import { Icon } from "../icon/Icon.js";
 import { MobileNavigation } from "./MobileNavigation.js";
-
-const headerScrollDirectionThreshold = 18;
 
 export function AppHeader({
   onMenuExpandedChange,
@@ -68,19 +67,19 @@ export function AppHeader({
       setStandaloneVisible(true);
       return;
     }
-    if (scrollTop <= headerScrollDirectionThreshold) {
+    if (scrollTop <= publicNavigationHeaderScrollThreshold) {
       upwardDistanceRef.current = 0;
       downwardDistanceRef.current = 0;
       setStandaloneVisible(true);
       return;
     }
-    if (upwardDistanceRef.current >= headerScrollDirectionThreshold) {
+    if (upwardDistanceRef.current >= publicNavigationHeaderScrollThreshold) {
       upwardDistanceRef.current = 0;
       downwardDistanceRef.current = 0;
       setStandaloneVisible(true);
       return;
     }
-    if (downwardDistanceRef.current < headerScrollDirectionThreshold) return;
+    if (downwardDistanceRef.current < publicNavigationHeaderScrollThreshold) return;
     upwardDistanceRef.current = 0;
     downwardDistanceRef.current = 0;
     if (scrollTop < header.offsetHeight) {

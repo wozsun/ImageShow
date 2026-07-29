@@ -45,15 +45,17 @@ export function HomePage() {
     <main className="page home-page">
       <HomeBackground source={background} />
       <div className="public-navigation-frame">
-        <AppHeader />
-        <HomeFilterBar
-          filters={filters}
-          stats={stats}
-          isPending={statsQuery.isPending}
-          isError={statsQuery.isError}
-          isPlaceholderData={statsQuery.isPlaceholderData}
-          onFiltersChange={setFilters}
-        />
+        <div className="public-navigation-stack">
+          <AppHeader />
+          <HomeFilterBar
+            filters={filters}
+            stats={stats}
+            isPending={statsQuery.isPending}
+            isError={statsQuery.isError}
+            isPlaceholderData={statsQuery.isPlaceholderData}
+            onFiltersChange={setFilters}
+          />
+        </div>
       </div>
       <div className="home-filter-bar-spacer" aria-hidden="true" />
       <HomeHero

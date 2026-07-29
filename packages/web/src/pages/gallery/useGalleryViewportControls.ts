@@ -75,11 +75,11 @@ function useGalleryNavigationVisibility(
     navigationStateRef.current = nextState;
     if (nextState.stage === currentState.stage) return;
 
-    // inert 会把隐藏导航移出交互与无障碍树；先释放内部焦点，避免浏览器
-    // 保留一个已不可见的焦点目标。
+    // inert 会把隐藏工具栏移出交互与无障碍树；先释放内部焦点，避免浏览器
+    // 保留一个已不可见的焦点目标。主导航由 AppHeader 在自身隐藏时清理焦点。
     if (
-      currentState.stage === "visible"
-      && nextState.stage !== "visible"
+      currentState.stage !== "hidden"
+      && nextState.stage === "hidden"
     ) {
       blurFocusedElement(toolbar);
     }
@@ -87,9 +87,9 @@ function useGalleryNavigationVisibility(
   }, !lockedOpen);
 
   return {
-    headerVisible: stage !== "hidden",
+    headerVisible: stage === "visible",
     height,
-    toolbarVisible: stage === "visible"
+    toolbarVisible: stage !== "hidden"
   };
 }
 

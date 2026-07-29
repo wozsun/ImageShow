@@ -1,12 +1,16 @@
+import {
+  publicNavigationHeaderScrollThreshold
+} from "../../lib/ui/public-navigation.js";
+
 const galleryNavigationThresholds = {
-  hideToolbar: 18,
-  hideHeader: 48,
-  revealHeader: 16,
-  revealToolbar: 18,
-  revealAtTop: 18
+  hideHeader: publicNavigationHeaderScrollThreshold,
+  hideToolbar: 48,
+  revealToolbar: 16,
+  revealHeader: publicNavigationHeaderScrollThreshold,
+  revealAtTop: publicNavigationHeaderScrollThreshold
 } as const;
 
-export type GalleryNavigationStage = "visible" | "header-only" | "hidden";
+export type GalleryNavigationStage = "visible" | "toolbar-only" | "hidden";
 
 type ScrollDirection = "up" | "down" | null;
 
@@ -58,11 +62,11 @@ export function advanceGalleryNavigation(
     let distance = carriedDistance + stepDistance;
     while (stage !== "visible") {
       const threshold = stage === "hidden"
-        ? galleryNavigationThresholds.revealHeader
-        : galleryNavigationThresholds.revealToolbar;
+        ? galleryNavigationThresholds.revealToolbar
+        : galleryNavigationThresholds.revealHeader;
       if (distance < threshold) return { stage, direction, distance };
       distance -= threshold;
-      stage = stage === "hidden" ? "header-only" : "visible";
+      stage = stage === "hidden" ? "toolbar-only" : "visible";
       if (distance === 0) return settledState(stage);
     }
     return settledState("visible");
@@ -85,11 +89,11 @@ export function advanceGalleryNavigation(
   let distance = carriedDistance + stepDistance;
   while (stage !== "hidden") {
     const threshold = stage === "visible"
-      ? galleryNavigationThresholds.hideToolbar
-      : galleryNavigationThresholds.hideHeader;
+      ? galleryNavigationThresholds.hideHeader
+      : galleryNavigationThresholds.hideToolbar;
     if (distance < threshold) return { stage, direction, distance };
     distance -= threshold;
-    stage = stage === "visible" ? "header-only" : "hidden";
+    stage = stage === "visible" ? "toolbar-only" : "hidden";
     if (distance === 0) return settledState(stage);
   }
   return settledState("hidden");

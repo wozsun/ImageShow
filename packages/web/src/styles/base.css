@@ -38,9 +38,12 @@
 
 * { box-sizing: border-box; }
 html { overflow-y: auto; }
-/* Safari 的根弹性滚动会暂时错绘 fixed 导航。公开页不依赖下拉刷新，
-   因此只在公开路由关闭纵向边界回弹。 */
 html.public-page-document { overscroll-behavior-y: none; }
+/* 移动 Safari 的 fixed 元素在回弹时仍锚定视口；只在触控主指针环境
+   保留本地橡皮筋反馈，不把边界手势交给刷新或导航动作。 */
+@media (hover: none) and (pointer: coarse) {
+  html.public-page-document { overscroll-behavior-y: contain; }
+}
 html.modal-open, body.modal-open { overflow: hidden; }
 /* DialogLayerPortal is the single owner of dialog positioning. The root layer
    follows Safari's current dynamic viewport while nested dialogs fill their
@@ -459,19 +462,25 @@ button:not(:disabled):not(.select-trigger):not([data-availability-locked="true"]
   pointer-events: none;
 }
 
-.public-navigation-frame > .topbar,
-.public-navigation-frame > .public-navigation-secondary {
+.public-navigation-stack {
+  --public-navigation-stack-shift: 0px;
+  width: 100%;
+  pointer-events: none;
+  /* 主、次导航共享这一位移，切换时保持边界连续。 */
+  transform: translateY(var(--public-navigation-stack-shift));
+  transition:
+    transform var(--public-nav-motion-duration)
+    var(--public-nav-motion-easing);
+}
+
+.public-navigation-stack:has(> .topbar.is-scroll-hidden) {
+  --public-navigation-stack-shift: calc(0px - var(--app-header-height));
+}
+
+.public-navigation-stack > .topbar,
+.public-navigation-stack > .public-navigation-secondary {
   position: relative;
   pointer-events: auto;
-}
-
-.public-navigation-secondary {
-  --public-navigation-header-shift: 0px;
-}
-
-.public-navigation-frame > .topbar.is-scroll-hidden
-  + .public-navigation-secondary {
-  --public-navigation-header-shift: calc(-1 * var(--app-header-height));
 }
 
 .topbar {
@@ -488,9 +497,6 @@ button:not(:disabled):not(.select-trigger):not([data-availability-locked="true"]
   box-shadow: 0 10px 28px rgba(0, 2, 8, .34);
   -webkit-backdrop-filter: blur(20px) saturate(118%);
   backdrop-filter: blur(20px) saturate(118%);
-  transition:
-    transform var(--public-nav-motion-duration)
-    var(--public-nav-motion-easing);
 }
 .topbar::before {
   content: "";
@@ -549,7 +555,6 @@ button:not(:disabled):not(.select-trigger):not([data-availability-locked="true"]
 }
 .topbar.is-scroll-hidden {
   pointer-events: none;
-  transform: translateY(-100%);
 }
 .brand { font-weight: 800; font-size: 20px; }
 .topbar .desktop-nav, .actions, .inline-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }

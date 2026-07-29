@@ -149,9 +149,7 @@
     inset 0 1px rgba(255, 255, 255, .1);
   -webkit-backdrop-filter: blur(24px) saturate(128%);
   backdrop-filter: blur(24px) saturate(128%);
-  transform: translateY(calc(
-    var(--gallery-toolbar-shift) + var(--public-navigation-header-shift)
-  ));
+  transform: translateY(var(--gallery-toolbar-shift));
   transition:
     transform var(--public-nav-motion-duration)
     var(--public-nav-motion-easing);

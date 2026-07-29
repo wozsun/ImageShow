@@ -43,7 +43,7 @@
   .select-menu.is-closing,
   .facet-select-menu,
   .facet-select-menu.is-closing { animation: none; }
-  .topbar,
+  .public-navigation-stack,
   .gallery-toolbar { transition: none; }
   .gallery-back-to-top { transition: none; }
 }
@@ -61,7 +61,7 @@
     align-items: stretch;
     flex-direction: column;
   }
-  .public-navigation-frame > .topbar.is-scroll-hidden
+  .public-navigation-stack > .topbar.is-scroll-hidden
     + .gallery-toolbar {
     max-height: 100svh;
   }

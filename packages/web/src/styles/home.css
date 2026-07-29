@@ -78,10 +78,6 @@
     inset 0 -1px rgba(255, 255, 255, .12);
   -webkit-backdrop-filter: blur(28px) saturate(145%);
   backdrop-filter: blur(28px) saturate(145%);
-  transition:
-    transform var(--public-nav-motion-duration)
-    var(--public-nav-motion-easing);
-  transform: translateY(var(--public-navigation-header-shift));
 }
 
 .home-filter-bar-spacer {
