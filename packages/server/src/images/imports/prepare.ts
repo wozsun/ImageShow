@@ -217,12 +217,14 @@ type PreparationSessionState = Pick<
   | "prepared_payload"
   | "execution_token"
   | "raw_token"
->;
+> & {
+  cancellation_generation: string;
+};
 
 async function preparationSessionState(id: string) {
   return (await pool.query(
     `SELECT mode, status, storage_slug, prepared_payload, execution_token,
-            raw_token
+            raw_token, created_at::text AS cancellation_generation
        FROM import_session
       WHERE id=$1`,
     [id]
@@ -253,7 +255,7 @@ async function prepareCurrentSession(
   if (session.status === "finalized") {
     throw new ApiError(409, "import_finalized", "导入任务已完成");
   }
-  if (await importWasCancelled(id)) {
+  if (await importWasCancelled(id, session.cancellation_generation)) {
     throw new ApiError(409, "import_cancelled", "导入已取消");
   }
 
@@ -327,7 +329,7 @@ export async function prepareImportSession(id: string, requestSignal?: AbortSign
   if (session.status === "finalized") {
     throw new ApiError(409, "import_finalized", "导入任务已完成");
   }
-  if (await importWasCancelled(id)) {
+  if (await importWasCancelled(id, session.cancellation_generation)) {
     throw new ApiError(409, "import_cancelled", "导入已取消");
   }
 

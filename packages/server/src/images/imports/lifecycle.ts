@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { appConfig } from "@imageshow/shared";
 import { pool } from "../../core/db.ts";
 import { ApiError, errorMessage } from "../../core/api-error.ts";
@@ -8,14 +9,89 @@ import {
   notifyImportStatus
 } from "./status.ts";
 
-const cancelledImports = new Map<string, number>();
+export type ImportCancellationMarker = Readonly<{
+  id: string;
+  generation: string;
+  value: string;
+}>;
+
+type StoredImportCancellationMarker = ImportCancellationMarker & {
+  expiresAt: number;
+  expiryTimer: ReturnType<typeof setTimeout>;
+};
+
+const cancelledImports = new Map<string, StoredImportCancellationMarker>();
 const importLeaseHeartbeatMs = Math.max(
   1_000,
   Math.min(30_000, Math.floor(appConfig.uploadTtlSeconds * 1_000 / 3))
 );
+const clearOwnedCancellationScript = `
+  if redis.call("GET", KEYS[1]) == ARGV[1] then
+    return redis.call("DEL", KEYS[1])
+  end
+  return 0
+`;
 
 function cancelledImportKey(id: string) {
   return `imageshow:import-cancelled:${id}`;
+}
+
+function markerFromValue(id: string, value: string) {
+  try {
+    const parsed = JSON.parse(value) as {
+      generation?: unknown;
+      token?: unknown;
+    };
+    if (
+      typeof parsed.generation !== "string"
+      || !parsed.generation
+      || typeof parsed.token !== "string"
+      || !parsed.token
+    ) {
+      return undefined;
+    }
+    return {
+      id,
+      generation: parsed.generation,
+      value
+    } satisfies ImportCancellationMarker;
+  } catch {
+    return undefined;
+  }
+}
+
+function clearLocalCancellationValue(id: string, value: string) {
+  const marker = cancelledImports.get(id);
+  if (marker?.value !== value) return;
+  clearTimeout(marker.expiryTimer);
+  cancelledImports.delete(id);
+}
+
+function activeLocalCancellation(id: string) {
+  const marker = cancelledImports.get(id);
+  if (!marker) return undefined;
+  if (marker.expiresAt > Date.now()) return marker;
+  clearLocalCancellationValue(id, marker.value);
+  return undefined;
+}
+
+async function clearRedisCancellationValue(id: string, value: string) {
+  await redis.eval(
+    clearOwnedCancellationScript,
+    1,
+    cancelledImportKey(id),
+    value
+  ).catch(() => undefined);
+}
+
+async function importGenerationIsCurrent(id: string, generation: string) {
+  return Boolean((await pool.query(
+    `SELECT 1
+       FROM import_session
+      WHERE id=$1
+        AND created_at=$2::timestamptz`,
+    [id, generation]
+  )).rowCount);
 }
 
 async function renewImportLease(id: string, required = false) {
@@ -52,29 +128,86 @@ export async function withImportLease<T>(
   }
 }
 
-export async function importWasCancelled(id: string) {
-  const expires = cancelledImports.get(id) ?? 0;
-  if (expires > Date.now()) return true;
-  if (expires) cancelledImports.delete(id);
-  return Boolean(
-    await redis.get(cancelledImportKey(id)).catch(() => null)
-  );
+export async function findImportCancellation(
+  id: string,
+  generation: string
+) {
+  const localMarker = activeLocalCancellation(id);
+  if (localMarker?.generation === generation) return localMarker;
+  let generationIsCurrent: Promise<boolean> | undefined;
+  const canClearMismatchedMarker = () => {
+    generationIsCurrent ??= importGenerationIsCurrent(id, generation)
+      .catch(() => false);
+    return generationIsCurrent;
+  };
+  if (localMarker && await canClearMismatchedMarker()) {
+    await clearImportCancelled(localMarker);
+  }
+
+  const value = await redis.get(cancelledImportKey(id)).catch(() => null);
+  if (!value) return undefined;
+  const marker = markerFromValue(id, value);
+  if (!marker || marker.generation !== generation) {
+    // Only the generation still present in PostgreSQL may discard a
+    // mismatched derived marker. A fenced old executor must not remove a
+    // newer cancellation published for a replacement session.
+    if (await canClearMismatchedMarker()) {
+      await clearRedisCancellationValue(id, value);
+    }
+    return undefined;
+  }
+  return marker;
 }
 
-export async function markImportCancelled(id: string) {
+export async function importWasCancelled(
+  id: string,
+  generation: string
+) {
+  return Boolean(await findImportCancellation(id, generation));
+}
+
+export async function markImportCancelled(
+  id: string,
+  generation: string
+) {
   clearImportPhase(id);
-  cancelledImports.set(
+  const value = JSON.stringify({
+    generation,
+    token: randomUUID()
+  });
+  const marker = {
     id,
-    Date.now() + appConfig.uploadTtlSeconds * 1_000
-  );
+    generation,
+    value
+  } satisfies ImportCancellationMarker;
+  const expiresAt = Date.now() + appConfig.uploadTtlSeconds * 1_000;
+  const expiryTimer = setTimeout(() => {
+    clearLocalCancellationValue(id, value);
+  }, appConfig.uploadTtlSeconds * 1_000);
+  expiryTimer.unref();
+  const previous = cancelledImports.get(id);
+  if (previous) clearTimeout(previous.expiryTimer);
+  cancelledImports.set(id, {
+    ...marker,
+    expiresAt,
+    expiryTimer
+  });
   await redis
-    .set(cancelledImportKey(id), "1", "EX", appConfig.uploadTtlSeconds)
+    .set(
+      cancelledImportKey(id),
+      value,
+      "EX",
+      appConfig.uploadTtlSeconds
+    )
     .catch(() => undefined);
+  return marker;
 }
 
-export async function clearImportCancelled(id: string) {
-  cancelledImports.delete(id);
-  await redis.del(cancelledImportKey(id)).catch(() => undefined);
+export async function clearImportCancelled(
+  marker: ImportCancellationMarker
+) {
+  clearLocalCancellationValue(marker.id, marker.value);
+  await clearRedisCancellationValue(marker.id, marker.value);
 }
 
 export async function assertImportStillPreparing(

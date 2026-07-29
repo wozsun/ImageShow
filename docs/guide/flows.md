@@ -140,21 +140,46 @@ pool，不保存 Cookie；慢请求不会阻塞其他空闲 worker，客户端�
 
 prepare 完成后会删除 `data/tmp` 下的 raw 文件；素材化失败、prepare 失败、取消和过期清理同样删除 attempt 隔离的 `.raw.<attempt>` / `.raw.<attempt>.part` 与 `_uploads` 候选对象。失败路径先持久化并确认 PostgreSQL 已进入 `failed` / `cancelled` 等可清理状态，再删除 raw 与暂存对象；权威状态无法确认时一律保留。清理只匹配完整 UUID 形态的 attempt 文件，避免误删其他临时内容。完整分片通过同目录硬链接以“不覆盖本 attempt 目标”的方式原子发布为 `.raw.<attempt>`；随后只有 `execution_token` 仍匹配的执行者才能把同一 token 写入 `raw_token` 并发布 `received`。若进程在文件发布后、`received` 落库前退出，后续 materialize 会按数据库中的执行 token 恢复该完整文件；半成品不会进入恢复路径。
 
-materialize、prepare、commit、取消和过期清理共用每会话 PostgreSQL advisory lock。专用锁连接在持锁期间监听 `error` / `end`；连接丢失会发送中止信号、等待回调完成协作式收口并销毁该连接。会话中的 `execution_token` 是数据库发布栅栏：新执行者会先换 token，旧执行者随后不能把 `received`、`ready` 或 `finalized` 发布成功；`raw_token` 另把 `received` 真值绑定到唯一完整 raw。每次 prepare 还使用“会话 ID + 尝试 ID”的唯一 processed image / thumbnail 暂存键，因此无法立即取消的迟到对象写入也不会覆盖新尝试。正式候选或旧位置的不可逆删除进入 `move.cleanup`，任务重新取得单图锁并在删除边界重读 PostgreSQL；未解决任务同时持有物理对象删除租约，commit、分类移动和存储迁移在任务终结前拒绝采用相同命名空间、前缀与键，从而封闭不可取消 DELETE 发出后的失锁窗口。取消先把 `cancelled` 写入 PostgreSQL 并中止本实例任务，再等待跨进程执行者释放该锁后清理。进程在 `preparing` 期间退出后，下一次 prepare 取得该锁、清理该会话的旧 staging，再从 `raw_token` 指向的完整 raw 重做。`received` / `ready` 状态更新的回包不确定时会先回读 PostgreSQL，权威状态无法确认时保留 raw 与 prepared 对象，不做可能破坏已发布真值的清理。
+materialize、prepare、commit、取消和过期清理共用每会话 PostgreSQL advisory lock。专用锁连接在持锁期间监听 `error` / `end`；连接丢失会发送中止信号、等待回调完成协作式收口并销毁该连接。会话中的 `execution_token` 是数据库发布栅栏：新执行者会先换 token，旧执行者随后不能把 `received`、`ready` 或 `finalized` 发布成功；`raw_token` 另把 `received` 真值绑定到唯一完整 raw。每次 prepare 还使用“会话 ID + 尝试 ID”的唯一 processed image / thumbnail 暂存键，因此无法立即取消的迟到对象写入也不会覆盖新尝试。正式候选或旧位置的不可逆删除进入 `move.cleanup`，任务重新取得单图锁并在删除边界重读 PostgreSQL；未解决任务同时持有物理对象删除租约，commit、分类移动和存储迁移在任务终结前拒绝采用相同命名空间、前缀与键，从而封闭不可取消 DELETE 发出后的失锁窗口。
+
+取消先发布绑定 `import_session.created_at` 会话代际和本次操作 token 的进程内 / Redis
+标记，再中止本实例执行并按同一代际把 PostgreSQL 状态条件更新为 `cancelled`。
+文件接收、素材化、prepare、预览、commit 和 cancel 的路径参数会在导入路由边界统一
+为 PostgreSQL 的小写 UUID 表示，避免同一 UUID 因字符串大小写落入不同的进程内
+所有权、Redis key 或 advisory lock；状态查询与 SSE 可保留调用方写法，但内部查找
+仍使用规范 ID。
+Redis 不可用时进程内标记仍封闭当前实例的创建 / prepare 竞态；Redis 恢复不决定
+PostgreSQL 状态。等待活动 Promise 并取得会话锁后，已经证明本实例与跨进程执行者均
+退出，取消路径会用 value 比较后删除自己的标记，再清理 raw、staging 和会话行。
+因此较早的取消不能误删较新的并发标记，创建竞态删除 `created` 行时也会立即释放它
+实际观察到的同代际标记；幂等创建返回前还会重读 PostgreSQL 的当前代际与状态，
+即使取消已经清标记并删除会话，也不会用事务内旧快照返回失效入口。Redis 删除失败
+被忽略，只留下有 TTL 的派生键；该键与旧会话代际绑定，不能取消后来创建的
+PostgreSQL 会话。
+
+进程在 `preparing` 期间退出后，下一次 prepare 取得该锁、清理该会话的旧 staging，
+再从 `raw_token` 指向的完整 raw 重做。`received` / `ready` 状态更新的回包不确定时
+会先回读 PostgreSQL，权威状态无法确认时保留 raw 与 prepared 对象，不做可能破坏
+已发布真值的清理。
 
 导入会话空闲有效期为 30 分钟；materialize、排队、prepare 与 commit 期间会周期性
-续租 `expires_at`，取消标记和孤儿 raw 清理年龄也使用同一有效期。启动与周期性
-孤儿扫描在迁移可用后运行，只对 PostgreSQL 已无对应会话、文件年龄已超过该阈值且
-可非阻塞取得会话锁的 raw / `.part` 执行删除；仍有未来租约或正在执行的会话不会因
-文件 mtime 较旧而丢失素材。后台清理用 `FOR UPDATE SKIP LOCKED` 原子认领真正空闲
-过期的普通会话，并逐项等待同一会话锁确认执行者已经退出；对于过期的 `committing`，
-只有非阻塞取得该锁、确认没有活跃提交者后，才先标记为 `cancelled`。终态会话随后按
-存储后端分组：每个后端只列举一次 `_uploads` 并按 session ID 过滤，raw 临时目录也
-只扫描一次；实际删除使用有界 worker pool。只有 raw、staging 和最终候选清理均成功
-的会话才删除数据库行，单项失败会保留会话供下次重试。若进程在正式对象复制后、
-数据库事务提交前退出，过期清理会先确认 PostgreSQL 没有图片引用，再删除最终候选
-image / thumbnail；删除失败进入可重试的对象清理任务，“清理无效存储”仍作为孤儿
-对象的最后防线。
+续租 `expires_at`。取消标记 TTL 与孤儿 raw 清理年龄也使用同一有效期，但 TTL 只是
+进程异常或 Redis 清理失败时的安全上限，正常取消和过期清理不等待它到期。
+启动与周期性孤儿扫描在迁移可用后运行，只对 PostgreSQL 已无对应会话、文件年龄已
+超过该阈值且可非阻塞取得会话锁的 raw / `.part` 执行删除；仍有未来租约或正在执行
+的会话不会因文件 mtime 较旧而丢失素材。
+
+后台清理先为候选会话逐项发布同代际取消标记，再用 `FOR UPDATE SKIP LOCKED`
+条件认领真正空闲的过期会话；未认领项立即释放自己的标记。已认领项先中止本实例
+执行，再逐项等待同一会话锁，确认执行者退出后立即清标记，随后才批量清理资源和
+删除会话行。对于过期的 `committing`，只有非阻塞取得该锁、确认没有活跃提交者后，
+才标记为 `cancelled`，并在持锁证明成立时释放本次标记。终态会话随后按存储后端
+分组：每个后端只列举一次 `_uploads` 并按 session ID 过滤，raw 临时目录也只扫描
+一次；实际删除使用有界 worker pool。只有 raw、staging 和最终候选清理均成功的
+会话才删除数据库行，单项失败会保留会话供下次重试，但不再把取消标记留到 TTL。
+若进程在正式对象复制后、数据库事务提交前退出，过期清理会先确认 PostgreSQL 没有
+图片引用，再删除最终候选 image / thumbnail；删除失败进入可重试的对象清理任务，
+“清理无效存储”仍作为孤儿对象的最后防线。
 
 download materialize 会为每个通过安全校验的当前图片 URL 生成仅含其 HTTPS origin
 的 `Referer`，以兼容微博等图床的基础防盗链；发生重定向时按新目标重新计算，不会

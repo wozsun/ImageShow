@@ -32,6 +32,10 @@ import {
   limitWeiboImportBody,
 } from "../core/http/request-body-limit.ts";
 
+function parseOwnedImportId(value: string) {
+  return parse(uuidInput, value).toLowerCase();
+}
+
 export function registerImportRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/import-vocabulary`, async (c) => {
     return c.json(apiSuccess(await getImportVocabulary()));
@@ -103,7 +107,7 @@ export function registerImportRoutes(app: Hono) {
   });
 
   app.put(`${adminApiBasePath}/imports/:id/file`, async (c) => {
-    const id = parse(uuidInput, c.req.param("id"));
+    const id = parseOwnedImportId(c.req.param("id"));
     const body = c.req.raw.body ?? new Response(await c.req.arrayBuffer()).body;
     await receiveImportFile(id, body, c.req.raw.signal);
     return c.json(apiSuccess());
@@ -111,7 +115,7 @@ export function registerImportRoutes(app: Hono) {
 
   app.post(`${adminApiBasePath}/imports/:id/materialize`, async (c) => {
     await materializeDownloadSession(
-      parse(uuidInput, c.req.param("id")),
+      parseOwnedImportId(c.req.param("id")),
       c.req.raw.signal
     );
     return c.json(apiSuccess());
@@ -119,17 +123,17 @@ export function registerImportRoutes(app: Hono) {
 
   app.post(`${adminApiBasePath}/imports/:id/prepare`, async (c) => {
     return c.json(apiSuccess(await prepareImportSession(
-      parse(uuidInput, c.req.param("id")),
+      parseOwnedImportId(c.req.param("id")),
       c.req.raw.signal
     )));
   });
 
   app.get(`${adminApiBasePath}/imports/:id/preview/full`, async (c) => {
-    return previewImportSession(parse(uuidInput, c.req.param("id")), "full");
+    return previewImportSession(parseOwnedImportId(c.req.param("id")), "full");
   });
 
   app.get(`${adminApiBasePath}/imports/:id/preview`, async (c) => {
-    return previewImportSession(parse(uuidInput, c.req.param("id")), "thumb");
+    return previewImportSession(parseOwnedImportId(c.req.param("id")), "thumb");
   });
 
   app.get(`${adminApiBasePath}/imports/status`, async (c) => {
@@ -142,13 +146,13 @@ export function registerImportRoutes(app: Hono) {
   });
 
   app.post(`${adminApiBasePath}/imports/:id/commit`, async (c) => {
-    const id = parse(uuidInput, c.req.param("id"));
+    const id = parseOwnedImportId(c.req.param("id"));
     const input = parse(importCommitInput, await c.req.json().catch(() => ({})));
     return c.json(apiSuccess(await commitImportSession(id, input, c.req.raw.signal)));
   });
 
   app.post(`${adminApiBasePath}/imports/:id/cancel`, async (c) => {
-    await cancelImportSession(parse(uuidInput, c.req.param("id")));
+    await cancelImportSession(parseOwnedImportId(c.req.param("id")));
     return c.json(apiSuccess());
   });
 }

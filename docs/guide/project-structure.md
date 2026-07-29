@@ -80,7 +80,9 @@ core / config
   原子发布到 `data/tmp`。
 - `status.ts` 负责进程内 phase、状态投影与 SSE，并以请求信号和响应流共用的幂等
   cleanup 管理监听器、heartbeat、快照与写入失败；`lifecycle.ts` 负责租约、取消
-  标记、execution fence 和失败落库，PostgreSQL 状态仍是唯一权威来源。
+  标记、execution fence 和失败落库。取消标记绑定会话创建代际与发布所有者，并由
+  显式取消和 `cleanup-job.ts` 在执行者收口后比较清除；PostgreSQL 状态仍是唯一
+  权威来源。
 - `prepare.ts` 只编排会话认领、恢复和清理，图片处理与 prepared 结果由
   `prepare-artifacts.ts` 完成。
 - `commit.ts` 只编排锁、对象落位与补偿；数据库事务、提交后缓存同步和候选对象所有权

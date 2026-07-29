@@ -13,7 +13,7 @@ import { importSessionResponse, type ImportSessionRecord } from "../presenter.ts
 import { abortActiveImport } from "./execution.ts";
 import {
   clearImportCancelled,
-  importWasCancelled,
+  findImportCancellation,
   markImportCancelled
 } from "./lifecycle.ts";
 import { emitCancelledImportStatus } from "./status.ts";
@@ -31,6 +31,10 @@ import type {
   MetadataPayload,
   PreparedPayload
 } from "./types.ts";
+
+type ImportSessionCreationRecord = ImportSessionRecord & {
+  cancellation_generation: string;
+};
 
 function defaultMetadata(input: ImportCreateInput, imageTime: string): MetadataPayload {
   return {
@@ -64,7 +68,8 @@ async function createImportSessionUnderLocationLock(
       `import.create:${input.idempotency_key}`
     ]);
     const existing = (await client.query(
-      `SELECT id, mode, request_hash, image_time
+      `SELECT id, mode, request_hash, image_time,
+              created_at::text AS cancellation_generation
          FROM import_session
         WHERE idempotency_key=$1
         LIMIT 1`,
@@ -72,7 +77,9 @@ async function createImportSessionUnderLocationLock(
     )).rows[0] as Pick<
       ImportSessionRow,
       "id" | "mode" | "request_hash" | "image_time"
-    > | undefined;
+    > & {
+      cancellation_generation: string;
+    } | undefined;
     signal.throwIfAborted();
 
     let normalizedImageTime;
@@ -104,7 +111,11 @@ async function createImportSessionUnderLocationLock(
       if (existing.request_hash !== requestHash) {
         throw new ApiError(409, "idempotency_conflict", "同一幂等键已用于不同导入请求");
       }
-      return { id: existing.id, mode: existing.mode };
+      return {
+        id: existing.id,
+        mode: existing.mode,
+        cancellation_generation: existing.cancellation_generation
+      };
     }
 
     const id = createImageId(normalizedImageTime.date, input.manifest_position);
@@ -112,7 +123,8 @@ async function createImportSessionUnderLocationLock(
     const created = (await client.query(
       `INSERT INTO import_session(id, mode, storage_slug, source_url, expected_size, metadata_payload, idempotency_key, request_hash, image_time, expires_at)
        VALUES($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9,$10)
-       RETURNING id, mode`,
+       RETURNING id, mode,
+                 created_at::text AS cancellation_generation`,
       [
         id,
         input.mode,
@@ -125,14 +137,41 @@ async function createImportSessionUnderLocationLock(
         normalizedImageTime.date,
         new Date(Date.now() + appConfig.uploadTtlSeconds * 1000)
       ]
-    )).rows[0] as ImportSessionRecord;
+    )).rows[0] as ImportSessionCreationRecord;
     signal.throwIfAborted();
     return created;
   });
 
   signal.throwIfAborted();
-  if (await importWasCancelled(result.id)) {
-    await pool.query("DELETE FROM import_session WHERE id=$1 AND status='created'", [result.id]);
+  const cancellation = await findImportCancellation(
+    result.id,
+    result.cancellation_generation
+  );
+  if (cancellation) {
+    const deleted = await pool.query(
+      `DELETE FROM import_session
+        WHERE id=$1
+          AND created_at=$2::timestamptz
+          AND status='created'`,
+      [result.id, result.cancellation_generation]
+    );
+    if (deleted.rowCount) await clearImportCancelled(cancellation);
+    throw new ApiError(409, "import_cancelled", "导入已取消");
+  }
+  const current = (await pool.query(
+    `SELECT status, created_at::text AS cancellation_generation
+       FROM import_session
+      WHERE id=$1`,
+    [result.id]
+  )).rows[0] as {
+    status: ImportStatus;
+    cancellation_generation: string;
+  } | undefined;
+  if (
+    !current
+    || current.cancellation_generation !== result.cancellation_generation
+    || current.status === "cancelled"
+  ) {
     throw new ApiError(409, "import_cancelled", "导入已取消");
   }
   return importSessionResponse(result);
@@ -179,49 +218,98 @@ export async function previewImportSession(id: string, variant: "thumb" | "full"
 }
 
 export async function cancelImportSession(id: string) {
-  await markImportCancelled(id);
-  const activePromise = abortActiveImport(id);
-  const cancelled = (await pool.query(
-    `UPDATE import_session
-     SET status='cancelled', execution_token=NULL, raw_token=NULL,
-         expires_at=now(), updated_at=now()
-     WHERE id=$1 AND status IN (
-       'created','materializing','received','preparing','ready','failed','cancelled'
-     )
-     RETURNING id`,
+  const target = (await pool.query(
+    `SELECT id::text AS canonical_id,
+            created_at::text AS cancellation_generation
+       FROM import_session
+      WHERE id=$1`,
     [id]
-  )).rows[0] as { id: string } | undefined;
+  )).rows[0] as {
+    canonical_id: string;
+    cancellation_generation: string;
+  } | undefined;
+  if (!target) return;
+  const canonicalId = target.canonical_id;
 
-  if (cancelled) emitCancelledImportStatus(id);
+  const cancellation = await markImportCancelled(
+    canonicalId,
+    target.cancellation_generation
+  );
+  const activePromise = abortActiveImport(canonicalId);
+  let cancelled: { id: string } | undefined;
+  try {
+    cancelled = (await pool.query(
+      `UPDATE import_session
+       SET status='cancelled', execution_token=NULL, raw_token=NULL,
+           expires_at=now(), updated_at=now()
+       WHERE id=$1
+         AND created_at=$2::timestamptz
+         AND status IN (
+           'created','materializing','received','preparing','ready',
+           'failed','cancelled'
+         )
+       RETURNING id`,
+      [canonicalId, target.cancellation_generation]
+    )).rows[0] as { id: string } | undefined;
+  } catch (error) {
+    await activePromise?.catch(() => undefined);
+    throw error;
+  }
+
+  if (cancelled) emitCancelledImportStatus(canonicalId);
   await activePromise?.catch(() => undefined);
   if (!cancelled) {
     const existing = (await pool.query(
-      "SELECT status FROM import_session WHERE id=$1",
-      [id]
-    )).rows[0] as { status?: ImportStatus } | undefined;
-    await clearImportCancelled(id);
-    if (existing?.status === "finalized") return;
-    if (existing) throw new ApiError(409, "invalid_import_state", "导入任务正在提交，无法取消");
-    return;
+      `SELECT status, created_at::text AS cancellation_generation
+         FROM import_session
+        WHERE id=$1`,
+      [canonicalId]
+    )).rows[0] as {
+      status: ImportStatus;
+      cancellation_generation: string;
+    } | undefined;
+    await clearImportCancelled(cancellation);
+    if (
+      !existing
+      || existing.cancellation_generation !== target.cancellation_generation
+    ) {
+      return;
+    }
+    if (existing.status === "finalized") return;
+    throw new ApiError(409, "invalid_import_state", "导入任务正在提交，无法取消");
   }
-  return withImportSessionLock(id, async (signal) => {
+  return withImportSessionLock(canonicalId, async (signal) => {
     signal.throwIfAborted();
     const session = (await pool.query(
-      "SELECT status, storage_slug FROM import_session WHERE id=$1",
-      [id]
-    )).rows[0] as Pick<ImportSessionRow, "status" | "storage_slug"> | undefined;
-    if (!session) {
-      await clearImportCancelled(id);
+      `SELECT status, storage_slug,
+              created_at::text AS cancellation_generation
+         FROM import_session
+        WHERE id=$1`,
+      [canonicalId]
+    )).rows[0] as Pick<
+      ImportSessionRow,
+      "status" | "storage_slug"
+    > & {
+      cancellation_generation: string;
+    } | undefined;
+    if (
+      !session
+      || session.cancellation_generation !== target.cancellation_generation
+    ) {
+      await clearImportCancelled(cancellation);
       return;
     }
     if (session.status !== "cancelled") {
+      await clearImportCancelled(cancellation);
       throw new ApiError(409, "invalid_import_state", "导入任务状态已变化");
     }
+    // 持有会话锁且本实例执行 Promise 已收口，证明没有执行者仍能消费该标记。
+    await clearImportCancelled(cancellation);
     try {
       signal.throwIfAborted();
       const cleanups = await Promise.allSettled([
-        cleanupStagedObjects(id, session.storage_slug),
-        removeRawImport(id)
+        cleanupStagedObjects(canonicalId, session.storage_slug),
+        removeRawImport(canonicalId)
       ]);
       const failures = cleanups
         .filter((result): result is PromiseRejectedResult => result.status === "rejected")
@@ -239,9 +327,11 @@ export async function cancelImportSession(id: string) {
       );
     }
     await pool.query(
-      "DELETE FROM import_session WHERE id=$1 AND status='cancelled'",
-      [id]
+      `DELETE FROM import_session
+        WHERE id=$1
+          AND created_at=$2::timestamptz
+          AND status='cancelled'`,
+      [canonicalId, target.cancellation_generation]
     );
-    await clearImportCancelled(id);
   });
 }

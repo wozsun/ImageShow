@@ -29,6 +29,11 @@ import {
   mergeImportCleanupFailures,
   type ImportCleanupFailures
 } from "./cleanup-failures.ts";
+import {
+  clearImportCancelled,
+  markImportCancelled,
+  type ImportCancellationMarker
+} from "./lifecycle.ts";
 
 type ExpiredImportCleanup = {
   id: string;
@@ -36,19 +41,32 @@ type ExpiredImportCleanup = {
   finalObjectKey: string;
 };
 
+type ExpiredImportCandidate = {
+  id: string;
+  cancellation_generation: string;
+};
+
+function cancellationOwnerKey(id: string, generation: string) {
+  return `${id}:${generation}`;
+}
+
 async function cancelExpiredCommittingImports() {
   const candidates = (await pool.query(
-    `SELECT id
+    `SELECT id, created_at::text AS cancellation_generation
        FROM import_session
       WHERE status='committing' AND expires_at < now()
       ORDER BY expires_at ASC
       LIMIT $1`,
     [appConfig.trashBatchSize]
-  )).rows as Array<{ id: string }>;
+  )).rows as ExpiredImportCandidate[];
   if (!candidates.length) return 0;
 
   let cancelled = 0;
   for (const candidate of candidates) {
+    const cancellation = await markImportCancelled(
+      candidate.id,
+      candidate.cancellation_generation
+    );
     const attempt = await tryWithStorageLocationReadAndAdvisoryLocks(
       [{ key: importSessionLockKey(candidate.id), acquisition: "try" }],
       (signal) => {
@@ -61,12 +79,15 @@ async function cancelExpiredCommittingImports() {
                   error='提交进程中断且会话已过期',
                   updated_at=now()
             WHERE id=$1
+              AND created_at=$2::timestamptz
               AND status='committing'
               AND expires_at < now()`,
-          [candidate.id]
+          [candidate.id, candidate.cancellation_generation]
         );
       }
     );
+    // 未取得锁时没有发布 PostgreSQL 取消；取得锁则已经证明执行者退出。
+    await clearImportCancelled(cancellation);
     if (attempt.acquired) {
       cancelled += attempt.value.rowCount ?? 0;
     }
@@ -76,18 +97,47 @@ async function cancelExpiredCommittingImports() {
 
 export async function handleImportCleanupJob(): Promise<BackgroundJobOutcome> {
   const cancelledCommitting = await cancelExpiredCommittingImports();
+  const candidates = (await pool.query(
+    `SELECT id, created_at::text AS cancellation_generation
+       FROM import_session
+      WHERE status IN (
+        'created','materializing','received','preparing','ready',
+        'finalized','failed','cancelled'
+      )
+        AND expires_at < now()
+      ORDER BY expires_at ASC
+      LIMIT $1`,
+    [appConfig.trashBatchSize]
+  )).rows as ExpiredImportCandidate[];
+  const cancellations = await Promise.all(candidates.map((candidate) =>
+    markImportCancelled(candidate.id, candidate.cancellation_generation)
+  ));
+  const cancellationByOwner = new Map(
+    cancellations.map((cancellation) => [
+      cancellationOwnerKey(cancellation.id, cancellation.generation),
+      cancellation
+    ])
+  );
+
   const rows = (await pool.query(
-    `WITH expired AS (
-       SELECT id
-         FROM import_session
-        WHERE status IN (
+    `WITH candidates AS (
+       SELECT *
+         FROM unnest($1::uuid[], $2::timestamptz[])
+           AS candidate(id, created_at)
+     ),
+     expired AS (
+       SELECT session.id
+         FROM import_session AS session
+         JOIN candidates AS candidate
+           ON candidate.id=session.id
+          AND candidate.created_at=session.created_at
+        WHERE session.status IN (
           'created','materializing','received','preparing','ready',
           'finalized','failed','cancelled'
         )
-          AND expires_at < now()
-        ORDER BY expires_at ASC
-        FOR UPDATE SKIP LOCKED
-        LIMIT $1
+          AND session.expires_at < now()
+        ORDER BY session.expires_at ASC
+        FOR UPDATE OF session SKIP LOCKED
      )
      UPDATE import_session AS session
         SET status=CASE
@@ -99,19 +149,47 @@ export async function handleImportCleanupJob(): Promise<BackgroundJobOutcome> {
             updated_at=now()
        FROM expired
       WHERE session.id=expired.id
-      RETURNING session.id`,
-    [appConfig.trashBatchSize]
-  )).rows as Array<{ id: string }>;
+      RETURNING session.id,
+                session.created_at::text AS cancellation_generation`,
+    [
+      candidates.map(({ id }) => id),
+      candidates.map(({ cancellation_generation }) =>
+        cancellation_generation
+      )
+    ]
+  )).rows as ExpiredImportCandidate[];
+  const claimedOwners = new Set(rows.map((row) =>
+    cancellationOwnerKey(row.id, row.cancellation_generation)
+  ));
+  await Promise.all(cancellations
+    .filter((cancellation) => !claimedOwners.has(cancellationOwnerKey(
+      cancellation.id,
+      cancellation.generation
+    )))
+    .map(clearImportCancelled));
 
   const cleanups: ExpiredImportCleanup[] = [];
   const failures: ImportCleanupFailures = new Map();
   for (const row of rows) {
+    const cancellation = cancellationByOwner.get(cancellationOwnerKey(
+      row.id,
+      row.cancellation_generation
+    ));
+    if (!cancellation) {
+      appendImportCleanupFailure(
+        failures,
+        row.id,
+        new Error("Import cleanup lost cancellation marker ownership")
+      );
+      continue;
+    }
     try {
       await abortActiveImport(row.id);
       await withImportSessionLock(row.id, async (signal) => {
         signal.throwIfAborted();
         const session = (await pool.query(
-          `SELECT status, storage_slug, final_object_key
+          `SELECT status, storage_slug, final_object_key,
+                  created_at::text AS cancellation_generation
              FROM import_session
             WHERE id=$1`,
           [row.id]
@@ -119,13 +197,19 @@ export async function handleImportCleanupJob(): Promise<BackgroundJobOutcome> {
           status: string;
           storage_slug: string;
           final_object_key: string;
+          cancellation_generation: string;
         } | undefined;
         if (
           !session
+          || session.cancellation_generation !==
+            row.cancellation_generation
           || !["cancelled", "finalized"].includes(session.status)
         ) {
+          await clearImportCancelled(cancellation);
           return;
         }
+        // 会话锁与已收口的本地执行共同证明取消竞态窗口已经结束。
+        await clearImportCancelled(cancellation);
         signal.throwIfAborted();
         cleanups.push({
           id: row.id,
@@ -172,13 +256,32 @@ export async function handleImportCleanupJob(): Promise<BackgroundJobOutcome> {
   );
 
   const cleanedIds = cleanupIds.filter((id) => !failures.has(id));
+  const cleanedIdSet = new Set(cleanedIds);
+  const cleanedCandidates = rows.filter(({ id }) => cleanedIdSet.has(id));
 
   const deletedExpired = await pool.query(
-    `DELETE FROM import_session
-      WHERE id = ANY($1::uuid[])
-        AND status IN ('cancelled','finalized')`,
-    [cleanedIds]
+    `DELETE FROM import_session AS session
+      USING unnest($1::uuid[], $2::timestamptz[])
+        AS candidate(id, created_at)
+      WHERE session.id=candidate.id
+        AND session.created_at=candidate.created_at
+        AND session.status IN ('cancelled','finalized')`,
+    [
+      cleanedCandidates.map(({ id }) => id),
+      cleanedCandidates.map(({ cancellation_generation }) =>
+        cancellation_generation
+      )
+    ]
   );
+  await Promise.all(cleanedCandidates
+    .map((row) => cancellationByOwner.get(cancellationOwnerKey(
+      row.id,
+      row.cancellation_generation
+    )))
+    .filter((
+      cancellation
+    ): cancellation is ImportCancellationMarker => Boolean(cancellation))
+    .map(clearImportCancelled));
   await cleanupOrphanRawImports(appConfig.uploadTtlSeconds * 1000);
 
   if (failures.size) {
