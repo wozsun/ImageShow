@@ -45,6 +45,7 @@ import {
 
 type StorageActionDialog =
   | { kind: "delete"; backend: StorageBackendAdmin; error?: string }
+  | { kind: "retry-cleanup"; backend: StorageBackendAdmin }
   | { kind: "migrate"; backend: StorageBackendAdmin }
   | { kind: "blocked"; backend: StorageBackendAdmin };
 
@@ -497,7 +498,10 @@ function StorageBackendsManager() {
                   body: JSON.stringify({ enabled: !backend.enabled })
                 })
               )}
-              onRetryCleanup={() => retryCleanup(backend.slug)}
+              onRetryCleanup={() => setActionDialog({
+                kind: "retry-cleanup",
+                backend
+              })}
               onRemovalAction={() => setActionDialog({
                 kind: backend.deletion.action,
                 backend
@@ -542,6 +546,19 @@ function StorageBackendsManager() {
           busy={Boolean(busy)}
           onClose={() => setActionDialog(null)}
           onConfirm={() => deleteBackend(actionDialog.backend)}
+        />
+      )}
+      {actionDialog?.kind === "retry-cleanup" && (
+        <ConfirmDialog
+          title={`重试“${storageBackendDisplay(actionDialog.backend)}”的旧对象删除？`}
+          description={`将 ${actionDialog.backend.exhausted_cleanup_job_count} 个已停止自动重试的旧对象删除任务重新加入后台队列。后台随后会再次删除迁移完成后遗留的源对象；此操作不会重新运行存储检查。`}
+          confirmLabel="确认重试删除"
+          confirmIcon="refresh-line"
+          pendingLabel="正在排队"
+          successLabel="已重新排队"
+          busy={Boolean(busy)}
+          onClose={() => setActionDialog(null)}
+          onConfirm={() => retryCleanup(actionDialog.backend.slug)}
         />
       )}
       {actionDialog?.kind === "migrate" && (

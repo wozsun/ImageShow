@@ -19,6 +19,7 @@ const iconNames = [
   "close-line",
   "dashboard-line",
   "database-2-line",
+  "delete-bin-2-line",
   "delete-bin-6-line",
   "delete-bin-7-line",
   "download-cloud-2-line",

@@ -520,6 +520,12 @@ pre {
   border-color: #e8aaa4;
 }
 .danger-button:hover, button.danger-button:hover { color: #84271f; background: #ffe7e3; border-color: #d98179; }
+.danger-button.two-step-confirm-icon-button.is-armed,
+button.danger-button.two-step-confirm-icon-button.is-armed {
+  color: #fff;
+  background: #b42318;
+  border-color: #b42318;
+}
 
 @media (prefers-reduced-motion: reduce) {
   .edit-modal form { animation: none; }

@@ -1,6 +1,5 @@
 const homeEntranceTiming = {
-  backgroundDeadlineMs: 600,
-  globalDeadlineMs: 1_000,
+  deadlineMs: 800,
   navigationDelayAfterBackgroundMs: 100,
   heroDelayAfterBackgroundMs: 250,
   catalogDelayAfterBackgroundMs: 800,
@@ -41,10 +40,8 @@ export class HomeEntranceController {
   readonly #onChange: HomeEntranceControllerOptions["onChange"];
   readonly #scheduler: HomeEntranceScheduler;
   #snapshot: HomeEntranceSnapshot;
-  #enteredAt: number | undefined;
-  #backgroundStartedAt: number | undefined;
-  #globalTimer: unknown;
-  #backgroundTimer: unknown;
+  #deadlineAt: number | undefined;
+  #deadlineTimer: unknown;
   #navigationTimer: unknown;
   #heroTimer: unknown;
   #catalogTimer: unknown;
@@ -77,23 +74,15 @@ export class HomeEntranceController {
   }
 
   start() {
-    if (this.#disposed || this.#enteredAt !== undefined) return;
-    this.#enteredAt = this.#scheduler.now();
+    if (this.#disposed || this.#deadlineAt !== undefined) return;
+    this.#deadlineAt = this.#scheduler.now() + homeEntranceTiming.deadlineMs;
     if (!this.#snapshot.heroRevealed) {
-      this.#globalTimer = this.#scheduler.setTimer(
-        () => this.reveal(),
-        homeEntranceTiming.globalDeadlineMs
-      );
-    }
-  }
-
-  backgroundRequestStarted() {
-    if (this.#disposed || this.#backgroundStartedAt !== undefined) return;
-    this.#backgroundStartedAt = this.#scheduler.now();
-    if (!this.#snapshot.heroRevealed) {
-      this.#backgroundTimer = this.#scheduler.setTimer(
-        () => this.reveal(),
-        homeEntranceTiming.backgroundDeadlineMs
+      this.#deadlineTimer = this.#scheduler.setTimer(
+        () => {
+          this.#deadlineTimer = undefined;
+          this.reveal();
+        },
+        homeEntranceTiming.deadlineMs
       );
     }
   }
@@ -173,17 +162,8 @@ export class HomeEntranceController {
     if (
       !this.#snapshot.heroRevealed
       && !this.#deadlineReleased
-      && (
-        (
-          this.#enteredAt !== undefined
-          && now - this.#enteredAt >= homeEntranceTiming.globalDeadlineMs
-        )
-        || (
-          this.#backgroundStartedAt !== undefined
-          && now - this.#backgroundStartedAt
-            >= homeEntranceTiming.backgroundDeadlineMs
-        )
-      )
+      && this.#deadlineAt !== undefined
+      && now >= this.#deadlineAt
     ) {
       this.reveal();
       return;
@@ -216,13 +196,9 @@ export class HomeEntranceController {
   }
 
   #deadlineAnchor(now: number) {
-    const enteredDeadline = this.#enteredAt === undefined
-      ? Number.POSITIVE_INFINITY
-      : this.#enteredAt + homeEntranceTiming.globalDeadlineMs;
-    const backgroundDeadline = this.#backgroundStartedAt === undefined
-      ? Number.POSITIVE_INFINITY
-      : this.#backgroundStartedAt + homeEntranceTiming.backgroundDeadlineMs;
-    return Math.min(now, enteredDeadline, backgroundDeadline);
+    return this.#deadlineAt === undefined
+      ? now
+      : Math.min(now, this.#deadlineAt);
   }
 
   #startForegroundSequence() {
@@ -269,7 +245,7 @@ export class HomeEntranceController {
       navigationRevealed: true,
       heroRevealed: true
     };
-    this.#clearDeadlineTimers();
+    this.#clearDeadlineTimer();
     this.#clearNavigationAndHeroTimers();
     this.#publish();
   }
@@ -307,14 +283,10 @@ export class HomeEntranceController {
     this.#publish();
   }
 
-  #clearDeadlineTimers() {
-    if (this.#globalTimer !== undefined) {
-      this.#scheduler.clearTimer(this.#globalTimer);
-      this.#globalTimer = undefined;
-    }
-    if (this.#backgroundTimer !== undefined) {
-      this.#scheduler.clearTimer(this.#backgroundTimer);
-      this.#backgroundTimer = undefined;
+  #clearDeadlineTimer() {
+    if (this.#deadlineTimer !== undefined) {
+      this.#scheduler.clearTimer(this.#deadlineTimer);
+      this.#deadlineTimer = undefined;
     }
   }
 
@@ -341,7 +313,7 @@ export class HomeEntranceController {
   }
 
   #clearAllTimers() {
-    this.#clearDeadlineTimers();
+    this.#clearDeadlineTimer();
     this.#clearForegroundTimers();
   }
 

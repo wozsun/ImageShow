@@ -54,11 +54,6 @@
   width: 38px;
   flex-basis: 38px;
 }
-button.batch-edit-delete-trigger.is-armed {
-  color: #fff;
-  background: #b42318;
-  border-color: #b42318;
-}
 .batch-edit-save-button {
   min-width: max(
     calc(3em + 3ch + 26px),

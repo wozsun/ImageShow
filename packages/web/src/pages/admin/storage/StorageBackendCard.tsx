@@ -50,7 +50,7 @@ export function StorageBackendCard({
   onSetDefault: () => Promise<boolean>;
   onRemovalAction: () => void;
   onToggleEnabled: () => Promise<boolean>;
-  onRetryCleanup: () => Promise<boolean>;
+  onRetryCleanup: () => void;
   onDragStart: (slug: string) => void;
   onDragEnter: (slug: string) => void;
   onDragEnd: () => void;
@@ -60,13 +60,11 @@ export function StorageBackendCard({
   const cardRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
   const enabledStatus = useAsyncActionStatus({ successDurationMs: null });
-  const cleanupRetryStatus = useAsyncActionStatus();
   const title = backend.display_name || storageBackendLabel(backend.slug);
   const cardBusy = Boolean(busy)
     || reorderBusy
     || defaultActionPending
-    || enabledStatus.pending
-    || cleanupRetryStatus.pending;
+    || enabledStatus.pending;
   const defaultPresentation = {
     idle: {
       icon: backend.is_default ? "star-fill" : "star-line",
@@ -88,15 +86,6 @@ export function StorageBackendCard({
     },
     error: { icon: "close-line", label: "操作失败" }
   } as const;
-  const cleanupRetryPresentation = {
-    idle: { icon: "refresh-line", label: "重试删除" },
-    pending: { icon: "refresh-line", label: "排队中" },
-    success: { icon: "check-line", label: "已排队" },
-    error: { icon: "close-line", label: "重试失败" }
-  } as const;
-  const cleanupRetryTitle = backend.exhausted_cleanup_job_count > 0
-    ? `将 ${backend.exhausted_cleanup_job_count} 个已停止自动重试的旧对象删除任务重新加入后台队列；不会执行存储检查`
-    : "旧对象删除任务已重新排队；不会执行存储检查";
   const begin = (event: DragEvent<HTMLSpanElement>) => {
     if (cardBusy) {
       event.preventDefault();
@@ -166,17 +155,17 @@ export function StorageBackendCard({
               onClick={() => void enabledStatus.run(onToggleEnabled)}
             />
           )}
-          {(backend.exhausted_cleanup_job_count > 0
-            || cleanupRetryStatus.status !== "idle") && (
-            <AsyncActionButton
+          {backend.exhausted_cleanup_job_count > 0 && (
+            <button
               type="button"
               className="storage-cleanup-retry"
-              status={cleanupRetryStatus.status}
-              presentation={cleanupRetryPresentation}
               disabled={cardBusy}
-              title={cleanupRetryTitle}
-              onClick={() => void cleanupRetryStatus.run(onRetryCleanup)}
-            />
+              title={`确认后将 ${backend.exhausted_cleanup_job_count} 个已停止自动重试的旧对象删除任务重新排队`}
+              onClick={onRetryCleanup}
+            >
+              <Icon name="refresh-line" />
+              <span>重试删除</span>
+            </button>
           )}
         </span>
         <span className="storage-card-actions-right">

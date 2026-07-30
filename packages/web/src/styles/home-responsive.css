@@ -362,16 +362,9 @@
   .home-filter-bar.is-home-secondary-navigation-entrance,
   .home-reveal-axes.is-reveal-animation-active .home-axis-group,
   .home-reveal-section.is-reveal-settled.is-reveal-animation-active
-    .home-section-heading::before,
-  .home-catalog.is-refreshing
-    .home-reveal-section.is-reveal-settled
-    .home-section-heading::before,
-  .home-catalog.is-refresh-complete-a
-    .home-reveal-section.is-reveal-settled
-    .home-section-heading::before,
-  .home-catalog.is-refresh-complete-b
-    .home-reveal-section.is-reveal-settled
-    .home-section-heading::before,
+    .home-section-track-glint,
+  .home-reveal-section.is-reveal-settled
+    .home-section-track-glint.is-refresh-glint-active,
   .home-reveal-theme.is-reveal-settled.is-reveal-animation-active
     .home-theme-options > .home-selector-options > button[data-reveal-item="true"],
   .home-reveal-tags.is-reveal-settled.is-reveal-animation-active

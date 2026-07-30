@@ -159,9 +159,6 @@ export function useHomeEntrance(
       // state commits cannot start the same background request again.
       image.setAttribute("src", source);
     }
-    if (image) {
-      controller.backgroundRequestStarted();
-    }
     if (image?.complete && image.naturalWidth > 0) {
       settleLoadedImage(image);
     }

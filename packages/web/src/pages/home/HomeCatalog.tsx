@@ -1,6 +1,7 @@
 import type { GalleryStatsDto } from "@imageshow/shared/browser";
 import {
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type ComponentPropsWithoutRef,
@@ -31,6 +32,7 @@ function HomeRevealSection({
   children,
   className = "",
   onAnimationEndCapture,
+  onAnimationIterationCapture,
   onFocusCapture,
   revealVariant,
   ...props
@@ -67,12 +69,18 @@ function HomeRevealSection({
           && event.target instanceof Element
           && event.target.matches(".home-axis-group:last-child");
         if (
-          event.animationName.startsWith("home-section-track-glint")
+          event.animationName === "home-section-track-glint"
           || finalAxesAnimation
         ) {
           entrance.finish();
         }
         onAnimationEndCapture?.(event);
+      }}
+      onAnimationIterationCapture={(event) => {
+        if (event.animationName === "home-section-track-glint") {
+          entrance.finish();
+        }
+        onAnimationIterationCapture?.(event);
       }}
       onFocusCapture={(event) => {
         revealImmediately();
@@ -148,13 +156,34 @@ function SectionHeading({
   index,
   eyebrow,
   title,
-  count
+  count,
+  refreshGlintRun,
+  isRefreshing,
+  reduceMotion
 }: {
   index: string;
   eyebrow: string;
   title: string;
   count: number;
+  refreshGlintRun: number;
+  isRefreshing: boolean;
+  reduceMotion: boolean;
 }) {
+  const [
+    completedRefreshGlintRun,
+    setCompletedRefreshGlintRun
+  ] = useState(
+    () => reduceMotion && !isRefreshing ? refreshGlintRun : 0
+  );
+  const refreshGlintActive = !reduceMotion
+    && refreshGlintRun > completedRefreshGlintRun;
+
+  useEffect(() => {
+    if (reduceMotion && !isRefreshing) {
+      setCompletedRefreshGlintRun(refreshGlintRun);
+    }
+  }, [isRefreshing, reduceMotion, refreshGlintRun]);
+
   return (
     <header className="home-section-heading">
       <div>
@@ -162,6 +191,21 @@ function SectionHeading({
         <h2>{title}</h2>
       </div>
       <small>{count} 项</small>
+      <i
+        className={[
+          "home-section-track-glint",
+          refreshGlintActive ? "is-refresh-glint-active" : ""
+        ].filter(Boolean).join(" ")}
+        aria-hidden="true"
+        onAnimationIteration={(event) => {
+          if (
+            event.animationName === "home-section-track-glint"
+            && !isRefreshing
+          ) {
+            setCompletedRefreshGlintRun(refreshGlintRun);
+          }
+        }}
+      />
     </header>
   );
 }
@@ -191,9 +235,9 @@ export function HomeCatalog({
 }) {
   const availabilityUnverified = isRefreshing || isError;
   const wasRefreshingRef = useRef(isRefreshing);
-  const [refreshGlintCompletion, setRefreshGlintCompletion] = useState<
-    "a" | "b" | null
-  >(null);
+  const [refreshGlintRun, setRefreshGlintRun] = useState(
+    () => isRefreshing ? 1 : 0
+  );
   const reduceMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
   const themeSet = new Set(selectedSlugs(filters.theme));
   const tagSet = new Set(selectedSlugs(filters.tag));
@@ -225,19 +269,13 @@ export function HomeCatalog({
     homeRevealItemLimits.authors
   );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const wasRefreshing = wasRefreshingRef.current;
     wasRefreshingRef.current = isRefreshing;
-    if (wasRefreshing && !isRefreshing) {
-      setRefreshGlintCompletion((current) => current === "a" ? "b" : "a");
+    if (!wasRefreshing && isRefreshing) {
+      setRefreshGlintRun((current) => current + 1);
     }
   }, [isRefreshing]);
-
-  useEffect(() => {
-    if (reduceMotion && refreshGlintCompletion) {
-      setRefreshGlintCompletion(null);
-    }
-  }, [reduceMotion, refreshGlintCompletion]);
 
   const updateFilter = (key: keyof GalleryFilters, value: string) => {
     onFiltersChange({ ...filters, [key]: value });
@@ -261,23 +299,12 @@ export function HomeCatalog({
       className={[
         "home-catalog",
         isRefreshing ? "is-refreshing" : "",
-        !isRefreshing && refreshGlintCompletion
-          ? `is-refresh-complete-${refreshGlintCompletion}`
-          : "",
         `is-entrance-${armed ? "armed" : "pending"}`
       ].filter(Boolean).join(" ")}
       aria-label="图库分类目录"
       aria-busy={isRefreshing}
       aria-hidden={armed ? undefined : true}
       inert={armed ? undefined : true}
-      onAnimationEndCapture={(event) => {
-        if (
-          event.animationName === "home-section-track-glint-complete-a"
-          || event.animationName === "home-section-track-glint-complete-b"
-        ) {
-          setRefreshGlintCompletion(null);
-        }
-      }}
       onFocusCapture={onCatalogIntent}
     >
       {isError && (
@@ -383,6 +410,9 @@ export function HomeCatalog({
                 eyebrow="THEMES"
                 title="主题"
                 count={stats.themes.length}
+                refreshGlintRun={refreshGlintRun}
+                isRefreshing={isRefreshing}
+                reduceMotion={reduceMotion}
               />
               <SelectorOptions className="home-theme-options">
                 {stats.themes.map((item, index) => {
@@ -446,6 +476,9 @@ export function HomeCatalog({
                   eyebrow="TAGS"
                   title="标签"
                   count={stats.tags.length}
+                  refreshGlintRun={refreshGlintRun}
+                  isRefreshing={isRefreshing}
+                  reduceMotion={reduceMotion}
                 />
                 <SelectorOptions className="home-tag-options">
                   {stats.tags.map((item) => {
@@ -503,6 +536,9 @@ export function HomeCatalog({
                   eyebrow="CONTRIBUTORS"
                   title="作者"
                   count={stats.authors.length}
+                  refreshGlintRun={refreshGlintRun}
+                  isRefreshing={isRefreshing}
+                  reduceMotion={reduceMotion}
                 />
                 <SelectorOptions className="home-author-options">
                   {stats.authors.map((item) => {

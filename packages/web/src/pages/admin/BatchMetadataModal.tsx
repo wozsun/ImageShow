@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useRef, useState, type RefObject } from "rea
 import { adminPermissions } from "@imageshow/shared/browser";
 import { Icon } from "../../components/icon/Icon.js";
 import { AsyncActionButton } from "../../components/actions/AsyncActionButton.js";
+import { TwoStepConfirmIconButton } from "../../components/actions/TwoStepConfirmIconButton.js";
 import { ConfirmDialog } from "../../components/feedback/ConfirmDialog.js";
 import { DialogFrame } from "../../components/feedback/DialogFrame.js";
 import { WorkflowDefaultFields } from "../../components/form/WorkflowDefaultFields.js";
@@ -138,7 +139,6 @@ export function BatchMetadataModal({
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const restoreTriggerRef = useRef<HTMLButtonElement | null>(null);
   const migrateTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const deleteTriggerRef = useRef<HTMLButtonElement | null>(null);
   const previewReturnFocusRef = useRef<HTMLElement | null>(null);
   // 父级刷新会清空选择；弹窗独立持有会话 ID 和权威基线。保存结果不确定时，
   // 基线会从 PostgreSQL 重新读取，避免把已经落库的部分修改伪装成本地撤销。
@@ -162,21 +162,8 @@ export function BatchMetadataModal({
   } = operations;
   const saving = saveStatus.pending;
   const deleteStatus = useAsyncActionStatus({ successDurationMs: null });
-  const [deleteArmed, setDeleteArmed] = useState(false);
   const [deleteError, setDeleteError] = useState("");
   const busy = saving || deleteStatus.pending;
-  useEffect(() => {
-    if (!deleteArmed) return;
-    const disarmOutsideDelete = (event: PointerEvent) => {
-      if (!deleteTriggerRef.current?.contains(event.target as Node)) {
-        setDeleteArmed(false);
-      }
-    };
-    document.addEventListener("pointerdown", disarmOutsideDelete, true);
-    return () => {
-      document.removeEventListener("pointerdown", disarmOutsideDelete, true);
-    };
-  }, [deleteArmed]);
   const [drafts, setDrafts] = useState<Record<string, ImageDraft>>(
     () => draftsFromImages(items)
   );
@@ -265,13 +252,7 @@ export function BatchMetadataModal({
   const deleteSingleImage = async (requestClose: () => void) => {
     const item = activeItems[0];
     if (!single || !item || busy) return;
-    if (!deleteArmed) {
-      setDeleteError("");
-      setDeleteArmed(true);
-      return;
-    }
 
-    setDeleteArmed(false);
     const deleted = await deleteStatus.run(async () => {
       setDeleteError("");
       try {
@@ -319,7 +300,6 @@ export function BatchMetadataModal({
         onSubmit={async (event) => {
           event.preventDefault();
           if (busy) return;
-          setDeleteArmed(false);
           if (await saveAll()) requestClose();
         }}
       >
@@ -505,22 +485,17 @@ export function BatchMetadataModal({
                 </button>
               )}
               {single && (
-                <button
-                  ref={deleteTriggerRef}
-                  className={`icon danger-button batch-edit-delete-trigger${deleteArmed ? " is-armed" : ""}`}
-                  type="button"
-                  title={deleteArmed ? "再次点击确认删除此图片" : "删除此图片"}
-                  aria-label={deleteArmed ? "再次点击确认删除此图片" : "删除此图片"}
-                  aria-pressed={deleteArmed}
-                  aria-busy={deleteStatus.pending || undefined}
+                <TwoStepConfirmIconButton
+                  className="icon danger-button batch-edit-delete-trigger"
+                  idleIcon="delete-bin-6-line"
+                  confirmIcon="delete-bin-2-line"
+                  idleLabel="删除此图片"
+                  confirmLabel="再次点击确认删除此图片"
+                  busy={deleteStatus.pending}
                   disabled={busy || !activeItems.length}
-                  onBlur={() => {
-                    if (!deleteStatus.pending) setDeleteArmed(false);
-                  }}
-                  onClick={() => void deleteSingleImage(requestClose)}
-                >
-                  <Icon name={deleteArmed ? "delete-bin-7-line" : "delete-bin-6-line"} />
-                </button>
+                  onArm={() => setDeleteError("")}
+                  onConfirm={() => void deleteSingleImage(requestClose)}
+                />
               )}
             </div>
           )}
