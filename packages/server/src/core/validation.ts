@@ -165,6 +165,17 @@ export const imageIdsInput = z.object({
 
 export const storageSlugInput = slugInput;
 
+export const storageBackendMigrationInput = z.strictObject({
+  source: storageSlugInput,
+  target: storageSlugInput
+}).refine(
+  ({ source, target }) => source !== target,
+  {
+    path: ["target"],
+    message: "目标存储后端不能与源后端相同"
+  }
+);
+
 export const batchMigrateStorageInput = z.object({
   ids: z.array(uuidInput).min(1).max(200).transform((ids) => [...new Set(ids)]),
   target: storageSlugInput

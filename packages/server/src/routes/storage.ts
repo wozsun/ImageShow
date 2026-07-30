@@ -1,12 +1,22 @@
 import type { Hono } from "hono";
 import {
   adminApiBasePath,
+  adminPermissions,
   type StorageBackendOptionsResponseDto,
+  type StorageBackendMigrationResponseDto,
   type StorageBackendsAdminResponseDto
 } from "@imageshow/shared/browser";
 import { apiSuccess } from "../core/http/responses.ts";
-import { requireSuperAdmin } from "../users/admin-authorization.ts";
-import { parse, slugListInput, storageSlugInput } from "../core/validation.ts";
+import {
+  requireAdminPermission,
+  requireSuperAdmin
+} from "../users/admin-authorization.ts";
+import {
+  parse,
+  slugListInput,
+  storageBackendMigrationInput,
+  storageSlugInput
+} from "../core/validation.ts";
 import {
   storageBackendCreateInput,
   storageBackendUpdateInput
@@ -25,6 +35,7 @@ import { resolveStorageTestConfig } from "../storage/backend-probe.ts";
 import { updateStorageBackend } from "../storage/backend-update.ts";
 import { retryStorageBackendCleanup } from "../storage/move-cleanup.ts";
 import { testStorageBackend } from "../storage/backend-self-test.ts";
+import { migrateStorageBackend } from "../storage/backend-migration.ts";
 
 export function registerStorageRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/storage/options`, async (c) => {
@@ -40,6 +51,21 @@ export function registerStorageRoutes(app: Hono) {
     } satisfies StorageBackendsAdminResponseDto;
     return c.json(apiSuccess(response));
   });
+
+  app.post(
+    `${adminApiBasePath}/storage/backends/migrate`,
+    requireAdminPermission(adminPermissions.storageMaintenanceMigrate),
+    async (c) => {
+      const input = parse(
+        storageBackendMigrationInput,
+        await c.req.json().catch(() => ({}))
+      );
+      const response = apiSuccess(
+        await migrateStorageBackend(input.source, input.target)
+      ) satisfies StorageBackendMigrationResponseDto;
+      return c.json(response);
+    }
+  );
 
   app.post(`${adminApiBasePath}/storage/backends`, requireSuperAdmin, async (c) => {
     const input = parse(storageBackendCreateInput, await c.req.json().catch(() => ({})));

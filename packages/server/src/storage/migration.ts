@@ -20,7 +20,7 @@ import { contentType, type StoragePrefix } from "./object-keys.ts";
 import { ensureVerifiedObjectAtDestination } from "./object-transfer.ts";
 import { shareStorageNamespace } from "./storage-namespace.ts";
 
-export type MigrateRecord = {
+export type StorageMigrationImageRecord = {
   id: string;
   object_key: string;
   ext: string;
@@ -32,8 +32,11 @@ export type MigrateRecord = {
   md5: string;
 };
 
-type MigrateResult = "migrated" | "unchanged" | "missing";
-type MigrationLocation = Pick<MigrateRecord, "storage_slug" | "object_key">;
+type StorageMigrationResult = "migrated" | "unchanged" | "missing";
+type MigrationLocation = Pick<
+  StorageMigrationImageRecord,
+  "storage_slug" | "object_key"
+>;
 
 const migrateColumns = [
   "id",
@@ -48,7 +51,7 @@ const migrateColumns = [
 ].join(", ");
 
 async function queueCandidateCleanup(
-  image: MigrateRecord,
+  image: StorageMigrationImageRecord,
   target: string,
   created: readonly MoveCleanupObjectInput[],
   reason: string,
@@ -100,7 +103,7 @@ function isLocation(
 }
 
 function migrationOutcomeUnknown(
-  image: MigrateRecord,
+  image: StorageMigrationImageRecord,
   target: string,
   originalError: unknown,
   details: Record<string, unknown>
@@ -129,12 +132,12 @@ function migrationOutcomeUnknown(
 }
 
 async function settleMigrationSwitchError(
-  image: MigrateRecord,
+  image: StorageMigrationImageRecord,
   target: string,
   created: readonly MoveCleanupObjectInput[],
   sourceCleanup: readonly CapturedMoveCleanupObject[],
   originalError: unknown
-): Promise<MigrateResult> {
+): Promise<StorageMigrationResult> {
   let location: MigrationLocation | undefined;
   try {
     location = await readMigrationLocation(image.id);
@@ -207,17 +210,17 @@ async function settleMigrationSwitchError(
   });
 }
 
-async function migrateImageStorageWhileLocked(
-  requested: MigrateRecord,
+async function migrateImageStorageBackendWhileLocked(
+  requested: StorageMigrationImageRecord,
   target: string,
   expectedSource: string | undefined,
   signal: AbortSignal
-): Promise<MigrateResult> {
+): Promise<StorageMigrationResult> {
   signal.throwIfAborted();
   const current = (await pool.query(
     `SELECT ${migrateColumns} FROM metadata WHERE id=$1`,
     [requested.id]
-  )).rows[0] as MigrateRecord | undefined;
+  )).rows[0] as StorageMigrationImageRecord | undefined;
   signal.throwIfAborted();
   if (!current) return "missing";
   if (expectedSource && current.storage_slug !== expectedSource) {
@@ -412,13 +415,13 @@ async function migrateImageStorageWhileLocked(
   );
 }
 
-export function migrateImageStorage(
-  row: MigrateRecord,
+export function migrateImageStorageBackend(
+  row: StorageMigrationImageRecord,
   target: string,
   options: { expectedSource?: string } = {}
-): Promise<MigrateResult> {
+): Promise<StorageMigrationResult> {
   return withImageStorageMutationLock(row.id, (signal) =>
-    migrateImageStorageWhileLocked(
+    migrateImageStorageBackendWhileLocked(
       row,
       target,
       options.expectedSource,
@@ -427,15 +430,15 @@ export function migrateImageStorage(
   );
 }
 
-export async function migrateStorageBackend(
+export async function migrateStorageBackendImages(
   sourceSlug: string,
   targetSlug: string,
-  entries: MigrateRecord[]
+  entries: StorageMigrationImageRecord[]
 ) {
   let migrated = 0;
   let unchanged = 0;
   let missing = 0;
-  const migratedEntries: MigrateRecord[] = [];
+  const migratedEntries: StorageMigrationImageRecord[] = [];
   const errors: Array<Record<string, unknown>> = [];
   for (const entry of entries) {
     if (entry.storage_slug !== sourceSlug) {
@@ -443,7 +446,7 @@ export async function migrateStorageBackend(
       continue;
     }
     try {
-      const result = await migrateImageStorage(entry, targetSlug, {
+      const result = await migrateImageStorageBackend(entry, targetSlug, {
         expectedSource: sourceSlug
       });
       if (result === "migrated") {

@@ -1,18 +1,18 @@
 import { pool } from "../core/db.ts";
-import { ApiError } from "../core/api-error.ts";
 import { invalidateImageCaches } from "../images/image-cache.ts";
 import { rebuildRandomPool } from "../random/cache-rebuild.ts";
-import { migrateStorageBackend, type MigrateRecord } from "../storage/migration.ts";
+import {
+  migrateStorageBackendImages,
+  type StorageMigrationImageRecord
+} from "./migration.ts";
 import {
   assertStorageWritable,
   getStorageBackend
-} from "../storage/backend-registry.ts";
+} from "./backend-registry.ts";
 
-export async function migrateStorageLocation(input: { source?: unknown; target?: unknown }) {
-  const source = typeof input?.source === "string" ? input.source : "";
-  const target = typeof input?.target === "string" ? input.target : "";
-  if (!source || !target || source === target) throw new ApiError(400, "validation_error", "Invalid migration source/target");
+export async function migrateStorageBackend(source: string, target: string) {
   await getStorageBackend(source);
+  await getStorageBackend(target);
   const rows = (await pool.query(
     `SELECT id, object_key, ext, status, storage_slug, device, brightness,
             theme, md5
@@ -20,9 +20,13 @@ export async function migrateStorageLocation(input: { source?: unknown; target?:
       WHERE storage_slug=$1
       ORDER BY created_at ASC`,
     [source]
-  )).rows as MigrateRecord[];
+  )).rows as StorageMigrationImageRecord[];
   if (rows.length) await assertStorageWritable(target);
-  const { migratedEntries, ...migration } = await migrateStorageBackend(source, target, rows);
+
+  const {
+    migratedEntries,
+    ...migration
+  } = await migrateStorageBackendImages(source, target, rows);
   if (migration.migrated) {
     await rebuildRandomPool();
     await invalidateImageCaches({

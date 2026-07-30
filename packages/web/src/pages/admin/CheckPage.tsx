@@ -7,10 +7,10 @@ import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
 import { Icon } from "../../components/icon/Icon.js";
 import { DialogFrame } from "../../components/feedback/DialogFrame.js";
 import { StableButtonLabel } from "../../components/data-display/StableButtonLabel.js";
-import { migrateStorageLocation } from "../../lib/api/storage-migration.js";
+import { migrateStorageBackend } from "../../lib/api/storage-backend-migration.js";
 import { invalidateStorageData } from "../../lib/api/query-invalidation.js";
 import { useAdminPermissions } from "../../lib/api/site-data.js";
-import { StorageLocationMigrationDialog } from "./StorageLocationMigrationDialog.js";
+import { StorageBackendMigrationDialog } from "./storage/StorageBackendMigrationDialog.js";
 import "../../styles/admin/check.css";
 
 export function CheckPage() {
@@ -24,7 +24,9 @@ export function CheckPage() {
   const canCleanupStorage = permissions.includes(
     adminPermissions.storageMaintenanceCleanup
   );
-  const [operationModal, setOperationModal] = useState<"migrate-storage-location" | "storage-cleanup" | null>(null);
+  const [operationModal, setOperationModal] = useState<
+    "storage-backend-migration" | "storage-cleanup" | null
+  >(null);
   const checks = useMemo(() => [
     { name: "db", label: "数据库" },
     { name: "storage", label: "存储" },
@@ -46,17 +48,17 @@ export function CheckPage() {
     }
   };
   const runStorageMigration = async (source: string, target: string) => {
-    setRunning("migrate-storage-location");
+    setRunning("storage-backend-migration");
     try {
-      setResult(await migrateStorageLocation(source, target));
+      setResult(await migrateStorageBackend(source, target));
       return true;
     } catch (error) {
-      reportAdminUiError("check.migrate-storage-location", error);
+      reportAdminUiError("storage.backend_migration", error);
       setResult({ ok: false, error: "迁移执行失败，请检查存储配置后重试" });
       return false;
     } finally {
       await invalidateStorageData(client).catch((error) => {
-        reportAdminUiError("check.migrate-storage-location.refresh", error);
+        reportAdminUiError("storage.backend_migration.refresh", error);
       });
       setRunning("");
     }
@@ -85,9 +87,9 @@ export function CheckPage() {
                 <button
                   type="button"
                   disabled={Boolean(running)}
-                  onClick={() => setOperationModal("migrate-storage-location")}
+                  onClick={() => setOperationModal("storage-backend-migration")}
                 >
-                  <Icon name="database-2-line" /><StableButtonLabel idle="迁移存储后端" busyText="迁移中" busy={running === "migrate-storage-location"} />
+                  <Icon name="database-2-line" /><StableButtonLabel idle="迁移存储后端" busyText="迁移中" busy={running === "storage-backend-migration"} />
                 </button>
               )}
               {canCleanupStorage && (
@@ -104,8 +106,8 @@ export function CheckPage() {
           )}
         </div>
       </header>
-      {operationModal === "migrate-storage-location" && canMigrateStorage && (
-        <StorageLocationMigrationDialog
+      {operationModal === "storage-backend-migration" && canMigrateStorage && (
+        <StorageBackendMigrationDialog
           busy={Boolean(running)}
           onClose={() => setOperationModal(null)}
           onRun={runStorageMigration}

@@ -3,8 +3,8 @@ import { mapWithWorkerPool } from "../core/concurrency.ts";
 import { pool } from "../core/db.ts";
 import { syncRandomImages } from "../random/cache-sync.ts";
 import {
-  migrateImageStorage,
-  type MigrateRecord
+  migrateImageStorageBackend,
+  type StorageMigrationImageRecord
 } from "../storage/migration.ts";
 import { assertStorageWritable } from "../storage/backend-registry.ts";
 import { invalidateImageCaches } from "./image-cache.ts";
@@ -44,7 +44,10 @@ export async function migrateImageBatchStorage(
   await mapWithWorkerPool(rows, concurrency, async (row) => {
     const imageStartedAt = performance.now();
     try {
-      const result = await migrateImageStorage(row as MigrateRecord, target);
+      const result = await migrateImageStorageBackend(
+        row as StorageMigrationImageRecord,
+        target
+      );
       if (result === "migrated") {
         migrated += 1;
         migratedIds.push(row.id);

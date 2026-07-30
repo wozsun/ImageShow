@@ -34,7 +34,7 @@ export type BatchStorageMigrationResponse = {
   failed: number;
 };
 
-export type StorageLocationMigrationResult = {
+export type StorageBackendMigrationResultDto = {
   source: string;
   target: string;
   migrated: number;
@@ -44,8 +44,8 @@ export type StorageLocationMigrationResult = {
   error_count: number;
 };
 
-export type StorageLocationMigrationResponse = ApiSuccessResponse<{
-  migration: StorageLocationMigrationResult;
+export type StorageBackendMigrationResponseDto = ApiSuccessResponse<{
+  migration: StorageBackendMigrationResultDto;
 }>;
 
 export type StorageBackendOptionDto = {

@@ -1,8 +1,7 @@
 import type { Hono } from "hono";
 import {
   adminApiBasePath,
-  adminPermissions,
-  type StorageLocationMigrationResponse
+  adminPermissions
 } from "@imageshow/shared/browser";
 import { apiSuccess } from "../core/http/responses.ts";
 import { requireAdminPermission } from "../users/admin-authorization.ts";
@@ -10,7 +9,6 @@ import { inspectRedisState } from "../checks/redis-inspect.ts";
 import { checkDatabase, checkTrash } from "../checks/database-check.ts";
 import { cleanupStorage } from "../checks/storage-cleanup.ts";
 import { checkStorage } from "../checks/storage-check.ts";
-import { migrateStorageLocation } from "../checks/storage-migrate.ts";
 import { checkSystemState } from "../checks/system-summary.ts";
 
 export function registerCheckRoutes(app: Hono) {
@@ -24,16 +22,4 @@ export function registerCheckRoutes(app: Hono) {
   );
   app.post(`${adminApiBasePath}/check/trash`, async (c) => c.json(apiSuccess(await checkTrash())));
   app.post(`${adminApiBasePath}/check/all`, async (c) => c.json(apiSuccess(await checkSystemState())));
-
-  app.post(
-    `${adminApiBasePath}/check/migrate-storage-location`,
-    requireAdminPermission(adminPermissions.storageMaintenanceMigrate),
-    async (c) => {
-      const body = await c.req.json().catch(() => ({}));
-      const response = (
-        apiSuccess(await migrateStorageLocation(body))
-      ) satisfies StorageLocationMigrationResponse;
-      return c.json(response);
-    }
-  );
 }

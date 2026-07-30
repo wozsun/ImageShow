@@ -28,7 +28,7 @@
 .storage-cleanup-retry:disabled { cursor: default; opacity: .7; }
 .storage-card-actions-right { display: flex; align-items: center; gap: 6px; margin-left: auto; }
 .storage-card-actions .icon.is-danger { color: #d23b3b; }
-.storage-card-actions .storage-migrate-action { color: #1f6feb; }
+.storage-card-actions .storage-backend-migrate-action { color: #1f6feb; }
 .storage-card-actions .storage-blocked-action { color: #8a5b16; }
 .storage-add-card { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 132px; border: 1px dashed #c4ccd6; border-radius: 12px; background: #fafbfc; color: #4a525d; font-size: 14px; cursor: pointer; }
 .storage-add-card:hover:not(:disabled) { border-color: #1f6feb; color: #1f6feb; }
