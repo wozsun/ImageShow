@@ -68,6 +68,10 @@
     --home-filter-bar-height: 64px;
   }
 
+  .home-random-background.is-ready .home-background-image-frame img {
+    animation-name: home-background-drift-mobile;
+  }
+
   .home-filter-bar {
     min-height: var(--home-filter-bar-height);
     padding: 7px 14px;
@@ -334,14 +338,67 @@
   }
 }
 
+@keyframes home-background-drift-mobile {
+  from { transform: scale(1.02) translate3d(0, 0, 0); }
+  to { transform: scale(1.032) translate3d(-.16%, 0, 0); }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .home-random-background img,
+  .home-background-image-frame img,
   .home-random-background.is-ready-after-foreground img,
   .home-navigation-frame,
-  .home-banner > .home-banner-copy,
+  .home-banner-label,
+  .home-banner-title,
+  .home-banner-tagline,
   .home-banner > .home-site-stats,
+  .home-site-stats li,
   .home-banner > .home-scroll-cue {
     transition: none;
+  }
+
+  .home-random-background.is-ready .home-background-image-frame img,
+  .home-background-atmosphere,
+  .home-random-background::after,
+  .home-filter-bar.is-home-secondary-navigation-entrance,
+  .home-reveal-axes.is-reveal-animation-active .home-axis-group,
+  .home-reveal-section.is-reveal-settled.is-reveal-animation-active
+    .home-section-heading::before,
+  .home-catalog.is-refreshing
+    .home-reveal-section.is-reveal-settled
+    .home-section-heading::before,
+  .home-catalog.is-refresh-complete-a
+    .home-reveal-section.is-reveal-settled
+    .home-section-heading::before,
+  .home-catalog.is-refresh-complete-b
+    .home-reveal-section.is-reveal-settled
+    .home-section-heading::before,
+  .home-reveal-theme.is-reveal-settled.is-reveal-animation-active
+    .home-theme-options > .home-selector-options > button[data-reveal-item="true"],
+  .home-reveal-tags.is-reveal-settled.is-reveal-animation-active
+    .home-tag-options > .home-selector-options > button[data-reveal-item="true"],
+  .home-reveal-authors.is-reveal-settled.is-reveal-animation-active
+    .home-author-options > .home-selector-options > button[data-reveal-item="true"] {
+    animation: none;
+  }
+
+  .home-catalog,
+  .home-reveal-section,
+  .home-section-heading::after {
+    transition: none;
+  }
+
+  .home-reveal-section,
+  .home-reveal-section.is-reveal-pending,
+  .home-reveal-axes.is-reveal-pending .home-axis-group,
+  .home-reveal-theme.is-reveal-pending
+    .home-theme-options > .home-selector-options > button[data-reveal-item="true"],
+  .home-reveal-tags.is-reveal-pending
+    .home-tag-options > .home-selector-options > button[data-reveal-item="true"],
+  .home-reveal-authors.is-reveal-pending
+    .home-author-options > .home-selector-options > button[data-reveal-item="true"] {
+    opacity: 1;
+    translate: 0 0;
+    scale: 1;
   }
 
   .home-loading-lines > span {

@@ -1,6 +1,8 @@
 import type { GalleryStatsDto } from "@imageshow/shared/browser";
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AppHeader } from "../../components/navigation/AppHeader.js";
+import { useDocumentMotionPaused } from "../../hooks/useDocumentMotionPaused.js";
+import { usePublicNavigationEntrance } from "../../hooks/usePublicNavigationEntrance.js";
 import { useGalleryStats, useSiteConfig } from "../../lib/api/site-data.js";
 import {
   emptyGalleryFilters,
@@ -15,6 +17,11 @@ import { useHomeEntrance } from "./useHomeEntrance.js";
 export function HomePage() {
   const catalogRef = useRef<HTMLElement>(null);
   const lastSuccessfulStatsRef = useRef<GalleryStatsDto | undefined>(undefined);
+  const {
+    hadAppearedBeforeMount: navigationHadAppearedBeforeMount,
+    markAppeared: markNavigationAppeared,
+    motionAllowed: navigationMotionAllowed
+  } = usePublicNavigationEntrance();
   const [filters, setFilters] = useState<GalleryFilters>({
     ...emptyGalleryFilters
   });
@@ -41,10 +48,25 @@ export function HomePage() {
     || "我们一起，\n收藏这些瞬间。";
   const tagline = siteQuery.data?.site.home.tagline
     ?? "一个由粉丝共同整理、投稿和维护的图片收藏站。";
-  const entrance = useHomeEntrance(background);
+  const entrance = useHomeEntrance(
+    background,
+    catalogRef,
+    navigationHadAppearedBeforeMount || !navigationMotionAllowed
+  );
+  const motionPaused = useDocumentMotionPaused();
+
+  useLayoutEffect(() => {
+    if (entrance.navigationRevealed) markNavigationAppeared();
+  }, [
+    entrance.navigationRevealed,
+    markNavigationAppeared
+  ]);
 
   return (
-    <main className="page home-page">
+    <main
+      className="page home-page"
+      data-motion-paused={motionPaused || undefined}
+    >
       <HomeBackground
         source={background}
         ready={entrance.backgroundReady}
@@ -67,6 +89,9 @@ export function HomePage() {
         <div className="public-navigation-stack">
           <AppHeader />
           <HomeFilterBar
+            animateEntrance={
+              navigationHadAppearedBeforeMount && navigationMotionAllowed
+            }
             filters={filters}
             stats={stats}
             isPending={statsQuery.isPending}
@@ -84,9 +109,11 @@ export function HomePage() {
         tagline={tagline}
         stats={stats}
         catalogRef={catalogRef}
+        onCatalogIntent={entrance.revealImmediately}
       />
       <HomeCatalog
         catalogRef={catalogRef}
+        armed={entrance.catalogArmed}
         filters={filters}
         stats={stats}
         isPending={statsQuery.isPending}
@@ -94,6 +121,7 @@ export function HomePage() {
         isRefreshing={statsQuery.isFetching}
         onFiltersChange={setFilters}
         onRetry={() => void statsQuery.refetch()}
+        onCatalogIntent={entrance.revealImmediately}
       />
     </main>
   );

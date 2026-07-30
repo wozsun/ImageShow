@@ -46,6 +46,8 @@
       #0e1623 46%,
       var(--gallery-sky-blue)
     );
+  transform-origin: center;
+  animation: gallery-atmosphere-breathe 26s ease-in-out infinite alternate;
 }
 
 .gallery-page::before,
@@ -153,6 +155,10 @@
   transition:
     transform var(--public-nav-motion-duration)
     var(--public-nav-motion-easing);
+}
+
+.gallery-toolbar.is-gallery-toolbar-entrance {
+  animation: gallery-toolbar-entrance 360ms ease-out 150ms backwards;
 }
 .gallery-toolbar-spacer {
   height: var(--gallery-toolbar-height);
@@ -314,6 +320,18 @@
 .gallery-virtual-tile {
   position: absolute;
 }
+
+.gallery-virtual-tile.is-gallery-card-reveal-initial {
+  animation:
+    gallery-card-reveal-initial 400ms var(--public-motion-ease-cinematic)
+    var(--gallery-card-reveal-delay, 0ms) backwards;
+}
+
+.gallery-virtual-tile.is-gallery-card-reveal-subsequent {
+  animation:
+    gallery-card-reveal-subsequent 280ms var(--public-motion-ease-soft)
+    var(--gallery-card-reveal-delay, 0ms) backwards;
+}
 .gallery-virtual-tile .tile-image-shell {
   width: 100%;
   height: 100%;
@@ -332,6 +350,16 @@
   height: 100%;
   object-fit: contain;
   background: #0d1422;
+  opacity: 0;
+  transform: scale(1.025);
+  transition:
+    opacity 320ms ease-out,
+    transform 520ms var(--public-motion-ease-cinematic);
+}
+
+.tile-image-shell.loaded img {
+  opacity: 1;
+  transform: scale(1);
 }
 .tile-info {
   position: absolute;
@@ -397,6 +425,32 @@
 .gallery-back-to-top .app-icon {
   width: 22px;
   height: 22px;
+}
+
+.gallery-page[data-motion-paused="true"] .gallery-atmosphere,
+.gallery-page[data-motion-paused="true"] .gallery-toolbar,
+.gallery-page[data-motion-paused="true"] .gallery-virtual-tile {
+  animation-play-state: paused;
+}
+
+@keyframes gallery-toolbar-entrance {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes gallery-card-reveal-initial {
+  from { opacity: 0; transform: translateY(14px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes gallery-card-reveal-subsequent {
+  from { opacity: 0; transform: translateY(7px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes gallery-atmosphere-breathe {
+  from { opacity: .84; transform: scale(1) translate3d(-.2%, 0, 0); }
+  to { opacity: 1; transform: scale(1.018) translate3d(.2%, -.16%, 0); }
 }
 
 @keyframes image-detail-backdrop-in {

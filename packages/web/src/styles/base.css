@@ -4,6 +4,9 @@
   --app-header-height: 64px;
   --public-nav-motion-duration: 300ms;
   --public-nav-motion-easing: cubic-bezier(.2, .8, .2, 1);
+  --public-motion-ease-cinematic: cubic-bezier(.22, 1, .36, 1);
+  --public-motion-ease-soft: cubic-bezier(.2, .7, .3, 1);
+  --public-motion-navigation-reveal: 380ms;
   /* 3.12 公开站点的临时星空色板；后续配置化时只需替换这一组入口。 */
   --public-space-black: #070b15;
   --public-space-deep: #0c1322;
@@ -498,6 +501,12 @@ button:not(:disabled):not(.select-trigger):not([data-availability-locked="true"]
   -webkit-backdrop-filter: blur(20px) saturate(118%);
   backdrop-filter: blur(20px) saturate(118%);
 }
+
+.topbar.is-public-navigation-entrance {
+  animation:
+    public-navigation-entrance
+    var(--public-motion-navigation-reveal) ease-out backwards;
+}
 .topbar::before {
   content: "";
   position: absolute;
@@ -555,6 +564,11 @@ button:not(:disabled):not(.select-trigger):not([data-availability-locked="true"]
 }
 .topbar.is-scroll-hidden {
   pointer-events: none;
+}
+
+@keyframes public-navigation-entrance {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 .brand { font-weight: 800; font-size: 20px; }
 .topbar .desktop-nav, .actions, .inline-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }

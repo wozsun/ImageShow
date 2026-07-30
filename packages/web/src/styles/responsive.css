@@ -45,6 +45,14 @@
   .facet-select-menu.is-closing { animation: none; }
   .public-navigation-stack,
   .gallery-toolbar { transition: none; }
+  .topbar.is-public-navigation-entrance { animation: none; }
+  .gallery-toolbar.is-gallery-toolbar-entrance,
+  .gallery-virtual-tile.is-gallery-card-reveal-initial,
+  .gallery-virtual-tile.is-gallery-card-reveal-subsequent,
+  .gallery-atmosphere {
+    animation: none;
+  }
+  .tile-image-shell img { transition: none; }
   .gallery-back-to-top { transition: none; }
 }
 

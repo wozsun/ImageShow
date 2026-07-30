@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type RefObject
+} from "react";
 import {
   useInfiniteQuery,
   useQuery,
@@ -26,6 +34,9 @@ import { useGalleryFacets, useSiteConfig } from "../../lib/api/site-data.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
 import { AnchoredMenuDismissSignalContext } from "../../hooks/useAnchoredMenu.js";
 import { pageScrollRestoredEvent } from "../../hooks/usePageScrollLock.js";
+import { useDocumentMotionPaused } from "../../hooks/useDocumentMotionPaused.js";
+import { useOneShotAnimation } from "../../hooks/useOneShotAnimation.js";
+import { usePublicNavigationEntrance } from "../../hooks/usePublicNavigationEntrance.js";
 import { LazyGalleryImage } from "./LazyGalleryImage.js";
 import {
   computeMasonryLayout,
@@ -45,6 +56,7 @@ import {
   galleryRouteSearchParams,
   type GalleryFilters
 } from "../../lib/gallery/gallery-query.js";
+import { GalleryCardRevealRegistry } from "./gallery-card-reveal.js";
 
 function GalleryTileDevelopmentStats() {
   const { debug } = useGalleryImageRuntime();
@@ -54,11 +66,15 @@ function GalleryTileDevelopmentStats() {
 
 function GalleryTile({
   position,
+  revealOrder,
+  revealRegistry,
   title,
   tags,
   onOpen
 }: {
   position: MasonryItemPosition;
+  revealOrder: number;
+  revealRegistry: GalleryCardRevealRegistry;
   title: string;
   tags: string;
   onOpen: (
@@ -67,17 +83,43 @@ function GalleryTile({
   ) => void;
 }) {
   const { item } = position;
+  const [reveal] = useState(() => revealRegistry.prepare(item.id, {
+    initialViewport: position.y < window.innerHeight,
+    order: revealOrder,
+    reduceMotion: window.matchMedia?.(
+      "(prefers-reduced-motion: reduce)"
+    ).matches === true
+  }));
+  const entrance = useOneShotAnimation(reveal.variant !== "settled");
+  useLayoutEffect(() => {
+    revealRegistry.markRevealed(item.id);
+  }, [item.id, revealRegistry]);
   return (
     <button
-      className="tile gallery-virtual-tile"
+      className={[
+        "tile",
+        "gallery-virtual-tile",
+        !entrance.active
+          ? ""
+          : `is-gallery-card-reveal-${reveal.variant}`
+      ].filter(Boolean).join(" ")}
       style={{
         left: position.x,
         top: position.y,
         width: position.width,
-        height: position.height
-      }}
+        height: position.height,
+        "--gallery-card-reveal-delay": `${reveal.delayMs}ms`
+      } as CSSProperties}
       data-image-id={item.id}
       onClick={(event) => onOpen(item, event.currentTarget)}
+      onAnimationEnd={(event) => {
+        if (
+          event.currentTarget === event.target
+          && event.animationName.startsWith("gallery-card-reveal-")
+        ) {
+          entrance.finish();
+        }
+      }}
     >
       {import.meta.env?.DEV === true && <GalleryTileDevelopmentStats />}
       <LazyGalleryImage
@@ -168,6 +210,11 @@ export function GalleryPage() {
   const galleryWindowRef = useRef<HTMLDivElement | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const previousImageQueryRef = useRef<string | null>(null);
+  const routeEntranceFinishedRef = useRef(false);
+  const {
+    markAppeared: markNavigationAppeared,
+    shouldAnimate: shouldAnimateNavigation
+  } = usePublicNavigationEntrance();
   const { data: facets } = useGalleryFacets();
   const { data: siteConfig } = useSiteConfig();
 
@@ -176,6 +223,22 @@ export function GalleryPage() {
     () => galleryApiSearchParams(filters, order).toString(),
     [filters, order]
   );
+  const revealRegistry = useMemo(
+    () => new GalleryCardRevealRegistry({
+      routeEntrance: !routeEntranceFinishedRef.current
+    }),
+    [imageQuery]
+  );
+  const toolbarEntrance = useOneShotAnimation(true);
+  const motionPaused = useDocumentMotionPaused();
+
+  useEffect(() => {
+    routeEntranceFinishedRef.current = true;
+  }, []);
+
+  useLayoutEffect(() => {
+    markNavigationAppeared();
+  }, [markNavigationAppeared]);
 
   const imagePages = useInfiniteQuery<PublicImageListResponseDto, Error, { pages: PublicImageListResponseDto[]; pageParams: string[] }, readonly unknown[], string>({
     queryKey: [...queryKeys.publicImages, imageQuery],
@@ -325,6 +388,7 @@ export function GalleryPage() {
     >
     <main
       className="page gallery-page"
+      data-motion-paused={motionPaused || undefined}
       style={{
         "--gallery-toolbar-height": toolbarHeight
           ? `${toolbarHeight}px`
@@ -335,13 +399,22 @@ export function GalleryPage() {
       <div className="public-navigation-frame">
         <div className="public-navigation-stack">
           <AppHeader
+            animateEntrance={shouldAnimateNavigation}
             onMenuExpandedChange={onHeaderMenuExpandedChange}
             visible={headerVisible}
           />
           <section
             ref={toolbarRef}
-            className={`gallery-toolbar public-navigation-secondary${filtersOpen ? " filters-open" : ""}${toolbarVisible ? "" : " is-scroll-hidden"}`}
+            className={`gallery-toolbar public-navigation-secondary${toolbarEntrance.active ? " is-gallery-toolbar-entrance" : ""}${filtersOpen ? " filters-open" : ""}${toolbarVisible ? "" : " is-scroll-hidden"}`}
             inert={!toolbarVisible}
+            onAnimationEnd={(event) => {
+              if (
+                event.currentTarget === event.target
+                && event.animationName === "gallery-toolbar-entrance"
+              ) {
+                toolbarEntrance.finish();
+              }
+            }}
           >
             <button
               ref={filterToggleRef}
@@ -444,10 +517,12 @@ export function GalleryPage() {
           className="gallery-window"
           style={{ height: layout.totalHeight }}
         >
-          {mountedPositions.map((position) => (
+          {mountedPositions.map((position, index) => (
             <GalleryTile
-              key={position.item.id}
+              key={`${imageQuery}:${position.item.id}`}
               position={position}
+              revealOrder={index}
+              revealRegistry={revealRegistry}
               title={galleryHoverTitle(position.item)}
               tags={galleryHoverTags(position.item)}
               onOpen={openDetail}

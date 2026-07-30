@@ -1,17 +1,88 @@
 import type { GalleryStatsDto } from "@imageshow/shared/browser";
-import { useRef, type ReactNode, type RefObject } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ComponentPropsWithoutRef,
+  type CSSProperties,
+  type ReactNode,
+  type RefObject
+} from "react";
 import { OverflowMarqueeText } from "../../components/data-display/OverflowMarqueeText.js";
 import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
+import { useMediaQuery } from "../../hooks/useMediaQuery.js";
+import { useOneShotAnimation } from "../../hooks/useOneShotAnimation.js";
 import type { GalleryFilters } from "../../lib/gallery/gallery-query.js";
 import {
+  boundedHomeRevealIndexes,
   brightnessLabels,
   brightnessOptions,
   countLabel,
   deviceLabels,
   deviceOptions,
   facetLabel,
+  homeRevealItemLimits,
   selectedSlugs
 } from "./home-ui.js";
+import { useOneShotSectionReveal } from "./useOneShotSectionReveal.js";
+
+function HomeRevealSection({
+  armed,
+  children,
+  className = "",
+  onAnimationEndCapture,
+  onFocusCapture,
+  revealVariant,
+  ...props
+}: ComponentPropsWithoutRef<"section"> & {
+  armed: boolean;
+  revealVariant: "state" | "axes" | "theme" | "tags" | "authors";
+}) {
+  const {
+    revealImmediately,
+    revealed,
+    revealedImmediately,
+    sectionRef
+  } = useOneShotSectionReveal(armed);
+  const entrance = useOneShotAnimation(
+    revealed
+    && !revealedImmediately
+    && revealVariant !== "state"
+  );
+  return (
+    <section
+      {...props}
+      ref={sectionRef}
+      className={[
+        className,
+        "home-reveal-section",
+        `home-reveal-${revealVariant}`,
+        revealedImmediately ? "is-reveal-immediate" : "",
+        entrance.active ? "is-reveal-animation-active" : "",
+        `is-reveal-${revealed ? "settled" : "pending"}`
+      ].filter(Boolean).join(" ")}
+      onAnimationEndCapture={(event) => {
+        const finalAxesAnimation = revealVariant === "axes"
+          && event.animationName === "home-axis-group-reveal"
+          && event.target instanceof Element
+          && event.target.matches(".home-axis-group:last-child");
+        if (
+          event.animationName.startsWith("home-section-track-glint")
+          || finalAxesAnimation
+        ) {
+          entrance.finish();
+        }
+        onAnimationEndCapture?.(event);
+      }}
+      onFocusCapture={(event) => {
+        revealImmediately();
+        onFocusCapture?.(event);
+      }}
+    >
+      {children}
+    </section>
+  );
+}
 
 function SelectorOptions({
   className,
@@ -97,15 +168,18 @@ function SectionHeading({
 
 export function HomeCatalog({
   catalogRef,
+  armed,
   filters,
   stats,
   isPending,
   isError,
   isRefreshing,
   onFiltersChange,
-  onRetry
+  onRetry,
+  onCatalogIntent
 }: {
   catalogRef: RefObject<HTMLElement | null>;
+  armed: boolean;
   filters: GalleryFilters;
   stats: GalleryStatsDto | undefined;
   isPending: boolean;
@@ -113,8 +187,14 @@ export function HomeCatalog({
   isRefreshing: boolean;
   onFiltersChange: (filters: GalleryFilters) => void;
   onRetry: () => void;
+  onCatalogIntent: () => void;
 }) {
   const availabilityUnverified = isRefreshing || isError;
+  const wasRefreshingRef = useRef(isRefreshing);
+  const [refreshGlintCompletion, setRefreshGlintCompletion] = useState<
+    "a" | "b" | null
+  >(null);
+  const reduceMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
   const themeSet = new Set(selectedSlugs(filters.theme));
   const tagSet = new Set(selectedSlugs(filters.tag));
   const authorSet = new Set(selectedSlugs(filters.author));
@@ -126,6 +206,38 @@ export function HomeCatalog({
   );
   const isUnavailable = (selected: boolean, count: number) =>
     !selected && count === 0;
+  const themeRevealIndexes = boundedHomeRevealIndexes(
+    stats?.themes ?? [],
+    themeSet,
+    availabilityUnverified,
+    homeRevealItemLimits.themes
+  );
+  const tagRevealIndexes = boundedHomeRevealIndexes(
+    stats?.tags ?? [],
+    tagSet,
+    availabilityUnverified,
+    homeRevealItemLimits.tags
+  );
+  const authorRevealIndexes = boundedHomeRevealIndexes(
+    stats?.authors ?? [],
+    authorSet,
+    availabilityUnverified,
+    homeRevealItemLimits.authors
+  );
+
+  useEffect(() => {
+    const wasRefreshing = wasRefreshingRef.current;
+    wasRefreshingRef.current = isRefreshing;
+    if (wasRefreshing && !isRefreshing) {
+      setRefreshGlintCompletion((current) => current === "a" ? "b" : "a");
+    }
+  }, [isRefreshing]);
+
+  useEffect(() => {
+    if (reduceMotion && refreshGlintCompletion) {
+      setRefreshGlintCompletion(null);
+    }
+  }, [reduceMotion, refreshGlintCompletion]);
 
   const updateFilter = (key: keyof GalleryFilters, value: string) => {
     onFiltersChange({ ...filters, [key]: value });
@@ -146,22 +258,50 @@ export function HomeCatalog({
   return (
     <section
       ref={catalogRef}
-      className={`home-catalog${isRefreshing ? " is-refreshing" : ""}`}
+      className={[
+        "home-catalog",
+        isRefreshing ? "is-refreshing" : "",
+        !isRefreshing && refreshGlintCompletion
+          ? `is-refresh-complete-${refreshGlintCompletion}`
+          : "",
+        `is-entrance-${armed ? "armed" : "pending"}`
+      ].filter(Boolean).join(" ")}
       aria-label="图库分类目录"
       aria-busy={isRefreshing}
+      aria-hidden={armed ? undefined : true}
+      inert={armed ? undefined : true}
+      onAnimationEndCapture={(event) => {
+        if (
+          event.animationName === "home-section-track-glint-complete-a"
+          || event.animationName === "home-section-track-glint-complete-b"
+        ) {
+          setRefreshGlintCompletion(null);
+        }
+      }}
+      onFocusCapture={onCatalogIntent}
     >
       {isError && (
-        <section className="home-glass-card home-stats-state" role="alert">
+        <HomeRevealSection
+          armed={armed}
+          className="home-glass-card home-stats-state"
+          revealVariant="state"
+          role="alert"
+        >
           <strong>图库目录暂时无法读取</strong>
           <p>仍可直接进入完整画廊，或重新尝试加载分类数量。</p>
           <button type="button" onClick={onRetry}>
             重新加载
           </button>
-        </section>
+        </HomeRevealSection>
       )}
 
-      {isPending && (
-        <section className="home-glass-card home-stats-state" aria-live="polite">
+      {isPending && !isError && (
+        <HomeRevealSection
+          armed={armed}
+          className="home-glass-card home-stats-state"
+          revealVariant="state"
+          aria-live="polite"
+        >
           <strong>正在整理图库目录</strong>
           <p>主题、标签和作者会在读取完成后全部显示。</p>
           <div className="home-loading-lines" aria-hidden="true">
@@ -169,13 +309,15 @@ export function HomeCatalog({
             <span />
             <span />
           </div>
-        </section>
+        </HomeRevealSection>
       )}
 
       {stats && (
         <>
-          <section
+          <HomeRevealSection
+            armed={armed}
             className="home-glass-card home-axes-card"
+            revealVariant="axes"
             aria-labelledby="home-axes-title"
           >
             <div className="home-axes-intro">
@@ -228,10 +370,14 @@ export function HomeCatalog({
                 </div>
               </div>
             </div>
-          </section>
+          </HomeRevealSection>
 
           <div className="home-selector-layout">
-            <section className="home-glass-card home-theme-selector">
+            <HomeRevealSection
+              armed={armed}
+              className="home-glass-card home-theme-selector"
+              revealVariant="theme"
+            >
               <SectionHeading
                 index="01"
                 eyebrow="THEMES"
@@ -244,11 +390,20 @@ export function HomeCatalog({
                   const disabled = isUnavailable(selected, item.image_count);
                   const locked = availabilityUnverified && !selected;
                   const label = facetLabel(item);
+                  const revealIndex = themeRevealIndexes.get(item.slug);
                   return (
                     <button
                       type="button"
                       className={selected ? "is-selected" : undefined}
                       key={item.slug}
+                      data-reveal-item={revealIndex === undefined
+                        ? undefined
+                        : true}
+                      style={revealIndex === undefined
+                        ? undefined
+                        : {
+                            "--home-reveal-index": revealIndex
+                          } as CSSProperties}
                       aria-pressed={selected}
                       aria-disabled={locked || undefined}
                       data-availability-locked={locked || undefined}
@@ -278,10 +433,14 @@ export function HomeCatalog({
                   );
                 })}
               </SelectorOptions>
-            </section>
+            </HomeRevealSection>
 
             <div className="home-selector-side">
-              <section className="home-glass-card home-tag-selector">
+              <HomeRevealSection
+                armed={armed}
+                className="home-glass-card home-tag-selector"
+                revealVariant="tags"
+              >
                 <SectionHeading
                   index="02"
                   eyebrow="TAGS"
@@ -294,11 +453,20 @@ export function HomeCatalog({
                     const disabled = isUnavailable(selected, item.image_count);
                     const locked = availabilityUnverified && !selected;
                     const label = facetLabel(item);
+                    const revealIndex = tagRevealIndexes.get(item.slug);
                     return (
                       <button
                         type="button"
                         className={`${selected ? "is-selected" : ""}${item.image_count === 0 ? " is-empty" : ""}`.trim()}
                         key={item.slug}
+                        data-reveal-item={revealIndex === undefined
+                          ? undefined
+                          : true}
+                        style={revealIndex === undefined
+                          ? undefined
+                          : {
+                              "--home-reveal-index": revealIndex
+                            } as CSSProperties}
                         aria-pressed={selected}
                         aria-disabled={locked || undefined}
                         data-availability-locked={locked || undefined}
@@ -323,9 +491,13 @@ export function HomeCatalog({
                     );
                   })}
                 </SelectorOptions>
-              </section>
+              </HomeRevealSection>
 
-              <section className="home-glass-card home-author-selector">
+              <HomeRevealSection
+                armed={armed}
+                className="home-glass-card home-author-selector"
+                revealVariant="authors"
+              >
                 <SectionHeading
                   index="03"
                   eyebrow="CONTRIBUTORS"
@@ -338,11 +510,20 @@ export function HomeCatalog({
                     const disabled = isUnavailable(selected, item.image_count);
                     const locked = availabilityUnverified && !selected;
                     const label = facetLabel(item);
+                    const revealIndex = authorRevealIndexes.get(item.slug);
                     return (
                       <button
                         type="button"
                         className={selected ? "is-selected" : undefined}
                         key={item.slug}
+                        data-reveal-item={revealIndex === undefined
+                          ? undefined
+                          : true}
+                        style={revealIndex === undefined
+                          ? undefined
+                          : {
+                              "--home-reveal-index": revealIndex
+                            } as CSSProperties}
                         aria-pressed={selected}
                         aria-disabled={locked || undefined}
                         data-availability-locked={locked || undefined}
@@ -367,7 +548,7 @@ export function HomeCatalog({
                     );
                   })}
                 </SelectorOptions>
-              </section>
+              </HomeRevealSection>
             </div>
           </div>
         </>

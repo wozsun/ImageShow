@@ -1,6 +1,7 @@
 import type { GalleryStatsDto } from "@imageshow/shared/browser";
 import { Link } from "react-router";
 import { Icon } from "../../components/icon/Icon.js";
+import { useOneShotAnimation } from "../../hooks/useOneShotAnimation.js";
 import {
   emptyGalleryFilters,
   galleryHref,
@@ -14,6 +15,7 @@ import {
 } from "./home-ui.js";
 
 export function HomeFilterBar({
+  animateEntrance,
   filters,
   stats,
   isPending,
@@ -21,6 +23,7 @@ export function HomeFilterBar({
   isPlaceholderData,
   onFiltersChange
 }: {
+  animateEntrance: boolean;
   filters: GalleryFilters;
   stats: GalleryStatsDto | undefined;
   isPending: boolean;
@@ -28,6 +31,7 @@ export function HomeFilterBar({
   isPlaceholderData: boolean;
   onFiltersChange: (filters: GalleryFilters) => void;
 }) {
+  const entrance = useOneShotAnimation(animateEntrance);
   const selectedLabels = stats
     ? [
         filters.device ? deviceLabels[filters.device] : "",
@@ -44,9 +48,21 @@ export function HomeFilterBar({
 
   return (
     <section
-      className="home-filter-bar public-navigation-secondary"
+      className={[
+        "home-filter-bar",
+        "public-navigation-secondary",
+        entrance.active ? "is-home-secondary-navigation-entrance" : ""
+      ].filter(Boolean).join(" ")}
       aria-label="当前画廊筛选"
       aria-busy={isPending || isPlaceholderData}
+      onAnimationEnd={(event) => {
+        if (
+          event.currentTarget === event.target
+          && event.animationName === "home-secondary-navigation-entrance"
+        ) {
+          entrance.finish();
+        }
+      }}
     >
       <div>
         <span>GALLERY FILTER</span>

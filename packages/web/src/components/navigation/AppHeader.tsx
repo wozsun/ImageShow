@@ -7,14 +7,17 @@ import {
   publicNavigationHeaderRevealThreshold,
   publicNavigationTopRevealThreshold
 } from "../../lib/ui/public-navigation.js";
+import { useOneShotAnimation } from "../../hooks/useOneShotAnimation.js";
 import { usePageScrollMovement } from "../../hooks/usePageScrollMovement.js";
 import { Icon } from "../icon/Icon.js";
 import { MobileNavigation } from "./MobileNavigation.js";
 
 export function AppHeader({
+  animateEntrance,
   onMenuExpandedChange,
   visible
 }: {
+  animateEntrance?: boolean;
   onMenuExpandedChange?: (expanded: boolean) => void;
   visible?: boolean;
 } = {}) {
@@ -28,6 +31,7 @@ export function AppHeader({
   const downwardDistanceRef = useRef(0);
   const [standaloneVisible, setStandaloneVisible] = useState(true);
   const headerVisible = visible ?? standaloneVisible;
+  const entrance = useOneShotAnimation(Boolean(animateEntrance));
 
   useLayoutEffect(() => {
     const header = headerRef.current;
@@ -90,8 +94,20 @@ export function AppHeader({
   return (
     <header
       ref={headerRef}
-      className={`topbar${headerVisible ? "" : " is-scroll-hidden"}`}
+      className={[
+        "topbar",
+        entrance.active ? "is-public-navigation-entrance" : "",
+        headerVisible ? "" : "is-scroll-hidden"
+      ].filter(Boolean).join(" ")}
       inert={!headerVisible}
+      onAnimationEnd={(event) => {
+        if (
+          event.currentTarget === event.target
+          && event.animationName === "public-navigation-entrance"
+        ) {
+          entrance.finish();
+        }
+      }}
     >
       <Link className="brand" to="/">{siteName}</Link>
       <nav className="desktop-nav">

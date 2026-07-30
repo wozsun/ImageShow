@@ -1,5 +1,6 @@
 import type { GalleryStatsDto } from "@imageshow/shared/browser";
 import type {
+  CSSProperties,
   RefObject,
   SyntheticEvent
 } from "react";
@@ -29,15 +30,18 @@ export function HomeBackground({
       ].filter(Boolean).join(" ")}
       aria-hidden="true"
     >
-      <img
-        key={source}
-        ref={imageRef}
-        alt=""
-        decoding="async"
-        fetchPriority="high"
-        onLoad={onLoad}
-        onError={onError}
-      />
+      <div className="home-background-image-frame">
+        <img
+          key={source}
+          ref={imageRef}
+          alt=""
+          decoding="async"
+          fetchPriority="high"
+          onLoad={onLoad}
+          onError={onError}
+        />
+      </div>
+      <span className="home-background-atmosphere" aria-hidden="true" />
     </div>
   );
 }
@@ -48,7 +52,8 @@ export function HomeHero({
   bannerTitle,
   tagline,
   stats,
-  catalogRef
+  catalogRef,
+  onCatalogIntent
 }: {
   revealed: boolean;
   bannerLabel: string;
@@ -56,6 +61,7 @@ export function HomeHero({
   tagline: string;
   stats: GalleryStatsDto | undefined;
   catalogRef: RefObject<HTMLElement | null>;
+  onCatalogIntent: () => void;
 }) {
   const totalImages = stats?.total_images ?? 0;
   const themeCount = stats?.themes.filter(
@@ -69,6 +75,7 @@ export function HomeHero({
   ];
 
   const scrollToCatalog = () => {
+    onCatalogIntent();
     const reduceMotion = window.matchMedia(
       "(prefers-reduced-motion: reduce)"
     ).matches;
@@ -86,9 +93,9 @@ export function HomeHero({
       inert={revealed ? undefined : true}
     >
       <div className="home-banner-copy">
-        <span>{bannerLabel}</span>
-        <h1 id="home-title">{bannerTitle}</h1>
-        {tagline && <p>{tagline}</p>}
+        <span className="home-banner-label">{bannerLabel}</span>
+        <h1 id="home-title" className="home-banner-title">{bannerTitle}</h1>
+        {tagline && <p className="home-banner-tagline">{tagline}</p>}
       </div>
       <aside
         className="home-site-stats"
@@ -97,7 +104,7 @@ export function HomeHero({
       >
         <span>LIBRARY STATS</span>
         <ul>
-          {siteStats.map((item) => {
+          {siteStats.map((item, index) => {
             const value = stats
               ? homeNumberFormatter.format(item.value)
               : "—";
@@ -113,6 +120,9 @@ export function HomeHero({
                 key={item.label}
                 className={item.primary ? "is-primary" : undefined}
                 data-value-width={valueWidth}
+                style={{
+                  "--home-stat-index": index
+                } as CSSProperties}
               >
                 <div className="home-stat-value">
                   <strong>{value}</strong>

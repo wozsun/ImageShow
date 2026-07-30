@@ -1,8 +1,10 @@
 import {
   useCallback,
+  useEffect,
   useLayoutEffect,
   useRef,
   useState,
+  type RefObject,
   type SyntheticEvent
 } from "react";
 import {
@@ -26,12 +28,19 @@ function reducedMotionPreferred() {
     && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
 }
 
-export function useHomeEntrance(source: string) {
+export function useHomeEntrance(
+  source: string,
+  catalogRef: RefObject<HTMLElement | null>,
+  navigationInitiallyRevealed: boolean
+) {
   const [snapshot, setSnapshot] = useState<HomeEntranceSnapshot>(() => {
     const revealImmediately = reducedMotionPreferred();
     return {
-      navigationRevealed: revealImmediately,
+      navigationRevealed:
+        revealImmediately
+        || navigationInitiallyRevealed,
       heroRevealed: revealImmediately,
+      catalogArmed: revealImmediately,
       backgroundReady: false,
       backgroundReadyAfterForeground: false
     };
@@ -89,10 +98,14 @@ export function useHomeEntrance(source: string) {
     generationRef.current = generation;
     const reduceMotion = reducedMotionPreferred();
     const foregroundAlreadyVisible = reduceMotion
-      || snapshotRef.current.navigationRevealed
-      || snapshotRef.current.heroRevealed;
+      || snapshotRef.current.heroRevealed
+      || snapshotRef.current.catalogArmed;
+    const navigationAlreadyVisible = foregroundAlreadyVisible
+      || navigationInitiallyRevealed
+      || snapshotRef.current.navigationRevealed;
     const controller = new HomeEntranceController({
       initiallyRevealed: foregroundAlreadyVisible,
+      navigationInitiallyRevealed: navigationAlreadyVisible,
       onChange: (nextSnapshot) => {
         if (activeRef.current?.generation === generation) {
           snapshotRef.current = nextSnapshot;
@@ -109,11 +122,15 @@ export function useHomeEntrance(source: string) {
 
     setSnapshot((current) => {
       const preserveForeground = reduceMotion
-        || current.navigationRevealed
-        || current.heroRevealed;
+        || current.heroRevealed
+        || current.catalogArmed;
+      const preserveNavigation = preserveForeground
+        || navigationInitiallyRevealed
+        || current.navigationRevealed;
       const nextSnapshot = {
-        navigationRevealed: preserveForeground,
+        navigationRevealed: preserveNavigation,
         heroRevealed: preserveForeground,
+        catalogArmed: preserveForeground,
         backgroundReady: false,
         backgroundReadyAfterForeground: false
       };
@@ -155,15 +172,68 @@ export function useHomeEntrance(source: string) {
       controller.dispose();
       if (activeRef.current === active) activeRef.current = null;
     };
-  }, [settleLoadedImage, source]);
+  }, [
+    navigationInitiallyRevealed,
+    settleLoadedImage,
+    source
+  ]);
+
+  const revealImmediately = useCallback(() => {
+    activeRef.current?.controller.revealImmediately();
+  }, []);
+
+  useEffect(() => {
+    if (snapshot.catalogArmed) return;
+    let frame: number | undefined;
+    const revealForCatalogApproach = () => {
+      frame = undefined;
+      const catalog = catalogRef.current;
+      if (
+        catalog
+        && (
+          window.scrollY > 0
+          || catalog.getBoundingClientRect().top < window.innerHeight - 1
+        )
+      ) {
+        revealImmediately();
+      }
+    };
+    const scheduleCatalogCheck = () => {
+      if (frame !== undefined) return;
+      frame = window.requestAnimationFrame(revealForCatalogApproach);
+    };
+    const revealForKeyboardNavigation = (event: KeyboardEvent) => {
+      if (event.key === "Tab") revealImmediately();
+    };
+    window.addEventListener("scroll", scheduleCatalogCheck, { passive: true });
+    window.addEventListener("resize", scheduleCatalogCheck);
+    document.addEventListener("keydown", revealForKeyboardNavigation, true);
+    scheduleCatalogCheck();
+    return () => {
+      window.removeEventListener("scroll", scheduleCatalogCheck);
+      window.removeEventListener("resize", scheduleCatalogCheck);
+      document.removeEventListener(
+        "keydown",
+        revealForKeyboardNavigation,
+        true
+      );
+      if (frame !== undefined) window.cancelAnimationFrame(frame);
+    };
+  }, [
+    catalogRef,
+    revealImmediately,
+    snapshot.catalogArmed
+  ]);
 
   return {
     backgroundReady: snapshot.backgroundReady,
     backgroundReadyAfterForeground: snapshot.backgroundReadyAfterForeground,
+    catalogArmed: snapshot.catalogArmed,
     heroRevealed: snapshot.heroRevealed,
     navigationRevealed: snapshot.navigationRevealed,
     imageRef,
     onBackgroundError,
-    onBackgroundLoad
+    onBackgroundLoad,
+    revealImmediately
   };
 }

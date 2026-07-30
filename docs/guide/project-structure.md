@@ -118,14 +118,21 @@ hooks ──► lib
 
 - `components/` 按稳定 UI 职责保存跨页面组件。
 - `hooks/` 保存跨页面且主要管理 React 生命周期或交互行为的 Hook；首页与画廊的导航
-  共用 `usePageScrollMovement.ts` 管理 RAF 合并、页面锁定和有界滚动位移采样。
+  共用 `usePageScrollMovement.ts` 管理 RAF 合并、页面锁定和有界滚动位移采样，
+  `usePublicNavigationEntrance.ts` 保证公开主导航在 SPA 会话内只入场一次，
+  `useOneShotAnimation.ts` 在动画结束或减少动态效果中断后永久移除本次入口状态，
+  `useDocumentMotionPaused.ts` 统一把文档隐藏状态交给持续环境动效。
 - `lib/` 保存无界面代码；HTTP 客户端、query key 和共享查询 Hook 集中在 `lib/api/`。
-  首页与画廊的主导航滚动阈值由 `lib/ui/public-navigation.ts` 统一定义。
+  首页与画廊的主导航滚动阈值由 `lib/ui/public-navigation.ts` 统一定义；共享公开端
+  入场缓动与首页导航淡入时长由 `styles/base.css` 的 motion token 提供，页面样式
+  只保留自身阶段和区块时长。
 - `pages/` 保存路由页面与页面级编排，页面专属组件、状态机和 Hook 就近维护。
 - `pages/home/HomePage.tsx` 只编排查询、筛选状态和页面生命周期；首屏、筛选摘要栏
-  与候选目录由同目录组件分别维护，避免路由组件同时掌握全部首页交互。
+  与候选目录由同目录组件分别维护，首屏控制器只拥有背景与顶层阶段，目录区块单次
+  揭示 Hook 就近维护，避免路由组件同时掌握全部首页交互。
 - `pages/gallery/` 就近拥有瀑布流位置模型、虚拟窗口、共享可见性观察器、三级导航
-  状态机与开发统计；跨页面可复用的 DOM 图片加载、解码和并发调度留在
+  状态机、查询级卡片揭示注册表与开发统计；跨页面可复用的 DOM 图片加载、解码和
+  并发调度留在
   `components/image/`，页面层只设置画廊任务的优先级、暂停和驻留边界。无界面的
   页面滚动边界归一化放在 `lib/ui/`，由共享采样 Hook 提供给各页面交互状态机。
 - `pages/admin/uploader/` 管理统一 prepared import 队列；其中 `link-import/` 负责 URL、

@@ -16,6 +16,33 @@ export const brightnessLabels: Record<string, string> = {
 export const deviceOptions = ["", "pc", "mb"] as const;
 export const brightnessOptions = ["", "dark", "light"] as const;
 export const homeNumberFormatter = new Intl.NumberFormat("zh-CN");
+export const homeRevealItemLimits = {
+  authors: 10,
+  tags: 18,
+  themes: 9
+} as const;
+
+type HomeFacetCount = {
+  image_count: number;
+  slug: string;
+};
+
+export function boundedHomeRevealIndexes(
+  items: readonly HomeFacetCount[],
+  selected: ReadonlySet<string>,
+  availabilityUnverified: boolean,
+  limit: number
+) {
+  const indexes = new Map<string, number>();
+  for (const item of items) {
+    const isSelected = selected.has(item.slug);
+    const disabled = !isSelected && item.image_count === 0;
+    const locked = availabilityUnverified && !isSelected;
+    if (disabled || locked || indexes.size >= limit) continue;
+    indexes.set(item.slug, indexes.size);
+  }
+  return indexes;
+}
 
 export function selectedSlugs(value: string) {
   return value.split(",").filter(Boolean);
