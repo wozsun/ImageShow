@@ -2,6 +2,7 @@ export type ImageElementSource = {
   src: string;
   srcSet?: string;
   sizes?: string;
+  loading?: "eager" | "lazy";
 };
 
 export type ImageElementLoadResult = {
@@ -96,7 +97,7 @@ export function loadImageElement(
       finish("reject", signal.reason ?? imageAbortError());
       return;
     }
-    element.loading = "eager";
+    element.loading = source.loading ?? "eager";
     element.decoding = "async";
     element.referrerPolicy = "no-referrer";
     element.addEventListener("load", onLoad);
