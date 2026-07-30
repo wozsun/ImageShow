@@ -1,6 +1,6 @@
 {
   "name": "@imageshow/web",
-  "version": "3.12.18",
+  "version": "3.12.19",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",

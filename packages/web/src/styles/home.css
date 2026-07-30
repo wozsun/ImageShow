@@ -7,6 +7,9 @@
   --home-primary-soft: var(--public-blue-soft);
   --home-accent: var(--public-pink);
   --home-card: rgba(15, 24, 40, .18);
+  --home-background-reveal-duration: 160ms;
+  --home-background-late-reveal-duration: 360ms;
+  --home-hero-item-duration: 120ms;
   --home-filter-bar-height: 72px;
   position: relative;
   isolation: isolate;
@@ -37,6 +40,31 @@
   display: block;
   object-fit: cover;
   object-position: center;
+  opacity: 0;
+  transition:
+    opacity var(--home-background-reveal-duration) ease-out;
+}
+
+.home-random-background.is-ready img {
+  opacity: 1;
+}
+
+.home-random-background.is-ready-after-foreground img {
+  transition-duration: var(--home-background-late-reveal-duration);
+  transition-timing-function: cubic-bezier(.2, .65, .3, 1);
+}
+
+.home-navigation-frame {
+  opacity: 1;
+  visibility: visible;
+  transition:
+    opacity var(--home-hero-item-duration) ease-out,
+    visibility 0s linear;
+}
+
+.home-navigation-frame.is-entrance-pending {
+  opacity: 0;
+  visibility: hidden;
 }
 
 .home-random-background::before,
@@ -180,6 +208,7 @@
 .home-banner-copy {
   width: min(760px, 100%);
   text-shadow: 0 2px 28px rgba(24, 10, 18, .36);
+  --home-entrance-delay: 0ms;
 }
 
 .home-banner-copy > span {
@@ -218,6 +247,7 @@
   box-shadow: 0 20px 50px rgba(24, 10, 18, .22);
   -webkit-backdrop-filter: blur(18px) saturate(115%);
   backdrop-filter: blur(18px) saturate(115%);
+  --home-entrance-delay: 30ms;
 }
 
 .home-site-stats > span {
@@ -318,10 +348,48 @@
   border-radius: 0;
   font-size: 12px;
   letter-spacing: .08em;
+  --home-entrance-delay: 60ms;
   transition:
-    color 140ms ease,
-    border-color 140ms ease,
-    transform 140ms ease;
+    color var(--home-hero-item-duration) ease,
+    border-color var(--home-hero-item-duration) ease,
+    transform var(--home-hero-item-duration) ease,
+    opacity var(--home-hero-item-duration) ease-out
+      var(--home-entrance-delay),
+    visibility 0s linear;
+}
+
+.home-banner > .home-banner-copy,
+.home-banner > .home-site-stats {
+  transition:
+    opacity var(--home-hero-item-duration) ease-out
+      var(--home-entrance-delay),
+    transform var(--home-hero-item-duration)
+      cubic-bezier(.2, .7, .3, 1) var(--home-entrance-delay),
+    visibility 0s linear;
+}
+
+.home-banner.is-entrance-pending > .home-banner-copy,
+.home-banner.is-entrance-pending > .home-site-stats {
+  visibility: hidden;
+  opacity: 0;
+  transform: translateY(4px);
+}
+
+.home-banner.is-entrance-visible > .home-banner-copy,
+.home-banner.is-entrance-visible > .home-site-stats {
+  visibility: visible;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.home-banner.is-entrance-pending > .home-scroll-cue {
+  visibility: hidden;
+  opacity: 0;
+}
+
+.home-banner.is-entrance-visible > .home-scroll-cue {
+  visibility: visible;
+  opacity: 1;
 }
 
 .home-scroll-cue:hover {

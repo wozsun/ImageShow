@@ -335,6 +335,15 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .home-random-background img,
+  .home-random-background.is-ready-after-foreground img,
+  .home-navigation-frame,
+  .home-banner > .home-banner-copy,
+  .home-banner > .home-site-stats,
+  .home-banner > .home-scroll-cue {
+    transition: none;
+  }
+
   .home-loading-lines > span {
     animation: none;
   }

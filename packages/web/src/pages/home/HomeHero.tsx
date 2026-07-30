@@ -1,22 +1,56 @@
 import type { GalleryStatsDto } from "@imageshow/shared/browser";
-import type { RefObject } from "react";
+import type {
+  RefObject,
+  SyntheticEvent
+} from "react";
 import { homeNumberFormatter } from "./home-ui.js";
 
-export function HomeBackground({ source }: { source: string }) {
+export function HomeBackground({
+  source,
+  ready,
+  readyAfterForeground,
+  imageRef,
+  onLoad,
+  onError
+}: {
+  source: string;
+  ready: boolean;
+  readyAfterForeground: boolean;
+  imageRef: RefObject<HTMLImageElement | null>;
+  onLoad: (event: SyntheticEvent<HTMLImageElement>) => void;
+  onError: (event: SyntheticEvent<HTMLImageElement>) => void;
+}) {
   return (
-    <div className="home-random-background" aria-hidden="true">
-      <img src={source} alt="" fetchPriority="high" />
+    <div
+      className={[
+        "home-random-background",
+        ready ? "is-ready" : "",
+        readyAfterForeground ? "is-ready-after-foreground" : ""
+      ].filter(Boolean).join(" ")}
+      aria-hidden="true"
+    >
+      <img
+        key={source}
+        ref={imageRef}
+        alt=""
+        decoding="async"
+        fetchPriority="high"
+        onLoad={onLoad}
+        onError={onError}
+      />
     </div>
   );
 }
 
 export function HomeHero({
+  revealed,
   bannerLabel,
   bannerTitle,
   tagline,
   stats,
   catalogRef
 }: {
+  revealed: boolean;
   bannerLabel: string;
   bannerTitle: string;
   tagline: string;
@@ -45,7 +79,12 @@ export function HomeHero({
   };
 
   return (
-    <section className="home-banner" aria-labelledby="home-title">
+    <section
+      className={`home-banner is-entrance-${revealed ? "visible" : "pending"}`}
+      aria-labelledby="home-title"
+      aria-hidden={revealed ? undefined : true}
+      inert={revealed ? undefined : true}
+    >
       <div className="home-banner-copy">
         <span>{bannerLabel}</span>
         <h1 id="home-title">{bannerTitle}</h1>

@@ -10,6 +10,7 @@ import {
 import { HomeCatalog } from "./HomeCatalog.js";
 import { HomeFilterBar } from "./HomeFilterBar.js";
 import { HomeBackground, HomeHero } from "./HomeHero.js";
+import { useHomeEntrance } from "./useHomeEntrance.js";
 
 export function HomePage() {
   const catalogRef = useRef<HTMLElement>(null);
@@ -40,11 +41,29 @@ export function HomePage() {
     || "我们一起，\n收藏这些瞬间。";
   const tagline = siteQuery.data?.site.home.tagline
     ?? "一个由粉丝共同整理、投稿和维护的图片收藏站。";
+  const entrance = useHomeEntrance(background);
 
   return (
     <main className="page home-page">
-      <HomeBackground source={background} />
-      <div className="public-navigation-frame">
+      <HomeBackground
+        source={background}
+        ready={entrance.backgroundReady}
+        readyAfterForeground={entrance.backgroundReadyAfterForeground}
+        imageRef={entrance.imageRef}
+        onLoad={entrance.onBackgroundLoad}
+        onError={entrance.onBackgroundError}
+      />
+      <div
+        className={[
+          "public-navigation-frame",
+          "home-navigation-frame",
+          `is-entrance-${entrance.navigationRevealed
+            ? "visible"
+            : "pending"}`
+        ].join(" ")}
+        aria-hidden={entrance.navigationRevealed ? undefined : true}
+        inert={entrance.navigationRevealed ? undefined : true}
+      >
         <div className="public-navigation-stack">
           <AppHeader />
           <HomeFilterBar
@@ -59,6 +78,7 @@ export function HomePage() {
       </div>
       <div className="home-filter-bar-spacer" aria-hidden="true" />
       <HomeHero
+        revealed={entrance.heroRevealed}
         bannerLabel={bannerLabel}
         bannerTitle={bannerTitle}
         tagline={tagline}
