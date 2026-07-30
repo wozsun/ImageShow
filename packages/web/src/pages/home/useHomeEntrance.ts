@@ -42,7 +42,8 @@ export function useHomeEntrance(
       heroRevealed: revealImmediately,
       catalogArmed: revealImmediately,
       backgroundReady: false,
-      backgroundReadyAfterForeground: false
+      backgroundReadyAfterForeground: false,
+      deadlineReached: false
     };
   });
   const snapshotRef = useRef(snapshot);
@@ -132,7 +133,8 @@ export function useHomeEntrance(
         heroRevealed: preserveForeground,
         catalogArmed: preserveForeground,
         backgroundReady: false,
-        backgroundReadyAfterForeground: false
+        backgroundReadyAfterForeground: false,
+        deadlineReached: false
       };
       snapshotRef.current = nextSnapshot;
       return nextSnapshot;
@@ -226,6 +228,7 @@ export function useHomeEntrance(
     backgroundReady: snapshot.backgroundReady,
     backgroundReadyAfterForeground: snapshot.backgroundReadyAfterForeground,
     catalogArmed: snapshot.catalogArmed,
+    deadlineReached: snapshot.deadlineReached,
     heroRevealed: snapshot.heroRevealed,
     navigationRevealed: snapshot.navigationRevealed,
     imageRef,

@@ -43,21 +43,11 @@
   pointer-events: none;
   opacity: 1;
   visibility: visible;
-  transition:
-    opacity 100ms ease-out,
-    visibility 0s linear;
 }
 
 .home-startup-feedback.is-settled {
   opacity: 0;
   visibility: hidden;
-  transition:
-    opacity 100ms ease-out,
-    visibility 0s linear 100ms;
-}
-
-.home-startup-feedback.is-settled.is-background-ready {
-  transition: none;
 }
 
 .home-background-image-frame,

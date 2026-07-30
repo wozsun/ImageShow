@@ -584,7 +584,10 @@ export function GalleryPage() {
       )}
       {!imagePages.isError && !loading && !items.length && <p className="empty-state gallery-empty">暂无图片</p>}
       {initialLoading && (
-        <AppLoadingRegion className="gallery-initial-loading" />
+        <AppLoadingRegion
+          className="gallery-initial-loading"
+          extraDots={3}
+        />
       )}
       {nextPageLoading && <p className="gallery-loading">加载中</p>}
       <div ref={sentinelRef} className="gallery-sentinel" />

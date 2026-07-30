@@ -1,6 +1,15 @@
 import type { GalleryStatsDto } from "@imageshow/shared/browser";
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
-import { AppLoadingIndicator } from "../../components/feedback/AppLoadingScreen.js";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState
+} from "react";
+import {
+  AppLoadingText,
+  type AppLoadingExtraDots
+} from "../../components/feedback/AppLoadingScreen.js";
 import { AppHeader } from "../../components/navigation/AppHeader.js";
 import { useDocumentMotionPaused } from "../../hooks/useDocumentMotionPaused.js";
 import { usePublicNavigationEntrance } from "../../hooks/usePublicNavigationEntrance.js";
@@ -14,6 +23,38 @@ import { HomeCatalog } from "./HomeCatalog.js";
 import { HomeFilterBar } from "./HomeFilterBar.js";
 import { HomeBackground, HomeHero } from "./HomeHero.js";
 import { useHomeEntrance } from "./useHomeEntrance.js";
+
+const homeLoadingDotSteps: ReadonlyArray<{
+  delayMs: number;
+  extraDots: AppLoadingExtraDots;
+}> = [
+  { delayMs: 0, extraDots: 1 },
+  { delayMs: 300, extraDots: 2 },
+  { delayMs: 600, extraDots: 3 }
+];
+
+function HomeStartupLoadingText({
+  active
+}: {
+  active: boolean;
+}) {
+  const [extraDots, setExtraDots] = useState<AppLoadingExtraDots>(
+    homeLoadingDotSteps[0].extraDots
+  );
+
+  useEffect(() => {
+    if (!active) return;
+    setExtraDots(homeLoadingDotSteps[0].extraDots);
+    const timers = homeLoadingDotSteps.slice(1).map((step) => (
+      window.setTimeout(() => setExtraDots(step.extraDots), step.delayMs)
+    ));
+    return () => {
+      for (const timer of timers) window.clearTimeout(timer);
+    };
+  }, [active]);
+
+  return <AppLoadingText extraDots={extraDots} />;
+}
 
 export function HomePage() {
   const catalogRef = useRef<HTMLElement>(null);
@@ -64,6 +105,7 @@ export function HomePage() {
   ]);
 
   const startupFeedbackSettled = entrance.backgroundReady
+    || entrance.deadlineReached
     || entrance.heroRevealed;
 
   return (
@@ -82,12 +124,11 @@ export function HomePage() {
       <div
         className={[
           "home-startup-feedback",
-          startupFeedbackSettled ? "is-settled" : "",
-          entrance.backgroundReady ? "is-background-ready" : ""
+          startupFeedbackSettled ? "is-settled" : ""
         ].filter(Boolean).join(" ")}
         aria-hidden={startupFeedbackSettled ? true : undefined}
       >
-        <AppLoadingIndicator />
+        <HomeStartupLoadingText active={!startupFeedbackSettled} />
       </div>
       <div
         className={[

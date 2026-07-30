@@ -13,6 +13,7 @@ export type HomeEntranceSnapshot = {
   catalogArmed: boolean;
   backgroundReady: boolean;
   backgroundReadyAfterForeground: boolean;
+  deadlineReached: boolean;
 };
 
 type HomeEntranceScheduler = {
@@ -64,7 +65,8 @@ export class HomeEntranceController {
       heroRevealed: initiallyRevealed,
       catalogArmed: initiallyRevealed,
       backgroundReady: false,
-      backgroundReadyAfterForeground: false
+      backgroundReadyAfterForeground: false,
+      deadlineReached: false
     };
     this.#foregroundSequenceStarted = initiallyRevealed;
   }
@@ -130,6 +132,10 @@ export class HomeEntranceController {
     const deadlineAnchor = this.#deadlineAnchor(now);
     const navigationWasRevealed = this.#snapshot.navigationRevealed;
     this.#clearForegroundTimers();
+    this.#snapshot = {
+      ...this.#snapshot,
+      deadlineReached: true
+    };
     this.#revealNavigation();
     const heroRevealAt = navigationWasRevealed
       ? deadlineAnchor

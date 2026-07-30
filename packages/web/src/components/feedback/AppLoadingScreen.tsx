@@ -1,35 +1,33 @@
-import { useState } from "react";
+export type AppLoadingExtraDots = 0 | 1 | 2 | 3;
 
-const appLoadingSpinDurationMs = 720;
-
-export function AppLoadingIndicator() {
-  // Align every newly mounted indicator to the same wall-clock phase. Route
-  // fallbacks and page-level waiting surfaces can replace each other without
-  // making the ring visibly jump back to its zero-degree frame.
-  const [spinnerAnimationDelay] = useState(
-    () => `${-(Date.now() % appLoadingSpinDurationMs)}ms`
-  );
-
+export function AppLoadingText({
+  extraDots = 0
+}: {
+  extraDots?: AppLoadingExtraDots;
+}) {
   return (
     <span
-      className="app-loading-indicator"
+      className="app-loading-text"
       role="status"
       aria-live="polite"
+      aria-label="加载中"
     >
-      <span
-        className="app-loading-spinner"
-        style={{ animationDelay: spinnerAnimationDelay }}
-        aria-hidden="true"
-      />
-      <span className="app-loading-label">加载中</span>
+      <span aria-hidden="true">
+        加载中…{".".repeat(extraDots)}
+        <span className="app-loading-reserved-dots">
+          {".".repeat(3 - extraDots)}
+        </span>
+      </span>
     </span>
   );
 }
 
 export function AppLoadingRegion({
-  className
+  className,
+  extraDots = 0
 }: {
   className?: string;
+  extraDots?: AppLoadingExtraDots;
 }) {
   return (
     <div
@@ -38,7 +36,7 @@ export function AppLoadingRegion({
         className
       ].filter(Boolean).join(" ")}
     >
-      <AppLoadingIndicator />
+      <AppLoadingText extraDots={extraDots} />
     </div>
   );
 }
