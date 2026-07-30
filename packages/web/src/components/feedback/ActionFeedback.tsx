@@ -55,10 +55,12 @@ function resolveAutoDismissMs(feedback: ActionFeedbackState) {
  */
 export function ActionFeedback({
   feedback,
-  onClose
+  onClose,
+  announce = true
 }: {
   feedback: ActionFeedbackState;
   onClose?: () => void;
+  announce?: boolean;
 }) {
   const text = feedback.text.trim();
   const feedbackKey = `${feedback.id}\u0000${feedback.status}\u0000${text}`;
@@ -163,7 +165,13 @@ export function ActionFeedback({
     <div
       className={`action-feedback action-feedback-${feedback.status}${paused ? " is-countdown-paused" : ""}${closing ? " is-closing" : ""}`}
       data-feedback-id={feedback.id}
-      role={feedback.status === "error" ? "alert" : "status"}
+      role={announce
+        ? feedback.status === "error" ? "alert" : "status"
+        : undefined}
+      aria-live={announce
+        ? feedback.status === "error" ? "assertive" : "polite"
+        : undefined}
+      aria-atomic={announce ? "true" : undefined}
       style={style}
       title={text}
       onMouseEnter={() => setHovered(true)}

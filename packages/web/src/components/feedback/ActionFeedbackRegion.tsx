@@ -132,18 +132,24 @@ export function ActionFeedbackRegion({
 export function ActionFeedbackOutlet({
   feedback,
   target,
-  onClose
+  onClose,
+  announce = true
 }: {
   feedback: ActionFeedbackState;
   target: ActionFeedbackTarget;
   onClose?: () => void;
+  announce?: boolean;
 }) {
   const { fallbackHost, hosts } = useActionFeedbackRegistry();
   const host = resolveActionFeedbackHost(target, hosts, fallbackHost);
   if (!host) return null;
 
   return createPortal(
-    <ActionFeedback feedback={feedback} onClose={onClose} />,
+    <ActionFeedback
+      feedback={feedback}
+      onClose={onClose}
+      announce={announce}
+    />,
     host,
     feedback.id
   );

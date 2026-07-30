@@ -1,13 +1,15 @@
-import { useState, type DragEvent } from "react";
+import { useRef, useState, type DragEvent } from "react";
 import type { AdminEntityDto } from "@imageshow/shared/browser";
 import { api } from "../../lib/api/client.js";
 import { Icon } from "../../components/icon/Icon.js";
 import { AsyncActionButton } from "../../components/actions/AsyncActionButton.js";
+import { ReorderControls } from "../../components/actions/ReorderControls.js";
 import { SlugChip } from "../../components/data-display/SlugChip.js";
 import { adminApiBasePath } from "../../lib/constants.js";
 import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
+import type { ReorderDirection } from "../../lib/ui/reorder.js";
 
-export function EntityAdminCard({ kind, item, onChanged, onDelete, onError, pinned = false, canDelete = false, onDragStart, onDragEnter, onDragEnd }: {
+export function EntityAdminCard({ kind, item, onChanged, onDelete, onError, pinned = false, canDelete = false, reorderBusy, canMovePrevious, canMoveNext, onMove, onReorderControlRef, onDragStart, onDragEnter, onDragEnd }: {
   kind: "themes" | "tags" | "authors";
   item: AdminEntityDto;
   onChanged: () => void;
@@ -15,6 +17,14 @@ export function EntityAdminCard({ kind, item, onChanged, onDelete, onError, pinn
   onError: (error: unknown) => void;
   pinned?: boolean;
   canDelete?: boolean;
+  reorderBusy: boolean;
+  canMovePrevious: boolean;
+  canMoveNext: boolean;
+  onMove: (direction: ReorderDirection) => void;
+  onReorderControlRef: (
+    direction: ReorderDirection,
+    node: HTMLButtonElement | null
+  ) => void;
   onDragStart?: (slug: string) => void;
   onDragEnter?: (slug: string) => void;
   onDragEnd?: () => void;
@@ -26,8 +36,10 @@ export function EntityAdminCard({ kind, item, onChanged, onDelete, onError, pinn
   const [link, setLink] = useState(item.link ?? "");
   const saveStatus = useAsyncActionStatus();
 
-  const [armed, setArmed] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [dragging, setDragging] = useState(false);
   const dirty = display !== item.display_name || (isAuthor && link.trim() !== (item.link ?? ""));
+  const cardBusy = saveStatus.pending || reorderBusy;
   const savePresentation = {
     idle: { icon: "save-3-line", label: "保存" },
     pending: { icon: "save-3-line", label: "保存中" },
@@ -54,7 +66,12 @@ export function EntityAdminCard({ kind, item, onChanged, onDelete, onError, pinn
     });
   };
 
-  const begin = (event: DragEvent<HTMLDivElement>) => {
+  const begin = (event: DragEvent<HTMLSpanElement>) => {
+    if (cardBusy) {
+      event.preventDefault();
+      return;
+    }
+    setDragging(true);
     event.dataTransfer.effectAllowed = "move";
     event.dataTransfer.setData("text/plain", item.slug);
     onDragStart?.(item.slug);
@@ -62,12 +79,10 @@ export function EntityAdminCard({ kind, item, onChanged, onDelete, onError, pinn
 
   return (
     <div
-      className={`entity-card${pinned ? " is-pinned" : ""}${armed ? " is-dragging" : ""}`}
-      draggable={armed}
-      onDragStart={begin}
+      ref={cardRef}
+      className={`entity-card${pinned ? " is-pinned" : ""}${dragging ? " is-dragging" : ""}`}
       onDragEnter={() => { if (!pinned) onDragEnter?.(item.slug); }}
       onDragOver={(event) => { if (!pinned) event.preventDefault(); }}
-      onDragEnd={() => { setArmed(false); onDragEnd?.(); }}
     >
       <div className="entity-card-row">
         <SlugChip value={item.slug} ariaLabel={`${noun} slug`} />
@@ -87,7 +102,7 @@ export function EntityAdminCard({ kind, item, onChanged, onDelete, onError, pinn
               value={display}
               onChange={(event) => setDisplay(event.target.value)}
               placeholder="显示名"
-              disabled={saveStatus.pending}
+              disabled={cardBusy}
               maxLength={64}
             />
           )}
@@ -99,7 +114,7 @@ export function EntityAdminCard({ kind, item, onChanged, onDelete, onError, pinn
             value={link}
             onChange={(event) => setLink(event.target.value)}
             placeholder="链接 URL（HTTPS，可选）"
-            disabled={saveStatus.pending}
+            disabled={cardBusy}
             maxLength={2048}
             aria-label={`作者 ${item.slug} 链接`}
           />
@@ -117,25 +132,29 @@ export function EntityAdminCard({ kind, item, onChanged, onDelete, onError, pinn
                   className="button"
                   status={saveStatus.status}
                   presentation={savePresentation}
-                  disabled={saveStatus.pending || (!dirty && saveStatus.status === "idle")}
+                  disabled={cardBusy || (!dirty && saveStatus.status === "idle")}
                   onClick={() => void save()}
                 />
               )}
-              <button
-                type="button"
-                className="icon entity-drag-handle"
-                title={`按住拖动排序`}
-                aria-label="拖动排序"
-                onMouseDown={() => setArmed(true)}
-                onMouseUp={() => setArmed(false)}
-              >
-                <Icon name="drag-move-2-fill" />
-              </button>
+              <ReorderControls
+                itemLabel={`${noun} ${item.slug}`}
+                busy={cardBusy}
+                canMovePrevious={canMovePrevious}
+                canMoveNext={canMoveNext}
+                onMove={onMove}
+                onControlRef={onReorderControlRef}
+                dragPreviewRef={cardRef}
+                onDragStart={begin}
+                onDragEnd={() => {
+                  setDragging(false);
+                  onDragEnd?.();
+                }}
+              />
               {canDelete && (
                 <button
                   className="icon danger-button"
                   type="button"
-                  disabled={saveStatus.pending}
+                  disabled={cardBusy}
                   title={`删除${noun}`}
                   onClick={onDelete}
                 >

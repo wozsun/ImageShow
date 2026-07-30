@@ -60,7 +60,7 @@
 
 .entity-link-input { flex: 1 1 0; min-width: 0; }
 /* 页脚只有文字时也以相同最小高度保持卡片对齐。 */
-.entity-card-foot { display: flex; align-items: center; gap: 8px; margin-top: auto; min-height: 34px; }
+.entity-card-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: auto; min-height: 34px; }
 /* 页脚所有按钮固定 34px 高、图标按钮 36px 宽（对齐图片管理卡片页脚）。保存按钮带文字行高，仅用
    min-height 仍会高于 34px 把页脚（和卡片）顶高，故用 height 钉死并去掉纵向内边距（box-sizing 为
    border-box，内容区 32px 足够容纳 18px 图标+文字），使其与图标按钮等高、出现/消失不改变卡片高度。 */
@@ -71,8 +71,6 @@
 .user-card .entity-card-foot { justify-content: flex-end; }
 .entity-pinned-note { white-space: nowrap; font-size: 13px; }
 
-.entity-drag-handle { cursor: grab; }
-.entity-drag-handle:active { cursor: grabbing; }
 .entity-card.is-pinned { background: #f7f9fc; border-style: dashed; }
 .entity-card.is-dragging { opacity: .55; }
 .role-badge { font-size: 12px; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }

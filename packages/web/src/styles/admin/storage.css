@@ -17,8 +17,8 @@
 .storage-default-toggle.is-default { border-color: #9fc2f5; background: #e8f1ff; color: #1f6feb; }
 .storage-default-toggle.is-default:disabled { opacity: 1; cursor: default; }
 .storage-default-toggle .app-icon { width: 14px; height: 14px; flex-basis: 14px; }
-.storage-card-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; border-top: 1px solid #eef1f5; padding-top: 8px; }
-.storage-card-actions-left { display: flex; align-items: center; gap: 8px; min-height: 30px; }
+.storage-card-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; border-top: 1px solid #eef1f5; padding-top: 8px; }
+.storage-card-actions-left { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 30px; }
 .storage-card-actions button { min-height: 34px; }
 .storage-card-actions .icon { width: 36px; flex: 0 0 36px; }
 .storage-enable-toggle { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; border: 1px solid #d0d5dd; background: #f3f4f6; color: #6b7280; font-size: 12px; font-weight: 600; cursor: pointer; }
@@ -26,12 +26,10 @@
 .storage-enable-toggle:disabled { cursor: default; opacity: .7; }
 .storage-cleanup-retry { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; border: 1px solid #f2c27b; background: #fff7e8; color: #a75b00; font-size: 12px; font-weight: 600; cursor: pointer; }
 .storage-cleanup-retry:disabled { cursor: default; opacity: .7; }
-.storage-card-actions-right { display: flex; align-items: center; gap: 6px; }
+.storage-card-actions-right { display: flex; align-items: center; gap: 6px; margin-left: auto; }
 .storage-card-actions .icon.is-danger { color: #d23b3b; }
 .storage-card-actions .storage-migrate-action { color: #1f6feb; }
 .storage-card-actions .storage-blocked-action { color: #8a5b16; }
-.storage-drag-handle { cursor: grab; }
-.storage-drag-handle:active { cursor: grabbing; }
 .storage-add-card { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 132px; border: 1px dashed #c4ccd6; border-radius: 12px; background: #fafbfc; color: #4a525d; font-size: 14px; cursor: pointer; }
 .storage-add-card:hover:not(:disabled) { border-color: #1f6feb; color: #1f6feb; }
 .edit-modal form.storage-edit-modal { display: flex; flex-direction: column; overflow: hidden; }

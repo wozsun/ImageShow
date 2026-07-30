@@ -30,12 +30,18 @@ import {
 import { queryKeys } from "../../lib/api/query-keys.js";
 import { useAdminSettings } from "../../lib/api/admin-settings.js";
 import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
-import { moveItemByKey } from "../../lib/ui/reorder.js";
+import {
+  reorderItemByDirection,
+  reorderItemByKey,
+  reorderPositionByKey,
+  type ReorderDirection
+} from "../../lib/ui/reorder.js";
 import type { Author, Tag, Theme } from "../../lib/types.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
 import { invalidateImageData } from "../../lib/api/query-invalidation.js";
 import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
 import { useAdminPermissions } from "../../lib/api/site-data.js";
+import { useReorderControlFocus } from "../../hooks/useReorderControlFocus.js";
 import "../../styles/admin/entity.css";
 
 type EntityKind = "tags" | "themes" | "authors";
@@ -99,16 +105,23 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
   const createAction = useAsyncActionStatus({ resultDurationMs: null });
   const [confirmDelete, setConfirmDelete] = useState<Entity | null>(null);
   const [page, setPage] = useState(1);
+  const [reordering, setReordering] = useState(false);
+  const [reorderAnnouncement, setReorderAnnouncement] = useState("");
 
   const [order, setOrder] = useState<Entity[]>([]);
+  const orderRef = useRef<Entity[]>([]);
   const dragSlug = useRef<string | null>(null);
+  const dragStartOrder = useRef<Entity[]>([]);
+  const reorderRunning = useRef(false);
+  const reorderFeedbackId = useRef<number | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
-  const showOperationError = (error: unknown, context: string) => {
-    reportAdminUiError(context, error);
-    setFeedback(createActionFeedback(`${copy.noun}操作失败，请稍后重试`, "error"));
-  };
 
-  useEffect(() => { setOrder(data?.items ?? []); }, [data]);
+  useEffect(() => {
+    if (reorderRunning.current || dragSlug.current) return;
+    const items = data?.items ?? [];
+    orderRef.current = items;
+    setOrder(items);
+  }, [data]);
   useEffect(() => {
     if (canDelete) return;
     setConfirmDelete(null);
@@ -116,9 +129,12 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
 
   const slugInvalid = slug.length > 0 && !slugPattern.test(slug);
   const slugError = slugInvalid ? slugFormatHint : createError;
-  const operationBusy = Boolean(mutation) || createAction.pending;
+  const operationBusy = Boolean(mutation) || createAction.pending || reordering;
 
   const pageSize = settingsData?.settings.admin.image_page_size ?? adminImagePageLimit;
+  const isFixedEntity = (item: Entity) => (
+    kind === "themes" && item.slug === "none"
+  );
   // 主题页可隐藏钉住的「未设置 / none」占位卡片（设置页 admin 组的开关，默认显示）；其它类别无此卡片。
   // 只过滤展示用列表，order（含 none）保持完整，拖拽排序逻辑不受影响。
   const showUnsetCard = settingsData?.settings.admin.show_unset_theme_card ?? true;
@@ -127,6 +143,15 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
     : order;
   const totalPages = Math.max(1, Math.ceil(visibleItems.length / pageSize));
   const pageItems = visibleItems.slice((page - 1) * pageSize, page * pageSize);
+  const {
+    registerReorderControl,
+    requestReorderFocus
+  } = useReorderControlFocus({
+    itemSlugs: visibleItems.map((item) => item.slug),
+    page,
+    pageSize,
+    onPageChange: setPage
+  });
   useEffect(() => { setPage((current) => Math.min(current, totalPages)); }, [totalPages]);
 
   const create = async (event: FormEvent) => {
@@ -181,39 +206,205 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
     }
   };
 
-  const moveOver = (targetSlug: string) => {
-    const from = dragSlug.current;
-    if (!from || from === targetSlug || from === "none" || targetSlug === "none") return;
-    setOrder((current) => moveItemByKey(
-      current,
-      from,
-      targetSlug,
-      (item) => item.slug
-    ));
+  const replaceOrder = (items: Entity[]) => {
+    orderRef.current = items;
+    setOrder(items);
   };
 
-  const persistOrder = async () => {
-    if (!dragSlug.current) return;
-    dragSlug.current = null;
-    const persistedOrder = data?.items ?? [];
-    const slugs = order.filter((item) => item.slug !== "none").map((item) => item.slug);
-    try {
-      await api(`${adminApiBasePath}/${kind}/reorder`, { method: "POST", body: JSON.stringify({ slugs }) });
-      await refresh();
-    } catch (err) {
-      setOrder(persistedOrder);
-      showOperationError(err, `entity_admin.${kind}.reorder`);
-      void refresh();
+  const positionText = (items: Entity[], movedSlug: string) => {
+    const position = reorderPositionByKey(
+      items,
+      movedSlug,
+      (item) => item.slug,
+      isFixedEntity
+    );
+    return position
+      ? `可排序项第 ${position.position} / ${position.total} 位`
+      : "当前位置不可用";
+  };
+
+  const itemName = (items: Entity[], movedSlug: string) => {
+    const item = items.find((candidate) => candidate.slug === movedSlug);
+    return `${copy.noun}“${item?.display_name || movedSlug}”`;
+  };
+
+  const showReorderFeedback = (
+    text: string,
+    status: "pending" | "success" | "error"
+  ) => {
+    const nextFeedback = createActionFeedback(text, status);
+    reorderFeedbackId.current = nextFeedback.id;
+    setFeedback(nextFeedback);
+    setReorderAnnouncement(text);
+  };
+
+  const persistOrder = async ({
+    nextOrder,
+    previousOrder,
+    movedSlug,
+    focusDirection
+  }: {
+    nextOrder: Entity[];
+    previousOrder: Entity[];
+    movedSlug: string;
+    focusDirection: ReorderDirection | null;
+  }) => {
+    if (
+      reorderRunning.current
+      || mutation
+      || createAction.pending
+    ) return;
+
+    reorderRunning.current = true;
+    setReordering(true);
+    replaceOrder(nextOrder);
+    if (focusDirection) {
+      requestReorderFocus(movedSlug, focusDirection);
     }
+    showReorderFeedback("正在保存排序...", "pending");
+
+    try {
+      let saveSucceeded = false;
+      try {
+        const slugs = nextOrder
+          .filter((item) => !isFixedEntity(item))
+          .map((item) => item.slug);
+        await api(`${adminApiBasePath}/${kind}/reorder`, {
+          method: "POST",
+          body: JSON.stringify({ slugs })
+        });
+        saveSucceeded = true;
+      } catch (error) {
+        reportAdminUiError(`entity_admin.${kind}.reorder`, error);
+      }
+
+      let authoritativeOrder = saveSucceeded ? nextOrder : previousOrder;
+      try {
+        await refresh();
+      } catch (error) {
+        reportAdminUiError(`entity_admin.${kind}.reorder_refresh`, error);
+      }
+
+      const queryState = client.getQueryState(queryKey);
+      const cached = client.getQueryData<AdminEntityListResponseDto>(queryKey);
+      const refreshed = Boolean(
+        cached
+        && queryState?.status === "success"
+        && !queryState.isInvalidated
+      );
+      if (refreshed && cached) {
+        authoritativeOrder = cached.items;
+      }
+
+      replaceOrder(authoritativeOrder);
+      if (focusDirection) {
+        requestReorderFocus(movedSlug, focusDirection);
+      }
+      const actualPosition = positionText(authoritativeOrder, movedSlug);
+      const label = itemName(authoritativeOrder, movedSlug);
+      const message = saveSucceeded
+        ? `${label}排序已保存，当前为${actualPosition}`
+        : refreshed && cached
+          ? `${label}排序保存失败，已按服务器顺序恢复到${actualPosition}`
+          : `${label}排序保存失败，已恢复到上次已知的${actualPosition}`;
+      showReorderFeedback(
+        message,
+        saveSucceeded ? "success" : "error"
+      );
+    } finally {
+      reorderRunning.current = false;
+      setReordering(false);
+    }
+  };
+
+  const moveByKeyboard = (
+    movedSlug: string,
+    direction: ReorderDirection
+  ) => {
+    if (operationBusy || reorderRunning.current) return;
+    const previousOrder = orderRef.current;
+    const result = reorderItemByDirection(
+      previousOrder,
+      movedSlug,
+      direction,
+      (item) => item.slug,
+      isFixedEntity
+    );
+    if (!result.moved) return;
+    void persistOrder({
+      nextOrder: result.items,
+      previousOrder,
+      movedSlug,
+      focusDirection: direction
+    });
+  };
+
+  const beginDrag = (movedSlug: string) => {
+    if (operationBusy || reorderRunning.current) return;
+    dragSlug.current = movedSlug;
+    dragStartOrder.current = orderRef.current;
+  };
+
+  const moveOver = (targetSlug: string) => {
+    const from = dragSlug.current;
+    if (!from || operationBusy || reorderRunning.current) return;
+    const result = reorderItemByKey(
+      orderRef.current,
+      from,
+      targetSlug,
+      (item) => item.slug,
+      isFixedEntity
+    );
+    if (result.moved) replaceOrder(result.items);
+  };
+
+  const finishDrag = () => {
+    const movedSlug = dragSlug.current;
+    dragSlug.current = null;
+    if (!movedSlug) return;
+    const previousOrder = dragStartOrder.current;
+    dragStartOrder.current = [];
+    const nextOrder = orderRef.current;
+    if (operationBusy || reorderRunning.current) {
+      replaceOrder(
+        client.getQueryData<AdminEntityListResponseDto>(queryKey)?.items
+          ?? previousOrder
+      );
+      return;
+    }
+    const changed = previousOrder.some(
+      (item, index) => item.slug !== nextOrder[index]?.slug
+    ) || previousOrder.length !== nextOrder.length;
+    if (!changed) {
+      replaceOrder(
+        client.getQueryData<AdminEntityListResponseDto>(queryKey)?.items
+          ?? previousOrder
+      );
+      return;
+    }
+    void persistOrder({
+      nextOrder,
+      previousOrder,
+      movedSlug,
+      focusDirection: null
+    });
   };
 
   return (
     <section className="workspace workspace-paged">
       <WorkspaceHeader
         title={`${copy.noun}管理`}
-        description={`第 ${page} / ${totalPages} 页 · 共 ${visibleItems.length} 个${copy.noun}${isFetching ? " · 加载中" : ""} · ${copy.headHint}`}
+        description={`第 ${page} / ${totalPages} 页 · 共 ${visibleItems.length} 个${copy.noun}${isFetching ? " · 加载中" : ""} · ${copy.headHint} · 可用前移/后移按钮，桌面端也可拖动排序`}
         feedbackTarget={feedbackTarget}
       />
+      <p
+        className="reorder-live-region"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        {reorderAnnouncement}
+      </p>
       <form className="admin-create-form" onSubmit={create}>
         <div className="admin-create-field entity-slug-field">
           <input
@@ -263,26 +454,44 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
         <ActionFeedbackOutlet
           feedback={feedback}
           target={feedbackTarget}
+          announce={feedback.id !== reorderFeedbackId.current}
           onClose={() => setFeedback(null)}
         />
       )}
       <div className="admin-scroll-region" ref={listRef}>
         <div className="entity-admin-grid">
-          {pageItems.map((item) => (
-            <EntityAdminCard
-              key={item.slug}
-              kind={kind}
-              item={item}
-              pinned={item.slug === "none"}
-              canDelete={canDelete}
-              onChanged={() => void refresh()}
-              onDelete={() => setConfirmDelete(item)}
-              onError={(error) => reportAdminUiError(`entity_admin.${kind}.update`, error)}
-              onDragStart={(s) => { dragSlug.current = s; }}
-              onDragEnter={moveOver}
-              onDragEnd={persistOrder}
-            />
-          ))}
+          {pageItems.map((item) => {
+            const position = reorderPositionByKey(
+              order,
+              item.slug,
+              (candidate) => candidate.slug,
+              isFixedEntity
+            );
+            return (
+              <EntityAdminCard
+                key={item.slug}
+                kind={kind}
+                item={item}
+                pinned={isFixedEntity(item)}
+                canDelete={canDelete}
+                reorderBusy={operationBusy}
+                canMovePrevious={Boolean(position && position.position > 1)}
+                canMoveNext={Boolean(
+                  position && position.position < position.total
+                )}
+                onMove={(direction) => moveByKeyboard(item.slug, direction)}
+                onReorderControlRef={(direction, node) => {
+                  registerReorderControl(item.slug, direction, node);
+                }}
+                onChanged={() => void refresh()}
+                onDelete={() => setConfirmDelete(item)}
+                onError={(error) => reportAdminUiError(`entity_admin.${kind}.update`, error)}
+                onDragStart={beginDrag}
+                onDragEnter={moveOver}
+                onDragEnd={finishDrag}
+              />
+            );
+          })}
           {listFailed && <QueryErrorState error={listError} onRetry={() => void refetch()} reportContext={`entity_admin.${kind}.load`} />}
           {!listFailed && !order.length && !isFetching && <p className="muted">{copy.empty}</p>}
         </div>

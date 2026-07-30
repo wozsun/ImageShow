@@ -1,4 +1,4 @@
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { z } from "zod";
 import type { RuntimeConfig } from "@imageshow/shared/browser";
 import {
@@ -15,7 +15,8 @@ const optionalEnvironmentString = z.preprocess(
 const processEnvironmentSchema = z.object({
   NODE_ENV: z.string().default("development"),
   ADMIN_USERNAME: optionalEnvironmentString,
-  ADMIN_PASSWORD: optionalEnvironmentString
+  ADMIN_PASSWORD: optionalEnvironmentString,
+  IMAGESHOW_DEVELOPMENT_DATA_DIRECTORY: optionalEnvironmentString
 });
 
 function parseBootstrapAdminEnvironment(environment: NodeJS.ProcessEnv) {
@@ -23,14 +24,17 @@ function parseBootstrapAdminEnvironment(environment: NodeJS.ProcessEnv) {
   return {
     nodeEnvironment: parsed.NODE_ENV,
     adminUsername: parsed.ADMIN_USERNAME,
-    adminPassword: parsed.ADMIN_PASSWORD
+    adminPassword: parsed.ADMIN_PASSWORD,
+    developmentDataDirectory: parsed.IMAGESHOW_DEVELOPMENT_DATA_DIRECTORY
   };
 }
 
 export const bootstrapEnvironment = Object.freeze(parseBootstrapAdminEnvironment(process.env));
 const dataDirectory = bootstrapEnvironment.nodeEnvironment === "production"
   ? "/app/data"
-  : join(process.cwd(), "data");
+  : bootstrapEnvironment.developmentDataDirectory
+    ? resolve(bootstrapEnvironment.developmentDataDirectory)
+    : join(process.cwd(), "data");
 
 export const runtimePaths = Object.freeze({
   configDirectory: dataDirectory,
