@@ -26,6 +26,9 @@ import { SelectMenu } from "../../components/form/SelectMenu.js";
 import { FacetSelector } from "../../components/data-display/FacetSelector.js";
 import { gallerySentinelRootMargin } from "../../lib/constants.js";
 import { queryKeys } from "../../lib/api/query-keys.js";
+import {
+  removeImageFromPublicImagesCache
+} from "../../lib/api/query-invalidation.js";
 import { displayNameOrSlug, errorMessage, imageDisplayTitle } from "../../lib/ui/formatters.js";
 import { buildRandomUrl } from "../../lib/gallery/random-url.js";
 import { brightnessOptionLabel, deviceOptionLabel } from "../../lib/ui/select-options.js";
@@ -39,9 +42,9 @@ import { useOneShotAnimation } from "../../hooks/useOneShotAnimation.js";
 import { usePublicNavigationEntrance } from "../../hooks/usePublicNavigationEntrance.js";
 import { LazyGalleryImage } from "./LazyGalleryImage.js";
 import {
-  computeMasonryLayout,
   useGalleryColumnCount,
   useGalleryGeometry,
+  useIncrementalMasonryLayout,
   useMasonryWindow,
   type MasonryItemPosition
 } from "./gallery-layout.js";
@@ -150,11 +153,15 @@ function imagePlaceholder(card: GalleryImageCard): PublicImageItem {
 function GalleryImageDetail({
   card,
   onClose,
+  onDeleteCommitted,
   onDeleted,
   returnFocusRef,
 }: {
   card: GalleryImageCard;
   onClose: () => void;
+  onDeleteCommitted: (
+    imageId: string
+  ) => void | Promise<void>;
   onDeleted: (imageId: string) => void;
   returnFocusRef: RefObject<HTMLElement | null>;
 }) {
@@ -177,8 +184,10 @@ function GalleryImageDetail({
     <ImageDetailModal
       item={item}
       onClose={onClose}
-      onDeleteCommitted={(imageId) => {
-        if (imageId === card.id) setDeleteCommitted(true);
+      onDeleteCommitted={async (imageId) => {
+        if (imageId !== card.id) return;
+        setDeleteCommitted(true);
+        await onDeleteCommitted(imageId);
       }}
       onDeleted={onDeleted}
       admin={false}
@@ -328,9 +337,10 @@ export function GalleryPage() {
 
   const columnCount = useGalleryColumnCount();
   const geometry = useGalleryGeometry(galleryRef);
-  const layout = useMemo(
-    () => computeMasonryLayout(items, { ...geometry, columnCount }),
-    [columnCount, geometry, items]
+  const layout = useIncrementalMasonryLayout(
+    items,
+    { ...geometry, columnCount },
+    imageQuery
   );
   const mountedPositions = useMasonryWindow(
     galleryWindowRef,
@@ -587,6 +597,13 @@ export function GalleryPage() {
         <GalleryImageDetail
           card={selected}
           onClose={() => setSelected(null)}
+          onDeleteCommitted={async (imageId) => {
+            await removeImageFromPublicImagesCache(
+              queryClient,
+              imageQuery,
+              imageId
+            );
+          }}
           onDeleted={handleGalleryImageDeleted}
           returnFocusRef={detailReturnFocusRef}
         />

@@ -1,4 +1,10 @@
-import type { QueryClient } from "@tanstack/react-query";
+import type {
+  InfiniteData,
+  QueryClient
+} from "@tanstack/react-query";
+import type {
+  PublicImageListResponseDto
+} from "@imageshow/shared/browser";
 import { queryKeys } from "./query-keys.js";
 
 function invalidate(client: QueryClient, queryKeysToInvalidate: readonly (readonly unknown[])[]) {
@@ -48,6 +54,38 @@ export function invalidateImageData(client: QueryClient) {
   return invalidate(client, imageDataQueryKeys);
 }
 
+export async function removeImageFromPublicImagesCache(
+  client: QueryClient,
+  imageQuery: string,
+  imageId: string
+) {
+  const queryKey = [...queryKeys.publicImages, imageQuery] as const;
+  // A next-page response may have captured the pre-delete InfiniteData. Stop
+  // only this exact request before editing the cache so a late response cannot
+  // restore the deleted card. This does not invalidate or replay loaded pages.
+  await client.cancelQueries({
+    queryKey,
+    exact: true
+  });
+  let removed = false;
+  client.setQueryData<InfiniteData<PublicImageListResponseDto, string>>(
+    queryKey,
+    (current) => {
+      if (!current) return current;
+      const pages = current.pages.map((page) => {
+        if (!page.items.some((item) => item.id === imageId)) return page;
+        removed = true;
+        return {
+          ...page,
+          items: page.items.filter((item) => item.id !== imageId)
+        };
+      });
+      return removed ? { ...current, pages } : current;
+    }
+  );
+  return removed;
+}
+
 export async function invalidateImageDataAfterDelete(
   client: QueryClient,
   imageId: string
@@ -61,11 +99,15 @@ export async function invalidateImageDataAfterDelete(
   });
   // 查询所有者会在 mutation 提交时先把当前 ID 设为 disabled。这里不能再把仍
   // active 的详情标为 stale，否则关闭动画期间的窗口聚焦或网络重连仍可能读取 404。
-  // 详情卸载后由 gcTime: 0 回收，列表和其他投影则照常失效并补位。
+  // 详情卸载后由 gcTime: 0 回收。当前公开列表已在 mutation 成功边界精确移除
+  // 目标 ID，不能把无限查询全部标为 stale 并重放历史游标页；其他投影照常失效。
   return invalidate(
     client,
     imageDataQueryKeys.filter(
-      (queryKey) => queryKey !== queryKeys.publicImageDetail
+      (queryKey) => (
+        queryKey !== queryKeys.publicImages
+        && queryKey !== queryKeys.publicImageDetail
+      )
     )
   );
 }

@@ -590,14 +590,14 @@
 .home-reveal-section.is-reveal-settled.is-reveal-animation-active
   .home-section-track-glint {
   animation:
-    home-section-track-glint 1600ms
+    home-section-track-glint 800ms
     cubic-bezier(.45, 0, .55, 1) 120ms both;
 }
 
 .home-reveal-section.is-reveal-settled
   .home-section-track-glint.is-refresh-glint-active {
   animation:
-    home-section-track-glint 1600ms
+    home-section-track-glint 800ms
     cubic-bezier(.45, 0, .55, 1) infinite both;
 }
 

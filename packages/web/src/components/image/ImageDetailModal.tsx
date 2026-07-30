@@ -56,7 +56,9 @@ type ImageDetailModalProps =
       detailLoading?: boolean;
       detailError?: string;
       onDetailRetry?: () => void;
-      onDeleteCommitted?: (imageId: string) => void;
+      onDeleteCommitted?: (
+        imageId: string
+      ) => void | Promise<void>;
       onDeleted?: (imageId: string) => void;
       returnFocusRef?: RefObject<HTMLElement | null>;
     }
@@ -64,7 +66,9 @@ type ImageDetailModalProps =
       item: AdminImageDetailItem | ImageItem;
       onClose: () => void;
       admin: true;
-      onDeleteCommitted?: (imageId: string) => void;
+      onDeleteCommitted?: (
+        imageId: string
+      ) => void | Promise<void>;
       onDeleted?: (imageId: string) => void;
       returnFocusRef?: RefObject<HTMLElement | null>;
     };

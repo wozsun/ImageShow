@@ -34,6 +34,28 @@
   background: var(--public-space-black);
 }
 
+.home-startup-feedback {
+  position: fixed;
+  inset: 0;
+  z-index: 6;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  opacity: 1;
+  visibility: visible;
+  transition:
+    opacity 180ms ease-out,
+    visibility 0s linear;
+}
+
+.home-startup-feedback.is-settled {
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 180ms ease-out,
+    visibility 0s linear 180ms;
+}
+
 .home-background-image-frame,
 .home-background-atmosphere,
 .home-random-background::before,

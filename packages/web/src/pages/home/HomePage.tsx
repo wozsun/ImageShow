@@ -1,5 +1,6 @@
 import type { GalleryStatsDto } from "@imageshow/shared/browser";
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { AppLoadingIndicator } from "../../components/feedback/AppLoadingScreen.js";
 import { AppHeader } from "../../components/navigation/AppHeader.js";
 import { useDocumentMotionPaused } from "../../hooks/useDocumentMotionPaused.js";
 import { usePublicNavigationEntrance } from "../../hooks/usePublicNavigationEntrance.js";
@@ -75,6 +76,15 @@ export function HomePage() {
         onLoad={entrance.onBackgroundLoad}
         onError={entrance.onBackgroundError}
       />
+      <div
+        className={[
+          "home-startup-feedback",
+          entrance.heroRevealed ? "is-settled" : "is-active"
+        ].join(" ")}
+        aria-hidden={entrance.heroRevealed ? true : undefined}
+      >
+        <AppLoadingIndicator />
+      </div>
       <div
         className={[
           "public-navigation-frame",

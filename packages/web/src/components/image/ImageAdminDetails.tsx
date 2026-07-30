@@ -115,7 +115,9 @@ export function ImageAdminDetails({
   imageId: string;
   adminItem: AdminDetailSource | null;
   onItemUpdated?: (item: BatchEditableImageSnapshot) => void;
-  onItemDeleteCommitted?: (imageId: string) => void;
+  onItemDeleteCommitted?: (
+    imageId: string
+  ) => void | Promise<void>;
   onItemDeleted?: (imageId: string) => void;
   onNestedDialogChange?: (open: boolean) => void;
 }) {
@@ -336,12 +338,12 @@ export function ImageAdminDetails({
   ]);
   const refreshAfterDelete = useCallback(async () => {
     // mutation 已经由内层编辑器确认提交；先让公开详情的查询所有者禁用当前 ID，
-    // 再取消读取并刷新列表，避免关闭动画期间被聚焦或网络重连重新拉取 404。
-    onItemDeleteCommitted?.(imageId);
+    // 再取消读取并刷新派生投影，避免关闭动画期间被聚焦或网络重连重新拉取 404。
     let refreshError: unknown;
     try {
-      // 页面仍由详情与编辑器共同锁定滚动时先补齐活跃列表，画廊关闭后即可在
-      // 原滚动位置展示重排结果，而不会短暂退回旧卡片或页面顶部。
+      await onItemDeleteCommitted?.(imageId);
+      // 页面仍由详情与编辑器共同锁定滚动时刷新派生投影；公开列表已经在
+      // mutation 成功边界局部更新，不重放已加载的历史游标页。
       await invalidateImageDataAfterDelete(queryClient, imageId);
     } catch (error) {
       refreshError = error;

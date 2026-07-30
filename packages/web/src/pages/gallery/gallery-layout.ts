@@ -1,6 +1,8 @@
 import {
   useEffect,
   useLayoutEffect,
+  useMemo,
+  useRef,
   useState,
   type RefObject
 } from "react";
@@ -8,7 +10,10 @@ import {
   galleryMaxMountedTiles,
   galleryVirtualOverscanScreens
 } from "../../lib/constants.js";
-import type { Device } from "../../lib/types.js";
+import type {
+  Device,
+  GalleryImageCard
+} from "../../lib/types.js";
 import {
   isPageScrollLocked,
   pageScrollRestoredEvent
@@ -17,12 +22,11 @@ import { galleryColumnCount } from "./gallery-columns.js";
 import {
   masonryWindow,
   type GalleryGeometry,
-  type MasonryLayout
+  type MasonryLayout,
+  type MasonryLayoutSession,
+  reconcileMasonryLayout
 } from "./masonry-layout.js";
 
-export {
-  computeMasonryLayout
-} from "./masonry-layout.js";
 export type {
   MasonryItemPosition
 } from "./masonry-layout.js";
@@ -93,6 +97,33 @@ export function useGalleryGeometry(
   }, [galleryRef]);
 
   return geometry;
+}
+
+export function useIncrementalMasonryLayout(
+  items: GalleryImageCard[],
+  geometry: GalleryGeometry & { columnCount: number },
+  sessionKey: string
+) {
+  const committedSessionRef = useRef<MasonryLayoutSession | null>(null);
+  const candidate = useMemo(
+    () => reconcileMasonryLayout(
+      committedSessionRef.current,
+      items,
+      geometry,
+      sessionKey
+    ),
+    [
+      geometry.columnCount,
+      geometry.contentWidth,
+      geometry.gap,
+      items,
+      sessionKey
+    ]
+  );
+  useLayoutEffect(() => {
+    committedSessionRef.current = candidate;
+  }, [candidate]);
+  return candidate;
 }
 
 export function useMasonryWindow(

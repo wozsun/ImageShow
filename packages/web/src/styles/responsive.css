@@ -3,7 +3,30 @@
   width: 100%;
   min-height: 100dvh;
   color: #f2f7ff;
-  background: #000;
+  background: var(--public-space-black);
+}
+
+.app-loading-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--public-text);
+  font-size: 14px;
+  letter-spacing: .08em;
+}
+
+.app-loading-spinner {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  border: 2px solid rgba(145, 199, 255, .22);
+  border-top-color: var(--public-blue);
+  border-radius: 50%;
+  animation: app-loading-spin 720ms linear infinite;
+}
+
+@keyframes app-loading-spin {
+  to { transform: rotate(1turn); }
 }
 
 /* modal-* 动画被公共页与后台弹窗共同引用，需留在全局样式包中。 */
@@ -27,6 +50,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .app-loading-spinner { animation: none; }
+  .home-startup-feedback { transition: none; }
   .modal,
   .modal article { animation: none; }
   .mobile-nav-dropdown { animation: none; }
