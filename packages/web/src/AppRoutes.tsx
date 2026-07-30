@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router";
 import { adminBasePath, publicRootPath } from "./lib/constants.js";
 import { useSiteConfig } from "./lib/api/site-data.js";
 import { QueryErrorState } from "./components/feedback/QueryErrorState.js";

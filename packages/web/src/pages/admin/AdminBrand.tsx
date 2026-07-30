@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 
 const maximumNameFontSize = 20;
 const minimumNameFontSize = 14;

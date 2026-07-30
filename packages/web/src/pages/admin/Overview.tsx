@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import type { AdminOverviewDto } from "@imageshow/shared/browser";
 import { api } from "../../lib/api/client.js";
 import { ThumbImage } from "../../components/image/ThumbImage.js";

@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation } from "react-router";
 import { adminBasePath } from "../../lib/constants.js";
 import { useSiteConfig } from "../../lib/api/site-data.js";
 

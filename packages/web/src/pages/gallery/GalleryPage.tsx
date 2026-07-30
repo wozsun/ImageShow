@@ -8,7 +8,7 @@ import type {
   PublicImageDetailResponseDto,
   PublicImageListResponseDto
 } from "@imageshow/shared/browser";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router";
 import { api } from "../../lib/api/client.js";
 import { AppHeader } from "../../components/navigation/AppHeader.js";
 import { CopyButton } from "../../components/actions/CopyButton.js";

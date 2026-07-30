@@ -39,7 +39,10 @@ PostgreSQL 是唯一真相源，Redis 随机池、列表缓存和判重缓存均
 对象删除完成后，数据库删除仍以尝试号、`storage_slug` 和 `object_key` 做条件更新；恢复只
 接受 `purge_state='idle'`。进程崩溃留下的过期 `purging` 可重新认领，旧执行者不能用过期
 令牌删除或覆盖新执行者的结果。一次认领最多 `trashBatchSize` 行；清空回收站的 HTTP
-请求只处理一个批次，其余行由 `trash.purge` 后台任务继续领取。
+请求只处理一个批次，其余行由 `trash.purge` 后台任务继续领取。请求中止或批次异常时，
+已经进入当前并发片的图片先收口各自的删除结果；尚未处理以及失败状态写回未完成的认领，
+通过一次有界更新按 `id + purge_attempts` 立即恢复为 `idle`。该更新不会命中已删除、
+已标记失败或已被新 attempt 领取的行。
 
 关键索引：`ready` 状态下的随机轴 `(device, brightness, theme, id)`；前后台图库按 `image_time DESC, id DESC` 游标分页，并为常用筛选预建 ready 部分索引：无筛选、单设备、单亮度、设备+亮度、单主题、设备+主题、亮度+主题、设备+亮度+主题、作者。标签查询依赖 `image_tag(tag_slug, image_id)` 命中标签集合，结合 `metadata` 的 ready/图片时间与主题等索引完成分页；另有 MD5、缩略图反查、主题、作者和存储后端索引。
 

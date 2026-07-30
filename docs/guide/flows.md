@@ -645,7 +645,8 @@ metadata 与 tags 各自提交后只登记派生状态修复计划；批量更�
 2. 恢复只接受 `purge_state=idle`，更新数据库状态并重新加入 Redis 随机池，不搬字节。
 3. 彻底删除先用 `FOR UPDATE SKIP LOCKED` 把行认领为 `purging` 并增加尝试号，再进入该图的存储 mutation lock。锁内重新核对状态、尝试号与对象位置；原图和缩略图的 driver DELETE 返回后均重新确认对象不存在，只有两者都确认清除，才以同一尝试号和位置条件删除 metadata。
 4. 删除失败标为 `failed` 并保留错误，可安全重试；崩溃遗留的过期 `purging` 可由新尝试重新认领，旧执行者的令牌无法覆盖新结果。
-5. 清空回收站的 HTTP 请求最多认领一个 `trashBatchSize` 批次并返回 `deleted`、`failed`、`remaining`；有剩余时创建独立的持久化 `trash.purge` 任务，后续批次交给 Worker。即使已有同类任务正在收尾，本次唤醒也不会被运行中任务的幂等冲突吞掉。
+5. 批次在每个并发片开始处理单行前检查 HTTP 请求中止；已经进入该片的删除继续安全收口，尚未处理的行停止进入存储。无论中止、批次异常还是失败状态写回自身失败，结尾都用一次最多 `trashBatchSize` 行的批量更新，只按本次 `id + purge_attempts` 把仍为 `purging` 的认领恢复为 `idle`，不回滚已完成、已失败或所有权已转移的结果。
+6. 清空回收站的 HTTP 请求最多认领一个 `trashBatchSize` 批次并返回 `deleted`、`failed`、`remaining`；有剩余时创建独立的持久化 `trash.purge` 任务，后续批次交给 Worker。即使已有同类任务正在收尾，本次唤醒也不会被运行中任务的幂等冲突吞掉。
 
 公共 static/link 路由拒绝 deleted 图片；后台 `/api/admin/images/:id/raw|thumb|original` 经鉴权提供回收站查看。软删无法撤回浏览器/CDN 已缓存副本，安全级吊销需彻底删除并清 CDN。
 

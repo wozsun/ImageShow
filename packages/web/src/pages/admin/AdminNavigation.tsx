@@ -1,5 +1,5 @@
 import { Fragment } from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink } from "react-router";
 import type { AdminRole } from "@imageshow/shared/browser";
 import { Icon, type IconName } from "../../components/icon/Icon.js";
 import { adminBasePath } from "../../lib/constants.js";

@@ -112,7 +112,7 @@ export default defineConfig({
             },
             {
               name: "react-vendor",
-              test: /[\\/]node_modules[\\/](?:react-router-dom|react-router|react-dom|react|scheduler)[\\/]/,
+              test: /[\\/]node_modules[\\/](?:react-router|react-dom|react|scheduler)[\\/]/,
               priority: 4
             },
             {

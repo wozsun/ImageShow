@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef } from "react";
-import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { api, clearCsrfToken, setCsrfToken } from "../../lib/api/client.js";
 import { Icon } from "../../components/icon/Icon.js";

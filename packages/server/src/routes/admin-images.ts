@@ -108,7 +108,9 @@ export function registerAdminImageRoutes(app: Hono) {
     requireAdminPermission(adminPermissions.imageTrashEmpty),
     async (c) => {
       const input = parse(imageIdsInput, await c.req.json().catch(() => ({})));
-      const result = await purgeSelectedDeletedImages(input.ids);
+      const result = await purgeSelectedDeletedImages(input.ids, {
+        signal: c.req.raw.signal
+      });
       const response = {
         deleted: result.deleted,
         failed: result.failed,
@@ -126,7 +128,9 @@ export function registerAdminImageRoutes(app: Hono) {
     `${adminApiBasePath}/images/empty-trash`,
     requireAdminPermission(adminPermissions.imageTrashEmpty),
     async (c) => {
-      const result = await purgeDeletedImages();
+      const result = await purgeDeletedImages(undefined, {
+        signal: c.req.raw.signal
+      });
       if (result.remaining) await scheduleTrashPurge();
       const response = {
         deleted: result.deleted,
@@ -142,7 +146,7 @@ export function registerAdminImageRoutes(app: Hono) {
     requireAdminPermission(adminPermissions.imageTrashPurge),
     async (c) => {
       const id = parse(uuidInput, c.req.param("id"));
-      await purgeDeletedImage(id);
+      await purgeDeletedImage(id, { signal: c.req.raw.signal });
       return c.json(apiSuccess());
     }
   );

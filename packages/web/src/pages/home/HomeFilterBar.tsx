@@ -1,5 +1,5 @@
 import type { GalleryStatsDto } from "@imageshow/shared/browser";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { Icon } from "../../components/icon/Icon.js";
 import {
   emptyGalleryFilters,

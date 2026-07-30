@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Link, NavLink, useLocation } from "react-router-dom";
+import { Link, NavLink, useLocation } from "react-router";
 import { adminBasePath, publicRootPath } from "../../lib/constants.js";
 import { clearSessionProbeHint, hasSessionProbeHint, rememberSessionProbeHint, useAuthMe, useSiteConfig } from "../../lib/api/site-data.js";
 import {

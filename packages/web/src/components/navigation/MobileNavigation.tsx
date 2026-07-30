@@ -6,7 +6,7 @@ import {
   useState,
   type ReactNode
 } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation } from "react-router";
 import { Icon } from "../icon/Icon.js";
 import { useAnimatedClose } from "../../hooks/useAnimatedClose.js";
 import {

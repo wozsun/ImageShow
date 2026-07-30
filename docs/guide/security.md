@@ -33,6 +33,10 @@
   重新验证即可；现有登录会话不受影响。
 - 公开页默认不显示后台入口，也不主动请求 `/api/admin/auth/me`；只有当前浏览器本地存在 `site_session_hint` 提示位时，顶栏才懒探测 `/api/admin/auth/me`，并仅在服务端确认已登录后显示入口。图片详情同样只在存在该提示位时请求 `/api/admin/images/:id/admin-info` 补充登录态管理信息，接口返回 401 会清除提示位并保持普通访客展示。该提示位只存在 `localStorage`，不参与鉴权，伪造它最多导致一次登录态探测或一次受保护接口的 401。
 - 全站响应头包含 `X-Content-Type-Options`、`X-Frame-Options`、`Referrer-Policy`、`Cross-Origin-Opener-Policy` 与 CSP；SPA 以 report-only 模式监测脚本 Trusted Types，白名单只列出实际出现的 `imageshow-altcha-worker`、`svelte-trusted-html`、`decodeHTMLEntitiesPolicy` 与 `AGPolicy`，不放行任意策略名，也不提供放行任意脚本 URL 或 HTML 的默认策略；同源 `/api/security/csp-report` 默认只返回 204，不读取或记录报告正文。登录页在 ALTCHA 首次挂载前预设隐藏 footer 与 logo，使组件不渲染会被 Trusted Types 拒绝的动态 HTML footer；应用只接受 `site.domain` 及配置的 `random` / `static` / `link` 子域名，未知 `Host` 直接返回不可缓存的 404。
+- Web 直接依赖 `react-router@8.3.0`，只使用 `<BrowserRouter>` / `<Routes>`、
+  链接与位置等 Declarative Mode API，不使用 Framework / Data action、服务端
+  渲染、React Server Components 或任何 unstable RSC API。当前版本已包含
+  `GHSA-qwww-vcr4-c8h2` 的官方修复；将来若引入 RSC，仍须重新审查 CSRF 边界。
 - 普通 API 请求体在解析前限制为 128 KiB；管理员偏好 PATCH 在鉴权与 CSRF
   通过后使用独立的 5 KiB 传输上限，解析并规范化后的完整 JSONB 另受 4 KiB
   上限约束。完整配置、微博解析、JSONL 清单和批量图片编辑分别使用独立的
