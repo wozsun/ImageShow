@@ -1,14 +1,15 @@
 import { useMemo, useState } from "react";
 import type {
-  BatchImageSnapshotResponse,
   BatchImageUpdateItemInputDto,
   BatchImageUpdateRequestDto,
   BatchImageUpdateResponse
 } from "@imageshow/shared/browser";
 import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
 import { api } from "../../lib/api/client.js";
+import { readEditableImageSnapshots } from "../../lib/api/image-edit.js";
 import { adminApiBasePath } from "../../lib/constants.js";
 import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
+import type { BatchEditableImageSnapshot } from "../../lib/types.js";
 import { summarizeBatchUpdateFailures } from "./batch-update-failures.js";
 
 export type BatchMetadataUpdate = BatchImageUpdateItemInputDto;
@@ -28,7 +29,9 @@ export function useBatchMetadataOperations({
   onSaved
 }: {
   initialIds: string[];
-  onSaved: () => void | Promise<void>;
+  onSaved: (
+    authoritativeItems?: BatchEditableImageSnapshot[] | null
+  ) => void | Promise<void>;
 }) {
   const [activeIds, setActiveIds] = useState(initialIds);
   const [availableIdSet, setAvailableIdSet] = useState<Set<string>>(
@@ -50,13 +53,7 @@ export function useBatchMetadataOperations({
 
   const readAuthoritativeSnapshot = async () => {
     try {
-      return await api<BatchImageSnapshotResponse>(
-        `${adminApiBasePath}/images/batch-snapshot`,
-        {
-          method: "POST",
-          body: JSON.stringify({ ids: initialIds })
-        }
-      );
+      return await readEditableImageSnapshots(initialIds);
     } catch (error) {
       reportAdminUiError("image_metadata.batch_snapshot", error);
       return null;
@@ -65,7 +62,9 @@ export function useBatchMetadataOperations({
 
   const save = async (
     items: BatchMetadataUpdate[],
-    reconcileUncertainSave: () => Promise<void>
+    reconcileUncertainSave: () => Promise<
+      BatchEditableImageSnapshot[] | null
+    >
   ) => {
     if (!items.length) return false;
     setSaveSummary(null);
@@ -96,11 +95,11 @@ export function useBatchMetadataOperations({
       // A failed item or a lost response can still follow a committed metadata
       // or tag transaction. Re-read PostgreSQL truth before allowing the
       // frozen edit snapshot to be used as a restore baseline.
-      if (!response || response.failed) {
-        await reconcileUncertainSave();
-      }
+      const authoritativeItems = !response || response.failed
+        ? await reconcileUncertainSave()
+        : undefined;
       try {
-        await onSaved();
+        await onSaved(authoritativeItems);
       } catch (error) {
         reportAdminUiError("image_metadata.batch_update_refresh", error);
       }

@@ -53,7 +53,6 @@ import {
 } from "./useImageAdminOperations.js";
 import "../../styles/admin/upload.css";
 import "../../styles/admin/images.css";
-import "../../styles/admin/image-edit.css";
 
 function adminImageListQuery(
   view: ImageAdminView,

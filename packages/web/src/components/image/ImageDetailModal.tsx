@@ -3,6 +3,7 @@ import {
   Suspense,
   useMemo,
   useRef,
+  useState,
   type RefObject
 } from "react";
 import { Icon } from "../icon/Icon.js";
@@ -11,6 +12,8 @@ import { displayNameOrSlug, imageDisplayTitle, formatDate, formatDimensions } fr
 import { brightnessOptionLabel, deviceOptionLabel } from "../../lib/ui/select-options.js";
 import type {
   AdminImageDetailItem,
+  BatchEditableImageSnapshot,
+  ImageItem,
   PublicImageItem
 } from "../../lib/types.js";
 import { hasSessionProbeHint, useGalleryFacets, useSiteConfig } from "../../lib/api/site-data.js";
@@ -24,10 +27,25 @@ import {
 import { OverlayScrollbar } from "../layout/OverlayScrollbar.js";
 import { ImageDescriptionSlot } from "./ImageDescriptionSlot.js";
 import { DialogLayerPortal } from "../feedback/DialogLayerPortal.js";
+import { DialogPortalTargetContext } from "../feedback/DialogPortalContext.js";
 
 const ImageAdminDetails = lazy(() => import("./ImageAdminDetails.js").then((module) => ({
   default: module.ImageAdminDetails
 })));
+
+function hasDistinctOriginal(original: string, displayUrl: string) {
+  if (!/^https:\/\//i.test(original.trim())) return false;
+  try {
+    const normalize = (value: string) => {
+      const url = new URL(value.trim());
+      url.hash = "";
+      return url.toString();
+    };
+    return normalize(original) !== normalize(displayUrl);
+  } catch {
+    return original.trim() !== displayUrl.trim();
+  }
+}
 
 type ImageDetailModalProps =
   | {
@@ -40,16 +58,30 @@ type ImageDetailModalProps =
       returnFocusRef?: RefObject<HTMLElement | null>;
     }
   | {
-      item: AdminImageDetailItem;
+      item: AdminImageDetailItem | ImageItem;
       onClose: () => void;
       admin: true;
       returnFocusRef?: RefObject<HTMLElement | null>;
     };
 
 export function ImageDetailModal(props: ImageDetailModalProps) {
-  const { item, onClose } = props;
+  const { onClose } = props;
+  const [editedSnapshot, setEditedSnapshot] =
+    useState<BatchEditableImageSnapshot | null>(null);
+  const item = editedSnapshot?.id === props.item.id
+    ? {
+        ...props.item,
+        ...editedSnapshot,
+        diff_original: hasDistinctOriginal(
+          editedSnapshot.original,
+          editedSnapshot.object_url
+        )
+      }
+    : props.item;
   const admin = props.admin === true;
-  const adminItem = admin ? props.item : null;
+  const adminItem = admin
+    ? item as AdminImageDetailItem & Partial<ImageItem>
+    : null;
   const showAdminDetails = admin || hasSessionProbeHint();
   const detailLoading = !admin && props.detailLoading === true;
   const detailError = !admin ? props.detailError?.trim() ?? "" : "";
@@ -57,16 +89,19 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
   const exit = useAnimatedClose(onClose);
   usePageScrollLock();
   const mobileLayout = useMediaQuery(mobileViewportMediaQuery);
+  const frameRef = useRef<HTMLDivElement | null>(null);
   const dialogRef = useRef<HTMLElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const detailContentRef = useRef<HTMLDivElement | null>(null);
   const titleHeaderRef = useRef<HTMLElement | null>(null);
   const actionsRef = useRef<HTMLDivElement | null>(null);
+  const [nestedDialogOpen, setNestedDialogOpen] = useState(false);
   useDialogFocus({
     containerRef: dialogRef,
     initialFocusRef: closeButtonRef,
     returnFocusRef: props.returnFocusRef,
     onEscape: () => exit.requestClose(),
+    paused: nestedDialogOpen
   });
   const { data: siteConfig } = useSiteConfig();
   const { data: facets } = useGalleryFacets();
@@ -97,6 +132,7 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
   return (
     <DialogLayerPortal>
       <div
+        ref={frameRef}
         className={`modal image-detail-modal ${exit.closing ? "is-closing" : ""}`}
         data-dialog-frame=""
         data-admin-dialog={admin ? "" : undefined}
@@ -106,6 +142,7 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
         onAnimationEnd={exit.onAnimationEnd}
         onClick={() => exit.requestClose()}
       >
+        <DialogPortalTargetContext.Provider value={frameRef}>
         <article ref={dialogRef} tabIndex={-1} onClick={(event) => event.stopPropagation()}>
         <ProgressiveImage
           key={item.id}
@@ -227,6 +264,8 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
                     key={item.id}
                     imageId={item.id}
                     adminItem={adminItem}
+                    onItemUpdated={setEditedSnapshot}
+                    onNestedDialogChange={setNestedDialogOpen}
                   />
                 </Suspense>
               )}
@@ -239,6 +278,7 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
           />
         </div>
         </article>
+        </DialogPortalTargetContext.Provider>
       </div>
     </DialogLayerPortal>
   );

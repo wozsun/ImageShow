@@ -639,7 +639,8 @@ dd a { color: #1f6feb; }
     );
 }
 
-.image-detail-modal:not([data-admin-dialog]) .tag-chip {
+.image-detail-modal:not([data-admin-dialog])
+  .image-detail-public-properties .tag-chip {
   color: #dce9ff;
   background: rgba(61, 121, 216, .18);
   border-color: rgba(145, 199, 255, .34);
@@ -655,7 +656,8 @@ dd a { color: #1f6feb; }
 }
 
 .image-detail-modal:not([data-admin-dialog]) .image-detail-actions .button.secondary,
-.image-detail-modal:not([data-admin-dialog]) .close {
+.image-detail-modal:not([data-admin-dialog])
+  .image-detail-title-row > .close {
   color: var(--public-text);
   background: rgba(75, 105, 150, .13);
   border-color: var(--public-line);
@@ -669,11 +671,22 @@ dd a { color: #1f6feb; }
   color: var(--public-muted);
 }
 
+.image-detail-modal:not([data-admin-dialog]) .image-detail-edit-button {
+  color: var(--public-muted);
+  border-color: transparent;
+  background: transparent;
+}
+
 .image-detail-modal:not([data-admin-dialog]) .image-detail-admin-toggle:hover,
+.image-detail-modal:not([data-admin-dialog]) .image-detail-edit-button:hover,
 .image-detail-modal:not([data-admin-dialog])
   .image-detail-admin-toggle[aria-expanded="true"] {
   color: var(--public-text);
   background: rgba(255, 255, 255, .04);
+}
+
+.image-detail-modal:not([data-admin-dialog]) .image-detail-edit-error {
+  color: #f08a92;
 }
 
 .image-detail-modal:not([data-admin-dialog]) .image-detail-admin-panel {

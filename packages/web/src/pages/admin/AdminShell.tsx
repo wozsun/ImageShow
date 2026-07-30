@@ -1,11 +1,11 @@
-import { lazy, Suspense, useEffect, useRef } from "react";
+import { lazy, Suspense, useRef } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { api, clearCsrfToken, setCsrfToken } from "../../lib/api/client.js";
+import { api, clearCsrfToken } from "../../lib/api/client.js";
 import { Icon } from "../../components/icon/Icon.js";
 import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
 import { adminApiBasePath, adminBasePath } from "../../lib/constants.js";
-import { clearSessionProbeHint, rememberSessionProbeHint, useAuthMe, useSiteConfig } from "../../lib/api/site-data.js";
+import { clearSessionProbeHint, useAuthMe, useSiteConfig } from "../../lib/api/site-data.js";
 import { clearAdminCacheAfterLogin } from "../../lib/api/query-invalidation.js";
 import { MobileNavigation } from "../../components/navigation/MobileNavigation.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
@@ -71,15 +71,6 @@ export function AdminShell() {
   const versionLinkEnabled = siteConfig?.site?.version?.link_enabled ?? true;
 
   const { data, error: authError, isError: authFailed, refetch } = useAuthMe();
-  useEffect(() => {
-    if (!data) return;
-    if (data.authenticated) {
-      if (data.csrf_token) setCsrfToken(data.csrf_token);
-      rememberSessionProbeHint();
-    } else {
-      clearSessionProbeHint();
-    }
-  }, [data]);
   if (authFailed) return <QueryErrorState error={authError} onRetry={() => void refetch()} fullPage />;
   if (!data) return <AppLoadingScreen />;
   if (!data.authenticated) return (

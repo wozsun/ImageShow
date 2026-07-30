@@ -37,7 +37,7 @@ export function BatchStorageMigrationDialog({
   single: boolean;
   returnFocusRef: RefObject<HTMLElement | null>;
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: () => void | Promise<void>;
   onSucceeded: () => void;
 }) {
   const { data } = useStorageOptions();
@@ -68,36 +68,50 @@ export function BatchStorageMigrationDialog({
 
   const migrate = async () => status.run(async () => {
     setError("");
+    let response: BatchStorageMigrationResponse;
     try {
-      const response = await api<BatchStorageMigrationResponse>(
+      response = await api<BatchStorageMigrationResponse>(
         `${adminApiBasePath}/images/batch-migrate-storage`,
         {
           method: "POST",
           body: JSON.stringify({ ids: imageIds, target })
         }
       );
-      if (response.migrated) onSaved();
-      if (response.failed) {
-        const unchanged = Math.max(
-          0,
-          imageIds.length - response.migrated - response.failed
-        );
-        reportAdminUiError(
-          "image_metadata.storage_migration_partial",
-          new Error(`批量存储迁移失败 ${response.failed}/${imageIds.length}`),
-          response
-        );
-        setError(
-          `迁移未全部完成：已迁移 ${response.migrated} 项，`
-          + `未变化 ${unchanged} 项，失败 ${response.failed} 项。`
-        );
-        return false;
-      }
-      return true;
     } catch (migrationError) {
       reportAdminUiError("image_metadata.storage_migration", migrationError);
       return false;
     }
+
+    // 迁移结果已经由服务端提交后，界面刷新失败不能把 mutation 误报为失败或诱导
+    // 用户重复迁移。刷新异常单独记录，成功/部分失败仍严格按服务端统计呈现。
+    if (response.migrated) {
+      try {
+        await onSaved();
+      } catch (refreshError) {
+        reportAdminUiError(
+          "image_metadata.storage_migration_refresh",
+          refreshError,
+          response
+        );
+      }
+    }
+    if (response.failed) {
+      const unchanged = Math.max(
+        0,
+        imageIds.length - response.migrated - response.failed
+      );
+      reportAdminUiError(
+        "image_metadata.storage_migration_partial",
+        new Error(`批量存储迁移失败 ${response.failed}/${imageIds.length}`),
+        response
+      );
+      setError(
+        `迁移未全部完成：已迁移 ${response.migrated} 项，`
+        + `未变化 ${unchanged} 项，失败 ${response.failed} 项。`
+      );
+      return false;
+    }
+    return true;
   });
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {

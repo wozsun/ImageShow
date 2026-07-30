@@ -16,6 +16,9 @@ export function DialogLayerPortal({ children }: { children: DialogLayerElement }
   const layer = cloneElement(children, {
     "data-dialog-layer": parentDialogPortalTargetRef ? "nested" : "root"
   });
+  if (parentDialogPortalTargetRef?.current) {
+    return createPortal(layer, parentDialogPortalTargetRef.current);
+  }
   if (parentDialogPortalTargetRef || typeof document === "undefined") {
     return layer;
   }

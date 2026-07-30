@@ -20,8 +20,7 @@ import type {
   Brightness,
   Device,
   FacetOption,
-  ImageDraft,
-  ImageItem
+  ImageDraft
 } from "../../lib/types.js";
 import { mergeBatchEditCommonAttributes, normalizeAuthor, normalizeTheme } from "../../lib/upload/upload-utils.js";
 import { BatchMetadataSaveSummary } from "./BatchMetadataSaveSummary.js";
@@ -118,13 +117,15 @@ export function BatchMetadataModal({
   returnFocusRef,
   single = false
 }: {
-  items: ImageItem[];
+  items: BatchEditableImageSnapshot[];
   pageSize: number;
   themes: FacetOption[];
   allTags: FacetOption[];
   authors: FacetOption[];
   onClose: () => void;
-  onSaved: () => void | Promise<void>;
+  onSaved: (
+    authoritativeItems?: BatchEditableImageSnapshot[] | null
+  ) => void | Promise<void>;
   returnFocusRef?: RefObject<HTMLElement | null>;
   single?: boolean;
 }) {
@@ -225,9 +226,7 @@ export function BatchMetadataModal({
     if (!changedItems.length) return false;
 
     setBaselineRefreshRequired(true);
-    return save(changedItems, async () => {
-      await reconcileAuthoritativeBaseline();
-    });
+    return save(changedItems, reconcileAuthoritativeBaseline);
   };
   const restoreAllChanges = async () => {
     let restoreItems = baselineItems;

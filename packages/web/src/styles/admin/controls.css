@@ -6,6 +6,29 @@
 /* 提交/保存的文案会在空闲与处理中切换；预留四个汉字的内容宽度，避免按钮跳动。 */
 .workflow-submit-button { min-width: calc(4em + 26px); }
 
+/* 后台图片列表、上传流程与按需单图编辑器共用的缩略图骨架。 */
+.image-thumbnail {
+  width: 72px;
+  height: 72px;
+  flex: 0 0 72px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #e8edf3;
+}
+.image-thumbnail.is-small {
+  width: 44px;
+  height: 44px;
+  flex-basis: 44px;
+}
+.image-thumbnail.is-clickable { cursor: zoom-in; }
+.image-thumbnail img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #e8edf3;
+}
+
 .apply-to-all-button {
   align-self: end;
   min-height: 38px;

@@ -18,6 +18,7 @@ export function clearAdminCacheAfterLogin(client: QueryClient) {
     queryKeys.overview,
     queryKeys.adminImages,
     queryKeys.adminImageInfo,
+    queryKeys.adminImageEditSnapshot,
     queryKeys.tags,
     queryKeys.themes,
     queryKeys.authors,
@@ -36,6 +37,7 @@ export function invalidateImageData(client: QueryClient) {
     queryKeys.galleryStats,
     queryKeys.adminImages,
     queryKeys.adminImageInfo,
+    queryKeys.adminImageEditSnapshot,
     queryKeys.overview,
     queryKeys.themes,
     queryKeys.tags,
@@ -52,7 +54,8 @@ export function invalidateStorageData(client: QueryClient) {
     queryKeys.publicImages,
     queryKeys.publicImageDetail,
     queryKeys.adminImages,
-    queryKeys.adminImageInfo
+    queryKeys.adminImageInfo,
+    queryKeys.adminImageEditSnapshot
   ]);
 }
 
@@ -66,6 +69,7 @@ export function invalidateRuntimeData(client: QueryClient) {
     queryKeys.overview,
     queryKeys.publicImages,
     queryKeys.publicImageDetail,
+    queryKeys.adminImageEditSnapshot,
     queryKeys.galleryFacets
   ]);
 }

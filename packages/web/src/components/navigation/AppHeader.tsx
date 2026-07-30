@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, NavLink, useLocation } from "react-router";
 import { adminBasePath, publicRootPath } from "../../lib/constants.js";
-import { clearSessionProbeHint, hasSessionProbeHint, rememberSessionProbeHint, useAuthMe, useSiteConfig } from "../../lib/api/site-data.js";
+import { hasSessionProbeHint, useAuthMe, useSiteConfig } from "../../lib/api/site-data.js";
 import {
   publicNavigationHeaderHideThreshold,
   publicNavigationHeaderRevealThreshold,
@@ -45,13 +45,7 @@ export function AppHeader({
     isActive || (pathname === "/" && rootPath === target) ? "active" : undefined;
 
   useEffect(() => {
-    if (!auth) return;
-    if (auth.authenticated) {
-      rememberSessionProbeHint();
-      return;
-    }
-    clearSessionProbeHint();
-    setShouldProbeSession(false);
+    if (auth && !auth.authenticated) setShouldProbeSession(false);
   }, [auth]);
 
   usePageScrollMovement(({ delta: scrollStep, position }) => {

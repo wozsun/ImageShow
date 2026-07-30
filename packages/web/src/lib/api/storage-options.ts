@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { queryOptions, useQuery } from "@tanstack/react-query";
 import { api } from "./client.js";
 import { adminApiBasePath } from "../constants.js";
 import { storageBackendLabel } from "../ui/select-options.js";
@@ -25,12 +25,17 @@ export function storageNameResolver(backends: StorageBackendOption[]) {
 // 启用的存储后端列表（slug + 显示名 + 标记），供上传/迁移目标选择器、检查页与存储名解析共用。所有
 // 调用方统一走这一个 queryKey 与 staleTime，从而自动去重、缓存一致（后端很少变动，缓存 5 分钟）。
 // enabled=false 时（公共画廊里未登录的访客、未打开的上传窗口等）不发请求，仍可安全调用。
-export function useStorageOptions(enabled = true) {
-  return useQuery<StorageBackendOptionsResponseDto>({
+export const storageOptionsQueryOptions =
+  queryOptions<StorageBackendOptionsResponseDto>({
     queryKey: queryKeys.storageOptions,
     queryFn: ({ signal }) => api(`${adminApiBasePath}/storage/options`, { signal }),
-    enabled,
     staleTime: 5 * 60 * 1000
+  });
+
+export function useStorageOptions(enabled = true) {
+  return useQuery({
+    ...storageOptionsQueryOptions,
+    enabled
   });
 }
 

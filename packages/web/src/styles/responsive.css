@@ -158,7 +158,7 @@
     place-items: stretch;
     overscroll-behavior: contain;
   }
-  .image-detail-modal article {
+  .image-detail-modal > article {
     --image-detail-mobile-controls-space: 64px;
     position: relative;
     width: 100%;
@@ -277,10 +277,10 @@
 }
 
 @media (max-width: 760px) and (forced-colors: none) {
-  .image-detail-modal article {
+  .image-detail-modal > article {
     scrollbar-width: none;
   }
-  .image-detail-modal article::-webkit-scrollbar {
+  .image-detail-modal > article::-webkit-scrollbar {
     width: 0;
     height: 0;
   }
