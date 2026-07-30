@@ -11,8 +11,11 @@ import { ImagePreviewModal } from "../../components/image/ImagePreviewModal.js";
 import { AdminPagination } from "../../components/navigation/AdminPagination.js";
 import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
 import { ImageDraftFields } from "../../components/form/ImageDraftFields.js";
+import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
+import { moveImageToTrash } from "../../lib/api/image-mutations.js";
 import { useAdminPermissions } from "../../lib/api/site-data.js";
 import { facetDisplayName, formatBytes, formatDimensions, shortImageId } from "../../lib/ui/formatters.js";
+import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
 import { batchCommonBrightnessOptions, batchCommonDeviceOptions, cardBrightnessSelectOptions, editCardDeviceSelectOptions } from "../../lib/ui/select-options.js";
 import { storageNameResolver, useStorageOptions } from "../../lib/api/storage-options.js";
 import type {
@@ -114,6 +117,7 @@ export function BatchMetadataModal({
   authors,
   onClose,
   onSaved,
+  onDeleted,
   returnFocusRef,
   single = false
 }: {
@@ -126,6 +130,7 @@ export function BatchMetadataModal({
   onSaved: (
     authoritativeItems?: BatchEditableImageSnapshot[] | null
   ) => void | Promise<void>;
+  onDeleted?: (imageId: string) => void | Promise<void>;
   returnFocusRef?: RefObject<HTMLElement | null>;
   single?: boolean;
 }) {
@@ -133,6 +138,7 @@ export function BatchMetadataModal({
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const restoreTriggerRef = useRef<HTMLButtonElement | null>(null);
   const migrateTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const deleteTriggerRef = useRef<HTMLButtonElement | null>(null);
   const previewReturnFocusRef = useRef<HTMLElement | null>(null);
   // 父级刷新会清空选择；弹窗独立持有会话 ID 和权威基线。保存结果不确定时，
   // 基线会从 PostgreSQL 重新读取，避免把已经落库的部分修改伪装成本地撤销。
@@ -155,6 +161,22 @@ export function BatchMetadataModal({
     saveSummary
   } = operations;
   const saving = saveStatus.pending;
+  const deleteStatus = useAsyncActionStatus({ successDurationMs: null });
+  const [deleteArmed, setDeleteArmed] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+  const busy = saving || deleteStatus.pending;
+  useEffect(() => {
+    if (!deleteArmed) return;
+    const disarmOutsideDelete = (event: PointerEvent) => {
+      if (!deleteTriggerRef.current?.contains(event.target as Node)) {
+        setDeleteArmed(false);
+      }
+    };
+    document.addEventListener("pointerdown", disarmOutsideDelete, true);
+    return () => {
+      document.removeEventListener("pointerdown", disarmOutsideDelete, true);
+    };
+  }, [deleteArmed]);
   const [drafts, setDrafts] = useState<Record<string, ImageDraft>>(
     () => draftsFromImages(items)
   );
@@ -240,11 +262,46 @@ export function BatchMetadataModal({
     setCommon(emptyCommonAttributes());
     return true;
   };
+  const deleteSingleImage = async (requestClose: () => void) => {
+    const item = activeItems[0];
+    if (!single || !item || busy) return;
+    if (!deleteArmed) {
+      setDeleteError("");
+      setDeleteArmed(true);
+      return;
+    }
+
+    setDeleteArmed(false);
+    const deleted = await deleteStatus.run(async () => {
+      setDeleteError("");
+      try {
+        await moveImageToTrash(item.id);
+      } catch (error) {
+        reportAdminUiError("image_metadata.single_delete", error);
+        setDeleteError("删除失败，请稍后重试");
+        return false;
+      }
+
+      // 删除已经由服务端提交后，刷新失败不能诱导用户再次执行 mutation。
+      // 各入口在这里补齐自己的列表并关闭详情，异常只单独记录。
+      try {
+        await onDeleted?.(item.id);
+      } catch (refreshError) {
+        reportAdminUiError(
+          "image_metadata.single_delete_refresh",
+          refreshError,
+          { imageId: item.id }
+        );
+      }
+      return true;
+    });
+    if (deleted) requestClose();
+  };
   return (
     <DialogFrame
       className="modal edit-modal batch-edit-overlay"
       ariaLabel={single ? "编辑图片" : "批量编辑图片"}
-      busy={saving}
+      busy={busy}
       paused={Boolean(
         (canMigrateStorage && migrating)
         || preview
@@ -261,6 +318,8 @@ export function BatchMetadataModal({
         tabIndex={-1}
         onSubmit={async (event) => {
           event.preventDefault();
+          if (busy) return;
+          setDeleteArmed(false);
           if (await saveAll()) requestClose();
         }}
       >
@@ -276,7 +335,7 @@ export function BatchMetadataModal({
                 className="batch-edit-restore-button"
                 type="button"
                 title="撤销所有未保存修改"
-                disabled={saving || !restoreAvailable}
+                disabled={busy || !restoreAvailable}
                 onClick={() => setRestoreConfirmation(true)}
               >
                 <Icon name="history-line" />复原
@@ -287,7 +346,7 @@ export function BatchMetadataModal({
               className="icon close pressable"
               type="button"
               title="关闭"
-              disabled={saving}
+              disabled={busy}
               onClick={() => requestClose()}
             >
               <Icon name="close-line" />
@@ -336,7 +395,7 @@ export function BatchMetadataModal({
                 tags: "批量标签"
               }}
               changed={commonChanged}
-              applyDisabled={saving}
+              applyDisabled={busy}
               applyReady={commonHasValue}
               onApply={() => setDrafts((current) => Object.fromEntries(
                 Object.entries(current).map(([id, draft]) => {
@@ -348,6 +407,11 @@ export function BatchMetadataModal({
           </WorkflowCollapsePanel>
         )}
         <div className="modal-scroll-list batch-edit-list" ref={listRef}>
+          {deleteError && (
+            <p className="batch-edit-delete-error" role="alert">
+              {deleteError}
+            </p>
+          )}
           {saveSummary && <BatchMetadataSaveSummary summary={saveSummary} />}
           {visibleItems.map((item) => {
             const draft = drafts[item.id];
@@ -387,7 +451,7 @@ export function BatchMetadataModal({
                         className="icon danger-button"
                         type="button"
                         title="从批量编辑中移除"
-                        disabled={saving}
+                        disabled={busy}
                         onClick={() => remove(item.id)}
                       >
                         <Icon name="close-line" />
@@ -403,7 +467,7 @@ export function BatchMetadataModal({
                   authors={authors}
                   deviceOptions={editCardDeviceSelectOptions}
                   brightnessOptions={cardBrightnessSelectOptions}
-                  disabled={saving}
+                  disabled={busy}
                   ariaPrefix={item.id}
                   changed={changed}
                 />
@@ -418,25 +482,47 @@ export function BatchMetadataModal({
             ariaLabel="批量编辑分页"
             page={page}
             totalPages={totalPages}
-            disabled={saving}
+            disabled={busy}
             onPrevious={() => setPage((value) => value - 1)}
             onNext={() => setPage((value) => value + 1)}
           />
         )}
         <footer>
-          {canMigrateStorage && (
-            <button
-              ref={migrateTriggerRef}
-              className="batch-edit-migrate-trigger"
-              type="button"
-              disabled={saving || !activeItems.length}
-              onPointerEnter={preloadBatchStorageMigrationDialog}
-              onPointerDown={preloadBatchStorageMigrationDialog}
-              onFocus={preloadBatchStorageMigrationDialog}
-              onClick={() => setMigrating(true)}
-            >
-              <Icon name="arrow-left-right-line" />{single ? "迁移存储" : "批量迁移存储"}
-            </button>
+          {(canMigrateStorage || single) && (
+            <div className="batch-edit-resource-actions">
+              {canMigrateStorage && (
+                <button
+                  ref={migrateTriggerRef}
+                  className="batch-edit-migrate-trigger"
+                  type="button"
+                  disabled={busy || !activeItems.length}
+                  onPointerEnter={preloadBatchStorageMigrationDialog}
+                  onPointerDown={preloadBatchStorageMigrationDialog}
+                  onFocus={preloadBatchStorageMigrationDialog}
+                  onClick={() => setMigrating(true)}
+                >
+                  <Icon name="arrow-left-right-line" />{single ? "迁移存储" : "批量迁移存储"}
+                </button>
+              )}
+              {single && (
+                <button
+                  ref={deleteTriggerRef}
+                  className={`icon danger-button batch-edit-delete-trigger${deleteArmed ? " is-armed" : ""}`}
+                  type="button"
+                  title={deleteArmed ? "再次点击确认删除此图片" : "删除此图片"}
+                  aria-label={deleteArmed ? "再次点击确认删除此图片" : "删除此图片"}
+                  aria-pressed={deleteArmed}
+                  aria-busy={deleteStatus.pending || undefined}
+                  disabled={busy || !activeItems.length}
+                  onBlur={() => {
+                    if (!deleteStatus.pending) setDeleteArmed(false);
+                  }}
+                  onClick={() => void deleteSingleImage(requestClose)}
+                >
+                  <Icon name={deleteArmed ? "delete-bin-7-line" : "delete-bin-6-line"} />
+                </button>
+              )}
+            </div>
           )}
           {!single && (
             <AdminPagination
@@ -444,19 +530,19 @@ export function BatchMetadataModal({
               ariaLabel="批量编辑分页"
               page={page}
               totalPages={totalPages}
-              disabled={saving}
+              disabled={busy}
               onPrevious={() => setPage((value) => value - 1)}
               onNext={() => setPage((value) => value + 1)}
             />
           )}
           <div className="modal-footer-actions">
-            <button type="button" disabled={saving} onClick={() => requestClose()}>取消</button>
+            <button type="button" disabled={busy} onClick={() => requestClose()}>取消</button>
             <AsyncActionButton
               className={`button workflow-submit-button${single ? "" : " batch-edit-save-button"}`}
               type="submit"
               status={saveStatus.status}
               presentation={savePresentation}
-              disabled={saving || !changedCount}
+              disabled={busy || !changedCount}
             />
           </div>
         </footer>

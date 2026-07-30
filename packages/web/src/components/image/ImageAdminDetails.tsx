@@ -15,7 +15,10 @@ import {
 } from "../../lib/api/client.js";
 import { imageEditSnapshotQueryOptions } from "../../lib/api/image-edit.js";
 import { importVocabularyQueryOptions } from "../../lib/api/import-vocabulary.js";
-import { invalidateImageData } from "../../lib/api/query-invalidation.js";
+import {
+  invalidateImageData,
+  invalidateImageDataAfterDelete
+} from "../../lib/api/query-invalidation.js";
 import { adminApiBasePath } from "../../lib/constants.js";
 import { queryKeys } from "../../lib/api/query-keys.js";
 import {
@@ -105,17 +108,22 @@ export function ImageAdminDetails({
   imageId,
   adminItem,
   onItemUpdated,
+  onItemDeleteCommitted,
+  onItemDeleted,
   onNestedDialogChange
 }: {
   imageId: string;
   adminItem: AdminDetailSource | null;
   onItemUpdated?: (item: BatchEditableImageSnapshot) => void;
+  onItemDeleteCommitted?: (imageId: string) => void;
+  onItemDeleted?: (imageId: string) => void;
   onNestedDialogChange?: (open: boolean) => void;
 }) {
   const admin = Boolean(adminItem);
   const queryClient = useQueryClient();
   const editButtonRef = useRef<HTMLButtonElement | null>(null);
   const preparationRef = useRef<Promise<PreparedImageEdit> | null>(null);
+  const deletedImageRef = useRef<string | null>(null);
   const directSnapshot = useMemo(
     () => editableSnapshotFromAdminItem(adminItem),
     [adminItem]
@@ -263,10 +271,13 @@ export function ImageAdminDetails({
   }, [accessAvailable, prepareEdit]);
 
   const closeEdit = useCallback(() => {
+    const deletedImageId = deletedImageRef.current;
+    deletedImageRef.current = null;
     preparationRef.current = null;
     setPreparedEdit(null);
     setEditError("");
-  }, []);
+    if (deletedImageId) onItemDeleted?.(deletedImageId);
+  }, [onItemDeleted]);
 
   const refreshAfterSave = useCallback(async (
     authoritativeItems?: BatchEditableImageSnapshot[] | null
@@ -323,6 +334,28 @@ export function ImageAdminDetails({
     onItemUpdated,
     queryClient
   ]);
+  const refreshAfterDelete = useCallback(async () => {
+    // mutation 已经由内层编辑器确认提交；先让公开详情的查询所有者禁用当前 ID，
+    // 再取消读取并刷新列表，避免关闭动画期间被聚焦或网络重连重新拉取 404。
+    onItemDeleteCommitted?.(imageId);
+    let refreshError: unknown;
+    try {
+      // 页面仍由详情与编辑器共同锁定滚动时先补齐活跃列表，画廊关闭后即可在
+      // 原滚动位置展示重排结果，而不会短暂退回旧卡片或页面顶部。
+      await invalidateImageDataAfterDelete(queryClient, imageId);
+    } catch (error) {
+      refreshError = error;
+    }
+
+    preparationRef.current = null;
+    setEditSuppressed(true);
+    setEditError("");
+    // 先让内层编辑器走完自己的退出动画；其 onClose 再通知外层详情关闭，
+    // 避免最短 pending 时长尚未结束时由父级卸载内层并遗留迟到的关闭定时器。
+    deletedImageRef.current = imageId;
+
+    if (refreshError) throw refreshError;
+  }, [imageId, onItemDeleteCommitted, queryClient]);
 
   // 存储选项只属于管理信息；留在这个按需块内，匿名公开详情不会下载后台查询实现。
   const storageName = useStorageNameResolver(admin);
@@ -415,6 +448,7 @@ export function ImageAdminDetails({
           authors={preparedEdit.vocabulary.authors}
           onClose={closeEdit}
           onSaved={refreshAfterSave}
+          onDeleted={refreshAfterDelete}
           returnFocusRef={editButtonRef}
         />
       )}

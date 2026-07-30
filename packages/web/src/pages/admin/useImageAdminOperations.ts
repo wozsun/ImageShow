@@ -7,6 +7,10 @@ import type {
 } from "@imageshow/shared/browser";
 import { adminApiBasePath } from "../../lib/constants.js";
 import { api } from "../../lib/api/client.js";
+import {
+  moveImageToTrash,
+  restoreImageFromTrash
+} from "../../lib/api/image-mutations.js";
 import type { ImageItem } from "../../lib/types.js";
 import {
   createActionFeedback,
@@ -108,9 +112,9 @@ export function useImageAdminOperations({
     setOperationText(action === "delete" ? "正在删除图片…" : "正在恢复图片…");
     const startedAt = Date.now();
     try {
-      await api(`${adminApiBasePath}/images/${item.id}/${action}`, {
-        method: "POST"
-      });
+      await (action === "delete"
+        ? moveImageToTrash(item.id)
+        : restoreImageFromTrash(item.id));
       await refresh();
       await waitForMinimumPendingDuration(startedAt);
       showFeedback(

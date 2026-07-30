@@ -27,9 +27,16 @@ export type ImportQueueAction =
   | { type: "append"; jobs: ImportJob[] }
   | { type: "retain-mode"; mode: "file" | "link" }
   | { type: "patch"; id: string; patch: Partial<ImportJob> }
-  | { type: "complete"; id: string; patch: Partial<ImportJob>; item: ImageItem }
+  | {
+      type: "complete";
+      id: string;
+      patch: Partial<ImportJob>;
+      item: ImageItem;
+      suppressDuplicateItem?: boolean;
+    }
   | { type: "patch-draft"; id: string; patch: Partial<ImageDraft> }
   | { type: "remove"; ids: Set<string>; pageSize: number }
+  | { type: "remove-library-duplicate"; imageId: string }
   | { type: "apply-defaults"; defaults: ImportAttributeDefaults }
   | { type: "set-page"; page: number; pageSize: number };
 
@@ -110,7 +117,8 @@ function completeQueueJob(
   state: ImportQueueState,
   id: string,
   patch: Partial<ImportJob>,
-  item: ImageItem
+  item: ImageItem,
+  suppressDuplicateItem = false
 ) {
   const jobIndex = state.jobs.findIndex((job) => job.id === id);
   const completed = jobIndex >= 0
@@ -122,7 +130,8 @@ function completeQueueJob(
   const jobs = state.jobs.map((job, index) => {
     if (index === jobIndex && completed) return completed;
     if (
-      job.md5 !== item.md5
+      suppressDuplicateItem
+      || job.md5 !== item.md5
       || (
         !isQueueDuplicateCandidate(job)
         && job.status !== "processing"
@@ -192,7 +201,13 @@ export function reduceImportQueue(
     case "patch":
       return updateQueueJob(state, action.id, (job) => patchJob(job, action.patch));
     case "complete":
-      return completeQueueJob(state, action.id, action.patch, action.item);
+      return completeQueueJob(
+        state,
+        action.id,
+        action.patch,
+        action.item,
+        action.suppressDuplicateItem
+      );
     case "patch-draft":
       return updateQueueJob(state, action.id, (job) => patchJobDraft(job, action.patch));
     case "remove": {
@@ -201,6 +216,24 @@ export function reduceImportQueue(
         state.jobs.filter((job) => !action.ids.has(job.id))
       );
       return { jobs, page: Math.min(state.page, importQueuePageCount(jobs.length, action.pageSize)) };
+    }
+    case "remove-library-duplicate": {
+      if (!state.jobs.some((job) => (
+        job.duplicates.some((duplicate) => duplicate.id === action.imageId)
+      ))) {
+        return state;
+      }
+      const jobs = reconcileImportQueueDuplicates(
+        mapJobsWithIdentity(state.jobs, (job) => {
+          const duplicates = job.duplicates.filter(
+            (duplicate) => duplicate.id !== action.imageId
+          );
+          return duplicates.length === job.duplicates.length
+            ? job
+            : { ...job, duplicates };
+        })
+      );
+      return { ...state, jobs };
     }
     case "apply-defaults": {
       const jobs = mapJobsWithIdentity(

@@ -34,7 +34,14 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
 }
-.batch-edit-modal footer > button { grid-column: 1; justify-self: start; }
+.batch-edit-resource-actions {
+  grid-column: 1;
+  justify-self: start;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .batch-edit-modal footer .batch-edit-footer-pagination {
   grid-column: 2;
   justify-self: center;
@@ -43,6 +50,15 @@
 .batch-edit-modal footer .modal-footer-actions { grid-column: 3; justify-self: end; }
 
 .batch-edit-modal footer button { min-height: 38px; }
+.batch-edit-delete-trigger.icon {
+  width: 38px;
+  flex-basis: 38px;
+}
+button.batch-edit-delete-trigger.is-armed {
+  color: #fff;
+  background: #b42318;
+  border-color: #b42318;
+}
 .batch-edit-save-button {
   min-width: max(
     calc(3em + 3ch + 26px),
@@ -67,6 +83,14 @@
 .admin-pagination.batch-edit-pagination { display: none; }
 .batch-edit-pagination button { min-height: 38px; }
 .batch-edit-save-summary { padding: 10px; border-radius: 6px; }
+.batch-edit-delete-error {
+  margin: 0;
+  padding: 9px 10px;
+  color: #8f251e;
+  background: #fff1ef;
+  border: 1px solid #e8aaa4;
+  border-radius: 6px;
+}
 
 .batch-edit-row {
   width: 100%;
@@ -329,22 +353,31 @@
     column-gap: 8px;
     padding: 8px max(10px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
   }
-  .batch-edit-modal > footer > button,
+  .batch-edit-modal > footer .batch-edit-resource-actions,
   .batch-edit-modal > footer .modal-footer-actions {
     min-width: 0;
-    justify-self: stretch;
+  }
+  .batch-edit-modal > footer .batch-edit-resource-actions {
+    grid-column: 1;
+    justify-self: start;
+    gap: 6px;
   }
   .batch-edit-modal > footer .modal-footer-actions { grid-column: 2; }
   .batch-edit-modal > footer button { min-height: 44px; }
   .batch-edit-modal > footer .modal-footer-actions { gap: 6px; }
-  .batch-edit-modal > footer > button {
-    padding-inline: 8px;
+  .batch-edit-modal > footer .batch-edit-migrate-trigger {
+    width: auto;
+    min-width: 0;
+    padding-inline: 10px;
     font-size: 13px;
     white-space: nowrap;
   }
-  .batch-edit-modal > footer > .batch-edit-migrate-trigger {
-    width: auto;
-    justify-self: start;
+  .batch-edit-modal > footer .batch-edit-migrate-trigger > .app-icon {
+    display: none;
+  }
+  .batch-edit-modal > footer .batch-edit-delete-trigger.icon {
+    width: 44px;
+    flex: 0 0 44px;
   }
   .batch-edit-modal > footer .modal-footer-actions button { white-space: nowrap; }
 

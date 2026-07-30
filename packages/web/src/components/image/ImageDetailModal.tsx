@@ -1,6 +1,7 @@
 import {
   lazy,
   Suspense,
+  useCallback,
   useMemo,
   useRef,
   useState,
@@ -55,12 +56,16 @@ type ImageDetailModalProps =
       detailLoading?: boolean;
       detailError?: string;
       onDetailRetry?: () => void;
+      onDeleteCommitted?: (imageId: string) => void;
+      onDeleted?: (imageId: string) => void;
       returnFocusRef?: RefObject<HTMLElement | null>;
     }
   | {
       item: AdminImageDetailItem | ImageItem;
       onClose: () => void;
       admin: true;
+      onDeleteCommitted?: (imageId: string) => void;
+      onDeleted?: (imageId: string) => void;
       returnFocusRef?: RefObject<HTMLElement | null>;
     };
 
@@ -87,6 +92,13 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
   const detailError = !admin ? props.detailError?.trim() ?? "" : "";
   const onDetailRetry = !admin ? props.onDetailRetry : undefined;
   const exit = useAnimatedClose(onClose);
+  const handleItemDeleted = useCallback((imageId: string) => {
+    try {
+      props.onDeleted?.(imageId);
+    } finally {
+      exit.requestClose();
+    }
+  }, [exit.requestClose, props.onDeleted]);
   usePageScrollLock();
   const mobileLayout = useMediaQuery(mobileViewportMediaQuery);
   const frameRef = useRef<HTMLDivElement | null>(null);
@@ -265,6 +277,8 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
                     imageId={item.id}
                     adminItem={adminItem}
                     onItemUpdated={setEditedSnapshot}
+                    onItemDeleteCommitted={props.onDeleteCommitted}
+                    onItemDeleted={handleItemDeleted}
                     onNestedDialogChange={setNestedDialogOpen}
                   />
                 </Suspense>

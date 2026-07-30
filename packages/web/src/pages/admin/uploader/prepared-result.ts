@@ -13,6 +13,7 @@ import {
 export type ImportQueueApi = {
   jobsRef: RefObject<ImportJob[]>;
   committedMd5sRef: RefObject<ReadonlySet<string>>;
+  deletedLibraryImageIdsRef: RefObject<ReadonlySet<string>>;
   updateJob: (id: string, patch: Partial<ImportJob>) => void;
 };
 
@@ -36,10 +37,11 @@ export function isCurrentImportAttempt(queue: ImportQueueApi, jobId: string, att
 export function applyPreparedResult(queue: ImportQueueApi, jobId: string, attemptKey: string, prepared: PreparedImport): PreparedApplyResult {
   const current = queue.jobsRef.current.find((job) => job.id === jobId);
   if (!current || ["cancelling", "cancelled"].includes(current.status) || current.attemptKey !== attemptKey || current.sessionId !== prepared.id) return { status: "stale" };
+  const deletedLibraryImageIds = queue.deletedLibraryImageIdsRef.current;
   const duplicateItems = [
     ...(prepared.duplicates ?? []),
     ...current.duplicates.filter((item) => item.md5 === prepared.md5)
-  ];
+  ].filter((item) => !deletedLibraryImageIds.has(item.id));
   const duplicates = [
     ...new Map(duplicateItems.map((item) => [item.id, item])).values()
   ];

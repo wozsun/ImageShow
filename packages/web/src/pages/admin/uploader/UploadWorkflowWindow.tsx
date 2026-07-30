@@ -479,6 +479,10 @@ export function UploadWorkflowWindow({
           item={detailItem}
           admin
           onClose={onCloseDetail}
+          onDeleted={(imageId) => {
+            detailReturnFocusRef.current = null;
+            queue.removeLibraryDuplicate(imageId);
+          }}
           returnFocusRef={detailReturnFocusRef}
         />
       )}

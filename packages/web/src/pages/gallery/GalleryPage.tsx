@@ -57,6 +57,7 @@ import {
   type GalleryFilters
 } from "../../lib/gallery/gallery-query.js";
 import { GalleryCardRevealRegistry } from "./gallery-card-reveal.js";
+import { galleryDeletionFocusTarget } from "./gallery-delete-continuity.js";
 
 function GalleryTileDevelopmentStats() {
   const { debug } = useGalleryImageRuntime();
@@ -149,20 +150,24 @@ function imagePlaceholder(card: GalleryImageCard): PublicImageItem {
 function GalleryImageDetail({
   card,
   onClose,
+  onDeleted,
   returnFocusRef,
 }: {
   card: GalleryImageCard;
   onClose: () => void;
+  onDeleted: (imageId: string) => void;
   returnFocusRef: RefObject<HTMLElement | null>;
 }) {
   const placeholder = useMemo(() => imagePlaceholder(card), [card]);
+  const [deleteCommitted, setDeleteCommitted] = useState(false);
   const { data, isPending, isFetching, isError, error, refetch } = useQuery<PublicImageDetailResponseDto>({
     queryKey: [...queryKeys.publicImageDetail, card.id],
     // 详情元数据很小，不把 React StrictMode 的模拟卸载传给 fetch；
     // 重放会继续复用同一 Promise，真正关闭后则立即回收零驻留期查询。
     // 原图请求仍由下方 DOM 图片调度器同步取消和清理。
     queryFn: () => api(`/api/images/${encodeURIComponent(card.id)}`),
-    gcTime: 0
+    gcTime: 0,
+    enabled: !deleteCommitted
   });
   const detail = data?.item.id === card.id ? data.item : null;
   const item = useMemo(() => ({ ...placeholder, ...(detail ?? {}) }), [placeholder, detail]);
@@ -172,6 +177,10 @@ function GalleryImageDetail({
     <ImageDetailModal
       item={item}
       onClose={onClose}
+      onDeleteCommitted={(imageId) => {
+        if (imageId === card.id) setDeleteCommitted(true);
+      }}
+      onDeleted={onDeleted}
       admin={false}
       detailLoading={detailLoading}
       detailError={detailError}
@@ -206,6 +215,7 @@ export function GalleryPage() {
     toolbarVisible,
   } = useGalleryViewportControls();
   const detailReturnFocusRef = useRef<HTMLElement | null>(null);
+  const selectedIndexRef = useRef(-1);
   const galleryRef = useRef<HTMLElement | null>(null);
   const galleryWindowRef = useRef<HTMLDivElement | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
@@ -341,8 +351,19 @@ export function GalleryPage() {
     opener: HTMLButtonElement
   ) => {
     detailReturnFocusRef.current = opener;
+    selectedIndexRef.current = items.findIndex((item) => item.id === card.id);
     setPinnedImageId(card.id);
     setSelected(card);
+  };
+  const handleGalleryImageDeleted = (deletedId: string) => {
+    const focusTarget = galleryDeletionFocusTarget(
+      items,
+      deletedId,
+      selectedIndexRef.current
+    );
+    // 原按钮会随查询重排卸载，不让通用弹窗焦点恢复抓住已脱离 DOM 的节点。
+    detailReturnFocusRef.current = null;
+    setPinnedImageId(focusTarget?.id ?? null);
   };
 
   useEffect(() => {
@@ -354,9 +375,21 @@ export function GalleryPage() {
       const opener = detailReturnFocusRef.current;
       focusFrame = window.requestAnimationFrame(() => {
         focusFrame = undefined;
-        if (opener?.isConnected) {
-          opener.scrollIntoView({ block: "nearest" });
-          opener.focus({ preventScroll: true });
+        const fallback = Array.from(
+          galleryWindowRef.current?.querySelectorAll<HTMLButtonElement>(
+            ".gallery-virtual-tile[data-image-id]"
+          ) ?? []
+        ).find((button) => button.dataset.imageId === pinnedImageId);
+        const focusTarget = opener?.isConnected ? opener : fallback;
+        if (focusTarget) {
+          const targetRect = focusTarget.getBoundingClientRect();
+          if (
+            targetRect.bottom <= 0
+            || targetRect.top >= window.innerHeight
+          ) {
+            focusTarget.scrollIntoView({ block: "nearest" });
+          }
+          focusTarget.focus({ preventScroll: true });
         }
         releaseFrame = window.requestAnimationFrame(() => {
           releaseFrame = undefined;
@@ -554,6 +587,7 @@ export function GalleryPage() {
         <GalleryImageDetail
           card={selected}
           onClose={() => setSelected(null)}
+          onDeleted={handleGalleryImageDeleted}
           returnFocusRef={detailReturnFocusRef}
         />
       )}

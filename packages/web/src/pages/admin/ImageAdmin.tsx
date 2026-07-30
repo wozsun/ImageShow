@@ -412,6 +412,7 @@ export function ImageAdmin() {
         <ImageDetailModal
           item={detail}
           onClose={() => setDetail(null)}
+          onDeleted={() => showFeedback("图片已移入回收站", "success")}
           returnFocusRef={detailReturnFocusRef}
           admin
         />
@@ -424,6 +425,10 @@ export function ImageAdmin() {
           authors={authors}
           onClose={() => setEditing(null)}
           onSaved={refresh}
+          onDeleted={async () => {
+            await refresh();
+            showFeedback("图片已移入回收站", "success");
+          }}
           returnFocusRef={editReturnFocusRef}
         />
       )}
