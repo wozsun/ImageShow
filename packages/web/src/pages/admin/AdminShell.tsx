@@ -150,9 +150,9 @@ export function AdminShell() {
             <Routes>
               <Route index element={<Overview />} />
               <Route path="images" element={<ImageAdmin />} />
-              <Route path="tags" element={<EntityAdmin kind="tags" />} />
-              <Route path="themes" element={<EntityAdmin kind="themes" />} />
-              <Route path="authors" element={<EntityAdmin kind="authors" />} />
+              <Route path="tags" element={<EntityAdmin key="tags" kind="tags" />} />
+              <Route path="themes" element={<EntityAdmin key="themes" kind="themes" />} />
+              <Route path="authors" element={<EntityAdmin key="authors" kind="authors" />} />
               <Route path="account" element={<AccountSettings />} />
               {isSuper && <Route path="site" element={<SettingsPage />} />}
               {isSuper && <Route path="advanced-config" element={<AdvancedConfigPage />} />}
