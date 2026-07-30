@@ -63,6 +63,9 @@ export function HomePage() {
     markNavigationAppeared
   ]);
 
+  const startupFeedbackSettled = entrance.backgroundReady
+    || entrance.heroRevealed;
+
   return (
     <main
       className="page home-page"
@@ -79,9 +82,10 @@ export function HomePage() {
       <div
         className={[
           "home-startup-feedback",
-          entrance.heroRevealed ? "is-settled" : "is-active"
-        ].join(" ")}
-        aria-hidden={entrance.heroRevealed ? true : undefined}
+          startupFeedbackSettled ? "is-settled" : "",
+          entrance.backgroundReady ? "is-background-ready" : ""
+        ].filter(Boolean).join(" ")}
+        aria-hidden={startupFeedbackSettled ? true : undefined}
       >
         <AppLoadingIndicator />
       </div>

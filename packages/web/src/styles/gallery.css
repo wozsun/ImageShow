@@ -393,6 +393,18 @@
   margin: 0 28px 28px;
   color: var(--public-muted);
 }
+
+.gallery-initial-loading {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.gallery-loading {
+  text-align: center;
+}
+
 .gallery-sentinel { height: 1px; }
 .gallery-back-to-top {
   position: fixed;

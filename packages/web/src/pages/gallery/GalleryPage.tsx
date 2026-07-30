@@ -35,6 +35,9 @@ import { brightnessOptionLabel, deviceOptionLabel } from "../../lib/ui/select-op
 import type { GalleryImageCard, PublicImageItem } from "../../lib/types.js";
 import { useGalleryFacets, useSiteConfig } from "../../lib/api/site-data.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
+import {
+  AppLoadingRegion
+} from "../../components/feedback/AppLoadingScreen.js";
 import { AnchoredMenuDismissSignalContext } from "../../hooks/useAnchoredMenu.js";
 import { pageScrollRestoredEvent } from "../../hooks/usePageScrollLock.js";
 import { useDocumentMotionPaused } from "../../hooks/useDocumentMotionPaused.js";
@@ -353,7 +356,10 @@ export function GalleryPage() {
   const themeLabel = (slug: string) => slug === "none" ? "" : themeNames.get(slug) ?? slug;
   const galleryHoverTitle = (item: GalleryImageCard) => item.title?.trim() || themeLabel(item.theme) || imageDisplayTitle(item);
   const galleryHoverTags = (item: GalleryImageCard) => item.tags.map((tag) => tagNames.get(tag) ?? tag).join(" · ");
-  const loading = imagePages.isLoading || imagePages.isFetchingNextPage;
+  const initialLoading = imagePages.isLoading && items.length === 0;
+  const nextPageLoading = imagePages.isFetchingNextPage
+    && items.length > 0;
+  const loading = initialLoading || nextPageLoading;
   const showBackToTop = backToTopVisible && !selected;
 
   const openDetail = (
@@ -577,7 +583,10 @@ export function GalleryPage() {
         <QueryErrorState error={imagePages.error} onRetry={() => void imagePages.refetch()} />
       )}
       {!imagePages.isError && !loading && !items.length && <p className="empty-state gallery-empty">暂无图片</p>}
-      {loading && <p className="gallery-loading">加载中</p>}
+      {initialLoading && (
+        <AppLoadingRegion className="gallery-initial-loading" />
+      )}
+      {nextPageLoading && <p className="gallery-loading">加载中</p>}
       <div ref={sentinelRef} className="gallery-sentinel" />
       <button
         type="button"

@@ -1,4 +1,9 @@
 .center { min-height: 100svh; display: grid; place-items: center; }
+.app-loading-region {
+  display: grid;
+  place-items: center;
+}
+
 .app-loading-screen {
   width: 100%;
   min-height: 100dvh;
