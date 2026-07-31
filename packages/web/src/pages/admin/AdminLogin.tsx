@@ -70,7 +70,9 @@ export function AdminLogin({
     <main
       ref={loginRef}
       className="login"
-      style={{ backgroundImage: `linear-gradient(rgba(12, 18, 28, .45), rgba(12, 18, 28, .72)), ${cssUrl(background)}` }}
+      style={{
+        backgroundImage: `linear-gradient(var(--admin-color-login-overlay-start), var(--admin-color-login-overlay-end)), ${cssUrl(background)}`
+      }}
     >
       <form onSubmit={async (event) => {
         event.preventDefault();

@@ -1,0 +1,263 @@
+/*
+ * Color contract
+ * --------------
+ * The bootstrap canvas is intentionally independent from either application
+ * domain: before React owns the route, every entry point stays dark.
+ *
+ * Public pages and admin pages have separate source tokens. Shared controls
+ * consume the context aliases at the end of this file; the lazy admin color
+ * sheet remaps those aliases only after SiteHead selects the admin domain.
+ *
+ * Raw color values belong in this file or admin/semantic-colors.css only.
+ */
+:root {
+  /* Bootstrap */
+  --bootstrap-color-canvas: #070b15;
+  --bootstrap-color-text: #f2f7ff;
+
+  /* Public foundations */
+  --public-color-canvas: #070b15;
+  --public-color-surface-default: #142036;
+  --public-color-surface-raised: #1c2a42;
+  --public-color-text-primary: #f2f7ff;
+  --public-color-text-secondary: #afbdd0;
+  --public-color-loading-text: rgba(175, 189, 208, .64);
+  --public-color-text-strong: #fff;
+  --public-color-border-default: rgba(155, 190, 239, .28);
+  --public-color-action-primary: #91c7ff;
+  --public-color-action-strong: #2f6fc9;
+  --public-color-action-soft: rgba(85, 150, 235, .3);
+  --public-color-accent: #df8caf;
+
+  /* Shared control roles in the public domain */
+  --public-color-control-text-primary: #20242a;
+  --public-color-control-text-secondary: #66717f;
+  --public-color-control-text-tertiary: #97a1b0;
+  --public-color-control-label: #495260;
+  --public-color-control-surface: #fff;
+  --public-color-control-surface-muted: #eef2f7;
+  --public-color-control-surface-hover: #eef5ff;
+  --public-color-control-surface-subtle-hover: #f1f3f6;
+  --public-color-control-border: #c9d1dc;
+  --public-color-control-border-subtle: #dce2ea;
+  --public-color-control-border-muted: #dce3ec;
+  --public-color-control-border-hover: #aeb8c5;
+  --public-color-control-border-selected: #9fc2f5;
+  --public-color-control-action: #1f6feb;
+  --public-color-control-invalid: #d64545;
+  --public-color-control-switch-thumb: #d8dee7;
+  --public-color-thumbnail-surface: #e8edf3;
+  --public-color-thumbnail-placeholder: #9aa6b4;
+  --public-color-image-placeholder-dark: #111820;
+  --public-shadow-control-floating: rgba(20, 30, 44, .18);
+  --public-shadow-control-resting: rgba(20, 30, 44, .12);
+
+  /* Shared feedback roles in the public domain */
+  --public-color-feedback-success-text: #245236;
+  --public-color-feedback-success-surface: #eaf8ee;
+  --public-color-feedback-success-border: #9fd3ad;
+  --public-color-feedback-danger-text: #8a2d24;
+  --public-color-feedback-danger-surface: #fff2f0;
+  --public-color-feedback-danger-border: #de8b83;
+  --public-color-feedback-error-text: #a12b2b;
+  --public-color-close: #d98c8c;
+  --public-color-close-hover: #c25b5b;
+
+  /* Scrollbars */
+  --color-scrollbar-light-track-thumb: rgba(20, 30, 44, .3);
+  --color-scrollbar-light-thumb: rgba(20, 30, 44, .26);
+  --color-scrollbar-light-thumb-hover: rgba(20, 30, 44, .42);
+  --color-overlay-scrollbar-light: rgba(20, 30, 44, .34);
+  --color-overlay-scrollbar-light-active: rgba(20, 30, 44, .54);
+  --color-overlay-scrollbar-dark: rgba(230, 237, 243, .34);
+  --color-overlay-scrollbar-dark-active: rgba(230, 237, 243, .62);
+
+  /* Public primary navigation */
+  --public-color-navigation-text: #f4f7fb;
+  --public-color-navigation-link: rgba(239, 242, 248, .76);
+  --public-color-navigation-mobile-link: rgba(239, 242, 248, .82);
+  --public-color-navigation-surface: rgba(7, 11, 21, .95);
+  --public-color-navigation-surface-solid: rgba(7, 11, 21, .97);
+  --public-color-navigation-border: rgba(255, 255, 255, .1);
+  --public-color-navigation-control-surface: rgba(255, 255, 255, .08);
+  --public-color-navigation-control-border: rgba(255, 255, 255, .2);
+  --public-color-navigation-active: rgba(77, 143, 232, .9);
+  --public-shadow-navigation: rgba(0, 2, 8, .34);
+  --public-shadow-navigation-menu: rgba(0, 2, 8, .42);
+  --public-color-navigation-glow-primary: rgba(90, 157, 239, .2);
+  --public-color-navigation-glow-accent: rgba(217, 117, 164, .12);
+  --public-color-navigation-star-neutral-strong: rgba(238, 247, 255, .92);
+  --public-color-navigation-star-primary: rgba(145, 199, 255, .88);
+  --public-color-navigation-star-neutral-soft: rgba(255, 255, 255, .74);
+  --public-color-navigation-star-primary-bright: rgba(170, 214, 255, .82);
+  --public-color-navigation-star-accent: rgba(255, 228, 240, .74);
+  --public-color-navigation-star-primary-soft: rgba(203, 229, 255, .78);
+  --public-color-navigation-star-neutral-muted: rgba(255, 255, 255, .68);
+  --public-color-navigation-streak: rgba(220, 239, 255, .9);
+  --public-color-navigation-streak-glow: rgba(125, 190, 255, .82);
+
+  /* Home */
+  --public-color-home-photo-mask-left: rgba(4, 8, 17, .5);
+  --public-color-home-photo-mask-center: rgba(5, 10, 20, .2);
+  --public-color-home-photo-mask-right: rgba(5, 9, 18, .12);
+  --public-color-home-photo-mask-top: rgba(5, 8, 16, .06);
+  --public-color-home-photo-mask-bottom: rgba(4, 7, 14, .28);
+  --public-color-home-atmosphere-primary: rgba(74, 121, 190, .22);
+  --public-color-home-atmosphere-accent: rgba(166, 76, 119, .14);
+  --public-color-home-grain-line: rgba(255, 255, 255, .12);
+  --public-color-home-grain-dot: rgba(255, 255, 255, .18);
+  --public-color-home-toolbar-surface: rgba(9, 15, 28, .88);
+  --public-color-home-toolbar-border: rgba(255, 255, 255, .12);
+  --public-color-home-toolbar-description: rgba(218, 229, 244, .68);
+  --public-color-home-reset-text: rgba(225, 235, 248, .78);
+  --public-color-home-reset-surface: rgba(87, 130, 190, .1);
+  --public-shadow-home-action: rgba(30, 84, 165, .3);
+  --public-shadow-home-copy: rgba(24, 10, 18, .36);
+  --public-color-home-eyebrow: #ffdce9;
+  --public-color-home-tagline: rgba(255, 246, 249, .9);
+  --public-color-home-stats-border: rgba(255, 255, 255, .24);
+  --public-shadow-home-stats: rgba(24, 10, 18, .22);
+  --public-color-home-stats-label: rgba(255, 220, 233, .82);
+  --public-color-home-stats-divider: rgba(255, 255, 255, .16);
+  --public-color-home-stats-unit: rgba(255, 246, 249, .68);
+  --public-color-home-stats-caption: rgba(255, 246, 249, .78);
+  --public-color-home-scroll-text: rgba(255, 246, 249, .74);
+  --public-color-home-scroll-border: rgba(255, 255, 255, .34);
+  --public-color-home-scroll-border-hover: rgba(255, 255, 255, .82);
+  --public-color-home-focus: rgba(255, 255, 255, .88);
+  --public-shadow-home-glass: rgba(0, 3, 10, .36);
+  --public-color-home-glass-highlight: rgba(255, 255, 255, .09);
+  --public-color-home-section-label: #cfe1ff;
+  --public-color-home-section-label-surface: rgba(61, 121, 216, .22);
+  --public-color-home-card-surface: rgba(15, 24, 40, .18);
+  --public-color-home-option-surface: rgba(107, 151, 211, .14);
+  --public-shadow-home-option-selected: rgba(30, 84, 165, .28);
+  --public-color-home-card-option-surface: rgba(104, 148, 209, .13);
+  --public-color-home-card-option-border: rgba(155, 190, 239, .16);
+  --public-color-home-option-caption: #9eabc0;
+  --public-color-home-theme-mark: #d9668f;
+  --public-color-home-option-border-hover: rgba(145, 199, 255, .5);
+  --public-color-home-option-border-selected: rgba(145, 199, 255, .52);
+  --public-color-home-option-disabled-text: rgba(160, 174, 194, .44);
+  --public-color-home-option-disabled-surface: rgba(73, 91, 119, .12);
+  --public-color-home-option-disabled-border: rgba(132, 166, 218, .1);
+  --public-color-home-catalog-accent-1: #5f9bea;
+  --public-color-home-catalog-accent-2: #7794c8;
+  --public-color-home-catalog-accent-3: #d17fa7;
+  --public-color-home-catalog-accent-4: #8581b7;
+  --public-color-home-catalog-accent-5: #b56e98;
+  --public-color-home-loading-edge: rgba(61, 121, 216, .1);
+  --public-color-home-loading-center: rgba(83, 148, 242, .28);
+  --public-color-home-reset-hover-surface: rgba(255, 255, 255, .14);
+
+  /* Gallery atmosphere and tiles */
+  --public-color-gallery-sky-left: #151820;
+  --public-color-gallery-sky-center: #0e1623;
+  --public-color-gallery-sky-right: #101c2a;
+  --public-color-gallery-atmosphere-left: rgba(106, 103, 124, .24);
+  --public-color-gallery-atmosphere-right: rgba(55, 83, 119, .27);
+  --public-color-gallery-atmosphere-bottom: rgba(49, 70, 105, .16);
+  --public-color-gallery-star-primary: rgba(255, 255, 255, .82);
+  --public-color-gallery-star-primary-halo: rgba(164, 171, 194, .24);
+  --public-color-gallery-star-secondary: rgba(182, 205, 231, .68);
+  --public-color-gallery-star-secondary-halo: rgba(116, 147, 184, .2);
+  --public-color-gallery-star-tertiary: rgba(218, 215, 233, .58);
+  --public-color-gallery-star-tertiary-halo: rgba(151, 143, 178, .18);
+  --public-color-gallery-mask-strongest: rgba(0, 0, 0, .92);
+  --public-color-gallery-mask-light: rgba(0, 0, 0, .58);
+  --public-color-gallery-mask-strong: rgba(0, 0, 0, .84);
+  --public-color-gallery-mask-soft: rgba(0, 0, 0, .52);
+  --public-color-gallery-mask-edge: rgba(0, 0, 0, .9);
+  --public-color-gallery-orbit-left: rgba(176, 176, 190, .11);
+  --public-color-gallery-orbit-left-soft: rgba(144, 153, 172, .09);
+  --public-color-gallery-orbit-right: rgba(112, 167, 226, .17);
+  --public-color-gallery-orbit-right-soft: rgba(156, 161, 211, .12);
+  --public-color-gallery-toolbar-label: rgba(222, 232, 246, .8);
+  --public-color-gallery-control-surface: rgba(86, 128, 185, .16);
+  --public-color-gallery-menu-surface: rgba(12, 19, 34, .98);
+  --public-shadow-gallery-menu: rgba(0, 2, 8, .5);
+  --public-color-gallery-menu-hover: rgba(77, 143, 232, .28);
+  --public-color-gallery-menu-option: rgba(28, 42, 66, .88);
+  --public-color-gallery-menu-option-hover: rgba(77, 143, 232, .24);
+  --public-color-gallery-menu-selection-text: #e6f2ff;
+  --public-color-gallery-menu-selection-surface: rgba(47, 111, 201, .38);
+  --public-color-gallery-menu-selection-border: rgba(145, 199, 255, .48);
+  --public-color-gallery-code-text: rgba(224, 235, 249, .78);
+  --public-color-gallery-code-surface: rgba(86, 128, 185, .14);
+  --public-shadow-gallery-tile: rgba(0, 3, 10, .28);
+  --public-color-gallery-tile-surface: #0d1422;
+  --public-color-gallery-tile-surface-raised: #18243a;
+  --public-color-gallery-tile-overlay-clear: rgba(14, 18, 28, 0);
+  --public-color-gallery-tile-overlay: rgba(14, 18, 28, .78);
+  --public-color-gallery-back-to-top: rgba(10, 16, 28, .94);
+  --public-shadow-gallery-back-to-top: rgba(0, 3, 10, .38);
+  --public-color-gallery-modal-clear: rgba(13, 18, 28, 0);
+  --public-color-gallery-modal-overlay: rgba(13, 18, 28, .76);
+
+  /* Public image detail */
+  --public-color-detail-surface-light: #fff;
+  --public-color-detail-card-surface: #fafbfd;
+  --public-color-detail-card-border: #e3e8ef;
+  --public-shadow-detail-card: rgba(28, 43, 62, .10);
+  --public-color-detail-placeholder: #8a93a0;
+  --public-color-detail-error: #a33f3f;
+  --public-color-detail-fade-clear: rgba(250, 251, 253, 0);
+  --public-color-detail-surface-dark: #111820;
+  --public-color-detail-surface-dark-raised: #19212b;
+  --public-shadow-detail-card-dark: rgba(0, 3, 10, .3);
+  --public-color-detail-error-dark: #f08a92;
+  --public-color-detail-fade-dark-clear: rgba(25, 33, 43, 0);
+  --public-color-detail-chip-text: #dce9ff;
+  --public-color-detail-chip-surface: rgba(61, 121, 216, .18);
+  --public-color-detail-chip-border: rgba(145, 199, 255, .34);
+  --public-color-detail-action-border: rgba(145, 199, 255, .42);
+  --public-color-detail-action-surface: rgba(75, 105, 150, .13);
+  --public-color-detail-action-hover: rgba(255, 255, 255, .04);
+  --public-color-detail-danger-border: rgba(240, 138, 146, .34);
+  --public-color-detail-danger-action-text: #ffd9dd;
+  --public-color-detail-danger-action-surface: rgba(167, 55, 70, .24);
+  --public-color-detail-danger-action-border: rgba(240, 138, 146, .42);
+  --public-color-detail-mobile-close-surface: rgba(5, 8, 14, .78);
+  --public-color-detail-mobile-close-border: rgba(255, 255, 255, .52);
+  --public-shadow-detail-mobile-close: rgba(0, 0, 0, .36);
+  --public-color-gallery-mobile-filter-surface: rgba(7, 12, 24, .95);
+  --public-shadow-gallery-mobile-filter: rgba(0, 2, 8, .4);
+
+  /* Context aliases consumed by shared base components. */
+  --color-browser-canvas: var(--bootstrap-color-canvas);
+  --color-control-text-primary: var(--public-color-control-text-primary);
+  --color-control-text-secondary: var(--public-color-control-text-secondary);
+  --color-control-text-tertiary: var(--public-color-control-text-tertiary);
+  --color-control-text-on-action: var(--public-color-text-strong);
+  --color-control-label: var(--public-color-control-label);
+  --color-control-surface: var(--public-color-control-surface);
+  --color-control-surface-muted: var(--public-color-control-surface-muted);
+  --color-control-surface-hover: var(--public-color-control-surface-hover);
+  --color-control-surface-subtle-hover: var(--public-color-control-surface-subtle-hover);
+  --color-control-border: var(--public-color-control-border);
+  --color-control-border-subtle: var(--public-color-control-border-subtle);
+  --color-control-border-muted: var(--public-color-control-border-muted);
+  --color-control-border-hover: var(--public-color-control-border-hover);
+  --color-control-border-selected: var(--public-color-control-border-selected);
+  --color-control-action: var(--public-color-control-action);
+  --color-control-invalid: var(--public-color-control-invalid);
+  --color-control-switch-thumb: var(--public-color-control-switch-thumb);
+  --color-thumbnail-surface: var(--public-color-thumbnail-surface);
+  --color-thumbnail-placeholder: var(--public-color-thumbnail-placeholder);
+  --color-image-placeholder-dark: var(--public-color-image-placeholder-dark);
+  --color-shadow-control-floating: var(--public-shadow-control-floating);
+  --color-shadow-control-resting: var(--public-shadow-control-resting);
+  --color-feedback-success-text: var(--public-color-feedback-success-text);
+  --color-feedback-success-surface: var(--public-color-feedback-success-surface);
+  --color-feedback-success-border: var(--public-color-feedback-success-border);
+  --color-feedback-danger-text: var(--public-color-feedback-danger-text);
+  --color-feedback-danger-surface: var(--public-color-feedback-danger-surface);
+  --color-feedback-danger-border: var(--public-color-feedback-danger-border);
+  --color-feedback-error-text: var(--public-color-feedback-error-text);
+  --color-close: var(--public-color-close);
+  --color-close-hover: var(--public-color-close-hover);
+}
+
+:root[data-ui-context="public"] {
+  --color-browser-canvas: var(--public-color-canvas);
+}

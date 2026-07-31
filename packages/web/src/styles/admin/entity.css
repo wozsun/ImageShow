@@ -31,9 +31,9 @@
   flex-direction: column;
   gap: 10px;
   padding: 14px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--admin-color-border-card);
   border-radius: 10px;
-  background: #fff;
+  background: var(--admin-color-surface-primary);
 }
 .entity-card-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
 /* 等宽 slug 小框：固定宽度让每张卡片的「显示名」输入框（及角色徽标）横向对齐。本身就是一个只读
@@ -46,7 +46,7 @@
   padding: 4px 8px;
   border: 0;
   border-radius: 6px;
-  background: #eef2f7;
+  background: var(--admin-color-entity-slug-surface);
   color: inherit;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 18px;
@@ -71,11 +71,11 @@
 .user-card .entity-card-foot { justify-content: flex-end; }
 .entity-pinned-note { white-space: nowrap; font-size: 13px; }
 
-.entity-card.is-pinned { background: #f7f9fc; border-style: dashed; }
+.entity-card.is-pinned { background: var(--admin-color-entity-surface-pinned); border-style: dashed; }
 .entity-card.is-dragging { opacity: .55; }
 .role-badge { font-size: 12px; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
-.role-super { background: #fef3c7; color: #92400e; }
-.role-image { background: #e0e7ff; color: #3730a3; }
+.role-super { background: var(--admin-color-role-super-surface); color: var(--admin-color-role-super-text); }
+.role-image { background: var(--admin-color-role-image-surface); color: var(--admin-color-role-image-text); }
 
 @media (max-width: 760px) {
   .admin-create-form input,

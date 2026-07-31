@@ -1,7 +1,7 @@
 .image-detail-admin-details {
   margin-top: 12px;
   padding-top: 10px;
-  border-top: 1px solid #e3e8ef;
+  border-top: 1px solid var(--admin-color-detail-border);
 }
 
 .image-detail-admin-actions {
@@ -21,13 +21,13 @@
   padding: 5px 8px;
   border-color: transparent;
   background: transparent;
-  color: #4c5868;
+  color: var(--admin-color-detail-action);
 }
 
-.image-detail-admin-toggle:hover { background: #f4f6f9; }
+.image-detail-admin-toggle:hover { background: var(--admin-color-detail-action-hover-surface); }
 
 .image-detail-admin-toggle:hover,
-.image-detail-admin-toggle[aria-expanded="true"] { color: #3b4655; }
+.image-detail-admin-toggle[aria-expanded="true"] { color: var(--admin-color-detail-action-hover); }
 
 .image-detail-admin-toggle > span { width: 12px; color: currentColor; }
 
@@ -38,30 +38,30 @@
   min-height: 34px;
   flex: 0 0 34px;
   padding: 0;
-  color: #4c5868;
+  color: var(--admin-color-detail-action);
   background: transparent;
   border-color: transparent;
 }
 
 .image-detail-edit-button.icon:hover {
-  color: #3b4655;
-  background: #f4f6f9;
+  color: var(--admin-color-detail-action-hover);
+  background: var(--admin-color-detail-action-hover-surface);
 }
 
 .image-detail-edit-button.icon[aria-busy="true"] { cursor: wait; }
 
 .image-detail-edit-error {
   margin: 6px 8px 0;
-  color: #a33f3f;
+  color: var(--admin-color-danger-text-soft);
   font-size: 13px;
 }
 
 .image-detail-admin-panel {
   margin-top: 6px;
   padding: 12px;
-  border: 1px solid #e7ebf0;
+  border: 1px solid var(--admin-color-detail-panel-border);
   border-radius: 8px;
-  background: #fbfcfd;
+  background: var(--admin-color-detail-panel-surface);
 }
 
 .image-detail-admin-panel dl { margin: 0; }
@@ -88,8 +88,8 @@
   gap: 10px;
   margin-top: 10px;
   padding-top: 10px;
-  border-top: 1px solid #ead5d5;
-  color: #a33f3f;
+  border-top: 1px solid var(--admin-color-danger-detail-border);
+  color: var(--admin-color-danger-text-soft);
 }
 
 .image-detail-admin-error button {

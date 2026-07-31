@@ -11,9 +11,9 @@
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    color: #f6f7f9;
-    background: #171b22;
-    border-bottom: 1px solid #2c333d;
+    color: var(--admin-color-text-on-dark);
+    background: var(--admin-color-navigation-surface);
+    border-bottom: 1px solid var(--admin-color-navigation-mobile-divider);
   }
   .admin-mobile-header > .admin-brand {
     flex: 0 0 190px;
@@ -22,13 +22,13 @@
   }
   .admin-mobile-navigation { flex: 0 0 auto; }
   .admin-mobile-navigation .mobile-nav-toggle {
-    color: #f6f7f9;
-    background: #242a33;
-    border-color: #3a424e;
+    color: var(--admin-color-text-on-dark);
+    background: var(--admin-color-navigation-hover);
+    border-color: var(--admin-color-navigation-control-border);
   }
   .admin-mobile-navigation .mobile-nav-dropdown {
-    background: #171b22;
-    border-color: #3a424e;
+    background: var(--admin-color-navigation-surface);
+    border-color: var(--admin-color-navigation-control-border);
     /* 后台菜单项较多；将其高度限制在头部以下的空间并内部滚动，使每一项在矮视口下都可达
        （下拉锚定在 sticky 头部，无法依赖页面滚动来露出折叠线以下的项）。 */
     max-height: calc(100svh - 72px);
@@ -36,17 +36,17 @@
   }
   .admin-mobile-navigation .mobile-nav-dropdown a,
   .admin-mobile-navigation .mobile-nav-dropdown button {
-    color: #f6f7f9;
+    color: var(--admin-color-text-on-dark);
     line-height: 1.25;
   }
   .admin-mobile-navigation .mobile-nav-dropdown a.active {
-    color: #fff;
-    background: #29466d;
+    color: var(--admin-color-text-on-emphasis);
+    background: var(--admin-color-navigation-mobile-active);
   }
   .admin-mobile-navigation .admin-nav-divider {
     height: 1px;
     margin: 4px;
-    border-top: 1px solid #343b46;
+    border-top: 1px solid var(--admin-color-navigation-divider);
   }
   .workspace { --workspace-inline-padding: 16px; padding: 16px; }
   /* 分页型后台页（图片列表 / 主题 / 标签 / 作者管理，均为 .workspace-paged）在移动端也保持桌面
@@ -74,7 +74,7 @@
     overscroll-behavior: contain;
   }
   /*通栏分隔线：先抵消移动端工作区的 16px 侧边内边距使横线铺满整个区域，再补回内边距让分页器内容保持对齐。*/
-  .workspace-paged > .admin-pagination { margin: 0 -16px; padding: 12px 16px 0; border-top: 1px solid #e2e8f0; }
+  .workspace-paged > .admin-pagination { margin: 0 -16px; padding: 12px 16px 0; border-top: 1px solid var(--admin-color-border-card); }
   .workspace-head:not(.workspace-grid-head) { align-items: stretch; flex-direction: column; }
   .workspace-grid-head {
     grid-template-columns: minmax(0, 1fr);

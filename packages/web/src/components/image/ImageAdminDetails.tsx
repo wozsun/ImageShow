@@ -38,6 +38,9 @@ import type {
   ImageAdminInfo,
   ImageItem
 } from "../../lib/types.js";
+// 公开详情可在已确认的管理员会话中独立加载本模块；管理色契约必须跟随能力块，
+// 不能依赖访问 AdminShell 后碰巧留在文档里的样式。
+import "../../styles/admin/semantic-colors.css";
 import "../../styles/admin/image-details.css";
 
 const MD5_RESERVE = "0".repeat(32);

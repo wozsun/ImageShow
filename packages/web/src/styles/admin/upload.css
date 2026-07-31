@@ -14,10 +14,10 @@
 }
 .link-import-menu-surface {
   padding: 5px;
-  border: 1px solid #d5dce5;
+  border: 1px solid var(--admin-color-upload-menu-border);
   border-radius: 6px;
-  background: #fff;
-  box-shadow: 0 8px 24px rgba(13, 18, 28, .16);
+  background: var(--admin-color-surface-primary);
+  box-shadow: 0 8px 24px var(--admin-shadow-menu);
 }
 .link-import-menu.opens-up {
   padding-top: 0;
@@ -43,7 +43,7 @@
   box-shadow: none;
 }
 .link-import-menu button:hover,
-.link-import-menu button:focus-visible { background: #f1f4f8; }
+.link-import-menu button:focus-visible { background: var(--admin-color-overview-recent-surface); }
 
 @keyframes link-import-menu-in {
   from { opacity: 0; transform: translateY(-6px); }
@@ -70,7 +70,7 @@
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgba(13, 18, 28, .76);
+  background: var(--admin-color-modal-overlay);
   animation: modal-fade .16s ease-out;
 }
 .upload-overlay.is-closing {
@@ -85,9 +85,9 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: #fff;
+  background: var(--admin-color-surface-primary);
   border-radius: 8px;
-  box-shadow: 0 18px 60px rgba(0, 0, 0, .28);
+  box-shadow: 0 18px 60px var(--admin-shadow-modal);
   animation: modal-pop .18s cubic-bezier(.2, .8, .2, 1);
 }
 .upload-overlay.is-closing .upload-window { animation: modal-pop-out .12s ease-in forwards; }
@@ -97,8 +97,8 @@
 .upload-window > footer {
   flex-shrink: 0;
   z-index: 2;
-  background: #fff;
-  border-bottom: 1px solid #dce2ea;
+  background: var(--admin-color-surface-primary);
+  border-bottom: 1px solid var(--admin-color-border-default);
   padding: 14px 16px;
   display: flex;
   justify-content: space-between;
@@ -111,7 +111,7 @@
   height: 42px;
   margin: 4px 0 0;
   overflow: hidden;
-  color: #66717f;
+  color: var(--admin-color-text-secondary);
   font-size: 14px;
   line-height: 20px;
 }
@@ -121,7 +121,7 @@
 }
 .upload-window > footer {
   bottom: 0;
-  border-top: 1px solid #dce2ea;
+  border-top: 1px solid var(--admin-color-border-default);
   border-bottom: 0;
   display: grid;
   grid-template-columns: 1fr auto 1fr;
@@ -148,9 +148,9 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   overflow: hidden;
-  border: 1px solid #c9d1dc;
+  border: 1px solid var(--admin-color-border-control);
   border-radius: 6px;
-  background: #fff;
+  background: var(--admin-color-surface-primary);
 }
 .upload-source-picker > button {
   min-width: 0;
@@ -158,23 +158,23 @@
   border: 0;
   border-radius: 0;
 }
-.upload-source-picker > button + button { border-left: 1px solid #c9d1dc; }
+.upload-source-picker > button + button { border-left: 1px solid var(--admin-color-border-control); }
 .upload-source-picker > button:focus-visible {
   position: relative;
   z-index: 1;
-  outline: 2px solid #1f6feb;
+  outline: 2px solid var(--admin-color-action-primary);
   outline-offset: -2px;
 }
 .upload-source-picker.is-disabled { opacity: .45; }
 .upload-source-picker.is-disabled > button { opacity: 1; }
 .upload-picker.is-disabled { opacity: .45; cursor: not-allowed; }
 .upload-picker input { display: none; }
-.link-import-card { width: min(560px, 96vw); max-height: 90vh; overflow: auto; background: #fff; border-radius: 8px; padding: 18px; display: flex; flex-direction: column; gap: 10px; animation: modal-pop .18s cubic-bezier(.2, .8, .2, 1); }
+.link-import-card { width: min(560px, 96vw); max-height: 90vh; overflow: auto; background: var(--admin-color-surface-primary); border-radius: 8px; padding: 18px; display: flex; flex-direction: column; gap: 10px; animation: modal-pop .18s cubic-bezier(.2, .8, .2, 1); }
 .link-import-head { display: flex; align-items: center; justify-content: space-between; }
 .link-import-head h2 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 20px; }
-.link-input-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-bottom: 1px solid #dce2ea; }
-.link-input-tabs button { border: 0; border-radius: 0; background: transparent; color: #66717f; }
-.link-input-tabs button.is-active { color: #1f5fae; box-shadow: inset 0 -2px #1f6feb; }
+.link-input-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-bottom: 1px solid var(--admin-color-border-default); }
+.link-input-tabs button { border: 0; border-radius: 0; background: transparent; color: var(--admin-color-text-secondary); }
+.link-input-tabs button.is-active { color: var(--admin-color-action-primary-dark); box-shadow: inset 0 -2px var(--admin-color-action-primary); }
 .link-input-hint { margin: 0; line-height: 20px; }
 .link-input-hint { white-space: normal; }
 .link-import-urls { width: 100%; height: 190px; min-height: 190px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; padding: 10px; }
@@ -196,25 +196,25 @@
   /* 统一容纳四字解析文案与图标，也容纳三位导入数量，避免状态切换时按钮跳动。 */
   min-width: calc(4em + 52px);
 }
-.link-import-submit-button.async-action-button.is-pending { color: #fff; background: #1f6feb; border-color: #1f6feb; }
+.link-import-submit-button.async-action-button.is-pending { color: var(--admin-color-text-on-emphasis); background: var(--admin-color-action-primary); border-color: var(--admin-color-action-primary); }
 .link-import-submit-label { display: inline-flex; align-items: center; gap: .25em; }
 .link-import-submit-count {
   min-width: 3ch;
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
-.link-import-result-summary { min-width: 0; margin: 0; color: #35653f; line-height: 20px; }
-.link-import-result-summary.is-warning { color: #795d1d; }
+.link-import-result-summary { min-width: 0; margin: 0; color: var(--admin-color-success-summary); line-height: 20px; }
+.link-import-result-summary.is-warning { color: var(--admin-color-warning-text); }
 .jsonl-preview { display: grid; gap: 8px; min-height: 0; }
-.jsonl-preview-summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: #435062; font-size: 13px; }
+.jsonl-preview-summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--admin-color-upload-summary); font-size: 13px; }
 .jsonl-preview-summary button { min-height: 32px; padding: 6px 9px; }
-.jsonl-error-list { max-height: 190px; margin: 0; padding: 0; overflow: auto; list-style: none; border-top: 1px solid #e1e6ed; }
-.jsonl-error-list li { display: grid; gap: 2px; padding: 8px 2px; border-bottom: 1px solid #e8ecf1; }
+.jsonl-error-list { max-height: 190px; margin: 0; padding: 0; overflow: auto; list-style: none; border-top: 1px solid var(--admin-color-upload-divider-strong); }
+.jsonl-error-list li { display: grid; gap: 2px; padding: 8px 2px; border-bottom: 1px solid var(--admin-color-upload-divider-muted); }
 .jsonl-error-list strong { font-size: 12px; }
-.jsonl-error-list span { overflow: hidden; color: #66717f; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.jsonl-error-list span { overflow: hidden; color: var(--admin-color-text-secondary); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .jsonl-error-list strong,
-.jsonl-error-list span { color: #b34337; }
-.jsonl-import-report { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid #ead8aa; border-radius: 6px; background: #fffaf0; color: #795d1d; font-size: 13px; }
+.jsonl-error-list span { color: var(--admin-color-danger-report-text); }
+.jsonl-import-report { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--admin-color-upload-report-border); border-radius: 6px; background: var(--admin-color-warning-surface-soft); color: var(--admin-color-warning-text); font-size: 13px; }
 .jsonl-import-report span { margin-right: auto; }
 .jsonl-import-report button { min-height: 30px; padding: 5px 8px; }
 .upload-list {
@@ -228,8 +228,8 @@
   min-height: 54px;
   margin: 0;
   padding: 8px 16px;
-  border-top: 1px solid #dce2ea;
-  background: #fff;
+  border-top: 1px solid var(--admin-color-border-default);
+  background: var(--admin-color-surface-primary);
 }
 .admin-pagination.upload-pagination { display: none; }
 .upload-pagination button { min-height: 38px; }
@@ -244,7 +244,7 @@
 .upload-primary-actions,
 .upload-clear-actions { flex-wrap: nowrap; }
 .upload-cleanup-trigger { display: none; }
-.upload-cleanup-menu > button { color: #a13a32; }
+.upload-cleanup-menu > button { color: var(--admin-color-danger-text-muted); }
 @container image-workflow (max-width: 980px) {
   .upload-head-actions {
     display: grid;
@@ -255,14 +255,14 @@
   .upload-clear-actions { grid-row: 2; }
 }
 .upload-footer-left { justify-self: start; min-width: 0; display: flex; align-items: center; gap: 10px; }
-.upload-storage-hint { color: #66717f; white-space: nowrap; }
-.clear-button { color: #d0473a; }
-.clear-button:not(:disabled):hover { color: #bd3c30; background: #f4f6f8; }
+.upload-storage-hint { color: var(--admin-color-text-secondary); white-space: nowrap; }
+.clear-button { color: var(--admin-color-danger-action); }
+.clear-button:not(:disabled):hover { color: var(--admin-color-danger-action-hover); background: var(--admin-color-upload-hover-surface); }
 .import-job {
-  --import-job-border: #c7cdd6;
-  --import-job-background: #f5f6f8;
-  --import-job-status: #586474;
-  --import-job-progress: #2563a9;
+  --import-job-border: var(--admin-color-import-neutral-border);
+  --import-job-background: var(--admin-color-import-neutral-surface);
+  --import-job-status: var(--admin-color-import-neutral-text);
+  --import-job-progress: var(--admin-color-import-neutral-progress);
   display: grid;
   grid-template-columns: 72px minmax(0, 1fr) auto;
   gap: 10px;
@@ -275,13 +275,13 @@
 .import-job-aside { grid-row: span 2; display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
 .import-job-preview { position: relative; width: 72px; height: 72px; flex: 0 0 72px; }
 .import-job-preview .image-thumbnail { width: 100%; height: 100%; flex-basis: 100%; }
-.import-job-size { color: #66717f; font-size: 11px; line-height: 1.2; white-space: nowrap; }
+.import-job-size { color: var(--admin-color-text-secondary); font-size: 11px; line-height: 1.2; white-space: nowrap; }
 .import-job-size.is-vertical { display: grid; justify-items: center; gap: 1px; }
-.import-job-size.is-vertical small { color: #96a0ad; font-size: 10px; line-height: 1; }
+.import-job-size.is-vertical small { color: var(--admin-color-text-subtle); font-size: 10px; line-height: 1; }
 .import-job-head { min-width: 0; display: grid; gap: 4px; }
 .import-job-head strong,
 .import-job-head span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.import-job-head span { color: #66717f; font-size: 14px; }
+.import-job-head span { color: var(--admin-color-text-secondary); font-size: 14px; }
 .import-job-meta { display: flex; align-items: baseline; }
 .import-job-head .import-job-meta-copy { flex: 0 1 auto; }
 .transfer-progress-value {
@@ -290,67 +290,67 @@
   font-size: 14px;
   font-variant-numeric: tabular-nums;
 }
-.transfer-progress-value::before { content: "·"; margin-inline: 6px; color: #66717f; }
+.transfer-progress-value::before { content: "·"; margin-inline: 6px; color: var(--admin-color-text-secondary); }
 .import-job-head .import-job-size-summary { display: none; font-size: 13px; }
 .import-status-label { color: var(--import-job-status); font-weight: 600; }
 .import-job-actions { display: flex; align-items: center; gap: 6px; }
 .import-job .image-fields { grid-column: 2 / 4; }
 .import-job .select-control.image-fields-device.is-changed .select-trigger,
 .import-job .select-control.image-fields-brightness.is-changed .select-trigger {
-  border-color: #e4bd58;
-  background: #fff;
-  box-shadow: 0 0 0 1px rgba(228, 189, 88, .34);
+  border-color: var(--admin-color-control-changed-emphasis);
+  background: var(--admin-color-surface-primary);
+  box-shadow: 0 0 0 1px var(--admin-color-control-changed-ring);
 }
 .import-job.ready {
-  --import-job-border: #86afe8;
-  --import-job-background: #edf5ff;
-  --import-job-status: #245eaa;
+  --import-job-border: var(--admin-color-import-ready-border);
+  --import-job-background: var(--admin-color-import-ready-surface);
+  --import-job-status: var(--admin-color-import-ready-text);
 }
 .import-job.uploading,
 .import-job.downloading,
 .import-job.received,
 .import-job.processing,
 .import-job.committing {
-  --import-job-border: #b5cae7;
-  --import-job-background: #f6f9fe;
-  --import-job-status: #2b65ad;
-  --import-job-progress: #1f63bd;
+  --import-job-border: var(--admin-color-import-active-border);
+  --import-job-background: var(--admin-color-import-active-surface);
+  --import-job-status: var(--admin-color-import-active-text);
+  --import-job-progress: var(--admin-color-import-active-progress);
 }
 .import-job.cancelling {
-  --import-job-border: #d8bc70;
-  --import-job-background: #fff9e9;
-  --import-job-status: #795a0a;
+  --import-job-border: var(--admin-color-import-cancelling-border);
+  --import-job-background: var(--admin-color-import-cancelling-surface);
+  --import-job-status: var(--admin-color-import-cancelling-text);
 }
 .import-job.done {
-  --import-job-border: #78b78a;
-  --import-job-background: #f2fbf5;
-  --import-job-status: #24723c;
+  --import-job-border: var(--admin-color-import-done-border);
+  --import-job-background: var(--admin-color-import-done-surface);
+  --import-job-status: var(--admin-color-import-done-text);
 }
 .import-job.failed {
-  --import-job-border: #de8b83;
-  --import-job-background: #fff4f2;
-  --import-job-status: #a12f25;
+  --import-job-border: var(--admin-color-import-failed-border);
+  --import-job-background: var(--admin-color-import-failed-surface);
+  --import-job-status: var(--admin-color-import-failed-text);
 }
 .import-job.cancelled {
-  --import-job-border: #c7ccd3;
-  --import-job-background: #f3f4f6;
-  --import-job-status: #68717d;
+  --import-job-border: var(--admin-color-import-cancelled-border);
+  --import-job-background: var(--admin-color-import-cancelled-surface);
+  --import-job-status: var(--admin-color-import-cancelled-text);
 }
 .import-job.queued {
-  --import-job-border: #c7cdd6;
-  --import-job-background: #f5f6f8;
-  --import-job-status: #586474;
+  --import-job-border: var(--admin-color-import-neutral-border);
+  --import-job-background: var(--admin-color-import-neutral-surface);
+  --import-job-status: var(--admin-color-import-neutral-text);
 }
 .duplicate-panel {
   grid-column: 2 / 4;
   display: grid;
   gap: 10px;
   padding: 10px;
-  background: #fff8e8;
-  border: 1px solid #f0d38a;
+  background: var(--admin-color-warning-surface);
+  border: 1px solid var(--admin-color-warning-border);
   border-radius: 8px;
 }
-.duplicate-panel span { color: #66717f; font-size: 14px; }
+.duplicate-panel span { color: var(--admin-color-text-secondary); font-size: 14px; }
 .duplicate-note { min-width: 0; display: grid; gap: 2px; }
 .duplicate-body { display: flex; align-items: flex-end; gap: 12px; }
 .duplicate-body .duplicate-list { flex: 1; min-width: 0; }
@@ -370,14 +370,14 @@
 }
 .duplicate-item .image-thumbnail { grid-row: span 2; }
 .duplicate-item span, .duplicate-item small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.duplicate-item small { color: #66717f; }
+.duplicate-item small { color: var(--admin-color-text-secondary); }
 .empty-state {
   margin: 0;
   padding: 28px;
   text-align: center;
-  color: #66717f;
-  background: #fff;
-  border: 1px dashed #c9d1dc;
+  color: var(--admin-color-text-secondary);
+  background: var(--admin-color-surface-primary);
+  border: 1px dashed var(--admin-color-border-control);
   border-radius: 8px;
 }
 button.empty-state.upload-dropzone {
@@ -393,9 +393,9 @@ button.empty-state.upload-dropzone {
 .upload-dropzone .app-icon { width: 32px; height: 32px; flex-basis: 32px; opacity: .7; }
 button.empty-state.upload-dropzone:not(:disabled):hover,
 .upload-dropzone.is-dragover {
-  border-color: #1f6feb;
-  background: #f5f9ff;
-  color: #1f6feb;
+  border-color: var(--admin-color-action-primary);
+  background: var(--admin-color-upload-dropzone-hover);
+  color: var(--admin-color-action-primary);
 }
 .upload-dropzone.is-dragover { border-style: solid; }
 :is(.admin, [data-admin-dialog]) button.upload-dropzone:not(:disabled):not(.select-trigger):active {
@@ -461,7 +461,7 @@ button.empty-state.upload-dropzone:not(:disabled):hover,
     display: inline-flex;
     width: 44px;
     height: 44px;
-    color: #a13a32;
+    color: var(--admin-color-danger-text-muted);
   }
   .upload-primary-actions .upload-picker,
   .upload-primary-actions .upload-source-picker {

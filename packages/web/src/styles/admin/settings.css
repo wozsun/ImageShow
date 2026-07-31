@@ -29,8 +29,8 @@
   min-height: 0;
 }
 .settings-grid section {
-  background: #fff;
-  border: 1px solid #dce2ea;
+  background: var(--admin-color-surface-primary);
+  border: 1px solid var(--admin-color-border-default);
   border-radius: 8px;
   padding: 14px;
 }
@@ -38,7 +38,7 @@
   display: grid;
   gap: 6px;
   margin-bottom: 10px;
-  color: #495260;
+  color: var(--admin-color-text-label);
 }
 .settings-grid section > h2:has(+ .hint) { margin-bottom: 4px; }
 .settings-grid section > h2 + .hint { margin-bottom: 18px; }

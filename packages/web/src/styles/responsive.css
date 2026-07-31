@@ -7,15 +7,22 @@
 .app-loading-screen {
   width: 100%;
   min-height: 100dvh;
-  color: #f2f7ff;
-  background: var(--public-space-black);
+  background: var(--bootstrap-color-canvas);
 }
 
 .app-loading-text {
   display: inline-block;
-  color: var(--public-text);
+  color: var(--public-color-loading-text);
   font-size: 14px;
   letter-spacing: .08em;
+}
+
+.app-loading-screen .app-loading-text {
+  color: var(--bootstrap-color-text);
+}
+
+:root[data-ui-context="public"] .app-loading-screen .app-loading-text {
+  color: var(--public-color-loading-text);
 }
 
 .app-loading-reserved-dots {
@@ -99,10 +106,10 @@
     width: 100%;
     min-height: 40px;
     padding: 8px 14px;
-    border: 1px solid var(--public-line);
+    border: 1px solid var(--public-color-border-default);
     border-radius: 8px;
-    background: rgba(86, 128, 185, .16);
-    color: var(--public-text);
+    background: var(--public-color-gallery-control-surface);
+    color: var(--public-color-text-primary);
     font-weight: 600;
   }
   .gallery-filter-count {
@@ -113,8 +120,8 @@
     height: 20px;
     padding: 0 6px;
     border-radius: 999px;
-    background: var(--public-blue-strong);
-    color: #fff;
+    background: var(--public-color-action-strong);
+    color: var(--public-color-text-strong);
     font-size: 12px;
   }
   .gallery-filter-chevron { margin-left: auto; display: inline-flex; transition: transform 120ms ease-out; }
@@ -132,11 +139,11 @@
     overflow-y: auto;
     overscroll-behavior: contain;
     align-items: end;
-    background: rgba(7, 12, 24, .95);
-    border-bottom: 1px solid rgba(255, 255, 255, .12);
+    background: var(--public-color-gallery-mobile-filter-surface);
+    border-bottom: 1px solid var(--public-color-home-toolbar-border);
     box-shadow:
-      0 12px 24px rgba(0, 2, 8, .4),
-      inset 0 1px rgba(255, 255, 255, .1);
+      0 12px 24px var(--public-shadow-gallery-mobile-filter),
+      inset 0 1px var(--public-color-navigation-border);
     -webkit-backdrop-filter: blur(24px) saturate(128%);
     backdrop-filter: blur(24px) saturate(128%);
     visibility: hidden;
@@ -250,10 +257,10 @@
     min-height: 44px;
     padding: 0;
     flex-basis: 44px;
-    color: #fff;
-    background: rgba(5, 8, 14, .78);
-    border-color: rgba(255, 255, 255, .52);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, .36);
+    color: var(--public-color-text-strong);
+    background: var(--public-color-detail-mobile-close-surface);
+    border-color: var(--public-color-detail-mobile-close-border);
+    box-shadow: 0 4px 16px var(--public-shadow-detail-mobile-close);
     -webkit-backdrop-filter: blur(12px) saturate(120%);
     backdrop-filter: blur(12px) saturate(120%);
   }

@@ -21,7 +21,7 @@
   min-width: 150px;
   display: grid;
   gap: 6px;
-  color: #495260;
+  color: var(--admin-color-text-label);
   font-size: 14px;
 }
 
@@ -45,15 +45,15 @@
   justify-content: flex-end;
   flex-wrap: wrap;
   gap: 8px;
-  color: #66717f;
+  color: var(--admin-color-text-secondary);
   font-size: 13px;
 }
 
 .log-meta span {
   padding: 3px 8px;
-  border: 1px solid #dce2ea;
+  border: 1px solid var(--admin-color-border-default);
   border-radius: 999px;
-  background: #fff;
+  background: var(--admin-color-surface-primary);
   white-space: nowrap;
 }
 
@@ -70,9 +70,9 @@
   min-height: 0;
   max-height: none;
   margin: 0;
-  border-color: #232b38;
-  background: #111827;
-  color: #e5edf8;
+  border-color: var(--admin-color-log-border);
+  background: var(--admin-color-log-surface);
+  color: var(--admin-color-log-text);
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   font-size: 13px;
   line-height: 1.5;
@@ -82,7 +82,7 @@
 }
 
 .log-viewer.is-empty {
-  color: #9aa4b2;
+  color: var(--admin-color-log-empty);
 }
 
 @media (max-width: 760px) {

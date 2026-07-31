@@ -12,8 +12,8 @@
   gap: 16px;
 }
 .check-result section {
-  background: #fff;
-  border: 1px solid #dce2ea;
+  background: var(--admin-color-surface-primary);
+  border: 1px solid var(--admin-color-border-default);
   border-radius: 8px;
   padding: 14px;
 }
@@ -26,8 +26,8 @@
   animation: surface-in .18s ease-out;
 }
 .check-card { animation: surface-in .2s ease-out; }
-.check-summary.ok, .check-card.ok { border: 1px solid #b9dec4; background: #f2fbf5; }
-.check-summary.warn, .check-card.warn { border: 1px solid #f0d38a; background: #fff8e8; }
+.check-summary.ok, .check-card.ok { border: 1px solid var(--admin-color-success-border-card); background: var(--admin-color-success-surface-soft); }
+.check-summary.warn, .check-card.warn { border: 1px solid var(--admin-color-warning-border); background: var(--admin-color-warning-surface); }
 .check-card-head {
   display: flex;
   justify-content: space-between;
@@ -42,8 +42,8 @@
   font-size: 13px;
   font-weight: 600;
 }
-.check-card.ok .check-card-head span { color: #245236; background: #dff3e5; }
-.check-card.warn .check-card-head span { color: #765314; background: #f9e7af; }
+.check-card.ok .check-card-head span { color: var(--admin-color-success-text); background: var(--admin-color-success-indicator-surface); }
+.check-card.warn .check-card-head span { color: var(--admin-color-warning-text-strong); background: var(--admin-color-warning-surface-badge); }
 .check-result pre { border: 0; padding: 0; max-height: 360px; }
 
 @media (max-width: 760px) {

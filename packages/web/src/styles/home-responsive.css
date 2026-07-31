@@ -1,7 +1,7 @@
 @media (hover: hover) {
   .home-gallery-entry:hover {
-    background: #2f6fc9;
-    border-color: var(--home-primary);
+    background: var(--public-color-action-strong);
+    border-color: var(--public-color-action-primary);
   }
 
   .home-gallery-entry:hover span {
@@ -13,12 +13,12 @@
   .home-theme-options > .home-selector-options > button:not(:disabled):not([data-availability-locked="true"]):hover,
   .home-tag-selector button:not(:disabled):not([data-availability-locked="true"]):hover,
   .home-author-selector button:not(:disabled):not([data-availability-locked="true"]):hover {
-    border-color: rgba(145, 199, 255, .5);
+    border-color: var(--public-color-home-option-border-hover);
   }
 
   .home-filter-reset:not(:disabled):hover {
-    color: #fff;
-    background: rgba(255, 255, 255, .14);
+    color: var(--public-color-text-strong);
+    background: var(--public-color-home-reset-hover-surface);
   }
 }
 

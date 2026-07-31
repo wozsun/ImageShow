@@ -24,12 +24,12 @@
 .home-glass-card {
   min-width: 0;
   padding: clamp(24px, 3vw, 38px);
-  background: var(--home-card);
-  border: 1px solid var(--home-line);
+  background: var(--public-color-home-card-surface);
+  border: 1px solid var(--public-color-border-default);
   border-radius: 28px;
   box-shadow:
-    0 24px 70px rgba(0, 3, 10, .36),
-    inset 0 1px rgba(255, 255, 255, .09);
+    0 24px 70px var(--public-shadow-home-glass),
+    inset 0 1px var(--public-color-home-glass-highlight);
   -webkit-backdrop-filter: blur(22px) saturate(120%);
   backdrop-filter: blur(22px) saturate(120%);
 }
@@ -53,7 +53,12 @@
   left: 0;
   height: 1px;
   pointer-events: none;
-  background: linear-gradient(90deg, var(--home-primary), var(--home-line));
+  background:
+    linear-gradient(
+      90deg,
+      var(--public-color-action-primary),
+      var(--public-color-border-default)
+    );
   opacity: .72;
   transform: scaleX(1);
   transform-origin: left center;
@@ -75,7 +80,7 @@
     linear-gradient(
       90deg,
       transparent 41%,
-      var(--home-primary) 50%,
+      var(--public-color-action-primary) 50%,
       transparent 59%
     );
   opacity: .82;
@@ -89,7 +94,7 @@
 .home-section-heading span {
   display: block;
   margin-bottom: 7px;
-  color: var(--home-accent);
+  color: var(--public-color-accent);
   font-size: 10px;
   font-weight: 800;
   letter-spacing: .14em;
@@ -107,8 +112,8 @@
   flex: 0 0 auto;
   margin-top: 4px;
   padding: 5px 10px;
-  color: #cfe1ff;
-  background: rgba(61, 121, 216, .22);
+  color: var(--public-color-home-section-label);
+  background: var(--public-color-home-section-label-surface);
   border-radius: 999px;
   font-size: 11px;
   font-weight: 700;
@@ -130,7 +135,7 @@
 .home-axes-intro > span {
   display: block;
   margin-bottom: 5px;
-  color: var(--home-accent);
+  color: var(--public-color-accent);
   font-size: 9px;
   font-weight: 800;
   letter-spacing: .14em;
@@ -155,7 +160,7 @@
 .home-axis-group > strong {
   display: block;
   margin-bottom: 6px;
-  color: var(--home-muted);
+  color: var(--public-color-text-secondary);
   font-size: 11px;
 }
 
@@ -172,9 +177,9 @@
   padding: 7px 8px;
   display: grid;
   place-items: center;
-  color: var(--home-ink);
-  background: rgba(107, 151, 211, .14);
-  border: 1px solid var(--home-line);
+  color: var(--public-color-text-primary);
+  background: var(--public-color-home-option-surface);
+  border: 1px solid var(--public-color-border-default);
   border-radius: 14px;
   cursor: pointer;
   transition:
@@ -210,10 +215,10 @@
 }
 
 .home-axis-group button.is-selected {
-  color: #fff;
-  background: var(--home-primary-strong);
-  border-color: var(--home-primary);
-  box-shadow: 0 8px 16px rgba(30, 84, 165, .28);
+  color: var(--public-color-text-strong);
+  background: var(--public-color-action-strong);
+  border-color: var(--public-color-action-primary);
+  box-shadow: 0 8px 16px var(--public-shadow-home-option-selected);
 }
 
 .home-selector-layout {
@@ -322,9 +327,9 @@
   grid-template-columns: 24px 4px minmax(0, 1fr) auto 24px;
   gap: 10px;
   align-items: center;
-  color: var(--home-ink);
-  background: rgba(104, 148, 209, .13);
-  border: 1px solid rgba(155, 190, 239, .16);
+  color: var(--public-color-text-primary);
+  background: var(--public-color-home-card-option-surface);
+  border: 1px solid var(--public-color-home-card-option-border);
   border-radius: 14px;
   text-align: left;
   cursor: pointer;
@@ -336,7 +341,7 @@
 }
 
 .home-theme-selector button > small {
-  color: #9eabc0;
+  color: var(--public-color-home-option-caption);
   font-family: Georgia, "Times New Roman", serif;
 }
 
@@ -350,14 +355,14 @@
 }
 
 .home-theme-selector button > span:not(.home-theme-mark) {
-  color: var(--home-muted);
+  color: var(--public-color-text-secondary);
   font-size: 11px;
   white-space: nowrap;
 }
 
 .home-theme-selector button > i,
 .home-author-selector button > i {
-  color: var(--home-primary);
+  color: var(--public-color-action-primary);
   font-size: 17px;
   font-style: normal;
   text-align: center;
@@ -367,12 +372,12 @@
   align-self: stretch;
   min-height: 30px;
   border-radius: 999px;
-  background: #d9668f;
+  background: var(--public-color-home-theme-mark);
 }
 
 .home-theme-selector button.is-selected {
-  background: var(--home-primary-soft);
-  border-color: rgba(145, 199, 255, .5);
+  background: var(--public-color-action-soft);
+  border-color: var(--public-color-home-option-border-hover);
 }
 
 .home-tag-options > .home-selector-options {
@@ -389,9 +394,9 @@
   grid-template-columns: 12px minmax(0, 1fr);
   gap: 2px 7px;
   align-content: center;
-  color: var(--home-ink);
-  background: rgba(107, 151, 211, .14);
-  border: 1px solid var(--home-line);
+  color: var(--public-color-text-primary);
+  background: var(--public-color-home-option-surface);
+  border: 1px solid var(--public-color-border-default);
   border-radius: 13px;
   text-align: left;
   cursor: pointer;
@@ -406,7 +411,7 @@
   grid-row: 1 / 3;
   width: 12px;
   align-self: center;
-  color: var(--home-primary);
+  color: var(--public-color-action-primary);
   font-weight: 800;
   text-align: center;
 }
@@ -424,7 +429,7 @@
 }
 
 .home-tag-selector button > small {
-  color: var(--home-muted);
+  color: var(--public-color-text-secondary);
   font-size: 10px;
 }
 
@@ -433,8 +438,8 @@
 }
 
 .home-tag-selector button.is-selected {
-  background: var(--home-primary-soft);
-  border-color: rgba(145, 199, 255, .52);
+  background: var(--public-color-action-soft);
+  border-color: var(--public-color-home-option-border-selected);
 }
 
 .home-author-options > .home-selector-options {
@@ -451,9 +456,9 @@
   grid-template-columns: minmax(0, 1fr) auto 24px;
   gap: 10px;
   align-items: center;
-  color: var(--home-ink);
-  background: rgba(104, 148, 209, .13);
-  border: 1px solid rgba(155, 190, 239, .16);
+  color: var(--public-color-text-primary);
+  background: var(--public-color-home-card-option-surface);
+  border: 1px solid var(--public-color-home-card-option-border);
   border-radius: 14px;
   text-align: left;
   cursor: pointer;
@@ -473,7 +478,7 @@
 }
 
 .home-author-selector button > small {
-  color: var(--home-muted);
+  color: var(--public-color-text-secondary);
   font-size: 10px;
 }
 
@@ -482,17 +487,17 @@
 }
 
 .home-author-selector button.is-selected {
-  background: var(--home-primary-soft);
-  border-color: rgba(145, 199, 255, .5);
+  background: var(--public-color-action-soft);
+  border-color: var(--public-color-home-option-border-hover);
 }
 
 .home-axis-group button:disabled,
 .home-theme-selector button:disabled,
 .home-tag-selector button:disabled,
 .home-author-selector button:disabled {
-  color: rgba(160, 174, 194, .44);
-  background: rgba(73, 91, 119, .12);
-  border-color: rgba(132, 166, 218, .1);
+  color: var(--public-color-home-option-disabled-text);
+  background: var(--public-color-home-option-disabled-surface);
+  border-color: var(--public-color-home-option-disabled-border);
   box-shadow: none;
   cursor: default;
   filter: grayscale(.72);
@@ -511,11 +516,11 @@
   cursor: progress;
 }
 
-.home-accent-0 { background: #5f9bea; }
-.home-accent-1 { background: #7794c8; }
-.home-accent-2 { background: #d17fa7; }
-.home-accent-3 { background: #8581b7; }
-.home-accent-4 { background: #b56e98; }
+.home-accent-0 { background: var(--public-color-home-catalog-accent-1); }
+.home-accent-1 { background: var(--public-color-home-catalog-accent-2); }
+.home-accent-2 { background: var(--public-color-home-catalog-accent-3); }
+.home-accent-3 { background: var(--public-color-home-catalog-accent-4); }
+.home-accent-4 { background: var(--public-color-home-catalog-accent-5); }
 
 .home-stats-state {
   width: min(760px, 100%);
@@ -530,14 +535,14 @@
 
 .home-stats-state > p {
   margin: 10px 0 20px;
-  color: var(--home-muted);
+  color: var(--public-color-text-secondary);
 }
 
 .home-stats-state > button {
   min-height: 40px;
   padding: 0 18px;
-  color: #fff;
-  background: var(--home-primary-strong);
+  color: var(--public-color-text-strong);
+  background: var(--public-color-action-strong);
   border: 0;
   border-radius: 999px;
   cursor: pointer;
@@ -551,7 +556,12 @@
 .home-loading-lines > span {
   height: 12px;
   border-radius: 999px;
-  background: linear-gradient(90deg, rgba(61, 121, 216, .1), rgba(83, 148, 242, .28), rgba(61, 121, 216, .1));
+  background: linear-gradient(
+    90deg,
+    var(--public-color-home-loading-edge),
+    var(--public-color-home-loading-center),
+    var(--public-color-home-loading-edge)
+  );
   background-size: 200% 100%;
   animation: home-loading 1.4s ease-in-out infinite;
 }

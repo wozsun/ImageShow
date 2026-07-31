@@ -1,9 +1,10 @@
-import { lazy, Suspense, useRef } from "react";
+import { lazy, Suspense, useLayoutEffect, useRef } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { api, clearCsrfToken } from "../../lib/api/client.js";
 import { Icon } from "../../components/icon/Icon.js";
 import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
+import { applyUiColorContext } from "../../components/layout/SiteHead.js";
 import { adminApiBasePath, adminBasePath } from "../../lib/constants.js";
 import { clearSessionProbeHint, useAuthMe, useSiteConfig } from "../../lib/api/site-data.js";
 import { clearAdminCacheAfterLogin } from "../../lib/api/query-invalidation.js";
@@ -19,7 +20,8 @@ import {
 } from "./AdminNavigation.js";
 import { AdminBrand } from "./AdminBrand.js";
 import { AdminPreferencesProvider } from "../../hooks/useAdminPreferences.js";
-// 后台样式在此引入（而非全局 styles.css），随 AdminShell 懒加载分块下载，公共页不会加载。
+// 后台颜色契约与组件样式都随 AdminShell 懒加载，公开入口不会下载。
+import "../../styles/admin/semantic-colors.css";
 import "../../styles/admin.css";
 
 const Overview = lazy(() => import("./Overview.js").then((module) => ({
@@ -71,6 +73,10 @@ export function AdminShell() {
   const versionLinkEnabled = siteConfig?.site?.version?.link_enabled ?? true;
 
   const { data, error: authError, isError: authFailed, refetch } = useAuthMe();
+  const appearanceReady = Boolean(data) || authFailed;
+  useLayoutEffect(() => {
+    if (appearanceReady) applyUiColorContext("admin");
+  }, [appearanceReady]);
   if (authFailed) return <QueryErrorState error={authError} onRetry={() => void refetch()} fullPage />;
   if (!data) return <AppLoadingScreen />;
   if (!data.authenticated) return (
