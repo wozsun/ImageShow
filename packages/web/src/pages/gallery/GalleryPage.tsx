@@ -40,7 +40,7 @@ import {
 } from "../../components/feedback/AppLoadingScreen.js";
 import { AnchoredMenuDismissSignalContext } from "../../hooks/useAnchoredMenu.js";
 import { pageScrollRestoredEvent } from "../../hooks/usePageScrollLock.js";
-import { useDocumentMotionPaused } from "../../hooks/useDocumentMotionPaused.js";
+import { useDocumentMotionPause } from "../../hooks/useDocumentMotionPause.js";
 import { useOneShotAnimation } from "../../hooks/useOneShotAnimation.js";
 import { usePublicNavigationEntrance } from "../../hooks/usePublicNavigationEntrance.js";
 import { LazyGalleryImage } from "./LazyGalleryImage.js";
@@ -252,7 +252,7 @@ export function GalleryPage() {
     [imageQuery]
   );
   const toolbarEntrance = useOneShotAnimation(true);
-  const motionPaused = useDocumentMotionPaused();
+  useDocumentMotionPause();
 
   useEffect(() => {
     routeEntranceFinishedRef.current = true;
@@ -437,7 +437,6 @@ export function GalleryPage() {
     >
     <main
       className="page gallery-page"
-      data-motion-paused={motionPaused || undefined}
       style={{
         "--gallery-toolbar-height": toolbarHeight
           ? `${toolbarHeight}px`

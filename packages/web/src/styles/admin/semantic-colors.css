@@ -6,38 +6,38 @@
  */
 :root {
   /* Foundations */
-  --admin-color-canvas: #f5f6f8;
+  --admin-color-canvas: #f4f7fb;
   --admin-color-surface-primary: #fff;
-  --admin-color-text-primary: #20242a;
-  --admin-color-text-secondary: #66717f;
-  --admin-color-text-label: #495260;
-  --admin-color-text-subtle: #96a0ad;
-  --admin-color-text-on-dark: #f6f7f9;
+  --admin-color-text-primary: #172033;
+  --admin-color-text-secondary: #5f6c7d;
+  --admin-color-text-label: #3e4a5c;
+  --admin-color-text-subtle: #8b97a7;
   --admin-color-text-on-emphasis: #fff;
-  --admin-color-border-control: #c9d1dc;
-  --admin-color-border-default: #dce2ea;
-  --admin-color-border-muted: #dce3ec;
-  --admin-color-border-card: #e2e8f0;
+  --admin-color-border-control: #c8d3e1;
+  --admin-color-border-default: #d8e1ec;
+  --admin-color-border-muted: #e0e7ef;
+  --admin-color-border-card: #dbe4ee;
   --admin-color-action-primary: #1f6feb;
-  --admin-color-action-primary-dark: #1f5fae;
+  --admin-color-action-primary-dark: #1559b7;
   --admin-color-focus-code: #6e7681;
-  --admin-color-thumbnail-surface: #e8edf3;
+  --admin-color-thumbnail-surface: #e8eef5;
 
   /* Navigation */
-  --admin-color-navigation-surface: #171b22;
-  --admin-color-navigation-hover: #242a33;
-  --admin-color-navigation-divider: #343b46;
-  --admin-color-navigation-control-border: #3a424e;
-  --admin-color-navigation-mobile-divider: #2c333d;
-  --admin-color-navigation-mobile-active: #29466d;
-  --admin-color-navigation-version-border: rgba(246, 247, 249, .12);
-  --admin-color-navigation-version-text: rgba(246, 247, 249, .62);
-  --admin-color-navigation-version-surface: rgba(246, 247, 249, .055);
-  --admin-color-navigation-version-hover-text: rgba(246, 247, 249, .82);
-  --admin-color-navigation-version-hover-surface: rgba(246, 247, 249, .09);
-  --admin-color-navigation-focus: rgba(246, 247, 249, .5);
-  --admin-color-navigation-scrollbar: rgba(255, 255, 255, .3);
-  --admin-color-navigation-scrollbar-active: rgba(255, 255, 255, .5);
+  --admin-color-navigation-surface: #fff;
+  --admin-color-navigation-hover: var(--admin-color-control-surface-hover);
+  --admin-color-navigation-active: #dbeafe;
+  --admin-color-navigation-text: #334155;
+  --admin-color-navigation-active-text: #1559b7;
+  --admin-color-navigation-divider: #e1e8f0;
+  --admin-color-navigation-control-border: #cbd6e3;
+  --admin-color-navigation-version-border: #d6e0eb;
+  --admin-color-navigation-version-text: #64748b;
+  --admin-color-navigation-version-surface: #f4f7fb;
+  --admin-color-navigation-version-hover-text: #1559b7;
+  --admin-color-navigation-version-hover-surface: #e7f0ff;
+  --admin-color-navigation-focus: rgba(31, 111, 235, .38);
+  --admin-color-navigation-scrollbar: rgba(71, 85, 105, .28);
+  --admin-color-navigation-scrollbar-active: rgba(71, 85, 105, .46);
 
   /* Controls and shared states */
   --admin-color-control-text-tertiary: #97a1b0;
@@ -51,8 +51,6 @@
   --admin-color-control-changed-surface: #fff8e8;
   --admin-color-control-changed-emphasis: #e4bd58;
   --admin-color-control-changed-ring: rgba(228, 189, 88, .34);
-  --admin-color-reorder-surface: #f8fafc;
-  --admin-color-reorder-border-hover: #b9c8da;
   --admin-color-tag-action: #6b7686;
   --admin-color-tag-action-hover: #384150;
   --admin-color-close: #d98c8c;
@@ -148,7 +146,6 @@
   --admin-color-overview-label: #4a5563;
   --admin-color-overview-hint: #8a93a2;
   --admin-color-overview-chip: #64748b;
-  --admin-color-overview-card-hover-border: #b9c4d4;
   --admin-color-overview-recent-surface: #f1f4f8;
 
   /* Storage */
@@ -191,6 +188,7 @@
 
 :root[data-ui-context="admin"],
 [data-admin-dialog] {
+  color-scheme: light;
   --color-browser-canvas: var(--admin-color-canvas);
   --color-control-text-primary: var(--admin-color-text-primary);
   --color-control-text-secondary: var(--admin-color-text-secondary);

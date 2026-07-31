@@ -11,9 +11,9 @@
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    color: var(--admin-color-text-on-dark);
+    color: var(--admin-color-navigation-text);
     background: var(--admin-color-navigation-surface);
-    border-bottom: 1px solid var(--admin-color-navigation-mobile-divider);
+    border-bottom: 1px solid var(--admin-color-navigation-divider);
   }
   .admin-mobile-header > .admin-brand {
     flex: 0 0 190px;
@@ -22,9 +22,18 @@
   }
   .admin-mobile-navigation { flex: 0 0 auto; }
   .admin-mobile-navigation .mobile-nav-toggle {
-    color: var(--admin-color-text-on-dark);
-    background: var(--admin-color-navigation-hover);
+    color: var(--admin-color-navigation-text);
+    background: var(--admin-color-navigation-surface);
     border-color: var(--admin-color-navigation-control-border);
+    transition:
+      color .16s ease,
+      background-color .16s ease,
+      border-color .16s ease;
+  }
+  .admin-mobile-navigation .mobile-nav-toggle[aria-expanded="true"] {
+    color: var(--admin-color-navigation-active-text);
+    background: var(--admin-color-navigation-active);
+    border-color: var(--admin-color-control-border-selected);
   }
   .admin-mobile-navigation .mobile-nav-dropdown {
     background: var(--admin-color-navigation-surface);
@@ -33,15 +42,21 @@
        （下拉锚定在 sticky 头部，无法依赖页面滚动来露出折叠线以下的项）。 */
     max-height: calc(100svh - 72px);
     overflow-y: auto;
+    box-shadow: 0 14px 34px var(--admin-shadow-menu);
   }
   .admin-mobile-navigation .mobile-nav-dropdown a,
   .admin-mobile-navigation .mobile-nav-dropdown button {
-    color: var(--admin-color-text-on-dark);
+    color: var(--admin-color-navigation-text);
     line-height: 1.25;
   }
+  .admin-mobile-navigation .mobile-nav-dropdown a:hover,
+  .admin-mobile-navigation .mobile-nav-dropdown button:hover {
+    color: var(--admin-color-navigation-active-text);
+    background: var(--admin-color-navigation-hover);
+  }
   .admin-mobile-navigation .mobile-nav-dropdown a.active {
-    color: var(--admin-color-text-on-emphasis);
-    background: var(--admin-color-navigation-mobile-active);
+    color: var(--admin-color-navigation-active-text);
+    background: var(--admin-color-navigation-active);
   }
   .admin-mobile-navigation .admin-nav-divider {
     height: 1px;
@@ -117,6 +132,15 @@
   .operation-modal:not(.storage-edit-modal) footer button { flex: 1; min-height: 44px; }
 }
 
+@media (max-width: 760px) and (hover: hover) and (pointer: fine) {
+  .admin-mobile-navigation button.mobile-nav-toggle:not(:disabled):hover {
+    color: var(--admin-color-navigation-active-text);
+    background: var(--admin-color-navigation-hover);
+    border-color: var(--admin-color-control-border-selected);
+    filter: none;
+  }
+}
+
 /* 后台共享的“减少动态效果”项放在所有尺寸规则之后，避免移动端
    :active 规则重新启用缩放。 */
 @media (prefers-reduced-motion: reduce) {
@@ -124,6 +148,22 @@
   .action-feedback-progress { animation: none; }
   :is(.admin, [data-admin-dialog]) button:not(:disabled):active { transform: none; }
   :is(.admin, [data-admin-dialog]) button:not(:disabled):not(.select-trigger):not(.password-toggle):not(.anchored-menu-item):active {
+    transform: none;
+  }
+  :is(
+    a.overview-card-link,
+    button.overview-recent-item,
+    button.storage-add-card,
+    .admin-image-card
+  ) {
+    transition: none;
+  }
+  :is(
+    a.overview-card-link,
+    button.overview-recent-item,
+    button.storage-add-card
+  ):not(:disabled):hover,
+  .admin-image-card:has(> .admin-image-card-detail:not(:disabled):hover) {
     transform: none;
   }
 }

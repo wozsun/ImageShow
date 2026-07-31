@@ -1,3 +1,7 @@
+:root {
+  --admin-interactive-card-lift: -1px;
+}
+
 .admin {
   min-height: 100vh;
   padding-left: 220px;
@@ -13,7 +17,8 @@
   max-height: 100svh;
   overflow: hidden;
   background: var(--admin-color-navigation-surface);
-  color: var(--admin-color-text-on-dark);
+  color: var(--admin-color-navigation-text);
+  border-right: 1px solid var(--admin-color-navigation-divider);
   padding: 18px;
   display: flex;
   flex-direction: column;
@@ -26,18 +31,30 @@
   justify-content: flex-start;
   align-items: center;
   gap: 12px;
-  border-radius: 6px;
+  border-radius: 10px;
   background: transparent;
-  color: var(--admin-color-text-on-dark);
+  color: var(--admin-color-navigation-text);
   border-color: transparent;
   line-height: 1.25;
   display: flex;
-  transition: color .16s ease, background-color .16s ease, font-weight .16s ease, transform .1s ease;
+  font-weight: 600;
+  transition:
+    color .16s ease,
+    background-color .16s ease,
+    border-color .16s ease,
+    box-shadow .16s ease,
+    transform .1s ease;
 }
-.admin > aside a:hover, .admin > aside button:hover,
-.admin > aside a.active { color: var(--admin-color-text-on-emphasis); background: var(--admin-color-navigation-hover); font-weight: 700; }
-.admin > aside a:hover .app-icon, .admin > aside button:hover .app-icon,
-.admin > aside a.active .app-icon { filter: brightness(1.25); }
+.admin > aside a:hover,
+.admin > aside button:hover {
+  color: var(--admin-color-navigation-active-text);
+  background: var(--admin-color-navigation-hover);
+}
+.admin > aside a.active {
+  color: var(--admin-color-navigation-active-text);
+  background: var(--admin-color-navigation-active);
+  font-weight: 700;
+}
 :is(.admin, [data-admin-dialog]) button:not(:disabled) {
   transition:
     color .16s ease,
@@ -68,7 +85,7 @@
   grid-template-columns: minmax(0, 1fr);
   align-items: center;
   overflow: hidden;
-  color: var(--admin-color-text-on-dark);
+  color: var(--admin-color-text-primary);
 }
 .admin-brand.has-version {
   grid-template-columns: minmax(0, 1fr) max-content;
@@ -133,7 +150,7 @@
   background: transparent;
 }
 .admin > aside .admin-brand-name:hover {
-  color: var(--admin-color-text-on-emphasis);
+  color: var(--admin-color-action-primary-dark);
   background: transparent;
   font-weight: 800;
 }
@@ -161,7 +178,46 @@
   color: var(--admin-color-navigation-version-hover-text);
   background: var(--admin-color-navigation-version-hover-surface);
 }
-.admin > aside .home-link { margin-bottom: 0; }
+.admin-site-navigation {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px;
+  gap: 2px;
+  align-items: center;
+}
+.admin > aside .admin-site-navigation > .home-link {
+  width: auto;
+  min-width: 0;
+  margin-bottom: 0;
+}
+.admin .admin-color-scheme-toggle {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+  justify-content: center;
+  gap: 0;
+  color: var(--admin-color-navigation-text);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.admin .admin-color-scheme-toggle:hover,
+.admin .admin-color-scheme-toggle:disabled:hover {
+  color: var(--admin-color-navigation-text);
+  background: transparent;
+}
+.admin .admin-color-scheme-toggle .app-icon {
+  width: 17px;
+  height: 17px;
+  flex-basis: 17px;
+}
+.admin .admin-color-scheme-toggle:disabled {
+  opacity: 1;
+  cursor: default;
+}
 .admin > aside .admin-nav-divider {
   flex: 0 0 1px;
   width: 100%;
@@ -190,10 +246,24 @@
 .admin > aside .logout-button { margin-top: 0; }
 .admin > aside .admin-nav-group { display: flex; flex-direction: column; gap: 4px; }
 
-.admin-nav-group-trigger { display: flex; align-items: center; border-radius: 6px; }
-.admin-nav-group-trigger:hover, .admin-nav-group-trigger.active { background: var(--admin-color-navigation-hover); }
+.admin-nav-group-trigger { display: flex; align-items: center; border-radius: 10px; }
+.admin-nav-group-trigger:hover { background: var(--admin-color-navigation-hover); }
+.admin-nav-group-trigger:hover > :is(.admin-nav-group-main, .admin-nav-caret) {
+  color: var(--admin-color-navigation-active-text);
+  background: transparent;
+}
+.admin-nav-group-trigger.active {
+  background: var(--admin-color-navigation-active);
+}
 .admin > aside .admin-nav-group-main { flex: 1 1 auto; width: auto; }
-.admin-nav-group-trigger.active .admin-nav-group-main { color: var(--admin-color-text-on-emphasis); font-weight: 700; }
+.admin-nav-group-trigger.active > :is(
+  .admin-nav-group-main,
+  .admin-nav-caret
+) {
+  color: var(--admin-color-navigation-active-text);
+  background: transparent;
+  font-weight: 700;
+}
 .admin-nav-group-label { flex: 1 1 auto; text-align: left; }
 .admin > aside .admin-nav-caret { width: auto; flex: 0 0 auto; padding: 10px 10px; }
 .admin-nav-caret .app-icon { width: 18px; height: 18px; flex-basis: 18px; transition: transform .2s ease; }
@@ -347,3 +417,56 @@ body:has(.admin > .workspace-contained) {
   overflow: hidden;
 }
 .segmented button { border: 0; border-radius: 0; }
+
+/*
+ * 只有整张表面本身承担点击职责时才使用抬升反馈；包含表单和独立动作的
+ * 配置卡只共享静态圆角，不因内部控件悬浮而移动。
+ */
+:is(
+  a.overview-card-link,
+  button.overview-recent-item,
+  button.storage-add-card
+):not(:disabled) {
+  transition:
+    color .16s ease,
+    background-color .16s ease,
+    border-color .16s ease,
+    box-shadow .16s ease,
+    transform .16s ease;
+}
+
+.admin-image-card {
+  transition:
+    border-color .16s ease,
+    box-shadow .16s ease,
+    transform .16s ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :is(
+    a.overview-card-link,
+    button.overview-recent-item,
+    button.storage-add-card
+  ):not(:disabled):hover {
+    border-color: var(--admin-color-control-border-selected);
+    box-shadow: 0 8px 22px var(--admin-shadow-card-hover);
+    transform: translateY(var(--admin-interactive-card-lift));
+  }
+
+  .admin-image-card:has(> .admin-image-card-detail:not(:disabled):hover) {
+    border-color: var(--admin-color-control-border-selected);
+    box-shadow: 0 8px 22px var(--admin-shadow-card-hover);
+    transform: translateY(var(--admin-interactive-card-lift));
+  }
+}
+
+:is(
+  a.overview-card-link,
+  button.overview-recent-item,
+  button.storage-add-card
+):focus-visible,
+.admin-image-card:has(> .admin-image-card-detail:focus-visible) {
+  border-color: var(--admin-color-action-primary);
+  outline: 3px solid var(--admin-color-navigation-focus);
+  outline-offset: 2px;
+}

@@ -23,9 +23,10 @@
   min-width: 0;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr));
-  gap: 8px;
+  gap: var(--admin-card-grid-gap);
   align-content: start;
 }
+.entity-vocabulary-grid { padding-bottom: 8px; }
 .entity-card {
   display: flex;
   flex-direction: column;

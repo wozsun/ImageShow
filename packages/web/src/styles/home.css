@@ -554,9 +554,10 @@
   outline-offset: 6px;
 }
 
-.home-page[data-motion-paused="true"] .home-background-image-frame img,
-.home-page[data-motion-paused="true"] .home-background-atmosphere,
-.home-page[data-motion-paused="true"] .home-random-background::after {
+:root[data-document-motion-paused="true"]
+  .home-background-image-frame img,
+:root[data-document-motion-paused="true"] .home-background-atmosphere,
+:root[data-document-motion-paused="true"] .home-random-background::after {
   animation-play-state: paused;
 }
 

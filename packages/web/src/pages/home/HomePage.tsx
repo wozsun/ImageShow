@@ -11,7 +11,7 @@ import {
   type AppLoadingExtraDots
 } from "../../components/feedback/AppLoadingScreen.js";
 import { AppHeader } from "../../components/navigation/AppHeader.js";
-import { useDocumentMotionPaused } from "../../hooks/useDocumentMotionPaused.js";
+import { useDocumentMotionPause } from "../../hooks/useDocumentMotionPause.js";
 import { usePublicNavigationEntrance } from "../../hooks/usePublicNavigationEntrance.js";
 import { useGalleryStats, useSiteConfig } from "../../lib/api/site-data.js";
 import {
@@ -95,7 +95,7 @@ export function HomePage() {
     catalogRef,
     navigationHadAppearedBeforeMount || !navigationMotionAllowed
   );
-  const motionPaused = useDocumentMotionPaused();
+  useDocumentMotionPause();
 
   useLayoutEffect(() => {
     if (entrance.navigationRevealed) markNavigationAppeared();
@@ -109,10 +109,7 @@ export function HomePage() {
     || entrance.heroRevealed;
 
   return (
-    <main
-      className="page home-page"
-      data-motion-paused={motionPaused || undefined}
-    >
+    <main className="page home-page">
       <HomeBackground
         source={background}
         ready={entrance.backgroundReady}

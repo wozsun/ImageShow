@@ -23,6 +23,7 @@ import {
   deviceOptions,
   facetLabel,
   homeRevealItemLimits,
+  homeThemesWithUnsetLast,
   selectedSlugs
 } from "./home-ui.js";
 import { useOneShotSectionReveal } from "./useOneShotSectionReveal.js";
@@ -248,10 +249,11 @@ export function HomeCatalog({
   const brightnessCounts = new Map(
     stats?.brightnesses.map((item) => [item.brightness, item.image_count]) ?? []
   );
+  const themes = homeThemesWithUnsetLast(stats?.themes ?? []);
   const isUnavailable = (selected: boolean, count: number) =>
     !selected && count === 0;
   const themeRevealIndexes = boundedHomeRevealIndexes(
-    stats?.themes ?? [],
+    themes,
     themeSet,
     availabilityUnverified,
     homeRevealItemLimits.themes
@@ -409,13 +411,13 @@ export function HomeCatalog({
                 index="01"
                 eyebrow="THEMES"
                 title="主题"
-                count={stats.themes.length}
+                count={themes.length}
                 refreshGlintRun={refreshGlintRun}
                 isRefreshing={isRefreshing}
                 reduceMotion={reduceMotion}
               />
               <SelectorOptions className="home-theme-options">
-                {stats.themes.map((item, index) => {
+                {themes.map((item, index) => {
                   const selected = themeSet.has(item.slug);
                   const disabled = isUnavailable(selected, item.image_count);
                   const locked = availabilityUnverified && !selected;

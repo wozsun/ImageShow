@@ -75,6 +75,8 @@
   .gallery-atmosphere {
     animation: none;
   }
+  .tile { transition: none; }
+  .tile:hover { translate: none; }
   .tile-image-shell img { transition: none; }
   .gallery-back-to-top { transition: none; }
 }

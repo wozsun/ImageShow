@@ -1,3 +1,8 @@
+:root {
+  /* 后台页面与可独立懒加载的管理编辑器共用卡片集合密度。 */
+  --admin-card-grid-gap: 6px;
+}
+
 .slug-combo-control { width: 100%; min-width: 0; }
 
 .slug-combo-control input[aria-invalid="true"] { border-color: var(--admin-color-danger-action); box-shadow: 0 0 0 1px var(--admin-color-danger-action); }
@@ -67,13 +72,12 @@
   overflow: hidden;
   border: 1px solid var(--admin-color-border-muted);
   border-radius: 6px;
-  background: var(--admin-color-reorder-surface);
-  transition: border-color .16s ease, background-color .16s ease;
+  background: var(--admin-color-surface-primary);
+  transition: filter .16s ease;
 }
 .reorder-control-group:hover,
 .reorder-control-group:focus-within {
-  border-color: var(--admin-color-reorder-border-hover);
-  background: var(--admin-color-surface-primary);
+  filter: brightness(.97);
 }
 .reorder-control-group > button.icon.reorder-step-button {
   width: 28px;
@@ -84,6 +88,9 @@
   border: 0;
   border-radius: 0;
   background: transparent;
+}
+.reorder-control-group:hover > button.icon.reorder-step-button:hover {
+  filter: none;
 }
 .reorder-control-group > .reorder-pointer-handle,
 .reorder-control-group > button.icon.reorder-step-button.is-next {
@@ -148,7 +155,14 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.async-action-button.is-pending { color: var(--admin-color-pending-text); background: var(--admin-color-pending-surface); border-color: var(--admin-color-pending-border); }
+.async-action-button.is-pending {
+  color: var(--admin-color-text-on-emphasis);
+  background: var(--admin-color-action-primary);
+  border-color: var(--admin-color-action-primary);
+}
+.async-action-button.is-pending:disabled {
+  cursor: wait;
+}
 .async-action-button.is-success { color: var(--admin-color-success-text); background: var(--admin-color-success-surface); border-color: var(--admin-color-success-border); }
 .async-action-button.is-error { color: var(--admin-color-danger-text); background: var(--admin-color-danger-surface); border-color: var(--admin-color-danger-border-strong); }
 
@@ -412,6 +426,21 @@ textarea.is-changed,
 .tag-input-control .tag-input-field:disabled { opacity: 1; }
 .tag-input-control:has(.tag-input-field:disabled) .tag-chip { padding: 3px 8px; }
 
+/*
+ * 单图 / 批量编辑器也会挂载在公开画廊的暗色页面上。显式焦点环取代
+ * 浏览器随外层 color-scheme 改变的原生 auto outline，保证两条入口一致。
+ */
+[data-admin-dialog] .batch-edit-modal :is(
+  input:not(.tag-input-field),
+  textarea,
+  .select-trigger
+):focus-visible,
+[data-admin-dialog] .batch-edit-modal .tag-input-control:focus-within {
+  border-color: var(--admin-color-action-primary);
+  outline: none;
+  box-shadow: 0 0 0 2px var(--admin-color-control-border-selected);
+}
+
 .tag-chip.is-new { background: var(--admin-color-success-surface); border-color: var(--admin-color-success-border); color: var(--admin-color-success-text-strong); }
 .tag-chip.is-new .tag-chip-remove { color: var(--admin-color-success-action); }
 .tag-chip.is-new .tag-chip-remove:hover { background: var(--admin-color-success-surface-hover); color: var(--admin-color-success-action-hover); }
@@ -507,12 +536,6 @@ pre {
   padding: 0 16px 12px;
   overflow-wrap: anywhere;
 }
-.confirm-dialog .async-action-button.button.is-pending {
-  color: var(--admin-color-text-on-emphasis);
-  background: var(--admin-color-action-primary);
-  border-color: var(--admin-color-action-primary);
-}
-
 /*危险动作按钮（删除等）。*/
 .danger-button, button.danger-button {
   color: var(--admin-color-danger-text);
@@ -521,10 +544,12 @@ pre {
 }
 .danger-button:hover, button.danger-button:hover { color: var(--admin-color-danger-text-strong); background: var(--admin-color-danger-surface-hover); border-color: var(--admin-color-danger-border-strong); }
 .danger-button.two-step-confirm-icon-button.is-armed,
-button.danger-button.two-step-confirm-icon-button.is-armed {
+button.danger-button.two-step-confirm-icon-button.is-armed,
+.danger-button.confirm-dialog-final-confirmation.is-armed,
+button.danger-button.confirm-dialog-final-confirmation.is-armed {
   color: var(--admin-color-text-on-emphasis);
-  background: var(--admin-color-danger-action);
-  border-color: var(--admin-color-danger-action);
+  background: var(--admin-color-danger-action-hover);
+  border-color: var(--admin-color-danger-action-hover);
 }
 
 @media (prefers-reduced-motion: reduce) {

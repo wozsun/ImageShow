@@ -16,6 +16,7 @@ import { ActionFeedbackProvider } from "../../components/feedback/ActionFeedback
 import { AdminLogin } from "./AdminLogin.js";
 import {
   AdminNavigationLinks,
+  AdminSiteNavigation,
   adminNavigationForRole
 } from "./AdminNavigation.js";
 import { AdminBrand } from "./AdminBrand.js";
@@ -119,7 +120,7 @@ export function AdminShell() {
           versionLinkEnabled={versionLinkEnabled}
           to={adminBasePath}
         />
-        <AdminNavigationLinks entries={navigation.site} variant="desktop" />
+        <AdminSiteNavigation entries={navigation.site} variant="desktop" />
         <div className="admin-nav-divider" role="separator" />
         <div className="admin-nav-scroll" ref={navScrollRef}>
           <AdminNavigationLinks entries={navigation.main} variant="desktop" />
@@ -140,7 +141,7 @@ export function AdminShell() {
           to={adminBasePath}
         />
         <MobileNavigation className="admin-mobile-navigation">
-          <AdminNavigationLinks entries={navigation.site} variant="mobile" />
+          <AdminSiteNavigation entries={navigation.site} variant="mobile" />
           <div className="admin-nav-divider" role="separator" />
           <AdminNavigationLinks entries={navigation.main} variant="mobile" />
           <div className="admin-nav-divider" role="separator" />

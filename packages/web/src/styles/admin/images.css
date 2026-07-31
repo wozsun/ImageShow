@@ -24,12 +24,12 @@
   color: var(--admin-color-text-label);
 }
 .check-label input { width: 16px; height: 16px; padding: 0; }
-.table { display: grid; gap: 8px; }
+.table { display: grid; gap: var(--admin-card-grid-gap); }
 .admin-image-grid {
   grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
   align-items: start;
-
   grid-auto-rows: min-content;
+  padding-block: 8px;
 }
 .admin-image-card {
   min-width: 0;

@@ -26,6 +26,7 @@
   --public-color-border-default: rgba(155, 190, 239, .28);
   --public-color-action-primary: #91c7ff;
   --public-color-action-strong: #2f6fc9;
+  --public-color-selection-strong: #2056e0;
   --public-color-action-soft: rgba(85, 150, 235, .3);
   --public-color-accent: #df8caf;
 
@@ -81,7 +82,7 @@
   --public-color-navigation-border: rgba(255, 255, 255, .1);
   --public-color-navigation-control-surface: rgba(255, 255, 255, .08);
   --public-color-navigation-control-border: rgba(255, 255, 255, .2);
-  --public-color-navigation-active: rgba(77, 143, 232, .9);
+  --public-color-navigation-active: var(--public-color-selection-strong);
   --public-shadow-navigation: rgba(0, 2, 8, .34);
   --public-shadow-navigation-menu: rgba(0, 2, 8, .42);
   --public-color-navigation-glow-primary: rgba(90, 157, 239, .2);
@@ -131,7 +132,6 @@
   --public-color-home-section-label-surface: rgba(61, 121, 216, .22);
   --public-color-home-card-surface: rgba(15, 24, 40, .18);
   --public-color-home-option-surface: rgba(107, 151, 211, .14);
-  --public-shadow-home-option-selected: rgba(30, 84, 165, .28);
   --public-color-home-card-option-surface: rgba(104, 148, 209, .13);
   --public-color-home-card-option-border: rgba(155, 190, 239, .16);
   --public-color-home-option-caption: #9eabc0;
@@ -185,6 +185,8 @@
   --public-color-gallery-code-text: rgba(224, 235, 249, .78);
   --public-color-gallery-code-surface: rgba(86, 128, 185, .14);
   --public-shadow-gallery-tile: rgba(0, 3, 10, .28);
+  --public-color-gallery-tile-border-hover: rgba(145, 199, 255, .5);
+  --public-shadow-gallery-tile-hover: rgba(47, 111, 201, .16);
   --public-color-gallery-tile-surface: #0d1422;
   --public-color-gallery-tile-surface-raised: #18243a;
   --public-color-gallery-tile-overlay-clear: rgba(14, 18, 28, 0);

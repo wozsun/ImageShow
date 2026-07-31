@@ -78,11 +78,11 @@
 .config-package-dialog-copy { grid-area: copy; }
 .config-package-dialog header > .close { grid-area: close; }
 .config-package-dialog .operation-body { display: grid; gap: 12px; overflow-y: auto; }
-.advanced-config-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.advanced-config-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--admin-card-grid-gap); margin: 0; }
 .advanced-config-summary div { min-width: 0; padding: 10px 12px; border-radius: 8px; background: var(--admin-color-config-summary-surface); }
 .advanced-config-summary dt { color: var(--admin-color-text-secondary); font-size: 12px; }
 .advanced-config-summary dd { margin: 4px 0 0; overflow: hidden; color: var(--admin-color-text-primary); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
-.advanced-config-backends { display: grid; gap: 8px; }
+.advanced-config-backends { display: grid; gap: var(--admin-card-grid-gap); }
 .advanced-config-backend {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(220px, 320px);

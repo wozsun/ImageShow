@@ -63,7 +63,7 @@
 .batch-edit-list {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 8px;
+  gap: var(--admin-card-grid-gap);
   align-content: start;
 }
 .batch-edit-common-panel { flex: 0 0 auto; }
@@ -136,7 +136,7 @@
 }
 .batch-edit-row > .image-fields { grid-area: fields; margin-top: 6px; }
 
-.batch-edit-row.is-changed { box-shadow: inset 3px 0 0 var(--admin-color-control-changed); background: var(--admin-color-control-changed-surface); }
+.batch-edit-row.is-changed { background: var(--admin-color-control-changed-surface); }
 .batch-edit-head-name { min-width: 0; display: flex; align-items: center; gap: 8px; }
 .batch-edit-head .changed-badge {
   flex: 0 0 auto;

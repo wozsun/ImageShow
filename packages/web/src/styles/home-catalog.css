@@ -216,9 +216,8 @@
 
 .home-axis-group button.is-selected {
   color: var(--public-color-text-strong);
-  background: var(--public-color-action-strong);
-  border-color: var(--public-color-action-primary);
-  box-shadow: 0 8px 16px var(--public-shadow-home-option-selected);
+  background: var(--public-color-action-soft);
+  border-color: var(--public-color-home-option-border-selected);
 }
 
 .home-selector-layout {
@@ -377,7 +376,7 @@
 
 .home-theme-selector button.is-selected {
   background: var(--public-color-action-soft);
-  border-color: var(--public-color-home-option-border-hover);
+  border-color: var(--public-color-home-option-border-selected);
 }
 
 .home-tag-options > .home-selector-options {
@@ -488,7 +487,7 @@
 
 .home-author-selector button.is-selected {
   background: var(--public-color-action-soft);
-  border-color: var(--public-color-home-option-border-hover);
+  border-color: var(--public-color-home-option-border-selected);
 }
 
 .home-axis-group button:disabled,
@@ -691,10 +690,10 @@
   animation: none;
 }
 
-.home-page[data-motion-paused="true"]
+:root[data-document-motion-paused="true"]
   .home-reveal-section.is-reveal-settled
   .home-section-track-glint,
-.home-page[data-motion-paused="true"] .home-loading-lines > span {
+:root[data-document-motion-paused="true"] .home-loading-lines > span {
   animation-play-state: paused;
 }
 

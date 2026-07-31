@@ -459,7 +459,7 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
         />
       )}
       <div className="admin-scroll-region" ref={listRef}>
-        <div className="entity-admin-grid">
+        <div className="entity-admin-grid entity-vocabulary-grid">
           {pageItems.map((item) => {
             const position = reorderPositionByKey(
               order,
@@ -508,7 +508,9 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
         <ConfirmDialog
           title={`删除${copy.noun}`}
           description={copy.deleteDescription(confirmDelete)}
-          confirmLabel="删除"
+          confirmLabel="确认删除"
+          requireFinalConfirmation
+          finalConfirmationLabel="再次确认"
           busy={mutation === "delete"}
           onClose={() => setConfirmDelete(null)}
           onConfirm={remove}

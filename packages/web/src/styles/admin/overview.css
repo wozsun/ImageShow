@@ -5,7 +5,7 @@
 .overview-cards {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 12px;
+  gap: var(--admin-card-grid-gap);
 }
 .overview-card {
   display: flex;
@@ -25,9 +25,7 @@ a.overview-card-link {
   text-decoration: none;
   color: inherit;
   cursor: pointer;
-  transition: border-color .15s ease, box-shadow .15s ease, transform .08s ease;
 }
-a.overview-card-link:hover { border-color: var(--admin-color-overview-card-hover-border); box-shadow: 0 4px 14px var(--admin-shadow-card-hover); }
 .overview-themes { display: flex; flex-wrap: wrap; gap: 8px; }
 .overview-theme-chip {
   display: inline-flex;
@@ -40,7 +38,7 @@ a.overview-card-link:hover { border-color: var(--admin-color-overview-card-hover
   font-size: 13px;
 }
 .overview-theme-chip b { color: var(--admin-color-overview-chip); font-weight: 600; font-size: 12px; }
-.overview-recent { display: grid; grid-template-columns: repeat(auto-fill, minmax(82px, 1fr)); gap: 10px; }
+.overview-recent { display: grid; grid-template-columns: repeat(auto-fill, minmax(82px, 1fr)); gap: var(--admin-card-grid-gap); }
 .overview-recent-item {
   display: block;
   width: 100%;

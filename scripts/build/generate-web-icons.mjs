@@ -52,6 +52,7 @@ const iconNames = [
   "shuffle-line",
   "star-fill",
   "star-line",
+  "sun-line",
   "upload-cloud-2-line",
   "user-add-line",
   "weibo-line"

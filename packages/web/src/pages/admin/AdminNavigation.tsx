@@ -228,3 +228,30 @@ export function AdminNavigationLinks({
     );
   });
 }
+
+const fixedLightAppearanceLabel =
+  "当前为亮色模式，暗色模式将在下一版本提供";
+
+export function AdminSiteNavigation({
+  entries,
+  variant
+}: {
+  entries: readonly AdminNavigationEntry[];
+  variant: "desktop" | "mobile";
+}) {
+  return (
+    <div className="admin-site-navigation">
+      <AdminNavigationLinks entries={entries} variant={variant} />
+      <button
+        className="admin-color-scheme-toggle"
+        type="button"
+        data-color-scheme="light"
+        aria-label={fixedLightAppearanceLabel}
+        title={fixedLightAppearanceLabel}
+        disabled
+      >
+        <Icon name="sun-line" />
+      </button>
+    </div>
+  );
+}

@@ -9,7 +9,7 @@
 .check-result {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 16px;
+  gap: var(--admin-card-grid-gap);
 }
 .check-result section {
   background: var(--admin-color-surface-primary);

@@ -1,4 +1,4 @@
-import { useRef, type RefObject } from "react";
+import { useRef, useState, type RefObject } from "react";
 import type { IconName } from "../icon/Icon.js";
 import { AsyncActionButton } from "../actions/AsyncActionButton.js";
 import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
@@ -10,6 +10,9 @@ export function ConfirmDialog({
   confirmLabel,
   busy = false,
   confirmDisabled = false,
+  requireFinalConfirmation = false,
+  finalConfirmationLabel = "再次确认",
+  finalConfirmationIcon = "delete-bin-2-line",
   closeOnBackdrop = false,
   danger = true,
   confirmIcon = "delete-bin-6-line",
@@ -26,6 +29,9 @@ export function ConfirmDialog({
   confirmLabel: string;
   busy?: boolean;
   confirmDisabled?: boolean;
+  requireFinalConfirmation?: boolean;
+  finalConfirmationLabel?: string;
+  finalConfirmationIcon?: IconName;
   closeOnBackdrop?: boolean;
   danger?: boolean;
   confirmIcon?: IconName;
@@ -38,10 +44,23 @@ export function ConfirmDialog({
   onConfirm: () => Promise<boolean | void>;
 }) {
   const confirmStatus = useAsyncActionStatus({ successDurationMs: null });
+  const [finalConfirmationArmed, setFinalConfirmationArmed] = useState(false);
   const cancelButtonRef = useRef<HTMLButtonElement | null>(null);
   const blocked = busy || confirmStatus.pending;
+  const finalConfirmationActive = (
+    requireFinalConfirmation
+    && finalConfirmationArmed
+    && !blocked
+    && !confirmDisabled
+  );
+  const displayedStatus = finalConfirmationActive
+    ? "idle"
+    : confirmStatus.status;
   const confirmPresentation = {
-    idle: { icon: confirmIcon, label: confirmLabel },
+    idle: {
+      icon: finalConfirmationActive ? finalConfirmationIcon : confirmIcon,
+      label: finalConfirmationActive ? finalConfirmationLabel : confirmLabel
+    },
     pending: { icon: confirmIcon, label: pendingLabel },
     success: { icon: "check-line", label: successLabel },
     error: { icon: "close-line", label: errorLabel }
@@ -72,6 +91,11 @@ export function ConfirmDialog({
           tabIndex={-1}
           onSubmit={(event) => {
             event.preventDefault();
+            if (requireFinalConfirmation && !finalConfirmationActive) {
+              setFinalConfirmationArmed(true);
+              return;
+            }
+            setFinalConfirmationArmed(false);
             void submit(requestClose);
           }}
         >
@@ -84,11 +108,21 @@ export function ConfirmDialog({
           <footer>
             <button ref={cancelButtonRef} type="button" disabled={blocked} onClick={() => requestClose()}>取消</button>
             <AsyncActionButton
-              className={danger ? "danger-button" : "button"}
+              className={[
+                danger ? "danger-button" : "button",
+                requireFinalConfirmation
+                  ? "confirm-dialog-final-confirmation"
+                  : "",
+                finalConfirmationActive ? "is-armed" : ""
+              ].filter(Boolean).join(" ")}
               type="submit"
-              status={confirmStatus.status}
+              status={displayedStatus}
               presentation={confirmPresentation}
               disabled={blocked || confirmDisabled}
+              aria-pressed={requireFinalConfirmation
+                ? finalConfirmationActive
+                : undefined}
+              onBlur={() => setFinalConfirmationArmed(false)}
             />
           </footer>
         </form>
