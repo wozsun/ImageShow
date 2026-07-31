@@ -1,4 +1,4 @@
-import { cloneElement, useContext, type ReactElement } from "react";
+import { cloneElement, useContext, useRef, type ReactElement } from "react";
 import { createPortal } from "react-dom";
 import { DialogPortalTargetContext } from "./DialogPortalContext.js";
 
@@ -13,14 +13,22 @@ type DialogLayerElement = ReactElement<{
  */
 export function DialogLayerPortal({ children }: { children: DialogLayerElement }) {
   const parentDialogPortalTargetRef = useContext(DialogPortalTargetContext);
+  const portalTargetRef = useRef<HTMLElement | null | undefined>(undefined);
+  if (portalTargetRef.current === undefined) {
+    portalTargetRef.current = parentDialogPortalTargetRef
+      ? parentDialogPortalTargetRef.current
+      : typeof document === "undefined"
+        ? null
+        : document.body;
+  }
   const layer = cloneElement(children, {
     "data-dialog-layer": parentDialogPortalTargetRef ? "nested" : "root"
   });
-  if (parentDialogPortalTargetRef?.current) {
-    return createPortal(layer, parentDialogPortalTargetRef.current);
-  }
-  if (parentDialogPortalTargetRef || typeof document === "undefined") {
-    return layer;
-  }
-  return createPortal(layer, document.body);
+  // Freeze the destination for this mount. When parent and child dialogs open
+  // together, the parent ref is still null during the child's first render and
+  // the nested layer already lives inside that parent. Moving it into a Portal
+  // on the first controlled-input update would remount the field and drop focus.
+  return portalTargetRef.current
+    ? createPortal(layer, portalTargetRef.current)
+    : layer;
 }
