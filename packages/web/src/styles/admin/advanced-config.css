@@ -34,7 +34,7 @@
   gap: 8px;
 }
 .advanced-config-editor-head-status .advanced-config-feedback-region { flex: 1 1 auto; }
-.advanced-config-dirty { flex: 0 0 auto; padding: 3px 9px; border-radius: 999px; background: var(--admin-color-warning-dirty-surface); color: var(--admin-color-warning-dirty-text); font-size: 12px; font-weight: 700; }
+.advanced-config-dirty { flex: 0 0 auto; padding: 3px 9px; border-radius: 999px; background: var(--admin-color-warning-surface-emphasis); color: var(--admin-color-warning-text); font-size: 12px; font-weight: 700; }
 .advanced-config-code-editor {
   position: relative;
   width: 100%;
@@ -98,7 +98,7 @@
 .advanced-config-backend > div span { overflow: hidden; color: var(--admin-color-text-secondary); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
 .advanced-config-backend label { display: grid; gap: 6px; margin: 0; color: var(--admin-color-text-label); }
 .advanced-config-backend label small { font-size: 12px; }
-.advanced-config-ready { display: inline-flex; align-items: center; justify-self: end; gap: 5px; color: var(--admin-color-success-ready); font-size: 13px; font-weight: 600; }
+.advanced-config-ready { display: inline-flex; align-items: center; justify-self: end; gap: 5px; color: var(--admin-color-success-text-strong); font-size: 13px; font-weight: 600; }
 
 @media (max-width: 760px) {
   .advanced-config-page { overflow-y: auto; }

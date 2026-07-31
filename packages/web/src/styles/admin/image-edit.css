@@ -81,7 +81,7 @@
 .batch-edit-delete-error {
   margin: 0;
   padding: 9px 10px;
-  color: var(--admin-color-danger-panel-text);
+  color: var(--admin-color-danger-text-strong);
   background: var(--admin-color-danger-surface);
   border: 1px solid var(--admin-color-danger-border);
   border-radius: 6px;
@@ -136,16 +136,16 @@
 }
 .batch-edit-row > .image-fields { grid-area: fields; margin-top: 6px; }
 
-.batch-edit-row.is-changed { box-shadow: inset 3px 0 0 var(--admin-color-control-changed); background: var(--admin-color-edit-row-changed-surface); }
+.batch-edit-row.is-changed { box-shadow: inset 3px 0 0 var(--admin-color-control-changed); background: var(--admin-color-control-changed-surface); }
 .batch-edit-head-name { min-width: 0; display: flex; align-items: center; gap: 8px; }
 .batch-edit-head .changed-badge {
   flex: 0 0 auto;
   padding: 1px 8px;
   border-radius: 999px;
   font-size: 12px;
-  color: var(--admin-color-warning-badge-text);
-  background: var(--admin-color-warning-badge-surface);
-  border: 1px solid var(--admin-color-warning-badge-border);
+  color: var(--admin-color-warning-text-strong);
+  background: var(--admin-color-warning-surface-emphasis);
+  border: 1px solid var(--admin-color-warning-border-strong);
 }
 
 .image-fields { min-width: 0; display: flex; flex-direction: column; gap: 8px; }

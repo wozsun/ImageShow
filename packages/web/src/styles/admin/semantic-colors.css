@@ -47,8 +47,6 @@
   --admin-color-control-border-hover: #aeb8c5;
   --admin-color-control-border-selected: #9fc2f5;
   --admin-color-control-switch-thumb: #d8dee7;
-  --admin-color-control-invalid: #d64545;
-  --admin-color-control-new: #1f9d57;
   --admin-color-control-changed: #d99a00;
   --admin-color-control-changed-surface: #fff8e8;
   --admin-color-control-changed-emphasis: #e4bd58;
@@ -71,75 +69,45 @@
   --admin-shadow-card-hover: rgba(13, 18, 28, .08);
   --admin-shadow-panel: rgba(32, 42, 56, .16);
 
+  /*
+   * Status palettes stay deliberately compact. Page and lifecycle states map
+   * to these roles instead of creating local variants for nearly equal hues.
+   */
+
   /* Status: success */
   --admin-color-success-text: #245236;
   --admin-color-success-text-strong: #1b6f40;
   --admin-color-success-surface: #eaf8ee;
-  --admin-color-success-surface-muted: #e8f7ee;
   --admin-color-success-surface-soft: #f2fbf5;
+  --admin-color-success-surface-emphasis: #dff3e5;
+  --admin-color-success-surface-hover: #cdeedb;
   --admin-color-success-border: #9fd3ad;
-  --admin-color-success-border-muted: #adddbf;
-  --admin-color-success-border-card: #b9dec4;
-  --admin-color-success-indicator-surface: #dff3e5;
   --admin-color-success-progress: #ccebd7;
-  --admin-color-success-new-text: #176c3c;
-  --admin-color-success-new-action: #2f8f5b;
-  --admin-color-success-new-action-hover: #11522d;
-  --admin-color-success-new-surface: #e7f7ee;
-  --admin-color-success-new-surface-hover: #cdeedb;
-  --admin-color-success-new-border: #8fd6ab;
-  --admin-color-success-ready: #1a7f37;
-  --admin-color-success-summary: #35653f;
+  --admin-color-success-action: #2f8f5b;
+  --admin-color-success-action-hover: #11522d;
 
   /* Status: warning */
   --admin-color-warning-text: #795d1d;
   --admin-color-warning-text-strong: #765314;
+  --admin-color-warning-action: #a75b00;
   --admin-color-warning-surface: #fff8e8;
   --admin-color-warning-surface-soft: #fffaf0;
-  --admin-color-warning-surface-badge: #f9e7af;
+  --admin-color-warning-surface-emphasis: #fff1cc;
+  --admin-color-warning-progress: #f7e7ae;
   --admin-color-warning-border: #f0d38a;
-  --admin-color-warning-border-strong: #f0c36a;
-  --admin-color-warning-dirty-text: #795d1d;
-  --admin-color-warning-dirty-surface: #fff3cd;
-  --admin-color-warning-info-text: #725700;
-  --admin-color-warning-info-surface: #fff8df;
-  --admin-color-warning-info-progress: #f7e7ae;
-  --admin-color-warning-info-border: #e5cf82;
-  --admin-color-warning-badge-text: #8a6100;
-  --admin-color-warning-badge-surface: #fff1cc;
-  --admin-color-warning-badge-border: #ecc659;
-  --admin-color-warning-cleanup-text: #a75b00;
-  --admin-color-warning-cleanup-surface: #fff7e8;
-  --admin-color-warning-cleanup-border: #f2c27b;
-  --admin-color-warning-blocked-text: #8a5b16;
+  --admin-color-warning-border-strong: #ecc659;
 
   /* Status: danger */
-  --admin-color-danger-text: #b42318;
-  --admin-color-query-error-text: #a12b2b;
-  --admin-color-danger-text-muted: #a13a32;
-  --admin-color-danger-text-soft: #a33f3f;
+  --admin-color-danger-text: #a12b2b;
   --admin-color-danger-text-strong: #84271f;
-  --admin-color-danger-text-error: #8a2d24;
-  --admin-color-danger-surface: #fff1ef;
-  --admin-color-danger-surface-soft: #fff4f2;
-  --admin-color-danger-surface-muted: #fff2f0;
+  --admin-color-danger-surface: #fff2f0;
   --admin-color-danger-surface-hover: #ffe7e3;
   --admin-color-danger-progress: #f7cece;
-  --admin-color-danger-feedback-surface: #fdecec;
   --admin-color-danger-border: #e8aaa4;
   --admin-color-danger-border-strong: #de8b83;
-  --admin-color-danger-border-hover: #d98179;
+  --admin-color-danger-border-subtle: #ead5d5;
   --admin-color-danger-action: #d0473a;
   --admin-color-danger-action-hover: #bd3c30;
-  --admin-color-danger-icon: #d23b3b;
-  --admin-color-danger-validation: #d64545;
-  --admin-color-danger-feedback-text: #a42b23;
-  --admin-color-danger-feedback-border: #ebb0b0;
-  --admin-color-danger-panel-text: #8f251e;
-  --admin-color-danger-report-text: #b34337;
-  --admin-color-danger-detail-border: #ead5d5;
-  --admin-color-danger-login-border: #d92d20;
-  --admin-color-danger-login-popover: #fda29b;
 
   /* Pending and informational */
   --admin-color-pending-text: #285c93;
@@ -147,7 +115,6 @@
   --admin-color-pending-surface: #eef5ff;
   --admin-color-pending-progress: #d3e4ff;
   --admin-color-pending-border: #a9c9ef;
-  --admin-color-pending-border-muted: #bdd5f5;
 
   /* Code editor and log viewer */
   --admin-color-code-surface: #0d1117;
@@ -204,7 +171,6 @@
   --admin-color-detail-action-hover: #3b4655;
   --admin-color-detail-action-hover-surface: #f4f6f9;
   --admin-color-edit-row-surface: #f7f8fa;
-  --admin-color-edit-row-changed-surface: #fffdf6;
 
   /* Image list and upload surfaces */
   --admin-color-workflow-trigger-surface: #f7f9fc;
@@ -215,33 +181,7 @@
   --admin-color-upload-divider-muted: #e8ecf1;
   --admin-color-upload-hover-surface: #f4f6f8;
   --admin-color-upload-dropzone-hover: #f5f9ff;
-  --admin-color-upload-report-border: #ead8aa;
   --admin-color-upload-summary: #435062;
-
-  /* Import lifecycle */
-  --admin-color-import-neutral-border: #c7cdd6;
-  --admin-color-import-neutral-surface: #f5f6f8;
-  --admin-color-import-neutral-text: #586474;
-  --admin-color-import-neutral-progress: #2563a9;
-  --admin-color-import-ready-border: #86afe8;
-  --admin-color-import-ready-surface: #edf5ff;
-  --admin-color-import-ready-text: #245eaa;
-  --admin-color-import-active-border: #b5cae7;
-  --admin-color-import-active-surface: #f6f9fe;
-  --admin-color-import-active-text: #2b65ad;
-  --admin-color-import-active-progress: #1f63bd;
-  --admin-color-import-cancelling-border: #d8bc70;
-  --admin-color-import-cancelling-surface: #fff9e9;
-  --admin-color-import-cancelling-text: #795a0a;
-  --admin-color-import-done-border: #78b78a;
-  --admin-color-import-done-surface: #f2fbf5;
-  --admin-color-import-done-text: #24723c;
-  --admin-color-import-failed-border: #de8b83;
-  --admin-color-import-failed-surface: #fff4f2;
-  --admin-color-import-failed-text: #a12f25;
-  --admin-color-import-cancelled-border: #c7ccd3;
-  --admin-color-import-cancelled-surface: #f3f4f6;
-  --admin-color-import-cancelled-text: #68717d;
 
   /* Advanced configuration */
   --admin-color-config-summary-surface: #f5f7fa;
@@ -267,7 +207,7 @@
   --color-control-border-hover: var(--admin-color-control-border-hover);
   --color-control-border-selected: var(--admin-color-control-border-selected);
   --color-control-action: var(--admin-color-action-primary);
-  --color-control-invalid: var(--admin-color-control-invalid);
+  --color-control-invalid: var(--admin-color-danger-action);
   --color-control-switch-thumb: var(--admin-color-control-switch-thumb);
   --color-thumbnail-surface: var(--admin-color-thumbnail-surface);
   --color-thumbnail-placeholder: var(--admin-color-thumbnail-placeholder);
@@ -277,10 +217,10 @@
   --color-feedback-success-text: var(--admin-color-success-text);
   --color-feedback-success-surface: var(--admin-color-success-surface);
   --color-feedback-success-border: var(--admin-color-success-border);
-  --color-feedback-danger-text: var(--admin-color-danger-text-error);
-  --color-feedback-danger-surface: var(--admin-color-danger-surface-muted);
+  --color-feedback-danger-text: var(--admin-color-danger-text);
+  --color-feedback-danger-surface: var(--admin-color-danger-surface);
   --color-feedback-danger-border: var(--admin-color-danger-border-strong);
-  --color-feedback-error-text: var(--admin-color-query-error-text);
+  --color-feedback-error-text: var(--admin-color-danger-text);
   --color-close: var(--admin-color-close);
   --color-close-hover: var(--admin-color-close-hover);
 }

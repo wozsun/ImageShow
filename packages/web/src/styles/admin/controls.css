@@ -1,7 +1,7 @@
 .slug-combo-control { width: 100%; min-width: 0; }
 
-.slug-combo-control input[aria-invalid="true"] { border-color: var(--admin-color-control-invalid); box-shadow: 0 0 0 1px var(--admin-color-control-invalid); }
-.slug-combo-control input[data-new-slug="true"] { border-color: var(--admin-color-control-new); box-shadow: 0 0 0 1px var(--admin-color-control-new); }
+.slug-combo-control input[aria-invalid="true"] { border-color: var(--admin-color-danger-action); box-shadow: 0 0 0 1px var(--admin-color-danger-action); }
+.slug-combo-control input[data-new-slug="true"] { border-color: var(--admin-color-success-action); box-shadow: 0 0 0 1px var(--admin-color-success-action); }
 
 /* 提交/保存的文案会在空闲与处理中切换；预留四个汉字的内容宽度，避免按钮跳动。 */
 .workflow-submit-button { min-width: calc(4em + 26px); }
@@ -150,7 +150,7 @@
 }
 .async-action-button.is-pending { color: var(--admin-color-pending-text); background: var(--admin-color-pending-surface); border-color: var(--admin-color-pending-border); }
 .async-action-button.is-success { color: var(--admin-color-success-text); background: var(--admin-color-success-surface); border-color: var(--admin-color-success-border); }
-.async-action-button.is-error { color: var(--admin-color-danger-text-error); background: var(--admin-color-danger-surface-muted); border-color: var(--admin-color-danger-border-strong); }
+.async-action-button.is-error { color: var(--admin-color-danger-text); background: var(--admin-color-danger-surface); border-color: var(--admin-color-danger-border-strong); }
 
 .action-feedback-region {
   min-width: 0;
@@ -228,31 +228,31 @@
 }
 
 .action-feedback-info {
-  --action-feedback-background: var(--admin-color-warning-info-surface);
-  --action-feedback-progress: var(--admin-color-warning-info-progress);
-  color: var(--admin-color-warning-info-text);
-  border-color: var(--admin-color-warning-info-border);
+  --action-feedback-background: var(--admin-color-warning-surface);
+  --action-feedback-progress: var(--admin-color-warning-progress);
+  color: var(--admin-color-warning-text-strong);
+  border-color: var(--admin-color-warning-border);
 }
 
 .action-feedback-pending {
   --action-feedback-background: var(--admin-color-pending-surface);
   --action-feedback-progress: var(--admin-color-pending-progress);
   color: var(--admin-color-pending-text-strong);
-  border-color: var(--admin-color-pending-border-muted);
+  border-color: var(--admin-color-pending-border);
 }
 
 .action-feedback-success {
-  --action-feedback-background: var(--admin-color-success-surface-muted);
+  --action-feedback-background: var(--admin-color-success-surface);
   --action-feedback-progress: var(--admin-color-success-progress);
   color: var(--admin-color-success-text-strong);
-  border-color: var(--admin-color-success-border-muted);
+  border-color: var(--admin-color-success-border);
 }
 
 .action-feedback-error {
-  --action-feedback-background: var(--admin-color-danger-feedback-surface);
+  --action-feedback-background: var(--admin-color-danger-surface);
   --action-feedback-progress: var(--admin-color-danger-progress);
-  color: var(--admin-color-danger-feedback-text);
-  border-color: var(--admin-color-danger-feedback-border);
+  color: var(--admin-color-danger-text);
+  border-color: var(--admin-color-danger-border);
 }
 
 .action-feedback-progress {
@@ -355,7 +355,7 @@
 }
 
 /*表单字段校验提示（slug 非法、密码不符合策略等）。*/
-.field-error { margin: 0; color: var(--admin-color-danger-validation); font-size: 13px; }
+.field-error { margin: 0; color: var(--admin-color-danger-text); font-size: 13px; }
 
 /*后台表单的错误提示（登录失败、账户设置校验、图片弹窗等，均在后台分块内）。*/
 .error { color: var(--admin-color-danger-text); margin: 0; }
@@ -412,9 +412,9 @@ textarea.is-changed,
 .tag-input-control .tag-input-field:disabled { opacity: 1; }
 .tag-input-control:has(.tag-input-field:disabled) .tag-chip { padding: 3px 8px; }
 
-.tag-chip.is-new { background: var(--admin-color-success-new-surface); border-color: var(--admin-color-success-new-border); color: var(--admin-color-success-new-text); }
-.tag-chip.is-new .tag-chip-remove { color: var(--admin-color-success-new-action); }
-.tag-chip.is-new .tag-chip-remove:hover { background: var(--admin-color-success-new-surface-hover); color: var(--admin-color-success-new-action-hover); }
+.tag-chip.is-new { background: var(--admin-color-success-surface); border-color: var(--admin-color-success-border); color: var(--admin-color-success-text-strong); }
+.tag-chip.is-new .tag-chip-remove { color: var(--admin-color-success-action); }
+.tag-chip.is-new .tag-chip-remove:hover { background: var(--admin-color-success-surface-hover); color: var(--admin-color-success-action-hover); }
 .tag-chip-remove {
   width: 18px; min-height: 18px; height: 18px; padding: 0;
   border: 0; border-radius: 999px; background: transparent; color: var(--admin-color-tag-action);
@@ -515,16 +515,16 @@ pre {
 
 /*危险动作按钮（删除等）。*/
 .danger-button, button.danger-button {
-  color: var(--admin-color-danger-text-muted);
+  color: var(--admin-color-danger-text);
   background: var(--admin-color-danger-surface);
   border-color: var(--admin-color-danger-border);
 }
-.danger-button:hover, button.danger-button:hover { color: var(--admin-color-danger-text-strong); background: var(--admin-color-danger-surface-hover); border-color: var(--admin-color-danger-border-hover); }
+.danger-button:hover, button.danger-button:hover { color: var(--admin-color-danger-text-strong); background: var(--admin-color-danger-surface-hover); border-color: var(--admin-color-danger-border-strong); }
 .danger-button.two-step-confirm-icon-button.is-armed,
 button.danger-button.two-step-confirm-icon-button.is-armed {
   color: var(--admin-color-text-on-emphasis);
-  background: var(--admin-color-danger-text);
-  border-color: var(--admin-color-danger-text);
+  background: var(--admin-color-danger-action);
+  border-color: var(--admin-color-danger-action);
 }
 
 @media (prefers-reduced-motion: reduce) {

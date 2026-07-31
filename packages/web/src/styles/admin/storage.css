@@ -22,14 +22,14 @@
 .storage-card-actions button { min-height: 34px; }
 .storage-card-actions .icon { width: 36px; flex: 0 0 36px; }
 .storage-enable-toggle { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--admin-color-altcha-border); background: var(--admin-color-storage-disabled-surface); color: var(--admin-color-storage-disabled-text); font-size: 12px; font-weight: 600; cursor: pointer; }
-.storage-enable-toggle.is-on { background: var(--admin-color-success-surface-muted); border-color: var(--admin-color-success-border-card); color: var(--admin-color-control-new); }
+.storage-enable-toggle.is-on { background: var(--admin-color-success-surface); border-color: var(--admin-color-success-border); color: var(--admin-color-success-text-strong); }
 .storage-enable-toggle:disabled { cursor: default; opacity: .7; }
-.storage-cleanup-retry { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--admin-color-warning-cleanup-border); background: var(--admin-color-warning-cleanup-surface); color: var(--admin-color-warning-cleanup-text); font-size: 12px; font-weight: 600; cursor: pointer; }
+.storage-cleanup-retry { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--admin-color-warning-border-strong); background: var(--admin-color-warning-surface); color: var(--admin-color-warning-action); font-size: 12px; font-weight: 600; cursor: pointer; }
 .storage-cleanup-retry:disabled { cursor: default; opacity: .7; }
 .storage-card-actions-right { display: flex; align-items: center; gap: 6px; margin-left: auto; }
-.storage-card-actions .icon.is-danger { color: var(--admin-color-danger-icon); }
+.storage-card-actions .icon.is-danger { color: var(--admin-color-danger-action); }
 .storage-card-actions .storage-backend-migrate-action { color: var(--admin-color-action-primary); }
-.storage-card-actions .storage-blocked-action { color: var(--admin-color-warning-blocked-text); }
+.storage-card-actions .storage-blocked-action { color: var(--admin-color-warning-text-strong); }
 .storage-add-card { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 132px; border: 1px dashed var(--admin-color-storage-add-border); border-radius: 12px; background: var(--admin-color-storage-add-surface); color: var(--admin-color-storage-label); font-size: 14px; cursor: pointer; }
 .storage-add-card:hover:not(:disabled) { border-color: var(--admin-color-action-primary); color: var(--admin-color-action-primary); }
 .edit-modal form.storage-edit-modal { display: flex; flex-direction: column; overflow: hidden; }

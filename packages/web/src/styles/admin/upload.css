@@ -203,7 +203,7 @@
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
-.link-import-result-summary { min-width: 0; margin: 0; color: var(--admin-color-success-summary); line-height: 20px; }
+.link-import-result-summary { min-width: 0; margin: 0; color: var(--admin-color-success-text); line-height: 20px; }
 .link-import-result-summary.is-warning { color: var(--admin-color-warning-text); }
 .jsonl-preview { display: grid; gap: 8px; min-height: 0; }
 .jsonl-preview-summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--admin-color-upload-summary); font-size: 13px; }
@@ -213,8 +213,8 @@
 .jsonl-error-list strong { font-size: 12px; }
 .jsonl-error-list span { overflow: hidden; color: var(--admin-color-text-secondary); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .jsonl-error-list strong,
-.jsonl-error-list span { color: var(--admin-color-danger-report-text); }
-.jsonl-import-report { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--admin-color-upload-report-border); border-radius: 6px; background: var(--admin-color-warning-surface-soft); color: var(--admin-color-warning-text); font-size: 13px; }
+.jsonl-error-list span { color: var(--admin-color-danger-text); }
+.jsonl-import-report { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--admin-color-warning-border); border-radius: 6px; background: var(--admin-color-warning-surface-soft); color: var(--admin-color-warning-text); font-size: 13px; }
 .jsonl-import-report span { margin-right: auto; }
 .jsonl-import-report button { min-height: 30px; padding: 5px 8px; }
 .upload-list {
@@ -244,7 +244,7 @@
 .upload-primary-actions,
 .upload-clear-actions { flex-wrap: nowrap; }
 .upload-cleanup-trigger { display: none; }
-.upload-cleanup-menu > button { color: var(--admin-color-danger-text-muted); }
+.upload-cleanup-menu > button { color: var(--admin-color-danger-text); }
 @container image-workflow (max-width: 980px) {
   .upload-head-actions {
     display: grid;
@@ -259,10 +259,10 @@
 .clear-button { color: var(--admin-color-danger-action); }
 .clear-button:not(:disabled):hover { color: var(--admin-color-danger-action-hover); background: var(--admin-color-upload-hover-surface); }
 .import-job {
-  --import-job-border: var(--admin-color-import-neutral-border);
-  --import-job-background: var(--admin-color-import-neutral-surface);
-  --import-job-status: var(--admin-color-import-neutral-text);
-  --import-job-progress: var(--admin-color-import-neutral-progress);
+  --import-job-border: var(--admin-color-border-control);
+  --import-job-background: var(--admin-color-canvas);
+  --import-job-status: var(--admin-color-text-secondary);
+  --import-job-progress: var(--admin-color-action-primary-dark);
   display: grid;
   grid-template-columns: 72px minmax(0, 1fr) auto;
   gap: 10px;
@@ -302,44 +302,44 @@
   box-shadow: 0 0 0 1px var(--admin-color-control-changed-ring);
 }
 .import-job.ready {
-  --import-job-border: var(--admin-color-import-ready-border);
-  --import-job-background: var(--admin-color-import-ready-surface);
-  --import-job-status: var(--admin-color-import-ready-text);
+  --import-job-border: var(--admin-color-pending-border);
+  --import-job-background: var(--admin-color-pending-surface);
+  --import-job-status: var(--admin-color-pending-text);
 }
 .import-job.uploading,
 .import-job.downloading,
 .import-job.received,
 .import-job.processing,
 .import-job.committing {
-  --import-job-border: var(--admin-color-import-active-border);
-  --import-job-background: var(--admin-color-import-active-surface);
-  --import-job-status: var(--admin-color-import-active-text);
-  --import-job-progress: var(--admin-color-import-active-progress);
+  --import-job-border: var(--admin-color-pending-border);
+  --import-job-background: var(--admin-color-pending-surface);
+  --import-job-status: var(--admin-color-pending-text);
+  --import-job-progress: var(--admin-color-action-primary-dark);
 }
 .import-job.cancelling {
-  --import-job-border: var(--admin-color-import-cancelling-border);
-  --import-job-background: var(--admin-color-import-cancelling-surface);
-  --import-job-status: var(--admin-color-import-cancelling-text);
+  --import-job-border: var(--admin-color-warning-border);
+  --import-job-background: var(--admin-color-warning-surface);
+  --import-job-status: var(--admin-color-warning-text);
 }
 .import-job.done {
-  --import-job-border: var(--admin-color-import-done-border);
-  --import-job-background: var(--admin-color-import-done-surface);
-  --import-job-status: var(--admin-color-import-done-text);
+  --import-job-border: var(--admin-color-success-border);
+  --import-job-background: var(--admin-color-success-surface-soft);
+  --import-job-status: var(--admin-color-success-text-strong);
 }
 .import-job.failed {
-  --import-job-border: var(--admin-color-import-failed-border);
-  --import-job-background: var(--admin-color-import-failed-surface);
-  --import-job-status: var(--admin-color-import-failed-text);
+  --import-job-border: var(--admin-color-danger-border-strong);
+  --import-job-background: var(--admin-color-danger-surface);
+  --import-job-status: var(--admin-color-danger-text);
 }
 .import-job.cancelled {
-  --import-job-border: var(--admin-color-import-cancelled-border);
-  --import-job-background: var(--admin-color-import-cancelled-surface);
-  --import-job-status: var(--admin-color-import-cancelled-text);
+  --import-job-border: var(--admin-color-border-control);
+  --import-job-background: var(--admin-color-canvas);
+  --import-job-status: var(--admin-color-text-secondary);
 }
 .import-job.queued {
-  --import-job-border: var(--admin-color-import-neutral-border);
-  --import-job-background: var(--admin-color-import-neutral-surface);
-  --import-job-status: var(--admin-color-import-neutral-text);
+  --import-job-border: var(--admin-color-border-control);
+  --import-job-background: var(--admin-color-canvas);
+  --import-job-status: var(--admin-color-text-secondary);
 }
 .duplicate-panel {
   grid-column: 2 / 4;
@@ -461,7 +461,7 @@ button.empty-state.upload-dropzone:not(:disabled):hover,
     display: inline-flex;
     width: 44px;
     height: 44px;
-    color: var(--admin-color-danger-text-muted);
+    color: var(--admin-color-danger-text);
   }
   .upload-primary-actions .upload-picker,
   .upload-primary-actions .upload-source-picker {

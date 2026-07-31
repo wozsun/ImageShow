@@ -65,6 +65,101 @@ const semanticDefinitionPattern =
   /(--(?:bootstrap-color|public-color|public-shadow|admin-color|admin-shadow|color)-[\w-]+)\s*:/g;
 const semanticReferencePattern =
   /var\((--(?:bootstrap-color|public-color|public-shadow|admin-color|admin-shadow|color)-[\w-]+)/g;
+const adminStatusTokenPattern =
+  /^--admin-color-(success|warning|danger|pending)-(.+)$/;
+const allowedAdminInteractionStatusTokens = new Set([
+  "--admin-color-control-changed",
+  "--admin-color-control-changed-emphasis",
+  "--admin-color-control-changed-ring",
+  "--admin-color-control-changed-surface"
+]);
+const adminStatusWords = [
+  "success(?:ful)?",
+  "succeeded",
+  "warn(?:ing)?s?",
+  "danger(?:ous)?",
+  "pending",
+  "errors?",
+  "invalid",
+  "fail(?:ed|ures?)?",
+  "info(?:rmational)?",
+  "new",
+  "changed",
+  "dirty",
+  "blocked",
+  "created",
+  "ready",
+  "done",
+  "completed?",
+  "finalized",
+  "missing",
+  "stale",
+  "queued",
+  "waiting",
+  "processing",
+  "preparing",
+  "materializing",
+  "uploading",
+  "downloading",
+  "received",
+  "committing",
+  "cancel(?:l?ed|l?ing)"
+];
+const adminStatusWordPattern = new RegExp(
+  `(?:^|-)(?:${adminStatusWords.join("|")})(?:-|$)`
+);
+const allowedAdminStatusRoles = new Map([
+  [
+    "success",
+    new Set([
+      "text",
+      "text-strong",
+      "surface",
+      "surface-soft",
+      "surface-emphasis",
+      "surface-hover",
+      "border",
+      "progress",
+      "action",
+      "action-hover"
+    ])
+  ],
+  [
+    "warning",
+    new Set([
+      "text",
+      "text-strong",
+      "action",
+      "surface",
+      "surface-soft",
+      "surface-emphasis",
+      "progress",
+      "border",
+      "border-strong"
+    ])
+  ],
+  [
+    "danger",
+    new Set([
+      "text",
+      "text-strong",
+      "surface",
+      "surface-hover",
+      "progress",
+      "border",
+      "border-strong",
+      "border-subtle",
+      "action",
+      "action-hover"
+    ])
+  ],
+  [
+    "pending",
+    new Set(["text", "text-strong", "surface", "progress", "border"])
+  ]
+]);
+const overSpecificAdminStatusTokenPattern =
+  /^--admin-color-(?:query-error(?:-|$)|control-(?:invalid|new)(?:-|$)|edit-row-changed(?:-|$)|import-|upload-report(?:-|$))/;
 
 function listSourceFiles(directory) {
   const files = [];
@@ -102,6 +197,18 @@ export function findNamedColorLiterals(source) {
 
 export function isRawColorAssetWhitelisted(file) {
   return rawColorAssetWhitelist.has(path.resolve(file));
+}
+
+export function isAllowedAdminStatusToken(token) {
+  if (!token.startsWith("--admin-color-")) return true;
+  if (allowedAdminInteractionStatusTokens.has(token)) return true;
+  const match = token.match(adminStatusTokenPattern);
+  if (!match) return !adminStatusWordPattern.test(token);
+  return allowedAdminStatusRoles.get(match[1])?.has(match[2]) === true;
+}
+
+export function isOverSpecificAdminStatusToken(token) {
+  return overSpecificAdminStatusTokenPattern.test(token);
 }
 
 const sourceFiles = [
@@ -192,6 +299,18 @@ for (const [file, source] of sources) {
     if (hueNamedSemanticTokenPattern.test(token)) {
       errors.push(
         `${displayPath(file)}:${line} names semantic token ${token} by hue`
+      );
+    }
+    if (!isAllowedAdminStatusToken(token)) {
+      errors.push(
+        `${displayPath(file)}:${line} defines noncanonical admin `
+        + `status role ${token}`
+      );
+    }
+    else if (isOverSpecificAdminStatusToken(token)) {
+      errors.push(
+        `${displayPath(file)}:${line} defines page- or lifecycle-specific `
+        + `status token ${token}`
       );
     }
     const previous = definitions.get(token);

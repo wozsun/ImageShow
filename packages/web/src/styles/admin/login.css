@@ -66,10 +66,10 @@ body:has(.login) {
 .login-altcha .altcha-main { width: 100%; }
 .login-altcha .altcha-main { padding-right: 40px; }
 .login-altcha .altcha-popover[data-variant="error"] {
-  --altcha-popover-color: var(--admin-color-danger-login-popover);
+  --altcha-popover-color: var(--admin-color-danger-border);
   left: 0;
-  background: var(--admin-color-danger-surface-soft);
-  border-color: var(--admin-color-danger-login-popover);
+  background: var(--admin-color-danger-surface);
+  border-color: var(--admin-color-danger-border);
   color: var(--admin-color-danger-text);
 }
 .login-altcha .altcha-popover[data-variant="error"] .altcha-popover-content {
@@ -102,13 +102,13 @@ body:has(.login) {
   z-index: 1;
   width: 100%;
   min-height: 38px;
-  border: 1px solid var(--admin-color-danger-login-border);
+  border: 1px solid var(--admin-color-danger-action);
   border-radius: 6px;
   background: var(--admin-color-surface-primary);
   color: var(--admin-color-danger-text);
   cursor: pointer;
 }
-.login-challenge-retry:hover { background: var(--admin-color-danger-surface-soft); }
+.login-challenge-retry:hover { background: var(--admin-color-danger-surface); }
 .login .error { line-height: 20px; }
 
 @keyframes login-surface-in {

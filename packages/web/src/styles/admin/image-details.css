@@ -52,7 +52,7 @@
 
 .image-detail-edit-error {
   margin: 6px 8px 0;
-  color: var(--admin-color-danger-text-soft);
+  color: var(--admin-color-danger-text);
   font-size: 13px;
 }
 
@@ -88,8 +88,8 @@
   gap: 10px;
   margin-top: 10px;
   padding-top: 10px;
-  border-top: 1px solid var(--admin-color-danger-detail-border);
-  color: var(--admin-color-danger-text-soft);
+  border-top: 1px solid var(--admin-color-danger-border-subtle);
+  color: var(--admin-color-danger-text);
 }
 
 .image-detail-admin-error button {
