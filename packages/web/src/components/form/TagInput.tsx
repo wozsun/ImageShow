@@ -27,7 +27,17 @@ export function TagInput({ value, onChange, suggestions, disabled = false, ariaL
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const listId = useId();
   const inputId = `${listId}-input`;
-  const { open, closing, position, opensUp, menuRef, openMenu, requestClose, onAnimationEnd } = useAnchoredMenu({
+  const {
+    open,
+    closing,
+    position,
+    opensUp,
+    menuRef,
+    openMenu,
+    requestClose,
+    cancelClose,
+    onAnimationEnd
+  } = useAnchoredMenu({
     triggerRef: wrapRef,
     getSize: () => suggestionMenuSize,
     initialMaxHeight: 260,
@@ -44,9 +54,24 @@ export function TagInput({ value, onChange, suggestions, disabled = false, ariaL
   const selected = new Set(value);
 
   const knownSlugs = new Set(suggestions.map((option) => option.slug));
-  const matches = suggestions
-    .filter((tag) => !selected.has(tag.slug) && (query ? (tag.slug.includes(query) || tag.display_name.toLowerCase().includes(query)) : true))
-    .slice(0, 50);
+  const matches = query
+    ? suggestions
+        .filter((tag) => !selected.has(tag.slug)
+          && (tag.slug.includes(query) || tag.display_name.toLowerCase().includes(query)))
+        .slice(0, 50)
+    : [];
+  const suggestionOpen = open && matches.length > 0;
+
+  const updateQuery = (nextText: string) => {
+    setText(nextText);
+    setActiveIndex(-1);
+    if (!nextText) {
+      if (open) requestClose();
+      return;
+    }
+    if (closing) cancelClose();
+    if (!open) openMenu();
+  };
 
   const addTag = (raw: string) => {
     const tag = raw.trim().toLowerCase();
@@ -59,9 +84,22 @@ export function TagInput({ value, onChange, suggestions, disabled = false, ariaL
     onChange([...value, tag]);
     setText("");
     setActiveIndex(-1);
+    if (open) requestClose();
     return true;
   };
   const removeTag = (tag: string) => onChange(value.filter((item) => item !== tag));
+  const scrollTags = (direction: -1 | 1) => {
+    const box = wrapRef.current;
+    if (!box) return false;
+    const maxScrollLeft = Math.max(0, box.scrollWidth - box.clientWidth);
+    const nextScrollLeft = Math.min(
+      maxScrollLeft,
+      Math.max(0, box.scrollLeft + direction * Math.max(80, Math.floor(box.clientWidth * 0.65)))
+    );
+    if (Math.abs(nextScrollLeft - box.scrollLeft) < 1) return false;
+    box.scrollLeft = nextScrollLeft;
+    return true;
+  };
 
   const handleKey = (event: KeyboardEvent<HTMLInputElement>) => {
     if (
@@ -70,10 +108,12 @@ export function TagInput({ value, onChange, suggestions, disabled = false, ariaL
     ) return;
 
     if (handleSuggestionNavigationKey(event, {
-      open,
+      open: suggestionOpen,
       matchCount: matches.length,
       setActiveIndex,
-      openMenu,
+      openMenu: () => {
+        if (matches.length) openMenu();
+      },
       requestClose
     })) return;
 
@@ -81,6 +121,20 @@ export function TagInput({ value, onChange, suggestions, disabled = false, ariaL
       event.preventDefault();
       if (open && activeIndex >= 0 && matches[activeIndex]) addTag(matches[activeIndex].slug);
       else if (text.trim()) addTag(text);
+    } else if (
+      event.key === "ArrowLeft"
+      && event.currentTarget.selectionStart === 0
+      && event.currentTarget.selectionEnd === 0
+      && scrollTags(-1)
+    ) {
+      event.preventDefault();
+    } else if (
+      event.key === "ArrowRight"
+      && event.currentTarget.selectionStart === text.length
+      && event.currentTarget.selectionEnd === text.length
+      && scrollTags(1)
+    ) {
+      event.preventDefault();
     } else if (event.key === "Backspace" && !text && value.length) {
       removeTag(value[value.length - 1]);
     }
@@ -88,7 +142,7 @@ export function TagInput({ value, onChange, suggestions, disabled = false, ariaL
 
   const menu = (
     <SuggestionList
-      open={open}
+      open={suggestionOpen}
       matches={matches}
       activeIndex={activeIndex}
       ariaLabel={ariaLabel}
@@ -144,18 +198,14 @@ export function TagInput({ value, onChange, suggestions, disabled = false, ariaL
             setText(raw);
             return;
           }
-          setText(normalizeFacetInput(raw));
-          setActiveIndex(-1);
-          if (!open) openMenu();
+          updateQuery(normalizeFacetInput(raw));
         }}
         onCompositionStart={() => {
           imeSession.beginComposition();
         }}
         onCompositionEnd={(event) => {
           if (!imeSession.endComposition(event.currentTarget)) return;
-          setText(normalizeFacetInput(event.currentTarget.value));
-          setActiveIndex(-1);
-          if (!open) openMenu();
+          updateQuery(normalizeFacetInput(event.currentTarget.value));
         }}
         onKeyDown={handleKey}
         onBlur={(event) => {
@@ -169,8 +219,8 @@ export function TagInput({ value, onChange, suggestions, disabled = false, ariaL
         disabled={disabled}
         aria-label={ariaLabel}
         role="combobox"
-        aria-expanded={open && !closing}
-        aria-controls={open ? listId : undefined}
+        aria-expanded={suggestionOpen && !closing}
+        aria-controls={suggestionOpen ? listId : undefined}
         aria-autocomplete="list"
         autoComplete="off"
       />

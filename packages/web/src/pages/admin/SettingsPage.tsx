@@ -180,30 +180,6 @@ export function SettingsPage() {
               />
             </label>
             <label>
-              站点域名
-              <input
-                value={settings.site.domain}
-                onChange={(event) => updateSite({ domain: event.target.value })}
-                placeholder="img.example.com"
-              />
-            </label>
-            <label>
-              站点 icon
-              <input
-                value={settings.site.icon_url}
-                onChange={(event) => updateSite({ icon_url: event.target.value })}
-                placeholder="/assets/brand/favicon.svg 或 https://..."
-              />
-            </label>
-            <label>
-              首页背景图
-              <input
-                value={settings.site.home.background}
-                onChange={(event) => updateSiteHome({ background: event.target.value })}
-                placeholder="留空＝站点随机图 API（/random?m=redirect）"
-              />
-            </label>
-            <label>
               首页 Banner 上方标识
               <input
                 value={settings.site.home.banner_label}
@@ -221,11 +197,11 @@ export function SettingsPage() {
               />
             </label>
             <label>
-              站点描述
+              首页背景图
               <input
-                value={settings.site.home.tagline}
-                onChange={(event) => updateSiteHome({ tagline: event.target.value })}
-                placeholder="个人图片管理、画廊展示和随机图片 API。"
+                value={settings.site.home.background}
+                onChange={(event) => updateSiteHome({ background: event.target.value })}
+                placeholder="留空＝站点随机图 API（/random?m=redirect）"
               />
             </label>
             <label>

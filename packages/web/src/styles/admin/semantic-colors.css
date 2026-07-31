@@ -6,66 +6,76 @@
  */
 :root {
   /* Foundations */
-  --admin-color-canvas: #f4f7fb;
-  --admin-color-surface-primary: #fff;
-  --admin-color-text-primary: #172033;
-  --admin-color-text-secondary: #5f6c7d;
-  --admin-color-text-label: #3e4a5c;
-  --admin-color-text-subtle: #8b97a7;
+  --admin-color-canvas: light-dark(#f4f7fb, #0d1117);
+  --admin-color-surface-primary: light-dark(#fff, #161b22);
+  --admin-color-text-primary: light-dark(#172033, #f0f6fc);
+  --admin-color-text-secondary: light-dark(#5f6c7d, #b1bac4);
+  --admin-color-text-label: light-dark(#3e4a5c, #c9d1d9);
+  --admin-color-text-subtle: light-dark(#8b97a7, #8b949e);
   --admin-color-text-on-emphasis: #fff;
-  --admin-color-border-control: #c8d3e1;
-  --admin-color-border-default: #d8e1ec;
-  --admin-color-border-muted: #e0e7ef;
-  --admin-color-border-card: #dbe4ee;
+  --admin-color-border-control: light-dark(#c8d3e1, #636c76);
+  --admin-color-border-default: light-dark(#d8e1ec, #30363d);
+  --admin-color-border-muted: light-dark(#e0e7ef, #2d333b);
+  --admin-color-border-card: light-dark(#dbe4ee, #30363d);
   --admin-color-action-primary: #1f6feb;
-  --admin-color-action-primary-dark: #1559b7;
-  --admin-color-focus-code: #6e7681;
-  --admin-color-thumbnail-surface: #e8eef5;
+  --admin-color-action-primary-dark: light-dark(#1559b7, #58a6ff);
+  --admin-color-action-text: light-dark(#1559b7, #79b8ff);
+  --admin-color-focus-code: light-dark(#6e7681, #8b949e);
+  --admin-color-thumbnail-surface: light-dark(#e8eef5, #21262d);
 
   /* Navigation */
-  --admin-color-navigation-surface: #fff;
+  --admin-color-navigation-surface: light-dark(#fff, #161b22);
   --admin-color-navigation-hover: var(--admin-color-control-surface-hover);
-  --admin-color-navigation-active: #dbeafe;
-  --admin-color-navigation-text: #334155;
-  --admin-color-navigation-active-text: #1559b7;
-  --admin-color-navigation-divider: #e1e8f0;
-  --admin-color-navigation-control-border: #cbd6e3;
-  --admin-color-navigation-version-border: #d6e0eb;
-  --admin-color-navigation-version-text: #64748b;
-  --admin-color-navigation-version-surface: #f4f7fb;
-  --admin-color-navigation-version-hover-text: #1559b7;
-  --admin-color-navigation-version-hover-surface: #e7f0ff;
-  --admin-color-navigation-focus: rgba(31, 111, 235, .38);
-  --admin-color-navigation-scrollbar: rgba(71, 85, 105, .28);
-  --admin-color-navigation-scrollbar-active: rgba(71, 85, 105, .46);
+  --admin-color-navigation-active: light-dark(#dbeafe, #14375e);
+  --admin-color-navigation-text: light-dark(#334155, #c9d1d9);
+  --admin-color-navigation-active-text: light-dark(#1559b7, #79c0ff);
+  --admin-color-navigation-divider: light-dark(#e1e8f0, #30363d);
+  --admin-color-navigation-control-surface: light-dark(#fff, #21262d);
+  --admin-color-navigation-control-border: light-dark(#cbd6e3, #636c76);
+  --admin-color-navigation-version-border: light-dark(#d6e0eb, #3d444d);
+  --admin-color-navigation-version-text: light-dark(#64748b, #8b949e);
+  --admin-color-navigation-version-surface: light-dark(#f4f7fb, #21262d);
+  --admin-color-navigation-version-hover-text: light-dark(#1559b7, #79c0ff);
+  --admin-color-navigation-version-hover-surface: light-dark(#e7f0ff, #1f2d3d);
+  --admin-color-focus-ring: light-dark(rgba(31, 111, 235, .64), rgba(88, 166, 255, .76));
+  --admin-color-navigation-scrollbar: light-dark(rgba(71, 85, 105, .28), rgba(201, 209, 217, .24));
+  --admin-color-navigation-scrollbar-active: light-dark(rgba(71, 85, 105, .46), rgba(201, 209, 217, .42));
 
   /* Controls and shared states */
-  --admin-color-control-text-tertiary: #97a1b0;
-  --admin-color-control-surface-muted: #eef2f7;
-  --admin-color-control-surface-hover: #eef5ff;
-  --admin-color-control-surface-subtle-hover: #f1f3f6;
-  --admin-color-control-border-hover: #aeb8c5;
-  --admin-color-control-border-selected: #9fc2f5;
-  --admin-color-control-switch-thumb: #d8dee7;
-  --admin-color-control-changed: #d99a00;
-  --admin-color-control-changed-surface: #fff8e8;
-  --admin-color-control-changed-emphasis: #e4bd58;
-  --admin-color-control-changed-ring: rgba(228, 189, 88, .34);
-  --admin-color-tag-action: #6b7686;
-  --admin-color-tag-action-hover: #384150;
-  --admin-color-close: #d98c8c;
-  --admin-color-close-hover: #c25b5b;
-  --admin-color-thumbnail-placeholder: #9aa6b4;
-  --admin-color-image-placeholder-dark: #111820;
-  --admin-shadow-control-floating: rgba(20, 30, 44, .18);
-  --admin-shadow-control-resting: rgba(20, 30, 44, .12);
-  --admin-shadow-modal: rgba(0, 0, 0, .28);
+  --admin-color-control-text-tertiary: light-dark(#97a1b0, #8b949e);
+  --admin-color-control-placeholder: light-dark(#9ba5b1, #555d67);
+  --admin-color-control-surface-muted: light-dark(#eef2f7, #21262d);
+  --admin-color-control-surface-hover: light-dark(#eef5ff, #1f2d3d);
+  --admin-color-control-surface-subtle-hover: light-dark(#f1f3f6, #20252c);
+  --admin-color-control-border-hover: light-dark(#aeb8c5, #6e7681);
+  --admin-color-control-border-selected: light-dark(#9fc2f5, #58a6ff);
+  --admin-color-control-switch-thumb: light-dark(#d8dee7, #484f58);
+  --admin-color-control-changed: light-dark(#d99a00, #e3b341);
+  --admin-color-control-changed-surface: light-dark(#fff8e8, #2d2717);
+  --admin-color-control-changed-emphasis: light-dark(#e4bd58, #d29922);
+  --admin-color-control-changed-ring: light-dark(rgba(228, 189, 88, .34), rgba(210, 153, 34, .42));
+  --admin-color-tag-action: light-dark(#6b7686, #b1bac4);
+  --admin-color-tag-action-hover: light-dark(#384150, #f0f6fc);
+  --admin-color-close: light-dark(#d98c8c, #ff7b72);
+  --admin-color-close-hover: light-dark(#c25b5b, #ffa198);
+  --admin-color-thumbnail-placeholder: light-dark(#9aa6b4, #8b949e);
+  --admin-color-image-placeholder-dark: #080b10;
+  --admin-shadow-control-floating: light-dark(rgba(20, 30, 44, .18), rgba(0, 0, 0, .48));
+  --admin-shadow-control-resting: light-dark(rgba(20, 30, 44, .12), rgba(0, 0, 0, .38));
+  --admin-shadow-modal: light-dark(rgba(0, 0, 0, .28), rgba(0, 0, 0, .58));
   --admin-shadow-preview: rgba(0, 0, 0, .4);
-  --admin-color-preview-close-surface: rgba(255, 255, 255, .92);
+  --admin-color-preview-close-surface: light-dark(rgba(255, 255, 255, .92), rgba(22, 27, 34, .92));
   --admin-color-modal-overlay: rgba(13, 18, 28, .76);
-  --admin-shadow-menu: rgba(13, 18, 28, .16);
-  --admin-shadow-card-hover: rgba(13, 18, 28, .08);
-  --admin-shadow-panel: rgba(32, 42, 56, .16);
+  --admin-shadow-menu: light-dark(rgba(13, 18, 28, .16), rgba(0, 0, 0, .46));
+  --admin-shadow-card-hover: light-dark(rgba(13, 18, 28, .08), rgba(0, 0, 0, .4));
+  --admin-shadow-panel: light-dark(rgba(32, 42, 56, .16), rgba(0, 0, 0, .48));
+
+  /* Base scrollbars must follow the admin appearance instead of the public palette. */
+  --admin-color-scrollbar-track-thumb: light-dark(rgba(20, 30, 44, .3), rgba(201, 209, 217, .28));
+  --admin-color-scrollbar-thumb: light-dark(rgba(20, 30, 44, .26), rgba(201, 209, 217, .24));
+  --admin-color-scrollbar-thumb-hover: light-dark(rgba(20, 30, 44, .42), rgba(201, 209, 217, .44));
+  --admin-color-overlay-scrollbar: light-dark(rgba(20, 30, 44, .34), rgba(201, 209, 217, .32));
+  --admin-color-overlay-scrollbar-active: light-dark(rgba(20, 30, 44, .54), rgba(201, 209, 217, .56));
 
   /*
    * Status palettes stay deliberately compact. Page and lifecycle states map
@@ -73,46 +83,46 @@
    */
 
   /* Status: success */
-  --admin-color-success-text: #245236;
-  --admin-color-success-text-strong: #1b6f40;
-  --admin-color-success-surface: #eaf8ee;
-  --admin-color-success-surface-soft: #f2fbf5;
-  --admin-color-success-surface-emphasis: #dff3e5;
-  --admin-color-success-surface-hover: #cdeedb;
-  --admin-color-success-border: #9fd3ad;
-  --admin-color-success-progress: #ccebd7;
-  --admin-color-success-action: #2f8f5b;
-  --admin-color-success-action-hover: #11522d;
+  --admin-color-success-text: light-dark(#245236, #8fd8a3);
+  --admin-color-success-text-strong: light-dark(#1b6f40, #72c68b);
+  --admin-color-success-surface: light-dark(#eaf8ee, #173126);
+  --admin-color-success-surface-soft: light-dark(#e8edea, #171c19);
+  --admin-color-success-surface-emphasis: light-dark(#dff3e5, #263d30);
+  --admin-color-success-surface-hover: light-dark(#cdeedb, #2d523b);
+  --admin-color-success-border: light-dark(#9fd3ad, #4d795b);
+  --admin-color-success-progress: light-dark(#ccebd7, #304f3b);
+  --admin-color-success-action: light-dark(#2f8f5b, #72c68b);
+  --admin-color-success-action-hover: light-dark(#11522d, #8fd8a3);
 
   /* Status: warning */
-  --admin-color-warning-text: #795d1d;
-  --admin-color-warning-text-strong: #765314;
-  --admin-color-warning-action: #a75b00;
-  --admin-color-warning-surface: #fff8e8;
-  --admin-color-warning-surface-soft: #fffaf0;
-  --admin-color-warning-surface-emphasis: #fff1cc;
-  --admin-color-warning-progress: #f7e7ae;
-  --admin-color-warning-border: #f0d38a;
-  --admin-color-warning-border-strong: #ecc659;
+  --admin-color-warning-text: light-dark(#795d1d, #f2cc60);
+  --admin-color-warning-text-strong: light-dark(#765314, #e3b341);
+  --admin-color-warning-action: light-dark(#a75b00, #e3b341);
+  --admin-color-warning-surface: light-dark(#fff8e8, #2d2717);
+  --admin-color-warning-surface-soft: light-dark(#fffaf0, #231f15);
+  --admin-color-warning-surface-emphasis: light-dark(#fff1cc, #3b3018);
+  --admin-color-warning-progress: light-dark(#f7e7ae, #4a3a18);
+  --admin-color-warning-border: light-dark(#f0d38a, #7d661c);
+  --admin-color-warning-border-strong: light-dark(#ecc659, #9e7f24);
 
   /* Status: danger */
-  --admin-color-danger-text: #a12b2b;
-  --admin-color-danger-text-strong: #84271f;
-  --admin-color-danger-surface: #fff2f0;
-  --admin-color-danger-surface-hover: #ffe7e3;
-  --admin-color-danger-progress: #f7cece;
-  --admin-color-danger-border: #e8aaa4;
-  --admin-color-danger-border-strong: #de8b83;
-  --admin-color-danger-border-subtle: #ead5d5;
-  --admin-color-danger-action: #d0473a;
-  --admin-color-danger-action-hover: #bd3c30;
+  --admin-color-danger-text: light-dark(#a12b2b, #cc7975);
+  --admin-color-danger-text-strong: light-dark(#84271f, #d98a85);
+  --admin-color-danger-surface: light-dark(#fff2f0, #2a1d1e);
+  --admin-color-danger-surface-hover: light-dark(#ffe7e3, #362426);
+  --admin-color-danger-progress: light-dark(#f7cece, #472e30);
+  --admin-color-danger-border: light-dark(#e8aaa4, #75494c);
+  --admin-color-danger-border-strong: light-dark(#de8b83, #8b5357);
+  --admin-color-danger-border-subtle: light-dark(#ead5d5, #472e30);
+  --admin-color-danger-action: light-dark(#d0473a, #cc7975);
+  --admin-color-danger-action-hover: light-dark(#bd3c30, #934448);
 
   /* Pending and informational */
-  --admin-color-pending-text: #285c93;
-  --admin-color-pending-text-strong: #294f78;
-  --admin-color-pending-surface: #eef5ff;
-  --admin-color-pending-progress: #d3e4ff;
-  --admin-color-pending-border: #a9c9ef;
+  --admin-color-pending-text: light-dark(#285c93, #79c0ff);
+  --admin-color-pending-text-strong: light-dark(#294f78, #a5d6ff);
+  --admin-color-pending-surface: light-dark(#eef5ff, #14253d);
+  --admin-color-pending-progress: light-dark(#d3e4ff, #1e3a5f);
+  --admin-color-pending-border: light-dark(#a9c9ef, #315d8c);
 
   /* Code editor and log viewer */
   --admin-color-code-surface: #0d1117;
@@ -127,68 +137,62 @@
   --admin-color-log-empty: #9aa4b2;
 
   /* Login and ALTCHA */
-  --admin-color-login-form-surface: rgba(255, 255, 255, .94);
+  --admin-color-login-form-surface: light-dark(#fff, #161b22);
   --admin-color-login-overlay-start: rgba(12, 18, 28, .45);
   --admin-color-login-overlay-end: rgba(12, 18, 28, .72);
-  --admin-color-altcha-border: #d0d5dd;
-  --admin-color-altcha-checkbox-border: #98a2b3;
-  --admin-color-altcha-text-secondary: #667085;
+  --admin-color-altcha-border: light-dark(#d0d5dd, #636c76);
+  --admin-color-altcha-checkbox-border: light-dark(#98a2b3, #6e7681);
+  --admin-color-altcha-text-secondary: light-dark(#667085, #b1bac4);
 
   /* Entity and role badges */
-  --admin-color-entity-surface-pinned: #f7f9fc;
-  --admin-color-entity-slug-surface: #eef2f7;
-  --admin-color-role-super-text: #92400e;
-  --admin-color-role-super-surface: #fef3c7;
-  --admin-color-role-image-text: #3730a3;
-  --admin-color-role-image-surface: #e0e7ff;
+  --admin-color-entity-surface-pinned: light-dark(#f7f9fc, #1c2128);
+  --admin-color-entity-slug-surface: light-dark(#eef2f7, #21262d);
+  --admin-color-role-super-text: light-dark(#92400e, #f2cc60);
+  --admin-color-role-super-surface: light-dark(#fef3c7, #3b2e13);
+  --admin-color-role-image-text: light-dark(#3730a3, #a5b4fc);
+  --admin-color-role-image-surface: light-dark(#e0e7ff, #25264f);
 
   /* Overview */
-  --admin-color-overview-label: #4a5563;
-  --admin-color-overview-hint: #8a93a2;
-  --admin-color-overview-chip: #64748b;
-  --admin-color-overview-recent-surface: #f1f4f8;
+  --admin-color-overview-label: light-dark(#4a5563, #c9d1d9);
+  --admin-color-overview-hint: light-dark(#8a93a2, #8b949e);
+  --admin-color-overview-chip: light-dark(#64748b, #b1bac4);
+  --admin-color-overview-recent-surface: light-dark(#f1f4f8, #1c2128);
 
   /* Storage */
-  --admin-color-storage-border: #e2e6ec;
-  --admin-color-storage-action-border: #eef1f5;
-  --admin-color-storage-default-surface: #e8f1ff;
-  --admin-color-storage-disabled-text: #6b7280;
-  --admin-color-storage-disabled-surface: #f3f4f6;
-  --admin-color-storage-label: #4a525d;
-  --admin-color-storage-meta: #8a93a0;
-  --admin-color-storage-add-border: #c4ccd6;
-  --admin-color-storage-add-surface: #fafbfc;
-  --admin-shadow-storage-default: rgba(31, 111, 235, .25);
+  --admin-color-storage-border: light-dark(#e2e6ec, #30363d);
+  --admin-color-storage-action-border: light-dark(#eef1f5, #272d35);
+  --admin-color-storage-default-surface: light-dark(#e8f1ff, #132a46);
+  --admin-color-storage-disabled-text: light-dark(#6b7280, #8b949e);
+  --admin-color-storage-disabled-surface: light-dark(#f3f4f6, #21262d);
+  --admin-color-storage-label: light-dark(#4a525d, #c9d1d9);
+  --admin-color-storage-meta: light-dark(#8a93a0, #8b949e);
+  --admin-color-storage-add-border: light-dark(#c4ccd6, #636c76);
+  --admin-color-storage-add-surface: light-dark(#fafbfc, #161b22);
+  --admin-shadow-storage-default: light-dark(rgba(31, 111, 235, .25), rgba(31, 111, 235, .35));
 
   /* Image details and editing */
-  --admin-color-detail-border: #e3e8ef;
-  --admin-color-detail-panel-border: #e7ebf0;
-  --admin-color-detail-panel-surface: #fbfcfd;
-  --admin-color-detail-action: #4c5868;
-  --admin-color-detail-action-hover: #3b4655;
-  --admin-color-detail-action-hover-surface: #f4f6f9;
-  --admin-color-edit-row-surface: #f7f8fa;
+  --admin-color-edit-row-surface: light-dark(#f7f8fa, #1c2128);
 
   /* Image list and upload surfaces */
-  --admin-color-workflow-trigger-surface: #f7f9fc;
-  --admin-color-workflow-content-surface: #edf1f5;
-  --admin-color-workflow-filter-surface: #f3f6fa;
-  --admin-color-upload-menu-border: #d5dce5;
-  --admin-color-upload-divider-strong: #e1e6ed;
-  --admin-color-upload-divider-muted: #e8ecf1;
-  --admin-color-upload-hover-surface: #f4f6f8;
-  --admin-color-upload-dropzone-hover: #f5f9ff;
-  --admin-color-upload-summary: #435062;
+  --admin-color-workflow-trigger-surface: light-dark(#f7f9fc, #1c2128);
+  --admin-color-workflow-content-surface: light-dark(#edf1f5, #21262d);
+  --admin-color-workflow-filter-surface: light-dark(#f3f6fa, #1b222c);
+  --admin-color-upload-menu-border: light-dark(#d5dce5, #3d444d);
+  --admin-color-upload-divider-strong: light-dark(#e1e6ed, #30363d);
+  --admin-color-upload-divider-muted: light-dark(#e8ecf1, #272d35);
+  --admin-color-upload-hover-surface: light-dark(#f4f6f8, #252d38);
+  --admin-color-upload-dropzone-hover: light-dark(#f5f9ff, #17283b);
+  --admin-color-upload-summary: light-dark(#435062, #c9d1d9);
 
   /* Advanced configuration */
-  --admin-color-config-summary-surface: #f5f7fa;
+  --admin-color-config-summary-surface: light-dark(#f5f7fa, #1c2128);
 
   /* Context aliases consumed by base.css while the admin domain is active. */
 }
 
 :root[data-ui-context="admin"],
 [data-admin-dialog] {
-  color-scheme: light;
+  color: var(--admin-color-text-primary);
   --color-browser-canvas: var(--admin-color-canvas);
   --color-control-text-primary: var(--admin-color-text-primary);
   --color-control-text-secondary: var(--admin-color-text-secondary);
@@ -205,6 +209,7 @@
   --color-control-border-hover: var(--admin-color-control-border-hover);
   --color-control-border-selected: var(--admin-color-control-border-selected);
   --color-control-action: var(--admin-color-action-primary);
+  --color-control-action-text: var(--admin-color-action-text);
   --color-control-invalid: var(--admin-color-danger-action);
   --color-control-switch-thumb: var(--admin-color-control-switch-thumb);
   --color-thumbnail-surface: var(--admin-color-thumbnail-surface);
@@ -221,4 +226,53 @@
   --color-feedback-error-text: var(--admin-color-danger-text);
   --color-close: var(--admin-color-close);
   --color-close-hover: var(--admin-color-close-hover);
+  --color-scrollbar-light-track-thumb: var(--admin-color-scrollbar-track-thumb);
+  --color-scrollbar-light-thumb: var(--admin-color-scrollbar-thumb);
+  --color-scrollbar-light-thumb-hover: var(--admin-color-scrollbar-thumb-hover);
+  --color-overlay-scrollbar-light: var(--admin-color-overlay-scrollbar);
+  --color-overlay-scrollbar-light-active: var(--admin-color-overlay-scrollbar-active);
+}
+
+:root[data-ui-context="admin"][data-color-scheme="light"],
+:root[data-color-scheme="light"] [data-admin-dialog] {
+  color-scheme: light;
+}
+
+:root[data-ui-context="admin"][data-color-scheme="dark"],
+:root[data-color-scheme="dark"] [data-admin-dialog] {
+  color-scheme: dark;
+}
+
+/*
+ * 画廊和后台暗色详情使用 semantic-colors.css 中唯一的共享契约。这里只覆写
+ * 后台亮色右侧详情表面；近黑图片区保持共享值。整框本身不设边界，避免任何
+ * 线条跨过黑色图片舞台，明暗模式都只依靠表面颜色自然分区。
+ */
+:root[data-ui-context="admin"][data-color-scheme="light"] [data-admin-dialog] {
+  --color-detail-surface: var(--admin-color-surface-primary);
+  --color-detail-surface-raised: #fafbfd;
+  --color-detail-border: var(--admin-color-border-default);
+  --color-detail-shadow: var(--admin-shadow-control-resting);
+  --color-detail-text-primary: var(--admin-color-text-primary);
+  --color-detail-text-secondary: var(--admin-color-text-secondary);
+  --color-detail-action-text: var(--admin-color-action-text);
+  --color-detail-action-fill: var(--admin-color-action-primary);
+  --color-detail-error: var(--admin-color-danger-text);
+  --color-detail-fade-clear: rgba(250, 251, 253, 0);
+  --color-detail-chip-text: var(--admin-color-text-primary);
+  --color-detail-chip-surface: var(--admin-color-control-surface-muted);
+  --color-detail-chip-border: var(--admin-color-border-control);
+  --color-detail-action-border: var(--admin-color-action-primary);
+  --color-detail-action-surface: var(--admin-color-surface-primary);
+  --color-detail-action-hover: var(--admin-color-control-surface-subtle-hover);
+  --color-detail-danger-border: var(--admin-color-danger-border-subtle);
+  --color-detail-danger-action-text: var(--admin-color-danger-text);
+  --color-detail-danger-action-surface: var(--admin-color-danger-surface);
+  --color-detail-danger-action-border: var(--admin-color-danger-border-strong);
+}
+
+:is(.admin, [data-admin-dialog], .image-detail-admin-details)
+  :is(a, button, input, textarea, select):focus-visible {
+  outline: 1px solid var(--admin-color-focus-ring);
+  outline-offset: 1px;
 }

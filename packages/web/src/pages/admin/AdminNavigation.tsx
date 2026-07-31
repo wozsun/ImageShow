@@ -1,6 +1,9 @@
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
 import { NavLink } from "react-router";
-import type { AdminRole } from "@imageshow/shared/browser";
+import type {
+  AdminColorScheme,
+  AdminRole
+} from "@imageshow/shared/browser";
 import { Icon, type IconName } from "../../components/icon/Icon.js";
 import { adminBasePath } from "../../lib/constants.js";
 import { AdminNavGroup } from "./AdminNavGroup.js";
@@ -229,28 +232,48 @@ export function AdminNavigationLinks({
   });
 }
 
-const fixedLightAppearanceLabel =
-  "当前为亮色模式，暗色模式将在下一版本提供";
-
 export function AdminSiteNavigation({
   entries,
-  variant
+  variant,
+  colorScheme,
+  onColorSchemeChange
 }: {
   entries: readonly AdminNavigationEntry[];
   variant: "desktop" | "mobile";
+  colorScheme: AdminColorScheme;
+  onColorSchemeChange: (colorScheme: AdminColorScheme) => void;
 }) {
+  const dark = colorScheme === "dark";
+  const actionLabel = dark ? "切换到亮色模式" : "切换到暗色模式";
+  const [holdCommittedIcon, setHoldCommittedIcon] = useState(false);
   return (
     <div className="admin-site-navigation">
       <AdminNavigationLinks entries={entries} variant={variant} />
       <button
-        className="admin-color-scheme-toggle"
+        className={[
+          "admin-color-scheme-toggle",
+          holdCommittedIcon ? "is-current-icon-held" : ""
+        ].filter(Boolean).join(" ")}
         type="button"
-        data-color-scheme="light"
-        aria-label={fixedLightAppearanceLabel}
-        title={fixedLightAppearanceLabel}
-        disabled
+        data-color-scheme={colorScheme}
+        aria-label="暗色模式"
+        aria-pressed={dark}
+        title={actionLabel}
+        onClick={() => {
+          setHoldCommittedIcon(true);
+          onColorSchemeChange(dark ? "light" : "dark");
+        }}
+        onPointerLeave={() => setHoldCommittedIcon(false)}
+        onBlur={() => setHoldCommittedIcon(false)}
       >
-        <Icon name="sun-line" />
+        <span className="admin-color-scheme-icon-stack" aria-hidden="true">
+          <span className="admin-color-scheme-icon is-current">
+            <Icon name={dark ? "moon-line" : "sun-line"} />
+          </span>
+          <span className="admin-color-scheme-icon is-target">
+            <Icon name={dark ? "sun-line" : "moon-line"} />
+          </span>
+        </span>
       </button>
     </div>
   );

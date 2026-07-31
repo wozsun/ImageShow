@@ -3,11 +3,27 @@
   --admin-card-grid-gap: 6px;
 }
 
+:root[data-ui-context="admin"] :is(input, textarea)::placeholder,
+[data-admin-dialog] :is(input, textarea)::placeholder {
+  color: var(--admin-color-control-placeholder);
+  opacity: 1;
+}
+
+:root[data-ui-context="admin"] :is(input, textarea, [contenteditable="true"]),
+[data-admin-dialog] :is(input, textarea, [contenteditable="true"]) {
+  color: var(--color-control-text-primary);
+  caret-color: var(--color-control-text-primary);
+}
+
+:root[data-ui-context="admin"] :is(input, textarea, .select-trigger):focus-visible,
+[data-admin-dialog] :is(input, textarea, .select-trigger):focus-visible {
+  outline: 1px solid var(--admin-color-focus-ring);
+  outline-offset: 0;
+}
+
 .slug-combo-control { width: 100%; min-width: 0; }
 
 .slug-combo-control input[aria-invalid="true"] { border-color: var(--admin-color-danger-action); box-shadow: 0 0 0 1px var(--admin-color-danger-action); }
-.slug-combo-control input[data-new-slug="true"] { border-color: var(--admin-color-success-action); box-shadow: 0 0 0 1px var(--admin-color-success-action); }
-
 /* 提交/保存的文案会在空闲与处理中切换；预留四个汉字的内容宽度，避免按钮跳动。 */
 .workflow-submit-button { min-width: calc(4em + 26px); }
 
@@ -420,25 +436,45 @@ textarea.is-changed,
   scrollbar-width: none;
 }
 .tag-input-control::-webkit-scrollbar { display: none; }
-.tag-input-field { flex: 1 1 80px; min-width: 80px; width: auto; border: 0; padding: 4px 2px; border-radius: 0; }
+.tag-input-field {
+  flex: 1 1 80px;
+  min-width: 80px;
+  width: auto;
+  padding: 4px 2px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
 .tag-input-field:focus { outline: none; }
 .tag-input-control:has(.tag-input-field:disabled) { opacity: .45; cursor: not-allowed; }
 .tag-input-control .tag-input-field:disabled { opacity: 1; }
 .tag-input-control:has(.tag-input-field:disabled) .tag-chip { padding: 3px 8px; }
 
-/*
- * 单图 / 批量编辑器也会挂载在公开画廊的暗色页面上。显式焦点环取代
- * 浏览器随外层 color-scheme 改变的原生 auto outline，保证两条入口一致。
- */
-[data-admin-dialog] .batch-edit-modal :is(
-  input:not(.tag-input-field),
-  textarea,
-  .select-trigger
-):focus-visible,
-[data-admin-dialog] .batch-edit-modal .tag-input-control:focus-within {
-  border-color: var(--admin-color-action-primary);
+:root[data-ui-context="admin"] .tag-input-control:focus-within,
+[data-admin-dialog] .tag-input-control:focus-within {
+  outline: 1px solid var(--admin-color-focus-ring);
+  outline-offset: 0;
+  box-shadow: none;
+}
+
+:root[data-ui-context="admin"] .tag-input-control .tag-input-field:focus-visible,
+[data-admin-dialog] .tag-input-control .tag-input-field:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px var(--admin-color-control-border-selected);
+  box-shadow: none;
+}
+
+:root[data-ui-context="admin"] .slug-combo-control input[data-new-slug="true"],
+[data-admin-dialog] .slug-combo-control input[data-new-slug="true"] {
+  border-color: var(--admin-color-success-action);
+  outline: none;
+  box-shadow: none;
+}
+
+:root[data-ui-context="admin"] .slug-combo-control input[data-new-slug="true"]:focus-visible,
+[data-admin-dialog] .slug-combo-control input[data-new-slug="true"]:focus-visible {
+  border-color: var(--admin-color-success-action);
+  outline: none;
+  box-shadow: 0 0 0 1px var(--admin-color-focus-ring);
 }
 
 .tag-chip.is-new { background: var(--admin-color-success-surface); border-color: var(--admin-color-success-border); color: var(--admin-color-success-text-strong); }
@@ -518,7 +554,11 @@ pre {
 }
 .edit-modal footer { border-top: 1px solid var(--admin-color-border-default); border-bottom: 0; justify-content: flex-end; }
 .edit-modal header > div { min-width: 0; }
-.edit-modal header h2 { margin: 0; font-size: 24px; }
+.edit-modal header h2 {
+  margin: 0;
+  color: var(--admin-color-text-primary);
+  font-size: 24px;
+}
 .edit-modal header p { margin: 4px 0 0; color: var(--admin-color-text-secondary); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .confirm-dialog form { width: min(520px, 100%); }

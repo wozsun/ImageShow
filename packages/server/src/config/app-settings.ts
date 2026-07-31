@@ -10,7 +10,6 @@ import {
   homeBackground,
   homeBannerLabel,
   homeBannerTitle,
-  homeTagline,
   imagePageSize,
   linkImageConcurrency,
   listPageSize,
@@ -23,8 +22,6 @@ import {
   randomMethod,
   recentUploads,
   rootRedirect,
-  siteDomain,
-  siteIconUrl,
   siteName,
   skipWebpUnderKb,
   thumbnailLongEdge,
@@ -41,15 +38,12 @@ import type { RuntimeConfigPatch } from "./runtime-config.ts";
 const siteHomeConfigSchema = z.strictObject({
   background: homeBackground.optional(),
   banner_label: homeBannerLabel.optional(),
-  banner_title: homeBannerTitle.optional(),
-  tagline: homeTagline.optional()
+  banner_title: homeBannerTitle.optional()
 });
 
 const appSettingsSchema = z.strictObject({
   site: z.strictObject({
     name: siteName.optional(),
-    domain: siteDomain.optional(),
-    icon_url: siteIconUrl.optional(),
     root_redirect: rootRedirect.optional(),
     home: siteHomeConfigSchema.optional(),
     gallery: z.strictObject({
@@ -120,8 +114,6 @@ export function getSettingsForAdmin(): AdminSettings {
   const settings = getRuntimeConfig();
   const {
     name,
-    domain,
-    icon_url,
     root_redirect,
     home,
     gallery,
@@ -140,14 +132,11 @@ export function getSettingsForAdmin(): AdminSettings {
   return {
     site: {
       name,
-      domain,
-      icon_url,
       root_redirect,
       home: {
         background: home.background,
         banner_label: home.banner_label,
-        banner_title: home.banner_title,
-        tagline: home.tagline
+        banner_title: home.banner_title
       },
       gallery,
       random_default_method

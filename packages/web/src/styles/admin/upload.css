@@ -162,8 +162,8 @@
 .upload-source-picker > button:focus-visible {
   position: relative;
   z-index: 1;
-  outline: 2px solid var(--admin-color-action-primary);
-  outline-offset: -2px;
+  outline: 1px solid var(--admin-color-focus-ring);
+  outline-offset: -1px;
 }
 .upload-source-picker.is-disabled { opacity: .45; }
 .upload-source-picker.is-disabled > button { opacity: 1; }

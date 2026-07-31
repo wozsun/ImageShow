@@ -314,14 +314,6 @@
   white-space: pre-line;
 }
 
-.home-banner p {
-  width: min(620px, 100%);
-  margin: 30px 0 0;
-  color: var(--public-color-home-tagline);
-  font-size: clamp(16px, 1.8vw, 20px);
-  line-height: 1.8;
-}
-
 .home-site-stats {
   width: 100%;
   padding: 22px;
@@ -441,7 +433,6 @@
 
 .home-banner-label,
 .home-banner-title,
-.home-banner-tagline,
 .home-site-stats {
   opacity: 1;
   visibility: visible;
@@ -479,11 +470,6 @@
     0s;
 }
 
-.home-banner-tagline {
-  --home-hero-duration: 600ms;
-  --home-hero-delay: 180ms;
-}
-
 .home-site-stats {
   --home-hero-duration: 560ms;
   --home-hero-delay: 180ms;
@@ -502,7 +488,6 @@
 
 .home-banner.is-entrance-pending .home-banner-label,
 .home-banner.is-entrance-pending .home-banner-title,
-.home-banner.is-entrance-pending .home-banner-tagline,
 .home-banner.is-entrance-pending > .home-site-stats {
   visibility: hidden;
   opacity: 0;
@@ -515,10 +500,6 @@
 .home-banner.is-entrance-pending .home-banner-title {
   letter-spacing: -.015em;
   transform: translateY(22px);
-}
-
-.home-banner.is-entrance-pending .home-banner-tagline {
-  transform: translateY(12px);
 }
 
 .home-banner.is-entrance-pending > .home-site-stats {

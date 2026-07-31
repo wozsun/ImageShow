@@ -130,7 +130,7 @@
   white-space: nowrap;
 }
 .admin-version-slot.is-link:focus-visible {
-  outline: 2px solid var(--admin-color-navigation-focus);
+  outline: 1px solid var(--admin-color-focus-ring);
   outline-offset: -1px;
   border-radius: 5px;
 }
@@ -203,20 +203,63 @@
   border: 0;
   border-radius: 0;
   box-shadow: none;
+  opacity: .7;
+  cursor: pointer;
+  transition:
+    color .16s ease,
+    opacity .16s ease,
+    transform var(--pressable-transition-duration, .08s) ease;
 }
-.admin .admin-color-scheme-toggle:hover,
-.admin .admin-color-scheme-toggle:disabled:hover {
+.admin .admin-color-scheme-toggle:hover {
   color: var(--admin-color-navigation-text);
   background: transparent;
+  opacity: 1;
+}
+.admin .admin-color-scheme-toggle:focus-visible {
+  outline: 1px solid var(--admin-color-focus-ring);
+  outline-offset: 1px;
+  border-radius: 4px;
 }
 .admin .admin-color-scheme-toggle .app-icon {
   width: 17px;
   height: 17px;
   flex-basis: 17px;
 }
-.admin .admin-color-scheme-toggle:disabled {
+.admin-color-scheme-icon-stack,
+.admin-color-scheme-icon {
+  width: 17px;
+  height: 17px;
+}
+.admin-color-scheme-icon-stack {
+  position: relative;
+  display: block;
+}
+.admin-color-scheme-icon {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  transition:
+    opacity .16s ease,
+    transform .16s ease;
+}
+.admin-color-scheme-icon.is-current {
   opacity: 1;
-  cursor: default;
+  transform: scale(1);
+}
+.admin-color-scheme-icon.is-target {
+  opacity: 0;
+  transform: scale(.78);
+}
+.admin-color-scheme-toggle:not(.is-current-icon-held):is(:hover, :focus-visible)
+  .admin-color-scheme-icon.is-current {
+  opacity: 0;
+  transform: scale(.78);
+}
+.admin-color-scheme-toggle:not(.is-current-icon-held):is(:hover, :focus-visible)
+  .admin-color-scheme-icon.is-target {
+  opacity: 1;
+  transform: scale(1);
 }
 .admin > aside .admin-nav-divider {
   flex: 0 0 1px;
@@ -467,6 +510,8 @@ body:has(.admin > .workspace-contained) {
 ):focus-visible,
 .admin-image-card:has(> .admin-image-card-detail:focus-visible) {
   border-color: var(--admin-color-action-primary);
-  outline: 3px solid var(--admin-color-navigation-focus);
-  outline-offset: 2px;
+  outline: 1px solid var(--admin-color-focus-ring);
+  outline-offset: 1px;
 }
+
+.admin .admin-image-card-detail:focus-visible { outline: none; }

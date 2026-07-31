@@ -208,9 +208,6 @@
     touch-action: pan-y;
     -webkit-overflow-scrolling: touch;
   }
-  .image-detail-modal:not([data-admin-dialog]) > article {
-    border: 0;
-  }
   .image-detail-modal .image-detail-image {
     width: 100%;
     height: auto;
@@ -259,10 +256,10 @@
     min-height: 44px;
     padding: 0;
     flex-basis: 44px;
-    color: var(--public-color-text-strong);
-    background: var(--public-color-detail-mobile-close-surface);
-    border-color: var(--public-color-detail-mobile-close-border);
-    box-shadow: 0 4px 16px var(--public-shadow-detail-mobile-close);
+    color: var(--color-detail-text-strong);
+    background: var(--color-detail-mobile-close-surface);
+    border-color: var(--color-detail-mobile-close-border);
+    box-shadow: 0 4px 16px var(--color-detail-mobile-close-shadow);
     -webkit-backdrop-filter: blur(12px) saturate(120%);
     backdrop-filter: blur(12px) saturate(120%);
   }

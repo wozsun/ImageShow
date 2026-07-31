@@ -1,6 +1,7 @@
 import { lazy, Suspense, useLayoutEffect, useRef } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
+import type { AdminRole } from "@imageshow/shared/browser";
 import { api, clearCsrfToken } from "../../lib/api/client.js";
 import { Icon } from "../../components/icon/Icon.js";
 import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
@@ -20,7 +21,10 @@ import {
   adminNavigationForRole
 } from "./AdminNavigation.js";
 import { AdminBrand } from "./AdminBrand.js";
-import { AdminPreferencesProvider } from "../../hooks/useAdminPreferences.js";
+import {
+  AdminPreferencesProvider,
+  useAdminPreference
+} from "../../hooks/useAdminPreferences.js";
 // 后台颜色契约与组件样式都随 AdminShell 懒加载，公开入口不会下载。
 import "../../styles/admin/semantic-colors.css";
 import "../../styles/admin.css";
@@ -62,65 +66,47 @@ const LogPage = lazy(() => import("./LogPage.js").then((module) => ({
   default: module.LogPage
 })));
 
-export function AdminShell() {
-  const navigate = useNavigate();
+function AuthenticatedAdminShell({
+  role,
+  siteName,
+  applicationVersion,
+  versionEnabled,
+  versionLinkEnabled,
+  onLogout
+}: {
+  role: AdminRole;
+  siteName: string;
+  applicationVersion: string;
+  versionEnabled: boolean;
+  versionLinkEnabled: boolean;
+  onLogout: () => Promise<void>;
+}) {
   const routeLocation = useLocation();
-  const client = useQueryClient();
-
   const navScrollRef = useRef<HTMLDivElement | null>(null);
-  const { data: siteConfig } = useSiteConfig();
-  const siteName = siteConfig?.site?.name || "ImageShow";
-  const versionEnabled = siteConfig?.site?.version?.enabled ?? true;
-  const versionLinkEnabled = siteConfig?.site?.version?.link_enabled ?? true;
-
-  const { data, error: authError, isError: authFailed, refetch } = useAuthMe();
-  const appearanceReady = Boolean(data) || authFailed;
-  useLayoutEffect(() => {
-    if (appearanceReady) applyUiColorContext("admin");
-  }, [appearanceReady]);
-  if (authFailed) return <QueryErrorState error={authError} onRetry={() => void refetch()} fullPage />;
-  if (!data) return <AppLoadingScreen />;
-  if (!data.authenticated) return (
-    <AdminLogin
-      siteName={siteName}
-      onLogin={async () => {
-        // 先同步移除可能跨登录复用的后台缓存，再重新读取认证状态。移除操作
-        // 不主动取数；认证完成后由真正挂载的后台路由按需读取，避免显示旧会话数据。
-        clearAdminCacheAfterLogin(client);
-        const result = await refetch({ throwOnError: true });
-        if (!result.data?.authenticated) {
-          throw new Error("登录状态确认失败，请重试");
-        }
-      }}
-      altchaEnabled={data.altcha_enabled}
-      loginBackground={data.login_background}
-    />
-  );
-  const role = data.role === "super" ? "super" : "image";
+  const [colorScheme, setColorScheme] = useAdminPreference("color_scheme");
   const isSuper = role === "super";
   const navigation = adminNavigationForRole(role);
-  const logout = async () => {
-    try {
-      await api(`${adminApiBasePath}/auth/logout`, { method: "POST" });
-    } finally {
-      clearCsrfToken();
-      clearSessionProbeHint();
-      navigate(adminBasePath);
-      location.reload();
-    }
-  };
+
+  useLayoutEffect(() => {
+    applyUiColorContext("admin", colorScheme);
+  }, [colorScheme]);
+
   return (
-    <AdminPreferencesProvider key={data.username} username={data.username}>
-      <main className="admin">
+    <main className="admin">
       <aside>
         <AdminBrand
           siteName={siteName}
-          applicationVersion={data.application_version}
+          applicationVersion={applicationVersion}
           versionEnabled={versionEnabled}
           versionLinkEnabled={versionLinkEnabled}
           to={adminBasePath}
         />
-        <AdminSiteNavigation entries={navigation.site} variant="desktop" />
+        <AdminSiteNavigation
+          entries={navigation.site}
+          variant="desktop"
+          colorScheme={colorScheme}
+          onColorSchemeChange={setColorScheme}
+        />
         <div className="admin-nav-divider" role="separator" />
         <div className="admin-nav-scroll" ref={navScrollRef}>
           <AdminNavigationLinks entries={navigation.main} variant="desktop" />
@@ -128,25 +114,30 @@ export function AdminShell() {
         <OverlayScrollbar targetRef={navScrollRef} />
         <div className="admin-nav-divider logout-divider" role="separator" />
         <AdminNavigationLinks entries={navigation.account} variant="desktop" />
-        <button className="logout-button" type="button" onClick={logout}>
+        <button className="logout-button" type="button" onClick={() => void onLogout()}>
           <Icon name="logout-box-r-line" />退出
         </button>
       </aside>
       <header className="admin-mobile-header">
         <AdminBrand
           siteName={siteName}
-          applicationVersion={data.application_version}
+          applicationVersion={applicationVersion}
           versionEnabled={versionEnabled}
           versionLinkEnabled={versionLinkEnabled}
           to={adminBasePath}
         />
         <MobileNavigation className="admin-mobile-navigation">
-          <AdminSiteNavigation entries={navigation.site} variant="mobile" />
+          <AdminSiteNavigation
+            entries={navigation.site}
+            variant="mobile"
+            colorScheme={colorScheme}
+            onColorSchemeChange={setColorScheme}
+          />
           <div className="admin-nav-divider" role="separator" />
           <AdminNavigationLinks entries={navigation.main} variant="mobile" />
           <div className="admin-nav-divider" role="separator" />
           <AdminNavigationLinks entries={navigation.account} variant="mobile" />
-          <button type="button" onClick={logout}>
+          <button type="button" onClick={() => void onLogout()}>
             <Icon name="logout-box-r-line" />退出
           </button>
         </MobileNavigation>
@@ -172,7 +163,75 @@ export function AdminShell() {
           </Suspense>
         </RouteLoadBoundary>
       </ActionFeedbackProvider>
-      </main>
+    </main>
+  );
+}
+
+export function AdminShell() {
+  const navigate = useNavigate();
+  const client = useQueryClient();
+
+  const { data: siteConfig } = useSiteConfig();
+  const siteName = siteConfig?.site?.name || "ImageShow";
+  const versionEnabled = siteConfig?.site?.version?.enabled ?? true;
+  const versionLinkEnabled = siteConfig?.site?.version?.link_enabled ?? true;
+
+  const {
+    data,
+    dataUpdatedAt,
+    error: authError,
+    isError: authFailed,
+    refetch
+  } = useAuthMe();
+  const unauthenticatedAppearanceReady =
+    authFailed || Boolean(data && !data.authenticated);
+  useLayoutEffect(() => {
+    if (unauthenticatedAppearanceReady) applyUiColorContext("admin");
+  }, [unauthenticatedAppearanceReady]);
+  if (authFailed) return <QueryErrorState error={authError} onRetry={() => void refetch()} fullPage />;
+  if (!data) return <AppLoadingScreen />;
+  if (!data.authenticated) return (
+    <AdminLogin
+      siteName={siteName}
+      onLogin={async () => {
+        // 先同步移除可能跨登录复用的后台缓存，再重新读取认证状态。移除操作
+        // 不主动取数；认证完成后由真正挂载的后台路由按需读取，避免显示旧会话数据。
+        clearAdminCacheAfterLogin(client);
+        const result = await refetch({ throwOnError: true });
+        if (!result.data?.authenticated) {
+          throw new Error("登录状态确认失败，请重试");
+        }
+      }}
+      altchaEnabled={data.altcha_enabled}
+      loginBackground={data.login_background}
+    />
+  );
+  const role = data.role === "super" ? "super" : "image";
+  const logout = async () => {
+    try {
+      await api(`${adminApiBasePath}/auth/logout`, { method: "POST" });
+    } finally {
+      clearCsrfToken();
+      clearSessionProbeHint();
+      navigate(adminBasePath);
+      location.reload();
+    }
+  };
+  return (
+    <AdminPreferencesProvider
+      key={data.username}
+      username={data.username}
+      serverPreferences={data.preferences}
+      serverPreferencesUpdatedAt={dataUpdatedAt}
+    >
+      <AuthenticatedAdminShell
+        role={role}
+        siteName={siteName}
+        applicationVersion={data.application_version}
+        versionEnabled={versionEnabled}
+        versionLinkEnabled={versionLinkEnabled}
+        onLogout={logout}
+      />
     </AdminPreferencesProvider>
   );
 }

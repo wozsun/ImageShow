@@ -146,6 +146,7 @@ export const passwordChangeInput = z.object({
 });
 
 const adminPreferenceInputFields = {
+  color_scheme: z.enum(adminPreferenceValueOptions.color_scheme).optional(),
   image_card_density: z.enum(adminPreferenceValueOptions.image_card_density).optional()
 } satisfies Record<keyof typeof adminPreferenceValueOptions, z.ZodType>;
 

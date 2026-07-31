@@ -50,7 +50,6 @@ export function HomeHero({
   revealed,
   bannerLabel,
   bannerTitle,
-  tagline,
   stats,
   catalogRef,
   onCatalogIntent
@@ -58,7 +57,6 @@ export function HomeHero({
   revealed: boolean;
   bannerLabel: string;
   bannerTitle: string;
-  tagline: string;
   stats: GalleryStatsDto | undefined;
   catalogRef: RefObject<HTMLElement | null>;
   onCatalogIntent: () => void;
@@ -95,7 +93,6 @@ export function HomeHero({
       <div className="home-banner-copy">
         <span className="home-banner-label">{bannerLabel}</span>
         <h1 id="home-title" className="home-banner-title">{bannerTitle}</h1>
-        {tagline && <p className="home-banner-tagline">{tagline}</p>}
       </div>
       <aside
         className="home-site-stats"

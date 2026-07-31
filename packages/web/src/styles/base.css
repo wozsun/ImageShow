@@ -240,18 +240,21 @@ input[aria-invalid="true"] {
 .select-menu > button:focus-visible { background: var(--color-control-surface-hover); }
 .select-menu > button.is-selected {
   position: relative;
-  color: var(--color-control-action);
+  color: var(--color-control-action-text);
   background: var(--color-control-surface-hover);
 }
 .select-menu > button.is-selected::after { content: "✓"; position: absolute; right: 10px; }
 .select-menu.is-closing { pointer-events: none; animation: select-menu-out .12s ease-in forwards; }
 .suggestion-menu > button.is-active { background: var(--color-control-surface-hover); }
+.suggestion-menu > button { padding-inline: 10px; }
 
 .suggestion-menu > button .option-display-name {
+  min-width: 0;
   margin-left: auto;
   padding-left: 12px;
   color: var(--color-control-text-tertiary);
   font-size: 12px;
+  text-align: right;
 }
 .modal-footer-actions { display: flex; align-items: center; gap: 12px; }
 
@@ -723,7 +726,7 @@ button:not(:disabled):not(.select-trigger):not([data-availability-locked="true"]
 .facet-selected-list button {
   background: var(--color-control-surface-hover);
   border-color: var(--color-control-border-selected);
-  color: var(--color-control-action);
+  color: var(--color-control-action-text);
 }
 .facet-selected-list button span { font-size: 16px; line-height: 1; }
 .facet-mode-switch {
@@ -739,7 +742,7 @@ button:not(:disabled):not(.select-trigger):not([data-availability-locked="true"]
 }
 .facet-mode-switch button { min-height: 30px; padding: 4px 9px; font-size: 14px; }
 .facet-mode-switch button.active {
-  color: var(--color-control-action);
+  color: var(--color-control-action-text);
   background: var(--color-control-surface-hover);
   border-color: var(--color-control-border-selected);
 }

@@ -119,6 +119,7 @@ export function BatchMetadataModal({
   onClose,
   onSaved,
   onDeleted,
+  onStorageMigrationSucceeded,
   returnFocusRef,
   single = false
 }: {
@@ -132,6 +133,7 @@ export function BatchMetadataModal({
     authoritativeItems?: BatchEditableImageSnapshot[] | null
   ) => void | Promise<void>;
   onDeleted?: (imageId: string) => void | Promise<void>;
+  onStorageMigrationSucceeded?: (message: string) => void;
   returnFocusRef?: RefObject<HTMLElement | null>;
   single?: boolean;
 }) {
@@ -528,12 +530,14 @@ export function BatchMetadataModal({
           <BatchStorageMigrationDialog
             open
             imageIds={activeItems.map((item) => item.id)}
+            currentStorageSlugs={activeItems.map((item) => item.storage_slug)}
             single={single}
             returnFocusRef={migrateTriggerRef}
             onClose={() => setMigrating(false)}
             onSaved={onSaved}
-            onSucceeded={() => {
+            onSucceeded={(message) => {
               setMigrating(false);
+              onStorageMigrationSucceeded?.(message);
               requestClose();
             }}
           />

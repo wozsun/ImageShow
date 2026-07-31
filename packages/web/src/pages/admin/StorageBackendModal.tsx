@@ -8,8 +8,7 @@ import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
 import { storageBackendDisplay, storageTypeLabel } from "../../lib/ui/select-options.js";
 import type { S3Settings, StorageBackendAdmin, StorageType, WebdavSettings } from "../../lib/types.js";
 import {
-  useAsyncActionStatus,
-  type AsyncActionStatus
+  useAsyncActionStatus
 } from "../../hooks/useAsyncActionStatus.js";
 
 const emptyS3: S3Settings = {
@@ -34,23 +33,13 @@ const storageTestPresentation = {
   error: { icon: "close-line", label: "连接失败" }
 } as const;
 
-const setDefaultPresentation = {
-  idle: { icon: "star-line", label: "设为默认" },
-  pending: { icon: "star-line", label: "设置中" },
-  success: { icon: "check-line", label: "已是默认" },
-  error: { icon: "close-line", label: "设置失败" }
-} as const;
-
 type StorageSaveOperation = "create" | "save";
 
-export function StorageBackendModal({ target, busy, defaultStatus, defaultActionPending, onClose, onSave, onSetDefault, onTest }: {
+export function StorageBackendModal({ target, busy, onClose, onSave, onTest }: {
   target: StorageBackendAdmin | "new";
   busy: string;
-  defaultStatus: AsyncActionStatus;
-  defaultActionPending: boolean;
   onClose: () => void;
   onSave: (slug: string, payload: Record<string, unknown>, isCreate: boolean) => Promise<boolean>;
-  onSetDefault: (slug: string) => Promise<boolean>;
   onTest: (body: unknown) => Promise<boolean>;
 }) {
   const creating = target === "new";
@@ -118,8 +107,7 @@ export function StorageBackendModal({ target, busy, defaultStatus, defaultAction
   const isCreateForm = creating && createdSlug === null;
   const formBusy = Boolean(busy)
     || connectionTest.pending
-    || saveStatus.pending
-    || defaultActionPending;
+    || saveStatus.pending;
   const savePresentation = {
     idle: {
       icon: "save-3-line",
@@ -157,16 +145,6 @@ export function StorageBackendModal({ target, busy, defaultStatus, defaultAction
   const runConnectionTest = async () => {
     await connectionTest.run(() => onTest(testBody()));
   };
-  const setAsDefault = async () => {
-    await onSetDefault(backend!.slug);
-  };
-  const currentDefaultPresentation = {
-    ...setDefaultPresentation,
-    idle: backend?.is_default
-      ? { icon: "star-fill" as const, label: "默认" }
-      : setDefaultPresentation.idle
-  } as const;
-
   return (
     <DialogFrame
       className="modal edit-modal"
@@ -268,15 +246,6 @@ export function StorageBackendModal({ target, busy, defaultStatus, defaultAction
                 disabled={formBusy}
                 onClick={() => void runConnectionTest()}
               />
-              {!creating && backend!.enabled && (
-                <AsyncActionButton
-                  type="button"
-                  status={defaultStatus}
-                  presentation={currentDefaultPresentation}
-                  disabled={formBusy || backend!.is_default}
-                  onClick={() => void setAsDefault()}
-                />
-              )}
             </div>
             <div className="modal-footer-actions">
               <button type="button" disabled={formBusy} onClick={() => requestClose()}>取消</button>

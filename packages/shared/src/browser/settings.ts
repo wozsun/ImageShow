@@ -148,10 +148,13 @@ export type SiteSettings = Pick<
 export type PublicSiteSettings =
   SiteSettings & Pick<RuntimeSiteSettings, "version">;
 
-export type AdminSiteSettings = Omit<SiteSettings, "home"> & {
+export type AdminSiteSettings = Omit<
+  SiteSettings,
+  "domain" | "home" | "icon_url"
+> & {
   home: Pick<
     SiteHomeSettings,
-    "background" | "banner_label" | "banner_title" | "tagline"
+    "background" | "banner_label" | "banner_title"
   >;
 };
 

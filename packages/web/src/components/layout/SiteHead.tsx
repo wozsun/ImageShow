@@ -1,5 +1,9 @@
 import { useEffect, useLayoutEffect } from "react";
 import { useLocation } from "react-router";
+import {
+  defaultAdminPreferences,
+  type AdminColorScheme
+} from "@imageshow/shared/browser";
 import { adminBasePath } from "../../lib/constants.js";
 import { useSiteConfig } from "../../lib/api/site-data.js";
 
@@ -24,13 +28,16 @@ function isAdminRoute(pathname: string) {
 function syncBrowserSurface(root: HTMLElement) {
   const styles = getComputedStyle(root);
   const browserCanvas = styles.getPropertyValue("--color-browser-canvas").trim();
-  ensureMeta("theme-color").content =
-    browserCanvas || styles.backgroundColor.trim();
+  const resolvedBackground = styles.backgroundColor.trim();
+  ensureMeta("theme-color").content = resolvedBackground || browserCanvas;
 }
 
-export function applyUiColorContext(uiContext: UiContext) {
+export function applyUiColorContext(
+  uiContext: UiContext,
+  adminColorScheme: AdminColorScheme = defaultAdminPreferences.color_scheme
+) {
   const appearance: BrowserAppearance =
-    uiContext === "admin" ? "light" : "dark";
+    uiContext === "admin" ? adminColorScheme : "dark";
   const root = document.documentElement;
   root.dataset.uiContext = uiContext;
   root.dataset.colorScheme = appearance;

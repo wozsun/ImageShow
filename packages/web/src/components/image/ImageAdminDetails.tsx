@@ -149,6 +149,7 @@ export function ImageAdminDetails({
   const [editSuppressed, setEditSuppressed] = useState(false);
   const [editPending, setEditPending] = useState(false);
   const [editError, setEditError] = useState("");
+  const [editNotice, setEditNotice] = useState("");
   const [preparedEdit, setPreparedEdit] = useState<PreparedImageEdit | null>(null);
   const [refreshedAdminInfo, setRefreshedAdminInfo] =
     useState<ImageAdminInfo | null>(null);
@@ -263,6 +264,7 @@ export function ImageAdminDetails({
 
   const openEdit = useCallback(async () => {
     setEditError("");
+    setEditNotice("");
     setEditPending(true);
     try {
       setPreparedEdit(await prepareEdit());
@@ -423,6 +425,11 @@ export function ImageAdminDetails({
           编辑器加载失败，请重试
         </p>
       )}
+      {editNotice && (
+        <p className="image-detail-edit-notice" role="status">
+          {editNotice}
+        </p>
+      )}
       {expanded && (
         <div className="image-detail-admin-panel">
           <dl>
@@ -454,6 +461,7 @@ export function ImageAdminDetails({
           onClose={closeEdit}
           onSaved={refreshAfterSave}
           onDeleted={refreshAfterDelete}
+          onStorageMigrationSucceeded={setEditNotice}
           returnFocusRef={editButtonRef}
         />
       )}

@@ -18,6 +18,7 @@ export function ImageEditModal({
   onClose,
   onSaved,
   onDeleted,
+  onStorageMigrationSucceeded,
   returnFocusRef,
 }: {
   item: BatchEditableImageSnapshot;
@@ -29,6 +30,7 @@ export function ImageEditModal({
     authoritativeItems?: BatchEditableImageSnapshot[] | null
   ) => void | Promise<void>;
   onDeleted?: (imageId: string) => void | Promise<void>;
+  onStorageMigrationSucceeded?: (message: string) => void;
   returnFocusRef?: RefObject<HTMLElement | null>;
 }) {
   return (
@@ -42,6 +44,7 @@ export function ImageEditModal({
       onClose={onClose}
       onSaved={onSaved}
       onDeleted={onDeleted}
+      onStorageMigrationSucceeded={onStorageMigrationSucceeded}
       returnFocusRef={returnFocusRef}
     />
   );

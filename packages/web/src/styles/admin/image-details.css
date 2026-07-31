@@ -1,7 +1,7 @@
 .image-detail-admin-details {
   margin-top: 12px;
   padding-top: 10px;
-  border-top: 1px solid var(--admin-color-detail-border);
+  border-top: 1px solid var(--color-detail-border);
 }
 
 .image-detail-admin-actions {
@@ -21,13 +21,13 @@
   padding: 5px 8px;
   border-color: transparent;
   background: transparent;
-  color: var(--admin-color-detail-action);
+  color: var(--color-detail-text-secondary);
 }
 
-.image-detail-admin-toggle:hover { background: var(--admin-color-detail-action-hover-surface); }
+.image-detail-admin-toggle:hover { background: var(--color-detail-action-hover); }
 
 .image-detail-admin-toggle:hover,
-.image-detail-admin-toggle[aria-expanded="true"] { color: var(--admin-color-detail-action-hover); }
+.image-detail-admin-toggle[aria-expanded="true"] { color: var(--color-detail-text-primary); }
 
 .image-detail-admin-toggle > span { width: 12px; color: currentColor; }
 
@@ -38,30 +38,36 @@
   min-height: 34px;
   flex: 0 0 34px;
   padding: 0;
-  color: var(--admin-color-detail-action);
+  color: var(--color-detail-text-secondary);
   background: transparent;
   border-color: transparent;
 }
 
 .image-detail-edit-button.icon:hover {
-  color: var(--admin-color-detail-action-hover);
-  background: var(--admin-color-detail-action-hover-surface);
+  color: var(--color-detail-text-primary);
+  background: var(--color-detail-action-hover);
 }
 
 .image-detail-edit-button.icon[aria-busy="true"] { cursor: wait; }
 
 .image-detail-edit-error {
   margin: 6px 8px 0;
-  color: var(--admin-color-danger-text);
+  color: var(--color-detail-error);
+  font-size: 13px;
+}
+
+.image-detail-edit-notice {
+  margin: 6px 8px 0;
+  color: var(--admin-color-success-text);
   font-size: 13px;
 }
 
 .image-detail-admin-panel {
   margin-top: 6px;
   padding: 12px;
-  border: 1px solid var(--admin-color-detail-panel-border);
+  border: 1px solid var(--color-detail-border);
   border-radius: 8px;
-  background: var(--admin-color-detail-panel-surface);
+  background: var(--color-detail-surface-raised);
 }
 
 .image-detail-admin-panel dl { margin: 0; }
@@ -88,11 +94,14 @@
   gap: 10px;
   margin-top: 10px;
   padding-top: 10px;
-  border-top: 1px solid var(--admin-color-danger-border-subtle);
-  color: var(--admin-color-danger-text);
+  border-top: 1px solid var(--color-detail-danger-border);
+  color: var(--color-detail-error);
 }
 
 .image-detail-admin-error button {
+  color: var(--color-detail-danger-action-text);
+  background: var(--color-detail-danger-action-surface);
+  border-color: var(--color-detail-danger-action-border);
   flex: 0 0 auto;
   min-height: 30px;
   padding: 4px 10px;

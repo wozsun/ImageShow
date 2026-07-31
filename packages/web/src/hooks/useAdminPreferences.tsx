@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -11,23 +12,27 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   adminPreferenceKeys,
+  defaultAdminPreferences,
   normalizeAdminPreferences,
   type AdminPreferenceKey,
   type AdminPreferences,
   type AdminPreferencesResponseDto,
-  type AdminPreferenceValues
+  type AdminPreferenceValues,
+  type AuthStateDto
 } from "@imageshow/shared/browser";
 import { api } from "../lib/api/client.js";
 import { adminApiBasePath } from "../lib/constants.js";
 import { queryKeys } from "../lib/api/query-keys.js";
+import {
+  reconcileAdminPreferenceCache,
+  runAdminPreferenceWriteWithReadFence,
+  sameAdminPreferences,
+  shouldReplaceAdminPreferenceQuerySnapshot,
+  type CachedAdminPreferences
+} from "../lib/api/admin-preference-cache.js";
 
 const localPreferenceVersion = 1;
 const localPreferenceKeyPrefix = "imageshow.admin.preferences.";
-
-type CachedAdminPreferences = {
-  values: AdminPreferences;
-  pending: AdminPreferences;
-};
 
 type SetAdminPreference = <Key extends AdminPreferenceKey>(
   key: Key,
@@ -69,13 +74,9 @@ function preferenceCount(preferences: AdminPreferences) {
   );
 }
 
-function samePreferences(left: AdminPreferences, right: AdminPreferences) {
-  return adminPreferenceKeys.every((key) => left[key] === right[key]);
-}
-
 function sameCache(left: CachedAdminPreferences, right: CachedAdminPreferences) {
-  return samePreferences(left.values, right.values)
-    && samePreferences(left.pending, right.pending);
+  return sameAdminPreferences(left.values, right.values)
+    && sameAdminPreferences(left.pending, right.pending);
 }
 
 function emptyCache(): CachedAdminPreferences {
@@ -119,20 +120,66 @@ function readCachedPreferences(username: string): CachedAdminPreferences {
 
 export function AdminPreferencesProvider({
   username,
+  serverPreferences,
+  serverPreferencesUpdatedAt,
   children
-}: PropsWithChildren<{ username: string }>) {
+}: PropsWithChildren<{
+  username: string;
+  serverPreferences: AdminPreferences;
+  serverPreferencesUpdatedAt: number;
+}>) {
   const queryClient = useQueryClient();
   const queryKey = useMemo(
     () => [...queryKeys.adminPreferences, username] as const,
     [username]
   );
+  const initialServerPreferences = useMemo(
+    () => normalizeAdminPreferences(serverPreferences),
+    [serverPreferences]
+  );
   const [cache, setCache] = useState<CachedAdminPreferences>(
-    () => readCachedPreferences(username)
+    () => reconcileAdminPreferenceCache(
+      readCachedPreferences(username),
+      initialServerPreferences
+    )
   );
   const cacheRef = useRef(cache);
   const queueRef = useRef(Promise.resolve());
   const queuedPreferencesRef = useRef<Partial<Record<AdminPreferenceKey, QueuedPreference>>>({});
   const queueVersionRef = useRef(0);
+  const activeUsernameRef = useRef<string | null>(username);
+
+  useLayoutEffect(() => {
+    activeUsernameRef.current = username;
+    return () => {
+      activeUsernameRef.current = null;
+    };
+  }, [username]);
+
+  useLayoutEffect(() => {
+    // 初始化 reconcile 可能已确认并移除上次遗留的 pending；即使内存状态没有
+    // 后续变化，也要在页面可交互前把这份归一化结果写回，避免未来把旧 pending
+    // 误当作尚未同步的本地选择。
+    writeCachedPreferences(username, cacheRef.current);
+  }, [username]);
+
+  useLayoutEffect(() => {
+    const cachedUpdatedAt = queryClient.getQueryState(queryKey)?.dataUpdatedAt;
+    if (!shouldReplaceAdminPreferenceQuerySnapshot(
+      cachedUpdatedAt,
+      serverPreferencesUpdatedAt
+    )) return;
+    queryClient.setQueryData<AdminPreferencesResponseDto>(
+      queryKey,
+      { preferences: initialServerPreferences },
+      { updatedAt: serverPreferencesUpdatedAt }
+    );
+  }, [
+    initialServerPreferences,
+    queryClient,
+    queryKey,
+    serverPreferencesUpdatedAt
+  ]);
 
   const commitCache = useCallback((next: CachedAdminPreferences) => {
     if (sameCache(cacheRef.current, next)) return;
@@ -140,6 +187,30 @@ export function AdminPreferencesProvider({
     writeCachedPreferences(username, next);
     setCache(next);
   }, [username]);
+
+  const syncAuthPreferenceSnapshot = useCallback((
+    preferences: AdminPreferences
+  ) => {
+    if (activeUsernameRef.current !== username) return;
+    const current = queryClient.getQueryData<AuthStateDto>(queryKeys.me);
+    if (!current?.authenticated || current.username !== username) return;
+    if (sameAdminPreferences(
+      normalizeAdminPreferences(current.preferences),
+      preferences
+    )) return;
+    queryClient.setQueryData<AuthStateDto>(queryKeys.me, {
+      ...current,
+      preferences
+    });
+  }, [queryClient, username]);
+
+  const cancelPreferenceReads = useCallback(
+    () => queryClient.cancelQueries(
+      { queryKey, exact: true },
+      { silent: true }
+    ),
+    [queryClient, queryKey]
+  );
 
   const enqueueSync = useCallback((requestedPatch: AdminPreferences) => {
     const patch: AdminPreferences = {};
@@ -157,10 +228,18 @@ export function AdminPreferencesProvider({
 
     queueRef.current = queueRef.current.then(async () => {
       try {
-        const response = await api<AdminPreferencesResponseDto>(`${adminApiBasePath}/preferences`, {
-          method: "PATCH",
-          body: JSON.stringify(patch)
-        });
+        /*
+         * A focus/reconnect GET may have captured the previous PostgreSQL value.
+         * Cancel once before the PATCH and once after its acknowledgement so no
+         * stale read can publish after pending is cleared.
+         */
+        const response = await runAdminPreferenceWriteWithReadFence(
+          cancelPreferenceReads,
+          () => api<AdminPreferencesResponseDto>(`${adminApiBasePath}/preferences`, {
+            method: "PATCH",
+            body: JSON.stringify(patch)
+          })
+        );
         const acknowledged = normalizeAdminPreferences(response.preferences);
         const current = cacheRef.current;
         const values = { ...current.values };
@@ -187,6 +266,7 @@ export function AdminPreferencesProvider({
         queryClient.setQueryData<AdminPreferencesResponseDto>(queryKey, {
           preferences: acknowledged
         });
+        syncAuthPreferenceSnapshot(acknowledged);
       } catch {
         // PostgreSQL 或网络暂时不可用时保留 pending；网络恢复或下次登录会再次补同步。
       } finally {
@@ -197,51 +277,54 @@ export function AdminPreferencesProvider({
         }
       }
     });
-  }, [commitCache, queryClient, queryKey]);
+  }, [
+    cancelPreferenceReads,
+    commitCache,
+    queryClient,
+    queryKey,
+    syncAuthPreferenceSnapshot
+  ]);
 
   const preferenceQuery = useQuery<AdminPreferencesResponseDto>({
     queryKey,
     queryFn: ({ signal }) => api(`${adminApiBasePath}/preferences`, { signal }),
-    // 当前页面内以本地状态和 PATCH 回执为准；刷新或重新登录后再读取服务端。
-    // 普通 reconnect 只会重试尚未成功加载的查询，不会刷新已经成功的无限新鲜数据。
+    // /auth/me 已携带 PostgreSQL 快照，作为后台首帧种子避免额外请求和外观闪烁。
+    // 页面重新聚焦时仍主动读取一次偏好，让另一设备完成的修改可以收敛到当前页面。
+    initialData: { preferences: initialServerPreferences },
+    initialDataUpdatedAt: serverPreferencesUpdatedAt,
     staleTime: Number.POSITIVE_INFINITY,
     gcTime: Number.POSITIVE_INFINITY,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: true,
+    refetchOnWindowFocus: "always",
+    refetchOnReconnect: "always",
     retry: 1
   });
 
   useEffect(() => {
     if (!preferenceQuery.data) return;
+    if (preferenceQuery.dataUpdatedAt < serverPreferencesUpdatedAt) return;
     const serverPreferences = normalizeAdminPreferences(preferenceQuery.data.preferences);
-    const current = cacheRef.current;
-    const values = { ...current.values };
-    const pending = { ...current.pending };
-    const patch: AdminPreferences = {};
-
-    for (const key of adminPreferenceKeys) {
-      const pendingValue = current.pending[key];
-      const serverValue = serverPreferences[key];
-      const localValue = current.values[key];
-
-      if (pendingValue !== undefined) {
-        assignPreference(values, key, pendingValue);
-        assignPreference(patch, key, pendingValue);
-      } else if (serverValue !== undefined) {
-        assignPreference(values, key, serverValue);
-      } else if (localValue !== undefined) {
-        assignPreference(pending, key, localValue);
-        assignPreference(patch, key, localValue);
-      }
-    }
-
-    commitCache({ values, pending });
-    enqueueSync(patch);
-  }, [commitCache, enqueueSync, preferenceQuery.data]);
+    const next = reconcileAdminPreferenceCache(cacheRef.current, serverPreferences);
+    commitCache(next);
+    enqueueSync(next.pending);
+    syncAuthPreferenceSnapshot(serverPreferences);
+  }, [
+    commitCache,
+    enqueueSync,
+    preferenceQuery.data,
+    preferenceQuery.dataUpdatedAt,
+    serverPreferencesUpdatedAt,
+    syncAuthPreferenceSnapshot
+  ]);
 
   useEffect(() => {
     const handleStorage = (event: StorageEvent) => {
-      if (event.storageArea !== window.localStorage || event.key !== localPreferenceKey(username)) return;
+      if (event.key !== localPreferenceKey(username)) return;
+      try {
+        if (event.storageArea !== window.localStorage) return;
+      } catch {
+        // 存储被浏览器策略禁用时忽略跨标签事件，当前页仍使用内存与服务端状态。
+        return;
+      }
       const next = readCachedPreferences(username);
       cacheRef.current = next;
       setCache(next);
@@ -288,15 +371,14 @@ export function AdminPreferencesProvider({
 }
 
 export function useAdminPreference<Key extends AdminPreferenceKey>(
-  key: Key,
-  fallback: AdminPreferenceValues[Key]
+  key: Key
 ): [AdminPreferenceValues[Key], (value: AdminPreferenceValues[Key]) => void] {
   const preferences = useContext(AdminPreferenceContext);
   if (!preferences) {
     throw new Error("useAdminPreference must be used inside AdminPreferencesProvider");
   }
   return [
-    preferences.values[key] ?? fallback,
+    preferences.values[key] ?? defaultAdminPreferences[key],
     (value) => preferences.setPreference(key, value)
   ];
 }

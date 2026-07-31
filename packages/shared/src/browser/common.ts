@@ -44,11 +44,14 @@ export type AdminPermission =
 // 管理端界面偏好以 PostgreSQL 为权威，并由浏览器本地存储提供首帧与离线兜底。
 // 将键和值域集中在 shared；新增偏好时，类型、服务端校验和前端投影会同步暴露缺口。
 export const imageCardDensities = ["compact", "spacious"] as const;
+export const adminColorSchemes = ["light", "dark"] as const;
 export const adminPreferenceValueOptions = {
+  color_scheme: adminColorSchemes,
   image_card_density: imageCardDensities
 } as const;
 export const adminPreferencesMaxBytes = 4 * 1024;
 
+export type AdminColorScheme = (typeof adminColorSchemes)[number];
 export type ImageCardDensity = (typeof imageCardDensities)[number];
 export type AdminPreferenceKey = keyof typeof adminPreferenceValueOptions;
 export const adminPreferenceKeys = Object.freeze(
@@ -58,6 +61,12 @@ export const adminPreferenceKeys = Object.freeze(
 export type AdminPreferenceValues = {
   [Key in AdminPreferenceKey]: (typeof adminPreferenceValueOptions)[Key][number];
 };
+
+export const defaultAdminPreferences: Readonly<AdminPreferenceValues> =
+  Object.freeze({
+    color_scheme: "dark",
+    image_card_density: "compact"
+  });
 
 export type AdminPreferences = Partial<AdminPreferenceValues>;
 
@@ -95,6 +104,7 @@ export type AuthStateDto = {
   application_version: string;
   altcha_enabled: boolean;
   login_background: string;
+  preferences: AdminPreferences;
 };
 
 export type AdminLoginResultDto = {

@@ -521,14 +521,8 @@ function StorageBackendsManager() {
           key={editingTarget === "new" ? "new" : editingTarget.slug}
           target={editingTarget}
           busy={busy}
-          defaultStatus={editingTarget !== "new"
-            && defaultActionSlug === editingTarget.slug
-            ? defaultAction.status
-            : "idle"}
-          defaultActionPending={defaultAction.pending}
           onClose={closeEditor}
           onTest={testConfig}
-          onSetDefault={setDefault}
           onSave={(slug, payload, isCreate) => runStorageAction(
             isCreate ? "create" : `save:${slug}`,
             () => isCreate

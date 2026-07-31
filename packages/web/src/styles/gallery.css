@@ -519,7 +519,8 @@
   width: min(1100px, 96vw);
   height: 90vh;
   max-height: 90vh;
-  background: var(--public-color-detail-surface-light);
+  color: var(--color-detail-text-primary);
+  background: var(--color-detail-surface);
   border-radius: 8px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 340px;
@@ -538,6 +539,7 @@
   width: 100%;
   height: 90vh;
   max-height: 90vh;
+  background: var(--color-detail-image-surface);
 }
 .image-detail-panel {
   position: relative;
@@ -569,7 +571,7 @@
   display: grid;
   margin: 0;
   padding: 15px 20px;
-  background: var(--public-color-detail-surface-light);
+  background: var(--color-detail-surface);
 }
 .image-detail-title-row {
   min-width: 0;
@@ -597,7 +599,7 @@
 
 .image-detail-title-link { color: inherit; }
 .image-detail-title-link:hover {
-  color: var(--color-control-action);
+  color: var(--color-detail-action-text);
   text-decoration: underline;
 }
 .image-detail-modal .image-detail-description-slot {
@@ -617,13 +619,13 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid var(--public-color-detail-card-border);
+  border: 1px solid var(--color-detail-border);
   border-radius: 8px;
-  background: var(--public-color-detail-card-surface);
+  background: var(--color-detail-surface-raised);
   transition: box-shadow .14s ease;
 }
 .image-detail-description-card.is-expanded {
-  box-shadow: 0 10px 24px var(--public-shadow-detail-card);
+  box-shadow: 0 10px 24px var(--color-detail-shadow);
 }
 .image-detail-description-card-body {
   position: relative;
@@ -658,8 +660,8 @@
   display: block;
   white-space: pre-wrap;
 }
-.image-detail-description-text.is-placeholder { color: var(--public-color-detail-placeholder); }
-.image-detail-description-text.is-error { color: var(--public-color-detail-error); }
+.image-detail-description-text.is-placeholder { color: var(--color-detail-text-secondary); }
+.image-detail-description-text.is-error { color: var(--color-detail-error); }
 .image-detail-description-toggle,
 .image-detail-description-retry {
   position: absolute;
@@ -672,10 +674,10 @@
   border: 0;
   background: linear-gradient(
     90deg,
-    var(--public-color-detail-fade-clear),
-    var(--public-color-detail-card-surface) 28%
+    var(--color-detail-fade-clear),
+    var(--color-detail-surface-raised) 28%
   );
-  color: var(--color-control-action);
+  color: var(--color-detail-action-text);
   line-height: 20px;
 }
 .image-detail-public-properties { margin-top: 0; }
@@ -690,121 +692,36 @@
 dl { display: grid; grid-template-columns: 82px 1fr; gap: 8px 12px; }
 dt { color: var(--color-control-text-secondary); }
 dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
-dd a { color: var(--color-control-action); }
+dd a { color: var(--color-control-action-text); }
 
-.image-detail-modal:not([data-admin-dialog]) > article {
-  color: var(--public-color-text-primary);
-  background: var(--public-color-detail-surface-dark);
-  border: 1px solid var(--public-color-border-default);
+.image-detail-modal dt {
+  color: var(--color-detail-text-secondary);
 }
 
-.image-detail-modal:not([data-admin-dialog]) .image-detail-image {
-  background: var(--public-color-detail-surface-dark);
+.image-detail-modal dd a {
+  color: var(--color-detail-action-text);
 }
 
-.image-detail-modal:not([data-admin-dialog]) .image-detail-head {
-  background: var(--public-color-detail-surface-dark);
+.image-detail-modal .image-detail-public-properties .tag-chip {
+  color: var(--color-detail-chip-text);
+  background: var(--color-detail-chip-surface);
+  border-color: var(--color-detail-chip-border);
 }
 
-.image-detail-modal:not([data-admin-dialog]) .image-detail-title-link:hover,
-.image-detail-modal:not([data-admin-dialog]) dd a {
-  color: var(--public-color-action-primary);
+.image-detail-modal .image-detail-actions .button {
+  color: var(--color-detail-text-strong);
+  background: var(--color-detail-action-fill);
 }
 
-.image-detail-modal:not([data-admin-dialog]) .image-detail-description-card {
-  background: var(--public-color-detail-surface-dark-raised);
-  border-color: var(--public-color-border-default);
+.image-detail-modal .image-detail-actions .image-detail-original {
+  border-color: var(--color-detail-action-border);
 }
 
-.image-detail-modal:not([data-admin-dialog]) .image-detail-description-card.is-expanded {
-  box-shadow: 0 10px 24px var(--public-shadow-detail-card-dark);
-}
-
-.image-detail-modal:not([data-admin-dialog]) .image-detail-description-text.is-placeholder,
-.image-detail-modal:not([data-admin-dialog]) dt {
-  color: var(--public-color-text-secondary);
-}
-
-.image-detail-modal:not([data-admin-dialog]) .image-detail-description-text.is-error {
-  color: var(--public-color-detail-error-dark);
-}
-
-.image-detail-modal:not([data-admin-dialog]) .image-detail-description-toggle,
-.image-detail-modal:not([data-admin-dialog]) .image-detail-description-retry {
-  color: var(--public-color-action-primary);
-  background:
-    linear-gradient(
-      90deg,
-      var(--public-color-detail-fade-dark-clear),
-      var(--public-color-detail-surface-dark-raised) 28%
-    );
-}
-
-.image-detail-modal:not([data-admin-dialog])
-  .image-detail-public-properties .tag-chip {
-  color: var(--public-color-detail-chip-text);
-  background: var(--public-color-detail-chip-surface);
-  border-color: var(--public-color-detail-chip-border);
-}
-
-.image-detail-modal:not([data-admin-dialog]) .image-detail-actions .button {
-  color: var(--public-color-text-strong);
-  background: var(--public-color-action-strong);
-}
-
-.image-detail-modal:not([data-admin-dialog]) .image-detail-actions .image-detail-original {
-  border-color: var(--public-color-detail-action-border);
-}
-
-.image-detail-modal:not([data-admin-dialog]) .image-detail-actions .button.secondary,
-.image-detail-modal:not([data-admin-dialog])
-  .image-detail-title-row > .close {
-  color: var(--public-color-text-primary);
-  background: var(--public-color-detail-action-surface);
-  border-color: var(--public-color-border-default);
-}
-
-.image-detail-modal:not([data-admin-dialog]) .image-detail-admin-details {
-  border-top-color: var(--public-color-border-default);
-}
-
-.image-detail-modal:not([data-admin-dialog]) .image-detail-admin-toggle {
-  color: var(--public-color-text-secondary);
-}
-
-.image-detail-modal:not([data-admin-dialog]) .image-detail-edit-button {
-  color: var(--public-color-text-secondary);
-  border-color: transparent;
-  background: transparent;
-}
-
-.image-detail-modal:not([data-admin-dialog]) .image-detail-admin-toggle:hover,
-.image-detail-modal:not([data-admin-dialog]) .image-detail-edit-button:hover,
-.image-detail-modal:not([data-admin-dialog])
-  .image-detail-admin-toggle[aria-expanded="true"] {
-  color: var(--public-color-text-primary);
-  background: var(--public-color-detail-action-hover);
-}
-
-.image-detail-modal:not([data-admin-dialog]) .image-detail-edit-error {
-  color: var(--public-color-detail-error-dark);
-}
-
-.image-detail-modal:not([data-admin-dialog]) .image-detail-admin-panel {
-  color: var(--public-color-text-primary);
-  background: var(--public-color-detail-surface-dark-raised);
-  border-color: var(--public-color-border-default);
-}
-
-.image-detail-modal:not([data-admin-dialog]) .image-detail-admin-error {
-  color: var(--public-color-detail-error-dark);
-  border-top-color: var(--public-color-detail-danger-border);
-}
-
-.image-detail-modal:not([data-admin-dialog]) .image-detail-admin-error button {
-  color: var(--public-color-detail-danger-action-text);
-  background: var(--public-color-detail-danger-action-surface);
-  border-color: var(--public-color-detail-danger-action-border);
+.image-detail-modal .image-detail-actions .button.secondary,
+.image-detail-modal .image-detail-title-row > .close {
+  color: var(--color-detail-text-primary);
+  background: var(--color-detail-action-surface);
+  border-color: var(--color-detail-border);
 }
 
 @media (max-width: 760px) {

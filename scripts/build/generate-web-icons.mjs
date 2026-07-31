@@ -42,6 +42,7 @@ const iconNames = [
   "link",
   "logout-box-r-line",
   "menu-line",
+  "moon-line",
   "palette-line",
   "pencil-line",
   "price-tag-3-line",

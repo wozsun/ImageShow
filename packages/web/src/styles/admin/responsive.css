@@ -23,7 +23,7 @@
   .admin-mobile-navigation { flex: 0 0 auto; }
   .admin-mobile-navigation .mobile-nav-toggle {
     color: var(--admin-color-navigation-text);
-    background: var(--admin-color-navigation-surface);
+    background: var(--admin-color-navigation-control-surface);
     border-color: var(--admin-color-navigation-control-border);
     transition:
       color .16s ease,
@@ -53,6 +53,10 @@
   .admin-mobile-navigation .mobile-nav-dropdown button:hover {
     color: var(--admin-color-navigation-active-text);
     background: var(--admin-color-navigation-hover);
+  }
+  .admin-mobile-navigation .mobile-nav-dropdown .admin-color-scheme-toggle:hover {
+    color: var(--admin-color-navigation-text);
+    background: transparent;
   }
   .admin-mobile-navigation .mobile-nav-dropdown a.active {
     color: var(--admin-color-navigation-active-text);

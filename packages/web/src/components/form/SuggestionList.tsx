@@ -100,10 +100,6 @@ export function SuggestionList({
         const active = index === activeIndex;
         const selected = selectedSlug !== undefined
           && option.slug === selectedSlug;
-        const className = [
-          selected ? "is-selected" : "",
-          active ? "is-active" : ""
-        ].filter(Boolean).join(" ");
 
         return (
           <MenuItemButton
@@ -111,7 +107,7 @@ export function SuggestionList({
             type="button"
             role="option"
             aria-selected={selectedSlug === undefined ? active : selected}
-            className={className}
+            className={active ? "is-active" : undefined}
             onMouseEnter={() => onActiveIndexChange(index)}
             preserveFocusOnPress
             onActivate={() => onChoose(option.slug)}

@@ -88,8 +88,6 @@ export function HomePage() {
     || "ImageShow · A FAN-MADE PHOTO HANDBOOK";
   const bannerTitle = siteQuery.data?.site.home.banner_title
     || "我们一起，\n收藏这些瞬间。";
-  const tagline = siteQuery.data?.site.home.tagline
-    ?? "一个由粉丝共同整理、投稿和维护的图片收藏站。";
   const entrance = useHomeEntrance(
     background,
     catalogRef,
@@ -158,7 +156,6 @@ export function HomePage() {
         revealed={entrance.heroRevealed}
         bannerLabel={bannerLabel}
         bannerTitle={bannerTitle}
-        tagline={tagline}
         stats={stats}
         catalogRef={catalogRef}
         onCatalogIntent={entrance.revealImmediately}

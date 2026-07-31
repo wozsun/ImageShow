@@ -32,8 +32,10 @@ Docker healthcheck 只读取并在内存中归一化已经存在的 `config.json
 commit 并发等前端预检所需的只读值；不会返回部署配置、完整 `appConfig`、
 服务端全局并发、外链抓取超时或其他内部默认值。`POST /api/admin/settings`
 同样只接受设置页公开的可编辑字段，并以嵌套 patch 合并，未公开配置不会因保存
-设置页而被默认值覆盖。`site.home.enabled` 保留在运行时配置中，但不进入普通
-设置页及其读写 DTO；需要通过配置文件或高级配置维护。
+设置页而被默认值覆盖。`site.domain`、`site.icon_url` 与
+`site.home.enabled` 保留在运行时配置中，但不进入普通设置页及其读写 DTO；
+`site.home.tagline` 同样只用于 HTML `description`。这些字段都需要通过配置文件
+或高级配置维护。
 
 设置页的「读取配置文件」与「保存应用配置」直接在各自按钮内显示进行中、成功或失败，
 并预留最长状态文案宽度。进行态至少展示 500ms，结果保留三秒；成功状态不会阻止再次
@@ -57,11 +59,12 @@ Dockerfile 的 `EXPOSE` 与 Compose 目标端口；回归测试会校验三者�
 
 | 配置路径 | 用途 |
 | --- | --- |
-| `site.name` / `site.domain` / `site.icon_url` | 站点名称、主域名和图标；域名仅允许 DNS 名称（开发环境可带端口），图标仅允许站内绝对路径或 HTTPS，`site.name` 也会写入 SPA HTML 的 `<title>`。 |
+| `site.name` | 站点名称，也会写入 SPA HTML 的 `<title>`；可在普通站点配置页维护。 |
+| `site.domain` / `site.icon_url` | 主域名和图标；域名仅允许 DNS 名称（开发环境可带端口），图标仅允许站内绝对路径或 HTTPS。两项只通过配置文件、高级配置或首次启动环境变量维护，不进入普通站点配置页及其读写 DTO。 |
 | `site.version.enabled` / `site.version.link_enabled` | 是否显示后台版本卡片、是否链接到对应的 GitHub Release，默认均为 `true`。关闭链接后仍显示版本；两项只通过配置文件、高级配置或首次启动环境变量维护，不进入站点配置页。 |
 | `site.root_redirect` | 根路径直接显示的页面：`home` 或 `gallery`；`/home`、`/gallery` 固定路径仍可单独访问。 |
 | `site.home.enabled` | 是否启用公共首页 `/home`，默认 `true`。关闭后 `/home` 重定向到画廊，导航不再显示首页入口，根路径固定显示画廊；只通过配置文件、高级配置或首次启动环境变量维护。 |
-| `site.home.tagline` | 首页 banner 的站点描述，也会写入 SPA HTML 的 description。首页全屏背景固定使用站点自身的随机图 API。 |
+| `site.home.tagline` | 站点描述，仅写入 SPA HTML 的 `description`，不在首页正文或普通站点配置页显示，只能通过配置文件、高级配置或首次启动环境变量维护。首页全屏背景固定使用站点自身的随机图 API。 |
 | `site.gallery.default_limit` / `site.gallery.order` | 画廊默认分页数量与排序。 |
 | `site.random_default_method` | `/random` 默认返回方式：`redirect` 或 `proxy`。 |
 | `site.random_subdomain` / `site.static_subdomain` / `site.link_subdomain` | 保留子域名前缀。 |

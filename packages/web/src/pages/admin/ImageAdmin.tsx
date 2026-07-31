@@ -88,7 +88,7 @@ export function ImageAdmin() {
   const [filters, setFilters] = useState<ImageAdminFilterValues>(
     emptyImageAdminFilters
   );
-  const [cardDensity, setCardDensity] = useAdminPreference("image_card_density", "compact");
+  const [cardDensity, setCardDensity] = useAdminPreference("image_card_density");
   const [detail, setDetail] = useState<ImageItem | null>(null);
   const [editing, setEditing] = useState<ImageItem | null>(null);
   const [batchEditing, setBatchEditing] = useState(false);
@@ -429,6 +429,7 @@ export function ImageAdmin() {
             await refresh();
             showFeedback("图片已移入回收站", "success");
           }}
+          onStorageMigrationSucceeded={(message) => showFeedback(message, "success")}
           returnFocusRef={editReturnFocusRef}
         />
       )}
@@ -441,6 +442,7 @@ export function ImageAdmin() {
           authors={authors}
           onClose={() => setBatchEditing(false)}
           onSaved={refresh}
+          onStorageMigrationSucceeded={(message) => showFeedback(message, "success")}
           returnFocusRef={batchEditReturnFocusRef}
         />
       )}

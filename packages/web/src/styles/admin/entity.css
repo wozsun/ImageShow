@@ -56,7 +56,6 @@
   text-overflow: ellipsis;
   cursor: text;
 }
-.entity-slug:focus { outline: none; }
 .entity-display-input { flex: 1 1 0; min-width: 0; }
 
 .entity-link-input { flex: 1 1 0; min-width: 0; }

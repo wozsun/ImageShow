@@ -24,6 +24,7 @@ import {
   readAdminSession
 } from "../users/admin-session.ts";
 import { adminPermissionsForRole } from "../users/admin-authorization.ts";
+import { readAdminPreferences } from "../users/preferences.ts";
 
 const sessionRedis = adminSessionRedisClient(redis);
 
@@ -52,6 +53,9 @@ export function registerPublicAuthRoutes(app: Hono) {
 
   app.get(`${adminApiBasePath}/auth/me`, async (c) => {
     const session = await readAdminSession(c);
+    const preferences = session
+      ? await readAdminPreferences(session.username)
+      : {};
     const authState = {
       authenticated: Boolean(session),
       username: session?.username ?? "",
@@ -62,7 +66,8 @@ export function registerPublicAuthRoutes(app: Hono) {
       csrf_token: session?.csrf ?? "",
       application_version: session ? applicationVersion() : "",
       altcha_enabled: getRuntimeConfig().altcha.enabled,
-      login_background: getEffectiveLoginBackground()
+      login_background: getEffectiveLoginBackground(),
+      preferences
     } satisfies AuthStateDto;
     return c.json(apiSuccess(authState));
   });
