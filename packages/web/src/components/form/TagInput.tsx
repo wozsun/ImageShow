@@ -3,7 +3,10 @@ import { useAnchoredMenu } from "../../hooks/useAnchoredMenu.js";
 import { useImeInputSession } from "../../hooks/useImeInputSession.js";
 import { Icon } from "../icon/Icon.js";
 import { slugPattern } from "../../lib/constants.js";
-import { normalizeFacetInput } from "../../lib/ui/facet-input.js";
+import {
+  facetSuggestions,
+  normalizeFacetInput
+} from "../../lib/ui/facet-input.js";
 import { facetDisplayName } from "../../lib/ui/formatters.js";
 import type { FacetOption } from "../../lib/types.js";
 import {
@@ -54,12 +57,7 @@ export function TagInput({ value, onChange, suggestions, disabled = false, ariaL
   const selected = new Set(value);
 
   const knownSlugs = new Set(suggestions.map((option) => option.slug));
-  const matches = query
-    ? suggestions
-        .filter((tag) => !selected.has(tag.slug)
-          && (tag.slug.includes(query) || tag.display_name.toLowerCase().includes(query)))
-        .slice(0, 50)
-    : [];
+  const matches = facetSuggestions(suggestions, query, selected);
   const suggestionOpen = open && matches.length > 0;
 
   const updateQuery = (nextText: string) => {
@@ -214,6 +212,7 @@ export function TagInput({ value, onChange, suggestions, disabled = false, ariaL
           const settledValue = added ? "" : normalized;
           if (!added) setText(normalized);
           imeSession.settleEditing(settledValue);
+          if (!added && open) requestClose();
         }}
         placeholder={value.length ? "" : placeholder}
         disabled={disabled}

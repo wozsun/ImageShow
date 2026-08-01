@@ -45,9 +45,9 @@ export function BatchStorageMigrationDialog({
 }) {
   const { data } = useStorageOptions();
   // 目标至少要让一张图片真正离开当前后端。单图编辑因此不会再列出其本身的
-  // 存储；混合来源的批量迁移仍可选择其中一个来源，以迁移其余图片。
+  // 存储；混合来源的批量迁移仍可选择其中一个已启用来源，以迁移其余图片。
   const options = (data?.backends ?? [])
-    .filter((backend) => currentStorageSlugs.some(
+    .filter((backend) => backend.enabled && currentStorageSlugs.some(
       (storageSlug) => storageSlug !== backend.slug
     ))
     .map((backend) => ({

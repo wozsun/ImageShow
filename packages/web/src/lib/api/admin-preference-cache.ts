@@ -34,7 +34,7 @@ export async function runAdminPreferenceWriteWithReadFence<Result>(
   return result;
 }
 
-function assignPreference<Key extends AdminPreferenceKey>(
+export function assignAdminPreference<Key extends AdminPreferenceKey>(
   preferences: AdminPreferences,
   key: Key,
   value: AdminPreferenceValues[Key]
@@ -55,15 +55,15 @@ export function reconcileAdminPreferenceCache(
     const localValue = current.values[key];
 
     if (pendingValue !== undefined) {
-      assignPreference(values, key, pendingValue);
+      assignAdminPreference(values, key, pendingValue);
       if (pendingValue !== serverValue) {
-        assignPreference(pending, key, pendingValue);
+        assignAdminPreference(pending, key, pendingValue);
       }
     } else if (serverValue !== undefined) {
-      assignPreference(values, key, serverValue);
+      assignAdminPreference(values, key, serverValue);
     } else if (localValue !== undefined) {
-      assignPreference(values, key, localValue);
-      assignPreference(pending, key, localValue);
+      assignAdminPreference(values, key, localValue);
+      assignAdminPreference(pending, key, localValue);
     }
   }
 

@@ -22,7 +22,7 @@ export function AccountSettings() {
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
   const updatePasswordStatus = useAsyncActionStatus();
-  const isSuper = auth?.role === "super";
+  const isSuper = auth?.authenticated && auth.role === "super";
 
   const nextInvalid = next.length > 0 && !isValidAdminPassword(next);
   const mismatch = confirm.length > 0 && next !== confirm;
@@ -56,7 +56,7 @@ export function AccountSettings() {
       <header className="workspace-head">
         <div>
           <h1>账户设置</h1>
-          <p>当前账户「{auth?.username || "—"}」· 修改登录密码</p>
+          <p>当前账户「{auth?.authenticated ? auth.username : "—"}」· 修改登录密码</p>
         </div>
       </header>
       <form className="account-form" onSubmit={submit} autoComplete="off">

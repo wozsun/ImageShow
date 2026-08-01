@@ -1,4 +1,4 @@
-import type { LogLevel } from "./common.ts";
+import type { LogLevel, SiteVersionSettings } from "./common.ts";
 
 export const rootRedirects = ["home", "gallery"] as const;
 export type RootRedirect = (typeof rootRedirects)[number];
@@ -20,11 +20,6 @@ export type SiteHomeSettings = {
 export type SiteGallerySettings = {
   default_limit: number;
   order: GalleryOrder;
-};
-
-export type SiteVersionSettings = {
-  enabled: boolean;
-  link_enabled: boolean;
 };
 
 export type RuntimeSiteSettings = {
@@ -145,8 +140,12 @@ export type SiteSettings = Pick<
   | "random_default_method"
 >;
 
-export type PublicSiteSettings =
-  SiteSettings & Pick<RuntimeSiteSettings, "version">;
+export type PublicSiteSettings = Pick<
+  RuntimeSiteSettings,
+  "name" | "icon_url" | "root_redirect" | "home"
+> & {
+  gallery: Pick<SiteGallerySettings, "order">;
+};
 
 export type AdminSiteSettings = Omit<
   SiteSettings,

@@ -174,24 +174,18 @@ export function siteConfigPayload(): SiteConfigDto {
   const runtime = getRuntimeConfig();
   const {
     name,
-    domain,
     icon_url,
-    version,
     root_redirect,
     home,
-    gallery,
-    random_default_method
+    gallery
   } = runtime.site;
   return {
     site: {
       name,
-      domain,
       icon_url,
-      version,
       root_redirect,
       home,
-      gallery,
-      random_default_method
+      gallery: { order: gallery.order }
     },
     image_detail: runtime.image_detail
   };

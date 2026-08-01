@@ -6,7 +6,7 @@ import {
   migrateImageStorageBackend,
   type StorageMigrationImageRecord
 } from "../storage/migration.ts";
-import { assertStorageWritable } from "../storage/backend-registry.ts";
+import { assertStorageWriteTarget } from "../storage/backend-registry.ts";
 import { invalidateImageCaches } from "./image-cache.ts";
 
 type BatchStorageMigrationMetrics = {
@@ -38,7 +38,7 @@ export async function migrateImageBatchStorage(
   let randomPoolFullRebuildTriggered = false;
 
   if (rows.some((row) => row.storage_slug !== target)) {
-    await assertStorageWritable(target);
+    await assertStorageWriteTarget(target);
   }
   const concurrency = getRuntimeConfig().background_job.migrate_concurrency;
   await mapWithWorkerPool(rows, concurrency, async (row) => {

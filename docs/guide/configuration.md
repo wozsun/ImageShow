@@ -61,7 +61,7 @@ Dockerfile 的 `EXPOSE` 与 Compose 目标端口；回归测试会校验三者�
 | --- | --- |
 | `site.name` | 站点名称，也会写入 SPA HTML 的 `<title>`；可在普通站点配置页维护。 |
 | `site.domain` / `site.icon_url` | 主域名和图标；域名仅允许 DNS 名称（开发环境可带端口），图标仅允许站内绝对路径或 HTTPS。两项只通过配置文件、高级配置或首次启动环境变量维护，不进入普通站点配置页及其读写 DTO。 |
-| `site.version.enabled` / `site.version.link_enabled` | 是否显示后台版本卡片、是否链接到对应的 GitHub Release，默认均为 `true`。关闭链接后仍显示版本；两项只通过配置文件、高级配置或首次启动环境变量维护，不进入站点配置页。 |
+| `site.version.enabled` / `site.version.link_enabled` | 是否显示后台版本卡片、是否链接到对应的 GitHub Release，默认均为 `true`。关闭链接后仍显示版本；两项只通过配置文件、高级配置或首次启动环境变量维护，不进入站点配置页，也不进入公开站点配置投影，只随已认证的会话探针返回。 |
 | `site.root_redirect` | 根路径直接显示的页面：`home` 或 `gallery`；`/home`、`/gallery` 固定路径仍可单独访问。 |
 | `site.home.enabled` | 是否启用公共首页 `/home`，默认 `true`。关闭后 `/home` 重定向到画廊，导航不再显示首页入口，根路径固定显示画廊；只通过配置文件、高级配置或首次启动环境变量维护。 |
 | `site.home.tagline` | 站点描述，仅写入 SPA HTML 的 `description`，不在首页正文或普通站点配置页显示，只能通过配置文件、高级配置或首次启动环境变量维护。首页全屏背景固定使用站点自身的随机图 API。 |

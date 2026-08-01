@@ -24,6 +24,7 @@ import { api } from "../lib/api/client.js";
 import { adminApiBasePath } from "../lib/constants.js";
 import { queryKeys } from "../lib/api/query-keys.js";
 import {
+  assignAdminPreference,
   reconcileAdminPreferenceCache,
   runAdminPreferenceWriteWithReadFence,
   sameAdminPreferences,
@@ -57,14 +58,6 @@ function localPreferenceKey(username: string) {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-function assignPreference<Key extends AdminPreferenceKey>(
-  preferences: AdminPreferences,
-  key: Key,
-  value: AdminPreferenceValues[Key]
-) {
-  Object.assign(preferences, { [key]: value });
 }
 
 function preferenceCount(preferences: AdminPreferences) {
@@ -198,10 +191,11 @@ export function AdminPreferencesProvider({
       normalizeAdminPreferences(current.preferences),
       preferences
     )) return;
-    queryClient.setQueryData<AuthStateDto>(queryKeys.me, {
+    const next: Extract<AuthStateDto, { authenticated: true }> = {
       ...current,
       preferences
-    });
+    };
+    queryClient.setQueryData<AuthStateDto>(queryKeys.me, next);
   }, [queryClient, username]);
 
   const cancelPreferenceReads = useCallback(
@@ -220,7 +214,7 @@ export function AdminPreferencesProvider({
       const value = requestedPatch[key];
       if (value === undefined || queuedPreferencesRef.current[key]?.value === value) continue;
       const version = ++queueVersionRef.current;
-      assignPreference(patch, key, value);
+      assignAdminPreference(patch, key, value);
       ticketVersions[key] = version;
       queuedPreferencesRef.current[key] = { value, version };
     }
@@ -250,7 +244,7 @@ export function AdminPreferencesProvider({
           const isLatestRequest = queuedPreferencesRef.current[key]?.version === ticketVersions[key];
           if (isLatestRequest && sentValue !== undefined && current.pending[key] === sentValue) {
             delete pending[key];
-            assignPreference(values, key, acknowledged[key] ?? sentValue);
+            assignAdminPreference(values, key, acknowledged[key] ?? sentValue);
             continue;
           }
 
@@ -259,7 +253,7 @@ export function AdminPreferencesProvider({
           if (current.pending[key] !== undefined || queuedPreferencesRef.current[key]) continue;
           const acknowledgedValue = acknowledged[key];
           if (acknowledgedValue === undefined) delete values[key];
-          else assignPreference(values, key, acknowledgedValue);
+          else assignAdminPreference(values, key, acknowledgedValue);
         }
         commitCache({ values, pending });
 
@@ -351,9 +345,9 @@ export function AdminPreferencesProvider({
     const values = { ...current.values };
     const pending = { ...current.pending };
     const patch: AdminPreferences = {};
-    assignPreference(values, key, value);
-    assignPreference(pending, key, value);
-    assignPreference(patch, key, value);
+    assignAdminPreference(values, key, value);
+    assignAdminPreference(pending, key, value);
+    assignAdminPreference(patch, key, value);
     commitCache({ values, pending });
     enqueueSync(patch);
   }, [commitCache, enqueueSync]);

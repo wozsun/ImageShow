@@ -6,7 +6,7 @@ import {
   type StorageMigrationImageRecord
 } from "./migration.ts";
 import {
-  assertStorageWritable,
+  assertStorageWriteTarget,
   getStorageBackend
 } from "./backend-registry.ts";
 
@@ -21,7 +21,7 @@ export async function migrateStorageBackend(source: string, target: string) {
       ORDER BY created_at ASC`,
     [source]
   )).rows as StorageMigrationImageRecord[];
-  if (rows.length) await assertStorageWritable(target);
+  if (rows.length) await assertStorageWriteTarget(target);
 
   const {
     migratedEntries,

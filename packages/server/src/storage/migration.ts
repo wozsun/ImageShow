@@ -3,7 +3,7 @@ import { pool, withTransaction } from "../core/db.ts";
 import { logger } from "../core/logger.ts";
 import { createThumbnail, md5Buffer } from "../images/processing.ts";
 import {
-  assertStorageWritable,
+  assertStorageWriteTarget,
   getStorageBackend,
   resolveStorageAccessForConfig
 } from "./backend-registry.ts";
@@ -229,7 +229,7 @@ async function migrateImageStorageBackendWhileLocked(
   if (current.storage_slug === target) return "unchanged";
 
   const source = await getStorageBackend(current.storage_slug);
-  const destination = await assertStorageWritable(target);
+  const destination = await assertStorageWriteTarget(target);
   signal.throwIfAborted();
   const sourceAccess = resolveStorageAccessForConfig(source);
   const destinationAccess = resolveStorageAccessForConfig(destination);

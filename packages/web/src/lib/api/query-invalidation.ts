@@ -1,10 +1,4 @@
-import type {
-  InfiniteData,
-  QueryClient
-} from "@tanstack/react-query";
-import type {
-  PublicImageListResponseDto
-} from "@imageshow/shared/browser";
+import type { QueryClient } from "@tanstack/react-query";
 import { queryKeys } from "./query-keys.js";
 
 function invalidate(client: QueryClient, queryKeysToInvalidate: readonly (readonly unknown[])[]) {
@@ -52,38 +46,6 @@ export function clearAdminCacheAfterLogin(client: QueryClient) {
 
 export function invalidateImageData(client: QueryClient) {
   return invalidate(client, imageDataQueryKeys);
-}
-
-export async function removeImageFromPublicImagesCache(
-  client: QueryClient,
-  imageQuery: string,
-  imageId: string
-) {
-  const queryKey = [...queryKeys.publicImages, imageQuery] as const;
-  // A next-page response may have captured the pre-delete InfiniteData. Stop
-  // only this exact request before editing the cache so a late response cannot
-  // restore the deleted card. This does not invalidate or replay loaded pages.
-  await client.cancelQueries({
-    queryKey,
-    exact: true
-  });
-  let removed = false;
-  client.setQueryData<InfiniteData<PublicImageListResponseDto, string>>(
-    queryKey,
-    (current) => {
-      if (!current) return current;
-      const pages = current.pages.map((page) => {
-        if (!page.items.some((item) => item.id === imageId)) return page;
-        removed = true;
-        return {
-          ...page,
-          items: page.items.filter((item) => item.id !== imageId)
-        };
-      });
-      return removed ? { ...current, pages } : current;
-    }
-  );
-  return removed;
 }
 
 export async function invalidateImageDataAfterDelete(

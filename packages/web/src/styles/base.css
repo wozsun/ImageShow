@@ -380,8 +380,10 @@ button.active, .button {
   left: calc(100% - var(--labeled-switch-edge-gap) - var(--labeled-switch-thumb-width));
 }
 
-button:not(:disabled):not(.select-trigger):not([data-availability-locked="true"]):hover,
-.button:not(:disabled):hover { filter: brightness(.97); }
+@media (hover: hover) and (pointer: fine) {
+  button:not(:disabled):not(.select-trigger):not([data-availability-locked="true"]):hover,
+  .button:not(:disabled):hover { filter: brightness(.97); }
+}
 .icon { width: 36px; padding: 0; flex: 0 0 36px; }
 
 .close { color: var(--color-close); }

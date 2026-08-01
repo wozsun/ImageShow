@@ -152,13 +152,7 @@ function assertStorageConfigComplete(config: StorageConfig) {
   return config;
 }
 
-export async function assertStorageWritable(
-  slug: string
-): Promise<StorageConfig> {
-  return assertStorageConfigComplete(await getStorageBackend(slug));
-}
-
-export async function assertStorageUploadable(
+export async function assertStorageWriteTarget(
   slug: string
 ): Promise<StorageConfig> {
   const record = (await getStorageBackends()).find(
@@ -175,7 +169,7 @@ export async function assertStorageUploadable(
     throw new ApiError(
       400,
       "storage_backend_disabled",
-      "该存储后端已停用，不能作为新图片的写入目标"
+      "该存储后端已停用，不能作为图片写入或迁移目标"
     );
   }
   return assertStorageConfigComplete(storageConfigFromRecord(record));

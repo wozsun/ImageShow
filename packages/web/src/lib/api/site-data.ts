@@ -156,5 +156,5 @@ const noAdminPermissions: readonly AdminPermission[] = [];
 
 export function useAdminPermissions(): readonly AdminPermission[] {
   const { data } = useAuthMe();
-  return data?.permissions ?? noAdminPermissions;
+  return data?.authenticated ? data.permissions : noAdminPermissions;
 }

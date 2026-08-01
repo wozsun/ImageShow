@@ -70,6 +70,11 @@ export const defaultAdminPreferences: Readonly<AdminPreferenceValues> =
 
 export type AdminPreferences = Partial<AdminPreferenceValues>;
 
+export type SiteVersionSettings = {
+  enabled: boolean;
+  link_enabled: boolean;
+};
+
 export function normalizeAdminPreferences(value: unknown): AdminPreferences {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   const input = value as Record<string, unknown>;
@@ -96,15 +101,18 @@ export type ApiSuccessResponse<T extends Record<string, unknown>> = {
 } & T;
 
 export type AuthStateDto = {
-  authenticated: boolean;
+  authenticated: false;
+  altcha_enabled: boolean;
+  login_background: string;
+} | {
+  authenticated: true;
   username: string;
-  role: AdminRole | "";
+  role: AdminRole;
   permissions: AdminPermission[];
   csrf_token: string;
   application_version: string;
-  altcha_enabled: boolean;
-  login_background: string;
   preferences: AdminPreferences;
+  version_settings: SiteVersionSettings;
 };
 
 export type AdminLoginResultDto = {

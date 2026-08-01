@@ -195,8 +195,6 @@ export function AdminShell() {
 
   const { data: siteConfig } = useSiteConfig();
   const siteName = siteConfig?.site?.name || "ImageShow";
-  const versionEnabled = siteConfig?.site?.version?.enabled ?? true;
-  const versionLinkEnabled = siteConfig?.site?.version?.link_enabled ?? true;
 
   const {
     data,
@@ -240,6 +238,8 @@ export function AdminShell() {
       location.reload();
     }
   };
+  const versionEnabled = data.version_settings.enabled;
+  const versionLinkEnabled = data.version_settings.link_enabled;
   return (
     <AdminPreferencesProvider
       key={data.username}

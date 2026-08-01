@@ -8,7 +8,10 @@ import {
 import { useAnchoredMenu } from "../../hooks/useAnchoredMenu.js";
 import { useImeInputSession } from "../../hooks/useImeInputSession.js";
 import { slugPattern } from "../../lib/constants.js";
-import { normalizeFacetInput } from "../../lib/ui/facet-input.js";
+import {
+  facetSuggestions,
+  normalizeFacetInput
+} from "../../lib/ui/facet-input.js";
 import { facetDisplayName } from "../../lib/ui/formatters.js";
 import type { FacetOption } from "../../lib/types.js";
 import {
@@ -16,6 +19,8 @@ import {
   SuggestionList,
   suggestionMenuSize
 } from "./SuggestionList.js";
+
+const hiddenSuggestionSlugs = new Set(["none"]);
 
 export function SlugComboInput({ value, onChange, options, noun, placeholder, disabled = false, ariaLabel, className }: {
   value: string;
@@ -40,7 +45,17 @@ export function SlugComboInput({ value, onChange, options, noun, placeholder, di
   const imeSession = useImeInputSession(renderedValue);
   const listId = useId();
   const inputId = `${listId}-input`;
-  const { open, closing, position, opensUp, menuRef, openMenu, requestClose, onAnimationEnd } = useAnchoredMenu({
+  const {
+    open,
+    closing,
+    position,
+    opensUp,
+    menuRef,
+    openMenu,
+    requestClose,
+    cancelClose,
+    onAnimationEnd
+  } = useAnchoredMenu({
     triggerRef: wrapRef,
     getSize: () => suggestionMenuSize,
     initialMaxHeight: 260,
@@ -61,22 +76,23 @@ export function SlugComboInput({ value, onChange, options, noun, placeholder, di
       onChange(normalized);
     }
     setActiveIndex(-1);
-    if (showSuggestions && !open) openMenu();
+    if (showSuggestions) {
+      if (closing) cancelClose();
+      if (!open) openMenu();
+    }
     return normalized;
   };
 
   const query = (focused ? editingValue : value).trim().toLowerCase();
 
-  const matches = query
-    ? options.filter((option) => option.slug !== "none" && (option.slug.includes(query) || option.display_name.toLowerCase().includes(query))).slice(0, 50)
-    : [];
+  const matches = facetSuggestions(options, query, hiddenSuggestionSlugs);
+  const suggestionOpen = open && matches.length > 0;
 
   const isNew = slugPattern.test(query) && query.length <= 32 && !options.some((option) => option.slug === query);
 
   const choose = (slug: string) => {
     const normalized = publishValue(slug, false);
     imeSession.settleEditing(facetDisplayName(options, normalized));
-    requestClose();
 
     setFocused(false);
     inputRef.current?.blur();
@@ -89,15 +105,17 @@ export function SlugComboInput({ value, onChange, options, noun, placeholder, di
     ) return;
 
     if (handleSuggestionNavigationKey(event, {
-      open,
+      open: suggestionOpen,
       matchCount: matches.length,
       setActiveIndex,
-      openMenu,
+      openMenu: () => {
+        if (matches.length) openMenu();
+      },
       requestClose
     })) return;
 
     if (event.key === "Enter") {
-      if (!open) return;
+      if (!suggestionOpen) return;
       event.preventDefault();
       if (activeIndex >= 0 && matches[activeIndex]) choose(matches[activeIndex].slug);
       else requestClose();
@@ -106,7 +124,7 @@ export function SlugComboInput({ value, onChange, options, noun, placeholder, di
 
   const menu = (
     <SuggestionList
-      open={open}
+      open={suggestionOpen}
       matches={matches}
       activeIndex={activeIndex}
       selectedSlug={value}
@@ -141,6 +159,7 @@ export function SlugComboInput({ value, onChange, options, noun, placeholder, di
             : publishedValueRef.current;
           imeSession.settleEditing(facetDisplayName(options, normalized));
           setFocused(false);
+          if (open) requestClose();
         }}
         onChange={(event) => {
           if (!imeSession.acceptInput(event.currentTarget)) return;
@@ -168,8 +187,8 @@ export function SlugComboInput({ value, onChange, options, noun, placeholder, di
         disabled={disabled}
         aria-label={ariaLabel}
         role="combobox"
-        aria-expanded={open && !closing}
-        aria-controls={open ? listId : undefined}
+        aria-expanded={suggestionOpen && !closing}
+        aria-controls={suggestionOpen ? listId : undefined}
         aria-autocomplete="list"
         data-new-slug={isNew || undefined}
         title={isNew ? `「${query}」是新${noun}，提交后会自动创建` : undefined}

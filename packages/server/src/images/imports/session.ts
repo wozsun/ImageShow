@@ -5,7 +5,7 @@ import { getRuntimeConfig } from "../../config/runtime-config-store.ts";
 import { pool, withTransaction } from "../../core/db.ts";
 import { ApiError } from "../../core/api-error.ts";
 import { privateNoStoreCacheControl } from "../../core/http/headers.ts";
-import { assertStorageUploadable, getDefaultStorageSlug } from "../../storage/backend-registry.ts";
+import { assertStorageWriteTarget, getDefaultStorageSlug } from "../../storage/backend-registry.ts";
 import { withStorageLocationReadLock } from "../../storage/maintenance-lock.ts";
 import { readStorageBuffer } from "../../storage/object-access.ts";
 import { contentType } from "../../storage/object-keys.ts";
@@ -57,7 +57,7 @@ async function createImportSessionUnderLocationLock(
 ) {
   signal.throwIfAborted();
   const storageSlug = input.storage_slug ?? await getDefaultStorageSlug();
-  await assertStorageUploadable(storageSlug);
+  await assertStorageWriteTarget(storageSlug);
   signal.throwIfAborted();
 
   const runtime = getRuntimeConfig();

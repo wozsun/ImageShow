@@ -106,7 +106,7 @@ DELETE 发出后失锁时由后继重新采用同一对象。
 | `type` | `local` / `s3` / `webdav` |
 | `config` | 驱动配置；密钥/密码明文存库但不回传前端 |
 | `namespace_identities` | 经验证且合并后的物理命名空间访问身份集合；当前配置身份始终隐式参与 |
-| `enabled` | 是否可作为新图片写入目标 |
+| `enabled` | 是否可作为新图片及存量图片迁移的写入目标 |
 | `is_default` | 是否为新上传默认后端 |
 | `sort_order` | 后台排序 |
 | `created_at` / `updated_at` | 时间戳 |

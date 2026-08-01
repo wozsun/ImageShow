@@ -26,9 +26,7 @@ import { SelectMenu } from "../../components/form/SelectMenu.js";
 import { FacetSelector } from "../../components/data-display/FacetSelector.js";
 import { gallerySentinelRootMargin } from "../../lib/constants.js";
 import { queryKeys } from "../../lib/api/query-keys.js";
-import {
-  removeImageFromPublicImagesCache
-} from "../../lib/api/query-invalidation.js";
+import { removeImageFromPublicImagesCache } from "./gallery-image-cache.js";
 import { displayNameOrSlug, errorMessage, imageDisplayTitle } from "../../lib/ui/formatters.js";
 import { buildRandomUrl } from "../../lib/gallery/random-url.js";
 import { brightnessOptionLabel, deviceOptionLabel } from "../../lib/ui/select-options.js";

@@ -53,21 +53,25 @@ export function registerPublicAuthRoutes(app: Hono) {
 
   app.get(`${adminApiBasePath}/auth/me`, async (c) => {
     const session = await readAdminSession(c);
-    const preferences = session
-      ? await readAdminPreferences(session.username)
-      : {};
+    const runtime = getRuntimeConfig();
+    if (!session) {
+      const authState = {
+        authenticated: false,
+        altcha_enabled: runtime.altcha.enabled,
+        login_background: getEffectiveLoginBackground()
+      } satisfies AuthStateDto;
+      return c.json(apiSuccess(authState));
+    }
+
     const authState = {
-      authenticated: Boolean(session),
-      username: session?.username ?? "",
-      role: session?.role ?? "",
-      permissions: session
-        ? adminPermissionsForRole(session.role)
-        : [],
-      csrf_token: session?.csrf ?? "",
-      application_version: session ? applicationVersion() : "",
-      altcha_enabled: getRuntimeConfig().altcha.enabled,
-      login_background: getEffectiveLoginBackground(),
-      preferences
+      authenticated: true,
+      username: session.username,
+      role: session.role,
+      permissions: adminPermissionsForRole(session.role),
+      csrf_token: session.csrf,
+      application_version: applicationVersion(),
+      preferences: await readAdminPreferences(session.username),
+      version_settings: runtime.site.version
     } satisfies AuthStateDto;
     return c.json(apiSuccess(authState));
   });

@@ -1,12 +1,13 @@
 {
   "name": "@imageshow/web",
-  "version": "3.13.5",
+  "version": "3.13.6",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "generate-icons": "node ../../scripts/build/generate-web-icons.mjs",
     "prebuild": "node ../../scripts/build/generate-web-icons.mjs",
     "build": "tsc -p tsconfig.json && vite build",
+    "postbuild": "node ../../scripts/build/check-web-chunks.mjs",
     "check": "node ../../scripts/build/check-semantic-colors.mjs && tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
