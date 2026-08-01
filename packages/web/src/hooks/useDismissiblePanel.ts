@@ -6,6 +6,7 @@ import {
   useState
 } from "react";
 import { isDocumentFallbackFocusTarget } from "../lib/ui/focus-target.js";
+import { anchoredPopupBoundarySelector } from "../lib/ui/anchored-popup-boundary.js";
 
 const outsideInteractionEvents = [
   "pointerdown",
@@ -16,7 +17,7 @@ const outsideInteractionEvents = [
 ] as const;
 
 const defaultPortalSelector =
-  ".select-menu, .facet-select-menu, [data-dialog-portal-menu]";
+  `.select-menu, .facet-select-menu, [data-dialog-portal-menu], ${anchoredPopupBoundarySelector}`;
 const availableHeightProperty =
   "--dismissible-panel-available-height";
 

@@ -64,6 +64,7 @@ body {
 html.has-overlay-scrollbar, html.has-overlay-scrollbar body { scrollbar-width: none; }
 html.has-overlay-scrollbar::-webkit-scrollbar,
 html.has-overlay-scrollbar body::-webkit-scrollbar { width: 0; height: 0; }
+.anchored-popup-boundary { display: contents; }
 .overlay-scrollbar {
   position: fixed;
   top: 0;
@@ -92,6 +93,7 @@ html.has-overlay-scrollbar body::-webkit-scrollbar { width: 0; height: 0; }
 
 .overlay-scrollbar-handle.is-floating { position: fixed; z-index: 30; }
 .overlay-scrollbar-handle.is-contained { position: absolute; z-index: 2; }
+.overlay-scrollbar-handle.is-menu { z-index: 101; }
 .overlay-scrollbar-handle.is-floating.is-active,
 .overlay-scrollbar-handle.is-contained.is-active { opacity: 1; pointer-events: auto; }
 

@@ -268,14 +268,14 @@
   --action-feedback-background: var(--admin-color-pending-surface);
   --action-feedback-progress: var(--admin-color-pending-progress);
   color: var(--admin-color-pending-text-strong);
-  border-color: var(--admin-color-pending-border);
+  border-color: var(--admin-color-pending-border-soft);
 }
 
 .action-feedback-success {
   --action-feedback-background: var(--admin-color-success-surface);
   --action-feedback-progress: var(--admin-color-success-progress);
   color: var(--admin-color-success-text-strong);
-  border-color: var(--admin-color-success-border);
+  border-color: var(--admin-color-success-border-soft);
 }
 
 .action-feedback-error {
@@ -407,7 +407,7 @@
   color: var(--admin-color-text-secondary);
   transition: color .16s ease, transform .1s ease;
 }
-.password-toggle:hover:not(:disabled) { color: var(--admin-color-action-primary); }
+.password-toggle:hover:not(:disabled) { color: var(--admin-color-action-text); }
 .password-toggle:active:not(:disabled) { transform: scale(var(--pressable-scale-small, .97)); }
 
 input.is-changed,

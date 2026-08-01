@@ -18,7 +18,7 @@
   --admin-color-border-muted: light-dark(#e0e7ef, #2d333b);
   --admin-color-border-card: light-dark(#dbe4ee, #30363d);
   --admin-color-action-primary: #1f6feb;
-  --admin-color-action-primary-dark: light-dark(#1559b7, #58a6ff);
+  --admin-color-action-primary-dark: light-dark(#1559b7, #79c0ff);
   --admin-color-action-text: light-dark(#1559b7, #79b8ff);
   --admin-color-focus-code: light-dark(#6e7681, #8b949e);
   --admin-color-thumbnail-surface: light-dark(#e8eef5, #21262d);
@@ -36,8 +36,8 @@
   --admin-color-navigation-version-text: light-dark(#64748b, #8b949e);
   --admin-color-navigation-version-surface: light-dark(#f4f7fb, #21262d);
   --admin-color-navigation-version-hover-text: light-dark(#1559b7, #79c0ff);
-  --admin-color-navigation-version-hover-surface: light-dark(#e7f0ff, #1f2d3d);
-  --admin-color-focus-ring: light-dark(rgba(31, 111, 235, .64), rgba(88, 166, 255, .76));
+  --admin-color-navigation-version-hover-surface: light-dark(#e7f0ff, #203247);
+  --admin-color-focus-ring: light-dark(rgba(31, 111, 235, .64), rgba(96, 168, 237, .88));
   --admin-color-navigation-scrollbar: light-dark(rgba(71, 85, 105, .28), rgba(201, 209, 217, .24));
   --admin-color-navigation-scrollbar-active: light-dark(rgba(71, 85, 105, .46), rgba(201, 209, 217, .42));
 
@@ -45,15 +45,15 @@
   --admin-color-control-text-tertiary: light-dark(#97a1b0, #8b949e);
   --admin-color-control-placeholder: light-dark(#9ba5b1, #555d67);
   --admin-color-control-surface-muted: light-dark(#eef2f7, #21262d);
-  --admin-color-control-surface-hover: light-dark(#eef5ff, #1f2d3d);
+  --admin-color-control-surface-hover: light-dark(#eef5ff, #1d2e40);
   --admin-color-control-surface-subtle-hover: light-dark(#f1f3f6, #20252c);
   --admin-color-control-border-hover: light-dark(#aeb8c5, #6e7681);
-  --admin-color-control-border-selected: light-dark(#9fc2f5, #58a6ff);
+  --admin-color-control-border-selected: light-dark(#9fc2f5, #619de7);
   --admin-color-control-switch-thumb: light-dark(#d8dee7, #484f58);
   --admin-color-control-changed: light-dark(#d99a00, #e3b341);
   --admin-color-control-changed-surface: light-dark(#fff8e8, #2d2717);
   --admin-color-control-changed-emphasis: light-dark(#e4bd58, #d29922);
-  --admin-color-control-changed-ring: light-dark(rgba(228, 189, 88, .34), rgba(210, 153, 34, .42));
+  --admin-color-control-changed-ring: light-dark(rgba(228, 189, 88, .34), rgba(221, 193, 126, .46));
   --admin-color-tag-action: light-dark(#6b7686, #b1bac4);
   --admin-color-tag-action-hover: light-dark(#384150, #f0f6fc);
   --admin-color-close: light-dark(#d98c8c, #ff7b72);
@@ -63,9 +63,9 @@
   --admin-shadow-control-floating: light-dark(rgba(20, 30, 44, .18), rgba(0, 0, 0, .48));
   --admin-shadow-control-resting: light-dark(rgba(20, 30, 44, .12), rgba(0, 0, 0, .38));
   --admin-shadow-modal: light-dark(rgba(0, 0, 0, .28), rgba(0, 0, 0, .58));
-  --admin-shadow-preview: rgba(0, 0, 0, .4);
+  --admin-shadow-preview: light-dark(rgba(0, 0, 0, .4), rgba(0, 0, 0, .64));
   --admin-color-preview-close-surface: light-dark(rgba(255, 255, 255, .92), rgba(22, 27, 34, .92));
-  --admin-color-modal-overlay: rgba(13, 18, 28, .76);
+  --admin-color-modal-overlay: light-dark(rgba(13, 18, 28, .76), rgba(0, 0, 0, .64));
   --admin-shadow-menu: light-dark(rgba(13, 18, 28, .16), rgba(0, 0, 0, .46));
   --admin-shadow-card-hover: light-dark(rgba(13, 18, 28, .08), rgba(0, 0, 0, .4));
   --admin-shadow-panel: light-dark(rgba(32, 42, 56, .16), rgba(0, 0, 0, .48));
@@ -85,11 +85,15 @@
   /* Status: success */
   --admin-color-success-text: light-dark(#245236, #8fd8a3);
   --admin-color-success-text-strong: light-dark(#1b6f40, #72c68b);
+  --admin-color-success-text-emphasis: light-dark(#24723c, #74bbaa);
   --admin-color-success-surface: light-dark(#eaf8ee, #173126);
   --admin-color-success-surface-soft: light-dark(#e8edea, #171c19);
+  --admin-color-success-surface-subtle: light-dark(#f2fbf5, #111f1c);
   --admin-color-success-surface-emphasis: light-dark(#dff3e5, #263d30);
   --admin-color-success-surface-hover: light-dark(#cdeedb, #2d523b);
   --admin-color-success-border: light-dark(#9fd3ad, #4d795b);
+  --admin-color-success-border-soft: light-dark(#a9bdb0, #5a695f);
+  --admin-color-success-border-strong: light-dark(#78b78a, #416f64);
   --admin-color-success-progress: light-dark(#ccebd7, #304f3b);
   --admin-color-success-action: light-dark(#2f8f5b, #72c68b);
   --admin-color-success-action-hover: light-dark(#11522d, #8fd8a3);
@@ -97,12 +101,15 @@
   /* Status: warning */
   --admin-color-warning-text: light-dark(#795d1d, #f2cc60);
   --admin-color-warning-text-strong: light-dark(#765314, #e3b341);
+  --admin-color-warning-text-soft: light-dark(#795a0a, #d0ae7d);
   --admin-color-warning-action: light-dark(#a75b00, #e3b341);
   --admin-color-warning-surface: light-dark(#fff8e8, #2d2717);
   --admin-color-warning-surface-soft: light-dark(#fffaf0, #231f15);
+  --admin-color-warning-surface-subtle: light-dark(#fff9e9, #2a261f);
   --admin-color-warning-surface-emphasis: light-dark(#fff1cc, #3b3018);
   --admin-color-warning-progress: light-dark(#f7e7ae, #4a3a18);
   --admin-color-warning-border: light-dark(#f0d38a, #7d661c);
+  --admin-color-warning-border-soft: light-dark(#d8bc70, #86745d);
   --admin-color-warning-border-strong: light-dark(#ecc659, #9e7f24);
 
   /* Status: danger */
@@ -118,11 +125,17 @@
   --admin-color-danger-action-hover: light-dark(#bd3c30, #934448);
 
   /* Pending and informational */
-  --admin-color-pending-text: light-dark(#285c93, #79c0ff);
+  --admin-color-pending-text: light-dark(#245eaa, #79c0ff);
   --admin-color-pending-text-strong: light-dark(#294f78, #a5d6ff);
-  --admin-color-pending-surface: light-dark(#eef5ff, #14253d);
+  --admin-color-pending-surface: light-dark(#edf5ff, #14253d);
   --admin-color-pending-progress: light-dark(#d3e4ff, #1e3a5f);
-  --admin-color-pending-border: light-dark(#a9c9ef, #315d8c);
+  --admin-color-pending-border: light-dark(#86afe8, #315d8c);
+  --admin-color-pending-text-soft: light-dark(#2b65ad, #5b90bf);
+  --admin-color-pending-surface-soft: light-dark(#f6f9fe, #0f1c2e);
+  --admin-color-pending-border-soft: light-dark(#b5cae7, #254669);
+  --admin-color-pending-text-subtle: light-dark(#496f98, #5586b3);
+  --admin-color-pending-surface-subtle: light-dark(#fafbfd, #0a131f);
+  --admin-color-pending-border-subtle: light-dark(#d4dfea, #192f46);
 
   /* Code editor and log viewer */
   --admin-color-code-surface: #0d1117;
@@ -161,14 +174,14 @@
   /* Storage */
   --admin-color-storage-border: light-dark(#e2e6ec, #30363d);
   --admin-color-storage-action-border: light-dark(#eef1f5, #272d35);
-  --admin-color-storage-default-surface: light-dark(#e8f1ff, #132a46);
+  --admin-color-storage-default-surface: light-dark(#e8f1ff, #1b3856);
   --admin-color-storage-disabled-text: light-dark(#6b7280, #8b949e);
   --admin-color-storage-disabled-surface: light-dark(#f3f4f6, #21262d);
   --admin-color-storage-label: light-dark(#4a525d, #c9d1d9);
   --admin-color-storage-meta: light-dark(#8a93a0, #8b949e);
   --admin-color-storage-add-border: light-dark(#c4ccd6, #636c76);
   --admin-color-storage-add-surface: light-dark(#fafbfc, #161b22);
-  --admin-shadow-storage-default: light-dark(rgba(31, 111, 235, .25), rgba(31, 111, 235, .35));
+  --admin-shadow-storage-default: light-dark(rgba(31, 111, 235, .25), rgba(65, 132, 191, .38));
 
   /* Image details and editing */
   --admin-color-edit-row-surface: light-dark(#f7f8fa, #1c2128);
@@ -181,7 +194,7 @@
   --admin-color-upload-divider-strong: light-dark(#e1e6ed, #30363d);
   --admin-color-upload-divider-muted: light-dark(#e8ecf1, #272d35);
   --admin-color-upload-hover-surface: light-dark(#f4f6f8, #252d38);
-  --admin-color-upload-dropzone-hover: light-dark(#f5f9ff, #17283b);
+  --admin-color-upload-dropzone-hover: light-dark(#f5f9ff, #182c40);
   --admin-color-upload-summary: light-dark(#435062, #c9d1d9);
 
   /* Advanced configuration */

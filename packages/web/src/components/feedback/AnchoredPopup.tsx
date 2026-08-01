@@ -1,11 +1,15 @@
 import {
+  useCallback,
   useContext,
+  useRef,
   type CSSProperties,
   type ComponentPropsWithoutRef,
   type ReactNode
 } from "react";
 import { createPortal } from "react-dom";
+import { anchoredPopupBoundaryClass } from "../../lib/ui/anchored-popup-boundary.js";
 import { localizeAnchoredPosition } from "../../lib/ui/menu-position.js";
+import { OverlayScrollbar } from "../layout/OverlayScrollbar.js";
 import { DialogPortalTargetContext } from "./DialogPortalContext.js";
 
 type AnchoredPopupProps = Omit<
@@ -14,6 +18,7 @@ type AnchoredPopupProps = Omit<
 > & {
   popupRef: (node: HTMLElement | null) => void;
   children: ReactNode;
+  overlayScrollbar?: boolean;
 };
 
 function localizePopupStyle(
@@ -38,25 +43,42 @@ function localizePopupStyle(
 export function AnchoredPopup({
   popupRef,
   children,
+  overlayScrollbar = false,
   style,
   ...props
 }: AnchoredPopupProps) {
   const dialogPortalTargetRef = useContext(DialogPortalTargetContext);
+  const popupElementRef = useRef<HTMLElement | null>(null);
+  const setPopupRef = useCallback((node: HTMLDivElement | null) => {
+    popupElementRef.current = node;
+    popupRef(node);
+  }, [popupRef]);
   if (typeof document === "undefined") return null;
   const dialogPortalTarget = dialogPortalTargetRef?.current ?? null;
   const portalTarget = dialogPortalTarget ?? document.body;
   const portalStyle = localizePopupStyle(style, dialogPortalTarget);
 
   return createPortal(
-    <div
-      ref={popupRef}
-      data-dialog-portal-menu={
-        dialogPortalTarget ? "" : undefined
-      }
-      {...props}
-      style={portalStyle}
-    >
-      {children}
+    <div className={anchoredPopupBoundaryClass}>
+      <div
+        ref={setPopupRef}
+        data-dialog-portal-menu={
+          dialogPortalTarget ? "" : undefined
+        }
+        {...props}
+        style={portalStyle}
+      >
+        {children}
+      </div>
+      {overlayScrollbar && (
+        <OverlayScrollbar
+          targetRef={popupElementRef}
+          containerRef={dialogPortalTarget
+            ? dialogPortalTargetRef ?? undefined
+            : undefined}
+          layer="menu"
+        />
+      )}
     </div>,
     portalTarget
   );

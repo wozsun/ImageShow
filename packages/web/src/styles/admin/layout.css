@@ -71,7 +71,7 @@
   --pressable-active-scale: var(--pressable-scale-small, .97);
 }
 .login-site-title { color: inherit; border-radius: 6px; }
-.login-site-title:hover { color: var(--admin-color-action-primary); }
+.login-site-title:hover { color: var(--admin-color-action-text); }
 .admin > aside .app-icon {
   width: 20px;
   height: 20px;

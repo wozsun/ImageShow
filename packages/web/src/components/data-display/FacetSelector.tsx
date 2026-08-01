@@ -60,6 +60,7 @@ export function FacetSelector({ options, value, onChange, noun, disabled = false
   const menu = open ? (
     <AnchoredPopup
       popupRef={menuRef}
+      overlayScrollbar
       className={[
         "facet-select-menu",
         menuClassName,

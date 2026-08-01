@@ -305,25 +305,31 @@
   --import-job-background: var(--admin-color-pending-surface);
   --import-job-status: var(--admin-color-pending-text);
 }
-.import-job.uploading,
-.import-job.downloading,
-.import-job.received,
 .import-job.processing,
 .import-job.committing {
-  --import-job-border: var(--admin-color-pending-border);
-  --import-job-background: var(--admin-color-pending-surface);
-  --import-job-status: var(--admin-color-pending-text);
-  --import-job-progress: var(--admin-color-action-primary-dark);
+  --import-job-border: var(--admin-color-pending-border-soft);
+  --import-job-background: var(--admin-color-pending-surface-soft);
+  --import-job-status: var(--admin-color-pending-text-soft);
+  --import-job-progress: var(--admin-color-pending-text-soft);
+}
+.import-job.queued,
+.import-job.uploading,
+.import-job.downloading,
+.import-job.received {
+  --import-job-border: var(--admin-color-pending-border-subtle);
+  --import-job-background: var(--admin-color-pending-surface-subtle);
+  --import-job-status: var(--admin-color-pending-text-subtle);
+  --import-job-progress: var(--admin-color-pending-text-subtle);
 }
 .import-job.cancelling {
-  --import-job-border: var(--admin-color-warning-border);
-  --import-job-background: var(--admin-color-warning-surface);
-  --import-job-status: var(--admin-color-warning-text);
+  --import-job-border: var(--admin-color-warning-border-soft);
+  --import-job-background: var(--admin-color-warning-surface-subtle);
+  --import-job-status: var(--admin-color-warning-text-soft);
 }
 .import-job.done {
-  --import-job-border: var(--admin-color-success-border);
-  --import-job-background: var(--admin-color-success-surface-soft);
-  --import-job-status: var(--admin-color-success-text-strong);
+  --import-job-border: var(--admin-color-success-border-strong);
+  --import-job-background: var(--admin-color-success-surface-subtle);
+  --import-job-status: var(--admin-color-success-text-emphasis);
 }
 .import-job.failed {
   --import-job-border: var(--admin-color-danger-border-strong);
@@ -331,11 +337,6 @@
   --import-job-status: var(--admin-color-danger-text);
 }
 .import-job.cancelled {
-  --import-job-border: var(--admin-color-border-control);
-  --import-job-background: var(--admin-color-canvas);
-  --import-job-status: var(--admin-color-text-secondary);
-}
-.import-job.queued {
   --import-job-border: var(--admin-color-border-control);
   --import-job-background: var(--admin-color-canvas);
   --import-job-status: var(--admin-color-text-secondary);
@@ -394,7 +395,7 @@ button.empty-state.upload-dropzone:not(:disabled):hover,
 .upload-dropzone.is-dragover {
   border-color: var(--admin-color-action-primary);
   background: var(--admin-color-upload-dropzone-hover);
-  color: var(--admin-color-action-primary);
+  color: var(--admin-color-action-text);
 }
 .upload-dropzone.is-dragover { border-style: solid; }
 :is(.admin, [data-admin-dialog]) button.upload-dropzone:not(:disabled):not(.select-trigger):active {

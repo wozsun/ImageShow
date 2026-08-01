@@ -28,6 +28,7 @@ type OverlayScrollbarProps = {
   topInsetRef?: RefObject<HTMLElement | null>;
   pageEdge?: boolean;
   tone?: "default" | "dark";
+  layer?: "default" | "menu";
   enableOnTouch?: boolean;
 };
 
@@ -37,6 +38,7 @@ export function OverlayScrollbar({
   topInsetRef,
   pageEdge,
   tone = "default",
+  layer = "default",
   enableOnTouch = false,
 }: OverlayScrollbarProps = {}) {
   const [enabled, setEnabled] = useState(false);
@@ -72,6 +74,7 @@ export function OverlayScrollbar({
       topInsetRef={topInsetRef}
       pageEdge={pageEdge}
       tone={tone}
+      layer={layer}
     />
   );
 }
@@ -82,6 +85,7 @@ function OverlayScrollbarHandle({
   topInsetRef,
   pageEdge,
   tone,
+  layer,
 }: OverlayScrollbarProps) {
   const [metrics, setMetrics] = useState<Metrics>({
     visible: false,
@@ -264,11 +268,12 @@ function OverlayScrollbarHandle({
   const activeClass = active || dragging ? "is-active" : "";
   const draggingClass = dragging ? "is-dragging" : "";
   const toneClass = tone === "dark" ? "is-dark" : "";
+  const layerClass = layer === "menu" ? "is-menu" : "";
   if (targetRef) {
     const placementClass = containerRef ? "is-contained" : "is-floating";
     return (
       <div
-        className={`overlay-scrollbar-handle ${placementClass} ${toneClass} ${activeClass} ${draggingClass}`.trim()}
+        className={`overlay-scrollbar-handle ${placementClass} ${toneClass} ${layerClass} ${activeClass} ${draggingClass}`.trim()}
         style={{ top: metrics.top, height: metrics.height, right: metrics.right }}
         onPointerDown={onHandlePointerDown}
         aria-hidden="true"
@@ -278,7 +283,7 @@ function OverlayScrollbarHandle({
   return (
     <div className={`overlay-scrollbar ${activeClass}`.trim()} aria-hidden="true">
       <div
-        className={`overlay-scrollbar-handle ${toneClass} ${draggingClass}`.trim()}
+        className={`overlay-scrollbar-handle ${toneClass} ${layerClass} ${draggingClass}`.trim()}
         style={{ top: metrics.top, height: metrics.height }}
         onPointerDown={onHandlePointerDown}
       />

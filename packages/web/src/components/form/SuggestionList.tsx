@@ -87,6 +87,7 @@ export function SuggestionList({
   return (
     <AnchoredPopup
       popupRef={popupRef}
+      overlayScrollbar
       id={listId}
       className={`select-menu suggestion-menu ${opensUp ? "opens-up" : ""} ${closing ? "is-closing" : ""}`}
       role="listbox"

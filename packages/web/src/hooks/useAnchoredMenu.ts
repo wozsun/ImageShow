@@ -14,6 +14,7 @@ import {
   type AnchoredMenuPosition,
   type AnchoredMenuSize
 } from "../lib/ui/menu-position.js";
+import { isWithinAnchoredPopupBoundary } from "../lib/ui/anchored-popup-boundary.js";
 import { isDocumentFallbackFocusTarget } from "../lib/ui/focus-target.js";
 
 const outsidePressEvents = ["pointerdown", "touchstart"] as const;
@@ -86,7 +87,7 @@ export function useAnchoredMenu(options: {
     const activeElement = document.activeElement;
     if (
       activeElement instanceof HTMLElement
-      && menuNodeRef.current?.contains(activeElement)
+      && isWithinAnchoredPopupBoundary(menuNodeRef.current, activeElement)
     ) {
       activeElement.blur();
     }
@@ -109,7 +110,10 @@ export function useAnchoredMenu(options: {
     const activeElement = document.activeElement;
     if (
       activeElement instanceof HTMLElement
-      && (menuNodeRef.current?.contains(activeElement) || triggerRef.current?.contains(activeElement))
+      && (
+        isWithinAnchoredPopupBoundary(menuNodeRef.current, activeElement)
+        || triggerRef.current?.contains(activeElement)
+      )
     ) {
       activeElement.blur();
     }
@@ -159,7 +163,7 @@ export function useAnchoredMenu(options: {
       if (!(target instanceof Node)) return;
       if (
         !triggerRef.current?.contains(target)
-        && !menuNodeRef.current?.contains(target)
+        && !isWithinAnchoredPopupBoundary(menuNodeRef.current, target)
       ) {
         requestClose();
       }
@@ -201,7 +205,7 @@ export function useAnchoredMenu(options: {
         if (!(target instanceof Node)) return;
         if (
           !triggerRef.current?.contains(target)
-          && !menuNodeRef.current?.contains(target)
+          && !isWithinAnchoredPopupBoundary(menuNodeRef.current, target)
         ) {
           requestClose();
         }

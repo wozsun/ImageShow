@@ -114,11 +114,15 @@ const allowedAdminStatusRoles = new Map([
     new Set([
       "text",
       "text-strong",
+      "text-emphasis",
       "surface",
       "surface-soft",
+      "surface-subtle",
       "surface-emphasis",
       "surface-hover",
       "border",
+      "border-soft",
+      "border-strong",
       "progress",
       "action",
       "action-hover"
@@ -129,12 +133,15 @@ const allowedAdminStatusRoles = new Map([
     new Set([
       "text",
       "text-strong",
+      "text-soft",
       "action",
       "surface",
       "surface-soft",
+      "surface-subtle",
       "surface-emphasis",
       "progress",
       "border",
+      "border-soft",
       "border-strong"
     ])
   ],
@@ -155,7 +162,19 @@ const allowedAdminStatusRoles = new Map([
   ],
   [
     "pending",
-    new Set(["text", "text-strong", "surface", "progress", "border"])
+    new Set([
+      "text",
+      "text-strong",
+      "text-soft",
+      "text-subtle",
+      "surface",
+      "surface-soft",
+      "surface-subtle",
+      "progress",
+      "border",
+      "border-soft",
+      "border-subtle"
+    ])
   ]
 ]);
 const overSpecificAdminStatusTokenPattern =
