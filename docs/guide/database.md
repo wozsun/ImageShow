@@ -135,7 +135,7 @@ bucket / root_path 与 WebDAV 的 base_url / root_path 是物理布局；仍有
 | `preferences` | 管理员界面偏好 JSONB；顶层必须是对象、最大 4 KiB，当前可保存 `color_scheme` 与 `image_card_density` |
 | `created_at` / `updated_at` | 时间戳 |
 
-仅在数据库没有 super 时，首次启动才使用 `ADMIN_USERNAME` / `ADMIN_PASSWORD` 创建首个 super；已有 super 的账号、密码和偏好始终以 PostgreSQL 为准。偏好 PATCH 使用 JSONB 顶层合并，不同键的并发修改由同一账号行串行化后各自保留；API 只返回当前 shared schema 认识的键。`color_scheme` 只接受 `light` / `dark`，缺失时使用暗色；`image_card_density` 缺失时使用紧凑。默认值集中在 shared，数据库仍只保存用户显式选择，不保存跟随系统的隐式状态。
+仅在数据库没有 super 时，首次启动才使用 `ADMIN_USERNAME` / `ADMIN_PASSWORD` 创建首个 super；已有 super 的账号、密码和偏好始终以 PostgreSQL 为准。偏好 PATCH 使用 JSONB 顶层合并，不同键的并发修改由同一账号行串行化后各自保留；API 只返回当前 shared schema 认识的键。`color_scheme` 只接受 `light` / `dark` / `system`，缺失时使用 `system` 并由浏览器实时解析；`image_card_density` 缺失时使用紧凑。默认值集中在 shared，数据库只保存用户选择的模式，不保存自动模式解析出的设备明暗结果。
 
 ## tag / theme / image_tag —— 标签与主题
 

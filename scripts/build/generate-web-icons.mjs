@@ -17,6 +17,7 @@ const iconNames = [
   "check-line",
   "checkbox-circle-line",
   "close-line",
+  "computer-line",
   "dashboard-line",
   "database-2-line",
   "delete-bin-2-line",

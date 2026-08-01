@@ -232,19 +232,30 @@ export function AdminNavigationLinks({
   });
 }
 
+const adminAppearanceOptions = {
+  dark: { label: "暗色模式", icon: "moon-line" },
+  light: { label: "亮色模式", icon: "sun-line" },
+  system: { label: "自动模式（跟随系统）", icon: "computer-line" }
+} as const satisfies Record<AdminColorScheme, {
+  label: string;
+  icon: IconName;
+}>;
+
 export function AdminSiteNavigation({
   entries,
   variant,
   colorScheme,
+  nextColorScheme,
   onColorSchemeChange
 }: {
   entries: readonly AdminNavigationEntry[];
   variant: "desktop" | "mobile";
   colorScheme: AdminColorScheme;
+  nextColorScheme: AdminColorScheme;
   onColorSchemeChange: (colorScheme: AdminColorScheme) => void;
 }) {
-  const dark = colorScheme === "dark";
-  const actionLabel = dark ? "切换到亮色模式" : "切换到暗色模式";
+  const current = adminAppearanceOptions[colorScheme];
+  const target = adminAppearanceOptions[nextColorScheme];
   const [holdCommittedIcon, setHoldCommittedIcon] = useState(false);
   return (
     <div className="admin-site-navigation">
@@ -256,22 +267,22 @@ export function AdminSiteNavigation({
         ].filter(Boolean).join(" ")}
         type="button"
         data-color-scheme={colorScheme}
-        aria-label="暗色模式"
-        aria-pressed={dark}
-        title={actionLabel}
+        aria-label={`当前外观：${current.label}；切换到${target.label}`}
+        title={`切换到${target.label}`}
         onClick={() => {
           setHoldCommittedIcon(true);
-          onColorSchemeChange(dark ? "light" : "dark");
+          onColorSchemeChange(nextColorScheme);
         }}
+        onPointerEnter={() => setHoldCommittedIcon(false)}
         onPointerLeave={() => setHoldCommittedIcon(false)}
         onBlur={() => setHoldCommittedIcon(false)}
       >
         <span className="admin-color-scheme-icon-stack" aria-hidden="true">
           <span className="admin-color-scheme-icon is-current">
-            <Icon name={dark ? "moon-line" : "sun-line"} />
+            <Icon name={current.icon} />
           </span>
           <span className="admin-color-scheme-icon is-target">
-            <Icon name={dark ? "sun-line" : "moon-line"} />
+            <Icon name={target.icon} />
           </span>
         </span>
       </button>

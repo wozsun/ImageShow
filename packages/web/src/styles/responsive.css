@@ -7,6 +7,7 @@
 .app-loading-screen {
   width: 100%;
   min-height: 100dvh;
+  color-scheme: dark;
   background: var(--bootstrap-color-canvas);
 }
 

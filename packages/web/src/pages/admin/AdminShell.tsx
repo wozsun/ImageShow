@@ -1,11 +1,13 @@
-import { lazy, Suspense, useLayoutEffect, useRef } from "react";
+import { lazy, Suspense, useLayoutEffect, useRef, useState } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import type { AdminRole } from "@imageshow/shared/browser";
+import {
+  defaultAdminPreferences,
+  type AdminRole
+} from "@imageshow/shared/browser";
 import { api, clearCsrfToken } from "../../lib/api/client.js";
 import { Icon } from "../../components/icon/Icon.js";
 import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
-import { applyUiColorContext } from "../../components/layout/SiteHead.js";
 import { adminApiBasePath, adminBasePath } from "../../lib/constants.js";
 import { clearSessionProbeHint, useAuthMe, useSiteConfig } from "../../lib/api/site-data.js";
 import { clearAdminCacheAfterLogin } from "../../lib/api/query-invalidation.js";
@@ -25,6 +27,11 @@ import {
   AdminPreferencesProvider,
   useAdminPreference
 } from "../../hooks/useAdminPreferences.js";
+import { useAdminColorScheme } from "../../hooks/useAdminColorScheme.js";
+import {
+  nextAdminColorScheme,
+  reconcileSystemNextAfter
+} from "../../lib/ui/color-scheme.js";
 // 后台颜色契约与组件样式都随 AdminShell 懒加载，公开入口不会下载。
 import "../../styles/admin/semantic-colors.css";
 import "../../styles/admin.css";
@@ -84,12 +91,25 @@ function AuthenticatedAdminShell({
   const routeLocation = useLocation();
   const navScrollRef = useRef<HTMLDivElement | null>(null);
   const [colorScheme, setColorScheme] = useAdminPreference("color_scheme");
+  const [systemNextAfter, setSystemNextAfter] = useState<"dark" | "light" | null>(null);
   const isSuper = role === "super";
   const navigation = adminNavigationForRole(role);
 
+  const resolvedColorScheme = useAdminColorScheme(colorScheme);
   useLayoutEffect(() => {
-    applyUiColorContext("admin", colorScheme);
+    setSystemNextAfter((current) => reconcileSystemNextAfter(
+      colorScheme,
+      current
+    ));
   }, [colorScheme]);
+  const nextColorScheme = nextAdminColorScheme(
+    resolvedColorScheme,
+    systemNextAfter === colorScheme
+  );
+  const handleColorSchemeChange = (next: typeof colorScheme) => {
+    setSystemNextAfter(next === "system" ? null : next);
+    setColorScheme(next);
+  };
 
   return (
     <main className="admin">
@@ -105,7 +125,8 @@ function AuthenticatedAdminShell({
           entries={navigation.site}
           variant="desktop"
           colorScheme={colorScheme}
-          onColorSchemeChange={setColorScheme}
+          nextColorScheme={nextColorScheme}
+          onColorSchemeChange={handleColorSchemeChange}
         />
         <div className="admin-nav-divider" role="separator" />
         <div className="admin-nav-scroll" ref={navScrollRef}>
@@ -131,7 +152,8 @@ function AuthenticatedAdminShell({
             entries={navigation.site}
             variant="mobile"
             colorScheme={colorScheme}
-            onColorSchemeChange={setColorScheme}
+            nextColorScheme={nextColorScheme}
+            onColorSchemeChange={handleColorSchemeChange}
           />
           <div className="admin-nav-divider" role="separator" />
           <AdminNavigationLinks entries={navigation.main} variant="mobile" />
@@ -185,9 +207,10 @@ export function AdminShell() {
   } = useAuthMe();
   const unauthenticatedAppearanceReady =
     authFailed || Boolean(data && !data.authenticated);
-  useLayoutEffect(() => {
-    if (unauthenticatedAppearanceReady) applyUiColorContext("admin");
-  }, [unauthenticatedAppearanceReady]);
+  useAdminColorScheme(
+    defaultAdminPreferences.color_scheme,
+    unauthenticatedAppearanceReady
+  );
   if (authFailed) return <QueryErrorState error={authError} onRetry={() => void refetch()} fullPage />;
   if (!data) return <AppLoadingScreen />;
   if (!data.authenticated) return (

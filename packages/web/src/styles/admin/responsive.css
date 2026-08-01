@@ -150,6 +150,7 @@
 @media (prefers-reduced-motion: reduce) {
   .action-feedback,
   .action-feedback-progress { animation: none; }
+  .admin-color-scheme-icon { transition: none; }
   :is(.admin, [data-admin-dialog]) button:not(:disabled):active { transform: none; }
   :is(.admin, [data-admin-dialog]) button:not(:disabled):not(.select-trigger):not(.password-toggle):not(.anchored-menu-item):active {
     transform: none;

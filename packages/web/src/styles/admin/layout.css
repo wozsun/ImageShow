@@ -243,6 +243,9 @@
     opacity .16s ease,
     transform .16s ease;
 }
+.admin-color-scheme-toggle.is-current-icon-held .admin-color-scheme-icon {
+  transition: none;
+}
 .admin-color-scheme-icon.is-current {
   opacity: 1;
   transform: scale(1);

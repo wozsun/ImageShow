@@ -171,11 +171,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.async-action-button.is-pending {
-  color: var(--admin-color-text-on-emphasis);
-  background: var(--admin-color-action-primary);
-  border-color: var(--admin-color-action-primary);
-}
 .async-action-button.is-pending:disabled {
   cursor: wait;
 }
