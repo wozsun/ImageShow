@@ -363,10 +363,21 @@ GET /random?d=&b=&t=&tag=&a=&m=
 
 ```text
 GET /gallery?d=&b=&t=&tag=&a=
+GET /embed/home
+GET /embed/gallery?d=&b=&t=&tag=&a=
 GET /api/images?d=&b=&t=&tag=&a=&cursor=&limit=&shuffle=
 GET /api/images/:id
 GET /api/gallery-stats
 ```
+
+`/embed/home` 与 `/embed/gallery` 直接复用普通首页和画廊的查询、筛选、瀑布流、
+详情、焦点和响应式组件，只通过页面参数不挂载 `AppHeader`，不是复制页面或用 CSS
+隐藏主导航。首页筛选摘要栏与画廊工具栏仍保留，页面顶部占位中的主导航高度改为
+零；嵌入首页的「进入画廊」保留筛选参数并继续前往 `/embed/gallery`，首页关闭时嵌入
+首页也在 SPA 内转到嵌入画廊。服务端仅在嵌入开关开启且使用 DNS 主机名的精确 HTTPS
+来源列表非空时提供这两个 HTML 文档，浏览器再按文档 CSP 拒绝未列入的父页面；直接
+顶层访问不受 `frame-ancestors` 限制。嵌入文档使用 `no-store`，避免白名单缩减后被
+共享缓存继续提供；其同源静态资源和公共 API 保持原缓存策略。
 
 首页固定使用 `/random?m=redirect` 作为全屏背景，并读取 `/api/gallery-stats`
 完整展示设备、明暗、主题、标签和作者候选项及图片数。五种属性在首页只更新本地
@@ -475,6 +486,8 @@ immediate 状态，当帧取消区块与子卡的入场，移出焦点后也不�
 清空上一方向的累计值，进入顶部保护区或展开任一导航菜单会立即恢复完整导航。已展开
 的移动导航跨回桌面断点时会主动关闭并释放完整导航锁定，避免已被 CSS 隐藏的菜单
 继续阻止滚动收起。一次快速位移可连续跨过两级，两个 300ms 动画允许重叠。
+嵌入画廊没有主导航，状态机因此只保留工具栏的显示 / 隐藏两级：向下越过工具栏
+自身区域后累计 56px 隐藏，向上累计 28px 显示，不经过不存在的主导航阶段。
 
 共享采样把负值夹到顶部，并为底部保留 4px 容差；即使浏览器仍报告边界外位置，
 顶部弹性位移以及触底后的超滚和回弹也不会伪造导航方向。只有离开底部容差后的真实
@@ -885,6 +898,7 @@ HTTP 缓存按 CDN 友好但不泄露私有数据分层：
 
 - `/assets/*` 的 Vite 构建产物和稳定的 `/media/*`、`/thumbs/*` 图片对象使用一年 `immutable`；`/assets/brand/*`、`/favicon.ico` 不是 hash 路径，只给短浏览器缓存和较长 CDN 缓存。构建会为可压缩静态文本生成 Brotli / gzip 版本，服务端按 `Accept-Encoding` 选择并附带 `Vary`，同时支持 ETag / Last-Modified 条件请求。前端分块遵循 `公开基础层 ⊂ 图片管理员层 ⊂ 超级管理员层`：公开入口不加载后台基础块，图片管理员入口不加载仅超级管理员页面的实现；纯通用机制和跨后台页面的小控件分别合并为全站基础块与后台基础块，路由专有实现仍按实际入口集合精确拆分。画廊删除后的公开无限列表修剪就近保留在画廊块，不能因复用后台失效模块而反向预载后台基础块。不足 1 KiB 的颜色上下文、媒体查询、路由等待、弹窗基础能力及已认证编辑查询并入既有基础块；纯后台偏好协调模块也固定并入后台基础块，不再独立形成请求。Web 构建结束后会检查首页、画廊与 HTML 均未静态导入或预载后台基础块，并拒绝除 bundler runtime 外的新亚 1 KiB JavaScript 请求。后台页面专属样式只在首次进入对应页面时加载，公开图片详情中的管理信息只在后台详情或已有管理员会话提示时加载；单图编辑实现仅在会话已确认且发生 hover、focus、pointerdown 或 click 意图后加载，批量迁移存储对话框也只为拥有权限且表达操作意图的超级管理员预取。同一会话复用已解析模块，完整刷新则复用带 hash 的 immutable 资源。部署后旧会话若引用已失效的 hash 资源，路由错误边界会保留外层界面并提供整页重载。静态出口与图片字节出口共用单段 Range 语义，包括后缀范围、不可满足范围的 416 以及 `If-Range`；静态 206 的 ETag 使用完整表示长度，因此不同 Range 与完整响应共用同一验证器。`If-None-Match` 实体标签列表按 quoted opaque-tag 解析，标签内逗号不会被误拆。存储后端的公开 URL 可能被管理员修改，因此指向该 URL 的 302 只短期缓存；缩略图缺失时会按当前尺寸与质量配置补建，失败会记录对象键、存储后端和原因，公开出口仍临时回退原图且不使用 immutable。
 - `/api/images`、`/api/images/:id`、`/api/site-config`、`/api/gallery-facets` 与 `/api/gallery-stats` 是公共动态数据：浏览器不持有，CDN 的新鲜、重验证和错误兜底窗口均不超过 30 秒。SPA HTML 使用由完整文档内容生成的 ETag 和 `max-age=0` 重验证，匹配 `If-None-Match` 时返回 304。
+- `/embed/home` 与 `/embed/gallery` HTML 固定 `no-store`；页面引用的 hash 静态资源和同源公共 API 仍沿用各自缓存策略。
 - `/random` 和 `random.<域名>` 永远 `no-store`，避免 CDN 把随机图固定成同一张；每次请求都会重新抽图，因此 proxy 响应不声明 `Accept-Ranges`。
 - `/api/admin/*`、登录 / ALTCHA 挑战 / 上传暂存预览 / SSE、后台图片字节、健康检查和错误响应使用 `no-store` 或 `private, no-store`，不应被 CDN 缓存。
 - `link.<域名>/original` 公共代理成功响应优先继承源站 `Cache-Control` / `Expires`；源站未声明时使用站内 CDN fallback：浏览器缓存 1 天、共享缓存 1 年，并允许 stale 回源兜底。后台原图代理仍为 `private, no-store`。

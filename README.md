@@ -14,6 +14,9 @@ ImageShow 是一个面向个人服务器的图片展示、图库管理与随机�
   在触控设备保留本地回弹反馈；画廊支持最新 / 随机排序，以分级导航手势、有界瀑布
   流窗口和共享图片解码队列支持长列表连续浏览。
 - `random.*`、`static.*`、`link.*` 三个职责隔离的保留子域名。
+- 可选的 `/embed/home` 与 `/embed/gallery` 复用完整公开页面能力但移除主导航，按
+  使用 DNS 主机名的精确 HTTPS 来源白名单供其他网站嵌入；默认关闭，不扩展 API 的
+  跨源访问权限。
 - `/random` 随机图 API 支持 `d`/`b`/`t`/`tag`/`a`/`m` 参数，`/api/gallery-stats` 提供图库总量及设备、明暗、主题、标签、作者统计；`random.*` 子域根路径可直接作为随机图链接。
 - 后台图片上传 / 链接导入、JSONL 清单导入、公开微博导入、编辑、删除、回收站、最终
   MD5 判重、日志查看与运行时设置；图片列表可按设备、亮度、主题、标签和作者筛选，
@@ -99,7 +102,7 @@ docker compose up -d
 
 > Linux 用 bind mount 时，先让镜像用户（UID/GID `1000`）可写数据目录：`sudo install -d -o 1000 -g 1000 data`。
 
-启动后（下例以 `img.example.com` 为站点域名）：首页 `https://img.example.com/home`、画廊 `/gallery`、后台 `/admin`、随机图 `/random`。
+启动后（下例以 `img.example.com` 为站点域名）：首页 `https://img.example.com/home`、画廊 `/gallery`、后台 `/admin`、随机图 `/random`。如需给其他网站嵌入无主导航页面，在 `data/config.json` 的顶层 `embed` 配置组中启用并填写使用 DNS 主机名的 HTTPS origin，重载配置后再使用 `/embed/home` 或 `/embed/gallery`；普通后台设置页不读取或修改该配置。
 
 ### 4. 反向代理与 HTTPS
 

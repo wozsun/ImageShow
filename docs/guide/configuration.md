@@ -32,7 +32,9 @@ Docker healthcheck 只读取并在内存中归一化已经存在的 `config.json
 commit 并发等前端预检所需的只读值；不会返回部署配置、完整 `appConfig`、
 服务端全局并发、外链抓取超时或其他内部默认值。`POST /api/admin/settings`
 同样只接受设置页公开的可编辑字段，并以嵌套 patch 合并，未公开配置不会因保存
-设置页而被默认值覆盖。`site.domain`、`site.icon_url` 与
+设置页而被默认值覆盖。`embed` 不进入普通后台设置的读取或保存 DTO，只通过
+`data/config.json` 维护；公开站点配置仅返回前端路由实际消费的有效嵌入开关，
+不返回来源列表。`site.domain`、`site.icon_url` 与
 `site.home.enabled` 保留在运行时配置中，但不进入普通设置页及其读写 DTO；
 `site.home.tagline` 同样只用于 HTML `description`。这些字段都需要通过配置文件
 或高级配置维护。
@@ -69,6 +71,8 @@ Dockerfile 的 `EXPOSE` 与 Compose 目标端口；回归测试会校验三者�
 | `site.random_default_method` | `/random` 默认返回方式：`redirect` 或 `proxy`。 |
 | `site.random_subdomain` / `site.static_subdomain` / `site.link_subdomain` | 保留子域名前缀。 |
 | `site.robots_enabled` | 是否提供 `robots.txt`，默认 `false`。开启后主站首页可抓取，资源域禁抓。 |
+| `embed.enabled` | 是否开放无主导航的 `/embed/home` 与 `/embed/gallery`，默认 `false`；启用但来源列表为空时仍安全地返回 404。仅在 `data/config.json` 中维护。 |
+| `embed.allowed_origins` | 允许嵌入页面、使用 DNS 主机名的精确 HTTPS origin 列表，最多 32 项且规范化后总长不超过 4096 字符；拒绝 HTTP、IP 地址、路径、参数、凭据和通配符，重复项会去除。仅在 `data/config.json` 中维护。 |
 | `upload.*` | 本地文件单次选择软上限、上传文件大小、图片长边限制、上传列表分页、单客户端上传队列并发，以及服务端 materialize / prepare 分阶段复用的全局并发；其中 `upload.max_items`、`upload.max_file_size_mb`、`upload.max_long_edge` 和 `upload.global_concurrency` 只在配置文件中维护。 |
 | `upload.max_items` | 本地文件单次选择软上限，默认 200，可配置范围为 1–1000；只由前端限制，服务端仍逐文件创建会话，没有本地批次条目数硬上限。 |
 | `link_image.fill_original_url` | URL 下载导入是否自动把输入 URL 填入「原图 URL」字段；不做可直达探测。 |

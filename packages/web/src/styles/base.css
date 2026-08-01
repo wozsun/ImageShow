@@ -467,8 +467,13 @@ button.active, .button {
 
 .home-page,
 .gallery-page {
-  padding-top: var(--app-header-height);
+  --public-page-header-height: var(--app-header-height);
+  padding-top: var(--public-page-header-height);
   color-scheme: dark;
+}
+.home-page.is-embedded,
+.gallery-page.is-embedded {
+  --public-page-header-height: 0px;
 }
 
 .public-navigation-frame {

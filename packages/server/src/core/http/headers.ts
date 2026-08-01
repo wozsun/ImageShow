@@ -9,20 +9,58 @@ const trustedTypePolicyNames = [
   "AGPolicy"
 ].join(" ");
 
-export const securityHeaders: Readonly<Record<string, string>> = {
+const commonSecurityHeaders: Readonly<Record<string, string>> = {
   "X-Content-Type-Options": "nosniff",
-  "X-Frame-Options": "DENY",
   "Referrer-Policy": "strict-origin-when-cross-origin",
-  "Cross-Origin-Opener-Policy": "same-origin",
+  "Cross-Origin-Opener-Policy": "same-origin"
+};
+
+const securityHeaders: Readonly<Record<string, string>> = {
+  ...commonSecurityHeaders,
+  "X-Frame-Options": "DENY",
   "Content-Security-Policy": "object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
 };
 
-export const spaDocumentHeaders: Readonly<Record<string, string>> = {
-  ...securityHeaders,
-  "Content-Security-Policy": "script-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+const commonSpaDocumentHeaders: Readonly<Record<string, string>> = {
+  ...commonSecurityHeaders,
   "Content-Security-Policy-Report-Only": `require-trusted-types-for 'script'; trusted-types ${trustedTypePolicyNames}; report-to ${cspReportGroup}`,
   "Reporting-Endpoints": `${cspReportGroup}="${cspReportPath}"`
 };
+
+export const spaDocumentHeaders: Readonly<Record<string, string>> = {
+  ...commonSpaDocumentHeaders,
+  "X-Frame-Options": "DENY",
+  "Content-Security-Policy": "script-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+};
+
+const embedDocumentContextKey = "embedDocumentResponse";
+
+export function embedSpaDocumentHeaders(
+  allowedOrigins: readonly string[]
+): Readonly<Record<string, string>> {
+  const frameAncestors = allowedOrigins.length
+    ? allowedOrigins.join(" ")
+    : "'none'";
+  return {
+    ...commonSpaDocumentHeaders,
+    "Content-Security-Policy": `script-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors ${frameAncestors}`
+  };
+}
+
+export function markEmbedDocumentResponse(context: Context, response: Response) {
+  context.set(embedDocumentContextKey, true);
+  return response;
+}
+
+export function finalizeSecurityHeaders(context: Context) {
+  const embeddedDocument = context.get(embedDocumentContextKey) === true;
+  if (embeddedDocument) context.res.headers.delete("X-Frame-Options");
+
+  for (const [name, value] of Object.entries(securityHeaders)) {
+    if (embeddedDocument && name === "X-Frame-Options") continue;
+    if (!context.res.headers.has(name)) context.header(name, value);
+  }
+}
 
 export const noStoreCacheControl = "no-store";
 export const privateNoStoreCacheControl = "private, no-store";

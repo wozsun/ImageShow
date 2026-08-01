@@ -66,7 +66,10 @@ export function galleryApiSearchParams(
   return params;
 }
 
-export function galleryHref(filters: GalleryFilters) {
+export function galleryHref(
+  filters: GalleryFilters,
+  pathname: "/gallery" | "/embed/gallery" = "/gallery"
+) {
   const query = galleryRouteSearchParams(filters).toString();
-  return query ? `/gallery?${query}` : "/gallery";
+  return query ? `${pathname}?${query}` : pathname;
 }

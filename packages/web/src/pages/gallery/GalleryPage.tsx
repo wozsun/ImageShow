@@ -200,7 +200,7 @@ function GalleryImageDetail({
   );
 }
 
-export function GalleryPage() {
+export function GalleryPage({ embedded = false }: { embedded?: boolean }) {
   const [selected, setSelected] = useState<GalleryImageCard | null>(null);
   const [pinnedImageId, setPinnedImageId] = useState<string | null>(null);
   const queryClient = useQueryClient();
@@ -223,7 +223,7 @@ export function GalleryPage() {
     toolbarHeight,
     toolbarRef,
     toolbarVisible,
-  } = useGalleryViewportControls();
+  } = useGalleryViewportControls({ headerPresent: !embedded });
   const detailReturnFocusRef = useRef<HTMLElement | null>(null);
   const selectedIndexRef = useRef(-1);
   const galleryRef = useRef<HTMLElement | null>(null);
@@ -434,7 +434,7 @@ export function GalleryPage() {
       resetKey={imageQuery}
     >
     <main
-      className="page gallery-page"
+      className={`page gallery-page${embedded ? " is-embedded" : ""}`}
       style={{
         "--gallery-toolbar-height": toolbarHeight
           ? `${toolbarHeight}px`
@@ -444,11 +444,13 @@ export function GalleryPage() {
       <span className="gallery-atmosphere" aria-hidden="true" />
       <div className="public-navigation-frame">
         <div className="public-navigation-stack">
-          <AppHeader
-            animateEntrance={shouldAnimateNavigation}
-            onMenuExpandedChange={onHeaderMenuExpandedChange}
-            visible={headerVisible}
-          />
+          {!embedded && (
+            <AppHeader
+              animateEntrance={shouldAnimateNavigation}
+              onMenuExpandedChange={onHeaderMenuExpandedChange}
+              visible={headerVisible}
+            />
+          )}
           <section
             ref={toolbarRef}
             className={`gallery-toolbar public-navigation-secondary${toolbarEntrance.active ? " is-gallery-toolbar-entrance" : ""}${filtersOpen ? " filters-open" : ""}${toolbarVisible ? "" : " is-scroll-hidden"}`}

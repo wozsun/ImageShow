@@ -10,6 +10,12 @@ type SpaDocumentRepresentation = {
   etag: string;
 };
 
+type SpaDocumentResponseOptions = {
+  cacheControl?: string;
+  headers?: Readonly<Record<string, string>>;
+  ifNoneMatch?: string | null;
+};
+
 export function createSpaDocumentRepresentation(body: string): SpaDocumentRepresentation {
   return {
     body,
@@ -21,16 +27,19 @@ export function createSpaDocumentRepresentation(body: string): SpaDocumentRepres
 
 export function spaDocumentResponse(
   representation: SpaDocumentRepresentation,
-  ifNoneMatch?: string | null
+  options: SpaDocumentResponseOptions = {}
 ) {
-  const notModified = ifNoneMatchMatches(ifNoneMatch, representation.etag);
+  const notModified = ifNoneMatchMatches(
+    options.ifNoneMatch,
+    representation.etag
+  );
   return new Response(notModified ? null : representation.body, {
     status: notModified ? 304 : 200,
     headers: {
       "Content-Type": "text/html; charset=utf-8",
-      "Cache-Control": publicDocumentCacheControl,
+      "Cache-Control": options.cacheControl ?? publicDocumentCacheControl,
       ETag: representation.etag,
-      ...spaDocumentHeaders
+      ...(options.headers ?? spaDocumentHeaders)
     }
   });
 }

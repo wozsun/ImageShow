@@ -21,6 +21,7 @@ export function HomeFilterBar({
   isPending,
   isError,
   isPlaceholderData,
+  galleryPath = "/gallery",
   onFiltersChange
 }: {
   animateEntrance: boolean;
@@ -29,6 +30,7 @@ export function HomeFilterBar({
   isPending: boolean;
   isError: boolean;
   isPlaceholderData: boolean;
+  galleryPath?: "/gallery" | "/embed/gallery";
   onFiltersChange: (filters: GalleryFilters) => void;
 }) {
   const entrance = useOneShotAnimation(animateEntrance);
@@ -43,7 +45,7 @@ export function HomeFilterBar({
         selectedFacetLabels(stats.authors, filters.author).join("/")
       ].filter(Boolean)
     : [];
-  const destination = galleryHref(filters);
+  const destination = galleryHref(filters, galleryPath);
   const hasFilters = Object.values(filters).some(Boolean);
 
   return (

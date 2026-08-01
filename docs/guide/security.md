@@ -32,7 +32,8 @@
   校验仍只由服务端配置决定。应用重启会使此前已签发但尚未提交的证明失效，用户
   重新验证即可；现有登录会话不受影响。
 - 公开页默认不显示后台入口，也不主动请求 `/api/admin/auth/me`；只有当前浏览器本地存在 `site_session_hint` 提示位时，顶栏与图片详情才共用该登录态探针，并仅在服务端确认已登录后显示管理信息和编辑入口。未登录探针只返回登录页所需的 ALTCHA 开关与背景，完全省略用户名、角色、权限、CSRF、应用版本、偏好和后台版本显示策略；确认已登录后才附带这些后台投影并建立内存中的 CSRF token。管理信息、词表、可编辑快照和保存仍分别由服务端鉴权与 CSRF 保护。任一受保护请求返回 401 都会清除 token 与提示位并恢复普通访客展示，403 会隐藏当前详情的管理入口。该提示位只存在 `localStorage`，不参与鉴权；伪造它最多触发 `/auth/me`，不会预载编辑器或取得管理数据。
-- 全站响应头包含 `X-Content-Type-Options`、`X-Frame-Options`、`Referrer-Policy`、`Cross-Origin-Opener-Policy` 与 CSP；SPA 以 report-only 模式监测脚本 Trusted Types，白名单只列出实际出现的 `imageshow-altcha-worker`、`svelte-trusted-html`、`decodeHTMLEntitiesPolicy` 与 `AGPolicy`，不放行任意策略名，也不提供放行任意脚本 URL 或 HTML 的默认策略；同源 `/api/security/csp-report` 默认只返回 204，不读取或记录报告正文。登录页在 ALTCHA 首次挂载前预设隐藏 footer 与 logo，使组件不渲染会被 Trusted Types 拒绝的动态 HTML footer；应用只接受 `site.domain` 及配置的 `random` / `static` / `link` 子域名，未知 `Host` 直接返回不可缓存的 404。
+- 普通响应在最终响应对象上统一补齐 `X-Content-Type-Options`、`X-Frame-Options: DENY`、`Referrer-Policy`、`Cross-Origin-Opener-Policy` 与 CSP `frame-ancestors 'none'`，直接返回的 API、静态、错误和未知 Host 响应也不会漏掉。只有服务端确认 `embed.enabled=true` 且白名单非空后，精确的 `/embed/home` 与 `/embed/gallery` 文档才移除 `X-Frame-Options`，并将规范化且使用 DNS 主机名的 HTTPS origin 写入 CSP `frame-ancestors`；IP literal 不进入白名单，也不使用已废弃且不能表达多来源的 `ALLOW-FROM`。禁用、空白名单、未知 Host、保留子域或其他路径继续不可嵌入。SPA 以 report-only 模式监测脚本 Trusted Types，白名单只列出实际出现的 `imageshow-altcha-worker`、`svelte-trusted-html`、`decodeHTMLEntitiesPolicy` 与 `AGPolicy`，不放行任意策略名，也不提供放行任意脚本 URL 或 HTML 的默认策略；同源 `/api/security/csp-report` 默认只返回 204，不读取或记录报告正文。登录页在 ALTCHA 首次挂载前预设隐藏 footer 与 logo，使组件不渲染会被 Trusted Types 拒绝的动态 HTML footer；应用只接受 `site.domain` 及配置的 `random` / `static` / `link` 子域名，未知 `Host` 直接返回不可缓存的 404。
+- 反向代理或 CDN 不得对 `/embed/*` 重新注入 `X-Frame-Options`，也不得覆盖应用生成的 CSP `frame-ancestors`，否则会把已授权的 iframe 一并拦截；普通路径的拒绝策略仍由应用统一生成。若代理层必须统一添加这些头，应为两个精确嵌入路径设置例外，并保留应用响应头。
 - Web 直接依赖 `react-router@8.3.0`，只使用 `<BrowserRouter>` / `<Routes>`、
   链接与位置等 Declarative Mode API，不使用 Framework / Data action、服务端
   渲染、React Server Components 或任何 unstable RSC API。当前版本已包含
@@ -81,5 +82,5 @@
 - 外链导入下载会为每个已通过安全校验的当前目标生成仅含 `https` origin 的
   `Referer`，用于微博图床等基础防盗链。重定向后按新目标重新生成，不透传图片
   路径、查询参数、来源页面或管理员输入的任意 Referer。
-- 公共画廊数据接口 `/api/images`、`/api/images/:id`、`/api/gallery-facets` 与 `/api/gallery-stats` 的**跨源保护**：借 Fetch Metadata（`Sec-Fetch-Site`）拒绝**跨站 / 同站跨源**读取，只放行同源（前端自身）、直接导航（`none`）与**不发该头**的老浏览器 / 非浏览器客户端（优雅降级，不误伤画廊）。它是跨源护栏、不是反爬墙——省略该头的客户端仍可访问，合规爬虫由 robots.txt 兜。（`/api/site-config` 不设限——它是内联进 SPA 的启动配置，需在任意首屏场景下可加载；返回内容只包含公开页面实际消费的站点名称、图标、根路径、首页、画廊排序和详情行为，不包含域名、后台版本显示策略、服务端分页默认值、随机出口默认方式、安全验证开关、登录页背景、上传限制或处理并发。）
+- 公共画廊数据接口 `/api/images`、`/api/images/:id`、`/api/gallery-facets` 与 `/api/gallery-stats` 的**跨源保护**：借 Fetch Metadata（`Sec-Fetch-Site`）拒绝**跨站 / 同站跨源**读取，只放行同源（前端自身）、直接导航（`none`）与**不发该头**的老浏览器 / 非浏览器客户端（优雅降级，不误伤画廊）。嵌入页中的数据请求仍由 iframe 内的同源应用发出，不增加 CORS、跨源凭据或后台写权限。它是跨源护栏、不是反爬墙——省略该头的客户端仍可访问，合规爬虫由 robots.txt 兜。（`/api/site-config` 不设限——它是内联进 SPA 的启动配置，需在任意首屏场景下可加载；返回内容只包含公开页面实际消费的站点名称、图标、根路径、首页、画廊排序、有效嵌入开关和详情行为，不包含嵌入来源列表、域名、后台版本显示策略、服务端分页默认值、随机出口默认方式、安全验证开关、登录页背景、上传限制或处理并发。）
 - **robots.txt（按主机区分，默认关闭）**：由 `config.json` 的 `site.robots_enabled` 控制，**默认 `false`**——此时 `/robots.txt` 对所有主机返回 404、不提供任何抓取规则。开启后按主机区分：主站**仅放行首页**（站点描述），画廊 / 接口 / 静态资源 / 后台一律不许抓取；`static.` / `link.` / `random.` 资源域整站禁抓。

@@ -5,8 +5,8 @@ import { getRuntimeConfig } from "./config/runtime-config-store.ts";
 import { apiErrorResponse, handleApiError } from "./core/http/responses.ts";
 import {
   appendVaryHeader,
-  noStoreCacheControl,
-  securityHeaders
+  finalizeSecurityHeaders,
+  noStoreCacheControl
 } from "./core/http/headers.ts";
 import {
   requireAdminCsrf,
@@ -52,10 +52,8 @@ export function createHttpApp() {
 
   app.onError((error, c) => handleApiError(c, error));
   app.use("*", async (c, next) => {
-    for (const [name, value] of Object.entries(securityHeaders)) {
-      c.header(name, value);
-    }
     await next();
+    finalizeSecurityHeaders(c);
   });
   app.use("*", async (c, next) => {
     if (!isAllowedSiteHost(c.req.header("host") ?? "")) {

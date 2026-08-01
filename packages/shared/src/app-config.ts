@@ -67,6 +67,12 @@ export const appConfig = {
     }
   },
 
+  embedding: {
+    maxAllowedOrigins: 32,
+    maxOriginLength: 320,
+    maxSerializedOriginsLength: 4096
+  },
+
   backgroundJob: {
     maxRetries: 5,
     retryBackoffSeconds: [60, 300, 900, 3600, 21600],
@@ -109,6 +115,10 @@ export const appConfig = {
       static_subdomain: "static",
       link_subdomain: "link",
       robots_enabled: false
+    },
+    embed: {
+      enabled: false,
+      allowed_origins: [] as string[]
     },
     upload: {
       max_items: 200,

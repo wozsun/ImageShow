@@ -89,7 +89,7 @@
   .gallery-page { --gallery-toolbar-height: 65px; }
 
   .gallery-toolbar {
-    max-height: calc(100svh - var(--app-header-height));
+    max-height: calc(100svh - var(--public-page-header-height));
     padding: 12px 16px;
     overflow: visible;
     align-items: stretch;
@@ -137,7 +137,7 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 12px;
-    max-height: min(70svh, calc(100svh - 100% - var(--app-header-height)));
+    max-height: min(70svh, calc(100svh - 100% - var(--public-page-header-height)));
     padding: 12px 16px 16px;
     overflow-y: auto;
     overscroll-behavior: contain;

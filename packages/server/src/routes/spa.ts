@@ -7,10 +7,13 @@ import { fileURLToPath } from "node:url";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { siteConfigPayload } from "../config/app-settings.ts";
 import {
+  embedSpaDocumentHeaders,
   immutableCacheControl,
+  markEmbedDocumentResponse,
   noStoreCacheControl,
   publicStaticCacheControl
 } from "../core/http/headers.ts";
+import { apiErrorResponse } from "../core/http/responses.ts";
 import { serveStaticWithValidators } from "../core/http/static-conditional.ts";
 import {
   createSpaDocumentRepresentation,
@@ -42,6 +45,8 @@ export function registerSpaRoutes(app: Hono) {
   app.get("/", spaHandler);
   app.get("/home", spaHandler);
   app.get("/gallery", spaHandler);
+  app.get("/embed/home", embedSpaHandler);
+  app.get("/embed/gallery", embedSpaHandler);
   app.get(adminBasePath, spaHandler);
   app.get(`${adminBasePath}/*`, spaHandler);
 }
@@ -89,6 +94,21 @@ function currentSpaRepresentation() {
 async function spaHandler(c: Context) {
   return spaDocumentResponse(
     currentSpaRepresentation(),
-    c.req.header("if-none-match")
+    { ifNoneMatch: c.req.header("if-none-match") }
+  );
+}
+
+async function embedSpaHandler(c: Context) {
+  const embed = getRuntimeConfig().embed;
+  if (!embed.enabled || embed.allowed_origins.length === 0) {
+    return apiErrorResponse({ status: 404, message: "Not Found" });
+  }
+  return markEmbedDocumentResponse(
+    c,
+    spaDocumentResponse(currentSpaRepresentation(), {
+      cacheControl: noStoreCacheControl,
+      headers: embedSpaDocumentHeaders(embed.allowed_origins),
+      ifNoneMatch: c.req.header("if-none-match")
+    })
   );
 }

@@ -9,6 +9,7 @@ import {
   altchaCounter,
   altchaTtlSeconds,
   commitConcurrency,
+  embedAllowedOrigins,
   galleryLimit,
   galleryOrder,
   globalCommitByteBudgetMb,
@@ -90,6 +91,10 @@ const runtimeConfigSchema = z.strictObject({
     static_subdomain: subdomainLabel,
     link_subdomain: subdomainLabel,
     robots_enabled: z.boolean()
+  }),
+  embed: z.strictObject({
+    enabled: z.boolean(),
+    allowed_origins: embedAllowedOrigins
   }),
   upload: z.strictObject({
     max_items: uploadImportMaxItems,

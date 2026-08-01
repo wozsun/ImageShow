@@ -56,7 +56,7 @@ function HomeStartupLoadingText({
   return <AppLoadingText extraDots={extraDots} />;
 }
 
-export function HomePage() {
+export function HomePage({ embedded = false }: { embedded?: boolean }) {
   const catalogRef = useRef<HTMLElement>(null);
   const lastSuccessfulStatsRef = useRef<GalleryStatsDto | undefined>(undefined);
   const {
@@ -107,7 +107,7 @@ export function HomePage() {
     || entrance.heroRevealed;
 
   return (
-    <main className="page home-page">
+    <main className={`page home-page${embedded ? " is-embedded" : ""}`}>
       <HomeBackground
         source={background}
         ready={entrance.backgroundReady}
@@ -137,12 +137,13 @@ export function HomePage() {
         inert={entrance.navigationRevealed ? undefined : true}
       >
         <div className="public-navigation-stack">
-          <AppHeader />
+          {!embedded && <AppHeader />}
           <HomeFilterBar
             animateEntrance={
               navigationHadAppearedBeforeMount && navigationMotionAllowed
             }
             filters={filters}
+            galleryPath={embedded ? "/embed/gallery" : "/gallery"}
             stats={stats}
             isPending={statsQuery.isPending}
             isError={statsQuery.isError}

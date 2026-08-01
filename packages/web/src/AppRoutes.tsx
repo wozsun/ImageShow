@@ -27,6 +27,22 @@ export function AppRoutes() {
             element={data.site.home.enabled === false ? <Navigate to="/gallery" replace /> : <HomePage />}
           />
           <Route path="/gallery" element={<GalleryPage />} />
+          <Route
+            path="/embed/home"
+            element={
+              !data.embed.enabled
+                ? <Navigate to="/" replace />
+                : data.site.home.enabled === false
+                  ? <Navigate to="/embed/gallery" replace />
+                  : <HomePage embedded />
+            }
+          />
+          <Route
+            path="/embed/gallery"
+            element={data.embed.enabled
+              ? <GalleryPage embedded />
+              : <Navigate to="/" replace />}
+          />
           <Route path={`${adminBasePath}/*`} element={<AdminShell />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

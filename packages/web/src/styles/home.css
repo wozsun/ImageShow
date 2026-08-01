@@ -279,7 +279,7 @@
   position: relative;
   z-index: 1;
   min-height: calc(
-    100svh - var(--app-header-height) - var(--home-filter-bar-height)
+    100svh - var(--public-page-header-height) - var(--home-filter-bar-height)
   );
   padding: clamp(64px, 10vw, 148px) max(28px, calc((100% - 1180px) / 2)) 56px;
   display: grid;

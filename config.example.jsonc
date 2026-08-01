@@ -55,6 +55,15 @@
     "robots_enabled": false
   },
 
+  // 去除公开主导航的受控嵌入页面配置。
+  "embed": {
+    // 是否开放 /embed/home 与 /embed/gallery；默认关闭。
+    "enabled": false,
+    // 允许作为 iframe 父页面、使用 DNS 主机名的精确 HTTPS origin。每项不得
+    // 包含路径、参数、凭据或通配符；最多 32 项，启用但留空时仍返回 404。
+    "allowed_origins": []
+  },
+
   // 本地上传配置，只影响从浏览器选择文件上传的入口。
   "upload": {
     // 单次文件选择软上限，范围 1-1000；服务端仍逐文件创建会话。

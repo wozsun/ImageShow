@@ -24,6 +24,7 @@ export type GalleryNavigationState = {
 
 export type GalleryNavigationInput = {
   delta: number;
+  headerPresent: boolean;
   scrollTop: number;
   toolbarHeight: number;
   lockedOpen: boolean;
@@ -59,6 +60,14 @@ export function advanceGalleryNavigation(
   let stepDistance = Math.abs(input.delta);
 
   if (direction === "up") {
+    if (!input.headerPresent) {
+      if (state.stage !== "hidden") return settledState("visible");
+      const distance = carriedDistance + stepDistance;
+      if (distance < galleryNavigationThresholds.revealToolbar) {
+        return { stage: "hidden", direction, distance };
+      }
+      return settledState("visible");
+    }
     if (state.stage === "visible") return settledState("visible");
     let stage: GalleryNavigationStage = state.stage;
     let distance = carriedDistance + stepDistance;
@@ -75,7 +84,7 @@ export function advanceGalleryNavigation(
   }
 
   if (state.stage === "hidden") return settledState("hidden");
-  if (state.stage === "visible") {
+  if (state.stage === "visible" || !input.headerPresent) {
     const toolbarBoundary = Math.max(0, input.toolbarHeight);
     const previousScrollTop = input.scrollTop - input.delta;
     if (input.scrollTop <= toolbarBoundary) return settledState("visible");
@@ -85,6 +94,14 @@ export function advanceGalleryNavigation(
       previousScrollTop
     );
     if (stepDistance <= 0) return settledState("visible");
+  }
+
+  if (!input.headerPresent) {
+    const distance = carriedDistance + stepDistance;
+    if (distance < galleryNavigationThresholds.hideToolbar) {
+      return { stage: "visible", direction, distance };
+    }
+    return settledState("hidden");
   }
 
   let stage: GalleryNavigationStage = state.stage;

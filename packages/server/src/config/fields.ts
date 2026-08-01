@@ -43,6 +43,56 @@ export const homeBannerLabel = z.string().trim().min(1).max(160);
 export const homeBannerTitle = z.string().trim().min(1).max(160);
 export const homeTagline = z.string().trim().max(200);
 
+function isCspSafeEmbedHostname(hostname: string) {
+  return isIP(hostname) === 0
+    && hostname.length <= 253
+    && !hostname.endsWith(".")
+    && hostname.split(".").every(
+      (label) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label)
+    );
+}
+
+function canonicalEmbedOrigin(value: string) {
+  if (!/^https:\/\/[^\s/?#\\@:]+(?::\d{1,5})?\/?$/i.test(value)) return null;
+  try {
+    const parsed = new URL(value);
+    if (
+      parsed.protocol !== "https:"
+      || parsed.username
+      || parsed.password
+      || parsed.pathname !== "/"
+      || parsed.search
+      || parsed.hash
+      || parsed.hostname.includes("*")
+      || (parsed.port !== "" && Number(parsed.port) < 1)
+      || !isCspSafeEmbedHostname(parsed.hostname)
+    ) {
+      return null;
+    }
+    return `https://${parsed.hostname}${parsed.port ? `:${parsed.port}` : ""}`;
+  } catch {
+    return null;
+  }
+}
+
+const embedAllowedOrigin = z.string().trim().min(1)
+  .max(appConfig.embedding.maxOriginLength)
+  .refine(
+    (value) => canonicalEmbedOrigin(value) !== null,
+    "嵌入来源必须是使用 DNS 主机名且不含路径、参数、凭据或通配符的 HTTPS origin"
+  )
+  .transform((value) => canonicalEmbedOrigin(value)!);
+
+export const embedAllowedOrigins = z.array(embedAllowedOrigin)
+  .max(appConfig.embedding.maxAllowedOrigins)
+  .transform((values) => [...new Set(values)])
+  .refine(
+    (values) => values.reduce((length, value) => length + value.length, 0)
+      + Math.max(0, values.length - 1)
+      <= appConfig.embedding.maxSerializedOriginsLength,
+    "嵌入来源列表过长"
+  );
+
 export const maxFileSizeMb = z.coerce.number().positive()
   .max(appConfig.imports.maxInputFileSizeMiB);
 export const maxLongEdge = z.coerce.number().int().min(512).max(32_768);

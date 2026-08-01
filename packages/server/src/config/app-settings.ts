@@ -187,6 +187,10 @@ export function siteConfigPayload(): SiteConfigDto {
       home,
       gallery: { order: gallery.order }
     },
+    embed: {
+      enabled: runtime.embed.enabled
+        && runtime.embed.allowed_origins.length > 0
+    },
     image_detail: runtime.image_detail
   };
 }

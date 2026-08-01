@@ -30,7 +30,8 @@ function blurFocusedElement(element: HTMLElement) {
 
 function useGalleryNavigationVisibility(
   toolbarRef: RefObject<HTMLElement | null>,
-  lockedOpen: boolean
+  lockedOpen: boolean,
+  headerPresent: boolean
 ) {
   const [height, setHeight] = useState(0);
   const [stage, setStage] = useState<GalleryNavigationStage>("visible");
@@ -52,6 +53,11 @@ function useGalleryNavigationVisibility(
   }, [toolbarRef]);
 
   useLayoutEffect(() => {
+    navigationStateRef.current = { ...initialGalleryNavigationState };
+    setStage("visible");
+  }, [headerPresent]);
+
+  useLayoutEffect(() => {
     if (!lockedOpen) return;
     navigationStateRef.current = { ...initialGalleryNavigationState };
     setStage("visible");
@@ -68,6 +74,7 @@ function useGalleryNavigationVisibility(
     const currentState = navigationStateRef.current;
     const nextState = advanceGalleryNavigation(currentState, {
       delta,
+      headerPresent,
       scrollTop: position.top,
       toolbarHeight: toolbarHeightRef.current,
       lockedOpen: menuOpen
@@ -87,7 +94,7 @@ function useGalleryNavigationVisibility(
   }, !lockedOpen);
 
   return {
-    headerVisible: stage === "visible",
+    headerVisible: headerPresent && stage === "visible",
     height,
     toolbarVisible: stage !== "hidden"
   };
@@ -126,11 +133,20 @@ export function scrollGalleryToTop() {
   window.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
 }
 
-export function useGalleryViewportControls() {
+export function useGalleryViewportControls({
+  headerPresent = true
+}: {
+  headerPresent?: boolean;
+} = {}) {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [headerMenuExpanded, setHeaderMenuExpanded] = useState(false);
   const toolbarRef = useRef<HTMLElement | null>(null);
   const mobileLayout = useMediaQuery(mobileViewportMediaQuery);
+
+  useLayoutEffect(() => {
+    if (!headerPresent) setHeaderMenuExpanded(false);
+  }, [headerPresent]);
+
   const disclosure = useDismissiblePanel({
     open: filtersOpen,
     onOpenChange: setFiltersOpen,
@@ -144,14 +160,16 @@ export function useGalleryViewportControls() {
   }, [disclosure.setOpen, filtersOpen]);
 
   const mobileFiltersOpen = mobileLayout && filtersOpen;
-  const navigationLockedOpen = mobileFiltersOpen || headerMenuExpanded;
+  const navigationLockedOpen = mobileFiltersOpen
+    || (headerPresent && headerMenuExpanded);
   const {
     headerVisible,
     height: toolbarHeight,
     toolbarVisible
   } = useGalleryNavigationVisibility(
     toolbarRef,
-    navigationLockedOpen
+    navigationLockedOpen,
+    headerPresent
   );
   const backToTopVisible = useBackToTopVisibility();
 

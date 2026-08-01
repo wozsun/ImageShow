@@ -37,6 +37,11 @@ export type RuntimeSiteSettings = {
   robots_enabled: boolean;
 };
 
+export type EmbedSettings = {
+  enabled: boolean;
+  allowed_origins: string[];
+};
+
 export type UploadSettings = {
   max_items: number;
   max_file_size_mb: number;
@@ -95,6 +100,7 @@ export type AdminPanelSettings = {
 
 export type RuntimeConfig = {
   site: RuntimeSiteSettings;
+  embed: EmbedSettings;
   upload: UploadSettings;
   link_image: LinkImageSettings;
   weibo: WeiboSettings;
@@ -184,6 +190,7 @@ export type AdminSettings = {
 
 export type SiteConfigDto = {
   site: PublicSiteSettings;
+  embed: Pick<EmbedSettings, "enabled">;
   image_detail: ImageDetailSettings;
 };
 
