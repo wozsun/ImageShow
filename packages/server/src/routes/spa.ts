@@ -6,6 +6,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { siteConfigPayload } from "../config/app-settings.ts";
+import { effectiveEmbedAncestorSources } from "../config/embed-ancestors.ts";
 import {
   embedSpaDocumentHeaders,
   immutableCacheControl,
@@ -99,15 +100,15 @@ async function spaHandler(c: Context) {
 }
 
 async function embedSpaHandler(c: Context) {
-  const embed = getRuntimeConfig().embed;
-  if (!embed.enabled || embed.allowed_origins.length === 0) {
+  const allowedAncestors = effectiveEmbedAncestorSources();
+  if (allowedAncestors.length === 0) {
     return apiErrorResponse({ status: 404, message: "Not Found" });
   }
   return markEmbedDocumentResponse(
     c,
     spaDocumentResponse(currentSpaRepresentation(), {
       cacheControl: noStoreCacheControl,
-      headers: embedSpaDocumentHeaders(embed.allowed_origins),
+      headers: embedSpaDocumentHeaders(allowedAncestors),
       ifNoneMatch: c.req.header("if-none-match")
     })
   );

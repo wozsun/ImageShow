@@ -71,8 +71,8 @@ Dockerfile 的 `EXPOSE` 与 Compose 目标端口；回归测试会校验三者�
 | `site.random_default_method` | `/random` 默认返回方式：`redirect` 或 `proxy`。 |
 | `site.random_subdomain` / `site.static_subdomain` / `site.link_subdomain` | 保留子域名前缀。 |
 | `site.robots_enabled` | 是否提供 `robots.txt`，默认 `false`。开启后主站首页可抓取，资源域禁抓。 |
-| `embed.enabled` | 是否开放无主导航的 `/embed/home` 与 `/embed/gallery`，默认 `false`；启用但来源列表为空时仍安全地返回 404。仅在 `data/config.json` 中维护。 |
-| `embed.allowed_origins` | 允许嵌入页面的 HTTPS 来源列表，可填写精确 origin 或形如 `https://*.example.com` 的子域通配符，最多 32 项且规范化后总长不超过 4096 字符；通配符只允许出现在最左侧且不包含根域名，根域名须另列。拒绝 HTTP、IP 地址、路径、参数、凭据、裸 `*`、中间通配符和过宽的单标签后缀，重复项会去除。通配符只能用于全部现有及未来子域均可信的自有父域；校验不内置 Public Suffix List，不得配置 `*.github.io` 等公共托管后缀。仅在 `data/config.json` 中维护。 |
+| `embed.enabled` | 是否开放无主导航的 `/embed/home` 与 `/embed/gallery`，默认 `false`。启用后会根据当前 `site.domain` 隐式允许站点自身 HTTPS origin 及其任意层级的现有和未来子域，因此只应在这些子域均可信时开启；若站点域名带非默认端口，两项都只允许该端口。派生来源不写回配置文件。仅在 `data/config.json` 中维护。 |
+| `embed.allowed_origins` | 除站点隐式来源外额外允许嵌入页面的 HTTPS 来源列表，可填写精确 origin 或形如 `https://*.example.com` 的子域通配符，最多 32 项且规范化后总长不超过 4096 字符；可以留空，重复隐式或显式来源会去除。通配符只允许出现在最左侧且不包含根域名，根域名须另列。拒绝 HTTP、IP 地址、路径、参数、凭据、裸 `*`、中间通配符和过宽的单标签后缀。通配符只能用于全部现有及未来子域均可信的自有父域；校验不内置 Public Suffix List，不得配置 `*.github.io` 等公共托管后缀。仅在 `data/config.json` 中维护。 |
 | `upload.*` | 本地文件单次选择软上限、上传文件大小、图片长边限制、上传列表分页、单客户端上传队列并发，以及服务端 materialize / prepare 分阶段复用的全局并发；其中 `upload.max_items`、`upload.max_file_size_mb`、`upload.max_long_edge` 和 `upload.global_concurrency` 只在配置文件中维护。 |
 | `upload.max_items` | 本地文件单次选择软上限，默认 200，可配置范围为 1–1000；只由前端限制，服务端仍逐文件创建会话，没有本地批次条目数硬上限。 |
 | `link_image.fill_original_url` | URL 下载导入是否自动把输入 URL 填入「原图 URL」字段；不做可直达探测。 |

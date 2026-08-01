@@ -57,12 +57,13 @@
 
   // 去除公开主导航的受控嵌入页面配置。
   "embed": {
-    // 是否开放 /embed/home 与 /embed/gallery；默认关闭。
+    // 是否开放 /embed/home 与 /embed/gallery；默认关闭。开启后 site.domain 对应的
+    // HTTPS origin 及其全部现有和未来子域会自动加入有效白名单，无需在下方重复
+    // 填写；只有这些子域均可信时才应开启。
     "enabled": false,
-    // 允许作为 iframe 父页面的精确 HTTPS origin，或 https://*.example.com 形式的
-    // 受限子域通配符；通配符不含根域，只能用于全部子域可信的自有父域，不能使用
-    // 公共托管后缀。每项不得包含路径、参数或凭据；最多 32 项，启用但留空时仍
-    // 返回 404。
+    // 额外允许作为 iframe 父页面的精确 HTTPS origin，或 https://*.example.com
+    // 形式的受限子域通配符；通配符不含根域，只能用于全部子域可信的自有父域，
+    // 不能使用公共托管后缀。每项不得包含路径、参数或凭据；最多 32 项。
     "allowed_origins": []
   },
 

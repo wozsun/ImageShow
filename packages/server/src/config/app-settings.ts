@@ -33,6 +33,7 @@ import {
   reloadRuntimeConfig,
   updateRuntimeConfig
 } from "./runtime-config-store.ts";
+import { effectiveEmbedAncestorSources } from "./embed-ancestors.ts";
 import type { RuntimeConfigPatch } from "./runtime-config.ts";
 
 const siteHomeConfigSchema = z.strictObject({
@@ -188,8 +189,7 @@ export function siteConfigPayload(): SiteConfigDto {
       gallery: { order: gallery.order }
     },
     embed: {
-      enabled: runtime.embed.enabled
-        && runtime.embed.allowed_origins.length > 0
+      enabled: effectiveEmbedAncestorSources(runtime).length > 0
     },
     image_detail: runtime.image_detail
   };

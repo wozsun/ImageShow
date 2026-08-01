@@ -20,7 +20,7 @@ ImageShow 是一个 npm workspaces 单仓多包项目：自托管图库 + 随机
 | `static.<域名>` | 只提供对象字节 `/media/*`、`/thumbs/*`（cookie 隔离，主站从不直接吐字节） |
 | `link.<域名>` | 外部原图安全代理：仅开放 `/original/*`，且只代理与展示图不同的 HTTPS `original` 字段 |
 
-所有普通请求在最终响应上统一附带安全响应头：`Content-Security-Policy: frame-ancestors 'none'`、`X-Frame-Options: DENY`、`X-Content-Type-Options: nosniff`、`Referrer-Policy`、`Cross-Origin-Opener-Policy` 等；直接构造的错误、静态和 API `Response` 也不会绕过。唯一例外是已启用且来源列表非空的 `/embed/home` 与 `/embed/gallery` 文档：它们移除 `X-Frame-Options`，只把规范化且使用 DNS 主机名的精确 HTTPS origin 或受限子域通配符写入 CSP `frame-ancestors`。SPA 文档以 report-only 模式观测 Trusted Types，并通过 `Reporting-Endpoints` 与 CSP `report-to` 把报告投递到同源 `/api/security/csp-report`。接收端只返回 204，不读取正文、不解析 JSON、也不写日志。
+所有普通请求在最终响应上统一附带安全响应头：`Content-Security-Policy: frame-ancestors 'none'`、`X-Frame-Options: DENY`、`X-Content-Type-Options: nosniff`、`Referrer-Policy`、`Cross-Origin-Opener-Policy` 等；直接构造的错误、静态和 API `Response` 也不会绕过。唯一例外是已启用的 `/embed/home` 与 `/embed/gallery` 文档：它们移除 `X-Frame-Options`，把当前站点自身 HTTPS origin、其子域通配符以及规范化的额外精确 origin 或受限子域通配符写入 CSP `frame-ancestors`。SPA 文档以 report-only 模式观测 Trusted Types，并通过 `Reporting-Endpoints` 与 CSP `report-to` 把报告投递到同源 `/api/security/csp-report`。接收端只返回 204，不读取正文、不解析 JSON、也不写日志。
 
 ## 分层
 
