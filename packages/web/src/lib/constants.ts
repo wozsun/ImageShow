@@ -12,7 +12,6 @@ export const galleryLoadBufferScreens = 1;
 export const galleryResidenceBufferScreens = 2;
 export const galleryVirtualOverscanScreens = 2.5;
 export const galleryMaxMountedTiles = 160;
-export const gallerySentinelRootMargin = "280px 0px";
 
 export function publicRootPath(
   site: Pick<SiteSettings, "root_redirect" | "home">

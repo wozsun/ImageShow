@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -24,7 +25,6 @@ import { Icon } from "../../components/icon/Icon.js";
 import { ImageDetailModal } from "../../components/image/ImageDetailModal.js";
 import { SelectMenu } from "../../components/form/SelectMenu.js";
 import { FacetSelector } from "../../components/data-display/FacetSelector.js";
-import { gallerySentinelRootMargin } from "../../lib/constants.js";
 import { queryKeys } from "../../lib/api/query-keys.js";
 import { removeImageFromPublicImagesCache } from "./gallery-image-cache.js";
 import { displayNameOrSlug, errorMessage, imageDisplayTitle } from "../../lib/ui/formatters.js";
@@ -62,6 +62,11 @@ import {
 } from "../../lib/gallery/gallery-query.js";
 import { GalleryCardRevealRegistry } from "./gallery-card-reveal.js";
 import { galleryDeletionFocusTarget } from "./gallery-delete-continuity.js";
+import {
+  GalleryPagePreloadGate,
+  galleryPagePreloadRange,
+  galleryPagePreloadRequestKey
+} from "./gallery-page-preload.js";
 
 function GalleryTileDevelopmentStats() {
   const { debug } = useGalleryImageRuntime();
@@ -228,7 +233,12 @@ export function GalleryPage({ embedded = false }: { embedded?: boolean }) {
   const selectedIndexRef = useRef(-1);
   const galleryRef = useRef<HTMLElement | null>(null);
   const galleryWindowRef = useRef<HTMLDivElement | null>(null);
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const pagePreloadRef = useRef<HTMLSpanElement | null>(null);
+  const pagePreloadGateRef = useRef<GalleryPagePreloadGate | null>(null);
+  const [pagePreloadRevision, setPagePreloadRevision] = useState(0);
+  if (!pagePreloadGateRef.current) {
+    pagePreloadGateRef.current = new GalleryPagePreloadGate();
+  }
   const previousImageQueryRef = useRef<string | null>(null);
   const routeEntranceFinishedRef = useRef(false);
   const {
@@ -242,6 +252,13 @@ export function GalleryPage({ embedded = false }: { embedded?: boolean }) {
   const imageQuery = useMemo(
     () => galleryApiSearchParams(filters, order).toString(),
     [filters, order]
+  );
+  useEffect(() => {
+    pagePreloadGateRef.current?.beginSession(imageQuery);
+  }, [imageQuery]);
+  const publicImagesQueryKey = useMemo(
+    () => [...queryKeys.publicImages, imageQuery] as const,
+    [imageQuery]
   );
   const revealRegistry = useMemo(
     () => new GalleryCardRevealRegistry({
@@ -261,7 +278,7 @@ export function GalleryPage({ embedded = false }: { embedded?: boolean }) {
   }, [markNavigationAppeared]);
 
   const imagePages = useInfiniteQuery<PublicImageListResponseDto, Error, { pages: PublicImageListResponseDto[]; pageParams: string[] }, readonly unknown[], string>({
-    queryKey: [...queryKeys.publicImages, imageQuery],
+    queryKey: publicImagesQueryKey,
     initialPageParam: "",
     queryFn: ({ pageParam, signal }) => {
       const params = new URLSearchParams(imageQuery);
@@ -313,29 +330,6 @@ export function GalleryPage({ embedded = false }: { embedded?: boolean }) {
 
   const items = useMemo(() => imagePages.data?.pages.flatMap((page) => page.items) ?? [], [imagePages.data]);
 
-  useEffect(() => {
-    const target = sentinelRef.current;
-    if (!target) return;
-    const observer = new IntersectionObserver((entries) => {
-      if (
-        !entries.some((entry) => entry.isIntersecting)
-        || items.length === 0
-        || imagePages.isFetchingNextPage
-        || !imagePages.hasNextPage
-      ) {
-        return;
-      }
-      void imagePages.fetchNextPage();
-    }, { rootMargin: gallerySentinelRootMargin });
-    observer.observe(target);
-    return () => observer.disconnect();
-  }, [
-    imagePages.fetchNextPage,
-    imagePages.hasNextPage,
-    imagePages.isFetchingNextPage,
-    items.length
-  ]);
-
   const columnCount = useGalleryColumnCount();
   const geometry = useGalleryGeometry(galleryRef);
   const layout = useIncrementalMasonryLayout(
@@ -343,6 +337,95 @@ export function GalleryPage({ embedded = false }: { embedded?: boolean }) {
     { ...geometry, columnCount },
     imageQuery
   );
+  const pagePreloadRange = useMemo(() => galleryPagePreloadRange(
+    imagePages.data?.pages.map((page) => page.items.length) ?? [],
+    layout.positions,
+    layout.totalHeight
+  ), [imagePages.data?.pages, layout.positions, layout.totalHeight]);
+  const nextPageCursor = imagePages.data?.pages.at(-1)?.next_cursor ?? "";
+  const nextPageRequestKey = galleryPagePreloadRequestKey(
+    imageQuery,
+    nextPageCursor
+  );
+  const requestNextPage = useCallback((retry = false) => {
+    // The rendered snapshot re-arms the observer after fetching or paused;
+    // the live state closes the notification window before claiming a cursor.
+    const liveFetchStatus = queryClient.getQueryState(
+      publicImagesQueryKey
+    )?.fetchStatus;
+    if (
+      !nextPageRequestKey
+      || !imagePages.hasNextPage
+      || imagePages.fetchStatus !== "idle"
+      || liveFetchStatus !== "idle"
+    ) {
+      return;
+    }
+    const claimSequence = pagePreloadGateRef.current?.claim(
+      nextPageRequestKey,
+      retry
+    );
+    if (claimSequence == null) return;
+
+    void imagePages.fetchNextPage({ cancelRefetch: false }).then((result) => {
+      if (pagePreloadGateRef.current?.rearmIfUnfulfilled(
+        nextPageRequestKey,
+        nextPageCursor,
+        result.data?.pageParams ?? [],
+        result.isFetchNextPageError,
+        claimSequence
+      )) {
+        setPagePreloadRevision((revision) => revision + 1);
+      }
+    });
+  }, [
+    imagePages.fetchNextPage,
+    imagePages.fetchStatus,
+    imagePages.hasNextPage,
+    nextPageCursor,
+    nextPageRequestKey,
+    publicImagesQueryKey,
+    queryClient
+  ]);
+
+  useEffect(() => {
+    if (
+      imagePages.fetchStatus !== "idle"
+      || !nextPageRequestKey
+      || !pagePreloadGateRef.current?.rearmIfUnfulfilled(
+        nextPageRequestKey,
+        nextPageCursor,
+        imagePages.data?.pageParams ?? [],
+        imagePages.isFetchNextPageError
+      )
+    ) {
+      return;
+    }
+    // A later ordinary refetch can clear a forward error without advancing its
+    // cursor. Re-observe the still-current page only after that refetch settles.
+    setPagePreloadRevision((revision) => revision + 1);
+  }, [
+    imagePages.data?.pageParams,
+    imagePages.fetchStatus,
+    imagePages.isFetchNextPageError,
+    nextPageCursor,
+    nextPageRequestKey
+  ]);
+
+  useEffect(() => {
+    const target = pagePreloadRef.current;
+    if (!target || !pagePreloadRange || !nextPageRequestKey) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) requestNextPage();
+    });
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [
+    nextPageRequestKey,
+    pagePreloadRange,
+    pagePreloadRevision,
+    requestNextPage
+  ]);
   const mountedPositions = useMasonryWindow(
     galleryWindowRef,
     layout,
@@ -576,10 +659,34 @@ export function GalleryPage({ embedded = false }: { embedded?: boolean }) {
               onOpen={openDetail}
             />
           ))}
+          {pagePreloadRange && nextPageRequestKey && (
+            <span
+              ref={pagePreloadRef}
+              aria-hidden="true"
+              data-gallery-page-preload=""
+              style={{
+                position: "absolute",
+                top: pagePreloadRange.top,
+                left: 0,
+                width: 1,
+                height: pagePreloadRange.height,
+                pointerEvents: "none"
+              }}
+            />
+          )}
         </div>
       </section>
       {imagePages.isError && (
-        <QueryErrorState error={imagePages.error} onRetry={() => void imagePages.refetch()} />
+        <QueryErrorState
+          error={imagePages.error}
+          onRetry={() => {
+            if (imagePages.isFetchNextPageError && nextPageRequestKey) {
+              requestNextPage(true);
+              return;
+            }
+            void imagePages.refetch();
+          }}
+        />
       )}
       {!imagePages.isError && !loading && !items.length && <p className="empty-state gallery-empty">暂无图片</p>}
       {initialLoading && (
@@ -589,7 +696,6 @@ export function GalleryPage({ embedded = false }: { embedded?: boolean }) {
         />
       )}
       {nextPageLoading && <p className="gallery-loading">加载中</p>}
-      <div ref={sentinelRef} className="gallery-sentinel" />
       <button
         type="button"
         className={`gallery-back-to-top pressable${showBackToTop ? " is-visible" : ""}`}

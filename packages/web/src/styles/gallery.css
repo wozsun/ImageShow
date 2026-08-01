@@ -435,7 +435,6 @@
   text-align: center;
 }
 
-.gallery-sentinel { height: 1px; }
 .gallery-back-to-top {
   position: fixed;
   right: max(40px, calc(env(safe-area-inset-right) + 32px));

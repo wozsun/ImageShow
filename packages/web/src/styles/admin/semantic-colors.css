@@ -87,12 +87,13 @@
   --admin-color-success-text-strong: light-dark(#1b6f40, #72c68b);
   --admin-color-success-text-emphasis: light-dark(#24723c, #74bbaa);
   --admin-color-success-surface: light-dark(#eaf8ee, #173126);
-  --admin-color-success-surface-soft: light-dark(#e8edea, #171c19);
+  --admin-color-success-surface-soft: light-dark(#f2fbf5, #173126);
   --admin-color-success-surface-subtle: light-dark(#f2fbf5, #111f1c);
   --admin-color-success-surface-emphasis: light-dark(#dff3e5, #263d30);
   --admin-color-success-surface-hover: light-dark(#cdeedb, #2d523b);
   --admin-color-success-border: light-dark(#9fd3ad, #4d795b);
   --admin-color-success-border-soft: light-dark(#a9bdb0, #5a695f);
+  --admin-color-success-border-subtle: light-dark(#b9dec4, #5a695f);
   --admin-color-success-border-strong: light-dark(#78b78a, #416f64);
   --admin-color-success-progress: light-dark(#ccebd7, #304f3b);
   --admin-color-success-action: light-dark(#2f8f5b, #72c68b);
@@ -107,6 +108,7 @@
   --admin-color-warning-surface-soft: light-dark(#fffaf0, #231f15);
   --admin-color-warning-surface-subtle: light-dark(#fff9e9, #2a261f);
   --admin-color-warning-surface-emphasis: light-dark(#fff1cc, #3b3018);
+  --admin-color-warning-surface-strong: light-dark(#f9e7af, #3b3018);
   --admin-color-warning-progress: light-dark(#f7e7ae, #4a3a18);
   --admin-color-warning-border: light-dark(#f0d38a, #7d661c);
   --admin-color-warning-border-soft: light-dark(#d8bc70, #86745d);
