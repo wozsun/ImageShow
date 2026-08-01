@@ -52,10 +52,17 @@ function isCspSafeEmbedHostname(hostname: string) {
     );
 }
 
-function canonicalEmbedOrigin(value: string) {
-  if (!/^https:\/\/[^\s/?#\\@:]+(?::\d{1,5})?\/?$/i.test(value)) return null;
+function canonicalEmbedAncestorSource(value: string) {
+  if (!/^https:\/\/(?:\*\.)?[^\s*/?#\\@:]+(?::\d{1,5})?\/?$/i.test(value)) return null;
   try {
     const parsed = new URL(value);
+    const wildcard = /^https:\/\/\*\./i.test(value);
+    const hostname = wildcard ? parsed.hostname.slice(2) : parsed.hostname;
+    const validWildcard = wildcard
+      ? parsed.hostname.startsWith("*.")
+        && !hostname.includes("*")
+        && hostname.includes(".")
+      : !parsed.hostname.includes("*");
     if (
       parsed.protocol !== "https:"
       || parsed.username
@@ -63,13 +70,13 @@ function canonicalEmbedOrigin(value: string) {
       || parsed.pathname !== "/"
       || parsed.search
       || parsed.hash
-      || parsed.hostname.includes("*")
+      || !validWildcard
       || (parsed.port !== "" && Number(parsed.port) < 1)
-      || !isCspSafeEmbedHostname(parsed.hostname)
+      || !isCspSafeEmbedHostname(hostname)
     ) {
       return null;
     }
-    return `https://${parsed.hostname}${parsed.port ? `:${parsed.port}` : ""}`;
+    return `https://${wildcard ? "*." : ""}${hostname}${parsed.port ? `:${parsed.port}` : ""}`;
   } catch {
     return null;
   }
@@ -78,10 +85,10 @@ function canonicalEmbedOrigin(value: string) {
 const embedAllowedOrigin = z.string().trim().min(1)
   .max(appConfig.embedding.maxOriginLength)
   .refine(
-    (value) => canonicalEmbedOrigin(value) !== null,
-    "嵌入来源必须是使用 DNS 主机名且不含路径、参数、凭据或通配符的 HTTPS origin"
+    (value) => canonicalEmbedAncestorSource(value) !== null,
+    "嵌入来源必须是使用 DNS 主机名且不含路径、参数或凭据的 HTTPS origin，或使用最左侧单通配符的子域来源"
   )
-  .transform((value) => canonicalEmbedOrigin(value)!);
+  .transform((value) => canonicalEmbedAncestorSource(value)!);
 
 export const embedAllowedOrigins = z.array(embedAllowedOrigin)
   .max(appConfig.embedding.maxAllowedOrigins)

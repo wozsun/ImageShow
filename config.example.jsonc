@@ -59,8 +59,10 @@
   "embed": {
     // 是否开放 /embed/home 与 /embed/gallery；默认关闭。
     "enabled": false,
-    // 允许作为 iframe 父页面、使用 DNS 主机名的精确 HTTPS origin。每项不得
-    // 包含路径、参数、凭据或通配符；最多 32 项，启用但留空时仍返回 404。
+    // 允许作为 iframe 父页面的精确 HTTPS origin，或 https://*.example.com 形式的
+    // 受限子域通配符；通配符不含根域，只能用于全部子域可信的自有父域，不能使用
+    // 公共托管后缀。每项不得包含路径、参数或凭据；最多 32 项，启用但留空时仍
+    // 返回 404。
     "allowed_origins": []
   },
 
