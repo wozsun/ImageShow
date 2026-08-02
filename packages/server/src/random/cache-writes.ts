@@ -1,16 +1,13 @@
 import type { Redis } from "ioredis";
 import {
-  GALLERY_FILTER_OPTIONS_KEY,
   randomAuthorSetKey,
   randomAxisSetKey,
   randomCategorySetKey,
-  randomItemKey,
   randomManifestKey,
   randomSnapshotKey,
   randomTagSetKey
 } from "./cache-keys.ts";
 import {
-  filterOptionsFromCategoryCounts,
   type RandomCategoryCounts,
   type RandomPoolItem
 } from "./cache-model.ts";
@@ -20,7 +17,6 @@ export function registerRandomGenerationKeys(
   keys: Set<string>
 ) {
   keys.add(randomManifestKey(generation));
-  keys.add(randomItemKey(generation));
   keys.add(randomSnapshotKey(generation));
 }
 
@@ -64,17 +60,10 @@ export function queueRandomMemberships(
 export function queueRandomSnapshot(
   pipeline: ReturnType<Redis["pipeline"]>,
   generation: string,
-  categoryCounts: RandomCategoryCounts,
-  updateGalleryOptions = true
+  categoryCounts: RandomCategoryCounts
 ) {
   pipeline.set(
     randomSnapshotKey(generation),
     JSON.stringify({ categoryCounts })
   );
-  if (updateGalleryOptions) {
-    pipeline.set(
-      GALLERY_FILTER_OPTIONS_KEY,
-      JSON.stringify(filterOptionsFromCategoryCounts(categoryCounts))
-    );
-  }
 }

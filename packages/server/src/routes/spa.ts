@@ -8,6 +8,7 @@ import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { siteConfigPayload } from "../config/app-settings.ts";
 import { effectiveEmbedAncestorSources } from "../config/embed-ancestors.ts";
 import {
+  appendVaryHeader,
   embedSpaDocumentHeaders,
   immutableCacheControl,
   markEmbedDocumentResponse,
@@ -28,6 +29,7 @@ export function registerSpaRoutes(app: Hono) {
   const faviconStatic = serveStatic({ path: join(publicDir, "favicon.ico") });
   app.use("/assets/*", async (c, next) => {
     await next();
+    appendVaryHeader(c, "Accept-Encoding");
     c.header("Cache-Control", c.res.status < 400
       ? c.req.path.startsWith("/assets/brand/") ? publicStaticCacheControl : immutableCacheControl
       : noStoreCacheControl);

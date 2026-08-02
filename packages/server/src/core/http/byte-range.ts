@@ -10,6 +10,24 @@ export function totalSizeFromContentRange(header: string | null | undefined) {
   return Number.isSafeInteger(totalSize) && totalSize >= 0 ? totalSize : undefined;
 }
 
+export function normalizePartialContentRange(
+  header: string | null | undefined
+) {
+  if (!header) return undefined;
+  const match = /^bytes\s+(\d+)-(\d+)\/(\d+)$/i.exec(header.trim());
+  if (!match) return undefined;
+  const [start, end, total] = match.slice(1).map(Number);
+  if (
+    !Number.isSafeInteger(start)
+    || !Number.isSafeInteger(end)
+    || !Number.isSafeInteger(total)
+    || start < 0
+    || end < start
+    || total <= end
+  ) return undefined;
+  return `bytes ${start}-${end}/${total}`;
+}
+
 export function assertSingleByteRangeSyntax(header: string | undefined, totalSize?: number) {
   if (!header) return;
   const match = /^bytes=(\d*)-(\d*)$/.exec(header.trim());

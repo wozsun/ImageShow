@@ -1,13 +1,13 @@
 import { pool } from "../core/db.ts";
 import { redis } from "../core/redis-client.ts";
-import { execRedisPipeline } from "../core/redis-pipeline.ts";
 import {
   acquireRandomUpdateLock,
   releaseRandomUpdateLock,
   startRandomUpdateLockRenewal
 } from "./cache-lock.ts";
-import { rebuildRandomPool, scheduleRandomRebuild } from "./cache-rebuild.ts";
+import { scheduleRandomRebuild } from "./cache-rebuild.ts";
 import {
+  GALLERY_FILTER_OPTIONS_KEY,
   RANDOM_CURRENT_KEY,
   RANDOM_MUTATION_REVISION_KEY,
   RANDOM_REBUILD_COMPLETED_KEY,
@@ -18,17 +18,18 @@ import {
 } from "./cache-keys.ts";
 import {
   adjustCategoryCounts,
+  filterOptionsFromCategoryCounts,
   parseRandomPoolItem,
   randomPoolItemsFromRows,
   type RandomCategoryCounts,
   type RandomPoolItem
 } from "./cache-model.ts";
-import { RANDOM_INCREMENTAL_COMPLETE_SCRIPT } from "./cache-scripts.ts";
+import { RANDOM_INCREMENTAL_APPLY_SCRIPT } from "./cache-scripts.ts";
 import {
-  collectRandomMemberships,
-  queueRandomMemberships,
-  queueRandomSnapshot
-} from "./cache-writes.ts";
+  RANDOM_INCREMENTAL_MAX_IMAGES,
+  RANDOM_INCREMENTAL_MAX_MEMBERSHIP_KEYS
+} from "./cache-policy.ts";
+import { collectRandomMemberships } from "./cache-writes.ts";
 
 async function readyRandomItems(ids: string[]): Promise<RandomPoolItem[]> {
   const rows = (await pool.query(
@@ -50,6 +51,60 @@ type RandomSyncResult = {
   fullRebuildTriggered: boolean;
 };
 
+function indexMembershipChanges(
+  changes: Map<string, string[]>,
+  keyIndexes: Map<string, number>
+) {
+  return [...changes].map(([key, ids]) => {
+    const keyIndex = keyIndexes.get(key);
+    if (keyIndex === undefined) {
+      throw new Error("Random membership key was not indexed");
+    }
+    return [keyIndex, ids] as const;
+  });
+}
+
+async function applyRandomIncrementalMutation(
+  generation: string,
+  token: string,
+  mutationRevision: number,
+  categoryCounts: RandomCategoryCounts,
+  itemValues: string[],
+  removedIds: string[],
+  removals: Map<string, string[]>,
+  additions: Map<string, string[]>,
+  touchedKeys: Set<string>
+) {
+  const membershipKeys = [...touchedKeys];
+  const keyIndexes = new Map(
+    membershipKeys.map((key, index) => [key, index + 1])
+  );
+  return Number(await redis.eval(
+    RANDOM_INCREMENTAL_APPLY_SCRIPT,
+    membershipKeys.length + 8,
+    RANDOM_CURRENT_KEY,
+    RANDOM_MUTATION_REVISION_KEY,
+    RANDOM_REBUILD_COMPLETED_KEY,
+    RANDOM_UPDATE_LOCK_KEY,
+    randomManifestKey(generation),
+    randomItemKey(generation),
+    randomSnapshotKey(generation),
+    GALLERY_FILTER_OPTIONS_KEY,
+    ...membershipKeys,
+    generation,
+    String(mutationRevision),
+    token,
+    JSON.stringify({
+      itemValues,
+      removedIds,
+      removals: indexMembershipChanges(removals, keyIndexes),
+      additions: indexMembershipChanges(additions, keyIndexes)
+    }),
+    JSON.stringify({ categoryCounts }),
+    JSON.stringify(filterOptionsFromCategoryCounts(categoryCounts))
+  )) === 1;
+}
+
 export async function syncRandomImages(
   ids: string[]
 ): Promise<RandomSyncResult> {
@@ -57,6 +112,11 @@ export async function syncRandomImages(
   if (!uniqueIds.length) return { fullRebuildTriggered: false };
   let fullRebuildTriggered = false;
   try {
+    if (uniqueIds.length > RANDOM_INCREMENTAL_MAX_IMAGES) {
+      await redis.incr(RANDOM_MUTATION_REVISION_KEY);
+      await scheduleRandomRebuild();
+      return { fullRebuildTriggered: true };
+    }
     const token = await acquireRandomUpdateLock();
     if (!token) {
       // 先推进 revision，防止正在构建的旧数据库快照被发布。
@@ -73,7 +133,7 @@ export async function syncRandomImages(
       const generation = await redis.get(RANDOM_CURRENT_KEY);
       if (!generation) {
         fullRebuildTriggered = true;
-        await rebuildRandomPool({ requireFresh: false });
+        await scheduleRandomRebuild();
         return { fullRebuildTriggered };
       }
       const [snapshotRaw, oldItemsRaw, currentItems] = await Promise.all([
@@ -83,7 +143,7 @@ export async function syncRandomImages(
       ]);
       if (!snapshotRaw) {
         fullRebuildTriggered = true;
-        await rebuildRandomPool({ requireFresh: false });
+        await scheduleRandomRebuild();
         return { fullRebuildTriggered };
       }
       const snapshot = JSON.parse(snapshotRaw) as {
@@ -91,7 +151,7 @@ export async function syncRandomImages(
       };
       if (!snapshot.categoryCounts) {
         fullRebuildTriggered = true;
-        await rebuildRandomPool({ requireFresh: false });
+        await scheduleRandomRebuild();
         return { fullRebuildTriggered };
       }
 
@@ -99,7 +159,6 @@ export async function syncRandomImages(
       const currentById = new Map(
         currentItems.map((item) => [item.id, item])
       );
-      const pipeline = redis.pipeline();
       const touchedKeys = new Set<string>();
       const removals = new Map<string, string[]>();
       const additions = new Map<string, string[]>();
@@ -123,39 +182,30 @@ export async function syncRandomImages(
         }
       }
 
-      queueRandomMemberships(pipeline, "srem", removals);
-      queueRandomMemberships(pipeline, "sadd", additions);
-      if (itemValues.length) {
-        pipeline.hset(randomItemKey(generation), ...itemValues);
+      if (touchedKeys.size > RANDOM_INCREMENTAL_MAX_MEMBERSHIP_KEYS) {
+        fullRebuildTriggered = true;
+        await scheduleRandomRebuild();
+        return { fullRebuildTriggered };
       }
-      if (removedIds.length) {
-        pipeline.hdel(randomItemKey(generation), ...removedIds);
-      }
-      queueRandomSnapshot(pipeline, generation, categoryCounts);
-      if (touchedKeys.size) {
-        pipeline.sadd(randomManifestKey(generation), ...touchedKeys);
-      }
+
       if (!await lockRenewal.renewNow()) {
         fullRebuildTriggered = true;
         await scheduleRandomRebuild();
         return { fullRebuildTriggered };
       }
 
-      await execRedisPipeline(pipeline);
-      const completed = lockRenewal.ownershipLost()
-        ? 0
-        : Number(await redis.eval(
-            RANDOM_INCREMENTAL_COMPLETE_SCRIPT,
-            4,
-            RANDOM_CURRENT_KEY,
-            RANDOM_MUTATION_REVISION_KEY,
-            RANDOM_REBUILD_COMPLETED_KEY,
-            RANDOM_UPDATE_LOCK_KEY,
-            generation,
-            String(mutationRevision),
-            token
-          ));
-      if (!completed) {
+      const applied = await applyRandomIncrementalMutation(
+        generation,
+        token,
+        mutationRevision,
+        categoryCounts,
+        itemValues,
+        removedIds,
+        removals,
+        additions,
+        touchedKeys
+      );
+      if (!applied) {
         fullRebuildTriggered = true;
         await scheduleRandomRebuild();
       }

@@ -103,7 +103,9 @@ export class S3Backend implements StorageDriver {
     const body = result.Body as Readable | undefined;
     if (!body) throw new ApiError(502, "storage_read_failed", "Storage returned an empty response body");
     const rawSize = Number(result.ContentLength);
-    const size = Number.isFinite(rawSize) && rawSize >= 0 ? rawSize : undefined;
+    const size = Number.isSafeInteger(rawSize) && rawSize >= 0
+      ? rawSize
+      : undefined;
     const contentRange = result.ContentRange;
     const totalSize = totalSizeFromContentRange(contentRange) ?? size;
     const etag = normalizeObjectEtag(result.ETag)
@@ -111,7 +113,10 @@ export class S3Backend implements StorageDriver {
     return {
       body,
       size,
-      totalSize: Number.isFinite(totalSize) ? totalSize : undefined,
+      totalSize: totalSize !== undefined
+        && Number.isSafeInteger(totalSize) && totalSize >= 0
+        ? totalSize
+        : undefined,
       contentRange,
       etag,
       lastModified: result.LastModified?.toUTCString(),

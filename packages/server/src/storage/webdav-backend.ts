@@ -233,7 +233,9 @@ export class WebdavBackend implements StorageDriver {
     }
     const rawContentLength = res.headers.get("content-length");
     const size = rawContentLength === null ? Number.NaN : Number(rawContentLength);
-    const normalizedSize = Number.isFinite(size) && size >= 0 ? size : undefined;
+    const normalizedSize = Number.isSafeInteger(size) && size >= 0
+      ? size
+      : undefined;
     const contentRange = res.status === 206 ? res.headers.get("content-range") ?? undefined : undefined;
     if (res.status === 206 && !contentRange) {
       await res.body.cancel().catch(() => undefined);
@@ -277,7 +279,10 @@ export class WebdavBackend implements StorageDriver {
     return {
       body,
       size: normalizedSize,
-      totalSize: Number.isFinite(totalSize) ? totalSize : undefined,
+      totalSize: totalSize !== undefined
+        && Number.isSafeInteger(totalSize) && totalSize >= 0
+        ? totalSize
+        : undefined,
       contentRange,
       etag: normalizeObjectEtag(res.headers.get("etag")),
       lastModified: res.headers.get("last-modified") ?? undefined,

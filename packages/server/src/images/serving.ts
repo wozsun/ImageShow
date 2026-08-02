@@ -8,7 +8,8 @@ import {
   privateNoStoreCacheControl,
   publicProxyFallbackThumbCacheControl,
   publicProxyImageCacheControl,
-  publicRedirectCacheControl
+  publicRedirectCacheControl,
+  safeResponseHeaderValue
 } from "../core/http/headers.ts";
 import { isExternalImageRejection, safeFetchExternalImage } from "../core/external-image-fetch.ts";
 import { coalesce } from "../core/coalesce.ts";
@@ -52,6 +53,15 @@ const proxyUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/53
 
 type ProxyFallback = () => Response | Promise<Response>;
 
+function safeUpstreamResponseHeader(name: string, value: string | null) {
+  if (!value) return "";
+  try {
+    return safeResponseHeaderValue(name, value);
+  } catch {
+    return "";
+  }
+}
+
 function shouldNotRedirectExternalError(error: unknown) {
   return isExternalImageRejection(error);
 }
@@ -66,7 +76,11 @@ async function proxyExternalImage(
 ): Promise<Response> {
   const redirectFallback = async () => fallback ? fallback() : new Response(null, {
     status: 302,
-    headers: { ...baseHeaders, Location: externalUrl, "Referrer-Policy": "no-referrer" }
+    headers: {
+      ...baseHeaders,
+      Location: safeResponseHeaderValue("Location", externalUrl),
+      "Referrer-Policy": "no-referrer"
+    }
   });
   if (isHead) return new Response(null, { headers: { ...baseHeaders, "Content-Type": contentType(ext) } });
 
@@ -90,12 +104,26 @@ async function proxyExternalImage(
       return redirectFallback();
     }
 
-    const headers: Record<string, string> = { ...baseHeaders, "Content-Type": upstream.headers.get("content-type") || contentType(ext) };
+    const headers: Record<string, string> = {
+      ...baseHeaders,
+      "Content-Type": safeUpstreamResponseHeader(
+        "Content-Type",
+        upstream.headers.get("content-type")
+      ) || contentType(ext)
+    };
     if (fallbackCacheControl) {
       // 代理图优先继承源站缓存策略；只有源站没有声明时才使用站内 CDN fallback。
-      const originCacheControl = upstream.headers.get("cache-control");
-      const originExpires = upstream.headers.get("expires");
-      if (originCacheControl) headers["Cache-Control"] = originCacheControl;
+      const originCacheControl = safeUpstreamResponseHeader(
+        "Cache-Control",
+        upstream.headers.get("cache-control")
+      );
+      const originExpires = safeUpstreamResponseHeader(
+        "Expires",
+        upstream.headers.get("expires")
+      );
+      if (originCacheControl) {
+        headers["Cache-Control"] = originCacheControl;
+      }
       else if (originExpires) {
         delete headers["Cache-Control"];
         headers.Expires = originExpires;
@@ -382,7 +410,13 @@ export async function serveThumb(key: string, request: StoredResponseRequest = {
 }
 
 function immutableRedirect(location: string) {
-  return new Response(null, { status: 302, headers: { Location: location, "Cache-Control": publicRedirectCacheControl } });
+  return new Response(null, {
+    status: 302,
+    headers: {
+      Location: safeResponseHeaderValue("Location", location),
+      "Cache-Control": publicRedirectCacheControl
+    }
+  });
 }
 
 export async function redirectOriginalLink(id: string, userAgent: string) {
@@ -401,7 +435,10 @@ export async function redirectOriginalLink(id: string, userAgent: string) {
   return new Response(null, {
     status: 302,
     headers: {
-      Location: direct ? original : `${linkBaseUrl()}/original/${encodeURIComponent(id)}`,
+      Location: safeResponseHeaderValue(
+        "Location",
+        direct ? original : `${linkBaseUrl()}/original/${encodeURIComponent(id)}`
+      ),
       "Cache-Control": privateNoStoreCacheControl,
       "Referrer-Policy": "no-referrer"
     }
@@ -423,7 +460,10 @@ export async function serveOriginalLinkProxy(id: string, isHead = false) {
     original,
     externalImageExt(original),
     isHead,
-    { "Cache-Control": noStoreCacheControl },
+    {
+      "Cache-Control": noStoreCacheControl,
+      "Referrer-Policy": "no-referrer"
+    },
     publicProxyImageCacheControl
   );
 }
@@ -454,8 +494,15 @@ export async function serveAdminOriginalLink(id: string, userAgent: string): Pro
   if (await cachedOriginalSupportsDirectAccess(original, userAgent)) {
     return new Response(null, {
       status: 302,
-      headers: { Location: original, "Cache-Control": privateNoStoreCacheControl, "Referrer-Policy": "no-referrer" }
+      headers: {
+        Location: safeResponseHeaderValue("Location", original),
+        "Cache-Control": privateNoStoreCacheControl,
+        "Referrer-Policy": "no-referrer"
+      }
     });
   }
-  return proxyExternalImage(original, externalImageExt(original), false, { "Cache-Control": privateNoStoreCacheControl });
+  return proxyExternalImage(original, externalImageExt(original), false, {
+    "Cache-Control": privateNoStoreCacheControl,
+    "Referrer-Policy": "no-referrer"
+  });
 }

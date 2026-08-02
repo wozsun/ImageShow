@@ -32,8 +32,36 @@
   校验仍只由服务端配置决定。应用重启会使此前已签发但尚未提交的证明失效，用户
   重新验证即可；现有登录会话不受影响。
 - 公开页默认不显示后台入口，也不主动请求 `/api/admin/auth/me`；只有当前浏览器本地存在 `site_session_hint` 提示位时，顶栏与图片详情才共用该登录态探针，并仅在服务端确认已登录后显示管理信息和编辑入口。未登录探针只返回登录页所需的 ALTCHA 开关与背景，完全省略用户名、角色、权限、CSRF、应用版本、偏好和后台版本显示策略；确认已登录后才附带这些后台投影并建立内存中的 CSRF token。管理信息、词表、可编辑快照和保存仍分别由服务端鉴权与 CSRF 保护。任一受保护请求返回 401 都会清除 token 与提示位并恢复普通访客展示，403 会隐藏当前详情的管理入口。该提示位只存在 `localStorage`，不参与鉴权；伪造它最多触发 `/auth/me`，不会预载编辑器或取得管理数据。
-- 普通响应在最终响应对象上统一补齐 `X-Content-Type-Options`、`X-Frame-Options: DENY`、`Referrer-Policy`、`Cross-Origin-Opener-Policy` 与 CSP `frame-ancestors 'none'`，直接返回的 API、静态、错误和未知 Host 响应也不会漏掉。只有服务端确认 `embed.enabled=true` 后，精确的 `/embed/home` 与 `/embed/gallery` 文档才移除 `X-Frame-Options`，并将当前 `site.domain` 的 HTTPS origin、同端口子域 host-source 以及规范化且使用 DNS 主机名的额外精确 HTTPS origin 或 `https://*.example.com` 形式的子域 host-source 写入 CSP `frame-ancestors`；隐式来源随站点配置变化，不写回或经 DTO 暴露。通配符不包含根域名，IP literal、裸 `*` 与中间通配符不进入额外白名单，也不使用已废弃且不能表达多来源的 `ALLOW-FROM`。通配符会同时授权该后缀下全部现有和未来子域，因此 `site.domain` 及额外通配符都必须处于可信 DNS 管理边界，不得把公共托管后缀作为安全边界。CSP 原生支持这类 host-source，因此响应不根据可能缺失的 `Origin` 或可被父页面关闭的 `Referer` 猜测并反射来源。禁用、未知 Host、保留子域或其他路径继续不可嵌入。SPA 以 report-only 模式监测脚本 Trusted Types，白名单只列出实际出现的 `imageshow-altcha-worker`、`svelte-trusted-html`、`decodeHTMLEntitiesPolicy` 与 `AGPolicy`，不放行任意策略名，也不提供放行任意脚本 URL 或 HTML 的默认策略；同源 `/api/security/csp-report` 默认只返回 204，不读取或记录报告正文。登录页在 ALTCHA 首次挂载前预设隐藏 footer 与 logo，使组件不渲染会被 Trusted Types 拒绝的动态 HTML footer；应用只接受 `site.domain` 及配置的 `random` / `static` / `link` 子域名，未知 `Host` 直接返回不可缓存的 404。
+- 普通响应在最终响应对象上统一补齐 `X-Content-Type-Options`、`X-Frame-Options: DENY`、`Referrer-Policy`、`Cross-Origin-Opener-Policy`、最小 `Permissions-Policy` 与 CSP `frame-ancestors 'none'`，直接返回的 API、静态、错误和未知 Host 响应也不会漏掉。只有服务端确认 `embed.enabled=true` 后，精确的 `/embed/home` 与 `/embed/gallery` 文档才移除 `X-Frame-Options`，并将当前 `site.domain` 的 HTTPS origin、同端口子域 host-source 以及规范化且使用 DNS 主机名的额外精确 HTTPS origin 或 `https://*.example.com` 形式的子域 host-source 写入 CSP `frame-ancestors`；隐式来源随站点配置变化，不写回或经 DTO 暴露。通配符不包含根域名，IP literal、裸 `*` 与中间通配符不进入额外白名单，也不使用已废弃且不能表达多来源的 `ALLOW-FROM`。通配符会同时授权该后缀下全部现有和未来子域，因此 `site.domain` 及额外通配符都必须处于可信 DNS 管理边界，不得把公共托管后缀作为安全边界。CSP 原生支持这类 host-source，因此响应不根据可能缺失的 `Origin` 或可被父页面关闭的 `Referer` 猜测并反射来源。禁用、未知 Host、保留子域或其他路径继续不可嵌入。SPA 以 report-only 模式同时观测完整资源策略与脚本 Trusted Types；白名单只列出实际出现的 `imageshow-altcha-worker`、`svelte-trusted-html`、`decodeHTMLEntitiesPolicy` 与 `AGPolicy`，不放行任意策略名，也不提供放行任意脚本 URL 或 HTML 的默认策略。候选策略明确覆盖 script、Worker、connect、HTTPS 图片、样式、字体、object、base 与 form；经浏览器报告验证前不直接收紧为强制策略。同源 `/api/security/csp-report` 只接受 POST，经 Fetch Metadata 拒绝跨站 / 同站跨源，声明体积上限为 64 KiB，并立即取消正文流；它不解析 JSON、不写日志、数据库或 Redis。登录页在 ALTCHA 首次挂载前预设隐藏 footer 与 logo，使组件不渲染会被 Trusted Types 拒绝的动态 HTML footer；应用只接受 `site.domain` 及配置的 `random` / `static` / `link` 子域名，未知 `Host` 直接返回不可缓存的 404。
 - 反向代理或 CDN 不得对 `/embed/*` 重新注入 `X-Frame-Options`，也不得覆盖应用生成的 CSP `frame-ancestors`，否则会把已授权的 iframe 一并拦截；普通路径的拒绝策略仍由应用统一生成。若代理层必须统一添加这些头，应为两个精确嵌入路径设置例外，并保留应用响应头。
+
+## 响应头矩阵
+
+所有动态响应头值在写入前拒绝 CR/LF、C0/C1 控制符、零宽字符与双向控制符，随后再
+经过 Fetch `Headers` 语法校验。存储或外部图片上游给出的异常 ETag、Last-Modified、
+Content-Type 与缓存验证器会被省略或回退为站内类型；`Content-Range` 还会解析数值关系
+并重建为规范形式，`Last-Modified` 解析后统一输出 HTTP-date，`Content-Length` 只接受
+非负安全整数；无法验证的范围会先销毁已打开的读取流再返回存储错误。当前出口按下表
+集中验收：
+
+| 响应类型 | 缓存 / 验证器 | 额外边界 |
+| --- | --- | --- |
+| 普通 SPA HTML | `max-age=0`、内容 ETag、支持 304 | 强制禁止嵌入；完整 CSP 候选与 Trusted Types 先 report-only |
+| `/embed/home`、`/embed/gallery` | `no-store`，仍带内容 ETag | 仅移除 `X-Frame-Options`，CSP 精确生成 `frame-ancestors` |
+| 公共 JSON API | 最长 30 秒共享缓存窗口，按入口决定 `Sec-Fetch-Site`，统一 `Vary: Accept-Encoding` | 不返回后台字段；受保护读取拒绝跨站 / 同站跨源 |
+| 登录、管理 API、错误、404、健康检查 | `no-store` 或 `private, no-store` | 登录限流的 429 使用纯数字 `Retry-After`；错误不会绕过安全头 |
+| CSP report、OPTIONS、204 | `no-store` | 只允许各自方法，先做 Host / Fetch Metadata 检查，取消不需要的正文；不启用 CORS |
+| hash 资产、稳定图片、HEAD、206、304 | hash 资产 / 稳定图片 `immutable`；非 hash 品牌资源短缓存；ETag、Last-Modified、单 Range | 304 无正文；206 保留完整对象验证器；416 返回 `Content-Range: bytes */总长` |
+| 随机 proxy / redirect | 永远 `no-store` | proxy 不声明 Range；302 的 `Location` 先校验；两种模式均带 `X-Image-Info` |
+| 外链原图 proxy / redirect | 公开 proxy 继承已校验源站策略或使用 fallback；后台 `private, no-store` | HTTPS 安全抓取、内容嗅探、`Referrer-Policy: no-referrer` |
+| 导入 SSE | `no-store, no-transform` | 不压缩、不缓冲，断开即清理 listener / heartbeat |
+| `static.` / `link.` / `random.` 与未知子域 | 只开放各自精确出口；失败 `no-store` | 保留子域的其他路径与未知 Host 均返回带完整安全头的 404 |
+
+当前不发送 COEP 或 CORP：页面允许 HTTPS 外链图片，静态 / 随机 / 原图出口也需要被
+其他站点正常引用；贸然隔离会要求所有上游同步提供 CORS/CORP，并可能破坏 ALTCHA
+Worker 与嵌入页。应用没有跨源 API 契约，不返回 `Access-Control-Allow-*`；跨源父页面
+只加载 iframe，iframe 内部继续同源请求本站 API。HSTS 也不由应用发送，只能由确认
+掌握 TLS 与全部相关子域的最外层代理部署。
 - Web 直接依赖 `react-router@8.3.0`，只使用 `<BrowserRouter>` / `<Routes>`、
   链接与位置等 Declarative Mode API，不使用 Framework / Data action、服务端
   渲染、React Server Components 或任何 unstable RSC API。当前版本已包含

@@ -41,6 +41,7 @@ import { registerSpaRoutes } from "./routes/spa.ts";
 import { registerImportRoutes } from "./routes/imports.ts";
 import { isAllowedSiteHost, specialHost } from "./config/site-host.ts";
 import { auditAdminMutation } from "./core/audit-log.ts";
+import { blockCrossSiteFetch } from "./core/http/request-security.ts";
 
 export function createHttpApp() {
   // Route handlers depend on the process-wide runtime snapshot. Keep assembly
@@ -61,10 +62,18 @@ export function createHttpApp() {
     }
     await next();
   });
-  app.options("*", async () => new Response(null, {
-    status: 204,
-    headers: { "Cache-Control": noStoreCacheControl }
-  }));
+  app.options(
+    "*",
+    async (c, next) => {
+      await c.req.raw.body?.cancel().catch(() => undefined);
+      return next();
+    },
+    blockCrossSiteFetch,
+    async () => new Response(null, {
+      status: 204,
+      headers: { "Cache-Control": noStoreCacheControl }
+    })
+  );
   app.get("/robots.txt", serveRobotsTxt);
 
   app.use("*", async (c, next) => {

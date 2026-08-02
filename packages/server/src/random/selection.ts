@@ -1,11 +1,12 @@
 import type { RandomMethod } from "@imageshow/shared/browser";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { apiErrorResponse } from "../core/http/responses.ts";
+import { safeResponseHeaderValue } from "../core/http/headers.ts";
 import { resolveAuthorTermMap } from "../authors/query.ts";
 import { resolveTagTermMap } from "../tags/query.ts";
 import { resolveThemeTermMap } from "../themes/query.ts";
 import { getRandomPoolSnapshot } from "./cache-read.ts";
-import { randomPoolRetryAfterSeconds } from "./cache-policy.ts";
+import { randomPoolRetry } from "./cache-policy.ts";
 import {
   filterSignature,
   recentlyServedIds,
@@ -26,8 +27,10 @@ import {
 export async function selectRandomImage(
   url: URL,
   userAgent = "",
-  clientId = ""
+  clientId = "",
+  signal?: AbortSignal
 ): Promise<PickedImage | Response | null> {
+  signal?.throwIfAborted();
   const queryError = validateRandomQuery(url.searchParams);
   if (queryError) return queryError;
 
@@ -55,6 +58,7 @@ export async function selectRandomImage(
     withResolvedSelectors(url, "tag", resolveTagTermMap),
     withResolvedSelectors(url, "a", resolveAuthorTermMap)
   ]);
+  signal?.throwIfAborted();
   const resolvedUrl = new URL(url);
   for (const [key, source] of [
     ["t", themeUrl],
@@ -74,17 +78,31 @@ export async function selectRandomImage(
   try {
     const [recent, snapshot] = await Promise.all([
       recentlyServedIds(clientId, signature),
-      getRandomPoolSnapshot()
+      getRandomPoolSnapshot(signal)
     ]);
-    picked = await pickFromRedisPool(resolvedUrl, method, axes, recent, snapshot);
+    signal?.throwIfAborted();
+    picked = await pickFromRedisPool(
+      resolvedUrl,
+      method,
+      axes,
+      recent,
+      snapshot,
+      signal
+    );
   } catch (error) {
-    const retryAfterSeconds = randomPoolRetryAfterSeconds(error);
-    if (retryAfterSeconds === undefined) throw error;
+    if (signal?.aborted) throw signal.reason;
+    const retry = randomPoolRetry(error);
+    if (!retry) throw error;
     const response = apiErrorResponse({
-      status: 503,
-      message: "Service Unavailable: Random pool is temporarily unavailable"
+      status: retry.status,
+      message: retry.status === 429
+        ? "Too Many Requests: Random pool cold start is rate limited"
+        : "Service Unavailable: Random pool is temporarily unavailable"
     });
-    response.headers.set("Retry-After", String(retryAfterSeconds));
+    response.headers.set(
+      "Retry-After",
+      safeResponseHeaderValue("Retry-After", String(retry.retryAfterSeconds))
+    );
     return response;
   }
   if (picked && !(picked instanceof Response)) {

@@ -5,7 +5,10 @@ import type {
 } from "@imageshow/shared/browser";
 import { ApiError } from "../api-error.ts";
 import { logger } from "../logger.ts";
-import { noStoreCacheControl } from "./headers.ts";
+import {
+  noStoreCacheControl,
+  responseContentLengthValue
+} from "./headers.ts";
 
 export function apiSuccess(): { ok: true };
 export function apiSuccess<T extends Record<string, unknown>>(
@@ -18,13 +21,13 @@ export function apiSuccess(fields: Record<string, unknown> = {}) {
 export function handleApiError(context: Context, error: unknown) {
   context.header("Cache-Control", noStoreCacheControl);
   if (error instanceof ApiError) {
-    if (
-      error.status === 416
-      && typeof (error.details as { total_size?: unknown })?.total_size === "number"
-    ) {
+    const totalSize = responseContentLengthValue(
+      (error.details as { total_size?: unknown })?.total_size
+    );
+    if (error.status === 416 && totalSize !== undefined) {
       context.header(
         "Content-Range",
-        `bytes */${(error.details as { total_size: number }).total_size}`
+        `bytes */${totalSize}`
       );
     }
     const payload = {

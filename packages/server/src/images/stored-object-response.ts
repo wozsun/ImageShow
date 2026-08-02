@@ -2,6 +2,12 @@ import { ifNoneMatchMatches, ifRangeMatches } from "../core/http/validators.ts";
 import type { OpenedRead } from "../storage/driver.ts";
 import type { ResolvedReadableObject } from "../storage/object-access.ts";
 import { webReadableFromNode } from "../storage/stream-buffer.ts";
+import {
+  responseContentLengthValue,
+  safeResponseHeaderValue
+} from "../core/http/headers.ts";
+import { normalizePartialContentRange } from "../core/http/byte-range.ts";
+import { ApiError } from "../core/api-error.ts";
 
 export type StoredResponseRequest = {
   range?: string;
@@ -23,6 +29,28 @@ function sameObjectVersion(left: OpenedRead, right: OpenedRead) {
   );
 }
 
+function safeStoredEtag(value?: string) {
+  if (!value) return undefined;
+  try {
+    return safeResponseHeaderValue("ETag", value);
+  } catch {
+    return undefined;
+  }
+}
+
+function safeStoredLastModified(value?: string) {
+  if (!value) return undefined;
+  try {
+    const safeValue = safeResponseHeaderValue("Last-Modified", value);
+    const timestamp = Date.parse(safeValue);
+    return Number.isFinite(timestamp)
+      ? new Date(timestamp).toUTCString()
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function streamResolvedObject(
   object: ResolvedReadableObject,
   contentTypeValue: string,
@@ -35,22 +63,29 @@ export async function streamResolvedObject(
   let opened = await object.open(
     validateBeforeRange ? undefined : request.range
   );
-  if (ifNoneMatchMatches(request.ifNoneMatch, opened.etag)) {
+  const initialEtag = safeStoredEtag(opened.etag);
+  const initialLastModified = safeStoredLastModified(opened.lastModified);
+  if (ifNoneMatchMatches(request.ifNoneMatch, initialEtag)) {
     opened.body.destroy();
     const headers = new Headers({
       "Cache-Control": cacheControl,
       "Accept-Ranges": "bytes"
     });
-    if (opened.etag) headers.set("ETag", opened.etag);
-    if (opened.lastModified) {
-      headers.set("Last-Modified", opened.lastModified);
+    if (initialEtag) {
+      headers.set("ETag", initialEtag);
+    }
+    if (initialLastModified) {
+      headers.set("Last-Modified", initialLastModified);
     }
     return new Response(null, { status: 304, headers });
   }
 
   const shouldApplyRange = Boolean(
     request.range
-    && (!request.ifRange || ifRangeMatches(request.ifRange, opened))
+    && (!request.ifRange || ifRangeMatches(request.ifRange, {
+      etag: initialEtag,
+      lastModified: initialLastModified
+    }))
   );
   if (validateBeforeRange && shouldApplyRange) {
     const full = opened;
@@ -62,24 +97,38 @@ export async function streamResolvedObject(
     }
   }
 
+  const etag = safeStoredEtag(opened.etag);
+  const lastModified = safeStoredLastModified(opened.lastModified);
+  const contentRange = normalizePartialContentRange(opened.contentRange);
+  if (opened.contentRange && !contentRange) {
+    opened.body.destroy();
+    throw new ApiError(
+      502,
+      "storage_read_failed",
+      "Storage returned an invalid Content-Range"
+    );
+  }
   const headers = new Headers({
     "Content-Type": contentTypeValue,
     "Cache-Control": cacheControl,
     "Accept-Ranges": "bytes"
   });
-  if (opened.etag) headers.set("ETag", opened.etag);
-  if (opened.lastModified) {
-    headers.set("Last-Modified", opened.lastModified);
+  if (etag) {
+    headers.set("ETag", etag);
   }
-  if (opened.size !== undefined) {
-    headers.set("Content-Length", String(opened.size));
+  if (lastModified) {
+    headers.set("Last-Modified", lastModified);
   }
-  if (opened.contentRange) {
-    headers.set("Content-Range", opened.contentRange);
+  const contentLength = responseContentLengthValue(opened.size);
+  if (contentLength !== undefined) {
+    headers.set("Content-Length", contentLength);
+  }
+  if (contentRange) {
+    headers.set("Content-Range", contentRange);
   }
   if (request.isHead) opened.body.destroy();
   return new Response(request.isHead ? null : webReadableFromNode(opened.body), {
-    status: opened.contentRange ? 206 : 200,
+    status: contentRange ? 206 : 200,
     headers
   });
 }

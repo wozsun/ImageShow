@@ -1,8 +1,8 @@
 import { pool } from "../core/db.ts";
 import { redis } from "../core/redis-client.ts";
 import { execRedisPipeline } from "../core/redis-pipeline.ts";
-import { coalesce } from "../core/coalesce.ts";
 import { randomUuidV7 } from "../core/uuid.ts";
+import { runSharedRandomBuild } from "./build-lifecycle.ts";
 import { waitForRandomFilterConsistency } from "./cache-consistency.ts";
 import {
   readRandomPoolSnapshot,
@@ -27,9 +27,11 @@ import {
   type RandomPoolSnapshot
 } from "./cache-model.ts";
 import {
+  RANDOM_CLEANUP_BATCH_SIZE,
   RANDOM_FILTER_CONSISTENCY_WAIT_MS,
   RANDOM_FILTER_TTL_SECONDS,
   randomPoolUpdating,
+  randomPoolRetry,
   redisUnavailable
 } from "./cache-policy.ts";
 import {
@@ -37,11 +39,14 @@ import {
   RANDOM_FILTER_PUBLISH_SCRIPT
 } from "./cache-scripts.ts";
 
-export async function getRandomPoolSnapshot(): Promise<RandomPoolSnapshot> {
+export async function getRandomPoolSnapshot(
+  signal?: AbortSignal
+): Promise<RandomPoolSnapshot> {
   try {
     return await readRandomPoolSnapshot()
-      ?? await rebuildRandomPool({ requireFresh: false });
-  } catch {
+      ?? await rebuildRandomPool({ requireFresh: false, signal });
+  } catch (error) {
+    if (randomPoolRetry(error)) throw error;
     throw redisUnavailable();
   }
 }
@@ -100,12 +105,14 @@ type RandomFilterInput = {
 
 async function buildRandomFilterSetAtRevision(
   input: RandomFilterInput,
-  revision: string
+  revision: string,
+  callerSignal?: AbortSignal
 ) {
   const signature = `${input.signature}|r=${revision}`;
   const finalKey = randomFilterKey(input.generation, signature, "final");
   const emptyKey = randomFilterKey(input.generation, signature, "empty");
-  return coalesce(`random-filter:${finalKey}`, async () => {
+  return runSharedRandomBuild(`random-filter:${finalKey}`, async (signal) => {
+    signal.throwIfAborted();
     const cachedCount = Number(await redis.eval(
       RANDOM_FILTER_CACHE_READ_SCRIPT,
       5,
@@ -117,6 +124,7 @@ async function buildRandomFilterSetAtRevision(
       revision,
       RANDOM_FILTER_TTL_SECONDS
     ));
+    signal.throwIfAborted();
     if (cachedCount === -2) return null;
     if (cachedCount >= 0) return { key: finalKey, count: cachedCount };
 
@@ -133,14 +141,26 @@ async function buildRandomFilterSetAtRevision(
       `candidate-${buildToken}`
     );
     tempKeys.push(current);
-    try {
-      if (!input.baseSetKeys.length) {
-        await redis.del(current);
-      } else if (input.baseSetKeys.length === 1) {
-        await redis.sunionstore(current, input.baseSetKeys[0]);
+
+    const storeTemporarySet = async (
+      command: "sunionstore" | "sinterstore" | "sdiffstore",
+      destination: string,
+      sources: string[]
+    ) => {
+      signal.throwIfAborted();
+      const transaction = redis.multi();
+      if (sources.length) {
+        transaction[command](destination, ...sources);
+        transaction.expire(destination, RANDOM_FILTER_TTL_SECONDS);
       } else {
-        await redis.sunionstore(current, ...input.baseSetKeys);
+        transaction.unlink(destination);
       }
+      await execRedisPipeline(transaction);
+      signal.throwIfAborted();
+    };
+
+    try {
+      await storeTemporarySet("sunionstore", current, input.baseSetKeys);
 
       const applyUnion = async (
         kind: "tag" | "author",
@@ -157,7 +177,7 @@ async function buildRandomFilterSetAtRevision(
           ? randomTagSetKey(input.generation, value)
           : randomAuthorSetKey(input.generation, value));
         tempKeys.push(key);
-        await redis.sunionstore(key, ...sourceKeys);
+        await storeTemporarySet("sunionstore", key, sourceKeys);
         return key;
       };
 
@@ -169,7 +189,7 @@ async function buildRandomFilterSetAtRevision(
           `${suffix}-${buildToken}`
         );
         tempKeys.push(next);
-        await redis.sinterstore(next, current, source);
+        await storeTemporarySet("sinterstore", next, [current, source]);
         current = next;
       };
 
@@ -181,7 +201,7 @@ async function buildRandomFilterSetAtRevision(
           `${suffix}-${buildToken}`
         );
         tempKeys.push(next);
-        await redis.sdiffstore(next, current, source);
+        await storeTemporarySet("sdiffstore", next, [current, source]);
         current = next;
       };
 
@@ -202,7 +222,8 @@ async function buildRandomFilterSetAtRevision(
         "after-author-exclude"
       );
 
-      await redis.sunionstore(candidateKey, current);
+      await storeTemporarySet("sunionstore", candidateKey, [current]);
+      signal.throwIfAborted();
       const publication = await redis.eval(
         RANDOM_FILTER_PUBLISH_SCRIPT,
         6,
@@ -215,31 +236,41 @@ async function buildRandomFilterSetAtRevision(
         revision,
         RANDOM_FILTER_TTL_SECONDS
       ) as [number, number];
-      const pipeline = redis.pipeline();
-      for (const key of tempKeys) {
-        pipeline.expire(key, RANDOM_FILTER_TTL_SECONDS);
-      }
-      await execRedisPipeline(pipeline);
+      signal.throwIfAborted();
       if (!Number(publication[0])) return null;
       return { key: finalKey, count: Number(publication[1]) };
-    } catch (error) {
-      const cleanup = redis.pipeline();
-      for (const key of new Set([...tempKeys, candidateKey])) {
-        cleanup.expire(key, RANDOM_FILTER_TTL_SECONDS);
+    } finally {
+      const ownedKeys = [...new Set([...tempKeys, candidateKey])];
+      try {
+        for (
+          let index = 0;
+          index < ownedKeys.length;
+          index += RANDOM_CLEANUP_BATCH_SIZE
+        ) {
+          await redis.unlink(
+            ...ownedKeys.slice(index, index + RANDOM_CLEANUP_BATCH_SIZE)
+          );
+        }
+      } catch {
+        // Every candidate receives its TTL in the same Redis transaction as
+        // its contents, so a failed best-effort UNLINK still has a bound.
       }
-      await execRedisPipeline(cleanup).catch(() => undefined);
-      throw error;
     }
-  });
+  }, callerSignal);
 }
 
 export async function buildRandomFilterSet(
-  input: RandomFilterInput
+  input: RandomFilterInput,
+  signal?: AbortSignal
 ): Promise<{ key: string; count: number }> {
   const deadline = Date.now() + RANDOM_FILTER_CONSISTENCY_WAIT_MS;
   try {
     for (;;) {
-      const consistency = await waitForRandomFilterConsistency({ deadline });
+      signal?.throwIfAborted();
+      const consistency = await waitForRandomFilterConsistency({
+        deadline,
+        signal
+      });
       if (consistency.status === "stale") {
         await scheduleRandomRebuild();
         throw redisUnavailable();
@@ -250,18 +281,15 @@ export async function buildRandomFilterSet(
 
       const result = await buildRandomFilterSetAtRevision(
         input,
-        consistency.revision
+        consistency.revision,
+        signal
       );
       if (result) return result;
       if (Date.now() >= deadline) throw randomPoolUpdating();
     }
   } catch (error) {
-    if (
-      (error as Error | undefined)?.name === "redis_unavailable"
-      || (error as Error | undefined)?.name === "random_pool_updating"
-    ) {
-      throw error;
-    }
+    if (signal?.aborted) throw signal.reason;
+    if (randomPoolRetry(error)) throw error;
     throw redisUnavailable();
   }
 }

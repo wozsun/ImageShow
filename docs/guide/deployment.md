@@ -22,8 +22,10 @@ Secret 读取，不会写入 `config.json`。
 
 ## 健康检查与镜像清理
 
-容器健康检查只调用 `/readyz`。该端点同时检查 PostgreSQL、Redis 与数据库迁移版本；
-任一依赖不可用都会返回非 2xx，Docker 随即把容器标为 unhealthy。`/livez` 只表示进程
+容器健康检查只调用 `/readyz`。该端点检查 PostgreSQL 与 Redis 连通性；数据库迁移在
+HTTP 服务开始监听前已经于迁移锁内完成或使进程启动失败，readiness 不再根据折叠后的
+历史版本号猜测 schema。任一运行依赖不可用都会返回非 2xx，Docker 随即把容器标为
+unhealthy。`/livez` 只表示进程
 仍在运行，适合人工区分“进程退出”和“依赖未就绪”，不作为镜像切换成功的依据。
 
 清理本地镜像必须先确认新容器 healthy，并且只处理 ImageShow 仓库和已经人工确认的
@@ -74,6 +76,10 @@ npm run admin:reset-password -- <username>
 生产环境务必在可信反向代理终止 TLS，并**覆盖**而不是透传客户端伪造的转发头。把站点域名与其所有子域名（含 `random` / `static` / `link` / 主题）都转发到应用的 `5518` 端口。
 
 ImageShow 已由 Hono 处理 Redis 数据缓存、HTTP 缓存头、压缩、静态预压缩、ETag、304 和图片 Range；Nginx 无需再配置 `proxy_cache`。如果以后接入 CDN，让 CDN 直接遵循 Hono 返回的 `Cache-Control` 和 `Vary` 即可。
+
+应用不发送 HSTS；只有确认 TLS、证书续期和全部相关子域均由同一 HTTPS 部署边界掌握
+时，才在最外层 Nginx/CDN 配置 `Strict-Transport-Security`。不要在无法保证所有子域
+HTTPS 的环境中复制 `includeSubDomains`。
 
 ### 最少配置
 

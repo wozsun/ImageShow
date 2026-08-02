@@ -905,7 +905,7 @@ metadata 与 tags 各自提交后只登记派生状态修复计划；批量更�
 
 Worker 用 `FOR UPDATE SKIP LOCKED` 领取持久任务，按任务类型限制并发。领取会生成新的 UUID `execution_token`；续租、成功、忽略、重排和失败写入都必须同时匹配任务 id、`running` 状态与 token。僵尸恢复会增加失败重试次数、清空 token 并开放后续领取，旧执行者即使稍后返回也不能写入终态；所有权代际不复用 `retry_count`，也不进入 payload。通用 `jobs` 仓储只管理领取、重试、僵尸恢复和历史裁剪，图片、导入与存储领域各自拥有 handler 和结果语义，小型注册表只负责类型分派。
 
-每个领取请求从发出起就在执行协调器中计数；任务返回后先登记活动 Promise、controller、执行期限和续租链，再允许 handler 进入首个 microtask，因此停机不会漏掉“已领取、未登记”的窄窗口。handler 共用一个 `AbortSignal`：15 分钟任务期限、租约所有权丢失、续租异常和进程停机任一发生都会立即中止；advisory lock 将该信号与锁连接丢失信号合并。各领域在数据库 / Redis / 文件与存储等待之间、每个有界批次开始前和实际写入或删除边界复核信号；随机池 Worker 重建不加入普通请求与启动预热的进程内单飞，避免一个任务的中止连带取消无关调用者。协调器把进程停机与执行失败作为两种完成状态：前者使用当前 token 立即重新排队且不增加 `retry_count`，任务超时、租约丢失、续租异常和 handler 错误才进入失败退避。handler 即使忽略信号也继续占用活动登记，直到真正收口；停机排空则以单个 10 秒期限同时等待在途领取、全部活动 Promise 与当前 tick，超时后交由进程硬退出上限处理。重复 stop 保持第一次停机原因且不重复改变状态。
+每个领取请求从发出起就在执行协调器中计数；任务返回后先登记活动 Promise、controller、执行期限和续租链，再允许 handler 进入首个 microtask，因此停机不会漏掉“已领取、未登记”的窄窗口。handler 共用一个 `AbortSignal`：15 分钟任务期限、租约所有权丢失、续租异常和进程停机任一发生都会立即中止；advisory lock 将该信号与锁连接丢失信号合并。各领域在数据库 / Redis / 文件与存储等待之间、每个有界批次开始前和实际写入或删除边界复核信号。随机池 Worker、普通请求与启动预热可以等待同一底层构建 Promise；某个 Worker 的任务信号只停止该调用方等待，底层构建使用独立 controller 并继续为其他调用方服务，直到进程停机统一中止。协调器把进程停机与执行失败作为两种完成状态：前者使用当前 token 立即重新排队且不增加 `retry_count`，任务超时、租约丢失、续租异常和 handler 错误才进入失败退避。handler 即使忽略信号也继续占用活动登记，直到真正收口；停机排空则以单个 10 秒期限同时等待在途领取、全部活动 Promise 与当前 tick，超时后交由进程硬退出上限处理。重复 stop 保持第一次停机原因且不重复改变状态。
 
 每次 tick 先运行到期的僵尸恢复、过期导入调度和历史裁剪，再并行给每个可运行任务类型一个最多 50 项 / 2 秒的时间片；慢队列不能无限占住 tick。调试日志记录各类型 backlog、最老等待时间、处理数、耗时和预算是否耗尽。存储孤儿清理与物理位置变更使用独占位置锁；导入会话创建、prepared 暂存写入、commit、取消及过期暂存清理持有共享位置锁，commit、分类移动、主题重分配、存储迁移与彻底删除还会取得对应单图锁。物理位置变更因此能在锁内检查全部会话、暂存对象和未解决 `move.cleanup`，不会把旧位置文件变成孤儿，也不会让旧清理任务跟随可变 slug 删除新位置。人工存储清理会保留 UUID 仍存在于任意图片或导入会话的 media / thumbnail，并保留属于任意尚未删除会话的 `_uploads`；这些对象分别交由单图清理任务或 `import.cleanup` 处理，只直接删除已无 PostgreSQL 所有者的孤儿。
 
@@ -951,13 +951,33 @@ slug 上恢复默认状态。
 
 ## 缓存策略
 
-PostgreSQL 18 是真相源，Redis 8 是可丢弃的加速层：随机池、画廊筛选、公共列表、公开详情、后台实体计数列表、导入词表、后台概览、原图直连探测、MD5 判重与对象键 / 缩略图键 / 图片 id lookup 走缓存。任意筛选与游标组合按需缓存，并用进程内 `coalesce()` 合并同一 key 的首次回源。随机池与图片读模型使用独立代际：前者在 `imageshow:random:<generation>:*` 命名空间按 generation / mutation revision 发布；后者把列表、详情、facets、概览、MD5 与 `imageshow:image_lookup:*` 统一放入 `image_cache_revision`。正常写入在落 Redis 前复核 revision，失效时先推进 revision。随机标签 / 作者筛选的空结果使用短 TTL 哨兵，避免 Redis 空 set 消失后重复物化；过滤集合先写不可见候选键，Lua 在缓存读取和发布候选时都要求 mutation revision 不变、completed revision 已追平且增量锁不存在。若增量锁仍存在，读取方最长等待约 3 秒并使用退避抖动；超时返回带 `Retry-After` 的临时 503，不立即触发全量重建。
+PostgreSQL 18 是真相源，Redis 8 是可丢弃的加速层：随机池、画廊筛选、公共列表、公开详情、后台实体计数列表、导入词表、后台概览、原图直连探测、MD5 判重与对象键 / 缩略图键 / 图片 id lookup 走缓存。任意筛选与游标组合按需缓存；普通查询用进程内 `coalesce()` 合并同一 key 的首次回源，随机 pool / filter 则进入可中止、可排空的领域构建注册表。随机池与图片读模型使用独立代际：前者在 `imageshow:random:<generation>:*` 命名空间按 generation / mutation revision 发布；后者把列表、详情、facets、概览、MD5 与 `imageshow:image_lookup:*` 统一放入 `image_cache_revision`。正常写入在落 Redis 前复核 revision，失效时先推进 revision。随机标签 / 作者筛选的空结果使用短 TTL 哨兵，避免 Redis 空 set 消失后重复物化；过滤集合先写不可见候选键，Lua 在缓存读取和发布候选时都要求 mutation revision 不变、completed revision 已追平且增量锁不存在。若增量锁仍存在，读取方最长等待约 3 秒并使用退避抖动；超时返回带 `Retry-After` 的临时 503，不立即触发全量重建。
 
 主题、标签和作者的词表与带 `image_count` 的后台列表分开加载。图片导入、归属编辑、删除和恢复只将实际受影响的计数列表标为 dirty；同一列表在下一次成功回源前只发送一次 Redis 删除。后台列表 miss 时按实体类型 `coalesce()` 单飞查询 PostgreSQL。批量编辑使用一个请求、派生状态协调器和显式失效收集器，在全部图片处理后统一同步；实体 slug、显示名、排序或作者链接变化时才刷新对应词表并失效 gallery facets。
 
 lookup 使用 `HSETEX` 在单条命令中原子写入一个或多个字段值及其 TTL，字段 TTL 当前为 6 小时。lookup hash 名称包含图片 revision，并严格校验缓存值的当前字段。随机池全量和增量同步不预热 lookup，公开列表、详情或资源接口 miss 时才从 PostgreSQL 回源并回填。图片写路径先推进统一 revision，再批量删除前一 revision 中受影响图片的 id、对象键和缩略图键字段；主题迁移与存储迁移同样收集精准 lookup 项。Redis 失效失败时，本实例的 dirty fence 让所有 revision 读保持 miss 并禁止回填，直到能够成功推进 revision；lookup JSON 损坏时资源出口仍可回退 PostgreSQL。
 
-随机 API 的正常路径依赖 Redis 随机池。全量重建在 PostgreSQL repeatable-read 快照中按每批 500 条只读取所需字段，并把批次序列化载荷保存在受控内存中；累计超过 16 MiB 时自动切换到 `data/tmp` 下随机命名、权限受限的 NDJSON spool。数据库提交后才校验并逐批读取内存 / spool 写 Redis generation，因此 Redis 网络等待不会占用数据库快照事务。spool 限制单批与总文件大小，核对批次数、条目数和文件字节数，并在成功、失败、优雅退出和下次启动时清理。全量与 `syncRandomImages` 共用 mutation revision；Lua 只在 revision 未变化时原子发布 generation，失败 pipeline 定向清理未发布 generation 或设置 TTL，不会删除当前及有效历史 generation。增量更新锁使用 token 所有权、30 秒租期和每 10 秒续租；completed revision 的 Lua 同时校验 generation、mutation revision 与锁 token，锁丢失时只排队全量重建。
+随机 API 的正常路径依赖 Redis 随机池。首次缺池由 Redis 10 秒固定窗口跨实例限制为
+最多 8 个构建等待者；同进程 pool / 同签名 filter 都由随机构建注册表共享一个 Promise，
+请求或 Worker 中止只停止本调用方等待，不会让其他调用者失去底层工作。窗口超额返回
+带剩余秒数 `Retry-After` 的 429；已有池更新或 Redis 故障继续返回 503 / 排队恢复。
+全量重建在 PostgreSQL repeatable-read 快照中按每批 500 条只读取所需字段，并把批次
+序列化载荷保存在受控内存中；累计超过 16 MiB 时自动切换到 `data/tmp` 下随机命名、
+权限受限的 NDJSON spool。数据库提交后才校验并逐批读取内存 / spool 写 Redis
+generation，因此 Redis 网络等待不会占用数据库快照事务。spool 限制单批与总文件
+大小，核对批次数、条目数和文件字节数，并在成功、失败、优雅退出和下次启动时清理。
+全量与 `syncRandomImages` 共用 mutation revision；Lua 同时校验 revision、重建锁 token
+并确认没有增量锁后才发布 generation。切换 current 时会原子登记被替换代际；发布
+收尾和下次启动按退役集合与 manifest 分批补 TTL，因此切换后的进程崩溃不会留下永久
+旧代际。构建 generation 与筛选候选在原子写入时先取得有界 TTL，成功、失败和中止
+都只对本次 UUID 所有的键执行分批 `UNLINK` / `PERSIST`。当前 generation 的 manifest
+先持久化，再用 `SSCAN` 有界读取并校验每个实际键；增量同步由单个 Lua 栅栏原子核对
+current generation、mutation revision、update-lock token 与 manifest，并同时更新集合、
+item、snapshot、画廊筛选选项、manifest 和 completed revision。过期执行者不能迟到写入
+已经退役或由新执行者接管的 generation。单次超过 200 张图片或 500 个集合键时跳过
+增量写并排队全量重建。增量更新锁使用 token 所有权、30 秒租期和
+每 10 秒续租；锁丢失时只排队全量重建。停机先中止并排空全部登记的 pool / filter
+Promise，再清理活动 spool 和关闭 Redis / PostgreSQL。
 
 批量图片编辑和批量存储迁移写结构化摘要日志，只包含请求 / 成功 / 失败数量、
 总耗时、最大单项耗时、请求体字节数、是否触发实体计数失效和是否触发随机池全量

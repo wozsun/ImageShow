@@ -5,6 +5,8 @@ export const RANDOM_CURRENT_KEY = `${RANDOM_CACHE_NAMESPACE}:current`;
 export const RANDOM_MUTATION_REVISION_KEY = `${RANDOM_CACHE_NAMESPACE}:mutation_revision`;
 export const RANDOM_UPDATE_LOCK_KEY = `${RANDOM_CACHE_NAMESPACE}:update_lock`;
 export const RANDOM_REBUILD_LOCK_KEY = `${RANDOM_CACHE_NAMESPACE}:rebuild_lock`;
+export const RANDOM_COLD_BUILD_WINDOW_PREFIX = `${RANDOM_CACHE_NAMESPACE}:cold_build_window`;
+export const RANDOM_RETIRED_GENERATIONS_KEY = `${RANDOM_CACHE_NAMESPACE}:retired_generations`;
 export const RANDOM_REBUILD_COMPLETED_KEY = `${RANDOM_CACHE_NAMESPACE}:rebuild_completed`;
 export const GALLERY_FILTER_OPTIONS_KEY = "imageshow:gallery_filter_options";
 

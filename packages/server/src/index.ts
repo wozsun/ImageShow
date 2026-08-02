@@ -21,6 +21,10 @@ import {
 } from "./storage/backend-registry.ts";
 import { rebuildRandomPool } from "./random/cache-rebuild.ts";
 import {
+  drainRandomBuilds,
+  stopRandomBuilds
+} from "./random/build-lifecycle.ts";
+import {
   cleanupActiveRandomRebuildSpools,
   cleanupOrphanRandomRebuildSpools,
 } from "./random/rebuild-spool.ts";
@@ -73,11 +77,16 @@ async function shutdown(signal: string) {
   const hardExit = setTimeout(() => process.exit(1), appConfig.backgroundJob.shutdownHardExitMs);
   hardExit.unref();
   try {
+    stopRandomBuilds(new Error(`Process received ${signal}`));
     stopWorker();
     const workerDrain = drainWorker();
+    const randomBuildDrain = drainRandomBuilds();
     await new Promise<void>((resolve) => server.close(() => resolve()));
-    await workerDrain;
-    await startupRandomPool;
+    await Promise.all([
+      workerDrain,
+      randomBuildDrain,
+      startupRandomPool
+    ]);
     await cleanupActiveRandomRebuildSpools();
     await closeStorageBackendRegistry();
     await redis.quit().catch(() => redis.disconnect());

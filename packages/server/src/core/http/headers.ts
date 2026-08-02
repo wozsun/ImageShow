@@ -12,7 +12,8 @@ const trustedTypePolicyNames = [
 const commonSecurityHeaders: Readonly<Record<string, string>> = {
   "X-Content-Type-Options": "nosniff",
   "Referrer-Policy": "strict-origin-when-cross-origin",
-  "Cross-Origin-Opener-Policy": "same-origin"
+  "Cross-Origin-Opener-Policy": "same-origin",
+  "Permissions-Policy": "camera=(), geolocation=(), microphone=()"
 };
 
 const securityHeaders: Readonly<Record<string, string>> = {
@@ -23,7 +24,22 @@ const securityHeaders: Readonly<Record<string, string>> = {
 
 const commonSpaDocumentHeaders: Readonly<Record<string, string>> = {
   ...commonSecurityHeaders,
-  "Content-Security-Policy-Report-Only": `require-trusted-types-for 'script'; trusted-types ${trustedTypePolicyNames}; report-to ${cspReportGroup}`,
+  "Content-Security-Policy-Report-Only": [
+    "default-src 'self'",
+    "script-src 'self'",
+    "worker-src 'self'",
+    "connect-src 'self'",
+    "img-src 'self' https: data: blob:",
+    "style-src 'self' 'unsafe-inline'",
+    "font-src 'self' data:",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "require-trusted-types-for 'script'",
+    `trusted-types ${trustedTypePolicyNames}`,
+    `report-uri ${cspReportPath}`,
+    `report-to ${cspReportGroup}`
+  ].join("; "),
   "Reporting-Endpoints": `${cspReportGroup}="${cspReportPath}"`
 };
 
@@ -84,4 +100,26 @@ export function appendVaryHeader(context: Context, ...names: string[]) {
   const normalized = new Map(existing.map((name) => [name.toLowerCase(), name]));
   for (const name of names) normalized.set(name.toLowerCase(), name);
   context.header("Vary", [...normalized.values()].join(", "));
+}
+
+const unsafeHeaderValuePattern =
+  /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060\u2066-\u2069\ufeff]/u;
+
+export function safeResponseHeaderValue(name: string, value: string) {
+  if (unsafeHeaderValuePattern.test(value)) {
+    throw new Error(`Unsafe ${name} response header value`);
+  }
+  // The Fetch implementation applies the remaining header-name and byte
+  // syntax checks. Constructing a throwaway list keeps every dynamic value on
+  // the same validation path before it reaches a response.
+  new Headers({ [name]: value });
+  return value;
+}
+
+export function responseContentLengthValue(value: unknown) {
+  return typeof value === "number"
+    && Number.isSafeInteger(value)
+    && value >= 0
+    ? String(value)
+    : undefined;
 }

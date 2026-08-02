@@ -5,30 +5,45 @@ PostgreSQL 共 9 张业务表，另有迁移记录表 `schema_migrations`。全�
 后续 schema 变化从 `0002` 开始，通过按文件名顺序执行的新前向迁移应用。
 PostgreSQL 是唯一真相源，Redis 随机池、列表缓存和判重缓存均可重建。
 
+`0001_initial.sql` 按依赖和运行职责排列：迁移账本 → 存储注册表 → 公共词表 →
+图片真值与关联 → 导入生命周期 → 后台任务 → 管理员身份。每张表内部统一为标识、
+状态 / 所有权、业务字段、错误 / 重试和时间字段；种子、约束与索引紧跟所属表，
+图片索引再按直接查询 / 外键、列表游标、随机选择 / 回收职责排列。
+
+3.14.7 将已经由 3.14.6 发布的 `background_job.execution_token` 合入基线。启动时
+迁移锁内只接受两种既有状态：已折叠的单条 `0001_initial`，或同时含
+`0001_initial`、`0002_background_job_execution_token` 且该列为无默认值的可空 UUID
+的旧链。
+后者只在同一事务中删除已吸收的 `0002` 历史，不重放 `0001`、不执行 DDL，也不改
+业务数据。若旧库只有 `0001` 且缺少该列，启动会明确拒绝，必须先用 3.14.6 完成
+前向升级；未知或不完整迁移历史同样不会被猜测性修补。全新基线与已升级库按列类型、
+默认值、可空性、约束和索引做逻辑 schema 比较并保持一致。字段顺序整理只作用于
+全新安装；既有库不会为了物理列顺序重建表。
+
 ## metadata —— 图片主表
 
 | 字段 | 含义 |
 | --- | --- |
 | `id` (UUID, PK) | 图片唯一 id（uuid v7，时间有序）；目录中的文件名也使用它 |
+| `status` | `ready` / `deleted` |
+| `storage_slug` | 图片所在存储后端 slug（外键 → `storage_backend.slug`） |
+| `object_key` (UNIQUE) | 标准化图片在所属后端中的对象存储键 |
 | `device` | 设备：`pc`（横屏）/ `mb`（竖屏），由宽高比或用户选择得到 |
 | `brightness` | 亮度：`dark` / `light`，上传默认自动识别 |
 | `theme` | 主题 slug；`none` 表示无主题 |
+| `author` | 作者 slug，可空，外键 → `author.slug`，删除作者时自动置空 |
+| `ext` | 扩展名：`jpg` / `png` / `webp` / `gif` / `avif` |
+| `md5` | 文件 MD5，32 位十六进制；用于判重 |
 | `width` / `height` | 像素尺寸 |
 | `image_size` / `thumbnail_size` | 标准化图片字节数 / 缩略图字节数 |
-| `ext` | 扩展名：`jpg` / `png` / `webp` / `gif` / `avif` |
-| `object_key` (UNIQUE) | 标准化图片在所属后端中的对象存储键 |
-| `storage_slug` | 图片所在存储后端 slug（外键 → `storage_backend.slug`） |
-| `md5` | 文件 MD5，32 位十六进制；用于判重 |
 | `title` / `description` / `source` / `original` | 标题 / 描述 / 来源 / 原图链接；标题和描述在去除首尾空白后分别最多 80 / 500 个普通汉字，外部链接仅允许 HTTPS |
 | `extra` | 预留扩展属性 JSON；用于后续 EXIF、AI 标签、主色、来源平台等非核心字段 |
-| `author` | 作者 slug，可空，外键 → `author.slug`，删除作者时自动置空 |
-| `status` | `ready` / `deleted` |
+| `image_time` | 图片展示 / 图库排序时间；JSONL 可指定，同一前端批次未指定时共享 `batch_time`，省略时使用会话创建时间 |
 | `deleted_at` | 软删时间 |
 | `purge_state` | 彻底删除认领状态：`idle` / `purging` / `failed`；只有 `idle` 可恢复 |
 | `purge_started_at` | 当前彻底删除认领开始时间，用于回收崩溃遗留的过期认领 |
 | `purge_attempts` | 单调递增的彻底删除尝试号，同时作为当前执行者的所有权令牌 |
 | `purge_error` | 最近一次彻底删除失败的有界错误信息 |
-| `image_time` | 图片展示 / 图库排序时间；JSONL 可指定，同一前端批次未指定时共享 `batch_time`，省略时使用会话创建时间 |
 | `created_at` | 实际导入 ImageShow 的时间 |
 | `updated_at` | 图片元数据最后更新时间 |
 
@@ -52,19 +67,19 @@ PostgreSQL 是唯一真相源，Redis 随机池、列表缓存和判重缓存均
 | --- | --- |
 | `id` (UUID, PK) | 服务端按 `image_time` 生成的 UUIDv7；最终图片 id 与对象键复用该值。同时间的批量导入记录会把单批次位置编码到 `rand_a`，使靠后的输入排序更新 |
 | `mode` | `upload` / `download`；分别由浏览器上传和服务器下载素材 |
-| `final_object_key` | 进入 `committing` 时确定的 `media` 正式存储键，提交前为空 |
+| `status` | `created` / `materializing` / `received` / `preparing` / `ready` / `committing` / `finalized` / `failed` / `cancelled` |
+| `execution_token` | 当前 materialize / prepare / commit 执行者的 UUID 栅栏 token；阶段发布必须匹配，进入稳定状态或取消时清空 |
+| `raw_token` | `received` / `preparing` 状态采用的 attempt 专属完整 raw UUID；prepare 只读取该 token 对应文件，进入 `ready` 或终态时清空 |
+| `idempotency_key` | 幂等键 |
+| `request_hash` | 幂等请求摘要；同一幂等键仅在摘要一致时复用会话，JSONL 的临时清单位置也参与摘要 |
 | `storage_slug` | 该会话锁定的目标后端 slug（外键 → `storage_backend.slug`）；需等待会话完成或过期清理后才能删除后端 |
+| `final_object_key` | 进入 `committing` 时确定的 `media` 正式存储键，提交前为空 |
 | `source_url` | URL 导入来源，仅允许 HTTPS；upload 模式为空 |
 | `expected_size` | 本地上传声明的 raw 字节数 |
 | `metadata_payload` | 创建会话时的草稿元数据 |
 | `prepared_payload` | 服务端 prepared 真值：MD5、尺寸、质量、暂存键，以及不受人工选择影响、每次 prepare 都重新计算的 `detected_device` / `detected_brightness` 等 |
-| `execution_token` | 当前 materialize / prepare / commit 执行者的 UUID 栅栏 token；阶段发布必须匹配，进入稳定状态或取消时清空 |
-| `raw_token` | `received` / `preparing` 状态采用的 attempt 专属完整 raw UUID；prepare 只读取该 token 对应文件，进入 `ready` 或终态时清空 |
-| `status` | `created` / `materializing` / `received` / `preparing` / `ready` / `committing` / `finalized` / `failed` / `cancelled` |
-| `idempotency_key` | 幂等键 |
-| `request_hash` | 幂等请求摘要；同一幂等键仅在摘要一致时复用会话，JSONL 的临时清单位置也参与摘要 |
-| `image_time` | 本次导入的图片展示时间；也参与 UUIDv7 和 `request_hash` |
 | `error` | 失败原因 |
+| `image_time` | 本次导入的图片展示时间；也参与 UUIDv7 和 `request_hash` |
 | `expires_at` | 30 分钟空闲过期时间；素材化、prepare 和 commit 期间持续续租。普通过期会话由 `import.cleanup` 原子认领；过期的 `committing` 仅在确认其提交 advisory lock 空闲后取消并清理 |
 | `created_at` / `updated_at` | 时间戳 |
 
@@ -74,11 +89,11 @@ PostgreSQL 是唯一真相源，Redis 随机池、列表缓存和判重缓存均
 | --- | --- |
 | `id` (PK) | 任务 id |
 | `type` | `thumb.generate` / `move.cleanup` / `import.cleanup` / `trash.purge` / `cache.rebuild` |
+| `status` | `pending` / `running` / `succeeded` / `failed` / `ignored` |
+| `execution_token` | 每次领取生成的 UUID 所有权栅栏；仅当前 `running` 执行者持有，退出运行态时清空 |
 | `target_id` | 目标图片 id |
 | `idempotency_key` | 幂等键 |
-| `status` | `pending` / `running` / `succeeded` / `failed` / `ignored` |
 | `payload` / `result` / `error` | 入参 / 结果 / 错误 |
-| `execution_token` | 每次领取生成的 UUID 所有权栅栏；仅当前 `running` 执行者持有，退出运行态时清空 |
 | `retry_count` / `next_retry_at` | 重试次数与下次重试时间 |
 | `created_at` / `updated_at` | 时间戳 |
 

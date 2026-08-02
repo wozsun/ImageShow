@@ -116,9 +116,11 @@ export async function pickFromRedisPool(
   method: RandomMethod,
   axes: CandidateAxes,
   recent: Set<string> = new Set(),
-  prefetchedSnapshot?: RandomPoolSnapshot
+  prefetchedSnapshot?: RandomPoolSnapshot,
+  signal?: AbortSignal
 ): Promise<PickedImage | Response | null> {
-  const snapshot = prefetchedSnapshot ?? await getRandomPoolSnapshot();
+  signal?.throwIfAborted();
+  const snapshot = prefetchedSnapshot ?? await getRandomPoolSnapshot(signal);
   const themeCandidates = parseThemeSelectors(url.searchParams, snapshot.themes);
   if (themeCandidates instanceof Response) return themeCandidates;
 
@@ -148,7 +150,7 @@ export async function pickFromRedisPool(
     tagExclude: tags.exclude,
     authorInclude: authors.include,
     authorExclude: authors.exclude
-  });
+  }, signal);
   if (filter.count <= 0) return noCandidatesError(url, axes);
   return await pickFromSet(snapshot.generation, filter.key, method, recent) ?? noCandidatesError(url, axes);
 }

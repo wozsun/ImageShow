@@ -7,7 +7,10 @@ import {
   type RuntimeConfigValidationResponseDto
 } from "@imageshow/shared/browser";
 import { apiSuccess } from "../core/http/responses.ts";
-import { privateNoStoreCacheControl } from "../core/http/headers.ts";
+import {
+  privateNoStoreCacheControl,
+  safeResponseHeaderValue
+} from "../core/http/headers.ts";
 import { limitAdvancedConfigBody } from "../core/http/request-body-limit.ts";
 import { requireSuperAdmin } from "../users/admin-authorization.ts";
 import { parse } from "../core/validation.ts";
@@ -63,7 +66,10 @@ export function registerAdvancedConfigRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/advanced-config/export`, requireSuperAdmin, async (c) => {
     const pkg = await createConfigPackage();
     c.header("Content-Type", "application/json; charset=utf-8");
-    c.header("Content-Disposition", `attachment; filename="${exportFilename(pkg.exported_at)}"`);
+    c.header("Content-Disposition", safeResponseHeaderValue(
+      "Content-Disposition",
+      `attachment; filename="${exportFilename(pkg.exported_at)}"`
+    ));
     c.header("Cache-Control", "private, no-store");
     return c.body(`${JSON.stringify(pkg, null, 2)}\n`);
   });

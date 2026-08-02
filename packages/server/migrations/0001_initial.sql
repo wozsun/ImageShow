@@ -1,8 +1,10 @@
+-- Migration ledger
 CREATE TABLE schema_migrations (
   version TEXT PRIMARY KEY,
   applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Storage registry
 CREATE TABLE storage_backend (
   slug TEXT PRIMARY KEY,
   display_name TEXT NOT NULL DEFAULT '',
@@ -26,6 +28,7 @@ ON storage_backend((is_default)) WHERE is_default;
 INSERT INTO storage_backend(slug, display_name, type, is_default)
 VALUES('local', '本地', 'local', true);
 
+-- Public vocabularies
 CREATE TABLE theme (
   slug TEXT PRIMARY KEY,
   display_name TEXT NOT NULL DEFAULT '',
@@ -64,14 +67,17 @@ CREATE TABLE author (
   CHECK (link = '' OR link ~* '^https://')
 );
 
+-- Image truth and relations
 CREATE TABLE metadata (
   id UUID PRIMARY KEY,
+  status TEXT NOT NULL DEFAULT 'ready',
+  storage_slug TEXT NOT NULL,
+  object_key TEXT NOT NULL UNIQUE,
   device TEXT NOT NULL,
   brightness TEXT NOT NULL,
   theme TEXT NOT NULL DEFAULT 'none',
+  author TEXT,
   ext TEXT NOT NULL,
-  object_key TEXT NOT NULL UNIQUE,
-  storage_slug TEXT NOT NULL,
   md5 TEXT NOT NULL,
   width INTEGER NOT NULL DEFAULT 0,
   height INTEGER NOT NULL DEFAULT 0,
@@ -82,21 +88,23 @@ CREATE TABLE metadata (
   source TEXT NOT NULL DEFAULT '',
   original TEXT NOT NULL DEFAULT '',
   extra JSONB NOT NULL DEFAULT '{}'::jsonb,
-  author TEXT,
-  status TEXT NOT NULL DEFAULT 'ready',
-  deleted_at TIMESTAMPTZ DEFAULT NULL,
+  image_time TIMESTAMPTZ NOT NULL DEFAULT now(),
+  deleted_at TIMESTAMPTZ,
   purge_state TEXT NOT NULL DEFAULT 'idle',
   purge_started_at TIMESTAMPTZ,
   purge_attempts INTEGER NOT NULL DEFAULT 0,
   purge_error TEXT,
-  image_time TIMESTAMPTZ NOT NULL DEFAULT now(),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CHECK (status IN ('ready', 'deleted')),
   CHECK (device IN ('pc', 'mb')),
   CHECK (brightness IN ('dark', 'light')),
   CHECK (theme <> ''),
   CHECK (length(theme) <= 32),
   CHECK (theme ~ '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'),
+  CHECK (author <> ''),
+  CHECK (length(author) <= 32),
+  CHECK (author ~ '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'),
   CHECK (ext IN ('jpg', 'png', 'webp', 'gif', 'avif')),
   CHECK (md5 ~ '^[a-f0-9]{32}$'),
   CHECK (width >= 0),
@@ -107,19 +115,24 @@ CREATE TABLE metadata (
   CHECK (source = '' OR source ~* '^https://'),
   CHECK (length(original) <= 2048),
   CHECK (original = '' OR original ~* '^https://'),
-  CHECK (author <> ''),
-  CHECK (length(author) <= 32),
-  CHECK (author ~ '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'),
-  CHECK (status IN ('ready', 'deleted')),
   CHECK (purge_state IN ('idle', 'purging', 'failed')),
-  CONSTRAINT fk_metadata_theme    FOREIGN KEY (theme)        REFERENCES theme(slug)            ON DELETE RESTRICT,
   CONSTRAINT fk_metadata_storage  FOREIGN KEY (storage_slug) REFERENCES storage_backend(slug)  ON DELETE RESTRICT,
+  CONSTRAINT fk_metadata_theme    FOREIGN KEY (theme)        REFERENCES theme(slug)            ON DELETE RESTRICT,
   CONSTRAINT fk_metadata_author   FOREIGN KEY (author)       REFERENCES author(slug)           ON DELETE SET NULL
 );
 
-CREATE INDEX idx_metadata_ready_random_axes
-ON metadata(device, brightness, theme, id) WHERE status = 'ready';
+-- Direct lookups and foreign-key support
+CREATE INDEX idx_metadata_storage_slug ON metadata(storage_slug);
+CREATE INDEX idx_metadata_theme ON metadata(theme);
+CREATE INDEX idx_metadata_author ON metadata(author);
 
+CREATE INDEX idx_metadata_md5
+ON metadata(md5);
+
+CREATE INDEX idx_metadata_thumb_key
+ON metadata((regexp_replace(object_key, '\.[^/.]+$', '.webp')));
+
+-- State and gallery cursor reads
 CREATE INDEX idx_metadata_status_deleted
 ON metadata(status, deleted_at, id);
 
@@ -153,15 +166,9 @@ ON metadata(theme, image_time DESC, id DESC) WHERE status = 'ready';
 CREATE INDEX idx_metadata_ready_author_image_time
 ON metadata(author, image_time DESC, id DESC) WHERE status = 'ready';
 
-CREATE INDEX idx_metadata_md5
-ON metadata(md5);
-
-CREATE INDEX idx_metadata_thumb_key
-ON metadata((regexp_replace(object_key, '\.[^/.]+$', '.webp')));
-
-CREATE INDEX idx_metadata_theme ON metadata(theme);
-CREATE INDEX idx_metadata_author ON metadata(author);
-CREATE INDEX idx_metadata_storage_slug ON metadata(storage_slug);
+-- Random selection and trash cleanup
+CREATE INDEX idx_metadata_ready_random_axes
+ON metadata(device, brightness, theme, id) WHERE status = 'ready';
 
 CREATE INDEX idx_metadata_trash_purge
 ON metadata(purge_state, deleted_at, id)
@@ -176,32 +183,33 @@ CREATE TABLE image_tag (
 
 CREATE INDEX idx_image_tag_tag ON image_tag(tag_slug, image_id);
 
+-- Import lifecycle
 CREATE TABLE import_session (
   id UUID PRIMARY KEY,
   mode TEXT NOT NULL,
-  final_object_key TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'created',
+  execution_token UUID,
+  raw_token UUID,
+  idempotency_key TEXT NOT NULL UNIQUE,
+  request_hash TEXT NOT NULL DEFAULT '',
   storage_slug TEXT NOT NULL REFERENCES storage_backend(slug) ON DELETE RESTRICT,
+  final_object_key TEXT NOT NULL DEFAULT '',
   source_url TEXT NOT NULL DEFAULT '',
   expected_size BIGINT,
   metadata_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
   prepared_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
-  execution_token UUID,
-  raw_token UUID,
-  status TEXT NOT NULL DEFAULT 'created',
-  idempotency_key TEXT NOT NULL UNIQUE,
-  request_hash TEXT NOT NULL DEFAULT '',
-  image_time TIMESTAMPTZ NOT NULL DEFAULT now(),
   error TEXT NOT NULL DEFAULT '',
+  image_time TIMESTAMPTZ NOT NULL DEFAULT now(),
   expires_at TIMESTAMPTZ NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   CHECK (mode IN ('upload', 'download')),
-  CHECK (expected_size IS NULL OR expected_size > 0),
-  CHECK (source_url = '' OR source_url ~* '^https://'),
   CHECK (status IN (
     'created', 'materializing', 'received', 'preparing', 'ready',
     'committing', 'finalized', 'failed', 'cancelled'
-  ))
+  )),
+  CHECK (expected_size IS NULL OR expected_size > 0),
+  CHECK (source_url = '' OR source_url ~* '^https://')
 );
 
 CREATE INDEX idx_import_session_status_expires
@@ -210,17 +218,19 @@ ON import_session(status, expires_at);
 CREATE UNIQUE INDEX idx_import_session_final_object_key
 ON import_session(final_object_key) WHERE final_object_key <> '';
 
+-- Background work queue
 CREATE TABLE background_job (
   id UUID PRIMARY KEY,
   type TEXT NOT NULL,
-  target_id TEXT NOT NULL DEFAULT '',
-  idempotency_key TEXT DEFAULT NULL,
   status TEXT NOT NULL DEFAULT 'pending',
+  execution_token UUID,
+  target_id TEXT NOT NULL DEFAULT '',
+  idempotency_key TEXT,
   payload JSONB NOT NULL DEFAULT '{}'::jsonb,
   result JSONB NOT NULL DEFAULT '{}'::jsonb,
   error TEXT NOT NULL DEFAULT '',
   retry_count INTEGER NOT NULL DEFAULT 0,
-  next_retry_at TIMESTAMPTZ DEFAULT NULL,
+  next_retry_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   CHECK (type IN ('thumb.generate','move.cleanup','import.cleanup','trash.purge','cache.rebuild')),
@@ -230,15 +240,16 @@ CREATE TABLE background_job (
 CREATE INDEX idx_background_job_status
 ON background_job(status, updated_at);
 
+CREATE UNIQUE INDEX idx_background_job_active_cache_rebuild
+ON background_job(type) WHERE type = 'cache.rebuild' AND status IN ('pending', 'running');
+
 CREATE INDEX idx_background_job_target
 ON background_job(target_id, type);
 
 CREATE UNIQUE INDEX idx_background_job_idempotency
 ON background_job(idempotency_key) WHERE idempotency_key IS NOT NULL;
 
-CREATE UNIQUE INDEX idx_background_job_active_cache_rebuild
-ON background_job(type) WHERE type = 'cache.rebuild' AND status IN ('pending', 'running');
-
+-- Administrative identities
 CREATE TABLE admin_account (
   username TEXT PRIMARY KEY,
   password_hash TEXT NOT NULL,

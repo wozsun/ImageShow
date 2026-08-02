@@ -10,7 +10,10 @@ import { deriveKey } from "altcha-lib/algorithms/pbkdf2";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { ApiError } from "./api-error.ts";
 import { requestClientIp } from "./http/request-security.ts";
-import { noStoreCacheControl } from "./http/headers.ts";
+import {
+  noStoreCacheControl,
+  safeResponseHeaderValue
+} from "./http/headers.ts";
 import { redis } from "./redis-client.ts";
 
 const altchaAlgorithm = "PBKDF2/SHA-256";
@@ -97,11 +100,17 @@ async function reserveChallengeRequest(c: Context) {
   )) as [number, number];
 
   if (Number(ipCount) > ipLimit) {
-    c.header("Retry-After", String(security.login_failure_window_seconds));
+    c.header("Retry-After", safeResponseHeaderValue(
+      "Retry-After",
+      String(security.login_failure_window_seconds)
+    ));
     throw new ApiError(429, "altcha_rate_limited", "安全验证请求过于频繁，请稍后再试");
   }
   if (Number(globalCount) > globalLimit) {
-    c.header("Retry-After", String(security.login_global_window_seconds));
+    c.header("Retry-After", safeResponseHeaderValue(
+      "Retry-After",
+      String(security.login_global_window_seconds)
+    ));
     throw new ApiError(429, "altcha_global_rate_limited", "安全验证服务请求过于频繁，请稍后再试");
   }
 }

@@ -37,8 +37,21 @@ function jitteredDelay(delayMs: number) {
   return Math.max(1, Math.round(delayMs * (0.8 + Math.random() * 0.4)));
 }
 
-function sleep(delayMs: number) {
-  return new Promise((resolve) => setTimeout(resolve, delayMs));
+function sleep(delayMs: number, signal?: AbortSignal) {
+  if (!signal) return new Promise((resolve) => setTimeout(resolve, delayMs));
+  signal.throwIfAborted();
+  return new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", aborted);
+      resolve();
+    }, delayMs);
+    const aborted = () => {
+      clearTimeout(timer);
+      reject(signal.reason);
+    };
+    signal.addEventListener("abort", aborted, { once: true });
+    if (signal.aborted) aborted();
+  });
 }
 
 const readRedisConsistencyState: RandomFilterConsistencyReader = async (keys) => (
@@ -60,6 +73,7 @@ export async function waitForRandomFilterConsistency(options: {
   keys?: RandomFilterConsistencyKeys;
   deadline?: number;
   readState?: RandomFilterConsistencyReader;
+  signal?: AbortSignal;
 } = {}): Promise<RandomFilterConsistency> {
   const keys = options.keys ?? defaultKeys;
   const readState = options.readState ?? readRedisConsistencyState;
@@ -68,7 +82,9 @@ export async function waitForRandomFilterConsistency(options: {
   let delayMs = RANDOM_FILTER_WAIT_BASE_MS;
 
   for (;;) {
+    options.signal?.throwIfAborted();
     const state = await readState(keys);
+    options.signal?.throwIfAborted();
     const revision = redisRevision(state[0]);
     const completedRevision = redisRevision(state[1]);
     const updateInProgress = Number(state[2]) === 1;
@@ -83,7 +99,10 @@ export async function waitForRandomFilterConsistency(options: {
     }
 
     const remainingMs = deadline - Date.now();
-    await sleep(Math.min(remainingMs, jitteredDelay(delayMs)));
+    await sleep(
+      Math.min(remainingMs, jitteredDelay(delayMs)),
+      options.signal
+    );
     delayMs = Math.min(
       RANDOM_FILTER_WAIT_MAX_MS,
       Math.ceil(delayMs * 1.7)
