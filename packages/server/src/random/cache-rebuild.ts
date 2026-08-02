@@ -58,8 +58,10 @@ function chunkArray<T>(items: T[], size: number): T[][] {
 
 async function readyRandomItemBatch(
   client: PoolClient,
-  afterId: string | null
+  afterId: string | null,
+  signal?: AbortSignal
 ): Promise<RandomPoolItem[]> {
+  signal?.throwIfAborted();
   const rows = (await client.query(
     `WITH ready AS (
        SELECT m.id, m.object_key, m.ext, m.device, m.brightness, m.theme,
@@ -81,6 +83,7 @@ async function readyRandomItemBatch(
       ORDER BY ready.id`,
     [afterId, RANDOM_REBUILD_BATCH_SIZE]
   )).rows;
+  signal?.throwIfAborted();
   return randomPoolItemsFromRows(rows);
 }
 
@@ -134,8 +137,10 @@ async function writeRandomGenerationBatch(
   generation: string,
   items: RandomPoolItem[],
   categoryCounts: RandomCategoryCounts,
-  keys: Set<string>
+  keys: Set<string>,
+  signal?: AbortSignal
 ) {
+  signal?.throwIfAborted();
   if (!items.length) return;
   const memberships = new Map<string, string[]>();
   const itemValues: string[] = [];
@@ -148,6 +153,7 @@ async function writeRandomGenerationBatch(
   pipeline.hset(randomItemKey(generation), ...itemValues);
   queueRandomMemberships(pipeline, "sadd", memberships);
   await execRedisPipeline(pipeline);
+  signal?.throwIfAborted();
 }
 
 async function expireOldGeneration(generation: string | null) {
@@ -196,9 +202,10 @@ function validateRandomPoolItemBatch(value: unknown): RandomPoolItem[] {
   return value as RandomPoolItem[];
 }
 
-async function readReadyRandomItemBatches(): Promise<
+async function readReadyRandomItemBatches(signal?: AbortSignal): Promise<
   RandomRebuildBatchStore<RandomPoolItem>
 > {
+  signal?.throwIfAborted();
   const batchStore = createRandomRebuildBatchStore({
     validateBatch: validateRandomPoolItemBatch
   });
@@ -207,9 +214,11 @@ async function readReadyRandomItemBatches(): Promise<
     await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
     let afterId: string | null = null;
     for (;;) {
-      const items = await readyRandomItemBatch(client, afterId);
+      signal?.throwIfAborted();
+      const items = await readyRandomItemBatch(client, afterId, signal);
       if (!items.length) break;
       await batchStore.append(items);
+      signal?.throwIfAborted();
       afterId = items.at(-1)?.id ?? null;
       if (items.length < RANDOM_REBUILD_BATCH_SIZE) break;
     }
@@ -225,7 +234,10 @@ async function readReadyRandomItemBatches(): Promise<
   }
 }
 
-async function performRandomPoolRebuild(targetRevision: number): Promise<{
+async function performRandomPoolRebuild(
+  targetRevision: number,
+  signal?: AbortSignal
+): Promise<{
   published: boolean;
   snapshot: RandomPoolSnapshot;
 }> {
@@ -235,8 +247,9 @@ async function performRandomPoolRebuild(targetRevision: number): Promise<{
   registerRandomGenerationKeys(generation, keys);
   let publicationAttempted = false;
   try {
+    signal?.throwIfAborted();
     // PostgreSQL 快照只覆盖数据库读取；COMMIT 后才开始向 Redis 写 generation。
-    const itemBatches = await readReadyRandomItemBatches();
+    const itemBatches = await readReadyRandomItemBatches(signal);
     try {
       const sourceStats = itemBatches.stats();
       logger.info("random_pool_rebuild_source_ready", {
@@ -248,11 +261,13 @@ async function performRandomPoolRebuild(targetRevision: number): Promise<{
         spool_bytes: sourceStats.spoolBytes
       });
       for await (const items of itemBatches.batches()) {
+        signal?.throwIfAborted();
         await writeRandomGenerationBatch(
           generation,
           items,
           categoryCounts,
-          keys
+          keys,
+          signal
         );
       }
     } finally {
@@ -262,12 +277,16 @@ async function performRandomPoolRebuild(targetRevision: number): Promise<{
     const finalPipeline = redis.pipeline();
     queueRandomSnapshot(finalPipeline, generation, categoryCounts, false);
     for (const batch of chunkArray([...keys], RANDOM_CLEANUP_BATCH_SIZE)) {
+      signal?.throwIfAborted();
       finalPipeline.sadd(randomManifestKey(generation), ...batch);
     }
+    signal?.throwIfAborted();
     await execRedisPipeline(finalPipeline);
+    signal?.throwIfAborted();
 
     const themes = filterOptionsFromCategoryCounts(categoryCounts).themes;
     const snapshot = { generation, categoryCounts, themes };
+    signal?.throwIfAborted();
     publicationAttempted = true;
     const publication = await redis.eval(
       RANDOM_GENERATION_PUBLISH_SCRIPT,
@@ -286,6 +305,7 @@ async function performRandomPoolRebuild(targetRevision: number): Promise<{
     } else {
       await cleanupFailedGeneration(generation, keys);
     }
+    signal?.throwIfAborted();
     return { published, snapshot };
   } catch (error) {
     await cleanupFailedGeneration(
@@ -328,14 +348,19 @@ export async function readRandomPoolSnapshot(): Promise<
   }
 }
 
-async function rebuildRandomPoolWhileLocked(token: string) {
+async function rebuildRandomPoolWhileLocked(
+  token: string,
+  signal?: AbortSignal
+) {
   const stopRenewal = startRandomRebuildLockRenewal(token);
   try {
     for (;;) {
+      signal?.throwIfAborted();
       const targetRevision = redisRevision(
         await redis.get(RANDOM_MUTATION_REVISION_KEY)
       );
-      const rebuilt = await performRandomPoolRebuild(targetRevision);
+      signal?.throwIfAborted();
+      const rebuilt = await performRandomPoolRebuild(targetRevision, signal);
       if (rebuilt.published) return rebuilt.snapshot;
     }
   } finally {
@@ -343,12 +368,34 @@ async function rebuildRandomPoolWhileLocked(token: string) {
   }
 }
 
-async function processPendingRandomPoolRebuilds() {
+function waitForRandomRebuild(signal?: AbortSignal) {
+  if (!signal) {
+    return new Promise<void>((resolve) => {
+      setTimeout(resolve, RANDOM_REBUILD_WAIT_INTERVAL_MS);
+    });
+  }
+  signal.throwIfAborted();
+  return new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", aborted);
+      resolve();
+    }, RANDOM_REBUILD_WAIT_INTERVAL_MS);
+    const aborted = () => {
+      clearTimeout(timer);
+      reject(signal.reason);
+    };
+    signal.addEventListener("abort", aborted, { once: true });
+    if (signal.aborted) aborted();
+  });
+}
+
+async function processPendingRandomPoolRebuilds(signal?: AbortSignal) {
   for (
     let attempt = 0;
     attempt < RANDOM_REBUILD_WAIT_ATTEMPTS;
     attempt += 1
   ) {
+    signal?.throwIfAborted();
     const [snapshot, requestedRaw, completedRaw] = await Promise.all([
       readRandomPoolSnapshot().catch(() => null),
       redis.get(RANDOM_MUTATION_REVISION_KEY),
@@ -360,35 +407,42 @@ async function processPendingRandomPoolRebuilds() {
       return await readRandomPoolSnapshot() ?? snapshot;
     }
 
+    signal?.throwIfAborted();
     const token = await acquireRandomRebuildLock();
-    if (token) return rebuildRandomPoolWhileLocked(token);
-    await new Promise((resolve) => {
-      setTimeout(resolve, RANDOM_REBUILD_WAIT_INTERVAL_MS);
-    });
+    if (token) return rebuildRandomPoolWhileLocked(token, signal);
+    signal?.throwIfAborted();
+    await waitForRandomRebuild(signal);
   }
 
+  signal?.throwIfAborted();
   await scheduleRandomRebuild();
   throw redisUnavailable();
 }
 
 export async function rebuildRandomPool(
-  options: { requireFresh?: boolean } = {}
+  options: { requireFresh?: boolean; signal?: AbortSignal } = {}
 ): Promise<RandomPoolSnapshot> {
+  const { signal } = options;
+  signal?.throwIfAborted();
   const requireFresh = options.requireFresh ?? true;
   const requiredRevision = requireFresh
     ? await redis.incr(RANDOM_MUTATION_REVISION_KEY)
     : redisRevision(await redis.get(RANDOM_MUTATION_REVISION_KEY));
+  signal?.throwIfAborted();
 
   for (;;) {
-    const snapshot = await coalesce(
-      "random-pool-rebuild",
-      processPendingRandomPoolRebuilds
-    );
+    // A worker-owned signal must not cancel unrelated request/startup callers
+    // that share the ordinary in-process single-flight promise.
+    const snapshot = signal
+      ? await processPendingRandomPoolRebuilds(signal)
+      : await coalesce("random-pool-rebuild", processPendingRandomPoolRebuilds);
+    signal?.throwIfAborted();
     if (!requireFresh) return snapshot;
     const completedRevision = redisRevision(
       await redis.get(RANDOM_REBUILD_COMPLETED_KEY)
     );
     if (completedRevision >= requiredRevision) {
+      signal?.throwIfAborted();
       return await readRandomPoolSnapshot() ?? snapshot;
     }
   }

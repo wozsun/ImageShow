@@ -19,6 +19,10 @@ import {
   recoverStaleBackgroundJobs,
   type BackgroundJob
 } from "./repository.ts";
+import {
+  WorkerExecutionCoordinator,
+  type WorkerExecutionCompletion
+} from "./worker-execution.ts";
 
 let timer: NodeJS.Timeout | undefined;
 let tickPromise: Promise<void> | null = null;
@@ -55,51 +59,71 @@ function logDiscardedBackgroundJobTransition(
   });
 }
 
-function startBackgroundJobLeaseRenewal(job: BackgroundJob) {
-  const intervalMs = Math.max(
-    1_000,
-    Math.floor(appConfig.backgroundJob.taskTimeoutSeconds * 1_000 / 3)
-  );
-  let stopped = false;
-  let timer: NodeJS.Timeout | undefined;
-  let renewal = Promise.resolve();
+async function settleBackgroundJob(
+  job: BackgroundJob,
+  completion: WorkerExecutionCompletion<BackgroundJobOutcome>
+) {
+  if (completion.status === "stopped") {
+    if (!await rescheduleBackgroundJob(
+      job,
+      0,
+      { reason: "worker_stopping" }
+    )) {
+      logDiscardedBackgroundJobTransition(job, "rescheduled");
+    }
+    return;
+  }
+  if (completion.status === "rejected") {
+    if (!await markBackgroundJobFailed(job, completion.error)) {
+      logDiscardedBackgroundJobTransition(job, "failed");
+    }
+    return;
+  }
 
-  const clearRenewalTimer = () => {
-    if (!timer) return;
-    clearInterval(timer);
-    timer = undefined;
-  };
-  const queueRenewal = () => {
-    renewal = renewal
-      .then(async () => {
-        if (stopped) return;
-        if (await renewBackgroundJobLease(job)) return;
-        stopped = true;
-        clearRenewalTimer();
-        logger.warn("background job lease ownership lost", {
-          job_id: job.id,
-          type: job.type
-        });
-      })
-      .catch((error: unknown) => {
-        stopped = true;
-        clearRenewalTimer();
-        logger.error("background job lease renewal failed", {
-          job_id: job.id,
-          type: job.type,
-          error: error instanceof Error ? error.message : String(error)
-        });
-      });
-  };
-
-  timer = setInterval(queueRenewal, intervalMs);
-  timer.unref();
-  return async () => {
-    stopped = true;
-    clearRenewalTimer();
-    await renewal;
-  };
+  const outcome = completion.value;
+  let stored: boolean;
+  let transition: "ignored" | "rescheduled" | "succeeded";
+  if (outcome.status === "ignored") {
+    transition = "ignored";
+    stored = await markBackgroundJobIgnored(job, outcome.reason);
+  } else if (outcome.status === "reschedule") {
+    transition = "rescheduled";
+    stored = await rescheduleBackgroundJob(
+      job,
+      outcome.delayMs,
+      outcome.result
+    );
+  } else {
+    transition = "succeeded";
+    stored = await markBackgroundJobSucceeded(job, outcome.result);
+  }
+  if (!stored) logDiscardedBackgroundJobTransition(job, transition);
 }
+
+const taskTimeoutMs = appConfig.backgroundJob.taskTimeoutSeconds * 1_000;
+const executionCoordinator = new WorkerExecutionCoordinator<
+  BackgroundJob,
+  BackgroundJobOutcome
+>({
+  taskTimeoutMs,
+  leaseRenewalIntervalMs: Math.max(1_000, Math.floor(taskTimeoutMs / 3)),
+  renewLease: renewBackgroundJobLease,
+  execute: handleBackgroundJob,
+  settle: settleBackgroundJob,
+  onLeaseLost(job) {
+    logger.warn("background job lease ownership lost", {
+      job_id: job.id,
+      type: job.type
+    });
+  },
+  onLeaseRenewalError(job, error) {
+    logger.error("background job lease renewal failed", {
+      job_id: job.id,
+      type: job.type,
+      error: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
 
 async function runBackgroundJobType(type: string, lanes: number): Promise<QueueSliceResult> {
   const startedAt = performance.now();
@@ -116,42 +140,12 @@ async function runBackgroundJobType(type: string, lanes: number): Promise<QueueS
 
   async function runLane() {
     while (reserveClaim()) {
-      const job = await claimBackgroundJob(type);
-      if (!job) return;
-      const stopLeaseRenewal = startBackgroundJobLeaseRenewal(job);
-      let outcome: BackgroundJobOutcome;
-      try {
-        outcome = await handleBackgroundJob(job);
-      } catch (error) {
-        await stopLeaseRenewal();
-        if (!await markBackgroundJobFailed(job, error)) {
-          logDiscardedBackgroundJobTransition(job, "failed");
-        }
-        processed += 1;
-        continue;
-      }
-      await stopLeaseRenewal();
-      try {
-        let stored: boolean;
-        let transition: "ignored" | "rescheduled" | "succeeded";
-        if (outcome.status === "ignored") {
-          transition = "ignored";
-          stored = await markBackgroundJobIgnored(job, outcome.reason);
-        } else if (outcome.status === "reschedule") {
-          transition = "rescheduled";
-          stored = await rescheduleBackgroundJob(
-            job,
-            outcome.delayMs,
-            outcome.result
-          );
-        } else {
-          transition = "succeeded";
-          stored = await markBackgroundJobSucceeded(job, outcome.result);
-        }
-        if (!stored) logDiscardedBackgroundJobTransition(job, transition);
-      } finally {
-        processed += 1;
-      }
+      if (!executionCoordinator.isAccepting()) return;
+      const ran = await executionCoordinator.claimAndRun(
+        () => claimBackgroundJob(type)
+      );
+      if (!ran) return;
+      processed += 1;
     }
   }
   await Promise.all(Array.from({ length: lanes }, runLane));
@@ -169,6 +163,7 @@ async function scheduleExpiredImportCleanup() {
 }
 
 async function runWorkerTick() {
+  if (!executionCoordinator.isAccepting()) return;
   const now = Date.now();
   if (now - lastStaleRecovery >= appConfig.backgroundJob.staleRecoveryIntervalMs) {
     const delayMs = lastStaleRecovery
@@ -195,6 +190,7 @@ async function runWorkerTick() {
     logger.debug("worker_periodic_task", { task: "history_cleanup", delay_ms: delayMs });
   }
 
+  if (!executionCoordinator.isAccepting()) return;
   const pending = await listRunnableBackgroundJobCounts();
   await Promise.all(pending.map(async (row) => {
     const result = await runBackgroundJobType(
@@ -222,6 +218,7 @@ function tick() {
 
 export function startWorker() {
   if (timer) return;
+  executionCoordinator.start();
   const onTickError = (error: unknown) => logger.error("worker tick failed", error);
   timer = setInterval(() => tick().catch(onTickError), appConfig.backgroundJob.tickIntervalMs);
   void tick().catch(onTickError);
@@ -230,16 +227,16 @@ export function startWorker() {
 export function stopWorker() {
   if (timer) clearInterval(timer);
   timer = undefined;
+  executionCoordinator.stop();
 }
 
 export async function drainWorker(
   timeoutMs = appConfig.backgroundJob.drainTimeoutMs
 ) {
-  if (!tickPromise) return;
-  let deadlineTimer: NodeJS.Timeout | undefined;
-  const deadline = new Promise<void>((resolve) => {
-    deadlineTimer = setTimeout(resolve, timeoutMs);
-  });
-  await Promise.race([tickPromise.catch(() => undefined), deadline]);
-  if (deadlineTimer) clearTimeout(deadlineTimer);
+  const additionalWork = tickPromise ? [tickPromise] : [];
+  const drained = await executionCoordinator.drain(timeoutMs, additionalWork);
+  if (!drained) {
+    logger.warn("background worker drain deadline exceeded", { timeout_ms: timeoutMs });
+  }
+  return drained;
 }

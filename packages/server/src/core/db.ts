@@ -107,6 +107,16 @@ type AdvisoryLockWork<T> = (
 const advisoryLockSignalContext = new AsyncLocalStorage<AbortSignal>();
 const poisonedAdvisoryClients = new WeakSet<PoolClient>();
 
+export function runWithAdvisoryLockSignal<T>(
+  signal: AbortSignal,
+  work: () => Promise<T>
+): Promise<T> {
+  const parent = advisoryLockSignalContext.getStore();
+  const combined = parent ? AbortSignal.any([parent, signal]) : signal;
+  combined.throwIfAborted();
+  return advisoryLockSignalContext.run(combined, work);
+}
+
 function signalError(signal: AbortSignal) {
   return signal.reason instanceof Error
     ? signal.reason

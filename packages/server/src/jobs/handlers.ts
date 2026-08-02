@@ -9,9 +9,11 @@ import { handleTrashPurgeJob } from "../images/trash-purge-job.ts";
 import { handleImportCleanupJob } from "../images/imports/cleanup-job.ts";
 import { rebuildRandomPool } from "../random/cache-rebuild.ts";
 import { handleMoveCleanupJob } from "../storage/move-cleanup-job.ts";
+import { runWithAdvisoryLockSignal } from "../core/db.ts";
 
 type BackgroundJobHandler = (
-  job: BackgroundJob
+  job: BackgroundJob,
+  signal: AbortSignal
 ) => Promise<BackgroundJobOutcome>;
 
 const backgroundJobHandlers = {
@@ -19,8 +21,8 @@ const backgroundJobHandlers = {
   "move.cleanup": handleMoveCleanupJob,
   "import.cleanup": handleImportCleanupJob,
   "trash.purge": handleTrashPurgeJob,
-  "cache.rebuild": async () => {
-    await rebuildRandomPool();
+  "cache.rebuild": async (_job, signal) => {
+    await rebuildRandomPool({ signal });
     return jobSucceeded();
   }
 } satisfies Record<BackgroundJobType, BackgroundJobHandler>;
@@ -28,10 +30,12 @@ const backgroundJobHandlers = {
 export type { BackgroundJobOutcome } from "./handler-outcome.ts";
 
 export async function handleBackgroundJob(
-  job: BackgroundJob
+  job: BackgroundJob,
+  signal: AbortSignal = new AbortController().signal
 ): Promise<BackgroundJobOutcome> {
   const handler = backgroundJobHandlers[
     job.type as BackgroundJobType
   ] as BackgroundJobHandler | undefined;
-  return handler ? handler(job) : jobIgnored("not implemented");
+  if (!handler) return jobIgnored("not implemented");
+  return runWithAdvisoryLockSignal(signal, () => handler(job, signal));
 }

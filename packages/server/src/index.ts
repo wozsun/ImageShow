@@ -73,9 +73,10 @@ async function shutdown(signal: string) {
   const hardExit = setTimeout(() => process.exit(1), appConfig.backgroundJob.shutdownHardExitMs);
   hardExit.unref();
   try {
-    await new Promise<void>((resolve) => server.close(() => resolve()));
     stopWorker();
-    await drainWorker();
+    const workerDrain = drainWorker();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await workerDrain;
     await startupRandomPool;
     await cleanupActiveRandomRebuildSpools();
     await closeStorageBackendRegistry();

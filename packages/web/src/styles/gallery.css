@@ -144,9 +144,7 @@
   color: var(--public-color-text-primary);
   background: var(--public-color-home-toolbar-surface);
   border-bottom: 1px solid var(--public-color-home-toolbar-border);
-  box-shadow:
-    0 12px 30px var(--public-shadow-navigation),
-    inset 0 1px var(--public-color-navigation-border);
+  box-shadow: 0 12px 30px var(--public-shadow-navigation);
   -webkit-backdrop-filter: blur(24px) saturate(128%);
   backdrop-filter: blur(24px) saturate(128%);
   transform: translateY(var(--gallery-toolbar-shift));
@@ -156,7 +154,7 @@
 }
 
 .gallery-toolbar.is-gallery-toolbar-entrance {
-  animation: gallery-toolbar-entrance 360ms ease-out 150ms backwards;
+  animation: gallery-toolbar-entrance 260ms ease-out 60ms backwards;
 }
 .gallery-toolbar-spacer {
   height: var(--gallery-toolbar-height);

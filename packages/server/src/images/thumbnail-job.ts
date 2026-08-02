@@ -56,7 +56,8 @@ async function generateThumbnailWhileLocked(
   } else {
     thumbnailSize = await generateStoredThumbnail(
       row.object_key,
-      row.storage_slug
+      row.storage_slug,
+      signal
     );
     signal.throwIfAborted();
   }
@@ -76,8 +77,10 @@ async function generateThumbnailWhileLocked(
 }
 
 export function handleThumbnailJob(
-  job: BackgroundJob
+  job: BackgroundJob,
+  signal: AbortSignal
 ): Promise<BackgroundJobOutcome> {
+  signal.throwIfAborted();
   return withImageStorageMutationLock(job.target_id, (signal) =>
     generateThumbnailWhileLocked(job, signal)
   );

@@ -75,7 +75,7 @@ healthcheck 只读现有配置快照，密码恢复不初始化运行时配置�
 | `images/` | 图片读写、展示投影、缓存、分类与元数据变更、回收站、缩略图与回收站任务；`imports/` 拥有完整导入会话生命周期及清理任务，`read-models/` 只读 PostgreSQL。 |
 | `storage/` | local、S3、WebDAV driver 及无环工厂；注册表缓存与 driver、管理读模型、配置变更、探测和占用统计分开维护，并拥有对象访问、强摘要传输、位置锁、迁移及 `move.cleanup` 仓储与 handler。 |
 | `random/` | 随机筛选、Redis generation、增量同步、全量重建、去重和随机出口读模型；缓存键、策略、Lua、序列化模型与批量写入分别维护。 |
-| `jobs/` | 仅拥有通用 `background_job` 生命周期、小型类型分派与公平调度 Worker；各领域拥有自己的 handler、payload 和结果语义。 |
+| `jobs/` | 仅拥有通用 `background_job` 生命周期、小型类型分派、公平调度 Worker，以及集中管理任务中止、期限、续租和有界排空的执行协调器；各领域拥有自己的 handler、payload 和结果语义。 |
 | `checks/` | 数据库、Redis 与存储一致性检查，以及显式触发的存储维护。 |
 | `authors/`、`tags/`、`themes/`、`vocab/` | 词表查询、变更、关联锁与派生缓存。 |
 | `users/` | 管理员初始化、账号变更、登录会话、角色与操作授权、密码恢复、偏好和会话失效。 |

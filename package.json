@@ -1,7 +1,7 @@
 {
   "name": "imageshow",
   "private": true,
-  "version": "3.14.5",
+  "version": "3.14.6",
   "type": "module",
   "workspaces": [
     "packages/*"

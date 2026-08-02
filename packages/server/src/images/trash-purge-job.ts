@@ -4,10 +4,15 @@ import {
   type BackgroundJobOutcome
 } from "../jobs/handler-outcome.ts";
 import { enqueue } from "../jobs/repository.ts";
+import type { BackgroundJob } from "../jobs/types.ts";
 import { purgeDeletedImages } from "./trash.ts";
 
-export async function handleTrashPurgeJob(): Promise<BackgroundJobOutcome> {
-  const result = await purgeDeletedImages();
+export async function handleTrashPurgeJob(
+  _job: BackgroundJob,
+  signal: AbortSignal
+): Promise<BackgroundJobOutcome> {
+  signal.throwIfAborted();
+  const result = await purgeDeletedImages(undefined, { signal });
   if (result.failed) {
     throw new Error(
       `trash purge batch failed for ${result.failed} `

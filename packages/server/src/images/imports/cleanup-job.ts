@@ -8,6 +8,7 @@ import {
   jobSucceeded,
   type BackgroundJobOutcome
 } from "../../jobs/handler-outcome.ts";
+import type { BackgroundJob } from "../../jobs/types.ts";
 import {
   tryWithStorageLocationReadAndAdvisoryLocks
 } from "../../storage/maintenance-lock.ts";
@@ -50,7 +51,8 @@ function cancellationOwnerKey(id: string, generation: string) {
   return `${id}:${generation}`;
 }
 
-async function cancelExpiredCommittingImports() {
+async function cancelExpiredCommittingImports(signal: AbortSignal) {
+  signal.throwIfAborted();
   const candidates = (await pool.query(
     `SELECT id, created_at::text AS cancellation_generation
        FROM import_session
@@ -63,31 +65,37 @@ async function cancelExpiredCommittingImports() {
 
   let cancelled = 0;
   for (const candidate of candidates) {
+    signal.throwIfAborted();
     const cancellation = await markImportCancelled(
       candidate.id,
       candidate.cancellation_generation
     );
-    const attempt = await tryWithStorageLocationReadAndAdvisoryLocks(
-      [{ key: importSessionLockKey(candidate.id), acquisition: "try" }],
-      (signal) => {
-        signal.throwIfAborted();
-        return pool.query(
-          `UPDATE import_session
-              SET status='cancelled',
-                  execution_token=NULL,
-                  raw_token=NULL,
-                  error='提交进程中断且会话已过期',
-                  updated_at=now()
-            WHERE id=$1
-              AND created_at=$2::timestamptz
-              AND status='committing'
-              AND expires_at < now()`,
-          [candidate.id, candidate.cancellation_generation]
+    const attempt = await (async () => {
+      try {
+        return await tryWithStorageLocationReadAndAdvisoryLocks(
+          [{ key: importSessionLockKey(candidate.id), acquisition: "try" }],
+          (lockSignal) => {
+            lockSignal.throwIfAborted();
+            return pool.query(
+              `UPDATE import_session
+                  SET status='cancelled',
+                      execution_token=NULL,
+                      raw_token=NULL,
+                      error='提交进程中断且会话已过期',
+                      updated_at=now()
+                WHERE id=$1
+                  AND created_at=$2::timestamptz
+                  AND status='committing'
+                  AND expires_at < now()`,
+              [candidate.id, candidate.cancellation_generation]
+            );
+          }
         );
+      } finally {
+        // 未取得锁时没有发布 PostgreSQL 取消；取得锁则已经证明执行者退出。
+        await clearImportCancelled(cancellation);
       }
-    );
-    // 未取得锁时没有发布 PostgreSQL 取消；取得锁则已经证明执行者退出。
-    await clearImportCancelled(cancellation);
+    })();
     if (attempt.acquired) {
       cancelled += attempt.value.rowCount ?? 0;
     }
@@ -95,8 +103,12 @@ async function cancelExpiredCommittingImports() {
   return cancelled;
 }
 
-export async function handleImportCleanupJob(): Promise<BackgroundJobOutcome> {
-  const cancelledCommitting = await cancelExpiredCommittingImports();
+export async function handleImportCleanupJob(
+  _job: BackgroundJob,
+  signal: AbortSignal
+): Promise<BackgroundJobOutcome> {
+  const cancelledCommitting = await cancelExpiredCommittingImports(signal);
+  signal.throwIfAborted();
   const candidates = (await pool.query(
     `SELECT id, created_at::text AS cancellation_generation
        FROM import_session
@@ -109,9 +121,16 @@ export async function handleImportCleanupJob(): Promise<BackgroundJobOutcome> {
       LIMIT $1`,
     [appConfig.trashBatchSize]
   )).rows as ExpiredImportCandidate[];
+  signal.throwIfAborted();
   const cancellations = await Promise.all(candidates.map((candidate) =>
     markImportCancelled(candidate.id, candidate.cancellation_generation)
   ));
+  try {
+    signal.throwIfAborted();
+  } catch (error) {
+    await Promise.all(cancellations.map(clearImportCancelled));
+    throw error;
+  }
   const cancellationByOwner = new Map(
     cancellations.map((cancellation) => [
       cancellationOwnerKey(cancellation.id, cancellation.generation),
@@ -171,6 +190,7 @@ export async function handleImportCleanupJob(): Promise<BackgroundJobOutcome> {
   const cleanups: ExpiredImportCleanup[] = [];
   const failures: ImportCleanupFailures = new Map();
   for (const row of rows) {
+    signal.throwIfAborted();
     const cancellation = cancellationByOwner.get(cancellationOwnerKey(
       row.id,
       row.cancellation_generation
@@ -185,6 +205,7 @@ export async function handleImportCleanupJob(): Promise<BackgroundJobOutcome> {
     }
     try {
       await abortActiveImport(row.id);
+      signal.throwIfAborted();
       await withImportSessionLock(row.id, async (signal) => {
         signal.throwIfAborted();
         const session = (await pool.query(
@@ -218,10 +239,12 @@ export async function handleImportCleanupJob(): Promise<BackgroundJobOutcome> {
         });
       });
     } catch (error) {
+      signal.throwIfAborted();
       appendImportCleanupFailure(failures, row.id, error);
     }
   }
 
+  signal.throwIfAborted();
   const cleanupIds = cleanups.map(({ id }) => id);
   const byStorage = new Map<string, string[]>();
   for (const cleanup of cleanups) {
@@ -230,14 +253,22 @@ export async function handleImportCleanupJob(): Promise<BackgroundJobOutcome> {
     else byStorage.set(cleanup.storageSlug, [cleanup.id]);
   }
   for (const [storageSlug, ids] of byStorage) {
-    const stagingFailures = await cleanupStagedObjectsBatch(ids, storageSlug);
+    signal.throwIfAborted();
+    const stagingFailures = await cleanupStagedObjectsBatch(
+      ids,
+      storageSlug,
+      signal
+    );
+    signal.throwIfAborted();
     mergeImportCleanupFailures(failures, stagingFailures);
   }
 
   try {
-    const rawFailures = await removeRawImports(cleanupIds);
+    signal.throwIfAborted();
+    const rawFailures = await removeRawImports(cleanupIds, signal);
     mergeImportCleanupFailures(failures, rawFailures);
   } catch (error) {
+    signal.throwIfAborted();
     for (const id of cleanupIds) {
       appendImportCleanupFailure(failures, id, error);
     }
@@ -248,17 +279,26 @@ export async function handleImportCleanupJob(): Promise<BackgroundJobOutcome> {
     getRuntimeConfig().background_job.move_cleanup_concurrency,
     async ({ id, finalObjectKey, storageSlug }) => {
       try {
-        await cleanupFinalImportObjects(id, finalObjectKey, storageSlug);
+        signal.throwIfAborted();
+        await cleanupFinalImportObjects(
+          id,
+          finalObjectKey,
+          storageSlug,
+          signal
+        );
       } catch (error) {
+        signal.throwIfAborted();
         appendImportCleanupFailure(failures, id, error);
       }
-    }
+    },
+    { signal }
   );
 
   const cleanedIds = cleanupIds.filter((id) => !failures.has(id));
   const cleanedIdSet = new Set(cleanedIds);
   const cleanedCandidates = rows.filter(({ id }) => cleanedIdSet.has(id));
 
+  signal.throwIfAborted();
   const deletedExpired = await pool.query(
     `DELETE FROM import_session AS session
       USING unnest($1::uuid[], $2::timestamptz[])
@@ -282,7 +322,12 @@ export async function handleImportCleanupJob(): Promise<BackgroundJobOutcome> {
       cancellation
     ): cancellation is ImportCancellationMarker => Boolean(cancellation))
     .map(clearImportCancelled));
-  await cleanupOrphanRawImports(appConfig.uploadTtlSeconds * 1000);
+  signal.throwIfAborted();
+  await cleanupOrphanRawImports(
+    appConfig.uploadTtlSeconds * 1000,
+    signal
+  );
+  signal.throwIfAborted();
 
   if (failures.size) {
     const messages = [...failures].map(([id, errors]) => (

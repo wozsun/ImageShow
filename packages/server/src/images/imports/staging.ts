@@ -65,8 +65,10 @@ async function removeStagingKeys(keys: string[], storageSlug: string) {
 
 export async function cleanupStagedObjectsBatch(
   ids: readonly string[],
-  storageSlug: string
+  storageSlug: string,
+  callerSignal?: AbortSignal
 ) {
+  callerSignal?.throwIfAborted();
   const targets = new Set(ids);
   const failures: ImportCleanupFailures = new Map();
   if (!targets.size) return failures;
@@ -88,10 +90,12 @@ export async function cleanupStagedObjectsBatch(
       }
     });
   } catch (error) {
+    callerSignal?.throwIfAborted();
     for (const id of targets) {
       appendImportCleanupFailure(failures, id, error);
     }
   }
+  callerSignal?.throwIfAborted();
   return failures;
 }
 
@@ -114,8 +118,10 @@ export async function cleanupStagedObjects(id: string, storageSlug: string) {
 export async function cleanupFinalImportObjects(
   id: string,
   finalObjectKey: string,
-  storageSlug: string
+  storageSlug: string,
+  signal?: AbortSignal
 ) {
+  signal?.throwIfAborted();
   if (!finalObjectKey) return;
   const referenced = await pool.query(
     `SELECT 1
@@ -124,6 +130,7 @@ export async function cleanupFinalImportObjects(
       LIMIT 1`,
     [storageSlug, finalObjectKey]
   );
+  signal?.throwIfAborted();
   if (referenced.rowCount) return;
   await enqueueObjectsForCleanup(id, [
     { prefix: "media", key: finalObjectKey, backend: storageSlug },
@@ -133,4 +140,5 @@ export async function cleanupFinalImportObjects(
       backend: storageSlug
     }
   ], "expired_import_commit_cleanup");
+  signal?.throwIfAborted();
 }

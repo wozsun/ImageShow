@@ -170,10 +170,18 @@ async function transcodeImageToWebp(input: ImageInput, settings: ImageTranscodeS
   }
 }
 
-export async function generateStoredThumbnail(objectKey: string, storageSlug: string) {
+export async function generateStoredThumbnail(
+  objectKey: string,
+  storageSlug: string,
+  signal?: AbortSignal
+) {
+  signal?.throwIfAborted();
   const config = await getStorageBackend(storageSlug);
+  signal?.throwIfAborted();
   const input = config.type === "local" ? safeStoragePath("media", objectKey) : await readStorageBuffer("media", objectKey, storageSlug);
   const thumbnail = await createThumbnail(input);
+  signal?.throwIfAborted();
   await writeStorageBuffer("thumbs", thumbnailObjectKey(objectKey), thumbnail, "image/webp", storageSlug);
+  signal?.throwIfAborted();
   return thumbnail.byteLength;
 }

@@ -122,7 +122,11 @@ export async function removeRawImportAttempt(
   }
 }
 
-export async function removeRawImports(ids: readonly string[]) {
+export async function removeRawImports(
+  ids: readonly string[],
+  signal?: AbortSignal
+) {
+  signal?.throwIfAborted();
   const targets = new Set(ids);
   const failures: ImportCleanupFailures = new Map();
   if (!targets.size) return failures;
@@ -132,6 +136,7 @@ export async function removeRawImports(ids: readonly string[]) {
     if (error.code === "ENOENT") return [];
     throw error;
   });
+  signal?.throwIfAborted();
   const entries = names.flatMap((name) => {
     const match = rawImportFilePattern.exec(name);
     const id = match?.[1] ?? "";
@@ -142,12 +147,15 @@ export async function removeRawImports(ids: readonly string[]) {
     getRuntimeConfig().background_job.move_cleanup_concurrency,
     async ({ id, path }) => {
       try {
+        signal?.throwIfAborted();
         await rm(path, { force: true });
       } catch (error) {
         appendImportCleanupFailure(failures, id, error);
       }
-    }
+    },
+    { signal }
   );
+  signal?.throwIfAborted();
   return failures;
 }
 
@@ -164,13 +172,18 @@ export async function rawImportExists(id: string, executionToken: string) {
   return Boolean(info?.isFile());
 }
 
-export async function cleanupOrphanRawImports(maxAgeMs: number) {
+export async function cleanupOrphanRawImports(
+  maxAgeMs: number,
+  signal?: AbortSignal
+) {
+  signal?.throwIfAborted();
   const cutoff = Date.now() - maxAgeMs;
   let removed = 0;
   const root = runtimePaths.tempDirectory;
   await mkdir(root, { recursive: true });
   const entries = await readdir(root, { withFileTypes: true });
   for (const entry of entries) {
+    signal?.throwIfAborted();
     if (!entry.isFile()) continue;
     const match = rawImportFilePattern.exec(entry.name);
     if (!match) continue;
@@ -195,6 +208,7 @@ export async function cleanupOrphanRawImports(maxAgeMs: number) {
       await rm(path, { force: true });
       return true;
     });
+    signal?.throwIfAborted();
     if (attempt.acquired && attempt.value) removed += 1;
   }
   return removed;

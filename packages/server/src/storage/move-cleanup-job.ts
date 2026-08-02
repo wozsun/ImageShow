@@ -46,8 +46,10 @@ function cleanupObjectsFromPayload(
 }
 
 export async function handleMoveCleanupJob(
-  job: BackgroundJob
+  job: BackgroundJob,
+  signal: AbortSignal
 ): Promise<BackgroundJobOutcome> {
+  signal.throwIfAborted();
   const objects = cleanupObjectsFromPayload(job);
   if (!objects) {
     throw new ApiError(

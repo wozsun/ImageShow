@@ -529,6 +529,10 @@ button.active, .button {
   backdrop-filter: blur(20px) saturate(118%);
 }
 
+.public-navigation-stack > .topbar:has(+ .public-navigation-secondary) {
+  box-shadow: none;
+}
+
 .topbar.is-public-navigation-entrance {
   animation:
     public-navigation-entrance

@@ -2,6 +2,8 @@
   --home-background-reveal-duration: 1100ms;
   --home-background-late-reveal-duration: 900ms;
   --home-filter-bar-height: 72px;
+  --home-navigation-entrance-delay: 30ms;
+  --home-navigation-entrance-duration: 180ms;
   position: relative;
   isolation: isolate;
   color: var(--public-color-text-primary);
@@ -63,6 +65,15 @@
   overflow: hidden;
 }
 
+/* 非嵌入页让图片从次导航顶边开始，避免桌面端 64px 主导航与 72px
+   次导航高度差在淡入中透出 8px 画布。这里有意少保留 8px 构图安全区；
+   嵌入页仍完整避让次导航。不要改动上方为 iOS 视口取色保留的外壳结构。 */
+.home-page:not(.is-embedded) .home-background-image-frame {
+  top: var(--public-page-header-height);
+  height: calc(100vh - var(--public-page-header-height));
+  height: calc(100lvh - var(--public-page-header-height));
+}
+
 .home-background-image-frame img {
   position: absolute;
   inset: 0;
@@ -96,9 +107,17 @@
   visibility: visible;
 }
 
-.home-navigation-frame.is-entrance-pending {
+.home-navigation-frame.is-entrance-pending .topbar,
+.home-navigation-frame.is-entrance-pending .home-filter-bar {
   opacity: 0;
   visibility: hidden;
+}
+
+/* 共享位移经过分数像素时，外缘半透明边框会与亮色照片抗锯齿混合。
+   保留边框几何但不单独绘线，由相邻暗色表面的自然色差完成分层。 */
+.home-navigation-frame
+  .public-navigation-stack > .topbar:has(+ .home-filter-bar) {
+  border-bottom-color: transparent;
 }
 
 .home-random-background::before,
@@ -157,15 +176,30 @@
   gap: 12px;
   align-items: center;
   color: var(--public-color-text-primary);
-  background: var(--public-color-home-toolbar-surface);
+  background: var(--public-color-home-filter-surface);
   border-bottom: 1px solid var(--public-color-home-toolbar-border);
-  box-shadow: 0 12px 32px var(--public-shadow-navigation);
+  box-shadow: none;
   -webkit-backdrop-filter: blur(28px) saturate(145%);
   backdrop-filter: blur(28px) saturate(145%);
 }
 
+.home-filter-bar::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: -1;
+  height: 1px;
+  pointer-events: none;
+  box-shadow: 0 12px 32px var(--public-shadow-navigation);
+}
+
 .home-filter-bar.is-home-filter-bar-entrance {
-  animation: home-filter-bar-fade-in 360ms ease-out 150ms backwards;
+  animation:
+    home-filter-bar-fade-in
+    var(--home-navigation-entrance-duration) ease-out
+    var(--home-navigation-entrance-delay) backwards;
 }
 
 .home-filter-bar-spacer {
