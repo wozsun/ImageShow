@@ -36,7 +36,7 @@ function OverviewMetricCards({ items }: { items: OverviewMetric[] }) {
   );
 }
 
-export function Overview() {
+export function Overview({ canManageStorage }: { canManageStorage: boolean }) {
   const [detail, setDetail] = useState<
     AdminOverviewDto["recent"][number] | null
   >(null);
@@ -70,7 +70,11 @@ export function Overview() {
     { label: "其它存储", value: data?.nonlocal,
       hint: sizePair(data?.nonlocal_image_size, data?.nonlocal_thumb_size),
       hintTitle: sizeTitle("原图", data?.nonlocal_image_size, "缩略图", data?.nonlocal_thumb_size) },
-    { label: "存储后端", value: data?.backend_count }
+    {
+      label: "存储后端",
+      value: data?.backend_count,
+      to: canManageStorage ? `${adminBasePath}/storage` : undefined
+    }
   ];
   return (
     <section className="workspace overview">

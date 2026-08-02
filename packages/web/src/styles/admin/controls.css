@@ -15,12 +15,6 @@
   caret-color: var(--color-control-text-primary);
 }
 
-:root[data-ui-context="admin"] :is(input, textarea, .select-trigger):focus-visible,
-[data-admin-dialog] :is(input, textarea, .select-trigger):focus-visible {
-  outline: 1px solid var(--admin-color-focus-ring);
-  outline-offset: 0;
-}
-
 .slug-combo-control { width: 100%; min-width: 0; }
 
 .slug-combo-control input[aria-invalid="true"] { border-color: var(--admin-color-danger-action); box-shadow: 0 0 0 1px var(--admin-color-danger-action); }
@@ -93,7 +87,7 @@
 }
 .reorder-control-group:hover,
 .reorder-control-group:focus-within {
-  filter: brightness(.97);
+  filter: var(--pressable-hover-filter);
 }
 .reorder-control-group > button.icon.reorder-step-button {
   width: 28px;
@@ -440,36 +434,19 @@ textarea.is-changed,
   border-radius: 0;
   background: transparent;
 }
-.tag-input-field:focus { outline: none; }
+.tag-input-control:has(.tag-input-field:focus-visible) {
+  outline: 1px auto var(--color-native-focus-outline);
+  outline-offset: 0;
+}
+.tag-input-control .tag-input-field:focus-visible { outline: none; }
 .tag-input-control:has(.tag-input-field:disabled) { opacity: .45; cursor: not-allowed; }
 .tag-input-control .tag-input-field:disabled { opacity: 1; }
 .tag-input-control:has(.tag-input-field:disabled) .tag-chip { padding: 3px 8px; }
 
-:root[data-ui-context="admin"] .tag-input-control:focus-within,
-[data-admin-dialog] .tag-input-control:focus-within {
-  outline: 1px solid var(--admin-color-focus-ring);
-  outline-offset: 0;
-  box-shadow: none;
-}
-
-:root[data-ui-context="admin"] .tag-input-control .tag-input-field:focus-visible,
-[data-admin-dialog] .tag-input-control .tag-input-field:focus-visible {
-  outline: none;
-  box-shadow: none;
-}
-
 :root[data-ui-context="admin"] .slug-combo-control input[data-new-slug="true"],
 [data-admin-dialog] .slug-combo-control input[data-new-slug="true"] {
   border-color: var(--admin-color-success-action);
-  outline: none;
   box-shadow: none;
-}
-
-:root[data-ui-context="admin"] .slug-combo-control input[data-new-slug="true"]:focus-visible,
-[data-admin-dialog] .slug-combo-control input[data-new-slug="true"]:focus-visible {
-  border-color: var(--admin-color-success-action);
-  outline: none;
-  box-shadow: 0 0 0 1px var(--admin-color-focus-ring);
 }
 
 .tag-chip.is-new { background: var(--admin-color-success-surface); border-color: var(--admin-color-success-border); color: var(--admin-color-success-text-strong); }

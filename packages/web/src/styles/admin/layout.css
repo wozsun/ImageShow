@@ -129,11 +129,6 @@
   line-height: 1;
   white-space: nowrap;
 }
-.admin-version-slot.is-link:focus-visible {
-  outline: 1px solid var(--admin-color-focus-ring);
-  outline-offset: -1px;
-  border-radius: 5px;
-}
 .admin > aside .admin-brand {
   width: 184px;
   min-height: 45px;
@@ -215,11 +210,6 @@
   background: transparent;
   opacity: 1;
 }
-.admin .admin-color-scheme-toggle:focus-visible {
-  outline: 1px solid var(--admin-color-focus-ring);
-  outline-offset: 1px;
-  border-radius: 4px;
-}
 .admin .admin-color-scheme-toggle .app-icon {
   width: 17px;
   height: 17px;
@@ -294,9 +284,10 @@
 
 .admin-nav-group-trigger { display: flex; align-items: center; border-radius: 10px; }
 .admin-nav-group-trigger:hover { background: var(--admin-color-navigation-hover); }
-.admin-nav-group-trigger:hover > :is(.admin-nav-group-main, .admin-nav-caret) {
+.admin > aside .admin-nav-group-trigger:hover > :is(.admin-nav-group-main, .admin-nav-caret) {
   color: var(--admin-color-navigation-active-text);
   background: transparent;
+  filter: none;
 }
 .admin-nav-group-trigger.active {
   background: var(--admin-color-navigation-active);
@@ -505,16 +496,3 @@ body:has(.admin > .workspace-contained) {
     transform: translateY(var(--admin-interactive-card-lift));
   }
 }
-
-:is(
-  a.overview-card-link,
-  button.overview-recent-item,
-  button.storage-add-card
-):focus-visible,
-.admin-image-card:has(> .admin-image-card-detail:focus-visible) {
-  border-color: var(--admin-color-action-primary);
-  outline: 1px solid var(--admin-color-focus-ring);
-  outline-offset: 1px;
-}
-
-.admin .admin-image-card-detail:focus-visible { outline: none; }

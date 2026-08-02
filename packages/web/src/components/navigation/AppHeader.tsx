@@ -45,6 +45,11 @@ export function AppHeader({
   const homeEnabled = data?.site?.home?.enabled ?? true;
   const rootPath = data?.site ? publicRootPath(data.site) : "/home";
   const showAdminEntry = Boolean(auth?.authenticated);
+  const isGalleryPage = pathname === "/gallery"
+    || (pathname === "/" && rootPath === "/gallery");
+  const homeNavigationState = isGalleryPage
+    ? { publicNavigationSource: "gallery" }
+    : undefined;
   const navClassName = (target: "/home" | "/gallery") => ({ isActive }: { isActive: boolean }) =>
     isActive || (pathname === "/" && rootPath === target) ? "active" : undefined;
 
@@ -109,14 +114,20 @@ export function AppHeader({
         }
       }}
     >
-      <Link className="brand" to="/">{siteName}</Link>
+      <Link
+        className="brand"
+        to="/"
+        state={rootPath === "/home" ? homeNavigationState : undefined}
+      >
+        {siteName}
+      </Link>
       <nav className="desktop-nav">
-        {homeEnabled && <NavLink to="/home" className={navClassName("/home")}><Icon name="home-4-line" />首页</NavLink>}
+        {homeEnabled && <NavLink to="/home" state={homeNavigationState} className={navClassName("/home")}><Icon name="home-4-line" />首页</NavLink>}
         <NavLink to="/gallery" className={navClassName("/gallery")}><Icon name="image-line" />画廊</NavLink>
         {showAdminEntry && <NavLink to={adminBasePath}><Icon name="settings-3-line" />管理</NavLink>}
       </nav>
       <MobileNavigation onExpandedChange={onMenuExpandedChange}>
-        {homeEnabled && <NavLink to="/home" className={navClassName("/home")}><Icon name="home-4-line" />首页</NavLink>}
+        {homeEnabled && <NavLink to="/home" state={homeNavigationState} className={navClassName("/home")}><Icon name="home-4-line" />首页</NavLink>}
         <NavLink to="/gallery" className={navClassName("/gallery")}><Icon name="image-line" />画廊</NavLink>
         {showAdminEntry && <NavLink to={adminBasePath}><Icon name="settings-3-line" />管理</NavLink>}
       </MobileNavigation>

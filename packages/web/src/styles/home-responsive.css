@@ -68,10 +68,6 @@
     --home-filter-bar-height: 64px;
   }
 
-  .home-random-background.is-ready .home-background-image-frame img {
-    animation-name: home-background-drift-mobile;
-  }
-
   .home-filter-bar {
     min-height: var(--home-filter-bar-height);
     padding: 7px 14px;
@@ -338,11 +334,6 @@
   }
 }
 
-@keyframes home-background-drift-mobile {
-  from { transform: scale(1.02) translate3d(0, 0, 0); }
-  to { transform: scale(1.032) translate3d(-.16%, 0, 0); }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .home-background-image-frame img,
   .home-random-background.is-ready-after-foreground img,
@@ -355,10 +346,9 @@
     transition: none;
   }
 
-  .home-random-background.is-ready .home-background-image-frame img,
   .home-background-atmosphere,
   .home-random-background::after,
-  .home-filter-bar.is-home-secondary-navigation-entrance,
+  .home-filter-bar.is-home-filter-bar-entrance,
   .home-reveal-axes.is-reveal-animation-active .home-axis-group,
   .home-reveal-section.is-reveal-settled.is-reveal-animation-active
     .home-section-track-glint,

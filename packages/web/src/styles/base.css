@@ -12,6 +12,8 @@
   --pressable-scale-small: .97;
   --pressable-scale-medium: .98;
   --pressable-scale-large: .99;
+  --pressable-hover-brighten-filter: brightness(1.2);
+  --pressable-hover-filter: brightness(.97);
 }
 
 :root[data-color-scheme="dark"] {
@@ -20,6 +22,10 @@
 
 :root[data-color-scheme="light"] {
   color-scheme: light;
+}
+
+:where(a, button, input, textarea, select):focus-visible {
+  outline-color: var(--color-native-focus-outline);
 }
 
 * { box-sizing: border-box; }
@@ -382,7 +388,7 @@ button.active, .button {
 
 @media (hover: hover) and (pointer: fine) {
   button:not(:disabled):not(.select-trigger):not([data-availability-locked="true"]):hover,
-  .button:not(:disabled):hover { filter: brightness(.97); }
+  .button:not(:disabled):hover { filter: var(--pressable-hover-filter); }
 }
 .icon { width: 36px; padding: 0; flex: 0 0 36px; }
 
@@ -629,7 +635,7 @@ button.active, .button {
 .mobile-nav-toggle {
   min-height: 38px;
   color: var(--public-color-navigation-text);
-  background: var(--public-color-navigation-control-surface);
+  background: var(--public-color-navigation-mobile-control-surface);
   border-color: var(--public-color-navigation-control-border);
 }
 .mobile-nav-dropdown {

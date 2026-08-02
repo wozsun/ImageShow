@@ -122,7 +122,6 @@ const allowedAdminStatusRoles = new Map([
       "surface-hover",
       "border",
       "border-soft",
-      "border-subtle",
       "border-strong",
       "progress",
       "action",

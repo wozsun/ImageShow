@@ -168,7 +168,7 @@ function AuthenticatedAdminShell({
         <RouteLoadBoundary resetKey={routeLocation.pathname}>
           <Suspense fallback={<div className="center">加载中</div>}>
             <Routes>
-              <Route index element={<Overview />} />
+              <Route index element={<Overview canManageStorage={isSuper} />} />
               <Route path="images" element={<ImageAdmin />} />
               <Route path="tags" element={<EntityAdmin key="tags" kind="tags" />} />
               <Route path="themes" element={<EntityAdmin key="themes" kind="themes" />} />

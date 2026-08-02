@@ -81,6 +81,7 @@
   --public-color-navigation-surface-solid: rgba(7, 11, 21, .97);
   --public-color-navigation-border: rgba(255, 255, 255, .1);
   --public-color-navigation-control-surface: rgba(255, 255, 255, .08);
+  --public-color-navigation-mobile-control-surface: rgba(0, 0, 0, .06);
   --public-color-navigation-control-border: rgba(255, 255, 255, .2);
   --public-color-navigation-active: var(--public-color-selection-strong);
   --public-shadow-navigation: rgba(0, 2, 8, .34);
@@ -124,7 +125,6 @@
   --public-color-home-scroll-text: rgba(255, 246, 249, .74);
   --public-color-home-scroll-border: rgba(255, 255, 255, .34);
   --public-color-home-scroll-border-hover: rgba(255, 255, 255, .82);
-  --public-color-home-focus: rgba(255, 255, 255, .88);
   --public-shadow-home-glass: rgba(0, 3, 10, .36);
   --public-color-home-glass-highlight: rgba(255, 255, 255, .09);
   --public-color-home-section-label: #cfe1ff;
@@ -135,8 +135,9 @@
   --public-color-home-card-option-border: rgba(155, 190, 239, .16);
   --public-color-home-option-caption: #9eabc0;
   --public-color-home-theme-mark: #d9668f;
-  --public-color-home-option-border-hover: rgba(145, 199, 255, .5);
-  --public-color-home-option-border-selected: rgba(145, 199, 255, .58);
+  --public-color-home-option-border-hover: rgba(132, 208, 255, .94);
+  --public-color-home-option-selected-surface: rgba(104, 172, 244, .46);
+  --public-color-home-option-border-selected: rgba(130, 201, 255, .86);
   --public-color-home-option-disabled-text: rgba(160, 174, 194, .44);
   --public-color-home-option-disabled-surface: rgba(73, 91, 119, .12);
   --public-color-home-option-disabled-border: rgba(132, 166, 218, .1);
@@ -178,14 +179,15 @@
   --public-color-gallery-menu-hover: rgba(77, 143, 232, .28);
   --public-color-gallery-menu-option: rgba(28, 42, 66, .88);
   --public-color-gallery-menu-option-hover: rgba(77, 143, 232, .24);
+  --public-color-gallery-menu-option-border-hover: rgba(145, 199, 255, .58);
   --public-color-gallery-menu-selection-text: #e6f2ff;
   --public-color-gallery-menu-selection-surface: rgba(47, 111, 201, .38);
   --public-color-gallery-menu-selection-border: rgba(145, 199, 255, .48);
-  --public-color-gallery-code-text: rgba(224, 235, 249, .78);
+  --public-color-gallery-code-text: rgba(224, 235, 249, .9);
   --public-color-gallery-code-surface: rgba(86, 128, 185, .14);
   --public-shadow-gallery-tile: rgba(0, 3, 10, .28);
   --public-color-gallery-tile-border-hover: rgba(145, 199, 255, .5);
-  --public-shadow-gallery-tile-hover: rgba(47, 111, 201, .16);
+  --public-shadow-gallery-tile-hover: rgba(66, 148, 255, .34);
   --public-color-gallery-tile-surface: #0d1422;
   --public-color-gallery-tile-surface-raised: #18243a;
   --public-color-gallery-tile-overlay-clear: rgba(14, 18, 28, 0);
@@ -232,6 +234,7 @@
   --public-shadow-gallery-mobile-filter: rgba(0, 2, 8, .4);
 
   /* Context aliases consumed by shared base components. */
+  --color-native-focus-outline: CanvasText;
   --color-browser-canvas: var(--bootstrap-color-canvas);
   --color-control-text-primary: var(--public-color-control-text-primary);
   --color-control-text-secondary: var(--public-color-control-text-secondary);

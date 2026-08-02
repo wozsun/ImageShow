@@ -216,7 +216,7 @@
 
 .home-axis-group button.is-selected {
   color: var(--public-color-text-strong);
-  background: var(--public-color-action-soft);
+  background: var(--public-color-home-option-selected-surface);
   border-color: var(--public-color-home-option-border-selected);
 }
 
@@ -375,7 +375,7 @@
 }
 
 .home-theme-selector button.is-selected {
-  background: var(--public-color-action-soft);
+  background: var(--public-color-home-option-selected-surface);
   border-color: var(--public-color-home-option-border-selected);
 }
 
@@ -437,7 +437,7 @@
 }
 
 .home-tag-selector button.is-selected {
-  background: var(--public-color-action-soft);
+  background: var(--public-color-home-option-selected-surface);
   border-color: var(--public-color-home-option-border-selected);
 }
 
@@ -486,7 +486,7 @@
 }
 
 .home-author-selector button.is-selected {
-  background: var(--public-color-action-soft);
+  background: var(--public-color-home-option-selected-surface);
   border-color: var(--public-color-home-option-border-selected);
 }
 

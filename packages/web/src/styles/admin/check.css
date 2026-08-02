@@ -26,7 +26,7 @@
   animation: surface-in .18s ease-out;
 }
 .check-card { animation: surface-in .2s ease-out; }
-.check-summary.ok, .check-card.ok { border: 1px solid var(--admin-color-success-border-subtle); background: var(--admin-color-success-surface-soft); }
+.check-summary.ok, .check-card.ok { border: 1px solid var(--admin-color-success-border-strong); background: var(--admin-color-success-surface-soft); }
 .check-summary.warn, .check-card.warn { border: 1px solid var(--admin-color-warning-border); background: var(--admin-color-warning-surface); }
 .check-card-head {
   display: flex;

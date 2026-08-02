@@ -72,7 +72,7 @@
   object-fit: cover;
   object-position: center top;
   opacity: 0;
-  transform: scale(1.06);
+  transform: scale(1.05);
   transform-origin: center top;
   transition:
     opacity var(--home-background-reveal-duration)
@@ -81,15 +81,9 @@
       var(--public-motion-ease-cinematic);
 }
 
-.home-random-background.is-ready .home-background-image-frame img {
-  animation:
-    home-background-drift 22s ease-in-out
-    var(--home-background-reveal-duration) infinite alternate;
-}
-
 .home-random-background.is-ready img {
   opacity: 1;
-  transform: scale(1.02);
+  transform: scale(1);
 }
 
 .home-random-background.is-ready-after-foreground img {
@@ -168,33 +162,17 @@
   color: var(--public-color-text-primary);
   background: var(--public-color-home-toolbar-surface);
   border-bottom: 1px solid var(--public-color-home-toolbar-border);
-  box-shadow:
-    0 12px 32px var(--public-shadow-navigation),
-    inset 0 -1px var(--public-color-home-toolbar-border);
+  box-shadow: 0 12px 32px var(--public-shadow-navigation);
   -webkit-backdrop-filter: blur(28px) saturate(145%);
   backdrop-filter: blur(28px) saturate(145%);
 }
 
-.home-filter-bar.is-home-secondary-navigation-entrance {
-  animation:
-    home-secondary-navigation-entrance
-    320ms var(--public-motion-ease-soft) backwards;
+.home-filter-bar.is-home-filter-bar-entrance {
+  animation: home-filter-bar-fade-in 160ms ease-out backwards;
 }
 
 .home-filter-bar-spacer {
   height: var(--home-filter-bar-height);
-}
-
-@keyframes home-secondary-navigation-entrance {
-  from {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 .home-filter-bar > div {
@@ -531,20 +509,11 @@
 
 .home-scroll-cue:focus-visible {
   color: var(--public-color-text-strong);
-  outline: 2px solid var(--public-color-home-focus);
-  outline-offset: 6px;
 }
 
-:root[data-document-motion-paused="true"]
-  .home-background-image-frame img,
 :root[data-document-motion-paused="true"] .home-background-atmosphere,
 :root[data-document-motion-paused="true"] .home-random-background::after {
   animation-play-state: paused;
-}
-
-@keyframes home-background-drift {
-  from { transform: scale(1.02) translate3d(0, 0, 0); }
-  to { transform: scale(1.045) translate3d(-.35%, 0, 0); }
 }
 
 @keyframes home-atmosphere-breathe {
@@ -555,4 +524,9 @@
 @keyframes home-star-breathe {
   from { opacity: .13; }
   to { opacity: .21; }
+}
+
+@keyframes home-filter-bar-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }

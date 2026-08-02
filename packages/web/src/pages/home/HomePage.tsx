@@ -6,6 +6,7 @@ import {
   useRef,
   useState
 } from "react";
+import { useLocation, useNavigate } from "react-router";
 import {
   AppLoadingText,
   type AppLoadingExtraDots
@@ -59,6 +60,12 @@ function HomeStartupLoadingText({
 export function HomePage({ embedded = false }: { embedded?: boolean }) {
   const catalogRef = useRef<HTMLElement>(null);
   const lastSuccessfulStatsRef = useRef<GalleryStatsDto | undefined>(undefined);
+  const transitionStateConsumedRef = useRef(false);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const isGalleryNavigation = !embedded
+    && location.state?.publicNavigationSource === "gallery";
+  const [animateFilterBarEntrance] = useState(() => isGalleryNavigation);
   const {
     hadAppearedBeforeMount: navigationHadAppearedBeforeMount,
     markAppeared: markNavigationAppeared,
@@ -94,6 +101,33 @@ export function HomePage({ embedded = false }: { embedded?: boolean }) {
     navigationHadAppearedBeforeMount || !navigationMotionAllowed
   );
   useDocumentMotionPause();
+
+  useLayoutEffect(() => {
+    if (!isGalleryNavigation || transitionStateConsumedRef.current) return;
+    transitionStateConsumedRef.current = true;
+    const remainingState = {
+      ...(location.state as Record<string, unknown>)
+    };
+    delete remainingState.publicNavigationSource;
+    void navigate(
+      {
+        pathname: location.pathname,
+        search: location.search,
+        hash: location.hash
+      },
+      {
+        replace: true,
+        state: Object.keys(remainingState).length ? remainingState : null
+      }
+    );
+  }, [
+    isGalleryNavigation,
+    location.hash,
+    location.pathname,
+    location.search,
+    location.state,
+    navigate
+  ]);
 
   useLayoutEffect(() => {
     if (entrance.navigationRevealed) markNavigationAppeared();
@@ -139,9 +173,7 @@ export function HomePage({ embedded = false }: { embedded?: boolean }) {
         <div className="public-navigation-stack">
           {!embedded && <AppHeader />}
           <HomeFilterBar
-            animateEntrance={
-              navigationHadAppearedBeforeMount && navigationMotionAllowed
-            }
+            animateEntrance={animateFilterBarEntrance}
             filters={filters}
             galleryPath={embedded ? "/embed/gallery" : "/gallery"}
             stats={stats}

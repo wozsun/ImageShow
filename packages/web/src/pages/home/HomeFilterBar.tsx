@@ -15,7 +15,7 @@ import {
 } from "./home-ui.js";
 
 export function HomeFilterBar({
-  animateEntrance,
+  animateEntrance = false,
   filters,
   stats,
   isPending,
@@ -24,7 +24,7 @@ export function HomeFilterBar({
   galleryPath = "/gallery",
   onFiltersChange
 }: {
-  animateEntrance: boolean;
+  animateEntrance?: boolean;
   filters: GalleryFilters;
   stats: GalleryStatsDto | undefined;
   isPending: boolean;
@@ -50,17 +50,13 @@ export function HomeFilterBar({
 
   return (
     <section
-      className={[
-        "home-filter-bar",
-        "public-navigation-secondary",
-        entrance.active ? "is-home-secondary-navigation-entrance" : ""
-      ].filter(Boolean).join(" ")}
+      className={`home-filter-bar public-navigation-secondary${entrance.active ? " is-home-filter-bar-entrance" : ""}`}
       aria-label="当前画廊筛选"
       aria-busy={isPending || isPlaceholderData}
       onAnimationEnd={(event) => {
         if (
           event.currentTarget === event.target
-          && event.animationName === "home-secondary-navigation-entrance"
+          && event.animationName === "home-filter-bar-fade-in"
         ) {
           entrance.finish();
         }

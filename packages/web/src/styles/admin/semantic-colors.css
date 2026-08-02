@@ -25,19 +25,18 @@
 
   /* Navigation */
   --admin-color-navigation-surface: light-dark(#fff, #161b22);
-  --admin-color-navigation-hover: var(--admin-color-control-surface-hover);
-  --admin-color-navigation-active: light-dark(#dbeafe, #14375e);
+  --admin-color-navigation-hover: light-dark(#eef5ff, #182a43);
+  --admin-color-navigation-active: light-dark(#dbeafe, #173f6b);
   --admin-color-navigation-text: light-dark(#334155, #c9d1d9);
   --admin-color-navigation-active-text: light-dark(#1559b7, #79c0ff);
   --admin-color-navigation-divider: light-dark(#e1e8f0, #30363d);
-  --admin-color-navigation-control-surface: light-dark(#fff, #21262d);
+  --admin-color-navigation-control-surface: light-dark(#fff, #1c2128);
   --admin-color-navigation-control-border: light-dark(#cbd6e3, #636c76);
   --admin-color-navigation-version-border: light-dark(#d6e0eb, #3d444d);
   --admin-color-navigation-version-text: light-dark(#64748b, #8b949e);
   --admin-color-navigation-version-surface: light-dark(#f4f7fb, #21262d);
   --admin-color-navigation-version-hover-text: light-dark(#1559b7, #79c0ff);
   --admin-color-navigation-version-hover-surface: light-dark(#e7f0ff, #203247);
-  --admin-color-focus-ring: light-dark(rgba(31, 111, 235, .64), rgba(96, 168, 237, .88));
   --admin-color-navigation-scrollbar: light-dark(rgba(71, 85, 105, .28), rgba(201, 209, 217, .24));
   --admin-color-navigation-scrollbar-active: light-dark(rgba(71, 85, 105, .46), rgba(201, 209, 217, .42));
 
@@ -93,7 +92,6 @@
   --admin-color-success-surface-hover: light-dark(#cdeedb, #2d523b);
   --admin-color-success-border: light-dark(#9fd3ad, #4d795b);
   --admin-color-success-border-soft: light-dark(#a9bdb0, #5a695f);
-  --admin-color-success-border-subtle: light-dark(#b9dec4, #5a695f);
   --admin-color-success-border-strong: light-dark(#78b78a, #416f64);
   --admin-color-success-progress: light-dark(#ccebd7, #304f3b);
   --admin-color-success-action: light-dark(#2f8f5b, #72c68b);
@@ -162,8 +160,8 @@
   /* Entity and role badges */
   --admin-color-entity-surface-pinned: light-dark(#f7f9fc, #1c2128);
   --admin-color-entity-slug-surface: light-dark(#eef2f7, #21262d);
-  --admin-color-role-super-text: light-dark(#92400e, #f2cc60);
-  --admin-color-role-super-surface: light-dark(#fef3c7, #3b2e13);
+  --admin-color-role-super-text: light-dark(#1559b7, #79c0ff);
+  --admin-color-role-super-surface: light-dark(#dbeafe, #15447a);
   --admin-color-role-image-text: light-dark(#3730a3, #a5b4fc);
   --admin-color-role-image-surface: light-dark(#e0e7ff, #25264f);
 
@@ -254,8 +252,9 @@
 }
 
 :root[data-ui-context="admin"][data-color-scheme="dark"],
-:root[data-color-scheme="dark"] [data-admin-dialog] {
+:root[data-color-scheme="dark"] :is([data-admin-dialog], .image-detail-admin-details) {
   color-scheme: dark;
+  --pressable-hover-filter: var(--pressable-hover-brighten-filter);
 }
 
 /*
@@ -284,10 +283,4 @@
   --color-detail-danger-action-text: var(--admin-color-danger-text);
   --color-detail-danger-action-surface: var(--admin-color-danger-surface);
   --color-detail-danger-action-border: var(--admin-color-danger-border-strong);
-}
-
-:is(.admin, [data-admin-dialog], .image-detail-admin-details)
-  :is(a, button, input, textarea, select):focus-visible {
-  outline: 1px solid var(--admin-color-focus-ring);
-  outline-offset: 1px;
 }
