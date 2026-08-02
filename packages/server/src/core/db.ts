@@ -321,83 +321,6 @@ export function runMigrations() {
   );
 }
 
-const currentBaselineMigration = "0001_initial";
-const absorbedBaselineMigrations = [
-  "0002_background_job_execution_token"
-] as const;
-
-async function consolidateBaselineMigrationHistory(
-  signal: AbortSignal,
-  client: PoolClient
-) {
-  const historyTable = (await client.query(
-    "SELECT to_regclass('public.schema_migrations')::text AS name"
-  )).rows[0]?.name as string | null | undefined;
-  if (!historyTable) return;
-
-  signal.throwIfAborted();
-  const versions = (await client.query(
-    "SELECT version FROM schema_migrations ORDER BY version"
-  )).rows.map((row) => String(row.version));
-  if (!versions.length) return;
-
-  const supportedVersions = new Set([
-    currentBaselineMigration,
-    ...absorbedBaselineMigrations
-  ]);
-  const unsupported = versions.filter((version) => !supportedVersions.has(version));
-  if (unsupported.length || !versions.includes(currentBaselineMigration)) {
-    throw new Error(
-      `Unsupported database migration history: ${versions.join(", ")}`
-    );
-  }
-
-  const executionToken = (await client.query(
-    `SELECT data_type, is_nullable, column_default
-       FROM information_schema.columns
-      WHERE table_schema='public'
-        AND table_name='background_job'
-        AND column_name='execution_token'`
-  )).rows[0] as {
-    data_type?: string;
-    is_nullable?: string;
-    column_default?: string | null;
-  } | undefined;
-  if (
-    executionToken?.data_type !== "uuid"
-    || executionToken.is_nullable !== "YES"
-    || executionToken.column_default !== null
-  ) {
-    throw new Error(
-      "Database must be upgraded through ImageShow 3.14.6 before the 0001 baseline can be consolidated"
-    );
-  }
-
-  const absorbed = absorbedBaselineMigrations.filter((version) => (
-    versions.includes(version)
-  ));
-  if (!absorbed.length) return;
-  if (absorbed.length !== absorbedBaselineMigrations.length) {
-    throw new Error(
-      `Incomplete database migration history: ${versions.join(", ")}`
-    );
-  }
-
-  signal.throwIfAborted();
-  await client.query("BEGIN");
-  try {
-    await client.query(
-      "DELETE FROM schema_migrations WHERE version = ANY($1::text[])",
-      [absorbed]
-    );
-    signal.throwIfAborted();
-    await client.query("COMMIT");
-  } catch (error) {
-    await client.query("ROLLBACK").catch(() => undefined);
-    throw error;
-  }
-}
-
 async function runMigrationsUnderLock(
   signal: AbortSignal,
   client: PoolClient
@@ -408,7 +331,6 @@ async function runMigrationsUnderLock(
     ? bundledMigrationDir
     : join(here, "..", "..", "migrations");
   const files = (await readdir(migrationDir)).filter((file) => file.endsWith(".sql")).sort();
-  await consolidateBaselineMigrationHistory(signal, client);
   for (const file of files) {
     signal.throwIfAborted();
     const version = file.replace(/\.sql$/, "");

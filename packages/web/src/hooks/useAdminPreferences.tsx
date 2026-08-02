@@ -32,7 +32,6 @@ import {
   type CachedAdminPreferences
 } from "../lib/api/admin-preference-cache.js";
 
-const localPreferenceVersion = 1;
 const localPreferenceKeyPrefix = "imageshow.admin.preferences.";
 
 type SetAdminPreference = <Key extends AdminPreferenceKey>(
@@ -81,7 +80,7 @@ function writeCachedPreferences(username: string, cache: CachedAdminPreferences)
   try {
     window.localStorage.setItem(
       localPreferenceKey(username),
-      JSON.stringify({ version: localPreferenceVersion, ...cache })
+      JSON.stringify(cache)
     );
     return true;
   } catch {
@@ -97,7 +96,7 @@ function readCachedPreferences(username: string): CachedAdminPreferences {
     const raw = storage.getItem(localPreferenceKey(username));
     if (raw === null) return emptyCache();
     const parsed = JSON.parse(raw) as unknown;
-    if (!isRecord(parsed) || parsed.version !== localPreferenceVersion) return emptyCache();
+    if (!isRecord(parsed)) return emptyCache();
     const pending = normalizeAdminPreferences(parsed.pending);
     return {
       values: {

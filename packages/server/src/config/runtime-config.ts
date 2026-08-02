@@ -216,29 +216,6 @@ function projectKnownConfig(base: unknown, input: unknown): unknown {
   );
 }
 
-function migrateRenamedConfigFields(value: unknown): unknown {
-  if (!isPlainRecord(value)) return value;
-  const site = value.site;
-  if (!isPlainRecord(site) || !isPlainRecord(site.home)) return value;
-  const home = site.home;
-  if (
-    home.background !== undefined
-    || typeof home.hero_background !== "string"
-  ) {
-    return value;
-  }
-  return {
-    ...value,
-    site: {
-      ...site,
-      home: {
-        ...home,
-        background: home.hero_background
-      }
-    }
-  };
-}
-
 function mergeDefined(base: Record<string, unknown>, patch: Record<string, unknown>) {
   const result: Record<string, unknown> = { ...base };
   for (const [key, value] of Object.entries(patch)) {
@@ -263,7 +240,7 @@ export function parseRuntimeConfig(value: unknown): RuntimeConfig {
 export function normalizeRuntimeConfig(value: unknown): RuntimeConfig {
   return runtimeConfigSchema.parse(projectKnownConfig(
     appConfig.runtimeDefaults,
-    migrateRenamedConfigFields(value)
+    value
   ));
 }
 

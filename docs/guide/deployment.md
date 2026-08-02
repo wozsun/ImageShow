@@ -19,13 +19,20 @@ docker run --rm -p 5518:5518 \
 `log/` 日志），因此只需挂载这一个目录。PostgreSQL / Redis 连接只从容器环境或
 Secret 读取，不会写入 `config.json`。
 外部 Redis 需要密码时额外传入 `REDIS_PASSWORD`；留空或省略表示使用无密码连接。
+服务端以 ioredis 6 的 RESP3 协议连接 Redis 8，不提供面向旧 Redis / RESP2 的兼容
+开关；外部 Redis 也必须按当前 Redis 8 基线部署。
+从 3.14.8 部署 3.14.9 时，先停止应用，再清空该 ImageShow 实例通过 `REDIS_DB`
+指定的逻辑库，随后启动新版本；登录会话会失效，随机池与查询缓存会按 PostgreSQL
+真相源重新生成。Redis 与其他业务共享时不得执行 `FLUSHALL`，操作前必须核对目标
+逻辑库只由当前 ImageShow 实例使用。
 
 ## 健康检查与镜像清理
 
 容器健康检查只调用 `/readyz`。该端点检查 PostgreSQL 与 Redis 连通性；数据库迁移在
-HTTP 服务开始监听前已经于迁移锁内完成或使进程启动失败，readiness 不再根据折叠后的
-历史版本号猜测 schema。任一运行依赖不可用都会返回非 2xx，Docker 随即把容器标为
-unhealthy。`/livez` 只表示进程
+HTTP 服务开始监听前已经于迁移锁内完成或使进程启动失败。3.14.9 只支持全新数据库或
+已经完成 3.14.8 部署、且迁移账本仅含 `0001_initial` 的现有数据库；应用不再探测或
+修复更早版本的 schema 与迁移历史。任一运行依赖不可用都会返回非 2xx，Docker 随即
+把容器标为 unhealthy。`/livez` 只表示进程
 仍在运行，适合人工区分“进程退出”和“依赖未就绪”，不作为镜像切换成功的依据。
 
 清理本地镜像必须先确认新容器 healthy，并且只处理 ImageShow 仓库和已经人工确认的

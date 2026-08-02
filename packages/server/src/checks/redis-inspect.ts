@@ -93,10 +93,9 @@ export async function inspectRedisState() {
     imageLookupKeys.thumbs,
     imageLookupKeys.id
   ];
-  const [coreKeys, randomItemIds, hsetexSupported, lookupFieldTtls, generationInspection] = await Promise.all([
+  const [coreKeys, randomItemIds, lookupFieldTtls, generationInspection] = await Promise.all([
     Promise.all(coreKeyNames.map((key) => redisKeySummary(key).catch(() => missingKeySummary(key)))),
     itemKey ? sampleHashFields(itemKey, 12).catch(() => []) : Promise.resolve([]),
-    inspectHsetexCapability(),
     inspectLookupFieldTtls(Object.values(imageLookupKeys)),
     inspectGenerations(generation, scanned.generations)
   ]);
@@ -119,7 +118,6 @@ export async function inspectRedisState() {
     galleryFilterOptions,
     categoryThemes: categorySummary.themes,
     generationInspection,
-    hsetexSupported,
     requestedRevision: redisRevision(requestedRaw),
     completedRevision: redisRevision(completedRaw)
   });
@@ -129,7 +127,6 @@ export async function inspectRedisState() {
       status: redis.status,
       configured_db: deploymentConfig.redis.db,
       redis_version: parseRedisInfo(serverInfo, new Set(["redis_version"])).redis_version ?? "unknown",
-      hsetex_supported: hsetexSupported,
       dbsize,
       memory: parseRedisInfo(memoryInfo),
       keyspace: parseRedisInfo(keyspaceInfo)
@@ -175,11 +172,6 @@ function parseJson<T>(raw: string | null, fallback: T) {
   } catch {
     return fallback;
   }
-}
-
-async function inspectHsetexCapability() {
-  const result = await redis.call("COMMAND", "INFO", "HSETEX").catch(() => null);
-  return Array.isArray(result) && result.length > 0 && result[0] !== null;
 }
 
 async function redisKeySummary(key: string) {
@@ -398,7 +390,6 @@ function redisStateIssues(input: {
   galleryFilterOptions: GalleryFilterOptions;
   categoryThemes: string[];
   generationInspection: Awaited<ReturnType<typeof inspectGenerations>>;
-  hsetexSupported: boolean;
   requestedRevision: number;
   completedRevision: number;
 }) {
@@ -423,7 +414,6 @@ function redisStateIssues(input: {
   if (input.snapshot && JSON.stringify(optionThemes) !== JSON.stringify(input.categoryThemes)) {
     issues.push("gallery_filter_options 主题列表与随机分类计数不一致");
   }
-  if (!input.hsetexSupported) issues.push("当前 Redis 不支持 HSETEX");
   if (input.completedRevision < input.requestedRevision) {
     issues.push(`随机池 completed revision ${input.completedRevision} 落后于 mutation revision ${input.requestedRevision}`);
   }

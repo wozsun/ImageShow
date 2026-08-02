@@ -13,7 +13,7 @@ docker compose pull
 docker compose up -d
 ```
 
-Docker 镜像已包含 Node.js 26.5.0。只有在宿主机直接运行开发、检查或构建命令时，才需要安装 Node.js `>=26.3.0 <27`；该版本范围覆盖项目使用的原生 UUIDv7、Temporal、Argon2 与 TypeScript 类型擦除。
+Docker 镜像已包含 Node.js 26.5.1。只有在宿主机直接运行开发、检查或构建命令时，才需要安装 Node.js `>=26.3.0 <27`；该版本范围覆盖项目使用的原生 UUIDv7、Temporal、Argon2 与 TypeScript 类型擦除。
 
 若使用 `.env`，首次启动必须提供：
 

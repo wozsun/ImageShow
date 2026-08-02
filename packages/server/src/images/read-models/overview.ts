@@ -15,14 +15,11 @@ import {
 } from "../presenter.ts";
 
 type OverviewStats = AdminOverviewDto;
-const overviewProjectionVersion = 2;
 
 export async function getOverviewStats(): Promise<AdminOverviewDto> {
   const recentLimit = getRuntimeConfig().admin.recent_uploads;
   const generation = await publicImagesCacheGeneration();
-  // Version the value shape so a rolling upgrade never feeds the former
-  // thumbnail-only projection to the full detail dialog.
-  const cacheKey = `projection:${overviewProjectionVersion}:recent:${recentLimit}`;
+  const cacheKey = `recent:${recentLimit}`;
   const cached = await getAdminOverviewCache<OverviewStats>(cacheKey, generation);
   if (cached) return cached;
 
