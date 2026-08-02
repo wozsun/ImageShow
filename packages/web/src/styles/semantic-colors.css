@@ -86,8 +86,6 @@
   --public-color-navigation-active: var(--public-color-selection-strong);
   --public-shadow-navigation: rgba(0, 2, 8, .34);
   --public-shadow-navigation-menu: rgba(0, 2, 8, .42);
-  --public-color-navigation-glow-primary: rgba(90, 157, 239, .2);
-  --public-color-navigation-glow-accent: rgba(217, 117, 164, .12);
   --public-color-navigation-star-neutral-strong: rgba(238, 247, 255, .92);
   --public-color-navigation-star-primary: rgba(145, 199, 255, .88);
   --public-color-navigation-star-neutral-soft: rgba(255, 255, 255, .74);
@@ -95,8 +93,8 @@
   --public-color-navigation-star-accent: rgba(255, 228, 240, .74);
   --public-color-navigation-star-primary-soft: rgba(203, 229, 255, .78);
   --public-color-navigation-star-neutral-muted: rgba(255, 255, 255, .68);
-  --public-color-navigation-streak: rgba(220, 239, 255, .9);
-  --public-color-navigation-streak-glow: rgba(125, 190, 255, .82);
+  --public-color-navigation-streak: rgba(220, 239, 255, .8);
+  --public-color-navigation-streak-glow: rgba(125, 190, 255, .6);
 
   /* Home */
   --public-color-home-photo-mask-left: rgba(4, 8, 17, .5);
@@ -108,8 +106,7 @@
   --public-color-home-atmosphere-accent: rgba(166, 76, 119, .14);
   --public-color-home-grain-line: rgba(255, 255, 255, .12);
   --public-color-home-grain-dot: rgba(255, 255, 255, .18);
-  --public-color-home-filter-surface: rgba(7, 11, 21, .82);
-  --public-color-home-toolbar-surface: rgba(9, 15, 28, .88);
+  --public-color-home-filter-surface: rgba(7, 11, 21, .32);
   --public-color-home-toolbar-border: rgba(255, 255, 255, .12);
   --public-color-home-toolbar-description: rgba(218, 229, 244, .68);
   --public-color-home-reset-text: rgba(225, 235, 248, .78);
@@ -231,7 +228,6 @@
   --color-detail-mobile-close-surface: rgba(5, 8, 14, .78);
   --color-detail-mobile-close-border: rgba(255, 255, 255, .52);
   --color-detail-mobile-close-shadow: rgba(0, 0, 0, .36);
-  --public-color-gallery-mobile-filter-surface: rgba(7, 12, 24, .95);
   --public-shadow-gallery-mobile-filter: rgba(0, 2, 8, .4);
 
   /* Context aliases consumed by shared base components. */

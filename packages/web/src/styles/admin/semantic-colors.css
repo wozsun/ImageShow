@@ -127,15 +127,15 @@
   /* Pending and informational */
   --admin-color-pending-text: light-dark(#245eaa, #79c0ff);
   --admin-color-pending-text-strong: light-dark(#294f78, #a5d6ff);
-  --admin-color-pending-surface: light-dark(#edf5ff, #14253d);
+  --admin-color-pending-surface: light-dark(#e2efff, #14253d);
   --admin-color-pending-progress: light-dark(#d3e4ff, #1e3a5f);
   --admin-color-pending-border: light-dark(#86afe8, #315d8c);
   --admin-color-pending-text-soft: light-dark(#2b65ad, #5b90bf);
-  --admin-color-pending-surface-soft: light-dark(#f6f9fe, #0f1c2e);
+  --admin-color-pending-surface-soft: light-dark(#ebf3fd, #0f1c2e);
   --admin-color-pending-border-soft: light-dark(#b5cae7, #254669);
-  --admin-color-pending-text-subtle: light-dark(#496f98, #5586b3);
-  --admin-color-pending-surface-subtle: light-dark(#fafbfd, #0a131f);
-  --admin-color-pending-border-subtle: light-dark(#d4dfea, #192f46);
+  --admin-color-pending-text-subtle: light-dark(#3f6f9f, #5586b3);
+  --admin-color-pending-surface-subtle: light-dark(#f3f7fc, #0a131f);
+  --admin-color-pending-border-subtle: light-dark(#cbdbea, #192f46);
 
   /* Code editor and log viewer */
   --admin-color-code-surface: #0d1117;

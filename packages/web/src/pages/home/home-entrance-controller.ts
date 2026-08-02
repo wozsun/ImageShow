@@ -1,6 +1,6 @@
 const homeEntranceTiming = {
   deadlineMs: 800,
-  navigationDelayAfterBackgroundMs: 100,
+  primaryNavigationDelayAfterBackgroundMs: 30,
   heroDelayAfterBackgroundMs: 250,
   catalogDelayAfterBackgroundMs: 800,
   heroDelayAfterDeadlineMs: 80,
@@ -216,11 +216,11 @@ export class HomeEntranceController {
       + homeEntranceTiming.catalogDelayAfterBackgroundMs;
     if (!this.#snapshot.navigationRevealed) {
       this.#navigationRevealAt = now
-        + homeEntranceTiming.navigationDelayAfterBackgroundMs;
+        + homeEntranceTiming.primaryNavigationDelayAfterBackgroundMs;
       this.#navigationTimer = this.#scheduler.setTimer(() => {
         this.#navigationTimer = undefined;
         this.#revealNavigation();
-      }, homeEntranceTiming.navigationDelayAfterBackgroundMs);
+      }, homeEntranceTiming.primaryNavigationDelayAfterBackgroundMs);
     }
     this.#heroTimer = this.#scheduler.setTimer(() => {
       this.#heroTimer = undefined;

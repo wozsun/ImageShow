@@ -68,6 +68,7 @@
   .facet-select-menu,
   .facet-select-menu.is-closing { animation: none; }
   .public-navigation-stack,
+  .public-navigation-stack::before,
   .gallery-toolbar { transition: none; }
   .topbar.is-public-navigation-entrance { animation: none; }
   .gallery-toolbar.is-gallery-toolbar-entrance,
@@ -142,13 +143,13 @@
     overflow-y: auto;
     overscroll-behavior: contain;
     align-items: end;
-    background: var(--public-color-gallery-mobile-filter-surface);
+    background: var(--public-color-navigation-surface-solid);
     border-bottom: 1px solid var(--public-color-home-toolbar-border);
     box-shadow:
       0 12px 24px var(--public-shadow-gallery-mobile-filter),
       inset 0 1px var(--public-color-navigation-border);
-    -webkit-backdrop-filter: blur(24px) saturate(128%);
-    backdrop-filter: blur(24px) saturate(128%);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
     visibility: hidden;
     opacity: 0;
     pointer-events: none;

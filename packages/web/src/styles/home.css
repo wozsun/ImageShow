@@ -2,8 +2,10 @@
   --home-background-reveal-duration: 1100ms;
   --home-background-late-reveal-duration: 900ms;
   --home-filter-bar-height: 72px;
+  --public-navigation-secondary-height: var(--home-filter-bar-height);
+  /* 主导航等待 30ms；次级导航再延迟 30ms，总等待 60ms。 */
   --home-navigation-entrance-delay: 30ms;
-  --home-navigation-entrance-duration: 180ms;
+  --home-navigation-entrance-duration: 160ms;
   position: relative;
   isolation: isolate;
   color: var(--public-color-text-primary);
@@ -107,17 +109,23 @@
   visibility: visible;
 }
 
-.home-navigation-frame.is-entrance-pending .topbar,
-.home-navigation-frame.is-entrance-pending .home-filter-bar {
+.home-navigation-frame .public-navigation-stack::before {
+  bottom: auto;
+  height: var(--public-page-header-height);
+}
+
+.home-navigation-frame.is-entrance-pending .topbar {
   opacity: 0;
   visibility: hidden;
 }
 
-/* 共享位移经过分数像素时，外缘半透明边框会与亮色照片抗锯齿混合。
-   保留边框几何但不单独绘线，由相邻暗色表面的自然色差完成分层。 */
-.home-navigation-frame
-  .public-navigation-stack > .topbar:has(+ .home-filter-bar) {
-  border-bottom-color: transparent;
+.home-navigation-frame.is-entrance-pending .home-filter-bar {
+  background-color: var(--home-filter-bar-surface-start);
+}
+
+.home-navigation-frame.is-entrance-pending .home-filter-bar > * {
+  opacity: 0;
+  visibility: hidden;
 }
 
 .home-random-background::before,
@@ -167,6 +175,8 @@
 }
 
 .home-filter-bar {
+  --home-filter-bar-surface-start: var(--public-color-navigation-surface);
+  --home-filter-bar-surface-end: var(--public-color-home-filter-surface);
   z-index: 6;
   width: 100%;
   min-height: var(--home-filter-bar-height);
@@ -176,11 +186,11 @@
   gap: 12px;
   align-items: center;
   color: var(--public-color-text-primary);
-  background: var(--public-color-home-filter-surface);
+  background-color: var(--home-filter-bar-surface-end);
   border-bottom: 1px solid var(--public-color-home-toolbar-border);
   box-shadow: none;
-  -webkit-backdrop-filter: blur(28px) saturate(145%);
-  backdrop-filter: blur(28px) saturate(145%);
+  -webkit-backdrop-filter: blur(16px) saturate(118%);
+  backdrop-filter: blur(16px) saturate(118%);
 }
 
 .home-filter-bar::after {
@@ -197,9 +207,21 @@
 
 .home-filter-bar.is-home-filter-bar-entrance {
   animation:
-    home-filter-bar-fade-in
+    home-filter-bar-surface-reveal
     var(--home-navigation-entrance-duration) ease-out
     var(--home-navigation-entrance-delay) backwards;
+}
+
+.home-filter-bar.is-home-filter-bar-entrance > * {
+  animation:
+    home-filter-bar-content-reveal
+    var(--home-navigation-entrance-duration) ease-out
+    var(--home-navigation-entrance-delay) backwards;
+}
+
+.home-filter-bar.is-home-filter-bar-entrance
+  > .home-filter-reset:disabled {
+  --home-filter-bar-content-end-opacity: .38;
 }
 
 .home-filter-bar-spacer {
@@ -330,8 +352,8 @@
   border: 1px solid var(--public-color-home-stats-border);
   border-radius: 24px;
   box-shadow: 0 20px 50px var(--public-shadow-home-stats);
-  -webkit-backdrop-filter: blur(18px) saturate(115%);
-  backdrop-filter: blur(18px) saturate(115%);
+  -webkit-backdrop-filter: blur(8px) saturate(115%);
+  backdrop-filter: blur(8px) saturate(115%);
 }
 
 .home-site-stats > span {
@@ -557,7 +579,23 @@
   to { opacity: .21; }
 }
 
-@keyframes home-filter-bar-fade-in {
+@keyframes home-filter-bar-surface-reveal {
+  from { background-color: var(--home-filter-bar-surface-start); }
+  to { background-color: var(--home-filter-bar-surface-end); }
+}
+
+@keyframes home-filter-bar-content-reveal {
   from { opacity: 0; }
-  to { opacity: 1; }
+  to { opacity: var(--home-filter-bar-content-end-opacity, 1); }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .home-filter-bar {
+    --home-filter-bar-surface-start:
+      var(--public-color-navigation-surface-solid);
+    --home-filter-bar-surface-end:
+      var(--public-color-navigation-surface-solid);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
 }

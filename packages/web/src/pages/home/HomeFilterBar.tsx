@@ -56,7 +56,7 @@ export function HomeFilterBar({
       onAnimationEnd={(event) => {
         if (
           event.currentTarget === event.target
-          && event.animationName === "home-filter-bar-fade-in"
+          && event.animationName === "home-filter-bar-surface-reveal"
         ) {
           entrance.finish();
         }

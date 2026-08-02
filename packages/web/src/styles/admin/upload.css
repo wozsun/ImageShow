@@ -306,7 +306,6 @@
   --import-job-status: var(--admin-color-pending-text-soft);
   --import-job-progress: var(--admin-color-pending-text-soft);
 }
-.import-job.queued,
 .import-job.uploading,
 .import-job.downloading,
 .import-job.received {
@@ -314,6 +313,11 @@
   --import-job-background: var(--admin-color-pending-surface-subtle);
   --import-job-status: var(--admin-color-pending-text-subtle);
   --import-job-progress: var(--admin-color-pending-text-subtle);
+}
+.import-job.queued {
+  --import-job-border: var(--admin-color-border-default);
+  --import-job-background: var(--admin-color-control-surface-muted);
+  --import-job-status: var(--admin-color-text-secondary);
 }
 .import-job.cancelling {
   --import-job-border: var(--admin-color-warning-border-soft);

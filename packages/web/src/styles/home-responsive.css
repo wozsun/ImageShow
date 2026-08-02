@@ -348,6 +348,7 @@
   .home-background-atmosphere,
   .home-random-background::after,
   .home-filter-bar.is-home-filter-bar-entrance,
+  .home-filter-bar.is-home-filter-bar-entrance > *,
   .home-reveal-axes.is-reveal-animation-active .home-axis-group,
   .home-reveal-section.is-reveal-settled.is-reveal-animation-active
     .home-section-track-glint,

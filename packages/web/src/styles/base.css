@@ -6,7 +6,7 @@
   --public-nav-motion-easing: cubic-bezier(.2, .8, .2, 1);
   --public-motion-ease-cinematic: cubic-bezier(.22, 1, .36, 1);
   --public-motion-ease-soft: cubic-bezier(.2, .7, .3, 1);
-  --public-motion-navigation-reveal: 380ms;
+  --public-motion-navigation-reveal: 360ms;
   background-color: var(--color-browser-canvas);
   /* 点击反馈按可点击面积分级：小图标位移更明显，大卡片/整宽按钮更克制。 */
   --pressable-scale-small: .97;
@@ -494,8 +494,11 @@ button.active, .button {
 
 .public-navigation-stack {
   --public-navigation-stack-shift: 0px;
+  --public-navigation-material-clip: 0px;
+  position: relative;
   width: 100%;
   pointer-events: none;
+  isolation: isolate;
   /* 主、次导航共享这一位移，切换时保持边界连续。 */
   transform: translateY(var(--public-navigation-stack-shift));
   transition:
@@ -503,8 +506,53 @@ button.active, .button {
     var(--public-nav-motion-easing);
 }
 
+.public-navigation-stack::before,
+.public-navigation-stack::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.public-navigation-stack::before {
+  inset: 0;
+  clip-path: inset(0 0 var(--public-navigation-material-clip) 0);
+  transition:
+    clip-path var(--public-nav-motion-duration)
+    var(--public-nav-motion-easing);
+  background-color: var(--public-color-navigation-surface);
+  -webkit-backdrop-filter: blur(20px) saturate(118%);
+  backdrop-filter: blur(20px) saturate(118%);
+}
+
+.public-navigation-stack::after {
+  top: 0;
+  right: 0;
+  left: 0;
+  height: var(--app-header-height);
+  background:
+    radial-gradient(circle at 20% 31%, var(--public-color-navigation-star-neutral-strong) 0 1px, transparent 1.8px),
+    radial-gradient(circle at 28% 72%, var(--public-color-navigation-star-primary) 0 .9px, transparent 1.7px),
+    radial-gradient(circle at 35% 22%, var(--public-color-navigation-star-neutral-soft) 0 .7px, transparent 1.45px),
+    radial-gradient(circle at 52% 68%, var(--public-color-navigation-star-primary-bright) 0 .9px, transparent 1.7px),
+    radial-gradient(circle at 61% 26%, var(--public-color-navigation-star-accent) 0 .8px, transparent 1.55px),
+    radial-gradient(circle at 72% 63%, var(--public-color-navigation-star-primary-soft) 0 .75px, transparent 1.5px),
+    radial-gradient(circle at 83% 28%, var(--public-color-navigation-star-neutral-muted) 0 .7px, transparent 1.45px);
+  opacity: .86;
+  filter: blur(.55px);
+}
+
+.public-navigation-stack:not(:has(> .topbar))::after {
+  content: none;
+}
+
 .public-navigation-stack:has(> .topbar.is-scroll-hidden) {
   --public-navigation-stack-shift: calc(0px - var(--app-header-height));
+}
+
+.public-navigation-stack:has(> .public-navigation-secondary.is-scroll-hidden) {
+  --public-navigation-material-clip:
+    var(--public-navigation-secondary-height, 0px);
 }
 
 .public-navigation-stack > .topbar,
@@ -522,14 +570,13 @@ button.active, .button {
   align-items: center;
   justify-content: space-between;
   color: var(--public-color-navigation-text);
-  background: var(--public-color-navigation-surface);
+  background: transparent;
   border-bottom: 1px solid var(--public-color-navigation-border);
   box-shadow: 0 10px 28px var(--public-shadow-navigation);
-  -webkit-backdrop-filter: blur(20px) saturate(118%);
-  backdrop-filter: blur(20px) saturate(118%);
 }
 
 .public-navigation-stack > .topbar:has(+ .public-navigation-secondary) {
+  border-bottom-color: transparent;
   box-shadow: none;
 }
 
@@ -537,33 +584,6 @@ button.active, .button {
   animation:
     public-navigation-entrance
     var(--public-motion-navigation-reveal) ease-out backwards;
-}
-.topbar::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(
-      ellipse 30% 120% at 37% -38%,
-      var(--public-color-navigation-glow-primary),
-      transparent 70%
-    ),
-    radial-gradient(
-      ellipse 26% 110% at 68% 142%,
-      var(--public-color-navigation-glow-accent),
-      transparent 72%
-    ),
-    radial-gradient(circle at 20% 31%, var(--public-color-navigation-star-neutral-strong) 0 1px, transparent 1.8px),
-    radial-gradient(circle at 28% 72%, var(--public-color-navigation-star-primary) 0 .9px, transparent 1.7px),
-    radial-gradient(circle at 35% 22%, var(--public-color-navigation-star-neutral-soft) 0 .7px, transparent 1.45px),
-    radial-gradient(circle at 52% 68%, var(--public-color-navigation-star-primary-bright) 0 .9px, transparent 1.7px),
-    radial-gradient(circle at 61% 26%, var(--public-color-navigation-star-accent) 0 .8px, transparent 1.55px),
-    radial-gradient(circle at 72% 63%, var(--public-color-navigation-star-primary-soft) 0 .75px, transparent 1.5px),
-    radial-gradient(circle at 83% 28%, var(--public-color-navigation-star-neutral-muted) 0 .7px, transparent 1.45px);
-  opacity: .86;
-  filter: blur(.35px);
 }
 .topbar::after {
   content: "";
@@ -586,7 +606,7 @@ button.active, .button {
     42% 42%
   );
   filter:
-    blur(.25px)
+    blur(.36px)
     drop-shadow(0 0 5px var(--public-color-navigation-streak-glow));
 }
 .topbar > * {
@@ -595,6 +615,14 @@ button.active, .button {
 }
 .topbar.is-scroll-hidden {
   pointer-events: none;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .public-navigation-stack::before {
+    background: var(--public-color-navigation-surface-solid);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
 }
 
 @keyframes public-navigation-entrance {

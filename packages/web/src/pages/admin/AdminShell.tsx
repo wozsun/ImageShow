@@ -29,8 +29,10 @@ import {
 } from "../../hooks/useAdminPreferences.js";
 import { useAdminColorScheme } from "../../hooks/useAdminColorScheme.js";
 import {
+  advanceAdminColorSchemeCycle,
   nextAdminColorScheme,
-  reconcileSystemNextAfter
+  reconcileAdminColorSchemeCycle,
+  type AdminColorSchemeCycle
 } from "../../lib/ui/color-scheme.js";
 // 后台颜色契约与组件样式都随 AdminShell 懒加载，公开入口不会下载。
 import "../../styles/admin/semantic-colors.css";
@@ -91,23 +93,29 @@ function AuthenticatedAdminShell({
   const routeLocation = useLocation();
   const navScrollRef = useRef<HTMLDivElement | null>(null);
   const [colorScheme, setColorScheme] = useAdminPreference("color_scheme");
-  const [systemNextAfter, setSystemNextAfter] = useState<"dark" | "light" | null>(null);
+  const [colorSchemeCycle, setColorSchemeCycle] =
+    useState<AdminColorSchemeCycle | null>(null);
   const isSuper = role === "super";
   const navigation = adminNavigationForRole(role);
 
   const resolvedColorScheme = useAdminColorScheme(colorScheme);
   useLayoutEffect(() => {
-    setSystemNextAfter((current) => reconcileSystemNextAfter(
+    setColorSchemeCycle((current) => reconcileAdminColorSchemeCycle(
       colorScheme,
       current
     ));
   }, [colorScheme]);
   const nextColorScheme = nextAdminColorScheme(
+    colorScheme,
     resolvedColorScheme,
-    systemNextAfter === colorScheme
+    colorSchemeCycle
   );
   const handleColorSchemeChange = (next: typeof colorScheme) => {
-    setSystemNextAfter(next === "system" ? null : next);
+    setColorSchemeCycle(advanceAdminColorSchemeCycle(
+      colorScheme,
+      resolvedColorScheme,
+      next
+    ));
     setColorScheme(next);
   };
 
