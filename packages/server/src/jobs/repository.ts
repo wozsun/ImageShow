@@ -26,6 +26,7 @@ export async function enqueue(
          error='',
          retry_count=0,
          next_retry_at=NULL,
+         execution_token=NULL,
          created_at=now(),
          updated_at=now()
      WHERE background_job.status IN ('succeeded','ignored')
@@ -115,6 +116,11 @@ export async function enqueueRerunnableJob(
                          THEN background_job.next_retry_at
                        ELSE NULL
                      END,
+                     execution_token=CASE
+                       WHEN background_job.status='running'
+                         THEN background_job.execution_token
+                       ELSE NULL
+                     END,
                      created_at=CASE
                        WHEN background_job.status='running'
                          THEN background_job.created_at
@@ -136,9 +142,10 @@ export async function enqueueRerunnableJob(
 }
 
 export async function claimBackgroundJob(type: string) {
+  const executionToken = randomUuidV7();
   const result = await pool.query(
     `UPDATE background_job
-     SET status = 'running', updated_at = now()
+     SET status='running', execution_token=$2, updated_at=now()
      WHERE id = (
        SELECT id FROM background_job
        WHERE (
@@ -150,17 +157,28 @@ export async function claimBackgroundJob(type: string) {
        FOR UPDATE SKIP LOCKED
        LIMIT 1
      )
-     RETURNING id, type, target_id, payload, retry_count, created_at`,
-    [type]
+     RETURNING id, type, target_id, payload, execution_token,
+               retry_count, created_at`,
+    [type, executionToken]
   );
   return result.rows[0] as BackgroundJob | undefined;
 }
 
+export async function renewBackgroundJobLease(job: BackgroundJob) {
+  const result = await pool.query(
+    `UPDATE background_job
+     SET updated_at=now()
+     WHERE id=$1 AND status='running' AND execution_token=$2`,
+    [job.id, job.execution_token]
+  );
+  return result.rowCount === 1;
+}
+
 export async function markBackgroundJobSucceeded(
-  id: string,
+  job: BackgroundJob,
   result: unknown = {}
 ) {
-  await pool.query(
+  const updated = await pool.query(
     `UPDATE background_job
      SET status=CASE
            WHEN payload->>'rerun_requested'='true' THEN 'pending'
@@ -169,7 +187,7 @@ export async function markBackgroundJobSucceeded(
          payload=payload - 'rerun_requested',
          result=CASE
            WHEN payload->>'rerun_requested'='true' THEN '{}'::jsonb
-           ELSE $2::jsonb
+           ELSE $3::jsonb
          END,
          error='',
          retry_count=CASE
@@ -177,38 +195,53 @@ export async function markBackgroundJobSucceeded(
            ELSE retry_count
          END,
          next_retry_at=NULL,
+         execution_token=NULL,
          created_at=CASE
            WHEN payload->>'rerun_requested'='true' THEN now()
            ELSE created_at
          END,
          updated_at=now()
-     WHERE id=$1`,
-    [id, JSON.stringify(result)]
+     WHERE id=$1 AND status='running' AND execution_token=$2`,
+    [job.id, job.execution_token, JSON.stringify(result)]
   );
+  return updated.rowCount === 1;
 }
 
-export async function markBackgroundJobIgnored(id: string, reason: string) {
-  await pool.query(
-    "UPDATE background_job SET status='ignored', error=$2, updated_at=now() WHERE id=$1",
-    [id, reason]
+export async function markBackgroundJobIgnored(
+  job: BackgroundJob,
+  reason: string
+) {
+  const updated = await pool.query(
+    `UPDATE background_job
+     SET status='ignored', execution_token=NULL, error=$3, updated_at=now()
+     WHERE id=$1 AND status='running' AND execution_token=$2`,
+    [job.id, job.execution_token, reason]
   );
+  return updated.rowCount === 1;
 }
 
 export async function rescheduleBackgroundJob(
-  id: string,
+  job: BackgroundJob,
   delayMs: number,
   result: unknown = {}
 ) {
-  await pool.query(
+  const updated = await pool.query(
     `UPDATE background_job
      SET status='pending',
-         result=$2::jsonb,
+         result=$3::jsonb,
          error='',
-         next_retry_at=$3,
+         next_retry_at=$4,
+         execution_token=NULL,
          updated_at=now()
-     WHERE id=$1`,
-    [id, JSON.stringify(result), new Date(Date.now() + Math.max(0, delayMs))]
+     WHERE id=$1 AND status='running' AND execution_token=$2`,
+    [
+      job.id,
+      job.execution_token,
+      JSON.stringify(result),
+      new Date(Date.now() + Math.max(0, delayMs))
+    ]
   );
+  return updated.rowCount === 1;
 }
 
 export async function markBackgroundJobFailed(
@@ -221,27 +254,33 @@ export async function markBackgroundJobFailed(
   const seconds = backoff[Math.min(retry - 1, backoff.length - 1)];
   const exhausted = retry >= maxRetries;
 
-  logger[exhausted ? "error" : "warn"](
-    `task ${job.type} ${
-      exhausted ? "gave up" : `will retry (${retry}/${maxRetries})`
-    } id=${job.id.slice(0, 8)}: ${errorMessage(error)}`
-  );
-  await pool.query(
+  const updated = await pool.query(
     `UPDATE background_job
      SET status='failed',
          payload=payload - 'rerun_requested',
          retry_count=$2,
          next_retry_at=$3,
          error=$4,
+         execution_token=NULL,
          updated_at=now()
-     WHERE id=$1`,
+     WHERE id=$1 AND status='running' AND execution_token=$5`,
     [
       job.id,
       retry,
       exhausted ? null : new Date(Date.now() + seconds * 1000),
-      errorMessage(error)
+      errorMessage(error),
+      job.execution_token
     ]
   );
+  if (updated.rowCount === 1) {
+    logger[exhausted ? "error" : "warn"](
+      `task ${job.type} ${
+        exhausted ? "gave up" : `will retry (${retry}/${maxRetries})`
+      } id=${job.id.slice(0, 8)}: ${errorMessage(error)}`
+    );
+    return true;
+  }
+  return false;
 }
 
 export async function listRunnableBackgroundJobCounts() {
@@ -273,6 +312,7 @@ export async function recoverStaleBackgroundJobs() {
            ELSE now()
          END,
          error='Recovered stale running task',
+         execution_token=NULL,
          updated_at=now()
      WHERE status='running'
        AND updated_at < now() - ($1 || ' seconds')::interval`,

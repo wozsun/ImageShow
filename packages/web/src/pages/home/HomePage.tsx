@@ -6,7 +6,6 @@ import {
   useRef,
   useState
 } from "react";
-import { useLocation, useNavigate } from "react-router";
 import {
   AppLoadingText,
   type AppLoadingExtraDots
@@ -60,16 +59,11 @@ function HomeStartupLoadingText({
 export function HomePage({ embedded = false }: { embedded?: boolean }) {
   const catalogRef = useRef<HTMLElement>(null);
   const lastSuccessfulStatsRef = useRef<GalleryStatsDto | undefined>(undefined);
-  const transitionStateConsumedRef = useRef(false);
-  const location = useLocation();
-  const navigate = useNavigate();
-  const isGalleryNavigation = !embedded
-    && location.state?.publicNavigationSource === "gallery";
-  const [animateFilterBarEntrance] = useState(() => isGalleryNavigation);
   const {
     hadAppearedBeforeMount: navigationHadAppearedBeforeMount,
     markAppeared: markNavigationAppeared,
-    motionAllowed: navigationMotionAllowed
+    motionAllowed: navigationMotionAllowed,
+    shouldAnimate: shouldAnimateNavigation
   } = usePublicNavigationEntrance();
   const [filters, setFilters] = useState<GalleryFilters>({
     ...emptyGalleryFilters
@@ -101,33 +95,6 @@ export function HomePage({ embedded = false }: { embedded?: boolean }) {
     navigationHadAppearedBeforeMount || !navigationMotionAllowed
   );
   useDocumentMotionPause();
-
-  useLayoutEffect(() => {
-    if (!isGalleryNavigation || transitionStateConsumedRef.current) return;
-    transitionStateConsumedRef.current = true;
-    const remainingState = {
-      ...(location.state as Record<string, unknown>)
-    };
-    delete remainingState.publicNavigationSource;
-    void navigate(
-      {
-        pathname: location.pathname,
-        search: location.search,
-        hash: location.hash
-      },
-      {
-        replace: true,
-        state: Object.keys(remainingState).length ? remainingState : null
-      }
-    );
-  }, [
-    isGalleryNavigation,
-    location.hash,
-    location.pathname,
-    location.search,
-    location.state,
-    navigate
-  ]);
 
   useLayoutEffect(() => {
     if (entrance.navigationRevealed) markNavigationAppeared();
@@ -171,9 +138,15 @@ export function HomePage({ embedded = false }: { embedded?: boolean }) {
         inert={entrance.navigationRevealed ? undefined : true}
       >
         <div className="public-navigation-stack">
-          {!embedded && <AppHeader />}
+          {!embedded && (
+            <AppHeader
+              animateEntrance={
+                shouldAnimateNavigation && entrance.navigationRevealed
+              }
+            />
+          )}
           <HomeFilterBar
-            animateEntrance={animateFilterBarEntrance}
+            entranceReady={entrance.navigationRevealed}
             filters={filters}
             galleryPath={embedded ? "/embed/gallery" : "/gallery"}
             stats={stats}

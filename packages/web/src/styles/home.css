@@ -94,9 +94,6 @@
 .home-navigation-frame {
   opacity: 1;
   visibility: visible;
-  transition:
-    opacity var(--public-motion-navigation-reveal) ease-out,
-    visibility 0s linear;
 }
 
 .home-navigation-frame.is-entrance-pending {
@@ -168,7 +165,7 @@
 }
 
 .home-filter-bar.is-home-filter-bar-entrance {
-  animation: home-filter-bar-fade-in 160ms ease-out backwards;
+  animation: home-filter-bar-fade-in 360ms ease-out 150ms backwards;
 }
 
 .home-filter-bar-spacer {

@@ -15,7 +15,7 @@ import {
 } from "./home-ui.js";
 
 export function HomeFilterBar({
-  animateEntrance = false,
+  entranceReady,
   filters,
   stats,
   isPending,
@@ -24,7 +24,7 @@ export function HomeFilterBar({
   galleryPath = "/gallery",
   onFiltersChange
 }: {
-  animateEntrance?: boolean;
+  entranceReady: boolean;
   filters: GalleryFilters;
   stats: GalleryStatsDto | undefined;
   isPending: boolean;
@@ -33,7 +33,7 @@ export function HomeFilterBar({
   galleryPath?: "/gallery" | "/embed/gallery";
   onFiltersChange: (filters: GalleryFilters) => void;
 }) {
-  const entrance = useOneShotAnimation(animateEntrance);
+  const entrance = useOneShotAnimation(entranceReady);
   const selectedLabels = stats
     ? [
         filters.device ? deviceLabels[filters.device] : "",

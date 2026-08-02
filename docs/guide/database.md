@@ -78,6 +78,7 @@ PostgreSQL 是唯一真相源，Redis 随机池、列表缓存和判重缓存均
 | `idempotency_key` | 幂等键 |
 | `status` | `pending` / `running` / `succeeded` / `failed` / `ignored` |
 | `payload` / `result` / `error` | 入参 / 结果 / 错误 |
+| `execution_token` | 每次领取生成的 UUID 所有权栅栏；仅当前 `running` 执行者持有，退出运行态时清空 |
 | `retry_count` / `next_retry_at` | 重试次数与下次重试时间 |
 | `created_at` / `updated_at` | 时间戳 |
 
@@ -88,6 +89,10 @@ PostgreSQL 是唯一真相源，Redis 随机池、列表缓存和判重缓存均
 Worker 会按保留策略裁剪历史记录：`succeeded` / `ignored` 保留 7 天；普通任务耗尽
 重试且 `next_retry_at IS NULL` 的 `failed` 保留 90 天。耗尽的 `move.cleanup` 不按历史
 保留期删除，因为它仍是后端对象的未解决保护引用，必须通过管理端重试并实际核验成功。
+每次 `FOR UPDATE SKIP LOCKED` 领取都会生成新的 `execution_token`；续租、成功、忽略、
+重排和失败写入必须同时匹配任务 id、`running` 状态与该 token。僵尸恢复及所有退出
+`running` 的路径会清空 token，因此租约超时后又被重新领取的旧执行者不能写入迟到
+终态。`retry_count` 只统计失败与僵尸恢复次数，所有权代际不会进入 payload。
 
 `move.cleanup` 的对象条目同时固化后端 slug、对象前缀 / 键和入队时的物理命名空间
 identity。`pending`、`running` 以及所有 `failed`（包括耗尽重试）都属于未解决引用；

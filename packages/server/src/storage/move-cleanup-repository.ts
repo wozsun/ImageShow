@@ -162,6 +162,7 @@ export async function retryExhaustedMoveCleanupJobs(storageSlug: string) {
          error='',
          retry_count=0,
          next_retry_at=NULL,
+         execution_token=NULL,
          created_at=now(),
          updated_at=now()
      WHERE job.type='move.cleanup'

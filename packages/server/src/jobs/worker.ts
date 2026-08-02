@@ -3,7 +3,10 @@ import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { logger } from "../core/logger.ts";
 import { cleanupOrphanRawImports } from "../images/imports/temp-files.ts";
 import { scheduleImportCleanupJob } from "../images/imports/cleanup-job.ts";
-import { handleBackgroundJob } from "./handlers.ts";
+import {
+  handleBackgroundJob,
+  type BackgroundJobOutcome
+} from "./handlers.ts";
 import {
   claimBackgroundJob,
   cleanupBackgroundJobHistory,
@@ -11,8 +14,10 @@ import {
   markBackgroundJobFailed,
   markBackgroundJobIgnored,
   markBackgroundJobSucceeded,
+  renewBackgroundJobLease,
   rescheduleBackgroundJob,
-  recoverStaleBackgroundJobs
+  recoverStaleBackgroundJobs,
+  type BackgroundJob
 } from "./repository.ts";
 
 let timer: NodeJS.Timeout | undefined;
@@ -39,6 +44,63 @@ type QueueSliceResult = {
   budgetExhausted: boolean;
 };
 
+function logDiscardedBackgroundJobTransition(
+  job: { id: string; type: string },
+  transition: "failed" | "ignored" | "rescheduled" | "succeeded"
+) {
+  logger.warn("discarded background job transition after ownership loss", {
+    job_id: job.id,
+    type: job.type,
+    transition
+  });
+}
+
+function startBackgroundJobLeaseRenewal(job: BackgroundJob) {
+  const intervalMs = Math.max(
+    1_000,
+    Math.floor(appConfig.backgroundJob.taskTimeoutSeconds * 1_000 / 3)
+  );
+  let stopped = false;
+  let timer: NodeJS.Timeout | undefined;
+  let renewal = Promise.resolve();
+
+  const clearRenewalTimer = () => {
+    if (!timer) return;
+    clearInterval(timer);
+    timer = undefined;
+  };
+  const queueRenewal = () => {
+    renewal = renewal
+      .then(async () => {
+        if (stopped) return;
+        if (await renewBackgroundJobLease(job)) return;
+        stopped = true;
+        clearRenewalTimer();
+        logger.warn("background job lease ownership lost", {
+          job_id: job.id,
+          type: job.type
+        });
+      })
+      .catch((error: unknown) => {
+        stopped = true;
+        clearRenewalTimer();
+        logger.error("background job lease renewal failed", {
+          job_id: job.id,
+          type: job.type,
+          error: error instanceof Error ? error.message : String(error)
+        });
+      });
+  };
+
+  timer = setInterval(queueRenewal, intervalMs);
+  timer.unref();
+  return async () => {
+    stopped = true;
+    clearRenewalTimer();
+    await renewal;
+  };
+}
+
 async function runBackgroundJobType(type: string, lanes: number): Promise<QueueSliceResult> {
   const startedAt = performance.now();
   const deadline = startedAt + appConfig.backgroundJob.queueSliceMaxMs;
@@ -56,17 +118,37 @@ async function runBackgroundJobType(type: string, lanes: number): Promise<QueueS
     while (reserveClaim()) {
       const job = await claimBackgroundJob(type);
       if (!job) return;
+      const stopLeaseRenewal = startBackgroundJobLeaseRenewal(job);
+      let outcome: BackgroundJobOutcome;
       try {
-        const outcome = await handleBackgroundJob(job);
-        if (outcome.status === "ignored") {
-          await markBackgroundJobIgnored(job.id, outcome.reason);
-        } else if (outcome.status === "reschedule") {
-          await rescheduleBackgroundJob(job.id, outcome.delayMs, outcome.result);
-        } else {
-          await markBackgroundJobSucceeded(job.id, outcome.result);
-        }
+        outcome = await handleBackgroundJob(job);
       } catch (error) {
-        await markBackgroundJobFailed(job, error);
+        await stopLeaseRenewal();
+        if (!await markBackgroundJobFailed(job, error)) {
+          logDiscardedBackgroundJobTransition(job, "failed");
+        }
+        processed += 1;
+        continue;
+      }
+      await stopLeaseRenewal();
+      try {
+        let stored: boolean;
+        let transition: "ignored" | "rescheduled" | "succeeded";
+        if (outcome.status === "ignored") {
+          transition = "ignored";
+          stored = await markBackgroundJobIgnored(job, outcome.reason);
+        } else if (outcome.status === "reschedule") {
+          transition = "rescheduled";
+          stored = await rescheduleBackgroundJob(
+            job,
+            outcome.delayMs,
+            outcome.result
+          );
+        } else {
+          transition = "succeeded";
+          stored = await markBackgroundJobSucceeded(job, outcome.result);
+        }
+        if (!stored) logDiscardedBackgroundJobTransition(job, transition);
       } finally {
         processed += 1;
       }

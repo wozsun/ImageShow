@@ -337,7 +337,6 @@
 @media (prefers-reduced-motion: reduce) {
   .home-background-image-frame img,
   .home-random-background.is-ready-after-foreground img,
-  .home-navigation-frame,
   .home-banner-label,
   .home-banner-title,
   .home-banner > .home-site-stats,
