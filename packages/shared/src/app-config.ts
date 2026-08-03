@@ -34,7 +34,8 @@ export const appConfig = {
     maxRawBytes: 4 * 1024,
     maxSelectorCount: 64,
     maxSelectorsPerField: 32,
-    maxSelectorCharacters: 64
+    maxSelectorCharacters: 64,
+    maxJsonItems: 200
   },
 
   trashBatchSize: 100,

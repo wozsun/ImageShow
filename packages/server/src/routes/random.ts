@@ -1,15 +1,17 @@
 import type { Context, Hono } from "hono";
+import type { RandomImageJsonResponseDto } from "@imageshow/shared/browser";
 import { resolveReadableObject } from "../storage/object-access.ts";
 import { contentType } from "../storage/object-keys.ts";
 import { publicImageUrls } from "../storage/public-urls.ts";
-import { apiErrorResponse } from "../core/http/responses.ts";
+import { apiErrorResponse, apiSuccess } from "../core/http/responses.ts";
 import { requestClientIp } from "../core/http/request-security.ts";
 import {
   noStoreCacheControl,
   responseContentLengthValue,
   safeResponseHeaderValue
 } from "../core/http/headers.ts";
-import { selectRandomImage } from "../random/selection.ts";
+import { presentRandomJsonItems } from "../random/json-presentation.ts";
+import { selectRandomImages } from "../random/selection.ts";
 import { webReadableFromNode } from "../storage/stream-buffer.ts";
 
 export function registerRandomRoutes(app: Hono) {
@@ -22,20 +24,40 @@ export async function handleRandomImage(c: Context) {
 }
 
 async function respondRandom(c: Context, url: URL) {
-  const picked = await selectRandomImage(
+  const selection = await selectRandomImages(
     url,
     c.req.header("user-agent") ?? "",
     requestClientIp(c),
     c.req.raw.signal
   );
-  if (picked instanceof Response) return picked;
+  if (selection instanceof Response) return selection;
+  if (selection.method === "json") {
+    const items = await presentRandomJsonItems(
+      selection.items,
+      c.req.raw.signal
+    );
+    const fields = {
+      count: items.length,
+      items
+    } satisfies RandomImageJsonResponseDto;
+    const body = JSON.stringify(apiSuccess(fields));
+    const headers = new Headers({
+      "Cache-Control": noStoreCacheControl,
+      "Content-Type": "application/json; charset=utf-8"
+    });
+    const contentLength = responseContentLengthValue(Buffer.byteLength(body));
+    if (contentLength !== undefined) headers.set("Content-Length", contentLength);
+    return new Response(c.req.method === "HEAD" ? null : body, { headers });
+  }
+
+  const picked = selection.items[0];
   if (!picked) return apiErrorResponse({ status: 404, message: "Not Found: No available images" });
   const imageInfo = `${picked.device}-${picked.brightness}-${picked.theme}-${picked.id}`;
   const baseHeaders = {
     "Cache-Control": noStoreCacheControl,
     "X-Image-Info": safeResponseHeaderValue("X-Image-Info", imageInfo)
   };
-  if (picked.method === "proxy") {
+  if (selection.method === "proxy") {
     const opened = await (
       await resolveReadableObject("media", picked.object_key, picked.storage_slug)
     ).open();

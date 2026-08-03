@@ -21,6 +21,7 @@ body:has(.login) {
 }
 
 .login form {
+  color-scheme: dark;
   position: absolute;
   top: var(--login-card-center-y, 50dvh);
   left: 50%;
@@ -28,11 +29,13 @@ body:has(.login) {
   width: min(360px, calc(100vw - 32px));
   display: grid;
   gap: 12px;
+  color: var(--admin-color-text-primary);
   background: var(--admin-color-login-form-surface);
+  -webkit-backdrop-filter: blur(6px) saturate(110%);
+  backdrop-filter: blur(6px) saturate(110%);
   padding: 24px;
   border: 1px solid var(--admin-color-border-default);
   border-radius: 8px;
-  opacity: .75;
   animation: login-surface-in .2s ease-out;
   transition: top 80ms ease-out;
 }
@@ -113,7 +116,15 @@ body:has(.login) {
 
 @keyframes login-surface-in {
   from { opacity: 0; transform: translateY(6px); }
-  to { opacity: .75; transform: translateY(0); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .login form {
+    background: var(--admin-color-surface-primary);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -70,7 +70,7 @@ Dockerfile 的 `EXPOSE` 与 Compose 目标端口；回归测试会校验三者�
 | `site.home.enabled` | 是否启用公共首页 `/home`，默认 `true`。关闭后 `/home` 重定向到画廊，导航不再显示首页入口，根路径固定显示画廊；只通过配置文件、高级配置或首次启动环境变量维护。 |
 | `site.home.tagline` | 站点描述，仅写入 SPA HTML 的 `description`，不在首页正文或普通站点配置页显示，只能通过配置文件、高级配置或首次启动环境变量维护。首页全屏背景固定使用站点自身的随机图 API。 |
 | `site.gallery.default_limit` / `site.gallery.order` | 画廊默认分页数量与排序。 |
-| `site.random_default_method` | `/random` 默认返回方式：`redirect` 或 `proxy`。 |
+| `site.random_default_method` | `/random` 默认返回方式：`redirect`、`proxy` 或 `json`；默认 JSON 模式省略 `n` 时返回一项数组，批量仍须显式使用 `m=json&n=...`。 |
 | `site.random_subdomain` / `site.static_subdomain` / `site.link_subdomain` | 保留子域名前缀。 |
 | `site.robots_enabled` | 是否提供 `robots.txt`，默认 `false`。开启后主站首页可抓取，资源域禁抓。 |
 | `embed.enabled` | 是否开放无主导航的 `/embed/home` 与 `/embed/gallery`，默认 `false`。启用后会根据当前 `site.domain` 隐式允许站点自身 HTTPS origin 及其任意层级的现有和未来子域，因此只应在这些子域均可信时开启；若站点域名带非默认端口，两项都只允许该端口。派生来源不写回配置文件。仅在 `data/config.json` 中维护。 |
@@ -93,7 +93,7 @@ Dockerfile 的 `EXPOSE` 与 Compose 目标端口；回归测试会校验三者�
 | `import.global_commit_concurrency` | 单个服务端进程同时执行的 commit 数，默认 10；所有客户端和直接 API 请求共享，只在配置文件中维护。 |
 | `import.global_commit_byte_budget_mb` | 单个服务端进程中处于 commit 的 prepared 图片与缩略图总字节预算，默认 512 MiB；与数量并发限制同时生效，只在配置文件中维护。 |
 | `image_detail.title_opens_image` | 图片详情弹窗标题是否链接到图片直链。 |
-| `admin.login_background` | 后台登录页背景，仅允许站内绝对路径或 HTTPS；留空时使用站点自身随机图。登录表单整体以 75% 不透明度覆盖背景，让图片适度透出；背景层固定于当前动态视口且完全不滚动，独立定位的卡片按 visual viewport 可见中线放置，在工具栏或软键盘压缩可见高度时通过快速过渡整体上移。 |
+| `admin.login_background` | 后台登录页背景，仅允许站内绝对路径或 HTTPS；留空时使用站点自身随机图。未认证登录页继承公开页面固定暗色上下文，不读取管理员外观偏好；登录成功并进入后台后才应用账号偏好。表单内容保持完全不透明，只有表面使用 alpha 0.20 的 `blur(6px) saturate(110%)` 毛玻璃，系统要求减少透明效果时回退为暗色实底。背景层固定于当前动态视口且完全不滚动，独立定位的卡片按 visual viewport 可见中线放置，在工具栏或软键盘压缩可见高度时通过快速过渡整体上移。 |
 | `admin.image_page_size` / `admin.recent_uploads` / `admin.show_unset_theme_card` | 后台图片分页、概览最近上传数量、主题页「未设置」占位卡片开关。 |
 | `background_job.*` | 后台任务并发：移动清理、删除主题时图片搬运、批量迁移存储拷贝。默认各 5。 |
 | `security.*` | 登录会话有效期和登录限流阈值；ALTCHA 挑战签发复用两组时间窗口，单 IP 使用登录阈值的三倍，全局使用登录阈值的五倍。 |

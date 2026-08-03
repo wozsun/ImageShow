@@ -42,7 +42,7 @@
       // 画廊默认排序：latest 为最新，random 为随机。
       "order": "random"
     },
-    // 随机图接口默认返回方式：redirect 为跳转，proxy 为代理输出。
+    // 随机图接口默认返回方式：redirect 为跳转，proxy 为代理输出，json 为图片元数据数组。
     "random_default_method": "redirect",
     // 随机图 API 子域名前缀，对应 random.<主域名>。
     "random_subdomain": "random",

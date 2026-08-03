@@ -1,3 +1,4 @@
+import type { RandomMethod } from "@imageshow/shared/browser";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { apiErrorResponse } from "../core/http/responses.ts";
 import { safeResponseHeaderValue } from "../core/http/headers.ts";
@@ -8,10 +9,10 @@ import { getRandomPoolSnapshot } from "./cache-read.ts";
 import { randomPoolRetry } from "./cache-policy.ts";
 import {
   recentlyServedIds,
-  rememberServedId
+  rememberServedIds
 } from "./dedupe.ts";
 import {
-  pickFromRedisPool,
+  pickManyFromRedisPool,
   resolveCandidateAxes,
   type PickedImage
 } from "./picker.ts";
@@ -20,14 +21,19 @@ import {
   parseRandomQuery,
   type RandomSelectorGroup
 } from "./query.ts";
-import { pickTargetedImage } from "./targeted-selection.ts";
+import { pickTargetedImages } from "./targeted-selection.ts";
 
-export async function selectRandomImage(
+export type RandomImageSelection = {
+  method: RandomMethod;
+  items: PickedImage[];
+};
+
+export async function selectRandomImages(
   url: URL,
   userAgent = "",
   clientId = "",
   signal?: AbortSignal
-): Promise<PickedImage | Response | null> {
+): Promise<RandomImageSelection | Response> {
   signal?.throwIfAborted();
   const parsed = parseRandomQuery(
     url,
@@ -35,7 +41,14 @@ export async function selectRandomImage(
   );
   if (parsed instanceof Response) return parsed;
   if (parsed.ids.length) {
-    return pickTargetedImage(parsed.ids, parsed.method, signal);
+    const items = await pickTargetedImages(
+      parsed.ids,
+      parsed.resultLimit,
+      signal
+    );
+    return items instanceof Response
+      ? items
+      : { method: parsed.method, items };
   }
 
   const [themeMap, tagMap, authorMap] = await Promise.all([
@@ -56,16 +69,17 @@ export async function selectRandomImage(
     userAgent
   );
 
-  let picked: PickedImage | Response | null;
+  let picked: PickedImage[] | Response;
   try {
     const [recent, snapshot] = await Promise.all([
       recentlyServedIds(clientId, query.signature),
       getRandomPoolSnapshot(signal)
     ]);
     signal?.throwIfAborted();
-    picked = await pickFromRedisPool(
+    picked = await pickManyFromRedisPool(
       query,
       axes,
+      query.resultLimit,
       recent,
       snapshot,
       signal
@@ -86,10 +100,13 @@ export async function selectRandomImage(
     );
     return response;
   }
-  if (picked && !(picked instanceof Response)) {
-    await rememberServedId(clientId, query.signature, picked.id);
-  }
-  return picked;
+  if (picked instanceof Response) return picked;
+  await rememberServedIds(
+    clientId,
+    query.signature,
+    picked.map((item) => item.id)
+  );
+  return { method: query.method, items: picked };
 }
 
 async function resolveSelectorMap(

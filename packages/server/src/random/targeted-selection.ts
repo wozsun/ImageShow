@@ -1,17 +1,16 @@
 import type {
   Brightness,
-  Device,
-  RandomMethod
+  Device
 } from "@imageshow/shared/browser";
 import { pool } from "../core/db.ts";
 import { apiErrorResponse } from "../core/http/responses.ts";
 import type { PickedImage } from "./picker.ts";
 
-export async function pickTargetedImage(
+export async function pickTargetedImages(
   ids: string[],
-  method: RandomMethod,
+  limit: number,
   signal?: AbortSignal
-): Promise<PickedImage | Response> {
+): Promise<PickedImage[] | Response> {
   signal?.throwIfAborted();
   const fullIds = ids.filter((id) => id.length > 12);
   const suffixes = ids.filter((id) => id.length === 12);
@@ -40,15 +39,20 @@ export async function pickTargetedImage(
     device: row.device as Device,
     brightness: row.brightness as Brightness,
     theme: String(row.theme),
-    storage_slug: String(row.storage_slug),
-    method
+    storage_slug: String(row.storage_slug)
   }));
-  const picked = candidates[Math.floor(Math.random() * candidates.length)];
-  if (!picked) {
+  if (!candidates.length) {
     return apiErrorResponse({
       status: 404,
       message: "Not Found: No available images for the requested ids"
     });
   }
-  return picked;
+  for (let index = candidates.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [candidates[index], candidates[swapIndex]] = [
+      candidates[swapIndex]!,
+      candidates[index]!
+    ];
+  }
+  return candidates.slice(0, limit);
 }

@@ -1,5 +1,4 @@
 import { appConfig } from "@imageshow/shared";
-import type { RandomMethod } from "@imageshow/shared/browser";
 import {
   buildRandomFilterSet,
   getRandomPoolSnapshot,
@@ -32,7 +31,7 @@ export type PickedImage = Pick<
   | "brightness"
   | "theme"
   | "storage_slug"
-> & { method: RandomMethod };
+>;
 
 function inferDevice(ua: string) {
   if (!ua) return "r";
@@ -111,23 +110,32 @@ function categoryCandidates(snapshot: RandomPoolSnapshot, axes: CandidateAxes, t
 async function pickFromSet(
   generation: string,
   setKey: string,
-  method: RandomMethod,
   recent: Set<string>
 ) {
   const batchSize = Math.max(8, Math.min(64, appConfig.randomDedupe.historySize + 1));
   let fallback: RandomPoolItem | null = null;
   for (let attempt = 0; attempt < appConfig.randomDedupe.maxAttempts; attempt += 1) {
     const items = await sampleRandomPoolItems(setKey, batchSize, generation);
-    if (!items.length) return fallback ? { ...fallback, method } : null;
+    if (!items.length) return fallback;
     for (const item of items) {
       if (!fallback) fallback = item;
-      if (!recent.has(item.id)) return { ...item, method };
+      if (!recent.has(item.id)) return item;
     }
   }
-  return fallback ? { ...fallback, method } : null;
+  return fallback;
 }
 
-export async function pickFromRedisPool(
+function filterSignature(
+  query: NormalizedRandomQuery,
+  baseCandidates: Array<{ key: string }>
+) {
+  return `${query.signature}|${baseCandidates
+    .map((candidate) => candidate.key)
+    .sort()
+    .join("|")}`;
+}
+
+async function pickFromRedisPool(
   query: NormalizedRandomQuery,
   axes: CandidateAxes,
   recent: Set<string> = new Set(),
@@ -149,16 +157,13 @@ export async function pickFromRedisPool(
   if (!hasTagOrAuthorFilter) {
     const selected = weightedPick(baseCandidates);
     if (!selected) return noCandidatesError(query, axes);
-    return await pickFromSet(snapshot.generation, selected.key, query.method, recent)
+    return await pickFromSet(snapshot.generation, selected.key, recent)
       ?? noCandidatesError(query, axes);
   }
 
   const filter = await buildRandomFilterSet({
     generation: snapshot.generation,
-    signature: `${query.signature}|${baseCandidates
-      .map((candidate) => candidate.key)
-      .sort()
-      .join("|")}`,
+    signature: filterSignature(query, baseCandidates),
     baseSetKeys: baseCandidates.map((candidate) => candidate.key),
     tagInclude: query.tag.include,
     tagExclude: query.tag.exclude,
@@ -166,6 +171,63 @@ export async function pickFromRedisPool(
     authorExclude: query.author.exclude
   }, signal);
   if (filter.count <= 0) return noCandidatesError(query, axes);
-  return await pickFromSet(snapshot.generation, filter.key, query.method, recent)
+  return await pickFromSet(snapshot.generation, filter.key, recent)
     ?? noCandidatesError(query, axes);
+}
+
+export async function pickManyFromRedisPool(
+  query: NormalizedRandomQuery,
+  axes: CandidateAxes,
+  limit: number,
+  recent: Set<string> = new Set(),
+  prefetchedSnapshot?: RandomPoolSnapshot,
+  signal?: AbortSignal
+): Promise<PickedImage[] | Response> {
+  if (limit <= 1) {
+    const picked = await pickFromRedisPool(
+      query,
+      axes,
+      recent,
+      prefetchedSnapshot,
+      signal
+    );
+    if (picked instanceof Response) return picked;
+    return picked ? [picked] : [];
+  }
+
+  signal?.throwIfAborted();
+  const snapshot = prefetchedSnapshot ?? await getRandomPoolSnapshot(signal);
+  const themeCandidates = randomThemeCandidates(query.theme, snapshot.themes);
+  if (themeCandidates instanceof Response) return themeCandidates;
+
+  const hasThemeFilter = hasSelector(query.theme);
+  const baseCandidates = hasThemeFilter
+    ? categoryCandidates(snapshot, axes, themeCandidates)
+    : axisCandidates(snapshot, axes);
+  if (!baseCandidates.length) return noCandidatesError(query, axes);
+
+  const filter = await buildRandomFilterSet({
+    generation: snapshot.generation,
+    signature: filterSignature(query, baseCandidates),
+    baseSetKeys: baseCandidates.map((candidate) => candidate.key),
+    tagInclude: query.tag.include,
+    tagExclude: query.tag.exclude,
+    authorInclude: query.author.include,
+    authorExclude: query.author.exclude
+  }, signal);
+  if (filter.count <= 0) return noCandidatesError(query, axes);
+
+  const sampleCount = Math.min(filter.count, limit + recent.size);
+  const sampled = await sampleRandomPoolItems(
+    filter.key,
+    sampleCount,
+    snapshot.generation
+  );
+  const fresh: RandomPoolItem[] = [];
+  const fallback: RandomPoolItem[] = [];
+  for (const item of sampled) {
+    (recent.has(item.id) ? fallback : fresh).push(item);
+  }
+  const picked = [...fresh, ...fallback].slice(0, limit);
+  return picked.length ? picked : noCandidatesError(query, axes);
 }

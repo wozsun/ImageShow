@@ -4,13 +4,15 @@
 }
 
 :root[data-ui-context="admin"] :is(input, textarea)::placeholder,
-[data-admin-dialog] :is(input, textarea)::placeholder {
+[data-admin-dialog] :is(input, textarea)::placeholder,
+.login form :is(input, textarea)::placeholder {
   color: var(--admin-color-control-placeholder);
   opacity: 1;
 }
 
 :root[data-ui-context="admin"] :is(input, textarea, [contenteditable="true"]),
-[data-admin-dialog] :is(input, textarea, [contenteditable="true"]) {
+[data-admin-dialog] :is(input, textarea, [contenteditable="true"]),
+.login form :is(input, textarea, [contenteditable="true"]) {
   color: var(--color-control-text-primary);
   caret-color: var(--color-control-text-primary);
 }

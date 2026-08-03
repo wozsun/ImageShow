@@ -2,7 +2,6 @@ import { lazy, Suspense, useLayoutEffect, useRef, useState } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  defaultAdminPreferences,
   type AdminRole
 } from "@imageshow/shared/browser";
 import { api, clearCsrfToken } from "../../lib/api/client.js";
@@ -28,6 +27,7 @@ import {
   useAdminPreference
 } from "../../hooks/useAdminPreferences.js";
 import { useAdminColorScheme } from "../../hooks/useAdminColorScheme.js";
+import { applyUiColorContext } from "../../lib/ui/apply-ui-color-context.js";
 import {
   advanceAdminColorSchemeCycle,
   nextAdminColorScheme,
@@ -213,10 +213,9 @@ export function AdminShell() {
   } = useAuthMe();
   const unauthenticatedAppearanceReady =
     authFailed || Boolean(data && !data.authenticated);
-  useAdminColorScheme(
-    defaultAdminPreferences.color_scheme,
-    unauthenticatedAppearanceReady
-  );
+  useLayoutEffect(() => {
+    if (unauthenticatedAppearanceReady) applyUiColorContext("public");
+  }, [unauthenticatedAppearanceReady]);
   if (authFailed) return <QueryErrorState error={authError} onRetry={() => void refetch()} fullPage />;
   if (!data) return <AppLoadingScreen />;
   if (!data.authenticated) return (

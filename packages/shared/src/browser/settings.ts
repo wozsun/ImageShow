@@ -3,7 +3,7 @@ import type { LogLevel, SiteVersionSettings } from "./common.ts";
 export const rootRedirects = ["home", "gallery"] as const;
 export type RootRedirect = (typeof rootRedirects)[number];
 
-export const randomMethods = ["proxy", "redirect"] as const;
+export const randomMethods = ["proxy", "redirect", "json"] as const;
 export type RandomMethod = (typeof randomMethods)[number];
 
 export const galleryOrders = ["latest", "random"] as const;

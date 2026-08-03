@@ -65,6 +65,24 @@ export type PublicImageDetailResponseDto = {
   item: PublicImageDetailDto;
 };
 
+export type RandomImageJsonItemDto = {
+  id: string;
+  object_url: string;
+  thumb_url: string;
+  device: Device;
+  brightness: Brightness;
+  theme: string;
+  tags: string[];
+  width: number;
+  height: number;
+  image_time: string;
+};
+
+export type RandomImageJsonResponseDto = {
+  count: number;
+  items: RandomImageJsonItemDto[];
+};
+
 export type AdminImageItemDto = PublicImageItemDto & {
   status: "ready" | "deleted";
   object_key: string;

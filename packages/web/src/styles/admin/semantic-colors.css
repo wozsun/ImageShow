@@ -150,7 +150,7 @@
   --admin-color-log-empty: #9aa4b2;
 
   /* Login and ALTCHA */
-  --admin-color-login-form-surface: light-dark(#fff, #161b22);
+  --admin-color-login-form-surface: rgba(22, 27, 34, .2);
   --admin-color-login-overlay-start: rgba(12, 18, 28, .45);
   --admin-color-login-overlay-end: rgba(12, 18, 28, .72);
   --admin-color-altcha-border: light-dark(#d0d5dd, #636c76);
@@ -204,7 +204,8 @@
 }
 
 :root[data-ui-context="admin"],
-[data-admin-dialog] {
+[data-admin-dialog],
+.login form {
   color: var(--admin-color-text-primary);
   --color-browser-canvas: var(--admin-color-canvas);
   --color-control-text-primary: var(--admin-color-text-primary);

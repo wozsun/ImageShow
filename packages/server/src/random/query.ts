@@ -18,6 +18,7 @@ export type RandomSelectorGroup = {
 
 export type ParsedRandomQuery = {
   method: RandomMethod;
+  resultLimit: number;
   ids: string[];
   requestedDevice: RandomRequestDevice | null;
   requestedBrightness: RandomBrightness | null;
@@ -38,9 +39,9 @@ export type RandomSelectorMaps = {
 
 const randomRequestDevices: ReadonlySet<string> = new Set(randomRequestDeviceValues);
 const randomMethods: ReadonlySet<string> = new Set(randomMethodValues);
-const randomAllowedQueryValues = ["d", "b", "t", "tag", "a", "id", "m"] as const;
+const randomAllowedQueryValues = ["d", "b", "t", "tag", "a", "id", "m", "n"] as const;
 const randomAllowedQuery = new Set<string>(randomAllowedQueryValues);
-const randomSingleValueQuery = new Set(["d", "b", "m"]);
+const randomSingleValueQuery = new Set(["d", "b", "m", "n"]);
 const randomBrightnessSet = new Set(randomBrightnesses);
 const disallowedSelectorCharacters = /[\u0000-\u001f\u007f]/u;
 const fullUuidPattern = new RegExp(
@@ -139,7 +140,7 @@ function parseSelectorGroup(
 function targetedIdCombinationError(query: URLSearchParams) {
   if (!query.has("id")) return null;
   const incompatible = [...new Set(
-    [...query.keys()].filter((key) => key !== "id" && key !== "m")
+    [...query.keys()].filter((key) => key !== "id" && key !== "m" && key !== "n")
   )].sort();
   if (!incompatible.length) return null;
   return apiErrorResponse(
@@ -147,9 +148,46 @@ function targetedIdCombinationError(query: URLSearchParams) {
     {
       field: "id",
       incompatible,
-      hint: "id can only be combined with m"
+      hint: "id can only be combined with m and n"
     }
   );
+}
+
+function parseJsonResultLimit(
+  query: URLSearchParams,
+  explicitMethod: string | null
+): number | Response {
+  if (!query.has("n")) return 1;
+  if (explicitMethod !== "json") {
+    return apiErrorResponse(
+      { status: 400, message: "Bad Request: n requires m=json" },
+      { field: "n", hint: "Use n only with an explicit m=json parameter" }
+    );
+  }
+
+  const raw = query.get("n") ?? "";
+  if (!/^\d+$/u.test(raw)) {
+    return apiErrorResponse(
+      { status: 400, message: "Bad Request: Invalid result count" },
+      { field: "n", hint: "Use a positive integer" }
+    );
+  }
+  const significant = raw.replace(/^0+/u, "");
+  if (!significant) {
+    return apiErrorResponse(
+      { status: 400, message: "Bad Request: Invalid result count" },
+      { field: "n", hint: "Use a positive integer" }
+    );
+  }
+
+  const maximum = String(appConfig.randomQuery.maxJsonItems);
+  if (
+    significant.length > maximum.length
+    || (significant.length === maximum.length && significant > maximum)
+  ) {
+    return appConfig.randomQuery.maxJsonItems;
+  }
+  return Number(significant);
 }
 
 function parseTargetedIds(query: URLSearchParams): string[] | Response {
@@ -211,13 +249,15 @@ export function parseRandomQuery(
   const queryError = invalidQueryParameters(query);
   if (queryError) return queryError;
 
-  const explicitMethod = query.get("m")?.toLowerCase() || null;
-  if (explicitMethod && !randomMethods.has(explicitMethod)) {
+  const explicitMethod = query.get("m")?.toLowerCase() ?? null;
+  if (query.has("m") && (!explicitMethod || !randomMethods.has(explicitMethod))) {
     return apiErrorResponse(
       { status: 400, message: "Bad Request: Invalid method" },
       { field: "m" }
     );
   }
+  const resultLimit = parseJsonResultLimit(query, explicitMethod);
+  if (resultLimit instanceof Response) return resultLimit;
   const targetedCombinationError = targetedIdCombinationError(query);
   if (targetedCombinationError) return targetedCombinationError;
   if (query.has("id")) {
@@ -225,6 +265,7 @@ export function parseRandomQuery(
     if (ids instanceof Response) return ids;
     return {
       method: (explicitMethod ?? defaultMethod) as RandomMethod,
+      resultLimit,
       ids,
       requestedDevice: null,
       requestedBrightness: null,
@@ -265,6 +306,7 @@ export function parseRandomQuery(
 
   return {
     method: (explicitMethod ?? defaultMethod) as RandomMethod,
+    resultLimit,
     ids: [],
     requestedDevice: requestedDevice as RandomRequestDevice | null,
     requestedBrightness: requestedBrightness as RandomBrightness | null,

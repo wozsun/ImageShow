@@ -23,12 +23,17 @@ export async function recentlyServedIds(clientId: string, signature: string): Pr
   }
 }
 
-export async function rememberServedId(clientId: string, signature: string, id: string): Promise<void> {
-  if (!clientId || !id) return;
+export async function rememberServedIds(
+  clientId: string,
+  signature: string,
+  ids: string[]
+): Promise<void> {
+  const uniqueIds = [...new Set(ids.filter(Boolean))];
+  if (!clientId || !uniqueIds.length) return;
   try {
     const key = recentKey(clientId, signature);
     const pipeline = redis.pipeline()
-      .lpush(key, id)
+      .lpush(key, ...uniqueIds)
       .ltrim(key, 0, appConfig.randomDedupe.historySize - 1)
       .expire(key, appConfig.randomDedupe.ttlSeconds);
     await execRedisPipeline(pipeline);

@@ -48,7 +48,8 @@ const rootRedirectOptions = rootRedirects.map((value) => ({
 
 const randomMethodLabels: Record<RandomMethod, string> = {
   proxy: "代理返回",
-  redirect: "302 跳转"
+  redirect: "302 跳转",
+  json: "JSON 数据"
 };
 const randomMethodOptions = randomMethods.map((value) => ({
   value,
