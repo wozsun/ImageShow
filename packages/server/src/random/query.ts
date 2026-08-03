@@ -18,6 +18,7 @@ export type RandomSelectorGroup = {
 
 export type ParsedRandomQuery = {
   method: RandomMethod;
+  ids: string[];
   requestedDevice: RandomRequestDevice | null;
   requestedBrightness: RandomBrightness | null;
   theme: RandomSelectorGroup;
@@ -37,11 +38,16 @@ export type RandomSelectorMaps = {
 
 const randomRequestDevices: ReadonlySet<string> = new Set(randomRequestDeviceValues);
 const randomMethods: ReadonlySet<string> = new Set(randomMethodValues);
-const randomAllowedQueryValues = ["d", "b", "t", "tag", "a", "m"] as const;
+const randomAllowedQueryValues = ["d", "b", "t", "tag", "a", "id", "m"] as const;
 const randomAllowedQuery = new Set<string>(randomAllowedQueryValues);
 const randomSingleValueQuery = new Set(["d", "b", "m"]);
 const randomBrightnessSet = new Set(randomBrightnesses);
 const disallowedSelectorCharacters = /[\u0000-\u001f\u007f]/u;
+const fullUuidPattern = new RegExp(
+  "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+  "iu"
+);
+const uuidSuffixPattern = /^[0-9a-f]{12}$/iu;
 
 export function isRandomBrightness(value: string): value is RandomBrightness {
   return randomBrightnessSet.has(value as RandomBrightness);
@@ -130,6 +136,64 @@ function parseSelectorGroup(
   };
 }
 
+function targetedIdCombinationError(query: URLSearchParams) {
+  if (!query.has("id")) return null;
+  const incompatible = [...new Set(
+    [...query.keys()].filter((key) => key !== "id" && key !== "m")
+  )].sort();
+  if (!incompatible.length) return null;
+  return apiErrorResponse(
+    { status: 400, message: "Bad Request: id cannot be combined with filters" },
+    {
+      field: "id",
+      incompatible,
+      hint: "id can only be combined with m"
+    }
+  );
+}
+
+function parseTargetedIds(query: URLSearchParams): string[] | Response {
+  const ids: string[] = [];
+  let submittedCount = 0;
+  for (const rawValue of query.getAll("id")) {
+    for (const rawPart of rawValue.split(",")) {
+      const value = rawPart.trim();
+      if (!value) continue;
+      submittedCount += 1;
+      if (submittedCount > appConfig.randomQuery.maxSelectorsPerField) {
+        return apiErrorResponse(
+          { status: 400, message: "Bad Request: Too many selectors" },
+          {
+            field: "id",
+            maxSelectors: appConfig.randomQuery.maxSelectorsPerField
+          }
+        );
+      }
+      if (!fullUuidPattern.test(value) && !uuidSuffixPattern.test(value)) {
+        return apiErrorResponse(
+          { status: 400, message: "Bad Request: Invalid id" },
+          {
+            field: "id",
+            value,
+            hint: "Use a full UUID or its final 12 hexadecimal characters"
+          }
+        );
+      }
+      ids.push(value.toLowerCase());
+    }
+  }
+  if (!ids.length) {
+    return apiErrorResponse(
+      { status: 400, message: "Bad Request: Invalid id" },
+      {
+        field: "id",
+        hint: "Provide a full UUID or its final 12 hexadecimal characters"
+      }
+    );
+  }
+  return [...new Set(ids)].sort();
+}
+
 export function parseRandomQuery(
   url: URL,
   defaultMethod: RandomMethod
@@ -153,6 +217,21 @@ export function parseRandomQuery(
       { status: 400, message: "Bad Request: Invalid method" },
       { field: "m" }
     );
+  }
+  const targetedCombinationError = targetedIdCombinationError(query);
+  if (targetedCombinationError) return targetedCombinationError;
+  if (query.has("id")) {
+    const ids = parseTargetedIds(query);
+    if (ids instanceof Response) return ids;
+    return {
+      method: (explicitMethod ?? defaultMethod) as RandomMethod,
+      ids,
+      requestedDevice: null,
+      requestedBrightness: null,
+      theme: { include: [], exclude: [] },
+      tag: { include: [], exclude: [] },
+      author: { include: [], exclude: [] }
+    };
   }
   const requestedBrightness = query.get("b")?.toLowerCase() || null;
   if (requestedBrightness && !isRandomBrightness(requestedBrightness)) {
@@ -186,6 +265,7 @@ export function parseRandomQuery(
 
   return {
     method: (explicitMethod ?? defaultMethod) as RandomMethod,
+    ids: [],
     requestedDevice: requestedDevice as RandomRequestDevice | null,
     requestedBrightness: requestedBrightness as RandomBrightness | null,
     theme: theme.selectors,

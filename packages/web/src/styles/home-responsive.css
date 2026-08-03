@@ -345,7 +345,6 @@
     transition: none;
   }
 
-  .home-background-atmosphere,
   .home-random-background::after,
   .home-filter-bar.is-home-filter-bar-entrance,
   .home-filter-bar.is-home-filter-bar-entrance > *,

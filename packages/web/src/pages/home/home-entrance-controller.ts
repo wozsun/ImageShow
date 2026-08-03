@@ -1,9 +1,8 @@
 const homeEntranceTiming = {
   deadlineMs: 800,
-  primaryNavigationDelayAfterBackgroundMs: 30,
-  heroDelayAfterBackgroundMs: 250,
+  heroDelayAfterBackgroundMs: 160,
   catalogDelayAfterBackgroundMs: 800,
-  heroDelayAfterDeadlineMs: 80,
+  heroDelayAfterDeadlineMs: 60,
   catalogDelayAfterDeadlineMs: 360
 } as const;
 
@@ -43,10 +42,8 @@ export class HomeEntranceController {
   #snapshot: HomeEntranceSnapshot;
   #deadlineAt: number | undefined;
   #deadlineTimer: unknown;
-  #navigationTimer: unknown;
   #heroTimer: unknown;
   #catalogTimer: unknown;
-  #navigationRevealAt: number | undefined;
   #heroRevealAt: number | undefined;
   #catalogRevealAt: number | undefined;
   #foregroundSequenceStarted: boolean;
@@ -95,13 +92,16 @@ export class HomeEntranceController {
       || this.#backgroundFailed
       || this.#snapshot.backgroundReady
     ) return;
+    const foregroundSequenceWasStarted = this.#foregroundSequenceStarted;
     this.#snapshot = {
       ...this.#snapshot,
+      navigationRevealed:
+        this.#snapshot.navigationRevealed || !foregroundSequenceWasStarted,
       backgroundReady: true,
-      backgroundReadyAfterForeground: this.#foregroundSequenceStarted
+      backgroundReadyAfterForeground: foregroundSequenceWasStarted
     };
     this.#publish();
-    if (!this.#foregroundSequenceStarted) {
+    if (!foregroundSequenceWasStarted) {
       this.#startForegroundSequence();
     }
   }
@@ -175,12 +175,6 @@ export class HomeEntranceController {
       return;
     }
     if (
-      this.#navigationRevealAt !== undefined
-      && now >= this.#navigationRevealAt
-    ) {
-      this.#revealNavigation();
-    }
-    if (
       this.#heroRevealAt !== undefined
       && now >= this.#heroRevealAt
     ) {
@@ -214,14 +208,6 @@ export class HomeEntranceController {
       + homeEntranceTiming.heroDelayAfterBackgroundMs;
     this.#catalogRevealAt = now
       + homeEntranceTiming.catalogDelayAfterBackgroundMs;
-    if (!this.#snapshot.navigationRevealed) {
-      this.#navigationRevealAt = now
-        + homeEntranceTiming.primaryNavigationDelayAfterBackgroundMs;
-      this.#navigationTimer = this.#scheduler.setTimer(() => {
-        this.#navigationTimer = undefined;
-        this.#revealNavigation();
-      }, homeEntranceTiming.primaryNavigationDelayAfterBackgroundMs);
-    }
     this.#heroTimer = this.#scheduler.setTimer(() => {
       this.#heroTimer = undefined;
       this.#revealHero();
@@ -234,7 +220,6 @@ export class HomeEntranceController {
 
   #revealNavigation() {
     if (this.#disposed || this.#snapshot.navigationRevealed) return;
-    this.#navigationRevealAt = undefined;
     this.#snapshot = {
       ...this.#snapshot,
       navigationRevealed: true
@@ -244,7 +229,6 @@ export class HomeEntranceController {
 
   #revealHero() {
     if (this.#disposed || this.#snapshot.heroRevealed) return;
-    this.#navigationRevealAt = undefined;
     this.#heroRevealAt = undefined;
     this.#snapshot = {
       ...this.#snapshot,
@@ -252,7 +236,7 @@ export class HomeEntranceController {
       heroRevealed: true
     };
     this.#clearDeadlineTimer();
-    this.#clearNavigationAndHeroTimers();
+    this.#clearHeroTimer();
     this.#publish();
   }
 
@@ -296,13 +280,8 @@ export class HomeEntranceController {
     }
   }
 
-  #clearNavigationAndHeroTimers() {
-    this.#navigationRevealAt = undefined;
+  #clearHeroTimer() {
     this.#heroRevealAt = undefined;
-    if (this.#navigationTimer !== undefined) {
-      this.#scheduler.clearTimer(this.#navigationTimer);
-      this.#navigationTimer = undefined;
-    }
     if (this.#heroTimer !== undefined) {
       this.#scheduler.clearTimer(this.#heroTimer);
       this.#heroTimer = undefined;
@@ -310,7 +289,7 @@ export class HomeEntranceController {
   }
 
   #clearForegroundTimers() {
-    this.#clearNavigationAndHeroTimers();
+    this.#clearHeroTimer();
     this.#catalogRevealAt = undefined;
     if (this.#catalogTimer !== undefined) {
       this.#scheduler.clearTimer(this.#catalogTimer);

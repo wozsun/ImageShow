@@ -1,15 +1,15 @@
 .home-page {
-  --home-background-reveal-duration: 1100ms;
+  --home-background-reveal-duration: 1000ms;
   --home-background-late-reveal-duration: 900ms;
   --home-filter-bar-height: 72px;
   --public-navigation-secondary-height: var(--home-filter-bar-height);
-  /* 主导航等待 30ms；次级导航再延迟 30ms，总等待 60ms。 */
+  /* 导航保护底色与背景同帧就位；次级导航内容再等待 30ms。 */
   --home-navigation-entrance-delay: 30ms;
   --home-navigation-entrance-duration: 160ms;
   position: relative;
   isolation: isolate;
   color: var(--public-color-text-primary);
-  background: var(--public-color-canvas);
+  background: var(--public-color-home-loading-surface);
 }
 
 .home-random-background {
@@ -27,7 +27,7 @@
   overflow: visible;
   pointer-events: none;
   isolation: isolate;
-  background: var(--public-color-canvas);
+  background: var(--public-color-home-loading-surface);
 }
 
 .home-startup-feedback {
@@ -47,7 +47,6 @@
 }
 
 .home-background-image-frame,
-.home-background-atmosphere,
 .home-random-background::before,
 .home-random-background::after {
   position: absolute;
@@ -114,6 +113,10 @@
   height: var(--public-page-header-height);
 }
 
+.home-navigation-frame.is-entrance-pending
+  .public-navigation-stack::before,
+.home-navigation-frame.is-entrance-pending
+  .public-navigation-stack::after,
 .home-navigation-frame.is-entrance-pending .topbar {
   opacity: 0;
   visibility: hidden;
@@ -121,8 +124,10 @@
 
 .home-navigation-frame.is-entrance-pending .home-filter-bar {
   background-color: var(--home-filter-bar-surface-start);
+  border-bottom-color: transparent;
 }
 
+.home-navigation-frame.is-entrance-pending .home-filter-bar::after,
 .home-navigation-frame.is-entrance-pending .home-filter-bar > * {
   opacity: 0;
   visibility: hidden;
@@ -149,16 +154,6 @@
     );
 }
 
-.home-background-atmosphere {
-  z-index: 2;
-  opacity: .82;
-  background:
-    radial-gradient(circle at 72% 18%, var(--public-color-home-atmosphere-primary), transparent 36%),
-    radial-gradient(circle at 12% 76%, var(--public-color-home-atmosphere-accent), transparent 34%);
-  transform: scale(1.02);
-  animation: home-atmosphere-breathe 15s ease-in-out infinite alternate;
-}
-
 .home-random-background::after {
   z-index: 3;
   opacity: .18;
@@ -174,8 +169,16 @@
   animation: home-star-breathe 18s ease-in-out infinite alternate;
 }
 
+/* 图片 decode 前只保留与首页次级导航同基色的纯色舞台。 */
+.home-random-background:not(.is-ready)::before,
+.home-random-background:not(.is-ready)::after {
+  opacity: 0;
+  visibility: hidden;
+  animation: none;
+}
+
 .home-filter-bar {
-  --home-filter-bar-surface-start: var(--public-color-navigation-surface);
+  --home-filter-bar-surface-start: var(--public-color-home-loading-surface);
   --home-filter-bar-surface-end: var(--public-color-home-filter-surface);
   z-index: 6;
   width: 100%;
@@ -476,13 +479,13 @@
 }
 
 .home-banner-label {
-  --home-hero-duration: 440ms;
+  --home-hero-duration: 400ms;
   --home-hero-delay: 0ms;
 }
 
 .home-banner-title {
-  --home-hero-duration: 780ms;
-  --home-hero-delay: 80ms;
+  --home-hero-duration: 700ms;
+  --home-hero-delay: 60ms;
   transition-property: opacity, transform, letter-spacing, visibility;
   transition-duration:
     var(--home-hero-duration),
@@ -502,8 +505,8 @@
 }
 
 .home-site-stats {
-  --home-hero-duration: 560ms;
-  --home-hero-delay: 180ms;
+  --home-hero-duration: 480ms;
+  --home-hero-delay: 100ms;
   transform-origin: center;
 }
 
@@ -511,10 +514,10 @@
   opacity: 1;
   transform: translateY(0);
   transition:
-    opacity 360ms ease-out
-      calc(260ms + var(--home-stat-index, 0) * 60ms),
-    transform 420ms var(--public-motion-ease-cinematic)
-      calc(260ms + var(--home-stat-index, 0) * 60ms);
+    opacity 320ms ease-out
+      calc(160ms + var(--home-stat-index, 0) * 50ms),
+    transform 380ms var(--public-motion-ease-cinematic)
+      calc(160ms + var(--home-stat-index, 0) * 50ms);
 }
 
 .home-banner.is-entrance-pending .home-banner-label,
@@ -564,14 +567,8 @@
   color: var(--public-color-text-strong);
 }
 
-:root[data-document-motion-paused="true"] .home-background-atmosphere,
 :root[data-document-motion-paused="true"] .home-random-background::after {
   animation-play-state: paused;
-}
-
-@keyframes home-atmosphere-breathe {
-  from { opacity: .66; transform: scale(1.01) translate3d(-.2%, 0, 0); }
-  to { opacity: .9; transform: scale(1.045) translate3d(.25%, -.2%, 0); }
 }
 
 @keyframes home-star-breathe {

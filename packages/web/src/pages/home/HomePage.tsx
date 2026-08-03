@@ -28,7 +28,7 @@ const homeLoadingDotSteps: ReadonlyArray<{
   delayMs: number;
   extraDots: AppLoadingExtraDots;
 }> = [
-  { delayMs: 0, extraDots: 1 },
+  { delayMs: 100, extraDots: 1 },
   { delayMs: 300, extraDots: 2 },
   { delayMs: 600, extraDots: 3 }
 ];
@@ -38,14 +38,12 @@ function HomeStartupLoadingText({
 }: {
   active: boolean;
 }) {
-  const [extraDots, setExtraDots] = useState<AppLoadingExtraDots>(
-    homeLoadingDotSteps[0].extraDots
-  );
+  const [extraDots, setExtraDots] = useState<AppLoadingExtraDots>(0);
 
   useEffect(() => {
     if (!active) return;
-    setExtraDots(homeLoadingDotSteps[0].extraDots);
-    const timers = homeLoadingDotSteps.slice(1).map((step) => (
+    setExtraDots(0);
+    const timers = homeLoadingDotSteps.map((step) => (
       window.setTimeout(() => setExtraDots(step.extraDots), step.delayMs)
     ));
     return () => {

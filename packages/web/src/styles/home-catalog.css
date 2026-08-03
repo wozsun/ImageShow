@@ -30,8 +30,8 @@
   box-shadow:
     0 24px 70px var(--public-shadow-home-glass),
     inset 0 1px var(--public-color-home-glass-highlight);
-  -webkit-backdrop-filter: blur(22px) saturate(120%);
-  backdrop-filter: blur(22px) saturate(120%);
+  -webkit-backdrop-filter: blur(16px) saturate(120%);
+  backdrop-filter: blur(16px) saturate(120%);
 }
 
 .home-section-heading {

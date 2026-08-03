@@ -170,6 +170,9 @@ ON metadata(author, image_time DESC, id DESC) WHERE status = 'ready';
 CREATE INDEX idx_metadata_ready_random_axes
 ON metadata(device, brightness, theme, id) WHERE status = 'ready';
 
+CREATE INDEX idx_metadata_ready_id_suffix
+ON metadata ((right(id::text, 12))) WHERE status = 'ready';
+
 CREATE INDEX idx_metadata_trash_purge
 ON metadata(purge_state, deleted_at, id)
 WHERE status = 'deleted';

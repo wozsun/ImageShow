@@ -41,7 +41,6 @@ export function HomeBackground({
           onError={onError}
         />
       </div>
-      <span className="home-background-atmosphere" aria-hidden="true" />
     </div>
   );
 }

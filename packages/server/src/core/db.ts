@@ -321,6 +321,129 @@ export function runMigrations() {
   );
 }
 
+const currentBaselineMigration = "0001_initial";
+const absorbedBaselineMigrations = [
+  "0002_random_id_suffix_index"
+] as const;
+const randomIdSuffixIndexName = "idx_metadata_ready_id_suffix";
+const randomIdSuffixIndexSql = `CREATE INDEX ${randomIdSuffixIndexName}
+  ON metadata ((right(id::text, 12))) WHERE status = 'ready'`;
+
+type RandomIdSuffixIndexShape = {
+  schema_name?: string;
+  table_name?: string;
+  access_method?: string;
+  indisvalid?: boolean;
+  indisready?: boolean;
+  indisunique?: boolean;
+  indnkeyatts?: number;
+  indnatts?: number;
+  expression?: string | null;
+  predicate?: string | null;
+};
+
+function isCurrentRandomIdSuffixIndex(
+  index: RandomIdSuffixIndexShape | undefined
+) {
+  return index?.schema_name === "public"
+    && index.table_name === "metadata"
+    && index.access_method === "btree"
+    && index.indisvalid === true
+    && index.indisready === true
+    && index.indisunique === false
+    && index.indnkeyatts === 1
+    && index.indnatts === 1
+    && [
+      "right((id)::text, 12)",
+      '"right"((id)::text, 12)'
+    ].includes(index.expression ?? "")
+    && index.predicate === "(status = 'ready'::text)";
+}
+
+async function readRandomIdSuffixIndex(client: PoolClient) {
+  return (await client.query(
+    `SELECT table_namespace.nspname AS schema_name,
+            table_class.relname AS table_name,
+            access_method.amname AS access_method,
+            index_record.indisvalid,
+            index_record.indisready,
+            index_record.indisunique,
+            index_record.indnkeyatts,
+            index_record.indnatts,
+            pg_get_expr(index_record.indexprs, index_record.indrelid) AS expression,
+            pg_get_expr(index_record.indpred, index_record.indrelid) AS predicate
+       FROM pg_class index_class
+       JOIN pg_index index_record ON index_record.indexrelid = index_class.oid
+       JOIN pg_class table_class ON table_class.oid = index_record.indrelid
+       JOIN pg_namespace table_namespace ON table_namespace.oid = table_class.relnamespace
+       JOIN pg_am access_method ON access_method.oid = index_class.relam
+      WHERE index_class.oid = to_regclass($1)`,
+    [`public.${randomIdSuffixIndexName}`]
+  )).rows[0] as RandomIdSuffixIndexShape | undefined;
+}
+
+async function consolidateRandomIdSuffixBaseline(
+  signal: AbortSignal,
+  client: PoolClient
+) {
+  const historyTable = (await client.query(
+    "SELECT to_regclass('public.schema_migrations')::text AS name"
+  )).rows[0]?.name as string | null | undefined;
+  if (!historyTable) return;
+
+  signal.throwIfAborted();
+  const versions = (await client.query(
+    "SELECT version FROM schema_migrations ORDER BY version"
+  )).rows.map((row) => String(row.version));
+  if (!versions.length) return;
+
+  const supportedVersions = new Set([
+    currentBaselineMigration,
+    ...absorbedBaselineMigrations
+  ]);
+  const unsupported = versions.filter((version) => !supportedVersions.has(version));
+  if (unsupported.length || !versions.includes(currentBaselineMigration)) {
+    throw new Error(
+      `Unsupported database migration history: ${versions.join(", ")}`
+    );
+  }
+
+  const absorbed = absorbedBaselineMigrations.filter((version) => (
+    versions.includes(version)
+  ));
+  signal.throwIfAborted();
+  await client.query("BEGIN");
+  try {
+    let index = await readRandomIdSuffixIndex(client);
+    if (!index) {
+      if (absorbed.length) {
+        throw new Error(
+          "Database migration history records the random id suffix index, but the index is missing"
+        );
+      }
+      await client.query(randomIdSuffixIndexSql);
+      signal.throwIfAborted();
+      index = await readRandomIdSuffixIndex(client);
+    }
+    if (!isCurrentRandomIdSuffixIndex(index)) {
+      throw new Error(
+        "Database random id suffix index does not match the ImageShow 3.15.1 baseline"
+      );
+    }
+    if (absorbed.length) {
+      await client.query(
+        "DELETE FROM schema_migrations WHERE version = ANY($1::text[])",
+        [absorbed]
+      );
+    }
+    signal.throwIfAborted();
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  }
+}
+
 async function runMigrationsUnderLock(
   signal: AbortSignal,
   client: PoolClient
@@ -331,6 +454,7 @@ async function runMigrationsUnderLock(
     ? bundledMigrationDir
     : join(here, "..", "..", "migrations");
   const files = (await readdir(migrationDir)).filter((file) => file.endsWith(".sql")).sort();
+  await consolidateRandomIdSuffixBaseline(signal, client);
   for (const file of files) {
     signal.throwIfAborted();
     const version = file.replace(/\.sql$/, "");

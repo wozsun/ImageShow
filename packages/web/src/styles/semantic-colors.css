@@ -102,10 +102,9 @@
   --public-color-home-photo-mask-right: rgba(5, 9, 18, .12);
   --public-color-home-photo-mask-top: rgba(5, 8, 16, .06);
   --public-color-home-photo-mask-bottom: rgba(4, 7, 14, .28);
-  --public-color-home-atmosphere-primary: rgba(74, 121, 190, .22);
-  --public-color-home-atmosphere-accent: rgba(166, 76, 119, .14);
   --public-color-home-grain-line: rgba(255, 255, 255, .12);
   --public-color-home-grain-dot: rgba(255, 255, 255, .18);
+  --public-color-home-loading-surface: var(--public-color-canvas);
   --public-color-home-filter-surface: rgba(7, 11, 21, .32);
   --public-color-home-toolbar-border: rgba(255, 255, 255, .12);
   --public-color-home-toolbar-description: rgba(218, 229, 244, .68);
@@ -152,9 +151,9 @@
   --public-color-gallery-sky-left: #151820;
   --public-color-gallery-sky-center: #0e1623;
   --public-color-gallery-sky-right: #101c2a;
-  --public-color-gallery-atmosphere-left: rgba(106, 103, 124, .24);
-  --public-color-gallery-atmosphere-right: rgba(55, 83, 119, .27);
-  --public-color-gallery-atmosphere-bottom: rgba(49, 70, 105, .16);
+  --public-color-gallery-atmosphere-left: rgba(106, 103, 124, .12);
+  --public-color-gallery-atmosphere-right: rgba(55, 83, 119, .16);
+  --public-color-gallery-atmosphere-bottom: rgba(49, 70, 105, .08);
   --public-color-gallery-star-primary: rgba(255, 255, 255, .82);
   --public-color-gallery-star-primary-halo: rgba(164, 171, 194, .24);
   --public-color-gallery-star-secondary: rgba(182, 205, 231, .68);

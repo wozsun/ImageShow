@@ -20,6 +20,7 @@ import {
   parseRandomQuery,
   type RandomSelectorGroup
 } from "./query.ts";
+import { pickTargetedImage } from "./targeted-selection.ts";
 
 export async function selectRandomImage(
   url: URL,
@@ -33,6 +34,9 @@ export async function selectRandomImage(
     getRuntimeConfig().site.random_default_method
   );
   if (parsed instanceof Response) return parsed;
+  if (parsed.ids.length) {
+    return pickTargetedImage(parsed.ids, parsed.method, signal);
+  }
 
   const [themeMap, tagMap, authorMap] = await Promise.all([
     resolveSelectorMap(parsed.theme, resolveThemeTermMap),

@@ -23,7 +23,16 @@ import {
   type RandomSelectorGroup
 } from "./query.ts";
 
-export type PickedImage = RandomPoolItem & { method: RandomMethod };
+export type PickedImage = Pick<
+  RandomPoolItem,
+  | "id"
+  | "object_key"
+  | "ext"
+  | "device"
+  | "brightness"
+  | "theme"
+  | "storage_slug"
+> & { method: RandomMethod };
 
 function inferDevice(ua: string) {
   if (!ua) return "r";
