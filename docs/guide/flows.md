@@ -357,11 +357,14 @@ URL 下载遵循 `link_image.fill_original_url`：开启时自动把输入 URL �
 GET /random?d=&b=&t=&tag=&a=&m=
 ```
 
-1. 校验参数并把主题、标签、作者别名解析为 slug。
-2. 未指定设备时按 User-Agent 推断。
-3. 按客户端与筛选签名做短时不重复。
-4. 在 Redis generation 随机池中按 axis/category 计数加权选集合；标签和作者筛选通过 Redis 临时过滤集合完成。合法增量更新期间有界等待 completed revision；Redis 不可用或等待超时时返回带 `Retry-After` 的 503。
-5. `m=proxy` 从图片所属存储后端代理字节，否则 302 到对象 URL。
+1. 在任何词表、Redis 或存储访问前校验查询字节、键、单值重复、selector 长度与数量、
+   值域以及包含/排除互斥关系。
+2. 把主题、标签、作者的 slug / 显示名统一解析为排序去重的 slug；未知包含项返回 404，
+   未知排除项删除，并生成与输入顺序和返回方式无关的规范筛选签名。
+3. 未指定设备时按 User-Agent 推断。
+4. 按客户端与规范筛选签名做短时不重复。
+5. 在 Redis generation 随机池中按 axis/category 计数加权选集合；标签和作者筛选通过 Redis 临时过滤集合完成。合法增量更新期间有界等待 completed revision；Redis 不可用或等待超时时返回带 `Retry-After` 的 503。
+6. `m=proxy` 从图片所属存储后端代理字节，否则 302 到对象 URL。
 
 参数细节见[随机图 API](./random-api.md)。
 

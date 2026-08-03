@@ -13,21 +13,6 @@ function recentKey(clientId: string, signature: string) {
   return `${RECENT_PREFIX}${shortHash(clientId)}:${shortHash(signature)}`;
 }
 
-export function filterSignature(url: URL): string {
-  const params = url.searchParams;
-  const multi = (key: string) => [...new Set(params.getAll(key)
-    .flatMap((value) => value.split(","))
-    .map((value) => value.trim().toLowerCase())
-    .filter(Boolean))].sort();
-  return JSON.stringify({
-    d: params.get("d")?.toLowerCase() ?? "",
-    b: params.get("b")?.toLowerCase() ?? "",
-    t: multi("t"),
-    tag: multi("tag"),
-    a: multi("a")
-  });
-}
-
 export async function recentlyServedIds(clientId: string, signature: string): Promise<Set<string>> {
   if (!clientId) return new Set();
   try {

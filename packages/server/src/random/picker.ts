@@ -14,7 +14,14 @@ import {
   type RandomPoolSnapshot
 } from "./cache-model.ts";
 import { apiErrorResponse } from "../core/http/responses.ts";
-import { isRandomBrightness, parseAuthorSelectors, parseTagSelectors, parseThemeSelectors, randomBrightnesses, randomDevices } from "./query.ts";
+import {
+  isRandomBrightness,
+  randomBrightnesses,
+  randomDevices,
+  randomThemeCandidates,
+  type NormalizedRandomQuery,
+  type RandomSelectorGroup
+} from "./query.ts";
 
 export type PickedImage = RandomPoolItem & { method: RandomMethod };
 
@@ -34,17 +41,17 @@ export function resolveCandidateAxes(requestedDevice: string | null, requestedBr
 
 export type CandidateAxes = ReturnType<typeof resolveCandidateAxes>;
 
-function hasSelector(query: URLSearchParams, key: string) {
-  return query.getAll(key).some((value) => value.split(",").some((part) => part.trim()));
+function hasSelector(selectors: RandomSelectorGroup) {
+  return selectors.include.length > 0 || selectors.exclude.length > 0;
 }
 
-function noCandidatesError(url: URL, axes: CandidateAxes) {
+function noCandidatesError(query: NormalizedRandomQuery, axes: CandidateAxes) {
   const hasFilters = Boolean(
     axes.requestedDevice ||
     axes.requestedBrightness ||
-    hasSelector(url.searchParams, "t") ||
-    hasSelector(url.searchParams, "tag") ||
-    hasSelector(url.searchParams, "a")
+    hasSelector(query.theme) ||
+    hasSelector(query.tag) ||
+    hasSelector(query.author)
   );
   return apiErrorResponse({ status: 404, message: hasFilters ? "Not Found: No available images for the selected filters" : "Not Found: No available images" });
 }
@@ -112,8 +119,7 @@ async function pickFromSet(
 }
 
 export async function pickFromRedisPool(
-  url: URL,
-  method: RandomMethod,
+  query: NormalizedRandomQuery,
   axes: CandidateAxes,
   recent: Set<string> = new Set(),
   prefetchedSnapshot?: RandomPoolSnapshot,
@@ -121,36 +127,36 @@ export async function pickFromRedisPool(
 ): Promise<PickedImage | Response | null> {
   signal?.throwIfAborted();
   const snapshot = prefetchedSnapshot ?? await getRandomPoolSnapshot(signal);
-  const themeCandidates = parseThemeSelectors(url.searchParams, snapshot.themes);
+  const themeCandidates = randomThemeCandidates(query.theme, snapshot.themes);
   if (themeCandidates instanceof Response) return themeCandidates;
 
-  const tags = parseTagSelectors(url.searchParams);
-  if (tags instanceof Response) return tags;
-  const authors = parseAuthorSelectors(url.searchParams);
-  if (authors instanceof Response) return authors;
-
-  const hasThemeFilter = hasSelector(url.searchParams, "t");
-  const hasTagOrAuthorFilter = tags.include.length > 0 || tags.exclude.length > 0 || authors.include.length > 0 || authors.exclude.length > 0;
+  const hasThemeFilter = hasSelector(query.theme);
+  const hasTagOrAuthorFilter = hasSelector(query.tag) || hasSelector(query.author);
   const baseCandidates = hasThemeFilter
     ? categoryCandidates(snapshot, axes, themeCandidates)
     : axisCandidates(snapshot, axes);
-  if (!baseCandidates.length) return noCandidatesError(url, axes);
+  if (!baseCandidates.length) return noCandidatesError(query, axes);
 
   if (!hasTagOrAuthorFilter) {
     const selected = weightedPick(baseCandidates);
-    if (!selected) return noCandidatesError(url, axes);
-    return await pickFromSet(snapshot.generation, selected.key, method, recent) ?? noCandidatesError(url, axes);
+    if (!selected) return noCandidatesError(query, axes);
+    return await pickFromSet(snapshot.generation, selected.key, query.method, recent)
+      ?? noCandidatesError(query, axes);
   }
 
   const filter = await buildRandomFilterSet({
     generation: snapshot.generation,
-    signature: `${url.searchParams.toString()}|${baseCandidates.map((candidate) => candidate.key).join("|")}`,
+    signature: `${query.signature}|${baseCandidates
+      .map((candidate) => candidate.key)
+      .sort()
+      .join("|")}`,
     baseSetKeys: baseCandidates.map((candidate) => candidate.key),
-    tagInclude: tags.include,
-    tagExclude: tags.exclude,
-    authorInclude: authors.include,
-    authorExclude: authors.exclude
+    tagInclude: query.tag.include,
+    tagExclude: query.tag.exclude,
+    authorInclude: query.author.include,
+    authorExclude: query.author.exclude
   }, signal);
-  if (filter.count <= 0) return noCandidatesError(url, axes);
-  return await pickFromSet(snapshot.generation, filter.key, method, recent) ?? noCandidatesError(url, axes);
+  if (filter.count <= 0) return noCandidatesError(query, axes);
+  return await pickFromSet(snapshot.generation, filter.key, query.method, recent)
+    ?? noCandidatesError(query, axes);
 }

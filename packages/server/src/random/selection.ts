@@ -1,4 +1,3 @@
-import type { RandomMethod } from "@imageshow/shared/browser";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { apiErrorResponse } from "../core/http/responses.ts";
 import { safeResponseHeaderValue } from "../core/http/headers.ts";
@@ -8,7 +7,6 @@ import { resolveThemeTermMap } from "../themes/query.ts";
 import { getRandomPoolSnapshot } from "./cache-read.ts";
 import { randomPoolRetry } from "./cache-policy.ts";
 import {
-  filterSignature,
   recentlyServedIds,
   rememberServedId
 } from "./dedupe.ts";
@@ -18,10 +16,9 @@ import {
   type PickedImage
 } from "./picker.ts";
 import {
-  isRandomBrightness,
-  randomMethods,
-  randomRequestDevices,
-  validateRandomQuery
+  normalizeRandomQuery,
+  parseRandomQuery,
+  type RandomSelectorGroup
 } from "./query.ts";
 
 export async function selectRandomImage(
@@ -31,59 +28,39 @@ export async function selectRandomImage(
   signal?: AbortSignal
 ): Promise<PickedImage | Response | null> {
   signal?.throwIfAborted();
-  const queryError = validateRandomQuery(url.searchParams);
-  if (queryError) return queryError;
+  const parsed = parseRandomQuery(
+    url,
+    getRuntimeConfig().site.random_default_method
+  );
+  if (parsed instanceof Response) return parsed;
 
-  const explicitMethod = url.searchParams.get("m")?.toLowerCase() || null;
-  if (explicitMethod && !randomMethods.has(explicitMethod)) {
-    return apiErrorResponse(
-      { status: 400, message: "Bad Request: Invalid method" },
-      { field: "m" }
-    );
-  }
-  const method = (
-    explicitMethod ?? getRuntimeConfig().site.random_default_method
-  ) as RandomMethod;
-  const requestedBrightness = url.searchParams.get("b")?.toLowerCase() || null;
-  if (requestedBrightness && !isRandomBrightness(requestedBrightness)) {
-    return apiErrorResponse({ status: 400, message: "Bad Request: Invalid brightness" }, { field: "b" });
-  }
-  const requestedDevice = url.searchParams.get("d")?.toLowerCase() || null;
-  if (requestedDevice && !randomRequestDevices.has(requestedDevice)) {
-    return apiErrorResponse({ status: 400, message: "Bad Request: Invalid device" }, { field: "d" });
-  }
-
-  const [themeUrl, tagUrl, authorUrl] = await Promise.all([
-    withResolvedSelectors(url, "t", resolveThemeTermMap),
-    withResolvedSelectors(url, "tag", resolveTagTermMap),
-    withResolvedSelectors(url, "a", resolveAuthorTermMap)
+  const [themeMap, tagMap, authorMap] = await Promise.all([
+    resolveSelectorMap(parsed.theme, resolveThemeTermMap),
+    resolveSelectorMap(parsed.tag, resolveTagTermMap),
+    resolveSelectorMap(parsed.author, resolveAuthorTermMap)
   ]);
   signal?.throwIfAborted();
-  const resolvedUrl = new URL(url);
-  for (const [key, source] of [
-    ["t", themeUrl],
-    ["tag", tagUrl],
-    ["a", authorUrl]
-  ] as const) {
-    resolvedUrl.searchParams.delete(key);
-    for (const value of source.searchParams.getAll(key)) {
-      resolvedUrl.searchParams.append(key, value);
-    }
-  }
-  const axes = resolveCandidateAxes(requestedDevice, requestedBrightness, userAgent);
-
-  const signature = filterSignature(resolvedUrl);
+  const query = normalizeRandomQuery(parsed, {
+    theme: themeMap,
+    tag: tagMap,
+    author: authorMap
+  });
+  if (query instanceof Response) return query;
+  const axes = resolveCandidateAxes(
+    query.requestedDevice,
+    query.requestedBrightness,
+    userAgent
+  );
 
   let picked: PickedImage | Response | null;
   try {
     const [recent, snapshot] = await Promise.all([
-      recentlyServedIds(clientId, signature),
+      recentlyServedIds(clientId, query.signature),
       getRandomPoolSnapshot(signal)
     ]);
     signal?.throwIfAborted();
     picked = await pickFromRedisPool(
-      resolvedUrl,
-      method,
+      query,
       axes,
       recent,
       snapshot,
@@ -106,34 +83,15 @@ export async function selectRandomImage(
     return response;
   }
   if (picked && !(picked instanceof Response)) {
-    await rememberServedId(clientId, signature, picked.id);
+    await rememberServedId(clientId, query.signature, picked.id);
   }
   return picked;
 }
 
-async function withResolvedSelectors(
-  url: URL,
-  key: string,
+async function resolveSelectorMap(
+  selectors: RandomSelectorGroup,
   resolve: (terms: string[]) => Promise<Map<string, string>>
-): Promise<URL> {
-  const raw = url.searchParams.getAll(key);
-  if (!raw.length) return url;
-  try {
-    const terms = raw
-      .flatMap((value) => value.split(","))
-      .map((value) => value.trim())
-      .filter(Boolean);
-    const map = await resolve(terms.map((term) => term.replace(/^!/, "")));
-    const next = new URL(url.toString());
-    next.searchParams.delete(key);
-    for (const term of terms) {
-      const exclude = term.startsWith("!");
-      const bare = (exclude ? term.slice(1) : term).toLowerCase();
-      const slug = map.get(bare) ?? bare;
-      next.searchParams.append(key, exclude ? `!${slug}` : slug);
-    }
-    return next;
-  } catch {
-    return url;
-  }
+): Promise<Map<string, string>> {
+  const terms = [...selectors.include, ...selectors.exclude];
+  return terms.length ? resolve(terms) : new Map();
 }
