@@ -1,6 +1,6 @@
 import { pool } from "../core/db.ts";
 import { errorMessage } from "../core/api-error.ts";
-import { getRandomCategoryCounts } from "../random/cache-read.ts";
+import { getReadyImageCacheCoordinatorStatus } from "../images/ready-cache/coordinator.ts";
 import { listStorageKeys } from "../storage/object-access.ts";
 import { storageBackends } from "./storage-common.ts";
 
@@ -8,7 +8,7 @@ export async function checkSystemState() {
   const dbCheck = (
     await pool.query("SELECT count(*)::int FROM metadata")
   ).rows[0].count;
-  const categoryCounts = await getRandomCategoryCounts();
+  const imageCache = getReadyImageCacheCoordinatorStatus();
   const { defaultBackend, backends } = await storageBackends();
   const storage: Record<string, unknown> = {};
   for (const backend of backends) {
@@ -25,7 +25,12 @@ export async function checkSystemState() {
   return {
     images: dbCheck,
     default_backend: defaultBackend,
-    random_category_counts: categoryCounts,
+    image_cache: {
+      state: imageCache.meta?.state ?? imageCache.reason,
+      readable: imageCache.readable,
+      revision: imageCache.meta?.appliedRevision ?? null,
+      item_count: imageCache.meta?.itemCount ?? null
+    },
     storage
   };
 }

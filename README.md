@@ -2,7 +2,7 @@
 
 [![Publish Release](https://github.com/wozsun/ImageShow/actions/workflows/publish-release.yml/badge.svg)](https://github.com/wozsun/ImageShow/actions/workflows/publish-release.yml)
 
-ImageShow 是一个面向个人服务器的图片展示、图库管理与随机图 API 服务。它提供公开首页与瀑布流画廊、后台上传管理、本地 / S3 兼容对象存储 / WebDAV 多后端并存、Redis 随机池缓存，以及一键 Docker 部署。
+ImageShow 是一个面向个人服务器的图片展示、图库管理与随机图 API 服务。它提供公开首页与瀑布流画廊、后台上传管理、本地 / S3 兼容对象存储 / WebDAV 多后端并存、Redis 8 就绪图片读模型，以及一键 Docker 部署。
 
 ## 功能
 
@@ -28,7 +28,9 @@ ImageShow 是一个面向个人服务器的图片展示、图库管理与随机�
   传输与处理，取消竞态标记按会话代际和所有者在执行收口后立即释放。
 - 图片管理员可从公开画廊或后台的图片详情直接编辑可用图片，也可处理常规上传、移入
   回收站和恢复图片，查看、新建、编辑及用精确移动按钮或桌面拖动排序主题、标签和
-  作者，并执行数据库、存储、Redis、回收站及全部五项只读检查；图片存储迁移、
+  作者，并执行数据库、存储、Redis、回收站及全部五项只读检查；检查页还会展示
+  画廊 / 随机图 / 后台就绪列表共用缓存的 revision、图片数和重建进度，后台概览的
+  存储与大小区域同时显示该 Redis 图片投影的条目数、占用与同步状态；图片存储迁移、
   永久删除、清空回收站、主题/标签/作者的单项删除、存储后端迁移和无效存储清理由
   超级管理员专属权限保护，前端隐藏无权限入口，服务端仍会独立拦截请求。
 - 管理员界面偏好以 PostgreSQL 为真相源跨端同步，浏览器本地缓存支持首帧显示与断网后
@@ -39,19 +41,24 @@ ImageShow 是一个面向个人服务器的图片展示、图库管理与随机�
 - **存储多后端并存**：本地目录、S3 兼容对象存储与 WebDAV 可同时使用，每张图片记录自己所在后端，可单张、批量或整后端迁移；存储卡片会按当前占用提供删除、迁移或阻断原因说明，删除配置前还会二次确认并由服务端重新校验。在用 S3 Endpoint 可经同命名空间证明后安全换绑，迁移提交真值与对象删除均会核验并持久补偿。
 - WebP 缩略图，数据库 / 存储 / Redis 自检与存储迁移工具。
 
-## 部署
+## 本地体验与生产部署
 
-以 Docker Compose 一键部署，自带 PostgreSQL 与 Redis。应用只监听一个端口（默认 `5518`），主域名及其全部子域名都由它按 `Host` 提供，生产环境在前置反向代理终止 HTTPS。
+仓库根目录的 `compose.yaml` 自带 PostgreSQL 与 Redis，只用于本地体验、开发和全新安装
+验证，不是当前正式生产拓扑。当前生产部署固定为一台主机上的一个 ImageShow 应用容器；
+PostgreSQL 与 Redis 在另一套基础设施 Compose 中各运行一个单机单容器。升级时停止对应
+当前容器，更新后原位启动，不并行保留另一套应用容器。应用只监听一个端口（默认
+`5518`），主域名及其全部子域名都由它按 `Host` 提供，前置反向代理负责终止 HTTPS。
 
 ### 1. 准备
 
-- 安装 Docker 与 Docker Compose。
+- 安装 Docker 与 Docker Compose。连接外部 Redis 时也必须提供 `INCREX`、`ARRING`
+  与 `ARLASTITEMS`；应用会在启动时检查，不固定次版本号。
 - 仅在宿主机直接开发或构建时需要 Node.js `>=26.3.0 <27`；Docker 部署已内置 Node.js。
 - 一个域名，把**主域名与其通配子域名**（`random.` / `static.` / `link.` 都走同一应用）解析到服务器。
 
 ### 2. 配置部署参数
 
-`compose.yaml` 已为站点域名、端口、时区、数据库和 Redis 连接提供默认值，
+用于本地快速体验的 `compose.yaml` 已为站点域名、端口、时区、数据库和 Redis 连接提供默认值，
 无需创建 `.env` 也能展开完整配置。若直接编辑 Compose 文件，全新安装至少应在
 `services.imageshow.environment` 中设置首次管理员用户名和密码，并在文件顶部
 `x-database-settings` 中修改数据库用户名和密码；正式使用前还要把
@@ -73,12 +80,18 @@ DATABASE_NAME=imageshow
 DATABASE_USER=imageshow
 DATABASE_PASSWORD=                # 必填，请使用随机强密码
 REDIS_PASSWORD=                   # 仅连接带密码的外部 Redis 时填写
+REDIS_MAXMEMORY=500mb             # Redis 数据集上限；本机大图库实验可设为 2gb
 ```
 
 已有 super 管理员时，启动不会再读取环境变量覆盖账号或密码；请在后台账户页面修改。
 `DATABASE_*` 与 `REDIS_*` 是每次启动都读取的部署配置，必须持续由
 Compose、`.env` 或 Secret 提供。内置 Redis 位于 Compose 私有网络且不设置密码；
-只有连接启用了认证的外部 Redis 时才填写 `REDIS_PASSWORD`。
+只有连接启用了认证的外部 Redis 时才填写 `REDIS_PASSWORD`。仓库 Compose 的
+`REDIS_MAXMEMORY` 默认 `500mb` 并固定使用 `noeviction`，避免自动淘汰画廊核心键；
+外部 Redis 也必须配置正数 `maxmemory` 和 `noeviction`，应用启动时会核对。
+Redis 暂时不可连接或能力不满足时，HTTP 进程仍启动并让画廊、详情及后台正常图片列表
+回源 PostgreSQL，但 `/readyz` 保持非就绪，普通随机请求返回 503；连接恢复并重新校验
+通过后才开放 Redis 图片缓存。
 其余应用选项只在首次启动时播种进
 `data/config.json`，之后以该文件为准——完整字段与默认值见仓库根的
 [`config.example.jsonc`](config.example.jsonc)。主进程会在装配 HTTP 路由和启动
@@ -97,7 +110,7 @@ PostgreSQL；Redis 可用时会清除所有管理员登录会话，Redis 故障�
 不会重置已有账号。源码环境可执行
 `npm run admin:reset-password -- admin`。
 
-### 3. 启动
+### 3. 启动本地快速体验栈
 
 ```bash
 docker compose pull
@@ -147,12 +160,12 @@ Secure Cookie、同源检查与跳转 URL 出错。示例面向当前 stable Ngi
 
 ### 数据与配置
 
-- **持久化**：`./data`（bind mount，含 `config.json`、`storage/` 本地图片、`log/` 日志）＋ `postgresql18_data` / `redis_data` 两个卷。数据库与 Redis 连接只保存在部署环境或 Secret 中。
+- **本地快速体验持久化**：`./data`（bind mount，含 `config.json`、`storage/` 本地图片、`log/` 日志）＋ `postgresql18_data` / `redis_data` 两个卷。数据库与 Redis 连接只保存在部署环境或 Secret 中。
 - **改配置**：应用策略可在后台「设置」页修改，或编辑 `data/config.json` 后点「读取配置文件」热加载；数据库 / Redis 连接修改 `.env` 或 Compose 后重建容器。容器内固定监听 `5518`，宿主机映射端口由 `HOST_PORT` 控制。
 - 内置 PostgreSQL 默认不对宿主发布端口；需直连时用 `docker exec -it imageshow-postgresql psql`。
 
-更多方式（仅运行应用容器 + 外部数据库、升级 Redis 等）与配置 / 子域名 / 架构细节见
-仓库内[维护文档](docs/README.md)。
+正式环境只运行一个应用容器，并连接基础设施 Compose 中各一个 PostgreSQL、Redis
+容器；部署、停机更新、配置、子域名与架构细节见仓库内[维护文档](docs/README.md)。
 
 ## 许可
 

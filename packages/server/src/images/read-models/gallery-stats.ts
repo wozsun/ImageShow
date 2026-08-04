@@ -7,16 +7,23 @@ import {
   type Device,
   type GalleryStatsDto
 } from "@imageshow/shared/browser";
-import { ApiError } from "../../core/api-error.ts";
 import { coalesce } from "../../core/coalesce.ts";
 import { pool } from "../../core/db.ts";
-import { splitSelectors } from "../../core/selectors.ts";
 import { galleryStatsQuery } from "../../core/validation.ts";
 import {
-  getGalleryStatsCache,
-  imageCacheRevision,
-  setGalleryStatsCache
-} from "../image-cache.ts";
+  readReadyImageCountSnapshot,
+  type ReadyImageCountSnapshot
+} from "../ready-cache/counts.ts";
+import {
+  resolveReadyImageListFilterPlan,
+  type ReadyImageFilterPlan,
+  type ReadyImageSelectorGroup
+} from "../ready-cache/filters.ts";
+import {
+  getAuthorVocab,
+  getTagVocab,
+  getThemeVocab
+} from "../../vocab/vocab-cache.ts";
 
 type GalleryStatsQuery = z.infer<typeof galleryStatsQuery>;
 type FilterAxis = "device" | "brightness" | "theme" | "tag" | "author";
@@ -65,47 +72,27 @@ function numericCount(value: unknown) {
   return Number.isFinite(count) && count > 0 ? count : 0;
 }
 
-function parseSelector(value: string | undefined, noun: string) {
-  if (!value) return undefined;
-  const { include, exclude } = splitSelectors([value]);
-  if (include.length && exclude.length) {
-    throw new ApiError(
-      400,
-      "validation_error",
-      `Cannot mix include and exclude ${noun} selectors`
-    );
+function parsedSelector(group: ReadyImageSelectorGroup) {
+  if (group.include.length) {
+    return { exclude: false, values: group.include };
   }
-  const isExclude = exclude.length > 0;
-  return {
-    exclude: isExclude,
-    values: isExclude ? exclude : include
-  };
+  if (group.exclude.length) {
+    return { exclude: true, values: group.exclude };
+  }
+  return undefined;
 }
 
-function parseStatsFilters(query: GalleryStatsQuery): ParsedStatsFilters {
+function parsedStatsFilters(
+  query: GalleryStatsQuery,
+  plan: ReadyImageFilterPlan
+): ParsedStatsFilters {
   return {
     device: query.d,
     brightness: query.b,
-    theme: parseSelector(query.t, "theme"),
-    tag: parseSelector(query.tag, "tag"),
-    author: parseSelector(query.a, "author")
+    theme: parsedSelector(plan.theme),
+    tag: parsedSelector(plan.tag),
+    author: parsedSelector(plan.author)
   };
-}
-
-function normalizedSelectorKey(selector: ParsedSelector | undefined) {
-  if (!selector) return "";
-  const values = [...selector.values].sort();
-  return `${selector.exclude ? "!" : ""}${values.join(",")}`;
-}
-
-function galleryStatsCacheKey(filters: ParsedStatsFilters) {
-  return JSON.stringify([
-    filters.device ?? "",
-    filters.brightness ?? "",
-    normalizedSelectorKey(filters.theme),
-    normalizedSelectorKey(filters.tag),
-    normalizedSelectorKey(filters.author)
-  ]);
 }
 
 // Candidate counts intentionally omit their own axis: selections on one axis
@@ -311,45 +298,56 @@ async function readPublicGalleryStats(
   }
 }
 
+async function presentCachedGalleryStats(
+  snapshot: ReadyImageCountSnapshot
+): Promise<GalleryStatsDto> {
+  const [themeVocab, tagVocab, authorVocab] = await Promise.all([
+    getThemeVocab(),
+    getTagVocab(),
+    getAuthorVocab()
+  ]);
+  return {
+    total_images: snapshot.total,
+    matching_images: snapshot.matching,
+    devices: devices.map((device) => ({
+      device,
+      image_count: snapshot.devices[device] ?? 0
+    })),
+    brightnesses: brightnesses.map((brightness) => ({
+      brightness,
+      image_count: snapshot.brightnesses[brightness] ?? 0
+    })),
+    categories: devices.flatMap((device) => (
+      brightnesses.map((brightness) => ({
+        device,
+        brightness,
+        image_count: snapshot.axes[`${device}:${brightness}`] ?? 0
+      }))
+    )),
+    themes: themeVocab.map((entry) => ({
+      ...entry,
+      image_count: snapshot.themes[entry.slug] ?? 0
+    })),
+    tags: tagVocab.map((entry) => ({
+      ...entry,
+      image_count: snapshot.tags[entry.slug] ?? 0
+    })),
+    authors: authorVocab.map((entry) => ({
+      ...entry,
+      image_count: snapshot.authors[entry.slug] ?? 0
+    }))
+  };
+}
+
 export async function getPublicGalleryStats(
   query: GalleryStatsQuery = {}
 ): Promise<GalleryStatsDto> {
-  const filters = parseStatsFilters(query);
-  const revision = await imageCacheRevision();
-  const cacheKey = galleryStatsCacheKey(filters);
-  if (revision === null) {
-    return coalesce(
-      `gallery-stats:uncached:${cacheKey}`,
-      () => readPublicGalleryStats(filters)
-    );
-  }
-
-  const cached = await getGalleryStatsCache<GalleryStatsDto>(
-    cacheKey,
-    revision
-  );
-  if (cached.status === "hit") return cached.value;
-  if (cached.status === "unavailable") {
-    return coalesce(
-      `gallery-stats:uncached:${revision}:${cacheKey}`,
-      () => readPublicGalleryStats(filters)
-    );
-  }
-
+  const plan = await resolveReadyImageListFilterPlan(query);
+  const cached = await readReadyImageCountSnapshot(plan);
+  if (cached.cached) return presentCachedGalleryStats(cached.value);
+  const filters = parsedStatsFilters(query, plan);
   return coalesce(
-    `gallery-stats:${revision ?? "uncached"}:${cacheKey}`,
-    async () => {
-      const raced = await getGalleryStatsCache<GalleryStatsDto>(
-        cacheKey,
-        revision
-      );
-      if (raced.status === "hit") return raced.value;
-
-      const stats = await readPublicGalleryStats(filters);
-      if (raced.status === "miss") {
-        await setGalleryStatsCache(cacheKey, stats, revision);
-      }
-      return stats;
-    }
+    `gallery-stats:postgres:${plan.signature}`,
+    () => readPublicGalleryStats(filters)
   );
 }

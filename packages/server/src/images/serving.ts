@@ -23,17 +23,14 @@ import {
 import { contentType } from "../storage/object-keys.ts";
 import { isStorageObjectNotFound } from "../storage/not-found.ts";
 import {
-  getImageLookupById,
-  getImageLookupByObjectKey,
-  getImageLookupByThumbKey,
   getOriginalDirectCache,
-  imageCacheRevision,
-  setImageLookup,
-  setImageLookupById,
-  setOriginalDirectCache,
-  type CompleteImageLookupSource,
-} from "./image-cache.ts";
-import type { ImageLookupByIdItem } from "./image-cache-schema.ts";
+  setOriginalDirectCache
+} from "./original-direct-cache.ts";
+import {
+  readReadyImageById,
+  readReadyImageByObjectKey,
+  readReadyImageByThumbKey
+} from "./ready-cache/query.ts";
 import { linkBaseUrl } from "../config/site-host.ts";
 import { displayUrlForOriginalComparison, hasDistinctOriginalUrl } from "./original-link.ts";
 import {
@@ -52,6 +49,20 @@ const proxyTimeoutMs = 12_000;
 const proxyUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 
 type ProxyFallback = () => Response | Promise<Response>;
+
+type ImageLookupByIdItem = {
+  id: string;
+  object_key: string;
+  original: string;
+  ext: string;
+  storage_slug: string;
+  device: "pc" | "mb";
+  brightness: "dark" | "light";
+  theme: string;
+  status: string;
+  description: string;
+  source: string;
+};
 
 function safeUpstreamResponseHeader(name: string, value: string | null) {
   if (!value) return "";
@@ -281,41 +292,36 @@ async function streamOriginalThumbnailFallback(
   );
 }
 
-async function imageLookupById(id: string): Promise<ImageLookupByIdItem | null> {
-  const revision = await imageCacheRevision();
-  const cached = await getImageLookupById(id, revision);
-  if (cached) return cached;
+async function imageLookupById(
+  id: string,
+  includeDeleted = false
+): Promise<ImageLookupByIdItem | null> {
+  const cached = await readReadyImageById(id);
+  if (cached.cached && cached.value) {
+    return { ...cached.value, status: "ready" };
+  }
+  if (cached.cached && !includeDeleted) return null;
   const row = (await pool.query(
     `SELECT id, object_key, original, ext, storage_slug, device, brightness, theme,
             status, description, source
        FROM metadata
       WHERE id=$1
+        AND ($2::boolean OR status='ready')
       LIMIT 1`,
-    [id]
-  )).rows[0] as Partial<CompleteImageLookupSource> | undefined;
+    [id, includeDeleted]
+  )).rows[0] as ImageLookupByIdItem | undefined;
   if (!row) return null;
-  return setImageLookupById({
-    id,
-    object_key: String(row.object_key ?? ""),
-    original: String(row.original ?? ""),
-    ext: String(row.ext ?? ""),
-    storage_slug: String(row.storage_slug),
-    device: row.device as ImageLookupByIdItem["device"],
-    brightness: row.brightness as ImageLookupByIdItem["brightness"],
-    theme: String(row.theme ?? "none"),
-    status: String(row.status ?? ""),
-    description: String(row.description ?? ""),
-    source: String(row.source ?? "")
-  }, revision);
+  return row;
 }
 
 export async function serveObject(key: string, request: StoredResponseRequest = {}) {
-  const revision = await imageCacheRevision();
-  const cached = await getImageLookupByObjectKey(key, revision);
-  let ext = cached?.ext;
-  let storageSlug = cached?.storage_slug;
-  if (!cached) {
-    // Redis lookup 是加速层；缺失时回到 PostgreSQL 查元数据，并顺手回填 object/thumb 双向索引。
+  const cached = await readReadyImageByObjectKey(key);
+  let ext = cached.cached ? cached.value?.ext : undefined;
+  let storageSlug = cached.cached ? cached.value?.storage_slug : undefined;
+  if (cached.cached && !cached.value) {
+    throw new ApiError(404, "not_found", "Object not found");
+  }
+  if (!cached.cached) {
     const row = (await pool.query(
       "SELECT object_key, ext, storage_slug, status FROM metadata WHERE object_key=$1 LIMIT 1",
       [key]
@@ -324,13 +330,6 @@ export async function serveObject(key: string, request: StoredResponseRequest = 
     if (!row || row.status !== "ready") throw new ApiError(404, "not_found", "Object not found");
     ext = row.ext;
     storageSlug = row.storage_slug;
-    await setImageLookup({
-      object_key: key,
-      thumb_key: thumbnailObjectKey(key),
-      ext,
-      storage_slug: storageSlug,
-      status: "ready"
-    }, revision);
   }
   if (!ext || !storageSlug) throw new ApiError(404, "not_found", "Object not found");
   const object = await resolveReadableObject("media", key, storageSlug);
@@ -342,21 +341,20 @@ export async function serveObject(key: string, request: StoredResponseRequest = 
 }
 
 export async function serveThumb(key: string, request: StoredResponseRequest = {}): Promise<Response> {
-  const revision = await imageCacheRevision();
-  const cached = await getImageLookupByThumbKey(key, revision);
-  if (cached) {
-    const backend = cached.storage_slug;
+  const cached = await readReadyImageByThumbKey(key);
+  if (cached.cached && cached.value) {
+    const backend = cached.value.storage_slug;
     const object = await resolveReadableObject("thumbs", key, backend);
     const publicUrl = await readablePublicThumbUrl(
       object,
-      cached.object_key,
+      cached.value.object_key,
       key,
       backend
     );
     if (publicUrl) return immutableRedirect(publicUrl);
 
     const streamed = await streamThumbEnsuring(
-      cached.object_key,
+      cached.value.object_key,
       key,
       backend,
       immutableCacheControl,
@@ -366,11 +364,14 @@ export async function serveThumb(key: string, request: StoredResponseRequest = {
     if (streamed) return streamed;
 
     return streamOriginalThumbnailFallback(
-      cached.object_key,
-      cached.ext,
+      cached.value.object_key,
+      cached.value.ext,
       backend,
       request
     );
+  }
+  if (cached.cached) {
+    throw new ApiError(404, "not_found", "Thumbnail not found");
   }
   const row = (await pool.query("SELECT object_key, ext, storage_slug, status FROM metadata WHERE object_key=$1 OR regexp_replace(object_key, '\\.[^/.]+$', '.webp')=$1 LIMIT 1", [key])).rows[0];
 
@@ -379,10 +380,6 @@ export async function serveThumb(key: string, request: StoredResponseRequest = {
   const thumbKey = thumbnailObjectKey(objectKey);
   const ext = row.ext;
   const backend = row.storage_slug;
-  await setImageLookup(
-    { object_key: objectKey, thumb_key: thumbKey, ext, storage_slug: backend, status: "ready" },
-    revision
-  );
   const object = await resolveReadableObject("thumbs", thumbKey, backend);
   const publicUrl = await readablePublicThumbUrl(
     object,
@@ -419,7 +416,7 @@ function immutableRedirect(location: string) {
   });
 }
 
-export async function redirectOriginalLink(id: string, userAgent: string) {
+async function resolvePublicExternalOriginal(id: string) {
   const row = await imageLookupById(id);
   const original = String(row?.original ?? "");
   if (!row || row.status !== "ready") {
@@ -429,7 +426,11 @@ export async function redirectOriginalLink(id: string, userAgent: string) {
   if (!/^https:\/\//i.test(original)) throw new ApiError(404, "not_found", "Original link not found");
   const displayUrl = await displayUrlForOriginalComparison(row);
   if (!hasDistinctOriginalUrl(original, displayUrl)) throw new ApiError(404, "not_found", "Original link not found");
+  return original;
+}
 
+export async function redirectOriginalLink(id: string, userAgent: string) {
+  const original = await resolvePublicExternalOriginal(id);
   const direct = await cachedOriginalSupportsDirectAccess(original, userAgent);
   // 原图链接可无 Referer 直连时直接 302；否则跳到 link 子域代理，避免详情页按钮打开后被防盗链拦截。
   return new Response(null, {
@@ -446,16 +447,7 @@ export async function redirectOriginalLink(id: string, userAgent: string) {
 }
 
 export async function serveOriginalLinkProxy(id: string, isHead = false) {
-  const row = await imageLookupById(id);
-  const original = String(row?.original ?? "");
-  if (!row || row.status !== "ready") {
-    throw new ApiError(404, "not_found", "Original link not found");
-  }
-
-  if (!/^https:\/\//i.test(original)) throw new ApiError(404, "not_found", "Original link not found");
-  const displayUrl = await displayUrlForOriginalComparison(row);
-  if (!hasDistinctOriginalUrl(original, displayUrl)) throw new ApiError(404, "not_found", "Original link not found");
-
+  const original = await resolvePublicExternalOriginal(id);
   return proxyExternalImage(
     original,
     externalImageExt(original),
@@ -469,7 +461,7 @@ export async function serveOriginalLinkProxy(id: string, isHead = false) {
 }
 
 export async function serveAdminThumb(id: string, request: StoredResponseRequest = {}): Promise<Response> {
-  const row = await imageLookupById(id);
+  const row = await imageLookupById(id, true);
   if (!row) throw new ApiError(404, "not_found", "Image not found");
   const backend = row.storage_slug;
   const thumbKey = thumbnailObjectKey(row.object_key);
@@ -479,14 +471,14 @@ export async function serveAdminThumb(id: string, request: StoredResponseRequest
 }
 
 export async function serveAdminObject(id: string, request: StoredResponseRequest = {}): Promise<Response> {
-  const row = await imageLookupById(id);
+  const row = await imageLookupById(id, true);
   if (!row) throw new ApiError(404, "not_found", "Image not found");
   const backend = row.storage_slug;
   return streamStoredObject("media", row.object_key, backend, contentType(row.ext), privateNoStoreCacheControl, request);
 }
 
 export async function serveAdminOriginalLink(id: string, userAgent: string): Promise<Response> {
-  const row = await imageLookupById(id);
+  const row = await imageLookupById(id, true);
   const original = String(row?.original ?? "");
   if (!row || !/^https:\/\//i.test(original)) throw new ApiError(404, "not_found", "Original link not found");
   const displayUrl = await displayUrlForOriginalComparison(row);

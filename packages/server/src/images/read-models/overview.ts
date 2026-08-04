@@ -1,12 +1,7 @@
 import type { AdminOverviewDto } from "@imageshow/shared/browser";
 import { getRuntimeConfig } from "../../config/runtime-config-store.ts";
-import { coalesce } from "../../core/coalesce.ts";
 import { pool } from "../../core/db.ts";
-import {
-  getAdminOverviewCache,
-  publicImagesCacheGeneration,
-  setAdminOverviewCache
-} from "../image-cache.ts";
+import { getReadyImageCacheAdminStatus } from "../ready-cache/admin-status.ts";
 import {
   adminImageDetailView,
   imageDetailPresentationColumnsWithTags,
@@ -14,35 +9,21 @@ import {
   type ImageRecordWithTags
 } from "../presenter.ts";
 
-type OverviewStats = AdminOverviewDto;
-
 export async function getOverviewStats(): Promise<AdminOverviewDto> {
   const recentLimit = getRuntimeConfig().admin.recent_uploads;
-  const generation = await publicImagesCacheGeneration();
-  const cacheKey = `recent:${recentLimit}`;
-  const cached = await getAdminOverviewCache<OverviewStats>(cacheKey, generation);
-  if (cached) return cached;
-
-  return coalesce(
-    `admin-overview:${generation ?? "uncached"}:${cacheKey}`,
-    async () => {
-      const raced = await getAdminOverviewCache<OverviewStats>(
-        cacheKey,
-        generation
-      );
-      if (raced) return raced;
-
-      const stats = await buildOverviewStats(recentLimit);
-      await setAdminOverviewCache(cacheKey, stats, generation);
-      return stats;
-    }
-  );
+  return buildOverviewStats(recentLimit);
 }
 
 async function buildOverviewStats(
   recentLimit: number
 ): Promise<AdminOverviewDto> {
-  const [statsResult, topThemesResult, recentResult, backendResult] = await Promise.all([
+  const [
+    statsResult,
+    topThemesResult,
+    recentResult,
+    backendResult,
+    readyImageCache
+  ] = await Promise.all([
     pool.query(`
       SELECT
         count(*) FILTER (WHERE status='ready')::int AS gallery,
@@ -79,7 +60,8 @@ async function buildOverviewStats(
         LIMIT $1`,
       [recentLimit]
     ),
-    pool.query("SELECT count(*)::int AS n FROM storage_backend")
+    pool.query("SELECT count(*)::int AS n FROM storage_backend"),
+    getReadyImageCacheAdminStatus()
   ]);
 
   const row = statsResult.rows[0];
@@ -108,6 +90,13 @@ async function buildOverviewStats(
       theme: item.theme,
       count: item.count
     })),
-    recent
+    recent,
+    redis_cache: {
+      state: readyImageCache.state,
+      synchronized: readyImageCache.synchronized,
+      rebuilding: readyImageCache.rebuilding,
+      item_count: readyImageCache.item_count,
+      memory_bytes: readyImageCache.memory_bytes
+    }
   };
 }

@@ -1,12 +1,12 @@
 import { appConfig } from "@imageshow/shared";
 import { redis } from "./redis-client.ts";
 
-export type RedisJsonLookup<T> =
+type RedisJsonLookup<T> =
   | { status: "hit"; value: T }
   | { status: "miss" }
   | { status: "unavailable" };
 
-export async function getRedisJsonLookup<T>(
+async function getRedisJsonLookup<T>(
   key: string
 ): Promise<RedisJsonLookup<T>> {
   let raw: string | null;

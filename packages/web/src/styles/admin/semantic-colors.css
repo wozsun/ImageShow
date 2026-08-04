@@ -81,13 +81,18 @@
    * to these roles instead of creating local variants for nearly equal hues.
    */
 
+  /* Status: neutral */
+  --admin-color-neutral-text: light-dark(#646a73, #8b949e);
+  --admin-color-neutral-surface: light-dark(#f3f4f5, #15191f);
+  --admin-color-neutral-border: light-dark(#d9dde2, #2a3038);
+
   /* Status: success */
   --admin-color-success-text: light-dark(#245236, #8fd8a3);
   --admin-color-success-text-strong: light-dark(#1b6f40, #72c68b);
   --admin-color-success-text-emphasis: light-dark(#24723c, #74bbaa);
   --admin-color-success-surface: light-dark(#eaf8ee, #173126);
   --admin-color-success-surface-soft: light-dark(#f2fbf5, #173126);
-  --admin-color-success-surface-subtle: light-dark(#f2fbf5, #111f1c);
+  --admin-color-success-surface-subtle: light-dark(#f2fbf5, #152821);
   --admin-color-success-surface-emphasis: light-dark(#dff3e5, #263d30);
   --admin-color-success-surface-hover: light-dark(#cdeedb, #2d523b);
   --admin-color-success-border: light-dark(#9fd3ad, #4d795b);
@@ -104,7 +109,7 @@
   --admin-color-warning-action: light-dark(#a75b00, #e3b341);
   --admin-color-warning-surface: light-dark(#fff8e8, #2d2717);
   --admin-color-warning-surface-soft: light-dark(#fffaf0, #231f15);
-  --admin-color-warning-surface-subtle: light-dark(#fff9e9, #2a261f);
+  --admin-color-warning-surface-subtle: light-dark(#fff9e9, #302b22);
   --admin-color-warning-surface-emphasis: light-dark(#fff1cc, #3b3018);
   --admin-color-warning-surface-strong: light-dark(#f9e7af, #3b3018);
   --admin-color-warning-progress: light-dark(#f7e7ae, #4a3a18);
@@ -130,12 +135,12 @@
   --admin-color-pending-surface: light-dark(#e2efff, #14253d);
   --admin-color-pending-progress: light-dark(#d3e4ff, #1e3a5f);
   --admin-color-pending-border: light-dark(#86afe8, #315d8c);
-  --admin-color-pending-text-soft: light-dark(#2b65ad, #5b90bf);
-  --admin-color-pending-surface-soft: light-dark(#ebf3fd, #0f1c2e);
-  --admin-color-pending-border-soft: light-dark(#b5cae7, #254669);
-  --admin-color-pending-text-subtle: light-dark(#3f6f9f, #5586b3);
-  --admin-color-pending-surface-subtle: light-dark(#f3f7fc, #0a131f);
-  --admin-color-pending-border-subtle: light-dark(#cbdbea, #192f46);
+  --admin-color-pending-text-soft: light-dark(#2f6ea9, #6ba3d4);
+  --admin-color-pending-surface-soft: light-dark(#eaf3ff, #102033);
+  --admin-color-pending-border-soft: light-dark(#aec9e8, #2b4d70);
+  --admin-color-pending-text-subtle: light-dark(#3776a1, #5d87ab);
+  --admin-color-pending-surface-subtle: light-dark(#f2f7ff, #0c1b29);
+  --admin-color-pending-border-subtle: light-dark(#d7e2e6, #253d55);
 
   /* Code editor and log viewer */
   --admin-color-code-surface: #0d1117;

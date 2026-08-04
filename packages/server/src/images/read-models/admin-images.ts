@@ -7,8 +7,9 @@ import type {
 import { pool, withAdvisoryLocks } from "../../core/db.ts";
 import { ApiError } from "../../core/api-error.ts";
 import { adminImageListQuery } from "../../core/validation.ts";
-import { imageCacheRevision, warmCompleteImageLookups } from "../image-cache.ts";
 import { batchImageUpdateLockRequests } from "../batch-update-lock.ts";
+import { resolveReadyImageListFilterPlan } from "../ready-cache/filters.ts";
+import { readReadyImagePage } from "../ready-cache/query.ts";
 import {
   adminImageView,
   batchEditableImagePresentationColumnsWithTags,
@@ -35,7 +36,21 @@ function imageStorageLabel(row: {
 export async function listAdminImages(
   query: AdminImageListQuery
 ): Promise<AdminImageListResponse> {
-  const cacheRevision = await imageCacheRevision();
+  if (query.status === "ready") {
+    const plan = await resolveReadyImageListFilterPlan(query);
+    const cached = await readReadyImagePage(plan, query.limit, query.cursor);
+    if (cached.cached) {
+      const images = await publicImagesWithTags(cached.value.items.map((item) => ({
+        ...item,
+        status: "ready"
+      })));
+      return {
+        items: images.map(adminImageView),
+        total: cached.value.total,
+        next_cursor: cached.value.nextCursor
+      };
+    }
+  }
   const { params, where } = await buildImageListFilters(query);
 
   const [countResult, page] = await Promise.all([
@@ -45,7 +60,6 @@ export async function listAdminImages(
     ),
     fetchAdminImagePage([...where], [...params], query.limit, query.cursor)
   ]);
-  await warmCompleteImageLookups(page.rows, cacheRevision);
   return {
     items: page.items.map(adminImageView),
     total: Number(countResult.rows[0]?.count ?? 0),

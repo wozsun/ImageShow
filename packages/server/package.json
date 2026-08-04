@@ -1,6 +1,6 @@
 {
   "name": "@imageshow/server",
-  "version": "3.15.2",
+  "version": "4.0.0",
   "type": "module",
   "scripts": {
     "dev": "node --env-file-if-exists=../../.env --watch src/index.ts",
@@ -16,7 +16,7 @@
     "altcha-lib": "^2.3.2",
     "fast-xml-parser": "^5.10.1",
     "file-type": "^22.0.1",
-    "hono": "^4.12.33",
+    "hono": "^4.13.0",
     "ioredis": "^6.0.0",
     "pg": "^8.22.0",
     "sharp": "^0.35.3",

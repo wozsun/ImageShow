@@ -31,6 +31,7 @@ export function clearAdminCacheAfterLogin(client: QueryClient) {
     queryKeys.importVocabulary,
     queryKeys.settings,
     queryKeys.overview,
+    queryKeys.readyImageCache,
     queryKeys.adminImages,
     queryKeys.adminImageInfo,
     queryKeys.adminImageEditSnapshot,

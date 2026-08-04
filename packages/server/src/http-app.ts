@@ -25,6 +25,7 @@ import { registerAdminThemeRoutes } from "./routes/admin-themes.ts";
 import { registerAdminAuthorRoutes } from "./routes/admin-authors.ts";
 import { registerAdminUserRoutes } from "./routes/admin-users.ts";
 import { registerAdminPreferenceRoutes } from "./routes/admin-preferences.ts";
+import { registerAdminCacheRoutes } from "./routes/admin-cache.ts";
 import { registerCheckRoutes } from "./routes/check.ts";
 import { registerHealthRoutes } from "./routes/health.ts";
 import {
@@ -162,6 +163,7 @@ export function createHttpApp() {
   registerAdminAuthorRoutes(app);
   registerAdminUserRoutes(app);
   registerAdminPreferenceRoutes(app);
+  registerAdminCacheRoutes(app);
   registerImportRoutes(app);
   registerAdminLogRoutes(app);
   registerAdvancedConfigRoutes(app);

@@ -11,6 +11,7 @@ import { migrateStorageBackend } from "../../lib/api/storage-backend-migration.j
 import { invalidateStorageData } from "../../lib/api/query-invalidation.js";
 import { useAdminPermissions } from "../../lib/api/site-data.js";
 import { StorageBackendMigrationDialog } from "./storage/StorageBackendMigrationDialog.js";
+import { ReadyImageCachePanel } from "./ReadyImageCachePanel.js";
 import "../../styles/admin/check.css";
 
 export function CheckPage() {
@@ -23,6 +24,9 @@ export function CheckPage() {
   );
   const canCleanupStorage = permissions.includes(
     adminPermissions.storageMaintenanceCleanup
+  );
+  const canRebuildCache = permissions.includes(
+    adminPermissions.cacheMaintenanceRebuild
   );
   const [operationModal, setOperationModal] = useState<
     "storage-backend-migration" | "storage-cleanup" | null
@@ -106,6 +110,7 @@ export function CheckPage() {
           )}
         </div>
       </header>
+      <ReadyImageCachePanel canRebuild={canRebuildCache} />
       {operationModal === "storage-backend-migration" && canMigrateStorage && (
         <StorageBackendMigrationDialog
           busy={Boolean(running)}
@@ -252,16 +257,15 @@ const CHECK_RESULT_LABELS: Record<string, string> = {
   // Redis 状态
   connection: "连接状态",
   prefix_counts: "键数量统计",
+  image_cache: "统一图片缓存",
+  coordinator: "协调器状态",
+  persisted_meta: "持久化元数据",
   core_keys: "核心键",
-  folder_summary: "目录映射摘要",
-  random_category_counts: "随机分类计数",
-  random_items: "随机池图片",
-  random_generation: "随机池版本",
   ready_count: "图库就绪数",
-  random_pool_count: "随机池数量",
-  random_pool_mismatch: "随机池数量不一致",
-  random_pool_error: "随机池错误",
-  gallery_filter_options: "画廊筛选轴缓存",
+  ready_cache_count: "缓存就绪数",
+  ready_cache_readable: "缓存可读",
+  ready_cache_state: "缓存状态",
+  ready_cache_mismatch: "缓存数量不一致",
   issues: "发现的问题",
   // 全部检查（概览）
   images: "图片总数",
@@ -276,8 +280,8 @@ function checkResultLabel(key: string) {
 function isIssueKey(key: string) {
   return [
     "issues", "operations", "failures", "failed", "unavailable_backends", "error", "errors", "error_count",
-    "random_pool_mismatch", "random_pool_error", "missing_objects", "missing_thumbs",
-    "orphan_objects", "orphan_thumbs", "orphan_staging_files"
+    "missing_objects", "missing_thumbs",
+    "orphan_objects", "orphan_thumbs", "orphan_staging_files", "ready_cache_mismatch"
   ].includes(key);
 }
 

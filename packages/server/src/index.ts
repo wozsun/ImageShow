@@ -7,27 +7,20 @@ import {
   onRuntimeConfigChange
 } from "./config/runtime-config-store.ts";
 import { configureSharpConcurrency } from "./images/processing.ts";
-import { invalidateImageCaches } from "./images/image-cache.ts";
+import {
+  initializeReadyImageCacheCoordinator,
+  stopReadyImageCacheCoordinator
+} from "./images/ready-cache/coordinator.ts";
 import { cleanupOrphanRawImports } from "./images/imports/temp-files.ts";
 import { closeDatabasePools, pingDb, runMigrations } from "./core/db.ts";
 import { ensureSuperAdmin } from "./users/admin-bootstrap.ts";
-import { pingRedis, redis } from "./core/redis-client.ts";
+import { redis } from "./core/redis-client.ts";
 import { configureRuntimeLogger, logger } from "./core/logger.ts";
 import { ensureRuntimeDirectories } from "./storage/runtime-directories.ts";
 import { drainWorker, startWorker, stopWorker } from "./jobs/worker.ts";
 import {
-  closeStorageBackendRegistry,
-  onStorageBackendChange
+  closeStorageBackendRegistry
 } from "./storage/backend-registry.ts";
-import { rebuildRandomPool } from "./random/cache-rebuild.ts";
-import {
-  drainRandomBuilds,
-  stopRandomBuilds
-} from "./random/build-lifecycle.ts";
-import {
-  cleanupActiveRandomRebuildSpools,
-  cleanupOrphanRandomRebuildSpools,
-} from "./random/rebuild-spool.ts";
 import { createHttpApp } from "./http-app.ts";
 
 initializeRuntimeConfig();
@@ -35,7 +28,6 @@ configureRuntimeLogger(() => getRuntimeConfig().log);
 const app = createHttpApp();
 
 await ensureRuntimeDirectories();
-await cleanupOrphanRandomRebuildSpools();
 await pingDb();
 await runMigrations();
 await cleanupOrphanRawImports(appConfig.uploadTtlSeconds * 1000);
@@ -43,27 +35,12 @@ await ensureSuperAdmin({
   username: bootstrapEnvironment.adminUsername,
   password: bootstrapEnvironment.adminPassword
 });
-await pingRedis();
 configureSharpConcurrency();
 onRuntimeConfigChange(configureSharpConcurrency);
-let publicUrlConfigSignature = publicUrlConfigCacheSignature();
-onRuntimeConfigChange(() => {
-  const nextSignature = publicUrlConfigCacheSignature();
-  if (nextSignature === publicUrlConfigSignature) return;
-  publicUrlConfigSignature = nextSignature;
-  void invalidateImageCaches();
-});
-onStorageBackendChange(() => {
-  void invalidateImageCaches().catch((error) => {
-    logger.warn("storage change cache invalidation failed", error);
-  });
+await initializeReadyImageCacheCoordinator().catch((error) => {
+  logger.warn("startup ready-image cache initialization failed", error);
 });
 startWorker();
-const startupRandomPool = rebuildRandomPool({ requireFresh: false }).catch((error) => {
-  // Redis is a derived layer. A failed warm-up is retried by normal reads and
-  // queued rebuild jobs without preventing the HTTP service from starting.
-  logger.warn("startup random pool warm-up failed", error);
-});
 
 const serverPort = appConfig.applicationPort;
 const server = serve({ fetch: app.fetch, port: serverPort });
@@ -77,17 +54,14 @@ async function shutdown(signal: string) {
   const hardExit = setTimeout(() => process.exit(1), appConfig.backgroundJob.shutdownHardExitMs);
   hardExit.unref();
   try {
-    stopRandomBuilds(new Error(`Process received ${signal}`));
     stopWorker();
+    const readyImageCacheStop = stopReadyImageCacheCoordinator();
     const workerDrain = drainWorker();
-    const randomBuildDrain = drainRandomBuilds();
     await new Promise<void>((resolve) => server.close(() => resolve()));
     await Promise.all([
       workerDrain,
-      randomBuildDrain,
-      startupRandomPool
+      readyImageCacheStop
     ]);
-    await cleanupActiveRandomRebuildSpools();
     await closeStorageBackendRegistry();
     await redis.quit().catch(() => redis.disconnect());
     await closeDatabasePools();
@@ -99,12 +73,3 @@ async function shutdown(signal: string) {
 
 process.on("SIGTERM", () => void shutdown("SIGTERM"));
 process.on("SIGINT", () => void shutdown("SIGINT"));
-
-function publicUrlConfigCacheSignature() {
-  const { site } = getRuntimeConfig();
-  return JSON.stringify({
-    domain: site.domain,
-    static_subdomain: site.static_subdomain,
-    link_subdomain: site.link_subdomain
-  });
-}

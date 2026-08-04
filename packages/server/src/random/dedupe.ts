@@ -16,8 +16,16 @@ function recentKey(clientId: string, signature: string) {
 export async function recentlyServedIds(clientId: string, signature: string): Promise<Set<string>> {
   if (!clientId) return new Set();
   try {
-    const ids = await redis.lrange(recentKey(clientId, signature), 0, appConfig.randomDedupe.historySize - 1);
-    return new Set(ids);
+    const ids = await redis.call(
+      "ARLASTITEMS",
+      recentKey(clientId, signature),
+      String(appConfig.randomDedupe.historySize),
+      "REV"
+    );
+    if (!Array.isArray(ids) || ids.some((id) => typeof id !== "string")) {
+      throw new Error("Redis ARLASTITEMS returned an invalid result");
+    }
+    return new Set(ids as string[]);
   } catch {
     return new Set();
   }
@@ -32,9 +40,13 @@ export async function rememberServedIds(
   if (!clientId || !uniqueIds.length) return;
   try {
     const key = recentKey(clientId, signature);
-    const pipeline = redis.pipeline()
-      .lpush(key, ...uniqueIds)
-      .ltrim(key, 0, appConfig.randomDedupe.historySize - 1)
+    const pipeline = redis.multi()
+      .call(
+        "ARRING",
+        key,
+        String(appConfig.randomDedupe.historySize),
+        ...uniqueIds
+      )
       .expire(key, appConfig.randomDedupe.ttlSeconds);
     await execRedisPipeline(pipeline);
   } catch {

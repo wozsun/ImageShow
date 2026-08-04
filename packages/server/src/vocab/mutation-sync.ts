@@ -2,12 +2,6 @@ import { slugPattern } from "@imageshow/shared/browser";
 import { withAdvisoryLock, withAdvisoryLocks } from "../core/db.ts";
 import { ApiError } from "../core/api-error.ts";
 import {
-  invalidateImageCaches,
-  type ImageLookupInvalidationEntry
-} from "../images/image-cache.ts";
-import { rebuildRandomPool } from "../random/cache-rebuild.ts";
-import { syncRandomImages } from "../random/cache-sync.ts";
-import {
   invalidateEntityCountCaches,
   refreshEntityVocabularies
 } from "./vocab-cache.ts";
@@ -110,48 +104,13 @@ export function assertVocabularyFound(
   );
 }
 
-type VocabularyMutationSync = {
-  entity: VocabularyEntity;
-  lookupEntries?: readonly ImageLookupInvalidationEntry[];
-  imageDataChanged?: boolean;
-  random?:
-    | { mode: "rebuild" }
-    | { mode: "images"; ids: readonly string[] };
-  facets?: boolean;
-};
-
-/**
- * 派生状态修复顺序固定为随机池、词表缓存、图片代际。图片代际最后推进，
- * 可避免新代际的 gallery facets 在词表刷新前重新物化旧标签。每一阶段即使
- * 失败也会继续执行后续阶段，最终再抛出首个错误。
- */
 export async function synchronizeVocabularyMutation({
-  entity,
-  lookupEntries = [],
-  imageDataChanged = false,
-  random,
-  facets = true
-}: VocabularyMutationSync) {
-  const failures: unknown[] = [];
-
-  if (random?.mode === "rebuild") {
-    await rebuildRandomPool().catch((error) => failures.push(error));
-  } else if (random?.mode === "images" && random.ids.length) {
-    await syncRandomImages([...random.ids]).catch((error) => failures.push(error));
-  }
-
-  const vocabularyRepairs = await Promise.allSettled([
+  entity
+}: {
+  entity: VocabularyEntity;
+}) {
+  await Promise.all([
     refreshEntityVocabularies([entity]),
     invalidateEntityCountCaches([entity])
   ]);
-  for (const repair of vocabularyRepairs) {
-    if (repair.status === "rejected") failures.push(repair.reason);
-  }
-
-  if (imageDataChanged || facets) {
-    await invalidateImageCaches({ lookupEntries, facets })
-      .catch((error) => failures.push(error));
-  }
-
-  if (failures.length) throw failures[0];
 }

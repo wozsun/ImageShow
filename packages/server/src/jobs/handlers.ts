@@ -7,7 +7,7 @@ import type { BackgroundJob, BackgroundJobType } from "./types.ts";
 import { handleThumbnailJob } from "../images/thumbnail-job.ts";
 import { handleTrashPurgeJob } from "../images/trash-purge-job.ts";
 import { handleImportCleanupJob } from "../images/imports/cleanup-job.ts";
-import { rebuildRandomPool } from "../random/cache-rebuild.ts";
+import { ensureReadyImageCacheCurrent } from "../images/ready-cache/coordinator.ts";
 import { handleMoveCleanupJob } from "../storage/move-cleanup-job.ts";
 import { runWithAdvisoryLockSignal } from "../core/db.ts";
 
@@ -22,7 +22,7 @@ const backgroundJobHandlers = {
   "import.cleanup": handleImportCleanupJob,
   "trash.purge": handleTrashPurgeJob,
   "cache.rebuild": async (_job, signal) => {
-    await rebuildRandomPool({ signal });
+    await ensureReadyImageCacheCurrent({ signal });
     return jobSucceeded();
   }
 } satisfies Record<BackgroundJobType, BackgroundJobHandler>;

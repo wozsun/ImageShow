@@ -24,7 +24,14 @@ services:
     image: redis:8
     container_name: imageshow-redis
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes"]
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --maxmemory
+      - ${REDIS_MAXMEMORY:-500mb}
+      - --maxmemory-policy
+      - noeviction
     volumes:
       - redis_data:/data
     healthcheck:

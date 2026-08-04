@@ -1,6 +1,7 @@
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { ApiError } from "./api-error.ts";
 import { redis } from "./redis-client.ts";
+import { reserveRedisWindows } from "./redis-window-limit.ts";
 
 const loginFailureKeyPrefix = "imageshow:login_fail";
 const globalKey = `${loginFailureKeyPrefix}:global`;
@@ -13,23 +14,21 @@ function identityKey(ip: string, username: string) {
 export const loginRateLimiter = {
   async reserve(ip: string, username: string) {
     const limits = getRuntimeConfig().security;
-    const counts = (await redis.eval(
-      `local function bump(name, ttl)
-         local total = redis.call('INCR', name)
-         local remaining = redis.call('TTL', name)
-         if total == 1 or remaining < 0 then redis.call('EXPIRE', name, ttl) end
-         return total
-       end
-       return { bump(KEYS[1], ARGV[1]), bump(KEYS[2], ARGV[2]) }`,
-      2,
-      identityKey(ip, username),
-      globalKey,
-      limits.login_failure_window_seconds,
-      limits.login_global_window_seconds
-    )) as [number, number];
+    const [identity, global] = await reserveRedisWindows([
+      {
+        key: identityKey(ip, username),
+        capacity: limits.login_max_failures,
+        windowSeconds: limits.login_failure_window_seconds
+      },
+      {
+        key: globalKey,
+        capacity: limits.login_global_max_attempts,
+        windowSeconds: limits.login_global_window_seconds
+      }
+    ]);
     if (
-      Number(counts[0]) > limits.login_max_failures
-      || Number(counts[1]) > limits.login_global_max_attempts
+      !identity?.allowed
+      || !global?.allowed
     ) {
       throw new ApiError(
         429,

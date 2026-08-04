@@ -1,5 +1,5 @@
 import type { Pool, PoolClient } from "pg";
-import { pool } from "../core/db.ts";
+import { pool, withTransaction } from "../core/db.ts";
 import { ApiError } from "../core/api-error.ts";
 import { metadataUpdateInput, parse } from "../core/validation.ts";
 import { thumbnailRef } from "../storage/image-paths.ts";
@@ -37,9 +37,9 @@ import {
 } from "./classification.ts";
 import type { ImageRecord } from "./presenter.ts";
 import {
-  applyOrCollectImageMutationSync,
-  type ImageMutationSyncBatch
+  withImageMutationSync
 } from "./mutation-sync.ts";
+import { bumpReadyImageRevision } from "./ready-cache/revision.ts";
 
 type MutationImageRecord = Pick<
   ImageRecord,
@@ -90,7 +90,6 @@ function detectImageDevice(image: MutationImageRecord) {
 
 type ImageMutationOptions = {
   entityCountInvalidationBatch?: EntityCountCacheInvalidationBatch;
-  mutationSyncBatch?: ImageMutationSyncBatch;
 };
 
 async function applyImageFieldEdits(
@@ -128,17 +127,11 @@ async function applyImageFieldEdits(
   return result.rows[0] as MutationImageRecord;
 }
 
-export async function updateImageMetadata(
+async function updateImageMetadataWithinSync(
   id: string,
   body: unknown,
-  options: ImageMutationOptions = {}
+  options: ImageMutationOptions
 ) {
-  const current = (await pool.query(
-    `SELECT ${mutationImageColumns} FROM metadata WHERE id=$1`,
-    [id]
-  )).rows[0] as MutationImageRecord | undefined;
-  if (!current) throw new ApiError(404, "not_found", "Image not found");
-
   const parsed = parse(metadataUpdateInput, body);
   const touchAuthor = parsed.author !== undefined;
   const authorValue = parsed.author ? parsed.author : null;
@@ -147,38 +140,42 @@ export async function updateImageMetadata(
     || parsed.theme !== undefined;
 
   if (!classificationRequested) {
-    const authorChanged = touchAuthor && authorValue !== current.author;
-    const applyFields = async (signal?: AbortSignal) => {
-      signal?.throwIfAborted();
-      const createdAuthor = parsed.author
-        ? await ensureAuthorWithMutationLockHeld(pool, parsed.author)
-        : false;
-      signal?.throwIfAborted();
-      await applyImageFieldEdits(pool, id, parsed, authorValue, touchAuthor);
-      return createdAuthor;
-    };
-    const createdAuthor = parsed.author
-      ? await withVocabularyAssociationLock("author", parsed.author, applyFields)
-      : await applyFields();
-    const cacheTasks: Array<Promise<unknown>> = [
-      applyOrCollectImageMutationSync(
-        {
-          id,
-          md5: current.md5 ?? "",
-          lookupEntries: [{ id, object_key: current.object_key }]
-        },
-        options.mutationSyncBatch
-      )
-    ];
-    if (authorChanged) {
-      cacheTasks.push(invalidateOrCollectEntityCountCaches(
-        ["author"],
-        options.entityCountInvalidationBatch
-      ));
-    }
-    if (createdAuthor) cacheTasks.push(refreshEntityVocabularies(["author"]));
-    await Promise.all(cacheTasks);
-    return;
+    const applyFields = (signal?: AbortSignal) => withImageMutationSync(
+      async (mutationSyncBatch) => {
+        const current = (await pool.query(
+          `SELECT ${mutationImageColumns} FROM metadata WHERE id=$1`,
+          [id]
+        )).rows[0] as MutationImageRecord | undefined;
+        if (!current) throw new ApiError(404, "not_found", "Image not found");
+
+        const authorChanged = touchAuthor && authorValue !== current.author;
+        const createdAuthor = await withTransaction(async (client) => {
+          signal?.throwIfAborted();
+          const created = parsed.author
+            ? await ensureAuthorWithMutationLockHeld(client, parsed.author)
+            : false;
+          signal?.throwIfAborted();
+          await applyImageFieldEdits(client, id, parsed, authorValue, touchAuthor);
+          await bumpReadyImageRevision(client);
+          return created;
+        });
+        mutationSyncBatch.add({ id });
+        const cacheTasks: Array<Promise<unknown>> = [];
+        if (authorChanged) {
+          cacheTasks.push(invalidateOrCollectEntityCountCaches(
+            ["author"],
+            options.entityCountInvalidationBatch
+          ));
+        }
+        if (createdAuthor) {
+          cacheTasks.push(refreshEntityVocabularies(["author"]));
+        }
+        await Promise.all(cacheTasks);
+      }
+    );
+    return parsed.author
+      ? withVocabularyAssociationLock("author", parsed.author, applyFields)
+      : applyFields();
   }
 
   const mutateImageLocation = async (signal: AbortSignal) => {
@@ -229,143 +226,146 @@ export async function updateImageMetadata(
       : null;
     const createdEntityKinds = new Set<EntityCacheKind>();
     let client: PoolClient | undefined;
-    let updated: MutationImageRecord;
 
-    try {
-      signal.throwIfAborted();
-      client = await pool.connect();
-      signal.throwIfAborted();
-      await client.query("BEGIN");
-      const locked = (await client.query(
-        `SELECT ${mutationImageColumns} FROM metadata WHERE id=$1 FOR UPDATE`,
-        [id]
-      )).rows[0] as MutationImageRecord | undefined;
-      signal.throwIfAborted();
-      if (!locked) throw new ApiError(404, "not_found", "Image not found");
-      if (locked.status !== "ready") {
-        throw new ApiError(
-          409,
-          "invalid_image_state",
-          "Only ready images can change category"
-        );
-      }
-      if (
-        locked.storage_slug !== sourceImage.storage_slug
-        || locked.object_key !== sourceImage.object_key
-        || locked.device !== sourceImage.device
-        || locked.brightness !== sourceImage.brightness
-        || locked.theme !== sourceImage.theme
-      ) {
-        throw new ApiError(
-          409,
-          "image_location_changed",
-          "Image location changed while preparing the category update"
-        );
-      }
-
-      if (
-        parsed.theme
-        && parsed.theme !== "none"
-        && await ensureThemeWithMutationLockHeld(client, target.theme)
-      ) {
-        createdEntityKinds.add("theme");
-      }
-      if (
-        next.author
-        && await ensureAuthorWithMutationLockHeld(client, next.author)
-      ) {
-        createdEntityKinds.add("author");
-      }
-
-      signal.throwIfAborted();
-      const result = await client.query(
-        `UPDATE metadata
-            SET device=$2,
-                brightness=$3,
-                theme=$4,
-                object_key=$5,
-                title=COALESCE($6,title),
-                description=COALESCE($7,description),
-                source=COALESCE($8,source),
-                original=COALESCE($9,original),
-                author=CASE WHEN $11::boolean THEN $10 ELSE author END,
-                updated_at=now()
-          WHERE id=$1
-            AND storage_slug=$12
-            AND object_key=$13
-            AND device=$14
-            AND brightness=$15
-            AND theme=$16
-          RETURNING ${mutationImageColumns}`,
-        [
-          id,
-          target.device,
-          target.brightness,
-          target.theme,
-          relocation?.nextObjectKey ?? locked.object_key,
-          next.title,
-          next.description,
-          next.source,
-          next.original,
-          authorValue,
-          touchAuthor,
-          sourceImage.storage_slug,
-          sourceImage.object_key,
-          sourceImage.device,
-          sourceImage.brightness,
-          sourceImage.theme
-        ]
-      );
-      const updatedRow = result.rows[0] as MutationImageRecord | undefined;
-      if (!updatedRow) {
-        throw new ApiError(
-          409,
-          "image_location_changed",
-          "Image location changed before the category update was committed"
-        );
-      }
-      if (relocation) {
-        await enqueuePreparedImageSourceCleanup(
-          client,
-          relocation,
-          "category_move_source_cleanup"
-        );
-      }
-      updated = updatedRow;
-      signal.throwIfAborted();
-      await client.query("COMMIT");
-    } catch (error) {
-      await client?.query("ROLLBACK").catch(() => undefined);
-      if (relocation) {
-        try {
-          await discardPreparedImageRelocationIfUnreferenced(
-            relocation,
-            "category_move_compare_and_swap_failed"
-          );
-        } catch (cleanupError) {
-          throw new AggregateError(
-            [error, cleanupError],
-            "Category move failed and candidate cleanup could not be queued"
+    const mutation = await withImageMutationSync(async (mutationSyncBatch) => {
+      let committedImage: MutationImageRecord | null = null;
+      let lockedAuthor: MutationImageRecord["author"];
+      try {
+        signal.throwIfAborted();
+        client = await pool.connect();
+        signal.throwIfAborted();
+        await client.query("BEGIN");
+        const locked = (await client.query(
+          `SELECT ${mutationImageColumns} FROM metadata WHERE id=$1 FOR UPDATE`,
+          [id]
+        )).rows[0] as MutationImageRecord | undefined;
+        signal.throwIfAborted();
+        if (!locked) throw new ApiError(404, "not_found", "Image not found");
+        lockedAuthor = locked.author;
+        if (locked.status !== "ready") {
+          throw new ApiError(
+            409,
+            "invalid_image_state",
+            "Only ready images can change category"
           );
         }
+        if (
+          locked.storage_slug !== sourceImage.storage_slug
+          || locked.object_key !== sourceImage.object_key
+          || locked.device !== sourceImage.device
+          || locked.brightness !== sourceImage.brightness
+          || locked.theme !== sourceImage.theme
+        ) {
+          throw new ApiError(
+            409,
+            "image_location_changed",
+            "Image location changed while preparing the category update"
+          );
+        }
+
+        if (
+          parsed.theme
+          && parsed.theme !== "none"
+          && await ensureThemeWithMutationLockHeld(client, target.theme)
+        ) {
+          createdEntityKinds.add("theme");
+        }
+        if (
+          next.author
+          && await ensureAuthorWithMutationLockHeld(client, next.author)
+        ) {
+          createdEntityKinds.add("author");
+        }
+
+        signal.throwIfAborted();
+        const result = await client.query(
+          `UPDATE metadata
+              SET device=$2,
+                  brightness=$3,
+                  theme=$4,
+                  object_key=$5,
+                  title=COALESCE($6,title),
+                  description=COALESCE($7,description),
+                  source=COALESCE($8,source),
+                  original=COALESCE($9,original),
+                  author=CASE WHEN $11::boolean THEN $10 ELSE author END,
+                  updated_at=now()
+            WHERE id=$1
+              AND storage_slug=$12
+              AND object_key=$13
+              AND device=$14
+              AND brightness=$15
+              AND theme=$16
+            RETURNING ${mutationImageColumns}`,
+          [
+            id,
+            target.device,
+            target.brightness,
+            target.theme,
+            relocation?.nextObjectKey ?? locked.object_key,
+            next.title,
+            next.description,
+            next.source,
+            next.original,
+            authorValue,
+            touchAuthor,
+            sourceImage.storage_slug,
+            sourceImage.object_key,
+            sourceImage.device,
+            sourceImage.brightness,
+            sourceImage.theme
+          ]
+        );
+        const updatedRow = result.rows[0] as MutationImageRecord | undefined;
+        if (!updatedRow) {
+          throw new ApiError(
+            409,
+            "image_location_changed",
+            "Image location changed before the category update was committed"
+          );
+        }
+        if (relocation) {
+          await enqueuePreparedImageSourceCleanup(
+            client,
+            relocation,
+            "category_move_source_cleanup"
+          );
+        }
+        await bumpReadyImageRevision(client);
+        committedImage = updatedRow;
+        signal.throwIfAborted();
+        await client.query("COMMIT");
+      } catch (error) {
+        await client?.query("ROLLBACK").catch(() => undefined);
+        if (relocation) {
+          try {
+            await discardPreparedImageRelocationIfUnreferenced(
+              relocation,
+              "category_move_compare_and_swap_failed"
+            );
+          } catch (cleanupError) {
+            throw new AggregateError(
+              [error, cleanupError],
+              "Category move failed and candidate cleanup could not be queued"
+            );
+          }
+        }
+        throw error;
+      } finally {
+        client?.release();
       }
-      throw error;
-    } finally {
-      client?.release();
-    }
+      if (!committedImage) {
+        throw new Error("Category update committed without an image result");
+      }
+      mutationSyncBatch.add({ id });
+      return { updated: committedImage, previousAuthor: lockedAuthor };
+    });
+    const { updated, previousAuthor } = mutation;
 
     const changedEntityKinds: EntityCacheKind[] = [];
     if (sourceImage.theme !== updated.theme) changedEntityKinds.push("theme");
-    if (sourceImage.author !== updated.author) changedEntityKinds.push("author");
+    if (previousAuthor !== updated.author) changedEntityKinds.push("author");
     await Promise.all([
-      applyOrCollectImageMutationSync({
-        id,
-        md5: sourceImage.md5 ?? "",
-        lookupEntries: [
-          { id, object_key: sourceImage.object_key },
-          { object_key: updated.object_key }
-        ]
-      }, options.mutationSyncBatch),
       invalidateOrCollectEntityCountCaches(
         changedEntityKinds,
         options.entityCountInvalidationBatch
@@ -389,4 +389,12 @@ export async function updateImageMetadata(
     );
   }
   return withImageStorageMutationLock(id, mutateImageLocation);
+}
+
+export function updateImageMetadata(
+  id: string,
+  body: unknown,
+  options: ImageMutationOptions = {}
+) {
+  return updateImageMetadataWithinSync(id, body, options);
 }

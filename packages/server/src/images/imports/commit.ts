@@ -18,6 +18,9 @@ import {
 import { resolveClassification } from "../classification.ts";
 import { importCommitImage } from "../presenter.ts";
 import {
+  withImageMutationSync
+} from "../mutation-sync.ts";
+import {
   cleanupImportCandidate,
   cleanupImportCandidatesIfUnreferenced,
   importCandidateIsPublishedOrRecoverable,
@@ -147,15 +150,19 @@ async function commitStoredImageSession(
     })).created;
     signal.throwIfAborted();
 
-    const result = await persistCommittedImage(
-      id,
-      session,
-      payload,
-      executionToken,
-      resolvedTags,
-      signal
-    );
-    databaseCommitted = true;
+    const result = await withImageMutationSync(async (mutationBatch) => {
+      const committed = await persistCommittedImage(
+        id,
+        session,
+        payload,
+        executionToken,
+        resolvedTags,
+        signal
+      );
+      databaseCommitted = true;
+      mutationBatch.add({ id });
+      return committed;
+    });
 
     const stagingCleanup = await Promise.allSettled([
       removeStorageObjectAndConfirm(

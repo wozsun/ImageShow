@@ -15,6 +15,7 @@ import {
   safeResponseHeaderValue
 } from "./http/headers.ts";
 import { redis } from "./redis-client.ts";
+import { reserveRedisWindows } from "./redis-window-limit.ts";
 
 const altchaAlgorithm = "PBKDF2/SHA-256";
 const maximumPayloadLength = 16 * 1024;
@@ -80,36 +81,32 @@ async function reserveChallengeRequest(c: Context) {
   const ipLimit = security.login_max_failures * 3;
   const globalLimit = security.login_global_max_attempts * 5;
   const source = createHash("sha256").update(requestClientIp(c)).digest("base64url");
-  const [ipCount, globalCount] = (await redis.eval(
-    `local function bump(name, ttl)
-       local total = redis.call('INCR', name)
-       local remaining = redis.call('TTL', name)
-       if total == 1 or remaining < 0 then redis.call('EXPIRE', name, ttl) end
-       return total
-     end
-
-     local ip_total = bump(KEYS[1], ARGV[1])
-     if ip_total > tonumber(ARGV[3]) then return { ip_total, -1 } end
-     return { ip_total, bump(KEYS[2], ARGV[2]) }`,
-    2,
-    temporaryKey("challenge-rate-ip", source),
-    temporaryKey("challenge-rate-global", "all"),
-    security.login_failure_window_seconds,
-    security.login_global_window_seconds,
-    ipLimit
-  )) as [number, number];
-
-  if (Number(ipCount) > ipLimit) {
+  const [ipReservation, globalReservation] = await reserveRedisWindows([
+    {
+      key: temporaryKey("challenge-rate-ip", source),
+      capacity: ipLimit,
+      windowSeconds: security.login_failure_window_seconds
+    },
+    {
+      key: temporaryKey("challenge-rate-global", "all"),
+      capacity: globalLimit,
+      windowSeconds: security.login_global_window_seconds
+    }
+  ]);
+  if (!ipReservation || !globalReservation) {
+    throw new Error("ALTCHA rate-limit reservations are missing");
+  }
+  if (!ipReservation.allowed) {
     c.header("Retry-After", safeResponseHeaderValue(
       "Retry-After",
-      String(security.login_failure_window_seconds)
+      String(ipReservation.retryAfterSeconds)
     ));
     throw new ApiError(429, "altcha_rate_limited", "安全验证请求过于频繁，请稍后再试");
   }
-  if (Number(globalCount) > globalLimit) {
+  if (!globalReservation.allowed) {
     c.header("Retry-After", safeResponseHeaderValue(
       "Retry-After",
-      String(security.login_global_window_seconds)
+      String(globalReservation.retryAfterSeconds)
     ));
     throw new ApiError(429, "altcha_global_rate_limited", "安全验证服务请求过于频繁，请稍后再试");
   }

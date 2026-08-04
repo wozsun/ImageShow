@@ -372,24 +372,3 @@ export function normalizeRandomQuery(
     })
   };
 }
-
-export function randomThemeCandidates(
-  selectors: RandomSelectorGroup,
-  validThemes: string[]
-): string[] | Response {
-  const themeSet = new Set(validThemes);
-  const invalidTheme = [...selectors.include, ...selectors.exclude]
-    .find((theme) => !themeSet.has(theme));
-  if (invalidTheme) {
-    return apiErrorResponse(
-      { status: 400, message: "Bad Request: Invalid theme" },
-      { field: "t", value: invalidTheme }
-    );
-  }
-  if (selectors.include.length) return selectors.include;
-  if (selectors.exclude.length) {
-    const excluded = new Set(selectors.exclude);
-    return validThemes.filter((theme) => !excluded.has(theme));
-  }
-  return validThemes;
-}

@@ -1,7 +1,10 @@
 import type { PoolClient } from "pg";
 import { pool, withTransaction } from "../core/db.ts";
 import { ApiError } from "../core/api-error.ts";
-import { applyOrCollectImageMutationSync, type ImageMutationSyncBatch } from "../images/mutation-sync.ts";
+import {
+  withImageMutationSync
+} from "../images/mutation-sync.ts";
+import { bumpReadyImageRevision } from "../images/ready-cache/revision.ts";
 import {
   invalidateOrCollectEntityCountCaches,
   refreshEntityVocabularies,
@@ -57,24 +60,39 @@ export async function deleteTag(slug: string) {
   const result = await withVocabularyMutationLock(
     "tag",
     slug,
-    async (signal) => {
-      signal.throwIfAborted();
-      const deleted = await pool.query("DELETE FROM tag WHERE slug = $1", [slug]);
-      signal.throwIfAborted();
-      return deleted;
-    }
+    (signal) => withImageMutationSync(async (mutationBatch) => {
+      const mutation = await withTransaction(async (client) => {
+        signal.throwIfAborted();
+        const affected = (await client.query(
+          `SELECT m.id
+             FROM metadata m
+             JOIN image_tag it ON it.image_id=m.id
+            WHERE it.tag_slug=$1`,
+          [slug]
+        )).rows as Array<{ id: string }>;
+        const deleted = await client.query(
+          "DELETE FROM tag WHERE slug = $1",
+          [slug]
+        );
+        if (affected.length) await bumpReadyImageRevision(client);
+        signal.throwIfAborted();
+        return { deleted, affected };
+      });
+      for (const image of mutation.affected) {
+        mutationBatch.add({ id: image.id });
+      }
+      await Promise.all([
+        refreshEntityVocabularies(["tag"]),
+        invalidateOrCollectEntityCountCaches(["tag"])
+      ]);
+      return mutation.deleted;
+    })
   );
   assertVocabularyFound("tag", result.rowCount);
-  await synchronizeVocabularyMutation({
-    entity: "tag",
-    imageDataChanged: true,
-    random: { mode: "rebuild" }
-  });
 }
 
 type SetImageTagsOptions = {
   entityCountInvalidationBatch?: EntityCountCacheInvalidationBatch;
-  mutationSyncBatch?: ImageMutationSyncBatch;
 };
 
 export async function replaceImageTags(
@@ -98,6 +116,7 @@ export async function replaceImageTags(
     );
     if (inserted.rowCount) createdTag = true;
   }
+  await bumpReadyImageRevision(client);
   signal?.throwIfAborted();
   await client.query("DELETE FROM image_tag WHERE image_id = $1", [imageId]);
   for (const slug of slugs) {
@@ -116,33 +135,34 @@ export async function replaceImageTags(
 
 export async function updateImageTags(imageId: string, names: string[], options: SetImageTagsOptions = {}) {
   const resolved = await resolveTagNames(names);
-  const persist = (signal?: AbortSignal) => withTransaction(async (client) => {
-    signal?.throwIfAborted();
-    const result = await replaceImageTags(client, imageId, resolved, signal);
-    signal?.throwIfAborted();
-    return result;
-  });
-  const mutation = await (resolved.length
+  const persist = (signal?: AbortSignal) => withImageMutationSync(
+    async (mutationBatch) => {
+      const mutation = await withTransaction(async (client) => {
+        signal?.throwIfAborted();
+        const result = await replaceImageTags(client, imageId, resolved, signal);
+        signal?.throwIfAborted();
+        return result;
+      });
+      mutationBatch.add({ id: imageId });
+      const cacheRepairs = await Promise.allSettled([
+        invalidateOrCollectEntityCountCaches(
+          ["tag"],
+          options.entityCountInvalidationBatch
+        ),
+        mutation.createdTag
+          ? refreshEntityVocabularies(["tag"])
+          : Promise.resolve()
+      ]);
+      const failedRepair = cacheRepairs.find(
+        (result): result is PromiseRejectedResult => result.status === "rejected"
+      );
+      if (failedRepair) throw failedRepair.reason;
+    }
+  );
+  return resolved.length
     ? withVocabularyAssociationLocks(
       resolved.map((slug) => ({ entity: "tag", slug })),
       (signal) => persist(signal)
     )
-    : persist()
-  );
-
-  // The database transaction has committed. Attempt every derived-cache
-  // repair even if one cache backend operation fails, so callers never observe
-  // tags committed without the random pool and MD5 detail cache being repaired.
-  const cacheRepairs = await Promise.allSettled([
-    applyOrCollectImageMutationSync({
-      id: imageId,
-      md5: mutation.md5,
-    }, options.mutationSyncBatch),
-    invalidateOrCollectEntityCountCaches(["tag"], options.entityCountInvalidationBatch),
-    mutation.createdTag ? refreshEntityVocabularies(["tag"]) : Promise.resolve(),
-  ]);
-  const failedRepair = cacheRepairs.find(
-    (result): result is PromiseRejectedResult => result.status === "rejected"
-  );
-  if (failedRepair) throw failedRepair.reason;
+    : persist();
 }

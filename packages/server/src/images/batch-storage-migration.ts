@@ -1,17 +1,14 @@
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { mapWithWorkerPool } from "../core/concurrency.ts";
 import { pool } from "../core/db.ts";
-import { syncRandomImages } from "../random/cache-sync.ts";
 import {
   migrateImageStorageBackend,
   type StorageMigrationImageRecord
 } from "../storage/migration.ts";
 import { assertStorageWriteTarget } from "../storage/backend-registry.ts";
-import { invalidateImageCaches } from "./image-cache.ts";
 
 type BatchStorageMigrationMetrics = {
   maxImageDurationMs: number;
-  randomPoolFullRebuildTriggered: boolean;
 };
 
 type BatchStorageMigrationOptions = {
@@ -24,7 +21,7 @@ export async function migrateImageBatchStorage(
   options: BatchStorageMigrationOptions = {}
 ) {
   const rows = (await pool.query(
-    `SELECT id, object_key, ext, status, storage_slug, device, brightness,
+    `SELECT id, object_key, ext, storage_slug, device, brightness,
             theme, md5
        FROM metadata
       WHERE id = ANY($1::uuid[])`,
@@ -33,9 +30,7 @@ export async function migrateImageBatchStorage(
   let migrated = 0;
   let unchanged = 0;
   let failed = ids.length - rows.length;
-  const migratedIds: string[] = [];
   let maxImageDurationMs = 0;
-  let randomPoolFullRebuildTriggered = false;
 
   if (rows.some((row) => row.storage_slug !== target)) {
     await assertStorageWriteTarget(target);
@@ -50,7 +45,6 @@ export async function migrateImageBatchStorage(
       );
       if (result === "migrated") {
         migrated += 1;
-        migratedIds.push(row.id);
       } else if (result === "missing") {
         failed += 1;
       } else {
@@ -66,19 +60,8 @@ export async function migrateImageBatchStorage(
     }
   });
 
-  if (migratedIds.length) {
-    const migratedIdSet = new Set(migratedIds);
-    const randomSync = await syncRandomImages(migratedIds);
-    randomPoolFullRebuildTriggered = randomSync.fullRebuildTriggered;
-    await invalidateImageCaches({
-      lookupEntries: rows
-        .filter((row) => migratedIdSet.has(row.id))
-        .map((row) => ({ id: row.id, object_key: row.object_key }))
-    });
-  }
   options.onMetrics?.({
-    maxImageDurationMs,
-    randomPoolFullRebuildTriggered
+    maxImageDurationMs
   });
   return {
     requested: ids.length,

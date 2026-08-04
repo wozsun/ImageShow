@@ -315,9 +315,9 @@
   --import-job-progress: var(--admin-color-pending-text-subtle);
 }
 .import-job.queued {
-  --import-job-border: var(--admin-color-border-default);
-  --import-job-background: var(--admin-color-control-surface-muted);
-  --import-job-status: var(--admin-color-text-secondary);
+  --import-job-border: var(--admin-color-neutral-border);
+  --import-job-background: var(--admin-color-neutral-surface);
+  --import-job-status: var(--admin-color-neutral-text);
 }
 .import-job.cancelling {
   --import-job-border: var(--admin-color-warning-border-soft);
@@ -335,9 +335,9 @@
   --import-job-status: var(--admin-color-danger-text);
 }
 .import-job.cancelled {
-  --import-job-border: var(--admin-color-border-control);
-  --import-job-background: var(--admin-color-canvas);
-  --import-job-status: var(--admin-color-text-secondary);
+  --import-job-border: var(--admin-color-neutral-border);
+  --import-job-background: var(--admin-color-neutral-surface);
+  --import-job-status: var(--admin-color-neutral-text);
 }
 .duplicate-panel {
   grid-column: 2 / 4;
@@ -350,6 +350,7 @@
 }
 .duplicate-panel span { color: var(--admin-color-text-secondary); font-size: 14px; }
 .duplicate-note { min-width: 0; display: grid; gap: 2px; }
+.duplicate-note strong { color: var(--admin-color-warning-text-soft); }
 .duplicate-body { display: flex; align-items: flex-end; gap: 12px; }
 .duplicate-body .duplicate-list { flex: 1; min-width: 0; }
 .duplicate-body .inline-actions { flex: 0 0 auto; flex-wrap: nowrap; }
@@ -401,6 +402,10 @@ button.empty-state.upload-dropzone:not(:disabled):hover,
 }
 
 @media (max-width: 760px) {
+  .upload-window .upload-defaults-panel {
+    --workflow-collapse-trigger-surface: var(--admin-color-surface-primary);
+    --workflow-collapse-content-surface: var(--admin-color-surface-primary);
+  }
   .link-import-input-region.has-result-summary {
     height: 190px;
     display: grid;

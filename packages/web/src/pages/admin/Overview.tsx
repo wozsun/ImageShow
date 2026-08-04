@@ -1,17 +1,30 @@
 import { useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router";
-import type { AdminOverviewDto } from "@imageshow/shared/browser";
+import type {
+  AdminOverviewDto,
+  ReadyImageCacheAdminStatusDto
+} from "@imageshow/shared/browser";
 import { api } from "../../lib/api/client.js";
 import { ThumbImage } from "../../components/image/ThumbImage.js";
 import { ImageDetailModal } from "../../components/image/ImageDetailModal.js";
 import { adminApiBasePath, adminBasePath } from "../../lib/constants.js";
 import { queryKeys } from "../../lib/api/query-keys.js";
+import { useReadyImageCacheStatus } from "../../lib/api/ready-image-cache.js";
 import { formatBytes } from "../../lib/ui/formatters.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
 import "../../styles/admin/overview.css";
 
 type OverviewMetric = { label: string; value?: number | string; hint?: string; hintTitle?: string; to?: string };
+
+function redisCacheStateLabel(
+  cache: AdminOverviewDto["redis_cache"] | undefined
+) {
+  if (!cache) return "读取中";
+  if (cache.synchronized) return "已同步";
+  if (cache.rebuilding) return "重建中";
+  return cache.state === "degraded" ? "已降级" : "不可用";
+}
 
 function OverviewMetricCards({ items }: { items: OverviewMetric[] }) {
   return (
@@ -41,8 +54,39 @@ export function Overview({ canManageStorage }: { canManageStorage: boolean }) {
     AdminOverviewDto["recent"][number] | null
   >(null);
   const detailReturnFocusRef = useRef<HTMLElement | null>(null);
+  const client = useQueryClient();
   const query = useQuery<AdminOverviewDto>({ queryKey: queryKeys.overview, queryFn: ({ signal }) => api(`${adminApiBasePath}/overview`, { signal }) });
+  const cachedReadyImageStatus = client.getQueryData<
+    ReadyImageCacheAdminStatusDto
+  >(queryKeys.readyImageCache);
+  const observeReadyImageStatus = Boolean(
+    query.data?.redis_cache.rebuilding || cachedReadyImageStatus?.rebuilding
+  );
+  const readyImageStatusQuery = useReadyImageCacheStatus(
+    {
+      enabled: observeReadyImageStatus,
+      refreshAfter: query.data?.redis_cache.rebuilding
+        ? query.dataUpdatedAt
+        : 0
+    }
+  );
   const { data } = query;
+  const readyImageStatusIsCurrent = Boolean(
+    readyImageStatusQuery.isSuccess
+    && readyImageStatusQuery.data
+    && readyImageStatusQuery.dataUpdatedAt > query.dataUpdatedAt
+  );
+  const redisCache = observeReadyImageStatus
+    && readyImageStatusIsCurrent
+    && readyImageStatusQuery.data
+    ? {
+        state: readyImageStatusQuery.data.state,
+        synchronized: readyImageStatusQuery.data.synchronized,
+        rebuilding: readyImageStatusQuery.data.rebuilding,
+        item_count: readyImageStatusQuery.data.item_count,
+        memory_bytes: readyImageStatusQuery.data.memory_bytes
+      }
+    : data?.redis_cache;
   if (query.isError) return <QueryErrorState error={query.error} onRetry={() => void query.refetch()} fullPage reportContext="overview.load" />;
   const imageCards: OverviewMetric[] = [
     { label: "图库", value: data?.gallery, hint: "已分类展示", to: `${adminBasePath}/images` },
@@ -62,7 +106,19 @@ export function Overview({ canManageStorage }: { canManageStorage: boolean }) {
   // 卡片副标题只显示「X + Y」两个体积；hover 的 title 再标明每段各是什么，避免用户不清楚 + 两边的含义。
   const sizeTitle = (firstLabel: string, first: number | undefined, secondLabel: string, second: number | undefined) =>
     first === undefined || second === undefined ? undefined : `${firstLabel} ${formatBytes(first)} + ${secondLabel} ${formatBytes(second)}`;
+  const redisCacheState = redisCacheStateLabel(redisCache);
+  const redisCacheSize = redisCache?.memory_bytes === null
+    || redisCache?.memory_bytes === undefined
+    ? "大小未知"
+    : formatBytes(redisCache.memory_bytes);
   const storageCards: OverviewMetric[] = [
+    {
+      label: "Redis 缓存",
+      value: redisCache?.item_count ?? undefined,
+      hint: `${redisCacheSize} · ${redisCacheState}`,
+      hintTitle: "统一图片投影占用与同步状态",
+      to: `${adminBasePath}/check`
+    },
     // 本地存储 / 其它存储的图片与缩略图占用，以及当前存储后端数。
     { label: "本地存储", value: data?.local,
       hint: sizePair(data?.local_image_size, data?.local_thumb_size),

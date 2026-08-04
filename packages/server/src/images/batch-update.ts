@@ -4,7 +4,6 @@ import { withAdvisoryLocks } from "../core/db.ts";
 import type { BatchImageUpdateItemInput } from "../core/validation.ts";
 import { updateImageTags } from "../tags/mutations.ts";
 import { createEntityCountCacheInvalidationBatch } from "../vocab/vocab-cache.ts";
-import { createImageMutationSyncBatch } from "./mutation-sync.ts";
 import { updateImageMetadata } from "./metadata-mutations.ts";
 import { batchImageUpdateLockRequests } from "./batch-update-lock.ts";
 import type {
@@ -15,7 +14,6 @@ import type {
 type BatchUpdateExecutionMetrics = {
   maxItemDurationMs: number;
   entityCountInvalidationTriggered: boolean;
-  randomPoolFullRebuildTriggered: boolean;
 };
 
 type BatchUpdateOptions = {
@@ -39,11 +37,9 @@ export async function updateImagesBatch(
   options: BatchUpdateOptions = {},
 ): Promise<BatchImageUpdateResponse> {
   const entityCountInvalidationBatch = createEntityCountCacheInvalidationBatch();
-  const mutationSyncBatch = createImageMutationSyncBatch();
   let results: BatchImageUpdateItemResult[] = [];
   let maxItemDurationMs = 0;
   let entityCountInvalidationTriggered = false;
-  let randomPoolFullRebuildTriggered = false;
 
   return withAdvisoryLocks(
     batchImageUpdateLockRequests(items.map((item) => item.id)),
@@ -60,13 +56,11 @@ export async function updateImagesBatch(
             if (Object.keys(metadata).length) {
               await updateImageMetadata(id, metadata, {
                 entityCountInvalidationBatch,
-                mutationSyncBatch,
               });
             }
             if (tags !== undefined) {
               await updateImageTags(id, tags, {
                 entityCountInvalidationBatch,
-                mutationSyncBatch,
               });
             }
           } catch (error) {
@@ -78,10 +72,6 @@ export async function updateImagesBatch(
           maxItemDurationMs = Math.max(maxItemDurationMs, performance.now() - itemStartedAt);
           return result;
         });
-
-        // This also repairs committed metadata when a later tag mutation failed.
-        const syncSummary = await mutationSyncBatch.flush();
-        randomPoolFullRebuildTriggered = syncSummary.randomPoolFullRebuildTriggered;
       } finally {
         entityCountInvalidationTriggered = entityCountInvalidationBatch.hasWork();
         try {
@@ -90,7 +80,6 @@ export async function updateImagesBatch(
           options.onMetrics?.({
             maxItemDurationMs,
             entityCountInvalidationTriggered,
-            randomPoolFullRebuildTriggered,
           });
         }
       }

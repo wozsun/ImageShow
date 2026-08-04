@@ -7,6 +7,14 @@ import {
   synchronizeVocabularyMutation,
   withVocabularyMutationLock
 } from "../vocab/mutation-sync.ts";
+import {
+  withImageMutationSync
+} from "../images/mutation-sync.ts";
+import { bumpReadyImageRevision } from "../images/ready-cache/revision.ts";
+import {
+  invalidateEntityCountCaches,
+  refreshEntityVocabularies
+} from "../vocab/vocab-cache.ts";
 
 /** Use only while the caller owns a shared association or exclusive mutation lock. */
 export async function ensureAuthorWithMutationLockHeld(
@@ -60,7 +68,7 @@ export async function reorderAuthors(slugs: string[]) {
   await synchronizeVocabularyMutation({ entity: "author" });
 }
 
-type ClearedAuthorImage = { id: string; object_key: string };
+type ClearedAuthorImage = { id: string };
 
 async function deleteAuthorUnderLock(slug: string, signal: AbortSignal) {
   return withTransaction(async (client) => {
@@ -77,7 +85,7 @@ async function deleteAuthorUnderLock(slug: string, signal: AbortSignal) {
       `UPDATE metadata
           SET author=NULL, updated_at=now()
         WHERE author=$1
-        RETURNING id, object_key`,
+        RETURNING id`,
       [slug]
     )).rows as ClearedAuthorImage[];
     signal.throwIfAborted();
@@ -86,16 +94,8 @@ async function deleteAuthorUnderLock(slug: string, signal: AbortSignal) {
       [slug]
     )).rowCount);
     signal.throwIfAborted();
+    if (affected.length) await bumpReadyImageRevision(client);
     return { deleted, affected };
-  });
-}
-
-async function synchronizeAuthorDeletion(affected: ClearedAuthorImage[]) {
-  await synchronizeVocabularyMutation({
-    entity: "author",
-    lookupEntries: affected,
-    imageDataChanged: Boolean(affected.length),
-    random: { mode: "images", ids: affected.map((image) => image.id) }
   });
 }
 
@@ -103,8 +103,17 @@ export async function deleteAuthor(slug: string) {
   const result = await withVocabularyMutationLock(
     "author",
     slug,
-    (signal) => deleteAuthorUnderLock(slug, signal)
+    (signal) => withImageMutationSync(async (mutationBatch) => {
+      const deleted = await deleteAuthorUnderLock(slug, signal);
+      for (const image of deleted.affected) {
+        mutationBatch.add({ id: image.id });
+      }
+      await Promise.all([
+        refreshEntityVocabularies(["author"]),
+        invalidateEntityCountCaches(["author"])
+      ]);
+      return deleted;
+    })
   );
   assertVocabularyFound("author", result.deleted ? 1 : 0);
-  await synchronizeAuthorDeletion(result.affected);
 }

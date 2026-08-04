@@ -10,12 +10,13 @@
   主题、标签和作者的查看、新建、编辑及排序；相应管理页不提供批量删除，单项删除
   分别需要 `theme.delete`、`tag.delete` 和 `author.delete`。图片管理员还可以执行
   数据库、存储、Redis、回收站和全部五项只读检查；存储后端迁移需要
-  `storage.maintenance.migrate`，无效存储清理需要 `storage.maintenance.cleanup`。
-  以上八项高风险操作权限当前只授予超级管理员；直接构造对应单项请求同样返回 403，
+  `storage.maintenance.migrate`，无效存储清理需要 `storage.maintenance.cleanup`，
+  手动重建统一图片缓存需要 `cache.maintenance.rebuild`。
+  以上九项高风险操作权限当前只授予超级管理员；直接构造对应单项请求同样返回 403，
   且在解析正文或进入存储维护操作前终止。
-- Compose 内置 Redis 只连接项目私有网络、不发布宿主机端口且不设置密码。连接启用了认证的外部 Redis 时，可通过 `REDIS_PASSWORD` 向应用提供密码。
+- Compose 内置 Redis 使用不固定次版本的 `redis:8` 镜像，只连接项目私有网络、不发布宿主机端口且不设置密码。`REDIS_MAXMEMORY` 默认 `500mb`，淘汰策略固定为 `noeviction`，避免内存压力静默删除会话或画廊核心键；本机大图库实验使用 `2gb`。应用启动时会检查正数 `maxmemory`、`noeviction`、`INCREX`、`ARRING` 与 `ARLASTITEMS`；连接启用了认证的外部 Redis 时，可通过 `REDIS_PASSWORD` 向应用提供密码。
 - 管理端界面偏好接口只使用鉴权会话中的用户名定位 `admin_account.preferences`，不接受客户端传入目标账号。接口只接受 shared 注册的键与值域，PATCH 在 PostgreSQL 行内原子合并并返回完整投影；JSONB 顶层必须是对象且最大 4 KiB。浏览器缓存键按用户名隔离，`localStorage` 仅承担首帧显示、断网 pending 和多标签同步，不参与鉴权，也不保存会话或 CSRF token。PostgreSQL 尚无某键时，已校验的本地值可补写一次；删除账号时偏好随该行自然删除。
-- 登录失败限流：每 IP + 用户名 60 秒内 5 次失败即拦截，叠加 180 秒内 10 次尝试的全局兜底（阈值与窗口均可在 `config.json` 的 `security.*` 调整）。
+- 登录失败限流：每 IP + 用户名 60 秒内 5 次失败即拦截，叠加 180 秒内 10 次尝试的全局兜底（阈值与窗口均可在 `config.json` 的 `security.*` 调整）。两个固定窗口在一次 Redis 服务端原子操作中按来源到全局的顺序使用 `INCREX ... UBOUND ... EX ... ENX` 预留；前一窗口已拒绝时不再消耗后续共享额度。达到上限后计数不再增长，后续请求也不会延长首次建立的 TTL。
 - 登录前置安全验证使用完全自托管的 ALTCHA：服务端签发带 HMAC 的
   PBKDF2/SHA-256 确定性工作量挑战，登录页显示紧凑验证条并在组件加载后自动由
   浏览器求解；自动验证失败时可点击验证条手动重试。挑战签名主密钥在首次签发时
@@ -23,7 +24,8 @@
   Redis 使用带 TTL 的原子 `SET NX` 消费挑战 nonce，保证同一证明在并发请求中也
   只能使用一次。挑战签发复用 `security.*` 的两组时间窗口：单来源阈值为
   `login_max_failures × 3`，全局阈值为 `login_global_max_attempts × 5`；全局计数键
-  不包含来源 IP。登录密码校验继续使用原阈值。可在 `config.json` 的
+  不包含来源 IP。挑战限流同样使用 `INCREX`；来源已超限时不会再消耗全局窗口。
+  登录密码校验继续使用原阈值。可在 `config.json` 的
   `altcha.enabled` 关闭；
   浏览器单次求解最多等待 60 秒，服务端同时限制
   `cost × counter_max <= 100000000`，挑战有效期最短 90 秒，避免可通过配置校验的

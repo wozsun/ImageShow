@@ -72,4 +72,29 @@ export type AdminOverviewDto = {
   light: number;
   top_themes: Array<{ theme: string; count: number }>;
   recent: AdminImageDetailItemDto[];
+  redis_cache: {
+    state: string;
+    synchronized: boolean;
+    rebuilding: boolean;
+    item_count: number | null;
+    memory_bytes: number | null;
+  };
+};
+
+export type ReadyImageCacheAdminStatusDto = {
+  initialized: boolean;
+  readable: boolean;
+  rebuilding: boolean;
+  synchronized: boolean;
+  state: string;
+  reason: string;
+  authoritative_revision: string;
+  applied_revision: string | null;
+  item_count: number | null;
+  processed: number | null;
+  total: number | null;
+  memory_bytes: number | null;
+  built_at: string | null;
+  started_at: string | null;
+  last_error: string;
 };

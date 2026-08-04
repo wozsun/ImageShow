@@ -3,6 +3,8 @@ import { randomUuidV7At } from "../core/uuid.ts";
 const localImageTimePattern = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/;
 const zonedImageTimePattern = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/;
 const earliestImageTime = 0;
+const latestImageTime = Math.floor(Number.MAX_SAFE_INTEGER / 1_000);
+const latestImageTimeIso = new Date(latestImageTime).toISOString();
 
 type ParseImageTimeOptions = {
   now?: Date;
@@ -43,6 +45,9 @@ function localImageTime(input: string, timeZone: string) {
 function assertAllowedImageTime(date: Date) {
   if (!Number.isFinite(date.getTime())) throw invalidImageTime();
   if (date.getTime() < earliestImageTime) throw invalidImageTime("image_time 不能早于 1970-01-01");
+  if (date.getTime() > latestImageTime) {
+    throw invalidImageTime(`image_time 不能晚于 ${latestImageTimeIso}`);
+  }
   return date;
 }
 

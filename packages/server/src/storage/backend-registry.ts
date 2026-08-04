@@ -20,7 +20,6 @@ let storageCache: StorageBackendRecord[] | null = null;
 let storageCacheExpiresAt = 0;
 let storageLoad: Promise<StorageBackendRecord[]> | null = null;
 let storageCacheGeneration = 0;
-const storageBackendChangeListeners = new Set<() => void>();
 const storageDriverCache = new Map<string, StorageDriver>();
 let storageDriverCloseQueue = Promise.resolve();
 
@@ -92,15 +91,6 @@ export function invalidateStorageBackendRegistry(
   // snapshot, but no later caller may join or publish that stale load.
   storageLoad = null;
   if (options.retireDrivers) retireStorageDrivers();
-  for (const listener of storageBackendChangeListeners) {
-    try {
-      listener();
-    } catch (error) {
-      logger.error("storage_backend_change_listener_failed", {
-        error: errorMessage(error)
-      });
-    }
-  }
 }
 
 export async function closeStorageBackendRegistry() {
@@ -110,11 +100,6 @@ export async function closeStorageBackendRegistry() {
   storageLoad = null;
   retireStorageDrivers();
   await storageDriverCloseQueue;
-}
-
-export function onStorageBackendChange(listener: () => void) {
-  storageBackendChangeListeners.add(listener);
-  return () => storageBackendChangeListeners.delete(listener);
 }
 
 export async function listStorageBackends(): Promise<StorageBackendRecord[]> {

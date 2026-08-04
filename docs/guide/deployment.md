@@ -1,11 +1,13 @@
-# 单容器与反向代理
+# 生产单实例部署与反向代理
 
-## 单容器 + 外部数据库
+## 单应用容器 + 基础设施 Compose
 
-也可只运行 ImageShow 容器并连接外部 PostgreSQL/Redis：
+当前生产部署固定在一台主机：只运行一个 ImageShow 应用容器，并连接另一套基础设施
+Compose 中各一个 PostgreSQL 与 Redis 容器。升级时先停止对应当前容器，更新后原位启动。
+应用容器可按下例连接基础设施服务：
 
 ```bash
-docker run --rm -p 5518:5518 \
+docker run -d --name imageshow --restart unless-stopped -p 5518:5518 \
   -e SITE_DOMAIN=img.example.com -e TZ=UTC \
   -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD="${ADMIN_PASSWORD:?set ADMIN_PASSWORD first}" \
   -e DATABASE_HOST=db.example.internal -e DATABASE_NAME=imageshow \
@@ -19,19 +21,26 @@ docker run --rm -p 5518:5518 \
 `log/` 日志），因此只需挂载这一个目录。PostgreSQL / Redis 连接只从容器环境或
 Secret 读取，不会写入 `config.json`。
 外部 Redis 需要密码时额外传入 `REDIS_PASSWORD`；留空或省略表示使用无密码连接。
-服务端以 ioredis 6 的 RESP3 协议连接 Redis 8，不提供面向旧 Redis / RESP2 的兼容
-开关；外部 Redis 也必须按当前 Redis 8 基线部署。
-从 3.14.8 部署 3.14.9 时，先停止应用，再清空该 ImageShow 实例通过 `REDIS_DB`
-指定的逻辑库，随后启动新版本；登录会话会失效，随机池与查询缓存会按 PostgreSQL
-真相源重新生成。Redis 与其他业务共享时不得执行 `FLUSHALL`，操作前必须核对目标
-逻辑库只由当前 ImageShow 实例使用。
+服务端以 ioredis 6 连接 Redis 8，不提供旧 Redis 兼容开关；启动时会检查
+`INCREX`、`ARRING` 与 `ARLASTITEMS`。内置服务使用不固定次版本的 `redis:8` 主版本
+标签并开启 AOF；Compose 不设置
+`REDIS_MAXMEMORY` 时使用 `500mb`，淘汰策略固定为 `noeviction`。外部 Redis 同样必须
+设置正数 `maxmemory` 和 `noeviction`；应用启动时会拒绝不满足该边界的实例。
+
+从 3.15.2 升级 v4 时，先停止应用，再清空该 ImageShow 实例通过 `REDIS_DB` 指定的逻辑
+库，随后启动新版本；登录会话会失效，统一就绪图片投影与派生查询会按 PostgreSQL 真相
+源重建。v4 不读取旧随机 generation、图片 revision 缓存，也不使用带 `v2` / `v3` 后缀
+的兼容 key。Redis 与其他业务共享时不得执行 `FLUSHALL`，操作前必须核对目标逻辑库只由
+当前 ImageShow 实例使用。
 
 ## 健康检查与镜像清理
 
-容器健康检查只调用 `/readyz`。该端点检查 PostgreSQL 与 Redis 连通性；数据库迁移在
-HTTP 服务开始监听前已经于迁移锁内完成或使进程启动失败。3.14.9 只支持全新数据库或
-已经完成 3.14.8 部署、且迁移账本仅含 `0001_initial` 的现有数据库；应用不再探测或
-修复更早版本的 schema 与迁移历史。任一运行依赖不可用都会返回非 2xx，Docker 随即
+容器健康检查只调用 `/readyz`。该端点检查 PostgreSQL、Redis 连通性及 Redis 必需能力；
+数据库迁移在 HTTP 服务开始监听前完成。Redis 临时不可用或能力不满足时，进程仍监听
+HTTP，但图片缓存保持降级且 `/readyz` 返回非 2xx；Redis 每次重新连接后必须重新通过
+命令、内存策略、revision 与核心完整性检查，才能开放缓存读取。v4 以全新数据库
+或已完成 3.15.2 的数据库为升级基线，并新增 `0002_ready_image_revision` 前向迁移；
+应用不改写已发布迁移，也不在迁移文件之外猜测旧 schema。任一运行依赖不可用都会返回非 2xx，Docker 随即
 把容器标为 unhealthy。`/livez` 只表示进程
 仍在运行，适合人工区分“进程退出”和“依赖未就绪”，不作为镜像切换成功的依据。
 
@@ -183,6 +192,18 @@ Nginx `real_ip_header` 与受信任 CDN 节点的 `set_real_ip_from` 恢复真�
 128 MiB 请求档；示例取 256m，为代理层保留 56 MiB 余量。导入会话随前端 lane
 推进逐项创建，不存在批量会话请求体。
 
-当前支持单应用实例的停机部署，不支持多个应用实例滚动写入。Redis 中的随机池和业务缓存具备分布式锁 / revision 保护，但 storage backend 注册表与 driver 使用进程内 TTL 缓存，没有跨实例失效协议；更新部署时先停止运行中的实例，再启动新实例。
+当前生产拓扑固定为一台主机、一个 ImageShow 应用容器；PostgreSQL 与 Redis 在另一
+基础设施 Compose 中各运行一个单容器。所有升级都先停止对应容器，再更新当前容器并
+启动；短期不实施多实例，未来边界只记录在[多实例待办](./todo-multi-instance.md)。
+
+基础设施侧 Redis 容器应启用 AOF 和自动重启。`maxmemory` 正式默认 `500mb`，本机大图库
+实验使用 `2gb`，策略必须为 `noeviction`；Docker 硬内存上限还要为 AOF 缓冲、客户端与
+分配器开销留出额外空间。公开组合筛选和统计结果由应用按 LRU、条目数、总成员放大倍数
+及单结果大小主动约束；使用量达到 `maxmemory` 的 80% 时先删除最久未访问的一半，再按
+需清空全部派生查询结果，画廊核心投影、会话和限流键不参与这条主动淘汰。OOM 写入失败
+会执行同一清理并让该次复杂查询回源，Redis 不会自行删除未知键。连接若被终止，应用
+立即关闭读门并在 5 秒内结束在途命令；画廊、详情与后台列表回源 PostgreSQL，普通随机
+请求返回 503。Redis 恢复后先删除可再生查询结果，再重新校验 revision 与完整性。若核心
+投影本身超过 `maxmemory`，必须停机同时提高 Redis 和 Docker 上限。
 
 浏览器同源 PUT 的原始图片先写入容器 `data/tmp`，服务端 prepare 完成后才向选定后端写入候选文件；请求依赖管理员会话 Cookie 与 `X-CSRF-Token`，浏览器不直连对象存储，因此存储桶无需配置 CORS。

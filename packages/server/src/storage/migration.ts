@@ -3,6 +3,10 @@ import { pool, withTransaction } from "../core/db.ts";
 import { logger } from "../core/logger.ts";
 import { createThumbnail, md5Buffer } from "../images/processing.ts";
 import {
+  withImageMutationSync
+} from "../images/mutation-sync.ts";
+import { bumpReadyImageRevision } from "../images/ready-cache/revision.ts";
+import {
   assertStorageWriteTarget,
   getStorageBackend,
   resolveStorageAccessForConfig
@@ -24,7 +28,6 @@ export type StorageMigrationImageRecord = {
   id: string;
   object_key: string;
   ext: string;
-  status: string;
   storage_slug: string;
   device: string;
   brightness: string;
@@ -33,16 +36,16 @@ export type StorageMigrationImageRecord = {
 };
 
 type StorageMigrationResult = "migrated" | "unchanged" | "missing";
-type MigrationLocation = Pick<
-  StorageMigrationImageRecord,
-  "storage_slug" | "object_key"
->;
+type MigrationState = {
+  storage_slug: string;
+  object_key: string;
+  status: string;
+};
 
 const migrateColumns = [
   "id",
   "object_key",
   "ext",
-  "status",
   "storage_slug",
   "device",
   "brightness",
@@ -82,24 +85,24 @@ async function queueCandidateCleanup(
   }
 }
 
-async function readMigrationLocation(
+async function readMigrationState(
   imageId: string
-): Promise<MigrationLocation | undefined> {
+): Promise<MigrationState | undefined> {
   return (await pool.query(
-    `SELECT storage_slug, object_key
+    `SELECT storage_slug, object_key, status
        FROM metadata
       WHERE id=$1`,
     [imageId]
-  )).rows[0] as MigrationLocation | undefined;
+  )).rows[0] as MigrationState | undefined;
 }
 
-function isLocation(
-  location: MigrationLocation | undefined,
+function hasMigrationLocation(
+  state: MigrationState,
   storageSlug: string,
   objectKey: string
-) {
-  return location?.storage_slug === storageSlug
-    && location.object_key === objectKey;
+): boolean {
+  return state.storage_slug === storageSlug
+    && state.object_key === objectKey;
 }
 
 function migrationOutcomeUnknown(
@@ -137,10 +140,10 @@ async function settleMigrationSwitchError(
   created: readonly MoveCleanupObjectInput[],
   sourceCleanup: readonly CapturedMoveCleanupObject[],
   originalError: unknown
-): Promise<StorageMigrationResult> {
-  let location: MigrationLocation | undefined;
+): Promise<MigrationState> {
+  let state: MigrationState | undefined;
   try {
-    location = await readMigrationLocation(image.id);
+    state = await readMigrationState(image.id);
   } catch (truthError) {
     throw migrationOutcomeUnknown(image, target, originalError, {
       truth_error: errorMessage(truthError),
@@ -149,7 +152,7 @@ async function settleMigrationSwitchError(
     });
   }
 
-  if (isLocation(location, target, image.object_key)) {
+  if (state && hasMigrationLocation(state, target, image.object_key)) {
     // The metadata and cleanup receipt normally committed atomically. Enqueue
     // again to also cover a writer that bypassed this transaction; the
     // deterministic key makes the operation idempotent.
@@ -188,10 +191,13 @@ async function settleMigrationSwitchError(
       object_key: image.object_key,
       original_error: errorMessage(originalError)
     });
-    return "migrated";
+    return state;
   }
 
-  if (isLocation(location, image.storage_slug, image.object_key)) {
+  if (
+    state
+    && hasMigrationLocation(state, image.storage_slug, image.object_key)
+  ) {
     await queueCandidateCleanup(
       image,
       target,
@@ -203,8 +209,9 @@ async function settleMigrationSwitchError(
   }
 
   throw migrationOutcomeUnknown(image, target, originalError, {
-    actual_storage_slug: location?.storage_slug ?? null,
-    actual_object_key: location?.object_key ?? null,
+    actual_storage_slug: state?.storage_slug ?? null,
+    actual_object_key: state?.object_key ?? null,
+    actual_status: state?.status ?? null,
     target_candidates: created,
     retained_source_objects: sourceCleanup
   });
@@ -333,86 +340,105 @@ async function migrateImageStorageBackendWhileLocked(
     throw error;
   }
 
-  let switched: boolean;
-  try {
-    switched = await withTransaction(async (client) => {
-      signal.throwIfAborted();
-      const result = await client.query(
-        `UPDATE metadata
-            SET storage_slug=$2, updated_at=now()
-          WHERE id=$1
-            AND storage_slug=$3
-            AND object_key=$4`,
-        [current.id, target, current.storage_slug, current.object_key]
+  return withImageMutationSync(async (mutationBatch) => {
+    const finishMigration = (status: string): StorageMigrationResult => {
+      if (status === "ready") {
+        mutationBatch.add({ id: current.id });
+      }
+      return "migrated";
+    };
+
+    let switchedStatus: string | null;
+    try {
+      switchedStatus = await withTransaction(async (client) => {
+        signal.throwIfAborted();
+        const result = await client.query(
+          `UPDATE metadata
+              SET storage_slug=$2, updated_at=now()
+            WHERE id=$1
+              AND storage_slug=$3
+              AND object_key=$4
+          RETURNING status`,
+          [current.id, target, current.storage_slug, current.object_key]
+        );
+        const status = String(result.rows[0]?.status ?? "");
+        if (!result.rowCount || !status) return null;
+        await enqueueCapturedObjectsForCleanup(
+          current.id,
+          sourceCleanup,
+          "source_cleanup_after_storage_switch",
+          client
+        );
+        if (status === "ready") {
+          await bumpReadyImageRevision(client);
+        }
+        signal.throwIfAborted();
+        return status;
+      });
+    } catch (error) {
+      const state = await settleMigrationSwitchError(
+        current,
+        target,
+        created,
+        sourceCleanup,
+        error
       );
-      if (!result.rowCount) return false;
+      return finishMigration(state.status);
+    }
+
+    if (switchedStatus !== null) return finishMigration(switchedStatus);
+
+    // A zero-row CAS should mean the source is unchanged, but re-read before
+    // compensating so an out-of-protocol writer cannot make a target candidate
+    // authoritative between the CAS and cleanup decision.
+    let state: MigrationState | undefined;
+    try {
+      state = await readMigrationState(current.id);
+    } catch (truthError) {
+      throw migrationOutcomeUnknown(
+        current,
+        target,
+        new Error("storage migration compare-and-swap affected no rows"),
+        {
+          truth_error: errorMessage(truthError),
+          target_candidates: created,
+          retained_source_objects: sourceCleanup
+        }
+      );
+    }
+    if (state && hasMigrationLocation(state, target, current.object_key)) {
       await enqueueCapturedObjectsForCleanup(
         current.id,
         sourceCleanup,
-        "source_cleanup_after_storage_switch",
-        client
+        "source_cleanup_after_storage_switch"
       );
-      signal.throwIfAborted();
-      return true;
-    });
-  } catch (error) {
-    return settleMigrationSwitchError(
-      current,
-      target,
-      created,
-      sourceCleanup,
-      error
-    );
-  }
-
-  if (switched) return "migrated";
-
-  // A zero-row CAS should mean the source is unchanged, but re-read before
-  // compensating so an out-of-protocol writer cannot make a target candidate
-  // authoritative between the CAS and cleanup decision.
-  let location: MigrationLocation | undefined;
-  try {
-    location = await readMigrationLocation(current.id);
-  } catch (truthError) {
+      return finishMigration(state.status);
+    }
+    if (
+      state
+      && hasMigrationLocation(state, current.storage_slug, current.object_key)
+    ) {
+      await queueCandidateCleanup(
+        current,
+        target,
+        created,
+        "location_compare_and_swap_failed"
+      );
+      return "unchanged";
+    }
     throw migrationOutcomeUnknown(
       current,
       target,
       new Error("storage migration compare-and-swap affected no rows"),
       {
-        truth_error: errorMessage(truthError),
+        actual_storage_slug: state?.storage_slug ?? null,
+        actual_object_key: state?.object_key ?? null,
+        actual_status: state?.status ?? null,
         target_candidates: created,
         retained_source_objects: sourceCleanup
       }
     );
-  }
-  if (isLocation(location, target, current.object_key)) {
-    await enqueueCapturedObjectsForCleanup(
-      current.id,
-      sourceCleanup,
-      "source_cleanup_after_storage_switch"
-    );
-    return "migrated";
-  }
-  if (isLocation(location, current.storage_slug, current.object_key)) {
-    await queueCandidateCleanup(
-      current,
-      target,
-      created,
-      "location_compare_and_swap_failed"
-    );
-    return "unchanged";
-  }
-  throw migrationOutcomeUnknown(
-    current,
-    target,
-    new Error("storage migration compare-and-swap affected no rows"),
-    {
-      actual_storage_slug: location?.storage_slug ?? null,
-      actual_object_key: location?.object_key ?? null,
-      target_candidates: created,
-      retained_source_objects: sourceCleanup
-    }
-  );
+  });
 }
 
 export function migrateImageStorageBackend(
@@ -438,7 +464,6 @@ export async function migrateStorageBackendImages(
   let migrated = 0;
   let unchanged = 0;
   let missing = 0;
-  const migratedEntries: StorageMigrationImageRecord[] = [];
   const errors: Array<Record<string, unknown>> = [];
   for (const entry of entries) {
     if (entry.storage_slug !== sourceSlug) {
@@ -451,7 +476,6 @@ export async function migrateStorageBackendImages(
       });
       if (result === "migrated") {
         migrated += 1;
-        migratedEntries.push(entry);
       } else if (result === "missing") {
         missing += 1;
         errors.push({
@@ -474,7 +498,6 @@ export async function migrateStorageBackendImages(
     source: sourceSlug,
     target: targetSlug,
     migrated,
-    migratedEntries,
     unchanged,
     missing,
     errors: errors.slice(0, 100),

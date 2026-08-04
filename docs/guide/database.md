@@ -1,23 +1,20 @@
 # 数据库结构
 
-PostgreSQL 共 9 张业务表，另有迁移记录表 `schema_migrations`。全新数据库以
-`packages/server/migrations/0001_initial.sql` 为完整基线，当前迁移集只包含这一份
-文件。随机图 `id` 的末 12 位查询所需 ready 部分表达式索引也属于该基线。
-PostgreSQL 是唯一真相源，Redis 随机池、列表缓存和判重缓存均可重建。
+PostgreSQL 共 10 张业务表，另有迁移记录表 `schema_migrations`。全新数据库依次执行
+`0001_initial.sql` 与 `0002_ready_image_revision.sql`。随机图 `id` 的末 12 位查询所需
+ready 部分表达式索引属于 `0001`；统一 Redis 图片投影的权威 revision 单行表由
+`0002` 新增。PostgreSQL 是唯一真相源，Redis 投影与查询缓存均可重建。
 
 `0001_initial.sql` 按依赖和运行职责排列：迁移账本 → 存储注册表 → 公共词表 →
-图片真值与关联 → 导入生命周期 → 后台任务 → 管理员身份。每张表内部统一为标识、
+图片真值与关联 → 导入生命周期 → 后台任务 → 管理员身份；`0002` 再增加图片投影
+revision。每张表内部统一为标识、
 状态 / 所有权、业务字段、错误 / 重试和时间字段；种子、约束与索引紧跟所属表，
 图片索引再按直接查询 / 外键、列表游标、随机选择 / 回收职责排列。
 
-3.15.2 以全新空数据库或已经完成 3.15.1 部署的数据库为唯一支持基线。两者都只记录
-`0001_initial`，且末 12 位 ready 部分表达式索引已经属于实际 schema。3.15.1 用于补建、
-校验该索引并折叠临时 `0002_random_id_suffix_index` 记录的一次性升级代码已经移除；
-3.15.2 不再识别、修复或清理旧过渡状态，也不会在迁移文件之外猜测 schema。
-
-空数据库直接执行包含该索引的完整 `0001`；已运行 3.15.1 的数据库不执行额外 DDL。
-尚未完成 3.15.1 基线收口的旧环境必须先运行 3.15.1，再升级到本版本。后续 schema
-变化继续从 `0002` 开始新增前向迁移。
+v4 以全新空数据库或已经完成 3.15.2 的数据库为支持基线。前者顺序执行两份迁移；
+后者保留已发布 `0001` 不变，只前向执行 `0002_ready_image_revision`。尚未完成 3.15.2
+基线收口的旧环境必须先升级到 3.15.2。应用不会在迁移文件之外猜测、修补或删除旧
+schema 状态。
 
 ## metadata —— 图片主表
 
@@ -46,7 +43,8 @@ PostgreSQL 是唯一真相源，Redis 随机池、列表缓存和判重缓存均
 | `created_at` | 实际导入 ImageShow 的时间 |
 | `updated_at` | 图片元数据最后更新时间 |
 
-图片分类直接由 `device`、`brightness` 与 `theme` 表达，人工可读目录也使用这三项；随机候选由 Redis 集合维护，PostgreSQL 不保存分类连续编号。
+图片分类直接由 `device`、`brightness` 与 `theme` 表达，人工可读目录也使用这三项；
+随机候选由统一 Redis ready-image ZSET 投影维护，PostgreSQL 不保存分类连续编号。
 
 彻底删除先用 `FOR UPDATE SKIP LOCKED` 把 deleted 行原子认领为 `purging` 并增加
 `purge_attempts`，随后在该图的存储 mutation lock 内再次核对状态、尝试号和对象位置。
@@ -63,7 +61,16 @@ PostgreSQL 是唯一真相源，Redis 随机池、列表缓存和判重缓存均
 `image_time DESC, id DESC` 游标分页，并为常用筛选预建 ready 部分索引：无筛选、
 单设备、单亮度、设备+亮度、单主题、设备+主题、亮度+主题、设备+亮度+主题、作者。
 标签查询依赖 `image_tag(tag_slug, image_id)` 命中标签集合，结合 `metadata` 的 ready/
-图片时间与主题等索引完成分页；另有 MD5、缩略图反查、主题、作者和存储后端索引。
+图片时间与主题等索引完成 Redis 降级时的分页；另有 MD5、缩略图反查、主题、作者和
+存储后端索引。
+
+## ready_image_revision —— Redis 投影权威修订号
+
+该表只允许 `singleton=1` 一行，保存非负 `BIGINT revision` 与 `updated_at`。所有会改变
+ready 图片 rich 投影、筛选成员或统计的业务事务都在 COMMIT 前原子递增 revision。
+Redis meta 的 `applied_revision` 只有在精确同步或全量重建完成完整性校验后才可发布；
+二者不一致时缓存读门关闭。该表不保存 Redis 状态；当前协议只服务于单个 ImageShow
+应用进程，未来演进边界见[多实例待办](./todo-multi-instance.md)。
 
 ## import_session —— 统一导入会话
 
@@ -101,7 +108,7 @@ PostgreSQL 是唯一真相源，Redis 随机池、列表缓存和判重缓存均
 | `retry_count` / `next_retry_at` | 重试次数与下次重试时间 |
 | `created_at` / `updated_at` | 时间戳 |
 
-`cache.rebuild` 会从 PostgreSQL 全量重建 Redis 随机池，`trash.purge` 每次只执行一个
+`cache.rebuild` 会从 PostgreSQL 全量重建统一 ready-image Redis 投影，`trash.purge` 每次只执行一个
 有界删除批次并按剩余数量重新调度。确定性幂等键只阻止 `pending`、`running` 和仍可重试
 的 `failed` 重复入队；`succeeded`、`ignored` 与耗尽重试的 `failed` 会在同一记录上重置
 为 `pending`，因此同一对象以后再次需要 `move.cleanup` 时不会被历史任务静默拦截。
@@ -169,13 +176,13 @@ bucket / root_path 与 WebDAV 的 base_url / root_path 是物理布局；仍有
 共享 advisory lock，并在锁内使用同一列表幂等确保缺失标签存在、替换
 `image_tag`。标签管理只提供单项删除，删除时取得对应独占锁，因此不能穿过并发
 关联或在外键写入中途执行。删除标签会级联删除
-`image_tag`，并按“随机池 → 词表 / 计数 → 图片缓存代际”顺序修复派生状态，保证
-`tag=` 随机过滤和 gallery facets 不会重新物化旧值。
+`image_tag`，在同一事务推进图片 revision，提交后精确更新 Redis 标签索引、rich item、
+统计与词表 / 计数派生状态，保证 `tag=` 随机过滤和 gallery facets 不会重新物化旧值。
 
 ## author —— 作者
 
 作者有 `slug`、`display_name`、`link`、排序和时间戳。一图最多一个作者，存在
 `metadata.author`。作者关联持有共享 slug 租约，并在同一锁边界内幂等完成“确保作者存在”和
-图片写入；显式词表管理与删除持有独占 slug 锁，因此删除不能穿过并发关联。删除事务返回本次实际
-置空的图片 id，事务后只用这组真值修复随机池、词表和图片缓存，避免删除与并发关联
-互相覆盖。
+图片写入；显式词表管理与删除持有独占 slug 锁，因此删除不能穿过并发关联。删除事务
+返回本次实际置空的图片 id，推进 revision 后只用这组真值精确同步 Redis 作者索引、
+rich item、统计与词表 / 计数，避免删除与并发关联互相覆盖。

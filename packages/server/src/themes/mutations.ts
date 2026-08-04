@@ -22,6 +22,10 @@ import {
   prepareVerifiedImageRelocation,
   type RelocatableImage
 } from "../storage/image-relocation.ts";
+import {
+  withImageMutationSync
+} from "../images/mutation-sync.ts";
+import { bumpReadyImageRevision } from "../images/ready-cache/revision.ts";
 
 async function insertTheme(client: PoolClient, slug: string) {
   if (!slug || slug === "none") return false;
@@ -83,12 +87,7 @@ export async function reorderThemes(slugs: string[]) {
   await synchronizeVocabularyMutation({ entity: "theme" });
 }
 
-type ThemeLookupInvalidation = {
-  id: string;
-  object_key?: string;
-};
-
-async function reassignThemeImagesToNone(theme: string): Promise<ThemeLookupInvalidation[]> {
+async function reassignThemeImagesToNone(theme: string) {
   const images = (await pool.query(
     `SELECT id, device, brightness, theme, ext, md5, object_key,
             storage_slug
@@ -97,10 +96,10 @@ async function reassignThemeImagesToNone(theme: string): Promise<ThemeLookupInva
       ORDER BY device, brightness, id`,
     [theme]
   )).rows as Array<RelocatableImage>;
-  if (!images.length) return [];
+  if (!images.length) return;
   const concurrency = getRuntimeConfig().background_job.theme_reassign_concurrency;
 
-  const results = await mapWithWorkerPool(images, concurrency, (candidate) =>
+  await mapWithWorkerPool(images, concurrency, (candidate) =>
     withStorageLocationReadAndAdvisoryLocks([
       {
         key: vocabularyMutationLockKey("theme", theme),
@@ -117,7 +116,7 @@ async function reassignThemeImagesToNone(theme: string): Promise<ThemeLookupInva
         [candidate.id, theme]
       )).rows[0] as RelocatableImage | undefined;
       signal.throwIfAborted();
-      if (!image) return [] as ThemeLookupInvalidation[];
+      if (!image) return;
 
       const relocation = await prepareVerifiedImageRelocation(
         image,
@@ -131,41 +130,50 @@ async function reassignThemeImagesToNone(theme: string): Promise<ThemeLookupInva
       );
       try {
         signal.throwIfAborted();
-        const switched = await withTransaction(async (client) => {
-          const result = await client.query(
-            `UPDATE metadata
-                SET theme='none', object_key=$3, updated_at=now()
-              WHERE id=$1
-                AND theme=$2
-                AND storage_slug=$4
-                AND object_key=$5
-                AND device=$6
-                AND brightness=$7`,
-            [
-              image.id,
-              theme,
-              relocation.nextObjectKey,
-              image.storage_slug,
-              image.object_key,
-              image.device,
-              image.brightness
-            ]
-          );
-          if (!result.rowCount) return false;
-          await enqueuePreparedImageSourceCleanup(
-            client,
-            relocation,
-            "theme_reassign_source_cleanup"
-          );
-          signal.throwIfAborted();
-          return true;
-        });
+        const switched = await withImageMutationSync(
+          async (mutationBatch) => {
+            const committed = await withTransaction(async (client) => {
+              const result = await client.query(
+                `UPDATE metadata
+                    SET theme='none', object_key=$3, updated_at=now()
+                  WHERE id=$1
+                    AND theme=$2
+                    AND storage_slug=$4
+                    AND object_key=$5
+                    AND device=$6
+                    AND brightness=$7`,
+                [
+                  image.id,
+                  theme,
+                  relocation.nextObjectKey,
+                  image.storage_slug,
+                  image.object_key,
+                  image.device,
+                  image.brightness
+                ]
+              );
+              if (!result.rowCount) return false;
+              await enqueuePreparedImageSourceCleanup(
+                client,
+                relocation,
+                "theme_reassign_source_cleanup"
+              );
+              await bumpReadyImageRevision(client);
+              signal.throwIfAborted();
+              return true;
+            });
+            if (committed) {
+              mutationBatch.add({ id: image.id });
+            }
+            return committed;
+          }
+        );
         if (!switched) {
           await discardPreparedImageRelocation(
             relocation,
             "theme_reassign_compare_and_swap_failed"
           );
-          return [];
+          return;
         }
       } catch (error) {
         try {
@@ -181,15 +189,8 @@ async function reassignThemeImagesToNone(theme: string): Promise<ThemeLookupInva
         }
         throw error;
       }
-      return relocation.nextObjectKey === image.object_key
-        ? [{ id: image.id }]
-        : [
-            { id: image.id, object_key: image.object_key },
-            { id: image.id, object_key: relocation.nextObjectKey }
-          ];
     })
   );
-  return results.flat();
 }
 
 async function deleteThemeWhenUnreferencedUnderLock(
@@ -215,16 +216,15 @@ async function deleteThemeWhenUnreferencedUnderLock(
 }
 
 async function deleteThemeAndReassign(slug: string) {
-  const lookupInvalidations: ThemeLookupInvalidation[] = [];
   while (true) {
-    lookupInvalidations.push(...await reassignThemeImagesToNone(slug));
+    await reassignThemeImagesToNone(slug);
     const result = await withVocabularyMutationLock(
       "theme",
       slug,
       (signal) => deleteThemeWhenUnreferencedUnderLock(slug, signal)
     );
     if (!result.retry) {
-      return { deleted: result.deleted, lookupInvalidations };
+      return result.deleted;
     }
   }
 }
@@ -233,14 +233,7 @@ export async function deleteTheme(slug: string) {
   if (slug === "none") {
     throw new ApiError(400, "invalid_theme", "The reserved 'none' theme cannot be deleted", { slug });
   }
-  const result = await deleteThemeAndReassign(slug);
-  assertVocabularyFound("theme", result.deleted ? 1 : 0);
-  if (result.lookupInvalidations.length) {
-    await synchronizeVocabularyMutation({
-      entity: "theme",
-      lookupEntries: result.lookupInvalidations,
-      imageDataChanged: true,
-      random: { mode: "rebuild" }
-    });
-  } else await synchronizeVocabularyMutation({ entity: "theme" });
+  const deleted = await deleteThemeAndReassign(slug);
+  assertVocabularyFound("theme", deleted ? 1 : 0);
+  await synchronizeVocabularyMutation({ entity: "theme" });
 }

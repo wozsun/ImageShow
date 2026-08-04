@@ -268,6 +268,12 @@ export async function publicImageCards(rows: PublicImageCardRecord[]) {
   return Promise.all(rows.map((row) => publicImageCard(row, tagMap.get(row.id) ?? [])));
 }
 
+export function publicImageCardsWithTags(
+  rows: Array<PublicImageCardRecord & { tags: string[] }>
+) {
+  return Promise.all(rows.map((row) => publicImageCard(row, row.tags)));
+}
+
 export type AdminImage = Omit<PublicImage, "ext">;
 
 export function adminImageView(image: PublicImage): AdminImage {

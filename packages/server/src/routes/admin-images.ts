@@ -158,11 +158,9 @@ export function registerAdminImageRoutes(app: Hono) {
       const startedAt = performance.now();
       const input = parse(batchMigrateStorageInput, await c.req.json().catch(() => ({})));
       let maxItemDurationMs = 0;
-      let randomPoolFullRebuildTriggered = false;
       const result = await migrateImageBatchStorage(input.ids, input.target, {
         onMetrics(metrics) {
           maxItemDurationMs = metrics.maxImageDurationMs;
-          randomPoolFullRebuildTriggered = metrics.randomPoolFullRebuildTriggered;
         },
       });
       logger.info("batch_storage_migration_summary", {
@@ -173,7 +171,6 @@ export function registerAdminImageRoutes(app: Hono) {
         max_item_duration_ms: Math.round(maxItemDurationMs * 100) / 100,
         request_body_bytes: getRequestBodyBytes(c),
         entity_count_invalidation_triggered: false,
-        random_pool_full_rebuild_triggered: randomPoolFullRebuildTriggered,
       });
       const response = {
         migrated: result.migrated,
@@ -191,12 +188,10 @@ export function registerAdminImageRoutes(app: Hono) {
     ) satisfies BatchImageUpdateRequestDto;
     let maxItemDurationMs = 0;
     let entityCountInvalidationTriggered = false;
-    let randomPoolFullRebuildTriggered = false;
     const result = await updateImagesBatch(input.items, {
       onMetrics(metrics) {
         maxItemDurationMs = metrics.maxItemDurationMs;
         entityCountInvalidationTriggered = metrics.entityCountInvalidationTriggered;
-        randomPoolFullRebuildTriggered = metrics.randomPoolFullRebuildTriggered;
       },
     });
     logger.info("batch_image_update_summary", {
@@ -207,7 +202,6 @@ export function registerAdminImageRoutes(app: Hono) {
       max_item_duration_ms: Math.round(maxItemDurationMs * 100) / 100,
       request_body_bytes: getRequestBodyBytes(c),
       entity_count_invalidation_triggered: entityCountInvalidationTriggered,
-      random_pool_full_rebuild_triggered: randomPoolFullRebuildTriggered,
     });
     const response = {
       updated: result.updated,
