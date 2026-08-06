@@ -1,14 +1,22 @@
 import { appConfig } from "@imageshow/shared";
+import { publicReadUsesFallbackAdmission } from "./public-pg-fallback.ts";
 import { redis } from "./redis-client.ts";
+import { getRedisOperationalState } from "./runtime-availability.ts";
 
 type RedisJsonLookup<T> =
   | { status: "hit"; value: T }
   | { status: "miss" }
   | { status: "unavailable" };
 
+function publicRedisIsUnavailable() {
+  return publicReadUsesFallbackAdmission()
+    && !getRedisOperationalState().available;
+}
+
 async function getRedisJsonLookup<T>(
   key: string
 ): Promise<RedisJsonLookup<T>> {
+  if (publicRedisIsUnavailable()) return { status: "unavailable" };
   let raw: string | null;
   try {
     raw = await redis.get(key);
@@ -33,6 +41,7 @@ export async function setRedisJson(
   value: unknown,
   ttlSeconds = appConfig.derivedCacheTtlSeconds
 ) {
+  if (publicRedisIsUnavailable()) return false;
   try {
     await redis.set(key, JSON.stringify(value), "EX", ttlSeconds);
     return true;
@@ -43,6 +52,7 @@ export async function setRedisJson(
 
 export async function deleteRedisKeys(...keys: string[]) {
   if (!keys.length) return false;
+  if (publicRedisIsUnavailable()) return false;
   try {
     await redis.unlink(...keys);
     return true;

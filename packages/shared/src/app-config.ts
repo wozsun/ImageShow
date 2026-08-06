@@ -6,7 +6,8 @@ import {
   devices,
   imageDescriptionMaxLength,
   imageTitleMaxLength,
-  importBatchHardLimit
+  importBatchHardLimit,
+  slugMaxLength
 } from "./browser/common.ts";
 
 export const appConfig = {
@@ -14,7 +15,7 @@ export const appConfig = {
   applicationPort: 5518,
   devices,
   brightness: brightnesses,
-  themeMaxLength: 32,
+  themeMaxLength: slugMaxLength,
   imageMetadata: {
     titleMaxLength: imageTitleMaxLength,
     descriptionMaxLength: imageDescriptionMaxLength
@@ -63,6 +64,28 @@ export const appConfig = {
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 10000,
     maxLifetimeSeconds: 30 * 60
+  },
+
+  // Redis runtime degradation may move public reads onto PostgreSQL. Keep
+  // this budget below the 30-connection application pool so administrative
+  // transactions and the worker retain independent capacity. Per-class caps
+  // also reserve capacity for object/id lookups when aggregate work is busy.
+  publicPgFallback: {
+    totalConcurrency: 12,
+    queueLimit: 64,
+    queueTimeoutMs: 1_500,
+    retryAfterSeconds: 1,
+    minimumRandomCandidates: 32,
+    maximumRandomCandidates: 512,
+    maximumTargetedCandidates: 256,
+    maximumVocabularyRows: 10_000,
+    maximumStorageBackendRows: 256,
+    classes: {
+      lookup: { concurrency: 6, executionTimeoutMs: 2_500 },
+      list: { concurrency: 4, executionTimeoutMs: 4_000 },
+      random: { concurrency: 3, executionTimeoutMs: 4_500 },
+      aggregate: { concurrency: 2, executionTimeoutMs: 7_500 }
+    }
   },
 
   authentication: {

@@ -1,9 +1,9 @@
 import { z } from "zod";
-import { slugPattern } from "@imageshow/shared/browser";
+import { slugMaxLength, slugPattern } from "@imageshow/shared/browser";
 
 export const adminUsernameInput = z.string().trim().toLowerCase()
   .min(1, "用户名不能为空")
-  .max(32, "用户名最长 32 个字符")
+  .max(slugMaxLength, `用户名最长 ${slugMaxLength} 个字符`)
   .regex(slugPattern, "用户名只能包含小写字母、数字、连字符，且不能以连字符开头或结尾");
 
 export const adminPasswordInput = z.string().min(8).max(128)

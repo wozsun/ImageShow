@@ -1,11 +1,13 @@
 import { appConfig } from "@imageshow/shared";
 import { pool } from "../core/db.ts";
 import { getReadyImageCacheCoordinatorStatus } from "../images/ready-cache/coordinator.ts";
+import {
+  getPublicPgFallbackAdmissionSnapshot
+} from "../core/public-pg-fallback.ts";
+import { readAdminPostgresqlStatus } from "./lightweight-status.ts";
 
 export async function checkDatabase() {
-  const readyCount = Number((await pool.query(
-    "SELECT count(*)::int AS total FROM metadata WHERE status='ready'"
-  )).rows[0]?.total ?? 0);
+  const status = await readAdminPostgresqlStatus();
   const operations = (await pool.query(
     `SELECT id,type,target_id,status,retry_count,error,updated_at
        FROM background_job
@@ -17,11 +19,13 @@ export async function checkDatabase() {
   const cache = getReadyImageCacheCoordinatorStatus();
   const cacheCount = cache.meta?.itemCount ?? null;
   return {
-    ready_count: readyCount,
+    status,
+    ready_count: status.ready_images,
     ready_cache_count: cacheCount,
     ready_cache_readable: cache.readable,
     ready_cache_state: cache.meta?.state ?? cache.reason,
-    ready_cache_mismatch: cacheCount !== readyCount,
+    ready_cache_mismatch: cacheCount !== status.ready_images,
+    public_pg_fallback: getPublicPgFallbackAdmissionSnapshot(),
     operations
   };
 }

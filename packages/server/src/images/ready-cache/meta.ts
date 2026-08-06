@@ -1,7 +1,11 @@
 import type { Redis } from "ioredis";
 import { redis } from "../../core/redis-client.ts";
 import { execRedisPipeline } from "../../core/redis-pipeline.ts";
-import { READY_IMAGE_META_KEY } from "./keys.ts";
+import {
+  READY_IMAGE_LAST_UPDATED_KEY,
+  READY_IMAGE_META_KEY
+} from "./keys.ts";
+import { readyImageCacheLastUpdatedValue } from "./last-updated.ts";
 import {
   READY_IMAGE_CACHE_SCHEMA,
   type ReadyImageCacheMeta,
@@ -46,6 +50,12 @@ function nonNegativeInteger(value: unknown, field: string) {
   return number;
 }
 
+function optionalMemoryBytes(value: unknown) {
+  return String(value ?? "") === "-1"
+    ? null
+    : nonNegativeInteger(value, "memory_bytes");
+}
+
 function optionalTimestamp(value: unknown, field: string) {
   const timestamp = String(value ?? "");
   if (timestamp && !Number.isFinite(Date.parse(timestamp))) {
@@ -77,7 +87,7 @@ function parseReadyImageCacheMeta(
     startedAt: optionalTimestamp(raw.started_at, "started_at"),
     processed: nonNegativeInteger(raw.processed, "processed"),
     total: nonNegativeInteger(raw.total, "total"),
-    memoryBytes: nonNegativeInteger(raw.memory_bytes, "memory_bytes"),
+    memoryBytes: optionalMemoryBytes(raw.memory_bytes),
     lastError: raw.last_error
   };
   if (meta.processed > meta.total) {
@@ -86,8 +96,7 @@ function parseReadyImageCacheMeta(
   if (
     meta.state === "ready"
     && (
-      meta.schema !== READY_IMAGE_CACHE_SCHEMA
-      || !meta.builtAt
+      !meta.builtAt
       || meta.itemCount !== meta.total
       || meta.processed !== meta.total
       || meta.lastError
@@ -99,6 +108,9 @@ function parseReadyImageCacheMeta(
 }
 
 function serializedMeta(meta: ReadyImageCacheMeta) {
+  if (meta.schema !== READY_IMAGE_CACHE_SCHEMA) {
+    throw new Error("Refusing to write an unsupported ready-image cache schema");
+  }
   return {
     schema: String(meta.schema),
     state: meta.state,
@@ -108,7 +120,7 @@ function serializedMeta(meta: ReadyImageCacheMeta) {
     started_at: meta.startedAt,
     processed: String(meta.processed),
     total: String(meta.total),
-    memory_bytes: String(meta.memoryBytes),
+    memory_bytes: meta.memoryBytes === null ? "-1" : String(meta.memoryBytes),
     last_error: meta.lastError.slice(0, 1_000)
   };
 }
@@ -121,11 +133,18 @@ export async function readReadyImageCacheMeta(
 
 export async function writeReadyImageCacheMeta(
   meta: ReadyImageCacheMeta,
-  client: Redis = redis
+  client: Redis = redis,
+  options: { lastUpdatedAt?: string } = {}
 ) {
   const transaction = client.multi();
   transaction.del(READY_IMAGE_META_KEY);
   transaction.hset(READY_IMAGE_META_KEY, serializedMeta(meta));
+  if (options.lastUpdatedAt !== undefined) {
+    transaction.set(
+      READY_IMAGE_LAST_UPDATED_KEY,
+      readyImageCacheLastUpdatedValue(options.lastUpdatedAt)
+    );
+  }
   await execRedisPipeline(transaction);
 }
 
@@ -142,7 +161,7 @@ export function rebuildingReadyImageCacheMeta(
     startedAt,
     processed: 0,
     total: 0,
-    memoryBytes: 0,
+    memoryBytes: null,
     lastError: ""
   };
 }

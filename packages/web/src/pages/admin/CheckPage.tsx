@@ -1,5 +1,9 @@
-import { useMemo, useState } from "react";
-import { adminPermissions } from "@imageshow/shared/browser";
+import { useState } from "react";
+import {
+  adminPermissions,
+  type AdminCheckStatusDto
+} from "@imageshow/shared/browser";
+import type { UseQueryResult } from "@tanstack/react-query";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api/client.js";
 import { adminApiBasePath } from "../../lib/constants.js";
@@ -10,15 +14,33 @@ import { StableButtonLabel } from "../../components/data-display/StableButtonLab
 import { migrateStorageBackend } from "../../lib/api/storage-backend-migration.js";
 import { invalidateStorageData } from "../../lib/api/query-invalidation.js";
 import { useAdminPermissions } from "../../lib/api/site-data.js";
+import { useAdminCheckStatus } from "../../lib/api/ready-image-cache.js";
+import {
+  formatBytes,
+  revisionFingerprint
+} from "../../lib/ui/formatters.js";
 import { StorageBackendMigrationDialog } from "./storage/StorageBackendMigrationDialog.js";
 import { ReadyImageCachePanel } from "./ReadyImageCachePanel.js";
 import "../../styles/admin/check.css";
+
+const checkViews = [
+  { name: "status", label: "状态" },
+  { name: "db", label: "数据库" },
+  { name: "storage", label: "存储" },
+  { name: "redis", label: "Redis" },
+  { name: "trash", label: "回收站" },
+  { name: "all", label: "全部" }
+] as const;
+
+type CheckView = typeof checkViews[number]["name"];
 
 export function CheckPage() {
   const client = useQueryClient();
   const [result, setResult] = useState<unknown>(null);
   const [running, setRunning] = useState("");
+  const [checkView, setCheckView] = useState<CheckView>("status");
   const permissions = useAdminPermissions();
+  const statusQuery = useAdminCheckStatus();
   const canMigrateStorage = permissions.includes(
     adminPermissions.storageMaintenanceMigrate
   );
@@ -31,13 +53,6 @@ export function CheckPage() {
   const [operationModal, setOperationModal] = useState<
     "storage-backend-migration" | "storage-cleanup" | null
   >(null);
-  const checks = useMemo(() => [
-    { name: "db", label: "数据库" },
-    { name: "storage", label: "存储" },
-    { name: "redis", label: "Redis" },
-    { name: "trash", label: "回收站" },
-    { name: "all", label: "全部" }
-  ], []);
   const runCheck = async (name: string, body?: Record<string, unknown>) => {
     setRunning(name);
     try {
@@ -50,6 +65,11 @@ export function CheckPage() {
     } finally {
       setRunning("");
     }
+  };
+  const selectCheckView = (view: CheckView) => {
+    setCheckView(view);
+    setResult(null);
+    if (view !== "status") void runCheck(view);
   };
   const runStorageMigration = async (source: string, target: string) => {
     setRunning("storage-backend-migration");
@@ -73,15 +93,16 @@ export function CheckPage() {
         <div><h1>检查</h1><p>检查数据库、Redis 与存储一致性</p></div>
         <div className="check-actions">
           <div className="actions">
-            {checks.map((check) => (
+            {checkViews.map((check) => (
               <button
                 type="button"
                 key={check.name}
-                className={check.name === "all" ? "check-all-action" : undefined}
+                className={checkView === check.name ? "active" : undefined}
+                aria-pressed={checkView === check.name}
                 disabled={Boolean(running)}
-                onClick={() => void runCheck(check.name)}
+                onClick={() => selectCheckView(check.name)}
               >
-                <Icon name="refresh-line" /><StableButtonLabel idle={check.label} busyText="运行中" busy={running === check.name} />
+                <Icon name={check.name === "status" ? "dashboard-line" : "refresh-line"} /><StableButtonLabel idle={check.label} busyText="运行中" busy={running === check.name} />
               </button>
             ))}
           </div>
@@ -110,7 +131,12 @@ export function CheckPage() {
           )}
         </div>
       </header>
-      <ReadyImageCachePanel canRebuild={canRebuildCache} />
+      {(checkView === "status" || checkView === "all") && (
+        <>
+          <LightweightStatusCards query={statusQuery} />
+          <ReadyImageCachePanel canRebuild={canRebuildCache} query={statusQuery} />
+        </>
+      )}
       {operationModal === "storage-backend-migration" && canMigrateStorage && (
         <StorageBackendMigrationDialog
           busy={Boolean(running)}
@@ -128,6 +154,85 @@ export function CheckPage() {
       {result !== null && <CheckResult result={result} />}
     </section>
   );
+}
+
+function LightweightStatusCards({ query }: {
+  query: UseQueryResult<AdminCheckStatusDto, Error>;
+}) {
+  const postgresql = query.data?.postgresql;
+  const redis = query.data?.redis;
+  const requestError = query.isError ? "轻量状态请求失败，请手动刷新重试。" : "";
+  return (
+    <div className="check-status-grid">
+      <section className={`check-status-card ${
+        postgresql?.status === "ok"
+          ? "ok"
+          : postgresql?.status === "error" || requestError
+            ? "warn"
+            : ""
+      }`}>
+        <header>
+          <div><h2>PostgreSQL</h2><p>权威图片与后台任务真相源</p></div>
+          <span>{postgresql?.status === "ok" ? "已连接" : postgresql?.status === "error" ? "异常" : "读取中"}</span>
+        </header>
+        {requestError && <p className="error" role="alert">{requestError}</p>}
+        {postgresql?.status === "error" && (
+          <p className="error" role="alert">{postgresql.error.category} · {postgresql.error.code} · {postgresql.error.message}</p>
+        )}
+        <dl>
+          <div>
+            <dt>版本</dt>
+            <dd title={postgresql?.status === "ok" ? postgresql.data.version : undefined}>
+              {postgresql?.status === "ok" ? postgresql.data.version : "—"}
+            </dd>
+          </div>
+          <div><dt>响应耗时</dt><dd>{postgresql?.status === "ok" ? `${postgresql.data.latency_ms} ms` : "—"}</dd></div>
+          <div><dt>ready / 总图片</dt><dd>{postgresql?.status === "ok" ? `${postgresql.data.ready_images.toLocaleString()} / ${postgresql.data.total_images.toLocaleString()}` : "—"}</dd></div>
+          <div>
+            <dt>权威 revision 指纹</dt>
+            <dd title={postgresql?.status === "ok" ? `完整 revision：${postgresql.data.authoritative_revision}` : undefined}>
+              {revisionFingerprint(postgresql?.status === "ok" ? postgresql.data.authoritative_revision : null)}
+            </dd>
+          </div>
+          <div><dt>异常后台任务</dt><dd>{postgresql?.status === "ok" ? postgresql.data.abnormal_jobs.toLocaleString() : "—"}</dd></div>
+        </dl>
+      </section>
+      <section className={`check-status-card ${
+        redis?.status === "ok"
+          ? "ok"
+          : redis?.status === "error" || requestError
+            ? "warn"
+            : ""
+      }`}>
+        <header>
+          <div><h2>Redis</h2><p>缓存、会话与安全运行时依赖</p></div>
+          <span>{redis?.status === "ok" ? "已连接" : redis?.status === "error" ? "异常" : "读取中"}</span>
+        </header>
+        {requestError && <p className="error" role="alert">{requestError}</p>}
+        {redis?.status === "error" && (
+          <p className="error" role="alert">{redis.error.category} · {redis.error.code} · {redis.error.message}</p>
+        )}
+        <dl>
+          <div><dt>版本 / DB</dt><dd>{redis?.status === "ok" ? `${redis.data.version} / ${redis.data.configured_db}` : "—"}</dd></div>
+          <div><dt>响应耗时</dt><dd>{redis?.status === "ok" ? `${redis.data.latency_ms} ms` : "—"}</dd></div>
+          <div><dt>全局碎片率</dt><dd>{redis?.status === "ok" ? redis.data.memory.fragmentation_ratio ?? "—" : "—"}</dd></div>
+          <div>
+            <dt title="Redis 分配器已分配的总内存（INFO MEMORY: used_memory）">全局 used</dt>
+            <dd>{redis?.status === "ok" ? formatStatusBytes(redis.data.memory.used_memory_bytes) : "—"}</dd>
+          </div>
+          <div>
+            <dt title="操作系统观测到的 Redis 常驻内存（INFO MEMORY: used_memory_rss）">全局 RSS</dt>
+            <dd>{redis?.status === "ok" ? formatStatusBytes(redis.data.memory.used_memory_rss_bytes) : "—"}</dd>
+          </div>
+        </dl>
+        <p className="check-status-note">内存字段来自 INFO MEMORY，仅表示整个 Redis 实例的观测值。</p>
+      </section>
+    </div>
+  );
+}
+
+function formatStatusBytes(value: number | null) {
+  return value === null ? "—" : formatBytes(value);
 }
 
 function StorageCleanupDialog({ running, onClose, onRun }: {
@@ -225,8 +330,13 @@ function CheckResult({ result }: { result: unknown }) {
 }
 
 const CHECK_RESULT_LABELS: Record<string, string> = {
+  database: "数据库深度检查",
+  redis: "Redis 深度检查",
+  status: "轻量状态",
+  data: "检查结果",
   // 数据库检查
   operations: "进行中 / 失败的任务",
+  public_pg_fallback: "公开 PostgreSQL 回源准入",
   // 回收站
   deleted_count: "回收站数量",
   candidates: "待处理对象",
@@ -257,10 +367,14 @@ const CHECK_RESULT_LABELS: Record<string, string> = {
   // Redis 状态
   connection: "连接状态",
   prefix_counts: "键数量统计",
-  image_cache: "统一图片缓存",
+  image_projection: "Redis 图片投影",
+  core: "核心投影占用",
+  derived: "派生缓存占用",
+  recent_errors: "最近投影错误",
   coordinator: "协调器状态",
   persisted_meta: "持久化元数据",
   core_keys: "核心键",
+  derived_keys: "派生键",
   ready_count: "图库就绪数",
   ready_cache_count: "缓存就绪数",
   ready_cache_readable: "缓存可读",
@@ -270,7 +384,8 @@ const CHECK_RESULT_LABELS: Record<string, string> = {
   // 全部检查（概览）
   images: "图片总数",
   default_backend: "默认存储后端",
-  storage: "各后端对象统计",
+  storage: "存储深度检查",
+  trash: "回收站深度检查",
 };
 
 function checkResultLabel(key: string) {

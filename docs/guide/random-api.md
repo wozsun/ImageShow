@@ -16,9 +16,21 @@
 
 `t` / `tag` / `a` 可填 slug 或显示名，服务端会先解析成 slug，再按字段排序去重并生成
 稳定筛选签名。基础随机、主题、标签和作者筛选都复用
-`imageshow:cache:images:*` 就绪图片投影：无筛选直接使用全量 ZSET，简单筛选直接使用
-轴 / 主题 / 标签 / 作者 ZSET，组合与排除筛选生成带 6 小时 TTL 的派生 ZSET。派生结果
-带 PostgreSQL revision 和基数元数据；revision 变化、基数不符或核心键缺失时不会继续读。
+`imageshow:cache:images:*` 就绪图片投影：无筛选直接使用根层核心 `index:all`，轴 / 主题 /
+标签 / 作者 ZSET 与组合结果统一位于 `imageshow:cache:images:derived:*`。核心重建不再
+预建属性索引；公开请求首次使用某个属性时立即进入 PostgreSQL fallback，并触发独立的
+后台 keyset 分批构建；一次请求所需的全部缺失属性进入有界进程内串行队列。当前回源与
+后台构建都经过统一公开 PG 准入，属性构建全局最多并发 1、同一属性进程内单飞。索引及其
+独立 meta 使用 6 小时滑动 TTL，并同时校验
+applied revision、count 与每次发布唯一的实例 token；组合结果只使用已经验证的属性索引，
+且在消费后复核来源实例没有被清理或替换。派生结果缺失、过期、
+revision 变化或基数不符不会关闭核心读门：首次未命中请求不等待构建，构建成功后的后续
+随机请求自动使用 Redis；未取得槽位、失败或工作量超限也不改变当前有界 PostgreSQL fallback。
+属性索引、组合结果和统计结果共用 6 小时滑动 TTL 与 LRU registry，最多 256 个结果、
+128 个活跃筛选签名；单结果、总成员数和序列化统计大小均有集中上限。超限、损坏或
+registry 不一致只使本次随机请求放弃派生结果，不触发核心投影重建。组合集合命令还限制
+单命令源成员、预期结果、操作数和整次构建累计工作量；超限时不创建共享临时集合，随机
+请求不物化 Redis 临时集合，直接进入同一 PostgreSQL fallback。
 
 查询使用有界、规范化的公开契约：
 
@@ -37,8 +49,9 @@
 
 ## Redis 热路径与降级
 
-不含 `id` 的正常随机请求不访问 PostgreSQL，也不使用 `ORDER BY random()`、count +
-offset 或二次元数据查询。Redis 用 `ZRANDMEMBER` 从筛选 ZSET 抽取 UUID member，再从
+不含 `id` 的正常随机请求在所需派生索引已存在时不访问 PostgreSQL，也不使用
+`ORDER BY random()`、count + offset 或二次元数据查询；首次属性筛选只为构建可复用
+ZSET 做有界 keyset 读取。Redis 用 `ZRANDMEMBER` 从筛选 ZSET 抽取 UUID member，再从
 rich item hash 批量取得返回、跳转或代理所需的完整投影。单次响应 UUID 唯一，并优先
 避开同一客户端最近拿到的图片。
 
@@ -46,22 +59,32 @@ rich item hash 批量取得返回、跳转或代理所需的完整投影。单�
 `ARLASTITEMS ... REV` 读取最新记录；该键有 TTL，记录失败只降低短期去重效果，不影响
 图片真值或随机可用性。
 
-核心读模型正在更新、损坏或不可用时，普通随机请求不临时从 PostgreSQL 构造随机池：
-服务端关闭缓存读门、排队单飞重建，并返回 `503 random_cache_unavailable` 与
-`Retry-After: 1`。空且健康的图库返回 404。全量重建使用 PostgreSQL
-repeatable-read 快照分批读取，完成完整性校验且确认 revision 未变化后才重新开放读门。
+当前进程完成过一次 Redis 冷启动校验后，核心读模型正在更新、损坏、命令不足或不可用时，
+普通随机进入 `random` 工作量级的 PostgreSQL fallback。查询先用有界索引探针取得候选
+UUIDv7 时间范围，再生成随机 pivot，向后按 `id` 读取并在不足时从头 wrap；候选最多
+512 个，应用层打乱、去重并优先避开仍可读取的 Redis 最近历史，不使用
+`ORDER BY random()`、count + OFFSET 或临时随机池。Redis 完全断线时不建立替代历史，
+故障窗口允许跨请求重复。空图库或合法的零匹配筛选返回 404；只有 fallback 队列、等待、
+PostgreSQL 或执行上限饱和时返回带 `Retry-After` 的 429/503。进程首次 Redis 校验尚未
+成功时则由冷启动总门直接 503，不允许随机路由绕过硬前置。
+
+全量重建使用 PostgreSQL repeatable-read 快照分批读取，完成完整性校验且确认 revision
+未变化后才重新开放 Redis 读门；重建本身不影响 `/readyz` 或后台会话。
 
 图片导入、属性 / 标签 / 分类修改、删除、恢复、主题或作者级联和存储迁移都在同一
 PostgreSQL 事务推进 `ready_image_revision`。提交后仍持有进程内写栅栏，以旧 Redis
-投影和 PostgreSQL 新投影计算精确差异，更新 item、反查、ZSET、统计与完整性字段，最后
-发布 revision。Redis 同步失败不会回滚已经成功的数据库事务，而是关闭读门并重建。
+投影和 PostgreSQL 新投影计算精确差异，只更新核心 item、反查、`index:all`、全局统计与
+核心完整性字段，最后发布 revision。Redis 同步失败不会回滚已经成功的数据库事务，而是
+关闭读门并重建。
 
 ## 定向 `id` 查询
 
 `id` 路径先查同一 Redis item / 末 12 位索引；缓存不可读时直接查询 PostgreSQL 权威
 数据。完整 UUID 命中主键，末 12 位命中 `ready` 部分表达式索引
-`right(id::text, 12)`，两个分支合并去重后再打乱。它不应用客户端最近历史，也绝不
-回退到完整随机集合。没有匹配、只匹配到回收站图片或候选已不可用时返回 404。
+`right(id::text, 12)`，两个分支合并去重后最多读取 257 行以检测边界，正式候选硬上限
+为 256，超过时返回 `503 public_pg_fallback_work_limit`；合法请求最多返回 200 张。
+候选在应用层打乱，不应用客户端最近历史，也绝不回退到完整随机集合。没有匹配、只匹配
+到回收站图片或候选已不可用时返回 404。
 
 ```text
 /random?id=019f8457-063a-7002-a580-7a432dc7fd8d

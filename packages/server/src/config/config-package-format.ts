@@ -2,6 +2,7 @@ import { z } from "zod";
 import { appConfig } from "@imageshow/shared";
 import {
   type AdvancedConfigPreviewDto,
+  slugMaxLength,
   slugPattern,
   type RuntimeConfig
 } from "@imageshow/shared/browser";
@@ -21,7 +22,7 @@ const configPackageFormatVersion = 2 as const;
 const configPackageMaxBackends = appConfig.imports.configPackageMaxBackends;
 const configPackageMaxBytes = appConfig.imports.configPackageMaxBytes;
 
-const packageSlug = z.string().trim().toLowerCase().min(1).max(32)
+const packageSlug = z.string().trim().toLowerCase().min(1).max(slugMaxLength)
   .regex(slugPattern)
   .refine((slug) => slug !== "local", "local is not importable");
 const packageDisplayName = z.string().trim().max(64);

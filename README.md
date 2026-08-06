@@ -28,10 +28,15 @@ ImageShow 是一个面向个人服务器的图片展示、图库管理与随机�
   传输与处理，取消竞态标记按会话代际和所有者在执行收口后立即释放。
 - 图片管理员可从公开画廊或后台的图片详情直接编辑可用图片，也可处理常规上传、移入
   回收站和恢复图片，查看、新建、编辑及用精确移动按钮或桌面拖动排序主题、标签和
-  作者，并执行数据库、存储、Redis、回收站及全部五项只读检查；检查页还会展示
-  画廊 / 随机图 / 后台就绪列表共用缓存的 revision、图片数和重建进度，后台概览的
-  存储与大小区域同时显示该 Redis 图片投影的条目数、占用与同步状态；图片存储迁移、
-  永久删除、清空回收站、主题/标签/作者的单项删除、存储后端迁移和无效存储清理由
+  作者，并执行数据库、存储、Redis、回收站及全部五项只读检查；检查页默认以一次
+  轻量请求独立展示 PostgreSQL 与 Redis 状态，并区分图片核心投影、带生命周期的派生
+  缓存、revision、记录占用和重建进度，完整扫描只在手动深度检查时执行。后台概览的
+  存储与大小区域同时显示该 Redis 图片核心投影的条目数、记录占用与同步状态；最多
+  500 张的
+  图片变更精确同步，词表删除、批量图片操作、导入提交或整后端迁移超过该边界时不为
+  缓存加载完整 ID 列表，而在保留 PostgreSQL 事务、对象锁和失败补偿的前提下只安排
+  一次后台投影重建；图片存储迁移、永久删除、清空回收站、主题/标签/作者的单项删除、
+  存储后端迁移和无效存储清理由
   超级管理员专属权限保护，前端隐藏无权限入口，服务端仍会独立拦截请求。
 - 管理员界面偏好以 PostgreSQL 为真相源跨端同步，浏览器本地缓存支持首帧显示与断网后
   补同步；后台外观可选亮色、暗色或实时跟随设备，缺少偏好时默认跟随设备；公开首页、
@@ -80,18 +85,31 @@ DATABASE_NAME=imageshow
 DATABASE_USER=imageshow
 DATABASE_PASSWORD=                # 必填，请使用随机强密码
 REDIS_PASSWORD=                   # 仅连接带密码的外部 Redis 时填写
-REDIS_MAXMEMORY=500mb             # Redis 数据集上限；本机大图库实验可设为 2gb
 ```
 
 已有 super 管理员时，启动不会再读取环境变量覆盖账号或密码；请在后台账户页面修改。
 `DATABASE_*` 与 `REDIS_*` 是每次启动都读取的部署配置，必须持续由
 Compose、`.env` 或 Secret 提供。内置 Redis 位于 Compose 私有网络且不设置密码；
-只有连接启用了认证的外部 Redis 时才填写 `REDIS_PASSWORD`。仓库 Compose 的
-`REDIS_MAXMEMORY` 默认 `500mb` 并固定使用 `noeviction`，避免自动淘汰画廊核心键；
-外部 Redis 也必须配置正数 `maxmemory` 和 `noeviction`，应用启动时会核对。
-Redis 暂时不可连接或能力不满足时，HTTP 进程仍启动并让画廊、详情及后台正常图片列表
-回源 PostgreSQL，但 `/readyz` 保持非就绪，普通随机请求返回 503；连接恢复并重新校验
-通过后才开放 Redis 图片缓存。
+只有连接启用了认证的外部 Redis 时才填写 `REDIS_PASSWORD`。仓库 Compose 不配置或
+推断 Redis 内存上限、淘汰策略与容器硬限制；应用只读取 `INFO MEMORY` 供运维观测，
+  启动与 `/readyz` 只核对 PostgreSQL 核心 schema、必要初始化、Redis 连接及
+  `INCREX`、`ARRING`、`ARLASTITEMS` 三项必需命令；命令能力会在 ImageShow 自有的
+  5 秒 TTL 探针键上实际执行，检查后尝试立即 `UNLINK`，权限不允许时由 TTL 收口；
+  ACL 拒绝不能仅凭 `COMMAND INFO` 通过。HTTP 会先开放 `/livez` 与
+`/readyz`，但当前进程首次通过 Redis 能力校验前不开放任何业务路由，也不启动 worker。
+数据库迁移完成后，应用还会用一条专用 PostgreSQL session 持有固定生命周期 advisory
+lock；连接同一数据库的第二个 ImageShow 进程会在清理、管理员初始化、HTTP 和 worker
+启动前明确退出。该 session 意外断开即表示单实例所有权丢失，当前进程立即停止接收新
+请求，执行既有有界排空并关闭数据库连接池后以失败状态退出；这只是误部署保护，不代表
+支持多应用实例。
+首次校验成功后业务门在该进程内永久打开；运行期 Redis 断线时 `/readyz` 保持非就绪，
+后台统一返回 `503 redis_unavailable`，公开画廊、详情、统计、图片资源与随机 API 通过
+有并发、队列、超时和 SQL 工作量上限的 PostgreSQL 回源继续服务。Redis 新连接恢复后还需
+复核连接 epoch 与命令，随后复核图片 schema、revision、meta 与核心完整性，才自动切回
+Redis-first。后台会话 key 仍由 Redis 保存；每次认证再按其中的用户名对 PostgreSQL
+`admin_account` 做一次主键查询，核对权威角色与密码代际。PostgreSQL 查询失败返回
+`503 database_unavailable` 并保留会话；只有账号明确不存在、角色变化、密码代际不匹配或
+会话 key 确实丢失时才返回 401。
 其余应用选项只在首次启动时播种进
 `data/config.json`，之后以该文件为准——完整字段与默认值见仓库根的
 [`config.example.jsonc`](config.example.jsonc)。主进程会在装配 HTTP 路由和启动
@@ -104,10 +122,11 @@ Redis 暂时不可连接或能力不满足时，HTTP 进程仍启动并让画廊
 docker exec -it imageshow imageshow reset-password admin
 ```
 
-密码只通过隐藏输入读取，不得作为命令参数传入。密码更新仅依赖
-PostgreSQL；Redis 可用时会清除所有管理员登录会话，Redis 故障时密码仍会
-更新并输出会话未清理警告。修改 `.env` 中的 `ADMIN_PASSWORD` 或重启容器
-不会重置已有账号。源码环境可执行
+密码只通过隐藏输入读取，不得作为命令参数传入。密码直接更新 PostgreSQL 真值；Redis
+可用时再清除所有登录会话。Redis 故障不阻止密码恢复，目标账号旧会话在下一次认证时会
+因 PostgreSQL 密码代际不匹配而失效；命令只警告其他管理员会话未按恢复流程清除。修改
+`.env` 中的
+`ADMIN_PASSWORD` 或重启容器不会重置已有账号。源码环境可执行
 `npm run admin:reset-password -- admin`。
 
 ### 3. 启动本地快速体验栈

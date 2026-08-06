@@ -43,8 +43,29 @@ import { registerImportRoutes } from "./routes/imports.ts";
 import { isAllowedSiteHost, specialHost } from "./config/site-host.ts";
 import { auditAdminMutation } from "./core/audit-log.ts";
 import { blockCrossSiteFetch } from "./core/http/request-security.ts";
+import {
+  businessAvailabilityGateIsOpen,
+  requireOperationalRedis
+} from "./core/runtime-availability.ts";
 
-export function createHttpApp() {
+type HttpAvailabilityDependencies = {
+  businessGateIsOpen(): boolean;
+  requireRedis(): Promise<unknown>;
+};
+
+const defaultHttpAvailabilityDependencies: HttpAvailabilityDependencies = {
+  businessGateIsOpen: businessAvailabilityGateIsOpen,
+  requireRedis: requireOperationalRedis
+};
+
+export function createHttpApp(): Hono;
+export function createHttpApp(
+  availability: HttpAvailabilityDependencies
+): Hono;
+export function createHttpApp(
+  availability: HttpAvailabilityDependencies =
+    defaultHttpAvailabilityDependencies
+) {
   // Route handlers depend on the process-wide runtime snapshot. Keep assembly
   // explicit so importing this module remains pure while incorrect startup
   // order fails before the application can accept requests.
@@ -62,6 +83,25 @@ export function createHttpApp() {
       return apiErrorResponse({ status: 404, message: "Not Found" });
     }
     await next();
+  });
+  app.use("*", async (c, next) => {
+    const path = new URL(c.req.url).pathname;
+    if (
+      path === "/livez"
+      || path === "/readyz"
+      || availability.businessGateIsOpen()
+    ) {
+      await next();
+      return;
+    }
+    return apiErrorResponse(
+      {
+        status: 503,
+        code: "redis_unavailable",
+        message: "Redis cold-start validation has not completed"
+      },
+      { phase: "cold_start" }
+    );
   });
   app.options(
     "*",
@@ -145,6 +185,10 @@ export function createHttpApp() {
   registerHealthRoutes(app);
   registerPublicRoutes(app);
   registerRandomRoutes(app);
+  app.use(`${adminApiBasePath}/*`, async (_c, next) => {
+    await availability.requireRedis();
+    await next();
+  });
   registerPublicAuthRoutes(app);
   registerSecurityReportRoutes(app);
 

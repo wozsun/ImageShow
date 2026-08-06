@@ -1,4 +1,4 @@
-FROM node:26.5.1 AS deps
+FROM node:26.7.0 AS deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
 COPY packages/shared/package.json packages/shared/package.json
@@ -11,14 +11,14 @@ WORKDIR /app
 COPY . .
 RUN npm run build && npm run knip
 
-FROM node:26.5.1 AS prod-deps
+FROM node:26.7.0 AS prod-deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
 COPY packages/shared/package.json packages/shared/package.json
 COPY packages/server/package.json packages/server/package.json
 RUN npm ci --omit=dev --workspace @imageshow/shared --workspace @imageshow/server --include-workspace-root=false
 
-FROM node:26.5.1-slim AS runtime
+FROM node:26.7.0-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production \
     MALLOC_ARENA_MAX=2

@@ -1,38 +1,54 @@
 import { hashPassword } from "../core/password.ts";
 import { adminPasswordInput, adminUsernameInput } from "../core/credentials.ts";
+import { pool } from "../core/db.ts";
 
-type PasswordRecoveryQuery = (
-  sql: string,
-  params: unknown[]
-) => Promise<{ rowCount: number | null; rows: Array<{ username: string }> }>;
+type PasswordRecoveryMutation = (
+  username: string,
+  passwordHash: string
+) => Promise<string>;
 
 type AdministratorPasswordRecoveryResult =
   | { username: string; sessionsInvalidated: true; removedSessions: number }
   | { username: string; sessionsInvalidated: false; error: unknown };
 
+export async function resetAdministratorPasswordHash(
+  username: string,
+  passwordHash: string
+) {
+  const result = await pool.query<{ username: string }>(
+    `UPDATE admin_account
+        SET password_hash=$2,
+            updated_at=now()
+      WHERE username=$1
+      RETURNING username`,
+    [username, passwordHash]
+  );
+  if (!result.rowCount) throw new Error(`管理员不存在: ${username}`);
+  return result.rows[0]!.username;
+}
+
 async function resetAdministratorPassword(
-  query: PasswordRecoveryQuery,
+  mutate: PasswordRecoveryMutation,
   usernameInput: string,
   passwordInput: string
 ) {
   const username = adminUsernameInput.parse(usernameInput);
   const password = adminPasswordInput.parse(passwordInput);
   const passwordHash = await hashPassword(password);
-  const result = await query(
-    "UPDATE admin_account SET password_hash = $2, updated_at = now() WHERE username = $1 RETURNING username",
-    [username, passwordHash]
-  );
-  if (!result.rowCount) throw new Error(`管理员不存在: ${username}`);
-  return result.rows[0].username;
+  return mutate(username, passwordHash);
 }
 
 export async function resetAdministratorPasswordWithSessionCleanup(
-  query: PasswordRecoveryQuery,
+  mutate: PasswordRecoveryMutation,
   invalidateSessions: () => Promise<number>,
   usernameInput: string,
   passwordInput: string
 ): Promise<AdministratorPasswordRecoveryResult> {
-  const username = await resetAdministratorPassword(query, usernameInput, passwordInput);
+  const username = await resetAdministratorPassword(
+    mutate,
+    usernameInput,
+    passwordInput
+  );
   try {
     return {
       username,

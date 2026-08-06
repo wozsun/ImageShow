@@ -1,11 +1,15 @@
 import { errorMessage } from "../../core/api-error.ts";
 import { logger } from "../../core/logger.ts";
 import {
-  assertRequiredRedisFeatures,
   getRedisConnectionState,
-  onRedisConnectionStateChange,
-  pingRedis
+  isRedisRequiredCommandsError,
+  type RedisRequiredCommandCapabilities
 } from "../../core/redis-client.ts";
+import {
+  getRedisOperationalState,
+  onRedisOperationalStateChange,
+  probeRedisOperationalState
+} from "../../core/runtime-availability.ts";
 import { enqueueRerunnableJob } from "../../jobs/repository.ts";
 import {
   readyImageCacheWriteFenceIsClosed,
@@ -15,11 +19,17 @@ import {
   type ReadyImageCacheReadLease
 } from "./fence.ts";
 import type { ReadyImageCacheMeta } from "./model.ts";
-import { clearReadyImageDisposableCaches } from "./derived-cache-policy.ts";
+import {
+  clearReadyImageDisposableCaches
+} from "./derived-cache-lifecycle.ts";
+import {
+  invalidateReadyImageDerivedOccupancyMirror
+} from "./derived-cache-occupancy.ts";
 import { validateReadyImageCacheAtStartup } from "./integrity.ts";
 import { readReadyImageCacheMeta } from "./meta.ts";
 import { rebuildReadyImageCache } from "./rebuild.ts";
 import { getReadyImageRevision } from "./revision.ts";
+import { recordReadyImageCacheError } from "./status-observability.ts";
 
 const CACHE_REBUILD_JOB_KEY = "ready-image-cache-rebuild";
 
@@ -27,8 +37,10 @@ export type ReadyImageCacheCoordinatorStatus = {
   initialized: boolean;
   readable: boolean;
   rebuilding: boolean;
+  rebuildStartedAt: string | null;
   reason: string;
   meta: ReadyImageCacheMeta | null;
+  requiredCommands: RedisRequiredCommandCapabilities | null;
 };
 
 let initialized = false;
@@ -36,20 +48,34 @@ let readable = false;
 let stopped = false;
 let reason = "not_initialized";
 let currentMeta: ReadyImageCacheMeta | null = null;
+let requiredCommandCapabilities: RedisRequiredCommandCapabilities | null = null;
 let rebuildPromise: Promise<ReadyImageCacheMeta> | null = null;
+let activeRebuildStartedAt: string | null = null;
 let rebuildAbortController: AbortController | null = null;
 let validatedRedisConnectionEpoch = 0;
 let redisRevalidationPromise: Promise<void> | null = null;
 let pendingRedisRevalidationEpoch = 0;
-let clearDisposableCachesOnNextReady = false;
+let clearDisposableCachesOnNextReady = true;
+let plannedMutationRebuildHolds = 0;
+let plannedMutationRebuildRequired = false;
+let plannedMutationAffectedCount = 0;
+let plannedMutationReleasePromise: Promise<void> | null = null;
+let resolvePlannedMutationRelease: (() => void) | null = null;
 
 function redisConnectionIsValidated() {
   const connection = getRedisConnectionState();
-  return connection.ready && connection.epoch === validatedRedisConnectionEpoch;
+  const operational = getRedisOperationalState();
+  return connection.ready
+    && operational.available
+    && operational.connectionEpoch === connection.epoch
+    && connection.epoch === validatedRedisConnectionEpoch;
 }
 
 function coordinatorIsReadable() {
-  return readable && !stopped && redisConnectionIsValidated();
+  return readable
+    && !stopped
+    && plannedMutationRebuildHolds === 0
+    && redisConnectionIsValidated();
 }
 
 function coordinatorStatus(): ReadyImageCacheCoordinatorStatus {
@@ -57,8 +83,10 @@ function coordinatorStatus(): ReadyImageCacheCoordinatorStatus {
     initialized,
     readable: coordinatorIsReadable(),
     rebuilding: rebuildPromise !== null,
-    reason,
-    meta: currentMeta
+    rebuildStartedAt: activeRebuildStartedAt,
+    reason: plannedMutationRebuildHolds > 0 ? "mutation_in_progress" : reason,
+    meta: currentMeta,
+    requiredCommands: requiredCommandCapabilities
   };
 }
 
@@ -73,14 +101,30 @@ async function scheduleRebuild() {
   });
 }
 
+async function handleRedisValidationFailure(
+  error: unknown,
+  failureEvent: string
+) {
+  if (isRedisRequiredCommandsError(error)) {
+    logger.warn("ready_image_cache_required_redis_commands_missing", {
+      missing: error.capabilities.missing
+    });
+    return error.capabilities;
+  }
+  logger.warn(failureEvent, error);
+  await scheduleRebuild();
+  return null;
+}
+
 async function runRebuild() {
+  activeRebuildStartedAt = new Date().toISOString();
   readable = false;
   validatedRedisConnectionEpoch = 0;
   reason = "rebuilding";
   rebuildAbortController = new AbortController();
   const signal = rebuildAbortController.signal;
   try {
-    await assertRequiredRedisFeatures();
+    requiredCommandCapabilities = await probeRedisOperationalState();
     const connection = getRedisConnectionState();
     if (!connection.ready) {
       throw new Error("Redis connection is unavailable before cache rebuild");
@@ -103,6 +147,9 @@ async function runRebuild() {
     });
     return meta;
   } catch (error) {
+    if (!signal.aborted) {
+      recordReadyImageCacheError("core", "core_rebuild_failed", error);
+    }
     readable = false;
     validatedRedisConnectionEpoch = 0;
     // A failed fixed-namespace rebuild publishes a degraded meta after
@@ -111,8 +158,11 @@ async function runRebuild() {
     currentMeta = await readReadyImageCacheMeta().catch(() => currentMeta);
     reason = signal.aborted ? "stopped" : `degraded:${errorMessage(error)}`;
     if (!signal.aborted) {
-      logger.warn("ready_image_cache_rebuild_failed", error);
-      await scheduleRebuild();
+      const capabilities = await handleRedisValidationFailure(
+        error,
+        "ready_image_cache_rebuild_failed"
+      );
+      if (capabilities) requiredCommandCapabilities = capabilities;
     }
     throw error;
   } finally {
@@ -131,7 +181,7 @@ async function revalidateRedisConnection(epoch: number) {
   const validation = await withReadyImageCacheWriteFence(async () => {
     const before = getRedisConnectionState();
     if (!before.ready || before.epoch !== epoch) return null;
-    await assertRequiredRedisFeatures();
+    requiredCommandCapabilities = await probeRedisOperationalState();
     if (clearDisposableCachesOnNextReady) {
       await clearReadyImageDisposableCaches();
       const afterCleanup = getRedisConnectionState();
@@ -177,11 +227,21 @@ async function drainRedisRevalidations() {
       await revalidateRedisConnection(epoch);
     } catch (error) {
       if (getRedisConnectionState().epoch === epoch) {
+        recordReadyImageCacheError(
+          "core",
+          "core_validation_failed",
+          error
+        );
         readable = false;
         validatedRedisConnectionEpoch = 0;
         reason = `degraded:${errorMessage(error)}`;
-        logger.warn("ready_image_cache_redis_revalidation_failed", error);
-        await scheduleRebuild();
+        const capabilities = await handleRedisValidationFailure(
+          error,
+          "ready_image_cache_redis_revalidation_failed"
+        );
+        if (capabilities) {
+          requiredCommandCapabilities = capabilities;
+        }
       }
     }
   }
@@ -195,23 +255,31 @@ function requestRedisConnectionRevalidation(epoch: number) {
   redisRevalidationPromise ??= drainRedisRevalidations().finally(() => {
     redisRevalidationPromise = null;
     if (pendingRedisRevalidationEpoch && !stopped) {
-      void requestRedisConnectionRevalidation(pendingRedisRevalidationEpoch);
+      observeRedisConnectionRevalidation(pendingRedisRevalidationEpoch);
     }
   });
   return redisRevalidationPromise;
 }
 
-onRedisConnectionStateChange((connection) => {
+function observeRedisConnectionRevalidation(epoch: number) {
+  void requestRedisConnectionRevalidation(epoch).catch((error) => {
+    logger.warn("ready_image_cache_redis_revalidation_task_failed", error);
+  });
+}
+
+onRedisOperationalStateChange((operational) => {
   if (!initialized || stopped) return;
   readable = false;
   validatedRedisConnectionEpoch = 0;
-  if (!connection.ready) {
+  requiredCommandCapabilities = operational.capabilities;
+  if (!operational.available) {
+    invalidateReadyImageDerivedOccupancyMirror();
     clearDisposableCachesOnNextReady = true;
-    reason = "redis_disconnected";
+    reason = operational.reason;
     return;
   }
   reason = "redis_revalidating";
-  void requestRedisConnectionRevalidation(connection.epoch);
+  observeRedisConnectionRevalidation(operational.connectionEpoch);
 });
 
 function waitForTask<T>(promise: Promise<T>, signal?: AbortSignal) {
@@ -238,14 +306,16 @@ function waitForTask<T>(promise: Promise<T>, signal?: AbortSignal) {
 
 export async function initializeReadyImageCacheCoordinator() {
   stopped = false;
-  // Ignore the initial ioredis `ready` event and run one explicit validation
-  // after ping resolves. Later reconnect events are handled by the listener.
+  // Ignore the initial ioredis `ready` event and run one explicit capability
+  // validation. Later reconnect epochs are handled by the listener.
   initialized = false;
   readable = false;
   validatedRedisConnectionEpoch = 0;
+  requiredCommandCapabilities = null;
+  clearDisposableCachesOnNextReady = true;
   reason = "validating";
   try {
-    await pingRedis();
+    requiredCommandCapabilities = await probeRedisOperationalState();
     initialized = true;
     const connection = getRedisConnectionState();
     if (!connection.ready) throw new Error("Redis connection is unavailable");
@@ -253,19 +323,32 @@ export async function initializeReadyImageCacheCoordinator() {
   } catch (error) {
     initialized = true;
     reason = `degraded:${errorMessage(error)}`;
-    await scheduleRebuild();
+    const capabilities = await handleRedisValidationFailure(
+      error,
+      "ready_image_cache_initialization_failed"
+    );
+    if (capabilities) requiredCommandCapabilities = capabilities;
   }
   return coordinatorStatus();
 }
 
 export function requestReadyImageCacheRebuild(
   options: { signal?: AbortSignal } = {}
-) {
+): Promise<ReadyImageCacheMeta> {
   if (stopped) {
     return Promise.reject(new Error("Ready-image cache coordinator is stopped"));
   }
+  const plannedRelease = plannedMutationReleasePromise;
+  if (plannedMutationRebuildHolds > 0 && plannedRelease) {
+    plannedMutationRebuildRequired = true;
+    const deferred = plannedRelease.then(() => (
+      requestReadyImageCacheRebuild()
+    ));
+    return waitForTask(deferred, options.signal);
+  }
   rebuildPromise ??= runRebuild().finally(() => {
     rebuildPromise = null;
+    activeRebuildStartedAt = null;
   });
   return waitForTask(rebuildPromise, options.signal);
 }
@@ -368,12 +451,97 @@ export function getReadyImageCacheCoordinatorStatus() {
 
 export function reportReadyImageCacheFailure(error: unknown) {
   if (stopped) return;
+  recordReadyImageCacheError("core", "core_read_failed", error);
   readable = false;
   validatedRedisConnectionEpoch = 0;
   reason = `degraded:${errorMessage(error)}`;
   logger.warn("ready_image_cache_read_failed", error);
   if (!initialized) return;
+  if (plannedMutationRebuildHolds > 0) {
+    plannedMutationRebuildRequired = true;
+    return;
+  }
   void requestReadyImageCacheRebuild().catch(() => undefined);
+}
+
+export function beginReadyImageCachePlannedMutation(
+  affectedCount: number
+) {
+  if (!Number.isSafeInteger(affectedCount) || affectedCount <= 0) {
+    throw new Error("Planned mutation count must be a positive integer");
+  }
+  if (stopped) {
+    return (_rebuildRequired: boolean) => false;
+  }
+  if (plannedMutationRebuildHolds === 0) {
+    plannedMutationReleasePromise = new Promise<void>((resolve) => {
+      resolvePlannedMutationRelease = resolve;
+    });
+  }
+  plannedMutationRebuildHolds += 1;
+  plannedMutationAffectedCount = Math.max(
+    plannedMutationAffectedCount,
+    affectedCount
+  );
+  readable = false;
+  reason = `mutation_in_progress:${affectedCount}`;
+  let released = false;
+  return (rebuildRequired: boolean) => {
+    if (released) return false;
+    released = true;
+    plannedMutationRebuildRequired ||= rebuildRequired;
+    plannedMutationRebuildHolds -= 1;
+    if (plannedMutationRebuildHolds > 0) return false;
+    const shouldRebuild = plannedMutationRebuildRequired;
+    const rebuildAffectedCount = plannedMutationAffectedCount;
+    const releaseWaiters = resolvePlannedMutationRelease;
+    plannedMutationRebuildRequired = false;
+    plannedMutationAffectedCount = 0;
+    plannedMutationReleasePromise = null;
+    resolvePlannedMutationRelease = null;
+    if (shouldRebuild) {
+      requestReadyImageCacheRebuildAfterMutation(rebuildAffectedCount);
+      releaseWaiters?.();
+      return true;
+    }
+    if (
+      currentMeta?.state === "ready"
+      && redisConnectionIsValidated()
+      && !stopped
+    ) {
+      readable = true;
+      reason = "ready";
+    }
+    releaseWaiters?.();
+    return false;
+  };
+}
+
+export function readyImageCachePlannedMutationIsActive() {
+  return plannedMutationRebuildHolds > 0;
+}
+
+export function requestReadyImageCacheRebuildAfterMutation(
+  affectedCount: number
+) {
+  if (!Number.isSafeInteger(affectedCount) || affectedCount <= 0) {
+    throw new Error("Mutation rebuild count must be a positive integer");
+  }
+  if (stopped) return false;
+  readable = false;
+  reason = `mutation_rebuild_required:${affectedCount}`;
+  if (!initialized) return false;
+  if (plannedMutationRebuildHolds > 0) {
+    plannedMutationRebuildRequired = true;
+    plannedMutationAffectedCount = Math.max(
+      plannedMutationAffectedCount,
+      affectedCount
+    );
+    return true;
+  }
+  validatedRedisConnectionEpoch = 0;
+  void requestReadyImageCacheRebuild().catch(() => undefined);
+  return true;
 }
 
 export function completeReadyImageCacheMutation(meta: ReadyImageCacheMeta) {

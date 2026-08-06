@@ -81,20 +81,94 @@ export type AdminOverviewDto = {
   };
 };
 
+export type AdminCheckErrorCategory =
+  | "connection"
+  | "query"
+  | "command"
+  | "projection"
+  | "storage"
+  | "unknown";
+
+export type AdminCheckFailureDto = {
+  category: AdminCheckErrorCategory;
+  code: string;
+  message: string;
+};
+
+export type AdminCheckResourceDto<T> =
+  | { status: "ok"; data: T; error: null }
+  | { status: "error"; data: null; error: AdminCheckFailureDto };
+
+export type ReadyImageCacheOccupancyDto = {
+  key_count: number | null;
+  member_count: number | null;
+  memory_bytes: number | null;
+  source: "meta" | "registry" | "deep";
+};
+
+export type ReadyImageCacheRecentErrorDto = {
+  category: "core" | "derived";
+  code: string;
+  message: string;
+  occurred_at: string;
+};
+
 export type ReadyImageCacheAdminStatusDto = {
   initialized: boolean;
   readable: boolean;
   rebuilding: boolean;
-  synchronized: boolean;
+  synchronized: boolean | null;
   state: string;
   reason: string;
-  authoritative_revision: string;
+  stage: "idle" | "validating" | "rebuilding_core" | "degraded";
+  authoritative_revision: string | null;
   applied_revision: string | null;
   item_count: number | null;
   processed: number | null;
   total: number | null;
   memory_bytes: number | null;
+  last_updated_at: string | null;
   built_at: string | null;
   started_at: string | null;
-  last_error: string;
+  elapsed_ms: number | null;
+  core: ReadyImageCacheOccupancyDto;
+  derived: ReadyImageCacheOccupancyDto;
+  recent_errors: {
+    core: ReadyImageCacheRecentErrorDto | null;
+    derived: ReadyImageCacheRecentErrorDto | null;
+  };
+  required_commands: {
+    INCREX: boolean | null;
+    ARRING: boolean | null;
+    ARLASTITEMS: boolean | null;
+  };
+};
+
+export type AdminPostgresqlStatusDto = {
+  connection: "connected";
+  version: string;
+  latency_ms: number;
+  ready_images: number;
+  total_images: number;
+  authoritative_revision: string;
+  abnormal_jobs: number;
+};
+
+export type AdminRedisStatusDto = {
+  connection: "connected";
+  version: string;
+  configured_db: number;
+  latency_ms: number;
+  memory: {
+    scope: "redis_instance";
+    used_memory_bytes: number | null;
+    used_memory_rss_bytes: number | null;
+    fragmentation_ratio: number | null;
+  };
+  image_projection: ReadyImageCacheAdminStatusDto;
+};
+
+export type AdminCheckStatusDto = {
+  postgresql: AdminCheckResourceDto<AdminPostgresqlStatusDto>;
+  redis: AdminCheckResourceDto<AdminRedisStatusDto>;
 };

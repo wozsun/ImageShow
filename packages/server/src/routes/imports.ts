@@ -7,14 +7,14 @@ import {
 import { ApiError } from "../core/api-error.ts";
 import { apiSuccess } from "../core/http/responses.ts";
 import {
-  importCommitInput,
+  importBatchCommitInput,
   importCreateInput,
   jsonlManifestInput,
   parse,
   uuidInput,
   weiboImportInput
 } from "../core/validation.ts";
-import { commitImportSession } from "../images/imports/commit.ts";
+import { commitImportSessions } from "../images/imports/batch-commit.ts";
 import { prepareImportSession } from "../images/imports/prepare.ts";
 import {
   materializeDownloadSession,
@@ -32,6 +32,8 @@ import { createWeiboImportBatchManifest } from "../images/imports/weibo.ts";
 import { WeiboImportError } from "../images/imports/weibo-types.ts";
 import { getImportVocabulary } from "../vocab/vocab-cache.ts";
 import {
+  importBatchCommitPath,
+  limitImportBatchCommitBody,
   limitJsonlManifestBody,
   limitWeiboImportBody,
 } from "../core/http/request-body-limit.ts";
@@ -152,10 +154,15 @@ export function registerImportRoutes(app: Hono) {
     return streamImportEvents(parseImportIds(c.req.url), c.req.raw.signal);
   });
 
-  app.post(`${adminApiBasePath}/imports/:id/commit`, async (c) => {
-    const id = parseOwnedImportId(c.req.param("id"));
-    const input = parse(importCommitInput, await c.req.json().catch(() => ({})));
-    return c.json(apiSuccess(await commitImportSession(id, input, c.req.raw.signal)));
+  app.post(importBatchCommitPath, limitImportBatchCommitBody, async (c) => {
+    const input = parse(
+      importBatchCommitInput,
+      await c.req.json().catch(() => ({}))
+    );
+    return c.json(apiSuccess(await commitImportSessions(
+      input.items,
+      c.req.raw.signal
+    )));
   });
 
   app.post(`${adminApiBasePath}/imports/:id/cancel`, async (c) => {

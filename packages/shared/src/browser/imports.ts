@@ -5,6 +5,7 @@ import type {
   ImageDraftDto
 } from "./images.ts";
 
+export const importStatusBatchMaxItems = 100;
 export const importModes = ["upload", "download"] as const;
 export type ImportMode = (typeof importModes)[number];
 
@@ -120,4 +121,19 @@ export type StoredImportStatusListDto = {
 export type StoredImportCommitResultDto = {
   status: "imported";
   item: AdminImageItemDto;
+};
+
+export type StoredImportBatchCommitItemInputDto = {
+  id: string;
+  metadata: ImageDraftDto;
+};
+
+export type StoredImportBatchCommitItemResultDto =
+  | ({ id: string } & StoredImportCommitResultDto)
+  | { id: string; status: "failed"; code: string; message: string };
+
+export type StoredImportBatchCommitResultDto = {
+  imported: number;
+  failed: number;
+  items: StoredImportBatchCommitItemResultDto[];
 };

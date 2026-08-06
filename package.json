@@ -1,7 +1,7 @@
 {
   "name": "imageshow",
   "private": true,
-  "version": "4.0.0",
+  "version": "4.1.0",
   "type": "module",
   "workspaces": [
     "packages/*"
@@ -13,6 +13,7 @@
     "check:colors": "node scripts/build/check-semantic-colors.mjs",
     "check": "npm run build -w @imageshow/shared && npm --workspaces run check",
     "knip": "knip",
+    "benchmark:ready-image-set-work": "npm run benchmark:ready-image-set-work -w @imageshow/server",
     "admin:reset-password": "node --env-file-if-exists=.env packages/server/src/admin-password-cli.ts reset-password",
     "start": "npm run start -w @imageshow/server"
   },
@@ -20,6 +21,6 @@
     "node": ">=26.3.0 <27"
   },
   "devDependencies": {
-    "knip": "^6.27.0"
+    "knip": "^6.31.0"
   }
 }

@@ -1,10 +1,11 @@
 import { EventEmitter } from "node:events";
 import { pool } from "../../core/db.ts";
 import { ApiError } from "../../core/api-error.ts";
-import type {
-  ImportMode,
-  ImportStatus,
-  StoredImportStatusDto
+import {
+  importStatusBatchMaxItems,
+  type ImportMode,
+  type ImportStatus,
+  type StoredImportStatusDto
 } from "@imageshow/shared/browser";
 
 const activeImportPhases = new Map<
@@ -36,7 +37,7 @@ function uniqueImportIds(ids: string[]) {
     if (seen.has(canonicalId)) continue;
     seen.add(canonicalId);
     unique.push(id);
-    if (unique.length === 100) break;
+    if (unique.length === importStatusBatchMaxItems) break;
   }
   return unique;
 }

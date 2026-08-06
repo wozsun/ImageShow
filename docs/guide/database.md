@@ -1,20 +1,20 @@
 # 数据库结构
 
 PostgreSQL 共 10 张业务表，另有迁移记录表 `schema_migrations`。全新数据库依次执行
-`0001_initial.sql` 与 `0002_ready_image_revision.sql`。随机图 `id` 的末 12 位查询所需
-ready 部分表达式索引属于 `0001`；统一 Redis 图片投影的权威 revision 单行表由
-`0002` 新增。PostgreSQL 是唯一真相源，Redis 投影与查询缓存均可重建。
+`0001_initial.sql` 与 `0002_ready_image_revision.sql`；随机图 `id` 的末 12 位查询所需
+ready 部分表达式索引属于 `0001`，统一 Redis 图片投影的权威 revision 单行表由已发布的
+`0002` 建立。PostgreSQL 是唯一真相源，Redis 图片
+投影、查询缓存与管理员会话均不替代数据库真值。
 
-`0001_initial.sql` 按依赖和运行职责排列：迁移账本 → 存储注册表 → 公共词表 →
-图片真值与关联 → 导入生命周期 → 后台任务 → 管理员身份；`0002` 再增加图片投影
-revision。每张表内部统一为标识、
+`0001_initial.sql` 按依赖和运行职责排列：迁移账本 → 存储注册表 →
+公共词表 → 图片真值与关联 → 导入生命周期 → 后台任务 → 管理员身份。每张表内部统一为标识、
 状态 / 所有权、业务字段、错误 / 重试和时间字段；种子、约束与索引紧跟所属表，
 图片索引再按直接查询 / 外键、列表游标、随机选择 / 回收职责排列。
 
-v4 以全新空数据库或已经完成 3.15.2 的数据库为支持基线。前者顺序执行两份迁移；
-后者保留已发布 `0001` 不变，只前向执行 `0002_ready_image_revision`。尚未完成 3.15.2
-基线收口的旧环境必须先升级到 3.15.2。应用不会在迁移文件之外猜测、修补或删除旧
-schema 状态。
+v4.1 保留 v4.0 已发布的 `0002` 前向迁移：已执行的数据库不会重放，尚未执行的数据库与
+全新安装都会由 migration runner 建立 `ready_image_revision`；runner 不重放 `0001`、
+不删除既有 `schema_migrations` 历史。v4.1 不需要管理员凭据 revision 表或相关迁移，应用也
+不会在迁移文件之外猜测、修补或删除旧 schema 状态。
 
 ## metadata —— 图片主表
 
@@ -176,13 +176,16 @@ bucket / root_path 与 WebDAV 的 base_url / root_path 是物理布局；仍有
 共享 advisory lock，并在锁内使用同一列表幂等确保缺失标签存在、替换
 `image_tag`。标签管理只提供单项删除，删除时取得对应独占锁，因此不能穿过并发
 关联或在外键写入中途执行。删除标签会级联删除
-`image_tag`，在同一事务推进图片 revision，提交后精确更新 Redis 标签索引、rich item、
-统计与词表 / 计数派生状态，保证 `tag=` 随机过滤和 gallery facets 不会重新物化旧值。
+`image_tag`，在同一事务推进图片 revision，提交后精确更新 Redis rich item、核心统计与
+词表 / 计数派生状态。旧 revision 的按需标签索引会被读取端拒绝，后续请求从 PostgreSQL
+真值重新构建，保证 `tag=` 随机过滤和 gallery facets 不会沿用旧成员；旧索引仍受统一
+派生 registry 的 TTL、LRU、结果数和成员数上限约束，不参与核心完整性判定。
 
 ## author —— 作者
 
 作者有 `slug`、`display_name`、`link`、排序和时间戳。一图最多一个作者，存在
 `metadata.author`。作者关联持有共享 slug 租约，并在同一锁边界内幂等完成“确保作者存在”和
 图片写入；显式词表管理与删除持有独占 slug 锁，因此删除不能穿过并发关联。删除事务
-返回本次实际置空的图片 id，推进 revision 后只用这组真值精确同步 Redis 作者索引、
-rich item、统计与词表 / 计数，避免删除与并发关联互相覆盖。
+返回本次实际置空的图片 id，推进 revision 后只用这组真值精确同步 Redis rich item、
+核心统计与词表 / 计数；旧 revision 的按需作者索引由读取端拒绝并重建，避免删除与并发
+关联互相覆盖。

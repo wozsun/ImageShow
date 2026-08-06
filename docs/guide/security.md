@@ -1,7 +1,21 @@
 # 安全
 
-- 管理员密码使用 Node.js `node:crypto` 原生异步 Argon2id 派生，以 PHC 字符串写入 PostgreSQL；固定参数为 64 MiB 内存、3 轮、并行度 4、32 字节输出和 16 字节随机 salt。登录只接受完整匹配该策略的 PHC 参数，并使用恒定时间比较派生结果。
-- 管理会话存于 Redis，Cookie 为 `HttpOnly` + `SameSite=Lax`，识别为 HTTPS 时附加 `Secure`；所有写操作要求 `X-CSRF-Token` 并校验同源。管理员密码被后台重置或账号被删除时，服务端用 `SCAN + MGET` 定向清除该账号的全部会话；自行改密会保留当前会话并清除同账号的其他会话。紧急密码恢复以 PostgreSQL 密码更新为主流程，并在 Redis 可用时使用 `SCAN` 清除全部管理员会话；Redis 故障不会阻止密码更新，但会警告旧会话尚未清除。
+- 管理员密码使用 Node.js `node:crypto` 原生异步 Argon2id 派生，以 PHC 字符串写入 PostgreSQL；固定参数为 64 MiB 内存、3 轮、并行度 4、32 字节输出和 24 字节随机 salt。登录继续接受既有 16 字节 salt 且其余参数完全一致的哈希，并使用恒定时间比较派生结果；账号下一次创建或改密即写入现行格式。24 字节 salt 同时标识该密码已启用会话凭据绑定，避免无版本旧会话在改密后重新获得授权。
+- 管理会话存于 Redis，Cookie 为 `HttpOnly` + `SameSite=Lax`，识别为 HTTPS 时附加
+  `Secure`；所有写操作要求 `X-CSRF-Token` 并校验同源。会话保存密码哈希的不可逆
+  SHA-256 代际，但 Redis 不保存管理员账号、角色或密码代际的全局投影。每次会话认证先
+  读取 Redis key，再以其中用户名对 PostgreSQL `admin_account` 做一次主键查询，比较权威
+  角色、密码哈希格式和代际。PostgreSQL 查询异常统一返回
+  `503 database_unavailable` 且不删除 Redis key；只有数据库明确确认账号不存在、角色或
+  代际不匹配，以及 Redis 明确确认会话不存在时才返回 401。既有无代际会话仅可在账号仍
+  使用旧 16 字节 salt 哈希时原地补齐。
+- 自行改密在锁定账号行并验证当前密码后，先在当前 Redis 会话 key 内同时授权旧、新两个
+  代际，再更新 PostgreSQL；Redis 预授权失败时事务回滚且不写新密码。数据库提交完成后
+  当前会话保留，其他旧会话通过 `SCAN + MGET` 尽力回收；清理时的 Redis 故障不改变已经
+  提交的成功结果，残留会话会在下一次 PostgreSQL 代际核对时失效。后台重置和删除账号也
+  先提交 PostgreSQL，再尽力清理目标会话。紧急密码恢复直接更新 PostgreSQL 真值，随后在
+  Redis 可用时清除全部管理员会话；Redis 故障不阻止恢复写入，目标账号旧会话仍会在下次
+  认证时失效。
 - 管理员授权在角色之上使用集中定义的操作权限。`/api/admin/auth/me` 返回当前会话的
   权限标识，前端据此隐藏不可用入口，但权限列表只用于界面呈现，服务端路由中间件
   才是最终授权边界。图片管理员仍可上传、编辑元数据、移入回收站和恢复图片；
@@ -14,7 +28,7 @@
   手动重建统一图片缓存需要 `cache.maintenance.rebuild`。
   以上九项高风险操作权限当前只授予超级管理员；直接构造对应单项请求同样返回 403，
   且在解析正文或进入存储维护操作前终止。
-- Compose 内置 Redis 使用不固定次版本的 `redis:8` 镜像，只连接项目私有网络、不发布宿主机端口且不设置密码。`REDIS_MAXMEMORY` 默认 `500mb`，淘汰策略固定为 `noeviction`，避免内存压力静默删除会话或画廊核心键；本机大图库实验使用 `2gb`。应用启动时会检查正数 `maxmemory`、`noeviction`、`INCREX`、`ARRING` 与 `ARLASTITEMS`；连接启用了认证的外部 Redis 时，可通过 `REDIS_PASSWORD` 向应用提供密码。
+- Compose 内置 Redis 使用不固定次版本的 `redis:8` 镜像，只连接项目私有网络、不发布宿主机端口且不设置密码，并启用 AOF。ImageShow 不设置 Redis 内存上限、淘汰策略或容器硬限制，只把 `INFO MEMORY` 作为运维观测；启动与 `/readyz` 检查连接，并在自有 5 秒 TTL 探针键上实际执行 `INCREX`、`ARRING`、`ARLASTITEMS` 三项必需命令，命令存在但 ACL 拒绝执行仍视为不可用。首次校验成功前后台与公开业务都由冷启动门拒绝；运行期 Redis 故障时后台在会话读取前统一返回 `503 redis_unavailable`，不能伪装成 401 或触发浏览器清除登录状态，公开只读业务才允许有界 PostgreSQL 回源。连接启用了认证的外部 Redis 时，可通过 `REDIS_PASSWORD` 向应用提供密码。
 - 管理端界面偏好接口只使用鉴权会话中的用户名定位 `admin_account.preferences`，不接受客户端传入目标账号。接口只接受 shared 注册的键与值域，PATCH 在 PostgreSQL 行内原子合并并返回完整投影；JSONB 顶层必须是对象且最大 4 KiB。浏览器缓存键按用户名隔离，`localStorage` 仅承担首帧显示、断网 pending 和多标签同步，不参与鉴权，也不保存会话或 CSRF token。PostgreSQL 尚无某键时，已校验的本地值可补写一次；删除账号时偏好随该行自然删除。
 - 登录失败限流：每 IP + 用户名 60 秒内 5 次失败即拦截，叠加 180 秒内 10 次尝试的全局兜底（阈值与窗口均可在 `config.json` 的 `security.*` 调整）。两个固定窗口在一次 Redis 服务端原子操作中按来源到全局的顺序使用 `INCREX ... UBOUND ... EX ... ENX` 预留；前一窗口已拒绝时不再消耗后续共享额度。达到上限后计数不再增长，后续请求也不会延长首次建立的 TTL。
 - 登录前置安全验证使用完全自托管的 ALTCHA：服务端签发带 HMAC 的

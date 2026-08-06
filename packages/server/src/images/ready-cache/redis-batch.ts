@@ -2,7 +2,7 @@ import type { Redis } from "ioredis";
 import { execRedisPipeline } from "../../core/redis-pipeline.ts";
 
 export const REDIS_BATCH_MAX_COMMANDS = 250;
-export const REDIS_BATCH_MAX_BYTES = 512 * 1024;
+const REDIS_BATCH_MAX_BYTES = 512 * 1024;
 
 type RedisPipeline = ReturnType<Redis["pipeline"]>;
 
@@ -66,6 +66,25 @@ export function* chunkHashEntries(
       bytes = 0;
     }
     chunk.push([field, value]);
+    bytes += entryBytes;
+  }
+  if (chunk.length) yield chunk;
+}
+
+export function* chunkSortedSetEntries(
+  key: string,
+  entries: Iterable<readonly [string | number, string]>
+) {
+  let chunk: Array<readonly [string | number, string]> = [];
+  let bytes = estimatedRedisBytes(key);
+  for (const [score, member] of entries) {
+    const entryBytes = estimatedRedisBytes(score, member);
+    if (chunk.length && bytes + entryBytes > REDIS_BATCH_MAX_BYTES) {
+      yield chunk;
+      chunk = [];
+      bytes = estimatedRedisBytes(key);
+    }
+    chunk.push([score, member]);
     bytes += entryBytes;
   }
   if (chunk.length) yield chunk;

@@ -1,6 +1,13 @@
 import type { PoolClient } from "pg";
 import { pool } from "../../core/db.ts";
 
+type ReadyImageRevisionReader = {
+  query(
+    text: string,
+    values?: unknown[]
+  ): Promise<{ rows: Record<string, unknown>[] }>;
+};
+
 export type ReadyImageRevision = string;
 
 export type ReadyImageRevisionSnapshot = {
@@ -31,7 +38,7 @@ function revisionSnapshot(row: Record<string, unknown> | undefined) {
 }
 
 export async function getReadyImageRevision(
-  client: Pick<PoolClient, "query"> = pool
+  client: ReadyImageRevisionReader = pool
 ): Promise<ReadyImageRevisionSnapshot> {
   const row = (await client.query(
     `SELECT revision, updated_at

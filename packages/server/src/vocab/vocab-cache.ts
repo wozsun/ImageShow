@@ -1,6 +1,12 @@
 import { randomUUID } from "node:crypto";
+import { appConfig } from "@imageshow/shared";
 import { coalesce } from "../core/coalesce.ts";
-import { pool } from "../core/db.ts";
+import {
+  coalescePublicRead,
+  publicPgFallbackWorkLimitExceeded,
+  publicReadUsesFallbackAdmission,
+  queryForPublicRead
+} from "../core/public-pg-fallback.ts";
 import { deleteRedisKeys, getRedisJson, setRedisJson } from "../core/redis-json.ts";
 import type {
   AuthorDto as Author,
@@ -52,68 +58,83 @@ function vocabFromRows(rows: Array<{ slug: string; display_name: string }>): Voc
   return rows.map(({ slug, display_name }) => ({ slug, display_name }));
 }
 
+async function queryVocabularyRows<T>(sql: string) {
+  const publicFallback = publicReadUsesFallbackAdmission();
+  const maximumRows = appConfig.publicPgFallback.maximumVocabularyRows;
+  const rows = (await queryForPublicRead(
+    `${sql}\n${publicFallback ? "LIMIT $1" : ""}`,
+    publicFallback ? [maximumRows + 1] : undefined
+  )).rows as T[];
+  if (publicFallback && rows.length > maximumRows) {
+    throw publicPgFallbackWorkLimitExceeded(
+      "Vocabulary exceeds the supported public result limit"
+    );
+  }
+  return rows;
+}
+
 async function loadTagVocab(revision: number) {
-  const rows = (await pool.query(
+  const rows = await queryVocabularyRows<VocabEntry>(
     `SELECT slug, display_name
        FROM tag
-      ORDER BY sort_order ASC, slug ASC`,
-  )).rows as VocabEntry[];
+      ORDER BY sort_order ASC, slug ASC`
+  );
   await cacheEntityVocabulary("tag", TAG_VOCAB_KEY, revision, rows);
   return rows;
 }
 
 async function loadThemeVocab(revision: number) {
-  const rows = (await pool.query(
+  const rows = await queryVocabularyRows<VocabEntry>(
     `SELECT slug, display_name
        FROM theme
-      ORDER BY (slug = 'none') DESC, sort_order ASC, slug ASC`,
-  )).rows as VocabEntry[];
+      ORDER BY (slug = 'none') DESC, sort_order ASC, slug ASC`
+  );
   await cacheEntityVocabulary("theme", THEME_VOCAB_KEY, revision, rows);
   return rows;
 }
 
 async function loadAuthorVocab(revision: number) {
-  const rows = (await pool.query(
+  const rows = await queryVocabularyRows<AuthorVocabEntry>(
     `SELECT slug, display_name, link
        FROM author
-      ORDER BY sort_order ASC, slug ASC`,
-  )).rows as AuthorVocabEntry[];
+      ORDER BY sort_order ASC, slug ASC`
+  );
   await cacheEntityVocabulary("author", AUTHOR_VOCAB_KEY, revision, rows);
   return rows;
 }
 
 async function loadAdminTagList(revision: number) {
-  const rows = (await pool.query(
+  const rows = await queryVocabularyRows<Tag>(
     `SELECT t.slug, t.display_name, count(it.image_id)::int AS image_count
        FROM tag t
        LEFT JOIN image_tag it ON it.tag_slug = t.slug
       GROUP BY t.slug, t.display_name, t.sort_order
-      ORDER BY t.sort_order ASC, t.slug ASC`,
-  )).rows as Tag[];
+      ORDER BY t.sort_order ASC, t.slug ASC`
+  );
   await cacheAdminEntityList("tag", ADMIN_TAG_LIST_KEY, revision, rows);
   return rows;
 }
 
 async function loadAdminThemeList(revision: number) {
-  const rows = (await pool.query(
+  const rows = await queryVocabularyRows<Theme>(
     `SELECT t.slug, t.display_name, count(m.id)::int AS image_count
        FROM theme t
        LEFT JOIN metadata m ON m.theme = t.slug AND m.status = 'ready'
       GROUP BY t.slug, t.display_name, t.sort_order
-      ORDER BY (t.slug = 'none') DESC, t.sort_order ASC, t.slug ASC`,
-  )).rows as Theme[];
+      ORDER BY (t.slug = 'none') DESC, t.sort_order ASC, t.slug ASC`
+  );
   await cacheAdminEntityList("theme", ADMIN_THEME_LIST_KEY, revision, rows);
   return rows;
 }
 
 async function loadAdminAuthorList(revision: number) {
-  const rows = (await pool.query(
+  const rows = await queryVocabularyRows<Author>(
     `SELECT a.slug, a.display_name, a.link, count(m.id)::int AS image_count
        FROM author a
        LEFT JOIN metadata m ON m.author = a.slug AND m.status = 'ready'
       GROUP BY a.slug, a.display_name, a.link, a.sort_order
-      ORDER BY a.sort_order ASC, a.slug ASC`,
-  )).rows as Author[];
+      ORDER BY a.sort_order ASC, a.slug ASC`
+  );
   await cacheAdminEntityList("author", ADMIN_AUTHOR_LIST_KEY, revision, rows);
   return rows;
 }
@@ -167,6 +188,9 @@ async function cachedEntityValue<T extends unknown[]>(
     && cached.revision === revision
     && Array.isArray(cached.value)
   ) return cached.value;
+  if (publicReadUsesFallbackAdmission()) {
+    return coalescePublicRead(`entity-cache:${coalesceKey}`, load);
+  }
   return coalesce(coalesceKey, load);
 }
 

@@ -1,6 +1,11 @@
 import { appConfig } from "@imageshow/shared";
 import { ApiError, errorMessage } from "../core/api-error.ts";
-import { pool } from "../core/db.ts";
+import {
+  coalescePublicRead,
+  publicPgFallbackWorkLimitExceeded,
+  publicReadUsesFallbackAdmission,
+  queryForPublicRead
+} from "../core/public-pg-fallback.ts";
 import { logger } from "../core/logger.ts";
 import {
   missingS3Fields,
@@ -10,7 +15,8 @@ import {
 } from "./backend-config.ts";
 import {
   storageBackendRecordFromRow,
-  storageConfigFromRecord
+  storageConfigFromRecord,
+  type StorageBackendConfigRow
 } from "./backend-record.ts";
 import { createStorageDriver } from "./driver-factory.ts";
 import type { StorageDriver } from "./driver.ts";
@@ -55,18 +61,44 @@ function retireStorageDrivers() {
 }
 
 async function loadStorageBackends(): Promise<StorageBackendRecord[]> {
-  const rows = (await pool.query(
+  const maximumRows = appConfig.publicPgFallback.maximumStorageBackendRows;
+  const publicFallback = publicReadUsesFallbackAdmission();
+  const rows = (await queryForPublicRead<StorageBackendConfigRow & {
+    display_name: string;
+    enabled: boolean;
+    is_default: boolean;
+  }>(
     `SELECT slug, display_name, type, config, enabled, is_default,
             namespace_identities
        FROM storage_backend
-      ORDER BY (slug = 'local') DESC, sort_order ASC, slug ASC`
+      ORDER BY (slug = 'local') DESC, sort_order ASC, slug ASC
+      ${publicFallback ? "LIMIT $1" : ""}`,
+    publicFallback ? [maximumRows + 1] : undefined
   )).rows;
+  if (publicFallback && rows.length > maximumRows) {
+    throw publicPgFallbackWorkLimitExceeded(
+      "Storage backend registry exceeds the public result limit"
+    );
+  }
   return rows.map((row) => storageBackendRecordFromRow(row));
 }
 
 async function getStorageBackends(): Promise<StorageBackendRecord[]> {
   if (storageCache && Date.now() < storageCacheExpiresAt) return storageCache;
   const loadGeneration = storageCacheGeneration;
+  if (publicReadUsesFallbackAdmission()) {
+    return coalescePublicRead(
+      `storage-backends:${loadGeneration}`,
+      async () => {
+        const loaded = await loadStorageBackends();
+        if (storageCacheGeneration === loadGeneration) {
+          storageCache = loaded;
+          storageCacheExpiresAt = Date.now() + storageCacheTtlMs;
+        }
+        return loaded;
+      }
+    );
+  }
   if (!storageLoad) storageLoad = loadStorageBackends();
   const currentLoad = storageLoad;
   try {

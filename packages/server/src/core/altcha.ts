@@ -15,6 +15,7 @@ import {
   safeResponseHeaderValue
 } from "./http/headers.ts";
 import { redis } from "./redis-client.ts";
+import { runRequiredRedisCommand } from "./runtime-availability.ts";
 import { reserveRedisWindows } from "./redis-window-limit.ts";
 
 const altchaAlgorithm = "PBKDF2/SHA-256";
@@ -187,13 +188,13 @@ export async function verifyAltchaProof(proofValue: unknown) {
     1,
     Math.min(60 * 60, Math.ceil(payload.challenge.parameters.expiresAt - nowSeconds))
   );
-  const claimed = await redis.set(
+  const claimed = await runRequiredRedisCommand(() => redis.set(
     temporaryKey("used", payload.challenge.parameters.nonce),
     "1",
     "EX",
     remainingSeconds,
     "NX"
-  );
+  ));
   if (claimed !== "OK") {
     throw new ApiError(400, "altcha_replayed", "安全验证已使用，请重新验证");
   }

@@ -1,5 +1,6 @@
 import type { Redis } from "ioredis";
 import { redis } from "./redis-client.ts";
+import { runRequiredRedisCommand } from "./runtime-availability.ts";
 
 export type RedisWindow = {
   key: string;
@@ -66,13 +67,10 @@ function integer(value: unknown, context: string) {
  * one already-blocked identity from consuming a shared global allowance.
  * INCREX owns each cap and initial TTL; TTL reads never extend the window.
  */
-export async function reserveRedisWindows(
+async function reserveRedisWindowsUnchecked(
   windows: readonly RedisWindow[],
-  client: Redis = redis
+  client: Redis
 ): Promise<RedisWindowReservation[]> {
-  if (!windows.length) return [];
-  windows.forEach(assertWindow);
-
   const raw = await client.call(
     "EVAL",
     reserveWindowsScript,
@@ -108,4 +106,15 @@ export async function reserveRedisWindows(
       retryAfterSeconds: Math.max(1, ttl >= 0 ? ttl : window.windowSeconds)
     };
   });
+}
+
+export function reserveRedisWindows(
+  windows: readonly RedisWindow[],
+  client: Redis = redis
+): Promise<RedisWindowReservation[]> {
+  if (!windows.length) return Promise.resolve([]);
+  windows.forEach(assertWindow);
+  return client === redis
+    ? runRequiredRedisCommand(() => reserveRedisWindowsUnchecked(windows, client))
+    : reserveRedisWindowsUnchecked(windows, client);
 }

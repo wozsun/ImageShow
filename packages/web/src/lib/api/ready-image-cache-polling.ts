@@ -1,13 +1,13 @@
 import type { Query, QueryState } from "@tanstack/react-query";
 import type {
-  ReadyImageCacheAdminStatusDto
+  AdminCheckStatusDto
 } from "@imageshow/shared/browser";
 
 const STATUS_POLL_INTERVAL_MS = 1_000;
 const STATUS_POLL_MAX_BACKOFF_MS = 30_000;
 
 type ReadyImageCachePollingState = Pick<
-  QueryState<ReadyImageCacheAdminStatusDto, Error>,
+  QueryState<AdminCheckStatusDto, Error>,
   | "data"
   | "dataUpdateCount"
   | "dataUpdatedAt"
@@ -17,9 +17,9 @@ type ReadyImageCachePollingState = Pick<
 
 type ReadyImageCachePollingQuery = Pick<
   Query<
-    ReadyImageCacheAdminStatusDto,
+    AdminCheckStatusDto,
     Error,
-    ReadyImageCacheAdminStatusDto,
+    AdminCheckStatusDto,
     readonly unknown[]
   >,
   "state"
@@ -29,6 +29,7 @@ type PollingTracker = {
   dataUpdateCount: number;
   errorUpdateCount: number;
   failureStreak: number;
+  rebuilding: boolean;
 };
 
 const pollingTrackers = new WeakMap<object, PollingTracker>();
@@ -43,18 +44,26 @@ function pollingTracker(
     || state.dataUpdateCount < tracker.dataUpdateCount
     || state.errorUpdateCount < tracker.errorUpdateCount
   ) {
+    const resourceFailed = redisResourceFailed(state.data);
     tracker = {
       dataUpdateCount: state.dataUpdateCount,
       errorUpdateCount: state.errorUpdateCount,
-      failureStreak: state.status === "error" ? 1 : 0
+      failureStreak: state.status === "error" || resourceFailed ? 1 : 0,
+      rebuilding: projectionIsRebuilding(state.data)
     };
     pollingTrackers.set(query, tracker);
     return tracker;
   }
 
   if (state.dataUpdateCount > tracker.dataUpdateCount) {
+    const updates = state.dataUpdateCount - tracker.dataUpdateCount;
     tracker.dataUpdateCount = state.dataUpdateCount;
-    tracker.failureStreak = 0;
+    if (redisResourceFailed(state.data)) {
+      tracker.failureStreak += updates;
+    } else {
+      tracker.failureStreak = 0;
+      tracker.rebuilding = projectionIsRebuilding(state.data);
+    }
   }
   if (state.errorUpdateCount > tracker.errorUpdateCount) {
     const failures = state.errorUpdateCount - tracker.errorUpdateCount;
@@ -64,7 +73,16 @@ function pollingTracker(
   return tracker;
 }
 
-export function readyImageCacheRefetchInterval(
+function projectionIsRebuilding(status: AdminCheckStatusDto | undefined) {
+  return status?.redis.status === "ok"
+    && status.redis.data.image_projection.rebuilding;
+}
+
+function redisResourceFailed(status: AdminCheckStatusDto | undefined) {
+  return status?.redis.status === "error";
+}
+
+export function adminCheckStatusRefetchInterval(
   query: ReadyImageCachePollingQuery,
   refreshAfter = 0
 ): number | false {
@@ -72,8 +90,10 @@ export function readyImageCacheRefetchInterval(
   const tracker = pollingTracker(query, state);
   const needsNewerStatus = refreshAfter > 0
     && state.dataUpdatedAt <= refreshAfter;
-  if (!state.data?.rebuilding && !needsNewerStatus) return false;
-  if (state.status !== "error") return STATUS_POLL_INTERVAL_MS;
+  if (!tracker.rebuilding && !needsNewerStatus) return false;
+  if (state.status !== "error" && !redisResourceFailed(state.data)) {
+    return STATUS_POLL_INTERVAL_MS;
+  }
   const exponent = Math.min(
     Math.max(tracker.failureStreak - 1, 0),
     5

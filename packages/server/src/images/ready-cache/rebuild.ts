@@ -5,6 +5,10 @@ import { redis } from "../../core/redis-client.ts";
 import { withReadyImageCacheWriteFence } from "./fence.ts";
 import { READY_IMAGE_META_KEY } from "./keys.ts";
 import {
+  invalidateReadyImageDerivedOccupancyMirror,
+  resetReadyImageDerivedOccupancyMirror
+} from "./derived-cache-occupancy.ts";
+import {
   buildReadyImageCardinalities,
   validateBuiltReadyImageCache,
   writeReadyImageStatsAndIntegrity,
@@ -33,8 +37,33 @@ import {
   getReadyImageRevision
 } from "./revision.ts";
 import { readReadyImageSourceSnapshot } from "./source.ts";
+import { markReadyImageCacheLastUpdated } from "./last-updated.ts";
 
 const SAMPLE_SIZE = 32;
+
+async function observeReadyImageCacheMemory(
+  client: Redis,
+  signal?: AbortSignal
+) {
+  try {
+    return await estimateReadyImageCacheMemory(client, signal);
+  } catch (error) {
+    signal?.throwIfAborted();
+    logger.warn("ready_image_cache_memory_observation_failed", {
+      error: errorMessage(error)
+    });
+    return null;
+  }
+}
+
+async function clearReadyImageCacheForRebuild(
+  client: Redis,
+  signal?: AbortSignal
+) {
+  invalidateReadyImageDerivedOccupancyMirror();
+  await clearReadyImageCacheData(client, signal);
+  resetReadyImageDerivedOccupancyMirror();
+}
 
 function wait(ms: number, signal?: AbortSignal) {
   signal?.throwIfAborted();
@@ -84,9 +113,13 @@ async function buildAttempt(
   const startedAt = new Date().toISOString();
   let progress = rebuildingReadyImageCacheMeta(previousRevision, startedAt);
   await withReadyImageCacheWriteFence(async () => {
-    await writeReadyImageCacheMeta(progress, client);
-    await clearReadyImageCacheData(client, signal);
-    await writeReadyImageCacheMeta(progress, client);
+    await writeReadyImageCacheMeta(progress, client, {
+      lastUpdatedAt: startedAt
+    });
+    await clearReadyImageCacheForRebuild(client, signal);
+    await writeReadyImageCacheMeta(progress, client, {
+      lastUpdatedAt: new Date().toISOString()
+    });
   });
 
   let cardinalities: ReadyImageCardinalities = buildReadyImageCardinalities(0);
@@ -100,7 +133,9 @@ async function buildAttempt(
         appliedRevision: revision,
         total
       };
-      await writeReadyImageCacheMeta(progress, client);
+      await writeReadyImageCacheMeta(progress, client, {
+        lastUpdatedAt: new Date().toISOString()
+      });
     },
     async (items, state) => {
       addSamples(samples, items, state.processed - items.length, state.total);
@@ -115,6 +150,7 @@ async function buildAttempt(
       await client.hset(READY_IMAGE_META_KEY, {
         processed: String(state.processed)
       });
+      await markReadyImageCacheLastUpdated(client);
     },
     signal
   );
@@ -128,7 +164,7 @@ async function buildAttempt(
     client,
     signal
   );
-  const memoryBytes = await estimateReadyImageCacheMemory(client, signal);
+  const memoryBytes = await observeReadyImageCacheMemory(client, signal);
   await validateBuiltReadyImageCache(
     expected,
     stats,
@@ -156,7 +192,9 @@ async function buildAttempt(
       memoryBytes,
       lastError: ""
     };
-    await writeReadyImageCacheMeta(meta, client);
+    await writeReadyImageCacheMeta(meta, client, {
+      lastUpdatedAt: meta.builtAt
+    });
     // Production mutations hold the same fence from before BEGIN through
     // exact Redis sync. This second read also catches direct/unfenced test or
     // operator writes that commit during the cross-system publish itself.
@@ -166,7 +204,7 @@ async function buildAttempt(
         ...progress,
         appliedRevision: afterPublish,
         lastError: "PostgreSQL changed while the cache was being published"
-      }, client);
+      }, client, { lastUpdatedAt: new Date().toISOString() });
       return { changed: true };
     }
     return { changed: false, meta };
@@ -181,21 +219,22 @@ async function discardFailedBuild(error: unknown, client: Redis) {
       const cleanupErrors: unknown[] = [];
       try {
         // A failed fixed-namespace build is never readable. Release its memory
-        // before publishing the degraded marker so noeviction still has room
+        // before publishing the degraded marker so no partial projection remains
         // for sessions, limits, and the next rebuild attempt.
-        await clearReadyImageCacheData(client);
+        await clearReadyImageCacheForRebuild(client);
       } catch (cleanupError) {
         cleanupErrors.push(cleanupError);
       }
       try {
+        const failedAt = new Date().toISOString();
         await writeReadyImageCacheMeta({
           ...fallback,
           state: "degraded",
-          builtAt: "",
+          builtAt: failedAt,
           itemCount: 0,
-          memoryBytes: 0,
+          memoryBytes: null,
           lastError: errorMessage(error)
-        }, client);
+        }, client, { lastUpdatedAt: failedAt });
       } catch (metaError) {
         cleanupErrors.push(metaError);
       }

@@ -2,6 +2,7 @@ import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { ApiError } from "./api-error.ts";
 import { redis } from "./redis-client.ts";
 import { reserveRedisWindows } from "./redis-window-limit.ts";
+import { runRequiredRedisCommand } from "./runtime-availability.ts";
 
 const loginFailureKeyPrefix = "imageshow:login_fail";
 const globalKey = `${loginFailureKeyPrefix}:global`;
@@ -39,6 +40,8 @@ export const loginRateLimiter = {
   },
 
   async clear(ip: string, username: string) {
-    await redis.del(identityKey(ip, username));
+    await runRequiredRedisCommand(
+      () => redis.del(identityKey(ip, username))
+    );
   }
 };

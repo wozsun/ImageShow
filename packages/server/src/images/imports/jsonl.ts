@@ -4,13 +4,15 @@ import {
   type JsonlManifestItemDto,
   type JsonlManifestParseErrorDto,
   type JsonlManifestResultDto,
+  slugMaxLength,
   slugPattern
 } from "@imageshow/shared/browser";
 import { ImageTimeError, parseImageTime } from "../image-time.ts";
 
 const httpsUrl = z.string().trim().max(2048).url().refine((value) => new URL(value).protocol === "https:", "必须使用 HTTPS URL");
 const pageUrl = z.string().trim().max(2048).url().refine((value) => new URL(value).protocol === "https:", "必须使用 HTTPS URL");
-const slug = z.string().trim().toLowerCase().min(1).max(32).regex(slugPattern);
+const slug = z.string().trim().toLowerCase().min(1)
+  .max(slugMaxLength).regex(slugPattern);
 
 const jsonlRowSchema = z.object({
   original: httpsUrl,

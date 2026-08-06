@@ -205,7 +205,7 @@ Dockerfile 的 `EXPOSE` 与 Compose 目标端口；回归测试会校验三者�
 
 输入本身是 WebP、体积小于 `normalize.skip_webp_under_kb` 且长边已经达标时，原字节直接成为最终候选文件；服务端仍会执行解码校验、标准缩略图生成和最终 MD5 计算。`upload.concurrency` / `link_image.concurrency` 只约束单个后台页面自己的 lane 数；任务进入 materialize 槽时才逐项创建服务端会话，队尾尚未进入 lane 的任务没有会话。每条 lane 在服务端权威状态确认当前项进入 `preparing` 后最多提前素材化一项，因此每条 lane 最多同时存在当前执行项和一个已启动的前瞻项，不会让长队列在处理前消耗 30 分钟会话租期。`upload.global_concurrency` / `link_image.global_concurrency` 分别由对应模式的 materialize 与 prepare 两个服务端阶段复用，每个阶段都有独立许可池。即使调用方绕过前端队列直接打接口，进程内也会排队并支持取消等待中的任务。
 
-commit 使用独立的 `import.commit_concurrency` / `import.global_commit_concurrency`。前者限制单个后台页面，后者在取得会话 advisory lock、存储共享锁和数据库事务连接之前限制整个服务端进程。服务端还按 `import.global_commit_byte_budget_mb` 对 prepared 图片与缩略图大小做 FIFO 加权限流；活动权重始终按任务真实字节累计，不会在运行中随动态预算截断。超过预算的单个合法对象只能在当前没有其他 commit 占用时独立运行；预算升降后仍按真实活动总量决定是否放行队首。数量许可与字节许可都覆盖正式对象复制、数据库事务、暂存清理和缓存更新，而不只是 `INSERT`。PostgreSQL 主查询连接池上限为 30；长生命周期 advisory lock 使用另一个上限同为 30 的专用连接池，避免下载、转码和存储 I/O 持锁期间占满查询连接。commit 的存储共享锁、排序后的主题 / 作者 / 最终标签共享关联租约、会话锁和单图锁由同一专用连接按固定顺序取得，不会在锁池内嵌套等待第二条连接；同 slug commit 可以并行并在共享租约内幂等确保词表项存在，显式词表管理和删除使用的独占锁仍会等待全部关联租约退出。锁连接丢失会中止工作，导入发布另以数据库 execution token 栅栏旧执行者。当前单应用实例最多因此保留 60 条 PostgreSQL 连接，数据库 `max_connections` 应为该边界和运维连接留足空间。
+commit 使用独立的 `import.commit_concurrency` / `import.global_commit_concurrency`。前者限制单个后台页面，后者在取得会话 advisory lock、存储共享锁和数据库事务连接之前限制整个服务端进程。服务端还按 `import.global_commit_byte_budget_mb` 对 prepared 图片与缩略图大小做 FIFO 加权限流；活动权重始终按任务真实字节累计，不会在运行中随动态预算截断。超过预算的单个合法对象只能在当前没有其他 commit 占用时独立运行；预算升降后仍按真实活动总量决定是否放行队首。数量许可与字节许可都覆盖正式对象复制、数据库事务、暂存清理和缓存更新，而不只是 `INSERT`。PostgreSQL 主查询连接池上限为 30；长生命周期 advisory lock 使用另一个上限同为 30 的专用连接池，避免下载、转码和存储 I/O 持锁期间占满查询连接。commit 的存储共享锁、排序后的主题 / 作者 / 最终标签共享关联租约、会话锁和单图锁由同一专用连接按固定顺序取得，不会在锁池内嵌套等待第二条连接；同 slug commit 可以并行并在共享租约内幂等确保词表项存在，显式词表管理和删除使用的独占锁仍会等待全部关联租约退出。锁连接丢失会中止工作，导入发布另以数据库 execution token 栅栏旧执行者。公开回源的 PostgreSQL 查询取消与后端收敛使用最多 2 条专用连接，单应用生命周期锁再独占 1 条连接；当前单应用实例最多因此保留 63 条连接，数据库 `max_connections` 应为该边界和运维连接留足空间。
 
 URL 输入窗口、JSONL 解析和微博解析共享 3600 项通用安全边界；JSONL 与微博还在
 服务端重复执行该边界。三者同时满足各自的可配置软上限：URL 与 JSONL 由
@@ -299,7 +299,6 @@ PostgreSQL 提交状态，不根据可能已被后继修改的业务行猜测；
 | `ADMIN_USERNAME` / `ADMIN_PASSWORD` | 数据库没有 super 时初始化首个管理员账号。 |
 | `DATABASE_HOST` / `DATABASE_PORT` / `DATABASE_NAME` / `DATABASE_USER` / `DATABASE_PASSWORD` | 每次启动时建立 PostgreSQL 连接；Compose 同时用 name、user、password 初始化 PostgreSQL 容器。 |
 | `REDIS_HOST` / `REDIS_PORT` / `REDIS_DB` / `REDIS_PASSWORD` | 每次启动时建立 Redis 8 连接，并检查运行所需命令；内置 Redis 不设置密码，只有连接启用了认证的外部 Redis 时才填写可选密码。 |
-| `REDIS_MAXMEMORY` | 只传给 Compose 内的 Redis 服务，默认 `500mb`；本机大图库实验设为 `2gb`。Redis 使用 `noeviction`，外部 Redis 也必须配置正数 `maxmemory` 与同一策略。 |
 | `SITE_DOMAIN` | 首次生成配置文件时播种 `site.domain`，默认 `example.com`。 |
 | `HOST_PORT` | 映射到容器内固定 `5518` 的宿主机端口，默认 `5518`。 |
 | `TZ` | 无偏移本地图片时间的解析时区，默认 `UTC`。 |

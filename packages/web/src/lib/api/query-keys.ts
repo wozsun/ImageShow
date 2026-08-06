@@ -8,7 +8,7 @@ export const queryKeys = {
   adminImageInfo: ["admin-image-info"] as const,
   adminImageEditSnapshot: ["admin-image-edit-snapshot"] as const,
   overview: ["admin-overview"] as const,
-  readyImageCache: ["ready-image-cache"] as const,
+  adminCheckStatus: ["admin-check-status"] as const,
   adminImages: ["admin-images"] as const,
   tags: ["tags"] as const,
   themes: ["themes"] as const,

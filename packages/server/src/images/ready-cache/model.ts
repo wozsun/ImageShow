@@ -1,14 +1,14 @@
-import type { Brightness, Device } from "@imageshow/shared/browser";
-import { thumbnailObjectKey } from "../../storage/image-paths.ts";
 import {
-  READY_IMAGE_ALL_INDEX_KEY,
-  readyImageAuthorIndexKey,
-  readyImageAxisIndexKey,
-  readyImageTagIndexKey,
-  readyImageThemeIndexKey
-} from "./keys.ts";
+  brightnesses,
+  devices,
+  slugMaxLength,
+  slugPattern,
+  type Brightness,
+  type Device
+} from "@imageshow/shared/browser";
+import { thumbnailObjectKey } from "../../storage/image-paths.ts";
 
-export const READY_IMAGE_CACHE_SCHEMA = 1;
+export const READY_IMAGE_CACHE_SCHEMA = 4;
 export const READY_IMAGE_REBUILD_BATCH_SIZE = 1_000;
 export const READY_IMAGE_REBUILD_MAX_ATTEMPTS = 2;
 export const READY_IMAGE_REBUILD_QUIET_MS = 250;
@@ -29,7 +29,7 @@ export type ReadyImageCacheMeta = {
   startedAt: string;
   processed: number;
   total: number;
-  memoryBytes: number;
+  memoryBytes: number | null;
   lastError: string;
 };
 
@@ -62,8 +62,6 @@ export type ReadyImageCacheResult<T> =
   | { cached: false };
 
 const imageExtensions = new Set(["jpg", "png", "webp", "gif", "avif"]);
-const slugPattern = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
-
 function finiteNonNegative(value: unknown) {
   const number = Number(value ?? 0);
   if (!Number.isSafeInteger(number) || number < 0) {
@@ -80,7 +78,7 @@ function timestamp(value: unknown, field: string) {
   return text;
 }
 
-function safeSortScore(value: unknown) {
+export function readyImageSortScore(value: unknown) {
   const raw = String(value ?? "");
   if (!/^-?\d+$/.test(raw)) {
     throw new Error("Ready-image cache row contains an invalid sort score");
@@ -101,7 +99,9 @@ export function readyImageCacheItemFromRow(
     : [];
   if (
     tags.length > 50
-    || tags.some((tag) => tag.length > 32 || !slugPattern.test(tag))
+    || tags.some((tag) => (
+      tag.length > slugMaxLength || !slugPattern.test(tag)
+    ))
   ) {
     throw new Error("Ready-image cache row contains invalid tags");
   }
@@ -119,7 +119,7 @@ export function readyImageCacheItemFromRow(
     height: finiteNonNegative(row.height),
     image_size: finiteNonNegative(row.image_size),
     image_time: timestamp(row.cursor_image_time ?? row.image_time, "image_time"),
-    sort_score: safeSortScore(row.sort_score),
+    sort_score: readyImageSortScore(row.sort_score),
     title: String(row.title ?? ""),
     description: String(row.description ?? ""),
     source: String(row.source ?? ""),
@@ -132,14 +132,14 @@ export function readyImageCacheItemFromRow(
     !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(item.id)
     || !item.object_key
     || !imageExtensions.has(item.ext)
-    || !["pc", "mb"].includes(item.device)
-    || !["dark", "light"].includes(item.brightness)
-    || item.theme.length > 32
+    || !devices.includes(item.device)
+    || !brightnesses.includes(item.brightness)
+    || item.theme.length > slugMaxLength
     || !slugPattern.test(item.theme)
-    || item.storage_slug.length > 32
+    || item.storage_slug.length > slugMaxLength
     || !slugPattern.test(item.storage_slug)
     || (item.author && (
-      item.author.length > 32 || !slugPattern.test(item.author)
+      item.author.length > slugMaxLength || !slugPattern.test(item.author)
     ))
   ) {
     throw new Error("Ready-image cache row is outside the supported model");
@@ -245,16 +245,6 @@ export function readyImageIdFromMember(member: string) {
     member.slice(16, 20),
     member.slice(20)
   ].join("-");
-}
-
-export function readyImageIndexKeys(item: ReadyImageCacheItem) {
-  return [
-    READY_IMAGE_ALL_INDEX_KEY,
-    readyImageAxisIndexKey(item.device, item.brightness),
-    readyImageThemeIndexKey(item.theme),
-    ...item.tags.map(readyImageTagIndexKey),
-    ...(item.author ? [readyImageAuthorIndexKey(item.author)] : [])
-  ];
 }
 
 export function readyImageThumbKey(item: ReadyImageCacheItem) {

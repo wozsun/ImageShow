@@ -60,6 +60,11 @@ core / config
   管理员初始化，启动 Worker 和 HTTP 服务，并处理优雅退出。
 - `src/admin-password-cli.ts` 是管理员密码恢复入口。
 - `src/healthcheck-cli.ts` 是容器 readiness 检查入口。
+- `scripts/benchmarks/` 保存可重复执行、使用隔离依赖且会自行清理测试键的服务端性能
+  基线脚本，不接入生产启动或 GitHub Actions。
+- `images/mutation-sync-policy.ts` 只定义图片变更总量的纯决策与结果契约；
+  `images/mutation-sync.ts` 持有写栅栏并执行精准发布或安排全量重建，领域 SQL 只负责在
+  自己的事务边界 COUNT、推进 revision 和按决策读取有限 ID。
 
 两个 CLI 都直接依赖所需基础设施，不导入 HTTP 应用，也不会触发主服务启动；
 healthcheck 只读现有配置快照，密码恢复不初始化运行时配置。
@@ -68,17 +73,17 @@ healthcheck 只读现有配置快照，密码恢复不初始化运行时配置�
 
 | 目录 | 职责与允许依赖 |
 | --- | --- |
-| `core/` | PostgreSQL、Redis、安全抓取、日志、密码、UUID、并发和通用校验；不依赖业务领域或路由。 |
+| `core/` | PostgreSQL、Redis、单应用生命周期锁、两阶段运行可用性、公开 PG fallback 准入、安全抓取、日志、密码、UUID、并发和通用校验；不依赖业务领域或路由。 |
 | `core/http/` | HTTP 响应与响应头、请求来源和请求体限制、压缩阈值、条件请求、静态响应与 Range 解析。 |
 | `config/` | 部署环境、首次播种、运行时配置 schema、无导入副作用的文件读写与显式进程内 store，以及配置包。 |
 | `routes/` | HTTP 方法、鉴权、CSRF、输入解析和响应投影；业务工作委托给领域模块。 |
 | `images/` | 图片读写、展示投影、分类与元数据变更、回收站和缩略图；`ready-cache/` 拥有统一 Redis rich 投影、筛选、统计、精确同步与重建，`imports/` 拥有完整导入会话生命周期及清理任务，`read-models/` 承载 PostgreSQL 降级读模型。 |
 | `storage/` | local、S3、WebDAV driver 及无环工厂；注册表缓存与 driver、管理读模型、配置变更、探测和占用统计分开维护，并拥有对象访问、强摘要传输、位置锁、迁移及 `move.cleanup` 仓储与 handler。 |
-| `random/` | 随机查询校验、设备轴推断、Redis 8 Array 最近历史、定向 id 降级查询和随机出口编排；候选投影、筛选与重建统一由 `images/ready-cache/` 提供。 |
+| `random/` | 随机查询校验、设备轴推断、Redis 8 Array 最近历史、定向 id 与有界 pivot 普通随机 PG 降级查询及随机出口编排；Redis 候选投影、筛选与重建统一由 `images/ready-cache/` 提供。 |
 | `jobs/` | 仅拥有通用 `background_job` 生命周期、小型类型分派、公平调度 Worker，以及集中管理任务中止、期限、续租和有界排空的执行协调器；各领域拥有自己的 handler、payload 和结果语义。 |
-| `checks/` | 数据库、Redis 与存储一致性检查，以及显式触发的存储维护。 |
+| `checks/` | PostgreSQL / Redis 独立轻量状态、数据库 / Redis / 存储 / 回收站手动深度检查，以及显式触发的存储维护。 |
 | `authors/`、`tags/`、`themes/`、`vocab/` | 词表查询、变更、关联锁与派生缓存。 |
-| `users/` | 管理员初始化、账号变更、登录会话、角色与操作授权、密码恢复、偏好和会话失效。 |
+| `users/` | 管理员初始化、账号变更、Redis 登录会话、逐请求 PostgreSQL 角色与密码代际核对、操作授权、密码恢复、偏好和会话失效；不维护管理员凭据 Redis 投影。 |
 | `types/` | 仅放缺失的编译期声明，不承载运行时代码。 |
 
 `images/imports/` 内部继续保持单一编排入口，但按稳定职责分开：

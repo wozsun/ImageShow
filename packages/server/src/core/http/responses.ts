@@ -21,6 +21,12 @@ export function apiSuccess(fields: Record<string, unknown> = {}) {
 export function handleApiError(context: Context, error: unknown) {
   context.header("Cache-Control", noStoreCacheControl);
   if (error instanceof ApiError) {
+    const retryAfterSeconds = Number(
+      (error as ApiError & { retryAfterSeconds?: unknown }).retryAfterSeconds
+    );
+    if (Number.isSafeInteger(retryAfterSeconds) && retryAfterSeconds > 0) {
+      context.header("Retry-After", String(retryAfterSeconds));
+    }
     const totalSize = responseContentLengthValue(
       (error.details as { total_size?: unknown })?.total_size
     );

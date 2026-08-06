@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { appConfig } from "@imageshow/shared";
 import {
+  slugMaxLength,
   slugPattern,
   type RuntimeConfig
 } from "@imageshow/shared/browser";
@@ -63,7 +64,8 @@ const subdomainLabel = z.string().trim().regex(
 );
 
 const weiboUserId = z.string().regex(/^[1-9]\d{0,19}$/, "must be a numeric Weibo user ID");
-const weiboAuthorSlug = z.string().trim().toLowerCase().min(1).max(32).regex(slugPattern);
+const weiboAuthorSlug = z.string().trim().toLowerCase().min(1)
+  .max(slugMaxLength).regex(slugPattern);
 
 const runtimeConfigSchema = z.strictObject({
   site: z.strictObject({

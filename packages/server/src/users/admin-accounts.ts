@@ -1,7 +1,8 @@
-import { pool } from "../core/db.ts";
+import { pool, withTransaction } from "../core/db.ts";
 import { ApiError } from "../core/api-error.ts";
 import { hashPassword, verifyPassword } from "../core/password.ts";
 import type { AdminUserDto } from "@imageshow/shared/browser";
+import { adminCredentialVersion } from "./session-credential.ts";
 
 export async function listAdminAccounts(): Promise<AdminUserDto[]> {
   return (await pool.query(
@@ -33,62 +34,80 @@ export async function resetImageAdminPassword(
   username: string,
   password: string
 ) {
-  const target = await pool.query(
-    "SELECT role FROM admin_account WHERE username = $1",
-    [username]
-  );
-  if (!target.rowCount) throw new ApiError(404, "not_found", "用户不存在");
-  if (target.rows[0].role === "super") {
-    throw new ApiError(
-      409,
-      "super_immutable",
-      "超级管理员的密码无法在此修改",
-      { username }
-    );
-  }
   const hash = await hashPassword(password);
-  await pool.query(
-    "UPDATE admin_account SET password_hash = $2, updated_at = now() WHERE username = $1",
-    [username, hash]
-  );
+  const nextCredentialVersion = adminCredentialVersion(hash);
+  return withTransaction(async (client) => {
+    const target = await client.query(
+      "SELECT role FROM admin_account WHERE username = $1 FOR UPDATE",
+      [username]
+    );
+    if (!target.rowCount) {
+      throw new ApiError(404, "not_found", "用户不存在");
+    }
+    if (target.rows[0].role === "super") {
+      throw new ApiError(
+        409,
+        "super_immutable",
+        "超级管理员的密码无法在此修改",
+        { username }
+      );
+    }
+    await client.query(
+      "UPDATE admin_account SET password_hash = $2, updated_at = now() WHERE username = $1",
+      [username, hash]
+    );
+    return nextCredentialVersion;
+  });
 }
 
 export async function changeAdminPassword(
   username: string,
   currentPassword: string,
-  newPassword: string
+  newPassword: string,
+  authorizeCredentialTransition: (
+    nextCredentialVersion: string
+  ) => Promise<void>
 ) {
-  const row = (await pool.query(
-    "SELECT password_hash FROM admin_account WHERE username = $1",
-    [username]
-  )).rows[0] as { password_hash: string } | undefined;
-  if (!row) throw new ApiError(404, "not_found", "User not found");
-  if (!(await verifyPassword(row.password_hash, currentPassword))) {
-    throw new ApiError(401, "invalid_current_password", "当前密码不正确");
-  }
   const hash = await hashPassword(newPassword);
-  await pool.query(
-    "UPDATE admin_account SET password_hash = $2, updated_at = now() WHERE username = $1",
-    [username, hash]
-  );
+  const nextCredentialVersion = adminCredentialVersion(hash);
+  return withTransaction(async (client) => {
+    const row = (await client.query(
+      "SELECT password_hash FROM admin_account WHERE username = $1 FOR UPDATE",
+      [username]
+    )).rows[0] as { password_hash: string } | undefined;
+    if (!row) throw new ApiError(404, "not_found", "User not found");
+    if (!(await verifyPassword(row.password_hash, currentPassword))) {
+      throw new ApiError(401, "invalid_current_password", "当前密码不正确");
+    }
+    await authorizeCredentialTransition(nextCredentialVersion);
+    await client.query(
+      "UPDATE admin_account SET password_hash = $2, updated_at = now() WHERE username = $1",
+      [username, hash]
+    );
+    return nextCredentialVersion;
+  });
 }
 
 export async function deleteImageAdmin(username: string) {
-  const target = await pool.query(
-    "SELECT role FROM admin_account WHERE username = $1",
-    [username]
-  );
-  if (!target.rowCount) throw new ApiError(404, "not_found", "用户不存在");
-  if (target.rows[0].role === "super") {
-    throw new ApiError(
-      409,
-      "super_immutable",
-      "超级管理员不可删除",
-      { username }
+  await withTransaction(async (client) => {
+    const target = await client.query(
+      "SELECT role FROM admin_account WHERE username = $1 FOR UPDATE",
+      [username]
     );
-  }
-  await pool.query(
-    "DELETE FROM admin_account WHERE username = $1",
-    [username]
-  );
+    if (!target.rowCount) {
+      throw new ApiError(404, "not_found", "用户不存在");
+    }
+    if (target.rows[0].role === "super") {
+      throw new ApiError(
+        409,
+        "super_immutable",
+        "超级管理员不可删除",
+        { username }
+      );
+    }
+    await client.query(
+      "DELETE FROM admin_account WHERE username = $1",
+      [username]
+    );
+  });
 }

@@ -16,7 +16,7 @@ import {
 } from "../users/admin-accounts.ts";
 import {
   adminSessionRedisClient,
-  invalidateAdminSessionsByUsername
+  invalidateCommittedAdminSessionsByUsername
 } from "../users/session-invalidation.ts";
 
 const sessionRedis = adminSessionRedisClient(redis);
@@ -41,15 +41,23 @@ export function registerAdminUserRoutes(app: Hono) {
   app.post(`${adminApiBasePath}/users/:username/password`, async (c) => {
     const username = parse(adminUsernameInput, c.req.param("username"));
     const input = parse(userPasswordInput, await c.req.json().catch(() => ({})));
-    await resetImageAdminPassword(username, input.password);
-    await invalidateAdminSessionsByUsername(sessionRedis, username);
+    const validCredentialVersion = await resetImageAdminPassword(
+      username,
+      input.password
+    );
+    await invalidateCommittedAdminSessionsByUsername(sessionRedis, username, {
+      operation: "password_reset",
+      validCredentialVersion
+    });
     return c.json(apiSuccess());
   });
 
   app.post(`${adminApiBasePath}/users/:username/delete`, async (c) => {
     const username = parse(adminUsernameInput, c.req.param("username"));
     await deleteImageAdmin(username);
-    await invalidateAdminSessionsByUsername(sessionRedis, username);
+    await invalidateCommittedAdminSessionsByUsername(sessionRedis, username, {
+      operation: "account_delete"
+    });
     return c.json(apiSuccess());
   });
 }

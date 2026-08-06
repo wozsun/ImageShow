@@ -3,14 +3,17 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router";
 import type {
   AdminOverviewDto,
-  ReadyImageCacheAdminStatusDto
+  AdminCheckStatusDto
 } from "@imageshow/shared/browser";
 import { api } from "../../lib/api/client.js";
 import { ThumbImage } from "../../components/image/ThumbImage.js";
 import { ImageDetailModal } from "../../components/image/ImageDetailModal.js";
 import { adminApiBasePath, adminBasePath } from "../../lib/constants.js";
 import { queryKeys } from "../../lib/api/query-keys.js";
-import { useReadyImageCacheStatus } from "../../lib/api/ready-image-cache.js";
+import {
+  readyImageProjection,
+  useAdminCheckStatus
+} from "../../lib/api/ready-image-cache.js";
 import { formatBytes } from "../../lib/ui/formatters.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
 import "../../styles/admin/overview.css";
@@ -56,13 +59,14 @@ export function Overview({ canManageStorage }: { canManageStorage: boolean }) {
   const detailReturnFocusRef = useRef<HTMLElement | null>(null);
   const client = useQueryClient();
   const query = useQuery<AdminOverviewDto>({ queryKey: queryKeys.overview, queryFn: ({ signal }) => api(`${adminApiBasePath}/overview`, { signal }) });
-  const cachedReadyImageStatus = client.getQueryData<
-    ReadyImageCacheAdminStatusDto
-  >(queryKeys.readyImageCache);
+  const cachedCheckStatus = client.getQueryData<AdminCheckStatusDto>(
+    queryKeys.adminCheckStatus
+  );
+  const cachedReadyImageStatus = readyImageProjection(cachedCheckStatus);
   const observeReadyImageStatus = Boolean(
     query.data?.redis_cache.rebuilding || cachedReadyImageStatus?.rebuilding
   );
-  const readyImageStatusQuery = useReadyImageCacheStatus(
+  const checkStatusQuery = useAdminCheckStatus(
     {
       enabled: observeReadyImageStatus,
       refreshAfter: query.data?.redis_cache.rebuilding
@@ -71,20 +75,21 @@ export function Overview({ canManageStorage }: { canManageStorage: boolean }) {
     }
   );
   const { data } = query;
+  const currentReadyImageStatus = readyImageProjection(checkStatusQuery.data);
   const readyImageStatusIsCurrent = Boolean(
-    readyImageStatusQuery.isSuccess
-    && readyImageStatusQuery.data
-    && readyImageStatusQuery.dataUpdatedAt > query.dataUpdatedAt
+    checkStatusQuery.isSuccess
+    && currentReadyImageStatus
+    && checkStatusQuery.dataUpdatedAt > query.dataUpdatedAt
   );
   const redisCache = observeReadyImageStatus
     && readyImageStatusIsCurrent
-    && readyImageStatusQuery.data
+    && currentReadyImageStatus
     ? {
-        state: readyImageStatusQuery.data.state,
-        synchronized: readyImageStatusQuery.data.synchronized,
-        rebuilding: readyImageStatusQuery.data.rebuilding,
-        item_count: readyImageStatusQuery.data.item_count,
-        memory_bytes: readyImageStatusQuery.data.memory_bytes
+        state: currentReadyImageStatus.state,
+        synchronized: currentReadyImageStatus.synchronized === true,
+        rebuilding: currentReadyImageStatus.rebuilding,
+        item_count: currentReadyImageStatus.item_count,
+        memory_bytes: currentReadyImageStatus.memory_bytes
       }
     : data?.redis_cache;
   if (query.isError) return <QueryErrorState error={query.error} onRetry={() => void query.refetch()} fullPage reportContext="overview.load" />;

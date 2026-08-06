@@ -1,4 +1,4 @@
-import { pool } from "../core/db.ts";
+import { queryForPublicRead } from "../core/public-pg-fallback.ts";
 import { getAdminTagList, getTagVocab } from "../vocab/vocab-cache.ts";
 import { resolveSlugs, resolveTermMap } from "../core/term-resolve.ts";
 import type { TagDto } from "@imageshow/shared/browser";
@@ -6,7 +6,7 @@ import type { TagDto } from "@imageshow/shared/browser";
 export async function getTagsForImages(ids: string[]): Promise<Map<string, string[]>> {
   const map = new Map<string, string[]>();
   if (!ids.length) return map;
-  const rows = (await pool.query(
+  const rows = (await queryForPublicRead(
     `SELECT image_id, tag_slug AS slug
      FROM image_tag
      WHERE image_id = ANY($1::uuid[])

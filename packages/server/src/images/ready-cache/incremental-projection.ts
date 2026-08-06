@@ -13,7 +13,6 @@ import {
   READY_IMAGE_INCREMENTAL_LIMIT,
   parseReadyImageCacheItem,
   readyImageIdSuffixScore,
-  readyImageIndexKeys,
   readyImageMember,
   readyImageStatFields,
   readyImageThumbKey,
@@ -22,7 +21,8 @@ import {
 } from "./model.ts";
 import {
   readReadyImageCardinalities,
-  updateReadyImageIntegrity
+  updateReadyImageIntegrity,
+  type ReadyImageStats
 } from "./integrity-manifest.ts";
 import {
   REDIS_BATCH_MAX_COMMANDS,
@@ -36,6 +36,26 @@ function nonNegativeInteger(value: unknown, context: string) {
     throw new Error(`Ready-image incremental sync returned invalid ${context}`);
   }
   return count;
+}
+
+function adjustExpectedReadyImageStats(
+  stats: ReadyImageStats,
+  items: ReadyImageCacheItem[],
+  difference: -1 | 1
+) {
+  for (const item of items) {
+    for (const field of readyImageStatFields(item)) {
+      const current = stats.get(field) ?? 0;
+      const next = current + difference;
+      if (!Number.isSafeInteger(next) || next < 0) {
+        throw new Error(
+          `Ready-image incremental statistics differ before updating ${field}`
+        );
+      }
+      if (next === 0 && field !== "total") stats.delete(field);
+      else stats.set(field, next);
+    }
+  }
 }
 
 export async function readPreviousReadyImageCacheItems(ids: string[]) {
@@ -92,12 +112,10 @@ async function queueRemoval(
     estimatedRedisBytes(READY_IMAGE_ID_SUFFIX_LOOKUP_KEY, member),
     (pipeline) => { pipeline.zrem(READY_IMAGE_ID_SUFFIX_LOOKUP_KEY, member); }
   );
-  for (const key of readyImageIndexKeys(item)) {
-    await writer.queue(
-      estimatedRedisBytes(key, member),
-      (pipeline) => { pipeline.zrem(key, member); }
-    );
-  }
+  await writer.queue(
+    estimatedRedisBytes(READY_IMAGE_ALL_INDEX_KEY, member),
+    (pipeline) => { pipeline.zrem(READY_IMAGE_ALL_INDEX_KEY, member); }
+  );
   for (const field of readyImageStatFields(item)) {
     await writer.queue(
       estimatedRedisBytes(READY_IMAGE_STATS_KEY, field, -1),
@@ -136,12 +154,16 @@ async function queueAddition(
       );
     }
   );
-  for (const key of readyImageIndexKeys(item)) {
-    await writer.queue(
-      estimatedRedisBytes(key, item.sort_score, member),
-      (pipeline) => { pipeline.zadd(key, item.sort_score, member); }
-    );
-  }
+  await writer.queue(
+    estimatedRedisBytes(
+      READY_IMAGE_ALL_INDEX_KEY,
+      item.sort_score,
+      member
+    ),
+    (pipeline) => {
+      pipeline.zadd(READY_IMAGE_ALL_INDEX_KEY, item.sort_score, member);
+    }
+  );
   for (const field of readyImageStatFields(item)) {
     await writer.queue(
       estimatedRedisBytes(READY_IMAGE_STATS_KEY, field, 1),
@@ -175,17 +197,9 @@ async function removeZeroStatistics(fields: string[]) {
   }
 }
 
-function indexStatisticField(key: string) {
-  if (key === READY_IMAGE_ALL_INDEX_KEY) return "total";
-  const marker = ":index:";
-  const position = key.indexOf(marker);
-  return position >= 0 ? key.slice(position + marker.length) : null;
-}
-
 async function validateIncrementalCardinalities(
   cardinalities: Map<string, number>,
-  expectedItemCount: number,
-  indexKeys: string[]
+  expectedItemCount: number
 ) {
   for (const key of [
     READY_IMAGE_ITEMS_KEY,
@@ -198,33 +212,27 @@ async function validateIncrementalCardinalities(
       throw new Error(`Ready-image incremental core cardinality differs for ${key}`);
     }
   }
-  const statisticFields = indexKeys.map(indexStatisticField);
-  if (statisticFields.some((field) => !field)) {
-    throw new Error("Ready-image incremental sync touched an invalid index");
-  }
-  const values = statisticFields.length
-    ? await redis.hmget(READY_IMAGE_STATS_KEY, ...statisticFields as string[])
-    : [];
-  indexKeys.forEach((key, index) => {
-    const statistic = nonNegativeInteger(
-      values[index] ?? 0,
-      `statistic for ${key}`
+  const totalStatistic = nonNegativeInteger(
+    await redis.hget(READY_IMAGE_STATS_KEY, "total"),
+    "total statistic"
+  );
+  if (cardinalities.get(READY_IMAGE_ALL_INDEX_KEY) !== totalStatistic) {
+    throw new Error(
+      "Ready-image incremental all index differs from total statistic"
     );
-    if (cardinalities.get(key) !== statistic) {
-      throw new Error(`Ready-image incremental index differs from ${key} statistic`);
-    }
-  });
+  }
 }
 
 export async function applyReadyImageCacheDelta(
   previousItems: ReadyImageCacheItem[],
   currentItems: ReadyImageCacheItem[],
-  nextItemCount: number
+  nextItemCount: number,
+  expectedStats: ReadyImageStats
 ) {
-  const touchedIndexes = new Set<string>();
+  adjustExpectedReadyImageStats(expectedStats, previousItems, -1);
+  adjustExpectedReadyImageStats(expectedStats, currentItems, 1);
   const touchedStats = new Set<string>();
   for (const item of [...previousItems, ...currentItems]) {
-    for (const key of readyImageIndexKeys(item)) touchedIndexes.add(key);
     for (const field of readyImageStatFields(item)) touchedStats.add(field);
   }
   const writer = new RedisPipelineBatcher(redis);
@@ -233,23 +241,21 @@ export async function applyReadyImageCacheDelta(
   await writer.flush();
   await removeZeroStatistics([...touchedStats]);
 
-  const touchedCardinalityKeys = [...new Set([
+  const touchedCardinalityKeys = [
     READY_IMAGE_ITEMS_KEY,
     READY_IMAGE_OBJECT_LOOKUP_KEY,
     READY_IMAGE_THUMB_LOOKUP_KEY,
     READY_IMAGE_ID_SUFFIX_LOOKUP_KEY,
     READY_IMAGE_STATS_KEY,
-    READY_IMAGE_ALL_INDEX_KEY,
-    ...touchedIndexes
-  ])];
+    READY_IMAGE_ALL_INDEX_KEY
+  ];
   const cardinalities = await readReadyImageCardinalities(
     touchedCardinalityKeys,
     redis
   );
   await validateIncrementalCardinalities(
     cardinalities,
-    nextItemCount,
-    [...touchedIndexes]
+    nextItemCount
   );
   await updateReadyImageIntegrity(cardinalities, redis);
   await validateReadyImageSamples(currentItems, redis);

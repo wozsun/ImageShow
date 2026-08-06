@@ -459,13 +459,20 @@ export function migrateImageStorageBackend(
 export async function migrateStorageBackendImages(
   sourceSlug: string,
   targetSlug: string,
-  entries: StorageMigrationImageRecord[]
+  entries:
+    | Iterable<StorageMigrationImageRecord>
+    | AsyncIterable<StorageMigrationImageRecord>
 ) {
   let migrated = 0;
   let unchanged = 0;
   let missing = 0;
+  let errorCount = 0;
   const errors: Array<Record<string, unknown>> = [];
-  for (const entry of entries) {
+  const recordError = (error: Record<string, unknown>) => {
+    errorCount += 1;
+    if (errors.length < 100) errors.push(error);
+  };
+  for await (const entry of entries) {
     if (entry.storage_slug !== sourceSlug) {
       unchanged += 1;
       continue;
@@ -478,7 +485,7 @@ export async function migrateStorageBackendImages(
         migrated += 1;
       } else if (result === "missing") {
         missing += 1;
-        errors.push({
+        recordError({
           id: entry.id,
           object_key: entry.object_key,
           reason: "source_object_missing"
@@ -487,7 +494,7 @@ export async function migrateStorageBackendImages(
         unchanged += 1;
       }
     } catch (error) {
-      errors.push({
+      recordError({
         id: entry.id,
         object_key: entry.object_key,
         reason: errorMessage(error)
@@ -500,7 +507,7 @@ export async function migrateStorageBackendImages(
     migrated,
     unchanged,
     missing,
-    errors: errors.slice(0, 100),
-    error_count: errors.length
+    errors,
+    error_count: errorCount
   };
 }

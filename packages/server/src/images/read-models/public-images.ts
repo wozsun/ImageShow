@@ -6,11 +6,12 @@ import type {
 import { getRuntimeConfig } from "../../config/runtime-config-store.ts";
 import { ApiError } from "../../core/api-error.ts";
 import { coalesce } from "../../core/coalesce.ts";
-import { pool } from "../../core/db.ts";
-import { listQuery } from "../../core/validation.ts";
 import {
-  resolveReadyImageListFilterPlan
-} from "../ready-cache/filters.ts";
+  publicReadUsesFallbackAdmission,
+  queryForPublicRead
+} from "../../core/public-pg-fallback.ts";
+import { listQuery } from "../../core/validation.ts";
+import { resolveImageFilterPlan } from "../filter-plan.ts";
 import {
   readReadyImageById,
   readReadyImagePage
@@ -20,7 +21,7 @@ import {
   publicImageDetail,
   type PublicImageDetailRecord
 } from "../presenter.ts";
-import { buildImageListFilters } from "./list-filters.ts";
+import { buildResolvedReadyImageListFilters } from "./list-filters.ts";
 import { fetchPublicImageCardPage } from "./pagination.ts";
 
 type PublicListQuery = z.infer<typeof listQuery>;
@@ -39,11 +40,12 @@ function withShuffle(
 }
 
 export async function listPublicImages(
-  query: PublicListQuery
+  query: PublicListQuery,
+  signal?: AbortSignal
 ): Promise<PublicImageListResponseDto> {
   const limit = query.limit ?? getRuntimeConfig().site.gallery.default_limit;
-  const plan = await resolveReadyImageListFilterPlan(query);
-  const cached = await readReadyImagePage(plan, limit, query.cursor);
+  const plan = await resolveImageFilterPlan(query);
+  const cached = await readReadyImagePage(plan, limit, query.cursor, signal);
   if (cached.cached) {
     return withShuffle(query, {
       items: await publicImageCardsWithTags(cached.value.items.map((item) => ({
@@ -55,8 +57,8 @@ export async function listPublicImages(
   }
 
   const fallbackKey = JSON.stringify({ ...query, limit });
-  const payload = await coalesce(`public-images:postgres:${fallbackKey}`, async () => {
-    const { params, where } = await buildImageListFilters(query);
+  const load = async () => {
+    const { params, where } = buildResolvedReadyImageListFilters(plan);
     const page = await fetchPublicImageCardPage(
       where,
       params,
@@ -67,7 +69,10 @@ export async function listPublicImages(
       items: page.items,
       next_cursor: page.nextCursor
     } satisfies PublicImageListResponseDto;
-  });
+  };
+  const payload = publicReadUsesFallbackAdmission()
+    ? await load()
+    : await coalesce(`public-images:postgres:${fallbackKey}`, load);
   return withShuffle(query, payload);
 }
 
@@ -78,8 +83,8 @@ export async function getPublicImage(id: string): Promise<PublicImageDetailDto> 
     return publicImageDetail({ ...cached.value, status: "ready" });
   }
 
-  return coalesce(`public-image:postgres:${id}`, async () => {
-    const result = await pool.query(
+  const load = async () => {
+    const result = await queryForPublicRead(
       `SELECT id,
               device,
               brightness,
@@ -98,5 +103,8 @@ export async function getPublicImage(id: string): Promise<PublicImageDetailDto> 
     );
     if (!result.rows[0]) throw new ApiError(404, "not_found", "Image not found");
     return publicImageDetail(result.rows[0] as PublicImageDetailRecord);
-  });
+  };
+  return publicReadUsesFallbackAdmission()
+    ? load()
+    : coalesce(`public-image:postgres:${id}`, load);
 }

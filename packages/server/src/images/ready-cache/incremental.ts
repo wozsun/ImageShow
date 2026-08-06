@@ -2,7 +2,10 @@ import {
   completeReadyImageCacheMutation,
   getReadyImageCacheCoordinatorStatus
 } from "./coordinator.ts";
-import { getRedisConnectionState } from "../../core/redis-client.ts";
+import {
+  getRedisConnectionState,
+  redis
+} from "../../core/redis-client.ts";
 import {
   applyReadyImageCacheDelta,
   readPreviousReadyImageCacheItems
@@ -20,6 +23,10 @@ import {
   getReadyImageRevision
 } from "./revision.ts";
 import { readReadyImageSourceItems } from "./source.ts";
+import {
+  publishReadyImageStatsIntegrity,
+  validateReadyImageStatsIntegrity
+} from "./integrity-manifest.ts";
 
 function assertRedisConnectionEpoch(epoch: number) {
   const connection = getRedisConnectionState();
@@ -75,6 +82,10 @@ export async function synchronizeReadyImageCacheMutation(
     throw new Error("PostgreSQL revision changed before Redis synchronization");
   }
   assertRedisConnectionEpoch(redisConnectionEpoch);
+  const expectedStats = await validateReadyImageStatsIntegrity(null, redis);
+  if (expectedStats.get("total") !== persistedMeta.itemCount) {
+    throw new Error("Ready-image cache total statistic differs before mutation");
+  }
 
   let nextItemCount = persistedMeta.itemCount;
   for (
@@ -96,13 +107,18 @@ export async function synchronizeReadyImageCacheMutation(
     await applyReadyImageCacheDelta(
       previousItems,
       currentItems,
-      nextItemCount
+      nextItemCount,
+      expectedStats
     );
     assertRedisConnectionEpoch(redisConnectionEpoch);
   }
 
+  await publishReadyImageStatsIntegrity(expectedStats, redis);
+  assertRedisConnectionEpoch(redisConnectionEpoch);
   const meta = nextMeta(persistedMeta, committedRevision, nextItemCount);
-  await writeReadyImageCacheMeta(meta);
+  await writeReadyImageCacheMeta(meta, redis, {
+    lastUpdatedAt: new Date().toISOString()
+  });
   assertRedisConnectionEpoch(redisConnectionEpoch);
   if ((await getReadyImageRevision()).revision !== committedRevision) {
     throw new Error("PostgreSQL revision changed while Redis was publishing");

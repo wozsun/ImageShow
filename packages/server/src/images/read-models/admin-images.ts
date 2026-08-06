@@ -8,7 +8,7 @@ import { pool, withAdvisoryLocks } from "../../core/db.ts";
 import { ApiError } from "../../core/api-error.ts";
 import { adminImageListQuery } from "../../core/validation.ts";
 import { batchImageUpdateLockRequests } from "../batch-update-lock.ts";
-import { resolveReadyImageListFilterPlan } from "../ready-cache/filters.ts";
+import { resolveImageFilterPlan } from "../filter-plan.ts";
 import { readReadyImagePage } from "../ready-cache/query.ts";
 import {
   adminImageView,
@@ -17,7 +17,10 @@ import {
   publicImagesWithTags,
   type ImageRecordWithTags
 } from "../presenter.ts";
-import { buildImageListFilters } from "./list-filters.ts";
+import {
+  buildImageListFilters,
+  buildResolvedReadyImageListFilters
+} from "./list-filters.ts";
 import { fetchAdminImagePage } from "./pagination.ts";
 
 type AdminImageListQuery = z.infer<typeof adminImageListQuery>;
@@ -36,9 +39,15 @@ function imageStorageLabel(row: {
 export async function listAdminImages(
   query: AdminImageListQuery
 ): Promise<AdminImageListResponse> {
+  let readyPlan: Awaited<ReturnType<typeof resolveImageFilterPlan>>
+    | null = null;
   if (query.status === "ready") {
-    const plan = await resolveReadyImageListFilterPlan(query);
-    const cached = await readReadyImagePage(plan, query.limit, query.cursor);
+    readyPlan = await resolveImageFilterPlan(query);
+    const cached = await readReadyImagePage(
+      readyPlan,
+      query.limit,
+      query.cursor
+    );
     if (cached.cached) {
       const images = await publicImagesWithTags(cached.value.items.map((item) => ({
         ...item,
@@ -51,7 +60,9 @@ export async function listAdminImages(
       };
     }
   }
-  const { params, where } = await buildImageListFilters(query);
+  const { params, where } = readyPlan
+    ? buildResolvedReadyImageListFilters(readyPlan)
+    : await buildImageListFilters(query);
 
   const [countResult, page] = await Promise.all([
     pool.query(

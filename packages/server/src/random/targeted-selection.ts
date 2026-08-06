@@ -1,4 +1,8 @@
-import { pool } from "../core/db.ts";
+import { appConfig } from "@imageshow/shared";
+import {
+  publicPgFallbackWorkLimitExceeded,
+  queryForPublicRead
+} from "../core/public-pg-fallback.ts";
 import { apiErrorResponse } from "../core/http/responses.ts";
 import { readTargetedReadyImages } from "../images/ready-cache/query.ts";
 import { readyImageCacheItemFromRow } from "../images/ready-cache/model.ts";
@@ -28,24 +32,34 @@ export async function pickTargetedImages(
   if (cached.cached) {
     candidates = cached.value;
   } else {
+    const maximumCandidates =
+      appConfig.publicPgFallback.maximumTargetedCandidates;
     const fullIds = ids.filter((id) => id.length > 12);
     const suffixes = ids.filter((id) => id.length === 12);
-    const rows = (await pool.query(
-      `WITH candidate_ids AS (
+    const rows = (await queryForPublicRead(
+      `WITH candidate_ids AS MATERIALIZED (
          SELECT id
            FROM metadata
           WHERE status='ready' AND id=ANY($1::uuid[])
-         UNION
+         UNION ALL
          SELECT id
            FROM metadata
-          WHERE status='ready' AND right(id::text, 12)=ANY($2::text[])
+          WHERE status='ready'
+            AND right(id::text, 12)=ANY($2::text[])
+            AND NOT (id=ANY($1::uuid[]))
+          LIMIT $3
        )
        SELECT ${readyImageSourceColumns}
          FROM metadata m
          JOIN candidate_ids candidate ON candidate.id=m.id
         ORDER BY m.id`,
-      [fullIds, suffixes]
+      [fullIds, suffixes, maximumCandidates + 1]
     )).rows as Record<string, unknown>[];
+    if (rows.length > maximumCandidates) {
+      throw publicPgFallbackWorkLimitExceeded(
+        "Targeted random selection exceeds the supported candidate limit"
+      );
+    }
     candidates = rows.map(readyImageCacheItemFromRow);
   }
   signal?.throwIfAborted();

@@ -7,6 +7,7 @@ import {
   type BatchImageUpdateItemInputDto,
   importBatchHardLimit,
   importModes,
+  slugMaxLength,
   slugPattern
 } from "@imageshow/shared/browser";
 import { adminPasswordInput, adminUsernameInput } from "./credentials.ts";
@@ -49,7 +50,7 @@ const metadataInput = z.object({
   device: z.enum(classificationDevices),
   brightness: z.enum(appConfig.brightness),
   theme: z.string().trim().toLowerCase().min(1).max(appConfig.themeMaxLength).regex(slugPattern).default("none"),
-  author: z.string().trim().toLowerCase().max(32)
+  author: z.string().trim().toLowerCase().max(slugMaxLength)
     .refine((value) => value === "" || slugPattern.test(value), "author must be a lowercase slug")
     .default(""),
   title: z.string().trim().max(appConfig.imageMetadata.titleMaxLength).default(""),
@@ -62,7 +63,7 @@ export const metadataUpdateInput = z.object({
   device: z.enum(classificationDevices).optional(),
   brightness: z.enum(["dark", "light", "auto"]).optional(),
   theme: z.string().trim().toLowerCase().min(1).max(appConfig.themeMaxLength).regex(slugPattern).optional(),
-  author: z.string().trim().toLowerCase().max(32)
+  author: z.string().trim().toLowerCase().max(slugMaxLength)
     .refine((value) => value === "" || slugPattern.test(value), "author must be a lowercase slug")
     .optional(),
   title: z.string().trim().max(appConfig.imageMetadata.titleMaxLength).optional(),
@@ -73,7 +74,7 @@ export const metadataUpdateInput = z.object({
 
 const slugInput = z.string().trim().toLowerCase()
   .min(1, "标识 slug 不能为空")
-  .max(32, "标识 slug 最长 32 个字符")
+  .max(slugMaxLength, `标识 slug 最长 ${slugMaxLength} 个字符`)
   .regex(slugPattern, "标识 slug 只能包含小写字母、数字、连字符，且不能以连字符开头或结尾");
 const displayNameInput = z.string().trim().max(64, "显示名最长 64 个字符");
 
@@ -202,9 +203,29 @@ export const importCreateInput = metadataInput.extend({
   }
 });
 
-export const importCommitInput = metadataInput.extend({
+const importCommitInput = metadataInput.extend({
   brightness: z.enum(["dark", "light", "auto"]).default("auto"),
   tags: z.array(tagSlugInput).max(50).optional().transform((tags) => [...new Set(tags ?? [])])
+});
+
+export const importBatchCommitInput = z.object({
+  items: z.array(z.object({
+    id: uuidInput.transform((id) => id.toLowerCase()),
+    metadata: importCommitInput
+  })).min(1).max(importBatchHardLimit)
+}).superRefine((value, ctx) => {
+  const ids = new Set<string>();
+  for (let index = 0; index < value.items.length; index += 1) {
+    const id = value.items[index].id.toLowerCase();
+    if (ids.has(id)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["items", index, "id"],
+        message: "导入提交批次不能包含重复会话"
+      });
+    }
+    ids.add(id);
+  }
 });
 
 export const jsonlManifestInput = z.object({
@@ -242,7 +263,7 @@ function galleryStatsSelector(noun: string) {
         tokens.length === 0
         || tokens.some((token) => {
           const slug = token.replace(/^!/, "");
-          return slug.length > 32 || !slugPattern.test(slug);
+          return slug.length > slugMaxLength || !slugPattern.test(slug);
         })
       ) {
         ctx.addIssue({

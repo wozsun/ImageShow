@@ -3,9 +3,14 @@ import {
   devices,
   type GalleryFacetsDto
 } from "@imageshow/shared/browser";
+import { appConfig } from "@imageshow/shared";
 import { coalesce } from "../../core/coalesce.ts";
-import { pool } from "../../core/db.ts";
-import { createReadyImageFilterPlan } from "../ready-cache/filters.ts";
+import {
+  publicPgFallbackWorkLimitExceeded,
+  publicReadUsesFallbackAdmission,
+  queryForPublicRead
+} from "../../core/public-pg-fallback.ts";
+import { createImageFilterPlan } from "../filter-plan.ts";
 import { readReadyImageCountSnapshot } from "../ready-cache/counts.ts";
 import {
   getAuthorVocab,
@@ -41,24 +46,36 @@ async function facetVocabulary(
 }
 
 async function readFacetsFromPostgres() {
-  const row = (await pool.query(
+  const maximumRows = appConfig.publicPgFallback.maximumVocabularyRows;
+  const row = (await queryForPublicRead(
     `SELECT
        ARRAY(
          SELECT DISTINCT m.theme
            FROM metadata m
           WHERE m.status='ready'
+          LIMIT $1
        ) AS themes,
        ARRAY(
          SELECT DISTINCT it.tag_slug
            FROM image_tag it
            JOIN metadata m ON m.id=it.image_id AND m.status='ready'
+          LIMIT $1
        ) AS tags,
        ARRAY(
          SELECT DISTINCT m.author
-           FROM metadata m
+          FROM metadata m
           WHERE m.status='ready' AND m.author IS NOT NULL
-       ) AS authors`
+          LIMIT $1
+       ) AS authors`,
+    [maximumRows + 1]
   )).rows[0] as FacetMembershipRow;
+  if ([row.themes, row.tags, row.authors].some((values) => (
+    (values?.length ?? 0) > maximumRows
+  ))) {
+    throw publicPgFallbackWorkLimitExceeded(
+      "Gallery facets exceed the public result limit"
+    );
+  }
   return facetVocabulary({
     themes: Object.fromEntries((row.themes ?? []).map((slug) => [slug, 1])),
     tags: Object.fromEntries((row.tags ?? []).map((slug) => [slug, 1])),
@@ -66,10 +83,15 @@ async function readFacetsFromPostgres() {
   });
 }
 
-export async function getPublicGalleryFacets(): Promise<GalleryFacetsDto> {
+export async function getPublicGalleryFacets(
+  signal?: AbortSignal
+): Promise<GalleryFacetsDto> {
   const cached = await readReadyImageCountSnapshot(
-    createReadyImageFilterPlan({})
+    createImageFilterPlan({}),
+    signal
   );
   if (cached.cached) return facetVocabulary(cached.value);
-  return coalesce("gallery-facets:postgres", readFacetsFromPostgres);
+  return publicReadUsesFallbackAdmission()
+    ? readFacetsFromPostgres()
+    : coalesce("gallery-facets:postgres", readFacetsFromPostgres);
 }

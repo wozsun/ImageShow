@@ -1,10 +1,12 @@
 import {
   brightnesses,
   devices,
+  slugMaxLength,
+  slugPattern,
   type Brightness,
   type Device
 } from "@imageshow/shared/browser";
-import type { ReadyImageFilterPlan } from "./filters.ts";
+import type { ImageFilterPlan } from "../filter-plan.ts";
 
 type CountRecord = Record<string, number>;
 
@@ -33,28 +35,103 @@ export function nonNegativeReadyImageCount(value: unknown) {
   return Number.isSafeInteger(count) && count >= 0 ? count : null;
 }
 
+function jsonReadyImageCount(value: unknown) {
+  return typeof value === "number"
+    && Number.isSafeInteger(value)
+    && value >= 0
+    ? value
+    : null;
+}
+
 function countRecord(value: unknown): value is CountRecord {
   return Boolean(
     value
     && typeof value === "object"
     && !Array.isArray(value)
     && Object.values(value).every(
-      (count) => nonNegativeReadyImageCount(count) !== null
+      (count) => jsonReadyImageCount(count) !== null
     )
   );
+}
+
+function exactCountRecord(
+  value: unknown,
+  expectedKeys: readonly string[],
+  maximum: number
+): value is CountRecord {
+  if (!countRecord(value)) return false;
+  const keys = Object.keys(value).sort();
+  const expected = [...expectedKeys].sort();
+  return keys.length === expected.length
+    && keys.every((key, index) => key === expected[index])
+    && Object.values(value).every((count) => count <= maximum);
+}
+
+function boundedCountRecord(
+  value: unknown,
+  maximum: number
+): value is CountRecord {
+  return countRecord(value)
+    && Object.values(value).every((count) => count <= maximum)
+    && Object.keys(value).every((key) => (
+      key.length <= slugMaxLength
+      && slugPattern.test(key)
+    ));
+}
+
+function safeCountSum(record: CountRecord) {
+  const sum = Object.values(record).reduce((total, count) => total + count, 0);
+  return Number.isSafeInteger(sum) ? sum : null;
+}
+
+function countSumWithin(
+  record: CountRecord,
+  minimum: number,
+  maximum: number
+) {
+  const sum = safeCountSum(record);
+  return sum !== null && sum >= minimum && sum <= maximum;
 }
 
 function validSnapshot(value: unknown): value is ReadyImageCountSnapshot {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const snapshot = value as Partial<ReadyImageCountSnapshot>;
-  return nonNegativeReadyImageCount(snapshot.total) !== null
-    && nonNegativeReadyImageCount(snapshot.matching) !== null
-    && countRecord(snapshot.axes)
-    && countRecord(snapshot.devices)
-    && countRecord(snapshot.brightnesses)
-    && countRecord(snapshot.themes)
-    && countRecord(snapshot.tags)
-    && countRecord(snapshot.authors);
+  const total = jsonReadyImageCount(snapshot.total);
+  const matching = jsonReadyImageCount(snapshot.matching);
+  const axisKeys = readyImageAxisPairs.map(({ device, brightness }) => (
+    readyImageAxisField(device, brightness)
+  ));
+  const expectedFields = [
+    "total",
+    "matching",
+    "axes",
+    "devices",
+    "brightnesses",
+    "themes",
+    "tags",
+    "authors"
+  ].sort();
+  const actualFields = Object.keys(snapshot).sort();
+  if (
+    actualFields.length !== expectedFields.length
+    || actualFields.some((field, index) => field !== expectedFields[index])
+    || total === null
+    || matching === null
+    || matching > total
+    || !exactCountRecord(snapshot.axes, axisKeys, total)
+    || !exactCountRecord(snapshot.devices, devices, total)
+    || !exactCountRecord(snapshot.brightnesses, brightnesses, total)
+    || !boundedCountRecord(snapshot.themes, total)
+    || !boundedCountRecord(snapshot.tags, total)
+    || !boundedCountRecord(snapshot.authors, total)
+  ) {
+    return false;
+  }
+  return safeCountSum(snapshot.axes) === matching
+    && countSumWithin(snapshot.devices, matching, total)
+    && countSumWithin(snapshot.brightnesses, matching, total)
+    && countSumWithin(snapshot.themes, matching, total)
+    && countSumWithin(snapshot.authors, 0, total);
 }
 
 export function parseCachedReadyImageCountSnapshot(raw: string | null) {
@@ -62,7 +139,9 @@ export function parseCachedReadyImageCountSnapshot(raw: string | null) {
   try {
     const value = JSON.parse(raw) as Partial<CachedReadyImageCountSnapshot>;
     if (
-      !/^\d+$/.test(String(value.revision ?? ""))
+      Object.keys(value).length !== 2
+      || typeof value.revision !== "string"
+      || !/^\d+$/.test(value.revision)
       || !validSnapshot(value.value)
     ) {
       return null;
@@ -108,11 +187,35 @@ function assertGlobalStats(stats: Map<string, number>, expectedTotal: number) {
   const themeTotal = [...stats]
     .filter(([field]) => field.startsWith("theme:"))
     .reduce((sum, [, count]) => sum + count, 0);
+  const authorTotal = [...stats]
+    .filter(([field]) => field.startsWith("author:"))
+    .reduce((sum, [, count]) => sum + count, 0);
+  const validFixedFields = new Set([
+    "total",
+    ...readyImageAxisPairs.map(({ device, brightness }) => (
+      `axis:${device}:${brightness}`
+    )),
+    ...devices.map((device) => `device:${device}`),
+    ...brightnesses.map((brightness) => `brightness:${brightness}`)
+  ]);
+  const validDynamicField = (field: string) => {
+    const separator = field.indexOf(":");
+    const prefix = field.slice(0, separator);
+    const slug = field.slice(separator + 1);
+    return (prefix === "theme" || prefix === "tag" || prefix === "author")
+      && slug.length <= slugMaxLength
+      && slugPattern.test(slug);
+  };
   if (
-    axisTotal !== total
+    [...stats].some(([field, count]) => (
+      count > expectedTotal
+      || (!validFixedFields.has(field) && !validDynamicField(field))
+    ))
+    || axisTotal !== total
     || deviceTotal !== total
     || brightnessTotal !== total
     || themeTotal !== total
+    || authorTotal > total
   ) {
     throw new Error("Ready-image cache statistics dimensions are inconsistent");
   }
@@ -124,7 +227,10 @@ export function parseReadyImageGlobalStats(
 ) {
   const stats = new Map<string, number>();
   for (const [field, value] of Object.entries(raw)) {
-    const count = nonNegativeReadyImageCount(value);
+    const numeric = /^\d+$/u.test(value) ? Number(value) : null;
+    const count = numeric !== null && Number.isSafeInteger(numeric)
+      ? numeric
+      : null;
     if (count === null) {
       throw new Error("Ready-image cache contains an invalid statistic");
     }
@@ -134,7 +240,7 @@ export function parseReadyImageGlobalStats(
   return stats;
 }
 
-export function isUnfilteredReadyImagePlan(plan: ReadyImageFilterPlan) {
+export function isUnfilteredReadyImagePlan(plan: ImageFilterPlan) {
   return plan.axes.length === readyImageAxisPairs.length
     && plan.theme.include.length === 0
     && plan.theme.exclude.length === 0

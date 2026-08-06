@@ -23,9 +23,48 @@ import {
   type RelocatableImage
 } from "../storage/image-relocation.ts";
 import {
-  withImageMutationSync
+  withImageMutationSync,
+  withPlannedImageMutationRebuild
 } from "../images/mutation-sync.ts";
+import {
+  READY_IMAGE_EXACT_SYNC_MAX_ITEMS,
+  decideImageMutationSync
+} from "../images/mutation-sync-policy.ts";
 import { bumpReadyImageRevision } from "../images/ready-cache/revision.ts";
+import { invalidateEntityCountCaches } from "../vocab/vocab-cache.ts";
+
+const THEME_REASSIGN_PAGE_SIZE = 100;
+
+type ThemeReassignImage = RelocatableImage & { status: string };
+type ThemeReassignPlan = {
+  affectedCount: number;
+  throughId: string | null;
+};
+type ThemeReassignProgress = {
+  readyCommitted: number;
+  readyReserved: number;
+};
+type ThemeReassignImageResult = "committed" | "deferred" | "skipped";
+
+function reserveReadyReassignment(
+  progress: ThemeReassignProgress,
+  exactReadyLimit: number | null
+) {
+  if (
+    exactReadyLimit !== null
+    && progress.readyCommitted + progress.readyReserved >= exactReadyLimit
+  ) {
+    return null;
+  }
+  progress.readyReserved += 1;
+  let released = false;
+  return (committed: boolean) => {
+    if (released) return;
+    released = true;
+    progress.readyReserved -= 1;
+    if (committed) progress.readyCommitted += 1;
+  };
+}
 
 async function insertTheme(client: PoolClient, slug: string) {
   if (!slug || slug === "none") return false;
@@ -87,37 +126,37 @@ export async function reorderThemes(slugs: string[]) {
   await synchronizeVocabularyMutation({ entity: "theme" });
 }
 
-async function reassignThemeImagesToNone(theme: string) {
-  const images = (await pool.query(
-    `SELECT id, device, brightness, theme, ext, md5, object_key,
-            storage_slug
-       FROM metadata
-      WHERE theme=$1
-      ORDER BY device, brightness, id`,
-    [theme]
-  )).rows as Array<RelocatableImage>;
-  if (!images.length) return;
-  const concurrency = getRuntimeConfig().background_job.theme_reassign_concurrency;
+async function reassignThemeImageToNone(
+  theme: string,
+  candidate: ThemeReassignImage,
+  progress: ThemeReassignProgress,
+  exactReadyLimit: number | null
+): Promise<ThemeReassignImageResult> {
+  return withStorageLocationReadAndAdvisoryLocks([
+    {
+      key: vocabularyMutationLockKey("theme", theme),
+      mode: "shared"
+    },
+    { key: imageStorageMutationLockKey(candidate.id) }
+  ], async (signal) => {
+    signal.throwIfAborted();
+    const image = (await pool.query(
+      `SELECT id, device, brightness, theme, ext, md5, object_key,
+              storage_slug, status
+         FROM metadata
+        WHERE id=$1 AND theme=$2`,
+      [candidate.id, theme]
+    )).rows[0] as ThemeReassignImage | undefined;
+    signal.throwIfAborted();
+    if (!image) return "skipped";
 
-  await mapWithWorkerPool(images, concurrency, (candidate) =>
-    withStorageLocationReadAndAdvisoryLocks([
-      {
-        key: vocabularyMutationLockKey("theme", theme),
-        mode: "shared"
-      },
-      { key: imageStorageMutationLockKey(candidate.id) }
-    ], async (signal) => {
-      signal.throwIfAborted();
-      const image = (await pool.query(
-        `SELECT id, device, brightness, theme, ext, md5, object_key,
-                storage_slug
-           FROM metadata
-          WHERE id=$1 AND theme=$2`,
-        [candidate.id, theme]
-      )).rows[0] as RelocatableImage | undefined;
-      signal.throwIfAborted();
-      if (!image) return;
+    const releaseReadyReservation = image.status === "ready"
+      ? reserveReadyReassignment(progress, exactReadyLimit)
+      : undefined;
+    if (releaseReadyReservation === null) return "deferred";
 
+    let readyCommitted = false;
+    try {
       const relocation = await prepareVerifiedImageRelocation(
         image,
         {
@@ -141,7 +180,8 @@ async function reassignThemeImagesToNone(theme: string) {
                     AND storage_slug=$4
                     AND object_key=$5
                     AND device=$6
-                    AND brightness=$7`,
+                    AND brightness=$7
+                    AND status=$8`,
                 [
                   image.id,
                   theme,
@@ -149,7 +189,8 @@ async function reassignThemeImagesToNone(theme: string) {
                   image.storage_slug,
                   image.object_key,
                   image.device,
-                  image.brightness
+                  image.brightness,
+                  image.status
                 ]
               );
               if (!result.rowCount) return false;
@@ -158,23 +199,26 @@ async function reassignThemeImagesToNone(theme: string) {
                 relocation,
                 "theme_reassign_source_cleanup"
               );
-              await bumpReadyImageRevision(client);
+              if (image.status === "ready") {
+                await bumpReadyImageRevision(client);
+              }
               signal.throwIfAborted();
               return true;
             });
-            if (committed) {
+            if (committed && image.status === "ready") {
               mutationBatch.add({ id: image.id });
             }
             return committed;
           }
         );
+        readyCommitted = switched && image.status === "ready";
         if (!switched) {
           await discardPreparedImageRelocation(
             relocation,
             "theme_reassign_compare_and_swap_failed"
           );
-          return;
         }
+        return switched ? "committed" : "skipped";
       } catch (error) {
         try {
           await discardPreparedImageRelocationIfUnreferenced(
@@ -189,8 +233,67 @@ async function reassignThemeImagesToNone(theme: string) {
         }
         throw error;
       }
-    })
-  );
+    } finally {
+      releaseReadyReservation?.(readyCommitted);
+    }
+  });
+}
+
+async function reassignThemeImagesToNone(
+  theme: string,
+  throughId: string | null,
+  progress: ThemeReassignProgress,
+  exactReadyLimit: number | null
+) {
+  if (!throughId) return { deferred: false };
+  const concurrency = getRuntimeConfig().background_job.theme_reassign_concurrency;
+  let afterId: string | null = null;
+  for (;;) {
+    const images = (await pool.query(
+      `SELECT id, device, brightness, theme, ext, md5, object_key,
+              storage_slug, status
+         FROM metadata
+        WHERE theme=$1
+          AND ($2::uuid IS NULL OR id > $2::uuid)
+          AND id <= $3::uuid
+        ORDER BY id
+        LIMIT $4`,
+      [theme, afterId, throughId, THEME_REASSIGN_PAGE_SIZE]
+    )).rows as ThemeReassignImage[];
+    if (!images.length) return { deferred: false };
+    const results = await mapWithWorkerPool(images, concurrency, (candidate) => (
+      reassignThemeImageToNone(
+        theme,
+        candidate,
+        progress,
+        exactReadyLimit
+      )
+    ));
+    if (results.includes("deferred")) return { deferred: true };
+    afterId = images.at(-1)!.id;
+    if (images.length < THEME_REASSIGN_PAGE_SIZE) {
+      return { deferred: false };
+    }
+  }
+}
+
+async function readThemeReassignPlan(
+  theme: string
+): Promise<ThemeReassignPlan> {
+  const row = (await pool.query(
+    `SELECT (count(*) FILTER (WHERE status='ready'))::int AS affected_count,
+            max(id::text) AS through_id
+       FROM metadata
+      WHERE theme=$1`,
+    [theme]
+  )).rows[0] as {
+    affected_count?: number;
+    through_id?: string | null;
+  } | undefined;
+  return {
+    affectedCount: Number(row?.affected_count ?? 0),
+    throughId: row?.through_id ?? null
+  };
 }
 
 async function deleteThemeWhenUnreferencedUnderLock(
@@ -215,13 +318,50 @@ async function deleteThemeWhenUnreferencedUnderLock(
   return { deleted, retry: false };
 }
 
-async function deleteThemeAndReassign(slug: string) {
+async function deleteThemeAndReassign(
+  slug: string,
+  progress: ThemeReassignProgress
+) {
   while (true) {
-    await reassignThemeImagesToNone(slug);
-    const result = await withVocabularyMutationLock(
-      "theme",
-      slug,
-      (signal) => deleteThemeWhenUnreferencedUnderLock(slug, signal)
+    const plan = await readThemeReassignPlan(slug);
+    const decision = decideImageMutationSync(
+      progress.readyCommitted + plan.affectedCount
+    );
+    const attempt = async (
+      throughId: string | null,
+      exactReadyLimit: number | null
+    ) => {
+      const reassigned = await reassignThemeImagesToNone(
+        slug,
+        throughId,
+        progress,
+        exactReadyLimit
+      );
+      if (reassigned.deferred) {
+        return { deleted: false, retry: true };
+      }
+      return withVocabularyMutationLock(
+        "theme",
+        slug,
+        (signal) => deleteThemeWhenUnreferencedUnderLock(slug, signal)
+      );
+    };
+    if (decision.mode === "rebuild") {
+      return withPlannedImageMutationRebuild(
+        decision,
+        async () => {
+          let throughId = plan.throughId;
+          for (;;) {
+            const result = await attempt(throughId, null);
+            if (!result.retry) return result.deleted;
+            throughId = (await readThemeReassignPlan(slug)).throughId;
+          }
+        }
+      );
+    }
+    const result = await attempt(
+      plan.throughId,
+      READY_IMAGE_EXACT_SYNC_MAX_ITEMS
     );
     if (!result.retry) {
       return result.deleted;
@@ -233,7 +373,19 @@ export async function deleteTheme(slug: string) {
   if (slug === "none") {
     throw new ApiError(400, "invalid_theme", "The reserved 'none' theme cannot be deleted", { slug });
   }
-  const deleted = await deleteThemeAndReassign(slug);
-  assertVocabularyFound("theme", deleted ? 1 : 0);
-  await synchronizeVocabularyMutation({ entity: "theme" });
+  const progress: ThemeReassignProgress = {
+    readyCommitted: 0,
+    readyReserved: 0
+  };
+  let synchronized = false;
+  try {
+    const deleted = await deleteThemeAndReassign(slug, progress);
+    assertVocabularyFound("theme", deleted ? 1 : 0);
+    await synchronizeVocabularyMutation({ entity: "theme" });
+    synchronized = true;
+  } finally {
+    if (!synchronized && progress.readyCommitted > 0) {
+      await invalidateEntityCountCaches(["theme"]);
+    }
+  }
 }

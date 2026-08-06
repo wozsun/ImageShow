@@ -93,7 +93,7 @@ async function buildOverviewStats(
     recent,
     redis_cache: {
       state: readyImageCache.state,
-      synchronized: readyImageCache.synchronized,
+      synchronized: readyImageCache.synchronized === true,
       rebuilding: readyImageCache.rebuilding,
       item_count: readyImageCache.item_count,
       memory_bytes: readyImageCache.memory_bytes

@@ -8,7 +8,8 @@ import {
   withVocabularyMutationLock
 } from "../vocab/mutation-sync.ts";
 import {
-  withImageMutationSync
+  withImageMutationSync,
+  type ImageMutationSyncBatch
 } from "../images/mutation-sync.ts";
 import { bumpReadyImageRevision } from "../images/ready-cache/revision.ts";
 import {
@@ -70,7 +71,11 @@ export async function reorderAuthors(slugs: string[]) {
 
 type ClearedAuthorImage = { id: string };
 
-async function deleteAuthorUnderLock(slug: string, signal: AbortSignal) {
+async function deleteAuthorUnderLock(
+  slug: string,
+  signal: AbortSignal,
+  mutationBatch: ImageMutationSyncBatch
+) {
   return withTransaction(async (client) => {
     signal.throwIfAborted();
     const author = await client.query(
@@ -81,20 +86,39 @@ async function deleteAuthorUnderLock(slug: string, signal: AbortSignal) {
     if (!author.rowCount) {
       return { deleted: false, affected: [] as ClearedAuthorImage[] };
     }
-    const affected = (await client.query(
+    const affectedCount = Number((await client.query(
+      `SELECT count(*)::int AS count
+         FROM metadata
+        WHERE author=$1
+          AND status='ready'`,
+      [slug]
+    )).rows[0]?.count ?? 0);
+    signal.throwIfAborted();
+    const decision = mutationBatch.decide(affectedCount);
+    const affected = decision.mode === "exact"
+      ? (await client.query(
+        `SELECT id
+           FROM metadata
+          WHERE author=$1
+            AND status='ready'
+          ORDER BY id`,
+        [slug]
+      )).rows as ClearedAuthorImage[]
+      : [];
+    signal.throwIfAborted();
+    await client.query(
       `UPDATE metadata
           SET author=NULL, updated_at=now()
-        WHERE author=$1
-        RETURNING id`,
+        WHERE author=$1`,
       [slug]
-    )).rows as ClearedAuthorImage[];
+    );
     signal.throwIfAborted();
     const deleted = Boolean((await client.query(
       "DELETE FROM author WHERE slug=$1",
       [slug]
     )).rowCount);
     signal.throwIfAborted();
-    if (affected.length) await bumpReadyImageRevision(client);
+    if (affectedCount) await bumpReadyImageRevision(client);
     return { deleted, affected };
   });
 }
@@ -104,7 +128,11 @@ export async function deleteAuthor(slug: string) {
     "author",
     slug,
     (signal) => withImageMutationSync(async (mutationBatch) => {
-      const deleted = await deleteAuthorUnderLock(slug, signal);
+      const deleted = await deleteAuthorUnderLock(
+        slug,
+        signal,
+        mutationBatch
+      );
       for (const image of deleted.affected) {
         mutationBatch.add({ id: image.id });
       }

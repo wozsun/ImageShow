@@ -2,7 +2,9 @@
 
 当前生产边界是一台主机上的一个 ImageShow 应用容器；PostgreSQL 与 Redis 位于另一套
 Compose，并各自只运行一个单机单容器。升级时停止对应容器、更新当前容器再启动。短期
-不计划支持多个 ImageShow 实例；只有未来部署前提真实改变时，才重新评估以下事项。
+不计划支持多个 ImageShow 实例。当前进程通过 PostgreSQL 生命周期 advisory lock 拒绝
+同库第二实例，并在 lock session 丢失时安全退出；它没有 fencing token、跨实例缓存失效
+或 writer 接管能力，只是误部署保护。只有未来部署前提真实改变时，才重新评估以下事项。
 
 ## v4 主动移除的旧能力
 

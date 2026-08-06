@@ -2,7 +2,10 @@ import { emitKeypressEvents } from "node:readline";
 import { pool, pingDb } from "./core/db.ts";
 import { pingRedis, redis } from "./core/redis-client.ts";
 import { parseAdminPasswordCommand } from "./users/admin-password-command.ts";
-import { resetAdministratorPasswordWithSessionCleanup } from "./users/password-recovery.ts";
+import {
+  resetAdministratorPasswordHash,
+  resetAdministratorPasswordWithSessionCleanup
+} from "./users/password-recovery.ts";
 import {
   adminSessionRedisClient,
   invalidateAllAdminSessions
@@ -62,7 +65,7 @@ async function main() {
 
   await pingDb();
   const result = await resetAdministratorPasswordWithSessionCleanup(
-    (sql, params) => pool.query(sql, params),
+    resetAdministratorPasswordHash,
     async () => {
       await pingRedis();
       return invalidateAllAdminSessions(adminSessionRedisClient(redis));
@@ -78,8 +81,8 @@ async function main() {
   const reason = result.error instanceof Error ? result.error.message : String(result.error);
   process.stdout.write(`管理员 ${result.username} 的密码已重置。\n`);
   process.stderr.write(
-    `警告：Redis 会话清理失败（${reason}）。旧会话可能在 Redis 恢复后继续有效，\n` +
-    "请恢复 Redis 后清空 imageshow:session:*，或重新执行密码重置命令。\n"
+    `警告：Redis 会话清理失败（${reason}）。目标账号的旧会话已因密码绑定失效，\n` +
+    "但其他管理员会话未按恢复流程清除；Redis 恢复后可重新执行命令。\n"
   );
 }
 

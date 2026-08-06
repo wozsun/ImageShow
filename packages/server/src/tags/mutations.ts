@@ -63,18 +63,33 @@ export async function deleteTag(slug: string) {
     (signal) => withImageMutationSync(async (mutationBatch) => {
       const mutation = await withTransaction(async (client) => {
         signal.throwIfAborted();
-        const affected = (await client.query(
-          `SELECT m.id
+        const affectedCount = Number((await client.query(
+          `SELECT count(*)::int AS count
              FROM metadata m
              JOIN image_tag it ON it.image_id=m.id
-            WHERE it.tag_slug=$1`,
+            WHERE it.tag_slug=$1
+              AND m.status='ready'`,
           [slug]
-        )).rows as Array<{ id: string }>;
+        )).rows[0]?.count ?? 0);
+        signal.throwIfAborted();
+        const decision = mutationBatch.decide(affectedCount);
+        const affected = decision.mode === "exact"
+          ? (await client.query(
+            `SELECT m.id
+               FROM metadata m
+               JOIN image_tag it ON it.image_id=m.id
+              WHERE it.tag_slug=$1
+                AND m.status='ready'
+              ORDER BY m.id`,
+            [slug]
+          )).rows as Array<{ id: string }>
+          : [];
+        signal.throwIfAborted();
         const deleted = await client.query(
           "DELETE FROM tag WHERE slug = $1",
           [slug]
         );
-        if (affected.length) await bumpReadyImageRevision(client);
+        if (affectedCount) await bumpReadyImageRevision(client);
         signal.throwIfAborted();
         return { deleted, affected };
       });

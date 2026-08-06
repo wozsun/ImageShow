@@ -1,4 +1,4 @@
-import type { Hono } from "hono";
+import type { Context, Hono } from "hono";
 import { adminApiBasePath, type AuthStateDto } from "@imageshow/shared/browser";
 import { ApiError } from "../core/api-error.ts";
 import { apiSuccess } from "../core/http/responses.ts";
@@ -14,19 +14,25 @@ import { parse, passwordChangeInput } from "../core/validation.ts";
 import { changeAdminPassword } from "../users/admin-accounts.ts";
 import {
   adminSessionRedisClient,
-  invalidateAdminSessionsByUsername
+  invalidateCommittedAdminSessionsByUsername
 } from "../users/session-invalidation.ts";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { getEffectiveLoginBackground } from "../config/app-settings.ts";
 import {
   createAdminSession,
   deleteAdminSession,
-  readAdminSession
+  readAdminSession,
+  authorizeAdminSessionCredentialTransition,
+  type AdminSession
 } from "../users/admin-session.ts";
 import { adminPermissionsForRole } from "../users/admin-authorization.ts";
 import { readAdminPreferences } from "../users/preferences.ts";
 
 const sessionRedis = adminSessionRedisClient(redis);
+
+function authenticatedSession(context: Context) {
+  return context.get("session") as AdminSession | undefined;
+}
 
 export function registerPublicAuthRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/auth/challenge`, blockCrossSiteFetch, async (c) => {
@@ -84,11 +90,27 @@ export function registerProtectedAuthRoutes(app: Hono) {
   });
 
   app.post(`${adminApiBasePath}/auth/password`, async (c) => {
-    const session = await readAdminSession(c);
+    const session = authenticatedSession(c);
     if (!session) throw new ApiError(401, "unauthorized", "Unauthorized");
     const input = parse(passwordChangeInput, await c.req.json().catch(() => ({})));
-    await changeAdminPassword(session.username, input.current_password, input.new_password);
-    await invalidateAdminSessionsByUsername(sessionRedis, session.username, session.id);
+    const validCredentialVersion = await changeAdminPassword(
+      session.username,
+      input.current_password,
+      input.new_password,
+      (nextCredentialVersion) => authorizeAdminSessionCredentialTransition(
+        session,
+        nextCredentialVersion
+      )
+    );
+    await invalidateCommittedAdminSessionsByUsername(
+      sessionRedis,
+      session.username,
+      {
+        operation: "password_change",
+        preservedSessionId: session.id,
+        validCredentialVersion
+      }
+    );
     return c.json(apiSuccess());
   });
 }

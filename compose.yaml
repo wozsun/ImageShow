@@ -28,10 +28,6 @@ services:
       - redis-server
       - --appendonly
       - "yes"
-      - --maxmemory
-      - ${REDIS_MAXMEMORY:-500mb}
-      - --maxmemory-policy
-      - noeviction
     volumes:
       - redis_data:/data
     healthcheck:

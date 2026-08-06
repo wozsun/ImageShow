@@ -4,7 +4,7 @@ import { apiErrorResponse } from "../core/http/responses.ts";
 import { resolveAuthorTermMap } from "../authors/query.ts";
 import { resolveTagTermMap } from "../tags/query.ts";
 import { resolveThemeTermMap } from "../themes/query.ts";
-import { createReadyImageFilterPlan } from "../images/ready-cache/filters.ts";
+import { createImageFilterPlan } from "../images/filter-plan.ts";
 import { sampleReadyImages } from "../images/ready-cache/query.ts";
 import {
   recentlyServedIds,
@@ -20,6 +20,7 @@ import {
   type SelectedReadyImage
 } from "./selection-model.ts";
 import { pickTargetedImages } from "./targeted-selection.ts";
+import { sampleReadyImagesFromPostgres } from "./postgres-selection.ts";
 
 export type RandomImageSelection = {
   method: RandomMethod;
@@ -70,7 +71,7 @@ export async function selectRandomImages(
     query.requestedBrightness,
     userAgent
   );
-  const plan = createReadyImageFilterPlan({
+  const plan = createImageFilterPlan({
     devices: axes.deviceCandidates,
     brightnesses: axes.brightnessCandidates,
     theme: query.theme,
@@ -82,18 +83,17 @@ export async function selectRandomImages(
   const cached = await sampleReadyImages(
     plan,
     query.resultLimit,
-    recent
+    recent,
+    signal
   );
-  if (!cached.cached) {
-    const response = apiErrorResponse({
-      status: 503,
-      code: "random_cache_unavailable",
-      message: "Random image cache is rebuilding"
-    });
-    response.headers.set("Retry-After", "1");
-    return response;
-  }
-  const items = cached.value;
+  const items = cached.cached
+    ? cached.value
+    : await sampleReadyImagesFromPostgres(
+        plan,
+        query.resultLimit,
+        recent,
+        signal
+      );
   if (!items.length) {
     const hasFilters = Boolean(
       axes.requestedDevice

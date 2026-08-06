@@ -12,6 +12,7 @@ import { restoreImageFromTrash, restoreImagesFromTrash } from "./restore.ts";
 import {
   withImageMutationSync
 } from "./mutation-sync.ts";
+import { decideImageMutationSync } from "./mutation-sync-policy.ts";
 import { bumpReadyImageRevision } from "./ready-cache/revision.ts";
 import { invalidateEntityCountCaches } from "../vocab/vocab-cache.ts";
 
@@ -90,17 +91,24 @@ export async function restoreDeletedImage(id: string, missingIsError = true) {
 export async function batchRestoreImages(
   ids: string[]
 ): Promise<BatchImageRestoreResponseDto> {
+  const requestedCount = new Set(ids.map((id) => id.toLowerCase())).size;
+  const decision = decideImageMutationSync(requestedCount);
   return withImageMutationSync(async (mutationBatch) => {
-    const restoredImages = await restoreImagesFromTrash(ids);
-    for (const image of restoredImages) {
+    if (decision.mode === "rebuild") {
+      mutationBatch.decide(decision.affectedCount);
+    }
+    const result = await restoreImagesFromTrash(ids, {
+      returnIds: decision.mode !== "rebuild"
+    });
+    for (const image of result.images) {
       mutationBatch.add({ id: image.id });
     }
-    if (restoredImages.length) {
+    if (result.restored) {
       await invalidateEntityCountCaches(["theme", "author"]);
     }
     return {
-      restored: restoredImages.length,
-      ignored: ids.length - restoredImages.length
+      restored: result.restored,
+      ignored: ids.length - result.restored
     };
   });
 }

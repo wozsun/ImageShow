@@ -1,4 +1,4 @@
-import { slugPattern } from "@imageshow/shared/browser";
+import { slugMaxLength, slugPattern } from "@imageshow/shared/browser";
 import { withAdvisoryLock, withAdvisoryLocks } from "../core/db.ts";
 import { ApiError } from "../core/api-error.ts";
 import {
@@ -65,14 +65,14 @@ export function assertVocabularySlug(
 ) {
   if (
     options.reserved?.includes(slug)
-    || slug.length > 32
+    || slug.length > slugMaxLength
     || !slugPattern.test(slug)
   ) {
     const label = vocabularyLabels[entity];
     throw new ApiError(
       400,
       `invalid_${entity}`,
-      `${label} slug must be a lowercase slug (a-z, 0-9, -), <=32 chars`,
+      `${label} slug must be a lowercase slug (a-z, 0-9, -), <=${slugMaxLength} chars`,
       { slug }
     );
   }

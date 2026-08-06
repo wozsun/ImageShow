@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { slugPattern, type StorageType } from "@imageshow/shared/browser";
+import {
+  slugMaxLength,
+  slugPattern,
+  type StorageType
+} from "@imageshow/shared/browser";
 import { isHttpsEndpoint, isHttpsUrl } from "../core/url-validation.ts";
 
 const httpsEndpoint = z.string().trim().max(2048)
@@ -52,7 +56,8 @@ export type StorageBackendRecord = StorageConfig & {
   is_default: boolean;
 };
 
-const storageSlugInput = z.string().trim().toLowerCase().min(1).max(32).regex(slugPattern);
+const storageSlugInput = z.string().trim().toLowerCase().min(1)
+  .max(slugMaxLength).regex(slugPattern);
 const storageDisplayInput = z.string().trim().max(64);
 
 export const storageBackendCreateInput = z.object({

@@ -1,4 +1,4 @@
-import { pool } from "../../core/db.ts";
+import { queryForPublicRead } from "../../core/public-pg-fallback.ts";
 import { decodeImageCursor, encodeImageCursor } from "../cursor.ts";
 import {
   imagePresentationColumns,
@@ -40,7 +40,7 @@ async function fetchImageRows(
     );
   }
   params.push(limit + 1);
-  const result = await pool.query(
+  const result = await queryForPublicRead(
     `SELECT ${columns}, image_time::text AS cursor_image_time
      FROM metadata
      WHERE ${where.join(" AND ")}

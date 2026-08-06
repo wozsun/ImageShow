@@ -28,11 +28,30 @@ const advisoryLockPool = new pg.Pool({
   application_name: "imageshow-advisory-locks",
   allowExitOnIdle: true
 });
+const cancellationPool = new pg.Pool({
+  ...poolConfig,
+  application_name: "imageshow-query-cancellation",
+  max: 2,
+  connectionTimeoutMillis: 1_000,
+  query_timeout: 1_500,
+  statement_timeout: 1_000,
+  allowExitOnIdle: true
+});
 
 pool.on("error", (error) => logger.error("idle PostgreSQL client error", error));
 advisoryLockPool.on("error", (error) => {
   logger.error("idle PostgreSQL advisory-lock client error", error);
 });
+cancellationPool.on("error", (error) => {
+  logger.error("idle PostgreSQL cancellation client error", error);
+});
+
+export function createDedicatedDatabaseClient(applicationName: string) {
+  return new pg.Client({
+    ...poolConfig,
+    application_name: applicationName
+  });
+}
 
 export async function withTransactionOnClient<T>(
   client: PoolClient,
@@ -366,6 +385,65 @@ export async function pingDb() {
   await pool.query("SELECT 1");
 }
 
+const readinessRelations = [
+  "schema_migrations",
+  "metadata",
+  "ready_image_revision",
+  "background_job",
+  "storage_backend",
+  "admin_account"
+] as const;
+
+export async function assertCoreDatabaseReady(
+  database: Pick<PoolClient, "query"> = pool
+) {
+  const result = await database.query<{ relation: string | null }>(
+    `SELECT to_regclass('public.' || relation)::text AS relation
+       FROM unnest($1::text[]) relation`,
+    [[...readinessRelations]]
+  );
+  if (
+    result.rows.length !== readinessRelations.length
+    || result.rows.some((row) => row.relation === null)
+  ) {
+    throw new Error("PostgreSQL core schema is incomplete");
+  }
+  const revision = (await database.query<{ revision: string }>(
+    `SELECT revision::text AS revision
+       FROM ready_image_revision
+      WHERE singleton=1`
+  )).rows[0]?.revision;
+  if (!revision || !/^\d+$/.test(revision)) {
+    throw new Error("PostgreSQL ready-image revision is not initialized");
+  }
+}
+
+export async function requestDatabaseBackendCancellation(
+  processId: number,
+  terminate = false
+) {
+  const functionName = terminate ? "pg_terminate_backend" : "pg_cancel_backend";
+  return (await cancellationPool.query<{ accepted: boolean }>(
+    `SELECT ${functionName}($1) AS accepted`,
+    [processId]
+  )).rows[0]?.accepted === true;
+}
+
+export async function databaseBackendQueryIsActive(processId: number) {
+  return (await cancellationPool.query<{ active: boolean }>(
+    `SELECT EXISTS (
+       SELECT 1
+         FROM pg_stat_activity
+        WHERE pid=$1 AND state='active'
+     ) AS active`,
+    [processId]
+  )).rows[0]?.active === true;
+}
+
 export async function closeDatabasePools() {
-  await Promise.allSettled([pool.end(), advisoryLockPool.end()]);
+  await Promise.allSettled([
+    pool.end(),
+    advisoryLockPool.end(),
+    cancellationPool.end()
+  ]);
 }

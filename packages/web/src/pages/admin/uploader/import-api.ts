@@ -1,6 +1,5 @@
 import { api, getCsrfToken } from "../../../lib/api/client.js";
 import { adminApiBasePath } from "../../../lib/constants.js";
-import type { ImageDraft } from "../../../lib/types.js";
 import { createIntegerProgressReporter } from "./upload-progress.js";
 import type {
   ImportSessionCreateDto,
@@ -10,6 +9,8 @@ import type {
   JsonlManifestResultDto,
   PreparedImportDto,
   StoredImportCommitResultDto,
+  StoredImportBatchCommitItemInputDto,
+  StoredImportBatchCommitResultDto,
   StoredImportStatusListDto,
   StoredImportStatusDto,
   WeiboImportParseErrorDto,
@@ -26,6 +27,7 @@ export type WeiboImportParseError = WeiboImportParseErrorDto;
 export type WeiboImportResult = WeiboImportResultDto;
 export type StoredImportStatus = StoredImportStatusDto;
 export type StoredImportCommitResult = StoredImportCommitResultDto;
+export type StoredImportBatchCommitResult = StoredImportBatchCommitResultDto;
 
 export function getStoredImportStatuses(ids: string[], signal?: AbortSignal) {
   const query = encodeURIComponent(ids.join(","));
@@ -121,9 +123,14 @@ export function cancelStoredImport(sessionId: string) {
   return api(`${adminApiBasePath}/imports/${sessionId}/cancel`, { method: "POST" });
 }
 
-export function commitStoredImport(sessionId: string, draft: ImageDraft) {
-  return api<StoredImportCommitResult>(`${adminApiBasePath}/imports/${sessionId}/commit`, {
-    method: "POST",
-    body: JSON.stringify(draft)
-  });
+export function commitStoredImports(
+  items: StoredImportBatchCommitItemInputDto[]
+) {
+  return api<StoredImportBatchCommitResult>(
+    `${adminApiBasePath}/imports/commit-batch`,
+    {
+      method: "POST",
+      body: JSON.stringify({ items })
+    }
+  );
 }

@@ -1,6 +1,7 @@
 import type { Redis } from "ioredis";
 import { execRedisPipeline } from "../../core/redis-pipeline.ts";
 import {
+  READY_IMAGE_ALL_INDEX_KEY,
   READY_IMAGE_CACHE_PREFIX,
   READY_IMAGE_ID_SUFFIX_LOOKUP_KEY,
   READY_IMAGE_ITEMS_KEY,
@@ -16,7 +17,6 @@ import {
 } from "./integrity.ts";
 import {
   readyImageIdSuffixScore,
-  readyImageIndexKeys,
   readyImageMember,
   readyImageStatFields,
   readyImageThumbKey,
@@ -25,9 +25,9 @@ import {
 } from "./model.ts";
 import {
   REDIS_BATCH_MAX_COMMANDS,
-  REDIS_BATCH_MAX_BYTES,
   RedisPipelineBatcher,
   chunkHashEntries,
+  chunkSortedSetEntries,
   estimatedRedisBytes
 } from "./redis-batch.ts";
 
@@ -80,25 +80,13 @@ async function queueHashEntries(
   }
 }
 
-function chunkSortedSetMembers(members: Array<string | number>) {
-  const chunks: Array<Array<string | number>> = [];
-  let chunk: Array<string | number> = [];
-  let bytes = 0;
+function* sortedSetEntries(members: Array<string | number>) {
   for (let index = 0; index < members.length; index += 2) {
     const score = members[index];
     const member = members[index + 1];
     if (score === undefined || member === undefined) continue;
-    const entryBytes = estimatedRedisBytes(score, member);
-    if (chunk.length && bytes + entryBytes > REDIS_BATCH_MAX_BYTES) {
-      chunks.push(chunk);
-      chunk = [];
-      bytes = 0;
-    }
-    chunk.push(score, member);
-    bytes += entryBytes;
+    yield [score, String(member)] as const;
   }
-  if (chunk.length) chunks.push(chunk);
-  return chunks;
 }
 
 export async function writeReadyImageCacheBatch(
@@ -114,19 +102,15 @@ export async function writeReadyImageCacheBatch(
   const objectEntries: Array<readonly [string, string]> = [];
   const thumbEntries: Array<readonly [string, string]> = [];
   const suffixMembers: Array<string | number> = [];
-  const memberships = new Map<string, Array<string | number>>();
+  const allIndexMembers: Array<string | number> = [];
   for (const item of items) {
     const member = readyImageMember(item.id);
     itemEntries.push([member, serializeReadyImageCacheItem(item)]);
     objectEntries.push([item.object_key, member]);
     thumbEntries.push([readyImageThumbKey(item), member]);
     suffixMembers.push(readyImageIdSuffixScore(item), member);
-    for (const key of readyImageIndexKeys(item)) {
-      const members = memberships.get(key) ?? [];
-      members.push(item.sort_score, member);
-      memberships.set(key, members);
-      incrementReadyImageCount(cardinalities, key);
-    }
+    allIndexMembers.push(item.sort_score, member);
+    incrementReadyImageCount(cardinalities, READY_IMAGE_ALL_INDEX_KEY);
     for (const field of readyImageStatFields(item)) {
       incrementReadyImageCount(stats, field);
     }
@@ -136,7 +120,11 @@ export async function writeReadyImageCacheBatch(
   await queueHashEntries(READY_IMAGE_ITEMS_KEY, itemEntries, writer);
   await queueHashEntries(READY_IMAGE_OBJECT_LOOKUP_KEY, objectEntries, writer);
   await queueHashEntries(READY_IMAGE_THUMB_LOOKUP_KEY, thumbEntries, writer);
-  for (const members of chunkSortedSetMembers(suffixMembers)) {
+  for (const entries of chunkSortedSetEntries(
+    READY_IMAGE_ID_SUFFIX_LOOKUP_KEY,
+    sortedSetEntries(suffixMembers)
+  )) {
+    const members = entries.flat();
     await writer.queue(
       estimatedRedisBytes(READY_IMAGE_ID_SUFFIX_LOOKUP_KEY, ...members),
       (pipeline) => {
@@ -144,13 +132,17 @@ export async function writeReadyImageCacheBatch(
       }
     );
   }
-  for (const [key, allMembers] of memberships) {
-    for (const members of chunkSortedSetMembers(allMembers)) {
-      await writer.queue(
-        estimatedRedisBytes(key, ...members),
-        (pipeline) => { pipeline.zadd(key, ...members); }
-      );
-    }
+  for (const entries of chunkSortedSetEntries(
+    READY_IMAGE_ALL_INDEX_KEY,
+    sortedSetEntries(allIndexMembers)
+  )) {
+    const members = entries.flat();
+    await writer.queue(
+      estimatedRedisBytes(READY_IMAGE_ALL_INDEX_KEY, ...members),
+      (pipeline) => {
+        pipeline.zadd(READY_IMAGE_ALL_INDEX_KEY, ...members);
+      }
+    );
   }
   await writer.flush();
   signal?.throwIfAborted();

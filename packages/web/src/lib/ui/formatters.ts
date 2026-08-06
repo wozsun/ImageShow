@@ -68,6 +68,21 @@ export function formatBytes(bytes: number) {
   return `${value >= 100 || exponent === 0 ? Math.round(value) : value.toFixed(1)} ${units[exponent]}`;
 }
 
+/**
+ * Keep the authoritative revision exact in APIs and comparisons, while giving
+ * operators a compact value that cannot be mistaken for an image count.
+ */
+export function revisionFingerprint(revision: string | null | undefined) {
+  if (!revision) return "—";
+
+  let hash = 0x811c9dc5;
+  for (const character of revision) {
+    hash ^= character.codePointAt(0) ?? 0;
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return `#${(hash >>> 0).toString(16).padStart(8, "0").slice(-6)}`;
+}
+
 export function cssUrl(value: string) {
   return `url("${escapeCssString(value)}")`;
 }

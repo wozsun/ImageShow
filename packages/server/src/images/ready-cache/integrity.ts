@@ -3,7 +3,6 @@ import { errorMessage } from "../../core/api-error.ts";
 import { redis } from "../../core/redis-client.ts";
 import {
   READY_IMAGE_ALL_INDEX_KEY,
-  READY_IMAGE_CACHE_PREFIX,
   READY_IMAGE_ID_SUFFIX_LOOKUP_KEY,
   READY_IMAGE_ITEMS_KEY,
   READY_IMAGE_OBJECT_LOOKUP_KEY,
@@ -20,14 +19,17 @@ import {
   readReadyImageIntegrity,
   sameReadyImageCardinalities,
   validateReadyImageCardinalities,
+  validateReadyImageStatsIntegrity,
   writeReadyImageStatsAndIntegrity,
   type ReadyImageCardinalities,
   type ReadyImageStats
 } from "./integrity-manifest.ts";
-import { validateReadyImageSamples } from "./integrity-samples.ts";
+import {
+  validatePersistedReadyImageSamples,
+  validateReadyImageSamples
+} from "./integrity-samples.ts";
 import { compareReadyImageRevisions } from "./revision.ts";
-
-const SCAN_COUNT = 1_000;
+import { readReadyImageCacheLastUpdated } from "./last-updated.ts";
 
 export type ReadyImageCacheStartupValidation =
   | { valid: true; meta: ReadyImageCacheMeta }
@@ -67,62 +69,6 @@ export function buildReadyImageCardinalities(
   return cardinalities;
 }
 
-function expectedStatsFromCardinalities(
-  cardinalities: ReadyImageCardinalities,
-  itemCount: number
-) {
-  const stats: ReadyImageStats = new Map([["total", itemCount]]);
-  const axisCounts = new Map<string, number>();
-  for (const [key, count] of cardinalities) {
-    const prefix = `${READY_IMAGE_CACHE_PREFIX}index:`;
-    if (!key.startsWith(prefix) || key === READY_IMAGE_ALL_INDEX_KEY) continue;
-    const field = key.slice(prefix.length);
-    stats.set(field, count);
-    if (field.startsWith("axis:")) axisCounts.set(field, count);
-  }
-  for (const device of ["pc", "mb"]) {
-    const count = [...axisCounts]
-      .filter(([field]) => field.startsWith(`axis:${device}:`))
-      .reduce((sum, [, value]) => sum + value, 0);
-    if (count) stats.set(`device:${device}`, count);
-  }
-  for (const brightness of ["dark", "light"]) {
-    const count = [...axisCounts]
-      .filter(([field]) => field.endsWith(`:${brightness}`))
-      .reduce((sum, [, value]) => sum + value, 0);
-    if (count) stats.set(`brightness:${brightness}`, count);
-  }
-  return stats;
-}
-
-async function validateReadyImageStats(
-  expected: ReadyImageStats,
-  client: Redis
-) {
-  const seen = new Map<string, string>();
-  let cursor = "0";
-  do {
-    const [next, fields] = await client.hscan(
-      READY_IMAGE_STATS_KEY,
-      cursor,
-      "COUNT",
-      SCAN_COUNT
-    );
-    cursor = next;
-    for (let index = 0; index < fields.length; index += 2) {
-      const field = fields[index];
-      const value = fields[index + 1];
-      if (field && value !== undefined) seen.set(field, value);
-    }
-  } while (cursor !== "0");
-  if (
-    seen.size !== expected.size
-    || [...expected].some(([field, count]) => seen.get(field) !== String(count))
-  ) {
-    throw new Error("Ready-image cache statistics failed validation");
-  }
-}
-
 export async function validateBuiltReadyImageCache(
   expected: ReadyImageCardinalities,
   stats: ReadyImageStats,
@@ -135,7 +81,7 @@ export async function validateBuiltReadyImageCache(
     throw new Error("Ready-image cache integrity manifest differs from the build");
   }
   await validateReadyImageCardinalities(expected, client, signal);
-  await validateReadyImageStats(stats, client);
+  await validateReadyImageStatsIntegrity(stats, client);
   await validateReadyImageSamples(samples, client);
 }
 
@@ -156,22 +102,28 @@ export async function validateReadyImageCacheAtStartup(
     if (compareReadyImageRevisions(meta.appliedRevision, postgresRevision) !== 0) {
       return { valid: false, reason: "revision_mismatch", meta };
     }
+    if (!await readReadyImageCacheLastUpdated(client)) {
+      return { valid: false, reason: "last_updated_missing", meta };
+    }
     const integrity = await readReadyImageIntegrity(client);
     const core = initialReadyImageCardinalities(meta.itemCount);
+    if (integrity.size !== core.size + 1) {
+      return { valid: false, reason: "integrity_core_mismatch", meta };
+    }
     for (const [key, count] of core) {
       if (integrity.get(key) !== count) {
         return { valid: false, reason: "integrity_core_mismatch", meta };
       }
     }
-    const expectedStats = expectedStatsFromCardinalities(
-      integrity,
-      meta.itemCount
-    );
-    if (integrity.get(READY_IMAGE_STATS_KEY) !== expectedStats.size) {
+    const stats = await validateReadyImageStatsIntegrity(null, client);
+    if (
+      integrity.get(READY_IMAGE_STATS_KEY) !== stats.size
+      || stats.get("total") !== meta.itemCount
+    ) {
       return { valid: false, reason: "integrity_stats_mismatch", meta };
     }
     await validateReadyImageCardinalities(integrity, client);
-    await validateReadyImageStats(expectedStats, client);
+    await validatePersistedReadyImageSamples(meta.itemCount, client);
     return { valid: true, meta };
   } catch (error) {
     return {

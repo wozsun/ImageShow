@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { pool } from "../core/db.ts";
+import { queryForPublicRead } from "../core/public-pg-fallback.ts";
 import { ApiError } from "../core/api-error.ts";
 import { logger } from "../core/logger.ts";
 import {
@@ -301,7 +301,7 @@ async function imageLookupById(
     return { ...cached.value, status: "ready" };
   }
   if (cached.cached && !includeDeleted) return null;
-  const row = (await pool.query(
+  const row = (await queryForPublicRead(
     `SELECT id, object_key, original, ext, storage_slug, device, brightness, theme,
             status, description, source
        FROM metadata
@@ -322,7 +322,7 @@ export async function serveObject(key: string, request: StoredResponseRequest = 
     throw new ApiError(404, "not_found", "Object not found");
   }
   if (!cached.cached) {
-    const row = (await pool.query(
+    const row = (await queryForPublicRead(
       "SELECT object_key, ext, storage_slug, status FROM metadata WHERE object_key=$1 LIMIT 1",
       [key]
     )).rows[0] as { ext: string; storage_slug: string; status: string } | undefined;
@@ -373,7 +373,7 @@ export async function serveThumb(key: string, request: StoredResponseRequest = {
   if (cached.cached) {
     throw new ApiError(404, "not_found", "Thumbnail not found");
   }
-  const row = (await pool.query("SELECT object_key, ext, storage_slug, status FROM metadata WHERE object_key=$1 OR regexp_replace(object_key, '\\.[^/.]+$', '.webp')=$1 LIMIT 1", [key])).rows[0];
+  const row = (await queryForPublicRead("SELECT object_key, ext, storage_slug, status FROM metadata WHERE object_key=$1 OR regexp_replace(object_key, '\\.[^/.]+$', '.webp')=$1 LIMIT 1", [key])).rows[0];
 
   if (!row || row.status !== "ready") throw new ApiError(404, "not_found", "Thumbnail not found");
   const objectKey = row.object_key;

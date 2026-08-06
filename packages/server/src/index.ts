@@ -15,6 +15,12 @@ import { cleanupOrphanRawImports } from "./images/imports/temp-files.ts";
 import { closeDatabasePools, pingDb, runMigrations } from "./core/db.ts";
 import { ensureSuperAdmin } from "./users/admin-bootstrap.ts";
 import { redis } from "./core/redis-client.ts";
+import {
+  markRuntimeInitializationComplete,
+  onBusinessAvailabilityGateOpen,
+  startRedisOperationalMonitor,
+  stopRedisOperationalMonitor
+} from "./core/runtime-availability.ts";
 import { configureRuntimeLogger, logger } from "./core/logger.ts";
 import { ensureRuntimeDirectories } from "./storage/runtime-directories.ts";
 import { drainWorker, startWorker, stopWorker } from "./jobs/worker.ts";
@@ -22,53 +28,117 @@ import {
   closeStorageBackendRegistry
 } from "./storage/backend-registry.ts";
 import { createHttpApp } from "./http-app.ts";
+import {
+  acquireApplicationLifecycleLock,
+  type ApplicationLifecycleLock
+} from "./core/application-lifecycle-lock.ts";
 
 initializeRuntimeConfig();
 configureRuntimeLogger(() => getRuntimeConfig().log);
 const app = createHttpApp();
 
+let lifecycleLock: ApplicationLifecycleLock | null = null;
+let lifecycleOwnershipLoss: Error | null = null;
+let coordinatorInitialization: Promise<unknown> | null = null;
+let server: ReturnType<typeof serve> | null = null;
+let shuttingDown = false;
+let shutdownPromise: Promise<void> | null = null;
+let shutdownExitCode = 0;
+
+async function settleCoordinatorInitialization() {
+  const current = coordinatorInitialization;
+  if (current) await current.catch(() => undefined);
+}
+
 await ensureRuntimeDirectories();
 await pingDb();
 await runMigrations();
-await cleanupOrphanRawImports(appConfig.uploadTtlSeconds * 1000);
-await ensureSuperAdmin({
-  username: bootstrapEnvironment.adminUsername,
-  password: bootstrapEnvironment.adminPassword
-});
-configureSharpConcurrency();
-onRuntimeConfigChange(configureSharpConcurrency);
-await initializeReadyImageCacheCoordinator().catch((error) => {
-  logger.warn("startup ready-image cache initialization failed", error);
-});
-startWorker();
+try {
+  lifecycleLock = await acquireApplicationLifecycleLock();
+} catch (error) {
+  await closeDatabasePools();
+  throw error;
+}
 
-const serverPort = appConfig.applicationPort;
-const server = serve({ fetch: app.fetch, port: serverPort });
-logger.info(`ImageShow listening on :${serverPort}`);
+void lifecycleLock.ownershipLost.then((error) => {
+  lifecycleOwnershipLoss = error;
+  shuttingDown = true;
+  logger.error("application lifecycle lock ownership lost", error);
+  void shutdown("lifecycle lock loss", 1);
+});
 
-let shuttingDown = false;
-async function shutdown(signal: string) {
-  if (shuttingDown) return;
+try {
+  await cleanupOrphanRawImports(appConfig.uploadTtlSeconds * 1000);
+  lifecycleLock.assertOwned();
+  await ensureSuperAdmin({
+    username: bootstrapEnvironment.adminUsername,
+    password: bootstrapEnvironment.adminPassword
+  });
+  lifecycleLock.assertOwned();
+  configureSharpConcurrency();
+  onRuntimeConfigChange(configureSharpConcurrency);
+  markRuntimeInitializationComplete();
+
+  onBusinessAvailabilityGateOpen(() => {
+    coordinatorInitialization ??= initializeReadyImageCacheCoordinator()
+      .catch((error) => {
+        logger.warn("startup ready-image cache initialization failed", error);
+      })
+      .finally(() => {
+        if (!shuttingDown) startWorker();
+      });
+  });
+
+  lifecycleLock.assertOwned();
+  const serverPort = appConfig.applicationPort;
+  server = serve({ fetch: app.fetch, port: serverPort });
+  logger.info(`ImageShow listening on :${serverPort}`);
+  startRedisOperationalMonitor();
+} catch (error) {
+  const startupError = lifecycleOwnershipLoss ?? error;
+  if (!lifecycleOwnershipLoss) {
+    logger.error("application startup failed", startupError);
+  }
+  await shutdown("startup failure", 1);
+  throw startupError;
+}
+
+function shutdown(signal: string, exitCode = 0) {
+  shutdownExitCode = Math.max(shutdownExitCode, exitCode);
+  if (shutdownPromise) return shutdownPromise;
   shuttingDown = true;
   logger.info(`received ${signal}, shutting down`);
   const hardExit = setTimeout(() => process.exit(1), appConfig.backgroundJob.shutdownHardExitMs);
   hardExit.unref();
-  try {
-    stopWorker();
-    const readyImageCacheStop = stopReadyImageCacheCoordinator();
-    const workerDrain = drainWorker();
-    await new Promise<void>((resolve) => server.close(() => resolve()));
-    await Promise.all([
-      workerDrain,
-      readyImageCacheStop
-    ]);
-    await closeStorageBackendRegistry();
-    await redis.quit().catch(() => redis.disconnect());
-    await closeDatabasePools();
-  } finally {
-    clearTimeout(hardExit);
-    process.exit(0);
-  }
+  shutdownPromise = (async () => {
+    try {
+      const currentServer = server;
+      server = null;
+      const serverClose = currentServer
+        ? new Promise<void>((resolve) => currentServer.close(() => resolve()))
+        : Promise.resolve();
+      stopRedisOperationalMonitor();
+      stopWorker();
+      const workerDrain = drainWorker();
+      await settleCoordinatorInitialization();
+      const readyImageCacheStop = stopReadyImageCacheCoordinator();
+      await Promise.all([
+        serverClose,
+        workerDrain,
+        readyImageCacheStop
+      ]);
+      await closeStorageBackendRegistry();
+      await redis.quit().catch(() => redis.disconnect());
+      await closeDatabasePools();
+      await lifecycleLock?.release().catch((error) => {
+        logger.error("application lifecycle lock release failed", error);
+      });
+    } finally {
+      clearTimeout(hardExit);
+      process.exit(shutdownExitCode);
+    }
+  })();
+  return shutdownPromise;
 }
 
 process.on("SIGTERM", () => void shutdown("SIGTERM"));
