@@ -112,7 +112,7 @@ export const appConfig = {
     expireUploadsIntervalMs: 60_000,
     historyCleanupIntervalMs: 60 * 60 * 1000,
     completedRetentionSeconds: 7 * 24 * 60 * 60,
-    failedRetentionSeconds: 90 * 24 * 60 * 60,
+    failedRetentionSeconds: 7 * 24 * 60 * 60,
     historyCleanupBatchSize: 1000,
     tickIntervalMs: 5_000,
     queueSliceMaxJobs: 50,

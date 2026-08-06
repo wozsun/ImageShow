@@ -1,20 +1,18 @@
 # 数据库结构
 
-PostgreSQL 共 10 张业务表，另有迁移记录表 `schema_migrations`。全新数据库依次执行
-`0001_initial.sql` 与 `0002_ready_image_revision.sql`；随机图 `id` 的末 12 位查询所需
-ready 部分表达式索引属于 `0001`，统一 Redis 图片投影的权威 revision 单行表由已发布的
-`0002` 建立。PostgreSQL 是唯一真相源，Redis 图片
-投影、查询缓存与管理员会话均不替代数据库真值。
+PostgreSQL 共 10 张业务表，另有迁移记录表 `schema_migrations`。全新数据库只执行
+`0001_initial.sql`；随机图 `id` 的末 12 位查询所需 ready 部分表达式索引，以及统一
+Redis 图片投影的权威 revision 单行表均属于当前基线。PostgreSQL 是唯一真相源，Redis
+图片投影、查询缓存与管理员会话均不替代数据库真值。
 
 `0001_initial.sql` 按依赖和运行职责排列：迁移账本 → 存储注册表 →
-公共词表 → 图片真值与关联 → 导入生命周期 → 后台任务 → 管理员身份。每张表内部统一为标识、
-状态 / 所有权、业务字段、错误 / 重试和时间字段；种子、约束与索引紧跟所属表，
-图片索引再按直接查询 / 外键、列表游标、随机选择 / 回收职责排列。
+公共词表 → 图片真值、关联与投影 revision → 导入生命周期 → 后台任务 → 管理员身份。
+每张表内部统一为标识、状态 / 所有权、业务字段、错误 / 重试和时间字段；种子、约束与
+索引紧跟所属表，图片索引再按直接查询 / 外键、列表游标、随机选择 / 回收职责排列。
 
-v4.1 保留 v4.0 已发布的 `0002` 前向迁移：已执行的数据库不会重放，尚未执行的数据库与
-全新安装都会由 migration runner 建立 `ready_image_revision`；runner 不重放 `0001`、
-不删除既有 `schema_migrations` 历史。v4.1 不需要管理员凭据 revision 表或相关迁移，应用也
-不会在迁移文件之外猜测、修补或删除旧 schema 状态。
+当前代码库只保留完整的新安装基线，不提供额外兼容或升级迁移。既有部署必须已经具备
+与当前基线一致的 schema；应用不会在迁移文件之外猜测、修补或删除旧 schema 状态，也
+不会自动改写既有 `schema_migrations` 历史。
 
 ## metadata —— 图片主表
 
@@ -113,7 +111,7 @@ Redis meta 的 `applied_revision` 只有在精确同步或全量重建完成完�
 的 `failed` 重复入队；`succeeded`、`ignored` 与耗尽重试的 `failed` 会在同一记录上重置
 为 `pending`，因此同一对象以后再次需要 `move.cleanup` 时不会被历史任务静默拦截。
 Worker 会按保留策略裁剪历史记录：`succeeded` / `ignored` 保留 7 天；普通任务耗尽
-重试且 `next_retry_at IS NULL` 的 `failed` 保留 90 天。耗尽的 `move.cleanup` 不按历史
+重试且 `next_retry_at IS NULL` 的 `failed` 同样保留 7 天。耗尽的 `move.cleanup` 不按历史
 保留期删除，因为它仍是后端对象的未解决保护引用，必须通过管理端重试并实际核验成功。
 每次 `FOR UPDATE SKIP LOCKED` 领取都会生成新的 `execution_token`；续租、成功、忽略、
 重排和失败写入必须同时匹配任务 id、`running` 状态与该 token。僵尸恢复及所有退出

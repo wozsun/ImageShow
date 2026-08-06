@@ -301,7 +301,7 @@ function RebuildConfirmation({ busy, onClose, onConfirm }: {
             </button>
           </header>
           <div className="operation-body">
-            <p className="notice-line">只清理 ImageShow 自有的核心与派生图片键；不会修改 PostgreSQL 图片、管理员会话、限流数据或随机历史。</p>
+            <p className="notice-line">只清理自有的核心与派生图片键；不会修改 PostgreSQL 图片、管理员会话、限流数据或随机历史。</p>
           </div>
           <footer>
             <button type="button" disabled={busy} onClick={() => requestClose()}>取消</button>
