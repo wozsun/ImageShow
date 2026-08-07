@@ -80,6 +80,7 @@ export function finalizeSecurityHeaders(context: Context) {
 
 export const noStoreCacheControl = "no-store";
 export const privateNoStoreCacheControl = "private, no-store";
+export const privateRevalidationCacheControl = "private, no-cache";
 export const immutableCacheControl = "public, max-age=31536000, immutable";
 export const publicDocumentCacheControl = "public, max-age=0, s-maxage=60, stale-while-revalidate=300, stale-if-error=600";
 export const publicStaticCacheControl = "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800, stale-if-error=604800";

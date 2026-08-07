@@ -11,7 +11,7 @@ import {
   publicRedirectCacheControl,
   safeResponseHeaderValue
 } from "../core/http/headers.ts";
-import { isExternalImageRejection, safeFetchExternalImage } from "../core/external-image-fetch.ts";
+import { safeFetchExternalImage } from "../core/external-image-fetch.ts";
 import { coalesce } from "../core/coalesce.ts";
 import { generateStoredThumbnail } from "./processing.ts";
 import { thumbnailObjectKey } from "../storage/image-paths.ts";
@@ -42,13 +42,13 @@ import {
   streamResolvedObject,
   type StoredResponseRequest
 } from "./stored-object-response.ts";
+import {
+  externalImageProxyTimeoutMs,
+  externalImageProxyUserAgent,
+  proxyExternalImage
+} from "./external-image-proxy.ts";
 
 export type { StoredResponseRequest } from "./stored-object-response.ts";
-
-const proxyTimeoutMs = 12_000;
-const proxyUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
-
-type ProxyFallback = () => Response | Promise<Response>;
 
 type ImageLookupByIdItem = {
   id: string;
@@ -62,95 +62,8 @@ type ImageLookupByIdItem = {
   status: string;
   description: string;
   source: string;
+  updated_at: string;
 };
-
-function safeUpstreamResponseHeader(name: string, value: string | null) {
-  if (!value) return "";
-  try {
-    return safeResponseHeaderValue(name, value);
-  } catch {
-    return "";
-  }
-}
-
-function shouldNotRedirectExternalError(error: unknown) {
-  return isExternalImageRejection(error);
-}
-
-async function proxyExternalImage(
-  externalUrl: string,
-  ext: string,
-  isHead: boolean,
-  baseHeaders: Record<string, string> = {},
-  fallbackCacheControl?: string,
-  fallback?: ProxyFallback
-): Promise<Response> {
-  const redirectFallback = async () => fallback ? fallback() : new Response(null, {
-    status: 302,
-    headers: {
-      ...baseHeaders,
-      Location: safeResponseHeaderValue("Location", externalUrl),
-      "Referrer-Policy": "no-referrer"
-    }
-  });
-  if (isHead) return new Response(null, { headers: { ...baseHeaders, "Content-Type": contentType(ext) } });
-
-  let origin: string;
-  try {
-    origin = `${new URL(externalUrl).origin}/`;
-  } catch {
-    if (fallback) return fallback();
-    throw new ApiError(400, "external_image_rejected", "外部图片请求未通过安全校验");
-  }
-
-  try {
-    // 外链代理带源站同源 Referer 绕过简单防盗链；取流失败时走调用方 fallback，默认退回 302。
-    const upstream = await safeFetchExternalImage(externalUrl, {
-      timeoutMs: proxyTimeoutMs,
-      headers: { Referer: origin, "User-Agent": proxyUserAgent, Accept: "image/*,*/*" },
-      imageValidation: "sniff"
-    });
-    if (!upstream.ok || !upstream.body) {
-      await upstream.body?.cancel().catch(() => undefined);
-      return redirectFallback();
-    }
-
-    const headers: Record<string, string> = {
-      ...baseHeaders,
-      "Content-Type": safeUpstreamResponseHeader(
-        "Content-Type",
-        upstream.headers.get("content-type")
-      ) || contentType(ext)
-    };
-    if (fallbackCacheControl) {
-      // 代理图优先继承源站缓存策略；只有源站没有声明时才使用站内 CDN fallback。
-      const originCacheControl = safeUpstreamResponseHeader(
-        "Cache-Control",
-        upstream.headers.get("cache-control")
-      );
-      const originExpires = safeUpstreamResponseHeader(
-        "Expires",
-        upstream.headers.get("expires")
-      );
-      if (originCacheControl) {
-        headers["Cache-Control"] = originCacheControl;
-      }
-      else if (originExpires) {
-        delete headers["Cache-Control"];
-        headers.Expires = originExpires;
-      } else {
-        headers["Cache-Control"] = fallbackCacheControl;
-      }
-    }
-    return new Response(upstream.body, { headers });
-  } catch (error) {
-    if (shouldNotRedirectExternalError(error)) {
-      if (fallback) return fallback();
-      throw error;
-    }
-    return redirectFallback();
-  }
-}
 
 function externalImageExt(url: string) {
   try {
@@ -166,8 +79,8 @@ async function originalSupportsDirectAccess(url: string, userAgent: string) {
     // 用 Range 只探测第一个字节，确认“无 Referer 直连是否可达”，避免为了探测下载整张原图。
     const response = await safeFetchExternalImage(url, {
       method: "GET",
-      timeoutMs: proxyTimeoutMs,
-      headers: { "User-Agent": userAgent || proxyUserAgent, Accept: "image/*,*/*", Range: "bytes=0-0" },
+      timeoutMs: externalImageProxyTimeoutMs,
+      headers: { "User-Agent": userAgent || externalImageProxyUserAgent, Accept: "image/*,*/*", Range: "bytes=0-0" },
       imageValidation: "header"
     });
     await response.body?.cancel().catch(() => undefined);
@@ -197,7 +110,7 @@ function originalDirectCacheKey(url: string, userAgent: string) {
 }
 
 async function cachedOriginalSupportsDirectAccess(url: string, userAgent: string) {
-  const cacheKey = originalDirectCacheKey(url, userAgent || proxyUserAgent);
+  const cacheKey = originalDirectCacheKey(url, userAgent || externalImageProxyUserAgent);
   const cached = await getOriginalDirectCache(cacheKey);
   if (cached) return cached.direct;
 
@@ -303,7 +216,7 @@ async function imageLookupById(
   if (cached.cached && !includeDeleted) return null;
   const row = (await queryForPublicRead(
     `SELECT id, object_key, original, ext, storage_slug, device, brightness, theme,
-            status, description, source
+            status, description, source, updated_at::text AS updated_at
        FROM metadata
       WHERE id=$1
         AND ($2::boolean OR status='ready')
@@ -426,19 +339,19 @@ async function resolvePublicExternalOriginal(id: string) {
   if (!/^https:\/\//i.test(original)) throw new ApiError(404, "not_found", "Original link not found");
   const displayUrl = await displayUrlForOriginalComparison(row);
   if (!hasDistinctOriginalUrl(original, displayUrl)) throw new ApiError(404, "not_found", "Original link not found");
-  return original;
+  return { url: original, updatedAt: row.updated_at };
 }
 
 export async function redirectOriginalLink(id: string, userAgent: string) {
   const original = await resolvePublicExternalOriginal(id);
-  const direct = await cachedOriginalSupportsDirectAccess(original, userAgent);
+  const direct = await cachedOriginalSupportsDirectAccess(original.url, userAgent);
   // 原图链接可无 Referer 直连时直接 302；否则跳到 link 子域代理，避免详情页按钮打开后被防盗链拦截。
   return new Response(null, {
     status: 302,
     headers: {
       Location: safeResponseHeaderValue(
         "Location",
-        direct ? original : `${linkBaseUrl()}/original/${encodeURIComponent(id)}`
+        direct ? original.url : `${linkBaseUrl()}/original/${encodeURIComponent(id)}`
       ),
       "Cache-Control": privateNoStoreCacheControl,
       "Referrer-Policy": "no-referrer"
@@ -446,12 +359,26 @@ export async function redirectOriginalLink(id: string, userAgent: string) {
   });
 }
 
-export async function serveOriginalLinkProxy(id: string, isHead = false) {
+export async function serveOriginalLinkProxy(
+  id: string,
+  request: {
+    method?: "GET" | "HEAD";
+    ifNoneMatch?: string;
+    ifModifiedSince?: string;
+  } = {}
+) {
   const original = await resolvePublicExternalOriginal(id);
   return proxyExternalImage(
-    original,
-    externalImageExt(original),
-    isHead,
+    original.url,
+    externalImageExt(original.url),
+    {
+      method: request.method ?? "GET",
+      validators: {
+        ifNoneMatch: request.ifNoneMatch,
+        ifModifiedSince: request.ifModifiedSince,
+        resourceUpdatedAt: original.updatedAt
+      }
+    },
     {
       "Cache-Control": noStoreCacheControl,
       "Referrer-Policy": "no-referrer"
@@ -493,7 +420,7 @@ export async function serveAdminOriginalLink(id: string, userAgent: string): Pro
       }
     });
   }
-  return proxyExternalImage(original, externalImageExt(original), false, {
+  return proxyExternalImage(original, externalImageExt(original), { method: "GET" }, {
     "Cache-Control": privateNoStoreCacheControl,
     "Referrer-Policy": "no-referrer"
   });

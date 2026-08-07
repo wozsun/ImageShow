@@ -6,7 +6,10 @@ import {
   type StorageBackendMigrationResponseDto,
   type StorageBackendsAdminResponseDto
 } from "@imageshow/shared/browser";
-import { apiSuccess } from "../core/http/responses.ts";
+import {
+  apiSuccess,
+  privateCacheableApiSuccess
+} from "../core/http/responses.ts";
 import {
   requireAdminPermission,
   requireSuperAdmin
@@ -42,7 +45,7 @@ export function registerStorageRoutes(app: Hono) {
     const response = {
       backends: await listStorageBackendOptions()
     } satisfies StorageBackendOptionsResponseDto;
-    return c.json(apiSuccess(response));
+    return privateCacheableApiSuccess(c, response);
   });
 
   app.get(`${adminApiBasePath}/storage/backends`, requireSuperAdmin, async (c) => {

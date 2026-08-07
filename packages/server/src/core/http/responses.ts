@@ -7,6 +7,7 @@ import { ApiError } from "../api-error.ts";
 import { logger } from "../logger.ts";
 import {
   noStoreCacheControl,
+  privateRevalidationCacheControl,
   responseContentLengthValue
 } from "./headers.ts";
 import {
@@ -27,11 +28,40 @@ export function cacheableApiSuccess<T extends Record<string, unknown>>(
   fields: T,
   cacheControl: string
 ) {
-  const response = contentResponse(
-    createContentRepresentation(JSON.stringify(apiSuccess(fields))),
+  return cacheableContentResponse(
+    context,
+    JSON.stringify(apiSuccess(fields)),
     {
       cacheControl,
-      contentType: "application/json; charset=UTF-8",
+      contentType: "application/json; charset=UTF-8"
+    }
+  );
+}
+
+export function privateCacheableApiSuccess<T extends Record<string, unknown>>(
+  context: Context,
+  fields: T
+) {
+  return cacheableApiSuccess(
+    context,
+    fields,
+    privateRevalidationCacheControl
+  );
+}
+
+export function cacheableContentResponse(
+  context: Context,
+  body: string,
+  options: {
+    cacheControl: string;
+    contentType: string;
+    headers?: Readonly<Record<string, string>>;
+  }
+) {
+  const response = contentResponse(
+    createContentRepresentation(body),
+    {
+      ...options,
       ifNoneMatch: context.req.header("if-none-match")
     }
   );

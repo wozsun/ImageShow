@@ -6,7 +6,10 @@ import {
 } from "@imageshow/shared/browser";
 import type { Hono } from "hono";
 import type { z } from "zod";
-import { apiSuccess } from "../core/http/responses.ts";
+import {
+  apiSuccess,
+  privateCacheableApiSuccess
+} from "../core/http/responses.ts";
 import { parse, slugListInput } from "../core/validation.ts";
 import { requireAdminPermission } from "../users/admin-authorization.ts";
 
@@ -32,7 +35,7 @@ export function registerAdminEntityRoutes<
     const response = {
       items: await options.list()
     } satisfies AdminEntityListResponseDto;
-    return c.json(apiSuccess(response));
+    return privateCacheableApiSuccess(c, response);
   });
 
   app.post(base, async (c) => {

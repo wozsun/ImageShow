@@ -9,7 +9,10 @@ import {
   type SelectedTrashPurgeResponseDto,
   type TrashPurgeResponseDto
 } from "@imageshow/shared/browser";
-import { apiSuccess } from "../core/http/responses.ts";
+import {
+  apiSuccess,
+  privateCacheableApiSuccess
+} from "../core/http/responses.ts";
 import { logger } from "../core/logger.ts";
 import {
   batchImageUpdatePath,
@@ -51,7 +54,7 @@ export function registerAdminImageRoutes(app: Hono) {
 
   app.get(`${adminApiBasePath}/images`, async (c) => {
     const q = parse(adminImageListQuery, Object.fromEntries(new URL(c.req.url).searchParams));
-    return c.json(apiSuccess(await listAdminImages(q)));
+    return privateCacheableApiSuccess(c, await listAdminImages(q));
   });
 
   app.post(`${adminApiBasePath}/images/batch-snapshot`, async (c) => {
@@ -63,7 +66,7 @@ export function registerAdminImageRoutes(app: Hono) {
 
   app.get(`${adminApiBasePath}/images/:id/admin-info`, async (c) => {
     const id = parse(uuidInput, c.req.param("id"));
-    return c.json(apiSuccess(await getAdminImageInfo(id)));
+    return privateCacheableApiSuccess(c, await getAdminImageInfo(id));
   });
 
   app.get(`${adminApiBasePath}/images/:id/thumb`, async (c) => {

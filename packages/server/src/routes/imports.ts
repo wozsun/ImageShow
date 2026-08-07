@@ -5,7 +5,10 @@ import {
   type StoredImportStatusListDto
 } from "@imageshow/shared/browser";
 import { ApiError } from "../core/api-error.ts";
-import { apiSuccess } from "../core/http/responses.ts";
+import {
+  apiSuccess,
+  privateCacheableApiSuccess
+} from "../core/http/responses.ts";
 import {
   importBatchCommitInput,
   importCreateInput,
@@ -44,7 +47,7 @@ function parseOwnedImportId(value: string) {
 
 export function registerImportRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/import-vocabulary`, async (c) => {
-    return c.json(apiSuccess(await getImportVocabulary()));
+    return privateCacheableApiSuccess(c, await getImportVocabulary());
   });
 
   app.post(`${adminApiBasePath}/imports/create`, async (c) => {
@@ -147,7 +150,7 @@ export function registerImportRoutes(app: Hono) {
     const response = {
       items: await listImportStatuses(ids)
     } satisfies StoredImportStatusListDto;
-    return c.json(apiSuccess(response));
+    return privateCacheableApiSuccess(c, response);
   });
 
   app.get(`${adminApiBasePath}/imports/events`, async (c) => {

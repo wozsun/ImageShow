@@ -3,7 +3,10 @@ import {
   adminApiBasePath,
   type AdminSettingsResponseDto
 } from "@imageshow/shared/browser";
-import { apiSuccess } from "../core/http/responses.ts";
+import {
+  apiSuccess,
+  privateCacheableApiSuccess
+} from "../core/http/responses.ts";
 import { requireSuperAdmin } from "../users/admin-authorization.ts";
 import {
   getSettingsForAdmin,
@@ -17,7 +20,7 @@ export function registerSettingsRoutes(app: Hono) {
     const response = {
       settings: getSettingsForAdmin()
     } satisfies AdminSettingsResponseDto;
-    return c.json(apiSuccess(response));
+    return privateCacheableApiSuccess(c, response);
   });
 
   app.post(`${adminApiBasePath}/settings`, requireSuperAdmin, async (c) => {

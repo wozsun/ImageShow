@@ -59,10 +59,18 @@ function parseEntityTagList(header: string) {
   return quoted ? [] : candidates;
 }
 
+export function ifNoneMatchCandidates(
+  header: string | null | undefined
+) {
+  if (!header) return [];
+  return parseEntityTagList(header).filter((candidate) => (
+    candidate === "*" || isEntityTag(candidate)
+  ));
+}
+
 /** If-None-Match uses weak comparison for GET and HEAD responses. */
 function ifNoneMatchMatches(header: string | null | undefined, etag?: string | null) {
-  if (!header) return false;
-  return parseEntityTagList(header).some((candidate) => {
+  return ifNoneMatchCandidates(header).some((candidate) => {
     return candidate === "*" || Boolean(etag && weakEtagMatches(candidate, etag));
   });
 }

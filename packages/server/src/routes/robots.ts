@@ -1,6 +1,9 @@
 import type { Context } from "hono";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
-import { apiErrorResponse } from "../core/http/responses.ts";
+import {
+  apiErrorResponse,
+  cacheableContentResponse
+} from "../core/http/responses.ts";
 import { robotsCacheControl } from "../core/http/headers.ts";
 import { specialHost } from "../config/site-host.ts";
 
@@ -22,7 +25,8 @@ export function serveRobotsTxt(context: Context) {
 }
 
 function robotsResponse(context: Context, body: string) {
-  context.header("Content-Type", "text/plain; charset=utf-8");
-  context.header("Cache-Control", robotsCacheControl);
-  return context.body(body);
+  return cacheableContentResponse(context, body, {
+    cacheControl: robotsCacheControl,
+    contentType: "text/plain; charset=utf-8"
+  });
 }

@@ -65,11 +65,12 @@ Content-Type 与缓存验证器会被省略或回退为站内类型；`Content-R
 | 普通 SPA HTML | `max-age=0`、内容 ETag、支持 304 | 强制禁止嵌入；完整 CSP 候选与 Trusted Types 先 report-only |
 | `/embed/home`、`/embed/gallery` | `no-store`，仍带内容 ETag | 仅移除 `X-Frame-Options`，CSP 精确生成 `frame-ancestors` |
 | 确定性公共 JSON API | `max-age=0`、最长 30 秒共享缓存窗口、内容弱 ETag 与 304；按入口决定 `Sec-Fetch-Site`，统一 `Vary: Accept-Encoding` | 不返回后台字段；受保护读取拒绝跨站 / 同站跨源；`shuffle` 保持 `no-store` |
-| 登录、管理 API、错误、404、健康检查 | `no-store` 或 `private, no-store` | 登录限流的 429 使用纯数字 `Retry-After`；错误不会绕过安全头 |
+| 确定性管理只读 JSON | `private, no-cache`、完整 envelope 内容弱 ETag 与 304 | 仅浏览器私有保存且每次重验证；身份鉴权先于内容生成，禁止 CDN 共享 |
+| 登录、其他管理 API、错误、404、健康检查 | `no-store` 或 `private, no-store` | `auth/me`、ALTCHA、检查状态、日志、SSE、后台字节、预览、敏感配置与写接口不缓存；登录限流的 429 使用纯数字 `Retry-After` |
 | CSP report、OPTIONS、204 | `no-store` | 只允许各自方法，先做 Host / Fetch Metadata 检查，取消不需要的正文；不启用 CORS |
 | hash 资产、稳定图片、HEAD、206、304 | hash 资产 / 稳定图片 `immutable`；非 hash 品牌资源短缓存；ETag、Last-Modified、单 Range | 304 无正文；206 保留完整对象验证器；416 返回 `Content-Range: bytes */总长` |
 | 随机 proxy / redirect / JSON | 永远 `no-store` | proxy 不声明 Range；302 的 `Location` 先校验；前两种模式带 `X-Image-Info`，JSON 只返回公开字段与实际 `count`，HEAD 不发送正文 |
-| 外链原图 proxy / redirect | 公开 proxy 继承已校验源站策略或使用 fallback；后台 `private, no-store` | HTTPS 安全抓取、内容嗅探、`Referrer-Policy: no-referrer` |
+| 外链原图 proxy / redirect | 公开 proxy 继承已校验源站策略或使用 fallback，URL 命名空间弱 ETag、Last-Modified 与 304；后台 `private, no-store` | HTTPS 安全抓取、GET 内容嗅探、HEAD 不保留正文、旧 URL 验证器不能命中新 URL、`Referrer-Policy: no-referrer` |
 | 导入 SSE | `no-store, no-transform` | 不压缩、不缓冲，断开即清理 listener / heartbeat |
 | `static.` / `link.` / `random.` 与未知子域 | 只开放各自精确出口；失败 `no-store` | 保留子域的其他路径与未知 Host 均返回带完整安全头的 404 |
 
@@ -127,4 +128,4 @@ Worker 与嵌入页。应用没有跨源 API 契约，不返回 `Access-Control-
   `Referer`，用于微博图床等基础防盗链。重定向后按新目标重新生成，不透传图片
   路径、查询参数、来源页面或管理员输入的任意 Referer。
 - 公共画廊数据接口 `/api/images`、`/api/images/:id`、`/api/gallery-facets` 与 `/api/gallery-stats` 的**跨源保护**：借 Fetch Metadata（`Sec-Fetch-Site`）拒绝**跨站 / 同站跨源**读取，只放行同源（前端自身）、直接导航（`none`）与**不发该头**的老浏览器 / 非浏览器客户端（优雅降级，不误伤画廊）。嵌入页中的数据请求仍由 iframe 内的同源应用发出，不增加 CORS、跨源凭据或后台写权限。它是跨源护栏、不是反爬墙——省略该头的客户端仍可访问，合规爬虫由 robots.txt 兜。（`/api/site-config` 不设限——它是内联进 SPA 的启动配置，需在任意首屏场景下可加载；返回内容只包含公开页面实际消费的站点名称、图标、根路径、首页、画廊排序、有效嵌入开关和详情行为，不包含嵌入来源列表、域名、后台版本显示策略、服务端分页默认值、随机出口默认方式、安全验证开关、登录页背景、上传限制或处理并发。）
-- **robots.txt（按主机区分，默认关闭）**：由 `config.json` 的 `site.robots_enabled` 控制，**默认 `false`**——此时 `/robots.txt` 对所有主机返回 404、不提供任何抓取规则。开启后按主机区分：主站**仅放行首页**（站点描述），画廊 / 接口 / 静态资源 / 后台一律不许抓取；`static.` / `link.` / `random.` 资源域整站禁抓。
+- **robots.txt（按主机区分，默认关闭）**：由 `config.json` 的 `site.robots_enabled` 控制，**默认 `false`**——此时 `/robots.txt` 对所有主机返回 404、不提供任何抓取规则。开启后按主机区分：主站**仅放行首页**（站点描述），画廊 / 接口 / 静态资源 / 后台一律不许抓取；`static.` / `link.` / `random.` 资源域整站禁抓。最终文本带内容弱 ETag，`If-None-Match` 命中返回无正文 304；主机或首页启用配置改变正文时 ETag 同步变化。

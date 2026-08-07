@@ -344,7 +344,7 @@ URL 下载遵循 `link_image.fill_original_url`：开启时自动把输入 URL �
 
 ## 原图链接与外链代理
 
-详情弹窗的「原图」只在 `original` 字段存在且不同于展示图时显示，并先请求 `/api/images/:id/original`。后端也执行相同判断：`original` 为空、不是 `https` 或等于展示 URL 时返回 404。只有 `original` 指向另一个 HTTPS URL 时，后端才用当前浏览器 User-Agent、无 Referer、`GET + Range: bytes=0-0` 探测：可直接访问则 302 到原 URL，否则 302 到 `link.<域名>/original/:id`，由服务端带源站 Referer 转发。
+详情弹窗的「原图」只在 `original` 字段存在且不同于展示图时显示，并先请求 `/api/images/:id/original`。后端也执行相同判断：`original` 为空、不是 `https` 或等于展示 URL 时返回 404。只有 `original` 指向另一个 HTTPS URL 时，后端才用当前浏览器 User-Agent、无 Referer、`GET + Range: bytes=0-0` 探测：可直接访问则 302 到原 URL，否则 302 到 `link.<域名>/original/:id`，由服务端带源站 Referer 转发。公共代理的 GET / HEAD 会把已绑定当前 URL 的 `If-None-Match` 还原为上游验证器；HEAD 优先请求上游 HEAD，明确返回 405 / 501、缺少图片类型或类型不受支持时才用 GET 取得响应并完成图片嗅探，随后立即取消正文。
 
 公共原图接口只接受 `status=ready`。后台回收站的原图按钮显示规则与公开页面一致：只有 `original` 存在且不同于展示图时显示；deleted 行点击时走带鉴权的 `/api/admin/images/:id/original`，它允许回收站内的独立原图链接，但仍使用 `private, no-store`。回收站查看图片本体使用带鉴权的 raw/thumb 接口。
 
@@ -1166,8 +1166,8 @@ HTTP 缓存按 CDN 友好但不泄露私有数据分层：
 - `/api/images`、`/api/images/:id`、`/api/site-config`、`/api/gallery-facets` 与 `/api/gallery-stats` 是公共动态数据：浏览器以 `max-age=0` 保存后立即重验证，CDN 的新鲜、重验证和错误兜底窗口均不超过 30 秒。确定性 JSON 响应与 SPA HTML 共用由完整语义内容生成的弱 ETag，不克隆响应流，也不把 gzip / Brotli 当成不同内容；匹配 `If-None-Match` 时直接返回无正文 304。`shuffle` 列表仍为 `no-store`，不生成验证器。
 - `/embed/home` 与 `/embed/gallery` HTML 固定 `no-store`；页面引用的 hash 静态资源和同源公共 API 仍沿用各自缓存策略。
 - `/random` 和 `random.<域名>` 永远 `no-store`，避免 CDN 把随机图固定成同一张；每次请求都会重新抽图，因此 proxy 响应不声明 `Accept-Ranges`。
-- `/api/admin/*`、登录 / ALTCHA 挑战 / 上传暂存预览 / SSE、后台图片字节、健康检查和错误响应使用 `no-store` 或 `private, no-store`，不应被 CDN 缓存。
-- `link.<域名>/original` 公共代理成功响应优先继承源站 `Cache-Control` / `Expires`；源站未声明时使用站内 CDN fallback：浏览器缓存 1 天、共享缓存 1 年，并允许 stale 回源兜底。后台原图代理仍为 `private, no-store`。
+- 管理端图片列表、单图管理信息、标签 / 主题 / 作者、导入词表 / 状态、普通设置与存储选项是按当前会话鉴权的确定性只读 JSON：使用 `private, no-cache` 与完整 envelope 内容弱 ETag，浏览器可以保存但每次必须私有重验证，CDN 不得共享。登录 / `auth/me` / ALTCHA、健康与检查状态、日志、SSE、后台图片字节、导入预览、敏感完整配置、错误和全部写接口继续 `no-store` 或 `private, no-store`。
+- `robots.txt` 保留原有共享缓存窗口，并按最终文本生成内容弱 ETag；主机或运行时配置改变正文时验证器随之改变。`link.<域名>/original` 公共代理成功响应优先继承源站 `Cache-Control` / `Expires`；源站未声明时使用站内 CDN fallback：浏览器缓存 1 天、共享缓存 1 年，并允许 stale 回源兜底。代理把上游 ETag 编码进含当前 `original` URL SHA-256 的弱验证器，URL 修改后旧标签不会转发到新上游；Last-Modified 合并合法上游日期与高于图片 `updated_at` 的安全秒级版本栅栏，变更发生的当秒不透出日期验证器，且只有当前记录栅栏未晚于客户端日期时才转发 `If-Modified-Since`。上游 304 原样收口为无正文 304，后台原图代理仍为 `private, no-store`。
 
 公共 API 的缓存响应按 `Sec-Fetch-Site` 分变体，所有 API 按 `Accept-Encoding` 分变体。动态压缩读取不超过 1 KiB 的响应前缀决定是否压缩，避免完整缓冲大响应；内容弱 ETag 在压缩前随 JSON 一次生成，命中 304 时不进入压缩。本站静态 / link 子域直接输出的存储图片带 `Content-Length`、内容或对象版本 ETag 与可用的 `Last-Modified`；有可靠验证器时按 `If-None-Match` 优先、`If-Modified-Since` 后备的标准顺序返回 304，单段 Range 使用同一完整对象验证器并按强 ETag 或日期处理 `If-Range`。多段或不可满足的 Range 返回带对象总长度的 416；WebDAV 忽略 Range 时按流跳过并截取所需区间，不缓冲完整对象。
 

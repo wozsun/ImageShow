@@ -129,7 +129,7 @@ function isRedirect(status: number) {
   return [301, 302, 303, 307, 308].includes(status);
 }
 
-function isAllowedImageContentType(value: string | null) {
+export function isAllowedExternalImageContentType(value: string | null) {
   const mime = value?.split(";")[0]?.trim().toLowerCase() ?? "";
   return allowedImageMimeTypes.has(mime);
 }
@@ -184,7 +184,7 @@ async function responseWithSniffedImageBody(response: Response) {
   });
 
   const headers = new Headers(response.headers);
-  if (!isAllowedImageContentType(headers.get("content-type"))) headers.set("Content-Type", detectedMime);
+  if (!isAllowedExternalImageContentType(headers.get("content-type"))) headers.set("Content-Type", detectedMime);
   return new Response(body, { status: response.status, statusText: response.statusText, headers });
 }
 
@@ -250,7 +250,7 @@ export async function safeFetchExternalImage(input: string, options: SafeExterna
 
     const validation = options.imageValidation ?? "sniff";
     try {
-      if (validation === "header" && !isAllowedImageContentType(response.headers.get("content-type"))) {
+      if (validation === "header" && !isAllowedExternalImageContentType(response.headers.get("content-type"))) {
         await response.body?.cancel().catch(() => undefined);
         throw externalImageRejected("unsupported_image_header", urlLogContext(url));
       }

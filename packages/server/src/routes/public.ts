@@ -123,7 +123,11 @@ export function registerPublicRoutes(app: Hono) {
     c.req.raw.signal,
     async () => serveOriginalLinkProxy(
       parse(uuidInput, c.req.param("id")),
-      c.req.method === "HEAD"
+      {
+        method: c.req.method === "HEAD" ? "HEAD" : "GET",
+        ifNoneMatch: c.req.header("if-none-match"),
+        ifModifiedSince: c.req.header("if-modified-since")
+      }
     )
   ));
 }
