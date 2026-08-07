@@ -1,4 +1,7 @@
-import { ifNoneMatchMatches, ifRangeMatches } from "../core/http/validators.ts";
+import {
+  conditionalRequestNotModified,
+  ifRangeMatches
+} from "../core/http/validators.ts";
 import type { OpenedRead } from "../storage/driver.ts";
 import type { ResolvedReadableObject } from "../storage/object-access.ts";
 import { webReadableFromNode } from "../storage/stream-buffer.ts";
@@ -12,6 +15,7 @@ import { ApiError } from "../core/api-error.ts";
 export type StoredResponseRequest = {
   range?: string;
   ifNoneMatch?: string;
+  ifModifiedSince?: string;
   ifRange?: string;
   isHead?: boolean;
 };
@@ -58,14 +62,20 @@ export async function streamResolvedObject(
   request: StoredResponseRequest = {}
 ) {
   const validateBeforeRange = Boolean(
-    request.range && (request.ifNoneMatch || request.ifRange)
+    request.range
+    && (request.ifNoneMatch || request.ifModifiedSince || request.ifRange)
   );
   let opened = await object.open(
     validateBeforeRange ? undefined : request.range
   );
   const initialEtag = safeStoredEtag(opened.etag);
   const initialLastModified = safeStoredLastModified(opened.lastModified);
-  if (ifNoneMatchMatches(request.ifNoneMatch, initialEtag)) {
+  if (conditionalRequestNotModified({
+    ifNoneMatch: request.ifNoneMatch,
+    ifModifiedSince: request.ifModifiedSince,
+    etag: initialEtag,
+    lastModified: initialLastModified
+  })) {
     opened.body.destroy();
     const headers = new Headers({
       "Cache-Control": cacheControl,

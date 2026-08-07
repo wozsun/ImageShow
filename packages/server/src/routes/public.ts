@@ -1,6 +1,10 @@
 import type { Hono } from "hono";
 import type { PublicImageDetailResponseDto } from "@imageshow/shared/browser";
-import { apiErrorResponse, apiSuccess } from "../core/http/responses.ts";
+import {
+  apiErrorResponse,
+  apiSuccess,
+  cacheableApiSuccess
+} from "../core/http/responses.ts";
 import { blockCrossSiteFetch } from "../core/http/request-security.ts";
 import {
   noStoreCacheControl,
@@ -30,20 +34,26 @@ export function registerPublicRoutes(app: Hono) {
   app.get("/api/images", blockCrossSiteFetch, async (c) => {
     return runPublicReadRequest("list", c.req.raw.signal, async (signal) => {
       const q = parse(listQuery, Object.fromEntries(new URL(c.req.url).searchParams));
-      c.header("Cache-Control", q.shuffle ? noStoreCacheControl : publicListCacheControl);
-      return c.json(apiSuccess(await listPublicImages(q, signal)));
+      const response = await listPublicImages(q, signal);
+      if (q.shuffle) {
+        c.header("Cache-Control", noStoreCacheControl);
+        return c.json(apiSuccess(response));
+      }
+      return cacheableApiSuccess(c, response, publicListCacheControl);
     });
   });
 
   app.get("/api/site-config", async (c) => {
-    c.header("Cache-Control", publicConfigCacheControl);
-    return c.json(apiSuccess(siteConfigPayload()));
+    return cacheableApiSuccess(c, siteConfigPayload(), publicConfigCacheControl);
   });
 
   app.get("/api/gallery-facets", blockCrossSiteFetch, async (c) => {
     return runPublicReadRequest("aggregate", c.req.raw.signal, async (signal) => {
-      c.header("Cache-Control", publicMetadataCacheControl);
-      return c.json(apiSuccess(await getPublicGalleryFacets(signal)));
+      return cacheableApiSuccess(
+        c,
+        await getPublicGalleryFacets(signal),
+        publicMetadataCacheControl
+      );
     });
   });
 
@@ -69,19 +79,21 @@ export function registerPublicRoutes(app: Hono) {
         })
       );
       const query = parse(galleryStatsQuery, rawQuery);
-      c.header("Cache-Control", publicMetadataCacheControl);
-      return c.json(apiSuccess(await getPublicGalleryStats(query, signal)));
+      return cacheableApiSuccess(
+        c,
+        await getPublicGalleryStats(query, signal),
+        publicMetadataCacheControl
+      );
     });
   });
 
   app.get("/api/images/:id", blockCrossSiteFetch, async (c) => {
     return runPublicReadRequest("lookup", c.req.raw.signal, async () => {
       const id = parse(uuidInput, c.req.param("id"));
-      c.header("Cache-Control", publicMetadataCacheControl);
       const response = {
         item: await getPublicImage(id)
       } satisfies PublicImageDetailResponseDto;
-      return c.json(apiSuccess(response));
+      return cacheableApiSuccess(c, response, publicMetadataCacheControl);
     });
   });
 

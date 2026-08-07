@@ -64,7 +64,7 @@ Content-Type 与缓存验证器会被省略或回退为站内类型；`Content-R
 | --- | --- | --- |
 | 普通 SPA HTML | `max-age=0`、内容 ETag、支持 304 | 强制禁止嵌入；完整 CSP 候选与 Trusted Types 先 report-only |
 | `/embed/home`、`/embed/gallery` | `no-store`，仍带内容 ETag | 仅移除 `X-Frame-Options`，CSP 精确生成 `frame-ancestors` |
-| 公共 JSON API | 最长 30 秒共享缓存窗口，按入口决定 `Sec-Fetch-Site`，统一 `Vary: Accept-Encoding` | 不返回后台字段；受保护读取拒绝跨站 / 同站跨源 |
+| 确定性公共 JSON API | `max-age=0`、最长 30 秒共享缓存窗口、内容弱 ETag 与 304；按入口决定 `Sec-Fetch-Site`，统一 `Vary: Accept-Encoding` | 不返回后台字段；受保护读取拒绝跨站 / 同站跨源；`shuffle` 保持 `no-store` |
 | 登录、管理 API、错误、404、健康检查 | `no-store` 或 `private, no-store` | 登录限流的 429 使用纯数字 `Retry-After`；错误不会绕过安全头 |
 | CSP report、OPTIONS、204 | `no-store` | 只允许各自方法，先做 Host / Fetch Metadata 检查，取消不需要的正文；不启用 CORS |
 | hash 资产、稳定图片、HEAD、206、304 | hash 资产 / 稳定图片 `immutable`；非 hash 品牌资源短缓存；ETag、Last-Modified、单 Range | 304 无正文；206 保留完整对象验证器；416 返回 `Content-Range: bytes */总长` |

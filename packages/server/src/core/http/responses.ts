@@ -9,6 +9,10 @@ import {
   noStoreCacheControl,
   responseContentLengthValue
 } from "./headers.ts";
+import {
+  contentResponse,
+  createContentRepresentation
+} from "./content-response.ts";
 
 export function apiSuccess(): { ok: true };
 export function apiSuccess<T extends Record<string, unknown>>(
@@ -16,6 +20,22 @@ export function apiSuccess<T extends Record<string, unknown>>(
 ): ApiSuccessResponse<T>;
 export function apiSuccess(fields: Record<string, unknown> = {}) {
   return { ok: true as const, ...fields };
+}
+
+export function cacheableApiSuccess<T extends Record<string, unknown>>(
+  context: Context,
+  fields: T,
+  cacheControl: string
+) {
+  const response = contentResponse(
+    createContentRepresentation(JSON.stringify(apiSuccess(fields))),
+    {
+      cacheControl,
+      contentType: "application/json; charset=UTF-8",
+      ifNoneMatch: context.req.header("if-none-match")
+    }
+  );
+  return context.newResponse(response.body, response);
 }
 
 export function handleApiError(context: Context, error: unknown) {

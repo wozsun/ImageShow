@@ -1,14 +1,12 @@
-import { createHash } from "node:crypto";
 import {
   publicDocumentCacheControl,
   spaDocumentHeaders
 } from "../core/http/headers.ts";
-import { ifNoneMatchMatches } from "../core/http/validators.ts";
-
-type SpaDocumentRepresentation = {
-  body: string;
-  etag: string;
-};
+import {
+  contentResponse,
+  createContentRepresentation,
+  type ContentRepresentation
+} from "../core/http/content-response.ts";
 
 type SpaDocumentResponseOptions = {
   cacheControl?: string;
@@ -16,30 +14,18 @@ type SpaDocumentResponseOptions = {
   ifNoneMatch?: string | null;
 };
 
-export function createSpaDocumentRepresentation(body: string): SpaDocumentRepresentation {
-  return {
-    body,
-    // 动态压缩可能为同一 HTML 内容选择不同 Content-Encoding。弱标签表达
-    // 语义表示相同，不错误声称压缩前后的响应字节完全一致。
-    etag: `W/"${createHash("sha256").update(body).digest("base64url")}"`
-  };
+export function createSpaDocumentRepresentation(body: string): ContentRepresentation {
+  return createContentRepresentation(body);
 }
 
 export function spaDocumentResponse(
-  representation: SpaDocumentRepresentation,
+  representation: ContentRepresentation,
   options: SpaDocumentResponseOptions = {}
 ) {
-  const notModified = ifNoneMatchMatches(
-    options.ifNoneMatch,
-    representation.etag
-  );
-  return new Response(notModified ? null : representation.body, {
-    status: notModified ? 304 : 200,
-    headers: {
-      "Content-Type": "text/html; charset=utf-8",
-      "Cache-Control": options.cacheControl ?? publicDocumentCacheControl,
-      ETag: representation.etag,
-      ...(options.headers ?? spaDocumentHeaders)
-    }
+  return contentResponse(representation, {
+    cacheControl: options.cacheControl ?? publicDocumentCacheControl,
+    contentType: "text/html; charset=utf-8",
+    headers: options.headers ?? spaDocumentHeaders,
+    ifNoneMatch: options.ifNoneMatch
   });
 }

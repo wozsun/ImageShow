@@ -7,6 +7,7 @@ export function storedResponseRequest(
   return {
     range: context.req.header("range"),
     ifNoneMatch: context.req.header("if-none-match"),
+    ifModifiedSince: context.req.header("if-modified-since"),
     ifRange: context.req.header("if-range"),
     isHead: context.req.method === "HEAD"
   };

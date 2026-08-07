@@ -1163,12 +1163,12 @@ TTL，不进入 ready 图片命名空间。停机中止并排空当前缓存重�
 HTTP 缓存按 CDN 友好但不泄露私有数据分层：
 
 - `/assets/*` 的 Vite 构建产物和稳定的 `/media/*`、`/thumbs/*` 图片对象使用一年 `immutable`；`/assets/brand/*`、`/favicon.ico` 不是 hash 路径，只给短浏览器缓存和较长 CDN 缓存。构建会为可压缩静态文本生成 Brotli / gzip 版本，服务端按 `Accept-Encoding` 选择并附带 `Vary`，同时支持 ETag / Last-Modified 条件请求。前端分块遵循 `公开基础层 ⊂ 图片管理员层 ⊂ 超级管理员层`：公开入口不加载后台基础块，图片管理员入口不加载仅超级管理员页面的实现；纯通用机制和跨后台页面的小控件分别合并为全站基础块与后台基础块，路由专有实现仍按实际入口集合精确拆分。画廊删除后的公开无限列表修剪就近保留在画廊块，不能因复用后台失效模块而反向预载后台基础块。不足 1 KiB 的颜色上下文、媒体查询、路由等待、弹窗基础能力及已认证编辑查询并入既有基础块；纯后台偏好协调模块也固定并入后台基础块，不再独立形成请求。Web 构建结束后会检查首页、画廊与 HTML 均未静态导入或预载后台基础块，并拒绝除 bundler runtime 外的新亚 1 KiB JavaScript 请求。后台页面专属样式只在首次进入对应页面时加载，公开图片详情中的管理信息只在后台详情或已有管理员会话提示时加载；单图编辑实现仅在会话已确认且发生 hover、focus、pointerdown 或 click 意图后加载，批量迁移存储对话框也只为拥有权限且表达操作意图的超级管理员预取。同一会话复用已解析模块，完整刷新则复用带 hash 的 immutable 资源。部署后旧会话若引用已失效的 hash 资源，路由错误边界会保留外层界面并提供整页重载。静态出口与图片字节出口共用单段 Range 语义，包括后缀范围、不可满足范围的 416 以及 `If-Range`；静态 206 的 ETag 使用完整表示长度，因此不同 Range 与完整响应共用同一验证器。`If-None-Match` 实体标签列表按 quoted opaque-tag 解析，标签内逗号不会被误拆。存储后端的公开 URL 可能被管理员修改，因此指向该 URL 的 302 只短期缓存；缩略图缺失时会按当前尺寸与质量配置补建，失败会记录对象键、存储后端和原因，公开出口仍临时回退原图且不使用 immutable。
-- `/api/images`、`/api/images/:id`、`/api/site-config`、`/api/gallery-facets` 与 `/api/gallery-stats` 是公共动态数据：浏览器不持有，CDN 的新鲜、重验证和错误兜底窗口均不超过 30 秒。SPA HTML 使用由完整文档内容生成的 ETag 和 `max-age=0` 重验证，匹配 `If-None-Match` 时返回 304。
+- `/api/images`、`/api/images/:id`、`/api/site-config`、`/api/gallery-facets` 与 `/api/gallery-stats` 是公共动态数据：浏览器以 `max-age=0` 保存后立即重验证，CDN 的新鲜、重验证和错误兜底窗口均不超过 30 秒。确定性 JSON 响应与 SPA HTML 共用由完整语义内容生成的弱 ETag，不克隆响应流，也不把 gzip / Brotli 当成不同内容；匹配 `If-None-Match` 时直接返回无正文 304。`shuffle` 列表仍为 `no-store`，不生成验证器。
 - `/embed/home` 与 `/embed/gallery` HTML 固定 `no-store`；页面引用的 hash 静态资源和同源公共 API 仍沿用各自缓存策略。
 - `/random` 和 `random.<域名>` 永远 `no-store`，避免 CDN 把随机图固定成同一张；每次请求都会重新抽图，因此 proxy 响应不声明 `Accept-Ranges`。
 - `/api/admin/*`、登录 / ALTCHA 挑战 / 上传暂存预览 / SSE、后台图片字节、健康检查和错误响应使用 `no-store` 或 `private, no-store`，不应被 CDN 缓存。
 - `link.<域名>/original` 公共代理成功响应优先继承源站 `Cache-Control` / `Expires`；源站未声明时使用站内 CDN fallback：浏览器缓存 1 天、共享缓存 1 年，并允许 stale 回源兜底。后台原图代理仍为 `private, no-store`。
 
-公共 API 的缓存响应按 `Sec-Fetch-Site` 分变体，所有 API 按 `Accept-Encoding` 分变体。动态压缩读取不超过 1 KiB 的响应前缀决定是否压缩，避免完整缓冲大响应。本站静态 / link 子域直接输出的存储图片带 `Content-Length` 和内容或对象版本 ETag；有可靠验证器时支持正确的 304，单段 Range 使用同一完整对象验证器并按强 ETag 或日期处理 `If-Range`。多段或不可满足的 Range 返回带对象总长度的 416；WebDAV 忽略 Range 时按流跳过并截取所需区间，不缓冲完整对象。
+公共 API 的缓存响应按 `Sec-Fetch-Site` 分变体，所有 API 按 `Accept-Encoding` 分变体。动态压缩读取不超过 1 KiB 的响应前缀决定是否压缩，避免完整缓冲大响应；内容弱 ETag 在压缩前随 JSON 一次生成，命中 304 时不进入压缩。本站静态 / link 子域直接输出的存储图片带 `Content-Length`、内容或对象版本 ETag 与可用的 `Last-Modified`；有可靠验证器时按 `If-None-Match` 优先、`If-Modified-Since` 后备的标准顺序返回 304，单段 Range 使用同一完整对象验证器并按强 ETag 或日期处理 `If-Range`。多段或不可满足的 Range 返回带对象总长度的 416；WebDAV 忽略 Range 时按流跳过并截取所需区间，不缓冲完整对象。
 
 推荐 Nginx 配置面向当前 stable 1.30.3，不重复声明其默认 HTTP/1.1 / keepalive，也不重复实现应用缓存；它只负责 TLS、HTTP/2、转发头，并为导入 / SSE 与长时间检查路径关闭请求缓冲或放宽超时。若需要共享 HTTP 缓存，优先让外部 CDN 遵循 Hono 返回的 `Cache-Control` 与 `Vary`。

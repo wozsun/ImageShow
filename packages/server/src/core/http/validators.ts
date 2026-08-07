@@ -60,7 +60,7 @@ function parseEntityTagList(header: string) {
 }
 
 /** If-None-Match uses weak comparison for GET and HEAD responses. */
-export function ifNoneMatchMatches(header: string | null | undefined, etag?: string | null) {
+function ifNoneMatchMatches(header: string | null | undefined, etag?: string | null) {
   if (!header) return false;
   return parseEntityTagList(header).some((candidate) => {
     return candidate === "*" || Boolean(etag && weakEtagMatches(candidate, etag));
@@ -96,7 +96,7 @@ export function conditionalRequestNotModified(input: {
   etag?: string | null;
   lastModified?: string | null;
 }) {
-  if (input.ifNoneMatch) {
+  if (input.ifNoneMatch != null) {
     return ifNoneMatchMatches(input.ifNoneMatch, input.etag);
   }
   return ifModifiedSinceMatches(input.ifModifiedSince, input.lastModified);
