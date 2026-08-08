@@ -1,7 +1,18 @@
+import {
+  slugMaxLength,
+  slugPattern
+} from "@imageshow/shared/browser";
 import type { FacetOption } from "../types.js";
 
-export function normalizeFacetInput(value: string) {
-  return value.toLowerCase().replace(/[^a-z0-9-]/g, "");
+export function normalizeFacetSearchQuery(value: string) {
+  return value.trim().toLowerCase();
+}
+
+export function parseFacetSlug(value: string) {
+  const slug = value.trim().toLowerCase();
+  return slug.length <= slugMaxLength && slugPattern.test(slug)
+    ? slug
+    : null;
 }
 
 export function facetSuggestions(
@@ -9,13 +20,14 @@ export function facetSuggestions(
   query: string,
   excludedSlugs: ReadonlySet<string> = new Set()
 ) {
-  if (!query) return [];
+  const normalizedQuery = normalizeFacetSearchQuery(query);
+  if (!normalizedQuery) return [];
   return options
     .filter((option) => (
       !excludedSlugs.has(option.slug)
       && (
-        option.slug.includes(query)
-        || option.display_name.toLowerCase().includes(query)
+        option.slug.includes(normalizedQuery)
+        || option.display_name.toLowerCase().includes(normalizedQuery)
       )
     ))
     .slice(0, 50);

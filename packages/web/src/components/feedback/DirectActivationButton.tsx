@@ -142,6 +142,13 @@ function useDirectActivation(
         // already queued around synchronous UI teardown.
         event.preventDefault();
       }
+      if (directPrimaryPress && !preserveFocusOnPress) {
+        // Preventing the compatibility mouse sequence also prevents the
+        // browser's normal focus transfer. Recreate that transfer during the
+        // press so focused editors settle before pointerup activates the
+        // button, matching the mouse mousedown -> click order.
+        event.currentTarget.focus({ preventScroll: true });
+      }
       if (!directPrimaryPress) {
         pointerPressRef.current = null;
         return;

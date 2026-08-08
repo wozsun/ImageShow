@@ -3,6 +3,10 @@ import { AnchoredPopup } from "../feedback/AnchoredPopup.js";
 import { DirectActivationButton } from "../feedback/DirectActivationButton.js";
 import { MenuItemButton } from "../feedback/MenuItemButton.js";
 import { useAnchoredMenu } from "../../hooks/useAnchoredMenu.js";
+import {
+  facetSuggestions,
+  normalizeFacetSearchQuery
+} from "../../lib/ui/facet-input.js";
 import { facetDisplayName } from "../../lib/ui/formatters.js";
 import type { AnchoredMenuSize } from "../../lib/ui/menu-position.js";
 import type { FacetOption } from "../../lib/types.js";
@@ -43,11 +47,8 @@ export function FacetSelector({ options, value, onChange, noun, disabled = false
     focusOnOpen: () => searchRef.current
   });
   const selectedSet = new Set(parsed.selected);
-  const normalizedQuery = query.trim().toLowerCase();
-  const results = normalizedQuery
-    ? options.filter((option) => !selectedSet.has(option.slug)
-      && (option.slug.includes(normalizedQuery) || option.display_name.toLowerCase().includes(normalizedQuery))).slice(0, 50)
-    : [];
+  const normalizedQuery = normalizeFacetSearchQuery(query);
+  const results = facetSuggestions(options, query, selectedSet);
 
   useEffect(() => {
     if (parsed.selected.length) setMode(parsed.exclude ? "exclude" : "include");

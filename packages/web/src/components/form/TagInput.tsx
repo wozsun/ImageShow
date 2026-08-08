@@ -1,11 +1,12 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import { vocabularyDisplayNameMaxLength } from "@imageshow/shared/browser";
 import { useAnchoredMenu } from "../../hooks/useAnchoredMenu.js";
 import { useImeInputSession } from "../../hooks/useImeInputSession.js";
 import { Icon } from "../icon/Icon.js";
-import { slugPattern } from "../../lib/constants.js";
 import {
   facetSuggestions,
-  normalizeFacetInput
+  normalizeFacetSearchQuery,
+  parseFacetSlug
 } from "../../lib/ui/facet-input.js";
 import { facetDisplayName } from "../../lib/ui/formatters.js";
 import type { FacetOption } from "../../lib/types.js";
@@ -28,6 +29,8 @@ export function TagInput({ value, onChange, suggestions, disabled = false, ariaL
   const [activeIndex, setActiveIndex] = useState(-1);
   const imeSession = useImeInputSession(text);
   const wrapRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const choiceSettledCompositionRef = useRef(false);
   const listId = useId();
   const inputId = `${listId}-input`;
   const {
@@ -53,7 +56,7 @@ export function TagInput({ value, onChange, suggestions, disabled = false, ariaL
     if (box && box.contains(document.activeElement)) box.scrollLeft = box.scrollWidth;
   }, [text, value]);
 
-  const query = text.trim().toLowerCase();
+  const query = normalizeFacetSearchQuery(text);
   const selected = new Set(value);
 
   const knownSlugs = new Set(suggestions.map((option) => option.slug));
@@ -63,7 +66,7 @@ export function TagInput({ value, onChange, suggestions, disabled = false, ariaL
   const updateQuery = (nextText: string) => {
     setText(nextText);
     setActiveIndex(-1);
-    if (!nextText) {
+    if (!normalizeFacetSearchQuery(nextText)) {
       if (open) requestClose();
       return;
     }
@@ -72,18 +75,28 @@ export function TagInput({ value, onChange, suggestions, disabled = false, ariaL
   };
 
   const addTag = (raw: string) => {
-    const tag = raw.trim().toLowerCase();
+    const tag = parseFacetSlug(raw);
     if (
-      !tag
+      tag === null
       || selected.has(tag)
-      || tag.length > 32
-      || !slugPattern.test(tag)
     ) return false;
     onChange([...value, tag]);
     setText("");
     setActiveIndex(-1);
     if (open) requestClose();
     return true;
+  };
+  const chooseTag = (slug: string) => {
+    const compositionActive = imeSession.isComposing();
+    if (!addTag(slug) || !compositionActive) return;
+
+    // Suggestion presses normally preserve focus so several tags can be
+    // chosen quickly. During an active composition we instead end this focus
+    // session: WebKit may still dispatch the old compositionend/input pair,
+    // which the settled IME guard must reject rather than restore the query.
+    choiceSettledCompositionRef.current = true;
+    imeSession.settleEditing("");
+    inputRef.current?.blur();
   };
   const removeTag = (tag: string) => onChange(value.filter((item) => item !== tag));
   const scrollTags = (direction: -1 | 1) => {
@@ -115,7 +128,7 @@ export function TagInput({ value, onChange, suggestions, disabled = false, ariaL
       requestClose
     })) return;
 
-    if (event.key === "Enter" || event.key === "," || (event.key === " " && !event.nativeEvent.isComposing)) {
+    if (event.key === "Enter") {
       event.preventDefault();
       if (open && activeIndex >= 0 && matches[activeIndex]) addTag(matches[activeIndex].slug);
       else if (text.trim()) addTag(text);
@@ -151,7 +164,7 @@ export function TagInput({ value, onChange, suggestions, disabled = false, ariaL
       popupRef={menuRef}
       onAnimationEnd={onAnimationEnd}
       onActiveIndexChange={setActiveIndex}
-      onChoose={addTag}
+      onChoose={chooseTag}
     />
   );
 
@@ -180,11 +193,13 @@ export function TagInput({ value, onChange, suggestions, disabled = false, ariaL
         );
       })}
       <input
+        ref={inputRef}
         id={inputId}
         className="tag-input-field"
         value={text}
-        maxLength={32}
+        maxLength={vocabularyDisplayNameMaxLength}
         onFocus={() => {
+          choiceSettledCompositionRef.current = false;
           imeSession.beginEditing();
         }}
         onChange={(event) => {
@@ -196,23 +211,25 @@ export function TagInput({ value, onChange, suggestions, disabled = false, ariaL
             setText(raw);
             return;
           }
-          updateQuery(normalizeFacetInput(raw));
+          updateQuery(raw);
         }}
         onCompositionStart={() => {
           imeSession.beginComposition();
         }}
         onCompositionEnd={(event) => {
           if (!imeSession.endComposition(event.currentTarget)) return;
-          updateQuery(normalizeFacetInput(event.currentTarget.value));
+          updateQuery(event.currentTarget.value);
         }}
         onKeyDown={handleKey}
         onBlur={(event) => {
-          const normalized = normalizeFacetInput(event.currentTarget.value);
-          const added = normalized.trim() ? addTag(normalized) : false;
-          const settledValue = added ? "" : normalized;
-          if (!added) setText(normalized);
-          imeSession.settleEditing(settledValue);
-          if (!added && open) requestClose();
+          if (!choiceSettledCompositionRef.current) {
+            addTag(event.currentTarget.value);
+          }
+          choiceSettledCompositionRef.current = false;
+          setText("");
+          setActiveIndex(-1);
+          imeSession.settleEditing("");
+          if (open) requestClose();
         }}
         placeholder={value.length ? "" : placeholder}
         disabled={disabled}

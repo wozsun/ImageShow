@@ -15,6 +15,7 @@ export const altchaSolveTimeoutMs = 60_000;
 
 export const slugPattern = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 export const slugMaxLength = 32;
+export const vocabularyDisplayNameMaxLength = 64;
 
 export const adminBasePath = "/admin";
 export const adminApiBasePath = "/api/admin";

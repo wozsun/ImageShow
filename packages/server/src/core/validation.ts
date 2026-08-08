@@ -8,7 +8,8 @@ import {
   importBatchHardLimit,
   importModes,
   slugMaxLength,
-  slugPattern
+  slugPattern,
+  vocabularyDisplayNameMaxLength
 } from "@imageshow/shared/browser";
 import { adminPasswordInput, adminUsernameInput } from "./credentials.ts";
 import { ApiError } from "./api-error.ts";
@@ -76,7 +77,10 @@ const slugInput = z.string().trim().toLowerCase()
   .min(1, "标识 slug 不能为空")
   .max(slugMaxLength, `标识 slug 最长 ${slugMaxLength} 个字符`)
   .regex(slugPattern, "标识 slug 只能包含小写字母、数字、连字符，且不能以连字符开头或结尾");
-const displayNameInput = z.string().trim().max(64, "显示名最长 64 个字符");
+const displayNameInput = z.string().trim().max(
+  vocabularyDisplayNameMaxLength,
+  `显示名最长 ${vocabularyDisplayNameMaxLength} 个字符`
+);
 
 export const tagSlugInput = slugInput;
 export const tagCreateInput = z.object({ slug: tagSlugInput, display_name: displayNameInput.optional().default("") });

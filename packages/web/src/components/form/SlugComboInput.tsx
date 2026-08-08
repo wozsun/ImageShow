@@ -5,12 +5,13 @@ import {
   useState,
   type KeyboardEvent
 } from "react";
+import { vocabularyDisplayNameMaxLength } from "@imageshow/shared/browser";
 import { useAnchoredMenu } from "../../hooks/useAnchoredMenu.js";
 import { useImeInputSession } from "../../hooks/useImeInputSession.js";
-import { slugPattern } from "../../lib/constants.js";
 import {
   facetSuggestions,
-  normalizeFacetInput
+  normalizeFacetSearchQuery,
+  parseFacetSlug
 } from "../../lib/ui/facet-input.js";
 import { facetDisplayName } from "../../lib/ui/formatters.js";
 import type { FacetOption } from "../../lib/types.js";
@@ -37,6 +38,7 @@ export function SlugComboInput({ value, onChange, options, noun, placeholder, di
   const [focused, setFocused] = useState(false);
   const [editingValue, setEditingValue] = useState(value);
   const publishedValueRef = useRef(value);
+  const pendingChoiceRef = useRef<string | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const renderedValue = focused
@@ -65,34 +67,42 @@ export function SlugComboInput({ value, onChange, options, noun, placeholder, di
 
   useEffect(() => {
     publishedValueRef.current = value;
-    if (!imeSession.isComposing()) setEditingValue(value);
-  }, [value]);
+    if (!focused && !imeSession.isComposing()) setEditingValue(value);
+  }, [focused, value]);
 
-  const publishValue = (raw: string, showSuggestions = true) => {
-    const normalized = normalizeFacetInput(raw);
-    setEditingValue(normalized);
-    if (normalized !== publishedValueRef.current) {
-      publishedValueRef.current = normalized;
-      onChange(normalized);
+  const publishSlug = (slug: string) => {
+    if (slug !== publishedValueRef.current) {
+      publishedValueRef.current = slug;
+      onChange(slug);
     }
-    setActiveIndex(-1);
-    if (showSuggestions) {
-      if (closing) cancelClose();
-      if (!open) openMenu();
-    }
-    return normalized;
   };
 
-  const query = (focused ? editingValue : value).trim().toLowerCase();
+  const updateQuery = (nextValue: string) => {
+    setEditingValue(nextValue);
+    publishSlug(parseFacetSlug(nextValue) ?? "");
+    setActiveIndex(-1);
+    if (!normalizeFacetSearchQuery(nextValue)) {
+      if (open) requestClose();
+      return;
+    }
+    if (closing) cancelClose();
+    if (!open) openMenu();
+  };
+
+  const query = normalizeFacetSearchQuery(focused ? editingValue : value);
 
   const matches = facetSuggestions(options, query, hiddenSuggestionSlugs);
   const suggestionOpen = open && matches.length > 0;
 
-  const isNew = slugPattern.test(query) && query.length <= 32 && !options.some((option) => option.slug === query);
+  const typedSlug = parseFacetSlug(focused ? editingValue : value);
+  const isNew = typedSlug !== null
+    && !options.some((option) => option.slug === typedSlug);
 
-  const choose = (slug: string) => {
-    const normalized = publishValue(slug, false);
-    imeSession.settleEditing(facetDisplayName(options, normalized));
+  const commitAndBlur = (slug: string) => {
+    pendingChoiceRef.current = slug;
+    setEditingValue(slug);
+    publishSlug(slug);
+    imeSession.settleEditing(facetDisplayName(options, slug));
 
     setFocused(false);
     inputRef.current?.blur();
@@ -115,10 +125,17 @@ export function SlugComboInput({ value, onChange, options, noun, placeholder, di
     })) return;
 
     if (event.key === "Enter") {
-      if (!suggestionOpen) return;
       event.preventDefault();
-      if (activeIndex >= 0 && matches[activeIndex]) choose(matches[activeIndex].slug);
-      else requestClose();
+      if (suggestionOpen && activeIndex >= 0 && matches[activeIndex]) {
+        commitAndBlur(matches[activeIndex].slug);
+        return;
+      }
+      const slug = parseFacetSlug(editingValue);
+      if (slug !== null) {
+        commitAndBlur(slug);
+      } else if (suggestionOpen) {
+        requestClose();
+      }
     }
   };
 
@@ -136,7 +153,7 @@ export function SlugComboInput({ value, onChange, options, noun, placeholder, di
       popupRef={menuRef}
       onAnimationEnd={onAnimationEnd}
       onActiveIndexChange={setActiveIndex}
-      onChoose={choose}
+      onChoose={commitAndBlur}
     />
   );
 
@@ -146,18 +163,21 @@ export function SlugComboInput({ value, onChange, options, noun, placeholder, di
         ref={inputRef}
         id={inputId}
         value={renderedValue}
-        maxLength={32}
+        maxLength={vocabularyDisplayNameMaxLength}
         onFocus={() => {
+          pendingChoiceRef.current = null;
           setEditingValue(value);
           publishedValueRef.current = value;
           imeSession.beginEditing();
           setFocused(true);
         }}
         onBlur={(event) => {
-          const normalized = imeSession.isComposing()
-            ? publishValue(event.currentTarget.value, false)
-            : publishedValueRef.current;
-          imeSession.settleEditing(facetDisplayName(options, normalized));
+          const chosenSlug = pendingChoiceRef.current;
+          pendingChoiceRef.current = null;
+          const slug = chosenSlug ?? parseFacetSlug(event.currentTarget.value) ?? "";
+          publishSlug(slug);
+          setEditingValue(slug);
+          imeSession.settleEditing(facetDisplayName(options, slug));
           setFocused(false);
           if (open) requestClose();
         }}
@@ -170,17 +190,14 @@ export function SlugComboInput({ value, onChange, options, noun, placeholder, di
             setEditingValue(raw);
             return;
           }
-          publishValue(raw);
+          updateQuery(raw);
         }}
         onCompositionStart={() => {
           imeSession.beginComposition();
         }}
         onCompositionEnd={(event) => {
           if (!imeSession.endComposition(event.currentTarget)) return;
-          publishValue(
-            event.currentTarget.value,
-            document.activeElement === event.currentTarget
-          );
+          updateQuery(event.currentTarget.value);
         }}
         onKeyDown={handleKey}
         placeholder={placeholder ?? noun}
@@ -191,7 +208,7 @@ export function SlugComboInput({ value, onChange, options, noun, placeholder, di
         aria-controls={suggestionOpen ? listId : undefined}
         aria-autocomplete="list"
         data-new-slug={isNew || undefined}
-        title={isNew ? `「${query}」是新${noun}，提交后会自动创建` : undefined}
+        title={isNew ? `「${typedSlug}」是新${noun}，提交后会自动创建` : undefined}
         autoComplete="off"
       />
       {menu}
