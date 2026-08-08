@@ -1,10 +1,11 @@
 import {
-  lazy,
+  Component,
   Suspense,
   useCallback,
   useMemo,
   useRef,
   useState,
+  type ReactNode,
   type RefObject
 } from "react";
 import { Icon } from "../icon/Icon.js";
@@ -29,10 +30,49 @@ import { OverlayScrollbar } from "../layout/OverlayScrollbar.js";
 import { ImageDescriptionSlot } from "./ImageDescriptionSlot.js";
 import { DialogLayerPortal } from "../feedback/DialogLayerPortal.js";
 import { DialogPortalTargetContext } from "../feedback/DialogPortalContext.js";
+import { LazyImageAdminDetails } from "./image-admin-details-loader.js";
+import "../../styles/image-detail.css";
 
-const ImageAdminDetails = lazy(() => import("./ImageAdminDetails.js").then((module) => ({
-  default: module.ImageAdminDetails
-})));
+class ImageAdminDetailsModuleBoundary extends Component<{
+  children: ReactNode;
+  resetKey: string;
+}, { failed: boolean }> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidUpdate(previousProps: Readonly<{
+    children: ReactNode;
+    resetKey: string;
+  }>) {
+    if (
+      this.state.failed
+      && previousProps.resetKey !== this.props.resetKey
+    ) {
+      this.setState({ failed: false });
+    }
+  }
+
+  render() {
+    if (this.state.failed) {
+      return (
+        <div className="image-detail-admin-module-error" role="alert">
+          <span>管理信息加载失败</span>
+          <button
+            className="button secondary pressable"
+            type="button"
+            onClick={() => window.location.reload()}
+          >
+            重新加载
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 function hasDistinctOriginal(original: string, displayUrl: string) {
   if (!/^https:\/\//i.test(original.trim())) return false;
@@ -66,6 +106,7 @@ type ImageDetailModalProps =
       item: AdminImageDetailItem | ImageItem;
       onClose: () => void;
       admin: true;
+      storageLabel?: string;
       onDeleteCommitted?: (
         imageId: string
       ) => void | Promise<void>;
@@ -91,6 +132,10 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
   const adminItem = admin
     ? item as AdminImageDetailItem & Partial<ImageItem>
     : null;
+  const adminStorageLabel = props.admin
+    && adminItem?.storage_slug === props.item.storage_slug
+    ? props.storageLabel
+    : undefined;
   const showAdminDetails = admin || hasSessionProbeHint();
   const detailLoading = !admin && props.detailLoading === true;
   const detailError = !admin ? props.detailError?.trim() ?? "" : "";
@@ -275,17 +320,20 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
                 </a>
               </div>
               {showAdminDetails && (
-                <Suspense fallback={null}>
-                  <ImageAdminDetails
-                    key={item.id}
-                    imageId={item.id}
-                    adminItem={adminItem}
-                    onItemUpdated={setEditedSnapshot}
-                    onItemDeleteCommitted={props.onDeleteCommitted}
-                    onItemDeleted={handleItemDeleted}
-                    onNestedDialogChange={setNestedDialogOpen}
-                  />
-                </Suspense>
+                <ImageAdminDetailsModuleBoundary resetKey={item.id}>
+                  <Suspense fallback={null}>
+                    <LazyImageAdminDetails
+                      key={item.id}
+                      imageId={item.id}
+                      adminItem={adminItem}
+                      adminStorageLabel={adminStorageLabel}
+                      onItemUpdated={setEditedSnapshot}
+                      onItemDeleteCommitted={props.onDeleteCommitted}
+                      onItemDeleted={handleItemDeleted}
+                      onNestedDialogChange={setNestedDialogOpen}
+                    />
+                  </Suspense>
+                </ImageAdminDetailsModuleBoundary>
               )}
             </div>
           </div>

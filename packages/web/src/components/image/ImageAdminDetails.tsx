@@ -7,18 +7,11 @@ import {
   useState
 } from "react";
 import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { ImportVocabularyDto } from "@imageshow/shared/browser";
 import {
   api,
   clearCsrfToken,
   isApiClientError
 } from "../../lib/api/client.js";
-import { imageEditSnapshotQueryOptions } from "../../lib/api/image-edit.js";
-import { importVocabularyQueryOptions } from "../../lib/api/import-vocabulary.js";
-import {
-  invalidateImageData,
-  invalidateImageDataAfterDelete
-} from "../../lib/api/query-invalidation.js";
 import { adminApiBasePath } from "../../lib/constants.js";
 import { queryKeys } from "../../lib/api/query-keys.js";
 import {
@@ -27,10 +20,12 @@ import {
   useAuthMe
 } from "../../lib/api/site-data.js";
 import {
-  storageOptionsQueryOptions,
-  useStorageNameResolver
-} from "../../lib/api/storage-options.js";
+  isImageNotEditableError,
+  type ImageEditorTarget
+} from "../../lib/image-editor-capability-loader.js";
 import { errorMessage, formatDate } from "../../lib/ui/formatters.js";
+import { storageBackendLabel } from "../../lib/ui/select-options.js";
+import { useImageEditorCapability } from "../../hooks/useImageEditorCapability.js";
 import { Icon } from "../icon/Icon.js";
 import type {
   AdminImageDetailItem,
@@ -38,41 +33,13 @@ import type {
   ImageAdminInfo,
   ImageItem
 } from "../../lib/types.js";
-// 公开详情可在已确认的管理员会话中独立加载本模块；管理色契约必须跟随能力块，
-// 不能依赖访问 AdminShell 后碰巧留在文档里的样式。
-import "../../styles/admin/semantic-colors.css";
+// 公开详情可在已确认的管理员会话中独立加载本模块；这里只带入管理详情自身样式，
+// 完整的管理表单色契约继续等到用户明确打开编辑器时再加载。
 import "../../styles/admin/image-details.css";
 
 const MD5_RESERVE = "0".repeat(32);
 
 type AdminDetailSource = AdminImageDetailItem & Partial<ImageItem>;
-type ImageEditModule = typeof import("../../pages/admin/ImageEditModal.js");
-
-type PreparedImageEdit = {
-  editorModule: ImageEditModule;
-  item: BatchEditableImageSnapshot;
-  vocabulary: ImportVocabularyDto;
-};
-
-let imageEditModulePromise: Promise<ImageEditModule> | undefined;
-
-function loadImageEditModule() {
-  if (!imageEditModulePromise) {
-    imageEditModulePromise = import("../../pages/admin/ImageEditModal.js")
-      .catch((error: unknown) => {
-        imageEditModulePromise = undefined;
-        throw error;
-      });
-  }
-  return imageEditModulePromise;
-}
-
-class ImageNotEditableError extends Error {
-  constructor() {
-    super("图片当前不可编辑");
-    this.name = "ImageNotEditableError";
-  }
-}
 
 function adminImageInfoQueryOptions(imageId: string) {
   return queryOptions<ImageAdminInfo>({
@@ -82,22 +49,6 @@ function adminImageInfoQueryOptions(imageId: string) {
     refetchOnWindowFocus: false,
     staleTime: 5 * 60 * 1000
   });
-}
-
-function editableSnapshotFromAdminItem(
-  item: AdminDetailSource | null
-): BatchEditableImageSnapshot | null {
-  if (!item || item.deleted_at) return null;
-  if (item.status && item.status !== "ready") return null;
-  if (
-    !("original" in item)
-    || typeof item.original !== "string"
-    || !("object_key" in item)
-    || typeof item.object_key !== "string"
-  ) {
-    return null;
-  }
-  return item as BatchEditableImageSnapshot;
 }
 
 function unresolvedValue(admin: boolean, loading: boolean, failed: boolean) {
@@ -110,6 +61,7 @@ function unresolvedValue(admin: boolean, loading: boolean, failed: boolean) {
 export function ImageAdminDetails({
   imageId,
   adminItem,
+  adminStorageLabel,
   onItemUpdated,
   onItemDeleteCommitted,
   onItemDeleted,
@@ -117,6 +69,7 @@ export function ImageAdminDetails({
 }: {
   imageId: string;
   adminItem: AdminDetailSource | null;
+  adminStorageLabel?: string;
   onItemUpdated?: (item: BatchEditableImageSnapshot) => void;
   onItemDeleteCommitted?: (
     imageId: string
@@ -126,13 +79,7 @@ export function ImageAdminDetails({
 }) {
   const admin = Boolean(adminItem);
   const queryClient = useQueryClient();
-  const editButtonRef = useRef<HTMLButtonElement | null>(null);
-  const preparationRef = useRef<Promise<PreparedImageEdit> | null>(null);
   const deletedImageRef = useRef<string | null>(null);
-  const directSnapshot = useMemo(
-    () => editableSnapshotFromAdminItem(adminItem),
-    [adminItem]
-  );
   const knownUneditable = Boolean(
     adminItem?.deleted_at
       || (adminItem?.status && adminItem.status !== "ready")
@@ -147,10 +94,8 @@ export function ImageAdminDetails({
   const accessConfirmed = admin || authQuery.data?.authenticated === true;
   const [expanded, setExpanded] = useState(() => admin);
   const [editSuppressed, setEditSuppressed] = useState(false);
-  const [editPending, setEditPending] = useState(false);
   const [editError, setEditError] = useState("");
   const [editNotice, setEditNotice] = useState("");
-  const [preparedEdit, setPreparedEdit] = useState<PreparedImageEdit | null>(null);
   const [refreshedAdminInfo, setRefreshedAdminInfo] =
     useState<ImageAdminInfo | null>(null);
 
@@ -159,8 +104,6 @@ export function ImageAdminDetails({
       clearCsrfToken();
       clearSessionProbeHint();
     }
-    preparationRef.current = null;
-    setPreparedEdit(null);
     setAccessAvailable(false);
     setExpanded(false);
   }, []);
@@ -184,7 +127,7 @@ export function ImageAdminDetails({
   const adminInfoOptions = adminImageInfoQueryOptions(imageId);
   const query = useQuery({
     ...adminInfoOptions,
-    enabled: !admin && accessConfirmed && expanded
+    enabled: accessConfirmed && expanded && (!admin || !adminStorageLabel)
   });
   const adminInfo = query.data?.id === imageId ? query.data : undefined;
 
@@ -199,17 +142,9 @@ export function ImageAdminDetails({
     denyAdminAccess(query.error.status === 401);
   }, [admin, denyAdminAccess, query.error]);
 
-  const editOpen = preparedEdit !== null;
-  useLayoutEffect(() => {
-    onNestedDialogChange?.(editOpen);
-    return () => {
-      if (editOpen) onNestedDialogChange?.(false);
-    };
-  }, [editOpen, onNestedDialogChange]);
-
   const canEdit = accessConfirmed && !knownUneditable && !editSuppressed;
   const handlePreparationFailure = useCallback((error: unknown) => {
-    if (error instanceof ImageNotEditableError) {
+    if (isImageNotEditableError(error)) {
       setEditSuppressed(true);
       return;
     }
@@ -220,71 +155,69 @@ export function ImageAdminDetails({
       denyAdminAccess(error.status === 401);
     }
   }, [denyAdminAccess]);
+  const editTarget = useMemo<ImageEditorTarget>(() => ({
+    kind: "single",
+    sources: [adminItem ?? { id: imageId }]
+  }), [adminItem, imageId]);
+  const editorCapability = useImageEditorCapability({
+    onPreparationError: handlePreparationFailure,
+    onOpenError: (error) => {
+      if (!isImageNotEditableError(error) && accessAvailable) {
+        setEditError(errorMessage(error));
+      }
+    }
+  });
+  const editOpen = editorCapability.session !== null;
+  const editPending = editorCapability.pending !== null;
 
-  const prepareEdit = useCallback(() => {
-    if (!canEdit) return Promise.reject(new ImageNotEditableError());
-    if (preparationRef.current) return preparationRef.current;
+  useEffect(() => {
+    if (!accessAvailable) editorCapability.reset();
+  }, [accessAvailable, editorCapability.reset]);
 
-    const itemReady = directSnapshot
-      ? Promise.resolve(directSnapshot)
-      : queryClient.fetchQuery(imageEditSnapshotQueryOptions(imageId))
-        .then((response) => {
-          const item = response.items.find((candidate) => candidate.id === imageId);
-          if (!item) throw new ImageNotEditableError();
-          return item;
-        });
-    const pending = Promise.all([
-      loadImageEditModule(),
-      queryClient.fetchQuery(importVocabularyQueryOptions),
-      queryClient.fetchQuery(storageOptionsQueryOptions),
-      itemReady
-    ]).then(([editorModule, vocabulary, , item]) => ({
-      editorModule,
-      vocabulary,
-      item
-    }));
-    preparationRef.current = pending;
-    void pending.catch((error: unknown) => {
-      if (preparationRef.current === pending) preparationRef.current = null;
-      handlePreparationFailure(error);
-    });
-    return pending;
-  }, [
-    canEdit,
-    directSnapshot,
-    handlePreparationFailure,
-    imageId,
-    queryClient
-  ]);
+  useLayoutEffect(() => {
+    onNestedDialogChange?.(editOpen);
+    return () => {
+      if (editOpen) onNestedDialogChange?.(false);
+    };
+  }, [editOpen, onNestedDialogChange]);
 
   const prefetchEdit = useCallback(() => {
     if (!canEdit) return;
-    void prepareEdit().catch(() => undefined);
-  }, [canEdit, prepareEdit]);
+    editorCapability.preload(editTarget);
+  }, [canEdit, editTarget, editorCapability.preload]);
 
-  const openEdit = useCallback(async () => {
+  const openEdit = useCallback((opener: HTMLElement) => {
+    if (!canEdit) return;
     setEditError("");
     setEditNotice("");
-    setEditPending(true);
-    try {
-      setPreparedEdit(await prepareEdit());
-    } catch (error) {
-      if (!(error instanceof ImageNotEditableError) && accessAvailable) {
-        setEditError(errorMessage(error));
-      }
-    } finally {
-      setEditPending(false);
-    }
-  }, [accessAvailable, prepareEdit]);
+    void editorCapability.open(editTarget, opener);
+  }, [canEdit, editTarget, editorCapability.open]);
 
   const closeEdit = useCallback(() => {
     const deletedImageId = deletedImageRef.current;
     deletedImageRef.current = null;
-    preparationRef.current = null;
-    setPreparedEdit(null);
+    editorCapability.close();
     setEditError("");
     if (deletedImageId) onItemDeleted?.(deletedImageId);
-  }, [onItemDeleted]);
+  }, [editorCapability.close, onItemDeleted]);
+
+  const loadAdminInfoAfterInvalidation = useCallback(async () => {
+    // Overview 等未直接持有存储显示名的后台详情会启用上面的 admin-info
+    // Query。全局图片失效已经等待这个 active Query 完成刷新；优先复用它的
+    // 结果，避免随后再以同一个 key 发起第二次请求。ImageAdmin 传入显示名时
+    // 该 Query 未启用，保存后仍在这里按需读取一次 updated_at 与存储显示名。
+    if (expanded && !adminStorageLabel) {
+      const queryState = queryClient.getQueryState<ImageAdminInfo>(
+        adminImageInfoQueryOptions(imageId).queryKey
+      );
+      if (queryState?.error) throw queryState.error;
+      if (queryState?.data) return queryState.data;
+    }
+    return queryClient.fetchQuery({
+      ...adminImageInfoQueryOptions(imageId),
+      staleTime: 0
+    });
+  }, [adminStorageLabel, expanded, imageId, queryClient]);
 
   const refreshAfterSave = useCallback(async (
     authoritativeItems?: BatchEditableImageSnapshot[] | null
@@ -292,23 +225,17 @@ export function ImageAdminDetails({
     // 所有详情与列表共享这一处失效；随后读取单图权威快照，只用于立即更新仍打开的
     // 详情和可能继续停留的失败编辑会话。后台详情同时回读轻量管理信息，以更新快照
     // 契约刻意不承载的 updated_at；两条读取并行，且不触发第二轮全局失效。
-    await invalidateImageData(queryClient);
-    const snapshotRequest = authoritativeItems
-      ? Promise.resolve({ items: authoritativeItems })
-      : queryClient.fetchQuery({
-          ...imageEditSnapshotQueryOptions(imageId),
-          staleTime: 0
-        });
-    const adminInfoRequest: Promise<ImageAdminInfo | null> = admin
-      ? queryClient.fetchQuery({
-          ...adminImageInfoQueryOptions(imageId),
-          staleTime: 0
-        })
-      : Promise.resolve(null);
-    const [snapshotResult, adminInfoResult] = await Promise.allSettled([
-      snapshotRequest,
-      adminInfoRequest
-    ]);
+    const capabilityModule = editorCapability.session?.module;
+    if (!capabilityModule) throw new Error("图片编辑能力未加载");
+    const { snapshotResult, adminInfoResult } =
+      await capabilityModule.refreshSingleImageAfterSave<ImageAdminInfo>({
+        queryClient,
+        imageId,
+        authoritativeItems,
+        loadAdminInfo: admin
+          ? loadAdminInfoAfterInvalidation
+          : undefined
+      });
 
     if (snapshotResult.status === "rejected") {
       handlePreparationFailure(snapshotResult.reason);
@@ -318,14 +245,11 @@ export function ImageAdminDetails({
     const item = response.items.find((candidate) => candidate.id === imageId);
     if (!item) {
       setEditSuppressed(true);
-      setPreparedEdit(null);
+      editorCapability.reset();
       return;
     }
     onItemUpdated?.(item);
-    setPreparedEdit((current) => current
-      ? { ...current, item }
-      : current);
-    preparationRef.current = null;
+    editorCapability.updateItems([item]);
 
     if (adminInfoResult.status === "rejected") {
       handlePreparationFailure(adminInfoResult.reason);
@@ -336,8 +260,12 @@ export function ImageAdminDetails({
     }
   }, [
     admin,
+    editorCapability.reset,
+    editorCapability.session,
+    editorCapability.updateItems,
     handlePreparationFailure,
     imageId,
+    loadAdminInfoAfterInvalidation,
     onItemUpdated,
     queryClient
   ]);
@@ -346,15 +274,19 @@ export function ImageAdminDetails({
     // 再取消读取并刷新派生投影，避免关闭动画期间被聚焦或网络重连重新拉取 404。
     let refreshError: unknown;
     try {
-      await onItemDeleteCommitted?.(imageId);
+      const capabilityModule = editorCapability.session?.module;
+      if (!capabilityModule) throw new Error("图片编辑能力未加载");
       // 页面仍由详情与编辑器共同锁定滚动时刷新派生投影；公开列表已经在
       // mutation 成功边界局部更新，不重放已加载的历史游标页。
-      await invalidateImageDataAfterDelete(queryClient, imageId);
+      await capabilityModule.refreshSingleImageAfterDelete({
+        queryClient,
+        imageId,
+        onDeleteCommitted: onItemDeleteCommitted
+      });
     } catch (error) {
       refreshError = error;
     }
 
-    preparationRef.current = null;
     setEditSuppressed(true);
     setEditError("");
     // 先让内层编辑器走完自己的退出动画；其 onClose 再通知外层详情关闭，
@@ -362,10 +294,12 @@ export function ImageAdminDetails({
     deletedImageRef.current = imageId;
 
     if (refreshError) throw refreshError;
-  }, [imageId, onItemDeleteCommitted, queryClient]);
-
-  // 存储选项只属于管理信息；留在这个按需块内，匿名公开详情不会下载后台查询实现。
-  const storageName = useStorageNameResolver(admin);
+  }, [
+    editorCapability.session,
+    imageId,
+    onItemDeleteCommitted,
+    queryClient
+  ]);
 
   if (!accessAvailable || !accessConfirmed) return null;
 
@@ -374,9 +308,9 @@ export function ImageAdminDetails({
   const fallback = unresolvedValue(admin, loading, failed);
   const md5 = refreshedAdminInfo?.md5 || adminItem?.md5 || adminInfo?.md5 || fallback;
   const storage = refreshedAdminInfo?.storage_label
-    || (adminItem
-      ? storageName(adminItem) || fallback
-      : adminInfo?.storage_label || fallback);
+    || adminStorageLabel
+    || adminInfo?.storage_label
+    || (adminItem ? storageBackendLabel(adminItem.storage_slug) : fallback);
   const createdAt =
     refreshedAdminInfo?.created_at ?? adminItem?.created_at ?? adminInfo?.created_at;
   const updatedAt =
@@ -385,7 +319,8 @@ export function ImageAdminDetails({
     if (admin || !accessConfirmed) return;
     void queryClient.prefetchQuery(adminInfoOptions);
   };
-  const EditModal = preparedEdit?.editorModule.ImageEditModal;
+  const EditModal = editorCapability.session?.module.ImageEditModal;
+  const editItem = editorCapability.session?.items[0];
 
   return (
     <section className="image-detail-admin-details">
@@ -404,7 +339,6 @@ export function ImageAdminDetails({
         </button>
         {canEdit && (
           <button
-            ref={editButtonRef}
             type="button"
             className="icon image-detail-edit-button pressable"
             aria-label="编辑图片"
@@ -414,7 +348,7 @@ export function ImageAdminDetails({
             onPointerEnter={prefetchEdit}
             onFocus={prefetchEdit}
             onPointerDown={prefetchEdit}
-            onClick={() => void openEdit()}
+            onClick={(event) => openEdit(event.currentTarget)}
           >
             <Icon name="pencil-line" />
           </button>
@@ -422,7 +356,7 @@ export function ImageAdminDetails({
       </div>
       {editError && (
         <p className="image-detail-edit-error" role="alert" title={editError}>
-          编辑器加载失败，请重试
+          编辑器加载失败，请重新加载页面
         </p>
       )}
       {editNotice && (
@@ -452,17 +386,17 @@ export function ImageAdminDetails({
           )}
         </div>
       )}
-      {preparedEdit && EditModal && (
+      {editorCapability.session && EditModal && editItem && (
         <EditModal
-          item={preparedEdit.item}
-          themes={preparedEdit.vocabulary.themes}
-          allTags={preparedEdit.vocabulary.tags}
-          authors={preparedEdit.vocabulary.authors}
+          item={editItem}
+          themes={editorCapability.session.vocabulary.themes}
+          allTags={editorCapability.session.vocabulary.tags}
+          authors={editorCapability.session.vocabulary.authors}
           onClose={closeEdit}
           onSaved={refreshAfterSave}
           onDeleted={refreshAfterDelete}
           onStorageMigrationSucceeded={setEditNotice}
-          returnFocusRef={editButtonRef}
+          returnFocusRef={editorCapability.returnFocusRef}
         />
       )}
     </section>

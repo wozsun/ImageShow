@@ -2,7 +2,7 @@ import { useId, useRef, useState, type RefObject } from "react";
 import { slugFormatHint, slugPattern } from "../../../lib/constants.js";
 import { storageTypeLabel } from "../../../lib/ui/select-options.js";
 import type { AdvancedConfigPreview } from "../../../lib/types.js";
-import { Icon } from "../../../components/icon/Icon.js";
+import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import { AsyncActionButton } from "../../../components/actions/AsyncActionButton.js";
 import { DialogFrame } from "../../../components/feedback/DialogFrame.js";
 import { OverlayScrollbar } from "../../../components/layout/OverlayScrollbar.js";
@@ -95,7 +95,7 @@ export function ConfigPackageImportDialog({
               disabled={blocked}
               onClick={() => requestClose()}
             >
-              <Icon name="close-line" />
+              <AdminIcon name="close-line" />
             </button>
           </header>
           <div ref={operationBodyRef} className="operation-body">
@@ -132,7 +132,7 @@ export function ConfigPackageImportDialog({
                         />
                         {error && <small className="error">{error}</small>}
                       </label>
-                    ) : <span className="advanced-config-ready"><Icon name="check-line" />可新增</span>}
+                    ) : <span className="advanced-config-ready"><AdminIcon name="check-line" />可新增</span>}
                   </article>
                 );
               }) : <p className="muted">配置包不包含自定义存储后端。</p>}

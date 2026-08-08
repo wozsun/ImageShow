@@ -7,7 +7,7 @@ import {
   type RootRedirect
 } from "@imageshow/shared/browser";
 import { api } from "../../lib/api/client.js";
-import { Icon } from "../../components/icon/Icon.js";
+import { AdminIcon } from "../../components/icon/AdminIcon.js";
 import { AsyncActionButton } from "../../components/actions/AsyncActionButton.js";
 import { NumberInput } from "../../components/form/NumberInput.js";
 import { SelectMenu } from "../../components/form/SelectMenu.js";
@@ -170,7 +170,7 @@ export function SettingsPage() {
       <div className="settings-scroll-region" ref={scrollRef}>
         <div className="settings-grid">
           <section>
-            <h2><Icon name="information-line" />站点信息</h2>
+            <h2><AdminIcon name="information-line" />站点信息</h2>
             <p className="hint">这些非敏感配置只保存到容器配置目录；环境变量仅在配置文件首次生成时读取。</p>
             <label>
               站点名
@@ -215,7 +215,7 @@ export function SettingsPage() {
             </label>
           </section>
           <section>
-            <h2><Icon name="settings-3-line" />页面行为</h2>
+            <h2><AdminIcon name="settings-3-line" />页面行为</h2>
             <label>
               根路径页面
               <SelectMenu
@@ -273,7 +273,7 @@ export function SettingsPage() {
             </label>
           </section>
           <section className="settings-card-wide">
-            <h2><Icon name="image-line" />图片设置</h2>
+            <h2><AdminIcon name="image-line" />图片设置</h2>
             <p className="hint">这些配置影响新上传、链接下载、缩略图生成和图片管理列表；已存在图片不会自动重新处理。</p>
             <div className="settings-field-grid">
               <label>

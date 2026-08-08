@@ -23,6 +23,10 @@ import { HomeCatalog } from "./HomeCatalog.js";
 import { HomeFilterBar } from "./HomeFilterBar.js";
 import { HomeBackground, HomeHero } from "./HomeHero.js";
 import { useHomeEntrance } from "./useHomeEntrance.js";
+import "../../styles/public-core.css";
+import "../../styles/home.css";
+import "../../styles/home-catalog.css";
+import "../../styles/home-responsive.css";
 
 const homeLoadingDotSteps: ReadonlyArray<{
   delayMs: number;

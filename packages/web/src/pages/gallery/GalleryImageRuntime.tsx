@@ -3,6 +3,7 @@ import {
   useContext,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore
@@ -177,10 +178,10 @@ export function GalleryImageRuntime({
     runtime.scheduler.cancelGroup("detail");
   }, [runtime]);
 
-  const contextValue = {
+  const contextValue = useMemo(() => ({
     ...runtime,
     galleryPaused: detailOpen
-  };
+  }), [detailOpen, runtime]);
 
   return (
     <GalleryImageRuntimeContext.Provider value={contextValue}>

@@ -1,9 +1,12 @@
-import { useCallback, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useAdminSettings } from "../../../lib/api/admin-settings.js";
 import { facetDisplayName } from "../../../lib/ui/formatters.js";
 import { storageBackendLabel, uploadCommonBrightnessOptions, uploadCommonDeviceOptions } from "../../../lib/ui/select-options.js";
 import { useImportVocabulary } from "../../../lib/api/import-vocabulary.js";
-import { useStorageOptions } from "../../../lib/api/storage-options.js";
+import {
+  storageNameResolver,
+  useStorageOptions
+} from "../../../lib/api/storage-options.js";
 import type { FacetOption, ImageItem, ImportJob } from "../../../lib/types.js";
 import type { ImportAttributeDefaults } from "../../../lib/upload/upload-utils.js";
 import type { ImportPreviewTarget } from "./DuplicateMatchPanel.js";
@@ -26,10 +29,15 @@ import {
   isCompletedImportJob
 } from "./upload-cleanup-actions.js";
 import { canApplyImportAttributeDefaults } from "./import-attribute-policy.js";
-import { UploaderTriggers } from "./UploaderTriggers.js";
+import { AsyncIntentFence } from "../../../lib/async-intent-fence.js";
 import { UploadWorkflowWindow } from "./UploadWorkflowWindow.js";
+import {
+  type UploaderActivation
+} from "./uploader-activation.js";
+import "../../../styles/admin/upload.css";
 
 const EMPTY_FACET_OPTIONS: FacetOption[] = [];
+type LinkUrlDialogModule = typeof import("./link-import/LinkUrlDialog.js");
 
 function needsImportCancellation(job: ImportJob) {
   return job.status !== "cancelling"
@@ -37,11 +45,28 @@ function needsImportCancellation(job: ImportJob) {
     && job.status !== "cancelled";
 }
 
-export function Uploader({ onDone }: { onDone: () => void }) {
+export function Uploader({
+  activation,
+  activationEnabled,
+  loadLinkInputModule,
+  onActivationSettled,
+  onDone,
+  onLoadError
+}: {
+  activation: UploaderActivation | null;
+  activationEnabled: boolean;
+  loadLinkInputModule: () => Promise<LinkUrlDialogModule>;
+  onActivationSettled: (sequence: number) => void;
+  onDone: () => void;
+  onLoadError: (error: unknown) => void;
+}) {
   const fileInputId = useId();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"file" | "link">("file");
   const [urlInputOpen, setUrlInputOpen] = useState(false);
+  const [linkInputPending, setLinkInputPending] = useState(false);
+  const [LinkUrlDialogComponent, setLinkUrlDialogComponent] =
+    useState<LinkUrlDialogModule["LinkUrlDialog"] | null>(null);
   const [linkInputMode, setLinkInputMode] = useState<LinkInputMode>("urls");
   const [jsonlErrors, setJsonlErrors] = useState<JsonlManifestParseError[]>([]);
   const [dragOver, setDragOver] = useState(false);
@@ -63,6 +88,16 @@ export function Uploader({ onDone }: { onDone: () => void }) {
   const workflowReturnFocusRef = useRef<HTMLElement | null>(null);
   const detailReturnFocusRef = useRef<HTMLElement | null>(null);
   const previewReturnFocusRef = useRef<HTMLElement | null>(null);
+  const processedActivationRef = useRef(0);
+  const intentFenceRef = useRef(new AsyncIntentFence());
+
+  useEffect(() => {
+    const intentFence = intentFenceRef.current;
+    // 挂载状态与意图序号分开：真实卸载会拒绝迟到回调，而开发环境的
+    // StrictMode effect 重放不会丢掉 processedActivationRef 已接管的首次激活。
+    intentFence.mount();
+    return () => intentFence.unmount();
+  }, []);
 
   const { data: settingsData } = useAdminSettings();
   const { data: vocabulary } = useImportVocabulary(open);
@@ -99,13 +134,13 @@ export function Uploader({ onDone }: { onDone: () => void }) {
       .map((backend) => ({ value: backend.slug, label: backend.display_name || storageBackendLabel(backend.slug) })),
     [storageBackends]
   );
-  const storageNameBySlug = useMemo(
-    () => new Map(backendOptions.map((backend) => [backend.value, backend.label] as const)),
-    [backendOptions]
+  const resolveStorageName = useMemo(
+    () => storageNameResolver(storageBackends),
+    [storageBackends]
   );
   const storageName = useCallback(
-    (slug: string) => storageNameBySlug.get(slug) || storageBackendLabel(slug),
-    [storageNameBySlug]
+    (slug: string) => resolveStorageName({ storage_slug: slug }),
+    [resolveStorageName]
   );
 
   const {
@@ -143,7 +178,10 @@ export function Uploader({ onDone }: { onDone: () => void }) {
   useImportStatusEvents(queue.jobs, queue.jobsRef, queue.updateJob);
 
   const closeWorkflow = () => {
+    intentFenceRef.current.invalidate();
     setOpen(false);
+    setUrlInputOpen(false);
+    setLinkInputPending(false);
     setDefaultsExpanded(false);
     queue.clearJobs(isCompletedImportJob);
     setJsonlErrors([]);
@@ -157,13 +195,20 @@ export function Uploader({ onDone }: { onDone: () => void }) {
     return cancellationSucceeded;
   }, [cancelLinkImport, cancelLocalImport, queue.removeJob]);
 
-  const openInMode = async (next: "file" | "link", opener?: HTMLElement) => {
+  const openInMode = async (
+    next: "file" | "link",
+    opener: HTMLElement | undefined,
+    intent: number
+  ) => {
+    if (!intentFenceRef.current.isCurrent(intent)) return false;
     if (opener) workflowReturnFocusRef.current = opener;
     const discarded = queue.jobsRef.current.filter((job) => next === "file" ? job.kind !== "local" : job.kind === "local");
     await Promise.all(discarded.filter(needsImportCancellation).map(cancelJob));
+    if (!intentFenceRef.current.isCurrent(intent)) return false;
     queue.retainMode(next);
     setMode(next);
     setOpen(true);
+    return true;
   };
 
   const retryJob = useCallback(async (jobId: string) => {
@@ -213,11 +258,71 @@ export function Uploader({ onDone }: { onDone: () => void }) {
     await Promise.allSettled(cancellationRequests);
   };
 
-  const openLinkInput = async (inputMode: LinkInputMode, opener?: HTMLElement) => {
-    setLinkInputMode(inputMode);
-    await openInMode("link", opener);
-    setUrlInputOpen(true);
+  const openLinkInput = async (
+    inputMode: LinkInputMode,
+    opener?: HTMLElement,
+    intent = intentFenceRef.current.begin()
+  ) => {
+    if (!intentFenceRef.current.isCurrent(intent)) return false;
+    setLinkInputPending(true);
+    try {
+      const module = await loadLinkInputModule();
+      if (!intentFenceRef.current.isCurrent(intent)) return false;
+      setLinkUrlDialogComponent(() => module.LinkUrlDialog);
+      setLinkInputMode(inputMode);
+      if (!await openInMode("link", opener, intent)) return false;
+      if (!intentFenceRef.current.isCurrent(intent)) return false;
+      setUrlInputOpen(true);
+      return true;
+    } catch (error) {
+      if (intentFenceRef.current.isCurrent(intent)) onLoadError(error);
+      return false;
+    } finally {
+      if (intentFenceRef.current.isCurrent(intent)) {
+        setLinkInputPending(false);
+      }
+    }
   };
+  const preloadLinkInput = () => {
+    void loadLinkInputModule().catch(() => undefined);
+  };
+
+  useEffect(() => {
+    if (!activationEnabled || !activation) {
+      intentFenceRef.current.invalidate();
+      setLinkInputPending(false);
+      return;
+    }
+    if (activation.sequence === processedActivationRef.current) {
+      return;
+    }
+    processedActivationRef.current = activation.sequence;
+    const intent = intentFenceRef.current.begin();
+    const runActivation = async () => {
+      try {
+        if (activation.kind === "workflow") {
+          setUrlInputOpen(false);
+          setLinkInputPending(false);
+          await openInMode("link", activation.opener, intent);
+          return;
+        }
+        if (activation.kind === "files") {
+          setUrlInputOpen(false);
+          setLinkInputPending(false);
+          await openInMode("file", activation.opener, intent);
+          return;
+        }
+        await openLinkInput(activation.kind, activation.opener, intent);
+      } catch (error) {
+        if (intentFenceRef.current.isCurrent(intent)) onLoadError(error);
+      } finally {
+        if (intentFenceRef.current.isCurrent(intent)) {
+          onActivationSettled(activation.sequence);
+        }
+      }
+    };
+    void runActivation();
+  }, [activation, activationEnabled]);
 
   const addLinks = (submission: LinkDialogSubmission) => {
     if (submission.inputMode === "urls") {
@@ -293,13 +398,6 @@ export function Uploader({ onDone }: { onDone: () => void }) {
 
   return (
     <>
-      <UploaderTriggers
-        onOpenWorkflow={(opener) => void openInMode("link", opener)}
-        onOpenUrls={(opener) => void openLinkInput("urls", opener)}
-        onOpenJsonl={(opener) => void openLinkInput("jsonl", opener)}
-        onOpenWeibo={(opener) => void openLinkInput("weibo", opener)}
-        onOpenFiles={(opener) => void openInMode("file", opener)}
-      />
       {open && (
         <UploadWorkflowWindow
           mode={mode}
@@ -328,6 +426,8 @@ export function Uploader({ onDone }: { onDone: () => void }) {
           preview={preview}
           previewReturnFocusRef={previewReturnFocusRef}
           urlInputOpen={urlInputOpen}
+          linkInputPending={linkInputPending}
+          LinkUrlDialogComponent={LinkUrlDialogComponent}
           linkInputMode={linkInputMode}
           autoImportAfterParse={autoImportAfterParse}
           linkMaxItems={linkMaxItems}
@@ -347,9 +447,9 @@ export function Uploader({ onDone }: { onDone: () => void }) {
           onOpenDetail={openJobDetail}
           onOpenPreview={openJobPreview}
           onOpenLinkInput={(inputMode) => {
-            setLinkInputMode(inputMode);
-            setUrlInputOpen(true);
+            void openLinkInput(inputMode);
           }}
+          onPreloadLinkInput={preloadLinkInput}
           onBackendChange={setBackendChoice}
           onCancelAll={() => clearJobs(() => true)}
           onCommitReady={() => {

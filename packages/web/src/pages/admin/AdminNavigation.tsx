@@ -4,7 +4,7 @@ import type {
   AdminColorScheme,
   AdminRole
 } from "@imageshow/shared/browser";
-import { Icon, type IconName } from "../../components/icon/Icon.js";
+import { AdminIcon, type AdminIconName } from "../../components/icon/AdminIcon.js";
 import { adminBasePath } from "../../lib/constants.js";
 import { AdminNavGroup } from "./AdminNavGroup.js";
 
@@ -12,7 +12,7 @@ type AdminNavigationLink = {
   kind: "link";
   to: string;
   label: string;
-  icon: IconName;
+  icon: AdminIconName;
   end?: boolean;
   superOnly?: boolean;
   desktopClassName?: string;
@@ -22,7 +22,7 @@ type AdminNavigationGroup = {
   kind: "group";
   id: string;
   label: string;
-  icon: IconName;
+  icon: AdminIconName;
   items: readonly AdminNavigationLink[];
   superOnly?: boolean;
   desktopDefaultOpenRoles?: readonly AdminRole[];
@@ -195,7 +195,7 @@ function NavigationLink({
         isActive ? "active" : ""
       ].filter(Boolean).join(" ")}
     >
-      <Icon name={item.icon} />{item.label}
+      <AdminIcon name={item.icon} />{item.label}
     </NavLink>
   );
 }
@@ -238,7 +238,7 @@ const adminAppearanceOptions = {
   system: { label: "自动模式（跟随系统）", icon: "computer-line" }
 } as const satisfies Record<AdminColorScheme, {
   label: string;
-  icon: IconName;
+  icon: AdminIconName;
 }>;
 
 export function AdminSiteNavigation({
@@ -279,10 +279,10 @@ export function AdminSiteNavigation({
       >
         <span className="admin-color-scheme-icon-stack" aria-hidden="true">
           <span className="admin-color-scheme-icon is-current">
-            <Icon name={current.icon} />
+            <AdminIcon name={current.icon} />
           </span>
           <span className="admin-color-scheme-icon is-target">
-            <Icon name={target.icon} />
+            <AdminIcon name={target.icon} />
           </span>
         </span>
       </button>

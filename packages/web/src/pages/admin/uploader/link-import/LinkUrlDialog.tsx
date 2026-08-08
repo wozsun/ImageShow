@@ -4,7 +4,7 @@ import {
   type AsyncActionPresentation
 } from "../../../../components/actions/AsyncActionButton.js";
 import { DialogFrame } from "../../../../components/feedback/DialogFrame.js";
-import { Icon, type IconName } from "../../../../components/icon/Icon.js";
+import { AdminIcon, type AdminIconName } from "../../../../components/icon/AdminIcon.js";
 import { OverlayScrollbar } from "../../../../components/layout/OverlayScrollbar.js";
 import { useAsyncActionStatus } from "../../../../hooks/useAsyncActionStatus.js";
 import {
@@ -45,7 +45,7 @@ type ParsedLinkDialogResult = {
 
 const inputModePresentation: Record<LinkInputMode, {
   heading: string;
-  icon: IconName;
+  icon: AdminIconName;
   label: string;
   placeholder: string;
 }> = {
@@ -137,7 +137,7 @@ function ImportIssuePreview({ summary, copyLabel, getCopyText, items }: {
           className="button secondary"
           onClick={() => void copyTextToClipboard(getCopyText()).catch(() => undefined)}
         >
-          <Icon name="file-copy-line" />{copyLabel}
+          <AdminIcon name="file-copy-line" />{copyLabel}
         </button>
       </div>
       {items.length > 0 && (
@@ -423,9 +423,9 @@ export function LinkUrlDialog({
       <>
       <div ref={importCardRef} className="link-import-card" tabIndex={-1} aria-busy={parseAction.pending}>
         <div className="link-import-head">
-          <h2><Icon name={presentation.icon} />{presentation.heading}</h2>
+          <h2><AdminIcon name={presentation.icon} />{presentation.heading}</h2>
           <button type="button" className="icon close" title="关闭" onClick={() => requestClose()}>
-            <Icon name="close-line" />
+            <AdminIcon name="close-line" />
           </button>
         </div>
         <div className="link-input-tabs" role="tablist" aria-label="输入模式">

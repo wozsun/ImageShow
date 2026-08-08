@@ -1,4 +1,4 @@
-import { Icon } from "../../components/icon/Icon.js";
+import { AdminIcon } from "../../components/icon/AdminIcon.js";
 import { TwoStepConfirmIconButton } from "../../components/actions/TwoStepConfirmIconButton.js";
 import { ThumbImage } from "../../components/image/ThumbImage.js";
 import type { ImageItem } from "../../lib/types.js";
@@ -18,7 +18,13 @@ type AdminImageCardProps = {
   actionsDisabled: boolean;
   canPurge: boolean;
   onCheck: (checked: boolean) => void;
+  detailDisabled: boolean;
+  detailPending: boolean;
+  onPreloadDetail: () => void;
   onDetail: (opener: HTMLElement) => void;
+  editDisabled: boolean;
+  editPending: boolean;
+  onPreloadEdit: () => void;
   onEdit: (opener: HTMLElement) => void;
   onPurge: () => void;
   onDelete: () => void;
@@ -33,7 +39,13 @@ export function AdminImageCard({
   actionsDisabled,
   canPurge,
   onCheck,
+  detailDisabled,
+  detailPending,
+  onPreloadDetail,
   onDetail,
+  editDisabled,
+  editPending,
+  onPreloadEdit,
   onEdit,
   onPurge,
   onDelete,
@@ -56,15 +68,19 @@ export function AdminImageCard({
         className="admin-image-card-checkbox"
         type="checkbox"
         checked={checked}
-        disabled={busy || actionsDisabled}
+        disabled={busy || actionsDisabled || detailPending}
         aria-label={`选择图片：${title}`}
         onChange={(event) => onCheck(event.target.checked)}
       />
       <button
         type="button"
         className="admin-image-card-detail"
-        disabled={busy}
+        disabled={busy || detailDisabled || detailPending}
+        aria-busy={detailPending || undefined}
         aria-label={`查看图片详情：${title}`}
+        onPointerEnter={onPreloadDetail}
+        onFocus={onPreloadDetail}
+        onPointerDown={onPreloadDetail}
         onClick={(event) => onDetail(event.currentTarget)}
       >
         <span className="admin-image-card-thumb">
@@ -93,10 +109,14 @@ export function AdminImageCard({
                 type="button"
                 title="编辑"
                 aria-label={`编辑图片：${title}`}
-                disabled={actionsDisabled}
+                aria-busy={editPending || undefined}
+                disabled={busy || editDisabled || editPending}
+                onPointerEnter={onPreloadEdit}
+                onFocus={onPreloadEdit}
+                onPointerDown={onPreloadEdit}
                 onClick={(event) => onEdit(event.currentTarget)}
               >
-                <Icon name="pencil-line" />
+                <AdminIcon name="pencil-line" />
               </button>
               <TwoStepConfirmIconButton
                 className="danger-button"
@@ -106,7 +126,7 @@ export function AdminImageCard({
                 confirmLabel={`再次点击确认删除图片：${title}`}
                 idleTitle="删除"
                 confirmTitle="再次点击确认删除"
-                disabled={busy || actionsDisabled}
+                disabled={busy || actionsDisabled || detailPending}
                 onConfirm={onDelete}
               />
             </>
@@ -116,10 +136,10 @@ export function AdminImageCard({
                 type="button"
                 title="恢复"
                 aria-label={`恢复图片：${title}`}
-                disabled={busy || actionsDisabled}
+                disabled={busy || actionsDisabled || detailPending}
                 onClick={onRestore}
               >
-                <Icon name="arrow-go-back-line" />
+                <AdminIcon name="arrow-go-back-line" />
               </button>
               {canPurge && (
                 <button
@@ -127,10 +147,10 @@ export function AdminImageCard({
                   className="danger-button"
                   title="永久删除"
                   aria-label={`永久删除图片：${title}`}
-                  disabled={actionsDisabled}
+                  disabled={actionsDisabled || detailPending}
                   onClick={onPurge}
                 >
-                  <Icon name="delete-bin-7-line" />
+                  <AdminIcon name="delete-bin-7-line" />
                 </button>
               )}
             </>
@@ -155,7 +175,7 @@ function AdminImageCardMetadata({
   if (storage) {
     return (
       <span className={className} title={`存储：${storage}`}>
-        <Icon name="hard-drive-2-line" />
+        <AdminIcon name="hard-drive-2-line" />
         <span>{storage}</span>
       </span>
     );

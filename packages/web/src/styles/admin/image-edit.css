@@ -1,3 +1,9 @@
+:root {
+  --admin-color-edit-row-surface: light-dark(#f7f8fa, #1c2128);
+  --admin-color-preview-close-surface: light-dark(rgba(255, 255, 255, .92), rgba(22, 27, 34, .92));
+  --admin-shadow-preview: light-dark(rgba(0, 0, 0, .4), rgba(0, 0, 0, .64));
+}
+
 .image-preview-modal { z-index: 50; }
 .image-preview-modal .image-preview-image {
   width: min(96vw, 1280px);
@@ -405,4 +411,10 @@
     flex-direction: column;
   }
   .batch-edit-modal.is-single .batch-edit-row { margin-block: auto; }
+}
+
+/* The preview image, rather than the modal article, owns this transition. */
+@media (prefers-reduced-motion: reduce) {
+  .image-preview-modal .image-preview-image,
+  .image-preview-modal.is-closing .image-preview-image { animation: none; }
 }

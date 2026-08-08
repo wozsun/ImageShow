@@ -1,8 +1,9 @@
 /*
  * Admin color contract
  * --------------------
- * This sheet is imported only by the lazy admin style chunk. Admin component
- * colors never depend on the public palette, even where current values match.
+ * This sheet follows only capabilities that render shared admin controls: the
+ * login page, authenticated admin routes, or an authorized public edit flow.
+ * Route navigation and page-only tokens stay in their narrower CSS owners.
  */
 :root {
   /* Foundations */
@@ -20,25 +21,7 @@
   --admin-color-action-primary: #1f6feb;
   --admin-color-action-primary-dark: light-dark(#1559b7, #79c0ff);
   --admin-color-action-text: light-dark(#1559b7, #79b8ff);
-  --admin-color-focus-code: light-dark(#6e7681, #8b949e);
   --admin-color-thumbnail-surface: light-dark(#e8eef5, #21262d);
-
-  /* Navigation */
-  --admin-color-navigation-surface: light-dark(#fff, #161b22);
-  --admin-color-navigation-hover: light-dark(#eef5ff, #182a43);
-  --admin-color-navigation-active: light-dark(#dbeafe, #173f6b);
-  --admin-color-navigation-text: light-dark(#334155, #c9d1d9);
-  --admin-color-navigation-active-text: light-dark(#1559b7, #79c0ff);
-  --admin-color-navigation-divider: light-dark(#e1e8f0, #30363d);
-  --admin-color-navigation-control-surface: light-dark(#fff, #1c2128);
-  --admin-color-navigation-control-border: light-dark(#cbd6e3, #636c76);
-  --admin-color-navigation-version-border: light-dark(#d6e0eb, #3d444d);
-  --admin-color-navigation-version-text: light-dark(#64748b, #8b949e);
-  --admin-color-navigation-version-surface: light-dark(#f4f7fb, #21262d);
-  --admin-color-navigation-version-hover-text: light-dark(#1559b7, #79c0ff);
-  --admin-color-navigation-version-hover-surface: light-dark(#e7f0ff, #203247);
-  --admin-color-navigation-scrollbar: light-dark(rgba(71, 85, 105, .28), rgba(201, 209, 217, .24));
-  --admin-color-navigation-scrollbar-active: light-dark(rgba(71, 85, 105, .46), rgba(201, 209, 217, .42));
 
   /* Controls and shared states */
   --admin-color-control-text-tertiary: light-dark(#97a1b0, #8b949e);
@@ -62,12 +45,8 @@
   --admin-shadow-control-floating: light-dark(rgba(20, 30, 44, .18), rgba(0, 0, 0, .48));
   --admin-shadow-control-resting: light-dark(rgba(20, 30, 44, .12), rgba(0, 0, 0, .38));
   --admin-shadow-modal: light-dark(rgba(0, 0, 0, .28), rgba(0, 0, 0, .58));
-  --admin-shadow-preview: light-dark(rgba(0, 0, 0, .4), rgba(0, 0, 0, .64));
-  --admin-color-preview-close-surface: light-dark(rgba(255, 255, 255, .92), rgba(22, 27, 34, .92));
-  --admin-color-modal-overlay: light-dark(rgba(13, 18, 28, .76), rgba(0, 0, 0, .64));
   --admin-shadow-menu: light-dark(rgba(13, 18, 28, .16), rgba(0, 0, 0, .46));
   --admin-shadow-card-hover: light-dark(rgba(13, 18, 28, .08), rgba(0, 0, 0, .4));
-  --admin-shadow-panel: light-dark(rgba(32, 42, 56, .16), rgba(0, 0, 0, .48));
 
   /* Base scrollbars must follow the admin appearance instead of the public palette. */
   --admin-color-scrollbar-track-thumb: light-dark(rgba(20, 30, 44, .3), rgba(201, 209, 217, .28));
@@ -80,11 +59,6 @@
    * Status palettes stay deliberately compact. Page and lifecycle states map
    * to these roles instead of creating local variants for nearly equal hues.
    */
-
-  /* Status: neutral */
-  --admin-color-neutral-text: light-dark(#646a73, #8b949e);
-  --admin-color-neutral-surface: light-dark(#f3f4f5, #15191f);
-  --admin-color-neutral-border: light-dark(#d9dde2, #2a3038);
 
   /* Status: success */
   --admin-color-success-text: light-dark(#245236, #8fd8a3);
@@ -141,69 +115,6 @@
   --admin-color-pending-text-subtle: light-dark(#3776a1, #5d87ab);
   --admin-color-pending-surface-subtle: light-dark(#f2f7ff, #0c1b29);
   --admin-color-pending-border-subtle: light-dark(#d7e2e6, #253d55);
-
-  /* Code editor and log viewer */
-  --admin-color-code-surface: #0d1117;
-  --admin-color-code-border: #30363d;
-  --admin-color-code-text: #e6edf3;
-  --admin-color-code-gutter: #6e7681;
-  --admin-color-code-active-line: rgba(110, 118, 129, .12);
-  --admin-color-code-focus-ring: rgba(110, 118, 129, .28);
-  --admin-color-log-surface: #111827;
-  --admin-color-log-border: #232b38;
-  --admin-color-log-text: #e5edf8;
-  --admin-color-log-empty: #9aa4b2;
-
-  /* Login and ALTCHA */
-  --admin-color-login-form-surface: rgba(22, 27, 34, .2);
-  --admin-color-login-overlay-start: rgba(12, 18, 28, .45);
-  --admin-color-login-overlay-end: rgba(12, 18, 28, .72);
-  --admin-color-altcha-border: light-dark(#d0d5dd, #636c76);
-  --admin-color-altcha-checkbox-border: light-dark(#98a2b3, #6e7681);
-  --admin-color-altcha-text-secondary: light-dark(#667085, #b1bac4);
-
-  /* Entity and role badges */
-  --admin-color-entity-surface-pinned: light-dark(#f7f9fc, #1c2128);
-  --admin-color-entity-slug-surface: light-dark(#eef2f7, #21262d);
-  --admin-color-role-super-text: light-dark(#1559b7, #79c0ff);
-  --admin-color-role-super-surface: light-dark(#dbeafe, #15447a);
-  --admin-color-role-image-text: light-dark(#3730a3, #a5b4fc);
-  --admin-color-role-image-surface: light-dark(#e0e7ff, #25264f);
-
-  /* Overview */
-  --admin-color-overview-label: light-dark(#4a5563, #c9d1d9);
-  --admin-color-overview-hint: light-dark(#8a93a2, #8b949e);
-  --admin-color-overview-chip: light-dark(#64748b, #b1bac4);
-  --admin-color-overview-recent-surface: light-dark(#f1f4f8, #1c2128);
-
-  /* Storage */
-  --admin-color-storage-border: light-dark(#e2e6ec, #30363d);
-  --admin-color-storage-action-border: light-dark(#eef1f5, #272d35);
-  --admin-color-storage-default-surface: light-dark(#e8f1ff, #1b3856);
-  --admin-color-storage-disabled-text: light-dark(#6b7280, #8b949e);
-  --admin-color-storage-disabled-surface: light-dark(#f3f4f6, #21262d);
-  --admin-color-storage-label: light-dark(#4a525d, #c9d1d9);
-  --admin-color-storage-meta: light-dark(#8a93a0, #8b949e);
-  --admin-color-storage-add-border: light-dark(#c4ccd6, #636c76);
-  --admin-color-storage-add-surface: light-dark(#fafbfc, #161b22);
-  --admin-shadow-storage-default: light-dark(rgba(31, 111, 235, .25), rgba(65, 132, 191, .38));
-
-  /* Image details and editing */
-  --admin-color-edit-row-surface: light-dark(#f7f8fa, #1c2128);
-
-  /* Image list and upload surfaces */
-  --admin-color-workflow-trigger-surface: light-dark(#f7f9fc, #1c2128);
-  --admin-color-workflow-content-surface: light-dark(#edf1f5, #21262d);
-  --admin-color-workflow-filter-surface: light-dark(#f3f6fa, #1b222c);
-  --admin-color-upload-menu-border: light-dark(#d5dce5, #3d444d);
-  --admin-color-upload-divider-strong: light-dark(#e1e6ed, #30363d);
-  --admin-color-upload-divider-muted: light-dark(#e8ecf1, #272d35);
-  --admin-color-upload-hover-surface: light-dark(#f4f6f8, #252d38);
-  --admin-color-upload-dropzone-hover: light-dark(#f5f9ff, #182c40);
-  --admin-color-upload-summary: light-dark(#435062, #c9d1d9);
-
-  /* Advanced configuration */
-  --admin-color-config-summary-surface: light-dark(#f5f7fa, #1c2128);
 
   /* Context aliases consumed by base.css while the admin domain is active. */
 }
@@ -277,6 +188,7 @@
   --color-detail-text-secondary: var(--admin-color-text-secondary);
   --color-detail-action-text: var(--admin-color-action-text);
   --color-detail-action-fill: var(--admin-color-action-primary);
+  --color-detail-success: var(--admin-color-success-text);
   --color-detail-error: var(--admin-color-danger-text);
   --color-detail-fade-clear: rgba(250, 251, 253, 0);
   --color-detail-chip-text: var(--admin-color-text-primary);

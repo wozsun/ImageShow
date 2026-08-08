@@ -1,0 +1,350 @@
+@import "./image-detail-semantic-colors.css";
+
+@keyframes image-detail-backdrop-in {
+  from { background-color: var(--color-detail-backdrop-clear); }
+  to { background-color: var(--color-modal-overlay); }
+}
+
+@keyframes image-detail-surface-in {
+  from { transform: translateY(8px) scale(.985); }
+  to { transform: translateY(0) scale(1); }
+}
+
+.image-detail-modal { animation: image-detail-backdrop-in .16s ease-out; }
+.image-detail-modal > article {
+  width: min(1100px, 96vw);
+  height: 90vh;
+  max-height: 90vh;
+  color: var(--color-detail-text-primary);
+  background: var(--color-detail-surface);
+  border-radius: 8px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  overflow: hidden;
+  animation: image-detail-surface-in .18s cubic-bezier(.2, .8, .2, 1);
+}
+.image-detail-image {
+  width: 100%;
+  height: 90vh;
+  max-height: 90vh;
+  background: var(--color-detail-image-surface);
+}
+.image-detail-panel {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: inherit;
+}
+.image-detail-modal .image-detail-content {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 0;
+  overflow-anchor: none;
+  overscroll-behavior: none;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+.image-detail-modal .image-detail-head {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  flex: 0 0 auto;
+  display: grid;
+  margin: 0;
+  padding: 15px 20px;
+  background: var(--color-detail-surface);
+}
+.image-detail-title-row {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.image-detail-title-row h2 {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.image-detail-modal .image-detail-head h2 {
+  margin: 0;
+  font-size: 1.5em;
+  line-height: 1.2;
+  display: block;
+}
+.image-detail-scroll-body {
+  flex: 0 0 auto;
+  min-height: auto;
+  overflow: visible;
+  padding: 0 20px 20px;
+}
+
+.image-detail-title-link { color: inherit; }
+.image-detail-title-link:hover {
+  color: var(--color-detail-action-text);
+  text-decoration: underline;
+}
+.image-detail-modal .image-detail-description-slot {
+  position: relative;
+  flex: 0 0 auto;
+  width: auto;
+  height: 52px;
+  min-height: 52px;
+  max-height: 52px;
+  margin: 0 20px 14px;
+  line-height: 20px;
+}
+.image-detail-description-card {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--color-detail-border);
+  border-radius: 8px;
+  background: var(--color-detail-surface-raised);
+  transition: box-shadow .14s ease;
+}
+.image-detail-description-card.is-expanded {
+  box-shadow: 0 10px 24px var(--color-detail-shadow);
+}
+.image-detail-description-card-body {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  padding: 5px 10px;
+}
+.image-detail-description-card.is-expanded .image-detail-description-card-body {
+  overflow: auto;
+  overscroll-behavior-y: auto;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+  padding: 5px 10px 28px;
+}
+.image-detail-description-text {
+  height: 40px;
+  margin: 0;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
+}
+.image-detail-modal .image-detail-description-text {
+  margin: 0;
+  color: inherit;
+}
+.image-detail-description-card.is-expanded .image-detail-description-text {
+  height: auto;
+  padding-right: 0;
+  display: block;
+  white-space: pre-wrap;
+}
+.image-detail-description-text.is-placeholder { color: var(--color-detail-text-secondary); }
+.image-detail-description-text.is-error { color: var(--color-detail-error); }
+.image-detail-description-toggle,
+.image-detail-description-retry {
+  position: absolute;
+  right: 8px;
+  bottom: 5px;
+  z-index: 1;
+  min-height: 20px;
+  height: 20px;
+  padding: 0 2px 0 12px;
+  border: 0;
+  background: linear-gradient(
+    90deg,
+    var(--color-detail-fade-clear),
+    var(--color-detail-surface-raised) 28%
+  );
+  color: var(--color-detail-action-text);
+  line-height: 20px;
+}
+.image-detail-public-properties { margin-top: 0; }
+.image-detail-actions { min-height: 38px; }
+.image-detail-original.is-disabled,
+.image-detail-source.is-disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+.image-detail-original.is-disabled:hover,
+.image-detail-source.is-disabled:hover { filter: none; }
+.image-detail-admin-module-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-detail-border);
+  color: var(--color-detail-error);
+}
+.image-detail-admin-module-error button {
+  flex: 0 0 auto;
+  min-height: 30px;
+  padding: 4px 10px;
+}
+.image-detail-modal dl { display: grid; grid-template-columns: 82px 1fr; gap: 8px 12px; }
+.image-detail-modal dt { color: var(--color-detail-text-secondary); }
+.image-detail-modal dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.image-detail-modal dd a { color: var(--color-detail-action-text); }
+
+.image-detail-modal .image-detail-public-properties .tag-chip {
+  color: var(--color-detail-chip-text);
+  background: var(--color-detail-chip-surface);
+  border-color: var(--color-detail-chip-border);
+}
+
+.image-detail-modal .image-detail-actions .button {
+  color: var(--color-detail-text-strong);
+  background: var(--color-detail-action-fill);
+}
+
+.image-detail-modal .image-detail-actions .image-detail-original {
+  border-color: var(--color-detail-action-border);
+}
+
+.image-detail-modal .image-detail-actions .button.secondary,
+.image-detail-modal .image-detail-title-row > .close {
+  color: var(--color-detail-text-primary);
+  background: var(--color-detail-action-surface);
+  border-color: var(--color-detail-border);
+}
+
+@media (max-width: 760px) {
+  .image-detail-modal {
+    padding: 0;
+    place-items: stretch;
+    overscroll-behavior: contain;
+  }
+  .image-detail-modal > article {
+    --image-detail-mobile-controls-space: 64px;
+    position: relative;
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    max-height: 100vh;
+    max-height: 100dvh;
+    display: block;
+    overflow-x: hidden;
+    overflow-y: auto;
+    border: 0;
+    border-radius: 0;
+    overscroll-behavior-y: contain;
+    touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
+  }
+  .image-detail-modal .image-detail-image {
+    width: 100%;
+    height: auto;
+    min-height: min(30vh, 15rem);
+    min-height: min(30svh, 15rem);
+    max-height: calc(
+      100vh
+      - env(safe-area-inset-top)
+      - env(safe-area-inset-bottom)
+      - var(--image-detail-mobile-controls-space)
+    );
+    max-height: calc(
+      100dvh
+      - env(safe-area-inset-top)
+      - env(safe-area-inset-bottom)
+      - var(--image-detail-mobile-controls-space)
+    );
+  }
+  .image-detail-modal .image-detail-panel {
+    position: static;
+    display: block;
+    overflow: visible;
+  }
+  .image-detail-modal .image-detail-content {
+    position: static;
+    display: block;
+    min-height: 0;
+    overflow: visible;
+    overscroll-behavior: auto;
+    touch-action: auto;
+  }
+  .image-detail-modal .image-detail-head {
+    position: static;
+    padding: 18px 20px;
+  }
+  .image-detail-modal .image-detail-title-row {
+    display: block;
+    padding-right: 56px;
+  }
+  .image-detail-modal .image-detail-head .close {
+    position: fixed;
+    top: max(12px, calc(env(safe-area-inset-top) + 8px));
+    right: max(12px, calc(env(safe-area-inset-right) + 8px));
+    z-index: 7;
+    width: 44px;
+    min-height: 44px;
+    padding: 0;
+    flex-basis: 44px;
+    color: var(--color-detail-text-strong);
+    background: var(--color-detail-mobile-close-surface);
+    border-color: var(--color-detail-mobile-close-border);
+    box-shadow: 0 4px 16px var(--color-detail-mobile-close-shadow);
+    -webkit-backdrop-filter: blur(12px) saturate(120%);
+    backdrop-filter: blur(12px) saturate(120%);
+  }
+  .image-detail-modal .image-detail-description-slot.is-inline-expanded {
+    height: auto;
+    min-height: 52px;
+    max-height: none;
+  }
+  .image-detail-modal
+    .image-detail-description-slot.is-inline-expanded
+    .image-detail-description-card {
+    position: relative;
+    inset: auto;
+    min-height: 52px;
+  }
+  .image-detail-modal
+    .image-detail-description-slot.is-inline-expanded
+    .image-detail-description-card-body {
+    height: auto;
+    overflow: visible;
+    overscroll-behavior: auto;
+    touch-action: auto;
+  }
+  .image-detail-modal .image-detail-scroll-body {
+    padding-bottom: max(20px, env(safe-area-inset-bottom));
+  }
+}
+
+@media (forced-colors: none) {
+  .image-detail-modal .image-detail-content {
+    scrollbar-width: none;
+  }
+  .image-detail-modal .image-detail-content::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
+}
+
+@media (max-width: 760px) and (forced-colors: none) {
+  .image-detail-modal > article {
+    scrollbar-width: none;
+  }
+  .image-detail-modal > article::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
+}
+
+/* This file loads after app-core, so it owns the final detail-motion override. */
+@media (prefers-reduced-motion: reduce) {
+  .image-detail-modal,
+  .image-detail-modal > article { animation: none; }
+}

@@ -11,7 +11,7 @@ import { invalidateRuntimeData } from "../../../lib/api/query-invalidation.js";
 import { adminApiBasePath } from "../../../lib/constants.js";
 import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
 import type { RuntimeConfigChangeSummary } from "../../../lib/types.js";
-import { Icon } from "../../../components/icon/Icon.js";
+import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import { AsyncActionButton } from "../../../components/actions/AsyncActionButton.js";
 import {
   createActionFeedback,
@@ -194,7 +194,7 @@ export function RuntimeConfigEditor({ reloadToken }: {
           title="精准编辑当前实例的全部运行时配置，缺少字段或多余字段均会拒绝保存。"
           aria-description="精准编辑当前实例的全部运行时配置，缺少字段或多余字段均会拒绝保存。"
         >
-          <Icon name="settings-3-line" />完整 config.json
+          <AdminIcon name="settings-3-line" />完整 config.json
         </h2>
         <div className="advanced-config-editor-head-status">
           <ActionFeedbackRegion

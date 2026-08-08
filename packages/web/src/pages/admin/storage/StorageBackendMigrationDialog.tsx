@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { AsyncActionButton } from "../../../components/actions/AsyncActionButton.js";
 import { DialogFrame } from "../../../components/feedback/DialogFrame.js";
 import { SelectMenu } from "../../../components/form/SelectMenu.js";
-import { Icon } from "../../../components/icon/Icon.js";
+import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import { useAsyncActionStatus } from "../../../hooks/useAsyncActionStatus.js";
 import {
   useStorageOptions,
@@ -132,7 +132,7 @@ export function StorageBackendMigrationDialog({
               disabled={blocked}
               onClick={() => requestClose()}
             >
-              <Icon name="close-line" />
+              <AdminIcon name="close-line" />
             </button>
           </header>
           <div className="operation-body">

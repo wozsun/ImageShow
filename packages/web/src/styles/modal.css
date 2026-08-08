@@ -1,0 +1,54 @@
+/* DialogLayerPortal owns positioning; this file only supplies the shared
+   backdrop, motion and small-screen behavior used by public and admin dialogs. */
+.modal {
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  overscroll-behavior: none;
+  background: var(--color-modal-overlay);
+  animation: modal-fade .16s ease-out;
+}
+
+.modal.is-closing {
+  pointer-events: none;
+  animation: modal-fade-out .12s ease-in forwards;
+}
+
+.modal.is-closing > article,
+.modal.is-closing > form {
+  animation: modal-pop-out .12s ease-in forwards;
+}
+
+@keyframes modal-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modal-pop {
+  from { opacity: .86; transform: translateY(8px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes modal-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes modal-pop-out {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(8px) scale(.985); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal,
+  .modal article,
+  .modal.is-closing,
+  .modal.is-closing > article,
+  .modal.is-closing > form { animation: none; }
+}
+
+@media (max-width: 760px) {
+  .modal { padding: 10px; }
+  .modal-footer-actions > * { flex: 1; }
+}

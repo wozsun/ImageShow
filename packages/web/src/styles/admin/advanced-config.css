@@ -1,3 +1,14 @@
+:root {
+  --admin-color-focus-code: light-dark(#6e7681, #8b949e);
+  --admin-color-code-surface: #0d1117;
+  --admin-color-code-border: #30363d;
+  --admin-color-code-text: #e6edf3;
+  --admin-color-code-gutter: #6e7681;
+  --admin-color-code-active-line: rgba(110, 118, 129, .12);
+  --admin-color-code-focus-ring: rgba(110, 118, 129, .28);
+  --admin-color-config-summary-surface: light-dark(#f5f7fa, #1c2128);
+}
+
 .advanced-config-page { display: flex; flex-direction: column; overflow: hidden; }
 .advanced-config-page > .workspace-head { flex: 0 0 auto; }
 .advanced-config-head-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }

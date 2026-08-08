@@ -1,3 +1,10 @@
+:root {
+  --admin-color-workflow-trigger-surface: light-dark(#f7f9fc, #1c2128);
+  --admin-color-workflow-content-surface: light-dark(#edf1f5, #21262d);
+  --admin-color-workflow-filter-surface: light-dark(#f3f6fa, #1b222c);
+  --admin-shadow-panel: light-dark(rgba(32, 42, 56, .16), rgba(0, 0, 0, .48));
+}
+
 .toolbar {
   min-height: 44px;
   display: flex;
@@ -31,6 +38,14 @@
   grid-auto-rows: min-content;
   padding-block: 8px;
 }
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--admin-color-border-control);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.segmented button { border: 0; border-radius: 0; }
+
 .admin-image-card {
   min-width: 0;
   display: grid;
@@ -42,6 +57,25 @@
   border: 1px solid var(--admin-color-border-default);
   border-radius: 8px;
   padding: 8px;
+  transition:
+    border-color .16s ease,
+    box-shadow .16s ease,
+    transform .16s ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .admin-image-card:has(> .admin-image-card-detail:not(:disabled):hover) {
+    border-color: var(--admin-color-control-border-selected);
+    box-shadow: 0 8px 22px var(--admin-shadow-card-hover);
+    transform: translateY(var(--admin-interactive-card-lift));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-image-card { transition: none; }
+  .admin-image-card:has(> .admin-image-card-detail:not(:disabled):hover) {
+    transform: none;
+  }
 }
 
 .admin-image-grid .admin-image-card {

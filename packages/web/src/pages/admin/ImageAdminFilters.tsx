@@ -5,7 +5,7 @@ import {
   type ImportVocabularyDto
 } from "@imageshow/shared/browser";
 import { FacetSelector } from "../../components/data-display/FacetSelector.js";
-import { Icon } from "../../components/icon/Icon.js";
+import { AdminIcon } from "../../components/icon/AdminIcon.js";
 import { SelectMenu } from "../../components/form/SelectMenu.js";
 import {
   brightnessOptionLabel,
@@ -69,19 +69,20 @@ export function ImageAdminFilters({
         ref={disclosure.triggerRef}
         type="button"
         className="image-list-filter-toggle"
+        disabled={disabled}
         aria-expanded={open}
         aria-controls="admin-image-filter-panel"
         onClick={() => open
           ? disclosure.setOpen(false, { restoreFocus: true })
           : disclosure.setOpen(true)}
       >
-        <Icon name="filter-3-line" />
+        <AdminIcon name="filter-3-line" />
         筛选
         {activeCount > 0 && (
           <span className="image-list-filter-count">{activeCount}</span>
         )}
         <span className="image-list-filter-chevron">
-          <Icon name="arrow-down-s-line" />
+          <AdminIcon name="arrow-down-s-line" />
         </span>
       </button>
       <AnchoredMenuDismissSignalContext.Provider
@@ -102,7 +103,7 @@ export function ImageAdminFilters({
             className="image-list-filter-panel-close"
             onClick={() => disclosure.setOpen(false, { restoreFocus: true })}
           >
-            <Icon name="close-line" />
+            <AdminIcon name="close-line" />
             收起筛选
           </button>
           <div className="image-list-filter-primary">

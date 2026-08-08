@@ -1,9 +1,9 @@
 import type { ButtonHTMLAttributes, ReactElement } from "react";
-import { Icon, type IconName } from "../icon/Icon.js";
+import { AdminIcon, type AdminIconName } from "../icon/AdminIcon.js";
 import type { AsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
 
 type AsyncActionPresentationItem = {
-  icon?: IconName;
+  icon?: AdminIconName;
 } & (
   | { label: string; ariaLabel?: never }
   | { label: ReactElement; ariaLabel: string }
@@ -70,7 +70,7 @@ export function AsyncActionButton({
             >
               {item.icon && (
                 currentState
-                  ? <Icon name={item.icon} />
+                  ? <AdminIcon name={item.icon} />
                   : <span className="async-action-icon-placeholder" aria-hidden="true" />
               )}
               <span className="async-action-label">{item.label}</span>

@@ -2,7 +2,7 @@ import { useRef, type KeyboardEvent } from "react";
 import { AnchoredPopup } from "../../../components/feedback/AnchoredPopup.js";
 import { DirectActivationButton } from "../../../components/feedback/DirectActivationButton.js";
 import { MenuItemButton } from "../../../components/feedback/MenuItemButton.js";
-import { Icon } from "../../../components/icon/Icon.js";
+import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import { useAnchoredMenu } from "../../../hooks/useAnchoredMenu.js";
 import type { AnchoredMenuSize } from "../../../lib/ui/menu-position.js";
 import type {
@@ -119,7 +119,7 @@ export function UploadCleanupMenu({
         disabled={allDisabled}
         onActivate={() => menu.open ? menu.requestClose() : menu.openMenu()}
       >
-        <Icon name="delete-bin-6-line" />
+        <AdminIcon name="delete-bin-6-line" />
       </DirectActivationButton>
       {popup}
     </>

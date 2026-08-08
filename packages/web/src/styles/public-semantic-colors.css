@@ -1,0 +1,27 @@
+:root {
+  /* Public primary navigation shared by Home and Gallery. */
+  --public-color-navigation-text: #f4f7fb;
+  --public-color-navigation-link: rgba(239, 242, 248, .76);
+  --public-color-navigation-mobile-link: rgba(239, 242, 248, .82);
+  --public-color-navigation-surface: rgba(7, 11, 21, .95);
+  --public-color-navigation-surface-solid: rgba(7, 11, 21, .97);
+  --public-color-navigation-border: rgba(255, 255, 255, .1);
+  --public-color-navigation-control-surface: rgba(255, 255, 255, .08);
+  --public-color-navigation-mobile-control-surface: rgba(0, 0, 0, .06);
+  --public-color-navigation-control-border: rgba(255, 255, 255, .2);
+  --public-color-navigation-active: var(--public-color-selection-strong);
+  --public-shadow-navigation: rgba(0, 2, 8, .34);
+  --public-shadow-navigation-menu: rgba(0, 2, 8, .42);
+  --public-color-navigation-star-neutral-strong: rgba(238, 247, 255, .92);
+  --public-color-navigation-star-primary: rgba(145, 199, 255, .88);
+  --public-color-navigation-star-neutral-soft: rgba(255, 255, 255, .74);
+  --public-color-navigation-star-primary-bright: rgba(170, 214, 255, .82);
+  --public-color-navigation-star-accent: rgba(255, 228, 240, .74);
+  --public-color-navigation-star-primary-soft: rgba(203, 229, 255, .78);
+  --public-color-navigation-star-neutral-muted: rgba(255, 255, 255, .68);
+  --public-color-navigation-streak: rgba(220, 239, 255, .8);
+  --public-color-navigation-streak-glow: rgba(125, 190, 255, .6);
+
+  /* The secondary navigation material is shared by Home and Gallery. */
+  --public-color-toolbar-border: rgba(255, 255, 255, .12);
+}

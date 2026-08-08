@@ -1,3 +1,9 @@
+:root {
+  --admin-color-login-form-surface: rgba(22, 27, 34, .2);
+  --admin-color-login-overlay-start: rgba(12, 18, 28, .45);
+  --admin-color-login-overlay-end: rgba(12, 18, 28, .72);
+}
+
 html:has(.login),
 body:has(.login) {
   width: 100%;
@@ -6,6 +12,9 @@ body:has(.login) {
   overflow: hidden;
   overscroll-behavior: none;
 }
+
+.login-site-title { color: inherit; border-radius: 6px; }
+.login-site-title:hover { color: var(--admin-color-action-text); }
 
 .login {
   /* 背景层固定占满当前动态视口且不参与滚动；登录卡片作为独立定位层随动态视口
@@ -40,78 +49,7 @@ body:has(.login) {
   transition: top 80ms ease-out;
 }
 .login h1 { margin: 0 0 6px; }
-.login-altcha-shell {
-  position: relative;
-  width: 100%;
-  min-width: 0;
-}
 .login-challenge-slot { position: relative; min-height: 40px; }
-.login-altcha {
-  /* ALTCHA 上游样式使用 light-dark()。这里显式设置登录页配色，避免构建器转换后的
-     颜色变量在不支持的环境中失效，同时把标准组件收成与表单一致的扁平验证条。 */
-  --altcha-border-color: var(--admin-color-altcha-border);
-  --altcha-border-radius: 6px;
-  --altcha-checkbox-border-color: var(--admin-color-altcha-checkbox-border);
-  --altcha-checkbox-size: 20px;
-  --altcha-color-base: var(--admin-color-surface-primary);
-  --altcha-color-base-content: var(--admin-color-text-primary);
-  --altcha-color-neutral: var(--admin-color-altcha-border);
-  --altcha-color-neutral-content: var(--admin-color-altcha-text-secondary);
-  --altcha-input-background-color: var(--admin-color-surface-primary);
-  --altcha-max-width: 100%;
-  --altcha-padding: 8px 10px;
-  --altcha-spinner-color: var(--admin-color-altcha-text-secondary);
-  display: block;
-  width: 100%;
-  overflow: visible;
-}
-.login-altcha .altcha,
-.login-altcha .altcha-main { width: 100%; }
-.login-altcha .altcha-main { padding-right: 40px; }
-.login-altcha .altcha-popover[data-variant="error"] {
-  --altcha-popover-color: var(--admin-color-danger-border);
-  left: 0;
-  background: var(--admin-color-danger-surface);
-  border-color: var(--admin-color-danger-border);
-  color: var(--admin-color-danger-text);
-}
-.login-altcha .altcha-popover[data-variant="error"] .altcha-popover-content {
-  justify-content: flex-start;
-  padding: 7px 10px;
-  text-align: left;
-}
-.login-altcha .altcha-popover[data-variant="error"] .altcha-error {
-  width: 100%;
-  margin: 0;
-  text-align: left;
-}
-.login-altcha .altcha[data-state="verified"] .altcha-checkbox-wrap {
-  cursor: default;
-  pointer-events: none;
-}
-.login-altcha-mark {
-  position: absolute;
-  top: 50%;
-  right: 10px;
-  width: 20px;
-  height: 20px;
-  color: var(--admin-color-altcha-text-secondary);
-  pointer-events: none;
-  transform: translateY(-50%);
-}
-.login-challenge-retry {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  width: 100%;
-  min-height: 38px;
-  border: 1px solid var(--admin-color-danger-action);
-  border-radius: 6px;
-  background: var(--admin-color-surface-primary);
-  color: var(--admin-color-danger-text);
-  cursor: pointer;
-}
-.login-challenge-retry:hover { background: var(--admin-color-danger-surface); }
 .login .error { line-height: 20px; }
 
 @keyframes login-surface-in {

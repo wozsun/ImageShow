@@ -1,4 +1,5 @@
-import { useCallback, useRef, useState } from "react";
+import { Component, Suspense, lazy, useCallback, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import type { AltchaWidgetElement } from "altcha";
 import type { AdminLoginResultDto } from "@imageshow/shared/browser";
 import { api, clearCsrfToken, setCsrfToken } from "../../lib/api/client.js";
@@ -9,8 +10,34 @@ import {
   rememberSessionProbeHint
 } from "../../lib/api/site-data.js";
 import { cssUrl } from "../../lib/ui/formatters.js";
-import { LoginChallenge } from "./LoginChallenge.js";
+import { establishAndConfirmAdminSession } from "./admin-login-session.js";
 import { useLoginVisualViewport } from "./useLoginVisualViewport.js";
+// 登录页复用管理表单色契约，但不加载认证后才需要的 admin-core 布局。
+import "../../styles/admin/semantic-colors.css";
+import "../../styles/admin/login.css";
+
+const LoginChallenge = lazy(() => import("./LoginChallenge.js").then((module) => ({
+  default: module.LoginChallenge
+})));
+
+class LoginChallengeModuleBoundary extends Component<{
+  children: ReactNode;
+  onError: () => void;
+}, { failed: boolean }> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch() {
+    this.props.onError();
+  }
+
+  render() {
+    return this.state.failed ? null : this.props.children;
+  }
+}
 
 export function AdminLogin({
   siteName,
@@ -19,7 +46,7 @@ export function AdminLogin({
   loginBackground
 }: {
   siteName: string;
-  onLogin: () => Promise<void>;
+  onLogin: () => Promise<boolean>;
   altchaEnabled: boolean;
   loginBackground: string;
 }) {
@@ -29,18 +56,23 @@ export function AdminLogin({
   const [loggingIn, setLoggingIn] = useState(false);
   const [challengeLoaded, setChallengeLoaded] = useState(!altchaEnabled);
   const [challengeVerified, setChallengeVerified] = useState(!altchaEnabled);
-  const [challengeLoadFailed, setChallengeLoadFailed] = useState(false);
+  const [challengeFailure, setChallengeFailure] = useState<"module" | "runtime" | null>(null);
   const [challengeInstance, setChallengeInstance] = useState(0);
+  const [serverSessionEstablished, setServerSessionEstablished] = useState(false);
   const loginRef = useLoginVisualViewport();
   const challengeRef = useRef<AltchaWidgetElement | null>(null);
+  const serverSessionRef = useRef({ established: false });
   const submissionActiveRef = useRef(false);
   const automaticChallengeRetryUsedRef = useRef(false);
   const markChallengeReady = useCallback(() => {
     setChallengeLoaded(true);
-    setChallengeLoadFailed(false);
-    automaticChallengeRetryUsedRef.current = false;
+    setChallengeFailure(null);
   }, []);
-  const markChallengeError = useCallback(() => {
+  const markChallengeVerification = useCallback((verified: boolean) => {
+    setChallengeVerified(verified);
+    if (verified) automaticChallengeRetryUsedRef.current = false;
+  }, []);
+  const markChallengeRuntimeError = useCallback(() => {
     setChallengeLoaded(false);
     setChallengeVerified(false);
     if (!automaticChallengeRetryUsedRef.current) {
@@ -48,23 +80,37 @@ export function AdminLogin({
       setChallengeInstance((current) => current + 1);
       return;
     }
-    setChallengeLoadFailed(true);
+    setChallengeFailure("runtime");
+  }, []);
+  const markChallengeModuleError = useCallback(() => {
+    setChallengeLoaded(false);
+    setChallengeVerified(false);
+    setChallengeFailure("module");
   }, []);
   const retryChallenge = useCallback(() => {
+    // 失败过的模块 URL 会被当前页面的模块加载器缓存；重新载入页面才能真正
+    // 发起新请求。组件运行失败则复用已经下载的模块，仅重建 widget 实例。
+    if (challengeFailure === "module") {
+      location.reload();
+      return;
+    }
     automaticChallengeRetryUsedRef.current = true;
-    setChallengeLoadFailed(false);
+    setChallengeFailure(null);
     setChallengeLoaded(false);
     setChallengeVerified(false);
     setChallengeInstance((current) => current + 1);
-  }, []);
+  }, [challengeFailure]);
 
   const background = loginBackground || "/random?m=redirect";
   const credentialsComplete = username.trim().length > 0 && password.length > 0;
-  const buttonLabel = loggingIn
-    ? "登录中…"
-    : !challengeLoaded
-      ? "加载验证…"
-      : "登录";
+  let buttonLabel = "登录";
+  if (serverSessionEstablished) {
+    buttonLabel = loggingIn ? "进入后台…" : "重新加载后台";
+  } else if (loggingIn) {
+    buttonLabel = "登录中…";
+  } else if (!challengeLoaded) {
+    buttonLabel = "加载验证…";
+  }
 
   return (
     <main
@@ -76,7 +122,14 @@ export function AdminLogin({
     >
       <form onSubmit={async (event) => {
         event.preventDefault();
-        if (submissionActiveRef.current || !credentialsComplete) return;
+        if (submissionActiveRef.current) return;
+        if (serverSessionRef.current.established) {
+          // 浏览器会缓存同一页面里失败过的模块导入；新页面既会重新请求资源，
+          // 又会创建全新 QueryClient，因此无需重复登录或清理旧用户缓存。
+          location.reload();
+          return;
+        }
+        if (!credentialsComplete) return;
         let altcha: string | undefined;
         if (altchaEnabled) {
           const proof = new FormData(event.currentTarget).get("altcha");
@@ -88,20 +141,42 @@ export function AdminLogin({
         setError("");
         setLoggingIn(true);
         try {
-          const response = await api<AdminLoginResultDto>(`${adminApiBasePath}/auth/login`, {
-            method: "POST",
-            body: JSON.stringify({ username, password, ...(altcha ? { altcha } : {}) })
-          });
-          setCsrfToken(response.csrf_token);
-          rememberSessionProbeHint();
-          await onLogin();
-        } catch (caught) {
+          const authenticated = await establishAndConfirmAdminSession(
+            serverSessionRef.current,
+            async () => {
+              const response = await api<AdminLoginResultDto>(`${adminApiBasePath}/auth/login`, {
+                method: "POST",
+                body: JSON.stringify({ username, password, ...(altcha ? { altcha } : {}) })
+              });
+              setCsrfToken(response.csrf_token);
+              rememberSessionProbeHint();
+              setServerSessionEstablished(true);
+            },
+            onLogin
+          );
+          if (authenticated) return;
+
           clearCsrfToken();
           clearSessionProbeHint();
-          setError((caught as Error).message);
+          setServerSessionEstablished(false);
+          setError("登录状态确认失败，请重新登录");
           if (altchaEnabled) {
             setChallengeVerified(false);
             challengeRef.current?.reset();
+          }
+          submissionActiveRef.current = false;
+          setLoggingIn(false);
+        } catch (caught) {
+          if (serverSessionRef.current.established) {
+            setError("登录已成功，但后台加载失败，请重新加载后台");
+          } else {
+            clearCsrfToken();
+            clearSessionProbeHint();
+            setError((caught as Error).message);
+            if (altchaEnabled) {
+              setChallengeVerified(false);
+              challengeRef.current?.reset();
+            }
           }
           submissionActiveRef.current = false;
           setLoggingIn(false);
@@ -123,14 +198,20 @@ export function AdminLogin({
         />
         {altchaEnabled && (
           <div className="login-challenge-slot">
-            <LoginChallenge
+            <LoginChallengeModuleBoundary
               key={challengeInstance}
-              ref={challengeRef}
-              onError={markChallengeError}
-              onReady={markChallengeReady}
-              onVerificationChange={setChallengeVerified}
-            />
-            {challengeLoadFailed && (
+              onError={markChallengeModuleError}
+            >
+              <Suspense fallback={null}>
+                <LoginChallenge
+                  ref={challengeRef}
+                  onError={markChallengeRuntimeError}
+                  onReady={markChallengeReady}
+                  onVerificationChange={markChallengeVerification}
+                />
+              </Suspense>
+            </LoginChallengeModuleBoundary>
+            {challengeFailure && (
               <button className="login-challenge-retry" type="button" onClick={retryChallenge}>
                 安全验证加载失败，点击重试
               </button>
@@ -141,7 +222,13 @@ export function AdminLogin({
         <button
           id="admin-login-submit"
           className="button"
-          disabled={!credentialsComplete || !challengeLoaded || !challengeVerified || loggingIn}
+          disabled={
+            loggingIn
+            || (
+              !serverSessionEstablished
+              && (!credentialsComplete || !challengeLoaded || !challengeVerified)
+            )
+          }
           type="submit"
         >
           {buttonLabel}

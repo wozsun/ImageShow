@@ -9,7 +9,7 @@ import type { BatchStorageMigrationResponse } from "@imageshow/shared/browser";
 import { AsyncActionButton } from "../../components/actions/AsyncActionButton.js";
 import { DialogFrame } from "../../components/feedback/DialogFrame.js";
 import { SelectMenu } from "../../components/form/SelectMenu.js";
-import { Icon } from "../../components/icon/Icon.js";
+import { AdminIcon } from "../../components/icon/AdminIcon.js";
 import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
 import { api } from "../../lib/api/client.js";
 import { useStorageOptions } from "../../lib/api/storage-options.js";
@@ -186,7 +186,7 @@ export function BatchStorageMigrationDialog({
               disabled={status.pending}
               onClick={() => requestClose()}
             >
-              <Icon name="close-line" />
+              <AdminIcon name="close-line" />
             </button>
           </header>
           <div className="operation-body">

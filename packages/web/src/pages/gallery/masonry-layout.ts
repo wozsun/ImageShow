@@ -16,6 +16,8 @@ export type MasonryItemPosition = {
 
 export type MasonryLayout = {
   positions: MasonryItemPosition[];
+  columns: MasonryItemPosition[][];
+  positionById: Map<string, MasonryItemPosition>;
   totalHeight: number;
   columnWidth: number;
 };
@@ -102,6 +104,34 @@ function masonryTotalHeight(
   );
 }
 
+function indexedMasonryLayout(
+  positions: MasonryItemPosition[],
+  columnCount: number,
+  totalHeight: number,
+  columnWidth: number
+): MasonryLayout {
+  const columns = Array.from(
+    { length: columnCount },
+    () => [] as MasonryItemPosition[]
+  );
+  const positionById = new Map<string, MasonryItemPosition>();
+  for (const position of positions) {
+    columns[position.column]!.push(position);
+    // Image IDs are unique in gallery data. Keeping the first occurrence also
+    // preserves the previous linear `find` behavior for malformed fixtures.
+    if (!positionById.has(position.item.id)) {
+      positionById.set(position.item.id, position);
+    }
+  }
+  return {
+    positions,
+    columns,
+    positionById,
+    totalHeight,
+    columnWidth
+  };
+}
+
 function computeMasonryLayout(
   items: GalleryImageCard[],
   geometry: GalleryGeometry & { columnCount: number }
@@ -130,11 +160,12 @@ function computeMasonryLayout(
       bottom
     };
   });
-  return {
+  return indexedMasonryLayout(
     positions,
-    totalHeight: masonryTotalHeight(columnHeights, normalized.gap),
+    normalized.columnCount,
+    masonryTotalHeight(columnHeights, normalized.gap),
     columnWidth
-  };
+  );
 }
 
 function geometryMatches(
@@ -192,9 +223,7 @@ export function reconcileMasonryLayout(
     return completeLayoutSession(items, normalized, sessionKey);
   }
 
-  const previousById = new Map(
-    previous.positions.map((position) => [position.item.id, position])
-  );
+  const previousById = previous.positionById;
   const nextIndexById = new Map<string, number>();
   let previousIndex = -1;
   let additionsStarted = false;
@@ -235,7 +264,12 @@ export function reconcileMasonryLayout(
     }
     const y = oldPosition.y - shifts[oldPosition.column]!;
     const item = items[nextIndex]!;
-    retained.push({
+    const positionUnchanged = (
+      oldPosition.item === item
+      && oldPosition.index === nextIndex
+      && oldPosition.y === y
+    );
+    retained.push(positionUnchanged ? oldPosition : {
       ...oldPosition,
       item,
       index: nextIndex,
@@ -280,16 +314,36 @@ export function reconcileMasonryLayout(
   }
 
   return {
-    positions,
-    totalHeight: masonryTotalHeight(columnHeights, normalized.gap),
-    columnWidth: previous.columnWidth,
+    ...indexedMasonryLayout(
+      positions,
+      normalized.columnCount,
+      masonryTotalHeight(columnHeights, normalized.gap),
+      previous.columnWidth
+    ),
     sessionKey,
     geometry: normalized
   };
 }
 
+function firstColumnIntersection(
+  positions: readonly MasonryItemPosition[],
+  start: number
+) {
+  let lower = 0;
+  let upper = positions.length;
+  while (lower < upper) {
+    const middle = lower + Math.floor((upper - lower) / 2);
+    if (positions[middle]!.bottom < start) {
+      lower = middle + 1;
+    } else {
+      upper = middle;
+    }
+  }
+  return lower;
+}
+
 export function masonryWindow(
-  positions: MasonryItemPosition[],
+  layout: MasonryLayout,
   start: number,
   end: number,
   maxItems = galleryMaxMountedTiles,
@@ -307,24 +361,34 @@ export function masonryWindow(
   const distanceFromPriority = (position: MasonryItemPosition) => (
     Math.abs(position.y + position.height / 2 - center)
   );
-  const intersecting = positions.filter(
-    (position) => (
-      position.bottom >= boundedStart
-      && position.y <= boundedEnd
-    )
+  const byDistanceThenIndex = (
+    left: MasonryItemPosition,
+    right: MasonryItemPosition
+  ) => (
+    distanceFromPriority(left) - distanceFromPriority(right)
+    || left.index - right.index
   );
+  const intersecting: MasonryItemPosition[] = [];
+  for (const column of layout.columns) {
+    let index = firstColumnIntersection(column, boundedStart);
+    while (index < column.length) {
+      const position = column[index]!;
+      if (position.y > boundedEnd) break;
+      intersecting.push(position);
+      index += 1;
+    }
+  }
+  intersecting.sort((left, right) => left.index - right.index);
   let mounted = intersecting.length <= itemLimit
     ? intersecting
     : intersecting
         .slice()
-        .sort((left, right) => (
-          distanceFromPriority(left) - distanceFromPriority(right)
-        ))
+        .sort(byDistanceThenIndex)
         .slice(0, itemLimit)
         .sort((left, right) => left.index - right.index);
 
   const pinned = pinnedItemId
-    ? positions.find((position) => position.item.id === pinnedItemId)
+    ? layout.positionById.get(pinnedItemId)
     : undefined;
   if (!pinned || mounted.some((position) => position === pinned)) {
     return mounted;
@@ -333,9 +397,7 @@ export function masonryWindow(
   if (mounted.length >= itemLimit) {
     mounted = mounted
       .slice()
-      .sort((left, right) => (
-        distanceFromPriority(left) - distanceFromPriority(right)
-      ))
+      .sort(byDistanceThenIndex)
       .slice(0, itemLimit - 1);
   }
   return [...mounted, pinned].sort((left, right) => left.index - right.index);

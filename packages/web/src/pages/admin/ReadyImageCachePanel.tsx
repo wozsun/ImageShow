@@ -7,7 +7,7 @@ import type {
   AdminCheckStatusDto,
   ReadyImageCacheAdminStatusDto
 } from "@imageshow/shared/browser";
-import { Icon } from "../../components/icon/Icon.js";
+import { AdminIcon } from "../../components/icon/AdminIcon.js";
 import { StableButtonLabel } from "../../components/data-display/StableButtonLabel.js";
 import { DialogFrame } from "../../components/feedback/DialogFrame.js";
 import { api } from "../../lib/api/client.js";
@@ -169,7 +169,7 @@ export function ReadyImageCachePanel({
               disabled={busy || query.isFetching}
               onClick={() => void refresh()}
             >
-              <Icon name="refresh-line" />
+              <AdminIcon name="refresh-line" />
               <StableButtonLabel idle="刷新状态" busyText="刷新中" busy={manualRefreshing} />
             </button>
             {canRebuild && (
@@ -178,7 +178,7 @@ export function ReadyImageCachePanel({
                 disabled={busy || query.isFetching || Boolean(status?.rebuilding)}
                 onClick={() => setConfirmRebuild(true)}
               >
-                <Icon name="database-2-line" />
+                <AdminIcon name="database-2-line" />
                 <StableButtonLabel idle="重建图片投影" busyText="启动中" busy={rebuildStarting} />
               </button>
             )}
@@ -297,7 +297,7 @@ function RebuildConfirmation({ busy, onClose, onConfirm }: {
               disabled={busy}
               onClick={() => requestClose()}
             >
-              <Icon name="close-line" />
+              <AdminIcon name="close-line" />
             </button>
           </header>
           <div className="operation-body">
@@ -306,7 +306,7 @@ function RebuildConfirmation({ busy, onClose, onConfirm }: {
           <footer>
             <button type="button" disabled={busy} onClick={() => requestClose()}>取消</button>
             <button className="button" type="submit" disabled={busy}>
-              <Icon name="database-2-line" />
+              <AdminIcon name="database-2-line" />
               <StableButtonLabel idle="确认重建" busyText="启动中" busy={busy} />
             </button>
           </footer>

@@ -1,5 +1,5 @@
 import { useRef, useState, type RefObject } from "react";
-import type { IconName } from "../icon/Icon.js";
+import type { AdminIconName } from "../icon/AdminIcon.js";
 import { AsyncActionButton } from "../actions/AsyncActionButton.js";
 import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
 import { DialogFrame } from "./DialogFrame.js";
@@ -31,10 +31,10 @@ export function ConfirmDialog({
   confirmDisabled?: boolean;
   requireFinalConfirmation?: boolean;
   finalConfirmationLabel?: string;
-  finalConfirmationIcon?: IconName;
+  finalConfirmationIcon?: AdminIconName;
   closeOnBackdrop?: boolean;
   danger?: boolean;
-  confirmIcon?: IconName;
+  confirmIcon?: AdminIconName;
   pendingLabel?: string;
   successLabel?: string;
   errorLabel?: string;

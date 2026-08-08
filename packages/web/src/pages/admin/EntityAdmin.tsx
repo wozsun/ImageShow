@@ -6,7 +6,7 @@ import {
 } from "@imageshow/shared/browser";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, isApiClientError } from "../../lib/api/client.js";
-import { Icon } from "../../components/icon/Icon.js";
+import { AdminIcon } from "../../components/icon/AdminIcon.js";
 import { StableButtonLabel } from "../../components/data-display/StableButtonLabel.js";
 import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
 import { AdminPagination } from "../../components/navigation/AdminPagination.js";
@@ -442,7 +442,7 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
           type="submit"
           disabled={operationBusy || !slug.trim() || slugInvalid}
         >
-          <Icon name="add-line" />
+          <AdminIcon name="add-line" />
           <StableButtonLabel
             idle={`新建${copy.noun}`}
             busyText="新建中"

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router";
 import type {
@@ -7,7 +7,6 @@ import type {
 } from "@imageshow/shared/browser";
 import { api } from "../../lib/api/client.js";
 import { ThumbImage } from "../../components/image/ThumbImage.js";
-import { ImageDetailModal } from "../../components/image/ImageDetailModal.js";
 import { adminApiBasePath, adminBasePath } from "../../lib/constants.js";
 import { queryKeys } from "../../lib/api/query-keys.js";
 import {
@@ -15,7 +14,9 @@ import {
   useAdminCheckStatus
 } from "../../lib/api/ready-image-cache.js";
 import { formatBytes } from "../../lib/ui/formatters.js";
+import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
+import { useAdminImageDetailCapability } from "../../hooks/useAdminImageDetailCapability.js";
 import "../../styles/admin/overview.css";
 
 type OverviewMetric = { label: string; value?: number | string; hint?: string; hintTitle?: string; to?: string };
@@ -53,10 +54,13 @@ function OverviewMetricCards({ items }: { items: OverviewMetric[] }) {
 }
 
 export function Overview({ canManageStorage }: { canManageStorage: boolean }) {
-  const [detail, setDetail] = useState<
-    AdminOverviewDto["recent"][number] | null
-  >(null);
-  const detailReturnFocusRef = useRef<HTMLElement | null>(null);
+  const [detailLoadError, setDetailLoadError] = useState("");
+  const detailCapability = useAdminImageDetailCapability<
+    AdminOverviewDto["recent"][number]
+  >((error) => {
+    reportAdminUiError("overview.detail_load", error);
+    setDetailLoadError("图片详情加载失败，请重新加载页面");
+  });
   const client = useQueryClient();
   const query = useQuery<AdminOverviewDto>({ queryKey: queryKeys.overview, queryFn: ({ signal }) => api(`${adminApiBasePath}/overview`, { signal }) });
   const cachedCheckStatus = client.getQueryData<AdminCheckStatusDto>(
@@ -182,26 +186,34 @@ export function Overview({ canManageStorage }: { canManageStorage: boolean }) {
                     type="button"
                     className="overview-recent-item"
                     key={img.id}
+                    disabled={detailCapability.pendingItemId === img.id}
+                    aria-busy={detailCapability.pendingItemId === img.id || undefined}
                     aria-label={`查看图片详情：${img.title || img.id}`}
                     title={img.title || img.id}
+                    onPointerEnter={detailCapability.preload}
+                    onFocus={detailCapability.preload}
+                    onPointerDown={detailCapability.preload}
                     onClick={(event) => {
-                      detailReturnFocusRef.current = event.currentTarget;
-                      setDetail(img);
+                      setDetailLoadError("");
+                      void detailCapability.open(img, event.currentTarget);
                     }}
                   >
                     <ThumbImage src={img.thumb_url} alt="" />
                   </button>
                 ))}
               </div>
+              {detailLoadError && (
+                <p className="error" role="alert">{detailLoadError}</p>
+              )}
             </div>
           )}
         </div>
       </div>
-      {detail && (
-        <ImageDetailModal
-          item={detail}
-          onClose={() => setDetail(null)}
-          returnFocusRef={detailReturnFocusRef}
+      {detailCapability.item && detailCapability.Modal && (
+        <detailCapability.Modal
+          item={detailCapability.item}
+          onClose={detailCapability.close}
+          returnFocusRef={detailCapability.returnFocusRef}
           admin
         />
       )}

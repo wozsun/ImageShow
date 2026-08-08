@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { Icon } from "../../../components/icon/Icon.js";
+import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import { ImageThumbnail } from "../../../components/image/ImageThumbnail.js";
 import { ImageDraftFields } from "../../../components/form/ImageDraftFields.js";
 import { importCardBrightnessSelectOptions, importCardDeviceSelectOptions } from "../../../lib/ui/select-options.js";
@@ -132,22 +132,22 @@ export const ImportJobCard = memo(function ImportJobCard({
       <div className="import-job-actions">
         {retryable && (
           <button type="button" className="icon" title="重试" onClick={() => onRetry(job)} disabled={busy}>
-            <Icon name="refresh-line" />
+            <AdminIcon name="refresh-line" />
           </button>
         )}
         {cancellationFailed && (
           <button type="button" className="icon" title="重新取消" onClick={() => onCancel(job)} disabled={busy}>
-            <Icon name="refresh-line" />
+            <AdminIcon name="refresh-line" />
           </button>
         )}
         {running && (
           <button type="button" className="icon danger-button" title="取消" onClick={() => onCancel(job)}>
-            <Icon name="close-line" />
+            <AdminIcon name="close-line" />
           </button>
         )}
         {!running && !cancelling && !cancellationFailed && (
           <button type="button" className="icon danger-button" title="移除" onClick={() => onRemove(job)} disabled={busy}>
-            <Icon name="close-line" />
+            <AdminIcon name="close-line" />
           </button>
         )}
       </div>

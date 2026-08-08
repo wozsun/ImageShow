@@ -1,7 +1,7 @@
 import { useRef, useState, type DragEvent } from "react";
 import { AsyncActionButton } from "../../../components/actions/AsyncActionButton.js";
 import { ReorderControls } from "../../../components/actions/ReorderControls.js";
-import { Icon } from "../../../components/icon/Icon.js";
+import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import {
   useAsyncActionStatus,
   type AsyncActionStatus
@@ -163,7 +163,7 @@ export function StorageBackendCard({
               title={`确认后将 ${backend.exhausted_cleanup_job_count} 个已停止自动重试的旧对象删除任务重新排队`}
               onClick={onRetryCleanup}
             >
-              <Icon name="refresh-line" />
+              <AdminIcon name="refresh-line" />
               <span>重试删除</span>
             </button>
           )}
@@ -192,7 +192,7 @@ export function StorageBackendCard({
             disabled={cardBusy}
             onClick={onEdit}
           >
-            <Icon name="pencil-line" />
+            <AdminIcon name="pencil-line" />
           </button>
           <button
             type="button"
@@ -221,7 +221,7 @@ export function StorageBackendCard({
             disabled={cardBusy}
             onClick={onRemovalAction}
           >
-            <Icon name={backend.deletion.action === "delete"
+            <AdminIcon name={backend.deletion.action === "delete"
               ? "delete-bin-6-line"
               : backend.deletion.action === "migrate"
                 ? "arrow-left-right-line"

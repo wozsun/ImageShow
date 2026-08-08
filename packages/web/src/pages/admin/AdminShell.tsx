@@ -1,201 +1,43 @@
-import { lazy, Suspense, useLayoutEffect, useRef, useState } from "react";
-import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router";
+import { lazy, useLayoutEffect } from "react";
+import { useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import {
-  type AdminRole
-} from "@imageshow/shared/browser";
 import { api, clearCsrfToken } from "../../lib/api/client.js";
-import { Icon } from "../../components/icon/Icon.js";
-import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
 import { adminApiBasePath, adminBasePath } from "../../lib/constants.js";
-import { clearSessionProbeHint, useAuthMe, useSiteConfig } from "../../lib/api/site-data.js";
-import { clearAdminCacheAfterLogin } from "../../lib/api/query-invalidation.js";
-import { MobileNavigation } from "../../components/navigation/MobileNavigation.js";
+import {
+  clearSessionProbeHint,
+  useAuthMe,
+  useSiteConfig
+} from "../../lib/api/site-data.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
-import { RouteLoadBoundary } from "../../components/feedback/RouteLoadBoundary.js";
 import { AppLoadingScreen } from "../../components/feedback/AppLoadingScreen.js";
-import { ActionFeedbackProvider } from "../../components/feedback/ActionFeedbackRegion.js";
-import { AdminLogin } from "./AdminLogin.js";
-import {
-  AdminNavigationLinks,
-  AdminSiteNavigation,
-  adminNavigationForRole
-} from "./AdminNavigation.js";
-import { AdminBrand } from "./AdminBrand.js";
-import {
-  AdminPreferencesProvider,
-  useAdminPreference
-} from "../../hooks/useAdminPreferences.js";
-import { useAdminColorScheme } from "../../hooks/useAdminColorScheme.js";
 import { applyUiColorContext } from "../../lib/ui/apply-ui-color-context.js";
-import {
-  advanceAdminColorSchemeCycle,
-  nextAdminColorScheme,
-  reconcileAdminColorSchemeCycle,
-  type AdminColorSchemeCycle
-} from "../../lib/ui/color-scheme.js";
-// 后台颜色契约与组件样式都随 AdminShell 懒加载，公开入口不会下载。
-import "../../styles/admin/semantic-colors.css";
-import "../../styles/admin.css";
 
-const Overview = lazy(() => import("./Overview.js").then((module) => ({
-  default: module.Overview
-})));
-const ImageAdmin = lazy(() => {
-  // 后台详情默认展开；与图片页并行预载管理信息，避免首次开卡时再插入整块内容。
-  // 公共详情仍保留自身的按需 import，不会因此加载后台管理模块。
-  const adminDetailsReady = import("../../components/image/ImageAdminDetails.js");
-  return import("./ImageAdmin.js").then(async (module) => {
-    await adminDetailsReady;
-    return { default: module.ImageAdmin };
-  });
-});
-const EntityAdmin = lazy(() => import("./EntityAdmin.js").then((module) => ({
-  default: module.EntityAdmin
-})));
-const AccountSettings = lazy(() => import("./AccountSettings.js").then((module) => ({
-  default: module.AccountSettings
-})));
-const SettingsPage = lazy(() => import("./SettingsPage.js").then((module) => ({
-  default: module.SettingsPage
-})));
-const AdvancedConfigPage = lazy(() => import("./AdvancedConfigPage.js").then((module) => ({
-  default: module.AdvancedConfigPage
-})));
-const StorageSettings = lazy(() => import("./StorageSettings.js").then((module) => ({
-  default: module.StorageSettings
-})));
-const UserAdmin = lazy(() => import("./UserAdmin.js").then((module) => ({
-  default: module.UserAdmin
-})));
-const CheckPage = lazy(() => import("./CheckPage.js").then((module) => ({
-  default: module.CheckPage
-})));
-const LogPage = lazy(() => import("./LogPage.js").then((module) => ({
-  default: module.LogPage
-})));
+type AdminCacheModule = typeof import("../../lib/api/query-invalidation.js");
 
-function AuthenticatedAdminShell({
-  role,
-  siteName,
-  applicationVersion,
-  versionEnabled,
-  versionLinkEnabled,
-  onLogout
-}: {
-  role: AdminRole;
-  siteName: string;
-  applicationVersion: string;
-  versionEnabled: boolean;
-  versionLinkEnabled: boolean;
-  onLogout: () => Promise<void>;
-}) {
-  const routeLocation = useLocation();
-  const navScrollRef = useRef<HTMLDivElement | null>(null);
-  const [colorScheme, setColorScheme] = useAdminPreference("color_scheme");
-  const [colorSchemeCycle, setColorSchemeCycle] =
-    useState<AdminColorSchemeCycle | null>(null);
-  const isSuper = role === "super";
-  const navigation = adminNavigationForRole(role);
+let adminCacheModulePromise: Promise<AdminCacheModule> | undefined;
 
-  const resolvedColorScheme = useAdminColorScheme(colorScheme);
-  useLayoutEffect(() => {
-    setColorSchemeCycle((current) => reconcileAdminColorSchemeCycle(
-      colorScheme,
-      current
-    ));
-  }, [colorScheme]);
-  const nextColorScheme = nextAdminColorScheme(
-    colorScheme,
-    resolvedColorScheme,
-    colorSchemeCycle
-  );
-  const handleColorSchemeChange = (next: typeof colorScheme) => {
-    setColorSchemeCycle(advanceAdminColorSchemeCycle(
-      colorScheme,
-      resolvedColorScheme,
-      next
-    ));
-    setColorScheme(next);
-  };
-
-  return (
-    <main className="admin">
-      <aside>
-        <AdminBrand
-          siteName={siteName}
-          applicationVersion={applicationVersion}
-          versionEnabled={versionEnabled}
-          versionLinkEnabled={versionLinkEnabled}
-          to={adminBasePath}
-        />
-        <AdminSiteNavigation
-          entries={navigation.site}
-          variant="desktop"
-          colorScheme={colorScheme}
-          nextColorScheme={nextColorScheme}
-          onColorSchemeChange={handleColorSchemeChange}
-        />
-        <div className="admin-nav-divider" role="separator" />
-        <div className="admin-nav-scroll" ref={navScrollRef}>
-          <AdminNavigationLinks entries={navigation.main} variant="desktop" />
-        </div>
-        <OverlayScrollbar targetRef={navScrollRef} />
-        <div className="admin-nav-divider logout-divider" role="separator" />
-        <AdminNavigationLinks entries={navigation.account} variant="desktop" />
-        <button className="logout-button" type="button" onClick={() => void onLogout()}>
-          <Icon name="logout-box-r-line" />退出
-        </button>
-      </aside>
-      <header className="admin-mobile-header">
-        <AdminBrand
-          siteName={siteName}
-          applicationVersion={applicationVersion}
-          versionEnabled={versionEnabled}
-          versionLinkEnabled={versionLinkEnabled}
-          to={adminBasePath}
-        />
-        <MobileNavigation className="admin-mobile-navigation">
-          <AdminSiteNavigation
-            entries={navigation.site}
-            variant="mobile"
-            colorScheme={colorScheme}
-            nextColorScheme={nextColorScheme}
-            onColorSchemeChange={handleColorSchemeChange}
-          />
-          <div className="admin-nav-divider" role="separator" />
-          <AdminNavigationLinks entries={navigation.main} variant="mobile" />
-          <div className="admin-nav-divider" role="separator" />
-          <AdminNavigationLinks entries={navigation.account} variant="mobile" />
-          <button type="button" onClick={() => void onLogout()}>
-            <Icon name="logout-box-r-line" />退出
-          </button>
-        </MobileNavigation>
-      </header>
-      <ActionFeedbackProvider>
-        <RouteLoadBoundary resetKey={routeLocation.pathname}>
-          <Suspense fallback={<div className="center">加载中</div>}>
-            <Routes>
-              <Route index element={<Overview canManageStorage={isSuper} />} />
-              <Route path="images" element={<ImageAdmin />} />
-              <Route path="tags" element={<EntityAdmin key="tags" kind="tags" />} />
-              <Route path="themes" element={<EntityAdmin key="themes" kind="themes" />} />
-              <Route path="authors" element={<EntityAdmin key="authors" kind="authors" />} />
-              <Route path="account" element={<AccountSettings />} />
-              {isSuper && <Route path="site" element={<SettingsPage />} />}
-              {isSuper && <Route path="advanced-config" element={<AdvancedConfigPage />} />}
-              {isSuper && <Route path="storage" element={<StorageSettings />} />}
-              {isSuper && <Route path="users" element={<UserAdmin />} />}
-              <Route path="check" element={<CheckPage />} />
-              {isSuper && <Route path="logs" element={<LogPage />} />}
-              <Route path="*" element={<Navigate to={adminBasePath} replace />} />
-            </Routes>
-          </Suspense>
-        </RouteLoadBoundary>
-      </ActionFeedbackProvider>
-    </main>
-  );
+function loadAdminCacheModule() {
+  if (!adminCacheModulePromise) {
+    // This helper has no CSS preload, so a transient JavaScript failure may be
+    // retried in the same page. CSS-bearing capabilities use the page-lifetime
+    // loader and require a full reload instead.
+    adminCacheModulePromise = import("../../lib/api/query-invalidation.js")
+      .catch((error: unknown) => {
+        adminCacheModulePromise = undefined;
+        throw error;
+      });
+  }
+  return adminCacheModulePromise;
 }
+
+const AdminLogin = lazy(() => import("./AdminLogin.js").then((module) => ({
+  default: module.AdminLogin
+})));
+const AuthenticatedAdminShell = lazy(() => (
+  import("./AuthenticatedAdminShell.js").then((module) => ({
+    default: module.AuthenticatedAdminShell
+  }))
+));
 
 export function AdminShell() {
   const navigate = useNavigate();
@@ -216,24 +58,35 @@ export function AdminShell() {
   useLayoutEffect(() => {
     if (unauthenticatedAppearanceReady) applyUiColorContext("public");
   }, [unauthenticatedAppearanceReady]);
-  if (authFailed) return <QueryErrorState error={authError} onRetry={() => void refetch()} fullPage />;
+  // 初次认证读取失败时没有可用界面；登录后的确认请求失败则仍保留旧的
+  // unauthenticated 快照和 AdminLogin，由它提供不重复 POST 的安全恢复入口。
+  if (authFailed && data?.authenticated !== false) {
+    return (
+      <QueryErrorState
+        error={authError}
+        onRetry={() => void refetch()}
+        fullPage
+      />
+    );
+  }
   if (!data) return <AppLoadingScreen />;
-  if (!data.authenticated) return (
-    <AdminLogin
-      siteName={siteName}
-      onLogin={async () => {
-        // 先同步移除可能跨登录复用的后台缓存，再重新读取认证状态。移除操作
-        // 不主动取数；认证完成后由真正挂载的后台路由按需读取，避免显示旧会话数据。
-        clearAdminCacheAfterLogin(client);
-        const result = await refetch({ throwOnError: true });
-        if (!result.data?.authenticated) {
-          throw new Error("登录状态确认失败，请重试");
-        }
-      }}
-      altchaEnabled={data.altcha_enabled}
-      loginBackground={data.login_background}
-    />
-  );
+  if (!data.authenticated) {
+    return (
+      <AdminLogin
+        siteName={siteName}
+        onLogin={async () => {
+          // 先同步移除可能跨登录复用的后台缓存，再重新读取认证状态。移除操作
+          // 不主动取数；认证完成后由真正挂载的后台路由按需读取，避免显示旧会话数据。
+          const { clearAdminCacheAfterLogin } = await loadAdminCacheModule();
+          clearAdminCacheAfterLogin(client);
+          const result = await refetch({ throwOnError: true });
+          return Boolean(result.data?.authenticated);
+        }}
+        altchaEnabled={data.altcha_enabled}
+        loginBackground={data.login_background}
+      />
+    );
+  }
   const role = data.role === "super" ? "super" : "image";
   const logout = async () => {
     try {
@@ -245,23 +98,17 @@ export function AdminShell() {
       location.reload();
     }
   };
-  const versionEnabled = data.version_settings.enabled;
-  const versionLinkEnabled = data.version_settings.link_enabled;
   return (
-    <AdminPreferencesProvider
-      key={data.username}
+    <AuthenticatedAdminShell
+      role={role}
       username={data.username}
       serverPreferences={data.preferences}
       serverPreferencesUpdatedAt={dataUpdatedAt}
-    >
-      <AuthenticatedAdminShell
-        role={role}
-        siteName={siteName}
-        applicationVersion={data.application_version}
-        versionEnabled={versionEnabled}
-        versionLinkEnabled={versionLinkEnabled}
-        onLogout={logout}
-      />
-    </AdminPreferencesProvider>
+      siteName={siteName}
+      applicationVersion={data.application_version}
+      versionEnabled={data.version_settings.enabled}
+      versionLinkEnabled={data.version_settings.link_enabled}
+      onLogout={logout}
+    />
   );
 }

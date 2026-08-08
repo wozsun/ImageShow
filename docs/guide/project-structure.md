@@ -13,7 +13,8 @@ packages/web ─────► packages/shared
 ## 根目录职责
 
 - `package.json` 只编排 workspace 构建、类型检查、死代码检查和运维入口。
-- `scripts/build/` 只生成 Web 图标并汇集服务端迁移与 SPA 静态资产。
+- `scripts/build/` 生成 Web 图标、校验颜色与生产分块边界，并汇集服务端迁移及 SPA
+  静态资产；通用产物图解析由独立产物检查器承担，项目权限和请求预算规则留在门禁入口。
 - `scripts/runtime/` 只放容器内的命令包装；容器启动由 `docker-entrypoint.sh` 负责权限
   收敛后直接执行传入命令。
 - `Dockerfile` 先安装完整依赖并构建三个 workspace，再单独安装 server/shared 的生产依赖，

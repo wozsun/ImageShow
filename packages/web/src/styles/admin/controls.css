@@ -569,3 +569,19 @@ button.danger-button.confirm-dialog-final-confirmation.is-armed {
 @media (prefers-reduced-motion: reduce) {
   .edit-modal form { animation: none; }
 }
+.account-form {
+  max-width: 420px;
+  display: grid;
+  gap: 14px;
+}
+.account-form label {
+  display: grid;
+  gap: 6px;
+  color: var(--admin-color-text-label);
+}
+.account-form .button { justify-self: start; }
+.account-note {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}

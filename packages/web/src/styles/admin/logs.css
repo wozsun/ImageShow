@@ -1,3 +1,10 @@
+:root {
+  --admin-color-log-surface: #111827;
+  --admin-color-log-border: #232b38;
+  --admin-color-log-text: #e5edf8;
+  --admin-color-log-empty: #9aa4b2;
+}
+
 .log-page {
   display: flex;
   flex-direction: column;

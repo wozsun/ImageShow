@@ -10,8 +10,8 @@ export const slugFormatHint = "只能包含小写字母、数字、连字符";
 
 export const galleryLoadBufferScreens = 1;
 export const galleryResidenceBufferScreens = 2;
-export const galleryVirtualOverscanScreens = 2.5;
-export const galleryMaxMountedTiles = 160;
+export const galleryVirtualOverscanScreens = 3;
+export const galleryMaxMountedTiles = 180;
 
 export function publicRootPath(
   site: Pick<SiteSettings, "root_redirect" | "home">

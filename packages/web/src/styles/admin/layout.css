@@ -2,6 +2,53 @@
   --admin-interactive-card-lift: -1px;
 }
 
+footer .admin-pagination { margin-top: 0; }
+
+/* These compact layout contracts are cheaper in the cached admin foundation
+   than as sub-kilobyte route requests. Page content remains route-owned. */
+.admin:has(> .workspace-contained) {
+  height: 100dvh;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.admin:has(> .workspace-contained) > .admin-mobile-header {
+  flex: 0 0 auto;
+}
+.admin:has(> .workspace-contained) > .workspace-contained {
+  flex: 1;
+  min-height: 0;
+}
+html:has(.admin > .workspace-contained),
+body:has(.admin > .workspace-contained) {
+  width: 100%;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+@media (min-width: 761px) {
+  .workspace-paged {
+    height: 100svh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding-bottom: 16px;
+  }
+  .workspace-paged > .admin-scroll-region {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    align-content: start;
+  }
+  .workspace-paged > .admin-pagination {
+    margin: 0 -24px;
+    padding: 12px 24px 0;
+    border-top: 1px solid var(--admin-color-border-card);
+  }
+}
+
 .admin {
   min-height: 100vh;
   padding-left: 220px;
@@ -70,8 +117,6 @@
 :is(.admin, [data-admin-dialog]) button.icon:not(:disabled) {
   --pressable-active-scale: var(--pressable-scale-small, .97);
 }
-.login-site-title { color: inherit; border-radius: 6px; }
-.login-site-title:hover { color: var(--admin-color-action-text); }
 .admin > aside .app-icon {
   width: 20px;
   height: 20px;
@@ -318,41 +363,6 @@
   min-width: 0;
 }
 .muted { color: var(--admin-color-text-secondary); }
-.admin:has(> .workspace-contained) {
-  height: 100dvh;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.admin:has(> .workspace-contained) > .admin-mobile-header {
-  flex: 0 0 auto;
-}
-.admin:has(> .workspace-contained) > .workspace-contained {
-  flex: 1;
-  min-height: 0;
-}
-html:has(.admin > .workspace-contained),
-body:has(.admin > .workspace-contained) {
-  width: 100%;
-  height: 100dvh;
-  min-height: 0;
-  overflow: hidden;
-}
-.settings-page {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.settings-page > .workspace-head {
-  flex: 0 0 auto;
-}
-.settings-scroll-region {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
 .workspace > .page-edge-scroll-host {
   margin-inline-end: calc(-1 * var(--workspace-inline-padding));
   padding-inline-end: calc(var(--workspace-inline-padding) + 2px);
@@ -430,69 +440,3 @@ body:has(.admin > .workspace-contained) {
   gap: 12px;
 }
 .admin-pagination span { min-width: 72px; color: var(--admin-color-text-secondary); text-align: center; }
-
-@media (min-width: 761px) {
-
-  .workspace-paged { height: 100svh; display: flex; flex-direction: column; overflow: hidden; padding-bottom: 16px; }
-
-  /* 分页管理页只在这里维护视口尺寸；贴右几何由 OverlayScrollbar 的
-     pageEdge 配置统一添加 .page-edge-scroll-host。 */
-  .workspace-paged > .admin-scroll-region {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-    align-content: start;
-  }
-
-  .workspace-paged > .admin-pagination { margin: 0 -24px; padding: 12px 24px 0; border-top: 1px solid var(--admin-color-border-card); }
-}
-
-.segmented {
-  display: inline-flex;
-  border: 1px solid var(--admin-color-border-control);
-  border-radius: 6px;
-  overflow: hidden;
-}
-.segmented button { border: 0; border-radius: 0; }
-
-/*
- * 只有整张表面本身承担点击职责时才使用抬升反馈；包含表单和独立动作的
- * 配置卡只共享静态圆角，不因内部控件悬浮而移动。
- */
-:is(
-  a.overview-card-link,
-  button.overview-recent-item,
-  button.storage-add-card
-):not(:disabled) {
-  transition:
-    color .16s ease,
-    background-color .16s ease,
-    border-color .16s ease,
-    box-shadow .16s ease,
-    transform .16s ease;
-}
-
-.admin-image-card {
-  transition:
-    border-color .16s ease,
-    box-shadow .16s ease,
-    transform .16s ease;
-}
-
-@media (hover: hover) and (pointer: fine) {
-  :is(
-    a.overview-card-link,
-    button.overview-recent-item,
-    button.storage-add-card
-  ):not(:disabled):hover {
-    border-color: var(--admin-color-control-border-selected);
-    box-shadow: 0 8px 22px var(--admin-shadow-card-hover);
-    transform: translateY(var(--admin-interactive-card-lift));
-  }
-
-  .admin-image-card:has(> .admin-image-card-detail:not(:disabled):hover) {
-    border-color: var(--admin-color-control-border-selected);
-    box-shadow: 0 8px 22px var(--admin-shadow-card-hover);
-    transform: translateY(var(--admin-interactive-card-lift));
-  }
-}

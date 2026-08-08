@@ -9,6 +9,7 @@ import "altcha/altcha.css";
 import "altcha/i18n/zh-cn";
 import pbkdf2WorkerUrl from "altcha/workers/pbkdf2?worker&url";
 import { adminApiBasePath } from "../../lib/constants.js";
+import "../../styles/admin/login-challenge.css";
 
 type TrustedScriptUrlPolicy = {
   createScriptURL(value: string): unknown;
@@ -116,8 +117,17 @@ export const LoginChallenge = forwardRef<AltchaWidgetElement, LoginChallengeProp
       assignRef(forwardedRef, element);
       if (!element) return;
       let ready = false;
+      let failed = false;
+      let disposed = false;
+      const reportFailure = () => {
+        if (failed) return;
+        failed = true;
+        onError();
+      };
       const reportState = (state: string | undefined) => {
-        if (state) onVerificationChange(state === "verified");
+        if (!state) return;
+        onVerificationChange(state === "verified");
+        if (state === "error") reportFailure();
       };
       const markReady = () => {
         if (ready) return;
@@ -137,7 +147,7 @@ export const LoginChallenge = forwardRef<AltchaWidgetElement, LoginChallengeProp
         event.preventDefault();
       };
       const loadTimeout = window.setTimeout(() => {
-        if (!ready) onError();
+        if (!ready) reportFailure();
       }, 5000);
 
       // ALTCHA 的实例方法只在自定义 load 事件后可用。监听事件之外再安排一次
@@ -146,7 +156,7 @@ export const LoginChallenge = forwardRef<AltchaWidgetElement, LoginChallengeProp
       element.addEventListener("statechange", handleStateChange);
       element.addEventListener("click", preventVerifiedReset, true);
       queueMicrotask(() => {
-        if (!element.isConnected || ready) return;
+        if (disposed || !element.isConnected || ready) return;
         try {
           element.getConfiguration();
           markReady();
@@ -156,6 +166,7 @@ export const LoginChallenge = forwardRef<AltchaWidgetElement, LoginChallengeProp
       });
 
       return () => {
+        disposed = true;
         clearTimeout(loadTimeout);
         element.removeEventListener("load", markReady);
         element.removeEventListener("statechange", handleStateChange);

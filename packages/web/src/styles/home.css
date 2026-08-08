@@ -1,3 +1,5 @@
+@import "./home-semantic-colors.css";
+
 .home-page {
   --home-background-reveal-duration: 1000ms;
   --home-background-late-reveal-duration: 900ms;
@@ -190,7 +192,7 @@
   align-items: center;
   color: var(--public-color-text-primary);
   background-color: var(--home-filter-bar-surface-end);
-  border-bottom: 1px solid var(--public-color-home-toolbar-border);
+  border-bottom: 1px solid var(--public-color-toolbar-border);
   box-shadow: none;
   -webkit-backdrop-filter: blur(16px) saturate(118%);
   backdrop-filter: blur(16px) saturate(118%);

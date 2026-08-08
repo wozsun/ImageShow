@@ -1,5 +1,5 @@
 import type { DragEvent } from "react";
-import { Icon } from "../icon/Icon.js";
+import { AdminIcon } from "../icon/AdminIcon.js";
 import type { ReorderDirection } from "../../lib/ui/reorder.js";
 
 export function ReorderControls({
@@ -45,7 +45,7 @@ export function ReorderControls({
           if (!unavailable) onMove(direction);
         }}
       >
-        <Icon name="arrow-up-line" />
+        <AdminIcon name="arrow-up-line" />
       </button>
     );
   };
@@ -86,7 +86,7 @@ export function ReorderControls({
         }}
         onDragEnd={onDragEnd}
       >
-        <Icon name="drag-move-2-fill" />
+        <AdminIcon name="drag-move-2-fill" />
       </span>
       {button("next", canMoveNext)}
     </span>

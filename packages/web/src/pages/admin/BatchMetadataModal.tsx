@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState, type RefObject } from "react";
 import { adminPermissions } from "@imageshow/shared/browser";
-import { Icon } from "../../components/icon/Icon.js";
+import { AdminIcon } from "../../components/icon/AdminIcon.js";
 import { AsyncActionButton } from "../../components/actions/AsyncActionButton.js";
 import { TwoStepConfirmIconButton } from "../../components/actions/TwoStepConfirmIconButton.js";
 import { ConfirmDialog } from "../../components/feedback/ConfirmDialog.js";
@@ -15,6 +15,9 @@ import { ImageDraftFields } from "../../components/form/ImageDraftFields.js";
 import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
 import { moveImageToTrash } from "../../lib/api/image-mutations.js";
 import { useAdminPermissions } from "../../lib/api/site-data.js";
+import {
+  createPageLifetimeModuleLoader
+} from "../../lib/page-lifetime-module-loader.js";
 import { facetDisplayName, formatBytes, formatDimensions, shortImageId } from "../../lib/ui/formatters.js";
 import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
 import { batchCommonBrightnessOptions, batchCommonDeviceOptions, cardBrightnessSelectOptions, editCardDeviceSelectOptions } from "../../lib/ui/select-options.js";
@@ -33,7 +36,13 @@ import {
   type BatchMetadataUpdate
 } from "./useBatchMetadataOperations.js";
 
-const loadBatchStorageMigrationDialog = () => import("./BatchStorageMigrationDialog.js");
+type BatchStorageMigrationDialogModule =
+  typeof import("./BatchStorageMigrationDialog.js");
+
+const loadBatchStorageMigrationDialog =
+  createPageLifetimeModuleLoader<BatchStorageMigrationDialogModule>(
+    () => import("./BatchStorageMigrationDialog.js")
+  );
 const preloadBatchStorageMigrationDialog = () => {
   void loadBatchStorageMigrationDialog().catch(() => undefined);
 };
@@ -320,7 +329,7 @@ export function BatchMetadataModal({
                 disabled={busy || !restoreAvailable}
                 onClick={() => setRestoreConfirmation(true)}
               >
-                <Icon name="history-line" />复原
+                <AdminIcon name="history-line" />复原
               </button>
             )}
             <button
@@ -331,7 +340,7 @@ export function BatchMetadataModal({
               disabled={busy}
               onClick={() => requestClose()}
             >
-              <Icon name="close-line" />
+              <AdminIcon name="close-line" />
             </button>
           </div>
         </header>
@@ -436,7 +445,7 @@ export function BatchMetadataModal({
                         disabled={busy}
                         onClick={() => remove(item.id)}
                       >
-                        <Icon name="close-line" />
+                        <AdminIcon name="close-line" />
                       </button>
                     )}
                   </div>
@@ -483,7 +492,7 @@ export function BatchMetadataModal({
                   onFocus={preloadBatchStorageMigrationDialog}
                   onClick={() => setMigrating(true)}
                 >
-                  <Icon name="arrow-left-right-line" />{single ? "迁移存储" : "批量迁移存储"}
+                  <AdminIcon name="arrow-left-right-line" />{single ? "迁移存储" : "批量迁移存储"}
                 </button>
               )}
               {single && (

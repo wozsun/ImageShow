@@ -1,3 +1,12 @@
+:root {
+  --admin-color-entity-surface-pinned: light-dark(#f7f9fc, #1c2128);
+  --admin-color-entity-slug-surface: light-dark(#eef2f7, #21262d);
+  --admin-color-role-super-text: light-dark(#1559b7, #79c0ff);
+  --admin-color-role-super-surface: light-dark(#dbeafe, #15447a);
+  --admin-color-role-image-text: light-dark(#3730a3, #a5b4fc);
+  --admin-color-role-image-surface: light-dark(#e0e7ff, #25264f);
+}
+
 .admin-scroll-list { max-height: calc(100svh - 210px); overflow-y: auto; padding-right: 2px; }
 
 /* 主题 / 标签 / 用户管理：卡片网格（共用 .entity-* 类）。 */

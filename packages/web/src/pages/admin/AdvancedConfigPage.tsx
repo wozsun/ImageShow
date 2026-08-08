@@ -5,7 +5,7 @@ import { api } from "../../lib/api/client.js";
 import { adminApiBasePath } from "../../lib/constants.js";
 import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
 import type { AdvancedConfigPreview } from "../../lib/types.js";
-import { Icon } from "../../components/icon/Icon.js";
+import { AdminIcon } from "../../components/icon/AdminIcon.js";
 import { AsyncActionButton } from "../../components/actions/AsyncActionButton.js";
 import { ConfirmDialog } from "../../components/feedback/ConfirmDialog.js";
 import { ConfigPackageImportDialog } from "./advanced-config/ConfigPackageImportDialog.js";
@@ -149,7 +149,7 @@ export function AdvancedConfigPage() {
               disabled={Boolean(busy)}
               onClick={() => setExportConfirmation(true)}
             >
-              <Icon name="download-cloud-2-line" />导出配置包
+              <AdminIcon name="download-cloud-2-line" />导出配置包
             </button>
           </>
         }

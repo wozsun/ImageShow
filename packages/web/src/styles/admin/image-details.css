@@ -4,6 +4,11 @@
   border-top: 1px solid var(--color-detail-border);
 }
 
+:root[data-color-scheme="dark"] .image-detail-admin-details {
+  color-scheme: dark;
+  --pressable-hover-filter: var(--pressable-hover-brighten-filter);
+}
+
 .image-detail-admin-actions {
   display: flex;
   align-items: stretch;
@@ -58,7 +63,7 @@
 
 .image-detail-edit-notice {
   margin: 6px 8px 0;
-  color: var(--admin-color-success-text);
+  color: var(--color-detail-success);
   font-size: 13px;
 }
 

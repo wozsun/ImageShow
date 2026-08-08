@@ -9,7 +9,7 @@ import { ConfirmDialog } from "../../../components/feedback/ConfirmDialog.js";
 import { DialogFrame } from "../../../components/feedback/DialogFrame.js";
 import { SelectMenu } from "../../../components/form/SelectMenu.js";
 import { WorkflowDefaultFields } from "../../../components/form/WorkflowDefaultFields.js";
-import { Icon } from "../../../components/icon/Icon.js";
+import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import { ImageDetailModal } from "../../../components/image/ImageDetailModal.js";
 import { ImagePreviewModal } from "../../../components/image/ImagePreviewModal.js";
 import { WorkflowCollapsePanel } from "../../../components/layout/WorkflowCollapsePanel.js";
@@ -26,10 +26,9 @@ import type { ImportAttributeDefaults } from "../../../lib/upload/upload-utils.j
 import type { ImportPreviewTarget } from "./DuplicateMatchPanel.js";
 import { ImportJobList } from "./ImportJobList.js";
 import type { JsonlManifestParseError } from "./import-api.js";
-import {
-  LinkUrlDialog,
-  type LinkDialogSubmission,
-  type LinkInputMode
+import type {
+  LinkDialogSubmission,
+  LinkInputMode
 } from "./link-import/LinkUrlDialog.js";
 import { UploadCleanupMenu } from "./UploadCleanupMenu.js";
 import type {
@@ -37,6 +36,8 @@ import type {
   UploadCleanupActionId
 } from "./upload-cleanup-actions.js";
 import type { ImportQueueController } from "./useImportQueue.js";
+type LinkUrlDialogComponent =
+  typeof import("./link-import/LinkUrlDialog.js")["LinkUrlDialog"];
 
 export function UploadWorkflowWindow({
   mode,
@@ -65,6 +66,8 @@ export function UploadWorkflowWindow({
   preview,
   previewReturnFocusRef,
   urlInputOpen,
+  linkInputPending,
+  LinkUrlDialogComponent,
   linkInputMode,
   autoImportAfterParse,
   linkMaxItems,
@@ -84,6 +87,7 @@ export function UploadWorkflowWindow({
   onOpenDetail,
   onOpenPreview,
   onOpenLinkInput,
+  onPreloadLinkInput,
   onBackendChange,
   onCancelAll,
   onCommitReady,
@@ -118,6 +122,8 @@ export function UploadWorkflowWindow({
   preview: ImportPreviewTarget | null;
   previewReturnFocusRef: RefObject<HTMLElement | null>;
   urlInputOpen: boolean;
+  linkInputPending: boolean;
+  LinkUrlDialogComponent: LinkUrlDialogComponent | null;
   linkInputMode: LinkInputMode;
   autoImportAfterParse: boolean;
   linkMaxItems: number;
@@ -137,6 +143,7 @@ export function UploadWorkflowWindow({
   onOpenDetail: (item: ImageItem, opener: HTMLElement) => void;
   onOpenPreview: (target: ImportPreviewTarget) => void;
   onOpenLinkInput: (inputMode: LinkInputMode) => void;
+  onPreloadLinkInput: () => void;
   onBackendChange: (backend: string) => void;
   onCancelAll: () => Promise<void>;
   onCommitReady: () => void;
@@ -251,10 +258,10 @@ export function UploadWorkflowWindow({
               />
               {mode === "link" ? (
                 <div
-                  className={`upload-source-picker${busy ? " is-disabled" : ""}`}
+                  className={`upload-source-picker${busy || linkInputPending ? " is-disabled" : ""}`}
                   role="group"
                   aria-label="选择导入来源"
-                  aria-disabled={busy}
+                  aria-disabled={busy || linkInputPending}
                 >
                   {([
                     ["urls", "链接"],
@@ -266,7 +273,10 @@ export function UploadWorkflowWindow({
                       ref={linkInputMode === inputMode ? linkPickerRef : undefined}
                       type="button"
                       className="upload-source-option pressable"
-                      disabled={busy}
+                      disabled={busy || linkInputPending}
+                      onPointerEnter={onPreloadLinkInput}
+                      onFocus={onPreloadLinkInput}
+                      onPointerDown={onPreloadLinkInput}
                       onClick={() => onOpenLinkInput(inputMode)}
                     >
                       {label}
@@ -278,7 +288,7 @@ export function UploadWorkflowWindow({
                   className={`button secondary upload-picker pressable${busy ? " is-disabled" : ""}`}
                   aria-disabled={busy}
                 >
-                  <Icon name="upload-cloud-2-line" />
+                  <AdminIcon name="upload-cloud-2-line" />
                   <input
                     id={fileInputId}
                     ref={fileInputRef}
@@ -302,7 +312,7 @@ export function UploadWorkflowWindow({
                 onClick={() => requestClose()}
                 disabled={busy}
               >
-                <Icon name="close-line" />
+                <AdminIcon name="close-line" />
               </button>
             </div>
           </div>
@@ -368,7 +378,7 @@ export function UploadWorkflowWindow({
                     .join("\n\n")
                 ).catch(() => undefined)}
               >
-                <Icon name="file-copy-line" />复制错误
+                <AdminIcon name="file-copy-line" />复制错误
               </button>
               <button type="button" onClick={onClearJsonlErrors}>清除</button>
             </div>
@@ -393,9 +403,13 @@ export function UploadWorkflowWindow({
             <button
               type="button"
               className="empty-state upload-dropzone"
+              disabled={linkInputPending}
+              onPointerEnter={onPreloadLinkInput}
+              onFocus={onPreloadLinkInput}
+              onPointerDown={onPreloadLinkInput}
               onClick={() => onOpenLinkInput("urls")}
             >
-              <Icon name="download-cloud-2-line" />
+              <AdminIcon name="download-cloud-2-line" />
               <span>还没有导入任务，点击此处选择图片来源</span>
             </button>
           ) : (
@@ -414,7 +428,7 @@ export function UploadWorkflowWindow({
                 onAddFiles(event.dataTransfer.files);
               }}
             >
-              <Icon name="image-line" />
+              <AdminIcon name="image-line" />
               <span>还没有选择图片，点击此处选择，或将图片拖到这里</span>
             </button>
           ))}
@@ -478,6 +492,7 @@ export function UploadWorkflowWindow({
         <ImageDetailModal
           item={detailItem}
           admin
+          storageLabel={storageName(detailItem.storage_slug)}
           onClose={onCloseDetail}
           onDeleted={(imageId) => {
             detailReturnFocusRef.current = null;
@@ -496,8 +511,8 @@ export function UploadWorkflowWindow({
           returnFocusRef={previewReturnFocusRef}
         />
       )}
-      {urlInputOpen && (
-        <LinkUrlDialog
+      {urlInputOpen && LinkUrlDialogComponent && (
+        <LinkUrlDialogComponent
           initialInputMode={linkInputMode}
           autoImportAfterParse={autoImportAfterParse}
           maxItems={linkMaxItems}

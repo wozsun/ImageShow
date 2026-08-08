@@ -6,7 +6,7 @@ import {
   type AdminImageListResponse
 } from "@imageshow/shared/browser";
 import { api } from "../../lib/api/client.js";
-import { Icon } from "../../components/icon/Icon.js";
+import { AdminIcon } from "../../components/icon/AdminIcon.js";
 import { StableButtonLabel } from "../../components/data-display/StableButtonLabel.js";
 import { ConfirmDialog } from "../../components/feedback/ConfirmDialog.js";
 import {
@@ -28,20 +28,20 @@ import { useAdminSettings } from "../../lib/api/admin-settings.js";
 import { useImportVocabulary } from "../../lib/api/import-vocabulary.js";
 import { useStorageNameResolver } from "../../lib/api/storage-options.js";
 import type { ImageItem } from "../../lib/types.js";
-import { ImageDetailModal } from "../../components/image/ImageDetailModal.js";
 import { AdminImageCard } from "./AdminImageCard.js";
-import { BatchMetadataModal } from "./BatchMetadataModal.js";
-import { ImageEditModal } from "./ImageEditModal.js";
 import {
   emptyImageAdminFilters,
   ImageAdminFilters,
   type ImageAdminFilterValues
 } from "./ImageAdminFilters.js";
-import { Uploader } from "./uploader/Uploader.js";
+import { UploaderLauncher } from "./uploader/UploaderLauncher.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
 import { invalidateImageData } from "../../lib/api/query-invalidation.js";
+import { AsyncIntentFence } from "../../lib/async-intent-fence.js";
 import { useAdminPreference } from "../../hooks/useAdminPreferences.js";
 import { useAdminPermissions } from "../../lib/api/site-data.js";
+import { useAdminImageDetailCapability } from "../../hooks/useAdminImageDetailCapability.js";
+import { useImageEditorCapability } from "../../hooks/useImageEditorCapability.js";
 import {
   mobileViewportMediaQuery,
   useMediaQuery
@@ -51,7 +51,6 @@ import {
   useImageAdminOperations,
   type ImageAdminView
 } from "./useImageAdminOperations.js";
-import "../../styles/admin/upload.css";
 import "../../styles/admin/images.css";
 
 function adminImageListQuery(
@@ -89,9 +88,7 @@ export function ImageAdmin() {
     emptyImageAdminFilters
   );
   const [cardDensity, setCardDensity] = useAdminPreference("image_card_density");
-  const [detail, setDetail] = useState<ImageItem | null>(null);
-  const [editing, setEditing] = useState<ImageItem | null>(null);
-  const [batchEditing, setBatchEditing] = useState(false);
+  const [uploaderPending, setUploaderPending] = useState(false);
   const mobileLayout = useMediaQuery(mobileViewportMediaQuery);
   const permissions = useAdminPermissions();
   const canPurgeImage = permissions.includes(
@@ -103,17 +100,11 @@ export function ImageAdmin() {
 
   const feedbackTarget = useActionFeedbackTarget("image-admin");
   const gridRef = useRef<HTMLDivElement | null>(null);
-  const detailReturnFocusRef = useRef<HTMLElement | null>(null);
-  const editReturnFocusRef = useRef<HTMLElement | null>(null);
-  const batchEditReturnFocusRef = useRef<HTMLElement | null>(null);
-  const pageNavigationSequenceRef = useRef(0);
+  const pageNavigationFenceRef = useRef(new AsyncIntentFence());
   const client = useQueryClient();
   const { data: settingsData } = useAdminSettings();
 
   const { data: vocabulary } = useImportVocabulary();
-  const themes = vocabulary?.themes ?? [];
-  const allTags = vocabulary?.tags ?? [];
-  const authors = vocabulary?.authors ?? [];
   // 列表卡片的「所在存储」展示后端显示名（而非 slug）；从后端列表解析。
   const storageName = useStorageNameResolver();
   const pageSize = settingsData?.settings.admin.image_page_size ?? adminImagePageLimit;
@@ -126,7 +117,7 @@ export function ImageAdmin() {
   });
   const items = data?.items ?? [];
   const invalidateData = useCallback(async () => {
-    pageNavigationSequenceRef.current += 1;
+    pageNavigationFenceRef.current.invalidate();
     setPageNavigation(null);
     await invalidateImageData(client);
   }, [client]);
@@ -150,17 +141,36 @@ export function ImageAdmin() {
     runConfirmedAction,
     restoreSelected
   } = useImageAdminOperations({ items, invalidateData });
+  const detailCapability = useAdminImageDetailCapability<ImageItem>((error) => {
+    reportAdminUiError("image_admin.detail_load", error);
+    showFeedback("图片详情加载失败，请重新加载页面", "error");
+  });
+  const detailPending = detailCapability.pendingItemId !== null;
+  const editorCapability = useImageEditorCapability({
+    onOpenError: (error) => {
+      reportAdminUiError("image_admin.editor_load", error);
+      showFeedback("图片编辑功能加载失败，请重新加载页面", "error");
+    }
+  });
+  const editorPending = editorCapability.pending !== null;
+  const editorConflictBusy = operationBusy || detailPending || uploaderPending;
+  const interfaceBusy = editorConflictBusy || editorPending;
   const finishImportBatch = useCallback(() => {
     setSelected([]);
   }, [setSelected]);
   const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / pageSize));
   const canDeleteReadyItems = view !== "deleted";
+  useEffect(() => {
+    const pageNavigationFence = pageNavigationFenceRef.current;
+    pageNavigationFence.mount();
+    return () => pageNavigationFence.unmount();
+  }, []);
   const changeFilter = (
     key: keyof ImageAdminFilterValues,
     nextValue: string
   ) => {
-    if (filters[key] === nextValue || operationBusy) return;
-    pageNavigationSequenceRef.current += 1;
+    if (filters[key] === nextValue || interfaceBusy) return;
+    pageNavigationFenceRef.current.invalidate();
     setPageNavigation(null);
     setFilters((current) => ({ ...current, [key]: nextValue }));
     setCursorHistory([""]);
@@ -168,8 +178,8 @@ export function ImageAdmin() {
     gridRef.current?.scrollTo({ top: 0, left: 0 });
   };
   const changeView = (next: typeof view) => {
-    if (next === view || operationBusy) return;
-    pageNavigationSequenceRef.current += 1;
+    if (next === view || interfaceBusy) return;
+    pageNavigationFenceRef.current.invalidate();
     setPageNavigation(null);
     gridRef.current?.scrollTo({ top: 0, left: 0 });
     setView(next);
@@ -182,9 +192,10 @@ export function ImageAdmin() {
     targetHistory: string[],
     direction: "previous" | "next"
   ) => {
-    if (pageNavigation) return;
+    if (pageNavigation || interfaceBusy) return;
     const targetCursor = targetHistory.at(-1) ?? "";
-    const requestSequence = ++pageNavigationSequenceRef.current;
+    const pageNavigationFence = pageNavigationFenceRef.current;
+    const requestSequence = pageNavigationFence.begin();
     setPageNavigation(direction);
     setFeedback(null);
 
@@ -193,26 +204,26 @@ export function ImageAdmin() {
       await client.fetchQuery(
         adminImageListQuery(view, filters, targetCursor, pageSize)
       );
-      if (requestSequence !== pageNavigationSequenceRef.current) return;
+      if (!pageNavigationFence.isCurrent(requestSequence)) return;
       setSelected([]);
       setCursorHistory(targetHistory);
     } catch (error) {
-      if (requestSequence === pageNavigationSequenceRef.current) {
+      if (pageNavigationFence.isCurrent(requestSequence)) {
         reportAdminUiError("image_admin.page_navigation", error);
         showFeedback("页面加载失败，请稍后重试", "error");
       }
     } finally {
-      if (requestSequence === pageNavigationSequenceRef.current) {
+      if (pageNavigationFence.isCurrent(requestSequence)) {
         setPageNavigation(null);
       }
     }
   };
   const previousPage = () => {
-    if (pageNavigation || cursorHistory.length === 1) return;
+    if (pageNavigation || interfaceBusy || cursorHistory.length === 1) return;
     void loadPage(cursorHistory.slice(0, -1), "previous");
   };
   const nextPage = () => {
-    if (pageNavigation || !data?.next_cursor) return;
+    if (pageNavigation || interfaceBusy || !data?.next_cursor) return;
     void loadPage([...cursorHistory, data.next_cursor], "next");
   };
   useEffect(() => {
@@ -226,7 +237,7 @@ export function ImageAdmin() {
 
     // 删除、恢复或分类编辑可能让最后一页消失。正常刷新保留当前游标；只有当前页
     // 已经无效时才退回一页，并允许新页结果继续把游标夹紧到最后一个有效页。
-    pageNavigationSequenceRef.current += 1;
+    pageNavigationFenceRef.current.invalidate();
     setPageNavigation(null);
     setSelected([]);
     setCursorHistory((current) => current.length > 1 ? current.slice(0, -1) : current);
@@ -255,15 +266,24 @@ export function ImageAdmin() {
           </p>
         </div>
         <div className="image-admin-head-tools">
-          {view === "ready" && <Uploader onDone={finishImportBatch} />}
+          <UploaderLauncher
+            showTriggers={view === "ready"}
+            disabled={operationBusy || detailPending || editorPending}
+            onDone={finishImportBatch}
+            onLoadError={(error) => {
+              reportAdminUiError("image_admin.uploader_load", error);
+              showFeedback("上传与导入功能加载失败，请重新加载页面", "error");
+            }}
+            onPendingChange={setUploaderPending}
+          />
           <div className="segmented">
-            <button type="button" className={view === "ready" ? "active" : ""} disabled={operationBusy} onClick={() => changeView("ready")}>
+            <button type="button" className={view === "ready" ? "active" : ""} disabled={interfaceBusy} onClick={() => changeView("ready")}>
               图库
             </button>
-            <button type="button" className={view === "unset" ? "active" : ""} disabled={operationBusy} onClick={() => changeView("unset")}>
+            <button type="button" className={view === "unset" ? "active" : ""} disabled={interfaceBusy} onClick={() => changeView("unset")}>
               无主题
             </button>
-            <button type="button" className={view === "deleted" ? "active" : ""} disabled={operationBusy} onClick={() => changeView("deleted")}>
+            <button type="button" className={view === "deleted" ? "active" : ""} disabled={interfaceBusy} onClick={() => changeView("deleted")}>
               回收站
             </button>
           </div>
@@ -275,7 +295,7 @@ export function ImageAdmin() {
           vocabulary={vocabulary}
           view={view}
           mobileLayout={mobileLayout}
-          disabled={operationBusy}
+          disabled={interfaceBusy}
           onChange={changeFilter}
         />
         <div className="toolbar image-list-toolbar">
@@ -285,7 +305,7 @@ export function ImageAdmin() {
                 id="admin-image-select-all"
                 type="checkbox"
                 checked={allSelected}
-                disabled={operationBusy}
+                disabled={interfaceBusy}
                 onChange={(event) => setSelected(event.target.checked ? items.map((item) => item.id) : [])}
               />
               全选
@@ -312,44 +332,69 @@ export function ImageAdmin() {
             />
             <div className="image-list-batch-actions">
               {(view === "ready" || view === "unset") && (
-                <button type="button" disabled={!selected.length || operationBusy} onClick={(event) => {
-                  batchEditReturnFocusRef.current = event.currentTarget;
-                  setBatchEditing(true);
-                }}>
-                  <Icon name="pencil-line" />批量编辑
+                <button
+                  type="button"
+                  disabled={
+                    !selected.length
+                    || editorConflictBusy
+                    || editorCapability.pending?.kind === "batch"
+                  }
+                  aria-busy={
+                    editorCapability.pending?.kind === "batch" || undefined
+                  }
+                  onPointerEnter={() => editorCapability.preload({
+                    kind: "batch",
+                    sources: selectedItems
+                  })}
+                  onFocus={() => editorCapability.preload({
+                    kind: "batch",
+                    sources: selectedItems
+                  })}
+                  onPointerDown={() => editorCapability.preload({
+                    kind: "batch",
+                    sources: selectedItems
+                  })}
+                  onClick={(event) => {
+                    void editorCapability.open({
+                      kind: "batch",
+                      sources: selectedItems
+                    }, event.currentTarget);
+                  }}
+                >
+                  <AdminIcon name="pencil-line" />批量编辑
                 </button>
               )}
               {view === "deleted" && (
                 <button
                   type="button"
-                  disabled={!selected.length || operationBusy}
+                  disabled={!selected.length || interfaceBusy}
                   onClick={restoreSelected}
                 >
-                  <Icon name="arrow-go-back-line" />批量恢复
+                  <AdminIcon name="arrow-go-back-line" />批量恢复
                 </button>
               )}
               {canDeleteReadyItems && (
                 <button
                   className="danger-button"
                   type="button"
-                  disabled={!selected.length || operationBusy}
+                  disabled={!selected.length || interfaceBusy}
                   onClick={() => setConfirmAction({ kind: "batch-delete", ids: [...selected] })}
                 >
-                  <Icon name="delete-bin-6-line" />批量删除
+                  <AdminIcon name="delete-bin-6-line" />批量删除
                 </button>
               )}
               {view === "deleted" && canEmptyTrash && (
                 <button
                   className="danger-button"
                   type="button"
-                  disabled={operationBusy || (!selected.length && !items.length)}
+                  disabled={interfaceBusy || (!selected.length && !items.length)}
                   onClick={() => setConfirmAction(
                     selected.length
                       ? { kind: "purge-selected", ids: [...selected] }
                       : { kind: "empty-trash" }
                   )}
                 >
-                  <Icon name="delete-bin-7-line" />
+                  <AdminIcon name="delete-bin-7-line" />
                   <StableButtonLabel
                     idle={selected.length ? "删除已选图" : "清空回收站"}
                     busyText={confirmAction?.kind === "purge-selected" ? "正在删除" : "正在清空"}
@@ -376,19 +421,32 @@ export function ImageAdmin() {
               item={item}
               storageName={storageName}
               checked={selected.includes(item.id)}
+              detailDisabled={operationBusy || uploaderPending || editorPending}
+              detailPending={detailCapability.pendingItemId === item.id}
+              onPreloadDetail={detailCapability.preload}
               onCheck={(checked) => setSelected((current) => checked ? [...current, item.id] : current.filter((id) => id !== item.id))}
               onDetail={(opener) => {
-                detailReturnFocusRef.current = opener;
-                setDetail(item);
+                void detailCapability.open(item, opener);
               }}
+              editDisabled={editorConflictBusy}
+              editPending={
+                editorCapability.pending?.kind === "single"
+                && editorCapability.pending.itemIds[0] === item.id
+              }
+              onPreloadEdit={() => editorCapability.preload({
+                kind: "single",
+                sources: [item]
+              })}
               onEdit={(opener) => {
-                editReturnFocusRef.current = opener;
-                setEditing(item);
+                void editorCapability.open({
+                  kind: "single",
+                  sources: [item]
+                }, opener);
               }}
               canPurge={canPurgeImage}
               onPurge={() => setConfirmAction({ kind: "purge", id: item.id, title: imageDisplayTitle(item) })}
               busy={busyIds.includes(item.id)}
-              actionsDisabled={operationBusy}
+              actionsDisabled={interfaceBusy}
               onDelete={() => void runRowAction(item, "delete")}
               onRestore={() => void runRowAction(item, "restore")}
             />
@@ -403,47 +461,48 @@ export function ImageAdmin() {
         ariaLabel="图片列表分页"
         page={pageNumber}
         totalPages={totalPages}
-        previousDisabled={operationBusy || cursorHistory.length === 1 || isFetching || pageNavigation !== null}
-        nextDisabled={operationBusy || !data?.next_cursor || isFetching || pageNavigation !== null}
+        previousDisabled={interfaceBusy || cursorHistory.length === 1 || isFetching || pageNavigation !== null}
+        nextDisabled={interfaceBusy || !data?.next_cursor || isFetching || pageNavigation !== null}
         onPrevious={previousPage}
         onNext={nextPage}
       />
-      {detail && (
-        <ImageDetailModal
-          item={detail}
-          onClose={() => setDetail(null)}
+      {detailCapability.item && detailCapability.Modal && (
+        <detailCapability.Modal
+          item={detailCapability.item}
+          onClose={detailCapability.close}
           onDeleted={() => showFeedback("图片已移入回收站", "success")}
-          returnFocusRef={detailReturnFocusRef}
+          returnFocusRef={detailCapability.returnFocusRef}
+          storageLabel={storageName(detailCapability.item)}
           admin
         />
       )}
-      {editing && (
-        <ImageEditModal
-          item={editing}
-          themes={themes}
-          allTags={allTags}
-          authors={authors}
-          onClose={() => setEditing(null)}
+      {editorCapability.session?.kind === "single" && (
+        <editorCapability.session.module.ImageEditModal
+          item={editorCapability.session.items[0]}
+          themes={editorCapability.session.vocabulary.themes}
+          allTags={editorCapability.session.vocabulary.tags}
+          authors={editorCapability.session.vocabulary.authors}
+          onClose={editorCapability.close}
           onSaved={refresh}
           onDeleted={async () => {
             await refresh();
             showFeedback("图片已移入回收站", "success");
           }}
           onStorageMigrationSucceeded={(message) => showFeedback(message, "success")}
-          returnFocusRef={editReturnFocusRef}
+          returnFocusRef={editorCapability.returnFocusRef}
         />
       )}
-      {batchEditing && (
-        <BatchMetadataModal
-          items={selectedItems}
+      {editorCapability.session?.kind === "batch" && (
+        <editorCapability.session.module.BatchMetadataModal
+          items={editorCapability.session.items}
           pageSize={editPageSize}
-          themes={themes}
-          allTags={allTags}
-          authors={authors}
-          onClose={() => setBatchEditing(false)}
+          themes={editorCapability.session.vocabulary.themes}
+          allTags={editorCapability.session.vocabulary.tags}
+          authors={editorCapability.session.vocabulary.authors}
+          onClose={editorCapability.close}
           onSaved={refresh}
           onStorageMigrationSucceeded={(message) => showFeedback(message, "success")}
-          returnFocusRef={batchEditReturnFocusRef}
+          returnFocusRef={editorCapability.returnFocusRef}
         />
       )}
       {confirmAction && confirmCopy && (

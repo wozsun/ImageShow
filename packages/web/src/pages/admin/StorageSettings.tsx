@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { StorageBackendsAdminResponseDto } from "@imageshow/shared/browser";
 import { api, isApiClientError } from "../../lib/api/client.js";
-import { Icon } from "../../components/icon/Icon.js";
+import { AdminIcon } from "../../components/icon/AdminIcon.js";
 import { ConfirmDialog } from "../../components/feedback/ConfirmDialog.js";
 import { adminApiBasePath } from "../../lib/constants.js";
 import {
@@ -513,7 +513,7 @@ function StorageBackendsManager() {
           );
         })}
         <button type="button" className="storage-add-card" disabled={operationBusy} onClick={() => openEditor("new")}>
-          <Icon name="add-line" /><span>新增存储后端</span>
+          <AdminIcon name="add-line" /><span>新增存储后端</span>
         </button>
       </div>
       {editingTarget && (

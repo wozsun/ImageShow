@@ -1,4 +1,5 @@
 import {
+  memo,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -45,7 +46,7 @@ function GalleryThumbnailFallbackDevelopmentStats() {
   return null;
 }
 
-export function LazyGalleryImage({
+export const LazyGalleryImage = memo(function LazyGalleryImage({
   src,
   alt,
   device,
@@ -193,4 +194,4 @@ export function LazyGalleryImage({
       )}
     </div>
   );
-}
+});

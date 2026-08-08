@@ -1,7 +1,7 @@
 import { useRef, useState, type DragEvent } from "react";
 import type { AdminEntityDto } from "@imageshow/shared/browser";
 import { api } from "../../lib/api/client.js";
-import { Icon } from "../../components/icon/Icon.js";
+import { AdminIcon } from "../../components/icon/AdminIcon.js";
 import { AsyncActionButton } from "../../components/actions/AsyncActionButton.js";
 import { ReorderControls } from "../../components/actions/ReorderControls.js";
 import { SlugChip } from "../../components/data-display/SlugChip.js";
@@ -158,7 +158,7 @@ export function EntityAdminCard({ kind, item, onChanged, onDelete, onError, pinn
                   title={`删除${noun}`}
                   onClick={onDelete}
                 >
-                  <Icon name="delete-bin-6-line" />
+                  <AdminIcon name="delete-bin-6-line" />
                 </button>
               )}
             </>

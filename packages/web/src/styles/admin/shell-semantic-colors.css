@@ -1,0 +1,18 @@
+:root {
+  /* Authenticated admin navigation is part of admin-core, never public detail/edit. */
+  --admin-color-navigation-surface: light-dark(#fff, #161b22);
+  --admin-color-navigation-hover: light-dark(#eef5ff, #182a43);
+  --admin-color-navigation-active: light-dark(#dbeafe, #173f6b);
+  --admin-color-navigation-text: light-dark(#334155, #c9d1d9);
+  --admin-color-navigation-active-text: light-dark(#1559b7, #79c0ff);
+  --admin-color-navigation-divider: light-dark(#e1e8f0, #30363d);
+  --admin-color-navigation-control-surface: light-dark(#fff, #1c2128);
+  --admin-color-navigation-control-border: light-dark(#cbd6e3, #636c76);
+  --admin-color-navigation-version-border: light-dark(#d6e0eb, #3d444d);
+  --admin-color-navigation-version-text: light-dark(#64748b, #8b949e);
+  --admin-color-navigation-version-surface: light-dark(#f4f7fb, #21262d);
+  --admin-color-navigation-version-hover-text: light-dark(#1559b7, #79c0ff);
+  --admin-color-navigation-version-hover-surface: light-dark(#e7f0ff, #203247);
+  --admin-color-navigation-scrollbar: light-dark(rgba(71, 85, 105, .28), rgba(201, 209, 217, .24));
+  --admin-color-navigation-scrollbar-active: light-dark(rgba(71, 85, 105, .46), rgba(201, 209, 217, .42));
+}

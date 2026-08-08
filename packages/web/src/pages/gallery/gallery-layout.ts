@@ -27,10 +27,6 @@ import {
   reconcileMasonryLayout
 } from "./masonry-layout.js";
 
-export type {
-  MasonryItemPosition
-} from "./masonry-layout.js";
-
 export function useGalleryColumnCount() {
   const [columnCount, setColumnCount] = useState(
     () => galleryColumnCount(window.innerWidth)
@@ -181,7 +177,7 @@ export function useMasonryWindow(
   }, [layout.totalHeight, windowRef]);
 
   return masonryWindow(
-    layout.positions,
+    layout,
     range.start,
     range.end,
     galleryMaxMountedTiles,

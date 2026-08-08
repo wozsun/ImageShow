@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { AnchoredPopup } from "../../../../components/feedback/AnchoredPopup.js";
 import { DirectActivationButton } from "../../../../components/feedback/DirectActivationButton.js";
 import { MenuItemButton } from "../../../../components/feedback/MenuItemButton.js";
-import { Icon } from "../../../../components/icon/Icon.js";
+import { AdminIcon } from "../../../../components/icon/AdminIcon.js";
 import { useAnchoredMenu } from "../../../../hooks/useAnchoredMenu.js";
 import type { AnchoredMenuSize } from "../../../../lib/ui/menu-position.js";
 
@@ -16,7 +16,18 @@ const IMPORT_MENU_SIZE: AnchoredMenuSize = {
 };
 const DESKTOP_MENU_QUERY = "(min-width: 761px)";
 
-export function LinkImportSplitButton({ onOpenWorkflow, onOpenUrls, onOpenJsonl, onOpenWeibo }: {
+export function LinkImportSplitButton({
+  pending,
+  onPreloadWorkflow,
+  onPreloadLinkInput,
+  onOpenWorkflow,
+  onOpenUrls,
+  onOpenJsonl,
+  onOpenWeibo
+}: {
+  pending: boolean;
+  onPreloadWorkflow: () => void;
+  onPreloadLinkInput: () => void;
   onOpenWorkflow: (opener: HTMLButtonElement) => void;
   onOpenUrls: (opener: HTMLButtonElement) => void;
   onOpenJsonl: (opener: HTMLButtonElement) => void;
@@ -107,13 +118,23 @@ export function LinkImportSplitButton({ onOpenWorkflow, onOpenUrls, onOpenJsonl,
 
   return (
     <div ref={splitRef} className="link-import-split">
-      <button className="button secondary upload-trigger link-import-main" type="button" onClick={(event) => onOpenWorkflow(event.currentTarget)}>
-        <Icon name="download-cloud-2-line" />导入图片
+      <button
+        className="button secondary upload-trigger link-import-main"
+        type="button"
+        disabled={pending}
+        aria-busy={pending || undefined}
+        onPointerEnter={onPreloadWorkflow}
+        onFocus={onPreloadWorkflow}
+        onPointerDown={onPreloadWorkflow}
+        onClick={(event) => onOpenWorkflow(event.currentTarget)}
+      >
+        <AdminIcon name="download-cloud-2-line" />导入图片
       </button>
       <DirectActivationButton
         ref={menuTriggerRef}
         className="button secondary link-import-menu-trigger"
         type="button"
+        disabled={pending}
         title="更多导入方式"
         aria-haspopup="menu"
         aria-expanded={menu.open && !menu.closing}
@@ -125,7 +146,7 @@ export function LinkImportSplitButton({ onOpenWorkflow, onOpenUrls, onOpenJsonl,
         }}
         onActivate={togglePinnedMenu}
       >
-        <Icon name="arrow-down-s-line" />
+        <AdminIcon name="arrow-down-s-line" />
       </DirectActivationButton>
       {menu.open && (
         <AnchoredPopup
@@ -149,14 +170,38 @@ export function LinkImportSplitButton({ onOpenWorkflow, onOpenUrls, onOpenJsonl,
           }}
         >
           <div className="link-import-menu-surface">
-            <MenuItemButton type="button" role="menuitem" onActivate={() => choose(onOpenUrls)}>
-              <Icon name="link" />链接导入
+            <MenuItemButton
+              type="button"
+              role="menuitem"
+              disabled={pending}
+              onPointerEnter={onPreloadLinkInput}
+              onFocus={onPreloadLinkInput}
+              onPointerDownCapture={onPreloadLinkInput}
+              onActivate={() => choose(onOpenUrls)}
+            >
+              <AdminIcon name="link" />链接导入
             </MenuItemButton>
-            <MenuItemButton type="button" role="menuitem" onActivate={() => choose(onOpenJsonl)}>
-              <Icon name="file-list-line" />清单导入
+            <MenuItemButton
+              type="button"
+              role="menuitem"
+              disabled={pending}
+              onPointerEnter={onPreloadLinkInput}
+              onFocus={onPreloadLinkInput}
+              onPointerDownCapture={onPreloadLinkInput}
+              onActivate={() => choose(onOpenJsonl)}
+            >
+              <AdminIcon name="file-list-line" />清单导入
             </MenuItemButton>
-            <MenuItemButton type="button" role="menuitem" onActivate={() => choose(onOpenWeibo)}>
-              <Icon name="weibo-line" />微博导入
+            <MenuItemButton
+              type="button"
+              role="menuitem"
+              disabled={pending}
+              onPointerEnter={onPreloadLinkInput}
+              onFocus={onPreloadLinkInput}
+              onPointerDownCapture={onPreloadLinkInput}
+              onActivate={() => choose(onOpenWeibo)}
+            >
+              <AdminIcon name="weibo-line" />微博导入
             </MenuItemButton>
           </div>
         </AnchoredPopup>

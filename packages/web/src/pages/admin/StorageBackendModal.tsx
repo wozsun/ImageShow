@@ -1,5 +1,5 @@
 import { useId, useRef, useState } from "react";
-import { Icon } from "../../components/icon/Icon.js";
+import { AdminIcon } from "../../components/icon/AdminIcon.js";
 import { AsyncActionButton } from "../../components/actions/AsyncActionButton.js";
 import { DialogFrame } from "../../components/feedback/DialogFrame.js";
 import { NumberInput } from "../../components/form/NumberInput.js";
@@ -173,7 +173,7 @@ export function StorageBackendModal({ target, busy, onClose, onSave, onTest }: {
               disabled={formBusy}
               onClick={() => requestClose()}
             >
-              <Icon name="close-line" />
+              <AdminIcon name="close-line" />
             </button>
           </header>
           <div className="operation-body" ref={bodyRef}>

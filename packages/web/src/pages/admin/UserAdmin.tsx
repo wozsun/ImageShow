@@ -2,7 +2,7 @@ import { useId, useRef, useState, type FormEvent, type RefObject } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AdminUsersResponseDto } from "@imageshow/shared/browser";
 import { api, isApiClientError } from "../../lib/api/client.js";
-import { Icon } from "../../components/icon/Icon.js";
+import { AdminIcon } from "../../components/icon/AdminIcon.js";
 import { AsyncActionButton } from "../../components/actions/AsyncActionButton.js";
 import { StableButtonLabel } from "../../components/data-display/StableButtonLabel.js";
 import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
@@ -176,7 +176,7 @@ export function UserAdmin() {
           type="submit"
           disabled={createFormBusy || !usernameValid || !isValidAdminPassword(password)}
         >
-          <Icon name="user-add-line" />
+          <AdminIcon name="user-add-line" />
           <StableButtonLabel
             idle="新建图片管理员"
             busyText="新建中"
@@ -245,7 +245,7 @@ function UserCard({ user, onResetPassword, onDelete }: {
               title="重置密码"
               onClick={(event) => onResetPassword(event.currentTarget)}
             >
-              <Icon name="key-2-line" />
+              <AdminIcon name="key-2-line" />
             </button>
             <button
               className="icon danger-button"
@@ -253,7 +253,7 @@ function UserCard({ user, onResetPassword, onDelete }: {
               title="删除管理员"
               onClick={onDelete}
             >
-              <Icon name="delete-bin-6-line" />
+              <AdminIcon name="delete-bin-6-line" />
             </button>
           </>
         )}
@@ -319,7 +319,7 @@ function ResetPasswordModal({ username, returnFocusRef, onClose, onError }: {
               disabled={resetPasswordStatus.pending}
               onClick={() => requestClose()}
             >
-              <Icon name="close-line" />
+              <AdminIcon name="close-line" />
             </button>
           </header>
           <div className="operation-body">

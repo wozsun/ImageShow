@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router";
-import { Icon, type IconName } from "../../components/icon/Icon.js";
+import { AdminIcon, type AdminIconName } from "../../components/icon/AdminIcon.js";
 
 type AdminNavGroupItem = { to: string; label: string; end?: boolean };
 
 export function AdminNavGroup({ icon, label, items, defaultOpen = false }: {
-  icon: IconName;
+  icon: AdminIconName;
   label: string;
   items: readonly AdminNavGroupItem[];
   defaultOpen?: boolean;
@@ -20,7 +20,7 @@ export function AdminNavGroup({ icon, label, items, defaultOpen = false }: {
     <div className={`admin-nav-group ${open ? "is-open" : ""}`}>
       <div className={`admin-nav-group-trigger ${sectionActive ? "active" : ""}`.trim()}>
         <button type="button" className="admin-nav-group-main" onClick={enter}>
-          <Icon name={icon} />
+          <AdminIcon name={icon} />
           <span className="admin-nav-group-label">{label}</span>
         </button>
         <button
@@ -30,7 +30,7 @@ export function AdminNavGroup({ icon, label, items, defaultOpen = false }: {
           aria-expanded={open}
           onClick={() => setOpen((value) => !value)}
         >
-          <Icon name="arrow-down-s-line" />
+          <AdminIcon name="arrow-down-s-line" />
         </button>
       </div>
       <div className={`admin-nav-sub ${open ? "is-open" : ""}`}>

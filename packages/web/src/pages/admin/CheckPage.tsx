@@ -8,7 +8,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api/client.js";
 import { adminApiBasePath } from "../../lib/constants.js";
 import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
-import { Icon } from "../../components/icon/Icon.js";
+import { AdminIcon } from "../../components/icon/AdminIcon.js";
 import { DialogFrame } from "../../components/feedback/DialogFrame.js";
 import { StableButtonLabel } from "../../components/data-display/StableButtonLabel.js";
 import { migrateStorageBackend } from "../../lib/api/storage-backend-migration.js";
@@ -102,7 +102,7 @@ export function CheckPage() {
                 disabled={Boolean(running)}
                 onClick={() => selectCheckView(check.name)}
               >
-                <Icon name={check.name === "status" ? "dashboard-line" : "refresh-line"} /><StableButtonLabel idle={check.label} busyText="运行中" busy={running === check.name} />
+                <AdminIcon name={check.name === "status" ? "dashboard-line" : "refresh-line"} /><StableButtonLabel idle={check.label} busyText="运行中" busy={running === check.name} />
               </button>
             ))}
           </div>
@@ -114,7 +114,7 @@ export function CheckPage() {
                   disabled={Boolean(running)}
                   onClick={() => setOperationModal("storage-backend-migration")}
                 >
-                  <Icon name="database-2-line" /><StableButtonLabel idle="迁移存储后端" busyText="迁移中" busy={running === "storage-backend-migration"} />
+                  <AdminIcon name="database-2-line" /><StableButtonLabel idle="迁移存储后端" busyText="迁移中" busy={running === "storage-backend-migration"} />
                 </button>
               )}
               {canCleanupStorage && (
@@ -124,7 +124,7 @@ export function CheckPage() {
                   disabled={Boolean(running)}
                   onClick={() => setOperationModal("storage-cleanup")}
                 >
-                  <Icon name="delete-bin-6-line" /><StableButtonLabel idle="清理无效存储" busyText="清理中" busy={running === "storage-cleanup"} />
+                  <AdminIcon name="delete-bin-6-line" /><StableButtonLabel idle="清理无效存储" busyText="清理中" busy={running === "storage-cleanup"} />
                 </button>
               )}
             </div>
@@ -275,7 +275,7 @@ function StorageCleanupDialog({ running, onClose, onRun }: {
               disabled={Boolean(running)}
               onClick={() => requestClose()}
             >
-              <Icon name="close-line" />
+              <AdminIcon name="close-line" />
             </button>
           </header>
           <div className="operation-body">
@@ -291,7 +291,7 @@ function StorageCleanupDialog({ running, onClose, onRun }: {
               type="submit"
               disabled={Boolean(running)}
             >
-              <Icon name="refresh-line" /><StableButtonLabel idle="开始执行" busyText="清理中" busy={running === "storage-cleanup"} />
+              <AdminIcon name="refresh-line" /><StableButtonLabel idle="开始执行" busyText="清理中" busy={running === "storage-cleanup"} />
             </button>
           </footer>
         </form>

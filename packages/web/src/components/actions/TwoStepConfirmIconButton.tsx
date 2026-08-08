@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { Icon, type IconName } from "../icon/Icon.js";
+import { AdminIcon, type AdminIconName } from "../icon/AdminIcon.js";
 
 type TwoStepConfirmIconButtonProps = {
   className?: string;
-  idleIcon: IconName;
-  confirmIcon: IconName;
+  idleIcon: AdminIconName;
+  confirmIcon: AdminIconName;
   idleLabel: string;
   confirmLabel: string;
   idleTitle?: string;
@@ -80,7 +80,7 @@ export function TwoStepConfirmIconButton({
         onConfirm();
       }}
     >
-      <Icon name={active ? confirmIcon : idleIcon} />
+      <AdminIcon name={active ? confirmIcon : idleIcon} />
     </button>
   );
 }

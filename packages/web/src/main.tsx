@@ -6,7 +6,7 @@ import { AppRoutes } from "./AppRoutes.js";
 import { SiteHead } from "./components/layout/SiteHead.js";
 import { OverlayScrollbar } from "./components/layout/OverlayScrollbar.js";
 import { adminBasePath } from "./lib/constants.js";
-import "./styles.css";
+import "./styles/app-core.css";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 90_000 } }

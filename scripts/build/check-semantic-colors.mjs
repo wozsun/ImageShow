@@ -9,12 +9,40 @@ const publicSemanticFile = path.join(
   sourceRoot,
   "styles/semantic-colors.css"
 );
-const adminSemanticFile = path.join(
-  sourceRoot,
-  "styles/admin/semantic-colors.css"
-);
+const routeSemanticFiles = [
+  "styles/public-semantic-colors.css",
+  "styles/home-semantic-colors.css",
+  "styles/gallery-semantic-colors.css",
+  "styles/image-detail-semantic-colors.css"
+].map((relativePath) => path.join(sourceRoot, relativePath));
+const adminSemanticFiles = [
+  "styles/admin/semantic-colors.css",
+  "styles/admin/shell-semantic-colors.css"
+].map((relativePath) => path.join(sourceRoot, relativePath));
+const embeddedAdminSemanticFiles = [
+  "styles/admin/advanced-config.css",
+  "styles/admin/entity.css",
+  "styles/admin/image-edit.css",
+  "styles/admin/images.css",
+  "styles/admin/login-challenge.css",
+  "styles/admin/login.css",
+  "styles/admin/logs.css",
+  "styles/admin/overview.css",
+  "styles/admin/storage.css",
+  "styles/admin/upload-triggers.css",
+  "styles/admin/upload.css"
+].map((relativePath) => path.join(sourceRoot, relativePath));
 const indexFile = path.join(webRoot, "index.html");
-const semanticFiles = new Set([publicSemanticFile, adminSemanticFile]);
+const dedicatedSemanticFiles = new Set([
+  publicSemanticFile,
+  ...routeSemanticFiles,
+  ...adminSemanticFiles
+]);
+const embeddedSemanticFiles = new Set(embeddedAdminSemanticFiles);
+const semanticDefinitionFiles = new Set([
+  ...dedicatedSemanticFiles,
+  ...embeddedSemanticFiles
+]);
 const rawColorAssetWhitelist = new Set([
   path.join(publicRoot, "assets/brand/favicon.svg")
 ]);
@@ -65,6 +93,8 @@ const semanticDefinitionPattern =
   /(--(?:bootstrap-color|public-color|public-shadow|admin-color|admin-shadow|color)-[\w-]+)\s*:/g;
 const semanticReferencePattern =
   /var\((--(?:bootstrap-color|public-color|public-shadow|admin-color|admin-shadow|color)-[\w-]+)/g;
+const semanticDeclarationPattern =
+  /--(?:bootstrap-color|public-color|public-shadow|admin-color|admin-shadow|color)-[\w-]+\s*:\s*[^;]+;/g;
 const adminStatusTokenPattern =
   /^--admin-color-(success|warning|danger|pending)-(.+)$/;
 const allowedAdminInteractionStatusTokens = new Set([
@@ -207,6 +237,17 @@ function collectMatches(file, source, pattern) {
   }));
 }
 
+function semanticDeclarationRanges(source) {
+  return [...source.matchAll(semanticDeclarationPattern)].map((match) => ({
+    start: match.index,
+    end: match.index + match[0].length
+  }));
+}
+
+function isInsideSemanticDeclaration(ranges, offset) {
+  return ranges.some((range) => offset >= range.start && offset < range.end);
+}
+
 export function findRawColorLiterals(source) {
   return [...source.matchAll(rawColorPattern)].map((match) => match[0]);
 }
@@ -253,7 +294,12 @@ const themeColorValueOffset = themeColorMatch
   : -1;
 
 for (const [file, source] of sources) {
-  if (semanticFiles.has(file) || rawColorAssetWhitelist.has(file)) continue;
+  if (dedicatedSemanticFiles.has(file) || rawColorAssetWhitelist.has(file)) {
+    continue;
+  }
+  const declarationRanges = embeddedSemanticFiles.has(file)
+    ? semanticDeclarationRanges(source)
+    : [];
   for (
     const occurrence of collectMatches(file, source, rawColorPattern)
   ) {
@@ -263,6 +309,9 @@ for (const [file, source] of sources) {
     ) {
       continue;
     }
+    if (isInsideSemanticDeclaration(declarationRanges, occurrence.match.index)) {
+      continue;
+    }
     errors.push(
       `${displayPath(file)}:${occurrence.line} contains a raw color `
       + `outside the semantic sheets or bootstrap theme-color meta: `
@@ -270,6 +319,9 @@ for (const [file, source] of sources) {
     );
   }
   for (const occurrence of collectMatches(file, source, namedColorPattern)) {
+    if (isInsideSemanticDeclaration(declarationRanges, occurrence.match.index)) {
+      continue;
+    }
     errors.push(
       `${displayPath(file)}:${occurrence.line} contains named color `
       + occurrence.match[0]
@@ -310,7 +362,7 @@ for (const [file, source] of sources) {
     semanticDefinitionPattern
   )) {
     const token = match[1];
-    if (!semanticFiles.has(file)) {
+    if (!semanticDefinitionFiles.has(file)) {
       errors.push(
         `${displayPath(file)}:${line} defines semantic token ${token} `
         + "outside a semantic color sheet"
