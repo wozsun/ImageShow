@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent
+} from "react";
 import { useSearchParams } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -53,7 +60,13 @@ import {
   type ImageAdminView
 } from "./useImageAdminOperations.js";
 import { loadAdminImagePage } from "./image-page-navigation.js";
+import {
+  ImageListSelectionController,
+  isImageSelectionPreservingTarget
+} from "./image-list-selection.js";
 import "../../styles/admin/images.css";
+
+const imageRangeSelectionHelpId = "admin-image-range-selection-help";
 
 function adminImageListQuery(
   view: ImageAdminView,
@@ -102,6 +115,7 @@ export function ImageAdmin() {
 
   const feedbackTarget = useActionFeedbackTarget("image-admin");
   const gridRef = useRef<HTMLDivElement | null>(null);
+  const selectionControllerRef = useRef(new ImageListSelectionController());
   const pageNavigationFenceRef = useRef(new AsyncIntentFence());
   const client = useQueryClient();
   const { data: settingsData } = useAdminSettings();
@@ -157,9 +171,25 @@ export function ImageAdmin() {
   const editorPending = editorCapability.pending !== null;
   const editorConflictBusy = operationBusy || detailPending || uploaderPending;
   const interfaceBusy = editorConflictBusy || editorPending;
-  const finishImportBatch = useCallback(() => {
+  const clearImageSelection = useCallback(() => {
+    selectionControllerRef.current.reset();
     setSelected([]);
   }, [setSelected]);
+  const clearSelectionFromPageClick = (
+    event: ReactMouseEvent<HTMLElement>
+  ) => {
+    if (!selected.length || interfaceBusy) return;
+    const target = event.target;
+    if (
+      !(target instanceof Element)
+      || !event.currentTarget.contains(target)
+      || isImageSelectionPreservingTarget(target)
+    ) return;
+    clearImageSelection();
+  };
+  const finishImportBatch = useCallback(() => {
+    clearImageSelection();
+  }, [clearImageSelection]);
   const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / pageSize));
   const canDeleteReadyItems = view !== "deleted";
   useEffect(() => {
@@ -176,6 +206,7 @@ export function ImageAdmin() {
     setPageNavigation(null);
     setFilters((current) => ({ ...current, [key]: nextValue }));
     setCursorHistory([""]);
+    selectionControllerRef.current.reset();
     resetTransientState();
     gridRef.current?.scrollTo({ top: 0, left: 0 });
   };
@@ -186,6 +217,7 @@ export function ImageAdmin() {
     gridRef.current?.scrollTo({ top: 0, left: 0 });
     setView(next);
     setCursorHistory([""]);
+    selectionControllerRef.current.reset();
     resetTransientState();
 
     setSearchParams(next === "ready" ? {} : { view: next }, { replace: true });
@@ -224,7 +256,7 @@ export function ImageAdmin() {
         }
       });
       if (!pageNavigationFence.isCurrent(requestSequence)) return;
-      setSelected([]);
+      clearImageSelection();
       setCursorHistory(target.cursorHistory);
     } catch (error) {
       if (pageNavigationFence.isCurrent(requestSequence)) {
@@ -238,10 +270,10 @@ export function ImageAdmin() {
     }
   };
   useEffect(() => {
-    setSelected([]);
+    clearImageSelection();
     // 视图和游标页不复用上一页的滚动位置，避免快速切换到回收站时首屏卡片只露出残片。
     gridRef.current?.scrollTo({ top: 0, left: 0 });
-  }, [cursor, filters, view]);
+  }, [clearImageSelection, cursor, filters, view]);
   useEffect(() => {
     if (isFetching || !data || pageNumber === 1) return;
     if (data.items.length > 0 && pageNumber <= totalPages) return;
@@ -250,18 +282,48 @@ export function ImageAdmin() {
     // 已经无效时才退回一页，并允许新页结果继续把游标夹紧到最后一个有效页。
     pageNavigationFenceRef.current.invalidate();
     setPageNavigation(null);
-    setSelected([]);
+    clearImageSelection();
     setCursorHistory((current) => (
       current.length > 1 ? current.slice(0, -1) : current
     ));
-  }, [data, isFetching, pageNumber, totalPages]);
+  }, [clearImageSelection, data, isFetching, pageNumber, totalPages]);
+  useLayoutEffect(() => {
+    const reconciled = selectionControllerRef.current.reconcile(
+      items.map((item) => item.id),
+      selected
+    );
+    if (
+      reconciled.length !== selected.length
+      || reconciled.some((id, index) => id !== selected[index])
+    ) {
+      setSelected(reconciled);
+    }
+  }, [items, selected]);
+  const updateSelection = (
+    targetId: string,
+    checked: boolean,
+    extendRange: boolean
+  ) => {
+    const pageIds = items.map((item) => item.id);
+    setSelected((current) => selectionControllerRef.current.update({
+      pageIds,
+      selectedIds: current,
+      targetId,
+      checked,
+      extendRange,
+      busy: interfaceBusy
+    }));
+  };
   const preloadBatchEditor = () => editorCapability.preload({
     kind: "batch",
     sources: selectedItems
   });
   const confirmCopy = imageAdminConfirmationCopy(confirmAction);
   return (
-    <section className="workspace workspace-paged">
+    <section
+      className="workspace workspace-paged"
+      onClick={clearSelectionFromPageClick}
+    >
       <header className="workspace-head image-admin-head">
         <div className="image-admin-head-copy">
           <div className="image-admin-title-row">
@@ -317,17 +379,33 @@ export function ImageAdmin() {
         />
         <div className="toolbar image-list-toolbar">
           <div className="inline-actions image-list-selection">
+            <span
+              id={imageRangeSelectionHelpId}
+              className="image-list-selection-help"
+            >
+              按住 Shift 点击卡片主体，或按 Shift+Enter，可将图片作为连续选择的区间端点。
+            </span>
             <label className="check-label">
               <input
                 id="admin-image-select-all"
                 type="checkbox"
                 checked={allSelected}
                 disabled={interfaceBusy}
-                onChange={(event) => setSelected(event.target.checked ? items.map((item) => item.id) : [])}
+                onChange={(event) => {
+                  selectionControllerRef.current.reset();
+                  setSelected(event.target.checked ? items.map((item) => item.id) : []);
+                }}
               />
               全选
             </label>
-            {selected.length > 0 && <span>已选 {selected.length}</span>}
+            <span
+              className={`image-list-selection-status${selected.length ? "" : " is-empty"}`}
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
+            >
+              {selected.length ? `已选 ${selected.length}` : "未选择图片"}
+            </span>
           </div>
           <div className="toolbar-actions image-list-toolbar-actions">
             {!mobileLayout && (
@@ -430,7 +508,13 @@ export function ImageAdmin() {
               detailDisabled={operationBusy || uploaderPending || editorPending}
               detailPending={detailCapability.pendingItemId === item.id}
               onPreloadDetail={detailCapability.preload}
-              onCheck={(checked) => setSelected((current) => checked ? [...current, item.id] : current.filter((id) => id !== item.id))}
+              onCheck={(checked, extendRange) => updateSelection(
+                item.id,
+                checked,
+                extendRange
+              )}
+              onSelectRange={() => updateSelection(item.id, true, true)}
+              rangeSelectionHelpId={imageRangeSelectionHelpId}
               onDetail={(opener) => {
                 void detailCapability.open(item, opener);
               }}

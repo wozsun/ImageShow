@@ -18,7 +18,9 @@ type AdminImageCardProps = {
   busy: boolean;
   actionsDisabled: boolean;
   canPurge: boolean;
-  onCheck: (checked: boolean) => void;
+  onCheck: (checked: boolean, extendRange: boolean) => void;
+  onSelectRange: () => void;
+  rangeSelectionHelpId: string;
   detailDisabled: boolean;
   detailPending: boolean;
   onPreloadDetail: () => void;
@@ -40,6 +42,8 @@ export function AdminImageCard({
   actionsDisabled,
   canPurge,
   onCheck,
+  onSelectRange,
+  rangeSelectionHelpId,
   detailDisabled,
   detailPending,
   onPreloadDetail,
@@ -58,29 +62,59 @@ export function AdminImageCard({
   const deletedAt = item.status === "deleted" && item.deleted_at
     ? `删除于 ${formatDate(item.deleted_at)}`
     : "";
+  const selectionDisabled = busy || actionsDisabled || detailPending;
 
   return (
     <article
-      className={`admin-image-card${busy ? " is-busy" : ""}`}
+      className={`admin-image-card${checked ? " is-selected" : ""}${busy ? " is-busy" : ""}`}
       aria-busy={busy}
     >
-      <input
-        id={`admin-image-select-${item.id}`}
-        className="admin-image-card-checkbox"
-        type="checkbox"
-        checked={checked}
-        disabled={busy || actionsDisabled || detailPending}
-        aria-label={`选择图片：${title}`}
-        onChange={(event) => onCheck(event.target.checked)}
-      />
+      <label
+        className="admin-image-card-checkbox-hit-area"
+        onClick={(event) => {
+          if (event.target !== event.currentTarget) return;
+          event.preventDefault();
+          if (selectionDisabled) return;
+          event.currentTarget.control?.focus();
+          onCheck(!checked, event.shiftKey);
+        }}
+      >
+        <input
+          id={`admin-image-select-${item.id}`}
+          className="admin-image-card-checkbox"
+          type="checkbox"
+          checked={checked}
+          disabled={selectionDisabled}
+          aria-label={`选择图片：${title}`}
+          onChange={(event) => onCheck(
+            event.target.checked,
+            "shiftKey" in event.nativeEvent && event.nativeEvent.shiftKey === true
+          )}
+        />
+      </label>
       <button
         type="button"
         className="admin-image-card-detail"
         disabled={busy || detailDisabled || detailPending}
         aria-busy={detailPending || undefined}
         aria-label={`查看图片详情：${title}`}
+        aria-describedby={rangeSelectionHelpId}
+        aria-keyshortcuts="Shift+Enter"
         {...preloadIntentProps(onPreloadDetail)}
-        onClick={(event) => onDetail(event.currentTarget)}
+        onClick={(event) => {
+          if (event.shiftKey) {
+            event.preventDefault();
+            onSelectRange();
+            return;
+          }
+          onDetail(event.currentTarget);
+        }}
+        onKeyDown={(event) => {
+          if (event.shiftKey && event.key === "Enter") {
+            event.preventDefault();
+            onSelectRange();
+          }
+        }}
       >
         <span className="admin-image-card-thumb">
           <ThumbImage src={item.thumb_url} alt="" />

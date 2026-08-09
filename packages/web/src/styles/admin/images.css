@@ -29,6 +29,18 @@
   color: var(--admin-color-text-label);
 }
 .check-label input { width: 16px; height: 16px; padding: 0; }
+.image-list-selection-help,
+.image-list-selection-status.is-empty {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
 .table { display: grid; gap: var(--admin-card-grid-gap); }
 .admin-image-grid {
   grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
@@ -61,6 +73,10 @@
     transform .16s ease;
 }
 
+.admin-image-card.is-selected {
+  border-color: var(--admin-color-control-border-selected);
+}
+
 @media (hover: hover) and (pointer: fine) {
   .admin-image-card:has(> .admin-image-card-detail:not(:disabled):hover) {
     border-color: var(--admin-color-control-border-selected);
@@ -85,7 +101,25 @@
   cursor: wait;
 }
 .apply-to-all-button.is-ready { background: var(--admin-color-action-primary); border-color: var(--admin-color-action-primary); color: var(--admin-color-text-on-emphasis); }
-.admin-image-card-checkbox { grid-area: check; margin: 0; justify-self: start; }
+.admin-image-card-checkbox-hit-area {
+  grid-area: check;
+  width: 32px;
+  min-height: 48px;
+  display: grid;
+  place-items: center;
+  justify-self: center;
+  cursor: pointer;
+}
+.admin-image-card-checkbox-hit-area:has(> .admin-image-card-checkbox:disabled) {
+  cursor: not-allowed;
+}
+.admin-image-card-checkbox {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  margin: 0;
+  cursor: inherit;
+}
 .admin-image-card-detail {
   --pressable-active-scale: var(--pressable-scale-large, .99);
 
@@ -254,6 +288,9 @@
 .image-list-filter-author { grid-area: author; }
 .image-list-filter-panel .select-trigger {
   height: var(--image-list-filter-control-height);
+  color: var(--admin-color-text-primary);
+  background: var(--admin-color-surface-primary);
+  border-color: var(--admin-color-border-control);
 }
 .image-list-toolbar {
   display: grid;

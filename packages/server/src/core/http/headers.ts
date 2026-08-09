@@ -12,8 +12,7 @@ const trustedTypePolicyNames = [
 const commonSecurityHeaders: Readonly<Record<string, string>> = {
   "X-Content-Type-Options": "nosniff",
   "Referrer-Policy": "strict-origin-when-cross-origin",
-  "Cross-Origin-Opener-Policy": "same-origin",
-  "Permissions-Policy": "camera=(), geolocation=(), microphone=()"
+  "Cross-Origin-Opener-Policy": "same-origin"
 };
 
 const securityHeaders: Readonly<Record<string, string>> = {
