@@ -42,9 +42,9 @@ const ImageAdmin = lazy(() =>
     default: module.ImageAdmin
   }))
 );
-const EntityAdmin = lazy(() =>
-  adminRouteModuleLoaders.entities().then((module) => ({
-    default: module.EntityAdmin
+const VocabularyAdmin = lazy(() =>
+  adminRouteModuleLoaders.vocabulary().then((module) => ({
+    default: module.VocabularyAdmin
   }))
 );
 const AccountSettings = lazy(() =>
@@ -194,9 +194,9 @@ function AuthenticatedAdminLayout({
             <Routes>
               <Route index element={<Overview canManageStorage={isSuper} />} />
               <Route path="images" element={<ImageAdmin />} />
-              <Route path="tags" element={<EntityAdmin key="tags" kind="tags" />} />
-              <Route path="themes" element={<EntityAdmin key="themes" kind="themes" />} />
-              <Route path="authors" element={<EntityAdmin key="authors" kind="authors" />} />
+              <Route path="tags" element={<VocabularyAdmin key="tags" kind="tags" />} />
+              <Route path="themes" element={<VocabularyAdmin key="themes" kind="themes" />} />
+              <Route path="authors" element={<VocabularyAdmin key="authors" kind="authors" />} />
               <Route path="account" element={<AccountSettings />} />
               {isSuper && <Route path="site" element={<SettingsPage />} />}
               {isSuper && <Route path="advanced-config" element={<AdvancedConfigPage />} />}

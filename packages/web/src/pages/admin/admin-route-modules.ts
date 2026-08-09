@@ -10,7 +10,7 @@ import type {
 export const adminRouteModuleLoaders = {
   overview: createPageLifetimeModuleLoader(() => import("./Overview.js")),
   images: createPageLifetimeModuleLoader(() => import("./ImageAdmin.js")),
-  entities: createPageLifetimeModuleLoader(() => import("./EntityAdmin.js")),
+  vocabulary: createPageLifetimeModuleLoader(() => import("./VocabularyAdmin.js")),
   account: createPageLifetimeModuleLoader(() => import("./AccountSettings.js")),
   site: createPageLifetimeModuleLoader(() => import("./SettingsPage.js")),
   advancedConfig: createPageLifetimeModuleLoader(
@@ -29,7 +29,7 @@ const immediateRoutePreload = { hover: "immediate" } as const;
 export const adminRoutePreloadPolicies = {
   overview: immediateRoutePreload,
   images: immediateRoutePreload,
-  entities: immediateRoutePreload,
+  vocabulary: immediateRoutePreload,
   account: immediateRoutePreload,
   site: immediateRoutePreload,
   // v4.7.4 产物约 432 KiB / 139 KiB gzip；短暂划过不应下载编辑器，

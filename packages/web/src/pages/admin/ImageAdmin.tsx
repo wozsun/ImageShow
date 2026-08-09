@@ -1,18 +1,12 @@
 import {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useRef,
-  useState,
-  type MouseEvent as ReactMouseEvent
+  useState
 } from "react";
 import { useSearchParams } from "react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  adminPermissions,
-  type AdminImageListResponse
-} from "@imageshow/shared/browser";
-import { api } from "../../lib/api/client.js";
+import { useQueryClient } from "@tanstack/react-query";
+import { adminPermissions } from "@imageshow/shared/browser";
 import { AdminIcon } from "../../components/icon/AdminIcon.js";
 import { StableButtonLabel } from "../../components/data-display/StableButtonLabel.js";
 import { ConfirmDialog } from "../../components/feedback/ConfirmDialog.js";
@@ -24,11 +18,7 @@ import {
 import { LabeledSwitch } from "../../components/form/LabeledSwitch.js";
 import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
 import { AdminPagination } from "../../components/navigation/AdminPagination.js";
-import {
-  adminApiBasePath,
-  adminImagePageLimit
-} from "../../lib/constants.js";
-import { queryKeys } from "../../lib/api/query-keys.js";
+import { adminImagePageLimit } from "../../lib/constants.js";
 import { imageDisplayTitle } from "../../lib/ui/formatters.js";
 import { preloadIntentProps } from "../../lib/ui/preload-intent.js";
 import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
@@ -45,7 +35,6 @@ import {
 import { UploaderLauncher } from "./uploader/UploaderLauncher.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
 import { invalidateImageData } from "../../lib/api/query-invalidation.js";
-import { AsyncIntentFence } from "../../lib/async-intent-fence.js";
 import { useAdminPreference } from "../../hooks/useAdminPreferences.js";
 import { useAdminPermissions } from "../../hooks/useAuthSession.js";
 import { useAdminImageDetailCapability } from "../../components/image/useAdminImageDetailCapability.js";
@@ -59,46 +48,11 @@ import {
   useImageAdminOperations,
   type ImageAdminView
 } from "./useImageAdminOperations.js";
-import {
-  adminImagePageBoundaryBuildCount,
-  adminImagePageBoundaryBuildLimit,
-  adminImagePageRetreatTarget,
-  adminImagePageNavigationStatus,
-  loadAdminImagePage,
-  type AdminImagePageNavigationProgress
-} from "./image-page-navigation.js";
-import {
-  ImageListSelectionController,
-  isImageSelectionPreservingTarget
-} from "./image-list-selection.js";
+import { useImageAdminSelection } from "./useImageAdminSelection.js";
+import { useImageAdminPageNavigation } from "./useImageAdminPageNavigation.js";
 import "../../styles/admin/images.css";
 
 const imageRangeSelectionHelpId = "admin-image-range-selection-help";
-
-function adminImageListQuery(
-  view: ImageAdminView,
-  filters: ImageAdminFilterValues,
-  cursor: string,
-  pageSize: number
-) {
-  const params = new URLSearchParams({
-    status: view === "deleted" ? "deleted" : "ready",
-    limit: String(pageSize)
-  });
-  // 「无主题」页签只显示未设置主题的正常图片。
-  if (view === "unset") params.set("t", "none");
-  else if (filters.theme) params.set("t", filters.theme);
-  if (filters.device) params.set("d", filters.device);
-  if (filters.brightness) params.set("b", filters.brightness);
-  if (filters.tag) params.set("tag", filters.tag);
-  if (filters.author) params.set("a", filters.author);
-  if (cursor) params.set("cursor", cursor);
-
-  return {
-    queryKey: [...queryKeys.adminImages, params.toString()] as const,
-    queryFn: ({ signal }: { signal: AbortSignal }) => api<AdminImageListResponse>(`${adminApiBasePath}/images?${params}`, { signal })
-  };
-}
 
 export function ImageAdmin() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -107,11 +61,6 @@ export function ImageAdmin() {
     ? viewParam
     : "ready";
   const [view, setView] = useState<ImageAdminView>(routeView);
-  const [cursorHistory, setCursorHistory] = useState<string[]>([""]);
-  const [pageNavigation, setPageNavigation] = useState<"previous" | "next" | null>(null);
-  const [pageNavigationProgress, setPageNavigationProgress] = useState<
-    AdminImagePageNavigationProgress | null
-  >(null);
   const [filters, setFilters] = useState<ImageAdminFilterValues>(
     emptyImageAdminFilters
   );
@@ -128,9 +77,6 @@ export function ImageAdmin() {
 
   const feedbackTarget = useActionFeedbackTarget("image-admin");
   const gridRef = useRef<HTMLDivElement | null>(null);
-  const selectionControllerRef = useRef(new ImageListSelectionController());
-  const pageNavigationFenceRef = useRef(new AsyncIntentFence());
-  const pageNavigationControllerRef = useRef<AbortController | null>(null);
   const client = useQueryClient();
   const { data: settingsData } = useAdminSettings();
 
@@ -140,30 +86,37 @@ export function ImageAdmin() {
   const pageSize = settingsData?.settings.admin.image_page_size ?? adminImagePageLimit;
   const previousPageSizeRef = useRef(pageSize);
   const editPageSize = settingsData?.settings.upload.list_page_size ?? 20;
-  const cursor = cursorHistory.at(-1) ?? "";
-  const pageNumber = cursorHistory.length;
-  const { data, error: listError, isError: listFailed, isFetching, refetch: refetchList } = useQuery({
-    ...adminImageListQuery(view, filters, cursor, pageSize),
+  const navigation = useImageAdminPageNavigation({
+    view,
+    filters,
+    pageSize,
     enabled: Boolean(settingsData)
   });
-  const items = data?.items ?? [];
-  const cancelPageNavigation = useCallback(() => {
-    pageNavigationFenceRef.current.invalidate();
-    const controller = pageNavigationControllerRef.current;
-    pageNavigationControllerRef.current = null;
-    controller?.abort();
-    setPageNavigation(null);
-    setPageNavigationProgress(null);
-  }, []);
+  const {
+    data,
+    items,
+    error: listError,
+    isError: listFailed,
+    isFetching,
+    refetch: refetchList,
+    cursor,
+    pageNumber,
+    totalPages,
+    direction: pageNavigation,
+    status: pageNavigationStatus,
+    cancel: cancelPageNavigation
+  } = navigation;
+  const selection = useImageAdminSelection(items);
+  const {
+    selected,
+    selectedItems,
+    allSelected
+  } = selection;
   const invalidateData = useCallback(async () => {
     cancelPageNavigation();
     await invalidateImageData(client);
   }, [cancelPageNavigation, client]);
   const {
-    selected,
-    setSelected,
-    selectedItems,
-    allSelected,
     operationText,
     feedback,
     setFeedback,
@@ -178,7 +131,12 @@ export function ImageAdmin() {
     runRowAction,
     runConfirmedAction,
     restoreSelected
-  } = useImageAdminOperations({ items, invalidateData });
+  } = useImageAdminOperations({
+    items,
+    selected,
+    clearSelection: selection.clear,
+    invalidateData
+  });
   const detailCapability = useAdminImageDetailCapability<ImageItem>((error) => {
     reportAdminUiError("image_admin.detail_load", error);
     showFeedback("图片详情加载失败，请重新加载页面", "error");
@@ -196,47 +154,19 @@ export function ImageAdmin() {
     detailCapability.item || editorCapability.session || confirmAction
   );
   const interfaceBusy = editorConflictBusy || editorPending || modalOpen;
-  const clearImageSelection = useCallback(() => {
-    selectionControllerRef.current.reset();
-    setSelected([]);
-  }, [setSelected]);
-  const clearSelectionFromPageClick = (
-    event: ReactMouseEvent<HTMLElement>
-  ) => {
-    if (!selected.length || interfaceBusy) return;
-    const target = event.target;
-    if (
-      !(target instanceof Element)
-      || !event.currentTarget.contains(target)
-      || isImageSelectionPreservingTarget(target)
-    ) return;
-    clearImageSelection();
-  };
-  const finishImportBatch = useCallback(() => {
-    clearImageSelection();
-  }, [clearImageSelection]);
-  const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / pageSize));
+  const clearImageSelection = selection.clear;
+  const finishImportBatch = selection.clear;
   const canDeleteReadyItems = view !== "deleted";
-  useEffect(() => {
-    const pageNavigationFence = pageNavigationFenceRef.current;
-    pageNavigationFence.mount();
-    return () => {
-      pageNavigationFence.unmount();
-      pageNavigationControllerRef.current?.abort();
-      pageNavigationControllerRef.current = null;
-    };
-  }, []);
   useEffect(() => {
     if (previousPageSizeRef.current === pageSize) return;
     previousPageSizeRef.current = pageSize;
-    cancelPageNavigation();
-    setCursorHistory([""]);
+    navigation.reset();
     clearImageSelection();
     resetTransientState();
     gridRef.current?.scrollTo({ top: 0, left: 0 });
   }, [
-    cancelPageNavigation,
     clearImageSelection,
+    navigation.reset,
     pageSize,
     resetTransientState
   ]);
@@ -245,22 +175,26 @@ export function ImageAdmin() {
   }, [cancelPageNavigation, interfaceBusy, pageNavigation]);
   useEffect(() => {
     if (routeView === view) return;
-    cancelPageNavigation();
     setView(routeView);
-    setCursorHistory([""]);
-    selectionControllerRef.current.reset();
+    navigation.reset();
+    clearImageSelection();
     resetTransientState();
     gridRef.current?.scrollTo({ top: 0, left: 0 });
-  }, [cancelPageNavigation, resetTransientState, routeView, view]);
+  }, [
+    clearImageSelection,
+    navigation.reset,
+    resetTransientState,
+    routeView,
+    view
+  ]);
   const changeFilter = (
     key: keyof ImageAdminFilterValues,
     nextValue: string
   ) => {
     if (filters[key] === nextValue || interfaceBusy) return;
-    cancelPageNavigation();
     setFilters((current) => ({ ...current, [key]: nextValue }));
-    setCursorHistory([""]);
-    selectionControllerRef.current.reset();
+    navigation.reset();
+    clearImageSelection();
     resetTransientState();
     gridRef.current?.scrollTo({ top: 0, left: 0 });
   };
@@ -270,172 +204,24 @@ export function ImageAdmin() {
     setSearchParams(next === "ready" ? {} : { view: next }, { replace: true });
   };
   const loadPage = async (targetPage: number) => {
-    if (
-      interfaceBusy
-      || targetPage === pageNumber
-      || targetPage < 1
-      || targetPage > totalPages
-    ) {
-      return;
-    }
-    // 连续导航意图之间可能尚未完成 React 状态提交；ref 是同步所有者，
-    // 新意图必须先中止旧补链。
-    cancelPageNavigation();
-    const boundaryBuilds = adminImagePageBoundaryBuildCount({
-      targetPage,
-      currentPage: pageNumber,
-      cursorHistory
-    });
-    if (boundaryBuilds > adminImagePageBoundaryBuildLimit) {
-      const firstSegmentPage = Math.min(
-        totalPages,
-        pageNumber + adminImagePageBoundaryBuildLimit
-      );
-      showFeedback(
-        `目标第 ${targetPage} 页尚需建立 ${boundaryBuilds} 个边界；`
-        + `单次最多 ${adminImagePageBoundaryBuildLimit} 个，`
-        + `请先跳到第 ${firstSegmentPage} 页再继续`,
-        "error"
-      );
-      return;
-    }
-    const direction = targetPage < pageNumber ? "previous" : "next";
-    const pageNavigationFence = pageNavigationFenceRef.current;
-    const requestSequence = pageNavigationFence.begin();
-    const controller = new AbortController();
-    pageNavigationControllerRef.current = controller;
-    setPageNavigation(direction);
-    setPageNavigationProgress(null);
     setFeedback(null);
-
-    try {
-      // 当前页及页码保持不动；目标页完整返回并进入查询缓存后，再一次性提交游标。
-      const target = await loadAdminImagePage({
-        targetPage,
-        currentPage: pageNumber,
-        currentPageData: data ?? null,
-        cursorHistory,
-        signal: controller.signal,
-        maxBoundaryBuilds: adminImagePageBoundaryBuildLimit,
-        onProgress: (progress) => {
-          if (pageNavigationFence.isCurrent(requestSequence)) {
-            setPageNavigationProgress(progress);
-          }
-        },
-        load: async (targetCursor) => {
-          const query = adminImageListQuery(
-            view,
-            filters,
-            targetCursor,
-            pageSize
-          );
-          const cancelQuery = () => {
-            void client.cancelQueries({
-              queryKey: query.queryKey,
-              exact: true
-            }).catch((error) => {
-              reportAdminUiError("image_admin.page_navigation_cancel", error);
-            });
-          };
-          controller.signal.addEventListener("abort", cancelQuery, { once: true });
-          try {
-            controller.signal.throwIfAborted();
-            const page = await client.fetchQuery(query);
-            controller.signal.throwIfAborted();
-            if (!pageNavigationFence.isCurrent(requestSequence)) {
-              throw new Error("Image page navigation was superseded");
-            }
-            return page;
-          } finally {
-            controller.signal.removeEventListener("abort", cancelQuery);
-          }
-        }
-      });
-      if (!pageNavigationFence.isCurrent(requestSequence)) return;
-      clearImageSelection();
-      setCursorHistory(target.cursorHistory);
-    } catch (error) {
-      if (pageNavigationFence.isCurrent(requestSequence)) {
-        reportAdminUiError("image_admin.page_navigation", error);
-        showFeedback("页面加载失败，请稍后重试", "error");
-      }
-    } finally {
-      if (pageNavigationFence.isCurrent(requestSequence)) {
-        if (pageNavigationControllerRef.current === controller) {
-          pageNavigationControllerRef.current = null;
-        }
-        setPageNavigation(null);
-        setPageNavigationProgress(null);
-      }
-    }
+    const error = await navigation.loadPage(targetPage, interfaceBusy);
+    if (error) showFeedback(error, "error");
   };
   useEffect(() => {
     clearImageSelection();
     // 视图和游标页不复用上一页的滚动位置，避免快速切换到回收站时首屏卡片只露出残片。
     gridRef.current?.scrollTo({ top: 0, left: 0 });
   }, [clearImageSelection, cursor, filters, view]);
-  useEffect(() => {
-    const retreatTarget = adminImagePageRetreatTarget({
-      isFetching,
-      hasPageData: Boolean(data),
-      itemCount: data?.items.length ?? 0,
-      currentPage: pageNumber,
-      totalPages
-    });
-    if (retreatTarget === null) return;
-
-    // 删除、恢复或分类编辑可能让当前页消失；直接夹紧到仍可访问的最近页，
-    // 避免总页数大幅收缩时逐页查询。
-    cancelPageNavigation();
-    clearImageSelection();
-    setCursorHistory((current) => current.slice(0, retreatTarget));
-  }, [
-    cancelPageNavigation,
-    clearImageSelection,
-    data,
-    isFetching,
-    pageNumber,
-    totalPages
-  ]);
-  useLayoutEffect(() => {
-    const reconciled = selectionControllerRef.current.reconcile(
-      items.map((item) => item.id),
-      selected
-    );
-    if (
-      reconciled.length !== selected.length
-      || reconciled.some((id, index) => id !== selected[index])
-    ) {
-      setSelected(reconciled);
-    }
-  }, [items, selected]);
-  const updateSelection = (
-    targetId: string,
-    checked: boolean,
-    extendRange: boolean
-  ) => {
-    const pageIds = items.map((item) => item.id);
-    setSelected((current) => selectionControllerRef.current.update({
-      pageIds,
-      selectedIds: current,
-      targetId,
-      checked,
-      extendRange,
-      busy: interfaceBusy
-    }));
-  };
   const preloadBatchEditor = () => editorCapability.preload({
     kind: "batch",
     sources: selectedItems
   });
   const confirmCopy = imageAdminConfirmationCopy(confirmAction);
-  const pageNavigationStatus = adminImagePageNavigationStatus(
-    pageNavigationProgress
-  );
   return (
     <section
       className="workspace workspace-paged"
-      onClick={clearSelectionFromPageClick}
+      onClick={(event) => selection.clearFromPageClick(event, interfaceBusy)}
     >
       <header className="workspace-head image-admin-head">
         <div className="image-admin-head-copy">
@@ -513,10 +299,10 @@ export function ImageAdmin() {
                 type="checkbox"
                 checked={allSelected}
                 disabled={interfaceBusy}
-                onChange={(event) => {
-                  selectionControllerRef.current.reset();
-                  setSelected(event.target.checked ? items.map((item) => item.id) : []);
-                }}
+                onChange={(event) => selection.selectAll(
+                  event.target.checked,
+                  interfaceBusy
+                )}
               />
               全选
             </label>
@@ -640,12 +426,18 @@ export function ImageAdmin() {
               detailDisabled={operationBusy || uploaderPending || editorPending}
               detailPending={detailCapability.pendingItemId === item.id}
               onPreloadDetail={detailCapability.preload}
-              onCheck={(checked, extendRange) => updateSelection(
+              onCheck={(checked, extendRange) => selection.update(
                 item.id,
                 checked,
-                extendRange
+                extendRange,
+                interfaceBusy
               )}
-              onSelectRange={() => updateSelection(item.id, true, true)}
+              onSelectRange={() => selection.update(
+                item.id,
+                true,
+                true,
+                interfaceBusy
+              )}
               rangeSelectionHelpId={imageRangeSelectionHelpId}
               onDetail={(opener) => {
                 cancelPageNavigation();

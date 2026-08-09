@@ -81,21 +81,21 @@ const adminNavigationModel = {
           to: `${adminBasePath}/themes`,
           icon: "palette-line",
           label: "主题管理",
-          routeModule: "entities"
+          routeModule: "vocabulary"
         },
         {
           kind: "link",
           to: `${adminBasePath}/tags`,
           icon: "price-tag-3-line",
           label: "标签管理",
-          routeModule: "entities"
+          routeModule: "vocabulary"
         },
         {
           kind: "link",
           to: `${adminBasePath}/authors`,
           icon: "quill-pen-line",
           label: "作者管理",
-          routeModule: "entities"
+          routeModule: "vocabulary"
         }
       ]
     },

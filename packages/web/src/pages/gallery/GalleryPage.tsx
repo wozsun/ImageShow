@@ -19,28 +19,22 @@ import type {
 import { useSearchParams } from "react-router";
 import { api } from "../../lib/api/client.js";
 import { AppHeader } from "../../components/navigation/AppHeader.js";
-import { CopyButton } from "../../components/actions/CopyButton.js";
 import { Icon } from "../../components/icon/Icon.js";
 // 当前详情共享 JS + CSS 实测压缩后不足 6 KiB；画廊首击直接使用，继续随路由
 // 加载可避免新增请求和 Suspense 边界。
 import { ImageDetailModal } from "../../components/image/ImageDetailModal.js";
-import { SelectMenu } from "../../components/form/SelectMenu.js";
-import { FacetSelector } from "../../components/data-display/FacetSelector.js";
 import { queryKeys } from "../../lib/api/query-keys.js";
 import { removeImageFromPublicImagesCache } from "./gallery-image-cache.js";
 import { displayNameOrSlug, errorMessage } from "../../lib/ui/formatters.js";
 import { buildRandomUrl } from "../../lib/gallery/random-url.js";
-import { brightnessOptionLabel, deviceOptionLabel } from "../../lib/ui/select-options.js";
 import type { GalleryImageCard, PublicImageItem } from "../../lib/types.js";
 import { useGalleryFacets, useSiteConfig } from "../../lib/api/site-data.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
 import {
   AppLoadingRegion
 } from "../../components/feedback/AppLoadingScreen.js";
-import { AnchoredMenuDismissSignalContext } from "../../hooks/useAnchoredMenu.js";
 import { pageScrollRestoredEvent } from "../../hooks/usePageScrollLock.js";
 import { useDocumentMotionPause } from "../../hooks/useDocumentMotionPause.js";
-import { useOneShotAnimation } from "../../hooks/useOneShotAnimation.js";
 import { usePublicNavigationEntrance } from "../../hooks/usePublicNavigationEntrance.js";
 import {
   useGalleryColumnCount,
@@ -59,11 +53,8 @@ import {
 import { GalleryCardRevealRegistry } from "./gallery-card-reveal.js";
 import { galleryDeletionFocusTarget } from "./gallery-delete-continuity.js";
 import { galleryImagesQueryOptions } from "./gallery-images-query.js";
-import {
-  GalleryPagePreloadGate,
-  galleryPagePreloadRange,
-  galleryPagePreloadRequestKey
-} from "./gallery-page-preload.js";
+import { useGalleryPagePreload } from "./useGalleryPagePreload.js";
+import { GalleryToolbar } from "./GalleryToolbar.js";
 import "../../styles/public-core.css";
 import "../../styles/gallery.css";
 import "../../styles/gallery-responsive.css";
@@ -154,12 +145,6 @@ export function GalleryPage({ embedded = false }: { embedded?: boolean }) {
   const selectedIndexRef = useRef(-1);
   const galleryRef = useRef<HTMLElement | null>(null);
   const galleryWindowRef = useRef<HTMLDivElement | null>(null);
-  const pagePreloadRef = useRef<HTMLSpanElement | null>(null);
-  const pagePreloadGateRef = useRef<GalleryPagePreloadGate | null>(null);
-  const [pagePreloadRevision, setPagePreloadRevision] = useState(0);
-  if (!pagePreloadGateRef.current) {
-    pagePreloadGateRef.current = new GalleryPagePreloadGate();
-  }
   const previousImageQueryRef = useRef<string | null>(null);
   const routeEntranceFinishedRef = useRef(false);
   const {
@@ -174,9 +159,6 @@ export function GalleryPage({ embedded = false }: { embedded?: boolean }) {
     () => galleryApiSearchParams(filters, order).toString(),
     [filters, order]
   );
-  useEffect(() => {
-    pagePreloadGateRef.current?.beginSession(imageQuery);
-  }, [imageQuery]);
   const publicImagesQuery = useMemo(
     () => galleryImagesQueryOptions(imageQuery),
     [imageQuery]
@@ -188,7 +170,6 @@ export function GalleryPage({ embedded = false }: { embedded?: boolean }) {
     }),
     [imageQuery]
   );
-  const toolbarEntrance = useOneShotAnimation(true);
   useDocumentMotionPause();
 
   useEffect(() => {
@@ -227,13 +208,6 @@ export function GalleryPage({ embedded = false }: { embedded?: boolean }) {
     author: filters.author
   });
 
-  const activeFilterCount =
-    (filters.device ? 1 : 0) +
-    (filters.brightness ? 1 : 0) +
-    (filters.theme ? 1 : 0) +
-    (filters.tag ? 1 : 0) +
-    (filters.author ? 1 : 0);
-
   const updateFilter = (key: keyof GalleryFilters, value: string) => {
     setRouteSearchParams(
       galleryRouteSearchParams({ ...filters, [key]: value })
@@ -249,95 +223,18 @@ export function GalleryPage({ embedded = false }: { embedded?: boolean }) {
     { ...geometry, columnCount },
     imageQuery
   );
-  const pagePreloadRange = useMemo(() => galleryPagePreloadRange(
-    imagePages.data?.pages.map((page) => page.items.length) ?? [],
-    layout.positions,
-    layout.totalHeight
-  ), [imagePages.data?.pages, layout.positions, layout.totalHeight]);
-  const nextPageCursor = imagePages.data?.pages.at(-1)?.next_cursor ?? "";
-  const nextPageRequestKey = galleryPagePreloadRequestKey(
-    imageQuery,
-    nextPageCursor
-  );
-  const requestNextPage = useCallback((retry = false) => {
-    // The rendered snapshot re-arms the observer after fetching or paused;
-    // the live state closes the notification window before claiming a cursor.
-    const liveFetchStatus = queryClient.getQueryState(
-      publicImagesQueryKey
-    )?.fetchStatus;
-    if (
-      !nextPageRequestKey
-      || !imagePages.hasNextPage
-      || imagePages.fetchStatus !== "idle"
-      || liveFetchStatus !== "idle"
-    ) {
-      return;
-    }
-    const claimSequence = pagePreloadGateRef.current?.claim(
-      nextPageRequestKey,
-      retry
-    );
-    if (claimSequence == null) return;
-
-    void imagePages.fetchNextPage({ cancelRefetch: false }).then((result) => {
-      if (pagePreloadGateRef.current?.rearmIfUnfulfilled(
-        nextPageRequestKey,
-        nextPageCursor,
-        result.data?.pageParams ?? [],
-        result.isFetchNextPageError,
-        claimSequence
-      )) {
-        setPagePreloadRevision((revision) => revision + 1);
-      }
-    });
-  }, [
-    imagePages.fetchNextPage,
-    imagePages.fetchStatus,
-    imagePages.hasNextPage,
-    nextPageCursor,
-    nextPageRequestKey,
-    publicImagesQueryKey,
-    queryClient
-  ]);
-
-  useEffect(() => {
-    if (
-      imagePages.fetchStatus !== "idle"
-      || !nextPageRequestKey
-      || !pagePreloadGateRef.current?.rearmIfUnfulfilled(
-        nextPageRequestKey,
-        nextPageCursor,
-        imagePages.data?.pageParams ?? [],
-        imagePages.isFetchNextPageError
-      )
-    ) {
-      return;
-    }
-    // A later ordinary refetch can clear a forward error without advancing its
-    // cursor. Re-observe the still-current page only after that refetch settles.
-    setPagePreloadRevision((revision) => revision + 1);
-  }, [
-    imagePages.data?.pageParams,
-    imagePages.fetchStatus,
-    imagePages.isFetchNextPageError,
-    nextPageCursor,
-    nextPageRequestKey
-  ]);
-
-  useEffect(() => {
-    const target = pagePreloadRef.current;
-    if (!target || !pagePreloadRange || !nextPageRequestKey) return;
-    const observer = new IntersectionObserver((entries) => {
-      if (entries.some((entry) => entry.isIntersecting)) requestNextPage();
-    });
-    observer.observe(target);
-    return () => observer.disconnect();
-  }, [
-    nextPageRequestKey,
+  const {
     pagePreloadRange,
-    pagePreloadRevision,
+    pagePreloadRef,
+    nextPageRequestKey,
     requestNextPage
-  ]);
+  } = useGalleryPagePreload({
+    imageQuery,
+    imagePages,
+    publicImagesQueryKey,
+    positions: layout.positions,
+    totalHeight: layout.totalHeight
+  });
   const themeNames = useMemo(() => new Map((facets?.themes ?? []).map((option) => [option.slug, displayNameOrSlug(option)])), [facets]);
   const tagNames = useMemo(() => new Map((facets?.tags ?? []).map((option) => [option.slug, displayNameOrSlug(option)])), [facets]);
   const initialLoading = imagePages.isLoading && items.length === 0;
@@ -437,111 +334,20 @@ export function GalleryPage({ embedded = false }: { embedded?: boolean }) {
               visible={headerVisible}
             />
           )}
-          <section
-            ref={toolbarRef}
-            className={`gallery-toolbar public-navigation-secondary${toolbarEntrance.active ? " is-gallery-toolbar-entrance" : ""}${filtersOpen ? " filters-open" : ""}${toolbarVisible ? "" : " is-scroll-hidden"}`}
-            inert={!toolbarVisible}
-            onAnimationEnd={(event) => {
-              if (
-                event.currentTarget === event.target
-                && event.animationName === "gallery-toolbar-entrance"
-              ) {
-                toolbarEntrance.finish();
-              }
-            }}
-          >
-            <button
-              ref={filterToggleRef}
-              type="button"
-              className="gallery-filter-toggle"
-              aria-expanded={filtersOpen}
-              aria-controls="gallery-filter-panel"
-              onClick={toggleFilters}
-            >
-              <Icon name="filter-3-line" />
-              筛选
-              {activeFilterCount > 0 && <span className="gallery-filter-count">{activeFilterCount}</span>}
-              <span className="gallery-filter-chevron"><Icon name="arrow-down-s-line" /></span>
-            </button>
-            <AnchoredMenuDismissSignalContext.Provider value={filterMenuDismissSignal}>
-              <div
-                ref={filterPanelRef}
-                id="gallery-filter-panel"
-                className="gallery-filter-panel"
-                role="group"
-                aria-label="画廊筛选条件"
-                aria-hidden={filterPanelHidden}
-                inert={filterPanelHidden}
-              >
-                <label className="gallery-axis">
-                  设备
-                  <SelectMenu
-                    value={filters.device}
-                    onChange={(value) => updateFilter("device", value)}
-                    options={[
-                      { value: "", label: "全部设备" },
-                      { value: "r", label: "强制随机" },
-                      ...(facets?.devices ?? ["pc", "mb"]).map((value) => ({ value, label: deviceOptionLabel(value) }))
-                    ]}
-                    ariaLabel="设备"
-                    menuClassName="public-gallery-menu"
-                  />
-                </label>
-                <label className="gallery-axis">
-                  亮度
-                  <SelectMenu
-                    value={filters.brightness}
-                    onChange={(value) => updateFilter("brightness", value)}
-                    options={[
-                      { value: "", label: "全部亮度" },
-                      ...(facets?.brightnesses ?? ["light", "dark"]).map((value) => ({ value, label: brightnessOptionLabel(value) }))
-                    ]}
-                    ariaLabel="亮度"
-                    menuClassName="public-gallery-menu"
-                  />
-                </label>
-                <label className="gallery-theme-filter">
-                  主题
-                  <FacetSelector
-                    options={facets?.themes ?? []}
-                    value={filters.theme}
-                    onChange={(value) => updateFilter("theme", value)}
-                    noun="主题"
-                    menuClassName="public-gallery-menu"
-                  />
-                </label>
-                <label className="gallery-tag-filter">
-                  标签
-                  <FacetSelector
-                    options={facets?.tags ?? []}
-                    value={filters.tag}
-                    onChange={(value) => updateFilter("tag", value)}
-                    noun="标签"
-                    menuClassName="public-gallery-menu"
-                  />
-                </label>
-                <label className="gallery-author-filter">
-                  作者
-                  <FacetSelector
-                    options={facets?.authors ?? []}
-                    value={filters.author}
-                    onChange={(value) => updateFilter("author", value)}
-                    noun="作者"
-                    menuClassName="public-gallery-menu"
-                  />
-                </label>
-                <div className="theme-link">
-                  <span>随机图片API</span>
-                  <div className="theme-link-row">
-                    <div className="generated-link-field">
-                      <code>{randomUrl}</code>
-                      <CopyButton value={randomUrl} ariaLabel="复制随机图片链接" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </AnchoredMenuDismissSignalContext.Provider>
-          </section>
+          <GalleryToolbar
+            filters={filters}
+            facets={facets}
+            randomUrl={randomUrl}
+            filtersOpen={filtersOpen}
+            filterPanelHidden={filterPanelHidden}
+            filterMenuDismissSignal={filterMenuDismissSignal}
+            toolbarVisible={toolbarVisible}
+            toolbarRef={toolbarRef}
+            filterToggleRef={filterToggleRef}
+            filterPanelRef={filterPanelRef}
+            toggleFilters={toggleFilters}
+            onFilterChange={updateFilter}
+          />
         </div>
       </div>
       <div className="gallery-toolbar-spacer" aria-hidden="true" />

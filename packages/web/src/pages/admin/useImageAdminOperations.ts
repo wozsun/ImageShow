@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import type {
   BatchImageDeleteResponseDto,
   BatchImageRestoreResponseDto,
@@ -15,7 +15,7 @@ import type { ImageItem } from "../../lib/types.js";
 import {
   createActionFeedback,
   type ActionFeedbackState
-} from "../../components/feedback/ActionFeedback.js";
+} from "../../lib/ui/action-feedback.js";
 import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
 import { waitForMinimumPendingDuration } from "../../lib/ui/async-action-timing.js";
 
@@ -65,12 +65,15 @@ export function imageAdminConfirmationCopy(
 
 export function useImageAdminOperations({
   items,
+  selected,
+  clearSelection,
   invalidateData
 }: {
   items: ImageItem[];
+  selected: string[];
+  clearSelection: () => void;
   invalidateData: () => Promise<unknown>;
 }) {
-  const [selected, setSelected] = useState<string[]>([]);
   const [operationText, setOperationText] = useState("");
   const [feedback, setFeedback] = useState<ActionFeedbackState | null>(null);
   const [confirmAction, setConfirmAction] =
@@ -79,12 +82,6 @@ export function useImageAdminOperations({
   const [busyIds, setBusyIds] = useState<string[]>([]);
 
   const operationBusy = actionBusy || busyIds.length > 0;
-  const selectedItems = useMemo(
-    () => items.filter((item) => selected.includes(item.id)),
-    [items, selected]
-  );
-  const allSelected = items.length > 0 && selected.length === items.length;
-
   const showFeedback = useCallback((
     text: string,
     status: "error" | "success"
@@ -93,12 +90,11 @@ export function useImageAdminOperations({
   }, []);
 
   const refresh = useCallback(async () => {
-    setSelected([]);
+    clearSelection();
     await invalidateData();
-  }, [invalidateData]);
+  }, [clearSelection, invalidateData]);
 
   const resetTransientState = useCallback(() => {
-    setSelected([]);
     setFeedback(null);
   }, []);
 
@@ -313,10 +309,6 @@ export function useImageAdminOperations({
   }, [refresh, selected, showFeedback]);
 
   return {
-    selected,
-    setSelected,
-    selectedItems,
-    allSelected,
     operationText,
     feedback,
     setFeedback,

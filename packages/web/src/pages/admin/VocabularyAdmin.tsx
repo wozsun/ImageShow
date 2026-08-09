@@ -12,15 +12,11 @@ import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
 import { AdminPagination } from "../../components/navigation/AdminPagination.js";
 import { ConfirmDialog } from "../../components/feedback/ConfirmDialog.js";
 import {
-  createActionFeedback,
-  type ActionFeedbackState
-} from "../../components/feedback/ActionFeedback.js";
-import {
   ActionFeedbackOutlet,
   useActionFeedbackTarget
 } from "../../components/feedback/ActionFeedbackRegion.js";
 import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.js";
-import { EntityAdminCard } from "./EntityAdminCard.js";
+import { VocabularyAdminCard } from "./VocabularyAdminCard.js";
 import {
   adminApiBasePath,
   adminImagePageLimit,
@@ -30,23 +26,17 @@ import {
 import { queryKeys } from "../../lib/api/query-keys.js";
 import { useAdminSettings } from "../../lib/api/admin-settings.js";
 import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
-import {
-  reorderItemByDirection,
-  reorderItemByKey,
-  reorderPositionByKey,
-  type ReorderDirection
-} from "../../lib/ui/reorder.js";
 import type { Author, Tag, Theme } from "../../lib/types.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
 import { invalidateImageData } from "../../lib/api/query-invalidation.js";
 import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
 import { useAdminPermissions } from "../../hooks/useAuthSession.js";
-import { useReorderControlFocus } from "../../hooks/useReorderControlFocus.js";
+import { usePersistedReorder } from "../../hooks/usePersistedReorder.js";
 import "../../styles/admin/entity.css";
 
-type EntityKind = "tags" | "themes" | "authors";
-type Entity = Tag | Theme | Author;
-type EntityMutation = "" | "delete";
+type VocabularyKind = "tags" | "themes" | "authors";
+type VocabularyEntry = Tag | Theme | Author;
+type VocabularyMutation = "" | "delete";
 
 const COPY = {
   tags: {
@@ -55,7 +45,7 @@ const COPY = {
     slugPlaceholder: "标签 slug",
     displayPlaceholder: "显示名（可选）",
     empty: "还没有标签",
-    deleteDescription: (item: Entity) => `删除标签「${item.display_name || item.slug}」，会从 ${item.image_count} 张图片上移除该标签，此操作无法撤销。`
+    deleteDescription: (item: VocabularyEntry) => `删除标签「${item.display_name || item.slug}」，会从 ${item.image_count} 张图片上移除该标签，此操作无法撤销。`
   },
   themes: {
     noun: "主题",
@@ -63,7 +53,7 @@ const COPY = {
     slugPlaceholder: "主题 slug",
     displayPlaceholder: "显示名（可选）",
     empty: "还没有主题（上传图片或在上方新建）",
-    deleteDescription: (item: Entity) => `删除主题「${item.display_name || item.slug}」，其 ${item.image_count} 张图片将归为「未设置」，此操作无法撤销。`
+    deleteDescription: (item: VocabularyEntry) => `删除主题「${item.display_name || item.slug}」，其 ${item.image_count} 张图片将归为「未设置」，此操作无法撤销。`
   },
   authors: {
     noun: "作者",
@@ -71,7 +61,7 @@ const COPY = {
     slugPlaceholder: "作者 slug",
     displayPlaceholder: "显示名（可选）",
     empty: "还没有作者（上传图片或在上方新建）",
-    deleteDescription: (item: Entity) => `删除作者「${item.display_name || item.slug}」，其 ${item.image_count} 张图片的作者属性将被清除，此操作无法撤销。`
+    deleteDescription: (item: VocabularyEntry) => `删除作者「${item.display_name || item.slug}」，其 ${item.image_count} 张图片的作者属性将被清除，此操作无法撤销。`
   }
 } as const;
 
@@ -80,9 +70,9 @@ const DELETE_PERMISSIONS = {
   tags: adminPermissions.tagDelete,
   themes: adminPermissions.themeDelete,
   authors: adminPermissions.authorDelete
-} satisfies Record<EntityKind, AdminPermission>;
+} satisfies Record<VocabularyKind, AdminPermission>;
 
-export function EntityAdmin({ kind }: { kind: EntityKind }) {
+export function VocabularyAdmin({ kind }: { kind: VocabularyKind }) {
   const copy = COPY[kind];
   const isAuthor = kind === "authors";
   const queryKey = QUERY_KEYS[kind];
@@ -98,30 +88,14 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
   const [display, setDisplay] = useState("");
 
   const [link, setLink] = useState("");
-  const [feedback, setFeedback] = useState<ActionFeedbackState | null>(null);
   const feedbackTarget = useActionFeedbackTarget(`${kind}-admin`);
-  const [mutation, setMutation] = useState<EntityMutation>("");
+  const [mutation, setMutation] = useState<VocabularyMutation>("");
   const [createError, setCreateError] = useState("");
   const createAction = useAsyncActionStatus({ resultDurationMs: null });
-  const [confirmDelete, setConfirmDelete] = useState<Entity | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<VocabularyEntry | null>(null);
   const [page, setPage] = useState(1);
-  const [reordering, setReordering] = useState(false);
-  const [reorderAnnouncement, setReorderAnnouncement] = useState("");
-
-  const [order, setOrder] = useState<Entity[]>([]);
-  const orderRef = useRef<Entity[]>([]);
-  const dragSlug = useRef<string | null>(null);
-  const dragStartOrder = useRef<Entity[]>([]);
-  const reorderRunning = useRef(false);
-  const reorderFeedbackId = useRef<number | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    if (reorderRunning.current || dragSlug.current) return;
-    const items = data?.items ?? [];
-    orderRef.current = items;
-    setOrder(items);
-  }, [data]);
   useEffect(() => {
     if (canDelete) return;
     setConfirmDelete(null);
@@ -129,29 +103,59 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
 
   const slugInvalid = slug.length > 0 && !slugPattern.test(slug);
   const slugError = slugInvalid ? slugFormatHint : createError;
-  const operationBusy = Boolean(mutation) || createAction.pending || reordering;
-
+  const externalBusy = Boolean(mutation) || createAction.pending;
   const pageSize = settingsData?.settings.admin.image_page_size ?? adminImagePageLimit;
-  const isFixedEntity = (item: Entity) => (
+  const isFixedVocabularyEntry = (item: VocabularyEntry) => (
     kind === "themes" && item.slug === "none"
   );
   // 主题页可隐藏钉住的「未设置 / none」占位卡片（设置页 admin 组的开关，默认显示）；其它类别无此卡片。
   // 只过滤展示用列表，order（含 none）保持完整，拖拽排序逻辑不受影响。
   const showUnsetCard = settingsData?.settings.admin.show_unset_theme_card ?? true;
+  const reorder = usePersistedReorder<VocabularyEntry>({
+    items: data?.items,
+    externalBusy,
+    getKey: (item) => item.slug,
+    isFixed: isFixedVocabularyEntry,
+    itemLabel: (items, movedSlug) => {
+      const item = items.find((candidate) => candidate.slug === movedSlug);
+      return `${copy.noun}“${item?.display_name || movedSlug}”`;
+    },
+    save: (slugs) => api(`${adminApiBasePath}/${kind}/reorder`, {
+      method: "POST",
+      body: JSON.stringify({ slugs })
+    }),
+    refresh,
+    readAuthoritative: () => {
+      const queryState = client.getQueryState(queryKey);
+      const cached = client.getQueryData<AdminEntityListResponseDto>(queryKey);
+      return cached
+        && queryState?.status === "success"
+        && !queryState.isInvalidated
+        ? cached.items
+        : null;
+    },
+    reportError: (stage, error) => reportAdminUiError(
+      `vocabulary_admin.${kind}.reorder${stage === "refresh" ? "_refresh" : ""}`,
+      error
+    ),
+    focus: {
+      itemKeys: (items) => (
+        kind === "themes" && !showUnsetCard
+          ? items.filter((item) => item.slug !== "none")
+          : items
+      ).map((item) => item.slug),
+      page,
+      pageSize,
+      onPageChange: setPage
+    }
+  });
+  const { order } = reorder;
+  const operationBusy = reorder.busy;
   const visibleItems = kind === "themes" && !showUnsetCard
     ? order.filter((item) => item.slug !== "none")
     : order;
   const totalPages = Math.max(1, Math.ceil(visibleItems.length / pageSize));
   const pageItems = visibleItems.slice((page - 1) * pageSize, page * pageSize);
-  const {
-    registerReorderControl,
-    requestReorderFocus
-  } = useReorderControlFocus({
-    itemSlugs: visibleItems.map((item) => item.slug),
-    page,
-    pageSize,
-    onPageChange: setPage
-  });
   useEffect(() => { setPage((current) => Math.min(current, totalPages)); }, [totalPages]);
 
   const create = async (event: FormEvent) => {
@@ -164,7 +168,7 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
     }
 
     setCreateError("");
-    setFeedback(null);
+    reorder.clearFeedback();
     await createAction.run(async () => {
       try {
         const body = isAuthor
@@ -180,7 +184,7 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
         await refresh();
         return true;
       } catch (error) {
-        reportAdminUiError(`entity_admin.${kind}.create`, error);
+        reportAdminUiError(`vocabulary_admin.${kind}.create`, error);
         setCreateError(
           isApiClientError(error) && (error.status === 409 || error.code.endsWith("_exists"))
             ? `该${copy.noun}已存在`
@@ -199,195 +203,11 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
       await refresh();
       return true;
     } catch (err) {
-      reportAdminUiError(`entity_admin.${kind}.delete`, err);
+      reportAdminUiError(`vocabulary_admin.${kind}.delete`, err);
       return false;
     } finally {
       setMutation("");
     }
-  };
-
-  const replaceOrder = (items: Entity[]) => {
-    orderRef.current = items;
-    setOrder(items);
-  };
-
-  const positionText = (items: Entity[], movedSlug: string) => {
-    const position = reorderPositionByKey(
-      items,
-      movedSlug,
-      (item) => item.slug,
-      isFixedEntity
-    );
-    return position
-      ? `可排序项第 ${position.position} / ${position.total} 位`
-      : "当前位置不可用";
-  };
-
-  const itemName = (items: Entity[], movedSlug: string) => {
-    const item = items.find((candidate) => candidate.slug === movedSlug);
-    return `${copy.noun}“${item?.display_name || movedSlug}”`;
-  };
-
-  const showReorderFeedback = (
-    text: string,
-    status: "pending" | "success" | "error"
-  ) => {
-    const nextFeedback = createActionFeedback(text, status);
-    reorderFeedbackId.current = nextFeedback.id;
-    setFeedback(nextFeedback);
-    setReorderAnnouncement(text);
-  };
-
-  const persistOrder = async ({
-    nextOrder,
-    previousOrder,
-    movedSlug,
-    focusDirection
-  }: {
-    nextOrder: Entity[];
-    previousOrder: Entity[];
-    movedSlug: string;
-    focusDirection: ReorderDirection | null;
-  }) => {
-    if (
-      reorderRunning.current
-      || mutation
-      || createAction.pending
-    ) return;
-
-    reorderRunning.current = true;
-    setReordering(true);
-    replaceOrder(nextOrder);
-    if (focusDirection) {
-      requestReorderFocus(movedSlug, focusDirection);
-    }
-    showReorderFeedback("正在保存排序...", "pending");
-
-    try {
-      let saveSucceeded = false;
-      try {
-        const slugs = nextOrder
-          .filter((item) => !isFixedEntity(item))
-          .map((item) => item.slug);
-        await api(`${adminApiBasePath}/${kind}/reorder`, {
-          method: "POST",
-          body: JSON.stringify({ slugs })
-        });
-        saveSucceeded = true;
-      } catch (error) {
-        reportAdminUiError(`entity_admin.${kind}.reorder`, error);
-      }
-
-      let authoritativeOrder = saveSucceeded ? nextOrder : previousOrder;
-      try {
-        await refresh();
-      } catch (error) {
-        reportAdminUiError(`entity_admin.${kind}.reorder_refresh`, error);
-      }
-
-      const queryState = client.getQueryState(queryKey);
-      const cached = client.getQueryData<AdminEntityListResponseDto>(queryKey);
-      const refreshed = Boolean(
-        cached
-        && queryState?.status === "success"
-        && !queryState.isInvalidated
-      );
-      if (refreshed && cached) {
-        authoritativeOrder = cached.items;
-      }
-
-      replaceOrder(authoritativeOrder);
-      if (focusDirection) {
-        requestReorderFocus(movedSlug, focusDirection);
-      }
-      const actualPosition = positionText(authoritativeOrder, movedSlug);
-      const label = itemName(authoritativeOrder, movedSlug);
-      const message = saveSucceeded
-        ? `${label}排序已保存，当前为${actualPosition}`
-        : refreshed && cached
-          ? `${label}排序保存失败，已按服务器顺序恢复到${actualPosition}`
-          : `${label}排序保存失败，已恢复到上次已知的${actualPosition}`;
-      showReorderFeedback(
-        message,
-        saveSucceeded ? "success" : "error"
-      );
-    } finally {
-      reorderRunning.current = false;
-      setReordering(false);
-    }
-  };
-
-  const moveByKeyboard = (
-    movedSlug: string,
-    direction: ReorderDirection
-  ) => {
-    if (operationBusy || reorderRunning.current) return;
-    const previousOrder = orderRef.current;
-    const result = reorderItemByDirection(
-      previousOrder,
-      movedSlug,
-      direction,
-      (item) => item.slug,
-      isFixedEntity
-    );
-    if (!result.moved) return;
-    void persistOrder({
-      nextOrder: result.items,
-      previousOrder,
-      movedSlug,
-      focusDirection: direction
-    });
-  };
-
-  const beginDrag = (movedSlug: string) => {
-    if (operationBusy || reorderRunning.current) return;
-    dragSlug.current = movedSlug;
-    dragStartOrder.current = orderRef.current;
-  };
-
-  const moveOver = (targetSlug: string) => {
-    const from = dragSlug.current;
-    if (!from || operationBusy || reorderRunning.current) return;
-    const result = reorderItemByKey(
-      orderRef.current,
-      from,
-      targetSlug,
-      (item) => item.slug,
-      isFixedEntity
-    );
-    if (result.moved) replaceOrder(result.items);
-  };
-
-  const finishDrag = () => {
-    const movedSlug = dragSlug.current;
-    dragSlug.current = null;
-    if (!movedSlug) return;
-    const previousOrder = dragStartOrder.current;
-    dragStartOrder.current = [];
-    const nextOrder = orderRef.current;
-    if (operationBusy || reorderRunning.current) {
-      replaceOrder(
-        client.getQueryData<AdminEntityListResponseDto>(queryKey)?.items
-          ?? previousOrder
-      );
-      return;
-    }
-    const changed = previousOrder.some(
-      (item, index) => item.slug !== nextOrder[index]?.slug
-    ) || previousOrder.length !== nextOrder.length;
-    if (!changed) {
-      replaceOrder(
-        client.getQueryData<AdminEntityListResponseDto>(queryKey)?.items
-          ?? previousOrder
-      );
-      return;
-    }
-    void persistOrder({
-      nextOrder,
-      previousOrder,
-      movedSlug,
-      focusDirection: null
-    });
   };
 
   return (
@@ -403,7 +223,7 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
         aria-live="polite"
         aria-atomic="true"
       >
-        {reorderAnnouncement}
+        {reorder.announcement}
       </p>
       <form className="admin-create-form" onSubmit={create}>
         <div className="admin-create-field entity-slug-field">
@@ -450,49 +270,44 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
           />
         </button>
       </form>
-      {feedback && (
+      {reorder.feedback && (
         <ActionFeedbackOutlet
-          feedback={feedback}
+          feedback={reorder.feedback}
           target={feedbackTarget}
-          announce={feedback.id !== reorderFeedbackId.current}
-          onClose={() => setFeedback(null)}
+          announce={false}
+          onClose={reorder.clearFeedback}
         />
       )}
       <div className="admin-scroll-region" ref={listRef}>
         <div className="entity-admin-grid entity-vocabulary-grid">
           {pageItems.map((item) => {
-            const position = reorderPositionByKey(
-              order,
-              item.slug,
-              (candidate) => candidate.slug,
-              isFixedEntity
-            );
+            const position = reorder.positionFor(item.slug);
             return (
-              <EntityAdminCard
+              <VocabularyAdminCard
                 key={item.slug}
                 kind={kind}
                 item={item}
-                pinned={isFixedEntity(item)}
+                pinned={isFixedVocabularyEntry(item)}
                 canDelete={canDelete}
                 reorderBusy={operationBusy}
                 canMovePrevious={Boolean(position && position.position > 1)}
                 canMoveNext={Boolean(
                   position && position.position < position.total
                 )}
-                onMove={(direction) => moveByKeyboard(item.slug, direction)}
+                onMove={(direction) => reorder.moveByKeyboard(item.slug, direction)}
                 onReorderControlRef={(direction, node) => {
-                  registerReorderControl(item.slug, direction, node);
+                  reorder.registerReorderControl(item.slug, direction, node);
                 }}
                 onChanged={() => void refresh()}
                 onDelete={() => setConfirmDelete(item)}
-                onError={(error) => reportAdminUiError(`entity_admin.${kind}.update`, error)}
-                onDragStart={beginDrag}
-                onDragEnter={moveOver}
-                onDragEnd={finishDrag}
+                onError={(error) => reportAdminUiError(`vocabulary_admin.${kind}.update`, error)}
+                onDragStart={reorder.beginDrag}
+                onDragEnter={reorder.moveOver}
+                onDragEnd={reorder.finishDrag}
               />
             );
           })}
-          {listFailed && <QueryErrorState error={listError} onRetry={() => void refetch()} reportContext={`entity_admin.${kind}.load`} />}
+          {listFailed && <QueryErrorState error={listError} onRetry={() => void refetch()} reportContext={`vocabulary_admin.${kind}.load`} />}
           {!listFailed && !order.length && !isFetching && <p className="muted">{copy.empty}</p>}
         </div>
       </div>

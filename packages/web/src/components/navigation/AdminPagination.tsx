@@ -10,7 +10,7 @@ import {
   resolveAdminPaginationCommit,
   shouldCommitAdminPaginationInput,
   shouldPreserveAdminPaginationInputFocus
-} from "./admin-pagination.js";
+} from "./admin-pagination-model.js";
 
 export function AdminPagination({
   page,

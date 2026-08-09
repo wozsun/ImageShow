@@ -8,9 +8,9 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import {
-  ActionFeedback,
-  type ActionFeedbackState
+  ActionFeedback
 } from "./ActionFeedback.js";
+import type { ActionFeedbackState } from "../../lib/ui/action-feedback.js";
 
 const actionFeedbackTargetBrand = Symbol("ActionFeedbackTarget");
 

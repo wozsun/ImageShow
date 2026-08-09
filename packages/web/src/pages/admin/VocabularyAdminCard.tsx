@@ -9,7 +9,7 @@ import { adminApiBasePath } from "../../lib/constants.js";
 import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
 import type { ReorderDirection } from "../../lib/ui/reorder.js";
 
-export function EntityAdminCard({ kind, item, onChanged, onDelete, onError, pinned = false, canDelete = false, reorderBusy, canMovePrevious, canMoveNext, onMove, onReorderControlRef, onDragStart, onDragEnter, onDragEnd }: {
+export function VocabularyAdminCard({ kind, item, onChanged, onDelete, onError, pinned = false, canDelete = false, reorderBusy, canMovePrevious, canMoveNext, onMove, onReorderControlRef, onDragStart, onDragEnter, onDragEnd }: {
   kind: "themes" | "tags" | "authors";
   item: AdminEntityDto;
   onChanged: () => void;

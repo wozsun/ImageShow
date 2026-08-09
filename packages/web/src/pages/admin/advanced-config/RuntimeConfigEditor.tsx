@@ -16,7 +16,7 @@ import { AsyncActionButton } from "../../../components/actions/AsyncActionButton
 import {
   createActionFeedback,
   type ActionFeedbackState
-} from "../../../components/feedback/ActionFeedback.js";
+} from "../../../lib/ui/action-feedback.js";
 import {
   ActionFeedbackOutlet,
   ActionFeedbackRegion,

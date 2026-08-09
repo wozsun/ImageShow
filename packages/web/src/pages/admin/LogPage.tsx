@@ -18,7 +18,7 @@ import type { SelectOption } from "../../lib/ui/select-options.js";
 import {
   createActionFeedback,
   type ActionFeedbackState
-} from "../../components/feedback/ActionFeedback.js";
+} from "../../lib/ui/action-feedback.js";
 import {
   ActionFeedbackOutlet,
   useActionFeedbackTarget

@@ -61,7 +61,7 @@ export const adminFoundationModuleSuffixes = [
   "/components/image/ThumbImage.tsx",
   "/components/layout/WorkspaceHeader.tsx",
   "/components/navigation/AdminPagination.tsx",
-  "/components/navigation/admin-pagination.ts",
+  "/components/navigation/admin-pagination-model.ts",
   "/hooks/useAdminPreferences.tsx",
   "/hooks/useAsyncActionStatus.ts",
   "/lib/api/admin-preference-cache.ts",
@@ -69,7 +69,8 @@ export const adminFoundationModuleSuffixes = [
   "/lib/api/image-edit.ts",
   "/lib/api/import-vocabulary.ts",
   "/lib/api/query-invalidation.ts",
-  "/lib/api/storage-options.ts"
+  "/lib/api/storage-options.ts",
+  "/lib/ui/action-feedback.ts"
 ] as const;
 
 export function matchesModuleSuffix(id: string, suffixes: readonly string[]) {
@@ -78,7 +79,7 @@ export function matchesModuleSuffix(id: string, suffixes: readonly string[]) {
 }
 
 const imageAdminStyleOwners = new Set([
-  "EntityAdmin",
+  "VocabularyAdmin",
   "ImageAdmin",
   "LinkUrlDialog",
   "Uploader"
@@ -177,7 +178,7 @@ const entryStyleAssetNames = new Map([
   ["LoginChallenge.css", "login-challenge"],
   ["Overview.css", "overview"],
   ["CheckPage.css", "check"],
-  ["entity.css", "entities"],
+  ["entity.css", "vocabulary"],
   ["SettingsPage.css", "site-settings"],
   ["AdvancedConfigPage.css", "advanced-config"],
   ["StorageSettings.css", "storage"],
@@ -212,7 +213,7 @@ const entryJavaScriptAssetNames = new Map([
   ["LinkUrlDialog", "link-import"],
   ["BatchStorageMigrationDialog", "storage-migration"],
   ["AccountSettings", "account"],
-  ["EntityAdmin", "entities"],
+  ["VocabularyAdmin", "vocabulary"],
   ["SettingsPage", "site-settings"],
   ["AdvancedConfigPage", "advanced-config"],
   ["StorageSettings", "storage"],
@@ -228,7 +229,7 @@ export function javaScriptAssetName(entryName: string) {
 export const webBuildAssetContract = {
   requiredEntryCssPrefixes: [
     "app-core", "home", "gallery", "admin-core", "images", "upload",
-    "login", "login-challenge", "overview", "check", "entities",
+    "login", "login-challenge", "overview", "check", "vocabulary",
     "site-settings", "advanced-config", "storage", "log"
   ],
   requiredSharedCssPrefixes: [
@@ -240,7 +241,7 @@ export const webBuildAssetContract = {
     "app", "home", "gallery", "admin", "admin-app", "login",
     "login-challenge", "overview", "images", "image-management",
     "image-editor", "upload", "link-import", "storage-migration", "account",
-    "entities", "site-settings", "advanced-config", "storage", "users",
+    "vocabulary", "site-settings", "advanced-config", "storage", "users",
     "check", "log", "pbkdf2", "app-foundation", "admin-auth-shared",
     "admin-foundation", "query-vendor", "react-vendor"
   ],

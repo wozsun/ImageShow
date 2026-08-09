@@ -1,0 +1,168 @@
+import type { RefObject } from "react";
+import type { GalleryFacetsDto } from "@imageshow/shared/browser";
+import { CopyButton } from "../../components/actions/CopyButton.js";
+import { FacetSelector } from "../../components/data-display/FacetSelector.js";
+import { SelectMenu } from "../../components/form/SelectMenu.js";
+import { Icon } from "../../components/icon/Icon.js";
+import { AnchoredMenuDismissSignalContext } from "../../hooks/useAnchoredMenu.js";
+import { useOneShotAnimation } from "../../hooks/useOneShotAnimation.js";
+import type { GalleryFilters } from "../../lib/gallery/gallery-query.js";
+import {
+  brightnessOptionLabel,
+  deviceOptionLabel
+} from "../../lib/ui/select-options.js";
+
+export function GalleryToolbar({
+  filters,
+  facets,
+  randomUrl,
+  filtersOpen,
+  filterPanelHidden,
+  filterMenuDismissSignal,
+  toolbarVisible,
+  toolbarRef,
+  filterToggleRef,
+  filterPanelRef,
+  toggleFilters,
+  onFilterChange
+}: {
+  filters: GalleryFilters;
+  facets: GalleryFacetsDto | undefined;
+  randomUrl: string;
+  filtersOpen: boolean;
+  filterPanelHidden: boolean | undefined;
+  filterMenuDismissSignal: number;
+  toolbarVisible: boolean;
+  toolbarRef: RefObject<HTMLElement | null>;
+  filterToggleRef: RefObject<HTMLButtonElement | null>;
+  filterPanelRef: RefObject<HTMLDivElement | null>;
+  toggleFilters: () => void;
+  onFilterChange: (key: keyof GalleryFilters, value: string) => void;
+}) {
+  const entrance = useOneShotAnimation(true);
+  const activeFilterCount = [
+    filters.device,
+    filters.brightness,
+    filters.theme,
+    filters.tag,
+    filters.author
+  ].filter(Boolean).length;
+
+  return (
+    <section
+      ref={toolbarRef}
+      className={`gallery-toolbar public-navigation-secondary${entrance.active ? " is-gallery-toolbar-entrance" : ""}${filtersOpen ? " filters-open" : ""}${toolbarVisible ? "" : " is-scroll-hidden"}`}
+      inert={!toolbarVisible}
+      onAnimationEnd={(event) => {
+        if (
+          event.currentTarget === event.target
+          && event.animationName === "gallery-toolbar-entrance"
+        ) {
+          entrance.finish();
+        }
+      }}
+    >
+      <button
+        ref={filterToggleRef}
+        type="button"
+        className="gallery-filter-toggle"
+        aria-expanded={filtersOpen}
+        aria-controls="gallery-filter-panel"
+        onClick={toggleFilters}
+      >
+        <Icon name="filter-3-line" />
+        筛选
+        {activeFilterCount > 0 && (
+          <span className="gallery-filter-count">{activeFilterCount}</span>
+        )}
+        <span className="gallery-filter-chevron">
+          <Icon name="arrow-down-s-line" />
+        </span>
+      </button>
+      <AnchoredMenuDismissSignalContext.Provider value={filterMenuDismissSignal}>
+        <div
+          ref={filterPanelRef}
+          id="gallery-filter-panel"
+          className="gallery-filter-panel"
+          role="group"
+          aria-label="画廊筛选条件"
+          aria-hidden={filterPanelHidden}
+          inert={filterPanelHidden}
+        >
+          <label className="gallery-axis">
+            设备
+            <SelectMenu
+              value={filters.device}
+              onChange={(value) => onFilterChange("device", value)}
+              options={[
+                { value: "", label: "全部设备" },
+                { value: "r", label: "强制随机" },
+                ...(facets?.devices ?? ["pc", "mb"]).map((value) => ({
+                  value,
+                  label: deviceOptionLabel(value)
+                }))
+              ]}
+              ariaLabel="设备"
+              menuClassName="public-gallery-menu"
+            />
+          </label>
+          <label className="gallery-axis">
+            亮度
+            <SelectMenu
+              value={filters.brightness}
+              onChange={(value) => onFilterChange("brightness", value)}
+              options={[
+                { value: "", label: "全部亮度" },
+                ...(facets?.brightnesses ?? ["light", "dark"]).map((value) => ({
+                  value,
+                  label: brightnessOptionLabel(value)
+                }))
+              ]}
+              ariaLabel="亮度"
+              menuClassName="public-gallery-menu"
+            />
+          </label>
+          <label className="gallery-theme-filter">
+            主题
+            <FacetSelector
+              options={facets?.themes ?? []}
+              value={filters.theme}
+              onChange={(value) => onFilterChange("theme", value)}
+              noun="主题"
+              menuClassName="public-gallery-menu"
+            />
+          </label>
+          <label className="gallery-tag-filter">
+            标签
+            <FacetSelector
+              options={facets?.tags ?? []}
+              value={filters.tag}
+              onChange={(value) => onFilterChange("tag", value)}
+              noun="标签"
+              menuClassName="public-gallery-menu"
+            />
+          </label>
+          <label className="gallery-author-filter">
+            作者
+            <FacetSelector
+              options={facets?.authors ?? []}
+              value={filters.author}
+              onChange={(value) => onFilterChange("author", value)}
+              noun="作者"
+              menuClassName="public-gallery-menu"
+            />
+          </label>
+          <div className="theme-link">
+            <span>随机图片API</span>
+            <div className="theme-link-row">
+              <div className="generated-link-field">
+                <code>{randomUrl}</code>
+                <CopyButton value={randomUrl} ariaLabel="复制随机图片链接" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </AnchoredMenuDismissSignalContext.Provider>
+    </section>
+  );
+}

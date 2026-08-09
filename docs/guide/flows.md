@@ -1231,7 +1231,7 @@ HTTP 缓存按 CDN 友好但不泄露私有数据分层：
   `Accept-Encoding` 选择并附带 `Vary`，同时支持 ETag / Last-Modified 条件请求。
   CSS 按真实加载边界输出：`app-core-*`、`public-common-*` 与 `admin-core-*` 只表示
   真正的全站、公开域和后台域共享层；页面专属产物直接使用 `home-*`、`gallery-*`、
-  `login-*`、`overview-*`、`check-*`、`images-*`、`entities-*`、`site-settings-*`、
+  `login-*`、`overview-*`、`check-*`、`images-*`、`vocabulary-*`、`site-settings-*`、
   `advanced-config-*`、`storage-*` 与 `log-*`，不重复附加权限前缀。上传、登录验证和
   跨前后台图片能力分别使用 `upload-*`、`login-challenge-*`、`image-detail-*`、
   `image-management-*`、`image-editor-*`、`image-workflow-*` 与
