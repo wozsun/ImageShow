@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router";
 import { AdminIcon, type AdminIconName } from "../../components/icon/AdminIcon.js";
+import { preloadIntentProps } from "../../lib/ui/preload-intent.js";
 import {
   preloadAdminRouteModule,
   type AdminRouteModuleKey
@@ -38,9 +39,7 @@ export function AdminNavGroup({ icon, label, items, defaultOpen = false }: {
         <button
           type="button"
           className="admin-nav-group-main"
-          onPointerEnter={preloadFirst}
-          onFocus={preloadFirst}
-          onPointerDown={preloadFirst}
+          {...preloadIntentProps(preloadFirst)}
           onClick={enter}
         >
           <AdminIcon name={icon} />
@@ -65,9 +64,7 @@ export function AdminNavGroup({ icon, label, items, defaultOpen = false }: {
                 key={item.to}
                 to={item.to}
                 end={item.end}
-                onPointerEnter={preload}
-                onFocus={preload}
-                onPointerDown={preload}
+                {...preloadIntentProps(preload)}
                 className={({ isActive }) => isActive ? "active" : ""}
               >
                 {item.label}

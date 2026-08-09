@@ -23,6 +23,7 @@ import {
 } from "../../lib/constants.js";
 import { queryKeys } from "../../lib/api/query-keys.js";
 import { imageDisplayTitle } from "../../lib/ui/formatters.js";
+import { preloadIntentProps } from "../../lib/ui/preload-intent.js";
 import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
 import { useAdminSettings } from "../../lib/api/admin-settings.js";
 import { useImportVocabulary } from "../../lib/api/import-vocabulary.js";
@@ -242,6 +243,10 @@ export function ImageAdmin() {
     setSelected([]);
     setCursorHistory((current) => current.length > 1 ? current.slice(0, -1) : current);
   }, [data, isFetching, pageNumber, totalPages]);
+  const preloadBatchEditor = () => editorCapability.preload({
+    kind: "batch",
+    sources: selectedItems
+  });
   const confirmCopy = imageAdminConfirmationCopy(confirmAction);
   return (
     <section className="workspace workspace-paged">
@@ -342,18 +347,7 @@ export function ImageAdmin() {
                   aria-busy={
                     editorCapability.pending?.kind === "batch" || undefined
                   }
-                  onPointerEnter={() => editorCapability.preload({
-                    kind: "batch",
-                    sources: selectedItems
-                  })}
-                  onFocus={() => editorCapability.preload({
-                    kind: "batch",
-                    sources: selectedItems
-                  })}
-                  onPointerDown={() => editorCapability.preload({
-                    kind: "batch",
-                    sources: selectedItems
-                  })}
+                  {...preloadIntentProps(preloadBatchEditor)}
                   onClick={(event) => {
                     void editorCapability.open({
                       kind: "batch",

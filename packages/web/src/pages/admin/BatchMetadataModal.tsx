@@ -19,6 +19,7 @@ import {
   createPageLifetimeModuleLoader
 } from "../../lib/page-lifetime-module-loader.js";
 import { facetDisplayName, formatBytes, formatDimensions, shortImageId } from "../../lib/ui/formatters.js";
+import { preloadIntentProps } from "../../lib/ui/preload-intent.js";
 import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
 import { batchCommonBrightnessOptions, batchCommonDeviceOptions, cardBrightnessSelectOptions, editCardDeviceSelectOptions } from "../../lib/ui/select-options.js";
 import { storageNameResolver, useStorageOptions } from "../../lib/api/storage-options.js";
@@ -487,9 +488,7 @@ export function BatchMetadataModal({
                   className="batch-edit-migrate-trigger"
                   type="button"
                   disabled={busy || !activeItems.length}
-                  onPointerEnter={preloadBatchStorageMigrationDialog}
-                  onPointerDown={preloadBatchStorageMigrationDialog}
-                  onFocus={preloadBatchStorageMigrationDialog}
+                  {...preloadIntentProps(preloadBatchStorageMigrationDialog)}
                   onClick={() => setMigrating(true)}
                 >
                   <AdminIcon name="arrow-left-right-line" />{single ? "迁移存储" : "批量迁移存储"}

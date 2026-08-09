@@ -5,6 +5,7 @@ import { MenuItemButton } from "../../../../components/feedback/MenuItemButton.j
 import { AdminIcon } from "../../../../components/icon/AdminIcon.js";
 import { useAnchoredMenu } from "../../../../hooks/useAnchoredMenu.js";
 import type { AnchoredMenuSize } from "../../../../lib/ui/menu-position.js";
+import { preloadIntentProps } from "../../../../lib/ui/preload-intent.js";
 
 const IMPORT_MENU_SIZE: AnchoredMenuSize = {
   minWidth: 0,
@@ -123,9 +124,7 @@ export function LinkImportSplitButton({
         type="button"
         disabled={pending}
         aria-busy={pending || undefined}
-        onPointerEnter={onPreloadWorkflow}
-        onFocus={onPreloadWorkflow}
-        onPointerDown={onPreloadWorkflow}
+        {...preloadIntentProps(onPreloadWorkflow)}
         onClick={(event) => onOpenWorkflow(event.currentTarget)}
       >
         <AdminIcon name="download-cloud-2-line" />导入图片

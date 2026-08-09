@@ -7,6 +7,7 @@ import {
   formatImageClassification,
   imageDisplayTitle
 } from "../../lib/ui/formatters.js";
+import { preloadIntentProps } from "../../lib/ui/preload-intent.js";
 
 type AdminImageCardProps = {
   item: ImageItem;
@@ -78,9 +79,7 @@ export function AdminImageCard({
         disabled={busy || detailDisabled || detailPending}
         aria-busy={detailPending || undefined}
         aria-label={`查看图片详情：${title}`}
-        onPointerEnter={onPreloadDetail}
-        onFocus={onPreloadDetail}
-        onPointerDown={onPreloadDetail}
+        {...preloadIntentProps(onPreloadDetail)}
         onClick={(event) => onDetail(event.currentTarget)}
       >
         <span className="admin-image-card-thumb">
@@ -111,9 +110,7 @@ export function AdminImageCard({
                 aria-label={`编辑图片：${title}`}
                 aria-busy={editPending || undefined}
                 disabled={busy || editDisabled || editPending}
-                onPointerEnter={onPreloadEdit}
-                onFocus={onPreloadEdit}
-                onPointerDown={onPreloadEdit}
+                {...preloadIntentProps(onPreloadEdit)}
                 onClick={(event) => onEdit(event.currentTarget)}
               >
                 <AdminIcon name="pencil-line" />

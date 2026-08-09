@@ -1,4 +1,5 @@
 import { AdminIcon } from "../../../components/icon/AdminIcon.js";
+import { preloadIntentProps } from "../../../lib/ui/preload-intent.js";
 import { LinkImportSplitButton } from "./link-import/LinkImportSplitButton.js";
 
 export function UploaderTriggers({
@@ -36,9 +37,7 @@ export function UploaderTriggers({
         type="button"
         disabled={pending}
         aria-busy={pending || undefined}
-        onPointerEnter={onPreloadWorkflow}
-        onFocus={onPreloadWorkflow}
-        onPointerDown={onPreloadWorkflow}
+        {...preloadIntentProps(onPreloadWorkflow)}
         onClick={(event) => onOpenFiles(event.currentTarget)}
       >
         <AdminIcon name="upload-cloud-2-line" />上传图片

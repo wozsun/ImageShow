@@ -61,6 +61,7 @@ const appFoundationModuleSuffixes = [
   "/lib/ui/clipboard.ts",
   "/lib/ui/error-reporting.ts",
   "/lib/ui/formatters.ts",
+  "/lib/ui/preload-intent.ts",
   "/lib/ui/select-options.ts"
 ] as const;
 

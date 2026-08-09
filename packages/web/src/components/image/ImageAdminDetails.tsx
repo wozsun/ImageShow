@@ -24,6 +24,7 @@ import {
   type ImageEditorTarget
 } from "../../lib/image-editor-capability-loader.js";
 import { errorMessage, formatDate } from "../../lib/ui/formatters.js";
+import { preloadIntentProps } from "../../lib/ui/preload-intent.js";
 import { storageBackendLabel } from "../../lib/ui/select-options.js";
 import { useImageEditorCapability } from "../../hooks/useImageEditorCapability.js";
 import { Icon } from "../icon/Icon.js";
@@ -329,9 +330,7 @@ export function ImageAdminDetails({
           type="button"
           className="image-detail-admin-toggle pressable"
           aria-expanded={expanded}
-          onPointerEnter={prefetchAdminInfo}
-          onFocus={prefetchAdminInfo}
-          onPointerDown={prefetchAdminInfo}
+          {...preloadIntentProps(prefetchAdminInfo)}
           onClick={() => setExpanded((current) => !current)}
         >
           <span aria-hidden="true">{expanded ? "▾" : "▸"}</span>
@@ -345,9 +344,7 @@ export function ImageAdminDetails({
             title="编辑图片"
             aria-busy={editPending || undefined}
             disabled={editPending}
-            onPointerEnter={prefetchEdit}
-            onFocus={prefetchEdit}
-            onPointerDown={prefetchEdit}
+            {...preloadIntentProps(prefetchEdit)}
             onClick={(event) => openEdit(event.currentTarget)}
           >
             <Icon name="pencil-line" />

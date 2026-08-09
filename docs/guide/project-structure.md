@@ -131,7 +131,10 @@ hooks ──► lib
 - `lib/` 保存无界面代码；HTTP 客户端、query key 和共享查询 Hook 集中在 `lib/api/`。
   首页与画廊的主导航滚动阈值由 `lib/ui/public-navigation.ts` 统一定义；共享公开端
   入场缓动与首页导航淡入时长由 `styles/base.css` 的 motion token 提供，页面样式
-  只保留自身阶段和区块时长。
+  只保留自身阶段和区块时长。`lib/ui/preload-intent.ts` 将普通交互元素的鼠标悬浮、
+  键盘聚焦和指针按下统一映射到同一被动预加载动作；接管指针激活生命周期的控件
+  仍就近使用捕获阶段事件，公共能力不改变模块、查询或业务激活的所有权。该极小
+  跨页面机制归入 `app-foundation`，不产生独立微型请求，也不反向引入后台实现。
 - `pages/` 保存路由页面与页面级编排，页面专属组件、状态机和 Hook 就近维护。
 - `AppRoutes.tsx` 将普通与嵌入路径映射到同一 `HomePage` / `GalleryPage`；页面参数只
   决定是否挂载主导航，不能复制公开页实现或以 CSS 隐藏导航。服务端仍独立决定嵌入

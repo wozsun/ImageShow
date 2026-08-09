@@ -6,6 +6,7 @@ import type {
 } from "@imageshow/shared/browser";
 import { AdminIcon, type AdminIconName } from "../../components/icon/AdminIcon.js";
 import { adminBasePath } from "../../lib/constants.js";
+import { preloadIntentProps } from "../../lib/ui/preload-intent.js";
 import { AdminNavGroup } from "./AdminNavGroup.js";
 import {
   preloadAdminRouteModule,
@@ -211,9 +212,7 @@ function NavigationLink({
     <NavLink
       to={item.to}
       end={item.end}
-      onPointerEnter={preload}
-      onFocus={preload}
-      onPointerDown={preload}
+      {...preloadIntentProps(preload)}
       className={({ isActive }) => [
         variant === "desktop" ? item.desktopClassName : "",
         isActive ? "active" : ""

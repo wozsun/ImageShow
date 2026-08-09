@@ -14,6 +14,7 @@ import {
   useAdminCheckStatus
 } from "../../lib/api/ready-image-cache.js";
 import { formatBytes } from "../../lib/ui/formatters.js";
+import { preloadIntentProps } from "../../lib/ui/preload-intent.js";
 import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
 import { useAdminImageDetailCapability } from "../../hooks/useAdminImageDetailCapability.js";
@@ -190,9 +191,7 @@ export function Overview({ canManageStorage }: { canManageStorage: boolean }) {
                     aria-busy={detailCapability.pendingItemId === img.id || undefined}
                     aria-label={`查看图片详情：${img.title || img.id}`}
                     title={img.title || img.id}
-                    onPointerEnter={detailCapability.preload}
-                    onFocus={detailCapability.preload}
-                    onPointerDown={detailCapability.preload}
+                    {...preloadIntentProps(detailCapability.preload)}
                     onClick={(event) => {
                       setDetailLoadError("");
                       void detailCapability.open(img, event.currentTarget);

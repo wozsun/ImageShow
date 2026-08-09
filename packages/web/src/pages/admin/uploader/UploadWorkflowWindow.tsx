@@ -21,6 +21,7 @@ import {
   type SelectOption
 } from "../../../lib/ui/select-options.js";
 import { copyTextToClipboard } from "../../../lib/ui/clipboard.js";
+import { preloadIntentProps } from "../../../lib/ui/preload-intent.js";
 import type { FacetOption, ImageDraft, ImageItem, ImportJob } from "../../../lib/types.js";
 import type { ImportAttributeDefaults } from "../../../lib/upload/upload-utils.js";
 import type { ImportPreviewTarget } from "./DuplicateMatchPanel.js";
@@ -274,9 +275,7 @@ export function UploadWorkflowWindow({
                       type="button"
                       className="upload-source-option pressable"
                       disabled={busy || linkInputPending}
-                      onPointerEnter={onPreloadLinkInput}
-                      onFocus={onPreloadLinkInput}
-                      onPointerDown={onPreloadLinkInput}
+                      {...preloadIntentProps(onPreloadLinkInput)}
                       onClick={() => onOpenLinkInput(inputMode)}
                     >
                       {label}
@@ -404,9 +403,7 @@ export function UploadWorkflowWindow({
               type="button"
               className="empty-state upload-dropzone"
               disabled={linkInputPending}
-              onPointerEnter={onPreloadLinkInput}
-              onFocus={onPreloadLinkInput}
-              onPointerDown={onPreloadLinkInput}
+              {...preloadIntentProps(onPreloadLinkInput)}
               onClick={() => onOpenLinkInput("urls")}
             >
               <AdminIcon name="download-cloud-2-line" />
