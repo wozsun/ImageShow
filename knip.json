@@ -4,9 +4,6 @@
     ".": {
       "entry": ["scripts/verify/*.mjs"]
     },
-    "packages/shared": {
-      "ignoreBinaries": ["tsc"]
-    },
     "packages/server": {
       "entry": ["src/healthcheck-cli.ts"]
     },
