@@ -30,6 +30,36 @@
   background: var(--admin-color-preview-close-surface);
 }
 
+.image-workflow-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: var(--admin-card-grid-gap);
+}
+
+.image-workflow-window > .image-workflow-footer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: 16px;
+}
+.image-workflow-window > .image-workflow-footer > .image-workflow-leading-actions {
+  grid-column: 1;
+  justify-self: start;
+  min-width: 0;
+}
+.image-workflow-window > .image-workflow-footer > .image-workflow-pagination {
+  grid-column: 2;
+  justify-self: center;
+  margin: 0;
+}
+.image-workflow-window > .image-workflow-footer > .modal-footer-actions {
+  grid-column: 3;
+  justify-self: end;
+  min-width: 0;
+}
+.image-workflow-pagination button { min-height: 38px; }
+
 .image-fields { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
 .image-fields-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: start; }
 
@@ -136,6 +166,42 @@
 }
 
 @media (max-width: 760px) {
+  .image-workflow-list {
+    min-height: 0;
+    padding: 10px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .image-workflow-window > .image-workflow-footer {
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 8px;
+    row-gap: 8px;
+  }
+  .image-workflow-window > .image-workflow-footer.has-pagination > .image-workflow-leading-actions,
+  .image-workflow-window > .image-workflow-footer.has-pagination > .modal-footer-actions {
+    grid-row: 2;
+  }
+  .image-workflow-window > .image-workflow-footer > .image-workflow-leading-actions {
+    grid-column: 1;
+  }
+  .image-workflow-window > .image-workflow-footer > .modal-footer-actions {
+    grid-column: 2;
+  }
+  .image-workflow-window > .image-workflow-footer > .image-workflow-pagination {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    width: 100%;
+    min-width: 0;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--admin-color-border-default);
+  }
+  .image-workflow-pagination button {
+    min-height: 44px;
+    flex: 1;
+  }
+
   .image-fields-primary {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));

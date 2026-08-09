@@ -319,7 +319,7 @@ export function ImageAdminDetails({
     void queryClient.prefetchQuery(adminInfoOptions);
   };
   const MetadataEditorModal =
-    editorCapability.session?.module.BatchMetadataModal;
+    editorCapability.session?.module.ImageMetadataEditorDialog;
   const editItem = editorCapability.session?.items[0];
 
   return (
@@ -384,16 +384,16 @@ export function ImageAdminDetails({
       )}
       {editorCapability.session && MetadataEditorModal && editItem && (
         <MetadataEditorModal
-          items={[editItem]}
-          pageSize={1}
-          title="编辑图片"
-          showBatchControls={false}
+          mode={{
+            kind: "single",
+            item: editItem,
+            onDeleted: refreshAfterDelete
+          }}
           themes={editorCapability.session.vocabulary.themes}
           allTags={editorCapability.session.vocabulary.tags}
           authors={editorCapability.session.vocabulary.authors}
           onClose={closeEdit}
           onSaved={refreshAfterSave}
-          onDeleted={refreshAfterDelete}
           onStorageMigrationSucceeded={setEditNotice}
           returnFocusRef={editorCapability.returnFocusRef}
         />

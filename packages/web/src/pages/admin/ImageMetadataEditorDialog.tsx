@@ -67,24 +67,29 @@ function emptyCommonAttributes() {
   };
 }
 
-export function BatchMetadataModal({
-  items,
-  pageSize,
-  title,
-  showBatchControls,
+export type ImageMetadataEditorMode =
+  | {
+      kind: "single";
+      item: BatchEditableImageSnapshot;
+      onDeleted: (imageId: string) => void | Promise<void>;
+    }
+  | {
+      kind: "batch";
+      items: BatchEditableImageSnapshot[];
+      pageSize: number;
+    };
+
+export function ImageMetadataEditorDialog({
+  mode,
   themes,
   allTags,
   authors,
   onClose,
   onSaved,
-  onDeleted,
   onStorageMigrationSucceeded,
   returnFocusRef
 }: {
-  items: BatchEditableImageSnapshot[];
-  pageSize: number;
-  title: string;
-  showBatchControls: boolean;
+  mode: ImageMetadataEditorMode;
   themes: FacetOption[];
   allTags: FacetOption[];
   authors: FacetOption[];
@@ -92,10 +97,14 @@ export function BatchMetadataModal({
   onSaved: (
     authoritativeItems?: BatchEditableImageSnapshot[] | null
   ) => void | Promise<void>;
-  onDeleted?: (imageId: string) => void | Promise<void>;
   onStorageMigrationSucceeded?: (message: string) => void;
   returnFocusRef?: RefObject<HTMLElement | null>;
 }) {
+  const singleMode = mode.kind === "single";
+  const batchMode = mode.kind === "batch";
+  const items = singleMode ? [mode.item] : mode.items;
+  const pageSize = singleMode ? 1 : mode.pageSize;
+  const title = singleMode ? "编辑图片" : "批量编辑图片";
   const listRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const restoreTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -137,8 +146,9 @@ export function BatchMetadataModal({
   const resolveStorageName = storageNameResolver(storageOptionsData?.backends ?? []);
   const activeIdSet = new Set(session.activeIds);
   const activeItems = session.baselineItems.filter((item) => activeIdSet.has(item.id));
-  const deleteAvailable = activeItems.length === 1 && Boolean(onDeleted);
+  const deleteAvailable = singleMode && activeItems.length === 1;
   const totalPages = Math.max(1, Math.ceil(activeItems.length / pageSize));
+  const paginationAvailable = batchMode && totalPages > 1;
   const visibleItems = activeItems.slice((page - 1) * pageSize, page * pageSize);
   useEffect(() => setPage((current) => Math.min(current, totalPages)), [totalPages]);
   const patchDraft = (id: string, patch: Partial<ImageDraft>) => setSession((current) => ({
@@ -170,7 +180,9 @@ export function BatchMetadataModal({
     success: { icon: "check-line", label: "保存成功" },
     error: { icon: "close-line", label: "保存失败" }
   } as const;
-  const modalSubtitle = `${activeItems.length} 张图片`;
+  const modalSubtitle = singleMode
+    ? (activeItems[0]?.object_key ?? "")
+    : `${activeItems.length} 张图片`;
 
   const commonChanged = { device: common.device !== "", brightness: common.brightness !== "", theme: common.theme.trim() !== "", author: common.author.trim() !== "", tags: common.tags.length > 0 };
   const commonHasValue = commonChanged.device || commonChanged.brightness || commonChanged.theme || commonChanged.author || commonChanged.tags;
@@ -228,7 +240,7 @@ export function BatchMetadataModal({
   };
   const deleteSingleImage = async (requestClose: () => void) => {
     const item = activeItems[0];
-    if (!deleteAvailable || !item || !onDeleted || busy) return;
+    if (!deleteAvailable || !item || mode.kind !== "single" || busy) return;
 
     const deleted = await deleteStatus.run(async () => {
       setDeleteError("");
@@ -243,7 +255,7 @@ export function BatchMetadataModal({
       // 删除已经由服务端提交后，刷新失败不能诱导用户再次执行 mutation。
       // 各入口在这里补齐自己的列表并关闭详情，异常只单独记录。
       try {
-        await onDeleted?.(item.id);
+        await mode.onDeleted(item.id);
       } catch (refreshError) {
         reportAdminUiError(
           "image_metadata.single_delete_refresh",
@@ -272,7 +284,7 @@ export function BatchMetadataModal({
       {({ requestClose }) => (
       <>
       <form
-        className="batch-edit-modal"
+        className={`batch-edit-modal image-workflow-window${singleMode ? " is-single" : ""}`}
         tabIndex={-1}
         onSubmit={async (event) => {
           event.preventDefault();
@@ -283,7 +295,7 @@ export function BatchMetadataModal({
         <header>
           <div>
             <h2>{title}</h2>
-            <p>{modalSubtitle}</p>
+            <p title={singleMode ? modalSubtitle : undefined}>{modalSubtitle}</p>
           </div>
           <div className="batch-edit-header-actions">
             <button
@@ -311,7 +323,7 @@ export function BatchMetadataModal({
             </button>
           </div>
         </header>
-        {showBatchControls && (
+        {batchMode && (
           <WorkflowCollapsePanel
             className="batch-edit-common-panel"
             contentClassName="batch-edit-common workflow-defaults"
@@ -367,7 +379,10 @@ export function BatchMetadataModal({
             />
           </WorkflowCollapsePanel>
         )}
-        <div className="modal-scroll-list batch-edit-list" ref={listRef}>
+        <div
+          className="modal-scroll-list image-workflow-list batch-edit-list"
+          ref={listRef}
+        >
           {deleteError && (
             <p className="batch-edit-delete-error" role="alert">
               {deleteError}
@@ -407,7 +422,7 @@ export function BatchMetadataModal({
                         {item.image_size ? formatBytes(item.image_size) : "大小未记录"} · {resolveStorageName(item)}
                       </span>
                     </div>
-                    {showBatchControls && (
+                    {batchMode && (
                       <button
                         className="icon danger-button"
                         type="button"
@@ -437,19 +452,9 @@ export function BatchMetadataModal({
           })}
           {!activeItems.length && <p className="empty-state">批量编辑列表为空</p>}
         </div>
-        {showBatchControls && (
-          <AdminPagination
-            className="batch-edit-pagination"
-            ariaLabel="批量编辑分页"
-            page={page}
-            totalPages={totalPages}
-            disabled={busy}
-            onPageChange={setPage}
-          />
-        )}
-        <footer>
+        <footer className={`image-workflow-footer${paginationAvailable ? " has-pagination" : ""}`}>
           {(canMigrateStorage || deleteAvailable) && (
-            <div className="batch-edit-resource-actions">
+            <div className="batch-edit-resource-actions image-workflow-leading-actions">
               {canMigrateStorage && (
                 <button
                   ref={migrateTriggerRef}
@@ -459,7 +464,7 @@ export function BatchMetadataModal({
                   {...preloadIntentProps(preloadBatchStorageMigrationDialog)}
                   onClick={() => setMigrating(true)}
                 >
-                  <AdminIcon name="arrow-left-right-line" />{showBatchControls ? "批量迁移存储" : "迁移存储"}
+                  <AdminIcon name="arrow-left-right-line" />{batchMode ? "批量迁移存储" : "迁移存储"}
                 </button>
               )}
               {deleteAvailable && (
@@ -477,9 +482,9 @@ export function BatchMetadataModal({
               )}
             </div>
           )}
-          {showBatchControls && (
+          {paginationAvailable && (
             <AdminPagination
-              className="batch-edit-footer-pagination"
+              className="image-workflow-pagination"
               ariaLabel="批量编辑分页"
               page={page}
               totalPages={totalPages}
@@ -490,7 +495,7 @@ export function BatchMetadataModal({
           <div className="modal-footer-actions">
             <button type="button" disabled={busy} onClick={() => requestClose()}>取消</button>
             <AsyncActionButton
-              className="button workflow-submit-button batch-edit-save-button"
+              className={`button workflow-submit-button${batchMode ? " batch-edit-save-button" : ""}`}
               type="submit"
               status={saveStatus.status}
               presentation={savePresentation}
@@ -506,7 +511,7 @@ export function BatchMetadataModal({
             open
             imageIds={activeItems.map((item) => item.id)}
             currentStorageSlugs={activeItems.map((item) => item.storage_slug)}
-            single={!showBatchControls}
+            single={singleMode}
             returnFocusRef={migrateTriggerRef}
             onClose={() => setMigrating(false)}
             onSaved={onSaved}

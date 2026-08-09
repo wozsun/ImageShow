@@ -713,24 +713,26 @@ export function ImageAdmin() {
         />
       )}
       {editorCapability.session && (
-        <editorCapability.session.module.BatchMetadataModal
-          items={editorCapability.session.items}
-          pageSize={editPageSize}
-          title={editorCapability.session.kind === "single"
-            ? "编辑图片"
-            : "批量编辑图片"}
-          showBatchControls={editorCapability.session.kind === "batch"}
+        <editorCapability.session.module.ImageMetadataEditorDialog
+          mode={editorCapability.session.kind === "single"
+            ? {
+                kind: "single",
+                item: editorCapability.session.items[0],
+                onDeleted: async () => {
+                  await refresh();
+                  showFeedback("图片已移入回收站", "success");
+                }
+              }
+            : {
+                kind: "batch",
+                items: editorCapability.session.items,
+                pageSize: editPageSize
+              }}
           themes={editorCapability.session.vocabulary.themes}
           allTags={editorCapability.session.vocabulary.tags}
           authors={editorCapability.session.vocabulary.authors}
           onClose={editorCapability.close}
           onSaved={refresh}
-          onDeleted={editorCapability.session.kind === "single"
-            ? async () => {
-                await refresh();
-                showFeedback("图片已移入回收站", "success");
-              }
-            : undefined}
           onStorageMigrationSucceeded={(message) => showFeedback(message, "success")}
           returnFocusRef={editorCapability.returnFocusRef}
         />

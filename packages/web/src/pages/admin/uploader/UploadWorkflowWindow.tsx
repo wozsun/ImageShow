@@ -215,7 +215,7 @@ export function UploadWorkflowWindow({
     >
       {({ requestClose }) => (
       <>
-      <section className="upload-window" tabIndex={-1}>
+      <section className="upload-window image-workflow-window" tabIndex={-1}>
         <header className="upload-window-header">
           <div className="upload-head-copy">
             <h1>{modeTitle}</h1>
@@ -365,7 +365,10 @@ export function UploadWorkflowWindow({
           />
         </WorkflowCollapsePanel>
 
-        <div className="modal-scroll-list upload-list" ref={listRef}>
+        <div
+          className="modal-scroll-list image-workflow-list upload-list"
+          ref={listRef}
+        >
           {jsonlErrors.length > 0 && (
             <div className="jsonl-import-report">
               <span>{jsonlErrors.length} 行未创建任务</span>
@@ -431,16 +434,8 @@ export function UploadWorkflowWindow({
           ))}
         </div>
 
-        <AdminPagination
-          className="upload-pagination"
-          ariaLabel="导入任务列表分页"
-          page={queue.page}
-          totalPages={queue.totalPages}
-          onPageChange={queue.setPage}
-        />
-
-        <footer>
-          <div className="upload-footer-left">
+        <footer className={`image-workflow-footer${queue.totalPages > 1 ? " has-pagination" : ""}`}>
+          <div className="upload-footer-left image-workflow-leading-actions">
             <div className="upload-backend">
               <SelectMenu
                 className="is-storage-select"
@@ -452,13 +447,15 @@ export function UploadWorkflowWindow({
             </div>
             <small className="upload-storage-hint">仅影响之后添加的新任务</small>
           </div>
-          <AdminPagination
-            className="upload-footer-pagination"
-            ariaLabel="导入任务列表分页"
-            page={queue.page}
-            totalPages={queue.totalPages}
-            onPageChange={queue.setPage}
-          />
+          {queue.totalPages > 1 && (
+            <AdminPagination
+              className="image-workflow-pagination"
+              ariaLabel="导入任务列表分页"
+              page={queue.page}
+              totalPages={queue.totalPages}
+              onPageChange={queue.setPage}
+            />
+          )}
           <div className="modal-footer-actions">
             <button
               type="button"

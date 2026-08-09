@@ -21,25 +21,11 @@
   white-space: nowrap;
 }
 
-.batch-edit-modal footer {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-}
 .batch-edit-resource-actions {
-  grid-column: 1;
-  justify-self: start;
-  min-width: 0;
   display: flex;
   align-items: center;
   gap: 8px;
 }
-.batch-edit-modal footer .batch-edit-footer-pagination {
-  grid-column: 2;
-  justify-self: center;
-}
-
-.batch-edit-modal footer .modal-footer-actions { grid-column: 3; justify-self: end; }
-
 .batch-edit-modal footer button { min-height: 38px; }
 .batch-edit-delete-trigger.icon {
   width: 38px;
@@ -51,23 +37,7 @@
     calc(4em + 1.125rem + 34px)
   );
 }
-.batch-edit-list {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--admin-card-grid-gap);
-  align-content: start;
-}
 .batch-edit-common-panel { flex: 0 0 auto; }
-.batch-edit-pagination {
-  flex: 0 0 auto;
-  min-height: 54px;
-  margin: 0;
-  padding: 8px 16px;
-  border-top: 1px solid var(--admin-color-border-default);
-  background: var(--admin-color-surface-primary);
-}
-.admin-pagination.batch-edit-pagination { display: none; }
-.batch-edit-pagination button { min-height: 38px; }
 .batch-edit-save-summary { padding: 10px; border-radius: 6px; }
 .batch-edit-delete-error {
   margin: 0;
@@ -146,10 +116,14 @@
     height: 100svh;
     height: 100dvh;
     max-height: none;
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
     overflow: hidden;
     border-radius: 0;
+  }
+  .edit-modal.batch-edit-overlay form.batch-edit-modal.is-single {
+    grid-template-rows: auto minmax(0, 1fr) auto;
   }
   .batch-edit-modal > header {
     padding: max(10px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 10px max(12px, env(safe-area-inset-left));
@@ -165,37 +139,12 @@
     flex: 0 0 44px;
     aspect-ratio: 1;
   }
-  .batch-edit-list {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow-x: hidden;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    -webkit-overflow-scrolling: touch;
-  }
-  .batch-edit-pagination {
-    min-height: 52px;
-    margin: 0;
-    padding: 6px max(10px, env(safe-area-inset-right)) 6px max(10px, env(safe-area-inset-left));
-  }
-  .admin-pagination.batch-edit-pagination { display: flex; }
-  .batch-edit-modal > footer .batch-edit-footer-pagination { display: none; }
-  .batch-edit-pagination button { flex: 1; min-height: 40px; }
   .batch-edit-modal > footer {
-    grid-template-columns: minmax(0, 1fr) auto;
-    column-gap: 8px;
     padding: 8px max(10px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
   }
-  .batch-edit-modal > footer .batch-edit-resource-actions,
-  .batch-edit-modal > footer .modal-footer-actions {
-    min-width: 0;
-  }
   .batch-edit-modal > footer .batch-edit-resource-actions {
-    grid-column: 1;
-    justify-self: start;
     gap: 6px;
   }
-  .batch-edit-modal > footer .modal-footer-actions { grid-column: 2; }
   .batch-edit-modal > footer button { min-height: 44px; }
   .batch-edit-modal > footer .modal-footer-actions { gap: 6px; }
   .batch-edit-modal > footer .batch-edit-migrate-trigger {
@@ -214,7 +163,6 @@
   }
   .batch-edit-modal > footer .modal-footer-actions button { white-space: nowrap; }
 
-  .batch-edit-list { padding: 10px; }
   .batch-edit-preview .image-thumbnail {
     width: 56px;
     height: 56px;
@@ -238,4 +186,9 @@
   .batch-edit-head { min-height: 0; padding-left: 0; }
   .batch-edit-head > div { gap: 2px; }
   .batch-edit-row > .image-fields { margin-top: 2px; }
+  .batch-edit-modal.is-single .batch-edit-list {
+    display: flex;
+    flex-direction: column;
+  }
+  .batch-edit-modal.is-single .batch-edit-row { margin-block: auto; }
 }

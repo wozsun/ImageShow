@@ -26,9 +26,9 @@ import "../../styles/admin/semantic-colors.css";
 import "../../styles/admin/controls.css";
 import "../../styles/admin/image-workflow.css";
 import "../../styles/admin/image-edit.css";
-import { BatchMetadataModal } from "./BatchMetadataModal.js";
+import { ImageMetadataEditorDialog } from "./ImageMetadataEditorDialog.js";
 
-export { BatchMetadataModal };
+export { ImageMetadataEditorDialog };
 
 class ImageNotEditableError extends Error {
   constructor() {

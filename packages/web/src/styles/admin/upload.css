@@ -45,6 +45,8 @@
   background: var(--admin-color-surface-primary);
   border-bottom: 1px solid var(--admin-color-border-default);
   padding: 14px 16px;
+}
+.upload-window > header {
   display: flex;
   justify-content: space-between;
   gap: 16px;
@@ -68,16 +70,12 @@
   bottom: 0;
   border-top: 1px solid var(--admin-color-border-default);
   border-bottom: 0;
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
 }
 .upload-backend {
   display: flex;
   align-items: center;
   justify-self: start;
 }
-.upload-window > footer .upload-footer-pagination { justify-self: center; }
-.upload-window > footer .modal-footer-actions { justify-self: end; }
 .upload-window > footer button { min-height: 38px; }
 .upload-window .workflow-submit-button { min-width: calc(4em + 3ch + 26px); }
 .upload-window > footer .select-trigger { height: 38px; }
@@ -155,22 +153,6 @@
 .jsonl-import-report { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--admin-color-warning-border); border-radius: 6px; background: var(--admin-color-warning-surface-soft); color: var(--admin-color-warning-text); font-size: 13px; }
 .jsonl-import-report span { margin-right: auto; }
 .jsonl-import-report button { min-height: 30px; padding: 5px 8px; }
-.upload-list {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--admin-card-grid-gap);
-  align-content: start;
-}
-.upload-pagination {
-  flex: 0 0 auto;
-  min-height: 54px;
-  margin: 0;
-  padding: 8px 16px;
-  border-top: 1px solid var(--admin-color-border-default);
-  background: var(--admin-color-surface-primary);
-}
-.admin-pagination.upload-pagination { display: none; }
-.upload-pagination button { min-height: 38px; }
 .upload-head-copy { min-width: 0; }
 .upload-task-summary { display: grid; gap: 2px; }
 .upload-summary-primary,
@@ -370,7 +352,7 @@ button.empty-state.upload-dropzone:not(:disabled):hover,
     max-height: none;
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
     border-radius: 0;
   }
   .upload-window > header.upload-window-header {
@@ -427,32 +409,9 @@ button.empty-state.upload-dropzone:not(:disabled):hover,
     height: 44px;
     justify-self: end;
   }
-  .upload-list {
-    min-height: 0;
-    overflow-x: hidden;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    -webkit-overflow-scrolling: touch;
-  }
-  .upload-pagination {
-    min-height: 52px;
-    margin: 0;
-    padding: 6px max(10px, env(safe-area-inset-right)) 6px max(10px, env(safe-area-inset-left));
-  }
-  .admin-pagination.upload-pagination { display: flex; margin: 0; }
-  .upload-window > footer .upload-footer-pagination { display: none; }
-  .upload-pagination button { flex: 1; min-height: 40px; }
   .upload-window > footer {
-    grid-template-columns: minmax(0, 1fr) auto;
-    column-gap: 8px;
     padding: 8px max(10px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
   }
-  .upload-window > footer .upload-footer-left,
-  .upload-window > footer .modal-footer-actions {
-    min-width: 0;
-    justify-self: stretch;
-  }
-  .upload-window > footer .modal-footer-actions { grid-column: 2; }
   .upload-window > footer button,
   .upload-window > footer .select-trigger { min-height: 44px; }
   .upload-window > footer .select-control.is-storage-select {
@@ -464,7 +423,6 @@ button.empty-state.upload-dropzone:not(:disabled):hover,
   .upload-window > footer .modal-footer-actions { gap: 6px; }
   .upload-window > footer .modal-footer-actions button { white-space: nowrap; }
 
-  .upload-list { padding: 10px; }
   .import-job {
     grid-template-columns: 56px minmax(0, 1fr) auto;
     grid-template-areas:
