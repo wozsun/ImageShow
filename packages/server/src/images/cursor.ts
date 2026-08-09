@@ -1,14 +1,12 @@
 import { ApiError } from "../core/api-error.ts";
 import { uuidInput } from "../core/validation.ts";
 
-const cursorVersion = "1";
 const cursorPayloadBytes = 24;
-const cursorPayloadLength = 32;
-const cursorLength = 34;
+const cursorLength = 32;
 const microsecondsPerSecond = 1_000_000n;
 const minimumCursorMicroseconds = BigInt(Number.MIN_SAFE_INTEGER);
 const maximumCursorMicroseconds = BigInt(Number.MAX_SAFE_INTEGER);
-const cursorPattern = /^1\.([A-Za-z0-9_-]{32})$/;
+const cursorPattern = /^[A-Za-z0-9_-]{32}$/;
 const cursorTimestampPattern = new RegExp(
   "^(\\d{4})-(\\d{2})-(\\d{2})[ T](\\d{2}):(\\d{2}):(\\d{2})"
     + "(?:\\.(\\d{1,6}))?(Z|[+-]\\d{2}(?::?\\d{2})?)$"
@@ -126,7 +124,7 @@ export function encodeImageCursor(row: { cursor_image_time: string; id: string }
   const payload = Buffer.alloc(cursorPayloadBytes);
   payload.writeBigInt64BE(microseconds, 0);
   id.copy(payload, 8);
-  const encoded = `${cursorVersion}.${payload.toString("base64url")}`;
+  const encoded = payload.toString("base64url");
   if (encoded.length !== cursorLength) {
     throw new Error("Invalid image list cursor encoding");
   }
@@ -136,12 +134,11 @@ export function encodeImageCursor(row: { cursor_image_time: string; id: string }
 export function decodeImageCursor(value: string) {
   try {
     if (value.length !== cursorLength) throw new Error();
-    const match = cursorPattern.exec(value);
-    if (!match || match[1]!.length !== cursorPayloadLength) throw new Error();
-    const payload = Buffer.from(match[1]!, "base64url");
+    if (!cursorPattern.test(value)) throw new Error();
+    const payload = Buffer.from(value, "base64url");
     if (
       payload.length !== cursorPayloadBytes
-      || payload.toString("base64url") !== match[1]
+      || payload.toString("base64url") !== value
     ) {
       throw new Error();
     }

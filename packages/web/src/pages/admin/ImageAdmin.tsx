@@ -59,7 +59,14 @@ import {
   useImageAdminOperations,
   type ImageAdminView
 } from "./useImageAdminOperations.js";
-import { loadAdminImagePage } from "./image-page-navigation.js";
+import {
+  adminImagePageBoundaryBuildCount,
+  adminImagePageBoundaryBuildLimit,
+  adminImagePageRetreatTarget,
+  adminImagePageNavigationStatus,
+  loadAdminImagePage,
+  type AdminImagePageNavigationProgress
+} from "./image-page-navigation.js";
 import {
   ImageListSelectionController,
   isImageSelectionPreservingTarget
@@ -96,9 +103,15 @@ function adminImageListQuery(
 export function ImageAdmin() {
   const [searchParams, setSearchParams] = useSearchParams();
   const viewParam = searchParams.get("view");
-  const [view, setView] = useState<ImageAdminView>(viewParam === "unset" || viewParam === "deleted" ? viewParam : "ready");
+  const routeView: ImageAdminView = viewParam === "unset" || viewParam === "deleted"
+    ? viewParam
+    : "ready";
+  const [view, setView] = useState<ImageAdminView>(routeView);
   const [cursorHistory, setCursorHistory] = useState<string[]>([""]);
   const [pageNavigation, setPageNavigation] = useState<"previous" | "next" | null>(null);
+  const [pageNavigationProgress, setPageNavigationProgress] = useState<
+    AdminImagePageNavigationProgress | null
+  >(null);
   const [filters, setFilters] = useState<ImageAdminFilterValues>(
     emptyImageAdminFilters
   );
@@ -117,6 +130,7 @@ export function ImageAdmin() {
   const gridRef = useRef<HTMLDivElement | null>(null);
   const selectionControllerRef = useRef(new ImageListSelectionController());
   const pageNavigationFenceRef = useRef(new AsyncIntentFence());
+  const pageNavigationControllerRef = useRef<AbortController | null>(null);
   const client = useQueryClient();
   const { data: settingsData } = useAdminSettings();
 
@@ -124,6 +138,7 @@ export function ImageAdmin() {
   // 列表卡片的「所在存储」展示后端显示名（而非 slug）；从后端列表解析。
   const storageName = useStorageNameResolver();
   const pageSize = settingsData?.settings.admin.image_page_size ?? adminImagePageLimit;
+  const previousPageSizeRef = useRef(pageSize);
   const editPageSize = settingsData?.settings.upload.list_page_size ?? 20;
   const cursor = cursorHistory.at(-1) ?? "";
   const pageNumber = cursorHistory.length;
@@ -132,11 +147,18 @@ export function ImageAdmin() {
     enabled: Boolean(settingsData)
   });
   const items = data?.items ?? [];
-  const invalidateData = useCallback(async () => {
+  const cancelPageNavigation = useCallback(() => {
     pageNavigationFenceRef.current.invalidate();
+    const controller = pageNavigationControllerRef.current;
+    pageNavigationControllerRef.current = null;
+    controller?.abort();
     setPageNavigation(null);
+    setPageNavigationProgress(null);
+  }, []);
+  const invalidateData = useCallback(async () => {
+    cancelPageNavigation();
     await invalidateImageData(client);
-  }, [client]);
+  }, [cancelPageNavigation, client]);
   const {
     selected,
     setSelected,
@@ -170,7 +192,10 @@ export function ImageAdmin() {
   });
   const editorPending = editorCapability.pending !== null;
   const editorConflictBusy = operationBusy || detailPending || uploaderPending;
-  const interfaceBusy = editorConflictBusy || editorPending;
+  const modalOpen = Boolean(
+    detailCapability.item || editorCapability.session || confirmAction
+  );
+  const interfaceBusy = editorConflictBusy || editorPending || modalOpen;
   const clearImageSelection = useCallback(() => {
     selectionControllerRef.current.reset();
     setSelected([]);
@@ -195,15 +220,44 @@ export function ImageAdmin() {
   useEffect(() => {
     const pageNavigationFence = pageNavigationFenceRef.current;
     pageNavigationFence.mount();
-    return () => pageNavigationFence.unmount();
+    return () => {
+      pageNavigationFence.unmount();
+      pageNavigationControllerRef.current?.abort();
+      pageNavigationControllerRef.current = null;
+    };
   }, []);
+  useEffect(() => {
+    if (previousPageSizeRef.current === pageSize) return;
+    previousPageSizeRef.current = pageSize;
+    cancelPageNavigation();
+    setCursorHistory([""]);
+    clearImageSelection();
+    resetTransientState();
+    gridRef.current?.scrollTo({ top: 0, left: 0 });
+  }, [
+    cancelPageNavigation,
+    clearImageSelection,
+    pageSize,
+    resetTransientState
+  ]);
+  useEffect(() => {
+    if (interfaceBusy && pageNavigation) cancelPageNavigation();
+  }, [cancelPageNavigation, interfaceBusy, pageNavigation]);
+  useEffect(() => {
+    if (routeView === view) return;
+    cancelPageNavigation();
+    setView(routeView);
+    setCursorHistory([""]);
+    selectionControllerRef.current.reset();
+    resetTransientState();
+    gridRef.current?.scrollTo({ top: 0, left: 0 });
+  }, [cancelPageNavigation, resetTransientState, routeView, view]);
   const changeFilter = (
     key: keyof ImageAdminFilterValues,
     nextValue: string
   ) => {
     if (filters[key] === nextValue || interfaceBusy) return;
-    pageNavigationFenceRef.current.invalidate();
-    setPageNavigation(null);
+    cancelPageNavigation();
     setFilters((current) => ({ ...current, [key]: nextValue }));
     setCursorHistory([""]);
     selectionControllerRef.current.reset();
@@ -211,31 +265,47 @@ export function ImageAdmin() {
     gridRef.current?.scrollTo({ top: 0, left: 0 });
   };
   const changeView = (next: typeof view) => {
-    if (next === view || interfaceBusy) return;
-    pageNavigationFenceRef.current.invalidate();
-    setPageNavigation(null);
-    gridRef.current?.scrollTo({ top: 0, left: 0 });
-    setView(next);
-    setCursorHistory([""]);
-    selectionControllerRef.current.reset();
-    resetTransientState();
-
+    if (next === routeView || interfaceBusy) return;
+    cancelPageNavigation();
     setSearchParams(next === "ready" ? {} : { view: next }, { replace: true });
   };
   const loadPage = async (targetPage: number) => {
     if (
-      pageNavigation
-      || interfaceBusy
+      interfaceBusy
       || targetPage === pageNumber
       || targetPage < 1
       || targetPage > totalPages
     ) {
       return;
     }
+    // 连续导航意图之间可能尚未完成 React 状态提交；ref 是同步所有者，
+    // 新意图必须先中止旧补链。
+    cancelPageNavigation();
+    const boundaryBuilds = adminImagePageBoundaryBuildCount({
+      targetPage,
+      currentPage: pageNumber,
+      cursorHistory
+    });
+    if (boundaryBuilds > adminImagePageBoundaryBuildLimit) {
+      const firstSegmentPage = Math.min(
+        totalPages,
+        pageNumber + adminImagePageBoundaryBuildLimit
+      );
+      showFeedback(
+        `目标第 ${targetPage} 页尚需建立 ${boundaryBuilds} 个边界；`
+        + `单次最多 ${adminImagePageBoundaryBuildLimit} 个，`
+        + `请先跳到第 ${firstSegmentPage} 页再继续`,
+        "error"
+      );
+      return;
+    }
     const direction = targetPage < pageNumber ? "previous" : "next";
     const pageNavigationFence = pageNavigationFenceRef.current;
     const requestSequence = pageNavigationFence.begin();
+    const controller = new AbortController();
+    pageNavigationControllerRef.current = controller;
     setPageNavigation(direction);
+    setPageNavigationProgress(null);
     setFeedback(null);
 
     try {
@@ -245,14 +315,40 @@ export function ImageAdmin() {
         currentPage: pageNumber,
         currentPageData: data ?? null,
         cursorHistory,
-        load: async (targetCursor) => {
-          const page = await client.fetchQuery(
-            adminImageListQuery(view, filters, targetCursor, pageSize)
-          );
-          if (!pageNavigationFence.isCurrent(requestSequence)) {
-            throw new Error("Image page navigation was superseded");
+        signal: controller.signal,
+        maxBoundaryBuilds: adminImagePageBoundaryBuildLimit,
+        onProgress: (progress) => {
+          if (pageNavigationFence.isCurrent(requestSequence)) {
+            setPageNavigationProgress(progress);
           }
-          return page;
+        },
+        load: async (targetCursor) => {
+          const query = adminImageListQuery(
+            view,
+            filters,
+            targetCursor,
+            pageSize
+          );
+          const cancelQuery = () => {
+            void client.cancelQueries({
+              queryKey: query.queryKey,
+              exact: true
+            }).catch((error) => {
+              reportAdminUiError("image_admin.page_navigation_cancel", error);
+            });
+          };
+          controller.signal.addEventListener("abort", cancelQuery, { once: true });
+          try {
+            controller.signal.throwIfAborted();
+            const page = await client.fetchQuery(query);
+            controller.signal.throwIfAborted();
+            if (!pageNavigationFence.isCurrent(requestSequence)) {
+              throw new Error("Image page navigation was superseded");
+            }
+            return page;
+          } finally {
+            controller.signal.removeEventListener("abort", cancelQuery);
+          }
         }
       });
       if (!pageNavigationFence.isCurrent(requestSequence)) return;
@@ -265,7 +361,11 @@ export function ImageAdmin() {
       }
     } finally {
       if (pageNavigationFence.isCurrent(requestSequence)) {
+        if (pageNavigationControllerRef.current === controller) {
+          pageNavigationControllerRef.current = null;
+        }
         setPageNavigation(null);
+        setPageNavigationProgress(null);
       }
     }
   };
@@ -275,18 +375,28 @@ export function ImageAdmin() {
     gridRef.current?.scrollTo({ top: 0, left: 0 });
   }, [clearImageSelection, cursor, filters, view]);
   useEffect(() => {
-    if (isFetching || !data || pageNumber === 1) return;
-    if (data.items.length > 0 && pageNumber <= totalPages) return;
+    const retreatTarget = adminImagePageRetreatTarget({
+      isFetching,
+      hasPageData: Boolean(data),
+      itemCount: data?.items.length ?? 0,
+      currentPage: pageNumber,
+      totalPages
+    });
+    if (retreatTarget === null) return;
 
-    // 删除、恢复或分类编辑可能让最后一页消失。正常刷新保留当前游标；只有当前页
-    // 已经无效时才退回一页，并允许新页结果继续把游标夹紧到最后一个有效页。
-    pageNavigationFenceRef.current.invalidate();
-    setPageNavigation(null);
+    // 删除、恢复或分类编辑可能让当前页消失；直接夹紧到仍可访问的最近页，
+    // 避免总页数大幅收缩时逐页查询。
+    cancelPageNavigation();
     clearImageSelection();
-    setCursorHistory((current) => (
-      current.length > 1 ? current.slice(0, -1) : current
-    ));
-  }, [clearImageSelection, data, isFetching, pageNumber, totalPages]);
+    setCursorHistory((current) => current.slice(0, retreatTarget));
+  }, [
+    cancelPageNavigation,
+    clearImageSelection,
+    data,
+    isFetching,
+    pageNumber,
+    totalPages
+  ]);
   useLayoutEffect(() => {
     const reconciled = selectionControllerRef.current.reconcile(
       items.map((item) => item.id),
@@ -319,6 +429,9 @@ export function ImageAdmin() {
     sources: selectedItems
   });
   const confirmCopy = imageAdminConfirmationCopy(confirmAction);
+  const pageNavigationStatus = adminImagePageNavigationStatus(
+    pageNavigationProgress
+  );
   return (
     <section
       className="workspace workspace-paged"
@@ -339,7 +452,13 @@ export function ImageAdmin() {
           <p role="status" aria-live="polite" aria-atomic="true">
             {operationText || (
               `第 ${pageNumber} / ${totalPages} 页 · 共 ${data?.total ?? 0} 项 · 本页 ${items.length} 项${
-                pageNavigation === "previous" ? " · 正在加载上一页" : pageNavigation === "next" ? " · 正在加载下一页" : isFetching ? " · 加载中" : ""
+                pageNavigationStatus
+                  ? ` · ${pageNavigationStatus}`
+                  : pageNavigation === "previous"
+                    ? " · 正在加载上一页"
+                    : pageNavigation === "next"
+                      ? " · 正在加载下一页"
+                      : isFetching ? " · 加载中" : ""
               }`
             )}
           </p>
@@ -353,7 +472,10 @@ export function ImageAdmin() {
               reportAdminUiError("image_admin.uploader_load", error);
               showFeedback("上传与导入功能加载失败，请重新加载页面", "error");
             }}
-            onPendingChange={setUploaderPending}
+            onPendingChange={(pending) => {
+              if (pending) cancelPageNavigation();
+              setUploaderPending(pending);
+            }}
           />
           <div className="segmented">
             <button type="button" className={view === "ready" ? "active" : ""} disabled={interfaceBusy} onClick={() => changeView("ready")}>
@@ -437,9 +559,10 @@ export function ImageAdmin() {
                   aria-busy={
                     editorCapability.pending?.kind === "batch" || undefined
                   }
-                  {...preloadIntentProps(preloadBatchEditor)}
-                  onClick={(event) => {
-                    void editorCapability.open({
+                   {...preloadIntentProps(preloadBatchEditor)}
+                   onClick={(event) => {
+                     cancelPageNavigation();
+                     void editorCapability.open({
                       kind: "batch",
                       sources: selectedItems
                     }, event.currentTarget);
@@ -452,7 +575,10 @@ export function ImageAdmin() {
                 <button
                   type="button"
                   disabled={!selected.length || interfaceBusy}
-                  onClick={restoreSelected}
+                  onClick={() => {
+                    cancelPageNavigation();
+                    void restoreSelected();
+                  }}
                 >
                   <AdminIcon name="arrow-go-back-line" />批量恢复
                 </button>
@@ -462,7 +588,10 @@ export function ImageAdmin() {
                   className="danger-button"
                   type="button"
                   disabled={!selected.length || interfaceBusy}
-                  onClick={() => setConfirmAction({ kind: "batch-delete", ids: [...selected] })}
+                  onClick={() => {
+                    cancelPageNavigation();
+                    setConfirmAction({ kind: "batch-delete", ids: [...selected] });
+                  }}
                 >
                   <AdminIcon name="delete-bin-6-line" />批量删除
                 </button>
@@ -472,11 +601,14 @@ export function ImageAdmin() {
                   className="danger-button"
                   type="button"
                   disabled={interfaceBusy || (!selected.length && !items.length)}
-                  onClick={() => setConfirmAction(
-                    selected.length
-                      ? { kind: "purge-selected", ids: [...selected] }
-                      : { kind: "empty-trash" }
-                  )}
+                  onClick={() => {
+                    cancelPageNavigation();
+                    setConfirmAction(
+                      selected.length
+                        ? { kind: "purge-selected", ids: [...selected] }
+                        : { kind: "empty-trash" }
+                    );
+                  }}
                 >
                   <AdminIcon name="delete-bin-7-line" />
                   <StableButtonLabel
@@ -516,6 +648,7 @@ export function ImageAdmin() {
               onSelectRange={() => updateSelection(item.id, true, true)}
               rangeSelectionHelpId={imageRangeSelectionHelpId}
               onDetail={(opener) => {
+                cancelPageNavigation();
                 void detailCapability.open(item, opener);
               }}
               editDisabled={editorConflictBusy}
@@ -528,17 +661,31 @@ export function ImageAdmin() {
                 sources: [item]
               })}
               onEdit={(opener) => {
+                cancelPageNavigation();
                 void editorCapability.open({
                   kind: "single",
                   sources: [item]
                 }, opener);
               }}
               canPurge={canPurgeImage}
-              onPurge={() => setConfirmAction({ kind: "purge", id: item.id, title: imageDisplayTitle(item) })}
+              onPurge={() => {
+                cancelPageNavigation();
+                setConfirmAction({
+                  kind: "purge",
+                  id: item.id,
+                  title: imageDisplayTitle(item)
+                });
+              }}
               busy={busyIds.includes(item.id)}
               actionsDisabled={interfaceBusy}
-              onDelete={() => void runRowAction(item, "delete")}
-              onRestore={() => void runRowAction(item, "restore")}
+              onDelete={() => {
+                cancelPageNavigation();
+                void runRowAction(item, "delete");
+              }}
+              onRestore={() => {
+                cancelPageNavigation();
+                void runRowAction(item, "restore");
+              }}
             />
           ))}
           {listFailed && <QueryErrorState error={listError} onRetry={() => void refetchList()} reportContext="image_admin.list_load" />}
