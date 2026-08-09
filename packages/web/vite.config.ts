@@ -117,7 +117,6 @@ const imageAdminStyleOwners = new Set([
 const crossDomainStyleOwners = new Set([
   "ImageDetailModal",
   "ImageAdminDetails",
-  "ImageEditModal",
   "image-editor-capability"
 ]);
 
@@ -226,7 +225,6 @@ const entryStyleAssetNames = new Map([
   ["Uploader.css", "upload"],
   ["ImageAdminDetails.css", "image-management"],
   ["ImageDetailModal.css", "image-detail"],
-  ["ImageEditModal.css", "image-edit"],
   ["image-editor-capability.css", "image-editor"],
   ["image-workflow.css", "image-workflow"],
   ["semantic-colors.css", "admin-theme"],

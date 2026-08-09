@@ -71,7 +71,6 @@ const requiredSharedCssAssetPrefixes = [
 ];
 const optionalCssAssetPrefixes = [
   "account",
-  "image-edit",
   "image-editor",
   "image-admin-common",
   "super-admin"
@@ -633,6 +632,25 @@ assertCssPreloadsUsePrefixes(
   "image editor capability",
   ["image-editor", "image-workflow", "admin-theme"],
   ["image-editor", "image-workflow", "admin-theme"]
+);
+await assertAssetsExcludeMarkers(
+  [singleCssAsset("upload"), singleCssAsset("image-editor")],
+  "CSS",
+  "upload and editor capability-specific styles",
+  [
+    {
+      pattern: /\.image-fields-(?:primary|row|urls|desc)\b/,
+      description: "a shared image-field layout selector"
+    },
+    {
+      pattern: /\.workflow-(?:defaults|collapse-(?:toggle|panel|content))\b/,
+      description: "a shared workflow-default layout selector"
+    },
+    {
+      pattern: /\.image-preview-modal\b/,
+      description: "the shared image preview modal"
+    }
+  ]
 );
 
 const overviewInitialPreloads = dynamicPreloadDependencies(

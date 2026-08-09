@@ -146,14 +146,10 @@
     height: 100svh;
     height: 100dvh;
     max-height: none;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+    display: flex;
+    flex-direction: column;
     overflow: hidden;
     border-radius: 0;
-  }
-  .edit-modal.batch-edit-overlay form.batch-edit-modal.is-single {
-    grid-template-rows: auto minmax(0, 1fr) auto;
   }
   .batch-edit-modal > header {
     padding: max(10px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 10px max(12px, env(safe-area-inset-left));
@@ -170,6 +166,7 @@
     aspect-ratio: 1;
   }
   .batch-edit-list {
+    flex: 1 1 auto;
     min-height: 0;
     overflow-x: hidden;
     overflow-y: auto;
@@ -241,9 +238,4 @@
   .batch-edit-head { min-height: 0; padding-left: 0; }
   .batch-edit-head > div { gap: 2px; }
   .batch-edit-row > .image-fields { margin-top: 2px; }
-  .batch-edit-modal.is-single .batch-edit-list {
-    display: flex;
-    flex-direction: column;
-  }
-  .batch-edit-modal.is-single .batch-edit-row { margin-block: auto; }
 }

@@ -30,12 +30,18 @@ import type {
   FacetOption,
   ImageDraft
 } from "../../lib/types.js";
-import { mergeBatchEditCommonAttributes, normalizeAuthor, normalizeTheme } from "../../lib/upload/upload-utils.js";
+import { mergeBatchEditCommonAttributes } from "../../lib/upload/upload-utils.js";
 import { BatchMetadataSaveSummary } from "./BatchMetadataSaveSummary.js";
 import {
-  useBatchMetadataOperations,
-  type BatchMetadataUpdate
+  useBatchMetadataOperations
 } from "./useBatchMetadataOperations.js";
+import {
+  changedMetadataUpdate,
+  createBatchMetadataSession,
+  fieldsChangedFor,
+  reconcileBatchMetadataSession,
+  restoreBatchMetadataDrafts
+} from "./batch-metadata-session.js";
 
 type BatchStorageMigrationDialogModule =
   typeof import("./BatchStorageMigrationDialog.js");
@@ -51,26 +57,6 @@ const BatchStorageMigrationDialog = lazy(() => loadBatchStorageMigrationDialog()
   default: module.BatchStorageMigrationDialog
 })));
 
-type BatchMetadataChanges = Record<keyof ImageDraft, boolean>;
-
-function draftFromImage(item: BatchEditableImageSnapshot): ImageDraft {
-  return {
-    title: item.title,
-    description: item.description,
-    source: item.source,
-    original: item.original,
-    device: item.device,
-    brightness: item.brightness,
-    theme: item.theme === "none" ? "" : item.theme,
-    author: item.author === "none" ? "" : item.author,
-    tags: item.tags
-  };
-}
-
-function draftsFromImages(items: BatchEditableImageSnapshot[]) {
-  return Object.fromEntries(items.map((item) => [item.id, draftFromImage(item)]));
-}
-
 function emptyCommonAttributes() {
   return {
     device: "" as "" | "auto" | Device,
@@ -81,48 +67,11 @@ function emptyCommonAttributes() {
   };
 }
 
-function tagsChanged(draftTags: string[], savedTags: string[]) {
-  return JSON.stringify([...draftTags].sort()) !== JSON.stringify([...savedTags].sort());
-}
-
-function fieldsChangedFor(
-  item: BatchEditableImageSnapshot,
-  draft: ImageDraft
-): BatchMetadataChanges {
-  return {
-    title: draft.title !== item.title,
-    description: draft.description !== item.description,
-    source: draft.source !== item.source,
-    original: draft.original !== item.original,
-    device: draft.device !== item.device,
-    brightness: draft.brightness !== item.brightness,
-    theme: normalizeTheme(draft.theme) !== normalizeTheme(item.theme),
-    author: normalizeAuthor(draft.author) !== normalizeAuthor(item.author === "none" ? "" : item.author),
-    tags: tagsChanged(draft.tags, item.tags ?? [])
-  };
-}
-
-function changedMetadataUpdate(
-  item: BatchEditableImageSnapshot,
-  draft: ImageDraft,
-  changed: BatchMetadataChanges
-): BatchMetadataUpdate {
-  const update: BatchMetadataUpdate = { id: item.id };
-  if (changed.title) update.title = draft.title;
-  if (changed.description) update.description = draft.description;
-  if (changed.source) update.source = draft.source;
-  if (changed.original) update.original = draft.original;
-  if (changed.device) update.device = draft.device;
-  if (changed.brightness) update.brightness = draft.brightness;
-  if (changed.theme) update.theme = normalizeTheme(draft.theme);
-  if (changed.author) update.author = normalizeAuthor(draft.author);
-  if (changed.tags) update.tags = draft.tags;
-  return update;
-}
-
 export function BatchMetadataModal({
   items,
   pageSize,
+  title,
+  showBatchControls,
   themes,
   allTags,
   authors,
@@ -130,11 +79,12 @@ export function BatchMetadataModal({
   onSaved,
   onDeleted,
   onStorageMigrationSucceeded,
-  returnFocusRef,
-  single = false
+  returnFocusRef
 }: {
   items: BatchEditableImageSnapshot[];
   pageSize: number;
+  title: string;
+  showBatchControls: boolean;
   themes: FacetOption[];
   allTags: FacetOption[];
   authors: FacetOption[];
@@ -145,29 +95,23 @@ export function BatchMetadataModal({
   onDeleted?: (imageId: string) => void | Promise<void>;
   onStorageMigrationSucceeded?: (message: string) => void;
   returnFocusRef?: RefObject<HTMLElement | null>;
-  single?: boolean;
 }) {
   const listRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const restoreTriggerRef = useRef<HTMLButtonElement | null>(null);
   const migrateTriggerRef = useRef<HTMLButtonElement | null>(null);
   const previewReturnFocusRef = useRef<HTMLElement | null>(null);
-  // 父级刷新会清空选择；弹窗独立持有会话 ID 和权威基线。保存结果不确定时，
-  // 基线会从 PostgreSQL 重新读取，避免把已经落库的部分修改伪装成本地撤销。
+  // 父级刷新可能清空选择或因筛选移除图片；弹窗独立持有固定会话 ID、活动成员、
+  // PostgreSQL 权威基线和草稿，保存留窗期间不再从父列表重建状态。
   const [sessionItemIds] = useState(() => items.map((item) => item.id));
-  const [baselineItems, setBaselineItems] =
-    useState<BatchEditableImageSnapshot[]>(() => items);
+  const [session, setSession] = useState(() => createBatchMetadataSession(items));
   const operations = useBatchMetadataOperations({
     initialIds: sessionItemIds,
     onSaved
   });
   const {
-    activeIdSet,
-    restorableRemovedCount,
-    remove,
-    readAuthoritativeSnapshot,
-    reconcileAvailableItems,
-    restoreActiveItems,
+    pendingReconciliation,
+    reconcilePendingSave,
     save,
     saveStatus,
     saveSummary
@@ -176,16 +120,13 @@ export function BatchMetadataModal({
   const deleteStatus = useAsyncActionStatus({ successDurationMs: null });
   const [deleteError, setDeleteError] = useState("");
   const busy = saving || deleteStatus.pending;
-  const [drafts, setDrafts] = useState<Record<string, ImageDraft>>(
-    () => draftsFromImages(items)
-  );
   const [preview, setPreview] = useState<{ src: string; thumbSrc: string; width: number; height: number } | null>(null);
   const [page, setPage] = useState(1);
 
   const [common, setCommon] = useState(emptyCommonAttributes);
   const [commonExpanded, setCommonExpanded] = useState(false);
   const [restoreConfirmation, setRestoreConfirmation] = useState(false);
-  const [baselineRefreshRequired, setBaselineRefreshRequired] = useState(false);
+  const [restoreError, setRestoreError] = useState("");
   const [migrating, setMigrating] = useState(false);
   const permissions = useAdminPermissions();
   const canMigrateStorage = permissions.includes(
@@ -194,34 +135,46 @@ export function BatchMetadataModal({
   const { data: storageOptionsData } = useStorageOptions();
   // 列表行左下角的「所在存储」展示后端显示名。
   const resolveStorageName = storageNameResolver(storageOptionsData?.backends ?? []);
-  const activeItems = baselineItems.filter((item) => activeIdSet.has(item.id));
+  const activeIdSet = new Set(session.activeIds);
+  const activeItems = session.baselineItems.filter((item) => activeIdSet.has(item.id));
+  const deleteAvailable = activeItems.length === 1 && Boolean(onDeleted);
   const totalPages = Math.max(1, Math.ceil(activeItems.length / pageSize));
   const visibleItems = activeItems.slice((page - 1) * pageSize, page * pageSize);
   useEffect(() => setPage((current) => Math.min(current, totalPages)), [totalPages]);
-  const patchDraft = (id: string, patch: Partial<ImageDraft>) => setDrafts((current) => ({ ...current, [id]: { ...current[id], ...patch } }));
+  const patchDraft = (id: string, patch: Partial<ImageDraft>) => setSession((current) => ({
+    ...current,
+    drafts: {
+      ...current.drafts,
+      [id]: { ...current.drafts[id], ...patch }
+    }
+  }));
+  const remove = (id: string) => setSession((current) => ({
+    ...current,
+    activeIds: current.activeIds.filter((candidate) => candidate !== id)
+  }));
 
   const changedByItem = new Map(activeItems.map((item) => [
     item.id,
-    fieldsChangedFor(item, drafts[item.id])
+    fieldsChangedFor(item, session.drafts[item.id])
   ]));
   const changedCount = activeItems.filter((item) => Object.values(changedByItem.get(item.id)!).some(Boolean)).length;
   const savePresentation = {
-    idle: !single && changedCount
-      ? { label: `保存${changedCount}项` }
-      : { icon: "save-3-line" as const, label: "保存" },
-    pending: { icon: "save-3-line", label: "保存中" },
+    idle: pendingReconciliation
+      ? { icon: "refresh-line" as const, label: "确认保存结果" }
+      : changedCount
+        ? { label: `保存${changedCount}项` }
+        : { icon: "save-3-line" as const, label: "保存" },
+    pending: pendingReconciliation
+      ? { icon: "refresh-line" as const, label: "确认中" }
+      : { icon: "save-3-line" as const, label: "保存中" },
     success: { icon: "check-line", label: "保存成功" },
     error: { icon: "close-line", label: "保存失败" }
   } as const;
-  const modalSubtitle = single ? (baselineItems[0]?.object_key ?? "") : `${activeItems.length} 张图片`;
+  const modalSubtitle = `${activeItems.length} 张图片`;
 
   const commonChanged = { device: common.device !== "", brightness: common.brightness !== "", theme: common.theme.trim() !== "", author: common.author.trim() !== "", tags: common.tags.length > 0 };
   const commonHasValue = commonChanged.device || commonChanged.brightness || commonChanged.theme || commonChanged.author || commonChanged.tags;
-  const restoreAvailable = changedCount > 0
-    || commonHasValue
-    || restorableRemovedCount > 0
-    || baselineRefreshRequired
-    || Boolean(saveSummary);
+  const restoreAvailable = changedCount > 0;
   const commonSummary = [
     batchCommonDeviceOptions.find((option) => option.value === common.device)?.label ?? "设备不变",
     batchCommonBrightnessOptions.find((option) => option.value === common.brightness)?.label ?? "亮暗不变",
@@ -229,41 +182,53 @@ export function BatchMetadataModal({
     facetDisplayName(authors, common.author, "作者不变"),
     `${common.tags.length} 个标签`,
   ].join(" · ");
-  const reconcileAuthoritativeBaseline = async () => {
-    setBaselineRefreshRequired(true);
-    const snapshot = await readAuthoritativeSnapshot();
-    if (!snapshot) return null;
-    setBaselineItems(snapshot.items);
-    reconcileAvailableItems(snapshot.items.map((item) => item.id));
-    setBaselineRefreshRequired(false);
-    return snapshot.items;
-  };
   const saveAll = async () => {
     const changedItems = activeItems.flatMap((item) => {
       const changed = changedByItem.get(item.id)!;
       if (!Object.values(changed).some(Boolean)) return [];
-      return [changedMetadataUpdate(item, drafts[item.id], changed)];
+      return [changedMetadataUpdate(item, session.drafts[item.id], changed)];
     });
-    if (!changedItems.length) return false;
-
-    setBaselineRefreshRequired(true);
-    return save(changedItems, reconcileAuthoritativeBaseline);
+    if (!changedItems.length && !pendingReconciliation) return false;
+    const outcome = await save(changedItems, session.activeIds);
+    const authoritativeItems = outcome?.authoritativeItems;
+    if (authoritativeItems) {
+      setSession((current) => reconcileBatchMetadataSession(
+        current,
+        outcome.attempt,
+        authoritativeItems
+      ));
+    }
+    return Boolean(
+      outcome
+      && !outcome.report.snapshotFailed
+      && outcome.report.failed === 0
+      && outcome.report.unavailableIds.length === 0
+    );
   };
   const restoreAllChanges = async () => {
-    let restoreItems = baselineItems;
-    if (baselineRefreshRequired) {
-      const refreshed = await reconcileAuthoritativeBaseline();
-      if (!refreshed) return false;
-      restoreItems = refreshed;
+    setRestoreError("");
+    if (pendingReconciliation) {
+      const outcome = await reconcilePendingSave();
+      const authoritativeItems = outcome?.authoritativeItems;
+      if (!authoritativeItems) {
+        setRestoreError("权威数据读取失败，未保存草稿已保留，请稍后重试。");
+        return false;
+      }
+      setSession((current) => restoreBatchMetadataDrafts(
+        reconcileBatchMetadataSession(
+          current,
+          outcome.attempt,
+          authoritativeItems
+        )
+      ));
+      return true;
     }
-    restoreActiveItems(restoreItems.map((item) => item.id));
-    setDrafts(draftsFromImages(restoreItems));
-    setCommon(emptyCommonAttributes());
+    setSession((current) => restoreBatchMetadataDrafts(current));
     return true;
   };
   const deleteSingleImage = async (requestClose: () => void) => {
     const item = activeItems[0];
-    if (!single || !item || busy) return;
+    if (!deleteAvailable || !item || !onDeleted || busy) return;
 
     const deleted = await deleteStatus.run(async () => {
       setDeleteError("");
@@ -293,7 +258,7 @@ export function BatchMetadataModal({
   return (
     <DialogFrame
       className="modal edit-modal batch-edit-overlay"
-      ariaLabel={single ? "编辑图片" : "批量编辑图片"}
+      ariaLabel={title}
       busy={busy}
       paused={Boolean(
         (canMigrateStorage && migrating)
@@ -307,32 +272,33 @@ export function BatchMetadataModal({
       {({ requestClose }) => (
       <>
       <form
-        className={`batch-edit-modal${single ? " is-single" : ""}`}
+        className="batch-edit-modal"
         tabIndex={-1}
         onSubmit={async (event) => {
           event.preventDefault();
           if (busy) return;
-          if (await saveAll()) requestClose();
+          await saveAll();
         }}
       >
         <header>
           <div>
-            <h2>{single ? "编辑图片" : "批量编辑图片"}</h2>
-            <p title={single ? modalSubtitle : undefined}>{modalSubtitle}</p>
+            <h2>{title}</h2>
+            <p>{modalSubtitle}</p>
           </div>
           <div className="batch-edit-header-actions">
-            {!single && (
-              <button
-                ref={restoreTriggerRef}
-                className="batch-edit-restore-button"
-                type="button"
-                title="撤销所有未保存修改"
-                disabled={busy || !restoreAvailable}
-                onClick={() => setRestoreConfirmation(true)}
-              >
-                <AdminIcon name="history-line" />复原
-              </button>
-            )}
+            <button
+              ref={restoreTriggerRef}
+              className="batch-edit-restore-button"
+              type="button"
+              title="撤销所有未保存修改"
+              disabled={busy || !restoreAvailable}
+              onClick={() => {
+                setRestoreError("");
+                setRestoreConfirmation(true);
+              }}
+            >
+              <AdminIcon name="history-line" />复原
+            </button>
             <button
               ref={closeButtonRef}
               className="icon close pressable"
@@ -345,7 +311,7 @@ export function BatchMetadataModal({
             </button>
           </div>
         </header>
-        {!single && (
+        {showBatchControls && (
           <WorkflowCollapsePanel
             className="batch-edit-common-panel"
             contentClassName="batch-edit-common workflow-defaults"
@@ -389,12 +355,15 @@ export function BatchMetadataModal({
               changed={commonChanged}
               applyDisabled={busy}
               applyReady={commonHasValue}
-              onApply={() => setDrafts((current) => Object.fromEntries(
-                Object.entries(current).map(([id, draft]) => {
-                  if (!activeIdSet.has(id)) return [id, draft];
-                  return [id, mergeBatchEditCommonAttributes(draft, common)];
-                })
-              ))}
+              onApply={() => setSession((current) => ({
+                ...current,
+                drafts: Object.fromEntries(
+                  Object.entries(current.drafts).map(([id, draft]) => {
+                    if (!current.activeIds.includes(id)) return [id, draft];
+                    return [id, mergeBatchEditCommonAttributes(draft, common)];
+                  })
+                )
+              }))}
             />
           </WorkflowCollapsePanel>
         )}
@@ -406,7 +375,7 @@ export function BatchMetadataModal({
           )}
           {saveSummary && <BatchMetadataSaveSummary summary={saveSummary} />}
           {visibleItems.map((item) => {
-            const draft = drafts[item.id];
+            const draft = session.drafts[item.id];
             const changed = changedByItem.get(item.id)!;
             const cardChanged = Object.values(changed).some(Boolean);
             return (
@@ -438,7 +407,7 @@ export function BatchMetadataModal({
                         {item.image_size ? formatBytes(item.image_size) : "大小未记录"} · {resolveStorageName(item)}
                       </span>
                     </div>
-                    {!single && (
+                    {showBatchControls && (
                       <button
                         className="icon danger-button"
                         type="button"
@@ -468,7 +437,7 @@ export function BatchMetadataModal({
           })}
           {!activeItems.length && <p className="empty-state">批量编辑列表为空</p>}
         </div>
-        {!single && (
+        {showBatchControls && (
           <AdminPagination
             className="batch-edit-pagination"
             ariaLabel="批量编辑分页"
@@ -479,7 +448,7 @@ export function BatchMetadataModal({
           />
         )}
         <footer>
-          {(canMigrateStorage || single) && (
+          {(canMigrateStorage || deleteAvailable) && (
             <div className="batch-edit-resource-actions">
               {canMigrateStorage && (
                 <button
@@ -490,10 +459,10 @@ export function BatchMetadataModal({
                   {...preloadIntentProps(preloadBatchStorageMigrationDialog)}
                   onClick={() => setMigrating(true)}
                 >
-                  <AdminIcon name="arrow-left-right-line" />{single ? "迁移存储" : "批量迁移存储"}
+                  <AdminIcon name="arrow-left-right-line" />{showBatchControls ? "批量迁移存储" : "迁移存储"}
                 </button>
               )}
-              {single && (
+              {deleteAvailable && (
                 <TwoStepConfirmIconButton
                   className="icon danger-button batch-edit-delete-trigger"
                   idleIcon="delete-bin-6-line"
@@ -508,7 +477,7 @@ export function BatchMetadataModal({
               )}
             </div>
           )}
-          {!single && (
+          {showBatchControls && (
             <AdminPagination
               className="batch-edit-footer-pagination"
               ariaLabel="批量编辑分页"
@@ -521,11 +490,11 @@ export function BatchMetadataModal({
           <div className="modal-footer-actions">
             <button type="button" disabled={busy} onClick={() => requestClose()}>取消</button>
             <AsyncActionButton
-              className={`button workflow-submit-button${single ? "" : " batch-edit-save-button"}`}
+              className="button workflow-submit-button batch-edit-save-button"
               type="submit"
               status={saveStatus.status}
               presentation={savePresentation}
-              disabled={busy || !changedCount}
+              disabled={busy || (!changedCount && !pendingReconciliation)}
             />
           </div>
         </footer>
@@ -537,7 +506,7 @@ export function BatchMetadataModal({
             open
             imageIds={activeItems.map((item) => item.id)}
             currentStorageSlugs={activeItems.map((item) => item.storage_slug)}
-            single={single}
+            single={!showBatchControls}
             returnFocusRef={migrateTriggerRef}
             onClose={() => setMigrating(false)}
             onSaved={onSaved}
@@ -553,13 +522,14 @@ export function BatchMetadataModal({
       {restoreConfirmation && (
         <ConfirmDialog
           title="确认复原全部修改"
-          description="将撤销本弹窗中尚未保存的属性修改，并恢复从批量编辑列表移出的图片；已经保存的修改不会回退。"
+          description="将当前活动图片尚未保存的属性草稿恢复到最近一次权威基线；图片列表成员、分页、批量默认属性、保存汇总及已经保存的修改都不会改变。"
           confirmLabel="确认复原"
           pendingLabel="复原中"
           successLabel="已复原"
           danger={false}
           confirmIcon="history-line"
           closeOnBackdrop
+          errorMessage={restoreError}
           returnFocusRef={restoreTriggerRef}
           onClose={() => setRestoreConfirmation(false)}
           onConfirm={restoreAllChanges}

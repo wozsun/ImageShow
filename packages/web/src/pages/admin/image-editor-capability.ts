@@ -19,10 +19,16 @@ import type {
 import type {
   BatchEditableImageSnapshot
 } from "../../lib/types.js";
+// 单图与批量编辑共用同一懒加载能力入口。共享样式独占字段内部排布，编辑器专属
+// 样式只负责卡片外框和宿主定位，因此即使浏览器并行预载 CSS，应用顺序也不会改变
+// 属性位置；冷入口同样不依赖图片列表、上传窗口或另一种编辑入口碰巧加载样式。
+import "../../styles/admin/semantic-colors.css";
+import "../../styles/admin/controls.css";
+import "../../styles/admin/image-workflow.css";
+import "../../styles/admin/image-edit.css";
 import { BatchMetadataModal } from "./BatchMetadataModal.js";
-import { ImageEditModal } from "./ImageEditModal.js";
 
-export { BatchMetadataModal, ImageEditModal };
+export { BatchMetadataModal };
 
 class ImageNotEditableError extends Error {
   constructor() {
@@ -99,12 +105,14 @@ export async function refreshSingleImageAfterSave<TAdminInfo>({
 }) {
   await invalidateImageData(queryClient);
   const snapshotRequest: Promise<BatchImageSnapshotResponse> =
-    authoritativeItems
-      ? Promise.resolve({ items: authoritativeItems })
-      : queryClient.fetchQuery({
+    authoritativeItems === undefined
+      ? queryClient.fetchQuery({
           ...imageEditSnapshotQueryOptions(imageId),
           staleTime: 0
-        });
+        })
+      : authoritativeItems === null
+        ? Promise.reject(new Error("图片权威快照读取失败"))
+        : Promise.resolve({ items: authoritativeItems });
   const adminInfoRequest: Promise<TAdminInfo | null> = loadAdminInfo
     ? loadAdminInfo()
     : Promise.resolve(null);

@@ -246,7 +246,6 @@ export function ImageAdminDetails({
     const item = response.items.find((candidate) => candidate.id === imageId);
     if (!item) {
       setEditSuppressed(true);
-      editorCapability.reset();
       return;
     }
     onItemUpdated?.(item);
@@ -261,7 +260,6 @@ export function ImageAdminDetails({
     }
   }, [
     admin,
-    editorCapability.reset,
     editorCapability.session,
     editorCapability.updateItems,
     handlePreparationFailure,
@@ -320,7 +318,8 @@ export function ImageAdminDetails({
     if (admin || !accessConfirmed) return;
     void queryClient.prefetchQuery(adminInfoOptions);
   };
-  const EditModal = editorCapability.session?.module.ImageEditModal;
+  const MetadataEditorModal =
+    editorCapability.session?.module.BatchMetadataModal;
   const editItem = editorCapability.session?.items[0];
 
   return (
@@ -383,9 +382,12 @@ export function ImageAdminDetails({
           )}
         </div>
       )}
-      {editorCapability.session && EditModal && editItem && (
-        <EditModal
-          item={editItem}
+      {editorCapability.session && MetadataEditorModal && editItem && (
+        <MetadataEditorModal
+          items={[editItem]}
+          pageSize={1}
+          title="编辑图片"
+          showBatchControls={false}
           themes={editorCapability.session.vocabulary.themes}
           allTags={editorCapability.session.vocabulary.tags}
           authors={editorCapability.session.vocabulary.authors}

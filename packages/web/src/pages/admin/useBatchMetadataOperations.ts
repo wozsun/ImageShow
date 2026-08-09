@@ -1,6 +1,5 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import type {
-  BatchImageUpdateItemInputDto,
   BatchImageUpdateRequestDto,
   BatchImageUpdateResponse
 } from "@imageshow/shared/browser";
@@ -11,8 +10,13 @@ import { adminApiBasePath } from "../../lib/constants.js";
 import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
 import type { BatchEditableImageSnapshot } from "../../lib/types.js";
 import { summarizeBatchUpdateFailures } from "./batch-update-failures.js";
-
-export type BatchMetadataUpdate = BatchImageUpdateItemInputDto;
+import {
+  createBatchMetadataSaveReport,
+  type BatchMetadataSaveAttempt,
+  type BatchMetadataSaveOutcome,
+  type BatchMetadataSaveReport,
+  type BatchMetadataUpdate
+} from "./batch-metadata-session.js";
 
 function reportBatchUpdateFailures(response: BatchImageUpdateResponse) {
   if (!response.failed) return;
@@ -33,105 +37,92 @@ export function useBatchMetadataOperations({
     authoritativeItems?: BatchEditableImageSnapshot[] | null
   ) => void | Promise<void>;
 }) {
-  const [activeIds, setActiveIds] = useState(initialIds);
-  const [availableIdSet, setAvailableIdSet] = useState<Set<string>>(
-    () => new Set(initialIds)
-  );
-  const [savedIdSet, setSavedIdSet] = useState<Set<string>>(() => new Set());
-  const [saveSummary, setSaveSummary] = useState<BatchImageUpdateResponse | null>(null);
+  const [pendingAttempt, setPendingAttempt] =
+    useState<BatchMetadataSaveAttempt | null>(null);
+  const [saveSummary, setSaveSummary] =
+    useState<BatchMetadataSaveReport | null>(null);
   const saveStatus = useAsyncActionStatus({ successDurationMs: null });
-  const activeIdSet = useMemo(() => new Set(activeIds), [activeIds]);
-  const restorableRemovedCount = initialIds.filter(
-    (id) => availableIdSet.has(id)
-      && !activeIdSet.has(id)
-      && !savedIdSet.has(id)
-  ).length;
-
-  const remove = (id: string) => {
-    setActiveIds((current) => current.filter((candidate) => candidate !== id));
-  };
 
   const readAuthoritativeSnapshot = async () => {
     try {
-      return await readEditableImageSnapshots(initialIds);
+      const snapshot = await readEditableImageSnapshots(initialIds);
+      return snapshot.items;
     } catch (error) {
       reportAdminUiError("image_metadata.batch_snapshot", error);
       return null;
     }
   };
 
-  const save = async (
-    items: BatchMetadataUpdate[],
-    reconcileUncertainSave: () => Promise<
-      BatchEditableImageSnapshot[] | null
-    >
-  ) => {
-    if (!items.length) return false;
-    setSaveSummary(null);
+  const finishAttempt = async (
+    attempt: BatchMetadataSaveAttempt,
+    notifySaved: boolean
+  ): Promise<BatchMetadataSaveOutcome> => {
+    const authoritativeItems = await readAuthoritativeSnapshot();
+    const report = createBatchMetadataSaveReport(
+      attempt,
+      authoritativeItems
+    );
+    setSaveSummary(report);
+    setPendingAttempt(authoritativeItems ? null : attempt);
 
-    return saveStatus.run(async () => {
-      let response: BatchImageUpdateResponse | null = null;
-      try {
-        const request = { items } satisfies BatchImageUpdateRequestDto;
-        response = await api<BatchImageUpdateResponse>(
-          `${adminApiBasePath}/images/batch-update`,
-          { method: "POST", body: JSON.stringify(request) }
-        );
-        setSaveSummary(response);
-        const updatedIds = new Set(
-          response.results
-            .filter((result) => result.status === "updated")
-            .map((result) => result.id)
-        );
-        if (updatedIds.size) {
-          setSavedIdSet((current) => new Set([...current, ...updatedIds]));
-          setActiveIds((current) => current.filter((id) => !updatedIds.has(id)));
-        }
-        reportBatchUpdateFailures(response);
-      } catch (error) {
-        reportAdminUiError("image_metadata.batch_update", error);
-      }
-
-      // A failed item or a lost response can still follow a committed metadata
-      // or tag transaction. Re-read PostgreSQL truth before allowing the
-      // frozen edit snapshot to be used as a restore baseline.
-      const authoritativeItems = !response || response.failed
-        ? await reconcileUncertainSave()
-        : undefined;
+    // mutation 每轮只触发一次集中图片查询失效。权威快照失败后的再次确认只重读
+    // batch-snapshot，不重复 mutation，也不重复失效父级查询。
+    if (notifySaved) {
       try {
         await onSaved(authoritativeItems);
       } catch (error) {
         reportAdminUiError("image_metadata.batch_update_refresh", error);
       }
-      return response?.failed === 0;
+    }
+    return { attempt, authoritativeItems, report };
+  };
+
+  const save = async (
+    items: BatchMetadataUpdate[],
+    activeIds: string[]
+  ): Promise<BatchMetadataSaveOutcome | null> => {
+    if (!items.length && !pendingAttempt) return null;
+    let outcome: BatchMetadataSaveOutcome | undefined;
+
+    await saveStatus.run(async () => {
+      const retryAttempt = pendingAttempt;
+      let attempt = retryAttempt;
+      if (!attempt) {
+        setSaveSummary(null);
+        let response: BatchImageUpdateResponse | null = null;
+        try {
+          const request = { items } satisfies BatchImageUpdateRequestDto;
+          response = await api<BatchImageUpdateResponse>(
+            `${adminApiBasePath}/images/batch-update`,
+            { method: "POST", body: JSON.stringify(request) }
+          );
+          reportBatchUpdateFailures(response);
+        } catch (error) {
+          reportAdminUiError("image_metadata.batch_update", error);
+        }
+        attempt = {
+          activeIds: [...activeIds],
+          items,
+          response
+        };
+      }
+
+      outcome = await finishAttempt(attempt, !retryAttempt);
+      return !outcome.report.snapshotFailed
+        && outcome.report.failed === 0
+        && outcome.report.unavailableIds.length === 0;
     });
+    return outcome ?? null;
   };
 
-  const reconcileAvailableItems = (availableIds: string[]) => {
-    const available = new Set(availableIds);
-    setAvailableIdSet(available);
-    setActiveIds((current) => current.filter((id) => available.has(id)));
-  };
-
-  const restoreActiveItems = (availableIds?: string[]) => {
-    const available = availableIds
-      ? new Set(availableIds)
-      : availableIdSet;
-    if (availableIds) setAvailableIdSet(available);
-    setActiveIds(initialIds.filter(
-      (id) => available.has(id) && !savedIdSet.has(id)
-    ));
-    setSaveSummary(null);
+  const reconcilePendingSave = async () => {
+    if (!pendingAttempt) return null;
+    return finishAttempt(pendingAttempt, false);
   };
 
   return {
-    activeIds,
-    activeIdSet,
-    restorableRemovedCount,
-    remove,
-    readAuthoritativeSnapshot,
-    reconcileAvailableItems,
-    restoreActiveItems,
+    pendingReconciliation: Boolean(pendingAttempt),
+    reconcilePendingSave,
     save,
     saveStatus,
     saveSummary
