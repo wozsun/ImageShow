@@ -1,4 +1,4 @@
-import { shortImageId } from "../../lib/ui/formatters.js";
+import { shortImageId } from "../../../lib/ui/formatters.js";
 import type { BatchMetadataSaveReport } from "./batch-metadata-session.js";
 
 export function BatchMetadataSaveSummary({ summary }: {

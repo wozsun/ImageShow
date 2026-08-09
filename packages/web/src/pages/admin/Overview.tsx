@@ -17,7 +17,7 @@ import { formatBytes } from "../../lib/ui/formatters.js";
 import { preloadIntentProps } from "../../lib/ui/preload-intent.js";
 import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
-import { useAdminImageDetailCapability } from "../../hooks/useAdminImageDetailCapability.js";
+import { useAdminImageDetailCapability } from "../../components/image/useAdminImageDetailCapability.js";
 import "../../styles/admin/overview.css";
 
 type OverviewMetric = { label: string; value?: number | string; hint?: string; hintTitle?: string; to?: string };

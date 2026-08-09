@@ -6,16 +6,16 @@ import {
   type RefObject
 } from "react";
 import type { BatchStorageMigrationResponse } from "@imageshow/shared/browser";
-import { AsyncActionButton } from "../../components/actions/AsyncActionButton.js";
-import { DialogFrame } from "../../components/feedback/DialogFrame.js";
-import { SelectMenu } from "../../components/form/SelectMenu.js";
-import { AdminIcon } from "../../components/icon/AdminIcon.js";
-import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
-import { api } from "../../lib/api/client.js";
-import { useStorageOptions } from "../../lib/api/storage-options.js";
-import { adminApiBasePath } from "../../lib/constants.js";
-import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
-import { errorMessage } from "../../lib/ui/formatters.js";
+import { AsyncActionButton } from "../../actions/AsyncActionButton.js";
+import { DialogFrame } from "../../feedback/DialogFrame.js";
+import { SelectMenu } from "../../form/SelectMenu.js";
+import { AdminIcon } from "../../icon/AdminIcon.js";
+import { useAsyncActionStatus } from "../../../hooks/useAsyncActionStatus.js";
+import { api } from "../../../lib/api/client.js";
+import { useStorageOptions } from "../../../lib/api/storage-options.js";
+import { adminApiBasePath } from "../../../lib/constants.js";
+import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
+import { errorMessage } from "../../../lib/ui/formatters.js";
 
 const migratePresentation = {
   idle: { icon: "arrow-left-right-line", label: "开始迁移" },

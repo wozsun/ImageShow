@@ -10,11 +10,11 @@ import {
   loadImageEditorCapabilityModule,
   type ImageEditorCapabilityModule,
   type ImageEditorTarget
-} from "../lib/image-editor-capability-loader.js";
-import { AsyncIntentFence } from "../lib/async-intent-fence.js";
+} from "./image-editor-capability-loader.js";
+import { AsyncIntentFence } from "../../../lib/async-intent-fence.js";
 import type {
   BatchEditableImageSnapshot
-} from "../lib/types.js";
+} from "../../../lib/types.js";
 import type { ImportVocabularyDto } from "@imageshow/shared/browser";
 
 type PreparedImageEditor = {

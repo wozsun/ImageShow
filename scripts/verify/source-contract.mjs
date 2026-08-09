@@ -64,6 +64,8 @@ const graph = new Map();
 const reversePageDependencies = new Set();
 const reverseInternalWebDependencies = new Set();
 const invalidServerDependencies = new Set();
+const authSessionQueryOwners = new Set();
+const authExpiredListenerOwners = new Set();
 const invalidWorkspaceDependencies = [];
 const allowedWorkspaceDependencies = {
   shared: new Set(),
@@ -94,6 +96,12 @@ for (const file of files) {
   const source = await readFile(file, "utf8");
   const dependencies = new Set();
   const sourcePath = displayPath(file);
+  if (/queryKey:\s*queryKeys\.me\b/.test(source)) {
+    authSessionQueryOwners.add(sourcePath);
+  }
+  if (/\.addEventListener\(\s*authExpiredEvent\b/.test(source)) {
+    authExpiredListenerOwners.add(sourcePath);
+  }
   for (const match of source.matchAll(importPattern)) {
     const specifier = match[1];
     const target = resolveImport(file, specifier);
@@ -159,19 +167,30 @@ if (invalidWorkspaceDependencies.length > 0) {
   );
 }
 
-const allowedReversePageDependencies = new Set([
-  "packages/web/src/lib/image-editor-capability-loader.ts -> packages/web/src/pages/admin/image-editor-capability.ts"
-]);
+const authSessionOwner = "packages/web/src/hooks/useAuthSession.tsx";
+if (
+  authSessionQueryOwners.size !== 1
+  || !authSessionQueryOwners.has(authSessionOwner)
+  || authExpiredListenerOwners.size !== 1
+  || !authExpiredListenerOwners.has(authSessionOwner)
+) {
+  throw new Error(
+    "source-contract: auth session ownership changed: "
+    + JSON.stringify({
+      authSessionQueryOwners: [...authSessionQueryOwners],
+      authExpiredListenerOwners: [...authExpiredListenerOwners]
+    })
+  );
+}
+
+const allowedReversePageDependencies = new Set();
 const unexpectedReverseDependencies = [...reversePageDependencies].filter(
   (edge) => !allowedReversePageDependencies.has(edge)
 );
 const staleReverseAllowlist = [...allowedReversePageDependencies].filter(
   (edge) => !reversePageDependencies.has(edge)
 );
-const allowedReverseInternalWebDependencies = new Set([
-  "packages/web/src/hooks/useAdminImageDetailCapability.ts -> packages/web/src/components/image/ImageDetailModal.tsx",
-  "packages/web/src/hooks/useAdminImageDetailCapability.ts -> packages/web/src/components/image/image-admin-details-loader.ts"
-]);
+const allowedReverseInternalWebDependencies = new Set();
 const unexpectedInternalWebDependencies = [...reverseInternalWebDependencies]
   .filter((edge) => !allowedReverseInternalWebDependencies.has(edge));
 const staleInternalWebAllowlist = [...allowedReverseInternalWebDependencies]
@@ -229,12 +248,7 @@ function visit(file) {
 }
 for (const file of files) if (!indexes.has(file)) visit(file);
 
-const allowedCycles = new Set([
-  [
-    "packages/web/src/lib/image-editor-capability-loader.ts",
-    "packages/web/src/pages/admin/image-editor-capability.ts"
-  ].sort().join(" | ")
-]);
+const allowedCycles = new Set();
 const unexpectedCycles = components.filter((cycle) => !allowedCycles.has(cycle));
 const staleCycleAllowlist = [...allowedCycles].filter(
   (cycle) => !components.includes(cycle)
@@ -304,6 +318,6 @@ if (missingExampleKeys.length || unknownExampleKeys.length) {
 }
 
 console.log(
-  `source-contract: ${files.length} modules, ${components.length} allowlisted cycle, `
+  `source-contract: ${files.length} modules, ${components.length} dependency cycles, `
   + `${defaultKeys.size} runtime config keys`
 );

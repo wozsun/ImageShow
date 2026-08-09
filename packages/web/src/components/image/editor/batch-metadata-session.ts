@@ -6,11 +6,11 @@ import type {
 import type {
   BatchEditableImageSnapshot,
   ImageDraft
-} from "../../lib/types.js";
+} from "../../../lib/types.js";
 import {
   normalizeAuthor,
   normalizeTheme
-} from "../../lib/upload/upload-utils.js";
+} from "../../../lib/upload/upload-utils.js";
 
 export type BatchMetadataUpdate = BatchImageUpdateItemInputDto;
 

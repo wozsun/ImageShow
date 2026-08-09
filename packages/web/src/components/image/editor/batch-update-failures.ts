@@ -1,5 +1,5 @@
 import type { BatchImageUpdateResponse } from "@imageshow/shared/browser";
-import { shortImageId } from "../../lib/ui/formatters.js";
+import { shortImageId } from "../../../lib/ui/formatters.js";
 
 const failureSampleLimit = 5;
 const failureCodeLimit = 20;

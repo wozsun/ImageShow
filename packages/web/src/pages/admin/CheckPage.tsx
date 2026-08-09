@@ -13,7 +13,7 @@ import { DialogFrame } from "../../components/feedback/DialogFrame.js";
 import { StableButtonLabel } from "../../components/data-display/StableButtonLabel.js";
 import { migrateStorageBackend } from "../../lib/api/storage-backend-migration.js";
 import { invalidateStorageData } from "../../lib/api/query-invalidation.js";
-import { useAdminPermissions } from "../../lib/api/site-data.js";
+import { useAdminPermissions } from "../../hooks/useAuthSession.js";
 import { useAdminCheckStatus } from "../../lib/api/ready-image-cache.js";
 import {
   formatBytes,

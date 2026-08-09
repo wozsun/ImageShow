@@ -40,7 +40,7 @@ import type { Author, Tag, Theme } from "../../lib/types.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
 import { invalidateImageData } from "../../lib/api/query-invalidation.js";
 import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
-import { useAdminPermissions } from "../../lib/api/site-data.js";
+import { useAdminPermissions } from "../../hooks/useAuthSession.js";
 import { useReorderControlFocus } from "../../hooks/useReorderControlFocus.js";
 import "../../styles/admin/entity.css";
 

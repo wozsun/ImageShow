@@ -3,12 +3,12 @@ import type {
   BatchImageUpdateRequestDto,
   BatchImageUpdateResponse
 } from "@imageshow/shared/browser";
-import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
-import { api } from "../../lib/api/client.js";
-import { readEditableImageSnapshots } from "../../lib/api/image-edit.js";
-import { adminApiBasePath } from "../../lib/constants.js";
-import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
-import type { BatchEditableImageSnapshot } from "../../lib/types.js";
+import { useAsyncActionStatus } from "../../../hooks/useAsyncActionStatus.js";
+import { api } from "../../../lib/api/client.js";
+import { readEditableImageSnapshots } from "../../../lib/api/image-edit.js";
+import { adminApiBasePath } from "../../../lib/constants.js";
+import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
+import type { BatchEditableImageSnapshot } from "../../../lib/types.js";
 import { summarizeBatchUpdateFailures } from "./batch-update-failures.js";
 import {
   createBatchMetadataSaveReport,

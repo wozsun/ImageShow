@@ -1,7 +1,8 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { Link, NavLink, useLocation } from "react-router";
 import { adminBasePath, publicRootPath } from "../../lib/constants.js";
-import { hasSessionProbeHint, useAuthMe, useSiteConfig } from "../../lib/api/site-data.js";
+import { useSiteConfig } from "../../lib/api/site-data.js";
+import { useAuthMe } from "../../hooks/useAuthSession.js";
 import {
   publicNavigationHeaderHideThreshold,
   publicNavigationHeaderRevealThreshold,
@@ -23,8 +24,7 @@ export function AppHeader({
 } = {}) {
   const { pathname } = useLocation();
   const { data } = useSiteConfig();
-  const [shouldProbeSession, setShouldProbeSession] = useState(hasSessionProbeHint);
-  const { data: auth } = useAuthMe(shouldProbeSession);
+  const { data: auth } = useAuthMe();
   const siteName = data?.site?.name || "ImageShow";
   const headerRef = useRef<HTMLElement | null>(null);
   const upwardDistanceRef = useRef(0);
@@ -47,10 +47,6 @@ export function AppHeader({
   const showAdminEntry = Boolean(auth?.authenticated);
   const navClassName = (target: "/home" | "/gallery") => ({ isActive }: { isActive: boolean }) =>
     isActive || (pathname === "/" && rootPath === target) ? "active" : undefined;
-
-  useEffect(() => {
-    if (auth && !auth.authenticated) setShouldProbeSession(false);
-  }, [auth]);
 
   usePageScrollMovement(({ delta: scrollStep, position }) => {
     const header = headerRef.current;

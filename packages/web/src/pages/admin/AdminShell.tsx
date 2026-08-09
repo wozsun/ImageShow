@@ -4,10 +4,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { api, clearCsrfToken } from "../../lib/api/client.js";
 import { adminApiBasePath, adminBasePath } from "../../lib/constants.js";
 import {
-  clearSessionProbeHint,
-  useAuthMe,
-  useSiteConfig
-} from "../../lib/api/site-data.js";
+  clearSessionProbeHint
+} from "../../lib/api/auth-session.js";
+import { useSiteConfig } from "../../lib/api/site-data.js";
+import { useAuthMe } from "../../hooks/useAuthSession.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
 import { AppLoadingScreen } from "../../components/feedback/AppLoadingScreen.js";
 import { applyUiColorContext } from "../../lib/ui/apply-ui-color-context.js";

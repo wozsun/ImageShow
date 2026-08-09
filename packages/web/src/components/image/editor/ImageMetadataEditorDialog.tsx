@@ -1,36 +1,36 @@
 import { lazy, Suspense, useEffect, useRef, useState, type RefObject } from "react";
 import { adminPermissions } from "@imageshow/shared/browser";
-import { AdminIcon } from "../../components/icon/AdminIcon.js";
-import { AsyncActionButton } from "../../components/actions/AsyncActionButton.js";
-import { TwoStepConfirmIconButton } from "../../components/actions/TwoStepConfirmIconButton.js";
-import { ConfirmDialog } from "../../components/feedback/ConfirmDialog.js";
-import { DialogFrame } from "../../components/feedback/DialogFrame.js";
-import { WorkflowDefaultFields } from "../../components/form/WorkflowDefaultFields.js";
-import { WorkflowCollapsePanel } from "../../components/layout/WorkflowCollapsePanel.js";
-import { ImageThumbnail } from "../../components/image/ImageThumbnail.js";
-import { ImagePreviewModal } from "../../components/image/ImagePreviewModal.js";
-import { AdminPagination } from "../../components/navigation/AdminPagination.js";
-import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
-import { ImageDraftFields } from "../../components/form/ImageDraftFields.js";
-import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
-import { moveImageToTrash } from "../../lib/api/image-mutations.js";
-import { useAdminPermissions } from "../../lib/api/site-data.js";
+import { AdminIcon } from "../../icon/AdminIcon.js";
+import { AsyncActionButton } from "../../actions/AsyncActionButton.js";
+import { TwoStepConfirmIconButton } from "../../actions/TwoStepConfirmIconButton.js";
+import { ConfirmDialog } from "../../feedback/ConfirmDialog.js";
+import { DialogFrame } from "../../feedback/DialogFrame.js";
+import { WorkflowDefaultFields } from "../../form/WorkflowDefaultFields.js";
+import { WorkflowCollapsePanel } from "../../layout/WorkflowCollapsePanel.js";
+import { ImageThumbnail } from "../ImageThumbnail.js";
+import { ImagePreviewModal } from "../ImagePreviewModal.js";
+import { AdminPagination } from "../../navigation/AdminPagination.js";
+import { OverlayScrollbar } from "../../layout/OverlayScrollbar.js";
+import { ImageDraftFields } from "../../form/ImageDraftFields.js";
+import { useAsyncActionStatus } from "../../../hooks/useAsyncActionStatus.js";
+import { moveImageToTrash } from "../../../lib/api/image-mutations.js";
+import { useAdminPermissions } from "../../../hooks/useAuthSession.js";
 import {
   createPageLifetimeModuleLoader
-} from "../../lib/page-lifetime-module-loader.js";
-import { facetDisplayName, formatBytes, formatDimensions, shortImageId } from "../../lib/ui/formatters.js";
-import { preloadIntentProps } from "../../lib/ui/preload-intent.js";
-import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
-import { batchCommonBrightnessOptions, batchCommonDeviceOptions, cardBrightnessSelectOptions, editCardDeviceSelectOptions } from "../../lib/ui/select-options.js";
-import { storageNameResolver, useStorageOptions } from "../../lib/api/storage-options.js";
+} from "../../../lib/page-lifetime-module-loader.js";
+import { facetDisplayName, formatBytes, formatDimensions, shortImageId } from "../../../lib/ui/formatters.js";
+import { preloadIntentProps } from "../../../lib/ui/preload-intent.js";
+import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
+import { batchCommonBrightnessOptions, batchCommonDeviceOptions, cardBrightnessSelectOptions, editCardDeviceSelectOptions } from "../../../lib/ui/select-options.js";
+import { storageNameResolver, useStorageOptions } from "../../../lib/api/storage-options.js";
 import type {
   BatchEditableImageSnapshot,
   Brightness,
   Device,
   FacetOption,
   ImageDraft
-} from "../../lib/types.js";
-import { mergeBatchEditCommonAttributes } from "../../lib/upload/upload-utils.js";
+} from "../../../lib/types.js";
+import { mergeBatchEditCommonAttributes } from "../../../lib/upload/upload-utils.js";
 import { BatchMetadataSaveSummary } from "./BatchMetadataSaveSummary.js";
 import {
   useBatchMetadataOperations

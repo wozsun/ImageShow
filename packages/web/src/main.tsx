@@ -5,6 +5,7 @@ import { BrowserRouter, useLocation } from "react-router";
 import { AppRoutes } from "./AppRoutes.js";
 import { SiteHead } from "./components/layout/SiteHead.js";
 import { OverlayScrollbar } from "./components/layout/OverlayScrollbar.js";
+import { AuthSessionProvider } from "./hooks/useAuthSession.js";
 import { adminBasePath } from "./lib/constants.js";
 import "./styles/app-core.css";
 
@@ -23,9 +24,11 @@ createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <SiteHead />
-        <AppRoutes />
-        <AppOverlayScrollbar />
+        <AuthSessionProvider>
+          <SiteHead />
+          <AppRoutes />
+          <AppOverlayScrollbar />
+        </AuthSessionProvider>
       </BrowserRouter>
     </QueryClientProvider>
   </React.StrictMode>

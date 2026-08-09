@@ -6,24 +6,24 @@ import {
 } from "react";
 import {
   loadImageAdminDetailsModule
-} from "../components/image/image-admin-details-loader.js";
-import { AsyncIntentFence } from "../lib/async-intent-fence.js";
+} from "./image-admin-details-loader.js";
+import { AsyncIntentFence } from "../../lib/async-intent-fence.js";
 import {
   createPageLifetimeModuleLoader
-} from "../lib/page-lifetime-module-loader.js";
+} from "../../lib/page-lifetime-module-loader.js";
 import type {
   AdminImageDetailItem,
   ImageItem
-} from "../lib/types.js";
+} from "../../lib/types.js";
 
 type ImageDetailModalModule =
-  typeof import("../components/image/ImageDetailModal.js");
+  typeof import("./ImageDetailModal.js");
 type ImageDetailModalComponent = ImageDetailModalModule["ImageDetailModal"];
 type AdminDetailItem = AdminImageDetailItem | ImageItem;
 
 const loadImageDetailModalModule =
   createPageLifetimeModuleLoader<ImageDetailModalModule>(
-    () => import("../components/image/ImageDetailModal.js")
+    () => import("./ImageDetailModal.js")
   );
 
 function loadAdminImageDetailCapability() {

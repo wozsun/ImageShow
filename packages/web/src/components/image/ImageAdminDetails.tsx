@@ -16,17 +16,17 @@ import { adminApiBasePath } from "../../lib/constants.js";
 import { queryKeys } from "../../lib/api/query-keys.js";
 import {
   clearSessionProbeHint,
-  hasSessionProbeHint,
-  useAuthMe
-} from "../../lib/api/site-data.js";
+  hasSessionProbeHint
+} from "../../lib/api/auth-session.js";
+import { useAuthMe } from "../../hooks/useAuthSession.js";
 import {
   isImageNotEditableError,
   type ImageEditorTarget
-} from "../../lib/image-editor-capability-loader.js";
+} from "./editor/image-editor-capability-loader.js";
 import { errorMessage, formatDate } from "../../lib/ui/formatters.js";
 import { preloadIntentProps } from "../../lib/ui/preload-intent.js";
 import { storageBackendLabel } from "../../lib/ui/select-options.js";
-import { useImageEditorCapability } from "../../hooks/useImageEditorCapability.js";
+import { useImageEditorCapability } from "./editor/useImageEditorCapability.js";
 import { Icon } from "../icon/Icon.js";
 import type {
   AdminImageDetailItem,
@@ -91,7 +91,7 @@ export function ImageAdminDetails({
   const [accessAvailable, setAccessAvailable] = useState(
     () => admin || hasSessionProbeHint()
   );
-  const authQuery = useAuthMe(!admin && accessAvailable);
+  const authQuery = useAuthMe();
   const accessConfirmed = admin || authQuery.data?.authenticated === true;
   const [expanded, setExpanded] = useState(() => admin);
   const [editSuppressed, setEditSuppressed] = useState(false);

@@ -8,7 +8,7 @@ import { adminApiBasePath } from "../../lib/constants.js";
 import {
   clearSessionProbeHint,
   rememberSessionProbeHint
-} from "../../lib/api/site-data.js";
+} from "../../lib/api/auth-session.js";
 import { cssUrl } from "../../lib/ui/formatters.js";
 import { establishAndConfirmAdminSession } from "./admin-login-session.js";
 import { useLoginVisualViewport } from "./useLoginVisualViewport.js";

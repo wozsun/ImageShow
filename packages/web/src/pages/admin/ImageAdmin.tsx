@@ -47,9 +47,9 @@ import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
 import { invalidateImageData } from "../../lib/api/query-invalidation.js";
 import { AsyncIntentFence } from "../../lib/async-intent-fence.js";
 import { useAdminPreference } from "../../hooks/useAdminPreferences.js";
-import { useAdminPermissions } from "../../lib/api/site-data.js";
-import { useAdminImageDetailCapability } from "../../hooks/useAdminImageDetailCapability.js";
-import { useImageEditorCapability } from "../../hooks/useImageEditorCapability.js";
+import { useAdminPermissions } from "../../hooks/useAuthSession.js";
+import { useAdminImageDetailCapability } from "../../components/image/useAdminImageDetailCapability.js";
+import { useImageEditorCapability } from "../../components/image/editor/useImageEditorCapability.js";
 import {
   mobileViewportMediaQuery,
   useMediaQuery

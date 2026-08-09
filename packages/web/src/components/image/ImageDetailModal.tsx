@@ -18,7 +18,8 @@ import type {
   ImageItem,
   PublicImageItem
 } from "../../lib/types.js";
-import { hasSessionProbeHint, useGalleryFacets, useSiteConfig } from "../../lib/api/site-data.js";
+import { hasSessionProbeHint } from "../../lib/api/auth-session.js";
+import { useGalleryFacets, useSiteConfig } from "../../lib/api/site-data.js";
 import { useAnimatedClose } from "../../hooks/useAnimatedClose.js";
 import { usePageScrollLock } from "../../hooks/usePageScrollLock.js";
 import { useDialogFocus } from "../../hooks/useDialogFocus.js";
