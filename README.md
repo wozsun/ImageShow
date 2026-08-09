@@ -109,7 +109,13 @@ Compose、`.env` 或 Secret 提供。内置 Redis 位于 Compose 私有网络且
   5 秒 TTL 探针键上实际执行，检查后尝试立即 `UNLINK`，权限不允许时由 TTL 收口；
   ACL 拒绝不能仅凭 `COMMAND INFO` 通过。HTTP 会先开放 `/livez` 与
 `/readyz`，但当前进程首次通过 Redis 能力校验前不开放任何业务路由，也不启动 worker。
-数据库迁移完成后，应用还会用一条专用 PostgreSQL session 持有固定生命周期 advisory
+空库只从唯一 `schema.sql` 初始化；非空库只读校验应用侧结构契约。额外旧表可以保留，
+必需表白名单接受 v4.6 精确定义的 `metadata.extra` / `background_job.result` 和仍含
+`thumb.generate` 的 job type CHECK，但不会恢复该任务的 producer / handler；其他额外列或
+约束、触发器、规则及唯一 / 普通索引等写语义对象拒绝启动。只读会话、绕过 FK 或缺少运行
+所需 DML 权限也不能就绪，应用不会自动迁移或删除。
+完成该步骤后，应用还会用一条专用
+PostgreSQL session 持有固定生命周期 advisory
 lock；连接同一数据库的第二个 ImageShow 进程会在清理、管理员初始化、HTTP 和 worker
 启动前明确退出。该 session 意外断开即表示单实例所有权丢失，当前进程立即停止接收新
 请求，执行既有有界排空并关闭数据库连接池后以失败状态退出；这只是误部署保护，不代表

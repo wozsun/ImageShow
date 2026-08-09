@@ -33,8 +33,6 @@ let lastHistoryCleanup = 0;
 function jobTypeConcurrency(type: string): number {
   const config = getRuntimeConfig();
   switch (type) {
-    case "thumb.generate":
-      return config.upload.concurrency;
     case "move.cleanup":
       return config.background_job.move_cleanup_concurrency;
     default:
@@ -66,8 +64,7 @@ async function settleBackgroundJob(
   if (completion.status === "stopped") {
     if (!await rescheduleBackgroundJob(
       job,
-      0,
-      { reason: "worker_stopping" }
+      0
     )) {
       logDiscardedBackgroundJobTransition(job, "rescheduled");
     }
@@ -90,12 +87,11 @@ async function settleBackgroundJob(
     transition = "rescheduled";
     stored = await rescheduleBackgroundJob(
       job,
-      outcome.delayMs,
-      outcome.result
+      outcome.delayMs
     );
   } else {
     transition = "succeeded";
-    stored = await markBackgroundJobSucceeded(job, outcome.result);
+    stored = await markBackgroundJobSucceeded(job);
   }
   if (!stored) logDiscardedBackgroundJobTransition(job, transition);
 }

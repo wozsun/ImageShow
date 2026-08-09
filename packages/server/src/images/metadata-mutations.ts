@@ -289,6 +289,7 @@ async function updateImageMetadataWithinSync(
                   source=COALESCE($8,source),
                   original=COALESCE($9,original),
                   author=CASE WHEN $11::boolean THEN $10 ELSE author END,
+                  thumbnail_size=COALESCE($17,thumbnail_size),
                   updated_at=now()
             WHERE id=$1
               AND storage_slug=$12
@@ -313,7 +314,8 @@ async function updateImageMetadataWithinSync(
             sourceImage.object_key,
             sourceImage.device,
             sourceImage.brightness,
-            sourceImage.theme
+            sourceImage.theme,
+            relocation?.thumbnailSize ?? null
           ]
         );
         const updatedRow = result.rows[0] as MutationImageRecord | undefined;

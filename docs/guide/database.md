@@ -1,18 +1,32 @@
 # 数据库结构
 
-PostgreSQL 共 10 张业务表，另有迁移记录表 `schema_migrations`。全新数据库只执行
-`0001_initial.sql`；随机图 `id` 的末 12 位查询所需 ready 部分表达式索引，以及统一
+PostgreSQL 共 10 张业务表，不保存迁移账本或 schema 版本表。空数据库只执行唯一
+`packages/server/schema.sql`；随机图 `id` 的末 12 位查询所需 ready 部分表达式索引，以及统一
 Redis 图片投影的权威 revision 单行表均属于当前基线。PostgreSQL 是唯一真相源，Redis
 图片投影、查询缓存与管理员会话均不替代数据库真值。
 
-`0001_initial.sql` 按依赖和运行职责排列：迁移账本 → 存储注册表 →
+`schema.sql` 按依赖和运行职责排列：存储注册表 →
 公共词表 → 图片真值、关联与投影 revision → 导入生命周期 → 后台任务 → 管理员身份。
 每张表内部统一为标识、状态 / 所有权、业务字段、错误 / 重试和时间字段；种子、约束与
 索引紧跟所属表，图片索引再按直接查询 / 外键、列表游标、随机选择 / 回收职责排列。
 
-当前代码库只保留完整的新安装基线，不提供额外兼容或升级迁移。既有部署必须已经具备
-与当前基线一致的 schema；应用不会在迁移文件之外猜测、修补或删除旧 schema 状态，也
-不会自动改写既有 `schema_migrations` 历史。
+当前代码库只保留完整的新安装基线，不提供编号迁移、迁移账本或数据库升级路径。启动在
+advisory bootstrap lock 内确认所有非系统 schema 都没有用户关系后，才在一个事务中执行
+完整 schema；并发启动由同一把锁串行化，失败会回滚全部 DDL。全部连接固定使用
+`search_path=public`。非空数据库按源码中的 structural contract revision 只读核对 10 张
+业务表的关系类型、必需列类型 / 可空性 / 默认值、关键 PK / FK / CHECK、FK 四个内部触发器、
+全部唯一 / 普通索引和必需种子，并确认会话可写、`session_replication_role=origin`、public
+schema 可用且当前角色具备每张表运行所需的 SELECT / INSERT / UPDATE / DELETE 权限；全部
+检查只读，不用回滚写探针。缺失或不兼容会在业务启动前明确失败，也不会自动补表、改表、
+删列或写版本标记。
+
+额外旧表及其自身索引不影响 readiness；必需表中的额外列只精确接受 v4.6 遗留定义
+`metadata.extra JSONB NOT NULL DEFAULT '{}'` 与
+`background_job.result JSONB NOT NULL DEFAULT '{}'`，并接受 v4.6 仍含 `thumb.generate` 的
+精确 `background_job.type` CHECK。当前源码不读写这两个字段，也不会生产或处理
+`thumb.generate`；其他额外列、分区 / 继承、RLS、触发器 / 规则，以及新增约束或唯一 / 普通
+索引都可能改变当前写入语义，因此一律拒绝。这些白名单旧定义留在数据库不会影响正常
+CRUD，但也不构成数据库升级能力。
 
 ## metadata —— 图片主表
 
@@ -31,7 +45,6 @@ Redis 图片投影的权威 revision 单行表均属于当前基线。PostgreSQL
 | `width` / `height` | 像素尺寸 |
 | `image_size` / `thumbnail_size` | 标准化图片字节数 / 缩略图字节数 |
 | `title` / `description` / `source` / `original` | 标题 / 描述 / 来源 / 原图链接；标题和描述在去除首尾空白后分别最多 80 / 500 个普通汉字，外部链接仅允许 HTTPS |
-| `extra` | 预留扩展属性 JSON；用于后续 EXIF、AI 标签、主色、来源平台等非核心字段 |
 | `image_time` | 图片展示 / 图库排序时间；JSONL 可指定，同一前端批次未指定时共享 `batch_time`，省略时使用会话创建时间 |
 | `deleted_at` | 软删时间 |
 | `purge_state` | 彻底删除认领状态：`idle` / `purging` / `failed`；只有 `idle` 可恢复 |
@@ -43,6 +56,18 @@ Redis 图片投影的权威 revision 单行表均属于当前基线。PostgreSQL
 
 图片分类直接由 `device`、`brightness` 与 `theme` 表达，人工可读目录也使用这三项；
 随机候选由统一 Redis ready-image ZSET 投影维护，PostgreSQL 不保存分类连续编号。
+
+缩略图缺失由唯一 repair 服务处理：持有单图存储 mutation lock 后重读 PostgreSQL 权威
+位置，流式校验本地源对象或校验远端 Buffer 并重建缩略图。任何正式键写入前，先持久化
+带物理 namespace、预期 SHA-256 / 大小及精确重试字节的 `move.cleanup` write-ahead
+receipt；只有与该回执完全一致的写入才可越过对象占用检查。写入成功后再以
+`id + storage_slug + object_key` 条件回写 `thumbnail_size`；失败或回包丢失时 Worker 仍用
+同一字节精确采用或重试候选，任务成功后删除 payload 中的临时重试字节。单应用生命周期
+锁取得后、HTTP 就绪前，从 PostgreSQL 重建未解决 repair 的进程内投影；入队与 Worker
+处理同步更新它，避免每个缩略图额外查询数据库。投影命中时公开与后台读取均使用原图
+no-store 降级，不把仅凭存在性的对象发布为 immutable。分类移动和存储迁移共用该服务；
+它们在风险写入前捕获候选 namespace，失锁后的清理回执直接使用该不可变凭据，不再借第
+二条 shared lock 形成排队写锁死锁。无生产者的缩略图后台任务已删除。
 
 彻底删除先用 `FOR UPDATE SKIP LOCKED` 把 deleted 行原子认领为 `purging` 并增加
 `purge_attempts`，随后在该图的存储 mutation lock 内再次核对状态、尝试号和对象位置。
@@ -97,12 +122,12 @@ Redis meta 的 `applied_revision` 只有在精确同步或全量重建完成完�
 | 字段 | 含义 |
 | --- | --- |
 | `id` (PK) | 任务 id |
-| `type` | `thumb.generate` / `move.cleanup` / `import.cleanup` / `trash.purge` / `cache.rebuild` |
+| `type` | `move.cleanup` / `import.cleanup` / `trash.purge` / `cache.rebuild` |
 | `status` | `pending` / `running` / `succeeded` / `failed` / `ignored` |
 | `execution_token` | 每次领取生成的 UUID 所有权栅栏；仅当前 `running` 执行者持有，退出运行态时清空 |
 | `target_id` | 目标图片 id |
 | `idempotency_key` | 幂等键 |
-| `payload` / `result` / `error` | 入参 / 结果 / 错误 |
+| `payload` / `error` | 入参与错误；终态结果不在队列表中重复持久化 |
 | `retry_count` / `next_retry_at` | 重试次数与下次重试时间 |
 | `created_at` / `updated_at` | 时间戳 |
 

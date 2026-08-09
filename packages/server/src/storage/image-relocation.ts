@@ -3,7 +3,7 @@ import type { PoolClient } from "pg";
 import { ApiError, errorMessage } from "../core/api-error.ts";
 import { pool } from "../core/db.ts";
 import { logger } from "../core/logger.ts";
-import { createThumbnail, md5Buffer } from "../images/processing.ts";
+import { repairStoredThumbnailWithLockHeld } from "../images/thumbnail-repair.ts";
 import {
   storageObjectKey,
   thumbnailObjectKey
@@ -14,8 +14,9 @@ import {
   ensureVerifiedObjectAtTarget
 } from "./object-transfer.ts";
 import {
+  assertThumbnailRepairNotPending,
   captureMoveCleanupObjects,
-  enqueueObjectsForCleanup,
+  enqueueCapturedObjectsForCleanupDetached,
   enqueueCapturedObjectsForCleanup,
   type CapturedMoveCleanupObject,
   type MoveCleanupObjectInput
@@ -42,7 +43,8 @@ export type PreparedImageRelocation = {
   nextObjectKey: string;
   backend: string;
   target: ImageClassificationTarget;
-  createdObjects: MoveCleanupObjectInput[];
+  thumbnailSize: number | null;
+  createdObjects: CapturedMoveCleanupObject[];
   sourceObjects: CapturedMoveCleanupObject[];
 };
 
@@ -60,7 +62,7 @@ function sourceMissingError(image: RelocatableImage, prefix: string, key: string
   );
 }
 
-function uniqueObjects(objects: MoveCleanupObjectInput[]) {
+function uniqueObjects<T extends MoveCleanupObjectInput>(objects: T[]): T[] {
   const seen = new Set<string>();
   return objects.filter((object) => {
     const identity = `${object.backend}:${object.prefix}:${object.key}`;
@@ -83,8 +85,9 @@ export async function prepareVerifiedImageRelocation(
   signal?.throwIfAborted();
   const storage = await resolveStorageAccess(image.storage_slug);
   signal?.throwIfAborted();
-  const createdObjects: MoveCleanupObjectInput[] = [];
+  const createdObjects: CapturedMoveCleanupObject[] = [];
   const sourceObjects: MoveCleanupObjectInput[] = [];
+  let thumbnailSize: number | null = null;
   let capturedSourceObjects: CapturedMoveCleanupObject[] = [];
   const nextObjectKey = storageObjectKey(
     target.device,
@@ -93,8 +96,20 @@ export async function prepareVerifiedImageRelocation(
     image.id,
     image.ext
   );
-  const cleanupCandidate = (object: MoveCleanupObjectInput) =>
-    enqueueObjectsForCleanup(
+  const captureCandidate = async (
+    prefix: "media" | "thumbs",
+    key: string
+  ) => {
+    const [captured] = await captureMoveCleanupObjects([{
+      prefix,
+      key,
+      backend: image.storage_slug
+    }]);
+    if (!captured) throw new Error("Candidate namespace could not be captured");
+    return captured;
+  };
+  const cleanupCandidate = (object: CapturedMoveCleanupObject) => () =>
+    enqueueCapturedObjectsForCleanupDetached(
       image.id,
       [object],
       `${operation}_candidate_integrity_failure`
@@ -103,9 +118,17 @@ export async function prepareVerifiedImageRelocation(
   try {
     signal?.throwIfAborted();
     if (nextObjectKey !== image.object_key) {
+      const sourceThumbnailKey = thumbnailObjectKey(image.object_key);
+      await assertThumbnailRepairNotPending(
+        image.id,
+        storage.config,
+        sourceThumbnailKey
+      );
+      signal?.throwIfAborted();
       if (!await storage.driver.exists("media", image.object_key)) {
         throw sourceMissingError(image, "media", image.object_key);
       }
+      const mediaCandidate = await captureCandidate("media", nextObjectKey);
       const mediaResult = await copyVerifiedObjectWithinStorage({
         storage,
         fromPrefix: "media",
@@ -113,41 +136,37 @@ export async function prepareVerifiedImageRelocation(
         toPrefix: "media",
         toKey: nextObjectKey,
         expectedSource: { md5: image.md5 ?? undefined },
-        cleanupCandidate
+        cleanupCandidate: cleanupCandidate(mediaCandidate)
       });
-      signal?.throwIfAborted();
       if (mediaResult.created) {
-        createdObjects.push({
-          prefix: "media",
-          key: nextObjectKey,
-          backend: image.storage_slug
-        });
+        createdObjects.push(mediaCandidate);
       }
+      signal?.throwIfAborted();
       sourceObjects.push({
         prefix: "media",
         key: image.object_key,
         backend: image.storage_slug
       });
 
-      const sourceThumbnailKey = thumbnailObjectKey(image.object_key);
       const targetThumbnailKey = thumbnailObjectKey(nextObjectKey);
       if (await storage.driver.exists("thumbs", sourceThumbnailKey)) {
+        const thumbnailCandidate = await captureCandidate(
+          "thumbs",
+          targetThumbnailKey
+        );
         const thumbnailResult = await copyVerifiedObjectWithinStorage({
           storage,
           fromPrefix: "thumbs",
           fromKey: sourceThumbnailKey,
           toPrefix: "thumbs",
           toKey: targetThumbnailKey,
-          cleanupCandidate
+          cleanupCandidate: cleanupCandidate(thumbnailCandidate)
         });
-        signal?.throwIfAborted();
         if (thumbnailResult.created) {
-          createdObjects.push({
-            prefix: "thumbs",
-            key: targetThumbnailKey,
-            backend: image.storage_slug
-          });
+          createdObjects.push(thumbnailCandidate);
         }
+        signal?.throwIfAborted();
+        thumbnailSize = thumbnailResult.sourceDigest.size;
         sourceObjects.push({
           prefix: "thumbs",
           key: sourceThumbnailKey,
@@ -156,32 +175,40 @@ export async function prepareVerifiedImageRelocation(
       } else {
         const media = await storage.driver.readBuffer("media", image.object_key);
         signal?.throwIfAborted();
-        if (image.md5 && md5Buffer(media) !== image.md5) {
-          throw new ApiError(
-            502,
-            "storage_source_integrity_failed",
-            "源存储对象与数据库记录的 MD5 不一致",
-            { image_id: image.id, object_key: image.object_key }
-          );
-        }
-        const thumbnail = await createThumbnail(media);
+        const repair = await repairStoredThumbnailWithLockHeld(
+          image.id,
+          signal ?? new AbortController().signal,
+          {
+            expectedLocation: {
+              objectKey: image.object_key,
+              storageSlug: image.storage_slug
+            },
+            sourceBuffer: media
+          }
+        );
         signal?.throwIfAborted();
+        const thumbnailCandidate = await captureCandidate(
+          "thumbs",
+          targetThumbnailKey
+        );
         const thumbnailResult = await ensureVerifiedObjectAtTarget({
           target: storage,
           prefix: "thumbs",
           key: targetThumbnailKey,
-          body: thumbnail,
+          body: repair.thumbnail,
           contentType: "image/webp",
-          cleanupCandidate
+          cleanupCandidate: cleanupCandidate(thumbnailCandidate)
         });
-        signal?.throwIfAborted();
         if (thumbnailResult.created) {
-          createdObjects.push({
-            prefix: "thumbs",
-            key: targetThumbnailKey,
-            backend: image.storage_slug
-          });
+          createdObjects.push(thumbnailCandidate);
         }
+        signal?.throwIfAborted();
+        thumbnailSize = repair.thumbnailSize;
+        sourceObjects.push({
+          prefix: "thumbs",
+          key: sourceThumbnailKey,
+          backend: image.storage_slug
+        });
       }
     }
     capturedSourceObjects = await captureMoveCleanupObjects(
@@ -189,7 +216,7 @@ export async function prepareVerifiedImageRelocation(
     );
   } catch (error) {
     try {
-      await enqueueObjectsForCleanup(
+      await enqueueCapturedObjectsForCleanupDetached(
         image.id,
         uniqueObjects(createdObjects),
         `${operation}_prepare_failed`
@@ -216,6 +243,7 @@ export async function prepareVerifiedImageRelocation(
     nextObjectKey,
     backend: image.storage_slug,
     target,
+    thumbnailSize,
     createdObjects: uniqueObjects(createdObjects),
     sourceObjects: capturedSourceObjects
   };
@@ -226,7 +254,7 @@ export function discardPreparedImageRelocation(
   relocation: PreparedImageRelocation,
   reason: string
 ) {
-  return enqueueObjectsForCleanup(
+  return enqueueCapturedObjectsForCleanupDetached(
     relocation.imageId,
     relocation.createdObjects,
     reason

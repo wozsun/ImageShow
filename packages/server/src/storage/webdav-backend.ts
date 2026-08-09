@@ -397,7 +397,10 @@ export class WebdavBackend implements StorageDriver {
 
     const propfind = async (url: string, depth: "1" | "infinity") => {
       const res = await this.request(url, { method: "PROPFIND", headers: { ...this.auth(), Depth: depth, "Content-Type": "application/xml" }, body: PROPFIND_BODY });
-      if (res.status === 404) return [];
+      if (res.status === 404) {
+        await res.body?.cancel().catch(() => undefined);
+        return [];
+      }
       if (!res.ok) {
         await res.body?.cancel().catch(() => undefined);
         throw new ApiError(502, "storage_list_failed", `WebDAV PROPFIND failed (${res.status})`);

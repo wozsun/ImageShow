@@ -13,7 +13,7 @@ packages/web ─────► packages/shared
 ## 根目录职责
 
 - `package.json` 只编排 workspace 构建、类型检查、死代码检查和运维入口。
-- `scripts/build/` 生成 Web 图标、校验颜色与生产分块边界，并汇集服务端迁移及 SPA
+- `scripts/build/` 生成 Web 图标、校验颜色与生产分块边界，并装配服务端 schema 及 SPA
   静态资产；通用产物图解析由独立产物检查器承担，项目权限和请求预算规则留在门禁入口。
 - `scripts/runtime/` 只放容器内的命令包装；容器启动由 `docker-entrypoint.sh` 负责权限
   收敛后直接执行传入命令。
@@ -57,7 +57,7 @@ core / config
 
 - `src/http-app.ts` 只构造 Hono 应用、装配中间件和路由；导入模块不会初始化配置、
   创建目录或启动服务。
-- `src/index.ts` 显式初始化运行时配置和日志来源，再创建 HTTP 应用，执行迁移与
+- `src/index.ts` 显式初始化运行时配置和日志来源，再创建 HTTP 应用，初始化 / 校验 schema 与
   管理员初始化，启动 Worker 和 HTTP 服务，并处理优雅退出。
 - `src/admin-password-cli.ts` 是管理员密码恢复入口。
 - `src/healthcheck-cli.ts` 是容器 readiness 检查入口。

@@ -19,7 +19,9 @@ export async function publicImageUrls(objectKey: string, slug: string) {
   return {
     object_url: driver.publicObjectUrl("media", objectKey)
       || `${staticBase}${localMediaUrl("media", objectKey)}`,
-    thumb_url: driver.publicObjectUrl("thumbs", thumbKey)
-      || `${staticBase}${localMediaUrl("thumbs", thumbKey)}`
+    // Every thumbnail enters the application once so missing remote objects
+    // can repair or fall back. serveThumb still redirects healthy remote
+    // objects to their public URL with a short cache lifetime.
+    thumb_url: `${staticBase}${localMediaUrl("thumbs", thumbKey)}`
   };
 }

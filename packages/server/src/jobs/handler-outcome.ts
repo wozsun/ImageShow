@@ -1,19 +1,16 @@
 export type BackgroundJobOutcome =
-  | { status: "succeeded"; result?: unknown }
+  | { status: "succeeded" }
   | { status: "ignored"; reason: string }
-  | { status: "reschedule"; delayMs: number; result?: unknown };
+  | { status: "reschedule"; delayMs: number };
 
-export function jobSucceeded(result?: unknown): BackgroundJobOutcome {
-  return { status: "succeeded", result };
+export function jobSucceeded(): BackgroundJobOutcome {
+  return { status: "succeeded" };
 }
 
 export function jobIgnored(reason: string): BackgroundJobOutcome {
   return { status: "ignored", reason };
 }
 
-export function jobRescheduled(
-  delayMs: number,
-  result?: unknown
-): BackgroundJobOutcome {
-  return { status: "reschedule", delayMs, result };
+export function jobRescheduled(delayMs: number): BackgroundJobOutcome {
+  return { status: "reschedule", delayMs };
 }

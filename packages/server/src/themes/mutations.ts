@@ -174,18 +174,22 @@ async function reassignThemeImageToNone(
             const committed = await withTransaction(async (client) => {
               const result = await client.query(
                 `UPDATE metadata
-                    SET theme='none', object_key=$3, updated_at=now()
+                    SET theme='none',
+                        object_key=$3,
+                        thumbnail_size=COALESCE($4, thumbnail_size),
+                        updated_at=now()
                   WHERE id=$1
                     AND theme=$2
-                    AND storage_slug=$4
-                    AND object_key=$5
-                    AND device=$6
-                    AND brightness=$7
-                    AND status=$8`,
+                    AND storage_slug=$5
+                    AND object_key=$6
+                    AND device=$7
+                    AND brightness=$8
+                    AND status=$9`,
                 [
                   image.id,
                   theme,
                   relocation.nextObjectKey,
+                  relocation.thumbnailSize,
                   image.storage_slug,
                   image.object_key,
                   image.device,

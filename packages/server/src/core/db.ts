@@ -1,4 +1,4 @@
-import { readdir, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -6,6 +6,10 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import pg, { type PoolClient } from "pg";
 import { appConfig } from "@imageshow/shared";
 import { deploymentConfig } from "../config/deployment-config.ts";
+import {
+  assertDatabaseStructure,
+  databaseSchemaContractRevision
+} from "./database-contract.ts";
 import { logger } from "./logger.ts";
 
 const databaseConfig = deploymentConfig.database;
@@ -17,6 +21,7 @@ const poolConfig = {
   user: databaseConfig.user,
   password: databaseConfig.password,
   max: appConfig.pgPool.max,
+  options: "-c search_path=public",
   idleTimeoutMillis: appConfig.pgPool.idleTimeoutMillis,
   connectionTimeoutMillis: appConfig.pgPool.connectionTimeoutMillis,
   maxLifetimeSeconds: appConfig.pgPool.maxLifetimeSeconds
@@ -333,51 +338,74 @@ export function withAdvisoryLock<T>(
   return withAdvisoryLocks([{ key, mode }], work);
 }
 
-export function runMigrations() {
+export function initializeDatabaseSchema() {
   return withAdvisoryLock(
-    "imageshow:migrations",
-    (signal, client) => runMigrationsUnderLock(signal, client)
+    "imageshow:schema-bootstrap",
+    (signal, client) => initializeDatabaseSchemaUnderLock(signal, client)
   );
 }
 
-async function runMigrationsUnderLock(
+function databaseSchemaPath() {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    join(here, "..", "schema.sql"),
+    join(here, "..", "..", "schema.sql")
+  ];
+  const schemaPath = candidates.find((candidate) => existsSync(candidate));
+  if (!schemaPath) {
+    throw new Error("PostgreSQL clean-install schema asset is missing");
+  }
+  return schemaPath;
+}
+
+async function databaseHasNoUserRelations(client: PoolClient) {
+  const result = await client.query<{ relation_count: string }>(
+    `SELECT count(*)::text AS relation_count
+       FROM pg_class relation
+      JOIN pg_namespace namespace ON namespace.oid=relation.relnamespace
+      WHERE namespace.nspname <> 'information_schema'
+        AND left(namespace.nspname, 3) <> 'pg_'
+        AND relation.relkind IN ('r', 'p', 'v', 'm', 'S', 'f')`
+  );
+  return Number(result.rows[0]?.relation_count ?? -1) === 0;
+}
+
+function databaseReadinessError(error: unknown) {
+  const reason = error instanceof Error ? error.message : String(error);
+  return new Error(
+    `PostgreSQL database is non-empty but does not satisfy schema contract `
+      + `revision ${databaseSchemaContractRevision}: ${reason}`,
+    { cause: error }
+  );
+}
+
+async function initializeDatabaseSchemaUnderLock(
   signal: AbortSignal,
   client: PoolClient
 ) {
-  const here = dirname(fileURLToPath(import.meta.url));
-  const bundledMigrationDir = join(here, "..", "migrations");
-  const migrationDir = existsSync(bundledMigrationDir)
-    ? bundledMigrationDir
-    : join(here, "..", "..", "migrations");
-  const files = (await readdir(migrationDir)).filter((file) => file.endsWith(".sql")).sort();
-  for (const file of files) {
+  signal.throwIfAborted();
+  if (!await databaseHasNoUserRelations(client)) {
     signal.throwIfAborted();
-    const version = file.replace(/\.sql$/, "");
-    let applied = false;
     try {
-      applied = Boolean((await client.query(
-        "SELECT 1 FROM schema_migrations WHERE version = $1",
-        [version]
-      )).rowCount);
+      await assertCoreDatabaseReady(client);
     } catch (error) {
-      if ((error as { code?: string }).code !== "42P01") throw error;
+      throw databaseReadinessError(error);
     }
-    signal.throwIfAborted();
-    if (applied) continue;
+    return;
+  }
 
-    const body = await readFile(join(migrationDir, file), "utf8");
+  const body = await readFile(databaseSchemaPath(), "utf8");
+  signal.throwIfAborted();
+  await client.query("BEGIN");
+  try {
+    await client.query(body);
     signal.throwIfAborted();
-    await client.query("BEGIN");
-    try {
-      await client.query(body);
-      signal.throwIfAborted();
-      await client.query("INSERT INTO schema_migrations(version) VALUES($1)", [version]);
-      signal.throwIfAborted();
-      await client.query("COMMIT");
-    } catch (error) {
-      await client.query("ROLLBACK").catch(() => undefined);
-      throw error;
-    }
+    await assertCoreDatabaseReady(client);
+    signal.throwIfAborted();
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
   }
 }
 
@@ -385,37 +413,10 @@ export async function pingDb() {
   await pool.query("SELECT 1");
 }
 
-const readinessRelations = [
-  "schema_migrations",
-  "metadata",
-  "ready_image_revision",
-  "background_job",
-  "storage_backend",
-  "admin_account"
-] as const;
-
 export async function assertCoreDatabaseReady(
   database: Pick<PoolClient, "query"> = pool
 ) {
-  const result = await database.query<{ relation: string | null }>(
-    `SELECT to_regclass('public.' || relation)::text AS relation
-       FROM unnest($1::text[]) relation`,
-    [[...readinessRelations]]
-  );
-  if (
-    result.rows.length !== readinessRelations.length
-    || result.rows.some((row) => row.relation === null)
-  ) {
-    throw new Error("PostgreSQL core schema is incomplete");
-  }
-  const revision = (await database.query<{ revision: string }>(
-    `SELECT revision::text AS revision
-       FROM ready_image_revision
-      WHERE singleton=1`
-  )).rows[0]?.revision;
-  if (!revision || !/^\d+$/.test(revision)) {
-    throw new Error("PostgreSQL ready-image revision is not initialized");
-  }
+  await assertDatabaseStructure(database);
 }
 
 export async function requestDatabaseBackendCancellation(

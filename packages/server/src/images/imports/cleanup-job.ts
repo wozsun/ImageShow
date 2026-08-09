@@ -61,53 +61,46 @@ async function cancelExpiredCommittingImports(signal: AbortSignal) {
       LIMIT $1`,
     [appConfig.trashBatchSize]
   )).rows as ExpiredImportCandidate[];
-  if (!candidates.length) return 0;
+  if (!candidates.length) return;
 
-  let cancelled = 0;
   for (const candidate of candidates) {
     signal.throwIfAborted();
     const cancellation = await markImportCancelled(
       candidate.id,
       candidate.cancellation_generation
     );
-    const attempt = await (async () => {
-      try {
-        return await tryWithStorageLocationReadAndAdvisoryLocks(
-          [{ key: importSessionLockKey(candidate.id), acquisition: "try" }],
-          (lockSignal) => {
-            lockSignal.throwIfAborted();
-            return pool.query(
-              `UPDATE import_session
-                  SET status='cancelled',
-                      execution_token=NULL,
-                      raw_token=NULL,
-                      error='提交进程中断且会话已过期',
-                      updated_at=now()
-                WHERE id=$1
-                  AND created_at=$2::timestamptz
-                  AND status='committing'
-                  AND expires_at < now()`,
-              [candidate.id, candidate.cancellation_generation]
-            );
-          }
-        );
-      } finally {
-        // 未取得锁时没有发布 PostgreSQL 取消；取得锁则已经证明执行者退出。
-        await clearImportCancelled(cancellation);
-      }
-    })();
-    if (attempt.acquired) {
-      cancelled += attempt.value.rowCount ?? 0;
+    try {
+      await tryWithStorageLocationReadAndAdvisoryLocks(
+        [{ key: importSessionLockKey(candidate.id), acquisition: "try" }],
+        (lockSignal) => {
+          lockSignal.throwIfAborted();
+          return pool.query(
+            `UPDATE import_session
+                SET status='cancelled',
+                    execution_token=NULL,
+                    raw_token=NULL,
+                    error='提交进程中断且会话已过期',
+                    updated_at=now()
+              WHERE id=$1
+                AND created_at=$2::timestamptz
+                AND status='committing'
+                AND expires_at < now()`,
+            [candidate.id, candidate.cancellation_generation]
+          );
+        }
+      );
+    } finally {
+      // 未取得锁时没有发布 PostgreSQL 取消；取得锁则已经证明执行者退出。
+      await clearImportCancelled(cancellation);
     }
   }
-  return cancelled;
 }
 
 export async function handleImportCleanupJob(
   _job: BackgroundJob,
   signal: AbortSignal
 ): Promise<BackgroundJobOutcome> {
-  const cancelledCommitting = await cancelExpiredCommittingImports(signal);
+  await cancelExpiredCommittingImports(signal);
   signal.throwIfAborted();
   const candidates = (await pool.query(
     `SELECT id, created_at::text AS cancellation_generation
@@ -299,7 +292,7 @@ export async function handleImportCleanupJob(
   const cleanedCandidates = rows.filter(({ id }) => cleanedIdSet.has(id));
 
   signal.throwIfAborted();
-  const deletedExpired = await pool.query(
+  await pool.query(
     `DELETE FROM import_session AS session
       USING unnest($1::uuid[], $2::timestamptz[])
         AS candidate(id, created_at)
@@ -335,10 +328,7 @@ export async function handleImportCleanupJob(
     ));
     throw new Error(`import cleanup failed: ${messages.join("; ")}`);
   }
-  return jobSucceeded({
-    cleaned: deletedExpired.rowCount ?? 0,
-    cancelled_committing: cancelledCommitting
-  });
+  return jobSucceeded();
 }
 
 export async function scheduleImportCleanupJob() {

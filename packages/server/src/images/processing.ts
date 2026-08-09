@@ -4,18 +4,17 @@ import { fileTypeFromBuffer, fileTypeFromFile } from "file-type";
 import sharp from "sharp";
 import { ApiError } from "../core/api-error.ts";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
-import { thumbnailObjectKey } from "../storage/image-paths.ts";
 import { getInputImageMaxLongEdge, getThumbnailSettings } from "../config/app-settings.ts";
-import { getStorageBackend } from "../storage/backend-registry.ts";
 
-export function configureSharpConcurrency() {
+export function configureSharpRuntime() {
+  // Sharp/libvips otherwise keeps recently-opened file descriptors in its
+  // cache. Linux permits unlinking those paths, but Windows leaves classified
+  // or migrated local source objects permanently EBUSY. Object files are
+  // immutable and already cached at higher layers, so descriptor caching has
+  // no ownership benefit here.
+  sharp.cache({ files: 0 });
   sharp.concurrency(Math.max(1, getRuntimeConfig().upload.concurrency));
 }
-import {
-  readStorageBuffer,
-  writeStorageBuffer
-} from "../storage/object-access.ts";
-import { safeStoragePath } from "../storage/object-keys.ts";
 
 type ImageInput = Buffer | string;
 export type ImageExt = "jpg" | "png" | "webp" | "gif" | "avif";
@@ -168,20 +167,4 @@ async function transcodeImageToWebp(input: ImageInput, settings: ImageTranscodeS
     lastDropMultiplier = overLimitMultiplier;
     quality = Math.max(settings.min_quality, quality - settings.quality_step * overLimitMultiplier);
   }
-}
-
-export async function generateStoredThumbnail(
-  objectKey: string,
-  storageSlug: string,
-  signal?: AbortSignal
-) {
-  signal?.throwIfAborted();
-  const config = await getStorageBackend(storageSlug);
-  signal?.throwIfAborted();
-  const input = config.type === "local" ? safeStoragePath("media", objectKey) : await readStorageBuffer("media", objectKey, storageSlug);
-  const thumbnail = await createThumbnail(input);
-  signal?.throwIfAborted();
-  await writeStorageBuffer("thumbs", thumbnailObjectKey(objectKey), thumbnail, "image/webp", storageSlug);
-  signal?.throwIfAborted();
-  return thumbnail.byteLength;
 }

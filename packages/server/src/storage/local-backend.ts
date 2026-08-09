@@ -1,4 +1,5 @@
-import { copyFile, mkdir, open, readFile, readdir, rm, rmdir, writeFile, access } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { copyFile, link, mkdir, open, readFile, readdir, rm, rmdir, writeFile, access } from "node:fs/promises";
 import { dirname, join, relative, sep } from "node:path";
 import { runtimePaths } from "../config/bootstrap-env.ts";
 import { ApiError } from "../core/api-error.ts";
@@ -43,16 +44,34 @@ export class LocalBackend implements StorageDriver {
         lastModified: new Date(Number(stats.mtimeMs)).toUTCString(),
         backend: "local" as const
       };
-      if (!range) return { body: handle.createReadStream(), size: totalSize, ...common };
+      if (!range) {
+        return {
+          body: handle.createReadStream({ autoClose: true, emitClose: true }),
+          size: totalSize,
+          ...common
+        };
+      }
       const size = range.end - range.start + 1;
       return {
-        body: handle.createReadStream(range),
+        body: handle.createReadStream({
+          autoClose: true,
+          emitClose: true,
+          start: range.start,
+          end: range.end
+        }),
         size,
         contentRange: `bytes ${range.start}-${range.end}/${totalSize}`,
         ...common
       };
     } catch (error) {
-      await handle.close().catch(() => undefined);
+      try {
+        await handle.close();
+      } catch (closeError) {
+        throw new AggregateError(
+          [error, closeError],
+          "Local object read failed and its file handle could not be closed"
+        );
+      }
       throw error;
     }
   }
@@ -64,7 +83,15 @@ export class LocalBackend implements StorageDriver {
   async writeBuffer(prefix: StoragePrefix, key: string, body: Buffer, _type: string) {
     const target = safeStoragePath(prefix, key);
     await mkdir(dirname(target), { recursive: true });
-    await writeFile(target, body);
+    const candidate = `${target}.candidate-${randomUUID()}`;
+    try {
+      await writeFile(candidate, body, { flag: "wx" });
+      // Linking a complete same-directory candidate makes publication atomic
+      // and refuses to overwrite an object that appeared concurrently.
+      await link(candidate, target);
+    } finally {
+      await rm(candidate, { force: true }).catch(() => undefined);
+    }
   }
 
   async remove(prefix: StoragePrefix, key: string) {
@@ -74,8 +101,15 @@ export class LocalBackend implements StorageDriver {
   async copy(fromPrefix: CopyPrefix, fromKey: string, toPrefix: CopyPrefix, toKey: string) {
     const target = safeStoragePath(toPrefix, toKey);
     await mkdir(dirname(target), { recursive: true });
-
-    await copyFile(safeStoragePath(fromPrefix, fromKey), target);
+    const candidate = `${target}.candidate-${randomUUID()}`;
+    try {
+      await copyFile(safeStoragePath(fromPrefix, fromKey), candidate);
+      // Publish only a complete same-directory candidate and never overwrite a
+      // target that appeared after the caller's existence check.
+      await link(candidate, target);
+    } finally {
+      await rm(candidate, { force: true }).catch(() => undefined);
+    }
   }
 
   async listKeys(prefix: StoragePrefix) {

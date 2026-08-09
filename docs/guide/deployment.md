@@ -39,14 +39,18 @@ RSS 与 fragmentation，且不以这些指标改变应用状态。
 
 容器健康检查只调用 `/readyz`。该端点检查 PostgreSQL 连通性与核心 schema、必要初始化、
 Redis 连通性及 Redis 必需能力，但不把图片投影重建、内存、AOF、版本或淘汰策略作为
-就绪条件；数据库迁移仍在 HTTP 监听前完成。Redis 首次校验失败时进程只开放健康端点，
+就绪条件；空库 schema 初始化或非空库 contract 只读校验仍在 HTTP 监听前完成。Redis 首次校验失败时进程只开放健康端点，
 全部业务 503 且 worker 不启动；首次成功后即永久打开当前进程的冷启动业务门。运行期
 Redis 故障使 `/readyz` 非 2xx，但进程不退出、不重启、不停止 worker 或公开读取。
 Redis 每次重新连接后必须重新通过连接 epoch 与命令能力；图片协调器再校验 schema、
 revision、meta、最后内容更新时间与核心完整性，才能开放缓存读取。当前镜像只携带
-`0001_initial.sql` 完整基线，全新安装一次建立包括 `ready_image_revision` 在内的全部
-结构；既有部署必须已经与该基线一致。应用不提供额外兼容或升级迁移，也不在迁移文件
-之外猜测或修补旧 schema。
+唯一 `schema.sql` 完整基线，全新安装一次建立包括 `ready_image_revision` 在内的全部 10 张
+业务表，不创建 schema 版本表。非空数据库必须满足当前应用侧只读结构契约；额外旧表可
+保留，必需表接受 v4.6 精确定义的 `metadata.extra` / `background_job.result` 和仍含
+`thumb.generate` 的 job type CHECK，但不恢复该任务实现。其他额外列或约束、触发器、规则及
+唯一 / 普通索引等会改变写语义的对象拒绝启动；只读会话、FK 执行被绕过或角色缺少运行所需
+DML 权限同样拒绝就绪。应用不再读写两个白名单字段，不提供编号迁移或升级路径，也不会对
+非空库执行 DDL 或写入契约标记。
 任一运行依赖不可用都会返回非 2xx，Docker 随即
 把容器标为 unhealthy。`/livez` 只表示进程
 仍在运行，适合人工区分“进程退出”和“依赖未就绪”，不作为镜像切换成功的依据。
@@ -202,7 +206,7 @@ Nginx `real_ip_header` 与受信任 CDN 节点的 `set_real_ip_from` 恢复真�
 
 当前生产拓扑固定为一台主机、一个 ImageShow 应用容器；PostgreSQL 与 Redis 在另一
 基础设施 Compose 中各运行一个单容器。所有升级都先停止对应容器，再更新当前容器并
-启动。应用在数据库迁移后、清理与业务启动前，用独立 PostgreSQL session 非阻塞取得
+启动。应用在 schema 初始化或 contract 校验后、清理与业务启动前，用独立 PostgreSQL session 非阻塞取得
 固定生命周期 advisory lock；连接同一数据库的第二个应用容器会以
 `application_instance_already_running` 明确拒绝启动。锁 session 意外断开时，旧进程
 无论发生在启动还是正常停机途中，都立即关闭 HTTP 接收、停止 Worker，并按既有期限排空

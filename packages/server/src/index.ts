@@ -6,13 +6,17 @@ import {
   initializeRuntimeConfig,
   onRuntimeConfigChange
 } from "./config/runtime-config-store.ts";
-import { configureSharpConcurrency } from "./images/processing.ts";
+import { configureSharpRuntime } from "./images/processing.ts";
 import {
   initializeReadyImageCacheCoordinator,
   stopReadyImageCacheCoordinator
 } from "./images/ready-cache/coordinator.ts";
 import { cleanupOrphanRawImports } from "./images/imports/temp-files.ts";
-import { closeDatabasePools, pingDb, runMigrations } from "./core/db.ts";
+import {
+  closeDatabasePools,
+  initializeDatabaseSchema,
+  pingDb
+} from "./core/db.ts";
 import { ensureSuperAdmin } from "./users/admin-bootstrap.ts";
 import { redis } from "./core/redis-client.ts";
 import {
@@ -27,6 +31,7 @@ import { drainWorker, startWorker, stopWorker } from "./jobs/worker.ts";
 import {
   closeStorageBackendRegistry
 } from "./storage/backend-registry.ts";
+import { initializeThumbnailRepairState } from "./storage/thumbnail-repair-state.ts";
 import { createHttpApp } from "./http-app.ts";
 import {
   acquireApplicationLifecycleLock,
@@ -52,7 +57,7 @@ async function settleCoordinatorInitialization() {
 
 await ensureRuntimeDirectories();
 await pingDb();
-await runMigrations();
+await initializeDatabaseSchema();
 try {
   lifecycleLock = await acquireApplicationLifecycleLock();
 } catch (error) {
@@ -68,6 +73,8 @@ void lifecycleLock.ownershipLost.then((error) => {
 });
 
 try {
+  await initializeThumbnailRepairState();
+  lifecycleLock.assertOwned();
   await cleanupOrphanRawImports(appConfig.uploadTtlSeconds * 1000);
   lifecycleLock.assertOwned();
   await ensureSuperAdmin({
@@ -75,8 +82,8 @@ try {
     password: bootstrapEnvironment.adminPassword
   });
   lifecycleLock.assertOwned();
-  configureSharpConcurrency();
-  onRuntimeConfigChange(configureSharpConcurrency);
+  configureSharpRuntime();
+  onRuntimeConfigChange(configureSharpRuntime);
   markRuntimeInitializationComplete();
 
   onBusinessAvailabilityGateOpen(() => {

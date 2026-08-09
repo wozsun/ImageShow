@@ -1,19 +1,34 @@
+import { createHash } from "node:crypto";
 import { ApiError, errorMessage } from "../core/api-error.ts";
 import { pool } from "../core/db.ts";
 import { logger } from "../core/logger.ts";
 import {
+  jobRescheduled,
   jobSucceeded,
   type BackgroundJobOutcome
 } from "../jobs/handler-outcome.ts";
+import { backgroundJobExecutionIsCurrent } from "../jobs/repository.ts";
 import type { BackgroundJob } from "../jobs/types.ts";
-import { getStorageBackend } from "./backend-registry.ts";
+import {
+  getStorageBackend,
+  resolveStorageAccessForConfig
+} from "./backend-registry.ts";
 import { thumbnailObjectKey } from "./image-paths.ts";
 import { withImageStorageMutationLock } from "./maintenance-lock.ts";
 import {
   pruneEmptyStorageDirs,
   removeStorageObjectAndConfirm
 } from "./object-access.ts";
+import {
+  digestStorageObject,
+  ensureVerifiedObjectAtTarget
+} from "./object-transfer.ts";
 import type { CapturedMoveCleanupObject } from "./move-cleanup-types.ts";
+import {
+  thumbnailObjectHasPendingRepair,
+  type ThumbnailRepairCleanupAuthorization
+} from "./move-cleanup.ts";
+import { markThumbnailRepairSettled } from "./thumbnail-repair-state.ts";
 import {
   shareStorageNamespace,
   storageNamespaceIncludesIdentity
@@ -21,7 +36,10 @@ import {
 
 function cleanupObjectsFromPayload(
   job: BackgroundJob
-): CapturedMoveCleanupObject[] | null {
+): {
+  objects: CapturedMoveCleanupObject[];
+  thumbnailRepairBody: Buffer | null;
+} | null {
   if (!Array.isArray(job.payload.objects) || !job.payload.objects.length) {
     return null;
   }
@@ -40,9 +58,53 @@ function cleanupObjectsFromPayload(
     ) {
       return null;
     }
+    const repair = object.thumbnail_repair;
+    if (
+      repair !== undefined
+      && (
+        object.prefix !== "thumbs"
+        || !repair
+        || typeof repair !== "object"
+        || typeof (repair as Record<string, unknown>).expected_sha256 !== "string"
+        || !/^[a-f0-9]{64}$/.test(
+          String((repair as Record<string, unknown>).expected_sha256)
+        )
+        || !Number.isSafeInteger(
+          (repair as Record<string, unknown>).expected_size
+        )
+        || Number((repair as Record<string, unknown>).expected_size) < 0
+      )
+    ) {
+      return null;
+    }
     objects.push(object as CapturedMoveCleanupObject);
   }
-  return objects;
+  const repairs = objects.filter((object) => object.thumbnail_repair);
+  const encodedBody = job.payload.thumbnail_repair_body_base64;
+  if (!repairs.length) {
+    return encodedBody === undefined
+      ? { objects, thumbnailRepairBody: null }
+      : null;
+  }
+  if (
+    repairs.length !== 1
+    || objects.length !== 1
+    || typeof encodedBody !== "string"
+    || !encodedBody
+  ) {
+    return null;
+  }
+  const body = Buffer.from(encodedBody, "base64");
+  const repair = repairs[0]!.thumbnail_repair!;
+  if (
+    body.toString("base64") !== encodedBody
+    || body.byteLength !== repair.expected_size
+    || createHash("sha256").update(body).digest("hex")
+      !== repair.expected_sha256
+  ) {
+    return null;
+  }
+  return { objects, thumbnailRepairBody: body };
 }
 
 export async function handleMoveCleanupJob(
@@ -50,8 +112,8 @@ export async function handleMoveCleanupJob(
   signal: AbortSignal
 ): Promise<BackgroundJobOutcome> {
   signal.throwIfAborted();
-  const objects = cleanupObjectsFromPayload(job);
-  if (!objects) {
+  const payload = cleanupObjectsFromPayload(job);
+  if (!payload) {
     throw new ApiError(
       500,
       "storage_cleanup_payload_invalid",
@@ -59,8 +121,19 @@ export async function handleMoveCleanupJob(
       { job_id: job.id, image_id: job.target_id }
     );
   }
+  const { objects, thumbnailRepairBody } = payload;
+  const thumbnailRepairObject = objects.find(
+    (object) => object.thumbnail_repair
+  );
 
   return withImageStorageMutationLock(job.target_id, async (signal) => {
+    signal.throwIfAborted();
+    if (
+      thumbnailRepairObject
+      && !await backgroundJobExecutionIsCurrent(job)
+    ) {
+      return jobSucceeded();
+    }
     signal.throwIfAborted();
     const row = (await pool.query(
       `SELECT id, object_key, storage_slug
@@ -98,9 +171,6 @@ export async function handleMoveCleanupJob(
       return config;
     };
 
-    let removed = 0;
-    let retained = 0;
-    let missing = 0;
     const seen = new Set<string>();
     for (const object of objects) {
       signal.throwIfAborted();
@@ -132,8 +202,11 @@ export async function handleMoveCleanupJob(
           currentBackend
         );
       }
-      if (matchesCurrentObject && sharesCurrentNamespace) {
-        retained += 1;
+      if (
+        matchesCurrentObject
+        && sharesCurrentNamespace
+        && !object.thumbnail_repair
+      ) {
         continue;
       }
 
@@ -164,17 +237,141 @@ export async function handleMoveCleanupJob(
           object.backend === latest.storage_slug
           || shareStorageNamespace(objectBackend, latestBackend)
         ) {
-          retained += 1;
+          if (object.prefix === "thumbs" && object.thumbnail_repair) {
+            const endpoint = resolveStorageAccessForConfig(objectBackend);
+            const candidateExists = await endpoint.driver.exists(
+              object.prefix,
+              object.key
+            );
+            signal.throwIfAborted();
+            if (!candidateExists) {
+              if (!thumbnailRepairBody) {
+                throw new ApiError(
+                  500,
+                  "thumbnail_repair_payload_invalid",
+                  "缩略图修复任务缺少可重试的权威字节"
+                );
+              }
+              const authorization: ThumbnailRepairCleanupAuthorization = {
+                receiptId: job.id,
+                imageId: job.target_id,
+                object: object as ThumbnailRepairCleanupAuthorization["object"]
+              };
+              await ensureVerifiedObjectAtTarget({
+                target: endpoint,
+                prefix: "thumbs",
+                key: object.key,
+                body: thumbnailRepairBody,
+                contentType: "image/webp",
+                repairAuthorization: authorization
+              });
+              signal.throwIfAborted();
+            }
+            let digest = await digestStorageObject(
+              endpoint,
+              object.prefix,
+              object.key
+            );
+            signal.throwIfAborted();
+            if (
+              digest.size !== object.thumbnail_repair.expected_size
+              || digest.sha256 !== object.thumbnail_repair.expected_sha256
+            ) {
+              if (!thumbnailRepairBody) {
+                throw new ApiError(
+                  500,
+                  "thumbnail_repair_payload_invalid",
+                  "缩略图修复任务缺少可重试的权威字节"
+                );
+              }
+              await removeStorageObjectAndConfirm(
+                object.prefix,
+                object.key,
+                object.backend
+              );
+              signal.throwIfAborted();
+              const authorization: ThumbnailRepairCleanupAuthorization = {
+                receiptId: job.id,
+                imageId: job.target_id,
+                object: object as ThumbnailRepairCleanupAuthorization["object"]
+              };
+              await ensureVerifiedObjectAtTarget({
+                target: endpoint,
+                prefix: "thumbs",
+                key: object.key,
+                body: thumbnailRepairBody,
+                contentType: "image/webp",
+                repairAuthorization: authorization
+              });
+              signal.throwIfAborted();
+              digest = await digestStorageObject(
+                endpoint,
+                object.prefix,
+                object.key
+              );
+              signal.throwIfAborted();
+              if (
+                digest.size !== object.thumbnail_repair.expected_size
+                || digest.sha256 !== object.thumbnail_repair.expected_sha256
+              ) {
+                throw new ApiError(
+                  502,
+                  "thumbnail_repair_integrity_failed",
+                  "缩略图修复重试后仍未得到预期内容"
+                );
+              }
+            }
+            const adopted = await pool.query(
+              `UPDATE metadata
+                  SET thumbnail_size=$2
+                WHERE id=$1
+                  AND storage_slug=$3
+                  AND object_key=$4`,
+              [
+                job.target_id,
+                digest.size,
+                latest.storage_slug,
+                latest.object_key
+              ]
+            );
+            signal.throwIfAborted();
+            if (!adopted.rowCount) {
+              throw new ApiError(
+                409,
+                "thumbnail_repair_ownership_changed",
+                "缩略图修复候选的数据库归属已经变化"
+              );
+            }
+            continue;
+          }
           continue;
         }
       }
-      let removal: "missing" | "removed";
+      if (object.prefix === "thumbs" && !object.thumbnail_repair) {
+        const objectBackend = await candidateBackend(object.backend);
+        signal.throwIfAborted();
+        if (await thumbnailObjectHasPendingRepair(
+          objectBackend,
+          object.key,
+          job.id
+        )) {
+          return jobRescheduled(1_000);
+        }
+        signal.throwIfAborted();
+      }
       try {
-        removal = await removeStorageObjectAndConfirm(
+        const removal = await removeStorageObjectAndConfirm(
           object.prefix,
           object.key,
           object.backend
         );
+        if (object.thumbnail_repair && removal === "missing") {
+          throw new ApiError(
+            503,
+            "thumbnail_repair_candidate_unsettled",
+            "迟到缩略图写入尚未出现，保留修复回执等待后续核验"
+          );
+        }
       } catch (error) {
         logger.warn("move_cleanup_object_delete_failed", {
           job_id: job.id,
@@ -190,17 +387,15 @@ export async function handleMoveCleanupJob(
         throw error;
       }
       signal.throwIfAborted();
-      if (removal === "missing") {
-        missing += 1;
-        continue;
-      }
-      removed += 1;
     }
     for (const backend of new Set(objects.map((object) => object.backend))) {
       signal.throwIfAborted();
       await pruneEmptyStorageDirs(backend);
     }
     signal.throwIfAborted();
-    return jobSucceeded({ removed, retained, missing });
+    if (thumbnailRepairObject) {
+      markThumbnailRepairSettled(job.target_id, thumbnailRepairObject.key);
+    }
+    return jobSucceeded();
   });
 }

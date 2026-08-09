@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { queryForPublicRead } from "../core/public-pg-fallback.ts";
-import { ApiError } from "../core/api-error.ts";
+import { ApiError, errorMessage } from "../core/api-error.ts";
 import { logger } from "../core/logger.ts";
 import {
   immutableCacheControl,
@@ -13,7 +13,7 @@ import {
 } from "../core/http/headers.ts";
 import { safeFetchExternalImage } from "../core/external-image-fetch.ts";
 import { coalesce } from "../core/coalesce.ts";
-import { generateStoredThumbnail } from "./processing.ts";
+import { repairStoredThumbnail } from "./thumbnail-repair.ts";
 import { thumbnailObjectKey } from "../storage/image-paths.ts";
 import {
   resolveReadableObject,
@@ -22,6 +22,7 @@ import {
 } from "../storage/object-access.ts";
 import { contentType } from "../storage/object-keys.ts";
 import { isStorageObjectNotFound } from "../storage/not-found.ts";
+import { thumbnailRepairIsPending } from "../storage/move-cleanup.ts";
 import {
   getOriginalDirectCache,
   setOriginalDirectCache
@@ -145,6 +146,7 @@ async function streamThumb(key: string, backend: string, cacheControl = immutabl
 }
 
 async function streamThumbEnsuring(
+  imageId: string,
   objectKey: string,
   thumbKey: string,
   backend: string,
@@ -166,7 +168,7 @@ async function streamThumbEnsuring(
     context: { objectKey, thumbKey, backend },
     readThumbnail,
     sourceExists: () => storageObjectExists("media", objectKey, backend),
-    rebuild: () => generateStoredThumbnail(objectKey, backend),
+    rebuild: () => repairStoredThumbnail(imageId),
     isNotFound: isStorageObjectNotFound,
     log: logger
   });
@@ -190,7 +192,8 @@ async function streamOriginalThumbnailFallback(
   objectKey: string,
   ext: string,
   backend: string,
-  request: StoredResponseRequest
+  request: StoredResponseRequest,
+  cacheControl = publicProxyFallbackThumbCacheControl
 ) {
   return thumbnailFallbackOrNotFound(
     () => streamStoredObject(
@@ -198,11 +201,29 @@ async function streamOriginalThumbnailFallback(
       objectKey,
       backend,
       contentType(ext),
-      publicProxyFallbackThumbCacheControl,
+      cacheControl,
       request
     ),
     isStorageObjectNotFound
   );
+}
+
+async function thumbnailRepairRequiresFallback(
+  imageId: string,
+  objectKey: string,
+  backend: string,
+  thumbKey: string
+) {
+  try {
+    return thumbnailRepairIsPending(imageId, thumbKey);
+  } catch (error) {
+    logger.error("thumbnail_repair_state_check_failed", {
+      object_key: objectKey,
+      storage_backend: backend,
+      reason: errorMessage(error)
+    });
+    return true;
+  }
 }
 
 async function imageLookupById(
@@ -255,44 +276,47 @@ export async function serveObject(key: string, request: StoredResponseRequest = 
 
 export async function serveThumb(key: string, request: StoredResponseRequest = {}): Promise<Response> {
   const cached = await readReadyImageByThumbKey(key);
-  if (cached.cached && cached.value) {
-    const backend = cached.value.storage_slug;
-    const object = await resolveReadableObject("thumbs", key, backend);
-    const publicUrl = await readablePublicThumbUrl(
-      object,
-      cached.value.object_key,
-      key,
-      backend
-    );
-    if (publicUrl) return immutableRedirect(publicUrl);
-
-    const streamed = await streamThumbEnsuring(
-      cached.value.object_key,
-      key,
-      backend,
-      immutableCacheControl,
-      request,
-      object
-    );
-    if (streamed) return streamed;
-
-    return streamOriginalThumbnailFallback(
-      cached.value.object_key,
-      cached.value.ext,
-      backend,
-      request
-    );
-  }
-  if (cached.cached) {
+  if (cached.cached && !cached.value) {
     throw new ApiError(404, "not_found", "Thumbnail not found");
   }
-  const row = (await queryForPublicRead("SELECT object_key, ext, storage_slug, status FROM metadata WHERE object_key=$1 OR regexp_replace(object_key, '\\.[^/.]+$', '.webp')=$1 LIMIT 1", [key])).rows[0];
-
-  if (!row || row.status !== "ready") throw new ApiError(404, "not_found", "Thumbnail not found");
+  type ThumbServingRow = {
+    id: string;
+    object_key: string;
+    ext: string;
+    storage_slug: string;
+    status: string;
+  };
+  const row: ThumbServingRow | undefined = cached.cached
+    ? { ...cached.value!, status: "ready" }
+    : (await queryForPublicRead<ThumbServingRow>(
+        `SELECT id, object_key, ext, storage_slug, status
+           FROM metadata
+          WHERE object_key=$1
+             OR regexp_replace(object_key, '\\.[^/.]+$', '.webp')=$1
+          LIMIT 1`,
+        [key]
+      )).rows[0];
+  if (!row || row.status !== "ready") {
+    throw new ApiError(404, "not_found", "Thumbnail not found");
+  }
   const objectKey = row.object_key;
   const thumbKey = thumbnailObjectKey(objectKey);
   const ext = row.ext;
   const backend = row.storage_slug;
+  if (await thumbnailRepairRequiresFallback(
+    row.id,
+    objectKey,
+    backend,
+    thumbKey
+  )) {
+    return streamOriginalThumbnailFallback(
+      objectKey,
+      ext,
+      backend,
+      request,
+      noStoreCacheControl
+    );
+  }
   const object = await resolveReadableObject("thumbs", thumbKey, backend);
   const publicUrl = await readablePublicThumbUrl(
     object,
@@ -302,6 +326,7 @@ export async function serveThumb(key: string, request: StoredResponseRequest = {
   );
   if (publicUrl) return immutableRedirect(publicUrl);
   const streamed = await streamThumbEnsuring(
+    row.id,
     objectKey,
     thumbKey,
     backend,
@@ -392,7 +417,28 @@ export async function serveAdminThumb(id: string, request: StoredResponseRequest
   if (!row) throw new ApiError(404, "not_found", "Image not found");
   const backend = row.storage_slug;
   const thumbKey = thumbnailObjectKey(row.object_key);
-  const streamed = await streamThumbEnsuring(row.object_key, thumbKey, backend, privateNoStoreCacheControl, request);
+  if (await thumbnailRepairRequiresFallback(
+    row.id,
+    row.object_key,
+    backend,
+    thumbKey
+  )) {
+    return streamOriginalThumbnailFallback(
+      row.object_key,
+      row.ext,
+      backend,
+      request,
+      privateNoStoreCacheControl
+    );
+  }
+  const streamed = await streamThumbEnsuring(
+    row.id,
+    row.object_key,
+    thumbKey,
+    backend,
+    privateNoStoreCacheControl,
+    request
+  );
   if (streamed) return streamed;
   throw new ApiError(404, "not_found", "Thumbnail not found");
 }

@@ -4,7 +4,6 @@ import {
   type BackgroundJobOutcome
 } from "./handler-outcome.ts";
 import type { BackgroundJob, BackgroundJobType } from "./types.ts";
-import { handleThumbnailJob } from "../images/thumbnail-job.ts";
 import { handleTrashPurgeJob } from "../images/trash-purge-job.ts";
 import { handleImportCleanupJob } from "../images/imports/cleanup-job.ts";
 import { ensureReadyImageCacheCurrent } from "../images/ready-cache/coordinator.ts";
@@ -17,7 +16,6 @@ type BackgroundJobHandler = (
 ) => Promise<BackgroundJobOutcome>;
 
 const backgroundJobHandlers = {
-  "thumb.generate": handleThumbnailJob,
   "move.cleanup": handleMoveCleanupJob,
   "import.cleanup": handleImportCleanupJob,
   "trash.purge": handleTrashPurgeJob,

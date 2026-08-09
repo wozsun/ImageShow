@@ -1,8 +1,6 @@
--- Migration ledger
-CREATE TABLE schema_migrations (
-  version TEXT PRIMARY KEY,
-  applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
+-- ImageShow clean-install schema, application structural contract revision 1.
+-- The revision belongs to source code only; this schema creates no migration
+-- ledger or persistent version marker.
 
 -- Storage registry
 CREATE TABLE storage_backend (
@@ -87,7 +85,6 @@ CREATE TABLE metadata (
   description TEXT NOT NULL DEFAULT '',
   source TEXT NOT NULL DEFAULT '',
   original TEXT NOT NULL DEFAULT '',
-  extra JSONB NOT NULL DEFAULT '{}'::jsonb,
   image_time TIMESTAMPTZ NOT NULL DEFAULT now(),
   deleted_at TIMESTAMPTZ,
   purge_state TEXT NOT NULL DEFAULT 'idle',
@@ -244,13 +241,12 @@ CREATE TABLE background_job (
   target_id TEXT NOT NULL DEFAULT '',
   idempotency_key TEXT,
   payload JSONB NOT NULL DEFAULT '{}'::jsonb,
-  result JSONB NOT NULL DEFAULT '{}'::jsonb,
   error TEXT NOT NULL DEFAULT '',
   retry_count INTEGER NOT NULL DEFAULT 0,
   next_retry_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  CHECK (type IN ('thumb.generate','move.cleanup','import.cleanup','trash.purge','cache.rebuild')),
+  CHECK (type IN ('move.cleanup','import.cleanup','trash.purge','cache.rebuild')),
   CHECK (status IN ('pending', 'running', 'succeeded', 'failed', 'ignored'))
 );
 

@@ -20,9 +20,9 @@ export async function handleTrashPurgeJob(
     );
   }
   if (result.remaining) {
-    return jobRescheduled(result.requested ? 0 : 1_000, result);
+    return jobRescheduled(result.requested ? 0 : 1_000);
   }
-  return jobSucceeded(result);
+  return jobSucceeded();
 }
 
 export function scheduleTrashPurge() {

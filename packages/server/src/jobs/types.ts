@@ -1,5 +1,4 @@
 export type BackgroundJobType =
-  | "thumb.generate"
   | "move.cleanup"
   | "import.cleanup"
   | "trash.purge"

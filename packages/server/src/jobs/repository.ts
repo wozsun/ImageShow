@@ -22,7 +22,6 @@ export async function enqueue(
          target_id=EXCLUDED.target_id,
          payload=EXCLUDED.payload,
          status='pending',
-         result='{}'::jsonb,
          error='',
          retry_count=0,
          next_retry_at=NULL,
@@ -95,11 +94,6 @@ export async function enqueueRerunnableJob(
                        WHEN background_job.status='running'
                          THEN background_job.status
                        ELSE 'pending'
-                     END,
-                     result=CASE
-                       WHEN background_job.status='running'
-                         THEN background_job.result
-                       ELSE '{}'::jsonb
                      END,
                      error=CASE
                        WHEN background_job.status='running'
@@ -174,20 +168,30 @@ export async function renewBackgroundJobLease(job: BackgroundJob) {
   return result.rowCount === 1;
 }
 
-export async function markBackgroundJobSucceeded(
-  job: BackgroundJob,
-  result: unknown = {}
-) {
+export async function backgroundJobExecutionIsCurrent(job: BackgroundJob) {
+  const result = await pool.query(
+    `SELECT 1
+       FROM background_job
+      WHERE id=$1
+        AND status='running'
+        AND execution_token=$2`,
+    [job.id, job.execution_token]
+  );
+  return result.rowCount === 1;
+}
+
+export async function markBackgroundJobSucceeded(job: BackgroundJob) {
   const updated = await pool.query(
     `UPDATE background_job
      SET status=CASE
            WHEN payload->>'rerun_requested'='true' THEN 'pending'
            ELSE 'succeeded'
          END,
-         payload=payload - 'rerun_requested',
-         result=CASE
-           WHEN payload->>'rerun_requested'='true' THEN '{}'::jsonb
-           ELSE $3::jsonb
+         payload=CASE
+           WHEN payload->>'rerun_requested'='true'
+             THEN payload - 'rerun_requested'
+           ELSE (payload - 'rerun_requested')
+                  - 'thumbnail_repair_body_base64'
          END,
          error='',
          retry_count=CASE
@@ -202,7 +206,7 @@ export async function markBackgroundJobSucceeded(
          END,
          updated_at=now()
      WHERE id=$1 AND status='running' AND execution_token=$2`,
-    [job.id, job.execution_token, JSON.stringify(result)]
+    [job.id, job.execution_token]
   );
   return updated.rowCount === 1;
 }
@@ -213,7 +217,12 @@ export async function markBackgroundJobIgnored(
 ) {
   const updated = await pool.query(
     `UPDATE background_job
-     SET status='ignored', execution_token=NULL, error=$3, updated_at=now()
+     SET status='ignored',
+         payload=(payload - 'rerun_requested')
+                   - 'thumbnail_repair_body_base64',
+         execution_token=NULL,
+         error=$3,
+         updated_at=now()
      WHERE id=$1 AND status='running' AND execution_token=$2`,
     [job.id, job.execution_token, reason]
   );
@@ -222,22 +231,19 @@ export async function markBackgroundJobIgnored(
 
 export async function rescheduleBackgroundJob(
   job: BackgroundJob,
-  delayMs: number,
-  result: unknown = {}
+  delayMs: number
 ) {
   const updated = await pool.query(
     `UPDATE background_job
      SET status='pending',
-         result=$3::jsonb,
          error='',
-         next_retry_at=$4,
+         next_retry_at=$3,
          execution_token=NULL,
          updated_at=now()
      WHERE id=$1 AND status='running' AND execution_token=$2`,
     [
       job.id,
       job.execution_token,
-      JSON.stringify(result),
       new Date(Date.now() + Math.max(0, delayMs))
     ]
   );

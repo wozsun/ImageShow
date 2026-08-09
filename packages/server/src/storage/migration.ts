@@ -1,7 +1,8 @@
 import { ApiError, errorMessage } from "../core/api-error.ts";
 import { pool, withTransaction } from "../core/db.ts";
 import { logger } from "../core/logger.ts";
-import { createThumbnail, md5Buffer } from "../images/processing.ts";
+import { md5Buffer } from "../images/processing.ts";
+import { repairStoredThumbnailWithLockHeld } from "../images/thumbnail-repair.ts";
 import {
   withImageMutationSync
 } from "../images/mutation-sync.ts";
@@ -14,9 +15,10 @@ import {
 import { thumbnailObjectKey } from "./image-paths.ts";
 import { withImageStorageMutationLock } from "./maintenance-lock.ts";
 import {
+  assertThumbnailRepairNotPending,
   captureMoveCleanupObjects,
   enqueueCapturedObjectsForCleanup,
-  enqueueObjectsForCleanup,
+  enqueueCapturedObjectsForCleanupDetached,
   type CapturedMoveCleanupObject,
   type MoveCleanupObjectInput
 } from "./move-cleanup.ts";
@@ -56,12 +58,16 @@ const migrateColumns = [
 async function queueCandidateCleanup(
   image: StorageMigrationImageRecord,
   target: string,
-  created: readonly MoveCleanupObjectInput[],
+  created: readonly CapturedMoveCleanupObject[],
   reason: string,
   originalError?: unknown
 ) {
   try {
-    await enqueueObjectsForCleanup(image.id, created, reason);
+    await enqueueCapturedObjectsForCleanupDetached(
+      image.id,
+      created,
+      reason
+    );
   } catch (cleanupError) {
     logger.error("storage_migration_candidate_enqueue_failed", {
       image_id: image.id,
@@ -137,7 +143,7 @@ function migrationOutcomeUnknown(
 async function settleMigrationSwitchError(
   image: StorageMigrationImageRecord,
   target: string,
-  created: readonly MoveCleanupObjectInput[],
+  created: readonly CapturedMoveCleanupObject[],
   sourceCleanup: readonly CapturedMoveCleanupObject[],
   originalError: unknown
 ): Promise<MigrationState> {
@@ -241,8 +247,10 @@ async function migrateImageStorageBackendWhileLocked(
   const sourceAccess = resolveStorageAccessForConfig(source);
   const destinationAccess = resolveStorageAccessForConfig(destination);
   const sharedNamespace = shareStorageNamespace(source, destination);
-  const created: MoveCleanupObjectInput[] = [];
+  const thumbKey = thumbnailObjectKey(current.object_key);
+  const created: CapturedMoveCleanupObject[] = [];
   const sourceObjects: MoveCleanupObjectInput[] = [];
+  let thumbnailSize = 0;
 
   const materialize = async (
     prefix: StoragePrefix,
@@ -252,6 +260,14 @@ async function migrateImageStorageBackendWhileLocked(
     sourceObjectExists = true
   ) => {
     signal.throwIfAborted();
+    const [capturedCandidate] = await captureMoveCleanupObjects([{
+      prefix,
+      key,
+      backend: target
+    }]);
+    if (!capturedCandidate) {
+      throw new Error("Migration candidate namespace could not be captured");
+    }
     const result = await ensureVerifiedObjectAtDestination({
       source: sourceAccess,
       target: destinationAccess,
@@ -260,20 +276,22 @@ async function migrateImageStorageBackendWhileLocked(
       body,
       contentType: objectContentType,
       sourceObjectExists,
-      cleanupCandidate: (object) => enqueueObjectsForCleanup(
+      cleanupCandidate: () => enqueueCapturedObjectsForCleanupDetached(
         current.id,
-        [object],
+        [capturedCandidate],
         "storage_migration_integrity_failure"
       )
     });
-    signal.throwIfAborted();
     if (result.created) {
-      created.push({ prefix, key, backend: target });
+      created.push(capturedCandidate);
     }
+    signal.throwIfAborted();
   };
 
   let sourceCleanup: CapturedMoveCleanupObject[];
   try {
+    await assertThumbnailRepairNotPending(current.id, source, thumbKey);
+    signal.throwIfAborted();
     if (!await sourceAccess.driver.exists("media", current.object_key)) {
       return "missing";
     }
@@ -297,21 +315,31 @@ async function migrateImageStorageBackendWhileLocked(
       contentType(current.ext)
     );
 
-    const thumbKey = thumbnailObjectKey(current.object_key);
     const sourceThumbExists = await sourceAccess.driver.exists(
       "thumbs",
       thumbKey
     );
     const thumbnail = sourceThumbExists
       ? await sourceAccess.driver.readBuffer("thumbs", thumbKey)
-      : await createThumbnail(image);
+      : (await repairStoredThumbnailWithLockHeld(
+          current.id,
+          signal,
+          {
+            expectedLocation: {
+              objectKey: current.object_key,
+              storageSlug: current.storage_slug
+            },
+            sourceBuffer: image
+          }
+        )).thumbnail;
+    thumbnailSize = thumbnail.byteLength;
     signal.throwIfAborted();
     await materialize(
       "thumbs",
       thumbKey,
       thumbnail,
       "image/webp",
-      sourceThumbExists
+      true
     );
     if (!sharedNamespace) {
       sourceObjects.push(
@@ -354,12 +382,20 @@ async function migrateImageStorageBackendWhileLocked(
         signal.throwIfAborted();
         const result = await client.query(
           `UPDATE metadata
-              SET storage_slug=$2, updated_at=now()
+              SET storage_slug=$2,
+                  thumbnail_size=$5,
+                  updated_at=now()
             WHERE id=$1
               AND storage_slug=$3
               AND object_key=$4
           RETURNING status`,
-          [current.id, target, current.storage_slug, current.object_key]
+          [
+            current.id,
+            target,
+            current.storage_slug,
+            current.object_key,
+            thumbnailSize
+          ]
         );
         const status = String(result.rows[0]?.status ?? "");
         if (!result.rowCount || !status) return null;

@@ -1,8 +1,10 @@
 import { createHash, type Hash } from "node:crypto";
+import { finished } from "node:stream/promises";
 import { ApiError, errorMessage } from "../core/api-error.ts";
 import { logger } from "../core/logger.ts";
 import type { StorageConfig } from "./backend-config.ts";
 import type { StorageDriver } from "./driver.ts";
+import type { ThumbnailRepairCleanupAuthorization } from "./move-cleanup.ts";
 import type { StoragePrefix } from "./object-keys.ts";
 import { shareStorageNamespace } from "./storage-namespace.ts";
 
@@ -45,10 +47,11 @@ type SourceMismatchError = {
 async function defaultCleanupLeaseCheck(
   target: StorageConfig,
   prefix: "media" | "thumbs",
-  key: string
+  key: string,
+  authorization?: ThumbnailRepairCleanupAuthorization
 ) {
   const { assertObjectNotPendingCleanup } = await import("./move-cleanup.ts");
-  await assertObjectNotPendingCleanup(target, prefix, key);
+  await assertObjectNotPendingCleanup(target, prefix, key, authorization);
 }
 
 function objectConflict(
@@ -98,7 +101,7 @@ function updateHashes(hashes: Hash[], chunk: unknown) {
 }
 
 /** Read an object as a stream and calculate strong integrity metadata. */
-async function digestStorageObject(
+export async function digestStorageObject(
   endpoint: StorageEndpoint,
   prefix: StoragePrefix,
   key: string,
@@ -112,6 +115,11 @@ async function digestStorageObject(
   for await (const chunk of opened.body) {
     size += updateHashes(hashes, chunk);
   }
+  // Async iteration completes on `end`, while FileHandle-backed streams may
+  // close their descriptor on the following turn. Wait for the complete
+  // stream lifecycle so an immediately-following move cleanup can unlink the
+  // local source on Windows as reliably as it can on Linux.
+  await finished(opened.body, { cleanup: true });
   return {
     size,
     sha256: sha256.digest("hex"),
@@ -191,6 +199,7 @@ export async function ensureVerifiedObjectAtTarget(input: {
   contentType: string;
   sourceSlug?: string;
   cleanupCandidate?: CandidateCleanup;
+  repairAuthorization?: ThumbnailRepairCleanupAuthorization;
 }): Promise<{ created: boolean }> {
   const {
     target,
@@ -199,14 +208,20 @@ export async function ensureVerifiedObjectAtTarget(input: {
     body,
     contentType,
     sourceSlug,
-    cleanupCandidate: candidateCleanup
+    cleanupCandidate: candidateCleanup,
+    repairAuthorization
   } = input;
   const expected: StorageObjectDigest = {
     size: body.byteLength,
     sha256: createHash("sha256").update(body).digest("hex")
   };
   if (prefix !== "_uploads") {
-    await defaultCleanupLeaseCheck(target.config, prefix, key);
+    await defaultCleanupLeaseCheck(
+      target.config,
+      prefix,
+      key,
+      repairAuthorization
+    );
   }
   if (await target.driver.exists(prefix, key)) {
     const existing = await digestStorageObject(target, prefix, key);
