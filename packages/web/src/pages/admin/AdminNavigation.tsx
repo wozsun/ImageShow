@@ -7,6 +7,10 @@ import type {
 import { AdminIcon, type AdminIconName } from "../../components/icon/AdminIcon.js";
 import { adminBasePath } from "../../lib/constants.js";
 import { AdminNavGroup } from "./AdminNavGroup.js";
+import {
+  preloadAdminRouteModule,
+  type AdminRouteModuleKey
+} from "./admin-route-modules.js";
 
 type AdminNavigationLink = {
   kind: "link";
@@ -16,6 +20,7 @@ type AdminNavigationLink = {
   end?: boolean;
   superOnly?: boolean;
   desktopClassName?: string;
+  routeModule?: AdminRouteModuleKey;
 };
 
 type AdminNavigationGroup = {
@@ -53,7 +58,8 @@ const adminNavigationModel = {
       to: adminBasePath,
       icon: "dashboard-line",
       label: "概览",
-      end: true
+      end: true,
+      routeModule: "overview"
     },
     {
       kind: "group",
@@ -67,25 +73,29 @@ const adminNavigationModel = {
           to: `${adminBasePath}/images`,
           icon: "image-line",
           label: "图片列表",
-          end: true
+          end: true,
+          routeModule: "images"
         },
         {
           kind: "link",
           to: `${adminBasePath}/themes`,
           icon: "palette-line",
-          label: "主题管理"
+          label: "主题管理",
+          routeModule: "entities"
         },
         {
           kind: "link",
           to: `${adminBasePath}/tags`,
           icon: "price-tag-3-line",
-          label: "标签管理"
+          label: "标签管理",
+          routeModule: "entities"
         },
         {
           kind: "link",
           to: `${adminBasePath}/authors`,
           icon: "quill-pen-line",
-          label: "作者管理"
+          label: "作者管理",
+          routeModule: "entities"
         }
       ]
     },
@@ -100,25 +110,29 @@ const adminNavigationModel = {
           kind: "link",
           to: `${adminBasePath}/site`,
           icon: "settings-3-line",
-          label: "站点配置"
+          label: "站点配置",
+          routeModule: "site"
         },
         {
           kind: "link",
           to: `${adminBasePath}/advanced-config`,
           icon: "settings-3-line",
-          label: "高级配置"
+          label: "高级配置",
+          routeModule: "advancedConfig"
         },
         {
           kind: "link",
           to: `${adminBasePath}/storage`,
           icon: "hard-drive-2-line",
-          label: "存储管理"
+          label: "存储管理",
+          routeModule: "storage"
         },
         {
           kind: "link",
           to: `${adminBasePath}/users`,
           icon: "group-line",
-          label: "用户管理"
+          label: "用户管理",
+          routeModule: "users"
         }
       ]
     },
@@ -126,14 +140,16 @@ const adminNavigationModel = {
       kind: "link",
       to: `${adminBasePath}/check`,
       icon: "checkbox-circle-line",
-      label: "检查"
+      label: "检查",
+      routeModule: "check"
     },
     {
       kind: "link",
       to: `${adminBasePath}/logs`,
       icon: "history-line",
       label: "日志",
-      superOnly: true
+      superOnly: true,
+      routeModule: "logs"
     }
   ],
   account: [
@@ -141,7 +157,8 @@ const adminNavigationModel = {
       kind: "link",
       to: `${adminBasePath}/account`,
       icon: "key-2-line",
-      label: "账户"
+      label: "账户",
+      routeModule: "account"
     }
   ]
 } as const satisfies AdminNavigationSections;
@@ -186,10 +203,17 @@ function NavigationLink({
   item: AdminNavigationLink;
   variant: "desktop" | "mobile";
 }) {
+  const routeModule = item.routeModule;
+  const preload = routeModule
+    ? () => preloadAdminRouteModule(routeModule)
+    : undefined;
   return (
     <NavLink
       to={item.to}
       end={item.end}
+      onPointerEnter={preload}
+      onFocus={preload}
+      onPointerDown={preload}
       className={({ isActive }) => [
         variant === "desktop" ? item.desktopClassName : "",
         isActive ? "active" : ""

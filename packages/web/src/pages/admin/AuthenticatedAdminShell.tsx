@@ -21,6 +21,7 @@ import {
   reconcileAdminColorSchemeCycle,
   type AdminColorSchemeCycle
 } from "../../lib/ui/color-scheme.js";
+import { adminRouteModuleLoaders } from "./admin-route-modules.js";
 import {
   AdminNavigationLinks,
   AdminSiteNavigation,
@@ -31,36 +32,56 @@ import { AdminBrand } from "./AdminBrand.js";
 import "../../styles/admin/semantic-colors.css";
 import "../../styles/admin-core.css";
 
-const Overview = lazy(() => import("./Overview.js").then((module) => ({
-  default: module.Overview
-})));
-const ImageAdmin = lazy(() => import("./ImageAdmin.js").then((module) => ({
-  default: module.ImageAdmin
-})));
-const EntityAdmin = lazy(() => import("./EntityAdmin.js").then((module) => ({
-  default: module.EntityAdmin
-})));
-const AccountSettings = lazy(() => import("./AccountSettings.js").then((module) => ({
-  default: module.AccountSettings
-})));
-const SettingsPage = lazy(() => import("./SettingsPage.js").then((module) => ({
-  default: module.SettingsPage
-})));
-const AdvancedConfigPage = lazy(() => import("./AdvancedConfigPage.js").then((module) => ({
-  default: module.AdvancedConfigPage
-})));
-const StorageSettings = lazy(() => import("./StorageSettings.js").then((module) => ({
-  default: module.StorageSettings
-})));
-const UserAdmin = lazy(() => import("./UserAdmin.js").then((module) => ({
-  default: module.UserAdmin
-})));
-const CheckPage = lazy(() => import("./CheckPage.js").then((module) => ({
-  default: module.CheckPage
-})));
-const LogPage = lazy(() => import("./LogPage.js").then((module) => ({
-  default: module.LogPage
-})));
+const Overview = lazy(() =>
+  adminRouteModuleLoaders.overview().then((module) => ({
+    default: module.Overview
+  }))
+);
+const ImageAdmin = lazy(() =>
+  adminRouteModuleLoaders.images().then((module) => ({
+    default: module.ImageAdmin
+  }))
+);
+const EntityAdmin = lazy(() =>
+  adminRouteModuleLoaders.entities().then((module) => ({
+    default: module.EntityAdmin
+  }))
+);
+const AccountSettings = lazy(() =>
+  adminRouteModuleLoaders.account().then((module) => ({
+    default: module.AccountSettings
+  }))
+);
+const SettingsPage = lazy(() =>
+  adminRouteModuleLoaders.site().then((module) => ({
+    default: module.SettingsPage
+  }))
+);
+const AdvancedConfigPage = lazy(() =>
+  adminRouteModuleLoaders.advancedConfig().then((module) => ({
+    default: module.AdvancedConfigPage
+  }))
+);
+const StorageSettings = lazy(() =>
+  adminRouteModuleLoaders.storage().then((module) => ({
+    default: module.StorageSettings
+  }))
+);
+const UserAdmin = lazy(() =>
+  adminRouteModuleLoaders.users().then((module) => ({
+    default: module.UserAdmin
+  }))
+);
+const CheckPage = lazy(() =>
+  adminRouteModuleLoaders.check().then((module) => ({
+    default: module.CheckPage
+  }))
+);
+const LogPage = lazy(() =>
+  adminRouteModuleLoaders.logs().then((module) => ({
+    default: module.LogPage
+  }))
+);
 
 type AuthenticatedAdminShellProps = {
   role: AdminRole;

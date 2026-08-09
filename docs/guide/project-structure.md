@@ -146,6 +146,10 @@ hooks ──► lib
   页面滚动边界归一化放在 `lib/ui/`，由共享采样 Hook 提供给各页面交互状态机。
 - `pages/admin/uploader/` 管理统一 prepared import 队列；其中 `link-import/` 负责 URL、
   JSONL 与微博输入。
+- `pages/admin/admin-route-modules.ts` 集中拥有后台路由页面的生命周期级动态加载器；
+  `AuthenticatedAdminShell` 的 `React.lazy` 与桌面 / 移动导航意图共用这些 Promise。
+  `AdminNavigation` 只为角色过滤后可见的内部页面绑定模块键，外部“首页”出口不猜测
+  根路由目标。预加载只能取得页面 JS、CSS 与静态依赖，不能挂载页面或提前执行查询。
 - `styles/` 按 base、home、gallery、admin 和 responsive 组织全局样式；首页进一步
   将页面 / 首屏基础、候选目录基础及共享响应式交互分文件，并按该顺序引入。公开页
   不参与动画的 fixed 导航外壳、主次导航共用的位移栈和根滚动回弹边界集中在
