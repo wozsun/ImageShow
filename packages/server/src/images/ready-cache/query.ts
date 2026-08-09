@@ -195,7 +195,7 @@ async function readPageFromIndex(
   limit: number,
   cursor: string | undefined
 ): Promise<ReadyImageCacheResult<ReadyImageCachePage>> {
-  const decoded = cursor ? decodeImageCursor(cursor) : null;
+  const decoded = cursor !== undefined ? decodeImageCursor(cursor) : null;
   return readCache(async () => {
     if (!await queryIndexIsValid(index)) return null;
     let start = 0;

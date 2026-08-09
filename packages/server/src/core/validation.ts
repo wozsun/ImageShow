@@ -254,7 +254,8 @@ const imageListBase = z.object({
   t: z.string().trim().toLowerCase().max(1024).optional(),
   tag: z.string().trim().toLowerCase().max(1024).optional(),
   a: z.string().trim().toLowerCase().max(1024).optional(),
-  cursor: z.string().trim().min(1).max(512).optional()
+  // The image cursor decoder owns format validation and its stable API error.
+  cursor: z.string().optional()
 });
 
 function galleryStatsSelector(noun: string) {

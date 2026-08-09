@@ -32,7 +32,7 @@ async function fetchImageRows(
   cursor: string | undefined,
   columns: string
 ) {
-  if (cursor) {
+  if (cursor !== undefined) {
     const decoded = decodeImageCursor(cursor);
     params.push(decoded.imageTime, decoded.id);
     where.push(
