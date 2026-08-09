@@ -1,7 +1,6 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { Icon } from "../icon/Icon.js";
 import {
-  clearImageElement,
   loadImageElement
 } from "./image-element-loader.js";
 
@@ -9,42 +8,85 @@ const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 600;
 
 type ThumbLoadState = {
-  src: string;
+  requestedSrc: string;
+  visibleSrc: string;
   attempt: number;
   status: "loading" | "ready" | "failed";
 };
 
 function initialLoadState(src: string): ThumbLoadState {
-  return { src, attempt: 0, status: "loading" };
+  return {
+    requestedSrc: src,
+    visibleSrc: "",
+    attempt: 0,
+    status: src ? "loading" : "ready"
+  };
 }
 
-export function ThumbImage({ src, alt = "", className = "" }: { src: string; alt?: string; className?: string }) {
-  const imageRef = useRef<HTMLImageElement | null>(null);
+export function ThumbImage({
+  src,
+  alt = "",
+  className = "",
+  retainLoadedWhenEmpty = false
+}: {
+  src: string;
+  alt?: string;
+  className?: string;
+  retainLoadedWhenEmpty?: boolean;
+}) {
+  const pendingImageRef = useRef<HTMLImageElement | null>(null);
   const timer = useRef<number | undefined>(undefined);
-  const [loadState, setLoadState] = useState<ThumbLoadState>(
+  const [state, setState] = useState<ThumbLoadState>(
     () => initialLoadState(src)
   );
-  const currentState = loadState.src === src
-    ? loadState
-    : initialLoadState(src);
+
+  useLayoutEffect(() => {
+    setState((current) => {
+      if (!src) {
+        if (retainLoadedWhenEmpty) {
+          return current.requestedSrc === "" && current.status === "ready"
+            ? current
+            : {
+                ...current,
+                requestedSrc: "",
+                attempt: 0,
+                status: "ready"
+              };
+        }
+        return current.requestedSrc === "" && !current.visibleSrc
+          ? current
+          : initialLoadState("");
+      }
+      if (current.requestedSrc === src) return current;
+      return {
+        requestedSrc: src,
+        visibleSrc: current.visibleSrc,
+        attempt: 0,
+        status: current.visibleSrc === src ? "ready" : "loading"
+      };
+    });
+  }, [retainLoadedWhenEmpty, src]);
+
+  const shouldLoad = Boolean(
+    src
+    && state.requestedSrc === src
+    && state.requestedSrc !== state.visibleSrc
+    && state.status === "loading"
+  );
 
   useLayoutEffect(() => {
     window.clearTimeout(timer.current);
     timer.current = undefined;
+    if (!shouldLoad) return;
 
-    if (loadState.src !== src) {
-      if (imageRef.current) clearImageElement(imageRef.current);
-      setLoadState(initialLoadState(src));
-      return;
-    }
-
-    const image = imageRef.current;
+    const image = pendingImageRef.current;
     if (!image) return;
-    const attempt = loadState.attempt;
+    const requestedSrc = state.requestedSrc;
+    const attempt = state.attempt;
     const controller = new AbortController();
     const resolvedSrc = attempt === 0
-      ? src
-      : `${src}${src.includes("?") ? "&" : "?"}retry=${attempt}`;
+      ? requestedSrc
+      : `${requestedSrc}${requestedSrc.includes("?") ? "&" : "?"}retry=${attempt}`;
 
     void loadImageElement(
       image,
@@ -52,25 +94,29 @@ export function ThumbImage({ src, alt = "", className = "" }: { src: string; alt
       controller.signal
     ).then(
       () => {
-        setLoadState((current) => (
-          current.src === src && current.attempt === attempt
-            ? { ...current, status: "ready" }
+        setState((current) => (
+          current.requestedSrc === requestedSrc && current.attempt === attempt
+            ? {
+                ...current,
+                visibleSrc: requestedSrc,
+                status: "ready"
+              }
             : current
         ));
       },
       () => {
         if (controller.signal.aborted) return;
         if (attempt >= MAX_RETRIES) {
-          setLoadState((current) => (
-            current.src === src && current.attempt === attempt
+          setState((current) => (
+            current.requestedSrc === requestedSrc && current.attempt === attempt
               ? { ...current, status: "failed" }
               : current
           ));
           return;
         }
         timer.current = window.setTimeout(() => {
-          setLoadState((current) => (
-            current.src === src && current.attempt === attempt
+          setState((current) => (
+            current.requestedSrc === requestedSrc && current.attempt === attempt
               ? { ...current, attempt: attempt + 1 }
               : current
           ));
@@ -82,11 +128,10 @@ export function ThumbImage({ src, alt = "", className = "" }: { src: string; alt
       controller.abort();
       window.clearTimeout(timer.current);
       timer.current = undefined;
-      clearImageElement(image);
     };
-  }, [loadState.attempt, loadState.src, src]);
+  }, [shouldLoad, state.attempt, state.requestedSrc]);
 
-  if (currentState.status === "failed") {
+  if (state.status === "failed" && !state.visibleSrc) {
     return (
       <span className={`thumb-fallback ${className}`.trim()} role="img" aria-label={alt || "缩略图加载失败"}>
         <Icon name="file-damage-line" />
@@ -94,15 +139,30 @@ export function ThumbImage({ src, alt = "", className = "" }: { src: string; alt
     );
   }
 
+  // 待加载节点完成 load/decode 后会沿用同一个 key 成为可见节点；此前的图层
+  // 始终保留，避免地址切换期间出现空白帧。
+  const layerSources = [
+    state.visibleSrc,
+    shouldLoad ? state.requestedSrc : ""
+  ].filter(Boolean);
+
   return (
-    <img
-      ref={imageRef}
-      alt={alt}
-      className={`thumb-image ${currentState.status === "ready" ? "is-ready" : ""} ${className}`.trim()}
-      aria-hidden={currentState.status === "ready" ? undefined : "true"}
-      loading="lazy"
-      decoding="async"
-      referrerPolicy="no-referrer"
-    />
+    <span className={`thumb-image ${state.visibleSrc ? "is-ready" : ""} ${className}`.trim()}>
+      {layerSources.map((layerSrc) => {
+        const visible = layerSrc === state.visibleSrc;
+        return (
+          <img
+            key={layerSrc}
+            ref={visible ? undefined : pendingImageRef}
+            alt={visible ? alt : ""}
+            className={`thumb-image-layer${visible ? " is-ready" : ""}`}
+            aria-hidden={visible ? undefined : "true"}
+            loading="lazy"
+            decoding="async"
+            referrerPolicy="no-referrer"
+          />
+        );
+      })}
+    </span>
   );
 }

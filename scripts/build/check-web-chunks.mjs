@@ -214,12 +214,12 @@ const generatedIconPaths = [
 ];
 if (
   commonIconEntries.length !== 16
-  || adminIconEntries.length !== 33
-  || new Set(generatedIconNames).size !== 49
-  || new Set(generatedIconPaths).size !== 49
+  || adminIconEntries.length !== 34
+  || new Set(generatedIconNames).size !== 50
+  || new Set(generatedIconPaths).size !== 50
 ) {
   throw new Error(
-    "check-web-chunks: generated icon tables must contain 16 common and 33 admin icons without duplicate names or paths"
+    "check-web-chunks: generated icon tables must contain 16 common and 34 admin icons without duplicate names or paths"
   );
 }
 await Promise.all([
@@ -689,6 +689,6 @@ if (runtimeAsset) {
 
 console.log(
   runtimeAsset
-    ? `check-web-chunks: public routes and AdminLogin exclude admin-foundation; Home ${homeInitialAssetCount} and Gallery ${galleryInitialAssetCount} initial assets stay within budget; 16 common and 33 admin icon paths have single foundation owners; ${classifiedRouteCssAssets.length} route CSS assets use classified short names; only ${runtimeAsset.assetName} (${runtimeAsset.size} B) is below 1 KiB`
-    : `check-web-chunks: public routes and AdminLogin exclude admin-foundation; Home ${homeInitialAssetCount} and Gallery ${galleryInitialAssetCount} initial assets stay within budget; 16 common and 33 admin icon paths have single foundation owners; ${classifiedRouteCssAssets.length} route CSS assets use classified short names; no JavaScript asset is below 1 KiB`
+    ? `check-web-chunks: public routes and AdminLogin exclude admin-foundation; Home ${homeInitialAssetCount} and Gallery ${galleryInitialAssetCount} initial assets stay within budget; ${commonIconEntries.length} common and ${adminIconEntries.length} admin icon paths have single foundation owners; ${classifiedRouteCssAssets.length} route CSS assets use classified short names; only ${runtimeAsset.assetName} (${runtimeAsset.size} B) is below 1 KiB`
+    : `check-web-chunks: public routes and AdminLogin exclude admin-foundation; Home ${homeInitialAssetCount} and Gallery ${galleryInitialAssetCount} initial assets stay within budget; ${commonIconEntries.length} common and ${adminIconEntries.length} admin icon paths have single foundation owners; ${classifiedRouteCssAssets.length} route CSS assets use classified short names; no JavaScript asset is below 1 KiB`
 );

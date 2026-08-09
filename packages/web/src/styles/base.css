@@ -414,8 +414,21 @@ button.active, .button {
   color: var(--color-thumbnail-placeholder);
 }
 .thumb-fallback .app-icon { width: 38%; height: 38%; max-width: 44px; max-height: 44px; }
-.thumb-image { visibility: hidden; }
+.thumb-image {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  visibility: hidden;
+}
 .thumb-image.is-ready { visibility: visible; }
+.thumb-image-layer {
+  position: absolute;
+  inset: 0;
+  visibility: hidden;
+}
+.thumb-image-layer.is-ready { visibility: visible; }
 
 .progressive-image {
   position: relative;

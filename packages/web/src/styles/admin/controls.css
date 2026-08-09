@@ -25,6 +25,7 @@
 
 /* 后台图片列表、上传流程与按需单图编辑器共用的缩略图骨架。 */
 .image-thumbnail {
+  position: relative;
   width: 72px;
   height: 72px;
   flex: 0 0 72px;
@@ -44,6 +45,18 @@
   height: 100%;
   object-fit: cover;
   background: var(--admin-color-thumbnail-surface);
+}
+.image-thumbnail-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--admin-color-thumbnail-placeholder);
+  pointer-events: none;
+}
+.image-thumbnail-loading .app-icon { width: 24px; height: 24px; }
+.image-thumbnail > :is(.thumb-image.is-ready, .thumb-fallback) ~ .image-thumbnail-loading {
+  visibility: hidden;
 }
 
 .apply-to-all-button {

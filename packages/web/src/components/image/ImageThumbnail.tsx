@@ -1,11 +1,22 @@
+import { AdminIcon } from "../icon/AdminIcon.js";
 import { ThumbImage } from "./ThumbImage.js";
 
-export function ImageThumbnail({ src, alt = "", size = "normal", className = "", onClick }: {
+export function ImageThumbnail({
+  src,
+  alt = "",
+  size = "normal",
+  className = "",
+  onClick,
+  showLoadingIndicator = false,
+  retainLoadedWhenEmpty = false
+}: {
   src: string;
   alt?: string;
   size?: "normal" | "small";
   className?: string;
   onClick?: (opener: HTMLElement) => void;
+  showLoadingIndicator?: boolean;
+  retainLoadedWhenEmpty?: boolean;
 }) {
   const interactive = Boolean(onClick);
   return (
@@ -22,7 +33,16 @@ export function ImageThumbnail({ src, alt = "", size = "normal", className = "",
         }
       } : undefined}
     >
-      <ThumbImage src={src} alt={alt} />
+      <ThumbImage
+        src={src}
+        alt={alt}
+        retainLoadedWhenEmpty={retainLoadedWhenEmpty}
+      />
+      {showLoadingIndicator && (
+        <span className="image-thumbnail-loading" aria-hidden="true">
+          <AdminIcon name="loader-4-line" />
+        </span>
+      )}
     </div>
   );
 }

@@ -102,9 +102,13 @@ export const ImportJobCard = memo(function ImportJobCard({
     <article className={`import-job ${job.status}`}>
       <div className="import-job-aside">
         <div className="import-job-preview">
-          {previewSrc
-            ? <ImageThumbnail src={previewSrc} className="import-job-thumbnail" onClick={openPreview} />
-            : <div className="image-thumbnail import-job-thumbnail" aria-hidden="true" />}
+          <ImageThumbnail
+            src={previewSrc}
+            className="import-job-thumbnail"
+            onClick={openPreview}
+            showLoadingIndicator
+            retainLoadedWhenEmpty={job.status === "committing"}
+          />
         </div>
         <span className="import-job-size is-vertical">
           <span>{originalSizeText}</span>
