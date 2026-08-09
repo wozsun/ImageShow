@@ -425,7 +425,7 @@
 .tile:hover .tile-info, .tile:focus-visible .tile-info { transform: translateY(0); }
 
 .gallery-loading,
-.gallery-empty.empty-state {
+.gallery-empty {
   margin: 0 28px 28px;
   color: var(--public-color-text-secondary);
 }

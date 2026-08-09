@@ -160,17 +160,17 @@ export function StorageBackendMigrationDialog({
             </label>
             {isLoading && <p className="muted">正在加载存储后端</p>}
             {isError && (
-              <p className="error" role="alert">
+              <p className="admin-error" role="alert">
                 存储后端列表加载失败，请关闭弹窗后重试。
               </p>
             )}
             {sourceUnavailable && (
-              <p className="error" role="alert">
+              <p className="admin-error" role="alert">
                 源后端状态已变化，请关闭弹窗并刷新页面后重试。
               </p>
             )}
             {data && !sourceUnavailable && !targetOptions.length && (
-              <p className="error" role="alert">
+              <p className="admin-error" role="alert">
                 没有其他已启用的目标后端，请先启用或新增一个存储后端。
               </p>
             )}

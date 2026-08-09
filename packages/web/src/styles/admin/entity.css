@@ -21,7 +21,7 @@
 /* 主题 / 标签 / 作者的 slug 字段以显示名框（最宽 280px）为基准取约 3/5，即 170px。 */
 .entity-slug-field { flex: 0 1 170px; max-width: 170px; }
 /* 校验提示保持单行，利用显示名输入框下方的空白，而不在 170px 窄框内折行。 */
-.entity-slug-field .field-error { white-space: nowrap; }
+.entity-slug-field .admin-field-error { white-space: nowrap; }
 /* 用户管理的密码框略宽，完整容纳密码提示和显示密码按钮。 */
 .user-password-field { flex: 1 1 300px; max-width: 360px; }
 /* 密码输入框填满字段包裹，使绝对定位的显示按钮保持在输入框内。 */

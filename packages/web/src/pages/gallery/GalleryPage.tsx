@@ -21,6 +21,8 @@ import { api } from "../../lib/api/client.js";
 import { AppHeader } from "../../components/navigation/AppHeader.js";
 import { CopyButton } from "../../components/actions/CopyButton.js";
 import { Icon } from "../../components/icon/Icon.js";
+// 当前详情共享 JS + CSS 实测压缩后不足 6 KiB；画廊首击直接使用，继续随路由
+// 加载可避免新增请求和 Suspense 边界。
 import { ImageDetailModal } from "../../components/image/ImageDetailModal.js";
 import { SelectMenu } from "../../components/form/SelectMenu.js";
 import { FacetSelector } from "../../components/data-display/FacetSelector.js";
@@ -570,7 +572,7 @@ export function GalleryPage({ embedded = false }: { embedded?: boolean }) {
           }}
         />
       )}
-      {!imagePages.isError && !loading && !items.length && <p className="empty-state gallery-empty">暂无图片</p>}
+      {!imagePages.isError && !loading && !items.length && <p className="gallery-empty">暂无图片</p>}
       {initialLoading && (
         <AppLoadingRegion
           className="gallery-initial-loading"

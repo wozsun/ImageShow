@@ -477,7 +477,7 @@ export function ImageAdmin() {
               setUploaderPending(pending);
             }}
           />
-          <div className="segmented">
+          <div className="image-admin-view-switch">
             <button type="button" className={view === "ready" ? "active" : ""} disabled={interfaceBusy} onClick={() => changeView("ready")}>
               图库
             </button>
@@ -499,7 +499,7 @@ export function ImageAdmin() {
           disabled={interfaceBusy}
           onChange={changeFilter}
         />
-        <div className="toolbar image-list-toolbar">
+        <div className="image-list-toolbar">
           <div className="inline-actions image-list-selection">
             <span
               id={imageRangeSelectionHelpId}
@@ -507,7 +507,7 @@ export function ImageAdmin() {
             >
               按住 Shift 点击卡片主体，或按 Shift+Enter，可将图片作为连续选择的区间端点。
             </span>
-            <label className="check-label">
+            <label className="image-list-check-label">
               <input
                 id="admin-image-select-all"
                 type="checkbox"
@@ -529,7 +529,7 @@ export function ImageAdmin() {
               {selected.length ? `已选 ${selected.length}` : "未选择图片"}
             </span>
           </div>
-          <div className="toolbar-actions image-list-toolbar-actions">
+          <div className="image-list-toolbar-actions">
             {!mobileLayout && (
               <ActionFeedbackRegion
                 className="image-admin-feedback-region"
@@ -630,7 +630,7 @@ export function ImageAdmin() {
         className="admin-scroll-region"
         ref={gridRef}
       >
-        <div className="table admin-image-grid" data-density={cardDensity}>
+        <div className="admin-image-grid" data-density={cardDensity}>
           {items.map((item) => (
             <AdminImageCard
               key={item.id}

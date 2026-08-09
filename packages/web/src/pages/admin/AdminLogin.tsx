@@ -218,7 +218,7 @@ export function AdminLogin({
             )}
           </div>
         )}
-        {error && <p className="error" role="alert" title={error}>{error}</p>}
+        {error && <p className="login-error" role="alert" title={error}>{error}</p>}
         <button
           id="admin-login-submit"
           className="button"

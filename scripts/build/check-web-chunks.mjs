@@ -59,7 +59,6 @@ const classifiedCssAssetPrefixes = [
   ...requiredEntryCssAssetPrefixes,
   ...requiredSharedCssAssetPrefixes,
   ...optionalCssAssetPrefixes,
-  "admin-common",
   "shared",
   "common"
 ];
@@ -96,6 +95,31 @@ for (const prefix of requiredEntryCssAssetPrefixes) {
 }
 for (const prefix of requiredSharedCssAssetPrefixes) {
   requireSharedCssAsset(prefix);
+}
+
+const adminCommonCssAsset = singleCssAsset("admin-common");
+const adminCommonCssSource = await assetSource(adminCommonCssAsset);
+const adminCommonClassNames = new Set(
+  [...adminCommonCssSource.matchAll(/\.(-?[_a-zA-Z]+[_a-zA-Z0-9-]*)/g)]
+    .map((match) => match[1])
+);
+const unexpectedAdminCommonClasses = [...adminCommonClassNames].filter(
+  (className) => className !== "password-input" && className !== "password-toggle"
+);
+if (
+  Buffer.byteLength(adminCommonCssSource, "utf8") > 2_048
+  || !adminCommonClassNames.has("password-input")
+  || !adminCommonClassNames.has("password-toggle")
+  || unexpectedAdminCommonClasses.length > 0
+) {
+  throw new Error(
+    "check-web-chunks: admin-common must remain a small PasswordInput-only stylesheet, found "
+    + JSON.stringify({
+      asset: adminCommonCssAsset,
+      bytes: Buffer.byteLength(adminCommonCssSource, "utf8"),
+      classes: [...adminCommonClassNames]
+    })
+  );
 }
 
 for (const prefix of requiredJavaScriptAssetPrefixes) {

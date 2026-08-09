@@ -6,12 +6,11 @@ import type {
 } from "@imageshow/shared/browser";
 import { AdminIcon, type AdminIconName } from "../../components/icon/AdminIcon.js";
 import { adminBasePath } from "../../lib/constants.js";
-import { preloadIntentProps } from "../../lib/ui/preload-intent.js";
 import { AdminNavGroup } from "./AdminNavGroup.js";
 import {
-  preloadAdminRouteModule,
   type AdminRouteModuleKey
 } from "./admin-route-modules.js";
+import { useAdminRoutePreloadIntent } from "./useAdminRoutePreloadIntent.js";
 
 type AdminNavigationLink = {
   kind: "link";
@@ -204,15 +203,12 @@ function NavigationLink({
   item: AdminNavigationLink;
   variant: "desktop" | "mobile";
 }) {
-  const routeModule = item.routeModule;
-  const preload = routeModule
-    ? () => preloadAdminRouteModule(routeModule)
-    : undefined;
+  const preloadIntent = useAdminRoutePreloadIntent(item.routeModule);
   return (
     <NavLink
       to={item.to}
       end={item.end}
-      {...preloadIntentProps(preload)}
+      {...preloadIntent}
       className={({ isActive }) => [
         variant === "desktop" ? item.desktopClassName : "",
         isActive ? "active" : ""

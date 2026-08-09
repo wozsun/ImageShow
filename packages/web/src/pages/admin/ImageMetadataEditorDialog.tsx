@@ -450,7 +450,7 @@ export function ImageMetadataEditorDialog({
               </article>
             );
           })}
-          {!activeItems.length && <p className="empty-state">批量编辑列表为空</p>}
+          {!activeItems.length && <p className="batch-edit-empty-state">批量编辑列表为空</p>}
         </div>
         <footer className={`image-workflow-footer${paginationAvailable ? " has-pagination" : ""}`}>
           {(canMigrateStorage || deleteAvailable) && (

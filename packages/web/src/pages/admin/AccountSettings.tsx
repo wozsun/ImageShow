@@ -81,7 +81,7 @@ export function AccountSettings() {
             autoComplete="new-password"
             ariaInvalid={nextInvalid}
           />
-          {nextInvalid && <p className="field-error">{passwordPolicyHint}</p>}
+          {nextInvalid && <p className="admin-field-error">{passwordPolicyHint}</p>}
         </label>
         <label>
           确认新密码
@@ -94,7 +94,7 @@ export function AccountSettings() {
             autoComplete="new-password"
           />
         </label>
-        {mismatch && <p className="error" role="alert">两次输入的新密码不一致。</p>}
+        {mismatch && <p className="admin-error" role="alert">两次输入的新密码不一致。</p>}
         {isSuper && <p className="muted account-note">无法登录时，可在容器终端使用 imageshow reset-password 恢复超级管理员密码。</p>}
         <AsyncActionButton
           className="button"

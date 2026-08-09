@@ -149,7 +149,7 @@ export function UserAdmin() {
             autoComplete="off"
             aria-invalid={Boolean(usernameError)}
           />
-          {usernameError && <p className="field-error" role="alert">{usernameError}</p>}
+          {usernameError && <p className="admin-field-error" role="alert">{usernameError}</p>}
         </div>
         <div className="admin-create-field user-password-field">
           <PasswordInput
@@ -161,7 +161,7 @@ export function UserAdmin() {
             autoComplete="new-password"
             ariaInvalid={passwordInvalid}
           />
-          {passwordInvalid && <p className="field-error">{passwordPolicyHint}</p>}
+          {passwordInvalid && <p className="admin-field-error">{passwordPolicyHint}</p>}
         </div>
         <AsyncActionButton
           type="button"
@@ -336,7 +336,7 @@ function ResetPasswordModal({ username, returnFocusRef, onClose, onError }: {
                 autoFocus
                 ariaInvalid={passwordInvalid}
               />
-              {passwordInvalid && <p className="field-error">{passwordPolicyHint}</p>}
+              {passwordInvalid && <p className="admin-field-error">{passwordPolicyHint}</p>}
             </label>
           </div>
           <footer>

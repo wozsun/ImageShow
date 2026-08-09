@@ -202,7 +202,7 @@ export function Overview({ canManageStorage }: { canManageStorage: boolean }) {
                 ))}
               </div>
               {detailLoadError && (
-                <p className="error" role="alert">{detailLoadError}</p>
+                <p className="admin-error" role="alert">{detailLoadError}</p>
               )}
             </div>
           )}

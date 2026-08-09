@@ -101,7 +101,7 @@ export function ConfirmDialog({
         >
           <header><div><h2>{title}</h2><p>{description}</p></div></header>
           {errorMessage && (
-            <p className="confirm-dialog-error error" role="alert">
+            <p className="confirm-dialog-error admin-error" role="alert">
               {errorMessage}
             </p>
           )}

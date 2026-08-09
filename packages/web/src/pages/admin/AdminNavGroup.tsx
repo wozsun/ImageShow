@@ -1,11 +1,10 @@
 import { useEffect, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router";
 import { AdminIcon, type AdminIconName } from "../../components/icon/AdminIcon.js";
-import { preloadIntentProps } from "../../lib/ui/preload-intent.js";
 import {
-  preloadAdminRouteModule,
   type AdminRouteModuleKey
 } from "./admin-route-modules.js";
+import { useAdminRoutePreloadIntent } from "./useAdminRoutePreloadIntent.js";
 
 type AdminNavGroupItem = {
   to: string;
@@ -14,10 +13,18 @@ type AdminNavGroupItem = {
   routeModule?: AdminRouteModuleKey;
 };
 
-function preloadHandler(routeModule?: AdminRouteModuleKey) {
-  return routeModule
-    ? () => preloadAdminRouteModule(routeModule)
-    : undefined;
+function AdminNavGroupLink({ item }: { item: AdminNavGroupItem }) {
+  const preloadIntent = useAdminRoutePreloadIntent(item.routeModule);
+  return (
+    <NavLink
+      to={item.to}
+      end={item.end}
+      {...preloadIntent}
+      className={({ isActive }) => isActive ? "active" : ""}
+    >
+      {item.label}
+    </NavLink>
+  );
 }
 
 export function AdminNavGroup({ icon, label, items, defaultOpen = false }: {
@@ -32,14 +39,14 @@ export function AdminNavGroup({ icon, label, items, defaultOpen = false }: {
   const [open, setOpen] = useState(sectionActive || defaultOpen);
   useEffect(() => { if (sectionActive) setOpen(true); }, [sectionActive]);
   const enter = () => { setOpen(true); if (items[0]) navigate(items[0].to); };
-  const preloadFirst = preloadHandler(items[0]?.routeModule);
+  const preloadFirst = useAdminRoutePreloadIntent(items[0]?.routeModule);
   return (
     <div className={`admin-nav-group ${open ? "is-open" : ""}`}>
       <div className={`admin-nav-group-trigger ${sectionActive ? "active" : ""}`.trim()}>
         <button
           type="button"
           className="admin-nav-group-main"
-          {...preloadIntentProps(preloadFirst)}
+          {...preloadFirst}
           onClick={enter}
         >
           <AdminIcon name={icon} />
@@ -57,20 +64,9 @@ export function AdminNavGroup({ icon, label, items, defaultOpen = false }: {
       </div>
       <div className={`admin-nav-sub ${open ? "is-open" : ""}`}>
         <div className="admin-nav-sub-inner">
-          {items.map((item) => {
-            const preload = preloadHandler(item.routeModule);
-            return (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.end}
-                {...preloadIntentProps(preload)}
-                className={({ isActive }) => isActive ? "active" : ""}
-              >
-                {item.label}
-              </NavLink>
-            );
-          })}
+          {items.map((item) => (
+            <AdminNavGroupLink key={item.to} item={item} />
+          ))}
         </div>
       </div>
     </div>

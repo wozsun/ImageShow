@@ -175,9 +175,9 @@ function LightweightStatusCards({ query }: {
           <div><h2>PostgreSQL</h2><p>权威图片与后台任务真相源</p></div>
           <span>{postgresql?.status === "ok" ? "已连接" : postgresql?.status === "error" ? "异常" : "读取中"}</span>
         </header>
-        {requestError && <p className="error" role="alert">{requestError}</p>}
+        {requestError && <p className="admin-error" role="alert">{requestError}</p>}
         {postgresql?.status === "error" && (
-          <p className="error" role="alert">{postgresql.error.category} · {postgresql.error.code} · {postgresql.error.message}</p>
+          <p className="admin-error" role="alert">{postgresql.error.category} · {postgresql.error.code} · {postgresql.error.message}</p>
         )}
         <dl>
           <div>
@@ -208,9 +208,9 @@ function LightweightStatusCards({ query }: {
           <div><h2>Redis</h2><p>缓存、会话与安全运行时依赖</p></div>
           <span>{redis?.status === "ok" ? "已连接" : redis?.status === "error" ? "异常" : "读取中"}</span>
         </header>
-        {requestError && <p className="error" role="alert">{requestError}</p>}
+        {requestError && <p className="admin-error" role="alert">{requestError}</p>}
         {redis?.status === "error" && (
-          <p className="error" role="alert">{redis.error.category} · {redis.error.code} · {redis.error.message}</p>
+          <p className="admin-error" role="alert">{redis.error.category} · {redis.error.code} · {redis.error.message}</p>
         )}
         <dl>
           <div><dt>版本 / DB</dt><dd>{redis?.status === "ok" ? `${redis.data.version} / ${redis.data.configured_db}` : "—"}</dd></div>
@@ -281,7 +281,7 @@ function StorageCleanupDialog({ running, onClose, onRun }: {
           <div className="operation-body">
             <p className="notice-line">此操作会修改存储对象。执行前请先运行存储检查，确认检查结果，并避免同时上传或批量编辑图片。</p>
             {errorMessage && (
-              <p className="error" role="alert">{errorMessage}</p>
+              <p className="admin-error" role="alert">{errorMessage}</p>
             )}
           </div>
           <footer>

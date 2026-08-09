@@ -297,7 +297,7 @@
 .duplicate-item .image-thumbnail { grid-row: span 2; }
 .duplicate-item span, .duplicate-item small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .duplicate-item small { color: var(--admin-color-text-secondary); }
-.empty-state {
+.upload-empty-state {
   margin: 0;
   padding: 28px;
   text-align: center;
@@ -306,7 +306,7 @@
   border: 1px dashed var(--admin-color-border-control);
   border-radius: 8px;
 }
-button.empty-state.upload-dropzone {
+button.upload-empty-state.upload-dropzone {
   width: 100%;
   min-height: 140px;
   flex-direction: column;
@@ -317,7 +317,7 @@ button.empty-state.upload-dropzone {
 }
 .upload-dropzone > * { pointer-events: none; }
 .upload-dropzone .app-icon { width: 32px; height: 32px; flex-basis: 32px; opacity: .7; }
-button.empty-state.upload-dropzone:not(:disabled):hover,
+button.upload-empty-state.upload-dropzone:not(:disabled):hover,
 .upload-dropzone.is-dragover {
   border-color: var(--admin-color-action-primary);
   background: var(--admin-color-upload-dropzone-hover);

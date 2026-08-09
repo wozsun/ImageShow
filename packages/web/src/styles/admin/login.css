@@ -50,7 +50,11 @@ body:has(.login) {
 }
 .login h1 { margin: 0 0 6px; }
 .login-challenge-slot { position: relative; min-height: 40px; }
-.login .error { line-height: 20px; }
+.login-error {
+  margin: 0;
+  color: var(--admin-color-danger-text);
+  line-height: 20px;
+}
 
 @keyframes login-surface-in {
   from { opacity: 0; transform: translateY(6px); }

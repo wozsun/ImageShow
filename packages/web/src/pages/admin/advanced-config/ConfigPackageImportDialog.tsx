@@ -130,7 +130,7 @@ export function ConfigPackageImportDialog({
                           aria-invalid={Boolean(error)}
                           disabled={blocked}
                         />
-                        {error && <small className="error">{error}</small>}
+                        {error && <small className="admin-error">{error}</small>}
                       </label>
                     ) : <span className="advanced-config-ready"><AdminIcon name="check-line" />可新增</span>}
                   </article>

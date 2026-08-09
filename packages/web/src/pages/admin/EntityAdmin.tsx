@@ -419,7 +419,7 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
             maxLength={32}
             aria-invalid={Boolean(slugError)}
           />
-          {slugError && <p className="field-error" role="alert">{slugError}</p>}
+          {slugError && <p className="admin-field-error" role="alert">{slugError}</p>}
         </div>
         <input
           value={display}

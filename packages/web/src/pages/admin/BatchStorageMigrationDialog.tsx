@@ -208,7 +208,7 @@ export function BatchStorageMigrationDialog({
               </p>
             )}
             <p className="notice-line">迁移会复制对象与缩略图到目标后端、更新引用，并删除源副本；目标为对象存储时需先在设置页配置好该后端。</p>
-            {error && <p className="error" role="alert" title={error}>{error}</p>}
+            {error && <p className="admin-error" role="alert" title={error}>{error}</p>}
           </div>
           <footer>
             <button

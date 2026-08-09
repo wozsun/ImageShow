@@ -185,7 +185,7 @@ export function ReadyImageCachePanel({
           </div>
         </div>
         {(rebuildError || statusError) && (
-          <p className="error" role="alert">{rebuildError || statusError}</p>
+          <p className="admin-error" role="alert">{rebuildError || statusError}</p>
         )}
         <dl className="ready-cache-status-grid">
           <div><dt>状态</dt><dd>{status?.rebuilding ? "重建中" : healthy ? "已同步" : status?.reason ?? "读取中"}</dd></div>

@@ -231,7 +231,7 @@ export const webBuildAssetContract = {
   ],
   requiredSharedCssPrefixes: [
     "public-common", "image-management", "image-detail", "image-workflow",
-    "admin-theme"
+    "admin-theme", "admin-common"
   ],
   optionalCssPrefixes: ["image-editor", "image-admin-common", "super-admin"],
   requiredJavaScriptPrefixes: [
@@ -254,8 +254,8 @@ export const webBuildAssetContract = {
       required: ["gallery", "public-common", "image-detail"]
     },
     AdminLogin: {
-      allowed: ["login", "admin-theme"],
-      required: ["login", "admin-theme"]
+      allowed: ["login", "admin-theme", "admin-common"],
+      required: ["login", "admin-theme", "admin-common"]
     },
     AuthenticatedAdminShell: {
       allowed: ["admin-core", "admin-theme"],

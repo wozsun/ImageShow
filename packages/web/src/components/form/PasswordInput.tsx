@@ -1,5 +1,6 @@
 import { useState, type RefObject } from "react";
 import { Icon } from "../icon/Icon.js";
+import "../../styles/admin/password-input.css";
 
 export function PasswordInput({
   value,

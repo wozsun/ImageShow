@@ -10,6 +10,8 @@ import { DialogFrame } from "../../../components/feedback/DialogFrame.js";
 import { SelectMenu } from "../../../components/form/SelectMenu.js";
 import { WorkflowDefaultFields } from "../../../components/form/WorkflowDefaultFields.js";
 import { AdminIcon } from "../../../components/icon/AdminIcon.js";
+// 上传能力本身已经按需加载；不足 6 KiB（压缩后）的详情共享样式与逻辑留在
+// 同一能力块，避免任务首击再产生一个懒加载边界。
 import { ImageDetailModal } from "../../../components/image/ImageDetailModal.js";
 import { ImagePreviewModal } from "../../../components/image/ImagePreviewModal.js";
 import { WorkflowCollapsePanel } from "../../../components/layout/WorkflowCollapsePanel.js";
@@ -404,7 +406,7 @@ export function UploadWorkflowWindow({
           {!queue.jobs.length && (mode === "link" ? (
             <button
               type="button"
-              className="empty-state upload-dropzone"
+              className="upload-empty-state upload-dropzone"
               disabled={linkInputPending}
               {...preloadIntentProps(onPreloadLinkInput)}
               onClick={() => onOpenLinkInput("urls")}
@@ -415,7 +417,7 @@ export function UploadWorkflowWindow({
           ) : (
             <button
               type="button"
-              className={`empty-state upload-dropzone${dragOver ? " is-dragover" : ""}`}
+              className={`upload-empty-state upload-dropzone${dragOver ? " is-dragover" : ""}`}
               onClick={() => fileInputRef.current?.click()}
               onDragOver={(event) => {
                 event.preventDefault();

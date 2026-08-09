@@ -47,6 +47,15 @@
   border: 1px solid var(--admin-color-danger-border);
   border-radius: 6px;
 }
+.batch-edit-empty-state {
+  margin: 0;
+  padding: 28px;
+  text-align: center;
+  color: var(--admin-color-text-secondary);
+  background: var(--admin-color-surface-primary);
+  border: 1px dashed var(--admin-color-border-control);
+  border-radius: 8px;
+}
 
 .batch-edit-row {
   width: 100%;

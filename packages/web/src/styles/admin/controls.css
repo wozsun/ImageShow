@@ -388,31 +388,16 @@
   }
 }
 
-/*表单字段校验提示（slug 非法、密码不符合策略等）。*/
-.field-error { margin: 0; color: var(--admin-color-danger-text); font-size: 13px; }
-
-/*后台表单的错误提示（登录失败、账户设置校验、图片弹窗等，均在后台分块内）。*/
-.error { color: var(--admin-color-danger-text); margin: 0; }
-
-.password-input { position: relative; width: 100%; min-width: 0; }
-.password-input input { width: 100%; padding-right: 38px; }
-.password-toggle {
-  position: absolute;
-  top: 50%;
-  right: 4px;
-
-  margin-top: -15px;
-  width: 32px;
-  height: 30px;
-  min-height: 0;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--admin-color-text-secondary);
-  transition: color .16s ease, transform .1s ease;
+/*后台字段与表单错误使用管理语义类，避免懒加载块向公共页面泄漏裸选择器。*/
+.admin-field-error {
+  margin: 0;
+  color: var(--admin-color-danger-text);
+  font-size: 13px;
 }
-.password-toggle:hover:not(:disabled) { color: var(--admin-color-action-text); }
-.password-toggle:active:not(:disabled) { transform: scale(var(--pressable-scale-small, .97)); }
+.admin-error {
+  margin: 0;
+  color: var(--admin-color-danger-text);
+}
 
 input.is-changed,
 textarea.is-changed,
