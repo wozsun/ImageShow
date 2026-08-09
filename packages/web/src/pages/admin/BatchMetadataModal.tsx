@@ -475,8 +475,7 @@ export function BatchMetadataModal({
             page={page}
             totalPages={totalPages}
             disabled={busy}
-            onPrevious={() => setPage((value) => value - 1)}
-            onNext={() => setPage((value) => value + 1)}
+            onPageChange={setPage}
           />
         )}
         <footer>
@@ -516,8 +515,7 @@ export function BatchMetadataModal({
               page={page}
               totalPages={totalPages}
               disabled={busy}
-              onPrevious={() => setPage((value) => value - 1)}
-              onNext={() => setPage((value) => value + 1)}
+              onPageChange={setPage}
             />
           )}
           <div className="modal-footer-actions">

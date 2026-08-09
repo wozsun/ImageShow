@@ -89,6 +89,7 @@ const adminFoundationModuleSuffixes = [
   "/components/image/ThumbImage.tsx",
   "/components/layout/WorkspaceHeader.tsx",
   "/components/navigation/AdminPagination.tsx",
+  "/components/navigation/admin-pagination.ts",
   "/hooks/useAdminPreferences.tsx",
   "/hooks/useAsyncActionStatus.ts",
   "/lib/api/admin-preference-cache.ts",

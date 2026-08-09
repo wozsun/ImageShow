@@ -436,8 +436,7 @@ export function UploadWorkflowWindow({
           ariaLabel="导入任务列表分页"
           page={queue.page}
           totalPages={queue.totalPages}
-          onPrevious={() => queue.setPage((page) => page - 1)}
-          onNext={() => queue.setPage((page) => page + 1)}
+          onPageChange={queue.setPage}
         />
 
         <footer>
@@ -458,8 +457,7 @@ export function UploadWorkflowWindow({
             ariaLabel="导入任务列表分页"
             page={queue.page}
             totalPages={queue.totalPages}
-            onPrevious={() => queue.setPage((page) => page - 1)}
-            onNext={() => queue.setPage((page) => page + 1)}
+            onPageChange={queue.setPage}
           />
           <div className="modal-footer-actions">
             <button

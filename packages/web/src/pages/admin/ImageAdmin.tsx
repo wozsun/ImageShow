@@ -52,6 +52,7 @@ import {
   useImageAdminOperations,
   type ImageAdminView
 } from "./useImageAdminOperations.js";
+import { loadAdminImagePage } from "./image-page-navigation.js";
 import "../../styles/admin/images.css";
 
 function adminImageListQuery(
@@ -189,12 +190,17 @@ export function ImageAdmin() {
 
     setSearchParams(next === "ready" ? {} : { view: next }, { replace: true });
   };
-  const loadPage = async (
-    targetHistory: string[],
-    direction: "previous" | "next"
-  ) => {
-    if (pageNavigation || interfaceBusy) return;
-    const targetCursor = targetHistory.at(-1) ?? "";
+  const loadPage = async (targetPage: number) => {
+    if (
+      pageNavigation
+      || interfaceBusy
+      || targetPage === pageNumber
+      || targetPage < 1
+      || targetPage > totalPages
+    ) {
+      return;
+    }
+    const direction = targetPage < pageNumber ? "previous" : "next";
     const pageNavigationFence = pageNavigationFenceRef.current;
     const requestSequence = pageNavigationFence.begin();
     setPageNavigation(direction);
@@ -202,12 +208,24 @@ export function ImageAdmin() {
 
     try {
       // 当前页及页码保持不动；目标页完整返回并进入查询缓存后，再一次性提交游标。
-      await client.fetchQuery(
-        adminImageListQuery(view, filters, targetCursor, pageSize)
-      );
+      const target = await loadAdminImagePage({
+        targetPage,
+        currentPage: pageNumber,
+        currentPageData: data ?? null,
+        cursorHistory,
+        load: async (targetCursor) => {
+          const page = await client.fetchQuery(
+            adminImageListQuery(view, filters, targetCursor, pageSize)
+          );
+          if (!pageNavigationFence.isCurrent(requestSequence)) {
+            throw new Error("Image page navigation was superseded");
+          }
+          return page;
+        }
+      });
       if (!pageNavigationFence.isCurrent(requestSequence)) return;
       setSelected([]);
-      setCursorHistory(targetHistory);
+      setCursorHistory(target.cursorHistory);
     } catch (error) {
       if (pageNavigationFence.isCurrent(requestSequence)) {
         reportAdminUiError("image_admin.page_navigation", error);
@@ -218,14 +236,6 @@ export function ImageAdmin() {
         setPageNavigation(null);
       }
     }
-  };
-  const previousPage = () => {
-    if (pageNavigation || interfaceBusy || cursorHistory.length === 1) return;
-    void loadPage(cursorHistory.slice(0, -1), "previous");
-  };
-  const nextPage = () => {
-    if (pageNavigation || interfaceBusy || !data?.next_cursor) return;
-    void loadPage([...cursorHistory, data.next_cursor], "next");
   };
   useEffect(() => {
     setSelected([]);
@@ -241,7 +251,9 @@ export function ImageAdmin() {
     pageNavigationFenceRef.current.invalidate();
     setPageNavigation(null);
     setSelected([]);
-    setCursorHistory((current) => current.length > 1 ? current.slice(0, -1) : current);
+    setCursorHistory((current) => (
+      current.length > 1 ? current.slice(0, -1) : current
+    ));
   }, [data, isFetching, pageNumber, totalPages]);
   const preloadBatchEditor = () => editorCapability.preload({
     kind: "batch",
@@ -455,10 +467,9 @@ export function ImageAdmin() {
         ariaLabel="图片列表分页"
         page={pageNumber}
         totalPages={totalPages}
-        previousDisabled={interfaceBusy || cursorHistory.length === 1 || isFetching || pageNavigation !== null}
-        nextDisabled={interfaceBusy || !data?.next_cursor || isFetching || pageNavigation !== null}
-        onPrevious={previousPage}
-        onNext={nextPage}
+        disabled={interfaceBusy || isFetching || pageNavigation !== null}
+        nextDisabled={!data?.next_cursor}
+        onPageChange={(targetPage) => void loadPage(targetPage)}
       />
       {detailCapability.item && detailCapability.Modal && (
         <detailCapability.Modal

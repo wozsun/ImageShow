@@ -501,8 +501,7 @@ export function EntityAdmin({ kind }: { kind: EntityKind }) {
         ariaLabel={`${copy.noun}分页`}
         page={page}
         totalPages={totalPages}
-        onPrevious={() => setPage((current) => Math.max(1, current - 1))}
-        onNext={() => setPage((current) => Math.min(totalPages, current + 1))}
+        onPageChange={setPage}
       />
       {canDelete && confirmDelete && (
         <ConfirmDialog
