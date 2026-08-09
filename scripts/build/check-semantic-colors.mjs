@@ -23,6 +23,7 @@ const embeddedAdminSemanticFiles = [
   "styles/admin/advanced-config.css",
   "styles/admin/entity.css",
   "styles/admin/image-edit.css",
+  "styles/admin/image-workflow.css",
   "styles/admin/images.css",
   "styles/admin/login-challenge.css",
   "styles/admin/login.css",

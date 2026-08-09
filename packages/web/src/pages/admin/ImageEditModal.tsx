@@ -8,6 +8,7 @@ import { BatchMetadataModal } from "./BatchMetadataModal.js";
 // 不再依赖 ImageAdmin 路由碰巧提前引入。
 import "../../styles/admin/semantic-colors.css";
 import "../../styles/admin/controls.css";
+import "../../styles/admin/image-workflow.css";
 import "../../styles/admin/image-edit.css";
 
 export function ImageEditModal({

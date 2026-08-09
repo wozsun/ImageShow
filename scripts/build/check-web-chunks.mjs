@@ -66,6 +66,7 @@ const requiredSharedCssAssetPrefixes = [
   "public-common",
   "image-management",
   "image-detail",
+  "image-workflow",
   "admin-theme"
 ];
 const optionalCssAssetPrefixes = [
@@ -544,6 +545,7 @@ const imageAdminDeferredAssets = [
   uploaderAsset,
   linkUrlDialogAsset,
   singleCssAsset("image-management"),
+  singleCssAsset("image-workflow"),
   singleCssAsset("upload")
 ];
 assertPreloadsExcludeAssets(
@@ -607,10 +609,30 @@ await assertAssetsExcludeMarkers(
   ]
 );
 
-await findStaticReachableDynamicImporter(
+const imageAdminUploaderImporter = await findStaticReachableDynamicImporter(
+  imageAdminAsset,
+  uploaderAsset,
+  "ImageAdmin"
+);
+assertCssPreloadsUsePrefixes(
+  imageAdminUploaderImporter.source,
+  uploaderAsset,
+  "Uploader capability",
+  ["upload", "image-workflow", "image-detail"],
+  ["upload", "image-workflow", "image-detail"]
+);
+
+const imageAdminEditorImporter = await findStaticReachableDynamicImporter(
   imageAdminAsset,
   imageEditorCapabilityAsset,
   "ImageAdmin"
+);
+assertCssPreloadsUsePrefixes(
+  imageAdminEditorImporter.source,
+  imageEditorCapabilityAsset,
+  "image editor capability",
+  ["image-editor", "image-workflow", "admin-theme"],
+  ["image-editor", "image-workflow", "admin-theme"]
 );
 
 const overviewInitialPreloads = dynamicPreloadDependencies(

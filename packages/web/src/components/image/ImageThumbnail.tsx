@@ -40,7 +40,7 @@ export function ImageThumbnail({
       />
       {showLoadingIndicator && (
         <span className="image-thumbnail-loading" aria-hidden="true">
-          <AdminIcon name="loader-4-line" />
+          <AdminIcon name="image-download-line" />
         </span>
       )}
     </div>

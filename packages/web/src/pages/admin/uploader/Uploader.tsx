@@ -34,6 +34,7 @@ import { UploadWorkflowWindow } from "./UploadWorkflowWindow.js";
 import {
   type UploaderActivation
 } from "./uploader-activation.js";
+import "../../../styles/admin/image-workflow.css";
 import "../../../styles/admin/upload.css";
 
 const EMPTY_FACET_OPTIONS: FacetOption[] = [];

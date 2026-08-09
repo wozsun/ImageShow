@@ -59,7 +59,7 @@ const iconGroups = [
       "information-line",
       "key-2-line",
       "link",
-      "loader-4-line",
+      "image-download-line",
       "logout-box-r-line",
       "moon-line",
       "palette-line",

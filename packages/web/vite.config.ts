@@ -228,6 +228,7 @@ const entryStyleAssetNames = new Map([
   ["ImageDetailModal.css", "image-detail"],
   ["ImageEditModal.css", "image-edit"],
   ["image-editor-capability.css", "image-editor"],
+  ["image-workflow.css", "image-workflow"],
   ["semantic-colors.css", "admin-theme"],
   ["AdminLogin.css", "login"],
   ["LoginChallenge.css", "login-challenge"],
