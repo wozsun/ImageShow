@@ -143,7 +143,9 @@
     // 单个管理页面同时执行的 commit 数，范围 1-128。
     "commit_concurrency": 5,
     // 单个服务端进程同时执行的 commit 数，范围 1-512；所有客户端和直接 API 请求共享。
-    "global_commit_concurrency": 10
+    "global_commit_concurrency": 10,
+    // 单个服务端进程同时提交的图片字节预算，单位 MiB，范围 1-65536。
+    "global_commit_byte_budget_mb": 512
   },
 
   // 图片详情弹窗配置。

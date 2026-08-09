@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "paths": {
+      "@imageshow/shared": ["./../shared/src/app-config.ts"],
+      "@imageshow/shared/browser": ["./../shared/src/browser.ts"]
+    }
+  },
+  "include": ["src", "vite.config.ts", "../shared/src"]
+}

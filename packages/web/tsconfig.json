@@ -3,6 +3,7 @@
   "compilerOptions": {
     "jsx": "react-jsx",
     "lib": ["ES2025", "DOM", "DOM.Iterable"],
+    "allowImportingTsExtensions": true,
     "noEmit": true
   },
   "include": ["src", "vite.config.ts"]

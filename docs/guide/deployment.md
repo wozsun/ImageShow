@@ -35,6 +35,13 @@ RSS 与 fragmentation，且不以这些指标改变应用状态。
 的兼容 key。Redis 与其他业务共享时不得执行 `FLUSHALL`，操作前必须核对目标逻辑库只由
 当前 ImageShow 实例使用。
 
+正式发布前必须在本地执行 `npm run verify:release`，并把该次验收产生的同一
+`imageshow:<version>-verify` image ID 标记为 `imageshow:local`。随后才推送 dev 并等待
+dev 镜像 Action，通过后合并 main、创建版本标签，再等待双 registry 镜像与 GitHub
+Release Action。上传后的 Actions 只做版本 / 分支 / 标签基础校验、容器构建与发布；不会
+重复本地类型、Knip、最终测试、数据库、存储或浏览器验收。任一步失败都停止后续发布，
+不得用 Action 成功推断本地门禁已通过。
+
 ## 健康检查与镜像清理
 
 容器健康检查只调用 `/readyz`。该端点检查 PostgreSQL 连通性与核心 schema、必要初始化、

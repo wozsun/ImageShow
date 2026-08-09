@@ -15,10 +15,12 @@ packages/web ─────► packages/shared
 - `package.json` 只编排 workspace 构建、类型检查、死代码检查和运维入口。
 - `scripts/build/` 生成 Web 图标、校验颜色与生产分块边界，并装配服务端 schema 及 SPA
   静态资产；通用产物图解析由独立产物检查器承担，项目权限和请求预算规则留在门禁入口。
+- `scripts/verify/` 编排只读源码检查、生产构建检查、三份最终测试和隔离镜像冷启动 / 重启
+  验收；复杂验收只在本地执行，不进入上传代码后的 Actions。
 - `scripts/runtime/` 只放容器内的命令包装；容器启动由 `docker-entrypoint.sh` 负责权限
   收敛后直接执行传入命令。
-- `Dockerfile` 先安装完整依赖并构建三个 workspace，再单独安装 server/shared 的生产依赖，
-  运行镜像只携带生产依赖、编译产物和运维入口。
+- `Dockerfile` 只安装三个 workspace 的构建依赖（不安装根目录本地门禁工具）并完成编译，
+  再单独安装 server/shared 的生产依赖；运行镜像只携带生产依赖、编译产物和运维入口。
 - `compose.yaml` 提供单实例 ImageShow、PostgreSQL 与 Redis 的标准部署。
 - `docs/guide/` 保存架构、配置、数据库、流程、部署和 API 说明，使用相对 Markdown
   链接，可直接在仓库中阅读。
@@ -26,6 +28,27 @@ packages/web ─────► packages/shared
 本地测试统一位于根目录 `tests/`，由 Git 忽略且不进入 Docker build context、生产镜像或
 GitHub Actions。测试从外部启动与生产镜像相同的服务入口；测试数据库、Redis、Compose、
 fixture、网络模拟和清理编排均留在 `tests/`。
+
+## 本地门禁与发布职责
+
+四个门禁可以单独重跑，总入口按 source → build → runtime 顺序失败即停，不通过子命令
+互相嵌套：
+
+| 命令 | 内容 | 副作用 |
+| --- | --- | --- |
+| `npm run verify:source` | workspace 类型、Knip、语义颜色、依赖方向 / 环、配置示例、图标、Markdown 链接与 selector inventory | 只读源码，不生成 `dist`、容器或浏览器会话 |
+| `npm run verify:build` | 清理必要输出，先构建 shared，再并行构建 Web / Server，装配服务端资产并检查 Web 分块契约 | 重建三个 workspace 的 `dist`；根 `dist` 只作为旧残留被删除，不会重新产生 |
+| `npm run verify:runtime` | baseline / Server / Web 三个最终入口，以及生产镜像冷启动、HTTP、schema 和重启 | 建立并清理随机命名的 tmpfs PostgreSQL、Redis、应用容器及网络；保留 `imageshow:<version>-verify` 候选镜像；不访问现有数据库、容器或浏览器 |
+| `npm run verify:release` | 依次执行以上三层 | 合并上述本地副作用 |
+
+`npm run icons:generate` 是维护图标生成源码的显式写命令；日常门禁只运行只读的
+`npm run icons:check`。`npm run check` 直接检查 shared / Server / Web 源码，不先构建
+shared，也不写生产产物。
+
+GitHub Actions 只核对 dev 分支或 release tag、根包 / 三个 workspace / lockfile 版本，
+然后通过固定完整 commit SHA 的 Actions 构建和推送生产镜像、创建 Release。它不运行
+`verify:*`、Knip、最终测试、数据库、存储、浏览器或性能验收；Action 成功不能替代本地
+`verify:release`。
 
 ## packages/shared
 

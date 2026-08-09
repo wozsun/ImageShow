@@ -158,6 +158,11 @@ docker compose up -d
 
 启动后（下例以 `img.example.com` 为站点域名）：首页 `https://img.example.com/home`、画廊 `/gallery`、后台 `/admin`、随机图 `/random`。如需嵌入无主导航页面，在 `data/config.json` 的顶层 `embed` 配置组中启用后即可从 `https://img.example.com` 及其任意层级子域使用 `/embed/home` 或 `/embed/gallery`；其他网站可在 `allowed_origins` 追加使用 DNS 主机名的精确 HTTPS origin，或形如 `https://*.example.com` 且不包含根域名的子域通配符。重载配置后生效，普通后台设置页不读取或修改该配置。
 
+源码发版前运行 `npm run verify:release`；也可按需独立执行只读源码检查
+`verify:source`、生产构建 `verify:build` 和隔离容器验收 `verify:runtime`。运行时门禁只创建
+随机命名的 tmpfs 测试容器和 `imageshow:<version>-verify` 候选镜像，不访问现有 Compose
+服务或数据。GitHub Actions 仅做版本基础校验、镜像构建 / 推送和 Release，不代替本地验收。
+
 ### 4. 反向代理与 HTTPS
 
 生产环境务必在可信反向代理终止 TLS，用**通配证书**覆盖 `*.img.example.com`，把主域名与所有子域名转发到应用的 `5518` 端口，并**覆盖**（而非透传）客户端伪造的 `X-Forwarded-*` 头：

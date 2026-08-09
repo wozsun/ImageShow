@@ -9,6 +9,7 @@
 **/tests
 **/*.test.*
 **/*.spec.*
+scripts/verify
 .codex
 AGENTS.md
 TODO.md

@@ -1,6 +1,7 @@
 import { readFile, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 import { createWebBuildInspector } from "./web-build-inspector.mjs";
+import { webBuildAssetContract } from "./web-build-contract.ts";
 
 const workspaceRoot = resolve(import.meta.dirname, "../..");
 const webDist = resolve(workspaceRoot, "packages/web/dist");
@@ -45,36 +46,15 @@ if (overlongCssAssets.length > 0) {
     `check-web-chunks: CSS asset names exceed 64 characters: ${JSON.stringify(overlongCssAssets)}`
   );
 }
-const requiredEntryCssAssetPrefixes = [
-  "app-core",
-  "home",
-  "gallery",
-  "admin-core",
-  "images",
-  "upload",
-  "login",
-  "login-challenge",
-  "overview",
-  "check",
-  "entities",
-  "site-settings",
-  "advanced-config",
-  "storage",
-  "log"
-];
-const requiredSharedCssAssetPrefixes = [
-  "public-common",
-  "image-management",
-  "image-detail",
-  "image-workflow",
-  "admin-theme"
-];
-const optionalCssAssetPrefixes = [
-  "account",
-  "image-editor",
-  "image-admin-common",
-  "super-admin"
-];
+const {
+  generatedIconCounts,
+  optionalCssPrefixes: optionalCssAssetPrefixes,
+  publicInitialAssetBudgets,
+  requiredEntryCssPrefixes: requiredEntryCssAssetPrefixes,
+  requiredJavaScriptPrefixes: requiredJavaScriptAssetPrefixes,
+  requiredSharedCssPrefixes: requiredSharedCssAssetPrefixes,
+  routeCss
+} = webBuildAssetContract;
 const classifiedCssAssetPrefixes = [
   ...requiredEntryCssAssetPrefixes,
   ...requiredSharedCssAssetPrefixes,
@@ -118,36 +98,6 @@ for (const prefix of requiredSharedCssAssetPrefixes) {
   requireSharedCssAsset(prefix);
 }
 
-const requiredJavaScriptAssetPrefixes = [
-  "app",
-  "home",
-  "gallery",
-  "admin",
-  "admin-app",
-  "login",
-  "login-challenge",
-  "overview",
-  "images",
-  "image-management",
-  "image-editor",
-  "upload",
-  "link-import",
-  "storage-migration",
-  "account",
-  "entities",
-  "site-settings",
-  "advanced-config",
-  "storage",
-  "users",
-  "check",
-  "log",
-  "pbkdf2",
-  "app-foundation",
-  "admin-auth-shared",
-  "admin-foundation",
-  "query-vendor",
-  "react-vendor"
-];
 for (const prefix of requiredJavaScriptAssetPrefixes) {
   singleAsset(prefix);
 }
@@ -212,14 +162,15 @@ const generatedIconPaths = [
   ...commonIconEntries.map((entry) => entry.path),
   ...adminIconEntries.map((entry) => entry.path)
 ];
+const generatedIconCount = generatedIconCounts.common + generatedIconCounts.admin;
 if (
-  commonIconEntries.length !== 16
-  || adminIconEntries.length !== 34
-  || new Set(generatedIconNames).size !== 50
-  || new Set(generatedIconPaths).size !== 50
+  commonIconEntries.length !== generatedIconCounts.common
+  || adminIconEntries.length !== generatedIconCounts.admin
+  || new Set(generatedIconNames).size !== generatedIconCount
+  || new Set(generatedIconPaths).size !== generatedIconCount
 ) {
   throw new Error(
-    "check-web-chunks: generated icon tables must contain 16 common and 34 admin icons without duplicate names or paths"
+    "check-web-chunks: generated icon tables do not match the declared counts or contain duplicate names/paths"
   );
 }
 await Promise.all([
@@ -286,25 +237,29 @@ function publicRouteInitialAssetSet(entryAsset) {
 }
 const homeInitialAssetCount = publicRouteInitialAssetSet(homeAsset).size;
 const galleryInitialAssetCount = publicRouteInitialAssetSet(galleryAsset).size;
-if (homeInitialAssetCount > 10 || galleryInitialAssetCount > 16) {
+if (
+  homeInitialAssetCount > publicInitialAssetBudgets.HomePage
+  || galleryInitialAssetCount > publicInitialAssetBudgets.GalleryPage
+) {
   throw new Error(
     "check-web-chunks: public route initial asset request budget exceeded: "
-    + `Home ${homeInitialAssetCount}/10, Gallery ${galleryInitialAssetCount}/16`
+    + `Home ${homeInitialAssetCount}/${publicInitialAssetBudgets.HomePage}, `
+    + `Gallery ${galleryInitialAssetCount}/${publicInitialAssetBudgets.GalleryPage}`
   );
 }
 const homeInitialCssAssets = assertCssPreloadsUsePrefixes(
   publicEntrySource,
   homeAsset,
   "HomePage",
-  ["home", "public-common"],
-  ["home", "public-common"]
+  routeCss.HomePage.allowed,
+  routeCss.HomePage.required
 );
 const galleryInitialCssAssets = assertCssPreloadsUsePrefixes(
   publicEntrySource,
   galleryAsset,
   "GalleryPage",
-  ["gallery", "public-common", "image-detail"],
-  ["gallery", "public-common", "image-detail"]
+  routeCss.GalleryPage.allowed,
+  routeCss.GalleryPage.required
 );
 
 await assertAssetsExcludeMarkers(
@@ -515,15 +470,15 @@ assertCssPreloadsUsePrefixes(
   adminShellSource,
   adminLoginAsset,
   "AdminLogin",
-  ["login", "admin-theme"],
-  ["login", "admin-theme"]
+  routeCss.AdminLogin.allowed,
+  routeCss.AdminLogin.required
 );
 assertCssPreloadsUsePrefixes(
   adminShellSource,
   authenticatedAdminShellAsset,
   "authenticated admin shell",
-  ["admin-core", "admin-theme"],
-  ["admin-core", "admin-theme"]
+  routeCss.AuthenticatedAdminShell.allowed,
+  routeCss.AuthenticatedAdminShell.required
 );
 
 const authenticatedAdminShellSource = await assetSource(
@@ -574,8 +529,8 @@ const imageAdminCssAssets = assertCssPreloadsUsePrefixes(
   authenticatedAdminShellSource,
   imageAdminAsset,
   "ImageAdmin",
-  ["images", "admin-theme"],
-  ["images"]
+  routeCss.ImageAdmin.allowed,
+  routeCss.ImageAdmin.required
 );
 
 await assertAssetsExcludeMarkers(
@@ -617,8 +572,8 @@ assertCssPreloadsUsePrefixes(
   imageAdminUploaderImporter.source,
   uploaderAsset,
   "Uploader capability",
-  ["upload", "image-workflow", "image-detail"],
-  ["upload", "image-workflow", "image-detail"]
+  routeCss.Uploader.allowed,
+  routeCss.Uploader.required
 );
 
 const imageAdminEditorImporter = await findStaticReachableDynamicImporter(
@@ -630,8 +585,8 @@ assertCssPreloadsUsePrefixes(
   imageAdminEditorImporter.source,
   imageEditorCapabilityAsset,
   "image editor capability",
-  ["image-editor", "image-workflow", "admin-theme"],
-  ["image-editor", "image-workflow", "admin-theme"]
+  routeCss.ImageEditor.allowed,
+  routeCss.ImageEditor.required
 );
 await assertAssetsExcludeMarkers(
   [singleCssAsset("upload"), singleCssAsset("image-editor")],

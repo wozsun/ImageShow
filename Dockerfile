@@ -4,12 +4,12 @@ COPY package.json package-lock.json* ./
 COPY packages/shared/package.json packages/shared/package.json
 COPY packages/server/package.json packages/server/package.json
 COPY packages/web/package.json packages/web/package.json
-RUN npm ci
+RUN npm ci --workspace @imageshow/shared --workspace @imageshow/server --workspace @imageshow/web --include-workspace-root=false
 
 FROM deps AS build
 WORKDIR /app
 COPY . .
-RUN npm run build && npm run knip
+RUN npm run build
 
 FROM node:26.7.0 AS prod-deps
 WORKDIR /app
@@ -25,7 +25,7 @@ ENV NODE_ENV=production \
 RUN apt-get update \
     && apt-get install -y --no-install-recommends gosu \
     && rm -rf /var/lib/apt/lists/*
-COPY --chown=node:node --from=build /app/package.json /app/package-lock.json* ./
+COPY --chown=node:node --from=build /app/package.json ./
 COPY --chown=node:node --from=prod-deps /app/node_modules ./node_modules
 COPY --chown=node:node --from=build /app/packages/shared/package.json ./packages/shared/package.json
 COPY --chown=node:node --from=build /app/packages/shared/dist ./packages/shared/dist

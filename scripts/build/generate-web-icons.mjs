@@ -7,6 +7,13 @@ const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, "..", "..");
 const webPackage = resolve(repo, "packages", "web");
 const iconDirectory = resolve(webPackage, "src", "components", "icon");
+const checkOnly = process.argv.slice(2).includes("--check");
+const unknownArguments = process.argv.slice(2).filter((argument) => (
+  argument !== "--check"
+));
+if (unknownArguments.length > 0) {
+  throw new Error(`Unknown generate-icons arguments: ${unknownArguments.join(", ")}`);
+}
 
 const iconGroups = [
   {
@@ -138,9 +145,26 @@ export type ${group.typeName} = keyof typeof ${group.exportName};
 `;
 }
 
-await Promise.all(iconGroups.map((group) => (
-  writeFile(group.outFile, generatedSource(group))
-)));
-console.log(
-  `generate-icons: wrote ${iconGroups.map((group) => `${group.names.length} ${group.label}`).join(" and ")} icons without duplicate paths`
-);
+if (checkOnly) {
+  const stale = [];
+  for (const group of iconGroups) {
+    const current = await readFile(group.outFile, "utf8").catch(() => "");
+    if (current !== generatedSource(group)) stale.push(group.outFile);
+  }
+  if (stale.length > 0) {
+    throw new Error(
+      "Generated icon sources are stale; run `npm run icons:generate`: "
+      + stale.map((file) => file.replace(`${repo}\\`, "")).join(", ")
+    );
+  }
+  console.log(
+    `generate-icons: verified ${iconGroups.map((group) => `${group.names.length} ${group.label}`).join(" and ")} icons`
+  );
+} else {
+  await Promise.all(iconGroups.map((group) => (
+    writeFile(group.outFile, generatedSource(group))
+  )));
+  console.log(
+    `generate-icons: wrote ${iconGroups.map((group) => `${group.names.length} ${group.label}`).join(" and ")} icons without duplicate paths`
+  );
+}

@@ -1,14 +1,14 @@
 {
   "name": "@imageshow/web",
-  "version": "4.7.0",
+  "version": "4.7.1",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "generate-icons": "node ../../scripts/build/generate-web-icons.mjs",
-    "prebuild": "node ../../scripts/build/generate-web-icons.mjs",
+    "icons:generate": "node ../../scripts/build/generate-web-icons.mjs",
+    "icons:check": "node ../../scripts/build/generate-web-icons.mjs --check",
     "build": "tsc -p tsconfig.json && vite build",
-    "postbuild": "node ../../scripts/build/check-web-chunks.mjs",
-    "check": "node ../../scripts/build/check-semantic-colors.mjs && tsc -p tsconfig.json --noEmit"
+    "check:build": "node ../../scripts/build/check-web-chunks.mjs",
+    "check": "tsc -p tsconfig.check.json"
   },
   "dependencies": {
     "@codemirror/lang-json": "^6.0.2",
