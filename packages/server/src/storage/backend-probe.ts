@@ -5,6 +5,7 @@ import {
   defaultWebdavSettings,
   s3SettingsSchema,
   webdavSettingsSchema,
+  type StorageBackendTestInput,
   type StorageConfig
 } from "./backend-config.ts";
 import {
@@ -105,12 +106,9 @@ export async function validateStorageBackendCandidate(
   }
 }
 
-export async function resolveStorageTestConfig(input: {
-  slug?: string;
-  type?: string;
-  s3?: unknown;
-  webdav?: unknown;
-}): Promise<StorageConfig> {
+export async function resolveStorageTestConfig(
+  input: StorageBackendTestInput
+): Promise<StorageConfig> {
   const current = input.slug
     ? await getStorageBackend(input.slug)
     : undefined;

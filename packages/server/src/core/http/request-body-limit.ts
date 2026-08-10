@@ -6,6 +6,10 @@ import {
 } from "@imageshow/shared/browser";
 import type { Context, Next } from "hono";
 import { apiErrorResponse } from "./responses.ts";
+import {
+  invalidJsonBodyError,
+  isJsonContentType
+} from "./json-body.ts";
 import { cspReportPath } from "./headers.ts";
 
 const standardApiBodyMaxBytes = 128 * 1024;
@@ -68,13 +72,25 @@ function measuredBodyLimit(maxSize: number) {
     let size = 0;
     const chunks: Uint8Array[] = [];
     const reader = c.req.raw.body.getReader();
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      size += value.length;
-      c.set(requestBodyBytesContextKey, size);
-      if (size > maxSize) return tooLarge(c);
-      chunks.push(value);
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        size += value.length;
+        c.set(requestBodyBytesContextKey, size);
+        if (size > maxSize) return tooLarge(c);
+        chunks.push(value);
+      }
+    } catch (error) {
+      if (
+        c.req.raw.signal.aborted
+        || isJsonContentType(c.req.header("content-type"))
+      ) {
+        throw invalidJsonBodyError();
+      }
+      throw error;
+    } finally {
+      reader.releaseLock();
     }
 
     const requestInit: RequestInit & { duplex: "half" } = {

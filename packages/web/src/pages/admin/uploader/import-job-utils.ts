@@ -12,7 +12,7 @@ function hasDirectIpHostname(hostname: string) {
 }
 
 function normalizeImportSourceUrl(value: string) {
-  if (value.length > externalImageUrlMaxLength) return null;
+  if (value.length > externalImageUrlMaxLength || /\s/.test(value)) return null;
   try {
     const parsed = new URL(value);
     const hostname = parsed.hostname.toLowerCase().replace(/\.$/, "");
@@ -49,6 +49,7 @@ export type ImportUrlParseIssue =
 
 export type ImportUrlParseResult = {
   urls: string[];
+  candidateCount: number;
   invalidCount: number;
   duplicateCount: number;
   issues: ImportUrlParseIssue[];
@@ -67,38 +68,36 @@ export function importPositionText(item: {
   return item.manifestLine ? `JSONL 第 ${item.manifestLine} 行` : "";
 }
 
-export function parseImportUrlInput(input: string | string[]): ImportUrlParseResult {
-  const lines = Array.isArray(input) ? input : input.split(/\r?\n/);
+export function parseImportUrlInput(input: string): ImportUrlParseResult {
   const urls: string[] = [];
+  let candidateCount = 0;
   let invalidCount = 0;
   let duplicateCount = 0;
   const issues: ImportUrlParseIssue[] = [];
   const firstLineByUrl = new Map<string, number>();
 
-  for (const [lineIndex, value] of lines.entries()) {
-    // 保留既有的空白分隔兼容，同时把每个值关联到其输入行；界面仍引导每行一个 URL。
-    for (const raw of value.split(/\s+/)) {
-      const url = raw.trim();
-      if (!url) continue;
-      const line = lineIndex + 1;
-      const normalizedUrl = normalizeImportSourceUrl(url);
-      if (!normalizedUrl) {
-        invalidCount += 1;
-        issues.push({ type: "invalid", line, raw });
-        continue;
-      }
-      const firstLine = firstLineByUrl.get(normalizedUrl);
-      if (firstLine !== undefined) {
-        duplicateCount += 1;
-        issues.push({ type: "duplicate", line, raw, firstLine });
-        continue;
-      }
-      firstLineByUrl.set(normalizedUrl, line);
-      urls.push(normalizedUrl);
+  for (const [lineIndex, value] of input.split(/\r?\n/).entries()) {
+    const raw = value.trim();
+    if (!raw) continue;
+    candidateCount += 1;
+    const line = lineIndex + 1;
+    const normalizedUrl = normalizeImportSourceUrl(raw);
+    if (!normalizedUrl) {
+      invalidCount += 1;
+      issues.push({ type: "invalid", line, raw });
+      continue;
     }
+    const firstLine = firstLineByUrl.get(normalizedUrl);
+    if (firstLine !== undefined) {
+      duplicateCount += 1;
+      issues.push({ type: "duplicate", line, raw, firstLine });
+      continue;
+    }
+    firstLineByUrl.set(normalizedUrl, line);
+    urls.push(normalizedUrl);
   }
 
-  return { urls, invalidCount, duplicateCount, issues };
+  return { urls, candidateCount, invalidCount, duplicateCount, issues };
 }
 
 export function localImportFileFingerprint(file: File) {

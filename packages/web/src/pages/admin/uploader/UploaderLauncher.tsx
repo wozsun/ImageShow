@@ -129,6 +129,10 @@ export function UploaderLauncher({
       launchFenceRef.current.isMounted()
       && activeSequenceRef.current === sequence
     ) {
+      launchFenceRef.current.invalidate();
+      setActivation((current) => (
+        current?.sequence === sequence ? null : current
+      ));
       updatePending(false);
     }
   };

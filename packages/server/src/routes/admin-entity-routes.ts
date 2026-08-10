@@ -10,6 +10,7 @@ import {
   apiSuccess,
   privateCacheableApiSuccess
 } from "../core/http/responses.ts";
+import { readJsonBody } from "../core/http/json-body.ts";
 import { parse, slugListInput } from "../core/validation.ts";
 import { requireAdminPermission } from "../users/admin-authorization.ts";
 
@@ -39,20 +40,20 @@ export function registerAdminEntityRoutes<
   });
 
   app.post(base, async (c) => {
-    const input = parse(options.createInput, await c.req.json().catch(() => ({})));
+    const input = parse(options.createInput, await readJsonBody(c));
     await options.create(input);
     return c.json(apiSuccess());
   });
 
   app.post(`${base}/reorder`, async (c) => {
-    const input = parse(slugListInput, await c.req.json().catch(() => ({})));
+    const input = parse(slugListInput, await readJsonBody(c));
     await options.reorder(input.slugs);
     return c.json(apiSuccess());
   });
 
   app.post(`${base}/:slug`, async (c) => {
     const slug = parse(options.slugInput, c.req.param("slug"));
-    const input = parse(options.updateInput, await c.req.json().catch(() => ({})));
+    const input = parse(options.updateInput, await readJsonBody(c));
     await options.update(slug, input);
     return c.json(apiSuccess());
   });

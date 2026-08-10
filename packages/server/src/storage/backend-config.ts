@@ -60,23 +60,50 @@ const storageSlugInput = z.string().trim().toLowerCase().min(1)
   .max(slugMaxLength).regex(slugPattern);
 const storageDisplayInput = z.string().trim().max(64);
 
-export const storageBackendCreateInput = z.object({
+const strictS3SettingsSchema = s3SettingsSchema.strict();
+const strictWebdavSettingsSchema = webdavSettingsSchema.strict();
+const nonEmptySettingsObject = z.record(z.string(), z.unknown()).refine(
+  (value) => Object.keys(value).length > 0,
+  "远端存储配置至少需要提供一个字段"
+);
+const s3SettingsUpdateSchema = nonEmptySettingsObject.pipe(
+  strictS3SettingsSchema
+);
+const webdavSettingsUpdateSchema = nonEmptySettingsObject.pipe(
+  strictWebdavSettingsSchema
+);
+
+export const storageBackendCreateInput = z.strictObject({
   slug: storageSlugInput,
   display_name: storageDisplayInput.optional().default(""),
   type: z.enum(["s3", "webdav"]).default("s3"),
-  s3: s3SettingsSchema.optional().prefault({}),
-  webdav: webdavSettingsSchema.optional().prefault({})
+  s3: strictS3SettingsSchema.optional().prefault({}),
+  webdav: strictWebdavSettingsSchema.optional().prefault({})
 });
 
-export const storageBackendUpdateInput = z.object({
+export const storageBackendUpdateInput = z.strictObject({
   display_name: storageDisplayInput.optional(),
   enabled: z.boolean().optional(),
-  s3: s3SettingsSchema.optional(),
-  webdav: webdavSettingsSchema.optional()
-});
+  s3: s3SettingsUpdateSchema.optional(),
+  webdav: webdavSettingsUpdateSchema.optional()
+}).refine(
+  (value) => Object.values(value).some((field) => field !== undefined),
+  "存储后端更新至少需要提供一个字段"
+);
+
+export const storageBackendTestInput = z.strictObject({
+  slug: storageSlugInput.optional(),
+  type: z.enum(["local", "s3", "webdav"]).optional(),
+  s3: strictS3SettingsSchema.optional(),
+  webdav: strictWebdavSettingsSchema.optional()
+}).refine(
+  (value) => Object.values(value).some((field) => field !== undefined),
+  "存储测试至少需要提供一个配置字段"
+);
 
 export type StorageBackendCreateInput = z.infer<typeof storageBackendCreateInput>;
 export type StorageBackendUpdateInput = z.infer<typeof storageBackendUpdateInput>;
+export type StorageBackendTestInput = z.infer<typeof storageBackendTestInput>;
 
 export type StorageBackendImportInput = {
   slug: string;

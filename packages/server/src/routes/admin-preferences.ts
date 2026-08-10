@@ -5,6 +5,7 @@ import {
 } from "@imageshow/shared/browser";
 import { ApiError } from "../core/api-error.ts";
 import { apiSuccess } from "../core/http/responses.ts";
+import { readJsonBody } from "../core/http/json-body.ts";
 import { limitAdminPreferencesBody } from "../core/http/request-body-limit.ts";
 import { adminPreferencesInput, parse } from "../core/validation.ts";
 import {
@@ -30,7 +31,7 @@ export function registerAdminPreferenceRoutes(app: Hono) {
   app.patch(`${adminApiBasePath}/preferences`, limitAdminPreferencesBody, async (c) => {
     const preferences = parse(
       adminPreferencesInput,
-      await c.req.json().catch(() => ({}))
+      await readJsonBody(c)
     );
     const savedPreferences = await updateAdminPreferences(
       authenticatedUsername(c),

@@ -90,7 +90,7 @@ export function UploadWorkflowHeader({
             className="icon close pressable upload-close-button"
             type="button"
             title="关闭"
-            onClick={onRequestClose}
+            onClick={() => onRequestClose()}
             disabled={busy}
           >
             <AdminIcon name="close-line" />

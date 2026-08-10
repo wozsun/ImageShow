@@ -42,6 +42,11 @@ const siteHomeConfigSchema = z.strictObject({
   banner_title: homeBannerTitle.optional()
 });
 
+function hasDefinedSetting(value: unknown): boolean {
+  if (!value || typeof value !== "object") return value !== undefined;
+  return Object.values(value).some(hasDefinedSetting);
+}
+
 const appSettingsSchema = z.strictObject({
   site: z.strictObject({
     name: siteName.optional(),
@@ -83,7 +88,10 @@ const appSettingsSchema = z.strictObject({
     recent_uploads: recentUploads.optional(),
     show_unset_theme_card: z.boolean().optional()
   }).optional()
-});
+}).refine(
+  hasDefinedSetting,
+  "至少需要提供一项设置"
+);
 
 export type AppSettingsInput = z.infer<typeof appSettingsSchema>;
 

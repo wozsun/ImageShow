@@ -1,7 +1,9 @@
 import type { Context, Hono } from "hono";
+import { z } from "zod";
 import { adminApiBasePath, type AuthStateDto } from "@imageshow/shared/browser";
 import { ApiError } from "../core/api-error.ts";
 import { apiSuccess } from "../core/http/responses.ts";
+import { readJsonBody } from "../core/http/json-body.ts";
 import { limitAdminLoginBody } from "../core/http/request-body-limit.ts";
 import {
   assertSameOrigin,
@@ -29,6 +31,11 @@ import { adminPermissionsForRole } from "../users/admin-authorization.ts";
 import { readAdminPreferences } from "../users/preferences.ts";
 
 const sessionRedis = adminSessionRedisClient(redis);
+const adminLoginInput = z.strictObject({
+  username: z.string().min(1).max(128),
+  password: z.string().min(1).max(128),
+  altcha: z.unknown().optional()
+});
 
 function authenticatedSession(context: Context) {
   return context.get("session") as AdminSession | undefined;
@@ -47,12 +54,12 @@ export function registerPublicAuthRoutes(app: Hono) {
     },
     limitAdminLoginBody,
     async (c) => {
-      const body = await c.req.json().catch(() => ({}));
+      const body = parse(adminLoginInput, await readJsonBody(c));
       await verifyAltchaProof(body.altcha);
       return c.json(apiSuccess(await createAdminSession(
         c,
-        String(body.username ?? ""),
-        String(body.password ?? "")
+        body.username,
+        body.password
       )));
     }
   );
@@ -92,7 +99,7 @@ export function registerProtectedAuthRoutes(app: Hono) {
   app.post(`${adminApiBasePath}/auth/password`, async (c) => {
     const session = authenticatedSession(c);
     if (!session) throw new ApiError(401, "unauthorized", "Unauthorized");
-    const input = parse(passwordChangeInput, await c.req.json().catch(() => ({})));
+    const input = parse(passwordChangeInput, await readJsonBody(c));
     const validCredentialVersion = await changeAdminPassword(
       session.username,
       input.current_password,

@@ -54,7 +54,8 @@ export type ImportSourceModeAdapter = {
   hasInput: (text: string) => boolean;
   parse: (
     text: string,
-    signal: AbortSignal
+    signal: AbortSignal,
+    urlResult?: ImportUrlParseResult
   ) => Promise<ParsedImportSourceResult>;
 };
 
@@ -86,8 +87,8 @@ const urlsAdapter: ImportSourceModeAdapter = {
     `每行一个 URL，最多 ${maxItems} 条；图片属性使用当前默认属性。`
   ),
   hasInput: (text) => Boolean(text.trim()),
-  parse: async (text) => {
-    const result = parseImportUrlInput(text);
+  parse: async (text, _signal, urlResult) => {
+    const result = urlResult ?? parseImportUrlInput(text);
     return {
       mode: "urls",
       result,

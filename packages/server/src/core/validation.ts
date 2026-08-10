@@ -47,7 +47,7 @@ function urlBase(message: string) {
 
 const classificationDevices = [...appConfig.devices, "auto"] as const;
 
-const metadataInput = z.object({
+const metadataInput = z.strictObject({
   device: z.enum(classificationDevices),
   brightness: z.enum(appConfig.brightness),
   theme: z.string().trim().toLowerCase().min(1).max(appConfig.themeMaxLength).regex(slugPattern).default("none"),
@@ -60,7 +60,7 @@ const metadataInput = z.object({
   original: httpsDomainUrlField(externalImageRejectedMessage)
 });
 
-export const metadataUpdateInput = z.object({
+const metadataUpdateFields = {
   device: z.enum(classificationDevices).optional(),
   brightness: z.enum(["dark", "light", "auto"]).optional(),
   theme: z.string().trim().toLowerCase().min(1).max(appConfig.themeMaxLength).regex(slugPattern).optional(),
@@ -71,7 +71,14 @@ export const metadataUpdateInput = z.object({
   description: z.string().trim().max(appConfig.imageMetadata.descriptionMaxLength).optional(),
   source: optionalHttpsUrlField("来源页面链接需为有效的 HTTPS 链接"),
   original: optionalHttpsDomainUrlField(externalImageRejectedMessage)
-});
+};
+
+function hasDefinedField(value: Record<string, unknown>) {
+  return Object.values(value).some((field) => field !== undefined);
+}
+
+export const metadataUpdateInput = z.strictObject(metadataUpdateFields)
+  .refine(hasDefinedField, "图片更新至少需要提供一个字段");
 
 const slugInput = z.string().trim().toLowerCase()
   .min(1, "标识 slug 不能为空")
@@ -83,22 +90,22 @@ const displayNameInput = z.string().trim().max(
 );
 
 export const tagSlugInput = slugInput;
-export const tagCreateInput = z.object({ slug: tagSlugInput, display_name: displayNameInput.optional().default("") });
-export const tagDisplayUpdateInput = z.object({ display_name: displayNameInput.default("") });
+export const tagCreateInput = z.strictObject({ slug: tagSlugInput, display_name: displayNameInput.optional().default("") });
+export const tagDisplayUpdateInput = z.strictObject({ display_name: displayNameInput });
 
 export const themeSlugInput = slugInput;
 const themeDisplayInput = displayNameInput;
 
-export const slugListInput = z.object({
+export const slugListInput = z.strictObject({
   slugs: z.array(slugInput).min(1).max(2000).transform((slugs) => [...new Set(slugs)])
 });
-export const themeCreateInput = z.object({ slug: themeSlugInput, display_name: themeDisplayInput.optional().default("") });
-export const themeDisplayUpdateInput = z.object({ display_name: themeDisplayInput.default("") });
+export const themeCreateInput = z.strictObject({ slug: themeSlugInput, display_name: themeDisplayInput.optional().default("") });
+export const themeDisplayUpdateInput = z.strictObject({ display_name: themeDisplayInput });
 
 export const authorSlugInput = slugInput;
 const authorLinkInput = httpsUrlField("作者主页链接需为有效的 HTTPS 链接");
-export const authorCreateInput = z.object({ slug: authorSlugInput, display_name: displayNameInput.optional().default(""), link: authorLinkInput });
-export const authorMetaUpdateInput = z.object({ display_name: displayNameInput.default(""), link: authorLinkInput });
+export const authorCreateInput = z.strictObject({ slug: authorSlugInput, display_name: displayNameInput.optional().default(""), link: authorLinkInput });
+export const authorMetaUpdateInput = z.strictObject({ display_name: displayNameInput, link: authorLinkInput });
 
 export const uuidInput = z.string().uuid();
 
@@ -108,7 +115,8 @@ const batchImageTagsInput = z.array(tagSlugInput)
   .transform((tags) => [...new Set(tags)])
   .pipe(z.array(tagSlugInput).max(50));
 
-const batchImageUpdateItemInput = metadataUpdateInput.extend({
+const batchImageUpdateItemInput = z.strictObject({
+  ...metadataUpdateFields,
   id: uuidInput,
   tags: batchImageTagsInput.optional(),
 }).superRefine((value, ctx) => {
@@ -125,7 +133,7 @@ const batchImageUpdateItemInput = metadataUpdateInput.extend({
 
 export type BatchImageUpdateItemInput = BatchImageUpdateItemInputDto;
 
-export const batchImageUpdateInput = z.object({
+export const batchImageUpdateInput = z.strictObject({
   items: z.array(batchImageUpdateItemInput).min(1).max(200),
 }).superRefine((value, ctx) => {
   const ids = new Set<string>();
@@ -142,10 +150,10 @@ export const batchImageUpdateInput = z.object({
   }
 });
 
-export const userCreateInput = z.object({ username: adminUsernameInput, password: adminPasswordInput });
-export const userPasswordInput = z.object({ password: adminPasswordInput });
+export const userCreateInput = z.strictObject({ username: adminUsernameInput, password: adminPasswordInput });
+export const userPasswordInput = z.strictObject({ password: adminPasswordInput });
 
-export const passwordChangeInput = z.object({
+export const passwordChangeInput = z.strictObject({
   current_password: z.string().min(1).max(128),
   new_password: adminPasswordInput
 });
@@ -165,7 +173,7 @@ export const adminPreferencesInput = z.strictObject(adminPreferenceInputFields)
     "管理端偏好过大"
   );
 
-export const imageIdsInput = z.object({
+export const imageIdsInput = z.strictObject({
   ids: z.array(uuidInput).min(1).max(200).transform((ids) => [...new Set(ids)])
 });
 
@@ -182,7 +190,7 @@ export const storageBackendMigrationInput = z.strictObject({
   }
 );
 
-export const batchMigrateStorageInput = z.object({
+export const batchMigrateStorageInput = z.strictObject({
   ids: z.array(uuidInput).min(1).max(200).transform((ids) => [...new Set(ids)]),
   target: storageSlugInput
 });
@@ -212,8 +220,8 @@ const importCommitInput = metadataInput.extend({
   tags: z.array(tagSlugInput).max(50).optional().transform((tags) => [...new Set(tags ?? [])])
 });
 
-export const importBatchCommitInput = z.object({
-  items: z.array(z.object({
+export const importBatchCommitInput = z.strictObject({
+  items: z.array(z.strictObject({
     id: uuidInput.transform((id) => id.toLowerCase()),
     metadata: importCommitInput
   })).min(1).max(importBatchHardLimit)
@@ -232,7 +240,7 @@ export const importBatchCommitInput = z.object({
   }
 });
 
-export const jsonlManifestInput = z.object({
+export const jsonlManifestInput = z.strictObject({
   content: z.string().min(1).max(appConfig.imports.jsonlManifestMaxBytes)
     .refine(
       (value) => Buffer.byteLength(value, "utf8") <= appConfig.imports.jsonlManifestMaxBytes,

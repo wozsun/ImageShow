@@ -10,6 +10,7 @@ import {
   apiSuccess,
   privateCacheableApiSuccess
 } from "../core/http/responses.ts";
+import { readJsonBody } from "../core/http/json-body.ts";
 import {
   requireAdminPermission,
   requireSuperAdmin
@@ -22,6 +23,7 @@ import {
 } from "../core/validation.ts";
 import {
   storageBackendCreateInput,
+  storageBackendTestInput,
   storageBackendUpdateInput
 } from "../storage/backend-config.ts";
 import {
@@ -61,7 +63,7 @@ export function registerStorageRoutes(app: Hono) {
     async (c) => {
       const input = parse(
         storageBackendMigrationInput,
-        await c.req.json().catch(() => ({}))
+        await readJsonBody(c)
       );
       const response = apiSuccess(
         await migrateStorageBackend(input.source, input.target)
@@ -71,13 +73,13 @@ export function registerStorageRoutes(app: Hono) {
   );
 
   app.post(`${adminApiBasePath}/storage/backends`, requireSuperAdmin, async (c) => {
-    const input = parse(storageBackendCreateInput, await c.req.json().catch(() => ({})));
+    const input = parse(storageBackendCreateInput, await readJsonBody(c));
     await createStorageBackend(input);
     return c.json(apiSuccess());
   });
 
   app.post(`${adminApiBasePath}/storage/backends/reorder`, requireSuperAdmin, async (c) => {
-    const input = parse(slugListInput, await c.req.json().catch(() => ({})));
+    const input = parse(slugListInput, await readJsonBody(c));
     await reorderStorageBackends(input.slugs);
     return c.json(apiSuccess());
   });
@@ -102,13 +104,13 @@ export function registerStorageRoutes(app: Hono) {
 
   app.post(`${adminApiBasePath}/storage/backends/:slug`, requireSuperAdmin, async (c) => {
     const slug = parse(storageSlugInput, c.req.param("slug"));
-    const input = parse(storageBackendUpdateInput, await c.req.json().catch(() => ({})));
+    const input = parse(storageBackendUpdateInput, await readJsonBody(c));
     await updateStorageBackend(slug, input);
     return c.json(apiSuccess());
   });
 
   app.post(`${adminApiBasePath}/storage/test`, requireSuperAdmin, async (c) => {
-    const body = await c.req.json().catch(() => ({}));
+    const body = parse(storageBackendTestInput, await readJsonBody(c));
     const config = await resolveStorageTestConfig(body);
     await testStorageBackend(config);
     return c.json(apiSuccess());

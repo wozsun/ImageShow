@@ -7,6 +7,7 @@ import {
   type RuntimeConfigValidationResponseDto
 } from "@imageshow/shared/browser";
 import { apiSuccess } from "../core/http/responses.ts";
+import { readJsonBody } from "../core/http/json-body.ts";
 import {
   privateNoStoreCacheControl,
   safeResponseHeaderValue
@@ -47,7 +48,7 @@ export function registerAdvancedConfigRoutes(app: Hono) {
   });
 
   app.post(`${adminApiBasePath}/advanced-config/runtime/validate`, requireSuperAdmin, limitAdvancedConfigBody, async (c) => {
-    const input = parse(runtimeInput, await c.req.json().catch(() => ({})));
+    const input = parse(runtimeInput, await readJsonBody(c));
     const result = validateFullRuntimeConfig(input.config);
     c.header("Cache-Control", privateNoStoreCacheControl);
     const response = {
@@ -57,7 +58,7 @@ export function registerAdvancedConfigRoutes(app: Hono) {
   });
 
   app.post(`${adminApiBasePath}/advanced-config/runtime`, requireSuperAdmin, limitAdvancedConfigBody, async (c) => {
-    const input = parse(runtimeInput, await c.req.json().catch(() => ({})));
+    const input = parse(runtimeInput, await readJsonBody(c));
     const result = await saveFullRuntimeConfig(input.config);
     c.header("Cache-Control", privateNoStoreCacheControl);
     return c.json(apiSuccess(result satisfies RuntimeConfigResponseDto));
@@ -75,7 +76,7 @@ export function registerAdvancedConfigRoutes(app: Hono) {
   });
 
   app.post(`${adminApiBasePath}/advanced-config/preview`, requireSuperAdmin, limitAdvancedConfigBody, async (c) => {
-    const input = parse(previewInput, await c.req.json().catch(() => ({})));
+    const input = parse(previewInput, await readJsonBody(c));
     const response = {
       preview: await previewConfigPackage(input.package)
     } satisfies AdvancedConfigPreviewResponseDto;
@@ -83,7 +84,7 @@ export function registerAdvancedConfigRoutes(app: Hono) {
   });
 
   app.post(`${adminApiBasePath}/advanced-config/import`, requireSuperAdmin, limitAdvancedConfigBody, async (c) => {
-    const input = parse(importInput, await c.req.json().catch(() => ({})));
+    const input = parse(importInput, await readJsonBody(c));
     await importConfigPackage(input.package, input.slug_mappings);
     return c.json(apiSuccess());
   });

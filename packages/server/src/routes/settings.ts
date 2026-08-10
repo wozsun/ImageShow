@@ -7,6 +7,7 @@ import {
   apiSuccess,
   privateCacheableApiSuccess
 } from "../core/http/responses.ts";
+import { readJsonBody } from "../core/http/json-body.ts";
 import { requireSuperAdmin } from "../users/admin-authorization.ts";
 import {
   getSettingsForAdmin,
@@ -24,7 +25,7 @@ export function registerSettingsRoutes(app: Hono) {
   });
 
   app.post(`${adminApiBasePath}/settings`, requireSuperAdmin, async (c) => {
-    const input = parseSettingsInput(await c.req.json().catch(() => ({})));
+    const input = parseSettingsInput(await readJsonBody(c));
     await saveAppSettings(input);
     return c.json(apiSuccess());
   });

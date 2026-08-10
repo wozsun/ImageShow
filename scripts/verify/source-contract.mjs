@@ -66,6 +66,7 @@ const reverseInternalWebDependencies = new Set();
 const invalidServerDependencies = new Set();
 const authSessionQueryOwners = new Set();
 const authExpiredListenerOwners = new Set();
+const directRouteJsonReaders = new Set();
 const invalidWorkspaceDependencies = [];
 const allowedWorkspaceDependencies = {
   shared: new Set(),
@@ -101,6 +102,12 @@ for (const file of files) {
   }
   if (/\.addEventListener\(\s*authExpiredEvent\b/.test(source)) {
     authExpiredListenerOwners.add(sourcePath);
+  }
+  if (
+    sourcePath.startsWith("packages/server/src/routes/")
+    && /\.req\.json\s*\(/.test(source)
+  ) {
+    directRouteJsonReaders.add(sourcePath);
   }
   for (const match of source.matchAll(importPattern)) {
     const specifier = match[1];
@@ -164,6 +171,13 @@ if (invalidWorkspaceDependencies.length > 0) {
   throw new Error(
     "source-contract: workspace dependency direction changed: "
     + JSON.stringify(invalidWorkspaceDependencies)
+  );
+}
+
+if (directRouteJsonReaders.size > 0) {
+  throw new Error(
+    "source-contract: write routes must use readJsonBody: "
+    + JSON.stringify([...directRouteJsonReaders])
   );
 }
 

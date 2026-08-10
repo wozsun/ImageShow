@@ -9,6 +9,7 @@ import {
   apiSuccess,
   privateCacheableApiSuccess
 } from "../core/http/responses.ts";
+import { readJsonBody } from "../core/http/json-body.ts";
 import {
   importBatchCommitInput,
   importCreateInput,
@@ -51,12 +52,12 @@ export function registerImportRoutes(app: Hono) {
   });
 
   app.post(`${adminApiBasePath}/imports/create`, async (c) => {
-    const input = parse(importCreateInput, await c.req.json().catch(() => ({})));
+    const input = parse(importCreateInput, await readJsonBody(c));
     return c.json(apiSuccess(await createImportSession(input)));
   });
 
   app.post(`${adminApiBasePath}/imports/jsonl/parse`, limitJsonlManifestBody, async (c) => {
-    const input = parse(jsonlManifestInput, await c.req.json().catch(() => ({})));
+    const input = parse(jsonlManifestInput, await readJsonBody(c));
     try {
       return c.json(apiSuccess(parseJsonlManifest(input.content, {
         maxItems: getRuntimeConfig().link_image.max_items,
@@ -69,7 +70,7 @@ export function registerImportRoutes(app: Hono) {
   });
 
   app.post(`${adminApiBasePath}/imports/weibo/parse`, limitWeiboImportBody, async (c) => {
-    const input = parse(weiboImportInput, await c.req.json().catch(() => ({})));
+    const input = parse(weiboImportInput, await readJsonBody(c));
     const runtimeConfig = getRuntimeConfig();
     const maxPosts = Math.min(
       appConfig.imports.batchHardLimit,
@@ -160,7 +161,7 @@ export function registerImportRoutes(app: Hono) {
   app.post(importBatchCommitPath, limitImportBatchCommitBody, async (c) => {
     const input = parse(
       importBatchCommitInput,
-      await c.req.json().catch(() => ({}))
+      await readJsonBody(c)
     );
     return c.json(apiSuccess(await commitImportSessions(
       input.items,

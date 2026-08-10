@@ -13,6 +13,7 @@ import {
   apiSuccess,
   privateCacheableApiSuccess
 } from "../core/http/responses.ts";
+import { readJsonBody } from "../core/http/json-body.ts";
 import { logger } from "../core/logger.ts";
 import {
   batchImageUpdatePath,
@@ -58,7 +59,7 @@ export function registerAdminImageRoutes(app: Hono) {
   });
 
   app.post(`${adminApiBasePath}/images/batch-snapshot`, async (c) => {
-    const input = parse(imageIdsInput, await c.req.json().catch(() => ({})));
+    const input = parse(imageIdsInput, await readJsonBody(c));
     const response: BatchImageSnapshotResponse =
       await getAdminImageSnapshots(input.ids);
     return c.json(apiSuccess(response));
@@ -97,12 +98,12 @@ export function registerAdminImageRoutes(app: Hono) {
   });
 
   app.post(`${adminApiBasePath}/images/batch-restore`, async (c) => {
-    const input = parse(imageIdsInput, await c.req.json().catch(() => ({})));
+    const input = parse(imageIdsInput, await readJsonBody(c));
     return c.json(apiSuccess(await batchRestoreImages(input.ids)));
   });
 
   app.post(`${adminApiBasePath}/images/batch-delete`, async (c) => {
-    const input = parse(imageIdsInput, await c.req.json().catch(() => ({})));
+    const input = parse(imageIdsInput, await readJsonBody(c));
     return c.json(apiSuccess(await batchDeleteImages(input.ids)));
   });
 
@@ -110,7 +111,7 @@ export function registerAdminImageRoutes(app: Hono) {
     `${adminApiBasePath}/images/batch-purge`,
     requireAdminPermission(adminPermissions.imageTrashEmpty),
     async (c) => {
-      const input = parse(imageIdsInput, await c.req.json().catch(() => ({})));
+      const input = parse(imageIdsInput, await readJsonBody(c));
       const result = await purgeSelectedDeletedImages(input.ids, {
         signal: c.req.raw.signal
       });
@@ -159,7 +160,7 @@ export function registerAdminImageRoutes(app: Hono) {
     requireAdminPermission(adminPermissions.imageStorageMigrate),
     async (c) => {
       const startedAt = performance.now();
-      const input = parse(batchMigrateStorageInput, await c.req.json().catch(() => ({})));
+      const input = parse(batchMigrateStorageInput, await readJsonBody(c));
       let maxItemDurationMs = 0;
       const result = await migrateImageBatchStorage(input.ids, input.target, {
         onMetrics(metrics) {
@@ -187,7 +188,7 @@ export function registerAdminImageRoutes(app: Hono) {
     const startedAt = performance.now();
     const input = parse(
       batchImageUpdateInput,
-      await c.req.json().catch(() => ({}))
+      await readJsonBody(c)
     ) satisfies BatchImageUpdateRequestDto;
     let maxItemDurationMs = 0;
     let entityCountInvalidationTriggered = false;

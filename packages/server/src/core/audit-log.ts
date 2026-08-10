@@ -11,6 +11,15 @@ function mutationMethod(method: string) {
   return method !== "GET" && method !== "HEAD" && method !== "OPTIONS";
 }
 
+function requestBodyRejected(error: unknown) {
+  return error instanceof ApiError
+    && requestBodyRejectionCode(error.code);
+}
+
+function requestBodyRejectionCode(code: unknown) {
+  return code === "invalid_json" || code === "validation_error";
+}
+
 async function responseErrorDetails(c: Context) {
   const contentType = c.res.headers.get("content-type") ?? "";
   if (!contentType.includes("application/json")) return {};
@@ -49,9 +58,20 @@ export async function auditAdminMutation(c: Context, next: Next) {
     await next();
     const status = c.res.status || 200;
     const entry = { ...base, status, duration_ms: Date.now() - started };
-    if (status >= 400) logger.warn("admin action failed", { ...entry, ...(await responseErrorDetails(c)) });
-    else logger.info("admin action", entry);
+    if (status >= 400) {
+      const errorDetails = await responseErrorDetails(c);
+      // Hono may convert a downstream exception through the application-level
+      // error handler before this middleware resumes. Apply the same
+      // pre-write rejection rule to that response path as to the catch path.
+      if (requestBodyRejectionCode(errorDetails.code)) return;
+      logger.warn("admin action failed", { ...entry, ...errorDetails });
+    } else {
+      logger.info("admin action", entry);
+    }
   } catch (error) {
+    // A request rejected before its write model is accepted is not an admin
+    // mutation attempt. Keep malformed/unknown payloads free of audit writes.
+    if (requestBodyRejected(error)) throw error;
     logger.warn("admin action failed", {
       ...base,
       status: error && typeof error === "object" && "status" in error ? (error as { status?: unknown }).status : undefined,

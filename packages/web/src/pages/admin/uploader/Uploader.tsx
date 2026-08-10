@@ -186,6 +186,7 @@ export function Uploader({
 
   const closeWorkflow = () => {
     intentFenceRef.current.invalidate();
+    if (activation) onActivationSettled(activation.sequence);
     setOpen(false);
     setSourceDialogOpen(false);
     setSourceDialogPending(false);

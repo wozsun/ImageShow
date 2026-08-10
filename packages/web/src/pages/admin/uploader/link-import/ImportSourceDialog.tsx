@@ -1,6 +1,7 @@
 import {
   useEffect,
   useId,
+  useMemo,
   useRef,
   useState,
   type RefObject
@@ -31,6 +32,7 @@ import {
   ImportSourceResultPanel,
   ImportSourceResultSummary
 } from "./ImportSourceResultPanel.js";
+import { parseImportUrlInput } from "../import-job-utils.js";
 
 export type { ImportSourceSubmission } from "./import-source-adapters.js";
 export type { ImportSourceMode } from "./import-source-model.js";
@@ -70,9 +72,10 @@ export function ImportSourceDialog({
   });
   const mobileLayout = useMediaQuery(mobileViewportMediaQuery);
   const adapter = importSourceModeAdapters[mode];
-  const urlParseResult = parsedResult?.mode === "urls"
-    ? parsedResult.result
-    : null;
+  const urlParseResult = useMemo(
+    () => mode === "urls" ? parseImportUrlInput(text) : undefined,
+    [mode, text]
+  );
   const limitState = importSourceLimitState(
     mode,
     text,
@@ -113,7 +116,11 @@ export function ImportSourceDialog({
     requestControllerRef.current = controller;
     setParseError("");
     try {
-      const result = await adapter.parse(text, controller.signal);
+      const result = await adapter.parse(
+        text,
+        controller.signal,
+        urlParseResult
+      );
       if (controller.signal.aborted) return null;
       setParsedResult(result);
       return result;
