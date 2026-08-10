@@ -1,9 +1,6 @@
 import { normalize, resolve } from "node:path";
 import { runtimePaths } from "../config/bootstrap-env.ts";
-import type {
-  StorageConfig,
-  WebdavStorageConfig
-} from "./backend-config.ts";
+import type { StorageConfig } from "./backend-config.ts";
 
 function normalizedRootPath(value: string) {
   return value.trim().replace(/^\/+|\/+$/g, "");
@@ -20,21 +17,6 @@ function canonicalHttpsEndpoint(value: string) {
   return endpoint.toString().replace(/\/$/, "");
 }
 
-function canonicalWebdavRoot(config: WebdavStorageConfig) {
-  const base = config.webdav.base_url.trim().replace(/\/+$/g, "");
-  const root = normalizedRootPath(config.webdav.root_path);
-  if (!base) return root;
-  const encodedRoot = root
-    .split("/")
-    .filter(Boolean)
-    .map(encodeURIComponent)
-    .join("/");
-  const location = new URL(encodedRoot ? `${base}/${encodedRoot}` : base);
-  location.hash = "";
-  location.pathname = location.pathname.replace(/\/+$/g, "") || "/";
-  return location.toString().replace(/\/$/, "");
-}
-
 /**
  * Return an opaque identity for the physical namespace that owns every
  * `media/`, `thumbs/` and `_uploads/` key. Credentials, public URLs,
@@ -49,10 +31,6 @@ export function configuredStorageNamespaceIdentity(config: StorageConfig) {
       normalizedRootPath(config.s3.root_path)
     ]);
   }
-  if (config.type === "webdav") {
-    return JSON.stringify(["webdav", canonicalWebdavRoot(config)]);
-  }
-
   const localRoot = normalize(resolve(runtimePaths.storageDirectory));
   return JSON.stringify([
     "local",
@@ -62,7 +40,6 @@ export function configuredStorageNamespaceIdentity(config: StorageConfig) {
 
 /**
  * Compare physical layout while treating an S3 endpoint as an access address.
- * WebDAV base paths remain part of the layout and cannot be rebound in place.
  */
 export function storageNamespaceLayoutIdentity(config: StorageConfig) {
   if (config.type === "s3") {

@@ -8,7 +8,6 @@ import { pool } from "../core/database-pools.ts";
 import { withAdvisoryLock } from "../core/database-advisory-locks.ts";
 import {
   s3SettingsSchema,
-  webdavSettingsSchema,
   type StorageBackendUpdateInput,
   type StorageConfig
 } from "./backend-config.ts";
@@ -16,7 +15,6 @@ import {
   normalizedNamespaceIdentities,
   storageConfigFromRow,
   withStoredS3Credential,
-  withStoredWebdavCredential,
   type StorageBackendConfigRow
 } from "./backend-record.ts";
 import {
@@ -52,13 +50,6 @@ function updatedStorageConfig(
   input: StorageBackendUpdateInput
 ): StorageConfig {
   if (current.type === "s3") {
-    if (input.webdav) {
-      throw new ApiError(
-        400,
-        "storage_backend_type_mismatch",
-        "S3 后端不能接收 WebDAV 配置"
-      );
-    }
     return input.s3
       ? {
           ...current,
@@ -69,25 +60,7 @@ function updatedStorageConfig(
         }
       : current;
   }
-  if (current.type === "webdav") {
-    if (input.s3) {
-      throw new ApiError(
-        400,
-        "storage_backend_type_mismatch",
-        "WebDAV 后端不能接收 S3 配置"
-      );
-    }
-    return input.webdav
-      ? {
-          ...current,
-          webdav: withStoredWebdavCredential(
-            webdavSettingsSchema.parse(input.webdav),
-            current.webdav
-          )
-        }
-      : current;
-  }
-  if (input.s3 || input.webdav) {
+  if (input.s3) {
     throw new ApiError(
       400,
       "storage_backend_reserved",
@@ -104,12 +77,6 @@ function changedPhysicalLocationFields(
   if (current.type === "s3" && next.type === "s3") {
     const fields = ["endpoint", "bucket", "root_path"] as const;
     return fields.filter((field) => current.s3[field] !== next.s3[field]);
-  }
-  if (current.type === "webdav" && next.type === "webdav") {
-    const fields = ["base_url", "root_path"] as const;
-    return fields.filter(
-      (field) => current.webdav[field] !== next.webdav[field]
-    );
   }
   return [];
 }
@@ -192,13 +159,6 @@ function sameStorageBackendConfig(
     return JSON.stringify(snapshotConfig.s3)
       === JSON.stringify(lockedConfig.s3);
   }
-  if (
-    snapshotConfig.type === "webdav"
-    && lockedConfig.type === "webdav"
-  ) {
-    return JSON.stringify(snapshotConfig.webdav)
-      === JSON.stringify(lockedConfig.webdav);
-  }
   return snapshotConfig.type === lockedConfig.type;
 }
 
@@ -216,10 +176,7 @@ async function updateStorageBackendUnderLock(
   const nextConfig = updatedStorageConfig(currentConfig, input);
   const configChanged = currentConfig.type === "s3" && nextConfig.type === "s3"
     ? JSON.stringify(currentConfig.s3) !== JSON.stringify(nextConfig.s3)
-    : currentConfig.type === "webdav" && nextConfig.type === "webdav"
-      ? JSON.stringify(currentConfig.webdav)
-        !== JSON.stringify(nextConfig.webdav)
-      : currentConfig.type !== nextConfig.type;
+    : false;
   const configuredNamespaceChanged =
     configuredStorageNamespaceIdentity(currentConfig)
     !== configuredStorageNamespaceIdentity(nextConfig);
@@ -373,9 +330,7 @@ async function updateStorageBackendUnderLock(
           ? null
           : nextConfig.type === "s3"
             ? JSON.stringify(nextConfig.s3)
-            : nextConfig.type === "webdav"
-              ? JSON.stringify(nextConfig.webdav)
-              : null;
+            : null;
         await client.query(
           `UPDATE storage_backend
               SET display_name=COALESCE($2, display_name),
@@ -448,7 +403,7 @@ export async function updateStorageBackend(
       )
     );
 
-  if (!input.s3 && !input.webdav) {
+  if (!input.s3) {
     await updateWithBackendLock();
     return;
   }

@@ -25,7 +25,7 @@ export const brightnesses = ["dark", "light"] as const;
 
 export type Device = (typeof devices)[number];
 export type Brightness = (typeof brightnesses)[number];
-export type StorageType = "local" | "s3" | "webdav";
+export type StorageType = "local" | "s3";
 
 export type AdminRole = "super" | "image";
 export const logLevels = ["DEBUG", "INFO", "WARN", "ERROR", "OFF"] as const;

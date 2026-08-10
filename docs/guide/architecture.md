@@ -17,7 +17,7 @@ JavaScript，并由同一个 Hono 应用按主机名提供 SPA、公共 API、�
         ▼
 Hono HTTP 应用 ──► PostgreSQL（业务真相）
         │        ├─► Redis（派生投影与运行时状态）
-        │        └─► StorageDriver（local / S3 / WebDAV）
+        │        └─► StorageDriver（local / S3）
         │
         └─► Worker ──► background_job
 ```

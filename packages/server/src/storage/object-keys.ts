@@ -12,7 +12,7 @@ function isReservedRootKey(key: string) {
   return reservedRootPrefixPattern.test(key);
 }
 
-export function storageObjectName(prefix: StoragePrefix, key: string) {
+function storageObjectName(prefix: StoragePrefix, key: string) {
   // key 只表达业务路径，实际对象路径统一加命名空间前缀，避免不同用途的对象混在根目录。
   if (key.includes("\0") || key.includes("..") || key.startsWith("/") || key.startsWith("\\")) {
     throw new ApiError(400, "unsafe_path", "Unsafe storage path");
@@ -56,8 +56,4 @@ export function contentType(ext: string): string {
   if (ext === "gif") return "image/gif";
   if (ext === "avif") return "image/avif";
   return "application/octet-stream";
-}
-
-export function contentTypeForKey(key: string): string {
-  return contentType(key.slice(key.lastIndexOf(".") + 1).toLowerCase());
 }

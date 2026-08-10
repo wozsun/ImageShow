@@ -16,7 +16,7 @@ CREATE TABLE storage_backend (
   CHECK (length(slug) <= 32),
   CHECK (slug ~ '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'),
   CHECK (length(display_name) <= 64),
-  CHECK (type IN ('local', 's3', 'webdav'))
+  CHECK (type IN ('local', 's3'))
 );
 
 CREATE UNIQUE INDEX idx_storage_backend_default

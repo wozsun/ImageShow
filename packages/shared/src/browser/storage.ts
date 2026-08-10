@@ -78,18 +78,6 @@ export type StorageBackendS3Dto = {
   secret_access_key_configured: boolean;
 };
 
-export type StorageBackendWebdavDto = {
-  base_url: string;
-  username: string;
-  root_path: string;
-  public_base_url: string;
-  list_depth_infinity: boolean;
-  connect_timeout_seconds: number;
-  idle_timeout_seconds: number;
-  task_timeout_seconds: number;
-  password_configured: boolean;
-};
-
 type StorageBackendAdminBaseDto = StorageBackendOptionDto & {
   image_count: number;
   import_session_count: number;
@@ -102,10 +90,6 @@ type StorageBackendAdminBaseDto = StorageBackendOptionDto & {
 export type StorageBackendAdminDto = StorageBackendAdminBaseDto & (
   | { type: Extract<StorageType, "local"> }
   | { type: Extract<StorageType, "s3">; s3: StorageBackendS3Dto }
-  | {
-    type: Extract<StorageType, "webdav">;
-    webdav: StorageBackendWebdavDto;
-  }
 );
 
 export type StorageBackendsAdminResponseDto = {

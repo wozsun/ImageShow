@@ -4,7 +4,6 @@ import type { AdminImageDetailItemDto } from "./images.ts";
 export type AdvancedConfigBackendPreviewDto = {
   slug: string;
   display_name: string;
-  type: "s3" | "webdav";
   enabled: boolean;
   is_default: boolean;
 };

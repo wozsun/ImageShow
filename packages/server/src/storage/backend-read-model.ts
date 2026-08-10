@@ -79,18 +79,6 @@ export async function getStorageBackendsForAdmin(): Promise<
         }
       };
     }
-    if (backend.type === "webdav") {
-      const { password, ...webdav } = backend.webdav;
-      return {
-        ...summary,
-        type: "webdav" as const,
-        deletion,
-        webdav: {
-          ...webdav,
-          password_configured: Boolean(password)
-        }
-      };
-    }
     return { ...summary, type: "local" as const, deletion };
   });
 }

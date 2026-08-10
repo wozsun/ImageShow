@@ -9,7 +9,6 @@ import {
 import { logger } from "../core/logger.ts";
 import {
   missingS3Fields,
-  missingWebdavFields,
   type StorageBackendRecord,
   type StorageConfig
 } from "./backend-config.ts";
@@ -184,11 +183,7 @@ function storageRecordBySlug(
 }
 
 function assertStorageConfigComplete(config: StorageConfig) {
-  const missing = config.type === "s3"
-    ? missingS3Fields(config.s3)
-    : config.type === "webdav"
-      ? missingWebdavFields(config.webdav)
-      : [];
+  const missing = config.type === "s3" ? missingS3Fields(config.s3) : [];
   if (missing.length) {
     throw new ApiError(
       400,

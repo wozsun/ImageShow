@@ -3,10 +3,9 @@ import { AdminIcon } from "../../components/icon/AdminIcon.js";
 import { AsyncActionButton } from "../../components/actions/AsyncActionButton.js";
 import { DialogFrame } from "../../components/feedback/DialogFrame.js";
 import { NumberInput } from "../../components/form/NumberInput.js";
-import { SelectMenu } from "../../components/form/SelectMenu.js";
 import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
 import { storageBackendDisplay, storageTypeLabel } from "../../lib/ui/select-options.js";
-import type { S3Settings, StorageBackendAdmin, StorageType, WebdavSettings } from "../../lib/types.js";
+import type { S3Settings, StorageBackendAdmin } from "../../lib/types.js";
 import {
   useAsyncActionStatus
 } from "../../hooks/useAsyncActionStatus.js";
@@ -16,16 +15,6 @@ const emptyS3: S3Settings = {
   force_path_style: true, root_path: "/", public_base_url: "", secret_access_key: "",
   connect_timeout_seconds: 15, idle_timeout_seconds: 15, task_timeout_seconds: 300
 };
-
-const emptyWebdav: WebdavSettings = {
-  base_url: "", username: "", root_path: "/", public_base_url: "", password: "", list_depth_infinity: false,
-  connect_timeout_seconds: 15, idle_timeout_seconds: 15, task_timeout_seconds: 300
-};
-
-const storageTypeOptions = [
-  { value: "s3", label: "对象存储 (S3)" },
-  { value: "webdav", label: "WebDAV" }
-];
 
 const storageTestPresentation = {
   idle: { icon: "flask-line", label: "连接测试" },
@@ -78,21 +67,12 @@ export function StorageBackendModal({ target, busy, onClose, onSave, onTest }: {
     : "";
   const [slug, setSlug] = useState(backend?.slug ?? "");
   const [displayName, setDisplayName] = useState(backend?.display_name ?? "");
-  const [type, setType] = useState<StorageType>(backend?.type ?? "s3");
-  const [storageTypeMenuOpen, setStorageTypeMenuOpen] = useState(false);
   const [s3, setS3] = useState<S3Settings>({
     ...emptyS3,
     ...(backend?.type === "s3" ? backend.s3 : {}),
     secret_access_key: ""
   });
-  const [webdav, setWebdav] = useState<WebdavSettings>({
-    ...emptyWebdav,
-    ...(backend?.type === "webdav" ? backend.webdav : {}),
-    password: ""
-  });
-
-  const effectiveType: StorageType = creating ? type : backend!.type;
-  const isWebdav = effectiveType === "webdav";
+  const effectiveType = creating ? "s3" : backend!.type;
   const titleId = useId();
   const descriptionId = useId();
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -127,20 +107,19 @@ export function StorageBackendModal({ target, busy, onClose, onSave, onTest }: {
       label: saveOperation === "create" ? "新建失败" : "保存失败"
     }
   } as const;
-  const configPayload = () => isLocal ? {} : isWebdav ? { webdav } : { s3 };
+  const configPayload = () => isLocal ? {} : { s3 };
   const submit = async () => {
     const creatingNow = isCreateForm;
     setSaveOperation(creatingNow ? "create" : "save");
     const targetSlug = creatingNow ? slug : createdSlug ?? backend!.slug;
     const payload = creatingNow
-      ? { slug, display_name: displayName, type: effectiveType, ...configPayload() }
+      ? { slug, display_name: displayName, s3 }
       : { display_name: displayName, ...(isLocal ? {} : configPayload()) };
     const succeeded = await saveStatus.run(() => onSave(targetSlug, payload, creatingNow));
     if (succeeded && creatingNow) setCreatedSlug(slug);
   };
   const testBody = () => ({
     ...(createdSlug || backend?.slug ? { slug: createdSlug ?? backend!.slug } : {}),
-    type: effectiveType,
     ...configPayload()
   });
   const runConnectionTest = async () => {
@@ -152,7 +131,6 @@ export function StorageBackendModal({ target, busy, onClose, onSave, onTest }: {
       titleId={titleId}
       descriptionId={isCreateForm ? undefined : descriptionId}
       busy={formBusy}
-      paused={storageTypeMenuOpen}
       initialFocusRef={closeButtonRef}
       onClose={onClose}
     >
@@ -197,42 +175,18 @@ export function StorageBackendModal({ target, busy, onClose, onSave, onTest }: {
                 placeholder={creating ? "存储后端名称" : backend!.slug}
               />
             </label>
-            {isCreateForm && (
-              <label>
-                存储类型
-                <SelectMenu
-                  value={type}
-                  onChange={(value) => setType(value as StorageType)}
-                  onOpenChange={setStorageTypeMenuOpen}
-                  options={storageTypeOptions}
-                  ariaLabel="存储类型"
-                />
-              </label>
-            )}
             {isLocal ? (
               <p className="hint">本地存储无需额外配置，图片保存在容器的存储目录。</p>
             ) : (
               <>
                 {locationLocked && (
                   <p className="notice-line" role="note">
-                    {isWebdav ? (
-                      <>
-                        此后端仍有 {locationUsage}。Base URL / 根目录已锁定；
-                        请先{locationUnlockGuidance}。凭据及访问参数仍可轮换，
-                        保存前服务端会验证读写能力。
-                      </>
-                    ) : (
-                      <>
-                        此后端仍有 {locationUsage}。Bucket / 根目录已锁定；
-                        如需改变请先{locationUnlockGuidance}。Endpoint 仍可修改，
-                        保存时服务端会证明新旧地址指向同一命名空间；验证失败会保留原配置。
-                      </>
-                    )}
+                    此后端仍有 {locationUsage}。Bucket / 根目录已锁定；
+                    如需改变请先{locationUnlockGuidance}。Endpoint 仍可修改，
+                    保存时服务端会证明新旧地址指向同一命名空间；验证失败会保留原配置。
                   </p>
                 )}
-                {isWebdav
-                  ? <WebdavFields value={webdav} onChange={setWebdav} configured={backend?.type === "webdav" ? backend.webdav.password_configured : undefined} locationLocked={locationLocked} />
-                  : <S3Fields value={s3} onChange={setS3} configured={backend?.type === "s3" ? backend.s3.secret_access_key_configured : undefined} locationLocked={locationLocked} />}
+                <S3Fields value={s3} onChange={setS3} configured={backend?.type === "s3" ? backend.s3.secret_access_key_configured : undefined} locationLocked={locationLocked} />
               </>
             )}
           </div>
@@ -316,60 +270,13 @@ function S3Fields({ value, onChange, configured, locationLocked }: { value: S3Se
   );
 }
 
-function WebdavFields({ value, onChange, configured, locationLocked }: { value: WebdavSettings; onChange: (next: WebdavSettings) => void; configured?: boolean; locationLocked: boolean }) {
-  const patch = (next: Partial<WebdavSettings>) => onChange({ ...value, ...next });
-  return (
-    <>
-      <p className="hint">密码保存后只显示“已配置”；上传统一经服务器中转写入 WebDAV。用户名/密码留空则匿名访问。</p>
-      <label>
-        Base URL
-        <input value={value.base_url} onChange={(event) => patch({ base_url: event.target.value })} placeholder="https://dav.example.com/dav" disabled={locationLocked} />
-      </label>
-      <label>
-        用户名
-        <input value={value.username} onChange={(event) => patch({ username: event.target.value })} />
-      </label>
-      <label>
-        密码
-        <input
-          type="password"
-          placeholder={configured ? "已配置" : ""}
-          value={value.password ?? ""}
-          onChange={(event) => patch({ password: event.target.value })}
-        />
-      </label>
-      <StorageLocationFields
-        rootPath={value.root_path}
-        publicBaseUrl={value.public_base_url}
-        locationLocked={locationLocked}
-        onChange={patch}
-      />
-      <StorageRequestTimeoutFields
-        value={value}
-        onChange={patch}
-        connectLabel="连接 / 首字节超时（秒）"
-      />
-      <label>
-        <input type="checkbox" checked={value.list_depth_infinity} onChange={(event) => patch({ list_depth_infinity: event.target.checked })} />
-        Depth: infinity 列举（更快；部分 WebDAV 服务器不支持，默认关闭）
-      </label>
-    </>
-  );
-}
-
 function StorageRequestTimeoutFields({
   value,
   onChange,
   connectLabel
 }: {
-  value: Pick<
-    S3Settings | WebdavSettings,
-    "connect_timeout_seconds" | "idle_timeout_seconds" | "task_timeout_seconds"
-  >;
-  onChange: (patch: Partial<Pick<
-    S3Settings | WebdavSettings,
-    "connect_timeout_seconds" | "idle_timeout_seconds" | "task_timeout_seconds"
-  >>) => void;
+  value: Pick<S3Settings, "connect_timeout_seconds" | "idle_timeout_seconds" | "task_timeout_seconds">;
+  onChange: (patch: Partial<Pick<S3Settings, "connect_timeout_seconds" | "idle_timeout_seconds" | "task_timeout_seconds">>) => void;
   connectLabel: string;
 }) {
   return (

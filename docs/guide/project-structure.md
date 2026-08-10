@@ -103,7 +103,7 @@ healthcheck 只读现有配置快照，密码恢复不初始化运行时配置�
 | `config/` | 部署环境、首次播种、运行时配置 schema、无导入副作用的文件读写与显式进程内 store，以及配置包。 |
 | `routes/` | HTTP 方法、鉴权、CSRF、输入解析和响应投影；业务工作委托给领域模块。 |
 | `images/` | 图片读写、展示投影、分类与元数据变更、回收站和缩略图；`ready-cache/` 拥有统一 Redis rich 投影、筛选、统计、精确同步与重建，`imports/` 拥有完整导入会话生命周期及清理任务，`read-models/` 承载 PostgreSQL 降级读模型。 |
-| `storage/` | local、S3、WebDAV driver 及无环工厂；注册表缓存与 driver、管理读模型、配置变更、探测和占用统计分开维护，并拥有对象访问、强摘要传输、位置锁、迁移及 `move.cleanup` 仓储与 handler。 |
+| `storage/` | local、S3 driver 及无环工厂；注册表缓存与 driver、管理读模型、配置变更、探测和占用统计分开维护，并拥有对象访问、强摘要传输、位置锁、迁移及 `move.cleanup` 仓储与 handler。 |
 | `random/` | 随机查询校验、设备轴推断、Redis 8 Array 最近历史、定向 id 与有界 pivot 普通随机 PG 降级查询及随机出口编排；Redis 候选投影、筛选与重建统一由 `images/ready-cache/` 提供。 |
 | `jobs/` | 仅拥有通用 `background_job` 生命周期、小型类型分派、公平调度 Worker，以及集中管理任务中止、期限、续租和有界排空的执行协调器；各领域拥有自己的 handler、payload 和结果语义。 |
 | `checks/` | PostgreSQL / Redis 独立轻量状态、数据库 / Redis / 存储 / 回收站手动深度检查，以及显式触发的存储维护。 |
@@ -148,7 +148,7 @@ gateway 自行复制这套准入状态。
   `external-original-serving.ts` 只处理外部原图探测、跳转和代理。
   `stored-object-response.ts` 集中流式、HEAD、Range 与缓存响应，
   `thumbnail-serving-lifecycle.ts` 集中缩略图可用性检查、并发补建、失败上下文和原图
-  回退的 404 映射，使 local、S3 与 WebDAV 共用同一生命周期。
+  回退的 404 映射，使 local 与 S3 共用同一生命周期。
 
 领域模块可以依赖 `core/` 和 `config/`，但基础设施不能反向导入具体路由。跨领域调用直接
 指向对方表达职责的模块，不通过泛化 `service`、`storage` 或 barrel 隐藏真实依赖，也不能

@@ -9,7 +9,6 @@ import {
 import { ApiError } from "../core/api-error.ts";
 import {
   s3SettingsSchema,
-  webdavSettingsSchema,
   type StorageBackendRecord
 } from "../storage/backend-config.ts";
 import {
@@ -18,7 +17,7 @@ import {
 } from "./runtime-config.ts";
 
 const configPackageFormat = "imageshow-config" as const;
-const configPackageFormatVersion = 2 as const;
+const configPackageFormatVersion = 3 as const;
 const configPackageMaxBackends = appConfig.imports.configPackageMaxBackends;
 const configPackageMaxBytes = appConfig.imports.configPackageMaxBytes;
 
@@ -32,18 +31,10 @@ const packageBackendBase = {
   enabled: z.boolean(),
   is_default: z.boolean()
 };
-const packageStorageBackendSchema = z.discriminatedUnion("type", [
-  z.strictObject({
-    ...packageBackendBase,
-    type: z.literal("s3"),
-    s3: s3SettingsSchema.strict()
-  }),
-  z.strictObject({
-    ...packageBackendBase,
-    type: z.literal("webdav"),
-    webdav: webdavSettingsSchema.strict()
-  })
-]);
+const packageStorageBackendSchema = z.strictObject({
+  ...packageBackendBase,
+  s3: s3SettingsSchema.strict()
+});
 
 const configPackageSchema = z.strictObject({
   format: z.literal(configPackageFormat),
@@ -103,9 +94,7 @@ function portableBackends(
       enabled: backend.enabled,
       is_default: backend.is_default
     };
-    portable.push(backend.type === "s3"
-      ? { ...base, type: "s3", s3: backend.s3 }
-      : { ...base, type: "webdav", webdav: backend.webdav });
+    portable.push({ ...base, s3: backend.s3 });
   }
   return portable;
 }
@@ -151,7 +140,6 @@ export function projectConfigPackagePreview(
     storage_backends: pkg.storage_backends.map((backend) => ({
       slug: backend.slug,
       display_name: backend.display_name,
-      type: backend.type,
       enabled: backend.enabled,
       is_default: backend.is_default
     })),

@@ -57,10 +57,9 @@ export async function importConfigPackage(
       const importedBackends = resolved.map((backend) => ({
         slug: backend.slug,
         display_name: backend.display_name,
-        type: backend.type,
         enabled: backend.enabled,
         is_default: backend.is_default,
-        config: backend.type === "s3" ? backend.s3 : backend.webdav
+        config: backend.s3
       }));
       let appliedRuntimeConfigRevision: number | null = null;
       let importTransactionId: string | null = null;

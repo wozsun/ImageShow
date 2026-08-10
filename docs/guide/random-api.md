@@ -95,7 +95,7 @@ PostgreSQL 事务推进 `ready_image_revision`。提交后仍持有进程内写�
 
 ## 返回方式
 
-`m=proxy` 从图片所属 local、S3 或 WebDAV 后端读取已入库图片字节，并附带
+`m=proxy` 从图片所属 local 或 S3 后端读取已入库图片字节，并附带
 `X-Image-Info`；它不声明 `Accept-Ranges`。`m=redirect` 返回 302 跳转到公开 URL。
 这里的 `proxy` 只是返回传输方式，与图片导入模式无关。
 

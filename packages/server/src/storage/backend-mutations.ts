@@ -38,7 +38,6 @@ export async function createStorageBackend(input: StorageBackendCreateInput) {
       "'local' 是内置后端，不能新建"
     );
   }
-  const config = input.type === "webdav" ? input.webdav : input.s3;
   try {
     await pool.query(
       `INSERT INTO storage_backend(
@@ -48,7 +47,7 @@ export async function createStorageBackend(input: StorageBackendCreateInput) {
          $1, $2, $3, $4::jsonb, true,
          (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM storage_backend)
        )`,
-      [input.slug, input.display_name, input.type, JSON.stringify(config)]
+      [input.slug, input.display_name, "s3", JSON.stringify(input.s3)]
     ).catch((error: unknown) => {
       if (
         error
@@ -93,7 +92,7 @@ export async function importStorageBackends(
             [
               backend.slug,
               backend.display_name,
-              backend.type,
+              "s3",
               JSON.stringify(backend.config),
               backend.enabled,
               highestSortOrder + index + 1

@@ -7,7 +7,7 @@
 | --- | --- |
 | 数据表、结构契约、任务状态 | [数据库结构](./database.md) |
 | 运行配置、环境变量、配置包 | [配置说明](./configuration.md) |
-| local / S3 / WebDAV、迁移与对象清理 | [存储](./storage.md) |
+| local / S3、迁移与对象清理 | [存储](./storage.md) |
 | Redis、Worker、锁与进程生命周期 | [架构总览](./architecture.md) |
 | 随机图查询参数与返回方式 | [随机图 API](./random-api.md) |
 | 鉴权、请求限制、代理和响应头 | [安全](./security.md) |
@@ -79,7 +79,7 @@ JSONL 可设置 `original`、`source`、`image_time`、`author`、`tags`、`titl
    staging。响应返回完整管理端图片对象，供队列直接收敛为已完成。
 
 每个会话在创建时锁定 `storage_slug`。默认后端的后续变化只影响新会话；ready 任务不能
-临时换后端。原始字节始终留在 `data/tmp`，导入流程也不让浏览器向 S3 或 WebDAV 直传。
+临时换后端。原始字节始终留在 `data/tmp`，导入流程也不让浏览器向 S3 直传。
 
 ### 取消、恢复与清理
 

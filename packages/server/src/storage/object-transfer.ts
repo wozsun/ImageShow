@@ -275,7 +275,7 @@ export async function ensureVerifiedObjectAtTarget(input: {
 /**
  * Copy within one physical backend using the driver's native copy primitive.
  * Source and target are streamed for hashing, which avoids a second full
- * in-memory copy for S3/WebDAV import commits and category moves.
+ * in-memory copy for S3 import commits and category moves.
  */
 export async function copyVerifiedObjectWithinStorage(input: {
   storage: StorageEndpoint;

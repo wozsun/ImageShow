@@ -19,7 +19,3 @@ export function isS3NotFound(error: unknown) {
     || candidate?.name === "NotFound"
     || candidate?.Code === "NoSuchKey";
 }
-
-export function isWebdavNotFoundStatus(status: number) {
-  return status === 404;
-}

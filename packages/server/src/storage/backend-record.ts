@@ -1,16 +1,13 @@
-import type { StorageType } from "@imageshow/shared/browser";
 import {
   s3SettingsSchema,
-  webdavSettingsSchema,
   type S3Settings,
   type StorageBackendRecord,
-  type StorageConfig,
-  type WebdavSettings
+  type StorageConfig
 } from "./backend-config.ts";
 
 export type StorageBackendConfigRow = {
   slug: string;
-  type: StorageType;
+  type: string;
   config: unknown;
   namespace_identities?: unknown;
 };
@@ -29,27 +26,23 @@ export function storageConfigFromRow(
   const namespaceIdentities = normalizedNamespaceIdentities(
     row.namespace_identities
   );
-  if (row.type === "s3") {
-    return {
-      slug: row.slug,
-      type: "s3",
-      namespace_identities: namespaceIdentities,
-      s3: s3SettingsSchema.parse(raw)
-    };
+  switch (row.type) {
+    case "s3":
+      return {
+        slug: row.slug,
+        type: "s3",
+        namespace_identities: namespaceIdentities,
+        s3: s3SettingsSchema.parse(raw)
+      };
+    case "local":
+      return {
+        slug: row.slug,
+        type: "local",
+        namespace_identities: namespaceIdentities
+      };
+    default:
+      throw new Error(`Unsupported storage backend type: ${row.type}`);
   }
-  if (row.type === "webdav") {
-    return {
-      slug: row.slug,
-      type: "webdav",
-      namespace_identities: namespaceIdentities,
-      webdav: webdavSettingsSchema.parse(raw)
-    };
-  }
-  return {
-    slug: row.slug,
-    type: "local",
-    namespace_identities: namespaceIdentities
-  };
 }
 
 export function storageBackendRecordFromRow(
@@ -87,12 +80,4 @@ export function withStoredS3Credential(
     return candidate;
   }
   return { ...candidate, secret_access_key: current.secret_access_key };
-}
-
-export function withStoredWebdavCredential(
-  candidate: WebdavSettings,
-  current?: WebdavSettings
-) {
-  if (candidate.password || !current?.password) return candidate;
-  return { ...candidate, password: current.password };
 }

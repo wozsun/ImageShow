@@ -171,8 +171,8 @@ DELETE 发出后失锁时由后继重新采用同一对象。
 | --- | --- |
 | `slug` (PK) | 后端标识；内置 `local` 不可删 |
 | `display_name` | 显示名 |
-| `type` | `local` / `s3` / `webdav` |
-| `config` | 驱动配置；密钥/密码明文存库但不回传前端 |
+| `type` | `local` / `s3` |
+| `config` | 驱动配置；S3 密钥明文存库但不回传前端 |
 | `namespace_identities` | 经验证且合并后的物理命名空间访问身份集合；当前配置身份始终隐式参与 |
 | `enabled` | 是否可作为新图片及存量图片迁移的写入目标 |
 | `is_default` | 是否为新上传默认后端 |
@@ -183,7 +183,7 @@ DELETE 发出后失锁时由后继重新采用同一对象。
 清理全部导入会话、未解决 `move.cleanup` 和 `_uploads` 暂存对象才能删除。后端注册表同时
 管理配置快照与按签名复用的 driver/client 生命周期；只有 driver 连接参数变化或后端
 删除才会安全退役相关实例，显示名、启停、默认项和排序变化只刷新注册表快照。S3 的
-bucket / root_path 与 WebDAV 的 base_url / root_path 是物理布局；仍有
+bucket / root_path 是物理布局；仍有
 图片、任意导入会话、未解决清理任务或暂存对象时不允许原地修改。S3 endpoint 可在
 独占位置锁内通过 `_uploads` 完整快照、既有对象的有界 Range 读取和双向随机挑战证明
 为同一命名空间的访问别名；成功后合并全部相交后端的 `namespace_identities`，使别名

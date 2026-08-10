@@ -1,6 +1,5 @@
 import { useId, useRef, useState, type RefObject } from "react";
 import { slugFormatHint, slugPattern } from "../../../lib/constants.js";
-import { storageTypeLabel } from "../../../lib/ui/select-options.js";
 import type { AdvancedConfigPreview } from "../../../lib/types.js";
 import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import { AsyncActionButton } from "../../../components/actions/AsyncActionButton.js";
@@ -114,7 +113,7 @@ export function ConfigPackageImportDialog({
                     <div>
                       <strong>{backend.display_name || backend.slug}</strong>
                       <span>
-                        {backend.slug} · {storageTypeLabel(backend.type)}
+                        {backend.slug} · 对象存储
                         {backend.is_default ? " · 默认" : ""}{backend.enabled ? "" : " · 已停用"}
                       </span>
                     </div>

@@ -2,8 +2,7 @@ export type {
   AdminSettings,
   Brightness,
   Device,
-  SiteSettings,
-  StorageType
+  SiteSettings
 } from "@imageshow/shared/browser";
 import type {
   AdminUserDto,
@@ -23,7 +22,6 @@ import type {
   RuntimeConfigChangeSummaryDto,
   StorageBackendAdminDto,
   StorageBackendS3Dto,
-  StorageBackendWebdavDto,
   TagDto,
   ThemeDto
 } from "@imageshow/shared/browser";
@@ -48,14 +46,6 @@ export type S3Settings = Omit<
   secret_access_key?: string;
   secret_access_key_configured?: boolean;
 };
-export type WebdavSettings = Omit<
-  StorageBackendWebdavDto,
-  "password_configured"
-> & {
-  password?: string;
-  password_configured?: boolean;
-};
-
 export type StorageBackendAdmin = StorageBackendAdminDto;
 export type AdvancedConfigPreview = AdvancedConfigPreviewDto;
 export type RuntimeConfigChangeSummary = RuntimeConfigChangeSummaryDto;

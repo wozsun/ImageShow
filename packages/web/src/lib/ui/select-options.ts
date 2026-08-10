@@ -101,7 +101,7 @@ export function storageBackendDisplay(backend: { slug: string; display_name?: st
   return backend.display_name || storageBackendLabel(backend.slug);
 }
 
-const storageTypeLabels: Record<string, string> = { local: "本地", s3: "对象存储", webdav: "WebDAV" };
+const storageTypeLabels: Record<string, string> = { local: "本地", s3: "对象存储" };
 
 export function storageTypeLabel(type: string) {
   return storageTypeLabels[type] ?? type;
