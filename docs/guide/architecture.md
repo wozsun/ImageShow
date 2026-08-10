@@ -64,8 +64,9 @@ PostgreSQL 是图片、词表、导入会话、后台任务、存储注册表和
 真相源。当前 schema 共 10 张表，其中 `ready_image_revision` 是图片投影 revision
 单行表；schema 不保存迁移账本或应用版本号。
 
-应用只在确认数据库为空时执行当前唯一 `schema.sql`；非空库只读验证应用侧结构契约，
-不会自动补表、改表、删表、写契约标记或清库。允许的兼容超集和拒绝条件以
+`schema.sql` 是唯一完整的新安装结构；空库随后执行小型 `schema-additions.sql`，非空库只
+执行其中经审查的行为中性字段和稳定系统种子，再做只读 readiness。应用不提供通用结构
+diff、编号迁移、破坏性 DDL、契约标记或清库。允许的 additions、兼容超集和拒绝条件以
 [数据库结构](./database.md)为唯一说明。
 
 ### Redis

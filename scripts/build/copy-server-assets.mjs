@@ -58,9 +58,12 @@ async function precompressDir(dir) {
 
 await mkdir(serverDist, { recursive: true });
 await rm(resolve(serverDist, "migrations"), { recursive: true, force: true });
-await rm(resolve(serverDist, "schema.sql"), { force: true });
+const databaseAssets = ["schema.sql", "schema-additions.sql"];
+await Promise.all(databaseAssets.map(async (asset) => {
+  await rm(resolve(serverDist, asset), { force: true });
+  await cp(resolve(serverPackage, asset), resolve(serverDist, asset));
+}));
 await rm(resolve(serverDist, "public"), { recursive: true, force: true });
-await cp(resolve(serverPackage, "schema.sql"), resolve(serverDist, "schema.sql"));
 await cp(webDist, resolve(serverDist, "public"), { recursive: true });
 
 // 最后一步：对最终汇集的 SPA 静态目录做预压缩。图标已内联进 JS 包，
@@ -68,5 +71,5 @@ await cp(webDist, resolve(serverDist, "public"), { recursive: true });
 await precompressDir(resolve(serverDist, "public"));
 
 console.log(
-  "assemble-server: schema.sql -> dist/schema.sql, web -> dist/public"
+  "assemble-server: database SQL assets -> dist, web -> dist/public"
 );

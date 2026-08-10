@@ -81,9 +81,10 @@ docker compose exec postgresql sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB
 
 ## 数据库与升级边界
 
-镜像只携带当前唯一 `schema.sql`。空数据库会在单事务内初始化；非空数据库只做应用侧
-只读结构契约检查，不执行编号迁移、补表、改表、删表、写版本标记或清库。兼容的额外
-旧对象可以保留；会改变当前写入语义的不兼容结构会明确拒绝启动。精确契约见
+`schema.sql` 是唯一完整的新安装结构；镜像另带小型累积 `schema-additions.sql`。空数据库
+在单事务内依次执行两者，非空数据库只执行克制 additions 后做只读 readiness。additions
+只补当前白名单中的行为中性字段和稳定系统种子，不提供编号迁移、通用 schema diff、
+删除、重命名、类型改变、推测回填、版本标记或清库。精确契约见
 [数据库结构](docs/guide/database.md#启动与结构契约)。
 
 Redis 不是业务真相源，普通升级不要求手工清空。连接必须支持 Redis 8 以及项目使用的

@@ -38,10 +38,11 @@ Redis 凭据只来自环境变量或 Secret，不写入 `config.json`。首次�
 
 ## PostgreSQL 与 Redis
 
-空数据库只由镜像内唯一 `schema.sql` 初始化。非空数据库不会执行 DDL、编号迁移、版本
-ledger 或清库，只进行应用侧只读结构契约检查；兼容超集与拒绝条件以
-[数据库结构](./database.md#启动与结构契约)为准。不兼容旧卷必须由部署者在升级前自行
-导出、转换或改用干净数据库，应用没有隐式升级路径。
+`schema.sql` 是镜像内唯一完整的新安装结构；`schema-additions.sql` 只包含经审查的行为中性
+字段与稳定系统种子。空数据库依次执行两者，非空数据库只执行 additions 后做只读
+readiness；整个过程受同一启动锁和事务保护。应用不提供编号迁移、通用 schema diff、版本
+ledger、破坏性 DDL 或清库；精确白名单与拒绝条件以
+[数据库结构](./database.md#启动与结构契约)为准。
 
 Redis 只保存会话、限流、统一就绪图片投影和可重建派生缓存。连接必须支持 Redis 8
 以及 `INCREX`、`ARRING`、`ARLASTITEMS`；应用会用带 5 秒 TTL 的自有探针键实际验证

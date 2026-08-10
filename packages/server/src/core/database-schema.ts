@@ -13,16 +13,18 @@ export function initializeDatabaseSchema() {
   );
 }
 
-function databaseSchemaPath() {
+type DatabaseAsset = "schema.sql" | "schema-additions.sql";
+
+function databaseAssetPath(asset: DatabaseAsset) {
   const candidates = [
-    join(import.meta.dirname, "..", "schema.sql"),
-    join(import.meta.dirname, "..", "..", "schema.sql")
+    join(import.meta.dirname, "..", asset),
+    join(import.meta.dirname, "..", "..", asset)
   ];
-  const schemaPath = candidates.find((candidate) => existsSync(candidate));
-  if (!schemaPath) {
-    throw new Error("PostgreSQL clean-install schema asset is missing");
+  const path = candidates.find((candidate) => existsSync(candidate));
+  if (!path) {
+    throw new Error(`PostgreSQL database asset is missing: ${asset}`);
   }
-  return schemaPath;
+  return path;
 }
 
 async function databaseHasNoUserRelations(client: PoolClient) {
@@ -50,27 +52,26 @@ async function initializeDatabaseSchemaUnderLock(
   client: PoolClient
 ) {
   signal.throwIfAborted();
-  if (!await databaseHasNoUserRelations(client)) {
-    signal.throwIfAborted();
-    try {
-      await assertCoreDatabaseReady(client);
-    } catch (error) {
-      throw databaseReadinessError(error);
-    }
-    return;
-  }
-
-  const body = await readFile(databaseSchemaPath(), "utf8");
+  const empty = await databaseHasNoUserRelations(client);
+  const [schema, additions] = await Promise.all([
+    empty
+      ? readFile(databaseAssetPath("schema.sql"), "utf8")
+      : Promise.resolve(null),
+    readFile(databaseAssetPath("schema-additions.sql"), "utf8")
+  ]);
   signal.throwIfAborted();
   await client.query("BEGIN");
   try {
-    await client.query(body);
+    if (schema) await client.query(schema);
+    signal.throwIfAborted();
+    await client.query(additions);
     signal.throwIfAborted();
     await assertCoreDatabaseReady(client);
     signal.throwIfAborted();
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK").catch(() => undefined);
+    if (!empty) throw databaseReadinessError(error);
     throw error;
   }
 }

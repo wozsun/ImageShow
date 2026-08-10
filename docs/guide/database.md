@@ -1,9 +1,10 @@
 # 数据库结构
 
-PostgreSQL 共 10 张业务表，不保存迁移账本或 schema 版本表。空数据库只执行唯一
-`packages/server/schema.sql`；随机图 `id` 的末 12 位查询所需 ready 部分表达式索引，以及统一
-Redis 图片投影的权威 revision 单行表均属于当前基线。PostgreSQL 是唯一真相源，Redis
-图片投影、查询缓存与管理员会话均不替代数据库真值。
+PostgreSQL 共 10 张业务表，不保存迁移账本或 schema 版本表。
+`packages/server/schema.sql` 是唯一完整的新安装结构；启动还会执行小型累积
+`schema-additions.sql`。随机图 `id` 的末 12 位查询所需 ready 部分表达式索引，以及统一 Redis
+图片投影的权威 revision 单行表均属于当前基线。PostgreSQL 是唯一真相源，Redis 图片投影、
+查询缓存与管理员会话均不替代数据库真值。
 
 `schema.sql` 按依赖和运行职责排列：存储注册表 →
 公共词表 → 图片真值、关联与投影 revision → 导入生命周期 → 后台任务 → 管理员身份。
@@ -12,13 +13,23 @@ Redis 图片投影的权威 revision 单行表均属于当前基线。PostgreSQL
 
 ## 启动与结构契约
 
-当前代码库只保留完整的新安装基线，不提供编号迁移、迁移账本或数据库升级路径。启动在
-advisory bootstrap lock 内确认所有非系统 schema 都没有用户关系后，才在一个事务中执行
-完整 schema；并发启动由同一把锁串行化，失败会回滚全部 DDL。全部连接固定使用
-`search_path=public`。非空数据库只读核对 10 张当前业务表、源码实际使用的列及其 PostgreSQL
-类型、必需系统种子，并确认会话可写、public schema 可用且当前角色具备各表实际操作所需的
-SELECT / INSERT / UPDATE / DELETE 权限；全部检查只读，不用回滚写探针。核心表、必需列、列
-类型、种子或权限缺失会在业务启动前明确失败，也不会自动补表、改表、删列或写版本标记。
+当前代码库只保留完整的新安装基线，不提供编号迁移、迁移账本或通用数据库升级路径。启动
+在 advisory bootstrap lock 内串行化：空数据库在一个事务中先执行完整 `schema.sql`，再执行
+`schema-additions.sql`；非空数据库只执行 additions，随后进入轻量 readiness。additions、
+readiness 或干净初始化任一步失败都会回滚本次事务。全部连接固定使用
+`search_path=public`。
+
+当前 additions 只允许三项幂等修复：补充可空 `metadata.purge_error TEXT`，补充带简单常量
+默认值的 `admin_account.preferences JSONB NOT NULL DEFAULT '{}'`，以及用稳定 slug
+`INSERT ... ON CONFLICT DO NOTHING` 补充 `theme.none`。已有 `theme.none` 的显示名不会被覆盖；
+同名列存在但类型不兼容时不会改型，随后由 readiness 明确拒绝。文件不补业务表、外键、
+CHECK，不删除或重命名对象，不推测回填，不更新已有数据，也不写版本行；以后只有真实的
+行为中性需求才追加条目。
+
+readiness 只读核对 10 张当前业务表、源码实际使用的列及其 PostgreSQL 类型、必需系统种子，
+并确认会话可写、public schema 可用且当前角色具备各表实际操作所需的 SELECT / INSERT /
+UPDATE / DELETE 权限，不使用回滚写探针。核心表、必需列、列类型、种子或权限缺失会在业务
+启动前明确失败。
 
 readiness 不复制 `schema.sql` 的可空性、默认值、PK / FK / CHECK、触发器和索引，也不识别
 旧版本号或旧结构形状。额外表、额外列、额外索引以及更宽的旧 CHECK 不影响启动，只要当前
