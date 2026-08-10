@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { copyFile, link, mkdir, open, readFile, readdir, rm, rmdir, writeFile, access } from "node:fs/promises";
+import { copyFile, link, mkdir, open, opendir, readdir, rm, rmdir, writeFile, access } from "node:fs/promises";
 import { dirname, join, relative, sep } from "node:path";
 import { runtimePaths } from "../config/bootstrap-env.ts";
+import { getInputImageMaxBytes } from "../config/app-settings.ts";
 import { ApiError } from "../core/api-error.ts";
 import { safeStoragePath, STORAGE_PREFIXES, type ReadablePrefix, type StoragePrefix } from "./object-keys.ts";
 import type {
@@ -13,6 +14,62 @@ import type {
 import { parseSingleByteRange } from "../core/http/byte-range.ts";
 import { localObjectEtag } from "./object-validator.ts";
 import { isMissingFileError } from "./not-found.ts";
+import { openedReadToBuffer } from "./stream-buffer.ts";
+import {
+  batchStorageKeys,
+  type StorageKeyListOptions
+} from "./key-listing.ts";
+
+async function readDirectoryOrMissing(path: string) {
+  try {
+    return await readdir(path, { withFileTypes: true });
+  } catch (error) {
+    if (isMissingFileError(error)) return [];
+    throw error;
+  }
+}
+
+async function* walkLocalKeys(
+  root: string,
+  directoryPath: string,
+  signal?: AbortSignal
+): AsyncGenerator<string> {
+  signal?.throwIfAborted();
+  let directory;
+  try {
+    directory = await opendir(directoryPath, { bufferSize: 64 });
+  } catch (error) {
+    if (isMissingFileError(error)) return;
+    throw error;
+  }
+
+  try {
+    while (true) {
+      signal?.throwIfAborted();
+      let entry;
+      try {
+        entry = await directory.read();
+      } catch (error) {
+        if (isMissingFileError(error)) return;
+        throw error;
+      }
+      signal?.throwIfAborted();
+      if (!entry) return;
+      const path = join(directoryPath, entry.name);
+      if (entry.isDirectory()) {
+        yield* walkLocalKeys(root, path, signal);
+      } else {
+        yield relative(root, path).split(sep).join("/");
+      }
+    }
+  } finally {
+    try {
+      await directory.close();
+    } catch (error) {
+      if (!isMissingFileError(error)) throw error;
+    }
+  }
+}
 
 export class LocalBackend implements StorageDriver {
   async exists(prefix: StoragePrefix, key: string) {
@@ -77,7 +134,10 @@ export class LocalBackend implements StorageDriver {
   }
 
   async readBuffer(prefix: StoragePrefix, key: string) {
-    return readFile(safeStoragePath(prefix, key));
+    return openedReadToBuffer(
+      await this.openRead(prefix, key),
+      getInputImageMaxBytes()
+    );
   }
 
   async writeBuffer(prefix: StoragePrefix, key: string, body: Buffer, _type: string) {
@@ -112,22 +172,15 @@ export class LocalBackend implements StorageDriver {
     }
   }
 
-  async listKeys(prefix: StoragePrefix) {
+  async *listKeys(
+    prefix: StoragePrefix,
+    options: StorageKeyListOptions = {}
+  ) {
     const root = join(runtimePaths.storageDirectory, prefix);
-    const keys: string[] = [];
-    async function walk(dir: string) {
-      const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
-      for (const entry of entries) {
-        const path = join(dir, entry.name);
-        if (entry.isDirectory()) await walk(path);
-        else {
-          const key = relative(root, path).split(sep).join("/");
-          keys.push(key);
-        }
-      }
-    }
-    await walk(root);
-    return keys;
+    return yield* batchStorageKeys(
+      walkLocalKeys(root, root, options.signal),
+      options
+    );
   }
 
   publicObjectUrl(_prefix: ReadablePrefix, _key: string) {
@@ -148,14 +201,21 @@ export class LocalBackend implements StorageDriver {
     const protectedDirs = new Set(STORAGE_PREFIXES.map((name) => join(root, name)));
     let removed = 0;
     const prune = async (dir: string): Promise<void> => {
-      const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
+      const entries = await readDirectoryOrMissing(dir);
       for (const entry of entries) {
         if (entry.isDirectory()) await prune(join(dir, entry.name));
       }
       if (dir === root || protectedDirs.has(dir)) return;
-      await rmdir(dir).then(() => { removed += 1; }).catch(() => undefined);
+      try {
+        await rmdir(dir);
+        removed += 1;
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException | undefined)?.code;
+        if (isMissingFileError(error) || code === "ENOTEMPTY" || code === "EEXIST") return;
+        throw error;
+      }
     };
-    const top = await readdir(root, { withFileTypes: true }).catch(() => []);
+    const top = await readDirectoryOrMissing(root);
     for (const entry of top) {
       if (entry.isDirectory()) await prune(join(root, entry.name));
     }

@@ -6,7 +6,7 @@ import { thumbnailObjectKey } from "../../storage/image-paths.ts";
 import { withStorageLocationReadLock } from "../../storage/maintenance-lock.ts";
 import { enqueueObjectsForCleanup } from "../../storage/move-cleanup.ts";
 import {
-  listStorageKeys,
+  collectStorageKeys,
   readStorageBuffer,
   removeStorageObjectAndConfirm
 } from "../../storage/object-access.ts";
@@ -76,7 +76,15 @@ export async function cleanupStagedObjectsBatch(
   try {
     await withStorageLocationReadLock(async (signal) => {
       signal.throwIfAborted();
-      const entries = (await listStorageKeys("_uploads", storageSlug))
+      const listing = await collectStorageKeys(
+        "_uploads",
+        storageSlug,
+        { signal }
+      );
+      if (!listing.complete) {
+        throw new Error("Import staging namespace listing was incomplete");
+      }
+      const entries = listing.keys
         .map((key) => ({ id: stagingSessionId(key), key }))
         .filter(({ id }) => targets.has(id));
       signal.throwIfAborted();

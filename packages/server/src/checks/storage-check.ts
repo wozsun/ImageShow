@@ -1,7 +1,8 @@
 import { pool } from "../core/db.ts";
 import { errorMessage } from "../core/api-error.ts";
 import { thumbnailRef } from "../storage/image-paths.ts";
-import { listStorageKeys } from "../storage/object-access.ts";
+import { collectStorageNamespaceSnapshot } from "../storage/object-access.ts";
+import { STORAGE_ADMIN_LIST_MAX_KEYS } from "../storage/key-listing.ts";
 import {
   activeImportStorageReferences,
   classifyStagingKeys,
@@ -15,7 +16,8 @@ import {
 
 const storageRowsQuery = "SELECT id, object_key, status, storage_slug FROM metadata";
 
-export async function checkStorage() {
+export async function checkStorage(signal?: AbortSignal) {
+  signal?.throwIfAborted();
   const rowsBeforeEnumeration = (await pool.query(storageRowsQuery)).rows as StorageRow[];
   const { backends } = await storageBackends();
   const missingObjects: Array<Record<string, unknown>> = [];
@@ -26,16 +28,26 @@ export async function checkStorage() {
   const activeStagingFiles: Array<Record<string, unknown>> = [];
   const orphanStagingFiles: Array<{ key: string; backend: string }> = [];
   const { sessionsByBackend: sessionsBeforeEnumeration } = await activeImportStorageReferences();
+  const incompleteListings: Array<{
+    backend: string;
+    prefix: "media" | "thumbs" | "_uploads";
+    scanned: number;
+    limit: number;
+  }> = [];
 
   const storageSnapshots = await Promise.all(backends.map(async (backend) => {
     try {
-      const [objectKeys, thumbKeys, stagingKeys] = await Promise.all([
-        listStorageKeys("media", backend),
-        listStorageKeys("thumbs", backend),
-        listStorageKeys("_uploads", backend)
-      ]);
-      return { backend, objectKeys, thumbKeys, stagingKeys };
+      const {
+        media: objects,
+        thumbs,
+        _uploads: staging
+      } = await collectStorageNamespaceSnapshot(backend, {
+        signal,
+        maxKeys: STORAGE_ADMIN_LIST_MAX_KEYS
+      });
+      return { backend, objects, thumbs, staging };
     } catch (error) {
+      signal?.throwIfAborted();
       unavailableBackends.push(`${backend}: ${errorMessage(error)}`);
       return null;
     }
@@ -57,7 +69,25 @@ export async function checkStorage() {
 
   for (const snapshot of storageSnapshots) {
     if (!snapshot) continue;
-    const { backend, objectKeys, thumbKeys, stagingKeys } = snapshot;
+    const { backend, objects, thumbs, staging: stagingListing } = snapshot;
+    const listings = [
+      ["media", objects],
+      ["thumbs", thumbs],
+      ["_uploads", stagingListing]
+    ] as const;
+    for (const [prefix, listing] of listings) {
+      if (!listing.complete) {
+        incompleteListings.push({
+          backend,
+          prefix,
+          scanned: listing.count,
+          limit: STORAGE_ADMIN_LIST_MAX_KEYS
+        });
+      }
+    }
+    const objectKeys = objects.keys;
+    const thumbKeys = thumbs.keys;
+    const stagingKeys = stagingListing.keys;
     const ready = rowsBeforeEnumeration.filter((row) => (
       row.storage_slug === backend && row.status === "ready"
     ));
@@ -93,9 +123,9 @@ export async function checkStorage() {
     }
 
     for (const image of ready) {
-      if (!objectSet.has(image.object_key)) { missingObjects.push({ id: image.id, object_key: image.object_key, backend }); continue; }
+      if (objects.complete && !objectSet.has(image.object_key)) { missingObjects.push({ id: image.id, object_key: image.object_key, backend }); continue; }
       const thumbKey = thumbnailRef(image).key;
-      if (!thumbSet.has(thumbKey)) missingThumbs.push({ id: image.id, object_key: image.object_key, thumb_key: thumbKey, backend });
+      if (thumbs.complete && !thumbSet.has(thumbKey)) missingThumbs.push({ id: image.id, object_key: image.object_key, thumb_key: thumbKey, backend });
     }
     for (const key of objectKeys) if (!referencedObjectKeys.has(key)) orphanObjects.push({ key, backend });
     for (const key of thumbKeys) if (!referencedThumbSet.has(key)) orphanThumbs.push({ key, backend });
@@ -107,6 +137,7 @@ export async function checkStorage() {
     orphan_thumbs: orphanThumbs,
     active_staging_files: activeStagingFiles,
     orphan_staging_files: orphanStagingFiles,
+    incomplete_listings: incompleteListings,
     unavailable_backends: unavailableBackends
   };
 }

@@ -347,6 +347,7 @@ const CHECK_RESULT_LABELS: Record<string, string> = {
   orphan_thumbs: "游离的缩略图",
   active_staging_files: "有效的导入暂存文件",
   orphan_staging_files: "失效的导入暂存文件",
+  incomplete_listings: "未完整列举的存储命名空间",
   unavailable_backends: "无法访问的后端",
   // 清理无效存储
   removed: "已删除对象",
@@ -394,7 +395,7 @@ function checkResultLabel(key: string) {
 
 function isIssueKey(key: string) {
   return [
-    "issues", "operations", "failures", "failed", "unavailable_backends", "error", "errors", "error_count",
+    "issues", "operations", "failures", "failed", "unavailable_backends", "incomplete_listings", "error", "errors", "error_count",
     "missing_objects", "missing_thumbs",
     "orphan_objects", "orphan_thumbs", "orphan_staging_files", "ready_cache_mismatch"
   ].includes(key);

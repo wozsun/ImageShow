@@ -175,7 +175,8 @@ export async function deleteStorageBackend(slug: string) {
       ) {
         const config = storageConfigFromRow(snapshot);
         const staging = await captureStagingNamespaceSnapshot(
-          resolveStorageAccessForConfig(config).driver
+          resolveStorageAccessForConfig(config).driver,
+          signal
         );
         usage.staging_object_count = staging.keys.size;
         signal.throwIfAborted();

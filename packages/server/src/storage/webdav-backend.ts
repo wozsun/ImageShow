@@ -20,6 +20,10 @@ import { assertSingleByteRangeSyntax, parseSingleByteRange, totalSizeFromContent
 import { normalizeObjectEtag } from "./object-validator.ts";
 import { isWebdavNotFoundStatus } from "./not-found.ts";
 import { responseWithCleanup } from "../core/http/response-lifecycle.ts";
+import {
+  batchStorageKeys,
+  type StorageKeyListOptions
+} from "./key-listing.ts";
 
 const PROPFIND_BODY = '<?xml version="1.0" encoding="utf-8"?><propfind xmlns="DAV:"><prop><resourcetype/></prop></propfind>';
 const WEBDAV_RETRY_ATTEMPTS = 3;
@@ -391,7 +395,10 @@ export class WebdavBackend implements StorageDriver {
     throw new ApiError(502, "storage_transfer_failed", `WebDAV COPY failed (${status || "network error"})`);
   }
 
-  async listKeys(prefix: StoragePrefix) {
+  async *listKeys(
+    prefix: StoragePrefix,
+    options: StorageKeyListOptions = {}
+  ) {
     const rootUrl = this.collectionUrl(prefix);
     const rootPath = decodeURIComponent(new URL(rootUrl).pathname).replace(/\/+$/, "");
 
@@ -418,7 +425,7 @@ export class WebdavBackend implements StorageDriver {
     if (this.config.webdav.list_depth_infinity) {
       const keys = (await propfind(rootUrl, "infinity")).map(toKey).filter((key): key is string => key !== null);
       if (keys.length > WEBDAV_MAX_LIST_KEYS) throw new ApiError(502, "storage_list_too_large", "WebDAV listing exceeded the safety limit");
-      return keys;
+      return yield* batchStorageKeys(keys, options);
     }
 
     const keys: string[] = [];
@@ -467,7 +474,7 @@ export class WebdavBackend implements StorageDriver {
       };
       schedule();
     });
-    return keys;
+    return yield* batchStorageKeys(keys, options);
   }
 
   publicObjectUrl(prefix: ReadablePrefix, key: string) {

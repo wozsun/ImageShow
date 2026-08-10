@@ -70,8 +70,10 @@ export async function validateStorageBackendCandidate(
   endpointRebind?: {
     currentConfig: StorageConfig;
     currentStaging: StagingNamespaceSnapshot;
-  }
+  },
+  signal?: AbortSignal
 ) {
+  signal?.throwIfAborted();
   const testConfig = { ...config, slug: "(test)" };
   const driver = resolveStorageAccessForConfig(testConfig).driver;
   try {
@@ -84,7 +86,8 @@ export async function validateStorageBackendCandidate(
           endpointRebind.currentConfig
         ).driver,
         candidate: driver,
-        currentStaging: endpointRebind.currentStaging
+        currentStaging: endpointRebind.currentStaging,
+        signal
       });
       return;
     }
@@ -96,6 +99,7 @@ export async function validateStorageBackendCandidate(
         "Storage backend did not confirm write access"
       );
     }
+    signal?.throwIfAborted();
   } finally {
     await Promise.resolve().then(() => driver.close?.()).catch((error) => {
       logger.warn("storage_probe_driver_close_failed", {

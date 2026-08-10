@@ -2,6 +2,10 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { ApiError, errorMessage } from "../core/api-error.ts";
 import { stagingSessionId } from "../images/imports/staging-keys.ts";
 import type { StorageDriver } from "./driver.ts";
+import {
+  collectStorageKeyListing,
+  STORAGE_ADMIN_LIST_MAX_KEYS
+} from "./key-listing.ts";
 
 const storageProbePrefix = ".storage-test-";
 
@@ -12,10 +16,20 @@ export type StagingNamespaceSnapshot = {
 
 /** Enumerate `_uploads` once and index every attempt-scoped key by session. */
 export async function captureStagingNamespaceSnapshot(
-  driver: StorageDriver
+  driver: StorageDriver,
+  signal?: AbortSignal
 ): Promise<StagingNamespaceSnapshot> {
+  signal?.throwIfAborted();
+  const listing = await collectStorageKeyListing(driver.listKeys("_uploads", {
+    signal,
+    maxKeys: STORAGE_ADMIN_LIST_MAX_KEYS
+  }));
+  signal?.throwIfAborted();
+  if (!listing.complete) {
+    throw new Error("Storage staging namespace listing was incomplete");
+  }
   const keys = new Set(
-    (await driver.listKeys("_uploads"))
+    listing.keys
       .filter((key) => !key.startsWith(storageProbePrefix))
   );
   const keysBySession = new Map<string, Set<string>>();
@@ -141,15 +155,22 @@ export async function verifyStorageEndpointRebind(input: {
   current: StorageDriver;
   candidate: StorageDriver;
   currentStaging: StagingNamespaceSnapshot;
+  signal?: AbortSignal;
 }) {
   let candidateStaging: StagingNamespaceSnapshot;
   try {
-    candidateStaging = await captureStagingNamespaceSnapshot(input.candidate);
+    candidateStaging = await captureStagingNamespaceSnapshot(
+      input.candidate,
+      input.signal
+    );
   } catch (error) {
+    input.signal?.throwIfAborted();
     throw endpointMismatch(errorMessage(error));
   }
+  input.signal?.throwIfAborted();
   if (!stagingSnapshotsMatch(input.currentStaging, candidateStaging)) {
     throw endpointMismatch("staging_snapshot_mismatch");
   }
   await verifyBidirectionalChallenge(input.current, input.candidate);
+  input.signal?.throwIfAborted();
 }

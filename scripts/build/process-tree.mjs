@@ -6,7 +6,12 @@ const closedProcesses = new WeakSet();
 export function spawnManaged(command, arguments_, options) {
   const child = spawn(command, arguments_, {
     ...options,
-    detached: options?.detached ?? !windows
+    // A detached Windows child owns a separate console and can surface a
+    // black window even when its direct process was requested hidden. taskkill
+    // /T already terminates the exact descendant tree, so only POSIX needs a
+    // detached process group for negative-PID signalling.
+    detached: windows ? false : (options?.detached ?? true),
+    windowsHide: options?.windowsHide ?? windows
   });
   child.once("close", () => closedProcesses.add(child));
   return child;

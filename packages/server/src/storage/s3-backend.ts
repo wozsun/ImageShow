@@ -24,6 +24,10 @@ import type {
 import { assertSingleByteRangeSyntax, totalSizeFromContentRange } from "../core/http/byte-range.ts";
 import { normalizeObjectEtag } from "./object-validator.ts";
 import { isS3NotFound } from "./not-found.ts";
+import {
+  batchStorageKeys,
+  type StorageKeyListOptions
+} from "./key-listing.ts";
 
 function storageS3Client(config: StorageConfig) {
   const endpoint = /^https:\/\//i.test(config.s3.endpoint) ? config.s3.endpoint : `https://${config.s3.endpoint}`;
@@ -145,7 +149,10 @@ export class S3Backend implements StorageDriver {
     }));
   }
 
-  async listKeys(prefix: StoragePrefix) {
+  async *listKeys(
+    prefix: StoragePrefix,
+    options: StorageKeyListOptions = {}
+  ) {
     const keys: string[] = [];
     let token: string | undefined;
     do {
@@ -158,7 +165,7 @@ export class S3Backend implements StorageDriver {
       }
       token = result.NextContinuationToken;
     } while (token);
-    return keys;
+    return yield* batchStorageKeys(keys, options);
   }
 
   publicObjectUrl(prefix: ReadablePrefix, key: string) {

@@ -5,6 +5,11 @@ import type {
   ReadablePrefix,
   StoragePrefix
 } from "./object-keys.ts";
+import { STORAGE_PREFIXES } from "./object-keys.ts";
+import {
+  collectStorageKeyListing,
+  type StorageKeyListOptions
+} from "./key-listing.ts";
 
 export async function storageObjectExists(
   prefix: StoragePrefix,
@@ -75,11 +80,37 @@ export async function removeStorageObjectAndConfirm(
   return existed ? "removed" as const : "missing" as const;
 }
 
-export async function listStorageKeys(
+export async function collectStorageKeys(
   prefix: StoragePrefix,
-  slug?: string
+  slug?: string,
+  options?: StorageKeyListOptions
 ) {
-  return (await resolveStorageAccess(slug)).driver.listKeys(prefix);
+  const { driver } = await resolveStorageAccess(slug);
+  return collectStorageKeyListing(driver.listKeys(prefix, options));
+}
+
+/** Collect all three namespaces through one driver and cancel sibling scans on failure. */
+export async function collectStorageNamespaceSnapshot(
+  slug: string,
+  options: StorageKeyListOptions = {}
+) {
+  const { driver } = await resolveStorageAccess(slug);
+  const siblingAbort = new AbortController();
+  const signal = options.signal
+    ? AbortSignal.any([options.signal, siblingAbort.signal])
+    : siblingAbort.signal;
+  const tasks = STORAGE_PREFIXES.map((prefix) => collectStorageKeyListing(
+    driver.listKeys(prefix, { ...options, signal })
+  ));
+  try {
+    const [media, thumbs, uploads] = await Promise.all(tasks);
+    return { media, thumbs, _uploads: uploads };
+  } catch (error) {
+    siblingAbort.abort(error);
+    await Promise.allSettled(tasks);
+    options.signal?.throwIfAborted();
+    throw error;
+  }
 }
 
 export async function pruneEmptyStorageDirs(slug?: string) {

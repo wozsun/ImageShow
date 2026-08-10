@@ -18,12 +18,14 @@ export function registerCheckRoutes(app: Hono) {
   ));
   app.post(`${adminApiBasePath}/check/db`, async (c) => c.json(apiSuccess(await checkDatabase())));
   app.post(`${adminApiBasePath}/check/redis`, async (c) => c.json(apiSuccess(await inspectRedisState())));
-  app.post(`${adminApiBasePath}/check/storage`, async (c) => c.json(apiSuccess(await checkStorage())));
+  app.post(`${adminApiBasePath}/check/storage`, async (c) => c.json(apiSuccess(await checkStorage(c.req.raw.signal))));
   app.post(
     `${adminApiBasePath}/check/storage-cleanup`,
     requireAdminPermission(adminPermissions.storageMaintenanceCleanup),
-    async (c) => c.json(apiSuccess(await cleanupStorage()))
+    async (c) => c.json(apiSuccess(await cleanupStorage(c.req.raw.signal)))
   );
   app.post(`${adminApiBasePath}/check/trash`, async (c) => c.json(apiSuccess(await checkTrash())));
-  app.post(`${adminApiBasePath}/check/all`, async (c) => c.json(apiSuccess(await checkSystemState())));
+  app.post(`${adminApiBasePath}/check/all`, async (c) => c.json(apiSuccess(
+    await checkSystemState(c.req.raw.signal)
+  )));
 }

@@ -1,6 +1,10 @@
 import type { Readable } from "node:stream";
 import type { StorageType } from "@imageshow/shared/browser";
 import type { ReadablePrefix, StoragePrefix } from "./object-keys.ts";
+import type {
+  StorageKeyListing,
+  StorageKeyListOptions
+} from "./key-listing.ts";
 
 export type OpenedRead = {
   body: Readable;
@@ -45,7 +49,10 @@ export interface StorageDriver {
     toPrefix: CopyPrefix,
     toKey: string
   ): Promise<void>;
-  listKeys(prefix: StoragePrefix): Promise<string[]>;
+  listKeys(
+    prefix: StoragePrefix,
+    options?: StorageKeyListOptions
+  ): StorageKeyListing;
   publicObjectUrl(prefix: ReadablePrefix, key: string): string;
   selfTest(): Promise<StorageSelfTest>;
   pruneEmptyDirs(): Promise<number>;

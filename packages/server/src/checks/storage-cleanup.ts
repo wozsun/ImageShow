@@ -2,10 +2,11 @@ import { pool } from "../core/db.ts";
 import { errorMessage } from "../core/api-error.ts";
 import { stagingSessionId } from "../images/imports/staging-keys.ts";
 import {
-  listStorageKeys,
+  collectStorageNamespaceSnapshot,
   pruneEmptyStorageDirs,
   removeStorageObjectAndConfirm
 } from "../storage/object-access.ts";
+import { STORAGE_ADMIN_LIST_MAX_KEYS } from "../storage/key-listing.ts";
 import type { StoragePrefix } from "../storage/object-keys.ts";
 import { withStorageLocationWriteLock } from "../storage/maintenance-lock.ts";
 import {
@@ -68,12 +69,35 @@ async function cleanupStorageUnderLock(signal: AbortSignal) {
       const activeUploadsOnBackend = sessionsByBackend.get(backend) ?? new Map();
       const committingOnBackend = committingReferences.get(backend) ?? emptyProtectedFinalReferences();
       const readyThumbs = expected.thumbs.get(backend) ?? new Set<string>();
-      const [mediaKeys, thumbKeys, stagingKeys] = await Promise.all([
-        listStorageKeys("media", backend),
-        listStorageKeys("thumbs", backend),
-        listStorageKeys("_uploads", backend)
-      ]);
+      const {
+        media: mediaListing,
+        thumbs: thumbListing,
+        _uploads: stagingListing
+      } = await collectStorageNamespaceSnapshot(backend, {
+        signal,
+        maxKeys: STORAGE_ADMIN_LIST_MAX_KEYS
+      });
       signal.throwIfAborted();
+      const listings = [
+        ["media", mediaListing],
+        ["thumbs", thumbListing],
+        ["_uploads", stagingListing]
+      ] as const;
+      const incomplete = listings.filter(([, listing]) => !listing.complete);
+      if (incomplete.length) {
+        for (const [prefix, listing] of incomplete) {
+          failures.push({
+            prefix,
+            key: "*",
+            backend,
+            error: `存储键列举达到 ${STORAGE_ADMIN_LIST_MAX_KEYS} 项上限；未使用不完整快照执行删除（已扫描 ${listing.count} 项）`
+          });
+        }
+        continue;
+      }
+      const mediaKeys = mediaListing.keys;
+      const thumbKeys = thumbListing.keys;
+      const stagingKeys = stagingListing.keys;
       const staging = classifyStagingKeys(stagingKeys, activeUploadsOnBackend);
       for (const { key, session } of staging.active) {
         retainedItems.push({
@@ -162,6 +186,11 @@ async function cleanupStorageUnderLock(signal: AbortSignal) {
   };
 }
 
-export function cleanupStorage() {
-  return withStorageLocationWriteLock(cleanupStorageUnderLock);
+export function cleanupStorage(callerSignal?: AbortSignal) {
+  callerSignal?.throwIfAborted();
+  return withStorageLocationWriteLock((lockSignal) => cleanupStorageUnderLock(
+    callerSignal
+      ? AbortSignal.any([callerSignal, lockSignal])
+      : lockSignal
+  ));
 }

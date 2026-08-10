@@ -244,7 +244,8 @@ async function updateStorageBackendUnderLock(
       assertPhysicalLocationChangeAllowed(changedFields, snapshotUsage);
     }
     currentStaging = await captureStagingNamespaceSnapshot(
-      resolveStorageAccessForConfig(currentConfig).driver
+      resolveStorageAccessForConfig(currentConfig).driver,
+      signal
     );
     snapshotUsage.staging_object_count = currentStaging.keys.size;
     signal.throwIfAborted();
@@ -288,7 +289,8 @@ async function updateStorageBackendUnderLock(
       existingObject,
       verifiedEndpointRebind && currentStaging
         ? { currentConfig, currentStaging }
-        : undefined
+        : undefined,
+      signal
     );
     signal.throwIfAborted();
   }

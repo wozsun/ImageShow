@@ -50,7 +50,6 @@ function runDocker(
   return new Promise((resolveCommand, rejectCommand) => {
     const child = spawnManaged("docker", arguments_, {
       cwd: workspaceRoot,
-      detached: true,
       stdio,
       windowsHide: true
     });
