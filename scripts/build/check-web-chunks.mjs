@@ -468,7 +468,7 @@ await assertAssetsExcludeMarkers(
   "unauthenticated admin entry",
   [
     {
-      pattern: /(?:batch-snapshot|image-detail-modal|batch-edit-modal)/,
+      pattern: /(?:images\/snapshot|image-detail-modal|batch-edit-modal)/,
       description: "a deferred image management capability"
     },
     {

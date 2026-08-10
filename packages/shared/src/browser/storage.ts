@@ -29,9 +29,14 @@ export function storageBackendDeletionStateFromBlockers(
   };
 }
 
-export type BatchStorageMigrationResponseDto = {
+export type ImageStorageMigrationItemResultDto =
+  | { id: string; status: "migrated" | "unchanged" }
+  | { id: string; status: "failed"; code: string; message: string };
+
+export type ImageStorageMigrationResponseDto = {
   migrated: number;
   failed: number;
+  results: ImageStorageMigrationItemResultDto[];
 };
 
 export type StorageBackendMigrationResultDto = {

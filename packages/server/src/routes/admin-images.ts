@@ -2,10 +2,10 @@ import type { Hono } from "hono";
 import {
   adminApiBasePath,
   adminPermissions,
-  type BatchImageSnapshotResponseDto,
-  type BatchStorageMigrationResponseDto,
-  type BatchImageUpdateRequestDto,
-  type BatchImageUpdateResponseDto,
+  type ImageSnapshotResponseDto,
+  type ImageStorageMigrationResponseDto,
+  type ImageUpdateRequestDto,
+  type ImageUpdateResponseDto,
   type SelectedTrashPurgeResponseDto,
   type TrashPurgeResponseDto
 } from "@imageshow/shared/browser";
@@ -16,20 +16,21 @@ import {
 import { readJsonBody } from "../core/http/json-body.ts";
 import { logger } from "../core/logger.ts";
 import {
-  batchImageUpdatePath,
+  imageUpdatePath,
   getRequestBodyBytes,
-  limitBatchImageUpdateBody,
+  limitImageUpdateBody,
 } from "../core/http/request-body-limit.ts";
 import {
   adminImageListQuery,
-  batchImageUpdateInput,
-  batchMigrateStorageInput,
+  imageSnapshotInput,
+  imageStorageMigrationInput,
+  imageUpdateInput,
   imageIdsInput,
   parse,
   uuidInput,
 } from "../core/validation.ts";
-import { migrateImageBatchStorage } from "../images/batch-storage-migration.ts";
-import { updateImagesBatch } from "../images/batch-update.ts";
+import { migrateImagesStorage } from "../images/image-storage-migration.ts";
+import { updateImages } from "../images/image-update.ts";
 import {
   getAdminImageSnapshots,
   getAdminImageInfo,
@@ -64,9 +65,9 @@ export function registerAdminImageRoutes(app: Hono) {
     return privateCacheableApiSuccess(c, await listAdminImages(q));
   });
 
-  app.post(`${adminApiBasePath}/images/batch-snapshot`, async (c) => {
-    const input = parse(imageIdsInput, await readJsonBody(c));
-    const response: BatchImageSnapshotResponseDto =
+  app.post(`${adminApiBasePath}/images/snapshot`, async (c) => {
+    const input = parse(imageSnapshotInput, await readJsonBody(c));
+    const response: ImageSnapshotResponseDto =
       await getAdminImageSnapshots(input.ids);
     return c.json(apiSuccess(response));
   });
@@ -162,18 +163,18 @@ export function registerAdminImageRoutes(app: Hono) {
   );
 
   app.post(
-    `${adminApiBasePath}/images/batch-migrate-storage`,
+    `${adminApiBasePath}/images/migrate-storage`,
     requireAdminPermission(adminPermissions.imageStorageMigrate),
     async (c) => {
       const startedAt = performance.now();
-      const input = parse(batchMigrateStorageInput, await readJsonBody(c));
+      const input = parse(imageStorageMigrationInput, await readJsonBody(c));
       let maxItemDurationMs = 0;
-      const result = await migrateImageBatchStorage(input.ids, input.target, {
+      const result = await migrateImagesStorage(input.ids, input.target, {
         onMetrics(metrics) {
           maxItemDurationMs = metrics.maxImageDurationMs;
         },
       });
-      logger.info("batch_storage_migration_summary", {
+      logger.info("image_storage_migration_summary", {
         requested: result.requested,
         succeeded: result.succeeded,
         failed: result.failed,
@@ -185,26 +186,27 @@ export function registerAdminImageRoutes(app: Hono) {
       const response = {
         migrated: result.migrated,
         failed: result.failed,
-      } satisfies BatchStorageMigrationResponseDto;
+        results: result.results
+      } satisfies ImageStorageMigrationResponseDto;
       return c.json(apiSuccess(response));
     }
   );
 
-  app.post(batchImageUpdatePath, limitBatchImageUpdateBody, async (c) => {
+  app.post(imageUpdatePath, limitImageUpdateBody, async (c) => {
     const startedAt = performance.now();
     const input = parse(
-      batchImageUpdateInput,
+      imageUpdateInput,
       await readJsonBody(c)
-    ) satisfies BatchImageUpdateRequestDto;
+    ) satisfies ImageUpdateRequestDto;
     let maxItemDurationMs = 0;
     let entityCountInvalidationTriggered = false;
-    const result = await updateImagesBatch(input.items, {
+    const result = await updateImages(input.items, {
       onMetrics(metrics) {
         maxItemDurationMs = metrics.maxItemDurationMs;
         entityCountInvalidationTriggered = metrics.entityCountInvalidationTriggered;
       },
     });
-    logger.info("batch_image_update_summary", {
+    logger.info("image_update_summary", {
       requested: input.items.length,
       succeeded: result.updated,
       failed: result.failed,
@@ -217,7 +219,7 @@ export function registerAdminImageRoutes(app: Hono) {
       updated: result.updated,
       failed: result.failed,
       results: result.results
-    } satisfies BatchImageUpdateResponseDto;
+    } satisfies ImageUpdateResponseDto;
     return c.json(apiSuccess(response));
   });
 }

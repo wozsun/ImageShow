@@ -1,6 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 import type {
-  BatchImageSnapshotResponseDto,
+  ImageSnapshotResponseDto,
   ImportVocabularyDto
 } from "@imageshow/shared/browser";
 import {
@@ -104,7 +104,7 @@ export async function refreshSingleImageAfterSave<TAdminInfo>({
   loadAdminInfo?: () => Promise<TAdminInfo>;
 }) {
   await invalidateImageData(queryClient);
-  const snapshotRequest: Promise<BatchImageSnapshotResponseDto> =
+  const snapshotRequest: Promise<ImageSnapshotResponseDto> =
     authoritativeItems === undefined
       ? queryClient.fetchQuery({
           ...imageEditSnapshotQueryOptions(imageId),

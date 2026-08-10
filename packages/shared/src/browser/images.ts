@@ -150,17 +150,17 @@ export type ImageAdminInfoDto = {
   updated_at: string;
 };
 
-export type BatchImageUpdateItemResultDto =
+export type ImageUpdateItemResultDto =
   | { id: string; status: "updated" }
   | { id: string; status: "failed"; code: string; message: string };
 
-export type BatchImageUpdateResponseDto = {
+export type ImageUpdateResponseDto = {
   updated: number;
   failed: number;
-  results: BatchImageUpdateItemResultDto[];
+  results: ImageUpdateItemResultDto[];
 };
 
-export type BatchImageSnapshotResponseDto = {
+export type ImageSnapshotResponseDto = {
   items: BatchEditableImageSnapshotDto[];
 };
 
@@ -176,12 +176,12 @@ export type ImageDraftDto = {
   tags: string[];
 };
 
-export type BatchImageUpdateItemInputDto = {
+export type ImageUpdateItemInputDto = {
   id: string;
 } & Partial<ImageDraftDto>;
 
-export type BatchImageUpdateRequestDto = {
-  items: BatchImageUpdateItemInputDto[];
+export type ImageUpdateRequestDto = {
+  items: ImageUpdateItemInputDto[];
 };
 
 export type AdminEntityDto = FacetOptionDto & {

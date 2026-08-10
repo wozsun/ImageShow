@@ -5,7 +5,7 @@ import {
   type FormEvent,
   type RefObject
 } from "react";
-import type { BatchStorageMigrationResponseDto } from "@imageshow/shared/browser";
+import type { ImageStorageMigrationResponseDto } from "@imageshow/shared/browser";
 import { AsyncActionButton } from "../../actions/AsyncActionButton.js";
 import { DialogFrame } from "../../feedback/DialogFrame.js";
 import { SelectMenu } from "../../form/SelectMenu.js";
@@ -89,10 +89,10 @@ export function BatchStorageMigrationDialog({
         setError("没有可迁移的其他存储后端。");
         return false;
       }
-      let response: BatchStorageMigrationResponseDto;
+      let response: ImageStorageMigrationResponseDto;
       try {
-        response = await api<BatchStorageMigrationResponseDto>(
-          `${adminApiBasePath}/images/batch-migrate-storage`,
+        response = await api<ImageStorageMigrationResponseDto>(
+          `${adminApiBasePath}/images/migrate-storage`,
           {
             method: "POST",
             body: JSON.stringify({ ids: imageIds, target })

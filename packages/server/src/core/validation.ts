@@ -4,7 +4,7 @@ import {
   adminImagePageLimit,
   adminPreferenceValueOptions,
   adminPreferencesMaxBytes,
-  type BatchImageUpdateItemInputDto,
+  type ImageUpdateItemInputDto,
   importBatchHardLimit,
   importModes,
   slugMaxLength,
@@ -121,7 +121,7 @@ export const normalizedImageTagsInput = z.array(tagSlugInput)
   .transform((tags) => [...new Set(tags)])
   .pipe(z.array(tagSlugInput).max(50));
 
-const batchImageUpdateItemInput = z.strictObject({
+const imageUpdateItemInput = z.strictObject({
   ...metadataUpdateFields,
   id: uuidInput,
   tags: normalizedImageTagsInput.optional(),
@@ -132,35 +132,42 @@ const batchImageUpdateItemInput = z.strictObject({
   if (!hasMetadataUpdate && value.tags === undefined) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: "批量更新项必须包含 metadata 或 tags",
+      message: "图片更新项必须包含 metadata 或 tags",
     });
   }
 });
 
-export type BatchImageUpdateItemInput = BatchImageUpdateItemInputDto;
+export type ImageUpdateItemInput = ImageUpdateItemInputDto;
 
-function addUniqueBatchIdIssues(
-  items: readonly { id: string }[],
-  ctx: z.RefinementCtx
+function addUniqueIdIssues(
+  ids: readonly string[],
+  ctx: z.RefinementCtx,
+  issuePath: (index: number) => PropertyKey[],
+  message: string
 ) {
-  const ids = new Set<string>();
-  for (let index = 0; index < items.length; index += 1) {
-    const id = items[index].id;
-    if (ids.has(id)) {
+  const seen = new Set<string>();
+  for (let index = 0; index < ids.length; index += 1) {
+    const id = ids[index];
+    if (seen.has(id)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ["items", index, "id"],
-        message: "批次不能包含重复 ID",
+        path: issuePath(index),
+        message,
       });
     }
-    ids.add(id);
+    seen.add(id);
   }
 }
 
-export const batchImageUpdateInput = z.strictObject({
-  items: z.array(batchImageUpdateItemInput).min(1).max(200),
+export const imageUpdateInput = z.strictObject({
+  items: z.array(imageUpdateItemInput).min(1).max(200),
 }).superRefine((value, ctx) => {
-  addUniqueBatchIdIssues(value.items, ctx);
+  addUniqueIdIssues(
+    value.items.map((item) => item.id),
+    ctx,
+    (index) => ["items", index, "id"],
+    "图片更新请求不能包含重复 ID"
+  );
 });
 
 export const userCreateInput = z.strictObject({ username: adminUsernameInput, password: adminPasswordInput });
@@ -190,6 +197,15 @@ export const imageIdsInput = z.strictObject({
   ids: z.array(uuidInput).min(1).max(200).transform((ids) => [...new Set(ids)])
 });
 
+const uniqueImageIdsInput = z.array(uuidInput).min(1).max(200)
+  .superRefine((ids, ctx) => {
+    addUniqueIdIssues(ids, ctx, (index) => [index], "请求不能包含重复 ID");
+  });
+
+export const imageSnapshotInput = z.strictObject({
+  ids: uniqueImageIdsInput
+});
+
 export const storageSlugInput = slugInput;
 
 export const storageBackendMigrationInput = z.strictObject({
@@ -203,8 +219,8 @@ export const storageBackendMigrationInput = z.strictObject({
   }
 );
 
-export const batchMigrateStorageInput = z.strictObject({
-  ids: z.array(uuidInput).min(1).max(200).transform((ids) => [...new Set(ids)]),
+export const imageStorageMigrationInput = z.strictObject({
+  ids: uniqueImageIdsInput,
   target: storageSlugInput
 });
 
@@ -237,7 +253,12 @@ export const importBatchCommitInput = z.strictObject({
     metadata: importCommitInput
   })).min(1).max(importBatchHardLimit)
 }).superRefine((value, ctx) => {
-  addUniqueBatchIdIssues(value.items, ctx);
+  addUniqueIdIssues(
+    value.items.map((item) => item.id),
+    ctx,
+    (index) => ["items", index, "id"],
+    "导入批次不能包含重复 ID"
+  );
 });
 
 export const jsonlManifestInput = z.strictObject({

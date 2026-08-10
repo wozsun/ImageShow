@@ -1,7 +1,7 @@
 import type {
-  BatchImageUpdateItemInputDto,
-  BatchImageUpdateItemResultDto,
-  BatchImageUpdateResponseDto
+  ImageUpdateItemInputDto,
+  ImageUpdateItemResultDto,
+  ImageUpdateResponseDto
 } from "@imageshow/shared/browser";
 import type {
   BatchEditableImageSnapshot,
@@ -12,7 +12,7 @@ import {
   normalizeTheme
 } from "../../../lib/upload/upload-utils.js";
 
-export type BatchMetadataUpdate = BatchImageUpdateItemInputDto;
+export type BatchMetadataUpdate = ImageUpdateItemInputDto;
 
 export type BatchMetadataSessionState = {
   activeIds: string[];
@@ -23,10 +23,10 @@ export type BatchMetadataSessionState = {
 export type BatchMetadataSaveAttempt = {
   activeIds: string[];
   items: BatchMetadataUpdate[];
-  response: BatchImageUpdateResponseDto | null;
+  response: ImageUpdateResponseDto | null;
 };
 
-export type BatchMetadataSaveReport = BatchImageUpdateResponseDto & {
+export type BatchMetadataSaveReport = ImageUpdateResponseDto & {
   responseReceived: boolean;
   snapshotFailed: boolean;
   unavailableIds: string[];
@@ -193,7 +193,7 @@ export function createBatchMetadataSaveReport(
   const responseReceived = attempt.response !== null;
   let response = attempt.response;
   if (!response) {
-    const results: BatchImageUpdateItemResultDto[] = attempt.items.map((update) => {
+    const results: ImageUpdateItemResultDto[] = attempt.items.map((update) => {
       const item = authoritativeById.get(update.id);
       return item && updateMatchesSnapshot(update, item)
         ? { id: update.id, status: "updated" }

@@ -1,14 +1,14 @@
 import type { z } from "zod";
 import type {
   AdminImageListResponseDto,
-  BatchImageSnapshotResponseDto,
+  ImageSnapshotResponseDto,
   ImageAdminInfoDto
 } from "@imageshow/shared/browser";
 import { pool } from "../../core/database-pools.ts";
 import { withAdvisoryLocks } from "../../core/database-advisory-locks.ts";
 import { ApiError } from "../../core/api-error.ts";
 import { adminImageListQuery } from "../../core/validation.ts";
-import { batchImageUpdateLockRequests } from "../batch-update-lock.ts";
+import { imageUpdateLockRequests } from "../image-update-lock.ts";
 import { resolveImageFilterPlan } from "../filter-plan.ts";
 import { readReadyImagePage } from "../ready-cache/query.ts";
 import {
@@ -81,10 +81,10 @@ export async function listAdminImages(
 
 export async function getAdminImageSnapshots(
   ids: string[]
-): Promise<BatchImageSnapshotResponseDto> {
+): Promise<ImageSnapshotResponseDto> {
   const canonicalIds = [...new Set(ids.map((id) => id.toLowerCase()))];
   return withAdvisoryLocks(
-    batchImageUpdateLockRequests(canonicalIds),
+    imageUpdateLockRequests(canonicalIds),
     async () => {
       const result = await pool.query(
         `SELECT ${batchEditableImagePresentationColumnsWithTags}

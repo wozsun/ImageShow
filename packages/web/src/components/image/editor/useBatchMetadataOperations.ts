@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type {
-  BatchImageUpdateRequestDto,
-  BatchImageUpdateResponseDto
+  ImageUpdateRequestDto,
+  ImageUpdateResponseDto
 } from "@imageshow/shared/browser";
 import { useAsyncActionStatus } from "../../../hooks/useAsyncActionStatus.js";
 import {
@@ -21,7 +21,7 @@ import {
   type BatchMetadataUpdate
 } from "./batch-metadata-session.js";
 
-function reportBatchUpdateFailures(response: BatchImageUpdateResponseDto) {
+function reportBatchUpdateFailures(response: ImageUpdateResponseDto) {
   if (!response.failed) return;
   const summary = summarizeBatchUpdateFailures(response);
   reportAdminUiError(
@@ -96,7 +96,7 @@ export function useBatchMetadataOperations({
     setPendingAttempt(authoritativeItems ? null : attempt);
 
     // mutation 每轮只触发一次集中图片查询失效。权威快照失败后的再次确认只重读
-    // batch-snapshot，不重复 mutation，也不重复失效父级查询。
+    // snapshot，不重复 mutation，也不重复失效父级查询。
     if (notifySaved) {
       try {
         await onSaved(authoritativeItems);
@@ -119,11 +119,11 @@ export function useBatchMetadataOperations({
       let attempt = retryAttempt;
       if (!attempt) {
         setLastSaveReport(null);
-        let response: BatchImageUpdateResponseDto | null = null;
+        let response: ImageUpdateResponseDto | null = null;
         try {
-          const request = { items } satisfies BatchImageUpdateRequestDto;
-          response = await api<BatchImageUpdateResponseDto>(
-            `${adminApiBasePath}/images/batch-update`,
+          const request = { items } satisfies ImageUpdateRequestDto;
+          response = await api<ImageUpdateResponseDto>(
+            `${adminApiBasePath}/images/update`,
             { method: "POST", body: JSON.stringify(request) }
           );
           reportBatchUpdateFailures(response);

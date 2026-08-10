@@ -22,10 +22,10 @@ const weiboImportPath = `${adminApiBasePath}/imports/weibo/parse`;
 // Fifty maximum-length URLs occupy about 600 KiB after worst-case JSON
 // escaping. A 1 MiB tier accepts every legal request with finite headroom.
 const weiboImportBodyMaxBytes = appConfig.imports.weiboRequestBodyMaxBytes;
-export const batchImageUpdatePath = `${adminApiBasePath}/images/batch-update`;
+export const imageUpdatePath = `${adminApiBasePath}/images/update`;
 // Two hundred maximum-field items occupy about 5.692 MiB after worst-case JSON
 // escaping. The 6 MiB tier covers every legal request with finite headroom.
-const batchImageUpdateBodyMaxBytes = 6 * 1024 * 1024;
+const imageUpdateBodyMaxBytes = 6 * 1024 * 1024;
 export const importBatchCommitPath = `${adminApiBasePath}/imports/commit-batch`;
 // A legal 3,600-item batch can contain two 2 KiB URLs plus metadata and fifty
 // tags per item. Keep even worst-case JSON escaping bounded without rejecting
@@ -124,7 +124,7 @@ export const limitWeiboImportBody = measuredBodyLimit(weiboImportBodyMaxBytes);
 
 export const limitAdvancedConfigBody = measuredBodyLimit(advancedConfigMaxBytes);
 
-export const limitBatchImageUpdateBody = measuredBodyLimit(batchImageUpdateBodyMaxBytes);
+export const limitImageUpdateBody = measuredBodyLimit(imageUpdateBodyMaxBytes);
 
 export const limitImportBatchCommitBody = measuredBodyLimit(importBatchCommitBodyMaxBytes);
 
@@ -154,7 +154,7 @@ export function limitProtectedAdminRequestBody(c: Context, next: Next) {
   ) {
     return next();
   }
-  if (c.req.method === "POST" && path === batchImageUpdatePath) {
+  if (c.req.method === "POST" && path === imageUpdatePath) {
     return next();
   }
   if (c.req.method === "POST" && path === importBatchCommitPath) {

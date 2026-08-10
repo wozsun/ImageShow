@@ -1,11 +1,11 @@
-import type { BatchImageUpdateResponseDto } from "@imageshow/shared/browser";
+import type { ImageUpdateResponseDto } from "@imageshow/shared/browser";
 import { shortImageId } from "../../../lib/ui/formatters.js";
 
 const failureSampleLimit = 5;
 const failureCodeLimit = 20;
 const failureSampleMessageLimit = 160;
 
-export function summarizeBatchUpdateFailures(response: BatchImageUpdateResponseDto) {
+export function summarizeBatchUpdateFailures(response: ImageUpdateResponseDto) {
   const failures = response.results.filter(
     (result): result is Extract<typeof result, { status: "failed" }> =>
       result.status === "failed"
