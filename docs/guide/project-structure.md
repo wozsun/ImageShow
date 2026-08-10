@@ -126,9 +126,12 @@ healthcheck 只读现有配置快照，密码恢复不初始化运行时配置�
 - `weibo.ts` 只编排批次和 JSONL 清单，链接/时间/响应提取、受限上游协议、未知响应值
   归一化及公开类型分别位于 `weibo-parser.ts`、`weibo-client.ts`、
   `weibo-values.ts`、`weibo-types.ts`。
-- 图片读取入口由 `serving.ts` 编排；`stored-object-response.ts` 集中流式、HEAD、
-  Range 与缓存响应，`thumbnail-serving-lifecycle.ts` 集中缩略图可用性检查、并发
-  补建、失败上下文和原图回退的 404 映射，使 local、S3 与 WebDAV 共用同一生命周期。
+- 图片读取先由 `image-serving-record.ts` 将 Redis 命中与 PostgreSQL fallback 归一为
+  同一 serving record；`stored-image-serving.ts` 只编排存储对象与缩略图，
+  `external-original-serving.ts` 只处理外部原图探测、跳转和代理。
+  `stored-object-response.ts` 集中流式、HEAD、Range 与缓存响应，
+  `thumbnail-serving-lifecycle.ts` 集中缩略图可用性检查、并发补建、失败上下文和原图
+  回退的 404 映射，使 local、S3 与 WebDAV 共用同一生命周期。
 
 领域模块可以依赖 `core/` 和 `config/`，但基础设施不能反向导入具体路由。跨领域调用直接
 指向对方表达职责的模块，不通过泛化 `service`、`storage` 或 barrel 隐藏真实依赖，也不能

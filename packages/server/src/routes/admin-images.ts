@@ -37,7 +37,11 @@ import {
   listAdminImages
 } from "../images/read-models/admin-images.ts";
 import { getOverviewStats } from "../images/read-models/overview.ts";
-import { serveAdminObject, serveAdminOriginalLink, serveAdminThumb } from "../images/serving.ts";
+import { serveAdminExternalOriginal } from "../images/external-original-serving.ts";
+import {
+  serveAdminStoredObject,
+  serveAdminStoredThumbnail
+} from "../images/stored-image-serving.ts";
 import {
   batchRestoreImages,
   moveImageToTrash,
@@ -72,17 +76,17 @@ export function registerAdminImageRoutes(app: Hono) {
 
   app.get(`${adminApiBasePath}/images/:id/thumb`, async (c) => {
     const id = parse(uuidInput, c.req.param("id"));
-    return serveAdminThumb(id, storedResponseRequest(c));
+    return serveAdminStoredThumbnail(id, storedResponseRequest(c));
   });
 
   app.get(`${adminApiBasePath}/images/:id/raw`, async (c) => {
     const id = parse(uuidInput, c.req.param("id"));
-    return serveAdminObject(id, storedResponseRequest(c));
+    return serveAdminStoredObject(id, storedResponseRequest(c));
   });
 
   app.get(`${adminApiBasePath}/images/:id/original`, async (c) => {
     const id = parse(uuidInput, c.req.param("id"));
-    return serveAdminOriginalLink(id, c.req.header("user-agent") ?? "");
+    return serveAdminExternalOriginal(id, c.req.header("user-agent") ?? "");
   });
 
   app.post(`${adminApiBasePath}/images/:id/delete`, async (c) => {

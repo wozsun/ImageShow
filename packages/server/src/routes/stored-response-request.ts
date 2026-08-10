@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import type { StoredResponseRequest } from "../images/serving.ts";
+import type { StoredResponseRequest } from "../images/stored-object-response.ts";
 
 export function storedResponseRequest(
   context: Context

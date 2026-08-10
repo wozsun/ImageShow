@@ -22,7 +22,14 @@ import { siteConfigPayload } from "../config/app-settings.ts";
 import { getPublicGalleryFacets } from "../images/read-models/facets.ts";
 import { getPublicGalleryStats } from "../images/read-models/gallery-stats.ts";
 import { getPublicImage, listPublicImages } from "../images/read-models/public-images.ts";
-import { redirectOriginalLink, serveObject, serveOriginalLinkProxy, serveThumb } from "../images/serving.ts";
+import {
+  redirectPublicExternalOriginal,
+  servePublicExternalOriginal
+} from "../images/external-original-serving.ts";
+import {
+  servePublicStoredObject,
+  servePublicStoredThumbnail
+} from "../images/stored-image-serving.ts";
 import { storedResponseRequest } from "./stored-response-request.ts";
 import { runPublicReadRequest } from "../core/public-pg-fallback.ts";
 
@@ -100,7 +107,7 @@ export function registerPublicRoutes(app: Hono) {
   app.get("/api/images/:id/original", async (c) => runPublicReadRequest(
     "lookup",
     c.req.raw.signal,
-    async () => redirectOriginalLink(
+    async () => redirectPublicExternalOriginal(
       parse(uuidInput, c.req.param("id")),
       c.req.header("user-agent") ?? ""
     )
@@ -109,19 +116,19 @@ export function registerPublicRoutes(app: Hono) {
   app.get("/media/*", async (c) => {
     return runPublicReadRequest("lookup", c.req.raw.signal, async () => {
       const key = c.req.path.replace(/^\/media\//, "");
-      return serveObject(key, storedResponseRequest(c));
+      return servePublicStoredObject(key, storedResponseRequest(c));
     });
   });
   app.get("/thumbs/*", async (c) => {
     return runPublicReadRequest("lookup", c.req.raw.signal, async () => {
       const key = c.req.path.replace(/^\/thumbs\//, "");
-      return serveThumb(key, storedResponseRequest(c));
+      return servePublicStoredThumbnail(key, storedResponseRequest(c));
     });
   });
   app.get("/original/:id", async (c) => runPublicReadRequest(
     "lookup",
     c.req.raw.signal,
-    async () => serveOriginalLinkProxy(
+    async () => servePublicExternalOriginal(
       parse(uuidInput, c.req.param("id")),
       {
         method: c.req.method === "HEAD" ? "HEAD" : "GET",
