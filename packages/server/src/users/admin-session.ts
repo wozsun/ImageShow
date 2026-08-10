@@ -9,21 +9,19 @@ import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { ApiError } from "../core/api-error.ts";
 import { pool } from "../core/db.ts";
 import { loginRateLimiter } from "../core/login-rate-limit.ts";
-import {
-  passwordHashAdminSessionMode,
-  verifyPassword
-} from "../core/password.ts";
+import { isCurrentPasswordHash, verifyPassword } from "../core/password.ts";
 import { redis } from "../core/redis-client.ts";
 import { assertSameOrigin, requestClientIp } from "../core/http/request-security.ts";
 import { runRequiredRedisCommand } from "../core/runtime-availability.ts";
 import {
   adminCredentialVersion,
-  parseAdminCredentialVersions
+  parseAdminCredentialVersions,
+  type AdminCredentialTransitionVersions
 } from "./session-credential.ts";
+import { adminSessionKey } from "./admin-session-key.ts";
 
 const adminSessionCookie = "imageshow_session";
-const adminSessionKeyPrefix = "imageshow:session:";
-const replaceSessionIfUnchangedScript = `
+const replaceCredentialTransitionSnapshotScript = `
 local current = redis.call('GET', KEYS[1])
 if current ~= ARGV[1] then
   return 0
@@ -44,7 +42,6 @@ export type AdminSession = {
   username: string;
   csrf: string;
   role: AdminRole;
-  credentialVersion: string;
 };
 
 type StoredAdminSession = {
@@ -58,6 +55,15 @@ type AdminAccountCredential = {
   username: string;
   password_hash: string;
   role: AdminRole;
+};
+
+type AdminSessionCredentialTransitionStore = {
+  readSession(id: string): Promise<string | null>;
+  replaceSessionSnapshot(
+    id: string,
+    expectedPayload: string,
+    nextPayload: string
+  ): Promise<boolean>;
 };
 
 async function readAdminAccountCredential(
@@ -84,19 +90,30 @@ async function readAdminAccountCredential(
 function storedAdminSession(value: unknown): StoredAdminSession | null {
   if (!value || typeof value !== "object") return null;
   const candidate = value as Record<string, unknown>;
+  const credentialVersions = parseAdminCredentialVersions(
+    candidate.credential_versions
+  );
   if (
-    typeof candidate.username !== "string"
+    Object.keys(candidate).length !== 4
+    || typeof candidate.username !== "string"
     || typeof candidate.csrf !== "string"
     || (candidate.role !== "super" && candidate.role !== "image")
+    || !credentialVersions
   ) return null;
   return {
     username: candidate.username,
     csrf: candidate.csrf,
     role: candidate.role,
-    credential_versions: parseAdminCredentialVersions(
-      candidate.credential_versions
-    )
+    credential_versions: credentialVersions
   };
+}
+
+function parseStoredAdminSession(raw: string) {
+  try {
+    return storedAdminSession(JSON.parse(raw));
+  } catch {
+    return null;
+  }
 }
 
 function sessionPayload(
@@ -111,32 +128,27 @@ function sessionPayload(
   } satisfies StoredAdminSession);
 }
 
-async function replaceExistingSession(
-  id: string,
-  payload: string
-) {
-  return runRequiredRedisCommand(() => redis.call(
-    "SET",
-    `${adminSessionKeyPrefix}${id}`,
-    payload,
-    "XX",
-    "KEEPTTL"
-  ));
-}
-
-async function replaceExistingSessionIfUnchanged(
+async function replaceCredentialTransitionSnapshot(
   id: string,
   expectedPayload: string,
   nextPayload: string
 ) {
-  return runRequiredRedisCommand(() => redis.eval(
-    replaceSessionIfUnchangedScript,
+  const replaced = await runRequiredRedisCommand(() => redis.eval(
+    replaceCredentialTransitionSnapshotScript,
     1,
-    `${adminSessionKeyPrefix}${id}`,
+    adminSessionKey(id),
     expectedPayload,
     nextPayload
   ));
+  return Number(replaced) === 1;
 }
+
+const adminSessionCredentialTransitionStore = {
+  readSession: (id: string) => runRequiredRedisCommand(
+    () => redis.get(adminSessionKey(id))
+  ),
+  replaceSessionSnapshot: replaceCredentialTransitionSnapshot
+} satisfies AdminSessionCredentialTransitionStore;
 
 async function deleteExistingSessionIfUnchanged(
   id: string,
@@ -145,7 +157,7 @@ async function deleteExistingSessionIfUnchanged(
   const deleted = await runRequiredRedisCommand(() => redis.eval(
     deleteSessionIfUnchangedScript,
     1,
-    `${adminSessionKeyPrefix}${id}`,
+    adminSessionKey(id),
     expectedPayload
   ));
   return Number(deleted) === 1;
@@ -167,7 +179,6 @@ export async function createAdminSession(
   const user = await readAdminAccountCredential(username);
   if (
     !user
-    || passwordHashAdminSessionMode(user.password_hash) === "invalid"
     || !(await verifyPassword(user.password_hash, password))
   ) {
     throw new ApiError(
@@ -182,7 +193,7 @@ export async function createAdminSession(
   const credentialVersion = adminCredentialVersion(user.password_hash);
   await loginRateLimiter.clear(ip, user.username);
   await runRequiredRedisCommand(() => redis.set(
-    `${adminSessionKeyPrefix}${sessionId}`,
+    adminSessionKey(sessionId),
     sessionPayload(
       { username: user.username, csrf, role: user.role },
       [credentialVersion]
@@ -205,17 +216,9 @@ const adminSessionChanged = Symbol("admin-session-changed");
 async function validateAdminSessionPayload(id: string, raw: string): Promise<
   AdminSession | null | typeof adminSessionChanged
 > {
-  let stored: StoredAdminSession | null = null;
-  try {
-    stored = storedAdminSession(JSON.parse(raw));
-  } catch {
-    stored = null;
-  }
+  const stored = parseStoredAdminSession(raw);
   if (stored) {
     const credential = await readAdminAccountCredential(stored.username);
-    const passwordHashMode = credential
-      ? passwordHashAdminSessionMode(credential.password_hash)
-      : "invalid";
     const credentialVersion = credential
       ? adminCredentialVersion(credential.password_hash)
       : null;
@@ -223,31 +226,15 @@ async function validateAdminSessionPayload(id: string, raw: string): Promise<
       credential
       && credentialVersion
       && credential.role === stored.role
-      && passwordHashMode !== "invalid"
-      && !(
-        stored.credential_versions.length === 0
-        && passwordHashMode === "bound"
-      )
-      && !(
-        stored.credential_versions.length > 0
-        && !stored.credential_versions.includes(credentialVersion)
-      )
+      && isCurrentPasswordHash(credential.password_hash)
+      && stored.credential_versions.includes(credentialVersion)
     );
     if (credentialMatches && credentialVersion) {
-      if (stored.credential_versions.length === 0) {
-        const replaced = await replaceExistingSessionIfUnchanged(
-          id,
-          raw,
-          sessionPayload(stored, [credentialVersion])
-        );
-        if (Number(replaced) !== 1) return adminSessionChanged;
-      }
       return {
         id,
         username: stored.username,
         csrf: stored.csrf,
-        role: stored.role,
-        credentialVersion
+        role: stored.role
       };
     }
   }
@@ -262,14 +249,14 @@ export async function readAdminSession(
   const id = getCookie(context, adminSessionCookie);
   if (!id) return null;
   const raw = await runRequiredRedisCommand(
-    () => redis.get(`${adminSessionKeyPrefix}${id}`)
+    () => redis.get(adminSessionKey(id))
   );
   if (!raw) return null;
   const session = await validateAdminSessionPayload(id, raw);
   if (session !== adminSessionChanged) return session;
 
   const changedRaw = await runRequiredRedisCommand(
-    () => redis.get(`${adminSessionKeyPrefix}${id}`)
+    () => redis.get(adminSessionKey(id))
   );
   if (!changedRaw) return null;
   const retried = await validateAdminSessionPayload(id, changedRaw);
@@ -283,16 +270,31 @@ export async function readAdminSession(
 
 export async function authorizeAdminSessionCredentialTransition(
   session: AdminSession,
-  nextCredentialVersion: string
+  credentialVersions: AdminCredentialTransitionVersions,
+  store: AdminSessionCredentialTransitionStore = (
+    adminSessionCredentialTransitionStore
+  )
 ) {
-  const updated = await replaceExistingSession(
-    session.id,
-    sessionPayload(session, [
-      session.credentialVersion,
-      nextCredentialVersion
-    ])
+  const currentPayload = await store.readSession(session.id);
+  const stored = currentPayload
+    ? parseStoredAdminSession(currentPayload)
+    : null;
+  const transitionAllowed = Boolean(
+    stored
+    && stored.username === session.username
+    && stored.csrf === session.csrf
+    && stored.role === session.role
+    && stored.credential_versions.includes(credentialVersions[0])
   );
-  if (updated !== "OK") {
+  if (!currentPayload || !transitionAllowed) {
+    throw new ApiError(401, "unauthorized", "Administrator session expired");
+  }
+  const updated = await store.replaceSessionSnapshot(
+    session.id,
+    currentPayload,
+    sessionPayload(session, credentialVersions)
+  );
+  if (!updated) {
     throw new ApiError(401, "unauthorized", "Administrator session expired");
   }
 }
@@ -317,7 +319,7 @@ export async function deleteAdminSession(context: Context) {
     ?? await readAdminSession(context);
   if (session) {
     await runRequiredRedisCommand(
-      () => redis.del(`${adminSessionKeyPrefix}${session.id}`)
+      () => redis.del(adminSessionKey(session.id))
     );
   }
   deleteCookie(context, adminSessionCookie, { path: "/" });

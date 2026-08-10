@@ -42,12 +42,13 @@ export function registerAdminUserRoutes(app: Hono) {
   app.post(`${adminApiBasePath}/users/:username/password`, async (c) => {
     const username = parse(adminUsernameInput, c.req.param("username"));
     const input = parse(userPasswordInput, await readJsonBody(c));
-    const validCredentialVersion = await resetImageAdminPassword(
-      username,
-      input.password
-    );
+    const [
+      staleCredentialVersion,
+      validCredentialVersion
+    ] = await resetImageAdminPassword(username, input.password);
     await invalidateCommittedAdminSessionsByUsername(sessionRedis, username, {
       operation: "password_reset",
+      staleCredentialVersion,
       validCredentialVersion
     });
     return c.json(apiSuccess());
@@ -55,9 +56,10 @@ export function registerAdminUserRoutes(app: Hono) {
 
   app.post(`${adminApiBasePath}/users/:username/delete`, async (c) => {
     const username = parse(adminUsernameInput, c.req.param("username"));
-    await deleteImageAdmin(username);
+    const staleCredentialVersion = await deleteImageAdmin(username);
     await invalidateCommittedAdminSessionsByUsername(sessionRedis, username, {
-      operation: "account_delete"
+      operation: "account_delete",
+      staleCredentialVersion
     });
     return c.json(apiSuccess());
   });

@@ -7,13 +7,8 @@ const CURRENT_PASSWORD_HASH_POLICY = Object.freeze({
   passes: 3,
   parallelism: 4,
   tagLength: 32,
-  // v4.1 sessions bind to the exact password hash. A longer salt makes hashes
-  // created by binding-aware code distinguishable from legacy hashes without
-  // a database migration, so an unversioned legacy session cannot survive a
-  // later password change.
   saltLength: 24
 });
-const LEGACY_PASSWORD_HASH_SALT_LENGTH = 16;
 const MAX_ENCODED_PASSWORD_HASH_LENGTH = 256;
 
 const encodedHashPattern = /^\$argon2id\$v=(\d+)\$m=(\d+),t=(\d+),p=(\d+)\$([A-Za-z0-9+/]+)\$([A-Za-z0-9+/]+)$/;
@@ -64,10 +59,7 @@ function parsePasswordHash(encoded: string): PasswordHashParameters | null {
       || memory !== policy.memory
       || passes !== policy.passes
       || parallelism !== policy.parallelism
-      || (
-        salt.length !== policy.saltLength
-        && salt.length !== LEGACY_PASSWORD_HASH_SALT_LENGTH
-      )
+      || salt.length !== policy.saltLength
       || expected.length !== policy.tagLength
     ) return null;
 
@@ -85,14 +77,8 @@ function parsePasswordHash(encoded: string): PasswordHashParameters | null {
   }
 }
 
-export function passwordHashAdminSessionMode(
-  encoded: string
-): "bound" | "invalid" | "legacy" {
-  const parameters = parsePasswordHash(encoded);
-  if (!parameters) return "invalid";
-  return parameters.salt.length === CURRENT_PASSWORD_HASH_POLICY.saltLength
-    ? "bound"
-    : "legacy";
+export function isCurrentPasswordHash(encoded: string) {
+  return parsePasswordHash(encoded) !== null;
 }
 
 function derivePassword(password: string, parameters: {

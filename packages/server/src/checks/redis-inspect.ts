@@ -39,9 +39,9 @@ import { readReadyImageCacheMeta } from "../images/ready-cache/meta.ts";
 import {
   readReadyImageCacheAdminStatus
 } from "../images/ready-cache/admin-status.ts";
+import { adminSessionKeyFamilyPrefix } from "../users/admin-session-key.ts";
 import { ORIGINAL_DIRECT_CACHE_PREFIX } from "../images/original-direct-cache.ts";
 
-const SESSION_KEY_PREFIX = "imageshow:session:";
 const LOGIN_FAIL_KEY_PREFIX = "imageshow:login_fail:";
 
 const coreKeyNames = [
@@ -299,7 +299,7 @@ async function scanImageshowKeys() {
         }
       } else if (key.startsWith(ORIGINAL_DIRECT_CACHE_PREFIX)) {
         counts.original_direct_cache += 1;
-      } else if (key.startsWith(SESSION_KEY_PREFIX)) {
+      } else if (key.startsWith(adminSessionKeyFamilyPrefix)) {
         counts.sessions += 1;
       } else if (key.startsWith(LOGIN_FAIL_KEY_PREFIX)) {
         counts.login_failures += 1;

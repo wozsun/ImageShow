@@ -8,9 +8,25 @@ export function adminCredentialVersion(passwordHash: string) {
     .digest("base64url");
 }
 
+export type AdminCredentialTransitionVersions = [string, string];
+
+export function adminCredentialTransitionVersions(
+  currentPasswordHash: string,
+  nextCredentialVersion: string
+): AdminCredentialTransitionVersions {
+  return [
+    adminCredentialVersion(currentPasswordHash),
+    nextCredentialVersion
+  ];
+}
+
 export function parseAdminCredentialVersions(value: unknown) {
-  if (!Array.isArray(value)) return [];
-  return [...new Set(value.filter((item): item is string => (
+  if (!Array.isArray(value) || value.length < 1 || value.length > 2) {
+    return null;
+  }
+  if (!value.every((item): item is string => (
     typeof item === "string" && credentialVersionPattern.test(item)
-  )))].slice(0, 2);
+  ))) return null;
+  if (new Set(value).size !== value.length) return null;
+  return [...value];
 }

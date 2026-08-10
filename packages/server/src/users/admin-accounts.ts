@@ -2,7 +2,11 @@ import { pool, withTransaction } from "../core/db.ts";
 import { ApiError } from "../core/api-error.ts";
 import { hashPassword, verifyPassword } from "../core/password.ts";
 import type { AdminUserDto } from "@imageshow/shared/browser";
-import { adminCredentialVersion } from "./session-credential.ts";
+import {
+  adminCredentialTransitionVersions,
+  adminCredentialVersion,
+  type AdminCredentialTransitionVersions
+} from "./session-credential.ts";
 
 export async function listAdminAccounts(): Promise<AdminUserDto[]> {
   return (await pool.query(
@@ -37,8 +41,11 @@ export async function resetImageAdminPassword(
   const hash = await hashPassword(password);
   const nextCredentialVersion = adminCredentialVersion(hash);
   return withTransaction(async (client) => {
-    const target = await client.query(
-      "SELECT role FROM admin_account WHERE username = $1 FOR UPDATE",
+    const target = await client.query<{ role: string; password_hash: string }>(
+      `SELECT role, password_hash
+         FROM admin_account
+        WHERE username = $1
+        FOR UPDATE`,
       [username]
     );
     if (!target.rowCount) {
@@ -56,7 +63,10 @@ export async function resetImageAdminPassword(
       "UPDATE admin_account SET password_hash = $2, updated_at = now() WHERE username = $1",
       [username, hash]
     );
-    return nextCredentialVersion;
+    return adminCredentialTransitionVersions(
+      target.rows[0]!.password_hash,
+      nextCredentialVersion
+    );
   });
 }
 
@@ -65,7 +75,7 @@ export async function changeAdminPassword(
   currentPassword: string,
   newPassword: string,
   authorizeCredentialTransition: (
-    nextCredentialVersion: string
+    credentialVersions: AdminCredentialTransitionVersions
   ) => Promise<void>
 ) {
   const hash = await hashPassword(newPassword);
@@ -79,19 +89,26 @@ export async function changeAdminPassword(
     if (!(await verifyPassword(row.password_hash, currentPassword))) {
       throw new ApiError(401, "invalid_current_password", "当前密码不正确");
     }
-    await authorizeCredentialTransition(nextCredentialVersion);
+    const credentialVersions = adminCredentialTransitionVersions(
+      row.password_hash,
+      nextCredentialVersion
+    );
+    await authorizeCredentialTransition(credentialVersions);
     await client.query(
       "UPDATE admin_account SET password_hash = $2, updated_at = now() WHERE username = $1",
       [username, hash]
     );
-    return nextCredentialVersion;
+    return credentialVersions;
   });
 }
 
 export async function deleteImageAdmin(username: string) {
-  await withTransaction(async (client) => {
-    const target = await client.query(
-      "SELECT role FROM admin_account WHERE username = $1 FOR UPDATE",
+  return withTransaction(async (client) => {
+    const target = await client.query<{ role: string; password_hash: string }>(
+      `SELECT role, password_hash
+         FROM admin_account
+        WHERE username = $1
+        FOR UPDATE`,
       [username]
     );
     if (!target.rowCount) {
@@ -109,5 +126,6 @@ export async function deleteImageAdmin(username: string) {
       "DELETE FROM admin_account WHERE username = $1",
       [username]
     );
+    return adminCredentialVersion(target.rows[0]!.password_hash);
   });
 }

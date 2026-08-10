@@ -100,13 +100,16 @@ export function registerProtectedAuthRoutes(app: Hono) {
     const session = authenticatedSession(c);
     if (!session) throw new ApiError(401, "unauthorized", "Unauthorized");
     const input = parse(passwordChangeInput, await readJsonBody(c));
-    const validCredentialVersion = await changeAdminPassword(
+    const [
+      staleCredentialVersion,
+      validCredentialVersion
+    ] = await changeAdminPassword(
       session.username,
       input.current_password,
       input.new_password,
-      (nextCredentialVersion) => authorizeAdminSessionCredentialTransition(
+      (credentialVersions) => authorizeAdminSessionCredentialTransition(
         session,
-        nextCredentialVersion
+        credentialVersions
       )
     );
     await invalidateCommittedAdminSessionsByUsername(
@@ -115,6 +118,7 @@ export function registerProtectedAuthRoutes(app: Hono) {
       {
         operation: "password_change",
         preservedSessionId: session.id,
+        staleCredentialVersion,
         validCredentialVersion
       }
     );
