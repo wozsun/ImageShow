@@ -58,9 +58,10 @@ async function assertPreparedObjectExists(
   storage: Awaited<ReturnType<typeof resolveStorageAccess>>,
   key: string,
   errorCode: "prepared_object_missing" | "prepared_thumbnail_missing",
-  errorMessage: string
+  errorMessage: string,
+  signal: AbortSignal
 ) {
-  if (!await storage.driver.exists("_uploads", key)) {
+  if (!await storage.driver.exists("_uploads", key, { signal })) {
     throw new ApiError(409, errorCode, errorMessage);
   }
 }
@@ -89,13 +90,15 @@ async function commitStoredImageSession(
       storage,
       preparedImageKey,
       "prepared_object_missing",
-      "准备好的图片文件不存在"
+      "准备好的图片文件不存在",
+      signal
     );
     await assertPreparedObjectExists(
       storage,
       payload.prepared_thumbnail_key,
       "prepared_thumbnail_missing",
-      "准备好的缩略图不存在"
+      "准备好的缩略图不存在",
+      signal
     );
     signal.throwIfAborted();
     copiedImage = (await copyVerifiedObjectWithinStorage({
@@ -121,7 +124,8 @@ async function commitStoredImageSession(
         executionToken,
         signal,
         "import_media_integrity_failure"
-      )
+      ),
+      signal
     })).created;
     signal.throwIfAborted();
     copiedThumbnail = (await copyVerifiedObjectWithinStorage({
@@ -146,7 +150,8 @@ async function commitStoredImageSession(
         executionToken,
         signal,
         "import_thumbnail_integrity_failure"
-      )
+      ),
+      signal
     })).created;
     signal.throwIfAborted();
 

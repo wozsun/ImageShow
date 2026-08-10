@@ -1,6 +1,9 @@
 import { ApiError, errorMessage } from "../core/api-error.ts";
 import { resolveStorageAccess } from "./backend-registry.ts";
-import type { OpenedRead } from "./driver.ts";
+import type {
+  OpenedRead,
+  StorageRequestOptions
+} from "./driver.ts";
 import type {
   ReadablePrefix,
   StoragePrefix
@@ -14,17 +17,19 @@ import {
 export async function storageObjectExists(
   prefix: StoragePrefix,
   key: string,
-  slug?: string
+  slug?: string,
+  options?: StorageRequestOptions
 ) {
-  return (await resolveStorageAccess(slug)).driver.exists(prefix, key);
+  return (await resolveStorageAccess(slug)).driver.exists(prefix, key, options);
 }
 
 export async function readStorageBuffer(
   prefix: StoragePrefix,
   key: string,
-  slug?: string
+  slug?: string,
+  options?: StorageRequestOptions
 ) {
-  return (await resolveStorageAccess(slug)).driver.readBuffer(prefix, key);
+  return (await resolveStorageAccess(slug)).driver.readBuffer(prefix, key, options);
 }
 
 export async function writeStorageBuffer(
@@ -32,31 +37,35 @@ export async function writeStorageBuffer(
   key: string,
   body: Buffer,
   contentType: string,
-  slug?: string
+  slug?: string,
+  options?: StorageRequestOptions
 ) {
   return (await resolveStorageAccess(slug)).driver.writeBuffer(
     prefix,
     key,
     body,
-    contentType
+    contentType,
+    options
   );
 }
 
 export async function removeStorageObjectAndConfirm(
   prefix: StoragePrefix,
   key: string,
-  slug?: string
+  slug?: string,
+  options?: StorageRequestOptions
 ) {
   const { config, driver } = await resolveStorageAccess(slug);
-  const existed = await driver.exists(prefix, key);
+  const existed = await driver.exists(prefix, key, options);
   // DELETE is idempotent for every driver. Issue it even after a negative
   // preflight so a stale or faulty existence response cannot make cleanup
   // terminal while the object is still present.
-  await driver.remove(prefix, key);
+  await driver.remove(prefix, key, options);
   let stillExists: boolean;
   try {
-    stillExists = await driver.exists(prefix, key);
+    stillExists = await driver.exists(prefix, key, options);
   } catch (error) {
+    options?.signal?.throwIfAborted();
     throw new ApiError(
       502,
       "storage_delete_confirmation_failed",
@@ -113,8 +122,11 @@ export async function collectStorageNamespaceSnapshot(
   }
 }
 
-export async function pruneEmptyStorageDirs(slug?: string) {
-  return (await resolveStorageAccess(slug)).driver.pruneEmptyDirs();
+export async function pruneEmptyStorageDirs(
+  slug?: string,
+  options?: StorageRequestOptions
+) {
+  return (await resolveStorageAccess(slug)).driver.pruneEmptyDirs(options);
 }
 
 export type ResolvedReadableObject = {
@@ -122,8 +134,11 @@ export type ResolvedReadableObject = {
   key: string;
   storageSlug: string;
   publicUrl: string;
-  exists: () => Promise<boolean>;
-  open: (range?: string) => Promise<OpenedRead>;
+  exists: (options?: StorageRequestOptions) => Promise<boolean>;
+  open: (
+    range?: string,
+    options?: StorageRequestOptions
+  ) => Promise<OpenedRead>;
 };
 
 export async function resolveReadableObject(
@@ -137,7 +152,7 @@ export async function resolveReadableObject(
     key,
     storageSlug: config.slug,
     publicUrl: driver.publicObjectUrl(prefix, key),
-    exists: () => driver.exists(prefix, key),
-    open: (range) => driver.openRead(prefix, key, range)
+    exists: (options) => driver.exists(prefix, key, options),
+    open: (range, options) => driver.openRead(prefix, key, range, options)
   };
 }

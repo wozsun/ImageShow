@@ -167,7 +167,12 @@ async function streamThumbEnsuring(
   return recoverStoredThumbnail({
     context: { objectKey, thumbKey, backend },
     readThumbnail,
-    sourceExists: () => storageObjectExists("media", objectKey, backend),
+    sourceExists: () => storageObjectExists(
+      "media",
+      objectKey,
+      backend,
+      { signal: request.signal }
+    ),
     rebuild: () => repairStoredThumbnail(imageId),
     isNotFound: isStorageObjectNotFound,
     log: logger
@@ -178,11 +183,12 @@ async function readablePublicThumbUrl(
   object: ResolvedReadableObject,
   objectKey: string,
   thumbKey: string,
-  backend: string
+  backend: string,
+  signal?: AbortSignal
 ) {
   return readablePublicThumbnailUrl({
     publicUrl: object.publicUrl,
-    exists: object.exists,
+    exists: () => object.exists({ signal }),
     context: { objectKey, thumbKey, backend },
     log: logger
   });
@@ -322,7 +328,8 @@ export async function serveThumb(key: string, request: StoredResponseRequest = {
     object,
     objectKey,
     thumbKey,
-    backend
+    backend,
+    request.signal
   );
   if (publicUrl) return immutableRedirect(publicUrl);
   const streamed = await streamThumbEnsuring(

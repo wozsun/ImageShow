@@ -130,7 +130,11 @@ export async function repairStoredThumbnailWithLockHeld(
 
   const storage = await resolveStorageAccess(authority.storage_slug);
   signal.throwIfAborted();
-  if (!await storage.driver.exists("media", authority.object_key)) {
+  if (!await storage.driver.exists(
+    "media",
+    authority.object_key,
+    { signal }
+  )) {
     throw new ApiError(
       502,
       "storage_source_object_missing",
@@ -149,9 +153,17 @@ export async function repairStoredThumbnailWithLockHeld(
   let thumbnail: Buffer;
   let created = false;
   let repairAuthorization: ThumbnailRepairCleanupAuthorization | undefined;
-  const thumbnailExists = await storage.driver.exists("thumbs", thumbKey);
+  const thumbnailExists = await storage.driver.exists(
+    "thumbs",
+    thumbKey,
+    { signal }
+  );
   if (thumbnailExists) {
-    thumbnail = await storage.driver.readBuffer("thumbs", thumbKey);
+    thumbnail = await storage.driver.readBuffer(
+      "thumbs",
+      thumbKey,
+      { signal }
+    );
   } else {
     let input: Buffer | string;
     if (options.sourceBuffer) {
@@ -162,7 +174,7 @@ export async function repairStoredThumbnailWithLockHeld(
         storage,
         "media",
         authority.object_key,
-        { includeMd5: true }
+        { includeMd5: true, signal }
       );
       if (authority.md5 && sourceDigest.md5 !== authority.md5) {
         throw new ApiError(
@@ -174,7 +186,11 @@ export async function repairStoredThumbnailWithLockHeld(
       }
       input = safeStoragePath("media", authority.object_key);
     } else {
-      const source = await storage.driver.readBuffer("media", authority.object_key);
+      const source = await storage.driver.readBuffer(
+        "media",
+        authority.object_key,
+        { signal }
+      );
       assertSourceIntegrity(authority, source);
       input = source;
     }
@@ -203,7 +219,8 @@ export async function repairStoredThumbnailWithLockHeld(
       key: thumbKey,
       body: thumbnail,
       contentType: "image/webp",
-      repairAuthorization
+      repairAuthorization,
+      signal
     });
     created = materialized.created;
     signal.throwIfAborted();

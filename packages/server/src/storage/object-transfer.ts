@@ -3,7 +3,10 @@ import { finished } from "node:stream/promises";
 import { ApiError, errorMessage } from "../core/api-error.ts";
 import { logger } from "../core/logger.ts";
 import type { StorageConfig } from "./backend-config.ts";
-import type { StorageDriver } from "./driver.ts";
+import type {
+  StorageDriver,
+  StorageRequestOptions
+} from "./driver.ts";
 import type { ThumbnailRepairCleanupAuthorization } from "./move-cleanup.ts";
 import type { StoragePrefix } from "./object-keys.ts";
 import { shareStorageNamespace } from "./storage-namespace.ts";
@@ -105,12 +108,17 @@ export async function digestStorageObject(
   endpoint: StorageEndpoint,
   prefix: StoragePrefix,
   key: string,
-  options: { includeMd5?: boolean } = {}
+  options: StorageRequestOptions & { includeMd5?: boolean } = {}
 ): Promise<StorageObjectDigest> {
   const sha256 = createHash("sha256");
   const md5 = options.includeMd5 ? createHash("md5") : undefined;
   const hashes = md5 ? [sha256, md5] : [sha256];
-  const opened = await endpoint.driver.openRead(prefix, key);
+  const opened = await endpoint.driver.openRead(
+    prefix,
+    key,
+    undefined,
+    { signal: options.signal }
+  );
   let size = 0;
   for await (const chunk of opened.body) {
     size += updateHashes(hashes, chunk);
@@ -200,6 +208,7 @@ export async function ensureVerifiedObjectAtTarget(input: {
   sourceSlug?: string;
   cleanupCandidate?: CandidateCleanup;
   repairAuthorization?: ThumbnailRepairCleanupAuthorization;
+  signal?: AbortSignal;
 }): Promise<{ created: boolean }> {
   const {
     target,
@@ -209,7 +218,8 @@ export async function ensureVerifiedObjectAtTarget(input: {
     contentType,
     sourceSlug,
     cleanupCandidate: candidateCleanup,
-    repairAuthorization
+    repairAuthorization,
+    signal
   } = input;
   const expected: StorageObjectDigest = {
     size: body.byteLength,
@@ -223,8 +233,8 @@ export async function ensureVerifiedObjectAtTarget(input: {
       repairAuthorization
     );
   }
-  if (await target.driver.exists(prefix, key)) {
-    const existing = await digestStorageObject(target, prefix, key);
+  if (await target.driver.exists(prefix, key, { signal })) {
+    const existing = await digestStorageObject(target, prefix, key, { signal });
     if (!sameDigest(existing, expected)) {
       throw objectConflict(target, prefix, key, sourceSlug);
     }
@@ -232,8 +242,20 @@ export async function ensureVerifiedObjectAtTarget(input: {
   }
 
   try {
-    await target.driver.writeBuffer(prefix, key, body, contentType);
-    const stored = await digestStorageObject(target, prefix, key).catch(() => {
+    await target.driver.writeBuffer(
+      prefix,
+      key,
+      body,
+      contentType,
+      { signal }
+    );
+    const stored = await digestStorageObject(
+      target,
+      prefix,
+      key,
+      { signal }
+    ).catch(() => {
+      signal?.throwIfAborted();
       throw transferIntegrityFailure(target, prefix, key, sourceSlug);
     });
     if (!sameDigest(stored, expected)) {
@@ -264,6 +286,7 @@ export async function copyVerifiedObjectWithinStorage(input: {
   expectedSource?: SourceDigestExpectation;
   sourceMismatch?: SourceMismatchError;
   cleanupCandidate?: CandidateCleanup;
+  signal?: AbortSignal;
 }): Promise<{ created: boolean; sourceDigest: StorageObjectDigest }> {
   const {
     storage,
@@ -277,13 +300,14 @@ export async function copyVerifiedObjectWithinStorage(input: {
       code: "storage_source_integrity_failed",
       message: "源存储对象与记录的完整性信息不一致"
     },
-    cleanupCandidate: candidateCleanup
+    cleanupCandidate: candidateCleanup,
+    signal
   } = input;
   const sourceDigest = await digestStorageObject(
     storage,
     fromPrefix,
     fromKey,
-    { includeMd5: Boolean(expectedSource.md5) }
+    { includeMd5: Boolean(expectedSource.md5), signal }
   );
   if (!digestMatchesExpected(sourceDigest, expectedSource)) {
     throw new ApiError(
@@ -304,8 +328,13 @@ export async function copyVerifiedObjectWithinStorage(input: {
   if (toPrefix !== "_uploads") {
     await defaultCleanupLeaseCheck(storage.config, toPrefix, toKey);
   }
-  if (await storage.driver.exists(toPrefix, toKey)) {
-    const existing = await digestStorageObject(storage, toPrefix, toKey);
+  if (await storage.driver.exists(toPrefix, toKey, { signal })) {
+    const existing = await digestStorageObject(
+      storage,
+      toPrefix,
+      toKey,
+      { signal }
+    );
     if (!sameDigest(existing, sourceDigest)) {
       throw objectConflict(storage, toPrefix, toKey, storage.config.slug);
     }
@@ -313,8 +342,20 @@ export async function copyVerifiedObjectWithinStorage(input: {
   }
 
   try {
-    await storage.driver.copy(fromPrefix, fromKey, toPrefix, toKey);
-    const copied = await digestStorageObject(storage, toPrefix, toKey).catch(() => {
+    await storage.driver.copy(
+      fromPrefix,
+      fromKey,
+      toPrefix,
+      toKey,
+      { signal }
+    );
+    const copied = await digestStorageObject(
+      storage,
+      toPrefix,
+      toKey,
+      { signal }
+    ).catch(() => {
+      signal?.throwIfAborted();
       throw transferIntegrityFailure(
         storage,
         toPrefix,
@@ -355,6 +396,7 @@ export async function ensureVerifiedObjectAtDestination(input: {
   contentType: string;
   sourceObjectExists?: boolean;
   cleanupCandidate?: CandidateCleanup;
+  signal?: AbortSignal;
 }): Promise<VerifiedObjectTransfer> {
   const { source, target, prefix, key, body, contentType } = input;
   const sharedNamespace = shareStorageNamespace(source.config, target.config);
@@ -366,7 +408,7 @@ export async function ensureVerifiedObjectAtDestination(input: {
         key
       );
     }
-    if (!await target.driver.exists(prefix, key)) {
+    if (!await target.driver.exists(prefix, key, { signal: input.signal })) {
       throw new ApiError(
         502,
         "storage_shared_object_unavailable",
@@ -383,7 +425,12 @@ export async function ensureVerifiedObjectAtDestination(input: {
       size: body.byteLength,
       sha256: createHash("sha256").update(body).digest("hex")
     };
-    const existing = await digestStorageObject(target, prefix, key);
+    const existing = await digestStorageObject(
+      target,
+      prefix,
+      key,
+      { signal: input.signal }
+    );
     if (!sameDigest(existing, expected)) {
       throw objectConflict(target, prefix, key, source.config.slug);
     }
@@ -397,7 +444,8 @@ export async function ensureVerifiedObjectAtDestination(input: {
     body,
     contentType,
     sourceSlug: source.config.slug,
-    cleanupCandidate: input.cleanupCandidate
+    cleanupCandidate: input.cleanupCandidate,
+    signal: input.signal
   });
   return { ...result, sharedNamespace };
 }

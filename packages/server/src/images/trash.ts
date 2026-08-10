@@ -241,14 +241,17 @@ async function purgeClaimedRow(claim: PurgeRow): Promise<PurgeRow | null> {
       removeStorageObjectAndConfirm(
         thumb.prefix,
         thumb.key,
-        row.storage_slug
+        row.storage_slug,
+        { signal }
       ),
       removeStorageObjectAndConfirm(
         "media",
         row.object_key,
-        row.storage_slug
+        row.storage_slug,
+        { signal }
       )
     ]);
+    signal.throwIfAborted();
     const removalErrors = removals.flatMap((result) =>
       result.status === "rejected" ? [result.reason] : []
     );

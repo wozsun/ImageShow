@@ -72,14 +72,27 @@ const mutationImageColumns = [
   "status"
 ].join(", ");
 
-async function detectImageBrightness(image: MutationImageRecord) {
+async function detectImageBrightness(
+  image: MutationImageRecord,
+  signal: AbortSignal
+) {
   if (image.status !== "ready") return undefined;
   const thumb = thumbnailRef(image);
-  if (!(await storageObjectExists(thumb.prefix, thumb.key, thumb.slug))) {
+  if (!(await storageObjectExists(
+    thumb.prefix,
+    thumb.key,
+    thumb.slug,
+    { signal }
+  ))) {
     return undefined;
   }
   return detectBrightness(
-    await readStorageBuffer(thumb.prefix, thumb.key, thumb.slug)
+    await readStorageBuffer(
+      thumb.prefix,
+      thumb.key,
+      thumb.slug,
+      { signal }
+    )
   );
 }
 
@@ -204,7 +217,7 @@ async function updateImageMetadataWithinSync(
       ),
       brightness: await resolveOptionalBrightnessWith(
         parsed.brightness,
-        () => detectImageBrightness(sourceImage)
+        () => detectImageBrightness(sourceImage, signal)
       )
     };
     signal.throwIfAborted();

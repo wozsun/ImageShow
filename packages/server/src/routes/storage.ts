@@ -112,7 +112,7 @@ export function registerStorageRoutes(app: Hono) {
   app.post(`${adminApiBasePath}/storage/test`, requireSuperAdmin, async (c) => {
     const body = parse(storageBackendTestInput, await readJsonBody(c));
     const config = await resolveStorageTestConfig(body);
-    await testStorageBackend(config);
+    await testStorageBackend(config, c.req.raw.signal);
     return c.json(apiSuccess());
   });
 }

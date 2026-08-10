@@ -2,15 +2,21 @@ import { errorMessage } from "../core/api-error.ts";
 import { logger } from "../core/logger.ts";
 import type { StorageConfig } from "./backend-config.ts";
 import {
-  getDefaultStorageBackend,
+  resolveStorageAccess,
   resolveStorageAccessForConfig
 } from "./backend-registry.ts";
 
-export async function testStorageBackend(config?: StorageConfig) {
-  const effective = config ?? await getDefaultStorageBackend();
-  const driver = resolveStorageAccessForConfig(effective).driver;
+export async function testStorageBackend(
+  config?: StorageConfig,
+  signal?: AbortSignal
+) {
+  signal?.throwIfAborted();
+  const access = config
+    ? resolveStorageAccessForConfig(config)
+    : await resolveStorageAccess();
+  const { config: effective, driver } = access;
   try {
-    await driver.selfTest();
+    await driver.selfTest({ signal });
   } finally {
     if (effective.slug === "(test)") {
       await Promise.resolve().then(() => driver.close?.()).catch((error) => {

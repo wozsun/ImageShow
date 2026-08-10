@@ -67,6 +67,9 @@ export type StorageBackendS3Dto = {
   force_path_style: boolean;
   root_path: string;
   public_base_url: string;
+  connect_timeout_seconds: number;
+  idle_timeout_seconds: number;
+  task_timeout_seconds: number;
   secret_access_key_configured: boolean;
 };
 

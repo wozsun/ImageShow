@@ -18,6 +18,7 @@ export type StoredResponseRequest = {
   ifModifiedSince?: string;
   ifRange?: string;
   isHead?: boolean;
+  signal?: AbortSignal;
 };
 
 function sameObjectVersion(left: OpenedRead, right: OpenedRead) {
@@ -61,12 +62,15 @@ export async function streamResolvedObject(
   cacheControl: string,
   request: StoredResponseRequest = {}
 ) {
+  request.signal?.throwIfAborted();
+  const storageRequest = { signal: request.signal };
   const validateBeforeRange = Boolean(
     request.range
     && (request.ifNoneMatch || request.ifModifiedSince || request.ifRange)
   );
   let opened = await object.open(
-    validateBeforeRange ? undefined : request.range
+    validateBeforeRange ? undefined : request.range,
+    storageRequest
   );
   const initialEtag = safeStoredEtag(opened.etag);
   const initialLastModified = safeStoredLastModified(opened.lastModified);
@@ -100,10 +104,10 @@ export async function streamResolvedObject(
   if (validateBeforeRange && shouldApplyRange) {
     const full = opened;
     full.body.destroy();
-    opened = await object.open(request.range);
+    opened = await object.open(request.range, storageRequest);
     if (!sameObjectVersion(full, opened)) {
       opened.body.destroy();
-      opened = await object.open();
+      opened = await object.open(undefined, storageRequest);
     }
   }
 

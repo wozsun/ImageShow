@@ -163,6 +163,10 @@ export class WebdavBackend implements StorageDriver {
     return this.dispatcher.close();
   }
 
+  forceClose() {
+    return this.dispatcher.destroy();
+  }
+
   private auth(): Record<string, string> {
     const { username, password } = this.config.webdav;
     if (!username) return {};

@@ -10,7 +10,7 @@ PostgreSQL。排查配置时先确认“这项配置由谁管理”，再判断�
 | --- | --- | --- |
 | 环境变量 | PostgreSQL / Redis 连接、宿主机端口映射，以及首次管理员凭据；也可在首次生成 `config.json` 时播种应用配置。 | 修改 `.env`、Compose 或 Secret 后重建 / 重启。部署字段在每次进程启动时读取，不写入 `config.json`。 |
 | `/app/data/config.json` | 站点、上传 / 导入、图片处理、安全和日志等应用运行策略。 | 后台设置页，或直接编辑文件后在后台「设置 → 读取配置文件」。上传文件大小、上传长边校验和服务端全局导入并发只通过配置文件维护。 |
-| PostgreSQL | 管理员账号及界面偏好；本地 / S3 / WebDAV 存储后端注册表；S3 endpoint、region、bucket、access key、secret key、根目录、public URL 等敏感或实例化数据。 | 后台设置页或对应管理界面。secret key 只保存，不返回给前端。 |
+| PostgreSQL | 管理员账号及界面偏好；本地 / S3 / WebDAV 存储后端注册表；S3 endpoint、region、bucket、access key、secret key、根目录、public URL 与连接 / 空闲 / 总时限等实例化数据。 | 后台设置页或对应管理界面。secret key 只保存，不返回给前端。 |
 
 完整应用字段清单、默认值和中英文注释见仓库根目录的
 `config.example.jsonc`；部署字段见 `.env.example`。实际运行配置文件是纯 JSON，

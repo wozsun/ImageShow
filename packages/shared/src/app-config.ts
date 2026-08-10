@@ -118,7 +118,7 @@ export const appConfig = {
     queueSliceMaxJobs: 50,
     queueSliceMaxMs: 2_000,
     drainTimeoutMs: 10_000,
-    shutdownHardExitMs: 15_000,
+    shutdownHardExitMs: 45_000,
 
     sampleLimit: 100
   },

@@ -10,6 +10,7 @@ import {
   readStorageBuffer,
   removeStorageObjectAndConfirm
 } from "../../storage/object-access.ts";
+import { STORAGE_ADMIN_LIST_MAX_KEYS } from "../../storage/key-listing.ts";
 import type { PreparedPayload } from "./types.ts";
 import { stagingSessionId } from "./staging-keys.ts";
 import {
@@ -19,9 +20,15 @@ import {
 
 export async function preparedThumbnailResponse(
   payload: Pick<PreparedPayload, "prepared_thumbnail_key">,
-  storageSlug: string
+  storageSlug: string,
+  signal?: AbortSignal
 ) {
-  const buffer = await readStorageBuffer("_uploads", payload.prepared_thumbnail_key, storageSlug);
+  const buffer = await readStorageBuffer(
+    "_uploads",
+    payload.prepared_thumbnail_key,
+    storageSlug,
+    { signal }
+  );
   return new Response(buffer as unknown as BodyInit, {
     headers: { "Content-Type": "image/webp", "Cache-Control": privateNoStoreCacheControl }
   });
@@ -39,7 +46,12 @@ async function removeStagingKeysWithinLock(
     async ({ id, key }) => {
       try {
         signal.throwIfAborted();
-        await removeStorageObjectAndConfirm("_uploads", key, storageSlug);
+        await removeStorageObjectAndConfirm(
+          "_uploads",
+          key,
+          storageSlug,
+          { signal }
+        );
       } catch (error) {
         appendImportCleanupFailure(failures, id, error);
       }
@@ -74,12 +86,15 @@ export async function cleanupStagedObjectsBatch(
   if (!targets.size) return failures;
 
   try {
-    await withStorageLocationReadLock(async (signal) => {
+    await withStorageLocationReadLock(async (lockSignal) => {
+      const signal = callerSignal
+        ? AbortSignal.any([callerSignal, lockSignal])
+        : lockSignal;
       signal.throwIfAborted();
       const listing = await collectStorageKeys(
         "_uploads",
         storageSlug,
-        { signal }
+        { signal, maxKeys: STORAGE_ADMIN_LIST_MAX_KEYS }
       );
       if (!listing.complete) {
         throw new Error("Import staging namespace listing was incomplete");

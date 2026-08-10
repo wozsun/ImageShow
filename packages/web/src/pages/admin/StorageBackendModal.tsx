@@ -13,7 +13,8 @@ import {
 
 const emptyS3: S3Settings = {
   endpoint: "", region: "auto", bucket: "", access_key_id: "",
-  force_path_style: true, root_path: "/", public_base_url: "", secret_access_key: ""
+  force_path_style: true, root_path: "/", public_base_url: "", secret_access_key: "",
+  connect_timeout_seconds: 15, idle_timeout_seconds: 15, task_timeout_seconds: 300
 };
 
 const emptyWebdav: WebdavSettings = {
@@ -306,6 +307,11 @@ function S3Fields({ value, onChange, configured, locationLocked }: { value: S3Se
         <input type="checkbox" checked={value.force_path_style} onChange={(event) => patch({ force_path_style: event.target.checked })} />
         Path-style
       </label>
+      <StorageRequestTimeoutFields
+        value={value}
+        onChange={patch}
+        connectLabel="连接超时（秒）"
+      />
     </>
   );
 }
@@ -338,13 +344,43 @@ function WebdavFields({ value, onChange, configured, locationLocked }: { value: 
         locationLocked={locationLocked}
         onChange={patch}
       />
+      <StorageRequestTimeoutFields
+        value={value}
+        onChange={patch}
+        connectLabel="连接 / 首字节超时（秒）"
+      />
       <label>
-        连接 / 首字节超时（秒）
+        <input type="checkbox" checked={value.list_depth_infinity} onChange={(event) => patch({ list_depth_infinity: event.target.checked })} />
+        Depth: infinity 列举（更快；部分 WebDAV 服务器不支持，默认关闭）
+      </label>
+    </>
+  );
+}
+
+function StorageRequestTimeoutFields({
+  value,
+  onChange,
+  connectLabel
+}: {
+  value: Pick<
+    S3Settings | WebdavSettings,
+    "connect_timeout_seconds" | "idle_timeout_seconds" | "task_timeout_seconds"
+  >;
+  onChange: (patch: Partial<Pick<
+    S3Settings | WebdavSettings,
+    "connect_timeout_seconds" | "idle_timeout_seconds" | "task_timeout_seconds"
+  >>) => void;
+  connectLabel: string;
+}) {
+  return (
+    <>
+      <label>
+        {connectLabel}
         <NumberInput
           min={1}
           max={120}
           value={value.connect_timeout_seconds}
-          onChange={(connect_timeout_seconds) => patch({
+          onChange={(connect_timeout_seconds) => onChange({
             connect_timeout_seconds
           })}
         />
@@ -355,7 +391,7 @@ function WebdavFields({ value, onChange, configured, locationLocked }: { value: 
           min={1}
           max={300}
           value={value.idle_timeout_seconds}
-          onChange={(idle_timeout_seconds) => patch({
+          onChange={(idle_timeout_seconds) => onChange({
             idle_timeout_seconds
           })}
         />
@@ -366,14 +402,10 @@ function WebdavFields({ value, onChange, configured, locationLocked }: { value: 
           min={15}
           max={3600}
           value={value.task_timeout_seconds}
-          onChange={(task_timeout_seconds) => patch({
+          onChange={(task_timeout_seconds) => onChange({
             task_timeout_seconds
           })}
         />
-      </label>
-      <label>
-        <input type="checkbox" checked={value.list_depth_infinity} onChange={(event) => patch({ list_depth_infinity: event.target.checked })} />
-        Depth: infinity 列举（更快；部分 WebDAV 服务器不支持，默认关闭）
       </label>
     </>
   );

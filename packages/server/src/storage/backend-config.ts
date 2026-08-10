@@ -21,7 +21,10 @@ export const s3SettingsSchema = z.object({
   root_path: z.string().trim()
     .regex(/^\/?(?:[a-zA-Z0-9._-]+\/?)*$/, "root_path must be a simple absolute path")
     .default("/"),
-  public_base_url: optionalHttpsUrl.default("")
+  public_base_url: optionalHttpsUrl.default(""),
+  connect_timeout_seconds: z.coerce.number().int().min(1).max(120).default(15),
+  idle_timeout_seconds: z.coerce.number().int().min(1).max(300).default(15),
+  task_timeout_seconds: z.coerce.number().int().min(15).max(3_600).default(300)
 });
 
 export const webdavSettingsSchema = z.object({

@@ -81,7 +81,8 @@ async function removeChallengeObject(driver: StorageDriver, key: string) {
 
 async function verifyBidirectionalChallenge(
   current: StorageDriver,
-  candidate: StorageDriver
+  candidate: StorageDriver,
+  signal?: AbortSignal
 ) {
   const probeId = randomUUID();
   const currentKey = `${storageProbePrefix}rebind-${probeId}-current`;
@@ -91,8 +92,19 @@ async function verifyBidirectionalChallenge(
   let verificationError: unknown;
 
   try {
-    await current.writeBuffer("_uploads", currentKey, currentChallenge, "application/octet-stream");
-    const readThroughCandidate = await candidate.readBuffer("_uploads", currentKey);
+    signal?.throwIfAborted();
+    await current.writeBuffer(
+      "_uploads",
+      currentKey,
+      currentChallenge,
+      "application/octet-stream",
+      { signal }
+    );
+    const readThroughCandidate = await candidate.readBuffer(
+      "_uploads",
+      currentKey,
+      { signal }
+    );
     if (!readThroughCandidate.equals(currentChallenge)) {
       throw endpointMismatch("candidate_read_mismatch");
     }
@@ -101,9 +113,14 @@ async function verifyBidirectionalChallenge(
       "_uploads",
       candidateKey,
       candidateChallenge,
-      "application/octet-stream"
+      "application/octet-stream",
+      { signal }
     );
-    const readThroughCurrent = await current.readBuffer("_uploads", candidateKey);
+    const readThroughCurrent = await current.readBuffer(
+      "_uploads",
+      candidateKey,
+      { signal }
+    );
     if (!readThroughCurrent.equals(candidateChallenge)) {
       throw endpointMismatch("current_read_mismatch");
     }
@@ -121,32 +138,34 @@ async function verifyBidirectionalChallenge(
     .filter((result): result is PromiseRejectedResult => result.status === "rejected")
     .map((result) => result.reason);
 
-  if (verificationError) {
+  if (cleanupFailures.length) {
     const mismatch = verificationError instanceof ApiError
       && verificationError.code === "storage_endpoint_rebind_mismatch"
       ? verificationError
-      : endpointMismatch(errorMessage(verificationError));
-    if (cleanupFailures.length) {
-      throw new ApiError(
-        502,
-        "storage_endpoint_rebind_cleanup_failed",
-        "Endpoint 重绑定验证对象未能完全清理，已保留原配置",
-        {
-          failed: cleanupFailures.length,
-          verification_code: mismatch.code,
-          verification_reason: mismatch.details
-        }
-      );
-    }
-    throw mismatch;
-  }
-  if (cleanupFailures.length) {
+      : verificationError
+        ? endpointMismatch(errorMessage(verificationError))
+        : undefined;
     throw new ApiError(
       502,
       "storage_endpoint_rebind_cleanup_failed",
       "Endpoint 重绑定验证对象未能完全清理，已保留原配置",
-      { failed: cleanupFailures.length }
+      {
+        failed: cleanupFailures.length,
+        ...(mismatch
+          ? {
+              verification_code: mismatch.code,
+              verification_reason: mismatch.details
+            }
+          : {})
+      }
     );
+  }
+  signal?.throwIfAborted();
+  if (verificationError) {
+    throw verificationError instanceof ApiError
+      && verificationError.code === "storage_endpoint_rebind_mismatch"
+      ? verificationError
+      : endpointMismatch(errorMessage(verificationError));
   }
 }
 
@@ -171,6 +190,10 @@ export async function verifyStorageEndpointRebind(input: {
   if (!stagingSnapshotsMatch(input.currentStaging, candidateStaging)) {
     throw endpointMismatch("staging_snapshot_mismatch");
   }
-  await verifyBidirectionalChallenge(input.current, input.candidate);
+  await verifyBidirectionalChallenge(
+    input.current,
+    input.candidate,
+    input.signal
+  );
   input.signal?.throwIfAborted();
 }

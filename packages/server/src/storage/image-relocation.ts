@@ -125,7 +125,11 @@ export async function prepareVerifiedImageRelocation(
         sourceThumbnailKey
       );
       signal?.throwIfAborted();
-      if (!await storage.driver.exists("media", image.object_key)) {
+      if (!await storage.driver.exists(
+        "media",
+        image.object_key,
+        { signal }
+      )) {
         throw sourceMissingError(image, "media", image.object_key);
       }
       const mediaCandidate = await captureCandidate("media", nextObjectKey);
@@ -136,7 +140,8 @@ export async function prepareVerifiedImageRelocation(
         toPrefix: "media",
         toKey: nextObjectKey,
         expectedSource: { md5: image.md5 ?? undefined },
-        cleanupCandidate: cleanupCandidate(mediaCandidate)
+        cleanupCandidate: cleanupCandidate(mediaCandidate),
+        signal
       });
       if (mediaResult.created) {
         createdObjects.push(mediaCandidate);
@@ -149,7 +154,11 @@ export async function prepareVerifiedImageRelocation(
       });
 
       const targetThumbnailKey = thumbnailObjectKey(nextObjectKey);
-      if (await storage.driver.exists("thumbs", sourceThumbnailKey)) {
+      if (await storage.driver.exists(
+        "thumbs",
+        sourceThumbnailKey,
+        { signal }
+      )) {
         const thumbnailCandidate = await captureCandidate(
           "thumbs",
           targetThumbnailKey
@@ -160,7 +169,8 @@ export async function prepareVerifiedImageRelocation(
           fromKey: sourceThumbnailKey,
           toPrefix: "thumbs",
           toKey: targetThumbnailKey,
-          cleanupCandidate: cleanupCandidate(thumbnailCandidate)
+          cleanupCandidate: cleanupCandidate(thumbnailCandidate),
+          signal
         });
         if (thumbnailResult.created) {
           createdObjects.push(thumbnailCandidate);
@@ -173,7 +183,11 @@ export async function prepareVerifiedImageRelocation(
           backend: image.storage_slug
         });
       } else {
-        const media = await storage.driver.readBuffer("media", image.object_key);
+        const media = await storage.driver.readBuffer(
+          "media",
+          image.object_key,
+          { signal }
+        );
         signal?.throwIfAborted();
         const repair = await repairStoredThumbnailWithLockHeld(
           image.id,
@@ -197,7 +211,8 @@ export async function prepareVerifiedImageRelocation(
           key: targetThumbnailKey,
           body: repair.thumbnail,
           contentType: "image/webp",
-          cleanupCandidate: cleanupCandidate(thumbnailCandidate)
+          cleanupCandidate: cleanupCandidate(thumbnailCandidate),
+          signal
         });
         if (thumbnailResult.created) {
           createdObjects.push(thumbnailCandidate);

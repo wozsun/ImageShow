@@ -139,11 +139,19 @@ export function registerImportRoutes(app: Hono) {
   });
 
   app.get(`${adminApiBasePath}/imports/:id/preview/full`, async (c) => {
-    return previewImportSession(parseOwnedImportId(c.req.param("id")), "full");
+    return previewImportSession(
+      parseOwnedImportId(c.req.param("id")),
+      "full",
+      c.req.raw.signal
+    );
   });
 
   app.get(`${adminApiBasePath}/imports/:id/preview`, async (c) => {
-    return previewImportSession(parseOwnedImportId(c.req.param("id")), "thumb");
+    return previewImportSession(
+      parseOwnedImportId(c.req.param("id")),
+      "thumb",
+      c.req.raw.signal
+    );
   });
 
   app.get(`${adminApiBasePath}/imports/status`, async (c) => {

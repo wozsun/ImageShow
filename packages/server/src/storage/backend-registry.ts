@@ -20,12 +20,14 @@ import {
 } from "./backend-record.ts";
 import { createStorageDriver } from "./driver-factory.ts";
 import type { StorageDriver } from "./driver.ts";
+import { manageStorageDriver } from "./driver-lifecycle.ts";
+import { StorageBackendRegistryGeneration } from "./backend-registry-generation.ts";
 
 const storageCacheTtlMs = appConfig.derivedCacheTtlSeconds * 1000;
 let storageCache: StorageBackendRecord[] | null = null;
 let storageCacheExpiresAt = 0;
 let storageLoad: Promise<StorageBackendRecord[]> | null = null;
-let storageCacheGeneration = 0;
+const registryGeneration = new StorageBackendRegistryGeneration();
 const storageDriverCache = new Map<string, StorageDriver>();
 let storageDriverCloseQueue = Promise.resolve();
 
@@ -34,11 +36,14 @@ function storageDriverCacheKey(config: StorageConfig) {
 }
 
 function storageDriverForConfig(config: StorageConfig) {
-  if (config.slug === "(test)") return createStorageDriver(config);
+  registryGeneration.assertOpen();
+  if (config.slug === "(test)") {
+    return manageStorageDriver(createStorageDriver(config));
+  }
   const key = storageDriverCacheKey(config);
   const cached = storageDriverCache.get(key);
   if (cached) return cached;
-  const driver = createStorageDriver(config);
+  const driver = manageStorageDriver(createStorageDriver(config));
   storageDriverCache.set(key, driver);
   return driver;
 }
@@ -47,10 +52,20 @@ function retireStorageDrivers() {
   const drivers = [...storageDriverCache.values()];
   storageDriverCache.clear();
   if (!drivers.length) return;
-  storageDriverCloseQueue = storageDriverCloseQueue.then(async () => {
-    const results = await Promise.allSettled(
-      drivers.map((driver) => Promise.resolve().then(() => driver.close?.()))
-    );
+  // Invoke close synchronously so every wrapper rejects new leases as soon as
+  // the cache generation is retired. Physical clients close only after their
+  // already-issued operations and response bodies drain (or hit the bound).
+  const closing = Promise.allSettled(drivers.map((driver) => {
+    try {
+      return Promise.resolve(driver.close?.());
+    } catch (error) {
+      return Promise.reject(error);
+    }
+  }));
+  storageDriverCloseQueue = Promise.all([
+    storageDriverCloseQueue,
+    closing
+  ]).then(([, results]) => {
     for (const result of results) {
       if (result.status === "fulfilled") continue;
       logger.warn("storage_driver_close_failed", {
@@ -83,15 +98,15 @@ async function loadStorageBackends(): Promise<StorageBackendRecord[]> {
   return rows.map((row) => storageBackendRecordFromRow(row));
 }
 
-async function getStorageBackends(): Promise<StorageBackendRecord[]> {
+async function loadCachedStorageBackends(): Promise<StorageBackendRecord[]> {
   if (storageCache && Date.now() < storageCacheExpiresAt) return storageCache;
-  const loadGeneration = storageCacheGeneration;
+  const loadGeneration = registryGeneration.current;
   if (publicReadUsesFallbackAdmission()) {
     return coalescePublicRead(
       `storage-backends:${loadGeneration}`,
       async () => {
         const loaded = await loadStorageBackends();
-        if (storageCacheGeneration === loadGeneration) {
+        if (registryGeneration.current === loadGeneration) {
           storageCache = loaded;
           storageCacheExpiresAt = Date.now() + storageCacheTtlMs;
         }
@@ -103,7 +118,7 @@ async function getStorageBackends(): Promise<StorageBackendRecord[]> {
   const currentLoad = storageLoad;
   try {
     const loaded = await currentLoad;
-    if (storageCacheGeneration === loadGeneration) {
+    if (registryGeneration.current === loadGeneration) {
       storageCache = loaded;
       storageCacheExpiresAt = Date.now() + storageCacheTtlMs;
     }
@@ -113,20 +128,28 @@ async function getStorageBackends(): Promise<StorageBackendRecord[]> {
   }
 }
 
+async function getStorageBackends(): Promise<StorageBackendRecord[]> {
+  return registryGeneration.commitStable(
+    loadCachedStorageBackends,
+    (backends) => backends
+  );
+}
+
 export function invalidateStorageBackendRegistry(
   options: { retireDrivers?: boolean } = {}
 ) {
-  storageCacheGeneration += 1;
+  registryGeneration.invalidate();
   storageCache = null;
   storageCacheExpiresAt = 0;
-  // A caller that started before this invalidation may still await its own
-  // snapshot, but no later caller may join or publish that stale load.
+  // A caller that started before invalidation may finish its physical query,
+  // but the generation gate prevents that snapshot from being committed or
+  // used to create a driver.
   storageLoad = null;
   if (options.retireDrivers) retireStorageDrivers();
 }
 
 export async function closeStorageBackendRegistry() {
-  storageCacheGeneration += 1;
+  registryGeneration.close();
   storageCache = null;
   storageCacheExpiresAt = 0;
   storageLoad = null;
@@ -139,9 +162,17 @@ export async function listStorageBackends(): Promise<StorageBackendRecord[]> {
 }
 
 export async function getStorageBackend(slug: string): Promise<StorageConfig> {
-  const record = (await getStorageBackends()).find(
-    (backend) => backend.slug === slug
+  return registryGeneration.commitStable(
+    loadCachedStorageBackends,
+    (backends) => storageConfigFromRecord(storageRecordBySlug(backends, slug))
   );
+}
+
+function storageRecordBySlug(
+  backends: readonly StorageBackendRecord[],
+  slug: string
+) {
+  const record = backends.find((backend) => backend.slug === slug);
   if (!record) {
     throw new ApiError(
       404,
@@ -149,7 +180,7 @@ export async function getStorageBackend(slug: string): Promise<StorageConfig> {
       `Unknown storage backend: ${slug}`
     );
   }
-  return storageConfigFromRecord(record);
+  return record;
 }
 
 function assertStorageConfigComplete(config: StorageConfig) {
@@ -172,28 +203,22 @@ function assertStorageConfigComplete(config: StorageConfig) {
 export async function assertStorageWriteTarget(
   slug: string
 ): Promise<StorageConfig> {
-  const record = (await getStorageBackends()).find(
-    (backend) => backend.slug === slug
-  );
-  if (!record) {
-    throw new ApiError(
-      404,
-      "storage_backend_not_found",
-      `Unknown storage backend: ${slug}`
-    );
-  }
-  if (!record.enabled) {
-    throw new ApiError(
-      400,
-      "storage_backend_disabled",
-      "该存储后端已停用，不能作为图片写入或迁移目标"
-    );
-  }
-  return assertStorageConfigComplete(storageConfigFromRecord(record));
+  return registryGeneration.commitStable(loadCachedStorageBackends, (backends) => {
+    const record = storageRecordBySlug(backends, slug);
+    if (!record.enabled) {
+      throw new ApiError(
+        400,
+        "storage_backend_disabled",
+        "该存储后端已停用，不能作为图片写入或迁移目标"
+      );
+    }
+    return assertStorageConfigComplete(storageConfigFromRecord(record));
+  });
 }
 
-async function getDefaultStorageRecord(): Promise<StorageBackendRecord> {
-  const backends = await getStorageBackends();
+function defaultStorageRecord(
+  backends: readonly StorageBackendRecord[]
+): StorageBackendRecord {
   const record = backends.find((backend) => backend.is_default)
     ?? backends.find((backend) => backend.slug === "local")
     ?? backends[0];
@@ -207,15 +232,21 @@ async function getDefaultStorageRecord(): Promise<StorageBackendRecord> {
   return record;
 }
 
-export async function getDefaultStorageBackend(): Promise<StorageConfig> {
-  return storageConfigFromRecord(await getDefaultStorageRecord());
+async function getDefaultStorageRecord(): Promise<StorageBackendRecord> {
+  return registryGeneration.commitStable(
+    loadCachedStorageBackends,
+    defaultStorageRecord
+  );
 }
 
 export async function resolveStorageAccess(slug?: string) {
-  const config = slug
-    ? await getStorageBackend(slug)
-    : await getDefaultStorageBackend();
-  return { config, driver: storageDriverForConfig(config) };
+  return registryGeneration.commitStable(loadCachedStorageBackends, (backends) => {
+    const record = slug
+      ? storageRecordBySlug(backends, slug)
+      : defaultStorageRecord(backends);
+    const config = storageConfigFromRecord(record);
+    return { config, driver: storageDriverForConfig(config) };
+  });
 }
 
 export function resolveStorageAccessForConfig(config: StorageConfig) {

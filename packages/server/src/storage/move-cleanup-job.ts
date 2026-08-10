@@ -241,7 +241,8 @@ export async function handleMoveCleanupJob(
             const endpoint = resolveStorageAccessForConfig(objectBackend);
             const candidateExists = await endpoint.driver.exists(
               object.prefix,
-              object.key
+              object.key,
+              { signal }
             );
             signal.throwIfAborted();
             if (!candidateExists) {
@@ -263,14 +264,16 @@ export async function handleMoveCleanupJob(
                 key: object.key,
                 body: thumbnailRepairBody,
                 contentType: "image/webp",
-                repairAuthorization: authorization
+                repairAuthorization: authorization,
+                signal
               });
               signal.throwIfAborted();
             }
             let digest = await digestStorageObject(
               endpoint,
               object.prefix,
-              object.key
+              object.key,
+              { signal }
             );
             signal.throwIfAborted();
             if (
@@ -287,7 +290,8 @@ export async function handleMoveCleanupJob(
               await removeStorageObjectAndConfirm(
                 object.prefix,
                 object.key,
-                object.backend
+                object.backend,
+                { signal }
               );
               signal.throwIfAborted();
               const authorization: ThumbnailRepairCleanupAuthorization = {
@@ -301,13 +305,15 @@ export async function handleMoveCleanupJob(
                 key: object.key,
                 body: thumbnailRepairBody,
                 contentType: "image/webp",
-                repairAuthorization: authorization
+                repairAuthorization: authorization,
+                signal
               });
               signal.throwIfAborted();
               digest = await digestStorageObject(
                 endpoint,
                 object.prefix,
-                object.key
+                object.key,
+                { signal }
               );
               signal.throwIfAborted();
               if (
@@ -363,7 +369,8 @@ export async function handleMoveCleanupJob(
         const removal = await removeStorageObjectAndConfirm(
           object.prefix,
           object.key,
-          object.backend
+          object.backend,
+          { signal }
         );
         if (object.thumbnail_repair && removal === "missing") {
           throw new ApiError(
@@ -390,7 +397,7 @@ export async function handleMoveCleanupJob(
     }
     for (const backend of new Set(objects.map((object) => object.backend))) {
       signal.throwIfAborted();
-      await pruneEmptyStorageDirs(backend);
+      await pruneEmptyStorageDirs(backend, { signal });
     }
     signal.throwIfAborted();
     if (thumbnailRepairObject) {

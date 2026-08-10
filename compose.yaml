@@ -40,6 +40,7 @@ services:
     image: wozsun/imageshow:latest
     container_name: imageshow
     restart: unless-stopped
+    stop_grace_period: 50s
     depends_on:
       postgresql:
         condition: service_healthy

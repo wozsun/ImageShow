@@ -127,14 +127,18 @@ function shutdown(signal: string, exitCode = 0) {
       stopRedisOperationalMonitor();
       stopWorker();
       const workerDrain = drainWorker();
+      // Mark every cached driver as retiring before waiting for HTTP bodies.
+      // Existing leases may drain; shutdown-time work cannot create a new
+      // driver from a stale or freshly loaded registry snapshot.
+      const storageRegistryClose = closeStorageBackendRegistry();
       await settleCoordinatorInitialization();
       const readyImageCacheStop = stopReadyImageCacheCoordinator();
       await Promise.all([
         serverClose,
         workerDrain,
-        readyImageCacheStop
+        readyImageCacheStop,
+        storageRegistryClose
       ]);
-      await closeStorageBackendRegistry();
       await redis.quit().catch(() => redis.disconnect());
       await closeDatabasePools();
       await lifecycleLock?.release().catch((error) => {

@@ -105,16 +105,19 @@ export async function prepareImportArtifacts(options: {
       preparedImageKey,
       normalized.processed,
       contentType(normalized.ext),
-      storageSlug
+      storageSlug,
+      { signal }
     ),
     writeStorageBuffer(
       "_uploads",
       preparedThumbnailKey,
       normalized.thumbnail,
       "image/webp",
-      storageSlug
+      storageSlug,
+      { signal }
     )
   ]);
+  signal.throwIfAborted();
   const writeFailure = writes.find(
     (result): result is PromiseRejectedResult => result.status === "rejected"
   );

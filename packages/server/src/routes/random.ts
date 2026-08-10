@@ -63,7 +63,7 @@ async function respondRandom(c: Context, url: URL) {
     if (selection.method === "proxy") {
       const opened = await (
         await resolveReadableObject("media", picked.object_key, picked.storage_slug)
-      ).open();
+      ).open(undefined, { signal });
       // 每次请求都会重新抽图，后续 Range 请求不保证命中同一对象，因此不声明字节范围能力。
       const headers = new Headers({ ...baseHeaders, "Content-Type": contentType(picked.ext) });
       const contentLength = responseContentLengthValue(opened.size);

@@ -280,7 +280,8 @@ async function migrateImageStorageBackendWhileLocked(
         current.id,
         [capturedCandidate],
         "storage_migration_integrity_failure"
-      )
+      ),
+      signal
     });
     if (result.created) {
       created.push(capturedCandidate);
@@ -292,12 +293,17 @@ async function migrateImageStorageBackendWhileLocked(
   try {
     await assertThumbnailRepairNotPending(current.id, source, thumbKey);
     signal.throwIfAborted();
-    if (!await sourceAccess.driver.exists("media", current.object_key)) {
+    if (!await sourceAccess.driver.exists(
+      "media",
+      current.object_key,
+      { signal }
+    )) {
       return "missing";
     }
     const image = await sourceAccess.driver.readBuffer(
       "media",
-      current.object_key
+      current.object_key,
+      { signal }
     );
     signal.throwIfAborted();
     if (current.md5 && md5Buffer(image) !== current.md5) {
@@ -317,10 +323,11 @@ async function migrateImageStorageBackendWhileLocked(
 
     const sourceThumbExists = await sourceAccess.driver.exists(
       "thumbs",
-      thumbKey
+      thumbKey,
+      { signal }
     );
     const thumbnail = sourceThumbExists
-      ? await sourceAccess.driver.readBuffer("thumbs", thumbKey)
+      ? await sourceAccess.driver.readBuffer("thumbs", thumbKey, { signal })
       : (await repairStoredThumbnailWithLockHeld(
           current.id,
           signal,

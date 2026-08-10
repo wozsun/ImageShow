@@ -462,6 +462,7 @@ try {
   attemptedContainers.add(names.app);
   await runDocker([
     "run", "--detach", "--name", names.app,
+    "--stop-timeout", "50",
     "--network", names.network,
     "--tmpfs", "/app/data:rw",
     "--env", "SITE_DOMAIN=example.test",
@@ -477,6 +478,12 @@ try {
     "--env", "REDIS_DB=0",
     imageId
   ]);
+  const stopTimeout = await runDocker([
+    "container", "inspect", "--format", "{{.Config.StopTimeout}}", names.app
+  ]);
+  if (stopTimeout.stdout !== "50") {
+    throw new Error(`unexpected ImageShow stop timeout: ${stopTimeout.stdout}`);
+  }
 
   await waitFor("ImageShow Docker health", healthProbe, 180_000);
   if (await containerImageId() !== imageId) {

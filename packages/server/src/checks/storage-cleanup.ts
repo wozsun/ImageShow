@@ -159,7 +159,12 @@ async function cleanupStorageUnderLock(signal: AbortSignal) {
       for (const [prefix, key] of candidates) {
         try {
           signal.throwIfAborted();
-          await removeStorageObjectAndConfirm(prefix, key, backend);
+          await removeStorageObjectAndConfirm(
+            prefix,
+            key,
+            backend,
+            { signal }
+          );
           signal.throwIfAborted();
           removed += 1;
         } catch (error) {
@@ -168,7 +173,7 @@ async function cleanupStorageUnderLock(signal: AbortSignal) {
         }
       }
       signal.throwIfAborted();
-      prunedDirs += await pruneEmptyStorageDirs(backend);
+      prunedDirs += await pruneEmptyStorageDirs(backend, { signal });
       signal.throwIfAborted();
     } catch (error) {
       if (signal.aborted) throw signal.reason ?? error;

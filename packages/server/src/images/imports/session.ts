@@ -189,7 +189,11 @@ export function createImportSession(input: ImportCreateInput) {
   );
 }
 
-export async function previewImportSession(id: string, variant: "thumb" | "full" = "thumb") {
+export async function previewImportSession(
+  id: string,
+  variant: "thumb" | "full" = "thumb",
+  signal?: AbortSignal
+) {
   const session = (await pool.query(
     "SELECT mode, source_url, storage_slug, status, prepared_payload FROM import_session WHERE id=$1",
     [id]
@@ -202,12 +206,15 @@ export async function previewImportSession(id: string, variant: "thumb" | "full"
   }
 
   const payload = session.prepared_payload as PreparedPayload;
-  if (variant === "thumb") return preparedThumbnailResponse(payload, session.storage_slug);
+  if (variant === "thumb") {
+    return preparedThumbnailResponse(payload, session.storage_slug, signal);
+  }
 
   const buffer = await readStorageBuffer(
     "_uploads",
     payload.prepared_image_key,
-    session.storage_slug
+    session.storage_slug,
+    { signal }
   );
   return new Response(buffer as unknown as BodyInit, {
     headers: {

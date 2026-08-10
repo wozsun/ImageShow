@@ -7,7 +7,7 @@ Compose 中各一个 PostgreSQL 与 Redis 容器。升级时先停止对应当�
 应用容器可按下例连接基础设施服务：
 
 ```bash
-docker run -d --name imageshow --restart unless-stopped -p 5518:5518 \
+docker run -d --name imageshow --restart unless-stopped --stop-timeout 50 -p 5518:5518 \
   -e SITE_DOMAIN=img.example.com -e TZ=UTC \
   -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD="${ADMIN_PASSWORD:?set ADMIN_PASSWORD first}" \
   -e DATABASE_HOST=db.example.internal -e DATABASE_NAME=imageshow \

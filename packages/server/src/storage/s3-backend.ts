@@ -9,6 +9,7 @@ import {
   S3Client,
   type GetObjectCommandOutput
 } from "@aws-sdk/client-s3";
+import { NodeHttpHandler } from "@smithy/node-http-handler";
 import { randomUUID } from "node:crypto";
 import { ApiError, errorMessage } from "../core/api-error.ts";
 import { getInputImageMaxBytes } from "../config/app-settings.ts";
@@ -19,6 +20,7 @@ import type {
   CopyPrefix,
   OpenedRead,
   StorageDriver,
+  StorageRequestOptions,
   StorageSelfTest
 } from "./driver.ts";
 import { assertSingleByteRangeSyntax, totalSizeFromContentRange } from "../core/http/byte-range.ts";
@@ -28,32 +30,63 @@ import {
   batchStorageKeys,
   type StorageKeyListOptions
 } from "./key-listing.ts";
+import { S3RequestRuntime } from "./s3-request-runtime.ts";
 
-function storageS3Client(config: StorageConfig) {
+const S3_LIST_MAX_PAGES = 100_001;
+const S3_LIST_MAX_CONSECUTIVE_EMPTY_PAGES = 8;
+
+export type S3CommandClient = {
+  send(
+    command: unknown,
+    options?: { abortSignal?: AbortSignal }
+  ): Promise<unknown>;
+  destroy(): void;
+};
+
+export type S3BackendDependencies = {
+  client?: S3CommandClient;
+};
+
+function storageS3Client(config: StorageConfig): S3CommandClient {
   const endpoint = /^https:\/\//i.test(config.s3.endpoint) ? config.s3.endpoint : `https://${config.s3.endpoint}`;
   return new S3Client({
     endpoint,
     region: config.s3.region || "auto",
     forcePathStyle: config.s3.force_path_style,
+    requestHandler: new NodeHttpHandler({
+      connectionTimeout: config.s3.connect_timeout_seconds * 1000
+    }),
     credentials: {
       accessKeyId: config.s3.access_key_id,
       secretAccessKey: config.s3.secret_access_key ?? ""
     }
-  });
+  }) as unknown as S3CommandClient;
 }
 
 export class S3Backend implements StorageDriver {
-  private readonly client: S3Client;
+  private readonly client: S3CommandClient;
   private readonly bucket: string;
   private readonly config: StorageConfig;
+  private readonly requests: S3RequestRuntime;
 
-  constructor(config: StorageConfig) {
+  constructor(
+    config: StorageConfig,
+    dependencies: S3BackendDependencies = {}
+  ) {
     this.config = config;
-    this.client = storageS3Client(config);
+    this.client = dependencies.client ?? storageS3Client(config);
     this.bucket = config.s3.bucket;
+    this.requests = new S3RequestRuntime({
+      idleTimeoutMs: config.s3.idle_timeout_seconds * 1000,
+      taskTimeoutMs: config.s3.task_timeout_seconds * 1000
+    });
   }
 
   close() {
+    this.client.destroy();
+  }
+
+  forceClose() {
     this.client.destroy();
   }
 
@@ -61,18 +94,57 @@ export class S3Backend implements StorageDriver {
     return storageS3ObjectName(this.config, prefix, key);
   }
 
-  private async objectSize(prefix: StoragePrefix, key: string) {
-    const result = await this.client.send(new HeadObjectCommand({
+  private send<Output>(
+    command: unknown,
+    options: StorageRequestOptions = {},
+    responseBody?: (result: Output) => Readable | undefined
+  ) {
+    return this.requests.run(
+      (signal) => this.client.send(command, { abortSignal: signal }) as Promise<Output>,
+      options,
+      responseBody
+    );
+  }
+
+  private async objectSize(
+    prefix: StoragePrefix,
+    key: string,
+    options: StorageRequestOptions = {}
+  ) {
+    const result = await this.send<{ ContentLength?: number }>(new HeadObjectCommand({
       Bucket: this.bucket,
       Key: this.name(prefix, key)
-    }));
+    }), options);
     const size = Number(result.ContentLength);
     return Number.isSafeInteger(size) && size >= 0 ? size : undefined;
   }
 
-  async exists(prefix: StoragePrefix, key: string) {
+  private async optionalObjectSize(
+    prefix: StoragePrefix,
+    key: string,
+    options: StorageRequestOptions
+  ) {
     try {
-      await this.client.send(new HeadObjectCommand({ Bucket: this.bucket, Key: this.name(prefix, key) }));
+      return await this.objectSize(prefix, key, options);
+    } catch (error) {
+      options.signal?.throwIfAborted();
+      return undefined;
+    }
+  }
+
+  async exists(
+    prefix: StoragePrefix,
+    key: string,
+    options: StorageRequestOptions = {}
+  ) {
+    try {
+      await this.send(
+        new HeadObjectCommand({
+          Bucket: this.bucket,
+          Key: this.name(prefix, key)
+        }),
+        options
+      );
       return true;
     } catch (error) {
       if (isS3NotFound(error)) return false;
@@ -80,11 +152,24 @@ export class S3Backend implements StorageDriver {
     }
   }
 
-  async openRead(prefix: StoragePrefix, key: string, range?: string): Promise<OpenedRead> {
+  async openRead(
+    prefix: StoragePrefix,
+    key: string,
+    range?: string,
+    options: StorageRequestOptions = {}
+  ): Promise<OpenedRead> {
     assertSingleByteRangeSyntax(range);
     let result: GetObjectCommandOutput;
     try {
-      result = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: this.name(prefix, key), Range: range }));
+      result = await this.send<GetObjectCommandOutput>(
+        new GetObjectCommand({
+          Bucket: this.bucket,
+          Key: this.name(prefix, key),
+          Range: range
+        }),
+        options,
+        (output) => output.Body as Readable | undefined
+      );
     } catch (error) {
       if (isS3NotFound(error)) throw new ApiError(404, "storage_object_not_found", "Object not found");
       if ((error as { $metadata?: { httpStatusCode?: number } })?.$metadata?.httpStatusCode === 416) {
@@ -94,7 +179,7 @@ export class S3Backend implements StorageDriver {
         const contentRange = responseHeaders?.["content-range"];
         const headerValue = Array.isArray(contentRange) ? contentRange[0] : contentRange;
         const totalSize = totalSizeFromContentRange(headerValue)
-          ?? await this.objectSize(prefix, key).catch(() => undefined);
+          ?? await this.optionalObjectSize(prefix, key, options);
         throw new ApiError(
           416,
           "range_not_satisfiable",
@@ -128,44 +213,143 @@ export class S3Backend implements StorageDriver {
     };
   }
 
-  async readBuffer(prefix: StoragePrefix, key: string) {
+  async readBuffer(
+    prefix: StoragePrefix,
+    key: string,
+    options: StorageRequestOptions = {}
+  ) {
     const limit = await getInputImageMaxBytes();
-    return openedReadToBuffer(await this.openRead(prefix, key), limit);
+    return openedReadToBuffer(
+      await this.openRead(prefix, key, undefined, options),
+      limit
+    );
   }
 
-  async writeBuffer(prefix: StoragePrefix, key: string, body: Buffer, type: string) {
-    await this.client.send(new PutObjectCommand({ Bucket: this.bucket, Key: this.name(prefix, key), Body: body, ContentType: type }));
+  async writeBuffer(
+    prefix: StoragePrefix,
+    key: string,
+    body: Buffer,
+    type: string,
+    options: StorageRequestOptions = {}
+  ) {
+    await this.send(new PutObjectCommand({
+      Bucket: this.bucket,
+      Key: this.name(prefix, key),
+      Body: body,
+      ContentType: type
+    }), options);
   }
 
-  async remove(prefix: StoragePrefix, key: string) {
-    await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: this.name(prefix, key) }));
+  async remove(
+    prefix: StoragePrefix,
+    key: string,
+    options: StorageRequestOptions = {}
+  ) {
+    await this.send(new DeleteObjectCommand({
+      Bucket: this.bucket,
+      Key: this.name(prefix, key)
+    }), options);
   }
 
-  async copy(fromPrefix: CopyPrefix, fromKey: string, toPrefix: CopyPrefix, toKey: string) {
-    await this.client.send(new CopyObjectCommand({
+  async copy(
+    fromPrefix: CopyPrefix,
+    fromKey: string,
+    toPrefix: CopyPrefix,
+    toKey: string,
+    options: StorageRequestOptions = {}
+  ) {
+    await this.send(new CopyObjectCommand({
       Bucket: this.bucket,
       CopySource: s3CopySource(this.config, fromPrefix, fromKey),
       Key: this.name(toPrefix, toKey)
-    }));
+    }), options);
+  }
+
+  private async *listedKeys(
+    prefixPath: string,
+    options: StorageKeyListOptions
+  ): AsyncGenerator<string> {
+    let token: string | undefined;
+    let pageCount = 0;
+    let consecutiveEmptyPages = 0;
+    const seenTokens = new Set<string>();
+    do {
+      options.signal?.throwIfAborted();
+      pageCount += 1;
+      if (pageCount > S3_LIST_MAX_PAGES) {
+        throw new ApiError(
+          502,
+          "storage_list_invalid",
+          "S3 object listing exceeded its page limit"
+        );
+      }
+      const result = await this.send<{
+        Contents?: Array<{ Key?: string }>;
+        IsTruncated?: boolean;
+        NextContinuationToken?: string;
+      }>(new ListObjectsV2Command({
+        Bucket: this.bucket,
+        Prefix: prefixPath,
+        ContinuationToken: token,
+        MaxKeys: 1_000
+      }), options);
+      let pageKeyCount = 0;
+      for (const item of result.Contents ?? []) {
+        options.signal?.throwIfAborted();
+        if (!item.Key || item.Key === prefixPath) continue;
+        if (!item.Key.startsWith(prefixPath)) {
+          throw new ApiError(
+            502,
+            "storage_list_invalid",
+            "S3 returned an object outside the requested prefix"
+          );
+        }
+        pageKeyCount += 1;
+        yield item.Key.slice(prefixPath.length);
+      }
+      consecutiveEmptyPages = pageKeyCount === 0 && result.IsTruncated
+        ? consecutiveEmptyPages + 1
+        : 0;
+      if (
+        consecutiveEmptyPages > S3_LIST_MAX_CONSECUTIVE_EMPTY_PAGES
+      ) {
+        throw new ApiError(
+          502,
+          "storage_list_invalid",
+          "S3 object listing made no progress across truncated pages"
+        );
+      }
+      const nextToken = result.IsTruncated
+        ? result.NextContinuationToken
+        : undefined;
+      if (result.IsTruncated && !nextToken) {
+        throw new ApiError(
+          502,
+          "storage_list_invalid",
+          "S3 returned a truncated page without a continuation token"
+        );
+      }
+      if (nextToken && seenTokens.has(nextToken)) {
+        throw new ApiError(
+          502,
+          "storage_list_invalid",
+          "S3 returned a repeated continuation token"
+        );
+      }
+      if (nextToken) seenTokens.add(nextToken);
+      token = nextToken;
+    } while (token);
   }
 
   async *listKeys(
     prefix: StoragePrefix,
     options: StorageKeyListOptions = {}
   ) {
-    const keys: string[] = [];
-    let token: string | undefined;
-    do {
-      const prefixPath = s3ListPrefix(this.config, prefix);
-      const result = await this.client.send(new ListObjectsV2Command({ Bucket: this.bucket, Prefix: prefixPath, ContinuationToken: token }));
-      for (const item of result.Contents ?? []) {
-        if (!item.Key || item.Key === prefixPath) continue;
-        const key = item.Key.startsWith(prefixPath) ? item.Key.slice(prefixPath.length) : item.Key;
-        keys.push(key);
-      }
-      token = result.NextContinuationToken;
-    } while (token);
-    return yield* batchStorageKeys(keys, options);
+    const prefixPath = s3ListPrefix(this.config, prefix);
+    return yield* batchStorageKeys(
+      this.listedKeys(prefixPath, options),
+      options
+    );
   }
 
   publicObjectUrl(prefix: ReadablePrefix, key: string) {
@@ -175,7 +359,9 @@ export class S3Backend implements StorageDriver {
     return `${base}/${encoded}`;
   }
 
-  async selfTest(): Promise<StorageSelfTest> {
+  async selfTest(
+    options: StorageRequestOptions = {}
+  ): Promise<StorageSelfTest> {
     const missing = missingS3Fields(this.config.s3);
     if (missing.length) throw new ApiError(400, "storage_config_incomplete", "Storage config incomplete", { missing });
     const key = `.storage-test-${randomUUID()}`;
@@ -186,9 +372,10 @@ export class S3Backend implements StorageDriver {
         "_uploads",
         key,
         Buffer.from("ok"),
-        "text/plain"
+        "text/plain",
+        options
       );
-      if (!await this.exists("_uploads", key)) {
+      if (!await this.exists("_uploads", key, options)) {
         throw new ApiError(
           502,
           "storage_test_failed",

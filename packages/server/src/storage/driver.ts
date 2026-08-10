@@ -18,6 +18,10 @@ export type OpenedRead = {
 
 export type CopyPrefix = "media" | "thumbs" | "_uploads";
 
+export type StorageRequestOptions = {
+  signal?: AbortSignal;
+};
+
 export type StorageSelfTest = {
   backend: StorageType;
   writable: boolean;
@@ -29,31 +33,48 @@ export type StorageSelfTest = {
 
 export interface StorageDriver {
   close?(): void | Promise<void>;
-  exists(prefix: StoragePrefix, key: string): Promise<boolean>;
+  /** Immediately abort in-flight transport work after graceful drain expires. */
+  forceClose?(): void | Promise<void>;
+  exists(
+    prefix: StoragePrefix,
+    key: string,
+    options?: StorageRequestOptions
+  ): Promise<boolean>;
   openRead(
     prefix: StoragePrefix,
     key: string,
-    range?: string
+    range?: string,
+    options?: StorageRequestOptions
   ): Promise<OpenedRead>;
-  readBuffer(prefix: StoragePrefix, key: string): Promise<Buffer>;
+  readBuffer(
+    prefix: StoragePrefix,
+    key: string,
+    options?: StorageRequestOptions
+  ): Promise<Buffer>;
   writeBuffer(
     prefix: StoragePrefix,
     key: string,
     body: Buffer,
-    type: string
+    type: string,
+    options?: StorageRequestOptions
   ): Promise<void>;
-  remove(prefix: StoragePrefix, key: string): Promise<void>;
+  remove(
+    prefix: StoragePrefix,
+    key: string,
+    options?: StorageRequestOptions
+  ): Promise<void>;
   copy(
     fromPrefix: CopyPrefix,
     fromKey: string,
     toPrefix: CopyPrefix,
-    toKey: string
+    toKey: string,
+    options?: StorageRequestOptions
   ): Promise<void>;
   listKeys(
     prefix: StoragePrefix,
     options?: StorageKeyListOptions
   ): StorageKeyListing;
   publicObjectUrl(prefix: ReadablePrefix, key: string): string;
-  selfTest(): Promise<StorageSelfTest>;
-  pruneEmptyDirs(): Promise<number>;
+  selfTest(options?: StorageRequestOptions): Promise<StorageSelfTest>;
+  pruneEmptyDirs(options?: StorageRequestOptions): Promise<number>;
 }
