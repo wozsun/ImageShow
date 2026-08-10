@@ -101,6 +101,7 @@ type ImageDetailModalProps =
         imageId: string
       ) => void | Promise<void>;
       onDeleted?: (imageId: string) => void;
+      onItemUpdated?: (item: BatchEditableImageSnapshot) => void;
       returnFocusRef?: RefObject<HTMLElement | null>;
     }
   | {
@@ -112,6 +113,7 @@ type ImageDetailModalProps =
         imageId: string
       ) => void | Promise<void>;
       onDeleted?: (imageId: string) => void;
+      onItemUpdated?: (item: BatchEditableImageSnapshot) => void;
       returnFocusRef?: RefObject<HTMLElement | null>;
     };
 
@@ -149,6 +151,10 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
       exit.requestClose();
     }
   }, [exit.requestClose, props.onDeleted]);
+  const handleItemUpdated = useCallback((nextItem: BatchEditableImageSnapshot) => {
+    setEditedSnapshot(nextItem);
+    props.onItemUpdated?.(nextItem);
+  }, [props.onItemUpdated]);
   usePageScrollLock();
   const mobileLayout = useMediaQuery(mobileViewportMediaQuery);
   const frameRef = useRef<HTMLDivElement | null>(null);
@@ -328,7 +334,7 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
                       imageId={item.id}
                       adminItem={adminItem}
                       adminStorageLabel={adminStorageLabel}
-                      onItemUpdated={setEditedSnapshot}
+                      onItemUpdated={handleItemUpdated}
                       onItemDeleteCommitted={props.onDeleteCommitted}
                       onItemDeleted={handleItemDeleted}
                       onNestedDialogChange={setNestedDialogOpen}

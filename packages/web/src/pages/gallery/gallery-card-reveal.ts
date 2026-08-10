@@ -17,8 +17,8 @@ type GalleryCardRevealOptions = {
 
 export class GalleryCardRevealRegistry {
   readonly #enteredAt: number;
-  readonly #revealedImageIds = new Set<string>();
   readonly #routeEntrance: boolean;
+  #revealedThroughIndex = -1;
 
   constructor(options: GalleryCardRevealRegistryOptions) {
     this.#enteredAt = options.enteredAt
@@ -27,10 +27,13 @@ export class GalleryCardRevealRegistry {
   }
 
   prepare(
-    imageId: string,
+    imageIndex: number,
     options: GalleryCardRevealOptions
   ): GalleryCardReveal {
-    if (options.reduceMotion || this.#revealedImageIds.has(imageId)) {
+    if (
+      options.reduceMotion
+      || imageIndex <= this.#revealedThroughIndex
+    ) {
       return { variant: "settled", delayMs: 0 };
     }
 
@@ -52,7 +55,14 @@ export class GalleryCardRevealRegistry {
     };
   }
 
-  markRevealed(imageId: string) {
-    this.#revealedImageIds.add(imageId);
+  markRevealed(imageIndex: number) {
+    this.#revealedThroughIndex = Math.max(
+      this.#revealedThroughIndex,
+      Math.floor(imageIndex)
+    );
+  }
+
+  get revealedThroughIndex() {
+    return this.#revealedThroughIndex;
   }
 }

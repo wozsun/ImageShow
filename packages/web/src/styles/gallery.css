@@ -329,6 +329,12 @@
 .gallery-virtual-tile {
   position: absolute;
 }
+.gallery-virtual-placeholder {
+  position: absolute;
+  pointer-events: none;
+  border: 1px solid var(--public-color-border-default);
+  background: var(--public-color-surface-default);
+}
 
 @media (hover: hover) and (pointer: fine) {
   .tile:hover {
@@ -441,10 +447,28 @@
   text-align: center;
 }
 
-.gallery-page > .query-error-state button {
+.gallery-query-error > .query-error-state button {
   color: var(--color-control-text-on-action);
   background: var(--color-control-action);
   border-color: var(--color-control-action);
+}
+
+.gallery-window-error {
+  position: fixed;
+  left: 50%;
+  bottom: max(24px, calc(env(safe-area-inset-bottom) + 16px));
+  z-index: 5;
+  width: min(440px, calc(100vw - 32px));
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+.gallery-window-error > .query-error-state {
+  padding: 18px;
+  border: 1px solid var(--public-color-border-default);
+  border-radius: 14px;
+  background: var(--public-color-gallery-menu-surface);
+  box-shadow: 0 12px 32px var(--public-shadow-gallery-menu);
+  pointer-events: auto;
 }
 
 .gallery-back-to-top {

@@ -1,31 +1,16 @@
 import {
   useEffect,
   useLayoutEffect,
-  useMemo,
-  useRef,
   useState,
   type RefObject
 } from "react";
-import {
-  galleryMaxMountedTiles,
-  galleryVirtualOverscanScreens
-} from "../../lib/constants.js";
-import type {
-  Device,
-  GalleryImageCard
-} from "../../lib/types.js";
-import {
-  isPageScrollLocked,
-  pageScrollRestoredEvent
-} from "../../hooks/usePageScrollLock.js";
+import type { Device } from "../../lib/types.js";
 import { galleryColumnCount } from "./gallery-columns.js";
-import {
-  masonryWindow,
-  type GalleryGeometry,
-  type MasonryLayout,
-  type MasonryLayoutSession,
-  reconcileMasonryLayout
-} from "./masonry-layout.js";
+
+type GalleryGeometry = {
+  contentWidth: number;
+  gap: number;
+};
 
 export function useGalleryColumnCount() {
   const [columnCount, setColumnCount] = useState(
@@ -93,98 +78,6 @@ export function useGalleryGeometry(
   }, [galleryRef]);
 
   return geometry;
-}
-
-export function useIncrementalMasonryLayout(
-  items: GalleryImageCard[],
-  geometry: GalleryGeometry & { columnCount: number },
-  sessionKey: string
-) {
-  const committedSessionRef = useRef<MasonryLayoutSession | null>(null);
-  const candidate = useMemo(
-    () => reconcileMasonryLayout(
-      committedSessionRef.current,
-      items,
-      geometry,
-      sessionKey
-    ),
-    [
-      geometry.columnCount,
-      geometry.contentWidth,
-      geometry.gap,
-      items,
-      sessionKey
-    ]
-  );
-  useLayoutEffect(() => {
-    committedSessionRef.current = candidate;
-  }, [candidate]);
-  return candidate;
-}
-
-export function useMasonryWindow(
-  windowRef: RefObject<HTMLElement | null>,
-  layout: MasonryLayout,
-  pinnedItemId: string | null = null
-) {
-  const [range, setRange] = useState(() => ({
-    start: 0,
-    end: window.innerHeight * (1 + galleryVirtualOverscanScreens),
-    visibleStart: 0,
-    visibleEnd: window.innerHeight
-  }));
-
-  useLayoutEffect(() => {
-    let frame: number | undefined;
-    const update = () => {
-      frame = undefined;
-      if (isPageScrollLocked()) return;
-      const element = windowRef.current;
-      if (!element) return;
-      const viewportHeight = Math.max(1, window.innerHeight);
-      const visibleStart = Math.max(0, -element.getBoundingClientRect().top);
-      const overscan = viewportHeight * galleryVirtualOverscanScreens;
-      const next = {
-        start: Math.max(0, visibleStart - overscan),
-        end: Math.min(
-          layout.totalHeight,
-          visibleStart + viewportHeight + overscan
-        ),
-        visibleStart,
-        visibleEnd: visibleStart + viewportHeight
-      };
-      setRange((current) => (
-        Math.abs(current.start - next.start) < 1
-        && Math.abs(current.end - next.end) < 1
-        && Math.abs(current.visibleStart - next.visibleStart) < 1
-        && Math.abs(current.visibleEnd - next.visibleEnd) < 1
-      ) ? current : next);
-    };
-    const schedule = () => {
-      if (frame !== undefined) return;
-      frame = window.requestAnimationFrame(update);
-    };
-    update();
-    window.addEventListener("scroll", schedule, { passive: true });
-    window.addEventListener("resize", schedule);
-    window.addEventListener(pageScrollRestoredEvent, schedule);
-    return () => {
-      window.removeEventListener("scroll", schedule);
-      window.removeEventListener("resize", schedule);
-      window.removeEventListener(pageScrollRestoredEvent, schedule);
-      if (frame !== undefined) window.cancelAnimationFrame(frame);
-    };
-  }, [layout.totalHeight, windowRef]);
-
-  return masonryWindow(
-    layout,
-    range.start,
-    range.end,
-    galleryMaxMountedTiles,
-    range.visibleStart,
-    range.visibleEnd,
-    pinnedItemId
-  );
 }
 
 export function galleryImageRatio(

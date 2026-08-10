@@ -13,9 +13,12 @@ import {
 import { useGalleryImageRuntime } from "./GalleryImageRuntime.js";
 import { LazyGalleryImage } from "./LazyGalleryImage.js";
 
-function GalleryTileDevelopmentStats() {
+function GalleryTileDevelopmentStats({ imageIndex }: { imageIndex: number }) {
   const { debug } = useGalleryImageRuntime();
-  useEffect(() => debug?.mountTile(), [debug]);
+  useEffect(() => {
+    debug?.recordReveal(imageIndex);
+    return debug?.mountTile();
+  }, [debug, imageIndex]);
   return null;
 }
 
@@ -30,7 +33,7 @@ export const GalleryTile = memo(function GalleryTile({
   const { item } = position;
   // revealOrder is deliberately mount-only. An existing tile keeps the reveal
   // selected by this initializer when earlier cards leave the virtual window.
-  const [reveal] = useState(() => revealRegistry.prepare(item.id, {
+  const [reveal] = useState(() => revealRegistry.prepare(position.index, {
     initialViewport: position.y < window.innerHeight,
     order: revealOrder,
     reduceMotion: window.matchMedia?.(
@@ -39,8 +42,8 @@ export const GalleryTile = memo(function GalleryTile({
   }));
   const entrance = useOneShotAnimation(reveal.variant !== "settled");
   useLayoutEffect(() => {
-    revealRegistry.markRevealed(item.id);
-  }, [item.id, revealRegistry]);
+    revealRegistry.markRevealed(position.index);
+  }, [position.index, revealRegistry]);
   return (
     <button
       className={[
@@ -68,7 +71,9 @@ export const GalleryTile = memo(function GalleryTile({
         }
       }}
     >
-      {import.meta.env?.DEV === true && <GalleryTileDevelopmentStats />}
+      {import.meta.env?.DEV === true && (
+        <GalleryTileDevelopmentStats imageIndex={position.index} />
+      )}
       <LazyGalleryImage
         src={item.thumb_url}
         alt={title}

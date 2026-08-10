@@ -15,6 +15,7 @@ import {
 } from "../../components/image/image-load-scheduler.js";
 import {
   GalleryDebugStats,
+  type GalleryDataWindowMetrics,
   type GalleryDebugController
 } from "./gallery-debug-stats.js";
 import {
@@ -70,6 +71,17 @@ function GalleryDevelopmentStats({
       data-pending={snapshot.pending}
       data-in-flight={snapshot.inFlight}
       data-thumbnail-fallbacks={snapshot.thumbnailFallbacks}
+      data-fetched-pages={snapshot.fetchedPages}
+      data-retained-pages={snapshot.retainedPages}
+      data-query-cache-pages={snapshot.queryCachePages}
+      data-compact-items={snapshot.compactItems}
+      data-full-items={snapshot.fullItems}
+      data-materialized-positions={snapshot.materializedPositions}
+      data-compact-layout-bytes={snapshot.compactLayoutBytes}
+      data-estimated-compact-bytes={snapshot.estimatedCompactBytes}
+      data-estimated-full-dto-bytes={snapshot.estimatedFullDtoBytes}
+      data-reveal-high-water={snapshot.revealHighWater}
+      data-used-js-heap-bytes={snapshot.usedJsHeapBytes ?? "unavailable"}
     >
       {JSON.stringify(snapshot)}
     </output>
@@ -78,10 +90,12 @@ function GalleryDevelopmentStats({
 
 export function GalleryImageRuntime({
   children,
+  dataWindowMetrics,
   detailOpen,
   resetKey
 }: {
   children: React.ReactNode;
+  dataWindowMetrics: GalleryDataWindowMetrics | null;
   detailOpen: boolean;
   resetKey: string;
 }) {
@@ -105,7 +119,21 @@ export function GalleryImageRuntime({
     if (previousResetKeyRef.current === resetKey) return;
     previousResetKeyRef.current = resetKey;
     runtime.debug?.resetThumbnailFallbacks();
+    runtime.debug?.resetDataWindow();
   }, [resetKey, runtime]);
+
+  useLayoutEffect(() => {
+    if (dataWindowMetrics) runtime.debug?.updateDataWindow(dataWindowMetrics);
+  }, [dataWindowMetrics, runtime]);
+
+  useEffect(() => {
+    if (!runtime.debug) return;
+    runtime.debug.sampleJsHeap();
+    const timer = window.setInterval(() => {
+      runtime.debug?.sampleJsHeap();
+    }, 2_000);
+    return () => window.clearInterval(timer);
+  }, [runtime]);
 
   useEffect(() => {
     if (!window.matchMedia) return;

@@ -1,10 +1,10 @@
 import type { GalleryImageCard } from "../../lib/types.js";
 import { imageDisplayTitle } from "../../lib/ui/formatters.js";
 import type { GalleryCardRevealRegistry } from "./gallery-card-reveal.js";
-import type { MasonryItemPosition } from "./masonry-layout.js";
+import type { GalleryWindowPosition } from "./gallery-data-window.js";
 
 export type GalleryTileRenderProps = {
-  position: MasonryItemPosition;
+  position: GalleryWindowPosition & { item: GalleryImageCard };
   revealOrder: number;
   revealRegistry: GalleryCardRevealRegistry;
   title: string;
@@ -19,8 +19,16 @@ export function galleryTilePropsEqual(
   previous: GalleryTileRenderProps,
   current: GalleryTileRenderProps
 ) {
+  const previousPosition = previous.position;
+  const currentPosition = current.position;
   return (
-    previous.position === current.position
+    previousPosition.item === currentPosition.item
+    && previousPosition.index === currentPosition.index
+    && previousPosition.column === currentPosition.column
+    && previousPosition.x === currentPosition.x
+    && previousPosition.y === currentPosition.y
+    && previousPosition.width === currentPosition.width
+    && previousPosition.height === currentPosition.height
     && previous.revealRegistry === current.revealRegistry
     && previous.title === current.title
     && previous.tags === current.tags

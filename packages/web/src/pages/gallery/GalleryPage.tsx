@@ -9,7 +9,6 @@ import {
   type RefObject
 } from "react";
 import {
-  useInfiniteQuery,
   useQuery,
   useQueryClient
 } from "@tanstack/react-query";
@@ -24,10 +23,13 @@ import { Icon } from "../../components/icon/Icon.js";
 // 加载可避免新增请求和 Suspense 边界。
 import { ImageDetailModal } from "../../components/image/ImageDetailModal.js";
 import { queryKeys } from "../../lib/api/query-keys.js";
-import { removeImageFromPublicImagesCache } from "./gallery-image-cache.js";
 import { displayNameOrSlug, errorMessage } from "../../lib/ui/formatters.js";
 import { buildRandomUrl } from "../../lib/gallery/random-url.js";
-import type { GalleryImageCard, PublicImageItem } from "../../lib/types.js";
+import type {
+  BatchEditableImageSnapshot,
+  GalleryImageCard,
+  PublicImageItem
+} from "../../lib/types.js";
 import { useGalleryFacets, useSiteConfig } from "../../lib/api/site-data.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
 import {
@@ -38,8 +40,7 @@ import { useDocumentMotionPause } from "../../hooks/useDocumentMotionPause.js";
 import { usePublicNavigationEntrance } from "../../hooks/usePublicNavigationEntrance.js";
 import {
   useGalleryColumnCount,
-  useGalleryGeometry,
-  useIncrementalMasonryLayout
+  useGalleryGeometry
 } from "./gallery-layout.js";
 import { GalleryImageRuntime } from "./GalleryImageRuntime.js";
 import { GalleryVirtualWindow } from "./GalleryVirtualWindow.js";
@@ -51,10 +52,8 @@ import {
   type GalleryFilters
 } from "../../lib/gallery/gallery-query.js";
 import { GalleryCardRevealRegistry } from "./gallery-card-reveal.js";
-import { galleryDeletionFocusTarget } from "./gallery-delete-continuity.js";
-import { galleryImagesQueryOptions } from "./gallery-images-query.js";
-import { useGalleryPagePreload } from "./useGalleryPagePreload.js";
 import { GalleryToolbar } from "./GalleryToolbar.js";
+import { useGalleryDataWindow } from "./useGalleryDataWindow.js";
 import "../../styles/public-core.css";
 import "../../styles/gallery.css";
 import "../../styles/gallery-responsive.css";
@@ -73,6 +72,7 @@ function GalleryImageDetail({
   onClose,
   onDeleteCommitted,
   onDeleted,
+  onItemUpdated,
   returnFocusRef,
 }: {
   card: GalleryImageCard;
@@ -81,6 +81,7 @@ function GalleryImageDetail({
     imageId: string
   ) => void | Promise<void>;
   onDeleted: (imageId: string) => void;
+  onItemUpdated: (item: BatchEditableImageSnapshot) => void;
   returnFocusRef: RefObject<HTMLElement | null>;
 }) {
   const placeholder = useMemo(() => imagePlaceholder(card), [card]);
@@ -108,6 +109,7 @@ function GalleryImageDetail({
         await onDeleteCommitted(imageId);
       }}
       onDeleted={onDeleted}
+      onItemUpdated={onItemUpdated}
       admin={false}
       detailLoading={detailLoading}
       detailError={detailError}
@@ -142,7 +144,7 @@ export function GalleryPage({ embedded = false }: { embedded?: boolean }) {
     toolbarVisible,
   } = useGalleryViewportControls({ headerPresent: !embedded });
   const detailReturnFocusRef = useRef<HTMLElement | null>(null);
-  const selectedIndexRef = useRef(-1);
+  const deletedFocusIdRef = useRef<string | null>(null);
   const galleryRef = useRef<HTMLElement | null>(null);
   const galleryWindowRef = useRef<HTMLDivElement | null>(null);
   const previousImageQueryRef = useRef<string | null>(null);
@@ -159,11 +161,6 @@ export function GalleryPage({ embedded = false }: { embedded?: boolean }) {
     () => galleryApiSearchParams(filters, order).toString(),
     [filters, order]
   );
-  const publicImagesQuery = useMemo(
-    () => galleryImagesQueryOptions(imageQuery),
-    [imageQuery]
-  );
-  const publicImagesQueryKey = publicImagesQuery.queryKey;
   const revealRegistry = useMemo(
     () => new GalleryCardRevealRegistry({
       routeEntrance: !routeEntranceFinishedRef.current
@@ -180,8 +177,6 @@ export function GalleryPage({ embedded = false }: { embedded?: boolean }) {
     markNavigationAppeared();
   }, [markNavigationAppeared]);
 
-  const imagePages = useInfiniteQuery(publicImagesQuery);
-
   useEffect(() => {
     const previous = previousImageQueryRef.current;
     previousImageQueryRef.current = imageQuery;
@@ -189,11 +184,11 @@ export function GalleryPage({ embedded = false }: { embedded?: boolean }) {
       const previousKey = [...queryKeys.publicImages, previous];
       void queryClient.cancelQueries({
         queryKey: previousKey,
-        exact: true
+        exact: false
       });
       queryClient.removeQueries({
         queryKey: previousKey,
-        exact: true
+        exact: false
       });
     }
     window.scrollTo({ top: 0 });
@@ -214,32 +209,18 @@ export function GalleryPage({ embedded = false }: { embedded?: boolean }) {
     );
   };
 
-  const items = useMemo(() => imagePages.data?.pages.flatMap((page) => page.items) ?? [], [imagePages.data]);
-
   const columnCount = useGalleryColumnCount();
   const geometry = useGalleryGeometry(galleryRef);
-  const layout = useIncrementalMasonryLayout(
-    items,
-    { ...geometry, columnCount },
-    imageQuery
-  );
-  const {
-    pagePreloadRange,
-    pagePreloadRef,
-    nextPageRequestKey,
-    requestNextPage
-  } = useGalleryPagePreload({
+  const galleryData = useGalleryDataWindow({
+    geometry: { ...geometry, columnCount },
     imageQuery,
-    imagePages,
-    publicImagesQueryKey,
-    positions: layout.positions,
-    totalHeight: layout.totalHeight
+    pinnedImageId,
+    windowRef: galleryWindowRef
   });
   const themeNames = useMemo(() => new Map((facets?.themes ?? []).map((option) => [option.slug, displayNameOrSlug(option)])), [facets]);
   const tagNames = useMemo(() => new Map((facets?.tags ?? []).map((option) => [option.slug, displayNameOrSlug(option)])), [facets]);
-  const initialLoading = imagePages.isLoading && items.length === 0;
-  const nextPageLoading = imagePages.isFetchingNextPage
-    && items.length > 0;
+  const initialLoading = galleryData.initialLoading;
+  const nextPageLoading = galleryData.nextPageLoading;
   const loading = initialLoading || nextPageLoading;
   const showBackToTop = backToTopVisible && !selected;
 
@@ -248,19 +229,14 @@ export function GalleryPage({ embedded = false }: { embedded?: boolean }) {
     opener: HTMLButtonElement
   ) => {
     detailReturnFocusRef.current = opener;
-    selectedIndexRef.current = items.findIndex((item) => item.id === card.id);
     setPinnedImageId(card.id);
     setSelected(card);
-  }, [items]);
-  const handleGalleryImageDeleted = (deletedId: string) => {
-    const focusTarget = galleryDeletionFocusTarget(
-      items,
-      deletedId,
-      selectedIndexRef.current
-    );
+  }, []);
+  const handleGalleryImageDeleted = () => {
     // 原按钮会随查询重排卸载，不让通用弹窗焦点恢复抓住已脱离 DOM 的节点。
     detailReturnFocusRef.current = null;
-    setPinnedImageId(focusTarget?.id ?? null);
+    setPinnedImageId(deletedFocusIdRef.current);
+    deletedFocusIdRef.current = null;
   };
 
   useEffect(() => {
@@ -313,6 +289,7 @@ export function GalleryPage({ embedded = false }: { embedded?: boolean }) {
 
   return (
     <GalleryImageRuntime
+      dataWindowMetrics={galleryData.debugMetrics}
       detailOpen={Boolean(selected)}
       resetKey={imageQuery}
     >
@@ -354,31 +331,31 @@ export function GalleryPage({ embedded = false }: { embedded?: boolean }) {
       <section ref={galleryRef} className="gallery">
         <GalleryVirtualWindow
           imageQuery={imageQuery}
-          layout={layout}
-          nextPageRequestKey={nextPageRequestKey}
           onOpen={openDetail}
-          pagePreloadRange={pagePreloadRange}
-          pagePreloadRef={pagePreloadRef}
-          pinnedItemId={pinnedImageId}
+          positions={galleryData.positions}
           revealRegistry={revealRegistry}
           tagNames={tagNames}
           themeNames={themeNames}
+          totalHeight={galleryData.snapshot.totalHeight}
           windowRef={galleryWindowRef}
         />
       </section>
-      {imagePages.isError && (
-        <QueryErrorState
-          error={imagePages.error}
-          onRetry={() => {
-            if (imagePages.isFetchNextPageError && nextPageRequestKey) {
-              requestNextPage(true);
-              return;
-            }
-            void imagePages.refetch();
-          }}
-        />
+      {galleryData.snapshot.error && (
+        <div className={`gallery-query-error${
+          galleryData.snapshot.errorRequest?.kind === "hydrate"
+            ? " gallery-window-error"
+            : ""
+        }`}>
+          <QueryErrorState
+            error={galleryData.snapshot.error}
+            onRetry={galleryData.retry}
+          />
+        </div>
       )}
-      {!imagePages.isError && !loading && !items.length && <p className="gallery-empty">暂无图片</p>}
+      {!galleryData.snapshot.error
+        && !loading
+        && galleryData.snapshot.compactItems === 0
+        && <p className="gallery-empty">暂无图片</p>}
       {initialLoading && (
         <AppLoadingRegion
           className="gallery-initial-loading"
@@ -405,13 +382,11 @@ export function GalleryPage({ embedded = false }: { embedded?: boolean }) {
           card={selected}
           onClose={() => setSelected(null)}
           onDeleteCommitted={async (imageId) => {
-            await removeImageFromPublicImagesCache(
-              queryClient,
-              imageQuery,
-              imageId
-            );
+            const result = await galleryData.removeImage(imageId);
+            deletedFocusIdRef.current = result.focusId;
           }}
           onDeleted={handleGalleryImageDeleted}
+          onItemUpdated={(item) => galleryData.refreshImage(item.id)}
           returnFocusRef={detailReturnFocusRef}
         />
       )}

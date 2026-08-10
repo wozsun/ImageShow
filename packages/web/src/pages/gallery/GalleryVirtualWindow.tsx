@@ -1,11 +1,10 @@
 import {
   memo,
+  type CSSProperties,
   type RefObject
 } from "react";
-import { useMasonryWindow } from "./gallery-layout.js";
 import { GalleryCardRevealRegistry } from "./gallery-card-reveal.js";
-import type { GalleryPagePreloadRange } from "./gallery-page-preload.js";
-import type { MasonryLayout } from "./masonry-layout.js";
+import type { GalleryWindowPosition } from "./gallery-data-window.js";
 import {
   galleryTileTags,
   galleryTileTitle,
@@ -15,68 +14,67 @@ import { GalleryTile } from "./GalleryTile.js";
 
 type GalleryVirtualWindowProps = {
   imageQuery: string;
-  layout: MasonryLayout;
-  nextPageRequestKey: string;
   onOpen: GalleryTileRenderProps["onOpen"];
-  pagePreloadRange: GalleryPagePreloadRange | null;
-  pagePreloadRef: RefObject<HTMLSpanElement | null>;
-  pinnedItemId: string | null;
+  positions: readonly GalleryWindowPosition[];
   revealRegistry: GalleryCardRevealRegistry;
   tagNames: ReadonlyMap<string, string>;
   themeNames: ReadonlyMap<string, string>;
+  totalHeight: number;
   windowRef: RefObject<HTMLDivElement | null>;
 };
 
+function GalleryWindowPlaceholder({
+  position
+}: {
+  position: GalleryWindowPosition;
+}) {
+  return (
+    <span
+      className="tile gallery-virtual-placeholder"
+      data-image-id={position.id}
+      aria-hidden="true"
+      style={{
+        left: position.x,
+        top: position.y,
+        width: position.width,
+        height: position.height
+      } as CSSProperties}
+    />
+  );
+}
+
 export const GalleryVirtualWindow = memo(function GalleryVirtualWindow({
   imageQuery,
-  layout,
-  nextPageRequestKey,
   onOpen,
-  pagePreloadRange,
-  pagePreloadRef,
-  pinnedItemId,
+  positions,
   revealRegistry,
   tagNames,
   themeNames,
+  totalHeight,
   windowRef
 }: GalleryVirtualWindowProps) {
-  const mountedPositions = useMasonryWindow(
-    windowRef,
-    layout,
-    pinnedItemId
-  );
   return (
     <div
       ref={windowRef}
       className="gallery-window"
-      style={{ height: layout.totalHeight }}
+      style={{ height: totalHeight }}
     >
-      {mountedPositions.map((position, index) => (
+      {positions.map((position, index) => position.item ? (
         <GalleryTile
-          key={`${imageQuery}:${position.item.id}`}
-          position={position}
+          key={`${imageQuery}:${position.id}`}
+          position={{ ...position, item: position.item }}
           revealOrder={index}
           revealRegistry={revealRegistry}
           title={galleryTileTitle(position.item, themeNames)}
           tags={galleryTileTags(position.item, tagNames)}
           onOpen={onOpen}
         />
-      ))}
-      {pagePreloadRange && nextPageRequestKey && (
-        <span
-          ref={pagePreloadRef}
-          aria-hidden="true"
-          data-gallery-page-preload=""
-          style={{
-            position: "absolute",
-            top: pagePreloadRange.top,
-            left: 0,
-            width: 1,
-            height: pagePreloadRange.height,
-            pointerEvents: "none"
-          }}
+      ) : (
+        <GalleryWindowPlaceholder
+          key={`${imageQuery}:${position.id}`}
+          position={position}
         />
-      )}
+      ))}
     </div>
   );
 });
