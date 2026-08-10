@@ -60,9 +60,9 @@ export function useBatchMetadataOperations({
 }) {
   const [pendingAttempt, setPendingAttempt] =
     useState<BatchMetadataSaveAttempt | null>(null);
-  const [saveSummary, setSaveSummary] =
+  const [lastSaveReport, setLastSaveReport] =
     useState<BatchMetadataSaveReport | null>(null);
-  const saveStatus = useAsyncActionStatus({ successDurationMs: null });
+  const saveStatus = useAsyncActionStatus({ resultDurationMs: null });
 
   const readAuthoritativeSnapshot = async () => {
     let lastError: unknown;
@@ -92,7 +92,7 @@ export function useBatchMetadataOperations({
       attempt,
       authoritativeItems
     );
-    setSaveSummary(report);
+    setLastSaveReport(report);
     setPendingAttempt(authoritativeItems ? null : attempt);
 
     // mutation 每轮只触发一次集中图片查询失效。权威快照失败后的再次确认只重读
@@ -118,7 +118,7 @@ export function useBatchMetadataOperations({
       const retryAttempt = pendingAttempt;
       let attempt = retryAttempt;
       if (!attempt) {
-        setSaveSummary(null);
+        setLastSaveReport(null);
         let response: BatchImageUpdateResponseDto | null = null;
         try {
           const request = { items } satisfies BatchImageUpdateRequestDto;
@@ -159,6 +159,6 @@ export function useBatchMetadataOperations({
     reconcilePendingSave,
     save,
     saveStatus,
-    saveSummary
+    lastSaveReport
   };
 }

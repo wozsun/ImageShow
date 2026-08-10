@@ -38,11 +38,6 @@
   );
 }
 .batch-edit-common-panel { flex: 0 0 auto; }
-.batch-edit-save-summary { padding: 10px; border-radius: 6px; }
-.batch-edit-confirmation-pending {
-  margin-top: 6px;
-  color: var(--admin-color-warning-text-strong);
-}
 .batch-edit-delete-error {
   margin: 0;
   padding: 9px 10px;

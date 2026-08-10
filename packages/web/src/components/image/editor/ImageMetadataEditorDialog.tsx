@@ -31,7 +31,6 @@ import type {
   ImageDraft
 } from "../../../lib/types.js";
 import { mergeBatchEditCommonAttributes } from "../../../lib/upload/upload-utils.js";
-import { BatchMetadataSaveSummary } from "./BatchMetadataSaveSummary.js";
 import {
   useBatchMetadataOperations
 } from "./useBatchMetadataOperations.js";
@@ -124,7 +123,7 @@ export function ImageMetadataEditorDialog({
     reconcilePendingSave,
     save,
     saveStatus,
-    saveSummary
+    lastSaveReport
   } = operations;
   const saving = saveStatus.pending;
   const deleteStatus = useAsyncActionStatus({ successDurationMs: null });
@@ -393,13 +392,12 @@ export function ImageMetadataEditorDialog({
               {deleteError}
             </p>
           )}
-          {saveSummary && <BatchMetadataSaveSummary summary={saveSummary} />}
           {visibleItems.map((item) => {
             const draft = session.drafts[item.id];
             const changed = changedByItem.get(item.id)!;
             const cardChanged = Object.values(changed).some(Boolean);
             const lastSaveState = batchMetadataCardSaveState(
-              saveSummary,
+              lastSaveReport,
               item.id
             );
             // A new edit supersedes an earlier success badge. Failed and
@@ -579,7 +577,7 @@ export function ImageMetadataEditorDialog({
       {restoreConfirmation && (
         <ConfirmDialog
           title="确认复原全部修改"
-          description="将当前活动图片尚未保存的属性草稿恢复到最近一次权威基线；图片列表成员、分页、批量默认属性、保存汇总及已经保存的修改都不会改变。"
+          description="将当前活动图片尚未保存的属性草稿恢复到最近一次权威基线；图片列表成员、分页、批量默认属性、卡片保存状态及已经保存的修改都不会改变。"
           confirmLabel="确认复原"
           pendingLabel="复原中"
           successLabel="已复原"
