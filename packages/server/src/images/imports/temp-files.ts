@@ -200,7 +200,7 @@ export async function cleanupOrphanRawImports(
       );
       if (referenced.rowCount) return false;
 
-      // Recheck age after taking the lifecycle lock so a newly replaced file
+      // Recheck age after taking the import-session lock so a replaced file
       // cannot be removed using stale directory metadata.
       const current = await statIfExists(path);
       if (!current || current.mtimeMs >= cutoff) return false;

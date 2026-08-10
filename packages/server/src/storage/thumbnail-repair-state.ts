@@ -8,8 +8,8 @@ function repairKey(imageId: string, key: string) {
 }
 
 /**
- * ImageShow owns one application-lifecycle advisory lock, so an in-process
- * projection can safely remove one PostgreSQL lookup from every thumbnail.
+ * The supported topology runs one ImageShow process, so an in-process
+ * projection can remove one PostgreSQL lookup from every thumbnail.
  * PostgreSQL remains authoritative and rebuilds this projection before HTTP
  * readiness on every process start.
  */

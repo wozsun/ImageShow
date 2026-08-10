@@ -17,10 +17,7 @@ import {
   closeDatabasePools,
   configureDatabasePools
 } from "./core/database-pools.ts";
-import {
-  initializeDatabaseSchema,
-  pingDatabase
-} from "./core/database-schema.ts";
+import { initializeDatabaseSchema } from "./core/database-schema.ts";
 import { ensureSuperAdmin } from "./users/admin-bootstrap.ts";
 import { redis } from "./core/redis-client.ts";
 import {
@@ -37,19 +34,14 @@ import {
 } from "./storage/backend-registry.ts";
 import { initializeThumbnailRepairState } from "./storage/thumbnail-repair-state.ts";
 import { createHttpApp } from "./http-app.ts";
-import {
-  acquireApplicationLifecycleLock,
-  type ApplicationLifecycleLock
-} from "./core/application-lifecycle-lock.ts";
 
 configureDatabasePools(deploymentConfig.database);
 initializeRuntimeConfig();
 configureRuntimeLogger(() => getRuntimeConfig().log);
 const app = createHttpApp();
 
-let lifecycleLock: ApplicationLifecycleLock | null = null;
-let lifecycleOwnershipLoss: Error | null = null;
 let coordinatorInitialization: Promise<unknown> | null = null;
+let unsubscribeBusinessAvailabilityGate: (() => void) | null = null;
 let server: ReturnType<typeof serve> | null = null;
 let shuttingDown = false;
 let shutdownPromise: Promise<void> | null = null;
@@ -60,38 +52,21 @@ async function settleCoordinatorInitialization() {
   if (current) await current.catch(() => undefined);
 }
 
-await ensureRuntimeDirectories();
-await pingDatabase();
-await initializeDatabaseSchema();
 try {
-  lifecycleLock = await acquireApplicationLifecycleLock();
-} catch (error) {
-  await closeDatabasePools();
-  throw error;
-}
-
-void lifecycleLock.ownershipLost.then((error) => {
-  lifecycleOwnershipLoss = error;
-  shuttingDown = true;
-  logger.error("application lifecycle lock ownership lost", error);
-  void shutdown("lifecycle lock loss", 1);
-});
-
-try {
+  await ensureRuntimeDirectories();
+  await initializeDatabaseSchema();
   await initializeThumbnailRepairState();
-  lifecycleLock.assertOwned();
   await cleanupOrphanRawImports(appConfig.uploadTtlSeconds * 1000);
-  lifecycleLock.assertOwned();
   await ensureSuperAdmin({
     username: bootstrapEnvironment.adminUsername,
     password: bootstrapEnvironment.adminPassword
   });
-  lifecycleLock.assertOwned();
   configureSharpRuntime();
   onRuntimeConfigChange(configureSharpRuntime);
   markRuntimeInitializationComplete();
 
-  onBusinessAvailabilityGateOpen(() => {
+  unsubscribeBusinessAvailabilityGate = onBusinessAvailabilityGateOpen(() => {
+    if (shuttingDown) return;
     coordinatorInitialization ??= initializeReadyImageCacheCoordinator()
       .catch((error) => {
         logger.warn("startup ready-image cache initialization failed", error);
@@ -101,24 +76,25 @@ try {
       });
   });
 
-  lifecycleLock.assertOwned();
   const serverPort = appConfig.applicationPort;
   server = serve({ fetch: app.fetch, port: serverPort });
   logger.info(`ImageShow listening on :${serverPort}`);
   startRedisOperationalMonitor();
 } catch (error) {
-  const startupError = lifecycleOwnershipLoss ?? error;
-  if (!lifecycleOwnershipLoss) {
-    logger.error("application startup failed", startupError);
-  }
+  logger.error("application startup failed", error);
   await shutdown("startup failure", 1);
-  throw startupError;
+  throw error;
 }
 
 function shutdown(signal: string, exitCode = 0) {
   shutdownExitCode = Math.max(shutdownExitCode, exitCode);
-  if (shutdownPromise) return shutdownPromise;
+  if (shutdownPromise) {
+    logger.info(`received ${signal}, shutdown already in progress`);
+    return shutdownPromise;
+  }
   shuttingDown = true;
+  unsubscribeBusinessAvailabilityGate?.();
+  unsubscribeBusinessAvailabilityGate = null;
   logger.info(`received ${signal}, shutting down`);
   const hardExit = setTimeout(() => process.exit(1), appConfig.backgroundJob.shutdownHardExitMs);
   hardExit.unref();
@@ -144,12 +120,13 @@ function shutdown(signal: string, exitCode = 0) {
         readyImageCacheStop,
         storageRegistryClose
       ]);
+    } catch (error) {
+      shutdownExitCode = 1;
+      logger.error("application shutdown failed", error);
+    } finally {
       await redis.quit().catch(() => redis.disconnect());
       await closeDatabasePools();
-      await lifecycleLock?.release().catch((error) => {
-        logger.error("application lifecycle lock release failed", error);
-      });
-    } finally {
+      logger.info("application resources released");
       clearTimeout(hardExit);
       process.exit(shutdownExitCode);
     }

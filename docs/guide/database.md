@@ -71,8 +71,8 @@ CHECK 也没有专用白名单或检测分支。它们不会因此成为当前�
 带物理 namespace、预期 SHA-256 / 大小及精确重试字节的 `move.cleanup` write-ahead
 receipt；只有与该回执完全一致的写入才可越过对象占用检查。写入成功后再以
 `id + storage_slug + object_key` 条件回写 `thumbnail_size`；失败或回包丢失时 Worker 仍用
-同一字节精确采用或重试候选，任务成功后删除 payload 中的临时重试字节。单应用生命周期
-锁取得后、HTTP 就绪前，从 PostgreSQL 重建未解决 repair 的进程内投影；入队与 Worker
+同一字节精确采用或重试候选，任务成功后删除 payload 中的临时重试字节。数据库初始化
+完成后、HTTP 就绪前，从 PostgreSQL 重建未解决 repair 的进程内投影；入队与 Worker
 处理同步更新它，避免每个缩略图额外查询数据库。投影命中时公开与后台读取均使用原图
 no-store 降级，不把仅凭存在性的对象发布为 immutable。分类移动和存储迁移共用该服务；
 它们在风险写入前捕获候选 namespace，失锁后的清理回执直接使用该不可变凭据，不再借第
@@ -106,7 +106,7 @@ no-store 降级，不把仅凭存在性的对象发布为 immutable。分类移�
 ready 图片 rich 投影、筛选成员或统计的业务事务都在 COMMIT 前原子递增 revision。
 Redis meta 的 `applied_revision` 只有在精确同步或全量重建完成完整性校验后才可发布；
 二者不一致时缓存读门关闭。该表不保存 Redis 状态；当前协议只服务于单个 ImageShow
-应用进程，未来演进边界见[多实例待办](./todo-multi-instance.md)。
+应用进程，不支持多应用实例。
 
 ## import_session —— 统一导入会话
 

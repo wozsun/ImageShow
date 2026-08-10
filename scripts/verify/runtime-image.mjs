@@ -17,6 +17,7 @@ const names = {
   network: `imageshow-verify-${suffix}`,
   postgres: `imageshow-verify-postgres-${suffix}`,
   redis: `imageshow-verify-redis-${suffix}`,
+  failedApp: `imageshow-verify-failed-app-${suffix}`,
   app: `imageshow-verify-app-${suffix}`
 };
 const stableImageTag = `imageshow:${version}-verify`;
@@ -185,7 +186,7 @@ async function terminateActiveChildren() {
 async function performRuntimeCleanup() {
   const errors = [];
   const containerResults = await Promise.allSettled(
-    [names.app, names.redis, names.postgres]
+    [names.failedApp, names.app, names.redis, names.postgres]
       .filter((name) => attemptedContainers.has(name))
       .map(async (name) => {
         await removeContainer(name);
@@ -276,8 +277,16 @@ function cleanup() {
       if (attempt === 0) await delay(250);
     }
     if (attemptedContainers.size > 0 || attemptedNetwork) {
+      const remaining = [
+        ...attemptedContainers,
+        ...(attemptedNetwork ? [names.network] : [])
+      ];
       throw new AggregateError(
-        [...terminationErrors, ...lastRuntimeErrors],
+        [
+          ...terminationErrors,
+          ...lastRuntimeErrors,
+          new Error(`resources still tracked: ${remaining.join(", ")}`)
+        ],
         "runtime-image resource cleanup failed after bounded retry"
       );
     }
@@ -392,6 +401,69 @@ async function containerImageId() {
   return result.stdout;
 }
 
+async function stoppedContainerProbe(name, exitCode, timeoutMs) {
+  const result = await runDocker([
+    "container", "inspect", "--format",
+    "{{.State.Status}} {{.State.ExitCode}}", name
+  ], { allowFailure: true, timeoutMs });
+  if (result.code === 0 && result.stdout === `exited ${exitCode}`) return result;
+  return {
+    ...result,
+    code: 1,
+    stderr: result.stderr
+      || `container state: ${result.stdout || "missing"}`
+  };
+}
+
+async function applicationConnectionCount(databaseName) {
+  if (!/^[a-z0-9_]+$/.test(databaseName)) {
+    throw new Error(`invalid test database name: ${databaseName}`);
+  }
+  const sql = [
+    "SELECT count(*)::text FROM pg_stat_activity",
+    `WHERE datname='${databaseName}'`,
+    "AND usename='imageshow' AND pid <> pg_backend_pid();"
+  ].join(" ");
+  const result = await runDocker([
+    "exec", "-e", `PGPASSWORD=${databasePassword}`, names.postgres,
+    "psql", "--username", "imageshow", "--dbname", "postgres",
+    "--tuples-only", "--no-align", "--command", sql
+  ]);
+  return Number(result.stdout.trim());
+}
+
+async function redisApplicationConnectionCount() {
+  const result = await runDocker([
+    "exec", names.redis, "redis-cli", "--raw", "CLIENT", "LIST"
+  ]);
+  return result.stdout
+    .split(/\r?\n/)
+    .filter((line) => line && !/\bcmd=client\|list\b/.test(line))
+    .length;
+}
+
+function applicationContainerArguments(name, databaseName, imageId) {
+  return [
+    "run", "--detach", "--name", name,
+    "--stop-timeout", "50",
+    "--network", names.network,
+    "--tmpfs", "/app/data:rw",
+    "--env", "SITE_DOMAIN=example.test",
+    "--env", "ADMIN_USERNAME=verifyadmin",
+    "--env", `ADMIN_PASSWORD=${adminPassword}`,
+    "--env", "DATABASE_HOST=postgresql",
+    "--env", "DATABASE_PORT=5432",
+    "--env", `DATABASE_NAME=${databaseName}`,
+    "--env", "DATABASE_USER=imageshow",
+    "--env", `DATABASE_PASSWORD=${databasePassword}`,
+    "--env", "REDIS_HOST=redis",
+    "--env", "REDIS_PORT=6379",
+    "--env", "REDIS_DB=0",
+    "--env", "LOG_LEVEL=INFO",
+    imageId
+  ];
+}
+
 async function schemaShape() {
   const sql = [
     "SELECT count(*)::text FROM information_schema.tables",
@@ -451,31 +523,47 @@ try {
   ], { timeoutMs: 3 * 60_000 });
 
   await waitFor("PostgreSQL", (timeoutMs) => runDocker([
-    "exec", names.postgres, "pg_isready", "--username", "imageshow", "--dbname", "imageshow"
+    "exec", names.postgres, "pg_isready", "--host", "127.0.0.1",
+    "--username", "imageshow", "--dbname", "imageshow"
   ], { allowFailure: true, timeoutMs }));
   await waitFor("Redis", (timeoutMs) => runDocker([
     "exec", names.redis, "redis-cli", "ping"
   ], { allowFailure: true, timeoutMs }));
 
-  attemptedContainers.add(names.app);
   await runDocker([
-    "run", "--detach", "--name", names.app,
-    "--stop-timeout", "50",
-    "--network", names.network,
-    "--tmpfs", "/app/data:rw",
-    "--env", "SITE_DOMAIN=example.test",
-    "--env", "ADMIN_USERNAME=verifyadmin",
-    "--env", `ADMIN_PASSWORD=${adminPassword}`,
-    "--env", "DATABASE_HOST=postgresql",
-    "--env", "DATABASE_PORT=5432",
-    "--env", "DATABASE_NAME=imageshow",
-    "--env", "DATABASE_USER=imageshow",
-    "--env", `DATABASE_PASSWORD=${databasePassword}`,
-    "--env", "REDIS_HOST=redis",
-    "--env", "REDIS_PORT=6379",
-    "--env", "REDIS_DB=0",
-    imageId
+    "exec", "-e", `PGPASSWORD=${databasePassword}`, names.postgres,
+    "psql", "--username", "imageshow", "--dbname", "postgres",
+    "--command", "CREATE DATABASE imageshow_broken"
   ]);
+  await runDocker([
+    "exec", "-e", `PGPASSWORD=${databasePassword}`, names.postgres,
+    "psql", "--username", "imageshow", "--dbname", "imageshow_broken",
+    "--command", "CREATE TABLE unrelated_marker(id integer PRIMARY KEY)"
+  ]);
+  attemptedContainers.add(names.failedApp);
+  await runDocker(applicationContainerArguments(
+    names.failedApp,
+    "imageshow_broken",
+    imageId
+  ));
+  await waitFor(
+    "ImageShow initialization failure",
+    (timeoutMs) => stoppedContainerProbe(names.failedApp, 1, timeoutMs),
+    30_000
+  );
+  const failedLogs = await runDocker(["logs", names.failedApp]);
+  if (!/application startup failed/.test(resultText(failedLogs))) {
+    throw new Error("initialization failure did not enter the shared shutdown path");
+  }
+  if (!/application resources released/.test(resultText(failedLogs))) {
+    throw new Error("initialization failure did not explicitly release resources");
+  }
+  if (await applicationConnectionCount("imageshow_broken") !== 0) {
+    throw new Error("failed ImageShow startup retained PostgreSQL connections");
+  }
+
+  attemptedContainers.add(names.app);
+  await runDocker(applicationContainerArguments(names.app, "imageshow", imageId));
   const stopTimeout = await runDocker([
     "container", "inspect", "--format", "{{.Config.StopTimeout}}", names.app
   ]);
@@ -492,8 +580,45 @@ try {
   if (coldShape !== "10") {
     throw new Error(`unexpected schema shape before restart: ${coldShape}`);
   }
+  if (await applicationConnectionCount("imageshow") < 1) {
+    throw new Error("running ImageShow did not hold an expected PostgreSQL connection");
+  }
+  if (await redisApplicationConnectionCount() < 1) {
+    throw new Error("running ImageShow did not hold an expected Redis connection");
+  }
 
-  await runDocker(["restart", names.app], { timeoutMs: 60_000 });
+  await runDocker([
+    "exec", names.app, "node", "--input-type=module", "--eval",
+    "process.kill(1, 'SIGTERM'); process.kill(1, 'SIGINT');"
+  ], { allowFailure: true });
+  await waitFor(
+    "ImageShow repeated graceful shutdown",
+    (timeoutMs) => stoppedContainerProbe(names.app, 0, timeoutMs),
+    60_000
+  );
+  const stoppedLogs = await runDocker(["logs", names.app]);
+  const stoppedLogText = resultText(stoppedLogs);
+  if (/application shutdown failed/.test(stoppedLogText)) {
+    throw new Error("repeated shutdown signals reported a failure");
+  }
+  for (const signal of ["SIGTERM", "SIGINT"]) {
+    if (!new RegExp(`received ${signal}`).test(stoppedLogText)) {
+      throw new Error(`${signal} did not reach the ImageShow shutdown handler`);
+    }
+  }
+  if (!/shutdown already in progress/.test(stoppedLogText)) {
+    throw new Error("repeated shutdown did not reuse the active shutdown");
+  }
+  if (!/application resources released/.test(stoppedLogText)) {
+    throw new Error("graceful shutdown did not explicitly release resources");
+  }
+  if (await applicationConnectionCount("imageshow") !== 0) {
+    throw new Error("graceful ImageShow shutdown retained PostgreSQL connections");
+  }
+  if (await redisApplicationConnectionCount() !== 0) {
+    throw new Error("graceful ImageShow shutdown retained Redis connections");
+  }
+  await runDocker(["start", names.app], { timeoutMs: 60_000 });
   await waitFor("ImageShow Docker health after restart", healthProbe, 180_000);
   if (await containerImageId() !== imageId) {
     throw new Error("restarted container does not use the inspected image ID");
@@ -516,6 +641,7 @@ try {
   completed = true;
   console.log(
     `[runtime-image] ${stableImageTag} ${imageId}; Docker health, immutable image ID, `
+    + "startup failure cleanup, repeated signals, explicit PostgreSQL/Redis release, "
     + "cold/restart HTTP and schema 10 tables passed"
   );
 } catch (error) {

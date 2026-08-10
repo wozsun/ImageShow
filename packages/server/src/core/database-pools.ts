@@ -11,7 +11,6 @@ export type DatabaseConnectionConfig = Readonly<{
 }>;
 
 let configuredConnection: DatabaseConnectionConfig | null = null;
-let poolConfig: pg.PoolConfig | null = null;
 
 export let pool: pg.Pool;
 let advisoryLockPool: pg.Pool | null = null;
@@ -26,13 +25,6 @@ function sameConnection(
     && left.name === right.name
     && left.user === right.user
     && left.password === right.password;
-}
-
-function requirePoolConfig() {
-  if (!poolConfig) {
-    throw new Error("PostgreSQL pools have not been configured");
-  }
-  return poolConfig;
 }
 
 function requireAdvisoryLockPool() {
@@ -100,17 +92,9 @@ export function configureDatabasePools(
   });
 
   configuredConnection = Object.freeze({ ...databaseConfig });
-  poolConfig = nextPoolConfig;
   pool = nextPool;
   advisoryLockPool = nextAdvisoryLockPool;
   cancellationPool = nextCancellationPool;
-}
-
-export function createDedicatedDatabaseClient(applicationName: string) {
-  return new pg.Client({
-    ...requirePoolConfig(),
-    application_name: applicationName
-  });
 }
 
 export function connectAdvisoryLockClient(): Promise<PoolClient> {
