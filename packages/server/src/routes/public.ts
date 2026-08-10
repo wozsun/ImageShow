@@ -31,7 +31,7 @@ import {
   servePublicStoredThumbnail
 } from "../images/stored-image-serving.ts";
 import { storedResponseRequest } from "./stored-response-request.ts";
-import { runPublicReadRequest } from "../core/public-pg-fallback.ts";
+import { runPublicReadRequest } from "../core/public-query-gateway.ts";
 
 const galleryStatsQueryKeys = ["d", "b", "t", "tag", "a"] as const;
 const galleryStatsQueryKeySet = new Set<string>(galleryStatsQueryKeys);

@@ -4,7 +4,7 @@ import type {
   AdminRedisStatusDto
 } from "@imageshow/shared/browser";
 import { deploymentConfig } from "../config/deployment-config.ts";
-import { pool } from "../core/db.ts";
+import { pool } from "../core/database-pools.ts";
 import {
   parseRedisInfoFields,
   parseRedisMemoryState,

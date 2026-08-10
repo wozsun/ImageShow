@@ -1,4 +1,4 @@
-import { pool } from "../../core/db.ts";
+import { pool } from "../../core/database-pools.ts";
 import { ApiError, errorMessage } from "../../core/api-error.ts";
 import { logger } from "../../core/logger.ts";
 import { randomUuidV7 } from "../../core/uuid.ts";

@@ -1,7 +1,7 @@
 import type { Brightness, Device } from "@imageshow/shared/browser";
 import type { PoolClient } from "pg";
 import { ApiError, errorMessage } from "../core/api-error.ts";
-import { pool } from "../core/db.ts";
+import { pool } from "../core/database-pools.ts";
 import { logger } from "../core/logger.ts";
 import { repairStoredThumbnailWithLockHeld } from "../images/thumbnail-repair.ts";
 import {

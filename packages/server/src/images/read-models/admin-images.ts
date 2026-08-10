@@ -4,7 +4,8 @@ import type {
   BatchImageSnapshotResponseDto,
   ImageAdminInfoDto
 } from "@imageshow/shared/browser";
-import { pool, withAdvisoryLocks } from "../../core/db.ts";
+import { pool } from "../../core/database-pools.ts";
+import { withAdvisoryLocks } from "../../core/database-advisory-locks.ts";
 import { ApiError } from "../../core/api-error.ts";
 import { adminImageListQuery } from "../../core/validation.ts";
 import { batchImageUpdateLockRequests } from "../batch-update-lock.ts";

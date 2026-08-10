@@ -1,4 +1,4 @@
-import { withTransaction } from "../core/db.ts";
+import { withTransaction } from "../core/database-transactions.ts";
 import { bumpReadyImageRevision } from "./ready-cache/revision.ts";
 
 type RestoredImage = { id: string };

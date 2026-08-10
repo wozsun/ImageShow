@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { pool } from "../../core/db.ts";
+import { pool } from "../../core/database-pools.ts";
 import { ApiError } from "../../core/api-error.ts";
 import {
   importStatusBatchMaxItems,

@@ -1,5 +1,5 @@
 import { ApiError } from "../core/api-error.ts";
-import { withAdvisoryLock } from "../core/db.ts";
+import { withAdvisoryLock } from "../core/database-advisory-locks.ts";
 import type { PoolClient } from "pg";
 import { getStorageBackend } from "./backend-registry.ts";
 import { withStorageLocationReadLock } from "./maintenance-lock.ts";

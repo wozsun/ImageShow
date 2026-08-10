@@ -1,5 +1,6 @@
 import { ApiError, errorMessage } from "../core/api-error.ts";
-import { pool, withTransaction } from "../core/db.ts";
+import { pool } from "../core/database-pools.ts";
+import { withTransaction } from "../core/database-transactions.ts";
 import { logger } from "../core/logger.ts";
 import { md5Buffer } from "../images/processing.ts";
 import { repairStoredThumbnailWithLockHeld } from "../images/thumbnail-repair.ts";

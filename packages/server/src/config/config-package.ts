@@ -1,4 +1,5 @@
-import { inspectTransactionOutcome, withAdvisoryLock } from "../core/db.ts";
+import { inspectTransactionOutcome } from "../core/database-transactions.ts";
+import { withAdvisoryLock } from "../core/database-advisory-locks.ts";
 import { applicationVersion } from "../core/application-version.ts";
 import {
   listStorageBackends

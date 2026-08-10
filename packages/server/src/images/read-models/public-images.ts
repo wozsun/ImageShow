@@ -9,7 +9,7 @@ import { coalesce } from "../../core/coalesce.ts";
 import {
   publicReadUsesFallbackAdmission,
   queryForPublicRead
-} from "../../core/public-pg-fallback.ts";
+} from "../../core/public-query-gateway.ts";
 import { listQuery } from "../../core/validation.ts";
 import { resolveImageFilterPlan } from "../filter-plan.ts";
 import {

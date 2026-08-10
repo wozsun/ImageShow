@@ -1,10 +1,10 @@
 import type { PoolClient } from "pg";
 import { ApiError } from "../core/api-error.ts";
+import { pool } from "../core/database-pools.ts";
 import {
-  pool,
   withTransaction,
   withTransactionOnClient
-} from "../core/db.ts";
+} from "../core/database-transactions.ts";
 import type {
   StorageBackendCreateInput,
   StorageBackendImportInput

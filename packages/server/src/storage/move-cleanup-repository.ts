@@ -1,5 +1,5 @@
 import type { PoolClient } from "pg";
-import { pool } from "../core/db.ts";
+import { pool } from "../core/database-pools.ts";
 import { enqueueRerunnableJob } from "../jobs/repository.ts";
 import type {
   CapturedMoveCleanupObject,

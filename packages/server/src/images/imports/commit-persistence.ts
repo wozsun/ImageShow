@@ -1,7 +1,8 @@
 import { ensureAuthorWithMutationLockHeld } from "../../authors/mutations.ts";
 import type { PoolClient } from "pg";
 import { ApiError } from "../../core/api-error.ts";
-import { pool, withTransaction } from "../../core/db.ts";
+import { pool } from "../../core/database-pools.ts";
+import { withTransaction } from "../../core/database-transactions.ts";
 import { replaceImageTags } from "../../tags/mutations.ts";
 import { ensureThemeWithMutationLockHeld } from "../../themes/mutations.ts";
 import type { EntityCacheKind } from "../../vocab/vocab-cache.ts";

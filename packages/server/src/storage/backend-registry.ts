@@ -5,7 +5,7 @@ import {
   publicPgFallbackWorkLimitExceeded,
   publicReadUsesFallbackAdmission,
   queryForPublicRead
-} from "../core/public-pg-fallback.ts";
+} from "../core/public-query-gateway.ts";
 import { logger } from "../core/logger.ts";
 import {
   missingS3Fields,

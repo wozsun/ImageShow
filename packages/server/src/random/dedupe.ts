@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { appConfig } from "@imageshow/shared";
 import { redis } from "../core/redis-client.ts";
 import { execRedisPipeline } from "../core/redis-pipeline.ts";
-import { publicReadUsesFallbackAdmission } from "../core/public-pg-fallback.ts";
+import { publicReadUsesFallbackAdmission } from "../core/public-query-gateway.ts";
 import { getRedisOperationalState } from "../core/runtime-availability.ts";
 
 const RECENT_PREFIX = "imageshow:random_recent:";

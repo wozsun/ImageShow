@@ -9,7 +9,7 @@ import {
   publicPgFallbackWorkLimitExceeded,
   publicReadUsesFallbackAdmission,
   queryForPublicRead
-} from "../../core/public-pg-fallback.ts";
+} from "../../core/public-query-gateway.ts";
 import { createImageFilterPlan } from "../filter-plan.ts";
 import { readReadyImageCountSnapshot } from "../ready-cache/counts.ts";
 import {

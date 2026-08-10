@@ -1,6 +1,6 @@
 import { hashPassword } from "../core/password.ts";
 import { adminPasswordInput, adminUsernameInput } from "../core/credentials.ts";
-import { pool } from "../core/db.ts";
+import { pool } from "../core/database-pools.ts";
 
 type PasswordRecoveryMutation = (
   username: string,

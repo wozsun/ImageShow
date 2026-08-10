@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { appConfig } from "@imageshow/shared";
-import { pool } from "../../core/db.ts";
+import { pool } from "../../core/database-pools.ts";
 import { ApiError, errorMessage } from "../../core/api-error.ts";
 import { redis } from "../../core/redis-client.ts";
 import type { ImportStatus } from "@imageshow/shared/browser";

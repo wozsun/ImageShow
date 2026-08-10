@@ -13,7 +13,7 @@ import {
   publicPgFallbackWorkLimitExceeded,
   publicReadUsesFallbackAdmission,
   withPublicReadClient
-} from "../../core/public-pg-fallback.ts";
+} from "../../core/public-query-gateway.ts";
 import { galleryStatsQuery } from "../../core/validation.ts";
 import {
   readReadyImageCountSnapshot,

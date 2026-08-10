@@ -2,7 +2,7 @@ import type {
   RuntimeConfig,
   RuntimeConfigChangeSummaryDto
 } from "@imageshow/shared/browser";
-import { withAdvisoryLock } from "../core/db.ts";
+import { withAdvisoryLock } from "../core/database-advisory-locks.ts";
 import { parseRuntimeConfig } from "./runtime-config.ts";
 import {
   getRuntimeConfig,

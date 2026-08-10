@@ -13,7 +13,7 @@ import {
 import { presentRandomJsonItems } from "../random/json-presentation.ts";
 import { selectRandomImages } from "../random/selection.ts";
 import { webReadableFromNode } from "../storage/stream-buffer.ts";
-import { runPublicReadRequest } from "../core/public-pg-fallback.ts";
+import { runPublicReadRequest } from "../core/public-query-gateway.ts";
 
 export function registerRandomRoutes(app: Hono) {
   app.all("/random", handleRandomImage);

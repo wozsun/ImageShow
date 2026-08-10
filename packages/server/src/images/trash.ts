@@ -1,6 +1,7 @@
 import { appConfig } from "@imageshow/shared";
 import type { BatchImageRestoreResponseDto } from "@imageshow/shared/browser";
-import { pool, withTransaction } from "../core/db.ts";
+import { pool } from "../core/database-pools.ts";
+import { withTransaction } from "../core/database-transactions.ts";
 import { ApiError, errorMessage } from "../core/api-error.ts";
 import { logger } from "../core/logger.ts";
 import { getStorageBackend } from "../storage/backend-registry.ts";

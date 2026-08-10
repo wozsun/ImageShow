@@ -1,6 +1,6 @@
 import { hashPassword } from "../core/password.ts";
 import { adminPasswordInput, adminUsernameInput } from "../core/credentials.ts";
-import { withAdvisoryLock } from "../core/db.ts";
+import { withAdvisoryLock } from "../core/database-advisory-locks.ts";
 
 const ADMIN_BOOTSTRAP_LOCK = "imageshow:admin-bootstrap";
 

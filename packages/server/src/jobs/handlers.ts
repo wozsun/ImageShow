@@ -8,7 +8,7 @@ import { handleTrashPurgeJob } from "../images/trash-purge-job.ts";
 import { handleImportCleanupJob } from "../images/imports/cleanup-job.ts";
 import { ensureReadyImageCacheCurrent } from "../images/ready-cache/coordinator.ts";
 import { handleMoveCleanupJob } from "../storage/move-cleanup-job.ts";
-import { runWithAdvisoryLockSignal } from "../core/db.ts";
+import { runWithAdvisoryLockSignal } from "../core/database-advisory-locks.ts";
 
 type BackgroundJobHandler = (
   job: BackgroundJob,

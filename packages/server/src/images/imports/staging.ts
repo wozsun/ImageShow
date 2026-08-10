@@ -1,5 +1,5 @@
 import { privateNoStoreCacheControl } from "../../core/http/headers.ts";
-import { pool } from "../../core/db.ts";
+import { pool } from "../../core/database-pools.ts";
 import { mapWithWorkerPool } from "../../core/concurrency.ts";
 import { getRuntimeConfig } from "../../config/runtime-config-store.ts";
 import { thumbnailObjectKey } from "../../storage/image-paths.ts";

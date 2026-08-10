@@ -6,7 +6,7 @@ import {
   publicPgFallbackWorkLimitExceeded,
   publicReadUsesFallbackAdmission,
   queryForPublicRead
-} from "../core/public-pg-fallback.ts";
+} from "../core/public-query-gateway.ts";
 import { deleteRedisKeys, getRedisJson, setRedisJson } from "../core/redis-json.ts";
 import type {
   AuthorDto as Author,

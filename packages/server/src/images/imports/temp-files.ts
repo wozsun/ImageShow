@@ -9,7 +9,7 @@ import {
   appendImportCleanupFailure,
   type ImportCleanupFailures
 } from "./cleanup-failures.ts";
-import { pool } from "../../core/db.ts";
+import { pool } from "../../core/database-pools.ts";
 import { getRuntimeConfig } from "../../config/runtime-config-store.ts";
 import { nodeReadableFromWeb } from "../../storage/stream-buffer.ts";
 import { tryWithImportSessionLock } from "./session-lock.ts";

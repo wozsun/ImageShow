@@ -1,5 +1,10 @@
 import { emitKeypressEvents } from "node:readline";
-import { pool, pingDb } from "./core/db.ts";
+import { deploymentConfig } from "./config/deployment-config.ts";
+import {
+  closeDatabasePools,
+  configureDatabasePools
+} from "./core/database-pools.ts";
+import { pingDatabase } from "./core/database-schema.ts";
 import { pingRedis, redis } from "./core/redis-client.ts";
 import { parseAdminPasswordCommand } from "./users/admin-password-command.ts";
 import {
@@ -10,6 +15,8 @@ import {
   adminSessionRedisClient,
   invalidateAllAdminSessions
 } from "./users/session-invalidation.ts";
+
+configureDatabasePools(deploymentConfig.database);
 
 type Keypress = {
   name?: string;
@@ -63,7 +70,7 @@ async function main() {
   const confirmation = await readHiddenLine("确认新密码: ");
   if (password !== confirmation) throw new Error("两次输入的密码不一致");
 
-  await pingDb();
+  await pingDatabase();
   const result = await resetAdministratorPasswordWithSessionCleanup(
     resetAdministratorPasswordHash,
     async () => {
@@ -93,5 +100,5 @@ try {
   process.exitCode = 1;
 } finally {
   redis.disconnect();
-  await pool.end().catch(() => undefined);
+  await closeDatabasePools();
 }

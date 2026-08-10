@@ -1,4 +1,4 @@
-import { queryForPublicRead } from "../../core/public-pg-fallback.ts";
+import { queryForPublicRead } from "../../core/public-query-gateway.ts";
 import { getRedisConnectionState, redis } from "../../core/redis-client.ts";
 import { randomUuidV7 } from "../../core/uuid.ts";
 import { getReadyImageCacheCoordinatorStatus } from "./coordinator.ts";

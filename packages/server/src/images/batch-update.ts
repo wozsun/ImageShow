@@ -1,6 +1,6 @@
 import { ApiError } from "../core/api-error.ts";
 import { mapWithWorkerPool } from "../core/concurrency.ts";
-import { withAdvisoryLocks } from "../core/db.ts";
+import { withAdvisoryLocks } from "../core/database-advisory-locks.ts";
 import type { BatchImageUpdateItemInput } from "../core/validation.ts";
 import { updateImageTags } from "../tags/mutations.ts";
 import { createEntityCountCacheInvalidationBatch } from "../vocab/vocab-cache.ts";

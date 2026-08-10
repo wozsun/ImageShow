@@ -1,6 +1,7 @@
 import { serve } from "@hono/node-server";
 import { appConfig } from "@imageshow/shared";
 import { bootstrapEnvironment } from "./config/bootstrap-env.ts";
+import { deploymentConfig } from "./config/deployment-config.ts";
 import {
   getRuntimeConfig,
   initializeRuntimeConfig,
@@ -14,9 +15,12 @@ import {
 import { cleanupOrphanRawImports } from "./images/imports/temp-files.ts";
 import {
   closeDatabasePools,
+  configureDatabasePools
+} from "./core/database-pools.ts";
+import {
   initializeDatabaseSchema,
-  pingDb
-} from "./core/db.ts";
+  pingDatabase
+} from "./core/database-schema.ts";
 import { ensureSuperAdmin } from "./users/admin-bootstrap.ts";
 import { redis } from "./core/redis-client.ts";
 import {
@@ -38,6 +42,7 @@ import {
   type ApplicationLifecycleLock
 } from "./core/application-lifecycle-lock.ts";
 
+configureDatabasePools(deploymentConfig.database);
 initializeRuntimeConfig();
 configureRuntimeLogger(() => getRuntimeConfig().log);
 const app = createHttpApp();
@@ -56,7 +61,7 @@ async function settleCoordinatorInitialization() {
 }
 
 await ensureRuntimeDirectories();
-await pingDb();
+await pingDatabase();
 await initializeDatabaseSchema();
 try {
   lifecycleLock = await acquireApplicationLifecycleLock();

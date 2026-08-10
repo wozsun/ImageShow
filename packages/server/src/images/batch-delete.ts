@@ -1,4 +1,4 @@
-import { withTransaction } from "../core/db.ts";
+import { withTransaction } from "../core/database-transactions.ts";
 import type { BatchImageDeleteResponseDto } from "@imageshow/shared/browser";
 import { invalidateEntityCountCaches } from "../vocab/vocab-cache.ts";
 import {

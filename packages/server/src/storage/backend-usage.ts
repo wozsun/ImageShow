@@ -1,6 +1,6 @@
 import type { StorageType } from "@imageshow/shared/browser";
 import { ApiError } from "../core/api-error.ts";
-import { pool } from "../core/db.ts";
+import { pool } from "../core/database-pools.ts";
 import { countUnresolvedMoveCleanupJobs } from "./move-cleanup-repository.ts";
 
 export type StorageBackendUsage = {

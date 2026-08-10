@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { ApiError, errorMessage } from "../core/api-error.ts";
-import { pool } from "../core/db.ts";
+import { pool } from "../core/database-pools.ts";
 import { logger } from "../core/logger.ts";
 import {
   jobRescheduled,

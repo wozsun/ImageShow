@@ -2,7 +2,7 @@ import { logger } from "../../core/logger.ts";
 import {
   publicReadUsesFallbackAdmission,
   runPublicReadBackgroundTask
-} from "../../core/public-pg-fallback.ts";
+} from "../../core/public-query-gateway.ts";
 import { redis } from "../../core/redis-client.ts";
 import { buildReadyImageAttributeIndex } from "./attribute-index-builder.ts";
 import {

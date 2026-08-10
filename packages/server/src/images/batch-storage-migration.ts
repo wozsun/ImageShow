@@ -1,6 +1,6 @@
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { mapWithWorkerPool } from "../core/concurrency.ts";
-import { pool } from "../core/db.ts";
+import { pool } from "../core/database-pools.ts";
 import {
   migrateImageStorageBackend,
   type StorageMigrationImageRecord

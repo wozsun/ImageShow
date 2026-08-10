@@ -1,6 +1,6 @@
 import type { AdminOverviewDto } from "@imageshow/shared/browser";
 import { getRuntimeConfig } from "../../config/runtime-config-store.ts";
-import { pool } from "../../core/db.ts";
+import { pool } from "../../core/database-pools.ts";
 import { getReadyImageCacheAdminStatus } from "../ready-cache/admin-status.ts";
 import {
   adminImageDetailView,

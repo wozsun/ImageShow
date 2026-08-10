@@ -1,5 +1,6 @@
 import type { Pool, PoolClient } from "pg";
-import { pool, withTransaction } from "../core/db.ts";
+import { pool } from "../core/database-pools.ts";
+import { withTransaction } from "../core/database-transactions.ts";
 import {
   assertVocabularyCreated,
   assertVocabularyFound,

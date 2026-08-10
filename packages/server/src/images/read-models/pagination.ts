@@ -1,4 +1,4 @@
-import { queryForPublicRead } from "../../core/public-pg-fallback.ts";
+import { queryForPublicRead } from "../../core/public-query-gateway.ts";
 import { decodeImageCursor, encodeImageCursor } from "../cursor.ts";
 import {
   imagePresentationColumns,

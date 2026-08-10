@@ -2,10 +2,10 @@ import type { PoolClient } from "pg";
 import { ApiError, errorMessage } from "../core/api-error.ts";
 import {
   inspectTransactionOutcome,
-  pool,
-  withAdvisoryLock,
   withTransactionOnClient
-} from "../core/db.ts";
+} from "../core/database-transactions.ts";
+import { pool } from "../core/database-pools.ts";
+import { withAdvisoryLock } from "../core/database-advisory-locks.ts";
 import {
   s3SettingsSchema,
   webdavSettingsSchema,

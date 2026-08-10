@@ -1,5 +1,6 @@
 import type { PoolClient } from "pg";
-import { pool, withTransaction } from "../core/db.ts";
+import { pool } from "../core/database-pools.ts";
+import { withTransaction } from "../core/database-transactions.ts";
 import { ApiError } from "../core/api-error.ts";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { mapWithWorkerPool } from "../core/concurrency.ts";

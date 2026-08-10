@@ -80,8 +80,9 @@ core / config
 
 - `src/http-app.ts` 只构造 Hono 应用、装配中间件和路由；导入模块不会初始化配置、
   创建目录或启动服务。
-- `src/index.ts` 显式初始化运行时配置和日志来源，再创建 HTTP 应用，初始化 / 校验 schema 与
-  管理员初始化，启动 Worker 和 HTTP 服务，并处理优雅退出。
+- `src/index.ts` 先向 PostgreSQL pool 显式注入部署配置，再初始化运行时配置和日志来源，
+  创建 HTTP 应用，初始化 / 校验 schema 与管理员初始化，启动 Worker 和 HTTP 服务，并处理
+  优雅退出。
 - `src/admin-password-cli.ts` 是管理员密码恢复入口。
 - `src/healthcheck-cli.ts` 是容器 readiness 检查入口。
 - `scripts/benchmarks/` 保存可重复执行、使用隔离依赖且会自行清理测试键的服务端性能
@@ -109,6 +110,13 @@ healthcheck 只读现有配置快照，密码恢复不初始化运行时配置�
 | `authors/`、`tags/`、`themes/`、`vocab/` | 词表查询、变更、关联锁与派生缓存。 |
 | `users/` | 管理员初始化、账号变更、Redis 登录会话、逐请求 PostgreSQL 角色与密码代际核对、操作授权、密码恢复、偏好和会话失效；不维护管理员凭据 Redis 投影。 |
 | `types/` | 仅放缺失的编译期声明，不承载运行时代码。 |
+
+`core/` 内 PostgreSQL 基础设施按生命周期边界拆分：`database-pools.ts` 只接收显式配置并
+拥有主查询、advisory lock 与取消连接池；`database-transactions.ts`、
+`database-advisory-locks.ts` 和 `database-schema.ts` 分别拥有事务、锁与干净安装 / readiness。
+公开降级读取由 `public-db-admission.ts` 统一管理容量、公平性和排队，
+`public-query-gateway.ts` 则拥有专用 client、查询串行化、取消与销毁收敛；领域模块不得绕过
+gateway 自行复制这套准入状态。
 
 `images/imports/` 内部继续保持单一编排入口，但按稳定职责分开：
 

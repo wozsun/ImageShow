@@ -1,5 +1,5 @@
 import { ApiError } from "../core/api-error.ts";
-import { pool } from "../core/db.ts";
+import { pool } from "../core/database-pools.ts";
 import { resolveStorageAccess } from "../storage/backend-registry.ts";
 import { thumbnailObjectKey } from "../storage/image-paths.ts";
 import { withImageStorageMutationLock } from "../storage/maintenance-lock.ts";

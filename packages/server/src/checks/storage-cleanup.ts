@@ -1,4 +1,4 @@
-import { pool } from "../core/db.ts";
+import { pool } from "../core/database-pools.ts";
 import { errorMessage } from "../core/api-error.ts";
 import { stagingSessionId } from "../images/imports/staging-keys.ts";
 import {

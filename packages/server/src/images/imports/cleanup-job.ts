@@ -1,7 +1,7 @@
 import { appConfig } from "@imageshow/shared";
 import { errorMessage } from "../../core/api-error.ts";
 import { mapWithWorkerPool } from "../../core/concurrency.ts";
-import { pool } from "../../core/db.ts";
+import { pool } from "../../core/database-pools.ts";
 import { getRuntimeConfig } from "../../config/runtime-config-store.ts";
 import { randomUuidV7 } from "../../core/uuid.ts";
 import {

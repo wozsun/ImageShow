@@ -1,5 +1,5 @@
 import type { Context, Hono } from "hono";
-import { assertCoreDatabaseReady } from "../core/db.ts";
+import { assertCoreDatabaseReady } from "../core/database-schema.ts";
 import { apiErrorResponse } from "../core/http/responses.ts";
 import { noStoreCacheControl } from "../core/http/headers.ts";
 import {

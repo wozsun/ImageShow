@@ -1,5 +1,5 @@
 import { appConfig } from "@imageshow/shared";
-import { publicReadUsesFallbackAdmission } from "./public-pg-fallback.ts";
+import { publicReadUsesFallbackAdmission } from "./public-query-gateway.ts";
 import { redis } from "./redis-client.ts";
 import { getRedisOperationalState } from "./runtime-availability.ts";
 

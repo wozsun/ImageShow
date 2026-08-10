@@ -1,5 +1,5 @@
 import type { PoolClient } from "pg";
-import { withPublicReadClient } from "../../core/public-pg-fallback.ts";
+import { withPublicReadClient } from "../../core/public-query-gateway.ts";
 import { getRedisConnectionState, redis } from "../../core/redis-client.ts";
 import { execRedisPipeline } from "../../core/redis-pipeline.ts";
 import { randomUuidV7 } from "../../core/uuid.ts";

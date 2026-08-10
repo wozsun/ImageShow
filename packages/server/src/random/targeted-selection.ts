@@ -2,7 +2,7 @@ import { appConfig } from "@imageshow/shared";
 import {
   publicPgFallbackWorkLimitExceeded,
   queryForPublicRead
-} from "../core/public-pg-fallback.ts";
+} from "../core/public-query-gateway.ts";
 import { apiErrorResponse } from "../core/http/responses.ts";
 import { readTargetedReadyImages } from "../images/ready-cache/query.ts";
 import { readyImageCacheItemFromRow } from "../images/ready-cache/model.ts";

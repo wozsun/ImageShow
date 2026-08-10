@@ -4,7 +4,7 @@ import {
   type AdminPreferences
 } from "@imageshow/shared/browser";
 import { ApiError } from "../core/api-error.ts";
-import { pool } from "../core/db.ts";
+import { pool } from "../core/database-pools.ts";
 
 type PreferenceQueryResult = {
   rowCount: number | null;

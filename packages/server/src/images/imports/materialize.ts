@@ -1,5 +1,5 @@
 import { getInputImageMaxBytes } from "../../config/app-settings.ts";
-import { pool } from "../../core/db.ts";
+import { pool } from "../../core/database-pools.ts";
 import { ApiError } from "../../core/api-error.ts";
 import { randomUuidV7 } from "../../core/uuid.ts";
 import { runImportMaterialization } from "./execution.ts";

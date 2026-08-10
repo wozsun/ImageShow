@@ -1,9 +1,9 @@
 import { appConfig } from "@imageshow/shared";
-import { pool } from "../core/db.ts";
+import { pool } from "../core/database-pools.ts";
 import { getReadyImageCacheCoordinatorStatus } from "../images/ready-cache/coordinator.ts";
 import {
   getPublicPgFallbackAdmissionSnapshot
-} from "../core/public-pg-fallback.ts";
+} from "../core/public-db-admission.ts";
 import { readAdminPostgresqlStatus } from "./lightweight-status.ts";
 
 export async function checkDatabase() {

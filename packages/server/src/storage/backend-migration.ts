@@ -1,4 +1,4 @@
-import { pool } from "../core/db.ts";
+import { pool } from "../core/database-pools.ts";
 import {
   migrateStorageBackendImages,
   type StorageMigrationImageRecord

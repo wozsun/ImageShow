@@ -1,5 +1,5 @@
 import type { Client, QueryResult } from "pg";
-import { createDedicatedDatabaseClient } from "./db.ts";
+import { createDedicatedDatabaseClient } from "./database-pools.ts";
 
 const APPLICATION_LIFECYCLE_LOCK_KEY =
   "imageshow:application-lifecycle";
