@@ -394,9 +394,7 @@ async function containerImageId() {
 
 async function schemaShape() {
   const sql = [
-    "SELECT count(*)::text || ':' ||",
-    "count(*) FILTER (WHERE table_name = 'schema_migrations')::text",
-    "FROM information_schema.tables",
+    "SELECT count(*)::text FROM information_schema.tables",
     "WHERE table_schema = 'public' AND table_type = 'BASE TABLE';"
   ].join(" ");
   const result = await runDocker([
@@ -491,7 +489,7 @@ try {
   }
   await waitFor("ImageShow HTTP", applicationProbe, 30_000);
   const coldShape = await schemaShape();
-  if (coldShape !== "10:0") {
+  if (coldShape !== "10") {
     throw new Error(`unexpected schema shape before restart: ${coldShape}`);
   }
 
@@ -502,7 +500,7 @@ try {
   }
   await waitFor("ImageShow HTTP after restart", applicationProbe, 30_000);
   const restartedShape = await schemaShape();
-  if (restartedShape !== "10:0") {
+  if (restartedShape !== "10") {
     throw new Error(`unexpected schema shape after restart: ${restartedShape}`);
   }
 
@@ -518,7 +516,7 @@ try {
   completed = true;
   console.log(
     `[runtime-image] ${stableImageTag} ${imageId}; Docker health, immutable image ID, `
-    + "cold/restart HTTP and schema 10:0 passed"
+    + "cold/restart HTTP and schema 10 tables passed"
   );
 } catch (error) {
   if (!interruptedSignal) {

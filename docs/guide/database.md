@@ -15,20 +15,16 @@ Redis 图片投影的权威 revision 单行表均属于当前基线。PostgreSQL
 当前代码库只保留完整的新安装基线，不提供编号迁移、迁移账本或数据库升级路径。启动在
 advisory bootstrap lock 内确认所有非系统 schema 都没有用户关系后，才在一个事务中执行
 完整 schema；并发启动由同一把锁串行化，失败会回滚全部 DDL。全部连接固定使用
-`search_path=public`。非空数据库按源码中的 structural contract revision 只读核对 10 张
-业务表的关系类型、必需列类型 / 可空性 / 默认值、关键 PK / FK / CHECK、FK 四个内部触发器、
-全部唯一 / 普通索引和必需种子，并确认会话可写、`session_replication_role=origin`、public
-schema 可用且当前角色具备每张表运行所需的 SELECT / INSERT / UPDATE / DELETE 权限；全部
-检查只读，不用回滚写探针。缺失或不兼容会在业务启动前明确失败，也不会自动补表、改表、
-删列或写版本标记。
+`search_path=public`。非空数据库只读核对 10 张当前业务表、源码实际使用的列及其 PostgreSQL
+类型、必需系统种子，并确认会话可写、public schema 可用且当前角色具备各表实际操作所需的
+SELECT / INSERT / UPDATE / DELETE 权限；全部检查只读，不用回滚写探针。核心表、必需列、列
+类型、种子或权限缺失会在业务启动前明确失败，也不会自动补表、改表、删列或写版本标记。
 
-额外旧表及其自身索引不影响 readiness；必需表中的额外列只精确接受 v4.6 遗留定义
-`metadata.extra JSONB NOT NULL DEFAULT '{}'` 与
-`background_job.result JSONB NOT NULL DEFAULT '{}'`，并接受 v4.6 仍含 `thumb.generate` 的
-精确 `background_job.type` CHECK。当前源码不读写这两个字段，也不会生产或处理
-`thumb.generate`；其他额外列、分区 / 继承、RLS、触发器 / 规则，以及新增约束或唯一 / 普通
-索引都可能改变当前写入语义，因此一律拒绝。这些白名单旧定义留在数据库不会影响正常
-CRUD，但也不构成数据库升级能力。
+readiness 不复制 `schema.sql` 的可空性、默认值、PK / FK / CHECK、触发器和索引，也不识别
+旧版本号或旧结构形状。额外表、额外列、额外索引以及更宽的旧 CHECK 不影响启动，只要当前
+代码不读写它们；`metadata.extra`、`background_job.result` 和仍含 `thumb.generate` 的旧
+CHECK 也没有专用白名单或检测分支。它们不会因此成为当前能力，物理清理由单独的人工脚本
+负责。
 
 ## metadata —— 图片主表
 

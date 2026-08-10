@@ -2,10 +2,7 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { PoolClient } from "pg";
-import {
-  assertDatabaseStructure,
-  databaseSchemaContractRevision
-} from "./database-contract.ts";
+import { assertDatabaseStructure } from "./database-contract.ts";
 import { withAdvisoryLock } from "./database-advisory-locks.ts";
 import { pool } from "./database-pools.ts";
 
@@ -43,8 +40,7 @@ async function databaseHasNoUserRelations(client: PoolClient) {
 function databaseReadinessError(error: unknown) {
   const reason = error instanceof Error ? error.message : String(error);
   return new Error(
-    `PostgreSQL database is non-empty but does not satisfy schema contract `
-      + `revision ${databaseSchemaContractRevision}: ${reason}`,
+    `PostgreSQL database is non-empty but is not ready for the current application: ${reason}`,
     { cause: error }
   );
 }

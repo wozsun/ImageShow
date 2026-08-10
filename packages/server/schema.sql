@@ -1,6 +1,5 @@
--- ImageShow clean-install schema, application structural contract revision 1.
--- The revision belongs to source code only; this schema creates no migration
--- ledger or persistent version marker.
+-- ImageShow clean-install schema.
+-- This schema creates no migration ledger or persistent version marker.
 
 -- Storage registry
 CREATE TABLE storage_backend (
