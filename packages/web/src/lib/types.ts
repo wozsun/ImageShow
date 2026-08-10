@@ -11,7 +11,7 @@ import type {
   AdminImageDetailItemDto,
   AdminImageItemDto,
   AuthorDto,
-  BatchEditableImageSnapshotDto,
+  EditableImageSnapshotDto,
   Brightness,
   Device,
   FacetOptionDto,
@@ -31,7 +31,7 @@ import type {
 export type GalleryImageCard = GalleryImageCardDto;
 export type PublicImageItem = PublicImageItemDto;
 export type AdminImageDetailItem = AdminImageDetailItemDto;
-export type BatchEditableImageSnapshot = BatchEditableImageSnapshotDto;
+export type EditableImageSnapshot = EditableImageSnapshotDto;
 export type ImageItem = AdminImageItemDto;
 export type ImageAdminInfo = ImageAdminInfoDto;
 

@@ -105,7 +105,7 @@ const adminStyleOwners = new Set([
   "LoginChallenge",
   "AdminShell",
   "AuthenticatedAdminShell",
-  "BatchStorageMigrationDialog",
+  "ImageStorageMigrationDialog",
   "CheckPage",
   "Overview",
   "UserAdmin"
@@ -211,7 +211,7 @@ const entryJavaScriptAssetNames = new Map([
   ["image-editor-capability", "image-editor"],
   ["Uploader", "upload"],
   ["ImportSourceDialog", "link-import"],
-  ["BatchStorageMigrationDialog", "storage-migration"],
+  ["ImageStorageMigrationDialog", "storage-migration"],
   ["AccountSettings", "account"],
   ["VocabularyAdmin", "vocabulary"],
   ["SettingsPage", "site-settings"],

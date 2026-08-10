@@ -24,7 +24,7 @@ import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
 import { batchCommonBrightnessOptions, batchCommonDeviceOptions, cardBrightnessSelectOptions, editCardDeviceSelectOptions } from "../../../lib/ui/select-options.js";
 import { storageNameResolver, useStorageOptions } from "../../../lib/api/storage-options.js";
 import type {
-  BatchEditableImageSnapshot,
+  EditableImageSnapshot,
   Brightness,
   Device,
   FacetOption,
@@ -32,29 +32,29 @@ import type {
 } from "../../../lib/types.js";
 import { mergeBatchEditCommonAttributes } from "../../../lib/upload/upload-utils.js";
 import {
-  useBatchMetadataOperations
-} from "./useBatchMetadataOperations.js";
+  useImageMetadataOperations
+} from "./useImageMetadataOperations.js";
 import {
-  batchMetadataCardSaveState,
+  imageMetadataCardSaveState,
   changedMetadataUpdate,
-  createBatchMetadataSession,
+  createImageMetadataSession,
   fieldsChangedFor,
-  reconcileBatchMetadataSession,
-  restoreBatchMetadataDrafts
-} from "./batch-metadata-session.js";
+  reconcileImageMetadataSession,
+  restoreImageMetadataDrafts
+} from "./image-metadata-session.js";
 
-type BatchStorageMigrationDialogModule =
-  typeof import("./BatchStorageMigrationDialog.js");
+type ImageStorageMigrationDialogModule =
+  typeof import("./ImageStorageMigrationDialog.js");
 
-const loadBatchStorageMigrationDialog =
-  createPageLifetimeModuleLoader<BatchStorageMigrationDialogModule>(
-    () => import("./BatchStorageMigrationDialog.js")
+const loadImageStorageMigrationDialog =
+  createPageLifetimeModuleLoader<ImageStorageMigrationDialogModule>(
+    () => import("./ImageStorageMigrationDialog.js")
   );
-const preloadBatchStorageMigrationDialog = () => {
-  void loadBatchStorageMigrationDialog().catch(() => undefined);
+const preloadImageStorageMigrationDialog = () => {
+  void loadImageStorageMigrationDialog().catch(() => undefined);
 };
-const BatchStorageMigrationDialog = lazy(() => loadBatchStorageMigrationDialog().then((module) => ({
-  default: module.BatchStorageMigrationDialog
+const ImageStorageMigrationDialog = lazy(() => loadImageStorageMigrationDialog().then((module) => ({
+  default: module.ImageStorageMigrationDialog
 })));
 
 function emptyCommonAttributes() {
@@ -67,44 +67,34 @@ function emptyCommonAttributes() {
   };
 }
 
-export type ImageMetadataEditorMode =
-  | {
-      kind: "single";
-      item: BatchEditableImageSnapshot;
-      onDeleted: (imageId: string) => void | Promise<void>;
-    }
-  | {
-      kind: "batch";
-      items: BatchEditableImageSnapshot[];
-      pageSize: number;
-    };
-
 export function ImageMetadataEditorDialog({
-  mode,
+  items,
+  pageSize,
   themes,
   allTags,
   authors,
   onClose,
+  onDeleted,
   onSaved,
   onStorageMigrationSucceeded,
   returnFocusRef
 }: {
-  mode: ImageMetadataEditorMode;
+  items: EditableImageSnapshot[];
+  pageSize: number;
   themes: FacetOption[];
   allTags: FacetOption[];
   authors: FacetOption[];
   onClose: () => void;
+  onDeleted: (imageIds: string[]) => void | Promise<void>;
   onSaved: (
-    authoritativeItems?: BatchEditableImageSnapshot[] | null
+    authoritativeItems?: EditableImageSnapshot[] | null
   ) => void | Promise<void>;
   onStorageMigrationSucceeded?: (message: string) => void;
   returnFocusRef?: RefObject<HTMLElement | null>;
 }) {
-  const singleMode = mode.kind === "single";
-  const batchMode = mode.kind === "batch";
-  const items = singleMode ? [mode.item] : mode.items;
-  const pageSize = singleMode ? 1 : mode.pageSize;
-  const title = singleMode ? "编辑图片" : "批量编辑图片";
+  const singleItem = items.length === 1;
+  const multipleItems = items.length > 1;
+  const title = singleItem ? "编辑图片" : "批量编辑图片";
   const listRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const restoreTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -114,8 +104,8 @@ export function ImageMetadataEditorDialog({
   // 父级刷新可能清空选择或因筛选移除图片；弹窗独立持有固定会话 ID、活动成员、
   // PostgreSQL 权威基线和草稿，保存留窗期间不再从父列表重建状态。
   const [sessionItemIds] = useState(() => items.map((item) => item.id));
-  const [session, setSession] = useState(() => createBatchMetadataSession(items));
-  const operations = useBatchMetadataOperations({
+  const [session, setSession] = useState(() => createImageMetadataSession(items));
+  const operations = useImageMetadataOperations({
     initialIds: sessionItemIds,
     onSaved
   });
@@ -148,9 +138,9 @@ export function ImageMetadataEditorDialog({
   const resolveStorageName = storageNameResolver(storageOptionsData?.backends ?? []);
   const activeIdSet = new Set(session.activeIds);
   const activeItems = session.baselineItems.filter((item) => activeIdSet.has(item.id));
-  const deleteAvailable = singleMode && activeItems.length === 1;
+  const deleteAvailable = activeItems.length > 0;
   const totalPages = Math.max(1, Math.ceil(activeItems.length / pageSize));
-  const paginationAvailable = batchMode && totalPages > 1;
+  const paginationAvailable = totalPages > 1;
   const visibleItems = activeItems.slice((page - 1) * pageSize, page * pageSize);
   useEffect(() => setPage((current) => Math.min(current, totalPages)), [totalPages]);
   const patchDraft = (id: string, patch: Partial<ImageDraft>) => setSession((current) => ({
@@ -182,7 +172,7 @@ export function ImageMetadataEditorDialog({
     success: { icon: "check-line", label: "保存成功" },
     error: { icon: "close-line", label: "保存失败" }
   } as const;
-  const modalSubtitle = singleMode
+  const modalSubtitle = singleItem
     ? (activeItems[0]?.object_key ?? "")
     : `${activeItems.length} 张图片`;
 
@@ -206,7 +196,7 @@ export function ImageMetadataEditorDialog({
     const outcome = await save(changedItems, session.activeIds);
     const authoritativeItems = outcome?.authoritativeItems;
     if (authoritativeItems) {
-      setSession((current) => reconcileBatchMetadataSession(
+      setSession((current) => reconcileImageMetadataSession(
         current,
         outcome.attempt,
         authoritativeItems
@@ -232,8 +222,8 @@ export function ImageMetadataEditorDialog({
         setRestoreError("权威数据读取失败，未保存草稿已保留，请稍后重试。");
         return false;
       }
-      setSession((current) => restoreBatchMetadataDrafts(
-        reconcileBatchMetadataSession(
+      setSession((current) => restoreImageMetadataDrafts(
+        reconcileImageMetadataSession(
           current,
           outcome.attempt,
           authoritativeItems
@@ -241,63 +231,103 @@ export function ImageMetadataEditorDialog({
       ));
       return true;
     }
-    setSession((current) => restoreBatchMetadataDrafts(current));
+    setSession((current) => restoreImageMetadataDrafts(current));
     return true;
   };
-  const deleteSingleImage = async (requestClose: () => void) => {
-    const item = activeItems[0];
-    if (!deleteAvailable || !item || mode.kind !== "single" || busy) return;
+  const deleteActiveImages = async (requestClose: () => void) => {
+    const imageIds = activeItems.map((item) => item.id);
+    if (!imageIds.length || busy) return false;
 
-    const deleted = await deleteStatus.run(async () => {
+    const allDeleted = await deleteStatus.run(async () => {
       setDeleteError("");
-      let deletionConfirmed = false;
+      const confirmedIds = new Set<string>();
       try {
-        const result = await deleteImages([item.id]);
-        deletionConfirmed = result.deleted === 1;
+        const result = await deleteImages(imageIds);
+        for (const item of result.results) {
+          if (item.status === "deleted") {
+            confirmedIds.add(item.id.toLowerCase());
+          }
+        }
       } catch (error) {
-        reportAdminUiError("image_metadata.single_delete", error);
+        reportAdminUiError("image_metadata.delete", error, { imageIds });
       }
 
-      if (!deletionConfirmed) {
-        let authoritativeSnapshotRead = false;
+      const unresolvedIds = imageIds.filter(
+        (id) => !confirmedIds.has(id.toLowerCase())
+      );
+      let authoritativeSnapshotRead = false;
+      if (unresolvedIds.length) {
         try {
-          const snapshot = await readEditableImageSnapshots([item.id]);
+          const snapshot = await readEditableImageSnapshots(unresolvedIds);
           authoritativeSnapshotRead = true;
-          deletionConfirmed = !snapshot.items.some(
-            (candidate) => candidate.id === item.id
+          const editableIds = new Set(
+            snapshot.items.map((item) => item.id.toLowerCase())
           );
+          for (const id of unresolvedIds) {
+            if (!editableIds.has(id.toLowerCase())) {
+              confirmedIds.add(id.toLowerCase());
+            }
+          }
         } catch (error) {
           reportAdminUiError(
-            "image_metadata.single_delete_snapshot",
+            "image_metadata.delete_snapshot",
             error,
-            { imageId: item.id }
+            { imageIds: unresolvedIds }
           );
-        }
-        if (!deletionConfirmed) {
-          setDeleteError(
-            authoritativeSnapshotRead
-              ? "图片当前仍可编辑，删除未生效"
-              : "删除结果无法确认，请稍后重试或刷新页面"
-          );
-          return false;
         }
       }
 
-      // 删除已经由服务端提交后，刷新失败不能诱导用户再次执行 mutation。
-      // 各入口在这里补齐自己的列表并关闭详情，异常只单独记录。
-      try {
-        await mode.onDeleted(item.id);
-      } catch (refreshError) {
-        reportAdminUiError(
-          "image_metadata.single_delete_refresh",
-          refreshError,
-          { imageId: item.id }
+      const deletedIds = imageIds.filter(
+        (id) => confirmedIds.has(id.toLowerCase())
+      );
+      if (deletedIds.length) {
+        const deletedIdSet = new Set(
+          deletedIds.map((id) => id.toLowerCase())
         );
+        setSession((current) => ({
+          ...current,
+          activeIds: current.activeIds.filter(
+            (id) => !deletedIdSet.has(id.toLowerCase())
+          ),
+          baselineItems: current.baselineItems.filter(
+            (item) => !deletedIdSet.has(item.id.toLowerCase())
+          ),
+          drafts: Object.fromEntries(
+            Object.entries(current.drafts).filter(
+              ([id]) => !deletedIdSet.has(id.toLowerCase())
+            )
+          )
+        }));
+
+        // 删除已经由服务端提交后，刷新失败不能诱导用户再次执行 mutation。
+        // 各入口在这里补齐自己的列表并关闭详情，异常只单独记录。
+        try {
+          await onDeleted(deletedIds);
+        } catch (refreshError) {
+          reportAdminUiError(
+            "image_metadata.delete_refresh",
+            refreshError,
+            { imageIds: deletedIds }
+          );
+        }
+      }
+
+      const unresolvedCount = imageIds.length - deletedIds.length;
+      if (unresolvedCount) {
+        setDeleteError(authoritativeSnapshotRead
+          ? imageIds.length === 1
+            ? "图片当前仍可编辑，删除未生效"
+            : `${unresolvedCount} 张图片当前仍可编辑，删除未全部生效`
+          : imageIds.length === 1
+            ? "删除结果无法确认，请稍后重试或刷新页面"
+            : `${unresolvedCount} 张图片的删除结果无法确认，请稍后重试或刷新页面`
+        );
+        return false;
       }
       return true;
     });
-    if (deleted) requestClose();
-    return deleted;
+    if (allDeleted) requestClose();
+    return allDeleted;
   };
   return (
     <DialogFrame
@@ -317,7 +347,7 @@ export function ImageMetadataEditorDialog({
       {({ requestClose }) => (
       <>
       <form
-        className={`batch-edit-modal image-workflow-window${singleMode ? " is-single" : ""}`}
+        className={`batch-edit-modal image-workflow-window${singleItem ? " is-single" : ""}`}
         tabIndex={-1}
         onSubmit={async (event) => {
           event.preventDefault();
@@ -328,7 +358,7 @@ export function ImageMetadataEditorDialog({
         <header>
           <div>
             <h2>{title}</h2>
-            <p title={singleMode ? modalSubtitle : undefined}>{modalSubtitle}</p>
+            <p title={singleItem ? modalSubtitle : undefined}>{modalSubtitle}</p>
           </div>
           <div className="batch-edit-header-actions">
             <button
@@ -356,7 +386,7 @@ export function ImageMetadataEditorDialog({
             </button>
           </div>
         </header>
-        {batchMode && (
+        {multipleItems && (
           <WorkflowCollapsePanel
             className="batch-edit-common-panel"
             contentClassName="batch-edit-common workflow-defaults"
@@ -425,7 +455,7 @@ export function ImageMetadataEditorDialog({
             const draft = session.drafts[item.id];
             const changed = changedByItem.get(item.id)!;
             const cardChanged = Object.values(changed).some(Boolean);
-            const lastSaveState = batchMetadataCardSaveState(
+            const lastSaveState = imageMetadataCardSaveState(
               lastSaveReport,
               item.id
             );
@@ -501,7 +531,7 @@ export function ImageMetadataEditorDialog({
                         {item.image_size ? formatBytes(item.image_size) : "大小未记录"} · {resolveStorageName(item)}
                       </span>
                     </div>
-                    {batchMode && (
+                    {multipleItems && (
                       <button
                         className="icon danger-button"
                         type="button"
@@ -540,10 +570,10 @@ export function ImageMetadataEditorDialog({
                   className="batch-edit-migrate-trigger"
                   type="button"
                   disabled={busy || !activeItems.length}
-                  {...preloadIntentProps(preloadBatchStorageMigrationDialog)}
+                  {...preloadIntentProps(preloadImageStorageMigrationDialog)}
                   onClick={() => setMigrating(true)}
                 >
-                  <AdminIcon name="arrow-left-right-line" />{batchMode ? "批量迁移存储" : "迁移存储"}
+                  <AdminIcon name="arrow-left-right-line" />{multipleItems ? "批量迁移存储" : "迁移存储"}
                 </button>
               )}
               {deleteAvailable && (
@@ -551,8 +581,8 @@ export function ImageMetadataEditorDialog({
                   ref={deleteTriggerRef}
                   className="icon danger-button batch-edit-delete-trigger"
                   type="button"
-                  title="删除此图片"
-                  aria-label="删除此图片"
+                  title={multipleItems ? "删除这些图片" : "删除此图片"}
+                  aria-label={multipleItems ? "删除这些图片" : "删除此图片"}
                   disabled={busy || !activeItems.length}
                   onClick={() => {
                     setDeleteError("");
@@ -577,7 +607,7 @@ export function ImageMetadataEditorDialog({
           <div className="modal-footer-actions">
             <button type="button" disabled={busy} onClick={() => requestClose()}>取消</button>
             <AsyncActionButton
-              className={`button workflow-submit-button${batchMode ? " batch-edit-save-button" : ""}`}
+              className={`button workflow-submit-button${multipleItems ? " batch-edit-save-button" : ""}`}
               type="submit"
               status={saveStatus.status}
               presentation={savePresentation}
@@ -589,11 +619,10 @@ export function ImageMetadataEditorDialog({
       <OverlayScrollbar targetRef={listRef} />
       {canMigrateStorage && migrating && (
         <Suspense fallback={null}>
-          <BatchStorageMigrationDialog
+          <ImageStorageMigrationDialog
             open
             imageIds={activeItems.map((item) => item.id)}
             currentStorageSlugs={activeItems.map((item) => item.storage_slug)}
-            single={singleMode}
             returnFocusRef={migrateTriggerRef}
             onClose={() => setMigrating(false)}
             onSaved={onSaved}
@@ -624,14 +653,16 @@ export function ImageMetadataEditorDialog({
       )}
       {deleteConfirmation && (
         <ConfirmDialog
-          title="确认删除图片"
-          description="此图片将移入回收站，可以稍后恢复。"
+          title={multipleItems ? "确认批量删除图片" : "确认删除图片"}
+          description={multipleItems
+            ? `这 ${activeItems.length} 张图片将移入回收站，可以稍后恢复。`
+            : "此图片将移入回收站，可以稍后恢复。"}
           confirmLabel="确认删除"
           pendingLabel="删除中"
           errorMessage={deleteError}
           returnFocusRef={deleteTriggerRef}
           onClose={() => setDeleteConfirmation(false)}
-          onConfirm={() => deleteSingleImage(requestClose)}
+          onConfirm={() => deleteActiveImages(requestClose)}
         />
       )}
       </>

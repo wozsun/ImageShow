@@ -14,7 +14,7 @@ import { displayNameOrSlug, imageDisplayTitle, formatDate, formatDimensions } fr
 import { brightnessOptionLabel, deviceOptionLabel } from "../../lib/ui/select-options.js";
 import type {
   AdminImageDetailItem,
-  BatchEditableImageSnapshot,
+  EditableImageSnapshot,
   ImageItem,
   PublicImageItem
 } from "../../lib/types.js";
@@ -101,7 +101,7 @@ type ImageDetailModalProps =
         imageId: string
       ) => void | Promise<void>;
       onDeleted?: (imageId: string) => void;
-      onItemUpdated?: (item: BatchEditableImageSnapshot) => void;
+      onItemUpdated?: (item: EditableImageSnapshot) => void;
       returnFocusRef?: RefObject<HTMLElement | null>;
     }
   | {
@@ -113,14 +113,14 @@ type ImageDetailModalProps =
         imageId: string
       ) => void | Promise<void>;
       onDeleted?: (imageId: string) => void;
-      onItemUpdated?: (item: BatchEditableImageSnapshot) => void;
+      onItemUpdated?: (item: EditableImageSnapshot) => void;
       returnFocusRef?: RefObject<HTMLElement | null>;
     };
 
 export function ImageDetailModal(props: ImageDetailModalProps) {
   const { onClose } = props;
   const [editedSnapshot, setEditedSnapshot] =
-    useState<BatchEditableImageSnapshot | null>(null);
+    useState<EditableImageSnapshot | null>(null);
   const item = editedSnapshot?.id === props.item.id
     ? {
         ...props.item,
@@ -151,7 +151,7 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
       exit.requestClose();
     }
   }, [exit.requestClose, props.onDeleted]);
-  const handleItemUpdated = useCallback((nextItem: BatchEditableImageSnapshot) => {
+  const handleItemUpdated = useCallback((nextItem: EditableImageSnapshot) => {
     setEditedSnapshot(nextItem);
     props.onItemUpdated?.(nextItem);
   }, [props.onItemUpdated]);

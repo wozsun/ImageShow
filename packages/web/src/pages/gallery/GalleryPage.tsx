@@ -26,7 +26,7 @@ import { queryKeys } from "../../lib/api/query-keys.js";
 import { displayNameOrSlug, errorMessage } from "../../lib/ui/formatters.js";
 import { buildRandomUrl } from "../../lib/gallery/random-url.js";
 import type {
-  BatchEditableImageSnapshot,
+  EditableImageSnapshot,
   GalleryImageCard,
   PublicImageItem
 } from "../../lib/types.js";
@@ -81,7 +81,7 @@ function GalleryImageDetail({
     imageId: string
   ) => void | Promise<void>;
   onDeleted: (imageId: string) => void;
-  onItemUpdated: (item: BatchEditableImageSnapshot) => void;
+  onItemUpdated: (item: EditableImageSnapshot) => void;
   returnFocusRef: RefObject<HTMLElement | null>;
 }) {
   const placeholder = useMemo(() => imagePlaceholder(card), [card]);

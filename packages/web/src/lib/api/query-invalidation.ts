@@ -16,7 +16,6 @@ const imageDataQueryKeys = [
   queryKeys.galleryStats,
   queryKeys.adminImages,
   queryKeys.adminImageInfo,
-  queryKeys.adminImageEditSnapshot,
   queryKeys.overview,
   queryKeys.themes,
   queryKeys.tags,
@@ -34,7 +33,6 @@ export function clearAdminCacheAfterLogin(client: QueryClient) {
     queryKeys.adminCheckStatus,
     queryKeys.adminImages,
     queryKeys.adminImageInfo,
-    queryKeys.adminImageEditSnapshot,
     queryKeys.tags,
     queryKeys.themes,
     queryKeys.authors,
@@ -51,16 +49,15 @@ export function invalidateImageData(client: QueryClient) {
 
 export async function invalidateImageDataAfterDelete(
   client: QueryClient,
-  imageId: string
+  imageIds: string[]
 ) {
-  const deletedDetailKey = [...queryKeys.publicImageDetail, imageId] as const;
   // 当前公开详情在删除后必然返回 404。先终止可能尚未完成的旧读取，但不改变
   // 它的 freshness；详情关闭后 gcTime: 0 会自然回收它。
-  await client.cancelQueries({
-    queryKey: deletedDetailKey,
+  await Promise.all(imageIds.map((imageId) => client.cancelQueries({
+    queryKey: [...queryKeys.publicImageDetail, imageId],
     exact: true
-  });
-  // 查询所有者会在 mutation 提交时先把当前 ID 设为 disabled。这里不能再把仍
+  })));
+  // 查询所有者会在 mutation 提交时先把当前 ID 集合设为 disabled。这里不能再把仍
   // active 的详情标为 stale，否则关闭动画期间的窗口聚焦或网络重连仍可能读取 404。
   // 详情卸载后由 gcTime: 0 回收。当前公开列表已在 mutation 成功边界精确移除
   // 目标 ID，不能把公开数据窗口的临时页全部标为 stale 并重放历史游标；
@@ -85,7 +82,6 @@ export function invalidateStorageData(client: QueryClient) {
     queryKeys.publicImageDetail,
     queryKeys.adminImages,
     queryKeys.adminImageInfo,
-    queryKeys.adminImageEditSnapshot
   ]);
 }
 
@@ -99,7 +95,6 @@ export function invalidateRuntimeData(client: QueryClient) {
     queryKeys.overview,
     queryKeys.publicImages,
     queryKeys.publicImageDetail,
-    queryKeys.adminImageEditSnapshot,
     queryKeys.galleryFacets
   ]);
 }

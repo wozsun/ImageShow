@@ -2,7 +2,7 @@ import {
   adminApiBasePath,
   type AdminImageDetailItemDto,
   type AdminImageItemDto,
-  type BatchEditableImageSnapshotDto,
+  type EditableImageSnapshotDto,
   type Brightness,
   type Device,
   type GalleryImageCardDto,
@@ -108,7 +108,7 @@ export const imageDetailPresentationColumnsWithTags = [
   imageTagsPresentationColumn
 ].join(", ");
 
-export const batchEditableImagePresentationColumnsWithTags = [
+export const editableImagePresentationColumnsWithTags = [
   "id",
   "device",
   "brightness",
@@ -336,9 +336,9 @@ export function adminImageDetailView(
   };
 }
 
-export function batchEditableImageSnapshotView(
+export function editableImageSnapshotView(
   image: PublicImage
-): BatchEditableImageSnapshotDto {
+): EditableImageSnapshotDto {
   return {
     id: image.id,
     title: image.title,

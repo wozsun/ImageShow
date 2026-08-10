@@ -209,9 +209,15 @@ export function ImageAdmin() {
     gridRef.current?.scrollTo({ top: 0, left: 0 });
   }, [clearImageSelection, cursor, filters, view]);
   const preloadBatchEditor = () => editorCapability.preload({
-    kind: "batch",
     sources: selectedItems
   });
+  const selectedEditorPending = Boolean(
+    editorCapability.pending
+    && editorCapability.pending.itemIds.length === selectedItems.length
+    && selectedItems.every(
+      (item, index) => editorCapability.pending?.itemIds[index] === item.id
+    )
+  );
   const confirmCopy = imageAdminConfirmationCopy(confirmAction);
   return (
     <section
@@ -335,16 +341,13 @@ export function ImageAdmin() {
                   disabled={
                     !selected.length
                     || editorConflictBusy
-                    || editorCapability.pending?.kind === "batch"
+                    || selectedEditorPending
                   }
-                  aria-busy={
-                    editorCapability.pending?.kind === "batch" || undefined
-                  }
+                  aria-busy={selectedEditorPending || undefined}
                    {...preloadIntentProps(preloadBatchEditor)}
                    onClick={(event) => {
                      cancelPageNavigation();
                      void editorCapability.open({
-                      kind: "batch",
                       sources: selectedItems
                     }, event.currentTarget);
                   }}
@@ -453,17 +456,15 @@ export function ImageAdmin() {
               }}
               editDisabled={editorConflictBusy}
               editPending={
-                editorCapability.pending?.kind === "single"
+                editorCapability.pending?.itemIds.length === 1
                 && editorCapability.pending.itemIds[0] === item.id
               }
               onPreloadEdit={() => editorCapability.preload({
-                kind: "single",
                 sources: [item]
               })}
               onEdit={(opener) => {
                 cancelPageNavigation();
                 void editorCapability.open({
-                  kind: "single",
                   sources: [item]
                 }, opener);
               }}
@@ -518,24 +519,21 @@ export function ImageAdmin() {
       )}
       {editorCapability.session && (
         <editorCapability.session.module.ImageMetadataEditorDialog
-          mode={editorCapability.session.kind === "single"
-            ? {
-                kind: "single",
-                item: editorCapability.session.items[0],
-                onDeleted: async () => {
-                  await refresh();
-                  showFeedback("图片已移入回收站", "success");
-                }
-              }
-            : {
-                kind: "batch",
-                items: editorCapability.session.items,
-                pageSize: editPageSize
-              }}
+          items={editorCapability.session.items}
+          pageSize={editPageSize}
           themes={editorCapability.session.vocabulary.themes}
           allTags={editorCapability.session.vocabulary.tags}
           authors={editorCapability.session.vocabulary.authors}
           onClose={editorCapability.close}
+          onDeleted={async (imageIds) => {
+            await refresh();
+            showFeedback(
+              imageIds.length === 1
+                ? "图片已移入回收站"
+                : `${imageIds.length} 张图片已移入回收站`,
+              "success"
+            );
+          }}
           onSaved={refresh}
           onStorageMigrationSucceeded={(message) => showFeedback(message, "success")}
           returnFocusRef={editorCapability.returnFocusRef}

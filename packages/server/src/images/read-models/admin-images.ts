@@ -14,8 +14,8 @@ import { readReadyImagePage } from "../ready-cache/query.ts";
 import {
   adminImageView,
   adminImagesWithTags,
-  batchEditableImagePresentationColumnsWithTags,
-  batchEditableImageSnapshotView,
+  editableImagePresentationColumnsWithTags,
+  editableImageSnapshotView,
   type ImageRecordWithTags
 } from "../presenter.ts";
 import {
@@ -87,7 +87,7 @@ export async function getAdminImageSnapshots(
     imageUpdateLockRequests(canonicalIds),
     async () => {
       const result = await pool.query(
-        `SELECT ${batchEditableImagePresentationColumnsWithTags}
+        `SELECT ${editableImagePresentationColumnsWithTags}
            FROM metadata
           WHERE id = ANY($1::uuid[])
             AND status = 'ready'`,
@@ -99,7 +99,7 @@ export async function getAdminImageSnapshots(
       const projected = (await adminImagesWithTags(
         result.rows as ImageRecordWithTags[]
       ))
-        .map(batchEditableImageSnapshotView);
+        .map(editableImageSnapshotView);
       const itemsById = new Map(projected.map((item) => [item.id, item]));
       return {
         items: canonicalIds.flatMap((id) => {

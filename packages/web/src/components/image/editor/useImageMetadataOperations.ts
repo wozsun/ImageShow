@@ -11,22 +11,22 @@ import {
 import { readEditableImageSnapshots } from "../../../lib/api/image-edit.js";
 import { adminApiBasePath } from "../../../lib/constants.js";
 import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
-import type { BatchEditableImageSnapshot } from "../../../lib/types.js";
-import { summarizeBatchUpdateFailures } from "./batch-update-failures.js";
+import type { EditableImageSnapshot } from "../../../lib/types.js";
+import { summarizeImageUpdateFailures } from "./image-update-failures.js";
 import {
-  createBatchMetadataSaveReport,
-  type BatchMetadataSaveAttempt,
-  type BatchMetadataSaveOutcome,
-  type BatchMetadataSaveReport,
-  type BatchMetadataUpdate
-} from "./batch-metadata-session.js";
+  createImageMetadataSaveReport,
+  type ImageMetadataSaveAttempt,
+  type ImageMetadataSaveOutcome,
+  type ImageMetadataSaveReport,
+  type ImageMetadataUpdate
+} from "./image-metadata-session.js";
 
-function reportBatchUpdateFailures(response: ImageUpdateResponseDto) {
+function reportImageUpdateFailures(response: ImageUpdateResponseDto) {
   if (!response.failed) return;
-  const summary = summarizeBatchUpdateFailures(response);
+  const summary = summarizeImageUpdateFailures(response);
   reportAdminUiError(
-    "image_metadata.batch_update_partial",
-    new Error(`批量图片元数据更新失败 ${summary.failed}/${summary.requested}`),
+    "image_metadata.update_partial",
+    new Error(`图片元数据更新失败 ${summary.failed}/${summary.requested}`),
     summary
   );
 }
@@ -49,19 +49,19 @@ function waitForSnapshotRetry(delayMs: number) {
   });
 }
 
-export function useBatchMetadataOperations({
+export function useImageMetadataOperations({
   initialIds,
   onSaved
 }: {
   initialIds: string[];
   onSaved: (
-    authoritativeItems?: BatchEditableImageSnapshot[] | null
+    authoritativeItems?: EditableImageSnapshot[] | null
   ) => void | Promise<void>;
 }) {
   const [pendingAttempt, setPendingAttempt] =
-    useState<BatchMetadataSaveAttempt | null>(null);
+    useState<ImageMetadataSaveAttempt | null>(null);
   const [lastSaveReport, setLastSaveReport] =
-    useState<BatchMetadataSaveReport | null>(null);
+    useState<ImageMetadataSaveReport | null>(null);
   const saveStatus = useAsyncActionStatus({ resultDurationMs: null });
 
   const readAuthoritativeSnapshot = async () => {
@@ -79,16 +79,16 @@ export function useBatchMetadataOperations({
         await waitForSnapshotRetry(retryDelay);
       }
     }
-    reportAdminUiError("image_metadata.batch_snapshot", lastError);
+    reportAdminUiError("image_metadata.snapshot", lastError);
     return null;
   };
 
   const finishAttempt = async (
-    attempt: BatchMetadataSaveAttempt,
+    attempt: ImageMetadataSaveAttempt,
     notifySaved: boolean
-  ): Promise<BatchMetadataSaveOutcome> => {
+  ): Promise<ImageMetadataSaveOutcome> => {
     const authoritativeItems = await readAuthoritativeSnapshot();
-    const report = createBatchMetadataSaveReport(
+    const report = createImageMetadataSaveReport(
       attempt,
       authoritativeItems
     );
@@ -101,18 +101,18 @@ export function useBatchMetadataOperations({
       try {
         await onSaved(authoritativeItems);
       } catch (error) {
-        reportAdminUiError("image_metadata.batch_update_refresh", error);
+        reportAdminUiError("image_metadata.update_refresh", error);
       }
     }
     return { attempt, authoritativeItems, report };
   };
 
   const save = async (
-    items: BatchMetadataUpdate[],
+    items: ImageMetadataUpdate[],
     activeIds: string[]
-  ): Promise<BatchMetadataSaveOutcome | null> => {
+  ): Promise<ImageMetadataSaveOutcome | null> => {
     if (!items.length && !pendingAttempt) return null;
-    let outcome: BatchMetadataSaveOutcome | undefined;
+    let outcome: ImageMetadataSaveOutcome | undefined;
 
     await saveStatus.run(async () => {
       const retryAttempt = pendingAttempt;
@@ -126,9 +126,9 @@ export function useBatchMetadataOperations({
             `${adminApiBasePath}/images/update`,
             { method: "POST", body: JSON.stringify(request) }
           );
-          reportBatchUpdateFailures(response);
+          reportImageUpdateFailures(response);
         } catch (error) {
-          reportAdminUiError("image_metadata.batch_update", error);
+          reportAdminUiError("image_metadata.update", error);
         }
         attempt = {
           activeIds: [...activeIds],

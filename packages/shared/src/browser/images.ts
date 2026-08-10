@@ -113,8 +113,8 @@ export type AdminImageDetailItemDto = PublicImageItemDto & Pick<
   | "deleted_at"
 >;
 
-/** Exact recovery payload consumed by the batch metadata editor. */
-export type BatchEditableImageSnapshotDto = Pick<
+/** Exact recovery payload consumed by the image metadata editor. */
+export type EditableImageSnapshotDto = Pick<
   AdminImageItemDto,
   | "id"
   | "title"
@@ -161,7 +161,7 @@ export type ImageUpdateResponseDto = {
 };
 
 export type ImageSnapshotResponseDto = {
-  items: BatchEditableImageSnapshotDto[];
+  items: EditableImageSnapshotDto[];
 };
 
 export type ImageDraftDto = {

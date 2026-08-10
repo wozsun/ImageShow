@@ -13,22 +13,21 @@ import {
 } from "./image-editor-capability-loader.js";
 import { AsyncIntentFence } from "../../../lib/async-intent-fence.js";
 import type {
-  BatchEditableImageSnapshot
+  EditableImageSnapshot
 } from "../../../lib/types.js";
 import type { ImportVocabularyDto } from "@imageshow/shared/browser";
 
 type PreparedImageEditor = {
   key: string;
-  kind: ImageEditorTarget["kind"];
   itemIds: string[];
   module: ImageEditorCapabilityModule;
-  items: BatchEditableImageSnapshot[];
+  items: EditableImageSnapshot[];
   vocabulary: ImportVocabularyDto;
 };
 
 type PendingImageEditor = Pick<
   PreparedImageEditor,
-  "key" | "kind" | "itemIds"
+  "key" | "itemIds"
 >;
 
 type Preparation = {
@@ -81,7 +80,6 @@ export function useImageEditorCapability({
     const promise = loadImageEditorCapabilityModule()
       .then(async (module) => ({
         key,
-        kind: target.kind,
         itemIds,
         module,
         ...await module.prepareImageEditor(queryClient, target.sources)
@@ -120,7 +118,6 @@ export function useImageEditorCapability({
     const requestSequence = requestFence.begin();
     const nextPending = {
       key: imageEditorTargetKey(target),
-      kind: target.kind,
       itemIds: target.sources.map((item) => item.id)
     };
     setPending(nextPending);
@@ -158,7 +155,7 @@ export function useImageEditorCapability({
     setSession(null);
   }, []);
 
-  const updateItems = useCallback((items: BatchEditableImageSnapshot[]) => {
+  const updateItems = useCallback((items: EditableImageSnapshot[]) => {
     preparationRef.current = null;
     setSession((current) => current ? { ...current, items } : current);
   }, []);

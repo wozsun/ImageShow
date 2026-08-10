@@ -5,7 +5,7 @@ const failureSampleLimit = 5;
 const failureCodeLimit = 20;
 const failureSampleMessageLimit = 160;
 
-export function summarizeBatchUpdateFailures(response: ImageUpdateResponseDto) {
+export function summarizeImageUpdateFailures(response: ImageUpdateResponseDto) {
   const failures = response.results.filter(
     (result): result is Extract<typeof result, { status: "failed" }> =>
       result.status === "failed"

@@ -30,7 +30,7 @@ import { useImageEditorCapability } from "./editor/useImageEditorCapability.js";
 import { Icon } from "../icon/Icon.js";
 import type {
   AdminImageDetailItem,
-  BatchEditableImageSnapshot,
+  EditableImageSnapshot,
   ImageAdminInfo,
   ImageItem
 } from "../../lib/types.js";
@@ -71,7 +71,7 @@ export function ImageAdminDetails({
   imageId: string;
   adminItem: AdminDetailSource | null;
   adminStorageLabel?: string;
-  onItemUpdated?: (item: BatchEditableImageSnapshot) => void;
+  onItemUpdated?: (item: EditableImageSnapshot) => void;
   onItemDeleteCommitted?: (
     imageId: string
   ) => void | Promise<void>;
@@ -157,7 +157,6 @@ export function ImageAdminDetails({
     }
   }, [denyAdminAccess]);
   const editTarget = useMemo<ImageEditorTarget>(() => ({
-    kind: "single",
     sources: [adminItem ?? { id: imageId }]
   }), [adminItem, imageId]);
   const editorCapability = useImageEditorCapability({
@@ -221,19 +220,19 @@ export function ImageAdminDetails({
   }, [adminStorageLabel, expanded, imageId, queryClient]);
 
   const refreshAfterSave = useCallback(async (
-    authoritativeItems?: BatchEditableImageSnapshot[] | null
+    authoritativeItems?: EditableImageSnapshot[] | null
   ) => {
     // 所有详情与列表共享这一处失效；随后读取单图权威快照，只用于立即更新仍打开的
     // 详情和可能继续停留的失败编辑会话。后台详情同时回读轻量管理信息，以更新快照
     // 契约刻意不承载的 updated_at；两条读取并行，且不触发第二轮全局失效。
     const capabilityModule = editorCapability.session?.module;
     if (!capabilityModule) throw new Error("图片编辑能力未加载");
-    const { snapshotResult, adminInfoResult } =
-      await capabilityModule.refreshSingleImageAfterSave<ImageAdminInfo>({
+    const { snapshotResult, adjacentDataResult } =
+      await capabilityModule.refreshImageEditorAfterSave<ImageAdminInfo>({
         queryClient,
-        imageId,
+        imageIds: [imageId],
         authoritativeItems,
-        loadAdminInfo: admin
+        loadAdjacentData: admin
           ? loadAdminInfoAfterInvalidation
           : undefined
       });
@@ -251,12 +250,12 @@ export function ImageAdminDetails({
     onItemUpdated?.(item);
     editorCapability.updateItems([item]);
 
-    if (adminInfoResult.status === "rejected") {
-      handlePreparationFailure(adminInfoResult.reason);
-      throw adminInfoResult.reason;
+    if (adjacentDataResult.status === "rejected") {
+      handlePreparationFailure(adjacentDataResult.reason);
+      throw adjacentDataResult.reason;
     }
-    if (adminInfoResult.value?.id === imageId) {
-      setRefreshedAdminInfo(adminInfoResult.value);
+    if (adjacentDataResult.value?.id === imageId) {
+      setRefreshedAdminInfo(adjacentDataResult.value);
     }
   }, [
     admin,
@@ -268,7 +267,7 @@ export function ImageAdminDetails({
     onItemUpdated,
     queryClient
   ]);
-  const refreshAfterDelete = useCallback(async () => {
+  const refreshAfterDelete = useCallback(async (imageIds: string[]) => {
     // mutation 已经由内层编辑器确认提交；先让公开详情的查询所有者禁用当前 ID，
     // 再取消读取并刷新派生投影，避免关闭动画期间被聚焦或网络重连重新拉取 404。
     let refreshError: unknown;
@@ -277,15 +276,22 @@ export function ImageAdminDetails({
       if (!capabilityModule) throw new Error("图片编辑能力未加载");
       // 页面仍由详情与编辑器共同锁定滚动时刷新派生投影；公开列表已经在
       // mutation 成功边界局部更新，不重放已加载的历史游标页。
-      await capabilityModule.refreshSingleImageAfterDelete({
+      await capabilityModule.refreshImageEditorAfterDelete({
         queryClient,
-        imageId,
+        imageIds,
         onDeleteCommitted: onItemDeleteCommitted
+          ? async (committedIds) => {
+              for (const committedId of committedIds) {
+                await onItemDeleteCommitted(committedId);
+              }
+            }
+          : undefined
       });
     } catch (error) {
       refreshError = error;
     }
 
+    if (!imageIds.includes(imageId)) return;
     setEditSuppressed(true);
     setEditError("");
     // 先让内层编辑器走完自己的退出动画；其 onClose 再通知外层详情关闭，
@@ -320,7 +326,6 @@ export function ImageAdminDetails({
   };
   const MetadataEditorModal =
     editorCapability.session?.module.ImageMetadataEditorDialog;
-  const editItem = editorCapability.session?.items[0];
 
   return (
     <section className="image-detail-admin-details">
@@ -382,17 +387,15 @@ export function ImageAdminDetails({
           )}
         </div>
       )}
-      {editorCapability.session && MetadataEditorModal && editItem && (
+      {editorCapability.session && MetadataEditorModal && (
         <MetadataEditorModal
-          mode={{
-            kind: "single",
-            item: editItem,
-            onDeleted: refreshAfterDelete
-          }}
+          items={editorCapability.session.items}
+          pageSize={1}
           themes={editorCapability.session.vocabulary.themes}
           allTags={editorCapability.session.vocabulary.tags}
           authors={editorCapability.session.vocabulary.authors}
           onClose={closeEdit}
+          onDeleted={refreshAfterDelete}
           onSaved={refreshAfterSave}
           onStorageMigrationSucceeded={setEditNotice}
           returnFocusRef={editorCapability.returnFocusRef}

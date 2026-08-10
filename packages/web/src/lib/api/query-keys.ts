@@ -6,7 +6,6 @@ export const queryKeys = {
   publicImages: ["public-images"] as const,
   publicImageDetail: ["public-image-detail"] as const,
   adminImageInfo: ["admin-image-info"] as const,
-  adminImageEditSnapshot: ["admin-image-edit-snapshot"] as const,
   overview: ["admin-overview"] as const,
   adminCheckStatus: ["admin-check-status"] as const,
   adminImages: ["admin-images"] as const,

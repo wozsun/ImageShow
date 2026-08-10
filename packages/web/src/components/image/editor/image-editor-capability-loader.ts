@@ -14,7 +14,7 @@ export const loadImageEditorCapabilityModule =
   );
 
 export function imageEditorTargetKey(target: ImageEditorTarget) {
-  return `${target.kind}:${target.sources.map((item) => item.id).join(",")}`;
+  return target.sources.map((item) => item.id).join(",");
 }
 
 export function isImageNotEditableError(error: unknown) {

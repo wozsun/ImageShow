@@ -4,7 +4,7 @@ import type {
   ImageUpdateResponseDto
 } from "@imageshow/shared/browser";
 import type {
-  BatchEditableImageSnapshot,
+  EditableImageSnapshot,
   ImageDraft
 } from "../../../lib/types.js";
 import {
@@ -12,39 +12,39 @@ import {
   normalizeTheme
 } from "../../../lib/upload/upload-utils.js";
 
-export type BatchMetadataUpdate = ImageUpdateItemInputDto;
+export type ImageMetadataUpdate = ImageUpdateItemInputDto;
 
-export type BatchMetadataSessionState = {
+export type ImageMetadataSessionState = {
   activeIds: string[];
-  baselineItems: BatchEditableImageSnapshot[];
+  baselineItems: EditableImageSnapshot[];
   drafts: Record<string, ImageDraft>;
 };
 
-export type BatchMetadataSaveAttempt = {
+export type ImageMetadataSaveAttempt = {
   activeIds: string[];
-  items: BatchMetadataUpdate[];
+  items: ImageMetadataUpdate[];
   response: ImageUpdateResponseDto | null;
 };
 
-export type BatchMetadataSaveReport = ImageUpdateResponseDto & {
+export type ImageMetadataSaveReport = ImageUpdateResponseDto & {
   responseReceived: boolean;
   snapshotFailed: boolean;
   unavailableIds: string[];
 };
 
-export type BatchMetadataCardSaveState =
+export type ImageMetadataCardSaveState =
   | "saved"
   | "failed"
   | "pending"
   | null;
 
-export type BatchMetadataSaveOutcome = {
-  attempt: BatchMetadataSaveAttempt;
-  authoritativeItems: BatchEditableImageSnapshot[] | null;
-  report: BatchMetadataSaveReport;
+export type ImageMetadataSaveOutcome = {
+  attempt: ImageMetadataSaveAttempt;
+  authoritativeItems: EditableImageSnapshot[] | null;
+  report: ImageMetadataSaveReport;
 };
 
-export type BatchMetadataChanges = Record<keyof ImageDraft, boolean>;
+export type ImageMetadataChanges = Record<keyof ImageDraft, boolean>;
 
 const imageDraftFields = [
   "title",
@@ -58,7 +58,7 @@ const imageDraftFields = [
   "tags"
 ] as const satisfies readonly (keyof ImageDraft)[];
 
-function draftFromImage(item: BatchEditableImageSnapshot): ImageDraft {
+function draftFromImage(item: EditableImageSnapshot): ImageDraft {
   return {
     title: item.title,
     description: item.description,
@@ -72,15 +72,15 @@ function draftFromImage(item: BatchEditableImageSnapshot): ImageDraft {
   };
 }
 
-function draftsFromImages(items: BatchEditableImageSnapshot[]) {
+function draftsFromImages(items: EditableImageSnapshot[]) {
   return Object.fromEntries(
     items.map((item) => [item.id, draftFromImage(item)])
   );
 }
 
-export function createBatchMetadataSession(
-  items: BatchEditableImageSnapshot[]
-): BatchMetadataSessionState {
+export function createImageMetadataSession(
+  items: EditableImageSnapshot[]
+): ImageMetadataSessionState {
   return {
     activeIds: items.map((item) => item.id),
     baselineItems: items,
@@ -94,9 +94,9 @@ function tagsChanged(draftTags: string[], savedTags: string[]) {
 }
 
 export function fieldsChangedFor(
-  item: BatchEditableImageSnapshot,
+  item: EditableImageSnapshot,
   draft: ImageDraft
-): BatchMetadataChanges {
+): ImageMetadataChanges {
   return {
     title: draft.title !== item.title,
     description: draft.description !== item.description,
@@ -112,11 +112,11 @@ export function fieldsChangedFor(
 }
 
 export function changedMetadataUpdate(
-  item: BatchEditableImageSnapshot,
+  item: EditableImageSnapshot,
   draft: ImageDraft,
-  changed: BatchMetadataChanges
-): BatchMetadataUpdate {
-  const update: BatchMetadataUpdate = { id: item.id };
+  changed: ImageMetadataChanges
+): ImageMetadataUpdate {
+  const update: ImageMetadataUpdate = { id: item.id };
   if (changed.title) update.title = draft.title;
   if (changed.description) update.description = draft.description;
   if (changed.source) update.source = draft.source;
@@ -149,7 +149,7 @@ function valuesEqual(
 function draftStillHasSubmittedIntent(
   field: keyof ImageDraft,
   draft: ImageDraft,
-  update: BatchMetadataUpdate
+  update: ImageMetadataUpdate
 ) {
   const submitted = update[field] as ImageDraft[keyof ImageDraft];
   return valuesEqual(field, draft[field], submitted);
@@ -157,8 +157,8 @@ function draftStillHasSubmittedIntent(
 
 function submittedIntentMatchesSnapshot(
   field: keyof ImageDraft,
-  update: BatchMetadataUpdate,
-  item: BatchEditableImageSnapshot
+  update: ImageMetadataUpdate,
+  item: EditableImageSnapshot
 ) {
   const submitted = update[field] as ImageDraft[keyof ImageDraft];
   const authoritativeDraft = draftFromImage(item);
@@ -174,8 +174,8 @@ function submittedIntentMatchesSnapshot(
 }
 
 function updateMatchesSnapshot(
-  update: BatchMetadataUpdate,
-  item: BatchEditableImageSnapshot
+  update: ImageMetadataUpdate,
+  item: EditableImageSnapshot
 ) {
   return imageDraftFields.every((field) => (
     !Object.hasOwn(update, field)
@@ -183,10 +183,10 @@ function updateMatchesSnapshot(
   ));
 }
 
-export function createBatchMetadataSaveReport(
-  attempt: BatchMetadataSaveAttempt,
-  authoritativeItems: BatchEditableImageSnapshot[] | null
-): BatchMetadataSaveReport {
+export function createImageMetadataSaveReport(
+  attempt: ImageMetadataSaveAttempt,
+  authoritativeItems: EditableImageSnapshot[] | null
+): ImageMetadataSaveReport {
   const authoritativeById = new Map(
     (authoritativeItems ?? []).map((item) => [item.id, item])
   );
@@ -226,10 +226,10 @@ export function createBatchMetadataSaveReport(
  * whose authoritative reread is unavailable is deliberately not called
  * successful yet: the retained draft can be reconciled without resubmitting.
  */
-export function batchMetadataCardSaveState(
-  report: BatchMetadataSaveReport | null,
+export function imageMetadataCardSaveState(
+  report: ImageMetadataSaveReport | null,
   imageId: string
-): BatchMetadataCardSaveState {
+): ImageMetadataCardSaveState {
   if (!report) return null;
   if (report.unavailableIds.includes(imageId)) return "failed";
   const result = report.results.find((candidate) => candidate.id === imageId);
@@ -243,11 +243,11 @@ export function batchMetadataCardSaveState(
   return "saved";
 }
 
-export function reconcileBatchMetadataSession(
-  state: BatchMetadataSessionState,
-  attempt: BatchMetadataSaveAttempt,
-  authoritativeItems: BatchEditableImageSnapshot[]
-): BatchMetadataSessionState {
+export function reconcileImageMetadataSession(
+  state: ImageMetadataSessionState,
+  attempt: ImageMetadataSaveAttempt,
+  authoritativeItems: EditableImageSnapshot[]
+): ImageMetadataSessionState {
   const oldBaselineById = new Map(
     state.baselineItems.map((item) => [item.id, item])
   );
@@ -270,7 +270,7 @@ export function reconcileBatchMetadataSession(
       ? fieldsChangedFor(oldBaseline, currentDraft)
       : Object.fromEntries(
           imageDraftFields.map((field) => [field, false])
-        ) as BatchMetadataChanges;
+        ) as ImageMetadataChanges;
     const nextDraft = { ...currentDraft };
     const writableDraft = nextDraft as Record<keyof ImageDraft, unknown>;
 
@@ -305,9 +305,9 @@ export function reconcileBatchMetadataSession(
   };
 }
 
-export function restoreBatchMetadataDrafts(
-  state: BatchMetadataSessionState
-): BatchMetadataSessionState {
+export function restoreImageMetadataDrafts(
+  state: ImageMetadataSessionState
+): ImageMetadataSessionState {
   const baselineById = new Map(
     state.baselineItems.map((item) => [item.id, item])
   );

@@ -24,11 +24,10 @@ const migratePresentation = {
   error: { icon: "close-line", label: "迁移失败" }
 } as const;
 
-export function BatchStorageMigrationDialog({
+export function ImageStorageMigrationDialog({
   open,
   imageIds,
   currentStorageSlugs,
-  single,
   returnFocusRef,
   onClose,
   onSaved,
@@ -37,12 +36,12 @@ export function BatchStorageMigrationDialog({
   open: boolean;
   imageIds: string[];
   currentStorageSlugs: string[];
-  single: boolean;
   returnFocusRef: RefObject<HTMLElement | null>;
   onClose: () => void;
   onSaved: () => void | Promise<void>;
   onSucceeded: (message: string) => void;
 }) {
+  const single = imageIds.length === 1;
   const { data } = useStorageOptions();
   // 目标至少要让一张图片真正离开当前后端。单图编辑因此不会再列出其本身的
   // 存储；混合来源的批量迁移仍可选择其中一个已启用来源，以迁移其余图片。
@@ -124,7 +123,7 @@ export function BatchStorageMigrationDialog({
       if (response.failed) {
         reportAdminUiError(
           "image_metadata.storage_migration_partial",
-          new Error(`批量存储迁移失败 ${response.failed}/${imageIds.length}`),
+          new Error(`图片存储迁移失败 ${response.failed}/${imageIds.length}`),
           response
         );
         setError(
