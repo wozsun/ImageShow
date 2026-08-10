@@ -1,194 +1,67 @@
-import type {
-  Dispatch,
-  RefObject,
-  SetStateAction
-} from "react";
 import { useCallback, useRef, useState } from "react";
-import { StableButtonLabel } from "../../../components/data-display/StableButtonLabel.js";
 import { ConfirmDialog } from "../../../components/feedback/ConfirmDialog.js";
 import { DialogFrame } from "../../../components/feedback/DialogFrame.js";
-import { SelectMenu } from "../../../components/form/SelectMenu.js";
-import { WorkflowDefaultFields } from "../../../components/form/WorkflowDefaultFields.js";
-import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 // 上传能力本身已经按需加载；不足 6 KiB（压缩后）的详情共享样式与逻辑留在
 // 同一能力块，避免任务首击再产生一个懒加载边界。
 import { ImageDetailModal } from "../../../components/image/ImageDetailModal.js";
 import { ImagePreviewModal } from "../../../components/image/ImagePreviewModal.js";
-import { WorkflowCollapsePanel } from "../../../components/layout/WorkflowCollapsePanel.js";
 import { OverlayScrollbar } from "../../../components/layout/OverlayScrollbar.js";
-import { AdminPagination } from "../../../components/navigation/AdminPagination.js";
-import {
-  uploadCommonBrightnessOptions,
-  uploadCommonDeviceOptions,
-  type SelectOption
-} from "../../../lib/ui/select-options.js";
-import { copyTextToClipboard } from "../../../lib/ui/clipboard.js";
-import { preloadIntentProps } from "../../../lib/ui/preload-intent.js";
-import type { FacetOption, ImageDraft, ImageItem, ImportJob } from "../../../lib/types.js";
-import type { ImportAttributeDefaults } from "../../../lib/upload/upload-utils.js";
-import type { ImportPreviewTarget } from "./DuplicateMatchPanel.js";
-import { ImportJobList } from "./ImportJobList.js";
-import type { JsonlManifestParseError } from "./import-api.js";
-import type {
-  LinkDialogSubmission,
-  LinkInputMode
-} from "./link-import/LinkUrlDialog.js";
-import { UploadCleanupMenu } from "./UploadCleanupMenu.js";
-import type {
-  UploadCleanupAction,
-  UploadCleanupActionId
-} from "./upload-cleanup-actions.js";
-import type { ImportQueueController } from "./useImportQueue.js";
-type LinkUrlDialogComponent =
-  typeof import("./link-import/LinkUrlDialog.js")["LinkUrlDialog"];
+import { UploadWorkflowDefaults } from "./UploadWorkflowDefaults.js";
+import { UploadWorkflowFooter } from "./UploadWorkflowFooter.js";
+import { UploadWorkflowHeader } from "./UploadWorkflowHeader.js";
+import { UploadWorkflowTaskList } from "./UploadWorkflowTaskList.js";
+import type { UploadCleanupActionId } from "./upload-cleanup-actions.js";
+import type { UploadWorkflowWindowController } from "./upload-workflow-controller.js";
 
 export function UploadWorkflowWindow({
-  mode,
-  fileInputId,
-  listRef,
-  closeButtonRef,
-  fileInputRef,
-  linkPickerRef,
-  busy,
-  queue,
-  jsonlErrors,
-  cleanupActions,
-  defaults,
-  defaultsExpanded,
-  defaultsSummary,
-  canApplyDefaults,
-  themes,
-  tags,
-  authors,
-  storageName,
-  activeBackend,
-  backendOptions,
-  dragOver,
-  detailItem,
-  detailReturnFocusRef,
-  preview,
-  previewReturnFocusRef,
-  urlInputOpen,
-  linkInputPending,
-  LinkUrlDialogComponent,
-  linkInputMode,
-  autoImportAfterParse,
-  linkMaxItems,
-  weiboMaxItems,
-  returnFocusRef,
-  onClose,
-  onAddFiles,
-  onClearJsonlErrors,
-  onDefaultsChange,
-  onDefaultsExpandedChange,
-  onDragOverChange,
-  onPatchJob,
-  onCancelJob,
-  onRetryJob,
-  onRemoveJob,
-  onConfirmDuplicateJob,
-  onOpenDetail,
-  onOpenPreview,
-  onOpenLinkInput,
-  onPreloadLinkInput,
-  onBackendChange,
-  onCancelAll,
-  onCommitReady,
-  onCloseDetail,
-  onClosePreview,
-  onCloseLinkInput,
-  onSubmitLinks
+  controller
 }: {
-  mode: "file" | "link";
-  fileInputId: string;
-  listRef: RefObject<HTMLDivElement | null>;
-  closeButtonRef: RefObject<HTMLButtonElement | null>;
-  fileInputRef: RefObject<HTMLInputElement | null>;
-  linkPickerRef: RefObject<HTMLButtonElement | null>;
-  busy: boolean;
-  queue: ImportQueueController;
-  jsonlErrors: JsonlManifestParseError[];
-  cleanupActions: UploadCleanupAction[];
-  defaults: ImportAttributeDefaults;
-  defaultsExpanded: boolean;
-  defaultsSummary: string;
-  canApplyDefaults: boolean;
-  themes: FacetOption[];
-  tags: FacetOption[];
-  authors: FacetOption[];
-  storageName: (slug: string) => string;
-  activeBackend: string;
-  backendOptions: readonly SelectOption[];
-  dragOver: boolean;
-  detailItem: ImageItem | null;
-  detailReturnFocusRef: RefObject<HTMLElement | null>;
-  preview: ImportPreviewTarget | null;
-  previewReturnFocusRef: RefObject<HTMLElement | null>;
-  urlInputOpen: boolean;
-  linkInputPending: boolean;
-  LinkUrlDialogComponent: LinkUrlDialogComponent | null;
-  linkInputMode: LinkInputMode;
-  autoImportAfterParse: boolean;
-  linkMaxItems: number;
-  weiboMaxItems: number;
-  returnFocusRef: RefObject<HTMLElement | null>;
-  onClose: () => void;
-  onAddFiles: (files: FileList | null) => void;
-  onClearJsonlErrors: () => void;
-  onDefaultsChange: Dispatch<SetStateAction<ImportAttributeDefaults>>;
-  onDefaultsExpandedChange: (expanded: boolean) => void;
-  onDragOverChange: (dragOver: boolean) => void;
-  onPatchJob: (job: ImportJob, patch: Partial<ImageDraft>) => void;
-  onCancelJob: (job: ImportJob) => void;
-  onRetryJob: (job: ImportJob) => void;
-  onRemoveJob: (job: ImportJob) => void;
-  onConfirmDuplicateJob: (job: ImportJob) => void;
-  onOpenDetail: (item: ImageItem, opener: HTMLElement) => void;
-  onOpenPreview: (target: ImportPreviewTarget) => void;
-  onOpenLinkInput: (inputMode: LinkInputMode) => void;
-  onPreloadLinkInput: () => void;
-  onBackendChange: (backend: string) => void;
-  onCancelAll: () => Promise<void>;
-  onCommitReady: () => void;
-  onCloseDetail: () => void;
-  onClosePreview: () => void;
-  onCloseLinkInput: () => void;
-  onSubmitLinks: (submission: LinkDialogSubmission) => void;
+  controller: UploadWorkflowWindowController;
 }) {
   const {
-    readyJobs,
-    duplicateJobs,
-    runningJobs,
-    doneJobs,
-    failedJobs
-  } = queue.summary;
+    mode,
+    busy,
+    queue,
+    listRef,
+    returnFocusRef,
+    header,
+    defaults,
+    tasks,
+    footer,
+    overlays
+  } = controller;
+  const SourceDialog = overlays.source.component;
   const modeTitle = mode === "file" ? "上传图片" : "导入图片";
-  const emptySubtitle = mode === "file"
-    ? "选择后立即上传并在服务端准备图片"
-    : "输入来源后立即创建并准备图片任务";
   const [pendingCleanupActionId, setPendingCleanupActionId] =
     useState<UploadCleanupActionId | null>(null);
   const cleanupReturnFocusRef = useRef<HTMLElement | null>(null);
-  const cleanupActionsRef = useRef(cleanupActions);
-  cleanupActionsRef.current = cleanupActions;
+  const cleanupActionsRef = useRef(header.cleanupActions);
+  cleanupActionsRef.current = header.cleanupActions;
   const pendingCleanupAction = pendingCleanupActionId
-    ? cleanupActions.find((action) => action.id === pendingCleanupActionId)
+    ? header.cleanupActions.find(
+        (action) => action.id === pendingCleanupActionId
+      )
     : undefined;
-  const selectCleanupAction = useCallback((
-    actionId: UploadCleanupActionId,
-    returnFocusTarget: HTMLElement
-  ) => {
-    const action = cleanupActionsRef.current.find(
-      (candidate) => candidate.id === actionId
-    );
-    if (!action?.enabled) return;
-    if (!action.confirmation) {
-      action.run();
-      return;
-    }
-    cleanupReturnFocusRef.current = returnFocusTarget;
-    setPendingCleanupActionId(actionId);
-  }, []);
+
+  const selectCleanupAction = useCallback(
+    (
+      actionId: UploadCleanupActionId,
+      returnFocusTarget: HTMLElement
+    ) => {
+      const action = cleanupActionsRef.current.find(
+        (candidate) => candidate.id === actionId
+      );
+      if (!action?.enabled) return;
+      if (!action.confirmation) {
+        action.run();
+        return;
+      }
+      cleanupReturnFocusRef.current = returnFocusTarget;
+      setPendingCleanupActionId(actionId);
+    },
+    []
+  );
+
   const confirmCleanupAction = useCallback(async () => {
     const action = cleanupActionsRef.current.find(
       (candidate) => candidate.id === pendingCleanupActionId
@@ -206,335 +79,106 @@ export function UploadWorkflowWindow({
       ariaLabel={modeTitle}
       busy={busy}
       paused={Boolean(
-        detailItem
-        || preview
-        || urlInputOpen
+        overlays.detail.item
+        || overlays.preview.target
+        || overlays.source.open
         || pendingCleanupActionId
       )}
-      initialFocusRef={closeButtonRef}
+      initialFocusRef={header.closeButtonRef}
       returnFocusRef={returnFocusRef}
-      onClose={onClose}
+      onClose={controller.onClose}
     >
       {({ requestClose }) => (
-      <>
-      <section className="upload-window image-workflow-window" tabIndex={-1}>
-        <header className="upload-window-header">
-          <div className="upload-head-copy">
-            <h1>{modeTitle}</h1>
-            {queue.jobs.length ? (
-              <p className="upload-task-summary">
-                <span className="upload-summary-primary">
-                  共 {queue.jobs.length} 张图片，{runningJobs} 张处理中，{readyJobs.length} 张待提交；
-                </span>
-                <span className="upload-summary-secondary">
-                  {doneJobs} 张成功，{failedJobs} 张失败，{duplicateJobs} 张重复待确认
-                  {jsonlErrors.length ? `，${jsonlErrors.length} 行解析失败` : ""}
-                </span>
-              </p>
-            ) : (
-              <p className="upload-empty-subtitle">{emptySubtitle}</p>
-            )}
-          </div>
-          <div className="upload-head-actions">
-            <div className="upload-clear-actions">
-              {cleanupActions.map((action) => (
-                <button
-                  key={action.id}
-                  type="button"
-                  className="clear-button"
-                  disabled={!action.enabled}
-                  onClick={(event) => {
-                    selectCleanupAction(
-                      action.id,
-                      event.currentTarget
-                    );
-                  }}
-                >
-                  {action.label}
-                </button>
-              ))}
-            </div>
-            <div className="upload-primary-actions">
-              <UploadCleanupMenu
-                actions={cleanupActions}
-                onSelect={selectCleanupAction}
-              />
-              {mode === "link" ? (
-                <div
-                  className={`upload-source-picker${busy || linkInputPending ? " is-disabled" : ""}`}
-                  role="group"
-                  aria-label="选择导入来源"
-                  aria-disabled={busy || linkInputPending}
-                >
-                  {([
-                    ["urls", "链接"],
-                    ["jsonl", "清单"],
-                    ["weibo", "微博"]
-                  ] as const).map(([inputMode, label]) => (
-                    <button
-                      key={inputMode}
-                      ref={linkInputMode === inputMode ? linkPickerRef : undefined}
-                      type="button"
-                      className="upload-source-option pressable"
-                      disabled={busy || linkInputPending}
-                      {...preloadIntentProps(onPreloadLinkInput)}
-                      onClick={() => onOpenLinkInput(inputMode)}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <label
-                  className={`button secondary upload-picker pressable${busy ? " is-disabled" : ""}`}
-                  aria-disabled={busy}
-                >
-                  <AdminIcon name="upload-cloud-2-line" />
-                  <input
-                    id={fileInputId}
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    disabled={busy}
-                    onChange={(event) => {
-                      onAddFiles(event.target.files);
-                      event.target.value = "";
-                    }}
-                  />
-                  选择图片
-                </label>
+        <>
+          <section
+            className="upload-window image-workflow-window"
+            tabIndex={-1}
+          >
+            <UploadWorkflowHeader
+              mode={mode}
+              busy={busy}
+              queue={queue}
+              jsonlErrorCount={tasks.jsonlErrors.length}
+              controller={header}
+              onSelectCleanup={selectCleanupAction}
+              onRequestClose={requestClose}
+            />
+            <UploadWorkflowDefaults
+              busy={busy}
+              queue={queue}
+              controller={defaults}
+            />
+            <UploadWorkflowTaskList
+              mode={mode}
+              busy={busy}
+              queue={queue}
+              listRef={listRef}
+              sourceController={header}
+              controller={tasks}
+            />
+            <UploadWorkflowFooter
+              busy={busy}
+              queue={queue}
+              controller={footer}
+              onRequestClose={requestClose}
+            />
+          </section>
+          <OverlayScrollbar targetRef={listRef} />
+          {overlays.detail.item && (
+            <ImageDetailModal
+              item={overlays.detail.item}
+              admin
+              storageLabel={tasks.storageName(
+                overlays.detail.item.storage_slug
               )}
-              <button
-                ref={closeButtonRef}
-                className="icon close pressable upload-close-button"
-                type="button"
-                title="关闭"
-                onClick={() => requestClose()}
-                disabled={busy}
-              >
-                <AdminIcon name="close-line" />
-              </button>
-            </div>
-          </div>
-        </header>
-
-        <WorkflowCollapsePanel
-          className="upload-defaults-panel"
-          contentClassName="upload-defaults workflow-defaults"
-          title="默认属性"
-          summary={defaultsSummary}
-          expanded={defaultsExpanded}
-          onExpandedChange={onDefaultsExpandedChange}
-        >
-          <WorkflowDefaultFields
-            values={defaults}
-            onChange={{
-              device: (device) => onDefaultsChange({
-                ...defaults,
-                device: device as ImportAttributeDefaults["device"]
-              }),
-              brightness: (brightness) => onDefaultsChange({
-                ...defaults,
-                brightness: brightness as ImportAttributeDefaults["brightness"]
-              }),
-              theme: (theme) => onDefaultsChange({ ...defaults, theme }),
-              author: (author) => onDefaultsChange({ ...defaults, author }),
-              tags: (nextTags) => onDefaultsChange({
-                ...defaults,
-                tags: nextTags
-              })
-            }}
-            deviceOptions={uploadCommonDeviceOptions}
-            brightnessOptions={uploadCommonBrightnessOptions}
-            themes={themes}
-            authors={authors}
-            tags={tags}
-            placeholders={{
-              theme: "主题",
-              author: "默认作者",
-              tags: "默认标签"
-            }}
-            ariaLabels={{
-              device: "默认设备",
-              brightness: "默认亮度",
-              theme: "默认主题",
-              author: "默认作者",
-              tags: "默认标签"
-            }}
-            applyDisabled={busy || !canApplyDefaults}
-            onApply={() => queue.applyDefaultsToAll(defaults)}
-          />
-        </WorkflowCollapsePanel>
-
-        <div
-          className="modal-scroll-list image-workflow-list upload-list"
-          ref={listRef}
-        >
-          {jsonlErrors.length > 0 && (
-            <div className="jsonl-import-report">
-              <span>{jsonlErrors.length} 行未创建任务</span>
-              <button
-                type="button"
-                onClick={() => void copyTextToClipboard(
-                  jsonlErrors
-                    .map((error) => `第 ${error.line} 行：${error.error}\n${error.raw}`)
-                    .join("\n\n")
-                ).catch(() => undefined)}
-              >
-                <AdminIcon name="file-copy-line" />复制错误
-              </button>
-              <button type="button" onClick={onClearJsonlErrors}>清除</button>
-            </div>
-          )}
-          <ImportJobList
-            jobs={queue.visibleJobs}
-            allJobs={queue.jobs}
-            busy={busy}
-            storageName={storageName}
-            themes={themes}
-            tags={tags}
-            authors={authors}
-            onPatch={onPatchJob}
-            onCancel={onCancelJob}
-            onRetry={onRetryJob}
-            onRemove={onRemoveJob}
-            onConfirmDuplicate={onConfirmDuplicateJob}
-            onOpenDetail={onOpenDetail}
-            onPreview={onOpenPreview}
-          />
-          {!queue.jobs.length && (mode === "link" ? (
-            <button
-              type="button"
-              className="upload-empty-state upload-dropzone"
-              disabled={linkInputPending}
-              {...preloadIntentProps(onPreloadLinkInput)}
-              onClick={() => onOpenLinkInput("urls")}
-            >
-              <AdminIcon name="download-cloud-2-line" />
-              <span>还没有导入任务，点击此处选择图片来源</span>
-            </button>
-          ) : (
-            <button
-              type="button"
-              className={`upload-empty-state upload-dropzone${dragOver ? " is-dragover" : ""}`}
-              onClick={() => fileInputRef.current?.click()}
-              onDragOver={(event) => {
-                event.preventDefault();
-                onDragOverChange(true);
+              onClose={overlays.detail.onClose}
+              onDeleted={(imageId) => {
+                overlays.detail.returnFocusRef.current = null;
+                queue.removeLibraryDuplicate(imageId);
               }}
-              onDragLeave={() => onDragOverChange(false)}
-              onDrop={(event) => {
-                event.preventDefault();
-                onDragOverChange(false);
-                onAddFiles(event.dataTransfer.files);
-              }}
-            >
-              <AdminIcon name="image-line" />
-              <span>还没有选择图片，点击此处选择，或将图片拖到这里</span>
-            </button>
-          ))}
-        </div>
-
-        <footer className={`image-workflow-footer${queue.totalPages > 1 ? " has-pagination" : ""}`}>
-          <div className="upload-footer-left image-workflow-leading-actions">
-            <div className="upload-backend">
-              <SelectMenu
-                className="is-storage-select"
-                value={activeBackend}
-                onChange={onBackendChange}
-                options={backendOptions}
-                ariaLabel="新任务存储位置"
-              />
-            </div>
-            <small className="upload-storage-hint">仅影响之后添加的新任务</small>
-          </div>
-          {queue.totalPages > 1 && (
-            <AdminPagination
-              className="image-workflow-pagination"
-              ariaLabel="导入任务列表分页"
-              page={queue.page}
-              totalPages={queue.totalPages}
-              onPageChange={queue.setPage}
+              returnFocusRef={overlays.detail.returnFocusRef}
             />
           )}
-          <div className="modal-footer-actions">
-            <button
-              type="button"
-              onClick={() => void onCancelAll().then(() => requestClose())}
-              disabled={busy}
-            >
-              取消
-            </button>
-            <button
-              className="button workflow-submit-button"
-              type="button"
-              disabled={!readyJobs.length || busy}
-              onClick={onCommitReady}
-            >
-              <StableButtonLabel
-                idle={readyJobs.length ? `提交 ${readyJobs.length} 张` : "提交"}
-                busyText="提交中"
-                busy={busy}
-              />
-            </button>
-          </div>
-        </footer>
-      </section>
-      <OverlayScrollbar targetRef={listRef} />
-      {detailItem && (
-        <ImageDetailModal
-          item={detailItem}
-          admin
-          storageLabel={storageName(detailItem.storage_slug)}
-          onClose={onCloseDetail}
-          onDeleted={(imageId) => {
-            detailReturnFocusRef.current = null;
-            queue.removeLibraryDuplicate(imageId);
-          }}
-          returnFocusRef={detailReturnFocusRef}
-        />
-      )}
-      {preview && (
-        <ImagePreviewModal
-          src={preview.src}
-          thumbSrc={preview.thumbSrc}
-          width={preview.width}
-          height={preview.height}
-          onClose={onClosePreview}
-          returnFocusRef={previewReturnFocusRef}
-        />
-      )}
-      {urlInputOpen && LinkUrlDialogComponent && (
-        <LinkUrlDialogComponent
-          initialInputMode={linkInputMode}
-          autoImportAfterParse={autoImportAfterParse}
-          maxItems={linkMaxItems}
-          weiboMaxItems={weiboMaxItems}
-          onClose={onCloseLinkInput}
-          onSubmit={onSubmitLinks}
-          returnFocusRef={linkPickerRef}
-        />
-      )}
-      {pendingCleanupAction?.confirmation && (
-        <ConfirmDialog
-          title={pendingCleanupAction.confirmation.title}
-          description={pendingCleanupAction.confirmation.description(
-            pendingCleanupAction.count
+          {overlays.preview.target && (
+            <ImagePreviewModal
+              src={overlays.preview.target.src}
+              thumbSrc={overlays.preview.target.thumbSrc}
+              width={overlays.preview.target.width}
+              height={overlays.preview.target.height}
+              onClose={overlays.preview.onClose}
+              returnFocusRef={overlays.preview.returnFocusRef}
+            />
           )}
-          confirmLabel={pendingCleanupAction.confirmation.confirmLabel(
-            pendingCleanupAction.count
+          {overlays.source.open && SourceDialog && (
+            <SourceDialog
+              initialMode={overlays.source.mode}
+              autoImportAfterParse={overlays.source.autoImportAfterParse}
+              maxItems={overlays.source.maxItems}
+              weiboMaxItems={overlays.source.weiboMaxItems}
+              onClose={overlays.source.onClose}
+              onSubmit={overlays.source.onSubmit}
+              returnFocusRef={overlays.source.returnFocusRef}
+            />
           )}
-          pendingLabel="清空中"
-          successLabel="已清空"
-          confirmDisabled={!pendingCleanupAction.enabled}
-          closeOnBackdrop
-          returnFocusRef={cleanupReturnFocusRef}
-          onClose={() => setPendingCleanupActionId(null)}
-          onConfirm={confirmCleanupAction}
-        />
-      )}
-      </>
+          {pendingCleanupAction?.confirmation && (
+            <ConfirmDialog
+              title={pendingCleanupAction.confirmation.title}
+              description={pendingCleanupAction.confirmation.description(
+                pendingCleanupAction.count
+              )}
+              confirmLabel={pendingCleanupAction.confirmation.confirmLabel(
+                pendingCleanupAction.count
+              )}
+              pendingLabel="清空中"
+              successLabel="已清空"
+              confirmDisabled={!pendingCleanupAction.enabled}
+              closeOnBackdrop
+              returnFocusRef={cleanupReturnFocusRef}
+              onClose={() => setPendingCleanupActionId(null)}
+              onConfirm={confirmCleanupAction}
+            />
+          )}
+        </>
       )}
     </DialogFrame>
   );

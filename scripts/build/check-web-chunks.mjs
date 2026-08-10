@@ -250,7 +250,7 @@ const imageAdminAsset = singleAsset("images");
 const imageAdminDetailsAsset = singleAsset("image-management");
 const imageEditorCapabilityAsset = singleAsset("image-editor");
 const uploaderAsset = singleAsset("upload");
-const linkUrlDialogAsset = singleAsset("link-import");
+const importSourceDialogAsset = singleAsset("link-import");
 const publicEntrySource = await assetSource(indexAsset);
 function publicRouteInitialAssetSet(entryAsset) {
   return new Set([
@@ -521,7 +521,7 @@ const imageAdminDeferredAssets = [
   imageAdminDetailsAsset,
   imageEditorCapabilityAsset,
   uploaderAsset,
-  linkUrlDialogAsset,
+  importSourceDialogAsset,
   singleCssAsset("image-management"),
   singleCssAsset("image-workflow"),
   singleCssAsset("upload")

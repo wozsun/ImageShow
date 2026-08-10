@@ -20,7 +20,7 @@ const DESKTOP_MENU_QUERY = "(min-width: 761px)";
 export function LinkImportSplitButton({
   pending,
   onPreloadWorkflow,
-  onPreloadLinkInput,
+  onPreloadImportSource,
   onOpenWorkflow,
   onOpenUrls,
   onOpenJsonl,
@@ -28,7 +28,7 @@ export function LinkImportSplitButton({
 }: {
   pending: boolean;
   onPreloadWorkflow: () => void;
-  onPreloadLinkInput: () => void;
+  onPreloadImportSource: () => void;
   onOpenWorkflow: (opener: HTMLButtonElement) => void;
   onOpenUrls: (opener: HTMLButtonElement) => void;
   onOpenJsonl: (opener: HTMLButtonElement) => void;
@@ -173,9 +173,9 @@ export function LinkImportSplitButton({
               type="button"
               role="menuitem"
               disabled={pending}
-              onPointerEnter={onPreloadLinkInput}
-              onFocus={onPreloadLinkInput}
-              onPointerDownCapture={onPreloadLinkInput}
+              onPointerEnter={onPreloadImportSource}
+              onFocus={onPreloadImportSource}
+              onPointerDownCapture={onPreloadImportSource}
               onActivate={() => choose(onOpenUrls)}
             >
               <AdminIcon name="link" />链接导入
@@ -184,9 +184,9 @@ export function LinkImportSplitButton({
               type="button"
               role="menuitem"
               disabled={pending}
-              onPointerEnter={onPreloadLinkInput}
-              onFocus={onPreloadLinkInput}
-              onPointerDownCapture={onPreloadLinkInput}
+              onPointerEnter={onPreloadImportSource}
+              onFocus={onPreloadImportSource}
+              onPointerDownCapture={onPreloadImportSource}
               onActivate={() => choose(onOpenJsonl)}
             >
               <AdminIcon name="file-list-line" />清单导入
@@ -195,9 +195,9 @@ export function LinkImportSplitButton({
               type="button"
               role="menuitem"
               disabled={pending}
-              onPointerEnter={onPreloadLinkInput}
-              onFocus={onPreloadLinkInput}
-              onPointerDownCapture={onPreloadLinkInput}
+              onPointerEnter={onPreloadImportSource}
+              onFocus={onPreloadImportSource}
+              onPointerDownCapture={onPreloadImportSource}
               onActivate={() => choose(onOpenWeibo)}
             >
               <AdminIcon name="weibo-line" />微博导入

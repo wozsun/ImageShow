@@ -15,7 +15,10 @@ import {
   importJobCanStartCommit,
   summarizeImportJobs
 } from "./import-queue-state.js";
-import type { LinkDialogSubmission, LinkInputMode } from "./link-import/LinkUrlDialog.js";
+import type {
+  ImportSourceMode,
+  ImportSourceSubmission
+} from "./link-import/ImportSourceDialog.js";
 import { jsonlImportJobs } from "./link-import/jsonl-jobs.js";
 import { weiboImportJobs } from "./link-import/weibo-jobs.js";
 import type { JsonlManifestParseError } from "./import-api.js";
@@ -31,6 +34,7 @@ import {
 import { canApplyImportAttributeDefaults } from "./import-attribute-policy.js";
 import { AsyncIntentFence } from "../../../lib/async-intent-fence.js";
 import { UploadWorkflowWindow } from "./UploadWorkflowWindow.js";
+import type { UploadWorkflowWindowController } from "./upload-workflow-controller.js";
 import {
   type UploaderActivation
 } from "./uploader-activation.js";
@@ -38,7 +42,8 @@ import "../../../styles/admin/image-workflow.css";
 import "../../../styles/admin/upload.css";
 
 const EMPTY_FACET_OPTIONS: FacetOption[] = [];
-type LinkUrlDialogModule = typeof import("./link-import/LinkUrlDialog.js");
+type ImportSourceDialogModule =
+  typeof import("./link-import/ImportSourceDialog.js");
 
 function needsImportCancellation(job: ImportJob) {
   return job.status !== "cancelling"
@@ -49,14 +54,14 @@ function needsImportCancellation(job: ImportJob) {
 export function Uploader({
   activation,
   activationEnabled,
-  loadLinkInputModule,
+  loadImportSourceModule,
   onActivationSettled,
   onDone,
   onLoadError
 }: {
   activation: UploaderActivation | null;
   activationEnabled: boolean;
-  loadLinkInputModule: () => Promise<LinkUrlDialogModule>;
+  loadImportSourceModule: () => Promise<ImportSourceDialogModule>;
   onActivationSettled: (sequence: number) => void;
   onDone: () => void;
   onLoadError: (error: unknown) => void;
@@ -64,11 +69,12 @@ export function Uploader({
   const fileInputId = useId();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"file" | "link">("file");
-  const [urlInputOpen, setUrlInputOpen] = useState(false);
-  const [linkInputPending, setLinkInputPending] = useState(false);
-  const [LinkUrlDialogComponent, setLinkUrlDialogComponent] =
-    useState<LinkUrlDialogModule["LinkUrlDialog"] | null>(null);
-  const [linkInputMode, setLinkInputMode] = useState<LinkInputMode>("urls");
+  const [sourceDialogOpen, setSourceDialogOpen] = useState(false);
+  const [sourceDialogPending, setSourceDialogPending] = useState(false);
+  const [ImportSourceDialogComponent, setImportSourceDialogComponent] =
+    useState<ImportSourceDialogModule["ImportSourceDialog"] | null>(null);
+  const [importSourceMode, setImportSourceMode] =
+    useState<ImportSourceMode>("urls");
   const [jsonlErrors, setJsonlErrors] = useState<JsonlManifestParseError[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const [defaults, setDefaults] = useState<ImportAttributeDefaults>({
@@ -85,7 +91,7 @@ export function Uploader({
   const listRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const linkPickerRef = useRef<HTMLButtonElement | null>(null);
+  const sourcePickerRef = useRef<HTMLButtonElement | null>(null);
   const workflowReturnFocusRef = useRef<HTMLElement | null>(null);
   const detailReturnFocusRef = useRef<HTMLElement | null>(null);
   const previewReturnFocusRef = useRef<HTMLElement | null>(null);
@@ -181,8 +187,8 @@ export function Uploader({
   const closeWorkflow = () => {
     intentFenceRef.current.invalidate();
     setOpen(false);
-    setUrlInputOpen(false);
-    setLinkInputPending(false);
+    setSourceDialogOpen(false);
+    setSourceDialogPending(false);
     setDefaultsExpanded(false);
     queue.clearJobs(isCompletedImportJob);
     setJsonlErrors([]);
@@ -259,39 +265,39 @@ export function Uploader({
     await Promise.allSettled(cancellationRequests);
   };
 
-  const openLinkInput = async (
-    inputMode: LinkInputMode,
+  const openImportSource = async (
+    sourceMode: ImportSourceMode,
     opener?: HTMLElement,
     intent = intentFenceRef.current.begin()
   ) => {
     if (!intentFenceRef.current.isCurrent(intent)) return false;
-    setLinkInputPending(true);
+    setSourceDialogPending(true);
     try {
-      const module = await loadLinkInputModule();
+      const module = await loadImportSourceModule();
       if (!intentFenceRef.current.isCurrent(intent)) return false;
-      setLinkUrlDialogComponent(() => module.LinkUrlDialog);
-      setLinkInputMode(inputMode);
+      setImportSourceDialogComponent(() => module.ImportSourceDialog);
+      setImportSourceMode(sourceMode);
       if (!await openInMode("link", opener, intent)) return false;
       if (!intentFenceRef.current.isCurrent(intent)) return false;
-      setUrlInputOpen(true);
+      setSourceDialogOpen(true);
       return true;
     } catch (error) {
       if (intentFenceRef.current.isCurrent(intent)) onLoadError(error);
       return false;
     } finally {
       if (intentFenceRef.current.isCurrent(intent)) {
-        setLinkInputPending(false);
+        setSourceDialogPending(false);
       }
     }
   };
-  const preloadLinkInput = () => {
-    void loadLinkInputModule().catch(() => undefined);
+  const preloadImportSource = () => {
+    void loadImportSourceModule().catch(() => undefined);
   };
 
   useEffect(() => {
     if (!activationEnabled || !activation) {
       intentFenceRef.current.invalidate();
-      setLinkInputPending(false);
+      setSourceDialogPending(false);
       return;
     }
     if (activation.sequence === processedActivationRef.current) {
@@ -302,18 +308,18 @@ export function Uploader({
     const runActivation = async () => {
       try {
         if (activation.kind === "workflow") {
-          setUrlInputOpen(false);
-          setLinkInputPending(false);
+          setSourceDialogOpen(false);
+          setSourceDialogPending(false);
           await openInMode("link", activation.opener, intent);
           return;
         }
         if (activation.kind === "files") {
-          setUrlInputOpen(false);
-          setLinkInputPending(false);
+          setSourceDialogOpen(false);
+          setSourceDialogPending(false);
           await openInMode("file", activation.opener, intent);
           return;
         }
-        await openLinkInput(activation.kind, activation.opener, intent);
+        await openImportSource(activation.kind, activation.opener, intent);
       } catch (error) {
         if (intentFenceRef.current.isCurrent(intent)) onLoadError(error);
       } finally {
@@ -325,12 +331,12 @@ export function Uploader({
     void runActivation();
   }, [activation, activationEnabled]);
 
-  const addLinks = (submission: LinkDialogSubmission) => {
-    if (submission.inputMode === "urls") {
+  const addImportSource = (submission: ImportSourceSubmission) => {
+    if (submission.mode === "urls") {
       void addUrls(submission.urls);
       return;
     }
-    if (submission.inputMode === "weibo") {
+    if (submission.mode === "weibo") {
       const postErrors: JsonlManifestParseError[] = submission.result.errors.map((error) => ({
         line: error.line,
         raw: error.url,
@@ -397,75 +403,105 @@ export function Uploader({
     setPreview(target);
   }, []);
 
+  const commitReadyJobs = () => {
+    const currentReadyJobs = summarizeImportJobs(
+      queue.jobsRef.current
+    ).readyJobs;
+    if (!currentReadyJobs.length) return;
+    setBusy(true);
+    void commitImports(currentReadyJobs).finally(() => setBusy(false));
+  };
+
+  const workflowController: UploadWorkflowWindowController = {
+    mode,
+    busy,
+    queue,
+    listRef,
+    returnFocusRef: workflowReturnFocusRef,
+    onClose: closeWorkflow,
+    header: {
+      cleanupActions,
+      closeButtonRef,
+      file: {
+        inputId: fileInputId,
+        inputRef: fileInputRef,
+        onAdd: (files) => void addFiles(files)
+      },
+      source: {
+        pending: sourceDialogPending,
+        mode: importSourceMode,
+        pickerRef: sourcePickerRef,
+        onOpen: (sourceMode) => {
+          void openImportSource(sourceMode);
+        },
+        onPreload: preloadImportSource
+      }
+    },
+    defaults: {
+      values: defaults,
+      expanded: defaultsExpanded,
+      summary: defaultsSummary,
+      canApply: canApplyDefaults,
+      themes,
+      tags,
+      authors,
+      onChange: setDefaults,
+      onExpandedChange: setDefaultsExpanded
+    },
+    tasks: {
+      jsonlErrors,
+      dragOver,
+      storageName,
+      themes,
+      tags,
+      authors,
+      onClearJsonlErrors: () => setJsonlErrors([]),
+      onDragOverChange: setDragOver,
+      onAddFiles: (files) => void addFiles(files),
+      onPatchJob: patchJob,
+      onCancelJob: requestCancelJob,
+      onRetryJob: requestRetryJob,
+      onRemoveJob: requestRemoveJob,
+      onConfirmDuplicateJob: confirmDuplicateJob,
+      onOpenDetail: openJobDetail,
+      onOpenPreview: openJobPreview
+    },
+    footer: {
+      activeBackend,
+      backendOptions,
+      onBackendChange: setBackendChoice,
+      onCancelAll: () => clearJobs(() => true),
+      onCommitReady: commitReadyJobs
+    },
+    overlays: {
+      detail: {
+        item: detailItem,
+        returnFocusRef: detailReturnFocusRef,
+        onClose: () => setDetailItem(null)
+      },
+      preview: {
+        target: preview,
+        returnFocusRef: previewReturnFocusRef,
+        onClose: () => setPreview(null)
+      },
+      source: {
+        open: sourceDialogOpen,
+        component: ImportSourceDialogComponent,
+        mode: importSourceMode,
+        autoImportAfterParse,
+        maxItems: linkMaxItems,
+        weiboMaxItems,
+        returnFocusRef: sourcePickerRef,
+        onClose: () => setSourceDialogOpen(false),
+        onSubmit: addImportSource
+      }
+    }
+  };
+
   return (
     <>
       {open && (
-        <UploadWorkflowWindow
-          mode={mode}
-          fileInputId={fileInputId}
-          listRef={listRef}
-          closeButtonRef={closeButtonRef}
-          fileInputRef={fileInputRef}
-          linkPickerRef={linkPickerRef}
-          busy={busy}
-          queue={queue}
-          jsonlErrors={jsonlErrors}
-          cleanupActions={cleanupActions}
-          defaults={defaults}
-          defaultsExpanded={defaultsExpanded}
-          defaultsSummary={defaultsSummary}
-          canApplyDefaults={canApplyDefaults}
-          themes={themes}
-          tags={tags}
-          authors={authors}
-          storageName={storageName}
-          activeBackend={activeBackend}
-          backendOptions={backendOptions}
-          dragOver={dragOver}
-          detailItem={detailItem}
-          detailReturnFocusRef={detailReturnFocusRef}
-          preview={preview}
-          previewReturnFocusRef={previewReturnFocusRef}
-          urlInputOpen={urlInputOpen}
-          linkInputPending={linkInputPending}
-          LinkUrlDialogComponent={LinkUrlDialogComponent}
-          linkInputMode={linkInputMode}
-          autoImportAfterParse={autoImportAfterParse}
-          linkMaxItems={linkMaxItems}
-          weiboMaxItems={weiboMaxItems}
-          returnFocusRef={workflowReturnFocusRef}
-          onClose={closeWorkflow}
-          onAddFiles={(files) => void addFiles(files)}
-          onClearJsonlErrors={() => setJsonlErrors([])}
-          onDefaultsChange={setDefaults}
-          onDefaultsExpandedChange={setDefaultsExpanded}
-          onDragOverChange={setDragOver}
-          onPatchJob={patchJob}
-          onCancelJob={requestCancelJob}
-          onRetryJob={requestRetryJob}
-          onRemoveJob={requestRemoveJob}
-          onConfirmDuplicateJob={confirmDuplicateJob}
-          onOpenDetail={openJobDetail}
-          onOpenPreview={openJobPreview}
-          onOpenLinkInput={(inputMode) => {
-            void openLinkInput(inputMode);
-          }}
-          onPreloadLinkInput={preloadLinkInput}
-          onBackendChange={setBackendChoice}
-          onCancelAll={() => clearJobs(() => true)}
-          onCommitReady={() => {
-            const currentReadyJobs = summarizeImportJobs(
-              queue.jobsRef.current
-            ).readyJobs;
-            if (!currentReadyJobs.length) return;
-            setBusy(true);
-            void commitImports(currentReadyJobs).finally(() => setBusy(false));
-          }}
-          onCloseDetail={() => setDetailItem(null)}
-          onClosePreview={() => setPreview(null)}
-          onCloseLinkInput={() => setUrlInputOpen(false)}
-          onSubmitLinks={addLinks}
-        />
+        <UploadWorkflowWindow controller={workflowController} />
       )}
     </>
   );

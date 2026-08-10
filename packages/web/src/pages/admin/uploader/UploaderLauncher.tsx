@@ -11,14 +11,15 @@ import type {
 import "../../../styles/admin/upload-triggers.css";
 
 type UploaderModule = typeof import("./Uploader.js");
-type LinkUrlDialogModule = typeof import("./link-import/LinkUrlDialog.js");
+type ImportSourceDialogModule =
+  typeof import("./link-import/ImportSourceDialog.js");
 
 const loadUploaderModule = createPageLifetimeModuleLoader<UploaderModule>(
   () => import("./Uploader.js")
 );
-const loadLinkInputModule =
-  createPageLifetimeModuleLoader<LinkUrlDialogModule>(
-    () => import("./link-import/LinkUrlDialog.js")
+const loadImportSourceModule =
+  createPageLifetimeModuleLoader<ImportSourceDialogModule>(
+    () => import("./link-import/ImportSourceDialog.js")
   );
 
 export function UploaderLauncher({
@@ -67,10 +68,10 @@ export function UploaderLauncher({
   const preloadUploader = () => {
     void loadUploaderModule().catch(() => undefined);
   };
-  const preloadLinkInput = () => {
+  const preloadImportSource = () => {
     void Promise.all([
       loadUploaderModule(),
-      loadLinkInputModule()
+      loadImportSourceModule()
     ]).catch(() => undefined);
   };
   const activate = async (
@@ -89,7 +90,7 @@ export function UploaderLauncher({
       const uploaderModule = needsLinkInput
         ? (await Promise.all([
             loadUploaderModule(),
-            loadLinkInputModule()
+            loadImportSourceModule()
           ]))[0]
         : await loadUploaderModule();
       if (
@@ -138,7 +139,7 @@ export function UploaderLauncher({
         <UploaderTriggers
           pending={pending || disabled}
           onPreloadWorkflow={preloadUploader}
-          onPreloadLinkInput={preloadLinkInput}
+          onPreloadImportSource={preloadImportSource}
           onOpenWorkflow={(opener) => void activate("workflow", opener)}
           onOpenUrls={(opener) => void activate("urls", opener)}
           onOpenJsonl={(opener) => void activate("jsonl", opener)}
@@ -150,7 +151,7 @@ export function UploaderLauncher({
         <UploaderComponent
           activation={activation}
           activationEnabled={showTriggers}
-          loadLinkInputModule={loadLinkInputModule}
+          loadImportSourceModule={loadImportSourceModule}
           onActivationSettled={settleActivation}
           onDone={onDone}
           onLoadError={onLoadError}

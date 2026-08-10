@@ -81,7 +81,7 @@ export function matchesModuleSuffix(id: string, suffixes: readonly string[]) {
 const imageAdminStyleOwners = new Set([
   "VocabularyAdmin",
   "ImageAdmin",
-  "LinkUrlDialog",
+  "ImportSourceDialog",
   "Uploader"
 ]);
 const crossDomainStyleOwners = new Set([
@@ -115,7 +115,7 @@ const imageDetailStyleOwners = new Set([
   "GalleryPage",
   "ImageAdmin",
   "ImageDetailModal",
-  "LinkUrlDialog",
+  "ImportSourceDialog",
   "Overview",
   "Uploader"
 ]);
@@ -210,7 +210,7 @@ const entryJavaScriptAssetNames = new Map([
   ["ImageAdminDetails", "image-management"],
   ["image-editor-capability", "image-editor"],
   ["Uploader", "upload"],
-  ["LinkUrlDialog", "link-import"],
+  ["ImportSourceDialog", "link-import"],
   ["BatchStorageMigrationDialog", "storage-migration"],
   ["AccountSettings", "account"],
   ["VocabularyAdmin", "vocabulary"],

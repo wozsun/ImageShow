@@ -5,7 +5,7 @@ import { LinkImportSplitButton } from "./link-import/LinkImportSplitButton.js";
 export function UploaderTriggers({
   pending,
   onPreloadWorkflow,
-  onPreloadLinkInput,
+  onPreloadImportSource,
   onOpenWorkflow,
   onOpenUrls,
   onOpenJsonl,
@@ -14,7 +14,7 @@ export function UploaderTriggers({
 }: {
   pending: boolean;
   onPreloadWorkflow: () => void;
-  onPreloadLinkInput: () => void;
+  onPreloadImportSource: () => void;
   onOpenWorkflow: (opener: HTMLButtonElement) => void;
   onOpenUrls: (opener: HTMLButtonElement) => void;
   onOpenJsonl: (opener: HTMLButtonElement) => void;
@@ -26,7 +26,7 @@ export function UploaderTriggers({
       <LinkImportSplitButton
         pending={pending}
         onPreloadWorkflow={onPreloadWorkflow}
-        onPreloadLinkInput={onPreloadLinkInput}
+        onPreloadImportSource={onPreloadImportSource}
         onOpenWorkflow={onOpenWorkflow}
         onOpenUrls={onOpenUrls}
         onOpenJsonl={onOpenJsonl}

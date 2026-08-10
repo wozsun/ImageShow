@@ -37,7 +37,7 @@
 }
 .upload-overlay.is-closing .upload-window { animation: modal-pop-out .12s ease-in forwards; }
 .upload-overlay .image-detail-modal { z-index: 40; }
-.upload-overlay .link-url-overlay { z-index: 45; }
+.upload-overlay .import-source-overlay { z-index: 45; }
 .upload-window > header,
 .upload-window > footer {
   flex-shrink: 0;
@@ -106,18 +106,17 @@
 .upload-source-picker.is-disabled > button { opacity: 1; }
 .upload-picker.is-disabled { opacity: .45; cursor: not-allowed; }
 .upload-picker input { display: none; }
-.link-import-card { width: min(560px, 96vw); max-height: 90vh; overflow: auto; background: var(--admin-color-surface-primary); border-radius: 8px; padding: 18px; display: flex; flex-direction: column; gap: 10px; animation: modal-pop .18s cubic-bezier(.2, .8, .2, 1); }
-.link-import-head { display: flex; align-items: center; justify-content: space-between; }
-.link-import-head h2 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 20px; }
-.link-input-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-bottom: 1px solid var(--admin-color-border-default); }
-.link-input-tabs button { border: 0; border-radius: 0; background: transparent; color: var(--admin-color-text-secondary); }
-.link-input-tabs button.is-active { color: var(--admin-color-action-primary-dark); box-shadow: inset 0 -2px var(--admin-color-action-primary); }
-.link-input-hint { margin: 0; line-height: 20px; }
-.link-input-hint { white-space: normal; }
-.link-import-urls { width: 100%; height: 190px; min-height: 190px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; padding: 10px; }
-.link-import-input-region { width: 100%; min-height: 0; display: flex; flex-direction: column; }
-.link-import-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
-.link-import-actions > .link-import-result-summary {
+.import-source-card { width: min(560px, 96vw); max-height: 90vh; overflow: auto; background: var(--admin-color-surface-primary); border-radius: 8px; padding: 18px; display: flex; flex-direction: column; gap: 10px; animation: modal-pop .18s cubic-bezier(.2, .8, .2, 1); }
+.import-source-head { display: flex; align-items: center; justify-content: space-between; }
+.import-source-head h2 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 20px; }
+.import-source-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-bottom: 1px solid var(--admin-color-border-default); }
+.import-source-tabs button { border: 0; border-radius: 0; background: transparent; color: var(--admin-color-text-secondary); }
+.import-source-tabs button.is-active { color: var(--admin-color-action-primary-dark); box-shadow: inset 0 -2px var(--admin-color-action-primary); }
+.import-source-hint { margin: 0; line-height: 20px; white-space: normal; }
+.import-source-textarea { width: 100%; height: 190px; min-height: 190px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; padding: 10px; }
+.import-source-input-region { width: 100%; min-height: 0; display: flex; flex-direction: column; }
+.import-source-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+.import-source-actions > .import-source-result-summary {
   flex: 1 1 auto;
   display: -webkit-box;
   max-height: 32px;
@@ -128,19 +127,19 @@
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
-.link-import-action-buttons { display: flex; justify-content: flex-end; gap: 10px; margin-left: auto; }
-.link-import-submit-button {
+.import-source-action-buttons { display: flex; justify-content: flex-end; gap: 10px; margin-left: auto; }
+.import-source-submit-button {
   /* 统一容纳四字解析文案与图标，也容纳三位导入数量，避免状态切换时按钮跳动。 */
   min-width: calc(4em + 52px);
 }
-.link-import-submit-label { display: inline-flex; align-items: center; gap: .25em; }
-.link-import-submit-count {
+.import-source-submit-label { display: inline-flex; align-items: center; gap: .25em; }
+.import-source-submit-count {
   min-width: 3ch;
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
-.link-import-result-summary { min-width: 0; margin: 0; color: var(--admin-color-success-text); line-height: 20px; }
-.link-import-result-summary.is-warning { color: var(--admin-color-warning-text); }
+.import-source-result-summary { min-width: 0; margin: 0; color: var(--admin-color-success-text); line-height: 20px; }
+.import-source-result-summary.is-warning { color: var(--admin-color-warning-text); }
 .jsonl-preview { display: grid; gap: 8px; min-height: 0; }
 .jsonl-preview-summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--admin-color-upload-summary); font-size: 13px; }
 .jsonl-preview-summary button { min-height: 32px; padding: 6px 9px; }
@@ -333,13 +332,13 @@ button.upload-empty-state.upload-dropzone:not(:disabled):hover,
     --workflow-collapse-trigger-surface: var(--admin-color-surface-primary);
     --workflow-collapse-content-surface: var(--admin-color-surface-primary);
   }
-  .link-import-input-region.has-result-summary {
+  .import-source-input-region.has-result-summary {
     height: 190px;
     display: grid;
     grid-template-rows: minmax(0, 1fr) auto;
     gap: 10px;
   }
-  .link-import-input-region.has-result-summary .link-import-urls {
+  .import-source-input-region.has-result-summary .import-source-textarea {
     height: 100%;
     min-height: 0;
     resize: none;
@@ -450,10 +449,10 @@ button.upload-empty-state.upload-dropzone:not(:disabled):hover,
   .duplicate-body { flex-direction: column; align-items: stretch; }
   .duplicate-body .inline-actions { justify-content: flex-end; }
 
-  .link-input-hint { white-space: normal; }
-  .link-import-actions { align-items: stretch; flex-direction: column; }
-  .link-import-action-buttons { width: 100%; margin-left: 0; }
-  .link-import-action-buttons button { flex: 1; min-height: 44px; }
+  .import-source-hint { white-space: normal; }
+  .import-source-actions { align-items: stretch; flex-direction: column; }
+  .import-source-action-buttons { width: 100%; margin-left: 0; }
+  .import-source-action-buttons button { flex: 1; min-height: 44px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

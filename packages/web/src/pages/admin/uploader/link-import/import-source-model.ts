@@ -4,9 +4,9 @@ import type {
   ImportUrlParseResult
 } from "../import-job-utils.js";
 
-export type LinkInputMode = "urls" | "jsonl" | "weibo";
+export type ImportSourceMode = "urls" | "jsonl" | "weibo";
 
-export const linkInputTextareaRows = 9;
+export const importSourceTextareaRows = 9;
 const urlIssuePreviewRawMaxLength = 500;
 
 export function formatUrlImportSummary(result: ImportUrlParseResult) {
@@ -63,22 +63,22 @@ function countNonEmptyInputItems(input: string) {
   return input.split(/\s+/).filter(Boolean).length;
 }
 
-export function linkInputLimitState(
-  inputMode: LinkInputMode,
+export function importSourceLimitState(
+  mode: ImportSourceMode,
   text: string,
   limits: { link: number; weibo: number },
   urlParseResult: ImportUrlParseResult | null = null
 ) {
-  const count = inputMode === "urls"
+  const count = mode === "urls"
     ? urlParseResult
       ? urlParseResult.urls.length + urlParseResult.invalidCount + urlParseResult.duplicateCount
       : countNonEmptyInputItems(text)
-    : inputMode === "weibo"
+    : mode === "weibo"
       ? parseWeiboImportUrls(text).length
       : text.split(/\r?\n/).filter((line) => line.trim()).length;
   const maxItems = Math.min(
     importBatchHardLimit,
-    inputMode === "weibo" ? limits.weibo : limits.link
+    mode === "weibo" ? limits.weibo : limits.link
   );
   const overLimit = count > maxItems;
   return { count, maxItems, overLimit };
