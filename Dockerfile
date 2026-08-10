@@ -31,6 +31,7 @@ COPY --chown=node:node --from=build /app/packages/shared/package.json ./packages
 COPY --chown=node:node --from=build /app/packages/shared/dist ./packages/shared/dist
 COPY --chown=node:node --from=build /app/packages/server/package.json ./packages/server/package.json
 COPY --chown=node:node --from=build /app/packages/server/dist ./packages/server/dist
+COPY --chown=node:node --from=build /app/scripts/runtime/normalize-v4.8-database.mjs ./scripts/runtime/normalize-v4.8-database.mjs
 RUN mkdir -p /app/data/storage /app/data/log && chown -R node:node /app/data
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 COPY scripts/runtime/imageshow /usr/local/bin/imageshow

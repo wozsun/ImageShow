@@ -35,7 +35,8 @@ readiness 不复制 `schema.sql` 的可空性、默认值、PK / FK / CHECK、�
 旧版本号或旧结构形状。额外表、额外列、额外索引以及更宽的旧 CHECK 不影响启动，只要当前
 代码不读写它们；`metadata.extra`、`background_job.result` 和仍含 `thumb.generate` 的旧
 CHECK 也没有专用白名单或检测分支。它们不会因此成为当前能力，物理清理由单独的人工脚本
-负责。
+负责。`v4.8.8` 的临时脚本、精确拒绝条件与备份 / 停机 / 恢复顺序见
+[一次性数据库归一化手册](./v4.8-database-normalization.md)；应用启动不会调用它。
 
 ## metadata —— 图片主表
 

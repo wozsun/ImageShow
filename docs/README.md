@@ -8,6 +8,7 @@
 - [项目结构](guide/project-structure.md)
 - [配置说明](guide/configuration.md)
 - [数据库结构](guide/database.md)
+- [v4.8 一次性数据库归一化](guide/v4.8-database-normalization.md)
 - [功能与流程](guide/flows.md)
 - [单容器与反向代理](guide/deployment.md)
 - [子域名](guide/subdomains.md)

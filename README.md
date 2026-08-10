@@ -87,6 +87,10 @@ docker compose exec postgresql sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB
 删除、重命名、类型改变、推测回填、版本标记或清库。精确契约见
 [数据库结构](docs/guide/database.md#启动与结构契约)。
 
+从旧版持续升级且仍保留遗留列 / CHECK 的生产库，在 `v4.8.8` 期间须按
+[一次性数据库归一化手册](docs/guide/v4.8-database-normalization.md)备份、停应用并人工执行；
+该入口不会被启动流程自动调用，并将在确认生产完成后的紧邻版本删除。
+
 Redis 不是业务真相源，普通升级不要求手工清空。连接必须支持 Redis 8 以及项目使用的
 `INCREX`、`ARRING`、`ARLASTITEMS` 命令；应用启动时会实际验证命令与 ACL 权限。
 
@@ -130,6 +134,7 @@ npm run verify:release
 - [项目结构](docs/guide/project-structure.md)
 - [配置说明](docs/guide/configuration.md)
 - [数据库结构](docs/guide/database.md)
+- [v4.8 一次性数据库归一化](docs/guide/v4.8-database-normalization.md)
 - [功能与流程](docs/guide/flows.md)
 - [生产部署](docs/guide/deployment.md)
 - [存储](docs/guide/storage.md)
