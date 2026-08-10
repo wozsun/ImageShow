@@ -1,8 +1,8 @@
 import { pool } from "../core/database-pools.ts";
-import {
-  migrateStorageBackendImages,
-  type StorageMigrationImageRecord
-} from "./migration.ts";
+import { migrateStorageBackendImages } from "./image-storage-migration-batch.ts";
+import type {
+  StorageMigrationImageRecord
+} from "./image-storage-migration.ts";
 import {
   assertStorageWriteTarget,
   getStorageBackend

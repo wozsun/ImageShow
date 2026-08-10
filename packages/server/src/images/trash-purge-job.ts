@@ -5,7 +5,7 @@ import {
 } from "../jobs/handler-outcome.ts";
 import { enqueue } from "../jobs/repository.ts";
 import type { BackgroundJob } from "../jobs/types.ts";
-import { purgeDeletedImages } from "./trash.ts";
+import { purgeDeletedImages } from "./trash-purge.ts";
 
 export async function handleTrashPurgeJob(
   _job: BackgroundJob,

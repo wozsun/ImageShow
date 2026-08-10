@@ -28,7 +28,6 @@ import {
   parse,
   uuidInput,
 } from "../core/validation.ts";
-import { batchDeleteImages } from "../images/batch-delete.ts";
 import { migrateImageBatchStorage } from "../images/batch-storage-migration.ts";
 import { updateImagesBatch } from "../images/batch-update.ts";
 import {
@@ -43,13 +42,16 @@ import {
   serveAdminStoredThumbnail
 } from "../images/stored-image-serving.ts";
 import {
+  batchDeleteImages,
   batchRestoreImages,
   moveImageToTrash,
+  restoreDeletedImage
+} from "../images/trash-mutations.ts";
+import {
   purgeDeletedImage,
   purgeDeletedImages,
-  purgeSelectedDeletedImages,
-  restoreDeletedImage
-} from "../images/trash.ts";
+  purgeSelectedDeletedImages
+} from "../images/trash-purge.ts";
 import { scheduleTrashPurge } from "../images/trash-purge-job.ts";
 import { requireAdminPermission } from "../users/admin-authorization.ts";
 import { storedResponseRequest } from "./stored-response-request.ts";

@@ -118,6 +118,15 @@ healthcheck 只读现有配置快照，密码恢复不初始化运行时配置�
 `public-query-gateway.ts` 则拥有专用 client、查询串行化、取消与销毁收敛；领域模块不得绕过
 gateway 自行复制这套准入状态。
 
+图片位置变更由 `image-storage-migration.ts` 统一取得单图锁，随后分别交给
+`image-storage-migration-prepare.ts` 发布并验证候选对象、
+`image-storage-migration-switch.ts` 切换 PostgreSQL 真相，提交结果不确定和补偿由
+`image-storage-migration-settlement.ts` 收敛；整后端枚举与计数只在
+`image-storage-migration-batch.ts`。回收站的软删除 / 恢复集中于
+`images/trash-mutations.ts`，永久对象删除与 claim 状态机集中于 `images/trash-purge.ts`，
+两者不共享转发入口。`metadata-mutations.ts` 只校验并选择普通字段更新或分类位置变更阶段，
+对应实现分别留在 `metadata-field-mutation.ts` 与 `metadata-classification-mutation.ts`。
+
 `images/imports/` 内部继续保持单一编排入口，但按稳定职责分开：
 
 - `session.ts` 创建、预览和取消会话；`materialize.ts` 只把 upload/download 原始素材

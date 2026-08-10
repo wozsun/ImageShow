@@ -1,8 +1,6 @@
 import { appConfig } from "@imageshow/shared";
-import type { BatchImageRestoreResponseDto } from "@imageshow/shared/browser";
-import { pool } from "../core/database-pools.ts";
-import { withTransaction } from "../core/database-transactions.ts";
 import { ApiError, errorMessage } from "../core/api-error.ts";
+import { pool } from "../core/database-pools.ts";
 import { logger } from "../core/logger.ts";
 import { getStorageBackend } from "../storage/backend-registry.ts";
 import { thumbnailRef } from "../storage/image-paths.ts";
@@ -11,12 +9,6 @@ import { assertThumbnailRepairNotPending } from "../storage/move-cleanup.ts";
 import {
   removeStorageObjectAndConfirm
 } from "../storage/object-access.ts";
-import { restoreImageFromTrash, restoreImagesFromTrash } from "./restore.ts";
-import {
-  withImageMutationSync
-} from "./mutation-sync.ts";
-import { decideImageMutationSync } from "./mutation-sync-policy.ts";
-import { bumpReadyImageRevision } from "./ready-cache/revision.ts";
 import { invalidateEntityCountCaches } from "../vocab/vocab-cache.ts";
 
 type PurgeRow = {
@@ -38,83 +30,6 @@ const purgeReturnColumns = [
   "metadata.storage_slug",
   "metadata.purge_attempts"
 ].join(", ");
-
-export async function moveImageToTrash(id: string) {
-  return withImageMutationSync(async (mutationBatch) => {
-    const deleted = await withTransaction(async (client) => {
-      const result = await client.query(
-        `UPDATE metadata
-            SET status='deleted',
-                deleted_at=now(),
-                purge_state='idle',
-                purge_started_at=NULL,
-                purge_error=NULL,
-                updated_at=now()
-          WHERE id=$1 AND status='ready'
-          RETURNING id`,
-        [id]
-      );
-      if (!result.rowCount) {
-        throw new ApiError(404, "not_found", "Ready image not found");
-      }
-      await bumpReadyImageRevision(client);
-      return result.rows[0] as { id: string };
-    });
-    mutationBatch.add({ id: deleted.id });
-    await invalidateEntityCountCaches(["theme", "author"]);
-  });
-}
-
-export async function restoreDeletedImage(id: string, missingIsError = true) {
-  return withImageMutationSync(async (mutationBatch) => {
-    const result = await restoreImageFromTrash(id);
-    if (result.status === "not_deleted") {
-      if (missingIsError) {
-        const state = (await pool.query(
-          "SELECT status, purge_state FROM metadata WHERE id=$1",
-          [id]
-        )).rows[0] as { status: string; purge_state: string } | undefined;
-        if (state?.status === "deleted" && state.purge_state !== "idle") {
-          throw new ApiError(
-            409,
-            "image_purge_claimed",
-            "Image is already owned by permanent deletion and cannot be restored"
-          );
-        }
-        throw new ApiError(404, "not_found", "Deleted image not found");
-      }
-      return false;
-    }
-    mutationBatch.add({ id: result.image.id });
-    await invalidateEntityCountCaches(["theme", "author"]);
-    return true;
-  });
-}
-
-export async function batchRestoreImages(
-  ids: string[]
-): Promise<BatchImageRestoreResponseDto> {
-  const requestedCount = new Set(ids.map((id) => id.toLowerCase())).size;
-  const decision = decideImageMutationSync(requestedCount);
-  return withImageMutationSync(async (mutationBatch) => {
-    if (decision.mode === "rebuild") {
-      mutationBatch.decide(decision.affectedCount);
-    }
-    const result = await restoreImagesFromTrash(ids, {
-      returnIds: decision.mode !== "rebuild"
-    });
-    for (const image of result.images) {
-      mutationBatch.add({ id: image.id });
-    }
-    if (result.restored) {
-      await invalidateEntityCountCaches(["theme", "author"]);
-    }
-    return {
-      restored: result.restored,
-      ignored: ids.length - result.restored
-    };
-  });
-}
 
 async function claimPurgeRows(ids?: string[]) {
   if (ids && !ids.length) return [];
@@ -257,7 +172,10 @@ async function purgeClaimedRow(claim: PurgeRow): Promise<PurgeRow | null> {
       result.status === "rejected" ? [result.reason] : []
     );
     if (removalErrors.length) {
-      throw new AggregateError(removalErrors, "Failed to remove all image objects");
+      throw new AggregateError(
+        removalErrors,
+        "Failed to remove all image objects"
+      );
     }
     signal.throwIfAborted();
 
@@ -341,9 +259,7 @@ export async function purgeDeletedImages(
   }
 
   try {
-    if (deletedRows.length) {
-      await invalidateEntityCountCaches(["tag"]);
-    }
+    if (deletedRows.length) await invalidateEntityCountCaches(["tag"]);
   } catch (error) {
     finalizationErrors.push(error);
   }
