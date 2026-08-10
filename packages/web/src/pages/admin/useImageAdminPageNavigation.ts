@@ -5,7 +5,7 @@ import {
   useState
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { AdminImageListResponse } from "@imageshow/shared/browser";
+import type { AdminImageListResponseDto } from "@imageshow/shared/browser";
 import { api } from "../../lib/api/client.js";
 import { adminApiBasePath } from "../../lib/constants.js";
 import { queryKeys } from "../../lib/api/query-keys.js";
@@ -42,7 +42,7 @@ function adminImageListQuery(
 
   return {
     queryKey: [...queryKeys.adminImages, params.toString()] as const,
-    queryFn: ({ signal }: { signal: AbortSignal }) => api<AdminImageListResponse>(
+    queryFn: ({ signal }: { signal: AbortSignal }) => api<AdminImageListResponseDto>(
       `${adminApiBasePath}/images?${params}`,
       { signal }
     )

@@ -44,20 +44,47 @@ export const webdavSettingsSchema = z.object({
 export type S3Settings = z.infer<typeof s3SettingsSchema>;
 export type WebdavSettings = z.infer<typeof webdavSettingsSchema>;
 
-export type StorageConfig = {
+type StorageConfigBase = {
   slug: string;
-  type: StorageType;
   /** Configured identities proven to be aliases of the current namespace. */
   namespace_identities?: string[];
+};
+
+type LocalStorageConfig = StorageConfigBase & {
+  type: "local";
+};
+
+export type S3StorageConfig = StorageConfigBase & {
+  type: "s3";
   s3: S3Settings;
+};
+
+export type WebdavStorageConfig = StorageConfigBase & {
+  type: "webdav";
   webdav: WebdavSettings;
 };
 
-export type StorageBackendRecord = StorageConfig & {
+export type StorageConfigByType = {
+  [Type in StorageType]: Type extends "local"
+    ? LocalStorageConfig
+    : Type extends "s3"
+      ? S3StorageConfig
+      : Type extends "webdav"
+        ? WebdavStorageConfig
+        : never;
+};
+
+export type StorageConfig = StorageConfigByType[StorageType];
+
+type StorageBackendRecordFields = {
   display_name: string;
   enabled: boolean;
   is_default: boolean;
 };
+
+export type StorageBackendRecord = {
+  [Type in StorageType]: StorageConfigByType[Type] & StorageBackendRecordFields;
+}[StorageType];
 
 const storageSlugInput = z.string().trim().toLowerCase().min(1)
   .max(slugMaxLength).regex(slugPattern);
@@ -116,9 +143,6 @@ export type StorageBackendImportInput = {
   is_default: boolean;
   config: S3Settings | WebdavSettings;
 };
-
-export const defaultS3Settings: S3Settings = Object.freeze(s3SettingsSchema.parse({}));
-export const defaultWebdavSettings: WebdavSettings = Object.freeze(webdavSettingsSchema.parse({}));
 
 export function missingS3Fields(settings: S3Settings): string[] {
   const fields: Array<[string, string | undefined]> = [

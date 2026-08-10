@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type {
   BatchImageUpdateRequestDto,
-  BatchImageUpdateResponse
+  BatchImageUpdateResponseDto
 } from "@imageshow/shared/browser";
 import { useAsyncActionStatus } from "../../../hooks/useAsyncActionStatus.js";
 import { api } from "../../../lib/api/client.js";
@@ -18,7 +18,7 @@ import {
   type BatchMetadataUpdate
 } from "./batch-metadata-session.js";
 
-function reportBatchUpdateFailures(response: BatchImageUpdateResponse) {
+function reportBatchUpdateFailures(response: BatchImageUpdateResponseDto) {
   if (!response.failed) return;
   const summary = summarizeBatchUpdateFailures(response);
   reportAdminUiError(
@@ -89,10 +89,10 @@ export function useBatchMetadataOperations({
       let attempt = retryAttempt;
       if (!attempt) {
         setSaveSummary(null);
-        let response: BatchImageUpdateResponse | null = null;
+        let response: BatchImageUpdateResponseDto | null = null;
         try {
           const request = { items } satisfies BatchImageUpdateRequestDto;
-          response = await api<BatchImageUpdateResponse>(
+          response = await api<BatchImageUpdateResponseDto>(
             `${adminApiBasePath}/images/batch-update`,
             { method: "POST", body: JSON.stringify(request) }
           );

@@ -1,7 +1,7 @@
 import { join, normalize, sep } from "node:path";
 import { runtimePaths } from "../config/bootstrap-env.ts";
 import { ApiError } from "../core/api-error.ts";
-import type { StorageConfig } from "./backend-config.ts";
+import type { S3StorageConfig } from "./backend-config.ts";
 
 export const STORAGE_PREFIXES = ["media", "thumbs", "_uploads"] as const;
 export type StoragePrefix = typeof STORAGE_PREFIXES[number];
@@ -33,19 +33,19 @@ export function safeStoragePath(prefix: StoragePrefix, key: string) {
   return resolved;
 }
 
-function s3RootPath(config: StorageConfig) {
+function s3RootPath(config: S3StorageConfig) {
   return (config.s3.root_path ?? "/").replace(/^\/+|\/+$/g, "");
 }
 
-export function storageS3ObjectName(config: StorageConfig, prefix: StoragePrefix, key: string) {
+export function storageS3ObjectName(config: S3StorageConfig, prefix: StoragePrefix, key: string) {
   return [s3RootPath(config), storageObjectName(prefix, key)].filter(Boolean).join("/");
 }
 
-export function s3ListPrefix(config: StorageConfig, prefix: StoragePrefix) {
+export function s3ListPrefix(config: S3StorageConfig, prefix: StoragePrefix) {
   return [s3RootPath(config), `${prefix}/`].filter(Boolean).join("/").replace(/^(?!$)(.*[^/])$/, "$1/");
 }
 
-export function s3CopySource(config: StorageConfig, prefix: StoragePrefix, key: string) {
+export function s3CopySource(config: S3StorageConfig, prefix: StoragePrefix, key: string) {
   return `${config.s3.bucket}/${storageS3ObjectName(config, prefix, key).split("/").map(encodeURIComponent).join("/")}`;
 }
 

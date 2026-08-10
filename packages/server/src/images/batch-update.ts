@@ -8,8 +8,8 @@ import { updateImageMetadata } from "./metadata-mutations.ts";
 import { batchImageUpdateLockRequests } from "./batch-update-lock.ts";
 import { withPlannedImageMutation } from "./mutation-sync.ts";
 import type {
-  BatchImageUpdateItemResult,
-  BatchImageUpdateResponse
+  BatchImageUpdateItemResultDto,
+  BatchImageUpdateResponseDto
 } from "@imageshow/shared/browser";
 
 type BatchUpdateExecutionMetrics = {
@@ -27,7 +27,7 @@ function countRequestedImages(items: BatchImageUpdateItemInput[]) {
   return new Set(items.map((item) => item.id.toLowerCase())).size;
 }
 
-function publicItemError(error: unknown): Pick<Extract<BatchImageUpdateItemResult, { status: "failed" }>, "code" | "message"> {
+function publicItemError(error: unknown): Pick<Extract<BatchImageUpdateItemResultDto, { status: "failed" }>, "code" | "message"> {
   if (error instanceof ApiError && error.status >= 400 && error.status < 500) {
     return { code: error.code, message: error.message };
   }
@@ -40,9 +40,9 @@ function publicItemError(error: unknown): Pick<Extract<BatchImageUpdateItemResul
 export async function updateImagesBatch(
   items: BatchImageUpdateItemInput[],
   options: BatchUpdateOptions = {},
-): Promise<BatchImageUpdateResponse> {
+): Promise<BatchImageUpdateResponseDto> {
   const entityCountInvalidationBatch = createEntityCountCacheInvalidationBatch();
-  let results: BatchImageUpdateItemResult[] = [];
+  let results: BatchImageUpdateItemResultDto[] = [];
   let maxItemDurationMs = 0;
   let entityCountInvalidationTriggered = false;
 
@@ -72,7 +72,7 @@ export async function updateImagesBatch(
             } catch (error) {
               itemError = error;
             }
-            const result: BatchImageUpdateItemResult = itemError
+            const result: BatchImageUpdateItemResultDto = itemError
               ? { id, status: "failed", ...publicItemError(itemError) }
               : { id, status: "updated" };
             maxItemDurationMs = Math.max(maxItemDurationMs, performance.now() - itemStartedAt);

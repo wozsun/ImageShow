@@ -13,7 +13,7 @@ import { NodeHttpHandler } from "@smithy/node-http-handler";
 import { randomUUID } from "node:crypto";
 import { ApiError, errorMessage } from "../core/api-error.ts";
 import { getInputImageMaxBytes } from "../config/app-settings.ts";
-import { missingS3Fields, type StorageConfig } from "./backend-config.ts";
+import { missingS3Fields, type S3StorageConfig } from "./backend-config.ts";
 import { s3CopySource, s3ListPrefix, storageS3ObjectName, type ReadablePrefix, type StoragePrefix } from "./object-keys.ts";
 import { openedReadToBuffer } from "./stream-buffer.ts";
 import type {
@@ -47,7 +47,7 @@ export type S3BackendDependencies = {
   client?: S3CommandClient;
 };
 
-function storageS3Client(config: StorageConfig): S3CommandClient {
+function storageS3Client(config: S3StorageConfig): S3CommandClient {
   const endpoint = /^https:\/\//i.test(config.s3.endpoint) ? config.s3.endpoint : `https://${config.s3.endpoint}`;
   return new S3Client({
     endpoint,
@@ -66,11 +66,11 @@ function storageS3Client(config: StorageConfig): S3CommandClient {
 export class S3Backend implements StorageDriver {
   private readonly client: S3CommandClient;
   private readonly bucket: string;
-  private readonly config: StorageConfig;
+  private readonly config: S3StorageConfig;
   private readonly requests: S3RequestRuntime;
 
   constructor(
-    config: StorageConfig,
+    config: S3StorageConfig,
     dependencies: S3BackendDependencies = {}
   ) {
     this.config = config;

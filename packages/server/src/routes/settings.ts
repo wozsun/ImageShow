@@ -12,9 +12,9 @@ import { requireSuperAdmin } from "../users/admin-authorization.ts";
 import {
   getSettingsForAdmin,
   parseSettingsInput,
-  reloadAppConfig,
   saveAppSettings
 } from "../config/app-settings.ts";
+import { reloadRuntimeConfigFromDisk } from "../config/runtime-config-store.ts";
 
 export function registerSettingsRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/settings`, (c) => {
@@ -31,7 +31,7 @@ export function registerSettingsRoutes(app: Hono) {
   });
 
   app.post(`${adminApiBasePath}/settings/reload`, requireSuperAdmin, async (c) => {
-    await reloadAppConfig();
+    await reloadRuntimeConfigFromDisk();
     return c.json(apiSuccess());
   });
 

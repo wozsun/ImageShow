@@ -1,7 +1,7 @@
 import type { z } from "zod";
 import type {
-  AdminImageListResponse,
-  BatchImageSnapshotResponse,
+  AdminImageListResponseDto,
+  BatchImageSnapshotResponseDto,
   ImageAdminInfoDto
 } from "@imageshow/shared/browser";
 import { pool, withAdvisoryLocks } from "../../core/db.ts";
@@ -38,7 +38,7 @@ function imageStorageLabel(row: {
 
 export async function listAdminImages(
   query: AdminImageListQuery
-): Promise<AdminImageListResponse> {
+): Promise<AdminImageListResponseDto> {
   let readyPlan: Awaited<ReturnType<typeof resolveImageFilterPlan>>
     | null = null;
   if (query.status === "ready") {
@@ -80,7 +80,7 @@ export async function listAdminImages(
 
 export async function getAdminImageSnapshots(
   ids: string[]
-): Promise<BatchImageSnapshotResponse> {
+): Promise<BatchImageSnapshotResponseDto> {
   const canonicalIds = [...new Set(ids.map((id) => id.toLowerCase()))];
   return withAdvisoryLocks(
     batchImageUpdateLockRequests(canonicalIds),

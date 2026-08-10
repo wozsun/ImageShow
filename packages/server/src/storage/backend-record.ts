@@ -1,11 +1,11 @@
 import type { StorageType } from "@imageshow/shared/browser";
 import {
-  defaultS3Settings,
-  defaultWebdavSettings,
   s3SettingsSchema,
   webdavSettingsSchema,
+  type S3Settings,
   type StorageBackendRecord,
-  type StorageConfig
+  type StorageConfig,
+  type WebdavSettings
 } from "./backend-config.ts";
 
 export type StorageBackendConfigRow = {
@@ -34,8 +34,7 @@ export function storageConfigFromRow(
       slug: row.slug,
       type: "s3",
       namespace_identities: namespaceIdentities,
-      s3: s3SettingsSchema.parse(raw),
-      webdav: defaultWebdavSettings
+      s3: s3SettingsSchema.parse(raw)
     };
   }
   if (row.type === "webdav") {
@@ -43,16 +42,13 @@ export function storageConfigFromRow(
       slug: row.slug,
       type: "webdav",
       namespace_identities: namespaceIdentities,
-      s3: defaultS3Settings,
       webdav: webdavSettingsSchema.parse(raw)
     };
   }
   return {
     slug: row.slug,
     type: "local",
-    namespace_identities: namespaceIdentities,
-    s3: defaultS3Settings,
-    webdav: defaultWebdavSettings
+    namespace_identities: namespaceIdentities
   };
 }
 
@@ -74,18 +70,18 @@ export function storageBackendRecordFromRow(
 export function storageConfigFromRecord(
   record: StorageBackendRecord
 ): StorageConfig {
-  return {
-    slug: record.slug,
-    type: record.type,
-    namespace_identities: record.namespace_identities,
-    s3: record.s3,
-    webdav: record.webdav
-  };
+  const {
+    display_name: _displayName,
+    enabled: _enabled,
+    is_default: _isDefault,
+    ...config
+  } = record;
+  return config;
 }
 
 export function withStoredS3Credential(
-  candidate: StorageConfig["s3"],
-  current?: StorageConfig["s3"]
+  candidate: S3Settings,
+  current?: S3Settings
 ) {
   if (candidate.secret_access_key || !current?.secret_access_key) {
     return candidate;
@@ -94,8 +90,8 @@ export function withStoredS3Credential(
 }
 
 export function withStoredWebdavCredential(
-  candidate: StorageConfig["webdav"],
-  current?: StorageConfig["webdav"]
+  candidate: WebdavSettings,
+  current?: WebdavSettings
 ) {
   if (candidate.password || !current?.password) return candidate;
   return { ...candidate, password: current.password };

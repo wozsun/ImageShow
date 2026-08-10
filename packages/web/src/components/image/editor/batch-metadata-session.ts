@@ -1,7 +1,7 @@
 import type {
   BatchImageUpdateItemInputDto,
-  BatchImageUpdateItemResult,
-  BatchImageUpdateResponse
+  BatchImageUpdateItemResultDto,
+  BatchImageUpdateResponseDto
 } from "@imageshow/shared/browser";
 import type {
   BatchEditableImageSnapshot,
@@ -23,10 +23,10 @@ export type BatchMetadataSessionState = {
 export type BatchMetadataSaveAttempt = {
   activeIds: string[];
   items: BatchMetadataUpdate[];
-  response: BatchImageUpdateResponse | null;
+  response: BatchImageUpdateResponseDto | null;
 };
 
-export type BatchMetadataSaveReport = BatchImageUpdateResponse & {
+export type BatchMetadataSaveReport = BatchImageUpdateResponseDto & {
   snapshotFailed: boolean;
   unavailableIds: string[];
 };
@@ -185,7 +185,7 @@ export function createBatchMetadataSaveReport(
   );
   let response = attempt.response;
   if (!response) {
-    const results: BatchImageUpdateItemResult[] = attempt.items.map((update) => {
+    const results: BatchImageUpdateItemResultDto[] = attempt.items.map((update) => {
       const item = authoritativeById.get(update.id);
       return item && updateMatchesSnapshot(update, item)
         ? { id: update.id, status: "updated" }

@@ -101,20 +101,17 @@ function changedPhysicalLocationFields(
   current: StorageConfig,
   next: StorageConfig
 ) {
-  const currentSettings = current.type === "s3"
-    ? current.s3
-    : current.webdav;
-  const nextSettings = next.type === "s3" ? next.s3 : next.webdav;
-  const fields = current.type === "s3"
-    ? ["endpoint", "bucket", "root_path"] as const
-    : current.type === "webdav"
-      ? ["base_url", "root_path"] as const
-      : [];
-  const currentRecord = currentSettings as unknown as Record<string, unknown>;
-  const nextRecord = nextSettings as unknown as Record<string, unknown>;
-  return fields.filter(
-    (field) => currentRecord[field] !== nextRecord[field]
-  );
+  if (current.type === "s3" && next.type === "s3") {
+    const fields = ["endpoint", "bucket", "root_path"] as const;
+    return fields.filter((field) => current.s3[field] !== next.s3[field]);
+  }
+  if (current.type === "webdav" && next.type === "webdav") {
+    const fields = ["base_url", "root_path"] as const;
+    return fields.filter(
+      (field) => current.webdav[field] !== next.webdav[field]
+    );
+  }
+  return [];
 }
 
 type StorageUpdateReceipt = { transactionId: string | null };
@@ -217,12 +214,12 @@ async function updateStorageBackendUnderLock(
   signal.throwIfAborted();
   const currentConfig = storageConfigFromRow(snapshot);
   const nextConfig = updatedStorageConfig(currentConfig, input);
-  const configChanged = currentConfig.type === "s3"
+  const configChanged = currentConfig.type === "s3" && nextConfig.type === "s3"
     ? JSON.stringify(currentConfig.s3) !== JSON.stringify(nextConfig.s3)
-    : currentConfig.type === "webdav"
+    : currentConfig.type === "webdav" && nextConfig.type === "webdav"
       ? JSON.stringify(currentConfig.webdav)
         !== JSON.stringify(nextConfig.webdav)
-      : false;
+      : currentConfig.type !== nextConfig.type;
   const configuredNamespaceChanged =
     configuredStorageNamespaceIdentity(currentConfig)
     !== configuredStorageNamespaceIdentity(nextConfig);

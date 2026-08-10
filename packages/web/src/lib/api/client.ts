@@ -1,4 +1,4 @@
-import type { ApiErrorResponse } from "@imageshow/shared/browser";
+import type { ApiErrorResponseDto } from "@imageshow/shared/browser";
 
 let csrfToken = "";
 export const authExpiredEvent = "imageshow:auth-expired";
@@ -61,7 +61,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     if (typeof window !== "undefined") window.dispatchEvent(new Event(authExpiredEvent));
   }
   if (!response.ok || data.ok === false) {
-    const failure = data as Partial<ApiErrorResponse>;
+    const failure = data as Partial<ApiErrorResponseDto>;
     throw new ApiClientError(
       typeof failure.error === "string"
         ? failure.error

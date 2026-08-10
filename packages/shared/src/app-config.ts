@@ -14,7 +14,7 @@ export const appConfig = {
   // Container-internal HTTP port. Keep Dockerfile and Compose target ports in sync.
   applicationPort: 5518,
   devices,
-  brightness: brightnesses,
+  brightnesses,
   themeMaxLength: slugMaxLength,
   imageMetadata: {
     titleMaxLength: imageTitleMaxLength,
@@ -27,8 +27,7 @@ export const appConfig = {
 
   randomDedupe: {
     historySize: 30,
-    ttlSeconds: 15 * 60,
-    maxAttempts: 8
+    ttlSeconds: 15 * 60
   },
 
   randomQuery: {

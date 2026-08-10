@@ -140,10 +140,10 @@ async function applyImageFieldEdits(
   return result.rows[0] as MutationImageRecord;
 }
 
-async function updateImageMetadataWithinSync(
+export function updateImageMetadata(
   id: string,
   body: unknown,
-  options: ImageMutationOptions
+  options: ImageMutationOptions = {}
 ) {
   const parsed = parse(metadataUpdateInput, body);
   const touchAuthor = parsed.author !== undefined;
@@ -404,12 +404,4 @@ async function updateImageMetadataWithinSync(
     );
   }
   return withImageStorageMutationLock(id, mutateImageLocation);
-}
-
-export function updateImageMetadata(
-  id: string,
-  body: unknown,
-  options: ImageMutationOptions = {}
-) {
-  return updateImageMetadataWithinSync(id, body, options);
 }

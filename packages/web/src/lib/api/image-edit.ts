@@ -1,5 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
-import type { BatchImageSnapshotResponse } from "@imageshow/shared/browser";
+import type { BatchImageSnapshotResponseDto } from "@imageshow/shared/browser";
 import { api } from "./client.js";
 import { queryKeys } from "./query-keys.js";
 import { adminApiBasePath } from "../constants.js";
@@ -8,7 +8,7 @@ export function readEditableImageSnapshots(
   imageIds: string[],
   signal?: AbortSignal
 ) {
-  return api<BatchImageSnapshotResponse>(
+  return api<BatchImageSnapshotResponseDto>(
     `${adminApiBasePath}/images/batch-snapshot`,
     {
       method: "POST",
@@ -23,7 +23,7 @@ export function readEditableImageSnapshots(
  * 让 hover/focus/pointerdown 与随后 click 复用同一请求。
  */
 export function imageEditSnapshotQueryOptions(imageId: string) {
-  return queryOptions<BatchImageSnapshotResponse>({
+  return queryOptions<BatchImageSnapshotResponseDto>({
     queryKey: [...queryKeys.adminImageEditSnapshot, imageId],
     queryFn: ({ signal }) => readEditableImageSnapshots([imageId], signal),
     retry: false,

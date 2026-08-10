@@ -10,6 +10,7 @@ import {
   assertDatabaseStructure,
   databaseSchemaContractRevision
 } from "./database-contract.ts";
+import { abortSignalError, raceWithAbortSignal } from "./abort.ts";
 import { logger } from "./logger.ts";
 
 const databaseConfig = deploymentConfig.database;
@@ -141,26 +142,6 @@ export function runWithAdvisoryLockSignal<T>(
   return advisoryLockSignalContext.run(combined, work);
 }
 
-function signalError(signal: AbortSignal) {
-  return signal.reason instanceof Error
-    ? signal.reason
-    : new Error("Operation aborted");
-}
-
-function raceWithSignal<T>(signal: AbortSignal, operation: Promise<T>): Promise<T> {
-  if (signal.aborted) {
-    void operation.catch(() => undefined);
-    return Promise.reject(signalError(signal));
-  }
-  return new Promise<T>((resolve, reject) => {
-    const aborted = () => reject(signalError(signal));
-    signal.addEventListener("abort", aborted, { once: true });
-    operation.then(resolve, reject).finally(() => {
-      signal.removeEventListener("abort", aborted);
-    });
-  });
-}
-
 function combinedLockSignal(signal: AbortSignal) {
   const parent = advisoryLockSignalContext.getStore();
   return parent ? AbortSignal.any([parent, signal]) : signal;
@@ -192,7 +173,7 @@ async function runAdvisoryLockWork<T>(
     })
   ));
   try {
-    const value = await raceWithSignal(signal, operation);
+    const value = await raceWithAbortSignal(signal, operation);
     signal.throwIfAborted();
     return value;
   } catch (error) {
@@ -200,7 +181,7 @@ async function runAdvisoryLockWork<T>(
       // Keep same-process limiters and active-operation registries occupied
       // until cooperative cleanup has actually stopped.
       await operation.catch(() => undefined);
-      throw signalError(signal);
+      throw abortSignalError(signal);
     }
     throw error;
   }
@@ -220,7 +201,7 @@ async function runWithAdvisoryLocksOnClient<T>(
       let result;
       try {
         signal.throwIfAborted();
-        result = await raceWithSignal(
+        result = await raceWithAbortSignal(
           signal,
           client.query(
             `SELECT ${advisoryLockFunction(lock)}(hashtext($1)) AS acquired`,

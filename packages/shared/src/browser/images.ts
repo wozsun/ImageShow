@@ -128,7 +128,7 @@ export type BatchEditableImageSnapshotDto = Pick<
   | "storage_slug"
 >;
 
-export type AdminImageListResponse = {
+export type AdminImageListResponseDto = {
   items: AdminImageItemDto[];
   total: number;
   next_cursor: string | null;
@@ -142,17 +142,17 @@ export type ImageAdminInfoDto = {
   updated_at: string;
 };
 
-export type BatchImageUpdateItemResult =
+export type BatchImageUpdateItemResultDto =
   | { id: string; status: "updated" }
   | { id: string; status: "failed"; code: string; message: string };
 
-export type BatchImageUpdateResponse = {
+export type BatchImageUpdateResponseDto = {
   updated: number;
   failed: number;
-  results: BatchImageUpdateItemResult[];
+  results: BatchImageUpdateItemResultDto[];
 };
 
-export type BatchImageSnapshotResponse = {
+export type BatchImageSnapshotResponseDto = {
   items: BatchEditableImageSnapshotDto[];
 };
 

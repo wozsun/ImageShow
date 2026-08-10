@@ -1,4 +1,4 @@
-import type { ApiSuccessResponse, StorageType } from "./common.ts";
+import type { ApiSuccessResponseDto, StorageType } from "./common.ts";
 
 export type StorageBackendDeleteBlocker =
   | "built_in"
@@ -29,7 +29,7 @@ export function storageBackendDeletionStateFromBlockers(
   };
 }
 
-export type BatchStorageMigrationResponse = {
+export type BatchStorageMigrationResponseDto = {
   migrated: number;
   failed: number;
 };
@@ -44,7 +44,7 @@ export type StorageBackendMigrationResultDto = {
   error_count: number;
 };
 
-export type StorageBackendMigrationResponseDto = ApiSuccessResponse<{
+export type StorageBackendMigrationResponseDto = ApiSuccessResponseDto<{
   migration: StorageBackendMigrationResultDto;
 }>;
 

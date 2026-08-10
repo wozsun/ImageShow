@@ -106,7 +106,7 @@ export function replaceRuntimeConfigIfRevision(
   });
 }
 
-export function reloadRuntimeConfig() {
+export function reloadRuntimeConfigFromDisk() {
   return withRuntimeConfigWriteLease(() => {
     getRuntimeConfig();
     const snapshot = readRuntimeConfigFile();

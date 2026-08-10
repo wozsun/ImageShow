@@ -25,10 +25,6 @@ function optionalHttpsUrlField(message: string) {
   return urlBase(message).optional();
 }
 
-function httpsDomainUrlField(message: string) {
-  return httpsUrlField(message).refine((value) => !value || isHttpsUrl(value, { requireDomain: true }), message);
-}
-
 function optionalHttpsDomainUrlField(message: string) {
   return optionalHttpsUrlField(message).refine((value) => !value || isHttpsUrl(value, { requireDomain: true }), message);
 }
@@ -46,31 +42,41 @@ function urlBase(message: string) {
 }
 
 const classificationDevices = [...appConfig.devices, "auto"] as const;
+const classificationBrightnesses = [...appConfig.brightnesses, "auto"] as const;
 
-const metadataInput = z.strictObject({
+const metadataFieldInputs = {
   device: z.enum(classificationDevices),
-  brightness: z.enum(appConfig.brightness),
-  theme: z.string().trim().toLowerCase().min(1).max(appConfig.themeMaxLength).regex(slugPattern).default("none"),
+  brightness: z.enum(classificationBrightnesses),
+  theme: z.string().trim().toLowerCase().min(1).max(appConfig.themeMaxLength).regex(slugPattern),
   author: z.string().trim().toLowerCase().max(slugMaxLength)
-    .refine((value) => value === "" || slugPattern.test(value), "author must be a lowercase slug")
-    .default(""),
-  title: z.string().trim().max(appConfig.imageMetadata.titleMaxLength).default(""),
-  description: z.string().trim().max(appConfig.imageMetadata.descriptionMaxLength).default(""),
-  source: httpsUrlField("来源页面链接需为有效的 HTTPS 链接"),
-  original: httpsDomainUrlField(externalImageRejectedMessage)
+    .refine((value) => value === "" || slugPattern.test(value), "author must be a lowercase slug"),
+  title: z.string().trim().max(appConfig.imageMetadata.titleMaxLength),
+  description: z.string().trim().max(appConfig.imageMetadata.descriptionMaxLength),
+  source: urlBase("来源页面链接需为有效的 HTTPS 链接"),
+  original: urlBase(externalImageRejectedMessage)
+    .refine((value) => !value || isHttpsUrl(value, { requireDomain: true }), externalImageRejectedMessage)
+};
+
+const metadataCreateInput = z.strictObject({
+  device: metadataFieldInputs.device,
+  brightness: metadataFieldInputs.brightness,
+  theme: metadataFieldInputs.theme.default("none"),
+  author: metadataFieldInputs.author.default(""),
+  title: metadataFieldInputs.title.default(""),
+  description: metadataFieldInputs.description.default(""),
+  source: metadataFieldInputs.source.default(""),
+  original: metadataFieldInputs.original.default("")
 });
 
 const metadataUpdateFields = {
-  device: z.enum(classificationDevices).optional(),
-  brightness: z.enum(["dark", "light", "auto"]).optional(),
-  theme: z.string().trim().toLowerCase().min(1).max(appConfig.themeMaxLength).regex(slugPattern).optional(),
-  author: z.string().trim().toLowerCase().max(slugMaxLength)
-    .refine((value) => value === "" || slugPattern.test(value), "author must be a lowercase slug")
-    .optional(),
-  title: z.string().trim().max(appConfig.imageMetadata.titleMaxLength).optional(),
-  description: z.string().trim().max(appConfig.imageMetadata.descriptionMaxLength).optional(),
-  source: optionalHttpsUrlField("来源页面链接需为有效的 HTTPS 链接"),
-  original: optionalHttpsDomainUrlField(externalImageRejectedMessage)
+  device: metadataFieldInputs.device.optional(),
+  brightness: metadataFieldInputs.brightness.optional(),
+  theme: metadataFieldInputs.theme.optional(),
+  author: metadataFieldInputs.author.optional(),
+  title: metadataFieldInputs.title.optional(),
+  description: metadataFieldInputs.description.optional(),
+  source: metadataFieldInputs.source.optional(),
+  original: metadataFieldInputs.original.optional()
 };
 
 function hasDefinedField(value: Record<string, unknown>) {
@@ -107,9 +113,9 @@ const authorLinkInput = httpsUrlField("作者主页链接需为有效的 HTTPS �
 export const authorCreateInput = z.strictObject({ slug: authorSlugInput, display_name: displayNameInput.optional().default(""), link: authorLinkInput });
 export const authorMetaUpdateInput = z.strictObject({ display_name: displayNameInput, link: authorLinkInput });
 
-export const uuidInput = z.string().uuid();
+export const uuidInput = z.string().uuid().transform((value) => value.toLowerCase());
 
-const batchImageTagsInput = z.array(tagSlugInput)
+export const normalizedImageTagsInput = z.array(tagSlugInput)
   // The public limit applies after normalization, so repeated spellings do not
   // consume the per-image tag allowance.
   .transform((tags) => [...new Set(tags)])
@@ -118,7 +124,7 @@ const batchImageTagsInput = z.array(tagSlugInput)
 const batchImageUpdateItemInput = z.strictObject({
   ...metadataUpdateFields,
   id: uuidInput,
-  tags: batchImageTagsInput.optional(),
+  tags: normalizedImageTagsInput.optional(),
 }).superRefine((value, ctx) => {
   const hasMetadataUpdate = Object.entries(value).some(([key, fieldValue]) =>
     key !== "id" && key !== "tags" && fieldValue !== undefined
@@ -133,21 +139,28 @@ const batchImageUpdateItemInput = z.strictObject({
 
 export type BatchImageUpdateItemInput = BatchImageUpdateItemInputDto;
 
-export const batchImageUpdateInput = z.strictObject({
-  items: z.array(batchImageUpdateItemInput).min(1).max(200),
-}).superRefine((value, ctx) => {
+function addUniqueBatchIdIssues(
+  items: readonly { id: string }[],
+  ctx: z.RefinementCtx
+) {
   const ids = new Set<string>();
-  for (let index = 0; index < value.items.length; index += 1) {
-    const id = value.items[index].id.toLowerCase();
+  for (let index = 0; index < items.length; index += 1) {
+    const id = items[index].id;
     if (ids.has(id)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["items", index, "id"],
-        message: "批量更新中的图片 ID 不能重复",
+        message: "批次不能包含重复 ID",
       });
     }
     ids.add(id);
   }
+}
+
+export const batchImageUpdateInput = z.strictObject({
+  items: z.array(batchImageUpdateItemInput).min(1).max(200),
+}).superRefine((value, ctx) => {
+  addUniqueBatchIdIssues(value.items, ctx);
 });
 
 export const userCreateInput = z.strictObject({ username: adminUsernameInput, password: adminPasswordInput });
@@ -195,16 +208,15 @@ export const batchMigrateStorageInput = z.strictObject({
   target: storageSlugInput
 });
 
-export const importCreateInput = metadataInput.extend({
+export const importCreateInput = metadataCreateInput.extend({
   mode: z.enum(importModes),
-  brightness: z.enum(["dark", "light", "auto"]).default("auto"),
   source_url: optionalHttpsDomainUrlField(externalImageRejectedMessage),
   image_time: z.string().trim().min(1).max(64).optional(),
   batch_time: z.string().trim().min(1).max(64).optional(),
   manifest_position: z.number().int().min(0).max(0xfff).optional(),
   size: z.number().int().positive().optional(),
   idempotency_key: z.string().uuid(),
-  tags: z.array(tagSlugInput).max(50).optional().transform((tags) => [...new Set(tags ?? [])]),
+  tags: normalizedImageTagsInput.optional().default([]),
   storage_slug: storageSlugInput.optional()
 }).superRefine((value, ctx) => {
   if (value.mode === "upload" && !value.size) {
@@ -215,29 +227,17 @@ export const importCreateInput = metadataInput.extend({
   }
 });
 
-const importCommitInput = metadataInput.extend({
-  brightness: z.enum(["dark", "light", "auto"]).default("auto"),
-  tags: z.array(tagSlugInput).max(50).optional().transform((tags) => [...new Set(tags ?? [])])
+const importCommitInput = metadataCreateInput.extend({
+  tags: normalizedImageTagsInput.optional().default([])
 });
 
 export const importBatchCommitInput = z.strictObject({
   items: z.array(z.strictObject({
-    id: uuidInput.transform((id) => id.toLowerCase()),
+    id: uuidInput,
     metadata: importCommitInput
   })).min(1).max(importBatchHardLimit)
 }).superRefine((value, ctx) => {
-  const ids = new Set<string>();
-  for (let index = 0; index < value.items.length; index += 1) {
-    const id = value.items[index].id.toLowerCase();
-    if (ids.has(id)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["items", index, "id"],
-        message: "导入提交批次不能包含重复会话"
-      });
-    }
-    ids.add(id);
-  }
+  addUniqueBatchIdIssues(value.items, ctx);
 });
 
 export const jsonlManifestInput = z.strictObject({
@@ -258,7 +258,7 @@ export const weiboImportInput = z.strictObject({
 const imageListBase = z.object({
   status: z.enum(["ready", "deleted"]).default("ready"),
   d: z.enum(appConfig.devices).optional(),
-  b: z.enum(appConfig.brightness).optional(),
+  b: z.enum(appConfig.brightnesses).optional(),
   t: z.string().trim().toLowerCase().max(1024).optional(),
   tag: z.string().trim().toLowerCase().max(1024).optional(),
   a: z.string().trim().toLowerCase().max(1024).optional(),
@@ -300,7 +300,7 @@ function galleryStatsSelector(noun: string) {
 
 export const galleryStatsQuery = z.strictObject({
   d: z.enum(appConfig.devices).optional(),
-  b: z.enum(appConfig.brightness).optional(),
+  b: z.enum(appConfig.brightnesses).optional(),
   t: galleryStatsSelector("主题").optional(),
   tag: galleryStatsSelector("标签").optional(),
   a: galleryStatsSelector("作者").optional()

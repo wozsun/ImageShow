@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { Agent } from "undici";
 import { ApiError, errorMessage } from "../core/api-error.ts";
 import { getInputImageMaxBytes } from "../config/app-settings.ts";
-import type { StorageConfig } from "./backend-config.ts";
+import type { WebdavStorageConfig } from "./backend-config.ts";
 import { contentTypeForKey, storageObjectName, type ReadablePrefix, type StoragePrefix } from "./object-keys.ts";
 import {
   nodeReadableFromWeb,
@@ -137,10 +137,10 @@ function trimSlashes(value: string) {
 export class WebdavBackend implements StorageDriver {
   private readonly base: string;
   private readonly origin: string;
-  private readonly config: StorageConfig;
+  private readonly config: WebdavStorageConfig;
   private readonly dispatcher: Agent;
 
-  constructor(config: StorageConfig) {
+  constructor(config: WebdavStorageConfig) {
     this.config = config;
     this.base = config.webdav.base_url.replace(/\/+$/, "");
     this.origin = (() => { try { return new URL(this.base).origin; } catch { return this.base; } })();

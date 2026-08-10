@@ -7,6 +7,7 @@ import {
   type QueryResultRow
 } from "pg";
 import { ApiError } from "./api-error.ts";
+import { abortSignalError, raceWithAbortSignal } from "./abort.ts";
 import {
   databaseBackendQueryIsActive,
   pool,
@@ -15,6 +16,10 @@ import {
 
 export type PublicPgFallbackClass =
   keyof typeof appConfig.publicPgFallback.classes;
+
+function publicPgAbortError(signal: AbortSignal) {
+  return abortSignalError(signal, "Public PostgreSQL fallback aborted");
+}
 
 type AdmissionLease = {
   release(): void;
@@ -80,26 +85,6 @@ export function publicPgFallbackWorkLimitExceeded(message: string) {
     "public_pg_fallback_work_limit",
     message
   );
-}
-
-function signalError(signal: AbortSignal) {
-  return signal.reason instanceof Error
-    ? signal.reason
-    : new Error("Public PostgreSQL fallback aborted");
-}
-
-function raceWithSignal<T>(signal: AbortSignal, operation: Promise<T>) {
-  if (signal.aborted) {
-    void operation.catch(() => undefined);
-    return Promise.reject(signalError(signal));
-  }
-  return new Promise<T>((resolve, reject) => {
-    const aborted = () => reject(signalError(signal));
-    signal.addEventListener("abort", aborted, { once: true });
-    operation.then(resolve, reject).finally(() => {
-      signal.removeEventListener("abort", aborted);
-    });
-  });
 }
 
 function queuedCount() {
@@ -169,7 +154,7 @@ function scheduleQueuedWork() {
       clearTimeout(entry.timer);
       entry.signal.removeEventListener("abort", entry.onAbort);
       if (entry.signal.aborted) {
-        entry.reject(signalError(entry.signal));
+        entry.reject(publicPgAbortError(entry.signal));
         continue;
       }
       entry.resolve(activate(kind));
@@ -201,7 +186,7 @@ function acquireAdmission(
     entry.resolve = resolve;
     entry.reject = reject;
     entry.onAbort = () => {
-      if (removeQueuedEntry(entry)) reject(signalError(signal));
+      if (removeQueuedEntry(entry)) reject(publicPgAbortError(signal));
     };
     entry.timer = setTimeout(() => {
       if (!removeQueuedEntry(entry)) return;
@@ -325,7 +310,7 @@ async function ensurePublicClient(context: PublicReadContext) {
     );
     if (context.operationAbort.signal.aborted) {
       lease.release();
-      throw signalError(context.operationAbort.signal);
+      throw publicPgAbortError(context.operationAbort.signal);
     }
     context.admissionLease = lease;
     const timeoutMs = appConfig.publicPgFallback.classes[
@@ -348,7 +333,7 @@ async function ensurePublicClient(context: PublicReadContext) {
           if (context.operationAbort.signal.aborted || context.terminalError) {
             destroyClientAndConverge(context);
             throw context.terminalError
-              ?? signalError(context.operationAbort.signal);
+              ?? publicPgAbortError(context.operationAbort.signal);
           }
           return client;
         })
@@ -358,7 +343,11 @@ async function ensurePublicClient(context: PublicReadContext) {
             releaseAdmission(context);
           }
         });
-      return await raceWithSignal(context.operationAbort.signal, checkout);
+      return await raceWithAbortSignal(
+        context.operationAbort.signal,
+        checkout,
+        "Public PostgreSQL fallback aborted"
+      );
     } catch (error) {
       if (!context.terminalError) {
         context.terminalError = fallbackError(
@@ -379,7 +368,7 @@ async function ensurePublicClient(context: PublicReadContext) {
 function queryFailure(context: PublicReadContext, error: unknown) {
   if (context.terminalError) return context.terminalError;
   if (context.operationAbort.signal.aborted) {
-    return signalError(context.operationAbort.signal);
+    return publicPgAbortError(context.operationAbort.signal);
   }
   if (error instanceof ApiError) return error;
   return fallbackError(
@@ -466,9 +455,10 @@ export async function queryForPublicRead<
       void query.finally(() => {
         context.activeQueries.delete(query);
       }).catch(() => undefined);
-      const result = await raceWithSignal(
+      const result = await raceWithAbortSignal(
         context.operationAbort.signal,
-        query
+        query,
+        "Public PostgreSQL fallback aborted"
       );
       context.operationAbort.signal.throwIfAborted();
       return result;
@@ -559,7 +549,7 @@ export async function runPublicReadRequest<T>(
   };
   context.onRequestAbort = () => terminateContext(
     context,
-    signalError(requestSignal)
+    publicPgAbortError(requestSignal)
   );
   if (requestSignal.aborted) context.onRequestAbort();
   else requestSignal.addEventListener("abort", context.onRequestAbort, {
@@ -571,9 +561,10 @@ export async function runPublicReadRequest<T>(
       const operation = Promise.resolve().then(() => (
         work(context.operationAbort.signal)
       ));
-      const value = await raceWithSignal(
+      const value = await raceWithAbortSignal(
         context.operationAbort.signal,
-        operation
+        operation,
+        "Public PostgreSQL fallback aborted"
       );
       context.operationAbort.signal.throwIfAborted();
       return value;

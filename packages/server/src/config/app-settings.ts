@@ -30,7 +30,6 @@ import {
 } from "./fields.ts";
 import {
   getRuntimeConfig,
-  reloadRuntimeConfig,
   updateRuntimeConfig
 } from "./runtime-config-store.ts";
 import { effectiveEmbedAncestorSources } from "./embed-ancestors.ts";
@@ -101,10 +100,6 @@ export function parseSettingsInput(value: unknown) {
     throw new ApiError(400, "validation_error", "Validation failed", result.error.flatten());
   }
   return result.data;
-}
-
-export async function reloadAppConfig() {
-  await reloadRuntimeConfig();
 }
 
 export function getInputImageMaxBytes() {

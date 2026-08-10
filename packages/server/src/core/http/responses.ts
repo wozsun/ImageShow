@@ -1,7 +1,7 @@
 import type { Context } from "hono";
 import type {
-  ApiErrorResponse,
-  ApiSuccessResponse
+  ApiErrorResponseDto,
+  ApiSuccessResponseDto
 } from "@imageshow/shared/browser";
 import { ApiError } from "../api-error.ts";
 import { logger } from "../logger.ts";
@@ -18,7 +18,7 @@ import {
 export function apiSuccess(): { ok: true };
 export function apiSuccess<T extends Record<string, unknown>>(
   fields: T
-): ApiSuccessResponse<T>;
+): ApiSuccessResponseDto<T>;
 export function apiSuccess(fields: Record<string, unknown> = {}) {
   return { ok: true as const, ...fields };
 }
@@ -91,7 +91,7 @@ export function handleApiError(context: Context, error: unknown) {
       code: error.code,
       error: error.message,
       details: error.details
-    } satisfies ApiErrorResponse;
+    } satisfies ApiErrorResponseDto;
     return context.json(payload, error.status as never);
   }
   const unhandled = error as { name?: string };
@@ -101,7 +101,7 @@ export function handleApiError(context: Context, error: unknown) {
       code: "redis_unavailable",
       error: "Redis unavailable",
       details: {}
-    } satisfies ApiErrorResponse;
+    } satisfies ApiErrorResponseDto;
     return context.json(payload, 503);
   }
 
@@ -114,7 +114,7 @@ export function handleApiError(context: Context, error: unknown) {
     code: "internal_error",
     error: "Internal server error",
     details: {}
-  } satisfies ApiErrorResponse;
+  } satisfies ApiErrorResponseDto;
   return context.json(payload, 500);
 }
 
@@ -134,7 +134,7 @@ export function apiErrorResponse(
   error: { status: number; message: string; code?: string },
   details: Record<string, unknown> = {}
 ) {
-  const payload: ApiErrorResponse = {
+  const payload: ApiErrorResponseDto = {
     ok: false,
     code: error.code ?? codeForStatus(error.status),
     error: error.message,

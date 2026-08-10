@@ -1,6 +1,9 @@
 import { normalize, resolve } from "node:path";
 import { runtimePaths } from "../config/bootstrap-env.ts";
-import type { StorageConfig } from "./backend-config.ts";
+import type {
+  StorageConfig,
+  WebdavStorageConfig
+} from "./backend-config.ts";
 
 function normalizedRootPath(value: string) {
   return value.trim().replace(/^\/+|\/+$/g, "");
@@ -17,7 +20,7 @@ function canonicalHttpsEndpoint(value: string) {
   return endpoint.toString().replace(/\/$/, "");
 }
 
-function canonicalWebdavRoot(config: StorageConfig) {
+function canonicalWebdavRoot(config: WebdavStorageConfig) {
   const base = config.webdav.base_url.trim().replace(/\/+$/g, "");
   const root = normalizedRootPath(config.webdav.root_path);
   if (!base) return root;

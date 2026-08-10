@@ -7,6 +7,7 @@ import {
   slugMaxLength,
   slugPattern
 } from "@imageshow/shared/browser";
+import { normalizedImageTagsInput } from "../../core/validation.ts";
 import { ImageTimeError, parseImageTime } from "../image-time.ts";
 
 const httpsUrl = z.string().trim().max(2048).url().refine((value) => new URL(value).protocol === "https:", "必须使用 HTTPS URL");
@@ -19,12 +20,12 @@ const jsonlRowSchema = z.object({
   source: pageUrl.optional(),
   image_time: z.string().trim().min(1).max(64).optional(),
   author: slug.optional(),
-  tags: z.array(slug).max(50).transform((tags) => [...new Set(tags)]).optional(),
+  tags: normalizedImageTagsInput.optional(),
   title: z.string().trim().max(appConfig.imageMetadata.titleMaxLength).optional(),
   description: z.string().trim().max(appConfig.imageMetadata.descriptionMaxLength).optional(),
   theme: slug.optional(),
   device: z.enum([...appConfig.devices, "auto"]).optional(),
-  brightness: z.enum([...appConfig.brightness, "auto"]).optional(),
+  brightness: z.enum([...appConfig.brightnesses, "auto"]).optional(),
   storage_slug: slug.optional()
 }).strict();
 

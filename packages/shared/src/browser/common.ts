@@ -92,14 +92,14 @@ export function normalizeAdminPreferences(value: unknown): AdminPreferences {
   return preferences as AdminPreferences;
 }
 
-export type ApiErrorResponse = {
+export type ApiErrorResponseDto = {
   ok: false;
   code: string;
   error: string;
   details?: unknown;
 };
 
-export type ApiSuccessResponse<T extends Record<string, unknown>> = {
+export type ApiSuccessResponseDto<T extends Record<string, unknown>> = {
   ok: true;
 } & T;
 

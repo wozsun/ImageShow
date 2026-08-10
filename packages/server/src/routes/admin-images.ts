@@ -2,10 +2,10 @@ import type { Hono } from "hono";
 import {
   adminApiBasePath,
   adminPermissions,
-  type BatchImageSnapshotResponse,
-  type BatchStorageMigrationResponse,
+  type BatchImageSnapshotResponseDto,
+  type BatchStorageMigrationResponseDto,
   type BatchImageUpdateRequestDto,
-  type BatchImageUpdateResponse,
+  type BatchImageUpdateResponseDto,
   type SelectedTrashPurgeResponseDto,
   type TrashPurgeResponseDto
 } from "@imageshow/shared/browser";
@@ -60,7 +60,7 @@ export function registerAdminImageRoutes(app: Hono) {
 
   app.post(`${adminApiBasePath}/images/batch-snapshot`, async (c) => {
     const input = parse(imageIdsInput, await readJsonBody(c));
-    const response: BatchImageSnapshotResponse =
+    const response: BatchImageSnapshotResponseDto =
       await getAdminImageSnapshots(input.ids);
     return c.json(apiSuccess(response));
   });
@@ -179,7 +179,7 @@ export function registerAdminImageRoutes(app: Hono) {
       const response = {
         migrated: result.migrated,
         failed: result.failed,
-      } satisfies BatchStorageMigrationResponse;
+      } satisfies BatchStorageMigrationResponseDto;
       return c.json(apiSuccess(response));
     }
   );
@@ -211,7 +211,7 @@ export function registerAdminImageRoutes(app: Hono) {
       updated: result.updated,
       failed: result.failed,
       results: result.results
-    } satisfies BatchImageUpdateResponse;
+    } satisfies BatchImageUpdateResponseDto;
     return c.json(apiSuccess(response));
   });
 }

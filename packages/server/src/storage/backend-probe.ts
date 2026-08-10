@@ -1,8 +1,6 @@
 import { ApiError, errorMessage } from "../core/api-error.ts";
 import { logger } from "../core/logger.ts";
 import {
-  defaultS3Settings,
-  defaultWebdavSettings,
   s3SettingsSchema,
   webdavSettingsSchema,
   type StorageBackendTestInput,
@@ -124,30 +122,30 @@ export async function resolveStorageTestConfig(
   const type = current?.type
     ?? (input.type === "webdav" || input.webdav ? "webdav" : "s3");
   if (type === "webdav") {
+    const currentWebdav = current?.type === "webdav"
+      ? current.webdav
+      : undefined;
     const candidate = webdavSettingsSchema.parse(
-      input.webdav ?? current?.webdav ?? {}
+      input.webdav ?? currentWebdav ?? {}
     );
     return {
       slug: "(test)",
       type: "webdav",
-      s3: defaultS3Settings,
       webdav: withStoredWebdavCredential(
         candidate,
-        current?.type === "webdav" ? current.webdav : undefined
+        currentWebdav
       )
     };
   }
 
-  const candidate = s3SettingsSchema.parse(
-    input.s3 ?? current?.s3 ?? {}
-  );
+  const currentS3 = current?.type === "s3" ? current.s3 : undefined;
+  const candidate = s3SettingsSchema.parse(input.s3 ?? currentS3 ?? {});
   return {
     slug: "(test)",
     type: "s3",
     s3: withStoredS3Credential(
       candidate,
-      current?.type === "s3" ? current.s3 : undefined
-    ),
-    webdav: defaultWebdavSettings
+      currentS3
+    )
   };
 }
