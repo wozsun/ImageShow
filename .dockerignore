@@ -11,6 +11,9 @@
 **/*.spec.*
 scripts/verify
 .codex
+.codex-baseline-*
+.agents
+.playwright-cli
 AGENTS.md
 TODO.md
 

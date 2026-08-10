@@ -19,6 +19,10 @@ const logFilePattern = /^app\.log(?:\.\d+)?$/;
 const defaultTailBytes = 200_000;
 const maxTailBytes = 1_000_000;
 
+function isMissingLogFile(error: unknown) {
+  return (error as NodeJS.ErrnoException | undefined)?.code === "ENOENT";
+}
+
 function normalizeLimit(value: string | null) {
   const parsed = Number(value ?? defaultTailBytes);
   if (!Number.isFinite(parsed)) return defaultTailBytes;
@@ -32,12 +36,24 @@ function logFileSortKey(name: string) {
 }
 
 async function listLogFiles(): Promise<LogFileSummaryDto[]> {
-  const names = await readdir(runtimePaths.logDirectory).catch(() => []);
+  let names: string[];
+  try {
+    names = await readdir(runtimePaths.logDirectory);
+  } catch (error) {
+    if (isMissingLogFile(error)) return [];
+    throw error;
+  }
   const files = await Promise.all(names
     .filter((name) => logFilePattern.test(name))
     .sort((a, b) => logFileSortKey(a) - logFileSortKey(b))
     .map(async (name) => {
-      const info = await stat(join(runtimePaths.logDirectory, name)).catch(() => null);
+      let info: Awaited<ReturnType<typeof stat>>;
+      try {
+        info = await stat(join(runtimePaths.logDirectory, name));
+      } catch (error) {
+        if (isMissingLogFile(error)) return null;
+        throw error;
+      }
       if (!info?.isFile()) return null;
       return { name, size: info.size, modified_at: info.mtime.toISOString() };
     }));
@@ -48,19 +64,56 @@ async function tailFile(name: string, limitBytes: number) {
   const safeName = basename(name);
   if (!logFilePattern.test(safeName)) throw new ApiError(400, "invalid_log_file", "日志文件名无效");
   const path = join(runtimePaths.logDirectory, safeName);
-  const info = await stat(path).catch(() => null);
-  if (!info?.isFile()) return { content: "", truncated: false, bytes_read: 0 };
-
-  const start = Math.max(0, info.size - limitBytes);
-  const size = info.size - start;
-  const buffer = Buffer.alloc(size);
-  const handle = await open(path, "r");
+  let handle: Awaited<ReturnType<typeof open>>;
   try {
-    await handle.read(buffer, 0, size, start);
+    handle = await open(path, "r");
+  } catch (error) {
+    if (isMissingLogFile(error)) {
+      return { content: "", truncated: false, bytes_read: 0 };
+    }
+    throw error;
+  }
+  try {
+    let info: Awaited<ReturnType<typeof stat>>;
+    try {
+      info = await handle.stat();
+    } catch (error) {
+      if (isMissingLogFile(error)) {
+        return { content: "", truncated: false, bytes_read: 0 };
+      }
+      throw error;
+    }
+    if (!info.isFile()) {
+      return { content: "", truncated: false, bytes_read: 0 };
+    }
+    const start = Math.max(0, info.size - limitBytes);
+    const size = info.size - start;
+    const buffer = Buffer.allocUnsafe(size);
+    let bytesRead = 0;
+    while (bytesRead < size) {
+      let result: { bytesRead: number };
+      try {
+        result = await handle.read(
+          buffer,
+          bytesRead,
+          size - bytesRead,
+          start + bytesRead
+        );
+      } catch (error) {
+        if (isMissingLogFile(error)) break;
+        throw error;
+      }
+      if (result.bytesRead === 0) break;
+      bytesRead += result.bytesRead;
+    }
+    return {
+      content: buffer.subarray(0, bytesRead).toString("utf8"),
+      truncated: start > 0,
+      bytes_read: bytesRead
+    };
   } finally {
     await handle.close();
   }
-  return { content: buffer.toString("utf8"), truncated: start > 0, bytes_read: size };
 }
 
 export async function readRecentLogFile(

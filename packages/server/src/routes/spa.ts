@@ -2,8 +2,7 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import type { Context, Hono } from "hono";
 import { adminBasePath } from "@imageshow/shared/browser";
 import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { siteConfigPayload } from "../config/app-settings.ts";
 import { effectiveEmbedAncestorSources } from "../config/embed-ancestors.ts";
@@ -22,7 +21,7 @@ import {
   spaDocumentResponse
 } from "./spa-response.ts";
 
-const publicDir = join(dirname(fileURLToPath(import.meta.url)), "../public");
+const publicDir = join(import.meta.dirname, "../public");
 
 export function registerSpaRoutes(app: Hono) {
   const assetStatic = serveStatic({ root: publicDir, precompressed: true });

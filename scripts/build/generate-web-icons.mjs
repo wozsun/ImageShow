@@ -1,10 +1,8 @@
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 
-const here = dirname(fileURLToPath(import.meta.url));
-const repo = resolve(here, "..", "..");
+const repo = resolve(import.meta.dirname, "..", "..");
 const webPackage = resolve(repo, "packages", "web");
 const iconDirectory = resolve(webPackage, "src", "components", "icon");
 const checkOnly = process.argv.slice(2).includes("--check");

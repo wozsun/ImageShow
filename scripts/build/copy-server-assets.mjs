@@ -1,15 +1,13 @@
 import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { dirname, relative, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { relative, resolve } from "node:path";
 import { brotliCompress, gzip, constants as zlibConstants } from "node:zlib";
 import { promisify } from "node:util";
 
 const gzipAsync = promisify(gzip);
 const brotliAsync = promisify(brotliCompress);
 
-const here = dirname(fileURLToPath(import.meta.url));
-const repo = resolve(here, "..", "..");
+const repo = resolve(import.meta.dirname, "..", "..");
 const serverPackage = resolve(repo, "packages", "server");
 const serverDist = resolve(serverPackage, "dist");
 const webDist = resolve(repo, "packages", "web", "dist");

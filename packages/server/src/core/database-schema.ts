@@ -1,7 +1,6 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import type { PoolClient } from "pg";
 import {
   assertDatabaseStructure,
@@ -18,10 +17,9 @@ export function initializeDatabaseSchema() {
 }
 
 function databaseSchemaPath() {
-  const here = dirname(fileURLToPath(import.meta.url));
   const candidates = [
-    join(here, "..", "schema.sql"),
-    join(here, "..", "..", "schema.sql")
+    join(import.meta.dirname, "..", "schema.sql"),
+    join(import.meta.dirname, "..", "..", "schema.sql")
   ];
   const schemaPath = candidates.find((candidate) => existsSync(candidate));
   if (!schemaPath) {
