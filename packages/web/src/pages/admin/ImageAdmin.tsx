@@ -71,9 +71,6 @@ export function ImageAdmin() {
   const canPurgeImage = permissions.includes(
     adminPermissions.imageTrashPurge
   );
-  const canEmptyTrash = permissions.includes(
-    adminPermissions.imageTrashEmpty
-  );
 
   const feedbackTarget = useActionFeedbackTarget("image-admin");
   const gridRef = useRef<HTMLDivElement | null>(null);
@@ -128,12 +125,10 @@ export function ImageAdmin() {
     operationBusy,
     refresh,
     resetTransientState,
-    runRowAction,
     runConfirmedAction,
-    restoreSelected
+    restore
   } = useImageAdminOperations({
     items,
-    selected,
     clearSelection: selection.clear,
     invalidateData
   });
@@ -363,7 +358,7 @@ export function ImageAdmin() {
                   disabled={!selected.length || interfaceBusy}
                   onClick={() => {
                     cancelPageNavigation();
-                    void restoreSelected();
+                    void restore([...selected]);
                   }}
                 >
                   <AdminIcon name="arrow-go-back-line" />批量恢复
@@ -376,13 +371,13 @@ export function ImageAdmin() {
                   disabled={!selected.length || interfaceBusy}
                   onClick={() => {
                     cancelPageNavigation();
-                    setConfirmAction({ kind: "batch-delete", ids: [...selected] });
+                    setConfirmAction({ kind: "delete", ids: [...selected] });
                   }}
                 >
                   <AdminIcon name="delete-bin-6-line" />批量删除
                 </button>
               )}
-              {view === "deleted" && canEmptyTrash && (
+              {view === "deleted" && canPurgeImage && (
                 <button
                   className="danger-button"
                   type="button"
@@ -391,18 +386,31 @@ export function ImageAdmin() {
                     cancelPageNavigation();
                     setConfirmAction(
                       selected.length
-                        ? { kind: "purge-selected", ids: [...selected] }
-                        : { kind: "empty-trash" }
+                        ? {
+                            kind: "purge",
+                            request: {
+                              scope: "selected",
+                              ids: [...selected]
+                            }
+                          }
+                        : {
+                            kind: "purge",
+                            request: { scope: "all" }
+                          }
                     );
                   }}
                 >
                   <AdminIcon name="delete-bin-7-line" />
                   <StableButtonLabel
                     idle={selected.length ? "删除已选图" : "清空回收站"}
-                    busyText={confirmAction?.kind === "purge-selected" ? "正在删除" : "正在清空"}
+                    busyText={
+                      confirmAction?.kind === "purge"
+                      && confirmAction.request.scope === "selected"
+                        ? "正在删除"
+                        : "正在清空"
+                    }
                     busy={actionBusy && (
-                      confirmAction?.kind === "purge-selected"
-                      || confirmAction?.kind === "empty-trash"
+                      confirmAction?.kind === "purge"
                     )}
                   />
                 </button>
@@ -464,7 +472,7 @@ export function ImageAdmin() {
                 cancelPageNavigation();
                 setConfirmAction({
                   kind: "purge",
-                  id: item.id,
+                  request: { scope: "selected", ids: [item.id] },
                   title: imageDisplayTitle(item)
                 });
               }}
@@ -472,11 +480,15 @@ export function ImageAdmin() {
               actionsDisabled={interfaceBusy}
               onDelete={() => {
                 cancelPageNavigation();
-                void runRowAction(item, "delete");
+                setConfirmAction({
+                  kind: "delete",
+                  ids: [item.id],
+                  title: imageDisplayTitle(item)
+                });
               }}
               onRestore={() => {
                 cancelPageNavigation();
-                void runRowAction(item, "restore");
+                void restore([item.id]);
               }}
             />
           ))}

@@ -193,18 +193,28 @@ export const adminPreferencesInput = z.strictObject(adminPreferenceInputFields)
     "管理端偏好过大"
   );
 
-export const imageIdsInput = z.strictObject({
-  ids: z.array(uuidInput).min(1).max(200).transform((ids) => [...new Set(ids)])
-});
-
 const uniqueImageIdsInput = z.array(uuidInput).min(1).max(200)
   .superRefine((ids, ctx) => {
     addUniqueIdIssues(ids, ctx, (index) => [index], "请求不能包含重复 ID");
   });
 
+export const imageActionInput = z.strictObject({
+  ids: uniqueImageIdsInput
+});
+
 export const imageSnapshotInput = z.strictObject({
   ids: uniqueImageIdsInput
 });
+
+export const imagePurgeInput = z.discriminatedUnion("scope", [
+  z.strictObject({
+    scope: z.literal("selected"),
+    ids: uniqueImageIdsInput
+  }),
+  z.strictObject({
+    scope: z.literal("all")
+  })
+]);
 
 export const storageSlugInput = slugInput;
 

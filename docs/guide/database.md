@@ -75,8 +75,12 @@ no-store 降级，不把仅凭存在性的对象发布为 immutable。分类移�
 `purge_attempts`，随后在该图的存储 mutation lock 内再次核对状态、尝试号和对象位置。
 对象删除完成后，数据库删除仍以尝试号、`storage_slug` 和 `object_key` 做条件更新；恢复只
 接受 `purge_state='idle'`。进程崩溃留下的过期 `purging` 可重新认领，旧执行者不能用过期
-令牌删除或覆盖新执行者的结果。一次认领最多 `trashBatchSize` 行；清空回收站的 HTTP
-请求只处理一个批次，其余行由 `trash.purge` 后台任务继续领取。请求中止或批次异常时，
+令牌删除或覆盖新执行者的结果。一次认领最多 `trashBatchSize` 行；软删除、恢复事务与
+`scope: "all"` 的水位捕获共享一个短时 advisory lock，水位查询直接复用持锁连接，因此
+捕获前已经开始的成员变更必先提交或回滚。HTTP 请求捕获当前总数及 `deleted_at + id` 上界
+后，先持久化携带该上界的 `trash.purge` 任务，再处理一个批次；首批中止或收口失败也不会
+丢失已确认范围。上界之后新进入回收站，或恢复后再次删除而取得新 `deleted_at` 的行不会
+被该任务认领。请求中止或批次异常时，
 已经进入当前并发片的图片先收口各自的删除结果；尚未处理以及失败状态写回未完成的认领，
 通过一次有界更新按 `id + purge_attempts` 立即恢复为 `idle`。该更新不会命中已删除、
 已标记失败或已被新 attempt 领取的行。
@@ -133,8 +137,9 @@ Redis meta 的 `applied_revision` 只有在精确同步或全量重建完成完�
 | `retry_count` / `next_retry_at` | 重试次数与下次重试时间 |
 | `created_at` / `updated_at` | 时间戳 |
 
-`cache.rebuild` 会从 PostgreSQL 全量重建统一 ready-image Redis 投影，`trash.purge` 每次只执行一个
-有界删除批次并按剩余数量重新调度。确定性幂等键只阻止 `pending`、`running` 和仍可重试
+`cache.rebuild` 会从 PostgreSQL 全量重建统一 ready-image Redis 投影，`trash.purge` 在 payload
+中保存发起清空操作时的删除水位，并在 HTTP 首批开始前持久化；每次只执行该稳定范围内的
+一个有界批次并按范围内剩余数量重新调度。确定性幂等键只阻止 `pending`、`running` 和仍可重试
 的 `failed` 重复入队；`succeeded`、`ignored` 与耗尽重试的 `failed` 会在同一记录上重置
 为 `pending`，因此同一对象以后再次需要 `move.cleanup` 时不会被历史任务静默拦截。
 Worker 会按保留策略裁剪历史记录：`succeeded` / `ignored` 保留 7 天；普通任务耗尽

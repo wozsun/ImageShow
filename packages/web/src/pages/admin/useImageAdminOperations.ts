@@ -1,16 +1,11 @@
 import { useCallback, useState } from "react";
-import type {
-  BatchImageDeleteResponseDto,
-  BatchImageRestoreResponseDto,
-  SelectedTrashPurgeResponseDto,
-  TrashPurgeResponseDto
-} from "@imageshow/shared/browser";
-import { adminApiBasePath } from "../../lib/constants.js";
-import { api } from "../../lib/api/client.js";
+import type { ImagePurgeRequestDto } from "@imageshow/shared/browser";
 import {
-  moveImageToTrash,
-  restoreImageFromTrash
+  deleteImages,
+  purgeImages,
+  restoreImages
 } from "../../lib/api/image-mutations.js";
+import { readEditableImageSnapshots } from "../../lib/api/image-edit.js";
 import type { ImageItem } from "../../lib/types.js";
 import {
   createActionFeedback,
@@ -22,55 +17,69 @@ import { waitForMinimumPendingDuration } from "../../lib/ui/async-action-timing.
 export type ImageAdminView = "ready" | "unset" | "deleted";
 
 export type ImageAdminConfirmAction =
-  | { kind: "batch-delete"; ids: string[] }
-  | { kind: "purge-selected"; ids: string[] }
-  | { kind: "empty-trash" }
-  | { kind: "purge"; id: string; title: string };
-
-const restoreChunkSize = 10;
+  | { kind: "delete"; ids: string[]; title?: string }
+  | {
+      kind: "purge";
+      request: ImagePurgeRequestDto;
+      title?: string;
+    };
 
 export function imageAdminConfirmationCopy(
   action: ImageAdminConfirmAction | null
 ) {
-  if (action?.kind === "batch-delete") {
+  if (action?.kind === "delete") {
+    const single = action.ids.length === 1;
     return {
-      title: "确认批量删除",
-      description: `将选中的 ${action.ids.length} 张图片移入回收站，可以稍后恢复。`,
+      title: single ? "确认删除图片" : "确认批量删除",
+      description: single && action.title
+        ? `“${action.title}”将移入回收站，可以稍后恢复。`
+        : `选中的 ${action.ids.length} 张图片将移入回收站，可以稍后恢复。`,
       label: "确认删除"
     };
   }
-  if (action?.kind === "empty-trash") {
+  if (action?.kind === "purge" && action.request.scope === "all") {
     return {
       title: "确认清空回收站",
-      description: "回收站内的所有图片及存储对象将被永久删除，此操作无法撤销。",
+      description: "当前回收站内的所有图片及存储对象将被永久删除；操作开始后才移入回收站的图片不受影响。此操作无法撤销。",
       label: "永久清空"
     };
   }
-  if (action?.kind === "purge-selected") {
+  if (action?.kind === "purge" && action.request.scope === "selected") {
+    const single = action.request.ids.length === 1;
     return {
-      title: "确认删除已选图片",
-      description: `选中的 ${action.ids.length} 张图片及其存储对象将被永久删除，此操作无法撤销。`,
-      label: "永久删除"
-    };
-  }
-  if (action?.kind === "purge") {
-    return {
-      title: "确认永久删除",
-      description: `“${action.title}”将从回收站和存储中永久删除，此操作无法撤销。`,
+      title: single ? "确认永久删除" : "确认删除已选图片",
+      description: single && action.title
+        ? `“${action.title}”将从回收站和存储中永久删除，此操作无法撤销。`
+        : `选中的 ${action.request.ids.length} 张图片及其存储对象将被永久删除，此操作无法撤销。`,
       label: "永久删除"
     };
   }
   return null;
 }
 
+type UnknownOutcomeRefreshResult = {
+  boundaryConfirmed: boolean;
+  refreshSucceeded: boolean;
+};
+
+function unknownOutcomeFeedback(
+  result: UnknownOutcomeRefreshResult,
+  subject = "操作"
+) {
+  if (!result.refreshSucceeded) {
+    return `${subject}结果未能确认，且图片列表刷新失败，请重新加载页面`;
+  }
+  return result.boundaryConfirmed
+    ? `${subject}结果未能确认，图片列表已在操作收口后刷新`
+    : `${subject}结果未能确认，图片列表已刷新，但无法确认操作已经收口，请稍后再次刷新`;
+}
+
 export function useImageAdminOperations({
   items,
-  selected,
   clearSelection,
   invalidateData
 }: {
   items: ImageItem[];
-  selected: string[];
   clearSelection: () => void;
   invalidateData: () => Promise<unknown>;
 }) {
@@ -98,215 +107,177 @@ export function useImageAdminOperations({
     setFeedback(null);
   }, []);
 
-  const runRowAction = useCallback(async (
-    item: ImageItem,
-    action: "delete" | "restore"
+  const refreshUnknownOutcome = useCallback(async (
+    context: string,
+    imageIds?: string[]
   ) => {
-    if (operationBusy) return;
-    setBusyIds([item.id]);
+    let boundaryConfirmed = false;
+    if (imageIds?.length) {
+      try {
+        await readEditableImageSnapshots(imageIds);
+        boundaryConfirmed = true;
+      } catch (error) {
+        reportAdminUiError(`${context}_snapshot`, error);
+      }
+    }
+    try {
+      await refresh();
+      return { boundaryConfirmed, refreshSucceeded: true };
+    } catch (error) {
+      reportAdminUiError(`${context}_refresh`, error);
+      return { boundaryConfirmed, refreshSucceeded: false };
+    }
+  }, [refresh]);
+
+  const restore = useCallback(async (ids: string[]) => {
+    if (!ids.length || operationBusy) return;
+    const single = ids.length === 1;
+    setActionBusy(true);
+    setBusyIds(ids);
     setFeedback(null);
-    setOperationText(action === "delete" ? "正在删除图片…" : "正在恢复图片…");
+    setOperationText(single ? "正在恢复图片…" : `正在恢复 ${ids.length} 张图片…`);
     const startedAt = Date.now();
     try {
-      await (action === "delete"
-        ? moveImageToTrash(item.id)
-        : restoreImageFromTrash(item.id));
-      await refresh();
+      let result;
+      try {
+        result = await restoreImages(ids);
+      } catch (error) {
+        reportAdminUiError("image_admin.restore", error);
+        const reconciliation = await refreshUnknownOutcome(
+          "image_admin.restore",
+          ids
+        );
+        await waitForMinimumPendingDuration(startedAt);
+        showFeedback(
+          unknownOutcomeFeedback(reconciliation, "恢复"),
+          "error"
+        );
+        return;
+      }
+      if (result.ignored) {
+        reportAdminUiError(
+          "image_admin.restore_partial",
+          new Error(`恢复完成，但有 ${result.ignored} 张图片未处理`)
+        );
+      }
+      let refreshFailed = false;
+      try {
+        await refresh();
+      } catch (error) {
+        refreshFailed = true;
+        reportAdminUiError("image_admin.restore_refresh", error);
+      }
       await waitForMinimumPendingDuration(startedAt);
       showFeedback(
-        action === "delete" ? "图片已移入回收站" : "图片已恢复",
-        "success"
+        `已恢复 ${result.restored} 张，${result.ignored} 张未处理${
+          refreshFailed ? "；图片列表刷新失败，请重新加载页面" : ""
+        }`,
+        result.ignored || refreshFailed ? "error" : "success"
       );
-    } catch (error) {
-      reportAdminUiError(`image_admin.${action}`, error);
-      await waitForMinimumPendingDuration(startedAt);
-      showFeedback("图片操作失败，请稍后重试", "error");
     } finally {
+      setActionBusy(false);
       setOperationText("");
       setBusyIds([]);
     }
-  }, [operationBusy, refresh, showFeedback]);
+  }, [operationBusy, refresh, refreshUnknownOutcome, showFeedback]);
 
   const runConfirmedAction = useCallback(async () => {
     if (!confirmAction) return false;
-    const affectedIds = confirmAction.kind === "batch-delete"
-      || confirmAction.kind === "purge-selected"
+    const purgeRequest = confirmAction.kind === "purge"
+      ? confirmAction.request
+      : null;
+    const affectedIds = confirmAction.kind === "delete"
       ? confirmAction.ids
-      : confirmAction.kind === "empty-trash"
-        ? items.map((item) => item.id)
-        : [confirmAction.id];
+      : purgeRequest?.scope === "selected"
+        ? purgeRequest.ids
+        : items.map((item) => item.id);
+    const single = affectedIds.length === 1;
     setActionBusy(true);
     setBusyIds(affectedIds);
     setFeedback(null);
     setOperationText(
-      confirmAction.kind === "batch-delete"
-        ? `正在批量删除 ${confirmAction.ids.length} 张图片…`
-        : confirmAction.kind === "purge-selected"
-          ? `正在永久删除 ${confirmAction.ids.length} 张图片…`
-        : confirmAction.kind === "empty-trash"
+      confirmAction.kind === "delete"
+        ? single
+          ? "正在删除图片…"
+          : `正在删除 ${affectedIds.length} 张图片…`
+        : purgeRequest?.scope === "all"
           ? "正在清空回收站…"
-          : "正在永久删除图片…"
+          : single
+            ? "正在永久删除图片…"
+            : `正在永久删除 ${affectedIds.length} 张图片…`
     );
     const startedAt = Date.now();
     try {
-      let resultFeedback: {
-        text: string;
-        status: "error" | "success";
-      };
-      if (confirmAction.kind === "batch-delete") {
-        const result = await api<BatchImageDeleteResponseDto>(
-          `${adminApiBasePath}/images/batch-delete`,
-          {
-            method: "POST",
-            body: JSON.stringify({ ids: confirmAction.ids })
+      let text: string;
+      let status: "error" | "success";
+      try {
+        if (confirmAction.kind === "delete") {
+          const result = await deleteImages(confirmAction.ids);
+          text = `已移入回收站 ${result.deleted} 张，${result.ignored} 张未处理`;
+          status = result.ignored ? "error" : "success";
+          if (result.ignored) {
+            reportAdminUiError(
+              "image_admin.delete_partial",
+              new Error(`删除完成，但有 ${result.ignored} 张图片未处理`)
+            );
           }
-        );
-        if (result.ignored) {
-          reportAdminUiError(
-            "image_admin.batch_delete_partial",
-            new Error(`批量删除完成，但有 ${result.ignored} 张图片未处理`)
-          );
-        }
-        resultFeedback = {
-          text: `已删除 ${result.deleted} 张，${result.ignored} 张未处理`,
-          status: result.ignored ? "error" : "success"
-        };
-      } else if (confirmAction.kind === "purge-selected") {
-        const result = await api<SelectedTrashPurgeResponseDto>(
-          `${adminApiBasePath}/images/batch-purge`,
-          {
-            method: "POST",
-            body: JSON.stringify({ ids: confirmAction.ids })
-          }
-        );
-        const pending = Math.max(0, result.remaining - result.failed);
-        if (result.failed || pending || result.ignored) {
-          reportAdminUiError(
-            "image_admin.batch_purge_partial",
-            new Error(
-              `批量永久删除完成，但有 ${result.failed} 张删除失败、`
-              + `${pending} 张暂未删除、${result.ignored} 张未处理`
-            )
-          );
-        }
-        resultFeedback = {
-          text: `已永久删除 ${result.deleted} 张${
+        } else {
+          const result = await purgeImages(confirmAction.request);
+          const pending = Math.max(0, result.remaining - result.failed);
+          const all = confirmAction.request.scope === "all";
+          text = `已永久删除 ${result.deleted} 张${
             result.failed ? `，${result.failed} 张删除失败` : ""
           }${
-            pending ? `，${pending} 张暂未删除` : ""
-          }${result.ignored ? `，${result.ignored} 张未处理` : ""}`,
-          status: result.failed || pending || result.ignored ? "error" : "success"
-        };
-      } else if (confirmAction.kind === "empty-trash") {
-        const result = await api<TrashPurgeResponseDto>(
-          `${adminApiBasePath}/images/empty-trash`,
-          { method: "POST" }
-        );
-        if (result.failed) {
-          reportAdminUiError(
-            "image_admin.empty_trash_partial",
-            new Error(
-              `清空回收站完成，但有 ${result.failed} 张图片的存储对象删除失败`
-            )
-          );
+            pending
+              ? all
+                ? `，剩余 ${pending} 张由后台继续处理`
+                : `，${pending} 张暂未删除`
+              : ""
+          }${result.ignored ? `，${result.ignored} 张状态已改变` : ""}`;
+          status = result.failed || (!all && (pending || result.ignored))
+            ? "error"
+            : "success";
+          if (status === "error") {
+            reportAdminUiError(
+              "image_admin.purge_partial",
+              new Error(text)
+            );
+          }
         }
-        resultFeedback = {
-          text: `已永久删除 ${result.deleted} 张${
-            result.failed ? `，${result.failed} 张失败` : ""
-          }${result.remaining ? `，剩余 ${result.remaining} 张由后台继续处理` : ""}`,
-          status: result.failed ? "error" : "success"
-        };
-      } else {
-        await api(
-          `${adminApiBasePath}/images/${confirmAction.id}/purge`,
-          { method: "POST" }
+      } catch (error) {
+        reportAdminUiError("image_admin.confirmed_action", error);
+        const reconciliation = await refreshUnknownOutcome(
+          confirmAction.kind === "delete"
+            ? "image_admin.delete"
+            : "image_admin.purge",
+          confirmAction.kind === "delete" ? confirmAction.ids : undefined
         );
-        resultFeedback = {
-          text: `已永久删除 ${confirmAction.title}`,
-          status: "success"
-        };
-      }
-      await refresh();
-      await waitForMinimumPendingDuration(startedAt);
-      showFeedback(resultFeedback.text, resultFeedback.status);
-      return true;
-    } catch (error) {
-      reportAdminUiError("image_admin.confirmed_action", error);
-      let refreshFailed = false;
-      if (confirmAction.kind === "purge-selected") {
-        try {
-          await refresh();
-        } catch (refreshError) {
-          refreshFailed = true;
-          reportAdminUiError(
-            "image_admin.batch_purge_refresh",
-            refreshError
-          );
-        }
-      }
-      await waitForMinimumPendingDuration(startedAt);
-      if (confirmAction.kind === "purge-selected") {
+        await waitForMinimumPendingDuration(startedAt);
         showFeedback(
-          refreshFailed
-            ? "永久删除中断，且图片列表刷新失败，请重新加载页面后确认"
-            : "永久删除中断，图片列表已刷新，请确认剩余图片后重试",
+          unknownOutcomeFeedback(reconciliation),
           "error"
         );
+        return false;
       }
-      return false;
-    } finally {
-      setActionBusy(false);
-      setOperationText("");
-      setBusyIds([]);
-    }
-  }, [confirmAction, items, refresh, showFeedback]);
-
-  const restoreSelected = useCallback(async () => {
-    const ids = [...selected];
-    const total = ids.length;
-    if (!total) return;
-    setActionBusy(true);
-    setBusyIds(ids);
-    setFeedback(null);
-    setOperationText(`恢复中… 0 / ${total} 张`);
-    const startedAt = Date.now();
-    let restored = 0;
-    let ignored = 0;
-    try {
-      for (let start = 0; start < total; start += restoreChunkSize) {
-        const chunk = ids.slice(start, start + restoreChunkSize);
-        const result = await api<BatchImageRestoreResponseDto>(
-          `${adminApiBasePath}/images/batch-restore`,
-          { method: "POST", body: JSON.stringify({ ids: chunk }) }
-        );
-        restored += result.restored;
-        ignored += result.ignored;
-        setOperationText(
-          `恢复中… ${Math.min(start + chunk.length, total)} / ${total} 张`
-        );
+      let refreshFailed = false;
+      try {
+        await refresh();
+      } catch (error) {
+        refreshFailed = true;
+        reportAdminUiError("image_admin.action_refresh", error);
       }
       await waitForMinimumPendingDuration(startedAt);
       showFeedback(
-        `已恢复 ${restored} 张，${ignored} 张未处理`,
-        ignored ? "error" : "success"
+        `${text}${refreshFailed ? "；图片列表刷新失败，请重新加载页面" : ""}`,
+        status === "error" || refreshFailed ? "error" : "success"
       );
-      if (ignored) {
-        reportAdminUiError(
-          "image_admin.batch_restore_partial",
-          new Error(`批量恢复完成，但有 ${ignored} 张图片未处理`)
-        );
-      }
-    } catch (error) {
-      reportAdminUiError("image_admin.batch_restore", error);
-      await waitForMinimumPendingDuration(startedAt);
-      showFeedback(`批量恢复中断，已恢复 ${restored} 张`, "error");
+      return true;
     } finally {
-      await refresh().catch(() => undefined);
       setActionBusy(false);
       setOperationText("");
       setBusyIds([]);
     }
-  }, [refresh, selected, showFeedback]);
+  }, [confirmAction, items, refresh, refreshUnknownOutcome, showFeedback]);
 
   return {
     operationText,
@@ -320,8 +291,7 @@ export function useImageAdminOperations({
     operationBusy,
     refresh,
     resetTransientState,
-    runRowAction,
     runConfirmedAction,
-    restoreSelected
+    restore
   };
 }

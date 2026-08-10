@@ -2,12 +2,13 @@ import type { Hono } from "hono";
 import {
   adminApiBasePath,
   adminPermissions,
+  type ImageDeleteResponseDto,
+  type ImagePurgeResponseDto,
+  type ImageRestoreResponseDto,
   type ImageSnapshotResponseDto,
   type ImageStorageMigrationResponseDto,
   type ImageUpdateRequestDto,
-  type ImageUpdateResponseDto,
-  type SelectedTrashPurgeResponseDto,
-  type TrashPurgeResponseDto
+  type ImageUpdateResponseDto
 } from "@imageshow/shared/browser";
 import {
   apiSuccess,
@@ -22,10 +23,11 @@ import {
 } from "../core/http/request-body-limit.ts";
 import {
   adminImageListQuery,
+  imageActionInput,
+  imagePurgeInput,
   imageSnapshotInput,
   imageStorageMigrationInput,
   imageUpdateInput,
-  imageIdsInput,
   parse,
   uuidInput,
 } from "../core/validation.ts";
@@ -43,17 +45,10 @@ import {
   serveAdminStoredThumbnail
 } from "../images/stored-image-serving.ts";
 import {
-  batchDeleteImages,
-  batchRestoreImages,
-  moveImageToTrash,
-  restoreDeletedImage
+  deleteImages,
+  restoreImages
 } from "../images/trash-mutations.ts";
-import {
-  purgeDeletedImage,
-  purgeDeletedImages,
-  purgeSelectedDeletedImages
-} from "../images/trash-purge.ts";
-import { scheduleTrashPurge } from "../images/trash-purge-job.ts";
+import { purgeImages } from "../images/trash-purge.ts";
 import { requireAdminPermission } from "../users/admin-authorization.ts";
 import { storedResponseRequest } from "./stored-response-request.ts";
 
@@ -92,73 +87,27 @@ export function registerAdminImageRoutes(app: Hono) {
     return serveAdminExternalOriginal(id, c.req.header("user-agent") ?? "");
   });
 
-  app.post(`${adminApiBasePath}/images/:id/delete`, async (c) => {
-    const id = parse(uuidInput, c.req.param("id"));
-    await moveImageToTrash(id);
-    return c.json(apiSuccess());
+  app.post(`${adminApiBasePath}/images/delete`, async (c) => {
+    const input = parse(imageActionInput, await readJsonBody(c));
+    const response: ImageDeleteResponseDto = await deleteImages(input.ids);
+    return c.json(apiSuccess(response));
   });
 
-  app.post(`${adminApiBasePath}/images/:id/restore`, async (c) => {
-    const id = parse(uuidInput, c.req.param("id"));
-    await restoreDeletedImage(id);
-    return c.json(apiSuccess());
-  });
-
-  app.post(`${adminApiBasePath}/images/batch-restore`, async (c) => {
-    const input = parse(imageIdsInput, await readJsonBody(c));
-    return c.json(apiSuccess(await batchRestoreImages(input.ids)));
-  });
-
-  app.post(`${adminApiBasePath}/images/batch-delete`, async (c) => {
-    const input = parse(imageIdsInput, await readJsonBody(c));
-    return c.json(apiSuccess(await batchDeleteImages(input.ids)));
+  app.post(`${adminApiBasePath}/images/restore`, async (c) => {
+    const input = parse(imageActionInput, await readJsonBody(c));
+    const response: ImageRestoreResponseDto = await restoreImages(input.ids);
+    return c.json(apiSuccess(response));
   });
 
   app.post(
-    `${adminApiBasePath}/images/batch-purge`,
-    requireAdminPermission(adminPermissions.imageTrashEmpty),
-    async (c) => {
-      const input = parse(imageIdsInput, await readJsonBody(c));
-      const result = await purgeSelectedDeletedImages(input.ids, {
-        signal: c.req.raw.signal
-      });
-      const response = {
-        deleted: result.deleted,
-        failed: result.failed,
-        remaining: result.remaining,
-        ignored: Math.max(
-          0,
-          input.ids.length - result.deleted - result.remaining
-        )
-      } satisfies SelectedTrashPurgeResponseDto;
-      return c.json(apiSuccess(response));
-    }
-  );
-
-  app.post(
-    `${adminApiBasePath}/images/empty-trash`,
-    requireAdminPermission(adminPermissions.imageTrashEmpty),
-    async (c) => {
-      const result = await purgeDeletedImages(undefined, {
-        signal: c.req.raw.signal
-      });
-      if (result.remaining) await scheduleTrashPurge();
-      const response = {
-        deleted: result.deleted,
-        failed: result.failed,
-        remaining: result.remaining
-      } satisfies TrashPurgeResponseDto;
-      return c.json(apiSuccess(response));
-    }
-  );
-
-  app.post(
-    `${adminApiBasePath}/images/:id/purge`,
+    `${adminApiBasePath}/images/purge`,
     requireAdminPermission(adminPermissions.imageTrashPurge),
     async (c) => {
-      const id = parse(uuidInput, c.req.param("id"));
-      await purgeDeletedImage(id, { signal: c.req.raw.signal });
-      return c.json(apiSuccess());
+      const input = parse(imagePurgeInput, await readJsonBody(c));
+      const response: ImagePurgeResponseDto = await purgeImages(input, {
+        signal: c.req.raw.signal
+      });
+      return c.json(apiSuccess(response));
     }
   );
 

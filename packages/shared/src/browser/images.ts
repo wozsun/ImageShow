@@ -199,22 +199,38 @@ export type AdminEntityListResponseDto = {
   items: AdminEntityDto[];
 };
 
-export type BatchImageDeleteResponseDto = {
+export type ImageDeleteItemResultDto = {
+  id: string;
+  status: "deleted" | "ignored";
+};
+
+export type ImageDeleteResponseDto = {
+  requested: number;
   deleted: number;
   ignored: number;
+  results: ImageDeleteItemResultDto[];
 };
 
-export type BatchImageRestoreResponseDto = {
+export type ImageRestoreItemResultDto = {
+  id: string;
+  status: "restored" | "ignored";
+};
+
+export type ImageRestoreResponseDto = {
+  requested: number;
   restored: number;
   ignored: number;
+  results: ImageRestoreItemResultDto[];
 };
 
-export type TrashPurgeResponseDto = {
+export type ImagePurgeRequestDto =
+  | { scope: "selected"; ids: string[] }
+  | { scope: "all" };
+
+export type ImagePurgeResponseDto = {
+  requested: number;
   deleted: number;
   failed: number;
   remaining: number;
-};
-
-export type SelectedTrashPurgeResponseDto = TrashPurgeResponseDto & {
   ignored: number;
 };

@@ -2,7 +2,6 @@ import { lazy, Suspense, useEffect, useRef, useState, type RefObject } from "rea
 import { adminPermissions } from "@imageshow/shared/browser";
 import { AdminIcon } from "../../icon/AdminIcon.js";
 import { AsyncActionButton } from "../../actions/AsyncActionButton.js";
-import { TwoStepConfirmIconButton } from "../../actions/TwoStepConfirmIconButton.js";
 import { ConfirmDialog } from "../../feedback/ConfirmDialog.js";
 import { DialogFrame } from "../../feedback/DialogFrame.js";
 import { WorkflowDefaultFields } from "../../form/WorkflowDefaultFields.js";
@@ -13,7 +12,8 @@ import { AdminPagination } from "../../navigation/AdminPagination.js";
 import { OverlayScrollbar } from "../../layout/OverlayScrollbar.js";
 import { ImageDraftFields } from "../../form/ImageDraftFields.js";
 import { useAsyncActionStatus } from "../../../hooks/useAsyncActionStatus.js";
-import { moveImageToTrash } from "../../../lib/api/image-mutations.js";
+import { deleteImages } from "../../../lib/api/image-mutations.js";
+import { readEditableImageSnapshots } from "../../../lib/api/image-edit.js";
 import { useAdminPermissions } from "../../../hooks/useAuthSession.js";
 import {
   createPageLifetimeModuleLoader
@@ -108,6 +108,7 @@ export function ImageMetadataEditorDialog({
   const listRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const restoreTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const deleteTriggerRef = useRef<HTMLButtonElement | null>(null);
   const migrateTriggerRef = useRef<HTMLButtonElement | null>(null);
   const previewReturnFocusRef = useRef<HTMLElement | null>(null);
   // 父级刷新可能清空选择或因筛选移除图片；弹窗独立持有固定会话 ID、活动成员、
@@ -126,7 +127,7 @@ export function ImageMetadataEditorDialog({
     lastSaveReport
   } = operations;
   const saving = saveStatus.pending;
-  const deleteStatus = useAsyncActionStatus({ successDurationMs: null });
+  const deleteStatus = useAsyncActionStatus({ resultDurationMs: null });
   const [deleteError, setDeleteError] = useState("");
   const busy = saving || deleteStatus.pending;
   const [preview, setPreview] = useState<{ src: string; thumbSrc: string; width: number; height: number } | null>(null);
@@ -135,6 +136,7 @@ export function ImageMetadataEditorDialog({
   const [common, setCommon] = useState(emptyCommonAttributes);
   const [commonExpanded, setCommonExpanded] = useState(false);
   const [restoreConfirmation, setRestoreConfirmation] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState(false);
   const [restoreError, setRestoreError] = useState("");
   const [migrating, setMigrating] = useState(false);
   const permissions = useAdminPermissions();
@@ -248,12 +250,37 @@ export function ImageMetadataEditorDialog({
 
     const deleted = await deleteStatus.run(async () => {
       setDeleteError("");
+      let deletionConfirmed = false;
       try {
-        await moveImageToTrash(item.id);
+        const result = await deleteImages([item.id]);
+        deletionConfirmed = result.deleted === 1;
       } catch (error) {
         reportAdminUiError("image_metadata.single_delete", error);
-        setDeleteError("删除失败，请稍后重试");
-        return false;
+      }
+
+      if (!deletionConfirmed) {
+        let authoritativeSnapshotRead = false;
+        try {
+          const snapshot = await readEditableImageSnapshots([item.id]);
+          authoritativeSnapshotRead = true;
+          deletionConfirmed = !snapshot.items.some(
+            (candidate) => candidate.id === item.id
+          );
+        } catch (error) {
+          reportAdminUiError(
+            "image_metadata.single_delete_snapshot",
+            error,
+            { imageId: item.id }
+          );
+        }
+        if (!deletionConfirmed) {
+          setDeleteError(
+            authoritativeSnapshotRead
+              ? "图片当前仍可编辑，删除未生效"
+              : "删除结果无法确认，请稍后重试或刷新页面"
+          );
+          return false;
+        }
       }
 
       // 删除已经由服务端提交后，刷新失败不能诱导用户再次执行 mutation。
@@ -270,6 +297,7 @@ export function ImageMetadataEditorDialog({
       return true;
     });
     if (deleted) requestClose();
+    return deleted;
   };
   return (
     <DialogFrame
@@ -280,6 +308,7 @@ export function ImageMetadataEditorDialog({
         (canMigrateStorage && migrating)
         || preview
         || restoreConfirmation
+        || deleteConfirmation
       )}
       initialFocusRef={closeButtonRef}
       returnFocusRef={returnFocusRef}
@@ -518,17 +547,20 @@ export function ImageMetadataEditorDialog({
                 </button>
               )}
               {deleteAvailable && (
-                <TwoStepConfirmIconButton
+                <button
+                  ref={deleteTriggerRef}
                   className="icon danger-button batch-edit-delete-trigger"
-                  idleIcon="delete-bin-6-line"
-                  confirmIcon="delete-bin-2-line"
-                  idleLabel="删除此图片"
-                  confirmLabel="再次点击确认删除此图片"
-                  busy={deleteStatus.pending}
+                  type="button"
+                  title="删除此图片"
+                  aria-label="删除此图片"
                   disabled={busy || !activeItems.length}
-                  onArm={() => setDeleteError("")}
-                  onConfirm={() => void deleteSingleImage(requestClose)}
-                />
+                  onClick={() => {
+                    setDeleteError("");
+                    setDeleteConfirmation(true);
+                  }}
+                >
+                  <AdminIcon name="delete-bin-6-line" />
+                </button>
               )}
             </div>
           )}
@@ -588,6 +620,18 @@ export function ImageMetadataEditorDialog({
           returnFocusRef={restoreTriggerRef}
           onClose={() => setRestoreConfirmation(false)}
           onConfirm={restoreAllChanges}
+        />
+      )}
+      {deleteConfirmation && (
+        <ConfirmDialog
+          title="确认删除图片"
+          description="此图片将移入回收站，可以稍后恢复。"
+          confirmLabel="确认删除"
+          pendingLabel="删除中"
+          errorMessage={deleteError}
+          returnFocusRef={deleteTriggerRef}
+          onClose={() => setDeleteConfirmation(false)}
+          onConfirm={() => deleteSingleImage(requestClose)}
         />
       )}
       </>

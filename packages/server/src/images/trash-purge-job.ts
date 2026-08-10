@@ -3,30 +3,41 @@ import {
   jobSucceeded,
   type BackgroundJobOutcome
 } from "../jobs/handler-outcome.ts";
-import { enqueue } from "../jobs/repository.ts";
 import type { BackgroundJob } from "../jobs/types.ts";
-import { purgeDeletedImages } from "./trash-purge.ts";
+import {
+  continueTrashPurge,
+  type TrashPurgeWatermark
+} from "./trash-purge.ts";
+
+function trashPurgeWatermark(job: BackgroundJob): TrashPurgeWatermark {
+  const value = job.payload.watermark;
+  if (
+    !value
+    || typeof value !== "object"
+    || typeof (value as Record<string, unknown>).deletedAt !== "string"
+    || typeof (value as Record<string, unknown>).id !== "string"
+  ) {
+    throw new Error("trash.purge job is missing its deletion watermark");
+  }
+  return value as TrashPurgeWatermark;
+}
 
 export async function handleTrashPurgeJob(
-  _job: BackgroundJob,
+  job: BackgroundJob,
   signal: AbortSignal
 ): Promise<BackgroundJobOutcome> {
   signal.throwIfAborted();
-  const result = await purgeDeletedImages(undefined, { signal });
+  const result = await continueTrashPurge(trashPurgeWatermark(job), {
+    signal
+  });
   if (result.failed) {
     throw new Error(
       `trash purge batch failed for ${result.failed} `
-      + `of ${result.requested} claimed images`
+      + `of ${result.claimed} claimed images`
     );
   }
   if (result.remaining) {
-    return jobRescheduled(result.requested ? 0 : 1_000);
+    return jobRescheduled(result.claimed ? 0 : 1_000);
   }
   return jobSucceeded();
-}
-
-export function scheduleTrashPurge() {
-  // A concurrent empty-trash request may discover more work after a running
-  // row counted zero remaining. An independent row preserves that wake-up.
-  return enqueue("trash.purge");
 }

@@ -1,18 +1,27 @@
+import type {
+  ImageDeleteResponseDto,
+  ImagePurgeRequestDto,
+  ImagePurgeResponseDto,
+  ImageRestoreResponseDto
+} from "@imageshow/shared/browser";
 import { api } from "./client.js";
 import { adminApiBasePath } from "../constants.js";
 
-function adminImageActionPath(imageId: string, action: "delete" | "restore") {
-  return `${adminApiBasePath}/images/${encodeURIComponent(imageId)}/${action}`;
-}
-
-export function moveImageToTrash(imageId: string) {
-  return api<void>(adminImageActionPath(imageId, "delete"), {
-    method: "POST"
+function imageActionRequest<T>(path: string, body: unknown) {
+  return api<T>(`${adminApiBasePath}/images/${path}`, {
+    method: "POST",
+    body: JSON.stringify(body)
   });
 }
 
-export function restoreImageFromTrash(imageId: string) {
-  return api<void>(adminImageActionPath(imageId, "restore"), {
-    method: "POST"
-  });
+export function deleteImages(ids: string[]) {
+  return imageActionRequest<ImageDeleteResponseDto>("delete", { ids });
+}
+
+export function restoreImages(ids: string[]) {
+  return imageActionRequest<ImageRestoreResponseDto>("restore", { ids });
+}
+
+export function purgeImages(request: ImagePurgeRequestDto) {
+  return imageActionRequest<ImagePurgeResponseDto>("purge", request);
 }

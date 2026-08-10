@@ -1,5 +1,4 @@
 import { AdminIcon } from "../../components/icon/AdminIcon.js";
-import { TwoStepConfirmIconButton } from "../../components/actions/TwoStepConfirmIconButton.js";
 import { ThumbImage } from "../../components/image/ThumbImage.js";
 import type { ImageItem } from "../../lib/types.js";
 import {
@@ -153,17 +152,16 @@ export function AdminImageCard({
               >
                 <AdminIcon name="pencil-line" />
               </button>
-              <TwoStepConfirmIconButton
+              <button
+                type="button"
                 className="danger-button"
-                idleIcon="delete-bin-6-line"
-                confirmIcon="delete-bin-2-line"
-                idleLabel={`删除图片：${title}`}
-                confirmLabel={`再次点击确认删除图片：${title}`}
-                idleTitle="删除"
-                confirmTitle="再次点击确认删除"
+                title="删除"
+                aria-label={`删除图片：${title}`}
                 disabled={busy || actionsDisabled || detailPending}
-                onConfirm={onDelete}
-              />
+                onClick={onDelete}
+              >
+                <AdminIcon name="delete-bin-6-line" />
+              </button>
             </>
           ) : (
             <>

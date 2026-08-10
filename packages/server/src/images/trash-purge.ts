@@ -1,6 +1,11 @@
 import { appConfig } from "@imageshow/shared";
-import { ApiError, errorMessage } from "../core/api-error.ts";
+import type {
+  ImagePurgeRequestDto,
+  ImagePurgeResponseDto
+} from "@imageshow/shared/browser";
+import { errorMessage } from "../core/api-error.ts";
 import { pool } from "../core/database-pools.ts";
+import { enqueue } from "../jobs/repository.ts";
 import { logger } from "../core/logger.ts";
 import { getStorageBackend } from "../storage/backend-registry.ts";
 import { thumbnailRef } from "../storage/image-paths.ts";
@@ -10,6 +15,7 @@ import {
   removeStorageObjectAndConfirm
 } from "../storage/object-access.ts";
 import { invalidateEntityCountCaches } from "../vocab/vocab-cache.ts";
+import { withTrashMembershipLock } from "./trash-membership-lock.ts";
 
 type PurgeRow = {
   id: string;
@@ -23,6 +29,20 @@ type PurgeOptions = {
   signal?: AbortSignal;
 };
 
+export type TrashPurgeWatermark = {
+  deletedAt: string;
+  id: string;
+};
+
+type PurgeTarget =
+  | { ids: string[] }
+  | { watermark: TrashPurgeWatermark };
+
+type PurgeClaimOutcome =
+  | { status: "deleted"; row: PurgeRow }
+  | { status: "failed" }
+  | { status: "ignored" };
+
 const purgeReturnColumns = [
   "metadata.id",
   "metadata.object_key",
@@ -31,15 +51,25 @@ const purgeReturnColumns = [
   "metadata.purge_attempts"
 ].join(", ");
 
-async function claimPurgeRows(ids?: string[]) {
-  if (ids && !ids.length) return [];
+function targetPredicate(target: PurgeTarget, params: unknown[]) {
+  if ("ids" in target) {
+    return `AND id = ANY($${params.push(target.ids)}::uuid[])`;
+  }
+  const deletedAtParameter = params.push(target.watermark.deletedAt);
+  const idParameter = params.push(target.watermark.id);
+  return `AND (deleted_at, id) <= (
+    $${deletedAtParameter}::timestamptz,
+    $${idParameter}::uuid
+  )`;
+}
+
+async function claimPurgeRows(target: PurgeTarget) {
   const params: unknown[] = [];
-  const idPredicate = ids
-    ? `AND id = ANY($${params.push(ids)}::uuid[])`
-    : "";
-  const limitParameter = params.push(
-    Math.min(appConfig.trashBatchSize, ids?.length ?? appConfig.trashBatchSize)
-  );
+  const predicate = targetPredicate(target, params);
+  const limit = "ids" in target
+    ? Math.min(appConfig.trashBatchSize, target.ids.length)
+    : appConfig.trashBatchSize;
+  const limitParameter = params.push(limit);
   return (await pool.query(
     `WITH candidates AS (
        SELECT id
@@ -52,7 +82,7 @@ async function claimPurgeRows(ids?: string[]) {
               AND purge_started_at < now() - interval '15 minutes'
             )
           )
-          ${idPredicate}
+          ${predicate}
         ORDER BY deleted_at ASC, id ASC
         FOR UPDATE SKIP LOCKED
         LIMIT $${limitParameter}
@@ -90,17 +120,45 @@ async function releasePurgeClaims(rows: PurgeRow[]) {
   );
 }
 
-async function countRemainingPurgeRows(ids?: string[]) {
-  if (ids && !ids.length) return 0;
-  const result = ids
-    ? await pool.query(
-        "SELECT count(*)::int AS count FROM metadata WHERE status='deleted' AND id = ANY($1::uuid[])",
-        [ids]
-      )
-    : await pool.query(
-        "SELECT count(*)::int AS count FROM metadata WHERE status='deleted'"
-      );
+async function countRemainingPurgeRows(target: PurgeTarget) {
+  const params: unknown[] = [];
+  const predicate = targetPredicate(target, params);
+  const result = await pool.query(
+    `SELECT count(*)::int AS count
+       FROM metadata
+      WHERE status='deleted'
+        ${predicate}`,
+    params
+  );
   return Number(result.rows[0]?.count ?? 0);
+}
+
+async function captureTrashPurgeWatermark() {
+  return withTrashMembershipLock(async (client) => {
+    const row = (await client.query(
+      `SELECT deleted_at::text AS deleted_at,
+              id,
+              (count(*) OVER())::int AS requested
+         FROM metadata
+        WHERE status='deleted'
+        ORDER BY deleted_at DESC, id DESC
+        LIMIT 1`
+    )).rows[0] as {
+      deleted_at: string;
+      id: string;
+      requested: number;
+    } | undefined;
+    if (!row) return null;
+    return {
+      requested: Number(row.requested),
+      watermark: {
+        // PostgreSQL timestamptz carries microseconds; serializing a JS Date
+        // would truncate the maximum row and accidentally exclude it.
+        deletedAt: row.deleted_at,
+        id: row.id
+      }
+    };
+  });
 }
 
 async function markPurgeFailed(row: PurgeRow, error: unknown) {
@@ -132,10 +190,6 @@ async function recordPurgeFailure(row: PurgeRow, error: unknown) {
 async function purgeClaimedRow(claim: PurgeRow): Promise<PurgeRow | null> {
   return withImageStorageMutationLock(claim.id, async (signal) => {
     signal.throwIfAborted();
-    // A storage migration or theme reassignment may have completed while this
-    // purge waited for the per-image location lock. Always delete from the
-    // current location owned by this exact purge attempt, never from the claim
-    // snapshot.
     const row = (await pool.query(
       `SELECT ${purgeReturnColumns}
          FROM metadata
@@ -202,29 +256,34 @@ function isSignalAbort(error: unknown, signal?: AbortSignal) {
 async function processPurgeClaim(
   row: PurgeRow,
   signal?: AbortSignal
-): Promise<PurgeRow | null> {
+): Promise<PurgeClaimOutcome> {
   try {
-    // Keep this check inside the row boundary: claims in an already-started
-    // slice finish safely, while rows not yet handed to storage are released.
     signal?.throwIfAborted();
     const deleted = await purgeClaimedRow(row);
-    if (deleted) return deleted;
-    await recordPurgeFailure(
-      row,
-      new Error("Purge ownership was lost before metadata deletion")
-    );
+    if (deleted) return { status: "deleted", row: deleted };
+    await recordPurgeFailure(row, new Error(
+      "Purge ownership was lost before metadata deletion"
+    ));
   } catch (error) {
     if (isSignalAbort(error, signal)) throw error;
     await recordPurgeFailure(row, error);
   }
-  return null;
+
+  const current = (await pool.query(
+    "SELECT status FROM metadata WHERE id=$1",
+    [row.id]
+  )).rows[0] as { status: string } | undefined;
+  if (!current) return { status: "deleted", row };
+  return current.status === "deleted"
+    ? { status: "failed" }
+    : { status: "ignored" };
 }
 
-export async function purgeDeletedImages(
-  ids?: string[],
+async function purgeTargetBatch(
+  target: PurgeTarget,
   options: PurgeOptions = {}
 ) {
-  const rows = await claimPurgeRows(ids);
+  const rows = await claimPurgeRows(target);
   const deletedRows: PurgeRow[] = [];
   const finalizationErrors: unknown[] = [];
   let failed = 0;
@@ -238,8 +297,11 @@ export async function purgeDeletedImages(
       );
       for (const result of results) {
         if (result.status === "fulfilled") {
-          if (result.value) deletedRows.push(result.value);
-          else failed += 1;
+          if (result.value.status === "deleted") {
+            deletedRows.push(result.value.row);
+          } else if (result.value.status === "failed") {
+            failed += 1;
+          }
         }
       }
       const rejected = results.find((result) => result.status === "rejected");
@@ -250,16 +312,13 @@ export async function purgeDeletedImages(
   }
 
   try {
-    // One bounded ownership-aware update releases only claims that this batch
-    // still owns. Deleted, failed, and subsequently reclaimed rows do not
-    // match these predicates.
     await releasePurgeClaims(rows);
   } catch (error) {
     finalizationErrors.push(error);
   }
 
   try {
-    if (deletedRows.length) await invalidateEntityCountCaches(["tag"]);
+    if (rows.length) await invalidateEntityCountCaches(["tag"]);
   } catch (error) {
     finalizationErrors.push(error);
   }
@@ -272,60 +331,78 @@ export async function purgeDeletedImages(
   }
 
   return {
-    requested: rows.length,
+    claimed: rows.length,
     deleted: deletedRows.length,
     failed,
-    remaining: await countRemainingPurgeRows(ids)
+    remaining: await countRemainingPurgeRows(target)
   };
 }
 
-export async function purgeSelectedDeletedImages(
+async function purgeSelectedImages(
   ids: string[],
-  options: PurgeOptions = {}
-) {
-  let requested = 0;
+  options: PurgeOptions
+): Promise<ImagePurgeResponseDto> {
   let deleted = 0;
   let failed = 0;
   let remaining = 0;
-
   for (let offset = 0; offset < ids.length; offset += appConfig.trashBatchSize) {
-    const result = await purgeDeletedImages(
-      ids.slice(offset, offset + appConfig.trashBatchSize),
-      options
-    );
-    requested += result.requested;
+    const target = { ids: ids.slice(offset, offset + appConfig.trashBatchSize) };
+    const result = await purgeTargetBatch(target, options);
     deleted += result.deleted;
     failed += result.failed;
     remaining += result.remaining;
   }
-
-  return { requested, deleted, failed, remaining };
+  return {
+    requested: ids.length,
+    deleted,
+    failed,
+    remaining,
+    ignored: Math.max(0, ids.length - deleted - remaining)
+  };
 }
 
-export async function purgeDeletedImage(
-  id: string,
+export async function purgeImages(
+  request: ImagePurgeRequestDto,
+  options: PurgeOptions = {}
+): Promise<ImagePurgeResponseDto> {
+  if (request.scope === "selected") {
+    return purgeSelectedImages(request.ids, options);
+  }
+
+  const captured = await captureTrashPurgeWatermark();
+  if (!captured) {
+    return {
+      requested: 0,
+      deleted: 0,
+      failed: 0,
+      remaining: 0,
+      ignored: 0
+    };
+  }
+  await scheduleTrashPurge(captured.watermark);
+  const result = await purgeTargetBatch(
+    { watermark: captured.watermark },
+    options
+  );
+  return {
+    requested: captured.requested,
+    deleted: result.deleted,
+    failed: result.failed,
+    remaining: result.remaining,
+    ignored: Math.max(
+      0,
+      captured.requested - result.deleted - result.remaining
+    )
+  };
+}
+
+function scheduleTrashPurge(watermark: TrashPurgeWatermark) {
+  return enqueue("trash.purge", "", { watermark });
+}
+
+export function continueTrashPurge(
+  watermark: TrashPurgeWatermark,
   options: PurgeOptions = {}
 ) {
-  const result = await purgeDeletedImages([id], options);
-  if (!result.requested) {
-    const state = (await pool.query(
-      "SELECT status, purge_state FROM metadata WHERE id=$1",
-      [id]
-    )).rows[0] as { status: string; purge_state: string } | undefined;
-    if (state?.status === "deleted") {
-      throw new ApiError(
-        409,
-        "image_purge_in_progress",
-        "Image is already being permanently deleted"
-      );
-    }
-    throw new ApiError(404, "not_found", "Deleted image not found");
-  }
-  if (result.failed) {
-    throw new ApiError(
-      502,
-      "storage_delete_failed",
-      "Failed to permanently delete the stored image"
-    );
-  }
+  return purgeTargetBatch({ watermark }, options);
 }
