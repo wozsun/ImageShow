@@ -36,6 +36,7 @@ import {
   useBatchMetadataOperations
 } from "./useBatchMetadataOperations.js";
 import {
+  batchMetadataCardSaveState,
   changedMetadataUpdate,
   createBatchMetadataSession,
   fieldsChangedFor,
@@ -212,9 +213,13 @@ export function ImageMetadataEditorDialog({
     }
     return Boolean(
       outcome
-      && !outcome.report.snapshotFailed
-      && outcome.report.failed === 0
-      && outcome.report.unavailableIds.length === 0
+      && (
+        outcome.report.snapshotFailed
+        || (
+          outcome.report.failed === 0
+          && outcome.report.unavailableIds.length === 0
+        )
+      )
     );
   };
   const restoreAllChanges = async () => {
@@ -393,13 +398,54 @@ export function ImageMetadataEditorDialog({
             const draft = session.drafts[item.id];
             const changed = changedByItem.get(item.id)!;
             const cardChanged = Object.values(changed).some(Boolean);
+            const lastSaveState = batchMetadataCardSaveState(
+              saveSummary,
+              item.id
+            );
+            // A new edit supersedes an earlier success badge. Failed and
+            // pending cards keep their feedback because their draft still
+            // needs another save or an authoritative confirmation.
+            const cardSaveState = cardChanged && lastSaveState === "saved"
+              ? null
+              : lastSaveState;
+            const saveStatePresentation = cardSaveState
+              ? {
+                  saved: {
+                    rowClassName: "is-save-saved",
+                    badgeClassName: "is-saved",
+                    label: "保存成功"
+                  },
+                  failed: {
+                    rowClassName: "is-save-failed",
+                    badgeClassName: "is-failed",
+                    label: "保存失败"
+                  },
+                  pending: {
+                    rowClassName: "is-save-pending",
+                    badgeClassName: "is-pending",
+                    label: "待确认"
+                  }
+                }[cardSaveState]
+              : null;
             return (
-              <article key={item.id} className={`batch-edit-row${cardChanged ? " is-changed" : ""}`}>
+              <article
+                key={item.id}
+                className={`batch-edit-row${cardChanged ? " is-changed" : ""}${saveStatePresentation ? ` ${saveStatePresentation.rowClassName}` : ""}`}
+              >
                 <div className="batch-edit-preview">
-                  <ImageThumbnail src={item.thumb_url} onClick={(opener) => {
-                    previewReturnFocusRef.current = opener;
-                    setPreview({ src: item.object_url, thumbSrc: item.thumb_url, width: item.width, height: item.height });
-                  }} />
+                  <ImageThumbnail
+                    src={item.thumb_url}
+                    fallbackSrc={item.thumb_fallback_url}
+                    onClick={(opener) => {
+                      previewReturnFocusRef.current = opener;
+                      setPreview({
+                        src: item.object_url,
+                        thumbSrc: item.thumb_url,
+                        width: item.width,
+                        height: item.height
+                      });
+                    }}
+                  />
                   {item.image_size
                     ? <span className="batch-edit-preview-size">{formatBytes(item.image_size)}</span>
                     : null}
@@ -410,7 +456,13 @@ export function ImageMetadataEditorDialog({
                       <div className="batch-edit-head-name">
                         <strong className="batch-edit-title-desktop" title={item.object_key}>{item.id}</strong>
                         <strong className="batch-edit-title-mobile" title={item.id}>{shortImageId(item.id)}</strong>
-                        {cardChanged && <span className="changed-badge">已修改</span>}
+                        {saveStatePresentation ? (
+                          <span className={`batch-edit-save-badge ${saveStatePresentation.badgeClassName}`}>
+                            {saveStatePresentation.label}
+                          </span>
+                        ) : cardChanged ? (
+                          <span className="changed-badge">已修改</span>
+                        ) : null}
                       </div>
                       <span className="batch-edit-desktop-summary">
                         {formatDimensions(item.width, item.height)} · {item.theme} · {item.device}/{item.brightness} · {resolveStorageName(item)}

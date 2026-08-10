@@ -13,16 +13,45 @@ function localMediaUrl(prefix: ReadablePrefix, key: string) {
 }
 
 export async function publicImageUrls(objectKey: string, slug: string) {
+  return publicImageUrlsForDelivery(objectKey, slug, "application");
+}
+
+export type ThumbnailUrlDelivery = "application" | "direct";
+
+function thumbnailUrlsForDelivery(
+  applicationThumbUrl: string,
+  directThumbUrl: string,
+  thumbnailDelivery: ThumbnailUrlDelivery
+) {
+  if (thumbnailDelivery !== "direct" || !directThumbUrl) {
+    return { thumb_url: applicationThumbUrl };
+  }
+  return {
+    thumb_url: directThumbUrl,
+    thumb_fallback_url: applicationThumbUrl
+  };
+}
+
+export async function publicImageUrlsForDelivery(
+  objectKey: string,
+  slug: string,
+  thumbnailDelivery: ThumbnailUrlDelivery
+) {
   const { driver } = await resolveStorageAccess(slug);
   const thumbKey = thumbnailObjectKey(objectKey);
   const staticBase = staticLocalBaseUrl();
+  const applicationThumbUrl = `${staticBase}${localMediaUrl("thumbs", thumbKey)}`;
+  const directThumbUrl = driver.publicObjectUrl("thumbs", thumbKey);
   return {
     object_url: driver.publicObjectUrl("media", objectKey)
       || `${staticBase}${localMediaUrl("media", objectKey)}`,
-    // Every thumbnail enters the application once so missing remote objects
-    // can repair or fall back. Public stored-thumbnail delivery still
-    // redirects healthy remote objects to their public URL with a short
-    // cache lifetime.
-    thumb_url: `${staticBase}${localMediaUrl("thumbs", thumbKey)}`
+    // Public API consumers keep the repair-first route. Admin cards prefer
+    // the final remote URL and enter the same repair route only after a real
+    // image load failure, avoiding an unconditional redirect per card.
+    ...thumbnailUrlsForDelivery(
+      applicationThumbUrl,
+      directThumbUrl,
+      thumbnailDelivery
+    )
   };
 }

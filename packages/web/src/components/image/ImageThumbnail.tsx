@@ -8,7 +8,8 @@ export function ImageThumbnail({
   className = "",
   onClick,
   showLoadingIndicator = false,
-  retainLoadedWhenEmpty = false
+  retainLoadedWhenEmpty = false,
+  fallbackSrc = ""
 }: {
   src: string;
   alt?: string;
@@ -17,6 +18,7 @@ export function ImageThumbnail({
   onClick?: (opener: HTMLElement) => void;
   showLoadingIndicator?: boolean;
   retainLoadedWhenEmpty?: boolean;
+  fallbackSrc?: string;
 }) {
   const interactive = Boolean(onClick);
   return (
@@ -35,6 +37,7 @@ export function ImageThumbnail({
     >
       <ThumbImage
         src={src}
+        fallbackSrc={fallbackSrc}
         alt={alt}
         retainLoadedWhenEmpty={retainLoadedWhenEmpty}
       />

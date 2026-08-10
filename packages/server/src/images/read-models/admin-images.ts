@@ -13,9 +13,9 @@ import { resolveImageFilterPlan } from "../filter-plan.ts";
 import { readReadyImagePage } from "../ready-cache/query.ts";
 import {
   adminImageView,
+  adminImagesWithTags,
   batchEditableImagePresentationColumnsWithTags,
   batchEditableImageSnapshotView,
-  publicImagesWithTags,
   type ImageRecordWithTags
 } from "../presenter.ts";
 import {
@@ -50,7 +50,7 @@ export async function listAdminImages(
       query.cursor
     );
     if (cached.cached) {
-      const images = await publicImagesWithTags(cached.value.items.map((item) => ({
+      const images = await adminImagesWithTags(cached.value.items.map((item) => ({
         ...item,
         status: "ready"
       })));
@@ -96,7 +96,7 @@ export async function getAdminImageSnapshots(
       // Metadata and tags come from one SQL statement, so this is an
       // authoritative point-in-time projection even if another admin mutates
       // the image immediately before or after the snapshot.
-      const projected = (await publicImagesWithTags(
+      const projected = (await adminImagesWithTags(
         result.rows as ImageRecordWithTags[]
       ))
         .map(batchEditableImageSnapshotView);

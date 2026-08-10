@@ -32,8 +32,8 @@ export const adminRoutePreloadPolicies = {
   vocabulary: immediateRoutePreload,
   account: immediateRoutePreload,
   site: immediateRoutePreload,
-  // v4.7.4 产物约 432 KiB / 139 KiB gzip；短暂划过不应下载编辑器，
-  // 150 ms 停留仍能在明确导航意图下覆盖本地约 32 ms 的传输成本。
+  // 高级配置编辑器明显大于其他后台页；短暂划过不下载，150 ms 停留仍能
+  // 在明确导航意图下提前获取模块。
   advancedConfig: { hover: "dwell", delayMs: 150 },
   storage: immediateRoutePreload,
   users: immediateRoutePreload,

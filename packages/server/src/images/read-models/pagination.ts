@@ -1,9 +1,9 @@
 import { queryForPublicRead } from "../../core/public-query-gateway.ts";
 import { decodeImageCursor, encodeImageCursor } from "../cursor.ts";
 import {
+  adminImages,
   imagePresentationColumns,
   publicImageCards,
-  publicImages,
   type ImageRecord,
   type PublicImageCardRecord
 } from "../presenter.ts";
@@ -75,7 +75,7 @@ export async function fetchAdminImagePage(
     imagePresentationColumns
   );
   const rows = page.rows as Array<ImageRecord & { cursor_image_time: string }>;
-  const items = await publicImages(rows);
+  const items = await adminImages(rows);
   return { rows, items, nextCursor: page.nextCursor };
 }
 

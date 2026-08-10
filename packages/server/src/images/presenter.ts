@@ -10,7 +10,10 @@ import {
   type ImportSessionHandleDto,
   type PublicImageDetailDto
 } from "@imageshow/shared/browser";
-import { publicImageUrls } from "../storage/public-urls.ts";
+import {
+  publicImageUrlsForDelivery,
+  type ThumbnailUrlDelivery
+} from "../storage/public-urls.ts";
 import { getTagsForImages } from "../tags/query.ts";
 import { hasDistinctOriginalUrl } from "./original-link.ts";
 
@@ -165,9 +168,16 @@ export function importSessionResponse(
   };
 }
 
-async function publicUrlsForRow(row: PublicImageUrlRecord) {
+async function publicUrlsForRow(
+  row: PublicImageUrlRecord,
+  thumbnailDelivery: ThumbnailUrlDelivery = "application"
+) {
   const storageSlug = row.storage_slug;
-  const urls = await publicImageUrls(row.object_key, storageSlug);
+  const urls = await publicImageUrlsForDelivery(
+    row.object_key,
+    storageSlug,
+    thumbnailDelivery
+  );
   return { storageSlug, urls };
 }
 
@@ -177,14 +187,18 @@ function serializeTimestamp(value: string | Date | null | undefined) {
 }
 
 export async function importCommitImage(row: ImageRecord) {
-  return adminImageView(await publicImage(row));
+  return adminImageView(await presentedImage(row, undefined, "direct"));
 }
 
-async function publicImage(
+async function presentedImage(
   row: ImageRecord,
-  tags?: string[]
+  tags?: string[],
+  thumbnailDelivery: ThumbnailUrlDelivery = "application"
 ): Promise<PublicImage> {
-  const { storageSlug, urls } = await publicUrlsForRow(row);
+  const { storageSlug, urls } = await publicUrlsForRow(
+    row,
+    thumbnailDelivery
+  );
   const original = row.original ?? "";
   const hasDistinctOriginal = hasDistinctOriginalUrl(original, urls.object_url);
 
@@ -217,13 +231,21 @@ async function publicImage(
   };
 }
 
-export async function publicImages(rows: ImageRecord[]) {
+export async function adminImages(rows: ImageRecord[]) {
   const tagMap = await getTagsForImages(rows.map((row) => row.id));
-  return Promise.all(rows.map((row) => publicImage(row, tagMap.get(row.id) ?? [])));
+  return Promise.all(rows.map((row) => presentedImage(
+    row,
+    tagMap.get(row.id) ?? [],
+    "direct"
+  )));
 }
 
-export function publicImagesWithTags(rows: ImageRecordWithTags[]) {
-  return Promise.all(rows.map((row) => publicImage(row, row.tags)));
+export function adminImagesWithTags(rows: ImageRecordWithTags[]) {
+  return Promise.all(rows.map((row) => presentedImage(
+    row,
+    row.tags,
+    "direct"
+  )));
 }
 
 export async function publicImageDetail(
@@ -279,8 +301,9 @@ export type AdminImage = Omit<PublicImage, "ext">;
 export function adminImageView(image: PublicImage): AdminImage {
   const { ext: _ext, ...rest } = image;
   if (image.status !== "deleted") return rest;
+  const { thumb_fallback_url: _thumbFallbackUrl, ...deletedRest } = rest;
   return {
-    ...rest,
+    ...deletedRest,
     object_url: `${adminApiBasePath}/images/${image.id}/raw`,
     thumb_url: `${adminApiBasePath}/images/${image.id}/thumb`
   };
@@ -297,6 +320,7 @@ export function adminImageDetailView(
     theme: image.theme,
     author: image.author,
     thumb_url: image.thumb_url,
+    thumb_fallback_url: image.thumb_fallback_url,
     width: image.width,
     height: image.height,
     tags: image.tags,
@@ -327,6 +351,7 @@ export function batchEditableImageSnapshotView(
     author: image.author,
     tags: image.tags,
     thumb_url: image.thumb_url,
+    thumb_fallback_url: image.thumb_fallback_url,
     object_url: image.object_url,
     width: image.width,
     height: image.height,

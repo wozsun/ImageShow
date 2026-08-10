@@ -4,8 +4,8 @@ import { pool } from "../../core/database-pools.ts";
 import { getReadyImageCacheAdminStatus } from "../ready-cache/admin-status.ts";
 import {
   adminImageDetailView,
+  adminImagesWithTags,
   imageDetailPresentationColumnsWithTags,
-  publicImagesWithTags,
   type ImageRecordWithTags
 } from "../presenter.ts";
 
@@ -65,7 +65,7 @@ async function buildOverviewStats(
   ]);
 
   const row = statsResult.rows[0];
-  const recent = (await publicImagesWithTags(
+  const recent = (await adminImagesWithTags(
     recentResult.rows as ImageRecordWithTags[]
   ))
     .map(adminImageDetailView);

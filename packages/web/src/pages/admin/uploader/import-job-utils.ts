@@ -203,6 +203,7 @@ export function retryPrepareJob(job: ImportJob): ImportJob {
     failureStage: undefined,
     commitFailureCheckpoint: undefined,
     message: "等待重试",
+    previewFallback: undefined,
     transferProgress: undefined,
     md5: undefined,
     preparedOrder: undefined,

@@ -6,14 +6,14 @@ Compose，并各自只运行一个单机单容器。升级时停止对应容器�
 同库第二实例，并在 lock session 丢失时安全退出；它没有 fencing token、跨实例缓存失效
 或 writer 接管能力，只是误部署保护。只有未来部署前提真实改变时，才重新评估以下事项。
 
-## v4 主动移除的旧能力
+## 当前单实例假设
 
-- 不恢复旧随机缓存的 generation 键、独立候选池及其 publish / sync / lifecycle 链路。
-  统一 ready-image 读模型已经成为画廊、后台就绪列表和随机查询的唯一 Redis 投影。
-- 不恢复分布式重建锁、续租心跳、跨进程 rebuild spool 或旧 writer 接管分支。当前重建
-  coordinator 与读写栅栏只负责单个应用进程，升级会先停止该进程。
-- 不为当前拓扑加入 outbox、logical decoding、Pub/Sub 协调或实例观察 revision。若未来
-  需要多实例，必须作为完整一致性协议重新设计，不能把这些旧分支逐项加回。
+- 统一 ready-image 读模型是画廊、后台就绪列表和随机查询的唯一 Redis 图片投影；没有
+  第二套 generation 候选池或跨进程发布协议。
+- 重建 coordinator 与读写栅栏只负责当前应用进程，没有分布式重建租约、fencing token
+  或 writer 接管能力。
+- 当前拓扑没有 outbox、logical decoding、Pub/Sub 失效广播或跨实例 revision 观察者。
+  如果部署前提改变，必须把这些能力作为完整一致性协议一起设计。
 
 ## 图片缓存一致性
 

@@ -4,7 +4,10 @@ import type {
   BatchImageUpdateResponseDto
 } from "@imageshow/shared/browser";
 import { useAsyncActionStatus } from "../../../hooks/useAsyncActionStatus.js";
-import { api } from "../../../lib/api/client.js";
+import {
+  api,
+  isApiClientError
+} from "../../../lib/api/client.js";
 import { readEditableImageSnapshots } from "../../../lib/api/image-edit.js";
 import { adminApiBasePath } from "../../../lib/constants.js";
 import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
@@ -28,6 +31,24 @@ function reportBatchUpdateFailures(response: BatchImageUpdateResponseDto) {
   );
 }
 
+const snapshotRetryDelaysMs = [500, 1_250, 2_500] as const;
+
+function retryableImageSnapshotError(error: unknown) {
+  if (isApiClientError(error)) {
+    return error.code === "redis_unavailable"
+      || error.status === 502
+      || error.status === 503
+      || error.status === 504;
+  }
+  return error instanceof TypeError;
+}
+
+function waitForSnapshotRetry(delayMs: number) {
+  return new Promise<void>((resolve) => {
+    globalThis.setTimeout(resolve, delayMs);
+  });
+}
+
 export function useBatchMetadataOperations({
   initialIds,
   onSaved
@@ -44,13 +65,22 @@ export function useBatchMetadataOperations({
   const saveStatus = useAsyncActionStatus({ successDurationMs: null });
 
   const readAuthoritativeSnapshot = async () => {
-    try {
-      const snapshot = await readEditableImageSnapshots(initialIds);
-      return snapshot.items;
-    } catch (error) {
-      reportAdminUiError("image_metadata.batch_snapshot", error);
-      return null;
+    let lastError: unknown;
+    for (let attempt = 0; attempt <= snapshotRetryDelaysMs.length; attempt += 1) {
+      try {
+        const snapshot = await readEditableImageSnapshots(initialIds);
+        return snapshot.items;
+      } catch (error) {
+        lastError = error;
+        const retryDelay = snapshotRetryDelaysMs[attempt];
+        if (retryDelay === undefined || !retryableImageSnapshotError(error)) {
+          break;
+        }
+        await waitForSnapshotRetry(retryDelay);
+      }
     }
+    reportAdminUiError("image_metadata.batch_snapshot", lastError);
+    return null;
   };
 
   const finishAttempt = async (
@@ -108,9 +138,13 @@ export function useBatchMetadataOperations({
       }
 
       outcome = await finishAttempt(attempt, !retryAttempt);
-      return !outcome.report.snapshotFailed
-        && outcome.report.failed === 0
-        && outcome.report.unavailableIds.length === 0;
+      // A failed authoritative reread is a recoverable pending confirmation,
+      // not a second failed save. The next click only rereads the snapshot.
+      return outcome.report.snapshotFailed
+        || (
+          outcome.report.failed === 0
+          && outcome.report.unavailableIds.length === 0
+        );
     });
     return outcome ?? null;
   };

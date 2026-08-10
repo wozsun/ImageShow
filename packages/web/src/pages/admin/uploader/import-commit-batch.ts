@@ -40,6 +40,7 @@ function completedImport(
       commitFailureCheckpoint: undefined,
       message: importedMessage,
       preview: result.item.thumb_url,
+      previewFallback: result.item.thumb_fallback_url,
       previewFull: result.item.object_url
     },
     item: result.item

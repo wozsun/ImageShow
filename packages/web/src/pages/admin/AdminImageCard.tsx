@@ -117,7 +117,11 @@ export function AdminImageCard({
         }}
       >
         <span className="admin-image-card-thumb">
-          <ThumbImage src={item.thumb_url} alt="" />
+          <ThumbImage
+            src={item.thumb_url}
+            fallbackSrc={item.thumb_fallback_url}
+            alt=""
+          />
         </span>
         <span className="admin-image-card-main">
           <strong title={title}>{title}</strong>

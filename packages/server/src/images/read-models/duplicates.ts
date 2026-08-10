@@ -1,15 +1,15 @@
 import { coalesce } from "../../core/coalesce.ts";
 import { pool } from "../../core/database-pools.ts";
 import {
+  adminImages,
   adminImageView,
   imagePresentationColumns,
-  publicImages,
   type ImageRecord
 } from "../presenter.ts";
 
 export function getDuplicateImagesByMd5(md5: string) {
   return coalesce(`md5:${md5}`, async () => {
-    const rows = await publicImages((await pool.query(
+    const rows = await adminImages((await pool.query(
       `SELECT ${imagePresentationColumns}
          FROM metadata
         WHERE md5=$1

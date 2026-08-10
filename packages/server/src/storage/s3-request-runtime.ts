@@ -1,3 +1,4 @@
+import type { Socket } from "node:net";
 import type { Readable } from "node:stream";
 import { ApiError } from "../core/api-error.ts";
 import type { StorageRequestOptions } from "./driver.ts";
@@ -7,8 +8,8 @@ type S3RequestRuntimeOptions = {
   taskTimeoutMs: number;
 };
 
-type TimeoutReadable = Readable & {
-  setTimeout?: (milliseconds: number, callback?: () => void) => unknown;
+type SocketReadable = Readable & {
+  socket?: Socket | null;
 };
 
 function checkedTimeout(value: number, name: string) {
@@ -141,7 +142,7 @@ export class S3RequestRuntime {
     taskController: AbortController,
     taskTimer: ReturnType<typeof setTimeout>
   ) {
-    const timedBody = body as TimeoutReadable;
+    const responseSocket = (body as SocketReadable).socket;
     let cleaned = false;
     let fallbackIdleTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -155,7 +156,10 @@ export class S3RequestRuntime {
       body.off("end", cleanup);
       body.off("error", cleanup);
       body.off("close", cleanup);
-      timedBody.setTimeout?.(0);
+      if (responseSocket) {
+        responseSocket.off("timeout", onIdleTimeout);
+        responseSocket.setTimeout(0);
+      }
     };
     const destroyWithTimeout = (kind: "idle" | "task") => {
       const error = storageTimeout(kind);
@@ -169,6 +173,7 @@ export class S3RequestRuntime {
         this.idleTimeoutMs
       );
     };
+    const onIdleTimeout = () => destroyWithTimeout("idle");
     const onAbort = () => {
       const reason = abortReason(signal, new Error("S3 request aborted"));
       body.destroy(reason instanceof Error ? reason : new Error(String(reason)));
@@ -178,11 +183,9 @@ export class S3RequestRuntime {
     body.once("error", cleanup);
     body.once("close", cleanup);
     signal.addEventListener("abort", onAbort, { once: true });
-    if (timedBody.setTimeout) {
-      timedBody.setTimeout(
-        this.idleTimeoutMs,
-        () => destroyWithTimeout("idle")
-      );
+    if (responseSocket) {
+      responseSocket.on("timeout", onIdleTimeout);
+      responseSocket.setTimeout(this.idleTimeoutMs);
     } else {
       body.on("readable", resetFallbackIdleTimer);
       resetFallbackIdleTimer();

@@ -197,7 +197,11 @@ export function Overview({ canManageStorage }: { canManageStorage: boolean }) {
                       void detailCapability.open(img, event.currentTarget);
                     }}
                   >
-                    <ThumbImage src={img.thumb_url} alt="" />
+                    <ThumbImage
+                      src={img.thumb_url}
+                      fallbackSrc={img.thumb_fallback_url}
+                      alt=""
+                    />
                   </button>
                 ))}
               </div>

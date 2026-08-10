@@ -64,6 +64,7 @@ export function applyPreparedResult(queue: ImportQueueApi, jobId: string, attemp
   const draft = draftWithDetectedClassification(current.draft, detected);
   queue.updateJob(jobId, {
     preview: prepared.preview_url,
+    previewFallback: undefined,
     previewFull: prepared.preview_full_url,
     objectUrl: undefined,
     width: prepared.width,

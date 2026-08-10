@@ -39,6 +39,10 @@
 }
 .batch-edit-common-panel { flex: 0 0 auto; }
 .batch-edit-save-summary { padding: 10px; border-radius: 6px; }
+.batch-edit-confirmation-pending {
+  margin-top: 6px;
+  color: var(--admin-color-warning-text-strong);
+}
 .batch-edit-delete-error {
   margin: 0;
   padding: 9px 10px;
@@ -107,15 +111,46 @@
 .batch-edit-row > .image-fields { grid-area: fields; margin-top: 6px; }
 
 .batch-edit-row.is-changed { background: var(--admin-color-control-changed-surface); }
+.batch-edit-row.is-save-saved {
+  border-color: var(--admin-color-success-border-strong);
+  background: var(--admin-color-success-surface-subtle);
+}
+.batch-edit-row.is-save-pending {
+  border-color: var(--admin-color-warning-border-soft);
+  background: var(--admin-color-warning-surface-subtle);
+}
+.batch-edit-row.is-save-failed {
+  border-color: var(--admin-color-danger-border-strong);
+  background: var(--admin-color-danger-surface);
+}
 .batch-edit-head-name { min-width: 0; display: flex; align-items: center; gap: 8px; }
-.batch-edit-head .changed-badge {
+.batch-edit-head .changed-badge,
+.batch-edit-head .batch-edit-save-badge {
   flex: 0 0 auto;
   padding: 1px 8px;
   border-radius: 999px;
   font-size: 12px;
+  font-weight: 600;
+}
+.batch-edit-head .changed-badge {
   color: var(--admin-color-warning-text-strong);
   background: var(--admin-color-warning-surface-emphasis);
   border: 1px solid var(--admin-color-warning-border-strong);
+}
+.batch-edit-head .batch-edit-save-badge.is-saved {
+  color: var(--admin-color-success-text-emphasis);
+  background: var(--admin-color-success-surface-subtle);
+  border: 1px solid var(--admin-color-success-border-strong);
+}
+.batch-edit-head .batch-edit-save-badge.is-pending {
+  color: var(--admin-color-warning-text-soft);
+  background: var(--admin-color-warning-surface-subtle);
+  border: 1px solid var(--admin-color-warning-border-soft);
+}
+.batch-edit-head .batch-edit-save-badge.is-failed {
+  color: var(--admin-color-danger-text);
+  background: var(--admin-color-danger-surface);
+  border: 1px solid var(--admin-color-danger-border-strong);
 }
 
 @media (max-width: 760px) {

@@ -237,6 +237,7 @@ export function useLocalUploadImport(options: {
     const next = {
       ...retryPrepareJob(job),
       preview: objectUrl,
+      previewFallback: undefined,
       previewFull: undefined,
       objectUrl,
       width: job.originalWidth ?? job.width,

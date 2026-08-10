@@ -9,14 +9,18 @@ const RETRY_DELAY_MS = 600;
 
 type ThumbLoadState = {
   requestedSrc: string;
+  requestedFallbackSrc: string;
+  loadingSrc: string;
   visibleSrc: string;
   attempt: number;
   status: "loading" | "ready" | "failed";
 };
 
-function initialLoadState(src: string): ThumbLoadState {
+function initialLoadState(src: string, fallbackSrc: string): ThumbLoadState {
   return {
     requestedSrc: src,
+    requestedFallbackSrc: fallbackSrc,
+    loadingSrc: src,
     visibleSrc: "",
     attempt: 0,
     status: src ? "loading" : "ready"
@@ -27,17 +31,19 @@ export function ThumbImage({
   src,
   alt = "",
   className = "",
-  retainLoadedWhenEmpty = false
+  retainLoadedWhenEmpty = false,
+  fallbackSrc = ""
 }: {
   src: string;
   alt?: string;
   className?: string;
   retainLoadedWhenEmpty?: boolean;
+  fallbackSrc?: string;
 }) {
   const pendingImageRef = useRef<HTMLImageElement | null>(null);
   const timer = useRef<number | undefined>(undefined);
   const [state, setState] = useState<ThumbLoadState>(
-    () => initialLoadState(src)
+    () => initialLoadState(src, fallbackSrc)
   );
 
   useLayoutEffect(() => {
@@ -49,28 +55,36 @@ export function ThumbImage({
             : {
                 ...current,
                 requestedSrc: "",
+                requestedFallbackSrc: "",
+                loadingSrc: "",
                 attempt: 0,
                 status: "ready"
               };
         }
         return current.requestedSrc === "" && !current.visibleSrc
           ? current
-          : initialLoadState("");
+          : initialLoadState("", "");
       }
-      if (current.requestedSrc === src) return current;
+      if (
+        current.requestedSrc === src
+        && current.requestedFallbackSrc === fallbackSrc
+      ) return current;
       return {
         requestedSrc: src,
+        requestedFallbackSrc: fallbackSrc,
+        loadingSrc: src,
         visibleSrc: current.visibleSrc,
         attempt: 0,
         status: current.visibleSrc === src ? "ready" : "loading"
       };
     });
-  }, [retainLoadedWhenEmpty, src]);
+  }, [fallbackSrc, retainLoadedWhenEmpty, src]);
 
   const shouldLoad = Boolean(
-    src
+    state.loadingSrc
     && state.requestedSrc === src
-    && state.requestedSrc !== state.visibleSrc
+    && state.requestedFallbackSrc === fallbackSrc
+    && state.loadingSrc !== state.visibleSrc
     && state.status === "loading"
   );
 
@@ -81,12 +95,12 @@ export function ThumbImage({
 
     const image = pendingImageRef.current;
     if (!image) return;
-    const requestedSrc = state.requestedSrc;
+    const loadingSrc = state.loadingSrc;
     const attempt = state.attempt;
     const controller = new AbortController();
     const resolvedSrc = attempt === 0
-      ? requestedSrc
-      : `${requestedSrc}${requestedSrc.includes("?") ? "&" : "?"}retry=${attempt}`;
+      ? loadingSrc
+      : `${loadingSrc}${loadingSrc.includes("?") ? "&" : "?"}retry=${attempt}`;
 
     void loadImageElement(
       image,
@@ -95,10 +109,10 @@ export function ThumbImage({
     ).then(
       () => {
         setState((current) => (
-          current.requestedSrc === requestedSrc && current.attempt === attempt
+          current.loadingSrc === loadingSrc && current.attempt === attempt
             ? {
                 ...current,
-                visibleSrc: requestedSrc,
+                visibleSrc: loadingSrc,
                 status: "ready"
               }
             : current
@@ -106,9 +120,26 @@ export function ThumbImage({
       },
       () => {
         if (controller.signal.aborted) return;
+        if (
+          loadingSrc === state.requestedSrc
+          && state.requestedFallbackSrc
+          && state.requestedFallbackSrc !== loadingSrc
+        ) {
+          setState((current) => (
+            current.loadingSrc === loadingSrc && current.attempt === attempt
+              ? {
+                  ...current,
+                  loadingSrc: current.requestedFallbackSrc,
+                  attempt: 0,
+                  status: "loading"
+                }
+              : current
+          ));
+          return;
+        }
         if (attempt >= MAX_RETRIES) {
           setState((current) => (
-            current.requestedSrc === requestedSrc && current.attempt === attempt
+            current.loadingSrc === loadingSrc && current.attempt === attempt
               ? { ...current, status: "failed" }
               : current
           ));
@@ -116,7 +147,7 @@ export function ThumbImage({
         }
         timer.current = window.setTimeout(() => {
           setState((current) => (
-            current.requestedSrc === requestedSrc && current.attempt === attempt
+            current.loadingSrc === loadingSrc && current.attempt === attempt
               ? { ...current, attempt: attempt + 1 }
               : current
           ));
@@ -129,7 +160,13 @@ export function ThumbImage({
       window.clearTimeout(timer.current);
       timer.current = undefined;
     };
-  }, [shouldLoad, state.attempt, state.requestedSrc]);
+  }, [
+    shouldLoad,
+    state.attempt,
+    state.loadingSrc,
+    state.requestedFallbackSrc,
+    state.requestedSrc
+  ]);
 
   if (state.status === "failed" && !state.visibleSrc) {
     return (
@@ -143,7 +180,7 @@ export function ThumbImage({
   // 始终保留，避免地址切换期间出现空白帧。
   const layerSources = [
     state.visibleSrc,
-    shouldLoad ? state.requestedSrc : ""
+    shouldLoad ? state.loadingSrc : ""
   ].filter(Boolean);
 
   return (

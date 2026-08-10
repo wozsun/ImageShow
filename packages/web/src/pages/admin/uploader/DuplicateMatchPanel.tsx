@@ -57,7 +57,11 @@ export function DuplicateMatchPanel({
               className="duplicate-item"
               onClick={(event) => onOpenDetail(item, event.currentTarget)}
             >
-              <ImageThumbnail src={item.thumb_url} size="small" />
+              <ImageThumbnail
+                src={item.thumb_url}
+                fallbackSrc={item.thumb_fallback_url}
+                size="small"
+              />
               <span>{imageDisplayTitle(item)}</span>
               <small>{formatImageClassification(item)}</small>
             </button>
@@ -76,7 +80,13 @@ export function DuplicateMatchPanel({
               })}
             >
               {queuePreview
-                ? <ImageThumbnail src={queuePreview} size="small" />
+                ? (
+                    <ImageThumbnail
+                      src={queuePreview}
+                      fallbackSrc={queueDuplicate.previewFallback}
+                      size="small"
+                    />
+                  )
                 : <span className="image-thumbnail is-small" aria-hidden="true" />}
               <span className="duplicate-item-source" title={queueSource}>
                 {queueSource}

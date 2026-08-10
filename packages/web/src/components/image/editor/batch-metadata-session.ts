@@ -27,9 +27,16 @@ export type BatchMetadataSaveAttempt = {
 };
 
 export type BatchMetadataSaveReport = BatchImageUpdateResponseDto & {
+  responseReceived: boolean;
   snapshotFailed: boolean;
   unavailableIds: string[];
 };
+
+export type BatchMetadataCardSaveState =
+  | "saved"
+  | "failed"
+  | "pending"
+  | null;
 
 export type BatchMetadataSaveOutcome = {
   attempt: BatchMetadataSaveAttempt;
@@ -183,6 +190,7 @@ export function createBatchMetadataSaveReport(
   const authoritativeById = new Map(
     (authoritativeItems ?? []).map((item) => [item.id, item])
   );
+  const responseReceived = attempt.response !== null;
   let response = attempt.response;
   if (!response) {
     const results: BatchImageUpdateItemResultDto[] = attempt.items.map((update) => {
@@ -205,11 +213,34 @@ export function createBatchMetadataSaveReport(
   }
   return {
     ...response,
+    responseReceived,
     snapshotFailed: authoritativeItems === null,
     unavailableIds: authoritativeItems === null
       ? []
       : attempt.activeIds.filter((id) => !authoritativeById.has(id))
   };
+}
+
+/**
+ * Projects the last save attempt onto one editor card. A successful mutation
+ * whose authoritative reread is unavailable is deliberately not called
+ * successful yet: the retained draft can be reconciled without resubmitting.
+ */
+export function batchMetadataCardSaveState(
+  report: BatchMetadataSaveReport | null,
+  imageId: string
+): BatchMetadataCardSaveState {
+  if (!report) return null;
+  if (report.unavailableIds.includes(imageId)) return "failed";
+  const result = report.results.find((candidate) => candidate.id === imageId);
+  if (!result) return null;
+  if (report.snapshotFailed) {
+    return report.responseReceived && result.status === "failed"
+      ? "failed"
+      : "pending";
+  }
+  if (result.status === "failed") return "failed";
+  return "saved";
 }
 
 export function reconcileBatchMetadataSession(

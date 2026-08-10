@@ -104,6 +104,7 @@ export const ImportJobCard = memo(function ImportJobCard({
         <div className="import-job-preview">
           <ImageThumbnail
             src={previewSrc}
+            fallbackSrc={job.previewFallback}
             className="import-job-thumbnail"
             onClick={openPreview}
             showLoadingIndicator
