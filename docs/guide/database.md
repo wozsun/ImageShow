@@ -24,7 +24,7 @@ additions 只保存一个发布周期的安全增量。版本 N 新增经审查�
 占位文件及稳定的启动、构建入口。该模型不支持跳过 N 直接部署 N+1；恢复早于 N 的数据库
 备份时，也必须先运行 N 或人工执行同一份经审查 SQL。
 
-当前 `v4.8.14` 的 additions 没有待执行 SQL，只保留过渡规则注释。
+当前 `v4.8.15` 的 additions 没有待执行 SQL，只保留过渡规则注释。
 `metadata.purge_error TEXT`、`admin_account.preferences JSONB NOT NULL DEFAULT '{}'` 与
 `theme.none` 已在 `schema.sql` 形成基线，并已由全部受控生产数据库在上一版本完成确认。
 后续 additions 仍只保存当期真实增量：不补业务表、外键、CHECK，不删除或重命名对象，
@@ -40,6 +40,17 @@ readiness 不复制 `schema.sql` 的可空性、默认值、PK / FK / CHECK、�
 旧版本号或旧结构形状。额外表、额外列、额外索引以及更宽的 CHECK 不影响启动，只要当前
 代码不读写它们。当前封版结构不含 `metadata.extra`、`background_job.result`，存储与后台
 任务 CHECK 也只允许当前值；应用不再携带旧结构识别、清理或版本分支。
+
+## 运行期连接与公开回源
+
+单实例使用上限 30 的主查询池和上限 30 的 advisory lock 池。Redis 图片投影不可读时，
+公开只读路径通过主池内一个 FIFO 回源门访问 PostgreSQL：最多 12 个活动 client、64 个
+等待者，等待 1.5 秒或执行 7.5 秒即失败。这个预算不作用于管理事务和 Worker，因此主池
+仍为二者保留独立余量。调用点为一次公开读取建立显式惰性 reader scope；只有首个缓存 miss
+真正执行 SQL 时才借 client，同一请求后续多条查询都复用它并在读阶段结束时统一释放。
+不存在 AsyncLocalStorage 查询上下文、按查询类别调度或额外的数据库后端取消连接。请求取消、
+执行超时和连接错误都会正常释放或直接淘汰 client；Redis 恢复并重新通过能力与投影校验后，
+公开读取自动回到 Redis-first。
 
 ## metadata —— 图片主表
 

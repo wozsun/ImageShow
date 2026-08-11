@@ -1,6 +1,6 @@
 import { appConfig } from "@imageshow/shared";
 import { randomUuidV7At } from "../core/uuid.ts";
-import { queryForPublicRead } from "../core/public-query-gateway.ts";
+import type { DatabaseReader } from "../core/database-pools.ts";
 import type { ImageFilterPlan } from "../images/filter-plan.ts";
 import { buildImageFilterSql } from "../images/read-models/image-filter-sql.ts";
 import {
@@ -54,13 +54,14 @@ async function readCandidates(
   pivot: string,
   comparison: ">=" | "<",
   limit: number,
+  reader: DatabaseReader,
   signal?: AbortSignal
 ) {
   signal?.throwIfAborted();
   const clause = filterClause(plan);
   const pivotParameter = bind(clause.params, pivot);
   const limitParameter = bind(clause.params, limit);
-  const rows = (await queryForPublicRead(
+  const rows = (await reader.query(
     `SELECT ${readyImageSourceColumns}
        FROM metadata m
       WHERE ${clause.sql}
@@ -77,11 +78,12 @@ export async function sampleReadyImagesFromPostgres(
   plan: ImageFilterPlan,
   limit: number,
   recent: ReadonlySet<string>,
+  reader: DatabaseReader,
   signal?: AbortSignal
 ) {
   signal?.throwIfAborted();
   const clause = filterClause(plan);
-  const bounds = (await queryForPublicRead<{
+  const bounds = (await reader.query<{
     min_id: string | null;
     max_id: string | null;
   }>(
@@ -120,6 +122,7 @@ export async function sampleReadyImagesFromPostgres(
     pivot,
     ">=",
     candidateLimit,
+    reader,
     signal
   );
   const wrapped = forward.length < candidateLimit
@@ -128,6 +131,7 @@ export async function sampleReadyImagesFromPostgres(
         pivot,
         "<",
         candidateLimit - forward.length,
+        reader,
         signal
       )
     : [];

@@ -2,6 +2,8 @@ import pg, { type PoolClient } from "pg";
 import { appConfig } from "@imageshow/shared";
 import { logger } from "./logger.ts";
 
+export type DatabaseReader = Pick<PoolClient, "query">;
+
 export type DatabaseConnectionConfig = Readonly<{
   host: string;
   port: number;
@@ -14,7 +16,6 @@ let configuredConnection: DatabaseConnectionConfig | null = null;
 
 export let pool: pg.Pool;
 let advisoryLockPool: pg.Pool | null = null;
-let cancellationPool: pg.Pool | null = null;
 
 function sameConnection(
   left: DatabaseConnectionConfig,
@@ -32,13 +33,6 @@ function requireAdvisoryLockPool() {
     throw new Error("PostgreSQL pools have not been configured");
   }
   return advisoryLockPool;
-}
-
-function requireCancellationPool() {
-  if (!cancellationPool) {
-    throw new Error("PostgreSQL pools have not been configured");
-  }
-  return cancellationPool;
 }
 
 export function configureDatabasePools(
@@ -71,60 +65,23 @@ export function configureDatabasePools(
     application_name: "imageshow-advisory-locks",
     allowExitOnIdle: true
   });
-  const nextCancellationPool = new pg.Pool({
-    ...nextPoolConfig,
-    application_name: "imageshow-query-cancellation",
-    max: 2,
-    connectionTimeoutMillis: 1_000,
-    query_timeout: 1_500,
-    statement_timeout: 1_000,
-    allowExitOnIdle: true
-  });
-
   nextPool.on("error", (error) => {
     logger.error("idle PostgreSQL client error", error);
   });
   nextAdvisoryLockPool.on("error", (error) => {
     logger.error("idle PostgreSQL advisory-lock client error", error);
   });
-  nextCancellationPool.on("error", (error) => {
-    logger.error("idle PostgreSQL cancellation client error", error);
-  });
-
   configuredConnection = Object.freeze({ ...databaseConfig });
   pool = nextPool;
   advisoryLockPool = nextAdvisoryLockPool;
-  cancellationPool = nextCancellationPool;
 }
 
 export function connectAdvisoryLockClient(): Promise<PoolClient> {
   return requireAdvisoryLockPool().connect();
 }
 
-export async function requestDatabaseBackendCancellation(
-  processId: number,
-  terminate = false
-) {
-  const functionName = terminate ? "pg_terminate_backend" : "pg_cancel_backend";
-  return (await requireCancellationPool().query<{ accepted: boolean }>(
-    `SELECT ${functionName}($1) AS accepted`,
-    [processId]
-  )).rows[0]?.accepted === true;
-}
-
-export async function databaseBackendQueryIsActive(processId: number) {
-  return (await requireCancellationPool().query<{ active: boolean }>(
-    `SELECT EXISTS (
-       SELECT 1
-         FROM pg_stat_activity
-        WHERE pid=$1 AND state='active'
-     ) AS active`,
-    [processId]
-  )).rows[0]?.active === true;
-}
-
 export async function closeDatabasePools() {
-  const pools = [pool, advisoryLockPool, cancellationPool].filter(
+  const pools = [pool, advisoryLockPool].filter(
     (candidate): candidate is pg.Pool => candidate !== undefined
       && candidate !== null
   );

@@ -1,11 +1,13 @@
 import { appConfig } from "@imageshow/shared";
 import { ApiError, errorMessage } from "../core/api-error.ts";
 import {
-  coalescePublicRead,
   publicPgFallbackWorkLimitExceeded,
-  publicReadUsesFallbackAdmission,
-  queryForPublicRead
-} from "../core/public-query-gateway.ts";
+  type PublicDatabaseReadAccess
+} from "../core/public-db-fallback.ts";
+import {
+  pool,
+  type DatabaseReader
+} from "../core/database-pools.ts";
 import { logger } from "../core/logger.ts";
 import {
   missingS3Fields,
@@ -95,10 +97,12 @@ function storageDriverForConfig(config: StorageConfig) {
   return driver;
 }
 
-async function loadStorageBackends(): Promise<StorageBackendRecord[]> {
+async function loadStorageBackends(
+  reader: DatabaseReader = pool,
+  bounded = false
+): Promise<StorageBackendRecord[]> {
   const maximumRows = appConfig.publicPgFallback.maximumStorageBackendRows;
-  const publicFallback = publicReadUsesFallbackAdmission();
-  const rows = (await queryForPublicRead<StorageBackendConfigRow & {
+  const rows = (await reader.query<StorageBackendConfigRow & {
     display_name: string;
     enabled: boolean;
     is_default: boolean;
@@ -107,10 +111,10 @@ async function loadStorageBackends(): Promise<StorageBackendRecord[]> {
             namespace_identities
        FROM storage_backend
       ORDER BY (slug = 'local') DESC, sort_order ASC, slug ASC
-      ${publicFallback ? "LIMIT $1" : ""}`,
-    publicFallback ? [maximumRows + 1] : undefined
+      ${bounded ? "LIMIT $1" : ""}`,
+    bounded ? [maximumRows + 1] : undefined
   )).rows;
-  if (publicFallback && rows.length > maximumRows) {
+  if (bounded && rows.length > maximumRows) {
     throw publicPgFallbackWorkLimitExceeded(
       "Storage backend registry exceeds the public result limit"
     );
@@ -118,13 +122,11 @@ async function loadStorageBackends(): Promise<StorageBackendRecord[]> {
   return rows.map((row) => storageBackendRecordFromRow(row));
 }
 
-function loadStorageBackendsForRevision(revision: number) {
-  if (publicReadUsesFallbackAdmission()) {
-    return coalescePublicRead(
-      `storage-backends:${revision}`,
-      loadStorageBackends
-    );
-  }
+function loadStorageBackendsForRevision(
+  revision: number,
+  access: PublicDatabaseReadAccess
+) {
+  if (access.reader) return loadStorageBackends(access.reader, true);
   if (!storageLoad || storageLoad.revision !== revision) {
     storageLoad = { revision, promise: loadStorageBackends() };
   }
@@ -135,7 +137,8 @@ function loadStorageBackendsForRevision(revision: number) {
 }
 
 async function withCurrentStorageBackends<Result>(
-  select: (backends: StorageBackendRecord[]) => Result
+  select: (backends: StorageBackendRecord[]) => Result,
+  access: PublicDatabaseReadAccess = {}
 ): Promise<Result> {
   while (true) {
     assertRegistryOpen();
@@ -143,7 +146,7 @@ async function withCurrentStorageBackends<Result>(
       return select(storageCache);
     }
     const revision = registryRevision;
-    const loaded = await loadStorageBackendsForRevision(revision);
+    const loaded = await loadStorageBackendsForRevision(revision, access);
     assertRegistryOpen();
     if (revision !== registryRevision) continue;
     publishStorageBackends(loaded);
@@ -175,14 +178,19 @@ export async function closeStorageBackendRegistry() {
   await Promise.all([...closingStorageDrivers]);
 }
 
-export async function listStorageBackends(): Promise<StorageBackendRecord[]> {
-  return withCurrentStorageBackends((backends) => backends);
+export async function listStorageBackends(
+  access: PublicDatabaseReadAccess = {}
+): Promise<StorageBackendRecord[]> {
+  return withCurrentStorageBackends((backends) => backends, access);
 }
 
-export async function getStorageBackend(slug: string): Promise<StorageConfig> {
+export async function getStorageBackend(
+  slug: string,
+  access: PublicDatabaseReadAccess = {}
+): Promise<StorageConfig> {
   return withCurrentStorageBackends((backends) => storageConfigFromRecord(
     storageRecordBySlug(backends, slug)
-  ));
+  ), access);
 }
 
 function storageRecordBySlug(
@@ -245,14 +253,17 @@ function defaultStorageRecord(
   return record;
 }
 
-export async function resolveStorageAccess(slug?: string) {
+export async function resolveStorageAccess(
+  slug?: string,
+  access: PublicDatabaseReadAccess = {}
+) {
   return withCurrentStorageBackends((backends) => {
     const record = slug
       ? storageRecordBySlug(backends, slug)
       : defaultStorageRecord(backends);
     const config = storageConfigFromRecord(record);
     return { config, driver: storageDriverForConfig(config) };
-  });
+  }, access);
 }
 
 export function resolveStorageAccessForConfig(config: StorageConfig) {

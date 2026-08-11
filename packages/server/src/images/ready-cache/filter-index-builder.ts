@@ -79,7 +79,8 @@ export function resolveDirectReadyImageFilterKey(plan: ImageFilterPlan) {
 export async function buildReadyImageFilterIndex(
   plan: ImageFilterPlan,
   revision: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  background = false
 ): Promise<ReadyImageFilterIndex | null> {
   signal?.throwIfAborted();
   const startingStatus = getReadyImageCacheCoordinatorStatus();
@@ -142,7 +143,12 @@ export async function buildReadyImageFilterIndex(
   );
   if (
     attributeKeys.length
-    && !await ensureReadyImageAttributeIndexes(attributeKeys, revision, signal)
+    && !await ensureReadyImageAttributeIndexes(
+      attributeKeys,
+      revision,
+      signal,
+      background
+    )
   ) {
     return null;
   }

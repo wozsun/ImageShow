@@ -1,4 +1,7 @@
-import { queryForPublicRead } from "../../core/public-query-gateway.ts";
+import {
+  pool,
+  type DatabaseReader
+} from "../../core/database-pools.ts";
 import { decodeImageCursor, encodeImageCursor } from "../cursor.ts";
 import {
   adminImages,
@@ -30,7 +33,8 @@ async function fetchImageRows(
   params: unknown[],
   limit: number,
   cursor: string | undefined,
-  columns: string
+  columns: string,
+  reader: DatabaseReader
 ) {
   if (cursor !== undefined) {
     const decoded = decodeImageCursor(cursor);
@@ -40,7 +44,7 @@ async function fetchImageRows(
     );
   }
   params.push(limit + 1);
-  const result = await queryForPublicRead(
+  const result = await reader.query(
     `SELECT ${columns}, image_time::text AS cursor_image_time
      FROM metadata
      WHERE ${where.join(" AND ")}
@@ -65,14 +69,16 @@ export async function fetchAdminImagePage(
   where: string[],
   params: unknown[],
   limit: number,
-  cursor?: string
+  cursor?: string,
+  reader: DatabaseReader = pool
 ) {
   const page = await fetchImageRows(
     where,
     params,
     limit,
     cursor,
-    imagePresentationColumns
+    imagePresentationColumns,
+    reader
   );
   const rows = page.rows as Array<ImageRecord & { cursor_image_time: string }>;
   const items = await adminImages(rows);
@@ -83,16 +89,18 @@ export async function fetchPublicImageCardPage(
   where: string[],
   params: unknown[],
   limit: number,
-  cursor?: string
+  cursor?: string,
+  reader: DatabaseReader = pool
 ) {
   const page = await fetchImageRows(
     where,
     params,
     limit,
     cursor,
-    publicImageCardColumns
+    publicImageCardColumns,
+    reader
   );
   const rows = page.rows as Array<PublicImageCardRecord & { cursor_image_time: string }>;
-  const items = await publicImageCards(rows);
+  const items = await publicImageCards(rows, reader);
   return { rows, items, nextCursor: page.nextCursor };
 }

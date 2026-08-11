@@ -1,4 +1,7 @@
 import { publicImageUrls } from "../storage/public-urls.ts";
+import type {
+  PublicDatabaseReadAccess
+} from "../core/public-db-fallback.ts";
 
 type OriginalComparableImage = {
   object_key: string;
@@ -18,8 +21,15 @@ function equivalentUrl(left: string, right: string) {
   }
 }
 
-export async function displayUrlForOriginalComparison(image: OriginalComparableImage) {
-  const urls = await publicImageUrls(image.object_key, image.storage_slug);
+export async function displayUrlForOriginalComparison(
+  image: OriginalComparableImage,
+  database: PublicDatabaseReadAccess = {}
+) {
+  const urls = await publicImageUrls(
+    image.object_key,
+    image.storage_slug,
+    database
+  );
   return urls.object_url;
 }
 

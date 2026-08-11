@@ -7,9 +7,10 @@ import { getRuntimeConfig } from "../../config/runtime-config-store.ts";
 import { ApiError } from "../../core/api-error.ts";
 import { coalesce } from "../../core/coalesce.ts";
 import {
-  publicReadUsesFallbackAdmission,
-  queryForPublicRead
-} from "../../core/public-query-gateway.ts";
+  withPublicDatabaseRead,
+  type PublicDatabaseReadAccess
+} from "../../core/public-db-fallback.ts";
+import { pool, type DatabaseReader } from "../../core/database-pools.ts";
 import { listQuery } from "../../core/validation.ts";
 import { resolveImageFilterPlan } from "../filter-plan.ts";
 import {
@@ -39,52 +40,80 @@ function withShuffle(
   return { ...payload, items };
 }
 
-export async function listPublicImages(
+async function listPublicImagesWithAccess(
   query: PublicListQuery,
-  signal?: AbortSignal
+  signal: AbortSignal | undefined,
+  database: PublicDatabaseReadAccess
 ): Promise<PublicImageListResponseDto> {
   const limit = query.limit ?? getRuntimeConfig().site.gallery.default_limit;
-  const plan = await resolveImageFilterPlan(query);
-  const cached = await readReadyImagePage(plan, limit, query.cursor, signal);
+  const plan = await resolveImageFilterPlan(query, database);
+  const cached = await readReadyImagePage(
+    plan,
+    limit,
+    query.cursor,
+    signal,
+    Boolean(database.reader)
+  );
   if (cached.cached) {
     return withShuffle(query, {
       items: await publicImageCardsWithTags(cached.value.items.map((item) => ({
         ...item,
         status: "ready"
-      }))),
+      })), database),
       next_cursor: cached.value.nextCursor
     });
   }
 
   const fallbackKey = JSON.stringify({ ...query, limit });
-  const load = async () => {
+  const load = async (reader: DatabaseReader) => {
     const { params, where } = buildResolvedReadyImageListFilters(plan);
     const page = await fetchPublicImageCardPage(
       where,
       params,
       limit,
-      query.cursor
+      query.cursor,
+      reader
     );
     return {
       items: page.items,
       next_cursor: page.nextCursor
     } satisfies PublicImageListResponseDto;
   };
-  const payload = publicReadUsesFallbackAdmission()
-    ? await load()
-    : await coalesce(`public-images:postgres:${fallbackKey}`, load);
+  const payload = database.reader
+    ? await load(database.reader)
+    : await coalesce(
+        `public-images:postgres:${fallbackKey}`,
+        () => load(pool)
+      );
   return withShuffle(query, payload);
 }
 
-export async function getPublicImage(id: string): Promise<PublicImageDetailDto> {
+export function listPublicImages(
+  query: PublicListQuery,
+  signal?: AbortSignal
+): Promise<PublicImageListResponseDto> {
+  return signal
+    ? withPublicDatabaseRead(signal, (database, databaseSignal) => (
+        listPublicImagesWithAccess(query, databaseSignal, database)
+      ))
+    : listPublicImagesWithAccess(query, undefined, {});
+}
+
+async function getPublicImageWithAccess(
+  id: string,
+  database: PublicDatabaseReadAccess
+): Promise<PublicImageDetailDto> {
   const cached = await readReadyImageById(id);
   if (cached.cached) {
     if (!cached.value) throw new ApiError(404, "not_found", "Image not found");
-    return publicImageDetail({ ...cached.value, status: "ready" });
+    return publicImageDetail(
+      { ...cached.value, status: "ready" },
+      database
+    );
   }
 
-  const load = async () => {
-    const result = await queryForPublicRead(
+  const load = async (reader: DatabaseReader) => {
+    const result = await reader.query(
       `SELECT id,
               device,
               brightness,
@@ -102,9 +131,23 @@ export async function getPublicImage(id: string): Promise<PublicImageDetailDto> 
       [id]
     );
     if (!result.rows[0]) throw new ApiError(404, "not_found", "Image not found");
-    return publicImageDetail(result.rows[0] as PublicImageDetailRecord);
+    return publicImageDetail(
+      result.rows[0] as PublicImageDetailRecord,
+      { reader }
+    );
   };
-  return publicReadUsesFallbackAdmission()
-    ? load()
-    : coalesce(`public-image:postgres:${id}`, load);
+  return database.reader
+    ? load(database.reader)
+    : coalesce(`public-image:postgres:${id}`, () => load(pool));
+}
+
+export function getPublicImage(
+  id: string,
+  signal?: AbortSignal
+): Promise<PublicImageDetailDto> {
+  return signal
+    ? withPublicDatabaseRead(signal, (database) => (
+        getPublicImageWithAccess(id, database)
+      ))
+    : getPublicImageWithAccess(id, {});
 }

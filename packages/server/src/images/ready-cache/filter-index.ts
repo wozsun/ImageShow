@@ -48,7 +48,8 @@ function currentRevision() {
 
 export async function resolveReadyImageFilterIndex(
   plan: ImageFilterPlan,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  background = false
 ): Promise<ReadyImageFilterIndex | null> {
   try {
     for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -73,7 +74,8 @@ export async function resolveReadyImageFilterIndex(
         const attribute = await resolveReadyImageAttributeIndex(
           direct,
           revision,
-          signal
+          signal,
+          background
         );
         if (attribute) return { kind: "attribute", ...attribute };
         continue;
@@ -82,7 +84,7 @@ export async function resolveReadyImageFilterIndex(
       if (cached) return cached;
       const built = await coalesce(
         `ready-image-filter:${plan.signature}`,
-        () => buildReadyImageFilterIndex(plan, revision, signal)
+        () => buildReadyImageFilterIndex(plan, revision, signal, background)
       );
       if (built) return built;
     }

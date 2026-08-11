@@ -1,8 +1,4 @@
 import { logger } from "../../core/logger.ts";
-import {
-  publicReadUsesFallbackAdmission,
-  runPublicReadBackgroundTask
-} from "../../core/public-query-gateway.ts";
 import { redis } from "../../core/redis-client.ts";
 import { buildReadyImageAttributeIndex } from "./attribute-index-builder.ts";
 import {
@@ -44,7 +40,8 @@ async function buildAttributeIndex(
   spec: ReadyImageAttributeIndexSpec,
   revision: string,
   signal?: AbortSignal,
-  waitForSlot = false
+  waitForSlot = false,
+  publicFallback = false
 ) {
   if (waitForSlot) {
     while (
@@ -78,7 +75,12 @@ async function buildAttributeIndex(
   signal?.throwIfAborted();
   activeAttributeIndexBuilds += 1;
   try {
-    return await buildReadyImageAttributeIndex(spec, revision, signal);
+    return await buildReadyImageAttributeIndex(
+      spec,
+      revision,
+      signal,
+      publicFallback
+    );
   } finally {
     activeAttributeIndexBuilds -= 1;
     const waiters = [...attributeIndexBuildSlotWaiters];
@@ -95,7 +97,7 @@ function enqueueBackgroundAttributeIndexBuild(
     setImmediate(() => {
       const queued = attributeIndexBackgroundTail.then(() => {
         signal.throwIfAborted();
-        return runPublicReadBackgroundTask("aggregate", signal, build);
+        return build();
       });
       attributeIndexBackgroundTail = queued.then(
         () => undefined,
@@ -155,7 +157,8 @@ function attributeIndexBuildTask(
     spec,
     revision,
     controller.signal,
-    waitForSlot
+    waitForSlot,
+    background
   );
   const started = background
     ? enqueueBackgroundAttributeIndexBuild(
@@ -192,7 +195,8 @@ function attributeIndexBuildTask(
 export async function resolveReadyImageAttributeIndex(
   key: string,
   revision: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  background = false
 ): Promise<ReadyImageAttributeIndex | null> {
   const spec = readyImageAttributeIndexSpec(key);
   if (!spec || readyImageAttributeIndexKey(spec) !== key) return null;
@@ -202,7 +206,6 @@ export async function resolveReadyImageAttributeIndex(
     signal?.throwIfAborted();
     if (cached) return cached;
     const buildKey = `${key}:${revision}`;
-    const background = publicReadUsesFallbackAdmission();
     const task = attributeIndexBuildTask(
       buildKey,
       spec,
@@ -231,13 +234,18 @@ export async function resolveReadyImageAttributeIndex(
 export async function ensureReadyImageAttributeIndexes(
   keys: Iterable<string>,
   revision: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  background = false
 ) {
   const indexes = new Map<string, ReadyImageAttributeIndex>();
-  const background = publicReadUsesFallbackAdmission();
   let missing = false;
   for (const key of new Set(keys)) {
-    const index = await resolveReadyImageAttributeIndex(key, revision, signal);
+    const index = await resolveReadyImageAttributeIndex(
+      key,
+      revision,
+      signal,
+      background
+    );
     if (!index) {
       if (!background) return null;
       missing = true;

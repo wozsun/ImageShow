@@ -272,10 +272,11 @@ export async function readReadyImagePage(
   plan: ImageFilterPlan,
   limit: number,
   cursor?: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  background = false
 ): Promise<ReadyImageCacheResult<ReadyImageCachePage>> {
   try {
-    const index = await resolveReadyImageFilterIndex(plan, signal);
+    const index = await resolveReadyImageFilterIndex(plan, signal, background);
     if (!index) return { cached: false };
     return readPageFromIndex(index, limit, cursor);
   } catch (error) {
@@ -301,10 +302,11 @@ export async function sampleReadyImages(
   plan: ImageFilterPlan,
   limit: number,
   recent: ReadonlySet<string> = new Set(),
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  background = false
 ): Promise<ReadyImageCacheResult<ReadyImageCacheItem[]>> {
   try {
-    const index = await resolveReadyImageFilterIndex(plan, signal);
+    const index = await resolveReadyImageFilterIndex(plan, signal, background);
     if (!index) return { cached: false };
     const result = await readCache(async () => {
       if (!await queryIndexIsValid(index)) return null;

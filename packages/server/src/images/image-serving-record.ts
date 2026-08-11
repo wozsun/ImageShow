@@ -1,4 +1,7 @@
-import { queryForPublicRead } from "../core/public-query-gateway.ts";
+import { pool, type DatabaseReader } from "../core/database-pools.ts";
+import type {
+  PublicDatabaseReadAccess
+} from "../core/public-db-fallback.ts";
 import {
   readReadyImageById,
   readReadyImageByObjectKey,
@@ -27,18 +30,23 @@ type StoredImageServingRecord = Pick<
 >;
 
 export type ImageServingRecordDependencies = {
-  queryForPublicRead: typeof queryForPublicRead;
   readReadyImageById: typeof readReadyImageById;
   readReadyImageByObjectKey: typeof readReadyImageByObjectKey;
   readReadyImageByThumbKey: typeof readReadyImageByThumbKey;
 };
 
 const defaultImageServingRecordDependencies: ImageServingRecordDependencies = {
-  queryForPublicRead,
   readReadyImageById,
   readReadyImageByObjectKey,
   readReadyImageByThumbKey
 };
+
+function readDatabase<T>(
+  access: PublicDatabaseReadAccess,
+  read: (reader: DatabaseReader) => Promise<T>
+) {
+  return read(access.reader ?? pool);
+}
 
 function readyImageServingRecord(
   item: ReadyImageCacheItem
@@ -61,7 +69,10 @@ function readyImageServingRecord(
 
 export async function readImageServingRecordById(
   id: string,
-  options: { includeDeleted?: boolean } = {},
+  options: {
+    includeDeleted?: boolean;
+    database?: PublicDatabaseReadAccess;
+  } = {},
   dependencies: ImageServingRecordDependencies =
     defaultImageServingRecordDependencies
 ): Promise<ImageServingRecord | null> {
@@ -72,20 +83,23 @@ export async function readImageServingRecordById(
   }
   if (cached.cached && !includeDeleted) return null;
 
-  const row = (await dependencies.queryForPublicRead<ImageServingRecord>(
-    `SELECT id, object_key, original, ext, storage_slug, device, brightness, theme,
-            status, description, source, updated_at::text AS updated_at
-       FROM metadata
-      WHERE id=$1
-        AND ($2::boolean OR status='ready')
-      LIMIT 1`,
-    [id, includeDeleted]
-  )).rows[0];
+  const row = await readDatabase(options.database ?? {}, async (reader) => (
+    (await reader.query<ImageServingRecord>(
+      `SELECT id, object_key, original, ext, storage_slug, device, brightness, theme,
+              status, description, source, updated_at::text AS updated_at
+         FROM metadata
+        WHERE id=$1
+          AND ($2::boolean OR status='ready')
+        LIMIT 1`,
+      [id, includeDeleted]
+    )).rows[0]
+  ));
   return row ?? null;
 }
 
 export async function readReadyImageServingRecordByObjectKey(
   objectKey: string,
+  database: PublicDatabaseReadAccess = {},
   dependencies: ImageServingRecordDependencies =
     defaultImageServingRecordDependencies
 ): Promise<StoredImageServingRecord | null> {
@@ -96,18 +110,21 @@ export async function readReadyImageServingRecordByObjectKey(
       : null;
   }
 
-  const row = (await dependencies.queryForPublicRead<StoredImageServingRecord>(
-    `SELECT id, object_key, ext, storage_slug, status
-       FROM metadata
-      WHERE object_key=$1
-      LIMIT 1`,
-    [objectKey]
-  )).rows[0];
+  const row = await readDatabase(database, async (reader) => (
+    (await reader.query<StoredImageServingRecord>(
+      `SELECT id, object_key, ext, storage_slug, status
+         FROM metadata
+        WHERE object_key=$1
+        LIMIT 1`,
+      [objectKey]
+    )).rows[0]
+  ));
   return row?.status === "ready" ? row : null;
 }
 
 export async function readReadyImageServingRecordByThumbKey(
   thumbKey: string,
+  database: PublicDatabaseReadAccess = {},
   dependencies: ImageServingRecordDependencies =
     defaultImageServingRecordDependencies
 ): Promise<StoredImageServingRecord | null> {
@@ -118,13 +135,15 @@ export async function readReadyImageServingRecordByThumbKey(
       : null;
   }
 
-  const row = (await dependencies.queryForPublicRead<StoredImageServingRecord>(
-    `SELECT id, object_key, ext, storage_slug, status
-       FROM metadata
-      WHERE object_key=$1
-         OR regexp_replace(object_key, '\\.[^/.]+$', '.webp')=$1
-      LIMIT 1`,
-    [thumbKey]
-  )).rows[0];
+  const row = await readDatabase(database, async (reader) => (
+    (await reader.query<StoredImageServingRecord>(
+      `SELECT id, object_key, ext, storage_slug, status
+         FROM metadata
+        WHERE object_key=$1
+           OR regexp_replace(object_key, '\\.[^/.]+$', '.webp')=$1
+        LIMIT 1`,
+      [thumbKey]
+    )).rows[0]
+  ));
   return row?.status === "ready" ? row : null;
 }

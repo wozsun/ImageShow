@@ -4,6 +4,9 @@ import {
   resolveStorageAccess
 } from "./backend-registry.ts";
 import type {
+  PublicDatabaseReadAccess
+} from "../core/public-db-fallback.ts";
+import type {
   OpenedRead,
   StorageRequestOptions
 } from "./driver.ts";
@@ -148,19 +151,20 @@ export type ResolvedReadableObject = {
 export async function resolveReadableObject(
   prefix: ReadablePrefix,
   key: string,
-  slug: string
+  slug: string,
+  database: PublicDatabaseReadAccess = {}
 ): Promise<ResolvedReadableObject> {
-  const config = await getStorageBackend(slug);
+  const config = await getStorageBackend(slug, database);
   return {
     prefix,
     key,
     storageSlug: config.slug,
     publicUrl: directStorageObjectUrl(config, prefix, key),
     exists: async (options) => (
-      (await resolveStorageAccess(slug)).driver.exists(prefix, key, options)
+      (await resolveStorageAccess(slug, database)).driver.exists(prefix, key, options)
     ),
     open: async (range, options) => (
-      (await resolveStorageAccess(slug)).driver.openRead(
+      (await resolveStorageAccess(slug, database)).driver.openRead(
         prefix,
         key,
         range,

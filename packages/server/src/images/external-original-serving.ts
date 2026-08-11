@@ -1,5 +1,9 @@
 import { createHash } from "node:crypto";
 import { ApiError } from "../core/api-error.ts";
+import {
+  withPublicDatabaseRead,
+  type PublicDatabaseReadAccess
+} from "../core/public-db-fallback.ts";
 import { coalesce } from "../core/coalesce.ts";
 import { safeFetchExternalImage } from "../core/external-image-fetch.ts";
 import {
@@ -117,7 +121,10 @@ const defaultExternalOriginalServingDependencies:
 
 async function resolveExternalOriginal(
   id: string,
-  options: { includeDeleted?: boolean },
+  options: {
+    includeDeleted?: boolean;
+    database?: PublicDatabaseReadAccess;
+  },
   dependencies: ExternalOriginalServingDependencies
 ) {
   const record = await dependencies.readImageServingRecordById(id, options);
@@ -129,7 +136,10 @@ async function resolveExternalOriginal(
   ) {
     throw new ApiError(404, "not_found", "Original link not found");
   }
-  const displayUrl = await dependencies.displayUrlForOriginalComparison(record);
+  const displayUrl = await dependencies.displayUrlForOriginalComparison(
+    record,
+    options.database
+  );
   if (!hasDistinctOriginalUrl(original, displayUrl)) {
     throw new ApiError(404, "not_found", "Original link not found");
   }
@@ -140,9 +150,13 @@ export async function redirectPublicExternalOriginal(
   id: string,
   userAgent: string,
   dependencies: ExternalOriginalServingDependencies =
-    defaultExternalOriginalServingDependencies
+    defaultExternalOriginalServingDependencies,
+  signal: AbortSignal = new AbortController().signal
 ) {
-  const original = await resolveExternalOriginal(id, {}, dependencies);
+  const original = await withPublicDatabaseRead(
+    signal,
+    (database) => resolveExternalOriginal(id, { database }, dependencies)
+  );
   const direct = await dependencies.supportsDirectAccess(
     original.url,
     userAgent
@@ -168,11 +182,16 @@ export async function servePublicExternalOriginal(
     method?: "GET" | "HEAD";
     ifNoneMatch?: string;
     ifModifiedSince?: string;
+    signal?: AbortSignal;
   } = {},
   dependencies: ExternalOriginalServingDependencies =
     defaultExternalOriginalServingDependencies
 ) {
-  const original = await resolveExternalOriginal(id, {}, dependencies);
+  const signal = request.signal ?? new AbortController().signal;
+  const original = await withPublicDatabaseRead(
+    signal,
+    (database) => resolveExternalOriginal(id, { database }, dependencies)
+  );
   return dependencies.proxyExternalImage(
     original.url,
     externalImageExt(original.url),

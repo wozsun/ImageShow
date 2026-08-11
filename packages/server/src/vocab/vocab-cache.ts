@@ -2,11 +2,13 @@ import { randomUUID } from "node:crypto";
 import { appConfig } from "@imageshow/shared";
 import { coalesce } from "../core/coalesce.ts";
 import {
-  coalescePublicRead,
   publicPgFallbackWorkLimitExceeded,
-  publicReadUsesFallbackAdmission,
-  queryForPublicRead
-} from "../core/public-query-gateway.ts";
+  type PublicDatabaseReadAccess
+} from "../core/public-db-fallback.ts";
+import {
+  pool,
+  type DatabaseReader
+} from "../core/database-pools.ts";
 import { deleteRedisKeys, getRedisJson, setRedisJson } from "../core/redis-json.ts";
 import type {
   AuthorDto as Author,
@@ -58,14 +60,17 @@ function vocabFromRows(rows: Array<{ slug: string; display_name: string }>): Voc
   return rows.map(({ slug, display_name }) => ({ slug, display_name }));
 }
 
-async function queryVocabularyRows<T>(sql: string) {
-  const publicFallback = publicReadUsesFallbackAdmission();
+async function queryVocabularyRows<T>(
+  sql: string,
+  reader: DatabaseReader = pool,
+  bounded = false
+) {
   const maximumRows = appConfig.publicPgFallback.maximumVocabularyRows;
-  const rows = (await queryForPublicRead(
-    `${sql}\n${publicFallback ? "LIMIT $1" : ""}`,
-    publicFallback ? [maximumRows + 1] : undefined
+  const rows = (await reader.query(
+    `${sql}\n${bounded ? "LIMIT $1" : ""}`,
+    bounded ? [maximumRows + 1] : undefined
   )).rows as T[];
-  if (publicFallback && rows.length > maximumRows) {
+  if (bounded && rows.length > maximumRows) {
     throw publicPgFallbackWorkLimitExceeded(
       "Vocabulary exceeds the supported public result limit"
     );
@@ -73,31 +78,54 @@ async function queryVocabularyRows<T>(sql: string) {
   return rows;
 }
 
-async function loadTagVocab(revision: number) {
-  const rows = await queryVocabularyRows<VocabEntry>(
+async function readVocabularyRows<T>(
+  sql: string,
+  access: PublicDatabaseReadAccess
+) {
+  return queryVocabularyRows<T>(
+    sql,
+    access.reader ?? pool,
+    Boolean(access.reader)
+  );
+}
+
+async function loadTagVocab(
+  revision: number,
+  access: PublicDatabaseReadAccess = {}
+) {
+  const rows = await readVocabularyRows<VocabEntry>(
     `SELECT slug, display_name
        FROM tag
-      ORDER BY sort_order ASC, slug ASC`
+      ORDER BY sort_order ASC, slug ASC`,
+    access
   );
   await cacheEntityVocabulary("tag", TAG_VOCAB_KEY, revision, rows);
   return rows;
 }
 
-async function loadThemeVocab(revision: number) {
-  const rows = await queryVocabularyRows<VocabEntry>(
+async function loadThemeVocab(
+  revision: number,
+  access: PublicDatabaseReadAccess = {}
+) {
+  const rows = await readVocabularyRows<VocabEntry>(
     `SELECT slug, display_name
        FROM theme
-      ORDER BY (slug = 'none') DESC, sort_order ASC, slug ASC`
+      ORDER BY (slug = 'none') DESC, sort_order ASC, slug ASC`,
+    access
   );
   await cacheEntityVocabulary("theme", THEME_VOCAB_KEY, revision, rows);
   return rows;
 }
 
-async function loadAuthorVocab(revision: number) {
-  const rows = await queryVocabularyRows<AuthorVocabEntry>(
+async function loadAuthorVocab(
+  revision: number,
+  access: PublicDatabaseReadAccess = {}
+) {
+  const rows = await readVocabularyRows<AuthorVocabEntry>(
     `SELECT slug, display_name, link
        FROM author
-      ORDER BY sort_order ASC, slug ASC`
+      ORDER BY sort_order ASC, slug ASC`,
+    access
   );
   await cacheEntityVocabulary("author", AUTHOR_VOCAB_KEY, revision, rows);
   return rows;
@@ -181,6 +209,7 @@ async function cachedEntityValue<T extends unknown[]>(
   revision: number,
   coalesceKey: string,
   load: () => Promise<T>,
+  publicRead = false,
 ): Promise<T> {
   const cached = await getRedisJson<EntityCacheEnvelope<T>>(key);
   if (
@@ -188,39 +217,45 @@ async function cachedEntityValue<T extends unknown[]>(
     && cached.revision === revision
     && Array.isArray(cached.value)
   ) return cached.value;
-  if (publicReadUsesFallbackAdmission()) {
-    return coalescePublicRead(`entity-cache:${coalesceKey}`, load);
-  }
-  return coalesce(coalesceKey, load);
+  return publicRead ? load() : coalesce(coalesceKey, load);
 }
 
-export function getThemeVocab(): Promise<VocabEntry[]> {
+export function getThemeVocab(
+  access: PublicDatabaseReadAccess = {}
+): Promise<VocabEntry[]> {
   const revision = entityVocabularyRevisions.theme;
   return cachedEntityValue(
     THEME_VOCAB_KEY,
     revision,
     `entity-cache:vocab:theme:${revision}`,
-    () => loadThemeVocab(revision),
+    () => loadThemeVocab(revision, access),
+    Boolean(access.reader)
   );
 }
 
-export function getTagVocab(): Promise<VocabEntry[]> {
+export function getTagVocab(
+  access: PublicDatabaseReadAccess = {}
+): Promise<VocabEntry[]> {
   const revision = entityVocabularyRevisions.tag;
   return cachedEntityValue(
     TAG_VOCAB_KEY,
     revision,
     `entity-cache:vocab:tag:${revision}`,
-    () => loadTagVocab(revision),
+    () => loadTagVocab(revision, access),
+    Boolean(access.reader)
   );
 }
 
-export function getAuthorVocab(): Promise<AuthorVocabEntry[]> {
+export function getAuthorVocab(
+  access: PublicDatabaseReadAccess = {}
+): Promise<AuthorVocabEntry[]> {
   const revision = entityVocabularyRevisions.author;
   return cachedEntityValue(
     AUTHOR_VOCAB_KEY,
     revision,
     `entity-cache:vocab:author:${revision}`,
-    () => loadAuthorVocab(revision),
+    () => loadAuthorVocab(revision, access),
+    Boolean(access.reader)
   );
 }
 

@@ -1,5 +1,6 @@
 import { staticLocalBaseUrl } from "../config/site-host.ts";
 import { getStorageBackend } from "./backend-registry.ts";
+import type { PublicDatabaseReadAccess } from "../core/public-db-fallback.ts";
 import type { StorageConfig } from "./backend-config.ts";
 import { thumbnailObjectKey } from "./image-paths.ts";
 import {
@@ -27,8 +28,12 @@ export function directStorageObjectUrl(
   return `${base}/${encodeKeyPath(objectName)}`;
 }
 
-export async function publicImageUrls(objectKey: string, slug: string) {
-  const config = await getStorageBackend(slug);
+export async function publicImageUrls(
+  objectKey: string,
+  slug: string,
+  access: PublicDatabaseReadAccess = {}
+) {
+  const config = await getStorageBackend(slug, access);
   const thumbKey = thumbnailObjectKey(objectKey);
   const staticBase = staticLocalBaseUrl();
   const applicationThumbUrl = `${staticBase}${localMediaUrl("thumbs", thumbKey)}`;

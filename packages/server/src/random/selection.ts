@@ -21,6 +21,10 @@ import {
 } from "./selection-model.ts";
 import { pickTargetedImages } from "./targeted-selection.ts";
 import { sampleReadyImagesFromPostgres } from "./postgres-selection.ts";
+import type {
+  PublicDatabaseReadAccess
+} from "../core/public-db-fallback.ts";
+import { pool } from "../core/database-pools.ts";
 
 export type RandomImageSelection = {
   method: RandomMethod;
@@ -35,7 +39,8 @@ export async function selectRandomImages(
   url: URL,
   userAgent = "",
   clientId = "",
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  database: PublicDatabaseReadAccess = {}
 ): Promise<RandomImageSelection | Response> {
   signal?.throwIfAborted();
   const parsed = parseRandomQuery(
@@ -47,7 +52,8 @@ export async function selectRandomImages(
     const items = await pickTargetedImages(
       parsed.ids,
       parsed.resultLimit,
-      signal
+      signal,
+      database
     );
     return items instanceof Response
       ? items
@@ -55,9 +61,15 @@ export async function selectRandomImages(
   }
 
   const [themeMap, tagMap, authorMap] = await Promise.all([
-    resolveSelectorMap(parsed.theme, resolveThemeTermMap),
-    resolveSelectorMap(parsed.tag, resolveTagTermMap),
-    resolveSelectorMap(parsed.author, resolveAuthorTermMap)
+    resolveSelectorMap(parsed.theme, (terms) => (
+      resolveThemeTermMap(terms, database)
+    )),
+    resolveSelectorMap(parsed.tag, (terms) => (
+      resolveTagTermMap(terms, database)
+    )),
+    resolveSelectorMap(parsed.author, (terms) => (
+      resolveAuthorTermMap(terms, database)
+    ))
   ]);
   signal?.throwIfAborted();
   const query = normalizeRandomQuery(parsed, {
@@ -84,7 +96,8 @@ export async function selectRandomImages(
     plan,
     query.resultLimit,
     recent,
-    signal
+    signal,
+    Boolean(database.reader)
   );
   const items = cached.cached
     ? cached.value
@@ -92,6 +105,7 @@ export async function selectRandomImages(
         plan,
         query.resultLimit,
         recent,
+        database.reader ?? pool,
         signal
       );
   if (!items.length) {

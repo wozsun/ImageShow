@@ -1,4 +1,3 @@
-import type { PoolClient } from "pg";
 import type { z } from "zod";
 import { appConfig } from "@imageshow/shared";
 import {
@@ -10,10 +9,11 @@ import {
 } from "@imageshow/shared/browser";
 import { coalesce } from "../../core/coalesce.ts";
 import {
+  withPublicDatabaseRead,
   publicPgFallbackWorkLimitExceeded,
-  publicReadUsesFallbackAdmission,
-  withPublicReadClient
-} from "../../core/public-query-gateway.ts";
+  type PublicDatabaseReadAccess
+} from "../../core/public-db-fallback.ts";
+import { pool, type DatabaseReader } from "../../core/database-pools.ts";
 import { galleryStatsQuery } from "../../core/validation.ts";
 import {
   readReadyImageCountSnapshot,
@@ -79,7 +79,7 @@ function buildFilterClause(
 }
 
 async function filteredRows<T>(
-  client: PoolClient,
+  client: DatabaseReader,
   plan: ImageFilterPlan,
   omittedAxes: readonly ImageFilterAxis[],
   sql: (where: string, resultLimit: string) => string
@@ -94,7 +94,9 @@ async function filteredRows<T>(
 }
 
 async function readPublicGalleryStats(
-  plan: ImageFilterPlan
+  plan: ImageFilterPlan,
+  client: DatabaseReader,
+  signal: AbortSignal
 ): Promise<GalleryStatsDto> {
   const {
     totalResult,
@@ -105,7 +107,7 @@ async function readPublicGalleryStats(
     themeRows,
     tagRows,
     authorRows
-  } = await withPublicReadClient(async (client, signal) => {
+  } = await (async () => {
     signal.throwIfAborted();
     await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
     try {
@@ -221,7 +223,7 @@ async function readPublicGalleryStats(
       await client.query("ROLLBACK").catch(() => undefined);
       throw error;
     }
-  });
+  })();
 
   const categoryCounts = new Map(
     categoryRows.map((row) => [
@@ -274,12 +276,13 @@ async function readPublicGalleryStats(
 }
 
 async function presentCachedGalleryStats(
-  snapshot: ReadyImageCountSnapshot
+  snapshot: ReadyImageCountSnapshot,
+  database: PublicDatabaseReadAccess = {}
 ): Promise<GalleryStatsDto> {
   const [themeVocab, tagVocab, authorVocab] = await Promise.all([
-    getThemeVocab(),
-    getTagVocab(),
-    getAuthorVocab()
+    getThemeVocab(database),
+    getTagVocab(database),
+    getAuthorVocab(database)
   ]);
   return {
     total_images: snapshot.total,
@@ -314,15 +317,47 @@ async function presentCachedGalleryStats(
   };
 }
 
-export async function getPublicGalleryStats(
+async function getPublicGalleryStatsWithAccess(
+  query: GalleryStatsQuery,
+  signal: AbortSignal | undefined,
+  database: PublicDatabaseReadAccess
+): Promise<GalleryStatsDto> {
+  const plan = await resolveImageFilterPlan(query, database);
+  const cached = await readReadyImageCountSnapshot(
+    plan,
+    signal,
+    Boolean(database.reader)
+  );
+  if (cached.cached) return presentCachedGalleryStats(cached.value, database);
+  if (database.reader) {
+    return readPublicGalleryStats(
+      plan,
+      database.reader,
+      signal ?? new AbortController().signal
+    );
+  }
+  const load = async () => {
+    const client = await pool.connect();
+    try {
+      return await readPublicGalleryStats(
+        plan,
+        client,
+        new AbortController().signal
+      );
+    } finally {
+      client.release();
+    }
+  };
+  return coalesce(`gallery-stats:postgres:${plan.signature}`, load);
+}
+
+export function getPublicGalleryStats(
   query: GalleryStatsQuery = {},
   signal?: AbortSignal
 ): Promise<GalleryStatsDto> {
-  const plan = await resolveImageFilterPlan(query);
-  const cached = await readReadyImageCountSnapshot(plan, signal);
-  if (cached.cached) return presentCachedGalleryStats(cached.value);
-  const load = () => readPublicGalleryStats(plan);
-  return publicReadUsesFallbackAdmission()
-    ? load()
-    : coalesce(`gallery-stats:postgres:${plan.signature}`, load);
+  return signal
+    ? withPublicDatabaseRead(signal, (database, databaseSignal) => (
+        getPublicGalleryStatsWithAccess(query, databaseSignal, database)
+      ))
+    : getPublicGalleryStatsWithAccess(query, undefined, {});
 }

@@ -1,8 +1,9 @@
 import { appConfig } from "@imageshow/shared";
 import {
   publicPgFallbackWorkLimitExceeded,
-  queryForPublicRead
-} from "../core/public-query-gateway.ts";
+  type PublicDatabaseReadAccess
+} from "../core/public-db-fallback.ts";
+import { pool, type DatabaseReader } from "../core/database-pools.ts";
 import { apiErrorResponse } from "../core/http/responses.ts";
 import { readTargetedReadyImages } from "../images/ready-cache/query.ts";
 import { readyImageCacheItemFromRow } from "../images/ready-cache/model.ts";
@@ -24,7 +25,8 @@ function shuffled(items: SelectedReadyImage[]) {
 export async function pickTargetedImages(
   ids: string[],
   limit: number,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  database: PublicDatabaseReadAccess = {}
 ): Promise<SelectedReadyImage[] | Response> {
   signal?.throwIfAborted();
   const cached = await readTargetedReadyImages(ids);
@@ -36,7 +38,7 @@ export async function pickTargetedImages(
       appConfig.publicPgFallback.maximumTargetedCandidates;
     const fullIds = ids.filter((id) => id.length > 12);
     const suffixes = ids.filter((id) => id.length === 12);
-    const rows = (await queryForPublicRead(
+    const read = async (reader: DatabaseReader) => (await reader.query(
       `WITH candidate_ids AS MATERIALIZED (
          SELECT id
            FROM metadata
@@ -55,6 +57,7 @@ export async function pickTargetedImages(
         ORDER BY m.id`,
       [fullIds, suffixes, maximumCandidates + 1]
     )).rows as Record<string, unknown>[];
+    const rows = await read(database.reader ?? pool);
     if (rows.length > maximumCandidates) {
       throw publicPgFallbackWorkLimitExceeded(
         "Targeted random selection exceeds the supported candidate limit"

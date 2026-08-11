@@ -1,4 +1,4 @@
-import { queryForPublicRead } from "../../core/public-query-gateway.ts";
+import type { DatabaseReader } from "../../core/database-pools.ts";
 import { getRedisConnectionState, redis } from "../../core/redis-client.ts";
 import { randomUuidV7 } from "../../core/uuid.ts";
 import { getReadyImageCacheCoordinatorStatus } from "./coordinator.ts";
@@ -101,6 +101,7 @@ export async function publishReadyImageAttributeIndex(options: {
   startingMeta: ReadyImageCacheMeta;
   connectionEpoch: number;
   signal?: AbortSignal;
+  reader: DatabaseReader;
 }): Promise<ReadyImageAttributeIndex | null> {
   const key = readyImageAttributeIndexKey(options.spec);
   const metaKey = readyImageAttributeIndexMetaKey(key);
@@ -120,9 +121,8 @@ export async function publishReadyImageAttributeIndex(options: {
       ) {
         return null;
       }
-      const sourceRevision = (await getReadyImageRevision({
-        query: queryForPublicRead
-      })).revision;
+      const sourceRevision = (await getReadyImageRevision(options.reader))
+        .revision;
       options.signal?.throwIfAborted();
       if (sourceRevision !== options.revision) {
         return null;
@@ -149,9 +149,8 @@ export async function publishReadyImageAttributeIndex(options: {
         return null;
       }
 
-      const publishedRevision = (await getReadyImageRevision({
-        query: queryForPublicRead
-      })).revision;
+      const publishedRevision = (await getReadyImageRevision(options.reader))
+        .revision;
       options.signal?.throwIfAborted();
       const publishedStatus = getReadyImageCacheCoordinatorStatus();
       const publishedConnection = getRedisConnectionState();

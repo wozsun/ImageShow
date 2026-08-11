@@ -1,12 +1,21 @@
-import { queryForPublicRead } from "../core/public-query-gateway.ts";
+import {
+  pool,
+  type DatabaseReader
+} from "../core/database-pools.ts";
 import { getAdminTagList, getTagVocab } from "../vocab/vocab-cache.ts";
 import { resolveSlugs, resolveTermMap } from "../core/term-resolve.ts";
 import type { TagDto } from "@imageshow/shared/browser";
+import type {
+  PublicDatabaseReadAccess
+} from "../core/public-db-fallback.ts";
 
-export async function getTagsForImages(ids: string[]): Promise<Map<string, string[]>> {
+export async function getTagsForImages(
+  ids: string[],
+  reader: DatabaseReader = pool
+): Promise<Map<string, string[]>> {
   const map = new Map<string, string[]>();
   if (!ids.length) return map;
-  const rows = (await queryForPublicRead(
+  const rows = (await reader.query(
     `SELECT image_id, tag_slug AS slug
      FROM image_tag
      WHERE image_id = ANY($1::uuid[])
@@ -25,10 +34,16 @@ export async function listTagsWithCounts(): Promise<TagDto[]> {
   return getAdminTagList();
 }
 
-export function resolveTagTermMap(terms: string[]): Promise<Map<string, string>> {
-  return resolveTermMap(getTagVocab, terms);
+export function resolveTagTermMap(
+  terms: string[],
+  access: PublicDatabaseReadAccess = {}
+): Promise<Map<string, string>> {
+  return resolveTermMap(() => getTagVocab(access), terms);
 }
 
-export function resolveTagNames(names: string[]): Promise<string[]> {
-  return resolveSlugs(getTagVocab, names);
+export function resolveTagNames(
+  names: string[],
+  access: PublicDatabaseReadAccess = {}
+): Promise<string[]> {
+  return resolveSlugs(() => getTagVocab(access), names);
 }

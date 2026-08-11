@@ -9,6 +9,7 @@ import type {
   CopyPrefix,
   OpenedRead,
   StorageDriver,
+  StorageRequestOptions,
   StorageSelfTest
 } from "./driver.ts";
 import { parseSingleByteRange } from "../core/http/byte-range.ts";
@@ -82,14 +83,21 @@ export class LocalBackend implements StorageDriver {
     }
   }
 
-  async openRead(prefix: StoragePrefix, key: string, rangeHeader?: string): Promise<OpenedRead> {
+  async openRead(
+    prefix: StoragePrefix, key: string, rangeHeader?: string,
+    options: StorageRequestOptions = {}
+  ): Promise<OpenedRead> {
+    options.signal?.throwIfAborted();
     const path = safeStoragePath(prefix, key);
     const handle = await open(path, "r").catch((error: unknown) => {
+      options.signal?.throwIfAborted();
       if (isMissingFileError(error)) throw new ApiError(404, "storage_object_not_found", "Object not found");
       throw error;
     });
     try {
+      options.signal?.throwIfAborted();
       const stats = await handle.stat({ bigint: true });
+      options.signal?.throwIfAborted();
       const totalSize = Number(stats.size);
       if (!Number.isSafeInteger(totalSize) || totalSize < 0) {
         throw new ApiError(502, "storage_read_failed", "Object size is not supported");
@@ -103,7 +111,9 @@ export class LocalBackend implements StorageDriver {
       };
       if (!range) {
         return {
-          body: handle.createReadStream({ autoClose: true, emitClose: true }),
+          body: handle.createReadStream({
+            autoClose: true, emitClose: true, signal: options.signal
+          }),
           size: totalSize,
           ...common
         };
@@ -113,6 +123,7 @@ export class LocalBackend implements StorageDriver {
         body: handle.createReadStream({
           autoClose: true,
           emitClose: true,
+          signal: options.signal,
           start: range.start,
           end: range.end
         }),
@@ -133,9 +144,11 @@ export class LocalBackend implements StorageDriver {
     }
   }
 
-  async readBuffer(prefix: StoragePrefix, key: string) {
+  async readBuffer(
+    prefix: StoragePrefix, key: string, options: StorageRequestOptions = {}
+  ) {
     return openedReadToBuffer(
-      await this.openRead(prefix, key),
+      await this.openRead(prefix, key, undefined, options),
       getInputImageMaxBytes()
     );
   }

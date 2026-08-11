@@ -1,5 +1,4 @@
 import { appConfig } from "@imageshow/shared";
-import { publicReadUsesFallbackAdmission } from "./public-query-gateway.ts";
 import { redis } from "./redis-client.ts";
 import { getRedisOperationalState } from "./runtime-availability.ts";
 
@@ -9,8 +8,7 @@ type RedisJsonLookup<T> =
   | { status: "unavailable" };
 
 function publicRedisIsUnavailable() {
-  return publicReadUsesFallbackAdmission()
-    && !getRedisOperationalState().available;
+  return !getRedisOperationalState().available;
 }
 
 async function getRedisJsonLookup<T>(

@@ -7,6 +7,9 @@ import {
 import { resolveAuthorSlugs } from "../authors/query.ts";
 import { ApiError } from "../core/api-error.ts";
 import { splitSelectors } from "../core/selectors.ts";
+import type {
+  PublicDatabaseReadAccess
+} from "../core/public-db-fallback.ts";
 import { resolveTagNames } from "../tags/query.ts";
 import { resolveThemeSlugs } from "../themes/query.ts";
 
@@ -92,11 +95,20 @@ async function resolveSelector(
   }, noun);
 }
 
-export async function resolveImageFilterPlan(input: ImageFilterInput) {
+export async function resolveImageFilterPlan(
+  input: ImageFilterInput,
+  database: PublicDatabaseReadAccess = {}
+) {
   const [theme, tag, author] = await Promise.all([
-    resolveSelector(input.t, "theme", resolveThemeSlugs),
-    resolveSelector(input.tag, "tag", resolveTagNames),
-    resolveSelector(input.a, "author", resolveAuthorSlugs)
+    resolveSelector(input.t, "theme", (terms) => (
+      resolveThemeSlugs(terms, database)
+    )),
+    resolveSelector(input.tag, "tag", (terms) => (
+      resolveTagNames(terms, database)
+    )),
+    resolveSelector(input.a, "author", (terms) => (
+      resolveAuthorSlugs(terms, database)
+    ))
   ]);
   return createImageFilterPlan({
     devices: input.d ? [input.d] : devices,

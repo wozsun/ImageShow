@@ -11,7 +11,12 @@ import {
   type PublicImageDetailDto
 } from "@imageshow/shared/browser";
 import { publicImageUrls } from "../storage/public-urls.ts";
+import { listStorageBackends } from "../storage/backend-registry.ts";
 import { getTagsForImages } from "../tags/query.ts";
+import type { DatabaseReader } from "../core/database-pools.ts";
+import type {
+  PublicDatabaseReadAccess
+} from "../core/public-db-fallback.ts";
 import { hasDistinctOriginalUrl } from "./original-link.ts";
 
 export type ImageRecord = {
@@ -166,10 +171,11 @@ export function importSessionResponse(
 }
 
 async function publicUrlsForRow(
-  row: PublicImageUrlRecord
+  row: PublicImageUrlRecord,
+  access: PublicDatabaseReadAccess = {}
 ) {
   const storageSlug = row.storage_slug;
-  const urls = await publicImageUrls(row.object_key, storageSlug);
+  const urls = await publicImageUrls(row.object_key, storageSlug, access);
   return { storageSlug, urls };
 }
 
@@ -235,9 +241,10 @@ export function adminImagesWithTags(rows: ImageRecordWithTags[]) {
 }
 
 export async function publicImageDetail(
-  row: PublicImageDetailRecord
+  row: PublicImageDetailRecord,
+  access: PublicDatabaseReadAccess = {}
 ): Promise<PublicImageDetailDto> {
-  const { urls } = await publicUrlsForRow(row);
+  const { urls } = await publicUrlsForRow(row, access);
 
   return {
     id: row.id,
@@ -250,9 +257,10 @@ export async function publicImageDetail(
 
 async function publicImageCard(
   row: PublicImageCardRecord,
-  tags: string[] = []
+  tags: string[] = [],
+  access: PublicDatabaseReadAccess = {}
 ): Promise<GalleryImageCardDto> {
-  const { urls } = await publicUrlsForRow(row);
+  const { urls } = await publicUrlsForRow(row, access);
   const original = row.original ?? "";
   const hasDistinctOriginal = hasDistinctOriginalUrl(original, urls.object_url);
   return {
@@ -271,15 +279,32 @@ async function publicImageCard(
   };
 }
 
-export async function publicImageCards(rows: PublicImageCardRecord[]) {
-  const tagMap = await getTagsForImages(rows.map((row) => row.id));
-  return Promise.all(rows.map((row) => publicImageCard(row, tagMap.get(row.id) ?? [])));
+export async function publicImageCards(
+  rows: PublicImageCardRecord[],
+  reader?: DatabaseReader
+) {
+  const database = { reader };
+  const tagMap = await getTagsForImages(rows.map((row) => row.id), reader);
+  if (rows.length) await listStorageBackends(database);
+  return Promise.all(rows.map((row) => publicImageCard(
+    row,
+    tagMap.get(row.id) ?? [],
+    database
+  )));
 }
 
 export function publicImageCardsWithTags(
-  rows: Array<PublicImageCardRecord & { tags: string[] }>
+  rows: Array<PublicImageCardRecord & { tags: string[] }>,
+  access: PublicDatabaseReadAccess = {}
 ) {
-  return Promise.all(rows.map((row) => publicImageCard(row, row.tags)));
+  return (async () => {
+    if (rows.length) await listStorageBackends(access);
+    return Promise.all(rows.map((row) => publicImageCard(
+      row,
+      row.tags,
+      access
+    )));
+  })();
 }
 
 export type AdminImage = Omit<PublicImage, "ext">;

@@ -144,7 +144,8 @@ async function readGlobalStats(revision: string, expectedTotal: number) {
 
 export async function readReadyImageCountSnapshot(
   plan: ImageFilterPlan,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  background = false
 ): Promise<ReadyImageCacheResult<ReadyImageCountSnapshot>> {
   try {
     for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -188,13 +189,18 @@ export async function readReadyImageCountSnapshot(
       if (!await ensureReadyImageAttributeIndexes(
         candidateKeys,
         revision,
-        signal
+        signal,
+        background
       )) {
         return { cached: false };
       }
 
       const plans = Object.values(preflight.plans);
-      const indexes = await resolveReadyImageCountIndexes(plans, signal);
+      const indexes = await resolveReadyImageCountIndexes(
+        plans,
+        signal,
+        background
+      );
       if (!indexes) return { cached: false };
       const lease = await withReadyImageCacheRead(async () => {
         const current = getReadyImageCacheCoordinatorStatus();

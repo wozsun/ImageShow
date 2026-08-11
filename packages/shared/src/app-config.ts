@@ -67,24 +67,18 @@ export const appConfig = {
 
   // Redis runtime degradation may move public reads onto PostgreSQL. Keep
   // this budget below the 30-connection application pool so administrative
-  // transactions and the worker retain independent capacity. Per-class caps
-  // also reserve capacity for object/id lookups when aggregate work is busy.
+  // transactions and the worker retain independent capacity.
   publicPgFallback: {
     totalConcurrency: 12,
     queueLimit: 64,
     queueTimeoutMs: 1_500,
+    executionTimeoutMs: 7_500,
     retryAfterSeconds: 1,
     minimumRandomCandidates: 32,
     maximumRandomCandidates: 512,
     maximumTargetedCandidates: 256,
     maximumVocabularyRows: 10_000,
-    maximumStorageBackendRows: 256,
-    classes: {
-      lookup: { concurrency: 6, executionTimeoutMs: 2_500 },
-      list: { concurrency: 4, executionTimeoutMs: 4_000 },
-      random: { concurrency: 3, executionTimeoutMs: 4_500 },
-      aggregate: { concurrency: 2, executionTimeoutMs: 7_500 }
-    }
+    maximumStorageBackendRows: 256
   },
 
   authentication: {

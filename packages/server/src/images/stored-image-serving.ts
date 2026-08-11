@@ -1,5 +1,9 @@
 import { ApiError } from "../core/api-error.ts";
 import {
+  withPublicDatabaseRead,
+  type PublicDatabaseReadAccess
+} from "../core/public-db-fallback.ts";
+import {
   immutableCacheControl,
   privateNoStoreCacheControl,
   publicRedirectCacheControl,
@@ -65,10 +69,11 @@ async function streamStoredObject(
   contentTypeValue: string,
   cacheControl: string,
   request: StoredResponseRequest,
-  dependencies: StoredImageServingDependencies
+  dependencies: StoredImageServingDependencies,
+  database: PublicDatabaseReadAccess = {}
 ) {
   return dependencies.streamResolvedObject(
-    await dependencies.resolveReadableObject(prefix, key, backend),
+    await dependencies.resolveReadableObject(prefix, key, backend, database),
     contentTypeValue,
     cacheControl,
     request
@@ -89,13 +94,15 @@ async function deliverStoredThumbnail(
   record: StoredThumbnailRecord,
   request: StoredResponseRequest,
   policy: ThumbnailDeliveryPolicy,
-  dependencies: StoredImageServingDependencies
+  dependencies: StoredImageServingDependencies,
+  database: PublicDatabaseReadAccess = {}
 ): Promise<Response> {
   const thumbKey = thumbnailObjectKey(record.object_key);
   const resolvedThumb = await dependencies.resolveReadableObject(
     "thumbs",
     thumbKey,
-    record.storage_slug
+    record.storage_slug,
+    database
   );
   if (resolvedThumb?.publicUrl) {
     if (policy.allowPublicRedirect) {
@@ -123,24 +130,37 @@ export async function servePublicStoredObject(
   dependencies: StoredImageServingDependencies =
     defaultStoredImageServingDependencies
 ) {
-  const record = await dependencies.readReadyImageServingRecordByObjectKey(key);
-  if (!record) throw new ApiError(404, "not_found", "Object not found");
-  const object = await dependencies.resolveReadableObject(
-    "media",
-    key,
-    record.storage_slug
-  );
-  if (object.publicUrl) return immutableRedirect(object.publicUrl);
-  return dependencies.streamResolvedObject(
-    object,
-    contentType(record.ext),
-    immutableCacheControl,
-    request
-  ).catch((error: unknown) => {
-    if (isStorageObjectNotFound(error)) {
-      throw new ApiError(404, "not_found", "Object not found");
-    }
-    throw error;
+  const signal = request.signal ?? new AbortController().signal;
+  return withPublicDatabaseRead(signal, async (database, databaseSignal) => {
+    const record = await dependencies.readReadyImageServingRecordByObjectKey(
+      key,
+      database
+    );
+    if (!record) throw new ApiError(404, "not_found", "Object not found");
+    const object = await dependencies.resolveReadableObject(
+      "media",
+      key,
+      record.storage_slug,
+      database
+    );
+    if (object.publicUrl) return immutableRedirect(object.publicUrl);
+    const boundedRequest = {
+      ...request,
+      signal: request.signal
+        ? AbortSignal.any([request.signal, databaseSignal])
+        : databaseSignal
+    };
+    return dependencies.streamResolvedObject(
+      object,
+      contentType(record.ext),
+      immutableCacheControl,
+      boundedRequest
+    ).catch((error: unknown) => {
+      if (isStorageObjectNotFound(error)) {
+        throw new ApiError(404, "not_found", "Object not found");
+      }
+      throw error;
+    });
   });
 }
 
@@ -150,14 +170,26 @@ export async function servePublicStoredThumbnail(
   dependencies: StoredImageServingDependencies =
     defaultStoredImageServingDependencies
 ) {
-  const record = await dependencies.readReadyImageServingRecordByThumbKey(key);
-  if (!record) throw new ApiError(404, "not_found", "Thumbnail not found");
-  return deliverStoredThumbnail(
-    record,
-    request,
-    publicThumbnailPolicy,
-    dependencies
-  );
+  const signal = request.signal ?? new AbortController().signal;
+  return withPublicDatabaseRead(signal, async (database, databaseSignal) => {
+    const record = await dependencies.readReadyImageServingRecordByThumbKey(
+      key,
+      database
+    );
+    if (!record) throw new ApiError(404, "not_found", "Thumbnail not found");
+    return deliverStoredThumbnail(
+      record,
+      {
+        ...request,
+        signal: request.signal
+          ? AbortSignal.any([request.signal, databaseSignal])
+          : databaseSignal
+      },
+      publicThumbnailPolicy,
+      dependencies,
+      database
+    );
+  });
 }
 
 export async function serveAdminStoredThumbnail(

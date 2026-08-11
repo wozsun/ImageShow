@@ -2,7 +2,6 @@ import { createHash } from "node:crypto";
 import { appConfig } from "@imageshow/shared";
 import { redis } from "../core/redis-client.ts";
 import { execRedisPipeline } from "../core/redis-pipeline.ts";
-import { publicReadUsesFallbackAdmission } from "../core/public-query-gateway.ts";
 import { getRedisOperationalState } from "../core/runtime-availability.ts";
 
 const RECENT_PREFIX = "imageshow:random_recent:";
@@ -16,8 +15,7 @@ function recentKey(clientId: string, signature: string) {
 }
 
 function publicRedisIsUnavailable() {
-  return publicReadUsesFallbackAdmission()
-    && !getRedisOperationalState().available;
+  return !getRedisOperationalState().available;
 }
 
 export async function recentlyServedIds(clientId: string, signature: string): Promise<Set<string>> {
