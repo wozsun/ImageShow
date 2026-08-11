@@ -1,7 +1,8 @@
+import { errorMessage } from "../core/api-error.ts";
 import { pool } from "../core/database-pools.ts";
-import { migrateStorageBackendImages } from "./image-storage-migration-batch.ts";
-import type {
-  StorageMigrationImageRecord
+import {
+  migrateImageStorage,
+  type StorageMigrationImageRecord
 } from "./image-storage-migration.ts";
 import {
   assertStorageWriteTarget,
@@ -44,8 +45,7 @@ async function readStorageMigrationRows(
   throughId: string
 ) {
   return (await pool.query(
-    `SELECT id, object_key, ext, storage_slug, device, brightness,
-            theme, md5
+    `SELECT id, object_key, ext, storage_slug, md5
        FROM metadata
       WHERE storage_slug=$1
         AND id <= $2::uuid
@@ -57,13 +57,14 @@ async function readStorageMigrationRows(
 
 async function* streamStorageMigrationRows(
   source: string,
-  throughId: string
+  throughId: string,
+  signal?: AbortSignal
 ): AsyncGenerator<StorageMigrationImageRecord> {
   let afterId: string | null = null;
   for (;;) {
+    signal?.throwIfAborted();
     const rows = (await pool.query(
-      `SELECT id, object_key, ext, storage_slug, device, brightness,
-              theme, md5
+      `SELECT id, object_key, ext, storage_slug, md5
          FROM metadata
         WHERE storage_slug=$1
           AND ($2::uuid IS NULL OR id > $2::uuid)
@@ -72,6 +73,7 @@ async function* streamStorageMigrationRows(
         LIMIT $4`,
       [source, afterId, throughId, storageMigrationPageSize]
     )).rows as StorageMigrationImageRecord[];
+    signal?.throwIfAborted();
     if (!rows.length) return;
     const nextAfterId = rows.at(-1)?.id;
     if (!nextAfterId || nextAfterId === afterId) {
@@ -83,36 +85,122 @@ async function* streamStorageMigrationRows(
   }
 }
 
-export async function migrateStorageBackend(source: string, target: string) {
+async function migrateBackendEntries(
+  source: string,
+  target: string,
+  entries:
+    | Iterable<StorageMigrationImageRecord>
+    | AsyncIterable<StorageMigrationImageRecord>,
+  signal?: AbortSignal
+) {
+  let migrated = 0;
+  let unchanged = 0;
+  let missing = 0;
+  let errorCount = 0;
+  const errors: Array<Record<string, unknown>> = [];
+  const recordError = (error: Record<string, unknown>) => {
+    errorCount += 1;
+    if (errors.length < 100) errors.push(error);
+  };
+
+  for await (const entry of entries) {
+    signal?.throwIfAborted();
+    if (entry.storage_slug !== source) {
+      unchanged += 1;
+      continue;
+    }
+    try {
+      const result = await migrateImageStorage(entry, target, {
+        expectedSource: source,
+        signal
+      });
+      signal?.throwIfAborted();
+      if (result === "migrated") {
+        migrated += 1;
+      } else if (result === "missing") {
+        missing += 1;
+        recordError({
+          id: entry.id,
+          object_key: entry.object_key,
+          reason: "source_object_missing"
+        });
+      } else {
+        unchanged += 1;
+      }
+    } catch (error) {
+      signal?.throwIfAborted();
+      recordError({
+        id: entry.id,
+        object_key: entry.object_key,
+        reason: errorMessage(error)
+      });
+    }
+  }
+  return {
+    source,
+    target,
+    migrated,
+    unchanged,
+    missing,
+    errors,
+    error_count: errorCount
+  };
+}
+
+export async function migrateStorageBackend(
+  source: string,
+  target: string,
+  options: { signal?: AbortSignal } = {}
+) {
+  options.signal?.throwIfAborted();
   await getStorageBackend(source);
   await getStorageBackend(target);
+  options.signal?.throwIfAborted();
   const plan = await readStorageMigrationPlan(source);
+  options.signal?.throwIfAborted();
   if (!plan.affectedCount || !plan.throughId) {
     return {
-      migration: await migrateStorageBackendImages(source, target, [])
+      migration: await migrateBackendEntries(
+        source,
+        target,
+        [],
+        options.signal
+      )
     };
   }
   await assertStorageWriteTarget(target);
+  options.signal?.throwIfAborted();
 
   const decision = decideImageMutationSync(plan.affectedCount);
   const executeRebuild = async () => {
-    const entries = streamStorageMigrationRows(source, plan.throughId!);
-    const migration = await migrateStorageBackendImages(source, target, entries);
+    const entries = streamStorageMigrationRows(
+      source,
+      plan.throughId!,
+      options.signal
+    );
+    const migration = await migrateBackendEntries(
+      source,
+      target,
+      entries,
+      options.signal
+    );
     return { migration };
   };
   if (decision.mode === "rebuild") {
-    return withPlannedImageMutationRebuild(
-      decision,
-      executeRebuild
-    );
+    return withPlannedImageMutationRebuild(decision, executeRebuild);
   }
 
   const rows = await readStorageMigrationRows(source, plan.throughId);
+  options.signal?.throwIfAborted();
   const refreshedDecision = decideImageMutationSync(rows.length);
   return refreshedDecision.mode === "rebuild"
-    ? withPlannedImageMutationRebuild(
-        refreshedDecision,
-        executeRebuild
-      )
-    : { migration: await migrateStorageBackendImages(source, target, rows) };
+    ? withPlannedImageMutationRebuild(refreshedDecision, executeRebuild)
+    : {
+        migration: await migrateBackendEntries(
+          source,
+          target,
+          rows,
+          options.signal
+        )
+      };
 }

@@ -119,6 +119,7 @@ export function registerAdminImageRoutes(app: Hono) {
       const input = parse(imageStorageMigrationInput, await readJsonBody(c));
       let maxItemDurationMs = 0;
       const result = await migrateImagesStorage(input.ids, input.target, {
+        signal: c.req.raw.signal,
         onMetrics(metrics) {
           maxItemDurationMs = metrics.maxImageDurationMs;
         },

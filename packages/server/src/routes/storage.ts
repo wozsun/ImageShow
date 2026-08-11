@@ -66,7 +66,9 @@ export function registerStorageRoutes(app: Hono) {
         await readJsonBody(c)
       );
       const response = apiSuccess(
-        await migrateStorageBackend(input.source, input.target)
+        await migrateStorageBackend(input.source, input.target, {
+          signal: c.req.raw.signal
+        })
       ) satisfies StorageBackendMigrationResponseDto;
       return c.json(response);
     }
