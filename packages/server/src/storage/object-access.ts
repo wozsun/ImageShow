@@ -1,5 +1,8 @@
 import { ApiError, errorMessage } from "../core/api-error.ts";
-import { resolveStorageAccess } from "./backend-registry.ts";
+import {
+  getStorageBackend,
+  resolveStorageAccess
+} from "./backend-registry.ts";
 import type {
   OpenedRead,
   StorageRequestOptions
@@ -9,6 +12,7 @@ import type {
   StoragePrefix
 } from "./object-keys.ts";
 import { STORAGE_PREFIXES } from "./object-keys.ts";
+import { directStorageObjectUrl } from "./public-urls.ts";
 import {
   collectStorageKeyListing,
   type StorageKeyListOptions
@@ -144,15 +148,24 @@ export type ResolvedReadableObject = {
 export async function resolveReadableObject(
   prefix: ReadablePrefix,
   key: string,
-  slug?: string
+  slug: string
 ): Promise<ResolvedReadableObject> {
-  const { config, driver } = await resolveStorageAccess(slug);
+  const config = await getStorageBackend(slug);
   return {
     prefix,
     key,
     storageSlug: config.slug,
-    publicUrl: driver.publicObjectUrl(prefix, key),
-    exists: (options) => driver.exists(prefix, key, options),
-    open: (range, options) => driver.openRead(prefix, key, range, options)
+    publicUrl: directStorageObjectUrl(config, prefix, key),
+    exists: async (options) => (
+      (await resolveStorageAccess(slug)).driver.exists(prefix, key, options)
+    ),
+    open: async (range, options) => (
+      (await resolveStorageAccess(slug)).driver.openRead(
+        prefix,
+        key,
+        range,
+        options
+      )
+    )
   };
 }

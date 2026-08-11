@@ -4,7 +4,7 @@ import { dirname, join, relative, sep } from "node:path";
 import { runtimePaths } from "../config/bootstrap-env.ts";
 import { getInputImageMaxBytes } from "../config/app-settings.ts";
 import { ApiError } from "../core/api-error.ts";
-import { safeStoragePath, STORAGE_PREFIXES, type ReadablePrefix, type StoragePrefix } from "./object-keys.ts";
+import { safeStoragePath, STORAGE_PREFIXES, type StoragePrefix } from "./object-keys.ts";
 import type {
   CopyPrefix,
   OpenedRead,
@@ -181,11 +181,6 @@ export class LocalBackend implements StorageDriver {
       walkLocalKeys(root, root, options.signal),
       options
     );
-  }
-
-  publicObjectUrl(_prefix: ReadablePrefix, _key: string) {
-
-    return "";
   }
 
   async selfTest(): Promise<StorageSelfTest> {

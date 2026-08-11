@@ -9,12 +9,11 @@ import type { S3Settings, StorageBackendAdmin } from "../../lib/types.js";
 import {
   useAsyncActionStatus
 } from "../../hooks/useAsyncActionStatus.js";
-
-const emptyS3: S3Settings = {
-  endpoint: "", region: "auto", bucket: "", access_key_id: "",
-  force_path_style: true, root_path: "/", public_base_url: "", secret_access_key: "",
-  connect_timeout_seconds: 15, idle_timeout_seconds: 15, task_timeout_seconds: 300
-};
+import {
+  storageBackendEditConfigPatch,
+  storageBackendS3AfterSuccessfulSave,
+  storageBackendS3FormSettings
+} from "./storage/storage-backend-form.js";
 
 const storageTestPresentation = {
   idle: { icon: "flask-line", label: "连接测试" },
@@ -67,11 +66,11 @@ export function StorageBackendModal({ target, busy, onClose, onSave, onTest }: {
     : "";
   const [slug, setSlug] = useState(backend?.slug ?? "");
   const [displayName, setDisplayName] = useState(backend?.display_name ?? "");
-  const [s3, setS3] = useState<S3Settings>({
-    ...emptyS3,
-    ...(backend?.type === "s3" ? backend.s3 : {}),
-    secret_access_key: ""
-  });
+  const [s3, setS3] = useState<S3Settings>(() => (
+    storageBackendS3FormSettings(
+      backend?.type === "s3" ? backend : undefined
+    )
+  ));
   const effectiveType = creating ? "s3" : backend!.type;
   const titleId = useId();
   const descriptionId = useId();
@@ -107,7 +106,16 @@ export function StorageBackendModal({ target, busy, onClose, onSave, onTest }: {
       label: saveOperation === "create" ? "新建失败" : "保存失败"
     }
   } as const;
-  const configPayload = () => isLocal ? {} : { s3 };
+  const configPayload = () => {
+    if (isLocal) return {};
+    const { secret_access_key, ...settings } = s3;
+    if (backend?.type === "s3") {
+      return storageBackendEditConfigPatch(backend, s3);
+    }
+    return {
+      s3: secret_access_key ? { ...settings, secret_access_key } : settings
+    };
+  };
   const submit = async () => {
     const creatingNow = isCreateForm;
     setSaveOperation(creatingNow ? "create" : "save");
@@ -116,7 +124,10 @@ export function StorageBackendModal({ target, busy, onClose, onSave, onTest }: {
       ? { slug, display_name: displayName, s3 }
       : { display_name: displayName, ...(isLocal ? {} : configPayload()) };
     const succeeded = await saveStatus.run(() => onSave(targetSlug, payload, creatingNow));
-    if (succeeded && creatingNow) setCreatedSlug(slug);
+    if (succeeded) {
+      setS3(storageBackendS3AfterSuccessfulSave);
+      if (creatingNow) setCreatedSlug(slug);
+    }
   };
   const testBody = () => ({
     ...(createdSlug || backend?.slug ? { slug: createdSlug ?? backend!.slug } : {}),

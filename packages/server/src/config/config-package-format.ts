@@ -33,7 +33,7 @@ const packageBackendBase = {
 };
 const packageStorageBackendSchema = z.strictObject({
   ...packageBackendBase,
-  s3: s3SettingsSchema.strict()
+  s3: s3SettingsSchema
 });
 
 const configPackageSchema = z.strictObject({

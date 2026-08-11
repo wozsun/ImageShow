@@ -24,7 +24,7 @@ additions 只保存一个发布周期的安全增量。版本 N 新增经审查�
 占位文件及稳定的启动、构建入口。该模型不支持跳过 N 直接部署 N+1；恢复早于 N 的数据库
 备份时，也必须先运行 N 或人工执行同一份经审查 SQL。
 
-当前 `v4.8.9` 的 additions 没有待执行 SQL，只保留过渡规则注释。
+当前 `v4.8.10` 的 additions 没有待执行 SQL，只保留过渡规则注释。
 `metadata.purge_error TEXT`、`admin_account.preferences JSONB NOT NULL DEFAULT '{}'` 与
 `theme.none` 已在 `schema.sql` 形成基线，并已由全部受控生产数据库在上一版本完成确认。
 后续 additions 仍只保存当期真实增量：不补业务表、外键、CHECK，不删除或重命名对象，
@@ -194,8 +194,10 @@ bucket / root_path 是物理布局；仍有
 等价关系保持传递性；已在集合中或与其他注册项共享 identity 的空后端也不得无证明地
 脱离该集合。验证失败不写配置；COMMIT 回包丢失时按事务 ID 查询确定结果，
 无法确认则明确要求刷新核对。region、凭据、公开 URL 等访问参数不改变物理 identity，
-但会改变 driver；保存时仍取得独占位置锁，在没有并发多请求存储操作的边界完成验证、
-提交和旧 driver 退役。
+其中 region、凭据、path-style 和请求时限会改变 driver；保存时取得独占位置锁，在没有
+并发多请求存储操作的边界完成验证和提交；后续操作发布当前 PostgreSQL 快照时原子选取
+新 driver，并让失去签名引用的旧 driver 拒绝新操作。公开 URL 只参与响应地址投影，仅校验
+HTTPS 格式并在后端配置锁内保存，不创建探针 driver，也不退役当前连接。
 
 ## admin_account —— 管理员
 

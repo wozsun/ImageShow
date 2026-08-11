@@ -1,6 +1,5 @@
 import {
   s3SettingsSchema,
-  type S3Settings,
   type StorageBackendRecord,
   type StorageConfig
 } from "./backend-config.ts";
@@ -70,14 +69,4 @@ export function storageConfigFromRecord(
     ...config
   } = record;
   return config;
-}
-
-export function withStoredS3Credential(
-  candidate: S3Settings,
-  current?: S3Settings
-) {
-  if (candidate.secret_access_key || !current?.secret_access_key) {
-    return candidate;
-  }
-  return { ...candidate, secret_access_key: current.secret_access_key };
 }

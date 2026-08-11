@@ -14,7 +14,7 @@ import { randomUUID } from "node:crypto";
 import { ApiError, errorMessage } from "../core/api-error.ts";
 import { getInputImageMaxBytes } from "../config/app-settings.ts";
 import { missingS3Fields, type S3StorageConfig } from "./backend-config.ts";
-import { s3CopySource, s3ListPrefix, storageS3ObjectName, type ReadablePrefix, type StoragePrefix } from "./object-keys.ts";
+import { s3CopySource, s3ListPrefix, storageS3ObjectName, type StoragePrefix } from "./object-keys.ts";
 import { openedReadToBuffer } from "./stream-buffer.ts";
 import type {
   CopyPrefix,
@@ -83,10 +83,6 @@ export class S3Backend implements StorageDriver {
   }
 
   close() {
-    this.client.destroy();
-  }
-
-  forceClose() {
     this.client.destroy();
   }
 
@@ -352,13 +348,6 @@ export class S3Backend implements StorageDriver {
     );
   }
 
-  publicObjectUrl(prefix: ReadablePrefix, key: string) {
-    if (!this.config.s3.public_base_url) return "";
-    const base = this.config.s3.public_base_url.replace(/\/+$/, "");
-    const encoded = this.name(prefix, key).split("/").map(encodeURIComponent).join("/");
-    return `${base}/${encoded}`;
-  }
-
   async selfTest(
     options: StorageRequestOptions = {}
   ): Promise<StorageSelfTest> {
@@ -386,8 +375,7 @@ export class S3Backend implements StorageDriver {
         backend: "s3",
         writable: true,
         bucket: this.config.s3.bucket,
-        endpoint: this.config.s3.endpoint,
-        public_base_url: this.config.s3.public_base_url
+        endpoint: this.config.s3.endpoint
       };
     } catch (error) {
       testError = error;

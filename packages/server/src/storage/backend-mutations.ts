@@ -243,7 +243,7 @@ export async function deleteStorageBackend(slug: string) {
         }
       } finally {
         // The DELETE may commit even if its acknowledgement is lost.
-        invalidateStorageBackendRegistry({ retireDrivers: true });
+        invalidateStorageBackendRegistry();
       }
     }
   );

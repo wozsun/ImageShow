@@ -7,14 +7,15 @@ import {
 import { pool } from "../core/database-pools.ts";
 import { withAdvisoryLock } from "../core/database-advisory-locks.ts";
 import {
-  s3SettingsSchema,
+  mergeS3Settings,
+  sameStorageBackendSettings,
+  storageDriverSignature,
   type StorageBackendUpdateInput,
   type StorageConfig
 } from "./backend-config.ts";
 import {
   normalizedNamespaceIdentities,
   storageConfigFromRow,
-  withStoredS3Credential,
   type StorageBackendConfigRow
 } from "./backend-record.ts";
 import {
@@ -53,10 +54,7 @@ function updatedStorageConfig(
     return input.s3
       ? {
           ...current,
-          s3: withStoredS3Credential(
-            s3SettingsSchema.parse(input.s3),
-            current.s3
-          )
+          s3: mergeS3Settings(input.s3, current.s3)
         }
       : current;
   }
@@ -153,13 +151,10 @@ function sameStorageBackendConfig(
   ) {
     return false;
   }
-  const snapshotConfig = storageConfigFromRow(snapshot);
-  const lockedConfig = storageConfigFromRow(locked);
-  if (snapshotConfig.type === "s3" && lockedConfig.type === "s3") {
-    return JSON.stringify(snapshotConfig.s3)
-      === JSON.stringify(lockedConfig.s3);
-  }
-  return snapshotConfig.type === lockedConfig.type;
+  return sameStorageBackendSettings(
+    storageConfigFromRow(snapshot),
+    storageConfigFromRow(locked)
+  );
 }
 
 async function updateStorageBackendUnderLock(
@@ -174,9 +169,12 @@ async function updateStorageBackendUnderLock(
   signal.throwIfAborted();
   const currentConfig = storageConfigFromRow(snapshot);
   const nextConfig = updatedStorageConfig(currentConfig, input);
-  const configChanged = currentConfig.type === "s3" && nextConfig.type === "s3"
-    ? JSON.stringify(currentConfig.s3) !== JSON.stringify(nextConfig.s3)
-    : false;
+  const configChanged = !sameStorageBackendSettings(
+    currentConfig,
+    nextConfig
+  );
+  const driverChanged = storageDriverSignature(currentConfig)
+    !== storageDriverSignature(nextConfig);
   const configuredNamespaceChanged =
     configuredStorageNamespaceIdentity(currentConfig)
     !== configuredStorageNamespaceIdentity(nextConfig);
@@ -226,7 +224,7 @@ async function updateStorageBackendUnderLock(
     }
   }
 
-  const existingObject = snapshotUsage.image_count > 0
+  const existingObject = driverChanged && snapshotUsage.image_count > 0
     ? (await pool.query(
         `SELECT id, object_key, storage_slug
            FROM metadata
@@ -237,7 +235,7 @@ async function updateStorageBackendUnderLock(
       )).rows[0] as ExistingStorageProbe | undefined
     : undefined;
   signal.throwIfAborted();
-  if (configChanged) {
+  if (driverChanged) {
     await validateStorageBackendCandidate(
       nextConfig,
       existingObject,
@@ -357,7 +355,7 @@ async function updateStorageBackendUnderLock(
     );
   } finally {
     // COMMIT acknowledgement can be lost together with the lock connection.
-    invalidateStorageBackendRegistry({ retireDrivers: configChanged });
+    invalidateStorageBackendRegistry();
   }
 }
 
@@ -403,12 +401,15 @@ export async function updateStorageBackend(
       )
     );
 
-  if (!input.s3) {
+  const needsLocationWriteLock = input.s3
+    ? Object.keys(input.s3).some((field) => field !== "public_base_url")
+    : false;
+  if (!needsLocationWriteLock) {
     await updateWithBackendLock();
     return;
   }
 
-  // Any driver-affecting setting changes how subsequent object calls connect.
+  // S3 settings can affect the physical location or an active transport.
   // Exclude active readers before retiring the old driver so a multi-request
   // operation cannot be interrupted halfway through by a harmless config edit.
   await settleStorageBackendUpdate((receipt) =>

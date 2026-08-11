@@ -1,13 +1,10 @@
 import { ApiError, errorMessage } from "../core/api-error.ts";
 import { logger } from "../core/logger.ts";
 import {
-  s3SettingsSchema,
+  mergeS3Settings,
   type StorageBackendTestInput,
   type StorageConfig
 } from "./backend-config.ts";
-import {
-  withStoredS3Credential
-} from "./backend-record.ts";
 import {
   getStorageBackend,
   resolveStorageAccessForConfig
@@ -118,13 +115,10 @@ export async function resolveStorageTestConfig(
   if (current?.type === "local") return current;
 
   const currentS3 = current?.type === "s3" ? current.s3 : undefined;
-  const candidate = s3SettingsSchema.parse(input.s3 ?? currentS3 ?? {});
+  const candidate = mergeS3Settings(input.s3, currentS3);
   return {
     slug: "(test)",
     type: "s3",
-    s3: withStoredS3Credential(
-      candidate,
-      currentS3
-    )
+    s3: candidate
   };
 }

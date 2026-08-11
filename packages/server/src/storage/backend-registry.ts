@@ -9,6 +9,7 @@ import {
 import { logger } from "../core/logger.ts";
 import {
   missingS3Fields,
+  storageDriverSignature,
   type StorageBackendRecord,
   type StorageConfig
 } from "./backend-config.ts";
@@ -20,58 +21,78 @@ import {
 import { createStorageDriver } from "./driver-factory.ts";
 import type { StorageDriver } from "./driver.ts";
 import { manageStorageDriver } from "./driver-lifecycle.ts";
-import { StorageBackendRegistryGeneration } from "./backend-registry-generation.ts";
 
 const storageCacheTtlMs = appConfig.derivedCacheTtlSeconds * 1000;
 let storageCache: StorageBackendRecord[] | null = null;
 let storageCacheExpiresAt = 0;
-let storageLoad: Promise<StorageBackendRecord[]> | null = null;
-const registryGeneration = new StorageBackendRegistryGeneration();
+let registryRevision = 0;
+let registryClosed = false;
+let storageLoad: {
+  revision: number;
+  promise: Promise<StorageBackendRecord[]>;
+} | null = null;
 const storageDriverCache = new Map<string, StorageDriver>();
-let storageDriverCloseQueue = Promise.resolve();
+const closingStorageDrivers = new Set<Promise<void>>();
 
-function storageDriverCacheKey(config: StorageConfig) {
-  return JSON.stringify(config);
+function closedRegistryError() {
+  return new ApiError(
+    503,
+    "storage_registry_closed",
+    "Storage backend registry is shutting down"
+  );
+}
+
+function assertRegistryOpen() {
+  if (registryClosed) throw closedRegistryError();
+}
+
+function trackRetiredDriver(driver: StorageDriver) {
+  let close: Promise<void>;
+  try {
+    close = Promise.resolve(driver.close?.());
+  } catch (error) {
+    close = Promise.reject(error);
+  }
+  const tracked = close.catch((error) => {
+    logger.warn("storage_driver_close_failed", {
+      error: errorMessage(error)
+    });
+  }).finally(() => {
+    closingStorageDrivers.delete(tracked);
+  });
+  closingStorageDrivers.add(tracked);
+}
+
+function retainCurrentStorageDrivers(backends: readonly StorageBackendRecord[]) {
+  const currentSignatures = new Set(backends.map((backend) => (
+    storageDriverSignature(storageConfigFromRecord(backend))
+  )));
+  for (const [signature, driver] of storageDriverCache) {
+    if (currentSignatures.has(signature)) continue;
+    storageDriverCache.delete(signature);
+    // close() synchronously prevents new references; the physical client is
+    // closed once operations and response streams already in flight drain.
+    trackRetiredDriver(driver);
+  }
+}
+
+function publishStorageBackends(backends: StorageBackendRecord[]) {
+  retainCurrentStorageDrivers(backends);
+  storageCache = backends;
+  storageCacheExpiresAt = Date.now() + storageCacheTtlMs;
 }
 
 function storageDriverForConfig(config: StorageConfig) {
-  registryGeneration.assertOpen();
+  assertRegistryOpen();
   if (config.slug === "(test)") {
     return manageStorageDriver(createStorageDriver(config));
   }
-  const key = storageDriverCacheKey(config);
-  const cached = storageDriverCache.get(key);
+  const signature = storageDriverSignature(config);
+  const cached = storageDriverCache.get(signature);
   if (cached) return cached;
   const driver = manageStorageDriver(createStorageDriver(config));
-  storageDriverCache.set(key, driver);
+  storageDriverCache.set(signature, driver);
   return driver;
-}
-
-function retireStorageDrivers() {
-  const drivers = [...storageDriverCache.values()];
-  storageDriverCache.clear();
-  if (!drivers.length) return;
-  // Invoke close synchronously so every wrapper rejects new leases as soon as
-  // the cache generation is retired. Physical clients close only after their
-  // already-issued operations and response bodies drain (or hit the bound).
-  const closing = Promise.allSettled(drivers.map((driver) => {
-    try {
-      return Promise.resolve(driver.close?.());
-    } catch (error) {
-      return Promise.reject(error);
-    }
-  }));
-  storageDriverCloseQueue = Promise.all([
-    storageDriverCloseQueue,
-    closing
-  ]).then(([, results]) => {
-    for (const result of results) {
-      if (result.status === "fulfilled") continue;
-      logger.warn("storage_driver_close_failed", {
-        error: errorMessage(result.reason)
-      });
-    }
-  });
 }
 
 async function loadStorageBackends(): Promise<StorageBackendRecord[]> {
@@ -97,74 +118,71 @@ async function loadStorageBackends(): Promise<StorageBackendRecord[]> {
   return rows.map((row) => storageBackendRecordFromRow(row));
 }
 
-async function loadCachedStorageBackends(): Promise<StorageBackendRecord[]> {
-  if (storageCache && Date.now() < storageCacheExpiresAt) return storageCache;
-  const loadGeneration = registryGeneration.current;
+function loadStorageBackendsForRevision(revision: number) {
   if (publicReadUsesFallbackAdmission()) {
     return coalescePublicRead(
-      `storage-backends:${loadGeneration}`,
-      async () => {
-        const loaded = await loadStorageBackends();
-        if (registryGeneration.current === loadGeneration) {
-          storageCache = loaded;
-          storageCacheExpiresAt = Date.now() + storageCacheTtlMs;
-        }
-        return loaded;
-      }
+      `storage-backends:${revision}`,
+      loadStorageBackends
     );
   }
-  if (!storageLoad) storageLoad = loadStorageBackends();
+  if (!storageLoad || storageLoad.revision !== revision) {
+    storageLoad = { revision, promise: loadStorageBackends() };
+  }
   const currentLoad = storageLoad;
-  try {
-    const loaded = await currentLoad;
-    if (registryGeneration.current === loadGeneration) {
-      storageCache = loaded;
-      storageCacheExpiresAt = Date.now() + storageCacheTtlMs;
-    }
-    return loaded;
-  } finally {
+  return currentLoad.promise.finally(() => {
     if (storageLoad === currentLoad) storageLoad = null;
+  });
+}
+
+async function withCurrentStorageBackends<Result>(
+  select: (backends: StorageBackendRecord[]) => Result
+): Promise<Result> {
+  while (true) {
+    assertRegistryOpen();
+    if (storageCache && Date.now() < storageCacheExpiresAt) {
+      return select(storageCache);
+    }
+    const revision = registryRevision;
+    const loaded = await loadStorageBackendsForRevision(revision);
+    assertRegistryOpen();
+    if (revision !== registryRevision) continue;
+    publishStorageBackends(loaded);
+    // Selection intentionally shares the synchronous turn with the revision
+    // check so invalidation cannot publish between the snapshot and driver.
+    return select(loaded);
   }
 }
 
-async function getStorageBackends(): Promise<StorageBackendRecord[]> {
-  return registryGeneration.commitStable(
-    loadCachedStorageBackends,
-    (backends) => backends
-  );
-}
-
-export function invalidateStorageBackendRegistry(
-  options: { retireDrivers?: boolean } = {}
-) {
-  registryGeneration.invalidate();
+export function invalidateStorageBackendRegistry() {
+  registryRevision += 1;
   storageCache = null;
   storageCacheExpiresAt = 0;
-  // A caller that started before invalidation may finish its physical query,
-  // but the generation gate prevents that snapshot from being committed or
-  // used to create a driver.
   storageLoad = null;
-  if (options.retireDrivers) retireStorageDrivers();
 }
 
 export async function closeStorageBackendRegistry() {
-  registryGeneration.close();
-  storageCache = null;
-  storageCacheExpiresAt = 0;
-  storageLoad = null;
-  retireStorageDrivers();
-  await storageDriverCloseQueue;
+  if (!registryClosed) {
+    registryClosed = true;
+    registryRevision += 1;
+    storageCache = null;
+    storageCacheExpiresAt = 0;
+    storageLoad = null;
+    for (const driver of storageDriverCache.values()) {
+      trackRetiredDriver(driver);
+    }
+    storageDriverCache.clear();
+  }
+  await Promise.all([...closingStorageDrivers]);
 }
 
 export async function listStorageBackends(): Promise<StorageBackendRecord[]> {
-  return getStorageBackends();
+  return withCurrentStorageBackends((backends) => backends);
 }
 
 export async function getStorageBackend(slug: string): Promise<StorageConfig> {
-  return registryGeneration.commitStable(
-    loadCachedStorageBackends,
-    (backends) => storageConfigFromRecord(storageRecordBySlug(backends, slug))
-  );
+  return withCurrentStorageBackends((backends) => storageConfigFromRecord(
+    storageRecordBySlug(backends, slug)
+  ));
 }
 
 function storageRecordBySlug(
@@ -198,7 +216,7 @@ function assertStorageConfigComplete(config: StorageConfig) {
 export async function assertStorageWriteTarget(
   slug: string
 ): Promise<StorageConfig> {
-  return registryGeneration.commitStable(loadCachedStorageBackends, (backends) => {
+  return withCurrentStorageBackends((backends) => {
     const record = storageRecordBySlug(backends, slug);
     if (!record.enabled) {
       throw new ApiError(
@@ -227,15 +245,8 @@ function defaultStorageRecord(
   return record;
 }
 
-async function getDefaultStorageRecord(): Promise<StorageBackendRecord> {
-  return registryGeneration.commitStable(
-    loadCachedStorageBackends,
-    defaultStorageRecord
-  );
-}
-
 export async function resolveStorageAccess(slug?: string) {
-  return registryGeneration.commitStable(loadCachedStorageBackends, (backends) => {
+  return withCurrentStorageBackends((backends) => {
     const record = slug
       ? storageRecordBySlug(backends, slug)
       : defaultStorageRecord(backends);
@@ -249,5 +260,7 @@ export function resolveStorageAccessForConfig(config: StorageConfig) {
 }
 
 export async function getDefaultStorageSlug(): Promise<string> {
-  return (await getDefaultStorageRecord()).slug;
+  return withCurrentStorageBackends(
+    (backends) => defaultStorageRecord(backends).slug
+  );
 }

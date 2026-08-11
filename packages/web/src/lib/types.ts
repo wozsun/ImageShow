@@ -44,7 +44,6 @@ export type S3Settings = Omit<
   "secret_access_key_configured"
 > & {
   secret_access_key?: string;
-  secret_access_key_configured?: boolean;
 };
 export type StorageBackendAdmin = StorageBackendAdminDto;
 export type AdvancedConfigPreview = AdvancedConfigPreviewDto;

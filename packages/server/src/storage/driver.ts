@@ -1,6 +1,6 @@
 import type { Readable } from "node:stream";
 import type { StorageType } from "@imageshow/shared/browser";
-import type { ReadablePrefix, StoragePrefix } from "./object-keys.ts";
+import type { StoragePrefix } from "./object-keys.ts";
 import type {
   StorageKeyListing,
   StorageKeyListOptions
@@ -28,13 +28,10 @@ export type StorageSelfTest = {
   storage_dir?: string;
   bucket?: string;
   endpoint?: string;
-  public_base_url?: string;
 };
 
 export interface StorageDriver {
   close?(): void | Promise<void>;
-  /** Immediately abort in-flight transport work after graceful drain expires. */
-  forceClose?(): void | Promise<void>;
   exists(
     prefix: StoragePrefix,
     key: string,
@@ -74,7 +71,6 @@ export interface StorageDriver {
     prefix: StoragePrefix,
     options?: StorageKeyListOptions
   ): StorageKeyListing;
-  publicObjectUrl(prefix: ReadablePrefix, key: string): string;
   selfTest(options?: StorageRequestOptions): Promise<StorageSelfTest>;
   pruneEmptyDirs(options?: StorageRequestOptions): Promise<number>;
 }

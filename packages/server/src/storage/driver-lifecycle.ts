@@ -1,5 +1,5 @@
 import { ApiError } from "../core/api-error.ts";
-import type { ReadablePrefix, StoragePrefix } from "./object-keys.ts";
+import type { StoragePrefix } from "./object-keys.ts";
 import type {
   CopyPrefix,
   OpenedRead,
@@ -12,19 +12,6 @@ import type {
   StorageKeyListOptions
 } from "./key-listing.ts";
 
-const STORAGE_DRIVER_DRAIN_TIMEOUT_MS = 30_000;
-const STORAGE_DRIVER_CLOSE_TIMEOUT_MS = 5_000;
-
-type ManagedStorageDriverOptions = {
-  drainTimeoutMs?: number;
-  closeTimeoutMs?: number;
-};
-
-type CloseResult =
-  | { status: "fulfilled" }
-  | { status: "rejected"; reason: unknown }
-  | { status: "timed_out"; reason: Error };
-
 function retiredDriverError() {
   return new ApiError(
     503,
@@ -33,77 +20,31 @@ function retiredDriverError() {
   );
 }
 
-function checkedTimeout(
-  value: number | undefined,
-  fallback: number,
-  description: string
-) {
-  const timeout = value ?? fallback;
-  if (!Number.isSafeInteger(timeout) || timeout < 1) {
-    throw new RangeError(`${description} must be a positive safe integer`);
-  }
-  return timeout;
-}
-
-async function settleCloseWithin(
-  work: () => void | Promise<void>,
-  timeoutMs: number,
-  description: string
-): Promise<CloseResult> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const operation = Promise.resolve().then(work).then(
-    () => ({ status: "fulfilled" }) as const,
-    (reason) => ({ status: "rejected", reason }) as const
-  );
-  const timeout = new Promise<CloseResult>((resolve) => {
-    timer = setTimeout(() => resolve({
-      status: "timed_out",
-      reason: new Error(`${description} timed out after ${timeoutMs}ms`)
-    }), timeoutMs);
-  });
-  try {
-    return await Promise.race([operation, timeout]);
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
-}
-
 /**
- * Keep one physical driver alive for every operation that already captured it.
- * Stream reads own their lease until EOF, error or consumer cancellation.
+ * Retire one physical driver only after every operation that already entered
+ * it has settled. Response streams retain their reference through EOF, error
+ * or consumer cancellation.
  */
 class ManagedStorageDriver implements StorageDriver {
   private readonly driver: StorageDriver;
-  private readonly drainTimeoutMs: number;
-  private readonly closeTimeoutMs: number;
-  private activeLeases = 0;
+  private activeReferences = 0;
   private retiring = false;
   private drained: (() => void) | null = null;
   private closePromise: Promise<void> | null = null;
 
-  constructor(driver: StorageDriver, options: ManagedStorageDriverOptions = {}) {
+  constructor(driver: StorageDriver) {
     this.driver = driver;
-    this.drainTimeoutMs = checkedTimeout(
-      options.drainTimeoutMs,
-      STORAGE_DRIVER_DRAIN_TIMEOUT_MS,
-      "Storage driver drain timeout"
-    );
-    this.closeTimeoutMs = checkedTimeout(
-      options.closeTimeoutMs,
-      STORAGE_DRIVER_CLOSE_TIMEOUT_MS,
-      "Storage driver close timeout"
-    );
   }
 
-  private acquireLease() {
+  private retain() {
     if (this.retiring) throw retiredDriverError();
-    this.activeLeases += 1;
+    this.activeReferences += 1;
     let released = false;
     return () => {
       if (released) return;
       released = true;
-      this.activeLeases -= 1;
-      if (this.activeLeases === 0) {
+      this.activeReferences -= 1;
+      if (this.activeReferences === 0) {
         const drained = this.drained;
         this.drained = null;
         drained?.();
@@ -111,8 +52,8 @@ class ManagedStorageDriver implements StorageDriver {
     };
   }
 
-  private async withinLease<T>(work: () => Promise<T>) {
-    const release = this.acquireLease();
+  private async usingReference<T>(work: () => Promise<T>) {
+    const release = this.retain();
     try {
       return await work();
     } finally {
@@ -120,24 +61,22 @@ class ManagedStorageDriver implements StorageDriver {
     }
   }
 
-  private bodyWithLease(opened: OpenedRead, release: () => void) {
-    const releaseOnLifecycleEnd = () => {
-      opened.body.off("end", releaseOnLifecycleEnd);
-      opened.body.off("error", releaseOnLifecycleEnd);
-      opened.body.off("close", releaseOnLifecycleEnd);
+  private retainBody(opened: OpenedRead, release: () => void) {
+    const finish = () => {
+      opened.body.off("end", finish);
+      opened.body.off("error", finish);
+      opened.body.off("close", finish);
       release();
     };
-    opened.body.once("end", releaseOnLifecycleEnd);
-    opened.body.once("error", releaseOnLifecycleEnd);
-    opened.body.once("close", releaseOnLifecycleEnd);
-    if (opened.body.destroyed || opened.body.readableEnded) {
-      releaseOnLifecycleEnd();
-    }
+    opened.body.once("end", finish);
+    opened.body.once("error", finish);
+    opened.body.once("close", finish);
+    if (opened.body.destroyed || opened.body.readableEnded) finish();
     return opened;
   }
 
   exists(prefix: StoragePrefix, key: string, options?: StorageRequestOptions) {
-    return this.withinLease(() => this.driver.exists(prefix, key, options));
+    return this.usingReference(() => this.driver.exists(prefix, key, options));
   }
 
   async openRead(
@@ -146,9 +85,9 @@ class ManagedStorageDriver implements StorageDriver {
     range?: string,
     options?: StorageRequestOptions
   ) {
-    const release = this.acquireLease();
+    const release = this.retain();
     try {
-      return this.bodyWithLease(
+      return this.retainBody(
         await this.driver.openRead(prefix, key, range, options),
         release
       );
@@ -159,7 +98,7 @@ class ManagedStorageDriver implements StorageDriver {
   }
 
   readBuffer(prefix: StoragePrefix, key: string, options?: StorageRequestOptions) {
-    return this.withinLease(() => this.driver.readBuffer(prefix, key, options));
+    return this.usingReference(() => this.driver.readBuffer(prefix, key, options));
   }
 
   writeBuffer(
@@ -169,13 +108,13 @@ class ManagedStorageDriver implements StorageDriver {
     type: string,
     options?: StorageRequestOptions
   ) {
-    return this.withinLease(() => (
+    return this.usingReference(() => (
       this.driver.writeBuffer(prefix, key, body, type, options)
     ));
   }
 
   remove(prefix: StoragePrefix, key: string, options?: StorageRequestOptions) {
-    return this.withinLease(() => this.driver.remove(prefix, key, options));
+    return this.usingReference(() => this.driver.remove(prefix, key, options));
   }
 
   copy(
@@ -185,7 +124,7 @@ class ManagedStorageDriver implements StorageDriver {
     toKey: string,
     options?: StorageRequestOptions
   ) {
-    return this.withinLease(() => this.driver.copy(
+    return this.usingReference(() => this.driver.copy(
       fromPrefix,
       fromKey,
       toPrefix,
@@ -198,7 +137,7 @@ class ManagedStorageDriver implements StorageDriver {
     prefix: StoragePrefix,
     options?: StorageKeyListOptions
   ): StorageKeyListing {
-    const release = this.acquireLease();
+    const release = this.retain();
     try {
       return yield* this.driver.listKeys(prefix, options);
     } finally {
@@ -206,16 +145,12 @@ class ManagedStorageDriver implements StorageDriver {
     }
   }
 
-  publicObjectUrl(prefix: ReadablePrefix, key: string) {
-    return this.driver.publicObjectUrl(prefix, key);
-  }
-
   selfTest(options?: StorageRequestOptions): Promise<StorageSelfTest> {
-    return this.withinLease(() => this.driver.selfTest(options));
+    return this.usingReference(() => this.driver.selfTest(options));
   }
 
   pruneEmptyDirs(options?: StorageRequestOptions) {
-    return this.withinLease(() => this.driver.pruneEmptyDirs(options));
+    return this.usingReference(() => this.driver.pruneEmptyDirs(options));
   }
 
   close() {
@@ -226,70 +161,13 @@ class ManagedStorageDriver implements StorageDriver {
   }
 
   private async closeAfterDrain() {
-    const failures: unknown[] = [];
-    let drainTimedOut = false;
-    if (this.activeLeases > 0) {
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      await Promise.race([
-        new Promise<void>((resolve) => { this.drained = resolve; }),
-        new Promise<void>((resolve) => {
-          timer = setTimeout(() => {
-            drainTimedOut = true;
-            failures.push(new Error(
-              `Storage driver retirement timed out with ${this.activeLeases} active lease(s)`
-            ));
-            resolve();
-          }, this.drainTimeoutMs);
-        })
-      ]);
-      if (timer) clearTimeout(timer);
-      this.drained = null;
+    if (this.activeReferences > 0) {
+      await new Promise<void>((resolve) => { this.drained = resolve; });
     }
-
-    if (!drainTimedOut) {
-      const graceful = await settleCloseWithin(
-        () => this.driver.close?.(),
-        this.closeTimeoutMs,
-        "Storage driver graceful close"
-      );
-      if (graceful.status !== "fulfilled") {
-        failures.push(graceful.reason);
-        await this.forceCloseAfterFailure(failures, true);
-      }
-    } else {
-      await this.forceCloseAfterFailure(failures, false);
-    }
-
-    if (failures.length === 1) throw failures[0];
-    if (failures.length > 1) {
-      throw new AggregateError(failures, "Storage driver retirement failed");
-    }
-  }
-
-  private async forceCloseAfterFailure(
-    failures: unknown[],
-    gracefulAlreadyAttempted: boolean
-  ) {
-    if (!this.driver.forceClose && gracefulAlreadyAttempted) {
-      failures.push(new Error(
-        "Storage driver does not expose forceClose after graceful close failure"
-      ));
-      return;
-    }
-    const forced = await settleCloseWithin(
-      () => this.driver.forceClose
-        ? this.driver.forceClose()
-        : this.driver.close?.(),
-      this.closeTimeoutMs,
-      "Storage driver force close"
-    );
-    if (forced.status !== "fulfilled") failures.push(forced.reason);
+    await this.driver.close?.();
   }
 }
 
-export function manageStorageDriver(
-  driver: StorageDriver,
-  options?: ManagedStorageDriverOptions
-) {
-  return new ManagedStorageDriver(driver, options);
+export function manageStorageDriver(driver: StorageDriver): StorageDriver {
+  return new ManagedStorageDriver(driver);
 }

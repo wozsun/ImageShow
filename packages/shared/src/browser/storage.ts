@@ -1,4 +1,4 @@
-import type { ApiSuccessResponseDto, StorageType } from "./common.ts";
+import type { ApiSuccessResponseDto } from "./common.ts";
 
 export type StorageBackendDeleteBlocker =
   | "built_in"
@@ -88,8 +88,8 @@ type StorageBackendAdminBaseDto = StorageBackendOptionDto & {
 };
 
 export type StorageBackendAdminDto = StorageBackendAdminBaseDto & (
-  | { type: Extract<StorageType, "local"> }
-  | { type: Extract<StorageType, "s3">; s3: StorageBackendS3Dto }
+  | { type: "local" }
+  | { type: "s3"; s3: StorageBackendS3Dto }
 );
 
 export type StorageBackendsAdminResponseDto = {
