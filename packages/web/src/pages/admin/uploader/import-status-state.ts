@@ -18,7 +18,6 @@ const preReadyServerStatuses = new Set<StoredImportStatus["status"]>([
 
 const unavailablePreparedPreview = {
   preview: "",
-  previewFallback: undefined,
   previewFull: undefined
 };
 

@@ -199,7 +199,6 @@ export function useLinkImport(options: {
     const next = {
       ...retryLinkPrepareJob(job),
       preview: "",
-      previewFallback: undefined,
       previewFull: undefined,
       objectUrl: undefined,
       width: 0,

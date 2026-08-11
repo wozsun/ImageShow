@@ -5,17 +5,10 @@ import { getStorageBackend } from "./backend-registry.ts";
 import { withStorageLocationReadLock } from "./maintenance-lock.ts";
 import {
   enqueueMoveCleanupJob,
-  enqueueThumbnailRepairReceipt as persistThumbnailRepairReceipt,
   listUnresolvedMoveCleanupReferences,
   retryExhaustedMoveCleanupJobs,
-  settleThumbnailRepairReceipt as persistSettledThumbnailRepairReceipt,
   type UnresolvedMoveCleanupReference
 } from "./move-cleanup-repository.ts";
-import {
-  markThumbnailRepairPending,
-  markThumbnailRepairSettled,
-  thumbnailRepairIsPendingInMemory
-} from "./thumbnail-repair-state.ts";
 import type {
   CapturedMoveCleanupObject,
   MoveCleanupObjectInput
@@ -156,18 +149,6 @@ export async function assertThumbnailRepairNotPending(
   }
 }
 
-/**
- * A failed repair can leave bytes at the deterministic final key. Until its
- * durable receipt adopts or removes them, serving must use the original-image
- * fallback instead of treating mere existence as integrity proof.
- */
-export function thumbnailRepairIsPending(
-  imageId: string,
-  key: string
-) {
-  return thumbnailRepairIsPendingInMemory(imageId, key);
-}
-
 const cleanupEnqueueRetryDelaysMs = [0, 50, 150] as const;
 
 export async function captureMoveCleanupObjects(
@@ -188,90 +169,6 @@ export async function captureMoveCleanupObjects(
     captured.push({ ...object, namespace_identity: identity });
   }
   return captured;
-}
-
-function canonicalRepairBody(body: Buffer) {
-  return body.toString("base64");
-}
-
-/**
- * Create the durable write-ahead owner before repair bytes can reach the
- * deterministic thumbnail key. Existing unresolved ownership is accepted only
- * when it describes the exact same physical namespace, digest, size and body.
- */
-export async function enqueueThumbnailRepairWriteAhead(
-  imageId: string,
-  object: MoveCleanupObjectInput & {
-    prefix: "thumbs";
-    thumbnail_repair: NonNullable<MoveCleanupObjectInput["thumbnail_repair"]>;
-  },
-  body: Buffer
-): Promise<ThumbnailRepairCleanupAuthorization> {
-  const [captured] = await captureMoveCleanupObjects([object]);
-  if (!captured || captured.prefix !== "thumbs" || !captured.thumbnail_repair) {
-    throw new Error("Thumbnail repair receipt could not capture its namespace");
-  }
-  const bodyBase64 = canonicalRepairBody(body);
-  const receipt = await persistThumbnailRepairReceipt(
-    imageId,
-    captured,
-    bodyBase64
-  );
-  const existingObject = receipt.payload.objects?.[0];
-  if (
-    receipt.payload.objects?.length !== 1
-    || !existingObject
-    || existingObject.prefix !== captured.prefix
-    || existingObject.key !== captured.key
-    || existingObject.backend !== captured.backend
-    || existingObject.namespace_identity !== captured.namespace_identity
-    || existingObject.thumbnail_repair?.expected_sha256
-      !== captured.thumbnail_repair.expected_sha256
-    || existingObject.thumbnail_repair?.expected_size
-      !== captured.thumbnail_repair.expected_size
-    || receipt.payload.thumbnail_repair_body_base64 !== bodyBase64
-  ) {
-    throw new ApiError(
-      409,
-      "thumbnail_repair_already_pending",
-      "该缩略图已有内容不同的修复任务，请等待现有任务收口"
-    );
-  }
-  markThumbnailRepairPending(imageId, captured.key);
-  return {
-    receiptId: receipt.id,
-    imageId,
-    object: captured as ThumbnailRepairCleanupAuthorization["object"]
-  };
-}
-
-/**
- * Foreground repair completion is durable before its caller can enqueue a
- * source cleanup or permanently delete the image under the same image lock.
- */
-export async function settleThumbnailRepairWriteAhead(
-  authorization: ThumbnailRepairCleanupAuthorization,
-  body: Buffer
-) {
-  const bodyBase64 = canonicalRepairBody(body);
-  const settled = await persistSettledThumbnailRepairReceipt(
-    authorization.receiptId,
-    authorization.imageId,
-    authorization.object,
-    bodyBase64
-  );
-  if (!settled) {
-    throw new ApiError(
-      409,
-      "thumbnail_repair_receipt_changed",
-      "缩略图修复回执在完成前发生变化，已保留任务供 Worker 收敛",
-      { image_id: authorization.imageId, receipt_id: authorization.receiptId }
-    );
-  }
-  markThumbnailRepairSettled(
-    authorization.imageId,
-    authorization.object.key
-  );
 }
 
 export function enqueueCapturedObjectsForCleanup(

@@ -1,6 +1,6 @@
 {
   "name": "@imageshow/server",
-  "version": "4.8.12",
+  "version": "4.8.13",
   "private": true,
   "type": "module",
   "scripts": {

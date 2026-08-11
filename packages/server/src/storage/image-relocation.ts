@@ -3,7 +3,6 @@ import type { PoolClient } from "pg";
 import { ApiError, errorMessage } from "../core/api-error.ts";
 import { pool } from "../core/database-pools.ts";
 import { logger } from "../core/logger.ts";
-import { repairStoredThumbnailWithLockHeld } from "../images/thumbnail-repair.ts";
 import {
   storageObjectKey,
   thumbnailObjectKey
@@ -11,7 +10,7 @@ import {
 import { resolveStorageAccess } from "./backend-registry.ts";
 import {
   copyVerifiedObjectWithinStorage,
-  ensureVerifiedObjectAtTarget
+  missingThumbnailSourceError
 } from "./object-transfer.ts";
 import {
   assertThumbnailRepairNotPending,
@@ -132,6 +131,17 @@ export async function prepareVerifiedImageRelocation(
       )) {
         throw sourceMissingError(image, "media", image.object_key);
       }
+      if (!await storage.driver.exists(
+        "thumbs",
+        sourceThumbnailKey,
+        { signal }
+      )) {
+        throw missingThumbnailSourceError({
+          imageId: image.id,
+          backend: image.storage_slug,
+          key: sourceThumbnailKey
+        });
+      }
       const mediaCandidate = await captureCandidate("media", nextObjectKey);
       const mediaResult = await copyVerifiedObjectWithinStorage({
         storage,
@@ -154,77 +164,29 @@ export async function prepareVerifiedImageRelocation(
       });
 
       const targetThumbnailKey = thumbnailObjectKey(nextObjectKey);
-      if (await storage.driver.exists(
+      const thumbnailCandidate = await captureCandidate(
         "thumbs",
-        sourceThumbnailKey,
-        { signal }
-      )) {
-        const thumbnailCandidate = await captureCandidate(
-          "thumbs",
-          targetThumbnailKey
-        );
-        const thumbnailResult = await copyVerifiedObjectWithinStorage({
-          storage,
-          fromPrefix: "thumbs",
-          fromKey: sourceThumbnailKey,
-          toPrefix: "thumbs",
-          toKey: targetThumbnailKey,
-          cleanupCandidate: cleanupCandidate(thumbnailCandidate),
-          signal
-        });
-        if (thumbnailResult.created) {
-          createdObjects.push(thumbnailCandidate);
-        }
-        signal?.throwIfAborted();
-        thumbnailSize = thumbnailResult.sourceDigest.size;
-        sourceObjects.push({
-          prefix: "thumbs",
-          key: sourceThumbnailKey,
-          backend: image.storage_slug
-        });
-      } else {
-        const media = await storage.driver.readBuffer(
-          "media",
-          image.object_key,
-          { signal }
-        );
-        signal?.throwIfAborted();
-        const repair = await repairStoredThumbnailWithLockHeld(
-          image.id,
-          signal ?? new AbortController().signal,
-          {
-            expectedLocation: {
-              objectKey: image.object_key,
-              storageSlug: image.storage_slug
-            },
-            sourceBuffer: media
-          }
-        );
-        signal?.throwIfAborted();
-        const thumbnailCandidate = await captureCandidate(
-          "thumbs",
-          targetThumbnailKey
-        );
-        const thumbnailResult = await ensureVerifiedObjectAtTarget({
-          target: storage,
-          prefix: "thumbs",
-          key: targetThumbnailKey,
-          body: repair.thumbnail,
-          contentType: "image/webp",
-          cleanupCandidate: cleanupCandidate(thumbnailCandidate),
-          signal
-        });
-        if (thumbnailResult.created) {
-          createdObjects.push(thumbnailCandidate);
-        }
-        signal?.throwIfAborted();
-        thumbnailSize = repair.thumbnailSize;
-        sourceObjects.push({
-          prefix: "thumbs",
-          key: sourceThumbnailKey,
-          backend: image.storage_slug
-        });
+        targetThumbnailKey
+      );
+      const thumbnailResult = await copyVerifiedObjectWithinStorage({
+        storage,
+        fromPrefix: "thumbs",
+        fromKey: sourceThumbnailKey,
+        toPrefix: "thumbs",
+        toKey: targetThumbnailKey,
+        cleanupCandidate: cleanupCandidate(thumbnailCandidate),
+        signal
+      });
+      if (thumbnailResult.created) {
+        createdObjects.push(thumbnailCandidate);
       }
+      signal?.throwIfAborted();
+      thumbnailSize = thumbnailResult.sourceDigest.size;
+      sourceObjects.push({
+        prefix: "thumbs",
+        key: sourceThumbnailKey,
+        backend: image.storage_slug
+      });
     }
     capturedSourceObjects = await captureMoveCleanupObjects(
       uniqueObjects(sourceObjects)

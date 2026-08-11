@@ -1,34 +1,20 @@
-import { ApiError, errorMessage } from "../core/api-error.ts";
+import { ApiError } from "../core/api-error.ts";
 import {
   immutableCacheControl,
-  noStoreCacheControl,
   privateNoStoreCacheControl,
-  publicProxyFallbackThumbCacheControl,
   publicRedirectCacheControl,
   safeResponseHeaderValue
 } from "../core/http/headers.ts";
-import { logger } from "../core/logger.ts";
 import { thumbnailObjectKey } from "../storage/image-paths.ts";
-import {
-  resolveReadableObject,
-  storageObjectExists,
-  type ResolvedReadableObject
-} from "../storage/object-access.ts";
+import { resolveReadableObject } from "../storage/object-access.ts";
 import { contentType } from "../storage/object-keys.ts";
 import { isStorageObjectNotFound } from "../storage/not-found.ts";
-import { thumbnailRepairIsPending } from "../storage/move-cleanup.ts";
 import {
   readImageServingRecordById,
   readReadyImageServingRecordByObjectKey,
   readReadyImageServingRecordByThumbKey,
   type ImageServingRecord
 } from "./image-serving-record.ts";
-import { repairStoredThumbnail } from "./thumbnail-repair.ts";
-import {
-  readablePublicThumbnailUrl,
-  recoverStoredThumbnail,
-  thumbnailFallbackOrNotFound
-} from "./thumbnail-serving-lifecycle.ts";
 import {
   streamResolvedObject,
   type StoredResponseRequest
@@ -41,8 +27,6 @@ type StoredThumbnailRecord = Pick<
 
 type ThumbnailDeliveryPolicy = {
   cacheControl: string;
-  pendingFallbackCacheControl: string;
-  missingFallbackCacheControl: string | null;
   allowPublicRedirect: boolean;
 };
 
@@ -53,12 +37,6 @@ export type StoredImageServingDependencies = {
   readReadyImageServingRecordByThumbKey:
     typeof readReadyImageServingRecordByThumbKey;
   resolveReadableObject: typeof resolveReadableObject;
-  storageObjectExists: typeof storageObjectExists;
-  thumbnailRepairIsPending: typeof thumbnailRepairIsPending;
-  repairStoredThumbnail: typeof repairStoredThumbnail;
-  readablePublicThumbnailUrl: typeof readablePublicThumbnailUrl;
-  recoverStoredThumbnail: typeof recoverStoredThumbnail;
-  thumbnailFallbackOrNotFound: typeof thumbnailFallbackOrNotFound;
   streamResolvedObject: typeof streamResolvedObject;
 };
 
@@ -67,26 +45,16 @@ const defaultStoredImageServingDependencies: StoredImageServingDependencies = {
   readReadyImageServingRecordByObjectKey,
   readReadyImageServingRecordByThumbKey,
   resolveReadableObject,
-  storageObjectExists,
-  thumbnailRepairIsPending,
-  repairStoredThumbnail,
-  readablePublicThumbnailUrl,
-  recoverStoredThumbnail,
-  thumbnailFallbackOrNotFound,
   streamResolvedObject
 };
 
 const publicThumbnailPolicy: ThumbnailDeliveryPolicy = {
   cacheControl: immutableCacheControl,
-  pendingFallbackCacheControl: noStoreCacheControl,
-  missingFallbackCacheControl: publicProxyFallbackThumbCacheControl,
   allowPublicRedirect: true
 };
 
 const adminThumbnailPolicy: ThumbnailDeliveryPolicy = {
   cacheControl: privateNoStoreCacheControl,
-  pendingFallbackCacheControl: privateNoStoreCacheControl,
-  missingFallbackCacheControl: null,
   allowPublicRedirect: false
 };
 
@@ -107,104 +75,6 @@ async function streamStoredObject(
   );
 }
 
-function streamThumbnail(
-  key: string,
-  backend: string,
-  cacheControl: string,
-  request: StoredResponseRequest,
-  dependencies: StoredImageServingDependencies
-) {
-  return streamStoredObject(
-    "thumbs",
-    key,
-    backend,
-    "image/webp",
-    cacheControl,
-    request,
-    dependencies
-  );
-}
-
-async function streamThumbnailEnsuring(
-  record: StoredThumbnailRecord,
-  thumbKey: string,
-  cacheControl: string,
-  request: StoredResponseRequest,
-  dependencies: StoredImageServingDependencies,
-  resolvedThumb?: ResolvedReadableObject
-): Promise<Response | null> {
-  const readThumbnail = () => (
-    resolvedThumb
-      ? dependencies.streamResolvedObject(
-          resolvedThumb,
-          "image/webp",
-          cacheControl,
-          request
-        )
-      : streamThumbnail(
-          thumbKey,
-          record.storage_slug,
-          cacheControl,
-          request,
-          dependencies
-        )
-  );
-  return dependencies.recoverStoredThumbnail({
-    context: {
-      objectKey: record.object_key,
-      thumbKey,
-      backend: record.storage_slug
-    },
-    readThumbnail,
-    sourceExists: () => dependencies.storageObjectExists(
-      "media",
-      record.object_key,
-      record.storage_slug,
-      { signal: request.signal }
-    ),
-    rebuild: () => dependencies.repairStoredThumbnail(record.id),
-    isNotFound: isStorageObjectNotFound,
-    log: logger
-  });
-}
-
-async function streamOriginalThumbnailFallback(
-  record: StoredThumbnailRecord,
-  request: StoredResponseRequest,
-  cacheControl: string,
-  dependencies: StoredImageServingDependencies
-) {
-  return dependencies.thumbnailFallbackOrNotFound(
-    () => streamStoredObject(
-      "media",
-      record.object_key,
-      record.storage_slug,
-      contentType(record.ext),
-      cacheControl,
-      request,
-      dependencies
-    ),
-    isStorageObjectNotFound
-  );
-}
-
-async function thumbnailRepairRequiresFallback(
-  record: StoredThumbnailRecord,
-  thumbKey: string,
-  dependencies: StoredImageServingDependencies
-) {
-  try {
-    return await dependencies.thumbnailRepairIsPending(record.id, thumbKey);
-  } catch (error) {
-    logger.error("thumbnail_repair_state_check_failed", {
-      object_key: record.object_key,
-      storage_backend: record.storage_slug,
-      reason: errorMessage(error)
-    });
-    return true;
-  }
-}
-
 function immutableRedirect(location: string) {
   return new Response(null, {
     status: 302,
@@ -222,54 +92,29 @@ async function deliverStoredThumbnail(
   dependencies: StoredImageServingDependencies
 ): Promise<Response> {
   const thumbKey = thumbnailObjectKey(record.object_key);
-  if (await thumbnailRepairRequiresFallback(record, thumbKey, dependencies)) {
-    return streamOriginalThumbnailFallback(
-      record,
-      request,
-      policy.pendingFallbackCacheControl,
-      dependencies
-    );
-  }
-
-  const resolvedThumb = policy.allowPublicRedirect
-    ? await dependencies.resolveReadableObject(
-        "thumbs",
-        thumbKey,
-        record.storage_slug
-      )
-    : undefined;
-  if (resolvedThumb?.publicUrl) {
-    const publicUrl = await dependencies.readablePublicThumbnailUrl({
-      publicUrl: resolvedThumb.publicUrl,
-      exists: () => resolvedThumb.exists({ signal: request.signal }),
-      context: {
-        objectKey: record.object_key,
-        thumbKey,
-        backend: record.storage_slug
-      },
-      log: logger
-    });
-    if (publicUrl) return immutableRedirect(publicUrl);
-  }
-
-  const streamed = await streamThumbnailEnsuring(
-    record,
+  const resolvedThumb = await dependencies.resolveReadableObject(
+    "thumbs",
     thumbKey,
-    policy.cacheControl,
-    request,
-    dependencies,
-    resolvedThumb
+    record.storage_slug
   );
-  if (streamed) return streamed;
-  if (policy.missingFallbackCacheControl) {
-    return streamOriginalThumbnailFallback(
-      record,
-      request,
-      policy.missingFallbackCacheControl,
-      dependencies
-    );
+  if (resolvedThumb?.publicUrl) {
+    if (policy.allowPublicRedirect) {
+      return immutableRedirect(resolvedThumb.publicUrl);
+    }
   }
-  throw new ApiError(404, "not_found", "Thumbnail not found");
+  try {
+    return await dependencies.streamResolvedObject(
+      resolvedThumb,
+      "image/webp",
+      policy.cacheControl,
+      request
+    );
+  } catch (error) {
+    if (isStorageObjectNotFound(error)) {
+      throw new ApiError(404, "not_found", "Thumbnail not found");
+    }
+    throw error;
+  }
 }
 
 export async function servePublicStoredObject(

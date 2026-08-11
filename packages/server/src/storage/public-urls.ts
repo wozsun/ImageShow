@@ -28,30 +28,6 @@ export function directStorageObjectUrl(
 }
 
 export async function publicImageUrls(objectKey: string, slug: string) {
-  return publicImageUrlsForDelivery(objectKey, slug, "application");
-}
-
-export type ThumbnailUrlDelivery = "application" | "direct";
-
-function thumbnailUrlsForDelivery(
-  applicationThumbUrl: string,
-  directThumbUrl: string,
-  thumbnailDelivery: ThumbnailUrlDelivery
-) {
-  if (thumbnailDelivery !== "direct" || !directThumbUrl) {
-    return { thumb_url: applicationThumbUrl };
-  }
-  return {
-    thumb_url: directThumbUrl,
-    thumb_fallback_url: applicationThumbUrl
-  };
-}
-
-export async function publicImageUrlsForDelivery(
-  objectKey: string,
-  slug: string,
-  thumbnailDelivery: ThumbnailUrlDelivery
-) {
   const config = await getStorageBackend(slug);
   const thumbKey = thumbnailObjectKey(objectKey);
   const staticBase = staticLocalBaseUrl();
@@ -60,13 +36,6 @@ export async function publicImageUrlsForDelivery(
   return {
     object_url: directStorageObjectUrl(config, "media", objectKey)
       || `${staticBase}${localMediaUrl("media", objectKey)}`,
-    // Public API consumers keep the repair-first route. Admin cards prefer
-    // the final remote URL and enter the same repair route only after a real
-    // image load failure, avoiding an unconditional redirect per card.
-    ...thumbnailUrlsForDelivery(
-      applicationThumbUrl,
-      directThumbUrl,
-      thumbnailDelivery
-    )
+    thumb_url: directThumbUrl || applicationThumbUrl
   };
 }

@@ -87,8 +87,6 @@ export type AdminImageItemDto = PublicImageItemDto & {
   status: "ready" | "deleted";
   object_key: string;
   storage_slug: string;
-  /** Application repair route used only when a direct remote thumbnail fails. */
-  thumb_fallback_url?: string;
   md5: string;
   original: string;
   image_size?: number;
@@ -106,7 +104,6 @@ export type AdminImageItemDto = PublicImageItemDto & {
 export type AdminImageDetailItemDto = PublicImageItemDto & Pick<
   AdminImageItemDto,
   | "storage_slug"
-  | "thumb_fallback_url"
   | "md5"
   | "created_at"
   | "updated_at"
@@ -127,7 +124,6 @@ export type EditableImageSnapshotDto = Pick<
   | "author"
   | "tags"
   | "thumb_url"
-  | "thumb_fallback_url"
   | "object_url"
   | "width"
   | "height"

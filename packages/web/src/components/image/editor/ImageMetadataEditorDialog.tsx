@@ -492,7 +492,6 @@ export function ImageMetadataEditorDialog({
                 <div className="batch-edit-preview">
                   <ImageThumbnail
                     src={item.thumb_url}
-                    fallbackSrc={item.thumb_fallback_url}
                     onClick={(opener) => {
                       previewReturnFocusRef.current = opener;
                       setPreview({

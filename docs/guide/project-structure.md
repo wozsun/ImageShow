@@ -27,7 +27,8 @@ packages/web ─────► packages/shared
 
 本地测试统一位于根目录 `tests/`，由 Git 忽略且不进入 Docker build context、生产镜像或
 GitHub Actions。测试从外部启动与生产镜像相同的服务入口；测试数据库、Redis、Compose、
-fixture、网络模拟和清理编排均留在 `tests/`。
+fixture、网络模拟和清理编排均留在 `tests/`。Web 最终测试使用根目录仅供本地门禁的
+`linkedom` 真实挂载 React 组件；生产构建和运行镜像不安装该依赖。
 
 ## 本地门禁与发布职责
 
@@ -149,9 +150,8 @@ gateway 自行复制这套准入状态。
 - 图片读取先由 `image-serving-record.ts` 将 Redis 命中与 PostgreSQL fallback 归一为
   同一 serving record；`stored-image-serving.ts` 只编排存储对象与缩略图，
   `external-original-serving.ts` 只处理外部原图探测、跳转和代理。
-  `stored-object-response.ts` 集中流式、HEAD、Range 与缓存响应，
-  `thumbnail-serving-lifecycle.ts` 集中缩略图可用性检查、并发补建、失败上下文和原图
-  回退的 404 映射，使 local 与 S3 共用同一生命周期。
+  `stored-object-response.ts` 集中流式、HEAD、Range 与缓存响应；缩略图缺失在只读 serving
+  边界直接映射为 404，显式维修只属于 `checks/storage-maintenance.ts`。
 
 领域模块可以依赖 `core/` 和 `config/`，但基础设施不能反向导入具体路由。跨领域调用直接
 指向对方表达职责的模块，不通过泛化 `service`、`storage` 或 barrel 隐藏真实依赖，也不能

@@ -65,7 +65,6 @@ export type ImportJob = {
   status: "queued" | "uploading" | "downloading" | "received" | "processing" | "ready" | "committing" | "cancelling" | "done" | "failed" | "cancelled";
   message: string;
   preview: string;
-  previewFallback?: string;
   previewFull?: string;
   objectUrl?: string;
   draft: ImageDraft;

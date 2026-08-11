@@ -4,7 +4,6 @@ import { pool } from "../core/database-pools.ts";
 import { withTransaction } from "../core/database-transactions.ts";
 import { logger } from "../core/logger.ts";
 import { md5Buffer } from "../images/processing.ts";
-import { repairStoredThumbnailWithLockHeld } from "../images/thumbnail-repair.ts";
 import { withImageMutationSync } from "../images/mutation-sync.ts";
 import { bumpReadyImageRevision } from "../images/ready-cache/revision.ts";
 import {
@@ -23,7 +22,10 @@ import {
   type MoveCleanupObjectInput
 } from "./move-cleanup.ts";
 import { contentType, type StoragePrefix } from "./object-keys.ts";
-import { ensureVerifiedObjectAtDestination } from "./object-transfer.ts";
+import {
+  ensureVerifiedObjectAtDestination,
+  missingThumbnailSourceError
+} from "./object-transfer.ts";
 import { shareStorageNamespace } from "./storage-namespace.ts";
 
 export type StorageMigrationImageRecord = {
@@ -292,6 +294,19 @@ async function migrateImageStorageWhileLocked(
         { image_id: current.id, object_key: current.object_key }
       );
     }
+    if (!await sourceAccess.driver.exists("thumbs", thumbKey, { signal })) {
+      throw missingThumbnailSourceError({
+        imageId: current.id,
+        backend: current.storage_slug,
+        key: thumbKey
+      });
+    }
+    const thumbnail = await sourceAccess.driver.readBuffer(
+      "thumbs",
+      thumbKey,
+      { signal }
+    );
+    signal.throwIfAborted();
     await materialize(
       "media",
       current.object_key,
@@ -299,24 +314,6 @@ async function migrateImageStorageWhileLocked(
       contentType(current.ext)
     );
 
-    const sourceThumbExists = await sourceAccess.driver.exists(
-      "thumbs",
-      thumbKey,
-      { signal }
-    );
-    const thumbnail = sourceThumbExists
-      ? await sourceAccess.driver.readBuffer("thumbs", thumbKey, { signal })
-      : (await repairStoredThumbnailWithLockHeld(
-          current.id,
-          signal,
-          {
-            expectedLocation: {
-              objectKey: current.object_key,
-              storageSlug: current.storage_slug
-            },
-            sourceBuffer: image
-          }
-        )).thumbnail;
     thumbnailSize = thumbnail.byteLength;
     signal.throwIfAborted();
     await materialize("thumbs", thumbKey, thumbnail, "image/webp");

@@ -199,7 +199,6 @@ export function Overview({ canManageStorage }: { canManageStorage: boolean }) {
                   >
                     <ThumbImage
                       src={img.thumb_url}
-                      fallbackSrc={img.thumb_fallback_url}
                       alt=""
                     />
                   </button>

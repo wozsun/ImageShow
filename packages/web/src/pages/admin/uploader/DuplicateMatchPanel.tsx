@@ -59,7 +59,6 @@ export function DuplicateMatchPanel({
             >
               <ImageThumbnail
                 src={item.thumb_url}
-                fallbackSrc={item.thumb_fallback_url}
                 size="small"
               />
               <span>{imageDisplayTitle(item)}</span>
@@ -83,7 +82,6 @@ export function DuplicateMatchPanel({
                 ? (
                     <ImageThumbnail
                       src={queuePreview}
-                      fallbackSrc={queueDuplicate.previewFallback}
                       size="small"
                     />
                   )

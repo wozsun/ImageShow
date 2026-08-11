@@ -47,6 +47,23 @@ type SourceMismatchError = {
   message: string;
 };
 
+export function missingThumbnailSourceError({
+  imageId,
+  backend,
+  key
+}: {
+  imageId: string;
+  backend: string;
+  key: string;
+}) {
+  return new ApiError(
+    409,
+    "storage_thumbnail_missing",
+    "图片当前位置的缩略图不存在，请先在检查页运行“存储维护”",
+    { image_id: imageId, backend, prefix: "thumbs", key }
+  );
+}
+
 async function defaultCleanupLeaseCheck(
   target: StorageConfig,
   prefix: "media" | "thumbs",

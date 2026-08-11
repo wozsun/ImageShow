@@ -1,7 +1,7 @@
 {
   "name": "imageshow",
   "private": true,
-  "version": "4.8.12",
+  "version": "4.8.13",
   "type": "module",
   "workspaces": [
     "packages/*"
@@ -30,6 +30,7 @@
   },
   "devDependencies": {
     "knip": "^6.32.0",
+    "linkedom": "^0.18.13",
     "tsx": "^4.23.11"
   }
 }

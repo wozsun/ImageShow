@@ -67,6 +67,7 @@ export const adminFoundationModuleSuffixes = [
   "/lib/api/admin-preference-cache.ts",
   "/lib/api/admin-settings.ts",
   "/lib/api/image-edit.ts",
+  "/lib/api/image-mutations.ts",
   "/lib/api/import-vocabulary.ts",
   "/lib/api/query-invalidation.ts",
   "/lib/api/storage-options.ts",

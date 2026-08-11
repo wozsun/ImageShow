@@ -126,9 +126,13 @@ export function ImageStorageMigrationDialog({
           new Error(`图片存储迁移失败 ${response.failed}/${imageIds.length}`),
           response
         );
+        const reasons = [...new Set(response.results.flatMap((result) => (
+          result.status === "failed" ? [result.message] : []
+        )))];
         setError(
           `迁移未全部完成：已迁移 ${response.migrated} 项，`
           + `未变化 ${unchanged} 项，失败 ${response.failed} 项。`
+          + (reasons.length ? ` ${reasons.join("；")}` : "")
         );
         return false;
       }

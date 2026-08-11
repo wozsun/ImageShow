@@ -24,7 +24,7 @@ additions 只保存一个发布周期的安全增量。版本 N 新增经审查�
 占位文件及稳定的启动、构建入口。该模型不支持跳过 N 直接部署 N+1；恢复早于 N 的数据库
 备份时，也必须先运行 N 或人工执行同一份经审查 SQL。
 
-当前 `v4.8.12` 的 additions 没有待执行 SQL，只保留过渡规则注释。
+当前 `v4.8.13` 的 additions 没有待执行 SQL，只保留过渡规则注释。
 `metadata.purge_error TEXT`、`admin_account.preferences JSONB NOT NULL DEFAULT '{}'` 与
 `theme.none` 已在 `schema.sql` 形成基线，并已由全部受控生产数据库在上一版本完成确认。
 后续 additions 仍只保存当期真实增量：不补业务表、外键、CHECK，不删除或重命名对象，
@@ -70,25 +70,22 @@ readiness 不复制 `schema.sql` 的可空性、默认值、PK / FK / CHECK、�
 图片分类直接由 `device`、`brightness` 与 `theme` 表达，人工可读目录也使用这三项；
 随机候选由统一 Redis ready-image ZSET 投影维护，PostgreSQL 不保存分类连续编号。
 
-缩略图缺失由唯一 repair 服务处理：持有单图存储 mutation lock 后重读 PostgreSQL 权威
-位置，流式校验本地源对象或校验远端 Buffer 并重建缩略图。任何正式键写入前，先持久化
-带物理 namespace、预期 SHA-256 / 大小及精确重试字节的 `move.cleanup` write-ahead
-receipt；只有与该回执完全一致的写入才可越过对象占用检查。写入成功后再以
-`id + storage_slug + object_key` 条件回写 `thumbnail_size`；失败或回包丢失时 Worker 仍用
-同一字节精确采用或重试候选，任务成功后删除 payload 中的临时重试字节。数据库初始化
-完成后、HTTP 就绪前，从 PostgreSQL 重建未解决 repair 的进程内投影；入队与 Worker
-处理同步更新它，避免每个缩略图额外查询数据库。投影命中时公开与后台读取均使用原图
-no-store 降级，不把仅凭存在性的对象发布为 immutable。分类移动和存储迁移共用该服务；
-它们在风险写入前捕获候选 namespace，失锁后的清理回执直接使用该不可变凭据，不再借第
-二条 shared lock 形成排队写锁死锁。无生产者的缩略图后台任务已删除。
+成功提交的图片以正式原图与正式缩略图同时存在为数据库外对象不变量。正常缩略图 GET
+只按 `storage_slug + object_key` 解析唯一地址并读取正式对象，不查询 repair 状态、不探测
+存在性、不读取原图降级，也不在请求中写对象或 `thumbnail_size`。缺图返回 404；分类移动
+和存储迁移返回结构化 `storage_thumbnail_missing`，要求先运行检查页“存储维护”。
+
+4.8.13 不再提供 repair write-ahead 生产函数，也没有新的 `thumbnail_repair` payload 生产者。
+`move.cleanup` Worker 暂时仍能采用或清理部署前已经持久化的精确 repair 字节；其物理 namespace、
+摘要、大小、重试和对象占用语义只服务于这批历史未完成任务，不属于正常读取契约。
 
 检查页显式维护是独立的管理员同步操作：它在全局存储位置写锁内重读当前图片位置，只为
 原图仍存在且缩略图确实缺失的记录生成、强摘要回读并写回 `thumbnail_size`。该路径不创建
 `background_job`，也不把修复字节写入 JSONB；数据库回写未确认时会清理本次候选并逐项报告
 失败。维修写对象前用现有合法值 `thumbnail_size=0` 标记尚未最终采用的候选；即使数据库
 最终更新和候选清理同时无法确认，后续显式维护仍会重新进入该记录，而不需要新表、任务或
-修复 payload。4.8.12 仍保留上一段读取热路径 repair 的 write-ahead 结构，待显式维护稳定后由后续
-版本删除，二者不互相调用。
+修复 payload。它是当前唯一会生成缩略图的维修入口；生产中历史 repair 任务确认收口后，
+后续版本会删除 `move.cleanup` 的过渡消费分支。
 
 彻底删除先用 `FOR UPDATE SKIP LOCKED` 把 deleted 行原子认领为 `purging` 并增加
 `purge_attempts`，随后在该图的存储 mutation lock 内再次核对状态、尝试号和对象位置。

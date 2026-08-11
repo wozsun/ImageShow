@@ -34,21 +34,14 @@ export async function enqueueMoveCleanupJob(
   imageId: string,
   objects: readonly CapturedMoveCleanupObject[],
   reason: string,
-  client?: PoolClient,
-  options: { thumbnailRepairBodyBase64?: string } = {}
+  client?: PoolClient
 ) {
   if (!objects.length) return;
   const normalizedObjects = normalizedCleanupObjects(objects);
   const payload: MoveCleanupJobPayload = {
     objects: normalizedObjects,
     reason,
-    retain_exhausted: true,
-    ...(options.thumbnailRepairBodyBase64
-      ? {
-          thumbnail_repair_body_base64:
-            options.thumbnailRepairBodyBase64
-        }
-      : {})
+    retain_exhausted: true
   };
   await enqueueRerunnableJob(
     "move.cleanup",
@@ -57,77 +50,6 @@ export async function enqueueMoveCleanupJob(
     cleanupIdempotencyKey(imageId, normalizedObjects),
     client
   );
-}
-
-export type ThumbnailRepairReceipt = {
-  id: string;
-  status: string;
-  payload: MoveCleanupJobPayload;
-};
-
-/**
- * Persist the exact repair bytes before a deterministic final key can be
- * touched. If an unresolved owner already exists, return its immutable
- * payload so the caller can prove that it authorizes the same bytes.
- */
-export async function enqueueThumbnailRepairReceipt(
-  imageId: string,
-  object: CapturedMoveCleanupObject,
-  bodyBase64: string
-): Promise<ThumbnailRepairReceipt> {
-  await enqueueMoveCleanupJob(
-    imageId,
-    [object],
-    "thumbnail_repair_write_ahead",
-    undefined,
-    { thumbnailRepairBodyBase64: bodyBase64 }
-  );
-  const idempotencyKey = cleanupIdempotencyKey(imageId, [object]);
-  const receipt = (await pool.query<ThumbnailRepairReceipt>(
-    `SELECT id, status, payload
-       FROM background_job
-      WHERE type='move.cleanup'
-        AND idempotency_key=$1
-        AND status IN ('pending', 'running', 'failed')
-      LIMIT 1`,
-    [idempotencyKey]
-  )).rows[0];
-  if (!receipt) {
-    throw new Error("Thumbnail repair receipt was not durably retained");
-  }
-  return receipt;
-}
-
-/**
- * Finish the exact write-ahead receipt after the foreground repair has both
- * verified the object and adopted its byte size. This is intentionally an
- * ownership transition rather than a generic job settlement: a worker may
- * already have claimed the row while waiting for the same image lock.
- */
-export async function settleThumbnailRepairReceipt(
-  receiptId: string,
-  imageId: string,
-  object: CapturedMoveCleanupObject,
-  bodyBase64: string
-) {
-  const settled = await pool.query(
-    `UPDATE background_job
-        SET status='succeeded',
-            payload=(payload - 'rerun_requested')
-                      - 'thumbnail_repair_body_base64',
-            error='',
-            next_retry_at=NULL,
-            execution_token=NULL,
-            updated_at=now()
-      WHERE id=$1
-        AND type='move.cleanup'
-        AND target_id=$2
-        AND status IN ('pending', 'running', 'failed')
-        AND payload->'objects'=$3::jsonb
-        AND payload->>'thumbnail_repair_body_base64'=$4`,
-    [receiptId, imageId, JSON.stringify([object]), bodyBase64]
-  );
-  return settled.rowCount === 1;
 }
 
 export type MoveCleanupJobCount = {

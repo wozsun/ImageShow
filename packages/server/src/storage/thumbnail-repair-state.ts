@@ -1,17 +1,15 @@
 import { listUnresolvedThumbnailRepairKeys } from "./move-cleanup-repository.ts";
 
 const pendingRepairs = new Set<string>();
-let initialized = false;
 
 function repairKey(imageId: string, key: string) {
   return `${imageId}:${key}`;
 }
 
 /**
- * The supported topology runs one ImageShow process, so an in-process
- * projection can remove one PostgreSQL lookup from every thumbnail.
- * PostgreSQL remains authoritative and rebuilds this projection before HTTP
- * readiness on every process start.
+ * Transitional lifecycle for repair receipts created before v4.8.13.
+ * Normal thumbnail serving no longer reads this projection; startup and the
+ * legacy worker keep it synchronized until that consumer branch is removed.
  */
 export async function initializeThumbnailRepairState() {
   const rows = await listUnresolvedThumbnailRepairKeys();
@@ -20,22 +18,8 @@ export async function initializeThumbnailRepairState() {
   );
   pendingRepairs.clear();
   for (const key of next) pendingRepairs.add(key);
-  initialized = true;
-}
-
-export function markThumbnailRepairPending(imageId: string, key: string) {
-  pendingRepairs.add(repairKey(imageId, key));
 }
 
 export function markThumbnailRepairSettled(imageId: string, key: string) {
   pendingRepairs.delete(repairKey(imageId, key));
-}
-
-export function thumbnailRepairIsPendingInMemory(
-  imageId: string,
-  key: string
-) {
-  // Fail closed for CLI/tests that intentionally import serving before the
-  // normal startup sequence has rebuilt the projection.
-  return !initialized || pendingRepairs.has(repairKey(imageId, key));
 }

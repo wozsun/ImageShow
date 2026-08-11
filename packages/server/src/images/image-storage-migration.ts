@@ -2,6 +2,7 @@ import type {
   ImageStorageMigrationItemResultDto
 } from "@imageshow/shared/browser";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
+import { ApiError } from "../core/api-error.ts";
 import { mapWithWorkerPool } from "../core/concurrency.ts";
 import { pool } from "../core/database-pools.ts";
 import {
@@ -73,7 +74,19 @@ export async function migrateImagesStorage(
             id,
             status: result
           } satisfies ImageStorageMigrationItemResultDto;
-        } catch {
+        } catch (error) {
+          if (
+            error instanceof ApiError
+            && error.status >= 400
+            && error.status < 500
+          ) {
+            return {
+              id,
+              status: "failed",
+              code: error.code,
+              message: error.message
+            } satisfies ImageStorageMigrationItemResultDto;
+          }
           return {
             id,
             status: "failed",
