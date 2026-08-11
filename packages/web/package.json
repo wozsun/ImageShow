@@ -1,6 +1,6 @@
 {
   "name": "@imageshow/web",
-  "version": "4.8.18",
+  "version": "4.8.19",
   "private": true,
   "type": "module",
   "scripts": {

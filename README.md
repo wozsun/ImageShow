@@ -92,7 +92,7 @@ N+1 把同一定义移入 `schema.sql`，再把 additions 清空为注释占位�
 重命名、类型改变、推测回填、版本标记或清库。精确契约见
 [数据库结构](docs/guide/database.md#启动与结构契约)。
 
-当前 `v4.8.18` 没有待执行的 additions SQL，文件只保留过渡规则注释；
+当前 `v4.8.19` 没有待执行的 additions SQL，文件只保留过渡规则注释；
 `metadata.purge_error`、`admin_account.preferences` 与 `theme.none` 已属于 `schema.sql`
 基线，并已由全部受控生产数据库在上一版本完成确认。
 
@@ -134,15 +134,22 @@ npm run verify:release
 
 ## 文档索引
 
-- [快速开始](docs/guide/getting-started.md)
-- [架构总览](docs/guide/architecture.md)
-- [项目结构](docs/guide/project-structure.md)
-- [配置说明](docs/guide/configuration.md)
-- [数据库结构](docs/guide/database.md)
-- [功能与流程](docs/guide/flows.md)
-- [生产部署](docs/guide/deployment.md)
-- [存储](docs/guide/storage.md)
-- [安全](docs/guide/security.md)
+按身份进入：
+
+- [普通用户](docs/guide/roles/ordinary-user.md)
+- [图片管理员](docs/guide/roles/image-admin.md)
+- [超级管理员](docs/guide/roles/super-admin.md)
+- [实例维护者](docs/guide/roles/instance-maintainer.md)
+
+技术参考：
+
+- [架构总览](docs/guide/architecture.md)、[项目结构](docs/guide/project-structure.md)
+- [配置说明](docs/guide/configuration.md)、[数据库结构](docs/guide/database.md)、
+  [存储](docs/guide/storage.md)、[安全](docs/guide/security.md)
+- [功能与流程](docs/guide/flows.md)、[随机图 API](docs/guide/random-api.md)、
+  [生产部署](docs/guide/deployment.md)
+
+完整导航见[文档首页](docs/README.md)。
 
 ## 许可
 

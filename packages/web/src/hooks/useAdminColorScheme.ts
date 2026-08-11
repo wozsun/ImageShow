@@ -1,4 +1,4 @@
-import { useLayoutEffect, useState } from "react";
+import { useInsertionEffect, useLayoutEffect, useState } from "react";
 import type { AdminColorScheme } from "@imageshow/shared/browser";
 import {
   readSystemPrefersDark,
@@ -22,6 +22,13 @@ export function useAdminColorScheme(
     ? readSystemPrefersDark()
     : systemPrefersDark;
 
+  useInsertionEffect(() => {
+    if (!enabled) return;
+    // 在后台子树的布局样式被浏览器计算前提交最终颜色域，避免通用控件从
+    // bootstrap 安全色过渡到管理员偏好色时产生可见中间帧。
+    applyUiColorContext("admin", colorScheme, currentSystemPreference);
+  }, [colorScheme, currentSystemPreference, enabled]);
+
   useLayoutEffect(() => {
     if (!enabled) return;
     const mediaQuery = colorScheme === "system"
@@ -29,15 +36,11 @@ export function useAdminColorScheme(
       && typeof window.matchMedia === "function"
       ? window.matchMedia(systemColorSchemeMediaQuery)
       : null;
-    const apply = (prefersDark?: boolean) => {
-      if (prefersDark !== undefined) setSystemPrefersDark(prefersDark);
-      applyUiColorContext("admin", colorScheme, prefersDark);
-    };
-
-    apply(mediaQuery?.matches);
     if (!mediaQuery) return;
 
-    const handleChange = (event: MediaQueryListEvent) => apply(event.matches);
+    const handleChange = (event: MediaQueryListEvent) => {
+      setSystemPrefersDark(event.matches);
+    };
     mediaQuery.addEventListener("change", handleChange);
     return () => mediaQuery.removeEventListener("change", handleChange);
   }, [colorScheme, enabled]);

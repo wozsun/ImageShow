@@ -15,6 +15,26 @@
   /* Bootstrap */
   --bootstrap-color-canvas: #070b15;
   --bootstrap-color-text: #f2f7ff;
+  /*
+   * React 接管后台颜色域前，通用控件也必须留在暗色安全基线。公开页和后台页
+   * 随后分别用自己的语义色覆写这些别名，避免后台首帧短暂暴露公开页浅色按钮。
+   */
+  --bootstrap-color-control-text-primary: #f0f6fc;
+  --bootstrap-color-control-text-secondary: #b1bac4;
+  --bootstrap-color-control-text-tertiary: #8b949e;
+  --bootstrap-color-control-label: #c9d1d9;
+  --bootstrap-color-control-surface: #161b22;
+  --bootstrap-color-control-surface-muted: #21262d;
+  --bootstrap-color-control-surface-hover: #1d2e40;
+  --bootstrap-color-control-surface-subtle-hover: #20252c;
+  --bootstrap-color-control-border: #636c76;
+  --bootstrap-color-control-border-subtle: #30363d;
+  --bootstrap-color-control-border-muted: #2d333b;
+  --bootstrap-color-control-border-hover: #6e7681;
+  --bootstrap-color-control-border-selected: #619de7;
+  --bootstrap-color-control-action-text: #79b8ff;
+  --bootstrap-color-control-invalid: #cc7975;
+  --bootstrap-color-control-switch-thumb: #484f58;
 
   /* Public foundations */
   --public-color-canvas: #070b15;
@@ -116,4 +136,23 @@
 
 :root[data-ui-context="public"] {
   --color-browser-canvas: var(--public-color-canvas);
+}
+
+:root[data-ui-context="bootstrap"] {
+  --color-control-text-primary: var(--bootstrap-color-control-text-primary);
+  --color-control-text-secondary: var(--bootstrap-color-control-text-secondary);
+  --color-control-text-tertiary: var(--bootstrap-color-control-text-tertiary);
+  --color-control-label: var(--bootstrap-color-control-label);
+  --color-control-surface: var(--bootstrap-color-control-surface);
+  --color-control-surface-muted: var(--bootstrap-color-control-surface-muted);
+  --color-control-surface-hover: var(--bootstrap-color-control-surface-hover);
+  --color-control-surface-subtle-hover: var(--bootstrap-color-control-surface-subtle-hover);
+  --color-control-border: var(--bootstrap-color-control-border);
+  --color-control-border-subtle: var(--bootstrap-color-control-border-subtle);
+  --color-control-border-muted: var(--bootstrap-color-control-border-muted);
+  --color-control-border-hover: var(--bootstrap-color-control-border-hover);
+  --color-control-border-selected: var(--bootstrap-color-control-border-selected);
+  --color-control-action-text: var(--bootstrap-color-control-action-text);
+  --color-control-invalid: var(--bootstrap-color-control-invalid);
+  --color-control-switch-thumb: var(--bootstrap-color-control-switch-thumb);
 }

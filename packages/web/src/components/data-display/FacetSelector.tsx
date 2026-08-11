@@ -113,7 +113,11 @@ export function FacetSelector({ options, value, onChange, noun, disabled = false
               {facetDisplayName(options, slug)}<span aria-hidden="true">×</span>
             </MenuItemButton>
           ))}
-          {!parsed.selected.length && <span className="muted">尚未选择，默认使用全部{noun}</span>}
+          {!parsed.selected.length && (
+            <span className="muted facet-selected-empty">
+              尚未选择，默认使用全部{noun}
+            </span>
+          )}
         </div>
       </div>
       <div className="facet-mode-switch" aria-label={`${noun}筛选方式`}>
