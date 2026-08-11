@@ -11,6 +11,7 @@ const repo = resolve(import.meta.dirname, "..", "..");
 const serverPackage = resolve(repo, "packages", "server");
 const serverDist = resolve(serverPackage, "dist");
 const webDist = resolve(repo, "packages", "web", "dist");
+const serverPublic = resolve(serverDist, "public");
 
 for (const [label, input] of [
   ["server compilation", serverDist],
@@ -63,12 +64,21 @@ await Promise.all(databaseAssets.map(async (asset) => {
   await rm(resolve(serverDist, asset), { force: true });
   await cp(resolve(serverPackage, asset), resolve(serverDist, asset));
 }));
-await rm(resolve(serverDist, "public"), { recursive: true, force: true });
-await cp(webDist, resolve(serverDist, "public"), { recursive: true });
+await rm(serverPublic, { recursive: true, force: true });
+await cp(webDist, serverPublic, {
+  recursive: true,
+  filter(source) {
+    const path = relative(webDist, source).replaceAll("\\", "/");
+    return path !== ".vite" && !path.startsWith(".vite/");
+  }
+});
+if (existsSync(resolve(serverPublic, ".vite"))) {
+  throw new Error("assemble-server: build-only Web metadata reached public assets");
+}
 
 // 最后一步：对最终汇集的 SPA 静态目录做预压缩。图标已内联进 JS 包，
 // 不再作为 /assets/icons 静态文件单独发布。
-await precompressDir(resolve(serverDist, "public"));
+await precompressDir(serverPublic);
 
 console.log(
   "assemble-server: database SQL assets -> dist, web -> dist/public"

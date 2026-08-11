@@ -1,5 +1,5 @@
 import { readdir, readFile } from "node:fs/promises";
-import { extname, relative, resolve } from "node:path";
+import { extname, resolve } from "node:path";
 import { selectorSafelist } from "./selector-safelist.mjs";
 
 const workspaceRoot = resolve(import.meta.dirname, "../..");
@@ -60,29 +60,25 @@ const sourceText = (await Promise.all(sourceFiles.map((file) => readFile(file, "
   .map((source) => source.replace(/^\s*import\s+["'][^"']+\.css["'];?\s*$/gm, ""))
   .join("\n");
 
-const selectorFiles = new Map();
+const selectors = new Set();
 for (const file of cssFiles) {
-  const selectors = selectorsFromCss(await readFile(file, "utf8"));
-  for (const selector of selectors) {
-    const owners = selectorFiles.get(selector) ?? [];
-    owners.push(relative(workspaceRoot, file).replaceAll("\\", "/"));
-    selectorFiles.set(selector, owners);
+  for (const selector of selectorsFromCss(await readFile(file, "utf8"))) {
+    selectors.add(selector);
   }
 }
 
-const unused = [...selectorFiles]
-  .filter(([selector]) => !tokenAppears(sourceText, selector) && !safelisted(selector))
-  .map(([selector, owners]) => `${selector}: ${owners.join(", ")}`);
+const unused = [...selectors]
+  .filter((selector) => !tokenAppears(sourceText, selector) && !safelisted(selector));
 const staleExactSafelist = [...selectorSafelist.exact]
-  .filter((selector) => !selectorFiles.has(selector));
+  .filter((selector) => !selectors.has(selector));
 if (unused.length > 0 || staleExactSafelist.length > 0) {
   throw new Error(
-    "selector-inventory: selector ownership changed:\n"
+    "selector-inventory: unused selectors or stale safelist entries:\n"
     + JSON.stringify({ unused, staleExactSafelist }, null, 2)
   );
 }
 
 console.log(
-  `selector-inventory: ${selectorFiles.size} classes across ${cssFiles.length} stylesheets; `
+  `selector-inventory: ${selectors.size} classes across ${cssFiles.length} stylesheets; `
   + `${selectorSafelist.exact.size} exact safelist entries`
 );

@@ -569,7 +569,7 @@ button.active, .button {
 .facet-select-menu.opens-up { transform-origin: bottom center; animation-name: select-menu-in-up; }
 .facet-select-menu.is-closing { pointer-events: none; animation: select-menu-out .12s ease-in forwards; }
 .facet-select-menu.opens-up.is-closing { animation-name: select-menu-out-up; }
-.facet-selected-list > div { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 8px; }
+.facet-selected-list > div { display: flex; flex-wrap: wrap; gap: 6px; min-height: 38px; padding-top: 8px; }
 
 .facet-search-results { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 6px; margin-top: 8px; min-height: 30px; }
 .facet-search-results > .muted { white-space: nowrap; align-self: center; }

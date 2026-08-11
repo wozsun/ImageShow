@@ -14,7 +14,8 @@ packages/web ─────► packages/shared
 
 - `package.json` 只编排 workspace 构建、类型检查、死代码检查和运维入口。
 - `scripts/build/` 生成 Web 图标、校验颜色与生产分块边界，并装配服务端 schema 及 SPA
-  静态资产；通用产物图解析由独立产物检查器承担，项目权限和请求预算规则留在门禁入口。
+  静态资产；Web 构建直接输出通用产物图报告，门禁按真实依赖图验证公开入口、权限懒加载和
+  初始请求 / 字节预算，不维护模块或 chunk 名称清单；报告不装配进运行镜像。
 - `scripts/verify/` 编排只读源码检查、生产构建检查、三份最终测试和隔离镜像冷启动 / 重启
   验收；复杂验收只在本地执行，不进入上传代码后的 Actions。
 - `scripts/runtime/` 只放容器内的命令包装；容器启动由 `docker-entrypoint.sh` 负责权限
@@ -38,7 +39,7 @@ fixture、网络模拟和清理编排均留在 `tests/`。Web 最终测试使用
 | 命令 | 内容 | 副作用 |
 | --- | --- | --- |
 | `npm run verify:source` | workspace 类型、Knip、语义颜色、依赖方向 / 环、配置示例、图标、Markdown 链接与 selector inventory | 只读源码，不生成 `dist`、容器或浏览器会话 |
-| `npm run verify:build` | 清理必要输出，先构建 shared，再并行构建 Web / Server，装配服务端资产并检查 Web 分块契约 | 重建三个 workspace 的 `dist`；根 `dist` 只作为旧残留被删除，不会重新产生 |
+| `npm run verify:build` | 清理必要输出，先构建 shared，再并行构建 Web / Server，装配服务端资产并按真实产物图检查 Web 分块边界 | 重建三个 workspace 的 `dist`；根 `dist` 只作为旧残留被删除，不会重新产生 |
 | `npm run verify:runtime` | baseline / Server / Web 三个最终入口，以及生产镜像冷启动、HTTP、schema 和重启 | 建立并清理随机命名的 tmpfs PostgreSQL、Redis、应用容器及网络；保留 `imageshow:<version>-verify` 候选镜像；不访问现有数据库、容器或浏览器 |
 | `npm run verify:release` | 依次执行以上三层 | 合并上述本地副作用 |
 

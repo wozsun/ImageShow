@@ -181,15 +181,14 @@ if (directRouteJsonReaders.size > 0) {
   );
 }
 
-const authSessionOwner = "packages/web/src/hooks/useAuthSession.tsx";
+const [authSessionQueryOwner] = authSessionQueryOwners;
 if (
   authSessionQueryOwners.size !== 1
-  || !authSessionQueryOwners.has(authSessionOwner)
   || authExpiredListenerOwners.size !== 1
-  || !authExpiredListenerOwners.has(authSessionOwner)
+  || !authExpiredListenerOwners.has(authSessionQueryOwner)
 ) {
   throw new Error(
-    "source-contract: auth session ownership changed: "
+    "source-contract: auth session query and expiration listener need one shared owner: "
     + JSON.stringify({
       authSessionQueryOwners: [...authSessionQueryOwners],
       authExpiredListenerOwners: [...authExpiredListenerOwners]

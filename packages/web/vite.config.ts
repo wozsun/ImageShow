@@ -1,17 +1,115 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { appConfig } from "../shared/src/app-config.ts";
-import {
-  adminAuthSharedModuleSuffixes,
-  adminFoundationModuleSuffixes,
-  appFoundationModuleSuffixes,
-  javaScriptAssetName,
-  matchesModuleSuffix,
-  smallSharedMergeThreshold,
-  styleAssetName
-} from "../../scripts/build/web-build-contract.ts";
+
+function webSourcePath(id: string | null) {
+  if (!id) return null;
+  const normalized = id.replaceAll("\\", "/");
+  const marker = "/packages/web/";
+  const markerIndex = normalized.lastIndexOf(marker);
+  return markerIndex < 0
+    ? null
+    : normalized.slice(markerIndex + marker.length);
+}
+
+type ChunkingContext = {
+  getModuleInfo(id: string): {
+    dynamicImporters: string[];
+    importers: string[];
+    isEntry: boolean;
+  } | null;
+};
+
+function entryRootIds(moduleId: string, context: ChunkingContext) {
+  const roots = new Set<string>();
+  const visited = new Set<string>();
+  const pending = [moduleId];
+  while (pending.length) {
+    const id = pending.pop();
+    if (!id || visited.has(id)) continue;
+    visited.add(id);
+    const info = context.getModuleInfo(id);
+    if (!info) continue;
+    if (info.isEntry || info.dynamicImporters.length > 0) {
+      roots.add(id.replaceAll("\\", "/"));
+    }
+    if (!info.isEntry) pending.push(...info.importers);
+  }
+  return [...roots].sort();
+}
+
+function rootSetChunkName(prefix: string, roots: string[]) {
+  return `${prefix}-${createHash("sha256")
+    .update(roots.join("\n"))
+    .digest("hex")
+    .slice(0, 12)}`;
+}
+
+function sharedChunkName(moduleId: string, context: ChunkingContext) {
+  const roots = entryRootIds(moduleId, context);
+  const home = roots.some((id) => /\/src\/pages\/home\//.test(id));
+  const gallery = roots.some((id) => /\/src\/pages\/gallery\//.test(id));
+  const hasNonPublicRoot = roots.some((id) => (
+    !/\/src\/pages\/(?:home|gallery)\//.test(id)
+  ));
+  if (
+    roots.some((id) => id.endsWith("/index.html"))
+    || (home && gallery && hasNonPublicRoot)
+  ) {
+    return "app-foundation";
+  }
+  const initialRouteRoots = roots.filter((id) => (
+    /\/src\/pages\/(?:home|gallery)\//.test(id)
+    || /\/src\/pages\/admin\/(?:AdminShell|AdminLogin|LoginChallenge|AuthenticatedAdminShell|ImageAdmin)\.tsx$/.test(id)
+  ));
+  return initialRouteRoots.length > 0
+    ? rootSetChunkName("route-shared", initialRouteRoots)
+    : rootSetChunkName("capability", roots);
+}
+
+function webBuildReport(): Plugin {
+  return {
+    name: "imageshow-web-build-report",
+    generateBundle(_options, bundle) {
+      const chunks = Object.values(bundle).flatMap((output) => {
+        if (output.type !== "chunk") return [];
+        const metadata = output as typeof output & {
+          viteMetadata?: { importedCss?: Set<string> };
+        };
+        const moduleIds = Object.keys(output.modules);
+        const modules = moduleIds
+          .map(webSourcePath)
+          .filter((path): path is string => path !== null);
+        const moduleRoots = Object.fromEntries(moduleIds.flatMap((id) => {
+          const path = webSourcePath(id);
+          if (!path) return [];
+          const roots = entryRootIds(id, this)
+            .map(webSourcePath)
+            .filter((root): root is string => root !== null);
+          return [[path, roots]];
+        }));
+        return [{
+          file: output.fileName,
+          facade: webSourcePath(output.facadeModuleId),
+          imports: output.imports,
+          dynamicImports: output.dynamicImports,
+          css: [...(metadata.viteMetadata?.importedCss ?? [])],
+          emitted: output.code.length > 0,
+          modules,
+          moduleRoots
+        }];
+      });
+      this.emitFile({
+        type: "asset",
+        fileName: ".vite/web-build-report.json",
+        source: JSON.stringify({ version: 2, chunks }, null, 2)
+      });
+    }
+  };
+}
 
 function resolveProxyTarget() {
   const configPath = fileURLToPath(new URL("../../data/config.json", import.meta.url));
@@ -32,45 +130,29 @@ function resolveProxyTarget() {
 const target = resolveProxyTarget();
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), webBuildReport()],
   build: {
     outDir: "dist",
     emptyOutDir: true,
     rollupOptions: {
       output: {
-        // 缓存失效指纹：把默认 8 位哈希缩短为 6 位（仍是内容哈希，base64 字符集不变）。任一资源内容
-        // 变化即改名，CDN/浏览器据此拉新文件、不会命中旧缓存。6 位 base64 ≈ 687 亿种，足够防碰撞。
-        entryFileNames(chunk) {
-          return `assets/${javaScriptAssetName(chunk.name)}-[hash:6].js`;
-        },
-
+        // 内容哈希负责 CDN 与浏览器缓存失效；名称只用于调试，不参与功能契约。
+        entryFileNames: "assets/[name]-[hash].js",
         chunkFileNames(chunk) {
-          const hasStableGroupName = (
-            chunk.name === "react-vendor"
-            || chunk.name === "query-vendor"
-            || chunk.name === "app-foundation"
-            || chunk.name === "admin-auth-shared"
-            || chunk.name === "admin-foundation"
-          );
-          const isShared = !chunk.isEntry && !chunk.isDynamicEntry && !hasStableGroupName;
-          return isShared
-            ? "assets/shared-[hash:6].js"
-            : `assets/${javaScriptAssetName(chunk.name)}-[hash:6].js`;
+          return chunk.isDynamicEntry
+            ? "assets/[name]-[hash].js"
+            : "assets/shared-[hash].js";
         },
         assetFileNames(asset) {
-          const primaryName = asset.names[0] ?? "";
-          const semanticStyleName = styleAssetName(primaryName);
-          // Rolldown derives shared CSS names by joining every consuming route.
-          // Keep that ownership untouched while naming the stable consumer
-          // domain instead of exposing the complete route set.
-          return semanticStyleName
-            ? semanticStyleName
-            : "assets/[name]-[hash:6][extname]";
+          const primaryName = asset.names[0] ?? "asset";
+          return primaryName.endsWith(".css")
+            ? "assets/style-[hash][extname]"
+            : "assets/[name]-[hash][extname]";
         },
 
         codeSplitting: {
-          // 路由页面及其就近模块按实际入口集合精确拆分，不把公开页面、图片管理员页面
-          // 和超级管理员页面的专有实现互相打包；跨页面通用模块仍交给默认分块器复用。
+          // 页面与能力按实际入口根集合拆分；只有同时服务两个公开入口和其他入口的
+          // 通用基础模块进入应用基础块，不维护随文件移动而漂移的逐文件清单。
           groups: [
             {
               name: "query-vendor",
@@ -83,47 +165,17 @@ export default defineConfig({
               priority: 4
             },
             {
-              name: "app-foundation",
-              test: (id) => matchesModuleSuffix(id, appFoundationModuleSuffixes),
-              priority: 3,
-              includeDependenciesRecursively: false
-            },
-            {
-              name: "admin-auth-shared",
-              test: (id) => matchesModuleSuffix(
-                id,
-                adminAuthSharedModuleSuffixes
-              ),
-              priority: 3,
-              includeDependenciesRecursively: false
-            },
-            {
-              name: "admin-foundation",
-              test: (id) => matchesModuleSuffix(id, adminFoundationModuleSuffixes),
-              priority: 2,
-              minShareCount: 2,
-              // 只收明确列出的后台模块；依赖仍按其真实入口集合分块，避免公开页
-              // 因共用 Icon、对话框 Hook 等基础能力而加载后台基础块。
-              includeDependenciesRecursively: false
-            },
-            {
-              name: "app-shared",
-              test: (id) => (
-                /[\\/]packages[\\/]web[\\/]src[\\/]/.test(id)
-                && !/[\\/]packages[\\/]web[\\/]src[\\/]pages[\\/]/.test(id)
-                && !id.endsWith(".css")
+              name: sharedChunkName,
+              test: (id) => !id.endsWith(".css") && (
+                (
+                  /[\\/]packages[\\/]web[\\/]src[\\/]/.test(id)
+                  && !/[\\/]packages[\\/]web[\\/]src[\\/]pages[\\/]/.test(id)
+                )
+                || /[\\/]packages[\\/]shared[\\/]dist[\\/]browser(?:[\\/]|\.js$)/.test(id)
               ),
               priority: 1,
               minShareCount: 2,
-              entriesAware: true,
-              entriesAwareMergeThreshold: smallSharedMergeThreshold
-            },
-            {
-              name: "route-pages",
-              test: /[\\/]packages[\\/]web[\\/]src[\\/]pages[\\/]/,
-              minShareCount: 2,
-              entriesAware: true,
-              entriesAwareMergeThreshold: 0
+              includeDependenciesRecursively: false
             }
           ]
         }
@@ -133,9 +185,9 @@ export default defineConfig({
   worker: {
     rollupOptions: {
       output: {
-        entryFileNames: "assets/[name]-[hash:6].js",
-        chunkFileNames: "assets/[name]-[hash:6].js",
-        assetFileNames: "assets/[name]-[hash:6][extname]"
+        entryFileNames: "assets/[name]-[hash].js",
+        chunkFileNames: "assets/[name]-[hash].js",
+        assetFileNames: "assets/[name]-[hash][extname]"
       }
     }
   },
