@@ -197,8 +197,10 @@ hooks ──► lib
   图片加载、解码和并发调度留在
   `components/image/`，页面层只设置画廊任务的优先级、暂停和驻留边界。无界面的
   页面滚动边界归一化放在 `lib/ui/`，由共享采样 Hook 提供给各页面交互状态机。
-- `pages/admin/uploader/` 管理统一 prepared import 队列；其中 `link-import/` 负责 URL、
-  JSONL 与微博输入。
+- `pages/admin/uploader/` 管理统一 prepared import 队列；`Uploader` 持有任务与来源状态，
+  `UploadWorkflowWindow` 直接消费这些状态并就近渲染单消费者的头部、默认值、任务列表与
+  页脚，不再复制一套 controller contract；其中 `link-import/` 继续负责 URL、JSONL 与微博
+  输入适配。
 - `pages/admin/admin-route-modules.ts` 集中拥有后台路由页面的生命周期级动态加载器；
   `AuthenticatedAdminShell` 的 `React.lazy` 与桌面 / 移动导航意图共用这些 Promise。
   `AdminNavigation` 只为角色过滤后可见的内部页面绑定模块键，外部“首页”出口不猜测

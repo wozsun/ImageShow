@@ -1,15 +1,13 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAdminSettings } from "../../../lib/api/admin-settings.js";
-import { facetDisplayName } from "../../../lib/ui/formatters.js";
-import { storageBackendLabel, uploadCommonBrightnessOptions, uploadCommonDeviceOptions } from "../../../lib/ui/select-options.js";
+import { storageBackendLabel } from "../../../lib/ui/select-options.js";
 import { useImportVocabulary } from "../../../lib/api/import-vocabulary.js";
 import {
   storageNameResolver,
   useStorageOptions
 } from "../../../lib/api/storage-options.js";
-import type { FacetOption, ImageItem, ImportJob } from "../../../lib/types.js";
+import type { FacetOption, ImportJob } from "../../../lib/types.js";
 import type { ImportAttributeDefaults } from "../../../lib/upload/upload-utils.js";
-import type { ImportPreviewTarget } from "./DuplicateMatchPanel.js";
 import { importJobNeedsDuplicateConfirmation } from "./duplicate-match.js";
 import {
   importJobCanStartCommit,
@@ -28,13 +26,10 @@ import { useLinkImport } from "./link-import/useLinkImport.js";
 import { useImportCommit } from "./useImportCommit.js";
 import { useImportStatusEvents } from "./useImportStatusEvents.js";
 import {
-  createUploadCleanupActions,
   isCompletedImportJob
 } from "./upload-cleanup-actions.js";
-import { canApplyImportAttributeDefaults } from "./import-attribute-policy.js";
 import { AsyncIntentFence } from "../../../lib/async-intent-fence.js";
 import { UploadWorkflowWindow } from "./UploadWorkflowWindow.js";
-import type { UploadWorkflowWindowController } from "./upload-workflow-controller.js";
 import {
   type UploaderActivation
 } from "./uploader-activation.js";
@@ -66,7 +61,6 @@ export function Uploader({
   onDone: () => void;
   onLoadError: (error: unknown) => void;
 }) {
-  const fileInputId = useId();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"file" | "link">("file");
   const [sourceDialogOpen, setSourceDialogOpen] = useState(false);
@@ -76,7 +70,6 @@ export function Uploader({
   const [importSourceMode, setImportSourceMode] =
     useState<ImportSourceMode>("urls");
   const [jsonlErrors, setJsonlErrors] = useState<JsonlManifestParseError[]>([]);
-  const [dragOver, setDragOver] = useState(false);
   const [defaults, setDefaults] = useState<ImportAttributeDefaults>({
     device: "auto",
     brightness: "auto",
@@ -84,17 +77,8 @@ export function Uploader({
     author: "",
     tags: []
   });
-  const [defaultsExpanded, setDefaultsExpanded] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [detailItem, setDetailItem] = useState<ImageItem | null>(null);
-  const [preview, setPreview] = useState<ImportPreviewTarget | null>(null);
-  const listRef = useRef<HTMLDivElement | null>(null);
-  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const sourcePickerRef = useRef<HTMLButtonElement | null>(null);
   const workflowReturnFocusRef = useRef<HTMLElement | null>(null);
-  const detailReturnFocusRef = useRef<HTMLElement | null>(null);
-  const previewReturnFocusRef = useRef<HTMLElement | null>(null);
   const processedActivationRef = useRef(0);
   const intentFenceRef = useRef(new AsyncIntentFence());
 
@@ -190,7 +174,6 @@ export function Uploader({
     setOpen(false);
     setSourceDialogOpen(false);
     setSourceDialogPending(false);
-    setDefaultsExpanded(false);
     queue.clearJobs(isCompletedImportJob);
     setJsonlErrors([]);
   };
@@ -364,22 +347,6 @@ export function Uploader({
     void addJobs(jobs);
   };
 
-  const cleanupActions = createUploadCleanupActions({
-    jobs: queue.jobs,
-    busy,
-    onClear: (predicate) => void clearJobs(predicate)
-  });
-  const defaultsSummary = [
-    uploadCommonDeviceOptions.find((option) => option.value === defaults.device)?.label ?? "设备不设",
-    uploadCommonBrightnessOptions.find((option) => option.value === defaults.brightness)?.label ?? "亮暗不设",
-    facetDisplayName(themes, defaults.theme, "主题不设"),
-    facetDisplayName(authors, defaults.author, "作者不设"),
-    `${defaults.tags.length} 个标签`,
-  ].join(" · ");
-  const canApplyDefaults = useMemo(
-    () => queue.jobs.some((job) => canApplyImportAttributeDefaults(job, defaults)),
-    [defaults, queue.jobs]
-  );
   const patchJob = useCallback((job: ImportJob, patch: Partial<ImportJob["draft"]>) => {
     queue.updateJobDraft(job.id, patch);
   }, [queue.updateJobDraft]);
@@ -395,14 +362,6 @@ export function Uploader({
   const confirmDuplicateJob = useCallback((job: ImportJob) => {
     queue.updateJob(job.id, { duplicateDecision: "confirmed" });
   }, [queue.updateJob]);
-  const openJobDetail = useCallback((item: ImageItem, opener: HTMLElement) => {
-    detailReturnFocusRef.current = opener;
-    setDetailItem(item);
-  }, []);
-  const openJobPreview = useCallback((target: ImportPreviewTarget) => {
-    previewReturnFocusRef.current = target.opener ?? null;
-    setPreview(target);
-  }, []);
 
   const commitReadyJobs = () => {
     const currentReadyJobs = summarizeImportJobs(
@@ -413,96 +372,48 @@ export function Uploader({
     void commitImports(currentReadyJobs).finally(() => setBusy(false));
   };
 
-  const workflowController: UploadWorkflowWindowController = {
-    mode,
-    busy,
-    queue,
-    listRef,
-    returnFocusRef: workflowReturnFocusRef,
-    onClose: closeWorkflow,
-    header: {
-      cleanupActions,
-      closeButtonRef,
-      file: {
-        inputId: fileInputId,
-        inputRef: fileInputRef,
-        onAdd: (files) => void addFiles(files)
-      },
-      source: {
-        pending: sourceDialogPending,
-        mode: importSourceMode,
-        pickerRef: sourcePickerRef,
-        onOpen: (sourceMode) => {
-          void openImportSource(sourceMode);
-        },
-        onPreload: preloadImportSource
-      }
-    },
-    defaults: {
-      values: defaults,
-      expanded: defaultsExpanded,
-      summary: defaultsSummary,
-      canApply: canApplyDefaults,
-      themes,
-      tags,
-      authors,
-      onChange: setDefaults,
-      onExpandedChange: setDefaultsExpanded
-    },
-    tasks: {
-      jsonlErrors,
-      dragOver,
-      storageName,
-      themes,
-      tags,
-      authors,
-      onClearJsonlErrors: () => setJsonlErrors([]),
-      onDragOverChange: setDragOver,
-      onAddFiles: (files) => void addFiles(files),
-      onPatchJob: patchJob,
-      onCancelJob: requestCancelJob,
-      onRetryJob: requestRetryJob,
-      onRemoveJob: requestRemoveJob,
-      onConfirmDuplicateJob: confirmDuplicateJob,
-      onOpenDetail: openJobDetail,
-      onOpenPreview: openJobPreview
-    },
-    footer: {
-      activeBackend,
-      backendOptions,
-      onBackendChange: setBackendChoice,
-      onCancelAll: () => clearJobs(() => true),
-      onCommitReady: commitReadyJobs
-    },
-    overlays: {
-      detail: {
-        item: detailItem,
-        returnFocusRef: detailReturnFocusRef,
-        onClose: () => setDetailItem(null)
-      },
-      preview: {
-        target: preview,
-        returnFocusRef: previewReturnFocusRef,
-        onClose: () => setPreview(null)
-      },
-      source: {
-        open: sourceDialogOpen,
-        component: ImportSourceDialogComponent,
-        mode: importSourceMode,
-        autoImportAfterParse,
-        maxItems: linkMaxItems,
-        weiboMaxItems,
-        returnFocusRef: sourcePickerRef,
-        onClose: () => setSourceDialogOpen(false),
-        onSubmit: addImportSource
-      }
-    }
-  };
-
   return (
     <>
       {open && (
-        <UploadWorkflowWindow controller={workflowController} />
+        <UploadWorkflowWindow
+          mode={mode}
+          busy={busy}
+          queue={queue}
+          returnFocusRef={workflowReturnFocusRef}
+          onClose={closeWorkflow}
+          defaults={defaults}
+          onDefaultsChange={setDefaults}
+          themes={themes}
+          tags={tags}
+          authors={authors}
+          jsonlErrors={jsonlErrors}
+          onClearJsonlErrors={() => setJsonlErrors([])}
+          storageName={storageName}
+          onAddFiles={(files) => void addFiles(files)}
+          onPatchJob={patchJob}
+          onCancelJob={requestCancelJob}
+          onRetryJob={requestRetryJob}
+          onRemoveJob={requestRemoveJob}
+          onConfirmDuplicateJob={confirmDuplicateJob}
+          onClearJobs={clearJobs}
+          activeBackend={activeBackend}
+          backendOptions={backendOptions}
+          onBackendChange={setBackendChoice}
+          onCommitReady={commitReadyJobs}
+          sourceDialogPending={sourceDialogPending}
+          sourceDialogOpen={sourceDialogOpen}
+          sourceDialogComponent={ImportSourceDialogComponent}
+          importSourceMode={importSourceMode}
+          autoImportAfterParse={autoImportAfterParse}
+          linkMaxItems={linkMaxItems}
+          weiboMaxItems={weiboMaxItems}
+          onOpenImportSource={(sourceMode) => {
+            void openImportSource(sourceMode);
+          }}
+          onPreloadImportSource={preloadImportSource}
+          onCloseImportSource={() => setSourceDialogOpen(false)}
+          onSubmitImportSource={addImportSource}
+        />
       )}
     </>
   );
