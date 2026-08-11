@@ -14,7 +14,6 @@ import {
 import { thumbnailObjectKey } from "./image-paths.ts";
 import { withImageStorageMutationLock } from "./maintenance-lock.ts";
 import {
-  assertThumbnailRepairNotPending,
   captureMoveCleanupObjects,
   enqueueCapturedObjectsForCleanup,
   enqueueCapturedObjectsForCleanupDetached,
@@ -271,8 +270,6 @@ async function migrateImageStorageWhileLocked(
 
   let sourceCleanup: CapturedMoveCleanupObject[];
   try {
-    await assertThumbnailRepairNotPending(current.id, source, thumbKey);
-    signal.throwIfAborted();
     if (!await sourceAccess.driver.exists(
       "media",
       current.object_key,

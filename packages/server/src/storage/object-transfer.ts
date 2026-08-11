@@ -7,7 +7,6 @@ import type {
   StorageDriver,
   StorageRequestOptions
 } from "./driver.ts";
-import type { ThumbnailRepairCleanupAuthorization } from "./move-cleanup.ts";
 import type { StoragePrefix } from "./object-keys.ts";
 import { shareStorageNamespace } from "./storage-namespace.ts";
 
@@ -67,11 +66,10 @@ export function missingThumbnailSourceError({
 async function defaultCleanupLeaseCheck(
   target: StorageConfig,
   prefix: "media" | "thumbs",
-  key: string,
-  authorization?: ThumbnailRepairCleanupAuthorization
+  key: string
 ) {
   const { assertObjectNotPendingCleanup } = await import("./move-cleanup.ts");
-  await assertObjectNotPendingCleanup(target, prefix, key, authorization);
+  await assertObjectNotPendingCleanup(target, prefix, key);
 }
 
 function objectConflict(
@@ -216,7 +214,7 @@ async function cleanupAttemptedCandidate(
  * objects are never overwritten. A post-write mismatch is an upstream
  * integrity failure (502), not a pre-existing object conflict (409).
  */
-export async function ensureVerifiedObjectAtTarget(input: {
+async function ensureVerifiedObjectAtTarget(input: {
   target: StorageEndpoint;
   prefix: StoragePrefix;
   key: string;
@@ -224,7 +222,6 @@ export async function ensureVerifiedObjectAtTarget(input: {
   contentType: string;
   sourceSlug?: string;
   cleanupCandidate?: CandidateCleanup;
-  repairAuthorization?: ThumbnailRepairCleanupAuthorization;
   signal?: AbortSignal;
 }): Promise<{ created: boolean }> {
   const {
@@ -235,7 +232,6 @@ export async function ensureVerifiedObjectAtTarget(input: {
     contentType,
     sourceSlug,
     cleanupCandidate: candidateCleanup,
-    repairAuthorization,
     signal
   } = input;
   const expected: StorageObjectDigest = {
@@ -243,12 +239,7 @@ export async function ensureVerifiedObjectAtTarget(input: {
     sha256: createHash("sha256").update(body).digest("hex")
   };
   if (prefix !== "_uploads") {
-    await defaultCleanupLeaseCheck(
-      target.config,
-      prefix,
-      key,
-      repairAuthorization
-    );
+    await defaultCleanupLeaseCheck(target.config, prefix, key);
   }
   if (await target.driver.exists(prefix, key, { signal })) {
     const existing = await digestStorageObject(target, prefix, key, { signal });

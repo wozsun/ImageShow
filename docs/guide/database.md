@@ -24,7 +24,7 @@ additions 只保存一个发布周期的安全增量。版本 N 新增经审查�
 占位文件及稳定的启动、构建入口。该模型不支持跳过 N 直接部署 N+1；恢复早于 N 的数据库
 备份时，也必须先运行 N 或人工执行同一份经审查 SQL。
 
-当前 `v4.8.13` 的 additions 没有待执行 SQL，只保留过渡规则注释。
+当前 `v4.8.14` 的 additions 没有待执行 SQL，只保留过渡规则注释。
 `metadata.purge_error TEXT`、`admin_account.preferences JSONB NOT NULL DEFAULT '{}'` 与
 `theme.none` 已在 `schema.sql` 形成基线，并已由全部受控生产数据库在上一版本完成确认。
 后续 additions 仍只保存当期真实增量：不补业务表、外键、CHECK，不删除或重命名对象，
@@ -75,17 +75,12 @@ readiness 不复制 `schema.sql` 的可空性、默认值、PK / FK / CHECK、�
 存在性、不读取原图降级，也不在请求中写对象或 `thumbnail_size`。缺图返回 404；分类移动
 和存储迁移返回结构化 `storage_thumbnail_missing`，要求先运行检查页“存储维护”。
 
-4.8.13 不再提供 repair write-ahead 生产函数，也没有新的 `thumbnail_repair` payload 生产者。
-`move.cleanup` Worker 暂时仍能采用或清理部署前已经持久化的精确 repair 字节；其物理 namespace、
-摘要、大小、重试和对象占用语义只服务于这批历史未完成任务，不属于正常读取契约。
-
 检查页显式维护是独立的管理员同步操作：它在全局存储位置写锁内重读当前图片位置，只为
 原图仍存在且缩略图确实缺失的记录生成、强摘要回读并写回 `thumbnail_size`。该路径不创建
 `background_job`，也不把修复字节写入 JSONB；数据库回写未确认时会清理本次候选并逐项报告
 失败。维修写对象前用现有合法值 `thumbnail_size=0` 标记尚未最终采用的候选；即使数据库
 最终更新和候选清理同时无法确认，后续显式维护仍会重新进入该记录，而不需要新表、任务或
-修复 payload。它是当前唯一会生成缩略图的维修入口；生产中历史 repair 任务确认收口后，
-后续版本会删除 `move.cleanup` 的过渡消费分支。
+修复 payload。它是当前唯一会生成缩略图的维修入口。
 
 彻底删除先用 `FOR UPDATE SKIP LOCKED` 把 deleted 行原子认领为 `purging` 并增加
 `purge_attempts`，随后在该图的存储 mutation lock 内再次核对状态、尝试号和对象位置。
@@ -166,11 +161,13 @@ Worker 会按保留策略裁剪历史记录：`succeeded` / `ignored` 保留 7 �
 `running` 的路径会清空 token，因此租约超时后又被重新领取的旧执行者不能写入迟到
 终态。`retry_count` 只统计失败与僵尸恢复次数，所有权代际不会进入 payload。
 
-`move.cleanup` 的对象条目同时固化后端 slug、对象前缀 / 键和入队时的物理命名空间
-identity。`pending`、`running` 以及所有 `failed`（包括耗尽重试）都属于未解决引用；
+`move.cleanup` 的 payload 只保存原因、保留策略，以及固化后端 slug、对象前缀 / 键和入队时
+物理命名空间 identity 的对象条目，不携带图片或缩略图字节。`pending`、`running` 以及所有
+`failed`（包括耗尽重试）都属于未解决引用；
 对应后端不能删除或修改物理位置，管理接口会返回总数、失败数和耗尽重试数。超级管理员
 可按后端把耗尽任务恢复为 `pending`；Worker 删除前还会核对当前 slug 的 identity，并把
-对象已不存在视为核验完成。未解决记录也是该 identity、前缀与对象键的持久删除租约；
+对象已不存在视为核验完成。它不会生成或采用缩略图，也不会更新 `metadata`。未解决记录
+也是该 identity、前缀与对象键的持久删除租约；
 commit、分类移动和存储迁移在写入或采用正式对象前必须确认不存在该租约，避免远端
 DELETE 发出后失锁时由后继重新采用同一对象。
 

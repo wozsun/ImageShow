@@ -69,7 +69,7 @@ PostgreSQL 是图片、词表、导入会话、后台任务、存储注册表和
 受控数据库确认应用后，由 N+1 移入 `schema.sql` 并从 additions 删除；不支持跳过承载增量的
 版本。应用不提供通用结构 diff、编号迁移、破坏性 DDL、契约标记或清库。允许的 additions、
 兼容超集和拒绝条件以[数据库结构](./database.md)为唯一说明。
-当前 `v4.8.13` 的 additions 是注释占位，不执行 DDL 或数据写入。
+当前 `v4.8.14` 的 additions 是注释占位，不执行 DDL 或数据写入。
 
 ### Redis
 
@@ -112,8 +112,8 @@ Redis 运行期不可用时，后台在会话读取前统一返回 `503 redis_un
 会改变图片对象位置的导入提交、分类修改、主题重分配、单图或整后端迁移和彻底删除，
 共用存储位置维护锁与单图 advisory lock。锁内重新读取 PostgreSQL 真相，候选对象必须
 经强摘要回读验证，数据库位置以旧值做 CAS。数据库提交后才处理旧对象；不可逆删除交给
-带物理命名空间 identity 的持久 `move.cleanup` 回执，避免迟到 DELETE 删除后来采用的
-对象。
+带物理命名空间 identity 的持久 `move.cleanup` 任务。Worker 取得同一单图锁并在删除边界
+重读当前引用，已经重新采用的对象会保留，DELETE 结果则必须再次确认。
 
 检查页的显式存储维护取得同一位置锁的独占模式，因此会等待上传、迁移和对象清理的共享
 持有者完成，也阻止新持有者越过执行快照。它在锁内直接修复缺失缩略图和删除确认孤儿，
@@ -133,7 +133,7 @@ Worker 只消费四类持久任务：
 
 | 类型 | 所属领域 | 作用 |
 | --- | --- | --- |
-| `move.cleanup` | storage | 收口候选或旧位置对象删除 |
+| `move.cleanup` | storage | 删除确认未引用的捕获候选或旧位置对象 |
 | `import.cleanup` | images/imports | 清理过期导入会话和暂存对象 |
 | `trash.purge` | images | 续处理大批回收站彻底删除 |
 | `cache.rebuild` | images/ready-cache | 重建 ready 图片核心投影 |

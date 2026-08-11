@@ -23,16 +23,6 @@ export type {
   CapturedMoveCleanupObject,
   MoveCleanupObjectInput
 } from "./move-cleanup-types.ts";
-export type ThumbnailRepairCleanupAuthorization = {
-  receiptId: string;
-  imageId: string;
-  object: CapturedMoveCleanupObject & {
-    prefix: "thumbs";
-    thumbnail_repair: NonNullable<
-      CapturedMoveCleanupObject["thumbnail_repair"]
-    >;
-  };
-};
 
 type StorageBackendConfig = Awaited<ReturnType<typeof getStorageBackend>>;
 
@@ -71,29 +61,13 @@ async function cleanupReferenceMatchesTarget(
 export async function assertObjectNotPendingCleanup(
   target: Awaited<ReturnType<typeof getStorageBackend>>,
   prefix: "media" | "thumbs",
-  key: string,
-  authorization?: ThumbnailRepairCleanupAuthorization
+  key: string
 ) {
   const references = await listUnresolvedMoveCleanupReferences(prefix, key);
   if (!references.length) return;
   const backends = new Map<string, StorageBackendConfig>();
 
   for (const reference of references) {
-    if (
-      authorization
-      && prefix === "thumbs"
-      && reference.job_id === authorization.receiptId
-      && reference.target_id === authorization.imageId
-      && reference.backend === authorization.object.backend
-      && reference.namespace_identity
-        === authorization.object.namespace_identity
-      && reference.thumbnail_repair_sha256
-        === authorization.object.thumbnail_repair.expected_sha256
-      && reference.thumbnail_repair_size
-        === authorization.object.thumbnail_repair.expected_size
-    ) {
-      continue;
-    }
     if (!await cleanupReferenceMatchesTarget(reference, target, backends)) {
       continue;
     }
@@ -107,44 +81,6 @@ export async function assertObjectNotPendingCleanup(
         key,
         cleanup_backend: reference.backend
       }
-    );
-  }
-}
-
-/** Report whether any unresolved write-ahead repair owns this physical key. */
-export async function thumbnailObjectHasPendingRepair(
-  target: StorageBackendConfig,
-  key: string,
-  ignoreReceiptId?: string
-) {
-  const references = await listUnresolvedMoveCleanupReferences("thumbs", key);
-  const backends = new Map<string, StorageBackendConfig>();
-  for (const reference of references) {
-    if (
-      reference.job_id === ignoreReceiptId
-      || !reference.thumbnail_repair_sha256
-      || reference.thumbnail_repair_size === null
-      || !await cleanupReferenceMatchesTarget(reference, target, backends)
-    ) {
-      continue;
-    }
-    return true;
-  }
-  return false;
-}
-
-/** A mutation must not consume or remove bytes owned by a pending repair. */
-export async function assertThumbnailRepairNotPending(
-  imageId: string,
-  target: StorageBackendConfig,
-  key: string
-) {
-  if (await thumbnailObjectHasPendingRepair(target, key)) {
-    throw new ApiError(
-      409,
-      "thumbnail_repair_pending",
-      "该图片仍有未完成的缩略图修复，暂不能迁移或永久删除",
-      { image_id: imageId, backend: target.slug, key }
     );
   }
 }

@@ -7,10 +7,8 @@ import { errorMessage } from "../core/api-error.ts";
 import { pool } from "../core/database-pools.ts";
 import { enqueue } from "../jobs/repository.ts";
 import { logger } from "../core/logger.ts";
-import { getStorageBackend } from "../storage/backend-registry.ts";
 import { thumbnailRef } from "../storage/image-paths.ts";
 import { withImageStorageMutationLock } from "../storage/maintenance-lock.ts";
-import { assertThumbnailRepairNotPending } from "../storage/move-cleanup.ts";
 import {
   removeStorageObjectAndConfirm
 } from "../storage/object-access.ts";
@@ -203,10 +201,6 @@ async function purgeClaimedRow(claim: PurgeRow): Promise<PurgeRow | null> {
     if (!row) return null;
 
     const thumb = thumbnailRef(row);
-    const backend = await getStorageBackend(row.storage_slug);
-    signal.throwIfAborted();
-    await assertThumbnailRepairNotPending(row.id, backend, thumb.key);
-    signal.throwIfAborted();
     const removals = await Promise.allSettled([
       removeStorageObjectAndConfirm(
         thumb.prefix,

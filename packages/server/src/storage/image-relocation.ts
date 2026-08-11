@@ -13,7 +13,6 @@ import {
   missingThumbnailSourceError
 } from "./object-transfer.ts";
 import {
-  assertThumbnailRepairNotPending,
   captureMoveCleanupObjects,
   enqueueCapturedObjectsForCleanupDetached,
   enqueueCapturedObjectsForCleanup,
@@ -118,12 +117,6 @@ export async function prepareVerifiedImageRelocation(
     signal?.throwIfAborted();
     if (nextObjectKey !== image.object_key) {
       const sourceThumbnailKey = thumbnailObjectKey(image.object_key);
-      await assertThumbnailRepairNotPending(
-        image.id,
-        storage.config,
-        sourceThumbnailKey
-      );
-      signal?.throwIfAborted();
       if (!await storage.driver.exists(
         "media",
         image.object_key,

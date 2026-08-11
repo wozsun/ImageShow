@@ -32,7 +32,6 @@ import { drainWorker, startWorker, stopWorker } from "./jobs/worker.ts";
 import {
   closeStorageBackendRegistry
 } from "./storage/backend-registry.ts";
-import { initializeThumbnailRepairState } from "./storage/thumbnail-repair-state.ts";
 import { createHttpApp } from "./http-app.ts";
 
 configureDatabasePools(deploymentConfig.database);
@@ -55,7 +54,6 @@ async function settleCoordinatorInitialization() {
 try {
   await ensureRuntimeDirectories();
   await initializeDatabaseSchema();
-  await initializeThumbnailRepairState();
   await cleanupOrphanRawImports(appConfig.uploadTtlSeconds * 1000);
   await ensureSuperAdmin({
     username: bootstrapEnvironment.adminUsername,

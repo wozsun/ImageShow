@@ -168,18 +168,6 @@ export async function renewBackgroundJobLease(job: BackgroundJob) {
   return result.rowCount === 1;
 }
 
-export async function backgroundJobExecutionIsCurrent(job: BackgroundJob) {
-  const result = await pool.query(
-    `SELECT 1
-       FROM background_job
-      WHERE id=$1
-        AND status='running'
-        AND execution_token=$2`,
-    [job.id, job.execution_token]
-  );
-  return result.rowCount === 1;
-}
-
 export async function markBackgroundJobSucceeded(job: BackgroundJob) {
   const updated = await pool.query(
     `UPDATE background_job
@@ -187,12 +175,7 @@ export async function markBackgroundJobSucceeded(job: BackgroundJob) {
            WHEN payload->>'rerun_requested'='true' THEN 'pending'
            ELSE 'succeeded'
          END,
-         payload=CASE
-           WHEN payload->>'rerun_requested'='true'
-             THEN payload - 'rerun_requested'
-           ELSE (payload - 'rerun_requested')
-                  - 'thumbnail_repair_body_base64'
-         END,
+         payload=payload - 'rerun_requested',
          error='',
          retry_count=CASE
            WHEN payload->>'rerun_requested'='true' THEN 0
@@ -218,8 +201,7 @@ export async function markBackgroundJobIgnored(
   const updated = await pool.query(
     `UPDATE background_job
      SET status='ignored',
-         payload=(payload - 'rerun_requested')
-                   - 'thumbnail_repair_body_base64',
+         payload=payload - 'rerun_requested',
          execution_token=NULL,
          error=$3,
          updated_at=now()
