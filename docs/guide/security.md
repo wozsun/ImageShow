@@ -30,7 +30,7 @@
   主题、标签和作者的查看、新建、编辑及排序；相应管理页不提供批量删除，单项删除
   分别需要 `theme.delete`、`tag.delete` 和 `author.delete`。图片管理员还可以执行
   数据库、存储、Redis、回收站和全部五项只读检查；存储后端迁移需要
-  `storage.maintenance.migrate`，无效存储清理需要 `storage.maintenance.cleanup`，
+  `storage.maintenance.migrate`，显式存储维护需要 `storage.maintenance.execute`，
   手动重建统一图片缓存需要 `cache.maintenance.rebuild`。
   以上八项高风险操作权限当前只授予超级管理员；直接构造对应单项请求同样返回 403，
   且在解析正文或进入存储维护操作前终止。

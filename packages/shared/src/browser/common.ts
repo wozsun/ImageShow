@@ -37,7 +37,7 @@ export const adminPermissions = {
   themeDelete: "theme.delete",
   authorDelete: "author.delete",
   storageMaintenanceMigrate: "storage.maintenance.migrate",
-  storageMaintenanceCleanup: "storage.maintenance.cleanup",
+  storageMaintenanceExecute: "storage.maintenance.execute",
   cacheMaintenanceRebuild: "cache.maintenance.rebuild"
 } as const;
 export type AdminPermission =

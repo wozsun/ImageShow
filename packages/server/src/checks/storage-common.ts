@@ -1,10 +1,21 @@
 import { pool } from "../core/database-pools.ts";
+import { errorMessage } from "../core/api-error.ts";
 import { stagingSessionId } from "../images/imports/staging-keys.ts";
 import type { ImportMode } from "@imageshow/shared/browser";
-import { thumbnailObjectKey, thumbnailRef } from "../storage/image-paths.ts";
+import { thumbnailObjectKey } from "../storage/image-paths.ts";
 import { listStorageBackends } from "../storage/backend-registry.ts";
+import type { StorageBackendRecord } from "../storage/backend-config.ts";
+import { shareStorageNamespace } from "../storage/storage-namespace.ts";
+import { collectStorageNamespaceSnapshot } from "../storage/object-access.ts";
+import type { StorageKeyListOptions } from "../storage/key-listing.ts";
 
-export type StorageRow = { id: string; object_key: string; status: string; storage_slug: string };
+export type StorageRow = {
+  id: string;
+  object_key: string;
+  status: string;
+  storage_slug: string;
+  thumbnail_size?: string | number;
+};
 
 export type ActiveImportStorageReference = {
   id: string;
@@ -67,6 +78,36 @@ export async function activeImportStorageReferences() {
   return { rows, sessionsByBackend };
 }
 
+export async function importSessionIdsByBackend() {
+  const rows = (await pool.query(
+    "SELECT id, storage_slug FROM import_session"
+  )).rows as Array<{ id: string; storage_slug: string }>;
+  const idsByBackend = new Map<string, Set<string>>();
+  for (const row of rows) {
+    const ids = idsByBackend.get(row.storage_slug);
+    if (ids) ids.add(String(row.id));
+    else idsByBackend.set(row.storage_slug, new Set([String(row.id)]));
+  }
+  return idsByBackend;
+}
+
+export function mergeImportSessionIds(
+  ...snapshots: ReadonlyArray<ReadonlyMap<string, ReadonlySet<string>>>
+) {
+  const merged = new Map<string, Set<string>>();
+  for (const snapshot of snapshots) {
+    for (const [backend, snapshotIds] of snapshot) {
+      let ids = merged.get(backend);
+      if (!ids) {
+        ids = new Set<string>();
+        merged.set(backend, ids);
+      }
+      for (const id of snapshotIds) ids.add(id);
+    }
+  }
+  return merged;
+}
+
 export function classifyStagingKeys(
   keys: string[],
   activeSessions: ReadonlyMap<string, ActiveImportStorageReference>
@@ -108,20 +149,64 @@ export function mergeStorageReferenceRows(
   return [...rowsByObjectLocation.values()];
 }
 
-export async function storageBackends() {
-  const all = await listStorageBackends();
-  const defaultBackend = (all.find((backend) => backend.is_default) ?? all.find((backend) => backend.slug === "local") ?? all[0])?.slug ?? "local";
-  return { defaultBackend, backends: all.map((backend) => backend.slug) };
+export type StorageBackendGroup = {
+  backends: StorageBackendRecord[];
+  slugs: string[];
+};
+
+export function storageBackendGroupName(group: StorageBackendGroup) {
+  return group.slugs.toSorted().join(" / ");
 }
 
-export function expectedThumbs(rows: StorageRow[]) {
-  const thumbs = new Map<string, Set<string>>();
-  for (const row of rows) {
-    if (row.status !== "ready" && row.status !== "deleted") continue;
-    const ref = thumbnailRef(row);
-    let set = thumbs.get(ref.slug);
-    if (!set) { set = new Set<string>(); thumbs.set(ref.slug, set); }
-    set.add(ref.key);
+function appendStorageBackend(
+  groups: StorageBackendRecord[][],
+  backend: StorageBackendRecord
+) {
+  const matches = groups.flatMap((group, index) => (
+    group.some((candidate) => shareStorageNamespace(candidate, backend))
+      ? [index]
+      : []
+  ));
+  if (!matches.length) {
+    groups.push([backend]);
+    return;
   }
-  return { thumbs };
+
+  const merged = matches.flatMap((index) => groups[index]);
+  merged.push(backend);
+  for (const index of matches.toReversed()) {
+    groups.splice(index, 1);
+  }
+  groups.push(merged);
+}
+
+export async function storageBackendGroups(): Promise<StorageBackendGroup[]> {
+  const grouped: StorageBackendRecord[][] = [];
+  for (const backend of await listStorageBackends()) {
+    appendStorageBackend(grouped, backend);
+  }
+  return grouped.map((backends) => ({
+    backends,
+    slugs: backends.map((backend) => backend.slug)
+  }));
+}
+
+export async function collectStorageBackendGroupSnapshot(
+  group: StorageBackendGroup,
+  options: StorageKeyListOptions = {}
+) {
+  const errors: Array<{ backend: string; error: string }> = [];
+  for (const backend of group.backends) {
+    try {
+      const snapshot = await collectStorageNamespaceSnapshot(
+        backend.slug,
+        options
+      );
+      return { backend: backend.slug, snapshot, errors };
+    } catch (error) {
+      options.signal?.throwIfAborted();
+      errors.push({ backend: backend.slug, error: errorMessage(error) });
+    }
+  }
+  return { backend: group.slugs[0] ?? "unknown", snapshot: null, errors };
 }

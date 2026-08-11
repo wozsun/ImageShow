@@ -7,7 +7,7 @@ import { apiSuccess } from "../core/http/responses.ts";
 import { requireAdminPermission } from "../users/admin-authorization.ts";
 import { inspectRedisState } from "../checks/redis-inspect.ts";
 import { checkDatabase, checkTrash } from "../checks/database-check.ts";
-import { cleanupStorage } from "../checks/storage-cleanup.ts";
+import { maintainStorage } from "../checks/storage-maintenance.ts";
 import { checkStorage } from "../checks/storage-check.ts";
 import { checkSystemState } from "../checks/system-summary.ts";
 import { readAdminCheckStatus } from "../checks/lightweight-status.ts";
@@ -20,9 +20,9 @@ export function registerCheckRoutes(app: Hono) {
   app.post(`${adminApiBasePath}/check/redis`, async (c) => c.json(apiSuccess(await inspectRedisState())));
   app.post(`${adminApiBasePath}/check/storage`, async (c) => c.json(apiSuccess(await checkStorage(c.req.raw.signal))));
   app.post(
-    `${adminApiBasePath}/check/storage-cleanup`,
-    requireAdminPermission(adminPermissions.storageMaintenanceCleanup),
-    async (c) => c.json(apiSuccess(await cleanupStorage(c.req.raw.signal)))
+    `${adminApiBasePath}/check/storage-maintenance`,
+    requireAdminPermission(adminPermissions.storageMaintenanceExecute),
+    async (c) => c.json(apiSuccess(await maintainStorage(c.req.raw.signal)))
   );
   app.post(`${adminApiBasePath}/check/trash`, async (c) => c.json(apiSuccess(await checkTrash())));
   app.post(`${adminApiBasePath}/check/all`, async (c) => c.json(apiSuccess(

@@ -20,6 +20,7 @@ import {
   revisionFingerprint
 } from "../../lib/ui/formatters.js";
 import { StorageBackendMigrationDialog } from "./storage/StorageBackendMigrationDialog.js";
+import { storageMaintenancePreview } from "./storage-maintenance-preview.js";
 import { ReadyImageCachePanel } from "./ReadyImageCachePanel.js";
 import "../../styles/admin/check.css";
 
@@ -37,6 +38,8 @@ type CheckView = typeof checkViews[number]["name"];
 export function CheckPage() {
   const client = useQueryClient();
   const [result, setResult] = useState<unknown>(null);
+  const [resultKind, setResultKind] = useState("");
+  const [maintenancePreview, setMaintenancePreview] = useState<unknown>(null);
   const [running, setRunning] = useState("");
   const [checkView, setCheckView] = useState<CheckView>("status");
   const permissions = useAdminPermissions();
@@ -44,24 +47,27 @@ export function CheckPage() {
   const canMigrateStorage = permissions.includes(
     adminPermissions.storageMaintenanceMigrate
   );
-  const canCleanupStorage = permissions.includes(
-    adminPermissions.storageMaintenanceCleanup
+  const canMaintainStorage = permissions.includes(
+    adminPermissions.storageMaintenanceExecute
   );
   const canRebuildCache = permissions.includes(
     adminPermissions.cacheMaintenanceRebuild
   );
   const [operationModal, setOperationModal] = useState<
-    "storage-backend-migration" | "storage-cleanup" | null
+    "storage-backend-migration" | "storage-maintenance" | null
   >(null);
   const runCheck = async (name: string, body?: Record<string, unknown>) => {
     setRunning(name);
     try {
-      setResult(await api(`${adminApiBasePath}/check/${name}`, { method: "POST", body: body ? JSON.stringify(body) : undefined }));
-      return true;
+      const value = await api(`${adminApiBasePath}/check/${name}`, { method: "POST", body: body ? JSON.stringify(body) : undefined });
+      setResult(value);
+      setResultKind(name);
+      return value;
     } catch (error) {
       reportAdminUiError(`check.${name}`, error);
       setResult({ ok: false, error: "检查执行失败，请稍后重试" });
-      return false;
+      setResultKind(name);
+      return null;
     } finally {
       setRunning("");
     }
@@ -69,8 +75,25 @@ export function CheckPage() {
   const selectCheckView = (view: CheckView) => {
     setCheckView(view);
     setResult(null);
+    setResultKind("");
     if (view !== "status") void runCheck(view);
   };
+  const openStorageMaintenance = async () => {
+    let preview = resultKind === "storage"
+      ? storageMaintenancePreview(result) && result
+      : null;
+    if (!preview) {
+      setCheckView("storage");
+      preview = await runCheck("storage");
+    }
+    if (preview && storageMaintenancePreview(preview)) {
+      setMaintenancePreview(preview);
+      setOperationModal("storage-maintenance");
+    }
+  };
+  const runStorageMaintenance = async () => (
+    await runCheck("storage-maintenance") !== null
+  );
   const runStorageMigration = async (source: string, target: string) => {
     setRunning("storage-backend-migration");
     try {
@@ -106,7 +129,7 @@ export function CheckPage() {
               </button>
             ))}
           </div>
-          {(canMigrateStorage || canCleanupStorage) && (
+          {(canMigrateStorage || canMaintainStorage) && (
             <div className="actions">
               {canMigrateStorage && (
                 <button
@@ -117,14 +140,13 @@ export function CheckPage() {
                   <AdminIcon name="database-2-line" /><StableButtonLabel idle="迁移存储后端" busyText="迁移中" busy={running === "storage-backend-migration"} />
                 </button>
               )}
-              {canCleanupStorage && (
+              {canMaintainStorage && (
                 <button
-                  className="danger-button"
                   type="button"
                   disabled={Boolean(running)}
-                  onClick={() => setOperationModal("storage-cleanup")}
+                  onClick={() => void openStorageMaintenance()}
                 >
-                  <AdminIcon name="delete-bin-6-line" /><StableButtonLabel idle="清理无效存储" busyText="清理中" busy={running === "storage-cleanup"} />
+                  <AdminIcon name="database-2-line" /><StableButtonLabel idle="存储维护" busyText="处理中" busy={running === "storage" || running === "storage-maintenance"} />
                 </button>
               )}
             </div>
@@ -144,11 +166,15 @@ export function CheckPage() {
           onRun={runStorageMigration}
         />
       )}
-      {operationModal === "storage-cleanup" && canCleanupStorage && (
-        <StorageCleanupDialog
+      {operationModal === "storage-maintenance" && canMaintainStorage && (
+        <StorageMaintenanceDialog
+          preview={maintenancePreview}
           running={running}
-          onClose={() => setOperationModal(null)}
-          onRun={() => runCheck("storage-cleanup")}
+          onClose={() => {
+            setOperationModal(null);
+            setMaintenancePreview(null);
+          }}
+          onRun={runStorageMaintenance}
         />
       )}
       {result !== null && <CheckResult result={result} />}
@@ -235,14 +261,17 @@ function formatStatusBytes(value: number | null) {
   return value === null ? "—" : formatBytes(value);
 }
 
-function StorageCleanupDialog({ running, onClose, onRun }: {
+function StorageMaintenanceDialog({ preview, running, onClose, onRun }: {
+  preview: unknown;
   running: string;
   onClose: () => void;
   onRun: () => Promise<boolean>;
 }) {
   const [errorMessage, setErrorMessage] = useState("");
-  const title = "清理无效存储";
-  const description = "删除数据库未引用的原图、缩略图及已失效的上传暂存文件。回收站中的图片文件和其他仍被引用的对象会保留。";
+  const [confirmed, setConfirmed] = useState(false);
+  const summary = storageMaintenancePreview(preview);
+  const title = "存储维护";
+  const description = "重建可恢复的缺失缩略图，并删除数据库确认未引用的存储对象。回收站图片和有效导入仍会保留。";
   return (
     <DialogFrame
       className="modal edit-modal"
@@ -259,7 +288,7 @@ function StorageCleanupDialog({ running, onClose, onRun }: {
             if (await onRun()) {
               requestClose();
             } else {
-              setErrorMessage("清理执行失败，请稍后重试。");
+              setErrorMessage("存储维护执行失败，请稍后重试。");
             }
           }}
         >
@@ -279,7 +308,36 @@ function StorageCleanupDialog({ running, onClose, onRun }: {
             </button>
           </header>
           <div className="operation-body">
-            <p className="notice-line">此操作会修改存储对象。执行前请先运行存储检查，确认检查结果，并避免同时上传或批量编辑图片。</p>
+            {summary && (
+              <dl className="storage-maintenance-preview">
+                <div><dt>可重建缩略图</dt><dd>{summary.repairable_thumbnails.toLocaleString()}</dd></div>
+                <div><dt>缺失原图</dt><dd>{summary.missing_originals.toLocaleString()}</dd></div>
+                <div><dt>可清理对象</dt><dd>{summary.removable_objects.toLocaleString()}</dd></div>
+                <div><dt>受保护导入暂存</dt><dd>{summary.protected_uploads.toLocaleString()}</dd></div>
+              </dl>
+            )}
+            <p className="notice-line">
+              以上仅为当前检查预览。执行时服务端会在独占维护锁内重新读取数据库和完整存储快照；
+              {summary && (summary.blocked_namespaces || summary.unavailable_logical_backends)
+                ? `当前另有 ${[
+                    summary.blocked_namespaces
+                      ? `${summary.blocked_namespaces} 个不可用或列举不完整的命名空间`
+                      : "",
+                    summary.unavailable_logical_backends
+                      ? `${summary.unavailable_logical_backends} 个不可读逻辑后端`
+                      : ""
+                  ].filter(Boolean).join("、")}，${summary.blocked_items} 个相关项目只报告、不计入可执行数量。`
+                : "预览之后发生的上传或迁移不会直接沿用旧结果。"}
+            </p>
+            <label className="storage-maintenance-confirmation">
+              <input
+                type="checkbox"
+                checked={confirmed}
+                disabled={Boolean(running)}
+                onChange={(event) => setConfirmed(event.target.checked)}
+              />
+              <span>我已核对预览，并确认执行存储维修与孤儿对象清理。</span>
+            </label>
             {errorMessage && (
               <p className="admin-error" role="alert">{errorMessage}</p>
             )}
@@ -289,9 +347,9 @@ function StorageCleanupDialog({ running, onClose, onRun }: {
             <button
               className="button"
               type="submit"
-              disabled={Boolean(running)}
+              disabled={Boolean(running) || !confirmed || !summary}
             >
-              <AdminIcon name="refresh-line" /><StableButtonLabel idle="开始执行" busyText="清理中" busy={running === "storage-cleanup"} />
+              <AdminIcon name="refresh-line" /><StableButtonLabel idle="开始维护" busyText="维护中" busy={running === "storage-maintenance"} />
             </button>
           </footer>
         </form>
@@ -304,12 +362,12 @@ function CheckResult({ result }: { result: unknown }) {
   const objectResult = result && typeof result === "object" ? result as Record<string, unknown> : { value: result };
   const entries = Object.entries(objectResult).filter(([key]) => key !== "ok");
   const totalIssues = countCheckIssues(objectResult);
-  const cleanupSummary = storageCleanupSummary(objectResult);
+  const maintenanceSummary = storageMaintenanceSummary(objectResult);
   return (
     <>
-      <div className={`check-summary ${cleanupSummary?.warning || totalIssues ? "warn" : "ok"}`}>
-        <strong>{cleanupSummary?.title ?? (totalIssues ? `发现 ${totalIssues} 项需要处理` : "检查结果正常")}</strong>
-        <span>{cleanupSummary?.detail ?? "下方卡片展示每项检查的摘要，展开 JSON 可查看原始明细。"}</span>
+      <div className={`check-summary ${maintenanceSummary?.warning || totalIssues ? "warn" : "ok"}`}>
+        <strong>{maintenanceSummary?.title ?? (totalIssues ? `发现 ${totalIssues} 项需要处理` : "检查结果正常")}</strong>
+        <span>{maintenanceSummary?.detail ?? "下方卡片展示每项检查的摘要，展开 JSON 可查看原始明细。"}</span>
       </div>
       <div className="check-result">
         {entries.map(([key, value]) => {
@@ -343,18 +401,23 @@ const CHECK_RESULT_LABELS: Record<string, string> = {
   // 存储检查
   missing_objects: "缺失的原图",
   missing_thumbs: "缺失的缩略图",
+  pending_thumbnail_repairs: "待重新确认的缩略图",
   orphan_objects: "游离的原图",
   orphan_thumbs: "游离的缩略图",
   active_staging_files: "有效的导入暂存文件",
+  retained_staging_files: "由导入会话保留的暂存文件",
   orphan_staging_files: "失效的导入暂存文件",
   incomplete_listings: "未完整列举的存储命名空间",
   unavailable_backends: "无法访问的后端",
-  // 清理无效存储
+  // 存储维护
+  requested: "维护请求项",
+  repaired: "已修复缩略图",
   removed: "已删除对象",
-  retained: "因会话有效而保留",
-  failed: "删除失败数量",
+  skipped: "已安全跳过",
+  failed: "维护失败数量",
+  active_uploads_retained: "已保留有效导入暂存",
   pruned_dirs: "已回收空目录",
-  retained_items: "已保留项目及原因",
+  items: "逐项维护明细",
   failures: "失败项",
   migrated: "已迁移",
   unchanged: "无需迁移",
@@ -396,30 +459,29 @@ function checkResultLabel(key: string) {
 function isIssueKey(key: string) {
   return [
     "issues", "operations", "failures", "failed", "unavailable_backends", "incomplete_listings", "error", "errors", "error_count",
-    "missing_objects", "missing_thumbs",
+    "missing_objects", "missing_thumbs", "pending_thumbnail_repairs",
     "orphan_objects", "orphan_thumbs", "orphan_staging_files", "ready_cache_mismatch"
   ].includes(key);
 }
 
-function storageCleanupSummary(result: Record<string, unknown>) {
-  if (!("removed" in result) || !("retained_items" in result) || !("failures" in result)) {
+function storageMaintenanceSummary(result: Record<string, unknown>) {
+  if (!("requested" in result) || !("repaired" in result) || !("items" in result)) {
     return null;
   }
+  const requested = numericResult(result.requested);
+  const repaired = numericResult(result.repaired);
   const removed = numericResult(result.removed);
-  const retained = numericResult(result.retained);
+  const skipped = numericResult(result.skipped);
   const failed = numericResult(result.failed);
-  const candidates = numericResult(result.candidates);
   const prunedDirs = numericResult(result.pruned_dirs);
   return {
     warning: failed > 0,
     title: failed
-      ? `清理完成，但有 ${failed} 项删除失败`
-      : `清理完成：删除 ${removed} 项，保留 ${retained} 项`,
+      ? `存储维护完成，但有 ${failed} 项失败`
+      : `存储维护完成：修复 ${repaired} 项，删除 ${removed} 项`,
     detail: failed
-      ? `共发现 ${candidates} 个无效候选对象；失败项仍未清理，请根据下方错误明细处理。`
-      : retained
-        ? `保留项均对应尚未过期的导入会话，不属于无效存储；另回收 ${prunedDirs} 个空目录。`
-        : `共检查并处理 ${candidates} 个无效候选对象，另回收 ${prunedDirs} 个空目录。`
+      ? `本次共请求 ${requested} 项；失败项未被视为成功，请根据逐项明细处理后安全重试。`
+      : `本次共请求 ${requested} 项，安全跳过 ${skipped} 项，另回收 ${prunedDirs} 个空目录。`
   };
 }
 

@@ -123,6 +123,8 @@ gateway 自行复制这套准入状态。
 不再为只传递同一记录的 prepare / switch / settlement 阶段维护文件和中间契约。
 `images/image-storage-migration.ts` 只负责管理接口的 1..N 保序结果，
 `storage/backend-migration.ts` 只负责整后端计数和流式分页，两者都直接调用同一个单图原语。
+`checks/storage-check.ts` 只生成无写入权限的存储预览；`checks/storage-maintenance.ts` 在独占
+位置锁内重新扫描并直接完成缩略图维修与孤儿删除，不调用旧请求热路径 repair 或通用后台任务。
 回收站的软删除 / 恢复集中于
 `images/trash-mutations.ts`，永久对象删除与 claim 状态机集中于 `images/trash-purge.ts`，
 两者不共享转发入口。`metadata-mutations.ts` 只校验并选择普通字段更新或分类位置变更阶段，

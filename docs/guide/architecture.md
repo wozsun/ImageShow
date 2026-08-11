@@ -69,7 +69,7 @@ PostgreSQL 是图片、词表、导入会话、后台任务、存储注册表和
 受控数据库确认应用后，由 N+1 移入 `schema.sql` 并从 additions 删除；不支持跳过承载增量的
 版本。应用不提供通用结构 diff、编号迁移、破坏性 DDL、契约标记或清库。允许的 additions、
 兼容超集和拒绝条件以[数据库结构](./database.md)为唯一说明。
-当前 `v4.8.11` 的 additions 是注释占位，不执行 DDL 或数据写入。
+当前 `v4.8.12` 的 additions 是注释占位，不执行 DDL 或数据写入。
 
 ### Redis
 
@@ -114,6 +114,11 @@ Redis 运行期不可用时，后台在会话读取前统一返回 `503 redis_un
 经强摘要回读验证，数据库位置以旧值做 CAS。数据库提交后才处理旧对象；不可逆删除交给
 带物理命名空间 identity 的持久 `move.cleanup` 回执，避免迟到 DELETE 删除后来采用的
 对象。
+
+检查页的显式存储维护取得同一位置锁的独占模式，因此会等待上传、迁移和对象清理的共享
+持有者完成，也阻止新持有者越过执行快照。它在锁内直接修复缺失缩略图和删除确认孤儿，
+逐项返回结果，不把修复字节或执行结果复制到 `background_job`。只读存储检查不持锁，结果
+仅用于预览；写入口始终重新扫描 PostgreSQL 和完整物理命名空间。
 
 导入会话另以 session advisory lock 和 `execution_token` 隔离 materialize、prepare、
 commit、取消与过期清理。任何连接丢失或调用方取消都通过 `AbortSignal` 传播；领域模块在

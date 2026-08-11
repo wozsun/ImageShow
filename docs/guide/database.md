@@ -24,7 +24,7 @@ additions 只保存一个发布周期的安全增量。版本 N 新增经审查�
 占位文件及稳定的启动、构建入口。该模型不支持跳过 N 直接部署 N+1；恢复早于 N 的数据库
 备份时，也必须先运行 N 或人工执行同一份经审查 SQL。
 
-当前 `v4.8.11` 的 additions 没有待执行 SQL，只保留过渡规则注释。
+当前 `v4.8.12` 的 additions 没有待执行 SQL，只保留过渡规则注释。
 `metadata.purge_error TEXT`、`admin_account.preferences JSONB NOT NULL DEFAULT '{}'` 与
 `theme.none` 已在 `schema.sql` 形成基线，并已由全部受控生产数据库在上一版本完成确认。
 后续 additions 仍只保存当期真实增量：不补业务表、外键、CHECK，不删除或重命名对象，
@@ -81,6 +81,14 @@ receipt；只有与该回执完全一致的写入才可越过对象占用检查�
 no-store 降级，不把仅凭存在性的对象发布为 immutable。分类移动和存储迁移共用该服务；
 它们在风险写入前捕获候选 namespace，失锁后的清理回执直接使用该不可变凭据，不再借第
 二条 shared lock 形成排队写锁死锁。无生产者的缩略图后台任务已删除。
+
+检查页显式维护是独立的管理员同步操作：它在全局存储位置写锁内重读当前图片位置，只为
+原图仍存在且缩略图确实缺失的记录生成、强摘要回读并写回 `thumbnail_size`。该路径不创建
+`background_job`，也不把修复字节写入 JSONB；数据库回写未确认时会清理本次候选并逐项报告
+失败。维修写对象前用现有合法值 `thumbnail_size=0` 标记尚未最终采用的候选；即使数据库
+最终更新和候选清理同时无法确认，后续显式维护仍会重新进入该记录，而不需要新表、任务或
+修复 payload。4.8.12 仍保留上一段读取热路径 repair 的 write-ahead 结构，待显式维护稳定后由后续
+版本删除，二者不互相调用。
 
 彻底删除先用 `FOR UPDATE SKIP LOCKED` 把 deleted 行原子认领为 `purging` 并增加
 `purge_attempts`，随后在该图的存储 mutation lock 内再次核对状态、尝试号和对象位置。

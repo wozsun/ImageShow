@@ -158,6 +158,32 @@
 .check-card.ok .check-card-head span { color: var(--admin-color-success-text); background: var(--admin-color-success-surface-emphasis); }
 .check-card.warn .check-card-head span { color: var(--admin-color-warning-text-strong); background: var(--admin-color-warning-surface-strong); }
 .check-result pre { border: 0; padding: 0; max-height: 360px; }
+.storage-maintenance-preview {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+.storage-maintenance-preview div {
+  min-width: 0;
+  padding: 10px;
+  border-radius: 6px;
+  background: var(--admin-color-canvas);
+}
+.storage-maintenance-preview dt {
+  color: var(--admin-color-text-secondary);
+  font-size: 12px;
+}
+.storage-maintenance-preview dd {
+  margin: 4px 0 0;
+  font-weight: 600;
+}
+.storage-maintenance-confirmation {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.storage-maintenance-confirmation input { margin-top: 3px; }
 
 @media (max-width: 760px) {
   /* 六个检查视图保持两列；维护动作仍共享一行。 */
@@ -167,7 +193,8 @@
   .ready-cache-panel-head { flex-direction: column; }
   .ready-cache-panel-head > .actions { width: 100%; }
   .check-status-grid,
-  .ready-cache-occupancy-grid { grid-template-columns: 1fr; }
+  .ready-cache-occupancy-grid,
+  .storage-maintenance-preview { grid-template-columns: 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {
