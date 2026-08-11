@@ -81,15 +81,17 @@ docker compose exec postgresql sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB
 
 ## 数据库与升级边界
 
-`schema.sql` 是唯一完整的新安装结构；镜像另带小型累积 `schema-additions.sql`。空数据库
-在单事务内依次执行两者，非空数据库只执行克制 additions 后做只读 readiness。additions
-只补当前白名单中的行为中性字段和稳定系统种子，不提供编号迁移、通用 schema diff、
-删除、重命名、类型改变、推测回填、版本标记或清库。精确契约见
+`schema.sql` 是上一个已确认版本的干净安装基线；镜像另带只跨一个发布周期的
+`schema-additions.sql`，两者共同组成当前版本的完整空库结构。版本 N 的行为中性字段、必要
+索引或稳定系统种子先进入 additions；全部受控非空数据库部署 N 并通过 readiness 后，版本
+N+1 把同一定义移入 `schema.sql`，再把 additions 清空为注释占位。该流程不支持跳过 N，恢复
+早于 N 的数据库备份时也必须先应用 N 的增量。应用不提供编号迁移、通用 schema diff、删除、
+重命名、类型改变、推测回填、版本标记或清库。精确契约见
 [数据库结构](docs/guide/database.md#启动与结构契约)。
 
-从旧版持续升级且仍保留遗留列 / CHECK 的生产库，在 `v4.8.8` 期间须按
-[一次性数据库归一化手册](docs/guide/v4.8-database-normalization.md)备份、停应用并人工执行；
-该入口不会被启动流程自动调用，并将在确认生产完成后的紧邻版本删除。
+当前 `v4.8.9` 没有待执行的 additions SQL，文件只保留过渡规则注释；
+`metadata.purge_error`、`admin_account.preferences` 与 `theme.none` 已属于 `schema.sql`
+基线，并已由全部受控生产数据库在上一版本完成确认。
 
 Redis 不是业务真相源，普通升级不要求手工清空。连接必须支持 Redis 8 以及项目使用的
 `INCREX`、`ARRING`、`ARLASTITEMS` 命令；应用启动时会实际验证命令与 ACL 权限。
@@ -134,7 +136,6 @@ npm run verify:release
 - [项目结构](docs/guide/project-structure.md)
 - [配置说明](docs/guide/configuration.md)
 - [数据库结构](docs/guide/database.md)
-- [v4.8 一次性数据库归一化](docs/guide/v4.8-database-normalization.md)
 - [功能与流程](docs/guide/flows.md)
 - [生产部署](docs/guide/deployment.md)
 - [存储](docs/guide/storage.md)

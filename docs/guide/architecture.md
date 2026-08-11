@@ -64,10 +64,12 @@ PostgreSQL 是图片、词表、导入会话、后台任务、存储注册表和
 真相源。当前 schema 共 10 张表，其中 `ready_image_revision` 是图片投影 revision
 单行表；schema 不保存迁移账本或应用版本号。
 
-`schema.sql` 是唯一完整的新安装结构；空库随后执行小型 `schema-additions.sql`，非空库只
-执行其中经审查的行为中性字段和稳定系统种子，再做只读 readiness。应用不提供通用结构
-diff、编号迁移、破坏性 DDL、契约标记或清库。允许的 additions、兼容超集和拒绝条件以
-[数据库结构](./database.md)为唯一说明。
+`schema.sql` 是上一个已确认版本的干净安装基线；当前空库依次执行它与只跨一个发布周期的
+`schema-additions.sql`，非空库只执行 additions 后做只读 readiness。版本 N 的安全增量在全部
+受控数据库确认应用后，由 N+1 移入 `schema.sql` 并从 additions 删除；不支持跳过承载增量的
+版本。应用不提供通用结构 diff、编号迁移、破坏性 DDL、契约标记或清库。允许的 additions、
+兼容超集和拒绝条件以[数据库结构](./database.md)为唯一说明。
+当前 `v4.8.9` 的 additions 是注释占位，不执行 DDL 或数据写入。
 
 ### Redis
 

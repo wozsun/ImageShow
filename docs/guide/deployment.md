@@ -36,16 +36,16 @@ Redis 凭据只来自环境变量或 Secret，不写入 `config.json`。首次�
 
 ## PostgreSQL 与 Redis
 
-`schema.sql` 是镜像内唯一完整的新安装结构；`schema-additions.sql` 只包含经审查的行为中性
-字段与稳定系统种子。空数据库依次执行两者，非空数据库只执行 additions 后做只读
-readiness；整个过程受同一启动锁和事务保护。应用不提供编号迁移、通用 schema diff、版本
-ledger、破坏性 DDL 或清库；精确白名单与拒绝条件以
+`schema.sql` 是上一个已确认版本的干净安装基线；只跨一个发布周期的
+`schema-additions.sql` 保存当前经审查的行为中性字段、必要索引与稳定系统种子。空数据库依次
+执行两者，非空数据库只执行 additions 后做只读 readiness；整个过程受同一启动锁和事务保护。
+全部受控数据库确认应用版本 N 的 additions 后，N+1 才能把定义移入 `schema.sql` 并清空
+additions。部署不能跳过 N；恢复更早备份时也应先以 N 应用增量。应用不提供编号迁移、通用
+schema diff、版本 ledger、破坏性 DDL 或清库；精确白名单与拒绝条件以
 [数据库结构](./database.md#启动与结构契约)为准。
 
-`v4.8.8` 另带一个不会自动运行的临时人工归一化脚本，只供旧版延续数据库在可恢复备份和
-完整停机后删除两个遗留列、收窄两个 CHECK。它不是启动迁移机制；生产执行必须逐项遵循
-[v4.8 数据库一次性归一化](./v4.8-database-normalization.md)，确认成功前不得升级到删除该
-入口的后续版本。
+当前 `v4.8.9` 的 additions 没有待执行 SQL，只保留注释占位；全部受控生产数据库已经确认
+当前 `schema.sql` 形状，镜像不再携带一次性旧结构清理入口。
 
 Redis 只保存会话、限流、统一就绪图片投影和可重建派生缓存。连接必须支持 Redis 8
 以及 `INCREX`、`ARRING`、`ARLASTITEMS`；应用会用带 5 秒 TTL 的自有探针键实际验证

@@ -1,7 +1,7 @@
 {
   "name": "imageshow",
   "private": true,
-  "version": "4.8.8",
+  "version": "4.8.9",
   "type": "module",
   "workspaces": [
     "packages/*"
@@ -22,15 +22,11 @@
     "verify:release": "node scripts/verify/run.mjs release",
     "test:final:web": "tsx --test tests/final-web.test.ts",
     "benchmark:ready-image-set-work": "npm run benchmark:ready-image-set-work -w @imageshow/server",
-    "database:normalize:v4.8": "node --env-file-if-exists=.env scripts/runtime/normalize-v4.8-database.mjs",
     "admin:reset-password": "node --env-file-if-exists=.env packages/server/src/admin-password-cli.ts reset-password",
     "start": "npm run start -w @imageshow/server"
   },
   "engines": {
     "node": ">=26.3.0 <27"
-  },
-  "dependencies": {
-    "pg": "^8.23.0"
   },
   "devDependencies": {
     "knip": "^6.32.0",

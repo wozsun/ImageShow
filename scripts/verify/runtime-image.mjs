@@ -18,7 +18,6 @@ const names = {
   postgres: `imageshow-verify-postgres-${suffix}`,
   redis: `imageshow-verify-redis-${suffix}`,
   failedApp: `imageshow-verify-failed-app-${suffix}`,
-  normalizer: `imageshow-verify-normalizer-${suffix}`,
   app: `imageshow-verify-app-${suffix}`
 };
 const stableImageTag = `imageshow:${version}-verify`;
@@ -187,7 +186,7 @@ async function terminateActiveChildren() {
 async function performRuntimeCleanup() {
   const errors = [];
   const containerResults = await Promise.allSettled(
-    [names.failedApp, names.normalizer, names.app, names.redis, names.postgres]
+    [names.failedApp, names.app, names.redis, names.postgres]
       .filter((name) => attemptedContainers.has(name))
       .map(async (name) => {
         await removeContainer(name);
@@ -465,20 +464,6 @@ function applicationContainerArguments(name, databaseName, imageId) {
   ];
 }
 
-function normalizationCheckArguments(imageId) {
-  return [
-    "run", "--rm", "--name", names.normalizer,
-    "--network", names.network,
-    "--env", "DATABASE_HOST=postgresql",
-    "--env", "DATABASE_PORT=5432",
-    "--env", "DATABASE_NAME=imageshow",
-    "--env", "DATABASE_USER=imageshow",
-    "--env", `DATABASE_PASSWORD=${databasePassword}`,
-    imageId,
-    "npm", "run", "--silent", "database:normalize:v4.8", "--", "--check"
-  ];
-}
-
 async function schemaShape() {
   const sql = [
     "SELECT count(*)::text FROM information_schema.tables",
@@ -517,7 +502,6 @@ try {
     names.postgres,
     names.redis,
     names.failedApp,
-    names.normalizer,
     names.app
   ]) {
     await confirmAbsent(`container ${name}`, ["container", "inspect", name]);
@@ -639,26 +623,6 @@ try {
   if (await redisApplicationConnectionCount() !== 0) {
     throw new Error("graceful ImageShow shutdown retained Redis connections");
   }
-  attemptedContainers.add(names.normalizer);
-  const normalizationCheck = await runDocker(
-    normalizationCheckArguments(imageId),
-    { timeoutMs: 60_000 }
-  );
-  const normalizationReport = JSON.parse(normalizationCheck.stdout);
-  if (
-    normalizationReport.mode !== "check"
-    || normalizationReport.inspection?.target?.database !== "imageshow"
-    || normalizationReport.inspection?.ready_to_apply !== true
-    || normalizationReport.inspection?.pending_ddl?.length !== 0
-    || normalizationReport.inspection?.blockers?.length !== 0
-  ) {
-    throw new Error("candidate image normalization --check returned an unexpected report");
-  }
-  await confirmAbsent(
-    `container ${names.normalizer}`,
-    ["container", "inspect", names.normalizer]
-  );
-  attemptedContainers.delete(names.normalizer);
   await runDocker(["start", names.app], { timeoutMs: 60_000 });
   await waitFor("ImageShow Docker health after restart", healthProbe, 180_000);
   if (await containerImageId() !== imageId) {
@@ -683,7 +647,7 @@ try {
   console.log(
     `[runtime-image] ${stableImageTag} ${imageId}; Docker health, immutable image ID, `
     + "startup failure cleanup, repeated signals, explicit PostgreSQL/Redis release, "
-    + "packaged database normalization check, cold/restart HTTP and schema 10 tables passed"
+    + "cold/restart HTTP and schema 10 tables passed"
   );
 } catch (error) {
   if (!interruptedSignal) {
