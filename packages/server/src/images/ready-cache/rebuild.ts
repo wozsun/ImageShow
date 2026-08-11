@@ -5,10 +5,6 @@ import { redis } from "../../core/redis-client.ts";
 import { withReadyImageCacheWriteFence } from "./fence.ts";
 import { READY_IMAGE_META_KEY } from "./keys.ts";
 import {
-  invalidateReadyImageDerivedOccupancyMirror,
-  resetReadyImageDerivedOccupancyMirror
-} from "./derived-cache-occupancy.ts";
-import {
   buildReadyImageCardinalities,
   validateBuiltReadyImageCache,
   writeReadyImageStatsAndIntegrity,
@@ -60,9 +56,7 @@ async function clearReadyImageCacheForRebuild(
   client: Redis,
   signal?: AbortSignal
 ) {
-  invalidateReadyImageDerivedOccupancyMirror();
   await clearReadyImageCacheData(client, signal);
-  resetReadyImageDerivedOccupancyMirror();
 }
 
 function wait(ms: number, signal?: AbortSignal) {

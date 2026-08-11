@@ -51,9 +51,10 @@ Redis 暂时不可连接或能力不满足时，HTTP 进程仍监听。当前进
 `503 redis_unavailable`，但公开画廊、详情、facets、统计、图片 / 缩略图和定向及普通
 随机通过有界 PostgreSQL fallback 保持可用，只有准入队列或执行上限饱和时才返回
 `429/503` 与 `Retry-After`。
-应用进程冷启动和每个新 Redis 连接周期都会重新检查连接 epoch 与命令能力；图片协调器
-另行清理正式派生结果，并校验图片 schema、revision、meta、最后内容更新时间与核心
-完整性，通过后才开放 Redis-first 公开读取。后台只要求 Redis 会话能力可用，每次认证再
+应用进程冷启动和每个新 Redis 连接周期都会重新检查当前连接与命令能力；图片协调器以
+`unavailable` / `rebuilding` / `ready` / `stopped` 四态和一个活动任务清理正式派生结果，
+并校验图片 schema、PostgreSQL / Redis revision、meta、最后内容更新时间与核心完整性，
+通过后才开放 Redis-first 公开读取。后台只要求 Redis 会话能力可用，每次认证再
 按用户名查询一次 PostgreSQL `admin_account`，数据库异常返回 503 且保留会话。图片投影
 单独 rebuilding 或
 degraded 不影响 `/readyz` 或后台会话，公开读取与管理员 ready 列表暂时回源。Redis 请求

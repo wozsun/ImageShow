@@ -97,26 +97,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.ready-cache-occupancy-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 12px;
-}
-.ready-cache-occupancy-grid section {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  padding: 10px;
-  border-radius: 6px;
-  background: var(--admin-color-canvas);
-}
-.ready-cache-occupancy-grid h3 {
-  grid-column: 1 / -1;
-  margin: 0;
-  font-size: 14px;
-}
-.ready-cache-occupancy-grid span { color: var(--admin-color-text-secondary); }
 .ready-cache-errors { margin-top: 12px; color: var(--admin-color-danger-text); }
 .ready-cache-errors p { margin: 4px 0 0; }
 .check-result {
@@ -193,7 +173,6 @@
   .ready-cache-panel-head { flex-direction: column; }
   .ready-cache-panel-head > .actions { width: 100%; }
   .check-status-grid,
-  .ready-cache-occupancy-grid,
   .storage-maintenance-preview { grid-template-columns: 1fr; }
 }
 

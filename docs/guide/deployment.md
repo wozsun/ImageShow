@@ -44,7 +44,7 @@ additions。部署不能跳过 N；恢复更早备份时也应先以 N 应用增
 schema diff、版本 ledger、破坏性 DDL 或清库；精确白名单与拒绝条件以
 [数据库结构](./database.md#启动与结构契约)为准。
 
-当前 `v4.8.15` 的 additions 没有待执行 SQL，只保留注释占位；全部受控生产数据库已经确认
+当前 `v4.8.16` 的 additions 没有待执行 SQL，只保留注释占位；全部受控生产数据库已经确认
 当前 `schema.sql` 形状，镜像不再携带一次性旧结构清理入口。
 
 Redis 只保存会话、限流、统一就绪图片投影和可重建派生缓存。连接必须支持 Redis 8
@@ -64,7 +64,8 @@ Redis 只保存会话、限流、统一就绪图片投影和可重建派生缓�
 - 冷启动首次通过 Redis 能力检查前，业务路由和 Worker 都不开放。
 - 运行期 Redis 故障会让 `/readyz` 非就绪；后台返回 `503 redis_unavailable`，公开
   只读路径在工作量上限内回源 PostgreSQL。
-- Redis 重连后会重新验证连接 epoch、命令能力和图片投影完整性，再恢复 Redis-first。
+- Redis 重连后会由同一活动任务重新验证当前连接、命令能力、PostgreSQL / Redis revision
+  和图片投影完整性，再恢复 Redis-first；协调器不维护跨实例 owner 或第二套 epoch。
 
 建议直接使用镜像自带的 Docker HEALTHCHECK，不要用 `/livez` 替代就绪门禁：
 

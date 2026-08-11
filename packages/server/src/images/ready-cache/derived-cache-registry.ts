@@ -10,16 +10,10 @@ import {
   type DerivedResultDescriptor
 } from "./derived-cache-common.ts";
 import {
-  forgetReadyImageDerivedOccupancy,
-  rememberReadyImageDerivedOccupancy,
-  setReadyImageDerivedRegistryMemory
-} from "./derived-cache-occupancy.ts";
-import {
   READY_IMAGE_DERIVED_CACHE_POLICY,
   type ReadyImageDerivedResultKind
 } from "./derived-cache-policy.ts";
 import {
-  READY_IMAGE_DERIVED_REGISTRY_BYTES_KEY,
   READY_IMAGE_DERIVED_REGISTRY_COUNTS_KEY,
   READY_IMAGE_DERIVED_REGISTRY_KINDS_KEY,
   READY_IMAGE_DERIVED_REGISTRY_LRU_KEY,
@@ -27,7 +21,6 @@ import {
   assertReadyImageDerivedCacheKey
 } from "./keys.ts";
 import { REDIS_BATCH_MAX_COMMANDS } from "./redis-batch.ts";
-import { recordReadyImageCacheError } from "./status-observability.ts";
 
 const MAX_EVICTION_COMMANDS_PER_RESULT = 6;
 const EVICTION_BATCH_SIZE = Math.floor(
@@ -38,68 +31,7 @@ const MAX_REGISTRY_ENTRIES_DURING_REGISTRATION =
 
 type DerivedRegistryEntry = DerivedResultDescriptor & {
   count: number;
-  bytes: number | null;
 };
-
-function observedMemoryBytes(raw: unknown) {
-  if (String(raw ?? "") === "-1") return null;
-  return nonNegativeInteger(raw) ?? undefined;
-}
-
-function observeDerivedMemoryKeys(
-  keys: string[],
-  errorCode: string,
-  allMissingIsEmpty = false
-) {
-  return (async () => {
-    try {
-      const pipeline = redis.pipeline();
-      for (const key of keys) pipeline.call("MEMORY", "USAGE", key);
-      const results = await execRedisPipeline(pipeline);
-      if (
-        allMissingIsEmpty
-        && results.every((result) => result?.[1] === null)
-      ) {
-        return 0;
-      }
-      let total = 0;
-      for (const result of results) {
-        const bytes = nonNegativeInteger(result?.[1]);
-        if (bytes === null || !Number.isSafeInteger(total + bytes)) {
-          throw new Error("Ready-image derived memory observation is invalid");
-        }
-        total += bytes;
-      }
-      return total;
-    } catch (error) {
-      recordReadyImageCacheError("derived", errorCode, error);
-      return null;
-    }
-  })();
-}
-
-function observeDerivedResultMemory(
-  descriptor: DerivedResultDescriptor,
-  count: number
-) {
-  return observeDerivedMemoryKeys(
-    [
-      ...(descriptor.kind === "stats-result" || count > 0
-        ? [descriptor.key]
-        : []),
-      ...(descriptor.metaKey ? [descriptor.metaKey] : [])
-    ],
-    "derived_memory_observation_failed"
-  );
-}
-
-function observeDerivedRegistryMemory() {
-  return observeDerivedMemoryKeys(
-    derivedRegistryKeys,
-    "derived_registry_memory_observation_failed",
-    true
-  );
-}
 
 export async function evictReadyImageDerivedResults(keys: Iterable<string>) {
   const uniqueKeys = [...new Set(keys)];
@@ -120,7 +52,6 @@ export async function evictReadyImageDerivedResults(keys: Iterable<string>) {
       }
       transaction.zrem(READY_IMAGE_DERIVED_REGISTRY_LRU_KEY, key);
       transaction.hdel(READY_IMAGE_DERIVED_REGISTRY_COUNTS_KEY, key);
-      transaction.hdel(READY_IMAGE_DERIVED_REGISTRY_BYTES_KEY, key);
       transaction.hdel(READY_IMAGE_DERIVED_REGISTRY_KINDS_KEY, key);
       transaction.hdel(READY_IMAGE_DERIVED_REGISTRY_SIGNATURES_KEY, key);
     }
@@ -128,10 +59,6 @@ export async function evictReadyImageDerivedResults(keys: Iterable<string>) {
     if (results.some((result) => Number(result?.[1] ?? 0) > 0)) {
       modified = true;
     }
-    forgetReadyImageDerivedOccupancy(batch);
-  }
-  if (uniqueKeys.length) {
-    setReadyImageDerivedRegistryMemory(await observeDerivedRegistryMemory());
   }
   return modified;
 }
@@ -152,7 +79,6 @@ async function assertDerivedRegistryStructure() {
   const sizePipeline = redis.pipeline();
   sizePipeline.zcard(READY_IMAGE_DERIVED_REGISTRY_LRU_KEY);
   sizePipeline.hlen(READY_IMAGE_DERIVED_REGISTRY_COUNTS_KEY);
-  sizePipeline.hlen(READY_IMAGE_DERIVED_REGISTRY_BYTES_KEY);
   sizePipeline.hlen(READY_IMAGE_DERIVED_REGISTRY_KINDS_KEY);
   sizePipeline.hlen(READY_IMAGE_DERIVED_REGISTRY_SIGNATURES_KEY);
   const sizeResults = await execRedisPipeline(sizePipeline);
@@ -170,7 +96,6 @@ async function assertDerivedRegistryStructure() {
   const membersPipeline = redis.pipeline();
   membersPipeline.zrange(READY_IMAGE_DERIVED_REGISTRY_LRU_KEY, "0", "-1");
   membersPipeline.hkeys(READY_IMAGE_DERIVED_REGISTRY_COUNTS_KEY);
-  membersPipeline.hkeys(READY_IMAGE_DERIVED_REGISTRY_BYTES_KEY);
   membersPipeline.hkeys(READY_IMAGE_DERIVED_REGISTRY_KINDS_KEY);
   membersPipeline.hkeys(READY_IMAGE_DERIVED_REGISTRY_SIGNATURES_KEY);
   const memberResults = await execRedisPipeline(membersPipeline);
@@ -213,7 +138,6 @@ async function readDerivedRegistry() {
   const descriptors = keys.map(describeReadyImageDerivedResult);
   const pipeline = redis.pipeline();
   pipeline.hmget(READY_IMAGE_DERIVED_REGISTRY_COUNTS_KEY, ...keys);
-  pipeline.hmget(READY_IMAGE_DERIVED_REGISTRY_BYTES_KEY, ...keys);
   pipeline.hmget(READY_IMAGE_DERIVED_REGISTRY_KINDS_KEY, ...keys);
   pipeline.hmget(READY_IMAGE_DERIVED_REGISTRY_SIGNATURES_KEY, ...keys);
   for (const [index, key] of keys.entries()) {
@@ -230,12 +154,11 @@ async function readDerivedRegistry() {
   }
   const results = await execRedisPipeline(pipeline);
   const counts = results[0]?.[1] as Array<string | null> ?? [];
-  const bytes = results[1]?.[1] as Array<string | null> ?? [];
-  const kinds = results[2]?.[1] as Array<string | null> ?? [];
-  const signatures = results[3]?.[1] as Array<string | null> ?? [];
+  const kinds = results[1]?.[1] as Array<string | null> ?? [];
+  const signatures = results[2]?.[1] as Array<string | null> ?? [];
   const valid: DerivedRegistryEntry[] = [];
   const invalid: string[] = [];
-  let resultIndex = 4;
+  let resultIndex = 3;
 
   keys.forEach((key, index) => {
     const descriptor = descriptors[index];
@@ -257,7 +180,6 @@ async function readDerivedRegistry() {
       resultIndex += 1;
     }
     const count = nonNegativeInteger(counts[index]);
-    const memoryBytes = observedMemoryBytes(bytes[index]);
     const signature = signatures[index] || null;
     const validPrimary = descriptor?.kind === "stats-result"
       ? primaryExists && primaryTtl > 0
@@ -267,7 +189,6 @@ async function readDerivedRegistry() {
       || kinds[index] !== descriptor.kind
       || signature !== descriptor.signature
       || count === null
-      || memoryBytes === undefined
       || (descriptor.kind === "stats-result" && count !== 0)
       || (descriptor.kind !== "stats-result" && cardinality !== count)
       || !validPrimary
@@ -276,7 +197,7 @@ async function readDerivedRegistry() {
       invalid.push(key);
       return;
     }
-    valid.push({ ...descriptor, count, bytes: memoryBytes });
+    valid.push({ ...descriptor, count });
   });
   return { valid, invalid };
 }
@@ -307,7 +228,6 @@ export async function registerReadyImageDerivedResultUnchecked(options: {
     return false;
   }
 
-  const memoryBytes = await observeDerivedResultMemory(descriptor, count);
   await assertDerivedRegistryStructure();
   await trimRegistryEntryCount();
 
@@ -318,11 +238,6 @@ export async function registerReadyImageDerivedResultUnchecked(options: {
     key
   );
   transaction.hset(READY_IMAGE_DERIVED_REGISTRY_COUNTS_KEY, key, String(count));
-  transaction.hset(
-    READY_IMAGE_DERIVED_REGISTRY_BYTES_KEY,
-    key,
-    String(memoryBytes ?? -1)
-  );
   transaction.hset(READY_IMAGE_DERIVED_REGISTRY_KINDS_KEY, key, kind);
   transaction.hset(
     READY_IMAGE_DERIVED_REGISTRY_SIGNATURES_KEY,
@@ -336,13 +251,6 @@ export async function registerReadyImageDerivedResultUnchecked(options: {
     );
   }
   await execRedisPipeline(transaction);
-  rememberReadyImageDerivedOccupancy({
-    key,
-    kind,
-    count,
-    bytes: memoryBytes
-  });
-
   const registry = await readDerivedRegistry();
   const victims = new Set(registry.invalid);
   let retained = registry.valid.filter((entry) => !victims.has(entry.key));
@@ -396,6 +304,5 @@ export async function registerReadyImageDerivedResultUnchecked(options: {
     remove(victim);
   }
   await evictReadyImageDerivedResults(victims);
-  setReadyImageDerivedRegistryMemory(await observeDerivedRegistryMemory());
   return !victims.has(key);
 }

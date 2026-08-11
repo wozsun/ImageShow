@@ -1,14 +1,8 @@
 import { redis } from "../../core/redis-client.ts";
 import {
-  derivedRegistryKeys
-} from "./derived-cache-common.ts";
-import {
-  invalidateReadyImageDerivedOccupancyMirror,
-  resetReadyImageDerivedOccupancyMirror
-} from "./derived-cache-occupancy.ts";
-import {
   READY_IMAGE_DERIVED_INDEX_META_PREFIX,
   READY_IMAGE_DERIVED_INDEX_PREFIX,
+  READY_IMAGE_DERIVED_PREFIX,
   READY_IMAGE_FILTER_KEY_PREFIX,
   READY_IMAGE_FILTER_META_KEY_PREFIX,
   READY_IMAGE_STATS_RESULT_KEY_PREFIX,
@@ -40,26 +34,19 @@ async function clearPattern(pattern: string) {
   return removed;
 }
 
-async function clearDerivedRegistry() {
-  const removed = await redis.unlink(...derivedRegistryKeys);
-  resetReadyImageDerivedOccupancyMirror();
-  return removed;
-}
-
 /**
  * Drops only published reproducible query products while preserving gallery
  * core data. Builder-owned temporary keys expire independently and are never
  * removed from under an active filter construction.
  */
 export async function clearReadyImageDisposableCachesUnchecked() {
-  invalidateReadyImageDerivedOccupancyMirror();
   const removed = await Promise.all([
     clearPattern(`${READY_IMAGE_DERIVED_INDEX_PREFIX}*`),
     clearPattern(`${READY_IMAGE_DERIVED_INDEX_META_PREFIX}*`),
     clearPattern(`${READY_IMAGE_FILTER_KEY_PREFIX}*`),
     clearPattern(`${READY_IMAGE_FILTER_META_KEY_PREFIX}*`),
-    clearPattern(`${READY_IMAGE_STATS_RESULT_KEY_PREFIX}*`)
+    clearPattern(`${READY_IMAGE_STATS_RESULT_KEY_PREFIX}*`),
+    clearPattern(`${READY_IMAGE_DERIVED_PREFIX}registry:*`)
   ]);
-  removed.push(await clearDerivedRegistry());
   return removed.some((count) => count > 0);
 }

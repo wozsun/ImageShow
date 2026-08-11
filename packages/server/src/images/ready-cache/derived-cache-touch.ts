@@ -9,7 +9,6 @@ import {
   READY_IMAGE_ATTRIBUTE_AXIS_SUFFIXES,
   READY_IMAGE_ATTRIBUTE_SLUG_MAX_LENGTH,
   READY_IMAGE_DERIVED_INDEX_PREFIX,
-  READY_IMAGE_DERIVED_REGISTRY_BYTES_KEY,
   READY_IMAGE_DERIVED_REGISTRY_COUNTS_KEY,
   READY_IMAGE_DERIVED_REGISTRY_KINDS_KEY,
   READY_IMAGE_DERIVED_REGISTRY_LRU_KEY,
@@ -65,12 +64,10 @@ local function valid_attribute_key(value)
 end
 local lru_type = redis.call('TYPE', KEYS[3]).ok
 local counts_type = redis.call('TYPE', KEYS[4]).ok
-local bytes_type = redis.call('TYPE', KEYS[5]).ok
-local kinds_type = redis.call('TYPE', KEYS[6]).ok
-local signatures_type = redis.call('TYPE', KEYS[7]).ok
+local kinds_type = redis.call('TYPE', KEYS[5]).ok
+local signatures_type = redis.call('TYPE', KEYS[6]).ok
 if lru_type ~= 'zset'
   or counts_type ~= 'hash'
-  or bytes_type ~= 'hash'
   or kinds_type ~= 'hash'
   or signatures_type ~= 'hash' then
   return -1
@@ -83,8 +80,7 @@ if not item_count
   or registry_size > tonumber(ARGV[${maximumArgument}])
   or registry_size ~= redis.call('HLEN', KEYS[4])
   or registry_size ~= redis.call('HLEN', KEYS[5])
-  or registry_size ~= redis.call('HLEN', KEYS[6])
-  or registry_size ~= redis.call('HLEN', KEYS[7]) then
+  or registry_size ~= redis.call('HLEN', KEYS[6]) then
   return -1
 end
 local registry_members = redis.call('ZRANGE', KEYS[3], 0, -1)
@@ -92,32 +88,23 @@ if #registry_members > 0 then
   local registry_counts = redis.call(
     'HMGET', KEYS[4], unpack(registry_members)
   )
-  local registry_bytes = redis.call(
+  local registry_kinds = redis.call(
     'HMGET', KEYS[5], unpack(registry_members)
   )
-  local registry_kinds = redis.call(
-    'HMGET', KEYS[6], unpack(registry_members)
-  )
   local registry_signatures = redis.call(
-    'HMGET', KEYS[7], unpack(registry_members)
+    'HMGET', KEYS[6], unpack(registry_members)
   )
   local total_memberships = 0
   local active_signatures = {}
   local active_signature_count = 0
   for index = 1, #registry_members do
     if not registry_counts[index]
-      or not registry_bytes[index]
       or not registry_kinds[index]
       or not registry_signatures[index] then
       return -1
     end
     local count_raw = registry_counts[index]
-    local bytes_raw = registry_bytes[index]
-    if not string.match(count_raw, '^%d+$')
-      or (
-        bytes_raw ~= '-1'
-        and not string.match(bytes_raw, '^%d+$')
-      ) then
+    if not string.match(count_raw, '^%d+$') then
       return -1
     end
     local count = tonumber(count_raw)
@@ -168,17 +155,15 @@ if #registry_members > 0 then
 end
 local registered_score = redis.call('ZSCORE', KEYS[3], ARGV[1])
 local registered_count = redis.call('HGET', KEYS[4], ARGV[1])
-local registered_bytes = redis.call('HGET', KEYS[5], ARGV[1])
-local registered_kind = redis.call('HGET', KEYS[6], ARGV[1])
-local registered_signature = redis.call('HGET', KEYS[7], ARGV[1])
+local registered_kind = redis.call('HGET', KEYS[5], ARGV[1])
+local registered_signature = redis.call('HGET', KEYS[6], ARGV[1])
 local registered_fields = 0
 if registered_score then registered_fields = registered_fields + 1 end
 if registered_count then registered_fields = registered_fields + 1 end
-if registered_bytes then registered_fields = registered_fields + 1 end
 if registered_kind then registered_fields = registered_fields + 1 end
 if registered_signature then registered_fields = registered_fields + 1 end
 if registered_fields == 0 then return 0 end
-if registered_fields ~= 5 then return -1 end`;
+if registered_fields ~= 4 then return -1 end`;
 }
 
 const touchIndexedDerivedResultScript = `${validateDerivedRegistryScript(11, 12)}
@@ -216,7 +201,7 @@ end
 redis.call('EXPIRE', KEYS[2], ARGV[5])
 if count > 0 then redis.call('EXPIRE', KEYS[1], ARGV[5]) end
 redis.call('ZADD', KEYS[3], ARGV[10], ARGV[1])
-for index = 3, 7 do redis.call('EXPIRE', KEYS[index], ARGV[5]) end
+for index = 3, 6 do redis.call('EXPIRE', KEYS[index], ARGV[5]) end
 return 1`;
 
 export async function touchReadyImageIndexedResultUnchecked(options: {
@@ -244,12 +229,11 @@ export async function touchReadyImageIndexedResultUnchecked(options: {
   return redis.call(
     "EVAL",
     touchIndexedDerivedResultScript,
-    "7",
+    "6",
     options.key,
     descriptor.metaKey,
     READY_IMAGE_DERIVED_REGISTRY_LRU_KEY,
     READY_IMAGE_DERIVED_REGISTRY_COUNTS_KEY,
-    READY_IMAGE_DERIVED_REGISTRY_BYTES_KEY,
     READY_IMAGE_DERIVED_REGISTRY_KINDS_KEY,
     READY_IMAGE_DERIVED_REGISTRY_SIGNATURES_KEY,
     options.key,
@@ -280,7 +264,7 @@ if registered_count ~= '0'
 end
 redis.call('EXPIRE', KEYS[1], ARGV[3])
 redis.call('ZADD', KEYS[3], ARGV[5], ARGV[1])
-for index = 3, 7 do redis.call('EXPIRE', KEYS[index], ARGV[3]) end
+for index = 3, 6 do redis.call('EXPIRE', KEYS[index], ARGV[3]) end
 return 1`;
 
 export async function touchReadyImageStatsResultUnchecked(
@@ -293,12 +277,11 @@ export async function touchReadyImageStatsResultUnchecked(
   return redis.call(
     "EVAL",
     touchStatsResultScript,
-    "7",
+    "6",
     key,
     key,
     READY_IMAGE_DERIVED_REGISTRY_LRU_KEY,
     READY_IMAGE_DERIVED_REGISTRY_COUNTS_KEY,
-    READY_IMAGE_DERIVED_REGISTRY_BYTES_KEY,
     READY_IMAGE_DERIVED_REGISTRY_KINDS_KEY,
     READY_IMAGE_DERIVED_REGISTRY_SIGNATURES_KEY,
     key,

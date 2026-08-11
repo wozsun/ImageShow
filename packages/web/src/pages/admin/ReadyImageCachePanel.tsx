@@ -4,8 +4,7 @@ import {
   type UseQueryResult
 } from "@tanstack/react-query";
 import type {
-  AdminCheckStatusDto,
-  ReadyImageCacheAdminStatusDto
+  AdminCheckStatusDto
 } from "@imageshow/shared/browser";
 import { AdminIcon } from "../../components/icon/AdminIcon.js";
 import { StableButtonLabel } from "../../components/data-display/StableButtonLabel.js";
@@ -17,10 +16,7 @@ import {
   readyImageProjection
 } from "../../lib/api/ready-image-cache.js";
 import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
-import {
-  formatBytes,
-  revisionFingerprint
-} from "../../lib/ui/formatters.js";
+import { revisionFingerprint } from "../../lib/ui/formatters.js";
 
 function formatTime(value: string | null) {
   if (!value) return "—";
@@ -28,25 +24,12 @@ function formatTime(value: string | null) {
   return Number.isFinite(timestamp) ? new Date(timestamp).toLocaleString() : value;
 }
 
-function formatDuration(value: number | null | undefined) {
-  if (value === null || value === undefined) return "—";
-  if (value < 1_000) return `${value} ms`;
-  return `${(value / 1_000).toFixed(value < 10_000 ? 1 : 0)} s`;
-}
-
-function stageLabel(stage: ReadyImageCacheAdminStatusDto["stage"] | undefined) {
-  if (!stage) return "—";
-  if (stage === "rebuilding_core") return "重建核心投影";
-  if (stage === "validating") return "校验中";
-  if (stage === "degraded") return "已降级";
-  return "空闲";
-}
-
 type RebuildErrorBaseline = {
   dataUpdatedAt: number;
   hadStatus: boolean;
-  startedAt: string | null;
-  builtAt: string | null;
+  state: string | null;
+  reason: string | null;
+  appliedRevision: string | null;
 };
 
 export function ReadyImageCachePanel({
@@ -84,8 +67,10 @@ export function ReadyImageCachePanel({
         || (
           rebuildErrorBaseline.hadStatus
           && (
-            current.started_at !== rebuildErrorBaseline.startedAt
-            || current.built_at !== rebuildErrorBaseline.builtAt
+            current.state !== rebuildErrorBaseline.state
+            || current.reason !== rebuildErrorBaseline.reason
+            || current.applied_revision
+              !== rebuildErrorBaseline.appliedRevision
           )
         )
       )
@@ -136,8 +121,9 @@ export function ReadyImageCachePanel({
       setRebuildErrorBaseline({
         dataUpdatedAt: query.dataUpdatedAt,
         hadStatus: status !== undefined,
-        startedAt: status?.started_at ?? null,
-        builtAt: status?.built_at ?? null
+        state: status?.state ?? null,
+        reason: status?.reason ?? null,
+        appliedRevision: status?.applied_revision ?? null
       });
     } finally {
       rebuildRequestActive.current = false;
@@ -189,13 +175,6 @@ export function ReadyImageCachePanel({
         )}
         <dl className="ready-cache-status-grid">
           <div><dt>状态</dt><dd>{status?.rebuilding ? "重建中" : healthy ? "已同步" : status?.reason ?? "读取中"}</dd></div>
-          <div><dt>阶段</dt><dd>{stageLabel(status?.stage)}</dd></div>
-          <div><dt>图片数量</dt><dd>{status?.item_count?.toLocaleString() ?? "—"}</dd></div>
-          <div><dt>构建进度</dt><dd>{status?.total === null || status?.total === undefined ? "—" : `${status.processed ?? 0} / ${status.total}`}</dd></div>
-          <div>
-            <dt>本次耗时</dt>
-            <dd>{!status?.rebuilding && status?.built_at ? formatDuration(status.elapsed_ms) : "—"}</dd>
-          </div>
           <div>
             <dt>数据库 revision 指纹</dt>
             <dd title={status?.authoritative_revision ? `完整 revision：${status.authoritative_revision}` : undefined}>
@@ -208,25 +187,7 @@ export function ReadyImageCachePanel({
               {revisionFingerprint(status?.applied_revision)}
             </dd>
           </div>
-          <div>
-            <dt title="核心投影或派生缓存最近一次内容变更时间">最后更新时间</dt>
-            <dd>{formatTime(status?.last_updated_at ?? null)}</dd>
-          </div>
-          <div><dt>完整重建开始时间</dt><dd>{formatTime(status?.started_at ?? null)}</dd></div>
-          <div><dt>完整重建完成时间</dt><dd>{formatTime(status?.built_at ?? null)}</dd></div>
         </dl>
-        <div className="ready-cache-occupancy-grid">
-          <CacheOccupancy
-            title="核心投影"
-            memberLabel="图片成员"
-            value={status?.core}
-          />
-          <CacheOccupancy
-            title="派生缓存"
-            memberLabel="结果成员"
-            value={status?.derived}
-          />
-        </div>
         {(status?.recent_errors.core || status?.recent_errors.derived) && (
           <div className="ready-cache-errors">
             {status.recent_errors.core && (
@@ -246,21 +207,6 @@ export function ReadyImageCachePanel({
         />
       )}
     </>
-  );
-}
-
-function CacheOccupancy({ title, memberLabel, value }: {
-  title: string;
-  memberLabel: string;
-  value: ReadyImageCacheAdminStatusDto["core"] | undefined;
-}) {
-  return (
-    <section>
-      <h3>{title}</h3>
-      <span>{value?.key_count?.toLocaleString() ?? "—"} 个键</span>
-      <span>{value?.member_count?.toLocaleString() ?? "—"} 个{memberLabel}</span>
-      <span>{value?.memory_bytes === null || value?.memory_bytes === undefined ? "—" : formatBytes(value.memory_bytes)}</span>
-    </section>
   );
 }
 

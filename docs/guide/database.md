@@ -24,7 +24,7 @@ additions 只保存一个发布周期的安全增量。版本 N 新增经审查�
 占位文件及稳定的启动、构建入口。该模型不支持跳过 N 直接部署 N+1；恢复早于 N 的数据库
 备份时，也必须先运行 N 或人工执行同一份经审查 SQL。
 
-当前 `v4.8.15` 的 additions 没有待执行 SQL，只保留过渡规则注释。
+当前 `v4.8.16` 的 additions 没有待执行 SQL，只保留过渡规则注释。
 `metadata.purge_error TEXT`、`admin_account.preferences JSONB NOT NULL DEFAULT '{}'` 与
 `theme.none` 已在 `schema.sql` 形成基线，并已由全部受控生产数据库在上一版本完成确认。
 后续 additions 仍只保存当期真实增量：不补业务表、外键、CHECK，不删除或重命名对象，
@@ -51,6 +51,11 @@ readiness 不复制 `schema.sql` 的可空性、默认值、PK / FK / CHECK、�
 不存在 AsyncLocalStorage 查询上下文、按查询类别调度或额外的数据库后端取消连接。请求取消、
 执行超时和连接错误都会正常释放或直接淘汰 client；Redis 恢复并重新通过能力与投影校验后，
 公开读取自动回到 Redis-first。
+
+图片投影协调器只在当前进程内保留四态、一个活动校验或重建任务，以及 PostgreSQL / Redis
+revision；图片事务与投影发布共用一个短写栅栏。Redis 重连、revision 不一致或重建失败时
+读门保持关闭并继续走上述 PostgreSQL 回源，不维护独立 publication、release task 或跨实例
+代际状态。
 
 ## metadata —— 图片主表
 

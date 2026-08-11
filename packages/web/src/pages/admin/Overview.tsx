@@ -93,8 +93,8 @@ export function Overview({ canManageStorage }: { canManageStorage: boolean }) {
         state: currentReadyImageStatus.state,
         synchronized: currentReadyImageStatus.synchronized === true,
         rebuilding: currentReadyImageStatus.rebuilding,
-        item_count: currentReadyImageStatus.item_count,
-        memory_bytes: currentReadyImageStatus.memory_bytes
+        item_count: data?.redis_cache.item_count ?? null,
+        memory_bytes: data?.redis_cache.memory_bytes ?? null
       }
     : data?.redis_cache;
   if (query.isError) return <QueryErrorState error={query.error} onRetry={() => void query.refetch()} fullPage reportContext="overview.load" />;

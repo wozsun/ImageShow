@@ -91,6 +91,9 @@ core / config
 - `images/mutation-sync-policy.ts` 只定义图片变更总量的纯决策与结果契约；
   `images/mutation-sync.ts` 持有写栅栏并执行精准发布或安排全量重建，领域 SQL 只负责在
   自己的事务边界 COUNT、推进 revision 和按决策读取有限 ID。
+- `images/ready-cache/coordinator-machine.ts` 是单进程图片投影状态机的唯一所有者；
+  `coordinator.ts` 只装配该进程唯一实例。四态、单一活动校验 / 重建任务、revision 与
+  planned mutation fence 不再拆成逐函数转发文件。
 
 两个 CLI 都直接依赖所需基础设施，不导入 HTTP 应用，也不会触发主服务启动；
 healthcheck 只读现有配置快照，密码恢复不初始化运行时配置。

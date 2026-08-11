@@ -7,10 +7,6 @@ import {
   clearReadyImageDisposableCachesUnchecked
 } from "./derived-cache-cleanup.ts";
 import {
-  forgetReadyImageDerivedOccupancy,
-  rememberReadyImageDerivedOccupancy
-} from "./derived-cache-occupancy.ts";
-import {
   READY_IMAGE_DERIVED_CACHE_POLICY,
   type ReadyImageDerivedResultKind
 } from "./derived-cache-policy.ts";
@@ -85,19 +81,9 @@ async function touchReadyImageIndexedResult(options: {
 }) {
   return withDerivedCacheLifecycle(async () => {
     try {
-      const touched = await normalizedTouchResult(
+      return await normalizedTouchResult(
         await touchReadyImageIndexedResultUnchecked(options)
       );
-      if (touched) {
-        rememberReadyImageDerivedOccupancy({
-          key: options.key,
-          kind: options.kind,
-          count: options.count
-        });
-      } else {
-        forgetReadyImageDerivedOccupancy([options.key]);
-      }
-      return touched;
     } catch (error) {
       await clearAfterLifecycleFailure();
       throw error;
@@ -137,19 +123,9 @@ export async function touchReadyImageStatsResult(
 ) {
   return withDerivedCacheLifecycle(async () => {
     try {
-      const touched = await normalizedTouchResult(
+      return await normalizedTouchResult(
         await touchReadyImageStatsResultUnchecked(key, serialized, itemCount)
       );
-      if (touched) {
-        rememberReadyImageDerivedOccupancy({
-          key,
-          kind: "stats-result",
-          count: 0
-        });
-      } else {
-        forgetReadyImageDerivedOccupancy([key]);
-      }
-      return touched;
     } catch (error) {
       await clearAfterLifecycleFailure();
       throw error;

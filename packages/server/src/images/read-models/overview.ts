@@ -1,7 +1,9 @@
 import type { AdminOverviewDto } from "@imageshow/shared/browser";
 import { getRuntimeConfig } from "../../config/runtime-config-store.ts";
 import { pool } from "../../core/database-pools.ts";
-import { getReadyImageCacheAdminStatus } from "../ready-cache/admin-status.ts";
+import {
+  getReadyImageCacheOverviewStatus
+} from "../ready-cache/admin-status.ts";
 import {
   adminImageDetailView,
   adminImagesWithTags,
@@ -61,7 +63,7 @@ async function buildOverviewStats(
       [recentLimit]
     ),
     pool.query("SELECT count(*)::int AS n FROM storage_backend"),
-    getReadyImageCacheAdminStatus()
+    getReadyImageCacheOverviewStatus()
   ]);
 
   const row = statsResult.rows[0];
@@ -93,7 +95,7 @@ async function buildOverviewStats(
     recent,
     redis_cache: {
       state: readyImageCache.state,
-      synchronized: readyImageCache.synchronized === true,
+      synchronized: readyImageCache.synchronized,
       rebuilding: readyImageCache.rebuilding,
       item_count: readyImageCache.item_count,
       memory_bytes: readyImageCache.memory_bytes

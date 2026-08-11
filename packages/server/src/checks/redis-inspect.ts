@@ -10,22 +10,11 @@ import {
   getReadyImageCacheCoordinatorStatus
 } from "../images/ready-cache/coordinator.ts";
 import {
-  READY_IMAGE_EXACT_SYNC_MAX_ITEMS
-} from "../images/mutation-sync-policy.ts";
-import {
-  READY_IMAGE_DERIVED_CACHE_POLICY
-} from "../images/ready-cache/derived-cache-policy.ts";
-import {
-  READY_IMAGE_DERIVED_WORK_POLICY,
-  getReadyImageDerivedWorkStatus
-} from "../images/ready-cache/derived-work-policy.ts";
-import {
   READY_IMAGE_ALL_INDEX_KEY,
   READY_IMAGE_CACHE_PREFIX,
   READY_IMAGE_DERIVED_INDEX_META_PREFIX,
   READY_IMAGE_DERIVED_INDEX_PREFIX,
   READY_IMAGE_DERIVED_PREFIX,
-  READY_IMAGE_FILTER_KEY_PREFIX,
   READY_IMAGE_ID_SUFFIX_LOOKUP_KEY,
   READY_IMAGE_INTEGRITY_KEY,
   READY_IMAGE_ITEMS_KEY,
@@ -63,7 +52,7 @@ export async function inspectRedisState() {
     memoryInfo,
     keyspaceInfo,
     dbsize,
-    scanned,
+    prefixCounts,
     persistedMeta,
     requiredCommands
   ] =
@@ -72,35 +61,15 @@ export async function inspectRedisState() {
       redis.info("memory"),
       redis.info("keyspace"),
       redis.dbsize(),
-      scanImageshowKeys(),
+      scanImageshowKeyCounts(),
       readReadyImageCacheMeta().catch(() => null),
       readRequiredRedisCommandCapabilities()
     ]);
   const memoryState = parseRedisMemoryState(memoryInfo);
-  const coreKeys = await Promise.all(coreKeyNames.map((key) => (
-    redisKeySummary(key).catch(() => missingKeySummary(key))
-  )));
-  const derivedKeys = await summarizeRedisKeys(
-    scanned.imageKeys.filter((key) => key.startsWith(READY_IMAGE_DERIVED_PREFIX))
-  );
-  const coreOccupancy = deepOccupancy(
-    coreKeys,
-    coreKeys.find((key) => (
-      key.key === READY_IMAGE_ITEMS_KEY && key.type === "hash"
-    ))?.type_length ?? 0
-  );
-  const derivedOccupancy = deepOccupancy(
-    derivedKeys,
-    derivedKeys.reduce((sum, key) => (
-      key.type === "zset"
-      && (
-        key.key.startsWith(READY_IMAGE_DERIVED_INDEX_PREFIX)
-        || key.key.startsWith(READY_IMAGE_FILTER_KEY_PREFIX)
-      )
-        ? sum + key.type_length
-        : sum
-    ), 0)
-  );
+  const coreKeys = await Promise.all(coreKeyNames.map(async (key) => ({
+    key,
+    exists: await redis.exists(key) > 0
+  })));
   const coordinator = getReadyImageCacheCoordinatorStatus();
   const projection = await readReadyImageCacheAdminStatus(null);
   const issues: string[] = [];
@@ -147,105 +116,10 @@ export async function inspectRedisState() {
       },
       keyspace: parseRedisInfo(keyspaceInfo)
     },
-    prefix_counts: scanned.counts,
-    image_projection: {
-      ...projection,
-      core: coreOccupancy,
-      derived: derivedOccupancy,
-      coordinator,
-      persisted_meta: persistedMeta,
-      core_keys: coreKeys,
-      derived_keys: derivedKeys,
-      derived_policy: {
-        ttl_seconds: READY_IMAGE_DERIVED_CACHE_POLICY.ttlSeconds,
-        temporary_ttl_seconds:
-          READY_IMAGE_DERIVED_CACHE_POLICY.temporaryTtlSeconds,
-        max_results: READY_IMAGE_DERIVED_CACHE_POLICY.maxResults,
-        max_result_members:
-          READY_IMAGE_DERIVED_CACHE_POLICY.maxResultMembers,
-        minimum_total_members:
-          READY_IMAGE_DERIVED_CACHE_POLICY.minimumTotalMembers,
-        total_member_multiplier:
-          READY_IMAGE_DERIVED_CACHE_POLICY.totalMemberMultiplier,
-        max_active_signatures:
-          READY_IMAGE_DERIVED_CACHE_POLICY.maxActiveSignatures,
-        max_stats_result_bytes:
-          READY_IMAGE_DERIVED_CACHE_POLICY.maxStatsResultBytes
-      },
-      derived_work_policy: {
-        ...READY_IMAGE_DERIVED_WORK_POLICY,
-        active: getReadyImageDerivedWorkStatus()
-      },
-      mutation_sync_policy: {
-        exact_sync_max_items: READY_IMAGE_EXACT_SYNC_MAX_ITEMS
-      }
-    },
+    prefix_counts: prefixCounts,
+    image_projection: projection,
     issues
   };
-}
-
-async function redisKeySummary(key: string) {
-  const [type, ttl, memoryUsage] = await Promise.all([
-    redis.type(key),
-    redis.ttl(key),
-    redis.call("MEMORY", "USAGE", key).catch(() => null)
-  ]);
-  return {
-    key,
-    exists: type !== "none",
-    type,
-    ttl_seconds: ttl,
-    memory_bytes: typeof memoryUsage === "number" ? memoryUsage : null,
-    type_length: await redisKeyLength(key, type)
-  };
-}
-
-function missingKeySummary(key: string) {
-  return {
-    key,
-    exists: false,
-    type: "unknown",
-    ttl_seconds: -2,
-    memory_bytes: null,
-    type_length: 0
-  };
-}
-
-async function summarizeRedisKeys(keys: string[]) {
-  const summaries: Awaited<ReturnType<typeof redisKeySummary>>[] = [];
-  for (let offset = 0; offset < keys.length; offset += 32) {
-    summaries.push(...await Promise.all(
-      keys.slice(offset, offset + 32).map((key) => (
-        redisKeySummary(key).catch(() => missingKeySummary(key))
-      ))
-    ));
-  }
-  return summaries;
-}
-
-function deepOccupancy(
-  keys: Array<Awaited<ReturnType<typeof redisKeySummary>>>,
-  memberCount: number
-) {
-  const existing = keys.filter((key) => key.exists);
-  const memoryValues = existing.map((key) => key.memory_bytes);
-  return {
-    key_count: existing.length,
-    member_count: memberCount,
-    memory_bytes: memoryValues.every((value) => value !== null)
-      ? memoryValues.reduce<number>((sum, value) => sum + (value ?? 0), 0)
-      : null,
-    source: "deep" as const
-  };
-}
-
-async function redisKeyLength(key: string, type: string) {
-  if (type === "string") return redis.strlen(key);
-  if (type === "hash") return redis.hlen(key);
-  if (type === "list") return redis.llen(key);
-  if (type === "set") return redis.scard(key);
-  if (type === "zset") return redis.zcard(key);
-  return 0;
 }
 
 function emptyPrefixCounts() {
@@ -265,9 +139,8 @@ function emptyPrefixCounts() {
   };
 }
 
-async function scanImageshowKeys() {
+async function scanImageshowKeyCounts() {
   const counts = emptyPrefixCounts();
-  const imageKeys: string[] = [];
   let cursor = "0";
   do {
     const [nextCursor, keys] = await redis.scan(
@@ -281,7 +154,6 @@ async function scanImageshowKeys() {
     for (const key of keys) {
       counts.imageshow_total += 1;
       if (key.startsWith(READY_IMAGE_CACHE_PREFIX)) {
-        imageKeys.push(key);
         counts.ready_image_cache += 1;
         if (
           key === READY_IMAGE_ALL_INDEX_KEY
@@ -314,7 +186,7 @@ async function scanImageshowKeys() {
       }
     }
   } while (cursor !== "0");
-  return { counts, imageKeys };
+  return counts;
 }
 
 function parseRedisInfo(

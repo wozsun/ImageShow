@@ -98,13 +98,6 @@ export type AdminCheckResourceDto<T> =
   | { status: "ok"; data: T; error: null }
   | { status: "error"; data: null; error: AdminCheckFailureDto };
 
-export type ReadyImageCacheOccupancyDto = {
-  key_count: number | null;
-  member_count: number | null;
-  memory_bytes: number | null;
-  source: "meta" | "registry" | "deep";
-};
-
 export type ReadyImageCacheRecentErrorDto = {
   category: "core" | "derived";
   code: string;
@@ -113,33 +106,16 @@ export type ReadyImageCacheRecentErrorDto = {
 };
 
 export type ReadyImageCacheAdminStatusDto = {
-  initialized: boolean;
   readable: boolean;
   rebuilding: boolean;
   synchronized: boolean | null;
   state: string;
   reason: string;
-  stage: "idle" | "validating" | "rebuilding_core" | "degraded";
   authoritative_revision: string | null;
   applied_revision: string | null;
-  item_count: number | null;
-  processed: number | null;
-  total: number | null;
-  memory_bytes: number | null;
-  last_updated_at: string | null;
-  built_at: string | null;
-  started_at: string | null;
-  elapsed_ms: number | null;
-  core: ReadyImageCacheOccupancyDto;
-  derived: ReadyImageCacheOccupancyDto;
   recent_errors: {
     core: ReadyImageCacheRecentErrorDto | null;
     derived: ReadyImageCacheRecentErrorDto | null;
-  };
-  required_commands: {
-    INCREX: boolean | null;
-    ARRING: boolean | null;
-    ARLASTITEMS: boolean | null;
   };
 };
 

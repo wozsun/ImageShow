@@ -271,12 +271,3 @@ export function tryAcquireReadyImageStatsBuildSlot(
     if (large) activeLargeStatsBuilds -= 1;
   });
 }
-
-export function getReadyImageDerivedWorkStatus() {
-  return {
-    activeFilterBuilds,
-    activeLargeFilterBuilds,
-    activeStatsBuilds,
-    activeLargeStatsBuilds
-  };
-}
