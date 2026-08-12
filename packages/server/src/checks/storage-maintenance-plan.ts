@@ -1,0 +1,273 @@
+import { pool } from "../core/database-pools.ts";
+import { stagingSessionId } from "../images/imports/staging-keys.ts";
+import { thumbnailObjectKey } from "../storage/image-paths.ts";
+import { STORAGE_ADMIN_LIST_MAX_KEYS } from "../storage/key-listing.ts";
+import type { StoragePrefix } from "../storage/object-keys.ts";
+import {
+  activeImportStorageReferences,
+  classifyStagingKeys,
+  collectStorageBackendGroupSnapshot,
+  importFinalStorageReferences,
+  importSessionIdsByBackend,
+  mergeActiveImportSessions,
+  storageBackendGroups,
+  type StorageBackendGroup,
+  type StorageRow
+} from "./storage-common.ts";
+
+export type MaintenanceImage = StorageRow & {
+  md5: string;
+  thumbnail_size: string | number;
+};
+
+type MaintenanceAction =
+  | "repair_thumbnail"
+  | "remove_object"
+  | "inspect_namespace"
+  | "prune_directories";
+
+export type MaintenanceOutcome =
+  | "repaired"
+  | "removed"
+  | "skipped"
+  | "failed";
+
+export type MaintenanceItem = {
+  action: MaintenanceAction;
+  outcome: MaintenanceOutcome;
+  backend: string;
+  prefix: StoragePrefix | "*";
+  key: string;
+  image_id?: string;
+  thumbnail_size?: number;
+  reason?: string;
+  error?: string;
+};
+
+export type MaintenanceCandidate =
+  | { kind: "repair"; imageId: string }
+  | {
+    kind: "remove";
+    backend: string;
+    prefix: StoragePrefix;
+    key: string;
+  }
+  | { kind: "result"; item: MaintenanceItem };
+
+export type CapturedMaintenanceGroup = {
+  group: StorageBackendGroup;
+  backend: string;
+  snapshot: NonNullable<Awaited<ReturnType<
+    typeof collectStorageBackendGroupSnapshot
+  >>["snapshot"]>;
+};
+
+const maintenanceRowsQuery = `
+  SELECT id, object_key, status, storage_slug, md5, thumbnail_size
+    FROM metadata
+   ORDER BY id ASC`;
+
+function failedNamespaceItem(
+  backend: string,
+  prefix: StoragePrefix | "*",
+  error: string
+): MaintenanceItem {
+  return {
+    action: "inspect_namespace",
+    outcome: "failed",
+    backend,
+    prefix,
+    key: "*",
+    error
+  };
+}
+
+function skippedUploadItem(
+  backend: string,
+  key: string,
+  sessionId: string
+): MaintenanceItem {
+  return {
+    action: "remove_object",
+    outcome: "skipped",
+    backend,
+    prefix: "_uploads",
+    key,
+    reason: `导入会话 ${sessionId} 尚未清理，暂存对象继续由导入清理流程负责`
+  };
+}
+
+function retainedRowsForGroup(
+  rows: readonly MaintenanceImage[],
+  group: StorageBackendGroup
+) {
+  const slugs = new Set(group.slugs);
+  return rows.filter((row) => (
+    slugs.has(row.storage_slug)
+    && (row.status === "ready" || row.status === "deleted")
+  ));
+}
+
+async function captureMaintenanceGroups(
+  groups: readonly StorageBackendGroup[],
+  signal: AbortSignal
+) {
+  const captured: CapturedMaintenanceGroup[] = [];
+  const candidates: MaintenanceCandidate[] = [];
+  for (const group of groups) {
+    signal.throwIfAborted();
+    const result = await collectStorageBackendGroupSnapshot(group, {
+      signal,
+      maxKeys: STORAGE_ADMIN_LIST_MAX_KEYS
+    });
+    signal.throwIfAborted();
+    if (!result.snapshot) {
+      candidates.push({
+        kind: "result",
+        item: failedNamespaceItem(
+          group.slugs.join(" / "),
+          "*",
+          result.errors.map((entry) => (
+            `${entry.backend}: ${entry.error}`
+          )).join("; ") || "存储后端不可用"
+        )
+      });
+      continue;
+    }
+    const incomplete = ([
+      ["media", result.snapshot.media],
+      ["thumbs", result.snapshot.thumbs],
+      ["_uploads", result.snapshot._uploads]
+    ] as const).filter(([, listing]) => !listing.complete);
+    if (incomplete.length) {
+      for (const [prefix, listing] of incomplete) {
+        candidates.push({
+          kind: "result",
+          item: failedNamespaceItem(
+            result.backend,
+            prefix,
+            `存储键列举达到 ${STORAGE_ADMIN_LIST_MAX_KEYS} 项上限；`
+              + `未使用不完整快照执行维护（已扫描 ${listing.count} 项）`
+          )
+        });
+      }
+      continue;
+    }
+    captured.push({
+      group,
+      backend: result.backend,
+      snapshot: result.snapshot
+    });
+  }
+  return { captured, candidates };
+}
+
+function buildMaintenanceCandidates(
+  rows: readonly MaintenanceImage[],
+  sessionIdsByBackend: ReadonlyMap<string, ReadonlySet<string>>,
+  sessionsByBackend: ReadonlyMap<
+    string,
+    ReadonlyMap<string, Awaited<ReturnType<
+      typeof activeImportStorageReferences
+    >>["rows"][number]>
+  >,
+  groups: readonly CapturedMaintenanceGroup[],
+  initial: readonly MaintenanceCandidate[]
+) {
+  const candidates = [...initial];
+  let activeUploadsRetained = 0;
+
+  for (const { group, backend, snapshot } of groups) {
+    const retainedRows = retainedRowsForGroup(rows, group);
+    const mediaKeys = new Set(snapshot.media.keys);
+    const thumbKeys = new Set(snapshot.thumbs.keys);
+    for (const row of retainedRows) {
+      const thumbKey = thumbnailObjectKey(row.object_key);
+      if (
+        !mediaKeys.has(row.object_key)
+        || !thumbKeys.has(thumbKey)
+        || Number(row.thumbnail_size) <= 0
+      ) {
+        candidates.push({ kind: "repair", imageId: row.id });
+      }
+    }
+
+    const referencedMedia = new Set(retainedRows.map((row) => row.object_key));
+    const referencedThumbs = new Set(
+      retainedRows.map((row) => thumbnailObjectKey(row.object_key))
+    );
+    const activeSessions = mergeActiveImportSessions(
+      ...group.slugs.map((slug) => sessionsByBackend.get(slug) ?? new Map())
+    );
+    const importSessionIds = new Set(
+      group.slugs.flatMap((slug) => [
+        ...(sessionIdsByBackend.get(slug) ?? [])
+      ])
+    );
+    for (const session of activeSessions.values()) {
+      for (const reference of importFinalStorageReferences(session)) {
+        if (reference.prefix === "media") referencedMedia.add(reference.key);
+        if (reference.prefix === "thumbs") referencedThumbs.add(reference.key);
+      }
+    }
+
+    for (const key of snapshot.media.keys.toSorted()) {
+      if (!referencedMedia.has(key)) {
+        candidates.push({ kind: "remove", backend, prefix: "media", key });
+      }
+    }
+    for (const key of snapshot.thumbs.keys.toSorted()) {
+      if (!referencedThumbs.has(key)) {
+        candidates.push({ kind: "remove", backend, prefix: "thumbs", key });
+      }
+    }
+
+    const staging = classifyStagingKeys(
+      snapshot._uploads.keys.toSorted(),
+      activeSessions
+    );
+    activeUploadsRetained += staging.active.length;
+    for (const key of staging.orphan) {
+      const sessionId = stagingSessionId(key);
+      if (sessionId && importSessionIds.has(sessionId)) {
+        candidates.push({
+          kind: "result",
+          item: skippedUploadItem(backend, key, sessionId)
+        });
+      } else {
+        candidates.push({
+          kind: "remove",
+          backend,
+          prefix: "_uploads",
+          key
+        });
+      }
+    }
+  }
+  return { candidates, activeUploadsRetained };
+}
+
+export async function buildStorageMaintenancePlan(signal: AbortSignal) {
+  signal.throwIfAborted();
+  const [rowsResult, importReferences, sessionIdsByBackend, groups] = await Promise.all([
+    pool.query<MaintenanceImage>(maintenanceRowsQuery),
+    activeImportStorageReferences(),
+    importSessionIdsByBackend(),
+    storageBackendGroups()
+  ]);
+  signal.throwIfAborted();
+  const capture = await captureMaintenanceGroups(groups, signal);
+  signal.throwIfAborted();
+  const built = buildMaintenanceCandidates(
+    rowsResult.rows,
+    sessionIdsByBackend,
+    importReferences.sessionsByBackend,
+    capture.captured,
+    capture.candidates
+  );
+  return {
+    activeUploadsRetained: built.activeUploadsRetained,
+    candidates: built.candidates,
+    capturedGroups: capture.captured
+  };
+}

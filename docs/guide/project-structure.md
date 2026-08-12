@@ -126,8 +126,11 @@ healthcheck 只读现有配置快照，密码恢复不初始化运行时配置�
 不再为只传递同一记录的 prepare / switch / settlement 阶段维护文件和中间契约。
 `images/image-storage-migration.ts` 只负责管理接口的 1..N 保序结果，
 `storage/backend-migration.ts` 只负责整后端计数和流式分页，两者都直接调用同一个单图原语。
-`checks/storage-check.ts` 只生成无写入权限的存储预览；`checks/storage-maintenance.ts` 在独占
-位置锁内重新扫描并直接完成缩略图维修与孤儿删除，不调用旧请求热路径 repair 或通用后台任务。
+`checks/storage-check.ts` 只生成无写入权限的存储预览；显式写维护按稳定职责拆分：
+`checks/storage-maintenance-plan.ts` 重读 PostgreSQL、导入引用和完整存储快照并生成候选，
+`checks/storage-thumbnail-repair.ts` 负责缩略图写入与校验，`checks/storage-orphan-cleanup.ts`
+负责确认删除和空目录修剪，`checks/storage-maintenance.ts` 只保留独占位置锁、执行顺序和结果汇总。
+这组模块不调用旧请求热路径 repair 或通用后台任务。
 回收站的移入 / 恢复集中于
 `images/trash-mutations.ts`，永久对象删除与 claim 状态机集中于 `images/trash-purge.ts`，
 两者不共享转发入口。`images/image-update.ts` 只拥有 1..N 图片锁、保序并发、逐项结果和
@@ -156,7 +159,8 @@ healthcheck 只读现有配置快照，密码恢复不初始化运行时配置�
   `stored-image-serving.ts` 只编排存储对象与缩略图，
   `external-original-serving.ts` 只处理外部原图探测、跳转和代理。
   `stored-object-response.ts` 集中流式、HEAD、Range 与缓存响应；缩略图缺失在只读 serving
-  边界直接映射为 404，显式维修只属于 `checks/storage-maintenance.ts`。
+  边界直接映射为 404，显式维修只属于 `checks/storage-thumbnail-repair.ts`，并由
+  `checks/storage-maintenance.ts` 在独占维护编排中调用。
 
 领域模块可以依赖 `core/` 和 `config/`，但基础设施不能反向导入具体路由。跨领域调用直接
 指向对方表达职责的模块，不通过泛化 `service`、`storage` 或 barrel 隐藏真实依赖，也不能
