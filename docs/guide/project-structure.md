@@ -173,7 +173,9 @@ components ──► hooks / lib
 hooks ──► lib
 ```
 
-- `components/` 按稳定 UI 职责保存跨页面组件。
+- `components/` 按稳定 UI 职责保存跨页面组件；`components/image/editor/` 的数量中性
+  `1..N` 编辑器把重复图片卡片与 shell 编排分开，trash 模型和 Hook 集中拥有逐项响应
+  对账、权威回读、会话成员修剪及查询失效，不把 mutation 收口重新分散到入口页面。
 - `hooks/` 保存跨页面且主要管理 React 生命周期或交互行为的 Hook；首页与画廊的导航
   共用 `usePageScrollMovement.ts` 管理 RAF 合并、页面锁定和有界滚动位移采样，
   `usePublicNavigationEntrance.ts` 保证公开主导航在 SPA 会话内只入场一次，

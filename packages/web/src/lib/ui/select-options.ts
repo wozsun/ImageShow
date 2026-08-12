@@ -66,14 +66,14 @@ export const uploadCommonBrightnessOptions: readonly SelectOption[] = [
   { value: "dark", label: brightnessOptionLabel("dark") }
 ];
 
-export const batchCommonDeviceOptions: readonly SelectOption[] = [
+export const commonImageDeviceOptions: readonly SelectOption[] = [
   { value: "", label: "设备不变" },
   { value: "auto", label: "自动设备" },
   { value: "pc", label: deviceOptionLabel("pc") },
   { value: "mb", label: deviceOptionLabel("mb") }
 ];
 
-export const batchCommonBrightnessOptions: readonly SelectOption[] = [
+export const commonImageBrightnessOptions: readonly SelectOption[] = [
   { value: "", label: "亮暗不变" },
   { value: "auto", label: "自动亮暗" },
   { value: "light", label: brightnessOptionLabel("light") },

@@ -7,22 +7,16 @@ import { TwoStepConfirmIconButton } from "../../actions/TwoStepConfirmIconButton
 import { DialogFrame } from "../../feedback/DialogFrame.js";
 import { WorkflowDefaultFields } from "../../form/WorkflowDefaultFields.js";
 import { WorkflowCollapsePanel } from "../../layout/WorkflowCollapsePanel.js";
-import { ImageThumbnail } from "../ImageThumbnail.js";
 import { ImagePreviewModal } from "../ImagePreviewModal.js";
 import { AdminPagination } from "../../navigation/AdminPagination.js";
 import { OverlayScrollbar } from "../../layout/OverlayScrollbar.js";
-import { ImageDraftFields } from "../../form/ImageDraftFields.js";
-import { useAsyncActionStatus } from "../../../hooks/useAsyncActionStatus.js";
-import { moveImagesToTrash } from "../../../lib/api/image-mutations.js";
-import { readEditableImageSnapshots } from "../../../lib/api/image-edit.js";
 import { useAdminPermissions } from "../../../hooks/useAuthSession.js";
 import {
   createPageLifetimeModuleLoader
 } from "../../../lib/page-lifetime-module-loader.js";
-import { facetDisplayName, formatBytes, formatDimensions, shortImageId } from "../../../lib/ui/formatters.js";
+import { facetDisplayName } from "../../../lib/ui/formatters.js";
 import { preloadIntentProps } from "../../../lib/ui/preload-intent.js";
-import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
-import { batchCommonBrightnessOptions, batchCommonDeviceOptions, cardBrightnessSelectOptions, editCardDeviceSelectOptions } from "../../../lib/ui/select-options.js";
+import { commonImageBrightnessOptions, commonImageDeviceOptions } from "../../../lib/ui/select-options.js";
 import { storageNameResolver, useStorageOptions } from "../../../lib/api/storage-options.js";
 import type {
   EditableImageSnapshot,
@@ -31,18 +25,21 @@ import type {
   FacetOption,
   ImageDraft
 } from "../../../lib/types.js";
-import { mergeBatchEditCommonAttributes } from "../../../lib/upload/upload-utils.js";
+import { mergeCommonImageAttributes } from "../../../lib/upload/upload-utils.js";
 import {
   useImageMetadataOperations
 } from "./useImageMetadataOperations.js";
 import {
-  imageMetadataCardSaveState,
   changedMetadataUpdate,
   createImageMetadataSession,
   fieldsChangedFor,
   reconcileImageMetadataSession,
   restoreImageMetadataDrafts
 } from "./image-metadata-session.js";
+import { ImageMetadataEditorCard } from "./ImageMetadataEditorCard.js";
+import {
+  useImageEditorTrashAction
+} from "./useImageEditorTrashAction.js";
 
 type ImageStorageMigrationDialogModule =
   typeof import("./ImageStorageMigrationDialog.js");
@@ -75,7 +72,8 @@ export function ImageMetadataEditorDialog({
   allTags,
   authors,
   onClose,
-  onTrashed,
+  onTrashCommitted,
+  publicImageMembershipHandled = false,
   onSaved,
   onStorageMigrationSucceeded,
   returnFocusRef
@@ -86,7 +84,8 @@ export function ImageMetadataEditorDialog({
   allTags: FacetOption[];
   authors: FacetOption[];
   onClose: () => void;
-  onTrashed: (imageIds: string[]) => void | Promise<void>;
+  onTrashCommitted: (imageIds: string[]) => void | Promise<void>;
+  publicImageMembershipHandled?: boolean;
   onSaved: (
     authoritativeItems?: EditableImageSnapshot[] | null
   ) => void | Promise<void>;
@@ -106,6 +105,11 @@ export function ImageMetadataEditorDialog({
   // PostgreSQL 权威基线和草稿，保存留窗期间不再从父列表重建状态。
   const [sessionItemIds] = useState(() => items.map((item) => item.id));
   const [session, setSession] = useState(() => createImageMetadataSession(items));
+  const trashAction = useImageEditorTrashAction({
+    setSession,
+    onTrashCommitted,
+    publicImageMembershipHandled
+  });
   const operations = useImageMetadataOperations({
     initialIds: sessionItemIds,
     onSaved
@@ -118,9 +122,7 @@ export function ImageMetadataEditorDialog({
     lastSaveReport
   } = operations;
   const saving = saveStatus.pending;
-  const trashStatus = useAsyncActionStatus({ resultDurationMs: null });
-  const [trashError, setTrashError] = useState("");
-  const busy = saving || trashStatus.pending;
+  const busy = saving || trashAction.pending;
   const [preview, setPreview] = useState<{ src: string; thumbSrc: string; width: number; height: number } | null>(null);
   const [page, setPage] = useState(1);
 
@@ -181,8 +183,8 @@ export function ImageMetadataEditorDialog({
   const commonHasValue = commonChanged.device || commonChanged.brightness || commonChanged.theme || commonChanged.author || commonChanged.tags;
   const restoreAvailable = changedCount > 0;
   const commonSummary = [
-    batchCommonDeviceOptions.find((option) => option.value === common.device)?.label ?? "设备不变",
-    batchCommonBrightnessOptions.find((option) => option.value === common.brightness)?.label ?? "亮暗不变",
+    commonImageDeviceOptions.find((option) => option.value === common.device)?.label ?? "设备不变",
+    commonImageBrightnessOptions.find((option) => option.value === common.brightness)?.label ?? "亮暗不变",
     facetDisplayName(themes, common.theme, "主题不变"),
     facetDisplayName(authors, common.author, "作者不变"),
     `${common.tags.length} 个标签`,
@@ -238,101 +240,13 @@ export function ImageMetadataEditorDialog({
   const trashActiveImages = async (requestClose: () => void) => {
     const imageIds = activeItems.map((item) => item.id);
     if (!imageIds.length || busy) return false;
-
-    const allTrashed = await trashStatus.run(async () => {
-      setTrashError("");
-      const confirmedIds = new Set<string>();
-      try {
-        const result = await moveImagesToTrash(imageIds);
-        for (const item of result.results) {
-          if (item.status === "trashed") {
-            confirmedIds.add(item.id.toLowerCase());
-          }
-        }
-      } catch (error) {
-        reportAdminUiError("image_metadata.trash", error, { imageIds });
-      }
-
-      const unresolvedIds = imageIds.filter(
-        (id) => !confirmedIds.has(id.toLowerCase())
-      );
-      let authoritativeSnapshotRead = false;
-      if (unresolvedIds.length) {
-        try {
-          const snapshot = await readEditableImageSnapshots(unresolvedIds);
-          authoritativeSnapshotRead = true;
-          const editableIds = new Set(
-            snapshot.items.map((item) => item.id.toLowerCase())
-          );
-          for (const id of unresolvedIds) {
-            if (!editableIds.has(id.toLowerCase())) {
-              confirmedIds.add(id.toLowerCase());
-            }
-          }
-        } catch (error) {
-          reportAdminUiError(
-            "image_metadata.trash_snapshot",
-            error,
-            { imageIds: unresolvedIds }
-          );
-        }
-      }
-
-      const trashedIds = imageIds.filter(
-        (id) => confirmedIds.has(id.toLowerCase())
-      );
-      if (trashedIds.length) {
-        const trashedIdSet = new Set(
-          trashedIds.map((id) => id.toLowerCase())
-        );
-        setSession((current) => ({
-          ...current,
-          activeIds: current.activeIds.filter(
-            (id) => !trashedIdSet.has(id.toLowerCase())
-          ),
-          baselineItems: current.baselineItems.filter(
-            (item) => !trashedIdSet.has(item.id.toLowerCase())
-          ),
-          drafts: Object.fromEntries(
-            Object.entries(current.drafts).filter(
-              ([id]) => !trashedIdSet.has(id.toLowerCase())
-            )
-          )
-        }));
-
-        // 删除已经由服务端提交后，刷新失败不能诱导用户再次执行 mutation。
-        // 各入口在这里补齐自己的列表并关闭详情，异常只单独记录。
-        try {
-          await onTrashed(trashedIds);
-        } catch (refreshError) {
-          reportAdminUiError(
-            "image_metadata.trash_refresh",
-            refreshError,
-            { imageIds: trashedIds }
-          );
-        }
-      }
-
-      const unresolvedCount = imageIds.length - trashedIds.length;
-      if (unresolvedCount) {
-        setTrashError(authoritativeSnapshotRead
-          ? imageIds.length === 1
-            ? "图片当前仍可编辑，删除未生效"
-            : `${unresolvedCount} 张图片当前仍可编辑，删除未全部生效`
-          : imageIds.length === 1
-            ? "删除结果无法确认，请稍后重试或刷新页面"
-            : `${unresolvedCount} 张图片的删除结果无法确认，请稍后重试或刷新页面`
-        );
-        return false;
-      }
-      return true;
-    });
+    const allTrashed = await trashAction.trash(imageIds);
     if (allTrashed) requestClose();
     return allTrashed;
   };
   return (
     <DialogFrame
-      className="modal edit-modal batch-edit-overlay"
+      className="modal edit-modal image-editor-overlay"
       ariaLabel={title}
       busy={busy}
       paused={Boolean(
@@ -348,7 +262,7 @@ export function ImageMetadataEditorDialog({
       {({ requestClose }) => (
       <>
       <form
-        className={`batch-edit-modal image-workflow-window${singleItem ? " is-single" : ""}`}
+        className={`image-editor-modal image-workflow-window${singleItem ? " is-single" : ""}`}
         tabIndex={-1}
         onSubmit={async (event) => {
           event.preventDefault();
@@ -361,10 +275,10 @@ export function ImageMetadataEditorDialog({
             <h2>{title}</h2>
             <p title={singleItem ? modalSubtitle : undefined}>{modalSubtitle}</p>
           </div>
-          <div className="batch-edit-header-actions">
+          <div className="image-editor-header-actions">
             <button
               ref={restoreTriggerRef}
-              className="batch-edit-restore-button"
+              className="image-editor-restore-button"
               type="button"
               title="撤销所有未保存修改"
               disabled={busy || !restoreAvailable}
@@ -389,8 +303,8 @@ export function ImageMetadataEditorDialog({
         </header>
         {multipleItems && (
           <WorkflowCollapsePanel
-            className="batch-edit-common-panel"
-            contentClassName="batch-edit-common workflow-defaults"
+            className="image-editor-common-panel"
+            contentClassName="image-editor-common workflow-defaults"
             title="批量默认属性"
             summary={commonSummary}
             expanded={commonExpanded}
@@ -411,8 +325,8 @@ export function ImageMetadataEditorDialog({
                 author: (author) => setCommon({ ...common, author }),
                 tags: (tags) => setCommon({ ...common, tags })
               }}
-              deviceOptions={batchCommonDeviceOptions}
-              brightnessOptions={batchCommonBrightnessOptions}
+              deviceOptions={commonImageDeviceOptions}
+              brightnessOptions={commonImageBrightnessOptions}
               themes={themes}
               authors={authors}
               tags={allTags}
@@ -436,7 +350,7 @@ export function ImageMetadataEditorDialog({
                 drafts: Object.fromEntries(
                   Object.entries(current.drafts).map(([id, draft]) => {
                     if (!current.activeIds.includes(id)) return [id, draft];
-                    return [id, mergeBatchEditCommonAttributes(draft, common)];
+                    return [id, mergeCommonImageAttributes(draft, common)];
                   })
                 )
               }))}
@@ -444,130 +358,49 @@ export function ImageMetadataEditorDialog({
           </WorkflowCollapsePanel>
         )}
         <div
-          className="modal-scroll-list image-workflow-list batch-edit-list"
+          className="modal-scroll-list image-workflow-list image-editor-list"
           ref={listRef}
         >
-          {trashError && (
-            <p className="batch-edit-trash-error" role="alert">
-              {trashError}
+          {trashAction.errorMessage && (
+            <p className="image-editor-trash-error" role="alert">
+              {trashAction.errorMessage}
             </p>
           )}
-          {visibleItems.map((item) => {
-            const draft = session.drafts[item.id];
-            const changed = changedByItem.get(item.id)!;
-            const cardChanged = Object.values(changed).some(Boolean);
-            const lastSaveState = imageMetadataCardSaveState(
-              lastSaveReport,
-              item.id
-            );
-            // A new edit supersedes an earlier success badge. Failed and
-            // pending cards keep their feedback because their draft still
-            // needs another save or an authoritative confirmation.
-            const cardSaveState = cardChanged && lastSaveState === "saved"
-              ? null
-              : lastSaveState;
-            const saveStatePresentation = cardSaveState
-              ? {
-                  saved: {
-                    rowClassName: "is-save-saved",
-                    badgeClassName: "is-saved",
-                    label: "保存成功"
-                  },
-                  failed: {
-                    rowClassName: "is-save-failed",
-                    badgeClassName: "is-failed",
-                    label: "保存失败"
-                  },
-                  pending: {
-                    rowClassName: "is-save-pending",
-                    badgeClassName: "is-pending",
-                    label: "待确认"
-                  }
-                }[cardSaveState]
-              : null;
-            return (
-              <article
-                key={item.id}
-                className={`batch-edit-row${cardChanged ? " is-changed" : ""}${saveStatePresentation ? ` ${saveStatePresentation.rowClassName}` : ""}`}
-              >
-                <div className="batch-edit-preview">
-                  <ImageThumbnail
-                    src={item.thumb_url}
-                    onClick={(opener) => {
-                      previewReturnFocusRef.current = opener;
-                      setPreview({
-                        src: item.object_url,
-                        thumbSrc: item.thumb_url,
-                        width: item.width,
-                        height: item.height
-                      });
-                    }}
-                  />
-                  {item.image_size
-                    ? <span className="batch-edit-preview-size">{formatBytes(item.image_size)}</span>
-                    : null}
-                </div>
-                <div className="batch-edit-content">
-                  <div className="batch-edit-head">
-                    <div>
-                      <div className="batch-edit-head-name">
-                        <strong className="batch-edit-title-desktop" title={item.object_key}>{item.id}</strong>
-                        <strong className="batch-edit-title-mobile" title={item.id}>{shortImageId(item.id)}</strong>
-                        {saveStatePresentation ? (
-                          <span className={`batch-edit-save-badge ${saveStatePresentation.badgeClassName}`}>
-                            {saveStatePresentation.label}
-                          </span>
-                        ) : cardChanged ? (
-                          <span className="changed-badge">已修改</span>
-                        ) : null}
-                      </div>
-                      <span className="batch-edit-desktop-summary">
-                        {formatDimensions(item.width, item.height)} · {item.theme} · {item.device}/{item.brightness} · {resolveStorageName(item)}
-                      </span>
-                      <span className="batch-edit-summary-line batch-edit-mobile-summary">
-                        {formatDimensions(item.width, item.height)} · {item.device}/{item.brightness} · {item.theme}
-                      </span>
-                      <span className="batch-edit-summary-line batch-edit-mobile-summary">
-                        {item.image_size ? formatBytes(item.image_size) : "大小未记录"} · {resolveStorageName(item)}
-                      </span>
-                    </div>
-                    {multipleItems && (
-                      <button
-                        className="icon danger-button"
-                        type="button"
-                        title="从批量编辑中移除"
-                        disabled={busy}
-                        onClick={() => remove(item.id)}
-                      >
-                        <AdminIcon name="close-line" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-                <ImageDraftFields
-                  draft={draft}
-                  onPatch={(patch) => patchDraft(item.id, patch)}
-                  themes={themes}
-                  allTags={allTags}
-                  authors={authors}
-                  deviceOptions={editCardDeviceSelectOptions}
-                  brightnessOptions={cardBrightnessSelectOptions}
-                  disabled={busy}
-                  ariaPrefix={item.id}
-                  changed={changed}
-                />
-              </article>
-            );
-          })}
-          {!activeItems.length && <p className="batch-edit-empty-state">批量编辑列表为空</p>}
+          {visibleItems.map((item) => (
+            <ImageMetadataEditorCard
+              key={item.id}
+              item={item}
+              draft={session.drafts[item.id]}
+              changed={changedByItem.get(item.id)!}
+              lastSaveReport={lastSaveReport}
+              multipleItems={multipleItems}
+              busy={busy}
+              themes={themes}
+              allTags={allTags}
+              authors={authors}
+              storageName={resolveStorageName(item)}
+              onPatch={(patch) => patchDraft(item.id, patch)}
+              onRemove={() => remove(item.id)}
+              onPreview={(opener) => {
+                previewReturnFocusRef.current = opener;
+                setPreview({
+                  src: item.object_url,
+                  thumbSrc: item.thumb_url,
+                  width: item.width,
+                  height: item.height
+                });
+              }}
+            />
+          ))}
+          {!activeItems.length && <p className="image-editor-empty-state">图片编辑列表为空</p>}
         </div>
         <footer className={`image-workflow-footer${paginationAvailable ? " has-pagination" : ""}`}>
           {(canMigrateStorage || trashAvailable) && (
-            <div className="batch-edit-resource-actions image-workflow-leading-actions">
+            <div className="image-editor-resource-actions image-workflow-leading-actions">
               {canMigrateStorage && (
                 <button
                   ref={migrateTriggerRef}
-                  className="batch-edit-migrate-trigger"
+                  className="image-editor-migrate-trigger"
                   type="button"
                   disabled={busy || !activeItems.length}
                   {...preloadIntentProps(preloadImageStorageMigrationDialog)}
@@ -580,13 +413,13 @@ export function ImageMetadataEditorDialog({
                 multipleItems ? (
                   <button
                     ref={trashTriggerRef}
-                    className="icon danger-button batch-edit-trash-trigger"
+                    className="icon danger-button image-editor-trash-trigger"
                     type="button"
                     title="删除这些图片"
                     aria-label="删除这些图片"
                     disabled={busy || !activeItems.length}
                     onClick={() => {
-                      setTrashError("");
+                      trashAction.clearError();
                       setTrashConfirmation(true);
                     }}
                   >
@@ -594,7 +427,7 @@ export function ImageMetadataEditorDialog({
                   </button>
                 ) : (
                   <TwoStepConfirmIconButton
-                    className="icon danger-button batch-edit-trash-trigger"
+                    className="icon danger-button image-editor-trash-trigger"
                     idleIcon="delete-bin-6-line"
                     confirmIcon="delete-bin-2-line"
                     idleLabel="删除此图片"
@@ -602,9 +435,9 @@ export function ImageMetadataEditorDialog({
                     idleTitle="删除此图片"
                     confirmTitle="再次点击确认删除"
                     disabled={busy || !activeItems.length}
-                    busy={trashStatus.pending}
+                    busy={trashAction.pending}
                     onConfirm={() => {
-                      setTrashError("");
+                      trashAction.clearError();
                       void trashActiveImages(requestClose);
                     }}
                   />
@@ -625,7 +458,7 @@ export function ImageMetadataEditorDialog({
           <div className="modal-footer-actions">
             <button type="button" disabled={busy} onClick={() => requestClose()}>取消</button>
             <AsyncActionButton
-              className={`button workflow-submit-button${multipleItems ? " batch-edit-save-button" : ""}`}
+              className={`button workflow-submit-button${multipleItems ? " image-editor-save-button" : ""}`}
               type="submit"
               status={saveStatus.status}
               presentation={savePresentation}
@@ -675,7 +508,7 @@ export function ImageMetadataEditorDialog({
           description={`这 ${activeItems.length} 张图片将移入回收站并退出站点发现，可以稍后恢复。`}
           confirmLabel="确认删除"
           pendingLabel="删除中"
-          errorMessage={trashError}
+          errorMessage={trashAction.errorMessage}
           returnFocusRef={trashTriggerRef}
           onClose={() => setTrashConfirmation(false)}
           onConfirm={() => trashActiveImages(requestClose)}

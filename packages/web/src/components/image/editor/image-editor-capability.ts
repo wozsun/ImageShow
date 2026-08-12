@@ -3,8 +3,7 @@ import type { ImportVocabularyDto } from "@imageshow/shared/browser";
 import { readEditableImageSnapshots } from "../../../lib/api/image-edit.js";
 import { importVocabularyQueryOptions } from "../../../lib/api/import-vocabulary.js";
 import {
-  invalidateImageData,
-  invalidateImageDataAfterTrash
+  invalidateImageData
 } from "../../../lib/api/query-invalidation.js";
 import { storageOptionsQueryOptions } from "../../../lib/api/storage-options.js";
 import type {
@@ -109,17 +108,4 @@ export async function refreshImageEditorAfterSave<TAdjacentData>({
     adjacentDataRequest
   ]);
   return { snapshotResult, adjacentDataResult };
-}
-
-export async function refreshImageEditorAfterTrash({
-  queryClient,
-  imageIds,
-  onTrashCommitted
-}: {
-  queryClient: QueryClient;
-  imageIds: string[];
-  onTrashCommitted?: (imageIds: string[]) => void | Promise<void>;
-}) {
-  await onTrashCommitted?.(imageIds);
-  await invalidateImageDataAfterTrash(queryClient, imageIds);
 }

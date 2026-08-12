@@ -276,44 +276,29 @@ export function ImageAdminDetails({
     onItemUpdated,
     queryClient
   ]);
-  const refreshAfterTrash = useCallback(async (imageIds: string[]) => {
-    // mutation 已经由内层编辑器确认提交；先让公开详情的查询所有者禁用当前 ID，
-    // 再取消读取并刷新派生投影，避免关闭动画期间被聚焦或网络重连重新拉取 404。
-    let refreshError: unknown;
-    try {
-      const capabilityModule = editorCapability.session?.module;
-      if (!capabilityModule) throw new Error("图片编辑能力未加载");
-      // 页面仍由详情与编辑器共同锁定滚动时刷新派生投影；公开列表已经在
-      // mutation 成功边界局部更新，不重放已加载的历史游标页。
-      await capabilityModule.refreshImageEditorAfterTrash({
-        queryClient,
-        imageIds,
-        onTrashCommitted: onItemTrashCommitted
-          ? async (committedIds) => {
-              for (const committedId of committedIds) {
-                await onItemTrashCommitted(committedId);
-              }
-            }
-          : undefined
-      });
-    } catch (error) {
-      refreshError = error;
+  const commitEditorTrashMembership = useCallback(async (
+    imageIds: string[]
+  ) => {
+    let membershipError: unknown;
+    if (onItemTrashCommitted) {
+      try {
+        for (const committedId of imageIds) {
+          await onItemTrashCommitted(committedId);
+        }
+      } catch (error) {
+        membershipError = error;
+      }
     }
 
-    if (!imageIds.includes(imageId)) return;
-    setEditSuppressed(true);
-    setEditError("");
-    // 先让内层编辑器走完自己的退出动画；其 onClose 再通知外层详情关闭，
-    // 避免最短 pending 时长尚未结束时由父级卸载内层并遗留迟到的关闭定时器。
-    trashedImageRef.current = imageId;
-
-    if (refreshError) throw refreshError;
-  }, [
-    editorCapability.session,
-    imageId,
-    onItemTrashCommitted,
-    queryClient
-  ]);
+    if (imageIds.includes(imageId)) {
+      setEditSuppressed(true);
+      setEditError("");
+      // 先让内层编辑器走完自己的退出动画；其 onClose 再通知外层详情关闭，
+      // 避免最短 pending 时长尚未结束时由父级卸载内层并遗留迟到的关闭定时器。
+      trashedImageRef.current = imageId;
+    }
+    if (membershipError) throw membershipError;
+  }, [imageId, onItemTrashCommitted]);
 
   if (!accessAvailable || !accessConfirmed) return null;
 
@@ -404,7 +389,8 @@ export function ImageAdminDetails({
           allTags={editorCapability.session.vocabulary.tags}
           authors={editorCapability.session.vocabulary.authors}
           onClose={closeEdit}
-          onTrashed={refreshAfterTrash}
+          onTrashCommitted={commitEditorTrashMembership}
+          publicImageMembershipHandled={!admin}
           onSaved={refreshAfterSave}
           onStorageMigrationSucceeded={setEditNotice}
           returnFocusRef={editorCapability.returnFocusRef}

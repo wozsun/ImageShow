@@ -32,7 +32,7 @@ export type ImportAttributeDefaults = {
   tags: string[];
 };
 
-export type BatchEditCommonAttributes = {
+export type CommonImageAttributes = {
   device: "" | Device | "auto";
   brightness: "" | Brightness | "auto";
   theme: string;
@@ -40,9 +40,9 @@ export type BatchEditCommonAttributes = {
   tags: string[];
 };
 
-export function mergeBatchEditCommonAttributes(
+export function mergeCommonImageAttributes(
   draft: ImageDraft,
-  common: BatchEditCommonAttributes
+  common: CommonImageAttributes
 ): ImageDraft {
   return {
     ...draft,

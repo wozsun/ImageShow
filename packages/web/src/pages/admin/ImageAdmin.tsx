@@ -518,8 +518,9 @@ export function ImageAdmin() {
           allTags={editorCapability.session.vocabulary.tags}
           authors={editorCapability.session.vocabulary.authors}
           onClose={editorCapability.close}
-          onTrashed={async (imageIds) => {
-            await refresh();
+          onTrashCommitted={(imageIds) => {
+            cancelPageNavigation();
+            selection.clear();
             showFeedback(
               imageIds.length === 1
                 ? "图片已移入回收站"
