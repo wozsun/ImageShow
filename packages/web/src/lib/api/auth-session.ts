@@ -2,6 +2,7 @@ import type { AuthStateDto } from "@imageshow/shared/browser";
 import {
   api,
   clearCsrfToken,
+  isApiClientError,
   setCsrfToken
 } from "./client.js";
 import { adminApiBasePath } from "../constants.js";
@@ -49,10 +50,20 @@ export function synchronizeAuthSession(auth: AuthState) {
 }
 
 export async function readAuthSession(signal?: AbortSignal) {
-  const auth = await api<AuthState>(`${adminApiBasePath}/auth/me`, { signal });
-  // 查询结果发布前先同步 CSRF；公共详情紧随其后的受保护预取不能看到空 token。
-  synchronizeAuthSession(auth);
-  return auth;
+  try {
+    const auth = await api<AuthState>(`${adminApiBasePath}/auth/me`, { signal });
+    // 查询结果发布前先同步 CSRF；公共详情紧随其后的受保护预取不能看到空 token。
+    synchronizeAuthSession(auth);
+    return auth;
+  } catch (error) {
+    if (isApiClientError(error) && error.status === 401) {
+      // 公开详情不会为本地提示位提前挂载管理模块，因此过期探针必须在
+      // 认证读取边界立即收口。403 只拒绝当前能力，不据此删除会话提示。
+      clearCsrfToken();
+      clearSessionProbeHint();
+    }
+    throw error;
+  }
 }
 
 /** Coalesces a burst of expired-session events into one authoritative probe. */

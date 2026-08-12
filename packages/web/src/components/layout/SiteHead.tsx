@@ -32,8 +32,11 @@ export function SiteHead() {
       }
       return;
     }
-    applyUiColorContext("public");
-  }, [pathname]);
+    // 公开域只有在站点配置真实可用后才接管颜色。初始读取失败时继续保留
+    // index.html 的 bootstrap 画布，避免错误文字落入尚未就绪的公开颜色域。
+    if (site) applyUiColorContext("public");
+    else applyUiColorContext("bootstrap");
+  }, [pathname, site]);
 
   useEffect(() => {
     if (!site) return;

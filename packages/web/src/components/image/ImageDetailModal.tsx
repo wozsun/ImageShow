@@ -18,8 +18,8 @@ import type {
   AdminImageListItem,
   PublicImageItem
 } from "../../lib/types.js";
-import { hasSessionProbeHint } from "../../lib/api/auth-session.js";
 import { useGalleryFacets, useSiteConfig } from "../../lib/api/site-data.js";
+import { useAuthMe } from "../../hooks/useAuthSession.js";
 import { useAnimatedClose } from "../../hooks/useAnimatedClose.js";
 import { usePageScrollLock } from "../../hooks/usePageScrollLock.js";
 import { useDialogFocus } from "../../hooks/useDialogFocus.js";
@@ -154,7 +154,9 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
     && adminItem?.storage_slug === props.item.storage_slug
     ? props.storageLabel
     : undefined;
-  const showAdminDetails = admin || hasSessionProbeHint();
+  const authQuery = useAuthMe();
+  const showAdminDetails = admin
+    || authQuery.data?.authenticated === true;
   const detailLoading = !admin && props.detailLoading === true;
   const detailError = !admin ? props.detailError?.trim() ?? "" : "";
   const onDetailRetry = !admin ? props.onDetailRetry : undefined;

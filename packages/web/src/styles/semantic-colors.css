@@ -35,6 +35,13 @@
   --bootstrap-color-control-action-text: #79b8ff;
   --bootstrap-color-control-invalid: #cc7975;
   --bootstrap-color-control-switch-thumb: #484f58;
+  --bootstrap-color-feedback-success-text: #8fd8a3;
+  --bootstrap-color-feedback-success-surface: #173126;
+  --bootstrap-color-feedback-success-border: #4d795b;
+  --bootstrap-color-feedback-danger-text: #cc7975;
+  --bootstrap-color-feedback-danger-surface: #2a1d1e;
+  --bootstrap-color-feedback-danger-border: #8b5357;
+  --bootstrap-color-feedback-error-text: #cc7975;
 
   /* Public foundations */
   --public-color-canvas: #070b15;
@@ -155,4 +162,11 @@
   --color-control-action-text: var(--bootstrap-color-control-action-text);
   --color-control-invalid: var(--bootstrap-color-control-invalid);
   --color-control-switch-thumb: var(--bootstrap-color-control-switch-thumb);
+  --color-feedback-success-text: var(--bootstrap-color-feedback-success-text);
+  --color-feedback-success-surface: var(--bootstrap-color-feedback-success-surface);
+  --color-feedback-success-border: var(--bootstrap-color-feedback-success-border);
+  --color-feedback-danger-text: var(--bootstrap-color-feedback-danger-text);
+  --color-feedback-danger-surface: var(--bootstrap-color-feedback-danger-surface);
+  --color-feedback-danger-border: var(--bootstrap-color-feedback-danger-border);
+  --color-feedback-error-text: var(--bootstrap-color-feedback-error-text);
 }

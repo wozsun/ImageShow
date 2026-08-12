@@ -1,20 +1,11 @@
-import { useEffect, useRef, useState } from "react";
-import {
-  useQueryClient,
-  type UseQueryResult
-} from "@tanstack/react-query";
+import { useEffect, useState, type ReactNode } from "react";
+import type { UseQueryResult } from "@tanstack/react-query";
 import type {
   AdminCheckStatusDto
 } from "@imageshow/shared/browser";
 import { AdminIcon } from "../../components/icon/AdminIcon.js";
 import { StableButtonLabel } from "../../components/data-display/StableButtonLabel.js";
-import { DialogFrame } from "../../components/feedback/DialogFrame.js";
-import { api } from "../../lib/api/client.js";
-import { queryKeys } from "../../lib/api/query-keys.js";
-import {
-  readyImageCacheRebuildPath,
-  readyImageProjection
-} from "../../lib/api/ready-image-cache.js";
+import { readyImageProjection } from "../../lib/api/ready-image-cache.js";
 import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
 import { revisionFingerprint } from "../../lib/ui/formatters.js";
 
@@ -33,110 +24,36 @@ function formatDuration(value: number | null) {
     : `${Math.floor(seconds / 60)} 分 ${Math.round(seconds % 60)} 秒`;
 }
 
-type RebuildErrorBaseline = {
-  dataUpdatedAt: number;
-  hadStatus: boolean;
-  state: string | null;
-  reason: string | null;
-  appliedRevision: string | null;
-};
-
 export function ReadyImageCachePanel({
-  canRebuild,
-  query
+  query,
+  maintenanceBusy = false,
+  maintenanceError = "",
+  onRefreshSuccess,
+  reportQueryError = true,
+  renderMaintenanceAction
 }: {
-  canRebuild: boolean;
   query: UseQueryResult<AdminCheckStatusDto, Error>;
+  maintenanceBusy?: boolean;
+  maintenanceError?: string;
+  onRefreshSuccess?: () => void;
+  reportQueryError?: boolean;
+  renderMaintenanceAction?: (state: { disabled: boolean }) => ReactNode;
 }) {
-  const client = useQueryClient();
-  const rebuildRequestActive = useRef(false);
   const [manualRefreshing, setManualRefreshing] = useState(false);
-  const [rebuildStarting, setRebuildStarting] = useState(false);
-  const [confirmRebuild, setConfirmRebuild] = useState(false);
-  const [rebuildError, setRebuildError] = useState("");
-  const [rebuildErrorBaseline, setRebuildErrorBaseline] = useState<
-    RebuildErrorBaseline | null
-  >(null);
   const status = readyImageProjection(query.data);
 
   useEffect(() => {
-    if (!query.error) return;
+    if (!reportQueryError || !query.error) return;
     reportAdminUiError("check.status", query.error);
-  }, [query.error]);
-
-  useEffect(() => {
-    const current = readyImageProjection(query.data);
-    if (
-      rebuildErrorBaseline !== null
-      && query.isSuccess
-      && current
-      && query.dataUpdatedAt > rebuildErrorBaseline.dataUpdatedAt
-      && (
-        current.rebuilding
-        || (
-          rebuildErrorBaseline.hadStatus
-          && (
-            current.state !== rebuildErrorBaseline.state
-            || current.reason !== rebuildErrorBaseline.reason
-            || current.applied_revision
-              !== rebuildErrorBaseline.appliedRevision
-          )
-        )
-      )
-    ) {
-      setRebuildError("");
-      setRebuildErrorBaseline(null);
-    }
-  }, [query.data, query.dataUpdatedAt, query.isSuccess, rebuildErrorBaseline]);
+  }, [query.error, reportQueryError]);
 
   const refresh = async () => {
     setManualRefreshing(true);
     try {
       const result = await query.refetch();
-      if (result.isSuccess) {
-        setRebuildError("");
-        setRebuildErrorBaseline(null);
-      }
+      if (result.isSuccess) onRefreshSuccess?.();
     } finally {
       setManualRefreshing(false);
-    }
-  };
-
-  const rebuild = async () => {
-    if (rebuildRequestActive.current) return;
-    rebuildRequestActive.current = true;
-    setConfirmRebuild(false);
-    setRebuildStarting(true);
-    try {
-      await client.cancelQueries({
-        queryKey: queryKeys.adminCheckStatus,
-        exact: true
-      });
-      const nextStatus = await api<AdminCheckStatusDto>(
-        readyImageCacheRebuildPath,
-        { method: "POST" }
-      );
-      client.setQueryData(queryKeys.adminCheckStatus, nextStatus);
-      await client.invalidateQueries({
-        queryKey: queryKeys.overview,
-        exact: true,
-        refetchType: "none"
-      });
-      setRebuildError("");
-      setRebuildErrorBaseline(null);
-    } catch (requestError) {
-      reportAdminUiError("cache.ready_images.rebuild", requestError);
-      setRebuildError("图片投影重建未能启动，请检查 Redis 与 PostgreSQL 状态。");
-      setRebuildErrorBaseline({
-        dataUpdatedAt: query.dataUpdatedAt,
-        hadStatus: status !== undefined,
-        state: status?.state ?? null,
-        reason: status?.reason ?? null,
-        appliedRevision: status?.applied_revision ?? null
-      });
-    } finally {
-      rebuildRequestActive.current = false;
-      setRebuildStarting(false);
     }
   };
 
@@ -149,10 +66,9 @@ export function ReadyImageCachePanel({
     : redisFailure
       ? `Redis 状态读取失败（${redisFailure.category}）：${redisFailure.message}`
       : "";
-  const busy = manualRefreshing || rebuildStarting;
+  const busy = manualRefreshing || maintenanceBusy;
   return (
-    <>
-      <section className={`ready-cache-panel ${healthy ? "ok" : "warn"}`}>
+    <section className={`ready-cache-panel ${healthy ? "ok" : "warn"}`}>
         <div className="ready-cache-panel-head">
           <div>
             <h2>Redis 图片投影</h2>
@@ -167,20 +83,15 @@ export function ReadyImageCachePanel({
               <AdminIcon name="refresh-line" />
               <StableButtonLabel idle="刷新状态" busyText="刷新中" busy={manualRefreshing} />
             </button>
-            {canRebuild && (
-              <button
-                type="button"
-                disabled={busy || query.isFetching || Boolean(status?.rebuilding)}
-                onClick={() => setConfirmRebuild(true)}
-              >
-                <AdminIcon name="database-2-line" />
-                <StableButtonLabel idle="重建图片投影" busyText="启动中" busy={rebuildStarting} />
-              </button>
-            )}
+            {renderMaintenanceAction?.({
+              disabled: busy
+                || query.isFetching
+                || Boolean(status?.rebuilding)
+            })}
           </div>
         </div>
-        {(rebuildError || statusError) && (
-          <p className="admin-error" role="alert">{rebuildError || statusError}</p>
+        {(maintenanceError || statusError) && (
+          <p className="admin-error" role="alert">{maintenanceError || statusError}</p>
         )}
         <dl className="ready-cache-status-grid">
           <div><dt>状态</dt><dd>{status?.rebuilding ? "重建中" : healthy ? "已同步" : status?.reason ?? "读取中"}</dd></div>
@@ -225,66 +136,6 @@ export function ReadyImageCachePanel({
             )}
           </div>
         )}
-      </section>
-      {confirmRebuild && canRebuild && (
-        <RebuildConfirmation
-          busy={rebuildStarting}
-          onClose={() => setConfirmRebuild(false)}
-          onConfirm={rebuild}
-        />
-      )}
-    </>
-  );
-}
-
-function RebuildConfirmation({ busy, onClose, onConfirm }: {
-  busy: boolean;
-  onClose: () => void;
-  onConfirm: () => Promise<void>;
-}) {
-  const title = "重建 Redis 图片投影";
-  return (
-    <DialogFrame
-      className="modal edit-modal"
-      ariaLabel={title}
-      busy={busy}
-      onClose={onClose}
-    >
-      {({ requestClose }) => (
-        <form
-          className="operation-modal"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void onConfirm();
-          }}
-        >
-          <header>
-            <div>
-              <h2>{title}</h2>
-              <p>关闭缓存读门，分批从 PostgreSQL 重建核心图片投影。</p>
-            </div>
-            <button
-              className="icon close pressable"
-              type="button"
-              title="关闭"
-              disabled={busy}
-              onClick={() => requestClose()}
-            >
-              <AdminIcon name="close-line" />
-            </button>
-          </header>
-          <div className="operation-body">
-            <p className="notice-line">只清理自有的核心与派生图片键；不会修改 PostgreSQL 图片、管理员会话、限流数据或随机历史。</p>
-          </div>
-          <footer>
-            <button type="button" disabled={busy} onClick={() => requestClose()}>取消</button>
-            <button className="button" type="submit" disabled={busy}>
-              <AdminIcon name="database-2-line" />
-              <StableButtonLabel idle="确认重建" busyText="启动中" busy={busy} />
-            </button>
-          </footer>
-        </form>
-      )}
-    </DialogFrame>
+    </section>
   );
 }

@@ -1,0 +1,30 @@
+.storage-maintenance-preview {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+.storage-maintenance-preview div {
+  min-width: 0;
+  padding: 10px;
+  border-radius: 6px;
+  background: var(--admin-color-canvas);
+}
+.storage-maintenance-preview dt {
+  color: var(--admin-color-text-secondary);
+  font-size: 12px;
+}
+.storage-maintenance-preview dd {
+  margin: 4px 0 0;
+  font-weight: 600;
+}
+.storage-maintenance-confirmation {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.storage-maintenance-confirmation input { margin-top: 3px; }
+
+@media (max-width: 760px) {
+  .storage-maintenance-preview { grid-template-columns: 1fr; }
+}

@@ -53,13 +53,15 @@ export function AdminShell() {
     isError: authFailed,
     refetch
   } = useAuthMe();
-  const unauthenticatedAppearanceReady =
-    authFailed || Boolean(data && !data.authenticated);
+  const unauthenticatedAppearanceReady = Boolean(
+    data && !data.authenticated
+  );
   useLayoutEffect(() => {
     if (unauthenticatedAppearanceReady) applyUiColorContext("public");
   }, [unauthenticatedAppearanceReady]);
-  // 初次认证读取失败时没有可用界面；登录后的确认请求失败则仍保留旧的
-  // unauthenticated 快照和 AdminLogin，由它提供不重复 POST 的安全恢复入口。
+  // 初次认证读取失败时没有可用界面，并继续使用 bootstrap 反馈语义；
+  // 登录后的确认请求失败则仍保留旧的 unauthenticated 快照和 AdminLogin，
+  // 由它提供不重复 POST 的安全恢复入口。
   if (authFailed && data?.authenticated !== false) {
     return (
       <QueryErrorState

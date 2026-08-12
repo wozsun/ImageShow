@@ -15,8 +15,7 @@ import {
 import { adminApiBasePath } from "../../lib/constants.js";
 import { queryKeys } from "../../lib/api/query-keys.js";
 import {
-  clearSessionProbeHint,
-  hasSessionProbeHint
+  clearSessionProbeHint
 } from "../../lib/api/auth-session.js";
 import { useAuthMe } from "../../hooks/useAuthSession.js";
 import {
@@ -95,12 +94,13 @@ export function ImageAdminDetails({
       || (adminListItem && adminListItem.status !== "ready")
   );
 
-  // 后台详情已有 Shell 确认过会话；公共详情只在本地提示存在时探测，并等服务端确认后
-  // 才渲染管理入口。/auth/me 同时建立后续 POST 所需的 CSRF 状态。
-  const [accessAvailable, setAccessAvailable] = useState(
-    () => admin || hasSessionProbeHint()
-  );
+  // 后台详情已有 Shell 确认过会话；公共详情只有在外层根据 /auth/me 的
+  // 权威结果加载本模块后才可能渲染管理入口。本地 session hint 仅负责触发
+  // AuthSessionProvider 探测，不能成为本模块的访问依据。
   const authQuery = useAuthMe();
+  const [accessAvailable, setAccessAvailable] = useState(
+    () => admin || authQuery.data?.authenticated === true
+  );
   const accessConfirmed = admin || authQuery.data?.authenticated === true;
   const [expanded, setExpanded] = useState(() => admin);
   const [editSuppressed, setEditSuppressed] = useState(false);
