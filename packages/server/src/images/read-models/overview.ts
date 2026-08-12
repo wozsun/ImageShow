@@ -5,10 +5,9 @@ import {
   getReadyImageCacheOverviewStatus
 } from "../ready-cache/admin-status.ts";
 import {
-  adminImageDetailView,
-  adminImagesWithTags,
-  imageDetailPresentationColumnsWithTags,
-  type ImageRecordWithTags
+  adminImageDetailItemsWithTags,
+  adminImageDetailPresentationColumnsWithTags,
+  type AdminImageDetailRecordWithTags
 } from "../presenter.ts";
 
 export async function getOverviewStats(): Promise<AdminOverviewDto> {
@@ -55,7 +54,7 @@ async function buildOverviewStats(
       LIMIT 8
     `),
     pool.query(
-      `SELECT ${imageDetailPresentationColumnsWithTags}
+      `SELECT ${adminImageDetailPresentationColumnsWithTags}
          FROM metadata
         WHERE status='ready'
         ORDER BY created_at DESC, id DESC
@@ -67,10 +66,9 @@ async function buildOverviewStats(
   ]);
 
   const row = statsResult.rows[0];
-  const recent = (await adminImagesWithTags(
-    recentResult.rows as ImageRecordWithTags[]
-  ))
-    .map(adminImageDetailView);
+  const recent = await adminImageDetailItemsWithTags(
+    recentResult.rows as AdminImageDetailRecordWithTags[]
+  );
   return {
     gallery: row.gallery,
     theme_unset: row.theme_unset,

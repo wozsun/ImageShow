@@ -1,6 +1,6 @@
 import type { Brightness, Device } from "./common.ts";
 import type {
-  AdminImageItemDto,
+  AdminImageListItemDto,
   FacetOptionDto,
   ImageDraftDto
 } from "./images.ts";
@@ -57,7 +57,7 @@ export type PreparedImportDto = {
   detected_device: Device;
   detected_brightness: Brightness;
   storage_slug: string;
-  duplicates: AdminImageItemDto[];
+  duplicates: AdminImageListItemDto[];
 };
 
 export type JsonlManifestItemDto = {
@@ -120,7 +120,7 @@ export type StoredImportStatusListDto = {
 
 export type StoredImportCommitResultDto = {
   status: "imported";
-  item: AdminImageItemDto;
+  item: AdminImageListItemDto;
 };
 
 export type StoredImportBatchCommitItemInputDto = {

@@ -8,7 +8,7 @@ import { ensureThemeWithMutationLockHeld } from "../../themes/mutations.ts";
 import type { EntityCacheKind } from "../../vocab/vocab-cache.ts";
 import { resolveClassification } from "../classification.ts";
 import {
-  imagePresentationColumns,
+  adminImageListPresentationColumns,
   type ImageRecord
 } from "../presenter.ts";
 import type {
@@ -23,7 +23,7 @@ type CommitPersistenceSession = Pick<
 
 export async function readCommittedImage(id: string) {
   return (await pool.query(
-    `SELECT ${imagePresentationColumns} FROM metadata WHERE id=$1`,
+    `SELECT ${adminImageListPresentationColumns} FROM metadata WHERE id=$1`,
     [id]
   )).rows[0] as ImageRecord | undefined;
 }
@@ -61,7 +61,7 @@ export function persistCommittedImage(
          $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18
        )
        ON CONFLICT (id) DO NOTHING
-       RETURNING ${imagePresentationColumns}`,
+       RETURNING ${adminImageListPresentationColumns}`,
       [
         id,
         session.image_time,
@@ -119,7 +119,7 @@ async function readCommittedImageWithClient(
   id: string
 ) {
   return (await client.query(
-    `SELECT ${imagePresentationColumns} FROM metadata WHERE id=$1`,
+    `SELECT ${adminImageListPresentationColumns} FROM metadata WHERE id=$1`,
     [id]
   )).rows[0] as ImageRecord | undefined;
 }

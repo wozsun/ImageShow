@@ -1,4 +1,4 @@
-import type { ImageItem } from "../types.js";
+import type { AdminImageListItem } from "../types.js";
 
 export function shortImageId(id: string) {
   return `#${id.replace(/-/g, "").slice(-12)}`;
@@ -22,7 +22,7 @@ export function facetDisplayName(
   return option ? displayNameOrSlug(option) : slug;
 }
 
-export function formatImageClassification(item: ImageItem) {
+export function formatImageClassification(item: AdminImageListItem) {
   return `${item.theme} · ${item.device}/${item.brightness}`;
 }
 

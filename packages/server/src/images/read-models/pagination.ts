@@ -4,8 +4,8 @@ import {
 } from "../../core/database-pools.ts";
 import { decodeImageCursor, encodeImageCursor } from "../cursor.ts";
 import {
-  adminImages,
-  imagePresentationColumns,
+  adminImageListItems,
+  adminImageListPresentationColumns,
   publicImageCards,
   type ImageRecord,
   type PublicImageCardRecord
@@ -77,11 +77,11 @@ export async function fetchAdminImagePage(
     params,
     limit,
     cursor,
-    imagePresentationColumns,
+    adminImageListPresentationColumns,
     reader
   );
   const rows = page.rows as Array<ImageRecord & { cursor_image_time: string }>;
-  const items = await adminImages(rows);
+  const items = await adminImageListItems(rows);
   return { rows, items, nextCursor: page.nextCursor };
 }
 

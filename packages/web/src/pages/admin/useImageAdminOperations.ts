@@ -6,7 +6,7 @@ import {
   restoreImages
 } from "../../lib/api/image-mutations.js";
 import { readEditableImageSnapshots } from "../../lib/api/image-edit.js";
-import type { ImageItem } from "../../lib/types.js";
+import type { AdminImageListItem } from "../../lib/types.js";
 import {
   createActionFeedback,
   type ActionFeedbackState
@@ -72,7 +72,7 @@ export function useImageAdminOperations({
   clearSelection,
   invalidateData
 }: {
-  items: ImageItem[];
+  items: AdminImageListItem[];
   clearSelection: () => void;
   invalidateData: () => Promise<unknown>;
 }) {

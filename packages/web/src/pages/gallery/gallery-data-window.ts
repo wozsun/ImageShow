@@ -82,7 +82,7 @@ function estimateCardBytes(item: GalleryImageCard) {
     + item.theme.length
     + item.author.length
     + item.thumb_url.length
-    + (item.image_time?.length ?? 0)
+    + item.image_time.length
     + item.tags.reduce((total, tag) => total + tag.length, 0);
   return stringCharacters * 2 + item.tags.length * 8 + 96;
 }

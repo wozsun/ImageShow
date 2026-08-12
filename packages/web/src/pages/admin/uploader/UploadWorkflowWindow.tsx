@@ -30,7 +30,7 @@ import { preloadIntentProps } from "../../../lib/ui/preload-intent.js";
 import type {
   FacetOption,
   ImageDraft,
-  ImageItem,
+  AdminImageListItem,
   ImportJob
 } from "../../../lib/types.js";
 import type { ImportAttributeDefaults } from "../../../lib/upload/upload-utils.js";
@@ -136,7 +136,7 @@ export function UploadWorkflowWindow({
   const fileInputId = useId();
   const [defaultsExpanded, setDefaultsExpanded] = useState(false);
   const [dragOver, setDragOver] = useState(false);
-  const [detailItem, setDetailItem] = useState<ImageItem | null>(null);
+  const [detailItem, setDetailItem] = useState<AdminImageListItem | null>(null);
   const [preview, setPreview] = useState<ImportPreviewTarget | null>(null);
   const [pendingCleanupActionId, setPendingCleanupActionId] =
     useState<UploadCleanupActionId | null>(null);
@@ -216,7 +216,7 @@ export function UploadWorkflowWindow({
     return true;
   }, [pendingCleanupActionId]);
 
-  const openJobDetail = useCallback((item: ImageItem, opener: HTMLElement) => {
+  const openJobDetail = useCallback((item: AdminImageListItem, opener: HTMLElement) => {
     detailReturnFocusRef.current = opener;
     setDetailItem(item);
   }, []);

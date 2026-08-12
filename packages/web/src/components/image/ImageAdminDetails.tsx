@@ -32,7 +32,7 @@ import type {
   AdminImageDetailItem,
   EditableImageSnapshot,
   ImageAdminInfo,
-  ImageItem
+  AdminImageListItem
 } from "../../lib/types.js";
 // 公开详情可在已确认的管理员会话中独立加载本模块；这里只带入管理详情自身样式，
 // 完整的管理表单色契约继续等到用户明确打开编辑器时再加载。
@@ -40,7 +40,13 @@ import "../../styles/admin/image-details.css";
 
 const MD5_RESERVE = "0".repeat(32);
 
-type AdminDetailSource = AdminImageDetailItem & Partial<ImageItem>;
+type AdminDetailSource = AdminImageDetailItem | AdminImageListItem;
+
+function isAdminImageListItem(
+  item: AdminDetailSource
+): item is AdminImageListItem {
+  return "status" in item;
+}
 
 function adminImageInfoQueryOptions(imageId: string) {
   return queryOptions<ImageAdminInfo>({
@@ -79,11 +85,14 @@ export function ImageAdminDetails({
   onNestedDialogChange?: (open: boolean) => void;
 }) {
   const admin = Boolean(adminItem);
+  const adminListItem = adminItem && isAdminImageListItem(adminItem)
+    ? adminItem
+    : null;
   const queryClient = useQueryClient();
   const trashedImageRef = useRef<string | null>(null);
   const knownUneditable = Boolean(
-    adminItem?.deleted_at
-      || (adminItem?.status && adminItem.status !== "ready")
+    adminListItem?.deleted_at
+      || (adminListItem && adminListItem.status !== "ready")
   );
 
   // 后台详情已有 Shell 确认过会话；公共详情只在本地提示存在时探测，并等服务端确认后
@@ -377,7 +386,7 @@ export function ImageAdminDetails({
             <dt>存储</dt><dd>{storage}</dd>
             <dt>导入时间</dt><dd>{createdAt ? formatDate(createdAt) : fallback}</dd>
             <dt>更新时间</dt><dd>{updatedAt ? formatDate(updatedAt) : fallback}</dd>
-            {adminItem?.deleted_at && <><dt>删除时间</dt><dd>{formatDate(adminItem.deleted_at)}</dd></>}
+            {adminListItem?.deleted_at && <><dt>删除时间</dt><dd>{formatDate(adminListItem.deleted_at)}</dd></>}
           </dl>
           {failed && (
             <div className="image-detail-admin-error" role="alert" title={errorMessage(query.error)}>

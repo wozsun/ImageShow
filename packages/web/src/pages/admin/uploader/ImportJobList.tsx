@@ -1,5 +1,5 @@
 import { memo, useMemo } from "react";
-import type { FacetOption, ImageDraft, ImageItem, ImportJob } from "../../../lib/types.js";
+import type { FacetOption, ImageDraft, AdminImageListItem, ImportJob } from "../../../lib/types.js";
 import { ImportJobCard } from "./ImportJobCard.js";
 import type { ImportPreviewTarget } from "./DuplicateMatchPanel.js";
 import { queueDuplicateReferences } from "./duplicate-match.js";
@@ -17,7 +17,7 @@ type ImportJobListProps = {
   onRetry: (job: ImportJob) => void;
   onRemove: (job: ImportJob) => void;
   onConfirmDuplicate: (job: ImportJob) => void;
-  onOpenDetail: (item: ImageItem, opener: HTMLElement) => void;
+  onOpenDetail: (item: AdminImageListItem, opener: HTMLElement) => void;
   onPreview: (target: ImportPreviewTarget) => void;
 };
 

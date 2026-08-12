@@ -24,7 +24,7 @@ additions 只保存一个发布周期的安全增量。版本 N 新增经审查�
 占位文件及稳定的启动、构建入口。该模型不支持跳过 N 直接部署 N+1；恢复早于 N 的数据库
 备份时，也必须先运行 N 或人工执行同一份经审查 SQL。
 
-当前 `v4.9.1` 的 additions 没有待执行 SQL，只保留过渡规则注释。
+当前 `v4.9.2` 的 additions 没有待执行 SQL，只保留过渡规则注释。
 `metadata.purge_error TEXT`、`admin_account.preferences JSONB NOT NULL DEFAULT '{}'` 与
 `theme.none` 已在 `schema.sql` 形成基线，并已由全部受控生产数据库在上一版本完成确认。
 后续 additions 仍只保存当期真实增量：不补业务表、外键、CHECK，不删除或重命名对象，
@@ -33,13 +33,17 @@ additions 只保存一个发布周期的安全增量。版本 N 新增经审查�
 
 readiness 只读核对 10 张当前业务表、源码实际使用的列及其 PostgreSQL 类型、必需系统种子，
 并确认会话可写、public schema 可用且当前角色具备各表实际操作所需的 SELECT / INSERT /
-UPDATE / DELETE 权限，不使用回滚写探针。核心表、必需列、列类型、种子或权限缺失会在业务
-启动前明确失败。
+UPDATE / DELETE 权限，不使用回滚写探针。它还按列和谓词语义核对当前 SQL 依赖的最小行为
+约束，不依赖数据库对象名称：10 张业务表的业务主键；`metadata.object_key`、导入会话幂等键
+与非空最终对象键、后台任务非空幂等键与唯一活动 `cache.rebuild`、单一默认存储和单一超级
+管理员的唯一性；以及 metadata、image_tag、import_session 当前删除路径依赖的 RESTRICT、
+CASCADE 和 SET NULL 外键。缺少、失效或删除动作不符会在业务启动前明确失败。
 
-readiness 不复制 `schema.sql` 的可空性、默认值、PK / FK / CHECK、触发器和索引，也不识别
-旧版本号或旧结构形状。额外表、额外列、额外索引以及更宽的 CHECK 不影响启动，只要当前
-代码不读写它们。当前封版结构不含 `metadata.extra`、`background_job.result`，存储与后台
-任务 CHECK 也只允许当前值；应用不再携带旧结构识别、清理或版本分支。
+readiness 不复制 `schema.sql` 的可空性、默认值、CHECK、触发器、普通查询索引或无消费者
+约束，也不识别旧版本号或旧结构形状。额外表、额外列、额外索引、等价约束改名以及更宽的
+CHECK 不影响启动，只要当前代码不依赖它们。当前封版结构不含 `metadata.extra`、
+`background_job.result`，存储与后台任务 CHECK 也只允许当前值；应用不再携带旧结构识别、
+清理或版本分支。
 
 ## 运行期连接与公开回源
 

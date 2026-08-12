@@ -24,7 +24,7 @@ import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
 import { useAdminSettings } from "../../lib/api/admin-settings.js";
 import { useImportVocabulary } from "../../lib/api/import-vocabulary.js";
 import { useStorageNameResolver } from "../../lib/api/storage-options.js";
-import type { ImageItem } from "../../lib/types.js";
+import type { AdminImageListItem } from "../../lib/types.js";
 import { AdminImageCard } from "./AdminImageCard.js";
 import {
   emptyImageAdminFilters,
@@ -133,7 +133,7 @@ export function ImageAdmin() {
     clearSelection: selection.clear,
     invalidateData
   });
-  const detailCapability = useAdminImageDetailCapability<ImageItem>((error) => {
+  const detailCapability = useAdminImageDetailCapability<AdminImageListItem>((error) => {
     reportAdminUiError("image_admin.detail_load", error);
     showFeedback("图片详情加载失败，请重新加载页面", "error");
   });

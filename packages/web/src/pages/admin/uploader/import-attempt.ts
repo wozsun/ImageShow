@@ -206,7 +206,7 @@ export async function prepareMaterializedImportAttempt(options: {
     return;
   }
   // 先把最终 MD5 发布到实时队列：更早完成的 commit 会被下面的集合捕获，
-  // 更晚完成的 commit 则能把完整 ImageItem 直接汇入当前 processing 任务。
+  // 更晚完成的 commit 则能把完整 AdminImageListItem 直接汇入当前 processing 任务。
   queue.updateJob(job.id, { md5: prepared.md5 });
   let currentPrepared = prepared;
   if (queue.committedMd5sRef.current.has(prepared.md5)) {

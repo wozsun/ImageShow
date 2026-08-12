@@ -15,7 +15,7 @@ import { brightnessOptionLabel, deviceOptionLabel } from "../../lib/ui/select-op
 import type {
   AdminImageDetailItem,
   EditableImageSnapshot,
-  ImageItem,
+  AdminImageListItem,
   PublicImageItem
 } from "../../lib/types.js";
 import { hasSessionProbeHint } from "../../lib/api/auth-session.js";
@@ -89,6 +89,27 @@ function hasDistinctOriginal(original: string, displayUrl: string) {
   }
 }
 
+function applyEditedSnapshot<T extends PublicImageItem>(
+  item: T,
+  snapshot: EditableImageSnapshot | null
+) {
+  if (snapshot?.id !== item.id) return item;
+  return {
+    ...item,
+    ...snapshot,
+    diff_original: hasDistinctOriginal(
+      snapshot.original,
+      snapshot.object_url
+    )
+  };
+}
+
+function isAdminImageListItem(
+  item: AdminImageDetailItem | AdminImageListItem
+): item is AdminImageListItem {
+  return "status" in item;
+}
+
 type ImageDetailModalProps =
   | {
       item: PublicImageItem;
@@ -105,7 +126,7 @@ type ImageDetailModalProps =
       returnFocusRef?: RefObject<HTMLElement | null>;
     }
   | {
-      item: AdminImageDetailItem | ImageItem;
+      item: AdminImageDetailItem | AdminImageListItem;
       onClose: () => void;
       admin: true;
       storageLabel?: string;
@@ -121,19 +142,13 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
   const { onClose } = props;
   const [editedSnapshot, setEditedSnapshot] =
     useState<EditableImageSnapshot | null>(null);
-  const item = editedSnapshot?.id === props.item.id
-    ? {
-        ...props.item,
-        ...editedSnapshot,
-        diff_original: hasDistinctOriginal(
-          editedSnapshot.original,
-          editedSnapshot.object_url
-        )
-      }
-    : props.item;
+  const item = applyEditedSnapshot(props.item, editedSnapshot);
   const admin = props.admin === true;
-  const adminItem = admin
-    ? item as AdminImageDetailItem & Partial<ImageItem>
+  const adminItem = props.admin === true
+    ? applyEditedSnapshot(props.item, editedSnapshot)
+    : null;
+  const adminListItem = adminItem && isAdminImageListItem(adminItem)
+    ? adminItem
     : null;
   const adminStorageLabel = props.admin
     && adminItem?.storage_slug === props.item.storage_slug
@@ -190,7 +205,7 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
   const originalStateLabel = canOpenOriginal ? "打开原图" : "当前图片未注册原图";
   const sourceAvailable = Boolean(item.source);
   const sourceStateLabel = detailError ? "详情加载失败" : detailLoading ? "来源加载中" : sourceAvailable ? "打开来源页面" : "暂无来源";
-  const originalHref = adminItem?.deleted_at
+  const originalHref = adminListItem?.deleted_at
     ? `/api/admin/images/${encodeURIComponent(item.id)}/original`
     : `/api/images/${encodeURIComponent(item.id)}/original`;
   const imageAspectRatio = item.width > 0 && item.height > 0

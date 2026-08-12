@@ -4,7 +4,7 @@ import { ImageThumbnail } from "../../../components/image/ImageThumbnail.js";
 import { ImageDraftFields } from "../../../components/form/ImageDraftFields.js";
 import { importCardBrightnessSelectOptions, importCardDeviceSelectOptions } from "../../../lib/ui/select-options.js";
 import { formatBytes } from "../../../lib/ui/formatters.js";
-import type { FacetOption, ImageDraft, ImageItem, ImportJob } from "../../../lib/types.js";
+import type { FacetOption, ImageDraft, AdminImageListItem, ImportJob } from "../../../lib/types.js";
 import { DuplicateMatchPanel, type ImportPreviewTarget } from "./DuplicateMatchPanel.js";
 import {
   importJobNeedsDuplicateConfirmation,
@@ -39,7 +39,7 @@ type ImportJobCardProps = {
   onRetry: (job: ImportJob) => void;
   onRemove: (job: ImportJob) => void;
   onConfirmDuplicate: (job: ImportJob) => void;
-  onOpenDetail: (item: ImageItem, opener: HTMLElement) => void;
+  onOpenDetail: (item: AdminImageListItem, opener: HTMLElement) => void;
   onPreview: (target: ImportPreviewTarget) => void;
 };
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ImageDraft, ImageItem, ImportJob } from "../../../lib/types.js";
+import type { ImageDraft, AdminImageListItem, ImportJob } from "../../../lib/types.js";
 import type { ImportAttributeDefaults } from "../../../lib/upload/upload-utils.js";
 import {
   importQueuePageCount,
@@ -51,7 +51,7 @@ export function useImportQueue(pageSize: number) {
   const completeJob = useCallback((
     id: string,
     patch: Partial<ImportJob>,
-    item: ImageItem
+    item: AdminImageListItem
   ) => {
     const suppressDuplicateItem = trashedLibraryImageIdsRef.current.has(item.id);
     if (jobsRef.current.length && !suppressDuplicateItem) {

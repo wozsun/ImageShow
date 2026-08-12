@@ -8,7 +8,7 @@ import type {
   AdminUserDto,
   AdvancedConfigPreviewDto,
   AdminImageDetailItemDto,
-  AdminImageItemDto,
+  AdminImageListItemDto,
   AuthorDto,
   EditableImageSnapshotDto,
   Brightness,
@@ -30,7 +30,7 @@ export type GalleryImageCard = GalleryImageCardDto;
 export type PublicImageItem = PublicImageItemDto;
 export type AdminImageDetailItem = AdminImageDetailItemDto;
 export type EditableImageSnapshot = EditableImageSnapshotDto;
-export type ImageItem = AdminImageItemDto;
+export type AdminImageListItem = AdminImageListItemDto;
 export type ImageAdminInfo = ImageAdminInfoDto;
 
 export type Tag = TagDto;
@@ -73,7 +73,7 @@ export type ImportJob = {
   originalWidth?: number;
   originalHeight?: number;
   transferProgress?: number;
-  duplicates: ImageItem[];
+  duplicates: AdminImageListItem[];
   duplicateDecision: "upload" | "undecided" | "confirmed";
   detectedClassification?: ImportDetectedClassification;
   classificationOverride?: Partial<Record<"device" | "brightness", boolean>>;

@@ -44,7 +44,7 @@ export type GalleryImageCardDto = {
   height: number;
   tags: string[];
   diff_original: boolean;
-  image_time: string | null;
+  image_time: string;
 };
 
 export type PublicImageDetailDto = {
@@ -83,16 +83,16 @@ export type RandomImageJsonResponseDto = {
   items: RandomImageJsonItemDto[];
 };
 
-export type AdminImageItemDto = PublicImageItemDto & {
+export type AdminImageListItemDto = PublicImageItemDto & {
   status: "ready" | "deleted";
   object_key: string;
   storage_slug: string;
   md5: string;
   original: string;
-  image_size?: number;
-  deleted_at?: string | null;
-  created_at?: string | null;
-  updated_at?: string | null;
+  image_size: number;
+  deleted_at: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 /**
@@ -101,39 +101,36 @@ export type AdminImageItemDto = PublicImageItemDto & {
  * This deliberately excludes list/edit-only fields such as object_key,
  * original, image_size and status so compact callers do not over-fetch.
  */
-export type AdminImageDetailItemDto = PublicImageItemDto & Pick<
-  AdminImageItemDto,
-  | "storage_slug"
-  | "md5"
-  | "created_at"
-  | "updated_at"
-  | "deleted_at"
->;
+export type AdminImageDetailItemDto = PublicImageItemDto & {
+  storage_slug: string;
+  md5: string;
+  created_at: string;
+  updated_at: string;
+};
 
 /** Exact recovery payload consumed by the image metadata editor. */
-export type EditableImageSnapshotDto = Pick<
-  AdminImageItemDto,
-  | "id"
-  | "title"
-  | "description"
-  | "source"
-  | "original"
-  | "device"
-  | "brightness"
-  | "theme"
-  | "author"
-  | "tags"
-  | "thumb_url"
-  | "object_url"
-  | "width"
-  | "height"
-  | "image_size"
-  | "object_key"
-  | "storage_slug"
->;
+export type EditableImageSnapshotDto = {
+  id: string;
+  title: string;
+  description: string;
+  source: string;
+  original: string;
+  device: Device;
+  brightness: Brightness;
+  theme: string;
+  author: string;
+  tags: string[];
+  thumb_url: string;
+  object_url: string;
+  width: number;
+  height: number;
+  image_size: number;
+  object_key: string;
+  storage_slug: string;
+};
 
 export type AdminImageListResponseDto = {
-  items: AdminImageItemDto[];
+  items: AdminImageListItemDto[];
   total: number;
   next_cursor: string | null;
 };

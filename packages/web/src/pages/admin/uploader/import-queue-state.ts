@@ -1,4 +1,4 @@
-import type { ImageDraft, ImageItem, ImportJob } from "../../../lib/types.js";
+import type { ImageDraft, AdminImageListItem, ImportJob } from "../../../lib/types.js";
 import type { ImportAttributeDefaults } from "../../../lib/upload/upload-utils.js";
 import {
   importJobNeedsDuplicateConfirmation,
@@ -31,7 +31,7 @@ export type ImportQueueAction =
       type: "complete";
       id: string;
       patch: Partial<ImportJob>;
-      item: ImageItem;
+      item: AdminImageListItem;
       suppressDuplicateItem?: boolean;
     }
   | { type: "patch-draft"; id: string; patch: Partial<ImageDraft> }
@@ -117,7 +117,7 @@ function completeQueueJob(
   state: ImportQueueState,
   id: string,
   patch: Partial<ImportJob>,
-  item: ImageItem,
+  item: AdminImageListItem,
   suppressDuplicateItem = false
 ) {
   const jobIndex = state.jobs.findIndex((job) => job.id === id);

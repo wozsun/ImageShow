@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { PoolClient } from "pg";
-import { assertDatabaseStructure } from "./database-contract.ts";
+import { assertDatabaseReadiness } from "./database-readiness.ts";
 import { withAdvisoryLock } from "./database-advisory-locks.ts";
 import { pool } from "./database-pools.ts";
 
@@ -83,5 +83,5 @@ export async function pingDatabase() {
 export async function assertCoreDatabaseReady(
   database: Pick<PoolClient, "query"> = pool
 ) {
-  await assertDatabaseStructure(database);
+  await assertDatabaseReadiness(database);
 }

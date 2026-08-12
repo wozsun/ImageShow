@@ -114,7 +114,8 @@ healthcheck 只读现有配置快照，密码恢复不初始化运行时配置�
 
 `core/` 内 PostgreSQL 基础设施按生命周期边界拆分：`database-pools.ts` 只接收显式配置并
 拥有主查询与 advisory lock 两个连接池；`database-transactions.ts`、
-`database-advisory-locks.ts` 和 `database-schema.ts` 分别拥有事务、锁与干净安装 / readiness。
+`database-advisory-locks.ts` 和 `database-schema.ts` 分别拥有事务、锁与干净安装编排；
+`database-readiness.ts` 只读核对当前 SQL 真正依赖的最小结构、行为约束、权限与稳定种子。
 公开降级读取由 `public-db-admission.ts` 统一管理一个 FIFO 容量与等待队列，
 `public-db-fallback.ts` 只负责请求级惰性 reader scope、执行期限和 client 释放 / 淘汰。Redis
 缓存读取先行，首次真实回源才借 client，同一 scope 内的领域模块显式接收并复用 reader；

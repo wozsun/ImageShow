@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import type { RefObject } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import type { ImageItem, ImportJob } from "../../../lib/types.js";
+import type { AdminImageListItem, ImportJob } from "../../../lib/types.js";
 import { runWithConcurrency } from "../../../lib/upload/upload-utils.js";
 import {
   getStoredImportStatus,
@@ -22,7 +22,7 @@ import {
 export function useImportCommit(options: {
   jobsRef: RefObject<ImportJob[]>;
   updateJob: (id: string, patch: Partial<ImportJob>) => void;
-  completeJob: (id: string, patch: Partial<ImportJob>, item: ImageItem) => void;
+  completeJob: (id: string, patch: Partial<ImportJob>, item: AdminImageListItem) => void;
   concurrency: number;
   onDone: () => void;
 }) {

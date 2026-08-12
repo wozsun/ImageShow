@@ -106,25 +106,16 @@ async function getPublicImageWithAccess(
   const cached = await readReadyImageById(id);
   if (cached.cached) {
     if (!cached.value) throw new ApiError(404, "not_found", "Image not found");
-    return publicImageDetail(
-      { ...cached.value, status: "ready" },
-      database
-    );
+    return publicImageDetail(cached.value, database);
   }
 
   const load = async (reader: DatabaseReader) => {
     const result = await reader.query(
       `SELECT id,
-              device,
-              brightness,
-              theme,
-              ext,
               object_key,
               storage_slug,
               description,
-              source,
-              original,
-              status
+              source
          FROM metadata
         WHERE id=$1 AND status='ready'
         LIMIT 1`,

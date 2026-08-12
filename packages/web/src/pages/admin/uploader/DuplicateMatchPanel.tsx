@@ -1,6 +1,6 @@
 import { ImageThumbnail } from "../../../components/image/ImageThumbnail.js";
 import { formatImageClassification, imageDisplayTitle } from "../../../lib/ui/formatters.js";
-import type { ImageItem, ImportJob } from "../../../lib/types.js";
+import type { AdminImageListItem, ImportJob } from "../../../lib/types.js";
 import {
   importJobPreviewAvailable,
   importJobSourceLabel
@@ -23,9 +23,9 @@ export function DuplicateMatchPanel({
   onConfirm,
   onCancel
 }: {
-  libraryItems: ImageItem[];
+  libraryItems: AdminImageListItem[];
   queueDuplicate?: ImportJob;
-  onOpenDetail: (item: ImageItem, opener: HTMLElement) => void;
+  onOpenDetail: (item: AdminImageListItem, opener: HTMLElement) => void;
   onPreview: (target: ImportPreviewTarget) => void;
   onConfirm: () => void;
   onCancel: () => void;

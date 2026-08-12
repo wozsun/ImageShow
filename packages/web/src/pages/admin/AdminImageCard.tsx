@@ -1,7 +1,7 @@
 import { AdminIcon } from "../../components/icon/AdminIcon.js";
 import { TwoStepConfirmIconButton } from "../../components/actions/TwoStepConfirmIconButton.js";
 import { ThumbImage } from "../../components/image/ThumbImage.js";
-import type { ImageItem } from "../../lib/types.js";
+import type { AdminImageListItem } from "../../lib/types.js";
 import {
   formatDate,
   formatImageClassification,
@@ -10,7 +10,7 @@ import {
 import { preloadIntentProps } from "../../lib/ui/preload-intent.js";
 
 type AdminImageCardProps = {
-  item: ImageItem;
+  item: AdminImageListItem;
   storageName: (item: {
     storage_slug: string;
   }) => string;

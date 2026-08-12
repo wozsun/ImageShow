@@ -12,11 +12,10 @@ import { imageUpdateLockRequests } from "../image-update-lock.ts";
 import { resolveImageFilterPlan } from "../filter-plan.ts";
 import { readReadyImagePage } from "../ready-cache/query.ts";
 import {
-  adminImageView,
-  adminImagesWithTags,
+  adminImageListItemsWithTags,
   editableImagePresentationColumnsWithTags,
-  editableImageSnapshotView,
-  type ImageRecordWithTags
+  editableImageSnapshotsWithTags,
+  type EditableImageSnapshotRecordWithTags
 } from "../presenter.ts";
 import {
   buildImageListFilters,
@@ -50,12 +49,13 @@ export async function listAdminImages(
       query.cursor
     );
     if (cached.cached) {
-      const images = await adminImagesWithTags(cached.value.items.map((item) => ({
+      const images = await adminImageListItemsWithTags(cached.value.items.map((item) => ({
         ...item,
-        status: "ready"
+        status: "ready",
+        deleted_at: null
       })));
       return {
-        items: images.map(adminImageView),
+        items: images,
         total: cached.value.total,
         next_cursor: cached.value.nextCursor
       };
@@ -73,7 +73,7 @@ export async function listAdminImages(
     fetchAdminImagePage([...where], [...params], query.limit, query.cursor)
   ]);
   return {
-    items: page.items.map(adminImageView),
+    items: page.items,
     total: Number(countResult.rows[0]?.count ?? 0),
     next_cursor: page.nextCursor
   };
@@ -96,10 +96,9 @@ export async function getAdminImageSnapshots(
       // Metadata and tags come from one SQL statement, so this is an
       // authoritative point-in-time projection even if another admin mutates
       // the image immediately before or after the snapshot.
-      const projected = (await adminImagesWithTags(
-        result.rows as ImageRecordWithTags[]
-      ))
-        .map(editableImageSnapshotView);
+      const projected = await editableImageSnapshotsWithTags(
+        result.rows as EditableImageSnapshotRecordWithTags[]
+      );
       const itemsById = new Map(projected.map((item) => [item.id, item]));
       return {
         items: canonicalIds.flatMap((id) => {

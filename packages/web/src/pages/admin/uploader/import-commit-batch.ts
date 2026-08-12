@@ -1,4 +1,4 @@
-import type { ImageItem, ImportJob } from "../../../lib/types.js";
+import type { AdminImageListItem, ImportJob } from "../../../lib/types.js";
 import {
   importBatchHardLimit,
   importStatusBatchMaxItems
@@ -26,7 +26,7 @@ function normalizedCommitDraft(job: ImportJob) {
 
 type CompletedImport = {
   patch: Partial<ImportJob>;
-  item: ImageItem;
+  item: AdminImageListItem;
 };
 
 function completedImport(
@@ -50,7 +50,7 @@ type CommitSelectedImportsOptions = {
   selected: ImportJob[];
   concurrency: number;
   updateJob: (id: string, patch: Partial<ImportJob>) => void;
-  completeJob: (id: string, patch: Partial<ImportJob>, item: ImageItem) => void;
+  completeJob: (id: string, patch: Partial<ImportJob>, item: AdminImageListItem) => void;
 };
 
 type PendingImport = {

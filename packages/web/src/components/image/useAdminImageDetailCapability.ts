@@ -13,13 +13,13 @@ import {
 } from "../../lib/page-lifetime-module-loader.js";
 import type {
   AdminImageDetailItem,
-  ImageItem
+  AdminImageListItem
 } from "../../lib/types.js";
 
 type ImageDetailModalModule =
   typeof import("./ImageDetailModal.js");
 type ImageDetailModalComponent = ImageDetailModalModule["ImageDetailModal"];
-type AdminDetailItem = AdminImageDetailItem | ImageItem;
+type AdminDetailItem = AdminImageDetailItem | AdminImageListItem;
 
 const loadImageDetailModalModule =
   createPageLifetimeModuleLoader<ImageDetailModalModule>(

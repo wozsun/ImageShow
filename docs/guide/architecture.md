@@ -69,7 +69,7 @@ PostgreSQL 是图片、词表、导入会话、后台任务、存储注册表和
 受控数据库确认应用后，由 N+1 移入 `schema.sql` 并从 additions 删除；不支持跳过承载增量的
 版本。应用不提供通用结构 diff、编号迁移、破坏性 DDL、契约标记或清库。允许的 additions、
 兼容超集和拒绝条件以[数据库结构](./database.md)为唯一说明。
-当前 `v4.9.1` 的 additions 是注释占位，不执行 DDL 或数据写入。
+当前 `v4.9.2` 的 additions 是注释占位，不执行 DDL 或数据写入。
 
 ### Redis
 
