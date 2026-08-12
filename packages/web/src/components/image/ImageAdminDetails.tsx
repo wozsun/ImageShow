@@ -64,23 +64,23 @@ export function ImageAdminDetails({
   adminItem,
   adminStorageLabel,
   onItemUpdated,
-  onItemDeleteCommitted,
-  onItemDeleted,
+  onItemTrashCommitted,
+  onItemTrashed,
   onNestedDialogChange
 }: {
   imageId: string;
   adminItem: AdminDetailSource | null;
   adminStorageLabel?: string;
   onItemUpdated?: (item: EditableImageSnapshot) => void;
-  onItemDeleteCommitted?: (
+  onItemTrashCommitted?: (
     imageId: string
   ) => void | Promise<void>;
-  onItemDeleted?: (imageId: string) => void;
+  onItemTrashed?: (imageId: string) => void;
   onNestedDialogChange?: (open: boolean) => void;
 }) {
   const admin = Boolean(adminItem);
   const queryClient = useQueryClient();
-  const deletedImageRef = useRef<string | null>(null);
+  const trashedImageRef = useRef<string | null>(null);
   const knownUneditable = Boolean(
     adminItem?.deleted_at
       || (adminItem?.status && adminItem.status !== "ready")
@@ -194,12 +194,12 @@ export function ImageAdminDetails({
   }, [canEdit, editTarget, editorCapability.open]);
 
   const closeEdit = useCallback(() => {
-    const deletedImageId = deletedImageRef.current;
-    deletedImageRef.current = null;
+    const trashedImageId = trashedImageRef.current;
+    trashedImageRef.current = null;
     editorCapability.close();
     setEditError("");
-    if (deletedImageId) onItemDeleted?.(deletedImageId);
-  }, [editorCapability.close, onItemDeleted]);
+    if (trashedImageId) onItemTrashed?.(trashedImageId);
+  }, [editorCapability.close, onItemTrashed]);
 
   const loadAdminInfoAfterInvalidation = useCallback(async () => {
     // Overview 等未直接持有存储显示名的后台详情会启用上面的 admin-info
@@ -267,7 +267,7 @@ export function ImageAdminDetails({
     onItemUpdated,
     queryClient
   ]);
-  const refreshAfterDelete = useCallback(async (imageIds: string[]) => {
+  const refreshAfterTrash = useCallback(async (imageIds: string[]) => {
     // mutation 已经由内层编辑器确认提交；先让公开详情的查询所有者禁用当前 ID，
     // 再取消读取并刷新派生投影，避免关闭动画期间被聚焦或网络重连重新拉取 404。
     let refreshError: unknown;
@@ -276,13 +276,13 @@ export function ImageAdminDetails({
       if (!capabilityModule) throw new Error("图片编辑能力未加载");
       // 页面仍由详情与编辑器共同锁定滚动时刷新派生投影；公开列表已经在
       // mutation 成功边界局部更新，不重放已加载的历史游标页。
-      await capabilityModule.refreshImageEditorAfterDelete({
+      await capabilityModule.refreshImageEditorAfterTrash({
         queryClient,
         imageIds,
-        onDeleteCommitted: onItemDeleteCommitted
+        onTrashCommitted: onItemTrashCommitted
           ? async (committedIds) => {
               for (const committedId of committedIds) {
-                await onItemDeleteCommitted(committedId);
+                await onItemTrashCommitted(committedId);
               }
             }
           : undefined
@@ -296,13 +296,13 @@ export function ImageAdminDetails({
     setEditError("");
     // 先让内层编辑器走完自己的退出动画；其 onClose 再通知外层详情关闭，
     // 避免最短 pending 时长尚未结束时由父级卸载内层并遗留迟到的关闭定时器。
-    deletedImageRef.current = imageId;
+    trashedImageRef.current = imageId;
 
     if (refreshError) throw refreshError;
   }, [
     editorCapability.session,
     imageId,
-    onItemDeleteCommitted,
+    onItemTrashCommitted,
     queryClient
   ]);
 
@@ -395,7 +395,7 @@ export function ImageAdminDetails({
           allTags={editorCapability.session.vocabulary.tags}
           authors={editorCapability.session.vocabulary.authors}
           onClose={closeEdit}
-          onDeleted={refreshAfterDelete}
+          onTrashed={refreshAfterTrash}
           onSaved={refreshAfterSave}
           onStorageMigrationSucceeded={setEditNotice}
           returnFocusRef={editorCapability.returnFocusRef}

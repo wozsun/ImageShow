@@ -19,7 +19,7 @@ export function useImportQueue(pageSize: number) {
   const stateRef = useRef(state);
   const jobsRef = useRef(state.jobs);
   const committedMd5sRef = useRef(new Set<string>());
-  const deletedLibraryImageIdsRef = useRef(new Set<string>());
+  const trashedLibraryImageIdsRef = useRef(new Set<string>());
 
   const dispatch = useCallback((action: ImportQueueAction) => {
     // 上传/下载是异步并发流程，回调触发时 React state 可能已落后；ref 里同步维护最新队列供所有回调用。
@@ -30,7 +30,7 @@ export function useImportQueue(pageSize: number) {
     jobsRef.current = next.jobs;
     if (!next.jobs.length) {
       committedMd5sRef.current.clear();
-      deletedLibraryImageIdsRef.current.clear();
+      trashedLibraryImageIdsRef.current.clear();
     }
     setState(next);
   }, []);
@@ -53,7 +53,7 @@ export function useImportQueue(pageSize: number) {
     patch: Partial<ImportJob>,
     item: ImageItem
   ) => {
-    const suppressDuplicateItem = deletedLibraryImageIdsRef.current.has(item.id);
+    const suppressDuplicateItem = trashedLibraryImageIdsRef.current.has(item.id);
     if (jobsRef.current.length && !suppressDuplicateItem) {
       committedMd5sRef.current.add(item.md5);
     }
@@ -88,7 +88,7 @@ export function useImportQueue(pageSize: number) {
   const removeLibraryDuplicate = useCallback((imageId: string) => {
     // 服务端 prepare 可能在删除前已开始、删除后才返回旧 duplicates。墓碑由队列
     // 会话持有并在队列清空时释放，所有异步入口都必须在写入前查询它。
-    deletedLibraryImageIdsRef.current.add(imageId);
+    trashedLibraryImageIdsRef.current.add(imageId);
     dispatch({ type: "remove-library-duplicate", imageId });
   }, [dispatch]);
 
@@ -117,13 +117,13 @@ export function useImportQueue(pageSize: number) {
   const workerApi = useMemo<AppendImportQueueApi>(() => ({
     jobsRef,
     committedMd5sRef,
-    deletedLibraryImageIdsRef,
+    trashedLibraryImageIdsRef,
     appendJobs,
     updateJob
   }), [
     appendJobs,
     committedMd5sRef,
-    deletedLibraryImageIdsRef,
+    trashedLibraryImageIdsRef,
     jobsRef,
     updateJob
   ]);

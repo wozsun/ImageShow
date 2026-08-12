@@ -311,12 +311,7 @@ export type AdminImage = Omit<PublicImage, "ext">;
 
 export function adminImageView(image: PublicImage): AdminImage {
   const { ext: _ext, ...rest } = image;
-  if (image.status !== "deleted") return rest;
-  return {
-    ...rest,
-    object_url: `${adminApiBasePath}/images/${image.id}/raw`,
-    thumb_url: `${adminApiBasePath}/images/${image.id}/thumb`
-  };
+  return rest;
 }
 
 export function adminImageDetailView(

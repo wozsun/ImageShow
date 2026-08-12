@@ -29,7 +29,7 @@ type AdminImageCardProps = {
   onPreloadEdit: () => void;
   onEdit: (opener: HTMLElement) => void;
   onPurge: () => void;
-  onDelete: () => void;
+  onTrash: () => void;
   onRestore: () => void;
 };
 
@@ -52,7 +52,7 @@ export function AdminImageCard({
   onPreloadEdit,
   onEdit,
   onPurge,
-  onDelete,
+  onTrash,
   onRestore
 }: AdminImageCardProps) {
   const title = imageDisplayTitle(item);
@@ -157,7 +157,7 @@ export function AdminImageCard({
                 title="删除"
                 aria-label={`删除图片：${title}`}
                 disabled={busy || actionsDisabled || detailPending}
-                onClick={onDelete}
+                onClick={onTrash}
               >
                 <AdminIcon name="delete-bin-6-line" />
               </button>

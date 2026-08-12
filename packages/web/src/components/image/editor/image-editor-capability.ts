@@ -4,7 +4,7 @@ import { readEditableImageSnapshots } from "../../../lib/api/image-edit.js";
 import { importVocabularyQueryOptions } from "../../../lib/api/import-vocabulary.js";
 import {
   invalidateImageData,
-  invalidateImageDataAfterDelete
+  invalidateImageDataAfterTrash
 } from "../../../lib/api/query-invalidation.js";
 import { storageOptionsQueryOptions } from "../../../lib/api/storage-options.js";
 import type {
@@ -111,15 +111,15 @@ export async function refreshImageEditorAfterSave<TAdjacentData>({
   return { snapshotResult, adjacentDataResult };
 }
 
-export async function refreshImageEditorAfterDelete({
+export async function refreshImageEditorAfterTrash({
   queryClient,
   imageIds,
-  onDeleteCommitted
+  onTrashCommitted
 }: {
   queryClient: QueryClient;
   imageIds: string[];
-  onDeleteCommitted?: (imageIds: string[]) => void | Promise<void>;
+  onTrashCommitted?: (imageIds: string[]) => void | Promise<void>;
 }) {
-  await onDeleteCommitted?.(imageIds);
-  await invalidateImageDataAfterDelete(queryClient, imageIds);
+  await onTrashCommitted?.(imageIds);
+  await invalidateImageDataAfterTrash(queryClient, imageIds);
 }

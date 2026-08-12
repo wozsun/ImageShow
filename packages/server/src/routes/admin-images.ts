@@ -2,11 +2,11 @@ import type { Hono } from "hono";
 import {
   adminApiBasePath,
   adminPermissions,
-  type ImageDeleteResponseDto,
   type ImagePurgeResponseDto,
   type ImageRestoreResponseDto,
   type ImageSnapshotResponseDto,
   type ImageStorageMigrationResponseDto,
+  type ImageTrashResponseDto,
   type ImageUpdateRequestDto,
   type ImageUpdateResponseDto
 } from "@imageshow/shared/browser";
@@ -41,16 +41,11 @@ import {
 import { getOverviewStats } from "../images/read-models/overview.ts";
 import { serveAdminExternalOriginal } from "../images/external-original-serving.ts";
 import {
-  serveAdminStoredObject,
-  serveAdminStoredThumbnail
-} from "../images/stored-image-serving.ts";
-import {
-  deleteImages,
+  moveImagesToTrash,
   restoreImages
 } from "../images/trash-mutations.ts";
 import { purgeImages } from "../images/trash-purge.ts";
 import { requireAdminPermission } from "../users/admin-authorization.ts";
-import { storedResponseRequest } from "./stored-response-request.ts";
 
 export function registerAdminImageRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/overview`, async (c) => c.json(apiSuccess(await getOverviewStats())));
@@ -72,24 +67,14 @@ export function registerAdminImageRoutes(app: Hono) {
     return privateCacheableApiSuccess(c, await getAdminImageInfo(id));
   });
 
-  app.get(`${adminApiBasePath}/images/:id/thumb`, async (c) => {
-    const id = parse(uuidInput, c.req.param("id"));
-    return serveAdminStoredThumbnail(id, storedResponseRequest(c));
-  });
-
-  app.get(`${adminApiBasePath}/images/:id/raw`, async (c) => {
-    const id = parse(uuidInput, c.req.param("id"));
-    return serveAdminStoredObject(id, storedResponseRequest(c));
-  });
-
   app.get(`${adminApiBasePath}/images/:id/original`, async (c) => {
     const id = parse(uuidInput, c.req.param("id"));
     return serveAdminExternalOriginal(id, c.req.header("user-agent") ?? "");
   });
 
-  app.post(`${adminApiBasePath}/images/delete`, async (c) => {
+  app.post(`${adminApiBasePath}/images/trash`, async (c) => {
     const input = parse(imageActionInput, await readJsonBody(c));
-    const response: ImageDeleteResponseDto = await deleteImages(input.ids);
+    const response: ImageTrashResponseDto = await moveImagesToTrash(input.ids);
     return c.json(apiSuccess(response));
   });
 

@@ -80,6 +80,10 @@ Content-Type 与缓存验证器会被省略或回退为站内类型；`Content-R
 | 导入 SSE | `no-store, no-transform` | 不压缩、不缓冲，断开即清理 listener / heartbeat |
 | `static.` / `link.` / `random.` 与未知子域 | 只开放各自精确出口；失败 `no-store` | 保留子域的其他路径与未知 Host 均返回带完整安全头的 404 |
 
+稳定图片地址本身不是管理员授权边界。图片进入回收站后会退出所有公开发现入口，但已知的
+`/media/*`、`/thumbs/*` 或 S3 `public_base_url` 直链仍可访问；后台列表和动作权限继续由
+管理 API 独立强制。永久删除源对象也不能撤回已经进入浏览器或 CDN 缓存的副本。
+
 当前不发送 COEP 或 CORP：页面允许 HTTPS 外链图片，静态 / 随机 / 原图出口也需要被
 其他站点正常引用；贸然隔离会要求所有上游同步提供 CORS/CORP，并可能破坏 ALTCHA
 Worker 与嵌入页。应用没有跨源 API 契约，不返回 `Access-Control-Allow-*`；跨源父页面

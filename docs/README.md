@@ -8,7 +8,7 @@
 | 身份 | 适用范围 | 入口 |
 | --- | --- | --- |
 | 普通用户 | 浏览、筛选、图片详情、嵌入页与随机图 API | [普通用户指南](guide/roles/ordinary-user.md) |
-| 图片管理员 | 日常导入、编辑、分类、软删除、恢复与只读检查 | [图片管理员指南](guide/roles/image-admin.md) |
+| 图片管理员 | 日常导入、编辑、分类、移入回收站、恢复与只读检查 | [图片管理员指南](guide/roles/image-admin.md) |
 | 超级管理员 | 应用内账号、配置、存储与高风险维护 | [超级管理员指南](guide/roles/super-admin.md) |
 | 实例维护者 | Compose、反向代理、数据卷、升级、健康与恢复 | [实例维护者指南](guide/roles/instance-maintainer.md) |
 

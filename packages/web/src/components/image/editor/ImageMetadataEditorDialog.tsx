@@ -12,7 +12,7 @@ import { AdminPagination } from "../../navigation/AdminPagination.js";
 import { OverlayScrollbar } from "../../layout/OverlayScrollbar.js";
 import { ImageDraftFields } from "../../form/ImageDraftFields.js";
 import { useAsyncActionStatus } from "../../../hooks/useAsyncActionStatus.js";
-import { deleteImages } from "../../../lib/api/image-mutations.js";
+import { moveImagesToTrash } from "../../../lib/api/image-mutations.js";
 import { readEditableImageSnapshots } from "../../../lib/api/image-edit.js";
 import { useAdminPermissions } from "../../../hooks/useAuthSession.js";
 import {
@@ -74,7 +74,7 @@ export function ImageMetadataEditorDialog({
   allTags,
   authors,
   onClose,
-  onDeleted,
+  onTrashed,
   onSaved,
   onStorageMigrationSucceeded,
   returnFocusRef
@@ -85,7 +85,7 @@ export function ImageMetadataEditorDialog({
   allTags: FacetOption[];
   authors: FacetOption[];
   onClose: () => void;
-  onDeleted: (imageIds: string[]) => void | Promise<void>;
+  onTrashed: (imageIds: string[]) => void | Promise<void>;
   onSaved: (
     authoritativeItems?: EditableImageSnapshot[] | null
   ) => void | Promise<void>;
@@ -98,7 +98,7 @@ export function ImageMetadataEditorDialog({
   const listRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const restoreTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const deleteTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const trashTriggerRef = useRef<HTMLButtonElement | null>(null);
   const migrateTriggerRef = useRef<HTMLButtonElement | null>(null);
   const previewReturnFocusRef = useRef<HTMLElement | null>(null);
   // 父级刷新可能清空选择或因筛选移除图片；弹窗独立持有固定会话 ID、活动成员、
@@ -117,16 +117,16 @@ export function ImageMetadataEditorDialog({
     lastSaveReport
   } = operations;
   const saving = saveStatus.pending;
-  const deleteStatus = useAsyncActionStatus({ resultDurationMs: null });
-  const [deleteError, setDeleteError] = useState("");
-  const busy = saving || deleteStatus.pending;
+  const trashStatus = useAsyncActionStatus({ resultDurationMs: null });
+  const [trashError, setTrashError] = useState("");
+  const busy = saving || trashStatus.pending;
   const [preview, setPreview] = useState<{ src: string; thumbSrc: string; width: number; height: number } | null>(null);
   const [page, setPage] = useState(1);
 
   const [common, setCommon] = useState(emptyCommonAttributes);
   const [commonExpanded, setCommonExpanded] = useState(false);
   const [restoreConfirmation, setRestoreConfirmation] = useState(false);
-  const [deleteConfirmation, setDeleteConfirmation] = useState(false);
+  const [trashConfirmation, setTrashConfirmation] = useState(false);
   const [restoreError, setRestoreError] = useState("");
   const [migrating, setMigrating] = useState(false);
   const permissions = useAdminPermissions();
@@ -138,7 +138,7 @@ export function ImageMetadataEditorDialog({
   const resolveStorageName = storageNameResolver(storageOptionsData?.backends ?? []);
   const activeIdSet = new Set(session.activeIds);
   const activeItems = session.baselineItems.filter((item) => activeIdSet.has(item.id));
-  const deleteAvailable = activeItems.length > 0;
+  const trashAvailable = activeItems.length > 0;
   const totalPages = Math.max(1, Math.ceil(activeItems.length / pageSize));
   const paginationAvailable = totalPages > 1;
   const visibleItems = activeItems.slice((page - 1) * pageSize, page * pageSize);
@@ -234,22 +234,22 @@ export function ImageMetadataEditorDialog({
     setSession((current) => restoreImageMetadataDrafts(current));
     return true;
   };
-  const deleteActiveImages = async (requestClose: () => void) => {
+  const trashActiveImages = async (requestClose: () => void) => {
     const imageIds = activeItems.map((item) => item.id);
     if (!imageIds.length || busy) return false;
 
-    const allDeleted = await deleteStatus.run(async () => {
-      setDeleteError("");
+    const allTrashed = await trashStatus.run(async () => {
+      setTrashError("");
       const confirmedIds = new Set<string>();
       try {
-        const result = await deleteImages(imageIds);
+        const result = await moveImagesToTrash(imageIds);
         for (const item of result.results) {
-          if (item.status === "deleted") {
+          if (item.status === "trashed") {
             confirmedIds.add(item.id.toLowerCase());
           }
         }
       } catch (error) {
-        reportAdminUiError("image_metadata.delete", error, { imageIds });
+        reportAdminUiError("image_metadata.trash", error, { imageIds });
       }
 
       const unresolvedIds = imageIds.filter(
@@ -270,31 +270,31 @@ export function ImageMetadataEditorDialog({
           }
         } catch (error) {
           reportAdminUiError(
-            "image_metadata.delete_snapshot",
+            "image_metadata.trash_snapshot",
             error,
             { imageIds: unresolvedIds }
           );
         }
       }
 
-      const deletedIds = imageIds.filter(
+      const trashedIds = imageIds.filter(
         (id) => confirmedIds.has(id.toLowerCase())
       );
-      if (deletedIds.length) {
-        const deletedIdSet = new Set(
-          deletedIds.map((id) => id.toLowerCase())
+      if (trashedIds.length) {
+        const trashedIdSet = new Set(
+          trashedIds.map((id) => id.toLowerCase())
         );
         setSession((current) => ({
           ...current,
           activeIds: current.activeIds.filter(
-            (id) => !deletedIdSet.has(id.toLowerCase())
+            (id) => !trashedIdSet.has(id.toLowerCase())
           ),
           baselineItems: current.baselineItems.filter(
-            (item) => !deletedIdSet.has(item.id.toLowerCase())
+            (item) => !trashedIdSet.has(item.id.toLowerCase())
           ),
           drafts: Object.fromEntries(
             Object.entries(current.drafts).filter(
-              ([id]) => !deletedIdSet.has(id.toLowerCase())
+              ([id]) => !trashedIdSet.has(id.toLowerCase())
             )
           )
         }));
@@ -302,19 +302,19 @@ export function ImageMetadataEditorDialog({
         // 删除已经由服务端提交后，刷新失败不能诱导用户再次执行 mutation。
         // 各入口在这里补齐自己的列表并关闭详情，异常只单独记录。
         try {
-          await onDeleted(deletedIds);
+          await onTrashed(trashedIds);
         } catch (refreshError) {
           reportAdminUiError(
-            "image_metadata.delete_refresh",
+            "image_metadata.trash_refresh",
             refreshError,
-            { imageIds: deletedIds }
+            { imageIds: trashedIds }
           );
         }
       }
 
-      const unresolvedCount = imageIds.length - deletedIds.length;
+      const unresolvedCount = imageIds.length - trashedIds.length;
       if (unresolvedCount) {
-        setDeleteError(authoritativeSnapshotRead
+        setTrashError(authoritativeSnapshotRead
           ? imageIds.length === 1
             ? "图片当前仍可编辑，删除未生效"
             : `${unresolvedCount} 张图片当前仍可编辑，删除未全部生效`
@@ -326,8 +326,8 @@ export function ImageMetadataEditorDialog({
       }
       return true;
     });
-    if (allDeleted) requestClose();
-    return allDeleted;
+    if (allTrashed) requestClose();
+    return allTrashed;
   };
   return (
     <DialogFrame
@@ -338,7 +338,7 @@ export function ImageMetadataEditorDialog({
         (canMigrateStorage && migrating)
         || preview
         || restoreConfirmation
-        || deleteConfirmation
+        || trashConfirmation
       )}
       initialFocusRef={closeButtonRef}
       returnFocusRef={returnFocusRef}
@@ -446,9 +446,9 @@ export function ImageMetadataEditorDialog({
           className="modal-scroll-list image-workflow-list batch-edit-list"
           ref={listRef}
         >
-          {deleteError && (
-            <p className="batch-edit-delete-error" role="alert">
-              {deleteError}
+          {trashError && (
+            <p className="batch-edit-trash-error" role="alert">
+              {trashError}
             </p>
           )}
           {visibleItems.map((item) => {
@@ -561,7 +561,7 @@ export function ImageMetadataEditorDialog({
           {!activeItems.length && <p className="batch-edit-empty-state">批量编辑列表为空</p>}
         </div>
         <footer className={`image-workflow-footer${paginationAvailable ? " has-pagination" : ""}`}>
-          {(canMigrateStorage || deleteAvailable) && (
+          {(canMigrateStorage || trashAvailable) && (
             <div className="batch-edit-resource-actions image-workflow-leading-actions">
               {canMigrateStorage && (
                 <button
@@ -575,17 +575,17 @@ export function ImageMetadataEditorDialog({
                   <AdminIcon name="arrow-left-right-line" />{multipleItems ? "批量迁移存储" : "迁移存储"}
                 </button>
               )}
-              {deleteAvailable && (
+              {trashAvailable && (
                 <button
-                  ref={deleteTriggerRef}
-                  className="icon danger-button batch-edit-delete-trigger"
+                  ref={trashTriggerRef}
+                  className="icon danger-button batch-edit-trash-trigger"
                   type="button"
                   title={multipleItems ? "删除这些图片" : "删除此图片"}
                   aria-label={multipleItems ? "删除这些图片" : "删除此图片"}
                   disabled={busy || !activeItems.length}
                   onClick={() => {
-                    setDeleteError("");
-                    setDeleteConfirmation(true);
+                    setTrashError("");
+                    setTrashConfirmation(true);
                   }}
                 >
                   <AdminIcon name="delete-bin-6-line" />
@@ -650,18 +650,18 @@ export function ImageMetadataEditorDialog({
           onConfirm={restoreAllChanges}
         />
       )}
-      {deleteConfirmation && (
+      {trashConfirmation && (
         <ConfirmDialog
           title={multipleItems ? "确认批量删除图片" : "确认删除图片"}
           description={multipleItems
-            ? `这 ${activeItems.length} 张图片将移入回收站，可以稍后恢复。`
-            : "此图片将移入回收站，可以稍后恢复。"}
+            ? `这 ${activeItems.length} 张图片将移入回收站并退出站点发现；既有直链仍可访问，可以稍后恢复。`
+            : "此图片将移入回收站并退出站点发现；既有直链仍可访问，可以稍后恢复。"}
           confirmLabel="确认删除"
           pendingLabel="删除中"
-          errorMessage={deleteError}
-          returnFocusRef={deleteTriggerRef}
-          onClose={() => setDeleteConfirmation(false)}
-          onConfirm={() => deleteActiveImages(requestClose)}
+          errorMessage={trashError}
+          returnFocusRef={trashTriggerRef}
+          onClose={() => setTrashConfirmation(false)}
+          onConfirm={() => trashActiveImages(requestClose)}
         />
       )}
       </>

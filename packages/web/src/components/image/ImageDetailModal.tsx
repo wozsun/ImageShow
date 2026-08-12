@@ -97,10 +97,10 @@ type ImageDetailModalProps =
       detailLoading?: boolean;
       detailError?: string;
       onDetailRetry?: () => void;
-      onDeleteCommitted?: (
+      onTrashCommitted?: (
         imageId: string
       ) => void | Promise<void>;
-      onDeleted?: (imageId: string) => void;
+      onTrashed?: (imageId: string) => void;
       onItemUpdated?: (item: EditableImageSnapshot) => void;
       returnFocusRef?: RefObject<HTMLElement | null>;
     }
@@ -109,10 +109,10 @@ type ImageDetailModalProps =
       onClose: () => void;
       admin: true;
       storageLabel?: string;
-      onDeleteCommitted?: (
+      onTrashCommitted?: (
         imageId: string
       ) => void | Promise<void>;
-      onDeleted?: (imageId: string) => void;
+      onTrashed?: (imageId: string) => void;
       onItemUpdated?: (item: EditableImageSnapshot) => void;
       returnFocusRef?: RefObject<HTMLElement | null>;
     };
@@ -144,13 +144,13 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
   const detailError = !admin ? props.detailError?.trim() ?? "" : "";
   const onDetailRetry = !admin ? props.onDetailRetry : undefined;
   const exit = useAnimatedClose(onClose);
-  const handleItemDeleted = useCallback((imageId: string) => {
+  const handleItemTrashed = useCallback((imageId: string) => {
     try {
-      props.onDeleted?.(imageId);
+      props.onTrashed?.(imageId);
     } finally {
       exit.requestClose();
     }
-  }, [exit.requestClose, props.onDeleted]);
+  }, [exit.requestClose, props.onTrashed]);
   const handleItemUpdated = useCallback((nextItem: EditableImageSnapshot) => {
     setEditedSnapshot(nextItem);
     props.onItemUpdated?.(nextItem);
@@ -335,8 +335,8 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
                       adminItem={adminItem}
                       adminStorageLabel={adminStorageLabel}
                       onItemUpdated={handleItemUpdated}
-                      onItemDeleteCommitted={props.onDeleteCommitted}
-                      onItemDeleted={handleItemDeleted}
+                      onItemTrashCommitted={props.onTrashCommitted}
+                      onItemTrashed={handleItemTrashed}
                       onNestedDialogChange={setNestedDialogOpen}
                     />
                   </Suspense>

@@ -27,7 +27,7 @@
   gap: 8px;
 }
 .batch-edit-modal footer button { min-height: 38px; }
-.batch-edit-delete-trigger.icon {
+.batch-edit-trash-trigger.icon {
   width: 38px;
   flex-basis: 38px;
 }
@@ -38,7 +38,7 @@
   );
 }
 .batch-edit-common-panel { flex: 0 0 auto; }
-.batch-edit-delete-error {
+.batch-edit-trash-error {
   margin: 0;
   padding: 9px 10px;
   color: var(--admin-color-danger-text-strong);
@@ -196,7 +196,7 @@
   .batch-edit-modal > footer .batch-edit-migrate-trigger > .app-icon {
     display: none;
   }
-  .batch-edit-modal > footer .batch-edit-delete-trigger.icon {
+  .batch-edit-modal > footer .batch-edit-trash-trigger.icon {
     width: 44px;
     flex: 0 0 44px;
   }

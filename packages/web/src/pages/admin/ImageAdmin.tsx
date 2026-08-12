@@ -44,6 +44,7 @@ import {
   useMediaQuery
 } from "../../hooks/useMediaQuery.js";
 import {
+  imageAdminTrashViewNotice,
   imageAdminConfirmationCopy,
   useImageAdminOperations,
   type ImageAdminView
@@ -151,7 +152,7 @@ export function ImageAdmin() {
   const interfaceBusy = editorConflictBusy || editorPending || modalOpen;
   const clearImageSelection = selection.clear;
   const finishImportBatch = selection.clear;
-  const canDeleteReadyItems = view !== "deleted";
+  const canTrashReadyItems = view !== "deleted";
   useEffect(() => {
     if (previousPageSizeRef.current === pageSize) return;
     previousPageSizeRef.current = pageSize;
@@ -277,6 +278,11 @@ export function ImageAdmin() {
           </div>
         </div>
       </header>
+      {view === "deleted" && (
+        <p className="hint" role="note">
+          {imageAdminTrashViewNotice}
+        </p>
+      )}
       <div className="image-list-controls">
         <ImageAdminFilters
           value={filters}
@@ -367,14 +373,14 @@ export function ImageAdmin() {
                   <AdminIcon name="arrow-go-back-line" />批量恢复
                 </button>
               )}
-              {canDeleteReadyItems && (
+              {canTrashReadyItems && (
                 <button
                   className="danger-button"
                   type="button"
                   disabled={!selected.length || interfaceBusy}
                   onClick={() => {
                     cancelPageNavigation();
-                    setConfirmAction({ kind: "delete", ids: [...selected] });
+                    setConfirmAction({ kind: "trash", ids: [...selected] });
                   }}
                 >
                   <AdminIcon name="delete-bin-6-line" />批量删除
@@ -479,10 +485,10 @@ export function ImageAdmin() {
               }}
               busy={busyIds.includes(item.id)}
               actionsDisabled={interfaceBusy}
-              onDelete={() => {
+              onTrash={() => {
                 cancelPageNavigation();
                 setConfirmAction({
-                  kind: "delete",
+                  kind: "trash",
                   ids: [item.id],
                   title: imageDisplayTitle(item)
                 });
@@ -511,7 +517,7 @@ export function ImageAdmin() {
         <detailCapability.Modal
           item={detailCapability.item}
           onClose={detailCapability.close}
-          onDeleted={() => showFeedback("图片已移入回收站", "success")}
+          onTrashed={() => showFeedback("图片已移入回收站", "success")}
           returnFocusRef={detailCapability.returnFocusRef}
           storageLabel={storageName(detailCapability.item)}
           admin
@@ -525,7 +531,7 @@ export function ImageAdmin() {
           allTags={editorCapability.session.vocabulary.tags}
           authors={editorCapability.session.vocabulary.authors}
           onClose={editorCapability.close}
-          onDeleted={async (imageIds) => {
+          onTrashed={async (imageIds) => {
             await refresh();
             showFeedback(
               imageIds.length === 1

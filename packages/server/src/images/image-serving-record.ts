@@ -97,17 +97,15 @@ export async function readImageServingRecordById(
   return row ?? null;
 }
 
-export async function readReadyImageServingRecordByObjectKey(
+export async function readImageServingRecordByObjectKey(
   objectKey: string,
   database: PublicDatabaseReadAccess = {},
   dependencies: ImageServingRecordDependencies =
     defaultImageServingRecordDependencies
 ): Promise<StoredImageServingRecord | null> {
   const cached = await dependencies.readReadyImageByObjectKey(objectKey);
-  if (cached.cached) {
-    return cached.value
-      ? readyImageServingRecord(cached.value)
-      : null;
+  if (cached.cached && cached.value) {
+    return readyImageServingRecord(cached.value);
   }
 
   const row = await readDatabase(database, async (reader) => (
@@ -115,35 +113,35 @@ export async function readReadyImageServingRecordByObjectKey(
       `SELECT id, object_key, ext, storage_slug, status
          FROM metadata
         WHERE object_key=$1
+          AND status IN ('ready', 'deleted')
         LIMIT 1`,
       [objectKey]
     )).rows[0]
   ));
-  return row?.status === "ready" ? row : null;
+  return row ?? null;
 }
 
-export async function readReadyImageServingRecordByThumbKey(
+export async function readImageServingRecordByThumbKey(
   thumbKey: string,
   database: PublicDatabaseReadAccess = {},
   dependencies: ImageServingRecordDependencies =
     defaultImageServingRecordDependencies
 ): Promise<StoredImageServingRecord | null> {
   const cached = await dependencies.readReadyImageByThumbKey(thumbKey);
-  if (cached.cached) {
-    return cached.value
-      ? readyImageServingRecord(cached.value)
-      : null;
+  if (cached.cached && cached.value) {
+    return readyImageServingRecord(cached.value);
   }
 
   const row = await readDatabase(database, async (reader) => (
     (await reader.query<StoredImageServingRecord>(
       `SELECT id, object_key, ext, storage_slug, status
          FROM metadata
-        WHERE object_key=$1
-           OR regexp_replace(object_key, '\\.[^/.]+$', '.webp')=$1
+        WHERE (object_key=$1
+           OR regexp_replace(object_key, '\\.[^/.]+$', '.webp')=$1)
+          AND status IN ('ready', 'deleted')
         LIMIT 1`,
       [thumbKey]
     )).rows[0]
   ));
-  return row?.status === "ready" ? row : null;
+  return row ?? null;
 }

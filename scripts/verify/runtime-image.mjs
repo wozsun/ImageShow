@@ -20,14 +20,16 @@ const names = {
   failedApp: `imageshow-verify-failed-app-${suffix}`,
   app: `imageshow-verify-app-${suffix}`
 };
-const stableImageTag = `imageshow:${version}-verify`;
-const temporaryImageTag = `${stableImageTag}-${suffix}`;
+const temporaryImageTag = `imageshow:${version}-verify-${suffix}`;
+const verificationImageOwnerLabel = "org.imageshow.verify.run";
 const databasePassword = randomBytes(24).toString("base64url");
 const adminPassword = `Verify-${randomBytes(18).toString("base64url")}`;
 const activeChildren = new Set();
 const attemptedContainers = new Set();
+const preexistingImageIds = new Set();
 let attemptedNetwork = false;
 let attemptedImage = false;
+let attemptedImageId = "";
 let runtimeCleanupPromise = null;
 let imageCleanupPromise = null;
 let cleanupPromise = null;
@@ -133,6 +135,38 @@ function isNotFound(result) {
   );
 }
 
+async function inspectImageIdentity(
+  reference,
+  { allowDuringInterrupt = false, allowMissing = false } = {}
+) {
+  const inspected = await runDocker(["image", "inspect", reference], {
+    allowDuringInterrupt,
+    allowFailure: allowMissing
+  });
+  if (inspected.code !== 0) {
+    if (allowMissing && isNotFound(inspected)) return null;
+    throw new Error(
+      `failed to inspect image ${reference}: ${resultText(inspected)}`
+    );
+  }
+  let payload;
+  try {
+    payload = JSON.parse(inspected.stdout);
+  } catch (error) {
+    throw new Error(`invalid image inspection for ${reference}`, {
+      cause: error
+    });
+  }
+  const image = payload[0];
+  if (!image || !/^sha256:[0-9a-f]{64}$/.test(image.Id)) {
+    throw new Error(`invalid image identity for ${reference}`);
+  }
+  return {
+    id: image.Id,
+    owner: image.Config?.Labels?.[verificationImageOwnerLabel] ?? ""
+  };
+}
+
 async function confirmAbsent(
   label,
   inspectArguments,
@@ -232,20 +266,68 @@ function cleanupRuntimeResources() {
 
 async function performTemporaryImageCleanup() {
   if (!attemptedImage) return;
-  const removed = await runDocker(["image", "rm", temporaryImageTag], {
+  const taggedImage = await inspectImageIdentity(temporaryImageTag, {
     allowDuringInterrupt: true,
-    allowFailure: true
+    allowMissing: true
   });
-  if (removed.code !== 0 && !isNotFound(removed)) {
-    throw new Error(
-      `failed to remove temporary image tag ${temporaryImageTag}: ${resultText(removed)}`
-    );
+  if (taggedImage) {
+    if (taggedImage.owner !== suffix) {
+      throw new Error(
+        `refusing to remove unowned image ${temporaryImageTag}`
+      );
+    }
+    attemptedImageId = taggedImage.id;
+    const removed = await runDocker(["image", "rm", temporaryImageTag], {
+      allowDuringInterrupt: true,
+      allowFailure: true
+    });
+    if (removed.code !== 0 && !isNotFound(removed)) {
+      throw new Error(
+        `failed to remove temporary image tag ${temporaryImageTag}: ${resultText(removed)}`
+      );
+    }
   }
   await confirmAbsent(
     `temporary image tag ${temporaryImageTag}`,
     ["image", "inspect", temporaryImageTag],
     { allowDuringInterrupt: true }
   );
+  if (attemptedImageId) {
+    const remainingImage = await inspectImageIdentity(attemptedImageId, {
+      allowDuringInterrupt: true,
+      allowMissing: true
+    });
+    if (remainingImage && remainingImage.owner !== suffix) {
+      throw new Error(
+        `refusing to remove unowned image ${attemptedImageId}`
+      );
+    }
+    const dangling = await runDocker([
+      "image", "ls", "--all", "--quiet", "--no-trunc",
+      "--filter", "dangling=true"
+    ], { allowDuringInterrupt: true });
+    const danglingIds = new Set(dangling.stdout.split(/\r?\n/u).filter(Boolean));
+    if (
+      danglingIds.has(attemptedImageId)
+      && !preexistingImageIds.has(attemptedImageId)
+    ) {
+      const removedId = await runDocker(["image", "rm", attemptedImageId], {
+        allowDuringInterrupt: true,
+        allowFailure: true
+      });
+      if (removedId.code !== 0 && !isNotFound(removedId)) {
+        throw new Error(
+          `failed to remove dangling image ${attemptedImageId}: ${resultText(removedId)}`
+        );
+      }
+      await confirmAbsent(
+        `dangling image ${attemptedImageId}`,
+        ["image", "inspect", attemptedImageId],
+        { allowDuringInterrupt: true }
+      );
+    }
+  }
+  attemptedImageId = "";
   attemptedImage = false;
 }
 
@@ -276,18 +358,15 @@ function cleanup() {
       if (attemptedContainers.size === 0 && !attemptedNetwork) break;
       if (attempt === 0) await delay(250);
     }
+    const cleanupErrors = [...terminationErrors];
     if (attemptedContainers.size > 0 || attemptedNetwork) {
       const remaining = [
         ...attemptedContainers,
         ...(attemptedNetwork ? [names.network] : [])
       ];
-      throw new AggregateError(
-        [
-          ...terminationErrors,
-          ...lastRuntimeErrors,
-          new Error(`resources still tracked: ${remaining.join(", ")}`)
-        ],
-        "runtime-image resource cleanup failed after bounded retry"
+      cleanupErrors.push(
+        ...lastRuntimeErrors,
+        new Error(`resources still tracked: ${remaining.join(", ")}`)
       );
     }
 
@@ -302,9 +381,10 @@ function cleanup() {
       if (!attemptedImage) break;
       if (attempt === 0) await delay(250);
     }
-    if (!attemptedImage && terminationErrors.length === 0) return;
+    if (attemptedImage) cleanupErrors.push(...lastImageErrors);
+    if (cleanupErrors.length === 0) return;
     throw new AggregateError(
-      [...terminationErrors, ...lastImageErrors],
+      cleanupErrors,
       "runtime-image cleanup failed after bounded retry"
     );
   })();
@@ -477,25 +557,34 @@ async function schemaShape() {
   return result.stdout.trim();
 }
 
-let completed = false;
 try {
   await confirmAbsent(
     `temporary image tag ${temporaryImageTag}`,
     ["image", "inspect", temporaryImageTag]
   );
+  const imagesBeforeBuild = await runDocker([
+    "image", "ls", "--all", "--quiet", "--no-trunc"
+  ]);
+  for (const imageId of imagesBeforeBuild.stdout.split(/\r?\n/u)) {
+    if (imageId) preexistingImageIds.add(imageId);
+  }
   console.log(`[runtime-image] building ${temporaryImageTag}`);
   attemptedImage = true;
-  await runDocker(["build", "--tag", temporaryImageTag, "."], {
+  await runDocker([
+    "build",
+    "--label", `${verificationImageOwnerLabel}=${suffix}`,
+    "--tag", temporaryImageTag,
+    "."
+  ], {
     stdio: "inherit",
     timeoutMs: 10 * 60_000
   });
-  const image = await runDocker([
-    "image", "inspect", "--format", "{{.Id}}", temporaryImageTag
-  ]);
-  const imageId = image.stdout;
-  if (!/^sha256:[0-9a-f]{64}$/.test(imageId)) {
-    throw new Error(`invalid candidate image ID: ${imageId}`);
+  const image = await inspectImageIdentity(temporaryImageTag);
+  if (image.owner !== suffix) {
+    throw new Error(`temporary image ${temporaryImageTag} is not owned`);
   }
+  const imageId = image.id;
+  attemptedImageId = imageId;
 
   await confirmAbsent(`network ${names.network}`, ["network", "inspect", names.network]);
   for (const name of [
@@ -634,20 +723,11 @@ try {
     throw new Error(`unexpected schema shape after restart: ${restartedShape}`);
   }
 
-  await cleanupRuntimeResources();
-  await runDocker(["image", "tag", imageId, stableImageTag]);
-  const stableImage = await runDocker([
-    "image", "inspect", "--format", "{{.Id}}", stableImageTag
-  ]);
-  if (stableImage.stdout !== imageId) {
-    throw new Error(`stable candidate tag does not resolve to ${imageId}`);
-  }
-  await cleanupTemporaryImage();
-  completed = true;
+  await cleanup();
   console.log(
-    `[runtime-image] ${stableImageTag} ${imageId}; Docker health, immutable image ID, `
+    `[runtime-image] verified ${imageId}; Docker health, immutable image ID, `
     + "startup failure cleanup, repeated signals, explicit PostgreSQL/Redis release, "
-    + "cold/restart HTTP and schema 10 tables passed"
+    + "cold/restart HTTP and schema 10 tables passed; temporary Docker resources removed"
   );
 } catch (error) {
   if (!interruptedSignal) {
@@ -664,6 +744,6 @@ try {
   }
   throw error;
 } finally {
-  if (!completed) await cleanup();
+  await cleanup();
 }
 process.off("message", handleShutdownMessage);

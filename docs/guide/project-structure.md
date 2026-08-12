@@ -40,7 +40,7 @@ fixture、网络模拟和清理编排均留在 `tests/`。Web 最终测试使用
 | --- | --- | --- |
 | `npm run verify:source` | workspace 类型、Knip、语义颜色、依赖方向 / 环、配置示例、图标、Markdown 链接与 selector inventory | 只读源码，不生成 `dist`、容器或浏览器会话 |
 | `npm run verify:build` | 清理必要输出，先构建 shared，再并行构建 Web / Server，装配服务端资产并按真实产物图检查 Web 分块边界 | 重建三个 workspace 的 `dist`；根 `dist` 只作为旧残留被删除，不会重新产生 |
-| `npm run verify:runtime` | baseline / Server / Web 三个最终入口，以及生产镜像冷启动、HTTP、schema 和重启 | 建立并清理随机命名的 tmpfs PostgreSQL、Redis、应用容器及网络；保留 `imageshow:<version>-verify` 候选镜像；不访问现有数据库、容器或浏览器 |
+| `npm run verify:runtime` | baseline / Server / Web 三个最终入口，以及生产镜像冷启动、HTTP、schema 和重启 | 建立随机命名的 tmpfs PostgreSQL、Redis、应用容器、网络和临时镜像；无论成功、失败或中断均在结束前删除，不访问现有数据库、容器或浏览器 |
 | `npm run verify:release` | 依次执行以上三层 | 合并上述本地副作用 |
 
 `npm run icons:generate` 是维护图标生成源码的显式写命令；日常门禁只运行只读的
@@ -131,7 +131,7 @@ healthcheck 只读现有配置快照，密码恢复不初始化运行时配置�
 `storage/backend-migration.ts` 只负责整后端计数和流式分页，两者都直接调用同一个单图原语。
 `checks/storage-check.ts` 只生成无写入权限的存储预览；`checks/storage-maintenance.ts` 在独占
 位置锁内重新扫描并直接完成缩略图维修与孤儿删除，不调用旧请求热路径 repair 或通用后台任务。
-回收站的软删除 / 恢复集中于
+回收站的移入 / 恢复集中于
 `images/trash-mutations.ts`，永久对象删除与 claim 状态机集中于 `images/trash-purge.ts`，
 两者不共享转发入口。`metadata-mutations.ts` 只校验并选择普通字段更新或分类位置变更阶段，
 对应实现分别留在 `metadata-field-mutation.ts` 与 `metadata-classification-mutation.ts`。
@@ -153,7 +153,9 @@ healthcheck 只读现有配置快照，密码恢复不初始化运行时配置�
   归一化及公开类型分别位于 `weibo-parser.ts`、`weibo-client.ts`、
   `weibo-values.ts`、`weibo-types.ts`。
 - 图片读取先由 `image-serving-record.ts` 将 Redis 命中与 PostgreSQL fallback 归一为
-  同一 serving record；`stored-image-serving.ts` 只编排存储对象与缩略图，
+  同一 serving record；公开正式媒体的 ready-cache 明确空命中仍会在有界数据库读取中查找
+  ready 或 deleted 行，入口在缓存和数据库读取前统一拒绝非规范或过长对象键。
+  `stored-image-serving.ts` 只编排存储对象与缩略图，
   `external-original-serving.ts` 只处理外部原图探测、跳转和代理。
   `stored-object-response.ts` 集中流式、HEAD、Range 与缓存响应；缩略图缺失在只读 serving
   边界直接映射为 404，显式维修只属于 `checks/storage-maintenance.ts`。

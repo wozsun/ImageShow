@@ -195,16 +195,16 @@ export type AdminEntityListResponseDto = {
   items: AdminEntityDto[];
 };
 
-export type ImageDeleteItemResultDto = {
+export type ImageTrashItemResultDto = {
   id: string;
-  status: "deleted" | "ignored";
+  status: "trashed" | "ignored";
 };
 
-export type ImageDeleteResponseDto = {
+export type ImageTrashResponseDto = {
   requested: number;
-  deleted: number;
+  trashed: number;
   ignored: number;
-  results: ImageDeleteItemResultDto[];
+  results: ImageTrashItemResultDto[];
 };
 
 export type ImageRestoreItemResultDto = {

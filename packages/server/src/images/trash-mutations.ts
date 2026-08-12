@@ -1,5 +1,5 @@
 import type {
-  ImageDeleteResponseDto,
+  ImageTrashResponseDto,
   ImageRestoreResponseDto
 } from "@imageshow/shared/browser";
 import { withAdvisoryLocks } from "../core/database-advisory-locks.ts";
@@ -11,7 +11,7 @@ import { decideImageMutationSync } from "./mutation-sync-policy.ts";
 import { bumpReadyImageRevision } from "./ready-cache/revision.ts";
 import { lockTrashMembershipForTransaction } from "./trash-membership-lock.ts";
 
-const deleteImagesSql = `UPDATE metadata
+const moveImagesToTrashSql = `UPDATE metadata
   SET status='deleted',
       deleted_at=clock_timestamp(),
       purge_state='idle',
@@ -53,17 +53,17 @@ async function mutateImageTrashState(ids: string[], sql: string) {
   ));
 }
 
-export async function deleteImages(
+export async function moveImagesToTrash(
   ids: string[]
-): Promise<ImageDeleteResponseDto> {
-  const deletedIds = await mutateImageTrashState(ids, deleteImagesSql);
+): Promise<ImageTrashResponseDto> {
+  const trashedIds = await mutateImageTrashState(ids, moveImagesToTrashSql);
   return {
     requested: ids.length,
-    deleted: deletedIds.size,
-    ignored: ids.length - deletedIds.size,
+    trashed: trashedIds.size,
+    ignored: ids.length - trashedIds.size,
     results: ids.map((id) => ({
       id,
-      status: deletedIds.has(id.toLowerCase()) ? "deleted" : "ignored"
+      status: trashedIds.has(id.toLowerCase()) ? "trashed" : "ignored"
     }))
   };
 }

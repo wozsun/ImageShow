@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import type { ImagePurgeRequestDto } from "@imageshow/shared/browser";
 import {
-  deleteImages,
+  moveImagesToTrash,
   purgeImages,
   restoreImages
 } from "../../lib/api/image-mutations.js";
@@ -16,8 +16,13 @@ import { waitForMinimumPendingDuration } from "../../lib/ui/async-action-timing.
 
 export type ImageAdminView = "ready" | "unset" | "deleted";
 
+const cachedMediaPersistenceNotice =
+  "浏览器或 CDN 已缓存副本可能继续可访问，无法由此立即撤回。";
+export const imageAdminTrashViewNotice =
+  `图片进入回收站后不再被站点发现，但既有直链仍可访问；${cachedMediaPersistenceNotice}`;
+
 export type ImageAdminConfirmAction =
-  | { kind: "delete"; ids: string[]; title?: string }
+  | { kind: "trash"; ids: string[]; title?: string }
   | {
       kind: "purge";
       request: ImagePurgeRequestDto;
@@ -27,20 +32,20 @@ export type ImageAdminConfirmAction =
 export function imageAdminConfirmationCopy(
   action: ImageAdminConfirmAction | null
 ) {
-  if (action?.kind === "delete") {
+  if (action?.kind === "trash") {
     const single = action.ids.length === 1;
     return {
       title: single ? "确认删除图片" : "确认批量删除",
       description: single && action.title
-        ? `“${action.title}”将移入回收站，可以稍后恢复。`
-        : `选中的 ${action.ids.length} 张图片将移入回收站，可以稍后恢复。`,
+        ? `“${action.title}”将移入回收站并退出站点发现；既有直链仍可访问，可以稍后恢复。`
+        : `选中的 ${action.ids.length} 张图片将移入回收站并退出站点发现；既有直链仍可访问，可以稍后恢复。`,
       label: "确认删除"
     };
   }
   if (action?.kind === "purge" && action.request.scope === "all") {
     return {
       title: "确认清空回收站",
-      description: "当前回收站内的所有图片及存储对象将被永久删除；操作开始后才移入回收站的图片不受影响。此操作无法撤销。",
+      description: `当前回收站内的所有图片及存储对象将被永久删除；操作开始后才移入回收站的图片不受影响。此操作无法撤销。${cachedMediaPersistenceNotice}`,
       label: "永久清空"
     };
   }
@@ -49,8 +54,8 @@ export function imageAdminConfirmationCopy(
     return {
       title: single ? "确认永久删除" : "确认删除已选图片",
       description: single && action.title
-        ? `“${action.title}”将从回收站和存储中永久删除，此操作无法撤销。`
-        : `选中的 ${action.request.ids.length} 张图片及其存储对象将被永久删除，此操作无法撤销。`,
+        ? `“${action.title}”将从回收站和存储中永久删除，此操作无法撤销。${cachedMediaPersistenceNotice}`
+        : `选中的 ${action.request.ids.length} 张图片及其存储对象将被永久删除，此操作无法撤销。${cachedMediaPersistenceNotice}`,
       label: "永久删除"
     };
   }
@@ -186,7 +191,7 @@ export function useImageAdminOperations({
     const purgeRequest = confirmAction.kind === "purge"
       ? confirmAction.request
       : null;
-    const affectedIds = confirmAction.kind === "delete"
+    const affectedIds = confirmAction.kind === "trash"
       ? confirmAction.ids
       : purgeRequest?.scope === "selected"
         ? purgeRequest.ids
@@ -196,7 +201,7 @@ export function useImageAdminOperations({
     setBusyIds(affectedIds);
     setFeedback(null);
     setOperationText(
-      confirmAction.kind === "delete"
+      confirmAction.kind === "trash"
         ? single
           ? "正在删除图片…"
           : `正在删除 ${affectedIds.length} 张图片…`
@@ -211,13 +216,13 @@ export function useImageAdminOperations({
       let text: string;
       let status: "error" | "success";
       try {
-        if (confirmAction.kind === "delete") {
-          const result = await deleteImages(confirmAction.ids);
-          text = `已移入回收站 ${result.deleted} 张，${result.ignored} 张未处理`;
+        if (confirmAction.kind === "trash") {
+          const result = await moveImagesToTrash(confirmAction.ids);
+          text = `已移入回收站 ${result.trashed} 张，${result.ignored} 张未处理`;
           status = result.ignored ? "error" : "success";
           if (result.ignored) {
             reportAdminUiError(
-              "image_admin.delete_partial",
+              "image_admin.trash_partial",
               new Error(`删除完成，但有 ${result.ignored} 张图片未处理`)
             );
           }
@@ -245,12 +250,12 @@ export function useImageAdminOperations({
           }
         }
       } catch (error) {
-        reportAdminUiError("image_admin.confirmed_action", error);
+        reportAdminUiError("image_admin.trash_or_purge", error);
         const reconciliation = await refreshUnknownOutcome(
-          confirmAction.kind === "delete"
-            ? "image_admin.delete"
+          confirmAction.kind === "trash"
+            ? "image_admin.trash"
             : "image_admin.purge",
-          confirmAction.kind === "delete" ? confirmAction.ids : undefined
+          confirmAction.kind === "trash" ? confirmAction.ids : undefined
         );
         await waitForMinimumPendingDuration(startedAt);
         showFeedback(

@@ -47,11 +47,11 @@ export function invalidateImageData(client: QueryClient) {
   return invalidate(client, imageDataQueryKeys);
 }
 
-export async function invalidateImageDataAfterDelete(
+export async function invalidateImageDataAfterTrash(
   client: QueryClient,
   imageIds: string[]
 ) {
-  // 当前公开详情在删除后必然返回 404。先终止可能尚未完成的旧读取，但不改变
+  // 当前公开详情在移入回收站后必然返回 404。先终止可能尚未完成的旧读取，但不改变
   // 它的 freshness；详情关闭后 gcTime: 0 会自然回收它。
   await Promise.all(imageIds.map((imageId) => client.cancelQueries({
     queryKey: [...queryKeys.publicImageDetail, imageId],

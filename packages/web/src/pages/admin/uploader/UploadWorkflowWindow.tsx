@@ -534,7 +534,7 @@ export function UploadWorkflowWindow({
               admin
               storageLabel={storageName(detailItem.storage_slug)}
               onClose={() => setDetailItem(null)}
-              onDeleted={(imageId) => {
+              onTrashed={(imageId) => {
                 detailReturnFocusRef.current = null;
                 queue.removeLibraryDuplicate(imageId);
               }}

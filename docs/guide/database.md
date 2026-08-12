@@ -24,7 +24,7 @@ additions 只保存一个发布周期的安全增量。版本 N 新增经审查�
 占位文件及稳定的启动、构建入口。该模型不支持跳过 N 直接部署 N+1；恢复早于 N 的数据库
 备份时，也必须先运行 N 或人工执行同一份经审查 SQL。
 
-当前 `v4.8.19` 的 additions 没有待执行 SQL，只保留过渡规则注释。
+当前 `v4.9.0` 的 additions 没有待执行 SQL，只保留过渡规则注释。
 `metadata.purge_error TEXT`、`admin_account.preferences JSONB NOT NULL DEFAULT '{}'` 与
 `theme.none` 已在 `schema.sql` 形成基线，并已由全部受控生产数据库在上一版本完成确认。
 后续 additions 仍只保存当期真实增量：不补业务表、外键、CHECK，不删除或重命名对象，
@@ -75,7 +75,7 @@ revision；图片事务与投影发布共用一个短写栅栏。Redis 重连、
 | `image_size` / `thumbnail_size` | 标准化图片字节数 / 缩略图字节数 |
 | `title` / `description` / `source` / `original` | 标题 / 描述 / 来源 / 原图链接；标题和描述在去除首尾空白后分别最多 80 / 500 个普通汉字，外部链接仅允许 HTTPS |
 | `image_time` | 图片展示 / 图库排序时间；JSONL 可指定，同一前端批次未指定时共享 `batch_time`，省略时使用会话创建时间 |
-| `deleted_at` | 软删时间 |
+| `deleted_at` | 移入回收站时间 |
 | `purge_state` | 彻底删除认领状态：`idle` / `purging` / `failed`；只有 `idle` 可恢复 |
 | `purge_started_at` | 当前彻底删除认领开始时间，用于回收崩溃遗留的过期认领 |
 | `purge_attempts` | 单调递增的彻底删除尝试号，同时作为当前执行者的所有权令牌 |
@@ -102,7 +102,7 @@ revision；图片事务与投影发布共用一个短写栅栏。Redis 重连、
 `purge_attempts`，随后在该图的存储 mutation lock 内再次核对状态、尝试号和对象位置。
 对象删除完成后，数据库删除仍以尝试号、`storage_slug` 和 `object_key` 做条件更新；恢复只
 接受 `purge_state='idle'`。进程崩溃留下的过期 `purging` 可重新认领，旧执行者不能用过期
-令牌删除或覆盖新执行者的结果。一次认领最多 `trashBatchSize` 行；软删除、恢复事务与
+令牌删除或覆盖新执行者的结果。一次认领最多 `trashBatchSize` 行；移入回收站、恢复事务与
 `scope: "all"` 的水位捕获共享一个短时 advisory lock，水位查询直接复用持锁连接，因此
 捕获前已经开始的成员变更必先提交或回滚。HTTP 请求捕获当前总数及 `deleted_at + id` 上界
 后，先持久化携带该上界的 `trash.purge` 任务，再处理一个批次；首批中止或收口失败也不会

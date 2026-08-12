@@ -70,22 +70,22 @@ function imagePlaceholder(card: GalleryImageCard): PublicImageItem {
 function GalleryImageDetail({
   card,
   onClose,
-  onDeleteCommitted,
-  onDeleted,
+  onTrashCommitted,
+  onTrashed,
   onItemUpdated,
   returnFocusRef,
 }: {
   card: GalleryImageCard;
   onClose: () => void;
-  onDeleteCommitted: (
+  onTrashCommitted: (
     imageId: string
   ) => void | Promise<void>;
-  onDeleted: (imageId: string) => void;
+  onTrashed: (imageId: string) => void;
   onItemUpdated: (item: EditableImageSnapshot) => void;
   returnFocusRef: RefObject<HTMLElement | null>;
 }) {
   const placeholder = useMemo(() => imagePlaceholder(card), [card]);
-  const [deleteCommitted, setDeleteCommitted] = useState(false);
+  const [trashCommitted, setTrashCommitted] = useState(false);
   const { data, isPending, isFetching, isError, error, refetch } = useQuery<PublicImageDetailResponseDto>({
     queryKey: [...queryKeys.publicImageDetail, card.id],
     // 详情元数据很小，不把 React StrictMode 的模拟卸载传给 fetch；
@@ -93,7 +93,7 @@ function GalleryImageDetail({
     // 原图请求仍由下方 DOM 图片调度器同步取消和清理。
     queryFn: () => api(`/api/images/${encodeURIComponent(card.id)}`),
     gcTime: 0,
-    enabled: !deleteCommitted
+    enabled: !trashCommitted
   });
   const detail = data?.item.id === card.id ? data.item : null;
   const item = useMemo(() => ({ ...placeholder, ...(detail ?? {}) }), [placeholder, detail]);
@@ -103,12 +103,12 @@ function GalleryImageDetail({
     <ImageDetailModal
       item={item}
       onClose={onClose}
-      onDeleteCommitted={async (imageId) => {
+      onTrashCommitted={async (imageId) => {
         if (imageId !== card.id) return;
-        setDeleteCommitted(true);
-        await onDeleteCommitted(imageId);
+        setTrashCommitted(true);
+        await onTrashCommitted(imageId);
       }}
-      onDeleted={onDeleted}
+      onTrashed={onTrashed}
       onItemUpdated={onItemUpdated}
       admin={false}
       detailLoading={detailLoading}
@@ -144,7 +144,7 @@ export function GalleryPage({ embedded = false }: { embedded?: boolean }) {
     toolbarVisible,
   } = useGalleryViewportControls({ headerPresent: !embedded });
   const detailReturnFocusRef = useRef<HTMLElement | null>(null);
-  const deletedFocusIdRef = useRef<string | null>(null);
+  const trashedFocusIdRef = useRef<string | null>(null);
   const galleryRef = useRef<HTMLElement | null>(null);
   const galleryWindowRef = useRef<HTMLDivElement | null>(null);
   const previousImageQueryRef = useRef<string | null>(null);
@@ -232,11 +232,11 @@ export function GalleryPage({ embedded = false }: { embedded?: boolean }) {
     setPinnedImageId(card.id);
     setSelected(card);
   }, []);
-  const handleGalleryImageDeleted = () => {
+  const handleGalleryImageTrashed = () => {
     // 原按钮会随查询重排卸载，不让通用弹窗焦点恢复抓住已脱离 DOM 的节点。
     detailReturnFocusRef.current = null;
-    setPinnedImageId(deletedFocusIdRef.current);
-    deletedFocusIdRef.current = null;
+    setPinnedImageId(trashedFocusIdRef.current);
+    trashedFocusIdRef.current = null;
   };
 
   useEffect(() => {
@@ -381,11 +381,11 @@ export function GalleryPage({ embedded = false }: { embedded?: boolean }) {
         <GalleryImageDetail
           card={selected}
           onClose={() => setSelected(null)}
-          onDeleteCommitted={async (imageId) => {
+          onTrashCommitted={async (imageId) => {
             const result = await galleryData.removeImage(imageId);
-            deletedFocusIdRef.current = result.focusId;
+            trashedFocusIdRef.current = result.focusId;
           }}
-          onDeleted={handleGalleryImageDeleted}
+          onTrashed={handleGalleryImageTrashed}
           onItemUpdated={(item) => galleryData.refreshImage(item.id)}
           returnFocusRef={detailReturnFocusRef}
         />
