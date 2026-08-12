@@ -43,9 +43,10 @@ async function readProjectionSnapshot(
   dependencies: ReadyImageCacheAdminStatusDependencies
 ) {
   const coordinator = dependencies.getCoordinatorStatus();
-  const meta = coordinator.rebuilding || !coordinator.readable
-    ? await dependencies.readMeta().catch(() => coordinator.meta)
-    : coordinator.meta;
+  // The persisted hash is the observable contract. Reading it is one fixed
+  // command and avoids presenting an old in-process snapshot after external
+  // corruption or an interrupted publish.
+  const meta = await dependencies.readMeta().catch(() => null);
   return {
     coordinator,
     meta,
@@ -62,6 +63,14 @@ async function readProjectionSnapshot(
         ? meta?.state ?? "unavailable"
         : "degraded"
   };
+}
+
+function rebuildDurationMs(startedAt: string, completedAt: string) {
+  if (!startedAt || !completedAt) return null;
+  const started = Date.parse(startedAt);
+  const completed = Date.parse(completedAt);
+  const duration = completed - started;
+  return Number.isSafeInteger(duration) && duration >= 0 ? duration : null;
 }
 
 export async function readReadyImageCacheAdminStatus(
@@ -83,10 +92,26 @@ export async function readReadyImageCacheAdminStatus(
     reason: coordinator.reason,
     authoritative_revision: authoritativeRevision,
     applied_revision: meta?.appliedRevision ?? null,
+    item_count: meta?.itemCount ?? null,
+    processed: coordinator.rebuilding && meta?.state === "rebuilding"
+      ? meta.processed
+      : null,
+    total: coordinator.rebuilding && meta?.state === "rebuilding"
+      ? meta.total
+      : null,
+    last_updated_at: meta?.lastUpdatedAt ?? null,
+    full_rebuild_started_at: meta?.fullRebuildStartedAt ?? null,
+    full_rebuild_completed_at: meta?.fullRebuildCompletedAt || null,
+    full_rebuild_duration_ms: meta
+      ? rebuildDurationMs(
+          meta.fullRebuildStartedAt,
+          meta.fullRebuildCompletedAt
+        )
+      : null,
     recent_errors: {
       core: recent.core ?? persistedCoreError(
         meta?.lastError ?? "",
-        meta?.startedAt ?? null
+        meta?.lastUpdatedAt ?? null
       ),
       derived: recent.derived
     }
@@ -104,7 +129,10 @@ export async function getReadyImageCacheOverviewStatus(
     synchronized: snapshot.synchronized === true,
     rebuilding: snapshot.coordinator.rebuilding,
     item_count: snapshot.meta?.itemCount ?? null,
-    memory_bytes: snapshot.meta?.memoryBytes ?? null
+    last_full_rebuild_core_memory_bytes:
+      snapshot.meta?.lastFullRebuildCoreMemoryBytes ?? null,
+    last_full_rebuild_measured_at:
+      snapshot.meta?.lastFullRebuildMeasuredAt || null
   };
 }
 

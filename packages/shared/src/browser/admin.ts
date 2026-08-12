@@ -76,7 +76,8 @@ export type AdminOverviewDto = {
     synchronized: boolean;
     rebuilding: boolean;
     item_count: number | null;
-    memory_bytes: number | null;
+    last_full_rebuild_core_memory_bytes: number | null;
+    last_full_rebuild_measured_at: string | null;
   };
 };
 
@@ -113,6 +114,13 @@ export type ReadyImageCacheAdminStatusDto = {
   reason: string;
   authoritative_revision: string | null;
   applied_revision: string | null;
+  item_count: number | null;
+  processed: number | null;
+  total: number | null;
+  last_updated_at: string | null;
+  full_rebuild_started_at: string | null;
+  full_rebuild_completed_at: string | null;
+  full_rebuild_duration_ms: number | null;
   recent_errors: {
     core: ReadyImageCacheRecentErrorDto | null;
     derived: ReadyImageCacheRecentErrorDto | null;

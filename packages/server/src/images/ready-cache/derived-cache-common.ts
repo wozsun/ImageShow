@@ -14,8 +14,6 @@ import {
   READY_IMAGE_DERIVED_CACHE_POLICY,
   type ReadyImageDerivedResultKind
 } from "./derived-cache-policy.ts";
-import { markReadyImageCacheLastUpdated } from "./last-updated.ts";
-import { recordReadyImageCacheError } from "./status-observability.ts";
 
 const signaturePattern = /^[0-9a-f]{64}$/u;
 let lastAccessScore = 0;
@@ -33,18 +31,6 @@ export const derivedRegistryKeys = [
   READY_IMAGE_DERIVED_REGISTRY_KINDS_KEY,
   READY_IMAGE_DERIVED_REGISTRY_SIGNATURES_KEY
 ];
-
-export async function recordDerivedCacheModification() {
-  try {
-    await markReadyImageCacheLastUpdated();
-  } catch (error) {
-    recordReadyImageCacheError(
-      "derived",
-      "last_updated_write_failed",
-      error
-    );
-  }
-}
 
 export function nonNegativeInteger(raw: unknown) {
   const value = String(raw ?? "");

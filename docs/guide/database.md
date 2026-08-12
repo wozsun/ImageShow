@@ -24,7 +24,7 @@ additions 只保存一个发布周期的安全增量。版本 N 新增经审查�
 占位文件及稳定的启动、构建入口。该模型不支持跳过 N 直接部署 N+1；恢复早于 N 的数据库
 备份时，也必须先运行 N 或人工执行同一份经审查 SQL。
 
-当前 `v4.9.2` 的 additions 没有待执行 SQL，只保留过渡规则注释。
+当前 `v4.9.3` 的 additions 没有待执行 SQL，只保留过渡规则注释。
 `metadata.purge_error TEXT`、`admin_account.preferences JSONB NOT NULL DEFAULT '{}'` 与
 `theme.none` 已在 `schema.sql` 形成基线，并已由全部受控生产数据库在上一版本完成确认。
 后续 additions 仍只保存当期真实增量：不补业务表、外键、CHECK，不删除或重命名对象，
@@ -60,6 +60,11 @@ CHECK 不影响启动，只要当前代码不依赖它们。当前封版结构�
 revision；图片事务与投影发布共用一个短写栅栏。Redis 重连、revision 不一致或重建失败时
 读门保持关闭并继续走上述 PostgreSQL 回源，不维护独立 publication、release task 或跨实例
 代际状态。
+
+Redis 核心 meta 的当前图片数和最后更新时间随完整重建批次、精确新增、编辑、回收站与
+恢复同步更新；派生筛选和统计缓存不修改这些字段。活动完整重建才暴露 `processed / total`，
+完整重建起止时间不因增量同步重写。核心内存值是带测量时间的最近成功完整重建快照，
+不是当前容量；当前核心 / 派生占用只由管理员显式 Redis 深检重新汇总。
 
 ## metadata —— 图片主表
 

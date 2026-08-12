@@ -107,7 +107,7 @@ healthcheck 只读现有配置快照，密码恢复不初始化运行时配置�
 | `storage/` | local、S3 driver 及无环工厂；注册表缓存与 driver、管理读模型、配置变更、探测和占用统计分开维护，并拥有对象访问、强摘要传输、位置锁、迁移及 `move.cleanup` 仓储与 handler。 |
 | `random/` | 随机查询校验、设备轴推断、Redis 8 Array 最近历史、定向 id 与有界 pivot 普通随机 PG 降级查询及随机出口编排；Redis 候选投影、筛选与重建统一由 `images/ready-cache/` 提供。 |
 | `jobs/` | 仅拥有通用 `background_job` 生命周期、小型类型分派、公平调度 Worker，以及集中管理任务中止、期限、续租和有界排空的执行协调器；各领域拥有自己的 handler、payload 和结果语义。 |
-| `checks/` | PostgreSQL / Redis 独立轻量状态、数据库 / Redis / 存储 / 回收站手动深度检查，以及显式触发的存储维护。 |
+| `checks/` | PostgreSQL / Redis 独立轻量状态、数据库 / Redis / 存储 / 回收站手动深度检查，以及显式触发的存储维护；Redis 深检以有界扫描和 pipeline 只返回当前汇总。 |
 | `authors/`、`tags/`、`themes/`、`vocab/` | 词表查询、变更、关联锁与派生缓存。 |
 | `users/` | 管理员初始化、账号变更、Redis 登录会话、逐请求 PostgreSQL 角色与密码代际核对、操作授权、密码恢复、偏好和会话失效；不维护管理员凭据 Redis 投影。 |
 | `types/` | 仅放缺失的编译期声明，不承载运行时代码。 |

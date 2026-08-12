@@ -7,7 +7,11 @@ export async function checkSystemState(signal?: AbortSignal) {
   signal?.throwIfAborted();
   const [database, redis, storage, trash] = await Promise.all([
     captureAdminCheck(checkDatabase, "query", "database_check_failed"),
-    captureAdminCheck(inspectRedisState, "command", "redis_check_failed"),
+    captureAdminCheck(
+      () => inspectRedisState(signal),
+      "command",
+      "redis_check_failed"
+    ),
     captureAdminCheck(
       () => checkStorage(signal),
       "storage",

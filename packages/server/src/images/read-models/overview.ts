@@ -96,7 +96,10 @@ async function buildOverviewStats(
       synchronized: readyImageCache.synchronized,
       rebuilding: readyImageCache.rebuilding,
       item_count: readyImageCache.item_count,
-      memory_bytes: readyImageCache.memory_bytes
+      last_full_rebuild_core_memory_bytes:
+        readyImageCache.last_full_rebuild_core_memory_bytes,
+      last_full_rebuild_measured_at:
+        readyImageCache.last_full_rebuild_measured_at
     }
   };
 }

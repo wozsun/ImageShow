@@ -1,8 +1,5 @@
 import { redis } from "../../core/redis-client.ts";
-import {
-  assertReadyImageDerivedResult,
-  recordDerivedCacheModification
-} from "./derived-cache-common.ts";
+import { assertReadyImageDerivedResult } from "./derived-cache-common.ts";
 import {
   clearReadyImageDisposableCachesUnchecked
 } from "./derived-cache-cleanup.ts";
@@ -36,17 +33,13 @@ async function withDerivedCacheLifecycle<T>(work: () => Promise<T>) {
 }
 
 async function clearAfterLifecycleFailure() {
-  const modified = await clearReadyImageDisposableCachesUnchecked()
-    .catch(() => false);
-  if (modified) await recordDerivedCacheModification().catch(() => undefined);
+  await clearReadyImageDisposableCachesUnchecked().catch(() => false);
 }
 
 async function normalizedTouchResult(result: unknown) {
   const numeric = Number(result);
   if (numeric === -1) {
-    if (await clearReadyImageDisposableCachesUnchecked()) {
-      await recordDerivedCacheModification();
-    }
+    await clearReadyImageDisposableCachesUnchecked();
     return false;
   }
   return numeric === 1;
@@ -60,9 +53,7 @@ export async function registerReadyImageDerivedResult(options: {
 }) {
   return withDerivedCacheLifecycle(async () => {
     try {
-      const retained = await registerReadyImageDerivedResultUnchecked(options);
-      await recordDerivedCacheModification();
-      return retained;
+      return await registerReadyImageDerivedResultUnchecked(options);
     } catch (error) {
       await clearAfterLifecycleFailure();
       throw error;
@@ -153,7 +144,6 @@ export async function discardReadyImageDerivedResult(
       );
       if (!cleared) throw error;
     }
-    if (modified) await recordDerivedCacheModification();
     return modified;
   });
 }
@@ -170,9 +160,7 @@ export async function storeReadyImageStatsResult(
         Buffer.byteLength(serialized, "utf8")
           > READY_IMAGE_DERIVED_CACHE_POLICY.maxStatsResultBytes
       ) {
-        if (await evictReadyImageDerivedResults([key])) {
-          await recordDerivedCacheModification();
-        }
+        await evictReadyImageDerivedResults([key]);
         return false;
       }
       await redis.set(
@@ -181,14 +169,12 @@ export async function storeReadyImageStatsResult(
         "EX",
         READY_IMAGE_DERIVED_CACHE_POLICY.ttlSeconds
       );
-      const retained = await registerReadyImageDerivedResultUnchecked({
+      return await registerReadyImageDerivedResultUnchecked({
         key,
         kind: "stats-result",
         count: 0,
         itemCount
       });
-      await recordDerivedCacheModification();
-      return retained;
     } catch (error) {
       await clearAfterLifecycleFailure();
       throw error;
@@ -198,8 +184,6 @@ export async function storeReadyImageStatsResult(
 
 export function clearReadyImageDisposableCaches() {
   return withDerivedCacheLifecycle(async () => {
-    const modified = await clearReadyImageDisposableCachesUnchecked();
-    if (modified) await recordDerivedCacheModification();
-    return modified;
+    return clearReadyImageDisposableCachesUnchecked();
   });
 }

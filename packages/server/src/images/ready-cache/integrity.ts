@@ -29,7 +29,6 @@ import {
   validateReadyImageSamples
 } from "./integrity-samples.ts";
 import { compareReadyImageRevisions } from "./revision.ts";
-import { readReadyImageCacheLastUpdated } from "./last-updated.ts";
 
 export type ReadyImageCacheStartupValidation =
   | { valid: true; meta: ReadyImageCacheMeta }
@@ -101,9 +100,6 @@ export async function validateReadyImageCacheAtStartup(
     }
     if (compareReadyImageRevisions(meta.appliedRevision, postgresRevision) !== 0) {
       return { valid: false, reason: "revision_mismatch", meta };
-    }
-    if (!await readReadyImageCacheLastUpdated(client)) {
-      return { valid: false, reason: "last_updated_missing", meta };
     }
     const integrity = await readReadyImageIntegrity(client);
     const core = initialReadyImageCardinalities(meta.itemCount);

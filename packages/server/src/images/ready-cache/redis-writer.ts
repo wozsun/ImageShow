@@ -3,6 +3,7 @@ import { execRedisPipeline } from "../../core/redis-pipeline.ts";
 import {
   READY_IMAGE_ALL_INDEX_KEY,
   READY_IMAGE_CACHE_PREFIX,
+  READY_IMAGE_CORE_KEYS,
   READY_IMAGE_ID_SUFFIX_LOOKUP_KEY,
   READY_IMAGE_ITEMS_KEY,
   READY_IMAGE_META_KEY,
@@ -24,7 +25,6 @@ import {
   type ReadyImageCacheItem
 } from "./model.ts";
 import {
-  REDIS_BATCH_MAX_COMMANDS,
   RedisPipelineBatcher,
   chunkHashEntries,
   chunkSortedSetEntries,
@@ -148,41 +148,28 @@ export async function writeReadyImageCacheBatch(
   signal?.throwIfAborted();
 }
 
-export async function estimateReadyImageCacheMemory(
+export async function measureReadyImageCoreMemory(
   client: Redis,
   signal?: AbortSignal
 ) {
+  signal?.throwIfAborted();
+  const pipeline = client.pipeline();
+  for (const key of READY_IMAGE_CORE_KEYS) {
+    assertReadyImageCacheKey(key);
+    pipeline.call("MEMORY", "USAGE", key, "SAMPLES", "0");
+  }
+  const results = await execRedisPipeline(pipeline);
   let total = 0;
-  let cursor = "0";
-  do {
-    signal?.throwIfAborted();
-    const [next, keys] = await client.scan(
-      cursor,
-      "MATCH",
-      `${READY_IMAGE_CACHE_PREFIX}*`,
-      "COUNT",
-      SCAN_BATCH_SIZE
-    );
-    cursor = next;
-    for (let offset = 0; offset < keys.length; offset += REDIS_BATCH_MAX_COMMANDS) {
-      const batch = keys.slice(offset, offset + REDIS_BATCH_MAX_COMMANDS);
-      const pipeline = client.pipeline();
-      for (const key of batch) {
-        assertReadyImageCacheKey(key);
-        pipeline.call("MEMORY", "USAGE", key, "SAMPLES", "5");
-      }
-      const results = await execRedisPipeline(pipeline);
-      for (const result of results) {
-        const bytes = Number(result[1] ?? 0);
-        if (!Number.isSafeInteger(bytes) || bytes < 0) {
-          throw new Error("Redis returned an invalid image-cache memory estimate");
-        }
-        total += bytes;
-        if (!Number.isSafeInteger(total)) {
-          throw new Error("Ready-image cache memory estimate is too large");
-        }
-      }
+  for (const result of results) {
+    const bytes = Number(result[1] ?? 0);
+    if (!Number.isSafeInteger(bytes) || bytes < 0) {
+      throw new Error("Redis returned invalid ready-image core memory usage");
     }
-  } while (cursor !== "0");
+    total += bytes;
+    if (!Number.isSafeInteger(total)) {
+      throw new Error("Ready-image core memory usage is too large");
+    }
+  }
+  signal?.throwIfAborted();
   return total;
 }

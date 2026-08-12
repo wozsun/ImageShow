@@ -25,7 +25,7 @@ import {
 } from "./model.ts";
 import {
   clearReadyImageCacheData,
-  estimateReadyImageCacheMemory,
+  measureReadyImageCoreMemory,
   writeReadyImageCacheBatch
 } from "./redis-writer.ts";
 import {
@@ -33,7 +33,6 @@ import {
   getReadyImageRevision
 } from "./revision.ts";
 import { readReadyImageSourceSnapshot } from "./source.ts";
-import { markReadyImageCacheLastUpdated } from "./last-updated.ts";
 
 const SAMPLE_SIZE = 32;
 
@@ -42,13 +41,17 @@ async function observeReadyImageCacheMemory(
   signal?: AbortSignal
 ) {
   try {
-    return await estimateReadyImageCacheMemory(client, signal);
+    const bytes = await measureReadyImageCoreMemory(client, signal);
+    return {
+      bytes,
+      measuredAt: new Date().toISOString()
+    };
   } catch (error) {
     signal?.throwIfAborted();
     logger.warn("ready_image_cache_memory_observation_failed", {
       error: errorMessage(error)
     });
-    return null;
+    return { bytes: null, measuredAt: "" };
   }
 }
 
@@ -105,15 +108,17 @@ async function buildAttempt(
   signal?: AbortSignal
 ): Promise<{ changed: true } | { changed: false; meta: ReadyImageCacheMeta }> {
   const startedAt = new Date().toISOString();
-  let progress = rebuildingReadyImageCacheMeta(previousRevision, startedAt);
+  const previousMeta = await readReadyImageCacheMeta(client).catch(() => null);
+  let progress = rebuildingReadyImageCacheMeta(
+    previousRevision,
+    startedAt,
+    previousMeta
+  );
   await withReadyImageCacheWriteFence(async () => {
-    await writeReadyImageCacheMeta(progress, client, {
-      lastUpdatedAt: startedAt
-    });
+    await writeReadyImageCacheMeta(progress, client);
     await clearReadyImageCacheForRebuild(client, signal);
-    await writeReadyImageCacheMeta(progress, client, {
-      lastUpdatedAt: new Date().toISOString()
-    });
+    progress = { ...progress, lastUpdatedAt: new Date().toISOString() };
+    await writeReadyImageCacheMeta(progress, client);
   });
 
   let cardinalities: ReadyImageCardinalities = buildReadyImageCardinalities(0);
@@ -125,11 +130,10 @@ async function buildAttempt(
       progress = {
         ...progress,
         appliedRevision: revision,
-        total
-      };
-      await writeReadyImageCacheMeta(progress, client, {
+        total,
         lastUpdatedAt: new Date().toISOString()
-      });
+      };
+      await writeReadyImageCacheMeta(progress, client);
     },
     async (items, state) => {
       addSamples(samples, items, state.processed - items.length, state.total);
@@ -140,11 +144,17 @@ async function buildAttempt(
         client,
         signal
       );
-      progress = { ...progress, processed: state.processed };
+      progress = {
+        ...progress,
+        itemCount: state.processed,
+        processed: state.processed,
+        lastUpdatedAt: new Date().toISOString()
+      };
       await client.hset(READY_IMAGE_META_KEY, {
-        processed: String(state.processed)
+        item_count: String(state.processed),
+        processed: String(state.processed),
+        last_updated_at: progress.lastUpdatedAt
       });
-      await markReadyImageCacheLastUpdated(client);
     },
     signal
   );
@@ -158,7 +168,7 @@ async function buildAttempt(
     client,
     signal
   );
-  const memoryBytes = await observeReadyImageCacheMemory(client, signal);
+  const memory = await observeReadyImageCacheMemory(client, signal);
   await validateBuiltReadyImageCache(
     expected,
     stats,
@@ -174,21 +184,22 @@ async function buildAttempt(
     if (compareReadyImageRevisions(snapshot.revision, beforePublish) !== 0) {
       return { changed: true };
     }
+    const completedAt = new Date().toISOString();
     const meta: ReadyImageCacheMeta = {
       schema: READY_IMAGE_CACHE_SCHEMA,
       state: "ready",
       appliedRevision: snapshot.revision,
       itemCount: snapshot.total,
-      builtAt: new Date().toISOString(),
-      startedAt,
-      processed: snapshot.total,
-      total: snapshot.total,
-      memoryBytes,
+      lastUpdatedAt: completedAt,
+      fullRebuildStartedAt: startedAt,
+      fullRebuildCompletedAt: completedAt,
+      processed: 0,
+      total: 0,
+      lastFullRebuildCoreMemoryBytes: memory.bytes,
+      lastFullRebuildMeasuredAt: memory.measuredAt,
       lastError: ""
     };
-    await writeReadyImageCacheMeta(meta, client, {
-      lastUpdatedAt: meta.builtAt
-    });
+    await writeReadyImageCacheMeta(meta, client);
     // Production mutations hold the same fence from before BEGIN through
     // exact Redis sync. This second read also catches direct/unfenced test or
     // operator writes that commit during the cross-system publish itself.
@@ -197,8 +208,9 @@ async function buildAttempt(
       await writeReadyImageCacheMeta({
         ...progress,
         appliedRevision: afterPublish,
+        lastUpdatedAt: new Date().toISOString(),
         lastError: "PostgreSQL changed while the cache was being published"
-      }, client, { lastUpdatedAt: new Date().toISOString() });
+      }, client);
       return { changed: true };
     }
     return { changed: false, meta };
@@ -221,14 +233,23 @@ async function discardFailedBuild(error: unknown, client: Redis) {
       }
       try {
         const failedAt = new Date().toISOString();
+        const degradedBase = current?.state === "rebuilding"
+          ? current
+          : rebuildingReadyImageCacheMeta(
+              fallback.appliedRevision,
+              failedAt,
+              fallback
+            );
         await writeReadyImageCacheMeta({
-          ...fallback,
+          ...degradedBase,
           state: "degraded",
-          builtAt: failedAt,
           itemCount: 0,
-          memoryBytes: null,
+          lastUpdatedAt: failedAt,
+          fullRebuildCompletedAt: "",
+          processed: 0,
+          total: 0,
           lastError: errorMessage(error)
-        }, client, { lastUpdatedAt: failedAt });
+        }, client);
       } catch (metaError) {
         cleanupErrors.push(metaError);
       }

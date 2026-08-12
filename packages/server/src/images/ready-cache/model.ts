@@ -8,7 +8,7 @@ import {
 } from "@imageshow/shared/browser";
 import { thumbnailObjectKey } from "../../storage/image-paths.ts";
 
-export const READY_IMAGE_CACHE_SCHEMA = 4;
+export const READY_IMAGE_CACHE_SCHEMA = 5;
 export const READY_IMAGE_REBUILD_BATCH_SIZE = 1_000;
 export const READY_IMAGE_REBUILD_MAX_ATTEMPTS = 2;
 export const READY_IMAGE_REBUILD_QUIET_MS = 250;
@@ -25,11 +25,13 @@ export type ReadyImageCacheMeta = {
   state: ReadyImageCacheState;
   appliedRevision: string;
   itemCount: number;
-  builtAt: string;
-  startedAt: string;
+  lastUpdatedAt: string;
+  fullRebuildStartedAt: string;
+  fullRebuildCompletedAt: string;
   processed: number;
   total: number;
-  memoryBytes: number | null;
+  lastFullRebuildCoreMemoryBytes: number | null;
+  lastFullRebuildMeasuredAt: string;
   lastError: string;
 };
 

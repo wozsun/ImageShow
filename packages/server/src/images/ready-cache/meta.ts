@@ -1,11 +1,7 @@
 import type { Redis } from "ioredis";
 import { redis } from "../../core/redis-client.ts";
 import { execRedisPipeline } from "../../core/redis-pipeline.ts";
-import {
-  READY_IMAGE_LAST_UPDATED_KEY,
-  READY_IMAGE_META_KEY
-} from "./keys.ts";
-import { readyImageCacheLastUpdatedValue } from "./last-updated.ts";
+import { READY_IMAGE_META_KEY } from "./keys.ts";
 import {
   READY_IMAGE_CACHE_SCHEMA,
   type ReadyImageCacheMeta,
@@ -17,11 +13,13 @@ const metaFields = new Set([
   "state",
   "applied_revision",
   "item_count",
-  "built_at",
-  "started_at",
+  "last_updated_at",
+  "full_rebuild_started_at",
+  "full_rebuild_completed_at",
   "processed",
   "total",
-  "memory_bytes",
+  "last_full_rebuild_core_memory_bytes",
+  "last_full_rebuild_measured_at",
   "last_error"
 ]);
 const cacheStates = new Set<ReadyImageCacheState>([
@@ -53,7 +51,7 @@ function nonNegativeInteger(value: unknown, field: string) {
 function optionalMemoryBytes(value: unknown) {
   return String(value ?? "") === "-1"
     ? null
-    : nonNegativeInteger(value, "memory_bytes");
+    : nonNegativeInteger(value, "last_full_rebuild_core_memory_bytes");
 }
 
 function optionalTimestamp(value: unknown, field: string) {
@@ -83,26 +81,69 @@ function parseReadyImageCacheMeta(
     state,
     appliedRevision: decimalRevision(raw.applied_revision),
     itemCount: nonNegativeInteger(raw.item_count, "item_count"),
-    builtAt: optionalTimestamp(raw.built_at, "built_at"),
-    startedAt: optionalTimestamp(raw.started_at, "started_at"),
+    lastUpdatedAt: optionalTimestamp(raw.last_updated_at, "last_updated_at"),
+    fullRebuildStartedAt: optionalTimestamp(
+      raw.full_rebuild_started_at,
+      "full_rebuild_started_at"
+    ),
+    fullRebuildCompletedAt: optionalTimestamp(
+      raw.full_rebuild_completed_at,
+      "full_rebuild_completed_at"
+    ),
     processed: nonNegativeInteger(raw.processed, "processed"),
     total: nonNegativeInteger(raw.total, "total"),
-    memoryBytes: optionalMemoryBytes(raw.memory_bytes),
+    lastFullRebuildCoreMemoryBytes: optionalMemoryBytes(
+      raw.last_full_rebuild_core_memory_bytes
+    ),
+    lastFullRebuildMeasuredAt: optionalTimestamp(
+      raw.last_full_rebuild_measured_at,
+      "last_full_rebuild_measured_at"
+    ),
     lastError: raw.last_error
   };
   if (meta.processed > meta.total) {
     throw new Error("Ready-image cache progress exceeds its total");
   }
+  if (!meta.lastUpdatedAt || !meta.fullRebuildStartedAt) {
+    throw new Error("Ready-image cache meta is missing required timestamps");
+  }
   if (
-    meta.state === "ready"
-    && (
-      !meta.builtAt
-      || meta.itemCount !== meta.total
-      || meta.processed !== meta.total
-      || meta.lastError
-    )
+    meta.fullRebuildCompletedAt
+    && Date.parse(meta.fullRebuildCompletedAt)
+      < Date.parse(meta.fullRebuildStartedAt)
   ) {
+    throw new Error(
+      "Ready-image cache full rebuild timestamps are out of order"
+    );
+  }
+  if (
+    (meta.lastFullRebuildCoreMemoryBytes === null)
+    !== (meta.lastFullRebuildMeasuredAt === "")
+  ) {
+    throw new Error("Ready-image cache memory snapshot is incomplete");
+  }
+  if (meta.state === "ready" && (
+    !meta.fullRebuildCompletedAt
+    || meta.processed !== 0
+    || meta.total !== 0
+    || meta.lastError
+  )) {
     throw new Error("Ready-image cache ready meta is internally inconsistent");
+  }
+  if (meta.state === "rebuilding" && (
+    meta.fullRebuildCompletedAt
+    || meta.itemCount !== meta.processed
+  )) {
+    throw new Error("Ready-image cache rebuilding meta is internally inconsistent");
+  }
+  if (meta.state === "degraded" && (
+    meta.fullRebuildCompletedAt
+    || meta.itemCount !== 0
+    || meta.processed !== 0
+    || meta.total !== 0
+    || !meta.lastError
+  )) {
+    throw new Error("Ready-image cache degraded meta is internally inconsistent");
   }
   return meta;
 }
@@ -116,11 +157,16 @@ function serializedMeta(meta: ReadyImageCacheMeta) {
     state: meta.state,
     applied_revision: decimalRevision(meta.appliedRevision),
     item_count: String(meta.itemCount),
-    built_at: meta.builtAt,
-    started_at: meta.startedAt,
+    last_updated_at: meta.lastUpdatedAt,
+    full_rebuild_started_at: meta.fullRebuildStartedAt,
+    full_rebuild_completed_at: meta.fullRebuildCompletedAt,
     processed: String(meta.processed),
     total: String(meta.total),
-    memory_bytes: meta.memoryBytes === null ? "-1" : String(meta.memoryBytes),
+    last_full_rebuild_core_memory_bytes:
+      meta.lastFullRebuildCoreMemoryBytes === null
+        ? "-1"
+        : String(meta.lastFullRebuildCoreMemoryBytes),
+    last_full_rebuild_measured_at: meta.lastFullRebuildMeasuredAt,
     last_error: meta.lastError.slice(0, 1_000)
   };
 }
@@ -133,35 +179,36 @@ export async function readReadyImageCacheMeta(
 
 export async function writeReadyImageCacheMeta(
   meta: ReadyImageCacheMeta,
-  client: Redis = redis,
-  options: { lastUpdatedAt?: string } = {}
+  client: Redis = redis
 ) {
   const transaction = client.multi();
   transaction.del(READY_IMAGE_META_KEY);
   transaction.hset(READY_IMAGE_META_KEY, serializedMeta(meta));
-  if (options.lastUpdatedAt !== undefined) {
-    transaction.set(
-      READY_IMAGE_LAST_UPDATED_KEY,
-      readyImageCacheLastUpdatedValue(options.lastUpdatedAt)
-    );
-  }
   await execRedisPipeline(transaction);
 }
 
 export function rebuildingReadyImageCacheMeta(
   appliedRevision: string,
-  startedAt = new Date().toISOString()
+  startedAt = new Date().toISOString(),
+  previous: ReadyImageCacheMeta | null = null
 ): ReadyImageCacheMeta {
+  const reliablePrevious = previous?.schema === READY_IMAGE_CACHE_SCHEMA
+    ? previous
+    : null;
   return {
     schema: READY_IMAGE_CACHE_SCHEMA,
     state: "rebuilding",
     appliedRevision: decimalRevision(appliedRevision),
     itemCount: 0,
-    builtAt: "",
-    startedAt,
+    lastUpdatedAt: startedAt,
+    fullRebuildStartedAt: startedAt,
+    fullRebuildCompletedAt: "",
     processed: 0,
     total: 0,
-    memoryBytes: null,
+    lastFullRebuildCoreMemoryBytes:
+      reliablePrevious?.lastFullRebuildCoreMemoryBytes ?? null,
+    lastFullRebuildMeasuredAt:
+      reliablePrevious?.lastFullRebuildMeasuredAt ?? "",
     lastError: ""
   };
 }

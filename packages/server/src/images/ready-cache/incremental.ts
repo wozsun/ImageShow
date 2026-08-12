@@ -38,15 +38,17 @@ function assertRedisConnectionEpoch(epoch: number) {
 function nextMeta(
   previous: ReadyImageCacheMeta,
   revision: string,
-  itemCount: number
+  itemCount: number,
+  lastUpdatedAt: string
 ): ReadyImageCacheMeta {
   return {
     ...previous,
     state: "ready",
     appliedRevision: revision,
     itemCount,
-    processed: itemCount,
-    total: itemCount,
+    lastUpdatedAt,
+    processed: 0,
+    total: 0,
     lastError: ""
   };
 }
@@ -115,10 +117,13 @@ export async function synchronizeReadyImageCacheMutation(
 
   await publishReadyImageStatsIntegrity(expectedStats, redis);
   assertRedisConnectionEpoch(redisConnectionEpoch);
-  const meta = nextMeta(persistedMeta, committedRevision, nextItemCount);
-  await writeReadyImageCacheMeta(meta, redis, {
-    lastUpdatedAt: new Date().toISOString()
-  });
+  const meta = nextMeta(
+    persistedMeta,
+    committedRevision,
+    nextItemCount,
+    new Date().toISOString()
+  );
+  await writeReadyImageCacheMeta(meta, redis);
   assertRedisConnectionEpoch(redisConnectionEpoch);
   if ((await getReadyImageRevision()).revision !== committedRevision) {
     throw new Error("PostgreSQL revision changed while Redis was publishing");

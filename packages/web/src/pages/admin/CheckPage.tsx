@@ -430,6 +430,7 @@ const CHECK_RESULT_LABELS: Record<string, string> = {
   migration: "迁移结果",
   // Redis 状态
   connection: "连接状态",
+  deep_inspection: "当前键空间深检",
   prefix_counts: "键数量统计",
   image_projection: "Redis 图片投影",
   core: "核心投影",

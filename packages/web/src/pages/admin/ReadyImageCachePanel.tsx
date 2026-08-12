@@ -24,6 +24,15 @@ function formatTime(value: string | null) {
   return Number.isFinite(timestamp) ? new Date(timestamp).toLocaleString() : value;
 }
 
+function formatDuration(value: number | null) {
+  if (value === null) return "—";
+  if (value < 1_000) return `${value} 毫秒`;
+  const seconds = value / 1_000;
+  return seconds < 60
+    ? `${seconds.toFixed(seconds < 10 ? 1 : 0)} 秒`
+    : `${Math.floor(seconds / 60)} 分 ${Math.round(seconds % 60)} 秒`;
+}
+
 type RebuildErrorBaseline = {
   dataUpdatedAt: number;
   hadStatus: boolean;
@@ -175,6 +184,24 @@ export function ReadyImageCachePanel({
         )}
         <dl className="ready-cache-status-grid">
           <div><dt>状态</dt><dd>{status?.rebuilding ? "重建中" : healthy ? "已同步" : status?.reason ?? "读取中"}</dd></div>
+          <div>
+            <dt>图片数量</dt>
+            <dd>{status?.item_count === null || status?.item_count === undefined
+              ? "—"
+              : status.item_count.toLocaleString()}</dd>
+          </div>
+          {status?.rebuilding && (
+            <div>
+              <dt>完整重建进度</dt>
+              <dd>{status.processed === null || status.total === null
+                ? "—"
+                : `${status.processed.toLocaleString()} / ${status.total.toLocaleString()}`}</dd>
+            </div>
+          )}
+          <div><dt>最后更新时间</dt><dd>{formatTime(status?.last_updated_at ?? null)}</dd></div>
+          <div><dt>完整重建开始时间</dt><dd>{formatTime(status?.full_rebuild_started_at ?? null)}</dd></div>
+          <div><dt>完整重建完成时间</dt><dd>{formatTime(status?.full_rebuild_completed_at ?? null)}</dd></div>
+          <div><dt>完整重建耗时</dt><dd>{formatDuration(status?.full_rebuild_duration_ms ?? null)}</dd></div>
           <div>
             <dt>数据库 revision 指纹</dt>
             <dd title={status?.authoritative_revision ? `完整 revision：${status.authoritative_revision}` : undefined}>

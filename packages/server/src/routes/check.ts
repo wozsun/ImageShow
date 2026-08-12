@@ -17,7 +17,9 @@ export function registerCheckRoutes(app: Hono) {
     c.json(apiSuccess(await readAdminCheckStatus()))
   ));
   app.post(`${adminApiBasePath}/check/db`, async (c) => c.json(apiSuccess(await checkDatabase())));
-  app.post(`${adminApiBasePath}/check/redis`, async (c) => c.json(apiSuccess(await inspectRedisState())));
+  app.post(`${adminApiBasePath}/check/redis`, async (c) => c.json(apiSuccess(
+    await inspectRedisState(c.req.raw.signal)
+  )));
   app.post(`${adminApiBasePath}/check/storage`, async (c) => c.json(apiSuccess(await checkStorage(c.req.raw.signal))));
   app.post(
     `${adminApiBasePath}/check/storage-maintenance`,

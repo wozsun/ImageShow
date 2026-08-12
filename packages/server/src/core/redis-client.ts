@@ -1,5 +1,6 @@
 import { Redis } from "ioredis";
 import { deploymentConfig } from "../config/deployment-config.ts";
+import { abortSignalError, raceWithAbortSignal } from "./abort.ts";
 import { logger } from "./logger.ts";
 
 const redisConfig = deploymentConfig.redis;
@@ -76,17 +77,35 @@ export function onRedisConnectionStateChange(
 
 let redisConnectPromise: Promise<unknown> | null = null;
 
-export async function pingRedis() {
+async function waitForRedisProbe<T>(
+  operation: Promise<T>,
+  signal?: AbortSignal
+) {
+  return signal
+    ? raceWithAbortSignal(signal, operation, "Redis probe aborted")
+    : operation;
+}
+
+function throwIfRedisProbeAborted(signal?: AbortSignal) {
+  if (signal?.aborted) {
+    throw abortSignalError(signal, "Redis probe aborted");
+  }
+}
+
+export async function pingRedis(signal?: AbortSignal) {
+  throwIfRedisProbeAborted(signal);
   if (redis.status === "wait" || redis.status === "end") {
     redisConnectPromise ??= redis.connect().finally(() => {
       redisConnectPromise = null;
     });
-    await redisConnectPromise;
+    await waitForRedisProbe(redisConnectPromise, signal);
   }
+  throwIfRedisProbeAborted(signal);
   if (redis.status !== "ready") {
     throw new Error(`Redis client is not ready (${redis.status})`);
   }
-  await redis.ping();
+  await waitForRedisProbe(redis.ping(), signal);
+  throwIfRedisProbeAborted(signal);
 }
 
 const requiredRedisCommands = [
@@ -108,9 +127,7 @@ export type RedisRequiredCommandCapabilities = Readonly<{
   missing: readonly RequiredRedisCommand[];
 }>;
 
-type RedisCommandProbe = {
-  call(command: string, ...args: string[]): Promise<unknown>;
-};
+type RedisCommandProbe = Pick<Redis, "call" | "pipeline">;
 
 export class RedisRequiredCommandsError extends Error {
   readonly code = "redis_required_commands_missing";
@@ -155,11 +172,15 @@ function isNonNegativeIntegerReply(value: unknown) {
 }
 
 async function commandProbe(
-  probe: () => Promise<boolean>
+  probe: () => Promise<boolean>,
+  signal?: AbortSignal
 ) {
   try {
     return await probe();
-  } catch {
+  } catch (error) {
+    if (signal?.aborted) {
+      throw abortSignalError(signal, "Redis command probe aborted");
+    }
     return false;
   }
 }
@@ -176,13 +197,13 @@ export function parseRedisMemoryState(info: string) {
 }
 
 export async function readRequiredRedisCommandCapabilities(
-  client: RedisCommandProbe = redis
+  client: RedisCommandProbe = redis,
+  signal?: AbortSignal
 ): Promise<RedisRequiredCommandCapabilities> {
-  let arrayProbeCreated = false;
-  let arrayProbeTtlApplied = false;
-  const commands = {
-    INCREX: await commandProbe(async () => {
-      const reply = await client.call(
+  throwIfRedisProbeAborted(signal);
+  const increx = await commandProbe(async () => {
+    const reply = await waitForRedisProbe(
+      client.call(
         "INCREX",
         REQUIRED_COMMAND_COUNTER_PROBE_KEY,
         "BYINT",
@@ -192,58 +213,75 @@ export async function readRequiredRedisCommandCapabilities(
         "EX",
         String(REQUIRED_COMMAND_PROBE_TTL_SECONDS),
         "ENX"
-      );
-      return Array.isArray(reply)
-        && reply.length === 2
-        && reply.every(isNonNegativeIntegerReply);
-    }),
-    ARRING: await commandProbe(async () => {
-      const reply = await client.call(
-        "ARRING",
-        REQUIRED_COMMAND_ARRAY_PROBE_KEY,
-        "1",
-        "imageshow-required-command-probe"
-      );
-      arrayProbeCreated = true;
-      if (!isNonNegativeIntegerReply(reply)) return false;
-      const expiration = await client.call(
-        "EXPIRE",
-        REQUIRED_COMMAND_ARRAY_PROBE_KEY,
-        String(REQUIRED_COMMAND_PROBE_TTL_SECONDS)
-      );
-      arrayProbeTtlApplied = Number(expiration) === 1;
-      return arrayProbeTtlApplied;
-    }),
-    ARLASTITEMS: await commandProbe(async () => {
-      const reply = await client.call(
-        "ARLASTITEMS",
-        REQUIRED_COMMAND_ARRAY_PROBE_KEY,
-        "1",
-        "REV"
-      );
-      return Array.isArray(reply)
-        && reply.every((item) => typeof item === "string");
-    })
-  } satisfies Record<RequiredRedisCommand, boolean>;
-  // Both successful writes already carry a short TTL. UNLINK removes them
-  // immediately; a restricted ACL may reject cleanup without turning the
-  // fixed, bounded probe keys into persistent application state.
-  let cleanupSucceeded = false;
-  try {
-    await client.call(
-      "UNLINK",
-      REQUIRED_COMMAND_COUNTER_PROBE_KEY,
-      REQUIRED_COMMAND_ARRAY_PROBE_KEY
+      ),
+      signal
     );
-    cleanupSucceeded = true;
-  } catch {
-    // The TTLs remain the cleanup boundary when immediate deletion is denied.
+    return Array.isArray(reply)
+      && reply.length === 2
+      && reply.every(isNonNegativeIntegerReply);
+  }, signal);
+
+  throwIfRedisProbeAborted(signal);
+  // Queue creation, TTL, read probe and cleanup as one indivisible scheduling
+  // stage. If the request is cancelled while Redis is executing it, no later
+  // command is scheduled and either EXPIRE or UNLINK bounds the probe key.
+  const pipeline = client.pipeline();
+  pipeline.call(
+    "ARRING",
+    REQUIRED_COMMAND_ARRAY_PROBE_KEY,
+    "1",
+    "imageshow-required-command-probe"
+  );
+  pipeline.call(
+    "EXPIRE",
+    REQUIRED_COMMAND_ARRAY_PROBE_KEY,
+    String(REQUIRED_COMMAND_PROBE_TTL_SECONDS)
+  );
+  pipeline.call(
+    "ARLASTITEMS",
+    REQUIRED_COMMAND_ARRAY_PROBE_KEY,
+    "1",
+    "REV"
+  );
+  pipeline.call(
+    "UNLINK",
+    REQUIRED_COMMAND_COUNTER_PROBE_KEY,
+    REQUIRED_COMMAND_ARRAY_PROBE_KEY
+  );
+  const results = await waitForRedisProbe(pipeline.exec(), signal);
+  throwIfRedisProbeAborted(signal);
+  if (!results || results.length !== 4) {
+    throw new Error("Redis required-command probe returned invalid results");
   }
+  const [arringResult, expirationResult, arlastitemsResult, cleanupResult] =
+    results;
+  if (
+    !arringResult
+    || !expirationResult
+    || !arlastitemsResult
+    || !cleanupResult
+  ) {
+    throw new Error("Redis required-command probe returned incomplete results");
+  }
+  const [arringError, arringReply] = arringResult;
+  const [expirationError, expirationReply] = expirationResult;
+  const [arlastitemsError, arlastitemsReply] = arlastitemsResult;
+  const [cleanupError] = cleanupResult;
+  const arrayProbeCreated = !arringError
+    && isNonNegativeIntegerReply(arringReply);
+  const arrayProbeTtlApplied = !expirationError
+    && Number(expirationReply) === 1;
+  const cleanupSucceeded = !cleanupError;
   if (arrayProbeCreated && !arrayProbeTtlApplied && !cleanupSucceeded) {
-    // ARRING succeeded but EXPIRE did not, so a cleanup failure would leave a
-    // persistent probe. Treat that base-key lifecycle failure as unavailable.
     throw new Error("Redis required-command array probe could not set its TTL");
   }
+  const commands = {
+    INCREX: increx,
+    ARRING: arrayProbeCreated && arrayProbeTtlApplied,
+    ARLASTITEMS: !arlastitemsError
+      && Array.isArray(arlastitemsReply)
+      && arlastitemsReply.every((item) => typeof item === "string")
+  } satisfies Record<RequiredRedisCommand, boolean>;
   const missing = requiredRedisCommands.filter((command) => !commands[command]);
   return {
     available: missing.length === 0,
