@@ -39,13 +39,20 @@ export type ImageStorageMigrationResponseDto = {
   results: ImageStorageMigrationItemResultDto[];
 };
 
+export type StorageBackendMigrationErrorSampleDto = {
+  id: string;
+  object_key: string;
+  code: string;
+  message: string;
+};
+
 export type StorageBackendMigrationResultDto = {
   source: string;
   target: string;
   migrated: number;
   unchanged: number;
   missing: number;
-  errors: Array<Record<string, unknown>>;
+  error_samples: StorageBackendMigrationErrorSampleDto[];
   error_count: number;
 };
 

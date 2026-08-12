@@ -1,4 +1,7 @@
-import { errorMessage } from "../core/api-error.ts";
+import type {
+  StorageBackendMigrationErrorSampleDto
+} from "@imageshow/shared/browser";
+import { ApiError, errorMessage } from "../core/api-error.ts";
 import { pool } from "../core/database-pools.ts";
 import {
   migrateImageStorage,
@@ -97,10 +100,10 @@ async function migrateBackendEntries(
   let unchanged = 0;
   let missing = 0;
   let errorCount = 0;
-  const errors: Array<Record<string, unknown>> = [];
-  const recordError = (error: Record<string, unknown>) => {
+  const errorSamples: StorageBackendMigrationErrorSampleDto[] = [];
+  const recordError = (error: StorageBackendMigrationErrorSampleDto) => {
     errorCount += 1;
-    if (errors.length < 100) errors.push(error);
+    if (errorSamples.length < 100) errorSamples.push(error);
   };
 
   for await (const entry of entries) {
@@ -122,7 +125,8 @@ async function migrateBackendEntries(
         recordError({
           id: entry.id,
           object_key: entry.object_key,
-          reason: "source_object_missing"
+          code: "source_object_missing",
+          message: "源存储对象不存在"
         });
       } else {
         unchanged += 1;
@@ -132,7 +136,10 @@ async function migrateBackendEntries(
       recordError({
         id: entry.id,
         object_key: entry.object_key,
-        reason: errorMessage(error)
+        code: error instanceof ApiError
+          ? error.code
+          : "storage_migration_failed",
+        message: errorMessage(error)
       });
     }
   }
@@ -142,7 +149,7 @@ async function migrateBackendEntries(
     migrated,
     unchanged,
     missing,
-    errors,
+    error_samples: errorSamples,
     error_count: errorCount
   };
 }

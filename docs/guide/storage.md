@@ -71,7 +71,11 @@ local、无公开 URL 的 S3 与配置 `public_base_url` 的 S3 都遵守这一�
 编排器中的 1 项或 N 项；整后端分页也逐项调用该原语，不维护第二套 executor、阶段 DTO
 或补偿协议。逐项结果明确区分 `migrated`、`unchanged`、图片不存在、源对象缺失和普通失败；
 一个成员失败不会回滚已经完成的其他成员。客户端断开会中止当前并发片并等待其对象候选与
-持久清理所有权收口，不再启动后续列表成员或读取下一页整后端数据。
+持久清理所有权收口，不再启动后续列表成员或读取下一页整后端数据。整后端迁移以
+`error_count` 表达权威失败总数，并只在 `error_samples` 返回最多 100 个稳定样本；每项固定为
+`{ id, object_key, code, message }`。已知 `ApiError` 保留其稳定 `code`，未知异常统一使用
+`storage_migration_failed`；`message` 只供界面展示和运维诊断，任何消费者都不得按其文本
+判断错误类型。
 
 迁移用统一的物理命名空间 identity 判断两个 slug 是否指向同一位置：S3 初始 identity
 由规范化 endpoint、bucket 和 root path 决定，本地后端由运行时存储目录决定；凭据、

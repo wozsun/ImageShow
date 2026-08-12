@@ -94,7 +94,7 @@ N+1 把同一定义移入 `schema.sql`，再把 additions 清空为注释占位�
 重命名、类型改变、推测回填、版本标记或清库。精确契约见
 [数据库结构](docs/guide/database.md#启动与结构契约)。
 
-当前 `v4.9.3` 没有待执行的 additions SQL，文件只保留过渡规则注释；
+当前 `v4.9.4` 没有待执行的 additions SQL，文件只保留过渡规则注释；
 `metadata.purge_error`、`admin_account.preferences` 与 `theme.none` 已属于 `schema.sql`
 基线，并已由全部受控生产数据库在上一版本完成确认。
 

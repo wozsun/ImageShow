@@ -237,8 +237,7 @@ async function migrateImageStorageWhileLocked(
     prefix: StoragePrefix,
     key: string,
     body: Buffer,
-    objectContentType: string,
-    sourceObjectExists = true
+    objectContentType: string
   ) => {
     signal.throwIfAborted();
     const [candidate] = await captureMoveCleanupObjects([{
@@ -256,7 +255,6 @@ async function migrateImageStorageWhileLocked(
       key,
       body,
       contentType: objectContentType,
-      sourceObjectExists,
       cleanupCandidate: () => enqueueCapturedObjectsForCleanupDetached(
         current.id,
         [candidate],

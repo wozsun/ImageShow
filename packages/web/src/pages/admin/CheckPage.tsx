@@ -424,7 +424,7 @@ const CHECK_RESULT_LABELS: Record<string, string> = {
   missing: "源对象缺失",
   media: "原图数",
   thumbs: "缩略图数",
-  errors: "错误明细",
+  error_samples: "错误样本",
   error_count: "错误数量",
   // 迁移存储后端
   migration: "迁移结果",
@@ -455,7 +455,7 @@ function checkResultLabel(key: string) {
 
 function isIssueKey(key: string) {
   return [
-    "issues", "operations", "failures", "failed", "unavailable_backends", "incomplete_listings", "error", "errors", "error_count",
+    "issues", "operations", "failures", "failed", "unavailable_backends", "incomplete_listings", "error", "error_count",
     "missing_objects", "missing_thumbs", "pending_thumbnail_repairs",
     "orphan_objects", "orphan_thumbs", "orphan_staging_files", "ready_cache_mismatch"
   ].includes(key);

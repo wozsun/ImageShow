@@ -7,6 +7,7 @@ import type {
   StorageDriver,
   StorageRequestOptions
 } from "./driver.ts";
+import { assertObjectNotPendingCleanup } from "./move-cleanup.ts";
 import type { StoragePrefix } from "./object-keys.ts";
 import { shareStorageNamespace } from "./storage-namespace.ts";
 
@@ -17,7 +18,6 @@ export type StorageEndpoint = {
 
 export type VerifiedObjectTransfer = {
   created: boolean;
-  sharedNamespace: boolean;
 };
 
 export type StorageObjectDigest = {
@@ -61,15 +61,6 @@ export function missingThumbnailSourceError({
     "图片当前位置的缩略图不存在，请先在检查页运行“存储维护”",
     { image_id: imageId, backend, prefix: "thumbs", key }
   );
-}
-
-async function defaultCleanupLeaseCheck(
-  target: StorageConfig,
-  prefix: "media" | "thumbs",
-  key: string
-) {
-  const { assertObjectNotPendingCleanup } = await import("./move-cleanup.ts");
-  await assertObjectNotPendingCleanup(target, prefix, key);
 }
 
 function objectConflict(
@@ -239,7 +230,7 @@ async function ensureVerifiedObjectAtTarget(input: {
     sha256: createHash("sha256").update(body).digest("hex")
   };
   if (prefix !== "_uploads") {
-    await defaultCleanupLeaseCheck(target.config, prefix, key);
+    await assertObjectNotPendingCleanup(target.config, prefix, key);
   }
   if (await target.driver.exists(prefix, key, { signal })) {
     const existing = await digestStorageObject(target, prefix, key, { signal });
@@ -334,7 +325,7 @@ export async function copyVerifiedObjectWithinStorage(input: {
     return { created: false, sourceDigest };
   }
   if (toPrefix !== "_uploads") {
-    await defaultCleanupLeaseCheck(storage.config, toPrefix, toKey);
+    await assertObjectNotPendingCleanup(storage.config, toPrefix, toKey);
   }
   if (await storage.driver.exists(toPrefix, toKey, { signal })) {
     const existing = await digestStorageObject(
@@ -402,15 +393,14 @@ export async function ensureVerifiedObjectAtDestination(input: {
   key: string;
   body: Buffer;
   contentType: string;
-  sourceObjectExists?: boolean;
   cleanupCandidate?: CandidateCleanup;
   signal?: AbortSignal;
 }): Promise<VerifiedObjectTransfer> {
   const { source, target, prefix, key, body, contentType } = input;
   const sharedNamespace = shareStorageNamespace(source.config, target.config);
-  if (sharedNamespace && input.sourceObjectExists !== false) {
+  if (sharedNamespace) {
     if (prefix !== "_uploads") {
-      await defaultCleanupLeaseCheck(
+      await assertObjectNotPendingCleanup(
         target.config,
         prefix,
         key
@@ -442,10 +432,10 @@ export async function ensureVerifiedObjectAtDestination(input: {
     if (!sameDigest(existing, expected)) {
       throw objectConflict(target, prefix, key, source.config.slug);
     }
-    return { created: false, sharedNamespace: true };
+    return { created: false };
   }
 
-  const result = await ensureVerifiedObjectAtTarget({
+  return ensureVerifiedObjectAtTarget({
     target,
     prefix,
     key,
@@ -455,5 +445,4 @@ export async function ensureVerifiedObjectAtDestination(input: {
     cleanupCandidate: input.cleanupCandidate,
     signal: input.signal
   });
-  return { ...result, sharedNamespace };
 }
