@@ -4,7 +4,6 @@ import { pathToFileURL } from "node:url";
 
 const workspaceRoot = resolve(import.meta.dirname, "../..");
 const buildOutputs = [
-  "dist",
   "packages/shared/dist",
   "packages/server/dist",
   "packages/web/dist"

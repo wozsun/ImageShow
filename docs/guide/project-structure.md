@@ -37,7 +37,7 @@ packages/web ─────► packages/shared
 | 命令 | 内容 | 副作用 |
 | --- | --- | --- |
 | `npm run verify:source` | workspace 类型、Knip、语义颜色、依赖方向 / 环、配置示例、图标、Markdown 链接与 selector inventory | 只读源码，不生成 `dist`、容器或浏览器会话 |
-| `npm run verify:build` | 清理必要输出，先构建 shared，再并行构建 Web / Server，装配服务端资产并按真实产物图检查 Web 分块边界 | 重建三个 workspace 的 `dist`；根 `dist` 只作为旧残留被删除，不会重新产生 |
+| `npm run verify:build` | 清理必要输出，先构建 shared，再并行构建 Web / Server，装配服务端资产并按真实产物图检查 Web 分块边界 | 只重建三个 workspace 的 `dist`，不维护从未产生的根 `dist` 或已删除的 migrations 输出 |
 | `npm run verify:runtime` | baseline / Server / Web 三个最终入口，以及生产镜像冷启动、HTTP、schema 和重启 | 建立随机命名的 tmpfs PostgreSQL、Redis、应用容器、网络和临时镜像；无论成功、失败或中断均在结束前删除，不访问现有数据库、容器或浏览器 |
 | `npm run verify:release` | 依次执行以上三层 | 合并上述本地副作用 |
 
@@ -107,7 +107,7 @@ healthcheck 只读现有配置快照，密码恢复不初始化运行时配置�
 | `storage/` | local、S3 driver 及无环工厂；注册表缓存与 driver、管理读模型、配置变更、探测和占用统计分开维护，并拥有对象访问、强摘要传输、位置锁、迁移及 `move.cleanup` 仓储与 handler。 |
 | `random/` | 随机查询校验、设备轴推断、Redis 8 Array 最近历史、定向 id 与有界 pivot 普通随机 PG 降级查询及随机出口编排；Redis 候选投影、筛选与重建统一由 `images/ready-cache/` 提供。 |
 | `jobs/` | 仅拥有通用 `background_job` 生命周期、小型类型分派、公平调度 Worker，以及集中管理任务中止、期限、续租和有界排空的执行协调器；各领域拥有自己的 handler、payload 和结果语义。 |
-| `checks/` | PostgreSQL / Redis 独立轻量状态、数据库 / Redis / 存储 / 回收站手动深度检查，以及显式触发的存储维护；Redis 深检以有界扫描和 pipeline 只返回当前汇总。 |
+| `checks/` | PostgreSQL / Redis 独立轻量状态、数据库 / Redis / 存储手动深度检查、“全部”中的回收站一致性结果，以及显式触发的存储维护；状态页自动 Redis 深检与手动 Redis 检查复用同一有界扫描和 pipeline，只返回当前汇总。 |
 | `authors/`、`tags/`、`themes/`、`vocab/` | 词表查询、变更、关联锁与派生缓存。 |
 | `users/` | 管理员初始化、账号变更、Redis 登录会话、逐请求 PostgreSQL 角色与密码代际核对、操作授权、密码恢复、偏好和会话失效；不维护管理员凭据 Redis 投影。 |
 | `types/` | 仅放缺失的编译期声明，不承载运行时代码。 |
@@ -213,7 +213,10 @@ hooks ──► lib
 - `pages/admin/admin-route-modules.ts` 集中拥有后台路由页面的生命周期级动态加载器；
   `AuthenticatedAdminShell` 的 `React.lazy` 与桌面 / 移动导航意图共用这些 Promise。
   `AdminNavigation` 只为角色过滤后可见的内部页面绑定模块键，外部“首页”出口不猜测
-  根路由目标。预加载只能取得页面 JS、CSS 与静态依赖，不能挂载页面或提前执行查询。
+  根路由目标。键盘 focus 与 pointerdown 立即预加载；普通后台页的鼠标 hover 立即加载，
+  高成本高级配置页只有持续 150 ms 的细指针 hover 才加载，离开或取消会清除 dwell。
+  预加载只能取得页面 JS、CSS 与静态依赖，不能挂载页面或提前执行查询；正式导航复用
+  同一个页面生命周期 Promise。
   冷启动资源所有权分为公开、后台登录、图片管理员与超级管理员四层；直接访问无权 URL
   仍先完成角色过滤，不执行超级管理员页面加载器。`CheckPage` 保留两种管理员共用的只读
   状态与检查，`CheckMaintenanceCapability` 才拥有整后端迁移、存储维护、缓存重建及其样式。
@@ -255,6 +258,33 @@ hooks ──► lib
 
 `lib/`、`hooks/` 和通用组件不得反向导入具体页面。只有形成稳定跨页面职责的代码才上移，
 页面内部的小组件无需为目录对称而拆分。
+
+### Web 构建资源边界
+
+Web 继续使用 entries-aware 的入口根集合分块，`minShareCount: 2` 表示模块至少被两个真实
+动态根共同引用才形成共享块。资源边界的判断顺序固定为权限、路由 / 能力意图、请求经济性：
+只有权限可见性、最早懒加载祖先和全部受测闭包都相同的资产才可以合并。交叉入口小块若并入
+任一调用方会造成未访问能力预载或复制，就保留为可解释的独立共享成本。
+
+生产 JS 与 CSS 使用从 Vite / Rolldown 构建图推导的语义 `[name]-[hash]` 文件名。动态入口
+沿用真实 facade，共享块名称来自实际入口根和能力关系；没有文件到页面的人工映射、序号命名
+或构建后 import 重写。内容哈希仍是缓存身份，名称只负责解释职责。每次生产构建都生成
+`.vite/web-build-report.json`，记录 facade、dynamic importer、入口类型、静态 / 动态依赖、
+模块根和 CSS owner；服务端装配明确过滤 `.vite`，因此报告不进入最终镜像。
+
+本地 `check-web-chunks` 从真实输出计算原始、gzip 9、Brotli 11 和实际有效传输字节；只有
+资产至少 256 B 且压缩结果更小时才采用预压缩副本。这组参数由 `scripts/build/` 中的生产
+装配 helper 与本地 checker 共用，不在 Vite 阶段额外落盘整套 `.gz` / `.br`。门禁分别验证
+匿名 Home、Gallery、公开详情、后台登录，以及图片管理员和超级管理员的每个可达路由；
+公开闭包出现后台专有资源、图片管理员闭包出现超级管理员专有资源、哈希失效或重复内容都会
+直接失败。
+
+当前分块规则保留经过排除试验后的最小方案：组级 `minSize` 8 / 12 / 16 KiB 在 4.8.19
+均未减少 44 个 emitted JS，反而让 Gallery 与图片管理员各增加一个请求；把全部应用模块放入
+单一 entries-aware 组的 8 / 16 / 32 KiB 也增加首屏请求或压缩字节，32 KiB 还使动态导入
+失效并产生构建警告。v4.9.9 的构建图审计没有发现能在所有权限 / 意图闭包中共同到达、同时
+不增加请求或有效 Brotli 字节的其他单一内置合并方案，因此不以总文件数下降为目标，也不增加
+自动合并插件或逐模块特殊规则。
 
 ## docs/guide
 

@@ -5,9 +5,17 @@ import type {
 } from "@imageshow/shared/browser";
 import { AdminIcon } from "../../components/icon/AdminIcon.js";
 import { StableButtonLabel } from "../../components/data-display/StableButtonLabel.js";
-import { readyImageProjection } from "../../lib/api/ready-image-cache.js";
+import {
+  readyImageProjection
+} from "../../lib/api/ready-image-cache.js";
 import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
-import { revisionFingerprint } from "../../lib/ui/formatters.js";
+import {
+  formatBytes,
+  revisionFingerprint
+} from "../../lib/ui/formatters.js";
+import type {
+  ReadyImageProjectionUsageSnapshot
+} from "./check-redis-inspection.js";
 
 function formatTime(value: string | null) {
   if (!value) return "—";
@@ -26,6 +34,8 @@ function formatDuration(value: number | null) {
 
 export function ReadyImageCachePanel({
   query,
+  projectionUsage = null,
+  projectionUsageNotice = "",
   maintenanceBusy = false,
   maintenanceError = "",
   onRefreshSuccess,
@@ -33,6 +43,8 @@ export function ReadyImageCachePanel({
   renderMaintenanceAction
 }: {
   query: UseQueryResult<AdminCheckStatusDto, Error>;
+  projectionUsage?: ReadyImageProjectionUsageSnapshot | null;
+  projectionUsageNotice?: string;
   maintenanceBusy?: boolean;
   maintenanceError?: string;
   onRefreshSuccess?: () => void;
@@ -67,6 +79,32 @@ export function ReadyImageCachePanel({
       ? `Redis 状态读取失败（${redisFailure.category}）：${redisFailure.message}`
       : "";
   const busy = manualRefreshing || maintenanceBusy;
+  const coreOccupancy = {
+    key_count: projectionUsage?.core.key_count ?? null,
+    member_count: projectionUsage?.core.member_count
+      ?? status?.item_count
+      ?? null,
+    memory_bytes: projectionUsage?.core.memory_bytes
+      ?? status?.last_full_rebuild_core_memory_bytes
+      ?? null
+  };
+  const derivedOccupancy = projectionUsage?.derived ?? null;
+  const deepMeasuredAt = projectionUsage
+    ? formatTime(projectionUsage.measured_at)
+    : null;
+  const projectionUsageNoticePrefix = projectionUsageNotice
+    ? `${projectionUsageNotice} `
+    : "";
+  const coreDetails = projectionUsage
+    ? `${projectionUsageNoticePrefix}最近一次完整 Redis 深检快照，测量于 ${deepMeasuredAt}。`
+    : status?.last_full_rebuild_measured_at
+      ? `${projectionUsageNoticePrefix}图片成员来自当前轻量状态；内存为最近完整重建快照，测量于 ${formatTime(
+          status.last_full_rebuild_measured_at
+        )}；当前键数需完成 Redis 检测后显示。`
+      : `${projectionUsageNoticePrefix}图片成员来自当前轻量状态；键数和内存需完成 Redis 检测后显示。`;
+  const derivedDetails = projectionUsage
+    ? `${projectionUsageNoticePrefix}最近一次完整 Redis 深检快照，测量于 ${deepMeasuredAt}。`
+    : projectionUsageNotice || "完成 Redis 检测后显示当前派生缓存占用。";
   return (
     <section className={`ready-cache-panel ${healthy ? "ok" : "warn"}`}>
         <div className="ready-cache-panel-head">
@@ -126,6 +164,23 @@ export function ReadyImageCachePanel({
             </dd>
           </div>
         </dl>
+        <div
+          className="ready-cache-occupancy-grid"
+          aria-busy={projectionUsageNotice.startsWith("正在") || undefined}
+        >
+          <CacheOccupancy
+            title="核心投影"
+            memberLabel="图片成员"
+            value={coreOccupancy}
+            details={coreDetails}
+          />
+          <CacheOccupancy
+            title="派生缓存"
+            memberLabel="结果成员"
+            value={derivedOccupancy}
+            details={derivedDetails}
+          />
+        </div>
         {(status?.recent_errors.core || status?.recent_errors.derived) && (
           <div className="ready-cache-errors">
             {status.recent_errors.core && (
@@ -136,6 +191,28 @@ export function ReadyImageCachePanel({
             )}
           </div>
         )}
+    </section>
+  );
+}
+
+function CacheOccupancy({ title, memberLabel, value, details }: {
+  title: string;
+  memberLabel: string;
+  value: {
+    key_count: number | null;
+    member_count: number | null;
+    memory_bytes: number | null;
+  } | null;
+  details: string;
+}) {
+  return (
+    <section title={details}>
+      <h3>{title}</h3>
+      <span>{value?.key_count?.toLocaleString() ?? "—"} 个键</span>
+      <span>{value?.member_count?.toLocaleString() ?? "—"} 个{memberLabel}</span>
+      <span>{value?.memory_bytes === null || value?.memory_bytes === undefined
+        ? "—"
+        : formatBytes(value.memory_bytes)}</span>
     </section>
   );
 }

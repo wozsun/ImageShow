@@ -17,6 +17,9 @@ import {
 import { migrateStorageBackend } from "../../lib/api/storage-backend-migration.js";
 import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
 import { ReadyImageCachePanel } from "./ReadyImageCachePanel.js";
+import type {
+  ReadyImageProjectionUsageSnapshot
+} from "./check-redis-inspection.js";
 import { StorageBackendMigrationDialog } from "./storage/StorageBackendMigrationDialog.js";
 import { storageMaintenancePreview } from "./storage-maintenance-preview.js";
 import "../../styles/admin/check-maintenance.css";
@@ -278,8 +281,14 @@ type RebuildErrorBaseline = {
   appliedRevision: string | null;
 };
 
-export function ReadyImageCacheMaintenancePanel({ query }: {
+export function ReadyImageCacheMaintenancePanel({
+  query,
+  projectionUsage = null,
+  projectionUsageNotice = ""
+}: {
   query: UseQueryResult<AdminCheckStatusDto, Error>;
+  projectionUsage?: ReadyImageProjectionUsageSnapshot | null;
+  projectionUsageNotice?: string;
 }) {
   const client = useQueryClient();
   const rebuildRequestActive = useRef(false);
@@ -360,6 +369,8 @@ export function ReadyImageCacheMaintenancePanel({ query }: {
     <>
       <ReadyImageCachePanel
         query={query}
+        projectionUsage={projectionUsage}
+        projectionUsageNotice={projectionUsageNotice}
         maintenanceBusy={rebuildStarting}
         maintenanceError={rebuildError}
         onRefreshSuccess={() => {

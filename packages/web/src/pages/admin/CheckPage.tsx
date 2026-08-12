@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import {
   adminPermissions,
   type AdminCheckStatusDto
@@ -10,7 +10,15 @@ import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
 import { AdminIcon } from "../../components/icon/AdminIcon.js";
 import { StableButtonLabel } from "../../components/data-display/StableButtonLabel.js";
 import { useAdminPermissions } from "../../hooks/useAuthSession.js";
-import { useAdminCheckStatus } from "../../lib/api/ready-image-cache.js";
+import {
+  readyImageProjection,
+  useAdminCheckStatus
+} from "../../lib/api/ready-image-cache.js";
+import {
+  readyImageProjectionUsage,
+  useAdminRedisInspection,
+  useRetainedReadyImageProjectionUsage
+} from "./check-redis-inspection.js";
 import {
   createPageLifetimeModuleLoader
 } from "../../lib/page-lifetime-module-loader.js";
@@ -40,7 +48,6 @@ const checkViews = [
   { name: "db", label: "数据库" },
   { name: "storage", label: "存储" },
   { name: "redis", label: "Redis" },
-  { name: "trash", label: "回收站" },
   { name: "all", label: "全部" }
 ] as const;
 
@@ -50,9 +57,45 @@ export function CheckPage() {
   const [result, setResult] = useState<unknown>(null);
   const [resultKind, setResultKind] = useState("");
   const [running, setRunning] = useState("");
+  const [automaticInspectionSatisfied, setAutomaticInspectionSatisfied] =
+    useState(false);
   const [checkView, setCheckView] = useState<CheckView>("status");
   const permissions = useAdminPermissions();
   const statusQuery = useAdminCheckStatus();
+  const projectionStatus = readyImageProjection(statusQuery.data);
+  const automaticInspectionEligible = statusQuery.isSuccess
+    && statusQuery.data.redis.status === "ok"
+    && projectionStatus?.rebuilding !== true;
+  const redisInspectionQuery = useAdminRedisInspection({
+    enabled: automaticInspectionEligible
+      && !automaticInspectionSatisfied
+      && running !== "all"
+  });
+  const {
+    currentProjectionUsage: automaticProjectionUsage,
+    projectionUsage,
+    retainProjectionUsage
+  } = useRetainedReadyImageProjectionUsage(redisInspectionQuery.data);
+  const projectionUsageNotice = projectionStatus?.rebuilding
+    ? "图片投影重建中，完成后会自动重新检测占用。"
+    : redisInspectionQuery.isFetching
+      ? projectionUsage
+        ? "正在后台更新当前 Redis 占用。"
+        : "正在后台自动检测当前 Redis 占用。"
+      : redisInspectionQuery.isError
+        ? projectionUsage
+          ? "自动检测失败，继续显示最近一次完整快照；请点击 Redis 重试。"
+          : "自动检测失败，请点击 Redis 重试。"
+        : redisInspectionQuery.data !== undefined
+          && !automaticProjectionUsage
+          && !automaticInspectionSatisfied
+          ? projectionUsage
+            ? "本次检测未完成，继续显示最近一次完整快照。"
+            : "检测未完成，部分结果未采用；请点击 Redis 查看明细。"
+          : "";
+  const redisInclusiveCheckBlocked = statusQuery.isPending
+    || projectionStatus?.rebuilding === true
+    || redisInspectionQuery.isFetching;
   const canMigrateStorage = permissions.includes(
     adminPermissions.storageMaintenanceMigrate
   );
@@ -62,19 +105,53 @@ export function CheckPage() {
   const canRebuildCache = permissions.includes(
     adminPermissions.cacheMaintenanceRebuild
   );
+
+  useEffect(() => {
+    if (!redisInspectionQuery.error) return;
+    reportAdminUiError(
+      "check.redis.inspection",
+      redisInspectionQuery.error
+    );
+  }, [redisInspectionQuery.error]);
+
+  useEffect(() => {
+    if (projectionStatus?.rebuilding) {
+      setAutomaticInspectionSatisfied(false);
+    }
+  }, [projectionStatus?.rebuilding]);
+
   const runCheck = async (name: string, body?: Record<string, unknown>) => {
+    let allInspectionSatisfied = false;
+    if (name === "all") setAutomaticInspectionSatisfied(true);
     setRunning(name);
     try {
-      const value = await api(`${adminApiBasePath}/check/${name}`, { method: "POST", body: body ? JSON.stringify(body) : undefined });
+      const value = name === "redis"
+        ? await refetchRedisInspection(redisInspectionQuery)
+        : await api(`${adminApiBasePath}/check/${name}`, {
+            method: "POST",
+            body: body ? JSON.stringify(body) : undefined
+          });
       setResult(value);
       setResultKind(name);
+      if (name === "redis") {
+        if (retainProjectionUsage(readyImageProjectionUsage(value, "redis"))) {
+          setAutomaticInspectionSatisfied(true);
+        }
+      } else if (name === "all") {
+        allInspectionSatisfied = Boolean(retainProjectionUsage(
+          readyImageProjectionUsage(value, "all")
+        ));
+      }
       return value;
     } catch (error) {
-      reportAdminUiError(`check.${name}`, error);
+      if (name !== "redis") reportAdminUiError(`check.${name}`, error);
       setResult({ ok: false, error: "检查执行失败，请稍后重试" });
       setResultKind(name);
       return null;
     } finally {
+      if (name === "all") {
+        setAutomaticInspectionSatisfied(allInspectionSatisfied);
+      }
       setRunning("");
     }
   };
@@ -96,7 +173,10 @@ export function CheckPage() {
                 key={check.name}
                 className={checkView === check.name ? "active" : undefined}
                 aria-pressed={checkView === check.name}
-                disabled={Boolean(running)}
+                disabled={Boolean(running) || (
+                  redisInclusiveCheckBlocked
+                  && (check.name === "redis" || check.name === "all")
+                )}
                 onClick={() => selectCheckView(check.name)}
               >
                 <AdminIcon name={check.name === "status" ? "dashboard-line" : "refresh-line"} /><StableButtonLabel idle={check.label} busyText="运行中" busy={running === check.name} />
@@ -131,18 +211,41 @@ export function CheckPage() {
               <Suspense fallback={(
                 <ReadyImageCachePanel
                   query={statusQuery}
+                  projectionUsage={projectionUsage}
+                  projectionUsageNotice={projectionUsageNotice}
                   reportQueryError={false}
                 />
               )}>
-                <ReadyImageCacheMaintenancePanel query={statusQuery} />
+                <ReadyImageCacheMaintenancePanel
+                  query={statusQuery}
+                  projectionUsage={projectionUsage}
+                  projectionUsageNotice={projectionUsageNotice}
+                />
               </Suspense>
             )
-            : <ReadyImageCachePanel query={statusQuery} />}
+            : (
+              <ReadyImageCachePanel
+                query={statusQuery}
+                projectionUsage={projectionUsage}
+                projectionUsageNotice={projectionUsageNotice}
+              />
+            )}
         </>
       )}
       {result !== null && <CheckResult result={result} />}
     </section>
   );
+}
+
+async function refetchRedisInspection(
+  query: ReturnType<typeof useAdminRedisInspection>
+) {
+  const result = await query.refetch({ cancelRefetch: false });
+  if (result.isError) throw result.error;
+  if (result.data === undefined) {
+    throw new Error("Redis inspection returned no result");
+  }
+  return result.data;
 }
 
 function LightweightStatusCards({ query }: {

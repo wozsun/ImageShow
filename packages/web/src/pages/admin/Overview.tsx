@@ -120,14 +120,17 @@ export function Overview({ canManageStorage }: { canManageStorage: boolean }) {
   const sizeTitle = (firstLabel: string, first: number | undefined, secondLabel: string, second: number | undefined) =>
     first === undefined || second === undefined ? undefined : `${firstLabel} ${formatBytes(first)} + ${secondLabel} ${formatBytes(second)}`;
   const redisCacheState = redisCacheStateLabel(redisCache);
-  const fullRebuildCoreSnapshot =
+  const fullRebuildCoreSize =
     redisCache?.last_full_rebuild_core_memory_bytes === null
       || redisCache?.last_full_rebuild_core_memory_bytes === undefined
       || !redisCache.last_full_rebuild_measured_at
-      ? "最近完整重建核心占用未知"
-      : `最近完整重建核心占用 ${formatBytes(
+      ? "—"
+      : formatBytes(
           redisCache.last_full_rebuild_core_memory_bytes
-        )}`;
+        );
+  const fullRebuildCoreSnapshot = fullRebuildCoreSize === "—"
+    ? "最近完整重建核心占用未知"
+    : `最近完整重建核心占用 ${fullRebuildCoreSize}`;
   const fullRebuildCoreSnapshotTitle = redisCache?.last_full_rebuild_measured_at
     ? `${fullRebuildCoreSnapshot}，测量于 ${new Date(
         redisCache.last_full_rebuild_measured_at
@@ -137,7 +140,7 @@ export function Overview({ canManageStorage }: { canManageStorage: boolean }) {
     {
       label: "Redis 缓存",
       value: redisCache?.item_count ?? undefined,
-      hint: `${fullRebuildCoreSnapshot} · ${redisCacheState}`,
+      hint: `${fullRebuildCoreSize} · ${redisCacheState}`,
       hintTitle: fullRebuildCoreSnapshotTitle,
       to: `${adminBasePath}/check`
     },

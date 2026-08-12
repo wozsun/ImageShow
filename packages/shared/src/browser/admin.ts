@@ -121,6 +121,8 @@ export type ReadyImageCacheAdminStatusDto = {
   full_rebuild_started_at: string | null;
   full_rebuild_completed_at: string | null;
   full_rebuild_duration_ms: number | null;
+  last_full_rebuild_core_memory_bytes: number | null;
+  last_full_rebuild_measured_at: string | null;
   recent_errors: {
     core: ReadyImageCacheRecentErrorDto | null;
     derived: ReadyImageCacheRecentErrorDto | null;

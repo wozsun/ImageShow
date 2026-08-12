@@ -97,6 +97,31 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.ready-cache-occupancy-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+.ready-cache-occupancy-grid section {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 10px;
+  border-radius: 6px;
+  background: var(--admin-color-canvas);
+}
+.ready-cache-occupancy-grid h3 {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 14px;
+}
+.ready-cache-occupancy-grid span {
+  overflow: hidden;
+  color: var(--admin-color-text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .ready-cache-errors { margin-top: 12px; color: var(--admin-color-danger-text); }
 .ready-cache-errors p { margin: 4px 0 0; }
 .check-result {
@@ -139,13 +164,14 @@
 .check-card.warn .check-card-head span { color: var(--admin-color-warning-text-strong); background: var(--admin-color-warning-surface-strong); }
 .check-result pre { border: 0; padding: 0; max-height: 360px; }
 @media (max-width: 760px) {
-  /* 六个检查视图和当前角色可见的操作保持两列。 */
+  /* 五个检查操作在窄屏保持两列。 */
   .check-actions { margin-left: 0; }
   .check-actions .actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .check-actions .actions button { width: 100%; }
   .ready-cache-panel-head { flex-direction: column; }
   .ready-cache-panel-head > .actions { width: 100%; }
-  .check-status-grid { grid-template-columns: 1fr; }
+  .check-status-grid,
+  .ready-cache-occupancy-grid { grid-template-columns: 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {

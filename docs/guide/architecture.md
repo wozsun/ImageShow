@@ -71,7 +71,7 @@ PostgreSQL 是图片、词表、导入会话、后台任务、存储注册表和
 受控数据库确认应用后，由 N+1 移入 `schema.sql` 并从 additions 删除；不支持跳过承载增量的
 版本。应用不提供通用结构 diff、编号迁移、破坏性 DDL、契约标记或清库。允许的 additions、
 兼容超集和拒绝条件以[数据库结构](./database.md)为唯一说明。
-当前 `v4.9.8` 的 additions 是注释占位，不执行 DDL 或数据写入。
+当前 `v4.9.9` 的 additions 是注释占位，不执行 DDL 或数据写入。
 
 ### Redis
 
@@ -112,9 +112,12 @@ Redis 运行期不可用时，后台在会话读取前统一返回 `503 redis_un
 保留主连接池余量。
 
 随机筛选和返回契约见[随机图 API](./random-api.md)。管理轻量状态只执行固定数量的
-PostgreSQL / Redis 命令，不扫描键空间或逐键读取内存；显式 Redis 深检才汇总当前核心与
-派生投影的键数、成员数和 `MEMORY USAGE`。Redis `INFO MEMORY` 始终只表示整个实例，
-不会与 ImageShow 投影汇总相加或替代。
+PostgreSQL / Redis 命令，不扫描键空间或逐键读取内存；Redis 图片投影的核心卡先显示当前
+图片数和最近完整重建内存快照，键数保持未知。检查页同时由唯一查询 owner 在后台自动启动
+一次有界 Redis 深检，轻量状态不等待它；完整结果原地更新核心与派生投影的键数、成员数和
+`MEMORY USAGE`。自动检测进行中不会再启动 Redis 或“全部”检查的第二次扫描，之后手动运行
+Redis 检查仍复用同一查询。未完成的部分汇总不会替换已有快照。Redis `INFO MEMORY` 始终只
+表示整个实例，不会与 ImageShow 投影汇总相加或替代。
 
 ### 图片字节
 

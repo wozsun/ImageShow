@@ -41,11 +41,78 @@ function entryRootIds(moduleId: string, context: ChunkingContext) {
   return [...roots].sort();
 }
 
+function semanticOwnerLabel(root: string) {
+  const sourcePath = webSourcePath(root) ?? root.replaceAll("\\", "/");
+  if (sourcePath.endsWith("index.html")) return "app";
+  const baseName = sourcePath.split("/").at(-1)
+    ?.replace(/\.[^.]+$/, "")
+    ?? "asset";
+  let label = baseName
+    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+    .replace(/([A-Z])([A-Z][a-z])/g, "$1-$2")
+    .replace(/[^A-Za-z0-9]+/g, "-")
+    .replace(/-(?:page|capability)$/i, "")
+    .replace(/^(?:web|assets?)-|-(?:js|css|chunks?|modules?)$/gi, "")
+    .replace(/^-|-$/g, "")
+    .toLowerCase();
+  if (sourcePath.startsWith("src/pages/admin/")) {
+    label = label
+      .split("-")
+      .filter((token) => token !== "admin")
+      .join("-")
+      .replace(/-settings$/, "");
+  }
+  return label || "asset";
+}
+
+function semanticOwnerCategory(root: string) {
+  const sourcePath = webSourcePath(root) ?? root.replaceAll("\\", "/");
+  if (sourcePath.endsWith("index.html")) return "app";
+  const segments = sourcePath.split("/");
+  if (segments[0] === "src" && segments.length > 2) {
+    if (["pages", "components", "lib"].includes(segments[1]!)) {
+      return segments[2]!
+        .replace(/[^A-Za-z0-9]+/g, "-")
+        .toLowerCase();
+    }
+  }
+  return semanticOwnerLabel(root);
+}
+
+const semanticChunkNameAssignments = new Map<
+  string,
+  Map<string, string>
+>();
+
 function rootSetChunkName(prefix: string, roots: string[]) {
-  return `${prefix}-${createHash("sha256")
-    .update(roots.join("\n"))
-    .digest("hex")
-    .slice(0, 12)}`;
+  const normalizedRoots = [...new Set(
+    roots.map((root) => root.replaceAll("\\", "/"))
+  )].sort();
+  const exactLabels = [...new Set(
+    normalizedRoots.map(semanticOwnerLabel)
+  )].sort();
+  const ownerLabels = exactLabels.length <= 3
+    ? exactLabels
+    : [...new Set(normalizedRoots.map(semanticOwnerCategory))].sort();
+  const baseName = `${prefix}-${ownerLabels.join("-") || "shared"}`;
+  const rootKey = normalizedRoots.join("\n");
+  let assignments = semanticChunkNameAssignments.get(baseName);
+  if (!assignments) {
+    assignments = new Map();
+    semanticChunkNameAssignments.set(baseName, assignments);
+  }
+  const existing = assignments.get(rootKey);
+  if (existing) return existing;
+  const assignedNames = new Set(assignments.values());
+  let name = baseName;
+  if (assignedNames.has(name)) {
+    name = `${baseName}-${createHash("sha256")
+      .update(rootKey)
+      .digest("hex")
+      .slice(0, 6)}`;
+  }
+  assignments.set(rootKey, name);
+  return name;
 }
 
 function sharedChunkName(moduleId: string, context: ChunkingContext) {
@@ -66,7 +133,7 @@ function sharedChunkName(moduleId: string, context: ChunkingContext) {
     || /\/src\/pages\/admin\/(?:AdminShell|AdminLogin|LoginChallenge|AuthenticatedAdminShell|ImageAdmin)\.tsx$/.test(id)
   ));
   return initialRouteRoots.length > 0
-    ? rootSetChunkName("route-shared", initialRouteRoots)
+    ? rootSetChunkName("route", initialRouteRoots)
     : rootSetChunkName("capability", roots);
 }
 
@@ -74,7 +141,7 @@ function webBuildReport(): Plugin {
   return {
     name: "imageshow-web-build-report",
     generateBundle(_options, bundle) {
-      const chunks = Object.values(bundle).flatMap((output) => {
+      const collectedChunks = Object.values(bundle).flatMap((output) => {
         if (output.type !== "chunk") return [];
         const metadata = output as typeof output & {
           viteMetadata?: { importedCss?: Set<string> };
@@ -93,7 +160,10 @@ function webBuildReport(): Plugin {
         }));
         return [{
           file: output.fileName,
+          name: output.name,
           facade: webSourcePath(output.facadeModuleId),
+          isEntry: output.isEntry,
+          isDynamicEntry: output.isDynamicEntry,
           imports: output.imports,
           dynamicImports: output.dynamicImports,
           css: [...(metadata.viteMetadata?.importedCss ?? [])],
@@ -102,10 +172,32 @@ function webBuildReport(): Plugin {
           moduleRoots
         }];
       });
+      const dynamicImporters = new Map<string, string[]>();
+      for (const chunk of collectedChunks) {
+        for (const target of chunk.dynamicImports) {
+          const importers = dynamicImporters.get(target) ?? [];
+          importers.push(chunk.file);
+          dynamicImporters.set(target, importers);
+        }
+      }
+      const chunks = collectedChunks.map((chunk) => ({
+        ...chunk,
+        dynamicImporters: [...new Set(
+          dynamicImporters.get(chunk.file) ?? []
+        )].sort()
+      }));
+      const styles = [...new Set(chunks.flatMap((chunk) => chunk.css))]
+        .sort()
+        .map((file) => ({
+          file,
+          owners: chunks
+            .filter((chunk) => chunk.css.includes(file))
+            .map((chunk) => ({ file: chunk.file, facade: chunk.facade }))
+        }));
       this.emitFile({
         type: "asset",
         fileName: ".vite/web-build-report.json",
-        source: JSON.stringify({ version: 2, chunks }, null, 2)
+        source: JSON.stringify({ version: 3, chunks, styles }, null, 2)
       });
     }
   };
@@ -136,19 +228,10 @@ export default defineConfig({
     emptyOutDir: true,
     rollupOptions: {
       output: {
-        // 内容哈希负责 CDN 与浏览器缓存失效；名称只用于调试，不参与功能契约。
+        // 名称解释真实入口或共享 owner；内容哈希独立负责缓存失效。
         entryFileNames: "assets/[name]-[hash].js",
-        chunkFileNames(chunk) {
-          return chunk.isDynamicEntry
-            ? "assets/[name]-[hash].js"
-            : "assets/shared-[hash].js";
-        },
-        assetFileNames(asset) {
-          const primaryName = asset.names[0] ?? "asset";
-          return primaryName.endsWith(".css")
-            ? "assets/style-[hash][extname]"
-            : "assets/[name]-[hash][extname]";
-        },
+        chunkFileNames: "assets/[name]-[hash].js",
+        assetFileNames: "assets/[name]-[hash][extname]",
 
         codeSplitting: {
           // 页面与能力按实际入口根集合拆分；只有同时服务两个公开入口和其他入口的

@@ -108,6 +108,10 @@ export async function readReadyImageCacheAdminStatus(
           meta.fullRebuildCompletedAt
         )
       : null,
+    last_full_rebuild_core_memory_bytes:
+      meta?.lastFullRebuildCoreMemoryBytes ?? null,
+    last_full_rebuild_measured_at:
+      meta?.lastFullRebuildMeasuredAt || null,
     recent_errors: {
       core: recent.core ?? persistedCoreError(
         meta?.lastError ?? "",

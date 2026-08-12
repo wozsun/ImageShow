@@ -8,6 +8,7 @@ export const queryKeys = {
   adminImageInfo: ["admin-image-info"] as const,
   overview: ["admin-overview"] as const,
   adminCheckStatus: ["admin-check-status"] as const,
+  adminRedisInspection: ["admin-redis-inspection"] as const,
   adminImages: ["admin-images"] as const,
   tags: ["tags"] as const,
   themes: ["themes"] as const,

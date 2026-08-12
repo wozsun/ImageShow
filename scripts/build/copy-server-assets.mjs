@@ -1,11 +1,11 @@
 import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { relative, resolve } from "node:path";
-import { brotliCompress, gzip, constants as zlibConstants } from "node:zlib";
-import { promisify } from "node:util";
-
-const gzipAsync = promisify(gzip);
-const brotliAsync = promisify(brotliCompress);
+import {
+  compressStaticAsset,
+  staticAssetCompression,
+  staticAssetIsCompressible
+} from "./static-asset-compression.mjs";
 
 const repo = resolve(import.meta.dirname, "..", "..");
 const serverPackage = resolve(repo, "packages", "server");
@@ -22,11 +22,6 @@ for (const [label, input] of [
   }
 }
 
-// 可预压缩的文本类资源；图片/字体等已是压缩格式，不重复压缩。
-const PRECOMPRESS_RE = /\.(?:js|css|html|svg|json|xml|txt|webmanifest)$/;
-// 更小的文件压缩收益甚微、还会多出两个文件，直接跳过。
-const PRECOMPRESS_MIN_BYTES = 256;
-
 // 构建时预压缩：为可压缩资源就地生成 .gz 与 .br（Node 内置 zlib，无新依赖），运行时由
 // serveStatic({ precompressed }) 按 Accept-Encoding 协商发送（br > gzip）。br 取最高质量 11、
 // gzip 取 9——一次性构建成本换运行时零开销与最优体积。
@@ -37,28 +32,19 @@ async function precompressDir(dir) {
       await precompressDir(full);
       continue;
     }
-    if (!PRECOMPRESS_RE.test(entry.name) || /\.(?:br|gz)$/.test(entry.name)) continue;
+    if (!staticAssetIsCompressible(entry.name)) continue;
     const buffer = await readFile(full);
-    if (buffer.length < PRECOMPRESS_MIN_BYTES) continue;
-    const [brotli, gzipped] = await Promise.all([
-      brotliAsync(buffer, {
-        params: {
-          [zlibConstants.BROTLI_PARAM_QUALITY]: 11,
-          [zlibConstants.BROTLI_PARAM_SIZE_HINT]: buffer.length
-        }
-      }),
-      gzipAsync(buffer, { level: 9 })
-    ]);
-    // 只在确实更小时才落盘（极小或已压缩的内容压缩后可能反而更大）。
+    const compressed = await compressStaticAsset(entry.name, buffer);
     await Promise.all([
-      brotli.length < buffer.length ? writeFile(`${full}.br`, brotli) : null,
-      gzipped.length < buffer.length ? writeFile(`${full}.gz`, gzipped) : null
+      compressed.brotli
+        ? writeFile(`${full}.br`, compressed.brotli)
+        : null,
+      compressed.gzip ? writeFile(`${full}.gz`, compressed.gzip) : null
     ]);
   }
 }
 
 await mkdir(serverDist, { recursive: true });
-await rm(resolve(serverDist, "migrations"), { recursive: true, force: true });
 const databaseAssets = ["schema.sql", "schema-additions.sql"];
 await Promise.all(databaseAssets.map(async (asset) => {
   await rm(resolve(serverDist, asset), { force: true });
@@ -81,5 +67,8 @@ if (existsSync(resolve(serverPublic, ".vite"))) {
 await precompressDir(serverPublic);
 
 console.log(
-  "assemble-server: database SQL assets -> dist, web -> dist/public"
+  "assemble-server: database SQL assets -> dist, web -> dist/public; "
+  + `precompressed br${staticAssetCompression.brotliQuality}/`
+  + `gzip${staticAssetCompression.gzipLevel}/`
+  + `min${staticAssetCompression.minimumBytes}`
 );

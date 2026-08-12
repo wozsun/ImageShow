@@ -16,8 +16,8 @@ Node.js 26 / Hono、React 19、PostgreSQL、Redis 8 和 Docker 构成。
 - 成功提交的图片以正式缩略图为不变量；正常读取严格只读，缺图显示统一损坏图标并由
   检查页“存储维护”显式修复。
 - PostgreSQL 保存全部业务真值，Redis 只承载会话、限流、统一就绪图片投影与可重建缓存。
-- 检查页以固定成本展示图片投影数量、revision 与重建时间；显式 Redis 深检才扫描当前
-  ImageShow 键空间并汇总核心 / 派生占用。
+- 检查页先以固定成本展示图片投影数量、revision 与重建时间，再自动执行一次有界 Redis
+  深检，扫描当前 ImageShow 键空间并汇总核心 / 派生占用；手动 Redis 检查复用同一查询。
 - 图片管理员与超级管理员使用集中权限矩阵；高风险接口在服务端独立鉴权。
 - 管理员偏好跨端同步，公开页面固定暗色，后台可选亮色、暗色或跟随设备。
 - 单应用实例、可信反向代理和容器健康检查组成当前生产边界。
@@ -94,7 +94,7 @@ N+1 把同一定义移入 `schema.sql`，再把 additions 清空为注释占位�
 重命名、类型改变、推测回填、版本标记或清库。精确契约见
 [数据库结构](docs/guide/database.md#启动与结构契约)。
 
-当前 `v4.9.8` 没有待执行的 additions SQL，文件只保留过渡规则注释；
+当前 `v4.9.9` 没有待执行的 additions SQL，文件只保留过渡规则注释；
 `metadata.purge_error`、`admin_account.preferences` 与 `theme.none` 已属于 `schema.sql`
 基线，并已由全部受控生产数据库在上一版本完成确认。
 
