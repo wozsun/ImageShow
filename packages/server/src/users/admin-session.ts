@@ -11,7 +11,11 @@ import { pool } from "../core/database-pools.ts";
 import { loginRateLimiter } from "../core/login-rate-limit.ts";
 import { isCurrentPasswordHash, verifyPassword } from "../core/password.ts";
 import { redis } from "../core/redis-client.ts";
-import { assertSameOrigin, requestClientIp } from "../core/http/request-security.ts";
+import {
+  assertSameOrigin,
+  requestClientIp,
+  requestIsSecure
+} from "../core/http/request-security.ts";
 import { runRequiredRedisCommand } from "../core/runtime-availability.ts";
 import {
   adminCredentialVersion,
@@ -161,11 +165,6 @@ async function deleteExistingSessionIfUnchanged(
     expectedPayload
   ));
   return Number(deleted) === 1;
-}
-
-function requestIsSecure(context: Context) {
-  return context.req.header("x-forwarded-proto") === "https"
-    || new URL(context.req.url).protocol === "https:";
 }
 
 export async function createAdminSession(

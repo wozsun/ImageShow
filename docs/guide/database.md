@@ -13,10 +13,11 @@ PostgreSQL 共 10 张业务表，不保存迁移账本或 schema 版本表。
 
 ## 启动与结构契约
 
-当前代码库不提供编号迁移、迁移账本或通用数据库升级路径。启动在 advisory bootstrap lock
-内串行化：空数据库在一个事务中先执行已封版的 `schema.sql`，再执行当前
+当前代码库不提供编号迁移、迁移账本或通用数据库升级路径。单应用进程启动时，空数据库
+在一个事务中先执行已封版的 `schema.sql`，再执行当前
 `schema-additions.sql`；非空数据库只执行 additions，随后进入轻量 readiness。additions、
 readiness 或干净初始化任一步失败都会回滚本次事务。全部连接固定使用 `search_path=public`。
+应用不再为不受支持的第二个重叠进程持有 schema 或管理员播种 bootstrap lock。
 
 additions 只保存一个发布周期的安全增量。版本 N 新增经审查的行为中性字段、与其直接相关的
 必要普通索引或稳定系统种子时，先写入 additions；全部受控非空数据库部署 N 并通过 readiness
@@ -24,7 +25,7 @@ additions 只保存一个发布周期的安全增量。版本 N 新增经审查�
 占位文件及稳定的启动、构建入口。该模型不支持跳过 N 直接部署 N+1；恢复早于 N 的数据库
 备份时，也必须先运行 N 或人工执行同一份经审查 SQL。
 
-当前 `v4.9.7` 的 additions 没有待执行 SQL，只保留过渡规则注释。
+当前 `v4.9.8` 的 additions 没有待执行 SQL，只保留过渡规则注释。
 `metadata.purge_error TEXT`、`admin_account.preferences JSONB NOT NULL DEFAULT '{}'` 与
 `theme.none` 已在 `schema.sql` 形成基线，并已由全部受控生产数据库在上一版本完成确认。
 后续 additions 仍只保存当期真实增量：不补业务表、外键、CHECK，不删除或重命名对象，

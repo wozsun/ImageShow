@@ -1,20 +1,31 @@
 import type { Context, Next } from "hono";
+import { isIP } from "node:net";
 import { ApiError } from "../api-error.ts";
 import { appendVaryHeader } from "./headers.ts";
+
+function requestProtocol(context: Context) {
+  const forwarded = context.req.header("x-forwarded-proto")
+    ?.trim()
+    .toLowerCase();
+  if (forwarded === "http" || forwarded === "https") return forwarded;
+  return new URL(context.req.url).protocol.replace(":", "");
+}
 
 function sameOrigin(context: Context) {
   const origin = context.req.header("origin");
   if (!origin) return true;
-  const host = context.req.header("x-forwarded-host")
-    || context.req.header("host");
-  const protocol = context.req.header("x-forwarded-proto")
-    || new URL(context.req.url).protocol.replace(":", "");
+  const host = context.req.header("host")?.trim().toLowerCase();
+  const protocol = requestProtocol(context);
   try {
     const parsed = new URL(origin);
     return parsed.host === host && parsed.protocol === `${protocol}:`;
   } catch {
     return false;
   }
+}
+
+export function requestIsSecure(context: Context) {
+  return requestProtocol(context) === "https";
 }
 
 export function assertSameOrigin(context: Context) {
@@ -37,10 +48,15 @@ export function blockCrossSiteFetch(context: Context, next: Next) {
 }
 
 export function requestClientIp(context: Context): string {
-  const realIp = context.req.header("x-real-ip")?.trim();
+  const exactIp = (value: string | undefined) => {
+    const candidate = value?.trim() ?? "";
+    return isIP(candidate) ? candidate : "";
+  };
+  const realIp = exactIp(context.req.header("x-real-ip"));
   if (realIp) return realIp;
-  const forwarded = context.req.header("x-forwarded-for")
-    ?.split(",")[0]
-    ?.trim();
+  const forwardedValue = context.req.header("x-forwarded-for");
+  const forwarded = forwardedValue?.includes(",")
+    ? ""
+    : exactIp(forwardedValue);
   return forwarded || "unknown";
 }

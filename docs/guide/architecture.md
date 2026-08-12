@@ -40,6 +40,8 @@ Hono HTTP 应用 ──► PostgreSQL（业务真相）
 未注册子域返回 404。嵌入页只在配置开启时提供，并由文档响应的 CSP
 `frame-ancestors` 限定父页面；它不会扩大 API 的跨源权限。完整路由见
 [子域名](./subdomains.md)，请求来源、鉴权与响应头见[安全](./security.md)。
+应用只接受最外层可信代理覆盖后的 `Host`、单值协议和单值客户端 IP，不解析
+`X-Forwarded-Host` 或多级 `X-Forwarded-For`；应用端口必须只对该代理可达。
 
 ## 代码分层
 
@@ -69,7 +71,7 @@ PostgreSQL 是图片、词表、导入会话、后台任务、存储注册表和
 受控数据库确认应用后，由 N+1 移入 `schema.sql` 并从 additions 删除；不支持跳过承载增量的
 版本。应用不提供通用结构 diff、编号迁移、破坏性 DDL、契约标记或清库。允许的 additions、
 兼容超集和拒绝条件以[数据库结构](./database.md)为唯一说明。
-当前 `v4.9.7` 的 additions 是注释占位，不执行 DDL 或数据写入。
+当前 `v4.9.8` 的 additions 是注释占位，不执行 DDL 或数据写入。
 
 ### Redis
 

@@ -10,6 +10,10 @@
   角色、密码哈希格式和代际。PostgreSQL 查询异常统一返回
   `503 database_unavailable` 且不删除 Redis key；只有数据库明确确认账号不存在、角色或
   代际不匹配，以及 Redis 明确确认会话不存在时才返回 401。
+- 客户端地址、协议和 Host 只信任最外层代理覆盖后的单跳值：应用使用原始 `Host`、精确的
+  `http` / `https` 协议值，以及单个合法 IP 的 `X-Real-IP` 或 `X-Forwarded-For`；不解析
+  `X-Forwarded-Host`，逗号分隔的代理链和无效 IP 归为 `unknown`。因此应用端口必须只对可信
+  代理可达，代理必须覆盖而不是追加同名访客头。
 - 自行改密在锁定账号行并验证当前密码后，重新读取当前 Redis 会话的严格 payload；只有
   身份字段一致且仍包含行锁内旧代际时，才以原始 payload 为快照原子替换为旧、新两个
   代际，再更新 PostgreSQL。会话已被重置、删除或并发改变，以及 Redis 预授权失败时，

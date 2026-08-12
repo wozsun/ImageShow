@@ -3,14 +3,15 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { PoolClient } from "pg";
 import { assertDatabaseReadiness } from "./database-readiness.ts";
-import { withAdvisoryLock } from "./database-advisory-locks.ts";
 import { pool } from "./database-pools.ts";
 
-export function initializeDatabaseSchema() {
-  return withAdvisoryLock(
-    "imageshow:schema-bootstrap",
-    (signal, client) => initializeDatabaseSchemaUnderLock(signal, client)
-  );
+export async function initializeDatabaseSchema() {
+  const client = await pool.connect();
+  try {
+    await initializeDatabaseSchemaOnClient(client);
+  } finally {
+    client.release();
+  }
 }
 
 type DatabaseAsset = "schema.sql" | "schema-additions.sql";
@@ -47,11 +48,7 @@ function databaseReadinessError(error: unknown) {
   );
 }
 
-async function initializeDatabaseSchemaUnderLock(
-  signal: AbortSignal,
-  client: PoolClient
-) {
-  signal.throwIfAborted();
+async function initializeDatabaseSchemaOnClient(client: PoolClient) {
   const empty = await databaseHasNoUserRelations(client);
   const [schema, additions] = await Promise.all([
     empty
@@ -59,15 +56,11 @@ async function initializeDatabaseSchemaUnderLock(
       : Promise.resolve(null),
     readFile(databaseAssetPath("schema-additions.sql"), "utf8")
   ]);
-  signal.throwIfAborted();
   await client.query("BEGIN");
   try {
     if (schema) await client.query(schema);
-    signal.throwIfAborted();
     await client.query(additions);
-    signal.throwIfAborted();
     await assertCoreDatabaseReady(client);
-    signal.throwIfAborted();
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK").catch(() => undefined);

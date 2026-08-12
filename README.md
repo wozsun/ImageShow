@@ -94,7 +94,7 @@ N+1 把同一定义移入 `schema.sql`，再把 additions 清空为注释占位�
 重命名、类型改变、推测回填、版本标记或清库。精确契约见
 [数据库结构](docs/guide/database.md#启动与结构契约)。
 
-当前 `v4.9.7` 没有待执行的 additions SQL，文件只保留过渡规则注释；
+当前 `v4.9.8` 没有待执行的 additions SQL，文件只保留过渡规则注释；
 `metadata.purge_error`、`admin_account.preferences` 与 `theme.none` 已属于 `schema.sql`
 基线，并已由全部受控生产数据库在上一版本完成确认。
 
@@ -105,10 +105,9 @@ Redis 不是业务真相源，普通升级不要求手工清空。连接必须�
 
 当前生产拓扑只支持一个 ImageShow 应用实例；Compose 或部署平台必须保证不会并行启动第二个
 连接同一数据库的应用进程，应用不实现多实例互斥、接管或跨进程一致性。应用应只监听回环或
-私有网络，由可信反向代理终止 HTTPS，并覆盖客户端传入的 `Host` 与 `X-Forwarded-*` 头。
-示例按 Nginx 1.30 stable 线编写；2026-08-10 对照
-[Nginx 官方下载页](https://nginx.org/en/download.html)核验的 stable 补丁为 1.30.4，
-实际部署应跟随 1.30.x 的最新安全补丁。
+私有网络，由可信反向代理终止 HTTPS，并覆盖客户端传入的 `Host`、`X-Real-IP`、
+`X-Forwarded-For` 与 `X-Forwarded-Proto`；应用不解析转发 Host 或多级 IP 链。
+产品无关的代理要求与唯一一份可替换的 Nginx 最简示例见[部署指南](docs/guide/deployment.md#反向代理与-https)。
 
 反向代理请求体上限不得低于应用配置。仓库示例使用 `client_max_body_size 256m`，覆盖
 默认 200 MiB 单图上限并留出代理层余量。完整 Docker、健康检查、停机、密码恢复及

@@ -42,11 +42,12 @@ export async function inspectTransactionOutcome(
 }
 
 export async function withTransaction<T>(
-  work: (client: PoolClient) => Promise<T>
+  work: (client: PoolClient) => Promise<T>,
+  options: { onTransactionId?: (transactionId: string) => void } = {}
 ): Promise<T> {
   const client = await pool.connect();
   try {
-    return await withTransactionOnClient(client, work);
+    return await withTransactionOnClient(client, work, options);
   } finally {
     client.release();
   }

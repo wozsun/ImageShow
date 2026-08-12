@@ -1,4 +1,3 @@
-import type { PoolClient } from "pg";
 import { ApiError } from "../core/api-error.ts";
 import { pool } from "../core/database-pools.ts";
 import {
@@ -71,12 +70,10 @@ export async function createStorageBackend(input: StorageBackendCreateInput) {
 export async function importStorageBackends(
   backends: StorageBackendImportInput[],
   beforeCommit: () => void | Promise<void>,
-  lockClient: PoolClient,
   onTransactionId: (transactionId: string) => void
 ) {
   try {
-    await withTransactionOnClient(
-      lockClient,
+    await withTransaction(
       async (client) => {
         const highestSortOrder = Number((await client.query(
           "SELECT COALESCE(MAX(sort_order), 0) AS value FROM storage_backend"
@@ -134,7 +131,7 @@ export async function importStorageBackends(
     }
     throw error;
   } finally {
-    // A successful COMMIT response can be lost with the lock connection.
+    // A successful COMMIT response can be lost with the transaction connection.
     invalidateStorageBackendRegistry();
   }
 }

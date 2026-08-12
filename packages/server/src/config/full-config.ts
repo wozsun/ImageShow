@@ -2,15 +2,12 @@ import type {
   RuntimeConfig,
   RuntimeConfigChangeSummaryDto
 } from "@imageshow/shared/browser";
-import { withAdvisoryLock } from "../core/database-advisory-locks.ts";
 import { parseRuntimeConfig } from "./runtime-config.ts";
 import {
   getRuntimeConfig,
   replaceRuntimeConfig,
   withRuntimeConfigWriteLease
 } from "./runtime-config-store.ts";
-
-export const advancedConfigWriteLockKey = "advanced-config-write";
 
 function summarizeRuntimeConfigChanges(
   current: RuntimeConfig,
@@ -36,15 +33,10 @@ export function validateFullRuntimeConfig(value: unknown) {
 }
 
 export function saveFullRuntimeConfig(value: unknown) {
-  return withRuntimeConfigWriteLease(() => withAdvisoryLock(
-    advancedConfigWriteLockKey,
-    async (signal) => {
-      signal.throwIfAborted();
-      const config = parseRuntimeConfig(value);
-      signal.throwIfAborted();
-      return {
-        config: structuredClone(await replaceRuntimeConfig(config))
-      };
-    }
-  ));
+  return withRuntimeConfigWriteLease(async () => {
+    const config = parseRuntimeConfig(value);
+    return {
+      config: structuredClone(await replaceRuntimeConfig(config))
+    };
+  });
 }

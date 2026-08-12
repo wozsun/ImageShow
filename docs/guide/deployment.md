@@ -38,13 +38,15 @@ Redis 凭据只来自环境变量或 Secret，不写入 `config.json`。首次�
 
 `schema.sql` 是上一个已确认版本的干净安装基线；只跨一个发布周期的
 `schema-additions.sql` 保存当前经审查的行为中性字段、必要索引与稳定系统种子。空数据库依次
-执行两者，非空数据库只执行 additions 后做只读 readiness；整个过程受同一启动锁和事务保护。
+执行两者，非空数据库只执行 additions 后做只读 readiness；整个过程受同一事务保护。
+单应用进程合同不再为第二个重叠启动者取得 bootstrap lock；首次启动、停止后的顺序重启、
+已有数据启动，以及事务回滚后的顺序恢复仍使用同一初始化路径。
 全部受控数据库确认应用版本 N 的 additions 后，N+1 才能把定义移入 `schema.sql` 并清空
 additions。部署不能跳过 N；恢复更早备份时也应先以 N 应用增量。应用不提供编号迁移、通用
 schema diff、版本 ledger、破坏性 DDL 或清库；精确白名单与拒绝条件以
 [数据库结构](./database.md#启动与结构契约)为准。
 
-当前 `v4.9.7` 的 additions 没有待执行 SQL，只保留注释占位；全部受控生产数据库已经确认
+当前 `v4.9.8` 的 additions 没有待执行 SQL，只保留注释占位；全部受控生产数据库已经确认
 当前 `schema.sql` 形状，镜像不再携带一次性旧结构清理入口。
 
 Redis 只保存会话、限流、统一就绪图片投影和可重建派生缓存。连接必须支持 Redis 8
@@ -99,12 +101,21 @@ npm run admin:reset-password -- <username>
 ## 反向代理与 HTTPS
 
 生产环境必须由可信反向代理终止 TLS，使用通配证书覆盖主域及子域，并把应用端口只绑定
-到回环或私有网络。代理必须覆盖而不是追加访客传入的 `Host`、`X-Real-IP`、
-`X-Forwarded-For` 和 `X-Forwarded-Proto`。
+到回环或明确的同机私有网络；仓库 Compose 默认把 `5518` 映射到 `127.0.0.1`。代理必须覆盖
+而不是追加访客传入的 `Host`、`X-Real-IP`、`X-Forwarded-For` 和 `X-Forwarded-Proto`。
+应用只使用 `Host`、单值 `X-Forwarded-Proto` 和单值客户端 IP 头，不解析
+`X-Forwarded-Host` 或多级 `X-Forwarded-For`。容器化代理可把上游改到同机私有 Docker 网络，
+但仍不得让不可信客户端绕过代理直连应用端口。
 
-以下配置按 Nginx 1.30 stable 线编写；2026-08-10 对照
-[Nginx 官方下载页](https://nginx.org/en/download.html)核验的 stable 补丁为 1.30.4。
-部署时应跟随 1.30.x 的最新安全补丁，不把这里的核验补丁号当成永久锁定版本。
+以下先列出代理产品无关的必要行为：
+
+- TLS 证书覆盖主域和通配子域，并把 HTTP 重定向到 HTTPS。
+- 覆盖上述四个请求头；客户端 IP 必须是单跳、单值地址，不传访客提供的代理链。
+- 请求体上限覆盖 200 MiB 单图和 128 MiB JSONL；长导入和存储检查允许至少 300 秒。
+- 导入事件 SSE 关闭响应缓冲，并允许至少 300 秒读取；上传流按部署需要关闭请求缓冲。
+- 不覆盖应用的 `Cache-Control`、`Vary`、CSP 或其他安全响应头，不另设应用响应缓存。
+
+随后只给出一份可替换的 Nginx 最简示例；ImageShow 不检测代理品牌，也不依赖 Nginx。
 
 ImageShow 已负责 ETag、304、Range、压缩、静态预压缩和缓存头。Nginx 不需要再配置
 `proxy_cache`，CDN 也应遵循应用返回的 `Cache-Control` 与 `Vary`。
@@ -134,33 +145,33 @@ server {
   proxy_set_header X-Forwarded-For $remote_addr;
   proxy_set_header X-Forwarded-Proto $scheme;
 
+  proxy_read_timeout 300s;
+  proxy_send_timeout 300s;
+
   location / {
     proxy_pass http://127.0.0.1:5518;
+  }
+
+  location /api/admin/imports/events {
+    proxy_pass http://127.0.0.1:5518;
+    proxy_buffering off;
   }
 }
 ```
 
-不要使用会拼接访客输入的 `$proxy_add_x_forwarded_for`。前置 CDN 必须先通过 Nginx
-`real_ip` 模块和受信任节点网段恢复 `$remote_addr`，或由 CDN 删除访客同名头后写入
-可信来源；传给应用的两个来源 IP 头仍须同时覆盖。
+不要使用会拼接访客输入的 `$proxy_add_x_forwarded_for`；可信代理必须把两个来源 IP 头
+都覆盖为同一个单值客户端地址。
 
-若 `X-Forwarded-Proto` 缺失或错误，Secure Cookie、同源校验和跳转 URL 都会出错。
+若 `X-Forwarded-Proto` 缺失或错误，Secure Cookie 和同源校验都会出错。
 反向代理的请求体上限不得低于应用对应配置；默认单图上限为 200 MiB，JSONL 使用独立
 128 MiB 请求档，因此示例取 256m。Compose 网络内应把上游改为 `imageshow:5518`。
 
-### 长操作配置
-
-需要为导入和存储检查提供更长上游等待时，可在最少配置上增加：
+上传流如需边收边传，可在同一 server 中增加：
 
 ```nginx
 location /api/admin/imports/ {
   proxy_pass http://127.0.0.1:5518;
   proxy_request_buffering off;
-  proxy_read_timeout 300s;
-}
-
-location /api/admin/check/ {
-  proxy_pass http://127.0.0.1:5518;
   proxy_read_timeout 300s;
 }
 ```

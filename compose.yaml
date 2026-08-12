@@ -61,7 +61,7 @@ services:
       REDIS_DB: ${REDIS_DB:-0}
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
     ports:
-      - "${HOST_PORT:-5518}:5518"
+      - "127.0.0.1:${HOST_PORT:-5518}:5518"
     volumes:
       - ./data:/app/data
     init: true
