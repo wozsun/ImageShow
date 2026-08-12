@@ -2,13 +2,13 @@ import type {
   ImageUpdateItemResultDto,
   ImageUpdateResponseDto
 } from "@imageshow/shared/browser";
-import { ApiError } from "../core/api-error.ts";
+import { ApiError, errorMessage } from "../core/api-error.ts";
 import { mapWithWorkerPool } from "../core/concurrency.ts";
 import { withAdvisoryLocks } from "../core/database-advisory-locks.ts";
+import { logger } from "../core/logger.ts";
 import type { ImageUpdateItemInput } from "../core/validation.ts";
-import { updateImageTags } from "../tags/mutations.ts";
 import { createEntityCountCacheInvalidationBatch } from "../vocab/vocab-cache.ts";
-import { updateImageMetadata } from "./metadata-mutations.ts";
+import { updateImageItem } from "./image-update-item.ts";
 import { imageUpdateLockRequests } from "./image-update-lock.ts";
 import { withPlannedImageMutation } from "./mutation-sync.ts";
 
@@ -46,7 +46,7 @@ export async function updateImages(
 
   return withAdvisoryLocks(
     imageUpdateLockRequests(items.map((item) => item.id)),
-    async () => {
+    async (requestSignal) => {
       const execute = async () => {
         try {
           // Different IDs may run at low concurrency. The request owns every
@@ -57,21 +57,19 @@ export async function updateImages(
             imageUpdateConcurrency,
             async (item): Promise<ImageUpdateItemResultDto> => {
               const itemStartedAt = performance.now();
-              const { id, tags, ...metadata } = item;
               try {
-                if (Object.keys(metadata).length) {
-                  await updateImageMetadata(id, metadata, {
-                    entityCountInvalidationBatch
-                  });
-                }
-                if (tags !== undefined) {
-                  await updateImageTags(id, tags, {
-                    entityCountInvalidationBatch
-                  });
-                }
-                return { id, status: "updated" };
+                await updateImageItem(
+                  item,
+                  { entityCountInvalidationBatch },
+                  requestSignal
+                );
+                return { id: item.id, status: "updated" };
               } catch (error) {
-                return { id, status: "failed", ...publicItemError(error) };
+                return {
+                  id: item.id,
+                  status: "failed",
+                  ...publicItemError(error)
+                };
               } finally {
                 maxItemDurationMs = Math.max(
                   maxItemDurationMs,
@@ -92,6 +90,10 @@ export async function updateImages(
           entityCountInvalidationTriggered = entityCountInvalidationBatch.hasWork();
           try {
             await entityCountInvalidationBatch.flush();
+          } catch (error) {
+            logger.warn("image_update_entity_count_invalidation_failed", {
+              error: errorMessage(error)
+            });
           } finally {
             options.onMetrics?.({
               maxItemDurationMs,

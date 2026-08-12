@@ -79,13 +79,6 @@ const metadataUpdateFields = {
   original: metadataFieldInputs.original.optional()
 };
 
-function hasDefinedField(value: Record<string, unknown>) {
-  return Object.values(value).some((field) => field !== undefined);
-}
-
-export const metadataUpdateInput = z.strictObject(metadataUpdateFields)
-  .refine(hasDefinedField, "图片更新至少需要提供一个字段");
-
 const slugInput = z.string().trim().toLowerCase()
   .min(1, "标识 slug 不能为空")
   .max(slugMaxLength, `标识 slug 最长 ${slugMaxLength} 个字符`)

@@ -555,6 +555,8 @@ pre {
   border-color: var(--admin-color-danger-border);
 }
 .danger-button:hover, button.danger-button:hover { color: var(--admin-color-danger-text-strong); background: var(--admin-color-danger-surface-hover); border-color: var(--admin-color-danger-border-strong); }
+.danger-button.two-step-confirm-icon-button.is-armed,
+button.danger-button.two-step-confirm-icon-button.is-armed,
 .danger-button.confirm-dialog-final-confirmation.is-armed,
 button.danger-button.confirm-dialog-final-confirmation.is-armed {
   color: var(--admin-color-text-on-emphasis);

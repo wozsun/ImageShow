@@ -19,7 +19,6 @@ import { LabeledSwitch } from "../../components/form/LabeledSwitch.js";
 import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
 import { AdminPagination } from "../../components/navigation/AdminPagination.js";
 import { adminImagePageLimit } from "../../lib/constants.js";
-import { imageDisplayTitle } from "../../lib/ui/formatters.js";
 import { preloadIntentProps } from "../../lib/ui/preload-intent.js";
 import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
 import { useAdminSettings } from "../../lib/api/admin-settings.js";
@@ -44,7 +43,6 @@ import {
   useMediaQuery
 } from "../../hooks/useMediaQuery.js";
 import {
-  imageAdminTrashViewNotice,
   imageAdminConfirmationCopy,
   useImageAdminOperations,
   type ImageAdminView
@@ -127,6 +125,8 @@ export function ImageAdmin() {
     refresh,
     resetTransientState,
     runConfirmedAction,
+    trash,
+    purge,
     restore
   } = useImageAdminOperations({
     items,
@@ -278,11 +278,6 @@ export function ImageAdmin() {
           </div>
         </div>
       </header>
-      {view === "deleted" && (
-        <p className="hint" role="note">
-          {imageAdminTrashViewNotice}
-        </p>
-      )}
       <div className="image-list-controls">
         <ImageAdminFilters
           value={filters}
@@ -477,21 +472,13 @@ export function ImageAdmin() {
               canPurge={canPurgeImage}
               onPurge={() => {
                 cancelPageNavigation();
-                setConfirmAction({
-                  kind: "purge",
-                  request: { scope: "selected", ids: [item.id] },
-                  title: imageDisplayTitle(item)
-                });
+                void purge({ scope: "selected", ids: [item.id] });
               }}
               busy={busyIds.includes(item.id)}
               actionsDisabled={interfaceBusy}
               onTrash={() => {
                 cancelPageNavigation();
-                setConfirmAction({
-                  kind: "trash",
-                  ids: [item.id],
-                  title: imageDisplayTitle(item)
-                });
+                void trash([item.id]);
               }}
               onRestore={() => {
                 cancelPageNavigation();

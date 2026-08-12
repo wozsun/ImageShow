@@ -1,6 +1,6 @@
 {
   "name": "@imageshow/web",
-  "version": "4.9.0",
+  "version": "4.9.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,7 +8,6 @@
     "icons:generate": "node ../../scripts/build/generate-web-icons.mjs",
     "icons:check": "node ../../scripts/build/generate-web-icons.mjs --check",
     "build": "tsc -p tsconfig.json && vite build",
-    "check:build": "node ../../scripts/build/check-web-chunks.mjs",
     "check": "tsc -p tsconfig.check.json"
   },
   "dependencies": {

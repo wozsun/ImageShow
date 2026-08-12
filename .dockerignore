@@ -9,7 +9,6 @@
 **/tests
 **/*.test.*
 **/*.spec.*
-scripts/verify
 .codex
 .codex-baseline-*
 .agents

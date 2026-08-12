@@ -1,7 +1,6 @@
 import { slugMaxLength, slugPattern } from "@imageshow/shared/browser";
 import {
-  withAdvisoryLock,
-  withAdvisoryLocks
+  withAdvisoryLock
 } from "../core/database-advisory-locks.ts";
 import { ApiError } from "../core/api-error.ts";
 import {
@@ -32,25 +31,6 @@ export function vocabularyAssociationLockRequests(
   )))]
     .sort()
     .map((key) => ({ key, mode: "shared" as const }));
-}
-
-export function withVocabularyAssociationLocks<T>(
-  entries: readonly { entity: VocabularyEntity; slug: string }[],
-  work: (signal: AbortSignal) => Promise<T>
-) {
-  return withAdvisoryLocks(vocabularyAssociationLockRequests(entries), work);
-}
-
-export function withVocabularyAssociationLock<T>(
-  entity: VocabularyEntity,
-  slug: string,
-  work: (signal: AbortSignal) => Promise<T>
-) {
-  return withAdvisoryLock(
-    vocabularyMutationLockKey(entity, slug),
-    work,
-    "shared"
-  );
 }
 
 export function withVocabularyMutationLock<T>(

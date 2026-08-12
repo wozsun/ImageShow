@@ -16,46 +16,34 @@ import { waitForMinimumPendingDuration } from "../../lib/ui/async-action-timing.
 
 export type ImageAdminView = "ready" | "unset" | "deleted";
 
-const cachedMediaPersistenceNotice =
-  "浏览器或 CDN 已缓存副本可能继续可访问，无法由此立即撤回。";
-export const imageAdminTrashViewNotice =
-  `图片进入回收站后不再被站点发现，但既有直链仍可访问；${cachedMediaPersistenceNotice}`;
-
 export type ImageAdminConfirmAction =
-  | { kind: "trash"; ids: string[]; title?: string }
+  | { kind: "trash"; ids: string[] }
   | {
       kind: "purge";
       request: ImagePurgeRequestDto;
-      title?: string;
     };
 
 export function imageAdminConfirmationCopy(
   action: ImageAdminConfirmAction | null
 ) {
   if (action?.kind === "trash") {
-    const single = action.ids.length === 1;
     return {
-      title: single ? "确认删除图片" : "确认批量删除",
-      description: single && action.title
-        ? `“${action.title}”将移入回收站并退出站点发现；既有直链仍可访问，可以稍后恢复。`
-        : `选中的 ${action.ids.length} 张图片将移入回收站并退出站点发现；既有直链仍可访问，可以稍后恢复。`,
+      title: "确认批量删除",
+      description: `选中的 ${action.ids.length} 张图片将移入回收站并退出站点发现，可以稍后恢复。`,
       label: "确认删除"
     };
   }
   if (action?.kind === "purge" && action.request.scope === "all") {
     return {
       title: "确认清空回收站",
-      description: `当前回收站内的所有图片及存储对象将被永久删除；操作开始后才移入回收站的图片不受影响。此操作无法撤销。${cachedMediaPersistenceNotice}`,
+      description: "当前回收站内的所有图片及存储对象将被永久删除；操作开始后才移入回收站的图片不受影响。此操作无法撤销。",
       label: "永久清空"
     };
   }
   if (action?.kind === "purge" && action.request.scope === "selected") {
-    const single = action.request.ids.length === 1;
     return {
-      title: single ? "确认永久删除" : "确认删除已选图片",
-      description: single && action.title
-        ? `“${action.title}”将从回收站和存储中永久删除，此操作无法撤销。${cachedMediaPersistenceNotice}`
-        : `选中的 ${action.request.ids.length} 张图片及其存储对象将被永久删除，此操作无法撤销。${cachedMediaPersistenceNotice}`,
+      title: "确认删除已选图片",
+      description: `选中的 ${action.request.ids.length} 张图片及其存储对象将被永久删除，此操作无法撤销。`,
       label: "永久删除"
     };
   }
@@ -186,13 +174,13 @@ export function useImageAdminOperations({
     }
   }, [operationBusy, refresh, refreshUnknownOutcome, showFeedback]);
 
-  const runConfirmedAction = useCallback(async () => {
-    if (!confirmAction) return false;
-    const purgeRequest = confirmAction.kind === "purge"
-      ? confirmAction.request
+  const runAction = useCallback(async (action: ImageAdminConfirmAction) => {
+    if (operationBusy) return false;
+    const purgeRequest = action.kind === "purge"
+      ? action.request
       : null;
-    const affectedIds = confirmAction.kind === "trash"
-      ? confirmAction.ids
+    const affectedIds = action.kind === "trash"
+      ? action.ids
       : purgeRequest?.scope === "selected"
         ? purgeRequest.ids
         : items.map((item) => item.id);
@@ -201,7 +189,7 @@ export function useImageAdminOperations({
     setBusyIds(affectedIds);
     setFeedback(null);
     setOperationText(
-      confirmAction.kind === "trash"
+      action.kind === "trash"
         ? single
           ? "正在删除图片…"
           : `正在删除 ${affectedIds.length} 张图片…`
@@ -216,8 +204,8 @@ export function useImageAdminOperations({
       let text: string;
       let status: "error" | "success";
       try {
-        if (confirmAction.kind === "trash") {
-          const result = await moveImagesToTrash(confirmAction.ids);
+        if (action.kind === "trash") {
+          const result = await moveImagesToTrash(action.ids);
           text = `已移入回收站 ${result.trashed} 张，${result.ignored} 张未处理`;
           status = result.ignored ? "error" : "success";
           if (result.ignored) {
@@ -227,9 +215,9 @@ export function useImageAdminOperations({
             );
           }
         } else {
-          const result = await purgeImages(confirmAction.request);
+          const result = await purgeImages(action.request);
           const pending = Math.max(0, result.remaining - result.failed);
-          const all = confirmAction.request.scope === "all";
+          const all = action.request.scope === "all";
           text = `已永久删除 ${result.deleted} 张${
             result.failed ? `，${result.failed} 张删除失败` : ""
           }${
@@ -252,10 +240,10 @@ export function useImageAdminOperations({
       } catch (error) {
         reportAdminUiError("image_admin.trash_or_purge", error);
         const reconciliation = await refreshUnknownOutcome(
-          confirmAction.kind === "trash"
+          action.kind === "trash"
             ? "image_admin.trash"
             : "image_admin.purge",
-          confirmAction.kind === "trash" ? confirmAction.ids : undefined
+          action.kind === "trash" ? action.ids : undefined
         );
         await waitForMinimumPendingDuration(startedAt);
         showFeedback(
@@ -282,7 +270,19 @@ export function useImageAdminOperations({
       setOperationText("");
       setBusyIds([]);
     }
-  }, [confirmAction, items, refresh, refreshUnknownOutcome, showFeedback]);
+  }, [items, operationBusy, refresh, refreshUnknownOutcome, showFeedback]);
+
+  const runConfirmedAction = useCallback(() => (
+    confirmAction ? runAction(confirmAction) : Promise.resolve(false)
+  ), [confirmAction, runAction]);
+  const trash = useCallback(
+    (ids: string[]) => runAction({ kind: "trash", ids }),
+    [runAction]
+  );
+  const purge = useCallback(
+    (request: ImagePurgeRequestDto) => runAction({ kind: "purge", request }),
+    [runAction]
+  );
 
   return {
     operationText,
@@ -297,6 +297,8 @@ export function useImageAdminOperations({
     refresh,
     resetTransientState,
     runConfirmedAction,
+    trash,
+    purge,
     restore
   };
 }

@@ -69,7 +69,7 @@ PostgreSQL 是图片、词表、导入会话、后台任务、存储注册表和
 受控数据库确认应用后，由 N+1 移入 `schema.sql` 并从 additions 删除；不支持跳过承载增量的
 版本。应用不提供通用结构 diff、编号迁移、破坏性 DDL、契约标记或清库。允许的 additions、
 兼容超集和拒绝条件以[数据库结构](./database.md)为唯一说明。
-当前 `v4.9.0` 的 additions 是注释占位，不执行 DDL 或数据写入。
+当前 `v4.9.1` 的 additions 是注释占位，不执行 DDL 或数据写入。
 
 ### Redis
 
@@ -88,7 +88,8 @@ Redis 8 只承载可以从 PostgreSQL 重建的图片读模型，以及会话、
   写栅栏内核对 PostgreSQL revision 与 Redis 已应用 revision，只有失配或完整性失败才
   single-flight 重建；重连期间变化的连接由同一任务重新校验，不维护第二套 epoch 状态。
 
-图片事务先在 PostgreSQL 推进 `ready_image_revision`。影响不超过 500 张时，提交后在
+图片事务先在 PostgreSQL 推进 `ready_image_revision`；同一张图片的一次原子编辑即使同时
+改变 metadata 与标签也至多推进一次，纯 no-op 不推进。影响不超过 500 张时，提交后在
 进程内写栅栏中精确更新核心投影；更大操作不加载完整 ID 列表，而是保持读门关闭并只
 安排一次全量重建。Redis 失败不回滚已经提交的 PostgreSQL 结果。
 

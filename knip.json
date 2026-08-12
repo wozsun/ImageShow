@@ -2,7 +2,6 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "workspaces": {
     ".": {
-      "entry": ["scripts/verify/*.mjs"],
       "ignoreDependencies": ["linkedom"]
     },
     "packages/server": {

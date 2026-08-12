@@ -9,17 +9,14 @@ import { bumpReadyImageRevision } from "../images/ready-cache/revision.ts";
 import {
   invalidateOrCollectEntityCountCaches,
   refreshEntityVocabularies,
-  type EntityCountCacheInvalidationBatch,
 } from "../vocab/vocab-cache.ts";
 import {
   assertVocabularyCreated,
   assertVocabularyFound,
   assertVocabularySlug,
   synchronizeVocabularyMutation,
-  withVocabularyAssociationLocks,
   withVocabularyMutationLock
 } from "../vocab/mutation-sync.ts";
-import { resolveTagNames } from "./query.ts";
 
 export async function createTag(slug: string, displayName = "") {
   assertVocabularySlug("tag", slug);
@@ -107,10 +104,6 @@ export async function deleteTag(slug: string) {
   assertVocabularyFound("tag", result.rowCount);
 }
 
-type SetImageTagsOptions = {
-  entityCountInvalidationBatch?: EntityCountCacheInvalidationBatch;
-};
-
 export async function replaceImageTags(
   client: PoolClient,
   imageId: string,
@@ -120,6 +113,30 @@ export async function replaceImageTags(
   signal?.throwIfAborted();
   const image = await client.query("SELECT md5 FROM metadata WHERE id = $1", [imageId]);
   if (!image.rowCount) throw new ApiError(404, "not_found", "Image not found");
+  const { createdTag } = await replaceImageTagAssociations(
+    client,
+    imageId,
+    slugs,
+    signal
+  );
+  await bumpReadyImageRevision(client);
+  signal?.throwIfAborted();
+  return {
+    createdTag,
+    md5: String(image.rows[0]?.md5 ?? ""),
+  };
+}
+
+/**
+ * Replaces only the relational tag set. Callers that combine tags with other
+ * image fields own the surrounding transaction and revision advance.
+ */
+export async function replaceImageTagAssociations(
+  client: PoolClient,
+  imageId: string,
+  slugs: string[],
+  signal?: AbortSignal
+) {
   let createdTag = false;
   for (const slug of slugs) {
     signal?.throwIfAborted();
@@ -132,7 +149,6 @@ export async function replaceImageTags(
     );
     if (inserted.rowCount) createdTag = true;
   }
-  await bumpReadyImageRevision(client);
   signal?.throwIfAborted();
   await client.query("DELETE FROM image_tag WHERE image_id = $1", [imageId]);
   for (const slug of slugs) {
@@ -143,42 +159,5 @@ export async function replaceImageTags(
     );
   }
   signal?.throwIfAborted();
-  return {
-    createdTag,
-    md5: String(image.rows[0]?.md5 ?? ""),
-  };
-}
-
-export async function updateImageTags(imageId: string, names: string[], options: SetImageTagsOptions = {}) {
-  const resolved = await resolveTagNames(names);
-  const persist = (signal?: AbortSignal) => withImageMutationSync(
-    async (mutationBatch) => {
-      const mutation = await withTransaction(async (client) => {
-        signal?.throwIfAborted();
-        const result = await replaceImageTags(client, imageId, resolved, signal);
-        signal?.throwIfAborted();
-        return result;
-      });
-      mutationBatch.add({ id: imageId });
-      const cacheRepairs = await Promise.allSettled([
-        invalidateOrCollectEntityCountCaches(
-          ["tag"],
-          options.entityCountInvalidationBatch
-        ),
-        mutation.createdTag
-          ? refreshEntityVocabularies(["tag"])
-          : Promise.resolve()
-      ]);
-      const failedRepair = cacheRepairs.find(
-        (result): result is PromiseRejectedResult => result.status === "rejected"
-      );
-      if (failedRepair) throw failedRepair.reason;
-    }
-  );
-  return resolved.length
-    ? withVocabularyAssociationLocks(
-      resolved.map((slug) => ({ entity: "tag", slug })),
-      (signal) => persist(signal)
-    )
-    : persist();
+  return { createdTag };
 }

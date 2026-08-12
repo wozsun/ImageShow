@@ -1,4 +1,5 @@
 import { AdminIcon } from "../../components/icon/AdminIcon.js";
+import { TwoStepConfirmIconButton } from "../../components/actions/TwoStepConfirmIconButton.js";
 import { ThumbImage } from "../../components/image/ThumbImage.js";
 import type { ImageItem } from "../../lib/types.js";
 import {
@@ -151,16 +152,18 @@ export function AdminImageCard({
               >
                 <AdminIcon name="pencil-line" />
               </button>
-              <button
-                type="button"
+              <TwoStepConfirmIconButton
                 className="danger-button"
-                title="删除"
-                aria-label={`删除图片：${title}`}
+                idleIcon="delete-bin-6-line"
+                confirmIcon="delete-bin-2-line"
+                idleLabel={`删除图片：${title}`}
+                confirmLabel={`再次点击确认删除图片：${title}`}
+                idleTitle="删除"
+                confirmTitle="再次点击确认删除"
                 disabled={busy || actionsDisabled || detailPending}
-                onClick={onTrash}
-              >
-                <AdminIcon name="delete-bin-6-line" />
-              </button>
+                busy={busy}
+                onConfirm={onTrash}
+              />
             </>
           ) : (
             <>
@@ -174,16 +177,18 @@ export function AdminImageCard({
                 <AdminIcon name="arrow-go-back-line" />
               </button>
               {canPurge && (
-                <button
-                  type="button"
+                <TwoStepConfirmIconButton
                   className="danger-button"
-                  title="永久删除"
-                  aria-label={`永久删除图片：${title}`}
-                  disabled={actionsDisabled || detailPending}
-                  onClick={onPurge}
-                >
-                  <AdminIcon name="delete-bin-7-line" />
-                </button>
+                  idleIcon="delete-bin-7-line"
+                  confirmIcon="delete-bin-2-line"
+                  idleLabel={`永久删除图片：${title}`}
+                  confirmLabel={`再次点击确认永久删除图片：${title}`}
+                  idleTitle="永久删除"
+                  confirmTitle="再次点击确认永久删除"
+                  disabled={busy || actionsDisabled || detailPending}
+                  busy={busy}
+                  onConfirm={onPurge}
+                />
               )}
             </>
           )}

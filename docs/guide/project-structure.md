@@ -13,11 +13,8 @@ packages/web ─────► packages/shared
 ## 根目录职责
 
 - `package.json` 只编排 workspace 构建、类型检查、死代码检查和运维入口。
-- `scripts/build/` 生成 Web 图标、校验颜色与生产分块边界，并装配服务端 schema 及 SPA
-  静态资产；Web 构建直接输出通用产物图报告，门禁按真实依赖图验证公开入口、权限懒加载和
-  初始请求 / 字节预算，不维护模块或 chunk 名称清单；报告不装配进运行镜像。
-- `scripts/verify/` 编排只读源码检查、生产构建检查、三份最终测试和隔离镜像冷启动 / 重启
-  验收；复杂验收只在本地执行，不进入上传代码后的 Actions。
+- `scripts/build/` 只保存生产构建所需的清理、进程编排、Web 图标生成和服务端 schema / SPA
+  资产装配；Web 构建直接输出通用产物图报告，报告不装配进运行镜像。
 - `scripts/runtime/` 只放容器内的命令包装；容器启动由 `docker-entrypoint.sh` 负责权限
   收敛后直接执行传入命令。
 - `Dockerfile` 只安装三个 workspace 的构建依赖（不安装根目录本地门禁工具）并完成编译，
@@ -26,10 +23,11 @@ packages/web ─────► packages/shared
 - `docs/guide/` 保存架构、配置、数据库、流程、部署和 API 说明，使用相对 Markdown
   链接，可直接在仓库中阅读。
 
-本地测试统一位于根目录 `tests/`，由 Git 忽略且不进入 Docker build context、生产镜像或
-GitHub Actions。测试从外部启动与生产镜像相同的服务入口；测试数据库、Redis、Compose、
-fixture、网络模拟和清理编排均留在 `tests/`。Web 最终测试使用根目录仅供本地门禁的
-`linkedom` 真实挂载 React 组件；生产构建和运行镜像不安装该依赖。
+本地测试、源码 / 构建 / 隔离镜像门禁脚本及 benchmarks 统一位于根目录 `tests/`，由 Git
+忽略且不进入 Docker build context、生产镜像或 GitHub Actions。测试从外部启动与生产镜像
+相同的服务入口；测试数据库、Redis、Compose、fixture、网络模拟和清理编排均留在
+`tests/`。Web 最终测试使用根目录仅供本地门禁的 `linkedom` 真实挂载 React 组件；生产构建
+和运行镜像不安装该依赖。
 
 ## 本地门禁与发布职责
 
@@ -87,8 +85,6 @@ core / config
   优雅退出。
 - `src/admin-password-cli.ts` 是管理员密码恢复入口。
 - `src/healthcheck-cli.ts` 是容器 readiness 检查入口。
-- `scripts/benchmarks/` 保存可重复执行、使用隔离依赖且会自行清理测试键的服务端性能
-  基线脚本，不接入生产启动或 GitHub Actions。
 - `images/mutation-sync-policy.ts` 只定义图片变更总量的纯决策与结果契约；
   `images/mutation-sync.ts` 持有写栅栏并执行精准发布或安排全量重建，领域 SQL 只负责在
   自己的事务边界 COUNT、推进 revision 和按决策读取有限 ID。
@@ -133,8 +129,9 @@ healthcheck 只读现有配置快照，密码恢复不初始化运行时配置�
 位置锁内重新扫描并直接完成缩略图维修与孤儿删除，不调用旧请求热路径 repair 或通用后台任务。
 回收站的移入 / 恢复集中于
 `images/trash-mutations.ts`，永久对象删除与 claim 状态机集中于 `images/trash-purge.ts`，
-两者不共享转发入口。`metadata-mutations.ts` 只校验并选择普通字段更新或分类位置变更阶段，
-对应实现分别留在 `metadata-field-mutation.ts` 与 `metadata-classification-mutation.ts`。
+两者不共享转发入口。`images/image-update.ts` 只拥有 1..N 图片锁、保序并发、逐项结果和
+请求级派生计数失效；`images/image-update-item.ts` 是单图 metadata、author / theme / tag
+创建、完整标签替换、分类位置 CAS 与持久清理回执的唯一 PostgreSQL 事务所有者。
 
 `images/imports/` 内部继续保持单一编排入口，但按稳定职责分开：
 
@@ -238,7 +235,7 @@ hooks ──► lib
   后台外观模式提供显式亮色、暗色与自动；自动模式跟随浏览器或操作系统并实时响应
   变化。公开页面和启动底色仍拥有独立颜色上下文；未认证登录页与公开页面中的管理弹窗
   都继承公开暗色分支，不读取后台保存的外观偏好，只有认证后的完整后台应用账号偏好；
-  `scripts/build/check-semantic-colors.mjs` 校验传统与现代颜色语法、完整 CSS 命名色、
+  `tests/verify/check-semantic-colors.mjs` 校验传统与现代颜色语法、完整 CSS 命名色、
   SVG 资产白名单、定义/引用完整性、无用 token、按色相命名、退役别名及公开/后台
   依赖边界，并拒绝超出规范集合的后台状态角色和页面 / 生命周期专用状态 token；
   当前品牌 favicon 是唯一允许保留原始色值的 SVG。

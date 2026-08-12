@@ -3,6 +3,7 @@ import { adminPermissions } from "@imageshow/shared/browser";
 import { AdminIcon } from "../../icon/AdminIcon.js";
 import { AsyncActionButton } from "../../actions/AsyncActionButton.js";
 import { ConfirmDialog } from "../../feedback/ConfirmDialog.js";
+import { TwoStepConfirmIconButton } from "../../actions/TwoStepConfirmIconButton.js";
 import { DialogFrame } from "../../feedback/DialogFrame.js";
 import { WorkflowDefaultFields } from "../../form/WorkflowDefaultFields.js";
 import { WorkflowCollapsePanel } from "../../layout/WorkflowCollapsePanel.js";
@@ -576,20 +577,38 @@ export function ImageMetadataEditorDialog({
                 </button>
               )}
               {trashAvailable && (
-                <button
-                  ref={trashTriggerRef}
-                  className="icon danger-button batch-edit-trash-trigger"
-                  type="button"
-                  title={multipleItems ? "删除这些图片" : "删除此图片"}
-                  aria-label={multipleItems ? "删除这些图片" : "删除此图片"}
-                  disabled={busy || !activeItems.length}
-                  onClick={() => {
-                    setTrashError("");
-                    setTrashConfirmation(true);
-                  }}
-                >
-                  <AdminIcon name="delete-bin-6-line" />
-                </button>
+                multipleItems ? (
+                  <button
+                    ref={trashTriggerRef}
+                    className="icon danger-button batch-edit-trash-trigger"
+                    type="button"
+                    title="删除这些图片"
+                    aria-label="删除这些图片"
+                    disabled={busy || !activeItems.length}
+                    onClick={() => {
+                      setTrashError("");
+                      setTrashConfirmation(true);
+                    }}
+                  >
+                    <AdminIcon name="delete-bin-6-line" />
+                  </button>
+                ) : (
+                  <TwoStepConfirmIconButton
+                    className="icon danger-button batch-edit-trash-trigger"
+                    idleIcon="delete-bin-6-line"
+                    confirmIcon="delete-bin-2-line"
+                    idleLabel="删除此图片"
+                    confirmLabel="再次点击确认删除此图片"
+                    idleTitle="删除此图片"
+                    confirmTitle="再次点击确认删除"
+                    disabled={busy || !activeItems.length}
+                    busy={trashStatus.pending}
+                    onConfirm={() => {
+                      setTrashError("");
+                      void trashActiveImages(requestClose);
+                    }}
+                  />
+                )
               )}
             </div>
           )}
@@ -650,12 +669,10 @@ export function ImageMetadataEditorDialog({
           onConfirm={restoreAllChanges}
         />
       )}
-      {trashConfirmation && (
+      {multipleItems && trashConfirmation && (
         <ConfirmDialog
-          title={multipleItems ? "确认批量删除图片" : "确认删除图片"}
-          description={multipleItems
-            ? `这 ${activeItems.length} 张图片将移入回收站并退出站点发现；既有直链仍可访问，可以稍后恢复。`
-            : "此图片将移入回收站并退出站点发现；既有直链仍可访问，可以稍后恢复。"}
+          title="确认批量删除图片"
+          description={`这 ${activeItems.length} 张图片将移入回收站并退出站点发现，可以稍后恢复。`}
           confirmLabel="确认删除"
           pendingLabel="删除中"
           errorMessage={trashError}

@@ -24,7 +24,7 @@ additions 只保存一个发布周期的安全增量。版本 N 新增经审查�
 占位文件及稳定的启动、构建入口。该模型不支持跳过 N 直接部署 N+1；恢复早于 N 的数据库
 备份时，也必须先运行 N 或人工执行同一份经审查 SQL。
 
-当前 `v4.9.0` 的 additions 没有待执行 SQL，只保留过渡规则注释。
+当前 `v4.9.1` 的 additions 没有待执行 SQL，只保留过渡规则注释。
 `metadata.purge_error TEXT`、`admin_account.preferences JSONB NOT NULL DEFAULT '{}'` 与
 `theme.none` 已在 `schema.sql` 形成基线，并已由全部受控生产数据库在上一版本完成确认。
 后续 additions 仍只保存当期真实增量：不补业务表、外键、CHECK，不删除或重命名对象，
@@ -241,6 +241,11 @@ HTTPS 格式并在后端配置锁内保存，不创建探针 driver，也不退�
 词表 / 计数派生状态。旧 revision 的按需标签索引会被读取端拒绝，后续请求从 PostgreSQL
 真值重新构建，保证 `tag=` 随机过滤和 gallery facets 不会沿用旧成员；旧索引仍受统一
 派生 registry 的 TTL、LRU、结果数和成员数上限约束，不参与核心完整性判定。
+
+图片编辑把 metadata、必要的 author / theme / tag 创建、完整标签替换和分类移动清理回执
+放进同一张图片的单个事务。实际变化只推进一次 `ready_image_revision`；事务任一步失败会
+完整回滚该图片，纯 no-op 不推进。并发编辑采用 last-write-wins，不存储逐图编辑版本，也不
+以 `ready_image_revision` 充当编辑冲突仲裁。
 
 ## author —— 作者
 
