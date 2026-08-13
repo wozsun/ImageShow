@@ -17,7 +17,6 @@ import {
 } from "./runtime-config.ts";
 
 const configPackageFormat = "imageshow-config" as const;
-const configPackageFormatVersion = 3 as const;
 const configPackageMaxBackends = appConfig.imports.configPackageMaxBackends;
 const configPackageMaxBytes = appConfig.imports.configPackageMaxBytes;
 
@@ -38,7 +37,6 @@ const packageStorageBackendSchema = z.strictObject({
 
 const configPackageSchema = z.strictObject({
   format: z.literal(configPackageFormat),
-  format_version: z.literal(configPackageFormatVersion),
   application_version: z.string().trim().min(1).max(64),
   exported_at: z.iso.datetime(),
   config: portableRuntimeConfigSchema,
@@ -107,7 +105,6 @@ export function buildConfigPackage(
 ): ConfigPackage {
   return parseConfigPackage({
     format: configPackageFormat,
-    format_version: configPackageFormatVersion,
     application_version: applicationVersion,
     exported_at: exportedAt.toISOString(),
     config: portableConfig(runtime),
@@ -133,7 +130,6 @@ export function projectConfigPackagePreview(
 ): AdvancedConfigPreviewDto {
   return {
     format: pkg.format,
-    format_version: pkg.format_version,
     application_version: pkg.application_version,
     exported_at: pkg.exported_at,
     config_groups: Object.keys(pkg.config).length,

@@ -277,7 +277,7 @@ function webBuildReport(): Plugin {
       this.emitFile({
         type: "asset",
         fileName: ".vite/web-build-report.json",
-        source: JSON.stringify({ version: 3, chunks, styles }, null, 2)
+        source: JSON.stringify({ chunks, styles }, null, 2)
       });
     }
   };

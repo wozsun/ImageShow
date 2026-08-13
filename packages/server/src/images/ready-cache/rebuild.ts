@@ -17,7 +17,6 @@ import {
   writeReadyImageCacheMeta
 } from "./meta.ts";
 import {
-  READY_IMAGE_CACHE_SCHEMA,
   READY_IMAGE_REBUILD_MAX_ATTEMPTS,
   READY_IMAGE_REBUILD_QUIET_MS,
   type ReadyImageCacheItem,
@@ -186,7 +185,6 @@ async function buildAttempt(
     }
     const completedAt = new Date().toISOString();
     const meta: ReadyImageCacheMeta = {
-      schema: READY_IMAGE_CACHE_SCHEMA,
       state: "ready",
       appliedRevision: snapshot.revision,
       itemCount: snapshot.total,

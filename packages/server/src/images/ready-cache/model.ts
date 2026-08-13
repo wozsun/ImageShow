@@ -8,7 +8,6 @@ import {
 } from "@imageshow/shared/browser";
 import { thumbnailObjectKey } from "../../storage/image-paths.ts";
 
-export const READY_IMAGE_CACHE_SCHEMA = 5;
 export const READY_IMAGE_REBUILD_BATCH_SIZE = 1_000;
 export const READY_IMAGE_REBUILD_MAX_ATTEMPTS = 2;
 export const READY_IMAGE_REBUILD_QUIET_MS = 250;
@@ -21,7 +20,6 @@ export type ReadyImageCacheState =
   | "degraded";
 
 export type ReadyImageCacheMeta = {
-  schema: number;
   state: ReadyImageCacheState;
   appliedRevision: string;
   itemCount: number;
@@ -33,6 +31,30 @@ export type ReadyImageCacheMeta = {
   lastFullRebuildCoreMemoryBytes: number | null;
   lastFullRebuildMeasuredAt: string;
   lastError: string;
+};
+
+export type ReadyImageSourceRow = {
+  id: string;
+  object_key: string;
+  ext: string;
+  device: string;
+  brightness: string;
+  theme: string;
+  storage_slug: string;
+  author: string;
+  tags: string[];
+  width: number | string;
+  height: number | string;
+  image_size: number | string;
+  cursor_image_time: string;
+  sort_score: number | string;
+  title: string;
+  description: string;
+  source: string;
+  original: string;
+  md5: string;
+  cursor_created_at: string;
+  cursor_updated_at: string;
 };
 
 export type ReadyImageCacheItem = {
@@ -94,7 +116,7 @@ export function readyImageSortScore(value: unknown) {
 }
 
 export function readyImageCacheItemFromRow(
-  row: Record<string, unknown>
+  row: ReadyImageSourceRow
 ): ReadyImageCacheItem {
   const tags = Array.isArray(row.tags)
     ? [...new Set(row.tags.map(String))].sort()
@@ -120,15 +142,15 @@ export function readyImageCacheItemFromRow(
     width: finiteNonNegative(row.width),
     height: finiteNonNegative(row.height),
     image_size: finiteNonNegative(row.image_size),
-    image_time: timestamp(row.cursor_image_time ?? row.image_time, "image_time"),
+    image_time: timestamp(row.cursor_image_time, "image_time"),
     sort_score: readyImageSortScore(row.sort_score),
     title: String(row.title ?? ""),
     description: String(row.description ?? ""),
     source: String(row.source ?? ""),
     original: String(row.original ?? ""),
     md5: String(row.md5 ?? ""),
-    created_at: timestamp(row.cursor_created_at ?? row.created_at, "created_at"),
-    updated_at: timestamp(row.cursor_updated_at ?? row.updated_at, "updated_at")
+    created_at: timestamp(row.cursor_created_at, "created_at"),
+    updated_at: timestamp(row.cursor_updated_at, "updated_at")
   };
   if (
     !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(item.id)
@@ -168,7 +190,7 @@ export function parseReadyImageCacheItem(
     ) {
       return null;
     }
-    return readyImageCacheItemFromRow({
+    const row = {
       id: value[0],
       object_key: value[1],
       ext: value[2],
@@ -190,7 +212,8 @@ export function parseReadyImageCacheItem(
       md5: value[18],
       cursor_created_at: value[19],
       cursor_updated_at: value[20]
-    });
+    } satisfies ReadyImageSourceRow;
+    return readyImageCacheItemFromRow(row);
   } catch {
     return null;
   }

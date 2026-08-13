@@ -1,4 +1,4 @@
--- One-release, behavior-neutral additions for existing ImageShow databases.
--- After every controlled database has applied a release's entries, the next
--- release moves them into schema.sql and removes them here. Keep this asset as
--- a comment-only placeholder when no delta is pending.
+-- Current-release, behavior-neutral additions for existing ImageShow databases.
+-- After every controlled database has applied an entry, the following release
+-- moves it into schema.sql and removes it here. Keep this asset as a comment-only
+-- placeholder when no delta is pending; do not skip a release carrying entries.

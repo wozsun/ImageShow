@@ -3,13 +3,11 @@ import { redis } from "../../core/redis-client.ts";
 import { execRedisPipeline } from "../../core/redis-pipeline.ts";
 import { READY_IMAGE_META_KEY } from "./keys.ts";
 import {
-  READY_IMAGE_CACHE_SCHEMA,
   type ReadyImageCacheMeta,
   type ReadyImageCacheState
 } from "./model.ts";
 
 const metaFields = new Set([
-  "schema",
   "state",
   "applied_revision",
   "item_count",
@@ -77,7 +75,6 @@ function parseReadyImageCacheMeta(
     throw new Error("Ready-image cache meta contains an invalid state");
   }
   const meta: ReadyImageCacheMeta = {
-    schema: nonNegativeInteger(raw.schema, "schema"),
     state,
     appliedRevision: decimalRevision(raw.applied_revision),
     itemCount: nonNegativeInteger(raw.item_count, "item_count"),
@@ -149,11 +146,7 @@ function parseReadyImageCacheMeta(
 }
 
 function serializedMeta(meta: ReadyImageCacheMeta) {
-  if (meta.schema !== READY_IMAGE_CACHE_SCHEMA) {
-    throw new Error("Refusing to write an unsupported ready-image cache schema");
-  }
   return {
-    schema: String(meta.schema),
     state: meta.state,
     applied_revision: decimalRevision(meta.appliedRevision),
     item_count: String(meta.itemCount),
@@ -192,11 +185,7 @@ export function rebuildingReadyImageCacheMeta(
   startedAt = new Date().toISOString(),
   previous: ReadyImageCacheMeta | null = null
 ): ReadyImageCacheMeta {
-  const reliablePrevious = previous?.schema === READY_IMAGE_CACHE_SCHEMA
-    ? previous
-    : null;
   return {
-    schema: READY_IMAGE_CACHE_SCHEMA,
     state: "rebuilding",
     appliedRevision: decimalRevision(appliedRevision),
     itemCount: 0,
@@ -206,9 +195,9 @@ export function rebuildingReadyImageCacheMeta(
     processed: 0,
     total: 0,
     lastFullRebuildCoreMemoryBytes:
-      reliablePrevious?.lastFullRebuildCoreMemoryBytes ?? null,
+      previous?.lastFullRebuildCoreMemoryBytes ?? null,
     lastFullRebuildMeasuredAt:
-      reliablePrevious?.lastFullRebuildMeasuredAt ?? "",
+      previous?.lastFullRebuildMeasuredAt ?? "",
     lastError: ""
   };
 }

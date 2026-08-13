@@ -36,23 +36,21 @@ Redis 凭据只来自环境变量或 Secret，不写入 `config.json`。首次�
 
 ## PostgreSQL 与 Redis
 
-`schema.sql` 是上一个已确认版本的干净安装基线；只跨一个发布周期的
-`schema-additions.sql` 保存当前经审查的行为中性字段、必要索引与稳定系统种子。空数据库依次
+`schema.sql` 直接定义当前干净安装基线；`schema-additions.sql` 保存当前经审查的行为中性
+字段、必要索引与稳定系统种子。空数据库依次
 执行两者，非空数据库只执行 additions 后做只读 readiness；整个过程受同一事务保护。
-单应用进程合同不再为第二个重叠启动者取得 bootstrap lock；首次启动、停止后的顺序重启、
+单应用进程合同不为第二个重叠启动者取得 bootstrap lock；首次启动、停止后的顺序重启、
 已有数据启动，以及事务回滚后的顺序恢复仍使用同一初始化路径。
-全部受控数据库确认应用版本 N 的 additions 后，N+1 才能把定义移入 `schema.sql` 并清空
-additions。部署不能跳过 N；恢复更早备份时也应先以 N 应用增量。应用不提供编号迁移、通用
-schema diff、版本 ledger、破坏性 DDL 或清库；精确白名单与拒绝条件以
+当前 additions 是注释占位，不执行 SQL。应用不提供编号迁移、通用 schema diff、版本 ledger、
+破坏性 DDL 或清库。additions 只承载一个发布周期；全部受控数据库确认应用后，下一发布才把
+同一定义并入 `schema.sql`，部署与旧备份恢复不得跳过承载 additions 的发布。精确白名单与拒绝条件以
 [数据库结构](./database.md#启动与结构契约)为准。
-
-当前 `v4.9.13` 的 additions 没有待执行 SQL，只保留注释占位；全部受控生产数据库已经确认
-当前 `schema.sql` 形状，镜像不再携带一次性旧结构清理入口。
 
 Redis 只保存会话、限流、统一就绪图片投影和可重建派生缓存。连接必须支持 Redis 8
 以及 `INCREX`、`ARRING`、`ARLASTITEMS`；应用会用带 5 秒 TTL 的自有探针键实际验证
 命令和 ACL 权限。Redis 不是真相源，不能通过清理 PostgreSQL 来修复 Redis 状态，也不
-需要为了普通 ImageShow 升级手工清空 Redis。
+保存不可重建的业务数据。在应用停止时把其专用 Redis DB 替换为空库是安全的冷启动操作，
+但会使管理员会话、限流状态和全部派生投影失效；启动后必须等待投影重建并重新登录。
 
 内置 Compose 使用 `redis:8`、AOF、私有网络且不设置密码；只有外部 Redis 启用了认证时
 才传 `REDIS_PASSWORD`。Redis 的内存限制、淘汰策略和容器硬限制由部署方配置，应用只

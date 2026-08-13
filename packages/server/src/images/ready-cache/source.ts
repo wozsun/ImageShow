@@ -3,7 +3,8 @@ import { pool } from "../../core/database-pools.ts";
 import {
   READY_IMAGE_REBUILD_BATCH_SIZE,
   readyImageCacheItemFromRow,
-  type ReadyImageCacheItem
+  type ReadyImageCacheItem,
+  type ReadyImageSourceRow
 } from "./model.ts";
 import { getReadyImageRevision } from "./revision.ts";
 
@@ -62,7 +63,7 @@ export async function readReadyImageSourceItems(
       WHERE m.status='ready' AND m.id=ANY($1::uuid[])
       ORDER BY m.id`,
     [uniqueIds]
-  )).rows as Record<string, unknown>[];
+  )).rows as ReadyImageSourceRow[];
   signal?.throwIfAborted();
   return rows.map(readyImageCacheItemFromRow);
 }
@@ -81,7 +82,7 @@ async function readBatch(
       ORDER BY m.id
       LIMIT $2`,
     [afterId, READY_IMAGE_REBUILD_BATCH_SIZE]
-  )).rows as Record<string, unknown>[];
+  )).rows as ReadyImageSourceRow[];
   signal?.throwIfAborted();
   return rows.map(readyImageCacheItemFromRow);
 }

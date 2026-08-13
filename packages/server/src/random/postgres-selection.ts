@@ -5,7 +5,8 @@ import type { ImageFilterPlan } from "../images/filter-plan.ts";
 import { buildImageFilterSql } from "../images/read-models/image-filter-sql.ts";
 import {
   readyImageCacheItemFromRow,
-  type ReadyImageCacheItem
+  type ReadyImageCacheItem,
+  type ReadyImageSourceRow
 } from "../images/ready-cache/model.ts";
 import { readyImageSourceColumns } from "../images/ready-cache/source.ts";
 
@@ -69,7 +70,7 @@ async function readCandidates(
       ORDER BY m.id ASC
       LIMIT ${limitParameter}`,
     clause.params
-  )).rows as Record<string, unknown>[];
+  )).rows as ReadyImageSourceRow[];
   signal?.throwIfAborted();
   return rows.map(readyImageCacheItemFromRow);
 }

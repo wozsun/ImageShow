@@ -11,7 +11,6 @@ import {
 } from "./keys.ts";
 import { readReadyImageCacheMeta } from "./meta.ts";
 import {
-  READY_IMAGE_CACHE_SCHEMA,
   type ReadyImageCacheItem,
   type ReadyImageCacheMeta
 } from "./model.ts";
@@ -92,9 +91,6 @@ export async function validateReadyImageCacheAtStartup(
   try {
     meta = await readReadyImageCacheMeta(client);
     if (!meta) return { valid: false, reason: "meta_missing", meta };
-    if (meta.schema !== READY_IMAGE_CACHE_SCHEMA) {
-      return { valid: false, reason: "schema_mismatch", meta };
-    }
     if (meta.state !== "ready") {
       return { valid: false, reason: `state_${meta.state}`, meta };
     }

@@ -10,7 +10,6 @@ export type AdvancedConfigBackendPreviewDto = {
 
 export type AdvancedConfigPreviewDto = {
   format: "imageshow-config";
-  format_version: number;
   application_version: string;
   exported_at: string;
   config_groups: number;

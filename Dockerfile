@@ -32,7 +32,7 @@ COPY --chown=node:node --from=build /app/packages/shared/dist ./packages/shared/
 COPY --chown=node:node --from=build /app/packages/server/package.json ./packages/server/package.json
 COPY --chown=node:node --from=build /app/packages/server/dist ./packages/server/dist
 RUN mkdir -p /app/data/storage /app/data/log && chown -R node:node /app/data
-COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+COPY scripts/runtime/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 COPY scripts/runtime/imageshow /usr/local/bin/imageshow
 RUN sed -i 's/\r$//' /usr/local/bin/docker-entrypoint.sh /usr/local/bin/imageshow \
     && chmod +x /usr/local/bin/docker-entrypoint.sh /usr/local/bin/imageshow

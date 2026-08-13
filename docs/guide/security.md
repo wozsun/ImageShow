@@ -3,7 +3,7 @@
 - 管理员密码使用 Node.js `node:crypto` 原生异步 Argon2id 派生，以 PHC 字符串写入 PostgreSQL；固定参数为 64 MiB 内存、3 轮、并行度 4、32 字节输出和 24 字节随机 salt，并使用恒定时间比较派生结果。登录只接受参数与长度完全匹配当前策略的哈希，不在登录路径自动改写密码记录。
 - 管理会话存于 Redis，Cookie 为 `HttpOnly` + `SameSite=Lax`，识别为 HTTPS 时附加
   `Secure`；所有写操作要求 `X-CSRF-Token` 并校验同源。会话保存密码哈希的不可逆
-  SHA-256 代际，key namespace 固定为 `imageshow:session:v2:`；其他 namespace 不参与认证。
+  SHA-256 代际，key namespace 固定为 `imageshow:session:`；其他 namespace 不参与认证。
   每个 payload 必须包含一至两个格式正确且互不重复的代际，缺失、空数组、非法项、重复项
   或超长数组均直接拒绝。Redis 不保存管理员账号、角色或密码代际的全局投影。每次会话认证先
   读取 Redis key，再以其中用户名对 PostgreSQL `admin_account` 做一次主键查询，比较权威

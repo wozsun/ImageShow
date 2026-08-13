@@ -99,7 +99,7 @@ export function ConfigPackageImportDialog({
           </header>
           <div ref={operationBodyRef} className="operation-body">
             <dl className="advanced-config-summary">
-              <div><dt>格式版本</dt><dd>v{preview.format_version}</dd></div>
+              <div><dt>格式</dt><dd>{preview.format}</dd></div>
               <div><dt>应用版本</dt><dd>{preview.application_version}</dd></div>
               <div><dt>导出时间</dt><dd>{previewDate(preview.exported_at)}</dd></div>
               <div><dt>配置组</dt><dd>{preview.config_groups}</dd></div>

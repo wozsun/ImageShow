@@ -6,7 +6,10 @@ import {
 import { pool, type DatabaseReader } from "../core/database-pools.ts";
 import { apiErrorResponse } from "../core/http/responses.ts";
 import { readTargetedReadyImages } from "../images/ready-cache/query.ts";
-import { readyImageCacheItemFromRow } from "../images/ready-cache/model.ts";
+import {
+  readyImageCacheItemFromRow,
+  type ReadyImageSourceRow
+} from "../images/ready-cache/model.ts";
 import { readyImageSourceColumns } from "../images/ready-cache/source.ts";
 import type { SelectedReadyImage } from "./selection-model.ts";
 
@@ -56,7 +59,7 @@ export async function pickTargetedImages(
          JOIN candidate_ids candidate ON candidate.id=m.id
         ORDER BY m.id`,
       [fullIds, suffixes, maximumCandidates + 1]
-    )).rows as Record<string, unknown>[];
+    )).rows as ReadyImageSourceRow[];
     const rows = await read(database.reader ?? pool);
     if (rows.length > maximumCandidates) {
       throw publicPgFallbackWorkLimitExceeded(

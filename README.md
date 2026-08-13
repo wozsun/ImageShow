@@ -84,21 +84,19 @@ sudo install -d -o 1000 -g 1000 data
 docker compose exec postgresql sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
 ```
 
-## 数据库与升级边界
+## 数据库基线
 
-`schema.sql` 是上一个已确认版本的干净安装基线；镜像另带只跨一个发布周期的
-`schema-additions.sql`，两者共同组成当前版本的完整空库结构。版本 N 的行为中性字段、必要
-索引或稳定系统种子先进入 additions；全部受控非空数据库部署 N 并通过 readiness 后，版本
-N+1 把同一定义移入 `schema.sql`，再把 additions 清空为注释占位。该流程不支持跳过 N，恢复
-早于 N 的数据库备份时也必须先应用 N 的增量。应用不提供编号迁移、通用 schema diff、删除、
-重命名、类型改变、推测回填、版本标记或清库。精确契约见
+`schema.sql` 直接定义当前干净安装基线；镜像同时保留可选的
+`schema-additions.sql`，用于对现有数据库执行逐项审查、行为中性的安全新增。空数据库在同一
+事务中依次执行两个入口，非空数据库只执行 additions 后进入只读 readiness。当前 additions
+为注释占位，不执行 SQL。additions 只承载一个发布周期：全部受控非空数据库应用其中增量并
+通过 readiness 后，下一发布才能把同一定义并入 `schema.sql` 并恢复注释占位；升级和恢复旧
+备份都不得跳过承载 additions 的发布。应用不提供编号迁移、通用 schema diff、删除、重命名、
+类型改变、推测回填、版本标记或清库。精确契约见
 [数据库结构](docs/guide/database.md#启动与结构契约)。
 
-当前 `v4.9.13` 没有待执行的 additions SQL，文件只保留过渡规则注释；
-`metadata.purge_error`、`admin_account.preferences` 与 `theme.none` 已属于 `schema.sql`
-基线，并已由全部受控生产数据库在上一版本完成确认。
-
-Redis 不是业务真相源，普通升级不要求手工清空。连接必须支持 Redis 8 以及项目使用的
+Redis 不是业务真相源；空 Redis 会从 PostgreSQL 重建派生状态并要求管理员重新登录。连接必须
+支持 Redis 8 以及项目使用的
 `INCREX`、`ARRING`、`ARLASTITEMS` 命令；应用启动时会实际验证命令与 ACL 权限。
 
 ## 生产部署
@@ -125,7 +123,7 @@ npm run verify:release
 
 `verify:release` 是完整本地发布门禁，依次覆盖源码契约、生产构建、最终测试和隔离生产
 镜像。门禁实现和 benchmarks 位于本地、Git 忽略的 `tests/`；上传后的 GitHub Actions
-只做基础完整性检查、容器构建和发布，不代替本地验收。
+只负责生产容器构建、镜像发布和 GitHub Release，不代替本地验收。
 
 常用独立门禁：
 

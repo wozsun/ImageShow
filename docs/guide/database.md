@@ -1,8 +1,8 @@
 # 数据库结构
 
 PostgreSQL 共 10 张业务表，不保存迁移账本或 schema 版本表。
-`packages/server/schema.sql` 是上一个已确认版本的干净安装基线；它与当前版本只跨一个发布
-周期的 `schema-additions.sql` 共同组成完整的新安装结构。随机图 `id` 的末 12 位查询所需 ready
+`packages/server/schema.sql` 直接定义当前干净安装基线；它与可选的
+`schema-additions.sql` 共同组成完整的新安装结构。随机图 `id` 的末 12 位查询所需 ready
 部分表达式索引，以及统一 Redis 图片投影的权威 revision 单行表均属于当前基线。PostgreSQL
 是唯一真相源，Redis 图片投影、查询缓存与管理员会话均不替代数据库真值。
 
@@ -14,23 +14,18 @@ PostgreSQL 共 10 张业务表，不保存迁移账本或 schema 版本表。
 ## 启动与结构契约
 
 当前代码库不提供编号迁移、迁移账本或通用数据库升级路径。单应用进程启动时，空数据库
-在一个事务中先执行已封版的 `schema.sql`，再执行当前
+在一个事务中先执行 `schema.sql`，再执行当前
 `schema-additions.sql`；非空数据库只执行 additions，随后进入轻量 readiness。additions、
 readiness 或干净初始化任一步失败都会回滚本次事务。全部连接固定使用 `search_path=public`。
-应用不再为不受支持的第二个重叠进程持有 schema 或管理员播种 bootstrap lock。
+应用不为不受支持的第二个重叠进程持有 schema 或管理员播种 bootstrap lock。
 
-additions 只保存一个发布周期的安全增量。版本 N 新增经审查的行为中性字段、与其直接相关的
-必要普通索引或稳定系统种子时，先写入 additions；全部受控非空数据库部署 N 并通过 readiness
-后，版本 N+1 将同一定义移入 `schema.sql`，同时从 additions 删除。没有当前增量时仍保留注释
-占位文件及稳定的启动、构建入口。该模型不支持跳过 N 直接部署 N+1；恢复早于 N 的数据库
-备份时，也必须先运行 N 或人工执行同一份经审查 SQL。
-
-当前 `v4.9.13` 的 additions 没有待执行 SQL，只保留过渡规则注释。
-`metadata.purge_error TEXT`、`admin_account.preferences JSONB NOT NULL DEFAULT '{}'` 与
-`theme.none` 已在 `schema.sql` 形成基线，并已由全部受控生产数据库在上一版本完成确认。
-后续 additions 仍只保存当期真实增量：不补业务表、外键、CHECK，不删除或重命名对象，
-不推测回填，不更新已有数据，也不写版本行；同名列存在但类型不兼容时不改型，由 readiness
-明确拒绝，稳定种子也不得覆盖已有显示值。
+additions 只保存一个发布周期内逐项审查、行为中性的安全新增；没有当前增量时仍保留注释占位
+文件及稳定的启动、构建入口。当前文件不执行 SQL。某次发布加入增量后，必须先让全部受控
+非空数据库应用并通过 readiness，下一发布才能把同一定义并入 `schema.sql` 并从 additions
+移除。部署不得跳过承载 additions 的发布；恢复更早的数据库备份时，也必须先用该发布应用
+相同增量。additions 不补业务表、外键、CHECK，不删除或重命名对象，不推测回填，不更新已有
+数据，也不写版本行；同名列存在但类型不兼容时不改型，由 readiness 明确拒绝，稳定种子也
+不得覆盖已有显示值。
 
 readiness 只读核对 10 张当前业务表、源码实际使用的列及其 PostgreSQL 类型、必需系统种子，
 并确认会话可写、public schema 可用且当前角色具备各表实际操作所需的 SELECT / INSERT /
@@ -41,10 +36,8 @@ UPDATE / DELETE 权限，不使用回滚写探针。它还按列和谓词语义�
 CASCADE 和 SET NULL 外键。缺少、失效或删除动作不符会在业务启动前明确失败。
 
 readiness 不复制 `schema.sql` 的可空性、默认值、CHECK、触发器、普通查询索引或无消费者
-约束，也不识别旧版本号或旧结构形状。额外表、额外列、额外索引、等价约束改名以及更宽的
-CHECK 不影响启动，只要当前代码不依赖它们。当前封版结构不含 `metadata.extra`、
-`background_job.result`，存储与后台任务 CHECK 也只允许当前值；应用不再携带旧结构识别、
-清理或版本分支。
+约束。额外表、额外列、额外索引、等价约束改名以及更宽的 CHECK 不影响启动，只要当前代码
+不依赖它们；破坏性清理由维护者在停机、备份和恢复验证后单独执行，不属于应用启动职责。
 
 ## 运行期连接与公开回源
 
