@@ -1,7 +1,7 @@
 {
   "name": "imageshow",
   "private": true,
-  "version": "4.9.9",
+  "version": "4.9.10",
   "type": "module",
   "workspaces": [
     "packages/*"
@@ -21,7 +21,6 @@
     "verify:runtime": "node tests/verify/run.mjs runtime",
     "verify:release": "node tests/verify/run.mjs release",
     "test:final:web": "tsx --test tests/final-web.test.ts",
-    "benchmark:ready-image-set-work": "node tests/benchmarks/ready-image-set-work.mjs",
     "admin:reset-password": "node --env-file-if-exists=.env packages/server/src/admin-password-cli.ts reset-password",
     "start": "npm run start -w @imageshow/server"
   },

@@ -286,6 +286,11 @@ Web 继续使用 entries-aware 的入口根集合分块，`minShareCount: 2` 表
 不增加请求或有效 Brotli 字节的其他单一内置合并方案，因此不以总文件数下降为目标，也不增加
 自动合并插件或逐模块特殊规则。
 
+运行时传输、浏览器 profile、450 图导入矩阵、分析器和前后对比报告只属于本地发布验收，
+保存在被 Git 忽略的 `tests/benchmarks/` 与 `tests/reports/`。它们不进入 `scripts/`、npm
+package scripts、Actions 或生产镜像；`scripts/` 继续只保存构建和容器运行所需命令。权威的
+评分口径、固定媒体身份和无回退边界见[架构总览](./architecture.md#浏览器传输基线)。
+
 ## docs/guide
 
 这里保存普通 Markdown 仓库文档。`roles/` 按普通用户、图片管理员、超级管理员和实例维护者
