@@ -192,11 +192,16 @@ hooks ──► lib
 - `components/` 按稳定 UI 职责保存跨页面组件；`components/image/editor/` 的数量中性
   `1..N` 编辑器把重复图片卡片与 shell 编排分开，trash 模型和 Hook 集中拥有逐项响应
   对账、权威回读、会话成员修剪及查询失效，不把 mutation 收口重新分散到入口页面。
+  `components/feedback/DialogLayerPortal.tsx` 是顶层动态视口和嵌套弹窗坐标系的唯一 owner；
+  移动图片详情的根层关闭控件继续复用共享 `DirectActivationButton`，不在页面入口复制触控
+  关闭分支。
 - `hooks/` 保存跨页面且主要管理 React 生命周期或交互行为的 Hook；首页与画廊的导航
   共用 `usePageScrollMovement.ts` 管理 RAF 合并、页面锁定和有界滚动位移采样，
   `usePublicNavigationEntrance.ts` 保证公开主导航在 SPA 会话内只入场一次，
   `useOneShotAnimation.ts` 在动画结束或减少动态效果中断后永久移除本次入口状态，
-  `useDocumentMotionPause.ts` 统一把文档隐藏状态交给持续环境动效。
+  `useDocumentMotionPause.ts` 统一把文档隐藏状态交给持续环境动效。共享
+  `usePageScrollLock.ts` 计数化冻结应用根、安装弹窗触摸边界并在最后释放时恢复页面滚动；
+  `useDialogFocus.ts` 在相同层级归还 opener，页面和角色模块不得建立第二套 body 锁。
 - `lib/` 保存无界面代码；HTTP 客户端、query key 和共享查询 Hook 集中在 `lib/api/`。
   首页与画廊的主导航滚动阈值由 `lib/ui/public-navigation.ts` 统一定义；共享公开端
   入场缓动与首页导航淡入时长由 `styles/base.css` 的 motion token 提供，页面样式
@@ -208,6 +213,9 @@ hooks ──► lib
   导航意图，`AppRoutes` 的 `React.lazy`、主导航和首页次级入口复用同一 Promise；它不绑定
   pointerdown，因而不会改变触摸或直接导航路径。`lib/image-url.ts` 只保存详情与画廊权威
   快照共同需要的原图 URL 判定，不让页面层复制同一字段投影。
+  `lib/ui/dialog-scroll-boundary.ts` 保存滚动 owner 选择与方向纯模型，
+  `dialog-touch-boundary.ts` 只管理 capture 触摸生命周期；二者只认识当前顶层 dialog frame
+  与 DOM 滚动能力，不依赖页面、角色或路由。
 - `pages/` 保存路由页面与页面级编排，页面专属组件、状态机和 Hook 就近维护。
 - `AppRoutes.tsx` 将普通与嵌入路径映射到同一 `HomePage` / `GalleryPage`；页面参数只
   决定是否挂载主导航，不能复制公开页实现或以 CSS 隐藏导航。服务端仍独立决定嵌入

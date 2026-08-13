@@ -31,6 +31,7 @@ import { OverlayScrollbar } from "../layout/OverlayScrollbar.js";
 import { ImageDescriptionSlot } from "./ImageDescriptionSlot.js";
 import { DialogLayerPortal } from "../feedback/DialogLayerPortal.js";
 import { DialogPortalTargetContext } from "../feedback/DialogPortalContext.js";
+import { DirectActivationButton } from "../feedback/DirectActivationButton.js";
 import { LazyImageAdminDetails } from "./image-admin-details-loader.js";
 import { hasDistinctOriginalUrl } from "../../lib/image-url.js";
 import "../../styles/image-detail.css";
@@ -165,14 +166,17 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
   const mobileLayout = useMediaQuery(mobileViewportMediaQuery);
   const frameRef = useRef<HTMLDivElement | null>(null);
   const dialogRef = useRef<HTMLElement | null>(null);
-  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const desktopCloseButtonRef = useRef<HTMLButtonElement | null>(null);
+  const mobileCloseButtonRef = useRef<HTMLButtonElement | null>(null);
   const detailContentRef = useRef<HTMLDivElement | null>(null);
   const titleHeaderRef = useRef<HTMLElement | null>(null);
   const actionsRef = useRef<HTMLDivElement | null>(null);
   const [nestedDialogOpen, setNestedDialogOpen] = useState(false);
   useDialogFocus({
-    containerRef: dialogRef,
-    initialFocusRef: closeButtonRef,
+    containerRef: frameRef,
+    initialFocusRef: mobileLayout
+      ? mobileCloseButtonRef
+      : desktopCloseButtonRef,
     returnFocusRef: props.returnFocusRef,
     onEscape: () => exit.requestClose(),
     paused: nestedDialogOpen
@@ -214,8 +218,22 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
         aria-modal="true"
         aria-label="图片详情"
         onAnimationEnd={exit.onAnimationEnd}
-        onClick={() => exit.requestClose()}
+        onClick={(event) => {
+          if (event.target === event.currentTarget) exit.requestClose();
+        }}
       >
+        {mobileLayout && (
+          <DirectActivationButton
+            ref={mobileCloseButtonRef}
+            className="icon close pressable image-detail-mobile-close"
+            type="button"
+            title="关闭"
+            aria-label="关闭图片详情"
+            onActivate={() => exit.requestClose()}
+          >
+            <Icon name="close-line" />
+          </DirectActivationButton>
+        )}
         <DialogPortalTargetContext.Provider value={frameRef}>
         <article ref={dialogRef} tabIndex={-1} onClick={(event) => event.stopPropagation()}>
         <ProgressiveImage
@@ -247,14 +265,18 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
                     )
                     : title}
                 </h2>
-                <button
-                  className="icon close pressable"
-                  ref={closeButtonRef}
-                  title="关闭"
-                  onClick={() => exit.requestClose()}
-                >
-                  <Icon name="close-line" />
-                </button>
+                {!mobileLayout && (
+                  <button
+                    className="icon close pressable"
+                    ref={desktopCloseButtonRef}
+                    type="button"
+                    title="关闭"
+                    aria-label="关闭图片详情"
+                    onClick={() => exit.requestClose()}
+                  >
+                    <Icon name="close-line" />
+                  </button>
+                )}
               </div>
             </header>
             <ImageDescriptionSlot

@@ -37,14 +37,24 @@ html.public-page-document { overscroll-behavior-y: none; }
   html.public-page-document { overscroll-behavior-y: contain; }
 }
 html.modal-open, body.modal-open { overflow: hidden; }
+@media (hover: none) and (pointer: coarse) {
+  html.modal-open [data-dialog-frame],
+  html.modal-open [data-dialog-frame] * {
+    overscroll-behavior-y: contain;
+  }
+}
 /* DialogLayerPortal is the single owner of dialog positioning. The root layer
    follows Safari's current dynamic viewport while nested dialogs fill their
    parent layer without escaping its stacking context. */
 [data-dialog-layer="root"] {
   position: fixed;
   inset: 0 0 auto;
+  width: 100%;
   height: 100vh;
   height: 100dvh;
+  max-height: 100vh;
+  max-height: 100dvh;
+  overflow: hidden;
 }
 [data-dialog-layer="nested"] { position: absolute; inset: 0; }
 /* clip 和 hidden 都会裁掉横向溢出；但 clip 不会像 hidden 那样把 body

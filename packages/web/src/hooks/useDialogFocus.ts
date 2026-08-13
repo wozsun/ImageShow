@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, type RefObject } from "react";
+import { getPageScrollLockFocusTarget } from "./usePageScrollLock.js";
 
 const FOCUSABLE_SELECTOR = [
   "a[href]",
@@ -49,8 +50,13 @@ export function useDialogFocus({
   // 关闭条件渲染的弹窗时会把 active 置为 false，因此无需卸载整个组件也能正确归还焦点。
   useLayoutEffect(() => {
     if (active && !wasActiveRef.current) {
+      const activeElement = document.activeElement instanceof HTMLElement
+        && document.activeElement !== document.body
+        ? document.activeElement
+        : null;
       returnFocusTargetRef.current = returnFocusRef?.current
-        ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+        ?? activeElement
+        ?? getPageScrollLockFocusTarget();
     } else if (!active && wasActiveRef.current) {
       restoreFocus();
       returnFocusTargetRef.current = null;

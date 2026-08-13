@@ -1,14 +1,23 @@
 import { useLayoutEffect } from "react";
+import {
+  createDialogTouchBoundary
+} from "../lib/ui/dialog-touch-boundary.js";
 
 let lockCount = 0;
 let lockedScrollY = 0;
 let lockedPageRoot: HTMLElement | null = null;
-let previousPageRootStyles: Pick<
-  CSSStyleDeclaration,
-  "position" | "top" | "left" | "right" | "width"
-> | null = null;
+let lockedPageFocusTarget: HTMLElement | null = null;
+let previousPageRootState: {
+  ariaHidden: string | null;
+  inert: boolean;
+  styles: Pick<
+    CSSStyleDeclaration,
+    "position" | "top" | "left" | "right" | "width"
+  >;
+} | null = null;
 let restoringPageScroll = false;
 let restorationFrame: number | undefined;
+let removeDialogTouchBoundary: (() => void) | null = null;
 
 export const pageScrollRestoredEvent = "imageshow:page-scroll-restored";
 
@@ -48,6 +57,47 @@ export function getPageScrollY() {
   return isPageScrollLocked() ? lockedScrollY : window.scrollY;
 }
 
+/**
+ * The first lock makes the application root inert before dialog focus effects
+ * run. Preserve its active opener so the focus trap can still record the
+ * correct return target; nested dialogs continue to use their live parent
+ * dialog focus instead.
+ */
+export function getPageScrollLockFocusTarget() {
+  return lockCount === 1 && lockedPageFocusTarget?.isConnected
+    ? lockedPageFocusTarget
+    : null;
+}
+
+function installDialogTouchBoundary() {
+  if (removeDialogTouchBoundary) return;
+  const boundary = createDialogTouchBoundary(document);
+  const captureNonPassive = {
+    capture: true,
+    passive: false
+  } as const;
+  document.addEventListener(
+    "touchstart",
+    boundary.onTouchStart,
+    captureNonPassive
+  );
+  document.addEventListener(
+    "touchmove",
+    boundary.onTouchMove,
+    captureNonPassive
+  );
+  document.addEventListener("touchend", boundary.onTouchEnd, true);
+  document.addEventListener("touchcancel", boundary.onTouchEnd, true);
+  removeDialogTouchBoundary = () => {
+    document.removeEventListener("touchstart", boundary.onTouchStart, true);
+    document.removeEventListener("touchmove", boundary.onTouchMove, true);
+    document.removeEventListener("touchend", boundary.onTouchEnd, true);
+    document.removeEventListener("touchcancel", boundary.onTouchEnd, true);
+    boundary.reset();
+    removeDialogTouchBoundary = null;
+  };
+}
+
 export function usePageScrollLock(active = true) {
   useLayoutEffect(() => {
     if (!active) return;
@@ -60,19 +110,32 @@ export function usePageScrollLock(active = true) {
       const scrollbarWidth = Math.max(0, window.innerWidth - document.documentElement.clientWidth);
       lockedPageRoot = document.getElementById("root");
       if (lockedPageRoot) {
-        previousPageRootStyles = {
-          position: lockedPageRoot.style.position,
-          top: lockedPageRoot.style.top,
-          left: lockedPageRoot.style.left,
-          right: lockedPageRoot.style.right,
-          width: lockedPageRoot.style.width
+        const activeElement = document.activeElement;
+        lockedPageFocusTarget = activeElement instanceof HTMLElement
+          && lockedPageRoot.contains(activeElement)
+          ? activeElement
+          : null;
+        previousPageRootState = {
+          ariaHidden: lockedPageRoot.getAttribute("aria-hidden"),
+          inert: lockedPageRoot.inert,
+          styles: {
+            position: lockedPageRoot.style.position,
+            top: lockedPageRoot.style.top,
+            left: lockedPageRoot.style.left,
+            right: lockedPageRoot.style.right,
+            width: lockedPageRoot.style.width
+          }
         };
         lockedPageRoot.style.position = "fixed";
         lockedPageRoot.style.top = `-${lockedScrollY}px`;
         lockedPageRoot.style.left = "0";
         lockedPageRoot.style.right = `${scrollbarWidth}px`;
         lockedPageRoot.style.width = "auto";
+        lockedPageFocusTarget?.blur();
+        lockedPageRoot.inert = true;
+        lockedPageRoot.setAttribute("aria-hidden", "true");
       }
+      installDialogTouchBoundary();
     }
     lockCount += 1;
     document.documentElement.classList.add("modal-open");
@@ -82,11 +145,22 @@ export function usePageScrollLock(active = true) {
       if (lockCount) return;
       document.documentElement.classList.remove("modal-open");
       document.body.classList.remove("modal-open");
-      if (lockedPageRoot && previousPageRootStyles) {
-        Object.assign(lockedPageRoot.style, previousPageRootStyles);
+      removeDialogTouchBoundary?.();
+      if (lockedPageRoot && previousPageRootState) {
+        Object.assign(lockedPageRoot.style, previousPageRootState.styles);
+        lockedPageRoot.inert = previousPageRootState.inert;
+        if (previousPageRootState.ariaHidden === null) {
+          lockedPageRoot.removeAttribute("aria-hidden");
+        } else {
+          lockedPageRoot.setAttribute(
+            "aria-hidden",
+            previousPageRootState.ariaHidden
+          );
+        }
       }
       lockedPageRoot = null;
-      previousPageRootStyles = null;
+      lockedPageFocusTarget = null;
+      previousPageRootState = null;
       restorePageScroll();
     };
   }, [active]);
