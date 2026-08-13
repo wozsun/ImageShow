@@ -7,6 +7,10 @@ import {
   type ImportStatus,
   type StoredImportStatusDto
 } from "@imageshow/shared/browser";
+import {
+  canonicalImportSubscriptionKey,
+  ImportStatusSubscription
+} from "./status-subscription.ts";
 
 const activeImportPhases = new Map<
   string,
@@ -14,6 +18,10 @@ const activeImportPhases = new Map<
 >();
 const importStatusEvents = new EventEmitter();
 importStatusEvents.setMaxListeners(0);
+
+type ImportStatusEvent = StoredImportStatusDto & {
+  attemptKey?: string;
+};
 
 const importPhaseStatuses = new Map<string, ImportStatus>([
   ["materialize-waiting", "created"],
@@ -26,10 +34,10 @@ const importPhaseStatuses = new Map<string, ImportStatus>([
 ]);
 
 function canonicalImportId(id: string) {
-  return id.toLowerCase();
+  return canonicalImportSubscriptionKey(id);
 }
 
-function uniqueImportIds(ids: string[]) {
+function uniqueImportKeys(ids: string[]) {
   const seen = new Set<string>();
   const unique: string[] = [];
   for (const id of ids) {
@@ -61,18 +69,8 @@ function importMessage(status: string, mode?: string, error?: string) {
   return "等待处理";
 }
 
-function emitImportStatus(status: StoredImportStatusDto) {
+function emitImportStatus(status: ImportStatusEvent) {
   importStatusEvents.emit("status", status);
-}
-
-export function emitCancelledImportStatus(id: string) {
-  emitImportStatus({
-    id,
-    status: "cancelled",
-    error: "",
-    phase: "cancelled",
-    message: "已取消"
-  });
 }
 
 export async function notifyImportStatus(id: string) {
@@ -112,17 +110,24 @@ export function clearImportPhase(id: string) {
   activeImportPhases.delete(canonicalImportId(id));
 }
 
-async function getImportStatus(id: string) {
+async function getImportStatusEvent(id: string): Promise<ImportStatusEvent> {
   const row = (await pool.query(
-    "SELECT mode, status, error FROM import_session WHERE id=$1",
+    `SELECT mode, status, error, idempotency_key
+       FROM import_session
+      WHERE id=$1`,
     [id]
   )).rows[0] as {
     mode: ImportMode;
     status: ImportStatus;
     error: string;
+    idempotency_key: string;
   } | undefined;
   if (!row) throw new ApiError(404, "not_found", "导入任务不存在");
-  return presentImportStatus(id, row);
+  return {
+    id,
+    ...presentImportStatus(id, row),
+    attemptKey: row.idempotency_key
+  };
 }
 
 function presentImportStatus(
@@ -147,10 +152,6 @@ function presentImportStatus(
   };
 }
 
-async function getImportStatusEvent(id: string): Promise<StoredImportStatusDto> {
-  return { id, ...await getImportStatus(id) };
-}
-
 function missingImportStatus(id: string): StoredImportStatusDto {
   return {
     id,
@@ -161,8 +162,38 @@ function missingImportStatus(id: string): StoredImportStatusDto {
   };
 }
 
+async function listImportStatusesByAttemptKeys(attemptKeys: string[]) {
+  const uniqueAttemptKeys = uniqueImportKeys(attemptKeys);
+  if (!uniqueAttemptKeys.length) return [];
+  const rows = (await pool.query(
+    `SELECT id, mode, status, error, idempotency_key
+       FROM import_session
+      WHERE idempotency_key = ANY($1::text[])`,
+    [uniqueAttemptKeys]
+  )).rows as Array<{
+    id: string;
+    mode: ImportMode;
+    status: ImportStatus;
+    error: string;
+    idempotency_key: string;
+  }>;
+  const rowsByAttemptKey = new Map(
+    rows.map((row) => [canonicalImportId(row.idempotency_key), row])
+  );
+  return uniqueAttemptKeys.flatMap((attemptKey) => {
+    const row = rowsByAttemptKey.get(canonicalImportId(attemptKey));
+    return row
+      ? [{
+          id: row.id,
+          ...presentImportStatus(row.id, row),
+          attemptKey
+        } satisfies ImportStatusEvent]
+      : [];
+  });
+}
+
 export async function listImportStatuses(ids: string[]) {
-  const uniqueIds = uniqueImportIds(ids);
+  const uniqueIds = uniqueImportKeys(ids);
   if (!uniqueIds.length) return [];
   const rows = (await pool.query(
     `SELECT id, mode, status, error
@@ -194,18 +225,16 @@ function encodeServerSentEvent(event: string, data: unknown) {
 }
 
 export function streamImportEvents(
-  ids: string[],
+  attemptKeys: string[],
   requestSignal: AbortSignal
 ): Response {
-  const uniqueIds = uniqueImportIds(ids);
-  const watched = new Map(
-    uniqueIds.map((id) => [canonicalImportId(id), id])
-  );
+  const uniqueAttemptKeys = uniqueImportKeys(attemptKeys);
+  const subscription = new ImportStatusSubscription(uniqueAttemptKeys);
   const encoder = new TextEncoder();
   let controller: ReadableStreamDefaultController<Uint8Array> | undefined;
   let cleaned = false;
   let heartbeat: ReturnType<typeof setInterval> | undefined;
-  let listener: ((status: StoredImportStatusDto) => void) | undefined;
+  let listener: ((status: ImportStatusEvent) => void) | undefined;
 
   function cleanup() {
     if (cleaned) return;
@@ -252,6 +281,15 @@ export function streamImportEvents(
     }
   }
 
+  function sendImportStatus(status: ImportStatusEvent) {
+    const responseId = subscription.observe(status);
+    if (!responseId) return true;
+    const { attemptKey: _attemptKey, ...publicStatus } = status;
+    return send("import-status", responseId === publicStatus.id
+      ? publicStatus
+      : { ...publicStatus, id: responseId });
+  }
+
   const stream = new ReadableStream<Uint8Array>({
     start(streamController) {
       controller = streamController;
@@ -261,21 +299,15 @@ export function streamImportEvents(
       }
       requestSignal.addEventListener("abort", closeStream, { once: true });
 
-      listener = (status) => {
-        const responseId = watched.get(canonicalImportId(status.id));
-        if (!responseId) return;
-        send("import-status", responseId === status.id
-          ? status
-          : { ...status, id: responseId });
-      };
+      listener = sendImportStatus;
       importStatusEvents.on("status", listener);
-      if (!send("ready", { ids: uniqueIds })) return;
+      if (!send("ready", { count: uniqueAttemptKeys.length })) return;
 
-      void listImportStatuses(uniqueIds)
+      void listImportStatusesByAttemptKeys(uniqueAttemptKeys)
         .then((statuses) => {
           if (cleaned) return;
           for (const status of statuses) {
-            if (!send("import-status", status)) return;
+            if (!sendImportStatus(status)) return;
           }
         })
         .catch(failStream);

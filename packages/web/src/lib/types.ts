@@ -84,7 +84,9 @@ export type ImportJob = {
   url?: string;
   // 当前前端处理尝试，同时作为 create 请求幂等键；重试时会更新。
   attemptKey: string;
-  // 已成功创建的 import_session id；SSE 状态监听和提交只使用真实会话 id。
+  // 单次入队动作的前端身份；同批任务独立持有稳定状态订阅，绝不发送给服务端。
+  subscriptionBatchKey: string;
+  // 已成功创建的 import_session id；事件回填、轮询和提交只使用真实会话 id。
   sessionId?: string;
   imageTime?: string;
   batchTime?: string;

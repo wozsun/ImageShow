@@ -13,6 +13,8 @@ import { readJsonBody } from "../core/http/json-body.ts";
 import {
   importBatchCommitInput,
   importCreateInput,
+  importStatusListInput,
+  importStatusSubscriptionInput,
   jsonlManifestInput,
   parse,
   uuidInput,
@@ -154,16 +156,23 @@ export function registerImportRoutes(app: Hono) {
     );
   });
 
-  app.get(`${adminApiBasePath}/imports/status`, async (c) => {
-    const ids = parseImportIds(c.req.url);
+  app.post(`${adminApiBasePath}/imports/status`, async (c) => {
+    const input = parse(importStatusListInput, await readJsonBody(c));
     const response = {
-      items: await listImportStatuses(ids)
+      items: await listImportStatuses(input.ids)
     } satisfies StoredImportStatusListDto;
-    return privateCacheableApiSuccess(c, response);
+    return c.json(apiSuccess(response));
   });
 
-  app.get(`${adminApiBasePath}/imports/events`, async (c) => {
-    return streamImportEvents(parseImportIds(c.req.url), c.req.raw.signal);
+  app.post(`${adminApiBasePath}/imports/events`, async (c) => {
+    const input = parse(
+      importStatusSubscriptionInput,
+      await readJsonBody(c)
+    );
+    return streamImportEvents(
+      input.attempt_keys,
+      c.req.raw.signal
+    );
   });
 
   app.post(importBatchCommitPath, limitImportBatchCommitBody, async (c) => {
@@ -181,12 +190,4 @@ export function registerImportRoutes(app: Hono) {
     await cancelImportSession(parseOwnedImportId(c.req.param("id")));
     return c.json(apiSuccess());
   });
-}
-
-function parseImportIds(url: string) {
-  return (new URL(url).searchParams.get("ids") ?? "")
-    .split(",")
-    .map((id) => id.trim())
-    .filter(Boolean)
-    .map((id) => parse(uuidInput, id));
 }

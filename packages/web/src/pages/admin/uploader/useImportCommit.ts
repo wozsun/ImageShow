@@ -7,7 +7,9 @@ import {
   getStoredImportStatus,
   type StoredImportStatus
 } from "./import-api.js";
-import { invalidateImageData } from "../../../lib/api/query-invalidation.js";
+import {
+  invalidateImageDataAfterImport
+} from "../../../lib/api/query-invalidation.js";
 import {
   resolveCommitRetry
 } from "./import-status-state.js";
@@ -22,6 +24,7 @@ import {
 export function useImportCommit(options: {
   jobsRef: RefObject<ImportJob[]>;
   updateJob: (id: string, patch: Partial<ImportJob>) => void;
+  updateJobs: (patches: ReadonlyMap<string, Partial<ImportJob>>) => void;
   completeJob: (id: string, patch: Partial<ImportJob>, item: AdminImageListItem) => void;
   concurrency: number;
   onDone: () => void;
@@ -29,6 +32,7 @@ export function useImportCommit(options: {
   const {
     jobsRef,
     updateJob,
+    updateJobs,
     completeJob,
     concurrency,
     onDone
@@ -77,24 +81,31 @@ export function useImportCommit(options: {
       const sessionKey = job.sessionId.toLowerCase();
       if (selectedSessionIds.has(sessionKey)) return;
       selectedSessionIds.add(sessionKey);
-      updateJob(job.id, {
-        status: "committing",
-        failureStage: undefined,
-        commitFailureCheckpoint: undefined,
-        message: "写入图库"
-      });
       selected.push(job);
     });
 
+    updateJobs(new Map(selected.map((job) => [job.id, {
+      status: "committing" as const,
+      failureStage: undefined,
+      commitFailureCheckpoint: undefined,
+      message: "写入图库"
+    }])));
+
+    const importedItems: AdminImageListItem[] = [];
     const imported = selected.length
       ? await commitSelectedImports({
           selected,
           concurrency,
           updateJob,
-          completeJob
+          completeJob: (id, patch, item) => {
+            importedItems.push(item);
+            completeJob(id, patch, item);
+          }
         })
       : false;
-    if (imported) await invalidateImageData(client);
+    if (imported && importedItems.length) {
+      await invalidateImageDataAfterImport(client, importedItems);
+    }
     onDone();
   }, [
     client,
@@ -102,6 +113,7 @@ export function useImportCommit(options: {
     concurrency,
     jobsRef,
     onDone,
-    updateJob
+    updateJob,
+    updateJobs
   ]);
 }

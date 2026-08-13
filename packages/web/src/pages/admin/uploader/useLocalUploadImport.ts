@@ -177,6 +177,7 @@ export function useLocalUploadImport(options: {
     const selectedFingerprints = selected.map(localImportFileFingerprint);
     selectedFingerprints.forEach((fingerprint) => pendingFileFingerprints.current.add(fingerprint));
     const batchTime = new Date().toISOString();
+    const subscriptionBatchKey = browserUuid();
     try {
       const jobs = await Promise.all(selected.map(async (file, manifestPosition): Promise<ImportJob> => {
         const objectUrl = URL.createObjectURL(file);
@@ -184,6 +185,7 @@ export function useLocalUploadImport(options: {
         return {
           id: browserUuid(),
           attemptKey: browserUuid(),
+          subscriptionBatchKey,
           batchTime,
           manifestPosition,
           kind: "local",

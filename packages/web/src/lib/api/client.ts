@@ -40,13 +40,22 @@ function publicCacheableRequest(path: string, method: string) {
     || /^\/api\/images(?:\/[^/]+)?$/.test(pathname);
 }
 
-export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
+export async function fetchApi(path: string, init: RequestInit = {}) {
   const headers = new Headers(init.headers);
   if (!(init.body instanceof FormData) && init.body && !headers.has("content-type")) headers.set("content-type", "application/json");
-  if (init.method && init.method !== "GET" && csrfToken) headers.set("x-csrf-token", csrfToken);
   const method = String(init.method ?? "GET").toUpperCase();
+  if (method !== "GET" && method !== "HEAD" && csrfToken) headers.set("x-csrf-token", csrfToken);
   const credentials = init.credentials ?? (publicCacheableRequest(path, method) ? "omit" : "same-origin");
   const response = await fetch(path, { ...init, headers, credentials });
+  if (response.status === 401 && !path.includes("/auth/login") && !path.includes("/auth/me")) {
+    clearCsrfToken();
+    if (typeof window !== "undefined") window.dispatchEvent(new Event(authExpiredEvent));
+  }
+  return response;
+}
+
+export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const response = await fetchApi(path, init);
   const body = await response.text();
   let data: Record<string, unknown> = {};
   if (body) {
@@ -55,10 +64,6 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     } catch {
       // 非 JSON 错误由统一 HTTP fallback 展示，不泄露代理层 HTML 响应。
     }
-  }
-  if (response.status === 401 && !path.includes("/auth/login") && !path.includes("/auth/me")) {
-    clearCsrfToken();
-    if (typeof window !== "undefined") window.dispatchEvent(new Event(authExpiredEvent));
   }
   if (!response.ok || data.ok === false) {
     const failure = data as Partial<ApiErrorResponseDto>;

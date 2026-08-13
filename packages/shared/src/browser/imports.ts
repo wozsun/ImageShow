@@ -118,6 +118,14 @@ export type StoredImportStatusListDto = {
   items: StoredImportStatusDto[];
 };
 
+export type ImportStatusListInputDto = {
+  ids: string[];
+};
+
+export type ImportStatusSubscriptionInputDto = {
+  attempt_keys: string[];
+};
+
 export type StoredImportCommitResultDto = {
   status: "imported";
   item: AdminImageListItemDto;

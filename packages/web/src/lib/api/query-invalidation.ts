@@ -1,4 +1,8 @@
 import type { QueryClient } from "@tanstack/react-query";
+import type {
+  AdminImageListItemDto,
+  ImportVocabularyDto
+} from "@imageshow/shared/browser";
 import { queryKeys } from "./query-keys.js";
 
 function invalidate(client: QueryClient, queryKeysToInvalidate: readonly (readonly unknown[])[]) {
@@ -45,6 +49,47 @@ export function clearAdminCacheAfterLogin(client: QueryClient) {
 
 export function invalidateImageData(client: QueryClient) {
   return invalidate(client, imageDataQueryKeys);
+}
+
+function importedVocabularyChanged(
+  vocabulary: ImportVocabularyDto,
+  items: readonly AdminImageListItemDto[]
+) {
+  const themes = new Set(vocabulary.themes.map(({ slug }) => slug));
+  const tags = new Set(vocabulary.tags.map(({ slug }) => slug));
+  const authors = new Set(vocabulary.authors.map(({ slug }) => slug));
+  return items.some((item) => (
+    !themes.has(item.theme)
+    || (item.author !== "" && !authors.has(item.author))
+    || item.tags.some((tag) => !tags.has(tag))
+  ));
+}
+
+export function invalidateImageDataAfterImport(
+  client: QueryClient,
+  items: readonly AdminImageListItemDto[]
+) {
+  const vocabulary = client.getQueryData<ImportVocabularyDto>(
+    queryKeys.importVocabulary
+  );
+  const vocabularyQueryExists = Boolean(
+    client.getQueryState(queryKeys.importVocabulary)
+  );
+  const hasTags = items.some((item) => item.tags.length > 0);
+  const hasAuthors = items.some((item) => item.author !== "");
+  return invalidate(client, [
+    queryKeys.publicImages,
+    queryKeys.galleryFacets,
+    queryKeys.galleryStats,
+    queryKeys.adminImages,
+    queryKeys.overview,
+    queryKeys.themes,
+    ...(hasTags ? [queryKeys.tags] : []),
+    ...(hasAuthors ? [queryKeys.authors] : []),
+    ...(vocabularyQueryExists && (
+      !vocabulary || importedVocabularyChanged(vocabulary, items)
+    ) ? [queryKeys.importVocabulary] : [])
+  ]);
 }
 
 export async function invalidateImageDataAfterTrash(

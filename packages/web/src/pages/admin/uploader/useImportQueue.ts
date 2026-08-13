@@ -48,6 +48,12 @@ export function useImportQueue(pageSize: number) {
     dispatch({ type: "patch", id, patch });
   }, [dispatch]);
 
+  const updateJobs = useCallback((
+    patches: ReadonlyMap<string, Partial<ImportJob>>
+  ) => {
+    if (patches.size) dispatch({ type: "patch-many", patches });
+  }, [dispatch]);
+
   const completeJob = useCallback((
     id: string,
     patch: Partial<ImportJob>,
@@ -140,6 +146,7 @@ export function useImportQueue(pageSize: number) {
     appendJobs,
     retainMode,
     updateJob,
+    updateJobs,
     completeJob,
     updateJobDraft,
     removeJob,

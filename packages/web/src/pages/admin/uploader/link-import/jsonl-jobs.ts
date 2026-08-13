@@ -48,9 +48,11 @@ export function jsonlImportJobs(
   defaultStorageSlug: string
 ): ImportJob[] {
   const batchTime = new Date().toISOString();
+  const subscriptionBatchKey = browserUuid();
   return items.map((item) => ({
     id: browserUuid(),
     attemptKey: browserUuid(),
+    subscriptionBatchKey,
     kind: "download",
     status: "queued",
     message: "等待下载",

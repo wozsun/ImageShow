@@ -11,6 +11,16 @@ function mutationMethod(method: string) {
   return method !== "GET" && method !== "HEAD" && method !== "OPTIONS";
 }
 
+const adminReadRequestContextKey = "adminReadRequest";
+
+export function markAdminReadRequest(context: Context) {
+  context.set(adminReadRequestContextKey, true);
+}
+
+function isMarkedAdminReadRequest(context: Context) {
+  return context.get(adminReadRequestContextKey) === true;
+}
+
 function requestBodyRejected(error: unknown) {
   return error instanceof ApiError
     && requestBodyRejectionCode(error.code);
@@ -38,7 +48,7 @@ async function responseErrorDetails(c: Context) {
 
 export async function auditAdminMutation(c: Context, next: Next) {
   const method = c.req.method.toUpperCase();
-  if (!mutationMethod(method)) {
+  if (!mutationMethod(method) || isMarkedAdminReadRequest(c)) {
     await next();
     return;
   }

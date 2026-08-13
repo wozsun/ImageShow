@@ -81,7 +81,7 @@ Content-Type 与缓存验证器会被省略或回退为站内类型；`Content-R
 | hash 资产、稳定图片、HEAD、206、304 | hash 资产 / 稳定图片 `immutable`；非 hash 品牌资源短缓存；ETag、Last-Modified、单 Range | 304 无正文；206 保留完整对象验证器；416 返回 `Content-Range: bytes */总长` |
 | 随机 proxy / redirect / JSON | 永远 `no-store` | proxy 不声明 Range；302 的 `Location` 先校验；前两种模式带 `X-Image-Info`，JSON 只返回公开字段与实际 `count`，HEAD 不发送正文 |
 | 外链原图 proxy / redirect | 公开 proxy 继承已校验源站策略或使用 fallback，URL 命名空间弱 ETag、Last-Modified 与 304；后台 `private, no-store` | HTTPS 安全抓取、GET 内容嗅探、HEAD 不保留正文、旧 URL 验证器不能命中新 URL、`Referrer-Policy: no-referrer` |
-| 导入 SSE | `no-store, no-transform` | 不压缩、不缓冲，断开即清理 listener / heartbeat |
+| 导入 SSE | `no-store, no-transform` | 固定 POST 路径，批量键只在有界 JSON 正文；不压缩、不缓冲，断开即清理 listener / heartbeat |
 | `static.` / `link.` / `random.` 与未知子域 | 只开放各自精确出口；失败 `no-store` | 保留子域的其他路径与未知 Host 均返回带完整安全头的 404 |
 
 稳定图片地址本身不是管理员授权边界。图片进入回收站后会退出所有公开发现入口，但已知的

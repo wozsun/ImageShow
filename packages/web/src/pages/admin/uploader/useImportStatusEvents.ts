@@ -1,97 +1,77 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { RefObject } from "react";
-import { adminApiBasePath } from "../../../lib/constants.js";
 import type { ImportJob } from "../../../lib/types.js";
-import { getStoredImportStatuses, type StoredImportStatus } from "./import-api.js";
-import { importStatusEventPatch } from "./import-status-state.js";
+import {
+  advanceImportStatusGeneration,
+  importStatusGenerationSubscriptions,
+  type ImportStatusGeneration,
+  type ImportStatusSubscriptionSpec
+} from "./import-status-subscription.js";
+import { startImportStatusSubscription } from "./import-status-transport.js";
 
-const STATUS_POLL_INTERVAL_MS = 2_000;
-const SSE_CONNECT_TIMEOUT_MS = 5_000;
-const terminalStatuses = new Set<ImportJob["status"]>([
-  "ready",
-  "cancelling",
-  "done",
-  "failed",
-  "cancelled"
-]);
-
-function applyStoredImportStatus(
-  state: StoredImportStatus,
-  jobsRef: RefObject<ImportJob[]>,
-  updateJob: (id: string, patch: Partial<ImportJob>) => void
-) {
-  const job = jobsRef.current.find((item) => item.sessionId === state.id);
-  if (!job || terminalStatuses.has(job.status)) return;
-  const patch = importStatusEventPatch(job, state);
-  if (patch) updateJob(job.id, patch);
+function importStatusSubscriptionSignature(spec: ImportStatusSubscriptionSpec) {
+  return `${spec.jobIds.join(",")}|${spec.attemptKeys.join(",")}`;
 }
 
+type ActiveImportStatusSubscription = {
+  signature: string;
+  stop: () => void;
+};
+
 export function useImportStatusEvents(
+  enabled: boolean,
   jobs: ImportJob[],
   jobsRef: RefObject<ImportJob[]>,
   updateJob: (id: string, patch: Partial<ImportJob>) => void
 ) {
-  const idsKey = useMemo(() => {
-    return jobs
-      .filter((job) => job.sessionId && !terminalStatuses.has(job.status))
-      .map((job) => job.sessionId!)
-      .sort()
-      .join(",");
-  }, [jobs]);
+  const [generation, setGeneration] = useState<ImportStatusGeneration>(
+    () => new Map()
+  );
+  const activeSubscriptions = useRef(
+    new Map<string, ActiveImportStatusSubscription>()
+  );
 
   useEffect(() => {
-    if (!idsKey) return;
-    let stopped = false;
-    let polling = false;
-    let source: EventSource | undefined;
-    let connectTimeout: ReturnType<typeof setTimeout> | undefined;
-    let pollTimeout: ReturnType<typeof setTimeout> | undefined;
-    let controller: AbortController | undefined;
-    const ids = idsKey.split(",").filter(Boolean);
+    setGeneration((currentGeneration) => (
+      enabled
+        ? advanceImportStatusGeneration(currentGeneration, jobs)
+        : currentGeneration.size === 0 ? currentGeneration : new Map()
+    ));
+  }, [enabled, jobs]);
 
-    const clearConnectTimeout = () => {
-      if (connectTimeout) {
-        clearTimeout(connectTimeout);
-        connectTimeout = undefined;
+  const subscriptions = useMemo(
+    () => importStatusGenerationSubscriptions(generation),
+    [generation]
+  );
+
+  useEffect(() => {
+    const desired = new Map(
+      enabled ? subscriptions.map((spec) => [spec.key, spec]) : []
+    );
+    for (const [key, active] of activeSubscriptions.current) {
+      const spec = desired.get(key);
+      if (
+        !spec
+        || active.signature !== importStatusSubscriptionSignature(spec)
+      ) {
+        active.stop();
+        activeSubscriptions.current.delete(key);
       }
-    };
+    }
+    for (const [key, spec] of desired) {
+      if (activeSubscriptions.current.has(key)) continue;
+      activeSubscriptions.current.set(key, {
+        signature: importStatusSubscriptionSignature(spec),
+        stop: startImportStatusSubscription(spec, jobsRef, updateJob)
+      });
+    }
+  }, [enabled, jobsRef, subscriptions, updateJob]);
 
-    const poll = async () => {
-      controller = new AbortController();
-      try {
-        const states = await getStoredImportStatuses(ids, controller.signal);
-        if (!stopped) states.forEach((state) => applyStoredImportStatus(state, jobsRef, updateJob));
-      } catch (error) {
-        if ((error as Error).name === "AbortError") return;
-      } finally {
-        if (!stopped && polling) pollTimeout = setTimeout(poll, STATUS_POLL_INTERVAL_MS);
-      }
-    };
-
-    const startPolling = () => {
-      if (stopped || polling) return;
-      polling = true;
-      clearConnectTimeout();
-      source?.close();
-      pollTimeout = setTimeout(poll, STATUS_POLL_INTERVAL_MS);
-    };
-
-    source = new EventSource(`${adminApiBasePath}/imports/events?ids=${encodeURIComponent(idsKey)}`);
-    connectTimeout = setTimeout(startPolling, SSE_CONNECT_TIMEOUT_MS);
-    source.addEventListener("ready", clearConnectTimeout);
-    source.addEventListener("import-status", (event) => {
-      clearConnectTimeout();
-      const state = JSON.parse((event as MessageEvent<string>).data) as StoredImportStatus;
-      applyStoredImportStatus(state, jobsRef, updateJob);
-    });
-    source.addEventListener("error", startPolling);
-
+  useEffect(() => {
+    const subscriptions = activeSubscriptions.current;
     return () => {
-      stopped = true;
-      clearConnectTimeout();
-      source?.close();
-      if (pollTimeout) clearTimeout(pollTimeout);
-      controller?.abort();
+      for (const active of subscriptions.values()) active.stop();
+      subscriptions.clear();
     };
-  }, [idsKey, jobsRef, updateJob]);
+  }, []);
 }

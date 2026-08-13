@@ -6,6 +6,7 @@ import {
   adminPreferencesMaxBytes,
   type ImageUpdateItemInputDto,
   importBatchHardLimit,
+  importStatusBatchMaxItems,
   importModes,
   slugMaxLength,
   slugPattern,
@@ -234,7 +235,7 @@ export const importCreateInput = metadataCreateInput.extend({
   batch_time: z.string().trim().min(1).max(64).optional(),
   manifest_position: z.number().int().min(0).max(0xfff).optional(),
   size: z.number().int().positive().optional(),
-  idempotency_key: z.string().uuid(),
+  idempotency_key: uuidInput,
   tags: normalizedImageTagsInput.optional().default([]),
   storage_slug: storageSlugInput.optional()
 }).superRefine((value, ctx) => {
@@ -244,6 +245,20 @@ export const importCreateInput = metadataCreateInput.extend({
   if (value.mode === "download" && !value.source_url) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["source_url"], message: "链接导入模式需要图片链接" });
   }
+});
+
+export const importStatusSubscriptionInput = z.strictObject({
+  attempt_keys: z.array(uuidInput)
+    .min(1)
+    .max(importStatusBatchMaxItems)
+    .transform((attemptKeys) => [...new Set(attemptKeys)])
+});
+
+export const importStatusListInput = z.strictObject({
+  ids: z.array(uuidInput)
+    .min(1)
+    .max(importStatusBatchMaxItems)
+    .transform((ids) => [...new Set(ids)])
 });
 
 const importCommitInput = metadataCreateInput.extend({

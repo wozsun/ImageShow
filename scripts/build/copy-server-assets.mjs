@@ -69,6 +69,5 @@ await precompressDir(serverPublic);
 console.log(
   "assemble-server: database SQL assets -> dist, web -> dist/public; "
   + `precompressed br${staticAssetCompression.brotliQuality}/`
-  + `gzip${staticAssetCompression.gzipLevel}/`
-  + `min${staticAssetCompression.minimumBytes}`
+  + `gzip${staticAssetCompression.gzipLevel}; smaller-body-only`
 );

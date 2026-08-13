@@ -79,6 +79,25 @@ function semanticOwnerCategory(root: string) {
   return semanticOwnerLabel(root);
 }
 
+const chunkResponsibilityAliases: Readonly<Record<string, string>> = {
+  "route-authenticated-shell-gallery-image": "async-ui",
+  "route-authenticated-shell-image": "workspace-ui",
+  "route-gallery-home": "public-ui",
+  "route-gallery-image": "image-ui",
+  "route-gallery": "image-view",
+  "route-image": "image-actions",
+  "route-login": "password-input",
+  "capability-account-user": "password",
+  "capability-admin": "workspace-header",
+  "capability-check-check-maintenance-overview": "cache-status",
+  "capability-check-maintenance-storage": "storage-move-api",
+  "capability-image-editor-import-source-dialog-uploader": "upload-utils",
+  "capability-image-editor-uploader": "image-fields",
+  "capability-settings-storage": "number-input",
+  "capability-storage-vocabulary": "reorder",
+  "capability-user-vocabulary": "slug-chip"
+};
+
 const semanticChunkNameAssignments = new Map<
   string,
   Map<string, string>
@@ -94,7 +113,8 @@ function rootSetChunkName(prefix: string, roots: string[]) {
   const ownerLabels = exactLabels.length <= 3
     ? exactLabels
     : [...new Set(normalizedRoots.map(semanticOwnerCategory))].sort();
-  const baseName = `${prefix}-${ownerLabels.join("-") || "shared"}`;
+  const generatedName = `${prefix}-${ownerLabels.join("-") || "shared"}`;
+  const baseName = chunkResponsibilityAliases[generatedName] ?? generatedName;
   const rootKey = normalizedRoots.join("\n");
   let assignments = semanticChunkNameAssignments.get(baseName);
   if (!assignments) {
@@ -135,6 +155,66 @@ function sharedChunkName(moduleId: string, context: ChunkingContext) {
   return initialRouteRoots.length > 0
     ? rootSetChunkName("route", initialRouteRoots)
     : rootSetChunkName("capability", roots);
+}
+
+const conciseAssetNames: Readonly<Record<string, string>> = {
+  index: "app",
+  AccountSettings: "account",
+  AdminLogin: "login",
+  AdminShell: "access-shell",
+  AdvancedConfigPage: "config",
+  AuthenticatedAdminShell: "workspace-shell",
+  CheckMaintenanceCapability: "maintenance",
+  CheckPage: "check",
+  GalleryPage: "gallery",
+  HomePage: "home",
+  ImageAdmin: "images",
+  ImageAdminDetails: "image-details",
+  ImageStorageMigrationDialog: "image-move",
+  ImportSourceDialog: "import-source",
+  LoginChallenge: "login-challenge",
+  LogPage: "logs",
+  Overview: "overview",
+  ReadyImageCachePanel: "cache-panel",
+  SettingsPage: "settings",
+  StorageBackendMigrationDialog: "storage-move",
+  StorageSettings: "storage",
+  Uploader: "upload",
+  UserAdmin: "users",
+  VocabularyAdmin: "vocabulary",
+  "image-editor-capability": "image-editor"
+};
+
+function conciseAssetName(name: string) {
+  return conciseAssetNames[name] ?? name;
+}
+
+function javascriptAssetPattern(name: string) {
+  return `assets/${conciseAssetName(name)}-[hash].js`;
+}
+
+function staticAssetPattern(names: string[]) {
+  const originalName = names[0] ?? "asset";
+  const extensionIndex = originalName.lastIndexOf(".");
+  const extension = extensionIndex >= 0
+    ? originalName.slice(extensionIndex)
+    : "";
+  const baseName = extensionIndex >= 0
+    ? originalName.slice(0, extensionIndex)
+    : originalName;
+  return `assets/${conciseAssetName(baseName)}-[hash]${extension}`;
+}
+
+const storageMoveModuleSuffixes = [
+  "/src/lib/api/storage-backend-migration.ts",
+  "/src/pages/admin/storage/StorageBackendMigrationDialog.tsx"
+];
+
+function isStorageMoveModule(id: string) {
+  const normalized = id.replaceAll("\\", "/");
+  return storageMoveModuleSuffixes.some((suffix) => (
+    normalized.endsWith(suffix)
+  ));
 }
 
 function webBuildReport(): Plugin {
@@ -228,14 +308,15 @@ export default defineConfig({
     emptyOutDir: true,
     rollupOptions: {
       output: {
-        // 名称解释真实入口或共享 owner；内容哈希独立负责缓存失效。
-        entryFileNames: "assets/[name]-[hash].js",
-        chunkFileNames: "assets/[name]-[hash].js",
-        assetFileNames: "assets/[name]-[hash][extname]",
+        // 文件名只表达简短职责；内容哈希独立负责缓存失效。这里不按字符数
+        // 截断名称，新增职责通过语义别名自然保持简洁。
+        entryFileNames: ({ name }) => javascriptAssetPattern(name),
+        chunkFileNames: ({ name }) => javascriptAssetPattern(name),
+        assetFileNames: ({ names }) => staticAssetPattern(names),
 
         codeSplitting: {
-          // 页面与能力按实际入口根集合拆分；只有同时服务两个公开入口和其他入口的
-          // 通用基础模块进入应用基础块，不维护随文件移动而漂移的逐文件清单。
+          // 页面与能力按实际入口根集合拆分；小块只在实测证明与目标页面必然
+          // 同行且完整线路字节下降时显式合并，不把体积阈值当成产物门禁。
           groups: [
             {
               name: "query-vendor",
@@ -246,6 +327,13 @@ export default defineConfig({
               name: "react-vendor",
               test: /[\\/]node_modules[\\/](?:react-router|react-dom|react|scheduler)[\\/]/,
               priority: 4
+            },
+            {
+              name: "storage-move",
+              test: isStorageMoveModule,
+              priority: 3,
+              minShareCount: 2,
+              includeDependenciesRecursively: false
             },
             {
               name: sharedChunkName,
@@ -268,9 +356,9 @@ export default defineConfig({
   worker: {
     rollupOptions: {
       output: {
-        entryFileNames: "assets/[name]-[hash].js",
-        chunkFileNames: "assets/[name]-[hash].js",
-        assetFileNames: "assets/[name]-[hash][extname]"
+        entryFileNames: ({ name }) => javascriptAssetPattern(name),
+        chunkFileNames: ({ name }) => javascriptAssetPattern(name),
+        assetFileNames: ({ names }) => staticAssetPattern(names)
       }
     }
   },

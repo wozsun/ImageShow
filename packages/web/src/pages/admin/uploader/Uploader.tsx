@@ -162,11 +162,12 @@ export function Uploader({
   const commitImports = useImportCommit({
     jobsRef: queue.jobsRef,
     updateJob: queue.updateJob,
+    updateJobs: queue.updateJobs,
     completeJob: queue.completeJob,
     concurrency: commitConcurrency,
     onDone
   });
-  useImportStatusEvents(queue.jobs, queue.jobsRef, queue.updateJob);
+  useImportStatusEvents(open, queue.jobs, queue.jobsRef, queue.updateJob);
 
   const closeWorkflow = () => {
     intentFenceRef.current.invalidate();

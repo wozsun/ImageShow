@@ -41,7 +41,10 @@ import { registerStorageRoutes } from "./routes/storage.ts";
 import { registerSpaRoutes } from "./routes/spa.ts";
 import { registerImportRoutes } from "./routes/imports.ts";
 import { isAllowedSiteHost, specialHost } from "./config/site-host.ts";
-import { auditAdminMutation } from "./core/audit-log.ts";
+import {
+  auditAdminMutation,
+  markAdminReadRequest
+} from "./core/audit-log.ts";
 import { blockCrossSiteFetch } from "./core/http/request-security.ts";
 import {
   businessAvailabilityGateIsOpen,
@@ -192,6 +195,19 @@ export function createHttpApp(
   registerPublicAuthRoutes(app);
   registerSecurityReportRoutes(app);
 
+  const adminReadPostPaths = new Set([
+    `${adminApiBasePath}/imports/status`,
+    `${adminApiBasePath}/imports/events`
+  ]);
+  app.use(`${adminApiBasePath}/*`, async (c, next) => {
+    if (
+      c.req.method === "POST"
+      && adminReadPostPaths.has(new URL(c.req.url).pathname)
+    ) {
+      markAdminReadRequest(c);
+    }
+    await next();
+  });
   app.use(`${adminApiBasePath}/*`, requireAdminSession);
   app.use(`${adminApiBasePath}/*`, auditAdminMutation);
   app.use(`${adminApiBasePath}/*`, async (c, next) => {

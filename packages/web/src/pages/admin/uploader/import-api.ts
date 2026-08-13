@@ -3,6 +3,7 @@ import { adminApiBasePath } from "../../../lib/constants.js";
 import { createIntegerProgressReporter } from "./upload-progress.js";
 import type {
   ImportSessionCreateDto,
+  ImportStatusListInputDto,
   ImportSessionHandleDto,
   JsonlManifestItemDto,
   JsonlManifestParseErrorDto,
@@ -30,10 +31,10 @@ export type StoredImportCommitResult = StoredImportCommitResultDto;
 export type StoredImportBatchCommitResult = StoredImportBatchCommitResultDto;
 
 export function getStoredImportStatuses(ids: string[], signal?: AbortSignal) {
-  const query = encodeURIComponent(ids.join(","));
+  const input: ImportStatusListInputDto = { ids };
   return api<StoredImportStatusListDto>(
-    `${adminApiBasePath}/imports/status?ids=${query}`,
-    { signal }
+    `${adminApiBasePath}/imports/status`,
+    { method: "POST", body: JSON.stringify(input), signal }
   ).then((result) => result.items);
 }
 

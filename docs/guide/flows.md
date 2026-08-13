@@ -58,8 +58,13 @@ created ─► materializing ─► received ─► preparing ─► ready
   修改输入后才开始新 attempt。
 - 每条 lane 只允许当前项处理和唯一后继项素材化前瞻。前端在权威状态进入
   `preparing` 后才开放该前瞻槽，不会预先为整个队列创建会话或消耗租期。
-- SSE 是任务状态主通道；连接不可用时退化为对未完成任务的批量状态轮询，不按卡片
-  创建独立轮询。
+- SSE 是任务状态主通道。当前活动世代以创建前已知的幂等尝试键建立稳定批次
+  订阅；素材准备期和批量提交期各自保持稳定连接，全部 `ready` 时主动暂停，提交开始后按
+  同一键恢复。单个会话稍后创建或在同一阶段改变状态不重建连接，历史终态任务不会进入
+  下一世代，超过 100 项时按协议上限分片。事件流使用固定的
+  `POST /api/admin/imports/events`，尝试键只进入有界 JSON 正文，不进入 URL；连接不可用时
+  退化为固定 `POST /api/admin/imports/status` 对当时未完成会话做批量状态轮询，真实会话 ID
+  同样只进入正文，不按卡片创建独立轮询。
 
 JSONL 可设置 `original`、`source`、`image_time`、`author`、`tags`、`title`、
 `description`、`theme`、`device`、`brightness` 与 `storage_slug`。行内字段优先于窗口
@@ -77,6 +82,10 @@ JSONL 可设置 `original`、`source`、`image_time`、`author`、`tags`、`titl
 3. **commit** 不重新下载或转码。它验证 `_uploads` 候选及正式对象，写入 `media` 与
    `thumbs`，在短事务中提交 metadata、标签、会话终态与图片投影 revision，随后清理
    staging。响应返回完整管理端图片对象，供队列直接收敛为已完成。
+
+每次批量 commit 结束后只触发一轮写后缓存同步。图片列表、公开筛选统计和概览仍读取
+服务端权威结果；已存在图片的详情不因新增图片失效。导入返回的完整图片对象同时用于判断
+主题、标签或作者词表是否真的出现新 slug，只有发生新增时才重读会话级导入词表。
 
 每个会话在创建时锁定 `storage_slug`。默认后端的后续变化只影响新会话；ready 任务不能
 临时换后端。原始字节始终留在 `data/tmp`，导入流程也不让浏览器向 S3 直传。

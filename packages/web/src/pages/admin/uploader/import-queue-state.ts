@@ -28,6 +28,10 @@ export type ImportQueueAction =
   | { type: "retain-mode"; mode: "file" | "link" }
   | { type: "patch"; id: string; patch: Partial<ImportJob> }
   | {
+      type: "patch-many";
+      patches: ReadonlyMap<string, Partial<ImportJob>>;
+    }
+  | {
       type: "complete";
       id: string;
       patch: Partial<ImportJob>;
@@ -108,6 +112,32 @@ function updateQueueJob(
   return {
     ...state,
     jobs: importQueueDuplicateStateChanged(currentJob, nextJob)
+      ? reconcileImportQueueDuplicates(jobs)
+      : jobs
+  };
+}
+
+function updateQueueJobs(
+  state: ImportQueueState,
+  patches: ReadonlyMap<string, Partial<ImportJob>>
+): ImportQueueState {
+  let duplicateStateChanged = false;
+  const jobs = mapJobsWithIdentity(state.jobs, (job) => {
+    const patch = patches.get(job.id);
+    if (!patch) return job;
+    const nextJob = patchJob(job, patch);
+    if (
+      nextJob !== job
+      && importQueueDuplicateStateChanged(job, nextJob)
+    ) {
+      duplicateStateChanged = true;
+    }
+    return nextJob;
+  });
+  if (jobs === state.jobs) return state;
+  return {
+    ...state,
+    jobs: duplicateStateChanged
       ? reconcileImportQueueDuplicates(jobs)
       : jobs
   };
@@ -200,6 +230,8 @@ export function reduceImportQueue(
     }
     case "patch":
       return updateQueueJob(state, action.id, (job) => patchJob(job, action.patch));
+    case "patch-many":
+      return updateQueueJobs(state, action.patches);
     case "complete":
       return completeQueueJob(
         state,

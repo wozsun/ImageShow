@@ -11,7 +11,6 @@ const brotliAsync = promisify(brotliCompress);
 export const staticAssetCompression = Object.freeze({
   brotliQuality: 11,
   gzipLevel: 9,
-  minimumBytes: 256,
   precompressPattern: /\.(?:js|css|html|svg|json|xml|txt|webmanifest)$/
 });
 
@@ -22,10 +21,7 @@ export function staticAssetIsCompressible(fileName) {
 
 export async function compressStaticAsset(fileName, source) {
   const rawBytes = source.length;
-  if (
-    rawBytes < staticAssetCompression.minimumBytes
-    || !staticAssetIsCompressible(fileName)
-  ) {
+  if (!staticAssetIsCompressible(fileName)) {
     return {
       rawBytes,
       gzipBytes: rawBytes,

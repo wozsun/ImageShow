@@ -175,9 +175,11 @@ export function linkImportJobs(
   storageSlug: string
 ) {
   const batchTime = new Date().toISOString();
+  const subscriptionBatchKey = browserUuid();
   return validatedUrls.map((url, manifestPosition): ImportJob => ({
     id: browserUuid(),
     attemptKey: browserUuid(),
+    subscriptionBatchKey,
     kind: "download",
     status: "queued",
     message: "等待下载",

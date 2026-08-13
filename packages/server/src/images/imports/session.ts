@@ -18,7 +18,7 @@ import {
   findImportCancellation,
   markImportCancelled
 } from "./lifecycle.ts";
-import { emitCancelledImportStatus } from "./status.ts";
+import { notifyImportStatus } from "./status.ts";
 import { importRequestHash } from "./request-hash.ts";
 import { withImportSessionLock } from "./session-lock.ts";
 import {
@@ -264,7 +264,7 @@ export async function cancelImportSession(id: string) {
     throw error;
   }
 
-  if (cancelled) emitCancelledImportStatus(canonicalId);
+  if (cancelled) await notifyImportStatus(canonicalId).catch(() => undefined);
   await activePromise?.catch(() => undefined);
   if (!cancelled) {
     const existing = (await pool.query(
