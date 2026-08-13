@@ -309,6 +309,9 @@ body:has(.admin > .workspace-contained) {
 .admin > aside .admin-nav-scroll {
   flex: 1 1 auto;
   min-height: 0;
+  /* 轨道跨过侧栏内边距贴住右侧分隔线，导航内容宽度保持不变。 */
+  margin-inline-end: -19px;
+  padding-inline-end: 19px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;

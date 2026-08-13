@@ -40,6 +40,7 @@ import { ImageMetadataEditorCard } from "./ImageMetadataEditorCard.js";
 import {
   useImageEditorTrashAction
 } from "./useImageEditorTrashAction.js";
+import type { ImageEditorSavedHandler } from "./image-editor-types.js";
 
 type ImageStorageMigrationDialogModule =
   typeof import("./ImageStorageMigrationDialog.js");
@@ -86,9 +87,7 @@ export function ImageMetadataEditorDialog({
   onClose: () => void;
   onTrashCommitted: (imageIds: string[]) => void | Promise<void>;
   publicImageMembershipHandled?: boolean;
-  onSaved: (
-    authoritativeItems?: EditableImageSnapshot[] | null
-  ) => void | Promise<void>;
+  onSaved: ImageEditorSavedHandler;
   onStorageMigrationSucceeded?: (message: string) => void;
   returnFocusRef?: RefObject<HTMLElement | null>;
 }) {

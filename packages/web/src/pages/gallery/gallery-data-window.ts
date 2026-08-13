@@ -3,7 +3,11 @@ import {
   galleryDataWindowFullItemBudget,
   galleryMaxMountedTiles
 } from "../../lib/constants.js";
-import type { GalleryImageCard } from "../../lib/types.js";
+import type {
+  EditableImageSnapshot,
+  GalleryImageCard
+} from "../../lib/types.js";
+import { hasDistinctOriginalUrl } from "../../lib/image-url.js";
 import {
   CompactMasonryLayout,
   galleryImageNumericRatio,
@@ -93,15 +97,67 @@ function pageFullBytes(items: readonly GalleryImageCard[]) {
 
 function itemsInStoredOrder(
   ids: readonly string[],
-  items: readonly GalleryImageCard[]
+  items: readonly GalleryImageCard[],
+  retainedItems?: readonly GalleryImageCard[] | null
 ) {
   if (ids.length !== items.length) return null;
   const byId = new Map(items.map((item) => [item.id, item]));
   if (byId.size !== items.length) return null;
-  const ordered = ids.map((id) => byId.get(id));
+  const retainedById = new Map(
+    (retainedItems ?? []).map((item) => [item.id, item])
+  );
+  const ordered = ids.map((id) => {
+    const item = byId.get(id);
+    if (!item) return undefined;
+    const retained = retainedById.get(id);
+    return retained && galleryCardsEqual(retained, item) ? retained : item;
+  });
   return ordered.every((item) => item !== undefined)
     ? ordered as GalleryImageCard[]
     : null;
+}
+
+function galleryCardsEqual(
+  left: GalleryImageCard,
+  right: GalleryImageCard
+) {
+  return left.id === right.id
+    && left.title === right.title
+    && left.device === right.device
+    && left.brightness === right.brightness
+    && left.theme === right.theme
+    && left.author === right.author
+    && left.thumb_url === right.thumb_url
+    && left.width === right.width
+    && left.height === right.height
+    && left.diff_original === right.diff_original
+    && left.image_time === right.image_time
+    && left.tags.length === right.tags.length
+    && left.tags.every((tag, index) => tag === right.tags[index]);
+}
+
+function galleryCardFromSnapshot(
+  current: GalleryImageCard,
+  snapshot: EditableImageSnapshot
+): GalleryImageCard {
+  const next = {
+    id: current.id,
+    title: snapshot.title,
+    device: snapshot.device,
+    brightness: snapshot.brightness,
+    theme: snapshot.theme,
+    author: snapshot.author,
+    thumb_url: snapshot.thumb_url,
+    width: snapshot.width,
+    height: snapshot.height,
+    tags: [...snapshot.tags],
+    diff_original: hasDistinctOriginalUrl(
+      snapshot.original,
+      snapshot.object_url
+    ),
+    image_time: current.image_time
+  } satisfies GalleryImageCard;
+  return galleryCardsEqual(current, next) ? current : next;
 }
 
 function requestCursorCharacters(page: GalleryWindowPage) {
@@ -239,7 +295,10 @@ export class GalleryDataWindow {
     return true;
   }
 
-  prepareImageRefresh(imageId: string): GalleryPageIntent | null {
+  prepareImageRefresh(
+    imageId: string,
+    authoritativeItem?: EditableImageSnapshot
+  ): GalleryPageIntent | null {
     const itemIndex = this.indexOfId(imageId);
     if (itemIndex < 0) return null;
     const pageIndex = this.#pageIndexAtItem(itemIndex);
@@ -253,10 +312,28 @@ export class GalleryDataWindow {
     // by the same replacement path as ordinary far-page recovery.
     this.#pendingCursors.clear();
     this.#failedCursors.delete(page.cursor);
-    if (page.items) {
-      this.#fullBytes -= page.fullBytes;
-      page.items = null;
-      page.fullBytes = 0;
+    const offset = itemIndex - page.startIndex;
+    const currentItem = page.items?.[offset];
+    if (currentItem && authoritativeItem?.id === imageId) {
+      const nextItem = galleryCardFromSnapshot(
+        currentItem,
+        authoritativeItem
+      );
+      if (nextItem !== currentItem) {
+        const byteDelta = estimateCardBytes(nextItem)
+          - estimateCardBytes(currentItem);
+        page.items![offset] = nextItem;
+        page.fullBytes += byteDelta;
+        this.#fullBytes += byteDelta;
+        const geometryChanged = this.#layout.setRatios(itemIndex, [
+          galleryImageNumericRatio(
+            nextItem.device,
+            nextItem.width,
+            nextItem.height
+          )
+        ]);
+        if (geometryChanged) this.#recalculatePageBounds();
+      }
     }
     this.#activePageIndexes.add(pageIndex);
     this.#commit();
@@ -437,7 +514,11 @@ export class GalleryDataWindow {
     // `shuffle=1` deliberately returns the same keyset page in a new order on
     // every request. Preserve this session's original order when the ID set is
     // unchanged; only a real insertion/deletion invalidates later boundaries.
-    const orderedItems = itemsInStoredOrder(page.ids, payload.items);
+    const orderedItems = itemsInStoredOrder(
+      page.ids,
+      payload.items,
+      page.items
+    );
     if (!orderedItems) {
       this.#truncatePages(pageIndex);
       this.#appendPage(cursor, payload);

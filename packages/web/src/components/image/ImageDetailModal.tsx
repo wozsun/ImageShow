@@ -32,6 +32,7 @@ import { ImageDescriptionSlot } from "./ImageDescriptionSlot.js";
 import { DialogLayerPortal } from "../feedback/DialogLayerPortal.js";
 import { DialogPortalTargetContext } from "../feedback/DialogPortalContext.js";
 import { LazyImageAdminDetails } from "./image-admin-details-loader.js";
+import { hasDistinctOriginalUrl } from "../../lib/image-url.js";
 import "../../styles/image-detail.css";
 
 class ImageAdminDetailsModuleBoundary extends Component<{
@@ -75,20 +76,6 @@ class ImageAdminDetailsModuleBoundary extends Component<{
   }
 }
 
-function hasDistinctOriginal(original: string, displayUrl: string) {
-  if (!/^https:\/\//i.test(original.trim())) return false;
-  try {
-    const normalize = (value: string) => {
-      const url = new URL(value.trim());
-      url.hash = "";
-      return url.toString();
-    };
-    return normalize(original) !== normalize(displayUrl);
-  } catch {
-    return original.trim() !== displayUrl.trim();
-  }
-}
-
 function applyEditedSnapshot<T extends PublicImageItem>(
   item: T,
   snapshot: EditableImageSnapshot | null
@@ -97,7 +84,7 @@ function applyEditedSnapshot<T extends PublicImageItem>(
   return {
     ...item,
     ...snapshot,
-    diff_original: hasDistinctOriginal(
+    diff_original: hasDistinctOriginalUrl(
       snapshot.original,
       snapshot.object_url
     )
@@ -123,6 +110,7 @@ type ImageDetailModalProps =
       ) => void | Promise<void>;
       onTrashed?: (imageId: string) => void;
       onItemUpdated?: (item: EditableImageSnapshot) => void;
+      onItemRefreshRequested?: (imageId: string) => void;
       returnFocusRef?: RefObject<HTMLElement | null>;
     }
   | {
@@ -135,6 +123,7 @@ type ImageDetailModalProps =
       ) => void | Promise<void>;
       onTrashed?: (imageId: string) => void;
       onItemUpdated?: (item: EditableImageSnapshot) => void;
+      onItemRefreshRequested?: (imageId: string) => void;
       returnFocusRef?: RefObject<HTMLElement | null>;
     };
 
@@ -352,6 +341,7 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
                       adminItem={adminItem}
                       adminStorageLabel={adminStorageLabel}
                       onItemUpdated={handleItemUpdated}
+                      onItemRefreshRequested={props.onItemRefreshRequested}
                       onItemTrashCommitted={props.onTrashCommitted}
                       onItemTrashed={handleItemTrashed}
                       onNestedDialogChange={setNestedDialogOpen}

@@ -13,6 +13,9 @@ import {
   deviceLabels,
   selectedFacetLabels
 } from "./home-ui.js";
+import {
+  usePublicRoutePreloadIntents
+} from "../../lib/public-route-modules.js";
 
 export function HomeFilterBar({
   entranceReady,
@@ -47,6 +50,10 @@ export function HomeFilterBar({
     : [];
   const destination = galleryHref(filters, galleryPath);
   const hasFilters = Object.values(filters).some(Boolean);
+  const publicRoutePreloadIntents = usePublicRoutePreloadIntents();
+  const galleryPreloadProps = galleryPath === "/gallery"
+    ? publicRoutePreloadIntents.gallery
+    : {};
 
   return (
     <section
@@ -91,7 +98,11 @@ export function HomeFilterBar({
         </span>
         <span className="home-filter-reset-label">重置</span>
       </button>
-      <Link className="home-gallery-entry" to={destination}>
+      <Link
+        className="home-gallery-entry"
+        to={destination}
+        {...galleryPreloadProps}
+      >
         进入画廊 <span aria-hidden="true">→</span>
       </Link>
     </section>

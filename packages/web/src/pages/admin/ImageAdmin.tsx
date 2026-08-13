@@ -33,11 +33,17 @@ import {
 } from "./ImageAdminFilters.js";
 import { UploaderLauncher } from "./uploader/UploaderLauncher.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
-import { invalidateImageData } from "../../lib/api/query-invalidation.js";
+import {
+  invalidateImageData,
+  invalidateImageDataAfterMetadataSave
+} from "../../lib/api/query-invalidation.js";
 import { useAdminPreference } from "../../hooks/useAdminPreferences.js";
 import { useAdminPermissions } from "../../hooks/useAuthSession.js";
 import { useAdminImageDetailCapability } from "../../components/image/useAdminImageDetailCapability.js";
 import { useImageEditorCapability } from "../../components/image/editor/useImageEditorCapability.js";
+import type {
+  ImageMetadataSaveCommit
+} from "../../components/image/editor/image-editor-capability-loader.js";
 import {
   mobileViewportMediaQuery,
   useMediaQuery
@@ -112,6 +118,21 @@ export function ImageAdmin() {
     cancelPageNavigation();
     await invalidateImageData(client);
   }, [cancelPageNavigation, client]);
+  const refreshAfterEditorSave = useCallback(async (
+    commit?: ImageMetadataSaveCommit
+  ) => {
+    cancelPageNavigation();
+    selection.clear();
+    if (!commit) {
+      await invalidateImageData(client);
+      return;
+    }
+    await invalidateImageDataAfterMetadataSave(
+      client,
+      commit.updates,
+      commit.authoritativeItems
+    );
+  }, [cancelPageNavigation, client, selection.clear]);
   const {
     operationText,
     feedback,
@@ -122,7 +143,6 @@ export function ImageAdmin() {
     actionBusy,
     busyIds,
     operationBusy,
-    refresh,
     resetTransientState,
     runConfirmedAction,
     trash,
@@ -528,7 +548,7 @@ export function ImageAdmin() {
               "success"
             );
           }}
-          onSaved={refresh}
+          onSaved={refreshAfterEditorSave}
           onStorageMigrationSucceeded={(message) => showFeedback(message, "success")}
           returnFocusRef={editorCapability.returnFocusRef}
         />

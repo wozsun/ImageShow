@@ -31,6 +31,7 @@ import {
 } from "./gallery-data-window.js";
 import { galleryImagePageQueryOptions } from "./gallery-images-query.js";
 import type { GalleryDataWindowMetrics } from "./gallery-debug-stats.js";
+import type { EditableImageSnapshot } from "../../lib/types.js";
 
 function initialViewport(): GalleryDataWindowViewport {
   const viewportHeight = Math.max(1, window.innerHeight);
@@ -304,24 +305,34 @@ export function useGalleryDataWindow({
     await Promise.allSettled(pending);
   }, [controller, imageQuery, queryClient]);
 
-  const refreshImage = useCallback((imageId: string) => {
+  const refreshImage = useCallback((
+    image: string | EditableImageSnapshot
+  ) => {
+    const imageId = typeof image === "string" ? image : image.id;
     const pauseToken = nextRequestPauseTokenRef.current += 1;
     requestPauseRef.current = { controller, token: pauseToken };
-    const intent = controller.prepareImageRefresh(imageId);
+    let intent: GalleryPageIntent | null = null;
+    preserveAnchor(() => {
+      intent = controller.prepareImageRefresh(
+        imageId,
+        typeof image === "string" ? undefined : image
+      );
+    });
     if (!intent) {
       requestPauseRef.current = null;
       return;
     }
+    const refreshIntent = intent;
 
     void settlePendingPageRequests().then(() => {
       const pause = requestPauseRef.current;
       if (pause?.controller !== controller || pause.token !== pauseToken) return;
       // Claim the authoritative hydration while the automatic request pump is
       // still paused, then reopen the remaining nearby slots.
-      fetchPage(intent);
+      fetchPage(refreshIntent);
       requestPauseRef.current = null;
     });
-  }, [controller, fetchPage, settlePendingPageRequests]);
+  }, [controller, fetchPage, preserveAnchor, settlePendingPageRequests]);
 
   const removeImage = useCallback(async (imageId: string) => {
     // Fence responses synchronously before awaiting Query cancellation. Even a

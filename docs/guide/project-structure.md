@@ -204,6 +204,10 @@ hooks ──► lib
   键盘聚焦和指针按下统一映射到同一被动预加载动作；接管指针激活生命周期的控件
   仍就近使用捕获阶段事件，公共能力不改变模块、查询或业务激活的所有权。该极小
   跨页面机制归入 `app-foundation`，不产生独立微型请求，也不反向引入后台实现。
+  `lib/public-route-modules.ts` 单独拥有 Home / Gallery 的可重试动态导入及 hover / focus
+  导航意图，`AppRoutes` 的 `React.lazy`、主导航和首页次级入口复用同一 Promise；它不绑定
+  pointerdown，因而不会改变触摸或直接导航路径。`lib/image-url.ts` 只保存详情与画廊权威
+  快照共同需要的原图 URL 判定，不让页面层复制同一字段投影。
 - `pages/` 保存路由页面与页面级编排，页面专属组件、状态机和 Hook 就近维护。
 - `AppRoutes.tsx` 将普通与嵌入路径映射到同一 `HomePage` / `GalleryPage`；页面参数只
   决定是否挂载主导航，不能复制公开页实现或以 CSS 隐藏导航。服务端仍独立决定嵌入
@@ -215,7 +219,9 @@ hooks ──► lib
   共享可见性观察器、三级导航状态机、查询级揭示 high-water 与开发统计；跨页面可复用的 DOM
   图片加载、解码和并发调度留在
   `components/image/`，页面层只设置画廊任务的优先级、暂停和驻留边界。无界面的
-  页面滚动边界归一化放在 `lib/ui/`，由共享采样 Hook 提供给各页面交互状态机。
+  页面滚动边界归一化放在 `lib/ui/`，由共享采样 Hook 提供给各页面交互状态机。图片编辑
+  保存时，数据窗口用权威快照原位更新唯一命中卡片并保持其他卡片对象，再以同一 cursor
+  后台水合该页；筛选成员、几何和游标变化继续由数据窗口原子提交。
 - `pages/admin/uploader/` 管理统一 prepared import 队列；`Uploader` 持有任务与来源状态，
   `UploadWorkflowWindow` 直接消费这些状态并就近渲染单消费者的头部、默认值、任务列表与
   页脚，不再复制一套 controller contract；其中 `link-import/` 继续负责 URL、JSONL 与微博

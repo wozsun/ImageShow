@@ -73,6 +73,7 @@ function GalleryImageDetail({
   onTrashCommitted,
   onTrashed,
   onItemUpdated,
+  onItemRefreshRequested,
   returnFocusRef,
 }: {
   card: GalleryImageCard;
@@ -82,6 +83,7 @@ function GalleryImageDetail({
   ) => void | Promise<void>;
   onTrashed: (imageId: string) => void;
   onItemUpdated: (item: EditableImageSnapshot) => void;
+  onItemRefreshRequested: (imageId: string) => void;
   returnFocusRef: RefObject<HTMLElement | null>;
 }) {
   const placeholder = useMemo(() => imagePlaceholder(card), [card]);
@@ -110,6 +112,7 @@ function GalleryImageDetail({
       }}
       onTrashed={onTrashed}
       onItemUpdated={onItemUpdated}
+      onItemRefreshRequested={onItemRefreshRequested}
       admin={false}
       detailLoading={detailLoading}
       detailError={detailError}
@@ -217,6 +220,13 @@ export function GalleryPage({ embedded = false }: { embedded?: boolean }) {
     pinnedImageId,
     windowRef: galleryWindowRef
   });
+  useEffect(() => {
+    if (!selected) return;
+    const refreshed = galleryData.positions.find(
+      (position) => position.id === selected.id
+    )?.item;
+    if (refreshed && refreshed !== selected) setSelected(refreshed);
+  }, [galleryData.positions, selected]);
   const themeNames = useMemo(() => new Map((facets?.themes ?? []).map((option) => [option.slug, displayNameOrSlug(option)])), [facets]);
   const tagNames = useMemo(() => new Map((facets?.tags ?? []).map((option) => [option.slug, displayNameOrSlug(option)])), [facets]);
   const initialLoading = galleryData.initialLoading;
@@ -386,7 +396,8 @@ export function GalleryPage({ embedded = false }: { embedded?: boolean }) {
             trashedFocusIdRef.current = result.focusId;
           }}
           onTrashed={handleGalleryImageTrashed}
-          onItemUpdated={(item) => galleryData.refreshImage(item.id)}
+          onItemUpdated={galleryData.refreshImage}
+          onItemRefreshRequested={galleryData.refreshImage}
           returnFocusRef={detailReturnFocusRef}
         />
       )}

@@ -1,6 +1,8 @@
 import type { QueryClient } from "@tanstack/react-query";
 import type {
   AdminImageListItemDto,
+  EditableImageSnapshotDto,
+  ImageUpdateItemInputDto,
   ImportVocabularyDto
 } from "@imageshow/shared/browser";
 import { queryKeys } from "./query-keys.js";
@@ -49,6 +51,65 @@ export function clearAdminCacheAfterLogin(client: QueryClient) {
 
 export function invalidateImageData(client: QueryClient) {
   return invalidate(client, imageDataQueryKeys);
+}
+
+function updatesField(
+  updates: readonly ImageUpdateItemInputDto[],
+  field: keyof ImageUpdateItemInputDto
+) {
+  return updates.some((update) => Object.hasOwn(update, field));
+}
+
+export function invalidateImageDataAfterMetadataSave(
+  client: QueryClient,
+  updates: readonly ImageUpdateItemInputDto[],
+  authoritativeItems: readonly Pick<EditableImageSnapshotDto, "id">[] | null
+) {
+  if (!updates.length) return Promise.resolve([]);
+  const changesDevice = updatesField(updates, "device");
+  const changesBrightness = updatesField(updates, "brightness");
+  const changesTheme = updatesField(updates, "theme");
+  const changesAuthor = updatesField(updates, "author");
+  const changesTags = updatesField(updates, "tags");
+  const changesMembership = changesDevice
+    || changesBrightness
+    || changesTheme
+    || changesAuthor
+    || changesTags;
+  const changesFacetVocabulary = changesTheme || changesAuthor || changesTags;
+  const authoritativeIds = new Set(
+    (authoritativeItems ?? []).map((item) => item.id)
+  );
+  const exactInvalidations = updates.flatMap((update) => {
+    const requests = [client.invalidateQueries({
+      queryKey: [...queryKeys.adminImageInfo, update.id],
+      exact: true
+    })];
+    if (!authoritativeIds.has(update.id)) {
+      // Without the authoritative snapshot every editable field may already
+      // have committed despite the lost confirmation. The active public
+      // detail owns a wider projection than its Gallery card, so the exact
+      // detail must re-read instead of retaining stale fields over the card's
+      // background page refresh.
+      requests.push(client.invalidateQueries({
+        queryKey: [...queryKeys.publicImageDetail, update.id],
+        exact: true
+      }));
+    }
+    return requests;
+  });
+  return Promise.all([
+    invalidate(client, [
+      queryKeys.adminImages,
+      queryKeys.overview,
+      ...(changesMembership ? [queryKeys.galleryStats] : []),
+      ...(changesFacetVocabulary ? [queryKeys.galleryFacets] : []),
+      ...(changesTheme ? [queryKeys.themes] : []),
+      ...(changesTags ? [queryKeys.tags] : []),
+      ...(changesAuthor ? [queryKeys.authors] : [])
+    ]),
+    ...exactInvalidations
+  ]);
 }
 
 function importedVocabularyChanged(

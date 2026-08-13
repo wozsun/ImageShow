@@ -20,7 +20,8 @@ import {
 import { useAuthMe } from "../../hooks/useAuthSession.js";
 import {
   isImageNotEditableError,
-  type ImageEditorTarget
+  type ImageEditorTarget,
+  type ImageMetadataSaveCommit
 } from "./editor/image-editor-capability-loader.js";
 import { errorMessage, formatDate } from "../../lib/ui/formatters.js";
 import { preloadIntentProps } from "../../lib/ui/preload-intent.js";
@@ -69,6 +70,7 @@ export function ImageAdminDetails({
   adminItem,
   adminStorageLabel,
   onItemUpdated,
+  onItemRefreshRequested,
   onItemTrashCommitted,
   onItemTrashed,
   onNestedDialogChange
@@ -77,6 +79,7 @@ export function ImageAdminDetails({
   adminItem: AdminDetailSource | null;
   adminStorageLabel?: string;
   onItemUpdated?: (item: EditableImageSnapshot) => void;
+  onItemRefreshRequested?: (imageId: string) => void;
   onItemTrashCommitted?: (
     imageId: string
   ) => void | Promise<void>;
@@ -212,7 +215,7 @@ export function ImageAdminDetails({
 
   const loadAdminInfoAfterInvalidation = useCallback(async () => {
     // Overview 等未直接持有存储显示名的后台详情会启用上面的 admin-info
-    // Query。全局图片失效已经等待这个 active Query 完成刷新；优先复用它的
+    // Query。精确图片信息失效已经等待这个 active Query 完成刷新；优先复用它的
     // 结果，避免随后再以同一个 key 发起第二次请求。ImageAdmin 传入显示名时
     // 该 Query 未启用，保存后仍在这里按需读取一次 updated_at 与存储显示名。
     if (expanded && !adminStorageLabel) {
@@ -229,18 +232,34 @@ export function ImageAdminDetails({
   }, [adminStorageLabel, expanded, imageId, queryClient]);
 
   const refreshAfterSave = useCallback(async (
-    authoritativeItems?: EditableImageSnapshot[] | null
+    commit?: ImageMetadataSaveCommit
   ) => {
-    // 所有详情与列表共享这一处失效；随后读取单图权威快照，只用于立即更新仍打开的
-    // 详情和可能继续停留的失败编辑会话。后台详情同时回读轻量管理信息，以更新快照
-    // 契约刻意不承载的 updated_at；两条读取并行，且不触发第二轮全局失效。
+    // 元数据保存已经在 mutation 边界取得权威快照，先原位更新当前详情和 Gallery
+    // 卡片，再按实际字段失效其余投影。存储迁移没有这份提交上下文，仍走完整回读。
     const capabilityModule = editorCapability.session?.module;
     if (!capabilityModule) throw new Error("图片编辑能力未加载");
+    const committedForCurrent = commit?.updates.some(
+      (update) => update.id === imageId
+    ) === true;
+    const applySnapshot = (item: EditableImageSnapshot) => {
+      onItemUpdated?.(item);
+      editorCapability.updateItems([item]);
+    };
+    const immediateItem = committedForCurrent
+      ? commit?.authoritativeItems?.find(
+          (candidate) => candidate.id === imageId
+        )
+      : undefined;
+    if (immediateItem) {
+      applySnapshot(immediateItem);
+    } else if (committedForCurrent) {
+      onItemRefreshRequested?.(imageId);
+    }
     const { snapshotResult, adjacentDataResult } =
       await capabilityModule.refreshImageEditorAfterSave<ImageAdminInfo>({
         queryClient,
         imageIds: [imageId],
-        authoritativeItems,
+        commit,
         loadAdjacentData: admin
           ? loadAdminInfoAfterInvalidation
           : undefined
@@ -252,12 +271,14 @@ export function ImageAdminDetails({
     }
     const response = snapshotResult.value;
     const item = response.items.find((candidate) => candidate.id === imageId);
-    if (!item) {
+    const shouldApplySnapshot = commit === undefined || committedForCurrent;
+    if (shouldApplySnapshot && !item) {
       setEditSuppressed(true);
       return;
     }
-    onItemUpdated?.(item);
-    editorCapability.updateItems([item]);
+    if (item && item !== immediateItem && shouldApplySnapshot) {
+      applySnapshot(item);
+    }
 
     if (adjacentDataResult.status === "rejected") {
       handlePreparationFailure(adjacentDataResult.reason);
@@ -273,6 +294,7 @@ export function ImageAdminDetails({
     handlePreparationFailure,
     imageId,
     loadAdminInfoAfterInvalidation,
+    onItemRefreshRequested,
     onItemUpdated,
     queryClient
   ]);

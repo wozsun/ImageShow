@@ -11,7 +11,6 @@ import {
 import { readEditableImageSnapshots } from "../../../lib/api/image-edit.js";
 import { adminApiBasePath } from "../../../lib/constants.js";
 import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
-import type { EditableImageSnapshot } from "../../../lib/types.js";
 import { summarizeImageUpdateFailures } from "./image-update-failures.js";
 import {
   createImageMetadataSaveReport,
@@ -20,6 +19,7 @@ import {
   type ImageMetadataSaveReport,
   type ImageMetadataUpdate
 } from "./image-metadata-session.js";
+import type { ImageEditorSavedHandler } from "./image-editor-types.js";
 
 function reportImageUpdateFailures(response: ImageUpdateResponseDto) {
   if (!response.failed) return;
@@ -54,9 +54,7 @@ export function useImageMetadataOperations({
   onSaved
 }: {
   initialIds: string[];
-  onSaved: (
-    authoritativeItems?: EditableImageSnapshot[] | null
-  ) => void | Promise<void>;
+  onSaved: ImageEditorSavedHandler;
 }) {
   const [pendingAttempt, setPendingAttempt] =
     useState<ImageMetadataSaveAttempt | null>(null);
@@ -99,7 +97,20 @@ export function useImageMetadataOperations({
     // snapshot，不重复 mutation，也不重复失效父级查询。
     if (notifySaved) {
       try {
-        await onSaved(authoritativeItems);
+        const updatedIds = new Set(report.results.flatMap((result) => (
+          result.status === "updated" ? [result.id] : []
+        )));
+        // 响应和权威快照同时丢失时，提交结果仍属未知。沿真实尝试字段做一次
+        // 保守失效与命中页回读，后续“再次确认”只读取 snapshot，不能遗漏
+        // 这次可能已经提交的写入，也不能重放 mutation。
+        const committedUpdates = authoritativeItems === null
+          && attempt.response === null
+          ? attempt.items
+          : attempt.items.filter((item) => updatedIds.has(item.id));
+        await onSaved({
+          authoritativeItems,
+          updates: committedUpdates
+        });
       } catch (error) {
         reportAdminUiError("image_metadata.update_refresh", error);
       }

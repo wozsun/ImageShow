@@ -2,7 +2,8 @@ import { createPageLifetimeModuleLoader } from "../../../lib/page-lifetime-modul
 import type { ImageEditorTarget } from "./image-editor-types.js";
 
 export type {
-  ImageEditorTarget
+  ImageEditorTarget,
+  ImageMetadataSaveCommit
 } from "./image-editor-types.js";
 
 export type ImageEditorCapabilityModule =

@@ -3,7 +3,8 @@ import type { ImportVocabularyDto } from "@imageshow/shared/browser";
 import { readEditableImageSnapshots } from "../../../lib/api/image-edit.js";
 import { importVocabularyQueryOptions } from "../../../lib/api/import-vocabulary.js";
 import {
-  invalidateImageData
+  invalidateImageData,
+  invalidateImageDataAfterMetadataSave
 } from "../../../lib/api/query-invalidation.js";
 import { storageOptionsQueryOptions } from "../../../lib/api/storage-options.js";
 import type {
@@ -12,6 +13,7 @@ import type {
 import type {
   EditableImageSnapshot
 } from "../../../lib/types.js";
+import type { ImageMetadataSaveCommit } from "./image-editor-types.js";
 // 单图与批量编辑共用同一懒加载能力入口。共享样式独占字段内部排布，编辑器专属
 // 样式只负责卡片外框和宿主定位，因此即使浏览器并行预载 CSS，应用顺序也不会改变
 // 属性位置；冷入口同样不依赖图片列表、上传窗口或另一种编辑入口碰巧加载样式。
@@ -85,22 +87,29 @@ export async function prepareImageEditor(
 export async function refreshImageEditorAfterSave<TAdjacentData>({
   queryClient,
   imageIds,
-  authoritativeItems,
+  commit,
   loadAdjacentData
 }: {
   queryClient: QueryClient;
   imageIds: string[];
-  authoritativeItems?: EditableImageSnapshot[] | null;
+  commit?: ImageMetadataSaveCommit;
   loadAdjacentData?: () => Promise<TAdjacentData>;
 }) {
-  await invalidateImageData(queryClient);
+  await (commit
+    ? invalidateImageDataAfterMetadataSave(
+        queryClient,
+        commit.updates,
+        commit.authoritativeItems
+      )
+    : invalidateImageData(queryClient));
   const snapshotRequest =
-    authoritativeItems === undefined
+    commit === undefined
       ? readEditableImageSnapshots(imageIds)
-      : authoritativeItems === null
+      : commit.authoritativeItems === null
         ? Promise.reject(new Error("图片权威快照读取失败"))
-        : Promise.resolve({ items: authoritativeItems });
+        : Promise.resolve({ items: commit.authoritativeItems });
   const adjacentDataRequest: Promise<TAdjacentData | null> = loadAdjacentData
+    && (commit === undefined || commit.updates.length > 0)
     ? loadAdjacentData()
     : Promise.resolve(null);
   const [snapshotResult, adjacentDataResult] = await Promise.allSettled([

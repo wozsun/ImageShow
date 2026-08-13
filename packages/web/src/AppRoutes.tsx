@@ -5,9 +5,24 @@ import { useSiteConfig } from "./lib/api/site-data.js";
 import { QueryErrorState } from "./components/feedback/QueryErrorState.js";
 import { RouteLoadBoundary } from "./components/feedback/RouteLoadBoundary.js";
 import { AppLoadingScreen } from "./components/feedback/AppLoadingScreen.js";
+import {
+  createPublicRouteModuleLoader,
+  createPublicRoutePreloadIntents,
+  PublicRoutePreloadProvider
+} from "./lib/public-route-modules.js";
 
-const HomePage = lazy(() => import("./pages/home/HomePage.js").then((module) => ({ default: module.HomePage })));
-const GalleryPage = lazy(() => import("./pages/gallery/GalleryPage.js").then((module) => ({ default: module.GalleryPage })));
+const homeRouteModule = createPublicRouteModuleLoader(
+  () => import("./pages/home/HomePage.js")
+);
+const galleryRouteModule = createPublicRouteModuleLoader(
+  () => import("./pages/gallery/GalleryPage.js")
+);
+const publicRoutePreloadIntents = createPublicRoutePreloadIntents(
+  homeRouteModule,
+  galleryRouteModule
+);
+const HomePage = lazy(() => homeRouteModule.load().then((module) => ({ default: module.HomePage })));
+const GalleryPage = lazy(() => galleryRouteModule.load().then((module) => ({ default: module.GalleryPage })));
 const AdminShell = lazy(() => import("./pages/admin/AdminShell.js").then((module) => ({ default: module.AdminShell })));
 
 export function AppRoutes() {
@@ -18,35 +33,37 @@ export function AppRoutes() {
   if (!data) return <AppLoadingScreen />;
   const rootPath = publicRootPath(data.site);
   return (
-    <RouteLoadBoundary resetKey={routeLocation.pathname} fullPage>
-      <Suspense fallback={<AppLoadingScreen />}>
-        <Routes>
-          <Route path="/" element={rootPath === "/home" ? <HomePage /> : <GalleryPage />} />
-          <Route
-            path="/home"
-            element={data.site.home.enabled === false ? <Navigate to="/gallery" replace /> : <HomePage />}
-          />
-          <Route path="/gallery" element={<GalleryPage />} />
-          <Route
-            path="/embed/home"
-            element={
-              !data.embed.enabled
-                ? <Navigate to="/" replace />
-                : data.site.home.enabled === false
-                  ? <Navigate to="/embed/gallery" replace />
-                  : <HomePage embedded />
-            }
-          />
-          <Route
-            path="/embed/gallery"
-            element={data.embed.enabled
-              ? <GalleryPage embedded />
-              : <Navigate to="/" replace />}
-          />
-          <Route path={`${adminBasePath}/*`} element={<AdminShell />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Suspense>
-    </RouteLoadBoundary>
+    <PublicRoutePreloadProvider intents={publicRoutePreloadIntents}>
+      <RouteLoadBoundary resetKey={routeLocation.pathname} fullPage>
+        <Suspense fallback={<AppLoadingScreen />}>
+          <Routes>
+            <Route path="/" element={rootPath === "/home" ? <HomePage /> : <GalleryPage />} />
+            <Route
+              path="/home"
+              element={data.site.home.enabled === false ? <Navigate to="/gallery" replace /> : <HomePage />}
+            />
+            <Route path="/gallery" element={<GalleryPage />} />
+            <Route
+              path="/embed/home"
+              element={
+                !data.embed.enabled
+                  ? <Navigate to="/" replace />
+                  : data.site.home.enabled === false
+                    ? <Navigate to="/embed/gallery" replace />
+                    : <HomePage embedded />
+              }
+            />
+            <Route
+              path="/embed/gallery"
+              element={data.embed.enabled
+                ? <GalleryPage embedded />
+                : <Navigate to="/" replace />}
+            />
+            <Route path={`${adminBasePath}/*`} element={<AdminShell />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
+      </RouteLoadBoundary>
+    </PublicRoutePreloadProvider>
   );
 }
