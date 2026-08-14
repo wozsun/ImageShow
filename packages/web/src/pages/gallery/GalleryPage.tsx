@@ -23,7 +23,7 @@ import { Icon } from "../../components/icon/Icon.js";
 // 加载可避免新增请求和 Suspense 边界。
 import { ImageDetailModal } from "../../components/image/ImageDetailModal.js";
 import { queryKeys } from "../../lib/api/query-keys.js";
-import { displayNameOrSlug, errorMessage } from "../../lib/ui/formatters.js";
+import { errorMessage } from "../../lib/ui/formatters.js";
 import { buildRandomUrl } from "../../lib/gallery/random-url.js";
 import type {
   EditableImageSnapshot,
@@ -227,8 +227,6 @@ export function GalleryPage({ embedded = false }: { embedded?: boolean }) {
     )?.item;
     if (refreshed && refreshed !== selected) setSelected(refreshed);
   }, [galleryData.positions, selected]);
-  const themeNames = useMemo(() => new Map((facets?.themes ?? []).map((option) => [option.slug, displayNameOrSlug(option)])), [facets]);
-  const tagNames = useMemo(() => new Map((facets?.tags ?? []).map((option) => [option.slug, displayNameOrSlug(option)])), [facets]);
   const initialLoading = galleryData.initialLoading;
   const nextPageLoading = galleryData.nextPageLoading;
   const loading = initialLoading || nextPageLoading;
@@ -344,8 +342,6 @@ export function GalleryPage({ embedded = false }: { embedded?: boolean }) {
           onOpen={openDetail}
           positions={galleryData.positions}
           revealRegistry={revealRegistry}
-          tagNames={tagNames}
-          themeNames={themeNames}
           totalHeight={galleryData.snapshot.totalHeight}
           windowRef={galleryWindowRef}
         />

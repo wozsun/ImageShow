@@ -6,6 +6,7 @@ import {
   type CSSProperties
 } from "react";
 import { useOneShotAnimation } from "../../hooks/useOneShotAnimation.js";
+import { imageDisplayTitle } from "../../lib/ui/formatters.js";
 import {
   galleryTilePropsEqual,
   type GalleryTileRenderProps
@@ -26,11 +27,10 @@ export const GalleryTile = memo(function GalleryTile({
   position,
   revealOrder,
   revealRegistry,
-  title,
-  tags,
   onOpen
 }: GalleryTileRenderProps) {
   const { item } = position;
+  const title = imageDisplayTitle(item);
   // revealOrder is deliberately mount-only. An existing tile keeps the reveal
   // selected by this initializer when earlier cards leave the virtual window.
   const [reveal] = useState(() => revealRegistry.prepare(position.index, {
@@ -83,7 +83,7 @@ export const GalleryTile = memo(function GalleryTile({
       />
       <span className="tile-info">
         <strong>{title}</strong>
-        {item.tags.length > 0 && <small>{tags}</small>}
+        {item.subtitle && <small>{item.subtitle}</small>}
       </span>
     </button>
   );

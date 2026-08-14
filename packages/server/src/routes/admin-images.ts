@@ -46,6 +46,8 @@ import {
 } from "../images/trash-mutations.ts";
 import { purgeImages } from "../images/trash-purge.ts";
 import { requireAdminPermission } from "../users/admin-authorization.ts";
+import { listStorageBackends } from "../storage/backend-registry.ts";
+import { storageBackendLabel } from "../storage/backend-label.ts";
 
 export function registerAdminImageRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/overview`, async (c) => c.json(apiSuccess(await getOverviewStats())));
@@ -102,6 +104,13 @@ export function registerAdminImageRoutes(app: Hono) {
     async (c) => {
       const startedAt = performance.now();
       const input = parse(imageStorageMigrationInput, await readJsonBody(c));
+      const targetBackend = (await listStorageBackends()).find(
+        (backend) => backend.slug === input.target
+      );
+      const targetStorageLabel = storageBackendLabel({
+        storage_slug: input.target,
+        storage_display_name: targetBackend?.display_name
+      });
       let maxItemDurationMs = 0;
       const result = await migrateImagesStorage(input.ids, input.target, {
         signal: c.req.raw.signal,
@@ -121,6 +130,7 @@ export function registerAdminImageRoutes(app: Hono) {
       const response = {
         migrated: result.migrated,
         failed: result.failed,
+        storage_label: targetStorageLabel,
         results: result.results
       } satisfies ImageStorageMigrationResponseDto;
       return c.json(apiSuccess(response));

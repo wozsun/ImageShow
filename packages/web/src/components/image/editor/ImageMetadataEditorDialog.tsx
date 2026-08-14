@@ -19,10 +19,10 @@ import { preloadIntentProps } from "../../../lib/ui/preload-intent.js";
 import { commonImageBrightnessOptions, commonImageDeviceOptions } from "../../../lib/ui/select-options.js";
 import { storageNameResolver, useStorageOptions } from "../../../lib/api/storage-options.js";
 import type {
-  EditableImageSnapshot,
   Brightness,
   Device,
   FacetOption,
+  ImageEditorItem,
   ImageDraft
 } from "../../../lib/types.js";
 import { mergeCommonImageAttributes } from "../../../lib/upload/upload-utils.js";
@@ -79,7 +79,7 @@ export function ImageMetadataEditorDialog({
   onStorageMigrationSucceeded,
   returnFocusRef
 }: {
-  items: EditableImageSnapshot[];
+  items: ImageEditorItem[];
   pageSize: number;
   themes: FacetOption[];
   allTags: FacetOption[];
@@ -88,7 +88,10 @@ export function ImageMetadataEditorDialog({
   onTrashCommitted: (imageIds: string[]) => void | Promise<void>;
   publicImageMembershipHandled?: boolean;
   onSaved: ImageEditorSavedHandler;
-  onStorageMigrationSucceeded?: (message: string) => void;
+  onStorageMigrationSucceeded?: (
+    message: string,
+    storageLabel: string
+  ) => void;
   returnFocusRef?: RefObject<HTMLElement | null>;
 }) {
   const singleItem = items.length === 1;
@@ -476,9 +479,9 @@ export function ImageMetadataEditorDialog({
             returnFocusRef={migrateTriggerRef}
             onClose={() => setMigrating(false)}
             onSaved={onSaved}
-            onSucceeded={(message) => {
+            onSucceeded={(message, storageLabel) => {
               setMigrating(false);
-              onStorageMigrationSucceeded?.(message);
+              onStorageMigrationSucceeded?.(message, storageLabel);
               requestClose();
             }}
           />

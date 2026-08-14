@@ -13,7 +13,7 @@ import {
 } from "./image-editor-capability-loader.js";
 import { AsyncIntentFence } from "../../../lib/async-intent-fence.js";
 import type {
-  EditableImageSnapshot
+  ImageEditorItem
 } from "../../../lib/types.js";
 import type { ImportVocabularyDto } from "@imageshow/shared/browser";
 
@@ -21,7 +21,7 @@ type PreparedImageEditor = {
   key: string;
   itemIds: string[];
   module: ImageEditorCapabilityModule;
-  items: EditableImageSnapshot[];
+  items: ImageEditorItem[];
   vocabulary: ImportVocabularyDto;
 };
 
@@ -155,7 +155,7 @@ export function useImageEditorCapability({
     setSession(null);
   }, []);
 
-  const updateItems = useCallback((items: EditableImageSnapshot[]) => {
+  const updateItems = useCallback((items: ImageEditorItem[]) => {
     preparationRef.current = null;
     setSession((current) => current ? { ...current, items } : current);
   }, []);

@@ -32,7 +32,7 @@ export type GalleryStatsDto = {
   authors: Array<GalleryStatsFacetDto & { link: string }>;
 };
 
-export type GalleryImageCardDto = {
+export type ImageCardBaseDto = {
   id: string;
   title: string;
   device: Device;
@@ -47,6 +47,11 @@ export type GalleryImageCardDto = {
   image_time: string;
 };
 
+export type GalleryImageCardDto = ImageCardBaseDto & {
+  /** Server-resolved theme/tag display names for the Gallery card. */
+  subtitle: string;
+};
+
 export type PublicImageDetailDto = {
   id: string;
   description: string;
@@ -54,6 +59,7 @@ export type PublicImageDetailDto = {
   source: string;
 };
 
+export type ImageDetailItemDto = ImageCardBaseDto & PublicImageDetailDto;
 export type PublicImageItemDto = GalleryImageCardDto & PublicImageDetailDto;
 
 export type PublicImageListResponseDto = {
@@ -83,7 +89,7 @@ export type RandomImageJsonResponseDto = {
   items: RandomImageJsonItemDto[];
 };
 
-export type AdminImageListItemDto = PublicImageItemDto & {
+export type AdminImageListItemDto = ImageDetailItemDto & {
   status: "ready" | "deleted";
   object_key: string;
   storage_slug: string;
@@ -101,17 +107,22 @@ export type AdminImageListItemDto = PublicImageItemDto & {
  * This deliberately excludes list/edit-only fields such as object_key,
  * original, image_size and status so compact callers do not over-fetch.
  */
-export type AdminImageDetailItemDto = PublicImageItemDto & {
-  storage_slug: string;
+export type AdminImageDetailItemDto = ImageDetailItemDto & {
+  storage_label: string;
   md5: string;
   created_at: string;
   updated_at: string;
 };
 
-/** Exact recovery payload consumed by the image metadata editor. */
+/**
+ * Exact recovery payload consumed by the image metadata editor. `subtitle`
+ * also lets a logged-in Gallery apply the same authoritative card text before
+ * its cursor page is re-read.
+ */
 export type EditableImageSnapshotDto = {
   id: string;
   title: string;
+  subtitle: string;
   description: string;
   source: string;
   original: string;

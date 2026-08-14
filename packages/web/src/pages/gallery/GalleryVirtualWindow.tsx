@@ -5,11 +5,7 @@ import {
 } from "react";
 import { GalleryCardRevealRegistry } from "./gallery-card-reveal.js";
 import type { GalleryWindowPosition } from "./gallery-data-window.js";
-import {
-  galleryTileTags,
-  galleryTileTitle,
-  type GalleryTileRenderProps
-} from "./gallery-tile-rendering.js";
+import type { GalleryTileRenderProps } from "./gallery-tile-rendering.js";
 import { GalleryTile } from "./GalleryTile.js";
 
 type GalleryVirtualWindowProps = {
@@ -17,8 +13,6 @@ type GalleryVirtualWindowProps = {
   onOpen: GalleryTileRenderProps["onOpen"];
   positions: readonly GalleryWindowPosition[];
   revealRegistry: GalleryCardRevealRegistry;
-  tagNames: ReadonlyMap<string, string>;
-  themeNames: ReadonlyMap<string, string>;
   totalHeight: number;
   windowRef: RefObject<HTMLDivElement | null>;
 };
@@ -48,8 +42,6 @@ export const GalleryVirtualWindow = memo(function GalleryVirtualWindow({
   onOpen,
   positions,
   revealRegistry,
-  tagNames,
-  themeNames,
   totalHeight,
   windowRef
 }: GalleryVirtualWindowProps) {
@@ -65,8 +57,6 @@ export const GalleryVirtualWindow = memo(function GalleryVirtualWindow({
           position={{ ...position, item: position.item }}
           revealOrder={index}
           revealRegistry={revealRegistry}
-          title={galleryTileTitle(position.item, themeNames)}
-          tags={galleryTileTags(position.item, tagNames)}
           onOpen={onOpen}
         />
       ) : (

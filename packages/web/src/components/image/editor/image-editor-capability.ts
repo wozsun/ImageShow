@@ -11,7 +11,7 @@ import type {
   ImageEditorSource
 } from "./image-editor-types.js";
 import type {
-  EditableImageSnapshot
+  ImageEditorItem
 } from "../../../lib/types.js";
 import type { ImageMetadataSaveCommit } from "./image-editor-types.js";
 // 单图与批量编辑共用同一懒加载能力入口。共享样式独占字段内部排布，编辑器专属
@@ -34,7 +34,7 @@ class ImageNotEditableError extends Error {
 
 function editableSnapshotFromSource(
   source: ImageEditorSource
-): EditableImageSnapshot | null {
+): ImageEditorItem | null {
   if (source.deleted_at) return null;
   if (source.status && source.status !== "ready") return null;
   if (
@@ -43,7 +43,7 @@ function editableSnapshotFromSource(
   ) {
     return null;
   }
-  return source as EditableImageSnapshot;
+  return source as ImageEditorItem;
 }
 
 async function loadEditableSnapshots(
@@ -66,14 +66,14 @@ async function loadEditableSnapshots(
   const itemById = new Map(response.items.map((item) => [item.id, item]));
   const items = ids.map((id) => itemById.get(id));
   if (items.some((item) => !item)) throw new ImageNotEditableError();
-  return items as EditableImageSnapshot[];
+  return items as ImageEditorItem[];
 }
 
 export async function prepareImageEditor(
   queryClient: QueryClient,
   sources: ImageEditorSource[]
 ): Promise<{
-  items: EditableImageSnapshot[];
+  items: ImageEditorItem[];
   vocabulary: ImportVocabularyDto;
 }> {
   const [vocabulary, , items] = await Promise.all([

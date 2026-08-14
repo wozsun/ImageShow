@@ -5,6 +5,7 @@ import type {
 } from "@imageshow/shared/browser";
 import type {
   EditableImageSnapshot,
+  ImageEditorItem,
   ImageDraft
 } from "../../../lib/types.js";
 import {
@@ -16,7 +17,7 @@ export type ImageMetadataUpdate = ImageUpdateItemInputDto;
 
 export type ImageMetadataSessionState = {
   activeIds: string[];
-  baselineItems: EditableImageSnapshot[];
+  baselineItems: ImageEditorItem[];
   drafts: Record<string, ImageDraft>;
 };
 
@@ -58,7 +59,7 @@ const imageDraftFields = [
   "tags"
 ] as const satisfies readonly (keyof ImageDraft)[];
 
-function draftFromImage(item: EditableImageSnapshot): ImageDraft {
+function draftFromImage(item: ImageEditorItem): ImageDraft {
   return {
     title: item.title,
     description: item.description,
@@ -72,14 +73,14 @@ function draftFromImage(item: EditableImageSnapshot): ImageDraft {
   };
 }
 
-function draftsFromImages(items: EditableImageSnapshot[]) {
+function draftsFromImages(items: ImageEditorItem[]) {
   return Object.fromEntries(
     items.map((item) => [item.id, draftFromImage(item)])
   );
 }
 
 export function createImageMetadataSession(
-  items: EditableImageSnapshot[]
+  items: ImageEditorItem[]
 ): ImageMetadataSessionState {
   return {
     activeIds: items.map((item) => item.id),
@@ -94,7 +95,7 @@ function tagsChanged(draftTags: string[], savedTags: string[]) {
 }
 
 export function fieldsChangedFor(
-  item: EditableImageSnapshot,
+  item: ImageEditorItem,
   draft: ImageDraft
 ): ImageMetadataChanges {
   return {
@@ -112,7 +113,7 @@ export function fieldsChangedFor(
 }
 
 export function changedMetadataUpdate(
-  item: EditableImageSnapshot,
+  item: ImageEditorItem,
   draft: ImageDraft,
   changed: ImageMetadataChanges
 ): ImageMetadataUpdate {
@@ -158,7 +159,7 @@ function draftStillHasSubmittedIntent(
 function submittedIntentMatchesSnapshot(
   field: keyof ImageDraft,
   update: ImageMetadataUpdate,
-  item: EditableImageSnapshot
+  item: ImageEditorItem
 ) {
   const submitted = update[field] as ImageDraft[keyof ImageDraft];
   const authoritativeDraft = draftFromImage(item);
@@ -175,7 +176,7 @@ function submittedIntentMatchesSnapshot(
 
 function updateMatchesSnapshot(
   update: ImageMetadataUpdate,
-  item: EditableImageSnapshot
+  item: ImageEditorItem
 ) {
   return imageDraftFields.every((field) => (
     !Object.hasOwn(update, field)

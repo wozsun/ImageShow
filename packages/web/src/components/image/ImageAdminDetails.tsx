@@ -109,6 +109,7 @@ export function ImageAdminDetails({
   const [editSuppressed, setEditSuppressed] = useState(false);
   const [editError, setEditError] = useState("");
   const [editNotice, setEditNotice] = useState("");
+  const [migratedStorageLabel, setMigratedStorageLabel] = useState("");
   const [refreshedAdminInfo, setRefreshedAdminInfo] =
     useState<ImageAdminInfo | null>(null);
 
@@ -214,10 +215,10 @@ export function ImageAdminDetails({
   }, [editorCapability.close, onItemTrashed]);
 
   const loadAdminInfoAfterInvalidation = useCallback(async () => {
-    // Overview 等未直接持有存储显示名的后台详情会启用上面的 admin-info
-    // Query。精确图片信息失效已经等待这个 active Query 完成刷新；优先复用它的
-    // 结果，避免随后再以同一个 key 发起第二次请求。ImageAdmin 传入显示名时
-    // 该 Query 未启用，保存后仍在这里按需读取一次 updated_at 与存储显示名。
+    // 后台入口直接传入首帧存储显示名，因此平时不启用 admin-info Query。公开详情
+    // 在展开管理信息后会启用它；精确图片信息失效已经等待该 active Query 完成刷新，
+    // 这里优先复用结果，避免随后再以同一个 key 发起第二次请求。后台保存或迁移后
+    // 仍按需读取一次 updated_at 与权威存储显示名。
     if (expanded && !adminStorageLabel) {
       const queryState = queryClient.getQueryState<ImageAdminInfo>(
         adminImageInfoQueryOptions(imageId).queryKey
@@ -238,6 +239,13 @@ export function ImageAdminDetails({
     // 卡片，再按实际字段失效其余投影。存储迁移没有这份提交上下文，仍走完整回读。
     const capabilityModule = editorCapability.session?.module;
     if (!capabilityModule) throw new Error("图片编辑能力未加载");
+    if (commit === undefined) {
+      // 无 commit 的保存回调只来自存储迁移。先丢弃此前操作留下的相邻信息与
+      // 目标兜底，确保本轮 admin-info 成功时优先采用其最新显示名；只有本轮
+      // 回读失败时，才由迁移响应携带的服务端目标显示名收口。
+      setRefreshedAdminInfo(null);
+      setMigratedStorageLabel("");
+    }
     const committedForCurrent = commit?.updates.some(
       (update) => update.id === imageId
     ) === true;
@@ -260,13 +268,22 @@ export function ImageAdminDetails({
         queryClient,
         imageIds: [imageId],
         commit,
-        loadAdjacentData: admin
+        loadAdjacentData: admin || commit === undefined
           ? loadAdminInfoAfterInvalidation
           : undefined
       });
 
+    if (
+      adjacentDataResult.status === "fulfilled"
+      && adjacentDataResult.value?.id === imageId
+    ) {
+      setRefreshedAdminInfo(adjacentDataResult.value);
+    }
     if (snapshotResult.status === "rejected") {
       handlePreparationFailure(snapshotResult.reason);
+      if (adjacentDataResult.status === "rejected") {
+        handlePreparationFailure(adjacentDataResult.reason);
+      }
       throw snapshotResult.reason;
     }
     const response = snapshotResult.value;
@@ -283,9 +300,6 @@ export function ImageAdminDetails({
     if (adjacentDataResult.status === "rejected") {
       handlePreparationFailure(adjacentDataResult.reason);
       throw adjacentDataResult.reason;
-    }
-    if (adjacentDataResult.value?.id === imageId) {
-      setRefreshedAdminInfo(adjacentDataResult.value);
     }
   }, [
     admin,
@@ -328,10 +342,22 @@ export function ImageAdminDetails({
   const failed = !admin && query.isError && !query.isFetching;
   const fallback = unresolvedValue(admin, loading, failed);
   const md5 = refreshedAdminInfo?.md5 || adminItem?.md5 || adminInfo?.md5 || fallback;
+  const refreshedPublicStorageLabel = !admin
+    && !query.isStale
+    && !query.isError
+    ? adminInfo?.storage_label
+    : undefined;
+  // 迁移接口已经确认目标后端时，该显示名比打开详情时的首帧标签更新。
+  // 后台详情以本轮显式回读优先；公开详情复用 active Query 的失效刷新，只有
+  // Query 已成功收敛为 fresh 时才优先。刷新中或失败时不能退回旧存储名。
   const storage = refreshedAdminInfo?.storage_label
+    || refreshedPublicStorageLabel
+    || migratedStorageLabel
     || adminStorageLabel
     || adminInfo?.storage_label
-    || (adminItem ? storageBackendLabel(adminItem.storage_slug) : fallback);
+    || (adminListItem
+      ? storageBackendLabel(adminListItem.storage_slug)
+      : fallback);
   const createdAt =
     refreshedAdminInfo?.created_at ?? adminItem?.created_at ?? adminInfo?.created_at;
   const updatedAt =
@@ -414,7 +440,10 @@ export function ImageAdminDetails({
           onTrashCommitted={commitEditorTrashMembership}
           publicImageMembershipHandled={!admin}
           onSaved={refreshAfterSave}
-          onStorageMigrationSucceeded={setEditNotice}
+          onStorageMigrationSucceeded={(message, storageLabel) => {
+            setMigratedStorageLabel(storageLabel);
+            setEditNotice(message);
+          }}
           returnFocusRef={editorCapability.returnFocusRef}
         />
       )}

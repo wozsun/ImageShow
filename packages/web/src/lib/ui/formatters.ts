@@ -1,7 +1,7 @@
 import type { AdminImageListItem } from "../types.js";
 
 export function shortImageId(id: string) {
-  return `#${id.replace(/-/g, "").slice(-12)}`;
+  return `#${id.slice(-12)}`;
 }
 
 export function imageDisplayTitle(item: { id: string; title?: string }) {

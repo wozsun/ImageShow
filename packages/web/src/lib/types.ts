@@ -15,6 +15,7 @@ import type {
   Device,
   FacetOptionDto,
   GalleryImageCardDto,
+  ImageDetailItemDto,
   ImageDraftDto,
   ImageAdminInfoDto,
   PublicImageItemDto,
@@ -27,9 +28,12 @@ import type {
 } from "@imageshow/shared/browser";
 
 export type GalleryImageCard = GalleryImageCardDto;
+export type ImageDetailItem = ImageDetailItemDto;
 export type PublicImageItem = PublicImageItemDto;
 export type AdminImageDetailItem = AdminImageDetailItemDto;
 export type EditableImageSnapshot = EditableImageSnapshotDto;
+/** Editor baseline fields; the server-only Gallery subtitle stays authoritative. */
+export type ImageEditorItem = Omit<EditableImageSnapshotDto, "subtitle">;
 export type AdminImageListItem = AdminImageListItemDto;
 export type ImageAdminInfo = ImageAdminInfoDto;
 

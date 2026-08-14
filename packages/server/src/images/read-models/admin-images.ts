@@ -22,19 +22,9 @@ import {
   buildResolvedReadyImageListFilters
 } from "./list-filters.ts";
 import { fetchAdminImagePage } from "./pagination.ts";
+import { storageBackendLabel } from "../../storage/backend-label.ts";
 
 type AdminImageListQuery = z.infer<typeof adminImageListQuery>;
-
-const storageBackendLabels: Record<string, string> = { local: "本地存储" };
-
-function imageStorageLabel(row: {
-  storage_slug: string;
-  storage_display_name?: string | null;
-}) {
-  return row.storage_display_name?.trim()
-    || storageBackendLabels[row.storage_slug]
-    || row.storage_slug;
-}
 
 export async function listAdminImages(
   query: AdminImageListQuery
@@ -135,7 +125,7 @@ export async function getAdminImageInfo(id: string): Promise<ImageAdminInfoDto> 
   return {
     id: row.id,
     md5: row.md5,
-    storage_label: imageStorageLabel(row),
+    storage_label: storageBackendLabel(row),
     created_at: row.created_at ?? "",
     updated_at: row.updated_at ?? ""
   };

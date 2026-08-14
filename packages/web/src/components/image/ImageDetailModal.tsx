@@ -16,6 +16,7 @@ import type {
   AdminImageDetailItem,
   EditableImageSnapshot,
   AdminImageListItem,
+  ImageDetailItem,
   PublicImageItem
 } from "../../lib/types.js";
 import { useGalleryFacets, useSiteConfig } from "../../lib/api/site-data.js";
@@ -77,10 +78,10 @@ class ImageAdminDetailsModuleBoundary extends Component<{
   }
 }
 
-function applyEditedSnapshot<T extends PublicImageItem>(
+function applyEditedSnapshot<T extends ImageDetailItem>(
   item: T,
   snapshot: EditableImageSnapshot | null
-) {
+): T {
   if (snapshot?.id !== item.id) return item;
   return {
     ...item,
@@ -89,7 +90,7 @@ function applyEditedSnapshot<T extends PublicImageItem>(
       snapshot.original,
       snapshot.object_url
     )
-  };
+  } as T;
 }
 
 function isAdminImageListItem(
@@ -118,7 +119,7 @@ type ImageDetailModalProps =
       item: AdminImageDetailItem | AdminImageListItem;
       onClose: () => void;
       admin: true;
-      storageLabel?: string;
+      storageLabel: string;
       onTrashCommitted?: (
         imageId: string
       ) => void | Promise<void>;
@@ -140,10 +141,7 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
   const adminListItem = adminItem && isAdminImageListItem(adminItem)
     ? adminItem
     : null;
-  const adminStorageLabel = props.admin
-    && adminItem?.storage_slug === props.item.storage_slug
-    ? props.storageLabel
-    : undefined;
+  const adminStorageLabel = props.admin ? props.storageLabel : undefined;
   const authQuery = useAuthMe();
   const showAdminDetails = admin
     || authQuery.data?.authenticated === true;

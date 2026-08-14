@@ -36,6 +36,7 @@ export type ImageStorageMigrationItemResultDto =
 export type ImageStorageMigrationResponseDto = {
   migrated: number;
   failed: number;
+  storage_label: string;
   results: ImageStorageMigrationItemResultDto[];
 };
 

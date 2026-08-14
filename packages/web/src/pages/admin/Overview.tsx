@@ -231,6 +231,7 @@ export function Overview({ canManageStorage }: { canManageStorage: boolean }) {
           item={detailCapability.item}
           onClose={detailCapability.close}
           returnFocusRef={detailCapability.returnFocusRef}
+          storageLabel={detailCapability.item.storage_label}
           admin
         />
       )}

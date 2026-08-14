@@ -39,8 +39,8 @@ export function useStorageOptions(enabled = true) {
   });
 }
 
-// 没有现成列表的调用方（图片列表卡片、图片详情）用这个 hook：图片载荷里只有 storage_slug、没有
-// display_name，于是复用上面的共享查询取后端列表并套用解析函数。enabled=false 时回退到 slug 标签。
+// 图片管理列表用这个 hook：列表载荷只有 storage_slug、没有 display_name，于是复用上面的共享
+// 查询取后端列表并套用解析函数。enabled=false 时回退到 slug 标签。
 export function useStorageNameResolver(enabled = true) {
   const { data } = useStorageOptions(enabled);
   return useMemo(() => storageNameResolver(data?.backends ?? []), [data]);

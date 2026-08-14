@@ -39,7 +39,7 @@ export function ImageStorageMigrationDialog({
   returnFocusRef: RefObject<HTMLElement | null>;
   onClose: () => void;
   onSaved: () => void | Promise<void>;
-  onSucceeded: (message: string) => void;
+  onSucceeded: (message: string, storageLabel: string) => void;
 }) {
   const single = imageIds.length === 1;
   const { data } = useStorageOptions();
@@ -82,6 +82,7 @@ export function ImageStorageMigrationDialog({
 
   const migrate = async () => {
     let completedMessage = "";
+    let completedStorageLabel = "";
     const succeeded = await status.run(async () => {
       setError("");
       if (!targetAvailable) {
@@ -136,8 +137,7 @@ export function ImageStorageMigrationDialog({
         );
         return false;
       }
-      const targetLabel = options.find((option) => option.value === target)?.label
-        ?? target;
+      const targetLabel = response.storage_label;
       const message = single
         ? response.migrated
           ? `图片已迁移到${targetLabel}`
@@ -146,15 +146,18 @@ export function ImageStorageMigrationDialog({
             unchanged ? `，${unchanged} 张未变化` : ""
           }`;
       completedMessage = message;
+      completedStorageLabel = targetLabel;
       return true;
     });
-    return succeeded ? completedMessage : "";
+    return succeeded
+      ? { message: completedMessage, storageLabel: completedStorageLabel }
+      : null;
   };
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const message = await migrate();
-    if (message) onSucceeded(message);
+    const result = await migrate();
+    if (result) onSucceeded(result.message, result.storageLabel);
   };
 
   return (

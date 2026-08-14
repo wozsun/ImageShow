@@ -3,11 +3,12 @@ import type {
 } from "@imageshow/shared/browser";
 import type {
   EditableImageSnapshot,
-  AdminImageListItem
+  AdminImageListItem,
+  ImageEditorItem
 } from "../../../lib/types.js";
 
 export type ImageEditorSource = Pick<AdminImageListItem, "id"> &
-  Partial<EditableImageSnapshot> &
+  Partial<ImageEditorItem> &
   Partial<Pick<AdminImageListItem, "deleted_at" | "status">>;
 
 export type ImageEditorTarget = {

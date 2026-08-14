@@ -14,13 +14,19 @@ import type { DatabaseReader } from "../core/database-pools.ts";
 import type {
   PublicDatabaseReadAccess
 } from "../core/public-db-fallback.ts";
+import { storageBackendLabel } from "../storage/backend-label.ts";
 import { listStorageBackends } from "../storage/backend-registry.ts";
 import { publicImageUrls } from "../storage/public-urls.ts";
 import { getTagsForImages } from "../tags/query.ts";
+import { getTagVocab, getThemeVocab } from "../vocab/vocab-cache.ts";
+import { createGallerySubtitleFormatter } from "./gallery-card-display.ts";
 import { hasDistinctOriginalUrl } from "./original-link.ts";
 
 type DatabaseNumber = number | string;
 type DatabaseTimestamp = string | Date;
+type GallerySubtitleFormatter = ReturnType<
+  typeof createGallerySubtitleFormatter
+>;
 
 type AdminImageCommonRecord = {
   id: string;
@@ -54,6 +60,7 @@ export type ImageRecordWithTags = ImageRecord & { tags: string[] };
 /** Exact row returned by the compact overview detail projection. */
 export type AdminImageDetailRecordWithTags = AdminImageCommonRecord & {
   md5: string;
+  storage_display_name: string;
   image_time: DatabaseTimestamp;
   created_at: DatabaseTimestamp;
   updated_at: DatabaseTimestamp;
@@ -234,10 +241,9 @@ async function presentAdminImageBase(
 
 async function adminImageListItem(
   row: ImageRecord,
-  tags?: string[]
+  tags: string[]
 ): Promise<AdminImageListItemDto> {
-  const tagList = tags ?? (await getTagsForImages([row.id])).get(row.id) ?? [];
-  const base = await presentAdminImageBase(row, tagList);
+  const base = await presentAdminImageBase(row, tags);
   return {
     ...base,
     original: row.original,
@@ -254,10 +260,14 @@ async function adminImageListItem(
 }
 
 export function importCommitImage(row: ImageRecord) {
-  return adminImageListItem(row);
+  return getTagsForImages([row.id]).then((tagMap) => adminImageListItem(
+    row,
+    tagMap.get(row.id) ?? []
+  ));
 }
 
 export async function adminImageListItems(rows: ImageRecord[]) {
+  if (!rows.length) return [];
   const tagMap = await getTagsForImages(rows.map((row) => row.id));
   return Promise.all(rows.map((row) => adminImageListItem(
     row,
@@ -265,19 +275,31 @@ export async function adminImageListItems(rows: ImageRecord[]) {
   )));
 }
 
-export function adminImageListItemsWithTags(rows: ImageRecordWithTags[]) {
-  return Promise.all(rows.map((row) => adminImageListItem(row, row.tags)));
+export async function adminImageListItemsWithTags(rows: ImageRecordWithTags[]) {
+  if (!rows.length) return [];
+  return Promise.all(rows.map((row) => adminImageListItem(
+    row,
+    row.tags
+  )));
 }
 
-export function adminImageDetailItemsWithTags(
+export async function adminImageDetailItemsWithTags(
   rows: AdminImageDetailRecordWithTags[]
 ) {
+  if (!rows.length) return [];
   return Promise.all(rows.map(async (row): Promise<AdminImageDetailItemDto> => {
-    const base = await presentAdminImageBase(row, row.tags);
+    const {
+      storage_slug: storageSlug,
+      ...base
+    } = await presentAdminImageBase(row, row.tags);
     return {
       ...base,
       diff_original: hasDistinctOriginalUrl(row.original, base.object_url),
       md5: row.md5,
+      storage_label: storageBackendLabel({
+        storage_slug: storageSlug,
+        storage_display_name: row.storage_display_name
+      }),
       image_time: serializeTimestamp(row.image_time),
       created_at: serializeTimestamp(row.created_at),
       updated_at: serializeTimestamp(row.updated_at)
@@ -285,13 +307,16 @@ export function adminImageDetailItemsWithTags(
   }));
 }
 
-export function editableImageSnapshotsWithTags(
+export async function editableImageSnapshotsWithTags(
   rows: EditableImageSnapshotRecordWithTags[]
 ) {
+  if (!rows.length) return [];
+  const gallerySubtitle = await loadGallerySubtitleFormatter();
   return Promise.all(rows.map(async (row): Promise<EditableImageSnapshotDto> => {
     const base = await presentAdminImageBase(row, row.tags);
     return {
       ...base,
+      subtitle: gallerySubtitle({ theme: row.theme, tags: row.tags }),
       original: row.original,
       image_size: Number(row.image_size),
       object_key: row.object_key
@@ -314,13 +339,15 @@ export async function publicImageDetail(
 
 async function publicImageCard(
   row: PublicImageCardRecord,
-  tags: string[] = [],
-  access: PublicDatabaseReadAccess = {}
+  tags: string[],
+  access: PublicDatabaseReadAccess,
+  gallerySubtitle: GallerySubtitleFormatter
 ): Promise<GalleryImageCardDto> {
   const { urls } = await publicUrlsForRow(row, access);
   const original = row.original;
   return {
     id: row.id,
+    subtitle: gallerySubtitle({ theme: row.theme, tags }),
     device: row.device,
     brightness: row.brightness,
     theme: row.theme,
@@ -339,13 +366,18 @@ export async function publicImageCards(
   rows: PublicImageCardRecord[],
   reader?: DatabaseReader
 ) {
+  if (!rows.length) return [];
   const database = { reader };
-  const tagMap = await getTagsForImages(rows.map((row) => row.id), reader);
-  if (rows.length) await listStorageBackends(database);
+  const [tagMap, gallerySubtitle] = await Promise.all([
+    getTagsForImages(rows.map((row) => row.id), reader),
+    loadGallerySubtitleFormatter(database),
+    listStorageBackends(database)
+  ]);
   return Promise.all(rows.map((row) => publicImageCard(
     row,
     tagMap.get(row.id) ?? [],
-    database
+    database,
+    gallerySubtitle
   )));
 }
 
@@ -354,11 +386,26 @@ export function publicImageCardsWithTags(
   access: PublicDatabaseReadAccess = {}
 ) {
   return (async () => {
-    if (rows.length) await listStorageBackends(access);
+    if (!rows.length) return [];
+    const [gallerySubtitle] = await Promise.all([
+      loadGallerySubtitleFormatter(access),
+      listStorageBackends(access)
+    ]);
     return Promise.all(rows.map((row) => publicImageCard(
       row,
       row.tags,
-      access
+      access,
+      gallerySubtitle
     )));
   })();
+}
+
+async function loadGallerySubtitleFormatter(
+  access: PublicDatabaseReadAccess = {}
+) {
+  const [themes, tags] = await Promise.all([
+    getThemeVocab(access),
+    getTagVocab(access)
+  ]);
+  return createGallerySubtitleFormatter(themes, tags);
 }

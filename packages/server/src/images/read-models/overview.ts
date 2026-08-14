@@ -54,7 +54,12 @@ async function buildOverviewStats(
       LIMIT 8
     `),
     pool.query(
-      `SELECT ${adminImageDetailPresentationColumnsWithTags}
+      `SELECT ${adminImageDetailPresentationColumnsWithTags},
+              COALESCE((
+                SELECT sb.display_name
+                  FROM storage_backend sb
+                 WHERE sb.slug = metadata.storage_slug
+              ), '') AS storage_display_name
          FROM metadata
         WHERE status='ready'
         ORDER BY created_at DESC, id DESC
