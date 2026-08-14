@@ -104,7 +104,7 @@ healthcheck 只读现有配置快照，密码恢复不初始化运行时配置�
 | `core/http/` | HTTP 响应与响应头、请求来源和请求体限制、压缩阈值、条件请求、静态响应与 Range 解析。 |
 | `config/` | 部署环境、首次播种、运行时配置 schema、无导入副作用的文件读写与显式进程内 store，以及配置包。 |
 | `routes/` | HTTP 方法、鉴权、CSRF、输入解析和响应投影；业务工作委托给领域模块。 |
-| `images/` | 图片读写、展示投影、分类与元数据变更、回收站和缩略图；`ready-cache/` 拥有统一 Redis rich 投影、筛选、统计、精确同步与重建，`imports/` 拥有完整导入会话生命周期及清理任务，`read-models/` 承载 PostgreSQL 降级读模型。 |
+| `images/` | 图片读写、展示投影、分类与元数据变更、回收站和缩略图；`page-window.ts` 唯一计算安全数字页窗口，`ready-cache/` 拥有统一 Redis rich 投影、筛选、统计、精确同步与重建，`imports/` 拥有完整导入会话生命周期及清理任务，`read-models/` 承载 PostgreSQL cursor / offset 读模型。 |
 | `storage/` | local、S3 driver 及无环工厂；注册表缓存与 driver、管理读模型、配置变更、探测和占用统计分开维护，并拥有对象访问、强摘要传输、位置锁、迁移及 `move.cleanup` 仓储与 handler。 |
 | `random/` | 随机查询校验、设备轴推断、Redis 8 Array 最近历史、定向 id 与有界 pivot 普通随机 PG 降级查询及随机出口编排；Redis 候选投影、筛选与重建统一由 `images/ready-cache/` 提供。 |
 | `jobs/` | 仅拥有通用 `background_job` 生命周期、小型类型分派、公平调度 Worker，以及集中管理任务中止、期限、续租和有界排空的执行协调器；各领域拥有自己的 handler、payload 和结果语义。 |
@@ -117,6 +117,8 @@ healthcheck 只读现有配置快照，密码恢复不初始化运行时配置�
 拥有主查询与 advisory lock 两个连接池；`database-transactions.ts`、
 `database-advisory-locks.ts` 和 `database-schema.ts` 分别拥有事务、锁与干净安装编排；
 `database-readiness.ts` 只读核对当前 SQL 真正依赖的最小结构、行为约束、权限与稳定种子。
+后台数字页使用 `database-transactions.ts` 的 read-only repeatable-read 事务，让 COUNT、
+越界判断、metadata 与 tags 共享一个 client 和快照；事务后 formatter 不得借默认 pool。
 schema 初始化和管理员播种直接使用主查询池，不为不受支持的第二应用进程取得启动锁；图片、
 词表、导入、存储位置等运行期领域锁仍使用独立 advisory lock 池。
 公开降级读取由 `public-db-admission.ts` 统一管理一个 FIFO 容量与等待队列，
@@ -175,6 +177,12 @@ Web 的 `import-status-subscription.ts` 只维护按入队批次有界的前端�
   边界直接映射为 404，显式维修只属于 `checks/storage-thumbnail-repair.ts`，并由
   `checks/storage-maintenance.ts` 在独占维护编排中调用。
 
+`images/ready-cache/query.ts` 编排筛选索引解析与 cursor / page 定位适配，
+`ready-cache/ordered-window.ts` 独占 ZCARD、精确 ZSET 范围、HMGET、水合及前后有效性校验；
+公开适配器生成下一 cursor，后台适配器只消费 `PageWindow.start`。
+`images/read-models/pagination.ts` 以同一行读取框架承载 PostgreSQL cursor 与 offset，但保留
+公开卡片和后台管理字段各自的最小 projection；后台先截取窗口，再只为最终行投影 tags。
+
 领域模块可以依赖 `core/` 和 `config/`，但基础设施不能反向导入具体路由。跨领域调用直接
 指向对方表达职责的模块，不通过泛化 `service`、`storage` 或 barrel 隐藏真实依赖，也不能
 通过路由或测试工具绕行。PostgreSQL 始终是业务真相源；Redis 模块只实现可重建读模型与
@@ -218,6 +226,10 @@ hooks ──► lib
   `dialog-touch-boundary.ts` 只管理 capture 触摸生命周期；二者只认识当前顶层 dialog frame
   与 DOM 滚动能力，不依赖页面、角色或路由。
 - `pages/` 保存路由页面与页面级编排，页面专属组件、状态机和 Hook 就近维护。
+- `pages/admin/useImageAdminPageNavigation.ts` 是后台图库、无主题与回收站数字页的唯一查询
+  owner，只保存规范化 scope 与 page，并让 React Query 处理取消、键隔离、90 秒新鲜缓存和
+  重试；同目录 `image-admin-list-query.ts` 只构造规范化 scope、query key 与数字页 URL，页面
+  不再维护 cursorHistory、补链 intent 或专用 `image-page-navigation.ts` 模型。
 - `AppRoutes.tsx` 将普通与嵌入路径映射到同一 `HomePage` / `GalleryPage`；页面参数只
   决定是否挂载主导航，不能复制公开页实现或以 CSS 隐藏导航。服务端仍独立决定嵌入
   文档是否存在并输出父页面白名单，前端开关只负责已加载 SPA 内的路由收敛。

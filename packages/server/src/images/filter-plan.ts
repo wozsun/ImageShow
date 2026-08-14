@@ -7,9 +7,7 @@ import {
 import { resolveAuthorSlugs } from "../authors/query.ts";
 import { ApiError } from "../core/api-error.ts";
 import { splitSelectors } from "../core/selectors.ts";
-import type {
-  PublicDatabaseReadAccess
-} from "../core/public-db-fallback.ts";
+import type { VocabularyReadAccess } from "../vocab/vocab-cache.ts";
 import { resolveTagNames } from "../tags/query.ts";
 import { resolveThemeSlugs } from "../themes/query.ts";
 
@@ -97,17 +95,17 @@ async function resolveSelector(
 
 export async function resolveImageFilterPlan(
   input: ImageFilterInput,
-  database: PublicDatabaseReadAccess = {}
+  access: VocabularyReadAccess = {}
 ) {
   const [theme, tag, author] = await Promise.all([
     resolveSelector(input.t, "theme", (terms) => (
-      resolveThemeSlugs(terms, database)
+      resolveThemeSlugs(terms, access)
     )),
     resolveSelector(input.tag, "tag", (terms) => (
-      resolveTagNames(terms, database)
+      resolveTagNames(terms, access)
     )),
     resolveSelector(input.a, "author", (terms) => (
-      resolveAuthorSlugs(terms, database)
+      resolveAuthorSlugs(terms, access)
     ))
   ]);
   return createImageFilterPlan({

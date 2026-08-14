@@ -5,12 +5,16 @@ import type {
   ImageAdminInfoDto
 } from "@imageshow/shared/browser";
 import { pool } from "../../core/database-pools.ts";
+import {
+  withReadOnlyRepeatableReadTransaction
+} from "../../core/database-transactions.ts";
 import { withAdvisoryLocks } from "../../core/database-advisory-locks.ts";
 import { ApiError } from "../../core/api-error.ts";
 import { adminImageListQuery } from "../../core/validation.ts";
 import { imageUpdateLockRequests } from "../image-update-lock.ts";
 import { resolveImageFilterPlan } from "../filter-plan.ts";
-import { readReadyImagePage } from "../ready-cache/query.ts";
+import { readReadyImagePageWindow } from "../ready-cache/query.ts";
+import { createPageWindow } from "../page-window.ts";
 import {
   adminImageListItemsWithTags,
   editableImagePresentationColumnsWithTags,
@@ -21,7 +25,7 @@ import {
   buildImageListFilters,
   buildResolvedReadyImageListFilters
 } from "./list-filters.ts";
-import { fetchAdminImagePage } from "./pagination.ts";
+import { fetchAdminImageOffsetRows } from "./pagination.ts";
 import { storageBackendLabel } from "../../storage/backend-label.ts";
 
 type AdminImageListQuery = z.infer<typeof adminImageListQuery>;
@@ -29,16 +33,17 @@ type AdminImageListQuery = z.infer<typeof adminImageListQuery>;
 export async function listAdminImages(
   query: AdminImageListQuery
 ): Promise<AdminImageListResponseDto> {
+  const window = createPageWindow(query.page, query.limit);
   let readyPlan: Awaited<ReturnType<typeof resolveImageFilterPlan>>
     | null = null;
   if (query.status === "ready") {
-    readyPlan = await resolveImageFilterPlan(query);
-    const cached = await readReadyImagePage(
+    readyPlan = await resolveImageFilterPlan(query, { redisMode: "required" });
+    const cached = await readReadyImagePageWindow(
       readyPlan,
-      query.limit,
-      query.cursor
+      window
     );
-    if (cached.cached) {
+    if (cached.status === "redis_unavailable") throw cached.error;
+    if (cached.status === "hit") {
       const images = await adminImageListItemsWithTags(cached.value.items.map((item) => ({
         ...item,
         status: "ready",
@@ -46,26 +51,38 @@ export async function listAdminImages(
       })));
       return {
         items: images,
-        total: cached.value.total,
-        next_cursor: cached.value.nextCursor
+        total: cached.value.total
       };
     }
   }
   const { params, where } = readyPlan
     ? buildResolvedReadyImageListFilters(readyPlan)
-    : await buildImageListFilters(query);
+    : await buildImageListFilters(query, { redisMode: "required" });
 
-  const [countResult, page] = await Promise.all([
-    pool.query(
-      `SELECT count(*)::int AS count FROM metadata WHERE ${where.join(" AND ")}`,
-      [...params]
-    ),
-    fetchAdminImagePage([...where], [...params], query.limit, query.cursor)
-  ]);
+  const snapshot = await withReadOnlyRepeatableReadTransaction(
+    async (client) => {
+      const countResult = await client.query(
+        `SELECT count(*)::text AS count FROM metadata WHERE ${where.join(" AND ")}`,
+        [...params]
+      );
+      const total = Number(countResult.rows[0]?.count ?? 0);
+      if (!Number.isSafeInteger(total) || total < 0) {
+        throw new Error("PostgreSQL returned an invalid image count");
+      }
+      const rows = window.start >= total
+        ? []
+        : await fetchAdminImageOffsetRows(
+            [...where],
+            [...params],
+            window,
+            client
+          );
+      return { rows, total };
+    }
+  );
   return {
-    items: page.items,
-    total: Number(countResult.rows[0]?.count ?? 0),
-    next_cursor: page.nextCursor
+    items: await adminImageListItemsWithTags(snapshot.rows),
+    total: snapshot.total
   };
 }
 

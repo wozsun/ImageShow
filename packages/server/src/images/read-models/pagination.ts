@@ -4,12 +4,13 @@ import {
 } from "../../core/database-pools.ts";
 import { decodeImageCursor, encodeImageCursor } from "../cursor.ts";
 import {
-  adminImageListItems,
   adminImageListPresentationColumns,
+  adminImageListPresentationColumnsWithTags,
   publicImageCards,
-  type ImageRecord,
+  type ImageRecordWithTags,
   type PublicImageCardRecord
 } from "../presenter.ts";
+import type { PageWindow } from "../page-window.ts";
 
 const publicImageCardColumns = [
   "id",
@@ -28,61 +29,82 @@ const publicImageCardColumns = [
   "status"
 ].join(", ");
 
-async function fetchImageRows(
+type ImageRowPosition =
+  | { kind: "cursor"; cursor?: string; limit: number }
+  | { kind: "offset"; window: PageWindow };
+
+type DeferredProjection = {
+  sourceColumns: string;
+};
+
+async function fetchImageRows<Row>(
   where: string[],
   params: unknown[],
-  limit: number,
-  cursor: string | undefined,
   columns: string,
-  reader: DatabaseReader
+  reader: DatabaseReader,
+  position: ImageRowPosition,
+  deferredProjection?: DeferredProjection
 ) {
-  if (cursor !== undefined) {
-    const decoded = decodeImageCursor(cursor);
+  if (position.kind === "cursor" && position.cursor !== undefined) {
+    const decoded = decodeImageCursor(position.cursor);
     params.push(decoded.imageTime, decoded.id);
     where.push(
       `(image_time, id) < ($${params.length - 1}::timestamptz, $${params.length}::uuid)`
     );
   }
-  params.push(limit + 1);
-  const result = await reader.query(
-    `SELECT ${columns}, image_time::text AS cursor_image_time
-     FROM metadata
+  const cursorPosition = position.kind === "cursor";
+  if (cursorPosition) {
+    params.push(position.limit + 1);
+  } else {
+    params.push(position.window.limit, position.window.start);
+  }
+  const limitParameter = cursorPosition ? params.length : params.length - 1;
+  const offsetClause = cursorPosition ? "" : ` OFFSET $${params.length}`;
+  const orderedWindow = `FROM metadata
      WHERE ${where.join(" AND ")}
      ORDER BY image_time DESC, id DESC
-     LIMIT $${params.length}`,
-    params
-  );
-  const visibleRows = result.rows.slice(0, limit) as Array<{
+     LIMIT $${limitParameter}${offsetClause}`;
+  const sql = deferredProjection && !cursorPosition
+    ? `SELECT ${columns}
+         FROM (
+           SELECT ${deferredProjection.sourceColumns}
+             ${orderedWindow}
+         ) metadata
+        ORDER BY image_time DESC, id DESC`
+    : `SELECT ${columns}${cursorPosition ? ", image_time::text AS cursor_image_time" : ""}
+       ${orderedWindow}`;
+  const result = await reader.query(sql, params);
+  const limit = cursorPosition ? position.limit : position.window.limit;
+  const visibleRows = result.rows.slice(0, limit) as Row[];
+  const hasNext = cursorPosition && result.rows.length > limit;
+  const last = visibleRows.at(-1) as (Row & {
     id: string;
     cursor_image_time: string;
-  }>;
-  const hasNext = result.rows.length > limit;
-  const last = visibleRows.at(-1);
+  }) | undefined;
   return {
     rows: visibleRows,
     hasNext,
-    nextCursor: hasNext && last ? encodeImageCursor(last) : null
+    nextCursor: cursorPosition && hasNext && last
+      ? encodeImageCursor(last)
+      : null
   };
 }
 
-export async function fetchAdminImagePage(
+export async function fetchAdminImageOffsetRows(
   where: string[],
   params: unknown[],
-  limit: number,
-  cursor?: string,
+  window: PageWindow,
   reader: DatabaseReader = pool
 ) {
-  const page = await fetchImageRows(
+  const page = await fetchImageRows<ImageRecordWithTags>(
     where,
     params,
-    limit,
-    cursor,
-    adminImageListPresentationColumns,
-    reader
+    adminImageListPresentationColumnsWithTags,
+    reader,
+    { kind: "offset", window },
+    { sourceColumns: adminImageListPresentationColumns }
   );
-  const rows = page.rows as Array<ImageRecord & { cursor_image_time: string }>;
-  const items = await adminImageListItems(rows);
-  return { rows, items, nextCursor: page.nextCursor };
+  return page.rows;
 }
 
 export async function fetchPublicImageCardPage(
@@ -92,15 +114,16 @@ export async function fetchPublicImageCardPage(
   cursor?: string,
   reader: DatabaseReader = pool
 ) {
-  const page = await fetchImageRows(
+  const page = await fetchImageRows<
+    PublicImageCardRecord & { cursor_image_time: string }
+  >(
     where,
     params,
-    limit,
-    cursor,
     publicImageCardColumns,
-    reader
+    reader,
+    { kind: "cursor", cursor, limit }
   );
-  const rows = page.rows as Array<PublicImageCardRecord & { cursor_image_time: string }>;
+  const rows = page.rows;
   const items = await publicImageCards(rows, reader);
   return { rows, items, nextCursor: page.nextCursor };
 }

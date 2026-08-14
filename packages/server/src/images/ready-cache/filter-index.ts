@@ -2,6 +2,10 @@ import { coalesce } from "../../core/coalesce.ts";
 import { logger } from "../../core/logger.ts";
 import { redis } from "../../core/redis-client.ts";
 import { execRedisPipeline } from "../../core/redis-pipeline.ts";
+import {
+  requireOperationalRedis,
+  runRequiredRedisCommand
+} from "../../core/runtime-availability.ts";
 import type { ImageFilterPlan } from "../filter-plan.ts";
 import {
   readReadyImageAttributeIndex,
@@ -39,11 +43,97 @@ export type ReadyImageFilterIndexValidation =
   | "revision_changed"
   | "invalid";
 
+type ReadyImageFilterIndexResolution =
+  | {
+      mode: "fallback";
+      signal?: AbortSignal;
+      background: boolean;
+    }
+  | {
+      mode: "required";
+    };
+
 function currentRevision() {
   const status = getReadyImageCacheCoordinatorStatus();
   return status.readable && status.meta?.state === "ready"
     ? status.meta.appliedRevision
     : null;
+}
+
+async function resolveReadyImageFilterIndexWithMode(
+  plan: ImageFilterPlan,
+  options: ReadyImageFilterIndexResolution
+): Promise<ReadyImageFilterIndex | null> {
+  const required = options.mode === "required";
+  const signal = options.mode === "fallback" ? options.signal : undefined;
+  const direct = resolveDirectReadyImageFilterKey(plan);
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    signal?.throwIfAborted();
+    if (required) await requireOperationalRedis();
+    if (!readyImageCacheIsReadable()) {
+      if (required) await requireOperationalRedis();
+      return null;
+    }
+    const revision = currentRevision();
+    if (!revision) {
+      if (required) await requireOperationalRedis();
+      return null;
+    }
+    if (direct === READY_IMAGE_ALL_INDEX_KEY) {
+      const status = getReadyImageCacheCoordinatorStatus();
+      if (status.meta?.appliedRevision !== revision) continue;
+      return {
+        kind: "core",
+        key: direct,
+        revision,
+        count: status.meta.itemCount,
+        metaKey: null,
+        instanceToken: null
+      };
+    }
+    if (direct) {
+      const attribute = required
+        ? await runRequiredRedisCommand(() => (
+            readReadyImageAttributeIndex(direct, revision)
+          ))
+        : await resolveReadyImageAttributeIndex(
+            direct,
+            revision,
+            signal,
+            options.background
+          );
+      if (currentRevision() !== revision) continue;
+      if (attribute) return { kind: "attribute", ...attribute };
+      if (required) {
+        scheduleReadyImageFilterIndexBuild(plan);
+        return null;
+      }
+      continue;
+    }
+    const cached = required
+      ? await runRequiredRedisCommand(() => (
+          readReadyImageFilterIndex(plan.signature, revision)
+        ))
+      : await readReadyImageFilterIndex(plan.signature, revision);
+    if (currentRevision() !== revision) continue;
+    if (cached) return cached;
+    if (required) {
+      scheduleReadyImageFilterIndexBuild(plan);
+      return null;
+    }
+    const built = await coalesce(
+      `ready-image-filter:${plan.signature}`,
+      () => buildReadyImageFilterIndex(
+        plan,
+        revision,
+        signal,
+        options.background
+      )
+    );
+    if (currentRevision() !== revision) continue;
+    if (built) return built;
+  }
+  return null;
 }
 
 export async function resolveReadyImageFilterIndex(
@@ -52,43 +142,11 @@ export async function resolveReadyImageFilterIndex(
   background = false
 ): Promise<ReadyImageFilterIndex | null> {
   try {
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      signal?.throwIfAborted();
-      if (!readyImageCacheIsReadable()) return null;
-      const revision = currentRevision();
-      if (!revision) return null;
-      const direct = resolveDirectReadyImageFilterKey(plan);
-      if (direct === READY_IMAGE_ALL_INDEX_KEY) {
-        const status = getReadyImageCacheCoordinatorStatus();
-        if (status.meta?.appliedRevision !== revision) continue;
-        return {
-          kind: "core",
-          key: direct,
-          revision,
-          count: status.meta.itemCount,
-          metaKey: null,
-          instanceToken: null
-        };
-      }
-      if (direct) {
-        const attribute = await resolveReadyImageAttributeIndex(
-          direct,
-          revision,
-          signal,
-          background
-        );
-        if (attribute) return { kind: "attribute", ...attribute };
-        continue;
-      }
-      const cached = await readReadyImageFilterIndex(plan.signature, revision);
-      if (cached) return cached;
-      const built = await coalesce(
-        `ready-image-filter:${plan.signature}`,
-        () => buildReadyImageFilterIndex(plan, revision, signal, background)
-      );
-      if (built) return built;
-    }
-    return null;
+    return await resolveReadyImageFilterIndexWithMode(plan, {
+      mode: "fallback",
+      signal,
+      background
+    });
   } catch (error) {
     if (signal?.aborted) throw signal.reason ?? error;
     if (isReadyImageCoreCacheError(error)) throw error;
@@ -107,6 +165,22 @@ export async function resolveReadyImageFilterIndex(
     });
     return null;
   }
+}
+
+function scheduleReadyImageFilterIndexBuild(plan: ImageFilterPlan) {
+  void resolveReadyImageFilterIndex(plan, undefined, true).catch(() => undefined);
+}
+
+/**
+ * Resolves only already-published indexes for an admin request. Every Redis
+ * read that belongs to the response is strict; a cache miss schedules the
+ * existing derived-index builder outside the response and permits the caller
+ * to use its PostgreSQL fallback.
+ */
+export async function resolveReadyImageFilterIndexForRequiredRead(
+  plan: ImageFilterPlan
+): Promise<ReadyImageFilterIndex | null> {
+  return resolveReadyImageFilterIndexWithMode(plan, { mode: "required" });
 }
 
 export async function validateReadyImageFilterIndex(

@@ -3,6 +3,7 @@ import {
   resolveImageFilterPlan,
   type ImageFilterPlan
 } from "../filter-plan.ts";
+import type { VocabularyReadAccess } from "../../vocab/vocab-cache.ts";
 import { buildImageFilterSql } from "./image-filter-sql.ts";
 
 export type ImageListFilterQuery = {
@@ -19,8 +20,11 @@ export type ImageListFilterQuery = {
  * filters. Pagination and total counts can clone the returned arrays, but
  * must not rebuild only a subset of these clauses.
  */
-export async function buildImageListFilters(query: ImageListFilterQuery) {
-  const plan = await resolveImageFilterPlan(query);
+export async function buildImageListFilters(
+  query: ImageListFilterQuery,
+  access: VocabularyReadAccess = {}
+) {
+  const plan = await resolveImageFilterPlan(query, access);
   return buildImageFilterSql({
     status: query.status,
     plan

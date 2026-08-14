@@ -1,20 +1,21 @@
-import { getAdminAuthorList, getAuthorVocab } from "../vocab/vocab-cache.ts";
+import {
+  getAdminAuthorList,
+  getAuthorVocab,
+  type VocabularyReadAccess
+} from "../vocab/vocab-cache.ts";
 import { resolveSlugs, resolveTermMap } from "../core/term-resolve.ts";
 import type { AuthorDto } from "@imageshow/shared/browser";
-import type {
-  PublicDatabaseReadAccess
-} from "../core/public-db-fallback.ts";
 
 export function resolveAuthorTermMap(
   terms: string[],
-  access: PublicDatabaseReadAccess = {}
+  access: VocabularyReadAccess = {}
 ): Promise<Map<string, string>> {
   return resolveTermMap(() => getAuthorVocab(access), terms);
 }
 
 export function resolveAuthorSlugs(
   terms: string[],
-  access: PublicDatabaseReadAccess = {}
+  access: VocabularyReadAccess = {}
 ): Promise<string[]> {
   return resolveSlugs(() => getAuthorVocab(access), terms);
 }

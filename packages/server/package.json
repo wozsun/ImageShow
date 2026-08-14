@@ -1,6 +1,6 @@
 {
   "name": "@imageshow/server",
-  "version": "4.11.1",
+  "version": "4.12.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,10 +11,10 @@
     "start": "node --env-file-if-exists=../../.env dist/index.js"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1110.0",
-    "@hono/node-server": "^2.1.0",
+    "@aws-sdk/client-s3": "^3.1111.0",
+    "@hono/node-server": "^2.1.1",
     "@imageshow/shared": "file:../shared",
-    "@smithy/node-http-handler": "^4.10.0",
+    "@smithy/node-http-handler": "^4.11.0",
     "altcha-lib": "^2.3.2",
     "file-type": "^22.0.1",
     "hono": "^4.13.2",

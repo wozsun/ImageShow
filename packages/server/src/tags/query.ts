@@ -2,12 +2,13 @@ import {
   pool,
   type DatabaseReader
 } from "../core/database-pools.ts";
-import { getAdminTagList, getTagVocab } from "../vocab/vocab-cache.ts";
+import {
+  getAdminTagList,
+  getTagVocab,
+  type VocabularyReadAccess
+} from "../vocab/vocab-cache.ts";
 import { resolveSlugs, resolveTermMap } from "../core/term-resolve.ts";
 import type { TagDto } from "@imageshow/shared/browser";
-import type {
-  PublicDatabaseReadAccess
-} from "../core/public-db-fallback.ts";
 
 export async function getTagsForImages(
   ids: string[],
@@ -36,14 +37,14 @@ export async function listTagsWithCounts(): Promise<TagDto[]> {
 
 export function resolveTagTermMap(
   terms: string[],
-  access: PublicDatabaseReadAccess = {}
+  access: VocabularyReadAccess = {}
 ): Promise<Map<string, string>> {
   return resolveTermMap(() => getTagVocab(access), terms);
 }
 
 export function resolveTagNames(
   names: string[],
-  access: PublicDatabaseReadAccess = {}
+  access: VocabularyReadAccess = {}
 ): Promise<string[]> {
   return resolveSlugs(() => getTagVocab(access), names);
 }

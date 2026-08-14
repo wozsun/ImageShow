@@ -9,7 +9,14 @@ import {
   pool,
   type DatabaseReader
 } from "../core/database-pools.ts";
-import { deleteRedisKeys, getRedisJson, setRedisJson } from "../core/redis-json.ts";
+import {
+  deleteRedisKeys,
+  deleteRequiredRedisKeys,
+  getRedisJson,
+  getRequiredRedisJson,
+  setRedisJson,
+  setRequiredRedisJson
+} from "../core/redis-json.ts";
 import type {
   AuthorDto as Author,
   FacetOptionDto,
@@ -28,6 +35,9 @@ const ADMIN_AUTHOR_LIST_KEY = "imageshow:admin:authors";
 export type EntityCacheKind = "theme" | "tag" | "author";
 export type VocabEntry = FacetOptionDto;
 export type AuthorVocabEntry = VocabEntry & { link: string };
+export type VocabularyReadAccess = PublicDatabaseReadAccess & {
+  redisMode?: "optional" | "required";
+};
 
 type EntityCountCacheInvalidationBatch = {
   add: (kinds: Iterable<EntityCacheKind>) => void;
@@ -38,6 +48,10 @@ type EntityCacheEnvelope<T extends unknown[]> = {
   epoch: string;
   revision: number;
   value: T;
+};
+type EntityCacheReadOptions = {
+  publicRead?: boolean;
+  redisMode?: "optional" | "required";
 };
 
 // 单实例进程使用独立 epoch。Redis 删除失败或进程重启后，遗留值即使仍在
@@ -80,7 +94,7 @@ async function queryVocabularyRows<T>(
 
 async function readVocabularyRows<T>(
   sql: string,
-  access: PublicDatabaseReadAccess
+  access: VocabularyReadAccess
 ) {
   return queryVocabularyRows<T>(
     sql,
@@ -91,7 +105,7 @@ async function readVocabularyRows<T>(
 
 async function loadTagVocab(
   revision: number,
-  access: PublicDatabaseReadAccess = {}
+  access: VocabularyReadAccess = {}
 ) {
   const rows = await readVocabularyRows<VocabEntry>(
     `SELECT slug, display_name
@@ -99,13 +113,13 @@ async function loadTagVocab(
       ORDER BY sort_order ASC, slug ASC`,
     access
   );
-  await cacheEntityVocabulary("tag", TAG_VOCAB_KEY, revision, rows);
+  await cacheEntityVocabulary("tag", TAG_VOCAB_KEY, revision, rows, access);
   return rows;
 }
 
 async function loadThemeVocab(
   revision: number,
-  access: PublicDatabaseReadAccess = {}
+  access: VocabularyReadAccess = {}
 ) {
   const rows = await readVocabularyRows<VocabEntry>(
     `SELECT slug, display_name
@@ -113,13 +127,13 @@ async function loadThemeVocab(
       ORDER BY (slug = 'none') DESC, sort_order ASC, slug ASC`,
     access
   );
-  await cacheEntityVocabulary("theme", THEME_VOCAB_KEY, revision, rows);
+  await cacheEntityVocabulary("theme", THEME_VOCAB_KEY, revision, rows, access);
   return rows;
 }
 
 async function loadAuthorVocab(
   revision: number,
-  access: PublicDatabaseReadAccess = {}
+  access: VocabularyReadAccess = {}
 ) {
   const rows = await readVocabularyRows<AuthorVocabEntry>(
     `SELECT slug, display_name, link
@@ -127,7 +141,7 @@ async function loadAuthorVocab(
       ORDER BY sort_order ASC, slug ASC`,
     access
   );
-  await cacheEntityVocabulary("author", AUTHOR_VOCAB_KEY, revision, rows);
+  await cacheEntityVocabulary("author", AUTHOR_VOCAB_KEY, revision, rows, access);
   return rows;
 }
 
@@ -172,11 +186,16 @@ async function cacheEntityVocabulary(
   key: string,
   revision: number,
   rows: unknown[],
+  access: VocabularyReadAccess,
 ) {
   if (revision !== entityVocabularyRevisions[kind]) return;
-  const written = await setRedisJson(key, entityCacheEnvelope(revision, rows));
+  const required = access.redisMode === "required";
+  const written = required
+    ? await setRequiredRedisJson(key, entityCacheEnvelope(revision, rows))
+    : await setRedisJson(key, entityCacheEnvelope(revision, rows));
   if (written && revision !== entityVocabularyRevisions[kind]) {
-    await deleteRedisKeys(key);
+    if (required) await deleteRequiredRedisKeys(key);
+    else await deleteRedisKeys(key);
   }
 }
 
@@ -209,19 +228,24 @@ async function cachedEntityValue<T extends unknown[]>(
   revision: number,
   coalesceKey: string,
   load: () => Promise<T>,
-  publicRead = false,
+  options: EntityCacheReadOptions = {},
 ): Promise<T> {
-  const cached = await getRedisJson<EntityCacheEnvelope<T>>(key);
+  const requiredRedis = options.redisMode === "required";
+  const cached = requiredRedis
+    ? await getRequiredRedisJson<EntityCacheEnvelope<T>>(key)
+    : await getRedisJson<EntityCacheEnvelope<T>>(key);
   if (
     cached?.epoch === entityCacheEpoch
     && cached.revision === revision
     && Array.isArray(cached.value)
   ) return cached.value;
-  return publicRead ? load() : coalesce(coalesceKey, load);
+  return options.publicRead
+    ? load()
+    : coalesce(`${coalesceKey}:${requiredRedis ? "required" : "optional"}`, load);
 }
 
 export function getThemeVocab(
-  access: PublicDatabaseReadAccess = {}
+  access: VocabularyReadAccess = {}
 ): Promise<VocabEntry[]> {
   const revision = entityVocabularyRevisions.theme;
   return cachedEntityValue(
@@ -229,12 +253,15 @@ export function getThemeVocab(
     revision,
     `entity-cache:vocab:theme:${revision}`,
     () => loadThemeVocab(revision, access),
-    Boolean(access.reader)
+    {
+      publicRead: Boolean(access.reader),
+      redisMode: access.redisMode
+    }
   );
 }
 
 export function getTagVocab(
-  access: PublicDatabaseReadAccess = {}
+  access: VocabularyReadAccess = {}
 ): Promise<VocabEntry[]> {
   const revision = entityVocabularyRevisions.tag;
   return cachedEntityValue(
@@ -242,12 +269,15 @@ export function getTagVocab(
     revision,
     `entity-cache:vocab:tag:${revision}`,
     () => loadTagVocab(revision, access),
-    Boolean(access.reader)
+    {
+      publicRead: Boolean(access.reader),
+      redisMode: access.redisMode
+    }
   );
 }
 
 export function getAuthorVocab(
-  access: PublicDatabaseReadAccess = {}
+  access: VocabularyReadAccess = {}
 ): Promise<AuthorVocabEntry[]> {
   const revision = entityVocabularyRevisions.author;
   return cachedEntityValue(
@@ -255,7 +285,10 @@ export function getAuthorVocab(
     revision,
     `entity-cache:vocab:author:${revision}`,
     () => loadAuthorVocab(revision, access),
-    Boolean(access.reader)
+    {
+      publicRead: Boolean(access.reader),
+      redisMode: access.redisMode
+    }
   );
 }
 

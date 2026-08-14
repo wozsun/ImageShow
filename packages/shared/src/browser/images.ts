@@ -143,7 +143,6 @@ export type EditableImageSnapshotDto = {
 export type AdminImageListResponseDto = {
   items: AdminImageListItemDto[];
   total: number;
-  next_cursor: string | null;
 };
 
 export type ImageAdminInfoDto = {

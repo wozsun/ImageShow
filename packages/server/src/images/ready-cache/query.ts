@@ -2,6 +2,11 @@ import { appConfig } from "@imageshow/shared";
 import { logger } from "../../core/logger.ts";
 import { redis } from "../../core/redis-client.ts";
 import { execRedisPipeline } from "../../core/redis-pipeline.ts";
+import {
+  isRedisUnavailableError,
+  requireOperationalRedis,
+  runRequiredRedisCommand
+} from "../../core/runtime-availability.ts";
 import { decodeImageCursor, encodeImageCursor } from "../cursor.ts";
 import {
   getReadyImageCacheCoordinatorStatus,
@@ -10,6 +15,7 @@ import {
 } from "./coordinator.ts";
 import {
   resolveReadyImageFilterIndex,
+  resolveReadyImageFilterIndexForRequiredRead,
   validateReadyImageFilterIndex,
   type ReadyImageFilterIndex
 } from "./filter-index.ts";
@@ -19,6 +25,7 @@ import {
 } from "./cache-errors.ts";
 import { discardReadyImageDerivedResult } from "./derived-cache-lifecycle.ts";
 import type { ImageFilterPlan } from "../filter-plan.ts";
+import type { PageWindow } from "../page-window.ts";
 import { recordReadyImageCacheError } from "./status-observability.ts";
 import {
   READY_IMAGE_ALL_INDEX_KEY,
@@ -34,12 +41,23 @@ import {
   type ReadyImageCacheResult,
   type ReadyImageCacheItem
 } from "./model.ts";
+import {
+  readReadyImageOrderedWindow,
+  type ReadyImageCacheWindow,
+  type ReadyImagePageReadMode,
+  type ReadyImageWindowDependencies
+} from "./ordered-window.ts";
 
 export type ReadyImageCachePage = {
   items: ReadyImageCacheItem[];
   total: number;
   nextCursor: string | null;
 };
+
+export type ReadyImagePageReadResult<T> =
+  | { status: "hit"; value: T }
+  | { status: "fallback" }
+  | { status: "redis_unavailable"; error: Error };
 
 function cacheItemCount() {
   return getReadyImageCacheCoordinatorStatus().meta?.itemCount ?? 0;
@@ -69,6 +87,7 @@ async function readCache<T>(
       ? { cached: true, value: lease.value }
       : { cached: false };
   } catch (error) {
+    if (isRedisUnavailableError(error)) throw error;
     if (scope === "core" || isReadyImageCoreCacheError(error)) {
       reportReadyImageCacheFailure(error);
     } else {
@@ -190,97 +209,128 @@ export async function readReadyImageById(
   });
 }
 
-async function readPageFromIndex(
-  index: ReadyImageFilterIndex,
-  limit: number,
-  cursor: string | undefined
-): Promise<ReadyImageCacheResult<ReadyImageCachePage>> {
-  const decoded = cursor !== undefined ? decodeImageCursor(cursor) : null;
-  return readCache(async () => {
-    if (!await queryIndexIsValid(index)) return null;
-    let start = 0;
-    if (decoded) {
-      const member = readyImageMember(decoded.id);
-      const cursorState = redis.pipeline();
-      cursorState.zscore(index.key, member);
-      cursorState.zrevrank(index.key, member);
-      const cursorResults = await execRedisPipeline(cursorState);
-      const scoreRaw = cursorResults[0]?.[1];
-      const rankRaw = cursorResults[1]?.[1];
-      if (scoreRaw === null || rankRaw === null) {
-        // A cursor can legitimately disappear after a committed mutation.
-        // PostgreSQL remains the precise fallback for that uncommon boundary.
-        return null;
-      }
-      const score = Number(scoreRaw);
-      const rank = Number(rankRaw);
-      if (
-        !Number.isSafeInteger(score)
-        || score !== decoded.sortScore
-        || !Number.isSafeInteger(rank)
-        || rank < 0
-      ) {
-        // A changed cursor image cannot preserve PostgreSQL keyset semantics.
-        return null;
-      }
-      start = rank + 1;
-    }
-    const transaction = redis.pipeline();
-    transaction.zcard(index.key);
-    transaction.zrevrange(index.key, start, start + limit);
-    const indexResults = await execRedisPipeline(transaction);
-    const total = Number(indexResults[0]?.[1] ?? 0);
-    const members = indexResults[1]?.[1] as string[] ?? [];
-    if (!Number.isSafeInteger(total) || total < 0) {
-      throw new Error("Ready-image cache returned an invalid page count");
-    }
-    if (index.count !== null && index.count !== total) {
-      throw new Error("Ready-image cached filter cardinality changed");
-    }
-    if (!members.length) {
-      return await queryIndexIsValid(index)
-        ? { items: [], total, nextCursor: null }
-        : null;
-    }
-    const raws = await readCoreItems(members);
-    if (index.kind !== "core") {
-      await assertDerivedMissingItemsAreNotCore(members, raws);
-    }
-    const allItems = raws.map((raw, position) => (
-      parsedItem(raw, members[position])
-    ));
-    const hasNext = allItems.length > limit;
-    const items = allItems.slice(0, limit);
-    const last = items.at(-1);
-    const value = {
-      items,
-      total,
-      nextCursor: hasNext && last
-        ? encodeImageCursor({ cursor_image_time: last.image_time, id: last.id })
-        : null
-    };
-    return await queryIndexIsValid(index) ? value : null;
-  }, index.kind === "core" ? "core" : "derived", async () => {
-    await discardReadyImageQueryIndex(index);
-  }).then((result) => {
-    if (!result.cached || result.value === null) return { cached: false };
-    return { cached: true, value: result.value };
-  });
+function executePageRedisCommand<T>(
+  mode: ReadyImagePageReadMode,
+  work: () => Promise<T>
+) {
+  return mode === "required" ? runRequiredRedisCommand(work) : work();
 }
 
-export async function readReadyImagePage(
-  plan: ImageFilterPlan,
+async function cursorWindowStart(
+  index: ReadyImageFilterIndex,
+  cursor: string | undefined,
+  mode: ReadyImagePageReadMode
+) {
+  if (cursor === undefined) return 0;
+  const decoded = decodeImageCursor(cursor);
+  const member = readyImageMember(decoded.id);
+  const cursorState = redis.pipeline();
+  cursorState.zscore(index.key, member);
+  cursorState.zrevrank(index.key, member);
+  const cursorResults = await executePageRedisCommand(
+    mode,
+    () => execRedisPipeline(cursorState)
+  );
+  const scoreRaw = cursorResults[0]?.[1];
+  const rankRaw = cursorResults[1]?.[1];
+  if (scoreRaw === null || rankRaw === null) return null;
+  const score = Number(scoreRaw);
+  const rank = Number(rankRaw);
+  return Number.isSafeInteger(score)
+    && score === decoded.sortScore
+    && Number.isSafeInteger(rank)
+    && rank >= 0
+    ? rank + 1
+    : null;
+}
+
+const readyImageWindowDependencies: ReadyImageWindowDependencies = {
+  validate: validateReadyImageFilterIndex,
+  count: (index) => redis.zcard(index.key),
+  members: (index, start, stop) => redis.zrevrange(
+    index.key,
+    start,
+    stop
+  ),
+  items: readCoreItems,
+  assertDerivedItems: assertDerivedMissingItemsAreNotCore
+};
+
+async function readPageFromIndex<T>(
+  index: ReadyImageFilterIndex,
+  locate: (mode: ReadyImagePageReadMode) => Promise<{
+    start: number;
+    present: (window: ReadyImageCacheWindow) => T;
+  } | null>,
   limit: number,
-  cursor?: string,
-  signal?: AbortSignal,
-  background = false
-): Promise<ReadyImageCacheResult<ReadyImageCachePage>> {
+  mode: ReadyImagePageReadMode
+): Promise<ReadyImagePageReadResult<T>> {
   try {
-    const index = await resolveReadyImageFilterIndex(plan, signal, background);
-    if (!index) return { cached: false };
-    return readPageFromIndex(index, limit, cursor);
+    const result = await readCache(async () => {
+      const location = await locate(mode);
+      if (!location) return null;
+      const window = await readReadyImageOrderedWindow(
+        index,
+        location.start,
+        limit,
+        mode,
+        readyImageWindowDependencies
+      );
+      return window ? location.present(window) : null;
+    }, index.kind === "core" ? "core" : "derived", async () => {
+      await discardReadyImageQueryIndex(index);
+    });
+    if (!result.cached || result.value === null) {
+      // A rebuilding/revision transition is a legitimate fallback, but a
+      // connection loss that invalidated the read lease remains a hard 503.
+      if (mode === "required") await requireOperationalRedis();
+      return { status: "fallback" };
+    }
+    return { status: "hit", value: result.value };
+  } catch (error) {
+    if (isRedisUnavailableError(error)) {
+      return {
+        status: "redis_unavailable",
+        error: error instanceof Error ? error : new Error(String(error))
+      };
+    }
+    throw error;
+  }
+}
+
+async function resolvedReadyImagePage<T>(
+  plan: ImageFilterPlan,
+  locate: (
+    index: ReadyImageFilterIndex,
+    mode: ReadyImagePageReadMode
+  ) => Promise<{
+    start: number;
+    present: (window: ReadyImageCacheWindow) => T;
+  } | null>,
+  limit: number,
+  signal: AbortSignal | undefined,
+  background: boolean,
+  mode: ReadyImagePageReadMode
+): Promise<ReadyImagePageReadResult<T>> {
+  try {
+    const index = mode === "required"
+      ? await resolveReadyImageFilterIndexForRequiredRead(plan)
+      : await resolveReadyImageFilterIndex(plan, signal, background);
+    if (!index) return { status: "fallback" };
+    return readPageFromIndex(
+      index,
+      (readMode) => locate(index, readMode),
+      limit,
+      mode
+    );
   } catch (error) {
     if (signal?.aborted) throw signal.reason ?? error;
+    if (isRedisUnavailableError(error)) {
+      return {
+        status: "redis_unavailable",
+        error: error instanceof Error ? error : new Error(String(error))
+      };
+    }
     if (isReadyImageCoreCacheError(error)) {
       reportReadyImageCacheFailure(error);
     } else {
@@ -294,8 +344,60 @@ export async function readReadyImagePage(
         error: error instanceof Error ? error.message : String(error)
       });
     }
-    return { cached: false };
+    return { status: "fallback" };
   }
+}
+
+export function readReadyImageCursorPage(
+  plan: ImageFilterPlan,
+  limit: number,
+  cursor?: string,
+  signal?: AbortSignal,
+  background = false
+): Promise<ReadyImagePageReadResult<ReadyImageCachePage>> {
+  return resolvedReadyImagePage(
+    plan,
+    async (index, mode) => {
+      const start = await cursorWindowStart(index, cursor, mode);
+      if (start === null) return null;
+      return {
+        start,
+        present: (window) => {
+          const last = window.items.at(-1);
+          return {
+            ...window,
+            nextCursor: start + window.items.length < window.total && last
+              ? encodeImageCursor({
+                  cursor_image_time: last.image_time,
+                  id: last.id
+                })
+              : null
+          };
+        }
+      };
+    },
+    limit,
+    signal,
+    background,
+    "fallback"
+  );
+}
+
+export function readReadyImagePageWindow(
+  plan: ImageFilterPlan,
+  window: PageWindow
+): Promise<ReadyImagePageReadResult<ReadyImageCacheWindow>> {
+  return resolvedReadyImagePage(
+    plan,
+    async () => ({
+      start: window.start,
+      present: (value) => value
+    }),
+    window.limit,
+    undefined,
+    false,
+    "required"
+  );
 }
 
 export async function sampleReadyImages(

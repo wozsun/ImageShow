@@ -115,7 +115,9 @@ attempt 级对象键也不会覆盖新尝试。
 
 画廊 URL 是筛选状态的唯一来源。列表按 `image_time DESC, id DESC` 使用 keyset cursor；
 cursor 是客户端只能透传的 32 字符 Base64URL 值，服务端严格校验时间与 UUID 边界，不
-接受带版本前缀或其他旧格式。`shuffle=1` 只打乱当前返回批次，不改变 cursor 链。
+接受带版本前缀或其他旧格式。公开列表查询是严格对象，只接受公开筛选、`cursor`、`limit`
+和 `shuffle`；`page`、`offset` 或未知字段均返回 `400 validation_error`。`shuffle=1` 只
+打乱当前返回批次，不改变 cursor 链。
 卡片标题只使用去除首尾空白后的 `title`；没有标题时显示 `#` 加 UUID 最后 12 位，不再以
 主题代替标题。列表 DTO 直接返回稳定的 `subtitle`：已设置主题使用主题显示名，标签使用显示名
 并以 `/` 连接，两部分同时存在时以 ` · ` 分隔；主题为 `none` 且没有标签时返回空字符串，
@@ -189,11 +191,25 @@ pointerup 直接提交关闭；桌面标题栏、键盘、Escape 和背景关闭
 筛选。当前页可以普通选择、全选或用 Shift 建立连续区间；翻页、换视图、换筛选或项目
 离开列表时清理失效选择，不跨页保留。
 
-图片列表仍使用 keyset cursor。页码输入跳到尚未建立的页时，会顺序补齐中间边界并显示
-进度；一次 intent 最多新增 20 个边界，更远目标要求分段跳转，不能表现成 O(1) 随机
-访问。筛选、路由、弹窗或图片写操作变化会取消整个 intent；总页数收缩时直接夹紧到
-最近有效页，不逐页回退查询。主题、标签、作者和上传队列等普通分页页面使用同一分页器，
-但不需要 cursor 补链。
+图片列表使用服务端权威数字页。后台查询是严格对象，只接受共同筛选、正安全整数 `page`
+与 `limit`；`cursor`、`offset` 或未知字段均返回 `400 validation_error`。服务端集中计算
+`PageWindow { page, limit, start, endExclusive }`，响应只包含 `{ items, total }`，任意有效
+目标页直接读取而不建立前序边界。合法页的 `start >= total` 时返回
+`200 { items: [], total }` 并跳过目标窗口读取，不在服务端静默改查最后一页。
+
+ready 与无主题页先解析一次规范化筛选计划，再按“索引句柄 → 页码位置适配器 → Redis 有序
+窗口 → 当前页水合”读取；窗口最多读取 `limit` 个成员，total 与成员来自同一已验证 revision。
+coordinator 正在重建、revision 改变或派生索引暂不可读时，允许使用同一个筛选计划回源
+PostgreSQL；Redis transport、连接或命令失败则标记运行时不可用并返回稳定
+`503 redis_unavailable`，不会伪装成成功回源页。筛选计划读取或补写主题、标签和作者的
+Redis JSON 词表也使用同一 required-read 失败合同；回收站只走 PostgreSQL OFFSET。
+
+PostgreSQL 回源在同一连接的 `REPEATABLE READ READ ONLY` 事务中依次读取 total、判断越界，
+再取得当前页 metadata 与随窗口投影的 tags；事务提交后才做 URL 和 DTO 格式化。浏览器端
+`useImageAdminPageNavigation` 是唯一查询 owner，查询键包含规范化 scope、page 和 page size，
+目标缓存 90 秒内可零网络复用。scope 改变时当次渲染立即使用第 1 页；成功结果使总页数收缩
+时只直接夹紧一次，目标页失败则保留该页与错误并在原页重试。主题、标签、作者和上传队列等
+普通分页页面继续使用各自的本地分页，不接入图片列表协议。
 
 ### 编辑、迁移与删除
 

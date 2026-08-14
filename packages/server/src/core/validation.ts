@@ -294,16 +294,18 @@ export const weiboImportInput = z.strictObject({
     .transform((urls) => [...new Set(urls)])
 });
 
-const imageListBase = z.object({
-  status: z.enum(["ready", "deleted"]).default("ready"),
+const imageListFilterFields = {
   d: z.enum(appConfig.devices).optional(),
   b: z.enum(appConfig.brightnesses).optional(),
   t: z.string().trim().toLowerCase().max(1024).optional(),
   tag: z.string().trim().toLowerCase().max(1024).optional(),
-  a: z.string().trim().toLowerCase().max(1024).optional(),
-  // The image cursor decoder owns format validation and its stable API error.
-  cursor: z.string().optional()
-});
+  a: z.string().trim().toLowerCase().max(1024).optional()
+};
+
+const safePositiveInteger = z.coerce.number().int().positive().refine(
+  Number.isSafeInteger,
+  "必须是安全整数"
+);
 
 function galleryStatsSelector(noun: string) {
   return z.string().trim().toLowerCase().min(1).max(1024)
@@ -345,14 +347,20 @@ export const galleryStatsQuery = z.strictObject({
   a: galleryStatsSelector("作者").optional()
 });
 
-export const listQuery = imageListBase.extend({
+export const listQuery = z.strictObject({
+  ...imageListFilterFields,
   status: z.literal("ready").default("ready"),
-  limit: z.coerce.number().int().positive().max(appConfig.pagination.maxLimit).optional(),
+  // The image cursor decoder owns format validation and its stable API error.
+  cursor: z.string().optional(),
+  limit: safePositiveInteger.max(appConfig.pagination.maxLimit).optional(),
   shuffle: z.enum(["1", "true"]).optional().transform(Boolean)
 });
 
-export const adminImageListQuery = imageListBase.extend({
-  limit: z.coerce.number().int().positive().max(appConfig.pagination.maxLimit).default(adminImagePageLimit)
+export const adminImageListQuery = z.strictObject({
+  ...imageListFilterFields,
+  status: z.enum(["ready", "deleted"]).default("ready"),
+  page: safePositiveInteger.default(1),
+  limit: safePositiveInteger.max(appConfig.pagination.maxLimit).default(adminImagePageLimit)
 });
 
 export function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {

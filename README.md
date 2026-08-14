@@ -9,7 +9,8 @@ Node.js 26 / Hono、React 19、PostgreSQL、Redis 8 和 Docker 构成。
 
 - 公开首页、瀑布流画廊、图片详情与可选无导航嵌入页；画廊卡片使用标题或 UUID 短标识，
   并直接展示服务端返回的主题 / 标签显示名副标题；长画廊使用有界 DTO / DOM 窗口，远页按
-  keyset cursor 恢复。
+  keyset cursor 恢复。后台图库、无主题与回收站则由服务端按数字页直达，不在浏览器补齐
+  前序 cursor 边界。
 - `/random` 随机图 API，以及职责隔离的 `random.*`、`static.*`、`link.*` 子域出口。
 - 后台图片上传、URL / JSONL / 微博导入、编辑、分类、回收站、日志与运行状态检查；概览
   最近上传直接携带管理详情所需的存储显示名，打开详情不依赖二次标签查询。
@@ -108,6 +109,10 @@ Redis 不是业务真相源；空 Redis 会从 PostgreSQL 重建派生状态并�
 私有网络，由可信反向代理终止 HTTPS，并覆盖客户端传入的 `Host`、`X-Real-IP`、
 `X-Forwarded-For` 与 `X-Forwarded-Proto`；应用不解析转发 Host 或多级 IP 链。
 产品无关的代理要求与唯一一份可替换的 Nginx 最简示例见[部署指南](docs/guide/deployment.md#反向代理与-https)。
+
+升级到 4.12.0 必须使用计划停机窗口：先停止旧应用并等待排空，再一次性部署同版本 Server
+与内置静态 Web，确认容器健康和 `/readyz` 后恢复访问。不得混用 4.11 Web 与 4.12 Server，
+也不得续用升级前仍打开的后台标签页；本版不提供旧后台 cursor 参数兼容。
 
 反向代理请求体上限不得低于应用配置。仓库示例使用 `client_max_body_size 256m`，覆盖
 默认 200 MiB 单图上限并留出代理层余量。完整 Docker、健康检查、停机、密码恢复及

@@ -117,12 +117,38 @@ Redis 核心 meta 的当前图片数和最后更新时间随完整重建批次�
 已标记失败或已被新 attempt 领取的行。
 
 关键索引：`ready` 状态下的随机轴 `(device, brightness, theme, id)`，以及随机图定向
-候选使用的 `right(id::text, 12)` ready 部分表达式索引；前后台图库按
-`image_time DESC, id DESC` 游标分页，并为常用筛选预建 ready 部分索引：无筛选、
-单设备、单亮度、设备+亮度、单主题、设备+主题、亮度+主题、设备+亮度+主题、作者。
-标签查询依赖 `image_tag(tag_slug, image_id)` 命中标签集合，结合 `metadata` 的 ready/
-图片时间与主题等索引完成 Redis 降级时的分页；另有 MD5、缩略图反查、主题、作者和
-存储后端索引。
+候选使用的 `right(id::text, 12)` ready 部分表达式索引；公开图库按
+`image_time DESC, id DESC` 使用 cursor，后台 ready 回源与 deleted 列表使用同一排序的
+数字页 OFFSET。常用 ready 筛选已有部分索引：无筛选、单设备、单亮度、设备+亮度、
+单主题、设备+主题、亮度+主题、设备+亮度+主题、作者。标签查询依赖
+`image_tag(tag_slug, image_id)` 命中标签集合，结合 `metadata` 的 ready、图片时间与主题等
+索引完成筛选；另有 MD5、缩略图反查、主题、作者和存储后端索引。
+
+后台 PostgreSQL 页在同一 `BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY` 事务中先
+COUNT，再判断 `PageWindow.start >= total`，最后才执行目标窗口 SELECT。窗口子查询先完成
+排序、LIMIT 与 OFFSET，外层只为最终至多 `limit` 行投影 `image_tag`，因此深页不会为被
+OFFSET 跳过的行水合标签。total、metadata 与 tags 属于同一事务快照；提交后的 presenter
+不再读取图片真相。
+
+### 4.12.0 数字页查询计划证据
+
+2026-08-15 在本地 Docker PostgreSQL 18 上用独立临时数据库生成 120,000 张图片
+（90,000 ready、30,000 deleted）和 47,142 条 `image_tag`，执行
+`EXPLAIN (ANALYZE, BUFFERS)`。页面大小均为 60；表已 `VACUUM (ANALYZE)`，下表是一次
+代表性采样，不作为跨机器延迟承诺：
+
+| 路径 | COUNT rows / Buffers / 耗时 | OFFSET 与窗口计划 | 窗口 Buffers / Sort / 耗时 |
+| --- | --- | --- | --- |
+| ready 无筛选深页 | 90,000 / hit 300、read 145 / 9.801 ms | OFFSET 60,000；索引扫描 60,060，返回 60 | hit 3,511；无 Sort；13.160 ms |
+| ready 典型组合（设备、明暗、主题、作者、标签） | 1,500 / hit 1,935、read 11 / 10.622 ms | OFFSET 1,200；组合筛选 1,500，返回 60 | hit 2,133；quicksort 435 kB；8.860 ms |
+| deleted 无筛选深页 | 30,000 / hit 183 / 3.155 ms | OFFSET 20,000；扫描 30,000，返回 60 | hit 1,213、temp read 513 / written 657；external merge 5,240 kB；27.092 ms |
+| deleted 作者 + 标签较差路径 | 1,429 / hit 3,430 / 10.523 ms | OFFSET 1,000；组合筛选 1,429，返回 60 | hit 3,611；quicksort 417 kB；13.464 ms |
+| ready 合法越界 | 10,286 / hit 95、read 2 / 2.710 ms | 应用比较 total 后不执行窗口 SELECT | 无 OFFSET、Sort 或标签水合 |
+
+四条有效页计划的标签子计划均只执行 60 次。ready 正常热路径由 Redis rank 直接读取目标
+窗口；上述 ready SQL 是 coordinator 重建、revision 改变或派生索引暂不可读时的回源证据。
+当前样本下既有索引已满足本版范围，因此 4.12.0 不新增 schema、稀疏锚点或持久化排名表；
+deleted 深页的外部排序若在真实规模中成为可测瓶颈，再依据独立数据决定索引或其他方案。
 
 ## ready_image_revision —— Redis 投影权威修订号
 

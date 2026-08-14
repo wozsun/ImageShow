@@ -1,13 +1,25 @@
 import type { PoolClient } from "pg";
 import { pool } from "./database-pools.ts";
 
+type TransactionOptions =
+  | {
+      mode?: "read_write";
+      onTransactionId?: (transactionId: string) => void;
+    }
+  | {
+      mode: "read_only_repeatable_read";
+      onTransactionId?: never;
+    };
+
 export async function withTransactionOnClient<T>(
   client: PoolClient,
   work: (client: PoolClient) => Promise<T>,
-  options: { onTransactionId?: (transactionId: string) => void } = {}
+  options: TransactionOptions = {}
 ): Promise<T> {
   try {
-    await client.query("BEGIN");
+    await client.query(options.mode === "read_only_repeatable_read"
+      ? "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY"
+      : "BEGIN");
     if (options.onTransactionId) {
       const transactionId = String((await client.query(
         "SELECT pg_current_xact_id()::text AS transaction_id"
@@ -48,6 +60,19 @@ export async function withTransaction<T>(
   const client = await pool.connect();
   try {
     return await withTransactionOnClient(client, work, options);
+  } finally {
+    client.release();
+  }
+}
+
+export async function withReadOnlyRepeatableReadTransaction<T>(
+  work: (client: PoolClient) => Promise<T>
+): Promise<T> {
+  const client = await pool.connect();
+  try {
+    return await withTransactionOnClient(client, work, {
+      mode: "read_only_repeatable_read"
+    });
   } finally {
     client.release();
   }

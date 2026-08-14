@@ -17,13 +17,20 @@ export type RedisOperationalState = Readonly<{
 type RedisOperationalListener = (state: RedisOperationalState) => void;
 type BusinessGateListener = () => void;
 
-class RedisUnavailableError extends Error {
+export class RedisUnavailableError extends Error {
   readonly code = "redis_unavailable";
 
   constructor(cause?: unknown) {
     super("Redis unavailable", { cause });
     this.name = "redis_unavailable";
   }
+}
+
+export function isRedisUnavailableError(
+  error: unknown
+): error is RedisUnavailableError {
+  return error instanceof RedisUnavailableError
+    || (error instanceof Error && error.name === "redis_unavailable");
 }
 
 let initializationComplete = false;

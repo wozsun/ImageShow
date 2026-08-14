@@ -111,6 +111,11 @@ const imageTagsPresentationColumn = `ARRAY(
    ORDER BY it.tag_slug
 ) AS tags`;
 
+export const adminImageListPresentationColumnsWithTags = [
+  adminImageListPresentationColumns,
+  imageTagsPresentationColumn
+].join(", ");
+
 export const adminImageDetailPresentationColumnsWithTags = [
   "id",
   "device",
@@ -207,13 +212,11 @@ async function publicUrlsForRow(
 }
 
 function serializeTimestamp(value: DatabaseTimestamp) {
-  if (value instanceof Date) return value.toISOString();
-  return value;
+  return (value instanceof Date ? value : new Date(value)).toISOString();
 }
 
 function serializeNullableTimestamp(value: DatabaseTimestamp | null) {
-  if (value instanceof Date) return value.toISOString();
-  return value ?? null;
+  return value === null ? null : serializeTimestamp(value);
 }
 
 async function presentAdminImageBase(

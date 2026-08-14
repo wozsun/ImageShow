@@ -86,7 +86,6 @@ export function ImageAdmin() {
   // 列表卡片的「所在存储」展示后端显示名（而非 slug）；从后端列表解析。
   const storageName = useStorageNameResolver();
   const pageSize = settingsData?.settings.admin.image_page_size ?? adminImagePageLimit;
-  const previousPageSizeRef = useRef(pageSize);
   const editPageSize = settingsData?.settings.upload.list_page_size ?? 20;
   const navigation = useImageAdminPageNavigation({
     view,
@@ -101,12 +100,9 @@ export function ImageAdmin() {
     isError: listFailed,
     isFetching,
     refetch: refetchList,
-    cursor,
+    scopeKey,
     pageNumber,
     totalPages,
-    direction: pageNavigation,
-    status: pageNavigationStatus,
-    cancel: cancelPageNavigation
   } = navigation;
   const selection = useImageAdminSelection(items);
   const {
@@ -115,13 +111,11 @@ export function ImageAdmin() {
     allSelected
   } = selection;
   const invalidateData = useCallback(async () => {
-    cancelPageNavigation();
     await invalidateImageData(client);
-  }, [cancelPageNavigation, client]);
+  }, [client]);
   const refreshAfterEditorSave = useCallback(async (
     commit?: ImageMetadataSaveCommit
   ) => {
-    cancelPageNavigation();
     selection.clear();
     if (!commit) {
       await invalidateImageData(client);
@@ -132,7 +126,7 @@ export function ImageAdmin() {
       commit.updates,
       commit.authoritativeItems
     );
-  }, [cancelPageNavigation, client, selection.clear]);
+  }, [client, selection.clear]);
   const {
     operationText,
     feedback,
@@ -174,31 +168,13 @@ export function ImageAdmin() {
   const finishImportBatch = selection.clear;
   const canTrashReadyItems = view !== "deleted";
   useEffect(() => {
-    if (previousPageSizeRef.current === pageSize) return;
-    previousPageSizeRef.current = pageSize;
-    navigation.reset();
-    clearImageSelection();
-    resetTransientState();
-    gridRef.current?.scrollTo({ top: 0, left: 0 });
-  }, [
-    clearImageSelection,
-    navigation.reset,
-    pageSize,
-    resetTransientState
-  ]);
-  useEffect(() => {
-    if (interfaceBusy && pageNavigation) cancelPageNavigation();
-  }, [cancelPageNavigation, interfaceBusy, pageNavigation]);
-  useEffect(() => {
     if (routeView === view) return;
     setView(routeView);
-    navigation.reset();
     clearImageSelection();
     resetTransientState();
     gridRef.current?.scrollTo({ top: 0, left: 0 });
   }, [
     clearImageSelection,
-    navigation.reset,
     resetTransientState,
     routeView,
     view
@@ -209,26 +185,23 @@ export function ImageAdmin() {
   ) => {
     if (filters[key] === nextValue || interfaceBusy) return;
     setFilters((current) => ({ ...current, [key]: nextValue }));
-    navigation.reset();
     clearImageSelection();
     resetTransientState();
     gridRef.current?.scrollTo({ top: 0, left: 0 });
   };
   const changeView = (next: typeof view) => {
     if (next === routeView || interfaceBusy) return;
-    cancelPageNavigation();
     setSearchParams(next === "ready" ? {} : { view: next }, { replace: true });
   };
-  const loadPage = async (targetPage: number) => {
+  const loadPage = (targetPage: number) => {
     setFeedback(null);
-    const error = await navigation.loadPage(targetPage, interfaceBusy);
-    if (error) showFeedback(error, "error");
+    navigation.loadPage(targetPage, interfaceBusy);
   };
   useEffect(() => {
     clearImageSelection();
-    // 视图和游标页不复用上一页的滚动位置，避免快速切换到回收站时首屏卡片只露出残片。
+    // 每个数字页与筛选 scope 都从顶部开始，避免首屏卡片只露出残片。
     gridRef.current?.scrollTo({ top: 0, left: 0 });
-  }, [clearImageSelection, cursor, filters, view]);
+  }, [clearImageSelection, pageNumber, scopeKey]);
   const preloadBatchEditor = () => editorCapability.preload({
     sources: selectedItems
   });
@@ -260,13 +233,7 @@ export function ImageAdmin() {
           <p role="status" aria-live="polite" aria-atomic="true">
             {operationText || (
               `第 ${pageNumber} / ${totalPages} 页 · 共 ${data?.total ?? 0} 项 · 本页 ${items.length} 项${
-                pageNavigationStatus
-                  ? ` · ${pageNavigationStatus}`
-                  : pageNavigation === "previous"
-                    ? " · 正在加载上一页"
-                    : pageNavigation === "next"
-                      ? " · 正在加载下一页"
-                      : isFetching ? " · 加载中" : ""
+                isFetching ? " · 加载中" : ""
               }`
             )}
           </p>
@@ -281,7 +248,6 @@ export function ImageAdmin() {
               showFeedback("上传与导入功能加载失败，请重新加载页面", "error");
             }}
             onPendingChange={(pending) => {
-              if (pending) cancelPageNavigation();
               setUploaderPending(pending);
             }}
           />
@@ -367,7 +333,6 @@ export function ImageAdmin() {
                   aria-busy={selectedEditorPending || undefined}
                    {...preloadIntentProps(preloadBatchEditor)}
                    onClick={(event) => {
-                     cancelPageNavigation();
                      void editorCapability.open({
                       sources: selectedItems
                     }, event.currentTarget);
@@ -381,7 +346,6 @@ export function ImageAdmin() {
                   type="button"
                   disabled={!selected.length || interfaceBusy}
                   onClick={() => {
-                    cancelPageNavigation();
                     void restore([...selected]);
                   }}
                 >
@@ -394,7 +358,6 @@ export function ImageAdmin() {
                   type="button"
                   disabled={!selected.length || interfaceBusy}
                   onClick={() => {
-                    cancelPageNavigation();
                     setConfirmAction({ kind: "trash", ids: [...selected] });
                   }}
                 >
@@ -407,7 +370,6 @@ export function ImageAdmin() {
                   type="button"
                   disabled={interfaceBusy || (!selected.length && !items.length)}
                   onClick={() => {
-                    cancelPageNavigation();
                     setConfirmAction(
                       selected.length
                         ? {
@@ -444,7 +406,7 @@ export function ImageAdmin() {
         </div>
       </div>
       <div
-        key={`grid:${view}:${cursor}`}
+        key={`grid:${scopeKey}:${pageNumber}`}
         className="admin-scroll-region"
         ref={gridRef}
       >
@@ -472,7 +434,6 @@ export function ImageAdmin() {
               )}
               rangeSelectionHelpId={imageRangeSelectionHelpId}
               onDetail={(opener) => {
-                cancelPageNavigation();
                 void detailCapability.open(item, opener);
               }}
               editDisabled={editorConflictBusy}
@@ -484,24 +445,20 @@ export function ImageAdmin() {
                 sources: [item]
               })}
               onEdit={(opener) => {
-                cancelPageNavigation();
                 void editorCapability.open({
                   sources: [item]
                 }, opener);
               }}
               canPurge={canPurgeImage}
               onPurge={() => {
-                cancelPageNavigation();
                 void purge({ scope: "selected", ids: [item.id] });
               }}
               busy={busyIds.includes(item.id)}
               actionsDisabled={interfaceBusy}
               onTrash={() => {
-                cancelPageNavigation();
                 void trash([item.id]);
               }}
               onRestore={() => {
-                cancelPageNavigation();
                 void restore([item.id]);
               }}
             />
@@ -511,14 +468,14 @@ export function ImageAdmin() {
           {!listFailed && !isFetching && !items.length && <p className="muted">暂无记录</p>}
         </div>
       </div>
-      <OverlayScrollbar key={`scrollbar:${view}:${cursor}`} targetRef={gridRef} pageEdge />
+      <OverlayScrollbar key={`scrollbar:${scopeKey}:${pageNumber}`} targetRef={gridRef} pageEdge />
       <AdminPagination
         ariaLabel="图片列表分页"
         page={pageNumber}
         totalPages={totalPages}
-        disabled={interfaceBusy || isFetching || pageNavigation !== null}
-        nextDisabled={!data?.next_cursor}
-        onPageChange={(targetPage) => void loadPage(targetPage)}
+        disabled={interfaceBusy || isFetching}
+        nextDisabled={pageNumber >= totalPages}
+        onPageChange={loadPage}
       />
       {detailCapability.item && detailCapability.Modal && (
         <detailCapability.Modal
@@ -539,7 +496,6 @@ export function ImageAdmin() {
           authors={editorCapability.session.vocabulary.authors}
           onClose={editorCapability.close}
           onTrashCommitted={(imageIds) => {
-            cancelPageNavigation();
             selection.clear();
             showFeedback(
               imageIds.length === 1

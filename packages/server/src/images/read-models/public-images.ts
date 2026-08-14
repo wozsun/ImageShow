@@ -15,7 +15,7 @@ import { listQuery } from "../../core/validation.ts";
 import { resolveImageFilterPlan } from "../filter-plan.ts";
 import {
   readReadyImageById,
-  readReadyImagePage
+  readReadyImageCursorPage
 } from "../ready-cache/query.ts";
 import {
   publicImageCardsWithTags,
@@ -47,14 +47,14 @@ async function listPublicImagesWithAccess(
 ): Promise<PublicImageListResponseDto> {
   const limit = query.limit ?? getRuntimeConfig().site.gallery.default_limit;
   const plan = await resolveImageFilterPlan(query, database);
-  const cached = await readReadyImagePage(
+  const cached = await readReadyImageCursorPage(
     plan,
     limit,
     query.cursor,
     signal,
     Boolean(database.reader)
   );
-  if (cached.cached) {
+  if (cached.status === "hit") {
     return withShuffle(query, {
       items: await publicImageCardsWithTags(cached.value.items.map((item) => ({
         ...item,

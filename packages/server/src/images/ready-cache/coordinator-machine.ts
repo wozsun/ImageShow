@@ -8,6 +8,7 @@ import {
 } from "../../core/redis-client.ts";
 import {
   getRedisOperationalState,
+  isRedisUnavailableError,
   probeRedisOperationalState,
   type RedisOperationalState
 } from "../../core/runtime-availability.ts";
@@ -209,6 +210,10 @@ export class ReadyImageCacheCoordinator {
           ? { valid: true, value } as const
           : { valid: false } as const;
       } catch (error) {
+        // A required request-path Redis command deliberately marks the
+        // operational state unavailable before throwing. Do not turn that
+        // explicit 503 signal into an ordinary stale-lease cache miss.
+        if (isRedisUnavailableError(error)) throw error;
         if (!stillCurrent()) return { valid: false } as const;
         throw error;
       }
