@@ -578,8 +578,3 @@ button.danger-button.confirm-dialog-final-confirmation.is-armed {
   color: var(--admin-color-text-label);
 }
 .account-form .button { justify-self: start; }
-.account-note {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.5;
-}

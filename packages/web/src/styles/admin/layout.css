@@ -324,7 +324,10 @@ body:has(.admin > .workspace-contained) {
   .admin-nav-scroll::-webkit-scrollbar { width: 0; height: 0; }
 }
 
-.admin > aside .overlay-scrollbar-handle { background: var(--admin-color-navigation-scrollbar); }
+.admin > aside .overlay-scrollbar-handle {
+  margin-inline-end: 1px;
+  background: var(--admin-color-navigation-scrollbar);
+}
 .admin > aside .overlay-scrollbar-handle:hover,
 .admin > aside .overlay-scrollbar-handle.is-dragging { background: var(--admin-color-navigation-scrollbar-active); }
 .admin > aside .logout-button { margin-top: 0; }

@@ -21,7 +21,6 @@ export function AccountSettings() {
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
   const updatePasswordStatus = useAsyncActionStatus();
-  const isSuper = auth?.authenticated && auth.role === "super";
 
   const nextInvalid = next.length > 0 && !isValidAdminPassword(next);
   const mismatch = confirm.length > 0 && next !== confirm;
@@ -95,7 +94,6 @@ export function AccountSettings() {
           />
         </label>
         {mismatch && <p className="admin-error" role="alert">两次输入的新密码不一致。</p>}
-        {isSuper && <p className="muted account-note">无法登录时，可在容器终端使用 imageshow reset-password 恢复超级管理员密码。</p>}
         <AsyncActionButton
           className="button"
           type="submit"
