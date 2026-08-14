@@ -1,6 +1,6 @@
 {
   "name": "@imageshow/server",
-  "version": "4.10.1",
+  "version": "4.11.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -19,6 +19,7 @@
     "file-type": "^22.0.1",
     "hono": "^4.13.2",
     "ioredis": "^6.0.0",
+    "ipaddr.js": "^2.5.0",
     "pg": "^8.23.0",
     "sharp": "^0.35.3",
     "undici": "^8.10.0",

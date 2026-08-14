@@ -128,7 +128,11 @@ Worker 与嵌入页。应用没有跨源 API 契约，不返回 `Access-Control-
 - 大请求路由的中间件顺序是：Host / 安全响应头 → 普通全局 limiter 路径豁免 → 管理员会话认证 → 审计入口 → CSRF → 路由专用字节 limiter → JSON 解析 → schema / 业务处理。匿名请求因此在读取大请求体前返回 401；已登录但缺少或错误 CSRF 的请求在专用 limiter 前返回 403。limiter 同时记录实际检查或可信 `Content-Length` 声明的字节数供摘要日志使用，不保存或输出正文。
 - 外部图片抓取统一走安全 fetch：只允许 `https` 且必须使用域名，不接受直接 IP；
   请求前和每次重定向后都校验主机，实际连接使用受控 DNS lookup 并再次校验连接
-  地址，阻断 DNS rebinding。连接地址按 IANA 当前
+  地址，阻断 DNS rebinding。DNS 返回项先按声明的 family 通过 Node 标准库严格校验：
+  IPv4 只接受四段十进制，IPv6 拒绝 zone ID 以及会被依赖重解释的裸
+  `::w.x.y.z` IPv4-compatible 写法；通过后由 `ipaddr.js` 负责地址解析、CIDR 匹配和
+  固定前缀中的 IPv4 提取。特殊用途地址表、最长前缀优先和默认拒绝策略仍由应用维护。
+  连接地址按 IANA 当前
   [IPv4](https://www.iana.org/assignments/iana-ipv4-special-registry/iana-ipv4-special-registry.xhtml) /
   [IPv6](https://www.iana.org/assignments/iana-ipv6-special-registry/iana-ipv6-special-registry.xhtml)
   special-purpose registry 的 `Globally Reachable` 语义和

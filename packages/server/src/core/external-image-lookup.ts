@@ -1,4 +1,5 @@
 import { isIP, type LookupFunction } from "node:net";
+import ipaddr from "ipaddr.js";
 
 export const externalImageLookupErrorCode = "EXTERNAL_IMAGE_LOOKUP_REJECTED";
 
@@ -6,6 +7,9 @@ type ExternalImageAddress = { address: string; family: number };
 type ExternalImageAddressResolver = (
   hostname: string
 ) => Promise<ExternalImageAddress[]>;
+
+type Ipv4Address = ReturnType<typeof ipaddr.IPv4.parse>;
+type Ipv6Address = ReturnType<typeof ipaddr.IPv6.parse>;
 
 type Ipv4SpecialPurposeRule = readonly [
   base: string,
@@ -87,38 +91,35 @@ const ipv6SpecialPurposeRules: readonly Ipv6SpecialPurposeRule[] = [
   ["ff00::", 8, false]
 ];
 
-function parseIpv4(address: string): number | null {
-  if (isIP(address) !== 4) return null;
-  const parts = address.split(".");
-  let value = 0;
-  for (const part of parts) {
-    const octet = Number(part);
-    value = (value << 8) + octet;
-  }
-  return value >>> 0;
-}
+const ipv4MulticastBase = ipaddr.IPv4.parse("224.0.0.0");
+const parsedIpv4SpecialPurposeRules = ipv4SpecialPurposeRules.map(
+  ([base, prefixLength, globallyReachable]) => [
+    ipaddr.IPv4.parse(base),
+    prefixLength,
+    globallyReachable
+  ] as const
+);
+const parsedIpv6SpecialPurposeRules = ipv6SpecialPurposeRules.map(
+  ([base, prefixLength, policy]) => [
+    ipaddr.IPv6.parse(base),
+    prefixLength,
+    policy
+  ] as const
+);
 
-function ipv4InRange(address: number, base: number, bits: number) {
-  const mask = bits === 0 ? 0 : (0xffffffff << (32 - bits)) >>> 0;
-  return (address & mask) === (base & mask);
-}
-
-function isGloballyReachableIpv4(address: string) {
-  const value = parseIpv4(address);
-  if (value === null) return false;
+function isGloballyReachableIpv4(address: Ipv4Address) {
 
   // Multicast is maintained in a separate IANA registry, not the
   // Special-Purpose Address Registry.
-  if (ipv4InRange(value, parseIpv4("224.0.0.0") ?? 0, 4)) return false;
+  if (address.match(ipv4MulticastBase, 4)) return false;
 
   let matchedPrefixLength = -1;
   let globallyReachable = true;
-  for (const [base, prefixLength, ruleGloballyReachable] of ipv4SpecialPurposeRules) {
-    const parsedBase = parseIpv4(base);
+  for (const rule of parsedIpv4SpecialPurposeRules) {
+    const [base, prefixLength, ruleGloballyReachable] = rule;
     if (
-      parsedBase !== null &&
       prefixLength > matchedPrefixLength &&
-      ipv4InRange(value, parsedBase, prefixLength)
+      address.match(base, prefixLength)
     ) {
       matchedPrefixLength = prefixLength;
       globallyReachable = ruleGloballyReachable;
@@ -127,84 +128,45 @@ function isGloballyReachableIpv4(address: string) {
   return globallyReachable;
 }
 
-function parseIpv6(address: string): bigint | null {
-  if (address.includes("%") || isIP(address) !== 6) return null;
-  const clean = address.toLowerCase();
-  const ipv4Tail = clean.match(/(?:^|:)(\d{1,3}(?:\.\d{1,3}){3})$/)?.[1];
-  let value = clean;
-  let tailParts: string[] = [];
-  if (ipv4Tail) {
-    const ipv4 = parseIpv4(ipv4Tail);
-    if (ipv4 === null) return null;
-    const ipv6Prefix = clean.slice(0, clean.length - ipv4Tail.length);
-    value = ipv6Prefix.endsWith("::") ? ipv6Prefix : ipv6Prefix.replace(/:$/, "");
-    tailParts = [
-      ((ipv4 >>> 16) & 0xffff).toString(16),
-      (ipv4 & 0xffff).toString(16)
-    ];
-  }
-
-  const halves = value.split("::");
-  if (halves.length > 2) return null;
-  const left = halves[0] ? halves[0].split(":").filter(Boolean) : [];
-  const right = halves[1] ? halves[1].split(":").filter(Boolean) : [];
-  const missing = 8 - tailParts.length - left.length - right.length;
-  if (missing < 0 || (halves.length === 1 && missing !== 0)) return null;
-  const parts = [
-    ...left,
-    ...Array.from({ length: missing }, () => "0"),
-    ...right,
-    ...tailParts
-  ];
-  if (parts.length !== 8) return null;
-
-  let result = 0n;
-  for (const part of parts) {
-    if (!/^[0-9a-f]{1,4}$/i.test(part)) return null;
-    result = (result << 16n) + BigInt(parseInt(part, 16));
-  }
-  return result;
-}
-
-function ipv6InRange(address: bigint, base: bigint, bits: number) {
-  const all = (1n << 128n) - 1n;
-  const mask = bits === 0 ? 0n : (all << BigInt(128 - bits)) & all;
-  return (address & mask) === (base & mask);
-}
-
-function ipv4FromIpv6(value: bigint) {
-  const ipv4 = Number(value & 0xffffffffn);
-  return `${(ipv4 >>> 24) & 255}.${(ipv4 >>> 16) & 255}.${(ipv4 >>> 8) & 255}.${ipv4 & 255}`;
-}
-
-function isGloballyReachableIpv6(address: string) {
-  const value = parseIpv6(address);
-  if (value === null) return false;
-
+function isGloballyReachableIpv6(address: Ipv6Address) {
   let matchedPrefixLength = -1;
   let policy: Ipv6SpecialPurposeRule[2] = false;
-  for (const [base, prefixLength, rulePolicy] of ipv6SpecialPurposeRules) {
-    const parsedBase = parseIpv6(base);
+  for (const rule of parsedIpv6SpecialPurposeRules) {
+    const [base, prefixLength, rulePolicy] = rule;
     if (
-      parsedBase !== null &&
       prefixLength > matchedPrefixLength &&
-      ipv6InRange(value, parsedBase, prefixLength)
+      address.match(base, prefixLength)
     ) {
       matchedPrefixLength = prefixLength;
       policy = rulePolicy;
     }
   }
 
-  return policy === "embedded-ipv4"
-    ? isGloballyReachableIpv4(ipv4FromIpv6(value))
-    : policy;
+  if (policy !== "embedded-ipv4") return policy;
+  const embeddedAddress = ipaddr.fromByteArray(address.toByteArray().slice(-4));
+  return embeddedAddress instanceof ipaddr.IPv4 &&
+    isGloballyReachableIpv4(embeddedAddress);
 }
 
 function isGloballyReachableAddress({ address, family }: ExternalImageAddress) {
   const parsedFamily = isIP(address);
   if (parsedFamily !== family) return false;
-  if (family === 4) return isGloballyReachableIpv4(address);
-  if (family === 6) return isGloballyReachableIpv6(address);
+  if (family === 4) {
+    return ipaddr.IPv4.isValidFourPartDecimal(address) &&
+      isGloballyReachableIpv4(ipaddr.IPv4.parse(address));
+  }
+  if (family === 6) {
+    // ipaddr.js rewrites deprecated bare ::w.x.y.z text to ::ffff:w.x.y.z.
+    // Reject that syntax before parsing so the actual ::/96 address cannot
+    // inherit the mapped-address policy.
+    const isBareIpv4Compatible = address.startsWith("::") &&
+      address.lastIndexOf(":") === 1 &&
+      address.includes(".");
+    return !address.includes("%") &&
+      !isBareIpv4Compatible &&
+      ipaddr.IPv6.isValid(address) &&
+      isGloballyReachableIpv6(ipaddr.IPv6.parse(address));
+  }
   return false;
 }
 
