@@ -22,6 +22,7 @@ import { notifyImportStatus } from "./status.ts";
 import { importRequestHash } from "./request-hash.ts";
 import { withImportSessionLock } from "./session-lock.ts";
 import {
+  cleanupFinalImportObjects,
   cleanupStagedObjects,
   preparedThumbnailResponse
 } from "./staging.ts";
@@ -289,14 +290,14 @@ export async function cancelImportSession(id: string) {
   return withImportSessionLock(canonicalId, async (signal) => {
     signal.throwIfAborted();
     const session = (await pool.query(
-      `SELECT status, storage_slug,
+      `SELECT status, storage_slug, final_object_key,
               created_at::text AS cancellation_generation
          FROM import_session
         WHERE id=$1`,
       [canonicalId]
     )).rows[0] as Pick<
       ImportSessionRow,
-      "status" | "storage_slug"
+      "status" | "storage_slug" | "final_object_key"
     > & {
       cancellation_generation: string;
     } | undefined;
@@ -317,6 +318,13 @@ export async function cancelImportSession(id: string) {
       signal.throwIfAborted();
       const cleanups = await Promise.allSettled([
         cleanupStagedObjects(canonicalId, session.storage_slug),
+        cleanupFinalImportObjects(
+          canonicalId,
+          session.final_object_key,
+          session.storage_slug,
+          signal,
+          "cancelled_import_commit_cleanup"
+        ),
         removeRawImport(canonicalId)
       ]);
       const failures = cleanups
@@ -330,7 +338,7 @@ export async function cancelImportSession(id: string) {
       throw new ApiError(
         502,
         "import_cleanup_failed",
-        "导入已取消，但暂存文件清理失败；后台任务将继续重试",
+        "导入已取消，但文件清理失败；后台任务将继续重试",
         { cause: error instanceof Error ? error.message : String(error) }
       );
     }

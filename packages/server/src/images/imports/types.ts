@@ -2,6 +2,7 @@ import type {
   Brightness,
   Device,
   ImageDraftDto,
+  ImportDuplicateDecision,
   ImportMode,
   ImportSessionCreateDto,
   ImportStatus
@@ -13,6 +14,17 @@ export type ImportMetadata = ImageDraftDto;
 
 export type MetadataPayload = ImportMetadata & {
   image_time: string;
+};
+
+export type ImportDuplicateCheck = {
+  md5: string;
+  match_count: number;
+};
+
+export type ImportDuplicateConfirmation = {
+  commit_attempt_id: string;
+  expected_md5: string;
+  decision: ImportDuplicateDecision;
 };
 
 export type PreparedPayload = MetadataPayload & {
@@ -35,6 +47,8 @@ export type PreparedPayload = MetadataPayload & {
   transcoded: boolean;
   detected_device: Device;
   detected_brightness: Brightness;
+  duplicate_check: ImportDuplicateCheck;
+  duplicate_confirmation?: ImportDuplicateConfirmation;
 };
 
 export type ImportSessionRow = {

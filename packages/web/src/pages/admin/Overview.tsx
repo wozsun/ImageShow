@@ -145,10 +145,10 @@ export function Overview({ canManageStorage }: { canManageStorage: boolean }) {
     ? new Date(redisCache.last_full_rebuild_measured_at).toLocaleString()
     : null;
   const redisMemoryHint = currentCoreSize && currentCoreMeasuredAt
-    ? `当前核心占用 ${currentCoreSize} · ${currentCoreMeasuredAt} · ${redisCacheState}`
+    ? `${currentCoreSize} · ${redisCacheState}`
     : fullRebuildCoreSize !== "—" && fullRebuildMeasuredAt
-      ? `最近完整重建 ${fullRebuildCoreSize} · ${fullRebuildMeasuredAt} · ${redisCacheState}`
-      : `当前核心占用未知 · ${redisCacheState}`;
+      ? `${fullRebuildCoreSize} · ${redisCacheState}`
+      : `— · ${redisCacheState}`;
   const redisMemoryTitle = currentCoreSize && currentCoreMeasuredAt
     ? `当前核心图片投影占用 ${currentCoreSize}，测量于 ${currentCoreMeasuredAt}`
     : fullRebuildCoreSize !== "—" && fullRebuildMeasuredAt

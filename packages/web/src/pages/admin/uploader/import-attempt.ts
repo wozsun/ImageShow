@@ -104,10 +104,14 @@ export async function cancelImportAttempt(
 ): Promise<boolean> {
   const currentJob = queue.jobsRef.current.find((item) => item.id === job.id);
   if (!currentJob || !importJobCanBeCancelled(currentJob)) return false;
+  const safeCommitCheckpoint = currentJob.commitIntent
+    && currentJob.commitFailureCheckpoint === "ready"
+    ? "ready" as const
+    : undefined;
   queue.updateJob(job.id, {
     status: "cancelling",
     failureStage: undefined,
-    commitFailureCheckpoint: undefined,
+    commitFailureCheckpoint: safeCommitCheckpoint,
     message: "正在取消并清理暂存数据",
     transferProgress: undefined
   });
@@ -129,7 +133,7 @@ export async function cancelImportAttempt(
       queue.updateJob(job.id, {
         status: "failed",
         failureStage: "cancel",
-        commitFailureCheckpoint: undefined,
+        commitFailureCheckpoint: safeCommitCheckpoint,
         message: `取消失败：${reason}`
       });
     }

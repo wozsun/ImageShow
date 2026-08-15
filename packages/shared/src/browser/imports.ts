@@ -8,6 +8,9 @@ import type {
 export const importStatusBatchMaxItems = 100;
 export const importModes = ["upload", "download"] as const;
 export type ImportMode = (typeof importModes)[number];
+export const importDuplicateDecisions = ["upload", "confirmed"] as const;
+export type ImportDuplicateDecision =
+  (typeof importDuplicateDecisions)[number];
 
 export const importStatuses = [
   "created",
@@ -133,12 +136,21 @@ export type StoredImportCommitResultDto = {
 
 export type StoredImportBatchCommitItemInputDto = {
   id: string;
+  commit_attempt_id: string;
+  expected_md5: string;
+  duplicate_decision: ImportDuplicateDecision;
   metadata: ImageDraftDto;
 };
 
 export type StoredImportBatchCommitItemResultDto =
   | ({ id: string } & StoredImportCommitResultDto)
-  | { id: string; status: "failed"; code: string; message: string };
+  | {
+      id: string;
+      status: "failed";
+      code: string;
+      message: string;
+      duplicates?: AdminImageListItemDto[];
+    };
 
 export type StoredImportBatchCommitResultDto = {
   imported: number;

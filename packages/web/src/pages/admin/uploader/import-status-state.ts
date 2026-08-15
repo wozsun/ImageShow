@@ -80,6 +80,12 @@ function clientStatusPatchMovesForward(
   if (job.status === "failed") {
     if (patch.status === "failed") return true;
     if (
+      job.commitFailureCheckpoint === "ready"
+      && ["cancelling", "cancelled"].includes(patch.status)
+    ) {
+      return true;
+    }
+    if (
       job.failureStage === "cancel"
       && ["cancelling", "cancelled"].includes(patch.status)
     ) {

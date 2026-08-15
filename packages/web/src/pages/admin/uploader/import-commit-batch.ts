@@ -40,8 +40,41 @@ function commitInput(job: ImportJob) {
   }
   return {
     id: job.sessionId.toLowerCase(),
+    commit_attempt_id: job.commitIntent.attemptId,
+    expected_md5: job.commitIntent.md5,
+    duplicate_decision: job.duplicateDecision === "confirmed"
+      ? "confirmed" as const
+      : "upload" as const,
     metadata: job.commitIntent.metadata
   };
+}
+
+type FailedBatchResult = Extract<
+  Awaited<ReturnType<typeof commitStoredImports>>["items"][number],
+  { status: "failed" }
+>;
+
+function applyDuplicateConflict(
+  options: CommitSelectedImportsOptions,
+  job: ImportJob,
+  result: FailedBatchResult
+) {
+  if (result.code !== "import_duplicate_conflict" || !result.duplicates?.length) {
+    return false;
+  }
+  const current = currentCommitJob(options, job);
+  if (!current) return true;
+  options.updateJob(current.id, {
+    status: "failed",
+    failureStage: "commit",
+    commitFailureCheckpoint: "ready",
+    resultState: undefined,
+    resultError: undefined,
+    duplicates: result.duplicates,
+    duplicateDecision: "undecided",
+    message: result.message
+  });
+  return true;
 }
 
 function currentCommitJob(
@@ -207,6 +240,12 @@ async function commitSelectedImportBatch(
     if (result?.status === "imported") {
       const accepted = acceptImportedResult(options, job, result, "已完成");
       if (accepted) acceptedItems.push(accepted);
+      continue;
+    }
+    if (
+      result?.status === "failed"
+      && applyDuplicateConflict(options, job, result)
+    ) {
       continue;
     }
     pending.push({

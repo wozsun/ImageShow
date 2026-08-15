@@ -80,7 +80,7 @@ export function importJobCanStartCommit(
   job: ImportJob,
   request: ImportCommitRequest
 ) {
-  if (job.duplicateDecision === "undecided") return false;
+  if (!job.md5 || job.duplicateDecision === "undecided") return false;
   return request === "ready"
     ? job.status === "ready" && !job.commitIntent
     : Boolean(job.commitIntent) && (
@@ -109,9 +109,11 @@ export function createImportCommitIntent(
   attemptId = browserUuid(),
   createdAt = new Date().toISOString()
 ): ImportCommitIntent {
+  if (!job.md5) throw new Error("准备提交的图片缺少最终 MD5");
   return {
     attemptId,
     createdAt,
+    md5: job.md5,
     metadata: {
       ...job.draft,
       theme: normalizeTheme(job.draft.theme),
@@ -125,13 +127,21 @@ function importJobHasCommitOwnership(job: ImportJob) {
   return Boolean(job.commitIntent) || commitOwnedStatuses.has(job.status);
 }
 
+function importJobHasConfirmedReadyCheckpoint(job: ImportJob) {
+  return Boolean(job.commitIntent)
+    && job.status === "failed"
+    && job.commitFailureCheckpoint === "ready";
+}
+
 export function importJobCanBeCancelled(job: ImportJob) {
+  if (importJobHasConfirmedReadyCheckpoint(job)) return true;
   return !importJobHasCommitOwnership(job)
     && !["cancelling", "done", "cancelled"].includes(job.status);
 }
 
 export function importJobCanLeaveQueue(job: ImportJob) {
-  if (["done", "cancelled"].includes(job.status)) return true;
+  if (["cancelling", "done", "cancelled"].includes(job.status)) return true;
+  if (importJobHasConfirmedReadyCheckpoint(job)) return true;
   return !importJobHasCommitOwnership(job);
 }
 
@@ -205,6 +215,7 @@ function patchJob(job: ImportJob, patch: Partial<ImportJob>) {
     job.commitIntent
     && patch.status === "failed"
     && patch.failureStage !== "commit"
+    && !(job.status === "cancelling" && patch.failureStage === "cancel")
   ) {
     return job;
   }

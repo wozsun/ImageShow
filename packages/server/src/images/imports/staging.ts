@@ -142,7 +142,8 @@ export async function cleanupFinalImportObjects(
   id: string,
   finalObjectKey: string,
   storageSlug: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  reason = "expired_import_commit_cleanup"
 ) {
   signal?.throwIfAborted();
   if (!finalObjectKey) return;
@@ -162,6 +163,6 @@ export async function cleanupFinalImportObjects(
       key: thumbnailObjectKey(finalObjectKey),
       backend: storageSlug
     }
-  ], "expired_import_commit_cleanup");
+  ], reason);
   signal?.throwIfAborted();
 }

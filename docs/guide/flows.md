@@ -58,8 +58,9 @@ created ─► materializing ─► received ─► preparing ─► ready
   微博入口先提取公开帖子中的原图、发布时间、来源与可选作者映射，再交给同一 JSONL
   解析器。
 - 本地来源按目录相对路径或文件名、大小、修改时间去重；远端来源按规范化 HTTPS URL
-  去重。prepare 得到最终 MD5 后，再统一提示图库重复或本批重复，由管理员决定是否仍
-  提交副本。
+  去重。prepare 得到最终 MD5 后，以一次 PostgreSQL 快照记录当时的有界命中数量，并统一
+  提示图库重复或本批重复，由管理员决定是否仍提交副本。该提示不是最终写入授权：commit
+  仍在相同最终 MD5 的并发边界内重读 PostgreSQL。
 - `attemptKey` 同时是服务端幂等键。响应丢失后重试会找回同一会话；已明确失败且用户
   修改输入后才开始新 attempt。
 - 每条 lane 只允许当前项处理和唯一后继项素材化前瞻。前端在权威状态进入
@@ -81,8 +82,10 @@ created ─► materializing ─► received ─► preparing ─► ready
   结果”，显式回执恢复显示“正在确认提交结果”。完成态不重复前置状态标签。服务端精确
   message 继续用于诊断和可操作失败，不直接驱动正常阶段文案。
 - 用户点击提交时，队列先同步取得单 runner 围栏，并为每项建立不可变 commit intent：锁定
-  attempt、创建时间以及规范化后深拷贝的实际 wire metadata。持有 intent 的任务禁止编辑、
-  普通取消、移除和“清空未提交”；失败重试与结果恢复只复用锁定值，不重新读取草稿。
+  attempt、最终 MD5、创建时间以及规范化后深拷贝的实际 wire metadata。重复决策随该项进入
+  既有批量 commit 正文，不另发逐图预检请求。持有 intent 的任务禁止编辑、普通取消、移除和
+  “清空未提交”；失败重试与结果恢复只复用锁定值，不重新读取草稿。只有服务端确认仍处于
+  `ready` 的重复冲突可重新确认或取消；它不会被误当作可能已写入的普通 commit 失败。
   `commit-queued`、`committing` 与 `finalized` 都继续订阅事件和轮询降级，迟到的
   `ready/committing/finalized` 不能倒退更高状态。状态订阅或展示组件暂时卸载后可重新订阅；
   本版本不持久化 Web 队列，因此不承诺整个 Uploader 卸载、刷新或浏览器退出后的草稿恢复。
@@ -100,11 +103,16 @@ JSONL 可设置 `original`、`source`、`image_time`、`author`、`tags`、`titl
 2. **prepare** 只处理已发布的 raw：校验图片、按配置标准化为 WebP、生成缩略图、检测
    设备与明暗、计算摘要，再把 processed image 与 prepared thumbnail 写入会话锁定
    后端的 `_uploads`。
-3. **commit** 不重新下载或转码。它验证 `_uploads` 候选及正式对象，写入 `media` 与
-   `thumbs`，在短事务中提交 metadata、标签、会话终态与图片投影 revision，随后清理
-   staging。`finalized` 事务一旦持久化就立即发出轻量权威状态通知，不等待缓存同步、暂存
-   清理、presenter 或整批响应；这些后置步骤失败不得倒退已提交事实。响应返回完整管理端
-   图片对象，供队列直接收敛为已完成。
+3. **commit** 不重新下载或转码。它先取得相同最终 MD5 的 advisory lock，并在该锁内重读
+   PostgreSQL；未明确允许重复且出现同内容图片时，只让当前批次成员返回结构化冲突，其他
+   成员继续执行。确认意图绑定 session、attempt 与最终 MD5，不能挪给另一项。通过后再验证
+   `_uploads` 候选及正式对象，写入 `media` 与 `thumbs`，在短事务中提交 metadata、标签、
+   会话终态与图片投影 revision，随后清理 staging。该内容锁沿用当前 PostgreSQL advisory
+   lock 基础设施，只串行相同 MD5，不增加多实例协调器。`finalized` 事务一旦持久化就立即
+   发出轻量权威状态通知，不等待缓存同步、暂存清理、presenter 或整批响应；这些后置步骤
+   失败不得倒退已提交事实。响应返回完整管理端图片对象，供队列直接收敛为已完成。
+   中断恢复若已生成正式候选，会保留位置供同一确认接续；用户随后取消或会话过期时，既有
+   持久 `move.cleanup` 边界接管候选原图和缩略图，避免删除会话后留下无主对象。
 
 完整结果以 `(jobId, commitIntent.attemptId)` 作为 Web 消费键。只有 reducer 首次接受的
 `imported` 结果可以完成任务、同步重复项并触发一轮图片列表、统计和概览查询失效；重复 HTTP
@@ -335,9 +343,9 @@ overview 和词表分别只在自身字段受影响时刷新；公开编辑与�
 
 后台概览沿用 `queryKeys.overview` 这一个查询 owner，在同一服务端请求中并行读取 PostgreSQL
 统计和 Redis 当前核心图片投影占用。Redis 测量只遍历固定核心键、准确使用
-`MEMORY USAGE ... SAMPLES 0`，不扫描键空间；并发概览请求单飞合并。成功时显示“当前核心
-占用”及测量时间，失败时显示未知或明确标注的“最近完整重建”。活动重建的状态轮询不重复
-测量，完成后的既有概览刷新只测量一次。
+`MEMORY USAGE ... SAMPLES 0`，不扫描键空间；并发概览请求单飞合并。卡片可见副标题只显示
+“占用大小 · 同步状态”；当前测量、最近完整重建回退及其测量时间保留在 hover 详情中，完全
+未知时以“—”占位。活动重建的状态轮询不重复测量，完成后的既有概览刷新只测量一次。
 
 检查页默认用一次轻量请求独立展示 PostgreSQL、Redis 和图片投影状态，同时在后台自动执行
 一次有界 Redis 占用检测；轻量结果不等待检测，完整检测结果原地填充核心投影与派生缓存双卡。

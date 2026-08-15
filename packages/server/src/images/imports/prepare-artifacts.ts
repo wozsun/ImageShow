@@ -13,11 +13,11 @@ import {
   sha256Buffer,
   transcodeStoredImage
 } from "../processing.ts";
-import { getDuplicateImagesByMd5 } from "../read-models/duplicates.ts";
 import {
   setImportPhase
 } from "./status.ts";
 import { assertImportStillPreparing } from "./lifecycle.ts";
+import { captureImportDuplicateCheck } from "./duplicate-confirmation.ts";
 import type {
   MetadataPayload,
   PreparedPayload
@@ -30,9 +30,11 @@ function requiredDeviceFromDimensions(width: number, height: number): Device {
 export async function preparedImportResult(
   id: string,
   storageSlug: string,
-  payload: PreparedPayload
+  payload: PreparedPayload,
+  preparedDuplicates?: PreparedImportDto["duplicates"]
 ): Promise<PreparedImportDto> {
-  const duplicates = await getDuplicateImagesByMd5(payload.md5);
+  const duplicates = preparedDuplicates
+    ?? (await captureImportDuplicateCheck(payload.md5)).duplicates;
   return {
     id,
     preview_url: `/api/admin/imports/${id}/preview`,
@@ -125,6 +127,7 @@ export async function prepareImportArtifacts(options: {
   signal.throwIfAborted();
   await assertImportStillPreparing(id, executionToken);
 
+  const duplicateSnapshot = await captureImportDuplicateCheck(normalized.md5);
   const payload: PreparedPayload = {
     ...metadata,
     mode,
@@ -145,10 +148,16 @@ export async function prepareImportArtifacts(options: {
     quality: normalized.quality,
     transcoded: normalized.transcoded,
     detected_device: detectedDevice,
-    detected_brightness: detectedBrightness
+    detected_brightness: detectedBrightness,
+    duplicate_check: duplicateSnapshot.check
   };
   return {
     payload,
-    result: await preparedImportResult(id, storageSlug, payload)
+    result: await preparedImportResult(
+      id,
+      storageSlug,
+      payload,
+      duplicateSnapshot.duplicates
+    )
   };
 }

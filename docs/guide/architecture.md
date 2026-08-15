@@ -171,8 +171,13 @@ Gallery 和其他后台页面。每个公开路由分别测量全新持久 profi
 只有检查页维护可以补建。分类移动和存储迁移不会在业务路径隐式修复。
 
 导入会话另以 session advisory lock 和 `execution_token` 隔离 materialize、prepare、
-commit、取消与过期清理。任何连接丢失或调用方取消都通过 `AbortSignal` 传播；领域模块在
-发布状态、写对象和删对象前重新核对所有权。端到端状态见[功能与流程](./flows.md)。
+commit、取消与过期清理。commit 还按 prepared 最终 MD5 使用同一 PostgreSQL advisory lock
+设施建立内容边界：只串行相同内容，在锁内重读 metadata，再由已绑定 session / attempt /
+MD5 的显式决策决定是否允许副本。不同内容和同批其他成员不共用该锁；当前单实例部署无需
+新增跨实例协调服务。提交取得内容与会话锁后还会核对预解析词表锁对应的已绑定 metadata；
+若另一并发请求刚完成绑定，只释放当前项并在同一请求内按权威 payload 重取一次。任何连接
+丢失或调用方取消都通过 `AbortSignal` 传播；领域模块在发布状态、写对象和删对象前重新核对
+所有权。端到端状态见[功能与流程](./flows.md)。
 
 ## 后台 Worker
 

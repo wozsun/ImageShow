@@ -163,8 +163,10 @@ Web 的 `import-status-subscription.ts` 只维护按入队批次有界的前端�
 同行，不形成额外动态入口或资源请求。
 - `prepare.ts` 只编排会话认领、恢复和清理，图片处理与 prepared 结果由
   `prepare-artifacts.ts` 完成。
-- `commit.ts` 只编排锁、对象落位与补偿；数据库事务、提交后缓存同步和候选对象所有权
-  分别位于 `commit-persistence.ts`、`commit-sync.ts`、`commit-candidates.ts`。
+- `duplicate-confirmation.ts` 统一拥有 prepare 重复快照、提交决策绑定和最终 MD5 内容锁键；
+  `commit.ts` 只编排这些锁、权威重读、对象落位与补偿。数据库事务、提交后缓存同步和候选
+  对象所有权分别位于 `commit-persistence.ts`、`commit-sync.ts`、
+  `commit-candidates.ts`。
 - `weibo.ts` 只编排批次和 JSONL 清单，链接/时间/响应提取、受限上游协议、未知响应值
   归一化及公开类型分别位于 `weibo-parser.ts`、`weibo-client.ts`、
   `weibo-values.ts`、`weibo-types.ts`。

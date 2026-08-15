@@ -2,7 +2,10 @@ import { pool } from "../../core/database-pools.ts";
 import { ApiError, errorMessage } from "../../core/api-error.ts";
 import { logger } from "../../core/logger.ts";
 import { randomUuidV7 } from "../../core/uuid.ts";
-import type { StoredImportCommitResultDto } from "@imageshow/shared/browser";
+import type {
+  StoredImportBatchCommitItemInputDto,
+  StoredImportCommitResultDto
+} from "@imageshow/shared/browser";
 import { resolveTagNames } from "../../tags/query.ts";
 import { vocabularyAssociationLockRequests } from "../../vocab/mutation-sync.ts";
 import { resolveStorageAccess } from "../../storage/backend-registry.ts";
@@ -36,6 +39,11 @@ import {
   runImportCommit,
   runImportCommitWithinByteBudget
 } from "./execution.ts";
+import {
+  assertImportDuplicateDecision,
+  importContentLockKey,
+  resolveImportDuplicateConfirmation
+} from "./duplicate-confirmation.ts";
 import { importSessionLockKey } from "./session-lock.ts";
 import type {
   ImportMetadata,
@@ -53,6 +61,25 @@ type CommitImportSessionRecord = Pick<
   | "image_time"
   | "execution_token"
 >;
+
+type CommitImportInput = StoredImportBatchCommitItemInputDto;
+
+type ImportCommitVocabularySource = Pick<
+  ImportMetadata,
+  "theme" | "author" | "tags"
+>;
+
+const retryVocabularyLocks = { status: "retry-vocabulary-locks" } as const;
+
+function importCommitVocabularyBinding(
+  payload: Partial<ImportCommitVocabularySource>
+) {
+  return JSON.stringify([
+    payload.theme ?? "",
+    payload.author ?? "",
+    [...new Set(payload.tags ?? [])].sort()
+  ]);
+}
 
 async function assertPreparedObjectExists(
   storage: Awaited<ReturnType<typeof resolveStorageAccess>>,
@@ -238,8 +265,9 @@ async function commitStoredImageSession(
 
 async function commitImportSessionWhileLocationStable(
   id: string,
-  metadata: ImportMetadata,
+  input: CommitImportInput,
   resolvedTags: string[],
+  vocabularyBinding: string,
   signal: AbortSignal
 ) {
   signal.throwIfAborted();
@@ -262,27 +290,79 @@ async function commitImportSessionWhileLocationStable(
     throw new ApiError(409, "invalid_import_state", "图片尚未准备完成");
   }
 
+  const preparedPayload = session.prepared_payload as PreparedPayload;
+  const authoritativeVocabularySource = (
+    session.status === "ready" && !preparedPayload.duplicate_confirmation
+  )
+    ? { ...preparedPayload, ...input.metadata }
+    : preparedPayload;
+  if (
+    importCommitVocabularyBinding(authoritativeVocabularySource)
+      !== vocabularyBinding
+  ) {
+    return retryVocabularyLocks;
+  }
+
   return withImportLease(id, async () => {
     signal.throwIfAborted();
     const executionToken = randomUuidV7();
     if (session?.status === "ready") {
-      const payload = { ...session.prepared_payload, ...metadata } as PreparedPayload;
+      const preparedPayload = session.prepared_payload as PreparedPayload;
+      const confirmation = resolveImportDuplicateConfirmation(
+        "ready",
+        preparedPayload,
+        input
+      );
+      const payload = {
+        ...preparedPayload,
+        ...(preparedPayload.duplicate_confirmation ? {} : input.metadata),
+        duplicate_confirmation: confirmation
+      } as PreparedPayload;
       const metadataPayload: MetadataPayload = {
-        ...metadata,
+        device: payload.device,
+        brightness: payload.brightness,
+        theme: payload.theme,
+        author: payload.author,
+        title: payload.title,
+        description: payload.description,
+        source: payload.source,
+        original: payload.original,
+        tags: [...payload.tags],
         image_time: new Date(session.image_time).toISOString()
       };
-      const classification = resolveClassification(metadata, {
+      const classification = resolveClassification(payload, {
         device: payload.detected_device,
         brightness: payload.detected_brightness
       });
       const finalKey = storageObjectKey(
         classification.device,
         classification.brightness,
-        metadata.theme,
+        payload.theme,
         id,
         payload.ext
       );
       signal.throwIfAborted();
+      try {
+        await assertImportDuplicateDecision(id, payload, confirmation);
+      } catch (error) {
+        if (error instanceof ApiError && error.code === "import_duplicate_conflict") {
+          const retained = await pool.query(
+            `UPDATE import_session
+                SET metadata_payload=$2::jsonb, prepared_payload=$3::jsonb,
+                    updated_at=now()
+              WHERE id=$1 AND status='ready'`,
+            [id, JSON.stringify(metadataPayload), JSON.stringify(payload)]
+          );
+          if (!retained.rowCount) {
+            throw new ApiError(
+              409,
+              "invalid_import_state",
+              "导入任务提交状态已变化"
+            );
+          }
+        }
+        throw error;
+      }
       const claimed = await pool.query(
         `UPDATE import_session
          SET status='committing', metadata_payload=$2::jsonb, prepared_payload=$3::jsonb,
@@ -308,13 +388,46 @@ async function commitImportSessionWhileLocationStable(
       session = claimed.rows[0] as CommitImportSessionRecord;
       await notifyImportStatus(id).catch(() => undefined);
     } else if (session?.status === "committing") {
+      const payload = session.prepared_payload as PreparedPayload;
+      const confirmation = resolveImportDuplicateConfirmation(
+        "committing",
+        payload,
+        input
+      );
+      const confirmedPayload = {
+        ...payload,
+        duplicate_confirmation: confirmation
+      };
+      try {
+        await assertImportDuplicateDecision(id, confirmedPayload, confirmation);
+      } catch (error) {
+        if (error instanceof ApiError && error.code === "import_duplicate_conflict") {
+          const released = await pool.query(
+            `UPDATE import_session
+                SET status='ready', prepared_payload=$2::jsonb,
+                    execution_token=NULL, updated_at=now()
+              WHERE id=$1 AND status='committing'`,
+            [id, JSON.stringify(confirmedPayload)]
+          );
+          if (!released.rowCount) {
+            throw new ApiError(
+              409,
+              "invalid_import_state",
+              "导入任务提交状态已变化"
+            );
+          }
+          await notifyImportStatus(id).catch(() => undefined);
+        }
+        throw error;
+      }
       const reclaimed = await pool.query(
         `UPDATE import_session
-            SET execution_token=$2::uuid, updated_at=now()
+            SET prepared_payload=$2::jsonb, execution_token=$3::uuid,
+                updated_at=now()
           WHERE id=$1 AND status='committing'
           RETURNING status, storage_slug, final_object_key, prepared_payload,
                     image_time, execution_token`,
-        [id, executionToken]
+        [id, JSON.stringify(confirmedPayload), executionToken]
       );
       if (!reclaimed.rowCount) {
         throw new ApiError(
@@ -353,7 +466,10 @@ async function importCommitVocabularyLocks(
     "status" | "prepared_payload"
   > | undefined;
   const prepared = row?.prepared_payload as Partial<PreparedPayload> | undefined;
-  const finalPayload = row?.status === "ready"
+  if (!prepared?.md5 || !/^[a-f0-9]{32}$/.test(prepared.md5)) {
+    throw new ApiError(409, "invalid_import_state", "图片尚未准备完成");
+  }
+  const finalPayload = row?.status === "ready" && !prepared.duplicate_confirmation
     ? { ...prepared, ...metadata }
     : prepared ?? metadata;
   const resolvedTags = await resolveTagNames(finalPayload.tags ?? []);
@@ -368,33 +484,52 @@ async function importCommitVocabularyLocks(
   ];
   return {
     locks: vocabularyAssociationLockRequests(entries),
-    resolvedTags
+    resolvedTags,
+    md5: prepared.md5,
+    binding: importCommitVocabularyBinding(finalPayload)
   };
 }
 
 async function commitImportSessionWithinLimit(
-  id: string,
-  metadata: ImportMetadata,
+  input: CommitImportInput,
   commitSignal: AbortSignal
 ) {
-  const vocabulary = await importCommitVocabularyLocks(id, metadata);
-  const attempt = await tryWithStorageLocationReadAndAdvisoryLocks(
-    [
-      ...vocabulary.locks,
-      { key: importSessionLockKey(id), acquisition: "try" },
-      { key: imageStorageMutationLockKey(id) }
-    ],
-    (lockSignal) => commitImportSessionWhileLocationStable(
-      id,
-      metadata,
-      vocabulary.resolvedTags,
-      AbortSignal.any([commitSignal, lockSignal])
-    )
-  );
-  if (!attempt.acquired) {
-    throw new ApiError(409, "import_already_finalizing", "Import is already being committed");
+  for (let lockAttempt = 0; lockAttempt < 2; lockAttempt += 1) {
+    const vocabulary = await importCommitVocabularyLocks(
+      input.id,
+      input.metadata
+    );
+    const attempt = await tryWithStorageLocationReadAndAdvisoryLocks(
+      [
+        ...vocabulary.locks,
+        { key: importContentLockKey(vocabulary.md5) },
+        { key: importSessionLockKey(input.id), acquisition: "try" },
+        { key: imageStorageMutationLockKey(input.id) }
+      ],
+      (lockSignal) => commitImportSessionWhileLocationStable(
+        input.id,
+        input,
+        vocabulary.resolvedTags,
+        vocabulary.binding,
+        AbortSignal.any([commitSignal, lockSignal])
+      )
+    );
+    if (!attempt.acquired) {
+      throw new ApiError(
+        409,
+        "import_already_finalizing",
+        "Import is already being committed"
+      );
+    }
+    if (attempt.value.status !== retryVocabularyLocks.status) {
+      return attempt.value;
+    }
   }
-  return attempt.value;
+  throw new ApiError(
+    409,
+    "import_commit_state_changed",
+    "导入任务提交属性已变化，请重试"
+  );
 }
 
 async function importCommitByteWeight(id: string) {
@@ -411,16 +546,15 @@ async function importCommitByteWeight(id: string) {
 }
 
 export function commitImportSession(
-  id: string,
-  metadata: ImportMetadata,
+  input: CommitImportInput,
   signal?: AbortSignal
 ): Promise<StoredImportCommitResultDto> {
   const commitSignal = signal ?? new AbortController().signal;
   return runImportCommit(async () => {
-    const bytes = await importCommitByteWeight(id);
+    const bytes = await importCommitByteWeight(input.id);
     return runImportCommitWithinByteBudget(
       bytes,
-      () => commitImportSessionWithinLimit(id, metadata, commitSignal),
+      () => commitImportSessionWithinLimit(input, commitSignal),
       commitSignal
     );
   }, commitSignal);

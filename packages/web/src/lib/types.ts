@@ -66,6 +66,7 @@ export type CommitFailureCheckpoint = "ready" | "committing" | "unknown";
 export type ImportCommitIntent = {
   attemptId: string;
   createdAt: string;
+  md5: string;
   metadata: ImageDraft;
 };
 type ImportResultState = "pending" | "recovering" | "error" | "hydrated";

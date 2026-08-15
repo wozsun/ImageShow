@@ -1,4 +1,5 @@
 import type {
+  AdminImageListItemDto,
   StoredImportBatchCommitItemInputDto,
   StoredImportBatchCommitItemResultDto,
   StoredImportBatchCommitResultDto
@@ -14,11 +15,15 @@ function failedImportResult(
   error: unknown
 ): StoredImportBatchCommitItemResultDto {
   if (error instanceof ApiError) {
+    const duplicates = error.code === "import_duplicate_conflict"
+      ? (error.details as { duplicates?: AdminImageListItemDto[] })?.duplicates
+      : undefined;
     return {
       id,
       status: "failed",
       code: error.code,
-      message: error.message
+      message: error.message,
+      ...(Array.isArray(duplicates) ? { duplicates } : {})
     };
   }
   return {
@@ -46,8 +51,7 @@ export async function commitImportSessions(
       async (item): Promise<StoredImportBatchCommitItemResultDto> => {
         try {
           const result = await commitImportSession(
-            item.id,
-            item.metadata,
+            item,
             commitSignal
           );
           return { id: item.id, ...result };

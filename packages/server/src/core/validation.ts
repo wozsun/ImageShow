@@ -6,6 +6,7 @@ import {
   adminPreferencesMaxBytes,
   type ImageUpdateItemInputDto,
   importBatchHardLimit,
+  importDuplicateDecisions,
   importStatusBatchMaxItems,
   importModes,
   slugMaxLength,
@@ -268,6 +269,9 @@ const importCommitInput = metadataCreateInput.extend({
 export const importBatchCommitInput = z.strictObject({
   items: z.array(z.strictObject({
     id: uuidInput,
+    commit_attempt_id: uuidInput,
+    expected_md5: z.string().regex(/^[a-f0-9]{32}$/),
+    duplicate_decision: z.enum(importDuplicateDecisions),
     metadata: importCommitInput
   })).min(1).max(importBatchHardLimit)
 }).superRefine((value, ctx) => {
