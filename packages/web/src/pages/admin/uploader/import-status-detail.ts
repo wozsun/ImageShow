@@ -33,10 +33,18 @@ export function importJobStatusDetail(
         return "发现重复图片，请确认";
       }
       return "图片处理完成，等待提交";
+    case "commit-queued":
+      return "等待提交";
     case "committing":
-      return job.recoveringCommitResult
+      return job.resultState === "recovering"
         ? "正在确认提交结果"
         : "写入图库中";
+    case "finalized":
+      if (job.resultState === "recovering") return "正在确认提交结果";
+      if (job.resultState === "error") {
+        return job.message || "已写入图库，但结果读取失败";
+      }
+      return "已写入图库，等待结果";
     case "cancelling":
       return "正在取消并清理暂存数据";
     case "done":

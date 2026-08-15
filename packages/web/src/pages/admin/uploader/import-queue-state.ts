@@ -1,5 +1,15 @@
-import type { ImageDraft, AdminImageListItem, ImportJob } from "../../../lib/types.js";
-import type { ImportAttributeDefaults } from "../../../lib/upload/upload-utils.js";
+import type {
+  ImageDraft,
+  AdminImageListItem,
+  ImportCommitIntent,
+  ImportJob
+} from "../../../lib/types.js";
+import {
+  browserUuid,
+  normalizeAuthor,
+  normalizeTheme,
+  type ImportAttributeDefaults
+} from "../../../lib/upload/upload-utils.js";
 import {
   importJobNeedsDuplicateConfirmation,
   importQueueDuplicateStateChanged,
@@ -18,12 +28,17 @@ const processingImportStatuses = new Set<ImportJob["status"]>([
   "downloading",
   "received",
   "processing",
-  "committing",
   "cancelling"
 ]);
 
+const commitOwnedStatuses = new Set<ImportJob["status"]>([
+  "commit-queued",
+  "committing",
+  "finalized"
+]);
+
 export type ImportQueueState = { jobs: ImportJob[]; page: number };
-export type ImportCommitIntent = "ready" | "retry";
+export type ImportCommitRequest = "ready" | "retry";
 export type ImportQueueAction =
   | { type: "append"; jobs: ImportJob[] }
   | { type: "retain-mode"; mode: "file" | "link" }
@@ -37,6 +52,7 @@ export type ImportQueueAction =
       id: string;
       patch: Partial<ImportJob>;
       item: AdminImageListItem;
+      commitAttemptId: string;
       suppressDuplicateItem?: boolean;
     }
   | { type: "patch-draft"; id: string; patch: Partial<ImageDraft> }
@@ -49,6 +65,9 @@ type ImportJobSummary = {
   readyJobs: ImportJob[];
   duplicateJobs: number;
   runningJobs: number;
+  commitQueuedJobs: number;
+  committingJobs: number;
+  finalizedJobs: number;
   doneJobs: number;
   failedJobs: number;
 };
@@ -59,22 +78,69 @@ export function importQueuePageCount(length: number, pageSize: number) {
 
 export function importJobCanStartCommit(
   job: ImportJob,
-  intent: ImportCommitIntent
+  request: ImportCommitRequest
 ) {
   if (job.duplicateDecision === "undecided") return false;
-  return intent === "ready"
-    ? job.status === "ready"
-    : job.status === "failed" && job.failureStage === "commit";
+  return request === "ready"
+    ? job.status === "ready" && !job.commitIntent
+    : Boolean(job.commitIntent) && (
+        (job.status === "failed" && job.failureStage === "commit")
+        || job.status === "committing"
+        || (
+          job.status === "finalized"
+          && job.resultState !== "hydrated"
+        )
+      );
 }
 
 export function importJobIsRecoveringCommitResult(
-  job: ImportJob,
-  intent: ImportCommitIntent
+  job: ImportJob
 ) {
-  return intent === "retry" && job.commitFailureCheckpoint !== "ready";
+  return job.status === "finalized"
+    || (
+      job.status === "failed"
+      && job.failureStage === "commit"
+      && job.commitFailureCheckpoint !== "ready"
+    );
+}
+
+export function createImportCommitIntent(
+  job: ImportJob,
+  attemptId = browserUuid(),
+  createdAt = new Date().toISOString()
+): ImportCommitIntent {
+  return {
+    attemptId,
+    createdAt,
+    metadata: {
+      ...job.draft,
+      theme: normalizeTheme(job.draft.theme),
+      author: normalizeAuthor(job.draft.author),
+      tags: [...job.draft.tags]
+    }
+  };
+}
+
+function importJobHasCommitOwnership(job: ImportJob) {
+  return Boolean(job.commitIntent) || commitOwnedStatuses.has(job.status);
+}
+
+export function importJobCanBeCancelled(job: ImportJob) {
+  return !importJobHasCommitOwnership(job)
+    && !["cancelling", "done", "cancelled"].includes(job.status);
+}
+
+export function importJobCanLeaveQueue(job: ImportJob) {
+  if (["done", "cancelled"].includes(job.status)) return true;
+  return !importJobHasCommitOwnership(job);
+}
+
+export function isUncommittedImportJob(job: ImportJob) {
+  return job.status !== "done" && importJobCanLeaveQueue(job);
 }
 
 function patchJobDraft(job: ImportJob, patch: Partial<ImageDraft>): ImportJob {
+  if (job.commitIntent) return job;
   if (!imageDraftPatchChanges(job.draft, patch)) return job;
   const next = { ...job, draft: { ...job.draft, ...patch } };
   return {
@@ -110,7 +176,9 @@ function patchJob(job: ImportJob, patch: Partial<ImportJob>) {
       serverProgress: undefined,
       serverAttemptKey: undefined,
       serverSessionId: undefined,
-      recoveringCommitResult: undefined,
+      commitIntent: undefined,
+      resultState: undefined,
+      resultError: undefined,
       ...(has("transferProgress") ? {} : { transferProgress: undefined })
     };
     const changes = (Object.keys(nextPatch) as Array<keyof ImportJob>)
@@ -129,6 +197,21 @@ function patchJob(job: ImportJob, patch: Partial<ImportJob>) {
       || patch.serverSessionId.toLowerCase() !== job.sessionId.toLowerCase()
       || !importStatusPatchMovesForward(job, patch)
     )
+  ) {
+    return job;
+  }
+  if (!importStatusPatchMovesForward(job, patch)) return job;
+  if (
+    job.commitIntent
+    && patch.status === "failed"
+    && patch.failureStage !== "commit"
+  ) {
+    return job;
+  }
+  if (
+    job.commitIntent
+    && has("commitIntent")
+    && patch.commitIntent !== job.commitIntent
   ) {
     return job;
   }
@@ -201,15 +284,26 @@ function completeQueueJob(
   id: string,
   patch: Partial<ImportJob>,
   item: AdminImageListItem,
+  commitAttemptId: string,
   suppressDuplicateItem = false
 ) {
   const jobIndex = state.jobs.findIndex((job) => job.id === id);
-  const completed = jobIndex >= 0
-    ? patchJob(state.jobs[jobIndex]!, { ...patch, md5: item.md5 })
-    : undefined;
-  let changed = Boolean(
-    completed && completed !== state.jobs[jobIndex]
-  );
+  const current = jobIndex >= 0 ? state.jobs[jobIndex] : undefined;
+  if (
+    !current?.commitIntent
+    || current.commitIntent.attemptId !== commitAttemptId
+    || current.resultState === "hydrated"
+  ) {
+    return state;
+  }
+  const completed = patchJob(current, {
+    ...patch,
+    status: "done",
+    resultState: "hydrated",
+    resultError: undefined,
+    md5: item.md5
+  });
+  if (completed === current) return state;
   const jobs = state.jobs.map((job, index) => {
     if (index === jobIndex && completed) return completed;
     if (
@@ -223,10 +317,8 @@ function completeQueueJob(
     ) {
       return job;
     }
-    changed = true;
     return { ...job, duplicates: [...job.duplicates, item] };
   });
-  if (!changed) return state;
   return {
     ...state,
     jobs: reconcileImportQueueDuplicates(jobs)
@@ -238,6 +330,9 @@ export function summarizeImportJobs(jobs: ImportJob[]): ImportJobSummary {
     readyJobs: [],
     duplicateJobs: 0,
     runningJobs: 0,
+    commitQueuedJobs: 0,
+    committingJobs: 0,
+    finalizedJobs: 0,
     doneJobs: 0,
     failedJobs: 0
   };
@@ -253,6 +348,18 @@ export function summarizeImportJobs(jobs: ImportJob[]): ImportJobSummary {
     }
     if (processingImportStatuses.has(job.status)) {
       summary.runningJobs += 1;
+      continue;
+    }
+    if (job.status === "commit-queued") {
+      summary.commitQueuedJobs += 1;
+      continue;
+    }
+    if (job.status === "committing") {
+      summary.committingJobs += 1;
+      continue;
+    }
+    if (job.status === "finalized") {
+      summary.finalizedJobs += 1;
       continue;
     }
     if (job.status === "done") summary.doneJobs += 1;
@@ -274,7 +381,8 @@ export function reduceImportQueue(
     case "retain-mode": {
       const jobs = reconcileImportQueueDuplicates(
         state.jobs.filter((job) => (
-          action.mode === "file" ? job.kind === "local" : job.kind !== "local"
+          (action.mode === "file" ? job.kind === "local" : job.kind !== "local")
+          || !importJobCanLeaveQueue(job)
         ))
       );
       return jobs.length === state.jobs.length && state.page === 1
@@ -291,6 +399,7 @@ export function reduceImportQueue(
         action.id,
         action.patch,
         action.item,
+        action.commitAttemptId,
         action.suppressDuplicateItem
       );
     case "patch-draft":
@@ -298,8 +407,11 @@ export function reduceImportQueue(
     case "remove": {
       if (!action.ids.size || !state.jobs.some((job) => action.ids.has(job.id))) return state;
       const jobs = reconcileImportQueueDuplicates(
-        state.jobs.filter((job) => !action.ids.has(job.id))
+        state.jobs.filter((job) => (
+          !action.ids.has(job.id) || !importJobCanLeaveQueue(job)
+        ))
       );
+      if (jobs.length === state.jobs.length) return state;
       return { jobs, page: Math.min(state.page, importQueuePageCount(jobs.length, action.pageSize)) };
     }
     case "remove-library-duplicate": {

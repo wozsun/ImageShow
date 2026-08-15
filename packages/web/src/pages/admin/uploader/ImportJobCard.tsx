@@ -16,10 +16,15 @@ import {
 } from "./import-attribute-policy.js";
 import { importPositionText } from "./import-job-utils.js";
 import { importJobStatusDetail } from "./import-status-detail.js";
+import {
+  importJobCanBeCancelled,
+  importJobCanLeaveQueue
+} from "./import-queue-state.js";
 
 const statusLabels: Record<ImportJob["status"], string> = {
   queued: "等待中", uploading: "上传中", downloading: "下载中", received: "待处理", processing: "处理中",
-  ready: "已就绪", committing: "提交中", cancelling: "取消中", done: "已完成",
+  ready: "已就绪", "commit-queued": "提交排队", committing: "提交中", finalized: "已写入",
+  cancelling: "取消中", done: "已完成",
   failed: "失败", cancelled: "已取消"
 };
 
@@ -61,14 +66,16 @@ export const ImportJobCard = memo(function ImportJobCard({
   onPreview
 }: ImportJobCardProps) {
   const editable = importJobAttributesEditable(job) && !busy;
-  const running = ["queued", "uploading", "downloading", "received", "processing"].includes(job.status);
+  const cancellable = importJobCanBeCancelled(job);
+  const removable = importJobCanLeaveQueue(job) && !cancellable;
   const cancelling = job.status === "cancelling";
   const cancellationFailed = job.failureStage === "cancel";
   const confirmDuplicate = importJobNeedsDuplicateConfirmation(job)
     && (job.duplicates.length > 0 || Boolean(queueDuplicate));
-  const retryable = ["failed", "cancelled"].includes(job.status)
-    && !cancellationFailed
-    && !confirmDuplicate;
+  const retryable = (
+    ["failed", "cancelled"].includes(job.status)
+    || (job.status === "finalized" && job.resultState === "error")
+  ) && !cancellationFailed && !confirmDuplicate;
   const statusLabel = cancellationFailed ? "取消失败" : statusLabels[job.status];
   const hasFinalSize = typeof job.finalSize === "number";
   const displayName = job.draft.title || job.file?.name || job.url || job.id;
@@ -108,7 +115,10 @@ export const ImportJobCard = memo(function ImportJobCard({
             className="import-job-thumbnail"
             onClick={openPreview}
             showLoadingIndicator
-            retainLoadedWhenEmpty={job.status === "committing"}
+            retainLoadedWhenEmpty={[
+              "committing",
+              "finalized"
+            ].includes(job.status)}
           />
         </div>
         <span className="import-job-size is-vertical">
@@ -136,7 +146,13 @@ export const ImportJobCard = memo(function ImportJobCard({
       </div>
       <div className="import-job-actions">
         {retryable && (
-          <button type="button" className="icon" title="重试" onClick={() => onRetry(job)} disabled={busy}>
+          <button
+            type="button"
+            className="icon"
+            title={job.status === "finalized" ? "重新获取结果" : "重试"}
+            onClick={() => onRetry(job)}
+            disabled={busy}
+          >
             <AdminIcon name="refresh-line" />
           </button>
         )}
@@ -145,12 +161,12 @@ export const ImportJobCard = memo(function ImportJobCard({
             <AdminIcon name="refresh-line" />
           </button>
         )}
-        {running && (
+        {cancellable && !cancellationFailed && (
           <button type="button" className="icon danger-button" title="取消" onClick={() => onCancel(job)}>
             <AdminIcon name="close-line" />
           </button>
         )}
-        {!running && !cancelling && !cancellationFailed && (
+        {removable && !cancelling && !cancellationFailed && (
           <button type="button" className="icon danger-button" title="移除" onClick={() => onRemove(job)} disabled={busy}>
             <AdminIcon name="close-line" />
           </button>

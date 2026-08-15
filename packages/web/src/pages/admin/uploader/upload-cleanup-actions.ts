@@ -1,5 +1,6 @@
 import type { ImportJob } from "../../../lib/types.js";
 import { importJobNeedsDuplicateConfirmation } from "./duplicate-match.js";
+import { isUncommittedImportJob } from "./import-queue-state.js";
 
 export type UploadCleanupActionId =
   | "duplicates"
@@ -31,10 +32,6 @@ type UploadCleanupActionDefinition = {
 
 export function isCompletedImportJob(job: ImportJob) {
   return job.status === "done";
-}
-
-function isUncommittedImportJob(job: ImportJob) {
-  return !isCompletedImportJob(job);
 }
 
 const uploadCleanupActionDefinitions: UploadCleanupActionDefinition[] = [

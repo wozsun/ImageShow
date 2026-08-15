@@ -10,6 +10,8 @@ import type { FacetOption, ImportJob } from "../../../lib/types.js";
 import type { ImportAttributeDefaults } from "../../../lib/upload/upload-utils.js";
 import { importJobNeedsDuplicateConfirmation } from "./duplicate-match.js";
 import {
+  importJobCanBeCancelled,
+  importJobCanLeaveQueue,
   importJobCanStartCommit,
   summarizeImportJobs
 } from "./import-queue-state.js";
@@ -39,12 +41,6 @@ import "../../../styles/admin/upload.css";
 const EMPTY_FACET_OPTIONS: FacetOption[] = [];
 type ImportSourceDialogModule =
   typeof import("./link-import/ImportSourceDialog.js");
-
-function needsImportCancellation(job: ImportJob) {
-  return job.status !== "cancelling"
-    && job.status !== "done"
-    && job.status !== "cancelled";
-}
 
 export function Uploader({
   activation,
@@ -195,7 +191,7 @@ export function Uploader({
     if (!intentFenceRef.current.isCurrent(intent)) return false;
     if (opener) workflowReturnFocusRef.current = opener;
     const discarded = queue.jobsRef.current.filter((job) => next === "file" ? job.kind !== "local" : job.kind === "local");
-    await Promise.all(discarded.filter(needsImportCancellation).map(cancelJob));
+    await Promise.all(discarded.filter(importJobCanBeCancelled).map(cancelJob));
     if (!intentFenceRef.current.isCurrent(intent)) return false;
     queue.retainMode(next);
     setMode(next);
@@ -207,12 +203,18 @@ export function Uploader({
     const current = queue.jobsRef.current.find((job) => job.id === jobId);
     if (
       !current
-      || !["failed", "cancelled"].includes(current.status)
       || current.failureStage === "cancel"
+      || !(
+        ["failed", "cancelled"].includes(current.status)
+        || (current.status === "finalized" && current.resultState === "error")
+      )
     ) {
       return;
     }
-    if (current.failureStage === "commit") {
+    if (
+      current.failureStage === "commit"
+      || current.status === "finalized"
+    ) {
       if (importJobNeedsDuplicateConfirmation(current)) return;
       if (!importJobCanStartCommit(current, "retry")) return;
       setBusy(true);
@@ -229,20 +231,23 @@ export function Uploader({
   ]);
 
   const removeJob = useCallback(async (job: ImportJob) => {
+    if (!importJobCanLeaveQueue(job)) return;
     if (["done", "cancelled"].includes(job.status)) {
       queue.removeJob(job.id);
       return;
     }
-    await cancelJob(job);
+    if (importJobCanBeCancelled(job)) await cancelJob(job);
   }, [cancelJob, queue.removeJob]);
 
   const clearJobs = async (predicate: (job: ImportJob) => boolean) => {
-    const targets = queue.jobsRef.current.filter(predicate);
+    const targets = queue.jobsRef.current
+      .filter(predicate)
+      .filter(importJobCanLeaveQueue);
     // cancelJob 会先把任务改成 cancelling。固定本次 ID，避免取消完成后再次按旧状态条件
     // 筛选，导致“重复待确认”任务找不到而仍留在总数中；期间新产生的重复项也不会误删。
     const targetIds = new Set(targets.map((job) => job.id));
     const cancellationRequests = targets
-      .filter(needsImportCancellation)
+      .filter(importJobCanBeCancelled)
       .map(cancelJob);
     // 取消函数在首个 await 前已经中止活动请求并标记任务；服务端暂存对象清理可能较慢，
     // 不应阻塞用户明确要求的本地队列清理和总数更新。
@@ -352,7 +357,7 @@ export function Uploader({
     queue.updateJobDraft(job.id, patch);
   }, [queue.updateJobDraft]);
   const requestCancelJob = useCallback((job: ImportJob) => {
-    void cancelJob(job);
+    if (importJobCanBeCancelled(job)) void cancelJob(job);
   }, [cancelJob]);
   const requestRetryJob = useCallback((job: ImportJob) => {
     void retryJob(job.id);

@@ -120,7 +120,7 @@ export const appConfig = {
     site: {
       name: "ImageShow",
       domain: "example.com",
-      description: "画廊与随机图API",
+      description: "画廊与随机图片API",
       icon_url: "/assets/brand/favicon.svg",
       version: {
         enabled: true,

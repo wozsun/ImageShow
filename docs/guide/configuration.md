@@ -73,7 +73,7 @@ PostgreSQL 的 `admin_account` 表，不进入 `config.json`。单应用进程�
 | --- | --- |
 | `site.name` | 站点名称，也会写入 SPA HTML 的 `<title>`；可在普通站点配置页维护。 |
 | `site.domain` / `site.icon_url` | 主域名和图标；域名仅允许 DNS 名称（开发环境可带端口），图标仅允许站内绝对路径或 HTTPS。两项只通过配置文件、高级配置或首次启动环境变量维护，不进入普通站点配置页及其读写 DTO。 |
-| `site.description` | 站点描述，默认“画廊与随机图API”，仅写入 SPA HTML 的 `description`，不在首页正文或普通站点配置页显示；空值按 `site.name`、`ImageShow` 的顺序回退。只通过配置文件、高级配置或首次启动环境变量维护。 |
+| `site.description` | 站点描述，默认“画廊与随机图片API”，仅写入 SPA HTML 的 `description`，不在首页正文或普通站点配置页显示；空值按 `site.name`、`ImageShow` 的顺序回退。只通过配置文件、高级配置或首次启动环境变量维护。 |
 | `site.version.enabled` / `site.version.link_enabled` | 是否显示后台版本卡片、是否链接到对应的 GitHub Release，默认均为 `true`。关闭链接后仍显示版本；两项只通过配置文件、高级配置或首次启动环境变量维护，不进入站点配置页，也不进入公开站点配置投影，只随已认证的会话探针返回。 |
 | `site.root_redirect` | 根路径直接显示的页面：`home` 或 `gallery`；`/home`、`/gallery` 固定路径仍可单独访问。 |
 | `site.home.enabled` | 是否启用公共首页 `/home`，默认 `true`。关闭后 `/home` 重定向到画廊，导航不再显示首页入口，根路径固定显示画廊；只通过配置文件、高级配置或首次启动环境变量维护。 |
@@ -214,6 +214,12 @@ PostgreSQL 的 `admin_account` 表，不进入 `config.json`。单应用进程�
 输入本身是 WebP、体积小于 `normalize.skip_webp_under_kb` 且长边已经达标时，原字节直接成为最终候选文件；服务端仍会执行解码校验、标准缩略图生成和最终 MD5 计算。`upload.concurrency` / `link_image.concurrency` 只约束单个后台页面自己的 lane 数；任务进入 materialize 槽时才逐项创建服务端会话，队尾尚未进入 lane 的任务没有会话。每条 lane 在服务端权威状态确认当前项进入 `preparing` 后最多提前素材化一项，因此每条 lane 最多同时存在当前执行项和一个已启动的前瞻项，不会让长队列在处理前消耗 30 分钟会话租期。`upload.global_concurrency` / `link_image.global_concurrency` 分别由对应模式的 materialize 与 prepare 两个服务端阶段复用，每个阶段都有独立许可池。即使调用方绕过前端队列直接打接口，进程内也会排队并支持取消等待中的任务。
 
 commit 使用独立的 `import.commit_concurrency` / `import.global_commit_concurrency`。前者限制单个后台页面，后者在取得会话 advisory lock、存储共享锁和数据库事务连接之前限制整个服务端进程。服务端还按 `import.global_commit_byte_budget_mb` 对 prepared 图片与缩略图大小做 FIFO 加权限流；活动权重始终按任务真实字节累计，不会在运行中随动态预算截断。超过预算的单个合法对象只能在当前没有其他 commit 占用时独立运行；预算升降后仍按真实活动总量决定是否放行队首。数量许可与字节许可都覆盖正式对象复制、数据库事务、暂存清理和缓存更新，而不只是 `INSERT`。PostgreSQL 主查询连接池上限为 30；长生命周期 advisory lock 使用另一个上限同为 30 的专用连接池，避免下载、转码和存储 I/O 持锁期间占满查询连接。commit 的存储共享锁、排序后的主题 / 作者 / 最终标签共享关联租约、会话锁和单图锁由同一专用连接按固定顺序取得，不会在锁池内嵌套等待第二条连接；同 slug commit 可以并行并在共享租约内幂等确保词表项存在，显式词表管理和删除使用的独占锁仍会等待全部关联租约退出。锁连接丢失会中止工作，导入发布另以数据库 execution token 栅栏旧执行者。公开 PostgreSQL 回源在主池内最多占 12 条连接，不再建立取消连接池；当前单应用实例最多保留 60 条应用连接，数据库 `max_connections` 应为该边界和运维连接留足空间。
+
+后台队列在建立不可变提交意图后先显示“提交排队 / 等待提交”，服务端真正取得上述数量与
+字节准入并把 PostgreSQL 会话推进到 `committing` 后才显示“写入图库中”；事务提交
+`finalized` 后显示“已写入图库，等待结果”，完整管理图片结果水合后才完成。等待准入、执行中
+和等待结果分别统计，不把全部已选任务算作处理中。持有提交意图的任务锁定当时规范化后的
+metadata，不能普通取消、移除或继续编辑；`finalized` 的结果读取失败只允许重新获取结果。
 
 URL 输入窗口、JSONL 解析和微博解析共享 3600 项通用安全边界；JSONL 与微博还在
 服务端重复执行该边界。三者同时满足各自的可配置软上限：URL 与 JSONL 由

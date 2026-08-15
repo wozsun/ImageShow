@@ -29,6 +29,7 @@ import {
   MaterializationPipeline,
   type MaterializationPipelineTask
 } from "./materialization-pipeline.js";
+import { importJobCanBeCancelled } from "./import-queue-state.js";
 
 export function useLocalUploadImport(options: {
   queue: AppendImportQueueApi;
@@ -62,7 +63,7 @@ export function useLocalUploadImport(options: {
       pipeline.dispose();
       const sessionIds = queue.jobsRef.current
         .filter((job) => job.kind === "local" && job.sessionId)
-        .filter((job) => !["done", "cancelled"].includes(job.status))
+        .filter(importJobCanBeCancelled)
         .map((job) => job.sessionId!);
       for (const sessionId of new Set(sessionIds)) {
         void cancelStoredImport(sessionId).catch(() => undefined);

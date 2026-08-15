@@ -94,6 +94,10 @@ export function Overview({ canManageStorage }: { canManageStorage: boolean }) {
         synchronized: currentReadyImageStatus.synchronized === true,
         rebuilding: currentReadyImageStatus.rebuilding,
         item_count: currentReadyImageStatus.item_count,
+        current_core_memory_bytes:
+          data?.redis_cache.current_core_memory_bytes ?? null,
+        current_core_measured_at:
+          data?.redis_cache.current_core_measured_at ?? null,
         last_full_rebuild_core_memory_bytes:
           data?.redis_cache.last_full_rebuild_core_memory_bytes ?? null,
         last_full_rebuild_measured_at:
@@ -120,6 +124,12 @@ export function Overview({ canManageStorage }: { canManageStorage: boolean }) {
   const sizeTitle = (firstLabel: string, first: number | undefined, secondLabel: string, second: number | undefined) =>
     first === undefined || second === undefined ? undefined : `${firstLabel} ${formatBytes(first)} + ${secondLabel} ${formatBytes(second)}`;
   const redisCacheState = redisCacheStateLabel(redisCache);
+  const currentCoreSize =
+    redisCache?.current_core_memory_bytes === null
+      || redisCache?.current_core_memory_bytes === undefined
+      || !redisCache.current_core_measured_at
+      ? null
+      : formatBytes(redisCache.current_core_memory_bytes);
   const fullRebuildCoreSize =
     redisCache?.last_full_rebuild_core_memory_bytes === null
       || redisCache?.last_full_rebuild_core_memory_bytes === undefined
@@ -128,20 +138,28 @@ export function Overview({ canManageStorage }: { canManageStorage: boolean }) {
       : formatBytes(
           redisCache.last_full_rebuild_core_memory_bytes
         );
-  const fullRebuildCoreSnapshot = fullRebuildCoreSize === "—"
-    ? "最近完整重建核心占用未知"
-    : `最近完整重建核心占用 ${fullRebuildCoreSize}`;
-  const fullRebuildCoreSnapshotTitle = redisCache?.last_full_rebuild_measured_at
-    ? `${fullRebuildCoreSnapshot}，测量于 ${new Date(
-        redisCache.last_full_rebuild_measured_at
-      ).toLocaleString()}`
-    : fullRebuildCoreSnapshot;
+  const currentCoreMeasuredAt = redisCache?.current_core_measured_at
+    ? new Date(redisCache.current_core_measured_at).toLocaleString()
+    : null;
+  const fullRebuildMeasuredAt = redisCache?.last_full_rebuild_measured_at
+    ? new Date(redisCache.last_full_rebuild_measured_at).toLocaleString()
+    : null;
+  const redisMemoryHint = currentCoreSize && currentCoreMeasuredAt
+    ? `当前核心占用 ${currentCoreSize} · ${currentCoreMeasuredAt} · ${redisCacheState}`
+    : fullRebuildCoreSize !== "—" && fullRebuildMeasuredAt
+      ? `最近完整重建 ${fullRebuildCoreSize} · ${fullRebuildMeasuredAt} · ${redisCacheState}`
+      : `当前核心占用未知 · ${redisCacheState}`;
+  const redisMemoryTitle = currentCoreSize && currentCoreMeasuredAt
+    ? `当前核心图片投影占用 ${currentCoreSize}，测量于 ${currentCoreMeasuredAt}`
+    : fullRebuildCoreSize !== "—" && fullRebuildMeasuredAt
+      ? `当前核心占用未知；最近完整重建核心占用 ${fullRebuildCoreSize}，测量于 ${fullRebuildMeasuredAt}`
+      : "当前核心图片投影占用未知";
   const storageCards: OverviewMetric[] = [
     {
       label: "Redis 缓存",
       value: redisCache?.item_count ?? undefined,
-      hint: `${fullRebuildCoreSize} · ${redisCacheState}`,
-      hintTitle: fullRebuildCoreSnapshotTitle,
+      hint: redisMemoryHint,
+      hintTitle: redisMemoryTitle,
       to: `${adminBasePath}/check`
     },
     // 本地存储 / 其它存储的图片与缩略图占用，以及当前存储后端数。

@@ -75,6 +75,8 @@ export type AdminOverviewDto = {
     synchronized: boolean;
     rebuilding: boolean;
     item_count: number | null;
+    current_core_memory_bytes: number | null;
+    current_core_measured_at: string | null;
     last_full_rebuild_core_memory_bytes: number | null;
     last_full_rebuild_measured_at: string | null;
   };

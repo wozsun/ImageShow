@@ -2,10 +2,8 @@ import { importStatusBatchMaxItems } from "@imageshow/shared/browser";
 import type { ImportJob } from "../../../lib/types.js";
 
 const terminalStatuses = new Set<ImportJob["status"]>([
-  "ready",
   "cancelling",
   "done",
-  "failed",
   "cancelled"
 ]);
 
@@ -108,11 +106,14 @@ export function importStatusGenerationSubscriptions(
 export function activeImportSessionIds(jobs: readonly ImportJob[]) {
   return [...new Set(
     jobs
-      .filter((job) => job.sessionId && !terminalStatuses.has(job.status))
+      .filter((job) => job.sessionId && importJobAcceptsStatus(job))
       .map((job) => job.sessionId!.toLowerCase())
   )].sort();
 }
 
 export function importJobAcceptsStatus(job: ImportJob) {
-  return !terminalStatuses.has(job.status);
+  if (terminalStatuses.has(job.status)) return false;
+  if (job.status === "ready") return Boolean(job.commitIntent);
+  if (job.status === "failed") return Boolean(job.commitIntent);
+  return true;
 }

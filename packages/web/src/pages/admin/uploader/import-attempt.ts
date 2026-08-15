@@ -13,6 +13,7 @@ import {
   type AppendImportQueueApi,
   type ImportQueueApi
 } from "./prepared-result.js";
+import { importJobCanBeCancelled } from "./import-queue-state.js";
 
 const preparationAdmissionStatuses = new Set([
   "preparing",
@@ -101,6 +102,8 @@ export async function cancelImportAttempt(
   abort: (() => void) | undefined,
   cancelSession: (sessionId: string) => Promise<unknown> = cancelStoredImport
 ): Promise<boolean> {
+  const currentJob = queue.jobsRef.current.find((item) => item.id === job.id);
+  if (!currentJob || !importJobCanBeCancelled(currentJob)) return false;
   queue.updateJob(job.id, {
     status: "cancelling",
     failureStage: undefined,

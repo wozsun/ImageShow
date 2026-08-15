@@ -28,6 +28,7 @@ import {
   MaterializationPipeline,
   type MaterializationPipelineTask
 } from "../materialization-pipeline.js";
+import { importJobCanBeCancelled } from "../import-queue-state.js";
 
 function linkSessionInput(job: ImportJob): ImportSessionCreateInput {
   return {
@@ -74,7 +75,7 @@ export function useLinkImport(options: {
       pipeline.dispose();
       const sessionIds = queue.jobsRef.current
         .filter((job) => job.kind === "download" && job.sessionId)
-        .filter((job) => !["done", "cancelled"].includes(job.status))
+        .filter(importJobCanBeCancelled)
         .map((job) => job.sessionId!);
       for (const sessionId of new Set(sessionIds)) {
         void cancelStoredImport(sessionId).catch(() => undefined);

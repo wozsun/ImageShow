@@ -182,6 +182,9 @@ export function UploadWorkflowWindow({
     readyJobs,
     duplicateJobs,
     runningJobs,
+    commitQueuedJobs,
+    committingJobs,
+    finalizedJobs,
     doneJobs,
     failedJobs
   } = queue.summary;
@@ -253,7 +256,8 @@ export function UploadWorkflowWindow({
                   <p className="upload-task-summary">
                     <span className="upload-summary-primary">
                       共 {queue.jobs.length} 张图片，{runningJobs} 张处理中，
-                      {readyJobs.length} 张待提交；
+                      {readyJobs.length} 张待提交，{commitQueuedJobs} 张等待准入，
+                      {committingJobs} 张写入中，{finalizedJobs} 张等待结果；
                     </span>
                     <span className="upload-summary-secondary">
                       {doneJobs} 张成功，{failedJobs} 张失败，

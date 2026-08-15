@@ -10,6 +10,8 @@ import { getReadyImageRevision } from "./revision.ts";
 import {
   getReadyImageCacheRecentErrors
 } from "./status-observability.ts";
+import { redis } from "../../core/redis-client.ts";
+import { measureReadyImageCoreMemory } from "./redis-writer.ts";
 
 type ReadyImageCacheAdminStatusDependencies = {
   getCoordinatorStatus: typeof getReadyImageCacheCoordinatorStatus;
@@ -24,6 +26,46 @@ const defaultAdminStatusDependencies: ReadyImageCacheAdminStatusDependencies = {
   readMeta: readReadyImageCacheMeta,
   recentErrors: getReadyImageCacheRecentErrors
 };
+
+export type ReadyImageCacheOverviewMeasurementDependencies = {
+  measureCoreMemory: () => Promise<number>;
+  now: () => Date;
+};
+
+const defaultOverviewMeasurementDependencies:
+  ReadyImageCacheOverviewMeasurementDependencies = {
+  measureCoreMemory: () => measureReadyImageCoreMemory(redis),
+  now: () => new Date()
+};
+
+type ReadyImageCacheOverviewMeasurement = {
+  current_core_memory_bytes: number | null;
+  current_core_measured_at: string | null;
+};
+
+let overviewMeasurementPromise:
+Promise<ReadyImageCacheOverviewMeasurement> | null = null;
+
+function measureReadyImageCacheOverview(
+  dependencies: ReadyImageCacheOverviewMeasurementDependencies =
+    defaultOverviewMeasurementDependencies
+) {
+  if (overviewMeasurementPromise) return overviewMeasurementPromise;
+  overviewMeasurementPromise = Promise.resolve()
+    .then(dependencies.measureCoreMemory)
+    .then((bytes) => ({
+      current_core_memory_bytes: bytes,
+      current_core_measured_at: dependencies.now().toISOString()
+    }))
+    .catch(() => ({
+      current_core_memory_bytes: null,
+      current_core_measured_at: null
+    }))
+    .finally(() => {
+      overviewMeasurementPromise = null;
+    });
+  return overviewMeasurementPromise;
+}
 
 function persistedCoreError(
   message: string,
@@ -124,15 +166,21 @@ export async function readReadyImageCacheAdminStatus(
 
 export async function getReadyImageCacheOverviewStatus(
   dependencies: ReadyImageCacheAdminStatusDependencies =
-    defaultAdminStatusDependencies
+    defaultAdminStatusDependencies,
+  measurementDependencies: ReadyImageCacheOverviewMeasurementDependencies =
+    defaultOverviewMeasurementDependencies
 ) {
-  const revision = await dependencies.getRevision();
+  const [revision, measurement] = await Promise.all([
+    dependencies.getRevision(),
+    measureReadyImageCacheOverview(measurementDependencies)
+  ]);
   const snapshot = await readProjectionSnapshot(revision.revision, dependencies);
   return {
     state: snapshot.state,
     synchronized: snapshot.synchronized === true,
     rebuilding: snapshot.coordinator.rebuilding,
     item_count: snapshot.meta?.itemCount ?? null,
+    ...measurement,
     last_full_rebuild_core_memory_bytes:
       snapshot.meta?.lastFullRebuildCoreMemoryBytes ?? null,
     last_full_rebuild_measured_at:

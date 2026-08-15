@@ -165,6 +165,10 @@ async function commitStoredImageSession(
         signal
       );
       databaseCommitted = true;
+      // finalized is already durable when persistCommittedImage returns. Publish
+      // that authoritative fact before Redis/cache synchronization, staging
+      // cleanup, presentation, or the surrounding batch can delay or fail.
+      await notifyImportStatus(id).catch(() => undefined);
       mutationBatch.add({ id });
       return committed;
     });
@@ -333,7 +337,6 @@ async function commitImportSessionWhileLocationStable(
       resolvedTags,
       signal
     );
-    await notifyImportStatus(id).catch(() => undefined);
     return result;
   });
 }

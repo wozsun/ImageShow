@@ -37,10 +37,16 @@
 created ─► materializing ─► received ─► preparing ─► ready
                                                         │
                                                         ▼
+                                           [Web: commit-queued]
+                                                        │ 服务端取得准入
+                                                        ▼
                                                    committing
-                                                        │
+                                                        │ 数据库已提交
                                                         ▼
                                                     finalized
+                                                        │ 完整结果已水合
+                                                        ▼
+                                               [Web: done]
 
 素材化或处理失败 ─► failed
 可取消阶段       ─► cancelled
@@ -70,9 +76,16 @@ created ─► materializing ─► received ─► preparing ─► ready
   旧会话及单调倒退事件不会只更新快照。卡片详情由 Web 单一纯映射生成：传输前稳定显示
   “等待上传/下载”，传输中显示“上传/下载原图中”，prepare 的连续内部阶段统一显示
   “处理图片并生成缩略图”；只有真实 `prepare-waiting` 单独提示等待处理。ready 显示
-  “图片处理完成，等待提交”或重复决策，正常 commit 显示“写入图库中”，显式回执恢复才显示
-  “正在确认提交结果”，完成态不重复前置状态标签。服务端精确 message 继续用于诊断和
-  可操作失败，不直接驱动正常阶段文案。
+  “图片处理完成，等待提交”或重复决策；建立提交意图后先以“提交排队 / 等待提交”等待服务端
+  准入，权威状态进入 `committing` 才显示“写入图库中”，`finalized` 显示“已写入图库，等待
+  结果”，显式回执恢复显示“正在确认提交结果”。完成态不重复前置状态标签。服务端精确
+  message 继续用于诊断和可操作失败，不直接驱动正常阶段文案。
+- 用户点击提交时，队列先同步取得单 runner 围栏，并为每项建立不可变 commit intent：锁定
+  attempt、创建时间以及规范化后深拷贝的实际 wire metadata。持有 intent 的任务禁止编辑、
+  普通取消、移除和“清空未提交”；失败重试与结果恢复只复用锁定值，不重新读取草稿。
+  `commit-queued`、`committing` 与 `finalized` 都继续订阅事件和轮询降级，迟到的
+  `ready/committing/finalized` 不能倒退更高状态。状态订阅或展示组件暂时卸载后可重新订阅；
+  本版本不持久化 Web 队列，因此不承诺整个 Uploader 卸载、刷新或浏览器退出后的草稿恢复。
 
 JSONL 可设置 `original`、`source`、`image_time`、`author`、`tags`、`title`、
 `description`、`theme`、`device`、`brightness` 与 `storage_slug`。行内字段优先于窗口
@@ -89,11 +102,16 @@ JSONL 可设置 `original`、`source`、`image_time`、`author`、`tags`、`titl
    后端的 `_uploads`。
 3. **commit** 不重新下载或转码。它验证 `_uploads` 候选及正式对象，写入 `media` 与
    `thumbs`，在短事务中提交 metadata、标签、会话终态与图片投影 revision，随后清理
-   staging。响应返回完整管理端图片对象，供队列直接收敛为已完成。
+   staging。`finalized` 事务一旦持久化就立即发出轻量权威状态通知，不等待缓存同步、暂存
+   清理、presenter 或整批响应；这些后置步骤失败不得倒退已提交事实。响应返回完整管理端
+   图片对象，供队列直接收敛为已完成。
 
-每次批量 commit 结束后只触发一轮写后缓存同步。图片列表、公开筛选统计和概览仍读取
-服务端权威结果；已存在图片的详情不因新增图片失效。导入返回的完整图片对象同时用于判断
-主题、标签或作者词表是否真的出现新 slug，只有发生新增时才重读会话级导入词表。
+完整结果以 `(jobId, commitIntent.attemptId)` 作为 Web 消费键。只有 reducer 首次接受的
+`imported` 结果可以完成任务、同步重复项并触发一轮图片列表、统计和概览查询失效；重复 HTTP
+响应、恢复结果、事件或 React 重放只能幂等忽略。`finalized` 后的完整结果缺失或读取失败只写
+`resultState/resultError` 并提供“重新获取结果”，不会变回普通 `failed`；成功水合后才成为
+`done`。导入返回的完整图片对象同时用于判断主题、标签或作者词表是否真的出现新 slug，只有
+发生新增时才重读会话级导入词表。已存在图片的详情不因新增图片失效。
 
 每个会话在创建时锁定 `storage_slug`。默认后端的后续变化只影响新会话；ready 任务不能
 临时换后端。原始字节始终留在 `data/tmp`，导入流程也不让浏览器向 S3 直传。
@@ -314,6 +332,12 @@ overview 和词表分别只在自身字段受影响时刷新；公开编辑与�
 回源。
 
 ### 检查、反馈与外观
+
+后台概览沿用 `queryKeys.overview` 这一个查询 owner，在同一服务端请求中并行读取 PostgreSQL
+统计和 Redis 当前核心图片投影占用。Redis 测量只遍历固定核心键、准确使用
+`MEMORY USAGE ... SAMPLES 0`，不扫描键空间；并发概览请求单飞合并。成功时显示“当前核心
+占用”及测量时间，失败时显示未知或明确标注的“最近完整重建”。活动重建的状态轮询不重复
+测量，完成后的既有概览刷新只测量一次。
 
 检查页默认用一次轻量请求独立展示 PostgreSQL、Redis 和图片投影状态，同时在后台自动执行
 一次有界 Redis 占用检测；轻量结果不等待检测，完整检测结果原地填充核心投影与派生缓存双卡。

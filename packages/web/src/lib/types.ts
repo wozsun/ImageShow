@@ -63,11 +63,17 @@ export type ManifestImportSource = "jsonl" | "weibo";
 export type ImportCommonAttributeField = "device" | "brightness" | "theme" | "author" | "tags";
 export type ImportDetectedClassification = { device: Device; brightness: Brightness };
 export type CommitFailureCheckpoint = "ready" | "committing" | "unknown";
+export type ImportCommitIntent = {
+  attemptId: string;
+  createdAt: string;
+  metadata: ImageDraft;
+};
+type ImportResultState = "pending" | "recovering" | "error" | "hydrated";
 
 export type ImportJob = {
   id: string;
   kind: "local" | "download";
-  status: "queued" | "uploading" | "downloading" | "received" | "processing" | "ready" | "committing" | "cancelling" | "done" | "failed" | "cancelled";
+  status: "queued" | "uploading" | "downloading" | "received" | "processing" | "ready" | "commit-queued" | "committing" | "finalized" | "cancelling" | "done" | "failed" | "cancelled";
   message: string;
   preview: string;
   previewFull?: string;
@@ -106,6 +112,9 @@ export type ImportJob = {
   storageSlug: string;
   failureStage?: "create" | "prepare" | "commit" | "cancel";
   commitFailureCheckpoint?: CommitFailureCheckpoint;
+  commitIntent?: ImportCommitIntent;
+  resultState?: ImportResultState;
+  resultError?: string;
   // 最近一次由当前 attempt/session 接受的服务端权威快照。可见详情由这些
   // 字段和客户端状态集中派生，不直接展示服务端正常阶段 message。
   serverStatus?: StoredImportServerStatus;
@@ -114,5 +123,4 @@ export type ImportJob = {
   serverProgress?: number;
   serverAttemptKey?: string;
   serverSessionId?: string;
-  recoveringCommitResult?: boolean;
 };

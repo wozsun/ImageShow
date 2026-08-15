@@ -3,6 +3,7 @@ import type { ImageDraft, AdminImageListItem, ImportJob } from "../../../lib/typ
 import type { ImportAttributeDefaults } from "../../../lib/upload/upload-utils.js";
 import {
   importQueuePageCount,
+  importJobCanLeaveQueue,
   reduceImportQueue,
   summarizeImportJobs,
   type ImportQueueAction,
@@ -25,7 +26,7 @@ export function useImportQueue(pageSize: number) {
     // 上传/下载是异步并发流程，回调触发时 React state 可能已落后；ref 里同步维护最新队列供所有回调用。
     const current = stateRef.current;
     const next = reduceImportQueue(current, action);
-    if (next === current) return;
+    if (next === current) return false;
     stateRef.current = next;
     jobsRef.current = next.jobs;
     if (!next.jobs.length) {
@@ -33,6 +34,7 @@ export function useImportQueue(pageSize: number) {
       trashedLibraryImageIdsRef.current.clear();
     }
     setState(next);
+    return true;
   }, []);
 
   useEffect(() => () => jobsRef.current.forEach(revokeObjectUrl), []);
@@ -56,14 +58,23 @@ export function useImportQueue(pageSize: number) {
 
   const completeJob = useCallback((
     id: string,
+    commitAttemptId: string,
     patch: Partial<ImportJob>,
     item: AdminImageListItem
   ) => {
     const suppressDuplicateItem = trashedLibraryImageIdsRef.current.has(item.id);
-    if (jobsRef.current.length && !suppressDuplicateItem) {
+    const accepted = dispatch({
+      type: "complete",
+      id,
+      commitAttemptId,
+      patch,
+      item,
+      suppressDuplicateItem
+    });
+    if (accepted && jobsRef.current.length && !suppressDuplicateItem) {
       committedMd5sRef.current.add(item.md5);
     }
-    dispatch({ type: "complete", id, patch, item, suppressDuplicateItem });
+    return accepted;
   }, [dispatch]);
 
   const updateJobDraft = useCallback((id: string, patch: Partial<ImageDraft>) => {
@@ -77,12 +88,16 @@ export function useImportQueue(pageSize: number) {
 
   const removeJob = useCallback((id: string) => {
     const job = jobsRef.current.find((item) => item.id === id);
-    if (job) releaseJob(job);
+    if (!job || !importJobCanLeaveQueue(job)) return false;
+    releaseJob(job);
     dispatch({ type: "remove", ids: new Set([id]), pageSize });
+    return true;
   }, [dispatch, pageSize, releaseJob]);
 
   const clearJobIds = useCallback((ids: ReadonlySet<string>) => {
-    const removed = jobsRef.current.filter((job) => ids.has(job.id));
+    const removed = jobsRef.current.filter((job) => (
+      ids.has(job.id) && importJobCanLeaveQueue(job)
+    ));
     removed.forEach(releaseJob);
     dispatch({ type: "remove", ids: new Set(removed.map((job) => job.id)), pageSize });
   }, [dispatch, pageSize, releaseJob]);
@@ -100,7 +115,10 @@ export function useImportQueue(pageSize: number) {
 
   const retainMode = useCallback((mode: "file" | "link") => {
     jobsRef.current
-      .filter((job) => mode === "file" ? job.kind !== "local" : job.kind === "local")
+      .filter((job) => (
+        (mode === "file" ? job.kind !== "local" : job.kind === "local")
+        && importJobCanLeaveQueue(job)
+      ))
       .forEach(releaseJob);
     dispatch({ type: "retain-mode", mode });
   }, [dispatch, releaseJob]);

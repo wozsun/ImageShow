@@ -28,8 +28,10 @@ const importStatusOrder = new Map<ImportJob["status"], number>([
   ["received", 2],
   ["processing", 3],
   ["ready", 4],
-  ["committing", 5],
-  ["done", 6]
+  ["commit-queued", 5],
+  ["committing", 6],
+  ["finalized", 7],
+  ["done", 8]
 ]);
 
 const authoritativeStatusOrder = new Map<StoredImportStatus["status"], number>([
@@ -67,9 +69,30 @@ function clientStatusPatchMovesForward(
 ) {
   if (!patch.status) return true;
   if (job.status === "done") return patch.status === "done";
+  if (job.status === "finalized") {
+    return patch.status === "finalized" || patch.status === "done";
+  }
   if (job.status === "cancelled") return patch.status === "cancelled";
-  if (job.status === "cancelling") return patch.status === "cancelled";
-  if (job.status === "failed") return patch.status === "failed";
+  if (job.status === "cancelling") {
+    return patch.status === "cancelled"
+      || (patch.status === "failed" && patch.failureStage === "cancel");
+  }
+  if (job.status === "failed") {
+    if (patch.status === "failed") return true;
+    if (
+      job.failureStage === "cancel"
+      && ["cancelling", "cancelled"].includes(patch.status)
+    ) {
+      return true;
+    }
+    return Boolean(job.commitIntent) && [
+      "commit-queued",
+      "committing",
+      "finalized",
+      "done"
+    ].includes(patch.status);
+  }
+  if (patch.status === "failed") return true;
   const currentOrder = importStatusOrder.get(job.status);
   const nextOrder = importStatusOrder.get(patch.status);
   return !(currentOrder !== undefined
@@ -85,7 +108,9 @@ function authoritativeSnapshotMovesForward(
   const currentStatus = job.serverStatus;
   if (!nextStatus || !currentStatus) return true;
   if (nextStatus !== currentStatus) {
-    if (["failed", "cancelled", "missing"].includes(currentStatus)) return false;
+    if (["finalized", "failed", "cancelled", "missing"].includes(currentStatus)) {
+      return false;
+    }
     if (nextStatus === "failed" || nextStatus === "cancelled") return true;
     if (nextStatus === "missing") return false;
     const currentOrder = authoritativeStatusOrder.get(currentStatus);
@@ -184,6 +209,9 @@ export function importStatusEventPatch(
     });
   }
   if (state.status === "preparing" || state.status === "ready") {
+    if (job.commitIntent) {
+      return authoritativeStatusPatch(job, state, {});
+    }
     return authoritativeStatusPatch(job, state, {
       status: "processing",
       transferProgress: undefined
@@ -194,12 +222,21 @@ export function importStatusEventPatch(
   }
   if (state.status === "finalized") {
     return authoritativeStatusPatch(job, state, {
-      status: "committing",
+      status: "finalized",
+      resultState: job.resultState ?? "pending",
       ...unavailablePreparedPreview
     });
   }
   if (state.status === "missing") return null;
   if (state.status === "failed") {
+    if (job.commitIntent) {
+      return authoritativeStatusPatch(job, state, {
+        status: "failed",
+        failureStage: "commit",
+        commitFailureCheckpoint: "unknown",
+        message: storedImportStatusMessage(state)
+      });
+    }
     return authoritativeStatusPatch(job, state, {
       status: "failed",
       failureStage: "prepare",
@@ -217,7 +254,7 @@ export function importStatusEventPatch(
 }
 
 export type CommitRetryResolution =
-  | { action: "commit" }
+  | { action: "commit"; patch?: Partial<ImportJob> }
   | { action: "reconcile"; patch: Partial<ImportJob> }
   | { action: "stop"; patch: Partial<ImportJob> };
 
@@ -232,13 +269,25 @@ export function resolveCommitRetry(
         status: "failed",
         failureStage: "commit",
         commitFailureCheckpoint: "ready",
-        recoveringCommitResult: false,
+        resultState: undefined,
+        resultError: undefined,
         message: "已确认提交尚未开始，请重试"
       }
     };
   }
-  if (status?.status === "committing" || status?.status === "finalized") {
-    return { action: "commit" };
+  if (status?.status === "committing") {
+    return { action: "commit", patch: { status: "committing" } };
+  }
+  if (status?.status === "finalized") {
+    return {
+      action: "commit",
+      patch: {
+        status: "finalized",
+        resultState: "recovering",
+        resultError: undefined,
+        ...unavailablePreparedPreview
+      }
+    };
   }
   return {
     action: "stop",
@@ -246,18 +295,17 @@ export function resolveCommitRetry(
   };
 }
 
-export function commitFailurePatchForStatus(
+function commitFailurePatchForStatus(
   status: StoredImportStatus | undefined,
   error: unknown
 ): Partial<ImportJob> {
   const reason = commitErrorMessage(error);
   if (status?.status === "finalized") {
     return {
-      status: "failed",
-      failureStage: "commit",
-      commitFailureCheckpoint: "committing",
+      status: "finalized",
       ...unavailablePreparedPreview,
-      recoveringCommitResult: false,
+      resultState: "error",
+      resultError: reason,
       message: `服务端已完成提交，但结果读取失败：${reason}；请重试获取结果`
     };
   }
@@ -267,7 +315,8 @@ export function commitFailurePatchForStatus(
       failureStage: undefined,
       commitFailureCheckpoint: undefined,
       ...unavailablePreparedPreview,
-      recoveringCommitResult: false,
+      resultState: undefined,
+      resultError: undefined,
       message: status.message || "导入已取消"
     };
   }
@@ -282,7 +331,8 @@ export function commitFailurePatchForStatus(
       failureStage: "prepare",
       commitFailureCheckpoint: undefined,
       ...unavailablePreparedPreview,
-      recoveringCommitResult: false,
+      resultState: undefined,
+      resultError: undefined,
       message
     };
   }
@@ -304,7 +354,43 @@ export function commitFailurePatchForStatus(
     ...(checkpoint === "ready"
       ? {}
       : unavailablePreparedPreview),
-    recoveringCommitResult: false,
+    resultState: undefined,
+    resultError: undefined,
     message
   };
+}
+
+export function commitResultFailurePatch(
+  job: ImportJob,
+  status: StoredImportStatus | undefined,
+  error: unknown
+): Partial<ImportJob> {
+  if (job.status === "finalized" || job.serverStatus === "finalized") {
+    return commitFailurePatchForStatus({
+      id: job.sessionId ?? job.id,
+      status: "finalized",
+      phase: "finalized",
+      error: "",
+      message: "已写入图库"
+    }, error);
+  }
+  const patch = commitFailurePatchForStatus(status, error);
+  if (
+    job.commitIntent
+    && patch.status === "failed"
+    && patch.failureStage !== "commit"
+  ) {
+    const reason = status?.status === "missing"
+      ? "提交会话不存在"
+      : status?.status === "failed"
+        ? status.error || "服务端会话已失败"
+        : "服务端会话回到了提交前状态";
+    return {
+      ...patch,
+      failureStage: "commit",
+      commitFailureCheckpoint: "unknown",
+      message: `提交状态异常：${reason}；属性已锁定，可重试确认结果`
+    };
+  }
+  return patch;
 }

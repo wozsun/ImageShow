@@ -226,6 +226,7 @@
   --import-job-status: var(--admin-color-pending-text);
 }
 .import-job.processing,
+.import-job.commit-queued,
 .import-job.committing {
   --import-job-border: var(--admin-color-pending-border-soft);
   --import-job-background: var(--admin-color-pending-surface-soft);
@@ -250,6 +251,7 @@
   --import-job-background: var(--admin-color-warning-surface-subtle);
   --import-job-status: var(--admin-color-warning-text-soft);
 }
+.import-job.finalized,
 .import-job.done {
   --import-job-border: var(--admin-color-success-border-strong);
   --import-job-background: var(--admin-color-success-surface-subtle);

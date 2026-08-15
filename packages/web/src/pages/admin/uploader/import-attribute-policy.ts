@@ -22,6 +22,7 @@ const initialAttributeStatuses = new Set<ImportJob["status"]>([
 ]);
 
 function importAttributePhase(job: ImportJob): ImportAttributePhase {
+  if (job.commitIntent) return "locked";
   if (initialAttributeStatuses.has(job.status)) return "initial";
   if (job.status === "ready") return "ready";
   if (job.status !== "failed") return "locked";

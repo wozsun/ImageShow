@@ -4,7 +4,9 @@ import { importPositionText } from "./import-job-utils.js";
 export function isQueueDuplicateCandidate(job: ImportJob) {
   if (!job.md5) return false;
   return job.status === "ready"
+    || job.status === "commit-queued"
     || job.status === "committing"
+    || job.status === "finalized"
     || (job.status === "failed" && job.failureStage === "commit");
 }
 

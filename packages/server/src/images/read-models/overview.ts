@@ -101,6 +101,10 @@ async function buildOverviewStats(
       synchronized: readyImageCache.synchronized,
       rebuilding: readyImageCache.rebuilding,
       item_count: readyImageCache.item_count,
+      current_core_memory_bytes:
+        readyImageCache.current_core_memory_bytes,
+      current_core_measured_at:
+        readyImageCache.current_core_measured_at,
       last_full_rebuild_core_memory_bytes:
         readyImageCache.last_full_rebuild_core_memory_bytes,
       last_full_rebuild_measured_at:
