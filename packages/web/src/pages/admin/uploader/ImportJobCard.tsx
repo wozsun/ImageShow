@@ -15,18 +15,14 @@ import {
   importJobAttributesEditable
 } from "./import-attribute-policy.js";
 import { importPositionText } from "./import-job-utils.js";
-import { importJobStatusDetail } from "./import-status-detail.js";
+import {
+  importJobStatusDetail,
+  importJobStatusLabel
+} from "./import-status-detail.js";
 import {
   importJobCanBeCancelled,
   importJobCanLeaveQueue
 } from "./import-queue-state.js";
-
-const statusLabels: Record<ImportJob["status"], string> = {
-  queued: "等待中", uploading: "上传中", downloading: "下载中", received: "待处理", processing: "处理中",
-  ready: "已就绪", "commit-queued": "提交排队", committing: "提交中", finalized: "已写入",
-  cancelling: "取消中", done: "已完成",
-  failed: "失败", cancelled: "已取消"
-};
 
 function formatPixelDimensions(width?: number, height?: number) {
   return width && height ? `${width}×${height}` : "0000×0000";
@@ -76,7 +72,7 @@ export const ImportJobCard = memo(function ImportJobCard({
     ["failed", "cancelled"].includes(job.status)
     || (job.status === "finalized" && job.resultState === "error")
   ) && !cancellationFailed && !confirmDuplicate;
-  const statusLabel = cancellationFailed ? "取消失败" : statusLabels[job.status];
+  const statusLabel = importJobStatusLabel(job, Boolean(queueDuplicate));
   const hasFinalSize = typeof job.finalSize === "number";
   const displayName = job.draft.title || job.file?.name || job.url || job.id;
   const originalSizeText = formatBytes(job.originalSize ?? job.file?.size ?? 0);
@@ -194,6 +190,7 @@ export const ImportJobCard = memo(function ImportJobCard({
         <DuplicateMatchPanel
           libraryItems={job.duplicates}
           queueDuplicate={queueDuplicate}
+          disabled={busy}
           onOpenDetail={onOpenDetail}
           onPreview={onPreview}
           onConfirm={() => onConfirmDuplicate(job)}

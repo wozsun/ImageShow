@@ -84,10 +84,13 @@ created ─► materializing ─► received ─► preparing ─► ready
 - 用户点击提交时，队列先同步取得单 runner 围栏，并为每项建立不可变 commit intent：锁定
   attempt、最终 MD5、创建时间以及规范化后深拷贝的实际 wire metadata。重复决策随该项进入
   既有批量 commit 正文，不另发逐图预检请求。持有 intent 的任务禁止编辑、普通取消、移除和
-  “清空未提交”；失败重试与结果恢复只复用锁定值，不重新读取草稿。只有服务端确认仍处于
-  `ready` 的重复冲突可重新确认或取消；它不会被误当作可能已写入的普通 commit 失败。
-  `commit-queued`、`committing` 与 `finalized` 都继续订阅事件和轮询降级，迟到的
-  `ready/committing/finalized` 不能倒退更高状态。状态订阅或展示组件暂时卸载后可重新订阅；
+  “清空未提交”；失败重试与结果恢复只复用锁定值，不重新读取草稿。服务端在 commit 边界
+  返回结构化重复冲突时，会话仍为 `ready`，当前项显示“重复待确认”，不计入失败数，也不进入
+  普通失败重试。点击“仍然提交”会在同一个同步单 runner 围栏内直接使用原 session、attempt、
+  最终 MD5 与 metadata 重新进入既有批量 commit，无需再点一次重试，也不增加状态查询；取消
+  仍可安全清理该 ready 会话，同批其他项目不受影响。等待确认时会忽略被拒绝请求的迟到
+  `committing/finalized` 帧；确认开始后的迟到 `ready` 也不能倒退 `commit-queued`。状态订阅
+  或展示组件暂时卸载后可重新订阅；
   本版本不持久化 Web 队列，因此不承诺整个 Uploader 卸载、刷新或浏览器退出后的草稿恢复。
 
 JSONL 可设置 `original`、`source`、`image_time`、`author`、`tags`、`title`、

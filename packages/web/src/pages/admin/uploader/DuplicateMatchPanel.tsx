@@ -18,6 +18,7 @@ export type ImportPreviewTarget = {
 export function DuplicateMatchPanel({
   libraryItems,
   queueDuplicate,
+  disabled,
   onOpenDetail,
   onPreview,
   onConfirm,
@@ -25,6 +26,7 @@ export function DuplicateMatchPanel({
 }: {
   libraryItems: AdminImageListItem[];
   queueDuplicate?: ImportJob;
+  disabled: boolean;
   onOpenDetail: (item: AdminImageListItem, opener: HTMLElement) => void;
   onPreview: (target: ImportPreviewTarget) => void;
   onConfirm: () => void;
@@ -102,8 +104,17 @@ export function DuplicateMatchPanel({
           )}
         </div>
         <div className="inline-actions">
-          <button type="button" onClick={onConfirm}>仍然提交</button>
-          <button className="danger-button" type="button" onClick={onCancel}>取消</button>
+          <button type="button" onClick={onConfirm} disabled={disabled}>
+            仍然提交
+          </button>
+          <button
+            className="danger-button"
+            type="button"
+            onClick={onCancel}
+            disabled={disabled}
+          >
+            取消
+          </button>
         </div>
       </div>
     </div>

@@ -73,7 +73,6 @@ export function Uploader({
     author: "",
     tags: []
   });
-  const [busy, setBusy] = useState(false);
   const workflowReturnFocusRef = useRef<HTMLElement | null>(null);
   const processedActivationRef = useRef(0);
   const intentFenceRef = useRef(new AsyncIntentFence());
@@ -155,7 +154,11 @@ export function Uploader({
     storageSlug: activeBackend,
     concurrency: downloadConcurrency
   });
-  const commitImports = useImportCommit({
+  const {
+    commit: commitImports,
+    confirmDuplicate: confirmImportDuplicate,
+    busy
+  } = useImportCommit({
     jobsRef: queue.jobsRef,
     updateJob: queue.updateJob,
     updateJobs: queue.updateJobs,
@@ -216,9 +219,8 @@ export function Uploader({
       || current.status === "finalized"
     ) {
       if (importJobNeedsDuplicateConfirmation(current)) return;
-      if (!importJobCanStartCommit(current, "retry")) return;
-      setBusy(true);
-      await commitImports([current]).finally(() => setBusy(false));
+      if (!importJobCanStartCommit(current, "resume")) return;
+      await commitImports([current]);
       return;
     }
     if (current.kind === "local") await retryLocalImport(current);
@@ -366,16 +368,17 @@ export function Uploader({
     void removeJob(job);
   }, [removeJob]);
   const confirmDuplicateJob = useCallback((job: ImportJob) => {
-    queue.updateJob(job.id, { duplicateDecision: "confirmed" });
-  }, [queue.updateJob]);
+    const current = queue.jobsRef.current.find((item) => item.id === job.id);
+    if (!current || !importJobNeedsDuplicateConfirmation(current)) return;
+    void confirmImportDuplicate(current.id);
+  }, [confirmImportDuplicate, queue.jobsRef]);
 
   const commitReadyJobs = () => {
     const currentReadyJobs = summarizeImportJobs(
       queue.jobsRef.current
     ).readyJobs;
     if (!currentReadyJobs.length) return;
-    setBusy(true);
-    void commitImports(currentReadyJobs).finally(() => setBusy(false));
+    void commitImports(currentReadyJobs);
   };
 
   return (

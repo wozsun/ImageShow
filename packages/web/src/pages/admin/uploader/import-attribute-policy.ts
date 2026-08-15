@@ -27,10 +27,9 @@ function importAttributePhase(job: ImportJob): ImportAttributePhase {
   if (job.status === "ready") return "ready";
   if (job.status !== "failed") return "locked";
 
-  if (job.failureStage === "commit") {
-    return job.commitFailureCheckpoint === "ready" ? "ready" : "locked";
+  if (job.failureStage === "commit" || job.failureStage === "cancel") {
+    return "locked";
   }
-  if (job.failureStage === "cancel") return "locked";
   return "initial";
 }
 

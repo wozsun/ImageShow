@@ -65,14 +65,20 @@ function applyDuplicateConflict(
   const current = currentCommitJob(options, job);
   if (!current) return true;
   options.updateJob(current.id, {
-    status: "failed",
-    failureStage: "commit",
-    commitFailureCheckpoint: "ready",
+    status: "ready",
+    failureStage: undefined,
+    commitFailureCheckpoint: undefined,
     resultState: undefined,
     resultError: undefined,
     duplicates: result.duplicates,
     duplicateDecision: "undecided",
-    message: result.message
+    message: result.message,
+    serverStatus: "ready",
+    serverPhase: "ready",
+    serverError: "",
+    serverProgress: undefined,
+    serverAttemptKey: current.attemptKey,
+    serverSessionId: current.sessionId
   });
   return true;
 }

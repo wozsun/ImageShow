@@ -63,11 +63,24 @@ const authoritativePhaseOrder = new Map<string, number>([
   ["cancelled", 0]
 ]);
 
+function authoritativeDuplicateConflictMovesToReady(
+  job: ImportJob,
+  patch: Partial<ImportJob>
+) {
+  return Boolean(job.commitIntent)
+    && ["commit-queued", "committing"].includes(job.status)
+    && job.duplicateDecision !== "confirmed"
+    && patch.status === "ready"
+    && patch.duplicateDecision === "undecided"
+    && Boolean(patch.duplicates?.length);
+}
+
 function clientStatusPatchMovesForward(
   job: ImportJob,
   patch: Partial<ImportJob>
 ) {
   if (!patch.status) return true;
+  if (authoritativeDuplicateConflictMovesToReady(job, patch)) return true;
   if (job.status === "done") return patch.status === "done";
   if (job.status === "finalized") {
     return patch.status === "finalized" || patch.status === "done";
@@ -110,6 +123,7 @@ function authoritativeSnapshotMovesForward(
   job: ImportJob,
   patch: Partial<ImportJob>
 ) {
+  if (authoritativeDuplicateConflictMovesToReady(job, patch)) return true;
   const nextStatus = patch.serverStatus;
   const currentStatus = job.serverStatus;
   if (!nextStatus || !currentStatus) return true;
@@ -197,6 +211,16 @@ export function importStatusEventPatch(
   job: ImportJob,
   state: StoredImportStatus
 ): Partial<ImportJob> | null {
+  // The structured commit response is authoritative: a duplicate conflict
+  // leaves the session ready. Older stream frames from the rejected request
+  // must not make it look like confirmation has already started.
+  if (
+    job.status === "ready"
+    && Boolean(job.commitIntent)
+    && !["ready", "cancelled"].includes(state.status)
+  ) {
+    return null;
+  }
   if (state.phase === "materialize-waiting") {
     return authoritativeStatusPatch(job, state, { status: "queued" });
   }

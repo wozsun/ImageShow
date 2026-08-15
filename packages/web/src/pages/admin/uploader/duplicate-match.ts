@@ -20,12 +20,7 @@ export function importJobPreviewAvailable(job: ImportJob) {
 }
 
 function importJobCanConfirmDuplicates(job: ImportJob) {
-  return job.status === "ready"
-    || (
-      job.status === "failed"
-      && job.failureStage === "commit"
-      && job.commitFailureCheckpoint === "ready"
-    );
+  return job.status === "ready";
 }
 
 export function importJobNeedsDuplicateConfirmation(job: ImportJob) {

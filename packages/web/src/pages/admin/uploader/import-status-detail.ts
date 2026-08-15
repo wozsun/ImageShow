@@ -1,4 +1,35 @@
 import type { ImportJob } from "../../../lib/types.js";
+import { importJobNeedsDuplicateConfirmation } from "./duplicate-match.js";
+
+const statusLabels: Record<ImportJob["status"], string> = {
+  queued: "等待中",
+  uploading: "上传中",
+  downloading: "下载中",
+  received: "待处理",
+  processing: "处理中",
+  ready: "已就绪",
+  "commit-queued": "提交排队",
+  committing: "提交中",
+  finalized: "已写入",
+  cancelling: "取消中",
+  done: "已完成",
+  failed: "失败",
+  cancelled: "已取消"
+};
+
+export function importJobStatusLabel(
+  job: ImportJob,
+  hasQueueDuplicate = false
+) {
+  if (job.failureStage === "cancel") return "取消失败";
+  if (
+    importJobNeedsDuplicateConfirmation(job)
+    && (job.duplicates.length > 0 || hasQueueDuplicate)
+  ) {
+    return "重复待确认";
+  }
+  return statusLabels[job.status];
+}
 
 export function importJobStatusDetail(
   job: ImportJob,
@@ -27,7 +58,7 @@ export function importJobStatusDetail(
     case "ready":
       if (job.duplicateDecision === "confirmed") return "已确认保留副本";
       if (
-        job.duplicateDecision === "undecided"
+        importJobNeedsDuplicateConfirmation(job)
         && (job.duplicates.length > 0 || hasQueueDuplicate)
       ) {
         return "发现重复图片，请确认";

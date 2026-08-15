@@ -38,7 +38,7 @@ const commitOwnedStatuses = new Set<ImportJob["status"]>([
 ]);
 
 export type ImportQueueState = { jobs: ImportJob[]; page: number };
-export type ImportCommitRequest = "ready" | "retry";
+export type ImportCommitRequest = "new" | "resume";
 export type ImportQueueAction =
   | { type: "append"; jobs: ImportJob[] }
   | { type: "retain-mode"; mode: "file" | "link" }
@@ -81,10 +81,11 @@ export function importJobCanStartCommit(
   request: ImportCommitRequest
 ) {
   if (!job.md5 || job.duplicateDecision === "undecided") return false;
-  return request === "ready"
+  return request === "new"
     ? job.status === "ready" && !job.commitIntent
     : Boolean(job.commitIntent) && (
-        (job.status === "failed" && job.failureStage === "commit")
+        job.status === "ready"
+        || (job.status === "failed" && job.failureStage === "commit")
         || job.status === "committing"
         || (
           job.status === "finalized"
@@ -133,14 +134,22 @@ function importJobHasConfirmedReadyCheckpoint(job: ImportJob) {
     && job.commitFailureCheckpoint === "ready";
 }
 
+function importJobHasReadyCommitIntent(job: ImportJob) {
+  return Boolean(job.commitIntent) && job.status === "ready";
+}
+
 export function importJobCanBeCancelled(job: ImportJob) {
+  if (["cancelling", "done", "cancelled"].includes(job.status)) return false;
+  if (job.failureStage === "cancel") return true;
+  if (importJobHasReadyCommitIntent(job)) return true;
   if (importJobHasConfirmedReadyCheckpoint(job)) return true;
-  return !importJobHasCommitOwnership(job)
-    && !["cancelling", "done", "cancelled"].includes(job.status);
+  return !importJobHasCommitOwnership(job);
 }
 
 export function importJobCanLeaveQueue(job: ImportJob) {
   if (["cancelling", "done", "cancelled"].includes(job.status)) return true;
+  if (job.failureStage === "cancel") return true;
+  if (importJobHasReadyCommitIntent(job)) return true;
   if (importJobHasConfirmedReadyCheckpoint(job)) return true;
   return !importJobHasCommitOwnership(job);
 }
@@ -354,7 +363,8 @@ export function summarizeImportJobs(jobs: ImportJob[]): ImportJobSummary {
       continue;
     }
     if (job.status === "ready") {
-      if (importJobCanStartCommit(job, "ready")) summary.readyJobs.push(job);
+      const request: ImportCommitRequest = job.commitIntent ? "resume" : "new";
+      if (importJobCanStartCommit(job, request)) summary.readyJobs.push(job);
       continue;
     }
     if (processingImportStatuses.has(job.status)) {

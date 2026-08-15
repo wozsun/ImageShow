@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { AdminImageListItem, ImportJob } from "../../../lib/types.js";
@@ -21,6 +21,9 @@ import {
   type ImportCommitRequest
 } from "./import-queue-state.js";
 import { commitSelectedImports } from "./import-commit-batch.js";
+import {
+  importJobNeedsDuplicateConfirmation
+} from "./duplicate-match.js";
 
 export function useImportCommit(options: {
   jobsRef: RefObject<ImportJob[]>;
@@ -45,23 +48,25 @@ export function useImportCommit(options: {
   } = options;
   const client = useQueryClient();
   const runnerActiveRef = useRef(false);
+  const [busy, setBusy] = useState(false);
 
-  return useCallback(async (jobs: ImportJob[]) => {
+  const commit = useCallback(async (jobs: ImportJob[]) => {
     // This ref is acquired synchronously, before the first await or reducer
     // write, so a double click/React re-entry cannot create a second intent.
     if (runnerActiveRef.current) return false;
     runnerActiveRef.current = true;
+    setBusy(true);
     try {
       const candidates = new Map<string, ImportCommitRequest>();
       await runWithConcurrency(jobs, concurrency, async (requestedJob) => {
-        const request: ImportCommitRequest = requestedJob.status === "ready"
-          ? "ready"
-          : "retry";
         let job = jobsRef.current.find((item) => item.id === requestedJob.id);
+        const request: ImportCommitRequest = job?.commitIntent
+          ? "resume"
+          : "new";
         if (!job || !importJobCanStartCommit(job, request)) return;
 
         if (
-          request === "retry"
+          request === "resume"
           && job.status === "failed"
           && job.commitFailureCheckpoint === "unknown"
         ) {
@@ -166,6 +171,7 @@ export function useImportCommit(options: {
       return importedItems.length > 0;
     } finally {
       runnerActiveRef.current = false;
+      setBusy(false);
     }
   }, [
     client,
@@ -176,4 +182,21 @@ export function useImportCommit(options: {
     updateJob,
     updateJobs
   ]);
+
+  const confirmDuplicate = useCallback(async (jobId: string) => {
+    // The same synchronous fence protects the confirmation patch and the
+    // immediate resubmission, including double-clicks before React rerenders.
+    if (runnerActiveRef.current) return false;
+    let job = jobsRef.current.find((item) => item.id === jobId);
+    if (!job || !importJobNeedsDuplicateConfirmation(job)) return false;
+
+    updateJob(job.id, { duplicateDecision: "confirmed" });
+    job = jobsRef.current.find((item) => item.id === jobId);
+    if (!job) return false;
+    if (!job.commitIntent) return true;
+    if (!importJobCanStartCommit(job, "resume")) return false;
+    return commit([job]);
+  }, [commit, jobsRef, updateJob]);
+
+  return { commit, confirmDuplicate, busy };
 }
