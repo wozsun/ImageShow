@@ -10,6 +10,8 @@ const adminImageListStaleTimeMs = 90_000;
 export type ImageAdminPageState = {
   scopeKey: string;
   page: number;
+  total: number | null;
+  totalUpdatedAt: number;
 };
 
 function normalizedScope(

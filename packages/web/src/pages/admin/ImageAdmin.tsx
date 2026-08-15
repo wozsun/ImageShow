@@ -94,8 +94,8 @@ export function ImageAdmin() {
     enabled: Boolean(settingsData)
   });
   const {
-    data,
     items,
+    total,
     error: listError,
     isError: listFailed,
     isFetching,
@@ -232,7 +232,7 @@ export function ImageAdmin() {
           </div>
           <p role="status" aria-live="polite" aria-atomic="true">
             {operationText || (
-              `第 ${pageNumber} / ${totalPages} 页 · 共 ${data?.total ?? 0} 项 · 本页 ${items.length} 项${
+              `第 ${pageNumber} / ${totalPages} 页 · 共 ${total} 项 · 本页 ${items.length} 项${
                 isFetching ? " · 加载中" : ""
               }`
             )}

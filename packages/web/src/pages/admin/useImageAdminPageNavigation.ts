@@ -29,7 +29,9 @@ export function useImageAdminPageNavigation({
   const scopeKey = imageAdminPaginationScopeKey(view, filters, pageSize);
   const [state, setState] = useState<ImageAdminPageState>({
     scopeKey,
-    page: 1
+    page: 1,
+    total: null,
+    totalUpdatedAt: 0
   });
   const pageNumber = effectiveImageAdminPage(state, scopeKey);
   const query = useQuery({
@@ -42,27 +44,68 @@ export function useImageAdminPageNavigation({
     ),
     enabled
   });
-  const successfulTotalPages = query.isSuccess
-    ? imageAdminTotalPages(query.data.total, pageSize)
-    : null;
-  const totalPages = successfulTotalPages ?? Math.max(1, pageNumber);
+  // Total belongs to the normalized scope, not to one numeric page. Keep the
+  // newest successful scope snapshot while the target page has no data yet.
+  // Millisecond timestamp ties only win after this observer sees a success.
+  const retainedTotal = state.scopeKey === scopeKey ? state.total : null;
+  const retainedTotalUpdatedAt = state.scopeKey === scopeKey
+    ? state.totalUpdatedAt
+    : 0;
+  const currentQueryFetchedSuccessfully = query.isFetchedAfterMount
+    && !query.isError;
+  const currentQueryHasLatestTotal = query.data !== undefined
+    && (
+      retainedTotal === null
+      || query.dataUpdatedAt > retainedTotalUpdatedAt
+      || currentQueryFetchedSuccessfully
+    );
+  const queryTotal = currentQueryHasLatestTotal ? query.data.total : null;
+  const total = queryTotal ?? retainedTotal ?? 0;
+  const totalPages = imageAdminTotalPages(total, pageSize);
 
   useEffect(() => {
     setState((current) => current.scopeKey === scopeKey
       ? current
-      : { scopeKey, page: 1 });
+      : {
+          scopeKey,
+          page: 1,
+          total: null,
+          totalUpdatedAt: 0
+        });
   }, [scopeKey]);
 
   useEffect(() => {
-    if (
-      successfulTotalPages === null
-      || pageNumber <= successfulTotalPages
-    ) return;
-    setState((current) => current.scopeKey === scopeKey
-      && current.page > successfulTotalPages
-      ? { scopeKey, page: successfulTotalPages }
-      : current);
-  }, [pageNumber, scopeKey, successfulTotalPages]);
+    if (queryTotal === null) return;
+    const successfulTotalPages = imageAdminTotalPages(queryTotal, pageSize);
+    setState((current) => {
+      if (
+        current.scopeKey !== scopeKey
+        || (
+          current.total !== null
+          && query.dataUpdatedAt <= current.totalUpdatedAt
+          && !currentQueryFetchedSuccessfully
+        )
+      ) return current;
+      const nextPage = Math.min(current.page, successfulTotalPages);
+      if (
+        current.page === nextPage
+        && current.total === queryTotal
+        && current.totalUpdatedAt === query.dataUpdatedAt
+      ) return current;
+      return {
+        scopeKey,
+        page: nextPage,
+        total: queryTotal,
+        totalUpdatedAt: query.dataUpdatedAt
+      };
+    });
+  }, [
+    currentQueryFetchedSuccessfully,
+    pageSize,
+    query.dataUpdatedAt,
+    queryTotal,
+    scopeKey
+  ]);
 
   const loadPage = useCallback((targetPage: number, blocked: boolean) => {
     if (
@@ -72,12 +115,19 @@ export function useImageAdminPageNavigation({
       || targetPage > totalPages
       || targetPage === pageNumber
     ) return;
-    setState({ scopeKey, page: targetPage });
+    setState((current) => ({
+      scopeKey,
+      page: targetPage,
+      total: current.scopeKey === scopeKey ? current.total : null,
+      totalUpdatedAt: current.scopeKey === scopeKey
+        ? current.totalUpdatedAt
+        : 0
+    }));
   }, [pageNumber, scopeKey, totalPages]);
 
   return {
-    data: query.data,
     items: query.data?.items ?? [],
+    total,
     error: query.error,
     isError: query.isError,
     isFetching: query.isFetching,
