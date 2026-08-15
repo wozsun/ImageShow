@@ -81,14 +81,18 @@ export function ReadyImageCachePanel({
   const busy = manualRefreshing || maintenanceBusy;
   const coreOccupancy = {
     key_count: projectionUsage?.core.key_count ?? null,
-    member_count: projectionUsage?.core.member_count
-      ?? status?.item_count
-      ?? null,
+    count: status?.item_count ?? null,
     memory_bytes: projectionUsage?.core.memory_bytes
       ?? status?.last_full_rebuild_core_memory_bytes
       ?? null
   };
-  const derivedOccupancy = projectionUsage?.derived ?? null;
+  const derivedOccupancy = projectionUsage
+    ? {
+        key_count: projectionUsage.derived.key_count,
+        count: projectionUsage.derived.member_count,
+        memory_bytes: projectionUsage.derived.memory_bytes
+      }
+    : null;
   const deepMeasuredAt = projectionUsage
     ? formatTime(projectionUsage.measured_at)
     : null;
@@ -96,7 +100,7 @@ export function ReadyImageCachePanel({
     ? `${projectionUsageNotice} `
     : "";
   const coreDetails = projectionUsage
-    ? `${projectionUsageNoticePrefix}最近一次完整 Redis 深检快照，测量于 ${deepMeasuredAt}。`
+    ? `${projectionUsageNoticePrefix}图片成员来自当前轻量状态；键数和内存来自最近一次完整 Redis 深检快照，测量于 ${deepMeasuredAt}。`
     : status?.last_full_rebuild_measured_at
       ? `${projectionUsageNoticePrefix}图片成员来自当前轻量状态；内存为最近完整重建快照，测量于 ${formatTime(
           status.last_full_rebuild_measured_at
@@ -170,13 +174,15 @@ export function ReadyImageCachePanel({
         >
           <CacheOccupancy
             title="核心投影"
-            memberLabel="图片成员"
+            countLabel="图片成员"
+            countUnit="个"
             value={coreOccupancy}
             details={coreDetails}
           />
           <CacheOccupancy
             title="派生缓存"
-            memberLabel="结果成员"
+            countLabel="结果成员"
+            countUnit="个"
             value={derivedOccupancy}
             details={derivedDetails}
           />
@@ -195,12 +201,19 @@ export function ReadyImageCachePanel({
   );
 }
 
-function CacheOccupancy({ title, memberLabel, value, details }: {
+function CacheOccupancy({
+  title,
+  countLabel,
+  countUnit,
+  value,
+  details
+}: {
   title: string;
-  memberLabel: string;
+  countLabel: string;
+  countUnit: string;
   value: {
     key_count: number | null;
-    member_count: number | null;
+    count: number | null;
     memory_bytes: number | null;
   } | null;
   details: string;
@@ -209,7 +222,7 @@ function CacheOccupancy({ title, memberLabel, value, details }: {
     <section title={details}>
       <h3>{title}</h3>
       <span>{value?.key_count?.toLocaleString() ?? "—"} 个键</span>
-      <span>{value?.member_count?.toLocaleString() ?? "—"} 个{memberLabel}</span>
+      <span>{value?.count?.toLocaleString() ?? "—"} {countUnit}{countLabel}</span>
       <span>{value?.memory_bytes === null || value?.memory_bytes === undefined
         ? "—"
         : formatBytes(value.memory_bytes)}</span>

@@ -11,6 +11,7 @@ import {
   effectiveImageAdminPage,
   imageAdminPaginationScopeKey,
   imageAdminTotalPages,
+  resolveImageAdminScopeTotal,
   type ImageAdminPageState
 } from "./image-admin-list-query.js";
 
@@ -51,16 +52,18 @@ export function useImageAdminPageNavigation({
   const retainedTotalUpdatedAt = state.scopeKey === scopeKey
     ? state.totalUpdatedAt
     : 0;
-  const currentQueryFetchedSuccessfully = query.isFetchedAfterMount
-    && !query.isError;
-  const currentQueryHasLatestTotal = query.data !== undefined
-    && (
-      retainedTotal === null
-      || query.dataUpdatedAt > retainedTotalUpdatedAt
-      || currentQueryFetchedSuccessfully
-    );
-  const queryTotal = currentQueryHasLatestTotal ? query.data.total : null;
-  const total = queryTotal ?? retainedTotal ?? 0;
+  const {
+    currentQueryHasObservedSuccessfulData,
+    queryTotal,
+    total
+  } = resolveImageAdminScopeTotal({
+    retainedTotal,
+    retainedUpdatedAt: retainedTotalUpdatedAt,
+    queryData: query.data,
+    queryUpdatedAt: query.dataUpdatedAt,
+    fetchedAfterMount: query.isFetchedAfterMount,
+    isSuccess: query.isSuccess
+  });
   const totalPages = imageAdminTotalPages(total, pageSize);
 
   useEffect(() => {
@@ -83,7 +86,7 @@ export function useImageAdminPageNavigation({
         || (
           current.total !== null
           && query.dataUpdatedAt <= current.totalUpdatedAt
-          && !currentQueryFetchedSuccessfully
+          && !currentQueryHasObservedSuccessfulData
         )
       ) return current;
       const nextPage = Math.min(current.page, successfulTotalPages);
@@ -100,7 +103,7 @@ export function useImageAdminPageNavigation({
       };
     });
   }, [
-    currentQueryFetchedSuccessfully,
+    currentQueryHasObservedSuccessfulData,
     pageSize,
     query.dataUpdatedAt,
     queryTotal,

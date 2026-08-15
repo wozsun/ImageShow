@@ -13,14 +13,18 @@ const adminRedisInspectionPath = `${adminApiBasePath}/check/redis`;
 
 type ReadyImageProjectionUsageAggregate = {
   key_count: number;
-  member_count: number;
   memory_bytes: number;
 };
+
+type ReadyImageDerivedProjectionUsageAggregate =
+  ReadyImageProjectionUsageAggregate & {
+    member_count: number;
+  };
 
 export type ReadyImageProjectionUsageSnapshot = {
   measured_at: string;
   core: ReadyImageProjectionUsageAggregate;
-  derived: ReadyImageProjectionUsageAggregate;
+  derived: ReadyImageDerivedProjectionUsageAggregate;
 };
 
 function recordValue(value: unknown) {
@@ -33,13 +37,10 @@ function projectionUsageAggregate(value: unknown) {
   const record = recordValue(value);
   if (!record) return null;
   const keyCount = record.key_count;
-  const memberCount = record.member_count;
   const memoryBytes = record.memory_bytes;
   if (
     !Number.isSafeInteger(keyCount)
     || Number(keyCount) < 0
-    || !Number.isSafeInteger(memberCount)
-    || Number(memberCount) < 0
     || !Number.isSafeInteger(memoryBytes)
     || Number(memoryBytes) < 0
   ) {
@@ -47,8 +48,24 @@ function projectionUsageAggregate(value: unknown) {
   }
   return {
     key_count: Number(keyCount),
-    member_count: Number(memberCount),
     memory_bytes: Number(memoryBytes)
+  };
+}
+
+function derivedProjectionUsageAggregate(value: unknown) {
+  const record = recordValue(value);
+  const aggregate = projectionUsageAggregate(record);
+  const memberCount = record?.member_count;
+  if (
+    !aggregate
+    || !Number.isSafeInteger(memberCount)
+    || Number(memberCount) < 0
+  ) {
+    return null;
+  }
+  return {
+    ...aggregate,
+    member_count: Number(memberCount)
   };
 }
 
@@ -78,7 +95,7 @@ export function readyImageProjectionUsage(
   }
   const usage = recordValue(deepInspection.image_projection_usage);
   const core = projectionUsageAggregate(usage?.core);
-  const derived = projectionUsageAggregate(usage?.derived);
+  const derived = derivedProjectionUsageAggregate(usage?.derived);
   return core && derived
     ? { measured_at: deepInspection.measured_at, core, derived }
     : null;

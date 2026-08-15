@@ -14,6 +14,39 @@ export type ImageAdminPageState = {
   totalUpdatedAt: number;
 };
 
+export function resolveImageAdminScopeTotal({
+  retainedTotal,
+  retainedUpdatedAt,
+  queryData,
+  queryUpdatedAt,
+  fetchedAfterMount,
+  isSuccess
+}: {
+  retainedTotal: number | null;
+  retainedUpdatedAt: number;
+  queryData: Pick<AdminImageListResponseDto, "total"> | undefined;
+  queryUpdatedAt: number;
+  fetchedAfterMount: boolean;
+  isSuccess: boolean;
+}) {
+  const currentQueryHasObservedSuccessfulData = queryData !== undefined
+    && isSuccess
+    && fetchedAfterMount;
+  const queryTotal = queryData !== undefined
+    && (
+      retainedTotal === null
+      || queryUpdatedAt > retainedUpdatedAt
+      || currentQueryHasObservedSuccessfulData
+    )
+    ? queryData.total
+    : null;
+  return {
+    currentQueryHasObservedSuccessfulData,
+    queryTotal,
+    total: queryTotal ?? retainedTotal ?? 0
+  };
+}
+
 function normalizedScope(
   view: ImageAdminView,
   filters: ImageAdminFilterValues,

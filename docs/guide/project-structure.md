@@ -229,8 +229,8 @@ hooks ──► lib
 - `pages/admin/useImageAdminPageNavigation.ts` 是后台图库、无主题与回收站数字页的唯一查询
   owner，只保存规范化 scope、目标 page 与最近成功的 scope total 快照，并让 React Query
   处理取消、键隔离、90 秒新鲜缓存和重试；同目录 `image-admin-list-query.ts` 只构造规范化
-  scope、query key 与数字页 URL，页面不再维护 cursorHistory、补链 intent 或专用
-  `image-page-navigation.ts` 模型。
+  scope、query key、数字页 URL 与纯 total 仲裁模型，页面不再维护 cursorHistory、补链
+  intent 或专用 `image-page-navigation.ts` 模型。
 - `AppRoutes.tsx` 将普通与嵌入路径映射到同一 `HomePage` / `GalleryPage`；页面参数只
   决定是否挂载主导航，不能复制公开页实现或以 CSS 隐藏导航。服务端仍独立决定嵌入
   文档是否存在并输出父页面白名单，前端开关只负责已加载 SPA 内的路由收敛。
