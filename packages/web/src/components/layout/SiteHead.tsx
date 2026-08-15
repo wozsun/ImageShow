@@ -42,7 +42,7 @@ export function SiteHead() {
     if (!site) return;
     document.title = site.name || "ImageShow";
     const description = ensureMeta("description");
-    description.content = site.home.tagline || site.name || "ImageShow";
+    description.content = site.description || site.name || "ImageShow";
 
     let link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
     if (!link) {
@@ -52,6 +52,6 @@ export function SiteHead() {
     }
     link.type = site.icon_url.endsWith(".svg") ? "image/svg+xml" : "";
     link.href = site.icon_url || "/assets/brand/favicon.svg";
-  }, [site?.name, site?.home.tagline, site?.icon_url]);
+  }, [site?.name, site?.description, site?.icon_url]);
   return null;
 }

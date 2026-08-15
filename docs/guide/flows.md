@@ -65,6 +65,14 @@ created ─► materializing ─► received ─► preparing ─► ready
   `POST /api/admin/imports/events`，尝试键只进入有界 JSON 正文，不进入 URL；连接不可用时
   退化为固定 `POST /api/admin/imports/status` 对当时未完成会话做批量状态轮询，真实会话 ID
   同样只进入正文，不按卡片创建独立轮询。
+- 任务卡片保存最近一次由当前 `attemptKey` 与真实会话共同接受的权威
+  `status` / `phase` 快照。新 attempt 或会话重绑会原子清空旧快照和阶段进度；迟到、
+  旧会话及单调倒退事件不会只更新快照。卡片详情由 Web 单一纯映射生成：传输前稳定显示
+  “等待上传/下载”，传输中显示“上传/下载原图中”，prepare 的连续内部阶段统一显示
+  “处理图片并生成缩略图”；只有真实 `prepare-waiting` 单独提示等待处理。ready 显示
+  “图片处理完成，等待提交”或重复决策，正常 commit 显示“写入图库中”，显式回执恢复才显示
+  “正在确认提交结果”，完成态不重复前置状态标签。服务端精确 message 继续用于诊断和
+  可操作失败，不直接驱动正常阶段文案。
 
 JSONL 可设置 `original`、`source`、`image_time`、`author`、`tags`、`title`、
 `description`、`theme`、`device`、`brightness` 与 `storage_slug`。行内字段优先于窗口

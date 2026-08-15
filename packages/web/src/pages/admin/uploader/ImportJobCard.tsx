@@ -15,6 +15,7 @@ import {
   importJobAttributesEditable
 } from "./import-attribute-policy.js";
 import { importPositionText } from "./import-job-utils.js";
+import { importJobStatusDetail } from "./import-status-detail.js";
 
 const statusLabels: Record<ImportJob["status"], string> = {
   queued: "等待中", uploading: "上传中", downloading: "下载中", received: "待处理", processing: "处理中",
@@ -83,7 +84,7 @@ export const ImportJobCard = memo(function ImportJobCard({
     && typeof job.transferProgress === "number";
   const transferProgress = Math.min(100, Math.max(0, Math.round(job.transferProgress ?? 0)));
   const transferProgressLabel = job.status === "downloading" ? "下载进度" : "上传进度";
-  const statusDetailText = job.message || statusLabel;
+  const statusDetailText = importJobStatusDetail(job, Boolean(queueDuplicate));
   const sourcePositionText = importPositionText(job);
   const metaText = [sourcePositionText, storageDisplayName, dimensionsText, statusDetailText].filter(Boolean).join(" · ");
   const sizeSummaryText = `${originalSizeText} → ${finalSizeText}${qualityText ? ` · ${qualityText}` : ""}`;

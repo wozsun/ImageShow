@@ -72,6 +72,7 @@ export function runtimeConfigFromEnvironment(): RuntimeConfig {
     site: {
       name: environmentValue("SITE_NAME"),
       domain: environmentValue("SITE_DOMAIN"),
+      description: environmentValue("SITE_DESCRIPTION"),
       icon_url: environmentValue("SITE_ICON_URL"),
       version: {
         enabled: environmentBoolean("SITE_VERSION_ENABLED"),
@@ -82,8 +83,7 @@ export function runtimeConfigFromEnvironment(): RuntimeConfig {
         enabled: environmentBoolean("SITE_HOME_ENABLED"),
         background: environmentValue("SITE_HOME_BACKGROUND"),
         banner_label: environmentValue("SITE_HOME_BANNER_LABEL"),
-        banner_title: environmentValue("SITE_HOME_BANNER_TITLE"),
-        tagline: environmentValue("SITE_HOME_TAGLINE")
+        banner_title: environmentValue("SITE_HOME_BANNER_TITLE")
       },
       gallery: {
         default_limit: environmentNumber("SITE_GALLERY_DEFAULT_LIMIT"),

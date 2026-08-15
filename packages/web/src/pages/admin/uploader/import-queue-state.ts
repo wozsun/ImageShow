@@ -11,6 +11,7 @@ import {
   imageDraftPatchChanges,
   importAttributeDefaultsPatch
 } from "./import-attribute-policy.js";
+import { importStatusPatchMovesForward } from "./import-status-state.js";
 
 const processingImportStatuses = new Set<ImportJob["status"]>([
   "uploading",
@@ -66,6 +67,13 @@ export function importJobCanStartCommit(
     : job.status === "failed" && job.failureStage === "commit";
 }
 
+export function importJobIsRecoveringCommitResult(
+  job: ImportJob,
+  intent: ImportCommitIntent
+) {
+  return intent === "retry" && job.commitFailureCheckpoint !== "ready";
+}
+
 function patchJobDraft(job: ImportJob, patch: Partial<ImageDraft>): ImportJob {
   if (!imageDraftPatchChanges(job.draft, patch)) return job;
   const next = { ...job, draft: { ...job.draft, ...patch } };
@@ -79,6 +87,51 @@ function patchJobDraft(job: ImportJob, patch: Partial<ImageDraft>): ImportJob {
 }
 
 function patchJob(job: ImportJob, patch: Partial<ImportJob>) {
+  const has = (field: keyof ImportJob) => Object.prototype.hasOwnProperty.call(
+    patch,
+    field
+  );
+  const attemptChanged = has("attemptKey")
+    && patch.attemptKey !== job.attemptKey;
+  const sessionChanged = has("sessionId")
+    && patch.sessionId?.toLowerCase() !== job.sessionId?.toLowerCase();
+
+  // Retry helpers deliberately spread the complete previous task so callers
+  // can publish one atomic replacement. Treat a binding change as the owner
+  // transition first: any server snapshot carried by that spread belongs to
+  // the previous attempt/session and must never participate in the monotonic
+  // event guard or survive into the new owner.
+  if (attemptChanged || sessionChanged) {
+    const nextPatch = {
+      ...patch,
+      serverStatus: undefined,
+      serverPhase: undefined,
+      serverError: undefined,
+      serverProgress: undefined,
+      serverAttemptKey: undefined,
+      serverSessionId: undefined,
+      recoveringCommitResult: undefined,
+      ...(has("transferProgress") ? {} : { transferProgress: undefined })
+    };
+    const changes = (Object.keys(nextPatch) as Array<keyof ImportJob>)
+      .some((field) => job[field] !== nextPatch[field]);
+    return changes ? { ...job, ...nextPatch } : job;
+  }
+
+  const authorityPatch = has("serverStatus") || has("serverPhase")
+    || has("serverError") || has("serverProgress");
+  if (
+    authorityPatch
+    && (
+      patch.serverAttemptKey !== job.attemptKey
+      || !job.sessionId
+      || !patch.serverSessionId
+      || patch.serverSessionId.toLowerCase() !== job.sessionId.toLowerCase()
+      || !importStatusPatchMovesForward(job, patch)
+    )
+  ) {
+    return job;
+  }
   const changes = (Object.keys(patch) as Array<keyof ImportJob>)
     .some((field) => job[field] !== patch[field]);
   return changes ? { ...job, ...patch } : job;

@@ -120,6 +120,7 @@ export const appConfig = {
     site: {
       name: "ImageShow",
       domain: "example.com",
+      description: "画廊与随机图API",
       icon_url: "/assets/brand/favicon.svg",
       version: {
         enabled: true,
@@ -130,8 +131,7 @@ export const appConfig = {
         enabled: true,
         background: "",
         banner_label: "ImageShow · A FAN-MADE PHOTO HANDBOOK",
-        banner_title: "我们一起，\n收藏这些瞬间。",
-        tagline: "个人图片管理、画廊展示和随机图片 API。"
+        banner_title: "我们一起，\n收藏这些瞬间。"
       },
       gallery: { default_limit: 60, order: "random" },
       random_default_method: "redirect",

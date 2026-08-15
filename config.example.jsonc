@@ -9,6 +9,9 @@
     "name": "ImageShow",
     // 主域名，仅填写 DNS 域名（开发环境可带端口），不包含协议、路径或凭据。
     "domain": "example.com",
+    // 站点描述，仅写入 SPA HTML 的 description；留空时回退到站点名称。
+    // 只通过本文件、高级配置或首次启动环境变量维护，不进入普通设置页。
+    "description": "画廊与随机图API",
     // 站点图标地址，可使用站内绝对路径或 HTTPS 图片地址。
     "icon_url": "/assets/brand/favicon.svg",
     // 后台版本卡片；仅通过配置文件、高级配置或首次启动环境变量维护，不进入站点配置页。
@@ -31,9 +34,7 @@
       // 首页 Banner 主标题上方的短标识。
       "banner_label": "ImageShow · A FAN-MADE PHOTO HANDBOOK",
       // 首页 Banner 主标题；字符串中的 \n 会显示为换行。
-      "banner_title": "我们一起，\n收藏这些瞬间。",
-      // 站点描述；用于首页 banner 下方说明文案和 HTML description。
-      "tagline": "个人图片管理、画廊展示和随机图片 API。"
+      "banner_title": "我们一起，\n收藏这些瞬间。"
     },
     // 公共画廊配置。
     "gallery": {

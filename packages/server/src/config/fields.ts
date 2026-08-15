@@ -33,6 +33,7 @@ export const siteDomain = z.string().trim().toLowerCase().min(1).max(259).refine
 }, "站点域名需为不含协议和路径的有效 DNS 域名，可带端口");
 export const siteIconUrl = z.string().trim().min(1).max(2048)
   .refine(isRootRelativeOrHttpsUrl, "站点图标必须是站内绝对路径或 HTTPS URL");
+export const siteDescription = z.string().trim().max(200);
 
 export const loginBackground = z.string().trim().max(2048)
   .refine((value) => !value || isRootRelativeOrHttpsUrl(value), "登录背景必须是站内绝对路径或 HTTPS URL");
@@ -41,7 +42,6 @@ export const homeBackground = z.string().trim().max(2048)
   .refine((value) => !value || isRootRelativeOrHttpsUrl(value), "首页背景必须是站内绝对路径或 HTTPS URL");
 export const homeBannerLabel = z.string().trim().min(1).max(160);
 export const homeBannerTitle = z.string().trim().min(1).max(160);
-export const homeTagline = z.string().trim().max(200);
 
 function isCspSafeEmbedHostname(hostname: string) {
   return isIP(hostname) === 0

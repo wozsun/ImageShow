@@ -21,6 +21,7 @@ import type {
   PublicImageItemDto,
   RandomMethod,
   RuntimeConfigChangeSummaryDto,
+  StoredImportServerStatus,
   StorageBackendAdminDto,
   StorageBackendS3Dto,
   TagDto,
@@ -105,4 +106,13 @@ export type ImportJob = {
   storageSlug: string;
   failureStage?: "create" | "prepare" | "commit" | "cancel";
   commitFailureCheckpoint?: CommitFailureCheckpoint;
+  // 最近一次由当前 attempt/session 接受的服务端权威快照。可见详情由这些
+  // 字段和客户端状态集中派生，不直接展示服务端正常阶段 message。
+  serverStatus?: StoredImportServerStatus;
+  serverPhase?: string;
+  serverError?: string;
+  serverProgress?: number;
+  serverAttemptKey?: string;
+  serverSessionId?: string;
+  recoveringCommitResult?: boolean;
 };

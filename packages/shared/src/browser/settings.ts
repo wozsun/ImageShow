@@ -14,7 +14,6 @@ export type SiteHomeSettings = {
   background: string;
   banner_label: string;
   banner_title: string;
-  tagline: string;
 };
 
 export type SiteGallerySettings = {
@@ -25,6 +24,7 @@ export type SiteGallerySettings = {
 export type RuntimeSiteSettings = {
   name: string;
   domain: string;
+  description: string;
   icon_url: string;
   version: SiteVersionSettings;
   root_redirect: RootRedirect;
@@ -148,7 +148,7 @@ export type SiteSettings = Pick<
 
 export type PublicSiteSettings = Pick<
   RuntimeSiteSettings,
-  "name" | "icon_url" | "root_redirect" | "home"
+  "name" | "description" | "icon_url" | "root_redirect" | "home"
 > & {
   gallery: Pick<SiteGallerySettings, "order">;
 };

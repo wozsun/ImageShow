@@ -48,6 +48,7 @@ services:
         condition: service_healthy
     environment:
       SITE_DOMAIN: ${SITE_DOMAIN:-example.com}
+      SITE_DESCRIPTION: ${SITE_DESCRIPTION:-}
       TZ: ${TZ:-UTC}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}

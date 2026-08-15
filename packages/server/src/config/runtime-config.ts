@@ -18,7 +18,6 @@ import {
   homeBackground,
   homeBannerLabel,
   homeBannerTitle,
-  homeTagline,
   imagePageSize,
   importGlobalConcurrency,
   linkFetchTimeoutSeconds,
@@ -45,6 +44,7 @@ import {
   rootRedirect,
   sessionTtlSeconds,
   siteDomain,
+  siteDescription,
   siteIconUrl,
   siteName,
   skipWebpUnderKb,
@@ -71,6 +71,7 @@ const runtimeConfigSchema = z.strictObject({
   site: z.strictObject({
     name: siteName,
     domain: siteDomain,
+    description: siteDescription,
     icon_url: siteIconUrl,
     version: z.strictObject({
       enabled: z.boolean(),
@@ -81,8 +82,7 @@ const runtimeConfigSchema = z.strictObject({
       enabled: z.boolean(),
       background: homeBackground,
       banner_label: homeBannerLabel,
-      banner_title: homeBannerTitle,
-      tagline: homeTagline
+      banner_title: homeBannerTitle
     }),
     gallery: z.strictObject({
       default_limit: galleryLimit,

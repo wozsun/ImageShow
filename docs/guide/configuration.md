@@ -35,10 +35,10 @@ commit 并发等前端预检所需的只读值；不会返回部署配置、完�
 同样只接受设置页公开的可编辑字段，并以嵌套 patch 合并，未公开配置不会因保存
 设置页而被默认值覆盖。`embed` 不进入普通后台设置的读取或保存 DTO，只通过
 `data/config.json` 维护；公开站点配置仅返回前端路由实际消费的有效嵌入开关，
-不返回来源列表。`site.domain`、`site.icon_url` 与
+不返回来源列表。`site.domain`、`site.description`、`site.icon_url` 与
 `site.home.enabled` 保留在运行时配置中，但不进入普通设置页及其读写 DTO；
-`site.home.tagline` 同样只用于 HTML `description`。这些字段都需要通过配置文件
-或高级配置维护。
+其中 `site.description` 只用于 HTML `description`。这些字段都需要通过配置文件
+或高级配置维护；公开站点配置投影会返回描述，供 SPA 路由切换后维护同一 meta。
 
 设置页的「读取配置文件」与「保存应用配置」直接在各自按钮内显示进行中、成功或失败，
 并预留最长状态文案宽度。进行态至少展示 500ms，结果保留三秒；成功状态不会阻止再次
@@ -73,10 +73,10 @@ PostgreSQL 的 `admin_account` 表，不进入 `config.json`。单应用进程�
 | --- | --- |
 | `site.name` | 站点名称，也会写入 SPA HTML 的 `<title>`；可在普通站点配置页维护。 |
 | `site.domain` / `site.icon_url` | 主域名和图标；域名仅允许 DNS 名称（开发环境可带端口），图标仅允许站内绝对路径或 HTTPS。两项只通过配置文件、高级配置或首次启动环境变量维护，不进入普通站点配置页及其读写 DTO。 |
+| `site.description` | 站点描述，默认“画廊与随机图API”，仅写入 SPA HTML 的 `description`，不在首页正文或普通站点配置页显示；空值按 `site.name`、`ImageShow` 的顺序回退。只通过配置文件、高级配置或首次启动环境变量维护。 |
 | `site.version.enabled` / `site.version.link_enabled` | 是否显示后台版本卡片、是否链接到对应的 GitHub Release，默认均为 `true`。关闭链接后仍显示版本；两项只通过配置文件、高级配置或首次启动环境变量维护，不进入站点配置页，也不进入公开站点配置投影，只随已认证的会话探针返回。 |
 | `site.root_redirect` | 根路径直接显示的页面：`home` 或 `gallery`；`/home`、`/gallery` 固定路径仍可单独访问。 |
 | `site.home.enabled` | 是否启用公共首页 `/home`，默认 `true`。关闭后 `/home` 重定向到画廊，导航不再显示首页入口，根路径固定显示画廊；只通过配置文件、高级配置或首次启动环境变量维护。 |
-| `site.home.tagline` | 站点描述，仅写入 SPA HTML 的 `description`，不在首页正文或普通站点配置页显示，只能通过配置文件、高级配置或首次启动环境变量维护。首页全屏背景固定使用站点自身的随机图 API。 |
 | `site.gallery.default_limit` / `site.gallery.order` | 画廊默认分页数量与排序。 |
 | `site.random_default_method` | `/random` 默认返回方式：`redirect`、`proxy` 或 `json`；默认 JSON 模式省略 `n` 时返回一项数组，批量仍须显式使用 `m=json&n=...`。 |
 | `site.random_subdomain` / `site.static_subdomain` / `site.link_subdomain` | 保留子域名前缀。 |
@@ -321,11 +321,11 @@ PostgreSQL 提交状态，不根据可能已被后继修改的业务行猜测；
 | 配置字段 | 环境变量 |
 | --- | --- |
 | `site.domain` | `SITE_DOMAIN` |
+| `site.description` | `SITE_DESCRIPTION` |
 | `site.version.enabled` | `SITE_VERSION_ENABLED` |
 | `site.version.link_enabled` | `SITE_VERSION_LINK_ENABLED` |
 | `site.robots_enabled` | `SITE_ROBOTS_ENABLED` |
 | `site.home.enabled` | `SITE_HOME_ENABLED` |
-| `site.home.tagline` | `SITE_HOME_TAGLINE` |
 | `admin.login_background` | `ADMIN_LOGIN_BACKGROUND` |
 | `normalize.quality_step` | `NORMALIZE_QUALITY_STEP` |
 | `thumbnail.long_edge` | `THUMBNAIL_LONG_EDGE` |
@@ -350,3 +350,20 @@ PostgreSQL 提交状态，不根据可能已被后继修改的业务行猜测；
 部署字段在每次进程启动时读取；缺失必需的数据库环境变量会直接拒绝启动。
 应用配置的环境变量仍只在首次生成 `config.json` 时播种，文件存在后不会覆盖已有
 值，请直接修改 `config.json` 并热加载。
+
+### 4.13.0 站点描述字段升级
+
+4.13.0 只接受 `site.description` 与 `SITE_DESCRIPTION`，不会读取、迁移或回退
+`site.home.tagline` / `SITE_HOME_TAGLINE`。4.12.x 导出的 portable 配置包也必须先人工
+改成当前路径再导入。升级已有实例时按以下顺序操作：
+
+1. 停止 ImageShow 实例并等待退出完成。
+2. 备份 `data/config.json`。
+3. 把原 `site.home.tagline` 的值移动到紧跟 `site.domain` 的
+   `site.description`，删除旧键；部署环境中如有旧变量，同步改名为
+   `SITE_DESCRIPTION`。
+4. 使用 JSON 工具检查配置语法和字段位置。
+5. 启动 4.13.0，确认健康检查和页面 HTML `description` 后再恢复访问。
+
+若跳过人工移动，结构归一化会把旧键视为未知字段删除并给新字段补默认值；它不会推测
+旧值。显式空字符串仍是合法配置，并按运行时回退规则使用站点名称。

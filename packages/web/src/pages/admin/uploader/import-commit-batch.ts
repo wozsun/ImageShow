@@ -38,6 +38,7 @@ function completedImport(
       status: "done",
       failureStage: undefined,
       commitFailureCheckpoint: undefined,
+      recoveringCommitResult: false,
       message: importedMessage,
       preview: result.item.thumb_url,
       previewFull: result.item.object_url
@@ -94,6 +95,12 @@ async function recoverFinalizedImports(
   completeJob: CommitSelectedImportsOptions["completeJob"],
   updateJob: CommitSelectedImportsOptions["updateJob"]
 ) {
+  for (const { job } of pending) {
+    updateJob(job.id, {
+      status: "committing",
+      recoveringCommitResult: true
+    });
+  }
   let recoveryError: unknown;
   let recoveryResults: Awaited<
     ReturnType<typeof commitStoredImports>

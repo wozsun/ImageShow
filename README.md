@@ -48,6 +48,7 @@ cp .env.example .env
 
 ```ini
 SITE_DOMAIN=img.example.com
+SITE_DESCRIPTION=画廊与随机图API       # 仅首次生成 config.json 时播种
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=                   # 首次创建账号使用，至少 8 位且含字母和数字
 DATABASE_NAME=imageshow
@@ -113,6 +114,12 @@ Redis 不是业务真相源；空 Redis 会从 PostgreSQL 重建派生状态并�
 升级到 4.12.0 必须使用计划停机窗口：先停止旧应用并等待排空，再一次性部署同版本 Server
 与内置静态 Web，确认容器健康和 `/readyz` 后恢复访问。不得混用 4.11 Web 与 4.12 Server，
 也不得续用升级前仍打开的后台标签页；本版不提供旧后台 cursor 参数兼容。
+
+升级到 4.13.0 前还必须在停机并备份配置后，把 `data/config.json` 的
+`site.home.tagline` 值移动到 `site.description`，并把部署中的
+`SITE_HOME_TAGLINE` 改为 `SITE_DESCRIPTION`；检查 JSON 后再启动新版本。应用不会自动
+迁移旧键，漏改时旧值会被结构归一化删除并补入新默认值。完整步骤见
+[配置说明](docs/guide/configuration.md#4130-站点描述字段升级)。
 
 反向代理请求体上限不得低于应用配置。仓库示例使用 `client_max_body_size 256m`，覆盖
 默认 200 MiB 单图上限并留出代理层余量。完整 Docker、健康检查、停机、密码恢复及

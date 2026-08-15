@@ -32,18 +32,128 @@ const importStatusOrder = new Map<ImportJob["status"], number>([
   ["done", 6]
 ]);
 
+const authoritativeStatusOrder = new Map<StoredImportStatus["status"], number>([
+  ["created", 0],
+  ["materializing", 1],
+  ["received", 2],
+  ["preparing", 3],
+  ["ready", 4],
+  ["committing", 5],
+  ["finalized", 6]
+]);
+
+const authoritativePhaseOrder = new Map<string, number>([
+  ["created", 0],
+  ["materialize-waiting", 1],
+  ["materializing", 0],
+  ["uploading", 1],
+  ["downloading", 1],
+  ["received", 0],
+  ["prepare-waiting", 1],
+  ["preparing", 0],
+  ["normalizing", 1],
+  ["detecting", 2],
+  ["staging", 3],
+  ["ready", 0],
+  ["committing", 0],
+  ["finalized", 0],
+  ["failed", 0],
+  ["cancelled", 0]
+]);
+
+function clientStatusPatchMovesForward(
+  job: ImportJob,
+  patch: Partial<ImportJob>
+) {
+  if (!patch.status) return true;
+  if (job.status === "done") return patch.status === "done";
+  if (job.status === "cancelled") return patch.status === "cancelled";
+  if (job.status === "cancelling") return patch.status === "cancelled";
+  if (job.status === "failed") return patch.status === "failed";
+  const currentOrder = importStatusOrder.get(job.status);
+  const nextOrder = importStatusOrder.get(patch.status);
+  return !(currentOrder !== undefined
+    && nextOrder !== undefined
+    && nextOrder < currentOrder);
+}
+
+function authoritativeSnapshotMovesForward(
+  job: ImportJob,
+  patch: Partial<ImportJob>
+) {
+  const nextStatus = patch.serverStatus;
+  const currentStatus = job.serverStatus;
+  if (!nextStatus || !currentStatus) return true;
+  if (nextStatus !== currentStatus) {
+    if (["failed", "cancelled", "missing"].includes(currentStatus)) return false;
+    if (nextStatus === "failed" || nextStatus === "cancelled") return true;
+    if (nextStatus === "missing") return false;
+    const currentOrder = authoritativeStatusOrder.get(currentStatus);
+    const nextOrder = authoritativeStatusOrder.get(nextStatus);
+    return currentOrder !== undefined
+      && nextOrder !== undefined
+      && nextOrder > currentOrder;
+  }
+
+  const currentPhase = job.serverPhase;
+  const nextPhase = patch.serverPhase;
+  if (currentPhase && nextPhase && nextPhase !== currentPhase) {
+    const currentOrder = authoritativePhaseOrder.get(currentPhase);
+    const nextOrder = authoritativePhaseOrder.get(nextPhase);
+    return currentOrder !== undefined
+      && nextOrder !== undefined
+      && nextOrder > currentOrder;
+  }
+  if (currentPhase && !nextPhase) return false;
+
+  if (
+    currentPhase === nextPhase
+    && job.serverProgress !== undefined
+    && (
+      patch.serverProgress === undefined
+      || patch.serverProgress < job.serverProgress
+    )
+  ) {
+    return false;
+  }
+  return true;
+}
+
+export function importStatusPatchMovesForward(
+  job: ImportJob,
+  patch: Partial<ImportJob>
+) {
+  return clientStatusPatchMovesForward(job, patch)
+    && authoritativeSnapshotMovesForward(job, patch);
+}
+
 function orderedImportStatusPatch(
   job: ImportJob,
   patch: Partial<ImportJob>
 ) {
-  if (!patch.status) return patch;
-  const currentOrder = importStatusOrder.get(job.status);
-  const nextOrder = importStatusOrder.get(patch.status);
-  return currentOrder !== undefined
-    && nextOrder !== undefined
-    && nextOrder < currentOrder
-    ? null
-    : patch;
+  return importStatusPatchMovesForward(job, patch) ? patch : null;
+}
+
+function authoritativeStatusPatch(
+  job: ImportJob,
+  state: StoredImportStatus,
+  patch: Partial<ImportJob>
+) {
+  if (
+    !job.sessionId
+    || job.sessionId.toLowerCase() !== state.id.toLowerCase()
+  ) {
+    return null;
+  }
+  return orderedImportStatusPatch(job, {
+    ...patch,
+    serverStatus: state.status,
+    serverPhase: state.phase,
+    serverError: state.error,
+    serverProgress: state.progress,
+    serverAttemptKey: job.attemptKey,
+    serverSessionId: job.sessionId
+  });
 }
 
 function commitErrorMessage(error: unknown) {
@@ -56,52 +166,52 @@ export function importStatusEventPatch(
   job: ImportJob,
   state: StoredImportStatus
 ): Partial<ImportJob> | null {
-  const message = storedImportStatusMessage(state);
   if (state.phase === "materialize-waiting") {
-    return orderedImportStatusPatch(job, { status: "queued", message });
+    return authoritativeStatusPatch(job, state, { status: "queued" });
   }
   if (state.status === "created") {
-    return orderedImportStatusPatch(job, { status: "queued", message });
+    return authoritativeStatusPatch(job, state, { status: "queued" });
   }
   if (state.status === "materializing") {
-    return orderedImportStatusPatch(job, job.kind === "local"
-      ? { status: "uploading", message }
-      : { status: "downloading", message, transferProgress: state.progress });
+    return authoritativeStatusPatch(job, state, job.kind === "local"
+      ? { status: "uploading" }
+      : { status: "downloading", transferProgress: state.progress });
   }
   if (state.status === "received") {
-    return orderedImportStatusPatch(job, {
+    return authoritativeStatusPatch(job, state, {
       status: "received",
-      message,
       transferProgress: undefined
     });
   }
   if (state.status === "preparing" || state.status === "ready") {
-    return orderedImportStatusPatch(job, {
+    return authoritativeStatusPatch(job, state, {
       status: "processing",
-      message,
       transferProgress: undefined
     });
   }
   if (state.status === "committing") {
-    return orderedImportStatusPatch(job, { status: "committing", message });
+    return authoritativeStatusPatch(job, state, { status: "committing" });
   }
   if (state.status === "finalized") {
-    return orderedImportStatusPatch(job, {
+    return authoritativeStatusPatch(job, state, {
       status: "committing",
-      ...unavailablePreparedPreview,
-      message: "服务端已完成提交，正在读取结果"
+      ...unavailablePreparedPreview
     });
   }
   if (state.status === "missing") return null;
   if (state.status === "failed") {
-    return { status: "failed", failureStage: "prepare", message };
+    return authoritativeStatusPatch(job, state, {
+      status: "failed",
+      failureStage: "prepare",
+      message: storedImportStatusMessage(state)
+    });
   }
   if (state.status === "cancelled") {
-    return {
+    return authoritativeStatusPatch(job, state, {
       status: "cancelled",
       ...unavailablePreparedPreview,
-      message
-    };
+      message: storedImportStatusMessage(state)
+    });
   }
   return null;
 }
@@ -122,6 +232,7 @@ export function resolveCommitRetry(
         status: "failed",
         failureStage: "commit",
         commitFailureCheckpoint: "ready",
+        recoveringCommitResult: false,
         message: "已确认提交尚未开始，请重试"
       }
     };
@@ -146,6 +257,7 @@ export function commitFailurePatchForStatus(
       failureStage: "commit",
       commitFailureCheckpoint: "committing",
       ...unavailablePreparedPreview,
+      recoveringCommitResult: false,
       message: `服务端已完成提交，但结果读取失败：${reason}；请重试获取结果`
     };
   }
@@ -155,6 +267,7 @@ export function commitFailurePatchForStatus(
       failureStage: undefined,
       commitFailureCheckpoint: undefined,
       ...unavailablePreparedPreview,
+      recoveringCommitResult: false,
       message: status.message || "导入已取消"
     };
   }
@@ -169,6 +282,7 @@ export function commitFailurePatchForStatus(
       failureStage: "prepare",
       commitFailureCheckpoint: undefined,
       ...unavailablePreparedPreview,
+      recoveringCommitResult: false,
       message
     };
   }
@@ -190,6 +304,7 @@ export function commitFailurePatchForStatus(
     ...(checkpoint === "ready"
       ? {}
       : unavailablePreparedPreview),
+    recoveringCommitResult: false,
     message
   };
 }

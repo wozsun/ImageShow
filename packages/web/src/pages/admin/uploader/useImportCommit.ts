@@ -15,6 +15,7 @@ import {
 } from "./import-status-state.js";
 import {
   importJobCanStartCommit,
+  importJobIsRecoveringCommitResult,
   type ImportCommitIntent
 } from "./import-queue-state.js";
 import {
@@ -41,6 +42,7 @@ export function useImportCommit(options: {
   return useCallback(async (jobs: ImportJob[]) => {
     const selected: ImportJob[] = [];
     const selectedSessionIds = new Set<string>();
+    const resultRecoveryJobIds = new Set<string>();
     await runWithConcurrency(jobs, concurrency, async (requestedJob) => {
       const intent: ImportCommitIntent = requestedJob.status === "failed"
         && requestedJob.failureStage === "commit"
@@ -81,15 +83,24 @@ export function useImportCommit(options: {
       const sessionKey = job.sessionId.toLowerCase();
       if (selectedSessionIds.has(sessionKey)) return;
       selectedSessionIds.add(sessionKey);
+      if (importJobIsRecoveringCommitResult(job, intent)) {
+        resultRecoveryJobIds.add(job.id);
+      }
       selected.push(job);
     });
 
-    updateJobs(new Map(selected.map((job) => [job.id, {
-      status: "committing" as const,
-      failureStage: undefined,
-      commitFailureCheckpoint: undefined,
-      message: "写入图库"
-    }])));
+    updateJobs(new Map(selected.map((job) => {
+      const recoveringCommitResult = resultRecoveryJobIds.has(job.id);
+      return [job.id, {
+        status: "committing" as const,
+        failureStage: undefined,
+        commitFailureCheckpoint: undefined,
+        recoveringCommitResult,
+        message: recoveringCommitResult
+          ? "正在确认提交结果"
+          : "写入图库中"
+      }];
+    })));
 
     const importedItems: AdminImageListItem[] = [];
     const imported = selected.length

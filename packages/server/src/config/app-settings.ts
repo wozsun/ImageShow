@@ -178,6 +178,7 @@ export function siteConfigPayload(): SiteConfigDto {
   const runtime = getRuntimeConfig();
   const {
     name,
+    description,
     icon_url,
     root_redirect,
     home,
@@ -186,6 +187,7 @@ export function siteConfigPayload(): SiteConfigDto {
   return {
     site: {
       name,
+      description,
       icon_url,
       root_redirect,
       home,

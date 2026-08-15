@@ -12,14 +12,17 @@ import {
   immutableCacheControl,
   markEmbedDocumentResponse,
   noStoreCacheControl,
-  publicStaticCacheControl
+  publicDocumentCacheControl,
+  publicStaticCacheControl,
+  spaDocumentHeaders
 } from "../core/http/headers.ts";
 import { apiErrorResponse } from "../core/http/responses.ts";
 import { serveStaticWithValidators } from "../core/http/static-conditional.ts";
 import {
-  createSpaDocumentRepresentation,
-  spaDocumentResponse
-} from "./spa-response.ts";
+  contentResponse,
+  createContentRepresentation,
+  type ContentRepresentation
+} from "../core/http/content-response.ts";
 
 const publicDir = join(import.meta.dirname, "../public");
 
@@ -54,7 +57,7 @@ export function registerSpaRoutes(app: Hono) {
 }
 
 let spaTemplate: string | null = null;
-let cachedSpaRepresentation: ReturnType<typeof createSpaDocumentRepresentation> | null = null;
+let cachedSpaRepresentation: ContentRepresentation | null = null;
 
 function escapeHtmlText(value: string) {
   return value
@@ -74,11 +77,11 @@ function buildSpaDocument(): string {
   const site = getRuntimeConfig().site;
   const inlineConfig = JSON.stringify(siteConfigPayload()).replace(/</g, "\\u003c");
   const title = escapeHtmlText(site.name || "ImageShow");
-  const description = escapeHtmlAttr(site.home.tagline || site.name || "ImageShow");
+  const description = escapeHtmlAttr(site.description || site.name || "ImageShow");
   const iconUrl = escapeHtmlAttr(site.icon_url || "/assets/brand/favicon.svg");
   const head =
-    `<link rel="preconnect" href="https://${site.static_subdomain}.${site.domain}" crossorigin>` +
-    `<script type="application/json" id="__site_config__">${inlineConfig}</script>`;
+    `<link rel="preconnect" href="https://${site.static_subdomain}.${site.domain}" crossorigin>`
+    + `<script type="application/json" id="__site_config__">${inlineConfig}</script>`;
   return spaTemplate
     .replace(/<title>[\s\S]*?<\/title>/i, `<title>${title}</title>`)
     .replace(/<meta\s+name="description"\s+content="[^"]*"\s*\/?>/i, `<meta name="description" content="${description}" />`)
@@ -89,8 +92,24 @@ function buildSpaDocument(): string {
 function currentSpaRepresentation() {
   const body = buildSpaDocument();
   if (cachedSpaRepresentation?.body === body) return cachedSpaRepresentation;
-  cachedSpaRepresentation = createSpaDocumentRepresentation(body);
+  cachedSpaRepresentation = createContentRepresentation(body);
   return cachedSpaRepresentation;
+}
+
+function spaDocumentResponse(
+  representation: ContentRepresentation,
+  options: {
+    cacheControl?: string;
+    headers?: Readonly<Record<string, string>>;
+    ifNoneMatch?: string | null;
+  } = {}
+) {
+  return contentResponse(representation, {
+    cacheControl: options.cacheControl ?? publicDocumentCacheControl,
+    contentType: "text/html; charset=utf-8",
+    headers: options.headers ?? spaDocumentHeaders,
+    ifNoneMatch: options.ifNoneMatch
+  });
 }
 
 async function spaHandler(c: Context) {
