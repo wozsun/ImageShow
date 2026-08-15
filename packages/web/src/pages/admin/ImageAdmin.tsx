@@ -95,6 +95,7 @@ export function ImageAdmin() {
   });
   const {
     items,
+    hasCurrentPageData,
     total,
     error: listError,
     isError: listFailed,
@@ -213,6 +214,11 @@ export function ImageAdmin() {
     )
   );
   const confirmCopy = imageAdminConfirmationCopy(confirmAction);
+  const pageStatusSuffix = isFetching
+    ? " · 加载中"
+    : hasCurrentPageData
+      ? ` · 本页 ${items.length} 项`
+      : "";
   return (
     <section
       className="workspace workspace-paged"
@@ -232,9 +238,7 @@ export function ImageAdmin() {
           </div>
           <p role="status" aria-live="polite" aria-atomic="true">
             {operationText || (
-              `第 ${pageNumber} / ${totalPages} 页 · 共 ${total} 项 · 本页 ${items.length} 项${
-                isFetching ? " · 加载中" : ""
-              }`
+              `第 ${pageNumber} / ${totalPages} 页 · 共 ${total} 项${pageStatusSuffix}`
             )}
           </p>
         </div>

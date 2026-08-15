@@ -127,6 +127,7 @@ export function useImageAdminPageNavigation({
 
   return {
     items: query.data?.items ?? [],
+    hasCurrentPageData: query.data !== undefined,
     total,
     error: query.error,
     isError: query.isError,
