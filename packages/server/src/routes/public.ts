@@ -20,7 +20,6 @@ import {
   uuidInput
 } from "../core/validation.ts";
 import {
-  redirectPublicExternalOriginal,
   servePublicExternalOriginal
 } from "../images/external-original-serving.ts";
 import { getPublicGalleryFacets } from "../images/read-models/facets.ts";
@@ -108,15 +107,6 @@ export function registerPublicRoutes(app: Hono) {
     return cacheableApiSuccess(c, response, publicMetadataCacheControl);
   });
 
-  app.get("/api/images/:id/original", async (c) => (
-    redirectPublicExternalOriginal(
-      parse(uuidInput, c.req.param("id")),
-      c.req.header("user-agent") ?? "",
-      undefined,
-      c.req.raw.signal
-    )
-  ));
-
   app.get("/media/*", async (c) => servePublicStoredObject(
     c.req.path.replace(/^\/media\//, ""),
     storedResponseRequest(c)
@@ -128,6 +118,7 @@ export function registerPublicRoutes(app: Hono) {
   app.get("/link/original/:id", async (c) => servePublicExternalOriginal(
     parse(uuidInput, c.req.param("id")),
     {
+      userAgent: c.req.header("user-agent") ?? "",
       method: c.req.method === "HEAD" ? "HEAD" : "GET",
       ifNoneMatch: c.req.header("if-none-match"),
       ifModifiedSince: c.req.header("if-modified-since"),

@@ -30,10 +30,6 @@ export function staticLocalBaseUrl() {
   return `https://${site.static_subdomain}.${site.domain}`;
 }
 
-export function publicExternalOriginalBaseUrl() {
-  return `${staticLocalBaseUrl()}/link`;
-}
-
 function splitHost(value: string): HostParts {
   const raw = value.trim().toLowerCase();
   if (!raw) return { hostname: "", port: "" };

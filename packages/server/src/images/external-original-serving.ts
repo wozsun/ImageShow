@@ -12,7 +12,6 @@ import {
   publicProxyImageCacheControl,
   safeResponseHeaderValue
 } from "../core/http/headers.ts";
-import { publicExternalOriginalBaseUrl } from "../config/site-host.ts";
 import {
   externalImageProxyTimeoutMs,
   externalImageProxyUserAgent,
@@ -33,7 +32,6 @@ export type ExternalOriginalServingDependencies = {
   displayUrlForOriginalComparison: typeof displayUrlForOriginalComparison;
   supportsDirectAccess: typeof cachedOriginalSupportsDirectAccess;
   proxyExternalImage: typeof proxyExternalImage;
-  publicExternalOriginalBaseUrl: typeof publicExternalOriginalBaseUrl;
 };
 
 function externalImageExt(url: string) {
@@ -115,8 +113,7 @@ const defaultExternalOriginalServingDependencies:
     readImageServingRecordById,
     displayUrlForOriginalComparison,
     supportsDirectAccess: cachedOriginalSupportsDirectAccess,
-    proxyExternalImage,
-    publicExternalOriginalBaseUrl
+    proxyExternalImage
   };
 
 async function resolveExternalOriginal(
@@ -146,39 +143,10 @@ async function resolveExternalOriginal(
   return { url: original, updatedAt: record.updated_at };
 }
 
-export async function redirectPublicExternalOriginal(
-  id: string,
-  userAgent: string,
-  dependencies: ExternalOriginalServingDependencies =
-    defaultExternalOriginalServingDependencies,
-  signal: AbortSignal = new AbortController().signal
-) {
-  const original = await withPublicDatabaseRead(
-    signal,
-    (database) => resolveExternalOriginal(id, { database }, dependencies)
-  );
-  const direct = await dependencies.supportsDirectAccess(
-    original.url,
-    userAgent
-  );
-  return new Response(null, {
-    status: 302,
-    headers: {
-      Location: safeResponseHeaderValue(
-        "Location",
-        direct
-          ? original.url
-          : `${dependencies.publicExternalOriginalBaseUrl()}/original/${encodeURIComponent(id)}`
-      ),
-      "Cache-Control": privateNoStoreCacheControl,
-      "Referrer-Policy": "no-referrer"
-    }
-  });
-}
-
 export async function servePublicExternalOriginal(
   id: string,
   request: {
+    userAgent?: string;
     method?: "GET" | "HEAD";
     ifNoneMatch?: string;
     ifModifiedSince?: string;
@@ -192,6 +160,19 @@ export async function servePublicExternalOriginal(
     signal,
     (database) => resolveExternalOriginal(id, { database }, dependencies)
   );
+  if (await dependencies.supportsDirectAccess(
+    original.url,
+    request.userAgent ?? ""
+  )) {
+    return new Response(null, {
+      status: 302,
+      headers: {
+        Location: safeResponseHeaderValue("Location", original.url),
+        "Cache-Control": privateNoStoreCacheControl,
+        "Referrer-Policy": "no-referrer"
+      }
+    });
+  }
   return dependencies.proxyExternalImage(
     original.url,
     externalImageExt(original.url),

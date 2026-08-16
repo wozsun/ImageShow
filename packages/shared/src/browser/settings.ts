@@ -149,6 +149,7 @@ export type PublicSiteSettings = Pick<
   "name" | "description" | "icon_url" | "root_redirect" | "home"
 > & {
   gallery: Pick<SiteGallerySettings, "order">;
+  static_url: string;
 };
 
 export type AdminSiteSettings = Omit<

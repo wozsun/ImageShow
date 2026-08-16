@@ -193,14 +193,21 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
 
   const titleOpensImage = (siteConfig?.image_detail?.title_opens_image ?? true) && Boolean(item.object_url);
   const title = imageDisplayTitle(item);
-  const canOpenOriginal = item.diff_original;
+  const hasRegisteredOriginal = item.diff_original;
   const imageTime = adminItem?.image_time ?? item.image_time;
-  const originalStateLabel = canOpenOriginal ? "打开原图" : "当前图片未注册原图";
   const sourceAvailable = Boolean(item.source);
   const sourceStateLabel = detailError ? "详情加载失败" : detailLoading ? "来源加载中" : sourceAvailable ? "打开来源页面" : "暂无来源";
   const originalHref = adminListItem?.deleted_at
     ? `/api/admin/images/${encodeURIComponent(item.id)}/original`
-    : `/api/images/${encodeURIComponent(item.id)}/original`;
+    : siteConfig?.site.static_url
+      ? `${siteConfig.site.static_url}/link/original/${encodeURIComponent(item.id)}`
+      : undefined;
+  const canOpenOriginal = hasRegisteredOriginal && Boolean(originalHref);
+  const originalStateLabel = !hasRegisteredOriginal
+    ? "当前图片未注册原图"
+    : canOpenOriginal
+      ? "打开原图"
+      : "原图链接加载中";
   const imageAspectRatio = item.width > 0 && item.height > 0
     ? `${item.width} / ${item.height}`
     : "16 / 9";

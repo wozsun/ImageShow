@@ -35,7 +35,8 @@ commit 并发等前端预检所需的只读值；不会返回部署配置、完�
 同样只接受设置页公开的可编辑字段，并以嵌套 patch 合并，未公开配置不会因保存
 设置页而被默认值覆盖。`embed` 不进入普通后台设置的读取或保存 DTO，只通过
 `data/config.json` 维护；公开站点配置仅返回前端路由实际消费的有效嵌入开关，
-不返回来源列表。`site.domain`、`site.description`、`site.icon_url` 与
+不返回来源列表，并额外返回由 `site.domain` 与 `site.static_subdomain` 派生的
+`site.static_url`，供详情原图按钮直接进入资源域。`site.domain`、`site.description`、`site.icon_url` 与
 `site.home.enabled` 保留在运行时配置中，但不进入普通设置页及其读写 DTO；
 其中 `site.description` 只用于 HTML `description`。这些字段都需要通过配置文件
 或高级配置维护；公开站点配置投影会返回描述，供 SPA 路由切换后维护同一 meta。
@@ -72,7 +73,7 @@ PostgreSQL 的 `admin_account` 表，不进入 `config.json`。单应用进程�
 | 配置路径 | 用途 |
 | --- | --- |
 | `site.name` | 站点名称，也会写入 SPA HTML 的 `<title>`；可在普通站点配置页维护。 |
-| `site.domain` / `site.icon_url` | 主域名和图标；域名仅允许 DNS 名称（开发环境可带端口），图标仅允许站内绝对路径或 HTTPS。两项只通过配置文件、高级配置或首次启动环境变量维护，不进入普通站点配置页及其读写 DTO。 |
+| `site.domain` / `site.icon_url` | 主域名和图标；域名仅允许 DNS 名称（开发环境可带端口），图标仅允许站内绝对路径或 HTTPS。两项只通过配置文件、高级配置或首次启动环境变量维护，不进入普通站点配置页及其读写 DTO；公开投影返回 `icon_url` 和由域名派生的 `static_url`，不返回原始 `domain` 字段。 |
 | `site.description` | 站点描述，默认“画廊与随机图片API”，仅写入 SPA HTML 的 `description`，不在首页正文或普通站点配置页显示；空值按 `site.name`、`ImageShow` 的顺序回退。只通过配置文件、高级配置或首次启动环境变量维护。 |
 | `site.version.enabled` / `site.version.link_enabled` | 是否显示后台版本卡片、是否链接到对应的 GitHub Release，默认均为 `true`。关闭链接后仍显示版本；两项只通过配置文件、高级配置或首次启动环境变量维护，不进入站点配置页，也不进入公开站点配置投影，只随已认证的会话探针返回。 |
 | `site.root_redirect` | 根路径直接显示的页面：`home` 或 `gallery`；`/home`、`/gallery` 固定路径仍可单独访问。 |
