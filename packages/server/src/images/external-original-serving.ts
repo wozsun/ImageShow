@@ -12,7 +12,7 @@ import {
   publicProxyImageCacheControl,
   safeResponseHeaderValue
 } from "../core/http/headers.ts";
-import { linkBaseUrl } from "../config/site-host.ts";
+import { publicExternalOriginalBaseUrl } from "../config/site-host.ts";
 import {
   externalImageProxyTimeoutMs,
   externalImageProxyUserAgent,
@@ -33,7 +33,7 @@ export type ExternalOriginalServingDependencies = {
   displayUrlForOriginalComparison: typeof displayUrlForOriginalComparison;
   supportsDirectAccess: typeof cachedOriginalSupportsDirectAccess;
   proxyExternalImage: typeof proxyExternalImage;
-  linkBaseUrl: typeof linkBaseUrl;
+  publicExternalOriginalBaseUrl: typeof publicExternalOriginalBaseUrl;
 };
 
 function externalImageExt(url: string) {
@@ -116,7 +116,7 @@ const defaultExternalOriginalServingDependencies:
     displayUrlForOriginalComparison,
     supportsDirectAccess: cachedOriginalSupportsDirectAccess,
     proxyExternalImage,
-    linkBaseUrl
+    publicExternalOriginalBaseUrl
   };
 
 async function resolveExternalOriginal(
@@ -168,7 +168,7 @@ export async function redirectPublicExternalOriginal(
         "Location",
         direct
           ? original.url
-          : `${dependencies.linkBaseUrl()}/original/${encodeURIComponent(id)}`
+          : `${dependencies.publicExternalOriginalBaseUrl()}/original/${encodeURIComponent(id)}`
       ),
       "Cache-Control": privateNoStoreCacheControl,
       "Referrer-Policy": "no-referrer"

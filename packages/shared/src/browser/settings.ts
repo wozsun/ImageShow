@@ -31,9 +31,7 @@ export type RuntimeSiteSettings = {
   home: SiteHomeSettings;
   gallery: SiteGallerySettings;
   random_default_method: RandomMethod;
-  random_subdomain: string;
   static_subdomain: string;
-  link_subdomain: string;
   robots_enabled: boolean;
 };
 

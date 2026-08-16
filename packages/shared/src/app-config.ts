@@ -135,9 +135,7 @@ export const appConfig = {
       },
       gallery: { default_limit: 60, order: "random" },
       random_default_method: "redirect",
-      random_subdomain: "random",
       static_subdomain: "static",
-      link_subdomain: "link",
       robots_enabled: false
     },
     embed: {

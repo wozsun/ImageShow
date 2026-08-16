@@ -32,14 +32,13 @@ Hono HTTP 应用 ──► PostgreSQL（业务真相）
 
 | 主机 | 职责 |
 | --- | --- |
-| `<站点域名>` | SPA、公共 API、管理 API、健康检查 |
-| `static.<站点域名>` | `/media/*` 与 `/thumbs/*` 对象字节 |
-| `random.<站点域名>` | 随机图 API 根入口 |
-| `link.<站点域名>` | 与展示图不同的外部 HTTPS 原图代理 |
+| `<站点域名>` | SPA、公共 API、管理 API、健康检查与 `/random` |
+| `static.<站点域名>` | `/media/*`、`/thumbs/*` 对象字节与 `/link/original/<id>` 外部 HTTPS 原图代理 |
 
-未注册子域返回 404。嵌入页只在配置开启时提供，并由文档响应的 CSP
+随机、外链和主题都不拥有专用子域；未注册子域返回 404。嵌入页只在配置开启时提供，
+并由文档响应的 CSP
 `frame-ancestors` 限定父页面；它不会扩大 API 的跨源权限。完整路由见
-[子域名](./subdomains.md)，请求来源、鉴权与响应头见[安全](./security.md)。
+[主机与资源子域](./subdomains.md)，请求来源、鉴权与响应头见[安全](./security.md)。
 应用只接受最外层可信代理覆盖后的 `Host`、单值协议和单值客户端 IP，不解析
 `X-Forwarded-Host` 或多级 `X-Forwarded-For`；应用端口必须只对该代理可达。
 

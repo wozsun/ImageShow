@@ -111,8 +111,9 @@ npm run admin:reset-password -- <username>
 
 ## 反向代理与 HTTPS
 
-生产环境必须由可信反向代理终止 TLS，使用通配证书覆盖主域及子域，并把应用端口只绑定
-到回环或明确的同机私有网络；仓库 Compose 默认把 `5518` 映射到 `127.0.0.1`。代理必须覆盖
+生产环境必须由可信反向代理终止 TLS，证书覆盖主站与配置的 `static` 资源域，并把应用
+端口只绑定到回环或明确的同机私有网络；不需要通配 DNS 或通配证书。仓库 Compose 默认把 `5518`
+映射到 `127.0.0.1`。代理必须覆盖
 而不是追加访客传入的 `Host`、`X-Real-IP`、`X-Forwarded-For` 和 `X-Forwarded-Proto`。
 应用只使用 `Host`、单值 `X-Forwarded-Proto` 和单值客户端 IP 头，不解析
 `X-Forwarded-Host` 或多级 `X-Forwarded-For`。容器化代理可把上游改到同机私有 Docker 网络，
@@ -120,7 +121,7 @@ npm run admin:reset-password -- <username>
 
 以下先列出代理产品无关的必要行为：
 
-- TLS 证书覆盖主域和通配子域，并把 HTTP 重定向到 HTTPS。
+- TLS 证书覆盖主站与 `static` 资源域，并把 HTTP 重定向到 HTTPS。
 - 覆盖上述四个请求头；客户端 IP 必须是单跳、单值地址，不传访客提供的代理链。
 - 请求体上限覆盖 200 MiB 单图和 128 MiB JSONL；长导入和存储检查允许至少 300 秒。
 - 导入事件 SSE 关闭响应缓冲，并允许至少 300 秒读取；上传流按部署需要关闭请求缓冲。
@@ -137,14 +138,14 @@ ImageShow 已负责 ETag、304、Range、压缩、静态预压缩和缓存头。
 ```nginx
 server {
   listen 80;
-  server_name img.example.com *.img.example.com;
+  server_name img.example.com static.img.example.com;
   return 301 https://$host$request_uri;
 }
 
 server {
   listen 443 ssl;
   http2 on;
-  server_name img.example.com *.img.example.com;
+  server_name img.example.com static.img.example.com;
 
   ssl_certificate /etc/nginx/cert/fullchain.pem;
   ssl_certificate_key /etc/nginx/cert/privkey.pem;
@@ -188,7 +189,7 @@ location /api/admin/imports/ {
 }
 ```
 
-应用不发送 HSTS。只有确认 TLS、证书续期及全部相关子域都由同一部署边界掌握时，才在
+应用不发送 HSTS。只有确认 TLS、证书续期及主站与资源域都由同一部署边界掌握时，才在
 最外层代理或 CDN 配置 HSTS。若启用 `/embed/*`，代理不得重新注入 `X-Frame-Options`
 或覆盖应用生成的 CSP `frame-ancestors`；完整安全边界见[安全说明](./security.md)。
 

@@ -125,4 +125,5 @@ PostgreSQL 事务推进 `ready_image_revision`。提交后仍持有进程内写�
 只写 `m=json` 等同 `n=1`，但仍返回数组。`n` 是上限而非数量保证。GET 与 HEAD 都为
 `no-store`；HEAD 返回与 GET 一致的状态、内容类型和内容长度，但不发送正文。
 
-随机图也可通过 `https://random.<域名>/` 访问根路径，见[子域名](./subdomains.md)。
+随机图只通过主站 `https://<域名>/random` 提供，不设置专用子域；主机边界见
+[主机与资源子域](./subdomains.md)。

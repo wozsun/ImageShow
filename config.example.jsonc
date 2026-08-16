@@ -3,7 +3,7 @@
   // 首次启动时，环境变量可播种部分字段；之后这些应用配置以 config.json 为准。
   // 容器内监听端口由代码固定；PostgreSQL 与 Redis 连接见 .env.example，不写入本文件。
   // 修改本文件后可在后台「设置 → 读取配置文件」热加载。
-  // 站点展示、入口、保留子域与公共页面配置。
+  // 站点展示、入口、静态资源子域与公共页面配置。
   "site": {
     // 站点名称，显示在页面标题、导航和后台界面中。
     "name": "ImageShow",
@@ -45,14 +45,11 @@
     },
     // 随机图接口默认返回方式：redirect 为跳转，proxy 为代理输出，json 为图片元数据数组。
     "random_default_method": "redirect",
-    // 随机图 API 子域名前缀，对应 random.<主域名>。
-    "random_subdomain": "random",
-    // 本地对象存储静态资源子域名前缀，对应 static.<主域名>。
+    // 静态资源子域名前缀，对应 static.<主域名>；承载 /media、/thumbs 与
+    // /link/original 外链原图代理。
     "static_subdomain": "static",
-    // 外部原图安全代理子域名前缀，对应 link.<主域名>。
-    "link_subdomain": "link",
     // 是否提供 robots.txt；关闭时 /robots.txt 对所有主机返回 404。
-    // 开启后主站仅放行首页，其余资源域默认禁抓。
+    // 开启后主站仅放行首页，静态资源域默认禁抓。
     "robots_enabled": false
   },
 

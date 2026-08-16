@@ -89,9 +89,7 @@ const runtimeConfigSchema = z.strictObject({
       order: galleryOrder
     }),
     random_default_method: randomMethod,
-    random_subdomain: subdomainLabel,
     static_subdomain: subdomainLabel,
-    link_subdomain: subdomainLabel,
     robots_enabled: z.boolean()
   }),
   embed: z.strictObject({

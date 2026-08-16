@@ -90,9 +90,7 @@ export function runtimeConfigFromEnvironment(): RuntimeConfig {
         order: environmentValue("SITE_GALLERY_ORDER") as RuntimeConfig["site"]["gallery"]["order"] | undefined
       },
       random_default_method: environmentValue("SITE_RANDOM_DEFAULT_METHOD") as RuntimeConfig["site"]["random_default_method"] | undefined,
-      random_subdomain: environmentValue("SITE_RANDOM_SUBDOMAIN"),
       static_subdomain: environmentValue("SITE_STATIC_SUBDOMAIN"),
-      link_subdomain: environmentValue("SITE_LINK_SUBDOMAIN"),
       robots_enabled: environmentBoolean("SITE_ROBOTS_ENABLED")
     },
     upload: {

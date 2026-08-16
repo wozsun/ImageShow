@@ -1,50 +1,28 @@
 import { getRuntimeConfig } from "./runtime-config-store.ts";
 
 type HostParts = { hostname: string; port: string };
+type SiteHostKind = "site" | "static" | "";
 
-function reservedPrefixes() {
+function siteHostKind(hostHeader: string): SiteHostKind {
+  const raw = hostHeader.trim().toLowerCase();
+  if (!/^[a-z0-9.-]+(?::\d{1,5})?$/.test(raw)) return "";
+  const current = splitHost(raw);
   const site = getRuntimeConfig().site;
-  return {
-    random: site.random_subdomain,
-    static: site.static_subdomain,
-    link: site.link_subdomain
-  };
-}
-
-function reservedPrefixList() {
-  const reserved = reservedPrefixes();
-  return [reserved.random, reserved.static, reserved.link];
-}
-
-function hostPrefix(hostHeader: string) {
-  const current = splitHost(hostHeader);
-  const root = splitHost(getRuntimeConfig().site.domain);
-  if (!current.hostname || !root.hostname || !current.hostname.endsWith(`.${root.hostname}`)) return "";
-  return current.hostname.slice(0, -root.hostname.length - 1);
+  const root = splitHost(site.domain);
+  if (!current.hostname || !root.hostname) return "";
+  if (current.port && (Number(current.port) < 1 || Number(current.port) > 65_535)) return "";
+  if (root.port && current.port !== root.port) return "";
+  if (current.hostname === root.hostname) return "site";
+  const staticHostname = `${site.static_subdomain}.${root.hostname}`;
+  return current.hostname === staticHostname ? "static" : "";
 }
 
 export function isAllowedSiteHost(hostHeader: string) {
-  const raw = hostHeader.trim().toLowerCase();
-  if (!/^[a-z0-9.-]+(?::\d{1,5})?$/.test(raw)) return false;
-  const current = splitHost(raw);
-  const root = splitHost(getRuntimeConfig().site.domain);
-  if (!current.hostname || !root.hostname) return false;
-  if (current.port && (Number(current.port) < 1 || Number(current.port) > 65_535)) return false;
-  if (root.port && current.port !== root.port) return false;
-  if (current.hostname === root.hostname) return true;
-  if (!current.hostname.endsWith(`.${root.hostname}`)) return false;
-  const prefix = current.hostname.slice(0, -root.hostname.length - 1);
-  return reservedPrefixList().includes(prefix);
+  return Boolean(siteHostKind(hostHeader));
 }
 
-export function specialHost(hostHeader: string): "random" | "static" | "link" | "" {
-  const prefix = hostPrefix(hostHeader);
-  if (!prefix) return "";
-  const reserved = reservedPrefixes();
-  if (prefix === reserved.random) return "random";
-  if (prefix === reserved.static) return "static";
-  if (prefix === reserved.link) return "link";
-  return "";
+export function isStaticSiteHost(hostHeader: string) {
+  return siteHostKind(hostHeader) === "static";
 }
 
 export function staticLocalBaseUrl() {
@@ -52,9 +30,8 @@ export function staticLocalBaseUrl() {
   return `https://${site.static_subdomain}.${site.domain}`;
 }
 
-export function linkBaseUrl() {
-  const site = getRuntimeConfig().site;
-  return `https://${site.link_subdomain}.${site.domain}`;
+export function publicExternalOriginalBaseUrl() {
+  return `${staticLocalBaseUrl()}/link`;
 }
 
 function splitHost(value: string): HostParts {

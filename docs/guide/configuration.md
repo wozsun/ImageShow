@@ -79,7 +79,7 @@ PostgreSQL 的 `admin_account` 表，不进入 `config.json`。单应用进程�
 | `site.home.enabled` | 是否启用公共首页 `/home`，默认 `true`。关闭后 `/home` 重定向到画廊，导航不再显示首页入口，根路径固定显示画廊；只通过配置文件、高级配置或首次启动环境变量维护。 |
 | `site.gallery.default_limit` / `site.gallery.order` | 画廊默认分页数量与排序。 |
 | `site.random_default_method` | `/random` 默认返回方式：`redirect`、`proxy` 或 `json`；默认 JSON 模式省略 `n` 时返回一项数组，批量仍须显式使用 `m=json&n=...`。 |
-| `site.random_subdomain` / `site.static_subdomain` / `site.link_subdomain` | 保留子域名前缀。 |
+| `site.static_subdomain` | 唯一资源子域前缀，承载 `/media/*`、`/thumbs/*` 与 `/link/original/<id>`；默认 `static`。随机图只使用主站 `/random`，外链原图与主题均无专用子域。 |
 | `site.robots_enabled` | 是否提供 `robots.txt`，默认 `false`。开启后主站首页可抓取，资源域禁抓。 |
 | `embed.enabled` | 是否开放无主导航的 `/embed/home` 与 `/embed/gallery`，默认 `false`。启用后会根据当前 `site.domain` 隐式允许站点自身 HTTPS origin 及其任意层级的现有和未来子域，因此只应在这些子域均可信时开启；若站点域名带非默认端口，两项都只允许该端口。派生来源不写回配置文件。仅在 `data/config.json` 中维护。 |
 | `embed.allowed_origins` | 除站点隐式来源外额外允许嵌入页面的 HTTPS 来源列表，可填写精确 origin 或形如 `https://*.example.com` 的子域通配符，最多 32 项且规范化后总长不超过 4096 字符；可以留空，重复隐式或显式来源会去除。通配符只允许出现在最左侧且不包含根域名，根域名须另列。拒绝 HTTP、IP 地址、路径、参数、凭据、裸 `*`、中间通配符和过宽的单标签后缀。通配符只能用于全部现有及未来子域均可信的自有父域；校验不内置 Public Suffix List，不得配置 `*.github.io` 等公共托管后缀。仅在 `data/config.json` 中维护。 |

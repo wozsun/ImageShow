@@ -19,7 +19,7 @@ export function registerRandomRoutes(app: Hono) {
   app.all("/random", handleRandomImage);
 }
 
-export async function handleRandomImage(c: Context) {
+async function handleRandomImage(c: Context) {
   if (c.req.method !== "GET" && c.req.method !== "HEAD") {
     return apiErrorResponse({ status: 405, message: "Method Not Allowed" });
   }

@@ -1,6 +1,6 @@
 {
   "name": "@imageshow/server",
-  "version": "4.13.3",
+  "version": "4.14.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -14,9 +14,9 @@
     "@aws-sdk/client-s3": "^3.1111.0",
     "@hono/node-server": "^2.1.1",
     "@imageshow/shared": "file:../shared",
-    "@smithy/node-http-handler": "^4.11.0",
+    "@smithy/node-http-handler": "^4.11.2",
     "altcha-lib": "^2.3.2",
-    "file-type": "^22.0.1",
+    "file-type": "^22.0.2",
     "hono": "^4.13.2",
     "ioredis": "^6.0.0",
     "ipaddr.js": "^2.5.0",

@@ -21,4 +21,4 @@
 - 运行契约：[配置说明](guide/configuration.md)、[数据库结构](guide/database.md)、
   [存储](guide/storage.md)、[安全](guide/security.md)
 - 功能出口：[功能与流程](guide/flows.md)、[随机图 API](guide/random-api.md)、
-  [子域名](guide/subdomains.md)
+  [主机与资源子域](guide/subdomains.md)

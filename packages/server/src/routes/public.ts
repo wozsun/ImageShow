@@ -125,7 +125,7 @@ export function registerPublicRoutes(app: Hono) {
     c.req.path.replace(/^\/thumbs\//, ""),
     storedResponseRequest(c)
   ));
-  app.get("/original/:id", async (c) => servePublicExternalOriginal(
+  app.get("/link/original/:id", async (c) => servePublicExternalOriginal(
     parse(uuidInput, c.req.param("id")),
     {
       method: c.req.method === "HEAD" ? "HEAD" : "GET",

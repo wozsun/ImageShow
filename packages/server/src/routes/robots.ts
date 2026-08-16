@@ -5,16 +5,15 @@ import {
   cacheableContentResponse
 } from "../core/http/responses.ts";
 import { robotsCacheControl } from "../core/http/headers.ts";
-import { specialHost } from "../config/site-host.ts";
+import { isStaticSiteHost } from "../config/site-host.ts";
 
 export function serveRobotsTxt(context: Context) {
   if (!getRuntimeConfig().site.robots_enabled) {
     return apiErrorResponse({ status: 404, message: "Not Found" });
   }
   const host = context.req.header("host") ?? "";
-  const special = specialHost(host);
 
-  if (special) {
+  if (isStaticSiteHost(host)) {
     return robotsResponse(context, "User-agent: *\nDisallow: /\n");
   }
 

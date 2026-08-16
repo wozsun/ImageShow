@@ -34,13 +34,13 @@ import {
 } from "./routes/auth.ts";
 import { registerPublicRoutes } from "./routes/public.ts";
 import { serveRobotsTxt } from "./routes/robots.ts";
-import { handleRandomImage, registerRandomRoutes } from "./routes/random.ts";
+import { registerRandomRoutes } from "./routes/random.ts";
 import { registerSettingsRoutes } from "./routes/settings.ts";
 import { registerSecurityReportRoutes } from "./routes/security-reports.ts";
 import { registerStorageRoutes } from "./routes/storage.ts";
 import { registerSpaRoutes } from "./routes/spa.ts";
 import { registerImportRoutes } from "./routes/imports.ts";
-import { isAllowedSiteHost, specialHost } from "./config/site-host.ts";
+import { isAllowedSiteHost, isStaticSiteHost } from "./config/site-host.ts";
 import {
   auditAdminMutation,
   markAdminReadRequest
@@ -106,6 +106,21 @@ export function createHttpApp(
       { phase: "cold_start" }
     );
   });
+  app.use("*", async (c, next) => {
+    if (!isStaticSiteHost(c.req.header("host") ?? "")) {
+      return next();
+    }
+    const path = new URL(c.req.url).pathname;
+    if (
+      path === "/robots.txt"
+      || path.startsWith("/media/")
+      || path.startsWith("/thumbs/")
+      || path.startsWith("/link/original/")
+    ) {
+      return next();
+    }
+    return apiErrorResponse({ status: 404, message: "Not Found" });
+  });
   app.options(
     "*",
     async (c, next) => {
@@ -120,38 +135,13 @@ export function createHttpApp(
   );
   app.get("/robots.txt", serveRobotsTxt);
 
-  app.use("*", async (c, next) => {
-    const host = c.req.header("host") ?? "";
-    const special = specialHost(host);
-    if (special === "random") {
-      if (c.req.method !== "GET" && c.req.method !== "HEAD") {
-        return apiErrorResponse({ status: 405, message: "Method Not Allowed" });
-      }
-      if (new URL(c.req.url).pathname !== "/") {
-        return apiErrorResponse({ status: 404, message: "Not Found" });
-      }
-      return handleRandomImage(c);
-    }
-    if (special === "static" || special === "link") {
-      const path = new URL(c.req.url).pathname;
-      const allowed = special === "static"
-        ? path.startsWith("/media/") || path.startsWith("/thumbs/")
-        : path.startsWith("/original/");
-      if (!allowed) {
-        return apiErrorResponse({ status: 404, message: "Not Found" });
-      }
-    }
-    return next();
-  });
-
-  const mediaHostGuard = async (c: Context, next: Next) => {
-    const special = specialHost(c.req.header("host") ?? "");
-    if (special === "static" || special === "link") return next();
+  const resourceHostGuard = async (c: Context, next: Next) => {
+    if (isStaticSiteHost(c.req.header("host") ?? "")) return next();
     return apiErrorResponse({ status: 404, message: "Not Found" });
   };
-  app.use("/media/*", mediaHostGuard);
-  app.use("/thumbs/*", mediaHostGuard);
-  app.use("/original/*", mediaHostGuard);
+  app.use("/media/*", resourceHostGuard);
+  app.use("/thumbs/*", resourceHostGuard);
+  app.use("/link/original/*", resourceHostGuard);
 
   app.use("/api/*", limitApiRequestBody);
   app.use("/api/*", async (c, next) => {
