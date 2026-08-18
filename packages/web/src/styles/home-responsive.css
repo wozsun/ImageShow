@@ -146,10 +146,10 @@
   }
 
   .home-selector-layout {
-    /* 选项区按既有移动行高与间距保留完整行，不让滚动视口露出截断行。 */
-    --home-mobile-theme-options-height: 568px; /* 8 × 64px + 7 × 8px */
-    --home-mobile-tag-options-height: 322px; /* 5 × 58px + 4 × 8px */
-    --home-mobile-author-options-height: 276px; /* 5 × 48px + 4 × 9px */
+    /* 以整数高度在完整行后露出约半行，明确提示各目录可以继续滚动。 */
+    --home-mobile-theme-options-height: 610px;
+    --home-mobile-tag-options-height: 490px;
+    --home-mobile-author-options-height: 370px;
   }
 
   .home-theme-selector {
