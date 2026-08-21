@@ -50,8 +50,9 @@ Redis 凭据只来自环境变量或 Secret，不写入 `config.json`。首次�
 [数据库结构](./database.md#启动与结构契约)为准。
 
 Redis 只保存会话、限流、统一就绪图片投影和可重建派生缓存。连接必须支持 Redis 8
-以及 `INCREX`、`ARRING`、`ARLASTITEMS`；应用会用带 5 秒 TTL 的自有探针键实际验证
-命令和 ACL 权限。Redis 不是真相源，不能通过清理 PostgreSQL 来修复 Redis 状态，也不
+以及 `INCREX`、`ARRING`、`ARLASTITEMS`、`SET ... IFEQ ... KEEPTTL` 与
+`DELEX ... IFEQ`；应用会用带 5 秒 TTL 的隔离探针键实际验证成功、条件失败、缺失、
+TTL 语义和 ACL 权限。Redis 不是真相源，不能通过清理 PostgreSQL 来修复 Redis 状态，也不
 保存不可重建的业务数据。在应用停止时把其专用 Redis DB 替换为空库是安全的冷启动操作，
 但会使管理员会话、限流状态和全部派生投影失效；启动后必须等待投影重建并重新登录。
 

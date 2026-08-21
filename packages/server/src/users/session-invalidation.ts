@@ -1,4 +1,8 @@
 import { redis } from "../core/redis-client.ts";
+import {
+  deleteRedisStringsIfEqual,
+  type RedisStringSnapshot
+} from "../core/redis-conditional-string.ts";
 import { logger } from "../core/logger.ts";
 import { runRequiredRedisCommand } from "../core/runtime-availability.ts";
 import { parseAdminCredentialVersions } from "./session-credential.ts";
@@ -8,20 +12,6 @@ import {
 } from "./admin-session-key.ts";
 
 const SESSION_SCAN_COUNT = 100;
-const unlinkSessionsIfUnchangedScript = `
-local removed = 0
-for index = 1, #KEYS do
-  if redis.call('GET', KEYS[index]) == ARGV[index] then
-    removed = removed + redis.call('UNLINK', KEYS[index])
-  end
-end
-return removed
-`;
-
-type SessionSnapshot = {
-  key: string;
-  value: string;
-};
 
 type TargetSessionInvalidation =
   | {
@@ -51,8 +41,13 @@ type SessionRedis = {
 type TargetSessionRedis = SessionRedis & {
   readSessions(keys: string[]): Promise<Array<string | null>>;
   unlinkSessionsIfUnchanged(
-    snapshots: SessionSnapshot[]
+    snapshots: RedisStringSnapshot[]
   ): Promise<number>;
+};
+
+type RedisSessionPipeline = {
+  call(command: string, ...arguments_: string[]): unknown;
+  exec(): Promise<Array<[Error | null, unknown]> | null>;
 };
 
 type RedisSessionCommands = {
@@ -65,11 +60,7 @@ type RedisSessionCommands = {
   ): Promise<[string, string[]]>;
   mget(...keys: string[]): Promise<Array<string | null>>;
   unlink(...keys: string[]): Promise<number>;
-  eval(
-    script: string,
-    numberOfKeys: number,
-    ...arguments_: string[]
-  ): Promise<unknown>;
+  pipeline(): RedisSessionPipeline;
 };
 
 export function adminSessionRedisClient(client: RedisSessionCommands): TargetSessionRedis {
@@ -86,14 +77,9 @@ export function adminSessionRedisClient(client: RedisSessionCommands): TargetSes
     )),
     readSessions: (keys) => run(() => client.mget(...keys)),
     unlinkSessions: (keys) => run(() => client.unlink(...keys)),
-    unlinkSessionsIfUnchanged: (snapshots) => run(async () => Number(
-      await client.eval(
-        unlinkSessionsIfUnchangedScript,
-        snapshots.length,
-        ...snapshots.map(({ key }) => key),
-        ...snapshots.map(({ value }) => value)
-      )
-    ))
+    unlinkSessionsIfUnchanged: (snapshots) => run(
+      () => deleteRedisStringsIfEqual(client, snapshots)
+    )
   };
 }
 
@@ -152,7 +138,7 @@ async function invalidateAdminSessionsByUsername(
     );
     if (keys.length) {
       const values = await client.readSessions(keys);
-      const targets = keys.flatMap((key, index): SessionSnapshot[] => {
+      const targets = keys.flatMap((key, index): RedisStringSnapshot[] => {
         if (key === preservedKey) return [];
         const value = values[index] ?? null;
         const identity = sessionIdentity(value);

@@ -38,14 +38,15 @@ REDIS_PASSWORD=
 数据库连接变量必须持续由 Compose、`.env` 或 Docker Secret 提供。Compose
 内置 Redis 使用私有网络内不固定次版本的无密码 `redis:8` 镜像，并启用 AOF；
 Compose 与应用都不设置或推断 Redis 内存上限、淘汰策略和容器硬限制。应用只读取
-`INFO MEMORY` 供运维观测，启动时在自有 5 秒 TTL 探针键上实际执行 `INCREX`、`ARRING`
-与 `ARLASTITEMS`；只返回命令元数据但 ACL 拒绝执行仍不能通过；
+`INFO MEMORY` 供运维观测，启动时在自有 5 秒 TTL 隔离探针键上实际执行 `INCREX`、
+`ARRING`、`ARLASTITEMS`、`SET ... IFEQ ... KEEPTTL` 与 `DELEX ... IFEQ`，并验证条件失败、
+缺失和 TTL 保留；只返回命令元数据但 ACL 拒绝执行仍不能通过；
 连接外部 Redis 时同样要求具备这些能力，只有启用了认证时才填写
 可选的 `REDIS_PASSWORD`。部署字段不写入
 `data/config.json`，也不能从后台高级配置修改。应用在代码中固定监听容器内
 `5518`；`HOST_PORT` 只控制映射到该端口的宿主机端口，默认同为 `5518`。
 
-Redis 暂时不可连接或能力不满足时，HTTP 进程仍监听。当前进程首次通过连接及三项命令
+Redis 暂时不可连接或能力不满足时，HTTP 进程仍监听。当前进程首次通过连接及五项能力
 校验前只开放 `/livez` 与非就绪的 `/readyz`，全部业务返回 503，worker 也不启动；首次
 成功后该冷启动门不再关闭。此后的运行期故障仍让 `/readyz` 非就绪并使后台统一返回
 `503 redis_unavailable`，但公开画廊、详情、facets、统计、图片 / 缩略图和定向及普通

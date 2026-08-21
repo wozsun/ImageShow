@@ -3,6 +3,7 @@ import { appConfig } from "@imageshow/shared";
 import { pool } from "../../core/database-pools.ts";
 import { ApiError, errorMessage } from "../../core/api-error.ts";
 import { redis } from "../../core/redis-client.ts";
+import { deleteRedisStringIfEqual } from "../../core/redis-conditional-string.ts";
 import type { ImportStatus } from "@imageshow/shared/browser";
 import {
   clearImportPhase,
@@ -25,12 +26,6 @@ const importLeaseHeartbeatMs = Math.max(
   1_000,
   Math.min(30_000, Math.floor(appConfig.uploadTtlSeconds * 1_000 / 3))
 );
-const clearOwnedCancellationScript = `
-  if redis.call("GET", KEYS[1]) == ARGV[1] then
-    return redis.call("DEL", KEYS[1])
-  end
-  return 0
-`;
 
 function cancelledImportKey(id: string) {
   return `imageshow:import-cancelled:${id}`;
@@ -76,9 +71,8 @@ function activeLocalCancellation(id: string) {
 }
 
 async function clearRedisCancellationValue(id: string, value: string) {
-  await redis.eval(
-    clearOwnedCancellationScript,
-    1,
+  await deleteRedisStringIfEqual(
+    redis,
     cancelledImportKey(id),
     value
   ).catch(() => undefined);

@@ -1,7 +1,12 @@
 import { Redis } from "ioredis";
+import { randomUUID } from "node:crypto";
 import { deploymentConfig } from "../config/deployment-config.ts";
 import { abortSignalError, raceWithAbortSignal } from "./abort.ts";
 import { logger } from "./logger.ts";
+import {
+  parseRedisDeleteIfEqualReply,
+  parseRedisSetIfEqualReply
+} from "./redis-conditional-string.ts";
 
 const redisConfig = deploymentConfig.redis;
 
@@ -111,13 +116,13 @@ export async function pingRedis(signal?: AbortSignal) {
 const requiredRedisCommands = [
   "INCREX",
   "ARRING",
-  "ARLASTITEMS"
+  "ARLASTITEMS",
+  "SET_IFEQ_KEEPTTL",
+  "DELEX_IFEQ"
 ] as const;
 const REQUIRED_COMMAND_PROBE_TTL_SECONDS = 5;
-const REQUIRED_COMMAND_COUNTER_PROBE_KEY =
-  "imageshow:runtime:required-command-probe:counter";
-const REQUIRED_COMMAND_ARRAY_PROBE_KEY =
-  "imageshow:runtime:required-command-probe:array";
+const REQUIRED_COMMAND_PROBE_TTL_MILLISECONDS =
+  REQUIRED_COMMAND_PROBE_TTL_SECONDS * 1_000;
 
 type RequiredRedisCommand = typeof requiredRedisCommands[number];
 
@@ -171,6 +176,52 @@ function isNonNegativeIntegerReply(value: unknown) {
   return Number.isSafeInteger(parsed) && parsed >= 0;
 }
 
+function requiredCommandProbeKeys() {
+  const namespace = `imageshow:runtime:required-command-probe:${randomUUID()}`;
+  return {
+    counter: `${namespace}:counter`,
+    array: `${namespace}:array`,
+    conditionalSet: `${namespace}:conditional-set`,
+    conditionalSetMissing: `${namespace}:conditional-set-missing`,
+    conditionalDelete: `${namespace}:conditional-delete`,
+    conditionalDeleteMissing: `${namespace}:conditional-delete-missing`
+  };
+}
+
+type RedisPipelineResult = [Error | null, unknown];
+
+function requiredPipelineResult(
+  results: RedisPipelineResult[],
+  index: number
+) {
+  const result = results[index];
+  if (!result) {
+    throw new Error("Redis required-command probe returned incomplete results");
+  }
+  return result;
+}
+
+function validPipelineReply(
+  result: RedisPipelineResult,
+  validate: (reply: unknown) => boolean
+) {
+  if (result[0]) return false;
+  try {
+    return validate(result[1]);
+  } catch {
+    return false;
+  }
+}
+
+function positiveProbeTtl(reply: unknown) {
+  return typeof reply === "number"
+    && Number.isSafeInteger(reply)
+    && reply > 0
+    && reply <= REQUIRED_COMMAND_PROBE_TTL_MILLISECONDS
+    ? reply
+    : null;
+}
+
 async function commandProbe(
   probe: () => Promise<boolean>,
   signal?: AbortSignal
@@ -201,11 +252,12 @@ export async function readRequiredRedisCommandCapabilities(
   signal?: AbortSignal
 ): Promise<RedisRequiredCommandCapabilities> {
   throwIfRedisProbeAborted(signal);
+  const probeKeys = requiredCommandProbeKeys();
   const increx = await commandProbe(async () => {
     const reply = await waitForRedisProbe(
       client.call(
         "INCREX",
-        REQUIRED_COMMAND_COUNTER_PROBE_KEY,
+        probeKeys.counter,
         "BYINT",
         "1",
         "UBOUND",
@@ -228,59 +280,182 @@ export async function readRequiredRedisCommandCapabilities(
   const pipeline = client.pipeline();
   pipeline.call(
     "ARRING",
-    REQUIRED_COMMAND_ARRAY_PROBE_KEY,
+    probeKeys.array,
     "1",
     "imageshow-required-command-probe"
   );
   pipeline.call(
     "EXPIRE",
-    REQUIRED_COMMAND_ARRAY_PROBE_KEY,
+    probeKeys.array,
     String(REQUIRED_COMMAND_PROBE_TTL_SECONDS)
   );
   pipeline.call(
     "ARLASTITEMS",
-    REQUIRED_COMMAND_ARRAY_PROBE_KEY,
+    probeKeys.array,
     "1",
     "REV"
   );
   pipeline.call(
+    "SET",
+    probeKeys.conditionalSet,
+    "before",
+    "EX",
+    String(REQUIRED_COMMAND_PROBE_TTL_SECONDS)
+  );
+  pipeline.call("PTTL", probeKeys.conditionalSet);
+  pipeline.call(
+    "SET",
+    probeKeys.conditionalSet,
+    "after",
+    "IFEQ",
+    "before",
+    "KEEPTTL"
+  );
+  pipeline.call("PTTL", probeKeys.conditionalSet);
+  pipeline.call(
+    "SET",
+    probeKeys.conditionalSet,
+    "unexpected",
+    "IFEQ",
+    "before",
+    "KEEPTTL"
+  );
+  pipeline.call("GET", probeKeys.conditionalSet);
+  pipeline.call(
+    "SET",
+    probeKeys.conditionalSetMissing,
+    "unexpected",
+    "IFEQ",
+    "missing",
+    "KEEPTTL"
+  );
+  pipeline.call("EXISTS", probeKeys.conditionalSetMissing);
+  pipeline.call(
+    "SET",
+    probeKeys.conditionalDelete,
+    "owned",
+    "EX",
+    String(REQUIRED_COMMAND_PROBE_TTL_SECONDS)
+  );
+  pipeline.call(
+    "DELEX",
+    probeKeys.conditionalDelete,
+    "IFEQ",
+    "other"
+  );
+  pipeline.call("GET", probeKeys.conditionalDelete);
+  pipeline.call(
+    "DELEX",
+    probeKeys.conditionalDelete,
+    "IFEQ",
+    "owned"
+  );
+  pipeline.call("EXISTS", probeKeys.conditionalDelete);
+  pipeline.call(
+    "DELEX",
+    probeKeys.conditionalDeleteMissing,
+    "IFEQ",
+    "missing"
+  );
+  pipeline.call(
     "UNLINK",
-    REQUIRED_COMMAND_COUNTER_PROBE_KEY,
-    REQUIRED_COMMAND_ARRAY_PROBE_KEY
+    ...Object.values(probeKeys)
   );
   const results = await waitForRedisProbe(pipeline.exec(), signal);
   throwIfRedisProbeAborted(signal);
-  if (!results || results.length !== 4) {
+  if (!results || results.length !== 18) {
     throw new Error("Redis required-command probe returned invalid results");
   }
-  const [arringResult, expirationResult, arlastitemsResult, cleanupResult] =
-    results;
-  if (
-    !arringResult
-    || !expirationResult
-    || !arlastitemsResult
-    || !cleanupResult
-  ) {
-    throw new Error("Redis required-command probe returned incomplete results");
-  }
+  const arringResult = requiredPipelineResult(results, 0);
+  const expirationResult = requiredPipelineResult(results, 1);
+  const arlastitemsResult = requiredPipelineResult(results, 2);
+  const conditionalSetSeedResult = requiredPipelineResult(results, 3);
+  const conditionalSetInitialTtlResult = requiredPipelineResult(results, 4);
+  const conditionalSetSuccessResult = requiredPipelineResult(results, 5);
+  const conditionalSetKeptTtlResult = requiredPipelineResult(results, 6);
+  const conditionalSetFailureResult = requiredPipelineResult(results, 7);
+  const conditionalSetValueResult = requiredPipelineResult(results, 8);
+  const conditionalSetMissingResult = requiredPipelineResult(results, 9);
+  const conditionalSetMissingExistsResult = requiredPipelineResult(results, 10);
+  const conditionalDeleteSeedResult = requiredPipelineResult(results, 11);
+  const conditionalDeleteFailureResult = requiredPipelineResult(results, 12);
+  const conditionalDeleteValueResult = requiredPipelineResult(results, 13);
+  const conditionalDeleteSuccessResult = requiredPipelineResult(results, 14);
+  const conditionalDeleteExistsResult = requiredPipelineResult(results, 15);
+  const conditionalDeleteMissingResult = requiredPipelineResult(results, 16);
+  const cleanupResult = requiredPipelineResult(results, 17);
   const [arringError, arringReply] = arringResult;
   const [expirationError, expirationReply] = expirationResult;
   const [arlastitemsError, arlastitemsReply] = arlastitemsResult;
-  const [cleanupError] = cleanupResult;
+  const [cleanupError, cleanupReply] = cleanupResult;
   const arrayProbeCreated = !arringError
     && isNonNegativeIntegerReply(arringReply);
   const arrayProbeTtlApplied = !expirationError
     && Number(expirationReply) === 1;
-  const cleanupSucceeded = !cleanupError;
+  const cleanupSucceeded = !cleanupError
+    && isNonNegativeIntegerReply(cleanupReply);
   if (arrayProbeCreated && !arrayProbeTtlApplied && !cleanupSucceeded) {
     throw new Error("Redis required-command array probe could not set its TTL");
   }
+  const initialSetTtl = conditionalSetInitialTtlResult[0]
+    ? null
+    : positiveProbeTtl(conditionalSetInitialTtlResult[1]);
+  const keptSetTtl = conditionalSetKeptTtlResult[0]
+    ? null
+    : positiveProbeTtl(conditionalSetKeptTtlResult[1]);
+  const setIfEqualKeepingTtl = validPipelineReply(
+    conditionalSetSeedResult,
+    (reply) => reply === "OK"
+  ) && initialSetTtl !== null
+    && validPipelineReply(
+      conditionalSetSuccessResult,
+      (reply) => parseRedisSetIfEqualReply(reply)
+    )
+    && keptSetTtl !== null
+    && keptSetTtl <= initialSetTtl
+    && validPipelineReply(
+      conditionalSetFailureResult,
+      (reply) => !parseRedisSetIfEqualReply(reply)
+    )
+    && validPipelineReply(
+      conditionalSetValueResult,
+      (reply) => reply === "after"
+    )
+    && validPipelineReply(
+      conditionalSetMissingResult,
+      (reply) => !parseRedisSetIfEqualReply(reply)
+    )
+    && validPipelineReply(
+      conditionalSetMissingExistsResult,
+      (reply) => Number(reply) === 0
+    );
+  const deleteIfEqual = validPipelineReply(
+    conditionalDeleteSeedResult,
+    (reply) => reply === "OK"
+  ) && validPipelineReply(
+    conditionalDeleteFailureResult,
+    (reply) => !parseRedisDeleteIfEqualReply(reply)
+  ) && validPipelineReply(
+    conditionalDeleteValueResult,
+    (reply) => reply === "owned"
+  ) && validPipelineReply(
+    conditionalDeleteSuccessResult,
+    (reply) => parseRedisDeleteIfEqualReply(reply)
+  ) && validPipelineReply(
+    conditionalDeleteExistsResult,
+    (reply) => Number(reply) === 0
+  ) && validPipelineReply(
+    conditionalDeleteMissingResult,
+    (reply) => !parseRedisDeleteIfEqualReply(reply)
+  );
   const commands = {
     INCREX: increx,
     ARRING: arrayProbeCreated && arrayProbeTtlApplied,
     ARLASTITEMS: !arlastitemsError
       && Array.isArray(arlastitemsReply)
-      && arlastitemsReply.every((item) => typeof item === "string")
+      && arlastitemsReply.every((item) => typeof item === "string"),
+    SET_IFEQ_KEEPTTL: setIfEqualKeepingTtl,
+    DELEX_IFEQ: deleteIfEqual
   } satisfies Record<RequiredRedisCommand, boolean>;
   const missing = requiredRedisCommands.filter((command) => !commands[command]);
   return {

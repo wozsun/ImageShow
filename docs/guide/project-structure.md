@@ -150,8 +150,8 @@ schema 初始化和管理员播种直接使用主查询池，不为不受支持�
   尝试键到稍后创建会话的稳定订阅匹配。请求信号和响应流共用的幂等 cleanup 管理
   listener、heartbeat、快照与写入失败；`lifecycle.ts` 负责租约、取消
   标记、execution fence 和失败落库。取消标记绑定会话创建代际与发布所有者，并由
-  显式取消和 `cleanup-job.ts` 在执行者收口后比较清除；PostgreSQL 状态仍是唯一
-  权威来源。
+  显式取消和 `cleanup-job.ts` 在执行者收口后通过 `DELEX ... IFEQ` 比较清除；
+  PostgreSQL 状态仍是唯一权威来源。
 
 事件流和批量状态回读均使用固定管理 POST 路径，至多 100 个尝试键或会话 ID 只进入严格
 JSON 正文。它们是只读协议：仍执行管理员会话、同源、CSRF、正文上限和 no-store 边界，但

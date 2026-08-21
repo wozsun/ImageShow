@@ -107,7 +107,8 @@ docker compose exec postgresql sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB
 
 Redis 不是业务真相源；空 Redis 会从 PostgreSQL 重建派生状态并要求管理员重新登录。连接必须
 支持 Redis 8 以及项目使用的
-`INCREX`、`ARRING`、`ARLASTITEMS` 命令；应用启动时会实际验证命令与 ACL 权限。
+`INCREX`、`ARRING`、`ARLASTITEMS`、`SET ... IFEQ ... KEEPTTL` 与
+`DELEX ... IFEQ` 能力；应用启动时会实际验证成功、条件失败、缺失、TTL 语义和 ACL 权限。
 
 ## 生产部署
 

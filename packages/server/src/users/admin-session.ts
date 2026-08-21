@@ -12,6 +12,10 @@ import { loginRateLimiter } from "../core/login-rate-limit.ts";
 import { isCurrentPasswordHash, verifyPassword } from "../core/password.ts";
 import { redis } from "../core/redis-client.ts";
 import {
+  deleteRedisStringIfEqual,
+  replaceRedisStringIfEqualKeepingTtl
+} from "../core/redis-conditional-string.ts";
+import {
   assertSameOrigin,
   requestClientIp,
   requestIsSecure
@@ -25,21 +29,6 @@ import {
 import { adminSessionKey } from "./admin-session-key.ts";
 
 const adminSessionCookie = "imageshow_session";
-const replaceCredentialTransitionSnapshotScript = `
-local current = redis.call('GET', KEYS[1])
-if current ~= ARGV[1] then
-  return 0
-end
-redis.call('SET', KEYS[1], ARGV[2], 'XX', 'KEEPTTL')
-return 1
-`;
-const deleteSessionIfUnchangedScript = `
-local current = redis.call('GET', KEYS[1])
-if current ~= ARGV[1] then
-  return 0
-end
-return redis.call('UNLINK', KEYS[1])
-`;
 
 export type AdminSession = {
   id: string;
@@ -137,14 +126,12 @@ async function replaceCredentialTransitionSnapshot(
   expectedPayload: string,
   nextPayload: string
 ) {
-  const replaced = await runRequiredRedisCommand(() => redis.eval(
-    replaceCredentialTransitionSnapshotScript,
-    1,
+  return runRequiredRedisCommand(() => replaceRedisStringIfEqualKeepingTtl(
+    redis,
     adminSessionKey(id),
     expectedPayload,
     nextPayload
   ));
-  return Number(replaced) === 1;
 }
 
 const adminSessionCredentialTransitionStore = {
@@ -158,13 +145,11 @@ async function deleteExistingSessionIfUnchanged(
   id: string,
   expectedPayload: string
 ) {
-  const deleted = await runRequiredRedisCommand(() => redis.eval(
-    deleteSessionIfUnchangedScript,
-    1,
+  return runRequiredRedisCommand(() => deleteRedisStringIfEqual(
+    redis,
     adminSessionKey(id),
     expectedPayload
   ));
-  return Number(deleted) === 1;
 }
 
 export async function createAdminSession(
