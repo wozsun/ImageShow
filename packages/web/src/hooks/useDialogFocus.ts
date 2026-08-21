@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, type RefObject } from "react";
+import { useEffectEvent, useLayoutEffect, useRef, type RefObject } from "react";
 import { getPageScrollLockFocusTarget } from "./usePageScrollLock.js";
 
 const FOCUSABLE_SELECTOR = [
@@ -35,8 +35,7 @@ export function useDialogFocus({
   active?: boolean;
   paused?: boolean;
 }) {
-  const onEscapeRef = useRef(onEscape);
-  onEscapeRef.current = onEscape;
+  const handleEscape = useEffectEvent(onEscape);
   const returnFocusTargetRef = useRef<HTMLElement | null>(null);
   const hasActivatedRef = useRef(false);
   const wasActiveRef = useRef(false);
@@ -84,7 +83,7 @@ export function useDialogFocus({
         if (event.isComposing || event.keyCode === 229) return;
         event.preventDefault();
         event.stopPropagation();
-        onEscapeRef.current();
+        handleEscape();
         return;
       }
       if (event.key !== "Tab") return;

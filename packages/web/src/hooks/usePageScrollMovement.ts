@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef } from "react";
+import { useEffectEvent, useLayoutEffect } from "react";
 import {
   normalizePageScrollPosition,
   pageScrollDelta,
@@ -27,11 +27,7 @@ export function usePageScrollMovement(
   onMovement: (movement: PageScrollMovement) => void,
   enabled = true
 ) {
-  const onMovementRef = useRef(onMovement);
-
-  useLayoutEffect(() => {
-    onMovementRef.current = onMovement;
-  }, [onMovement]);
+  const notifyMovement = useEffectEvent(onMovement);
 
   useLayoutEffect(() => {
     if (!enabled) return;
@@ -44,7 +40,7 @@ export function usePageScrollMovement(
       const position = currentPageScrollPosition();
       const delta = pageScrollDelta(previousPosition, position);
       previousPosition = position;
-      onMovementRef.current({ delta, position });
+      notifyMovement({ delta, position });
     };
     const scheduleUpdate = () => {
       if (frame !== undefined) return;

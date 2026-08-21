@@ -2,7 +2,7 @@ import {
   createContext,
   useContext,
   useEffect,
-  useRef,
+  useEffectEvent,
   useState,
   type ReactNode
 } from "react";
@@ -51,11 +51,12 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
     gcTime: Number.POSITIVE_INFINITY,
     refetchOnWindowFocus: false
   });
-  const refetchRef = useRef(query.refetch);
-  refetchRef.current = query.refetch;
   const [refreshCoordinator] = useState(
     () => new AuthSessionRefreshCoordinator()
   );
+  const refetchAuth = useEffectEvent(async () => {
+    await query.refetch({ cancelRefetch: false });
+  });
 
   useEffect(() => {
     if (!query.data) return;
@@ -74,7 +75,7 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
       clearSessionProbeHint();
       setPublicProbeRequested(true);
       void refreshCoordinator.run(async () => {
-        await refetchRef.current({ cancelRefetch: false });
+        await refetchAuth();
       }).catch(() => undefined);
     };
     window.addEventListener(authExpiredEvent, refreshAuth);
