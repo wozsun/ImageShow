@@ -10,7 +10,9 @@ type RedisBusinessCommandName =
   | "imageshowTouchReadyImageIndexedResult"
   | "imageshowTouchReadyImageStatsResult"
   | "imageshowStoreReadyImageFilterSet"
-  | "imageshowPublishReadyImageAttributeIndex";
+  | "imageshowPublishReadyImageAttributeIndex"
+  | "imageshowSampleReadyImageCoreIndex"
+  | "imageshowSampleReadyImageDerivedIndex";
 
 type RedisBusinessClientContract = Pick<Redis, RedisBusinessCommandName>;
 type RedisBusinessPipelineContract = Pick<
@@ -104,6 +106,38 @@ declare module "ioredis" {
       instanceToken: RedisValue,
       ttlSeconds: RedisValue
     ): Result<number, Context>;
+
+    imageshowSampleReadyImageCoreIndex(
+      metaKey: RedisValue,
+      integrityKey: RedisValue,
+      indexKey: RedisValue,
+      itemsKey: RedisValue,
+      revision: RedisValue,
+      expectedCount: RedisValue,
+      limit: RedisValue,
+      recentSize: RedisValue,
+      historySize: RedisValue,
+      maximumLimit: RedisValue
+    ): Result<Array<number | string | null>, Context>;
+
+    imageshowSampleReadyImageDerivedIndex(
+      coreMetaKey: RedisValue,
+      integrityKey: RedisValue,
+      coreIndexKey: RedisValue,
+      itemsKey: RedisValue,
+      derivedIndexKey: RedisValue,
+      derivedMetaKey: RedisValue,
+      revision: RedisValue,
+      expectedCoreCount: RedisValue,
+      expectedIndexCount: RedisValue,
+      instanceToken: RedisValue,
+      kind: RedisValue,
+      limit: RedisValue,
+      recentSize: RedisValue,
+      historySize: RedisValue,
+      maximumLimit: RedisValue,
+      maximumIndexMembers: RedisValue
+    ): Result<Array<number | string | null>, Context>;
   }
 }
 

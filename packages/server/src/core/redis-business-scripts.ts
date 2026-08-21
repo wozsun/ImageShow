@@ -299,3 +299,327 @@ redis.call(
 )
 redis.call('EXPIRE', KEYS[2], ARGV[6])
 return 1`;
+
+const sampleReadyImageIndexPrelude = `
+local STATUS_OK = 1
+local STATUS_EMPTY = 2
+local STATUS_CORE_INVALID = -1
+local STATUS_DERIVED_INVALID = -2
+local STATUS_REVISION_CHANGED = -3
+local STATUS_TOKEN_CHANGED = -4
+local STATUS_EXPIRED = -5
+local STATUS_CORE_MISSING_ITEM = -6
+local STATUS_DERIVED_MISSING_ITEM = -7
+
+local function command_failed(value)
+  return type(value) == 'table' and value.err ~= nil
+end
+
+local function non_negative_integer(raw)
+  local value = tonumber(raw)
+  if not value or value < 0 or value ~= math.floor(value) then return nil end
+  return value
+end
+
+local function positive_integer(raw)
+  local value = non_negative_integer(raw)
+  if not value or value == 0 then return nil end
+  return value
+end
+
+local function valid_revision(value)
+  return type(value) == 'string' and string.match(value, '^%d+$') ~= nil
+end
+
+local function valid_instance_token(value)
+  return type(value) == 'string'
+    and string.len(value) == 32
+    and string.match(value, '^[0-9a-f]+$') ~= nil
+end
+
+local function valid_timestamp(value)
+  if type(value) ~= 'string' then return false end
+  local year_raw, month_raw, day_raw, hour_raw, minute_raw, second_raw =
+    string.match(
+      value,
+      '^(%d%d%d%d)%-(%d%d)%-(%d%d)T(%d%d):(%d%d):(%d%d)%.%d%d%dZ$'
+    )
+  if not year_raw then return false end
+  local year = tonumber(year_raw)
+  local month = tonumber(month_raw)
+  local day = tonumber(day_raw)
+  local hour = tonumber(hour_raw)
+  local minute = tonumber(minute_raw)
+  local second = tonumber(second_raw)
+  if month < 1
+    or month > 12
+    or hour > 23
+    or minute > 59
+    or second > 59 then
+    return false
+  end
+  local days_in_month = {
+    31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
+  }
+  if year % 4 == 0 and (year % 100 ~= 0 or year % 400 == 0) then
+    days_in_month[2] = 29
+  end
+  return day >= 1 and day <= days_in_month[month]
+end
+
+local function validate_core(
+  meta_key,
+  integrity_key,
+  index_key,
+  items_key,
+  expected_revision,
+  expected_count
+)
+  local meta = redis.pcall(
+    'HMGET', meta_key, 'state', 'applied_revision', 'item_count'
+  )
+  if command_failed(meta) or #meta ~= 3 then return STATUS_CORE_INVALID end
+  if meta[2] ~= expected_revision then
+    return valid_revision(meta[2])
+      and STATUS_REVISION_CHANGED
+      or STATUS_CORE_INVALID
+  end
+  if meta[1] ~= 'ready' or meta[3] ~= tostring(expected_count) then
+    return STATUS_CORE_INVALID
+  end
+
+  local integrity = redis.pcall(
+    'HMGET', integrity_key, index_key, items_key
+  )
+  if command_failed(integrity)
+    or #integrity ~= 2
+    or integrity[1] ~= tostring(expected_count)
+    or integrity[2] ~= tostring(expected_count) then
+    return STATUS_CORE_INVALID
+  end
+
+  local index_count = redis.pcall('ZCARD', index_key)
+  local item_count = redis.pcall('HLEN', items_key)
+  if command_failed(index_count)
+    or command_failed(item_count)
+    or index_count ~= expected_count
+    or item_count ~= expected_count then
+    return STATUS_CORE_INVALID
+  end
+
+  local meta_ttl = redis.pcall('TTL', meta_key)
+  local integrity_ttl = redis.pcall('TTL', integrity_key)
+  local index_ttl = redis.pcall('TTL', index_key)
+  local items_ttl = redis.pcall('TTL', items_key)
+  if command_failed(meta_ttl)
+    or command_failed(integrity_ttl)
+    or command_failed(index_ttl)
+    or command_failed(items_ttl)
+    or meta_ttl ~= -1
+    or integrity_ttl ~= -1 then
+    return STATUS_CORE_INVALID
+  end
+  if expected_count == 0 then
+    if index_ttl ~= -2 or items_ttl ~= -2 then
+      return STATUS_CORE_INVALID
+    end
+  elseif index_ttl ~= -1 or items_ttl ~= -1 then
+    return STATUS_CORE_INVALID
+  end
+  return STATUS_OK
+end
+
+local function sample_count(
+  index_count,
+  limit,
+  recent_size,
+  history_size
+)
+  local requested
+  if limit <= 1 then
+    requested = math.max(8, math.min(64, history_size + 1))
+  else
+    requested = math.min(index_count, limit + recent_size)
+  end
+  return math.min(index_count, requested)
+end
+
+local function sample_members(
+  index_key,
+  items_key,
+  requested,
+  invalid_status
+)
+  local members = redis.pcall('ZRANDMEMBER', index_key, requested)
+  if command_failed(members)
+    or type(members) ~= 'table'
+    or #members ~= requested then
+    return {invalid_status, 0}, {}, {}
+  end
+  local values = redis.pcall('HMGET', items_key, unpack(members))
+  if command_failed(values)
+    or type(values) ~= 'table'
+    or #values ~= #members then
+    return {STATUS_CORE_INVALID, 0}, {}, {}
+  end
+
+  local output = {STATUS_OK, #members}
+  local missing_members = {}
+  for index, member in ipairs(members) do
+    local value = values[index]
+    table.insert(output, member)
+    table.insert(output, value or false)
+    if not value then table.insert(missing_members, member) end
+  end
+  return output, members, missing_members
+end
+
+local function valid_sampling_arguments(
+  limit,
+  recent_size,
+  history_size,
+  maximum_limit
+)
+  return limit
+    and recent_size
+    and history_size
+    and maximum_limit
+    and limit <= maximum_limit
+    and recent_size <= history_size
+end`;
+
+export const sampleReadyImageCoreIndexScript = `${sampleReadyImageIndexPrelude}
+local expected_count = non_negative_integer(ARGV[2])
+local limit = positive_integer(ARGV[3])
+local recent_size = non_negative_integer(ARGV[4])
+local history_size = non_negative_integer(ARGV[5])
+local maximum_limit = positive_integer(ARGV[6])
+if not expected_count
+  or not valid_revision(ARGV[1])
+  or not valid_sampling_arguments(
+    limit, recent_size, history_size, maximum_limit
+  ) then
+  return {STATUS_CORE_INVALID, 0}
+end
+
+local core_status = validate_core(
+  KEYS[1], KEYS[2], KEYS[3], KEYS[4], ARGV[1], expected_count
+)
+if core_status ~= STATUS_OK then return {core_status, 0} end
+if expected_count == 0 then return {STATUS_EMPTY, 0} end
+
+local requested = sample_count(
+  expected_count, limit, recent_size, history_size
+)
+local output, _, missing_members = sample_members(
+  KEYS[3], KEYS[4], requested, STATUS_CORE_INVALID
+)
+if #missing_members > 0 then output[1] = STATUS_CORE_MISSING_ITEM end
+return output`;
+
+export const sampleReadyImageDerivedIndexScript = `${sampleReadyImageIndexPrelude}
+local expected_core_count = non_negative_integer(ARGV[2])
+local expected_index_count = non_negative_integer(ARGV[3])
+local limit = positive_integer(ARGV[6])
+local recent_size = non_negative_integer(ARGV[7])
+local history_size = non_negative_integer(ARGV[8])
+local maximum_limit = positive_integer(ARGV[9])
+local maximum_index_members = non_negative_integer(ARGV[10])
+if not expected_core_count
+  or not expected_index_count
+  or not maximum_index_members
+  or expected_index_count > expected_core_count
+  or expected_index_count > maximum_index_members
+  or not valid_revision(ARGV[1])
+  or not valid_instance_token(ARGV[4])
+  or (ARGV[5] ~= 'attribute' and ARGV[5] ~= 'filter')
+  or not valid_sampling_arguments(
+    limit, recent_size, history_size, maximum_limit
+  ) then
+  return {STATUS_DERIVED_INVALID, 0}
+end
+
+local core_status = validate_core(
+  KEYS[1], KEYS[2], KEYS[3], KEYS[4], ARGV[1], expected_core_count
+)
+if core_status ~= STATUS_OK then return {core_status, 0} end
+
+local meta_ttl = redis.pcall('TTL', KEYS[6])
+if command_failed(meta_ttl) then return {STATUS_DERIVED_INVALID, 0} end
+if meta_ttl <= 0 then return {STATUS_EXPIRED, 0} end
+
+local meta = redis.pcall(
+  'HMGET', KEYS[6],
+  'applied_revision', 'count', 'built_at', 'instance_token', 'last_accessed'
+)
+if command_failed(meta) or #meta ~= 5 then
+  return {STATUS_DERIVED_INVALID, 0}
+end
+if meta[1] ~= ARGV[1] then
+  return valid_revision(meta[1])
+    and {STATUS_REVISION_CHANGED, 0}
+    or {STATUS_DERIVED_INVALID, 0}
+end
+if meta[4] ~= ARGV[4] then
+  return valid_instance_token(meta[4])
+    and {STATUS_TOKEN_CHANGED, 0}
+    or {STATUS_DERIVED_INVALID, 0}
+end
+if meta[2] ~= tostring(expected_index_count)
+  or not valid_timestamp(meta[3]) then
+  return {STATUS_DERIVED_INVALID, 0}
+end
+
+local meta_field_count = redis.pcall('HLEN', KEYS[6])
+if command_failed(meta_field_count) then
+  return {STATUS_DERIVED_INVALID, 0}
+end
+if ARGV[5] == 'attribute' then
+  if meta_field_count ~= 5
+    or not valid_timestamp(meta[5]) then
+    return {STATUS_DERIVED_INVALID, 0}
+  end
+elseif meta_field_count ~= 4 or meta[5] then
+  return {STATUS_DERIVED_INVALID, 0}
+end
+
+local index_count = redis.pcall('ZCARD', KEYS[5])
+local index_ttl = redis.pcall('TTL', KEYS[5])
+if command_failed(index_count) or command_failed(index_ttl) then
+  return {STATUS_DERIVED_INVALID, 0}
+end
+if expected_index_count > 0 then
+  if index_ttl <= 0 then return {STATUS_EXPIRED, 0} end
+elseif index_ttl ~= -2 then
+  return {STATUS_DERIVED_INVALID, 0}
+end
+if index_count ~= expected_index_count then
+  return {STATUS_DERIVED_INVALID, 0}
+end
+if expected_index_count == 0 then return {STATUS_EMPTY, 0} end
+
+local requested = sample_count(
+  expected_index_count, limit, recent_size, history_size
+)
+local output, _, missing_members = sample_members(
+  KEYS[5], KEYS[4], requested, STATUS_DERIVED_INVALID
+)
+if #missing_members == 0 then return output end
+
+local core_scores = redis.pcall(
+  'ZMSCORE', KEYS[3], unpack(missing_members)
+)
+if command_failed(core_scores)
+  or type(core_scores) ~= 'table'
+  or #core_scores ~= #missing_members then
+  output[1] = STATUS_CORE_INVALID
+  return output
+end
+for _, score in ipairs(core_scores) do
+  if score then
+    output[1] = STATUS_CORE_MISSING_ITEM
+    return output
+  end
+end
+output[1] = STATUS_DERIVED_MISSING_ITEM
+return output`;

@@ -1,4 +1,3 @@
-import { appConfig } from "@imageshow/shared";
 import { logger } from "../../core/logger.ts";
 import { redis } from "../../core/redis-client.ts";
 import { execRedisPipeline } from "../../core/redis-pipeline.ts";
@@ -47,6 +46,7 @@ import {
   type ReadyImagePageReadMode,
   type ReadyImageWindowDependencies
 } from "./ordered-window.ts";
+import { sampleResolvedReadyImageIndex } from "./random-sampler.ts";
 
 export type ReadyImageCachePage = {
   items: ReadyImageCacheItem[];
@@ -104,17 +104,6 @@ async function readCache<T>(
 function discardReadyImageQueryIndex(index: ReadyImageFilterIndex) {
   if (index.kind === "core") return Promise.resolve();
   return discardReadyImageDerivedResult(index.key, index.kind);
-}
-
-async function queryIndexIsValid(index: ReadyImageFilterIndex) {
-  const validation = await validateReadyImageFilterIndex(index);
-  if (validation === "valid") return true;
-  if (validation === "invalid" && index.kind === "core") {
-    throw new ReadyImageCoreCacheError(
-      "Ready-image core index validation failed"
-    );
-  }
-  return false;
 }
 
 async function readCoreItems(members: string[]) {
@@ -410,33 +399,17 @@ export async function sampleReadyImages(
   try {
     const index = await resolveReadyImageFilterIndex(plan, signal, background);
     if (!index) return { cached: false };
-    const result = await readCache(async () => {
-      if (!await queryIndexIsValid(index)) return null;
-      const count = await redis.zcard(index.key);
-      if (!count) return await queryIndexIsValid(index) ? [] : null;
-      const requested = limit <= 1
-        ? Math.max(8, Math.min(64, appConfig.randomDedupe.historySize + 1))
-        : Math.min(count, limit + recent.size);
-      const members = await redis.zrandmember(index.key, requested);
-      if (!members.length) {
-        await queryIndexIsValid(index);
-        return null;
+    const result = await readCache(
+      () => sampleResolvedReadyImageIndex(
+        index,
+        limit,
+        recent
+      ),
+      index.kind === "core" ? "core" : "derived",
+      async () => {
+        await discardReadyImageQueryIndex(index);
       }
-      const raws = await readCoreItems(members);
-      if (index.kind !== "core") {
-        await assertDerivedMissingItemsAreNotCore(members, raws);
-      }
-      const fresh: ReadyImageCacheItem[] = [];
-      const fallback: ReadyImageCacheItem[] = [];
-      raws.forEach((raw, position) => {
-        const item = parsedItem(raw, members[position]);
-        (recent.has(item.id) ? fallback : fresh).push(item);
-      });
-      const value = [...fresh, ...fallback].slice(0, limit);
-      return await queryIndexIsValid(index) ? value : null;
-    }, index.kind === "core" ? "core" : "derived", async () => {
-      await discardReadyImageQueryIndex(index);
-    });
+    );
     if (!result.cached || result.value === null) return { cached: false };
     return { cached: true, value: result.value };
   } catch (error) {

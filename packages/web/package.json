@@ -1,6 +1,6 @@
 {
   "name": "@imageshow/web",
-  "version": "4.16.1",
+  "version": "4.16.2",
   "private": true,
   "type": "module",
   "scripts": {
@@ -15,7 +15,7 @@
     "@imageshow/shared": "file:../shared",
     "@tanstack/react-query": "^5.101.4",
     "@uiw/react-codemirror": "^4.25.11",
-    "altcha": "^3.2.1",
+    "altcha": "^3.2.2",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router": "^8.3.0"
@@ -24,9 +24,9 @@
     "@types/node": "^26.2.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
-    "@vitejs/plugin-react": "^6.0.5",
+    "@vitejs/plugin-react": "^6.1.0",
     "remixicon": "^4.9.1",
     "typescript": "^7.0.2",
-    "vite": "^8.2.1"
+    "vite": "^8.2.2"
   }
 }
