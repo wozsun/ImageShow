@@ -103,9 +103,10 @@ JSONL 可设置 `original`、`source`、`image_time`、`author`、`tags`、`titl
 1. **materialize** 只取得完整 raw。upload 和 download 都先写
    `data/tmp/<session>.raw.<attempt>.part`，完成后在同目录原子发布；download 还执行
    HTTPS、DNS、重定向、大小、时间和内容嗅探限制。
-2. **prepare** 只处理已发布的 raw：校验图片、按配置标准化为 WebP、生成缩略图、检测
-   设备与明暗、计算摘要，再把 processed image 与 prepared thumbnail 写入会话锁定
-   后端的 `_uploads`。
+2. **prepare** 只处理已发布的 raw：以一次 Sharp metadata 校验白名单格式、原始尺寸与
+   EXIF 展示方向，按配置标准化为 WebP，并直接采用最终编码结果的尺寸和字节数；随后生成
+   缩略图、检测设备与明暗、计算摘要，再把 processed image 与 prepared thumbnail 写入
+   会话锁定后端的 `_uploads`。
 3. **commit** 不重新下载或转码。它先取得相同最终 MD5 的 advisory lock，并在该锁内重读
    PostgreSQL；未明确允许重复且出现同内容图片时，只让当前批次成员返回结构化冲突，其他
    成员继续执行。确认意图绑定 session、attempt 与最终 MD5，不能挪给另一项。通过后再验证
