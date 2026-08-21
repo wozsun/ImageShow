@@ -1,4 +1,7 @@
 import type { DatabaseReader } from "../../core/database-pools.ts";
+import {
+  publishReadyImageAttributeIndexCommand
+} from "../../core/redis-business-commands.ts";
 import { getRedisConnectionState, redis } from "../../core/redis-client.ts";
 import { randomUuidV7 } from "../../core/uuid.ts";
 import { getReadyImageCacheCoordinatorStatus } from "./coordinator.ts";
@@ -71,28 +74,6 @@ export async function readReadyImageAttributeIndex(
   }
 }
 
-const publishAttributeIndexScript = `
-local count = tonumber(ARGV[1])
-if count > 0 then
-  if redis.call('EXISTS', KEYS[3]) ~= 1 then return 0 end
-  if redis.call('ZCARD', KEYS[3]) ~= count then return 0 end
-  redis.call('RENAME', KEYS[3], KEYS[1])
-  redis.call('EXPIRE', KEYS[1], ARGV[6])
-else
-  redis.call('UNLINK', KEYS[1], KEYS[3])
-end
-redis.call('DEL', KEYS[2])
-redis.call(
-  'HSET', KEYS[2],
-  'applied_revision', ARGV[2],
-  'count', ARGV[1],
-  'built_at', ARGV[3],
-  'last_accessed', ARGV[4],
-  'instance_token', ARGV[5]
-)
-redis.call('EXPIRE', KEYS[2], ARGV[6])
-return 1`;
-
 export async function publishReadyImageAttributeIndex(options: {
   spec: ReadyImageAttributeIndexSpec;
   revision: string;
@@ -130,22 +111,18 @@ export async function publishReadyImageAttributeIndex(options: {
 
       const now = new Date().toISOString();
       const instanceToken = randomUuidV7().replaceAll("-", "");
-      const published = Number(await redis.call(
-        "EVAL",
-        publishAttributeIndexScript,
-        "3",
+      const published = await publishReadyImageAttributeIndexCommand(redis, {
         key,
         metaKey,
-        options.temporaryKey,
-        String(options.count),
-        options.revision,
-        now,
+        temporaryKey: options.temporaryKey,
+        count: options.count,
+        revision: options.revision,
         now,
         instanceToken,
-        String(READY_IMAGE_DERIVED_CACHE_POLICY.ttlSeconds)
-      ));
+        ttlSeconds: READY_IMAGE_DERIVED_CACHE_POLICY.ttlSeconds
+      });
       options.signal?.throwIfAborted();
-      if (published !== 1) {
+      if (!published) {
         return null;
       }
 

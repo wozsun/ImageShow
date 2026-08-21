@@ -89,6 +89,12 @@ Redis 8 只承载可以从 PostgreSQL 重建的图片读模型，以及会话、
   写栅栏内核对 PostgreSQL revision 与 Redis 已应用 revision，只有失配或完整性失败才
   single-flight 重建；重连期间变化的连接由同一任务重新校验，不维护第二套 epoch 状态。
 
+限流、派生结果 touch、统计结果 touch、筛选集合生成和属性索引发布这五类原子操作以
+ioredis 自定义命令集中注册。调用方不保存 Lua 或 `EVAL` 参数布局；同一物理连接首次执行
+可发送完整脚本，后续使用 SHA，Redis 重启或脚本缓存清空后的 `NOSCRIPT` 由客户端透明恢复。
+应用不在启动时 `SCRIPT LOAD`，也不把这些脚本部署为 Redis Functions。深度检查中按当前
+批次键动态测量的低频脚本仍直接执行，不属于高频业务命令。
+
 图片事务先在 PostgreSQL 推进 `ready_image_revision`；同一张图片的一次原子编辑即使同时
 改变 metadata 与标签也至多推进一次，纯 no-op 不推进。影响不超过 500 张时，提交后在
 进程内写栅栏中精确更新核心投影；更大操作不加载完整 ID 列表，而是保持读门关闭并只

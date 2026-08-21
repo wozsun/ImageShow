@@ -126,6 +126,14 @@ schema 初始化和管理员播种直接使用主查询池，不为不受支持�
 缓存读取先行，首次真实回源才借 client，同一 scope 内的领域模块显式接收并复用 reader；
 底层 `pool.query` 不再由进程上下文改写。
 
+高频且必须保持原子性的 Redis Lua 由 `core/redis-business-scripts.ts` 单独持有脚本文本，
+`core/redis-business-commands.ts` 统一声明五个 ioredis 自定义命令、key 数量、读写属性、
+参数布局和返回值解析，`redis-client.ts` 在唯一 client 构造点注册。限流与 ready-cache
+领域只调用类型化命令；ready-cache 的键和容量策略作为参数传入，`core/` 不反向依赖图片
+领域。ioredis 负责按物理连接在首次调用发送 `EVAL`、后续发送 `EVALSHA`，并在
+`NOSCRIPT` 后重发脚本；应用不维护 SHA、启动时预加载清单或 Redis Functions。检查页按键
+动态测量的低频 Lua 仍留在 `checks/`，不并入业务注册表。
+
 图片存储变更的单图原语集中在 `storage/image-storage-migration.ts`，在同一条可读控制流中
 完成锁内真相重读、候选发布与校验、PostgreSQL CAS，以及提交结果不确定时的补偿判断；
 不再为只传递同一记录的 prepare / switch / settlement 阶段维护文件和中间契约。

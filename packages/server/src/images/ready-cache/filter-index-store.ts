@@ -1,4 +1,8 @@
 import { getRedisConnectionState, redis } from "../../core/redis-client.ts";
+import {
+  storeReadyImageFilterSetCommand,
+  type ReadyImageFilterSetOperation
+} from "../../core/redis-business-commands.ts";
 import { execRedisPipeline } from "../../core/redis-pipeline.ts";
 import { randomUuidV7 } from "../../core/uuid.ts";
 import {
@@ -33,41 +37,6 @@ export type ReadyImageFilterIndex = ReadyImageResolvedIndex & (
   | { kind: "filter"; count: number; metaKey: string; instanceToken: string }
 );
 
-const storeSetOperationScript = `
-local source_count = #KEYS - 1
-for index = 1, source_count do
-  local actual = redis.call('ZCARD', KEYS[index])
-  if actual ~= tonumber(ARGV[index]) then
-    return {0, index, actual}
-  end
-end
-
-local command = ARGV[source_count + 1]
-local expected = tonumber(ARGV[source_count + 2])
-local ttl = tonumber(ARGV[source_count + 3])
-local destination = KEYS[source_count + 1]
-local arguments = {destination, tostring(source_count)}
-for index = 1, source_count do
-  table.insert(arguments, KEYS[index])
-end
-if command ~= 'ZDIFFSTORE' then
-  table.insert(arguments, 'AGGREGATE')
-  table.insert(arguments, 'MAX')
-end
-local stored = redis.call(command, unpack(arguments))
-if stored > expected then
-  redis.call('UNLINK', destination)
-  return {-1, stored, 0}
-end
-local expiry = 0
-if stored > 0 then
-  expiry = redis.call('EXPIRE', destination, ttl)
-else
-  redis.call('UNLINK', destination)
-end
-return {1, stored, expiry, redis.call('ZCARD', destination)}
-`;
-
 function currentRevision() {
   const status = getReadyImageCacheCoordinatorStatus();
   return status.readable && status.meta?.state === "ready"
@@ -76,48 +45,19 @@ function currentRevision() {
 }
 
 export async function storeReadyImageFilterSetOperation(
-  command: "zunionstore" | "zinterstore" | "zdiffstore",
+  command: ReadyImageFilterSetOperation,
   destination: string,
   sources: Array<{ key: string; count: number }>,
   expectedMembers: number
 ) {
-  const sourceKeys = sources.map(({ key }) => key);
-  const raw = await redis.call(
-    "EVAL",
-    storeSetOperationScript,
-    String(sourceKeys.length + 1),
-    ...sourceKeys,
+  return storeReadyImageFilterSetCommand(redis, {
+    command,
     destination,
-    ...sources.map(({ count }) => String(count)),
-    command.toUpperCase(),
-    String(expectedMembers),
-    String(READY_IMAGE_DERIVED_CACHE_POLICY.temporaryTtlSeconds)
-  );
-  if (!Array.isArray(raw)) {
-    await redis.unlink(destination).catch(() => undefined);
-    throw new Error("Ready-image derived set operation returned invalid data");
-  }
-  const status = Number(raw[0] ?? -2);
-  const stored = Number(raw[1] ?? -1);
-  const expiry = Number(raw[2] ?? -1);
-  const cardinality = Number(raw[3] ?? -1);
-  if (status === 0) {
-    throw new Error("Ready-image derived set source changed during build");
-  }
-  if (
-    status !== 1
-    || !Number.isSafeInteger(stored)
-    || stored < 0
-    || !Number.isSafeInteger(cardinality)
-    || cardinality < 0
-    || stored !== cardinality
-    || cardinality > expectedMembers
-    || expiry !== (cardinality > 0 ? 1 : 0)
-  ) {
-    await redis.unlink(destination).catch(() => undefined);
-    throw new Error("Ready-image derived set operation exceeded its estimate");
-  }
-  return cardinality;
+    sources,
+    expectedMembers,
+    temporaryTtlSeconds:
+      READY_IMAGE_DERIVED_CACHE_POLICY.temporaryTtlSeconds
+  });
 }
 
 export async function readReadyImageFilterIndex(

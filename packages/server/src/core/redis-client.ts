@@ -2,6 +2,7 @@ import { Redis } from "ioredis";
 import { randomUUID } from "node:crypto";
 import { deploymentConfig } from "../config/deployment-config.ts";
 import { abortSignalError, raceWithAbortSignal } from "./abort.ts";
+import { redisBusinessScripts } from "./redis-business-commands.ts";
 import { logger } from "./logger.ts";
 import {
   parseRedisDeleteIfEqualReply,
@@ -19,7 +20,8 @@ export const redis = new Redis({
   connectTimeout: 5_000,
   commandTimeout: 5_000,
   enableOfflineQueue: false,
-  maxRetriesPerRequest: 1
+  maxRetriesPerRequest: 1,
+  scripts: redisBusinessScripts
 });
 
 redis.on("error", (error) => {
