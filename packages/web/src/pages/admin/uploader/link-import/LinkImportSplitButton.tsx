@@ -117,14 +117,22 @@ export function LinkImportSplitButton({
     });
   };
 
+  const preloadImportWorkflow = () => {
+    onPreloadWorkflow();
+    onPreloadImportSource();
+  };
+
   return (
-    <div ref={splitRef} className="link-import-split">
+    <div
+      ref={splitRef}
+      className="link-import-split"
+      {...preloadIntentProps(preloadImportWorkflow)}
+    >
       <button
         className="button secondary upload-trigger link-import-main"
         type="button"
         disabled={pending}
         aria-busy={pending || undefined}
-        {...preloadIntentProps(onPreloadWorkflow)}
         onClick={(event) => onOpenWorkflow(event.currentTarget)}
       >
         <AdminIcon name="download-cloud-2-line" />导入图片

@@ -298,24 +298,31 @@ export function Uploader({
     processedActivationRef.current = activation.sequence;
     const intent = intentFenceRef.current.begin();
     const runActivation = async () => {
+      let opened = false;
       try {
         if (activation.kind === "workflow") {
           setSourceDialogOpen(false);
           setSourceDialogPending(false);
-          await openInMode("link", activation.opener, intent);
+          opened = await openInMode("link", activation.opener, intent);
           return;
         }
         if (activation.kind === "files") {
           setSourceDialogOpen(false);
           setSourceDialogPending(false);
-          await openInMode("file", activation.opener, intent);
+          opened = await openInMode("file", activation.opener, intent);
           return;
         }
-        await openImportSource(activation.kind, activation.opener, intent);
+        opened = await openImportSource(
+          activation.kind,
+          activation.opener,
+          intent
+        );
       } catch (error) {
         if (intentFenceRef.current.isCurrent(intent)) onLoadError(error);
       } finally {
-        if (intentFenceRef.current.isCurrent(intent)) {
+        // 成功启动后由 closeWorkflow 统一释放激活锁。若在弹窗打开时提前释放，
+        // 图片页会短暂经历 disabled -> enabled，从而在来源模块慢加载时产生闪烁。
+        if (!opened && intentFenceRef.current.isCurrent(intent)) {
           onActivationSettled(activation.sequence);
         }
       }

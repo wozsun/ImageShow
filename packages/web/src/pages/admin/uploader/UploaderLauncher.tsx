@@ -69,10 +69,7 @@ export function UploaderLauncher({
     void loadUploaderModule().catch(() => undefined);
   };
   const preloadImportSource = () => {
-    void Promise.all([
-      loadUploaderModule(),
-      loadImportSourceModule()
-    ]).catch(() => undefined);
+    void loadImportSourceModule().catch(() => undefined);
   };
   const activate = async (
     kind: UploaderActivationKind,
