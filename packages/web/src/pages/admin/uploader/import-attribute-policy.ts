@@ -23,8 +23,9 @@ const initialAttributeStatuses = new Set<ImportJob["status"]>([
 
 function importAttributePhase(job: ImportJob): ImportAttributePhase {
   if (job.commitIntent) return "locked";
-  if (initialAttributeStatuses.has(job.status)) return "initial";
   if (job.status === "ready") return "ready";
+  if (initialAttributeStatuses.has(job.status)) return "initial";
+  if (job.uploadIntentInput || job.remoteAcceptInput) return "locked";
   if (job.status !== "failed") return "locked";
 
   if (job.failureStage === "commit" || job.failureStage === "cancel") {
@@ -47,7 +48,8 @@ export function importAutomaticClassificationLabel(
 }
 
 export function importJobAttributesEditable(job: ImportJob) {
-  return importAttributePhase(job) === "ready";
+  return importAttributePhase(job) === "ready"
+    && job.serverHandoffPending !== true;
 }
 
 export function imageDraftPatchChanges(
@@ -111,6 +113,20 @@ export function importAttributeDefaultsPatch(
   if (phase === "initial") return initialAttributePatch(job, defaults);
   if (phase === "ready") return readyAttributePatch(job, defaults);
   return {};
+}
+
+export function importAttributeDefaultsActionMetadata(
+  defaults: ImportAttributeDefaults
+): Partial<ImageDraft> {
+  const theme = defaults.theme.trim();
+  const author = defaults.author.trim();
+  return {
+    device: defaults.device,
+    brightness: defaults.brightness,
+    ...(theme ? { theme } : {}),
+    ...(author ? { author } : {}),
+    ...(defaults.tags.length ? { tags: [...new Set(defaults.tags)] } : {})
+  };
 }
 
 export function canApplyImportAttributeDefaults(

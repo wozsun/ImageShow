@@ -45,6 +45,33 @@ function combinedLockSignal(signal: AbortSignal) {
   return parent ? AbortSignal.any([parent, signal]) : signal;
 }
 
+export async function acquireAdvisoryLockClient(
+  signal: AbortSignal | undefined,
+  connect: () => Promise<PoolClient> = connectAdvisoryLockClient
+) {
+  signal?.throwIfAborted();
+  const pending = connect();
+  if (!signal) return pending;
+  try {
+    const client = await raceWithAbortSignal(signal, pending);
+    signal.throwIfAborted();
+    return client;
+  } catch (error) {
+    if (signal.aborted) {
+      // node-postgres cannot cancel a queued pool checkout. Release a client
+      // that arrives after the caller has already left the wait boundary.
+      void pending.then((client) => {
+        try {
+          client.release();
+        } catch {
+          // The pool owns subsequent cleanup if a late release itself fails.
+        }
+      }, () => undefined);
+    }
+    throw error;
+  }
+}
+
 function advisoryLockFunction(lock: AdvisoryLockRequest) {
   const tryAcquire = lock.acquisition === "try";
   if (lock.mode === "shared") {
@@ -141,8 +168,8 @@ async function runWithAdvisoryLocks<T>(
   locks: readonly AdvisoryLockRequest[],
   work: AdvisoryLockWork<T>
 ): Promise<AdvisoryLockAttempt<T>> {
-  advisoryLockSignalContext.getStore()?.throwIfAborted();
-  const client = await connectAdvisoryLockClient();
+  const checkoutSignal = advisoryLockSignalContext.getStore();
+  const client = await acquireAdvisoryLockClient(checkoutSignal);
   let destroyClient = false;
   const connectionLoss = new AbortController();
   const lockSignal = combinedLockSignal(connectionLoss.signal);

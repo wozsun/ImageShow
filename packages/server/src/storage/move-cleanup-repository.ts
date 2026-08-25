@@ -1,6 +1,6 @@
 import type { PoolClient } from "pg";
 import { pool } from "../core/database-pools.ts";
-import { enqueueRerunnableJob } from "../jobs/repository.ts";
+import { enqueueRerunnableJobs } from "../jobs/repository.ts";
 import type {
   CapturedMoveCleanupObject,
   MoveCleanupJobPayload
@@ -22,34 +22,65 @@ function normalizedCleanupObjects(
 
 function cleanupIdempotencyKey(
   imageId: string,
-  objects: readonly CapturedMoveCleanupObject[]
+  objects: readonly CapturedMoveCleanupObject[],
+  guardToken?: string
 ) {
   const cleanupKey = objects
     .map((object) => `${object.backend}:${object.prefix}:${object.key}`)
     .join("|");
-  return `move.cleanup:${imageId}:${cleanupKey}`;
+  const guardScope = guardToken ? `:guard:${guardToken}` : "";
+  return `move.cleanup:${imageId}:${cleanupKey}${guardScope}`;
 }
 
 export async function enqueueMoveCleanupJob(
   imageId: string,
   objects: readonly CapturedMoveCleanupObject[],
   reason: string,
+  options: Readonly<{
+    client?: PoolClient;
+    guardToken?: string;
+  }> = {}
+) {
+  await enqueueMoveCleanupJobs([{
+    imageId,
+    objects,
+    reason,
+    guardToken: options.guardToken
+  }], options.client);
+}
+
+type MoveCleanupJobInput = Readonly<{
+  imageId: string;
+  objects: readonly CapturedMoveCleanupObject[];
+  reason: string;
+  guardToken?: string;
+}>;
+
+async function enqueueMoveCleanupJobs(
+  jobs: readonly MoveCleanupJobInput[],
   client?: PoolClient
 ) {
-  if (!objects.length) return;
-  const normalizedObjects = normalizedCleanupObjects(objects);
-  const payload: MoveCleanupJobPayload = {
-    objects: normalizedObjects,
-    reason,
-    retain_exhausted: true
-  };
-  await enqueueRerunnableJob(
-    "move.cleanup",
-    imageId,
-    payload,
-    cleanupIdempotencyKey(imageId, normalizedObjects),
-    client
-  );
+  const normalized = jobs.flatMap((job) => {
+    const objects = normalizedCleanupObjects(job.objects);
+    if (!objects.length) return [];
+    const payload: MoveCleanupJobPayload = {
+      objects,
+      reason: job.reason,
+      ...(job.guardToken ? { guard_token: job.guardToken } : {}),
+      retain_exhausted: true
+    };
+    return [{
+      type: "move.cleanup" as const,
+      targetId: job.imageId,
+      payload,
+      idempotencyKey: cleanupIdempotencyKey(
+        job.imageId,
+        objects,
+        job.guardToken
+      )
+    }];
+  });
+  await enqueueRerunnableJobs(normalized, client);
 }
 
 export type MoveCleanupJobCount = {
@@ -122,6 +153,9 @@ export async function countUnresolvedMoveCleanupJobs(storageSlug: string) {
 export type UnresolvedMoveCleanupReference = {
   backend: string;
   namespace_identity: string;
+  target_id: string;
+  reason: string;
+  guard_token: string;
 };
 
 /** Unresolved rows are deletion leases for the exact physical object. */
@@ -131,7 +165,10 @@ export async function listUnresolvedMoveCleanupReferences(
 ): Promise<UnresolvedMoveCleanupReference[]> {
   const rows = (await pool.query(
     `WITH unresolved AS (
-       SELECT CASE
+       SELECT target_id,
+              NULLIF(payload->>'reason', '') AS reason,
+              NULLIF(payload->>'guard_token', '') AS guard_token,
+              CASE
                 WHEN jsonb_typeof(payload->'objects')='array'
                   THEN payload->'objects'
                 ELSE '[]'::jsonb
@@ -140,14 +177,18 @@ export async function listUnresolvedMoveCleanupReferences(
         WHERE type='move.cleanup'
           AND status IN ('pending', 'running', 'failed')
      ), cleanup_references AS (
-        SELECT NULLIF(object->>'backend', '') AS backend,
+        SELECT unresolved.target_id,
+              unresolved.reason,
+              unresolved.guard_token,
+              NULLIF(object->>'backend', '') AS backend,
               object->>'prefix' AS prefix,
               object->>'key' AS key,
               NULLIF(object->>'namespace_identity', '') AS namespace_identity
          FROM unresolved
          CROSS JOIN LATERAL jsonb_array_elements(objects) AS object
      )
-      SELECT DISTINCT backend, namespace_identity
+      SELECT DISTINCT backend, namespace_identity, target_id, reason,
+                      guard_token
        FROM cleanup_references
       WHERE backend IS NOT NULL
         AND namespace_identity IS NOT NULL
@@ -157,7 +198,10 @@ export async function listUnresolvedMoveCleanupReferences(
   )).rows;
   return rows.map((row) => ({
     backend: String(row.backend),
-    namespace_identity: String(row.namespace_identity)
+    namespace_identity: String(row.namespace_identity),
+    target_id: String(row.target_id),
+    reason: String(row.reason ?? ""),
+    guard_token: String(row.guard_token ?? "")
   }));
 }
 

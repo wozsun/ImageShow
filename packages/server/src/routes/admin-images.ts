@@ -1,6 +1,7 @@
 import type { Hono } from "hono";
 import {
   adminApiBasePath,
+  adminImageListReadStartedAtHeader,
   adminPermissions,
   type ImagePurgeResponseDto,
   type ImageRestoreResponseDto,
@@ -53,6 +54,7 @@ export function registerAdminImageRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/overview`, async (c) => c.json(apiSuccess(await getOverviewStats())));
 
   app.get(`${adminApiBasePath}/images`, async (c) => {
+    c.header(adminImageListReadStartedAtHeader, String(Date.now()));
     const q = parse(adminImageListQuery, Object.fromEntries(new URL(c.req.url).searchParams));
     return privateCacheableApiSuccess(c, await listAdminImages(q));
   });

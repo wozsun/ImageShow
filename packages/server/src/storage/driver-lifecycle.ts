@@ -3,7 +3,9 @@ import type { StoragePrefix } from "./object-keys.ts";
 import type {
   CopyPrefix,
   OpenedRead,
+  StorageCopyOptions,
   StorageDriver,
+  StoragePruneOptions,
   StorageRequestOptions,
   StorageSelfTest
 } from "./driver.ts";
@@ -122,7 +124,7 @@ class ManagedStorageDriver implements StorageDriver {
     fromKey: string,
     toPrefix: CopyPrefix,
     toKey: string,
-    options?: StorageRequestOptions
+    options?: StorageCopyOptions
   ) {
     return this.usingReference(() => this.driver.copy(
       fromPrefix,
@@ -149,7 +151,7 @@ class ManagedStorageDriver implements StorageDriver {
     return this.usingReference(() => this.driver.selfTest(options));
   }
 
-  pruneEmptyDirs(options?: StorageRequestOptions) {
+  pruneEmptyDirs(options?: StoragePruneOptions) {
     return this.usingReference(() => this.driver.pruneEmptyDirs(options));
   }
 

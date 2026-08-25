@@ -23,6 +23,12 @@ export function apiSuccess(fields: Record<string, unknown> = {}) {
   return { ok: true as const, ...fields };
 }
 
+export function apiSuccessEtag<T extends Record<string, unknown>>(fields: T) {
+  return createContentRepresentation(
+    JSON.stringify(apiSuccess(fields))
+  ).etag;
+}
+
 export function cacheableApiSuccess<T extends Record<string, unknown>>(
   context: Context,
   fields: T,

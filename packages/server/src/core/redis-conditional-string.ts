@@ -60,7 +60,7 @@ export async function deleteRedisStringsIfEqual(
   client: RedisConditionalStringPipelineClient,
   snapshots: readonly RedisStringSnapshot[]
 ) {
-  if (!snapshots.length) return 0;
+  if (!snapshots.length) return [];
   const pipeline = client.pipeline();
   for (const snapshot of snapshots) {
     pipeline.call("DELEX", snapshot.key, "IFEQ", snapshot.value);
@@ -69,10 +69,7 @@ export async function deleteRedisStringsIfEqual(
   if (results.length !== snapshots.length) {
     throw new Error("Redis DELEX pipeline returned an invalid result count");
   }
-  return results.reduce(
-    (removed, [, reply]) => (
-      removed + Number(parseRedisDeleteIfEqualReply(reply))
-    ),
-    0
-  );
+  return results.flatMap(([, reply], index) => (
+    parseRedisDeleteIfEqualReply(reply) ? [snapshots[index]] : []
+  ));
 }

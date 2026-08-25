@@ -89,7 +89,7 @@ export function withStorageLocationReadLock<T>(work: StorageLockWork<T>): Promis
   );
 }
 
-export function withStorageLocationReadAndAdvisoryLock<T>(
+function withStorageLocationReadAndAdvisoryLock<T>(
   key: string,
   work: StorageLockWork<T>
 ): Promise<T> {

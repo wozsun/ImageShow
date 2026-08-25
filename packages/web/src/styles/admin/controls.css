@@ -10,6 +10,12 @@
   opacity: 1;
 }
 
+/* 保留 none 作为主题值；仅让未聚焦时显示的“未设置”呈现为框内提示色。 */
+:root[data-ui-context="admin"] .slug-combo-control.is-placeholder-value input:not(:focus),
+[data-admin-dialog] .slug-combo-control.is-placeholder-value input:not(:focus) {
+  color: var(--admin-color-control-placeholder);
+}
+
 :root[data-ui-context="admin"] :is(input, textarea, [contenteditable="true"]),
 [data-admin-dialog] :is(input, textarea, [contenteditable="true"]),
 .login form :is(input, textarea, [contenteditable="true"]) {

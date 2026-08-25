@@ -21,11 +21,13 @@ import type {
   PublicImageItemDto,
   RandomMethod,
   RuntimeConfigChangeSummaryDto,
-  StoredImportServerStatus,
+  RemoteImportItemInputDto,
+  ServerImportStatusDto,
   StorageBackendAdminDto,
   StorageBackendS3Dto,
   TagDto,
-  ThemeDto
+  ThemeDto,
+  UploadIntentItemInputDto
 } from "@imageshow/shared/browser";
 
 export type GalleryImageCard = GalleryImageCardDto;
@@ -62,10 +64,9 @@ export type RandomMode = "" | RandomMethod;
 export type ManifestImportSource = "jsonl" | "weibo";
 export type ImportCommonAttributeField = "device" | "brightness" | "theme" | "author" | "tags";
 export type ImportDetectedClassification = { device: Device; brightness: Brightness };
-export type CommitFailureCheckpoint = "ready" | "committing" | "unknown";
+type CommitFailureCheckpoint = "ready" | "committing" | "unknown";
 export type ImportCommitIntent = {
   attemptId: string;
-  createdAt: string;
   md5: string;
   metadata: ImageDraft;
 };
@@ -86,6 +87,7 @@ export type ImportJob = {
   originalHeight?: number;
   transferProgress?: number;
   duplicates: AdminImageListItem[];
+  duplicateCount?: number;
   duplicateDecision: "upload" | "undecided" | "confirmed";
   detectedClassification?: ImportDetectedClassification;
   classificationOverride?: Partial<Record<"device" | "brightness", boolean>>;
@@ -96,16 +98,35 @@ export type ImportJob = {
   url?: string;
   // 当前前端处理尝试，同时作为 create 请求幂等键；重试时会更新。
   attemptKey: string;
+  // 接管请求一旦开始便冻结；响应未知重放必须复用相同幂等键与完全相同的正文。
+  uploadIntentInput?: UploadIntentItemInputDto;
+  remoteAcceptInput?: RemoteImportItemInputDto;
   // 单次入队动作的前端身份；同批任务独立持有稳定状态订阅，绝不发送给服务端。
   subscriptionBatchKey: string;
-  // 已成功创建的 import_session id；事件回填、轮询和提交只使用真实会话 id。
+  // Redis canonical pair；状态读取、提交和取消始终同时携带两部分身份。
   sessionId?: string;
+  imageId?: string;
+  serverVersion?: number;
+  serverProgressSeq?: number;
+  serverSemanticRevision?: number;
+  // HTTP 接管响应与当前 SSE/snapshot 水位之间的独立围栏。未知水位的
+  // completed 重放保持 pending，直到一次新的权威快照接管该 pair。
+  serverHandoffPending?: boolean;
+  serverHandoffRevision?: number;
+  // 响应先于当前有界页时，仅在原占位所在页保留同一张卡；是否计入
+  // 客户端临时摘要由 Server 返回的 canonical 新建事实决定。
+  serverHandoffDisplayPage?: number;
+  serverHandoffProvisionalTotal?: boolean;
+  serverAcceptedOrder?: number;
+  serverAccepted?: boolean;
+  serverDraftPending?: boolean;
   imageTime?: string;
   batchTime?: string;
   manifestSource?: ManifestImportSource;
   manifestProvidedCommonFields?: ImportCommonAttributeField[];
   manifestLine?: number;
   manifestPosition?: number;
+  browserDisplayReleased?: boolean;
   originalSize?: number;
   finalSize?: number;
   quality?: number | null;
@@ -118,10 +139,11 @@ export type ImportJob = {
   resultError?: string;
   // 最近一次由当前 attempt/session 接受的服务端权威快照。可见详情由这些
   // 字段和客户端状态集中派生，不直接展示服务端正常阶段 message。
-  serverStatus?: StoredImportServerStatus;
+  serverStatus?: ServerImportStatusDto | "missing";
   serverPhase?: string;
   serverError?: string;
   serverProgress?: number;
   serverAttemptKey?: string;
   serverSessionId?: string;
+  serverImageId?: string;
 };

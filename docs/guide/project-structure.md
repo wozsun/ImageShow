@@ -154,29 +154,41 @@ Functions。检查页按键动态测量的低频 Lua 仍留在 `checks/`，不�
 
 `images/imports/` 内部继续保持单一编排入口，但按稳定职责分开：
 
-- `session.ts` 创建、预览和取消会话；`materialize.ts` 只把 upload/download 原始素材
-  原子发布到 `data/tmp`。
-- `status.ts` 负责进程内 phase、状态投影与 SSE；`status-subscription.ts` 只拥有幂等
-  尝试键到稍后创建会话的稳定订阅匹配。请求信号和响应流共用的幂等 cleanup 管理
-  listener、heartbeat、快照与写入失败；`lifecycle.ts` 负责租约、取消
-  标记、execution fence 和失败落库。取消标记绑定会话创建代际与发布所有者，并由
-  显式取消和 `cleanup-job.ts` 在执行者收口后通过 `DELEX ... IFEQ` 比较清除；
-  PostgreSQL 状态仍是唯一权威来源。
+- `session-service.ts` 负责批量 upload intent 与 remote accept；`raw-upload.ts` 把固定 raw
+  PUT 的 credential claim、流式写入和 canonical 转换收口为同一入口。
+- `session-repository.ts`、`session-scripts.ts` 与 codec / projection / transition 文件共同拥有
+  Redis canonical、owner queue、runnable、expires、计数和 revision 的原子领域契约；
+  `session-view.ts` 只负责 pair 状态与 preview 读取。
+- `import-worker.ts` 组合 download、prepare、commit 的独立有界 pool；`session-recovery.ts`
+  复用同一 repository 做启动、Redis 重连和 expiry 收敛，`irreversible-coordinator.ts` 只保存
+  当前进程的数据库事务边界；`execution-session.ts` 只负责同一 download / prepare token 下
+  heartbeat、progress、阶段发布与失败落盘的 version 接力和严格身份围栏。
+- `download-session.ts` 与 `raw-files.ts` 管理安全下载、attempt `.part` 和 raw generation；
+  `prepare-session.ts` 处理 Sharp 与 `_uploads` prepared generation；`commit-intent.ts` 冻结
+  异步意图，`commit-worker.ts` 持锁完成对象复制、PostgreSQL 事务和 completed 回执。
+- `cancel-session.ts` 统一取消与 resolving 收敛；生产 `cleanup-queue.ts` 只对可由年龄扫描重新
+  发现的 raw / staging 做有容量、有限重试的尽力清理，不承载正式对象所有权，也不是 Redis
+  或 PostgreSQL 队列的替代品。正式 media / thumbs 在复制前即由持久 `move.cleanup` guard 接管。
+- `storage-references.ts` 有界读取 Redis active canonical 的 raw / prepared / 正式候选引用；
+  `orphan-retention.ts` 集中固定年龄边界，`orphan-cleanup.ts` 与
+  `orphan-cleanup-worker.ts` 负责 60 秒保守周期、完整存储列表、namespace 复核和停机排空。
 
-事件流和批量状态回读均使用固定管理 POST 路径，至多 100 个尝试键或会话 ID 只进入严格
-JSON 正文。它们是只读协议：仍执行管理员会话、同源、CSRF、正文上限和 no-store 边界，但
-不进入管理写操作审计，也不在 URL、代理请求行或访问日志中展开 UUID 集合。
-
-Web 的 `import-status-subscription.ts` 只维护按入队批次有界的前端订阅世代；
-`import-status-transport.ts` 负责固定 POST 事件流、SSE 分帧和批量轮询降级；
-`useImportStatusEvents.ts` 只协调 React 生命周期中的连接复用与释放。这些模块由上传能力静态
-同行，不形成额外动态入口或资源请求。
-- `prepare.ts` 只编排会话认领、恢复和清理，图片处理与 prepared 结果由
-  `prepare-artifacts.ts` 完成。
-- `duplicate-confirmation.ts` 统一拥有 prepare 重复快照、提交决策绑定和最终 MD5 内容锁键；
-  `commit.ts` 只编排这些锁、权威重读、对象落位与补偿。数据库事务、提交后缓存同步和候选
-  对象所有权分别位于 `commit-persistence.ts`、`commit-sync.ts`、
-  `commit-candidates.ts`。
+- Server 的 `queue-events.ts`、`queue-snapshot.ts` 与 `action-scope.ts` 共同负责 owner + queue
+  单 SSE、稳定分页、当前进程动作作用域和最近一个动作批次的有界响应重放；`queue-action.ts`
+  编排有界全队列动作，
+  `queue-action-protocol.ts` 校验 watermark / continuation，`queue-action-handlers.ts` 执行逐项
+  动作，`session-update.ts` 负责尚未冻结 commit 的 active canonical 草稿 CAS，以及 ready
+  canonical 的重复决定 CAS。
+  Web 的 `useUploadQueueOwner` / `useImportQueueOwner` 分别组合浏览器来源与 Redis canonical，
+  并各自持有重复确认与单卡提交的 single-flight controller；
+  `useServerImportQueue.ts` 只拥有当前显示队列的连接生命周期，
+  `server-import-queue-state.ts` 负责 revision / version / progress 单调合并，
+  `useStoredImportDraftSync.ts` 按硬上限批量排空草稿写入并在 version 冲突时有界回读，
+  `useImportAuthorityHandoffs.ts` 持有独立于当前页 DTO 和连接代际的 HTTP 接管围栏，
+  `useImportQueue.ts` 是 PostgreSQL 水合 completed pair 的唯一图片查询失效 owner，并在
+  snapshot、SSE、提交 / 取消响应、旁路 status、全队列动作与重连代际之间按 pair 去重，
+  `import-cancel.ts` 统一执行有界 status / cancel 批次。
+  旧固定 2 秒 pair 轮询模块已经删除，只有响应未知的已知 pair 才使用一次有界 status 查询。
 - `weibo.ts` 只编排批次和 JSONL 清单，链接/时间/响应提取、受限上游协议、未知响应值
   归一化及公开类型分别位于 `weibo-parser.ts`、`weibo-client.ts`、
   `weibo-values.ts`、`weibo-types.ts`。

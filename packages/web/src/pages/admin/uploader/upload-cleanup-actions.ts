@@ -1,7 +1,3 @@
-import type { ImportJob } from "../../../lib/types.js";
-import { importJobNeedsDuplicateConfirmation } from "./duplicate-match.js";
-import { isUncommittedImportJob } from "./import-queue-state.js";
-
 export type UploadCleanupActionId =
   | "duplicates"
   | "uncommitted"
@@ -25,25 +21,17 @@ export type UploadCleanupAction = {
 type UploadCleanupActionDefinition = {
   id: UploadCleanupActionId;
   label: string;
-  matches: (job: ImportJob) => boolean;
-  availableWhileBusy?: boolean;
   confirmation?: UploadCleanupConfirmation;
 };
-
-export function isCompletedImportJob(job: ImportJob) {
-  return job.status === "done";
-}
 
 const uploadCleanupActionDefinitions: UploadCleanupActionDefinition[] = [
   {
     id: "duplicates",
-    label: "清空重复待确认",
-    matches: importJobNeedsDuplicateConfirmation
+    label: "清空重复待确认"
   },
   {
     id: "uncommitted",
     label: "清空未提交",
-    matches: isUncommittedImportJob,
     confirmation: {
       title: "清空未提交任务",
       description: (count) => (
@@ -54,30 +42,28 @@ const uploadCleanupActionDefinitions: UploadCleanupActionDefinition[] = [
   },
   {
     id: "completed",
-    label: "清空已完成",
-    matches: isCompletedImportJob,
-    availableWhileBusy: true
+    label: "清空已完成"
   }
 ];
 
 export function createUploadCleanupActions({
-  jobs,
-  busy,
+  counts,
   onClear
 }: {
-  jobs: ImportJob[];
-  busy: boolean;
-  onClear: (predicate: (job: ImportJob) => boolean) => void;
+  counts: Readonly<Record<UploadCleanupActionId, number>>;
+  onClear: (action: UploadCleanupActionId) => void;
 }): UploadCleanupAction[] {
   return uploadCleanupActionDefinitions.map((definition) => {
-    const count = jobs.filter(definition.matches).length;
+    const count = counts[definition.id];
     return {
       id: definition.id,
       label: definition.label,
       count,
-      enabled: count > 0 && (!busy || definition.availableWhileBusy === true),
+      // 可见卡片归属是唯一的可用性来源。上传、草稿交接和其他队列动作
+      // 只影响执行顺序，不得让同一按钮在任务生命周期中反复闪成 disabled。
+      enabled: count > 0,
       confirmation: definition.confirmation,
-      run: () => onClear(definition.matches)
+      run: () => onClear(definition.id)
     };
   });
 }

@@ -164,7 +164,11 @@ export type AdminSiteSettings = Omit<
 
 export type AdminUploadSettings = Pick<
   UploadSettings,
-  "max_items" | "max_file_size_mb" | "list_page_size" | "concurrency"
+  | "max_items"
+  | "max_file_size_mb"
+  | "max_long_edge"
+  | "list_page_size"
+  | "concurrency"
 >;
 
 export type AdminLinkImageSettings = Pick<

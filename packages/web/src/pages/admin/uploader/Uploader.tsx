@@ -11,9 +11,8 @@ import type { ImportAttributeDefaults } from "../../../lib/upload/upload-utils.j
 import { importJobNeedsDuplicateConfirmation } from "./duplicate-match.js";
 import {
   importJobCanBeCancelled,
-  importJobCanLeaveQueue,
-  importJobCanStartCommit,
-  summarizeImportJobs
+  importJobCanBeRemovedLocally,
+  importJobCanStartCommit
 } from "./import-queue-state.js";
 import type {
   ImportSourceMode,
@@ -22,14 +21,11 @@ import type {
 import { jsonlImportJobs } from "./link-import/jsonl-jobs.js";
 import { weiboImportJobs } from "./link-import/weibo-jobs.js";
 import type { JsonlManifestParseError } from "./import-api.js";
-import { useImportQueue } from "./useImportQueue.js";
-import { useLocalUploadImport } from "./useLocalUploadImport.js";
-import { useLinkImport } from "./link-import/useLinkImport.js";
-import { useImportCommit } from "./useImportCommit.js";
-import { useImportStatusEvents } from "./useImportStatusEvents.js";
 import {
-  isCompletedImportJob
-} from "./upload-cleanup-actions.js";
+  useImportQueueOwner,
+  useUploadQueueOwner
+} from "./useImportQueueOwners.js";
+import { useImportQueueWorkflowActions } from "./useImportQueueWorkflowActions.js";
 import { AsyncIntentFence } from "../../../lib/async-intent-fence.js";
 import { UploadWorkflowWindow } from "./UploadWorkflowWindow.js";
 import {
@@ -94,16 +90,13 @@ export function Uploader({
   const pageSize = settingsData?.settings.upload.list_page_size ?? 20;
   const uploadMaxItems = settingsData?.settings.upload.max_items ?? 200;
   const maxBytes = (settingsData?.settings.upload.max_file_size_mb ?? 100) * 1024 * 1024;
+  const maxLongEdge = settingsData?.settings.upload.max_long_edge ?? 32000;
   const uploadConcurrency = settingsData?.settings.upload.concurrency ?? 2;
-  const downloadConcurrency = settingsData?.settings.link_image.concurrency ?? 2;
-  const commitConcurrency = settingsData?.settings.import.commit_concurrency ?? 5;
   const fillOriginalUrl = settingsData?.settings.link_image.fill_original_url ?? false;
   const autoImportAfterParse =
     settingsData?.settings.link_image.auto_import === true;
   const linkMaxItems = settingsData?.settings.link_image.max_items ?? 200;
   const weiboMaxItems = settingsData?.settings.weibo.max_items ?? 20;
-  const queue = useImportQueue(pageSize);
-
   const { data: storageData } = useStorageOptions();
   const storageBackends = useMemo(() => storageData?.backends ?? [], [storageData?.backends]);
   const defaultBackend = storageBackends.find((backend) => backend.is_default)?.slug ?? "local";
@@ -129,62 +122,119 @@ export function Uploader({
     [resolveStorageName]
   );
 
-  const {
-    addFiles,
-    cancel: cancelLocalImport,
-    retry: retryLocalImport
-  } = useLocalUploadImport({
-    queue: queue.workerApi,
+  const uploadOwner = useUploadQueueOwner({
+    pageSize,
+    displayed: open && mode === "file",
     defaults,
     storageSlug: activeBackend,
     maxItems: uploadMaxItems,
     maxBytes,
-    concurrency: uploadConcurrency
+    maxLongEdge,
+    concurrency: uploadConcurrency,
+    onDone
   });
+  const importOwner = useImportQueueOwner({
+    pageSize,
+    displayed: open && mode === "link",
+    defaults,
+    fillOriginalUrl,
+    storageSlug: activeBackend,
+    onDone
+  });
+  const uploadQueue = uploadOwner.queue;
+  const importQueue = importOwner.queue;
+  const queue = mode === "file" ? uploadQueue : importQueue;
+  const {
+    addFiles,
+    cancel: cancelLocalImport,
+    cancelMany: cancelManyLocalImports,
+    retry: retryLocalImport
+  } = uploadOwner;
   const {
     addUrls,
     addJobs,
     addWeiboJobs,
     cancel: cancelLinkImport,
+    cancelMany: cancelManyLinkImports,
     retry: retryLinkImport
-  } = useLinkImport({
-    queue: queue.workerApi,
+  } = importOwner;
+  const uploadCommit = uploadOwner.commit;
+  const importCommit = importOwner.commit;
+  const commitImports = mode === "file"
+    ? uploadCommit.commit
+    : importCommit.commit;
+  const confirmImportDuplicate = mode === "file"
+    ? uploadCommit.confirmDuplicate
+    : importCommit.confirmDuplicate;
+  const commitBusy = mode === "file"
+    ? uploadCommit.busy
+    : importCommit.busy;
+  const cancelJob = useCallback(async (job: ImportJob) => {
+    const outcome = job.kind === "local"
+      ? await cancelLocalImport(job)
+      : await cancelLinkImport(job);
+    if (!outcome.succeeded) return false;
+    if (outcome.pair) {
+      const released = queue.releaseResolvedServerJobs([{
+        id: job.id,
+        attemptKey: job.attemptKey,
+        pair: outcome.pair
+      }]);
+      if (!released.has(job.id)) queue.server.refresh();
+      return released.has(job.id);
+    }
+    return queue.removeJob(job.id);
+  }, [
+    cancelLinkImport,
+    cancelLocalImport,
+    queue.releaseResolvedServerJobs,
+    queue.removeJob,
+    queue.server
+  ]);
+  const commitUploadQueueJobs = useCallback(
+    (jobs: ImportJob[]) => uploadCommit.commit(jobs, { notifyDone: false }),
+    [uploadCommit.commit]
+  );
+  const commitImportQueueJobs = useCallback(
+    (jobs: ImportJob[]) => importCommit.commit(jobs, { notifyDone: false }),
+    [importCommit.commit]
+  );
+  const uploadQueueWorkflow = useImportQueueWorkflowActions({
+    queue: uploadQueue,
     defaults,
-    fillOriginalUrl,
-    storageSlug: activeBackend,
-    concurrency: downloadConcurrency
-  });
-  const {
-    commit: commitImports,
-    confirmDuplicate: confirmImportDuplicate,
-    busy
-  } = useImportCommit({
-    jobsRef: queue.jobsRef,
-    updateJob: queue.updateJob,
-    updateJobs: queue.updateJobs,
-    completeJob: queue.completeJob,
-    concurrency: commitConcurrency,
+    cancelJobs: cancelManyLocalImports,
+    commitJobs: commitUploadQueueJobs,
     onDone
   });
-  useImportStatusEvents(open, queue.jobs, queue.jobsRef, queue.updateJob);
-
-  const closeWorkflow = () => {
+  const importQueueWorkflow = useImportQueueWorkflowActions({
+    queue: importQueue,
+    defaults,
+    cancelJobs: cancelManyLinkImports,
+    commitJobs: commitImportQueueJobs,
+    onDone
+  });
+  const queueWorkflow = mode === "file"
+    ? uploadQueueWorkflow
+    : importQueueWorkflow;
+  const closeWorkflow = useCallback((options: Readonly<{
+    skipCompletedCleanup?: boolean;
+  }> = {}) => {
     intentFenceRef.current.invalidate();
+    void queue.flushCompletedImportInvalidations().catch(() => undefined);
+    if (!options.skipCompletedCleanup && queue.summary.doneJobs > 0) {
+      queueWorkflow.runCleanupAction("completed");
+    }
     if (activation) onActivationSettled(activation.sequence);
     setOpen(false);
     setSourceDialogOpen(false);
     setSourceDialogPending(false);
-    queue.clearJobs(isCompletedImportJob);
-    setJsonlErrors([]);
-  };
-
-  const cancelJob = useCallback(async (job: ImportJob) => {
-    const cancellationSucceeded = job.kind === "local"
-      ? await cancelLocalImport(job)
-      : await cancelLinkImport(job);
-    if (cancellationSucceeded) queue.removeJob(job.id);
-    return cancellationSucceeded;
-  }, [cancelLinkImport, cancelLocalImport, queue.removeJob]);
+  }, [
+    activation,
+    onActivationSettled,
+    queue.flushCompletedImportInvalidations,
+    queue.summary.doneJobs,
+    queueWorkflow.runCleanupAction
+  ]);
 
   const openInMode = async (
     next: "file" | "link",
@@ -193,10 +243,6 @@ export function Uploader({
   ) => {
     if (!intentFenceRef.current.isCurrent(intent)) return false;
     if (opener) workflowReturnFocusRef.current = opener;
-    const discarded = queue.jobsRef.current.filter((job) => next === "file" ? job.kind !== "local" : job.kind === "local");
-    await Promise.all(discarded.filter(importJobCanBeCancelled).map(cancelJob));
-    if (!intentFenceRef.current.isCurrent(intent)) return false;
-    queue.retainMode(next);
     setMode(next);
     setOpen(true);
     return true;
@@ -233,29 +279,13 @@ export function Uploader({
   ]);
 
   const removeJob = useCallback(async (job: ImportJob) => {
-    if (!importJobCanLeaveQueue(job)) return;
+    if (!importJobCanBeRemovedLocally(job)) return;
     if (["done", "cancelled"].includes(job.status)) {
       queue.removeJob(job.id);
       return;
     }
     if (importJobCanBeCancelled(job)) await cancelJob(job);
   }, [cancelJob, queue.removeJob]);
-
-  const clearJobs = async (predicate: (job: ImportJob) => boolean) => {
-    const targets = queue.jobsRef.current
-      .filter(predicate)
-      .filter(importJobCanLeaveQueue);
-    // cancelJob 会先把任务改成 cancelling。固定本次 ID，避免取消完成后再次按旧状态条件
-    // 筛选，导致“重复待确认”任务找不到而仍留在总数中；期间新产生的重复项也不会误删。
-    const targetIds = new Set(targets.map((job) => job.id));
-    const cancellationRequests = targets
-      .filter(importJobCanBeCancelled)
-      .map(cancelJob);
-    // 取消函数在首个 await 前已经中止活动请求并标记任务；服务端暂存对象清理可能较慢，
-    // 不应阻塞用户明确要求的本地队列清理和总数更新。
-    queue.clearJobIds(targetIds);
-    await Promise.allSettled(cancellationRequests);
-  };
 
   const openImportSource = async (
     sourceMode: ImportSourceMode,
@@ -380,13 +410,7 @@ export function Uploader({
     void confirmImportDuplicate(current.id);
   }, [confirmImportDuplicate, queue.jobsRef]);
 
-  const commitReadyJobs = () => {
-    const currentReadyJobs = summarizeImportJobs(
-      queue.jobsRef.current
-    ).readyJobs;
-    if (!currentReadyJobs.length) return;
-    void commitImports(currentReadyJobs);
-  };
+  const busy = commitBusy || queue.actions.busy;
 
   return (
     <>
@@ -402,7 +426,7 @@ export function Uploader({
           themes={themes}
           tags={tags}
           authors={authors}
-          jsonlErrors={jsonlErrors}
+          jsonlErrors={mode === "link" ? jsonlErrors : []}
           onClearJsonlErrors={() => setJsonlErrors([])}
           storageName={storageName}
           onAddFiles={(files) => void addFiles(files)}
@@ -411,11 +435,18 @@ export function Uploader({
           onRetryJob={requestRetryJob}
           onRemoveJob={requestRemoveJob}
           onConfirmDuplicateJob={confirmDuplicateJob}
-          onClearJobs={clearJobs}
+          onApplyDefaults={queueWorkflow.applyDefaultsToQueue}
+          onCleanupAction={queueWorkflow.runCleanupAction}
+          onArmCleanupAction={queueWorkflow.armCleanupAction}
+          onConfirmCleanupAction={queueWorkflow.confirmCleanupAction}
+          onDiscardUnconfirmedIntents={queueWorkflow.discardUnconfirmedIntents}
+          confirmationScope={queueWorkflow.confirmationScope}
+          onArmClearQueue={queueWorkflow.armClearQueue}
+          onConfirmClearQueue={queueWorkflow.confirmClearQueue}
           activeBackend={activeBackend}
           backendOptions={backendOptions}
           onBackendChange={setBackendChoice}
-          onCommitReady={commitReadyJobs}
+          onCommitReady={queueWorkflow.commitReadyJobs}
           sourceDialogPending={sourceDialogPending}
           sourceDialogOpen={sourceDialogOpen}
           sourceDialogComponent={ImportSourceDialogComponent}

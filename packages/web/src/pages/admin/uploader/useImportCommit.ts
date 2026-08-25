@@ -1,202 +1,138 @@
 import { useCallback, useRef, useState } from "react";
 import type { RefObject } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import type { AdminImageListItem, ImportJob } from "../../../lib/types.js";
-import { runWithConcurrency } from "../../../lib/upload/upload-utils.js";
-import {
-  getStoredImportStatus,
-  type StoredImportStatus
-} from "./import-api.js";
-import {
-  invalidateImageDataAfterImport
-} from "../../../lib/api/query-invalidation.js";
-import {
-  importStatusEventPatch,
-  resolveCommitRetry
-} from "./import-status-state.js";
+import type { ImportJob } from "../../../lib/types.js";
 import {
   createImportCommitIntent,
   importJobCanStartCommit,
-  importJobIsRecoveringCommitResult,
   type ImportCommitRequest
 } from "./import-queue-state.js";
 import { commitSelectedImports } from "./import-commit-batch.js";
-import {
-  importJobNeedsDuplicateConfirmation
-} from "./duplicate-match.js";
+import { importJobNeedsDuplicateConfirmation } from "./duplicate-match.js";
+import type {
+  CompletedImportObservation
+} from "./import-queue-api.js";
+import { serverImportJobPairKey } from "./server-import-job.js";
 
 export function useImportCommit(options: {
   jobsRef: RefObject<ImportJob[]>;
   updateJob: (id: string, patch: Partial<ImportJob>) => void;
   updateJobs: (patches: ReadonlyMap<string, Partial<ImportJob>>) => void;
-  completeJob: (
+  updateDuplicateDecision: (
     id: string,
-    commitAttemptId: string,
-    patch: Partial<ImportJob>,
-    item: AdminImageListItem
-  ) => boolean;
-  concurrency: number;
+    decision: "upload" | "confirmed"
+  ) => Promise<boolean>;
+  flushPendingUpdates: () => Promise<void>;
+  observeCompletedImports: (
+    entries: readonly CompletedImportObservation[]
+  ) => void;
   onDone: () => void;
 }) {
   const {
     jobsRef,
     updateJob,
     updateJobs,
-    completeJob,
-    concurrency,
+    updateDuplicateDecision,
+    flushPendingUpdates,
+    observeCompletedImports,
     onDone
   } = options;
-  const client = useQueryClient();
   const runnerActiveRef = useRef(false);
+  const duplicateActiveRef = useRef(false);
   const [busy, setBusy] = useState(false);
 
-  const commit = useCallback(async (jobs: ImportJob[]) => {
-    // This ref is acquired synchronously, before the first await or reducer
-    // write, so a double click/React re-entry cannot create a second intent.
+  const commit = useCallback(async (
+    jobs: ImportJob[],
+    settings: Readonly<{ notifyDone?: boolean }> = {}
+  ) => {
     if (runnerActiveRef.current) return false;
     runnerActiveRef.current = true;
     setBusy(true);
     try {
-      const candidates = new Map<string, ImportCommitRequest>();
-      await runWithConcurrency(jobs, concurrency, async (requestedJob) => {
-        let job = jobsRef.current.find((item) => item.id === requestedJob.id);
-        const request: ImportCommitRequest = job?.commitIntent
+      try {
+        await flushPendingUpdates();
+      } catch {
+        return false;
+      }
+      const selected: ImportJob[] = [];
+      const selectedPairs = new Set<string>();
+      const patches = new Map<string, Partial<ImportJob>>();
+      for (const requested of jobs) {
+        const current = jobsRef.current.find((job) => (
+          job.id === requested.id && job.attemptKey === requested.attemptKey
+        ));
+        const request: ImportCommitRequest = current?.commitIntent
           ? "resume"
           : "new";
-        if (!job || !importJobCanStartCommit(job, request)) return;
-
-        if (
-          request === "resume"
-          && job.status === "failed"
-          && job.commitFailureCheckpoint === "unknown"
-        ) {
-          let status: StoredImportStatus | undefined;
-          let statusError: unknown;
-          try {
-            if (!job.sessionId) throw new Error("提交会话不存在");
-            status = await getStoredImportStatus(job.sessionId);
-          } catch (error) {
-            statusError = error;
-          }
-          if (status) {
-            const authorityPatch = importStatusEventPatch(job, status);
-            if (authorityPatch) updateJob(job.id, authorityPatch);
-            job = jobsRef.current.find((item) => item.id === requestedJob.id);
-            if (!job) return;
-          }
-          const resolution = resolveCommitRetry(
-            status,
-            statusError ?? new Error("重试前状态校验未通过")
-          );
-          if (resolution.patch) updateJob(job.id, resolution.patch);
-          if (resolution.action === "stop") return;
-        }
-        candidates.set(requestedJob.id, request);
-      });
-
-      // Re-read every candidate without yielding, validate it again, then
-      // publish all immutable intents and commit-queued states atomically.
-      const selected: ImportJob[] = [];
-      const selectedSessionIds = new Set<string>();
-      const patches = new Map<string, Partial<ImportJob>>();
-      for (const requestedJob of jobs) {
-        const request = candidates.get(requestedJob.id);
-        if (!request) continue;
-        const current = jobsRef.current.find(
-          (item) => item.id === requestedJob.id
-        );
         if (!current || !importJobCanStartCommit(current, request)) continue;
-        if (!current.sessionId) {
-          updateJob(current.id, current.commitIntent ? {
+        if (!current.sessionId || !current.imageId || !current.serverVersion) {
+          updateJob(current.id, {
             status: "failed",
-            failureStage: "commit",
-            commitFailureCheckpoint: "unknown",
-            message: "提交会话不存在，无法继续提交"
-          } : {
-            status: "failed",
-            failureStage: "prepare",
-            commitFailureCheckpoint: undefined,
-            message: "提交会话不存在，需要重新处理"
+            failureStage: current.commitIntent ? "commit" : "prepare",
+            commitFailureCheckpoint: current.commitIntent ? "unknown" : undefined,
+            message: "导入任务缺少服务端 pair 或版本，需要重新同步"
           });
           continue;
         }
-        const sessionKey = current.sessionId.toLowerCase();
-        if (selectedSessionIds.has(sessionKey)) continue;
-        selectedSessionIds.add(sessionKey);
-
+        const pair = serverImportJobPairKey(current);
+        if (selectedPairs.has(pair)) continue;
+        selectedPairs.add(pair);
         const commitIntent = current.commitIntent
           ?? createImportCommitIntent(current);
-        const recoveringResult = importJobIsRecoveringCommitResult(current);
-        const status: ImportJob["status"] =
-          current.status === "finalized" || current.serverStatus === "finalized"
-            ? "finalized"
-            : current.status === "committing"
-                || current.serverStatus === "committing"
-              ? "committing"
-              : "commit-queued";
         const patch: Partial<ImportJob> = {
-          status,
+          status: "commit-queued",
           commitIntent,
           failureStage: undefined,
           commitFailureCheckpoint: undefined,
-          resultState: recoveringResult ? "recovering" : "pending",
+          resultState: "pending",
           resultError: undefined,
-          message: status === "finalized"
-            ? recoveringResult
-              ? "正在确认提交结果"
-              : "已写入图库，等待结果"
-            : status === "committing"
-              ? recoveringResult
-                ? "正在确认提交结果"
-                : "写入图库中"
-              : "等待提交"
+          message: "正在受理提交意图"
         };
         patches.set(current.id, patch);
         selected.push({ ...current, ...patch, commitIntent });
       }
-
       updateJobs(patches);
       if (!selected.length) return false;
-      const importedItems = await commitSelectedImports({
+      const accepted = await commitSelectedImports({
         selected,
-        concurrency,
         getJob: (id) => jobsRef.current.find((job) => job.id === id),
-        updateJob,
-        completeJob
+        observeCompletedImports,
+        updateJob
       });
-      if (importedItems.length) {
-        await invalidateImageDataAfterImport(client, importedItems);
-      }
-      onDone();
-      return importedItems.length > 0;
+      if (accepted && settings.notifyDone !== false) onDone();
+      return accepted > 0;
     } finally {
       runnerActiveRef.current = false;
       setBusy(false);
     }
   }, [
-    client,
-    completeJob,
-    concurrency,
+    flushPendingUpdates,
     jobsRef,
+    observeCompletedImports,
     onDone,
     updateJob,
     updateJobs
   ]);
 
   const confirmDuplicate = useCallback(async (jobId: string) => {
-    // The same synchronous fence protects the confirmation patch and the
-    // immediate resubmission, including double-clicks before React rerenders.
-    if (runnerActiveRef.current) return false;
-    let job = jobsRef.current.find((item) => item.id === jobId);
-    if (!job || !importJobNeedsDuplicateConfirmation(job)) return false;
-
-    updateJob(job.id, { duplicateDecision: "confirmed" });
-    job = jobsRef.current.find((item) => item.id === jobId);
-    if (!job) return false;
-    if (!job.commitIntent) return true;
-    if (!importJobCanStartCommit(job, "resume")) return false;
-    return commit([job]);
-  }, [commit, jobsRef, updateJob]);
+    if (runnerActiveRef.current || duplicateActiveRef.current) return false;
+    duplicateActiveRef.current = true;
+    setBusy(true);
+    let resumeJob: ImportJob | null = null;
+    try {
+      let job = jobsRef.current.find((item) => item.id === jobId);
+      if (!job || !importJobNeedsDuplicateConfirmation(job)) return false;
+      if (!await updateDuplicateDecision(job.id, "confirmed")) return false;
+      job = jobsRef.current.find((item) => item.id === jobId);
+      if (!job) return false;
+      if (!job.commitIntent) return true;
+      if (!importJobCanStartCommit(job, "resume")) return false;
+      resumeJob = job;
+    } finally {
+      duplicateActiveRef.current = false;
+      setBusy(false);
+    }
+    return resumeJob ? commit([resumeJob]) : false;
+  }, [commit, jobsRef, updateDuplicateDecision]);
 
   return { commit, confirmDuplicate, busy };
 }

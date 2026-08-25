@@ -3,7 +3,10 @@ import {
   adminApiBasePath,
   type AdminUsersResponseDto
 } from "@imageshow/shared/browser";
-import { apiSuccess } from "../core/http/responses.ts";
+import {
+  apiSuccess,
+  privateCacheableApiSuccess
+} from "../core/http/responses.ts";
 import { readJsonBody } from "../core/http/json-body.ts";
 import { requireSuperAdmin } from "../users/admin-authorization.ts";
 import { redis } from "../core/redis-client.ts";
@@ -30,7 +33,7 @@ export function registerAdminUserRoutes(app: Hono) {
     const response = {
       items: await listAdminAccounts()
     } satisfies AdminUsersResponseDto;
-    return c.json(apiSuccess(response));
+    return privateCacheableApiSuccess(c, response);
   });
 
   app.post(`${adminApiBasePath}/users`, async (c) => {

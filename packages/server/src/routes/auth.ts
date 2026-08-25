@@ -2,7 +2,10 @@ import type { Context, Hono } from "hono";
 import { z } from "zod";
 import { adminApiBasePath, type AuthStateDto } from "@imageshow/shared/browser";
 import { ApiError } from "../core/api-error.ts";
-import { apiSuccess } from "../core/http/responses.ts";
+import {
+  apiSuccess,
+  apiSuccessEtag
+} from "../core/http/responses.ts";
 import { readJsonBody } from "../core/http/json-body.ts";
 import { limitAdminLoginBody } from "../core/http/request-body-limit.ts";
 import {
@@ -76,6 +79,7 @@ export function registerPublicAuthRoutes(app: Hono) {
       return c.json(apiSuccess(authState));
     }
 
+    const preferences = await readAdminPreferences(session.username);
     const authState = {
       authenticated: true,
       username: session.username,
@@ -83,7 +87,8 @@ export function registerPublicAuthRoutes(app: Hono) {
       permissions: adminPermissionsForRole(session.role),
       csrf_token: session.csrf,
       application_version: applicationVersion(),
-      preferences: await readAdminPreferences(session.username),
+      preferences,
+      preferences_etag: apiSuccessEtag({ preferences }),
       version_settings: runtime.site.version
     } satisfies AuthStateDto;
     return c.json(apiSuccess(authState));

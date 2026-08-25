@@ -1,50 +1,136 @@
+import {
+  importActionScopeHeader,
+  importActionPath,
+  importCancelPath,
+  importCommitPath,
+  importDuplicatesPath,
+  importSnapshotPath,
+  importStatusPath,
+  importUpdatePath,
+  remoteImportAcceptPath,
+  uploadCredentialHeader,
+  uploadIntentPath,
+  uploadRawPath,
+  type ImportCancelInputDto,
+  type ImportCancelResultDto,
+  type ImportCommitInputDto,
+  type ImportCommitResultDto,
+  type ImportDuplicateDetailsInputDto,
+  type ImportDuplicateDetailsResultDto,
+  type ImportQueueSnapshotInputDto,
+  type ImportQueueSnapshotDto,
+  type ImportQueueActionInputDto,
+  type ImportQueueActionResultDto,
+  type ImportSessionPairDto,
+  type ImportStatusResultDto,
+  type ImportSessionUpdateInputDto,
+  type ImportSessionUpdateResultDto,
+  type JsonlManifestItemDto,
+  type JsonlManifestParseErrorDto,
+  type JsonlManifestResultDto,
+  type RemoteImportAcceptInputDto,
+  type RemoteImportAcceptResultDto,
+  type UploadIntentInputDto,
+  type UploadIntentResultDto,
+  type UploadRawResultDto,
+  type WeiboImportParseErrorDto,
+  type WeiboImportResultDto
+} from "@imageshow/shared/browser";
 import { api, getCsrfToken } from "../../../lib/api/client.js";
 import { adminApiBasePath } from "../../../lib/constants.js";
 import { createIntegerProgressReporter } from "./upload-progress.js";
-import type {
-  ImportSessionCreateDto,
-  ImportStatusListInputDto,
-  ImportSessionHandleDto,
-  JsonlManifestItemDto,
-  JsonlManifestParseErrorDto,
-  JsonlManifestResultDto,
-  PreparedImportDto,
-  StoredImportCommitResultDto,
-  StoredImportBatchCommitItemInputDto,
-  StoredImportBatchCommitResultDto,
-  StoredImportStatusListDto,
-  StoredImportStatusDto,
-  WeiboImportParseErrorDto,
-  WeiboImportResultDto
-} from "@imageshow/shared/browser";
 
-export type PreparedImport = PreparedImportDto;
-export type ImportSessionHandle = ImportSessionHandleDto;
-export type ImportSessionCreateInput = ImportSessionCreateDto;
 export type JsonlManifestItem = JsonlManifestItemDto;
 export type JsonlManifestParseError = JsonlManifestParseErrorDto;
 export type JsonlManifestResult = JsonlManifestResultDto;
 export type WeiboImportParseError = WeiboImportParseErrorDto;
 export type WeiboImportResult = WeiboImportResultDto;
-export type StoredImportStatus = StoredImportStatusDto;
-export type StoredImportCommitResult = StoredImportCommitResultDto;
-export type StoredImportBatchCommitResult = StoredImportBatchCommitResultDto;
 
-export function getStoredImportStatuses(ids: string[], signal?: AbortSignal) {
-  const input: ImportStatusListInputDto = { ids };
-  return api<StoredImportStatusListDto>(
-    `${adminApiBasePath}/imports/status`,
-    { method: "POST", body: JSON.stringify(input), signal }
-  ).then((result) => result.items);
+export function createUploadIntents(
+  input: UploadIntentInputDto,
+  signal?: AbortSignal
+) {
+  return api<UploadIntentResultDto>(uploadIntentPath, {
+    method: "POST",
+    body: JSON.stringify(input),
+    signal
+  });
 }
 
-export async function getStoredImportStatus(id: string, signal?: AbortSignal) {
-  const states = await getStoredImportStatuses([id], signal);
-  return states[0];
+export function acceptRemoteImports(
+  input: RemoteImportAcceptInputDto,
+  signal?: AbortSignal
+) {
+  return api<RemoteImportAcceptResultDto>(remoteImportAcceptPath, {
+    method: "POST",
+    body: JSON.stringify(input),
+    signal
+  });
 }
 
-export function createImportSession(input: ImportSessionCreateInput, signal?: AbortSignal) {
-  return api<ImportSessionHandle>(`${adminApiBasePath}/imports/create`, { method: "POST", body: JSON.stringify(input), signal });
+export function getImportStatuses(
+  items: ImportSessionPairDto[],
+  signal?: AbortSignal
+) {
+  return api<ImportStatusResultDto>(importStatusPath, {
+    method: "POST",
+    body: JSON.stringify({ items }),
+    signal
+  }).then((result) => result.items);
+}
+
+export function updateStoredImports(
+  items: ImportSessionUpdateInputDto["items"]
+) {
+  return api<ImportSessionUpdateResultDto>(importUpdatePath, {
+    method: "POST",
+    body: JSON.stringify({ items } satisfies ImportSessionUpdateInputDto)
+  });
+}
+
+export function getImportDuplicateDetails(
+  md5s: ImportDuplicateDetailsInputDto["md5s"],
+  signal?: AbortSignal
+) {
+  return api<ImportDuplicateDetailsResultDto>(importDuplicatesPath, {
+    method: "POST",
+    body: JSON.stringify({ md5s } satisfies ImportDuplicateDetailsInputDto),
+    signal
+  });
+}
+
+export function executeImportQueueAction(
+  input: ImportQueueActionInputDto,
+  actionScope: string,
+  signal?: AbortSignal
+) {
+  return api<ImportQueueActionResultDto>(importActionPath, {
+    method: "POST",
+    headers: { [importActionScopeHeader]: actionScope },
+    body: JSON.stringify(input),
+    signal
+  });
+}
+
+export function getImportQueueSnapshot(
+  input: ImportQueueSnapshotInputDto,
+  actionScope: string,
+  signal?: AbortSignal
+) {
+  const query = new URLSearchParams({
+    queue: input.queue,
+    offset: String(input.offset),
+    limit: String(input.limit)
+  });
+  return api<ImportQueueSnapshotDto>(`${importSnapshotPath}?${query}`, {
+    method: "POST",
+    headers: { [importActionScopeHeader]: actionScope },
+    body: JSON.stringify({
+      exclude_items: input.exclude_items,
+      include_items: input.include_items
+    }),
+    signal
+  });
 }
 
 export function parseImportJsonl(content: string, signal?: AbortSignal) {
@@ -63,75 +149,83 @@ export function parseWeiboImport(urls: string[], signal?: AbortSignal) {
   });
 }
 
-export function prepareImportSession(session: ImportSessionHandle, signal?: AbortSignal) {
-  return api<PreparedImport>(session.prepare_url, { method: "POST", signal });
-}
-
-export async function materializeImportSession(
-  session: ImportSessionHandle,
-  signal?: AbortSignal
-) {
-  if (!session.materialize_url) throw new Error("下载会话缺少 materialize URL");
-  await api(session.materialize_url, { method: "POST", signal });
-}
-
-export function storedImportStatusMessage(state: StoredImportStatus) {
-  return state.status === "failed"
-    ? state.error || state.message
-    : state.message;
-}
+type UploadResponse = UploadRawResultDto & { ok: true };
 
 export function uploadLocalRaw(
-  session: ImportSessionHandle,
+  credential: string,
   file: File,
   callbacks: { onProgress: (progress: number) => void }
 ) {
-  if (!session.upload_url) throw new Error("上传会话缺少 upload URL");
   const request = new XMLHttpRequest();
-  // 任务进入上传阶段时已经写入 0%，因此 XHR 只需报告之后真正变化的整数百分比。
   const reportProgress = createIntegerProgressReporter(callbacks.onProgress, 0);
-  const promise = new Promise<void>((resolve, reject) => {
-    request.open("PUT", session.upload_url!);
+  const promise = new Promise<UploadRawResultDto>((resolve, reject) => {
+    request.open("PUT", uploadRawPath);
     const csrf = getCsrfToken();
     if (csrf) request.setRequestHeader("x-csrf-token", csrf);
+    request.setRequestHeader(uploadCredentialHeader, credential);
+    request.setRequestHeader(
+      "content-type",
+      file.type || "application/octet-stream"
+    );
     request.upload.onprogress = (event) => {
-      if (event.lengthComputable && event.total > 0) reportProgress((event.loaded / event.total) * 100);
+      if (event.lengthComputable && event.total > 0) {
+        reportProgress((event.loaded / event.total) * 100);
+      }
     };
     request.onload = () => {
       const data = parseUploadResponse(request.responseText);
-      if (request.status >= 200 && request.status < 300 && data.ok !== false) {
-        resolve();
+      if (
+        request.status >= 200
+        && request.status < 300
+        && data.ok === true
+        && typeof data.session_id === "string"
+        && typeof data.image_id === "string"
+        && data.status === "accepted"
+        && Number.isSafeInteger(data.version)
+      ) {
+        resolve(data as UploadRawResultDto);
         return;
       }
-      reject(new Error(String(data.error || `上传失败（HTTP ${request.status}）`)));
+      const responseError = data.error;
+      const message = typeof responseError === "string"
+        ? responseError
+        : responseError
+          && typeof responseError === "object"
+          && "message" in responseError
+          && typeof responseError.message === "string"
+          ? responseError.message
+          : `上传失败（HTTP ${request.status}）`;
+      reject(new Error(message));
     };
     request.onerror = () => reject(new Error("上传网络请求失败"));
-    request.onabort = () => reject(new Error("上传已取消"));
+    request.onabort = () => reject(new DOMException("上传已取消", "AbortError"));
     request.send(file);
   });
   return { promise, abort: () => request.abort() };
 }
 
-function parseUploadResponse(text: string): Record<string, unknown> {
+function parseUploadResponse(text: string): Partial<UploadResponse> & {
+  error?: unknown;
+} {
   try {
-    return JSON.parse(text || "{}") as Record<string, unknown>;
+    return JSON.parse(text || "{}") as Partial<UploadResponse> & {
+      error?: unknown;
+    };
   } catch {
     return {};
   }
 }
 
-export function cancelStoredImport(sessionId: string) {
-  return api(`${adminApiBasePath}/imports/${sessionId}/cancel`, { method: "POST" });
+export function cancelStoredImports(items: ImportCancelInputDto["items"]) {
+  return api<ImportCancelResultDto>(importCancelPath, {
+    method: "POST",
+    body: JSON.stringify({ items } satisfies ImportCancelInputDto)
+  });
 }
 
-export function commitStoredImports(
-  items: StoredImportBatchCommitItemInputDto[]
-) {
-  return api<StoredImportBatchCommitResult>(
-    `${adminApiBasePath}/imports/commit-batch`,
-    {
-      method: "POST",
-      body: JSON.stringify({ items })
-    }
-  );
+export function commitStoredImports(items: ImportCommitInputDto["items"]) {
+  return api<ImportCommitResultDto>(importCommitPath, {
+    method: "POST",
+    body: JSON.stringify({ items } satisfies ImportCommitInputDto)
+  });
 }

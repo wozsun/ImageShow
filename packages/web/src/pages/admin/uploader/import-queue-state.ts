@@ -1,34 +1,36 @@
 import type {
   ImageDraft,
-  AdminImageListItem,
   ImportCommitIntent,
   ImportJob
 } from "../../../lib/types.js";
 import {
-  browserUuid,
+  webUuidV7,
   normalizeAuthor,
   normalizeTheme,
   type ImportAttributeDefaults
 } from "../../../lib/upload/upload-utils.js";
-import {
-  importJobNeedsDuplicateConfirmation,
-  importQueueDuplicateStateChanged,
-  isQueueDuplicateCandidate,
-  reconcileImportQueueDuplicates
-} from "./duplicate-match.js";
+import { importJobNeedsDuplicateConfirmation } from "./duplicate-match.js";
 import {
   classificationOverrideFor,
   imageDraftPatchChanges,
   importAttributeDefaultsPatch
 } from "./import-attribute-policy.js";
 import { importStatusPatchMovesForward } from "./import-status-state.js";
+import {
+  importJobHasServerAuthority,
+  serverImportJobPairKey
+} from "./server-import-job.js";
 
 const processingImportStatuses = new Set<ImportJob["status"]>([
   "uploading",
   "downloading",
-  "received",
   "processing",
   "cancelling"
+]);
+
+const waitingImportStatuses = new Set<ImportJob["status"]>([
+  "queued",
+  "received"
 ]);
 
 const commitOwnedStatuses = new Set<ImportJob["status"]>([
@@ -39,31 +41,153 @@ const commitOwnedStatuses = new Set<ImportJob["status"]>([
 
 export type ImportQueueState = { jobs: ImportJob[]; page: number };
 export type ImportCommitRequest = "new" | "resume";
+export type ImportServerBinding = {
+  sessionId: string;
+  imageId: string;
+} & Partial<Pick<
+  ImportJob,
+  | "imageTime"
+  | "serverVersion"
+  | "serverSemanticRevision"
+  | "serverHandoffPending"
+  | "serverHandoffRevision"
+  | "serverHandoffDisplayPage"
+  | "serverHandoffProvisionalTotal"
+  | "serverAcceptedOrder"
+  | "status"
+  | "message"
+  | "failureStage"
+  | "resultState"
+  | "serverAccepted"
+  | "transferProgress"
+>>;
 export type ImportQueueAction =
   | { type: "append"; jobs: ImportJob[] }
-  | { type: "retain-mode"; mode: "file" | "link" }
+  | {
+      type: "replace-server-page";
+      jobs: ImportJob[];
+      stalePairKeys?: ReadonlySet<string>;
+    }
   | { type: "patch"; id: string; patch: Partial<ImportJob> }
+  | { type: "bind-server"; id: string; binding: ImportServerBinding }
   | {
       type: "patch-many";
       patches: ReadonlyMap<string, Partial<ImportJob>>;
     }
-  | {
-      type: "complete";
-      id: string;
-      patch: Partial<ImportJob>;
-      item: AdminImageListItem;
-      commitAttemptId: string;
-      suppressDuplicateItem?: boolean;
-    }
   | { type: "patch-draft"; id: string; patch: Partial<ImageDraft> }
-  | { type: "remove"; ids: Set<string>; pageSize: number }
-  | { type: "remove-library-duplicate"; imageId: string }
-  | { type: "apply-defaults"; defaults: ImportAttributeDefaults }
-  | { type: "set-page"; page: number; pageSize: number };
+  | {
+      type: "remove";
+      ids: Set<string>;
+      pageSize: number;
+      totalItems?: number;
+    }
+  | {
+      type: "release-resolved";
+      targets: ReadonlyMap<string, Readonly<{
+        attemptKey: string;
+        pairKey: string;
+      }>>;
+      pageSize: number;
+      totalItems?: number;
+    }
+  | {
+      type: "apply-defaults";
+      defaults: ImportAttributeDefaults;
+      attempts: ReadonlyMap<string, string>;
+    }
+  | {
+      type: "set-page";
+      page: number;
+      pageSize: number;
+      totalItems?: number;
+    };
+
+export function importJobHasBrowserDisplayOrder(job: ImportJob) {
+  return job.browserDisplayReleased !== true
+    && Number.isInteger(job.manifestPosition)
+    && job.manifestPosition! >= 0
+    && job.manifestPosition! <= 0xfff;
+}
+
+export function browserDisplayPrefixJobs(jobs: readonly ImportJob[]) {
+  const prefix = jobs.map((job, index) => ({ job, index })).filter(({ job }) => (
+    !importJobHasServerAuthority(job) || importJobHasBrowserDisplayOrder(job)
+  ));
+  const ordered = prefix.filter(({ job }) => (
+    importJobHasBrowserDisplayOrder(job)
+  )).sort((left, right) => {
+    if (left.job.subscriptionBatchKey !== right.job.subscriptionBatchKey) {
+      return left.job.subscriptionBatchKey > right.job.subscriptionBatchKey
+        ? -1
+        : 1;
+    }
+    const position = left.job.manifestPosition! - right.job.manifestPosition!;
+    return position || left.index - right.index;
+  });
+  const fallback = prefix.filter(({ job }) => (
+    !importJobHasBrowserDisplayOrder(job)
+  ));
+  return [...ordered, ...fallback].map(({ job }) => job);
+}
+
+export function combinedImportQueuePagePlan(
+  jobs: readonly ImportJob[],
+  page: number,
+  pageSize: number,
+  snapshotMaxItems: number
+) {
+  const displayPrefixJobs = browserDisplayPrefixJobs(jobs);
+  const pageStart = (page - 1) * pageSize;
+  const visibleDisplayPrefixJobs = displayPrefixJobs.slice(
+    pageStart,
+    pageStart + pageSize
+  );
+  const serverPairFor = (job: ImportJob) => (
+    importJobHasServerAuthority(job) && job.sessionId && job.imageId
+      ? { session_id: job.sessionId, image_id: job.imageId }
+      : null
+  );
+  const excludedServerItems = displayPrefixJobs.flatMap((job) => {
+    const pair = serverPairFor(job);
+    return pair ? [pair] : [];
+  });
+  const visibleRetainedDisplayJobs = displayPrefixJobs.slice(
+    pageStart,
+    pageStart + pageSize
+  );
+  const includedServerItems = visibleRetainedDisplayJobs.flatMap((job) => {
+    const pair = serverPairFor(job);
+    return pair ? [pair] : [];
+  });
+  const acceptedDisplayPairs = new Set(displayPrefixJobs.flatMap((job) => {
+    const pair = serverPairFor(job);
+    return pair ? [`${pair.session_id}\0${pair.image_id.toLowerCase()}`] : [];
+  }));
+  const serverDisplayLimit = Math.max(
+    0,
+    pageSize - visibleDisplayPrefixJobs.length
+  );
+  const serverPageOffset = Math.max(0, pageStart - displayPrefixJobs.length);
+
+  return {
+    visibleDisplayPrefixJobs,
+    acceptedDisplayPairs,
+    excludedServerItems,
+    includedServerItems,
+    serverDisplayLimit,
+    serverOffset: serverPageOffset,
+    serverLimit: Math.min(
+      pageSize,
+      Math.max(0, snapshotMaxItems - includedServerItems.length)
+    )
+  };
+}
 
 type ImportJobSummary = {
-  readyJobs: ImportJob[];
+  readyCount: number;
+  unfinishedCount: number;
   duplicateJobs: number;
+  waitingJobs: number;
   runningJobs: number;
   commitQueuedJobs: number;
   committingJobs: number;
@@ -94,26 +218,13 @@ export function importJobCanStartCommit(
       );
 }
 
-export function importJobIsRecoveringCommitResult(
-  job: ImportJob
-) {
-  return job.status === "finalized"
-    || (
-      job.status === "failed"
-      && job.failureStage === "commit"
-      && job.commitFailureCheckpoint !== "ready"
-    );
-}
-
 export function createImportCommitIntent(
   job: ImportJob,
-  attemptId = browserUuid(),
-  createdAt = new Date().toISOString()
+  attemptId = webUuidV7()
 ): ImportCommitIntent {
   if (!job.md5) throw new Error("准备提交的图片缺少最终 MD5");
   return {
     attemptId,
-    createdAt,
     md5: job.md5,
     metadata: {
       ...job.draft,
@@ -134,6 +245,13 @@ function importJobHasConfirmedReadyCheckpoint(job: ImportJob) {
     && job.commitFailureCheckpoint === "ready";
 }
 
+function importJobHasAuthoritativeFailedCommit(job: ImportJob) {
+  return Boolean(job.commitIntent)
+    && job.status === "failed"
+    && job.failureStage === "commit"
+    && job.serverStatus === "failed";
+}
+
 function importJobHasReadyCommitIntent(job: ImportJob) {
   return Boolean(job.commitIntent) && job.status === "ready";
 }
@@ -143,6 +261,7 @@ export function importJobCanBeCancelled(job: ImportJob) {
   if (job.failureStage === "cancel") return true;
   if (importJobHasReadyCommitIntent(job)) return true;
   if (importJobHasConfirmedReadyCheckpoint(job)) return true;
+  if (importJobHasAuthoritativeFailedCommit(job)) return true;
   return !importJobHasCommitOwnership(job);
 }
 
@@ -151,7 +270,14 @@ export function importJobCanLeaveQueue(job: ImportJob) {
   if (job.failureStage === "cancel") return true;
   if (importJobHasReadyCommitIntent(job)) return true;
   if (importJobHasConfirmedReadyCheckpoint(job)) return true;
+  if (importJobHasAuthoritativeFailedCommit(job)) return true;
   return !importJobHasCommitOwnership(job);
+}
+
+export function importJobCanBeRemovedLocally(job: ImportJob) {
+  return importJobCanLeaveQueue(job) && !(
+    job.status === "done" && importJobHasServerAuthority(job)
+  );
 }
 
 export function isUncommittedImportJob(job: ImportJob) {
@@ -179,14 +305,16 @@ function patchJob(job: ImportJob, patch: Partial<ImportJob>) {
   const attemptChanged = has("attemptKey")
     && patch.attemptKey !== job.attemptKey;
   const sessionChanged = has("sessionId")
-    && patch.sessionId?.toLowerCase() !== job.sessionId?.toLowerCase();
+    && patch.sessionId !== job.sessionId;
+  const imageChanged = has("imageId")
+    && patch.imageId?.toLowerCase() !== job.imageId?.toLowerCase();
 
   // Retry helpers deliberately spread the complete previous task so callers
   // can publish one atomic replacement. Treat a binding change as the owner
   // transition first: any server snapshot carried by that spread belongs to
   // the previous attempt/session and must never participate in the monotonic
   // event guard or survive into the new owner.
-  if (attemptChanged || sessionChanged) {
+  if (attemptChanged || sessionChanged || imageChanged) {
     const nextPatch = {
       ...patch,
       serverStatus: undefined,
@@ -195,6 +323,16 @@ function patchJob(job: ImportJob, patch: Partial<ImportJob>) {
       serverProgress: undefined,
       serverAttemptKey: undefined,
       serverSessionId: undefined,
+      serverImageId: undefined,
+      serverVersion: undefined,
+      serverProgressSeq: undefined,
+      serverSemanticRevision: undefined,
+      serverHandoffPending: undefined,
+      serverHandoffRevision: undefined,
+      serverHandoffDisplayPage: undefined,
+      serverHandoffProvisionalTotal: undefined,
+      serverAcceptedOrder: undefined,
+      serverAccepted: undefined,
       commitIntent: undefined,
       resultState: undefined,
       resultError: undefined,
@@ -213,7 +351,10 @@ function patchJob(job: ImportJob, patch: Partial<ImportJob>) {
       patch.serverAttemptKey !== job.attemptKey
       || !job.sessionId
       || !patch.serverSessionId
-      || patch.serverSessionId.toLowerCase() !== job.sessionId.toLowerCase()
+      || patch.serverSessionId !== job.sessionId
+      || !job.imageId
+      || !patch.serverImageId
+      || patch.serverImageId.toLowerCase() !== job.imageId.toLowerCase()
       || !importStatusPatchMovesForward(job, patch)
     )
   ) {
@@ -265,90 +406,139 @@ function updateQueueJob(
   if (nextJob === currentJob) return state;
   const jobs = [...state.jobs];
   jobs[jobIndex] = nextJob;
-  return {
-    ...state,
-    jobs: importQueueDuplicateStateChanged(currentJob, nextJob)
-      ? reconcileImportQueueDuplicates(jobs)
-      : jobs
-  };
+  return { ...state, jobs };
 }
 
 function updateQueueJobs(
   state: ImportQueueState,
   patches: ReadonlyMap<string, Partial<ImportJob>>
 ): ImportQueueState {
-  let duplicateStateChanged = false;
   const jobs = mapJobsWithIdentity(state.jobs, (job) => {
     const patch = patches.get(job.id);
     if (!patch) return job;
-    const nextJob = patchJob(job, patch);
-    if (
-      nextJob !== job
-      && importQueueDuplicateStateChanged(job, nextJob)
-    ) {
-      duplicateStateChanged = true;
-    }
-    return nextJob;
+    return patchJob(job, patch);
   });
   if (jobs === state.jobs) return state;
+  return { ...state, jobs };
+}
+
+function mergeCanonicalHandoff(
+  canonical: ImportJob,
+  local: ImportJob
+): ImportJob {
+  const preserveLocalPreview = !canonical.md5 && !canonical.preview;
+  const cancelling = local.status === "cancelling";
+  const preserveLocalDraft = local.serverDraftPending === true;
   return {
-    ...state,
-    jobs: duplicateStateChanged
-      ? reconcileImportQueueDuplicates(jobs)
-      : jobs
+    ...canonical,
+    id: local.id,
+    attemptKey: local.attemptKey,
+    subscriptionBatchKey: local.subscriptionBatchKey,
+    file: local.file ?? canonical.file,
+    fileFingerprint: local.fileFingerprint ?? canonical.fileFingerprint,
+    objectUrl: preserveLocalPreview
+      ? local.objectUrl ?? canonical.objectUrl
+      : canonical.objectUrl,
+    draft: preserveLocalDraft ? local.draft : canonical.draft,
+    serverDraftPending: preserveLocalDraft
+      ? true
+      : canonical.serverDraftPending,
+    uploadIntentInput: local.uploadIntentInput ?? canonical.uploadIntentInput,
+    remoteAcceptInput: local.remoteAcceptInput ?? canonical.remoteAcceptInput,
+    batchTime: local.batchTime ?? canonical.batchTime,
+    manifestSource: local.manifestSource ?? canonical.manifestSource,
+    manifestProvidedCommonFields: local.manifestProvidedCommonFields
+      ?? canonical.manifestProvidedCommonFields,
+    manifestLine: local.manifestLine ?? canonical.manifestLine,
+    manifestPosition: local.manifestPosition ?? canonical.manifestPosition,
+    serverHandoffPending: local.serverHandoffPending
+      ?? canonical.serverHandoffPending,
+    serverHandoffRevision: local.serverHandoffPending !== undefined
+      ? local.serverHandoffRevision
+      : canonical.serverHandoffRevision,
+    serverHandoffDisplayPage: local.serverHandoffDisplayPage,
+    serverHandoffProvisionalTotal: local.serverHandoffProvisionalTotal,
+    serverVersion: (
+      local.serverHandoffPending !== undefined || preserveLocalDraft
+    )
+      && local.serverVersion !== undefined
+      ? Math.max(canonical.serverVersion ?? 0, local.serverVersion)
+      : canonical.serverVersion,
+    serverSemanticRevision: (
+      local.serverHandoffPending !== undefined || preserveLocalDraft
+    )
+      && local.serverSemanticRevision !== undefined
+      ? Math.max(
+          canonical.serverSemanticRevision ?? 0,
+          local.serverSemanticRevision
+        )
+      : canonical.serverSemanticRevision,
+    serverAttemptKey: local.attemptKey,
+    ...(cancelling ? {
+      status: local.status,
+      message: local.message
+    } : {})
   };
 }
 
-function completeQueueJob(
+function bindQueueJob(
   state: ImportQueueState,
   id: string,
-  patch: Partial<ImportJob>,
-  item: AdminImageListItem,
-  commitAttemptId: string,
-  suppressDuplicateItem = false
-) {
-  const jobIndex = state.jobs.findIndex((job) => job.id === id);
-  const current = jobIndex >= 0 ? state.jobs[jobIndex] : undefined;
-  if (
-    !current?.commitIntent
-    || current.commitIntent.attemptId !== commitAttemptId
-    || current.resultState === "hydrated"
-  ) {
-    return state;
+  binding: ImportServerBinding
+): ImportQueueState {
+  const localIndex = state.jobs.findIndex((job) => job.id === id);
+  if (localIndex < 0) return state;
+  const current = state.jobs[localIndex]!;
+  const patched = patchJob(current, {
+    ...binding,
+    serverAccepted: true
+  });
+  const bound = patched.serverAccepted === true
+    ? patched
+    : { ...patched, ...binding, serverAccepted: true };
+  const pair = serverImportJobPairKey(bound);
+  const canonicalIndex = pair
+    ? state.jobs.findIndex((job, index) => (
+        index !== localIndex
+        && job.serverAccepted === true
+        && serverImportJobPairKey(job) === pair
+      ))
+    : -1;
+  const staleIncarnationIndexes = new Set(state.jobs.flatMap((job, index) => (
+    index !== localIndex
+    && index !== canonicalIndex
+    && job.serverAccepted === true
+    && job.sessionId === bound.sessionId
+    ? [index]
+    : []
+  )));
+  if (canonicalIndex < 0) {
+    if (bound === current && !staleIncarnationIndexes.size) return state;
+    const jobs = state.jobs
+      .map((job, index) => index === localIndex ? bound : job)
+      .filter((_job, index) => !staleIncarnationIndexes.has(index));
+    return { ...state, jobs };
   }
-  const completed = patchJob(current, {
-    ...patch,
-    status: "done",
-    resultState: "hydrated",
-    resultError: undefined,
-    md5: item.md5
-  });
-  if (completed === current) return state;
-  const jobs = state.jobs.map((job, index) => {
-    if (index === jobIndex && completed) return completed;
-    if (
-      suppressDuplicateItem
-      || job.md5 !== item.md5
-      || (
-        !isQueueDuplicateCandidate(job)
-        && job.status !== "processing"
-      )
-      || job.duplicates.some((duplicate) => duplicate.id === item.id)
-    ) {
-      return job;
-    }
-    return { ...job, duplicates: [...job.duplicates, item] };
-  });
+
+  const canonical = state.jobs[canonicalIndex]!;
+  const handedOff = mergeCanonicalHandoff(canonical, bound);
+  const jobs = state.jobs
+    .map((job, index) => index === canonicalIndex ? handedOff : job)
+    .filter((_, index) => (
+      index !== localIndex && !staleIncarnationIndexes.has(index)
+    ));
   return {
     ...state,
-    jobs: reconcileImportQueueDuplicates(jobs)
+    jobs
   };
 }
 
 export function summarizeImportJobs(jobs: ImportJob[]): ImportJobSummary {
   const summary: ImportJobSummary = {
-    readyJobs: [],
+    readyCount: 0,
+    unfinishedCount: 0,
     duplicateJobs: 0,
+    waitingJobs: 0,
     runningJobs: 0,
     commitQueuedJobs: 0,
     committingJobs: 0,
@@ -358,17 +548,26 @@ export function summarizeImportJobs(jobs: ImportJob[]): ImportJobSummary {
   };
 
   for (const job of jobs) {
+    if (!["done", "cancelled"].includes(job.status)) {
+      summary.unfinishedCount += 1;
+    }
     if (importJobNeedsDuplicateConfirmation(job)) {
       summary.duplicateJobs += 1;
       continue;
     }
     if (job.status === "ready") {
       const request: ImportCommitRequest = job.commitIntent ? "resume" : "new";
-      if (importJobCanStartCommit(job, request)) summary.readyJobs.push(job);
+      if (importJobCanStartCommit(job, request)) {
+        summary.readyCount += 1;
+      }
       continue;
     }
     if (processingImportStatuses.has(job.status)) {
       summary.runningJobs += 1;
+      continue;
+    }
+    if (waitingImportStatuses.has(job.status)) {
+      summary.waitingJobs += 1;
       continue;
     }
     if (job.status === "commit-queued") {
@@ -390,83 +589,131 @@ export function summarizeImportJobs(jobs: ImportJob[]): ImportJobSummary {
   return summary;
 }
 
+function removeQueueJobIds(
+  state: ImportQueueState,
+  ids: ReadonlySet<string>,
+  pageSize: number,
+  totalItems?: number
+) {
+  if (!ids.size) return state;
+  const jobs = state.jobs.filter((job) => !ids.has(job.id));
+  if (jobs.length === state.jobs.length) return state;
+  const nextTotalItems = totalItems === undefined
+    ? jobs.length
+    : Math.max(0, totalItems - (state.jobs.length - jobs.length));
+  return {
+    jobs,
+    page: Math.min(
+      state.page,
+      importQueuePageCount(nextTotalItems, pageSize)
+    )
+  };
+}
+
 export function reduceImportQueue(
   state: ImportQueueState,
   action: ImportQueueAction
 ): ImportQueueState {
   switch (action.type) {
     case "append": {
-      const jobs = reconcileImportQueueDuplicates([...action.jobs, ...state.jobs]);
+      const jobs = [...action.jobs, ...state.jobs];
       return { jobs, page: 1 };
     }
-    case "retain-mode": {
-      const jobs = reconcileImportQueueDuplicates(
-        state.jobs.filter((job) => (
-          (action.mode === "file" ? job.kind === "local" : job.kind !== "local")
-          || !importJobCanLeaveQueue(job)
-        ))
+    case "replace-server-page": {
+      const browserOwners = new Set(browserDisplayPrefixJobs(state.jobs));
+      const canonicalJobs = action.jobs;
+      const serverById = new Map(canonicalJobs.map((job) => [job.id, job]));
+      const serverByPair = new Map(canonicalJobs.map((job) => (
+        [serverImportJobPairKey(job), job] as const
+      )).filter(([pair]) => Boolean(pair)));
+      const consumedServerJobs = new Set<ImportJob>();
+      const displayOwners = state.jobs.flatMap((job) => {
+        if (!browserOwners.has(job)) return [];
+        const pair = serverImportJobPairKey(job);
+        if (pair && action.stalePairKeys?.has(pair)) return [];
+        const canonical = pair
+          ? serverByPair.get(pair)
+          : serverById.get(job.id);
+        if (!canonical) return [job];
+        consumedServerJobs.add(canonical);
+        return [mergeCanonicalHandoff(canonical, job)];
+      });
+      const retainedIds = new Set(displayOwners.map((job) => job.id));
+      const retainedPairs = new Set(
+        displayOwners.map(serverImportJobPairKey).filter(Boolean)
       );
-      return jobs.length === state.jobs.length && state.page === 1
-        ? state
-        : { jobs, page: 1 };
+      const serverPage = canonicalJobs.filter((job) => (
+        !consumedServerJobs.has(job)
+        && !retainedIds.has(job.id)
+        && !retainedPairs.has(serverImportJobPairKey(job))
+      ));
+      const jobs = [...displayOwners, ...serverPage];
+      if (
+        jobs.length === state.jobs.length
+        && jobs.every((job, index) => job === state.jobs[index])
+      ) return state;
+      return { ...state, jobs };
     }
     case "patch":
       return updateQueueJob(state, action.id, (job) => patchJob(job, action.patch));
+    case "bind-server":
+      return bindQueueJob(state, action.id, action.binding);
     case "patch-many":
       return updateQueueJobs(state, action.patches);
-    case "complete":
-      return completeQueueJob(
-        state,
-        action.id,
-        action.patch,
-        action.item,
-        action.commitAttemptId,
-        action.suppressDuplicateItem
-      );
     case "patch-draft":
       return updateQueueJob(state, action.id, (job) => patchJobDraft(job, action.patch));
     case "remove": {
-      if (!action.ids.size || !state.jobs.some((job) => action.ids.has(job.id))) return state;
-      const jobs = reconcileImportQueueDuplicates(
-        state.jobs.filter((job) => (
-          !action.ids.has(job.id) || !importJobCanLeaveQueue(job)
-        ))
+      const removable = new Set(state.jobs.filter((job) => (
+        action.ids.has(job.id) && importJobCanLeaveQueue(job)
+      )).map((job) => job.id));
+      return removeQueueJobIds(
+        state,
+        removable,
+        action.pageSize,
+        action.totalItems
       );
-      if (jobs.length === state.jobs.length) return state;
-      return { jobs, page: Math.min(state.page, importQueuePageCount(jobs.length, action.pageSize)) };
     }
-    case "remove-library-duplicate": {
-      if (!state.jobs.some((job) => (
-        job.duplicates.some((duplicate) => duplicate.id === action.imageId)
-      ))) {
-        return state;
-      }
-      const jobs = reconcileImportQueueDuplicates(
-        mapJobsWithIdentity(state.jobs, (job) => {
-          const duplicates = job.duplicates.filter(
-            (duplicate) => duplicate.id !== action.imageId
-          );
-          return duplicates.length === job.duplicates.length
-            ? job
-            : { ...job, duplicates };
-        })
+    case "release-resolved": {
+      const removable = new Set(state.jobs.filter((job) => {
+        const target = action.targets.get(job.id);
+        return target !== undefined
+          && job.attemptKey === target.attemptKey
+          && serverImportJobPairKey(job) === target.pairKey;
+      }).map((job) => job.id));
+      return removeQueueJobIds(
+        state,
+        removable,
+        action.pageSize,
+        action.totalItems
       );
-      return { ...state, jobs };
     }
     case "apply-defaults": {
       const jobs = mapJobsWithIdentity(
         state.jobs,
-        (job) => patchJobDraft(
-          job,
-          importAttributeDefaultsPatch(job, action.defaults)
-        )
+        (job) => {
+          if (action.attempts.get(job.id) !== job.attemptKey) return job;
+          const patch = importAttributeDefaultsPatch(job, action.defaults);
+          if (!imageDraftPatchChanges(job.draft, patch)) return job;
+          return {
+            ...patchJobDraft(job, patch),
+            // local placeholder 可能正与 accept 响应交叉；保留草稿到 canonical
+            // 接管后再写回，避免已发出的 accept payload 覆盖点击时意图。
+            serverDraftPending: true
+          };
+        }
       );
       return jobs === state.jobs ? state : { ...state, jobs };
     }
     case "set-page": {
       const page = Math.max(
         1,
-        Math.min(action.page, importQueuePageCount(state.jobs.length, action.pageSize))
+        Math.min(
+          action.page,
+          importQueuePageCount(
+            action.totalItems ?? state.jobs.length,
+            action.pageSize
+          )
+        )
       );
       return page === state.page ? state : { ...state, page };
     }

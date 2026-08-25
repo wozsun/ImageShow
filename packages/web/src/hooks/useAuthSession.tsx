@@ -1,5 +1,6 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useEffectEvent,
@@ -8,11 +9,15 @@ import {
 } from "react";
 import {
   useQuery,
+  useQueryClient,
   type UseQueryResult
 } from "@tanstack/react-query";
 import { useLocation } from "react-router";
 import {
-  type AdminPermission
+  normalizeAdminPreferences,
+  type AdminPermission,
+  type AdminPreferences,
+  type AuthStateDto
 } from "@imageshow/shared/browser";
 import { authExpiredEvent, clearCsrfToken } from "../lib/api/client.js";
 import {
@@ -24,6 +29,7 @@ import {
   type AuthState
 } from "../lib/api/auth-session.js";
 import { queryKeys } from "../lib/api/query-keys.js";
+import { sameAdminPreferences } from "../lib/api/admin-preference-cache.js";
 import { adminBasePath } from "../lib/constants.js";
 
 const AuthSessionContext = createContext<UseQueryResult<AuthState> | null>(null);
@@ -95,6 +101,42 @@ export function useAuthMe() {
     throw new Error("useAuthMe must be used inside AuthSessionProvider");
   }
   return query;
+}
+
+/**
+ * Keeps preference writes behind the sole /auth/me query owner. A preference
+ * PATCH must fence a captured old auth response before publishing its new
+ * preference snapshot and validator into the shared authentication cache.
+ */
+export function useAuthPreferenceCacheBridge() {
+  const queryClient = useQueryClient();
+  const cancelPendingAuthRead = useCallback(
+    () => queryClient.cancelQueries(
+      { queryKey: queryKeys.me, exact: true },
+      { silent: true }
+    ),
+    [queryClient]
+  );
+  const updateAuthPreferenceSnapshot = useCallback((
+    username: string,
+    preferences: AdminPreferences,
+    etag: string
+  ) => {
+    const current = queryClient.getQueryData<AuthStateDto>(queryKeys.me);
+    if (!current?.authenticated || current.username !== username) return;
+    if (sameAdminPreferences(
+      normalizeAdminPreferences(current.preferences),
+      preferences
+    ) && current.preferences_etag === etag) return;
+    const next: Extract<AuthStateDto, { authenticated: true }> = {
+      ...current,
+      preferences,
+      preferences_etag: etag
+    };
+    queryClient.setQueryData<AuthStateDto>(queryKeys.me, next);
+  }, [queryClient]);
+
+  return { cancelPendingAuthRead, updateAuthPreferenceSnapshot };
 }
 
 const noAdminPermissions: readonly AdminPermission[] = [];

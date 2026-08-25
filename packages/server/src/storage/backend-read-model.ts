@@ -6,6 +6,7 @@ import type {
 import { listStorageBackends } from "./backend-registry.ts";
 import { listUnresolvedMoveCleanupJobCounts } from "./move-cleanup-repository.ts";
 import { resolveStorageBackendDeletionState } from "./backend-deletion.ts";
+import { activeImportStorageCounts } from "../images/imports/storage-references.ts";
 
 export async function listStorageBackendOptions(): Promise<
   StorageBackendOptionDto[]
@@ -22,30 +23,20 @@ export async function getStorageBackendsForAdmin(): Promise<
   StorageBackendAdminDto[]
 > {
   const backends = await listStorageBackends();
-  const [imageCountRows, importSessionCountRows, cleanupCountRows] =
+  const [imageCountRows, importSessionCounts, cleanupCountRows] =
     await Promise.all([
       pool.query(
         `SELECT storage_slug, count(*)::int AS image_count
            FROM metadata
           GROUP BY storage_slug`
       ),
-      pool.query(
-        `SELECT storage_slug, count(*)::int AS import_session_count
-           FROM import_session
-          GROUP BY storage_slug`
-      ),
+      activeImportStorageCounts(),
       listUnresolvedMoveCleanupJobCounts()
     ]);
   const imageCounts = new Map<string, number>(
     imageCountRows.rows.map((row) => [
       String(row.storage_slug),
       Number(row.image_count ?? 0)
-    ])
-  );
-  const importSessionCounts = new Map<string, number>(
-    importSessionCountRows.rows.map((row) => [
-      String(row.storage_slug),
-      Number(row.import_session_count ?? 0)
     ])
   );
   const cleanupJobCounts = new Map(

@@ -19,7 +19,9 @@ import { openedReadToBuffer } from "./stream-buffer.ts";
 import type {
   CopyPrefix,
   OpenedRead,
+  StorageCopyOptions,
   StorageDriver,
+  StoragePruneOptions,
   StorageRequestOptions,
   StorageSelfTest
 } from "./driver.ts";
@@ -252,7 +254,7 @@ export class S3Backend implements StorageDriver {
     fromKey: string,
     toPrefix: CopyPrefix,
     toKey: string,
-    options: StorageRequestOptions = {}
+    options: StorageCopyOptions = {}
   ) {
     await this.send(new CopyObjectCommand({
       Bucket: this.bucket,
@@ -410,7 +412,7 @@ export class S3Backend implements StorageDriver {
     return result!;
   }
 
-  async pruneEmptyDirs(): Promise<number> {
+  async pruneEmptyDirs(_options?: StoragePruneOptions): Promise<number> {
     return 0;
   }
 }

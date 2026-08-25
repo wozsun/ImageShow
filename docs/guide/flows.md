@@ -15,41 +15,25 @@
 
 ## 图片导入
 
-后台提供本地文件、URL 列表、JSONL 清单和公开微博四种入口。前端把它们放入同一个
-有序任务队列；服务端只使用两种会话模式：
+后台提供本地文件、URL 列表、JSONL 清单和公开微博四种入口。浏览器维护当前窗口的本地
+占位；素材一旦被服务端接受，就由 Redis canonical 和单实例 worker 接管。PostgreSQL 不再
+保存运行中的导入会话；只有最终 `metadata` 行是完成事实，Redis 的 completed 回执不能单独
+证明图片已经提交。
 
-| 模式 | 素材化方式 |
-| --- | --- |
-| `upload` | 浏览器把单个文件 PUT 到服务端，服务端写入 attempt 隔离的 raw 临时文件 |
-| `download` | 服务端按安全抓取策略下载 URL，JSONL 与微博最终也转换成此模式 |
-
-任务真正进入某条 lane 的素材化阶段时才创建单个 `import_session`，没有一次创建整批
-会话的接口。一次选择共享 `batch_time`，输入位置写入 UUIDv7 的稳定随机位，因此并发
-完成顺序不会改变同批图片的时间排序。
+服务端队列按来源分为 `upload` 和 `import`。每个任务都以大小写敏感的
+`(session_id, image_id)` pair 定位；`session_id` 是 owner、队列和幂等键的稳定摘要，
+`image_id` 是按独立 `image_time` 生成并校验的 UUIDv7。一次选择共享 `batch_time`，存在
+`manifest_position` 时还写入 UUIDv7 的 12 位 `rand_a`，因此并发完成顺序不会改变同批排序。
 
 ```text
-选择文件 / 解析 URL、JSONL、微博
-        │
-        ▼
-浏览器任务队列
-        │ 获得 lane 执行机会
-        ▼
-created ─► materializing ─► received ─► preparing ─► ready
-                                                        │
-                                                        ▼
-                                           [Web: commit-queued]
-                                                        │ 服务端取得准入
-                                                        ▼
-                                                   committing
-                                                        │ 数据库已提交
-                                                        ▼
-                                                    finalized
-                                                        │ 完整结果已水合
-                                                        ▼
-                                               [Web: done]
-
-素材化或处理失败 ─► failed
-可取消阶段       ─► cancelled
+本地：  upload intent ─► raw PUT ─► received ─► preparing ─► ready
+远程：  accept ─► queued ─► downloading ─► received ─► preparing ─► ready
+                                                                      │
+                                                   async commit intent│
+                                                                      ▼
+                                      committing ─► completed / failed
+                                           │ PG 事务已开始但结果待核对
+                                           └────────► resolving
 ```
 
 ### 输入与队列
@@ -66,92 +50,321 @@ created ─► materializing ─► received ─► preparing ─► ready
   微博入口先提取公开帖子中的原图、发布时间、来源与可选作者映射，再交给同一 JSONL
   解析器。
 - 本地来源按目录相对路径或文件名、大小、修改时间去重；远端来源按规范化 HTTPS URL
-  去重。prepare 得到最终 MD5 后，以一次 PostgreSQL 快照记录当时的有界命中数量，并统一
-  提示图库重复或本批重复，由管理员决定是否仍提交副本。该提示不是最终写入授权：commit
-  仍在相同最终 MD5 的并发边界内重读 PostgreSQL。
-- `attemptKey` 同时是服务端幂等键。响应丢失后重试会找回同一会话；已明确失败且用户
-  修改输入后才开始新 attempt。
-- 每条 lane 只允许当前项处理和唯一后继项素材化前瞻。前端在权威状态进入
-  `preparing` 后才开放该前瞻槽，不会预先为整个队列创建会话或消耗租期。
-- SSE 是任务状态主通道。当前活动世代以创建前已知的幂等尝试键建立稳定批次
-  订阅；素材准备期和批量提交期各自保持稳定连接，全部 `ready` 时主动暂停，提交开始后按
-  同一键恢复。单个会话稍后创建或在同一阶段改变状态不重建连接，历史终态任务不会进入
-  下一世代，超过 100 项时按协议上限分片。事件流使用固定的
-  `POST /api/admin/imports/events`，尝试键只进入有界 JSON 正文，不进入 URL；连接不可用时
-  退化为固定 `POST /api/admin/imports/status` 对当时未完成会话做批量状态轮询，真实会话 ID
-  同样只进入正文，不按卡片创建独立轮询。
-- 任务卡片保存最近一次由当前 `attemptKey` 与真实会话共同接受的权威
-  `status` / `phase` 快照。新 attempt 或会话重绑会原子清空旧快照和阶段进度；迟到、
-  旧会话及单调倒退事件不会只更新快照。卡片详情由 Web 单一纯映射生成：传输前稳定显示
-  “等待上传/下载”，传输中显示“上传/下载原图中”，prepare 的连续内部阶段统一显示
-  “处理图片并生成缩略图”；只有真实 `prepare-waiting` 单独提示等待处理。ready 显示
-  “图片处理完成，等待提交”或重复决策；建立提交意图后先以“提交排队 / 等待提交”等待服务端
-  准入，权威状态进入 `committing` 才显示“写入图库中”，`finalized` 显示“已写入图库，等待
-  结果”，显式回执恢复显示“正在确认提交结果”。完成态不重复前置状态标签。服务端精确
-  message 继续用于诊断和可操作失败，不直接驱动正常阶段文案。
-- 用户点击提交时，队列先同步取得单 runner 围栏，并为每项建立不可变 commit intent：锁定
-  attempt、最终 MD5、创建时间以及规范化后深拷贝的实际 wire metadata。重复决策随该项进入
-  既有批量 commit 正文，不另发逐图预检请求。持有 intent 的任务禁止编辑、普通取消、移除和
-  “清空未提交”；失败重试与结果恢复只复用锁定值，不重新读取草稿。服务端在 commit 边界
-  返回结构化重复冲突时，会话仍为 `ready`，当前项显示“重复待确认”，不计入失败数，也不进入
-  普通失败重试。点击“仍然提交”会在同一个同步单 runner 围栏内直接使用原 session、attempt、
-  最终 MD5 与 metadata 重新进入既有批量 commit，无需再点一次重试，也不增加状态查询；取消
-  仍可安全清理该 ready 会话，同批其他项目不受影响。等待确认时会忽略被拒绝请求的迟到
-  `committing/finalized` 帧；确认开始后的迟到 `ready` 也不能倒退 `commit-queued`。状态订阅
-  或展示组件暂时卸载后可重新订阅；
-  本版本不持久化 Web 队列，因此不承诺整个 Uploader 卸载、刷新或浏览器退出后的草稿恢复。
+  去重。prepare 得到最终 MD5 后，以 PostgreSQL 快照提示重复；commit 在相同 MD5 的
+  advisory lock 内再次读取，前一份提示不替代最终写入授权。Redis canonical 只保存 MD5、
+  重复数量和用户决定；当前页需要展示明细时按 MD5 用一次有界 POST 批量读取 PostgreSQL，
+  图库图片移入回收站后只失效涉及该 MD5 的查询，不保留浏览器墓碑；用户决定写回时 Server
+  用一次 PostgreSQL 批量计数同步 canonical `duplicate_count`，零匹配不会在翻页后复活。
+- 浏览器 `attemptKey` 是 UUIDv7 幂等键。相同规范化意图的重试复用原 session、候选 ID、
+  `resolved_image_time` 和 request hash；只有 intent 已过期且 canonical 也不存在时才形成新
+  incarnation。每次选择 / 导入批次还冻结 UUIDv7 batch key 与从 0 开始的 manifest position；
+  两者进入 request hash 并派生持久展示键。接管请求发出时同时冻结其完整输入；响应未知的重放
+  不读取后来变化的窗口默认值。服务端派生的 accepted order、执行 token 和 generation 不进入
+  request hash。
+- 状态读取使用固定 `POST /api/admin/imports/status` 批量提交 pair，不把 session、metadata
+  或数组放进 URL，也不按卡片建立独立请求。Web 只接受 pair 匹配且
+  `(version, progress_seq)` 单调向前的状态；UUID 可以规范化大小写，session ID 不得改写大小写。
+- 关闭或按 Escape 不会中止请求或未完成任务；关闭路径会按当时冻结的队列水位，异步删除已经
+  完成的卡片与 Redis completed 回执，正式图片不受影响。若关闭瞬间正在重连，则后台连接只保留
+  到清理收敛，并以关闭前最后一份权威 semantic revision 为上限重新签发动作；关闭后才完成或仍
+  未完成的任务继续保留。真正离开图片路由、使上传 owner 卸载时，仍由浏览器持有的 raw 传输可以中止；已经转换
+  或远程 accept 的 canonical 继续由 worker 执行，不在 effect cleanup 中隐式批量取消。JSONL
+  行级解析错误也由 import owner 保留；切到
+  upload owner 时不展示或清除，重开 import 窗口后仍可复制或显式清除。尚未接管的占位草稿
+  只由对应浏览器 owner 持有；尚未冻结 commit 的 active canonical 卡片编辑以 pair/version
+  CAS 写回 Redis。占位转为 canonical 时还会
+  立即把接管前冻结的草稿补写到任何尚未冻结 commit 的 active 状态。防抖同步项自身冻结并
+  持有 pair、attempt、version 和最新草稿，翻页或隐藏窗口不会使它依赖已卸载的卡片；同一轮
+  多张草稿按接口硬上限聚合写回，不建立逐卡并发请求。worker 先推进 version 时，Web 先用
+  有界 status 批读取得当前 version，再重放同一草稿；草稿更新 HTTP 已推进 version / semantic
+  revision 而旧 snapshot 先到时，卡片继续保留较大水位和本地草稿，直到状态通道覆盖。任务在
+  防抖期间进入 committing、completed 或其他不可编辑状态时，本次写回明确失败并把卡片恢复为
+  已有 Server DTO 或批量 status 返回的权威草稿，不会把尚未提交的本地编辑静默当成成功。只有
+  Redis Lua 原子边界确认当前 canonical 已等于目标语义时，旧 expected version 的响应丢失重试
+  才能返回 unchanged；并发编辑已经写入其他语义时仍返回 version conflict。
+  已经由 Server 接管且确有可写 sync target 的草稿 fence 必须在提交动作真正执行前排空；
+  未接管占位上的默认值不会妨碍同一 owner 内其他 ready canonical 提交。可重试写回错误由草稿
+  owner 独立保留，SSE 重连只清状态通道错误，不会让重试入口消失。清理、提交和取消按钮是否
+  可用只取决于是否存在归属任务；草稿写回、接管交接和已有队列动作只决定冻结动作的执行顺序，
+  不把这些按钮反复切成 disabled。点击时已有 watermark 冻结其覆盖的 Server 集合，同时把尚未
+  进入该水位的 placeholder、pair 与 attempt 作为精确浏览器集合冻结并走既有逐项写回、提交或
+  取消路径；两者并行收敛且都不纳入点击后新任务。只有尚未取得有效 watermark、摘要未知且还
+  存在不能由这份精确集合代表的 Server 目标时，整次动作才只触发权威重取，不能静默执行一半或
+  等待未来水位自动扩大旧点击。
 
 JSONL 可设置 `original`、`source`、`image_time`、`author`、`tags`、`title`、
 `description`、`theme`、`device`、`brightness` 与 `storage_slug`。行内字段优先于窗口
 默认值；显式空标签和 `auto` 分类也是有效选择。完整数量、并发、文件大小和处理参数以
 [配置说明](./configuration.md)及 `config.example.jsonc` 为准。
 
-### materialize、prepare 与 commit
+### 接管、prepare 与 commit
 
-1. **materialize** 只取得完整 raw。upload 和 download 都先写
-   `data/tmp/<session>.raw.<attempt>.part`，完成后在同目录原子发布；download 还执行
-   HTTPS、DNS、重定向、大小、时间和内容嗅探限制。
-2. **prepare** 只处理已发布的 raw：以一次 Sharp metadata 校验白名单格式、原始尺寸与
-   EXIF 展示方向，按配置标准化为 WebP，并直接采用最终编码结果的尺寸和字节数；随后生成
-   缩略图、检测设备与明暗、计算摘要，再把 processed image 与 prepared thumbnail 写入
-   会话锁定后端的 `_uploads`。
-3. **commit** 不重新下载或转码。它先取得相同最终 MD5 的 advisory lock，并在该锁内重读
-   PostgreSQL；未明确允许重复且出现同内容图片时，只让当前批次成员返回结构化冲突，其他
-   成员继续执行。确认意图绑定 session、attempt 与最终 MD5，不能挪给另一项。通过后再验证
-   `_uploads` 候选及正式对象，写入 `media` 与 `thumbs`，在短事务中提交 metadata、标签、
-   会话终态与图片投影 revision，随后清理 staging。该内容锁沿用当前 PostgreSQL advisory
-   lock 基础设施，只串行相同 MD5，不增加多实例协调器。`finalized` 事务一旦持久化就立即
-   发出轻量权威状态通知，不等待缓存同步、暂存清理、presenter 或整批响应；这些后置步骤
-   失败不得倒退已提交事实。响应返回完整管理端图片对象，供队列直接收敛为已完成。
-   中断恢复若已生成正式候选，会保留位置供同一确认接续；用户随后取消或会话过期时，既有
-   持久 `move.cleanup` 边界接管候选原图和缩略图，避免删除会话后留下无主对象。
+1. **本地接管**先对可立即进入并发 lane 的一组文件发送一次固定
+   `POST /api/admin/imports/upload-intents`。正文含完整草稿、目标 storage、大小与素材约束；
+   响应为每项返回短期 credential。随后单次接管尝试对每个 intent 最多发送一次固定
+   `PUT /api/admin/imports/upload-raw`，credential 只放受限 header，正文只有图片字节。
+   Server 在读取正文前 claim intent，流式写 attempt 专属 `.part`，完成大小、格式和尺寸校验
+   后原子发布 raw，并在同一请求中把 intent 转换为 `upload/received` canonical。不存在第三次
+   takeover 或 receipt 请求。一次已签发的 N 项固定为一次 intent POST 加至多 N 次 raw PUT。
+   raw PUT 在 canonical 形成前失败或响应未知时，显式重试复用原 `attemptKey` 再请求同一
+   intent：服务端要么返回已经接管的 canonical，要么为同一 pair 重签 credential 后重传，
+   不通过新幂等身份创建第二项任务。
+2. **远程接管**把 URL、JSONL 和微博确认项合并到固定
+   `POST /api/admin/imports/remote-accept`。Server 在 storage read lock 内重新校验并创建
+   `import/queued` canonical；请求断开不撤销已接受项。worker 使用现有安全抓取完成 HTTPS、
+   SSRF、DNS、逐跳重定向、正文大小、超时和图片魔数校验，并以 attempt `.part` 原子发布 raw。
+3. **prepare**只处理完整 raw：Sharp 校验格式、尺寸和 EXIF 展示方向，按配置生成 processed
+   image 与 thumbnail，计算 MD5/SHA-256、设备和明暗，再在 storage location shared advisory
+   lock 内写入 `_uploads`。下载 / prepare 期间的草稿编辑可以推进 semantic version；worker
+   在 heartbeat、progress 和阶段发布的 CAS 冲突后重读 canonical，只在状态和 execution token
+   仍属于同一次执行时接力新版 version，并以最新草稿完成阶段。状态、图片身份或 token 已变化时
+   仍立即围栏，迟到执行者不能覆盖新 generation。
+4. **commit**请求只受理不可变意图。每项携带 pair、expected version、prepared MD5、稳定
+   UUIDv7 request ID、重复决定和完整 metadata；Server 冻结 intent hash、prepared generation、
+   正式对象键及当前认证 username。API 返回 `accepted` 后立即结束，不等待对象复制或数据库。
+   worker 在 storage、图片、词表和同 MD5 advisory lock 内，先为两个确定正式键写入持久
+   `move.cleanup` candidate guard，再复制候选，并在不可逆协调器的临界区完成最后一次 token
+   复验后启动单个 PostgreSQL 事务。guard 登记前会拒绝强摘要不匹配的预存正式对象；本次
+   attempt 只旁路自身唯一 guard token，旧删除租约继续阻断采用。guard 与提交共用单图存储
+   变更锁：复制或事务失败时由 handler 删除未引用候选，PostgreSQL 正式引用成立时则保留对象。
+   所有新 INSERT 显式写入
+   `metadata.created_by`；该字段只取冻结的 server actor，不接受客户端输入，也不进入 browser DTO。
 
-完整结果以 `(jobId, commitIntent.attemptId)` 作为 Web 消费键。只有 reducer 首次接受的
-`imported` 结果可以完成任务、同步重复项并触发一轮图片列表、统计和概览查询失效；重复 HTTP
-响应、恢复结果、事件或 React 重放只能幂等忽略。`finalized` 后的完整结果缺失或读取失败只写
-`resultState/resultError` 并提供“重新获取结果”，不会变回普通 `failed`；成功水合后才成为
-`done`。导入返回的完整图片对象同时用于判断主题、标签或作者词表是否真的出现新 slug，只有
-发生新增时才重读会话级导入词表。已存在图片的详情不因新增图片失效。
+`metadata WHERE id=image_id` 是唯一完成判据。相同 commit request ID 与相同 hash 可安全重试；
+worker 在 PostgreSQL 事务前失败时，当前 version 可把同一冻结意图重新排入 committing，
+不能借重试修改 actor、metadata 或正式对象键。同 ID 不同 hash 或换 ID 覆盖已冻结意图会被拒绝。
+PostgreSQL 已存在时，status、accept 和
+commit 重试通过同一个 `WHERE id = ANY(...)` 只读模型批量水合完整管理端图片；正常实时完成则
+直接把本次提交事务已经生成的完整管理投影随 SSE semantic 事件交给当前 owner，不再为每张完成
+图片追加同页 snapshot。只有拿到 PostgreSQL 投影后 Web 才把任务置为完成并失效图库查询。每个
+队列 owner 以单一入口按 pair 对 snapshot、SSE、提交、
+取消响应、所有旁路 status、全队列动作与重连水合去重，并把同一批首次完成项合并成一次图片
+列表、概览、图库统计与词表失效。Redis completed
+回执缺少 PostgreSQL 行时会被视为陈旧并清除，查询失败则 fail closed。批量 status 必须先固定
+Redis 会话读取，再发起 PostgreSQL
+查询：completed 只会在 PG 事务提交后发布，这一顺序避免把提交前 PG 快照与提交后 Redis
+回执拼成不存在的陈旧状态。completed 回执只额外保留卡片展示所需的来源类型、清单位置 / 行号、
+原始尺寸 / 大小和处理参数，不保留来源 URL、完整 prepared manifest、完整图片投影或草稿；完整
+图片投影只在实时 SSE 写出期间短暂复用，Redis 仍保持紧凑。因此任务实时完成、
+窗口隐藏后完成及窗口重开恢复都会沿用已就绪时的“微博第 N 张”和处理前后尺寸，详情明确显示
+“图片已入库”，且不需要额外状态请求。
 
-每个会话在创建时锁定 `storage_slug`。默认后端的后续变化只影响新会话；ready 任务不能
-临时换后端。原始字节始终留在 `data/tmp`，导入流程也不让浏览器向 S3 直传。
+每个 canonical 锁定 `storage_slug`。默认后端后续变化只影响新任务；ready 任务不能临时
+换后端。原始字节只进入 `data/tmp/upload|import`，浏览器不直传 S3；远端 `_uploads` 只保存
+processed image 与 prepared thumbnail。
+
+### 队列分页与状态同步
+
+上传与远程导入复用同一套 Server DTO 和 repository，但浏览器分别拥有 upload 与 import
+owner；两边分别持有本地资源、页码、显示状态、订阅和清空范围，隐藏或打开一边不会读取、
+重置或取消另一边。重复确认与单卡提交的 single-flight、busy 和迟到响应也由各自 owner 独立
+持有；隐藏 upload 后打开 import，不会被仍在途的 upload 请求锁住，响应只回写原队列。每个
+owner 把当前浏览器文档创建的批次作为稳定展示前缀，并按 batch / manifest 顺序排列；逐项
+接管后业务权威立即转交 Server，但当前文档仍在整个窗口生命周期内保留该批的来源顺序，
+不会在整批接管时切换展示所有者或改变快照参数。窗口重新进入则从一开始完全使用 Server
+display，因此协议切换只体现为任务仍然存在，不增加恢复提示或卡片状态。当前文档保序任务
+受 3600 项硬上限约束，新增任务越界时在创建 Server 任务前明确拒绝；关闭窗口后该浏览器
+预算随文档释放。组合分页只从 Server 页候选中过滤当前文档保序批次的 pair，并补足当前页剩余
+槽位；总数和摘要仍只把未接管任务与 Server metadata 相加，已接管展示项不会重复计数，当前
+组合页之外也不挂载 canonical 卡片。因此新批次始终在上、同批来源始终保持 1→N，不因逐项
+下载或 raw 转换的完成顺序重排。accept 成功就是业务所有权边界：响应同时返回 canonical 的
+精确 `accepted_order`、version 与 semantic revision，占位把焦点、预览和可见反馈原位交给
+同一张 handoff 卡片。打开的图片预览与重复详情使用 pair/attempt 身份而非一次性 DOM
+引用；event-first canonical 合并进 HTTP placeholder，或同一 session 切换 image incarnation
+时，预览内容、当前编辑字段和关闭后的回焦目标会同步转交给新卡片。同一 session 重建为不同
+image incarnation 时，绑定在一次 reducer
+更新中移除旧 canonical，且不继承旧 version、preview 或错误状态；owner 同时按旧 pair 终止
+status fence、coverage gate、detached 计数投影与草稿同步，并释放旧 Blob URL，不等待后续
+snapshot 才去重或清理资源。任务进入重复待确认后立即按当前页 MD5 查询重复详情，不等待同批
+其它图片完成准备；查询不主动中止，同一时刻只运行一个请求。已返回的结果按 MD5 立即写回
+对应卡片并在当前查询 revision 内缓存，期间新增的 MD5 只合并为一份尚未解析项的后继请求，
+避免已有卡片等待整批完成，也避免取消请求、重复查询已解析项与并发请求。
+
+upload 与 import 窗口共用同一两行摘要，桌面和移动端都保持：第一行显示总数、等待中与
+处理中，第二行显示待提交、提交中与已完成。其中等待 worker 准入的 `queued` / `received`
+以及等待提交准入或提交结果的任务计入“等待中”，实际下载、上传、准备或取消中的任务才
+计入“处理中”。重复图片卡片的状态标签显示黄色“待确认”，
+颜色直接复用重复提示标题的亮 / 暗语义色；协议恢复、读取和重连状态不在卡片列表上方另加
+提示。桌面标题栏下方 padding 为 12px；摘要两行本身提供稳定内容高度，因此右侧动作从一排
+切换到两排时不改变标题栏总高度，移动端继续使用原有 10px 下方 padding 和自适应高度。
+
+当前快照同时给出 `last_accepted_order`；只有响应 order 晚于该
+基线时才临时把 Server total 增加一次，因此首次响应不会漏计，响应丢失后的幂等重放也不会
+重复计数。owner 随即发起一次有界当前页重取；当前文档卡片继续按原 batch / manifest 位置
+展示，Server 页只补足剩余槽位。已经离开当前组合页的 accepted / completed handoff 只保留
+不含 File、Blob、object URL 或 intent 正文的计数投影。跨连接响应经 status fence 接管时，该
+投影归属当前 owner generation，并在其 `last_accepted_order` 覆盖后移除；coverage gate 主动重取
+期间沿用上一份稳定 Server summary，因此占位退出本地计数后不会临时少计或少一页。它不会被
+强行挂回当前页，也不会因翻页漏计。整页展示前缀不会因
+等待 snapshot 而把 Server 请求 limit 永久压成 0，也不会出现双卡或瞬时消失。接管请求在发出
+前记录 SSE connection generation；响应
+跨越连接换代或发出时通道尚未稳定时，不能拿旧响应 revision 与新连接水位直接比较，必须先
+通过批量 status 核对；active 结果合并当前权威 Server DTO，PG completed 且 Redis missing 时
+直接水合完成卡片。该 HTTP 围栏独立于页内 Server DTO，即使响应到达时客户端已有带
+accepted order 的旧 DTO，也要保留到状态通道覆盖。
+PG 已完成重放只有在 Redis 本身已是 completed 时才携带精确 revision；否则 Web
+保持未知围栏并立即请求一次有界快照，再用现有批量 status 明确 canonical 是 active、completed
+还是 missing。围栏由 queue owner 按 pair 持有，不随当前页卡片卸载，也不会因 SSE 连接换代
+或新连接仍返回 active 而清除；所有重试与覆盖门槛都绑定创建它的 connection generation，换代
+后必须重新核对，不能用旧代高 revision 阻塞冷启动的新代。active 只在同代后续 revision 到达后
+补查一次；status 返回的 active DTO 或 Redis completed 回执若带有高于当前基线的精确 semantic
+revision，owner 会立即发起一次有界当前页快照，而不是依赖可能丢失的后续 SSE。pair 在稳定
+snapshot 覆盖该 revision 后才解除；确认它不属于当前页时不要求再等一次事件，missing 也可
+安全解除。围栏解除以前，任务尚未确定进入当前签名 watermark，但仍由点击时精确 pair / attempt
+集合参与本地逐项动作；卡片若已进入可编辑状态，草稿继续由上述 pair/version CAS 围栏串行
+写回。此时已有按钮保持稳定，已有 watermark 只处理其原水位，精确集合只处理点击时已知目标；
+没有现成签名 watermark 且仍有集合外 Server 目标时，整次点击只触发权威重取，也不得在未来
+快照到达后扩大旧点击范围。Server 成员保持原卡片并可在连接恢复后重新操作。
+批量 status 失败时保留安全状态并在窗口内提供显式
+重试，不因一次网络错误永久锁死 owner。只有当前显示的队列建立一个
+`GET /api/admin/imports/events?queue=...` SSE；Server
+先注册 listener，再发送只含 revision 与 action scope 的 `ready`。客户端收到 `ready` 后立即
+废止旧 revision、pair 进度和 watermark，使旧页只可展示、不可驱动全局操作，再用非负
+offset 与有上限的 limit 请求当前组合页；不保留非当前页卡片，也没有固定 2 秒轮询。
+读取 owner 会在当前 offset 保留最多一页普通 Server DTO 作为有界替补，页面 reducer 仍只挂载
+当前组合页剩余槽位和当前文档已接管 pair；替补不创建卡片、Blob URL 或草稿 owner。这样当前
+文档 pair 逐项进入排除集合时，可以用已有 revision 从替补补齐展示槽位，不必为了同一批任务
+再读取一次。
+同一 scope、同一组合页内由动作收口、交接覆盖或真实成员变化触发的后台快照会保留当前
+稳定展示及原签名 watermark；旧水位止于原 accepted-order 与 revision，读取尚未失败时仍可
+冻结点击且绝不会纳入触发重读的新任务。重复触发合并为当前请求加至多一次尾随读取，不中止
+同 scope、同页请求。成功后再原位替换；当前文档新建批次在接管期间保持固定展示前缀，
+因此逐项或整批 handoff 始终使用一页读取窗口，不会生成 `limit=N → limit=20` 的参数尾请求。
+只有翻页、清除任务等真实改变组合页范围的操作才会更新 offset 或精确 pair 选择；若参数在
+当前读取完成前恢复到已覆盖范围，
+纯参数尾随会撤销；同筛选、同 offset 的 limit 收缩或恢复到已有稳定页覆盖范围时直接在客户端
+裁切。SSE 新会话已被当前读取捕获后，若随后加入的排除 / 可见 pair 均在该基线中，且基线仍
+足以填满 Server 槽位或已经读到队尾，也直接复用该 revision，不为同一批 handoff 再发参数快照；
+HTTP 接管围栏只声明必须覆盖的 semantic revision：若当前或在途 snapshot 已达到该水位就直接
+消费，只有仍低于水位时才补读，不再由 handoff 无条件叠加一次 refresh；
+显式 refresh、语义 reload 与新连接 ready 不会被参数回退误删。成功动作由同一 SSE 语义事件
+收敛，不再追加动作后快照；动作失败、缺少完整完成投影或发现 revision 缺口时才触发一次有界
+收敛快照，workflow 不叠加第二次刷新。
+单次同 scope 读取失败仍保留卡片和摘要，但立即把旧 canonical 基线降级为纯展示并撤销
+watermark 执行权威；limit 扩大、显式 refresh 与语义 reload 均进入同一 100 / 500 / 1500 ms
+有界恢复，读取期间到达的 reload 合并进该预算，不形成连续请求链。依赖 Server 且点击时没有
+水位的动作不会改用未来快照补冻，按钮本身不随读取状态闪烁，只触发权威重取。页面不会清空
+卡片或显示“恢复队列”类瞬时提示。只有组合页 offset 真实改变或 SSE generation / scope 确实
+换代时才中止对应旧读取；同 scope、同页刷新继续单飞。
+短暂断线与重连同样保留已成功读取的当前页稳定展示，新连接快照成功后原位替换；只有
+首次连接或组合页 offset 改变才进入无基线加载。底部存储位置只保留选择控件，不再显示
+“仅影响之后添加的新任务”的额外说明。队列动作没有真实失败时，因目标状态已经变化而跳过
+的项目直接留在卡片中，不额外显示“已处理 / 已保留”的协议汇总提示。
+
+快照请求把固定的 queue、offset、limit 留在短 query，并在有界 POST JSON 中携带当前文档
+保序批次的 Server pair 及当前组合页中的可见子集。快照 Lua 在同一 Redis 原子边界完整校验全部
+排除 pair，以其 `ZREVRANK` 把过滤 offset 换算成原始起始 rank，再读取有界窗口并补入可见
+canonical；因此当前文档前缀不会与 Server 页面重复，巨大 offset 不扫描 rank 0，其他会话后来
+创建的更靠前批次也不会使组合页错位。旧 incarnation 缺失、discard 或被替换时，响应明确返回
+stale pair 供 owner 原子清退，不用闪现额外提示。它同时
+读取 queue metadata 与 `last_accepted_order`。当前页 completed 回执只用一次 PostgreSQL
+`WHERE id = ANY(...)` 批量水合；
+确认失去正式图片的陈旧回执按固定预算原子删除后整页重读，查询未知时 fail closed。最终稳定
+页面才签发绑定当前进程 scope、Redis connection epoch、owner、queue、captured revision 与
+accepted-order 水位的动作 watermark。owner rank 只供该水位下的有界动作扫描，不参与展示分页。
+SSE semantic 事件可更新 summary 或令当前页有界重读；
+同一 pair/version 的 `progress_seq` 只要求单调增加，允许节流造成跳号。
+
+SSE 每 30 秒串行重新使用普通 HTTP 的 Redis + PostgreSQL 会话校验。logout、密码重置和账号
+删除会通过本进程连接登记立即关闭旧连接；自然 TTL、Redis session key 丢失、账号/角色/凭据
+变化或 Redis unavailable 最晚在下一次心跳关闭，失败后不再发送 ping。重新连接总是从空
+Server 基线和新 scope 开始，读取状态不会延长导入 canonical 的 `discard_at`。
+
+“应用到全部”、提交全部 ready、三类顶部清理和右下角清空都使用点击时已有的签名
+`action_watermark`，不退化为当前页循环。Server 按 accepted-order 水位有界扫描，响应返回
+逐项结果和签名 continuation；continuation 绑定 action ID、动作、规范化参数、完整 watermark、
+owner、queue、scope 和 cursor。首批响应丢失时浏览器用相同 action ID 从头重试，已经成立的
+commit intent、语义 no-op 或已移除成员不会再次推进 version、TTL 或 revision。当前进程的
+action scope 只保留这个动作最近一个请求批次的完整 Promise / 结果；完全相同的并发请求或
+响应丢失重试直接重放原逐项结果，包括删除 completed 回执前捕获的图片 DTO。客户端提交上批
+签发的 continuation，才证明它已经观察到上批响应并允许 replay 槽替换为下一批，因此内存始终
+有界；scope 内另以固定上限的近期 ID→请求指纹拒绝同 ID 换动作、水位或 payload。进程重启、
+Redis operational 周期变化或 scope 废止后旧 token 本来就不能继续。全局属性动作不在 canonical
+保存 action marker 或结果；相同请求的响应丢失由上述作用域结果槽精确重放，不会再次写任务。
+跨客户端 UUIDv7 大小不作为操作先后关系，实际成功的 CAS 顺序才是因果顺序。浏览器可以在
+前一动作执行期间继续冻结后续点击，每个动作使用独立 ID 与点击时 watermark，并在同一 owner
+内严格串行；全部排队动作结束后才触发一次收敛快照。
+提交点击若包含当前浏览器持有且草稿尚待写回的 ready owner，会先冻结点击时的本地 ID / attempt，
+以及已取得 pair 但尚未进入当前 watermark 的精确交接 owner，按既有逐项草稿围栏完成写回与
+提交受理，再继续执行原点击 watermark 的全队列动作。已逐项受理
+的任务会因状态推进被全队列动作跳过，后来接管的任务又晚于原 accepted-order 水位，因此不会
+重复提交或扩大点击范围；若 watermark 不可用且仍有精确集合之外的 Server ready 目标，整次
+提交只触发权威重取并等待用户重试。
+“应用到全部”的 Server payload 与 ready 卡片属性策略使用同一稀疏语义：device / brightness
+保留 `auto` 供 Server 按检测结果解析，未选择的空 theme、空 author 和空 tags 不发送，也不清空
+canonical 已有值；尚未接管的本地前缀仍按其阶段和清单显式字段规则应用同一组窗口默认值。
+“应用到全部”只按 accepted-order 水位选择成员，不按点击时状态或 semantic revision 筛选；
+每次 CAS 冲突都重读最新 active canonical，在其上重新计算稀疏 patch，因此保留未被 patch
+覆盖的并发编辑，而同一字段以实际后成功的动作结果为准。整队列清空同样只按 accepted-order
+水位选成员，并继续执行取消协调器与 PostgreSQL 复核。提交及三类状态清理才要求任务的
+`last_semantic_revision` 不晚于点击时 revision，且在执行时仍满足原谓词；点击后才 ready、
+改过草稿 / 重复决定或形成的新 incarnation 会保留并显示在汇总中。纯 progress 与 TTL
+续期不推进 semantic revision，因此不会误排除原本符合条件的任务。
+清除 completed 回执或清空队列时，Server 先批量读取并核对 PostgreSQL owner，捕获完整图片
+DTO 后再释放 Redis 回执，并把该 DTO 放入逐项动作响应；当前页外任务也因此进入同一个 Web
+完成态观察入口。`commit_ready` 重试若在 Redis 仍为 committing / resolving 时已经从
+PostgreSQL 确认完成，也必须把相同 DTO 放入逐项响应，不能降格为不带完成事实的 no-op。
+动作响应、在途 status 和后续 snapshot 无论按何种顺序到达，都只观察同一 pair 一次。完成 DTO
+先由 queue owner 汇总；一次提交或队列动作只发布一批，异步提交在 committing / resolving 归零
+或窗口关闭时统一失效图片列表、概览与图库投影，不按图片逐项重取同一个活动查询。
+
+需要确认的顶部清理在打开对话框时冻结 watermark、规范化动作、本地任务集合与显示数量；
+随后加入或变化的任务不会关闭对话框，也不会扩大旧确认的清理范围。只有连接 generation /
+scope 真正变化、窗口关闭或用户主动取消才终止这份确认；其他队列动作、草稿或接管交接不会
+禁用确认，确认后的动作按 owner 顺序执行。执行时还会按当前卡片重验打开弹窗时的原状态
+谓词，已经推进为其他状态的任务跳过且
+留在卡片上；Server 已返回的 failed / skipped 也直接由卡片及详情表达并关闭确认。只有网络
+结果未知或本地对账尚未收敛时保留弹窗，并以相同 action ID、水位和冻结集合直接重试。其他
+无需二次确认的顶部动作在单击时直接冻结同一组边界。
+
+右下角“取消”固定表示清空当前 owner 队列。没有未完成任务时单击执行；仍有执行中、结果
+未知或可重试任务时，同一危险色按钮必须再次点击确认。第一次点击同时冻结 Server watermark
+与本地占位集合，按钮文案从“取消”变为“清空”；失焦、外部 pointerdown 或 SSE
+generation / scope 变化会解除确认，没有计时器。普通 revision、计数、本地集合变化和随后
+加入的任务不重置确认，水位后新建的 canonical 永远不属于旧清空动作。取消、PG 核对或 CAS
+结果未知的卡片继续保留。
+确认时捕获的浏览器占位由来源 owner 批量收敛：同一 remote accept / upload intent 只等待一次，
+已返回但因组合分页离页的 pair 以无 Blob 的冻结 target 继续取消；未知 version 先按 status 上限
+批读，再按 cancel 硬上限串行提交，不产生每卡一个请求的并发风暴。正在 cancelling 的占位仍
+属于该 intent fence，不能当作普通可移除卡片。raw PUT 取消与 accepted 响应交叉时，本地 owner
+用原 upload intent 幂等重放区分尚未形成 canonical 的短凭证与已经成立的 pair；后者继续显式
+取消，只有明确 discarded 或确认仍只是 intent 才移除本地卡片，并同步释放该 pair 的页外投影、
+重试门槛与状态围栏。取消只确认任务已 completed 时，右下角整队列 `clear_queue` 可按第一次
+点击时独立冻结的本地 pair 与 attempt 释放同一终态 owner；即使响应丢失后的 Server 重放没有
+逐项返回该 pair，也不会把后来加入的 attempt 纳入。筛选清理则必须由同一 Server 动作以
+`changed` 或 `unchanged` 返回完全相同的 pair 才能释放重叠卡片；即使并行 cancel/status 得到
+missing，也以该逐项结果收敛。逐项 `skipped` / `failed` 或本地 owner 已推进出原筛选谓词时保留
+当前卡片并结束确认；仍匹配但没有 exact 结果、resolving 或结果未知时才继续保留冻结意图，
+不能让普通本地清理越过 commit owner。单卡重试同样先取消并精确释放旧 owner，
+只有 discarded 才创建新 attempt；completed 或 resolving 保留原 attempt 并显示终态。
 
 ### 取消、恢复与清理
 
-materialize、prepare、commit、取消和过期清理共用会话 advisory lock。数据库中的
-`execution_token` 与 `raw_token` 绑定当前执行者和完整 raw；迟到执行者不能发布新状态，
-attempt 级对象键也不会覆盖新尝试。
+显式取消、worker 和恢复共享 `(session_id, image_id)` 的进程内不可逆协调器。数据库事务
+开始前可用 pair/version CAS 收缩为 discarded；事务已经开始时返回 resolving，不撤销或伪报
+取消，settle 后再按 PostgreSQL 结果收敛。Web 只有收到 discarded 才报告 canonical 已取消；
+接收响应未知时，远程任务以原幂等键重放 accept 找回 pair，本地任务先等待当前 raw 请求
+settle，再核对状态。瞬时 missing 或仍无法确认的结果保留为可重试取消失败。Redis 不可用时
+worker 停止取得新任务并中止仍可
+安全中止的阶段，不回退到 PostgreSQL 旧会话表或内存队列。重连和启动使用同一个有界恢复
+入口，committing 状态始终先批量核对 PostgreSQL。
 
-取消先发布与会话代际绑定的快速标记，再中止本实例执行、条件更新 PostgreSQL，等待
-锁内执行者收口后清理 raw 和 `_uploads`。Redis 标记只是短期派生的取消信号，PostgreSQL
-状态仍是最终依据；清理只在标记值仍属于当前发布者时使用 `DELEX ... IFEQ` 原子删除，
-不会误删同 ID 新代际的标记。进程在 preparing 中退出后，下一次 prepare 可以从已确认
-完整的 raw 重做；
-无法确认权威状态时保留素材和候选，不做破坏性猜测。
+raw、`.part`、prepared staging 和正式候选的物理回收必须复验当前 canonical / generation
+及 PostgreSQL 正式引用；结果未知时保留，不从文件路径反建业务状态。正式候选仍交给持久
+`move.cleanup` 重试。canonical 不使用 Redis 原生过期事件：expires scanner 按 queue 分页读取
+服务端 `discard_at`，Lua 再复核 version、execution token 与截止时间并原子移除 canonical、
+owner / runnable / expires 索引、计数和 revision；committing 仍先经过不可逆协调器。过期、
+显式取消和 clear 只决定业务 tombstone，不以物理删除是否成功反推取消结果。
+延迟快速清理只携带取消时冻结的精确 raw generation；同一 pair 在 tombstone 过期后形成的新
+incarnation 不会被旧清理递归删除，其他遗留项仍由保守年龄扫描收口。
 
-过期会话由 `import.cleanup` 分批认领。只在 raw、暂存对象和可能的正式候选都已确认清理
-后删除会话行；失败项保留供下次重试。对象删除、存储类型差异和补偿规则见
-[存储](./storage.md)。
+独立的单实例孤儿清理 worker 每 60 秒运行。它只在 Redis operational 且 canonical 引用形成
+稳定有界快照时处理本地 raw 与存储暂存：当前进程仍在接收、下载、Sharp prepare 或发布的
+raw / `.part` 由
+活跃租约保护；`_uploads` 必须完整列举，并在删除前取得 storage location write lock、重新
+确认物理 namespace 未变以及枚举前后精确 prepared key。local 原子发布崩溃遗留的精确
+`.candidate-<UUID>` 只沿其基础 v5 key 判定引用与年龄；无法解析的旧键、近期 generation、
+Redis 异常和不完整列表全部保留。详细 age gate 与维护边界见[存储](./storage.md)。
 
 ## 公开浏览与图片出口
 
@@ -380,7 +593,7 @@ overview 和词表分别只在自身字段受影响时刷新；公开编辑与�
 但必须由超级管理员再次确认。执行端在独占存储位置锁内重新读取 PostgreSQL 和三个完整
 命名空间；预览同时包含缺失缩略图与数据库标记为尚未最终采用的缩略图，并按物理命名空间
 去重受阻情况，不把不完整组或不可读逻辑后端的相关项算作
-可执行维修 / 删除。仍存在的非活动导入会话继续持有自己的暂存对象。不完整列举不会生成
+可执行维修 / 删除。Redis 中仍活动的 canonical 继续持有自己的暂存对象。不完整列举不会生成
 修复或删除候选。维修直接写回并校验当前 local / S3 对象，
 不创建后台缩略图任务；孤儿删除、跳过和失败都按项返回。请求中止后不再启动后续项，已经
 开始的并发片先收口，因此旧预览和断开的响应都不会被当作写入真相。
@@ -392,7 +605,9 @@ overview 和词表分别只在自身字段受影响时刷新；公开编辑与�
 读取完成前使用固定启动暗色；初始读取失败也保留该画布及满足普通文字 4.5:1 的反馈色，
 认证完成后才在后台内容首帧前应用偏好。图片页冷入口的筛选控件、非选中子标签和次级导入
 按钮直接消费后台语义表面；选中标签与主上传按钮才使用主操作色，不依赖迟到页面样式
-把白色控件覆盖为暗色。公开页面及其中的管理弹窗始终使用公开暗色上下文。
+把白色控件覆盖为暗色。公开页面及其中的管理弹窗始终使用公开暗色上下文。后台偏好复用
+认证首帧或最近五分钟内的查询快照；认证首帧同时携带同一偏好 GET 表示的 ETag，更久后
+回到窗口或网络恢复时才显式携带它条件重验证，未变化的 PostgreSQL 投影返回 304。
 
 ## 配置、缓存与 Worker 的交接
 
@@ -402,9 +617,9 @@ overview 和词表分别只在自身字段受影响时刷新；公开编辑与�
 [配置说明](./configuration.md)。
 
 图片写事务只提交 PostgreSQL 真相并推进投影 revision；精确 Redis 同步或全量重建发生在
-提交后，失败不倒退业务结果。`move.cleanup`、`import.cleanup`、`trash.purge` 与
-`cache.rebuild` 的领取、租约、重试和停机语义由[架构总览](./architecture.md#后台-worker)
-统一说明，流程页面不复制任务状态机。
+提交后，失败不倒退业务结果。`move.cleanup`、`trash.purge` 与 `cache.rebuild` 的领取、
+租约、重试和停机语义，以及 Redis 导入 worker 的单实例恢复边界，由
+[架构总览](./architecture.md#后台-worker)统一说明，流程页面不复制任务状态机。
 
 ## HTTP 缓存与按需加载
 

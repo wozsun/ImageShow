@@ -1,6 +1,7 @@
 import type { ImageDraft, ImportJob, ManifestImportSource } from "../../../lib/types.js";
 import {
-  browserUuid,
+  webImportBatchKey,
+  webUuidV7,
   type ImportAttributeDefaults
 } from "../../../lib/upload/upload-utils.js";
 
@@ -175,10 +176,10 @@ export function linkImportJobs(
   storageSlug: string
 ) {
   const batchTime = new Date().toISOString();
-  const subscriptionBatchKey = browserUuid();
+  const subscriptionBatchKey = webImportBatchKey();
   return validatedUrls.map((url, manifestPosition): ImportJob => ({
-    id: browserUuid(),
-    attemptKey: browserUuid(),
+    id: webUuidV7(),
+    attemptKey: webUuidV7(),
     subscriptionBatchKey,
     kind: "download",
     status: "queued",
@@ -199,11 +200,36 @@ export function linkImportJobs(
 export function retryPrepareJob(job: ImportJob): ImportJob {
   return {
     ...job,
-    attemptKey: browserUuid(),
+    attemptKey: webUuidV7(),
+    uploadIntentInput: undefined,
+    remoteAcceptInput: undefined,
     sessionId: undefined,
+    imageId: undefined,
+    imageTime: undefined,
+    serverVersion: undefined,
+    serverProgressSeq: undefined,
+    serverSemanticRevision: undefined,
+    serverHandoffPending: undefined,
+    serverHandoffRevision: undefined,
+    serverHandoffDisplayPage: undefined,
+    serverHandoffProvisionalTotal: undefined,
+    serverAcceptedOrder: undefined,
+    serverAccepted: undefined,
+    serverDraftPending: undefined,
+    serverStatus: undefined,
+    serverPhase: undefined,
+    serverError: undefined,
+    serverProgress: undefined,
+    serverAttemptKey: undefined,
+    serverSessionId: undefined,
+    serverImageId: undefined,
+    browserDisplayReleased: undefined,
     status: "queued",
     failureStage: undefined,
     commitFailureCheckpoint: undefined,
+    commitIntent: undefined,
+    resultState: undefined,
+    resultError: undefined,
     message: "等待重试",
     transferProgress: undefined,
     md5: undefined,
@@ -211,6 +237,7 @@ export function retryPrepareJob(job: ImportJob): ImportJob {
     detectedClassification: undefined,
     classificationOverride: undefined,
     duplicates: [],
+    duplicateCount: undefined,
     duplicateDecision: "upload",
     finalSize: undefined,
     quality: undefined,
@@ -218,11 +245,21 @@ export function retryPrepareJob(job: ImportJob): ImportJob {
   };
 }
 
+export function isUnconfirmedLocalRawAttempt(job: ImportJob) {
+  return job.kind === "local"
+    && job.failureStage === "prepare"
+    && job.serverVersion === undefined
+    && Boolean(job.sessionId && job.imageId);
+}
+
 export function retryLinkPrepareJob(job: ImportJob): ImportJob {
-  if (job.failureStage !== "create" || job.sessionId) return retryPrepareJob(job);
+  if (job.failureStage !== "create" || job.sessionId) {
+    return retryPrepareJob(job);
+  }
   return {
     ...retryPrepareJob(job),
     attemptKey: job.attemptKey,
+    remoteAcceptInput: job.remoteAcceptInput,
     status: "queued",
     message: "重新获取导入会话",
   };

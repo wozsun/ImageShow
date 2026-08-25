@@ -8,8 +8,10 @@ import { runRequiredRedisCommand } from "../core/runtime-availability.ts";
 import { parseAdminCredentialVersions } from "./session-credential.ts";
 import {
   adminSessionKey,
+  adminSessionKeyFamilyPrefix,
   adminSessionKeyPattern
 } from "./admin-session-key.ts";
+import { closeAdminSessionConnections } from "./admin-session-connections.ts";
 
 const SESSION_SCAN_COUNT = 100;
 
@@ -42,7 +44,7 @@ type TargetSessionRedis = SessionRedis & {
   readSessions(keys: string[]): Promise<Array<string | null>>;
   unlinkSessionsIfUnchanged(
     snapshots: RedisStringSnapshot[]
-  ): Promise<number>;
+  ): Promise<RedisStringSnapshot[]>;
 };
 
 type RedisSessionPipeline = {
@@ -92,10 +94,19 @@ export async function invalidateAllAdminSessions(client: SessionRedis) {
       adminSessionKeyPattern,
       SESSION_SCAN_COUNT
     );
-    if (keys.length) removed += await client.unlinkSessions(keys);
+    if (keys.length) {
+      removed += await client.unlinkSessions(keys);
+      closeAdminSessionConnections(keys.flatMap(adminSessionIdFromKey));
+    }
     cursor = nextCursor;
   } while (cursor !== "0");
   return removed;
+}
+
+function adminSessionIdFromKey(key: string) {
+  return key.startsWith(adminSessionKeyFamilyPrefix)
+    ? [key.slice(adminSessionKeyFamilyPrefix.length)]
+    : [];
 }
 
 function sessionIdentity(raw: string | null) {
@@ -138,22 +149,39 @@ async function invalidateAdminSessionsByUsername(
     );
     if (keys.length) {
       const values = await client.readSessions(keys);
-      const targets = keys.flatMap((key, index): RedisStringSnapshot[] => {
+      const targets = keys.flatMap((key, index): Array<{
+        snapshot: RedisStringSnapshot;
+        sessionId: string;
+      }> => {
         if (key === preservedKey) return [];
         const value = values[index] ?? null;
         const identity = sessionIdentity(value);
+        const sessionId = adminSessionIdFromKey(key)[0];
         return value
+          && sessionId
           && identity?.username === username
           && identity.credentialVersions.includes(staleCredentialVersion)
           && !(
             validCredentialVersion
             && identity.credentialVersions.includes(validCredentialVersion)
           )
-          ? [{ key, value }]
+          ? [{ snapshot: { key, value }, sessionId }]
           : [];
       });
       if (targets.length) {
-        removed += await client.unlinkSessionsIfUnchanged(targets);
+        const removedSnapshots = await client.unlinkSessionsIfUnchanged(
+          targets.map((target) => target.snapshot)
+        );
+        removed += removedSnapshots.length;
+        const sessionByKey = new Map(
+          targets.map((target) => [target.snapshot.key, target.sessionId])
+        );
+        closeAdminSessionConnections(
+          removedSnapshots.flatMap((snapshot) => {
+            const sessionId = sessionByKey.get(snapshot.key);
+            return sessionId ? [sessionId] : [];
+          })
+        );
       }
     }
     cursor = nextCursor;

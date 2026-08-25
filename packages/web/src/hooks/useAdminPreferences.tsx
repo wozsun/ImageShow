@@ -17,10 +17,9 @@ import {
   type AdminPreferenceKey,
   type AdminPreferences,
   type AdminPreferencesResponseDto,
-  type AdminPreferenceValues,
-  type AuthStateDto
+  type AdminPreferenceValues
 } from "@imageshow/shared/browser";
-import { api } from "../lib/api/client.js";
+import { apiWithEtag } from "../lib/api/client.js";
 import { adminApiBasePath } from "../lib/constants.js";
 import { queryKeys } from "../lib/api/query-keys.js";
 import {
@@ -31,8 +30,10 @@ import {
   shouldReplaceAdminPreferenceQuerySnapshot,
   type CachedAdminPreferences
 } from "../lib/api/admin-preference-cache.js";
+import { useAuthPreferenceCacheBridge } from "./useAuthSession.js";
 
 const localPreferenceKeyPrefix = "imageshow.admin.preferences.";
+const preferenceRevalidationIntervalMs = 5 * 60 * 1000;
 
 type SetAdminPreference = <Key extends AdminPreferenceKey>(
   key: Key,
@@ -48,6 +49,10 @@ type QueuedPreference = {
   value: AdminPreferenceValues[AdminPreferenceKey];
   version: number;
 };
+
+type AdminPreferencesQuerySnapshot = AdminPreferencesResponseDto & Readonly<{
+  etag: string;
+}>;
 
 const AdminPreferenceContext = createContext<AdminPreferenceContextValue | null>(null);
 
@@ -113,14 +118,20 @@ function readCachedPreferences(username: string): CachedAdminPreferences {
 export function AdminPreferencesProvider({
   username,
   serverPreferences,
+  serverPreferencesEtag,
   serverPreferencesUpdatedAt,
   children
 }: PropsWithChildren<{
   username: string;
   serverPreferences: AdminPreferences;
+  serverPreferencesEtag: string;
   serverPreferencesUpdatedAt: number;
 }>) {
   const queryClient = useQueryClient();
+  const {
+    cancelPendingAuthRead,
+    updateAuthPreferenceSnapshot
+  } = useAuthPreferenceCacheBridge();
   const queryKey = useMemo(
     () => [...queryKeys.adminPreferences, username] as const,
     [username]
@@ -161,15 +172,19 @@ export function AdminPreferencesProvider({
       cachedUpdatedAt,
       serverPreferencesUpdatedAt
     )) return;
-    queryClient.setQueryData<AdminPreferencesResponseDto>(
+    queryClient.setQueryData<AdminPreferencesQuerySnapshot>(
       queryKey,
-      { preferences: initialServerPreferences },
+      {
+        preferences: initialServerPreferences,
+        etag: serverPreferencesEtag
+      },
       { updatedAt: serverPreferencesUpdatedAt }
     );
   }, [
     initialServerPreferences,
     queryClient,
     queryKey,
+    serverPreferencesEtag,
     serverPreferencesUpdatedAt
   ]);
 
@@ -181,28 +196,22 @@ export function AdminPreferencesProvider({
   }, [username]);
 
   const syncAuthPreferenceSnapshot = useCallback((
-    preferences: AdminPreferences
+    preferences: AdminPreferences,
+    etag: string
   ) => {
     if (activeUsernameRef.current !== username) return;
-    const current = queryClient.getQueryData<AuthStateDto>(queryKeys.me);
-    if (!current?.authenticated || current.username !== username) return;
-    if (sameAdminPreferences(
-      normalizeAdminPreferences(current.preferences),
-      preferences
-    )) return;
-    const next: Extract<AuthStateDto, { authenticated: true }> = {
-      ...current,
-      preferences
-    };
-    queryClient.setQueryData<AuthStateDto>(queryKeys.me, next);
-  }, [queryClient, username]);
+    updateAuthPreferenceSnapshot(username, preferences, etag);
+  }, [updateAuthPreferenceSnapshot, username]);
 
   const cancelPreferenceReads = useCallback(
-    () => queryClient.cancelQueries(
-      { queryKey, exact: true },
-      { silent: true }
-    ),
-    [queryClient, queryKey]
+    () => Promise.all([
+      queryClient.cancelQueries(
+        { queryKey, exact: true },
+        { silent: true }
+      ),
+      cancelPendingAuthRead()
+    ]).then(() => undefined),
+    [cancelPendingAuthRead, queryClient, queryKey]
   );
 
   const enqueueSync = useCallback((requestedPatch: AdminPreferences) => {
@@ -226,13 +235,17 @@ export function AdminPreferencesProvider({
          * Cancel once before the PATCH and once after its acknowledgement so no
          * stale read can publish after pending is cleared.
          */
-        const response = await runAdminPreferenceWriteWithReadFence(
+        const result = await runAdminPreferenceWriteWithReadFence(
           cancelPreferenceReads,
-          () => api<AdminPreferencesResponseDto>(`${adminApiBasePath}/preferences`, {
-            method: "PATCH",
-            body: JSON.stringify(patch)
-          })
+          () => apiWithEtag<AdminPreferencesResponseDto>(
+            `${adminApiBasePath}/preferences`,
+            {
+              method: "PATCH",
+              body: JSON.stringify(patch)
+            }
+          )
         );
+        const response = result.data;
         const acknowledged = normalizeAdminPreferences(response.preferences);
         const current = cacheRef.current;
         const values = { ...current.values };
@@ -256,10 +269,11 @@ export function AdminPreferencesProvider({
         }
         commitCache({ values, pending });
 
-        queryClient.setQueryData<AdminPreferencesResponseDto>(queryKey, {
-          preferences: acknowledged
+        queryClient.setQueryData<AdminPreferencesQuerySnapshot>(queryKey, {
+          preferences: acknowledged,
+          etag: result.etag
         });
-        syncAuthPreferenceSnapshot(acknowledged);
+        syncAuthPreferenceSnapshot(acknowledged, result.etag);
       } catch {
         // PostgreSQL 或网络暂时不可用时保留 pending；网络恢复或下次登录会再次补同步。
       } finally {
@@ -278,17 +292,37 @@ export function AdminPreferencesProvider({
     syncAuthPreferenceSnapshot
   ]);
 
-  const preferenceQuery = useQuery<AdminPreferencesResponseDto>({
+  const preferenceQuery = useQuery<AdminPreferencesQuerySnapshot>({
     queryKey,
-    queryFn: ({ signal }) => api(`${adminApiBasePath}/preferences`, { signal }),
+    queryFn: async ({ signal }) => {
+      const current = queryClient.getQueryData<AdminPreferencesQuerySnapshot>(
+        queryKey
+      ) ?? {
+        preferences: initialServerPreferences,
+        etag: serverPreferencesEtag
+      };
+      const result = await apiWithEtag<AdminPreferencesResponseDto>(
+        `${adminApiBasePath}/preferences`,
+        { signal },
+        {
+          etag: current.etag,
+          data: { preferences: current.preferences }
+        }
+      );
+      return { ...result.data, etag: result.etag };
+    },
     // /auth/me 已携带 PostgreSQL 快照，作为后台首帧种子避免额外请求和外观闪烁。
-    // 页面重新聚焦时仍主动读取一次偏好，让另一设备完成的修改可以收敛到当前页面。
-    initialData: { preferences: initialServerPreferences },
+    // 五分钟内复用 /auth/me 或上次条件读取的快照；更久后聚焦 / 重连才重验证，
+    // 服务端 ETag 会让未变化的偏好只产生 304 而不重复传输 JSON。
+    initialData: {
+      preferences: initialServerPreferences,
+      etag: serverPreferencesEtag
+    },
     initialDataUpdatedAt: serverPreferencesUpdatedAt,
-    staleTime: Number.POSITIVE_INFINITY,
+    staleTime: preferenceRevalidationIntervalMs,
     gcTime: Number.POSITIVE_INFINITY,
-    refetchOnWindowFocus: "always",
-    refetchOnReconnect: "always",
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
     retry: 1
   });
 
@@ -299,7 +333,7 @@ export function AdminPreferencesProvider({
     const next = reconcileAdminPreferenceCache(cacheRef.current, serverPreferences);
     commitCache(next);
     enqueueSync(next.pending);
-    syncAuthPreferenceSnapshot(serverPreferences);
+    syncAuthPreferenceSnapshot(serverPreferences, preferenceQuery.data.etag);
   }, [
     commitCache,
     enqueueSync,

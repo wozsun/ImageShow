@@ -154,6 +154,30 @@ function digestMatchesExpected(
     && (!expected.md5 || digest.md5 === expected.md5.toLowerCase());
 }
 
+/**
+ * Prove that a formal target can be owned before registering a cleanup guard.
+ * An absent object is writable; an existing object is adoptable only when its
+ * strong digest already matches the frozen commit manifest.
+ */
+export async function assertStorageTargetAvailable(input: {
+  storage: StorageEndpoint;
+  prefix: "media" | "thumbs";
+  key: string;
+  expected: SourceDigestExpectation;
+  signal?: AbortSignal;
+}) {
+  const { storage, prefix, key, expected, signal } = input;
+  await assertObjectNotPendingCleanup(storage.config, prefix, key);
+  if (!await storage.driver.exists(prefix, key, { signal })) return;
+  const existing = await digestStorageObject(storage, prefix, key, {
+    includeMd5: Boolean(expected.md5),
+    signal
+  });
+  if (!digestMatchesExpected(existing, expected)) {
+    throw objectConflict(storage, prefix, key, storage.config.slug);
+  }
+}
+
 async function cleanupCandidate(
   object: CandidateObject,
   cleanup: CandidateCleanup | undefined,
@@ -285,6 +309,11 @@ export async function copyVerifiedObjectWithinStorage(input: {
   expectedSource?: SourceDigestExpectation;
   sourceMismatch?: SourceMismatchError;
   cleanupCandidate?: CandidateCleanup;
+  /** Matching pre-copy guard owned under the image storage mutation lock. */
+  ownedImportCandidateGuard?: Readonly<{
+    imageId: string;
+    token: string;
+  }>;
   signal?: AbortSignal;
 }): Promise<{ created: boolean; sourceDigest: StorageObjectDigest }> {
   const {
@@ -300,6 +329,7 @@ export async function copyVerifiedObjectWithinStorage(input: {
       message: "源存储对象与记录的完整性信息不一致"
     },
     cleanupCandidate: candidateCleanup,
+    ownedImportCandidateGuard,
     signal
   } = input;
   const sourceDigest = await digestStorageObject(
@@ -325,7 +355,9 @@ export async function copyVerifiedObjectWithinStorage(input: {
     return { created: false, sourceDigest };
   }
   if (toPrefix !== "_uploads") {
-    await assertObjectNotPendingCleanup(storage.config, toPrefix, toKey);
+    await assertObjectNotPendingCleanup(storage.config, toPrefix, toKey, {
+      ownedImportCandidateGuard
+    });
   }
   if (await storage.driver.exists(toPrefix, toKey, { signal })) {
     const existing = await digestStorageObject(
@@ -346,7 +378,10 @@ export async function copyVerifiedObjectWithinStorage(input: {
       fromKey,
       toPrefix,
       toKey,
-      { signal }
+      {
+        signal,
+        atomicCandidateToken: ownedImportCandidateGuard?.token
+      }
     );
     const copied = await digestStorageObject(
       storage,

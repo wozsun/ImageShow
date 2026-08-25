@@ -1,4 +1,4 @@
-import type { QueryClient } from "@tanstack/react-query";
+import type { Query, QueryClient } from "@tanstack/react-query";
 import type {
   AdminImageListItemDto,
   EditableImageSnapshotDto,
@@ -6,6 +6,9 @@ import type {
   ImportVocabularyDto
 } from "@imageshow/shared/browser";
 import { queryKeys } from "./query-keys.js";
+import {
+  adminImageListValidationCovers
+} from "./admin-image-list-validation.js";
 
 function invalidate(client: QueryClient, queryKeysToInvalidate: readonly (readonly unknown[])[]) {
   return Promise.all(queryKeysToInvalidate.map((queryKey) => client.invalidateQueries({ queryKey })));
@@ -128,7 +131,8 @@ function importedVocabularyChanged(
 
 export function invalidateImageDataAfterImport(
   client: QueryClient,
-  items: readonly AdminImageListItemDto[]
+  items: readonly AdminImageListItemDto[],
+  options: Readonly<{ completedAt?: number }> = {}
 ) {
   const vocabulary = client.getQueryData<ImportVocabularyDto>(
     queryKeys.importVocabulary
@@ -138,18 +142,51 @@ export function invalidateImageDataAfterImport(
   );
   const hasTags = items.some((item) => item.tags.length > 0);
   const hasAuthors = items.some((item) => item.author !== "");
-  return invalidate(client, [
-    queryKeys.publicImages,
-    queryKeys.galleryFacets,
-    queryKeys.galleryStats,
-    queryKeys.adminImages,
-    queryKeys.overview,
-    queryKeys.themes,
-    ...(hasTags ? [queryKeys.tags] : []),
-    ...(hasAuthors ? [queryKeys.authors] : []),
-    ...(vocabularyQueryExists && (
-      !vocabulary || importedVocabularyChanged(vocabulary, items)
-    ) ? [queryKeys.importVocabulary] : [])
+  const completedAt = options.completedAt;
+  const adminImagesInFlight = new Set(
+    client.getQueryCache().findAll({ queryKey: queryKeys.adminImages })
+      .filter((query) => query.state.fetchStatus !== "idle")
+  );
+  const invalidateAdminImages = async () => {
+    const notCovered = completedAt === undefined
+      ? undefined
+      : (query: Query) => !adminImageListValidationCovers(
+          query,
+          completedAt
+        );
+    await client.invalidateQueries({
+      queryKey: queryKeys.adminImages,
+      predicate: notCovered
+    }, {
+      // 多个完成事件共享同一管理员列表所有者；先让在途读取自然完成，
+      // 避免默认 cancelRefetch 制造 aborted fetch。
+      cancelRefetch: false
+    });
+    await client.invalidateQueries({
+      queryKey: queryKeys.adminImages,
+      predicate: completedAt === undefined
+        ? (query) => adminImagesInFlight.has(query)
+        : notCovered
+    }, {
+      // 若在途读取早于完成水位，顺序补一次尾随读取；若它已经覆盖该
+      // 完成项，响应头水位会让 predicate 直接跳过，不产生重复请求。
+      cancelRefetch: false
+    });
+  };
+  return Promise.all([
+    invalidate(client, [
+      queryKeys.publicImages,
+      queryKeys.galleryFacets,
+      queryKeys.galleryStats,
+      queryKeys.overview,
+      queryKeys.themes,
+      ...(hasTags ? [queryKeys.tags] : []),
+      ...(hasAuthors ? [queryKeys.authors] : []),
+      ...(vocabularyQueryExists && (
+        !vocabulary || importedVocabularyChanged(vocabulary, items)
+      ) ? [queryKeys.importVocabulary] : [])
+    ]),
+    invalidateAdminImages()
   ]);
 }
 

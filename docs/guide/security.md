@@ -41,7 +41,7 @@
   以上八项高风险操作权限当前只授予超级管理员；直接构造对应单项请求同样返回 403，
   且在解析正文或进入存储维护操作前终止。
 - Compose 内置 Redis 使用不固定次版本的 `redis:8` 镜像，只连接项目私有网络、不发布宿主机端口且不设置密码，并启用 AOF。ImageShow 不设置 Redis 内存上限、淘汰策略或容器硬限制，只把 `INFO MEMORY` 作为运维观测；启动与 `/readyz` 检查连接，并在自有 5 秒 TTL 隔离探针键上实际执行 `INCREX`、`ARRING`、`ARLASTITEMS`、`SET ... IFEQ ... KEEPTTL` 与 `DELEX ... IFEQ` 五项必需能力，同时验证条件失败、缺失和 TTL 保留；命令存在但 ACL 拒绝执行仍视为不可用。首次校验成功前后台与公开业务都由冷启动门拒绝；运行期 Redis 故障时后台在会话读取前统一返回 `503 redis_unavailable`，不能伪装成 401 或触发浏览器清除登录状态，公开只读业务才允许有界 PostgreSQL 回源。连接启用了认证的外部 Redis 时，可通过 `REDIS_PASSWORD` 向应用提供密码。
-- 管理端界面偏好接口只使用鉴权会话中的用户名定位 `admin_account.preferences`，不接受客户端传入目标账号。接口只接受 shared 注册的键与值域，PATCH 在 PostgreSQL 行内原子合并并返回完整投影；JSONB 顶层必须是对象且最大 4 KiB。浏览器缓存键按用户名隔离，`localStorage` 仅承担首帧显示、断网 pending 和多标签同步，不参与鉴权，也不保存会话或 CSRF token。PostgreSQL 尚无某键时，已校验的本地值可补写一次；删除账号时偏好随该行自然删除。
+- 管理端界面偏好接口只使用鉴权会话中的用户名定位 `admin_account.preferences`，不接受客户端传入目标账号。接口只接受 shared 注册的键与值域，PATCH 在 PostgreSQL 行内原子合并并返回完整投影；JSONB 顶层必须是对象且最大 4 KiB。GET 使用 `private, no-cache` 与内容 ETag，`/api/admin/auth/me` 的认证首帧同时携带完全相同偏好表示的 ETag，五分钟内由前端查询缓存直接复用，更久后的窗口聚焦 / 重连显式带该验证器条件读取，设置未变化时即使此前没有访问过偏好 URL 也返回 304。浏览器缓存键按用户名隔离，`localStorage` 仅承担首帧显示、断网 pending 和多标签同步，不参与鉴权，也不保存会话或 CSRF token。PostgreSQL 尚无某键时，已校验的本地值可补写一次；删除账号时偏好随该行自然删除。
 - 登录失败限流：每 IP + 用户名 60 秒内 5 次失败即拦截，叠加 180 秒内 10 次尝试的全局兜底（阈值与窗口均可在 `config.json` 的 `security.*` 调整）。两个固定窗口在一次 Redis 服务端原子操作中按来源到全局的顺序使用 `INCREX ... UBOUND ... EX ... ENX` 预留；前一窗口已拒绝时不再消耗后续共享额度。达到上限后计数不再增长，后续请求也不会延长首次建立的 TTL。
 - 登录前置安全验证使用完全自托管的 ALTCHA：服务端签发带 HMAC 的
   PBKDF2/SHA-256 确定性工作量挑战，登录页显示紧凑验证条并在组件加载后自动由
@@ -104,8 +104,13 @@ Content-Type 与缓存验证器会被省略或回退为站内类型；`Content-R
 | hash 资产、稳定图片、HEAD、206、304 | hash 资产 / 稳定图片 `immutable`；非 hash 品牌资源短缓存；ETag、Last-Modified、单 Range | 304 无正文；206 保留完整对象验证器；416 返回 `Content-Range: bytes */总长` |
 | 随机 proxy / redirect / JSON | 永远 `no-store` | proxy 不声明 Range；302 的 `Location` 先校验；前两种模式带 `X-Image-Info`，JSON 只返回公开字段与实际 `count`，HEAD 不发送正文 |
 | 外链原图 proxy / redirect | `static.` 唯一公开入口的 direct 302 使用 `private, no-store`；proxy 继承已校验源站策略或使用 fallback，URL 命名空间弱 ETag、Last-Modified 与 304；后台 `private, no-store` | 单次公开图片解析、HTTPS 安全抓取、GET 内容嗅探、HEAD 不保留正文、旧 URL 验证器不能命中新 URL、`Referrer-Policy: no-referrer` |
-| 导入 SSE | `no-store, no-transform` | 固定 POST 路径，批量键只在有界 JSON 正文；不压缩、不缓冲，断开即清理 listener / heartbeat |
+| 导入 SSE | `no-store, no-transform` | 每个已显示的 owner + queue 使用一个固定 GET 路径；不压缩、不缓冲，30 秒串行鉴权 heartbeat，断开即清理 listener / scope |
 | `static.` 与未知子域 | `static.` 只开放 `/media/*`、`/thumbs/*`、`/link/original/<id>` 与可选 `/robots.txt`；失败 `no-store` | 主站不暴露资源字节路径；随机、外链、主题和其他未知子域均返回带完整安全头的 404 |
+
+确定性管理只读 JSON 包括偏好、管理员列表、存储选项 / 后端，以及已有的设置、
+词表、图片列表与管理详情；写后仍由各领域精确失效查询，内容未变化的再次读取返回 304。
+概览包含每次进入时即时测量的 Redis 核心占用与测量时间，因此保持普通私有读取，不为追求
+304 缓存或固定这项实时表示。
 
 稳定图片地址本身不是管理员授权边界。图片进入回收站后会退出所有公开发现入口，但已知的
 `/media/*`、`/thumbs/*` 或 S3 `public_base_url` 直链仍可访问；后台列表和动作权限继续由
@@ -123,11 +128,14 @@ Worker 与嵌入页。应用没有跨源 API 契约，不返回 `Access-Control-
 - 普通 API 请求体在解析前限制为 128 KiB；管理员偏好 PATCH 在鉴权与 CSRF
   通过后使用独立的 5 KiB 传输上限，解析并规范化后的完整 JSONB 另受 4 KiB
   上限约束。`/api/admin/auth/me` 只向已认证会话附带按 shared schema 规范化的
-  管理员偏好，用于在后台首次绘制前确定外观；浏览器本地偏好只是首帧、离线待同步和
+  管理员偏好及其 GET 表示 ETag，用于在后台首次绘制前确定外观并为首次过期重验提供
+  条件验证器；浏览器本地偏好只是首帧、离线待同步和
   多标签页缓存，不参与鉴权，也不能覆盖 PostgreSQL 权威值。完整配置、微博解析、
   JSONL 清单和批量图片编辑分别使用独立的
   1088 KiB、1 MiB、128 MiB、6 MiB 传输上限。导入会话随前端 lane 推进逐项
-  创建，每个创建请求仍走普通 API 上限，不存在可一次提交全部任务的批量会话入口。
+  创建，每个创建请求仍走普通 API 上限，不存在可一次提交全部任务的批量会话入口。导入
+  status、当前页重复详情、草稿更新、取消、提交意图与全队列动作等增长型 `1…N` 内容均使用
+  有硬上限的 POST JSON；SSE、preview、raw PUT 和 snapshot 固定短 URL 不承载数组或草稿。
   消费 JSON 的写路由统一要求 `application/json` 或带 `+json` 后缀的媒体类型；缺失、
   空白、截断、中止或语法错误正文稳定返回 `400 invalid_json`。正文对象使用 strict
   schema 拒绝未知或已删除字段，全可选更新至少包含一个有效字段；这类在写模型接纳前

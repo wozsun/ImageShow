@@ -105,9 +105,14 @@ export function ImportSourceDialog({
   };
 
   const changeMode = (nextMode: ImportSourceMode) => {
+    if (nextMode === mode) {
+      inputRef.current?.focus();
+      return;
+    }
     setMode(nextMode);
     setText("");
     resetParsedResult();
+    inputRef.current?.focus();
   };
 
   const parseInput = async () => {

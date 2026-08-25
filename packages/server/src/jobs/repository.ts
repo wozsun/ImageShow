@@ -49,24 +49,43 @@ export async function enqueue(
  * and receives a durable rerun marker. The generic success transition consumes
  * that marker by returning the same row to pending.
  */
-export async function enqueueRerunnableJob(
-  type: BackgroundJobType,
-  targetId: string,
-  payload: unknown,
-  idempotencyKey: string,
+export type RerunnableJobInput = Readonly<{
+  type: BackgroundJobType;
+  targetId: string;
+  payload: unknown;
+  idempotencyKey: string;
+}>;
+
+export async function enqueueRerunnableJobs(
+  jobs: readonly RerunnableJobInput[],
   client?: PoolClient
 ) {
-  const values = [
-    randomUuidV7(),
-    type,
-    targetId,
-    JSON.stringify(payload),
-    idempotencyKey
-  ];
+  if (!jobs.length) return;
+  const uniqueJobs = [...new Map(jobs.map((job) => [
+    job.idempotencyKey,
+    {
+      id: randomUuidV7(),
+      type: job.type,
+      target_id: job.targetId,
+      payload: job.payload,
+      idempotency_key: job.idempotencyKey
+    }
+  ])).values()];
   const query = `INSERT INTO background_job(
                    id, type, target_id, payload, idempotency_key
                  )
-                 VALUES($1, $2, $3, $4::jsonb, $5)
+                 SELECT input.id,
+                        input.type,
+                        input.target_id,
+                        input.payload,
+                        input.idempotency_key
+                   FROM jsonb_to_recordset($1::jsonb) AS input(
+                     id uuid,
+                     type text,
+                     target_id text,
+                     payload jsonb,
+                     idempotency_key text
+                   )
                  ON CONFLICT (idempotency_key)
                    WHERE idempotency_key IS NOT NULL
                  DO UPDATE
@@ -127,12 +146,28 @@ export async function enqueueRerunnableJob(
                      END
                  WHERE background_job.status='running'
                     OR background_job.status IN ('succeeded', 'ignored')
-                    OR (
-                      background_job.status='failed'
-                      AND background_job.next_retry_at IS NULL
-                    )`;
+                     OR (
+                       background_job.status='failed'
+                       AND background_job.next_retry_at IS NULL
+                     )`;
+  const values = [JSON.stringify(uniqueJobs)];
   if (client) await client.query(query, values);
   else await pool.query(query, values);
+}
+
+export function enqueueRerunnableJob(
+  type: BackgroundJobType,
+  targetId: string,
+  payload: unknown,
+  idempotencyKey: string,
+  client?: PoolClient
+) {
+  return enqueueRerunnableJobs([{
+    type,
+    targetId,
+    payload,
+    idempotencyKey
+  }], client);
 }
 
 export async function claimBackgroundJob(type: string) {

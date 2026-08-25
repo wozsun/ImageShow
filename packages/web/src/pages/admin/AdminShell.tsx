@@ -105,6 +105,7 @@ export function AdminShell() {
       role={role}
       username={data.username}
       serverPreferences={data.preferences}
+      serverPreferencesEtag={data.preferences_etag}
       serverPreferencesUpdatedAt={dataUpdatedAt}
       siteName={siteName}
       applicationVersion={data.application_version}

@@ -19,13 +19,52 @@
 也不会作为执行依据。超级管理员勾选确认后，唯一写入口
 `POST /api/admin/check/storage-maintenance` 取得全局独占位置锁，重新读取 PostgreSQL 与完整
 存储快照，再重建原图仍存在的缺失缩略图、更新该次真实修复的 `thumbnail_size`，并清理确认
-无引用的 `media`、`thumbs` 和无导入会话所有权的 `_uploads`。活动导入、仍等待导入清理的
-会话对象、缺失原图、已消失候选和未完整列举均明确保留或跳过。数据库中
+无引用的 `media`、`thumbs` 和超过统一年龄门槛、且不等于 Redis canonical 精确 prepared key
+的 v5 `_uploads`。同一 session 的旧 generation 不再因 session ID 相同而被误当成当前引用；
+近期 generation 与无法解析年龄的旧格式键会明确跳过。活动导入、仍受精确 generation 引用的
+对象、缺失原图、已消失候选和未完整列举均明确保留或跳过。数据库中
 `thumbnail_size=0` 且实体仍在的未收口缩略图会单独列入待重新确认项。预览按物理命名空间去重
-受阻项，只把执行端可以再次核对的维修与删除计入可执行数量；仍存在但已非活动状态的导入
-会话暂存单独显示为受保护项。响应满足
+受阻项，只把执行端可以再次核对的维修与删除计入可执行数量；仍被 active canonical 引用的
+暂存单独显示为受保护项。响应满足
 `requested = repaired + removed + skipped + failed`，并返回每项的后端、前缀、键、动作、结果
 及原因；重复执行只处理仍存在的问题。
+
+单实例孤儿清理 worker 以 60 秒周期处理可丢弃临时素材，不属于 `background_job`。raw 与
+prepared generation 的统一删除年龄是 24 小时，加一个 60 秒清理周期和 60 秒安全余量；
+`.part` 使用上传 claim 失活期限或远端请求超时两者较长者，再加同一周期与安全余量，当前
+默认因此为 4 分钟。raw 的年龄读取本地 mtime，`_uploads` 的年龄只接受当前 v5 键中 UUIDv7
+generation 的服务端时间；local driver 原子发布在进程崩溃后可能留下精确
+`<v5-key>.candidate-<UUID>`，它只在当前物理后端仍为 local 时沿基础 v5 key 判定年龄和引用，
+其他候选形态仍按未知键保留。路径只提供候选身份，绝不反建 session。
+
+自动清理先要求 Redis operational 并取得稳定、有界的 active canonical 引用，当前最多读取
+100,000 个 session。raw 删除还会实时复核本进程接收、下载和 Sharp prepare 的精确路径租约；
+目录扫描以最多三个打开句柄保存完整 DFS 位置，每周期最多读取 100,000 个目录项，因此即使
+单个异常 session 很大也会在后续周期继续而非反复跳过尾部。只读检查使用独立无状态扫描，
+截断时明确报告不完整且不修剪目录。prepared 删除先完整列举每个当前物理 namespace，再短暂取得
+storage location write lock，复读 Redis 引用并确认 backend 仍指向同一 namespace，之后才
+删除不在枚举前后引用并集中的陈旧键。远端列举有独立短期限，超时、不完整、Redis 断线、
+引用快速变化、backend 改绑或未知键结构都使该 namespace 失败关闭。检查页按需显示陈旧 raw
+和 `.part` 的数量与最老 mtime；业务请求不会常驻扫描本地目录。Redis unavailable 时当前实现
+跳过全部自动临时素材清理，也绝不会把 Redis 缺失解释成正式 `media` / `thumbs` 可删。
+
+一次自动周期总期限 50 秒：raw 阶段最多 20 秒，staging 阶段最多 30 秒；staging 每周期最多
+处理 32 个轮转后的物理组及合计 3,200,000 个键，支持的完整后端表上限仍为 100，故 33–100
+个合法后端不会关闭清理，而会由游标跨周期公平覆盖。历史 namespace identity 只用于合并引用
+保留集；实际列举和删除仍按当前物理 identity 分组，并在读写锁边界各自重新解析配置。local
+清理结束还会在同一写锁内有界修剪 `_uploads` 空目录。
+
+commit 在复制任何正式 media / thumbs 前，先为该 image 与两个确定键写入持久
+`move.cleanup` candidate guard。登记前先确认目标不存在，或其强摘要与冻结 manifest 完全一致；
+不匹配的预存对象直接冲突且不被 guard 接管。只有已经持有同一 image storage mutation lock 的
+本次 commit 可以按唯一 attempt token 忽略自己完全匹配的 guard；任何旧的未解决清理租约仍
+阻止复用。local 正式复制使用同一 token 命名原子候选，guard 同时捕获基础键与两个
+`.candidate-<token>` 键，因此进程在 link 前后崩溃也不会遗留无主文件。复制或 PostgreSQL
+失败后 handler 删除无引用候选，PostgreSQL 正式引用建立后则永久保留正式键并删除临时候选。
+请求后的 raw / staging 快速清理由
+有界尽力队列执行，满载或 8 次失败后交回上述年龄扫描，不影响正式候选的持久所有权。延迟
+取消清理只删除取消快照冻结的精确 `raw_generation`；即使 tombstone 已过期且同一 pair 形成
+新 incarnation，也不会递归删除新 generation，遗留 `.part` 和未知 generation 交由年龄扫描。
 
 执行入口只拥有独占锁、并发调度、执行顺序和上述响应汇总；inventory / plan 每次从数据库与
 完整对象快照生成候选，缩略图修复和孤儿清理分别复核自己的当前位置或引用条件。模块拆分不把
@@ -57,7 +96,7 @@ local、无公开 URL 的 S3 与配置 `public_base_url` 的 S3 都遵守这一�
 本身是实心主按钮，保存中继续保持实心蓝色；连接测试、启停和默认后端切换则保留各自
 原有的次按钮或状态开关表面。成功与失败结果仍使用对应反馈色。
 
-存储卡片的末端操作由服务端删除策略决定：空闲的自定义后端显示删除并在提交前二次确认；仍有图片时以 storage backend migration 入口替代删除，并与检查页共用同一迁移对话框及 `POST /api/admin/storage/backends/migrate`。这项操作由 storage 域负责，不属于只读检查；卡片入口会锁定当前源后端，源已不存在时禁止提交而不会静默改选其他后端。内置 `local`、默认后端、未清理导入会话或未解决 `move.cleanup` 等情况以原因说明入口替代删除。管理列表以及最终删除冲突响应都返回结构化的 `deletion.action` 与 `deletion.blockers`，前端不再复制一套删除规则。最终删除仍会在独占位置锁内重新读取全部占用，并在数据库计数为空后额外列举 `_uploads`；因此列表加载后新产生的引用、仅存在于存储端的暂存对象或其他竞态仍会被服务端拒绝。删除与整后端迁移在成功、明确失败或响应结果未知后都会刷新权威列表；若删除回执丢失但后端已不存在，确认弹窗随刷新结果收敛关闭。图片、任何尚未清理的导入会话、未解决的 `move.cleanup` 或 `_uploads` 暂存对象均需先移走或清理。
+存储卡片的末端操作由服务端删除策略决定：空闲的自定义后端显示删除并在提交前二次确认；仍有图片时以 storage backend migration 入口替代删除，并与检查页共用同一迁移对话框及 `POST /api/admin/storage/backends/migrate`。这项操作由 storage 域负责，不属于只读检查；卡片入口会锁定当前源后端，源已不存在时禁止提交而不会静默改选其他后端。内置 `local`、默认后端、Redis active canonical 或未解决 `move.cleanup` 等情况以原因说明入口替代删除。管理列表以及最终删除冲突响应都返回结构化的 `deletion.action` 与 `deletion.blockers`，前端不再复制一套删除规则。最终删除仍会在独占位置锁内重新读取 PostgreSQL 图片、Redis 临时引用、清理任务和 `_uploads`；Redis 不可用或读取不稳定时 fail closed。因此列表加载后新产生的引用、仅存在于存储端的暂存对象或其他竞态仍会被服务端拒绝。删除与整后端迁移在成功、明确失败或响应结果未知后都会刷新权威列表；若删除回执丢失但后端已不存在，确认弹窗随刷新结果收敛关闭。图片、任何 active canonical、未解决的 `move.cleanup` 或 `_uploads` 暂存对象均需先移走或清理。
 
 所有会改变图片对象位置的操作共用“全局共享维护锁 + 单图独占锁”。进入锁后重新读取
 当前 `storage_slug`、对象键和分类，读取源对象并把原图 / 缩略图复制到目标位置，
@@ -102,9 +141,9 @@ identity 相同时迁移会用目标后端凭据回读并逐字节验证共享�
 再确认对象确实不存在；测试失败不会把尚未确认的字段写入数据库。
 
 S3 的 bucket / root path 是不可在用修改的物理布局
-字段。修改时服务端持有全局独占位置锁，并在锁内重新统计该 slug 的全部图片、全部
-`import_session`（不按状态或 `expires_at` 排除）、未解决的 `move.cleanup` 和
-`_uploads` 对象；每个后端的 `_uploads` 只列举一次并复用同一快照。任一仍存在即返回
+字段。修改时服务端持有全局独占位置锁，并在锁内重新统计该 slug 的全部图片、Redis active
+canonical、未解决的 `move.cleanup` 和 `_uploads` 对象；每个后端的 `_uploads` 只列举一次
+并复用同一快照。任一仍存在即返回
 409，并在管理响应 / 错误详情中提供
 `cleanup_job_count`。清理任务的 `pending`、`running` 和所有 `failed` 均视为未解决；
 管理响应另返回失败数与耗尽重试数。存储卡片可把该后端已耗尽的任务重置为
@@ -113,10 +152,12 @@ S3 的 bucket / root path 是不可在用修改的物理布局
 `POST /api/admin/storage/backends/:slug/cleanup/retry`，不会提供直接删除或未经确认忽略
 任务的入口。页面会在仍有可运行或待重试的清理任务时自动刷新占用计数；若只剩已耗尽
 且等待管理员重试的任务则停止轮询，避免空闲页面持续请求。
-导入创建、prepared 暂存写入、commit、取消和过期暂存清理都持有同一位置锁的
-共享模式，因此不能在检查后又把暂存写到旧位置。锁连接丢失会发送中止信号并等待
-回调收口；raw、processed image 与 thumbnail 都使用尝试级唯一键，且 `execution_token`
-与 `raw_token` 必须匹配才能发布对应会话状态，因此迟到写入不能覆盖或发布新执行者的
+intent 创建只短暂持有同一位置锁的共享模式且本身不构成占用；raw 上传不跨网络正文持锁，
+但 intent 转换、远程 accept、prepared 暂存写入和 commit 会在真正采用目标后端时重新取得
+共享锁。因此转换 / accept 与删除竞争只能由先成立的锁边界胜出，不能留下指向已删除后端的
+可运行 canonical。锁连接丢失会发送中止信号并等待回调收口；raw、processed image 与
+thumbnail 都使用 attempt / generation 唯一键，且当前 `execution_token` 必须匹配才能发布，
+因此迟到写入不能覆盖或发布新执行者的
 候选。正式候选与旧位置删除由重新取得单图锁、在删除边界重读真值的 `move.cleanup`
 执行；未解决任务同时是对应物理对象的删除租约，所有正式写入路径在任务终结前都拒绝
 采用相同键，封闭远端删除请求发出后失锁的窗口。显示名、启停、默认项和排序只更新
@@ -137,7 +178,7 @@ S3 Endpoint 是可验证的访问地址：即使后端仍在使用，编辑窗�
 Endpoint，并把全部相交后端的 identity 合并为同一连通分量；候选不可访问、快照不同、
 双向挑战不同或探针清理失败都会保留原配置。事务 COMMIT 回包丢失时会按 xid8 查询
 最终提交状态；结果仍未知时返回明确的刷新提示，不会误称旧配置必然保留。完全
-没有图片、导入会话、清理任务、暂存对象、历史 identity 或同命名空间注册项的独立空
+没有图片、active canonical、清理任务、暂存对象、历史 identity 或同命名空间注册项的独立空
 后端仍可把 Endpoint 改到新位置，此时会建立新 identity；已知共享关系即使该 slug 自身
 为空也必须继续完成同命名空间证明。
 

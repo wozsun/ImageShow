@@ -10,7 +10,7 @@ import {
   calculateDownloadProgress,
   downloadProgressLength
 } from "./download-progress.ts";
-import { publishRawImportPart } from "./temp-files.ts";
+import { publishImportRawPart } from "./raw-files.ts";
 
 async function fetchImportResponse(url: string, limitBytes: number, externalSignal?: AbortSignal) {
   try {
@@ -72,7 +72,7 @@ export async function fetchImportImageToFile(
   });
   try {
     await pipeline(nodeReadableFromWeb(fetched.response.body.pipeThrough(limiter)), createWriteStream(part), { signal });
-    await publishRawImportPart(part, target, signal);
+    await publishImportRawPart(part, target, signal);
     return total;
   } catch (error) {
     // Preserve a complete target that may belong to a lock-loss successor;

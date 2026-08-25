@@ -1,86 +1,45 @@
-import type { AdminImageListItem, ImportJob } from "../../../lib/types.js";
-import {
-  importBatchHardLimit,
-  importStatusBatchMaxItems
-} from "@imageshow/shared/browser";
-import { runWithConcurrency } from "../../../lib/upload/upload-utils.js";
+import { importBatchHardLimit } from "@imageshow/shared/browser";
+import type { ImportJob } from "../../../lib/types.js";
 import {
   commitStoredImports,
-  getStoredImportStatuses,
-  type StoredImportCommitResult,
-  type StoredImportStatus
+  getImportStatuses
 } from "./import-api.js";
+import { importStatusEventPatch } from "./import-status-state.js";
 import {
-  commitResultFailurePatch,
-  importStatusEventPatch
-} from "./import-status-state.js";
+  completedImportObservations,
+  type CompletedImportObservation
+} from "./import-queue-api.js";
+import { serverImportPairKey } from "./server-import-job.js";
 
 type CommitSelectedImportsOptions = {
   selected: ImportJob[];
-  concurrency: number;
   getJob: (id: string) => ImportJob | undefined;
+  observeCompletedImports: (
+    entries: readonly CompletedImportObservation[]
+  ) => void;
   updateJob: (id: string, patch: Partial<ImportJob>) => void;
-  completeJob: (
-    id: string,
-    commitAttemptId: string,
-    patch: Partial<ImportJob>,
-    item: AdminImageListItem
-  ) => boolean;
-};
-
-type PendingImport = {
-  job: ImportJob;
-  error: unknown;
-  status?: StoredImportStatus;
 };
 
 function commitInput(job: ImportJob) {
-  if (!job.sessionId || !job.commitIntent) {
-    throw new Error("提交会话或提交意图不存在");
+  if (
+    !job.sessionId
+    || !job.imageId
+    || !job.serverVersion
+    || !job.commitIntent
+  ) {
+    throw new Error("提交任务缺少服务端 pair、版本或提交意图");
   }
   return {
-    id: job.sessionId.toLowerCase(),
-    commit_attempt_id: job.commitIntent.attemptId,
+    session_id: job.sessionId,
+    image_id: job.imageId.toLowerCase(),
+    expected_version: job.serverVersion,
     expected_md5: job.commitIntent.md5,
+    commit_request_id: job.commitIntent.attemptId,
     duplicate_decision: job.duplicateDecision === "confirmed"
       ? "confirmed" as const
       : "upload" as const,
     metadata: job.commitIntent.metadata
   };
-}
-
-type FailedBatchResult = Extract<
-  Awaited<ReturnType<typeof commitStoredImports>>["items"][number],
-  { status: "failed" }
->;
-
-function applyDuplicateConflict(
-  options: CommitSelectedImportsOptions,
-  job: ImportJob,
-  result: FailedBatchResult
-) {
-  if (result.code !== "import_duplicate_conflict" || !result.duplicates?.length) {
-    return false;
-  }
-  const current = currentCommitJob(options, job);
-  if (!current) return true;
-  options.updateJob(current.id, {
-    status: "ready",
-    failureStage: undefined,
-    commitFailureCheckpoint: undefined,
-    resultState: undefined,
-    resultError: undefined,
-    duplicates: result.duplicates,
-    duplicateDecision: "undecided",
-    message: result.message,
-    serverStatus: "ready",
-    serverPhase: "ready",
-    serverError: "",
-    serverProgress: undefined,
-    serverAttemptKey: current.attemptKey,
-    serverSessionId: current.sessionId
-  });
-  return true;
 }
 
 function currentCommitJob(
@@ -93,214 +52,170 @@ function currentCommitJob(
     : undefined;
 }
 
-function completedImport(
-  result: StoredImportCommitResult,
-  importedMessage: string
-) {
-  return {
-    patch: {
-      status: "done" as const,
-      failureStage: undefined,
-      commitFailureCheckpoint: undefined,
-      resultState: "hydrated" as const,
-      resultError: undefined,
-      message: importedMessage,
-      preview: result.item.thumb_url,
-      previewFull: result.item.object_url
-    },
-    item: result.item
-  };
-}
-
-function acceptImportedResult(
+async function reconcileUnknownBatch(
   options: CommitSelectedImportsOptions,
-  job: ImportJob,
-  result: StoredImportCommitResult,
-  message: string
+  selected: ImportJob[],
+  error: unknown
 ) {
-  const attemptId = job.commitIntent?.attemptId;
-  if (!attemptId) return undefined;
-  const completed = completedImport(result, message);
-  return options.completeJob(
-    job.id,
-    attemptId,
-    completed.patch,
-    completed.item
-  ) ? completed.item : undefined;
-}
-
-function applyCommitFailure(
-  options: CommitSelectedImportsOptions,
-  entry: PendingImport,
-  error = entry.error
-) {
-  const current = currentCommitJob(options, entry.job);
-  if (!current) return;
-  options.updateJob(
-    current.id,
-    commitResultFailurePatch(current, entry.status, error)
-  );
-}
-
-async function readPendingImportStatuses(
-  pending: PendingImport[],
-  concurrency: number
-) {
-  const ids = [...new Set(
-    pending.map(({ job }) => job.sessionId!.toLowerCase())
-  )];
-  const chunks: string[][] = [];
-  for (let offset = 0; offset < ids.length; offset += importStatusBatchMaxItems) {
-    chunks.push(ids.slice(offset, offset + importStatusBatchMaxItems));
-  }
-  const statuses = new Map<string, StoredImportStatus>();
-  await runWithConcurrency(
-    chunks,
-    Math.max(1, Math.min(concurrency, 4)),
-    async (chunk) => {
-      try {
-        const states = await getStoredImportStatuses(chunk);
-        for (const state of states) {
-          statuses.set(state.id.toLowerCase(), state);
-        }
-      } catch {
-        // A failed status chunk remains unknown while other chunks can still
-        // recover their authoritative session state.
+  try {
+    const states = await getImportStatuses(selected.map((job) => ({
+      session_id: job.sessionId!,
+      image_id: job.imageId!
+    })));
+    const completed = completedImportObservations(states);
+    const statesByPair = new Map(states.map((state) => [
+      serverImportPairKey(state),
+      state
+    ]));
+    for (const job of selected) {
+      const current = currentCommitJob(options, job);
+      if (!current) continue;
+      const state = statesByPair.get(serverImportPairKey({
+        session_id: job.sessionId!,
+        image_id: job.imageId!
+      }));
+      if (!state) continue;
+      const patch = importStatusEventPatch(current, state);
+      if (patch) options.updateJob(current.id, patch);
+      if (state.status === "present" && state.item.status === "ready") {
+        options.updateJob(current.id, {
+          status: "failed",
+          failureStage: "commit",
+          commitFailureCheckpoint: "ready",
+          resultState: undefined,
+          message: "提交尚未受理，请重试"
+        });
       }
     }
-  );
-  return statuses;
+    return completed;
+  } catch {
+    const message = error instanceof Error ? error.message : String(error);
+    for (const job of selected) {
+      const current = currentCommitJob(options, job);
+      if (!current) continue;
+      options.updateJob(current.id, {
+        status: "failed",
+        failureStage: "commit",
+        commitFailureCheckpoint: "unknown",
+        resultState: undefined,
+        message: `提交结果暂时无法确认：${message}`
+      });
+    }
+    return [];
+  }
 }
 
-async function recoverFinalizedImports(
-  pending: PendingImport[],
-  options: CommitSelectedImportsOptions
+async function commitBatch(
+  options: CommitSelectedImportsOptions,
+  selected: ImportJob[]
 ) {
-  for (const { job } of pending) {
+  let response: Awaited<ReturnType<typeof commitStoredImports>>;
+  try {
+    response = await commitStoredImports(selected.map(commitInput));
+  } catch (error) {
+    return {
+      accepted: 0,
+      completed: await reconcileUnknownBatch(options, selected, error)
+    };
+  }
+  const results = new Map(response.items.map((result) => [
+    serverImportPairKey(result),
+    result
+  ]));
+  let accepted = 0;
+  const completed: CompletedImportObservation[] = [];
+  for (const job of selected) {
     const current = currentCommitJob(options, job);
     if (!current) continue;
-    options.updateJob(job.id, {
-      status: "finalized",
+    const result = results.get(serverImportPairKey({
+      session_id: job.sessionId!,
+      image_id: job.imageId!
+    }));
+    if (!result) {
+      options.updateJob(current.id, {
+        status: "failed",
+        failureStage: "commit",
+        commitFailureCheckpoint: "unknown",
+        resultState: undefined,
+        message: "提交响应没有包含当前任务"
+      });
+      continue;
+    }
+    if (result.status === "failed") {
+      if (
+        result.code === "import_duplicate_conflict"
+        && result.duplicates?.length
+      ) {
+        options.updateJob(current.id, {
+          status: "ready",
+          failureStage: undefined,
+          commitFailureCheckpoint: undefined,
+          resultState: undefined,
+          duplicates: result.duplicates,
+          duplicateCount: result.duplicate_count ?? result.duplicates.length,
+          duplicateDecision: "undecided",
+          ...(result.version ? { serverVersion: result.version } : {}),
+          message: result.message
+        });
+      } else {
+        options.updateJob(current.id, {
+          status: "failed",
+          failureStage: "commit",
+          commitFailureCheckpoint: result.code === "invalid_import_state"
+            ? "ready"
+            : "unknown",
+          resultState: undefined,
+          message: result.message
+        });
+      }
+      continue;
+    }
+    if (result.status === "completed") {
+      completed.push({
+        pair: result,
+        item: result.completed_item
+      });
+    }
+    accepted += 1;
+    options.updateJob(current.id, {
+      status: result.status === "completed" ? "finalized" : "committing",
+      serverVersion: result.version,
+      serverStatus: result.status === "completed" ? "completed" : "committing",
+      serverAttemptKey: current.attemptKey,
+      serverSessionId: current.sessionId,
+      serverImageId: current.imageId,
+      failureStage: undefined,
+      commitFailureCheckpoint: undefined,
       resultState: "recovering",
       resultError: undefined,
-      message: "正在确认提交结果"
+      message: result.status === "completed"
+        ? "服务端已确认写入，正在读取结果"
+        : "提交已受理，等待服务器写入"
     });
   }
-
-  let recoveryError: unknown;
-  let recoveryResults: Awaited<
-    ReturnType<typeof commitStoredImports>
-  >["items"] = [];
-  try {
-    recoveryResults = (await commitStoredImports(
-      pending.map(({ job }) => commitInput(job))
-    )).items;
-  } catch (error) {
-    recoveryError = error;
-  }
-  const resultsById = new Map(
-    recoveryResults.map((result) => [result.id.toLowerCase(), result])
-  );
-  const acceptedItems: AdminImageListItem[] = [];
-  for (const entry of pending) {
-    const result = resultsById.get(entry.job.sessionId!.toLowerCase());
-    if (result?.status === "imported") {
-      const accepted = acceptImportedResult(
-        options,
-        entry.job,
-        result,
-        "服务端已完成提交"
-      );
-      if (accepted) acceptedItems.push(accepted);
-      continue;
-    }
-    applyCommitFailure(
-      options,
-      entry,
-      recoveryError ?? new Error(
-        result?.message ?? "服务端已完成提交，但批量结果恢复未返回该会话"
-      )
-    );
-  }
-  return acceptedItems;
-}
-
-async function commitSelectedImportBatch(
-  options: CommitSelectedImportsOptions
-) {
-  const { selected, concurrency } = options;
-  let batchError: unknown;
-  let batchResults: Awaited<ReturnType<typeof commitStoredImports>>["items"] = [];
-  try {
-    batchResults = (await commitStoredImports(selected.map(commitInput))).items;
-  } catch (error) {
-    batchError = error;
-  }
-  const resultsById = new Map(
-    batchResults.map((result) => [result.id.toLowerCase(), result])
-  );
-  const acceptedItems: AdminImageListItem[] = [];
-  const pending: PendingImport[] = [];
-  for (const job of selected) {
-    const result = resultsById.get(job.sessionId!.toLowerCase());
-    if (result?.status === "imported") {
-      const accepted = acceptImportedResult(options, job, result, "已完成");
-      if (accepted) acceptedItems.push(accepted);
-      continue;
-    }
-    if (
-      result?.status === "failed"
-      && applyDuplicateConflict(options, job, result)
-    ) {
-      continue;
-    }
-    pending.push({
-      job,
-      error: batchError ?? new Error(
-        result?.message ?? "批量提交未返回该导入会话的结果"
-      )
-    });
-  }
-  if (!pending.length) return acceptedItems;
-
-  const statuses = await readPendingImportStatuses(pending, concurrency);
-  for (const entry of pending) {
-    entry.status = statuses.get(entry.job.sessionId!.toLowerCase());
-    const current = currentCommitJob(options, entry.job);
-    if (!current || !entry.status) continue;
-    const authorityPatch = importStatusEventPatch(current, entry.status);
-    if (authorityPatch) options.updateJob(current.id, authorityPatch);
-  }
-
-  const finalized = pending.filter((entry) => {
-    const current = currentCommitJob(options, entry.job);
-    return entry.status?.status === "finalized"
-      || current?.status === "finalized"
-      || current?.serverStatus === "finalized";
-  });
-  const finalizedIds = new Set(finalized.map(({ job }) => job.id));
-  for (const entry of pending) {
-    if (!finalizedIds.has(entry.job.id)) applyCommitFailure(options, entry);
-  }
-  if (finalized.length) {
-    acceptedItems.push(...await recoverFinalizedImports(finalized, options));
-  }
-  return acceptedItems;
+  return { accepted, completed };
 }
 
 export async function commitSelectedImports(
   options: CommitSelectedImportsOptions
 ) {
-  const acceptedItems: AdminImageListItem[] = [];
-  for (
-    let offset = 0;
-    offset < options.selected.length;
-    offset += importBatchHardLimit
-  ) {
-    acceptedItems.push(...await commitSelectedImportBatch({
-      ...options,
-      selected: options.selected.slice(offset, offset + importBatchHardLimit)
-    }));
+  let accepted = 0;
+  const completed: CompletedImportObservation[] = [];
+  try {
+    for (
+      let offset = 0;
+      offset < options.selected.length;
+      offset += importBatchHardLimit
+    ) {
+      const batch = await commitBatch(
+        options,
+        options.selected.slice(offset, offset + importBatchHardLimit)
+      );
+      accepted += batch.accepted;
+      completed.push(...batch.completed);
+    }
+  } finally {
+    if (completed.length) options.observeCompletedImports(completed);
   }
-  return acceptedItems;
+  return accepted;
 }

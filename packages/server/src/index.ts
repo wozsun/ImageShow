@@ -12,7 +12,11 @@ import {
   initializeReadyImageCacheCoordinator,
   stopReadyImageCacheCoordinator
 } from "./images/ready-cache/coordinator.ts";
-import { cleanupOrphanRawImports } from "./images/imports/temp-files.ts";
+import {
+  drainImportSessionWorker,
+  startImportSessionWorker,
+  stopImportSessionWorker
+} from "./images/imports/runtime.ts";
 import {
   closeDatabasePools,
   configureDatabasePools
@@ -33,6 +37,9 @@ import {
   closeStorageBackendRegistry
 } from "./storage/backend-registry.ts";
 import { createHttpApp } from "./http-app.ts";
+import {
+  closeAllAdminSessionConnections
+} from "./users/admin-session-connections.ts";
 
 configureDatabasePools(deploymentConfig.database);
 initializeRuntimeConfig();
@@ -54,7 +61,6 @@ async function settleCoordinatorInitialization() {
 try {
   await ensureRuntimeDirectories();
   await initializeDatabaseSchema();
-  await cleanupOrphanRawImports(appConfig.uploadTtlSeconds * 1000);
   await ensureSuperAdmin({
     username: bootstrapEnvironment.adminUsername,
     password: bootstrapEnvironment.adminPassword
@@ -70,7 +76,10 @@ try {
         logger.warn("startup ready-image cache initialization failed", error);
       })
       .finally(() => {
-        if (!shuttingDown) startWorker();
+        if (!shuttingDown) {
+          startWorker();
+          startImportSessionWorker();
+        }
       });
   });
 
@@ -100,12 +109,15 @@ function shutdown(signal: string, exitCode = 0) {
     try {
       const currentServer = server;
       server = null;
+      closeAllAdminSessionConnections();
       const serverClose = currentServer
         ? new Promise<void>((resolve) => currentServer.close(() => resolve()))
         : Promise.resolve();
       stopRedisOperationalMonitor();
       stopWorker();
+      stopImportSessionWorker();
       const workerDrain = drainWorker();
+      const importWorkerDrain = drainImportSessionWorker();
       // Mark every cached driver as retiring before waiting for HTTP bodies.
       // Existing leases may drain; shutdown-time work cannot create a new
       // driver from a stale or freshly loaded registry snapshot.
@@ -115,6 +127,7 @@ function shutdown(signal: string, exitCode = 0) {
       await Promise.all([
         serverClose,
         workerDrain,
+        importWorkerDrain,
         readyImageCacheStop,
         storageRegistryClose
       ]);

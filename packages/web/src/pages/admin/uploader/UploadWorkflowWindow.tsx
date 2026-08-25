@@ -1,12 +1,12 @@
 import {
   useCallback,
+  useEffect,
   useId,
-  useMemo,
+  useLayoutEffect,
   useRef,
   useState,
   type RefObject
 } from "react";
-import { StableButtonLabel } from "../../../components/data-display/StableButtonLabel.js";
 import { ConfirmDialog } from "../../../components/feedback/ConfirmDialog.js";
 import { DialogFrame } from "../../../components/feedback/DialogFrame.js";
 import { WorkflowDefaultFields } from "../../../components/form/WorkflowDefaultFields.js";
@@ -27,6 +27,8 @@ import {
 import { copyTextToClipboard } from "../../../lib/ui/clipboard.js";
 import { facetDisplayName } from "../../../lib/ui/formatters.js";
 import { preloadIntentProps } from "../../../lib/ui/preload-intent.js";
+import { useTwoStepConfirmation } from "../../../hooks/useTwoStepConfirmation.js";
+import { useImportDuplicateDetails } from "./useImportDuplicateDetails.js";
 import type {
   FacetOption,
   ImageDraft,
@@ -37,7 +39,7 @@ import type { ImportAttributeDefaults } from "../../../lib/upload/upload-utils.j
 import type { ImportPreviewTarget } from "./DuplicateMatchPanel.js";
 import { ImportJobList } from "./ImportJobList.js";
 import { UploadCleanupMenu } from "./UploadCleanupMenu.js";
-import { canApplyImportAttributeDefaults } from "./import-attribute-policy.js";
+import { importJobPreviewAvailable } from "./duplicate-match.js";
 import type { JsonlManifestParseError } from "./import-api.js";
 import type {
   ImportSourceMode,
@@ -63,7 +65,9 @@ type UploadWorkflowWindowProps = {
   busy: boolean;
   queue: ImportQueueController;
   returnFocusRef: RefObject<HTMLElement | null>;
-  onClose: () => void;
+  onClose: (options?: Readonly<{
+    skipCompletedCleanup?: boolean;
+  }>) => void;
   defaults: ImportAttributeDefaults;
   onDefaultsChange: (defaults: ImportAttributeDefaults) => void;
   themes: FacetOption[];
@@ -78,11 +82,21 @@ type UploadWorkflowWindowProps = {
   onRetryJob: (job: ImportJob) => void;
   onRemoveJob: (job: ImportJob) => void;
   onConfirmDuplicateJob: (job: ImportJob) => void;
-  onClearJobs: (predicate: (job: ImportJob) => boolean) => Promise<void>;
+  onApplyDefaults: () => void;
+  onCleanupAction: (action: UploadCleanupActionId) => void;
+  onArmCleanupAction: (
+    action: UploadCleanupActionId,
+    confirmationCount: number
+  ) => Readonly<{ count: number }> | false;
+  onConfirmCleanupAction: (action: UploadCleanupActionId) => Promise<boolean>;
+  onDiscardUnconfirmedIntents: () => void;
+  confirmationScope: string;
+  onArmClearQueue: () => boolean;
+  onConfirmClearQueue: () => Promise<boolean>;
   activeBackend: string;
   backendOptions: readonly SelectOption[];
   onBackendChange: (backend: string) => void;
-  onCommitReady: () => void;
+  onCommitReady: () => Promise<void>;
   sourceDialogPending: boolean;
   sourceDialogOpen: boolean;
   sourceDialogComponent: ImportSourceDialogComponent | null;
@@ -95,6 +109,101 @@ type UploadWorkflowWindowProps = {
   onCloseImportSource: () => void;
   onSubmitImportSource: (submission: ImportSourceSubmission) => void;
 };
+
+const importJobFocusableSelector = [
+  "button",
+  "input",
+  "select",
+  "textarea",
+  "a[href]",
+  "[role='button']",
+  "[tabindex]:not([tabindex='-1'])"
+].join(",");
+
+type ImportJobElementOwner = Readonly<{
+  jobId: string;
+  attemptKey: string;
+  sessionId?: string;
+  imageId?: string;
+  element: HTMLElement;
+  path: readonly number[];
+  focusableIndex: number;
+  tagName: string;
+  ariaLabel: string | null;
+  title: string | null;
+  name: string | null;
+  role: string | null;
+}>;
+
+function importJobElementPath(card: HTMLElement, target: HTMLElement) {
+  const path: number[] = [];
+  let current: HTMLElement | null = target;
+  while (current && current !== card) {
+    const parent: HTMLElement | null = current.parentElement;
+    if (!parent) return [];
+    path.push([...parent.children].indexOf(current));
+    current = parent;
+  }
+  return current === card ? path.reverse() : [];
+}
+
+function importJobElementAtPath(
+  card: HTMLElement,
+  path: readonly number[]
+) {
+  let current: HTMLElement = card;
+  for (const index of path) {
+    const child: Element | undefined = [...current.children][index];
+    if (!(child instanceof HTMLElement)) return null;
+    current = child;
+  }
+  return current;
+}
+
+function importJobElementOwner(
+  job: ImportJob,
+  card: HTMLElement,
+  target: HTMLElement
+): ImportJobElementOwner {
+  const focusable = [...card.querySelectorAll<HTMLElement>(
+    importJobFocusableSelector
+  )];
+  return {
+    jobId: job.id,
+    attemptKey: job.attemptKey,
+    sessionId: job.sessionId,
+    imageId: job.imageId,
+    element: target,
+    path: importJobElementPath(card, target),
+    focusableIndex: focusable.indexOf(target),
+    tagName: target.tagName,
+    ariaLabel: target.getAttribute("aria-label"),
+    title: target.getAttribute("title"),
+    name: target.getAttribute("name"),
+    role: target.getAttribute("role")
+  };
+}
+
+function importJobElementForOwner(
+  card: HTMLElement,
+  owner: ImportJobElementOwner
+) {
+  const exact = importJobElementAtPath(card, owner.path);
+  const semanticMatch = (candidate: HTMLElement) => (
+    candidate.tagName === owner.tagName
+    && candidate.getAttribute("aria-label") === owner.ariaLabel
+    && candidate.getAttribute("title") === owner.title
+    && candidate.getAttribute("name") === owner.name
+    && candidate.getAttribute("role") === owner.role
+  );
+  if (exact && semanticMatch(exact)) return exact;
+  const focusable = [...card.querySelectorAll<HTMLElement>(
+    importJobFocusableSelector
+  )];
+  return focusable.find(semanticMatch)
+    ?? (owner.focusableIndex >= 0 ? focusable[owner.focusableIndex] : null)
+    ?? null;
+}
 
 export function UploadWorkflowWindow({
   mode,
@@ -116,7 +225,14 @@ export function UploadWorkflowWindow({
   onRetryJob,
   onRemoveJob,
   onConfirmDuplicateJob,
-  onClearJobs,
+  onApplyDefaults,
+  onCleanupAction,
+  onArmCleanupAction,
+  onConfirmCleanupAction,
+  onDiscardUnconfirmedIntents,
+  confirmationScope,
+  onArmClearQueue,
+  onConfirmClearQueue,
   activeBackend,
   backendOptions,
   onBackendChange,
@@ -138,24 +254,40 @@ export function UploadWorkflowWindow({
   const [dragOver, setDragOver] = useState(false);
   const [detailItem, setDetailItem] = useState<AdminImageListItem | null>(null);
   const [preview, setPreview] = useState<ImportPreviewTarget | null>(null);
-  const [pendingCleanupActionId, setPendingCleanupActionId] =
-    useState<UploadCleanupActionId | null>(null);
+  const [pendingCleanup, setPendingCleanup] = useState<Readonly<{
+    actionId: UploadCleanupActionId;
+    count: number;
+    confirmationScope: string;
+  }> | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const sourcePickerRef = useRef<HTMLButtonElement | null>(null);
   const detailReturnFocusRef = useRef<HTMLElement | null>(null);
+  const detailLifecycleFocusRef = useRef<HTMLElement | null>(null);
+  const detailOwnerRef = useRef<ImportJobElementOwner | null>(null);
   const previewReturnFocusRef = useRef<HTMLElement | null>(null);
+  const previewLifecycleFocusRef = useRef<HTMLElement | null>(null);
+  const focusedJobElementRef = useRef<ImportJobElementOwner | null>(null);
   const cleanupReturnFocusRef = useRef<HTMLElement | null>(null);
+  const serverReady = queue.server.status === "ready";
   const cleanupActions = createUploadCleanupActions({
-    jobs: queue.jobs,
-    busy,
-    onClear: (predicate) => void onClearJobs(predicate)
+    counts: {
+      duplicates: queue.summary.duplicateJobs,
+      uncommitted: queue.uncommittedCount,
+      completed: queue.summary.doneJobs
+    },
+    onClear: onCleanupAction
+  });
+  const duplicateDetails = useImportDuplicateDetails({
+    jobs: queue.visibleJobs,
+    updateJobs: queue.updateJobs,
+    updateDuplicateDecision: queue.updateDuplicateDecision
   });
   const cleanupActionsRef = useRef(cleanupActions);
   cleanupActionsRef.current = cleanupActions;
-  const pendingCleanupAction = pendingCleanupActionId
-    ? cleanupActions.find((action) => action.id === pendingCleanupActionId)
+  const pendingCleanupAction = pendingCleanup
+    ? cleanupActions.find((action) => action.id === pendingCleanup.actionId)
     : undefined;
   const defaultsSummary = [
     uploadCommonDeviceOptions.find(
@@ -168,26 +300,40 @@ export function UploadWorkflowWindow({
     facetDisplayName(authors, defaults.author, "作者不设"),
     `${defaults.tags.length} 个标签`
   ].join(" · ");
-  const canApplyDefaults = useMemo(
-    () => queue.jobs.some(
-      (job) => canApplyImportAttributeDefaults(job, defaults)
-    ),
-    [defaults, queue.jobs]
-  );
   const modeTitle = mode === "file" ? "上传图片" : "导入图片";
   const emptySubtitle = mode === "file"
     ? "选择后立即上传并在服务端准备图片"
     : "输入来源后立即创建并准备图片任务";
   const {
-    readyJobs,
-    duplicateJobs,
+    readyCount,
+    waitingJobs: stageWaitingJobs,
     runningJobs,
     commitQueuedJobs,
     committingJobs,
     finalizedJobs,
-    doneJobs,
-    failedJobs
+    doneJobs
   } = queue.summary;
+  const [committingCount, setCommittingCount] = useState<number | null>(null);
+  const submitCount = committingCount ?? readyCount;
+  const serverFailed = queue.server.status === "error";
+  const waitingJobs = stageWaitingJobs + commitQueuedJobs + finalizedJobs;
+  const clearDangerous = queue.summary.unfinishedCount > 0;
+  const clearConfirmation = useTwoStepConfirmation<HTMLButtonElement>({
+    invalidationKey: confirmationScope,
+    onDisarm: onDiscardUnconfirmedIntents
+  });
+  const clearRequiresConfirmation = clearDangerous
+    || clearConfirmation.armed;
+
+  useEffect(() => {
+    if (
+      pendingCleanup
+      && pendingCleanup.confirmationScope !== confirmationScope
+    ) {
+      onDiscardUnconfirmedIntents();
+      setPendingCleanup(null);
+    }
+  }, [confirmationScope, onDiscardUnconfirmedIntents, pendingCleanup]);
 
   const selectCleanupAction = useCallback(
     (
@@ -202,46 +348,236 @@ export function UploadWorkflowWindow({
         action.run();
         return;
       }
+      const confirmation = onArmCleanupAction(actionId, action.count);
+      if (!confirmation) return;
       cleanupReturnFocusRef.current = returnFocusTarget;
-      setPendingCleanupActionId(actionId);
+      setPendingCleanup({
+        actionId,
+        count: confirmation.count,
+        confirmationScope
+      });
     },
-    []
+    [confirmationScope, onArmCleanupAction]
   );
 
   const confirmCleanupAction = useCallback(async () => {
-    const action = cleanupActionsRef.current.find(
-      (candidate) => candidate.id === pendingCleanupActionId
-    );
-    if (!action?.confirmation || !action.enabled || action.count === 0) {
-      return false;
-    }
-    action.run();
-    return true;
-  }, [pendingCleanupActionId]);
+    if (!pendingCleanup) return false;
+    return onConfirmCleanupAction(pendingCleanup.actionId);
+  }, [onConfirmCleanupAction, pendingCleanup]);
 
-  const openJobDetail = useCallback((item: AdminImageListItem, opener: HTMLElement) => {
+  const openJobDetail = useCallback((
+    job: ImportJob,
+    item: AdminImageListItem,
+    opener: HTMLElement
+  ) => {
+    const card = opener.closest<HTMLElement>("[data-import-job-id]");
+    detailOwnerRef.current = card
+      ? importJobElementOwner(job, card, opener)
+      : null;
     detailReturnFocusRef.current = opener;
     setDetailItem(item);
+  }, []);
+  const captureJobFocus = useCallback((
+    job: ImportJob,
+    card: HTMLElement,
+    target: HTMLElement
+  ) => {
+    focusedJobElementRef.current = importJobElementOwner(job, card, target);
   }, []);
   const openJobPreview = useCallback((target: ImportPreviewTarget) => {
     previewReturnFocusRef.current = target.opener ?? null;
     setPreview(target);
   }, []);
 
+  const cardForJob = useCallback((job: ImportJob) => {
+    const cards = listRef.current?.querySelectorAll<HTMLElement>(
+      "[data-import-job-id][data-import-attempt-key]"
+    );
+    return [...cards ?? []].find((candidate) => (
+      candidate.dataset.importJobId === job.id
+      && candidate.dataset.importAttemptKey === job.attemptKey
+    )) ?? null;
+  }, []);
+  const previewOpenerForJob = useCallback((job: ImportJob) => (
+    cardForJob(job)?.querySelector<HTMLElement>(
+      ".import-job-thumbnail[role='button']"
+    ) ?? null
+  ), [cardForJob]);
+
+  useLayoutEffect(() => {
+    const matchingJob = (owner: ImportJobElementOwner) => (
+      queue.visibleJobs.find((job) => (
+        job.id === owner.jobId && job.attemptKey === owner.attemptKey
+      ))
+      ?? (owner.sessionId && owner.imageId
+        ? queue.visibleJobs.find((job) => (
+            job.sessionId === owner.sessionId
+            && job.imageId?.toLowerCase() === owner.imageId?.toLowerCase()
+          ))
+        : undefined)
+      ?? (owner.sessionId
+        ? queue.visibleJobs.find((job) => job.sessionId === owner.sessionId)
+        : undefined)
+    );
+    const transfer = (owner: ImportJobElementOwner | null) => {
+      if (!owner) return null;
+      const job = matchingJob(owner);
+      if (!job) return null;
+      const card = cardForJob(job);
+      if (!card) return null;
+      const element = owner.element.isConnected && card.contains(owner.element)
+        ? owner.element
+        : importJobElementForOwner(card, owner);
+      return element ? {
+        ...owner,
+        jobId: job.id,
+        attemptKey: job.attemptKey,
+        sessionId: job.sessionId,
+        imageId: job.imageId,
+        element
+      } : null;
+    };
+
+    const previousFocused = focusedJobElementRef.current;
+    if (previousFocused) {
+      const previousElementLost = !previousFocused.element.isConnected;
+      const transferred = transfer(previousFocused);
+      focusedJobElementRef.current = transferred;
+      const activeElement = document.activeElement;
+      const focusWasLost = !(activeElement instanceof HTMLElement)
+        || activeElement === document.body
+        || !activeElement.isConnected;
+      if (
+        transferred
+        && previousElementLost
+        && focusWasLost
+        && !detailItem
+        && !preview
+        && !sourceDialogOpen
+        && !pendingCleanup
+      ) transferred.element.focus({ preventScroll: true });
+    }
+
+    if (detailItem && detailOwnerRef.current) {
+      const transferred = transfer(detailOwnerRef.current);
+      detailOwnerRef.current = transferred;
+      detailReturnFocusRef.current = transferred?.element
+        ?? closeButtonRef.current;
+    }
+  }, [
+    cardForJob,
+    detailItem,
+    pendingCleanup,
+    preview,
+    queue.visibleJobs,
+    sourceDialogOpen
+  ]);
+
+  useLayoutEffect(() => {
+    if (!preview) return;
+    const exact = queue.visibleJobs.find((job) => (
+      job.id === preview.jobId && job.attemptKey === preview.attemptKey
+    ));
+    if (exact && importJobPreviewAvailable(exact)) {
+      const opener = preview.opener?.isConnected
+        ? preview.opener
+        : previewOpenerForJob(exact) ?? undefined;
+      const next = {
+        ...preview,
+        sessionId: exact.sessionId,
+        imageId: exact.imageId,
+        src: exact.previewFull || exact.preview,
+        thumbSrc: exact.preview,
+        width: exact.width,
+        height: exact.height,
+        opener
+      };
+      if (
+        next.sessionId !== preview.sessionId
+        || next.imageId?.toLowerCase() !== preview.imageId?.toLowerCase()
+        || next.src !== preview.src
+        || next.thumbSrc !== preview.thumbSrc
+        || next.width !== preview.width
+        || next.height !== preview.height
+        || next.opener !== preview.opener
+      ) {
+        previewReturnFocusRef.current = opener ?? null;
+        setPreview(next);
+      }
+      return;
+    }
+
+    const replacement = preview.sessionId
+      ? queue.visibleJobs.find((job) => job.sessionId === preview.sessionId)
+      : undefined;
+    if (replacement && importJobPreviewAvailable(replacement)) {
+      const opener = previewOpenerForJob(replacement) ?? undefined;
+      previewReturnFocusRef.current = opener ?? null;
+      setPreview({
+        jobId: replacement.id,
+        attemptKey: replacement.attemptKey,
+        sessionId: replacement.sessionId,
+        imageId: replacement.imageId,
+        src: replacement.previewFull || replacement.preview,
+        thumbSrc: replacement.preview,
+        width: replacement.width,
+        height: replacement.height,
+        opener
+      });
+      return;
+    }
+    const focusTarget = replacement ? previewOpenerForJob(replacement) : null;
+    previewLifecycleFocusRef.current = focusTarget ?? closeButtonRef.current;
+    previewReturnFocusRef.current = previewLifecycleFocusRef.current;
+    setPreview(null);
+  }, [preview, previewOpenerForJob, queue.visibleJobs]);
+
+  useLayoutEffect(() => {
+    if (preview) return;
+    const focusTarget = previewLifecycleFocusRef.current;
+    previewLifecycleFocusRef.current = null;
+    if (focusTarget?.isConnected) focusTarget.focus({ preventScroll: true });
+  }, [preview]);
+
+  const closeJobPreview = useCallback(() => {
+    previewLifecycleFocusRef.current = preview?.opener?.isConnected
+      ? preview.opener
+      : closeButtonRef.current;
+    setPreview(null);
+  }, [preview]);
+
+  const closeJobDetail = useCallback(() => {
+    const returnTarget = detailReturnFocusRef.current;
+    detailLifecycleFocusRef.current = returnTarget?.isConnected
+      ? returnTarget
+      : closeButtonRef.current;
+    detailOwnerRef.current = null;
+    setDetailItem(null);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (detailItem) return;
+    const focusTarget = detailLifecycleFocusRef.current;
+    detailLifecycleFocusRef.current = null;
+    if (focusTarget?.isConnected) focusTarget.focus({ preventScroll: true });
+  }, [detailItem]);
+
   return (
     <DialogFrame
       className="upload-overlay"
       ariaLabel={modeTitle}
-      busy={busy}
       paused={Boolean(
         detailItem
         || preview
         || sourceDialogOpen
-        || pendingCleanupActionId
+        || pendingCleanup
       )}
       initialFocusRef={closeButtonRef}
       returnFocusRef={returnFocusRef}
-      onClose={onClose}
+      onClose={() => {
+        onDiscardUnconfirmedIntents();
+        onClose();
+      }}
     >
       {({ requestClose }) => (
         <>
@@ -252,19 +588,15 @@ export function UploadWorkflowWindow({
             <header className="upload-window-header">
               <div className="upload-head-copy">
                 <h1>{modeTitle}</h1>
-                {queue.jobs.length ? (
+                {queue.totalItems > 0 ? (
                   <p className="upload-task-summary">
                     <span className="upload-summary-primary">
-                      共 {queue.jobs.length} 张图片，{runningJobs} 张处理中，
-                      {readyJobs.length} 张待提交，{commitQueuedJobs} 张等待准入，
-                      {committingJobs} 张写入中，{finalizedJobs} 张等待结果；
+                      共 {queue.totalItems} 张图片，{waitingJobs} 张等待中，
+                      {runningJobs} 张处理中；
                     </span>
                     <span className="upload-summary-secondary">
-                      {doneJobs} 张成功，{failedJobs} 张失败，
-                      {duplicateJobs} 张重复待确认
-                      {jsonlErrors.length
-                        ? `，${jsonlErrors.length} 行解析失败`
-                        : ""}
+                      {readyCount} 张待提交，{committingJobs} 张提交中，
+                      {doneJobs} 张已完成
                     </span>
                   </p>
                 ) : (
@@ -295,11 +627,11 @@ export function UploadWorkflowWindow({
                   {mode === "link" ? (
                     <div
                       className={`upload-source-picker${
-                        busy || sourceDialogPending ? " is-disabled" : ""
+                        sourceDialogPending ? " is-disabled" : ""
                       }`}
                       role="group"
                       aria-label="选择导入来源"
-                      aria-disabled={busy || sourceDialogPending}
+                      aria-disabled={sourceDialogPending}
                     >
                       {sourceOptions.map(([sourceMode, label]) => (
                         <button
@@ -311,7 +643,7 @@ export function UploadWorkflowWindow({
                           }
                           type="button"
                           className="upload-source-option pressable"
-                          disabled={busy || sourceDialogPending}
+                          disabled={sourceDialogPending}
                           {...preloadIntentProps(onPreloadImportSource)}
                           onClick={() => onOpenImportSource(sourceMode)}
                         >
@@ -320,12 +652,7 @@ export function UploadWorkflowWindow({
                       ))}
                     </div>
                   ) : (
-                    <label
-                      className={`button secondary upload-picker pressable${
-                        busy ? " is-disabled" : ""
-                      }`}
-                      aria-disabled={busy}
-                    >
+                    <label className="button secondary upload-picker pressable">
                       <AdminIcon name="upload-cloud-2-line" />
                       <input
                         id={fileInputId}
@@ -333,7 +660,6 @@ export function UploadWorkflowWindow({
                         type="file"
                         accept="image/*"
                         multiple
-                        disabled={busy}
                         onChange={(event) => {
                           onAddFiles(event.target.files);
                           event.target.value = "";
@@ -348,7 +674,6 @@ export function UploadWorkflowWindow({
                     type="button"
                     title="关闭"
                     onClick={() => requestClose()}
-                    disabled={busy}
                   >
                     <AdminIcon name="close-line" />
                   </button>
@@ -398,8 +723,8 @@ export function UploadWorkflowWindow({
                   author: "默认作者",
                   tags: "默认标签"
                 }}
-                applyDisabled={busy || !canApplyDefaults}
-                onApply={() => queue.applyDefaultsToAll(defaults)}
+                applyDisabled={queue.summary.unfinishedCount === 0}
+                onApply={onApplyDefaults}
               />
             </WorkflowCollapsePanel>
             <div
@@ -426,9 +751,39 @@ export function UploadWorkflowWindow({
                   </button>
                 </div>
               )}
+              {queue.serverNotice && (
+                <div className="jsonl-import-report" role="status">
+                  <span>{queue.serverNotice}</span>
+                  {queue.serverNoticeRetryable && (
+                    <button type="button" onClick={queue.retryServerNotice}>
+                      <AdminIcon name="refresh-line" />重试
+                    </button>
+                  )}
+                </div>
+              )}
+              {queue.actions.notice && (
+                <div className="jsonl-import-report" role="status">
+                  <span>{queue.actions.notice}</span>
+                </div>
+              )}
+              {duplicateDetails.error && (
+                <div className="jsonl-import-report" role="alert">
+                  <span>{duplicateDetails.error}</span>
+                  <button type="button" onClick={duplicateDetails.refresh}>
+                    <AdminIcon name="refresh-line" />重试
+                  </button>
+                </div>
+              )}
+              {serverFailed && (
+                <div className="jsonl-import-report" role="alert">
+                  <span>{queue.server.error || "服务端队列读取失败"}</span>
+                  <button type="button" onClick={queue.server.refresh}>
+                    <AdminIcon name="refresh-line" />重试
+                  </button>
+                </div>
+              )}
               <ImportJobList
                 jobs={queue.visibleJobs}
-                allJobs={queue.jobs}
                 busy={busy}
                 storageName={storageName}
                 themes={themes}
@@ -440,9 +795,10 @@ export function UploadWorkflowWindow({
                 onRemove={onRemoveJob}
                 onConfirmDuplicate={onConfirmDuplicateJob}
                 onOpenDetail={openJobDetail}
+                onFocusWithin={captureJobFocus}
                 onPreview={openJobPreview}
               />
-              {!queue.jobs.length && (mode === "link" ? (
+              {serverReady && queue.totalItems === 0 && (mode === "link" ? (
                 <button
                   type="button"
                   className="upload-empty-state upload-dropzone"
@@ -491,9 +847,6 @@ export function UploadWorkflowWindow({
                     ariaLabel="新任务存储位置"
                   />
                 </div>
-                <small className="upload-storage-hint">
-                  仅影响之后添加的新任务
-                </small>
               </div>
               {queue.totalPages > 1 && (
                 <AdminPagination
@@ -506,27 +859,57 @@ export function UploadWorkflowWindow({
               )}
               <div className="modal-footer-actions">
                 <button
+                  ref={clearConfirmation.targetRef}
                   type="button"
-                  onClick={() => void onClearJobs(() => true).then(
-                    () => requestClose()
-                  )}
-                  disabled={busy}
+                  className={[
+                    "upload-queue-clear-button",
+                    clearRequiresConfirmation ? "danger-button" : "",
+                    clearConfirmation.armed ? "is-armed" : ""
+                  ].filter(Boolean).join(" ")}
+                  aria-label={clearConfirmation.armed
+                    ? "再次点击确认清空当前队列"
+                    : clearRequiresConfirmation
+                      ? "清空当前队列，需要再次点击确认"
+                      : "清空当前队列"}
+                  aria-pressed={clearConfirmation.armed}
+                  onBlur={clearConfirmation.onBlur}
+                  onClick={() => {
+                    if (queue.totalItems === 0) {
+                      requestClose();
+                      return;
+                    }
+                    const run = () => {
+                      void onConfirmClearQueue().then((closed) => {
+                        if (closed) {
+                          requestClose(() => {
+                            onDiscardUnconfirmedIntents();
+                            onClose({ skipCompletedCleanup: true });
+                          });
+                        }
+                      });
+                    };
+                    if (!clearRequiresConfirmation) {
+                      if (onArmClearQueue()) run();
+                      return;
+                    }
+                    clearConfirmation.activate(onArmClearQueue, run);
+                  }}
                 >
-                  取消
+                  {clearConfirmation.armed ? "清空" : "取消"}
                 </button>
                 <button
                   className="button workflow-submit-button"
                   type="button"
-                  disabled={!readyJobs.length || busy}
-                  onClick={onCommitReady}
+                  disabled={!submitCount || committingCount !== null}
+                  onClick={() => {
+                    if (committingCount !== null || readyCount === 0) return;
+                    setCommittingCount(readyCount);
+                    void Promise.resolve(onCommitReady()).finally(() => {
+                      setCommittingCount(null);
+                    });
+                  }}
                 >
-                  <StableButtonLabel
-                    idle={readyJobs.length
-                      ? `提交 ${readyJobs.length} 张`
-                      : "提交"}
-                    busyText="提交中"
-                    busy={busy}
-                  />
+                  {submitCount ? `提交 ${submitCount} 张` : "提交"}
                 </button>
               </div>
             </footer>
@@ -537,9 +920,11 @@ export function UploadWorkflowWindow({
               item={detailItem}
               admin
               storageLabel={storageName(detailItem.storage_slug)}
-              onClose={() => setDetailItem(null)}
+              onClose={closeJobDetail}
               onTrashed={(imageId) => {
+                detailOwnerRef.current = null;
                 detailReturnFocusRef.current = null;
+                detailLifecycleFocusRef.current = closeButtonRef.current;
                 queue.removeLibraryDuplicate(imageId);
               }}
               returnFocusRef={detailReturnFocusRef}
@@ -551,7 +936,7 @@ export function UploadWorkflowWindow({
               thumbSrc={preview.thumbSrc}
               width={preview.width}
               height={preview.height}
-              onClose={() => setPreview(null)}
+              onClose={closeJobPreview}
               returnFocusRef={previewReturnFocusRef}
             />
           )}
@@ -570,17 +955,19 @@ export function UploadWorkflowWindow({
             <ConfirmDialog
               title={pendingCleanupAction.confirmation.title}
               description={pendingCleanupAction.confirmation.description(
-                pendingCleanupAction.count
+                pendingCleanup?.count ?? 0
               )}
               confirmLabel={pendingCleanupAction.confirmation.confirmLabel(
-                pendingCleanupAction.count
+                pendingCleanup?.count ?? 0
               )}
               pendingLabel="清空中"
               successLabel="已清空"
-              confirmDisabled={!pendingCleanupAction.enabled}
               closeOnBackdrop
               returnFocusRef={cleanupReturnFocusRef}
-              onClose={() => setPendingCleanupActionId(null)}
+              onClose={() => {
+                onDiscardUnconfirmedIntents();
+                setPendingCleanup(null);
+              }}
               onConfirm={confirmCleanupAction}
             />
           )}

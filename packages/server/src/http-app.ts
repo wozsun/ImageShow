@@ -1,6 +1,10 @@
 import { Hono, type Context, type Next } from "hono";
 import { compress } from "hono/compress";
-import { adminApiBasePath } from "@imageshow/shared/browser";
+import {
+  adminApiBasePath,
+  importDuplicatesPath,
+  importStatusPath
+} from "@imageshow/shared/browser";
 import { getRuntimeConfig } from "./config/runtime-config-store.ts";
 import { apiErrorResponse, handleApiError } from "./core/http/responses.ts";
 import {
@@ -150,12 +154,6 @@ export function createHttpApp(
   });
   const apiCompress = compress({ threshold: 1024 });
   app.use("/api/*", async (c, next) => {
-    if (
-      new URL(c.req.url).pathname ===
-        `${adminApiBasePath}/imports/events`
-    ) {
-      return next();
-    }
     let temporaryContentLength = false;
     await apiCompress(c, async () => {
       await next();
@@ -186,8 +184,8 @@ export function createHttpApp(
   registerSecurityReportRoutes(app);
 
   const adminReadPostPaths = new Set([
-    `${adminApiBasePath}/imports/status`,
-    `${adminApiBasePath}/imports/events`
+    importDuplicatesPath,
+    importStatusPath
   ]);
   app.use(`${adminApiBasePath}/*`, async (c, next) => {
     if (

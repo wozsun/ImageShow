@@ -1,8 +1,6 @@
 import { appConfig } from "@imageshow/shared";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { logger } from "../core/logger.ts";
-import { cleanupOrphanRawImports } from "../images/imports/temp-files.ts";
-import { scheduleImportCleanupJob } from "../images/imports/cleanup-job.ts";
 import {
   handleBackgroundJob,
   type BackgroundJobOutcome
@@ -27,7 +25,6 @@ import {
 let timer: NodeJS.Timeout | undefined;
 let tickPromise: Promise<void> | null = null;
 let lastStaleRecovery = 0;
-let lastImportCleanup = 0;
 let lastHistoryCleanup = 0;
 
 function jobTypeConcurrency(type: string): number {
@@ -153,11 +150,6 @@ async function runBackgroundJobType(type: string, lanes: number): Promise<QueueS
   };
 }
 
-async function scheduleExpiredImportCleanup() {
-  await cleanupOrphanRawImports(appConfig.uploadTtlSeconds * 1000);
-  await scheduleImportCleanupJob();
-}
-
 async function runWorkerTick() {
   if (!executionCoordinator.isAccepting()) return;
   const now = Date.now();
@@ -168,14 +160,6 @@ async function runWorkerTick() {
     lastStaleRecovery = now;
     await recoverStaleBackgroundJobs();
     logger.debug("worker_periodic_task", { task: "stale_recovery", delay_ms: delayMs });
-  }
-  if (now - lastImportCleanup >= appConfig.backgroundJob.expireUploadsIntervalMs) {
-    const delayMs = lastImportCleanup
-      ? Math.max(0, now - lastImportCleanup - appConfig.backgroundJob.expireUploadsIntervalMs)
-      : 0;
-    lastImportCleanup = now;
-    await scheduleExpiredImportCleanup();
-    logger.debug("worker_periodic_task", { task: "import_cleanup", delay_ms: delayMs });
   }
   if (now - lastHistoryCleanup >= appConfig.backgroundJob.historyCleanupIntervalMs) {
     const delayMs = lastHistoryCleanup

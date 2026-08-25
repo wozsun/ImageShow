@@ -17,24 +17,18 @@ const statusLabels: Record<ImportJob["status"], string> = {
   cancelled: "已取消"
 };
 
-export function importJobStatusLabel(
-  job: ImportJob,
-  hasQueueDuplicate = false
-) {
+export function importJobStatusLabel(job: ImportJob) {
   if (job.failureStage === "cancel") return "取消失败";
   if (
     importJobNeedsDuplicateConfirmation(job)
-    && (job.duplicates.length > 0 || hasQueueDuplicate)
+    && (job.duplicateCount ?? 0) > 0
   ) {
-    return "重复待确认";
+    return "待确认";
   }
   return statusLabels[job.status];
 }
 
-export function importJobStatusDetail(
-  job: ImportJob,
-  hasQueueDuplicate = false
-): string | null {
+export function importJobStatusDetail(job: ImportJob): string | null {
   if (job.failureStage === "cancel") {
     return job.message || "取消失败";
   }
@@ -59,7 +53,7 @@ export function importJobStatusDetail(
       if (job.duplicateDecision === "confirmed") return "已确认保留副本";
       if (
         importJobNeedsDuplicateConfirmation(job)
-        && (job.duplicates.length > 0 || hasQueueDuplicate)
+        && (job.duplicateCount ?? 0) > 0
       ) {
         return "发现重复图片，请确认";
       }
@@ -79,6 +73,7 @@ export function importJobStatusDetail(
     case "cancelling":
       return "正在取消并清理暂存数据";
     case "done":
+      return "图片已入库";
     case "cancelled":
       return null;
   }

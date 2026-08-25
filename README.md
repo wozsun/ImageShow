@@ -15,14 +15,26 @@ Node.js 26 / Hono、React 19、PostgreSQL、Redis 8 和 Docker 构成。
 - 主站 `/random` 随机图 API，以及集中承载本地媒体、缩略图和外链原图直连决策 / 代理的
   `static.*` 资源子域；已解析随机池在一次只读 Redis 原子调用内完成校验、抽样和 rich item
   读取，近期去重与最终排序仍由应用负责；不提供随机、外链或主题专用子域。
-- 后台图片上传、URL / JSONL / 微博导入、编辑、分类、回收站、日志与运行状态检查；导入
-  提交分别展示等待准入、正在写入、已写入但等待结果和完成，概览最近上传直接携带管理
-  详情所需的存储显示名，打开详情不依赖二次标签查询；相同最终内容在提交边界串行确认，
-  单项重复冲突不会中断同一批的其他图片，确认后直接复用该项已锁定的提交意图继续；
+- 后台图片上传、URL / JSONL / 微博导入、编辑、分类、回收站、日志与运行状态检查；本地上传
+  使用一次有界 intent POST 加逐文件 raw PUT，远程来源一次批量 accept 后由单实例 Redis
+  worker 接管，异步提交只冻结意图并以 PostgreSQL 图片行确认完成；相同最终内容在提交边界
+  串行确认，单项重复冲突不会中断同一批的其他图片，确认后复用该项已锁定的提交意图继续；
+  upload / import 队列按当前管理员分别用一个 SSE 和有界分页快照同步；展示保持新批次置顶、
+  同批来源顺序 1→N，并在窗口重开和跨页后保持稳定。重连只废止旧动作权威，当前页继续稳定
+  展示直至新快照原位替换；实时 completed 直接复用提交事务生成的 PostgreSQL 投影，窗口恢复时
+  再按页批量水合；全队列提交、默认值和清理
+  使用预冻结签名 watermark 与有界 continuation，HTTP 接管到状态通道之间以独立 revision
+  围栏和点击时精确 pair 集合关闭动作缺口；当前文档在窗口生命周期内保留新建批次的来源
+  顺序，业务权威仍逐项立即转交 Server，窗口重开后才完全使用 Server display；重复详情按
+  当前页 MD5 批量读取 PostgreSQL；
   “导入图片”主按钮与下拉按钮共享上传工作流和来源输入模块的意图预载，成功启动后保持
-  页面交互锁直到工作流关闭，避免来源弹窗开启时背景状态闪烁。
+  页面交互锁直到工作流关闭，避免来源弹窗开启时背景状态闪烁；完成事件按提交批次合并刷新
+  图库投影，关闭窗口默认只清理当时已经完成的卡片与 Redis 回执，未完成任务继续保留。
 - local 与多个 S3 兼容对象存储后端并存；支持单图、批量和整后端迁移，以及检查页显式
-  预览、确认后执行的存储维修与孤儿清理。
+  预览、确认后执行的存储维修与孤儿清理。单实例后台还会按固定周期回收超过保守年龄门槛、
+  且不再被 Redis canonical 精确引用的 raw、`.part` 与 `_uploads` generation；Redis 异常、
+  存储列表不完整或键代际无法解析时保守保留。正式候选在复制前登记持久清理 guard，只有
+  PostgreSQL 未引用时才会回收。
 - 成功提交的图片以正式缩略图为不变量；正常读取严格只读，缺图显示统一损坏图标并由
   检查页“存储维护”显式修复。
 - PostgreSQL 保存全部业务真值，Redis 只承载会话、限流、统一就绪图片投影与可重建缓存。
@@ -100,16 +112,20 @@ docker compose exec postgresql sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB
 ## 数据库基线
 
 `schema.sql` 直接定义当前干净安装基线；镜像同时保留可选的
-`schema-additions.sql`，用于对现有数据库执行逐项审查、行为中性的安全新增。空数据库在同一
-事务中依次执行两个入口，非空数据库只执行 additions 后进入只读 readiness。当前 additions
-为注释占位，不执行 SQL。additions 只承载一个发布周期：全部受控非空数据库应用其中增量并
+`schema-additions.sql`，用于对现有数据库执行当前发布周期经明确审查的受限增量或一次性
+数据变化。空数据库在同一事务中依次执行两个入口，非空数据库只执行 additions 后进入只读
+readiness。5.0.0 additions 新增 `metadata.created_by`，把旧行精确回填为 `wozsun`，随后设为
+`NOT NULL` 并删除默认值；重复执行保持幂等。additions 只承载一个发布周期：全部受控非空数据库应用其中增量并
 通过 readiness 后，下一发布才能把同一定义并入 `schema.sql` 并恢复注释占位；升级和恢复旧
 备份都不得跳过承载 additions 的发布。应用不提供编号迁移、通用 schema diff、删除、重命名、
-类型改变、推测回填、版本标记或清库。精确契约见
+类型改变、通用推测回填、版本标记或清库。精确契约见
 [数据库结构](docs/guide/database.md#启动与结构契约)。
 
-Redis 不是业务真相源；空 Redis 会从 PostgreSQL 重建派生状态并要求管理员重新登录。连接必须
-支持 Redis 8 以及项目使用的
+Redis 是必需的 operational datastore，但不是业务真相源；服务 unavailable 或命令 OOM 时，
+会话、导入写入和 worker 均 fail closed，不回退到 PostgreSQL 或进程内队列。停应用后把已确认
+专供 ImageShow 的 logical database 清为空库是受支持冷启动：管理员重新登录，未完成导入允许
+消失，派生状态从 PostgreSQL 重建。运行中清空或局部缺失 canonical / owner / metadata 结构
+不受支持，受影响队列会 fail closed 并要求停机处理。连接必须支持 Redis 8 以及项目使用的
 `INCREX`、`ARRING`、`ARLASTITEMS`、`SET ... IFEQ ... KEEPTTL` 与
 `DELEX ... IFEQ` 能力；应用启动时会实际验证成功、条件失败、缺失、TTL 语义和 ACL 权限。
 
@@ -121,15 +137,11 @@ Redis 不是业务真相源；空 Redis 会从 PostgreSQL 重建派生状态并�
 `X-Forwarded-For` 与 `X-Forwarded-Proto`；应用不解析转发 Host 或多级 IP 链。
 产品无关的代理要求与唯一一份可替换的 Nginx 最简示例见[部署指南](docs/guide/deployment.md#反向代理与-https)。
 
-升级到 4.12.0 必须使用计划停机窗口：先停止旧应用并等待排空，再一次性部署同版本 Server
-与内置静态 Web，确认容器健康和 `/readyz` 后恢复访问。不得混用 4.11 Web 与 4.12 Server，
-也不得续用升级前仍打开的后台标签页；本版不提供旧后台 cursor 参数兼容。
-
-升级到 4.13.0 前还必须在停机并备份配置后，把 `data/config.json` 的
-`site.home.tagline` 值移动到 `site.description`，并把部署中的
-`SITE_HOME_TAGLINE` 改为 `SITE_DESCRIPTION`；检查 JSON 后再启动新版本。应用不会自动
-迁移旧键，漏改时旧值会被结构归一化删除并补入新默认值。完整步骤见
-[配置说明](docs/guide/configuration.md#4130-站点描述字段升级)。
+从 4.16.5 升级到 5.0.0 必须执行一次计划停机：在旧版排空 PostgreSQL `import_session` 与仍可
+执行的 `import.cleanup`，停止且只停止应用，复核唯一中止条件，再对已人工确认专供 ImageShow
+的 Redis logical database 执行 `FLUSHDB`；严禁 `FLUSHALL`、清理 PostgreSQL / storage 或运行
+中删 key。首次启动 5.0.0 后只允许 fix-forward，不支持降级。精确 SQL、命令、预期值和失败
+边界见[生产部署指南](docs/guide/deployment.md)。
 
 反向代理请求体上限不得低于应用配置。仓库示例使用 `client_max_body_size 256m`，覆盖
 默认 200 MiB 单图上限并留出代理层余量。完整 Docker、健康检查、停机、密码恢复及

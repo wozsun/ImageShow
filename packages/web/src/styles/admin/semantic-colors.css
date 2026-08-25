@@ -80,6 +80,7 @@
   --admin-color-warning-text: light-dark(#795d1d, #f2cc60);
   --admin-color-warning-text-strong: light-dark(#765314, #e3b341);
   --admin-color-warning-text-soft: light-dark(#795a0a, #d0ae7d);
+  --admin-color-duplicate-text: light-dark(#906400, #d0ae7d);
   --admin-color-warning-action: light-dark(#a75b00, #e3b341);
   --admin-color-warning-surface: light-dark(#fff8e8, #2d2717);
   --admin-color-warning-surface-soft: light-dark(#fffaf0, #231f15);

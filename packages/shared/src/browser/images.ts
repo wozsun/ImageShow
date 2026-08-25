@@ -1,5 +1,8 @@
 import type { Brightness, Device } from "./common.ts";
 
+export const adminImageListReadStartedAtHeader =
+  "X-ImageShow-Read-Started-At";
+
 export type FacetOptionDto = {
   slug: string;
   display_name: string;

@@ -91,6 +91,7 @@ const databaseReadiness = {
       purge_started_at: "timestamptz",
       purge_attempts: "int4",
       purge_error: "text",
+      created_by: "text",
       created_at: "timestamptz",
       updated_at: "timestamptz"
     },
@@ -110,29 +111,6 @@ const databaseReadiness = {
       updated_at: "timestamptz"
     },
     privileges: ["SELECT", "UPDATE"]
-  },
-  import_session: {
-    columns: {
-      id: "uuid",
-      mode: "text",
-      status: "text",
-      execution_token: "uuid",
-      raw_token: "uuid",
-      idempotency_key: "text",
-      request_hash: "text",
-      storage_slug: "text",
-      final_object_key: "text",
-      source_url: "text",
-      expected_size: "int8",
-      metadata_payload: "jsonb",
-      prepared_payload: "jsonb",
-      error: "text",
-      image_time: "timestamptz",
-      expires_at: "timestamptz",
-      created_at: "timestamptz",
-      updated_at: "timestamptz"
-    },
-    privileges: readWritePrivileges
   },
   background_job: {
     columns: {
@@ -196,7 +174,6 @@ const requiredPrimaryKeys = [
   { table: "metadata", columns: ["id"] },
   { table: "image_tag", columns: ["image_id", "tag_slug"] },
   { table: "ready_image_revision", columns: ["singleton"] },
-  { table: "import_session", columns: ["id"] },
   { table: "background_job", columns: ["id"] },
   { table: "admin_account", columns: ["username"] }
 ] as const satisfies readonly RequiredPrimaryKey[];
@@ -206,16 +183,6 @@ const requiredUniqueIndexes = [
     table: "metadata",
     columns: ["object_key"],
     predicate: "none"
-  },
-  {
-    table: "import_session",
-    columns: ["idempotency_key"],
-    predicate: "none"
-  },
-  {
-    table: "import_session",
-    columns: ["final_object_key"],
-    predicate: "nonempty_final_object"
   },
   {
     table: "background_job",
@@ -274,13 +241,6 @@ const requiredForeignKeys = [
     referencedTable: "tag",
     referencedColumns: ["slug"],
     onDelete: "c"
-  },
-  {
-    table: "import_session",
-    columns: ["storage_slug"],
-    referencedTable: "storage_backend",
-    referencedColumns: ["slug"],
-    onDelete: "r"
   }
 ] as const satisfies readonly RequiredForeignKey[];
 

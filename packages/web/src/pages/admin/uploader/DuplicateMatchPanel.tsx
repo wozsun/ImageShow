@@ -1,13 +1,12 @@
 import { ImageThumbnail } from "../../../components/image/ImageThumbnail.js";
 import { formatImageClassification, imageDisplayTitle } from "../../../lib/ui/formatters.js";
-import type { AdminImageListItem, ImportJob } from "../../../lib/types.js";
-import {
-  importJobPreviewAvailable,
-  importJobSourceLabel
-} from "./duplicate-match.js";
-import { importPositionText } from "./import-job-utils.js";
+import type { AdminImageListItem } from "../../../lib/types.js";
 
 export type ImportPreviewTarget = {
+  jobId: string;
+  attemptKey: string;
+  sessionId?: string;
+  imageId?: string;
   src: string;
   thumbSrc: string;
   width?: number;
@@ -17,33 +16,19 @@ export type ImportPreviewTarget = {
 
 export function DuplicateMatchPanel({
   libraryItems,
-  queueDuplicate,
   disabled,
+  confirmDisabled,
   onOpenDetail,
-  onPreview,
   onConfirm,
   onCancel
 }: {
   libraryItems: AdminImageListItem[];
-  queueDuplicate?: ImportJob;
   disabled: boolean;
+  confirmDisabled?: boolean;
   onOpenDetail: (item: AdminImageListItem, opener: HTMLElement) => void;
-  onPreview: (target: ImportPreviewTarget) => void;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
-  const queuePositionText = queueDuplicate
-    ? importPositionText(queueDuplicate)
-    : "";
-  const queueSource = queueDuplicate
-    ? importJobSourceLabel(queueDuplicate)
-    : "";
-  const queuePreview = queueDuplicate?.preview ?? "";
-  const queuePreviewFull = queueDuplicate?.previewFull || queuePreview;
-  const queuePreviewAvailable = Boolean(
-    queueDuplicate && importJobPreviewAvailable(queueDuplicate)
-  );
-
   return (
     <div className="duplicate-panel">
       <div className="duplicate-note">
@@ -52,6 +37,11 @@ export function DuplicateMatchPanel({
       </div>
       <div className="duplicate-body">
         <div className="duplicate-list">
+          {!libraryItems.length && (
+            <small className="duplicate-loading">
+              正在读取图库中的重复图片…
+            </small>
+          )}
           {libraryItems.map((item) => (
             <button
               type="button"
@@ -67,51 +57,19 @@ export function DuplicateMatchPanel({
               <small>{formatImageClassification(item)}</small>
             </button>
           ))}
-          {queueDuplicate && (
-            <button
-              type="button"
-              className="duplicate-item batch-duplicate-item"
-              disabled={!queuePreviewAvailable}
-              onClick={(event) => onPreview({
-                src: queuePreviewFull,
-                thumbSrc: queuePreview,
-                width: queueDuplicate.width,
-                height: queueDuplicate.height,
-                opener: event.currentTarget,
-              })}
-            >
-              {queuePreview
-                ? (
-                    <ImageThumbnail
-                      src={queuePreview}
-                      size="small"
-                    />
-                  )
-                : <span className="image-thumbnail is-small" aria-hidden="true" />}
-              <span className="duplicate-item-source" title={queueSource}>
-                {queueSource}
-              </span>
-              <small>
-                {queuePreviewAvailable
-                  ? [
-                      queuePositionText || "同批处理任务",
-                      queueDuplicate.draft.theme,
-                      `${queueDuplicate.draft.device}/${queueDuplicate.draft.brightness}`
-                    ].filter(Boolean).join(" · ")
-                  : "来源预览暂不可用"}
-              </small>
-            </button>
-          )}
         </div>
         <div className="inline-actions">
-          <button type="button" onClick={onConfirm} disabled={disabled}>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={disabled || confirmDisabled}
+          >
             仍然提交
           </button>
           <button
             className="danger-button"
             type="button"
             onClick={onCancel}
-            disabled={disabled}
           >
             取消
           </button>

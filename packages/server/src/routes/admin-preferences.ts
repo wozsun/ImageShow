@@ -4,7 +4,12 @@ import {
   type AdminPreferencesResponseDto
 } from "@imageshow/shared/browser";
 import { ApiError } from "../core/api-error.ts";
-import { apiSuccess } from "../core/http/responses.ts";
+import {
+  apiSuccess,
+  apiSuccessEtag,
+  privateCacheableApiSuccess
+} from "../core/http/responses.ts";
+import { privateNoStoreCacheControl } from "../core/http/headers.ts";
 import { readJsonBody } from "../core/http/json-body.ts";
 import { limitAdminPreferencesBody } from "../core/http/request-body-limit.ts";
 import { adminPreferencesInput, parse } from "../core/validation.ts";
@@ -25,7 +30,7 @@ export function registerAdminPreferenceRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/preferences`, async (c) => {
     const preferences = await readAdminPreferences(authenticatedUsername(c));
     const response = { preferences } satisfies AdminPreferencesResponseDto;
-    return c.json(apiSuccess(response));
+    return privateCacheableApiSuccess(c, response);
   });
 
   app.patch(`${adminApiBasePath}/preferences`, limitAdminPreferencesBody, async (c) => {
@@ -40,6 +45,8 @@ export function registerAdminPreferenceRoutes(app: Hono) {
     const response = {
       preferences: savedPreferences
     } satisfies AdminPreferencesResponseDto;
+    c.header("Cache-Control", privateNoStoreCacheControl);
+    c.header("ETag", apiSuccessEtag(response));
     return c.json(apiSuccess(response));
   });
 }

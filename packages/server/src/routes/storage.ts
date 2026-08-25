@@ -54,7 +54,7 @@ export function registerStorageRoutes(app: Hono) {
     const response = {
       backends: await getStorageBackendsForAdmin()
     } satisfies StorageBackendsAdminResponseDto;
-    return c.json(apiSuccess(response));
+    return privateCacheableApiSuccess(c, response);
   });
 
   app.post(

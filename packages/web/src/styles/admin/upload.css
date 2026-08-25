@@ -47,6 +47,10 @@
   padding: 14px 16px;
 }
 .upload-window > header {
+  padding-bottom: 12px;
+  /* Chrome 实测两行动作各占 38.5px；连同 8px 间距、上下留白和边框
+     共需 112px。单排也预留同一桌面高度，避免 980px 临界点跳动。 */
+  min-height: 112px;
   display: flex;
   justify-content: space-between;
   gap: 16px;
@@ -78,6 +82,11 @@
 }
 .upload-window > footer button { min-height: 38px; }
 .upload-window .workflow-submit-button { min-width: calc(4em + 3ch + 26px); }
+.upload-window .upload-queue-clear-button.danger-button.is-armed {
+  color: var(--admin-color-text-on-emphasis);
+  background: var(--admin-color-danger-action-hover);
+  border-color: var(--admin-color-danger-action-hover);
+}
 .upload-window > footer .select-trigger { height: 38px; }
 .upload-defaults-panel { flex-shrink: 0; }
 .upload-picker {
@@ -104,7 +113,6 @@
 .upload-source-picker > button + button { border-left: 1px solid var(--admin-color-border-control); }
 .upload-source-picker.is-disabled { opacity: .45; }
 .upload-source-picker.is-disabled > button { opacity: 1; }
-.upload-picker.is-disabled { opacity: .45; cursor: not-allowed; }
 .upload-picker input { display: none; }
 .import-source-card { width: min(560px, 96vw); max-height: 90vh; overflow: auto; background: var(--admin-color-surface-primary); border-radius: 8px; padding: 18px; display: flex; flex-direction: column; gap: 10px; animation: modal-pop .18s cubic-bezier(.2, .8, .2, 1); }
 .import-source-head { display: flex; align-items: center; justify-content: space-between; }
@@ -174,7 +182,6 @@
   .upload-clear-actions { grid-row: 2; }
 }
 .upload-footer-left { justify-self: start; min-width: 0; display: flex; align-items: center; gap: 10px; }
-.upload-storage-hint { color: var(--admin-color-text-secondary); white-space: nowrap; }
 .clear-button { color: var(--admin-color-danger-action); }
 .clear-button:not(:disabled):hover { color: var(--admin-color-danger-action-hover); background: var(--admin-color-upload-hover-surface); }
 .import-job {
@@ -212,6 +219,9 @@
 .transfer-progress-value::before { content: "·"; margin-inline: 6px; color: var(--admin-color-text-secondary); }
 .import-job-head .import-job-size-summary { display: none; font-size: 13px; }
 .import-status-label { color: var(--import-job-status); font-weight: 600; }
+.import-status-label.is-duplicate-pending {
+  color: var(--admin-color-duplicate-text);
+}
 .import-job-actions { display: flex; align-items: center; gap: 6px; }
 .import-job .image-fields { grid-column: 2 / 4; }
 .import-job .select-control.image-fields-device.is-changed .select-trigger,
@@ -278,7 +288,7 @@
 }
 .duplicate-panel span { color: var(--admin-color-text-secondary); font-size: 14px; }
 .duplicate-note { min-width: 0; display: grid; gap: 2px; }
-.duplicate-note strong { color: var(--admin-color-warning-text-soft); }
+.duplicate-note strong { color: var(--admin-color-duplicate-text); }
 .duplicate-body { display: flex; align-items: flex-end; gap: 12px; }
 .duplicate-body .duplicate-list { flex: 1; min-width: 0; }
 .duplicate-body .inline-actions { flex: 0 0 auto; flex-wrap: nowrap; }
@@ -357,6 +367,7 @@ button.upload-empty-state.upload-dropzone:not(:disabled):hover,
     border-radius: 0;
   }
   .upload-window > header.upload-window-header {
+    min-height: 0;
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto auto;
     grid-template-rows: auto auto;
@@ -383,8 +394,6 @@ button.upload-empty-state.upload-dropzone:not(:disabled):hover,
     line-height: 20px;
   }
   .upload-task-summary { display: block; }
-  .upload-summary-primary,
-  .upload-summary-secondary { display: inline; }
   .upload-clear-actions { display: none; }
   .upload-cleanup-trigger {
     grid-column: 2;
@@ -420,7 +429,6 @@ button.upload-empty-state.upload-dropzone:not(:disabled):hover,
     min-width: 0;
     max-width: 100%;
   }
-  .upload-window > footer .upload-storage-hint { display: none; }
   .upload-window > footer .modal-footer-actions { gap: 6px; }
   .upload-window > footer .modal-footer-actions button { white-space: nowrap; }
 
@@ -455,6 +463,18 @@ button.upload-empty-state.upload-dropzone:not(:disabled):hover,
   .import-source-actions { align-items: stretch; flex-direction: column; }
   .import-source-action-buttons { width: 100%; margin-left: 0; }
   .import-source-action-buttons button { flex: 1; min-height: 44px; }
+}
+
+/* 窄屏无法在右侧两个操作列旁容纳完整的两行摘要；摘要独占第三行，
+   使两段统计仍各保持一行且不会被固定高度裁切。 */
+@media (max-width: 480px) {
+  .upload-window > header.upload-window-header {
+    grid-template-rows: auto auto auto;
+  }
+  .upload-window-header p {
+    grid-column: 1 / -1;
+    grid-row: 3;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

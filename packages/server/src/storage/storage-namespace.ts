@@ -78,3 +78,41 @@ export function shareStorageNamespace(source: StorageConfig, target: StorageConf
   return [...storageNamespaceIdentities(target)]
     .some((identity) => sourceIdentities.has(identity));
 }
+
+/**
+ * Build transitive physical-namespace groups. Historical identities can join
+ * backends whose current access endpoints differ, so direct current-identity
+ * grouping is not sufficient for whole-namespace maintenance.
+ */
+export function groupStorageNamespaces<T extends StorageConfig>(
+  configs: readonly T[]
+) {
+  const groups: T[][] = [];
+  for (const config of configs) {
+    const matches = groups.flatMap((group, index) => (
+      group.some((candidate) => shareStorageNamespace(candidate, config))
+        ? [index]
+        : []
+    ));
+    if (!matches.length) {
+      groups.push([config]);
+      continue;
+    }
+    const merged = matches.flatMap((index) => groups[index] ?? []);
+    merged.push(config);
+    for (const index of matches.toReversed()) groups.splice(index, 1);
+    groups.push(merged);
+  }
+  return groups;
+}
+
+/** Stable only while every current and historical identity in a group agrees. */
+export function storageNamespaceGroupIdentity(
+  configs: readonly StorageConfig[]
+) {
+  return JSON.stringify([
+    ...new Set(configs.flatMap((config) => [
+      ...storageNamespaceIdentities(config)
+    ]))
+  ].toSorted());
+}

@@ -2,7 +2,17 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "workspaces": {
     ".": {
-      "ignoreDependencies": ["linkedom"]
+      "entry": ["tests/final-*.test.ts"],
+      "ignoreDependencies": [
+        "@tanstack/react-query",
+        "hono",
+        "ipaddr.js",
+        "pg",
+        "react",
+        "react-dom",
+        "react-router",
+        "sharp"
+      ]
     },
     "packages/server": {
       "entry": ["src/healthcheck-cli.ts"]

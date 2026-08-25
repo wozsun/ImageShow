@@ -61,13 +61,31 @@ async function cleanupReferenceMatchesTarget(
 export async function assertObjectNotPendingCleanup(
   target: Awaited<ReturnType<typeof getStorageBackend>>,
   prefix: "media" | "thumbs",
-  key: string
+  key: string,
+  options: Readonly<{
+    /**
+     * Ignore only this import's pre-copy candidate guard. The caller must
+     * already hold the matching image storage mutation lock, which also
+     * fences the guard handler until PostgreSQL publication has completed.
+     */
+    ownedImportCandidateGuard?: Readonly<{
+      imageId: string;
+      token: string;
+    }>;
+  }> = {}
 ) {
   const references = await listUnresolvedMoveCleanupReferences(prefix, key);
   if (!references.length) return;
   const backends = new Map<string, StorageBackendConfig>();
 
   for (const reference of references) {
+    if (
+      options.ownedImportCandidateGuard?.imageId === reference.target_id
+      && options.ownedImportCandidateGuard.token === reference.guard_token
+      && reference.reason === "import_commit_candidate_guard"
+    ) {
+      continue;
+    }
     if (!await cleanupReferenceMatchesTarget(reference, target, backends)) {
       continue;
     }
@@ -114,7 +132,7 @@ export function enqueueCapturedObjectsForCleanup(
   client?: PoolClient
 ) {
   if (client) {
-    return enqueueMoveCleanupJob(imageId, objects, reason, client);
+    return enqueueMoveCleanupJob(imageId, objects, reason, { client });
   }
   return withStorageLocationReadLock(async (signal) => {
     signal.throwIfAborted();
@@ -159,7 +177,8 @@ async function enqueueMoveCleanupWithRetry(
   imageId: string,
   objects: readonly CapturedMoveCleanupObject[],
   reason: string,
-  signal: AbortSignal
+  signal: AbortSignal,
+  guardToken?: string
 ) {
   let lastError: unknown;
   for (const delayMs of cleanupEnqueueRetryDelaysMs) {
@@ -167,7 +186,7 @@ async function enqueueMoveCleanupWithRetry(
     await wait(delayMs);
     signal.throwIfAborted();
     try {
-      await enqueueMoveCleanupJob(imageId, objects, reason);
+      await enqueueMoveCleanupJob(imageId, objects, reason, { guardToken });
       signal.throwIfAborted();
       return;
     } catch (error) {
@@ -185,14 +204,21 @@ async function enqueueMoveCleanupWithRetry(
 export async function enqueueObjectsForCleanup(
   imageId: string,
   objects: readonly MoveCleanupObjectInput[],
-  reason: string
+  reason: string,
+  options: Readonly<{ guardToken?: string }> = {}
 ) {
   if (!objects.length) return;
   await withStorageLocationReadLock(async (signal) => {
     signal.throwIfAborted();
     const captured = await captureMoveCleanupObjects(objects);
     signal.throwIfAborted();
-    await enqueueMoveCleanupWithRetry(imageId, captured, reason, signal);
+    await enqueueMoveCleanupWithRetry(
+      imageId,
+      captured,
+      reason,
+      signal,
+      options.guardToken
+    );
     signal.throwIfAborted();
   });
 }

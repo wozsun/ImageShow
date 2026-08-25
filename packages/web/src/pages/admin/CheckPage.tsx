@@ -376,6 +376,9 @@ const CHECK_RESULT_LABELS: Record<string, string> = {
   active_staging_files: "有效的导入暂存文件",
   retained_staging_files: "由导入会话保留的暂存文件",
   orphan_staging_files: "失效的导入暂存文件",
+  stale_import_raw_files: "陈旧的导入 raw 文件",
+  stale_import_part_files: "陈旧的导入 .part 文件",
+  incomplete_import_raw_scan: "未完整扫描的导入临时目录",
   incomplete_listings: "未完整列举的存储命名空间",
   unavailable_backends: "无法访问的后端",
   // 存储维护
@@ -426,7 +429,9 @@ function isIssueKey(key: string) {
   return [
     "issues", "operations", "failures", "failed", "unavailable_backends", "incomplete_listings", "error", "error_count",
     "missing_objects", "missing_thumbs", "pending_thumbnail_repairs",
-    "orphan_objects", "orphan_thumbs", "orphan_staging_files", "ready_cache_mismatch"
+    "orphan_objects", "orphan_thumbs", "orphan_staging_files",
+    "stale_import_raw_files", "stale_import_part_files",
+    "incomplete_import_raw_scan", "ready_cache_mismatch"
   ].includes(key);
 }
 
@@ -460,7 +465,15 @@ function countCheckIssues(result: Record<string, unknown>) {
   for (const [key, value] of Object.entries(result)) {
     if (key === "ok") continue;
     if (isIssueKey(key)) {
-      total += countValue(value);
+      if (
+        (key === "stale_import_raw_files" || key === "stale_import_part_files")
+        && value
+        && typeof value === "object"
+      ) {
+        total += numericResult((value as Record<string, unknown>).count);
+      } else {
+        total += countValue(value);
+      }
     } else if (value && typeof value === "object") {
       total += countCheckIssues(value as Record<string, unknown>);
     }

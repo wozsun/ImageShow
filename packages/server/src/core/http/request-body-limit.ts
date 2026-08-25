@@ -2,7 +2,15 @@ import { appConfig } from "@imageshow/shared";
 import {
   adminApiBasePath,
   adminPreferencesMaxBytes,
-  configPackageRequestMaxBytes
+  configPackageRequestMaxBytes,
+  importCancelPath,
+  importCommitPath,
+  importSnapshotPath,
+  importStatusPath,
+  importUpdatePath,
+  remoteImportAcceptPath,
+  uploadIntentPath,
+  uploadRawPath
 } from "@imageshow/shared/browser";
 import type { Context, Next } from "hono";
 import { apiErrorResponse } from "./responses.ts";
@@ -26,12 +34,23 @@ export const imageUpdatePath = `${adminApiBasePath}/images/update`;
 // Two hundred maximum-field items occupy about 5.692 MiB after worst-case JSON
 // escaping. The 6 MiB tier covers every legal request with finite headroom.
 const imageUpdateBodyMaxBytes = 6 * 1024 * 1024;
-export const importBatchCommitPath = `${adminApiBasePath}/imports/commit-batch`;
 // A legal 3,600-item batch can contain two 2 KiB URLs plus metadata and fifty
 // tags per item. Keep even worst-case JSON escaping bounded without rejecting
 // an otherwise valid configured import batch.
-const importBatchCommitBodyMaxBytes = 160 * 1024 * 1024;
-const importFilePath = new RegExp(`^${adminApiBasePath}/imports/[^/]+/file$`);
+const importControlBodyMaxBytes = 160 * 1024 * 1024;
+// One bounded 3,600-pair exclusion list plus the visible inclusion subset stay
+// well below 1 MiB. Keep snapshot selection independent from the much larger
+// metadata-bearing import control tier.
+const importSnapshotBodyMaxBytes = 1024 * 1024;
+const importControlPaths = new Set([
+  uploadIntentPath,
+  remoteImportAcceptPath,
+  importStatusPath,
+  importUpdatePath,
+  importCommitPath,
+  importCancelPath,
+  importSnapshotPath
+]);
 const advancedConfigLargeBodyPath = new RegExp(
   `^${adminApiBasePath}/advanced-config/(?:preview|import|runtime(?:/validate)?)$`
 );
@@ -126,7 +145,9 @@ export const limitAdvancedConfigBody = measuredBodyLimit(advancedConfigMaxBytes)
 
 export const limitImageUpdateBody = measuredBodyLimit(imageUpdateBodyMaxBytes);
 
-export const limitImportBatchCommitBody = measuredBodyLimit(importBatchCommitBodyMaxBytes);
+export const limitImportControlBody = measuredBodyLimit(importControlBodyMaxBytes);
+
+export const limitImportSnapshotBody = measuredBodyLimit(importSnapshotBodyMaxBytes);
 
 export const limitAdminPreferencesBody = measuredBodyLimit(adminPreferencesBodyMaxBytes);
 
@@ -150,14 +171,14 @@ export function limitProtectedAdminRequestBody(c: Context, next: Next) {
   if (
     path === jsonlManifestPath
     || path === weiboImportPath
-    || (c.req.method === "PUT" && importFilePath.test(path))
+    || (c.req.method === "PUT" && path === uploadRawPath)
   ) {
     return next();
   }
   if (c.req.method === "POST" && path === imageUpdatePath) {
     return next();
   }
-  if (c.req.method === "POST" && path === importBatchCommitPath) {
+  if (c.req.method === "POST" && importControlPaths.has(path)) {
     return next();
   }
   if (c.req.method === "PATCH" && path === adminPreferencesPath) {

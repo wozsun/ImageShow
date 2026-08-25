@@ -8,6 +8,7 @@ import type {
 } from "../core/public-db-fallback.ts";
 import type {
   OpenedRead,
+  StoragePruneOptions,
   StorageRequestOptions
 } from "./driver.ts";
 import type {
@@ -131,7 +132,7 @@ export async function collectStorageNamespaceSnapshot(
 
 export async function pruneEmptyStorageDirs(
   slug?: string,
-  options?: StorageRequestOptions
+  options?: StoragePruneOptions
 ) {
   return (await resolveStorageAccess(slug)).driver.pruneEmptyDirs(options);
 }

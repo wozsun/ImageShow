@@ -1,6 +1,11 @@
+import { appConfig } from "@imageshow/shared";
 import { pool } from "../core/database-pools.ts";
 import { errorMessage } from "../core/api-error.ts";
-import { stagingSessionId } from "../images/imports/staging-keys.ts";
+import { inspectImportRawOrphans } from "../images/imports/raw-files.ts";
+import { importOrphanCutoffs } from "../images/imports/orphan-retention.ts";
+import {
+  parseImportStagingCleanupKey
+} from "../images/imports/staging-keys.ts";
 import { resolveStorageAccess } from "../storage/backend-registry.ts";
 import { thumbnailRef } from "../storage/image-paths.ts";
 import { STORAGE_ADMIN_LIST_MAX_KEYS } from "../storage/key-listing.ts";
@@ -9,9 +14,7 @@ import {
   classifyStagingKeys,
   collectStorageBackendGroupSnapshot,
   importFinalStorageReferences,
-  importSessionIdsByBackend,
   mergeActiveImportSessions,
-  mergeImportSessionIds,
   mergeStorageReferenceRows,
   storageBackendGroupName,
   storageBackendGroups,
@@ -35,11 +38,10 @@ export async function checkStorage(signal?: AbortSignal) {
   const activeStagingFiles: Array<Record<string, unknown>> = [];
   const retainedStagingFiles: Array<Record<string, unknown>> = [];
   const orphanStagingFiles: Array<Record<string, unknown>> = [];
-  const [activeBeforeEnumeration, sessionIdsBeforeEnumeration] = await Promise.all([
-    activeImportStorageReferences(),
-    importSessionIdsByBackend()
-  ]);
+  const activeBeforeEnumeration = await activeImportStorageReferences({ signal });
   const { sessionsByBackend: sessionsBeforeEnumeration } = activeBeforeEnumeration;
+  const checkedAt = Date.now();
+  const cutoffs = importOrphanCutoffs(checkedAt);
   const incompleteListings: Array<{
     backend: string;
     namespace: string;
@@ -71,12 +73,10 @@ export async function checkStorage(signal?: AbortSignal) {
   // 避免刚创建的导入会话已经写入暂存对象、却被首轮快照漏掉而瞬时误报。
   const [
     rowsAfterEnumerationResult,
-    activeSessionsAfterEnumeration,
-    sessionIdsAfterEnumeration
+    activeSessionsAfterEnumeration
   ] = await Promise.all([
     pool.query(storageRowsQuery),
-    activeImportStorageReferences(),
-    importSessionIdsByBackend()
+    activeImportStorageReferences({ signal })
   ]);
   const rowsAfterEnumeration = rowsAfterEnumerationResult.rows as StorageRow[];
   const rowsReferencedDuringEnumeration = mergeStorageReferenceRows(
@@ -84,10 +84,10 @@ export async function checkStorage(signal?: AbortSignal) {
     rowsAfterEnumeration
   );
   const { sessionsByBackend: sessionsAfterEnumeration } = activeSessionsAfterEnumeration;
-  const sessionIdsDuringEnumeration = mergeImportSessionIds(
-    sessionIdsBeforeEnumeration,
-    sessionIdsAfterEnumeration
-  );
+  const rawReferencePaths = new Set([
+    ...activeBeforeEnumeration.rawPaths,
+    ...activeSessionsAfterEnumeration.rawPaths
+  ]);
 
   for (const captured of storageSnapshots) {
     if (!captured) continue;
@@ -171,23 +171,66 @@ export async function checkStorage(signal?: AbortSignal) {
       ])
     );
     const staging = classifyStagingKeys(stagingListing.keys, activeSessions);
-    const importSessionIds = new Set(
-      group.slugs.flatMap((slug) => [
-        ...(sessionIdsDuringEnumeration.get(slug) ?? [])
-      ])
+    const activePreparedSessions = new Map(
+      [...activeSessions.values()].flatMap((session) => [
+        session.prepared_image_key,
+        session.prepared_thumbnail_key
+      ].filter((key): key is string => Boolean(key)).map((key) => [
+        key,
+        session
+      ] as const))
     );
+    const selectedBackend = group.backends.find((candidate) => (
+      candidate.slug === backend
+    ));
     for (const key of staging.orphan) {
-      const sessionId = stagingSessionId(key);
-      if (sessionId && importSessionIds.has(sessionId)) {
+      const parsed = parseImportStagingCleanupKey(key);
+      const identity = parsed
+        && (!parsed.local_atomic_candidate
+          || selectedBackend?.type === "local")
+        ? parsed
+        : null;
+      const activeCandidateSession = identity?.local_atomic_candidate
+        ? activePreparedSessions.get(identity.base_key)
+        : undefined;
+      if (activeCandidateSession) {
+        activeStagingFiles.push({
+          key,
+          backend,
+          namespace,
+          storage_slug: activeCandidateSession.storage_slug,
+          session_id: activeCandidateSession.id,
+          status: activeCandidateSession.status,
+          discard_at: activeCandidateSession.discard_at
+        });
+        continue;
+      }
+      if (!identity) {
         retainedStagingFiles.push({
           key,
           backend,
           namespace,
-          session_id: sessionId,
-          reason: "导入会话仍存在，继续由导入清理流程负责"
+          reason: "暂存键不符合当前 v5 generation 结构，无法证明年龄，保守保留"
+        });
+      } else if (identity.created_at >= cutoffs.stagingCutoff) {
+        retainedStagingFiles.push({
+          key,
+          backend,
+          namespace,
+          session_id: identity.session_id,
+          created_at: identity.created_at,
+          eligible_after: identity.created_at
+            + (checkedAt - cutoffs.stagingCutoff),
+          reason: "尚未超过 24 小时、一个清理周期与安全余量的统一门槛"
         });
       } else {
-        orphanStagingFiles.push({ key, backend, namespace });
+        orphanStagingFiles.push({
+          key,
+          backend,
+          namespace,
+          session_id: identity.session_id,
+          created_at: identity.created_at
+        });
       }
     }
     for (const { key, session } of staging.active) {
@@ -198,7 +241,7 @@ export async function checkStorage(signal?: AbortSignal) {
         storage_slug: session.storage_slug,
         session_id: session.id,
         status: session.status,
-        expires_at: session.expires_at
+        discard_at: session.discard_at
       });
     }
     for (const session of activeSessions.values()) {
@@ -248,6 +291,12 @@ export async function checkStorage(signal?: AbortSignal) {
       }
     }
   }
+  const staleRaw = await inspectImportRawOrphans({
+    keep: rawReferencePaths,
+    rawCutoff: cutoffs.rawCutoff,
+    partCutoff: cutoffs.partCutoff,
+    signal
+  });
   return {
     missing_objects: missingObjects,
     missing_thumbs: missingThumbs,
@@ -257,6 +306,12 @@ export async function checkStorage(signal?: AbortSignal) {
     active_staging_files: activeStagingFiles,
     retained_staging_files: retainedStagingFiles,
     orphan_staging_files: orphanStagingFiles,
+    stale_import_raw_files: staleRaw.raw,
+    stale_import_part_files: staleRaw.part,
+    incomplete_import_raw_scan: staleRaw.complete ? [] : [{
+      limit: appConfig.importRuntime.orphanCleanupMaxRawEntriesPerCycle,
+      reason: "导入临时目录扫描达到固定上限；当前 stale 统计不是完整结果"
+    }],
     incomplete_listings: incompleteListings,
     unavailable_backends: unavailableBackends
   };

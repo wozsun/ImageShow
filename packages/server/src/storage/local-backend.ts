@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { copyFile, link, mkdir, open, opendir, readdir, rm, rmdir, writeFile, access } from "node:fs/promises";
+import { copyFile, link, mkdir, open, opendir, rm, rmdir, writeFile, access } from "node:fs/promises";
 import { dirname, join, relative, sep } from "node:path";
 import { runtimePaths } from "../config/bootstrap-env.ts";
 import { getInputImageMaxBytes } from "../config/app-settings.ts";
@@ -8,7 +8,9 @@ import { safeStoragePath, STORAGE_PREFIXES, type StoragePrefix } from "./object-
 import type {
   CopyPrefix,
   OpenedRead,
+  StorageCopyOptions,
   StorageDriver,
+  StoragePruneOptions,
   StorageRequestOptions,
   StorageSelfTest
 } from "./driver.ts";
@@ -21,14 +23,11 @@ import {
   type StorageKeyListOptions
 } from "./key-listing.ts";
 
-async function readDirectoryOrMissing(path: string) {
-  try {
-    return await readdir(path, { withFileTypes: true });
-  } catch (error) {
-    if (isMissingFileError(error)) return [];
-    throw error;
-  }
-}
+const uuidV7TokenPattern = new RegExp(
+  "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}"
+    + "-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+  "iu"
+);
 
 async function* walkLocalKeys(
   root: string,
@@ -171,10 +170,23 @@ export class LocalBackend implements StorageDriver {
     await rm(safeStoragePath(prefix, key), { force: true });
   }
 
-  async copy(fromPrefix: CopyPrefix, fromKey: string, toPrefix: CopyPrefix, toKey: string) {
+  async copy(
+    fromPrefix: CopyPrefix,
+    fromKey: string,
+    toPrefix: CopyPrefix,
+    toKey: string,
+    options: StorageCopyOptions = {}
+  ) {
     const target = safeStoragePath(toPrefix, toKey);
     await mkdir(dirname(target), { recursive: true });
-    const candidate = `${target}.candidate-${randomUUID()}`;
+    const candidateToken = options.atomicCandidateToken ?? randomUUID();
+    if (
+      options.atomicCandidateToken
+      && !uuidV7TokenPattern.test(candidateToken)
+    ) {
+      throw new RangeError("Invalid local atomic candidate token");
+    }
+    const candidate = `${target}.candidate-${candidateToken.toLowerCase()}`;
     try {
       await copyFile(safeStoragePath(fromPrefix, fromKey), candidate);
       // Publish only a complete same-directory candidate and never overwrite a
@@ -204,13 +216,33 @@ export class LocalBackend implements StorageDriver {
     return { backend: "local", writable: true, storage_dir: runtimePaths.storageDirectory };
   }
 
-  async pruneEmptyDirs(): Promise<number> {
+  async pruneEmptyDirs(options: StoragePruneOptions = {}): Promise<number> {
     const root = runtimePaths.storageDirectory;
     const protectedDirs = new Set(STORAGE_PREFIXES.map((name) => join(root, name)));
+    const configuredLimit = options.maxEntries ?? 100_000;
+    if (!Number.isSafeInteger(configuredLimit) || configuredLimit < 0) {
+      throw new RangeError("Storage directory prune limit must be a non-negative safe integer");
+    }
+    const start = options.prefix ? join(root, options.prefix) : root;
     let removed = 0;
+    let visited = 0;
     const prune = async (dir: string): Promise<void> => {
-      const entries = await readDirectoryOrMissing(dir);
-      for (const entry of entries) {
+      options.signal?.throwIfAborted();
+      let directory;
+      try {
+        directory = await opendir(dir, { bufferSize: 64 });
+      } catch (error) {
+        if (isMissingFileError(error)) return;
+        throw error;
+      }
+      for await (const entry of directory) {
+        options.signal?.throwIfAborted();
+        visited += 1;
+        if (visited > configuredLimit) {
+          throw new Error(
+            `Storage directory prune exceeds bounded entry limit ${configuredLimit}`
+          );
+        }
         if (entry.isDirectory()) await prune(join(dir, entry.name));
       }
       if (dir === root || protectedDirs.has(dir)) return;
@@ -223,10 +255,7 @@ export class LocalBackend implements StorageDriver {
         throw error;
       }
     };
-    const top = await readDirectoryOrMissing(root);
-    for (const entry of top) {
-      if (entry.isDirectory()) await prune(join(root, entry.name));
-    }
+    await prune(start);
     return removed;
   }
 }

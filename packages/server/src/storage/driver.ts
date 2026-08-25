@@ -22,6 +22,16 @@ export type StorageRequestOptions = {
   signal?: AbortSignal;
 };
 
+export type StoragePruneOptions = StorageRequestOptions & {
+  prefix?: StoragePrefix;
+  maxEntries?: number;
+};
+
+export type StorageCopyOptions = StorageRequestOptions & {
+  /** Stable local atomic-candidate suffix owned by a durable cleanup guard. */
+  atomicCandidateToken?: string;
+};
+
 export type StorageSelfTest = {
   backend: StorageType;
   writable: boolean;
@@ -65,12 +75,12 @@ export interface StorageDriver {
     fromKey: string,
     toPrefix: CopyPrefix,
     toKey: string,
-    options?: StorageRequestOptions
+    options?: StorageCopyOptions
   ): Promise<void>;
   listKeys(
     prefix: StoragePrefix,
     options?: StorageKeyListOptions
   ): StorageKeyListing;
   selfTest(options?: StorageRequestOptions): Promise<StorageSelfTest>;
-  pruneEmptyDirs(options?: StorageRequestOptions): Promise<number>;
+  pruneEmptyDirs(options?: StoragePruneOptions): Promise<number>;
 }

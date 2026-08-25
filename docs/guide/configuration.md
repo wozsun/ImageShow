@@ -84,12 +84,12 @@ PostgreSQL 的 `admin_account` 表，不进入 `config.json`。单应用进程�
 | `site.robots_enabled` | 是否提供 `robots.txt`，默认 `false`。开启后主站首页可抓取，资源域禁抓。 |
 | `embed.enabled` | 是否开放无主导航的 `/embed/home` 与 `/embed/gallery`，默认 `false`。启用后会根据当前 `site.domain` 隐式允许站点自身 HTTPS origin 及其任意层级的现有和未来子域，因此只应在这些子域均可信时开启；若站点域名带非默认端口，两项都只允许该端口。派生来源不写回配置文件。仅在 `data/config.json` 中维护。 |
 | `embed.allowed_origins` | 除站点隐式来源外额外允许嵌入页面的 HTTPS 来源列表，可填写精确 origin 或形如 `https://*.example.com` 的子域通配符，最多 32 项且规范化后总长不超过 4096 字符；可以留空，重复隐式或显式来源会去除。通配符只允许出现在最左侧且不包含根域名，根域名须另列。拒绝 HTTP、IP 地址、路径、参数、凭据、裸 `*`、中间通配符和过宽的单标签后缀。通配符只能用于全部现有及未来子域均可信的自有父域；校验不内置 Public Suffix List，不得配置 `*.github.io` 等公共托管后缀。仅在 `data/config.json` 中维护。 |
-| `upload.*` | 本地文件单次选择软上限、上传文件大小、图片长边限制、上传列表分页、单客户端上传队列并发，以及服务端 materialize / prepare 分阶段复用的全局并发；其中 `upload.max_items`、`upload.max_file_size_mb`、`upload.max_long_edge` 和 `upload.global_concurrency` 只在配置文件中维护。 |
-| `upload.max_items` | 本地文件单次选择软上限，默认 200，可配置范围为 1–1000；只由前端限制，服务端仍逐文件创建会话，没有本地批次条目数硬上限。 |
+| `upload.*` | 本地文件单次选择上限、上传文件大小、图片长边限制、上传列表分页、浏览器 raw PUT 并发，以及服务端 prepare 全局并发；其中 `upload.max_items`、`upload.max_file_size_mb`、`upload.max_long_edge` 和 `upload.global_concurrency` 只在配置文件中维护。 |
+| `upload.max_items` | 本地文件单次选择与单次 intent 接管的运行时上限，默认 200，可配置范围为 1–1000；Server 还执行不可配置的通用 batch hard limit。 |
 | `link_image.fill_original_url` | URL 下载导入是否自动把输入 URL 填入「原图 URL」字段；不做可直达探测。 |
 | `link_image.auto_import` | 链接、JSONL 清单或微博解析出有效图片且没有任何问题项时，是否省略二次确认并直接建立导入队列，默认 `true`；出现问题项时始终停留在解析结果页，由管理员确认是否导入有效部分。 |
 | `link_image.concurrency` | 单客户端 URL 下载导入队列并发数。 |
-| `link_image.global_concurrency` | 服务端 URL materialize 与 prepare 分阶段复用的全局并发数；只在配置文件中维护。 |
+| `link_image.global_concurrency` | 服务端 URL download 与 prepare 两个独立阶段使用的全局并发基数；只在配置文件中维护。 |
 | `link_image.fetch_timeout_seconds` | 外链图片请求超时，单位秒；只覆盖 download 素材化的外部请求。 |
 | `link_image.max_items` | URL 列表、JSONL 清单的单次条目软上限，默认 200；不在设置页展示，管理端只读返回该值供导入窗口预检，修改需编辑配置文件，可配置范围为 1–1000。微博导入不使用该限制。 |
 | `weibo.max_items` | 微博链接单次输入软上限，默认 20；不在设置页展示，管理端只读返回该值供导入窗口预检，可配置范围为 1–50。 |
@@ -157,11 +157,17 @@ PostgreSQL 的 `admin_account` 表，不进入 `config.json`。单应用进程�
 | `log.max_size_mb` | 10 | 大于 0，最大 1024 MiB |
 | `log.max_files` | 5 | 1–100 |
 
-导入会话的空闲有效期固定为 30 分钟，是应用代码生命周期常量，不属于
-`config.json`。创建会话后，接收、排队、prepare 和 commit 会持续续租；取消标记
-与孤儿 raw 临时文件的安全清理年龄使用同一有效期，避免活跃会话被提前回收。取消
-标记会在同代际执行者收口或会话删除时主动清除，该 TTL 只用于进程异常或 Redis
-清理失败后的有界兜底。
+导入运行态期限是应用代码生命周期常量，不属于 `config.json`。upload intent 与 credential
+是创建后绝对 30 分钟，读取、重签或显示窗口都不续期；upload canonical 的空闲期限为 2 小时，
+remote import canonical 为 24 小时。合法语义迁移按新状态延长期限；长阶段内只有持有当前
+execution token 的有效 heartbeat 才能续租。ready、可重试 failed 等空闲状态不会自行续租。
+discarded / completed 紧凑回执沿用所属
+队列的终态保留窗口，并由 expires scanner 删除，不依赖 Redis 原生 EXPIRE 或 keyspace event。
+
+孤儿清理周期和安全余量均固定为 60 秒。无 canonical 引用的 raw 与 `_uploads` 使用
+“24 小时 + 一个周期 + 安全余量”；旧 `.part` 使用上传 claim 失活期限 2 分钟与远端请求超时
+两者较长者，再加周期与余量。所有年龄、批次和稳定读取边界都是代码常量，不能用运行配置
+缩短为会误删活跃素材的值。
 
 后台 Worker 的 5 秒 tick、每种任务类型单次最多 50 项 / 2 秒的公平时间片、15 分钟
 任务执行期限、10 秒停机排空期限、僵尸任务恢复周期和历史保留周期同样是应用生命周期
@@ -172,7 +178,9 @@ PostgreSQL 的 `admin_account` 表，不进入 `config.json`。单应用进程�
 
 ## 入库图片标准化
 
-本地上传与 URL 下载共用顶层 `normalize` 配置。两者分别由浏览器上传和服务器下载完成 materialize，原始文件原子落到容器本地 `data/tmp` 后，prepare 才执行校验、缩略图和最终入库文件处理，并把候选文件写入选定存储后端。
+本地上传与 URL 下载共用顶层 `normalize` 配置。两者分别由浏览器 raw PUT 和服务器安全下载
+取得原始字节，attempt `.part` 完整校验后原子落到 `data/tmp/upload|import`；prepare 才执行
+标准化、缩略图和最终入库文件处理，并把候选文件写入选定存储后端。
 
 ```json
 {
@@ -212,17 +220,17 @@ PostgreSQL 的 `admin_account` 表，不进入 `config.json`。单应用进程�
 
 `normalize.quality` 是首次 WebP 编码质量。输出超过 `normalize.max_size_kb` 时，会按超限倍数放大 `normalize.quality_step` 降低质量，最大不超过 `3 * quality_step`。某轮达标后会按原步进向上回补探测，最多补回本轮跳过的质量档位，尽量避免一次跳过可用画质。最低降到 `normalize.min_quality`；到达最低质量后即使仍超出目标体积，也会直接入库。尺寸会按比例缩小到 `normalize.max_long_edge` 以内，不会放大。
 
-prepare 只接受 JPEG、PNG、WebP、GIF 与 AVIF；SVG、TIFF、HEIC 及其他 Sharp 虽能识别但不在白名单内的格式仍会拒绝。输入格式、原始尺寸和 EXIF 展示方向来自同一次 Sharp metadata，标准化后 WebP 的格式、尺寸与字节数来自最终编码结果，不再重新解码候选文件。需要转码的 GIF、animated WebP 与 AVIF 继续沿用 Sharp 默认的首帧处理语义；符合下述跳过条件的 animated WebP 则保留完整原字节。URL 下载在 materialize 阶段执行的独立图片魔数检查仍是外部抓取安全边界，不由 prepare 的 Sharp 校验替代。
+prepare 只接受 JPEG、PNG、WebP、GIF 与 AVIF；SVG、TIFF、HEIC 及其他 Sharp 虽能识别但不在白名单内的格式仍会拒绝。输入格式、原始尺寸和 EXIF 展示方向来自同一次 Sharp metadata，标准化后 WebP 的格式、尺寸与字节数来自最终编码结果，不再重新解码候选文件。需要转码的 GIF、animated WebP 与 AVIF 继续沿用 Sharp 默认的首帧处理语义；符合下述跳过条件的 animated WebP 则保留完整原字节。URL download 阶段执行的独立图片魔数检查仍是外部抓取安全边界，不由 prepare 的 Sharp 校验替代。
 
-输入本身是 WebP、体积小于 `normalize.skip_webp_under_kb` 且长边已经达标时，原字节直接成为最终候选文件；服务端仍会执行解码校验、标准缩略图生成和最终 MD5 计算。`upload.concurrency` / `link_image.concurrency` 只约束单个后台页面自己的 lane 数；任务进入 materialize 槽时才逐项创建服务端会话，队尾尚未进入 lane 的任务没有会话。每条 lane 在服务端权威状态确认当前项进入 `preparing` 后最多提前素材化一项，因此每条 lane 最多同时存在当前执行项和一个已启动的前瞻项，不会让长队列在处理前消耗 30 分钟会话租期。`upload.global_concurrency` / `link_image.global_concurrency` 分别由对应模式的 materialize 与 prepare 两个服务端阶段复用，每个阶段都有独立许可池。即使调用方绕过前端队列直接打接口，进程内也会排队并支持取消等待中的任务。
+输入本身是 WebP、体积小于 `normalize.skip_webp_under_kb` 且长边已经达标时，原字节直接成为最终候选文件；服务端仍会执行解码校验、标准缩略图生成和最终 MD5 计算。`upload.concurrency` 既限制单个后台页面的 raw PUT 数，也限定一次预签 intent 批次为可以立即进入 lane 的文件；当前批结算后才为下一批签发，避免长队列预先消耗短 credential TTL。`link_image.concurrency` 约束浏览器来源队列，remote accept 后的下载由服务端 `link_image.global_concurrency` pool 接管；prepare 使用独立 pool，其容量取本地与远程全局并发基数的较大值。即使调用方绕过前端队列，worker 仍有有界阶段准入并支持取消等待任务。
 
 commit 使用独立的 `import.commit_concurrency` / `import.global_commit_concurrency`。前者限制单个后台页面，后者在取得会话 advisory lock、存储共享锁和数据库事务连接之前限制整个服务端进程。服务端还按 `import.global_commit_byte_budget_mb` 对 prepared 图片与缩略图大小做 FIFO 加权限流；活动权重始终按任务真实字节累计，不会在运行中随动态预算截断。超过预算的单个合法对象只能在当前没有其他 commit 占用时独立运行；预算升降后仍按真实活动总量决定是否放行队首。数量许可与字节许可都覆盖正式对象复制、数据库事务、暂存清理和缓存更新，而不只是 `INSERT`。PostgreSQL 主查询连接池上限为 30；长生命周期 advisory lock 使用另一个上限同为 30 的专用连接池，避免下载、转码和存储 I/O 持锁期间占满查询连接。commit 的存储共享锁、排序后的主题 / 作者 / 最终标签共享关联租约、会话锁和单图锁由同一专用连接按固定顺序取得，不会在锁池内嵌套等待第二条连接；同 slug commit 可以并行并在共享租约内幂等确保词表项存在，显式词表管理和删除使用的独占锁仍会等待全部关联租约退出。锁连接丢失会中止工作，导入发布另以数据库 execution token 栅栏旧执行者。公开 PostgreSQL 回源在主池内最多占 12 条连接，不再建立取消连接池；当前单应用实例最多保留 60 条应用连接，数据库 `max_connections` 应为该边界和运维连接留足空间。
 
-后台队列在建立不可变提交意图后先显示“提交排队 / 等待提交”，服务端真正取得上述数量与
-字节准入并把 PostgreSQL 会话推进到 `committing` 后才显示“写入图库中”；事务提交
-`finalized` 后显示“已写入图库，等待结果”，完整管理图片结果水合后才完成。等待准入、执行中
-和等待结果分别统计，不把全部已选任务算作处理中。持有提交意图的任务锁定当时规范化后的
-metadata，不能普通取消、移除或继续编辑；`finalized` 的结果读取失败只允许重新获取结果。
+后台队列在建立不可变提交意图后先显示“提交排队 / 等待提交”，Server 将 Redis canonical
+原子推进到 `committing` 后立刻返回 accepted；worker 真正取得上述数量与字节准入后才执行
+对象复制和 PostgreSQL 事务。事务提交后必须经 PostgreSQL 批量结果水合才完成。窗口将等待准入
+与等待结果合并为“等待中”，实际执行计入“处理中”，不把全部已选任务算作处理中。持有提交意图的任务锁定当时规范化后的
+metadata，不能普通取消、移除或继续编辑；结果读取失败只允许重新获取结果。
 commit 边界的结构化重复冲突是例外：会话仍为 `ready`，前端不计失败并允许直接确认复用同一
 提交意图，或取消并清理该会话；两种动作都不新增逐图预检请求。
 
@@ -233,9 +241,10 @@ URL 输入窗口、JSONL 解析和微博解析共享 3600 项通用安全边界�
 `link_image.max_items` 影响；按单条微博最多 18 张图片计算，合法配置最多产生
 900 张图片，服务端另保留不可配置的 1000 张安全上限。输入或解析结果超过限制时
 会在生成任务前明确拒绝，不自动拆成多个 `batch_time`。URL、JSONL 与微博都先在
-浏览器形成有序任务，随后随 lane 推进逐项调用同一个会话创建接口；服务端不提供
-批量会话创建入口。本地文件仅按 `upload.max_items` 做单次选择前端软限制；服务端
-同样逐文件创建会话，不维护本地选择批次，因此没有对应的服务端条目数硬上限。
+浏览器形成有序任务，随后通过一个固定的有界 remote accept JSON 请求批量创建或复用
+canonical。所有条目内容只进入受限正文。本地文件通过有界 upload intent 批次签发，Server
+同时执行 `upload.max_items` 与通用 hard limit；每个已签发批次只有一次 intent POST 和至多
+N 次纯字节 raw PUT。
 
 ## 高级配置
 

@@ -7,8 +7,10 @@ import {
   type ImageUpdateItemInputDto,
   importBatchHardLimit,
   importDuplicateDecisions,
+  importQueueActionTypes,
+  importQueueTypes,
+  importSourceTypes,
   importStatusBatchMaxItems,
-  importModes,
   slugMaxLength,
   slugPattern,
   vocabularyDisplayNameMaxLength
@@ -109,6 +111,13 @@ export const authorCreateInput = z.strictObject({ slug: authorSlugInput, display
 export const authorMetaUpdateInput = z.strictObject({ display_name: displayNameInput, link: authorLinkInput });
 
 export const uuidInput = z.string().uuid().transform((value) => value.toLowerCase());
+
+export const uuidV7Input = uuidInput.refine((value) => (
+  value[14] === "7" && ["8", "9", "a", "b"].includes(value[19] ?? "")
+), "必须使用 RFC 9562 UUIDv7");
+
+export const importSessionIdInput = z.string()
+  .regex(/^[A-Za-z0-9_-]{43}$/u, "导入 session_id 无效");
 
 export const normalizedImageTagsInput = z.array(tagSlugInput)
   // The public limit applies after normalization, so repeated spellings do not
@@ -229,58 +238,229 @@ export const imageStorageMigrationInput = z.strictObject({
   target: storageSlugInput
 });
 
-export const importCreateInput = metadataCreateInput.extend({
-  mode: z.enum(importModes),
-  source_url: optionalHttpsDomainUrlField(externalImageRejectedMessage),
-  image_time: z.string().trim().min(1).max(64).optional(),
-  batch_time: z.string().trim().min(1).max(64).optional(),
-  manifest_position: z.number().int().min(0).max(0xfff).optional(),
-  size: z.number().int().positive().optional(),
-  idempotency_key: uuidInput,
-  tags: normalizedImageTagsInput.optional().default([]),
-  storage_slug: storageSlugInput.optional()
-}).superRefine((value, ctx) => {
-  if (value.mode === "upload" && !value.size) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["size"], message: "上传模式需要文件大小" });
-  }
-  if (value.mode === "download" && !value.source_url) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["source_url"], message: "链接导入模式需要图片链接" });
-  }
-});
-
-export const importStatusSubscriptionInput = z.strictObject({
-  attempt_keys: z.array(uuidInput)
-    .min(1)
-    .max(importStatusBatchMaxItems)
-    .transform((attemptKeys) => [...new Set(attemptKeys)])
-});
-
-export const importStatusListInput = z.strictObject({
-  ids: z.array(uuidInput)
-    .min(1)
-    .max(importStatusBatchMaxItems)
-    .transform((ids) => [...new Set(ids)])
-});
-
-const importCommitInput = metadataCreateInput.extend({
+const importMetadataInput = metadataCreateInput.extend({
   tags: normalizedImageTagsInput.optional().default([])
 });
 
-export const importBatchCommitInput = z.strictObject({
-  items: z.array(z.strictObject({
-    id: uuidInput,
-    commit_attempt_id: uuidInput,
-    expected_md5: z.string().regex(/^[a-f0-9]{32}$/),
-    duplicate_decision: z.enum(importDuplicateDecisions),
-    metadata: importCommitInput
+const importTimeFields = {
+  image_time: z.string().trim().min(1).max(64).optional(),
+  batch_time: z.string().trim().min(1).max(64).optional(),
+  manifest_position: z.number().int().min(0).max(0xfff)
+};
+
+export const uploadIntentInput = z.strictObject({
+  items: z.array(importMetadataInput.extend({
+    idempotency_key: uuidV7Input,
+    batch_key: uuidV7Input,
+    ...importTimeFields,
+    storage_slug: storageSlugInput.optional(),
+    expected_size: z.number().int().positive(),
+    max_long_edge: z.number().int().positive()
   })).min(1).max(importBatchHardLimit)
 }).superRefine((value, ctx) => {
   addUniqueIdIssues(
-    value.items.map((item) => item.id),
+    value.items.map((item) => item.idempotency_key),
     ctx,
-    (index) => ["items", index, "id"],
-    "导入批次不能包含重复 ID"
+    (index) => ["items", index, "idempotency_key"],
+    "上传意图不能包含重复幂等键"
   );
+  addUniqueIdIssues(
+    value.items.map((item) => `${item.batch_key}\0${item.manifest_position}`),
+    ctx,
+    (index) => ["items", index, "manifest_position"],
+    "同一上传批次不能包含重复清单位置"
+  );
+});
+
+export const remoteImportAcceptInput = z.strictObject({
+  items: z.array(importMetadataInput.extend({
+    idempotency_key: uuidV7Input,
+    batch_key: uuidV7Input,
+    source_type: z.enum(importSourceTypes).exclude(["upload"]),
+    url: optionalHttpsDomainUrlField(externalImageRejectedMessage)
+      .refine(Boolean, externalImageRejectedMessage)
+      .transform((value) => value!),
+    ...importTimeFields,
+    manifest_line: z.number().int().min(1).max(1_000_000).optional(),
+    storage_slug: storageSlugInput.optional()
+  })).min(1).max(importBatchHardLimit)
+}).superRefine((value, ctx) => {
+  addUniqueIdIssues(
+    value.items.map((item) => item.idempotency_key),
+    ctx,
+    (index) => ["items", index, "idempotency_key"],
+    "远程导入不能包含重复幂等键"
+  );
+  addUniqueIdIssues(
+    value.items.map((item) => `${item.batch_key}\0${item.manifest_position}`),
+    ctx,
+    (index) => ["items", index, "manifest_position"],
+    "同一导入批次不能包含重复清单位置"
+  );
+});
+
+const importPairInput = z.strictObject({
+  session_id: importSessionIdInput,
+  image_id: uuidV7Input
+});
+
+function addUniqueImportPairIssues(
+  items: readonly { session_id: string; image_id: string }[],
+  ctx: z.RefinementCtx,
+  field = "items"
+) {
+  addUniqueIdIssues(
+    items.map(({ session_id, image_id }) => `${session_id}\0${image_id}`),
+    ctx,
+    (index) => [field, index, "session_id"],
+    "请求不能包含重复导入任务"
+  );
+}
+
+export const importStatusInput = z.strictObject({
+  items: z.array(importPairInput).min(1).max(importStatusBatchMaxItems)
+}).superRefine((value, ctx) => addUniqueImportPairIssues(value.items, ctx));
+
+export const importSnapshotQuery = z.strictObject({
+  queue: z.enum(importQueueTypes),
+  offset: z.coerce.number().int().min(0).default(0),
+  limit: z.coerce.number().int().min(0)
+    .max(appConfig.importRuntime.snapshotMaxItems)
+    .default(appConfig.runtimeDefaults.upload.list_page_size)
+});
+
+export const importSnapshotSelectionInput = z.strictObject({
+  exclude_items: z.array(importPairInput).max(importBatchHardLimit),
+  include_items: z.array(importPairInput)
+    .max(appConfig.importRuntime.snapshotMaxItems)
+}).superRefine((value, ctx) => {
+  addUniqueImportPairIssues(value.exclude_items, ctx, "exclude_items");
+  addUniqueImportPairIssues(value.include_items, ctx, "include_items");
+  addUniqueIdIssues(
+    value.exclude_items.map((item) => item.session_id),
+    ctx,
+    (index) => ["exclude_items", index, "session_id"],
+    "快照排除集合不能包含同一位置的多个 incarnation"
+  );
+  addUniqueIdIssues(
+    value.include_items.map((item) => item.session_id),
+    ctx,
+    (index) => ["include_items", index, "session_id"],
+    "快照补入集合不能包含同一位置的多个 incarnation"
+  );
+  const excluded = new Set(value.exclude_items.map((item) => (
+    `${item.session_id}\0${item.image_id}`
+  )));
+  value.include_items.forEach((item, index) => {
+    if (!excluded.has(`${item.session_id}\0${item.image_id}`)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["include_items", index, "session_id"],
+        message: "补入任务必须属于当前文档排除集合"
+      });
+    }
+  });
+});
+
+export const importEventsQuery = z.strictObject({
+  queue: z.enum(importQueueTypes)
+});
+
+const expectedImportVersionInput = z.number().int().positive();
+
+export const importSessionUpdateInput = z.strictObject({
+  items: z.array(importPairInput.extend({
+    expected_version: expectedImportVersionInput,
+    metadata: importMetadataInput.optional(),
+    duplicate_decision: z.enum(importDuplicateDecisions).optional()
+  }).refine(
+    (item) => item.metadata !== undefined || item.duplicate_decision !== undefined,
+    "导入更新项必须包含 metadata 或重复项决定"
+  )).min(1).max(importBatchHardLimit)
+}).superRefine((value, ctx) => addUniqueImportPairIssues(value.items, ctx));
+
+export const importDuplicateDetailsInput = z.strictObject({
+  md5s: z.array(z.string().regex(/^[a-f0-9]{32}$/u))
+    .min(1)
+    .max(importStatusBatchMaxItems)
+}).superRefine((value, ctx) => {
+  addUniqueIdIssues(
+    value.md5s,
+    ctx,
+    (index) => ["md5s", index],
+    "重复详情请求不能包含重复 MD5"
+  );
+});
+
+export const importCommitIntentInput = z.strictObject({
+  items: z.array(importPairInput.extend({
+    expected_version: expectedImportVersionInput,
+    expected_md5: z.string().regex(/^[a-f0-9]{32}$/u),
+    commit_request_id: uuidV7Input,
+    duplicate_decision: z.enum(importDuplicateDecisions),
+    metadata: importMetadataInput
+  })).min(1).max(importBatchHardLimit)
+}).superRefine((value, ctx) => {
+  addUniqueImportPairIssues(value.items, ctx);
+  addUniqueIdIssues(
+    value.items.map((item) => item.commit_request_id),
+    ctx,
+    (index) => ["items", index, "commit_request_id"],
+    "提交请求不能包含重复 commit_request_id"
+  );
+});
+
+export const importCancelInput = z.strictObject({
+  items: z.array(importPairInput.extend({
+    expected_version: expectedImportVersionInput
+  })).min(1).max(importBatchHardLimit)
+}).superRefine((value, ctx) => addUniqueImportPairIssues(value.items, ctx));
+
+const importActionMetadataInput = z.strictObject({
+  ...metadataUpdateFields,
+  tags: normalizedImageTagsInput.optional()
+}).refine(
+  (value) => Object.values(value).some((field) => field !== undefined),
+  "应用到全部必须包含至少一个属性"
+);
+
+export const importQueueActionInput = z.strictObject({
+  queue: z.enum(importQueueTypes),
+  action_request_id: uuidV7Input,
+  action: z.enum(importQueueActionTypes),
+  action_watermark: z.string().min(1).max(appConfig.importRuntime.tokenMaxBytes),
+  continuation: z.string().min(1)
+    .max(appConfig.importRuntime.tokenMaxBytes)
+    .optional(),
+  metadata: importActionMetadataInput.optional(),
+  max_semantic_revision: z.number().int().nonnegative()
+    .max(Number.MAX_SAFE_INTEGER)
+    .optional()
+}).superRefine((value, ctx) => {
+  if (value.action === "apply_metadata" && !value.metadata) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["metadata"],
+      message: "应用到全部需要 metadata"
+    });
+  }
+  if (value.action !== "apply_metadata" && value.metadata) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["metadata"],
+      message: "当前全队列动作不接受 metadata"
+    });
+  }
+  if (
+    value.action !== "clear_completed"
+    && value.max_semantic_revision !== undefined
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["max_semantic_revision"],
+      message: "当前全队列动作不接受 semantic revision 上限"
+    });
+  }
 });
 
 export const jsonlManifestInput = z.strictObject({

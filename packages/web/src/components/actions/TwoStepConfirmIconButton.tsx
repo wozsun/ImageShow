@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
 import { AdminIcon, type AdminIconName } from "../icon/AdminIcon.js";
+import { useTwoStepConfirmation } from "../../hooks/useTwoStepConfirmation.js";
 
 type TwoStepConfirmIconButtonProps = {
   className?: string;
@@ -11,7 +11,7 @@ type TwoStepConfirmIconButtonProps = {
   confirmTitle?: string;
   disabled?: boolean;
   busy?: boolean;
-  onArm?: () => void;
+  onArm?: () => boolean | void;
   onConfirm: () => void;
 };
 
@@ -31,33 +31,17 @@ export function TwoStepConfirmIconButton({
   onArm,
   onConfirm
 }: TwoStepConfirmIconButtonProps) {
-  const buttonRef = useRef<HTMLButtonElement | null>(null);
-  const [armed, setArmed] = useState(false);
-
-  useEffect(() => {
-    if (!armed) return;
-    const disarmOutsideButton = (event: PointerEvent) => {
-      if (!buttonRef.current?.contains(event.target as Node)) {
-        setArmed(false);
-      }
-    };
-    document.addEventListener("pointerdown", disarmOutsideButton, true);
-    return () => {
-      document.removeEventListener("pointerdown", disarmOutsideButton, true);
-    };
-  }, [armed]);
-
-  useEffect(() => {
-    if (disabled || busy) setArmed(false);
-  }, [busy, disabled]);
-
-  const active = armed && !disabled && !busy;
+  const confirmation = useTwoStepConfirmation<HTMLButtonElement>({
+    disabled,
+    busy
+  });
+  const active = confirmation.armed;
   const label = active ? confirmLabel : idleLabel;
   const title = active ? confirmTitle : idleTitle;
 
   return (
     <button
-      ref={buttonRef}
+      ref={confirmation.targetRef}
       className={[
         "two-step-confirm-icon-button",
         active ? "is-armed" : "",
@@ -69,15 +53,9 @@ export function TwoStepConfirmIconButton({
       aria-pressed={active}
       aria-busy={busy || undefined}
       disabled={disabled}
-      onBlur={() => setArmed(false)}
+      onBlur={confirmation.onBlur}
       onClick={() => {
-        if (!active) {
-          onArm?.();
-          setArmed(true);
-          return;
-        }
-        setArmed(false);
-        onConfirm();
+        confirmation.activate(() => onArm?.(), onConfirm);
       }}
     >
       <AdminIcon name={active ? confirmIcon : idleIcon} />

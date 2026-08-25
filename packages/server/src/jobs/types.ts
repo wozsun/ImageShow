@@ -1,6 +1,5 @@
 export type BackgroundJobType =
   | "move.cleanup"
-  | "import.cleanup"
   | "trash.purge"
   | "cache.rebuild";
 

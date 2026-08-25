@@ -4,10 +4,11 @@ PostgreSQL 共 10 张业务表，不保存迁移账本或 schema 版本表。
 `packages/server/schema.sql` 直接定义当前干净安装基线；它与可选的
 `schema-additions.sql` 共同组成完整的新安装结构。随机图 `id` 的末 12 位查询所需 ready
 部分表达式索引，以及统一 Redis 图片投影的权威 revision 单行表均属于当前基线。PostgreSQL
-是唯一真相源，Redis 图片投影、查询缓存与管理员会话均不替代数据库真值。
+是最终图片、账号、存储注册表和持久任务的唯一真相源。Redis 图片投影、查询缓存与管理员
+会话均不替代数据库真值；未完成导入 canonical 是允许在受控冷启动时整体丢弃的运行态。
 
 `schema.sql` 按依赖和运行职责排列：存储注册表 →
-公共词表 → 图片真值、关联与投影 revision → 导入生命周期 → 后台任务 → 管理员身份。
+公共词表 → 图片真值、关联与投影 revision → 旧导入表 → 后台任务 → 管理员身份。
 每张表内部统一为标识、状态 / 所有权、业务字段、错误 / 重试和时间字段；种子、约束与
 索引紧跟所属表，图片索引再按直接查询 / 外键、列表游标、随机选择 / 回收职责排列。
 
@@ -19,21 +20,21 @@ PostgreSQL 共 10 张业务表，不保存迁移账本或 schema 版本表。
 readiness 或干净初始化任一步失败都会回滚本次事务。全部连接固定使用 `search_path=public`。
 应用不为不受支持的第二个重叠进程持有 schema 或管理员播种 bootstrap lock。
 
-additions 只保存一个发布周期内逐项审查、行为中性的安全新增；没有当前增量时仍保留注释占位
-文件及稳定的启动、构建入口。当前文件不执行 SQL。某次发布加入增量后，必须先让全部受控
-非空数据库应用并通过 readiness，下一发布才能把同一定义并入 `schema.sql` 并从 additions
-移除。部署不得跳过承载 additions 的发布；恢复更早的数据库备份时，也必须先用该发布应用
-相同增量。additions 不补业务表、外键、CHECK，不删除或重命名对象，不推测回填，不更新已有
-数据，也不写版本行；同名列存在但类型不兼容时不改型，由 readiness 明确拒绝，稳定种子也
-不得覆盖已有显示值。
+additions 只保存一个发布周期内经明确审查的受限结构增量或一次性数据变化。5.0.0 在同一
+事务中为 `metadata` 增加可空 `created_by TEXT`，把旧行中仅有的 NULL 精确回填为
+`wozsun`，随后立即设为 `NOT NULL` 并删除默认值；条件块让已完成结构可重复执行，不把旧值
+覆盖为新 actor。全部受控非空数据库应用并通过专项核对后，下一发布才能把最终无默认值定义
+并入 `schema.sql` 并恢复 additions 注释占位。部署和旧备份恢复不得跳过承载增量的发布；
+additions 不提供通用 diff、推测回填、版本行或任意数据修复入口。
 
-readiness 只读核对 10 张当前业务表、源码实际使用的列及其 PostgreSQL 类型、必需系统种子，
+readiness 只读核对当前运行时所需业务表、源码实际使用的列及其 PostgreSQL 类型、必需系统种子，
 并确认会话可写、public schema 可用且当前角色具备各表实际操作所需的 SELECT / INSERT /
 UPDATE / DELETE 权限，不使用回滚写探针。它还按列和谓词语义核对当前 SQL 依赖的最小行为
-约束，不依赖数据库对象名称：10 张业务表的业务主键；`metadata.object_key`、导入会话幂等键
-与非空最终对象键、后台任务非空幂等键与唯一活动 `cache.rebuild`、单一默认存储和单一超级
-管理员的唯一性；以及 metadata、image_tag、import_session 当前删除路径依赖的 RESTRICT、
-CASCADE 和 SET NULL 外键。缺少、失效或删除动作不符会在业务启动前明确失败。
+约束，不依赖数据库对象名称：当前运行时表的业务主键；`metadata.object_key`、后台任务
+非空幂等键与唯一活动 `cache.rebuild`、单一默认存储和单一超级管理员的唯一性；以及当前
+metadata / image_tag 删除路径依赖的 RESTRICT、CASCADE 和 SET NULL 外键。旧
+`import_session` 表与索引不再属于 readiness。`created_by` 的 `text` 类型进入最小列集合；
+NOT NULL、无默认值和回填结果由 additions 事务及升级 SQL 专项核对。
 
 readiness 不复制 `schema.sql` 的可空性、默认值、CHECK、触发器、普通查询索引或无消费者
 约束。额外表、额外列、额外索引、等价约束改名以及更宽的 CHECK 不影响启动，只要当前代码
@@ -85,6 +86,7 @@ Redis 核心 meta 的当前图片数和最后更新时间随完整重建批次�
 | `purge_started_at` | 当前彻底删除认领开始时间，用于回收崩溃遗留的过期认领 |
 | `purge_attempts` | 单调递增的彻底删除尝试号，同时作为当前执行者的所有权令牌 |
 | `purge_error` | 最近一次彻底删除失败的有界错误信息 |
+| `created_by` | 首次提交该图片时冻结的规范化管理员 username；无外键、无默认值，不随编辑、删除、恢复或存储迁移改写 |
 | `created_at` | 实际导入 ImageShow 的时间 |
 | `updated_at` | 图片元数据最后更新时间 |
 
@@ -159,34 +161,24 @@ Redis meta 的 `applied_revision` 只有在精确同步或全量重建完成完�
 二者不一致时缓存读门关闭。该表不保存 Redis 状态；当前协议只服务于单个 ImageShow
 应用进程，不支持多应用实例。
 
-## import_session —— 统一导入会话
+## Redis 导入运行态与旧 `import_session`
 
-| 字段 | 含义 |
-| --- | --- |
-| `id` (UUID, PK) | 服务端按 `image_time` 生成的 UUIDv7；最终图片 id 与对象键复用该值。同时间的批量导入记录会把单批次位置编码到 `rand_a`，使靠后的输入排序更新 |
-| `mode` | `upload` / `download`；分别由浏览器上传和服务器下载素材 |
-| `status` | `created` / `materializing` / `received` / `preparing` / `ready` / `committing` / `finalized` / `failed` / `cancelled` |
-| `execution_token` | 当前 materialize / prepare / commit 执行者的 UUID 栅栏 token；阶段发布必须匹配，进入稳定状态或取消时清空 |
-| `raw_token` | `received` / `preparing` 状态采用的 attempt 专属完整 raw UUID；prepare 只读取该 token 对应文件，进入 `ready` 或终态时清空 |
-| `idempotency_key` | 幂等键 |
-| `request_hash` | 幂等请求摘要；同一幂等键仅在摘要一致时复用会话，JSONL 的临时清单位置也参与摘要 |
-| `storage_slug` | 该会话锁定的目标后端 slug（外键 → `storage_backend.slug`）；需等待会话完成或过期清理后才能删除后端 |
-| `final_object_key` | 进入 `committing` 时确定的 `media` 正式存储键，提交前为空 |
-| `source_url` | URL 导入来源，仅允许 HTTPS；upload 模式为空 |
-| `expected_size` | 本地上传声明的 raw 字节数 |
-| `metadata_payload` | 创建会话时的草稿元数据 |
-| `prepared_payload` | 服务端 prepared 真值：MD5、尺寸、质量、暂存键，以及不受人工选择影响、每次 prepare 都重新计算的 `detected_device` / `detected_brightness` 等 |
-| `error` | 失败原因 |
-| `image_time` | 本次导入的图片展示时间；也参与 UUIDv7 和 `request_hash` |
-| `expires_at` | 30 分钟空闲过期时间；素材化、prepare 和 commit 期间持续续租。普通过期会话由 `import.cleanup` 原子认领；过期的 `committing` 仅在确认其提交 advisory lock 空闲后取消并清理 |
-| `created_at` / `updated_at` | 时间戳 |
+5.0.0 不再读写 PostgreSQL `import_session`。运行中的 upload intent、owner queue、canonical、
+runnable、expires、计数和 revision 位于专用 Redis logical database；每个 canonical 冻结
+owner、queue、pair、独立 `image_time`、metadata、storage、version、progress sequence、
+execution token、raw / prepared generation 及可选 commit intent。领域命令用 Lua 原子维护
+canonical 与全部派生索引；Redis 不可用或结构不一致时 fail closed。
+
+已封版 `schema.sql` 仍物理定义旧表，5.0.0 不执行破坏性 DDL。升级前必须在 4.16.5 仍运行时
+排空旧导入，并在停应用后人工确认该表为 0；此后旧表只作为待后续基线整理的遗留对象，
+不参与接口、检查、存储占用、清理或 readiness。
 
 ## background_job —— 后台任务队列
 
 | 字段 | 含义 |
 | --- | --- |
 | `id` (PK) | 任务 id |
-| `type` | `move.cleanup` / `import.cleanup` / `trash.purge` / `cache.rebuild` |
+| `type` | 当前运行时支持 `move.cleanup` / `trash.purge` / `cache.rebuild`；旧 `import.cleanup` 历史行可以保留但不会再调度或处理 |
 | `status` | `pending` / `running` / `succeeded` / `failed` / `ignored` |
 | `execution_token` | 每次领取生成的 UUID 所有权栅栏；仅当前 `running` 执行者持有，退出运行态时清空 |
 | `target_id` | 目标图片 id |
@@ -232,12 +224,12 @@ DELETE 发出后失锁时由后继重新采用同一对象。
 | `sort_order` | 后台排序 |
 | `created_at` / `updated_at` | 时间戳 |
 
-`metadata.storage_slug` 与 `import_session.storage_slug` 以外键引用它；后端需先迁走图片、
-清理全部导入会话、未解决 `move.cleanup` 和 `_uploads` 暂存对象才能删除。后端注册表同时
+`metadata.storage_slug` 以外键引用它；后端需先迁走图片、清理 Redis active canonical、
+未解决 `move.cleanup` 和 `_uploads` 暂存对象才能删除。后端注册表同时
 管理配置快照与按签名复用的 driver/client 生命周期；只有 driver 连接参数变化或后端
 删除才会安全退役相关实例，显示名、启停、默认项和排序变化只刷新注册表快照。S3 的
 bucket / root_path 是物理布局；仍有
-图片、任意导入会话、未解决清理任务或暂存对象时不允许原地修改。S3 endpoint 可在
+图片、任意 active canonical、未解决清理任务或暂存对象时不允许原地修改。S3 endpoint 可在
 独占位置锁内通过 `_uploads` 完整快照、既有对象的有界 Range 读取和双向随机挑战证明
 为同一命名空间的访问别名；成功后合并全部相交后端的 `namespace_identities`，使别名
 等价关系保持传递性；已在集合中或与其他注册项共享 identity 的空后端也不得无证明地

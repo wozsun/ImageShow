@@ -7,6 +7,7 @@ import {
   imageDescriptionMaxLength,
   imageTitleMaxLength,
   importBatchHardLimit,
+  importQueueSnapshotMaxItems,
   slugMaxLength
 } from "./browser/common.ts";
 
@@ -53,7 +54,29 @@ export const appConfig = {
     configPackageMaxBackends: 100
   },
 
-  uploadTtlSeconds: 30 * 60,
+  importRuntime: {
+    uploadIntentTtlSeconds: 30 * 60,
+    uploadSessionIdleTtlSeconds: 2 * 60 * 60,
+    importSessionIdleTtlSeconds: 24 * 60 * 60,
+    uploadClaimStaleSeconds: 2 * 60,
+    workerHeartbeatSeconds: 30,
+    expiryScanBatchSize: 100,
+    recoveryScanBatchSize: 100,
+    snapshotMaxItems: importQueueSnapshotMaxItems,
+    snapshotStaleReceiptCleanupBudget: 200,
+    queueActionBatchSize: 100,
+    orphanCleanupIntervalSeconds: 60,
+    orphanCleanupSafetySeconds: 60,
+    orphanCleanupCycleTimeoutSeconds: 50,
+    orphanCleanupMaxStorageBackends: 32,
+    orphanCleanupMaxStagingKeysPerCycle: 3_200_000,
+    orphanCleanupMaxRawEntriesPerCycle: 100_000,
+    orphanCleanupMaxReferenceItems: 100_000,
+    retiredCleanupMaxAttempts: 8,
+    tokenMaxBytes: 2 * 1024,
+    tokenPayloadMaxBytes: 1024,
+    sseAuthenticationHeartbeatSeconds: 30
+  },
   derivedCacheTtlSeconds: 60 * 60,
   imageLookup: {
     ttlSeconds: 6 * 60 * 60
@@ -102,7 +125,6 @@ export const appConfig = {
     retryBackoffSeconds: [60, 300, 900, 3600, 21600],
     taskTimeoutSeconds: 15 * 60,
     staleRecoveryIntervalMs: 60_000,
-    expireUploadsIntervalMs: 60_000,
     historyCleanupIntervalMs: 60 * 60 * 1000,
     completedRetentionSeconds: 7 * 24 * 60 * 60,
     failedRetentionSeconds: 7 * 24 * 60 * 60,

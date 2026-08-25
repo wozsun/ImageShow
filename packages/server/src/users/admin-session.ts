@@ -27,6 +27,7 @@ import {
   type AdminCredentialTransitionVersions
 } from "./session-credential.ts";
 import { adminSessionKey } from "./admin-session-key.ts";
+import { closeAdminSessionConnections } from "./admin-session-connections.ts";
 
 const adminSessionCookie = "imageshow_session";
 
@@ -227,11 +228,14 @@ async function validateAdminSessionPayload(id: string, raw: string): Promise<
     : adminSessionChanged;
 }
 
-export async function readAdminSession(
-  context: Context
+/**
+ * Validate one login session through the same Redis + PostgreSQL authority
+ * used by ordinary HTTP middleware. Long-lived transports call this by ID on
+ * every authentication heartbeat instead of maintaining a second auth path.
+ */
+export async function validateAdminSessionById(
+  id: string
 ): Promise<AdminSession | null> {
-  const id = getCookie(context, adminSessionCookie);
-  if (!id) return null;
   const raw = await runRequiredRedisCommand(
     () => redis.get(adminSessionKey(id))
   );
@@ -250,6 +254,13 @@ export async function readAdminSession(
     "session_changed",
     "Administrator session changed; retry request"
   );
+}
+
+export async function readAdminSession(
+  context: Context
+): Promise<AdminSession | null> {
+  const id = getCookie(context, adminSessionCookie);
+  return id ? validateAdminSessionById(id) : null;
 }
 
 export async function authorizeAdminSessionCredentialTransition(
@@ -305,6 +316,7 @@ export async function deleteAdminSession(context: Context) {
     await runRequiredRedisCommand(
       () => redis.del(adminSessionKey(session.id))
     );
+    closeAdminSessionConnections([session.id]);
   }
   deleteCookie(context, adminSessionCookie, { path: "/" });
 }

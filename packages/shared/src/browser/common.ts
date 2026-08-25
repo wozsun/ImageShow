@@ -7,6 +7,7 @@
 export const imageTitleMaxLength = 80;
 export const imageDescriptionMaxLength = 500;
 export const importBatchHardLimit = 3_600;
+export const importQueueSnapshotMaxItems = 100;
 export const configPackageMaxBytes = 1024 * 1024;
 export const configPackageRequestMaxBytes =
   configPackageMaxBytes + 64 * 1024;
@@ -114,6 +115,7 @@ export type AuthStateDto = {
   csrf_token: string;
   application_version: string;
   preferences: AdminPreferences;
+  preferences_etag: string;
   version_settings: SiteVersionSettings;
 };
 

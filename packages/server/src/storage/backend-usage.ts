@@ -2,6 +2,7 @@ import type { StorageType } from "@imageshow/shared/browser";
 import { ApiError } from "../core/api-error.ts";
 import { pool } from "../core/database-pools.ts";
 import { countUnresolvedMoveCleanupJobs } from "./move-cleanup-repository.ts";
+import { activeImportStorageCounts } from "../images/imports/storage-references.ts";
 
 export type StorageBackendUsage = {
   image_count: number;
@@ -66,10 +67,7 @@ export async function readStorageBackendSnapshot(
             (SELECT count(*)::int
                FROM metadata
               WHERE metadata.storage_slug=backend.slug) AS image_count,
-            (SELECT count(*)::int
-               FROM import_session
-              WHERE import_session.storage_slug=backend.slug)
-              AS import_session_count
+            0::int AS import_session_count
        FROM storage_backend AS backend
       WHERE backend.slug=$1`,
     [slug]
@@ -81,6 +79,11 @@ export async function readStorageBackendSnapshot(
       `Unknown storage backend: ${slug}`
     );
   }
-  row.cleanup_job_count = await countUnresolvedMoveCleanupJobs(slug);
+  const [cleanupJobCount, activeImportCounts] = await Promise.all([
+    countUnresolvedMoveCleanupJobs(slug),
+    activeImportStorageCounts()
+  ]);
+  row.cleanup_job_count = cleanupJobCount;
+  row.import_session_count = activeImportCounts.get(slug) ?? 0;
   return row;
 }

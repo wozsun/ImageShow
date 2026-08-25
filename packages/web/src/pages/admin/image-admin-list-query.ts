@@ -1,11 +1,22 @@
-import type { AdminImageListResponseDto } from "@imageshow/shared/browser";
-import { api } from "../../lib/api/client.js";
+import {
+  adminImageListReadStartedAtHeader,
+  type AdminImageListResponseDto
+} from "@imageshow/shared/browser";
+import type { QueryClient } from "@tanstack/react-query";
+import { apiWithEtag } from "../../lib/api/client.js";
 import { adminApiBasePath } from "../../lib/constants.js";
 import { queryKeys } from "../../lib/api/query-keys.js";
+import {
+  recordAdminImageListValidation
+} from "../../lib/api/admin-image-list-validation.js";
 import type { ImageAdminFilterValues } from "./ImageAdminFilters.js";
 import type { ImageAdminView } from "./useImageAdminOperations.js";
 
 const adminImageListStaleTimeMs = 90_000;
+
+type CachedAdminImageListResponse = AdminImageListResponseDto & {
+  etag: string;
+};
 
 export type ImageAdminPageState = {
   scopeKey: string;
@@ -101,22 +112,45 @@ export function adminImageListQuery(
   if (filters.tag) params.set("tag", filters.tag);
   if (filters.author) params.set("a", filters.author);
 
+  const queryKey = [
+    ...queryKeys.adminImages,
+    scopeKey,
+    page,
+    pageSize
+  ] as const;
   return {
-    queryKey: [
-      ...queryKeys.adminImages,
-      scopeKey,
-      page,
-      pageSize
-    ] as const,
-    queryFn: async (context: { signal: AbortSignal }) => {
+    queryKey,
+    queryFn: async (context: { signal: AbortSignal; client: QueryClient }) => {
       // Strict Mode remounts before the first microtask. Defer consuming the
       // Query signal so that replay keeps the same in-flight Promise; after
       // that boundary, real navigation still cancels the transport normally.
       await Promise.resolve();
-      return api<AdminImageListResponseDto>(
-        `${adminApiBasePath}/images?${params}`,
-        { signal: context.signal }
+      const cached = context.client.getQueryData<CachedAdminImageListResponse>(
+        queryKey
       );
+      let validationStartedAt: number | undefined;
+      const result = await apiWithEtag<AdminImageListResponseDto>(
+        `${adminApiBasePath}/images?${params}`,
+        { signal: context.signal },
+        cached?.etag ? { etag: cached.etag, data: cached } : undefined,
+        (response) => {
+          const candidate = Number(
+            response.headers.get(adminImageListReadStartedAtHeader)
+          );
+          if (Number.isSafeInteger(candidate) && candidate >= 0) {
+            validationStartedAt = candidate;
+          }
+        }
+      );
+      if (validationStartedAt !== undefined) {
+        recordAdminImageListValidation(
+          context.client,
+          queryKey,
+          validationStartedAt
+        );
+      }
+      if (result.data === cached && result.etag === cached.etag) return cached;
+      return { ...result.data, etag: result.etag };
     },
     staleTime: adminImageListStaleTimeMs
   };

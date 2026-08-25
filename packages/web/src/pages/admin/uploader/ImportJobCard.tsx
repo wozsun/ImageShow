@@ -21,16 +21,27 @@ import {
 } from "./import-status-detail.js";
 import {
   importJobCanBeCancelled,
-  importJobCanLeaveQueue
+  importJobCanBeRemovedLocally
 } from "./import-queue-state.js";
 
 function formatPixelDimensions(width?: number, height?: number) {
   return width && height ? `${width}×${height}` : "0000×0000";
 }
 
+function formatJobDimensions(job: ImportJob, hasFinalSize: boolean) {
+  const finalDimensions = formatPixelDimensions(job.width, job.height);
+  const originalDimensions = job.originalWidth && job.originalHeight
+    ? formatPixelDimensions(job.originalWidth, job.originalHeight)
+    : hasFinalSize
+      ? "—"
+      : formatPixelDimensions(job.width, job.height);
+  return `${originalDimensions} → ${
+    hasFinalSize ? finalDimensions : formatPixelDimensions()
+  }`;
+}
+
 type ImportJobCardProps = {
   job: ImportJob;
-  queueDuplicate?: ImportJob;
   busy: boolean;
   storageDisplayName: string;
   themes: FacetOption[];
@@ -41,13 +52,21 @@ type ImportJobCardProps = {
   onRetry: (job: ImportJob) => void;
   onRemove: (job: ImportJob) => void;
   onConfirmDuplicate: (job: ImportJob) => void;
-  onOpenDetail: (item: AdminImageListItem, opener: HTMLElement) => void;
+  onOpenDetail: (
+    job: ImportJob,
+    item: AdminImageListItem,
+    opener: HTMLElement
+  ) => void;
+  onFocusWithin: (
+    job: ImportJob,
+    card: HTMLElement,
+    target: HTMLElement
+  ) => void;
   onPreview: (target: ImportPreviewTarget) => void;
 };
 
 export const ImportJobCard = memo(function ImportJobCard({
   job,
-  queueDuplicate,
   busy,
   storageDisplayName,
   themes,
@@ -59,27 +78,33 @@ export const ImportJobCard = memo(function ImportJobCard({
   onRemove,
   onConfirmDuplicate,
   onOpenDetail,
+  onFocusWithin,
   onPreview
 }: ImportJobCardProps) {
   const editable = importJobAttributesEditable(job) && !busy;
   const cancellable = importJobCanBeCancelled(job);
-  const removable = importJobCanLeaveQueue(job) && !cancellable;
+  const removable = importJobCanBeRemovedLocally(job) && !cancellable;
   const cancelling = job.status === "cancelling";
   const cancellationFailed = job.failureStage === "cancel";
   const confirmDuplicate = importJobNeedsDuplicateConfirmation(job)
-    && (job.duplicates.length > 0 || Boolean(queueDuplicate));
+    && (job.duplicateCount ?? 0) > 0;
   const retryable = (
     ["failed", "cancelled"].includes(job.status)
     || (job.status === "finalized" && job.resultState === "error")
   ) && !cancellationFailed && !confirmDuplicate;
-  const statusLabel = importJobStatusLabel(job, Boolean(queueDuplicate));
+  const statusLabel = importJobStatusLabel(job);
   const hasFinalSize = typeof job.finalSize === "number";
-  const displayName = job.draft.title || job.file?.name || job.url || job.id;
-  const originalSizeText = formatBytes(job.originalSize ?? job.file?.size ?? 0);
+  const originalSize = job.originalSize ?? job.file?.size;
+  const hasOriginalSize = typeof originalSize === "number";
+  const displayName = job.draft.title
+    || job.file?.name
+    || job.url
+    || (job.status === "done" ? job.draft.original : "")
+    || job.imageId
+    || job.id;
+  const originalSizeText = hasOriginalSize ? formatBytes(originalSize) : "—";
   const finalSizeText = hasFinalSize ? formatBytes(job.finalSize ?? 0) : "—";
-  const originalDimensionsText = formatPixelDimensions(job.originalWidth ?? job.width, job.originalHeight ?? job.height);
-  const finalDimensionsText = hasFinalSize ? formatPixelDimensions(job.width, job.height) : formatPixelDimensions();
-  const dimensionsText = `${originalDimensionsText} → ${finalDimensionsText}`;
+  const dimensionsText = formatJobDimensions(job, hasFinalSize);
   const qualityText = job.quality != null
     ? String(job.quality)
     : job.transcoded === false ? "跳过转码" : "";
@@ -87,14 +112,22 @@ export const ImportJobCard = memo(function ImportJobCard({
     && typeof job.transferProgress === "number";
   const transferProgress = Math.min(100, Math.max(0, Math.round(job.transferProgress ?? 0)));
   const transferProgressLabel = job.status === "downloading" ? "下载进度" : "上传进度";
-  const statusDetailText = importJobStatusDetail(job, Boolean(queueDuplicate));
+  const statusDetailText = importJobStatusDetail(job);
   const sourcePositionText = importPositionText(job);
   const metaText = [sourcePositionText, storageDisplayName, dimensionsText, statusDetailText].filter(Boolean).join(" · ");
-  const sizeSummaryText = `${originalSizeText} → ${finalSizeText}${qualityText ? ` · ${qualityText}` : ""}`;
+  const sizeSummaryText = `${
+    hasFinalSize && !hasOriginalSize
+      ? finalSizeText
+      : `${originalSizeText} → ${finalSizeText}`
+  }${qualityText ? ` · ${qualityText}` : ""}`;
   const automaticClassificationLabel = importAutomaticClassificationLabel(job);
   const previewSrc = job.preview;
   const openPreview: ((opener: HTMLElement) => void) | undefined = importJobPreviewAvailable(job)
     ? (opener) => onPreview({
+        jobId: job.id,
+        attemptKey: job.attemptKey,
+        sessionId: job.sessionId,
+        imageId: job.imageId,
         src: job.previewFull || previewSrc,
         thumbSrc: previewSrc,
         width: job.width,
@@ -103,7 +136,16 @@ export const ImportJobCard = memo(function ImportJobCard({
       })
     : undefined;
   return (
-    <article className={`import-job ${job.status}`}>
+    <article
+      className={`import-job ${job.status}`}
+      data-import-job-id={job.id}
+      data-import-attempt-key={job.attemptKey}
+      onFocusCapture={(event) => onFocusWithin(
+        job,
+        event.currentTarget,
+        event.target as HTMLElement
+      )}
+    >
       <div className="import-job-aside">
         <div className="import-job-preview">
           <ImageThumbnail
@@ -125,7 +167,9 @@ export const ImportJobCard = memo(function ImportJobCard({
       </div>
       <div className="import-job-head">
         <strong>
-          <b className="import-status-label">【{statusLabel}】</b>
+          <b className={`import-status-label${
+            confirmDuplicate ? " is-duplicate-pending" : ""
+          }`}>【{statusLabel}】</b>
           {displayName}
         </strong>
         <span className="import-job-meta">
@@ -184,15 +228,14 @@ export const ImportJobCard = memo(function ImportJobCard({
         )}
         changed={{ device: job.classificationOverride?.device, brightness: job.classificationOverride?.brightness }}
         disabled={!editable}
-        ariaPrefix={job.url ?? job.file?.name ?? job.id}
+        ariaPrefix={job.url ?? job.file?.name ?? job.imageId ?? job.id}
       />
       {confirmDuplicate && (
         <DuplicateMatchPanel
           libraryItems={job.duplicates}
-          queueDuplicate={queueDuplicate}
           disabled={busy}
-          onOpenDetail={onOpenDetail}
-          onPreview={onPreview}
+          confirmDisabled={job.duplicates.length === 0}
+          onOpenDetail={(item, opener) => onOpenDetail(job, item, opener)}
           onConfirm={() => onConfirmDuplicate(job)}
           onCancel={() => onCancel(job)}
         />

@@ -1,13 +1,10 @@
 import {
-  adminApiBasePath,
   type AdminImageDetailItemDto,
   type AdminImageListItemDto,
   type Brightness,
   type Device,
   type EditableImageSnapshotDto,
   type GalleryImageCardDto,
-  type ImportMode,
-  type ImportSessionHandleDto,
   type PublicImageDetailDto
 } from "@imageshow/shared/browser";
 import type { DatabaseReader } from "../core/database-pools.ts";
@@ -182,26 +179,6 @@ type PublicImageUrlRecord = Pick<
   "object_key" | "storage_slug"
 >;
 
-export type ImportSessionRecord = {
-  id: string;
-  mode: ImportMode;
-};
-
-export function importSessionResponse(
-  row: ImportSessionRecord
-): ImportSessionHandleDto {
-  return {
-    id: row.id,
-    upload_url: row.mode === "upload"
-      ? `${adminApiBasePath}/imports/${row.id}/file`
-      : undefined,
-    materialize_url: row.mode === "download"
-      ? `${adminApiBasePath}/imports/${row.id}/materialize`
-      : undefined,
-    prepare_url: `${adminApiBasePath}/imports/${row.id}/prepare`
-  };
-}
-
 async function publicUrlsForRow(
   row: PublicImageUrlRecord,
   access: PublicDatabaseReadAccess = {}
@@ -260,22 +237,6 @@ async function adminImageListItem(
     created_at: serializeTimestamp(row.created_at),
     updated_at: serializeTimestamp(row.updated_at)
   };
-}
-
-export function importCommitImage(row: ImageRecord) {
-  return getTagsForImages([row.id]).then((tagMap) => adminImageListItem(
-    row,
-    tagMap.get(row.id) ?? []
-  ));
-}
-
-export async function adminImageListItems(rows: ImageRecord[]) {
-  if (!rows.length) return [];
-  const tagMap = await getTagsForImages(rows.map((row) => row.id));
-  return Promise.all(rows.map((row) => adminImageListItem(
-    row,
-    tagMap.get(row.id) ?? []
-  )));
 }
 
 export async function adminImageListItemsWithTags(rows: ImageRecordWithTags[]) {

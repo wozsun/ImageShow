@@ -1,12 +1,10 @@
-import { memo, useMemo } from "react";
+import { memo } from "react";
 import type { FacetOption, ImageDraft, AdminImageListItem, ImportJob } from "../../../lib/types.js";
 import { ImportJobCard } from "./ImportJobCard.js";
 import type { ImportPreviewTarget } from "./DuplicateMatchPanel.js";
-import { queueDuplicateReferences } from "./duplicate-match.js";
 
 type ImportJobListProps = {
   jobs: ImportJob[];
-  allJobs: ImportJob[];
   busy: boolean;
   storageName: (slug: string) => string;
   themes: FacetOption[];
@@ -17,13 +15,21 @@ type ImportJobListProps = {
   onRetry: (job: ImportJob) => void;
   onRemove: (job: ImportJob) => void;
   onConfirmDuplicate: (job: ImportJob) => void;
-  onOpenDetail: (item: AdminImageListItem, opener: HTMLElement) => void;
+  onOpenDetail: (
+    job: ImportJob,
+    item: AdminImageListItem,
+    opener: HTMLElement
+  ) => void;
+  onFocusWithin: (
+    job: ImportJob,
+    card: HTMLElement,
+    target: HTMLElement
+  ) => void;
   onPreview: (target: ImportPreviewTarget) => void;
 };
 
 export const ImportJobList = memo(function ImportJobList({
   jobs,
-  allJobs,
   busy,
   storageName,
   themes,
@@ -35,17 +41,13 @@ export const ImportJobList = memo(function ImportJobList({
   onRemove,
   onConfirmDuplicate,
   onOpenDetail,
+  onFocusWithin,
   onPreview
 }: ImportJobListProps) {
-  const queueDuplicates = useMemo(
-    () => queueDuplicateReferences(allJobs),
-    [allJobs]
-  );
   return jobs.map((job) => (
     <ImportJobCard
       key={job.id}
       job={job}
-      queueDuplicate={queueDuplicates.get(job.id)}
       busy={busy}
       storageDisplayName={storageName(job.storageSlug)}
       themes={themes}
@@ -57,6 +59,7 @@ export const ImportJobList = memo(function ImportJobList({
       onRemove={onRemove}
       onConfirmDuplicate={onConfirmDuplicate}
       onOpenDetail={onOpenDetail}
+      onFocusWithin={onFocusWithin}
       onPreview={onPreview}
     />
   ));

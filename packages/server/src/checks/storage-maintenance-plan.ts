@@ -1,5 +1,8 @@
 import { pool } from "../core/database-pools.ts";
-import { stagingSessionId } from "../images/imports/staging-keys.ts";
+import { importOrphanCutoffs } from "../images/imports/orphan-retention.ts";
+import {
+  parseImportStagingCleanupKey
+} from "../images/imports/staging-keys.ts";
 import { thumbnailObjectKey } from "../storage/image-paths.ts";
 import { STORAGE_ADMIN_LIST_MAX_KEYS } from "../storage/key-listing.ts";
 import type { StoragePrefix } from "../storage/object-keys.ts";
@@ -8,7 +11,6 @@ import {
   classifyStagingKeys,
   collectStorageBackendGroupSnapshot,
   importFinalStorageReferences,
-  importSessionIdsByBackend,
   mergeActiveImportSessions,
   storageBackendGroups,
   type StorageBackendGroup,
@@ -85,7 +87,7 @@ function failedNamespaceItem(
 function skippedUploadItem(
   backend: string,
   key: string,
-  sessionId: string
+  reason: string
 ): MaintenanceItem {
   return {
     action: "remove_object",
@@ -93,7 +95,7 @@ function skippedUploadItem(
     backend,
     prefix: "_uploads",
     key,
-    reason: `导入会话 ${sessionId} 尚未清理，暂存对象继续由导入清理流程负责`
+    reason
   };
 }
 
@@ -164,7 +166,6 @@ async function captureMaintenanceGroups(
 
 function buildMaintenanceCandidates(
   rows: readonly MaintenanceImage[],
-  sessionIdsByBackend: ReadonlyMap<string, ReadonlySet<string>>,
   sessionsByBackend: ReadonlyMap<
     string,
     ReadonlyMap<string, Awaited<ReturnType<
@@ -172,7 +173,8 @@ function buildMaintenanceCandidates(
     >>["rows"][number]>
   >,
   groups: readonly CapturedMaintenanceGroup[],
-  initial: readonly MaintenanceCandidate[]
+  initial: readonly MaintenanceCandidate[],
+  stagingCutoff: number
 ) {
   const candidates = [...initial];
   let activeUploadsRetained = 0;
@@ -199,11 +201,6 @@ function buildMaintenanceCandidates(
     const activeSessions = mergeActiveImportSessions(
       ...group.slugs.map((slug) => sessionsByBackend.get(slug) ?? new Map())
     );
-    const importSessionIds = new Set(
-      group.slugs.flatMap((slug) => [
-        ...(sessionIdsByBackend.get(slug) ?? [])
-      ])
-    );
     for (const session of activeSessions.values()) {
       for (const reference of importFinalStorageReferences(session)) {
         if (reference.prefix === "media") referencedMedia.add(reference.key);
@@ -227,12 +224,44 @@ function buildMaintenanceCandidates(
       activeSessions
     );
     activeUploadsRetained += staging.active.length;
+    const activePreparedKeys = new Set(
+      [...activeSessions.values()].flatMap((session) => [
+        session.prepared_image_key,
+        session.prepared_thumbnail_key
+      ].filter((key): key is string => Boolean(key)))
+    );
+    const selectedBackend = group.backends.find((candidate) => (
+      candidate.slug === backend
+    ));
     for (const key of staging.orphan) {
-      const sessionId = stagingSessionId(key);
-      if (sessionId && importSessionIds.has(sessionId)) {
+      const identity = parseImportStagingCleanupKey(key);
+      const acceptedIdentity = identity
+        && (!identity.local_atomic_candidate
+          || selectedBackend?.type === "local")
+        ? identity
+        : null;
+      if (
+        acceptedIdentity?.local_atomic_candidate
+        && activePreparedKeys.has(acceptedIdentity.base_key)
+      ) {
+        activeUploadsRetained += 1;
+      } else if (!acceptedIdentity) {
         candidates.push({
           kind: "result",
-          item: skippedUploadItem(backend, key, sessionId)
+          item: skippedUploadItem(
+            backend,
+            key,
+            "暂存键不符合当前 v5 generation 结构，无法证明年龄，保守保留"
+          )
+        });
+      } else if (acceptedIdentity.created_at >= stagingCutoff) {
+        candidates.push({
+          kind: "result",
+          item: skippedUploadItem(
+            backend,
+            key,
+            "暂存对象尚未超过 24 小时、一个清理周期与安全余量的统一门槛"
+          )
         });
       } else {
         candidates.push({
@@ -247,12 +276,14 @@ function buildMaintenanceCandidates(
   return { candidates, activeUploadsRetained };
 }
 
-export async function buildStorageMaintenancePlan(signal: AbortSignal) {
+export async function buildStorageMaintenancePlan(
+  signal: AbortSignal,
+  now = Date.now()
+) {
   signal.throwIfAborted();
-  const [rowsResult, importReferences, sessionIdsByBackend, groups] = await Promise.all([
+  const [rowsResult, importReferences, groups] = await Promise.all([
     pool.query<MaintenanceImage>(maintenanceRowsQuery),
-    activeImportStorageReferences(),
-    importSessionIdsByBackend(),
+    activeImportStorageReferences({ signal }),
     storageBackendGroups()
   ]);
   signal.throwIfAborted();
@@ -260,10 +291,10 @@ export async function buildStorageMaintenancePlan(signal: AbortSignal) {
   signal.throwIfAborted();
   const built = buildMaintenanceCandidates(
     rowsResult.rows,
-    sessionIdsByBackend,
     importReferences.sessionsByBackend,
     capture.captured,
-    capture.candidates
+    capture.candidates,
+    importOrphanCutoffs(now).stagingCutoff
   );
   return {
     activeUploadsRetained: built.activeUploadsRetained,

@@ -124,7 +124,13 @@ export function getSettingsForAdmin(): AdminSettings {
     gallery,
     random_default_method
   } = settings.site;
-  const { max_items, max_file_size_mb, list_page_size, concurrency: uploadConcurrencyValue } = settings.upload;
+  const {
+    max_items,
+    max_file_size_mb,
+    max_long_edge,
+    list_page_size,
+    concurrency: uploadConcurrencyValue
+  } = settings.upload;
   const {
     fill_original_url,
     auto_import,
@@ -149,6 +155,7 @@ export function getSettingsForAdmin(): AdminSettings {
     upload: {
       max_items,
       max_file_size_mb,
+      max_long_edge,
       list_page_size,
       concurrency: uploadConcurrencyValue
     },

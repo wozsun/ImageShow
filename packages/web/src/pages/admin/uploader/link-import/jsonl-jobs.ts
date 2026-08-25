@@ -4,7 +4,8 @@ import type {
   ImportJob
 } from "../../../../lib/types.js";
 import {
-  browserUuid,
+  webImportBatchKey,
+  webUuidV7,
   type ImportAttributeDefaults
 } from "../../../../lib/upload/upload-utils.js";
 import type { JsonlManifestItem } from "../import-api.js";
@@ -48,10 +49,10 @@ export function jsonlImportJobs(
   defaultStorageSlug: string
 ): ImportJob[] {
   const batchTime = new Date().toISOString();
-  const subscriptionBatchKey = browserUuid();
+  const subscriptionBatchKey = webImportBatchKey();
   return items.map((item) => ({
-    id: browserUuid(),
-    attemptKey: browserUuid(),
+    id: webUuidV7(),
+    attemptKey: webUuidV7(),
     subscriptionBatchKey,
     kind: "download",
     status: "queued",

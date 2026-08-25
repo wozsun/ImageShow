@@ -54,18 +54,37 @@ export function mergeCommonImageAttributes(
   };
 }
 
-export function browserUuid() {
-  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
-  const bytes = new Uint8Array(16);
-  if (globalThis.crypto?.getRandomValues) {
-    globalThis.crypto.getRandomValues(bytes);
-  } else {
-    for (let index = 0; index < bytes.length; index += 1) bytes[index] = Math.floor(Math.random() * 256);
+export function webUuidV7(now = Date.now()) {
+  if (!globalThis.crypto?.getRandomValues) {
+    throw new Error("Secure random values are unavailable");
   }
-  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  if (!Number.isSafeInteger(now) || now < 0 || now > 0xffffffffffff) {
+    throw new RangeError("UUIDv7 timestamp is outside the 48-bit range");
+  }
+  const bytes = new Uint8Array(16);
+  globalThis.crypto.getRandomValues(bytes);
+  let timestamp = now;
+  for (let index = 5; index >= 0; index -= 1) {
+    bytes[index] = timestamp % 256;
+    timestamp = Math.floor(timestamp / 256);
+  }
+  bytes[6] = (bytes[6] & 0x0f) | 0x70;
   bytes[8] = (bytes[8] & 0x3f) | 0x80;
   const hex = Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("");
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+let lastImportBatchTimestamp = -1;
+
+/**
+ * Keep batch UUIDs strictly time-ordered inside one browser document, including
+ * multiple selections created within the same millisecond.
+ */
+export function webImportBatchKey(now = Date.now()) {
+  const timestamp = Math.max(now, lastImportBatchTimestamp + 1);
+  const batchKey = webUuidV7(timestamp);
+  lastImportBatchTimestamp = timestamp;
+  return batchKey;
 }
 
 export function normalizeTheme(value: string) {

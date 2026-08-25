@@ -87,6 +87,7 @@ type AuthenticatedAdminShellProps = {
   role: AdminRole;
   username: string;
   serverPreferences: AdminPreferences;
+  serverPreferencesEtag: string;
   serverPreferencesUpdatedAt: number;
   siteName: string;
   applicationVersion: string;
@@ -104,7 +105,10 @@ function AuthenticatedAdminLayout({
   onLogout
 }: Omit<
   AuthenticatedAdminShellProps,
-  "username" | "serverPreferences" | "serverPreferencesUpdatedAt"
+  | "username"
+  | "serverPreferences"
+  | "serverPreferencesEtag"
+  | "serverPreferencesUpdatedAt"
 >) {
   const routeLocation = useLocation();
   const navScrollRef = useRef<HTMLDivElement | null>(null);
@@ -216,6 +220,7 @@ function AuthenticatedAdminLayout({
 export function AuthenticatedAdminShell({
   username,
   serverPreferences,
+  serverPreferencesEtag,
   serverPreferencesUpdatedAt,
   ...layoutProps
 }: AuthenticatedAdminShellProps) {
@@ -224,6 +229,7 @@ export function AuthenticatedAdminShell({
       key={username}
       username={username}
       serverPreferences={serverPreferences}
+      serverPreferencesEtag={serverPreferencesEtag}
       serverPreferencesUpdatedAt={serverPreferencesUpdatedAt}
     >
       <AuthenticatedAdminLayout {...layoutProps} />
