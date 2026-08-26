@@ -371,19 +371,8 @@ PostgreSQL 提交状态，不根据可能已被后继修改的业务行猜测；
 应用配置的环境变量仍只在首次生成 `config.json` 时播种，文件存在后不会覆盖已有
 值，请直接修改 `config.json` 并热加载。
 
-### 4.13.0 站点描述字段升级
+### 站点描述
 
-4.13.0 只接受 `site.description` 与 `SITE_DESCRIPTION`，不会读取、迁移或回退
-`site.home.tagline` / `SITE_HOME_TAGLINE`。4.12.x 导出的 portable 配置包也必须先人工
-改成当前路径再导入。升级已有实例时按以下顺序操作：
-
-1. 停止 ImageShow 实例并等待退出完成。
-2. 备份 `data/config.json`。
-3. 把原 `site.home.tagline` 的值移动到紧跟 `site.domain` 的
-   `site.description`，删除旧键；部署环境中如有旧变量，同步改名为
-   `SITE_DESCRIPTION`。
-4. 使用 JSON 工具检查配置语法和字段位置。
-5. 启动 4.13.0，确认健康检查和页面 HTML `description` 后再恢复访问。
-
-若跳过人工移动，结构归一化会把旧键视为未知字段删除并给新字段补默认值；它不会推测
-旧值。显式空字符串仍是合法配置，并按运行时回退规则使用站点名称。
+`site.description` 是站点描述的唯一应用配置字段，首次生成配置时可由
+`SITE_DESCRIPTION` 播种。显式空字符串是合法配置，并按运行时回退规则使用站点名称；
+配置文件存在后，环境变量不会覆盖文件中的值。

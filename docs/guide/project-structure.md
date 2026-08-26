@@ -38,7 +38,7 @@ packages/web ─────► packages/shared
 | 命令 | 内容 | 副作用 |
 | --- | --- | --- |
 | `npm run verify:source` | workspace 类型、Knip、语义颜色、依赖方向 / 环、配置示例、图标、Markdown 链接与 selector inventory | 只读源码，不生成 `dist`、容器或浏览器会话 |
-| `npm run verify:build` | 清理必要输出，先构建 shared，再并行构建 Web / Server，装配服务端资产并按真实产物图检查 Web 分块边界 | 只重建三个 workspace 的 `dist`，不维护从未产生的根 `dist` 或已删除的 migrations 输出 |
+| `npm run verify:build` | 清理必要输出，先构建 shared，再并行构建 Web / Server，装配服务端资产并按真实产物图检查 Web 分块边界 | 只重建三个 workspace 的 `dist` |
 | `npm run verify:runtime` | baseline / Server / Web 三个最终入口，以及生产镜像冷启动、HTTP、schema 和重启 | 建立随机命名的 tmpfs PostgreSQL、Redis、应用容器、网络和临时镜像；无论成功、失败或中断均在结束前删除，不访问现有数据库、容器或浏览器 |
 | `npm run verify:release` | 依次执行以上三层 | 合并上述本地副作用 |
 
@@ -139,14 +139,14 @@ Functions。检查页按键动态测量的低频 Lua 仍留在 `checks/`，不�
 
 图片存储变更的单图原语集中在 `storage/image-storage-migration.ts`，在同一条可读控制流中
 完成锁内真相重读、候选发布与校验、PostgreSQL CAS，以及提交结果不确定时的补偿判断；
-不再为只传递同一记录的 prepare / switch / settlement 阶段维护文件和中间契约。
+不为只传递同一记录的 prepare / switch / settlement 阶段拆分文件和中间契约。
 `images/image-storage-migration.ts` 只负责管理接口的 1..N 保序结果，
 `storage/backend-migration.ts` 只负责整后端计数和流式分页，两者都直接调用同一个单图原语。
 `checks/storage-check.ts` 只生成无写入权限的存储预览；显式写维护按稳定职责拆分：
 `checks/storage-maintenance-plan.ts` 重读 PostgreSQL、导入引用和完整存储快照并生成候选，
 `checks/storage-thumbnail-repair.ts` 负责缩略图写入与校验，`checks/storage-orphan-cleanup.ts`
 负责确认删除和空目录修剪，`checks/storage-maintenance.ts` 只保留独占位置锁、执行顺序和结果汇总。
-这组模块不调用旧请求热路径 repair 或通用后台任务。
+这组写维护只从显式维护入口调用，不接入普通请求热路径或通用后台任务。
 回收站的移入 / 恢复集中于
 `images/trash-mutations.ts`，永久对象删除与 claim 状态机集中于 `images/trash-purge.ts`，
 两者不共享转发入口。`images/image-update.ts` 只拥有 1..N 图片锁、保序并发、逐项结果和
@@ -189,7 +189,7 @@ Functions。检查页按键动态测量的低频 Lua 仍留在 `checks/`，不�
   `useImportQueue.ts` 是 PostgreSQL 水合 completed pair 的唯一图片查询失效 owner，并在
   snapshot、SSE、提交 / 取消响应、旁路 status、全队列动作与重连代际之间按 pair 去重，
   `import-cancel.ts` 统一执行有界 status / cancel 批次。
-  旧固定 2 秒 pair 轮询模块已经删除，只有响应未知的已知 pair 才使用一次有界 status 查询。
+  导入队列不做固定 pair 轮询，只有响应未知的已知 pair 才使用一次有界 status 查询。
 - `weibo.ts` 只编排批次和 JSONL 清单，链接/时间/响应提取、受限上游协议、未知响应值
   归一化及公开类型分别位于 `weibo-parser.ts`、`weibo-client.ts`、
   `weibo-values.ts`、`weibo-types.ts`。

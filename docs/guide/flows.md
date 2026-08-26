@@ -363,7 +363,7 @@ incarnation 不会被旧清理递归删除，其他遗留项仍由保守年龄�
 raw / `.part` 由
 活跃租约保护；`_uploads` 必须完整列举，并在删除前取得 storage location write lock、重新
 确认物理 namespace 未变以及枚举前后精确 prepared key。local 原子发布崩溃遗留的精确
-`.candidate-<UUID>` 只沿其基础 v5 key 判定引用与年龄；无法解析的旧键、近期 generation、
+`.candidate-<UUID>` 只沿其基础 attempt key 判定引用与年龄；无法解析的非协议键、近期 generation、
 Redis 异常和不完整列表全部保留。详细 age gate 与维护边界见[存储](./storage.md)。
 
 ## 公开浏览与图片出口

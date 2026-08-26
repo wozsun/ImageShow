@@ -1,8 +1,8 @@
 # 数据库结构
 
 PostgreSQL 共 9 张业务表，不保存迁移账本或 schema 版本表。
-`packages/server/schema.sql` 直接定义当前干净安装基线；它与可选的
-`schema-additions.sql` 共同组成完整的新安装结构。随机图 `id` 的末 12 位查询所需 ready
+`packages/server/schema.sql` 完整定义当前干净安装的单一基线；当前
+`schema-additions.sql` 是纯注释占位，不为新安装补充任何结构。随机图 `id` 的末 12 位查询所需 ready
 部分表达式索引，以及统一 Redis 图片投影的权威 revision 单行表均属于当前基线。PostgreSQL
 是最终图片、账号、存储注册表和持久任务的唯一真相源。Redis 图片投影、查询缓存与管理员
 会话均不替代数据库真值；未完成导入 canonical 是允许在受控冷启动时整体丢弃的运行态。
@@ -15,22 +15,17 @@ PostgreSQL 共 9 张业务表，不保存迁移账本或 schema 版本表。
 ## 启动与结构契约
 
 当前代码库不提供编号迁移、迁移账本或通用数据库升级路径。单应用进程启动时，空数据库
-在一个事务中先执行 `schema.sql`，再执行当前
-`schema-additions.sql`；非空数据库只执行 additions，随后进入轻量 readiness。additions、
-readiness 或干净初始化任一步失败都会回滚本次事务。全部连接固定使用 `search_path=public`。
-应用不为不受支持的第二个重叠进程持有 schema 或管理员播种 bootstrap lock。
+在一个事务中先执行 `schema.sql`，再执行当前 `schema-additions.sql`；非空数据库只执行
+additions，随后进入轻量 readiness。当前 additions 是纯注释占位，因此 `schema.sql` 是本版
+唯一结构来源。additions、readiness 或干净初始化任一步失败都会回滚本次事务。全部连接固定
+使用 `search_path=public`。应用不为不受支持的第二个重叠进程持有 schema 或管理员播种
+bootstrap lock。
 
-additions 只保存一个发布周期内经明确审查的受限结构增量或一次性数据变化。5.0.1 处理两项
-已经明确退役的结构：存在 PostgreSQL `import_session` 时先取得 `ACCESS EXCLUSIVE` 锁，确认
-0 行后执行不带 `CASCADE` 的删除；`background_job` 同样在排他锁内确认所有行都属于当前
-`move.cleanup` / `trash.purge` / `cache.rebuild`，只识别并删除项目已知的历史枚举 CHECK，再
-建立固定名称的当前约束。固定约束必须实际只接受三种当前类型，不能只靠名称冒充；部署方其他
-CHECK 原样保留。任一旧行或外部依赖都会回滚整个启动事务，additions 不自动删历史行。干净
-安装本来不创建旧表且直接带当前 CHECK，因此同一 additions 是幂等 no-op。
-`metadata.created_by TEXT NOT NULL` 已直接定义在 `schema.sql`，没有外键或默认值。全部受控
-非空数据库应用当期 additions 并通过核对后，下一发布移除一次性语句并恢复注释占位。部署和
-旧备份恢复不得跳过承载增量的发布；additions 不提供通用 diff、推测回填、版本行或任意数据
-修复入口。
+additions 只为以后一个发布周期内经明确审查的受限结构增量或一次性数据变化保留入口。全部
+受控非空数据库应用当期 additions 并通过核对后，下一发布把同一定义并入 `schema.sql` 并恢复
+注释占位。部署和旧备份恢复不得跳过承载 additions 的发布；早于当前基线的数据库必须先运行
+对应的旧发布，当前版本不会识别版本、补做已移除迁移、删除旧对象、替换旧约束或推测回填。
+`metadata.created_by TEXT NOT NULL` 与后台任务当前类型约束都已直接定义在 `schema.sql`。
 
 readiness 只读核对当前运行时所需业务表、源码实际使用的列及其 PostgreSQL 类型、必需系统种子，
 并确认会话可写、public schema 可用且当前角色具备各表实际操作所需的 SELECT / INSERT /
@@ -38,8 +33,8 @@ UPDATE / DELETE 权限，不使用回滚写探针。它还按列和谓词语义�
 约束，不依赖数据库对象名称：当前运行时表的业务主键；`metadata.object_key`、后台任务
 非空幂等键与唯一活动 `cache.rebuild`、单一默认存储和单一超级管理员的唯一性；以及当前
 metadata / image_tag 删除路径依赖的 RESTRICT、CASCADE 和 SET NULL 外键。`created_by` 的
-`text` 类型进入最小列集合；除 5.0.1 精确删除的空旧导入表及项目已知历史枚举 CHECK 外，
-额外表、额外索引和部署方其他约束仍作为兼容超集保留，不触发通用破坏性对齐。
+`text` 类型进入最小列集合；额外表、额外索引和部署方其他约束仍作为兼容超集保留，不触发
+通用破坏性对齐，也不被解释为某个旧版本的标记。
 
 readiness 不复制 `schema.sql` 的可空性、默认值、CHECK、触发器、普通查询索引或无消费者
 约束。额外表、额外列、额外索引、等价约束改名以及更宽的 CHECK 不影响启动，只要当前代码
@@ -138,7 +133,7 @@ COUNT，再判断 `PageWindow.start >= total`，最后才执行目标窗口 SELE
 OFFSET 跳过的行水合标签。total、metadata 与 tags 属于同一事务快照；提交后的 presenter
 不再读取图片真相。
 
-### 4.12.0 数字页查询计划证据
+### 数字页查询计划证据
 
 2026-08-15 在本地 Docker PostgreSQL 18 上用独立临时数据库生成 120,000 张图片
 （90,000 ready、30,000 deleted）和 47,142 条 `image_tag`，执行
@@ -155,7 +150,7 @@ OFFSET 跳过的行水合标签。total、metadata 与 tags 属于同一事务�
 
 四条有效页计划的标签子计划均只执行 60 次。ready 正常热路径由 Redis rank 直接读取目标
 窗口；上述 ready SQL 是 coordinator 重建、revision 改变或派生索引暂不可读时的回源证据。
-当前样本下既有索引已满足本版范围，因此 4.12.0 不新增 schema、稀疏锚点或持久化排名表；
+当前样本下既有索引已满足当前范围，因此不新增 schema、稀疏锚点或持久化排名表；
 deleted 深页的外部排序若在真实规模中成为可测瓶颈，再依据独立数据决定索引或其他方案。
 
 ## ready_image_revision —— Redis 投影权威修订号
@@ -179,8 +174,8 @@ canonical 与全部派生索引；Redis 不可用或结构不一致时 fail clos
 | 字段 | 含义 |
 | --- | --- |
 | `id` (PK) | 任务 id |
-| `type` | 只允许 `move.cleanup` / `trash.purge` / `cache.rebuild`；5.0.1 启动拒绝仍含其他历史类型行的数据库 |
-| `status` | `pending` / `running` / `succeeded` / `failed` / `ignored` |
+| `type` | 只允许 `move.cleanup` / `trash.purge` / `cache.rebuild` |
+| `status` | `pending` / `running` / `succeeded` / `failed` |
 | `execution_token` | 每次领取生成的 UUID 所有权栅栏；仅当前 `running` 执行者持有，退出运行态时清空 |
 | `target_id` | 目标图片 id |
 | `idempotency_key` | 幂等键 |
@@ -191,12 +186,12 @@ canonical 与全部派生索引；Redis 不可用或结构不一致时 fail clos
 `cache.rebuild` 会从 PostgreSQL 全量重建统一 ready-image Redis 投影，`trash.purge` 在 payload
 中保存发起清空操作时的删除水位，并在 HTTP 首批开始前持久化；每次只执行该稳定范围内的
 一个有界批次并按范围内剩余数量重新调度。确定性幂等键只阻止 `pending`、`running` 和仍可重试
-的 `failed` 重复入队；`succeeded`、`ignored` 与耗尽重试的 `failed` 会在同一记录上重置
+的 `failed` 重复入队；`succeeded` 与耗尽重试的 `failed` 会在同一记录上重置
 为 `pending`，因此同一对象以后再次需要 `move.cleanup` 时不会被历史任务静默拦截。
-Worker 会按保留策略裁剪历史记录：`succeeded` / `ignored` 保留 7 天；普通任务耗尽
+Worker 会按保留策略裁剪历史记录：`succeeded` 保留 7 天；普通任务耗尽
 重试且 `next_retry_at IS NULL` 的 `failed` 同样保留 7 天。耗尽的 `move.cleanup` 不按历史
 保留期删除，因为它仍是后端对象的未解决保护引用，必须通过管理端重试并实际核验成功。
-每次 `FOR UPDATE SKIP LOCKED` 领取都会生成新的 `execution_token`；续租、成功、忽略、
+每次 `FOR UPDATE SKIP LOCKED` 领取都会生成新的 `execution_token`；续租、成功、
 重排和失败写入必须同时匹配任务 id、`running` 状态与该 token。僵尸恢复及所有退出
 `running` 的路径会清空 token，因此租约超时后又被重新领取的旧执行者不能写入迟到
 终态。`retry_count` 只统计失败与僵尸恢复次数，所有权代际不会进入 payload。

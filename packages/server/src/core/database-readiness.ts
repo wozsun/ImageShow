@@ -20,8 +20,8 @@ type TableReadiness = {
 const readWritePrivileges = ["SELECT", "INSERT", "UPDATE", "DELETE"] as const;
 
 // This is deliberately limited to columns referenced by current runtime SQL.
-// Clean installations are defined by the sealed schema.sql baseline together
-// with the current release's schema-additions.sql.
+// schema.sql is the complete clean-install baseline. A release may add a
+// separately reviewed, one-cycle schema-additions.sql delta before readiness.
 const databaseReadiness = {
   storage_backend: {
     columns: {
@@ -152,7 +152,6 @@ type RequiredUniqueIndex = RequiredPrimaryKey & {
   predicate:
     | "none"
     | "default_storage"
-    | "nonempty_final_object"
     | "non_null_idempotency"
     | "active_cache_rebuild"
     | "super_admin";
@@ -396,12 +395,6 @@ function predicateMatches(
     case "default_storage":
       return ["is_default", "is_default=true", "true=is_default"]
         .includes(normalized);
-    case "nonempty_final_object":
-      return [
-        "final_object_key<>''",
-        "''<>final_object_key",
-        "final_object_key!=''"
-      ].includes(normalized);
     case "non_null_idempotency":
       return normalized === "idempotency_keyisnotnull";
     case "active_cache_rebuild":
@@ -424,7 +417,6 @@ function uniqueIndexLabel(required: RequiredUniqueIndex) {
   const predicate = {
     none: "",
     default_storage: " WHERE is_default",
-    nonempty_final_object: " WHERE final_object_key <> ''",
     non_null_idempotency: " WHERE idempotency_key IS NOT NULL",
     active_cache_rebuild:
       " WHERE type = 'cache.rebuild' AND status IN ('pending', 'running')",

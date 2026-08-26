@@ -4,7 +4,11 @@ import { errorMessage } from "../core/api-error.ts";
 import { pool } from "../core/database-pools.ts";
 import { logger } from "../core/logger.ts";
 import { randomUuidV7 } from "../core/uuid.ts";
-import type { BackgroundJob, BackgroundJobType } from "./types.ts";
+import {
+  parseBackgroundJobType,
+  type BackgroundJob,
+  type BackgroundJobType
+} from "./types.ts";
 
 export type { BackgroundJob, BackgroundJobType } from "./types.ts";
 
@@ -28,7 +32,7 @@ export async function enqueue(
          execution_token=NULL,
          created_at=now(),
          updated_at=now()
-     WHERE background_job.status IN ('succeeded','ignored')
+     WHERE background_job.status='succeeded'
         OR (
           background_job.status='failed'
           AND background_job.next_retry_at IS NULL
@@ -145,7 +149,7 @@ export async function enqueueRerunnableJobs(
                        ELSE now()
                      END
                  WHERE background_job.status='running'
-                    OR background_job.status IN ('succeeded', 'ignored')
+                    OR background_job.status='succeeded'
                      OR (
                        background_job.status='failed'
                        AND background_job.next_retry_at IS NULL
@@ -170,7 +174,16 @@ export function enqueueRerunnableJob(
   }], client);
 }
 
-export async function claimBackgroundJob(type: string) {
+type BackgroundJobRow = Omit<BackgroundJob, "type"> & { type: unknown };
+
+function backgroundJobFromRow(row: BackgroundJobRow): BackgroundJob {
+  return {
+    ...row,
+    type: parseBackgroundJobType(row.type)
+  };
+}
+
+export async function claimBackgroundJob(type: BackgroundJobType) {
   const executionToken = randomUuidV7();
   const result = await pool.query(
     `UPDATE background_job
@@ -190,7 +203,8 @@ export async function claimBackgroundJob(type: string) {
                retry_count, created_at`,
     [type, executionToken]
   );
-  return result.rows[0] as BackgroundJob | undefined;
+  const row = result.rows[0] as BackgroundJobRow | undefined;
+  return row ? backgroundJobFromRow(row) : undefined;
 }
 
 export async function renewBackgroundJobLease(job: BackgroundJob) {
@@ -225,23 +239,6 @@ export async function markBackgroundJobSucceeded(job: BackgroundJob) {
          updated_at=now()
      WHERE id=$1 AND status='running' AND execution_token=$2`,
     [job.id, job.execution_token]
-  );
-  return updated.rowCount === 1;
-}
-
-export async function markBackgroundJobIgnored(
-  job: BackgroundJob,
-  reason: string
-) {
-  const updated = await pool.query(
-    `UPDATE background_job
-     SET status='ignored',
-         payload=payload - 'rerun_requested',
-         execution_token=NULL,
-         error=$3,
-         updated_at=now()
-     WHERE id=$1 AND status='running' AND execution_token=$2`,
-    [job.id, job.execution_token, reason]
   );
   return updated.rowCount === 1;
 }
@@ -319,7 +316,7 @@ export async function listRunnableBackgroundJobCounts() {
      ) OR (status='failed' AND next_retry_at <= now())
      GROUP BY type`
   )).rows.map((row) => ({
-    type: String(row.type),
+    type: parseBackgroundJobType(row.type),
     n: Number(row.n),
     oldest_wait_ms: Number(row.oldest_wait_ms ?? 0)
   }));
@@ -353,7 +350,7 @@ export async function cleanupBackgroundJobHistory() {
        WHERE id IN (
          SELECT id FROM background_job
          WHERE (
-             status IN ('succeeded', 'ignored')
+             status='succeeded'
              AND updated_at < now() - ($1 || ' seconds')::interval
            )
            OR (

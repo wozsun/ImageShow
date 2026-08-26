@@ -111,17 +111,15 @@ docker compose exec postgresql sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB
 
 ## 数据库基线
 
-`schema.sql` 直接定义当前干净安装基线；镜像同时保留可选的
-`schema-additions.sql`，用于对现有数据库执行当前发布周期经明确审查的受限增量或一次性
-数据变化。空数据库在同一事务中依次执行两个入口，非空数据库只执行 additions 后进入只读
-readiness。5.0.1 additions 删除已经停用且确认为空的 PostgreSQL `import_session`，并在确认
-不存在非当前 job type 后只移除项目已知的历史枚举 CHECK、建立三种当前类型的固定约束；
-部署方其他 CHECK 保持不变。两处都先取得排他锁，任何旧行或外部依赖都会让启动事务失败，
-且不使用 `CASCADE` 或自动删除历史行。
+`schema.sql` 完整定义当前干净安装的单一基线；镜像仍保留
+`schema-additions.sql` 作为当前发布周期的注释占位，并为以后经明确审查的受限增量或一次性
+数据变化保留固定入口。空数据库在同一事务中执行基线与占位文件，非空数据库执行占位文件后
+进入只读 readiness；当前发布不包含数据库升级 SQL，也不识别或清理旧版本结构。
 `metadata.created_by TEXT NOT NULL` 已直接属于干净安装基线。additions 只承载一个发布周期：
-全部受控非空数据库应用其中增量并通过 readiness 后，下一发布才能移除一次性语句并恢复注释
-占位；升级和恢复旧备份都不得跳过承载 additions 的发布。应用不提供编号迁移、通用 schema
-diff、任意删除 / 重命名 / 类型改变、通用推测回填、版本标记或清库。精确契约见
+全部受控非空数据库应用其中增量并通过 readiness 后，下一发布移除一次性语句并恢复注释占位。
+升级和恢复旧备份不得跳过承载 additions 的发布；早于当前基线的数据库必须先使用对应发布
+完成升级，当前版本不会代替旧发布补做。应用不提供编号迁移、通用 schema diff、任意删除 /
+重命名 / 类型改变、通用推测回填、版本标记或清库。精确契约见
 [数据库结构](docs/guide/database.md#启动与结构契约)。
 
 Redis 是必需的 operational datastore，但不是业务真相源；服务 unavailable 或命令 OOM 时，

@@ -251,7 +251,7 @@ function buildMaintenanceCandidates(
           item: skippedUploadItem(
             backend,
             key,
-            "暂存键不符合当前 v5 generation 结构，无法证明年龄，保守保留"
+            "暂存键不符合当前 attempt generation 结构，无法证明年龄，保守保留"
           )
         });
       } else if (acceptedIdentity.created_at >= stagingCutoff) {

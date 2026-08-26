@@ -213,7 +213,7 @@ CREATE TABLE background_job (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   CONSTRAINT background_job_current_type_check
     CHECK (type IN ('move.cleanup', 'trash.purge', 'cache.rebuild')),
-  CHECK (status IN ('pending', 'running', 'succeeded', 'failed', 'ignored'))
+  CHECK (status IN ('pending', 'running', 'succeeded', 'failed'))
 );
 
 CREATE INDEX idx_background_job_status

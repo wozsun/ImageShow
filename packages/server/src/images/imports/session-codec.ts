@@ -151,7 +151,7 @@ function parseRemote(value: unknown) {
 
 function parsePrepared(value: unknown) {
   const prepared = record(value, "prepared manifest");
-  allowedFields(prepared, [
+  exactFields(prepared, [
     "prepared_image_key",
     "prepared_thumbnail_key",
     "original_size",
@@ -161,6 +161,8 @@ function parsePrepared(value: unknown) {
     "height",
     "ext",
     "md5",
+    "prepared_image_sha256",
+    "prepared_thumbnail_sha256",
     "size",
     "thumbnail_size",
     "quality",
@@ -169,9 +171,6 @@ function parsePrepared(value: unknown) {
     "detected_brightness",
     "duplicate_count",
     "generation"
-  ], [
-    "prepared_image_sha256",
-    "prepared_thumbnail_sha256"
   ], "prepared manifest");
   nonEmptyString(prepared.prepared_image_key, "prepared.prepared_image_key");
   nonEmptyString(
@@ -202,14 +201,16 @@ function parsePrepared(value: unknown) {
     "prepared.detected_brightness"
   );
   nonEmptyString(prepared.generation, "prepared.generation");
-  for (const field of [
-    "prepared_image_sha256",
-    "prepared_thumbnail_sha256"
-  ] as const) {
-    if (prepared[field] !== undefined) {
-      digestValue(prepared[field], 32, `prepared.${field}`);
-    }
-  }
+  digestValue(
+    prepared.prepared_image_sha256,
+    32,
+    "prepared.prepared_image_sha256"
+  );
+  digestValue(
+    prepared.prepared_thumbnail_sha256,
+    32,
+    "prepared.prepared_thumbnail_sha256"
+  );
 }
 
 function parseCompletedDisplay(value: unknown, queue: unknown) {

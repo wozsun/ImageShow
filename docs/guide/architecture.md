@@ -65,15 +65,14 @@ PostgreSQL 是图片、词表、后台任务、存储注册表和管理员账号
 当前 schema 共 9 张表，其中 `ready_image_revision` 是图片投影 revision 单行表。schema
 不保存迁移账本或应用版本号。
 
-`schema.sql` 直接定义当前干净安装基线；空库依次执行它与可选的
-`schema-additions.sql`，非空库只执行 additions 后做只读 readiness。5.0.1 additions 在排他锁
-内确认旧 PostgreSQL `import_session` 为空后删除它，并在没有非当前 job type 行时只移除项目
-已知的历史枚举 CHECK、建立三种当前类型的固定约束；部署方其他 CHECK 保持不变。旧行或
-外部依赖使事务失败，不使用 `CASCADE`，也不自动删除历史行。
-`metadata.created_by TEXT NOT NULL` 已属于基线且没有默认值。
-additions 只承载一个发布周期；全部受控非空数据库确认增量后，下一发布移除一次性语句并恢复
-注释占位。应用不提供通用结构 diff、编号迁移、任意破坏性 DDL、契约标记或清库。允许的
-additions、兼容超集和拒绝条件以[数据库结构](./database.md)为唯一说明。
+`schema.sql` 完整定义当前干净安装的单一基线；空库依次执行它与
+`schema-additions.sql`，非空库只执行 additions 后做只读 readiness。当前 additions 是纯注释
+占位，不包含数据库升级、旧结构识别或清理逻辑；`metadata.created_by TEXT NOT NULL` 和
+后台任务的三种当前类型约束都直接属于基线。
+additions 只为以后一个发布周期内经审查的受限增量保留固定入口；全部受控非空数据库确认增量
+后，下一发布把定义并入 `schema.sql` 并恢复注释占位。应用不提供通用结构 diff、编号迁移、
+任意破坏性 DDL、契约标记或清库。允许的 additions、兼容超集和拒绝条件以
+[数据库结构](./database.md)为唯一说明。
 
 ### Redis
 

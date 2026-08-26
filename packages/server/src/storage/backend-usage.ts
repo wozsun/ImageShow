@@ -22,6 +22,11 @@ export type StorageBackendSnapshot = {
   cleanup_job_count: number;
 };
 
+type StorageBackendSnapshotRow = Omit<
+  StorageBackendSnapshot,
+  "import_session_count" | "cleanup_job_count"
+>;
+
 export function storageBackendUsage(
   row: Record<string, unknown>,
   stagingObjectCount = 0
@@ -66,12 +71,11 @@ export async function readStorageBackendSnapshot(
             backend.is_default,
             (SELECT count(*)::int
                FROM metadata
-              WHERE metadata.storage_slug=backend.slug) AS image_count,
-            0::int AS import_session_count
+              WHERE metadata.storage_slug=backend.slug) AS image_count
        FROM storage_backend AS backend
       WHERE backend.slug=$1`,
     [slug]
-  )).rows[0] as StorageBackendSnapshot | undefined;
+  )).rows[0] as StorageBackendSnapshotRow | undefined;
   if (!row) {
     throw new ApiError(
       404,
@@ -83,7 +87,9 @@ export async function readStorageBackendSnapshot(
     countUnresolvedMoveCleanupJobs(slug),
     activeImportStorageCounts()
   ]);
-  row.cleanup_job_count = cleanupJobCount;
-  row.import_session_count = activeImportCounts.get(slug) ?? 0;
-  return row;
+  return {
+    ...row,
+    import_session_count: activeImportCounts.get(slug) ?? 0,
+    cleanup_job_count: cleanupJobCount
+  };
 }

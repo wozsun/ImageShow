@@ -1,6 +1,6 @@
 {
   "name": "@imageshow/server",
-  "version": "5.0.1",
+  "version": "5.0.2",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,13 +11,13 @@
     "start": "node --env-file-if-exists=../../.env dist/index.js"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1115.0",
+    "@aws-sdk/client-s3": "^3.1118.0",
     "@hono/node-server": "^2.1.1",
     "@imageshow/shared": "file:../shared",
     "@smithy/node-http-handler": "^4.11.3",
     "altcha-lib": "^2.3.2",
     "file-type": "^22.0.2",
-    "hono": "^4.13.3",
+    "hono": "^4.13.5",
     "ioredis": "^6.0.0",
     "ipaddr.js": "^2.5.0",
     "pg": "^8.23.0",
@@ -26,7 +26,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@types/node": "^26.2.0",
+    "@types/node": "^26.3.0",
     "@types/pg": "^8.23.1",
     "typescript": "^7.0.2"
   }

@@ -121,7 +121,7 @@ async function cleanupPreparedAttempt(
     });
   }
   // The retry re-reads Redis before every delete attempt. Unknown ownership
-  // therefore remains fail-closed without losing the exact v5 staging keys.
+  // therefore remains fail-closed without losing the exact staging keys.
   await importRetiredCleanupQueue.enqueue(removeIfUnreferenced);
 }
 

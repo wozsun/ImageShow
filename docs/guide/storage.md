@@ -20,8 +20,8 @@
 `POST /api/admin/check/storage-maintenance` 取得全局独占位置锁，重新读取 PostgreSQL 与完整
 存储快照，再重建原图仍存在的缺失缩略图、更新该次真实修复的 `thumbnail_size`，并清理确认
 无引用的 `media`、`thumbs` 和超过统一年龄门槛、且不等于 Redis canonical 精确 prepared key
-的 v5 `_uploads`。同一 session 的旧 generation 不再因 session ID 相同而被误当成当前引用；
-近期 generation 与无法解析年龄的旧格式键会明确跳过。活动导入、仍受精确 generation 引用的
+的当前 attempt `_uploads`。同一 session 的非当前 generation 不会因 session ID 相同而被误当成
+当前引用；近期 generation 与无法解析年龄的非协议键会明确跳过。活动导入、仍受精确 generation 引用的
 对象、缺失原图、已消失候选和未完整列举均明确保留或跳过。数据库中
 `thumbnail_size=0` 且实体仍在的未收口缩略图会单独列入待重新确认项。预览按物理命名空间去重
 受阻项，只把执行端可以再次核对的维修与删除计入可执行数量；仍被 active canonical 引用的
@@ -32,9 +32,9 @@
 单实例孤儿清理 worker 以 60 秒周期处理可丢弃临时素材，不属于 `background_job`。raw 与
 prepared generation 的统一删除年龄是 24 小时，加一个 60 秒清理周期和 60 秒安全余量；
 `.part` 使用上传 claim 失活期限或远端请求超时两者较长者，再加同一周期与安全余量，当前
-默认因此为 4 分钟。raw 的年龄读取本地 mtime，`_uploads` 的年龄只接受当前 v5 键中 UUIDv7
+默认因此为 4 分钟。raw 的年龄读取本地 mtime，`_uploads` 的年龄只接受当前 attempt 键中 UUIDv7
 generation 的服务端时间；local driver 原子发布在进程崩溃后可能留下精确
-`<v5-key>.candidate-<UUID>`，它只在当前物理后端仍为 local 时沿基础 v5 key 判定年龄和引用，
+`<attempt-key>.candidate-<UUID>`，它只在当前物理后端仍为 local 时沿基础 attempt key 判定年龄和引用，
 其他候选形态仍按未知键保留。路径只提供候选身份，绝不反建 session。
 
 自动清理先要求 Redis operational 并取得稳定、有界的 active canonical 引用，当前最多读取

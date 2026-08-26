@@ -10,12 +10,12 @@ import {
   cleanupBackgroundJobHistory,
   listRunnableBackgroundJobCounts,
   markBackgroundJobFailed,
-  markBackgroundJobIgnored,
   markBackgroundJobSucceeded,
   renewBackgroundJobLease,
   rescheduleBackgroundJob,
   recoverStaleBackgroundJobs,
-  type BackgroundJob
+  type BackgroundJob,
+  type BackgroundJobType
 } from "./repository.ts";
 import {
   WorkerExecutionCoordinator,
@@ -27,12 +27,13 @@ let tickPromise: Promise<void> | null = null;
 let lastStaleRecovery = 0;
 let lastHistoryCleanup = 0;
 
-function jobTypeConcurrency(type: string): number {
+function jobTypeConcurrency(type: BackgroundJobType): number {
   const config = getRuntimeConfig();
   switch (type) {
     case "move.cleanup":
       return config.background_job.move_cleanup_concurrency;
-    default:
+    case "trash.purge":
+    case "cache.rebuild":
       return 1;
   }
 }
@@ -45,7 +46,7 @@ type QueueSliceResult = {
 
 function logDiscardedBackgroundJobTransition(
   job: { id: string; type: string },
-  transition: "failed" | "ignored" | "rescheduled" | "succeeded"
+  transition: "failed" | "rescheduled" | "succeeded"
 ) {
   logger.warn("discarded background job transition after ownership loss", {
     job_id: job.id,
@@ -76,11 +77,8 @@ async function settleBackgroundJob(
 
   const outcome = completion.value;
   let stored: boolean;
-  let transition: "ignored" | "rescheduled" | "succeeded";
-  if (outcome.status === "ignored") {
-    transition = "ignored";
-    stored = await markBackgroundJobIgnored(job, outcome.reason);
-  } else if (outcome.status === "reschedule") {
+  let transition: "rescheduled" | "succeeded";
+  if (outcome.status === "reschedule") {
     transition = "rescheduled";
     stored = await rescheduleBackgroundJob(
       job,
@@ -118,7 +116,10 @@ const executionCoordinator = new WorkerExecutionCoordinator<
   }
 });
 
-async function runBackgroundJobType(type: string, lanes: number): Promise<QueueSliceResult> {
+async function runBackgroundJobType(
+  type: BackgroundJobType,
+  lanes: number
+): Promise<QueueSliceResult> {
   const startedAt = performance.now();
   const deadline = startedAt + appConfig.backgroundJob.queueSliceMaxMs;
   let claimed = 0;

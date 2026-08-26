@@ -210,7 +210,7 @@ export async function checkStorage(signal?: AbortSignal) {
           key,
           backend,
           namespace,
-          reason: "暂存键不符合当前 v5 generation 结构，无法证明年龄，保守保留"
+          reason: "暂存键不符合当前 attempt generation 结构，无法证明年龄，保守保留"
         });
       } else if (identity.created_at >= cutoffs.stagingCutoff) {
         retainedStagingFiles.push({

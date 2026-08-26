@@ -448,13 +448,12 @@ local function assert_remote(value)
 end
 
 local function assert_prepared(value)
-  assert_allowed_fields(value, {
+  assert_exact_fields(value, {
     'prepared_image_key', 'prepared_thumbnail_key', 'original_size',
     'original_width', 'original_height', 'width', 'height', 'ext', 'md5',
+    'prepared_image_sha256', 'prepared_thumbnail_sha256',
     'size', 'thumbnail_size', 'quality', 'transcoded', 'detected_device',
     'detected_brightness', 'duplicate_count', 'generation'
-  }, {
-    'prepared_image_sha256', 'prepared_thumbnail_sha256'
   }, 'prepared')
   local positive_fields = {
     'original_size', 'original_width', 'original_height', 'width', 'height',
@@ -480,10 +479,8 @@ local function assert_prepared(value)
     or not valid_integer(value.duplicate_count, 0)
     or type(value.generation) ~= 'string'
     or value.generation == ''
-    or (value.prepared_image_sha256 ~= nil
-      and not valid_hash(value.prepared_image_sha256, 32))
-    or (value.prepared_thumbnail_sha256 ~= nil
-      and not valid_hash(value.prepared_thumbnail_sha256, 32)) then
+    or not valid_hash(value.prepared_image_sha256, 32)
+    or not valid_hash(value.prepared_thumbnail_sha256, 32) then
     error('IMPORT_QUEUE_STRUCTURE prepared_shape')
   end
 end
