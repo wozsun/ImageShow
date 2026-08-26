@@ -4,11 +4,11 @@ import { coalesce } from "../core/coalesce.ts";
 import {
   publicPgFallbackWorkLimitExceeded,
   type PublicDatabaseReadAccess
-} from "../core/public-db-fallback.ts";
+} from "../core/database/public-fallback.ts";
 import {
   pool,
   type DatabaseReader
-} from "../core/database-pools.ts";
+} from "../core/database/pools.ts";
 import {
   deleteRedisKeys,
   deleteRequiredRedisKeys,
@@ -16,11 +16,11 @@ import {
   getRequiredRedisJson,
   setRedisJson,
   setRequiredRedisJson
-} from "../core/redis-json.ts";
+} from "../core/redis/json.ts";
 import type {
   AuthorDto as Author,
   FacetOptionDto,
-  ImportVocabularyDto,
+  IngestionVocabularyDto,
   TagDto as Tag,
   ThemeDto as Theme
 } from "@imageshow/shared/browser";
@@ -322,7 +322,7 @@ export function getAdminAuthorList(): Promise<Author[]> {
   );
 }
 
-export async function getImportVocabulary(): Promise<ImportVocabularyDto> {
+export async function getIngestionVocabulary(): Promise<IngestionVocabularyDto> {
   const [themes, tags, authors] = await Promise.all([
     getThemeVocab(),
     getTagVocab(),

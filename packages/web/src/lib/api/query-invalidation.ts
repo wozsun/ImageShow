@@ -3,7 +3,7 @@ import type {
   AdminImageListItemDto,
   EditableImageSnapshotDto,
   ImageUpdateItemInputDto,
-  ImportVocabularyDto
+  IngestionVocabularyDto
 } from "@imageshow/shared/browser";
 import { queryKeys } from "./query-keys.js";
 import {
@@ -29,14 +29,14 @@ const imageDataQueryKeys = [
   queryKeys.themes,
   queryKeys.tags,
   queryKeys.authors,
-  queryKeys.importVocabulary
+  queryKeys.ingestionVocabulary
 ] as const;
 
 export function clearAdminCacheAfterLogin(client: QueryClient) {
   removeQueries(client, [
     // 清除整个偏好 key 前缀，不依赖登录表单里的原始用户名与服务端最终会话名完全一致。
     queryKeys.adminPreferences,
-    queryKeys.importVocabulary,
+    queryKeys.ingestionVocabulary,
     queryKeys.settings,
     queryKeys.overview,
     queryKeys.adminCheckStatus,
@@ -116,7 +116,7 @@ export function invalidateImageDataAfterMetadataSave(
 }
 
 function importedVocabularyChanged(
-  vocabulary: ImportVocabularyDto,
+  vocabulary: IngestionVocabularyDto,
   items: readonly AdminImageListItemDto[]
 ) {
   const themes = new Set(vocabulary.themes.map(({ slug }) => slug));
@@ -129,16 +129,16 @@ function importedVocabularyChanged(
   ));
 }
 
-export function invalidateImageDataAfterImport(
+export function invalidateImageDataAfterIngestion(
   client: QueryClient,
   items: readonly AdminImageListItemDto[],
   options: Readonly<{ completedAt?: number }> = {}
 ) {
-  const vocabulary = client.getQueryData<ImportVocabularyDto>(
-    queryKeys.importVocabulary
+  const vocabulary = client.getQueryData<IngestionVocabularyDto>(
+    queryKeys.ingestionVocabulary
   );
   const vocabularyQueryExists = Boolean(
-    client.getQueryState(queryKeys.importVocabulary)
+    client.getQueryState(queryKeys.ingestionVocabulary)
   );
   const hasTags = items.some((item) => item.tags.length > 0);
   const hasAuthors = items.some((item) => item.author !== "");
@@ -184,7 +184,7 @@ export function invalidateImageDataAfterImport(
       ...(hasAuthors ? [queryKeys.authors] : []),
       ...(vocabularyQueryExists && (
         !vocabulary || importedVocabularyChanged(vocabulary, items)
-      ) ? [queryKeys.importVocabulary] : [])
+      ) ? [queryKeys.ingestionVocabulary] : [])
     ]),
     invalidateAdminImages()
   ]);

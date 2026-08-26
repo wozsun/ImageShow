@@ -1,5 +1,5 @@
 import type { PoolClient } from "pg";
-import { withAdvisoryLock } from "../core/database-advisory-locks.ts";
+import { withAdvisoryLock } from "../core/database/advisory-locks.ts";
 
 const trashMembershipLockKey = "imageshow:trash-membership";
 

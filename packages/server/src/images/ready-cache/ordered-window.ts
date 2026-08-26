@@ -7,7 +7,7 @@ import {
 import type {
   ReadyImageFilterIndex,
   ReadyImageFilterIndexValidation
-} from "./filter-index.ts";
+} from "./indexes/filter.ts";
 import {
   parseReadyImageCacheItem,
   readyImageMember,

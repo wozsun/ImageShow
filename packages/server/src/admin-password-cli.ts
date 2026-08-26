@@ -3,10 +3,10 @@ import { deploymentConfig } from "./config/deployment-config.ts";
 import {
   closeDatabasePools,
   configureDatabasePools
-} from "./core/database-pools.ts";
-import { pingDatabase } from "./core/database-schema.ts";
-import { pingRedis, redis } from "./core/redis-client.ts";
-import { parseAdminPasswordCommand } from "./users/admin-password-command.ts";
+} from "./core/database/pools.ts";
+import { pingDatabase } from "./core/database/schema.ts";
+import { adminUsernameInput } from "./core/credentials.ts";
+import { pingRedis, redis } from "./core/redis/client.ts";
 import {
   resetAdministratorPasswordHash,
   resetAdministratorPasswordWithSessionCleanup
@@ -65,7 +65,11 @@ function readHiddenLine(prompt: string) {
 }
 
 async function main() {
-  const { username } = parseAdminPasswordCommand(process.argv.slice(2));
+  const arguments_ = process.argv.slice(2);
+  if (arguments_.length !== 2 || arguments_[0] !== "reset-password") {
+    throw new Error("用法: imageshow reset-password <username>");
+  }
+  const username = adminUsernameInput.parse(arguments_[1]);
   const password = await readHiddenLine("新密码: ");
   const confirmation = await readHiddenLine("确认新密码: ");
   if (password !== confirmation) throw new Error("两次输入的密码不一致");

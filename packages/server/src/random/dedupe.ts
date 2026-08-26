@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { appConfig } from "@imageshow/shared";
-import { redis } from "../core/redis-client.ts";
-import { execRedisPipeline } from "../core/redis-pipeline.ts";
+import { redis } from "../core/redis/client.ts";
+import { execRedisPipeline } from "../core/redis/pipeline.ts";
 import { getRedisOperationalState } from "../core/runtime-availability.ts";
 
 const RECENT_PREFIX = "imageshow:random_recent:";

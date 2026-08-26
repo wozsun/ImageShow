@@ -4,7 +4,7 @@ export type StorageBackendDeleteBlocker =
   | "built_in"
   | "default"
   | "images"
-  | "import_sessions"
+  | "ingestion_sessions"
   | "cleanup_jobs"
   | "staging_objects";
 
@@ -88,7 +88,7 @@ export type StorageBackendS3Dto = {
 
 type StorageBackendAdminBaseDto = StorageBackendOptionDto & {
   image_count: number;
-  import_session_count: number;
+  ingestion_session_count: number;
   cleanup_job_count: number;
   failed_cleanup_job_count: number;
   exhausted_cleanup_job_count: number;

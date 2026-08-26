@@ -1,0 +1,427 @@
+import type { PoolClient } from "pg";
+import { ApiError, errorMessage } from "../../core/api-error.ts";
+import {
+  inspectTransactionOutcome,
+  withTransactionOnClient
+} from "../../core/database/transactions.ts";
+import { pool } from "../../core/database/pools.ts";
+import { withAdvisoryLock } from "../../core/database/advisory-locks.ts";
+import {
+  mergeS3Settings,
+  sameStorageBackendSettings,
+  storageDriverSignature,
+  type StorageBackendUpdateInput,
+  type StorageConfig
+} from "./config.ts";
+import {
+  normalizedNamespaceIdentities,
+  storageConfigFromRow,
+  type StorageBackendConfigRow
+} from "./record.ts";
+import {
+  invalidateStorageBackendRegistry,
+  resolveStorageAccessForConfig
+} from "./registry.ts";
+import {
+  assertPhysicalLocationChangeAllowed,
+  readStorageBackendSnapshot,
+  storageBackendUsage,
+  type StorageBackendSnapshot
+} from "./usage.ts";
+import {
+  validateStorageBackendCandidate,
+  type ExistingStorageProbe
+} from "./probe.ts";
+import {
+  captureStagingNamespaceSnapshot,
+  type StagingNamespaceSnapshot
+} from "../migration/endpoint-rebind.ts";
+import {
+  withStorageLocationWriteAndAdvisoryLock
+} from "../maintenance-lock.ts";
+import {
+  configuredStorageNamespaceIdentity,
+  shareStorageNamespace,
+  storageNamespaceIdentities,
+  storageNamespaceLayoutIdentity
+} from "../objects/namespace.ts";
+
+function updatedStorageConfig(
+  current: StorageConfig,
+  input: StorageBackendUpdateInput
+): StorageConfig {
+  if (current.type === "s3") {
+    return input.s3
+      ? {
+          ...current,
+          s3: mergeS3Settings(input.s3, current.s3)
+        }
+      : current;
+  }
+  if (input.s3) {
+    throw new ApiError(
+      400,
+      "storage_backend_reserved",
+      "内置本地后端没有可编辑的远程存储配置"
+    );
+  }
+  return current;
+}
+
+function changedPhysicalLocationFields(
+  current: StorageConfig,
+  next: StorageConfig
+) {
+  if (current.type === "s3" && next.type === "s3") {
+    const fields = ["endpoint", "bucket", "root_path"] as const;
+    return fields.filter((field) => current.s3[field] !== next.s3[field]);
+  }
+  return [];
+}
+
+type StorageUpdateReceipt = { transactionId: string | null };
+type StorageNamespaceRow = StorageBackendConfigRow;
+
+function namespaceSetsOverlap(
+  first: ReadonlySet<string>,
+  second: ReadonlySet<string>
+) {
+  return [...first].some((identity) => second.has(identity));
+}
+
+function mergedStorageNamespaceComponent(
+  rows: readonly StorageNamespaceRow[],
+  current: StorageConfig,
+  candidate: StorageConfig
+) {
+  const identities = new Set([
+    ...storageNamespaceIdentities(current),
+    ...storageNamespaceIdentities(candidate)
+  ]);
+  const slugs = new Set([current.slug]);
+  let expanded = true;
+  while (expanded) {
+    expanded = false;
+    for (const row of rows) {
+      if (slugs.has(row.slug)) continue;
+      const rowIdentities = storageNamespaceIdentities(
+        storageConfigFromRow(row)
+      );
+      if (!namespaceSetsOverlap(identities, rowIdentities)) continue;
+      slugs.add(row.slug);
+      for (const identity of rowIdentities) {
+        if (!identities.has(identity)) expanded = true;
+        identities.add(identity);
+      }
+    }
+  }
+  return {
+    identities: [...identities].sort(),
+    slugs: [...slugs].sort()
+  };
+}
+
+async function hasRegisteredNamespacePeer(
+  client: PoolClient,
+  current: StorageConfig
+) {
+  const rows = (await client.query(
+    `SELECT slug, type, config, namespace_identities
+       FROM storage_backend
+      WHERE slug <> $1`,
+    [current.slug]
+  )).rows as StorageNamespaceRow[];
+  return rows.some((row) => shareStorageNamespace(
+    current,
+    storageConfigFromRow(row)
+  ));
+}
+
+function sameStorageBackendConfig(
+  snapshot: StorageBackendSnapshot,
+  locked: StorageBackendConfigRow
+) {
+  if (
+    locked.type !== snapshot.type
+    || JSON.stringify(
+      normalizedNamespaceIdentities(locked.namespace_identities)
+    ) !== JSON.stringify(
+      normalizedNamespaceIdentities(snapshot.namespace_identities)
+    )
+  ) {
+    return false;
+  }
+  return sameStorageBackendSettings(
+    storageConfigFromRow(snapshot),
+    storageConfigFromRow(locked)
+  );
+}
+
+async function updateStorageBackendUnderLock(
+  slug: string,
+  input: StorageBackendUpdateInput,
+  signal: AbortSignal,
+  lockClient: PoolClient,
+  receipt: StorageUpdateReceipt
+) {
+  signal.throwIfAborted();
+  const snapshot = await readStorageBackendSnapshot(slug);
+  signal.throwIfAborted();
+  const currentConfig = storageConfigFromRow(snapshot);
+  const nextConfig = updatedStorageConfig(currentConfig, input);
+  const configChanged = !sameStorageBackendSettings(
+    currentConfig,
+    nextConfig
+  );
+  const driverChanged = storageDriverSignature(currentConfig)
+    !== storageDriverSignature(nextConfig);
+  const configuredNamespaceChanged =
+    configuredStorageNamespaceIdentity(currentConfig)
+    !== configuredStorageNamespaceIdentity(nextConfig);
+  const layoutChanged = storageNamespaceLayoutIdentity(currentConfig)
+    !== storageNamespaceLayoutIdentity(nextConfig);
+  const endpointRebindCandidate = currentConfig.type === "s3"
+    && nextConfig.type === "s3"
+    && configuredNamespaceChanged
+    && !layoutChanged;
+
+  const changedFields = configuredNamespaceChanged
+    ? changedPhysicalLocationFields(currentConfig, nextConfig)
+    : [];
+  const snapshotUsage = storageBackendUsage(snapshot);
+  let currentStaging: StagingNamespaceSnapshot | undefined;
+  let verifiedEndpointRebind = false;
+  if (configuredNamespaceChanged) {
+    if (!endpointRebindCandidate) {
+      assertPhysicalLocationChangeAllowed(changedFields, snapshotUsage);
+    }
+    currentStaging = await captureStagingNamespaceSnapshot(
+      resolveStorageAccessForConfig(currentConfig).driver,
+      signal
+    );
+    snapshotUsage.staging_object_count = currentStaging.keys.size;
+    signal.throwIfAborted();
+    if (endpointRebindCandidate) {
+      verifiedEndpointRebind = Boolean(
+        snapshotUsage.image_count
+        || snapshotUsage.ingestion_session_count
+        || snapshotUsage.cleanup_job_count
+        || snapshotUsage.staging_object_count
+      );
+      if (
+        !verifiedEndpointRebind
+        && (
+          normalizedNamespaceIdentities(
+            snapshot.namespace_identities
+          ).length
+          || await hasRegisteredNamespacePeer(lockClient, currentConfig)
+        )
+      ) {
+        verifiedEndpointRebind = true;
+      }
+    } else {
+      assertPhysicalLocationChangeAllowed(changedFields, snapshotUsage);
+    }
+  }
+
+  const existingObject = driverChanged && snapshotUsage.image_count > 0
+    ? (await pool.query(
+        `SELECT id, object_key, storage_slug
+           FROM metadata
+          WHERE storage_slug=$1
+          ORDER BY id
+          LIMIT 1`,
+        [slug]
+      )).rows[0] as ExistingStorageProbe | undefined
+    : undefined;
+  signal.throwIfAborted();
+  if (driverChanged) {
+    await validateStorageBackendCandidate(
+      nextConfig,
+      existingObject,
+      verifiedEndpointRebind && currentStaging
+        ? { currentConfig, currentStaging }
+        : undefined,
+      signal
+    );
+    signal.throwIfAborted();
+  }
+
+  let nextNamespaceIdentities = normalizedNamespaceIdentities(
+    snapshot.namespace_identities
+  );
+  if (configuredNamespaceChanged && !verifiedEndpointRebind) {
+    nextNamespaceIdentities = [];
+  }
+
+  try {
+    await withTransactionOnClient(
+      lockClient,
+      async (client) => {
+        signal.throwIfAborted();
+        const row = (await client.query(
+          `SELECT slug, type, config, namespace_identities, is_default
+             FROM storage_backend
+            WHERE slug=$1
+            FOR UPDATE`,
+          [slug]
+        )).rows[0];
+        signal.throwIfAborted();
+        if (!row) {
+          throw new ApiError(
+            404,
+            "storage_backend_not_found",
+            `Unknown storage backend: ${slug}`
+          );
+        }
+        if (!sameStorageBackendConfig(snapshot, row)) {
+          throw new ApiError(
+            409,
+            "storage_backend_changed",
+            "存储后端配置已被其他请求修改，请刷新后重试"
+          );
+        }
+        if (input.enabled === false && row.is_default) {
+          throw new ApiError(
+            400,
+            "storage_default_enabled",
+            "默认后端不能停用，请先切换默认后端"
+          );
+        }
+        if (input.enabled === false && row.slug === "local") {
+          const alternativeDefault = await client.query(
+            `SELECT 1
+               FROM storage_backend
+              WHERE slug <> 'local' AND enabled AND is_default
+              LIMIT 1`
+          );
+          if (!alternativeDefault.rowCount) {
+            throw new ApiError(
+              400,
+              "storage_local_requires_alternative",
+              "停用本地存储前，请先启用其他存储并将其设为默认后端"
+            );
+          }
+        }
+
+        if (verifiedEndpointRebind) {
+          const namespaceRows = (await client.query(
+            `SELECT slug, type, config, namespace_identities
+               FROM storage_backend
+              FOR UPDATE`
+          )).rows as StorageNamespaceRow[];
+          const component = mergedStorageNamespaceComponent(
+            namespaceRows,
+            currentConfig,
+            nextConfig
+          );
+          nextNamespaceIdentities = component.identities;
+          await client.query(
+            `UPDATE storage_backend
+                SET namespace_identities=$2::text[]
+              WHERE slug = ANY($1::text[])`,
+            [component.slugs, component.identities]
+          );
+        }
+
+        const configJson = !configChanged
+          ? null
+          : nextConfig.type === "s3"
+            ? JSON.stringify(nextConfig.s3)
+            : null;
+        await client.query(
+          `UPDATE storage_backend
+              SET display_name=COALESCE($2, display_name),
+                  enabled=COALESCE($3, enabled),
+                  config=COALESCE($4::jsonb, config),
+                  namespace_identities=$5::text[],
+                  updated_at=now()
+            WHERE slug=$1`,
+          [
+            slug,
+            input.display_name ?? null,
+            input.enabled ?? null,
+            configJson,
+            nextNamespaceIdentities
+          ]
+        );
+        signal.throwIfAborted();
+      },
+      {
+        onTransactionId: (transactionId) => {
+          receipt.transactionId = transactionId;
+        }
+      }
+    );
+  } finally {
+    // COMMIT acknowledgement can be lost together with the lock connection.
+    invalidateStorageBackendRegistry();
+  }
+}
+
+async function settleStorageBackendUpdate(
+  work: (receipt: StorageUpdateReceipt) => Promise<void>
+) {
+  const receipt: StorageUpdateReceipt = { transactionId: null };
+  try {
+    await work(receipt);
+  } catch (error) {
+    if (!receipt.transactionId) throw error;
+    const outcome = await inspectTransactionOutcome(receipt.transactionId)
+      .catch(() => "unknown" as const);
+    if (outcome === "committed") return;
+    if (outcome === "rolled_back") throw error;
+    throw new ApiError(
+      503,
+      "storage_update_outcome_unknown",
+      "存储配置事务结果暂时无法确认，请刷新后核对当前配置",
+      {
+        transaction_id: receipt.transactionId,
+        original_error: errorMessage(error)
+      }
+    );
+  }
+}
+
+export async function updateStorageBackend(
+  slug: string,
+  input: StorageBackendUpdateInput
+) {
+  const backendLockKey = `imageshow:storage-backend:${slug}`;
+  const updateWithBackendLock = () =>
+    settleStorageBackendUpdate((receipt) =>
+      withAdvisoryLock(backendLockKey, (signal, lockClient) =>
+        updateStorageBackendUnderLock(
+          slug,
+          input,
+          signal,
+          lockClient,
+          receipt
+        )
+      )
+    );
+
+  const needsLocationWriteLock = input.s3
+    ? Object.keys(input.s3).some((field) => field !== "public_base_url")
+    : false;
+  if (!needsLocationWriteLock) {
+    await updateWithBackendLock();
+    return;
+  }
+
+  // S3 settings can affect the physical location or an active transport.
+  // Exclude active readers before retiring the old driver so a multi-request
+  // operation cannot be interrupted halfway through by a harmless config edit.
+  await settleStorageBackendUpdate((receipt) =>
+    withStorageLocationWriteAndAdvisoryLock(
+      backendLockKey,
+      (signal, lockClient) => updateStorageBackendUnderLock(
+        slug,
+        input,
+        signal,
+        lockClient,
+        receipt
+      )
+    )
+  );
+}

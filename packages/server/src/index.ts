@@ -13,17 +13,17 @@ import {
   stopReadyImageCacheCoordinator
 } from "./images/ready-cache/coordinator.ts";
 import {
-  drainImportSessionWorker,
-  startImportSessionWorker,
-  stopImportSessionWorker
-} from "./images/imports/runtime.ts";
+  drainIngestionSessionWorker,
+  startIngestionSessionWorker,
+  stopIngestionSessionWorker
+} from "./images/ingestion/runtime.ts";
 import {
   closeDatabasePools,
   configureDatabasePools
-} from "./core/database-pools.ts";
-import { initializeDatabaseSchema } from "./core/database-schema.ts";
+} from "./core/database/pools.ts";
+import { initializeDatabaseSchema } from "./core/database/schema.ts";
 import { ensureSuperAdmin } from "./users/admin-bootstrap.ts";
-import { redis } from "./core/redis-client.ts";
+import { redis } from "./core/redis/client.ts";
 import {
   markRuntimeInitializationComplete,
   onBusinessAvailabilityGateOpen,
@@ -31,11 +31,11 @@ import {
   stopRedisOperationalMonitor
 } from "./core/runtime-availability.ts";
 import { configureRuntimeLogger, logger } from "./core/logger.ts";
-import { ensureRuntimeDirectories } from "./storage/runtime-directories.ts";
+import { ensureRuntimeDirectories } from "./storage/objects/runtime-directories.ts";
 import { drainWorker, startWorker, stopWorker } from "./jobs/worker.ts";
 import {
   closeStorageBackendRegistry
-} from "./storage/backend-registry.ts";
+} from "./storage/backends/registry.ts";
 import { createHttpApp } from "./http-app.ts";
 import {
   closeAllAdminSessionConnections
@@ -78,7 +78,7 @@ try {
       .finally(() => {
         if (!shuttingDown) {
           startWorker();
-          startImportSessionWorker();
+          startIngestionSessionWorker();
         }
       });
   });
@@ -115,9 +115,9 @@ function shutdown(signal: string, exitCode = 0) {
         : Promise.resolve();
       stopRedisOperationalMonitor();
       stopWorker();
-      stopImportSessionWorker();
+      stopIngestionSessionWorker();
       const workerDrain = drainWorker();
-      const importWorkerDrain = drainImportSessionWorker();
+      const ingestionWorkerDrain = drainIngestionSessionWorker();
       // Mark every cached driver as retiring before waiting for HTTP bodies.
       // Existing leases may drain; shutdown-time work cannot create a new
       // driver from a stale or freshly loaded registry snapshot.
@@ -127,7 +127,7 @@ function shutdown(signal: string, exitCode = 0) {
       await Promise.all([
         serverClose,
         workerDrain,
-        importWorkerDrain,
+        ingestionWorkerDrain,
         readyImageCacheStop,
         storageRegistryClose
       ]);

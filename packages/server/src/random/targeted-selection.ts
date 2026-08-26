@@ -2,8 +2,8 @@ import { appConfig } from "@imageshow/shared";
 import {
   publicPgFallbackWorkLimitExceeded,
   type PublicDatabaseReadAccess
-} from "../core/public-db-fallback.ts";
-import { pool, type DatabaseReader } from "../core/database-pools.ts";
+} from "../core/database/public-fallback.ts";
+import { pool, type DatabaseReader } from "../core/database/pools.ts";
 import { apiErrorResponse } from "../core/http/responses.ts";
 import { readTargetedReadyImages } from "../images/ready-cache/query.ts";
 import {

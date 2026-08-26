@@ -1,8 +1,8 @@
 import type { Redis } from "ioredis";
 import { errorMessage } from "../../core/api-error.ts";
 import { logger } from "../../core/logger.ts";
-import { redis } from "../../core/redis-client.ts";
-import { withReadyImageCacheWriteFence } from "./fence.ts";
+import { redis } from "../../core/redis/client.ts";
+import { withReadyImageCacheWriteFence } from "./sync/fence.ts";
 import { READY_IMAGE_META_KEY } from "./keys.ts";
 import {
   buildReadyImageCardinalities,
@@ -10,7 +10,7 @@ import {
   writeReadyImageStatsAndIntegrity,
   type ReadyImageCardinalities,
   type ReadyImageStats
-} from "./integrity.ts";
+} from "./integrity/check.ts";
 import {
   readReadyImageCacheMeta,
   rebuildingReadyImageCacheMeta,
@@ -26,7 +26,7 @@ import {
   clearReadyImageCacheData,
   measureReadyImageCoreMemory,
   writeReadyImageCacheBatch
-} from "./redis-writer.ts";
+} from "./sync/redis-writer.ts";
 import {
   compareReadyImageRevisions,
   getReadyImageRevision

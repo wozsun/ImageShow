@@ -1,5 +1,5 @@
-import { pool } from "../core/database-pools.ts";
-import { withTransaction } from "../core/database-transactions.ts";
+import { pool } from "../core/database/pools.ts";
+import { withTransaction } from "../core/database/transactions.ts";
 import { ApiError } from "../core/api-error.ts";
 import { hashPassword, verifyPassword } from "../core/password.ts";
 import type { AdminUserDto } from "@imageshow/shared/browser";

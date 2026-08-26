@@ -6,8 +6,8 @@
  */
 export const imageTitleMaxLength = 80;
 export const imageDescriptionMaxLength = 500;
-export const importBatchHardLimit = 3_600;
-export const importQueueSnapshotMaxItems = 100;
+export const ingestionBatchHardLimit = 3_600;
+export const ingestionQueueSnapshotMaxItems = 100;
 export const configPackageMaxBytes = 1024 * 1024;
 export const configPackageRequestMaxBytes =
   configPackageMaxBytes + 64 * 1024;

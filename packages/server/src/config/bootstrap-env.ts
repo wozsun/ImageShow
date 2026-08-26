@@ -101,13 +101,13 @@ export function runtimeConfigFromEnvironment(): RuntimeConfig {
       concurrency: environmentNumber("UPLOAD_CONCURRENCY"),
       global_concurrency: environmentNumber("UPLOAD_GLOBAL_CONCURRENCY")
     },
-    link_image: {
-      fill_original_url: environmentBoolean("LINK_IMAGE_FILL_ORIGINAL_URL"),
-      auto_import: environmentBoolean("LINK_IMAGE_AUTO_IMPORT"),
-      concurrency: environmentNumber("LINK_IMAGE_CONCURRENCY"),
-      global_concurrency: environmentNumber("LINK_IMAGE_GLOBAL_CONCURRENCY"),
-      fetch_timeout_seconds: environmentNumber("LINK_IMAGE_FETCH_TIMEOUT_SECONDS"),
-      max_items: environmentNumber("LINK_IMAGE_MAX_ITEMS")
+    import: {
+      fill_original_url: environmentBoolean("IMPORT_FILL_ORIGINAL_URL"),
+      auto_import: environmentBoolean("IMPORT_AUTO_IMPORT"),
+      concurrency: environmentNumber("IMPORT_CONCURRENCY"),
+      global_concurrency: environmentNumber("IMPORT_GLOBAL_CONCURRENCY"),
+      fetch_timeout_seconds: environmentNumber("IMPORT_FETCH_TIMEOUT_SECONDS"),
+      max_items: environmentNumber("IMPORT_MAX_ITEMS")
     },
     weibo: {
       max_items: environmentNumber("WEIBO_MAX_ITEMS"),
@@ -126,11 +126,11 @@ export function runtimeConfigFromEnvironment(): RuntimeConfig {
       long_edge: environmentNumber("THUMBNAIL_LONG_EDGE"),
       quality: environmentNumber("THUMBNAIL_QUALITY")
     },
-    import: {
-      commit_concurrency: environmentNumber("IMPORT_COMMIT_CONCURRENCY"),
-      global_commit_concurrency: environmentNumber("IMPORT_GLOBAL_COMMIT_CONCURRENCY"),
+    ingestion: {
+      commit_concurrency: environmentNumber("INGESTION_COMMIT_CONCURRENCY"),
+      global_commit_concurrency: environmentNumber("INGESTION_GLOBAL_COMMIT_CONCURRENCY"),
       global_commit_byte_budget_mb: environmentNumber(
-        "IMPORT_GLOBAL_COMMIT_BYTE_BUDGET_MB"
+        "INGESTION_GLOBAL_COMMIT_BYTE_BUDGET_MB"
       )
     },
     image_detail: {

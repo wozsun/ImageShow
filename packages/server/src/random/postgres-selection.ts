@@ -1,6 +1,6 @@
 import { appConfig } from "@imageshow/shared";
 import { randomUuidV7At } from "../core/uuid.ts";
-import type { DatabaseReader } from "../core/database-pools.ts";
+import type { DatabaseReader } from "../core/database/pools.ts";
 import type { ImageFilterPlan } from "../images/filter-plan.ts";
 import { buildImageFilterSql } from "../images/read-models/image-filter-sql.ts";
 import {

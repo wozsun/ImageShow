@@ -1,8 +1,8 @@
-import { redis } from "../core/redis-client.ts";
+import { redis } from "../core/redis/client.ts";
 import {
   deleteRedisStringsIfEqual,
   type RedisStringSnapshot
-} from "../core/redis-conditional-string.ts";
+} from "../core/redis/conditional-string.ts";
 import { logger } from "../core/logger.ts";
 import { runRequiredRedisCommand } from "../core/runtime-availability.ts";
 import { parseAdminCredentialVersions } from "./session-credential.ts";

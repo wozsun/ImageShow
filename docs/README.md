@@ -22,3 +22,6 @@
   [存储](guide/storage.md)、[安全](guide/security.md)
 - 功能出口：[功能与流程](guide/flows.md)、[随机图 API](guide/random-api.md)、
   [主机与资源子域](guide/subdomains.md)
+- 版本审计：[5.0.2 结构快照](history/v5.0.2-project-structure.md)、
+  [5.0.2 → 5.1.0 结构对照](history/v5.0.2-to-v5.1.0-project-structure.md)、
+  [5.1.0 全仓逐文件审计](history/v5.1.0-full-repository-audit.md)

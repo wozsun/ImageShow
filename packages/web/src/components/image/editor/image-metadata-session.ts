@@ -11,7 +11,7 @@ import type {
 import {
   normalizeAuthor,
   normalizeTheme
-} from "../../../lib/upload/upload-utils.js";
+} from "../../../lib/image-draft.js";
 
 export type ImageMetadataUpdate = ImageUpdateItemInputDto;
 

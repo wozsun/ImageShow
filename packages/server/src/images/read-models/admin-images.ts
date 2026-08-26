@@ -4,11 +4,11 @@ import type {
   ImageSnapshotResponseDto,
   ImageAdminInfoDto
 } from "@imageshow/shared/browser";
-import { pool } from "../../core/database-pools.ts";
+import { pool } from "../../core/database/pools.ts";
 import {
   withReadOnlyRepeatableReadTransaction
-} from "../../core/database-transactions.ts";
-import { withAdvisoryLocks } from "../../core/database-advisory-locks.ts";
+} from "../../core/database/transactions.ts";
+import { withAdvisoryLocks } from "../../core/database/advisory-locks.ts";
 import { ApiError } from "../../core/api-error.ts";
 import { adminImageListQuery } from "../../core/validation.ts";
 import { imageUpdateLockRequests } from "../image-update-lock.ts";
@@ -26,7 +26,7 @@ import {
   buildResolvedReadyImageListFilters
 } from "./list-filters.ts";
 import { fetchAdminImageOffsetRows } from "./pagination.ts";
-import { storageBackendLabel } from "../../storage/backend-label.ts";
+import { storageBackendLabel } from "../../storage/backends/label.ts";
 
 type AdminImageListQuery = z.infer<typeof adminImageListQuery>;
 

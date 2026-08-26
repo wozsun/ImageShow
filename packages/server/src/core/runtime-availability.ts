@@ -5,7 +5,7 @@ import {
   onRedisConnectionStateChange,
   validateRedisRequiredFeaturesAtCurrentEpoch,
   type RedisRequiredCommandCapabilities
-} from "./redis-client.ts";
+} from "./redis/client.ts";
 
 export type RedisOperationalState = Readonly<{
   available: boolean;

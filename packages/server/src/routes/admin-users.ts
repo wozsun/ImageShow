@@ -9,7 +9,7 @@ import {
 } from "../core/http/responses.ts";
 import { readJsonBody } from "../core/http/json-body.ts";
 import { requireSuperAdmin } from "../users/admin-authorization.ts";
-import { redis } from "../core/redis-client.ts";
+import { redis } from "../core/redis/client.ts";
 import { adminUsernameInput } from "../core/credentials.ts";
 import { parse, userCreateInput, userPasswordInput } from "../core/validation.ts";
 import {

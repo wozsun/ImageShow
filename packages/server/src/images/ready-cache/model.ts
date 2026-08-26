@@ -6,7 +6,7 @@ import {
   type Brightness,
   type Device
 } from "@imageshow/shared/browser";
-import { thumbnailObjectKey } from "../../storage/image-paths.ts";
+import { thumbnailObjectKey } from "../../storage/objects/image-paths.ts";
 
 export const READY_IMAGE_REBUILD_BATCH_SIZE = 1_000;
 export const READY_IMAGE_REBUILD_MAX_ATTEMPTS = 2;

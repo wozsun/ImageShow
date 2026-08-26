@@ -4,13 +4,13 @@ import type {
   AdminRedisStatusDto
 } from "@imageshow/shared/browser";
 import { deploymentConfig } from "../config/deployment-config.ts";
-import { pool } from "../core/database-pools.ts";
+import { pool } from "../core/database/pools.ts";
 import {
   parseRedisInfoFields,
   parseRedisMemoryState,
   pingRedis,
   redis
-} from "../core/redis-client.ts";
+} from "../core/redis/client.ts";
 import {
   applyReadyImageAuthoritativeRevision,
   readReadyImageCacheAdminStatus

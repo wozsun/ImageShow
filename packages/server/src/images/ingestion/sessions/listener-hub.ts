@@ -1,0 +1,57 @@
+import type { AdminImageListItemDto } from "@imageshow/shared/browser";
+import { logger } from "../../../core/logger.ts";
+import type {
+  IngestionQueueMetadata,
+  IngestionQueueType,
+  StoredIngestionSession
+} from "./model.ts";
+
+export type IngestionQueueMutation = Readonly<{
+  owner: string;
+  queue: IngestionQueueType;
+  kind: "semantic" | "progress" | "removed";
+  metadata: IngestionQueueMetadata;
+  session?: StoredIngestionSession;
+  completedItem?: AdminImageListItemDto;
+}>;
+
+export type IngestionQueueListener = (
+  event: IngestionQueueMutation
+) => void | Promise<void>;
+
+export class IngestionQueueListenerHub {
+  readonly #listeners = new Map<string, Set<IngestionQueueListener>>();
+
+  #scope(owner: string, queue: IngestionQueueType) {
+    return `${owner}\0${queue}`;
+  }
+
+  subscribe(
+    owner: string,
+    queue: IngestionQueueType,
+    listener: IngestionQueueListener
+  ) {
+    const scope = this.#scope(owner, queue);
+    const listeners = this.#listeners.get(scope) ?? new Set();
+    listeners.add(listener);
+    this.#listeners.set(scope, listeners);
+    return () => {
+      listeners.delete(listener);
+      if (!listeners.size) this.#listeners.delete(scope);
+    };
+  }
+
+  publish(event: IngestionQueueMutation) {
+    for (const listener of [...(this.#listeners.get(
+      this.#scope(event.owner, event.queue)
+    ) ?? [])]) {
+      try {
+        void Promise.resolve(listener(event)).catch((error: unknown) => {
+          logger.error("import queue listener failed", error);
+        });
+      } catch (error) {
+        logger.error("import queue listener failed", error);
+      }
+    }
+  }
+}

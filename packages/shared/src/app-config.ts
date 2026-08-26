@@ -6,8 +6,8 @@ import {
   devices,
   imageDescriptionMaxLength,
   imageTitleMaxLength,
-  importBatchHardLimit,
-  importQueueSnapshotMaxItems,
+  ingestionBatchHardLimit,
+  ingestionQueueSnapshotMaxItems,
   slugMaxLength
 } from "./browser/common.ts";
 
@@ -41,11 +41,11 @@ export const appConfig = {
 
   trashBatchSize: 100,
 
-  imports: {
-    batchHardLimit: importBatchHardLimit,
+  ingestion: {
+    batchHardLimit: ingestionBatchHardLimit,
     maxInputFileSizeMiB: 200,
     uploadSoftLimitMax: 1_000,
-    linkSoftLimitMax: 1_000,
+    importSoftLimitMax: 1_000,
     weiboSoftLimitMax: 50,
     weiboImageHardLimit: 1_000,
     weiboRequestBodyMaxBytes: 1024 * 1024,
@@ -54,7 +54,7 @@ export const appConfig = {
     configPackageMaxBackends: 100
   },
 
-  importRuntime: {
+  ingestionRuntime: {
     uploadIntentTtlSeconds: 30 * 60,
     uploadSessionIdleTtlSeconds: 2 * 60 * 60,
     importSessionIdleTtlSeconds: 24 * 60 * 60,
@@ -62,7 +62,7 @@ export const appConfig = {
     workerHeartbeatSeconds: 30,
     expiryScanBatchSize: 100,
     recoveryScanBatchSize: 100,
-    snapshotMaxItems: importQueueSnapshotMaxItems,
+    snapshotMaxItems: ingestionQueueSnapshotMaxItems,
     snapshotStaleReceiptCleanupBudget: 200,
     queueActionBatchSize: 100,
     orphanCleanupIntervalSeconds: 60,
@@ -172,8 +172,8 @@ export const appConfig = {
       concurrency: 2,
       global_concurrency: 5
     },
-    link_image: {
-      fill_original_url: false,
+    import: {
+      fill_original_url: true,
       auto_import: true,
       concurrency: 2,
       global_concurrency: 5,
@@ -195,7 +195,7 @@ export const appConfig = {
       skip_webp_under_kb: 700
     },
     thumbnail: { long_edge: 512, quality: 75 },
-    import: {
+    ingestion: {
       commit_concurrency: 5,
       global_commit_concurrency: 10,
       global_commit_byte_budget_mb: 512

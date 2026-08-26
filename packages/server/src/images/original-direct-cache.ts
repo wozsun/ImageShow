@@ -1,4 +1,4 @@
-import { getRedisJson, setRedisJson } from "../core/redis-json.ts";
+import { getRedisJson, setRedisJson } from "../core/redis/json.ts";
 
 export const ORIGINAL_DIRECT_CACHE_PREFIX = "imageshow:original_direct:";
 const ORIGINAL_DIRECT_CACHE_TTL_SECONDS = 60 * 60;

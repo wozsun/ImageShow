@@ -3,12 +3,12 @@ import {
   adminApiBasePath,
   adminPreferencesMaxBytes,
   configPackageRequestMaxBytes,
-  importCancelPath,
-  importCommitPath,
-  importSnapshotPath,
-  importStatusPath,
-  importUpdatePath,
-  remoteImportAcceptPath,
+  ingestionCancelPath,
+  ingestionCommitPath,
+  ingestionSnapshotPath,
+  ingestionStatusPath,
+  ingestionUpdatePath,
+  importAcceptPath,
   uploadIntentPath,
   uploadRawPath
 } from "@imageshow/shared/browser";
@@ -21,15 +21,15 @@ import {
 import { cspReportPath } from "./headers.ts";
 
 const standardApiBodyMaxBytes = 128 * 1024;
-const jsonlManifestBodyMaxBytes = appConfig.imports.jsonlManifestMaxBytes;
+const jsonlManifestBodyMaxBytes = appConfig.ingestion.jsonlManifestMaxBytes;
 const advancedConfigMaxBytes = configPackageRequestMaxBytes;
 const adminPreferencesBodyMaxBytes = adminPreferencesMaxBytes + 1024;
 const adminPreferencesPath = `${adminApiBasePath}/preferences`;
-const jsonlManifestPath = `${adminApiBasePath}/imports/jsonl/parse`;
-const weiboImportPath = `${adminApiBasePath}/imports/weibo/parse`;
+const jsonlManifestPath = `${adminApiBasePath}/ingestion/import/jsonl/parse`;
+const weiboImportPath = `${adminApiBasePath}/ingestion/import/weibo/parse`;
 // Fifty maximum-length URLs occupy about 600 KiB after worst-case JSON
 // escaping. A 1 MiB tier accepts every legal request with finite headroom.
-const weiboImportBodyMaxBytes = appConfig.imports.weiboRequestBodyMaxBytes;
+const weiboImportBodyMaxBytes = appConfig.ingestion.weiboRequestBodyMaxBytes;
 export const imageUpdatePath = `${adminApiBasePath}/images/update`;
 // Two hundred maximum-field items occupy about 5.692 MiB after worst-case JSON
 // escaping. The 6 MiB tier covers every legal request with finite headroom.
@@ -37,19 +37,19 @@ const imageUpdateBodyMaxBytes = 6 * 1024 * 1024;
 // A legal 3,600-item batch can contain two 2 KiB URLs plus metadata and fifty
 // tags per item. Keep even worst-case JSON escaping bounded without rejecting
 // an otherwise valid configured import batch.
-const importControlBodyMaxBytes = 160 * 1024 * 1024;
+const ingestionControlBodyMaxBytes = 160 * 1024 * 1024;
 // One bounded 3,600-pair exclusion list plus the visible inclusion subset stay
 // well below 1 MiB. Keep snapshot selection independent from the much larger
 // metadata-bearing import control tier.
-const importSnapshotBodyMaxBytes = 1024 * 1024;
-const importControlPaths = new Set([
+const ingestionSnapshotBodyMaxBytes = 1024 * 1024;
+const ingestionControlPaths = new Set([
   uploadIntentPath,
-  remoteImportAcceptPath,
-  importStatusPath,
-  importUpdatePath,
-  importCommitPath,
-  importCancelPath,
-  importSnapshotPath
+  importAcceptPath,
+  ingestionStatusPath,
+  ingestionUpdatePath,
+  ingestionCommitPath,
+  ingestionCancelPath,
+  ingestionSnapshotPath
 ]);
 const advancedConfigLargeBodyPath = new RegExp(
   `^${adminApiBasePath}/advanced-config/(?:preview|import|runtime(?:/validate)?)$`
@@ -145,9 +145,9 @@ export const limitAdvancedConfigBody = measuredBodyLimit(advancedConfigMaxBytes)
 
 export const limitImageUpdateBody = measuredBodyLimit(imageUpdateBodyMaxBytes);
 
-export const limitImportControlBody = measuredBodyLimit(importControlBodyMaxBytes);
+export const limitIngestionControlBody = measuredBodyLimit(ingestionControlBodyMaxBytes);
 
-export const limitImportSnapshotBody = measuredBodyLimit(importSnapshotBodyMaxBytes);
+export const limitIngestionSnapshotBody = measuredBodyLimit(ingestionSnapshotBodyMaxBytes);
 
 export const limitAdminPreferencesBody = measuredBodyLimit(adminPreferencesBodyMaxBytes);
 
@@ -178,7 +178,7 @@ export function limitProtectedAdminRequestBody(c: Context, next: Next) {
   if (c.req.method === "POST" && path === imageUpdatePath) {
     return next();
   }
-  if (c.req.method === "POST" && importControlPaths.has(path)) {
+  if (c.req.method === "POST" && ingestionControlPaths.has(path)) {
     return next();
   }
   if (c.req.method === "PATCH" && path === adminPreferencesPath) {

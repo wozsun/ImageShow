@@ -9,10 +9,10 @@ import {
   withPublicDatabaseRead,
   publicPgFallbackWorkLimitExceeded,
   type PublicDatabaseReadAccess
-} from "../../core/public-db-fallback.ts";
-import { pool, type DatabaseReader } from "../../core/database-pools.ts";
+} from "../../core/database/public-fallback.ts";
+import { pool, type DatabaseReader } from "../../core/database/pools.ts";
 import { createImageFilterPlan } from "../filter-plan.ts";
-import { readReadyImageCountSnapshot } from "../ready-cache/counts.ts";
+import { readReadyImageCountSnapshot } from "../ready-cache/counts/query.ts";
 import {
   getAuthorVocab,
   getTagVocab,

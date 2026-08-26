@@ -3,12 +3,12 @@ import {
   sampleReadyImageCoreIndexCommand,
   sampleReadyImageDerivedIndexCommand,
   type RedisReadyImageSampleResult
-} from "../../core/redis-business-commands.ts";
-import { redis } from "../../core/redis-client.ts";
+} from "../../core/redis/business-commands.ts";
+import { redis } from "../../core/redis/client.ts";
 import { ReadyImageCoreCacheError } from "./cache-errors.ts";
 import { getReadyImageCacheCoordinatorStatus } from "./coordinator.ts";
-import { READY_IMAGE_DERIVED_CACHE_POLICY } from "./derived-cache-policy.ts";
-import type { ReadyImageFilterIndex } from "./filter-index.ts";
+import { READY_IMAGE_DERIVED_CACHE_POLICY } from "./derived/policy.ts";
+import type { ReadyImageFilterIndex } from "./indexes/filter.ts";
 import {
   READY_IMAGE_ALL_INDEX_KEY,
   READY_IMAGE_INTEGRITY_KEY,

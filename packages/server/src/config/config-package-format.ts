@@ -10,15 +10,15 @@ import { ApiError } from "../core/api-error.ts";
 import {
   s3SettingsSchema,
   type StorageBackendRecord
-} from "../storage/backend-config.ts";
+} from "../storage/backends/config.ts";
 import {
   portableRuntimeConfigSchema,
   type PortableRuntimeConfig
 } from "./runtime-config.ts";
 
 const configPackageFormat = "imageshow-config" as const;
-const configPackageMaxBackends = appConfig.imports.configPackageMaxBackends;
-const configPackageMaxBytes = appConfig.imports.configPackageMaxBytes;
+const configPackageMaxBackends = appConfig.ingestion.configPackageMaxBackends;
+const configPackageMaxBytes = appConfig.ingestion.configPackageMaxBytes;
 
 const packageSlug = z.string().trim().toLowerCase().min(1).max(slugMaxLength)
   .regex(slugPattern)

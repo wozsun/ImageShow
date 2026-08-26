@@ -2,8 +2,8 @@ import type {
   ImageTrashResponseDto,
   ImageRestoreResponseDto
 } from "@imageshow/shared/browser";
-import { withAdvisoryLocks } from "../core/database-advisory-locks.ts";
-import { withTransaction } from "../core/database-transactions.ts";
+import { withAdvisoryLocks } from "../core/database/advisory-locks.ts";
+import { withTransaction } from "../core/database/transactions.ts";
 import { invalidateEntityCountCaches } from "../vocab/vocab-cache.ts";
 import { imageUpdateLockRequests } from "./image-update-lock.ts";
 import { withImageMutationSync } from "./mutation-sync.ts";

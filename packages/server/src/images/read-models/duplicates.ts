@@ -1,5 +1,5 @@
 import { coalesce } from "../../core/coalesce.ts";
-import { pool } from "../../core/database-pools.ts";
+import { pool } from "../../core/database/pools.ts";
 import {
   adminImageListItemsWithTags,
   adminImageListPresentationColumns,

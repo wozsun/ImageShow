@@ -1,20 +1,20 @@
 import { appConfig } from "@imageshow/shared";
-import { pool } from "../core/database-pools.ts";
+import { pool } from "../core/database/pools.ts";
 import { errorMessage } from "../core/api-error.ts";
-import { inspectImportRawOrphans } from "../images/imports/raw-files.ts";
-import { importOrphanCutoffs } from "../images/imports/orphan-retention.ts";
+import { inspectIngestionRawOrphans } from "../images/ingestion/raw/orphan-scanner.ts";
+import { ingestionOrphanCutoffs } from "../images/ingestion/cleanup/retention.ts";
 import {
-  parseImportStagingCleanupKey
-} from "../images/imports/staging-keys.ts";
-import { resolveStorageAccess } from "../storage/backend-registry.ts";
-import { thumbnailRef } from "../storage/image-paths.ts";
-import { STORAGE_ADMIN_LIST_MAX_KEYS } from "../storage/key-listing.ts";
+  parseIngestionStagingCleanupKey
+} from "../images/ingestion/staging-keys.ts";
+import { resolveStorageAccess } from "../storage/backends/registry.ts";
+import { thumbnailRef } from "../storage/objects/image-paths.ts";
+import { STORAGE_ADMIN_LIST_MAX_KEYS } from "../storage/objects/key-listing.ts";
 import {
-  activeImportStorageReferences,
+  activeIngestionStorageReferences,
   classifyStagingKeys,
   collectStorageBackendGroupSnapshot,
-  importFinalStorageReferences,
-  mergeActiveImportSessions,
+  ingestionFinalStorageReferences,
+  mergeActiveIngestionSessions,
   mergeStorageReferenceRows,
   storageBackendGroupName,
   storageBackendGroups,
@@ -38,10 +38,10 @@ export async function checkStorage(signal?: AbortSignal) {
   const activeStagingFiles: Array<Record<string, unknown>> = [];
   const retainedStagingFiles: Array<Record<string, unknown>> = [];
   const orphanStagingFiles: Array<Record<string, unknown>> = [];
-  const activeBeforeEnumeration = await activeImportStorageReferences({ signal });
+  const activeBeforeEnumeration = await activeIngestionStorageReferences({ signal });
   const { sessionsByBackend: sessionsBeforeEnumeration } = activeBeforeEnumeration;
   const checkedAt = Date.now();
-  const cutoffs = importOrphanCutoffs(checkedAt);
+  const cutoffs = ingestionOrphanCutoffs(checkedAt);
   const incompleteListings: Array<{
     backend: string;
     namespace: string;
@@ -70,13 +70,13 @@ export async function checkStorage(signal?: AbortSignal) {
   }));
 
   // 检查本身不持有维护锁。枚举后再读取一次会话，并与枚举前快照取并集，
-  // 避免刚创建的导入会话已经写入暂存对象、却被首轮快照漏掉而瞬时误报。
+  // 避免刚创建的内容接入会话已经写入暂存对象、却被首轮快照漏掉而瞬时误报。
   const [
     rowsAfterEnumerationResult,
     activeSessionsAfterEnumeration
   ] = await Promise.all([
     pool.query(storageRowsQuery),
-    activeImportStorageReferences({ signal })
+    activeIngestionStorageReferences({ signal })
   ]);
   const rowsAfterEnumeration = rowsAfterEnumerationResult.rows as StorageRow[];
   const rowsReferencedDuringEnumeration = mergeStorageReferenceRows(
@@ -164,7 +164,7 @@ export async function checkStorage(signal?: AbortSignal) {
     const referencedThumbKeys = new Set(
       retainedDuringEnumeration.map((row) => thumbnailRef(row).key)
     );
-    const activeSessions = mergeActiveImportSessions(
+    const activeSessions = mergeActiveIngestionSessions(
       ...group.slugs.flatMap((slug) => [
         sessionsBeforeEnumeration.get(slug) ?? new Map(),
         sessionsAfterEnumeration.get(slug) ?? new Map()
@@ -184,7 +184,7 @@ export async function checkStorage(signal?: AbortSignal) {
       candidate.slug === backend
     ));
     for (const key of staging.orphan) {
-      const parsed = parseImportStagingCleanupKey(key);
+      const parsed = parseIngestionStagingCleanupKey(key);
       const identity = parsed
         && (!parsed.local_atomic_candidate
           || selectedBackend?.type === "local")
@@ -245,7 +245,7 @@ export async function checkStorage(signal?: AbortSignal) {
       });
     }
     for (const session of activeSessions.values()) {
-      for (const reference of importFinalStorageReferences(session)) {
+      for (const reference of ingestionFinalStorageReferences(session)) {
         if (reference.prefix === "media") referencedObjectKeys.add(reference.key);
         if (reference.prefix === "thumbs") referencedThumbKeys.add(reference.key);
       }
@@ -291,7 +291,7 @@ export async function checkStorage(signal?: AbortSignal) {
       }
     }
   }
-  const staleRaw = await inspectImportRawOrphans({
+  const staleRaw = await inspectIngestionRawOrphans({
     keep: rawReferencePaths,
     rawCutoff: cutoffs.rawCutoff,
     partCutoff: cutoffs.partCutoff,
@@ -306,11 +306,11 @@ export async function checkStorage(signal?: AbortSignal) {
     active_staging_files: activeStagingFiles,
     retained_staging_files: retainedStagingFiles,
     orphan_staging_files: orphanStagingFiles,
-    stale_import_raw_files: staleRaw.raw,
-    stale_import_part_files: staleRaw.part,
-    incomplete_import_raw_scan: staleRaw.complete ? [] : [{
-      limit: appConfig.importRuntime.orphanCleanupMaxRawEntriesPerCycle,
-      reason: "导入临时目录扫描达到固定上限；当前 stale 统计不是完整结果"
+    stale_ingestion_raw_files: staleRaw.raw,
+    stale_ingestion_part_files: staleRaw.part,
+    incomplete_ingestion_raw_scan: staleRaw.complete ? [] : [{
+      limit: appConfig.ingestionRuntime.orphanCleanupMaxRawEntriesPerCycle,
+      reason: "内容接入临时目录扫描达到固定上限；当前 stale 统计不是完整结果"
     }],
     incomplete_listings: incompleteListings,
     unavailable_backends: unavailableBackends

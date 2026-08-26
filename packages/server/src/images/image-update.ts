@@ -4,7 +4,7 @@ import type {
 } from "@imageshow/shared/browser";
 import { ApiError, errorMessage } from "../core/api-error.ts";
 import { mapWithWorkerPool } from "../core/concurrency.ts";
-import { withAdvisoryLocks } from "../core/database-advisory-locks.ts";
+import { withAdvisoryLocks } from "../core/database/advisory-locks.ts";
 import { logger } from "../core/logger.ts";
 import type { ImageUpdateItemInput } from "../core/validation.ts";
 import { createEntityCountCacheInvalidationBatch } from "../vocab/vocab-cache.ts";

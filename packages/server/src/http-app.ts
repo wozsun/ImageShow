@@ -2,8 +2,8 @@ import { Hono, type Context, type Next } from "hono";
 import { compress } from "hono/compress";
 import {
   adminApiBasePath,
-  importDuplicatesPath,
-  importStatusPath
+  ingestionDuplicatesPath,
+  ingestionStatusPath
 } from "@imageshow/shared/browser";
 import { getRuntimeConfig } from "./config/runtime-config-store.ts";
 import { apiErrorResponse, handleApiError } from "./core/http/responses.ts";
@@ -24,9 +24,7 @@ import { prepareCompressionThreshold } from "./core/http/compression-threshold.t
 import { registerAdminLogRoutes } from "./routes/admin-logs.ts";
 import { registerAdvancedConfigRoutes } from "./routes/advanced-config.ts";
 import { registerAdminImageRoutes } from "./routes/admin-images.ts";
-import { registerAdminTagRoutes } from "./routes/admin-tags.ts";
-import { registerAdminThemeRoutes } from "./routes/admin-themes.ts";
-import { registerAdminAuthorRoutes } from "./routes/admin-authors.ts";
+import { registerAdminVocabularyRoutes } from "./routes/admin-vocabulary.ts";
 import { registerAdminUserRoutes } from "./routes/admin-users.ts";
 import { registerAdminPreferenceRoutes } from "./routes/admin-preferences.ts";
 import { registerAdminCacheRoutes } from "./routes/admin-cache.ts";
@@ -43,7 +41,7 @@ import { registerSettingsRoutes } from "./routes/settings.ts";
 import { registerSecurityReportRoutes } from "./routes/security-reports.ts";
 import { registerStorageRoutes } from "./routes/storage.ts";
 import { registerSpaRoutes } from "./routes/spa.ts";
-import { registerImportRoutes } from "./routes/imports.ts";
+import { registerIngestionRoutes } from "./routes/ingestion.ts";
 import { isAllowedSiteHost, isStaticSiteHost } from "./config/site-host.ts";
 import {
   auditAdminMutation,
@@ -184,8 +182,8 @@ export function createHttpApp(
   registerSecurityReportRoutes(app);
 
   const adminReadPostPaths = new Set([
-    importDuplicatesPath,
-    importStatusPath
+    ingestionDuplicatesPath,
+    ingestionStatusPath
   ]);
   app.use(`${adminApiBasePath}/*`, async (c, next) => {
     if (
@@ -206,13 +204,11 @@ export function createHttpApp(
   registerProtectedAuthRoutes(app);
 
   registerAdminImageRoutes(app);
-  registerAdminTagRoutes(app);
-  registerAdminThemeRoutes(app);
-  registerAdminAuthorRoutes(app);
+  registerAdminVocabularyRoutes(app);
   registerAdminUserRoutes(app);
   registerAdminPreferenceRoutes(app);
   registerAdminCacheRoutes(app);
-  registerImportRoutes(app);
+  registerIngestionRoutes(app);
   registerAdminLogRoutes(app);
   registerAdvancedConfigRoutes(app);
   registerSettingsRoutes(app);

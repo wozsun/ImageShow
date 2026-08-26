@@ -10,8 +10,8 @@ import { getReadyImageRevision } from "./revision.ts";
 import {
   getReadyImageCacheRecentErrors
 } from "./status-observability.ts";
-import { redis } from "../../core/redis-client.ts";
-import { measureReadyImageCoreMemory } from "./redis-writer.ts";
+import { redis } from "../../core/redis/client.ts";
+import { measureReadyImageCoreMemory } from "./sync/redis-writer.ts";
 
 type ReadyImageCacheAdminStatusDependencies = {
   getCoordinatorStatus: typeof getReadyImageCacheCoordinatorStatus;

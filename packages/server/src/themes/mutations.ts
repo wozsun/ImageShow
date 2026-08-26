@@ -1,6 +1,6 @@
 import type { PoolClient } from "pg";
-import { pool } from "../core/database-pools.ts";
-import { withTransaction } from "../core/database-transactions.ts";
+import { pool } from "../core/database/pools.ts";
+import { withTransaction } from "../core/database/transactions.ts";
 import { ApiError } from "../core/api-error.ts";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { mapWithWorkerPool } from "../core/concurrency.ts";
@@ -22,7 +22,7 @@ import {
   enqueuePreparedImageSourceCleanup,
   prepareVerifiedImageRelocation,
   type RelocatableImage
-} from "../storage/image-relocation.ts";
+} from "../storage/migration/image-relocation.ts";
 import {
   withImageMutationSync,
   withPlannedImageMutationRebuild

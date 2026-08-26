@@ -11,7 +11,7 @@ import {
   homeBannerLabel,
   homeBannerTitle,
   imagePageSize,
-  linkImageConcurrency,
+  importConcurrency,
   listPageSize,
   loginBackground,
   normalizeMaxLongEdge,
@@ -62,10 +62,10 @@ const appSettingsSchema = z.strictObject({
     list_page_size: listPageSize.optional(),
     concurrency: uploadConcurrency.optional()
   }).optional(),
-  link_image: z.strictObject({
+  import: z.strictObject({
     fill_original_url: z.boolean().optional(),
     auto_import: z.boolean().optional(),
-    concurrency: linkImageConcurrency.optional()
+    concurrency: importConcurrency.optional()
   }).optional(),
   normalize: z.strictObject({
     quality: normalizeQuality.optional(),
@@ -134,11 +134,11 @@ export function getSettingsForAdmin(): AdminSettings {
   const {
     fill_original_url,
     auto_import,
-    concurrency: linkConcurrency,
-    max_items: linkMaxItems
-  } = settings.link_image;
+    concurrency: importConcurrencyValue,
+    max_items: importMaxItemsValue
+  } = settings.import;
   const { max_items: weiboMaxItems } = settings.weibo;
-  const { commit_concurrency } = settings.import;
+  const { commit_concurrency } = settings.ingestion;
   const { login_background, image_page_size, recent_uploads, show_unset_theme_card } = settings.admin;
   return {
     site: {
@@ -159,16 +159,16 @@ export function getSettingsForAdmin(): AdminSettings {
       list_page_size,
       concurrency: uploadConcurrencyValue
     },
-    link_image: {
+    import: {
       fill_original_url,
       auto_import,
-      concurrency: linkConcurrency,
-      max_items: linkMaxItems
+      concurrency: importConcurrencyValue,
+      max_items: importMaxItemsValue
     },
     weibo: { max_items: weiboMaxItems },
     normalize: settings.normalize,
     thumbnail: settings.thumbnail,
-    import: { commit_concurrency },
+    ingestion: { commit_concurrency },
     image_detail: settings.image_detail,
     admin: { login_background, image_page_size, recent_uploads, show_unset_theme_card }
   };
@@ -213,7 +213,7 @@ export async function saveAppSettings(input: AppSettingsInput) {
   const runtimePatch: RuntimeConfigPatch = {};
   if (input.site) runtimePatch.site = input.site;
   if (input.upload) runtimePatch.upload = input.upload;
-  if (input.link_image) runtimePatch.link_image = input.link_image;
+  if (input.import) runtimePatch.import = input.import;
   if (input.normalize) runtimePatch.normalize = input.normalize;
   if (input.thumbnail) runtimePatch.thumbnail = input.thumbnail;
   if (input.image_detail) runtimePatch.image_detail = input.image_detail;

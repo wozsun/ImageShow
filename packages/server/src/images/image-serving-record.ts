@@ -1,7 +1,7 @@
-import { pool, type DatabaseReader } from "../core/database-pools.ts";
+import { pool, type DatabaseReader } from "../core/database/pools.ts";
 import type {
   PublicDatabaseReadAccess
-} from "../core/public-db-fallback.ts";
+} from "../core/database/public-fallback.ts";
 import {
   readReadyImageById,
   readReadyImageByObjectKey,

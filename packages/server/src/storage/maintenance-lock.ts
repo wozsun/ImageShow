@@ -8,7 +8,7 @@ import {
   withAdvisoryLocksOnClient,
   type AdvisoryLockAttempt,
   type AdvisoryLockRequest
-} from "../core/database-advisory-locks.ts";
+} from "../core/database/advisory-locks.ts";
 
 const storageLocationLockKey = "imageshow:storage-location";
 type StorageLocationLockContext = {

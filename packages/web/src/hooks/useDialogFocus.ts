@@ -45,7 +45,7 @@ export function useDialogFocus({
     if (returnFocus && returnFocus.isConnected) returnFocus.focus({ preventScroll: true });
   };
 
-  // active 表示弹窗是否存在；paused 只暂停父级 trap，不归还焦点。Uploader 这类常驻组件
+  // active 表示弹窗是否存在；paused 只暂停父级 trap，不归还焦点。Ingestion 这类常驻组件
   // 关闭条件渲染的弹窗时会把 active 置为 false，因此无需卸载整个组件也能正确归还焦点。
   useLayoutEffect(() => {
     if (active && !wasActiveRef.current) {

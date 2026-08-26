@@ -1,0 +1,73 @@
+:root {
+  --admin-color-ingestion-menu-border: light-dark(#d5dce5, #3d444d);
+  --admin-color-ingestion-menu-focus-surface: light-dark(#f1f4f8, #1c2128);
+}
+
+.ingestion-triggers { display: flex; gap: 10px; }
+.ingestion-trigger { min-width: 120px; }
+.import-source-split { position: relative; display: inline-flex; }
+.import-source-split .import-source-main { min-width: 100px; border-radius: 6px 0 0 6px; }
+.import-source-menu-trigger { width: 34px; min-width: 34px; padding: 0; border-left: 0; border-radius: 0 6px 6px 0; }
+.import-source-menu {
+  --import-source-menu-gap: 6px;
+
+  position: fixed;
+  z-index: 12;
+  padding-top: var(--import-source-menu-gap);
+  transform-origin: top center;
+  animation: import-source-menu-in 80ms cubic-bezier(.2, .8, .2, 1);
+}
+.import-source-menu-surface {
+  padding: 5px;
+  border: 1px solid var(--admin-color-ingestion-menu-border);
+  border-radius: 6px;
+  background: var(--admin-color-surface-primary);
+  box-shadow: 0 8px 24px var(--admin-shadow-menu);
+}
+.import-source-menu.opens-up {
+  padding-top: 0;
+  padding-bottom: var(--import-source-menu-gap);
+  transform-origin: bottom center;
+  animation-name: import-source-menu-in-up;
+}
+.import-source-menu.is-closing {
+  pointer-events: none;
+  animation: import-source-menu-out 60ms ease-in forwards;
+}
+.import-source-menu.opens-up.is-closing { animation-name: import-source-menu-out-up; }
+.import-source-menu button {
+  width: 100%;
+  min-height: 34px;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.import-source-menu button:hover,
+.import-source-menu button:focus-visible { background: var(--admin-color-ingestion-menu-focus-surface); }
+
+@keyframes import-source-menu-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes import-source-menu-in-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes import-source-menu-out {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(-6px); }
+}
+
+@keyframes import-source-menu-out-up {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(6px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .import-source-menu { animation: none; }
+}

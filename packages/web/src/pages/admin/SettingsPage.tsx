@@ -98,10 +98,10 @@ export function SettingsPage() {
               list_page_size: settings.upload.list_page_size,
               concurrency: settings.upload.concurrency
             },
-            link_image: {
-              fill_original_url: settings.link_image.fill_original_url,
-              auto_import: settings.link_image.auto_import,
-              concurrency: settings.link_image.concurrency
+            import: {
+              fill_original_url: settings.import.fill_original_url,
+              auto_import: settings.import.auto_import,
+              concurrency: settings.import.concurrency
             },
             normalize: settings.normalize,
             thumbnail: settings.thumbnail,
@@ -136,7 +136,7 @@ export function SettingsPage() {
   const updateSiteHome = (patch: Partial<AdminSettings["site"]["home"]>) => updateSite({ home: { ...settings.site.home, ...patch } });
   const updateSiteGallery = (patch: Partial<AdminSettings["site"]["gallery"]>) => updateSite({ gallery: { ...settings.site.gallery, ...patch } });
   const updateUpload = (patch: Partial<AdminSettings["upload"]>) => setSettings({ ...settings, upload: { ...settings.upload, ...patch } });
-  const updateLinkImage = (patch: Partial<AdminSettings["link_image"]>) => setSettings({ ...settings, link_image: { ...settings.link_image, ...patch } });
+  const updateImport = (patch: Partial<AdminSettings["import"]>) => setSettings({ ...settings, import: { ...settings.import, ...patch } });
   const updateNormalize = (patch: Partial<AdminSettings["normalize"]>) => setSettings({ ...settings, normalize: { ...settings.normalize, ...patch } });
   const updateThumbnail = (patch: Partial<AdminSettings["thumbnail"]>) => setSettings({ ...settings, thumbnail: { ...settings.thumbnail, ...patch } });
   const updateAdmin = (patch: Partial<AdminSettings["admin"]>) => setSettings({ ...settings, admin: { ...settings.admin, ...patch } });
@@ -304,12 +304,12 @@ export function SettingsPage() {
                 />
               </label>
               <label>
-                单客户端链接导入并发数
+                单客户端导入并发数
                 <NumberInput
                   min={1}
                   max={128}
-                  value={settings.link_image.concurrency}
-                  onChange={(value) => updateLinkImage({ concurrency: value })}
+                  value={settings.import.concurrency}
+                  onChange={(value) => updateImport({ concurrency: value })}
                 />
               </label>
               <label>
@@ -397,16 +397,16 @@ export function SettingsPage() {
               <label>
                 <input
                   type="checkbox"
-                  checked={settings.link_image.fill_original_url}
-                  onChange={(event) => updateLinkImage({ fill_original_url: event.target.checked })}
+                  checked={settings.import.fill_original_url}
+                  onChange={(event) => updateImport({ fill_original_url: event.target.checked })}
                 />
-                链接导入自动填入原图 URL
+                URL 导入自动填入原图 URL
               </label>
               <label>
                 <input
                   type="checkbox"
-                  checked={settings.link_image.auto_import}
-                  onChange={(event) => updateLinkImage({
+                  checked={settings.import.auto_import}
+                  onChange={(event) => updateImport({
                     auto_import: event.target.checked
                   })}
                 />

@@ -9,8 +9,8 @@ import { coalesce } from "../../core/coalesce.ts";
 import {
   withPublicDatabaseRead,
   type PublicDatabaseReadAccess
-} from "../../core/public-db-fallback.ts";
-import { pool, type DatabaseReader } from "../../core/database-pools.ts";
+} from "../../core/database/public-fallback.ts";
+import { pool, type DatabaseReader } from "../../core/database/pools.ts";
 import { listQuery } from "../../core/validation.ts";
 import { resolveImageFilterPlan } from "../filter-plan.ts";
 import {

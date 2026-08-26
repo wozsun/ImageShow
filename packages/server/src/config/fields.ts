@@ -101,17 +101,17 @@ export const embedAllowedOrigins = z.array(embedAllowedOrigin)
   );
 
 export const maxFileSizeMb = z.coerce.number().positive()
-  .max(appConfig.imports.maxInputFileSizeMiB);
+  .max(appConfig.ingestion.maxInputFileSizeMiB);
 export const maxLongEdge = z.coerce.number().int().min(512).max(32_768);
 export const listPageSize = z.coerce.number().int().min(1).max(100);
-export const uploadImportMaxItems = z.coerce.number().int().min(1)
-  .max(appConfig.imports.uploadSoftLimitMax);
+export const uploadMaxItems = z.coerce.number().int().min(1)
+  .max(appConfig.ingestion.uploadSoftLimitMax);
 export const imagePageSize = z.coerce.number().int().min(10).max(appConfig.pagination.maxLimit);
 export const galleryLimit = z.coerce.number().int().positive().max(appConfig.pagination.maxLimit);
 export const recentUploads = z.coerce.number().int().min(1).max(50);
 
 export const uploadConcurrency = z.coerce.number().int().min(1).max(128);
-export const importGlobalConcurrency = z.coerce.number().int().min(1).max(512);
+export const ingestionStageConcurrency = z.coerce.number().int().min(1).max(512);
 export const commitConcurrency = z.coerce.number().int().min(1).max(128);
 export const globalCommitConcurrency = z.coerce.number().int().min(1).max(512);
 export const globalCommitByteBudgetMb = z.coerce.number().int().min(16).max(4096);
@@ -122,12 +122,12 @@ export const normalizeMinQuality = z.coerce.number().int().min(1).max(100);
 export const normalizeMaxLongEdge = z.coerce.number().int().min(512).max(32_768);
 export const normalizeMaxSizeKb = z.coerce.number().int().min(50).max(100 * 1024);
 export const skipWebpUnderKb = z.coerce.number().int().min(0).max(100 * 1024);
-export const linkImageConcurrency = z.coerce.number().int().min(1).max(128);
-export const linkFetchTimeoutSeconds = z.coerce.number().int().min(5).max(300);
-export const linkImportMaxItems = z.coerce.number().int().min(1)
-  .max(appConfig.imports.linkSoftLimitMax);
+export const importConcurrency = z.coerce.number().int().min(1).max(128);
+export const importFetchTimeoutSeconds = z.coerce.number().int().min(5).max(300);
+export const importMaxItems = z.coerce.number().int().min(1)
+  .max(appConfig.ingestion.importSoftLimitMax);
 export const weiboImportMaxItems = z.coerce.number().int().min(1)
-  .max(appConfig.imports.weiboSoftLimitMax);
+  .max(appConfig.ingestion.weiboSoftLimitMax);
 export const weiboMetadataConcurrency = z.coerce.number().int().min(1).max(16);
 export const weiboGlobalConcurrency = z.coerce.number().int().min(1).max(32);
 

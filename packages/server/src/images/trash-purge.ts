@@ -4,14 +4,14 @@ import type {
   ImagePurgeResponseDto
 } from "@imageshow/shared/browser";
 import { errorMessage } from "../core/api-error.ts";
-import { pool } from "../core/database-pools.ts";
+import { pool } from "../core/database/pools.ts";
 import { enqueue } from "../jobs/repository.ts";
 import { logger } from "../core/logger.ts";
-import { thumbnailRef } from "../storage/image-paths.ts";
+import { thumbnailRef } from "../storage/objects/image-paths.ts";
 import { withImageStorageMutationLock } from "../storage/maintenance-lock.ts";
 import {
   removeStorageObjectAndConfirm
-} from "../storage/object-access.ts";
+} from "../storage/objects/access.ts";
 import { invalidateEntityCountCaches } from "../vocab/vocab-cache.ts";
 import { withTrashMembershipLock } from "./trash-membership-lock.ts";
 

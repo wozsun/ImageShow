@@ -1,7 +1,7 @@
 import {
   pool,
   type DatabaseReader
-} from "../../core/database-pools.ts";
+} from "../../core/database/pools.ts";
 import { decodeImageCursor, encodeImageCursor } from "../cursor.ts";
 import {
   adminImageListPresentationColumns,

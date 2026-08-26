@@ -10,7 +10,7 @@ import {
   pingRedis,
   readRequiredRedisCommandCapabilities,
   redis
-} from "../core/redis-client.ts";
+} from "../core/redis/client.ts";
 import {
   getReadyImageCacheCoordinatorStatus
 } from "../images/ready-cache/coordinator.ts";

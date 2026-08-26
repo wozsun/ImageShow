@@ -49,7 +49,7 @@ export type UploadSettings = {
   global_concurrency: number;
 };
 
-export type LinkImageSettings = {
+export type ImportSettings = {
   fill_original_url: boolean;
   auto_import: boolean;
   concurrency: number;
@@ -79,7 +79,7 @@ export type ThumbnailSettings = {
   quality: number;
 };
 
-export type ImportSettings = {
+export type IngestionSettings = {
   commit_concurrency: number;
   global_commit_concurrency: number;
   global_commit_byte_budget_mb: number;
@@ -100,11 +100,11 @@ export type RuntimeConfig = {
   site: RuntimeSiteSettings;
   embed: EmbedSettings;
   upload: UploadSettings;
-  link_image: LinkImageSettings;
+  import: ImportSettings;
   weibo: WeiboSettings;
   normalize: NormalizeSettings;
   thumbnail: ThumbnailSettings;
-  import: ImportSettings;
+  ingestion: IngestionSettings;
   image_detail: ImageDetailSettings;
   admin: AdminPanelSettings;
   background_job: {
@@ -171,22 +171,22 @@ export type AdminUploadSettings = Pick<
   | "concurrency"
 >;
 
-export type AdminLinkImageSettings = Pick<
-  LinkImageSettings,
+export type AdminImportSettings = Pick<
+  ImportSettings,
   "fill_original_url" | "auto_import" | "concurrency" | "max_items"
 >;
 
 export type AdminWeiboSettings = Pick<WeiboSettings, "max_items">;
-export type AdminImportSettings = Pick<ImportSettings, "commit_concurrency">;
+export type AdminIngestionSettings = Pick<IngestionSettings, "commit_concurrency">;
 
 export type AdminSettings = {
   site: AdminSiteSettings;
   upload: AdminUploadSettings;
-  link_image: AdminLinkImageSettings;
+  import: AdminImportSettings;
   weibo: AdminWeiboSettings;
   normalize: NormalizeSettings;
   thumbnail: ThumbnailSettings;
-  import: AdminImportSettings;
+  ingestion: AdminIngestionSettings;
   image_detail: ImageDetailSettings;
   admin: AdminPanelSettings;
 };

@@ -15,14 +15,14 @@ import { AsyncIntentFence } from "../../../lib/async-intent-fence.js";
 import type {
   ImageEditorItem
 } from "../../../lib/types.js";
-import type { ImportVocabularyDto } from "@imageshow/shared/browser";
+import type { IngestionVocabularyDto } from "@imageshow/shared/browser";
 
 type PreparedImageEditor = {
   key: string;
   itemIds: string[];
   module: ImageEditorCapabilityModule;
   items: ImageEditorItem[];
-  vocabulary: ImportVocabularyDto;
+  vocabulary: IngestionVocabularyDto;
 };
 
 type PendingImageEditor = Pick<

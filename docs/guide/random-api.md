@@ -71,7 +71,7 @@ PostgreSQL 或执行上限饱和时返回带 `Retry-After` 的 429/503。进程�
 全量重建使用 PostgreSQL repeatable-read 快照分批读取，完成完整性校验且确认 revision
 未变化后才重新开放 Redis 读门；重建本身不影响 `/readyz` 或后台会话。
 
-图片导入、属性 / 标签 / 分类修改、删除、恢复、主题或作者级联和存储迁移都在同一
+图片接入、属性 / 标签 / 分类修改、删除、恢复、主题或作者级联和存储迁移都在同一
 PostgreSQL 事务推进 `ready_image_revision`。提交后仍持有进程内写栅栏，以旧 Redis
 投影和 PostgreSQL 新投影计算精确差异，只更新核心 item、反查、`index:all`、全局统计与
 核心完整性字段，最后发布 revision。Redis 同步失败不会回滚已经成功的数据库事务，而是
@@ -97,7 +97,7 @@ PostgreSQL 事务推进 `ready_image_revision`。提交后仍持有进程内写�
 
 `m=proxy` 从图片所属 local 或 S3 后端读取已入库图片字节，并附带
 `X-Image-Info`；它不声明 `Accept-Ranges`。`m=redirect` 返回 302 跳转到公开 URL。
-这里的 `proxy` 只是返回传输方式，与图片导入模式无关。
+这里的 `proxy` 只是返回传输方式，与图片接入模式无关。
 
 `m=json` 返回 `application/json`，顶层 `count` 是实际数量，`items` 是图片数组：
 

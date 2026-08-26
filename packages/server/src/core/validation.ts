@@ -5,12 +5,12 @@ import {
   adminPreferenceValueOptions,
   adminPreferencesMaxBytes,
   type ImageUpdateItemInputDto,
-  importBatchHardLimit,
-  importDuplicateDecisions,
-  importQueueActionTypes,
-  importQueueTypes,
-  importSourceTypes,
-  importStatusBatchMaxItems,
+  ingestionBatchHardLimit,
+  ingestionDuplicateDecisions,
+  ingestionQueueActionTypes,
+  ingestionQueueTypes,
+  ingestionSourceTypes,
+  ingestionStatusBatchMaxItems,
   slugMaxLength,
   slugPattern,
   vocabularyDisplayNameMaxLength
@@ -116,7 +116,7 @@ export const uuidV7Input = uuidInput.refine((value) => (
   value[14] === "7" && ["8", "9", "a", "b"].includes(value[19] ?? "")
 ), "必须使用 RFC 9562 UUIDv7");
 
-export const importSessionIdInput = z.string()
+export const ingestionSessionIdInput = z.string()
   .regex(/^[A-Za-z0-9_-]{43}$/u, "导入 session_id 无效");
 
 export const normalizedImageTagsInput = z.array(tagSlugInput)
@@ -238,25 +238,25 @@ export const imageStorageMigrationInput = z.strictObject({
   target: storageSlugInput
 });
 
-const importMetadataInput = metadataCreateInput.extend({
+const ingestionMetadataInput = metadataCreateInput.extend({
   tags: normalizedImageTagsInput.optional().default([])
 });
 
-const importTimeFields = {
+const ingestionTimeFields = {
   image_time: z.string().trim().min(1).max(64).optional(),
   batch_time: z.string().trim().min(1).max(64).optional(),
   manifest_position: z.number().int().min(0).max(0xfff)
 };
 
 export const uploadIntentInput = z.strictObject({
-  items: z.array(importMetadataInput.extend({
+  items: z.array(ingestionMetadataInput.extend({
     idempotency_key: uuidV7Input,
     batch_key: uuidV7Input,
-    ...importTimeFields,
+    ...ingestionTimeFields,
     storage_slug: storageSlugInput.optional(),
     expected_size: z.number().int().positive(),
     max_long_edge: z.number().int().positive()
-  })).min(1).max(importBatchHardLimit)
+  })).min(1).max(ingestionBatchHardLimit)
 }).superRefine((value, ctx) => {
   addUniqueIdIssues(
     value.items.map((item) => item.idempotency_key),
@@ -272,24 +272,24 @@ export const uploadIntentInput = z.strictObject({
   );
 });
 
-export const remoteImportAcceptInput = z.strictObject({
-  items: z.array(importMetadataInput.extend({
+export const importAcceptInput = z.strictObject({
+  items: z.array(ingestionMetadataInput.extend({
     idempotency_key: uuidV7Input,
     batch_key: uuidV7Input,
-    source_type: z.enum(importSourceTypes).exclude(["upload"]),
+    source_type: z.enum(ingestionSourceTypes).exclude(["upload"]),
     url: optionalHttpsDomainUrlField(externalImageRejectedMessage)
       .refine(Boolean, externalImageRejectedMessage)
       .transform((value) => value!),
-    ...importTimeFields,
+    ...ingestionTimeFields,
     manifest_line: z.number().int().min(1).max(1_000_000).optional(),
     storage_slug: storageSlugInput.optional()
-  })).min(1).max(importBatchHardLimit)
+  })).min(1).max(ingestionBatchHardLimit)
 }).superRefine((value, ctx) => {
   addUniqueIdIssues(
     value.items.map((item) => item.idempotency_key),
     ctx,
     (index) => ["items", index, "idempotency_key"],
-    "远程导入不能包含重复幂等键"
+    "导入不能包含重复幂等键"
   );
   addUniqueIdIssues(
     value.items.map((item) => `${item.batch_key}\0${item.manifest_position}`),
@@ -299,12 +299,12 @@ export const remoteImportAcceptInput = z.strictObject({
   );
 });
 
-const importPairInput = z.strictObject({
-  session_id: importSessionIdInput,
+const ingestionPairInput = z.strictObject({
+  session_id: ingestionSessionIdInput,
   image_id: uuidV7Input
 });
 
-function addUniqueImportPairIssues(
+function addUniqueIngestionPairIssues(
   items: readonly { session_id: string; image_id: string }[],
   ctx: z.RefinementCtx,
   field = "items"
@@ -313,29 +313,29 @@ function addUniqueImportPairIssues(
     items.map(({ session_id, image_id }) => `${session_id}\0${image_id}`),
     ctx,
     (index) => [field, index, "session_id"],
-    "请求不能包含重复导入任务"
+    "请求不能包含重复内容接入任务"
   );
 }
 
-export const importStatusInput = z.strictObject({
-  items: z.array(importPairInput).min(1).max(importStatusBatchMaxItems)
-}).superRefine((value, ctx) => addUniqueImportPairIssues(value.items, ctx));
+export const ingestionStatusInput = z.strictObject({
+  items: z.array(ingestionPairInput).min(1).max(ingestionStatusBatchMaxItems)
+}).superRefine((value, ctx) => addUniqueIngestionPairIssues(value.items, ctx));
 
-export const importSnapshotQuery = z.strictObject({
-  queue: z.enum(importQueueTypes),
+export const ingestionSnapshotQuery = z.strictObject({
+  queue: z.enum(ingestionQueueTypes),
   offset: z.coerce.number().int().min(0).default(0),
   limit: z.coerce.number().int().min(0)
-    .max(appConfig.importRuntime.snapshotMaxItems)
+    .max(appConfig.ingestionRuntime.snapshotMaxItems)
     .default(appConfig.runtimeDefaults.upload.list_page_size)
 });
 
-export const importSnapshotSelectionInput = z.strictObject({
-  exclude_items: z.array(importPairInput).max(importBatchHardLimit),
-  include_items: z.array(importPairInput)
-    .max(appConfig.importRuntime.snapshotMaxItems)
+export const ingestionSnapshotSelectionInput = z.strictObject({
+  exclude_items: z.array(ingestionPairInput).max(ingestionBatchHardLimit),
+  include_items: z.array(ingestionPairInput)
+    .max(appConfig.ingestionRuntime.snapshotMaxItems)
 }).superRefine((value, ctx) => {
-  addUniqueImportPairIssues(value.exclude_items, ctx, "exclude_items");
-  addUniqueImportPairIssues(value.include_items, ctx, "include_items");
+  addUniqueIngestionPairIssues(value.exclude_items, ctx, "exclude_items");
+  addUniqueIngestionPairIssues(value.include_items, ctx, "include_items");
   addUniqueIdIssues(
     value.exclude_items.map((item) => item.session_id),
     ctx,
@@ -362,27 +362,27 @@ export const importSnapshotSelectionInput = z.strictObject({
   });
 });
 
-export const importEventsQuery = z.strictObject({
-  queue: z.enum(importQueueTypes)
+export const ingestionEventsQuery = z.strictObject({
+  queue: z.enum(ingestionQueueTypes)
 });
 
-const expectedImportVersionInput = z.number().int().positive();
+const expectedIngestionVersionInput = z.number().int().positive();
 
-export const importSessionUpdateInput = z.strictObject({
-  items: z.array(importPairInput.extend({
-    expected_version: expectedImportVersionInput,
-    metadata: importMetadataInput.optional(),
-    duplicate_decision: z.enum(importDuplicateDecisions).optional()
+export const ingestionSessionUpdateInput = z.strictObject({
+  items: z.array(ingestionPairInput.extend({
+    expected_version: expectedIngestionVersionInput,
+    metadata: ingestionMetadataInput.optional(),
+    duplicate_decision: z.enum(ingestionDuplicateDecisions).optional()
   }).refine(
     (item) => item.metadata !== undefined || item.duplicate_decision !== undefined,
-    "导入更新项必须包含 metadata 或重复项决定"
-  )).min(1).max(importBatchHardLimit)
-}).superRefine((value, ctx) => addUniqueImportPairIssues(value.items, ctx));
+    "内容接入更新项必须包含 metadata 或重复项决定"
+  )).min(1).max(ingestionBatchHardLimit)
+}).superRefine((value, ctx) => addUniqueIngestionPairIssues(value.items, ctx));
 
-export const importDuplicateDetailsInput = z.strictObject({
+export const ingestionDuplicateDetailsInput = z.strictObject({
   md5s: z.array(z.string().regex(/^[a-f0-9]{32}$/u))
     .min(1)
-    .max(importStatusBatchMaxItems)
+    .max(ingestionStatusBatchMaxItems)
 }).superRefine((value, ctx) => {
   addUniqueIdIssues(
     value.md5s,
@@ -392,16 +392,16 @@ export const importDuplicateDetailsInput = z.strictObject({
   );
 });
 
-export const importCommitIntentInput = z.strictObject({
-  items: z.array(importPairInput.extend({
-    expected_version: expectedImportVersionInput,
+export const ingestionCommitIntentInput = z.strictObject({
+  items: z.array(ingestionPairInput.extend({
+    expected_version: expectedIngestionVersionInput,
     expected_md5: z.string().regex(/^[a-f0-9]{32}$/u),
     commit_request_id: uuidV7Input,
-    duplicate_decision: z.enum(importDuplicateDecisions),
-    metadata: importMetadataInput
-  })).min(1).max(importBatchHardLimit)
+    duplicate_decision: z.enum(ingestionDuplicateDecisions),
+    metadata: ingestionMetadataInput
+  })).min(1).max(ingestionBatchHardLimit)
 }).superRefine((value, ctx) => {
-  addUniqueImportPairIssues(value.items, ctx);
+  addUniqueIngestionPairIssues(value.items, ctx);
   addUniqueIdIssues(
     value.items.map((item) => item.commit_request_id),
     ctx,
@@ -410,13 +410,13 @@ export const importCommitIntentInput = z.strictObject({
   );
 });
 
-export const importCancelInput = z.strictObject({
-  items: z.array(importPairInput.extend({
-    expected_version: expectedImportVersionInput
-  })).min(1).max(importBatchHardLimit)
-}).superRefine((value, ctx) => addUniqueImportPairIssues(value.items, ctx));
+export const ingestionCancelInput = z.strictObject({
+  items: z.array(ingestionPairInput.extend({
+    expected_version: expectedIngestionVersionInput
+  })).min(1).max(ingestionBatchHardLimit)
+}).superRefine((value, ctx) => addUniqueIngestionPairIssues(value.items, ctx));
 
-const importActionMetadataInput = z.strictObject({
+const ingestionActionMetadataInput = z.strictObject({
   ...metadataUpdateFields,
   tags: normalizedImageTagsInput.optional()
 }).refine(
@@ -424,15 +424,15 @@ const importActionMetadataInput = z.strictObject({
   "应用到全部必须包含至少一个属性"
 );
 
-export const importQueueActionInput = z.strictObject({
-  queue: z.enum(importQueueTypes),
+export const ingestionQueueActionInput = z.strictObject({
+  queue: z.enum(ingestionQueueTypes),
   action_request_id: uuidV7Input,
-  action: z.enum(importQueueActionTypes),
-  action_watermark: z.string().min(1).max(appConfig.importRuntime.tokenMaxBytes),
+  action: z.enum(ingestionQueueActionTypes),
+  action_watermark: z.string().min(1).max(appConfig.ingestionRuntime.tokenMaxBytes),
   continuation: z.string().min(1)
-    .max(appConfig.importRuntime.tokenMaxBytes)
+    .max(appConfig.ingestionRuntime.tokenMaxBytes)
     .optional(),
-  metadata: importActionMetadataInput.optional(),
+  metadata: ingestionActionMetadataInput.optional(),
   max_semantic_revision: z.number().int().nonnegative()
     .max(Number.MAX_SAFE_INTEGER)
     .optional()
@@ -464,9 +464,9 @@ export const importQueueActionInput = z.strictObject({
 });
 
 export const jsonlManifestInput = z.strictObject({
-  content: z.string().min(1).max(appConfig.imports.jsonlManifestMaxBytes)
+  content: z.string().min(1).max(appConfig.ingestion.jsonlManifestMaxBytes)
     .refine(
-      (value) => Buffer.byteLength(value, "utf8") <= appConfig.imports.jsonlManifestMaxBytes,
+      (value) => Buffer.byteLength(value, "utf8") <= appConfig.ingestion.jsonlManifestMaxBytes,
       "JSONL 清单内容过大"
     )
 });
@@ -474,7 +474,7 @@ export const jsonlManifestInput = z.strictObject({
 export const weiboImportInput = z.strictObject({
   urls: z.array(z.string().trim().min(1).max(2048))
     .min(1)
-    .max(importBatchHardLimit)
+    .max(ingestionBatchHardLimit)
     .transform((urls) => [...new Set(urls)])
 });
 

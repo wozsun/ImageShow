@@ -1,6 +1,6 @@
 import type { Redis } from "ioredis";
 import { abortSignalError, raceWithAbortSignal } from "../core/abort.ts";
-import { execRedisPipeline } from "../core/redis-pipeline.ts";
+import { execRedisPipeline } from "../core/redis/pipeline.ts";
 import {
   READY_IMAGE_ALL_INDEX_KEY,
   READY_IMAGE_CACHE_PREFIX,

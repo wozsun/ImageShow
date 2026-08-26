@@ -1,14 +1,14 @@
 import { ApiError, errorMessage } from "../core/api-error.ts";
-import { pool } from "../core/database-pools.ts";
+import { pool } from "../core/database/pools.ts";
 import { createThumbnail, md5Buffer, sha256Buffer } from "../images/processing.ts";
-import { resolveStorageAccess } from "../storage/backend-registry.ts";
-import { thumbnailObjectKey } from "../storage/image-paths.ts";
-import { assertObjectNotPendingCleanup } from "../storage/move-cleanup.ts";
-import { removeStorageObjectAndConfirm } from "../storage/object-access.ts";
+import { resolveStorageAccess } from "../storage/backends/registry.ts";
+import { thumbnailObjectKey } from "../storage/objects/image-paths.ts";
+import { assertObjectNotPendingCleanup } from "../storage/cleanup/service.ts";
+import { removeStorageObjectAndConfirm } from "../storage/objects/access.ts";
 import {
   digestStorageObject,
   type StorageEndpoint
-} from "../storage/object-transfer.ts";
+} from "../storage/objects/transfer.ts";
 import type {
   MaintenanceImage,
   MaintenanceItem

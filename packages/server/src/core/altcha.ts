@@ -14,9 +14,9 @@ import {
   noStoreCacheControl,
   safeResponseHeaderValue
 } from "./http/headers.ts";
-import { redis } from "./redis-client.ts";
+import { redis } from "./redis/client.ts";
 import { runRequiredRedisCommand } from "./runtime-availability.ts";
-import { reserveRedisWindows } from "./redis-window-limit.ts";
+import { reserveRedisWindows } from "./redis/window-limit.ts";
 
 const altchaAlgorithm = "PBKDF2/SHA-256";
 const maximumPayloadLength = 16 * 1024;

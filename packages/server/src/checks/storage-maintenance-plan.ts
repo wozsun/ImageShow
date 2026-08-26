@@ -1,17 +1,17 @@
-import { pool } from "../core/database-pools.ts";
-import { importOrphanCutoffs } from "../images/imports/orphan-retention.ts";
+import { pool } from "../core/database/pools.ts";
+import { ingestionOrphanCutoffs } from "../images/ingestion/cleanup/retention.ts";
 import {
-  parseImportStagingCleanupKey
-} from "../images/imports/staging-keys.ts";
-import { thumbnailObjectKey } from "../storage/image-paths.ts";
-import { STORAGE_ADMIN_LIST_MAX_KEYS } from "../storage/key-listing.ts";
-import type { StoragePrefix } from "../storage/object-keys.ts";
+  parseIngestionStagingCleanupKey
+} from "../images/ingestion/staging-keys.ts";
+import { thumbnailObjectKey } from "../storage/objects/image-paths.ts";
+import { STORAGE_ADMIN_LIST_MAX_KEYS } from "../storage/objects/key-listing.ts";
+import type { StoragePrefix } from "../storage/objects/keys.ts";
 import {
-  activeImportStorageReferences,
+  activeIngestionStorageReferences,
   classifyStagingKeys,
   collectStorageBackendGroupSnapshot,
-  importFinalStorageReferences,
-  mergeActiveImportSessions,
+  ingestionFinalStorageReferences,
+  mergeActiveIngestionSessions,
   storageBackendGroups,
   type StorageBackendGroup,
   type StorageRow
@@ -169,7 +169,7 @@ function buildMaintenanceCandidates(
   sessionsByBackend: ReadonlyMap<
     string,
     ReadonlyMap<string, Awaited<ReturnType<
-      typeof activeImportStorageReferences
+      typeof activeIngestionStorageReferences
     >>["rows"][number]>
   >,
   groups: readonly CapturedMaintenanceGroup[],
@@ -198,11 +198,11 @@ function buildMaintenanceCandidates(
     const referencedThumbs = new Set(
       retainedRows.map((row) => thumbnailObjectKey(row.object_key))
     );
-    const activeSessions = mergeActiveImportSessions(
+    const activeSessions = mergeActiveIngestionSessions(
       ...group.slugs.map((slug) => sessionsByBackend.get(slug) ?? new Map())
     );
     for (const session of activeSessions.values()) {
-      for (const reference of importFinalStorageReferences(session)) {
+      for (const reference of ingestionFinalStorageReferences(session)) {
         if (reference.prefix === "media") referencedMedia.add(reference.key);
         if (reference.prefix === "thumbs") referencedThumbs.add(reference.key);
       }
@@ -234,7 +234,7 @@ function buildMaintenanceCandidates(
       candidate.slug === backend
     ));
     for (const key of staging.orphan) {
-      const identity = parseImportStagingCleanupKey(key);
+      const identity = parseIngestionStagingCleanupKey(key);
       const acceptedIdentity = identity
         && (!identity.local_atomic_candidate
           || selectedBackend?.type === "local")
@@ -283,7 +283,7 @@ export async function buildStorageMaintenancePlan(
   signal.throwIfAborted();
   const [rowsResult, importReferences, groups] = await Promise.all([
     pool.query<MaintenanceImage>(maintenanceRowsQuery),
-    activeImportStorageReferences({ signal }),
+    activeIngestionStorageReferences({ signal }),
     storageBackendGroups()
   ]);
   signal.throwIfAborted();
@@ -294,7 +294,7 @@ export async function buildStorageMaintenancePlan(
     importReferences.sessionsByBackend,
     capture.captured,
     capture.candidates,
-    importOrphanCutoffs(now).stagingCutoff
+    ingestionOrphanCutoffs(now).stagingCutoff
   );
   return {
     activeUploadsRetained: built.activeUploadsRetained,

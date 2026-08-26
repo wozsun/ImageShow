@@ -3,7 +3,7 @@ import { ApiError } from "../core/api-error.ts";
 import {
   withPublicDatabaseRead,
   type PublicDatabaseReadAccess
-} from "../core/public-db-fallback.ts";
+} from "../core/database/public-fallback.ts";
 import { coalesce } from "../core/coalesce.ts";
 import { safeFetchExternalImage } from "../core/external-image-fetch.ts";
 import {

@@ -2,7 +2,7 @@ import { ApiError } from "../core/api-error.ts";
 import {
   withPublicDatabaseRead,
   type PublicDatabaseReadAccess
-} from "../core/public-db-fallback.ts";
+} from "../core/database/public-fallback.ts";
 import {
   immutableCacheControl,
   publicRedirectCacheControl,
@@ -12,10 +12,10 @@ import {
   isCanonicalImageObjectKey,
   isCanonicalThumbnailObjectKey,
   thumbnailObjectKey
-} from "../storage/image-paths.ts";
-import { resolveReadableObject } from "../storage/object-access.ts";
-import { contentType } from "../storage/object-keys.ts";
-import { isStorageObjectNotFound } from "../storage/not-found.ts";
+} from "../storage/objects/image-paths.ts";
+import { resolveReadableObject } from "../storage/objects/access.ts";
+import { contentType } from "../storage/objects/keys.ts";
+import { isStorageObjectNotFound } from "../storage/objects/not-found.ts";
 import {
   readImageServingRecordByObjectKey,
   readImageServingRecordByThumbKey,

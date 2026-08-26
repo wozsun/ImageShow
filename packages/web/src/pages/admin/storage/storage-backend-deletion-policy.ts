@@ -10,7 +10,7 @@ const storageBackendDeleteBlockers = new Set<StorageBackendDeleteBlocker>([
   "built_in",
   "default",
   "images",
-  "import_sessions",
+  "ingestion_sessions",
   "cleanup_jobs",
   "staging_objects"
 ]);
@@ -42,8 +42,8 @@ export function storageBackendDeletionReasons(
         return "它是当前默认上传后端；请先启用其他后端并将其设为默认。";
       case "images":
         return `仍有 ${backend.image_count} 张图片使用该后端；请先迁移这些图片。`;
-      case "import_sessions":
-        return `仍有 ${backend.import_session_count} 个未清理导入会话；请等待会话清理完成。`;
+      case "ingestion_sessions":
+        return `仍有 ${backend.ingestion_session_count} 个未清理内容接入会话；请等待会话清理完成。`;
       case "cleanup_jobs":
         return `仍有 ${backend.cleanup_job_count} 个旧对象删除任务；请等待任务完成，耗尽重试的任务可在卡片上重新排队。`;
       case "staging_objects":
@@ -92,10 +92,10 @@ export function storageBackendAfterDeleteRejection(
   return {
     ...backend,
     image_count: countFromDetails(details, "image_count", backend.image_count),
-    import_session_count: countFromDetails(
+    ingestion_session_count: countFromDetails(
       details,
-      "import_session_count",
-      backend.import_session_count
+      "ingestion_session_count",
+      backend.ingestion_session_count
     ),
     cleanup_job_count: countFromDetails(
       details,

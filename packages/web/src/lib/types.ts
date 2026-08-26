@@ -21,8 +21,8 @@ import type {
   PublicImageItemDto,
   RandomMethod,
   RuntimeConfigChangeSummaryDto,
-  RemoteImportItemInputDto,
-  ServerImportStatusDto,
+  ImportItemInputDto,
+  ServerIngestionStatusDto,
   StorageBackendAdminDto,
   StorageBackendS3Dto,
   TagDto,
@@ -62,19 +62,19 @@ export type FacetOption = FacetOptionDto;
 export type RandomMode = "" | RandomMethod;
 
 export type ManifestImportSource = "jsonl" | "weibo";
-export type ImportCommonAttributeField = "device" | "brightness" | "theme" | "author" | "tags";
-export type ImportDetectedClassification = { device: Device; brightness: Brightness };
+export type IngestionCommonAttributeField = "device" | "brightness" | "theme" | "author" | "tags";
+export type IngestionDetectedClassification = { device: Device; brightness: Brightness };
 type CommitFailureCheckpoint = "ready" | "committing" | "unknown";
-export type ImportCommitIntent = {
+export type IngestionCommitIntent = {
   attemptId: string;
   md5: string;
   metadata: ImageDraft;
 };
-type ImportResultState = "pending" | "recovering" | "error" | "hydrated";
+type IngestionResultState = "pending" | "recovering" | "error" | "hydrated";
 
-export type ImportJob = {
+export type IngestionJob = {
   id: string;
-  kind: "local" | "download";
+  kind: "upload" | "import";
   status: "queued" | "uploading" | "downloading" | "received" | "processing" | "ready" | "commit-queued" | "committing" | "finalized" | "cancelling" | "done" | "failed" | "cancelled";
   message: string;
   preview: string;
@@ -89,7 +89,7 @@ export type ImportJob = {
   duplicates: AdminImageListItem[];
   duplicateCount?: number;
   duplicateDecision: "upload" | "undecided" | "confirmed";
-  detectedClassification?: ImportDetectedClassification;
+  detectedClassification?: IngestionDetectedClassification;
   classificationOverride?: Partial<Record<"device" | "brightness", boolean>>;
   file?: File;
   fileFingerprint?: string;
@@ -100,7 +100,7 @@ export type ImportJob = {
   attemptKey: string;
   // 接管请求一旦开始便冻结；响应未知重放必须复用相同幂等键与完全相同的正文。
   uploadIntentInput?: UploadIntentItemInputDto;
-  remoteAcceptInput?: RemoteImportItemInputDto;
+  importAcceptInput?: ImportItemInputDto;
   // 单次入队动作的前端身份；同批任务独立持有稳定状态订阅，绝不发送给服务端。
   subscriptionBatchKey: string;
   // Redis canonical pair；状态读取、提交和取消始终同时携带两部分身份。
@@ -123,7 +123,7 @@ export type ImportJob = {
   imageTime?: string;
   batchTime?: string;
   manifestSource?: ManifestImportSource;
-  manifestProvidedCommonFields?: ImportCommonAttributeField[];
+  manifestProvidedCommonFields?: IngestionCommonAttributeField[];
   manifestLine?: number;
   manifestPosition?: number;
   browserDisplayReleased?: boolean;
@@ -134,12 +134,12 @@ export type ImportJob = {
   storageSlug: string;
   failureStage?: "create" | "prepare" | "commit" | "cancel";
   commitFailureCheckpoint?: CommitFailureCheckpoint;
-  commitIntent?: ImportCommitIntent;
-  resultState?: ImportResultState;
+  commitIntent?: IngestionCommitIntent;
+  resultState?: IngestionResultState;
   resultError?: string;
   // 最近一次由当前 attempt/session 接受的服务端权威快照。可见详情由这些
   // 字段和客户端状态集中派生，不直接展示服务端正常阶段 message。
-  serverStatus?: ServerImportStatusDto | "missing";
+  serverStatus?: ServerIngestionStatusDto | "missing";
   serverPhase?: string;
   serverError?: string;
   serverProgress?: number;

@@ -2,18 +2,18 @@ import type { Brightness, Device } from "@imageshow/shared/browser";
 import type { PoolClient } from "pg";
 import { ensureAuthorWithMutationLockHeld } from "../authors/mutations.ts";
 import { ApiError, errorMessage } from "../core/api-error.ts";
-import { withAdvisoryLocks } from "../core/database-advisory-locks.ts";
-import { pool } from "../core/database-pools.ts";
+import { withAdvisoryLocks } from "../core/database/advisory-locks.ts";
+import { pool } from "../core/database/pools.ts";
 import { logger } from "../core/logger.ts";
 import type { ImageUpdateItemInput } from "../core/validation.ts";
-import { readStorageBuffer, storageObjectExists } from "../storage/object-access.ts";
-import { thumbnailRef } from "../storage/image-paths.ts";
+import { readStorageBuffer, storageObjectExists } from "../storage/objects/access.ts";
+import { thumbnailRef } from "../storage/objects/image-paths.ts";
 import {
   discardPreparedImageRelocationIfUnreferenced,
   enqueuePreparedImageSourceCleanup,
   prepareVerifiedImageRelocation,
   type PreparedImageRelocation
-} from "../storage/image-relocation.ts";
+} from "../storage/migration/image-relocation.ts";
 import {
   imageStorageMutationLockKey,
   withStorageLocationReadAndAdvisoryLocks

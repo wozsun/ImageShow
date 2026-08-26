@@ -13,11 +13,11 @@
 | 鉴权、请求限制、代理和响应头 | [安全](./security.md) |
 | 部署、健康检查与 Nginx | [生产部署](./deployment.md) |
 
-## 图片导入
+## 图片接入
 
 后台提供本地文件、URL 列表、JSONL 清单和公开微博四种入口。浏览器维护当前窗口的本地
 占位；素材一旦被服务端接受，就由 Redis canonical 和单实例 worker 接管。PostgreSQL 不再
-保存运行中的导入会话；只有最终 `metadata` 行是完成事实，Redis 的 completed 回执不能单独
+保存运行中的接入会话；只有最终 `metadata` 行是完成事实，Redis 的 completed 回执不能单独
 证明图片已经提交。
 
 服务端队列按来源分为 `upload` 和 `import`。每个任务都以大小写敏感的
@@ -61,7 +61,7 @@
   两者进入 request hash 并派生持久展示键。接管请求发出时同时冻结其完整输入；响应未知的重放
   不读取后来变化的窗口默认值。服务端派生的 accepted order、执行 token 和 generation 不进入
   request hash。
-- 状态读取使用固定 `POST /api/admin/imports/status` 批量提交 pair，不把 session、metadata
+- 状态读取使用固定 `POST /api/admin/ingestion/status` 批量提交 pair，不把 session、metadata
   或数组放进 URL，也不按卡片建立独立请求。Web 只接受 pair 匹配且
   `(version, progress_seq)` 单调向前的状态；UUID 可以规范化大小写，session ID 不得改写大小写。
 - 关闭或按 Escape 不会中止请求或未完成任务；关闭路径会按当时冻结的队列水位，异步删除已经
@@ -100,9 +100,9 @@ JSONL 可设置 `original`、`source`、`image_time`、`author`、`tags`、`titl
 ### 接管、prepare 与 commit
 
 1. **本地接管**先对可立即进入并发 lane 的一组文件发送一次固定
-   `POST /api/admin/imports/upload-intents`。正文含完整草稿、目标 storage、大小与素材约束；
+   `POST /api/admin/ingestion/upload-intents`。正文含完整草稿、目标 storage、大小与素材约束；
    响应为每项返回短期 credential。随后单次接管尝试对每个 intent 最多发送一次固定
-   `PUT /api/admin/imports/upload-raw`，credential 只放受限 header，正文只有图片字节。
+   `PUT /api/admin/ingestion/upload-raw`，credential 只放受限 header，正文只有图片字节。
    Server 在读取正文前 claim intent，流式写 attempt 专属 `.part`，完成大小、格式和尺寸校验
    后原子发布 raw，并在同一请求中把 intent 转换为 `upload/received` canonical。不存在第三次
    takeover 或 receipt 请求。一次已签发的 N 项固定为一次 intent POST 加至多 N 次 raw PUT。
@@ -110,7 +110,7 @@ JSONL 可设置 `original`、`source`、`image_time`、`author`、`tags`、`titl
    intent：服务端要么返回已经接管的 canonical，要么为同一 pair 重签 credential 后重传，
    不通过新幂等身份创建第二项任务。
 2. **远程接管**把 URL、JSONL 和微博确认项合并到固定
-   `POST /api/admin/imports/remote-accept`。Server 在 storage read lock 内重新校验并创建
+   `POST /api/admin/ingestion/import-accept`。Server 在 storage read lock 内重新校验并创建
    `import/queued` canonical；请求断开不撤销已接受项。worker 使用现有安全抓取完成 HTTPS、
    SSRF、DNS、逐跳重定向、正文大小、超时和图片魔数校验，并以 attempt `.part` 原子发布 raw。
 3. **prepare**只处理完整 raw：Sharp 校验格式、尺寸和 EXIF 展示方向，按配置生成 processed
@@ -217,7 +217,7 @@ snapshot 覆盖该 revision 后才解除；确认它不属于当前页时不要�
 快照到达后扩大旧点击范围。Server 成员保持原卡片并可在连接恢复后重新操作。
 批量 status 失败时保留安全状态并在窗口内提供显式
 重试，不因一次网络错误永久锁死 owner。只有当前显示的队列建立一个
-`GET /api/admin/imports/events?queue=...` SSE；Server
+`GET /api/admin/ingestion/events?queue=...` SSE；Server
 先注册 listener，再发送只含 revision 与 action scope 的 `ready`。客户端收到 `ready` 后立即
 废止旧 revision、pair 进度和 watermark，使旧页只可展示、不可驱动全局操作，再用非负
 offset 与有上限的 limit 请求当前组合页；不保留非当前页卡片，也没有固定 2 秒轮询。

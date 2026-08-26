@@ -2,7 +2,7 @@ import { errorMessage } from "../core/api-error.ts";
 import {
   pruneEmptyStorageDirs,
   removeStorageObjectAndConfirm
-} from "../storage/object-access.ts";
+} from "../storage/objects/access.ts";
 import type {
   CapturedMaintenanceGroup,
   MaintenanceCandidate,

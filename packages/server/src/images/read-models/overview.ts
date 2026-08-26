@@ -1,6 +1,6 @@
 import type { AdminOverviewDto } from "@imageshow/shared/browser";
 import { getRuntimeConfig } from "../../config/runtime-config-store.ts";
-import { pool } from "../../core/database-pools.ts";
+import { pool } from "../../core/database/pools.ts";
 import {
   getReadyImageCacheOverviewStatus
 } from "../ready-cache/admin-status.ts";
@@ -12,12 +12,6 @@ import {
 
 export async function getOverviewStats(): Promise<AdminOverviewDto> {
   const recentLimit = getRuntimeConfig().admin.recent_uploads;
-  return buildOverviewStats(recentLimit);
-}
-
-async function buildOverviewStats(
-  recentLimit: number
-): Promise<AdminOverviewDto> {
   const [
     statsResult,
     topThemesResult,

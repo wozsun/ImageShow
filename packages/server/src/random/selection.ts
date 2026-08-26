@@ -23,8 +23,8 @@ import { pickTargetedImages } from "./targeted-selection.ts";
 import { sampleReadyImagesFromPostgres } from "./postgres-selection.ts";
 import type {
   PublicDatabaseReadAccess
-} from "../core/public-db-fallback.ts";
-import { pool } from "../core/database-pools.ts";
+} from "../core/database/public-fallback.ts";
+import { pool } from "../core/database/pools.ts";
 
 export type RandomImageSelection = {
   method: RandomMethod;

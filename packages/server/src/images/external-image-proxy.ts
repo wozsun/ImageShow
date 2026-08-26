@@ -14,7 +14,7 @@ import {
   upstreamIfModifiedSinceForProxy,
   upstreamIfNoneMatchForProxy
 } from "../core/http/proxy-validators.ts";
-import { contentType } from "../storage/object-keys.ts";
+import { contentType } from "../storage/objects/keys.ts";
 
 export const externalImageProxyTimeoutMs = 12_000;
 export const externalImageProxyUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";

@@ -25,22 +25,22 @@ import {
   storageBackendCreateInput,
   storageBackendTestInput,
   storageBackendUpdateInput
-} from "../storage/backend-config.ts";
+} from "../storage/backends/config.ts";
 import {
   createStorageBackend,
   deleteStorageBackend,
   reorderStorageBackends,
   setDefaultStorageBackend
-} from "../storage/backend-mutations.ts";
+} from "../storage/backends/mutations.ts";
 import {
   getStorageBackendsForAdmin,
   listStorageBackendOptions
-} from "../storage/backend-read-model.ts";
-import { resolveStorageTestConfig } from "../storage/backend-probe.ts";
-import { updateStorageBackend } from "../storage/backend-update.ts";
-import { retryStorageBackendCleanup } from "../storage/move-cleanup.ts";
-import { testStorageBackend } from "../storage/backend-self-test.ts";
-import { migrateStorageBackend } from "../storage/backend-migration.ts";
+} from "../storage/backends/read-model.ts";
+import { resolveStorageTestConfig } from "../storage/backends/probe.ts";
+import { updateStorageBackend } from "../storage/backends/update.ts";
+import { retryStorageBackendCleanup } from "../storage/cleanup/service.ts";
+import { testStorageBackend } from "../storage/backends/self-test.ts";
+import { migrateStorageBackend } from "../storage/migration/backend.ts";
 
 export function registerStorageRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/storage/options`, async (c) => {

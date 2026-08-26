@@ -1,7 +1,7 @@
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { ApiError } from "./api-error.ts";
-import { redis } from "./redis-client.ts";
-import { reserveRedisWindows } from "./redis-window-limit.ts";
+import { redis } from "./redis/client.ts";
+import { reserveRedisWindows } from "./redis/window-limit.ts";
 import { runRequiredRedisCommand } from "./runtime-availability.ts";
 
 const loginFailureKeyPrefix = "imageshow:login_fail";

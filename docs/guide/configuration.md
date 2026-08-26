@@ -18,8 +18,10 @@ PostgreSQL。排查配置时先确认“这项配置由谁管理”，再判断�
 自动补齐，未知字段递归删除，已有有效值保留；归一化发生变化时写入同目录临时文件，
 同步文件内容后原子替换完整配置，并在支持目录同步的平台持久化该 rename。只有已知
 字段值不符合自身规定的合法范围时才会失败。PostgreSQL 与 Redis 连接值必须由环境
-变量提供。归一化是长期的结构校验与自愈能力，不是版本兼容层：已删除字段或别名与其他
-未知项一样被删除，对应现行字段按默认值补齐，不执行字段重命名迁移。
+变量提供。归一化是长期的结构校验与自愈能力，不是版本迁移框架。5.1.0 只包含一个有界的
+现行命名迁移：旧 `link_image` 远程来源段写入新 `import`，旧含 commit 字段的 `import`
+段写入新 `ingestion`；新旧名称并存时现行名称优先，旧段随后删除并原子写回。除此以外，
+已删除字段或别名与其他未知项一样被删除，对应现行字段按默认值补齐，不推测迁移。
 
 运行时配置模块本身不读取或写入文件。主进程在装配 HTTP 路由、注册配置变更监听器
 和启动 Worker 前显式初始化进程内快照；初始化失败时不会继续连接数据库或监听端口。
@@ -29,7 +31,7 @@ Docker healthcheck 只读取并在内存中归一化已经存在的 `config.json
 创建目录、写文件或启动服务。
 
 管理端 `GET /api/admin/settings` 只返回设置页和图片工作流实际读取的最小字段集。
-除设置页可编辑字段外，仅保留上传数量 / 文件大小、统一链接导入数量和页面
+除设置页可编辑字段外，仅保留上传数量 / 文件大小、Import 数量和页面
 commit 并发等前端预检所需的只读值；不会返回部署配置、完整 `appConfig`、
 服务端全局并发、外链抓取超时或其他内部默认值。`POST /api/admin/settings`
 同样只接受设置页公开的可编辑字段，并以嵌套 patch 合并，未公开配置不会因保存
@@ -86,21 +88,21 @@ PostgreSQL 的 `admin_account` 表，不进入 `config.json`。单应用进程�
 | `embed.allowed_origins` | 除站点隐式来源外额外允许嵌入页面的 HTTPS 来源列表，可填写精确 origin 或形如 `https://*.example.com` 的子域通配符，最多 32 项且规范化后总长不超过 4096 字符；可以留空，重复隐式或显式来源会去除。通配符只允许出现在最左侧且不包含根域名，根域名须另列。拒绝 HTTP、IP 地址、路径、参数、凭据、裸 `*`、中间通配符和过宽的单标签后缀。通配符只能用于全部现有及未来子域均可信的自有父域；校验不内置 Public Suffix List，不得配置 `*.github.io` 等公共托管后缀。仅在 `data/config.json` 中维护。 |
 | `upload.*` | 本地文件单次选择上限、上传文件大小、图片长边限制、上传列表分页、浏览器 raw PUT 并发，以及服务端 prepare 全局并发；其中 `upload.max_items`、`upload.max_file_size_mb`、`upload.max_long_edge` 和 `upload.global_concurrency` 只在配置文件中维护。 |
 | `upload.max_items` | 本地文件单次选择与单次 intent 接管的运行时上限，默认 200，可配置范围为 1–1000；Server 还执行不可配置的通用 batch hard limit。 |
-| `link_image.fill_original_url` | URL 下载导入是否自动把输入 URL 填入「原图 URL」字段；不做可直达探测。 |
-| `link_image.auto_import` | 链接、JSONL 清单或微博解析出有效图片且没有任何问题项时，是否省略二次确认并直接建立导入队列，默认 `true`；出现问题项时始终停留在解析结果页，由管理员确认是否导入有效部分。 |
-| `link_image.concurrency` | 单客户端 URL 下载导入队列并发数。 |
-| `link_image.global_concurrency` | 服务端 URL download 与 prepare 两个独立阶段使用的全局并发基数；只在配置文件中维护。 |
-| `link_image.fetch_timeout_seconds` | 外链图片请求超时，单位秒；只覆盖 download 素材化的外部请求。 |
-| `link_image.max_items` | URL 列表、JSONL 清单的单次条目软上限，默认 200；不在设置页展示，管理端只读返回该值供导入窗口预检，修改需编辑配置文件，可配置范围为 1–1000。微博导入不使用该限制。 |
+| `import.fill_original_url` | URL 下载导入是否自动把输入 URL 填入「原图 URL」字段；默认 `true`，不做可直达探测。显式设为 `false` 时保持原图 URL 为空。 |
+| `import.auto_import` | URL、JSONL 清单或微博解析出有效图片且没有任何问题项时，是否省略二次确认并直接建立 Import 队列，默认 `true`；出现问题项时始终停留在解析结果页，由管理员确认是否导入有效部分。 |
+| `import.concurrency` | 单客户端 Import 来源队列并发数。 |
+| `import.global_concurrency` | 服务端 URL download 与 prepare 两个独立阶段使用的全局并发基数；只在配置文件中维护。 |
+| `import.fetch_timeout_seconds` | 外链图片请求超时，单位秒；只覆盖 download 素材化的外部请求。 |
+| `import.max_items` | URL 列表、JSONL 清单的单次条目软上限，默认 200；不在设置页展示，管理端只读返回该值供接入窗口预检，修改需编辑配置文件，可配置范围为 1–1000。微博导入不使用该限制。 |
 | `weibo.max_items` | 微博链接单次输入软上限，默认 20；不在设置页展示，管理端只读返回该值供导入窗口预检，可配置范围为 1–50。 |
 | `weibo.concurrency` | 服务端同时请求和解析的微博帖子数，默认 2，可配置范围为 1–16；空闲 worker 会持续补位，只在配置文件中维护。 |
 | `weibo.global_concurrency` | 单个服务端进程共享的微博上游请求并发数，默认 5，可配置范围为 1–32；访客身份和帖子详情请求共用，只在配置文件中维护。 |
 | `weibo.author_slugs` | 微博用户 ID 到作者 slug 的映射表。键必须是纯数字用户 ID，值必须是合法的小写 slug；微博导入只有命中映射时才填写作者。 |
 | `normalize.*` | 本地上传与下载导入共用的最终入库文件标准化策略。 |
 | `thumbnail.*` | 缩略图长边和压缩质量，只影响此后新生成的缩略图。 |
-| `import.commit_concurrency` | 单个管理页面同时执行的 commit 数，默认 5；只在配置文件中维护，管理端只读返回。 |
-| `import.global_commit_concurrency` | 单个服务端进程同时执行的 commit 数，默认 10；所有客户端和直接 API 请求共享，只在配置文件中维护。 |
-| `import.global_commit_byte_budget_mb` | 单个服务端进程中处于 commit 的 prepared 图片与缩略图总字节预算，默认 512 MiB；与数量并发限制同时生效，只在配置文件中维护。 |
+| `ingestion.commit_concurrency` | 单个管理页面同时执行的 commit 数，默认 5；只在配置文件中维护，管理端只读返回。 |
+| `ingestion.global_commit_concurrency` | 单个服务端进程同时执行的 commit 数，默认 10；所有客户端和直接 API 请求共享，只在配置文件中维护。 |
+| `ingestion.global_commit_byte_budget_mb` | 单个服务端进程中处于 commit 的 prepared 图片与缩略图总字节预算，默认 512 MiB；与数量并发限制同时生效，只在配置文件中维护。 |
 | `image_detail.title_opens_image` | 图片详情弹窗标题是否链接到图片直链。 |
 | `admin.login_background` | 后台登录页背景，仅允许站内绝对路径或 HTTPS；留空时使用站点自身随机图。未认证登录页继承公开页面固定暗色上下文，不读取管理员外观偏好；登录成功并进入后台后才应用账号偏好。表单内容保持完全不透明，只有表面使用 alpha 0.20 的 `blur(6px) saturate(110%)` 毛玻璃，系统要求减少透明效果时回退为暗色实底。背景层固定于当前动态视口且完全不滚动，独立定位的卡片按 visual viewport 可见中线放置，在工具栏或软键盘压缩可见高度时通过快速过渡整体上移。 |
 | `admin.image_page_size` / `admin.recent_uploads` / `admin.show_unset_theme_card` | 后台图片分页、概览最近上传数量、主题页「未设置」占位卡片开关。 |
@@ -122,10 +124,10 @@ PostgreSQL 的 `admin_account` 表，不进入 `config.json`。单应用进程�
 | `upload.list_page_size` | 20 | 1–100 |
 | `upload.concurrency` | 2 | 1–128 |
 | `upload.global_concurrency` | 5 | 1–512 |
-| `link_image.concurrency` | 2 | 1–128 |
-| `link_image.global_concurrency` | 5 | 1–512 |
-| `link_image.fetch_timeout_seconds` | 30 | 5–300 秒 |
-| `link_image.max_items` | 200 | 1–1000 |
+| `import.concurrency` | 2 | 1–128 |
+| `import.global_concurrency` | 5 | 1–512 |
+| `import.fetch_timeout_seconds` | 30 | 5–300 秒 |
+| `import.max_items` | 200 | 1–1000 |
 | `weibo.max_items` | 20 | 1–50 |
 | `weibo.concurrency` | 2 | 1–16 |
 | `weibo.global_concurrency` | 5 | 1–32 |
@@ -137,9 +139,9 @@ PostgreSQL 的 `admin_account` 表，不进入 `config.json`。单应用进程�
 | `normalize.skip_webp_under_kb` | 700 | 0–102400 KiB |
 | `thumbnail.long_edge` | 512 | 64–4096 px |
 | `thumbnail.quality` | 75 | 1–100 |
-| `import.commit_concurrency` | 5 | 1–128 |
-| `import.global_commit_concurrency` | 10 | 1–512 |
-| `import.global_commit_byte_budget_mb` | 512 | 16–4096 MiB |
+| `ingestion.commit_concurrency` | 5 | 1–128 |
+| `ingestion.global_commit_concurrency` | 10 | 1–512 |
+| `ingestion.global_commit_byte_budget_mb` | 512 | 16–4096 MiB |
 | `admin.image_page_size` | 60 | 10–200 |
 | `admin.recent_uploads` | 12 | 1–50 |
 | `background_job.move_cleanup_concurrency` | 5 | 1–512 |
@@ -191,13 +193,18 @@ discarded / completed 紧凑回执沿用所属
     "concurrency": 2,
     "global_concurrency": 5
   },
-  "link_image": {
-    "fill_original_url": false,
+  "import": {
+    "fill_original_url": true,
     "auto_import": true,
     "concurrency": 2,
     "global_concurrency": 5,
     "fetch_timeout_seconds": 30,
     "max_items": 200
+  },
+  "ingestion": {
+    "commit_concurrency": 5,
+    "global_commit_concurrency": 10,
+    "global_commit_byte_budget_mb": 512
   },
   "weibo": {
     "max_items": 20,
@@ -222,9 +229,9 @@ discarded / completed 紧凑回执沿用所属
 
 prepare 只接受 JPEG、PNG、WebP、GIF 与 AVIF；SVG、TIFF、HEIC 及其他 Sharp 虽能识别但不在白名单内的格式仍会拒绝。输入格式、原始尺寸和 EXIF 展示方向来自同一次 Sharp metadata，标准化后 WebP 的格式、尺寸与字节数来自最终编码结果，不再重新解码候选文件。需要转码的 GIF、animated WebP 与 AVIF 继续沿用 Sharp 默认的首帧处理语义；符合下述跳过条件的 animated WebP 则保留完整原字节。URL download 阶段执行的独立图片魔数检查仍是外部抓取安全边界，不由 prepare 的 Sharp 校验替代。
 
-输入本身是 WebP、体积小于 `normalize.skip_webp_under_kb` 且长边已经达标时，原字节直接成为最终候选文件；服务端仍会执行解码校验、标准缩略图生成和最终 MD5 计算。`upload.concurrency` 既限制单个后台页面的 raw PUT 数，也限定一次预签 intent 批次为可以立即进入 lane 的文件；当前批结算后才为下一批签发，避免长队列预先消耗短 credential TTL。`link_image.concurrency` 约束浏览器来源队列，remote accept 后的下载由服务端 `link_image.global_concurrency` pool 接管；prepare 使用独立 pool，其容量取本地与远程全局并发基数的较大值。即使调用方绕过前端队列，worker 仍有有界阶段准入并支持取消等待任务。
+输入本身是 WebP、体积小于 `normalize.skip_webp_under_kb` 且长边已经达标时，原字节直接成为最终候选文件；服务端仍会执行解码校验、标准缩略图生成和最终 MD5 计算。`upload.concurrency` 既限制单个后台页面的 raw PUT 数，也限定一次预签 intent 批次为可以立即进入 lane 的文件；当前批结算后才为下一批签发，避免长队列预先消耗短 credential TTL。`import.concurrency` 约束浏览器来源队列，Import accept 后的下载由服务端 `import.global_concurrency` pool 接管；prepare 使用独立 pool，其容量取本地与远程全局并发基数的较大值。即使调用方绕过前端队列，worker 仍有有界阶段准入并支持取消等待任务。
 
-commit 使用独立的 `import.commit_concurrency` / `import.global_commit_concurrency`。前者限制单个后台页面，后者在取得会话 advisory lock、存储共享锁和数据库事务连接之前限制整个服务端进程。服务端还按 `import.global_commit_byte_budget_mb` 对 prepared 图片与缩略图大小做 FIFO 加权限流；活动权重始终按任务真实字节累计，不会在运行中随动态预算截断。超过预算的单个合法对象只能在当前没有其他 commit 占用时独立运行；预算升降后仍按真实活动总量决定是否放行队首。数量许可与字节许可都覆盖正式对象复制、数据库事务、暂存清理和缓存更新，而不只是 `INSERT`。PostgreSQL 主查询连接池上限为 30；长生命周期 advisory lock 使用另一个上限同为 30 的专用连接池，避免下载、转码和存储 I/O 持锁期间占满查询连接。commit 的存储共享锁、排序后的主题 / 作者 / 最终标签共享关联租约、会话锁和单图锁由同一专用连接按固定顺序取得，不会在锁池内嵌套等待第二条连接；同 slug commit 可以并行并在共享租约内幂等确保词表项存在，显式词表管理和删除使用的独占锁仍会等待全部关联租约退出。锁连接丢失会中止工作，导入发布另以数据库 execution token 栅栏旧执行者。公开 PostgreSQL 回源在主池内最多占 12 条连接，不再建立取消连接池；当前单应用实例最多保留 60 条应用连接，数据库 `max_connections` 应为该边界和运维连接留足空间。
+commit 使用独立的 `ingestion.commit_concurrency` / `ingestion.global_commit_concurrency`。前者限制单个后台页面，后者在取得会话 advisory lock、存储共享锁和数据库事务连接之前限制整个服务端进程。服务端还按 `ingestion.global_commit_byte_budget_mb` 对 prepared 图片与缩略图大小做 FIFO 加权限流；活动权重始终按任务真实字节累计，不会在运行中随动态预算截断。超过预算的单个合法对象只能在当前没有其他 commit 占用时独立运行；预算升降后仍按真实活动总量决定是否放行队首。数量许可与字节许可都覆盖正式对象复制、数据库事务、暂存清理和缓存更新，而不只是 `INSERT`。PostgreSQL 主查询连接池上限为 30；长生命周期 advisory lock 使用另一个上限同为 30 的专用连接池，避免下载、转码和存储 I/O 持锁期间占满查询连接。commit 的存储共享锁、排序后的主题 / 作者 / 最终标签共享关联租约、会话锁和单图锁由同一专用连接按固定顺序取得，不会在锁池内嵌套等待第二条连接；同 slug commit 可以并行并在共享租约内幂等确保词表项存在，显式词表管理和删除使用的独占锁仍会等待全部关联租约退出。锁连接丢失会中止工作，内容接入发布另以数据库 execution token 栅栏旧执行者。公开 PostgreSQL 回源在主池内最多占 12 条连接，不再建立取消连接池；当前单应用实例最多保留 60 条应用连接，数据库 `max_connections` 应为该边界和运维连接留足空间。
 
 后台队列在建立不可变提交意图后先显示“提交排队 / 等待提交”，Server 将 Redis canonical
 原子推进到 `committing` 后立刻返回 accepted；worker 真正取得上述数量与字节准入后才执行
@@ -236,9 +243,9 @@ commit 边界的结构化重复冲突是例外：会话仍为 `ready`，前端�
 
 URL 输入窗口、JSONL 解析和微博解析共享 3600 项通用安全边界；JSONL 与微博还在
 服务端重复执行该边界。三者同时满足各自的可配置软上限：URL 与 JSONL 由
-`link_image.max_items` 限制，最高 1000 项；
+`import.max_items` 限制，最高 1000 项；
 微博链接条数由 `weibo.max_items` 限制，最高 50 条。微博解析后的图片数不受
-`link_image.max_items` 影响；按单条微博最多 18 张图片计算，合法配置最多产生
+`import.max_items` 影响；按单条微博最多 18 张图片计算，合法配置最多产生
 900 张图片，服务端另保留不可配置的 1000 张安全上限。输入或解析结果超过限制时
 会在生成任务前明确拒绝，不自动拆成多个 `batch_time`。URL、JSONL 与微博都先在
 浏览器形成有序任务，随后通过一个固定的有界 remote accept JSON 请求批量创建或复用
@@ -292,7 +299,7 @@ super 管理员可在「设置 → 高级配置」导出或导入 JSON 配置包
   PostgreSQL / Redis 连接由目标实例自己的环境变量提供；三者均不进入配置包。
 - `storage_backends` 包含自定义 S3 后端的显示名、slug、启停状态、
   默认状态、顺序和完整连接配置。内置 `local` 不导出。
-- 管理员账号、图片及其标签 / 主题 / 作者、导入会话、后台任务和 Redis
+- 管理员账号、图片及其标签 / 主题 / 作者、内容接入会话、后台任务和 Redis
   缓存不属于配置包。
 - ALTCHA 的 HMAC 主密钥在首次签发挑战时随机生成并仅驻留进程内存，不属于配置项
   或配置包；应用重启后，重启前尚未提交的证明需要重新验证。
@@ -350,22 +357,25 @@ PostgreSQL 提交状态，不根据可能已被后继修改的业务行猜测；
 | `normalize.quality_step` | `NORMALIZE_QUALITY_STEP` |
 | `thumbnail.long_edge` | `THUMBNAIL_LONG_EDGE` |
 | `thumbnail.quality` | `THUMBNAIL_QUALITY` |
-| `import.commit_concurrency` | `IMPORT_COMMIT_CONCURRENCY` |
-| `import.global_commit_concurrency` | `IMPORT_GLOBAL_COMMIT_CONCURRENCY` |
-| `import.global_commit_byte_budget_mb` | `IMPORT_GLOBAL_COMMIT_BYTE_BUDGET_MB` |
+| `ingestion.commit_concurrency` | `INGESTION_COMMIT_CONCURRENCY` |
+| `ingestion.global_commit_concurrency` | `INGESTION_GLOBAL_COMMIT_CONCURRENCY` |
+| `ingestion.global_commit_byte_budget_mb` | `INGESTION_GLOBAL_COMMIT_BYTE_BUDGET_MB` |
 | `upload.max_items` | `UPLOAD_MAX_ITEMS` |
 | `upload.max_file_size_mb` | `UPLOAD_MAX_FILE_SIZE_MB` |
 | `upload.max_long_edge` | `UPLOAD_MAX_LONG_EDGE` |
 | `upload.concurrency` | `UPLOAD_CONCURRENCY` |
 | `upload.global_concurrency` | `UPLOAD_GLOBAL_CONCURRENCY` |
-| `link_image.concurrency` | `LINK_IMAGE_CONCURRENCY` |
-| `link_image.auto_import` | `LINK_IMAGE_AUTO_IMPORT` |
-| `link_image.global_concurrency` | `LINK_IMAGE_GLOBAL_CONCURRENCY` |
-| `link_image.fetch_timeout_seconds` | `LINK_IMAGE_FETCH_TIMEOUT_SECONDS` |
-| `link_image.max_items` | `LINK_IMAGE_MAX_ITEMS` |
+| `import.concurrency` | `IMPORT_CONCURRENCY` |
+| `import.auto_import` | `IMPORT_AUTO_IMPORT` |
+| `import.global_concurrency` | `IMPORT_GLOBAL_CONCURRENCY` |
+| `import.fetch_timeout_seconds` | `IMPORT_FETCH_TIMEOUT_SECONDS` |
+| `import.max_items` | `IMPORT_MAX_ITEMS` |
 | `weibo.max_items` | `WEIBO_MAX_ITEMS` |
 | `weibo.concurrency` | `WEIBO_CONCURRENCY` |
 | `weibo.global_concurrency` | `WEIBO_GLOBAL_CONCURRENCY` |
+
+5.1.0 不读取旧 `LINK_IMAGE_*` 或旧提交段 `IMPORT_COMMIT_*` 环境变量。环境变量只用于首次
+播种，无法像已有 `data/config.json` 一样安全区分新旧段；部署升级时须同步改成上表的新名称。
 
 部署字段在每次进程启动时读取；缺失必需的数据库环境变量会直接拒绝启动。
 应用配置的环境变量仍只在首次生成 `config.json` 时播种，文件存在后不会覆盖已有

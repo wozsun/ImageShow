@@ -1,6 +1,6 @@
 import { logger } from "../../core/logger.ts";
-import { redis } from "../../core/redis-client.ts";
-import { execRedisPipeline } from "../../core/redis-pipeline.ts";
+import { redis } from "../../core/redis/client.ts";
+import { execRedisPipeline } from "../../core/redis/pipeline.ts";
 import {
   isRedisUnavailableError,
   requireOperationalRedis,
@@ -17,12 +17,12 @@ import {
   resolveReadyImageFilterIndexForRequiredRead,
   validateReadyImageFilterIndex,
   type ReadyImageFilterIndex
-} from "./filter-index.ts";
+} from "./indexes/filter.ts";
 import {
   ReadyImageCoreCacheError,
   isReadyImageCoreCacheError
 } from "./cache-errors.ts";
-import { discardReadyImageDerivedResult } from "./derived-cache-lifecycle.ts";
+import { discardReadyImageDerivedResult } from "./derived/lifecycle.ts";
 import type { ImageFilterPlan } from "../filter-plan.ts";
 import type { PageWindow } from "../page-window.ts";
 import { recordReadyImageCacheError } from "./status-observability.ts";

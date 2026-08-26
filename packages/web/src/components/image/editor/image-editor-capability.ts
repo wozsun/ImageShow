@@ -1,7 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
-import type { ImportVocabularyDto } from "@imageshow/shared/browser";
+import type { IngestionVocabularyDto } from "@imageshow/shared/browser";
 import { readEditableImageSnapshots } from "../../../lib/api/image-edit.js";
-import { importVocabularyQueryOptions } from "../../../lib/api/import-vocabulary.js";
+import { ingestionVocabularyQueryOptions } from "../../../lib/api/ingestion-vocabulary.js";
 import {
   invalidateImageData,
   invalidateImageDataAfterMetadataSave
@@ -74,10 +74,10 @@ export async function prepareImageEditor(
   sources: ImageEditorSource[]
 ): Promise<{
   items: ImageEditorItem[];
-  vocabulary: ImportVocabularyDto;
+  vocabulary: IngestionVocabularyDto;
 }> {
   const [vocabulary, , items] = await Promise.all([
-    queryClient.fetchQuery(importVocabularyQueryOptions),
+    queryClient.fetchQuery(ingestionVocabularyQueryOptions),
     queryClient.fetchQuery(storageOptionsQueryOptions),
     loadEditableSnapshots(sources)
   ]);

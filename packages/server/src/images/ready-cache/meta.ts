@@ -1,6 +1,6 @@
 import type { Redis } from "ioredis";
-import { redis } from "../../core/redis-client.ts";
-import { execRedisPipeline } from "../../core/redis-pipeline.ts";
+import { redis } from "../../core/redis/client.ts";
+import { execRedisPipeline } from "../../core/redis/pipeline.ts";
 import { READY_IMAGE_META_KEY } from "./keys.ts";
 import {
   type ReadyImageCacheMeta,

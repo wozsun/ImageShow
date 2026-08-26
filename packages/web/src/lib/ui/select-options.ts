@@ -26,7 +26,7 @@ export const editCardDeviceSelectOptions: readonly SelectOption[] = [
   ...cardDeviceSelectOptions
 ];
 
-export function importCardDeviceSelectOptions(
+export function ingestionCardDeviceSelectOptions(
   value: string,
   automaticLabel: string
 ): readonly SelectOption[] {
@@ -45,7 +45,7 @@ export const cardBrightnessSelectOptions: readonly SelectOption[] = [
   ...manualBrightnessSelectOptions
 ];
 
-export function importCardBrightnessSelectOptions(
+export function ingestionCardBrightnessSelectOptions(
   value: string,
   automaticLabel: string
 ): readonly SelectOption[] {

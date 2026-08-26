@@ -1,6 +1,6 @@
 import type { Context, Hono } from "hono";
 import type { RandomImageJsonResponseDto } from "@imageshow/shared/browser";
-import { withPublicDatabaseRead } from "../core/public-db-fallback.ts";
+import { withPublicDatabaseRead } from "../core/database/public-fallback.ts";
 import {
   noStoreCacheControl,
   responseContentLengthValue,
@@ -10,10 +10,10 @@ import { requestClientIp } from "../core/http/request-security.ts";
 import { apiErrorResponse, apiSuccess } from "../core/http/responses.ts";
 import { presentRandomJsonItems } from "../random/json-presentation.ts";
 import { selectRandomImages } from "../random/selection.ts";
-import { resolveReadableObject } from "../storage/object-access.ts";
-import { contentType } from "../storage/object-keys.ts";
-import { publicImageUrls } from "../storage/public-urls.ts";
-import { webReadableFromNode } from "../storage/stream-buffer.ts";
+import { resolveReadableObject } from "../storage/objects/access.ts";
+import { contentType } from "../storage/objects/keys.ts";
+import { publicImageUrls } from "../storage/objects/public-urls.ts";
+import { webReadableFromNode } from "../storage/objects/stream-buffer.ts";
 
 export function registerRandomRoutes(app: Hono) {
   app.all("/random", handleRandomImage);

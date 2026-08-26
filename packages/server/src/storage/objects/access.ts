@@ -1,0 +1,176 @@
+import { ApiError, errorMessage } from "../../core/api-error.ts";
+import {
+  getStorageBackend,
+  resolveStorageAccess
+} from "../backends/registry.ts";
+import type {
+  PublicDatabaseReadAccess
+} from "../../core/database/public-fallback.ts";
+import type {
+  OpenedRead,
+  StoragePruneOptions,
+  StorageRequestOptions
+} from "../drivers/driver.ts";
+import type {
+  ReadablePrefix,
+  StoragePrefix
+} from "./keys.ts";
+import { STORAGE_PREFIXES } from "./keys.ts";
+import { directStorageObjectUrl } from "./public-urls.ts";
+import {
+  collectStorageKeyListing,
+  type StorageKeyListOptions
+} from "./key-listing.ts";
+
+export async function storageObjectExists(
+  prefix: StoragePrefix,
+  key: string,
+  slug?: string,
+  options?: StorageRequestOptions
+) {
+  return (await resolveStorageAccess(slug)).driver.exists(prefix, key, options);
+}
+
+export async function readStorageBuffer(
+  prefix: StoragePrefix,
+  key: string,
+  slug?: string,
+  options?: StorageRequestOptions
+) {
+  return (await resolveStorageAccess(slug)).driver.readBuffer(prefix, key, options);
+}
+
+export async function writeStorageBuffer(
+  prefix: StoragePrefix,
+  key: string,
+  body: Buffer,
+  contentType: string,
+  slug?: string,
+  options?: StorageRequestOptions
+) {
+  return (await resolveStorageAccess(slug)).driver.writeBuffer(
+    prefix,
+    key,
+    body,
+    contentType,
+    options
+  );
+}
+
+export async function removeStorageObjectAndConfirm(
+  prefix: StoragePrefix,
+  key: string,
+  slug?: string,
+  options?: StorageRequestOptions
+) {
+  const { config, driver } = await resolveStorageAccess(slug);
+  const existed = await driver.exists(prefix, key, options);
+  // DELETE is idempotent for every driver. Issue it even after a negative
+  // preflight so a stale or faulty existence response cannot make cleanup
+  // terminal while the object is still present.
+  await driver.remove(prefix, key, options);
+  let stillExists: boolean;
+  try {
+    stillExists = await driver.exists(prefix, key, options);
+  } catch (error) {
+    options?.signal?.throwIfAborted();
+    throw new ApiError(
+      502,
+      "storage_delete_confirmation_failed",
+      "存储对象删除后无法确认最终状态",
+      {
+        backend: config.slug,
+        prefix,
+        key,
+        reason: errorMessage(error)
+      }
+    );
+  }
+  if (stillExists) {
+    throw new ApiError(
+      502,
+      "storage_delete_incomplete",
+      "存储后端返回删除成功，但对象仍然存在",
+      { backend: config.slug, prefix, key }
+    );
+  }
+  return existed ? "removed" as const : "missing" as const;
+}
+
+export async function collectStorageKeys(
+  prefix: StoragePrefix,
+  slug?: string,
+  options?: StorageKeyListOptions
+) {
+  const { driver } = await resolveStorageAccess(slug);
+  return collectStorageKeyListing(driver.listKeys(prefix, options));
+}
+
+/** Collect all three namespaces through one driver and cancel sibling scans on failure. */
+export async function collectStorageNamespaceSnapshot(
+  slug: string,
+  options: StorageKeyListOptions = {}
+) {
+  const { driver } = await resolveStorageAccess(slug);
+  const siblingAbort = new AbortController();
+  const signal = options.signal
+    ? AbortSignal.any([options.signal, siblingAbort.signal])
+    : siblingAbort.signal;
+  const tasks = STORAGE_PREFIXES.map((prefix) => collectStorageKeyListing(
+    driver.listKeys(prefix, { ...options, signal })
+  ));
+  try {
+    const [media, thumbs, uploads] = await Promise.all(tasks);
+    return { media, thumbs, _uploads: uploads };
+  } catch (error) {
+    siblingAbort.abort(error);
+    await Promise.allSettled(tasks);
+    options.signal?.throwIfAborted();
+    throw error;
+  }
+}
+
+export async function pruneEmptyStorageDirs(
+  slug?: string,
+  options?: StoragePruneOptions
+) {
+  return (await resolveStorageAccess(slug)).driver.pruneEmptyDirs(options);
+}
+
+export type ResolvedReadableObject = {
+  prefix: ReadablePrefix;
+  key: string;
+  storageSlug: string;
+  publicUrl: string;
+  exists: (options?: StorageRequestOptions) => Promise<boolean>;
+  open: (
+    range?: string,
+    options?: StorageRequestOptions
+  ) => Promise<OpenedRead>;
+};
+
+export async function resolveReadableObject(
+  prefix: ReadablePrefix,
+  key: string,
+  slug: string,
+  database: PublicDatabaseReadAccess = {}
+): Promise<ResolvedReadableObject> {
+  const config = await getStorageBackend(slug, database);
+  return {
+    prefix,
+    key,
+    storageSlug: config.slug,
+    publicUrl: directStorageObjectUrl(config, prefix, key),
+    exists: async (options) => (
+      (await resolveStorageAccess(slug, database)).driver.exists(prefix, key, options)
+    ),
+    open: async (range, options) => (
+      (await resolveStorageAccess(slug, database)).driver.openRead(
+        prefix,
+        key,
+        range,
+        options
+      )
+    )
+  };
+}

@@ -4,12 +4,12 @@ import type {
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { ApiError } from "../core/api-error.ts";
 import { mapWithWorkerPool } from "../core/concurrency.ts";
-import { pool } from "../core/database-pools.ts";
+import { pool } from "../core/database/pools.ts";
 import {
   migrateImageStorage,
   type StorageMigrationImageRecord
-} from "../storage/image-storage-migration.ts";
-import { assertStorageWriteTarget } from "../storage/backend-registry.ts";
+} from "../storage/migration/image-storage.ts";
+import { assertStorageWriteTarget } from "../storage/backends/registry.ts";
 import { withPlannedImageMutation } from "./mutation-sync.ts";
 
 type ImageStorageMigrationMetrics = {

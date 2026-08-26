@@ -1,11 +1,11 @@
 import type {
   RandomImageJsonItemDto
 } from "@imageshow/shared/browser";
-import { publicImageUrls } from "../storage/public-urls.ts";
-import { listStorageBackends } from "../storage/backend-registry.ts";
+import { publicImageUrls } from "../storage/objects/public-urls.ts";
+import { listStorageBackends } from "../storage/backends/registry.ts";
 import type {
   PublicDatabaseReadAccess
-} from "../core/public-db-fallback.ts";
+} from "../core/database/public-fallback.ts";
 import type { SelectedReadyImage } from "./selection-model.ts";
 
 export async function presentRandomJsonItems(

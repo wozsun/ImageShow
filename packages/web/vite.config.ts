@@ -91,8 +91,7 @@ const chunkResponsibilityAliases: Readonly<Record<string, string>> = {
   "capability-admin": "workspace-header",
   "capability-check-check-maintenance-overview": "cache-status",
   "capability-check-maintenance-storage": "storage-move-api",
-  "capability-image-editor-import-source-dialog-uploader": "upload-utils",
-  "capability-image-editor-uploader": "image-fields",
+  "capability-image-editor-ingestion": "image-fields",
   "capability-settings-storage": "number-input",
   "capability-storage-vocabulary": "reorder",
   "capability-user-vocabulary": "slug-chip"
@@ -150,7 +149,7 @@ function sharedChunkName(moduleId: string, context: ChunkingContext) {
   }
   const initialRouteRoots = roots.filter((id) => (
     /\/src\/pages\/(?:home|gallery)\//.test(id)
-    || /\/src\/pages\/admin\/(?:AdminShell|AdminLogin|LoginChallenge|AuthenticatedAdminShell|ImageAdmin)\.tsx$/.test(id)
+    || /\/src\/pages\/admin\/(?:shell\/(?:AdminShell|AuthenticatedAdminShell)|account\/(?:AdminLogin|LoginChallenge)|images\/ImageAdmin)\.tsx$/.test(id)
   ));
   return initialRouteRoots.length > 0
     ? rootSetChunkName("route", initialRouteRoots)
@@ -179,7 +178,7 @@ const conciseAssetNames: Readonly<Record<string, string>> = {
   SettingsPage: "settings",
   StorageBackendMigrationDialog: "storage-move",
   StorageSettings: "storage",
-  Uploader: "upload",
+  Ingestion: "ingestion",
   UserAdmin: "users",
   VocabularyAdmin: "vocabulary",
   "image-editor-capability": "image-editor"

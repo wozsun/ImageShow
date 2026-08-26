@@ -1,9 +1,9 @@
-import { inspectTransactionOutcome } from "../core/database-transactions.ts";
+import { inspectTransactionOutcome } from "../core/database/transactions.ts";
 import { applicationVersion } from "../core/application-version.ts";
 import {
   listStorageBackends
-} from "../storage/backend-registry.ts";
-import { importStorageBackends } from "../storage/backend-mutations.ts";
+} from "../storage/backends/registry.ts";
+import { ingestionStorageBackends } from "../storage/backends/mutations.ts";
 import {
   buildConfigPackage,
   parseConfigPackage,
@@ -59,7 +59,7 @@ export async function importConfigPackage(
     let importTransactionId: string | null = null;
 
     try {
-      await importStorageBackends(
+      await ingestionStorageBackends(
         importedBackends,
         async () => {
           appliedRuntimeConfigRevision = (

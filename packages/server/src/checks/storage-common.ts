@@ -1,17 +1,17 @@
 import { errorMessage } from "../core/api-error.ts";
-import { stagingSessionId } from "../images/imports/staging-keys.ts";
+import { stagingSessionId } from "../images/ingestion/staging-keys.ts";
 import type {
-  ActiveImportStorageReference
-} from "../images/imports/storage-references.ts";
+  ActiveIngestionStorageReference
+} from "../images/ingestion/cleanup/storage-references.ts";
 export {
-  activeImportStorageReferences
-} from "../images/imports/storage-references.ts";
-import { thumbnailObjectKey } from "../storage/image-paths.ts";
-import { listStorageBackends } from "../storage/backend-registry.ts";
-import type { StorageBackendRecord } from "../storage/backend-config.ts";
-import { groupStorageNamespaces } from "../storage/storage-namespace.ts";
-import { collectStorageNamespaceSnapshot } from "../storage/object-access.ts";
-import type { StorageKeyListOptions } from "../storage/key-listing.ts";
+  activeIngestionStorageReferences
+} from "../images/ingestion/cleanup/storage-references.ts";
+import { thumbnailObjectKey } from "../storage/objects/image-paths.ts";
+import { listStorageBackends } from "../storage/backends/registry.ts";
+import type { StorageBackendRecord } from "../storage/backends/config.ts";
+import { groupStorageNamespaces } from "../storage/objects/namespace.ts";
+import { collectStorageNamespaceSnapshot } from "../storage/objects/access.ts";
+import type { StorageKeyListOptions } from "../storage/objects/key-listing.ts";
 
 export type StorageRow = {
   id: string;
@@ -21,19 +21,19 @@ export type StorageRow = {
   thumbnail_size?: string | number;
 };
 
-type ImportFinalStorageReference = {
+type IngestionFinalStorageReference = {
   prefix: "media" | "thumbs";
   key: string;
 };
 
 type ClassifiedStagingKey = {
   key: string;
-  session: ActiveImportStorageReference;
+  session: ActiveIngestionStorageReference;
 };
 
-export function importFinalStorageReferences(
-  session: Pick<ActiveImportStorageReference, "final_object_key">
-): ImportFinalStorageReference[] {
+export function ingestionFinalStorageReferences(
+  session: Pick<ActiveIngestionStorageReference, "final_object_key">
+): IngestionFinalStorageReference[] {
   const key = session.final_object_key;
   if (!key) return [];
   return [
@@ -44,7 +44,7 @@ export function importFinalStorageReferences(
 
 export function classifyStagingKeys(
   keys: string[],
-  activeSessions: ReadonlyMap<string, ActiveImportStorageReference>
+  activeSessions: ReadonlyMap<string, ActiveIngestionStorageReference>
 ) {
   const active: ClassifiedStagingKey[] = [];
   const orphan: string[] = [];
@@ -67,10 +67,10 @@ export function classifyStagingKeys(
   return { active, orphan };
 }
 
-export function mergeActiveImportSessions(
-  ...sessionMaps: ReadonlyArray<ReadonlyMap<string, ActiveImportStorageReference>>
+export function mergeActiveIngestionSessions(
+  ...sessionMaps: ReadonlyArray<ReadonlyMap<string, ActiveIngestionStorageReference>>
 ) {
-  const merged = new Map<string, ActiveImportStorageReference>();
+  const merged = new Map<string, ActiveIngestionStorageReference>();
   for (const sessions of sessionMaps) {
     for (const [id, session] of sessions) merged.set(id, session);
   }

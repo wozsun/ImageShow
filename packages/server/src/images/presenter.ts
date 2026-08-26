@@ -7,13 +7,13 @@ import {
   type GalleryImageCardDto,
   type PublicImageDetailDto
 } from "@imageshow/shared/browser";
-import type { DatabaseReader } from "../core/database-pools.ts";
+import type { DatabaseReader } from "../core/database/pools.ts";
 import type {
   PublicDatabaseReadAccess
-} from "../core/public-db-fallback.ts";
-import { storageBackendLabel } from "../storage/backend-label.ts";
-import { listStorageBackends } from "../storage/backend-registry.ts";
-import { publicImageUrls } from "../storage/public-urls.ts";
+} from "../core/database/public-fallback.ts";
+import { storageBackendLabel } from "../storage/backends/label.ts";
+import { listStorageBackends } from "../storage/backends/registry.ts";
+import { publicImageUrls } from "../storage/objects/public-urls.ts";
 import { getTagsForImages } from "../tags/query.ts";
 import { getTagVocab, getThemeVocab } from "../vocab/vocab-cache.ts";
 import { createGallerySubtitleFormatter } from "./gallery-card-display.ts";

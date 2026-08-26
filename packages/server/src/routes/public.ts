@@ -1,4 +1,4 @@
-import type { Hono } from "hono";
+import type { Context, Hono } from "hono";
 import type { PublicImageDetailResponseDto } from "@imageshow/shared/browser";
 import { siteConfigPayload } from "../config/app-settings.ts";
 import {
@@ -32,10 +32,21 @@ import {
   servePublicStoredObject,
   servePublicStoredThumbnail
 } from "../images/stored-image-serving.ts";
-import { storedResponseRequest } from "./stored-response-request.ts";
+import type { StoredResponseRequest } from "../images/stored-object-response.ts";
 
 const galleryStatsQueryKeys = ["d", "b", "t", "tag", "a"] as const;
 const galleryStatsQueryKeySet = new Set<string>(galleryStatsQueryKeys);
+
+function storedResponseRequest(context: Context): StoredResponseRequest {
+  return {
+    range: context.req.header("range"),
+    ifNoneMatch: context.req.header("if-none-match"),
+    ifModifiedSince: context.req.header("if-modified-since"),
+    ifRange: context.req.header("if-range"),
+    isHead: context.req.method === "HEAD",
+    signal: context.req.raw.signal
+  };
+}
 
 export function registerPublicRoutes(app: Hono) {
   app.get("/api/images", blockCrossSiteFetch, async (c) => {

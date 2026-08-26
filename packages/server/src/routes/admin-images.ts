@@ -47,8 +47,8 @@ import {
 } from "../images/trash-mutations.ts";
 import { purgeImages } from "../images/trash-purge.ts";
 import { requireAdminPermission } from "../users/admin-authorization.ts";
-import { listStorageBackends } from "../storage/backend-registry.ts";
-import { storageBackendLabel } from "../storage/backend-label.ts";
+import { listStorageBackends } from "../storage/backends/registry.ts";
+import { storageBackendLabel } from "../storage/backends/label.ts";
 
 export function registerAdminImageRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/overview`, async (c) => c.json(apiSuccess(await getOverviewStats())));

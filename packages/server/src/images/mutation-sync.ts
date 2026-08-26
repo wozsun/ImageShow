@@ -6,9 +6,9 @@ import {
   reportReadyImageCacheFailure,
   requestReadyImageCacheRebuildAfterMutation
 } from "./ready-cache/coordinator.ts";
-import { clearReadyImageDisposableCaches } from "./ready-cache/derived-cache-lifecycle.ts";
-import { withReadyImageCacheWriteFence } from "./ready-cache/fence.ts";
-import { synchronizeReadyImageCacheMutation } from "./ready-cache/incremental.ts";
+import { clearReadyImageDisposableCaches } from "./ready-cache/derived/lifecycle.ts";
+import { withReadyImageCacheWriteFence } from "./ready-cache/sync/fence.ts";
+import { synchronizeReadyImageCacheMutation } from "./ready-cache/sync/incremental.ts";
 import { getReadyImageRevision } from "./ready-cache/revision.ts";
 import {
   READY_IMAGE_EXACT_SYNC_MAX_ITEMS,

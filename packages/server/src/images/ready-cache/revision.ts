@@ -1,5 +1,5 @@
 import type { PoolClient } from "pg";
-import { pool } from "../../core/database-pools.ts";
+import { pool } from "../../core/database/pools.ts";
 
 type ReadyImageRevisionReader = {
   query(

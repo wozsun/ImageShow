@@ -2,9 +2,9 @@ import {
   conditionalRequestNotModified,
   ifRangeMatches
 } from "../core/http/validators.ts";
-import type { OpenedRead } from "../storage/driver.ts";
-import type { ResolvedReadableObject } from "../storage/object-access.ts";
-import { webReadableFromNode } from "../storage/stream-buffer.ts";
+import type { OpenedRead } from "../storage/drivers/driver.ts";
+import type { ResolvedReadableObject } from "../storage/objects/access.ts";
+import { webReadableFromNode } from "../storage/objects/stream-buffer.ts";
 import {
   responseContentLengthValue,
   safeResponseHeaderValue

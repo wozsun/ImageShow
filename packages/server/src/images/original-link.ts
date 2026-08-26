@@ -1,7 +1,7 @@
-import { publicImageUrls } from "../storage/public-urls.ts";
+import { publicImageUrls } from "../storage/objects/public-urls.ts";
 import type {
   PublicDatabaseReadAccess
-} from "../core/public-db-fallback.ts";
+} from "../core/database/public-fallback.ts";
 
 type OriginalComparableImage = {
   object_key: string;

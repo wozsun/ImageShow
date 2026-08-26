@@ -23,7 +23,7 @@ const publicRoutePreloadIntents = createPublicRoutePreloadIntents(
 );
 const HomePage = lazy(() => homeRouteModule.load().then((module) => ({ default: module.HomePage })));
 const GalleryPage = lazy(() => galleryRouteModule.load().then((module) => ({ default: module.GalleryPage })));
-const AdminShell = lazy(() => import("./pages/admin/AdminShell.js").then((module) => ({ default: module.AdminShell })));
+const AdminShell = lazy(() => import("./pages/admin/shell/AdminShell.js").then((module) => ({ default: module.AdminShell })));
 
 export function AppRoutes() {
   const routeLocation = useLocation();

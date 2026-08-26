@@ -5,7 +5,7 @@ import {
   getRedisConnectionState,
   isRedisRequiredCommandsError,
   type RedisConnectionState
-} from "../../core/redis-client.ts";
+} from "../../core/redis/client.ts";
 import {
   getRedisOperationalState,
   isRedisUnavailableError,
@@ -13,15 +13,15 @@ import {
   type RedisOperationalState
 } from "../../core/runtime-availability.ts";
 import { enqueueRerunnableJob } from "../../jobs/repository.ts";
-import { clearReadyImageDisposableCaches } from "./derived-cache-lifecycle.ts";
+import { clearReadyImageDisposableCaches } from "./derived/lifecycle.ts";
 import {
   readyImageCacheWriteFenceIsClosed,
   tryWithReadyImageCacheReadFence,
   withReadyImageCacheReadFence,
   withReadyImageCacheWriteFence,
   type ReadyImageCacheReadLease
-} from "./fence.ts";
-import { validateReadyImageCacheAtStartup } from "./integrity.ts";
+} from "./sync/fence.ts";
+import { validateReadyImageCacheAtStartup } from "./integrity/check.ts";
 import { readReadyImageCacheMeta } from "./meta.ts";
 import type { ReadyImageCacheMeta } from "./model.ts";
 import { rebuildReadyImageCache } from "./rebuild.ts";

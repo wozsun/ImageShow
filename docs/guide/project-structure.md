@@ -1,4 +1,4 @@
-# 项目结构
+# 项目结构（5.1.0）
 
 ImageShow 使用 npm workspaces 管理三个包。依赖方向固定为：
 
@@ -9,6 +9,11 @@ packages/web ─────► packages/shared
 
 `server` 与 `web` 不能互相导入；`shared` 不能依赖其他 workspace。Web 构建产物最终
 由服务端镜像提供；根目录 `docs/guide/` 只是普通仓库文档，不参与 workspace 或生产构建。
+
+本文是 5.1.0 的现行权威结构说明。5.0.2 的发布时目录已冻结在
+[5.0.2 项目结构快照](../history/v5.0.2-project-structure.md)，本次重组的逐项路径、owner 与
+验证对照见 [5.0.2 → 5.1.0 项目结构对照](../history/v5.0.2-to-v5.1.0-project-structure.md)。
+现行开发与运维步骤不得引用历史快照中的旧路径。
 
 ## 根目录职责
 
@@ -21,8 +26,9 @@ packages/web ─────► packages/shared
 - `Dockerfile` 只安装三个 workspace 的构建依赖（不安装根目录本地门禁工具）并完成编译，
   再单独安装 server/shared 的生产依赖；运行镜像只携带生产依赖、编译产物和运维入口。
 - `compose.yaml` 提供单实例 ImageShow、PostgreSQL 与 Redis 的标准部署。
-- `docs/guide/` 保存架构、配置、数据库、流程、部署和 API 说明，使用相对 Markdown
-  链接，可直接在仓库中阅读。
+- `docs/guide/` 保存当前架构、配置、数据库、流程、部署和 API 说明；`docs/history/` 只保存
+  绑定发布提交的不可变结构快照与版本间映射。两者均使用相对 Markdown 链接，可直接在
+  仓库中阅读。
 
 本地测试、源码 / 构建 / 隔离镜像门禁脚本及 benchmarks 统一位于根目录 `tests/`，由 Git
 忽略且不进入 Docker build context、生产镜像或 GitHub Actions。测试从外部启动与生产镜像
@@ -37,7 +43,7 @@ packages/web ─────► packages/shared
 
 | 命令 | 内容 | 副作用 |
 | --- | --- | --- |
-| `npm run verify:source` | workspace 类型、Knip、语义颜色、依赖方向 / 环、配置示例、图标、Markdown 链接与 selector inventory | 只读源码，不生成 `dist`、容器或浏览器会话 |
+| `npm run verify:source` | workspace 类型、Knip、语义颜色、TypeScript AST 依赖方向 / 环、配置示例、图标、Markdown 链接与 selector inventory | 只读源码，不生成 `dist`、容器或浏览器会话 |
 | `npm run verify:build` | 清理必要输出，先构建 shared，再并行构建 Web / Server，装配服务端资产并按真实产物图检查 Web 分块边界 | 只重建三个 workspace 的 `dist` |
 | `npm run verify:runtime` | baseline / Server / Web 三个最终入口，以及生产镜像冷启动、HTTP、schema 和重启 | 建立随机命名的 tmpfs PostgreSQL、Redis、应用容器、网络和临时镜像；无论成功、失败或中断均在结束前删除，不访问现有数据库、容器或浏览器 |
 | `npm run verify:release` | 依次执行以上三层 | 合并上述本地副作用 |
@@ -57,7 +63,7 @@ GitHub Actions 只核对 dev 分支或 release tag、根包 / 三个 workspace /
 共享包是前后端唯一共同依赖，只承载稳定的配置默认值、类型、校验常量和 DTO。
 
 - 默认入口只导出服务端与构建配置使用的完整 `appConfig`；Web 运行时代码不得导入。
-- `@imageshow/shared/browser` 是图片、分类、导入、存储和管理设置等双端 HTTP/SSE
+- `@imageshow/shared/browser` 是图片、分类、内容接入、存储和管理设置等双端 HTTP/SSE
   契约的唯一来源，并按 `browser/` 下的真实领域拆分后由 `browser.ts` 汇总。
 - 浏览器入口只含可进入 Web bundle 的 DTO、枚举、纯函数和输入限制，不得反向引入
   完整运行时默认值、Node.js、数据库或 Redis。
@@ -72,7 +78,7 @@ GitHub Actions 只核对 dev 分支或 release tag、根包 / 三个 workspace /
 index / routes
       │
       ▼
-images / imports / storage / random / jobs / vocab / users / checks
+images / ingestion / storage / random / jobs / vocab / users / checks
       │
       ▼
 core / config
@@ -101,12 +107,14 @@ healthcheck 只读现有配置快照，密码恢复不初始化运行时配置�
 
 | 目录 | 职责与允许依赖 |
 | --- | --- |
-| `core/` | PostgreSQL、Redis、两阶段运行可用性、公开 PG fallback 准入、安全抓取、日志、密码、UUID、并发和通用校验；不依赖业务领域或路由。 |
+| `core/` | 领域无关的运行可用性、安全抓取、日志、密码、UUID、并发和通用校验；不依赖业务领域或路由。只有未形成稳定三文件族的横切模块留在根层。 |
+| `core/database/` | PostgreSQL pool、事务、advisory lock、公开 fallback 准入、schema 装配和 readiness；`readiness/` 只承载数据库基线断言的内部职责。 |
+| `core/redis/` | 唯一 Redis client、业务 Lua / 命令注册、JSON、pipeline、条件字符串和窗口限流基础设施；不导入 ready-cache 或其他业务领域。 |
 | `core/http/` | HTTP 响应与响应头、请求来源和请求体限制、压缩阈值、条件请求、静态响应与 Range 解析。 |
 | `config/` | 部署环境、首次播种、运行时配置 schema、无导入副作用的文件读写与显式进程内 store，以及配置包。 |
 | `routes/` | HTTP 方法、鉴权、CSRF、输入解析和响应投影；业务工作委托给领域模块。 |
-| `images/` | 图片读写、展示投影、分类与元数据变更、回收站和缩略图；`page-window.ts` 唯一计算安全数字页窗口，`ready-cache/` 拥有统一 Redis rich 投影、筛选、统计、精确同步与重建，`imports/` 拥有完整导入会话生命周期及清理任务，`read-models/` 承载 PostgreSQL cursor / offset 读模型。 |
-| `storage/` | local、S3 driver 及无环工厂；注册表缓存与 driver、管理读模型、配置变更、探测和占用统计分开维护，并拥有对象访问、强摘要传输、位置锁、迁移及 `move.cleanup` 仓储与 handler。 |
+| `images/` | 图片读写、展示投影、分类与元数据变更、回收站和缩略图；`page-window.ts` 唯一计算安全数字页窗口，`ready-cache/` 拥有统一 Redis rich 投影、筛选、统计、精确同步与重建，`ingestion/` 拥有 Upload / Import 的完整接入会话生命周期及清理任务，`read-models/` 承载 PostgreSQL cursor / offset 读模型。 |
+| `storage/` | 只在根层保留横切 `maintenance-lock.ts`；`backends/`、`drivers/`、`objects/`、`migration/` 与 `cleanup/` 分别拥有注册表、驱动、对象原语、搬迁和持久清理。 |
 | `random/` | 随机查询校验、设备轴推断、Redis 8 Array 最近历史、定向 id 与有界 pivot 普通随机 PG 降级查询及随机出口编排；Redis 候选投影、筛选与重建统一由 `images/ready-cache/` 提供。 |
 | `jobs/` | 仅拥有通用 `background_job` 生命周期、小型类型分派、公平调度 Worker，以及集中管理任务中止、期限、续租和有界排空的执行协调器；各领域拥有自己的 handler、payload 和结果语义。 |
 | `checks/` | PostgreSQL / Redis 独立轻量状态、数据库 / Redis / 存储手动深度检查、“全部”中的回收站一致性结果，以及显式触发的存储维护；状态页自动 Redis 深检与手动 Redis 检查复用同一有界扫描和 pipeline，只返回当前汇总。 |
@@ -114,22 +122,33 @@ healthcheck 只读现有配置快照，密码恢复不初始化运行时配置�
 | `users/` | 管理员初始化、账号变更、Redis 登录会话、逐请求 PostgreSQL 角色与密码代际核对、操作授权、密码恢复、偏好和会话失效；不维护管理员凭据 Redis 投影。 |
 | `types/` | 仅放缺失的编译期声明，不承载运行时代码。 |
 
-`core/` 内 PostgreSQL 基础设施按生命周期边界拆分：`database-pools.ts` 只接收显式配置并
-拥有主查询与 advisory lock 两个连接池；`database-transactions.ts`、
-`database-advisory-locks.ts` 和 `database-schema.ts` 分别拥有事务、锁与干净安装编排；
-`database-readiness.ts` 只读核对当前 SQL 真正依赖的最小结构、行为约束、权限与稳定种子。
-后台数字页使用 `database-transactions.ts` 的 read-only repeatable-read 事务，让 COUNT、
+`routes/` 当前保留 18 个直属文件。`admin-vocabulary.ts` 在一个 HTTP 能力边界中声明 tags、
+themes 与 authors 三组同构 CRUD，通用 registrar 为文件内私有实现；每组仍分别注入自己的
+schema、查询、变更和删除权限，不把领域业务搬进路由。5.0.2 的三个单函数包装文件与外置
+registrar 已删除。`public.ts` 私有持有 Hono 请求到 `StoredResponseRequest` 的 header / signal
+投影，因为它只服务该文件内 media 与 thumbnail 两个入口，不再为单消费者保留独立文件。
+其余短 registrar 即使只有一个导出，也分别拥有独立 URL、鉴权 / 权限、中间件顺序、Host
+或缓存契约；不按行数与相邻文件合并。`http-app.ts` 仍显式展示公开路由、管理员 session、
+CSRF、请求体限制和各管理能力的装配顺序。
+
+`core/database/` 按 PostgreSQL 生命周期边界拆分：`pools.ts` 只接收显式配置并拥有主查询与
+advisory lock 两个连接池；`transactions.ts`、`advisory-locks.ts` 和 `schema.ts` 分别拥有
+事务、锁与干净安装编排。`readiness.ts` 是唯一总入口，按固定顺序调用
+`readiness/relations.ts`、`privileges.ts`、`indexes.ts`、`foreign-keys.ts` 与 `seeds.ts`；
+`readiness/contract.ts` 是最小表、列、权限、主键、索引与外键 contract 的唯一数据来源；
+`readiness/seeds.ts` 是稳定种子断言的唯一来源，其他检查模块不得复制两者。
+后台数字页使用 `database/transactions.ts` 的 read-only repeatable-read 事务，让 COUNT、
 越界判断、metadata 与 tags 共享一个 client 和快照；事务后 formatter 不得借默认 pool。
 schema 初始化和管理员播种直接使用主查询池，不为不受支持的第二应用进程取得启动锁；图片、
 词表、导入、存储位置等运行期领域锁仍使用独立 advisory lock 池。
-公开降级读取由 `public-db-admission.ts` 统一管理一个 FIFO 容量与等待队列，
-`public-db-fallback.ts` 只负责请求级惰性 reader scope、执行期限和 client 释放 / 淘汰。Redis
+公开降级读取由 `database/public-admission.ts` 统一管理一个 FIFO 容量与等待队列，
+`database/public-fallback.ts` 只负责请求级惰性 reader scope、执行期限和 client 释放 / 淘汰。Redis
 缓存读取先行，首次真实回源才借 client，同一 scope 内的领域模块显式接收并复用 reader；
 底层 `pool.query` 不再由进程上下文改写。
 
-高频且必须保持原子性的 Redis Lua 由 `core/redis-business-scripts.ts` 单独持有脚本文本，
-`core/redis-business-commands.ts` 统一声明七个 ioredis 自定义命令、key 数量、读写属性、
-参数布局和返回值解析，`redis-client.ts` 在唯一 client 构造点注册。限流与 ready-cache
+高频且必须保持原子性的 Redis Lua 由 `core/redis/business-scripts.ts` 单独持有脚本文本，
+`core/redis/business-commands.ts` 统一声明七个 ioredis 自定义命令、key 数量、读写属性、
+参数布局和返回值解析，`core/redis/client.ts` 在唯一 client 构造点注册。限流与 ready-cache
 领域只调用类型化命令；ready-cache 的键和容量策略作为参数传入，`core/` 不反向依赖图片
 领域。其中两条只读抽样命令分别接收四个 core key 和六个 derived key，把已解析索引后的
 校验、候选数计算、随机成员与 rich item 读取收敛为一次 Redis 调用；脚本不拼接隐藏 key，
@@ -137,11 +156,23 @@ schema 初始化和管理员播种直接使用主查询池，不为不受支持�
 发送 `EVALSHA`，并在 `NOSCRIPT` 后重发脚本；应用不维护 SHA、启动时预加载清单或 Redis
 Functions。检查页按键动态测量的低频 Lua 仍留在 `checks/`，不并入业务注册表。
 
-图片存储变更的单图原语集中在 `storage/image-storage-migration.ts`，在同一条可读控制流中
+`storage/` 的 5.1.0 稳定目录为：
+
+```text
+storage/
+├─ backends/   # 配置、记录、注册表、探测、读模型、更新、删除和占用
+├─ drivers/    # driver 契约、无环工厂、实例生命周期、local 与 S3
+├─ objects/    # 对象 key、namespace、访问、传输、校验、列表和公开 URL
+├─ migration/  # 单图 CAS、整后端迁移、relocation 与 endpoint rebind
+├─ cleanup/    # 持久 move.cleanup 类型、仓储、handler 与 service
+└─ maintenance-lock.ts
+```
+
+图片存储变更的单图原语集中在 `storage/migration/image-storage.ts`，在同一条可读控制流中
 完成锁内真相重读、候选发布与校验、PostgreSQL CAS，以及提交结果不确定时的补偿判断；
 不为只传递同一记录的 prepare / switch / settlement 阶段拆分文件和中间契约。
 `images/image-storage-migration.ts` 只负责管理接口的 1..N 保序结果，
-`storage/backend-migration.ts` 只负责整后端计数和流式分页，两者都直接调用同一个单图原语。
+`storage/migration/backend.ts` 只负责整后端计数和流式分页，两者都直接调用同一个单图原语。
 `checks/storage-check.ts` 只生成无写入权限的存储预览；显式写维护按稳定职责拆分：
 `checks/storage-maintenance-plan.ts` 重读 PostgreSQL、导入引用和完整存储快照并生成候选，
 `checks/storage-thumbnail-repair.ts` 负责缩略图写入与校验，`checks/storage-orphan-cleanup.ts`
@@ -153,45 +184,89 @@ Functions。检查页按键动态测量的低频 Lua 仍留在 `checks/`，不�
 请求级派生计数失效；`images/image-update-item.ts` 是单图 metadata、author / theme / tag
 创建、完整标签替换、分类位置 CAS 与持久清理回执的唯一 PostgreSQL 事务所有者。
 
-`images/imports/` 内部继续保持单一编排入口，但按稳定职责分开：
+`images/ingestion/` 是 Upload 与 Import 共用的统一内容接入领域，5.1.0 用稳定子目录表达允许依赖方向：
 
-- `session-service.ts` 负责批量 upload intent 与 remote accept；`raw-upload.ts` 把固定 raw
-  PUT 的 credential claim、流式写入和 canonical 转换收口为同一入口。
-- `session-repository.ts`、`session-scripts.ts` 与 codec / projection / transition 文件共同拥有
-  Redis canonical、owner queue、runnable、expires、计数和 revision 的原子领域契约；
-  `session-view.ts` 只负责 pair 状态与 preview 读取。
-- `import-worker.ts` 组合 download、prepare、commit 的独立有界 pool；`session-recovery.ts`
-  复用同一 repository 做启动、Redis 重连和 expiry 收敛，`irreversible-coordinator.ts` 只保存
-  当前进程的数据库事务边界；`execution-session.ts` 只负责同一 download / prepare token 下
-  heartbeat、progress、阶段发布与失败落盘的 version 接力和严格身份围栏。
-- `download-session.ts` 与 `raw-files.ts` 管理安全下载、attempt `.part` 和 raw generation；
-  `prepare-session.ts` 处理 Sharp 与 `_uploads` prepared generation；`commit-intent.ts` 冻结
-  异步意图，`commit-worker.ts` 持锁完成对象复制、PostgreSQL 事务和 completed 回执。
-- `cancel-session.ts` 统一取消与 resolving 收敛；生产 `cleanup-queue.ts` 只对可由年龄扫描重新
-  发现的 raw / staging 做有容量、有限重试的尽力清理，不承载正式对象所有权，也不是 Redis
-  或 PostgreSQL 队列的替代品。正式 media / thumbs 在复制前即由持久 `move.cleanup` guard 接管。
-- `storage-references.ts` 有界读取 Redis active canonical 的 raw / prepared / 正式候选引用；
-  `orphan-retention.ts` 集中固定年龄边界，`orphan-cleanup.ts` 与
-  `orphan-cleanup-worker.ts` 负责 60 秒保守周期、完整存储列表、namespace 复核和停机排空。
+```text
+ingestion/
+├─ sessions/    # 最低层 canonical / intent model、key、codec、命令与 Lua
+│  └─ scripts/  # projection、canonical、intents、queue、discovery
+├─ queue/       # snapshot、SSE、action、watermark、草稿 CAS 与展示投影
+├─ raw/         # 路径、lease、流式接收、generation 与孤儿扫描
+├─ sources/     # 安全远端下载、JSONL 与微博适配
+├─ execution/   # heartbeat、version fencing 与不可取消边界
+├─ commit/      # intent、校验、持久化、完成发布、补偿与 coordinator
+├─ cancel/      # 取消协调、批量结果和退休资源清理
+├─ cleanup/     # 可重发现资源的保守扫描与重试队列
+├─ workers/     # download / prepare / commit stage 编排与恢复
+├─ repository.ts
+├─ runtime-repository.ts
+├─ runtime.ts
+├─ session-service.ts
+└─ staging-keys.ts
+```
 
-- Server 的 `queue-events.ts`、`queue-snapshot.ts` 与 `action-scope.ts` 共同负责 owner + queue
-  单 SSE、稳定分页、当前进程动作作用域和最近一个动作批次的有界响应重放；`queue-action.ts`
-  编排有界全队列动作，
-  `queue-action-protocol.ts` 校验 watermark / continuation，`queue-action-handlers.ts` 执行逐项
-  动作，`session-update.ts` 负责尚未冻结 commit 的 active canonical 草稿 CAS，以及 ready
-  canonical 的重复决定 CAS。
-  Web 的 `useUploadQueueOwner` / `useImportQueueOwner` 分别组合浏览器来源与 Redis canonical，
+`sessions` 是不依赖其他 ingestion 子域的协议底层。`raw` 在其上实现 raw 文件与上传接管；
+`execution` 组合 session fencing 与 repository facade；`sources` 使用 `sessions`、`raw` 和
+`execution` 完成远端接收；`commit` 组合 `sessions`、`execution`、`cleanup`、storage、database
+与 vocab；`cancel` 组合 `sessions`、`execution`、`commit`、`cleanup` 与 `raw`。`queue` 内部的
+snapshot、SSE、watermark 和展示投影只使用 session / repository 边界，action handler 则负责
+协调 `cancel`、`commit` 与 `execution`，因此整个 `queue/` 不是单一底层。`workers` 可以编排
+所有这些模块，`runtime.ts` 是唯一生产装配入口；除这两层自身外，ingestion 内任何模块都不能
+反向依赖 `workers/` 或 `runtime.ts`。routes 只依赖公开 service、repository facade 与 DTO，
+不能导入 Lua 或私有 Worker。
+
+- `runtime-repository.ts` 构造进程唯一 repository；`runtime.ts` 是唯一生产装配入口，导入该
+  实例后创建 token service、service、`IngestionSessionWorker` 与 orphan cleanup Worker。HTTP、
+  Worker 和恢复流程因此复用核心 Redis client 上的同一 command runner 与 listener hub。
+- `repository.ts` 保留命令调用边界、错误翻译与事件发布 facade；实际职责分别由
+  `sessions/command-runner.ts`、`replies.ts`、`intent-store.ts`、`listener-hub.ts` 和
+  `queue/store.ts` 承接。facade 与内部模块不复制 key 推导、严格解析或业务校验。
+- `sessions/scripts/` 的五个文件仍生成原来十段完整 Lua。`projection.ts` 只保存共享 Lua
+  片段，不执行命令；每个业务操作仍是一段完整脚本和一次 `EVAL` / `EVALSHA`，脚本数量、
+  `numberOfKeys`、KEYS / ARGV、返回数组和错误 marker 不变。TypeScript 自定义命令标识已随
+  领域改为 Ingestion；Redis 中既有 `imageshow:import:*` key、queue 值 `import`、canonical
+  的 `remote` 字段和 `import_*` marker 保持不变，以便升级时继续接管在途会话。这些值只属于
+  持久运行时协议，不作为新源码、DTO、路由、配置或用户文案的命名依据。
+- `queue/events.ts`、`snapshot.ts`、`action-scope.ts` 与 `store.ts` 共同负责 owner + queue 单
+  SSE、稳定分页、动作作用域和最近动作批次的有界重放；`action.ts` 编排有界全队列动作，
+  `action-protocol.ts` 校验 watermark / continuation，`action-handlers.ts` 执行逐项动作，
+  `session-update.ts` 负责 active canonical 草稿和 ready duplicate decision 的 CAS。
+- `raw/lease-registry.ts` 是 `active`、`deleting`、`scanning`、`pruning` 可变状态的唯一 owner；
+  `paths.ts` 只处理身份与路径，`files.ts` 处理 generation 精确对象操作，`orphan-scanner.ts`
+  处理游标扫描和目录修剪，`upload.ts` 收口 credential claim、流式写入与 canonical 转换。
+- `commit/worker.ts` 继续唯一拥有 execution fencing、storage / advisory lock 顺序、prepared
+  对象采用、事务开始后的不可取消边界和完成发布时机；`target-validation.ts`、
+  `persistence.ts`、`staging-cleanup.ts`、`completion.ts` 只承接可独立命名的阶段。
+- `cancel/coordinator.ts` 保留 resolving / irreversible boundary、abort 顺序、mutation limiter
+  单例和响应丢失后的真相核对；`items.ts` 与 `retired-cleanup.ts` 不建立第二状态 owner。
+- `workers/ingestion-worker.ts` 组合 download、prepare、commit 的独立有界 pool；
+  `workers/session-recovery.ts` 复用同一 repository 做启动、Redis 重连和 expiry 收敛；
+  `execution/session.ts` 只拥有同一执行 token 下 heartbeat、progress、阶段发布和失败落盘。
+- `cleanup/storage-references.ts` 有界读取 active canonical 的对象引用；`retention.ts`、
+  `orphans.ts` 与 `orphan-worker.ts` 负责 60 秒保守周期、完整存储列表、namespace 复核和
+  停机排空；`retry-queue.ts` 只清理可由年龄扫描重新发现的 raw / staging。正式 media /
+  thumbs 仍在复制前由持久 `move.cleanup` guard 接管。
+
+Server 队列模块与 Web 队列 owner 的连接关系保持不变：
+
+- Web 的 `useUploadQueueOwner` / `useImportQueueOwner` 分别组合浏览器来源与 Redis canonical，
   并各自持有重复确认与单卡提交的 single-flight controller；
-  `useServerImportQueue.ts` 只拥有当前显示队列的连接生命周期，
-  `server-import-queue-state.ts` 负责 revision / version / progress 单调合并，
-  `useStoredImportDraftSync.ts` 按硬上限批量排空草稿写入并在 version 冲突时有界回读，
-  `useImportAuthorityHandoffs.ts` 持有独立于当前页 DTO 和连接代际的 HTTP 接管围栏，
-  `useImportQueue.ts` 是 PostgreSQL 水合 completed pair 的唯一图片查询失效 owner，并在
-  snapshot、SSE、提交 / 取消响应、旁路 status、全队列动作与重连代际之间按 pair 去重，
-  `import-cancel.ts` 统一执行有界 status / cancel 批次。
-  导入队列不做固定 pair 轮询，只有响应未知的已知 pair 才使用一次有界 status 查询。
-- `weibo.ts` 只编排批次和 JSONL 清单，链接/时间/响应提取、受限上游协议、未知响应值
-  归一化及公开类型分别位于 `weibo-parser.ts`、`weibo-client.ts`、
+  `useServerIngestionQueue.ts` 只拥有当前显示队列的连接生命周期，
+  `model/server-ingestion-queue-state.ts` 负责 revision / version / progress 单调合并，
+  `useStoredIngestionDraftSync.ts` 按硬上限批量排空草稿写入并在 version 冲突时有界回读，
+  `useIngestionAuthorityHandoffs.ts` 持有独立于当前页 DTO 和连接代际的 HTTP 接管围栏，
+  `useIngestionQueue.ts` 是单队列 controller 的公开组合入口。
+- `useCompletedIngestionInvalidation.ts` 是 completed pair 去重与 PostgreSQL 图片查询失效 owner；
+  `useIngestionStatusHydration.ts` 拥有响应未知 pair 的有界 status 回读与 AbortController；SSE
+  view / protocol 纯投影位于 `model/server-ingestion-queue-view.ts`，不创建第二条连接。
+- `model/stored-ingestion-draft-model.ts` 保存 target / authoritative projection 与 CAS 纯决策；
+  pending / dirty map、250 ms timer、batch tail、flush 和 revision 等待仍只由
+  `useStoredIngestionDraftSync.ts` 持有。
+- 两套 owner 不共享页码、SSE、
+  busy、清空范围或 action connection hold。内容接入队列不做固定 pair 轮询，只有响应未知的
+  已知 pair 才使用一次有界 status 查询。
+- `sources/weibo.ts` 只编排批次和 JSONL 清单，链接 / 时间 / 响应提取、受限上游协议、未知
+  响应值归一化及公开类型分别位于同目录 `weibo-parser.ts`、`weibo-client.ts`、
   `weibo-values.ts`、`weibo-types.ts`。
 - 图片读取先由 `image-serving-record.ts` 将 Redis 命中与 PostgreSQL fallback 归一为
   同一 serving record；公开正式媒体的 ready-cache 明确空命中仍会在有界数据库读取中查找
@@ -201,6 +276,12 @@ Functions。检查页按键动态测量的低频 Lua 仍留在 `checks/`，不�
   `stored-object-response.ts` 集中流式、HEAD、Range 与缓存响应；缩略图缺失在只读 serving
   边界直接映射为 404，显式维修只属于 `checks/storage-thumbnail-repair.ts`，并由
   `checks/storage-maintenance.ts` 在独占维护编排中调用。
+
+`images/ready-cache/` 以真实变化原因分为 `indexes/`、`derived/`、`counts/`、`sync/` 与
+`integrity/`；`keys.ts`、`model.ts`、`revision.ts`、`source.ts`、`query.ts`、
+`ordered-window.ts`、`random-sampler.ts`、`rebuild.ts`、状态观测和 coordinator 等横切模块
+继续留在根层。`coordinator-machine.ts` 仍独占 phase、pending refresh、active task / abort、
+mutation hold 与 rebuild requirement；归组没有增加第二个状态机或装配实例。
 
 `images/ready-cache/query.ts` 编排筛选索引解析与 cursor / page 定位适配，
 `ready-cache/ordered-window.ts` 独占 ZCARD、精确 ZSET 范围、HMGET、水合及前后有效性校验；
@@ -251,9 +332,9 @@ hooks ──► lib
   `dialog-touch-boundary.ts` 只管理 capture 触摸生命周期；二者只认识当前顶层 dialog frame
   与 DOM 滚动能力，不依赖页面、角色或路由。
 - `pages/` 保存路由页面与页面级编排，页面专属组件、状态机和 Hook 就近维护。
-- `pages/admin/useImageAdminPageNavigation.ts` 是后台图库、无主题与回收站数字页的唯一查询
+- `pages/admin/images/useImageAdminPageNavigation.ts` 是后台图库、无主题与回收站数字页的唯一查询
   owner，只保存规范化 scope、目标 page 与最近成功的 scope total 快照，并让 React Query
-  处理取消、键隔离、90 秒新鲜缓存和重试；同目录 `image-admin-list-query.ts` 只构造规范化
+  处理取消、键隔离、90 秒新鲜缓存和重试；同目录 `images/image-admin-list-query.ts` 只构造规范化
   scope、query key、数字页 URL 与纯 total 仲裁模型，页面不再维护 cursorHistory、补链
   intent 或专用 `image-page-navigation.ts` 模型。
 - `AppRoutes.tsx` 将普通与嵌入路径映射到同一 `HomePage` / `GalleryPage`；页面参数只
@@ -269,11 +350,28 @@ hooks ──► lib
   页面滚动边界归一化放在 `lib/ui/`，由共享采样 Hook 提供给各页面交互状态机。图片编辑
   保存时，数据窗口用权威快照原位更新唯一命中卡片并保持其他卡片对象，再以同一 cursor
   后台水合该页；筛选成员、几何和游标变化继续由数据窗口原子提交。
-- `pages/admin/uploader/` 管理统一 prepared import 队列；`Uploader` 持有任务与来源状态，
-  `UploadWorkflowWindow` 直接消费这些状态并就近渲染单消费者的头部、默认值、任务列表与
-  页脚，不再复制一套 controller contract；其中 `link-import/` 继续负责 URL、JSONL 与微博
-  输入适配。
-- `pages/admin/admin-route-modules.ts` 集中拥有后台路由页面的生命周期级动态加载器；
+- `pages/admin/` 按稳定页面职责分为 `shell/`、`account/`、`images/`、`check/`、`storage/`
+  与 `advanced-config/`；只有 `LogPage.tsx`、`Overview.tsx`、`SettingsPage.tsx`、
+  `UserAdmin.tsx`、`VocabularyAdmin.tsx` 及其单个卡片等没有形成三文件族的页面留在根层。
+  每个页面专属查询、操作 Hook、对话框和状态机都留在同一目录，不上移为虚假的跨页面公共层。
+- `pages/admin/ingestion/` 管理统一 prepared ingestion 队列，稳定分为 `queue/`、`workflow/`、
+  `upload/` 和动态 `import/`。统一内容接入是上位领域，`upload` / `import` 分别表示浏览器
+  本地上传与 Server 远程导入；内部 mode 使用同名值，不再使用偏实现细节的 `file` / `link`。
+  `Ingestion.tsx` 装配两个 owner、当前 mode、激活意图、
+  来源弹窗加载与工作流窗口；`queue/` 保存 queue controller、API、状态回读、SSE、草稿同步及 `model/`、
+  `cards/`；`upload/` 保存本地文件模型、raw XHR lane 和上传 owner；`import/` 保存 URL、JSONL、
+  微博来源模型、弹窗与远程接收 owner；`workflow/` 保存窗口、稳定 DOM 区域、清理和动作状态机。
+  来源弹窗仍由 `import/` 独立动态加载。配置段也按同一领域词汇收口：远程来源使用
+  `import.*`，共用提交使用 `ingestion.*`；旧 `link_image` 与旧提交段 `import.*` 只由
+  `data/config.json` 归一化器迁移并原子写回，旧环境变量不再读取。
+- `workflow/IngestionWorkflowWindow.tsx` 继续拥有 DialogFrame、焦点捕获 / 恢复、滚动容器、
+  关闭 / 隐藏、详情 / preview target、cleanup confirmation scope、mode 和 owner 选择；
+  `IngestionWorkflowRegions.tsx` 只渲染 header、defaults、queue body、summary 与 footer，DOM 顺序、
+  class、ARIA 和 focusable 顺序不变。
+- `upload/useUpload.ts` 仍唯一拥有 Blob URL、active XHR、AbortController、in-flight
+  Promise 与 effect cleanup；`upload-jobs.ts` 只处理文件准入和 intent 输入，
+  `raw-upload-lane.ts` 只执行既有 raw lane，不改变 5.0.2 的浏览器并发或凭据批次。
+- `pages/admin/shell/admin-route-modules.ts` 集中拥有后台路由页面的生命周期级动态加载器；
   `AuthenticatedAdminShell` 的 `React.lazy` 与桌面 / 移动导航意图共用这些 Promise。
   `AdminNavigation` 只为角色过滤后可见的内部页面绑定模块键，外部“首页”出口不猜测
   根路由目标。键盘 focus 与 pointerdown 立即预加载；普通后台页的鼠标 hover 立即加载，
@@ -335,6 +433,11 @@ Web 继续使用 entries-aware 的入口根集合分块，`minShareCount: 2` 表
 `.vite/web-build-report.json`，记录 facade、dynamic importer、入口类型、静态 / 动态依赖、
 模块根和 CSS owner；服务端装配明确过滤 `.vite`，因此报告不进入最终镜像。
 
+内容接入 facade 与样式使用 `ingestion-[hash].js` / `ingestion-[hash].css`，来源弹窗使用
+`import-source-[hash].js`，facade 与来源弹窗共享的队列纯能力由实际源码职责命名为
+`ingestion-job-utils-[hash].js`。构建产物不再出现作为父领域名称的 `uploader`、`upload` CSS / JS
+文件；`upload` 只保留为浏览器文件子模式，`import` 只保留为远程来源子模式。
+
 本地 `check-web-chunks` 从真实输出计算原始、gzip 9、Brotli 11 和实际有效响应体字节；
 gzip 与 Brotli 各自只要结果严格小于原始响应体就采用，不设置最低原始体积或最低节省量。
 这组参数由 `scripts/build/` 中的生产装配 helper 与本地 checker 共用，不在 Vite 阶段额外落盘
@@ -358,9 +461,11 @@ Git 忽略的 `tests/benchmarks/`。它们不进入 `scripts/`、npm
 package scripts、Actions 或生产镜像；`scripts/` 继续只保存构建和容器运行所需命令。权威的
 固定媒体身份和验收边界见[架构总览](./architecture.md#浏览器传输验收)。
 
-## docs/guide
+## docs
 
-这里保存普通 Markdown 仓库文档。`roles/` 按普通用户、图片管理员、超级管理员和实例维护者
-提供任务入口；同级主题文档维护架构、配置、数据库、流程、部署和 API 的唯一完整契约。
-角色页只链接技术参考，不复制容易漂移的底层细节。文档只陈述当前可用行为，不承担版本
-更新记录，也不生成或提供在线站点。
+`docs/guide/` 保存普通 Markdown 现行文档。`roles/` 按普通用户、图片管理员、超级管理员和
+实例维护者提供任务入口；同级主题文档维护架构、配置、数据库、流程、部署和 API 的唯一完整
+契约。角色页只链接技术参考，不复制容易漂移的底层细节。
+
+`docs/history/` 只保存明确绑定发布提交的不可变结构快照，以及相邻版本之间的路径 / owner
+映射；历史文档不能作为现行操作步骤或开发入口。两类文档均不生成或提供在线站点。

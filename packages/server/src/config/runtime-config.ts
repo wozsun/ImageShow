@@ -19,10 +19,10 @@ import {
   homeBannerLabel,
   homeBannerTitle,
   imagePageSize,
-  importGlobalConcurrency,
-  linkFetchTimeoutSeconds,
-  linkImageConcurrency,
-  linkImportMaxItems,
+  ingestionStageConcurrency,
+  importFetchTimeoutSeconds,
+  importConcurrency,
+  importMaxItems,
   listPageSize,
   logLevel,
   logMaxFiles,
@@ -52,7 +52,7 @@ import {
   thumbnailLongEdge,
   thumbnailQuality,
   uploadConcurrency,
-  uploadImportMaxItems,
+  uploadMaxItems,
   weiboGlobalConcurrency,
   weiboImportMaxItems,
   weiboMetadataConcurrency
@@ -97,20 +97,20 @@ const runtimeConfigSchema = z.strictObject({
     allowed_origins: embedAllowedOrigins
   }),
   upload: z.strictObject({
-    max_items: uploadImportMaxItems,
+    max_items: uploadMaxItems,
     max_file_size_mb: maxFileSizeMb,
     max_long_edge: maxLongEdge,
     list_page_size: listPageSize,
     concurrency: uploadConcurrency,
-    global_concurrency: importGlobalConcurrency
+    global_concurrency: ingestionStageConcurrency
   }),
-  link_image: z.strictObject({
+  import: z.strictObject({
     fill_original_url: z.boolean(),
     auto_import: z.boolean(),
-    concurrency: linkImageConcurrency,
-    global_concurrency: importGlobalConcurrency,
-    fetch_timeout_seconds: linkFetchTimeoutSeconds,
-    max_items: linkImportMaxItems
+    concurrency: importConcurrency,
+    global_concurrency: ingestionStageConcurrency,
+    fetch_timeout_seconds: importFetchTimeoutSeconds,
+    max_items: importMaxItems
   }),
   weibo: z.strictObject({
     max_items: weiboImportMaxItems,
@@ -130,7 +130,7 @@ const runtimeConfigSchema = z.strictObject({
     path: ["min_quality"]
   }),
   thumbnail: z.strictObject({ long_edge: thumbnailLongEdge, quality: thumbnailQuality }),
-  import: z.strictObject({
+  ingestion: z.strictObject({
     commit_concurrency: commitConcurrency,
     global_commit_concurrency: globalCommitConcurrency,
     global_commit_byte_budget_mb: globalCommitByteBudgetMb
@@ -198,6 +198,38 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+function isLegacyIngestionSection(value: unknown) {
+  return isPlainRecord(value) && (
+    "commit_concurrency" in value
+    || "global_commit_concurrency" in value
+    || "global_commit_byte_budget_mb" in value
+  );
+}
+
+function migrateRenamedIngestionSections(value: unknown): unknown {
+  if (!isPlainRecord(value)) return value;
+  const migrated = structuredClone(value);
+  const legacyLinkImageSection = migrated.link_image;
+  const currentImport = migrated.import;
+
+  if (
+    migrated.ingestion === undefined
+    && isLegacyIngestionSection(currentImport)
+  ) {
+    migrated.ingestion = currentImport;
+  }
+  if (
+    legacyLinkImageSection !== undefined
+    && (currentImport === undefined || isLegacyIngestionSection(currentImport))
+  ) {
+    migrated.import = legacyLinkImageSection;
+  } else if (isLegacyIngestionSection(currentImport)) {
+    delete migrated.import;
+  }
+  delete migrated.link_image;
+  return migrated;
+}
+
 function projectKnownConfig(base: unknown, input: unknown): unknown {
   if (!isPlainRecord(base)) return input === undefined ? base : input;
   if (input === undefined) return structuredClone(base);
@@ -240,7 +272,7 @@ export function parseRuntimeConfig(value: unknown): RuntimeConfig {
 export function normalizeRuntimeConfig(value: unknown): RuntimeConfig {
   return runtimeConfigSchema.parse(projectKnownConfig(
     appConfig.runtimeDefaults,
-    value
+    migrateRenamedIngestionSections(value)
   ));
 }
 

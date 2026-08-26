@@ -127,8 +127,8 @@ export function StorageBackendCard({
         </div>
         <div className="storage-card-meta">
           {backend.slug} · {storageTypeLabel(backend.type)} · {backend.image_count} 张图片
-          {backend.import_session_count > 0
-            ? ` · ${backend.import_session_count} 个未清理导入会话`
+          {backend.ingestion_session_count > 0
+            ? ` · ${backend.ingestion_session_count} 个未清理内容接入会话`
             : ""}
           {backend.cleanup_job_count > 0
             ? ` · 旧对象删除 ${backend.cleanup_job_count} 项`

@@ -25,7 +25,7 @@ import type {
   ImageEditorItem,
   ImageDraft
 } from "../../../lib/types.js";
-import { mergeCommonImageAttributes } from "../../../lib/upload/upload-utils.js";
+import { mergeCommonImageAttributes } from "../../../lib/image-draft.js";
 import {
   useImageMetadataOperations
 } from "./useImageMetadataOperations.js";

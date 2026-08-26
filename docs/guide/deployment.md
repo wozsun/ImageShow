@@ -189,7 +189,7 @@ server {
 上传流如需边收边传，可在同一 server 中增加：
 
 ```nginx
-location /api/admin/imports/ {
+location /api/admin/ingestion/ {
   proxy_pass http://127.0.0.1:5518;
   proxy_request_buffering off;
   proxy_read_timeout 300s;

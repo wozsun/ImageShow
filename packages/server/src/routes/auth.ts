@@ -14,7 +14,7 @@ import {
 } from "../core/http/request-security.ts";
 import { applicationVersion } from "../core/application-version.ts";
 import { issueAltchaChallenge, verifyAltchaProof } from "../core/altcha.ts";
-import { redis } from "../core/redis-client.ts";
+import { redis } from "../core/redis/client.ts";
 import { parse, passwordChangeInput } from "../core/validation.ts";
 import { changeAdminPassword } from "../users/admin-accounts.ts";
 import {

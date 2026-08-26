@@ -1,7 +1,7 @@
 import { slugMaxLength, slugPattern } from "@imageshow/shared/browser";
 import {
   withAdvisoryLock
-} from "../core/database-advisory-locks.ts";
+} from "../core/database/advisory-locks.ts";
 import { ApiError } from "../core/api-error.ts";
 import {
   invalidateEntityCountCaches,

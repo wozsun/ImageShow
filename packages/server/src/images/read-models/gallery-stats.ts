@@ -12,13 +12,13 @@ import {
   withPublicDatabaseRead,
   publicPgFallbackWorkLimitExceeded,
   type PublicDatabaseReadAccess
-} from "../../core/public-db-fallback.ts";
-import { pool, type DatabaseReader } from "../../core/database-pools.ts";
+} from "../../core/database/public-fallback.ts";
+import { pool, type DatabaseReader } from "../../core/database/pools.ts";
 import { galleryStatsQuery } from "../../core/validation.ts";
 import {
   readReadyImageCountSnapshot,
   type ReadyImageCountSnapshot
-} from "../ready-cache/counts.ts";
+} from "../ready-cache/counts/query.ts";
 import {
   resolveImageFilterPlan,
   type ImageFilterPlan
