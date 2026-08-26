@@ -85,7 +85,7 @@ commit 在复制任何正式 media / thumbs 前，先为该 image 与两个确�
 
 公共与管理 DTO 都只发布一个 `thumb_url`。local 以及无公开 URL 的 S3 由应用读取；配置了
 `public_base_url` 的 S3 直接发布最终对象 URL，不先做 HEAD 或应用 302。应用缩略图路由只读
-正式 `thumbs` 对象：缺失映射为 404，其他存储错误保持原样，不读取原图、不查 repair receipt，
+正式 `thumbs` 对象：缺失映射为 404，其他存储错误原样传播，不读取原图、不查 repair receipt，
 也不写存储或数据库。浏览器只尝试当前地址一次；加载失败立即显示统一损坏图标，刷新或重新
 打开页面才自然重试。图片移入回收站只退出 Gallery、公开详情、random、stats 与 facets 等
 发现面，不搬对象或改写 URL；管理列表继续复用同一个正式公开媒体地址和 immutable 缓存。
@@ -93,10 +93,10 @@ local、无公开 URL 的 S3 与配置 `public_base_url` 的 S3 都遵守这一�
 不存在后，后续源站请求无法回源。
 
 异步操作只改变按钮文案、禁用和等待光标，不把所有进行中状态强制提升为主按钮：保存
-本身是实心主按钮，保存中继续保持实心蓝色；连接测试、启停和默认后端切换则保留各自
-原有的次按钮或状态开关表面。成功与失败结果仍使用对应反馈色。
+本身是实心主按钮，保存中保持实心蓝色；连接测试、启停和默认后端切换分别使用
+次按钮或状态开关表面。成功与失败结果使用对应反馈色。
 
-存储卡片的末端操作由服务端删除策略决定：空闲的自定义后端显示删除并在提交前二次确认；仍有图片时以 storage backend migration 入口替代删除，并与检查页共用同一迁移对话框及 `POST /api/admin/storage/backends/migrate`。这项操作由 storage 域负责，不属于只读检查；卡片入口会锁定当前源后端，源已不存在时禁止提交而不会静默改选其他后端。内置 `local`、默认后端、Redis active canonical 或未解决 `move.cleanup` 等情况以原因说明入口替代删除。管理列表以及最终删除冲突响应都返回结构化的 `deletion.action` 与 `deletion.blockers`，前端不再复制一套删除规则。最终删除仍会在独占位置锁内重新读取 PostgreSQL 图片、Redis 临时引用、清理任务和 `_uploads`；Redis 不可用或读取不稳定时 fail closed。因此列表加载后新产生的引用、仅存在于存储端的暂存对象或其他竞态仍会被服务端拒绝。删除与整后端迁移在成功、明确失败或响应结果未知后都会刷新权威列表；若删除回执丢失但后端已不存在，确认弹窗随刷新结果收敛关闭。图片、任何 active canonical、未解决的 `move.cleanup` 或 `_uploads` 暂存对象均需先移走或清理。
+存储卡片的末端操作由服务端删除策略决定：空闲的自定义后端显示删除并在提交前二次确认；仍有图片时以 storage backend migration 入口替代删除，并与检查页共用同一迁移对话框及 `POST /api/admin/storage/backends/migrate`。这项操作由 storage 域负责，不属于只读检查；卡片入口会锁定当前源后端，源已不存在时禁止提交而不会静默改选其他后端。内置 `local`、默认后端、Redis active canonical 或未解决 `move.cleanup` 等情况以原因说明入口替代删除。管理列表以及最终删除冲突响应都返回结构化的 `deletion.action` 与 `deletion.blockers`，前端直接渲染这套服务端策略。最终删除会在独占位置锁内重新读取 PostgreSQL 图片、Redis 临时引用、清理任务和 `_uploads`；Redis 不可用或读取不稳定时 fail closed。因此列表加载后新产生的引用、仅存在于存储端的暂存对象或其他竞态仍会被服务端拒绝。删除与整后端迁移在成功、明确失败或响应结果未知后都会刷新权威列表；若删除回执丢失但后端已不存在，确认弹窗随刷新结果收敛关闭。图片、任何 active canonical、未解决的 `move.cleanup` 或 `_uploads` 暂存对象均需先移走或清理。
 
 所有会改变图片对象位置的操作共用“全局共享维护锁 + 单图独占锁”。进入锁后重新读取
 当前 `storage_slug`、对象键和分类，读取源对象并把原图 / 缩略图复制到目标位置，
@@ -114,7 +114,7 @@ local、无公开 URL 的 S3 与配置 `public_base_url` 的 S3 都遵守这一�
 编排器中的 1 项或 N 项；整后端分页也逐项调用该原语，不维护第二套 executor、阶段 DTO
 或补偿协议。逐项结果明确区分 `migrated`、`unchanged`、图片不存在、源对象缺失和普通失败；
 一个成员失败不会回滚已经完成的其他成员。客户端断开会中止当前并发片并等待其对象候选与
-持久清理所有权收口，不再启动后续列表成员或读取下一页整后端数据。整后端迁移以
+持久清理所有权收口，后续列表成员和下一页整后端数据保持未启动。整后端迁移以
 `error_count` 表达权威失败总数，并只在 `error_samples` 返回最多 100 个稳定样本；每项固定为
 `{ id, object_key, code, message }`。已知 `ApiError` 保留其稳定 `code`，未知异常统一使用
 `storage_migration_failed`；`message` 只供界面展示和运维诊断，任何消费者都不得按其文本
@@ -137,7 +137,7 @@ identity 相同时迁移会用目标后端凭据回读并逐字节验证共享�
 
 编辑窗口只提交实际变化的 S3 字段，连接测试也直接使用表单当前值，不会先保存配置；
 未重新输入 Secret Key 时，请求省略该字段，服务端通过普通配置 patch 合并沿用数据库中的
-当前值，不维护凭据专用兼容分支。测试会写入、读取并在 `finally` 中删除专用探针对象，
+当前值。测试会写入、读取并在 `finally` 中删除专用探针对象，
 再确认对象确实不存在；测试失败不会把尚未确认的字段写入数据库。
 
 S3 的 bucket / root path 是不可在用修改的物理布局
@@ -166,8 +166,8 @@ thumbnail 都使用 attempt / generation 唯一键，且当前 `execution_token`
 Endpoint、region、bucket、root path、path-style 和请求时限才组成连接签名。注册表发布新的
 PostgreSQL 快照时按该签名原子替换映射，同签名继续复用，
 失去引用的旧 driver 立即拒绝新操作；已经进入的普通请求会继续到结算，已返回的对象流则持有
-引用直到 EOF、取消或错误，最后只关闭底层 client 一次。这里不再维护 graceful / force 两套
-关闭状态机或 driver 私有超时；停机先停止 HTTP 接收并等待真实活动引用排空，进程级 45 秒
+引用直到 EOF、取消或错误，最后只关闭底层 client 一次。driver 采用单一引用排空状态机；停机
+先停止 HTTP 接收并等待真实活动引用排空，进程级 45 秒
 硬上限统一覆盖 driver、Redis、PostgreSQL 与其余资源收口。
 
 S3 Endpoint 是可验证的访问地址：即使后端仍在使用，编辑窗口也允许修改。保存时服务端
@@ -197,7 +197,7 @@ driver DELETE 返回后还会重新确认对象不存在；对象仍存在或确
 
 prepare 会保存 processed image 与缩略图的 SHA-256（图片同时保存 MD5）。import commit
 流式校验 `_uploads` 源对象，并优先通过 S3 / 本地驱动的后端内复制生成正式
-对象，随后流式回读目标校验；不再为了校验把源和目标同时读成完整 Buffer。正式同名
+对象，随后流式回读目标校验；源与目标校验均保持流式。正式同名
 对象已存在但内容不同返回 `storage_object_conflict`；本次复制成功后回读不一致返回
 `storage_transfer_integrity_failed`，便于区分存量冲突与存储端完整性故障。异常补偿只
 追踪本次实际创建的候选；数据库位置 CAS 与源对象清理凭据在同一事务提交。若 PostgreSQL

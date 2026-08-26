@@ -1,4 +1,4 @@
-# 项目结构（5.1.0）
+# 项目结构
 
 ImageShow 使用 npm workspaces 管理三个包。依赖方向固定为：
 
@@ -10,10 +10,7 @@ packages/web ─────► packages/shared
 `server` 与 `web` 不能互相导入；`shared` 不能依赖其他 workspace。Web 构建产物最终
 由服务端镜像提供；根目录 `docs/guide/` 只是普通仓库文档，不参与 workspace 或生产构建。
 
-本文是 5.1.0 的现行权威结构说明。5.0.2 的发布时目录已冻结在
-[5.0.2 项目结构快照](../history/v5.0.2-project-structure.md)，本次重组的逐项路径、owner 与
-验证对照见 [5.0.2 → 5.1.0 项目结构对照](../history/v5.0.2-to-v5.1.0-project-structure.md)。
-现行开发与运维步骤不得引用历史快照中的旧路径。
+本文直接描述现行源码、构建产物、状态所有者和依赖边界，是开发与运维的权威结构说明。
 
 ## 根目录职责
 
@@ -26,9 +23,8 @@ packages/web ─────► packages/shared
 - `Dockerfile` 只安装三个 workspace 的构建依赖（不安装根目录本地门禁工具）并完成编译，
   再单独安装 server/shared 的生产依赖；运行镜像只携带生产依赖、编译产物和运维入口。
 - `compose.yaml` 提供单实例 ImageShow、PostgreSQL 与 Redis 的标准部署。
-- `docs/guide/` 保存当前架构、配置、数据库、流程、部署和 API 说明；`docs/history/` 只保存
-  绑定发布提交的不可变结构快照与版本间映射。两者均使用相对 Markdown 链接，可直接在
-  仓库中阅读。
+- `docs/guide/` 保存当前架构、配置、数据库、流程、部署和 API 说明，使用相对 Markdown
+  链接，可直接在仓库中阅读。
 
 本地测试、源码 / 构建 / 隔离镜像门禁脚本及 benchmarks 统一位于根目录 `tests/`，由 Git
 忽略且不进入 Docker build context、生产镜像或 GitHub Actions。测试从外部启动与生产镜像
@@ -98,7 +94,7 @@ core / config
   自己的事务边界 COUNT、推进 revision 和按决策读取有限 ID。
 - `images/ready-cache/coordinator-machine.ts` 是单进程图片投影状态机的唯一所有者；
   `coordinator.ts` 只装配该进程唯一实例。四态、单一活动校验 / 重建任务、revision 与
-  planned mutation fence 不再拆成逐函数转发文件。
+  planned mutation fence 共同位于状态机边界内。
 
 两个 CLI 都直接依赖所需基础设施，不导入 HTTP 应用，也不会触发主服务启动；
 healthcheck 只读现有配置快照，密码恢复不初始化运行时配置。
@@ -124,9 +120,8 @@ healthcheck 只读现有配置快照，密码恢复不初始化运行时配置�
 
 `routes/` 当前保留 18 个直属文件。`admin-vocabulary.ts` 在一个 HTTP 能力边界中声明 tags、
 themes 与 authors 三组同构 CRUD，通用 registrar 为文件内私有实现；每组仍分别注入自己的
-schema、查询、变更和删除权限，不把领域业务搬进路由。5.0.2 的三个单函数包装文件与外置
-registrar 已删除。`public.ts` 私有持有 Hono 请求到 `StoredResponseRequest` 的 header / signal
-投影，因为它只服务该文件内 media 与 thumbnail 两个入口，不再为单消费者保留独立文件。
+schema、查询、变更和删除权限，不把领域业务搬进路由。`public.ts` 私有持有 Hono 请求到
+`StoredResponseRequest` 的 header / signal 投影，共同服务该文件内 media 与 thumbnail 两个入口。
 其余短 registrar 即使只有一个导出，也分别拥有独立 URL、鉴权 / 权限、中间件顺序、Host
 或缓存契约；不按行数与相邻文件合并。`http-app.ts` 仍显式展示公开路由、管理员 session、
 CSRF、请求体限制和各管理能力的装配顺序。
@@ -144,7 +139,7 @@ schema 初始化和管理员播种直接使用主查询池，不为不受支持�
 公开降级读取由 `database/public-admission.ts` 统一管理一个 FIFO 容量与等待队列，
 `database/public-fallback.ts` 只负责请求级惰性 reader scope、执行期限和 client 释放 / 淘汰。Redis
 缓存读取先行，首次真实回源才借 client，同一 scope 内的领域模块显式接收并复用 reader；
-底层 `pool.query` 不再由进程上下文改写。
+底层 `pool.query` 保持显式调用与原始连接语义。
 
 高频且必须保持原子性的 Redis Lua 由 `core/redis/business-scripts.ts` 单独持有脚本文本，
 `core/redis/business-commands.ts` 统一声明七个 ioredis 自定义命令、key 数量、读写属性、
@@ -156,7 +151,7 @@ schema 初始化和管理员播种直接使用主查询池，不为不受支持�
 发送 `EVALSHA`，并在 `NOSCRIPT` 后重发脚本；应用不维护 SHA、启动时预加载清单或 Redis
 Functions。检查页按键动态测量的低频 Lua 仍留在 `checks/`，不并入业务注册表。
 
-`storage/` 的 5.1.0 稳定目录为：
+`storage/` 的稳定目录为：
 
 ```text
 storage/
@@ -184,7 +179,7 @@ storage/
 请求级派生计数失效；`images/image-update-item.ts` 是单图 metadata、author / theme / tag
 创建、完整标签替换、分类位置 CAS 与持久清理回执的唯一 PostgreSQL 事务所有者。
 
-`images/ingestion/` 是 Upload 与 Import 共用的统一内容接入领域，5.1.0 用稳定子目录表达允许依赖方向：
+`images/ingestion/` 是 Upload 与 Import 共用的统一内容接入领域，稳定子目录表达允许依赖方向：
 
 ```text
 ingestion/
@@ -221,12 +216,12 @@ snapshot、SSE、watermark 和展示投影只使用 session / repository 边界�
 - `repository.ts` 保留命令调用边界、错误翻译与事件发布 facade；实际职责分别由
   `sessions/command-runner.ts`、`replies.ts`、`intent-store.ts`、`listener-hub.ts` 和
   `queue/store.ts` 承接。facade 与内部模块不复制 key 推导、严格解析或业务校验。
-- `sessions/scripts/` 的五个文件仍生成原来十段完整 Lua。`projection.ts` 只保存共享 Lua
-  片段，不执行命令；每个业务操作仍是一段完整脚本和一次 `EVAL` / `EVALSHA`，脚本数量、
-  `numberOfKeys`、KEYS / ARGV、返回数组和错误 marker 不变。TypeScript 自定义命令标识已随
-  领域改为 Ingestion；Redis 中既有 `imageshow:import:*` key、queue 值 `import`、canonical
-  的 `remote` 字段和 `import_*` marker 保持不变，以便升级时继续接管在途会话。这些值只属于
-  持久运行时协议，不作为新源码、DTO、路由、配置或用户文案的命名依据。
+- `sessions/scripts/` 的五个文件生成十段完整 Lua。`projection.ts` 只保存共享 Lua
+  片段，不执行命令；每个业务操作由一段完整脚本和一次 `EVAL` / `EVALSHA` 原子完成，明确声明
+  `numberOfKeys`、KEYS / ARGV、返回数组和错误 marker。TypeScript 自定义命令标识使用
+  Ingestion；Redis 持久运行时协议固定使用 `imageshow:import:*` key、queue 值 `import`、
+  canonical 的 `remote` 字段和 `import_*` marker。这些协议值不作为源码、DTO、路由、配置或
+  用户文案的领域名称。
 - `queue/events.ts`、`snapshot.ts`、`action-scope.ts` 与 `store.ts` 共同负责 owner + queue 单
   SSE、稳定分页、动作作用域和最近动作批次的有界重放；`action.ts` 编排有界全队列动作，
   `action-protocol.ts` 校验 watermark / continuation，`action-handlers.ts` 执行逐项动作，
@@ -335,8 +330,7 @@ hooks ──► lib
 - `pages/admin/images/useImageAdminPageNavigation.ts` 是后台图库、无主题与回收站数字页的唯一查询
   owner，只保存规范化 scope、目标 page 与最近成功的 scope total 快照，并让 React Query
   处理取消、键隔离、90 秒新鲜缓存和重试；同目录 `images/image-admin-list-query.ts` 只构造规范化
-  scope、query key、数字页 URL 与纯 total 仲裁模型，页面不再维护 cursorHistory、补链
-  intent 或专用 `image-page-navigation.ts` 模型。
+  scope、query key、数字页 URL 与纯 total 仲裁模型；页面状态只消费这两个所有者提供的结果。
 - `AppRoutes.tsx` 将普通与嵌入路径映射到同一 `HomePage` / `GalleryPage`；页面参数只
   决定是否挂载主导航，不能复制公开页实现或以 CSS 隐藏导航。服务端仍独立决定嵌入
   文档是否存在并输出父页面白名单，前端开关只负责已加载 SPA 内的路由收敛。
@@ -356,21 +350,21 @@ hooks ──► lib
   每个页面专属查询、操作 Hook、对话框和状态机都留在同一目录，不上移为虚假的跨页面公共层。
 - `pages/admin/ingestion/` 管理统一 prepared ingestion 队列，稳定分为 `queue/`、`workflow/`、
   `upload/` 和动态 `import/`。统一内容接入是上位领域，`upload` / `import` 分别表示浏览器
-  本地上传与 Server 远程导入；内部 mode 使用同名值，不再使用偏实现细节的 `file` / `link`。
+  本地上传与 Server 远程导入，内部 mode 也使用 `upload` / `import`。
   `Ingestion.tsx` 装配两个 owner、当前 mode、激活意图、
   来源弹窗加载与工作流窗口；`queue/` 保存 queue controller、API、状态回读、SSE、草稿同步及 `model/`、
   `cards/`；`upload/` 保存本地文件模型、raw XHR lane 和上传 owner；`import/` 保存 URL、JSONL、
   微博来源模型、弹窗与远程接收 owner；`workflow/` 保存窗口、稳定 DOM 区域、清理和动作状态机。
-  来源弹窗仍由 `import/` 独立动态加载。配置段也按同一领域词汇收口：远程来源使用
-  `import.*`，共用提交使用 `ingestion.*`；旧 `link_image` 与旧提交段 `import.*` 只由
-  `data/config.json` 归一化器迁移并原子写回，旧环境变量不再读取。
-- `workflow/IngestionWorkflowWindow.tsx` 继续拥有 DialogFrame、焦点捕获 / 恢复、滚动容器、
+  来源弹窗由 `import/` 独立动态加载。配置段使用同一领域词汇：远程来源使用
+  `import.*`，共用提交使用 `ingestion.*`。`data/config.json` 归一化器把 `link_image` 来源段和
+  含提交字段的 `import` 段投影到这两个现行分组，并原子写回规范结构。
+- `workflow/IngestionWorkflowWindow.tsx` 拥有 DialogFrame、焦点捕获 / 恢复、滚动容器、
   关闭 / 隐藏、详情 / preview target、cleanup confirmation scope、mode 和 owner 选择；
   `IngestionWorkflowRegions.tsx` 只渲染 header、defaults、queue body、summary 与 footer，DOM 顺序、
   class、ARIA 和 focusable 顺序不变。
 - `upload/useUpload.ts` 仍唯一拥有 Blob URL、active XHR、AbortController、in-flight
   Promise 与 effect cleanup；`upload-jobs.ts` 只处理文件准入和 intent 输入，
-  `raw-upload-lane.ts` 只执行既有 raw lane，不改变 5.0.2 的浏览器并发或凭据批次。
+  `raw-upload-lane.ts` 按当前浏览器并发窗口执行 raw PUT，并让上传 owner 分批签发短凭据。
 - `pages/admin/shell/admin-route-modules.ts` 集中拥有后台路由页面的生命周期级动态加载器；
   `AuthenticatedAdminShell` 的 `React.lazy` 与桌面 / 移动导航意图共用这些 Promise。
   `AdminNavigation` 只为角色过滤后可见的内部页面绑定模块键，外部“首页”出口不猜测
@@ -392,7 +386,7 @@ hooks ──► lib
   后台色契约跟随自身能力块，不能依赖用户曾访问后台；嵌套管理弹窗会在局部重映射
   共享控件别名并继承当前文档的亮暗分支，不改变外层公开页颜色域。token 按视觉职责
   和状态命名，不把当前色相写进契约；页面和组件样式只能消费语义 token 或上下文
-  别名，不再声明原始颜色。后台颜色契约同时为后台路由、管理弹窗及公开详情中按需
+  别名，原始颜色只在语义契约源中声明。后台颜色契约同时为后台路由、管理弹窗及公开详情中按需
   加载的管理动作提供同一套单像素焦点环，避免各入口回退到浏览器黑白粗框；
   后台成功、警告、危险和处理中状态只保留文字、表面、边框、动作、进度及必要强弱
   层级，导入阶段、登录、校验或具体页面直接映射这些角色，不另建流程专用色板；相邻
@@ -402,10 +396,10 @@ hooks ──► lib
   使用独立的暗色表面、亮色文字与满足交互边界辨识的控件边框。两个分支都只让蓝色
   承担当前项、选中态和主要动作，并通过同一组职责 token 的 `light-dark()` 值切换；
   暗色大面积交互蓝和带色透明层不能机械复用亮色 RGB，应按暗底重新提高可见度并适度
-  降低饱和度，但仍须一眼可辨原有色相；实色主操作蓝保留明确色度，不参与表面层的
+  降低饱和度，但仍须一眼可辨主色相；实色主操作蓝保留明确色度，不参与表面层的
   去饱和策略。
   只有白色强调文字、纯黑阴影及代码、日志、图片舞台等固定暗底内容可按其内容契约共色，
-  不重复声明或在组件中覆盖颜色；控件、卡片、弹窗及页面排布继续保留各自既有几何，
+  不重复声明或在组件中覆盖颜色；控件、卡片、弹窗及页面排布采用各自的当前几何，
   后台卡片集合的网格间距统一为 6px。
   只有整张表面承担点击职责的概览卡、最近图片、图片主卡和新增存储卡使用轻微抬升、
   蓝色边框及焦点环，含表单或独立动作的配置卡保持静止，且减少动态效果时取消位移。
@@ -413,8 +407,8 @@ hooks ──► lib
   变化。公开页面和启动底色仍拥有独立颜色上下文；未认证登录页与公开页面中的管理弹窗
   都继承公开暗色分支，不读取后台保存的外观偏好，只有认证后的完整后台应用账号偏好；
   `tests/verify/check-semantic-colors.mjs` 校验传统与现代颜色语法、完整 CSS 命名色、
-  SVG 资产白名单、定义/引用完整性、无用 token、按色相命名、退役别名及公开/后台
-  依赖边界，并拒绝超出规范集合的后台状态角色和页面 / 生命周期专用状态 token；
+  SVG 资产白名单、定义/引用完整性、无用 token、按色相命名及公开/后台依赖边界，
+  并拒绝超出规范集合的后台状态角色；
   当前品牌 favicon 是唯一允许保留原始色值的 SVG。
 
 `lib/`、`hooks/` 和通用组件不得反向导入具体页面。只有形成稳定跨页面职责的代码才上移，
@@ -435,8 +429,8 @@ Web 继续使用 entries-aware 的入口根集合分块，`minShareCount: 2` 表
 
 内容接入 facade 与样式使用 `ingestion-[hash].js` / `ingestion-[hash].css`，来源弹窗使用
 `import-source-[hash].js`，facade 与来源弹窗共享的队列纯能力由实际源码职责命名为
-`ingestion-job-utils-[hash].js`。构建产物不再出现作为父领域名称的 `uploader`、`upload` CSS / JS
-文件；`upload` 只保留为浏览器文件子模式，`import` 只保留为远程来源子模式。
+`ingestion-job-utils-[hash].js`。`upload` 与 `import` 分别作为浏览器文件和远程来源子模式，
+父领域资源统一使用 `ingestion` 命名。
 
 本地 `check-web-chunks` 从真实输出计算原始、gzip 9、Brotli 11 和实际有效响应体字节；
 gzip 与 Brotli 各自只要结果严格小于原始响应体就采用，不设置最低原始体积或最低节省量。
@@ -448,7 +442,7 @@ gzip 与 Brotli 各自只要结果严格小于原始响应体就采用，不设�
 本地报告列出未压缩小于 8 KiB，或生产有效响应体小于 4 KiB 的 emitted JS 与 CSS，并统计
 512 B、1 KiB、2 KiB、4 KiB、8 KiB 原始体积档位及有效体积档位；这只用于发现可合并资源，
 不是页面请求数或响应体积预算。只有与目标页面必然同行且不扩大权限、路由或能力懒加载边界的
-资产才合并；不再维护各入口随版本冻结的绝对请求数和有效响应体上限，总文件数本身也不是目标。
+资产才合并；资源门禁以真实构建图、权限闭包、同行关系和重复内容为准，总文件数本身不是目标。
 报告保留全部入口必达的 Rolldown runtime，该虚拟 runtime 不进入模块 ownership 分组，也不在
 构建后改写 import 或内容 hash。正文压缩采用规则与分块采用规则彼此独立。报告还会发现主构建
 图之外的 Worker 入口，并把它们纳入体积、命名和重复内容审计；
@@ -466,6 +460,4 @@ package scripts、Actions 或生产镜像；`scripts/` 继续只保存构建和�
 `docs/guide/` 保存普通 Markdown 现行文档。`roles/` 按普通用户、图片管理员、超级管理员和
 实例维护者提供任务入口；同级主题文档维护架构、配置、数据库、流程、部署和 API 的唯一完整
 契约。角色页只链接技术参考，不复制容易漂移的底层细节。
-
-`docs/history/` 只保存明确绑定发布提交的不可变结构快照，以及相邻版本之间的路径 / owner
-映射；历史文档不能作为现行操作步骤或开发入口。两类文档均不生成或提供在线站点。
+这些文档不生成或提供在线站点。

@@ -14,17 +14,16 @@ PostgreSQL 共 9 张业务表，不保存迁移账本或 schema 版本表。
 
 ## 启动与结构契约
 
-当前代码库不提供编号迁移、迁移账本或通用数据库升级路径。单应用进程启动时，空数据库
-在一个事务中先执行 `schema.sql`，再执行当前 `schema-additions.sql`；非空数据库只执行
-additions，随后进入轻量 readiness。当前 additions 是纯注释占位，因此 `schema.sql` 是本版
-唯一结构来源。additions、readiness 或干净初始化任一步失败都会回滚本次事务。全部连接固定
-使用 `search_path=public`。应用不为不受支持的第二个重叠进程持有 schema 或管理员播种
-bootstrap lock。
+数据库生命周期由干净基线、单发布周期 additions 和轻量 readiness 组成。单应用进程启动时，
+空数据库在一个事务中先执行 `schema.sql`，再执行当前 `schema-additions.sql`；非空数据库只执行
+additions，随后进入 readiness。当前 additions 是纯注释占位，因此 `schema.sql` 是本版唯一
+结构来源。additions、readiness 或干净初始化任一步失败都会回滚本次事务。全部连接固定使用
+`search_path=public`；单实例部署按顺序完成 schema 和管理员播种。
 
 additions 只为以后一个发布周期内经明确审查的受限结构增量或一次性数据变化保留入口。全部
 受控非空数据库应用当期 additions 并通过核对后，下一发布把同一定义并入 `schema.sql` 并恢复
-注释占位。部署和旧备份恢复不得跳过承载 additions 的发布；早于当前基线的数据库必须先运行
-对应的旧发布，当前版本不会识别版本、补做已移除迁移、删除旧对象、替换旧约束或推测回填。
+注释占位。部署和备份恢复按相邻发布顺序经过承载 additions 的版本；自动结构操作限定为当期
+明确声明的 additions，其他结构与数据整理由维护者在停机、备份和恢复验证后执行。
 `metadata.created_by TEXT NOT NULL` 与后台任务当前类型约束都已直接定义在 `schema.sql`。
 
 readiness 只读核对当前运行时所需业务表、源码实际使用的列及其 PostgreSQL 类型、必需系统种子，
@@ -33,12 +32,12 @@ UPDATE / DELETE 权限，不使用回滚写探针。它还按列和谓词语义�
 约束，不依赖数据库对象名称：当前运行时表的业务主键；`metadata.object_key`、后台任务
 非空幂等键与唯一活动 `cache.rebuild`、单一默认存储和单一超级管理员的唯一性；以及当前
 metadata / image_tag 删除路径依赖的 RESTRICT、CASCADE 和 SET NULL 外键。`created_by` 的
-`text` 类型进入最小列集合；额外表、额外索引和部署方其他约束仍作为兼容超集保留，不触发
-通用破坏性对齐，也不被解释为某个旧版本的标记。
+`text` 类型进入最小列集合。readiness 的结论只由这套运行时最小契约决定；应用未消费的数据库
+对象不进入启动判断，也不会触发自动结构对齐。
 
 readiness 不复制 `schema.sql` 的可空性、默认值、CHECK、触发器、普通查询索引或无消费者
-约束。额外表、额外列、额外索引、等价约束改名以及更宽的 CHECK 不影响启动，只要当前代码
-不依赖它们；破坏性清理由维护者在停机、备份和恢复验证后单独执行，不属于应用启动职责。
+约束。应用未消费的表、列、索引和约束位于启动契约之外；破坏性清理由维护者在停机、备份和
+恢复验证后单独执行，不属于应用启动职责。
 
 ## 运行期连接与公开回源
 
@@ -131,7 +130,7 @@ Redis 核心 meta 的当前图片数和最后更新时间随完整重建批次�
 COUNT，再判断 `PageWindow.start >= total`，最后才执行目标窗口 SELECT。窗口子查询先完成
 排序、LIMIT 与 OFFSET，外层只为最终至多 `limit` 行投影 `image_tag`，因此深页不会为被
 OFFSET 跳过的行水合标签。total、metadata 与 tags 属于同一事务快照；提交后的 presenter
-不再读取图片真相。
+只格式化该事务已经返回的结果集。
 
 ### 数字页查询计划证据
 

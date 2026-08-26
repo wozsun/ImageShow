@@ -103,7 +103,7 @@ Content-Type 与缓存验证器会被省略或回退为站内类型；`Content-R
 | CSP report、OPTIONS、204 | `no-store` | 只允许各自方法，先做 Host / Fetch Metadata 检查，取消不需要的正文；不启用 CORS |
 | hash 资产、稳定图片、HEAD、206、304 | hash 资产 / 稳定图片 `immutable`；非 hash 品牌资源短缓存；ETag、Last-Modified、单 Range | 304 无正文；206 保留完整对象验证器；416 返回 `Content-Range: bytes */总长` |
 | 随机 proxy / redirect / JSON | 永远 `no-store` | proxy 不声明 Range；302 的 `Location` 先校验；前两种模式带 `X-Image-Info`，JSON 只返回公开字段与实际 `count`，HEAD 不发送正文 |
-| 外链原图 proxy / redirect | `static.` 唯一公开入口的 direct 302 使用 `private, no-store`；proxy 继承已校验源站策略或使用 fallback，URL 命名空间弱 ETag、Last-Modified 与 304；后台 `private, no-store` | 单次公开图片解析、HTTPS 安全抓取、GET 内容嗅探、HEAD 不保留正文、旧 URL 验证器不能命中新 URL、`Referrer-Policy: no-referrer` |
+| 外链原图 proxy / redirect | `static.` 唯一公开入口的 direct 302 使用 `private, no-store`；proxy 继承已校验源站策略或使用 fallback，URL 命名空间弱 ETag、Last-Modified 与 304；后台 `private, no-store` | 单次公开图片解析、HTTPS 安全抓取、GET 内容嗅探、HEAD 不保留正文、验证结果严格绑定请求 URL、`Referrer-Policy: no-referrer` |
 | 导入 SSE | `no-store, no-transform` | 每个已显示的 owner + queue 使用一个固定 GET 路径；不压缩、不缓冲，30 秒串行鉴权 heartbeat，断开即清理 listener / scope |
 | `static.` 与未知子域 | `static.` 只开放 `/media/*`、`/thumbs/*`、`/link/original/<id>` 与可选 `/robots.txt`；失败 `no-store` | 主站不暴露资源字节路径；随机、外链、主题和其他未知子域均返回带完整安全头的 404 |
 
@@ -123,8 +123,8 @@ Worker 与嵌入页。应用没有跨源 API 契约，不返回 `Access-Control-
 掌握 TLS 与全部相关主机的最外层代理部署。
 - Web 直接依赖 `react-router@8.3.0`，只使用 `<BrowserRouter>` / `<Routes>`、
   链接与位置等 Declarative Mode API，不使用 Framework / Data action、服务端
-  渲染、React Server Components 或任何 unstable RSC API。当前版本已包含
-  `GHSA-qwww-vcr4-c8h2` 的官方修复；将来若引入 RSC，仍须重新审查 CSRF 边界。
+  渲染、React Server Components 或任何 unstable RSC API；将来若引入 RSC，须重新审查
+  CSRF 边界。
 - 普通 API 请求体在解析前限制为 128 KiB；管理员偏好 PATCH 在鉴权与 CSRF
   通过后使用独立的 5 KiB 传输上限，解析并规范化后的完整 JSONB 另受 4 KiB
   上限约束。`/api/admin/auth/me` 只向已认证会话附带按 shared schema 规范化的

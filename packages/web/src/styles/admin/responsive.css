@@ -114,7 +114,7 @@
     align-items: stretch;
     row-gap: 8px;
   }
-  /* 与桌面 .has-actions 保持同等选择器优先级，避免窄屏继续沿用桌面双列。 */
+  /* 与桌面 .has-actions 使用同等选择器优先级，窄屏采用单列。 */
   .workspace-grid-head.has-actions {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas:

@@ -1,11 +1,14 @@
 {
   "name": "imageshow",
   "private": true,
-  "version": "5.1.0",
+  "version": "5.1.1",
   "type": "module",
   "workspaces": [
     "packages/*"
   ],
+  "allowScripts": {
+    "esbuild@0.28.2": true
+  },
   "scripts": {
     "dev:server": "npm run build -w @imageshow/shared && npm run dev -w @imageshow/server",
     "dev:web": "npm run build -w @imageshow/shared && npm run dev -w @imageshow/web",

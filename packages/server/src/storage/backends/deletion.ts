@@ -20,7 +20,7 @@ function positiveCount(value: number | undefined) {
 /**
  * 存储后端管理列表和最终删除命令共用的删除策略。
  *
- * 内置 local 永远不可删除，因此无需再暴露其当前占用细节。有图片时优先建议迁移；
+ * 内置 local 直接返回 built_in 阻断；自定义后端有图片时优先建议迁移；
  * 迁移完成后，列表会继续展示默认项、会话或清理任务等剩余阻断原因。
  */
 export function resolveStorageBackendDeletionState(

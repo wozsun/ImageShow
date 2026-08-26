@@ -6,7 +6,7 @@ JavaScript，并由同一个 Hono 应用按主机名提供 SPA、公共 API、�
 
 ## 整体结构
 
-![ImageShow 架构图：客户端经反向代理按 Host 分流到 Hono 应用，应用读写 PostgreSQL、Redis 与存储后端，后台 Worker 分别消费 PostgreSQL jobs 与 Redis 导入状态](./assets/architecture.svg)
+![ImageShow 架构图：客户端经反向代理按 Host 分流到 Hono 应用，应用读写 PostgreSQL、Redis 与存储后端，后台 Worker 分别消费 PostgreSQL jobs 与 Redis 内容接入状态](./assets/architecture.svg)
 
 ```text
 浏览器 / API 客户端
@@ -67,11 +67,11 @@ PostgreSQL 是图片、词表、后台任务、存储注册表和管理员账号
 
 `schema.sql` 完整定义当前干净安装的单一基线；空库依次执行它与
 `schema-additions.sql`，非空库只执行 additions 后做只读 readiness。当前 additions 是纯注释
-占位，不包含数据库升级、旧结构识别或清理逻辑；`metadata.created_by TEXT NOT NULL` 和
-后台任务的三种当前类型约束都直接属于基线。
+占位；`metadata.created_by TEXT NOT NULL` 和后台任务的三种当前类型约束都直接属于基线。
 additions 只为以后一个发布周期内经审查的受限增量保留固定入口；全部受控非空数据库确认增量
-后，下一发布把定义并入 `schema.sql` 并恢复注释占位。应用不提供通用结构 diff、编号迁移、
-任意破坏性 DDL、契约标记或清库。允许的 additions、兼容超集和拒绝条件以
+后，下一发布把定义并入 `schema.sql` 并恢复注释占位。自动结构职责由干净初始化、单周期
+additions 和最小 readiness 构成；其他结构整理必须显式停机、备份并验证恢复。允许的 additions
+和 readiness 契约以
 [数据库结构](./database.md)为唯一说明。
 
 ### Redis
@@ -134,11 +134,11 @@ Redis 重启或脚本缓存清空后的 `NOSCRIPT` 由客户端透明恢复。�
 当前占用。新一轮重建或失败会保留上一份可靠的成功快照，新的成功重建才替换它；测量失败
 则明确回到未知。
 
-后台概览在原有 `/overview` 查询中与 PostgreSQL 统计并行，对固定
+后台概览在 `/overview` 查询中与 PostgreSQL 统计并行，对固定
 `READY_IMAGE_CORE_KEYS` 发出一个 pipeline 的准确 `MEMORY USAGE ... SAMPLES 0`，得到
 `current_core_memory_bytes` 与独立测量时间。它不执行 `SCAN`、不读取派生缓存，也不把当前值
-写入核心 meta。并发概览请求复用同一个进程内测量 Promise；测量失败只让当前值未知，历史
-完整重建字段仍保持原语义。准确测量的成本会随这些核心容器的成员数增长，因此只在概览读取
+写入核心 meta。并发概览请求复用同一个进程内测量 Promise；测量失败只让当前值未知，完整
+重建字段继续表示最近一次成功重建。准确测量的成本会随这些核心容器的成员数增长，因此只在概览读取
 和重建完成后的既有概览 refetch 中执行，不随重建进度轮询重复测量。
 
 Redis 运行期不可用时，后台在会话读取前统一返回 `503 redis_unavailable`；公共图片、
@@ -172,8 +172,8 @@ Gallery 和其他后台页面。每个公开路由分别测量全新持久 profi
 隔离 Compose、全新数据库、Redis 与浏览器 profile；完整工作负载固定执行 50 次 9 图导入并
 要求最终 450 张图片全部 ready、容器零重启且没有非预期失败。脚本输出每轮原始事实，报告
 字段只描述本次镜像、工作负载和运行环境。生产构建由 `check-web-chunks` 验证权限闭包、
-懒加载边界、资源 owner、内容哈希与重复产物，并用实际有效字节发现资源合并候选；不再为
-各页面维护随版本冻结的请求数或响应体积绝对预算。
+懒加载边界、资源 owner、内容哈希与重复产物，并用实际有效字节发现资源合并候选；资源治理
+以真实构建图和同行关系为依据，不把按页面冻结的请求数或响应体积作为绝对预算。
 
 ### 图片字节
 
@@ -198,10 +198,10 @@ Gallery 和其他后台页面。每个公开路由分别测量全新持久 profi
 逐项返回结果，不把修复字节或执行结果复制到 `background_job`。只读存储检查不持锁，结果
 仅用于预览；写入口始终重新扫描 PostgreSQL 和完整物理命名空间。
 
-导入临时素材由另一个单实例周期 worker 保守回收。它在短时 storage location read lock 内
+内容接入临时素材由另一个单实例周期 worker 保守回收。它在短时 storage location read lock 内
 完整列举每个 `_uploads` 物理组，删除阶段再取得 write lock，复核物理 namespace、Redis
 operational 状态及枚举前后精确引用；raw 另由进程内活跃路径租约保护。这个 worker
-只读取 Redis canonical 引用，不从 PostgreSQL 或文件反建导入状态，也不把临时素材逐项复制
+只读取 Redis canonical 引用，不从 PostgreSQL 或文件反建内容接入状态，也不把临时素材逐项复制
 成 `background_job`。
 正式提交则在复制两个确定候选前创建一条持久 `move.cleanup` guard，使进程崩溃后仍能按
 PostgreSQL 最终引用决定删除或保留。
@@ -236,7 +236,7 @@ PostgreSQL `WHERE id = ANY(...)` 水合。重连、Redis operational 周期变�
 轮询补偿。HTTP 接管结果携带精确
 accepted order，并以 snapshot 的 `last_accepted_order` 判断是否需要临时增加一次 total；这使
 首次响应和响应丢失重放都能精确计数。当前文档创建的批次在窗口生命周期内始终由浏览器按
-batch / manifest 保留整批展示顺序；业务权威逐项立即转交 Server，但整批 handoff 不再改变
+batch / manifest 保留整批展示顺序；业务权威逐项立即转交 Server，整批 handoff 保持
 展示前缀、offset 或 limit，也就不会为展示所有者切换追加扩张快照。窗口重新进入后从一开始
 完全使用 Server display，协议恢复只体现为任务仍在。浏览器保序任务最多 3600 项；新入队会
 在创建 Server 任务前拒绝越过该界限，关闭窗口后该预算随文档释放。同筛选、同 offset 的
@@ -244,7 +244,7 @@ batch / manifest 保留整批展示顺序；业务权威逐项立即转交 Serve
 当前 offset 额外保留最多一页普通 Server DTO 作为有界替补；页面状态只接收实际展示槽位和
 当前文档已接管 pair，替补不会生成卡片、Blob 或草稿 owner。新加入的精确 pair 已在稳定页时，
 或排除变化仍可由该替补填满 Server 槽位时，同样复用该 revision。离页 handoff
-只向队列 owner 声明所需 semantic revision，当前或在途快照已覆盖时不再建立第二个刷新 owner。
+只向队列 owner 声明所需 semantic revision；当前或在途快照覆盖该水位时继续作为唯一刷新 owner。
 离页 handoff 的业务计数仍只用
 无素材 provisional 投影。跨代 HTTP 结果把该投影重新归属当前 owner generation，并在
 accepted-order 基线覆盖后退出。status 返回更高 revision 而触发 coverage 快照时，最近稳定

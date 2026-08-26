@@ -156,7 +156,7 @@ function isGloballyReachableAddress({ address, family }: ExternalImageAddress) {
       isGloballyReachableIpv4(ipaddr.IPv4.parse(address));
   }
   if (family === 6) {
-    // ipaddr.js rewrites deprecated bare ::w.x.y.z text to ::ffff:w.x.y.z.
+    // ipaddr.js canonicalizes bare IPv4-tail IPv6 text to ::ffff:w.x.y.z.
     // Reject that syntax before parsing so the actual ::/96 address cannot
     // inherit the mapped-address policy.
     const isBareIpv4Compatible = address.startsWith("::") &&

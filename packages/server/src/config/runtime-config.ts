@@ -198,7 +198,7 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-function isLegacyIngestionSection(value: unknown) {
+function isIngestionCommitSection(value: unknown) {
   return isPlainRecord(value) && (
     "commit_concurrency" in value
     || "global_commit_concurrency" in value
@@ -206,28 +206,28 @@ function isLegacyIngestionSection(value: unknown) {
   );
 }
 
-function migrateRenamedIngestionSections(value: unknown): unknown {
+function projectIngestionSections(value: unknown): unknown {
   if (!isPlainRecord(value)) return value;
-  const migrated = structuredClone(value);
-  const legacyLinkImageSection = migrated.link_image;
-  const currentImport = migrated.import;
+  const projected = structuredClone(value);
+  const linkImageSection = projected.link_image;
+  const importSection = projected.import;
 
   if (
-    migrated.ingestion === undefined
-    && isLegacyIngestionSection(currentImport)
+    projected.ingestion === undefined
+    && isIngestionCommitSection(importSection)
   ) {
-    migrated.ingestion = currentImport;
+    projected.ingestion = importSection;
   }
   if (
-    legacyLinkImageSection !== undefined
-    && (currentImport === undefined || isLegacyIngestionSection(currentImport))
+    linkImageSection !== undefined
+    && (importSection === undefined || isIngestionCommitSection(importSection))
   ) {
-    migrated.import = legacyLinkImageSection;
-  } else if (isLegacyIngestionSection(currentImport)) {
-    delete migrated.import;
+    projected.import = linkImageSection;
+  } else if (isIngestionCommitSection(importSection)) {
+    delete projected.import;
   }
-  delete migrated.link_image;
-  return migrated;
+  delete projected.link_image;
+  return projected;
 }
 
 function projectKnownConfig(base: unknown, input: unknown): unknown {
@@ -272,7 +272,7 @@ export function parseRuntimeConfig(value: unknown): RuntimeConfig {
 export function normalizeRuntimeConfig(value: unknown): RuntimeConfig {
   return runtimeConfigSchema.parse(projectKnownConfig(
     appConfig.runtimeDefaults,
-    migrateRenamedIngestionSections(value)
+    projectIngestionSections(value)
   ));
 }
 

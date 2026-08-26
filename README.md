@@ -27,7 +27,7 @@ Node.js 26 / Hono、React 19、PostgreSQL、Redis 8 和 Docker 构成。
   围栏和点击时精确 pair 集合关闭动作缺口；当前文档在窗口生命周期内保留新建批次的来源
   顺序，业务权威仍逐项立即转交 Server，窗口重开后才完全使用 Server display；重复详情按
   当前页 MD5 批量读取 PostgreSQL；
-  “导入图片”主按钮与下拉按钮共享上传工作流和来源输入模块的意图预载，成功启动后保持
+  “导入图片”主按钮与下拉按钮共享内容接入工作流和来源输入模块的意图预载，成功启动后保持
   页面交互锁直到工作流关闭，避免来源弹窗开启时背景状态闪烁；完成事件按提交批次合并刷新
   图库投影，关闭窗口默认只清理当时已经完成的卡片与 Redis 回执，未完成任务继续保留。
 - local 与多个 S3 兼容对象存储后端并存；支持单图、批量和整后端迁移，以及检查页显式
@@ -114,12 +114,11 @@ docker compose exec postgresql sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB
 `schema.sql` 完整定义当前干净安装的单一基线；镜像仍保留
 `schema-additions.sql` 作为当前发布周期的注释占位，并为以后经明确审查的受限增量或一次性
 数据变化保留固定入口。空数据库在同一事务中执行基线与占位文件，非空数据库执行占位文件后
-进入只读 readiness；当前发布不包含数据库升级 SQL，也不识别或清理旧版本结构。
+进入只读 readiness；当前结构完全由基线定义，readiness 只核对运行时实际依赖的最小契约。
 `metadata.created_by TEXT NOT NULL` 已直接属于干净安装基线。additions 只承载一个发布周期：
 全部受控非空数据库应用其中增量并通过 readiness 后，下一发布移除一次性语句并恢复注释占位。
-升级和恢复旧备份不得跳过承载 additions 的发布；早于当前基线的数据库必须先使用对应发布
-完成升级，当前版本不会代替旧发布补做。应用不提供编号迁移、通用 schema diff、任意删除 /
-重命名 / 类型改变、通用推测回填、版本标记或清库。精确契约见
+部署和备份恢复按相邻发布顺序应用 additions；破坏性结构整理由维护者在停机、备份和恢复验证后
+单独执行。应用的自动结构职责限定为干净初始化、单周期 additions 和最小 readiness。精确契约见
 [数据库结构](docs/guide/database.md#启动与结构契约)。
 
 Redis 是必需的 operational datastore，但不是业务真相源；服务 unavailable 或命令 OOM 时，

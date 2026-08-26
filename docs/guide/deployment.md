@@ -30,8 +30,8 @@ docker run -d --name imageshow --restart unless-stopped --stop-timeout 50 \
 ```
 
 应用只需挂载 `/app/data`，其中保存 `config.json`、本地存储对象和日志。PostgreSQL、
-Redis 凭据只来自环境变量或 Secret，不写入 `config.json`。首次创建 super 管理员后，
-`ADMIN_USERNAME` / `ADMIN_PASSWORD` 不再覆盖已有账号。
+Redis 凭据只来自环境变量或 Secret，不写入 `config.json`。`ADMIN_USERNAME` /
+`ADMIN_PASSWORD` 仅在数据库没有 super 管理员时创建首个账号。
 
 应用容器的停止宽限必须至少为 50 秒。进程先停止接收请求，再协调 Worker、在途 HTTP、
 存储 driver 和数据库连接池；不要用短于该边界的外层编排超时提前强杀。
@@ -43,11 +43,10 @@ Redis 凭据只来自环境变量或 Secret，不写入 `config.json`。首次�
 执行两者，非空数据库只执行 additions 后做只读 readiness；整个过程受同一事务保护。
 单应用进程合同不为第二个重叠启动者取得 bootstrap lock；首次启动、停止后的顺序重启、
 已有数据启动，以及事务回滚后的顺序恢复仍使用同一初始化路径。
-当前发布不包含数据库升级 SQL，也不会识别或清理旧版本结构；`metadata.created_by TEXT NOT NULL`
-与后台任务当前类型约束已直接属于基线。应用不提供编号迁移、通用 schema diff、版本 ledger、
-任意破坏性 DDL 或清库。additions 只承载一个发布周期；全部受控数据库确认应用后，下一发布
-把定义并入基线并恢复注释占位。部署与旧备份恢复不得跳过承载 additions 的发布，早于当前
-基线的数据库必须先使用对应旧发布完成升级。精确白名单与拒绝条件以
+`metadata.created_by TEXT NOT NULL` 与后台任务当前类型约束直接属于基线。应用的自动结构职责
+限定为干净初始化、单周期 additions 和最小 readiness；破坏性 DDL 与数据整理由维护者另行执行。
+additions 全部受控应用后，下一发布把定义并入基线并恢复注释占位；部署与备份恢复按相邻发布
+顺序经过承载 additions 的版本。精确白名单与拒绝条件以
 [数据库结构](./database.md#启动与结构契约)为准。
 
 Redis 只保存会话、限流、统一就绪图片投影和可重建派生缓存。连接必须支持 Redis 8

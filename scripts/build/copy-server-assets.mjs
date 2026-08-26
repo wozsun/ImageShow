@@ -62,8 +62,7 @@ if (existsSync(resolve(serverPublic, ".vite"))) {
   throw new Error("assemble-server: build-only Web metadata reached public assets");
 }
 
-// 最后一步：对最终汇集的 SPA 静态目录做预压缩。图标已内联进 JS 包，
-// 不再作为 /assets/icons 静态文件单独发布。
+// 最后一步：对最终汇集的 SPA 静态目录做预压缩。图标以内联 JS 资源交付。
 await precompressDir(serverPublic);
 
 console.log(

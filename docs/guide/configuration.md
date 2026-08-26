@@ -18,10 +18,10 @@ PostgreSQL。排查配置时先确认“这项配置由谁管理”，再判断�
 自动补齐，未知字段递归删除，已有有效值保留；归一化发生变化时写入同目录临时文件，
 同步文件内容后原子替换完整配置，并在支持目录同步的平台持久化该 rename。只有已知
 字段值不符合自身规定的合法范围时才会失败。PostgreSQL 与 Redis 连接值必须由环境
-变量提供。归一化是长期的结构校验与自愈能力，不是版本迁移框架。5.1.0 只包含一个有界的
-现行命名迁移：旧 `link_image` 远程来源段写入新 `import`，旧含 commit 字段的 `import`
-段写入新 `ingestion`；新旧名称并存时现行名称优先，旧段随后删除并原子写回。除此以外，
-已删除字段或别名与其他未知项一样被删除，对应现行字段按默认值补齐，不推测迁移。
+变量提供。归一化是长期的结构校验与自愈能力，不是版本迁移框架。其中一项有界投影会把
+`link_image` 远程来源段投影到 `import`，把含 commit 字段的 `import` 段投影到
+`ingestion`；目标分组已经存在时以目标值为准，归一化结果只写回现行结构。其他未知项按普通
+结构投影删除，对应现行字段按默认值补齐，不推测字段含义。
 
 运行时配置模块本身不读取或写入文件。主进程在装配 HTTP 路由、注册配置变更监听器
 和启动 Worker 前显式初始化进程内快照；初始化失败时不会继续连接数据库或监听端口。
@@ -66,9 +66,8 @@ PostgreSQL 的 `admin_account` 表，不进入 `config.json`。单应用进程�
 只有确实缺失时才要求这两个值；已有 super 时不会再读取环境变量覆盖账号或密码。顺序重启和
 崩溃后的顺序恢复受支持，两个应用进程重叠播种不受支持。
 
-后台配置写入由同一进程内的 FIFO 写租约串行化，包括配置包导入的长 I/O 和补偿窗口；高级
-配置保存与配置包导入不再叠加只用于第二应用进程的数据库 advisory lock。配置包的存储后端
-写入仍使用 PostgreSQL 事务、提交结果回执和运行时配置 revision 补偿。
+后台配置写入由同一进程内的 FIFO 写租约串行化，包括配置包导入的长 I/O 和补偿窗口；配置包的
+存储后端写入使用 PostgreSQL 事务、提交结果回执和运行时配置 revision 补偿。
 
 ## 常用配置组
 
@@ -160,8 +159,8 @@ PostgreSQL 的 `admin_account` 表，不进入 `config.json`。单应用进程�
 | `log.max_files` | 5 | 1–100 |
 
 导入运行态期限是应用代码生命周期常量，不属于 `config.json`。upload intent 与 credential
-是创建后绝对 30 分钟，读取、重签或显示窗口都不续期；upload canonical 的空闲期限为 2 小时，
-remote import canonical 为 24 小时。合法语义迁移按新状态延长期限；长阶段内只有持有当前
+是创建后绝对 30 分钟，读取、重签或显示窗口都不续期；Upload canonical 的空闲期限为 2 小时，
+Import canonical 为 24 小时。合法语义迁移按新状态延长期限；长阶段内只有持有当前
 execution token 的有效 heartbeat 才能续租。ready、可重试 failed 等空闲状态不会自行续租。
 discarded / completed 紧凑回执沿用所属
 队列的终态保留窗口，并由 expires scanner 删除，不依赖 Redis 原生 EXPIRE 或 keyspace event。
@@ -227,11 +226,11 @@ discarded / completed 紧凑回执沿用所属
 
 `normalize.quality` 是首次 WebP 编码质量。输出超过 `normalize.max_size_kb` 时，会按超限倍数放大 `normalize.quality_step` 降低质量，最大不超过 `3 * quality_step`。某轮达标后会按原步进向上回补探测，最多补回本轮跳过的质量档位，尽量避免一次跳过可用画质。最低降到 `normalize.min_quality`；到达最低质量后即使仍超出目标体积，也会直接入库。尺寸会按比例缩小到 `normalize.max_long_edge` 以内，不会放大。
 
-prepare 只接受 JPEG、PNG、WebP、GIF 与 AVIF；SVG、TIFF、HEIC 及其他 Sharp 虽能识别但不在白名单内的格式仍会拒绝。输入格式、原始尺寸和 EXIF 展示方向来自同一次 Sharp metadata，标准化后 WebP 的格式、尺寸与字节数来自最终编码结果，不再重新解码候选文件。需要转码的 GIF、animated WebP 与 AVIF 继续沿用 Sharp 默认的首帧处理语义；符合下述跳过条件的 animated WebP 则保留完整原字节。URL download 阶段执行的独立图片魔数检查仍是外部抓取安全边界，不由 prepare 的 Sharp 校验替代。
+prepare 只接受 JPEG、PNG、WebP、GIF 与 AVIF；SVG、TIFF、HEIC 及其他 Sharp 虽能识别但不在白名单内的格式仍会拒绝。输入格式、原始尺寸和 EXIF 展示方向来自同一次 Sharp metadata，标准化后 WebP 的格式、尺寸与字节数来自最终编码结果，不二次解码候选文件。需要转码的 GIF、animated WebP 与 AVIF 使用 Sharp 默认的首帧处理语义；符合下述跳过条件的 animated WebP 则保留完整原字节。URL download 阶段执行的独立图片魔数检查仍是外部抓取安全边界，不由 prepare 的 Sharp 校验替代。
 
 输入本身是 WebP、体积小于 `normalize.skip_webp_under_kb` 且长边已经达标时，原字节直接成为最终候选文件；服务端仍会执行解码校验、标准缩略图生成和最终 MD5 计算。`upload.concurrency` 既限制单个后台页面的 raw PUT 数，也限定一次预签 intent 批次为可以立即进入 lane 的文件；当前批结算后才为下一批签发，避免长队列预先消耗短 credential TTL。`import.concurrency` 约束浏览器来源队列，Import accept 后的下载由服务端 `import.global_concurrency` pool 接管；prepare 使用独立 pool，其容量取本地与远程全局并发基数的较大值。即使调用方绕过前端队列，worker 仍有有界阶段准入并支持取消等待任务。
 
-commit 使用独立的 `ingestion.commit_concurrency` / `ingestion.global_commit_concurrency`。前者限制单个后台页面，后者在取得会话 advisory lock、存储共享锁和数据库事务连接之前限制整个服务端进程。服务端还按 `ingestion.global_commit_byte_budget_mb` 对 prepared 图片与缩略图大小做 FIFO 加权限流；活动权重始终按任务真实字节累计，不会在运行中随动态预算截断。超过预算的单个合法对象只能在当前没有其他 commit 占用时独立运行；预算升降后仍按真实活动总量决定是否放行队首。数量许可与字节许可都覆盖正式对象复制、数据库事务、暂存清理和缓存更新，而不只是 `INSERT`。PostgreSQL 主查询连接池上限为 30；长生命周期 advisory lock 使用另一个上限同为 30 的专用连接池，避免下载、转码和存储 I/O 持锁期间占满查询连接。commit 的存储共享锁、排序后的主题 / 作者 / 最终标签共享关联租约、会话锁和单图锁由同一专用连接按固定顺序取得，不会在锁池内嵌套等待第二条连接；同 slug commit 可以并行并在共享租约内幂等确保词表项存在，显式词表管理和删除使用的独占锁仍会等待全部关联租约退出。锁连接丢失会中止工作，内容接入发布另以数据库 execution token 栅栏旧执行者。公开 PostgreSQL 回源在主池内最多占 12 条连接，不再建立取消连接池；当前单应用实例最多保留 60 条应用连接，数据库 `max_connections` 应为该边界和运维连接留足空间。
+commit 使用独立的 `ingestion.commit_concurrency` / `ingestion.global_commit_concurrency`。前者限制单个后台页面，后者在取得会话 advisory lock、存储共享锁和数据库事务连接之前限制整个服务端进程。服务端还按 `ingestion.global_commit_byte_budget_mb` 对 prepared 图片与缩略图大小做 FIFO 加权限流；活动权重始终按任务真实字节累计，不会在运行中随动态预算截断。超过预算的单个合法对象只能在当前没有其他 commit 占用时独立运行；预算升降后仍按真实活动总量决定是否放行队首。数量许可与字节许可都覆盖正式对象复制、数据库事务、暂存清理和缓存更新，而不只是 `INSERT`。PostgreSQL 主查询连接池上限为 30；长生命周期 advisory lock 使用另一个上限同为 30 的专用连接池，避免下载、转码和存储 I/O 持锁期间占满查询连接。commit 的存储共享锁、排序后的主题 / 作者 / 最终标签共享关联租约、会话锁和单图锁由同一专用连接按固定顺序取得，不会在锁池内嵌套等待第二条连接；同 slug commit 可以并行并在共享租约内幂等确保词表项存在，显式词表管理和删除使用的独占锁仍会等待全部关联租约退出。锁连接丢失会中止工作，内容接入发布另以数据库 execution token 栅栏旧执行者。公开 PostgreSQL 回源在主池内最多占 12 条连接；当前单应用实例最多保留 60 条应用连接，数据库 `max_connections` 应为该边界和运维连接留足空间。
 
 后台队列在建立不可变提交意图后先显示“提交排队 / 等待提交”，Server 将 Redis canonical
 原子推进到 `committing` 后立刻返回 accepted；worker 真正取得上述数量与字节准入后才执行
@@ -272,8 +271,8 @@ super 管理员可在「设置 → 高级配置」直接查看和编辑当前实
 确认按钮供重试。编辑器卡片头部的稳定区域只承载没有可见按钮时的首次读取或外部刷新
 失败，不会压缩代码编辑区。字段级 slug 冲突与重命名校验仍紧邻对应输入框。
 
-精准 schema 的完整说明不再占用编辑器卡片中的独立文案行，鼠标悬停“完整
-config.json”标题时可查看；移动端同时隐藏页面头部的重复功能概述，为编辑器和操作按钮
+精准 schema 的完整说明位于“完整 config.json”标题的悬停提示中；移动端隐藏页面头部的
+重复功能概述，为编辑器和操作按钮
 保留稳定空间。操作失败仅显示简短中文提示，完整异常写入后台应用日志。
 
 保存使用同目录临时文件；临时文件完成 `fsync` 后原子重命名，并在支持目录同步的
@@ -374,8 +373,8 @@ PostgreSQL 提交状态，不根据可能已被后继修改的业务行猜测；
 | `weibo.concurrency` | `WEIBO_CONCURRENCY` |
 | `weibo.global_concurrency` | `WEIBO_GLOBAL_CONCURRENCY` |
 
-5.1.0 不读取旧 `LINK_IMAGE_*` 或旧提交段 `IMPORT_COMMIT_*` 环境变量。环境变量只用于首次
-播种，无法像已有 `data/config.json` 一样安全区分新旧段；部署升级时须同步改成上表的新名称。
+环境变量只使用上表列出的现行名称，并且只用于首次播种；已有 `data/config.json` 通过文件
+归一化处理配置段投影。部署环境应直接使用 `IMPORT_*` 与 `INGESTION_*`。
 
 部署字段在每次进程启动时读取；缺失必需的数据库环境变量会直接拒绝启动。
 应用配置的环境变量仍只在首次生成 `config.json` 时播种，文件存在后不会覆盖已有

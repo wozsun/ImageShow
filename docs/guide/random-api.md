@@ -17,8 +17,8 @@
 `t` / `tag` / `a` 可填 slug 或显示名，服务端会先解析成 slug，再按字段排序去重并生成
 稳定筛选签名。基础随机、主题、标签和作者筛选都复用
 `imageshow:cache:images:*` 就绪图片投影：无筛选直接使用根层核心 `index:all`，轴 / 主题 /
-标签 / 作者 ZSET 与组合结果统一位于 `imageshow:cache:images:derived:*`。核心重建不再
-预建属性索引；公开请求首次使用某个属性时立即进入 PostgreSQL fallback，并触发独立的
+标签 / 作者 ZSET 与组合结果统一位于 `imageshow:cache:images:derived:*`。核心重建只建立
+根层投影；公开请求首次使用某个属性时立即进入 PostgreSQL fallback，并触发独立的
 后台 keyset 分批构建；一次请求所需的全部缺失属性进入有界进程内串行队列。当前回源与
 后台构建都经过统一公开 PG 准入，属性构建全局最多并发 1、同一属性进程内单飞。索引及其
 独立 meta 使用 6 小时滑动 TTL，并同时校验

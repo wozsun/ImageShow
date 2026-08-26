@@ -31,7 +31,7 @@ type AsyncActionButtonProps = Omit<
 
 /**
  * 固定文案宽度的异步操作按钮。所有状态文案占用同一网格单元，不会改变按钮宽度
- * 或相邻控件位置；pending 保留调用方原有的主次层级，完成结果才使用反馈配色。
+ * 或相邻控件位置；pending 使用调用方传入的主次层级，完成结果才使用反馈配色。
  */
 export function AsyncActionButton({
   status,
