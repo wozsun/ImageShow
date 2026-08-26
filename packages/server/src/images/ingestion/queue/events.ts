@@ -109,7 +109,7 @@ function waitForHeartbeat(signal: AbortSignal, delayMs: number) {
   });
 }
 
-/** One authenticated, owner-scoped SSE connection for one import queue. */
+/** One authenticated, owner-scoped SSE connection for one Ingestion queue. */
 export function streamIngestionQueueEvents(
   context: Context,
   input: Readonly<{
@@ -134,7 +134,7 @@ export function streamIngestionQueueEvents(
       if (!stream.closed && !stream.aborted) stream.abort();
     };
     const closeFromRequest = () => close(
-      context.req.raw.signal.reason ?? new Error("Import SSE request closed")
+      context.req.raw.signal.reason ?? new Error("Ingestion SSE request closed")
     );
     context.req.raw.signal.addEventListener("abort", closeFromRequest, {
       once: true
@@ -150,7 +150,7 @@ export function streamIngestionQueueEvents(
         await raceWithAbortSignal(
           controller.signal,
           stream.writeSSE({ event, data: JSON.stringify(payload) }),
-          "Import SSE write aborted"
+          "Ingestion SSE write aborted"
         );
       });
       writes = write.catch((error) => close(error));
@@ -165,7 +165,7 @@ export function streamIngestionQueueEvents(
       const validated = await raceWithAbortSignal(
         controller.signal,
         validateSession(input.session.id),
-        "Import SSE authentication aborted"
+        "Ingestion SSE authentication aborted"
       );
       if (
         !validated
@@ -176,7 +176,7 @@ export function streamIngestionQueueEvents(
       const scope = actionScopes.open(
         input.session,
         input.queue,
-        () => close(new Error("Import action scope invalidated"))
+        () => close(new Error("Ingestion action scope invalidated"))
       );
       closeScope = scope.close;
 
@@ -185,7 +185,7 @@ export function streamIngestionQueueEvents(
       const buffered: IngestionQueueMutation[] = [];
       const mutationPayload = (mutation: IngestionQueueMutation) => {
         if (!mutation.session) {
-          throw new Error("Import queue mutation omitted its session identity");
+          throw new Error("Ingestion queue mutation omitted its session identity");
         }
         const payload: IngestionQueueEventDto = {
           type: "mutation",
@@ -216,7 +216,7 @@ export function streamIngestionQueueEvents(
         if (!readySent) {
           if (buffered.length >= initialMutationBufferLimit) {
             initialOverflow = true;
-            close(new Error("Import SSE initial mutation buffer overflow"));
+            close(new Error("Ingestion SSE initial mutation buffer overflow"));
           } else {
             buffered.push(mutation);
           }
@@ -241,7 +241,7 @@ export function streamIngestionQueueEvents(
           0,
           0
         ),
-        "Import SSE initial snapshot aborted"
+        "Ingestion SSE initial snapshot aborted"
       );
       actionScopes.require({
         id: scope.id,
@@ -271,7 +271,7 @@ export function streamIngestionQueueEvents(
         const heartbeatSession = await raceWithAbortSignal(
           controller.signal,
           validateSession(input.session.id),
-          "Import SSE authentication aborted"
+          "Ingestion SSE authentication aborted"
         );
         if (
           !heartbeatSession
@@ -288,7 +288,7 @@ export function streamIngestionQueueEvents(
       }
     } catch (error) {
       if (!controller.signal.aborted) {
-        logger.warn("import_queue_sse_closed", {
+        logger.warn("ingestion_queue_sse_closed", {
           owner: input.session.username,
           queue: input.queue,
           error: error instanceof Error ? error.message : String(error)
@@ -296,7 +296,7 @@ export function streamIngestionQueueEvents(
       }
     } finally {
       if (!controller.signal.aborted) {
-        controller.abort(new Error("Import SSE closed"));
+        controller.abort(new Error("Ingestion SSE closed"));
       }
       unsubscribeQueue();
       unregisterSession();

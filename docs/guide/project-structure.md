@@ -135,7 +135,7 @@ advisory lock 两个连接池；`transactions.ts`、`advisory-locks.ts` 和 `sch
 后台数字页使用 `database/transactions.ts` 的 read-only repeatable-read 事务，让 COUNT、
 越界判断、metadata 与 tags 共享一个 client 和快照；事务后 formatter 不得借默认 pool。
 schema 初始化和管理员播种直接使用主查询池，不为不受支持的第二应用进程取得启动锁；图片、
-词表、导入、存储位置等运行期领域锁仍使用独立 advisory lock 池。
+词表、内容接入、存储位置等运行期领域锁仍使用独立 advisory lock 池。
 公开降级读取由 `database/public-admission.ts` 统一管理一个 FIFO 容量与等待队列，
 `database/public-fallback.ts` 只负责请求级惰性 reader scope、执行期限和 client 释放 / 淘汰。Redis
 缓存读取先行，首次真实回源才借 client，同一 scope 内的领域模块显式接收并复用 reader；
@@ -169,7 +169,7 @@ storage/
 `images/image-storage-migration.ts` 只负责管理接口的 1..N 保序结果，
 `storage/migration/backend.ts` 只负责整后端计数和流式分页，两者都直接调用同一个单图原语。
 `checks/storage-check.ts` 只生成无写入权限的存储预览；显式写维护按稳定职责拆分：
-`checks/storage-maintenance-plan.ts` 重读 PostgreSQL、导入引用和完整存储快照并生成候选，
+`checks/storage-maintenance-plan.ts` 重读 PostgreSQL、Ingestion 引用和完整存储快照并生成候选，
 `checks/storage-thumbnail-repair.ts` 负责缩略图写入与校验，`checks/storage-orphan-cleanup.ts`
 负责确认删除和空目录修剪，`checks/storage-maintenance.ts` 只保留独占位置锁、执行顺序和结果汇总。
 这组写维护只从显式维护入口调用，不接入普通请求热路径或通用后台任务。
@@ -207,21 +207,26 @@ ingestion/
 snapshot、SSE、watermark 和展示投影只使用 session / repository 边界，action handler 则负责
 协调 `cancel`、`commit` 与 `execution`，因此整个 `queue/` 不是单一底层。`workers` 可以编排
 所有这些模块，`runtime.ts` 是唯一生产装配入口；除这两层自身外，ingestion 内任何模块都不能
-反向依赖 `workers/` 或 `runtime.ts`。routes 只依赖公开 service、repository facade 与 DTO，
-不能导入 Lua 或私有 Worker。
+反向依赖 `workers/` 或 `runtime.ts`。Routes 只依赖 runtime 公开的 service、repository facade、
+窄执行控制接口与 DTO，不能导入 Lua、执行协调器或私有 Worker。
 
 - `runtime-repository.ts` 构造进程唯一 repository；`runtime.ts` 是唯一生产装配入口，导入该
-  实例后创建 token service、service、`IngestionSessionWorker` 与 orphan cleanup Worker。HTTP、
-  Worker 和恢复流程因此复用核心 Redis client 上的同一 command runner 与 listener hub。
+  实例后创建 token service、service、`IngestionSessionWorker` 与 orphan cleanup Worker，并只向
+  HTTP 层公开 queue action / cancel 所需的窄执行控制接口。Routes 不接触 Worker 实例、stage
+  pool、tick、drain 或不可取消边界协调器；HTTP、Worker 和恢复流程仍复用核心 Redis client 上
+  的同一 command runner 与 listener hub。
 - `repository.ts` 保留命令调用边界、错误翻译与事件发布 facade；实际职责分别由
   `sessions/command-runner.ts`、`replies.ts`、`intent-store.ts`、`listener-hub.ts` 和
   `queue/store.ts` 承接。facade 与内部模块不复制 key 推导、严格解析或业务校验。
 - `sessions/scripts/` 的五个文件生成十段完整 Lua。`projection.ts` 只保存共享 Lua
   片段，不执行命令；每个业务操作由一段完整脚本和一次 `EVAL` / `EVALSHA` 原子完成，明确声明
-  `numberOfKeys`、KEYS / ARGV、返回数组和错误 marker。TypeScript 自定义命令标识使用
-  Ingestion；Redis 持久运行时协议固定使用 `imageshow:import:*` key、queue 值 `import`、
-  canonical 的 `remote` 字段和 `import_*` marker。这些协议值不作为源码、DTO、路由、配置或
-  用户文案的领域名称。
+  `numberOfKeys`、KEYS / ARGV、返回数组和错误 marker。TypeScript 与 Redis 持久运行时协议
+  均以 Ingestion 为父领域：key 固定使用 `imageshow:ingestion:*`，queue 只允许 `upload` /
+  `import`；Import canonical 以 `import_source` 保存 URL，Upload canonical 不含该字段。共享
+  marker 使用 `INGESTION_CANONICAL` / `INGESTION_QUEUE_STRUCTURE`，Upload intent 使用
+  `UPLOAD_INTENT`；签名 purpose 固定使用无版本后缀的 `imageshow/ingestion/...` 名称。
+  canonical 的 `version`、revision、generation 与 execution token 只承担当前 CAS、顺序、
+  对象所有权和执行 fencing。
 - `queue/events.ts`、`snapshot.ts`、`action-scope.ts` 与 `store.ts` 共同负责 owner + queue 单
   SSE、稳定分页、动作作用域和最近动作批次的有界重放；`action.ts` 编排有界全队列动作，
   `action-protocol.ts` 校验 watermark / continuation，`action-handlers.ts` 执行逐项动作，
@@ -350,12 +355,12 @@ hooks ──► lib
   每个页面专属查询、操作 Hook、对话框和状态机都留在同一目录，不上移为虚假的跨页面公共层。
 - `pages/admin/ingestion/` 管理统一 prepared ingestion 队列，稳定分为 `queue/`、`workflow/`、
   `upload/` 和动态 `import/`。统一内容接入是上位领域，`upload` / `import` 分别表示浏览器
-  本地上传与 Server 远程导入，内部 mode 也使用 `upload` / `import`。
+  Upload 与 Server Import，内部 mode 也使用 `upload` / `import`。
   `Ingestion.tsx` 装配两个 owner、当前 mode、激活意图、
   来源弹窗加载与工作流窗口；`queue/` 保存 queue controller、API、状态回读、SSE、草稿同步及 `model/`、
   `cards/`；`upload/` 保存本地文件模型、raw XHR lane 和上传 owner；`import/` 保存 URL、JSONL、
-  微博来源模型、弹窗与远程接收 owner；`workflow/` 保存窗口、稳定 DOM 区域、清理和动作状态机。
-  来源弹窗由 `import/` 独立动态加载。配置段使用同一领域词汇：远程来源使用
+  微博来源模型、弹窗与 Import 接收 owner；`workflow/` 保存窗口、稳定 DOM 区域、清理和动作状态机。
+  来源弹窗由 `import/` 独立动态加载。配置段使用同一领域词汇：Import 来源使用
   `import.*`，共用提交使用 `ingestion.*`。`data/config.json` 归一化器把 `link_image` 来源段和
   含提交字段的 `import` 段投影到这两个现行分组，并原子写回规范结构。
 - `workflow/IngestionWorkflowWindow.tsx` 拥有 DialogFrame、焦点捕获 / 恢复、滚动容器、
@@ -429,7 +434,7 @@ Web 继续使用 entries-aware 的入口根集合分块，`minShareCount: 2` 表
 
 内容接入 facade 与样式使用 `ingestion-[hash].js` / `ingestion-[hash].css`，来源弹窗使用
 `import-source-[hash].js`，facade 与来源弹窗共享的队列纯能力由实际源码职责命名为
-`ingestion-job-utils-[hash].js`。`upload` 与 `import` 分别作为浏览器文件和远程来源子模式，
+`ingestion-job-utils-[hash].js`。`upload` 与 `import` 分别作为浏览器文件和 Import 来源子模式，
 父领域资源统一使用 `ingestion` 命名。
 
 本地 `check-web-chunks` 从真实输出计算原始、gzip 9、Brotli 11 和实际有效响应体字节；
@@ -450,7 +455,7 @@ ALTCHA PBKDF2 Worker 必须由浏览器通过独立 URL 创建，且只在实际
 登录页首屏脚本。门禁同时拒绝具有完全相同入口根的重复 emitted JS、具有完全相同 owner 的重复
 CSS，以及内容完全重复的资产。
 
-当前镜像的运行时传输、浏览器 profile 和 450 图导入工作负载只属于本地发布验收，保存在被
+当前镜像的运行时传输、浏览器 profile 和 450 图 Upload 工作负载只属于本地发布验收，保存在被
 Git 忽略的 `tests/benchmarks/`。它们不进入 `scripts/`、npm
 package scripts、Actions 或生产镜像；`scripts/` 继续只保存构建和容器运行所需命令。权威的
 固定媒体身份和验收边界见[架构总览](./architecture.md#浏览器传输验收)。

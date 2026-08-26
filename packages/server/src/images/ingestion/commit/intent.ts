@@ -48,7 +48,7 @@ function failedResult(
   version?: number
 ): IngestionCommitItemResultDto {
   if (error instanceof ApiError) {
-    const details = error.code === "import_duplicate_conflict"
+    const details = error.code === "ingestion_duplicate_conflict"
       ? error.details as {
           duplicates?: AdminImageListItemDto[];
           duplicate_count?: number;
@@ -69,8 +69,8 @@ function failedResult(
   return {
     ...pair,
     status: "failed",
-    code: "import_commit_failed",
-    message: "Image import could not be accepted"
+    code: "ingestion_commit_failed",
+    message: "Ingestion commit could not be accepted"
   };
 }
 
@@ -93,7 +93,7 @@ async function assertDuplicateDecision(
     );
     throw new ApiError(
       409,
-      "import_duplicate_conflict",
+      "ingestion_duplicate_conflict",
       "提交前发现相同内容图片，请确认是否仍然提交",
       { duplicates, duplicate_count: duplicateCount }
     );
@@ -107,7 +107,7 @@ async function publishDuplicateConflict(
 ) {
   if (
     !(error instanceof ApiError)
-    || error.code !== "import_duplicate_conflict"
+    || error.code !== "ingestion_duplicate_conflict"
     || !stored
     || stored === ingestionSessionIncarnationMismatch
     || stored.status !== "ready"
@@ -141,7 +141,7 @@ async function convergeCommitVersionConflict(
   intentHash: string,
   error: unknown
 ): Promise<IngestionCommitItemResultDto> {
-  if (!(error instanceof ApiError) || error.code !== "import_version_conflict") {
+  if (!(error instanceof ApiError) || error.code !== "ingestion_version_conflict") {
     throw error;
   }
 
@@ -169,22 +169,22 @@ async function convergeCommitVersionConflict(
   if (current === ingestionSessionIncarnationMismatch) {
     throw new ApiError(
       409,
-      "import_incarnation_conflict",
+      "ingestion_incarnation_conflict",
       "内容接入任务身份已被替换"
     );
   }
   if (!current) {
-    throw new ApiError(410, "import_session_missing", "未完成内容接入已过期或被服务器丢弃");
+    throw new ApiError(410, "ingestion_session_missing", "未完成内容接入已过期或被服务器丢弃");
   }
   if (current.status === "completed") {
     throw new ApiError(
       503,
-      "import_result_unknown",
+      "ingestion_result_unknown",
       "Redis 完成回执缺少 PostgreSQL 正式图片"
     );
   }
   if (current.status === "discarded") {
-    throw new ApiError(409, "import_discarded", "内容接入任务已取消");
+    throw new ApiError(409, "ingestion_discarded", "内容接入任务已取消");
   }
   if (
     current.commit?.commit_request_id === input.commit_request_id
@@ -204,14 +204,14 @@ async function convergeCommitVersionConflict(
   if (current.commit?.commit_request_id === input.commit_request_id) {
     throw new ApiError(
       409,
-      "import_commit_intent_conflict",
+      "ingestion_commit_intent_conflict",
       "同一 commit_request_id 已用于不同提交意图"
     );
   }
   if (current.commit) {
     throw new ApiError(
       409,
-      "import_already_finalizing",
+      "ingestion_already_finalizing",
       "内容接入任务的提交意图已经冻结"
     );
   }
@@ -255,25 +255,25 @@ export async function acceptIngestionCommitIntents(
         if (stored === ingestionSessionIncarnationMismatch) {
           throw new ApiError(
             409,
-            "import_incarnation_conflict",
+            "ingestion_incarnation_conflict",
             "内容接入任务身份已被替换"
           );
         }
         if (!stored) {
-          throw new ApiError(410, "import_session_missing", "未完成内容接入已过期或被服务器丢弃");
+          throw new ApiError(410, "ingestion_session_missing", "未完成内容接入已过期或被服务器丢弃");
         }
         if (stored.status === "completed") {
           throw new ApiError(
             503,
-            "import_result_unknown",
+            "ingestion_result_unknown",
             "Redis 完成回执缺少 PostgreSQL 正式图片"
           );
         }
         if (stored.status === "discarded") {
-          throw new ApiError(409, "import_discarded", "内容接入任务已取消");
+          throw new ApiError(409, "ingestion_discarded", "内容接入任务已取消");
         }
         if (!("prepared" in stored) || !stored.prepared) {
-          throw new ApiError(409, "invalid_import_state", "图片尚未准备完成");
+          throw new ApiError(409, "invalid_ingestion_state", "图片尚未准备完成");
         }
         const intentHash = commitIntentHash(stored, input);
         if (
@@ -289,7 +289,7 @@ export async function acceptIngestionCommitIntents(
               if (stored.version !== input.expected_version) {
                 throw new ApiError(
                   409,
-                  "import_version_conflict",
+                  "ingestion_version_conflict",
                   "内容接入任务版本已变化"
                 );
               }
@@ -336,26 +336,26 @@ export async function acceptIngestionCommitIntents(
           if (stored.commit?.commit_request_id === input.commit_request_id) {
             throw new ApiError(
               409,
-              "import_commit_intent_conflict",
+              "ingestion_commit_intent_conflict",
               "同一 commit_request_id 已用于不同提交意图"
             );
           }
           throw new ApiError(
             409,
-            "import_already_finalizing",
+            "ingestion_already_finalizing",
             "内容接入任务的提交意图已经冻结"
           );
         }
         if (stored.status !== "ready") {
-          throw new ApiError(409, "invalid_import_state", "图片尚未准备完成");
+          throw new ApiError(409, "invalid_ingestion_state", "图片尚未准备完成");
         }
         if (stored.version !== input.expected_version) {
-          throw new ApiError(409, "import_version_conflict", "内容接入任务版本已变化");
+          throw new ApiError(409, "ingestion_version_conflict", "内容接入任务版本已变化");
         }
         if (stored.prepared.md5 !== input.expected_md5) {
           throw new ApiError(
             409,
-            "import_prepared_content_changed",
+            "ingestion_prepared_content_changed",
             "准备提交的图片内容已变化，请重新处理"
           );
         }

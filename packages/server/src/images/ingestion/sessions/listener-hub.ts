@@ -47,10 +47,10 @@ export class IngestionQueueListenerHub {
     ) ?? [])]) {
       try {
         void Promise.resolve(listener(event)).catch((error: unknown) => {
-          logger.error("import queue listener failed", error);
+          logger.error("ingestion_queue_listener_failed", error);
         });
       } catch (error) {
-        logger.error("import queue listener failed", error);
+        logger.error("ingestion_queue_listener_failed", error);
       }
     }
   }

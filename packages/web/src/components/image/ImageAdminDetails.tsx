@@ -417,7 +417,7 @@ export function ImageAdminDetails({
               <span>{md5}</span>
             </dd>
             <dt>存储</dt><dd>{storage}</dd>
-            <dt>导入时间</dt><dd>{createdAt ? formatDate(createdAt) : fallback}</dd>
+            <dt>入库时间</dt><dd>{createdAt ? formatDate(createdAt) : fallback}</dd>
             <dt>更新时间</dt><dd>{updatedAt ? formatDate(updatedAt) : fallback}</dd>
             {adminListItem?.deleted_at && <><dt>删除时间</dt><dd>{formatDate(adminListItem.deleted_at)}</dd></>}
           </dl>

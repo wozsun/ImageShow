@@ -27,7 +27,7 @@
 
 ```text
 本地：  upload intent ─► raw PUT ─► received ─► preparing ─► ready
-远程：  accept ─► queued ─► downloading ─► received ─► preparing ─► ready
+Import： accept ─► queued ─► downloading ─► received ─► preparing ─► ready
                                                                       │
                                                    async commit intent│
                                                                       ▼
@@ -68,7 +68,7 @@
   完成的卡片与 Redis completed 回执，正式图片不受影响。若关闭瞬间正在重连，则后台连接只保留
   到清理收敛，并以关闭前最后一份权威 semantic revision 为上限重新签发动作；关闭后才完成或仍
   未完成的任务继续保留。真正离开图片路由、使上传 owner 卸载时，仍由浏览器持有的 raw 传输可以中止；已经转换
-  或远程 accept 的 canonical 继续由 worker 执行，不在 effect cleanup 中隐式批量取消。JSONL
+  或 Import accept 的 canonical 继续由 worker 执行，不在 effect cleanup 中隐式批量取消。JSONL
   行级解析错误也由 import owner 保留；切到
   upload owner 时不展示或清除，重开 import 窗口后仍可复制或显式清除。尚未接管的占位草稿
   只由对应浏览器 owner 持有；尚未冻结 commit 的 active canonical 卡片编辑以 pair/version
@@ -99,18 +99,18 @@ JSONL 可设置 `original`、`source`、`image_time`、`author`、`tags`、`titl
 
 ### 接管、prepare 与 commit
 
-1. **本地接管**先对可立即进入并发 lane 的一组文件发送一次固定
-   `POST /api/admin/ingestion/upload-intents`。正文含完整草稿、目标 storage、大小与素材约束；
+1. **Upload 接管**先对可立即进入并发 lane 的一组文件发送一次固定
+   `POST /api/admin/ingestion/upload/intents`。正文含完整草稿、目标 storage、大小与素材约束；
    响应为每项返回短期 credential。随后单次接管尝试对每个 intent 最多发送一次固定
-   `PUT /api/admin/ingestion/upload-raw`，credential 只放受限 header，正文只有图片字节。
+   `PUT /api/admin/ingestion/upload/raw`，credential 只放受限 header，正文只有图片字节。
    Server 在读取正文前 claim intent，流式写 attempt 专属 `.part`，完成大小、格式和尺寸校验
    后原子发布 raw，并在同一请求中把 intent 转换为 `upload/received` canonical。不存在第三次
    takeover 或 receipt 请求。一次已签发的 N 项固定为一次 intent POST 加至多 N 次 raw PUT。
    raw PUT 在 canonical 形成前失败或响应未知时，显式重试复用原 `attemptKey` 再请求同一
    intent：服务端要么返回已经接管的 canonical，要么为同一 pair 重签 credential 后重传，
    不通过新幂等身份创建第二项任务。
-2. **远程接管**把 URL、JSONL 和微博确认项合并到固定
-   `POST /api/admin/ingestion/import-accept`。Server 在 storage read lock 内重新校验并创建
+2. **Import 接管**把 URL、JSONL 和微博确认项合并到固定
+   `POST /api/admin/ingestion/import/accept`。Server 在 storage read lock 内重新校验并创建
    `import/queued` canonical；请求断开不撤销已接受项。worker 使用现有安全抓取完成 HTTPS、
    SSRF、DNS、逐跳重定向、正文大小、超时和图片魔数校验，并以 attempt `.part` 原子发布 raw。
 3. **prepare**只处理完整 raw：Sharp 校验格式、尺寸和 EXIF 展示方向，按配置生成 processed
@@ -155,7 +155,7 @@ processed image 与 prepared thumbnail。
 
 ### 队列分页与状态同步
 
-上传与远程导入复用同一套 Server DTO 和 repository，但浏览器分别拥有 upload 与 import
+Upload 与 Import 复用同一套 Server DTO 和 repository，但浏览器分别拥有 upload 与 import
 owner；两边分别持有本地资源、页码、显示状态、订阅和清空范围，隐藏或打开一边不会读取、
 重置或取消另一边。重复确认与单卡提交的 single-flight、busy 和迟到响应也由各自 owner 独立
 持有；隐藏 upload 后打开 import，不会被仍在途的 upload 请求锁住，响应只回写原队列。每个
@@ -267,7 +267,7 @@ SSE semantic 事件可更新 summary 或令当前页有界重读；
 SSE 每 30 秒串行重新使用普通 HTTP 的 Redis + PostgreSQL 会话校验。logout、密码重置和账号
 删除会通过本进程连接登记立即关闭旧连接；自然 TTL、Redis session key 丢失、账号/角色/凭据
 变化或 Redis unavailable 最晚在下一次心跳关闭，失败后不再发送 ping。重新连接总是从空
-Server 基线和新 scope 开始，读取状态不会延长导入 canonical 的 `discard_at`。
+Server 基线和新 scope 开始，读取状态不会延长 Ingestion canonical 的 `discard_at`。
 
 “应用到全部”、提交全部 ready、三类顶部清理和右下角清空都使用点击时已有的签名
 `action_watermark`，不退化为当前页循环。Server 按 accepted-order 水位有界扫描，响应返回
@@ -322,7 +322,7 @@ scope 真正变化、窗口关闭或用户主动取消才终止这份确认；�
 generation / scope 变化会解除确认，没有计时器。普通 revision、计数、本地集合变化和随后
 加入的任务不重置确认，水位后新建的 canonical 永远不属于旧清空动作。取消、PG 核对或 CAS
 结果未知的卡片继续保留。
-确认时捕获的浏览器占位由来源 owner 批量收敛：同一 remote accept / upload intent 只等待一次，
+确认时捕获的浏览器占位由来源 owner 批量收敛：同一 Import accept / Upload intent 只等待一次，
 已返回但因组合分页离页的 pair 以无 Blob 的冻结 target 继续取消；未知 version 先按 status 上限
 批读，再按 cancel 硬上限串行提交，不产生每卡一个请求的并发风暴。正在 cancelling 的占位仍
 属于该 intent fence，不能当作普通可移除卡片。raw PUT 取消与 accepted 响应交叉时，本地 owner
@@ -342,7 +342,7 @@ missing，也以该逐项结果收敛。逐项 `skipped` / `failed` 或本地 ow
 显式取消、worker 和恢复共享 `(session_id, image_id)` 的进程内不可逆协调器。数据库事务
 开始前可用 pair/version CAS 收缩为 discarded；事务已经开始时返回 resolving，不撤销或伪报
 取消，settle 后再按 PostgreSQL 结果收敛。Web 只有收到 discarded 才报告 canonical 已取消；
-接收响应未知时，远程任务以原幂等键重放 accept 找回 pair，本地任务先等待当前 raw 请求
+接收响应未知时，Import 任务以原幂等键重放 accept 找回 pair，Upload 任务先等待当前 raw 请求
 settle，再核对状态。瞬时 missing 或仍无法确认的结果保留为可重试取消失败。Redis 不可用时
 worker 停止取得新任务并中止仍可
 安全中止的阶段，不回退到 PostgreSQL 旧会话表或内存队列。重连和启动使用同一个有界恢复
@@ -441,7 +441,7 @@ pointerup 直接提交关闭；桌面标题栏、键盘、Escape 和背景路径
 
 ### 权限
 
-图片管理员可以管理图片、导入、常规元数据、主题、标签、作者和检查；超级管理员额外
+图片管理员可以管理图片、上传 / 导入、常规元数据、主题、标签、作者和检查；超级管理员额外
 拥有用户、存储、配置、永久删除、词表删除、整后端迁移和缓存重建等能力。
 前端先按角色过滤路由发现与导航预加载，再按能力矩阵隐藏或禁用页面内入口；图片管理员
 直接访问超级管理员 URL 也不会先下载对应页面。服务端仍在每个接口独立校验，不能通过
@@ -588,7 +588,7 @@ overview 和词表分别只在自身字段受影响时刷新；公开编辑与�
 错误独立收口，一个失败不会抹掉其他结果。图片投影
 区域的角色公共部分呈现当前状态、PostgreSQL / Redis revision 指纹、最近错误、刷新和准确
 占用；手动重建、存储维护和整后端迁移在服务端确认超级管理员权限后才加载独立能力模块。
-存储维护弹窗使用当前只读检查结果预览缺图、可修复缩略图、孤儿对象和活动导入，
+存储维护弹窗使用当前只读检查结果预览缺图、可修复缩略图、孤儿对象和活动 Ingestion，
 但必须由超级管理员再次确认。执行端在独占存储位置锁内重新读取 PostgreSQL 和三个完整
 命名空间；预览同时包含缺失缩略图与数据库标记为尚未最终采用的缩略图，并按物理命名空间
 去重受阻情况，不把不完整组或不可读逻辑后端的相关项算作
@@ -617,7 +617,7 @@ overview 和词表分别只在自身字段受影响时刷新；公开编辑与�
 
 图片写事务只提交 PostgreSQL 真相并推进投影 revision；精确 Redis 同步或全量重建发生在
 提交后，失败不倒退业务结果。`move.cleanup`、`trash.purge` 与 `cache.rebuild` 的领取、
-租约、重试和停机语义，以及 Redis 导入 worker 的单实例恢复边界，由
+租约、重试和停机语义，以及 Redis Ingestion worker 的单实例恢复边界，由
 [架构总览](./architecture.md#后台-worker)统一说明，流程页面不复制任务状态机。
 
 ## HTTP 缓存与按需加载

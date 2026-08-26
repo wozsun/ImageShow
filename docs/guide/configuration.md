@@ -158,9 +158,9 @@ PostgreSQL 的 `admin_account` 表，不进入 `config.json`。单应用进程�
 | `log.max_size_mb` | 10 | 大于 0，最大 1024 MiB |
 | `log.max_files` | 5 | 1–100 |
 
-导入运行态期限是应用代码生命周期常量，不属于 `config.json`。upload intent 与 credential
+Ingestion 运行态期限是应用代码生命周期常量，不属于 `config.json`。Upload intent 与 credential
 是创建后绝对 30 分钟，读取、重签或显示窗口都不续期；Upload canonical 的空闲期限为 2 小时，
-Import canonical 为 24 小时。合法语义迁移按新状态延长期限；长阶段内只有持有当前
+Import canonical 为 24 小时。合法语义推进按新状态延长期限；长阶段内只有持有当前
 execution token 的有效 heartbeat 才能续租。ready、可重试 failed 等空闲状态不会自行续租。
 discarded / completed 紧凑回执沿用所属
 队列的终态保留窗口，并由 expires scanner 删除，不依赖 Redis 原生 EXPIRE 或 keyspace event。
@@ -228,7 +228,7 @@ discarded / completed 紧凑回执沿用所属
 
 prepare 只接受 JPEG、PNG、WebP、GIF 与 AVIF；SVG、TIFF、HEIC 及其他 Sharp 虽能识别但不在白名单内的格式仍会拒绝。输入格式、原始尺寸和 EXIF 展示方向来自同一次 Sharp metadata，标准化后 WebP 的格式、尺寸与字节数来自最终编码结果，不二次解码候选文件。需要转码的 GIF、animated WebP 与 AVIF 使用 Sharp 默认的首帧处理语义；符合下述跳过条件的 animated WebP 则保留完整原字节。URL download 阶段执行的独立图片魔数检查仍是外部抓取安全边界，不由 prepare 的 Sharp 校验替代。
 
-输入本身是 WebP、体积小于 `normalize.skip_webp_under_kb` 且长边已经达标时，原字节直接成为最终候选文件；服务端仍会执行解码校验、标准缩略图生成和最终 MD5 计算。`upload.concurrency` 既限制单个后台页面的 raw PUT 数，也限定一次预签 intent 批次为可以立即进入 lane 的文件；当前批结算后才为下一批签发，避免长队列预先消耗短 credential TTL。`import.concurrency` 约束浏览器来源队列，Import accept 后的下载由服务端 `import.global_concurrency` pool 接管；prepare 使用独立 pool，其容量取本地与远程全局并发基数的较大值。即使调用方绕过前端队列，worker 仍有有界阶段准入并支持取消等待任务。
+输入本身是 WebP、体积小于 `normalize.skip_webp_under_kb` 且长边已经达标时，原字节直接成为最终候选文件；服务端仍会执行解码校验、标准缩略图生成和最终 MD5 计算。`upload.concurrency` 既限制单个后台页面的 raw PUT 数，也限定一次预签 intent 批次为可以立即进入 lane 的文件；当前批结算后才为下一批签发，避免长队列预先消耗短 credential TTL。`import.concurrency` 约束浏览器来源队列，Import accept 后的下载由服务端 `import.global_concurrency` pool 接管；prepare 使用独立 pool，其容量取 Upload 与 Import 全局并发基数的较大值。即使调用方绕过前端队列，worker 仍有有界阶段准入并支持取消等待任务。
 
 commit 使用独立的 `ingestion.commit_concurrency` / `ingestion.global_commit_concurrency`。前者限制单个后台页面，后者在取得会话 advisory lock、存储共享锁和数据库事务连接之前限制整个服务端进程。服务端还按 `ingestion.global_commit_byte_budget_mb` 对 prepared 图片与缩略图大小做 FIFO 加权限流；活动权重始终按任务真实字节累计，不会在运行中随动态预算截断。超过预算的单个合法对象只能在当前没有其他 commit 占用时独立运行；预算升降后仍按真实活动总量决定是否放行队首。数量许可与字节许可都覆盖正式对象复制、数据库事务、暂存清理和缓存更新，而不只是 `INSERT`。PostgreSQL 主查询连接池上限为 30；长生命周期 advisory lock 使用另一个上限同为 30 的专用连接池，避免下载、转码和存储 I/O 持锁期间占满查询连接。commit 的存储共享锁、排序后的主题 / 作者 / 最终标签共享关联租约、会话锁和单图锁由同一专用连接按固定顺序取得，不会在锁池内嵌套等待第二条连接；同 slug commit 可以并行并在共享租约内幂等确保词表项存在，显式词表管理和删除使用的独占锁仍会等待全部关联租约退出。锁连接丢失会中止工作，内容接入发布另以数据库 execution token 栅栏旧执行者。公开 PostgreSQL 回源在主池内最多占 12 条连接；当前单应用实例最多保留 60 条应用连接，数据库 `max_connections` 应为该边界和运维连接留足空间。
 
@@ -247,8 +247,8 @@ URL 输入窗口、JSONL 解析和微博解析共享 3600 项通用安全边界�
 `import.max_items` 影响；按单条微博最多 18 张图片计算，合法配置最多产生
 900 张图片，服务端另保留不可配置的 1000 张安全上限。输入或解析结果超过限制时
 会在生成任务前明确拒绝，不自动拆成多个 `batch_time`。URL、JSONL 与微博都先在
-浏览器形成有序任务，随后通过一个固定的有界 remote accept JSON 请求批量创建或复用
-canonical。所有条目内容只进入受限正文。本地文件通过有界 upload intent 批次签发，Server
+浏览器形成有序任务，随后通过一个固定的有界 Import accept JSON 请求批量创建或复用
+canonical。所有条目内容只进入受限正文。本地文件通过有界 Upload intent 批次签发，Server
 同时执行 `upload.max_items` 与通用 hard limit；每个已签发批次只有一次 intent POST 和至多
 N 次纯字节 raw PUT。
 

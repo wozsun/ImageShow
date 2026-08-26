@@ -143,7 +143,7 @@ async function commitBatch(
     }
     if (result.status === "failed") {
       if (
-        result.code === "import_duplicate_conflict"
+        result.code === "ingestion_duplicate_conflict"
         && result.duplicates?.length
       ) {
         options.updateJob(current.id, {
@@ -161,7 +161,7 @@ async function commitBatch(
         options.updateJob(current.id, {
           status: "failed",
           failureStage: "commit",
-          commitFailureCheckpoint: result.code === "invalid_import_state"
+          commitFailureCheckpoint: result.code === "invalid_ingestion_state"
             ? "ready"
             : "unknown",
           resultState: undefined,

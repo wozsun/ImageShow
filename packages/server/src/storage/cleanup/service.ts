@@ -64,7 +64,7 @@ export async function assertObjectNotPendingCleanup(
   key: string,
   options: Readonly<{
     /**
-     * Ignore only this import's pre-copy candidate guard. The caller must
+     * Ignore only this Ingestion commit's pre-copy candidate guard. The caller must
      * already hold the matching image storage mutation lock, which also
      * fences the guard handler until PostgreSQL publication has completed.
      */
@@ -82,7 +82,7 @@ export async function assertObjectNotPendingCleanup(
     if (
       options.ownedIngestionCandidateGuard?.imageId === reference.target_id
       && options.ownedIngestionCandidateGuard.token === reference.guard_token
-      && reference.reason === "import_commit_candidate_guard"
+      && reference.reason === "ingestion_commit_candidate_guard"
     ) {
       continue;
     }

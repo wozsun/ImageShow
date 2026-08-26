@@ -20,7 +20,7 @@ export type IngestionSessionCommandRunner = (
 export function ingestionQueueStructureError() {
   return new ApiError(
     503,
-    "import_queue_structure_invalid",
+    "ingestion_queue_structure_invalid",
     "内容接入队列结构异常，请停止应用后清空 ImageShow 专用 Redis 逻辑库"
   );
 }
@@ -40,9 +40,9 @@ export function throwIngestionCommandConflict(code: number): never {
     throw new ApiError(410, "upload_intent_expired", "上传意图已过期，请重新签发");
   }
   if (code === -4) {
-    throw new ApiError(409, "import_execution_fenced", "内容接入执行权已转移");
+    throw new ApiError(409, "ingestion_execution_fenced", "内容接入执行权已转移");
   }
-  throw new Error(`Redis import command returned unexpected status ${code}`);
+  throw new Error(`Redis ingestion command returned unexpected status ${code}`);
 }
 
 function ingestionDomainReplyError(error: unknown) {
@@ -55,17 +55,17 @@ function ingestionDomainReplyError(error: unknown) {
       ? error.message
       : null;
   if (!message) return null;
-  if (/\b(?:IMPORT_QUEUE_STRUCTURE|WRONGTYPE)\b/u.test(message)) {
+  if (/\b(?:INGESTION_QUEUE_STRUCTURE|WRONGTYPE)\b/u.test(message)) {
     return ingestionQueueStructureError();
   }
-  if (/\bIMPORT_CANONICAL\b/u.test(message)) {
+  if (/\bINGESTION_CANONICAL\b/u.test(message)) {
     return new ApiError(
       409,
-      "import_session_state_conflict",
+      "ingestion_session_state_conflict",
       "内容接入任务状态与当前操作不一致"
     );
   }
-  if (/\bIMPORT_INTENT\b/u.test(message)) {
+  if (/\bUPLOAD_INTENT\b/u.test(message)) {
     return new ApiError(
       409,
       "upload_intent_state_conflict",

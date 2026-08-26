@@ -12,7 +12,7 @@ export function ingestionSessionWithDuplicateConflict(
   duplicateCount: number
 ) {
   if (!current.prepared) {
-    throw new ApiError(409, "invalid_import_state", "图片尚未准备完成");
+    throw new ApiError(409, "invalid_ingestion_state", "图片尚未准备完成");
   }
   return semanticIngestionSession(current, {
     status: "ready",
@@ -45,7 +45,7 @@ export async function recoverIngestionCommitDuplicateConflict(
 ) {
   if (
     !(error instanceof ApiError)
-    || error.code !== "import_duplicate_conflict"
+    || error.code !== "ingestion_duplicate_conflict"
     || current.status !== "committing"
     || !current.prepared
     || !current.commit

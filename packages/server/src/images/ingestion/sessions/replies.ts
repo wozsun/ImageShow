@@ -70,21 +70,21 @@ export function normalizedSemanticSession(
 export function redisReplyInteger(value: unknown, context: string) {
   const parsed = Number(value);
   if (!Number.isSafeInteger(parsed)) {
-    throw new Error(`Redis import command returned invalid ${context}`);
+    throw new Error(`Redis ingestion command returned invalid ${context}`);
   }
   return parsed;
 }
 
 export function redisReplyString(value: unknown, context: string) {
   if (typeof value !== "string") {
-    throw new Error(`Redis import command returned invalid ${context}`);
+    throw new Error(`Redis ingestion command returned invalid ${context}`);
   }
   return value;
 }
 
 export function redisReplyArray(value: unknown, context: string) {
   if (!Array.isArray(value)) {
-    throw new Error(`Redis import command returned invalid ${context}`);
+    throw new Error(`Redis ingestion command returned invalid ${context}`);
   }
   return value;
 }
@@ -98,24 +98,24 @@ export function parseCanonicalReply(
   if (code < 0) {
     if (operation === "create") throwIngestionCommandConflict(code);
     if (code === -1) {
-      throw new ApiError(410, "import_session_missing", "内容接入任务已过期或被丢弃");
+      throw new ApiError(410, "ingestion_session_missing", "内容接入任务已过期或被丢弃");
     }
     if (code === -2) {
-      throw new ApiError(409, "import_incarnation_conflict", "内容接入任务身份已被替换");
+      throw new ApiError(409, "ingestion_incarnation_conflict", "内容接入任务身份已被替换");
     }
     if (code === -3) {
-      throw new ApiError(409, "import_version_conflict", "内容接入任务版本已变化");
+      throw new ApiError(409, "ingestion_version_conflict", "内容接入任务版本已变化");
     }
     if (code === -4) {
-      throw new ApiError(409, "import_execution_fenced", "内容接入执行权已转移");
+      throw new ApiError(409, "ingestion_execution_fenced", "内容接入执行权已转移");
     }
     if (code === -5) {
-      throw new ApiError(410, "import_session_expired", "内容接入任务已经到期");
+      throw new ApiError(410, "ingestion_session_expired", "内容接入任务已经到期");
     }
     if (code === -6) {
       throw new ApiError(
         409,
-        "import_session_not_expired",
+        "ingestion_session_not_expired",
         "内容接入任务的有效期已经刷新"
       );
     }
@@ -130,7 +130,7 @@ export function parseCanonicalReply(
   try {
     metadataValue = JSON.parse(metadataJson);
   } catch {
-    throw new Error("Redis import command returned invalid queue metadata JSON");
+    throw new Error("Redis ingestion command returned invalid queue metadata JSON");
   }
   return {
     code,
@@ -176,7 +176,7 @@ export function parseMetadataJson(value: unknown, context: string) {
   try {
     parsed = JSON.parse(redisReplyString(value, context));
   } catch {
-    throw new Error(`Redis import command returned invalid ${context} JSON`);
+    throw new Error(`Redis ingestion command returned invalid ${context} JSON`);
   }
   return parseIngestionQueueMetadata(parsed);
 }

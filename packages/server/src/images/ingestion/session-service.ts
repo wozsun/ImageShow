@@ -38,6 +38,7 @@ import { ingestionSessionSemanticHash } from "./sessions/projection.ts";
 import { IngestionSessionRepository } from "./repository.ts";
 import {
   IngestionTokenService,
+  uploadCredentialPurpose,
   type IngestionTokenEnvelope
 } from "./sessions/token-service.ts";
 
@@ -135,7 +136,7 @@ type SettledItem<Input, Result> = Readonly<{
   error: unknown;
 }>;
 
-type CanonicalAcceptItem = Exclude<
+type AcceptedIngestionItem = Exclude<
   ImportAcceptItemDto,
   { status: "failed" }
 >;
@@ -157,7 +158,7 @@ const ingestionSessionServiceDefaults: IngestionSessionServiceDependencies = {
 function failedItem(
   idempotencyKey: string,
   error: unknown,
-  fallbackCode = "import_item_failed",
+  fallbackCode = "ingestion_item_failed",
   fallbackMessage?: string
 ): IngestionItemFailure {
   return {
@@ -188,7 +189,7 @@ export class IngestionSessionService {
 
   #credential(intent: UploadIntentSnapshot, now = Date.now()) {
     return this.tokens.sign(
-      "imageshow/upload-intent-credential/v1",
+      uploadCredentialPurpose,
       {
         owner: intent.owner,
         session_id: intent.session_id,
@@ -202,7 +203,7 @@ export class IngestionSessionService {
 
   verifyUploadCredential(token: string, owner: string) {
     const claims = this.tokens.verify(
-      "imageshow/upload-intent-credential/v1",
+      uploadCredentialPurpose,
       token,
       isUploadCredential
     );
@@ -218,7 +219,7 @@ export class IngestionSessionService {
     committed: ReadonlyMap<string, CommittedIngestionResult>,
     lookupError: unknown,
     now: number
-  ): Promise<CanonicalAcceptItem | IngestionItemFailure> {
+  ): Promise<AcceptedIngestionItem | IngestionItemFailure> {
     const databaseResult = committedIngestionResultForOwner(
       committed,
       session.image_id,
@@ -242,7 +243,7 @@ export class IngestionSessionService {
       return failedItem(
         idempotencyKey,
         lookupError,
-        "import_result_lookup_failed",
+        "ingestion_result_lookup_failed",
         "无法核对内容接入任务的 PostgreSQL 最终结果"
       );
     }
@@ -256,7 +257,7 @@ export class IngestionSessionService {
         idempotencyKey,
         new ApiError(
           409,
-          "import_result_missing",
+          "ingestion_result_missing",
           "Redis 完成收据在 PostgreSQL 中没有对应图片，已清除过期收据，请重试"
         )
       );
@@ -334,7 +335,7 @@ export class IngestionSessionService {
             batch_key: item.batch_key,
             provided_image_time: explicitTime,
             manifest_position: item.manifest_position,
-            remote: null,
+            import_source: null,
             metadata: draftMetadata(item),
             storage_slug: storageSlug,
             expected_size: item.expected_size,
@@ -470,7 +471,7 @@ export class IngestionSessionService {
             batch_key: item.batch_key,
             provided_image_time: explicitTime,
             manifest_position: item.manifest_position,
-            remote: { url: item.url },
+            import_source: { url: item.url },
             metadata: draftMetadata(item),
             storage_slug: storageSlug,
             expected_size: null,
@@ -490,7 +491,7 @@ export class IngestionSessionService {
             image_id: imageId,
             image_time: resolvedTime.iso,
             request_hash: requestHash,
-            remote: { url: item.url },
+            import_source: { url: item.url },
             metadata,
             storage_slug: storageSlug,
             status: "queued",

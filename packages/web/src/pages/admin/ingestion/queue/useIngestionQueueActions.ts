@@ -220,7 +220,7 @@ export function useIngestionQueueActions(
           recoverAuthSession
           && isApiClientError(error)
           && error.status === 401
-          && error.code === "invalid_import_token"
+          && error.code === "invalid_ingestion_token"
         ) {
           try {
             // The failed action is never replayed. Refresh the shared session

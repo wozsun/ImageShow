@@ -37,9 +37,9 @@ export async function downloadIngestionSessionSnapshot(
   if (
     session.status !== "downloading"
     || !session.execution_token
-    || !session.remote?.url
+    || !session.import_source?.url
   ) {
-    throw new ApiError(409, "invalid_import_state", "导入任务不能进入下载阶段");
+    throw new ApiError(409, "invalid_ingestion_state", "导入任务不能进入下载阶段");
   }
   const rawGeneration = randomUuidV7();
   const rawPath = ingestionRawPath("import", session, rawGeneration);
@@ -67,7 +67,7 @@ export async function downloadIngestionSessionSnapshot(
         let lastProgressAt = 0;
         try {
           const rawSize = await resolvedDependencies.fetchImageToFile(
-            session.remote!.url,
+            session.import_source!.url,
             rawPath,
             partPath,
             resolvedDependencies.inputImageMaxBytes(),

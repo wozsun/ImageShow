@@ -10,7 +10,7 @@ export type IngestionWorkerStagePoolLimits = Readonly<{
 }>;
 
 /**
- * Keeps slow remote reads, CPU-heavy preparation and irreversible commits in
+ * Keeps slow Import downloads, CPU-heavy preparation and irreversible commits in
  * independent bounded lanes. Commit work must hold both its item permit and
  * its prepared-byte permit for the whole callback.
  */

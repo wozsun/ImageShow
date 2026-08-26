@@ -35,7 +35,7 @@ async function cleanupRetiredSession(session: IngestionSessionSnapshot) {
       if (failures.length) {
         throw new AggregateError(
           failures,
-          "Retired import staging cleanup failed"
+          "Retired Ingestion staging cleanup failed"
         );
       }
     }));
@@ -45,7 +45,7 @@ async function cleanupRetiredSession(session: IngestionSessionSnapshot) {
     result.status === "rejected" ? [result.reason] : []
   ));
   if (failures.length) {
-    throw new AggregateError(failures, "Retired import cleanup failed");
+    throw new AggregateError(failures, "Retired Ingestion cleanup failed");
   }
 }
 
@@ -61,6 +61,6 @@ export async function cleanupRetiredSessions(
     }
   });
   if (failures.length) {
-    throw new AggregateError(failures, "Retired import batch cleanup failed");
+    throw new AggregateError(failures, "Retired Ingestion batch cleanup failed");
   }
 }

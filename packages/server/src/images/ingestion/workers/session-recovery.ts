@@ -27,12 +27,12 @@ type CommittedIngestionResults = Awaited<
 >;
 
 const recoveryRaceCodes = new Set([
-  "import_session_missing",
-  "import_session_expired",
-  "import_session_not_expired",
-  "import_incarnation_conflict",
-  "import_version_conflict",
-  "import_execution_fenced"
+  "ingestion_session_missing",
+  "ingestion_session_expired",
+  "ingestion_session_not_expired",
+  "ingestion_incarnation_conflict",
+  "ingestion_version_conflict",
+  "ingestion_execution_fenced"
 ]);
 
 function isRecoveryRace(error: unknown) {
@@ -177,7 +177,7 @@ export class IngestionSessionRecovery {
     );
     for (const result of results) {
       if (result.status === "failed") {
-        const code = result.code ?? "import_recovery_cancel_failed";
+        const code = result.code ?? "ingestion_recovery_cancel_failed";
         if (recoveryRaceCodes.has(code)) continue;
         throw new ApiError(
           409,
@@ -256,7 +256,7 @@ export class IngestionSessionRecovery {
         })
         : failedIngestionSession(
           active,
-          new ApiError(409, "import_raw_missing", "恢复时原始素材已不存在")
+          new ApiError(409, "ingestion_raw_missing", "恢复时原始素材已不存在")
         );
       await this.#repository.mutateSemantic(active, active.version, next);
       return true;

@@ -4,7 +4,7 @@ const stagingImageSuffix = ".image.webp";
 const stagingThumbnailSuffix = ".thumb.webp";
 
 function stagingSegment(value: string, pattern: RegExp, lowercase = true) {
-  if (!pattern.test(value)) throw new Error("Invalid import staging identity");
+  if (!pattern.test(value)) throw new Error("Invalid ingestion staging identity");
   return lowercase ? value.toLowerCase() : value;
 }
 

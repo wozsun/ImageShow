@@ -1,7 +1,7 @@
 {
   "name": "imageshow",
   "private": true,
-  "version": "5.1.1",
+  "version": "5.1.2",
   "type": "module",
   "workspaces": [
     "packages/*"
@@ -31,7 +31,7 @@
     "node": ">=26.3.0 <27"
   },
   "devDependencies": {
-    "knip": "^6.32.0",
+    "knip": "^6.32.3",
     "linkedom": "^0.18.13",
     "tsx": "^4.23.11"
   }

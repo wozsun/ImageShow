@@ -222,21 +222,21 @@ async function cleanupCapturedStagingGroup(
     const result = capture.captured;
     const currentGroup = currentGroups.get(group.key);
     if (!currentGroup || !capture.referencesBefore || !result) {
-      logger.warn("import_orphan_staging_namespace_changed", {
+      logger.warn("ingestion_orphan_staging_namespace_changed", {
         namespace: group.identity,
         reference_namespace: group.referenceIdentity
       });
       return { stagingRemoved: 0, stagingFailed: 0, incompleteNamespaces: 1 };
     }
     if (!result.backend || !result.listing) {
-      logger.warn("import_orphan_staging_namespace_unavailable", {
+      logger.warn("ingestion_orphan_staging_namespace_unavailable", {
         namespace: group.identity,
         errors: result.failures
       });
       return { stagingRemoved: 0, stagingFailed: 0, incompleteNamespaces: 1 };
     }
     if (!result.listing.complete) {
-      logger.warn("import_orphan_staging_listing_incomplete", {
+      logger.warn("ingestion_orphan_staging_listing_incomplete", {
         backend: result.backend,
         scanned: result.listing.count,
         limit: STORAGE_ADMIN_LIST_MAX_KEYS
@@ -281,7 +281,7 @@ async function cleanupCapturedStagingGroup(
         } catch (error) {
           signal.throwIfAborted();
           stagingFailed += 1;
-          logger.warn("import_orphan_staging_cleanup_failed", {
+          logger.warn("ingestion_orphan_staging_cleanup_failed", {
             backend: deletionBackend.slug,
             key,
             error: errorMessage(error)
@@ -298,7 +298,7 @@ async function cleanupCapturedStagingGroup(
       }).catch((error) => {
         signal.throwIfAborted();
         stagingFailed += 1;
-        logger.warn("import_orphan_staging_directory_cleanup_failed", {
+        logger.warn("ingestion_orphan_staging_directory_cleanup_failed", {
           backend: deletionBackend.slug,
           error: errorMessage(error)
         });
@@ -320,7 +320,7 @@ async function cleanupStagingOrphans(
   );
   const supportedBackendLimit = appConfig.ingestion.configPackageMaxBackends;
   if (backends.length > supportedBackendLimit) {
-    logger.warn("import_orphan_staging_supported_backend_limit_exceeded", {
+    logger.warn("ingestion_orphan_staging_supported_backend_limit_exceeded", {
       backends: backends.length,
       limit: supportedBackendLimit
     });
@@ -344,7 +344,7 @@ async function cleanupStagingOrphans(
     stopSignal?.throwIfAborted();
     if (index >= appConfig.ingestionRuntime.orphanCleanupMaxStorageBackends) {
       totals.incompleteNamespaces += groups.length - index;
-      logger.warn("import_orphan_staging_group_cycle_limit_reached", {
+      logger.warn("ingestion_orphan_staging_group_cycle_limit_reached", {
         remaining_namespaces: groups.length - index,
         limit: appConfig.ingestionRuntime.orphanCleanupMaxStorageBackends
       });
@@ -356,7 +356,7 @@ async function cleanupStagingOrphans(
     }
     if (budget.remaining <= 0) {
       totals.incompleteNamespaces += groups.length - index;
-      logger.warn("import_orphan_staging_cycle_budget_exhausted", {
+      logger.warn("ingestion_orphan_staging_cycle_budget_exhausted", {
         remaining_namespaces: groups.length - index,
         limit: appConfig.ingestionRuntime.orphanCleanupMaxStagingKeysPerCycle
       });
@@ -373,7 +373,7 @@ async function cleanupStagingOrphans(
       stopSignal?.throwIfAborted();
       if (callerSignal?.aborted) {
         totals.incompleteNamespaces += groups.length - index;
-        logger.warn("import_orphan_staging_cycle_timeout", {
+        logger.warn("ingestion_orphan_staging_cycle_timeout", {
           remaining_namespaces: groups.length - index
         });
         break;
@@ -431,7 +431,7 @@ export async function cleanupIngestionOrphans(
   } catch (error) {
     signal?.throwIfAborted();
     if (!rawTimeoutSignal.aborted) throw error;
-    logger.warn("import_orphan_raw_cycle_timeout", {
+    logger.warn("ingestion_orphan_raw_cycle_timeout", {
       timeout_ms: Math.max(1_000, Math.floor(cycleTimeoutMs * 0.4))
     });
   }

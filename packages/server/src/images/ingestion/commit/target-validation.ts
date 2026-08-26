@@ -57,7 +57,7 @@ export async function assertCurrentCommitExecution(
     || current.version !== expected.version
     || current.execution_token !== expected.execution_token
   ) {
-    throw new ApiError(409, "import_execution_fenced", "内容接入提交执行权已转移");
+    throw new ApiError(409, "ingestion_execution_fenced", "内容接入提交执行权已转移");
   }
 }
 
@@ -71,7 +71,7 @@ export async function assertCurrentDuplicateDecision(
   if (duplicates.length && decision !== "confirmed") {
     throw new ApiError(
       409,
-      "import_duplicate_conflict",
+      "ingestion_duplicate_conflict",
       "提交前发现相同内容图片，请确认是否仍然提交",
       { duplicates }
     );

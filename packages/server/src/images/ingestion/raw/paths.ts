@@ -17,7 +17,7 @@ function assertPathSegment(
   lowercase = true
 ) {
   if (!pattern.test(value)) {
-    throw new ApiError(400, "unsafe_path", "Unsafe temporary import identity");
+    throw new ApiError(400, "unsafe_path", "Unsafe temporary ingestion identity");
   }
   return lowercase ? value.toLowerCase() : value;
 }
@@ -62,7 +62,7 @@ function rawDirectory(
     assertPathSegment(pair.image_id, uuidPattern)
   ));
   if (!path.startsWith(`${root}${sep}`)) {
-    throw new ApiError(400, "unsafe_path", "Unsafe temporary import path");
+    throw new ApiError(400, "unsafe_path", "Unsafe temporary ingestion path");
   }
   return path;
 }

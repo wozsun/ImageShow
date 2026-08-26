@@ -9,28 +9,28 @@ import {
 
 function record(value: unknown, context: string) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error(`Redis import ${context} is not an object`);
+    throw new Error(`Redis ingestion ${context} is not an object`);
   }
   return value as Record<string, unknown>;
 }
 
 function nonEmptyString(value: unknown, field: string) {
   if (typeof value !== "string" || !value) {
-    throw new Error(`Redis import value has invalid ${field}`);
+    throw new Error(`Redis ingestion value has invalid ${field}`);
   }
   return value;
 }
 
 function stringValue(value: unknown, field: string) {
   if (typeof value !== "string") {
-    throw new Error(`Redis import value has invalid ${field}`);
+    throw new Error(`Redis ingestion value has invalid ${field}`);
   }
   return value;
 }
 
 function booleanValue(value: unknown, field: string) {
   if (typeof value !== "boolean") {
-    throw new Error(`Redis import value has invalid ${field}`);
+    throw new Error(`Redis ingestion value has invalid ${field}`);
   }
   return value;
 }
@@ -41,7 +41,7 @@ function enumValue(
   field: string
 ) {
   if (typeof value !== "string" || !allowed.includes(value)) {
-    throw new Error(`Redis import value has invalid ${field}`);
+    throw new Error(`Redis ingestion value has invalid ${field}`);
   }
   return value;
 }
@@ -49,7 +49,7 @@ function enumValue(
 function digestValue(value: unknown, bytes: number, field: string) {
   const digest = nonEmptyString(value, field);
   if (!new RegExp(`^[a-f0-9]{${bytes * 2}}$`, "u").test(digest)) {
-    throw new Error(`Redis import value has invalid ${field}`);
+    throw new Error(`Redis ingestion value has invalid ${field}`);
   }
   return digest;
 }
@@ -60,21 +60,21 @@ function displayOrderKey(value: unknown, sessionId: string) {
     !/^[0-9a-f]{32}:[0-9a-f]{3}:[A-Za-z0-9_-]{43}$/u.test(key)
     || !key.endsWith(`:${sessionId}`)
   ) {
-    throw new Error("Redis import value has invalid display_order_key");
+    throw new Error("Redis ingestion value has invalid display_order_key");
   }
   return key;
 }
 
 function nonNegativeInteger(value: unknown, field: string) {
   if (!Number.isSafeInteger(value) || Number(value) < 0) {
-    throw new Error(`Redis import value has invalid ${field}`);
+    throw new Error(`Redis ingestion value has invalid ${field}`);
   }
   return Number(value);
 }
 
 function positiveInteger(value: unknown, field: string) {
   const parsed = nonNegativeInteger(value, field);
-  if (parsed < 1) throw new Error(`Redis import value has invalid ${field}`);
+  if (parsed < 1) throw new Error(`Redis ingestion value has invalid ${field}`);
   return parsed;
 }
 
@@ -89,7 +89,7 @@ function exactFields(
     actual.length !== required.length
     || actual.some((field, index) => field !== required[index])
   ) {
-    throw new Error(`Redis import ${context} contains unexpected fields`);
+    throw new Error(`Redis ingestion ${context} contains unexpected fields`);
   }
 }
 
@@ -104,7 +104,7 @@ function allowedFields(
     Object.keys(value).some((field) => !allowed.has(field))
     || required.some((field) => !Object.hasOwn(value, field))
   ) {
-    throw new Error(`Redis import ${context} contains unexpected fields`);
+    throw new Error(`Redis ingestion ${context} contains unexpected fields`);
   }
 }
 
@@ -140,13 +140,13 @@ function parseDraft(value: unknown, context: string) {
   if (
     !Array.isArray(draft.tags)
     || draft.tags.some((tag) => typeof tag !== "string")
-  ) throw new Error(`Redis import value has invalid ${context}.tags`);
+  ) throw new Error(`Redis ingestion value has invalid ${context}.tags`);
 }
 
-function parseImportDescription(value: unknown) {
-  const remote = record(value, "remote description");
-  exactFields(remote, ["url"], "remote description");
-  nonEmptyString(remote.url, "remote.url");
+function parseImportSource(value: unknown) {
+  const importSource = record(value, "import source");
+  exactFields(importSource, ["url"], "import source");
+  nonEmptyString(importSource.url, "import_source.url");
 }
 
 function parsePrepared(value: unknown) {
@@ -192,7 +192,7 @@ function parsePrepared(value: unknown) {
   if (
     prepared.quality !== null
     && (!Number.isSafeInteger(prepared.quality) || Number(prepared.quality) < 0)
-  ) throw new Error("Redis import value has invalid prepared.quality");
+  ) throw new Error("Redis ingestion value has invalid prepared.quality");
   booleanValue(prepared.transcoded, "prepared.transcoded");
   enumValue(prepared.detected_device, ["pc", "mb"], "prepared.detected_device");
   enumValue(
@@ -231,7 +231,7 @@ function parseCompletedDisplay(value: unknown, queue: unknown) {
     (queue === "upload" && display.source_type !== "upload")
     || (queue === "import" && display.source_type === "upload")
   ) {
-    throw new Error("Redis import completed display has mismatched source_type");
+    throw new Error("Redis ingestion completed display has mismatched source_type");
   }
   for (const field of [
     "original_width",
@@ -241,7 +241,7 @@ function parseCompletedDisplay(value: unknown, queue: unknown) {
   if (
     display.quality !== null
     && (!Number.isSafeInteger(display.quality) || Number(display.quality) < 0)
-  ) throw new Error("Redis import value has invalid display.quality");
+  ) throw new Error("Redis ingestion value has invalid display.quality");
   booleanValue(display.transcoded, "display.transcoded");
   if (
     display.manifest_position !== undefined
@@ -250,11 +250,11 @@ function parseCompletedDisplay(value: unknown, queue: unknown) {
       || Number(display.manifest_position) < 0
       || Number(display.manifest_position) > 0xfff
     )
-  ) throw new Error("Redis import value has invalid display.manifest_position");
+  ) throw new Error("Redis ingestion value has invalid display.manifest_position");
   if (display.manifest_line !== undefined) {
     const line = positiveInteger(display.manifest_line, "display.manifest_line");
     if (line > 1_000_000) {
-      throw new Error("Redis import value has invalid display.manifest_line");
+      throw new Error("Redis ingestion value has invalid display.manifest_line");
     }
   }
 }
@@ -295,17 +295,17 @@ export function parseStoredIngestionSession(raw: string): StoredIngestionSession
   try {
     parsed = JSON.parse(raw);
   } catch {
-    throw new Error("Redis import canonical contains invalid JSON");
+    throw new Error("Redis ingestion canonical contains invalid JSON");
   }
   const value = record(parsed, "canonical");
   nonEmptyString(value.session_id, "session_id");
   nonEmptyString(value.image_id, "image_id");
   nonEmptyString(value.owner, "owner");
   if (!ingestionQueueTypes.includes(value.queue as never)) {
-    throw new Error("Redis import value has invalid queue");
+    throw new Error("Redis ingestion value has invalid queue");
   }
   if (!ingestionSessionStatuses.includes(value.status as never)) {
-    throw new Error("Redis import value has invalid status");
+    throw new Error("Redis ingestion value has invalid status");
   }
   digestValue(value.request_hash, 32, "request_hash");
   positiveInteger(value.version, "version");
@@ -380,7 +380,7 @@ export function parseStoredIngestionSession(raw: string): StoredIngestionSession
       "discard_at",
       "semantic_hash"
     ], [
-      "remote",
+      "import_source",
       "manifest_position",
       "manifest_line",
       "prepared",
@@ -391,13 +391,13 @@ export function parseStoredIngestionSession(raw: string): StoredIngestionSession
     digestValue(value.semantic_hash, 32, "semantic_hash");
     nonNegativeInteger(value.progress_seq, "progress_seq");
     if (!ingestionSourceTypes.includes(value.source_type as never)) {
-      throw new Error("Redis import value has invalid source_type");
+      throw new Error("Redis ingestion value has invalid source_type");
     }
     if (
       (value.queue === "upload" && value.source_type !== "upload")
       || (value.queue === "import" && value.source_type === "upload")
     ) {
-      throw new Error("Redis import value has mismatched queue and source_type");
+      throw new Error("Redis ingestion value has mismatched queue and source_type");
     }
     nonEmptyString(value.image_time, "image_time");
     nonEmptyString(value.storage_slug, "storage_slug");
@@ -414,12 +414,12 @@ export function parseStoredIngestionSession(raw: string): StoredIngestionSession
         || value.progress < 0
         || value.progress > 100
       )
-    ) throw new Error("Redis import value has invalid progress");
+    ) throw new Error("Redis ingestion value has invalid progress");
     parseDraft(value.metadata, "metadata");
     if (value.queue === "import") {
-      parseImportDescription(value.remote);
-    } else if (value.remote !== undefined) {
-      throw new Error("Redis import upload canonical has remote description");
+      parseImportSource(value.import_source);
+    } else if (value.import_source !== undefined) {
+      throw new Error("Redis ingestion Upload canonical has an Import source");
     }
     if (value.prepared !== undefined) parsePrepared(value.prepared);
     if (
@@ -429,11 +429,11 @@ export function parseStoredIngestionSession(raw: string): StoredIngestionSession
         || Number(value.manifest_position) < 0
         || Number(value.manifest_position) > 0xfff
       )
-    ) throw new Error("Redis import value has invalid manifest_position");
+    ) throw new Error("Redis ingestion value has invalid manifest_position");
     if (value.manifest_line !== undefined) {
       const line = positiveInteger(value.manifest_line, "manifest_line");
       if (line > 1_000_000) {
-        throw new Error("Redis import value has invalid manifest_line");
+        throw new Error("Redis ingestion value has invalid manifest_line");
       }
     }
     if (value.duplicate_decision !== undefined) {
@@ -492,7 +492,7 @@ export function parseUploadIntent(raw: string): UploadIntentSnapshot {
     !Number.isSafeInteger(value.manifest_position)
     || Number(value.manifest_position) < 0
     || Number(value.manifest_position) > 0xfff
-  ) throw new Error("Redis import value has invalid manifest_position");
+  ) throw new Error("Redis ingestion value has invalid manifest_position");
   return value as UploadIntentSnapshot;
 }
 
@@ -522,19 +522,19 @@ export function parseIngestionQueueMetadata(
   ], "queue metadata");
   nonEmptyString(metadata.owner, "owner");
   if (!ingestionQueueTypes.includes(metadata.queue as never)) {
-    throw new Error("Redis import queue metadata has invalid queue");
+    throw new Error("Redis ingestion queue metadata has invalid queue");
   }
   for (const field of metadataIntegerFields) {
     nonNegativeInteger(metadata[field], field);
   }
   if (Number(metadata.revision) < Number(metadata.last_accepted_order)) {
-    throw new Error("Redis import queue metadata has a regressed clock");
+    throw new Error("Redis ingestion queue metadata has a regressed clock");
   }
   if (
     Number(metadata.unfinished)
       !== Number(metadata.total) - Number(metadata.completed)
   ) {
-    throw new Error("Redis import queue metadata has inconsistent unfinished count");
+    throw new Error("Redis ingestion queue metadata has inconsistent unfinished count");
   }
   for (const field of [
     "waiting",
@@ -546,14 +546,14 @@ export function parseIngestionQueueMetadata(
     "failed"
   ] as const) {
     if (Number(metadata[field]) > Number(metadata.unfinished)) {
-      throw new Error(`Redis import queue metadata has inconsistent ${field} count`);
+      throw new Error(`Redis ingestion queue metadata has inconsistent ${field} count`);
     }
   }
   if (
     Number(metadata.resolving) > Number(metadata.committing_resolving)
   ) {
     throw new Error(
-      "Redis import queue metadata has inconsistent resolving subset"
+      "Redis ingestion queue metadata has inconsistent resolving subset"
     );
   }
   return metadata as unknown as IngestionQueueMetadata;
@@ -561,22 +561,22 @@ export function parseIngestionQueueMetadata(
 
 export function metadataFromHashReply(values: unknown[]) {
   if (values.length % 2 !== 0) {
-    throw new Error("Redis import queue metadata has an invalid field count");
+    throw new Error("Redis ingestion queue metadata has an invalid field count");
   }
   const metadata: Record<string, unknown> = {};
   for (let index = 0; index < values.length; index += 2) {
     const key = values[index];
     const value = values[index + 1];
     if (typeof key !== "string" || typeof value !== "string") {
-      throw new Error("Redis import queue metadata contains invalid fields");
+      throw new Error("Redis ingestion queue metadata contains invalid fields");
     }
     if (metadataIntegerFields.includes(key as never)) {
       if (!/^(?:0|[1-9][0-9]*)$/u.test(value)) {
-        throw new Error("Redis import queue metadata contains invalid integer text");
+        throw new Error("Redis ingestion queue metadata contains invalid integer text");
       }
       const integer = Number(value);
       if (!Number.isSafeInteger(integer)) {
-        throw new Error("Redis import queue metadata contains an unsafe integer");
+        throw new Error("Redis ingestion queue metadata contains an unsafe integer");
       }
       metadata[key] = integer;
     } else {

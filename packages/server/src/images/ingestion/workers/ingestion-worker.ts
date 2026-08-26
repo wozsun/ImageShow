@@ -35,7 +35,7 @@ import {
 import { IngestionWorkerStagePools } from "./stage-pools.ts";
 
 function workerCancellationError(signal: AbortSignal) {
-  return signal.reason ?? new ApiError(409, "import_worker_stopped", "内容接入 worker 已停止");
+  return signal.reason ?? new ApiError(409, "ingestion_worker_stopped", "内容接入 worker 已停止");
 }
 
 export function isSameFailedIngestionExecution(
@@ -68,7 +68,7 @@ type ActiveIngestion = {
 
 export class IngestionSessionWorker {
   readonly repository: IngestionSessionRepository;
-  readonly coordinator: IngestionIrreversibleCoordinator;
+  readonly #coordinator: IngestionIrreversibleCoordinator;
   readonly #stagePools = new IngestionWorkerStagePools({
     download: () => getRuntimeConfig().import.global_concurrency,
     prepare: () => Math.max(
@@ -96,7 +96,7 @@ export class IngestionSessionWorker {
     coordinator = new IngestionIrreversibleCoordinator()
   ) {
     this.repository = repository;
-    this.coordinator = coordinator;
+    this.#coordinator = coordinator;
     this.#recovery = new IngestionSessionRecovery(
       repository,
       coordinator,
@@ -116,17 +116,17 @@ export class IngestionSessionWorker {
       this.#accepting = true;
       this.#resetRecovery();
       void this.tick().catch((error) => {
-        logger.error("import worker recovery failed", error);
+        logger.error("ingestion_worker_recovery_failed", error);
       });
     });
     this.#timer = setInterval(() => {
       void this.tick().catch((error) => {
-        logger.error("import worker tick failed", error);
+        logger.error("ingestion_worker_tick_failed", error);
       });
     }, 500);
     this.#timer.unref();
     void this.tick().catch((error) => {
-      logger.error("import worker startup failed", error);
+      logger.error("ingestion_worker_startup_failed", error);
     });
   }
 
@@ -139,7 +139,7 @@ export class IngestionSessionWorker {
   #pause(reason: unknown) {
     this.#accepting = false;
     for (const active of this.#active.values()) {
-      if (this.coordinator.state(active.pair) === "database_started") continue;
+      if (this.#coordinator.state(active.pair) === "database_started") continue;
       active.controller.abort(reason);
     }
   }
@@ -149,12 +149,12 @@ export class IngestionSessionWorker {
     this.#timer = null;
     this.#removeRedisListener?.();
     this.#removeRedisListener = null;
-    this.#pause(new Error("Import worker stopping"));
+    this.#pause(new Error("Ingestion worker stopping"));
   }
 
   abortActive(pair: IngestionSessionPair) {
     const active = this.#active.get(pairKey(pair));
-    active?.controller.abort(new ApiError(409, "import_cancelled", "内容接入已取消"));
+    active?.controller.abort(new ApiError(409, "ingestion_cancelled", "内容接入已取消"));
     return active?.promise;
   }
 
@@ -299,7 +299,7 @@ export class IngestionSessionWorker {
           onExecution(session);
           return commitIngestionSessionSnapshot(
             this.repository,
-            this.coordinator,
+            this.#coordinator,
             session,
             signal
           );
@@ -368,7 +368,7 @@ export class IngestionSessionWorker {
       if (current.status === "resolving") {
         await cancelIngestionSessions(
           this.repository,
-          this.coordinator,
+          this.#coordinator,
           current.owner,
           [{
             session_id: current.session_id,
@@ -390,7 +390,7 @@ export class IngestionSessionWorker {
         (latest) => failedIngestionSession(latest, error)
       );
     } catch (settleError) {
-      logger.error("import worker failure could not be published", {
+      logger.error("ingestion_worker_failure_publish_failed", {
         session_id: execution.session_id,
         image_id: execution.image_id,
         stage_error: errorMessage(error),
@@ -406,7 +406,7 @@ export class IngestionSessionWorker {
     ]).then(() => true);
     if (timeoutMs <= 0) {
       const drained = this.#active.size === 0 && !this.#tickPromise;
-      await this.coordinator.waitForDatabaseTransactions();
+      await this.#coordinator.waitForDatabaseTransactions();
       return drained;
     }
     let timer: NodeJS.Timeout | undefined;
@@ -418,7 +418,7 @@ export class IngestionSessionWorker {
     // Once PostgreSQL may have started, graceful shutdown never abandons that
     // transaction merely because cancellable stage draining reached its
     // deadline. Its result remains the sole completion truth.
-    await this.coordinator.waitForDatabaseTransactions();
+    await this.#coordinator.waitForDatabaseTransactions();
     return drained;
   }
 }

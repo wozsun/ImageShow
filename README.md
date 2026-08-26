@@ -16,10 +16,10 @@ Node.js 26 / Hono、React 19、PostgreSQL、Redis 8 和 Docker 构成。
   `static.*` 资源子域；已解析随机池在一次只读 Redis 原子调用内完成校验、抽样和 rich item
   读取，近期去重与最终排序仍由应用负责；不提供随机、外链或主题专用子域。
 - 后台图片上传、URL / JSONL / 微博导入、编辑、分类、回收站、日志与运行状态检查；本地上传
-  使用一次有界 intent POST 加逐文件 raw PUT，远程来源一次批量 accept 后由单实例 Redis
+  使用一次有界 Upload intent POST 加逐文件 raw PUT，Import 来源一次批量 accept 后由单实例 Redis
   worker 接管，异步提交只冻结意图并以 PostgreSQL 图片行确认完成；相同最终内容在提交边界
   串行确认，单项重复冲突不会中断同一批的其他图片，确认后复用该项已锁定的提交意图继续；
-  upload / import 队列按当前管理员分别用一个 SSE 和有界分页快照同步；展示保持新批次置顶、
+  Upload / Import 队列按当前管理员分别用一个 SSE 和有界分页快照同步；展示保持新批次置顶、
   同批来源顺序 1→N，并在窗口重开和跨页后保持稳定。重连只废止旧动作权威，当前页继续稳定
   展示直至新快照原位替换；实时 completed 直接复用提交事务生成的 PostgreSQL 投影，窗口恢复时
   再按页批量水合；全队列提交、默认值和清理
@@ -122,10 +122,11 @@ docker compose exec postgresql sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB
 [数据库结构](docs/guide/database.md#启动与结构契约)。
 
 Redis 是必需的 operational datastore，但不是业务真相源；服务 unavailable 或命令 OOM 时，
-会话、导入写入和 worker 均 fail closed，不回退到 PostgreSQL 或进程内队列。停应用后把已确认
-专供 ImageShow 的 logical database 清为空库是受支持冷启动：管理员重新登录，未完成导入允许
-消失，派生状态从 PostgreSQL 重建。运行中清空或局部缺失 canonical / owner / metadata 结构
-不受支持，受影响队列会 fail closed 并要求停机处理。连接必须支持 Redis 8 以及项目使用的
+Ingestion 会话、写入和 worker 均 fail closed，不回退到 PostgreSQL 或进程内队列。停应用后把
+已确认专供 ImageShow 的 logical database 清为空库是受支持冷启动：管理员重新登录，未完成
+内容接入任务允许消失，派生状态从 PostgreSQL 重建。运行中清空或局部缺失 canonical / owner /
+metadata 结构不受支持，受影响队列会 fail closed 并要求停机处理。连接必须支持 Redis 8 以及
+项目使用的
 `INCREX`、`ARRING`、`ARLASTITEMS`、`SET ... IFEQ ... KEEPTTL` 与
 `DELEX ... IFEQ` 能力；应用启动时会实际验证成功、条件失败、缺失、TTL 语义和 ACL 权限。
 

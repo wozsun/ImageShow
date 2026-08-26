@@ -33,12 +33,12 @@ export class IngestionOrphanCleanupWorker {
           || report.incomplete_namespaces
           || report.incomplete_raw_scans
         ) {
-          logger.info("import orphan cleanup completed", report);
+          logger.info("ingestion_orphan_cleanup_completed", report);
         }
       })
       .catch((error) => {
         if (!controller.signal.aborted) {
-          logger.warn("import orphan cleanup failed", {
+          logger.warn("ingestion_orphan_cleanup_failed", {
             error: errorMessage(error)
           });
         }
@@ -53,7 +53,7 @@ export class IngestionOrphanCleanupWorker {
   stop() {
     if (this.#timer) clearInterval(this.#timer);
     this.#timer = null;
-    this.#controller?.abort(new Error("Import orphan cleanup worker stopping"));
+    this.#controller?.abort(new Error("Ingestion orphan cleanup worker stopping"));
     const running = this.#running ?? Promise.resolve();
     this.#cursorClose = running.then(() => closeIngestionRawCleanupCursor());
   }

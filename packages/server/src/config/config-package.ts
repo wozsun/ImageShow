@@ -3,7 +3,7 @@ import { applicationVersion } from "../core/application-version.ts";
 import {
   listStorageBackends
 } from "../storage/backends/registry.ts";
-import { ingestionStorageBackends } from "../storage/backends/mutations.ts";
+import { importStorageBackends } from "../storage/backends/mutations.ts";
 import {
   buildConfigPackage,
   parseConfigPackage,
@@ -59,7 +59,7 @@ export async function importConfigPackage(
     let importTransactionId: string | null = null;
 
     try {
-      await ingestionStorageBackends(
+      await importStorageBackends(
         importedBackends,
         async () => {
           appliedRuntimeConfigRevision = (

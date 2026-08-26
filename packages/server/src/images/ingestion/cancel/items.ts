@@ -27,8 +27,8 @@ export function cancelFailure(
   return {
     ...input,
     status: "failed",
-    code: error instanceof ApiError ? error.code : "import_cancel_failed",
-    message: error instanceof Error ? error.message : "Import cancel failed"
+    code: error instanceof ApiError ? error.code : "ingestion_cancel_failed",
+    message: error instanceof Error ? error.message : "Ingestion cancel failed"
   };
 }
 

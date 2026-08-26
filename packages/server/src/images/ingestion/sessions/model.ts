@@ -36,7 +36,7 @@ export function ingestionSessionPairKey(pair: IngestionSessionPair) {
   return `${pair.session_id}\0${pair.image_id.toLowerCase()}`;
 }
 
-export type ImportDescription = Readonly<{
+export type ImportSource = Readonly<{
   url: string;
 }>;
 
@@ -90,7 +90,7 @@ export type IngestionSessionSnapshot = IngestionSessionPair & Readonly<{
   manifest_line?: number;
   image_time: string;
   request_hash: string;
-  remote?: ImportDescription;
+  import_source?: ImportSource;
   metadata: ImageDraftDto;
   storage_slug: string;
   status: Exclude<IngestionSessionStatus, "completed" | "discarded">;

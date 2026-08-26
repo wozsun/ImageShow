@@ -7,10 +7,16 @@ import { appConfig } from "@imageshow/shared";
 import { ApiError } from "../../../core/api-error.ts";
 import { stableJson } from "./projection.ts";
 
+export const uploadCredentialPurpose =
+  "imageshow/ingestion/upload/credential";
+export const ingestionActionWatermarkPurpose =
+  "imageshow/ingestion/action/watermark";
+export const ingestionActionContinuationPurpose =
+  "imageshow/ingestion/action/continuation";
 export const ingestionTokenPurposes = [
-  "imageshow/upload-intent-credential/v1",
-  "imageshow/queue-watermark/v1",
-  "imageshow/queue-continuation/v1"
+  uploadCredentialPurpose,
+  ingestionActionWatermarkPurpose,
+  ingestionActionContinuationPurpose
 ] as const;
 export type IngestionTokenPurpose = typeof ingestionTokenPurposes[number];
 
@@ -28,7 +34,7 @@ type IngestionTokenServiceOptions = {
 };
 
 function invalidToken(message = "内容接入凭证无效") {
-  return new ApiError(401, "invalid_import_token", message);
+  return new ApiError(401, "invalid_ingestion_token", message);
 }
 
 function decodeBase64Url(value: string, maximumBytes: number) {
@@ -76,7 +82,7 @@ export class IngestionTokenService {
   constructor(options: IngestionTokenServiceOptions = {}) {
     const rootKey = Buffer.from(options.rootKey ?? randomBytes(32));
     if (rootKey.length !== 32) {
-      throw new RangeError("Import token root key must contain exactly 256 bits");
+      throw new RangeError("Ingestion token root key must contain exactly 256 bits");
     }
     this.#rootKey = Buffer.from(rootKey);
     this.#now = options.now ?? Date.now;
@@ -108,7 +114,7 @@ export class IngestionTokenService {
       || !Number.isSafeInteger(expiresAt)
       || issuedAt < 0
       || expiresAt <= issuedAt
-    ) throw new RangeError("Import token claims or lifetime are invalid");
+    ) throw new RangeError("Ingestion token claims or lifetime are invalid");
     const envelope = {
       purpose,
       issued_at: issuedAt,
@@ -117,14 +123,14 @@ export class IngestionTokenService {
     } satisfies IngestionTokenEnvelope;
     const payload = Buffer.from(stableJson(envelope), "utf8");
     if (payload.length > this.#maximumPayloadBytes) {
-      throw new RangeError("Import token payload exceeds its byte limit");
+      throw new RangeError("Ingestion token payload exceeds its byte limit");
     }
     const token = `${payload.toString("base64url")}.${this.#mac(
       purpose,
       payload
     ).toString("base64url")}`;
     if (Buffer.byteLength(token, "utf8") > this.#maximumTokenBytes) {
-      throw new RangeError("Import token exceeds its byte limit");
+      throw new RangeError("Ingestion token exceeds its byte limit");
     }
     return token;
   }

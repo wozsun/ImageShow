@@ -26,10 +26,10 @@ end
 if not valid_integer(now, 0)
   or not valid_integer(ttl_seconds, 1)
   or ttl_seconds > math.floor((max_safe_integer - now) / 1000) then
-  error('IMPORT_INTENT invalid_clock')
+  error('UPLOAD_INTENT invalid_clock')
 end
 assert_upload_intent_shape(template, false)
-assert_json_array_field(ARGV[1], 'tags', 1, 'IMPORT_INTENT')
+assert_json_array_field(ARGV[1], 'tags', 1, 'UPLOAD_INTENT')
 assert_snapshot_hash_container(canonical_key, 'canonical', 12)
 local canonical_json = redis.call('HGET', canonical_key, 'snapshot')
 if canonical_json then
@@ -50,7 +50,7 @@ if canonical_json then
     expires_key
   )
   if canonical.owner ~= template.owner or canonical.queue ~= 'upload' then
-    return redis.error_reply('IMPORT_CANONICAL invalid_upload_scope')
+    return redis.error_reply('INGESTION_CANONICAL invalid_upload_scope')
   end
   if canonical.session_id == template.session_id
     and canonical.request_hash == template.request_hash
@@ -61,24 +61,24 @@ if canonical_json then
   return { -2 }
 end
 
-assert_snapshot_hash_container(intent_key, 'intent', 6, 'IMPORT_INTENT')
+assert_snapshot_hash_container(intent_key, 'intent', 6, 'UPLOAD_INTENT')
 local existing_json = redis.call('HGET', intent_key, 'snapshot')
 assert_queue_structure(
   owner_key, display_key, metadata_key, template.owner, 'upload'
 )
 if redis.call('ZSCORE', owner_key, template.session_id) then
-  error('IMPORT_QUEUE_STRUCTURE canonical_missing')
+  error('INGESTION_QUEUE_STRUCTURE canonical_missing')
 end
 if redis.call('ZSCORE', display_key, template.display_order_key) then
-  error('IMPORT_QUEUE_STRUCTURE canonical_missing')
+  error('INGESTION_QUEUE_STRUCTURE canonical_missing')
 end
 if existing_json then
   local existing = decode_stored_json(
-    existing_json, 'intent', 'IMPORT_INTENT'
+    existing_json, 'intent', 'UPLOAD_INTENT'
   )
   assert_upload_intent_shape(existing, true)
   assert_upload_intent_hash(intent_key, existing)
-  assert_json_array_field(existing_json, 'tags', 1, 'IMPORT_INTENT')
+  assert_json_array_field(existing_json, 'tags', 1, 'UPLOAD_INTENT')
   if tonumber(existing.expires_at or 0) <= now then
     redis.call('DEL', intent_key)
   elseif existing.session_id == template.session_id
@@ -134,15 +134,15 @@ if not valid_integer(now, 0)
   or not valid_integer(ttl_seconds, 1)
   or not valid_integer(stale_ms, 0)
   or ttl_seconds > math.floor((9007199254740991 - now) / 1000) then
-  error('IMPORT_INTENT invalid_clock')
+  error('UPLOAD_INTENT invalid_clock')
 end
-assert_snapshot_hash_container(intent_key, 'intent', 6, 'IMPORT_INTENT')
+assert_snapshot_hash_container(intent_key, 'intent', 6, 'UPLOAD_INTENT')
 local current_json = redis.call('HGET', intent_key, 'snapshot')
 if not current_json then return { -1 } end
-local current = decode_stored_json(current_json, 'intent', 'IMPORT_INTENT')
+local current = decode_stored_json(current_json, 'intent', 'UPLOAD_INTENT')
 assert_upload_intent_shape(current, true)
 assert_upload_intent_hash(intent_key, current)
-assert_json_array_field(current_json, 'tags', 1, 'IMPORT_INTENT')
+assert_json_array_field(current_json, 'tags', 1, 'UPLOAD_INTENT')
 if current.session_id ~= expected_session_id
   or current.candidate_image_id ~= expected_image_id
   or current.request_hash ~= expected_hash then return { -2 } end
@@ -191,7 +191,7 @@ if action == 'release' then
   redis.call('HSET', intent_key, 'snapshot', serialized, 'execution_token', '')
   return { 3, serialized }
 end
-return redis.error_reply('IMPORT_INTENT invalid_action')
+return redis.error_reply('UPLOAD_INTENT invalid_action')
 `;
 
 export const readUploadIntentScript = String.raw`
@@ -202,7 +202,7 @@ if key_type == 'none' then return { 0 } end
 if key_type ~= 'hash'
   or redis.call('HLEN', intent_key) ~= 6
   or redis.call('HEXISTS', intent_key, 'snapshot') ~= 1 then
-  return redis.error_reply('IMPORT_INTENT intent_fields')
+  return redis.error_reply('UPLOAD_INTENT intent_fields')
 end
 return {
   1,

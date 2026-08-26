@@ -13,7 +13,7 @@ export type GalleryFacets = GalleryFacetsDto;
 export type GalleryStats = GalleryStatsDto;
 
 // site-config 与 gallery-facets 是「会话级近乎不变」的全局数据：只有在管理员保存站点设置、
-// 改动主题 / 标签 / 作者或导入图片后才需要显式失效。这里关闭自动后台刷新，避免组件重挂、
+// 改动主题 / 标签 / 作者或内容接入完成后才需要显式失效。这里关闭自动后台刷新，避免组件重挂、
 // 路由切换和窗口重新聚焦时反复请求；gcTime 同设 Infinity，使离开画廊再返回也不必重新拉取。
 // 任何页面都应改用下面两个 hook，而非各自内联 useQuery，既减少请求也统一了取数方式。
 const sessionGlobalQuery = {

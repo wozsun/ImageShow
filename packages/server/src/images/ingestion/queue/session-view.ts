@@ -4,6 +4,7 @@ import type {
   IngestionSessionPairDto,
   IngestionStatusItemDto
 } from "@imageshow/shared/browser";
+import { ingestionPreviewPath } from "@imageshow/shared/browser";
 import { ApiError } from "../../../core/api-error.ts";
 import { privateNoStoreCacheControl } from "../../../core/http/headers.ts";
 import { contentType } from "../../../storage/objects/keys.ts";
@@ -27,7 +28,7 @@ function previewPath(
   session: Pick<IngestionSessionSnapshot, "session_id" | "image_id">,
   full = false
 ) {
-  return `/api/admin/ingestion/preview/${encodeURIComponent(
+  return `${ingestionPreviewPath}/${encodeURIComponent(
     session.session_id
   )}/${encodeURIComponent(session.image_id)}${full ? "/full" : ""}`;
 }
@@ -59,7 +60,9 @@ export function presentIngestionSession(
     image_id: session.image_id,
     queue: session.queue,
     source_type: session.source_type,
-    ...(session.remote ? { source_url: session.remote.url } : {}),
+    ...(session.import_source
+      ? { source_url: session.import_source.url }
+      : {}),
     ...(session.manifest_position === undefined
       ? {}
       : { manifest_position: session.manifest_position }),
@@ -207,7 +210,7 @@ export async function readIngestionPreview(
       current.version !== session.version
       || current.prepared?.generation !== session.prepared?.generation
     ) {
-      throw new ApiError(409, "import_version_conflict", "内容接入任务版本已变化");
+      throw new ApiError(409, "ingestion_version_conflict", "内容接入任务版本已变化");
     }
     const key = variant === "full"
       ? current.prepared!.prepared_image_key

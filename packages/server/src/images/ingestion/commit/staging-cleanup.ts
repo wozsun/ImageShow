@@ -14,7 +14,7 @@ async function removeCommittedStagingKeys(
       result.status === "rejected" ? [result.reason] : []
     ));
     if (failures.length) {
-      throw new AggregateError(failures, "Committed import staging cleanup failed");
+      throw new AggregateError(failures, "Committed Ingestion staging cleanup failed");
     }
   });
 }

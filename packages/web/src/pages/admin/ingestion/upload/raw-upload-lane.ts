@@ -1,7 +1,7 @@
 import type { RefObject } from "react";
 import type { IngestionSessionPairDto } from "@imageshow/shared/browser";
 import type { IngestionJob } from "../../../../lib/types.js";
-import { uploadLocalRaw } from "../queue/ingestion-api.js";
+import { uploadRaw } from "../queue/ingestion-api.js";
 import {
   isCurrentIngestionAttempt,
   type AppendIngestionQueueApi
@@ -60,7 +60,7 @@ export async function runRawUploadLane({
       || !isCurrentIngestionAttempt(queue, job.id, job.attemptKey)
     ) return;
     const rawConnectionGeneration = queue.captureServerConnectionGeneration();
-    const request = uploadLocalRaw(credential, job.file, {
+    const request = uploadRaw(credential, job.file, {
       onProgress: (transferProgress) => {
         if (isCurrentIngestionAttempt(queue, job.id, job.attemptKey)) {
           queue.updateJob(job.id, { transferProgress });

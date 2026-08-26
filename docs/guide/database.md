@@ -5,7 +5,7 @@ PostgreSQL 共 9 张业务表，不保存迁移账本或 schema 版本表。
 `schema-additions.sql` 是纯注释占位，不为新安装补充任何结构。随机图 `id` 的末 12 位查询所需 ready
 部分表达式索引，以及统一 Redis 图片投影的权威 revision 单行表均属于当前基线。PostgreSQL
 是最终图片、账号、存储注册表和持久任务的唯一真相源。Redis 图片投影、查询缓存与管理员
-会话均不替代数据库真值；未完成导入 canonical 是允许在受控冷启动时整体丢弃的运行态。
+会话均不替代数据库真值；未完成 Ingestion canonical 是允许在受控冷启动时整体丢弃的运行态。
 
 `schema.sql` 按依赖和运行职责排列：存储注册表 →
 公共词表 → 图片真值、关联与投影 revision → 后台任务 → 管理员身份。
@@ -86,7 +86,7 @@ Redis 核心 meta 的当前图片数和最后更新时间随完整重建批次�
 | `purge_attempts` | 单调递增的彻底删除尝试号，同时作为当前执行者的所有权令牌 |
 | `purge_error` | 最近一次彻底删除失败的有界错误信息 |
 | `created_by` | 首次提交该图片时冻结的规范化管理员 username；无外键、无默认值，不随编辑、删除、恢复或存储迁移改写 |
-| `created_at` | 实际导入 ImageShow 的时间 |
+| `created_at` | 图片首次正式入库时间 |
 | `updated_at` | 图片元数据最后更新时间 |
 
 图片分类直接由 `device`、`brightness` 与 `theme` 表达，人工可读目录也使用这三项；
@@ -160,13 +160,15 @@ Redis meta 的 `applied_revision` 只有在精确同步或全量重建完成完�
 二者不一致时缓存读门关闭。该表不保存 Redis 状态；当前协议只服务于单个 ImageShow
 应用进程，不支持多应用实例。
 
-## Redis 导入运行态
+## Redis Ingestion 运行态
 
-运行中的 upload intent、owner queue、canonical、runnable、expires、计数和 revision 位于
-专用 Redis logical database；每个 canonical 冻结
+运行中的 Upload intent、owner queue、canonical、runnable、expires、计数和 revision 位于
+专用 Redis logical database，全部使用 `imageshow:ingestion:*` namespace；每个 canonical 冻结
 owner、queue、pair、独立 `image_time`、metadata、storage、version、progress sequence、
-execution token、raw / prepared generation 及可选 commit intent。领域命令用 Lua 原子维护
-canonical 与全部派生索引；Redis 不可用或结构不一致时 fail closed。
+execution token、raw / prepared generation 及可选 commit intent。Import canonical 额外保存
+`import_source`，Upload canonical 不含该字段；queue 只允许 `upload` / `import`。领域命令用
+Lua 原子维护 canonical 与全部派生索引；Redis 不可用或结构不一致时 fail closed。上述
+namespace、canonical 结构和无版本后缀的签名 purpose 共同构成唯一现行运行时协议。
 
 ## background_job —— 后台任务队列
 
@@ -251,7 +253,7 @@ HTTPS 格式并在后端配置锁内保存，不创建探针 driver，也不退�
 
 `tag` 与 `theme` 都使用小写 slug、显示名、排序和时间戳。主题是一图一值，直接存在 `metadata.theme`；标签是一图多值，通过 `image_tag(image_id, tag_slug)` 关联。
 
-图片标签关联与 import commit 对最终解析、去重后的 tag slug 按排序顺序组合取得
+图片标签关联与 Ingestion commit 对最终解析、去重后的 tag slug 按排序顺序组合取得
 共享 advisory lock，并在锁内使用同一列表幂等确保缺失标签存在、替换
 `image_tag`。标签管理只提供单项删除，删除时取得对应独占锁，因此不能穿过并发
 关联或在外键写入中途执行。删除标签会级联删除

@@ -32,7 +32,7 @@ export async function persistIngestionImage(
       if (existing.created_by !== commit.created_by) {
         throw new ApiError(
           409,
-          "import_image_owner_conflict",
+          "ingestion_image_owner_conflict",
           "图片 ID 已属于其他管理员"
         );
       }

@@ -10,9 +10,10 @@ import {
   verifyIngestionActionWatermark
 } from "./action-scope.ts";
 import { semanticIngestionSessionHash } from "../sessions/projection.ts";
-import type {
-  IngestionTokenEnvelope,
-  IngestionTokenService
+import {
+  ingestionActionContinuationPurpose,
+  type IngestionTokenEnvelope,
+  type IngestionTokenService
 } from "../sessions/token-service.ts";
 
 type IngestionQueueContinuationClaims = IngestionTokenEnvelope & Readonly<{
@@ -95,7 +96,7 @@ export function resolveIngestionQueueActionCursor(input: Readonly<{
     };
   }
   const continuation = input.tokens.verify(
-    "imageshow/queue-continuation/v1",
+    ingestionActionContinuationPurpose,
     input.request.continuation,
     isContinuationClaims
   );
@@ -116,7 +117,7 @@ export function resolveIngestionQueueActionCursor(input: Readonly<{
   ) {
     throw new ApiError(
       409,
-      "import_action_continuation_invalid",
+      "ingestion_action_continuation_invalid",
       "内容接入队列操作游标与当前请求不一致"
     );
   }
@@ -137,7 +138,7 @@ export function signIngestionQueueActionContinuation(input: Readonly<{
   if (input.nextCursor === null) return undefined;
   try {
     return input.tokens.sign(
-      "imageshow/queue-continuation/v1",
+      ingestionActionContinuationPurpose,
       {
         action_scope: input.resolved.watermark.action_scope,
         redis_connection_epoch:
@@ -159,7 +160,7 @@ export function signIngestionQueueActionContinuation(input: Readonly<{
     if (error instanceof RangeError) {
       throw new ApiError(
         409,
-        "import_action_watermark_expired",
+        "ingestion_action_watermark_expired",
         "内容接入队列操作水位已过期，请刷新后重试"
       );
     }

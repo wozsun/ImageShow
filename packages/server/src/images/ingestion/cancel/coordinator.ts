@@ -86,7 +86,7 @@ const defaultDependencies: CancelIngestionSessionsDependencies = {
 const cancelMutationSignal = new AbortController().signal;
 const cancelMutationLimiter = new DynamicConcurrencyLimiter(
   () => appConfig.ingestionRuntime.queueActionBatchSize,
-  (signal) => signal.reason ?? new Error("Import cancellation stopped")
+  (signal) => signal.reason ?? new Error("Ingestion cancellation stopped")
 );
 
 function abortActiveBestEffort(
@@ -95,14 +95,14 @@ function abortActiveBestEffort(
 ) {
   try {
     void Promise.resolve(abortActive(pair)).catch((error) => {
-      logger.warn("discarded_import_abort_deferred", {
+      logger.warn("ingestion_discarded_abort_deferred", {
         session_id: pair.session_id,
         image_id: pair.image_id,
         error: errorMessage(error)
       });
     });
   } catch (error) {
-    logger.warn("discarded_import_abort_deferred", {
+    logger.warn("ingestion_discarded_abort_deferred", {
       session_id: pair.session_id,
       image_id: pair.image_id,
       error: errorMessage(error)
@@ -153,7 +153,7 @@ async function retireCompletedSession(
           // PostgreSQL has already established the authoritative outcome. A
           // stale Redis state or a raced CAS must not prevent the canonical
           // pair from being re-read and retired below.
-          logger.warn("completed_import_receipt_publish_deferred", {
+          logger.warn("ingestion_completed_receipt_publish_deferred", {
             session_id: input.session_id,
             image_id: input.image_id,
             error: errorMessage(error)
@@ -185,7 +185,7 @@ async function retireCompletedSession(
         await repository.deleteSession(terminal, terminal.version);
       }
     } catch (error) {
-      logger.warn("completed_import_receipt_cleanup_deferred", {
+      logger.warn("ingestion_completed_receipt_cleanup_deferred", {
         session_id: input.session_id,
         image_id: input.image_id,
         error: errorMessage(error)
@@ -402,7 +402,7 @@ async function cancelLoadedIngestionSessions(
       if (work) {
         const outcome = outcomes.get(pairKey(pair));
         if (!outcome) {
-          throw new Error("Import cancel boundary result is missing");
+          throw new Error("Ingestion cancel boundary result is missing");
         }
         if (!outcome.ok) throw outcome.error;
         if (outcome.result.status === "resolving") {
@@ -507,14 +507,14 @@ async function cancelLoadedIngestionSessions(
       if (loaded[index]!.incarnationMismatch) {
         throw new ApiError(
           409,
-          "import_incarnation_conflict",
+          "ingestion_incarnation_conflict",
           "内容接入任务身份已被替换"
         );
       }
       if (!initial) {
         throw new ApiError(
           410,
-          "import_session_missing",
+          "ingestion_session_missing",
           "未完成内容接入已过期或被服务器丢弃"
         );
       }
@@ -522,7 +522,7 @@ async function cancelLoadedIngestionSessions(
         await repository.deleteSession(initial, initial.version);
         throw new ApiError(
           410,
-          "import_session_missing",
+          "ingestion_session_missing",
           "完成回执对应的 PostgreSQL 图片已不存在"
         );
       }
@@ -531,10 +531,10 @@ async function cancelLoadedIngestionSessions(
         continue;
       }
       if (initial.version !== input.expected_version) {
-        throw new ApiError(409, "import_version_conflict", "内容接入任务版本已变化");
+        throw new ApiError(409, "ingestion_version_conflict", "内容接入任务版本已变化");
       }
       throw new Error(
-        "Import cancel boundary was not created for an active session"
+        "Ingestion cancel boundary was not created for an active session"
       );
     } catch (error) {
       results.push(cancelFailure(pair, error));

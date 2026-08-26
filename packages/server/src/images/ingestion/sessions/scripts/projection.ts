@@ -73,7 +73,7 @@ end
 local function assert_hash_type(key, name, marker)
   local key_type = redis_key_type(key)
   if key_type ~= 'none' and key_type ~= 'hash' then
-    error((marker or 'IMPORT_QUEUE_STRUCTURE') .. ' ' .. name .. '_type')
+    error((marker or 'INGESTION_QUEUE_STRUCTURE') .. ' ' .. name .. '_type')
   end
 end
 
@@ -87,21 +87,21 @@ local function assert_snapshot_hash_container(
   if redis.call('EXISTS', key) == 1
     and (redis.call('HLEN', key) ~= expected_fields
       or redis.call('HEXISTS', key, 'snapshot') ~= 1) then
-    error((marker or 'IMPORT_QUEUE_STRUCTURE') .. ' ' .. name .. '_fields')
+    error((marker or 'INGESTION_QUEUE_STRUCTURE') .. ' ' .. name .. '_fields')
   end
 end
 
 local function assert_zset_type(key, name)
   local key_type = redis_key_type(key)
   if key_type ~= 'none' and key_type ~= 'zset' then
-    error('IMPORT_QUEUE_STRUCTURE ' .. name .. '_type')
+    error('INGESTION_QUEUE_STRUCTURE ' .. name .. '_type')
   end
 end
 
 local function decode_stored_json(value, name, marker)
   local ok, parsed = pcall(cjson.decode, value)
   if not ok or type(parsed) ~= 'table' then
-    error((marker or 'IMPORT_QUEUE_STRUCTURE') .. ' ' .. name .. '_json')
+    error((marker or 'INGESTION_QUEUE_STRUCTURE') .. ' ' .. name .. '_json')
   end
   return parsed
 end
@@ -109,11 +109,11 @@ end
 local function parse_stored_integer(value, name)
   if type(value) ~= 'string'
     or not (value == '0' or string.match(value, '^[1-9][0-9]*$')) then
-    error('IMPORT_QUEUE_STRUCTURE ' .. name)
+    error('INGESTION_QUEUE_STRUCTURE ' .. name)
   end
   local parsed = tonumber(value)
   if not parsed or parsed > max_safe_integer then
-    error('IMPORT_QUEUE_STRUCTURE ' .. name)
+    error('INGESTION_QUEUE_STRUCTURE ' .. name)
   end
   return parsed
 end
@@ -138,12 +138,12 @@ local function assert_queue_structure(
   local display_count = redis.call('ZCARD', display_key)
   if not metadata_exists then
     if owner_count ~= 0 or display_count ~= 0 then
-      error('IMPORT_QUEUE_STRUCTURE metadata_missing')
+      error('INGESTION_QUEUE_STRUCTURE metadata_missing')
     end
     return false
   end
   if redis.call('HLEN', metadata_key) ~= #summary_fields + 4 then
-    error('IMPORT_QUEUE_STRUCTURE metadata_fields')
+    error('INGESTION_QUEUE_STRUCTURE metadata_fields')
   end
   local stored_owner = redis.call('HGET', metadata_key, 'owner')
   local stored_queue = redis.call('HGET', metadata_key, 'queue')
@@ -151,7 +151,7 @@ local function assert_queue_structure(
     or stored_owner == ''
     or (owner ~= nil and stored_owner ~= owner)
     or stored_queue ~= queue then
-    error('IMPORT_QUEUE_STRUCTURE metadata_scope')
+    error('INGESTION_QUEUE_STRUCTURE metadata_scope')
   end
   local counts = {}
   for _, field in ipairs(summary_fields) do
@@ -169,7 +169,7 @@ local function assert_queue_structure(
     'invalid_revision'
   )
   if revision < last_accepted_order then
-    error('IMPORT_QUEUE_STRUCTURE metadata_clock')
+    error('INGESTION_QUEUE_STRUCTURE metadata_clock')
   end
   if owner_count > 0 then
     local highest = redis.call(
@@ -182,7 +182,7 @@ local function assert_queue_structure(
       or highest_score > max_safe_integer
       or highest_score % 1 ~= 0
       or highest_score > last_accepted_order then
-      error('IMPORT_QUEUE_STRUCTURE owner_clock')
+      error('INGESTION_QUEUE_STRUCTURE owner_clock')
     end
   end
   if counts.total ~= owner_count
@@ -195,7 +195,7 @@ local function assert_queue_structure(
     or counts.committing_resolving > counts.unfinished
     or counts.resolving > counts.committing_resolving
     or counts.failed > counts.unfinished then
-    error('IMPORT_QUEUE_STRUCTURE count_mismatch')
+    error('INGESTION_QUEUE_STRUCTURE count_mismatch')
   end
   return true
 end
@@ -211,7 +211,7 @@ local function assert_metadata_incrementable(metadata_key, include_order)
   )
   if revision >= max_safe_integer
     or (include_order and last_accepted_order >= max_safe_integer) then
-    error('IMPORT_QUEUE_STRUCTURE counter_exhausted')
+    error('INGESTION_QUEUE_STRUCTURE counter_exhausted')
   end
 end
 
@@ -244,7 +244,7 @@ local function validate_projection_delta(metadata_key, before, after)
     local next_value = current + after[field] - before[field]
     if current < 0 or current > max_safe_integer
       or next_value < 0 or next_value > max_safe_integer then
-      error('IMPORT_QUEUE_STRUCTURE negative_count')
+      error('INGESTION_QUEUE_STRUCTURE negative_count')
     end
   end
 end
@@ -273,7 +273,7 @@ local function valid_status(status)
     or status == 'discarded'
 end
 
-local function valid_remote_source(source_type)
+local function valid_import_source(source_type)
   return source_type == 'url'
     or source_type == 'jsonl'
     or source_type == 'weibo'
@@ -292,12 +292,12 @@ local function append_runnable(runnable_key, canonical_key, score_floor)
   if #tail > 0 then
     tail_score = tonumber(tail[2])
     if not valid_integer(tail_score, 0) then
-      error('IMPORT_QUEUE_STRUCTURE runnable_score')
+      error('INGESTION_QUEUE_STRUCTURE runnable_score')
     end
   end
   local next_score = math.max(tail_score + 1, score_floor, 1)
   if not valid_integer(next_score, 1) then
-    error('IMPORT_QUEUE_STRUCTURE runnable_score_exhausted')
+    error('INGESTION_QUEUE_STRUCTURE runnable_score_exhausted')
   end
   redis.call('ZADD', runnable_key, next_score, canonical_key)
   return next_score
@@ -316,7 +316,7 @@ end
 
 local function assert_exact_fields(value, fields, name, marker)
   if type(value) ~= 'table' then
-    error((marker or 'IMPORT_QUEUE_STRUCTURE') .. ' ' .. name .. '_shape')
+    error((marker or 'INGESTION_QUEUE_STRUCTURE') .. ' ' .. name .. '_shape')
   end
   local allowed = {}
   for _, field in ipairs(fields) do allowed[field] = true end
@@ -324,11 +324,11 @@ local function assert_exact_fields(value, fields, name, marker)
   for field, _ in pairs(value) do
     count = count + 1
     if not allowed[field] then
-      error((marker or 'IMPORT_QUEUE_STRUCTURE') .. ' ' .. name .. '_fields')
+      error((marker or 'INGESTION_QUEUE_STRUCTURE') .. ' ' .. name .. '_fields')
     end
   end
   if count ~= #fields then
-    error((marker or 'IMPORT_QUEUE_STRUCTURE') .. ' ' .. name .. '_fields')
+    error((marker or 'INGESTION_QUEUE_STRUCTURE') .. ' ' .. name .. '_fields')
   end
 end
 
@@ -340,19 +340,19 @@ local function assert_allowed_fields(
   marker
 )
   if type(value) ~= 'table' then
-    error((marker or 'IMPORT_QUEUE_STRUCTURE') .. ' ' .. name .. '_shape')
+    error((marker or 'INGESTION_QUEUE_STRUCTURE') .. ' ' .. name .. '_shape')
   end
   local allowed = {}
   for _, field in ipairs(required) do
     allowed[field] = true
     if value[field] == nil then
-      error((marker or 'IMPORT_QUEUE_STRUCTURE') .. ' ' .. name .. '_fields')
+      error((marker or 'INGESTION_QUEUE_STRUCTURE') .. ' ' .. name .. '_fields')
     end
   end
   for _, field in ipairs(optional) do allowed[field] = true end
   for field, _ in pairs(value) do
     if not allowed[field] then
-      error((marker or 'IMPORT_QUEUE_STRUCTURE') .. ' ' .. name .. '_fields')
+      error((marker or 'INGESTION_QUEUE_STRUCTURE') .. ' ' .. name .. '_fields')
     end
   end
 end
@@ -408,7 +408,7 @@ local function assert_json_array_field(
   local property = '"' .. field .. '":'
   if count_plain_occurrences(serialized, property) ~= expected_count
     or count_plain_occurrences(serialized, property .. '[') ~= expected_count then
-    error((marker or 'IMPORT_QUEUE_STRUCTURE') .. ' ' .. field .. '_array')
+    error((marker or 'INGESTION_QUEUE_STRUCTURE') .. ' ' .. field .. '_array')
   end
 end
 
@@ -436,14 +436,14 @@ local function assert_draft(value, marker)
     or type(value.source) ~= 'string'
     or type(value.original) ~= 'string'
     or not valid_string_array(value.tags) then
-    error((marker or 'IMPORT_QUEUE_STRUCTURE') .. ' metadata_shape')
+    error((marker or 'INGESTION_QUEUE_STRUCTURE') .. ' metadata_shape')
   end
 end
 
-local function assert_remote(value)
-  assert_exact_fields(value, { 'url' }, 'remote')
+local function assert_import_source(value)
+  assert_exact_fields(value, { 'url' }, 'import_source')
   if type(value.url) ~= 'string' or value.url == '' then
-    error('IMPORT_QUEUE_STRUCTURE remote_shape')
+    error('INGESTION_QUEUE_STRUCTURE import_source_shape')
   end
 end
 
@@ -461,7 +461,7 @@ local function assert_prepared(value)
   }
   for _, field in ipairs(positive_fields) do
     if not valid_integer(value[field], 1) then
-      error('IMPORT_QUEUE_STRUCTURE prepared_shape')
+      error('INGESTION_QUEUE_STRUCTURE prepared_shape')
     end
   end
   if type(value.prepared_image_key) ~= 'string'
@@ -481,7 +481,7 @@ local function assert_prepared(value)
     or value.generation == ''
     or not valid_hash(value.prepared_image_sha256, 32)
     or not valid_hash(value.prepared_thumbnail_sha256, 32) then
-    error('IMPORT_QUEUE_STRUCTURE prepared_shape')
+    error('INGESTION_QUEUE_STRUCTURE prepared_shape')
   end
 end
 
@@ -493,7 +493,7 @@ local function assert_completed_display(value, queue)
     'manifest_position', 'manifest_line'
   }, 'completed_display')
   if (queue == 'upload' and value.source_type ~= 'upload')
-    or (queue == 'import' and not valid_remote_source(value.source_type))
+    or (queue == 'import' and not valid_import_source(value.source_type))
     or not valid_integer(value.original_width, 1)
     or not valid_integer(value.original_height, 1)
     or not valid_integer(value.original_size, 1)
@@ -505,7 +505,7 @@ local function assert_completed_display(value, queue)
     or (value.manifest_line ~= nil
       and (not valid_integer(value.manifest_line, 1)
         or value.manifest_line > 1000000)) then
-    error('IMPORT_QUEUE_STRUCTURE completed_display_shape')
+    error('INGESTION_QUEUE_STRUCTURE completed_display_shape')
   end
 end
 
@@ -524,7 +524,7 @@ local function assert_commit(value)
       and value.duplicate_decision ~= 'confirmed')
     or type(value.final_object_key) ~= 'string'
     or value.final_object_key == '' then
-    error('IMPORT_QUEUE_STRUCTURE commit_shape')
+    error('INGESTION_QUEUE_STRUCTURE commit_shape')
   end
   assert_draft(value.metadata)
 end
@@ -533,7 +533,7 @@ local function assert_session_error(value)
   assert_exact_fields(value, { 'code', 'message' }, 'error')
   if type(value.code) ~= 'string' or value.code == ''
     or type(value.message) ~= 'string' then
-    error('IMPORT_QUEUE_STRUCTURE error_shape')
+    error('INGESTION_QUEUE_STRUCTURE error_shape')
   end
 end
 
@@ -543,7 +543,7 @@ local function assert_upload_intent_shape(intent, stored)
     'request_hash', 'display_order_key', 'manifest_position', 'metadata', 'storage_slug',
     'expected_size', 'max_long_edge', 'created_at', 'expires_at',
     'execution_token', 'claim_heartbeat_at'
-  }, 'intent', 'IMPORT_INTENT')
+  }, 'intent', 'UPLOAD_INTENT')
   if type(intent.owner) ~= 'string' or intent.owner == ''
     or type(intent.session_id) ~= 'string' or intent.session_id == ''
     or type(intent.candidate_image_id) ~= 'string'
@@ -560,7 +560,7 @@ local function assert_upload_intent_shape(intent, stored)
     or not valid_integer(intent.max_long_edge, 1)
     or not valid_integer(intent.manifest_position, 0)
     or intent.manifest_position > 4095 then
-    error('IMPORT_INTENT intent_shape')
+    error('UPLOAD_INTENT intent_shape')
   end
   if stored and (
     not valid_integer(intent.created_at, 0)
@@ -568,9 +568,9 @@ local function assert_upload_intent_shape(intent, stored)
     or type(intent.execution_token) ~= 'string'
     or not valid_integer(intent.claim_heartbeat_at, 0)
   ) then
-    error('IMPORT_INTENT stored_intent_shape')
+    error('UPLOAD_INTENT stored_intent_shape')
   end
-  assert_draft(intent.metadata, 'IMPORT_INTENT')
+  assert_draft(intent.metadata, 'UPLOAD_INTENT')
 end
 
 local function assert_upload_intent_hash(intent_key, intent)
@@ -580,14 +580,14 @@ local function assert_upload_intent_hash(intent_key, intent)
   }
   for _, field in ipairs(fields) do
     if redis.call('HGET', intent_key, field) ~= intent[field] then
-      error('IMPORT_INTENT intent_hash')
+      error('UPLOAD_INTENT intent_hash')
     end
   end
 end
 
 local function assert_canonical_shape(snapshot, pending_acceptance)
   if type(snapshot) ~= 'table' then
-    error('IMPORT_QUEUE_STRUCTURE canonical_shape')
+    error('INGESTION_QUEUE_STRUCTURE canonical_shape')
   end
   local minimum_version = pending_acceptance and 0 or 1
   local minimum_revision = pending_acceptance and 0 or 1
@@ -604,7 +604,7 @@ local function assert_canonical_shape(snapshot, pending_acceptance)
     or not valid_integer(snapshot.accepted_at, 0)
     or not valid_integer(snapshot.accepted_order, minimum_order)
     or not valid_integer(snapshot.discard_at, minimum_discard_at) then
-    error('IMPORT_QUEUE_STRUCTURE canonical_shape')
+    error('INGESTION_QUEUE_STRUCTURE canonical_shape')
   end
   if snapshot.status == 'completed' then
     assert_allowed_fields(snapshot, {
@@ -617,7 +617,7 @@ local function assert_canonical_shape(snapshot, pending_acceptance)
       or snapshot.commit_request_id == ''
       or not valid_hash(snapshot.commit_intent_hash, 32)
       or not valid_integer(snapshot.completed_at, 0) then
-      error('IMPORT_QUEUE_STRUCTURE completed_shape')
+      error('INGESTION_QUEUE_STRUCTURE completed_shape')
     end
     if snapshot.display ~= nil then
       assert_completed_display(snapshot.display, snapshot.queue)
@@ -630,7 +630,7 @@ local function assert_canonical_shape(snapshot, pending_acceptance)
     }, 'discarded')
     if type(snapshot.image_time) ~= 'string' or snapshot.image_time == ''
       or not valid_integer(snapshot.discarded_at, 0) then
-      error('IMPORT_QUEUE_STRUCTURE discarded_shape')
+      error('INGESTION_QUEUE_STRUCTURE discarded_shape')
     end
   else
     assert_allowed_fields(snapshot, {
@@ -640,15 +640,15 @@ local function assert_canonical_shape(snapshot, pending_acceptance)
       'accepted_at', 'accepted_order', 'execution_token', 'raw_generation',
       'raw_size', 'discard_at', 'semantic_hash'
     }, {
-      'remote', 'manifest_position', 'manifest_line', 'prepared',
+      'import_source', 'manifest_position', 'manifest_line', 'prepared',
       'duplicate_decision', 'commit', 'error'
     }, 'active')
     if snapshot.queue == 'upload' and snapshot.source_type ~= 'upload' then
-      error('IMPORT_QUEUE_STRUCTURE canonical_source')
+      error('INGESTION_QUEUE_STRUCTURE canonical_source')
     end
     if snapshot.queue == 'import'
-      and not valid_remote_source(snapshot.source_type) then
-      error('IMPORT_QUEUE_STRUCTURE canonical_source')
+      and not valid_import_source(snapshot.source_type) then
+      error('INGESTION_QUEUE_STRUCTURE canonical_source')
     end
     if type(snapshot.image_time) ~= 'string' or snapshot.image_time == ''
       or type(snapshot.storage_slug) ~= 'string'
@@ -669,19 +669,19 @@ local function assert_canonical_shape(snapshot, pending_acceptance)
       or (snapshot.progress ~= cjson.null
         and (type(snapshot.progress) ~= 'number'
           or snapshot.progress < 0 or snapshot.progress > 100)) then
-      error('IMPORT_QUEUE_STRUCTURE active_shape')
+      error('INGESTION_QUEUE_STRUCTURE active_shape')
     end
     assert_draft(snapshot.metadata)
     if snapshot.queue == 'import' then
-      assert_remote(snapshot.remote)
-    elseif snapshot.remote ~= nil then
-      error('IMPORT_QUEUE_STRUCTURE remote_scope')
+      assert_import_source(snapshot.import_source)
+    elseif snapshot.import_source ~= nil then
+      error('INGESTION_QUEUE_STRUCTURE import_source_scope')
     end
     if snapshot.prepared ~= nil then assert_prepared(snapshot.prepared) end
     if snapshot.duplicate_decision ~= nil
       and snapshot.duplicate_decision ~= 'upload'
       and snapshot.duplicate_decision ~= 'confirmed' then
-      error('IMPORT_QUEUE_STRUCTURE duplicate_decision')
+      error('INGESTION_QUEUE_STRUCTURE duplicate_decision')
     end
     if snapshot.commit ~= nil then assert_commit(snapshot.commit) end
     if snapshot.error ~= nil then assert_session_error(snapshot.error) end
@@ -709,14 +709,14 @@ local function assert_canonical_structure(
   )
   if snapshot.last_semantic_revision > metadata_revision
     or snapshot.accepted_order > last_accepted_order then
-    error('IMPORT_QUEUE_STRUCTURE canonical_clock')
+    error('INGESTION_QUEUE_STRUCTURE canonical_clock')
   end
   local hash_fields = {
     'session_id', 'image_id', 'owner', 'queue', 'status', 'request_hash'
   }
   for _, field in ipairs(hash_fields) do
     if redis.call('HGET', canonical_key, field) ~= snapshot[field] then
-      error('IMPORT_QUEUE_STRUCTURE canonical_hash')
+      error('INGESTION_QUEUE_STRUCTURE canonical_hash')
     end
   end
   local numeric_hash_fields = {
@@ -727,7 +727,7 @@ local function assert_canonical_structure(
       redis.call('HGET', canonical_key, field),
       'invalid_canonical_integer'
     ) ~= snapshot[field] then
-      error('IMPORT_QUEUE_STRUCTURE canonical_hash')
+      error('INGESTION_QUEUE_STRUCTURE canonical_hash')
     end
   end
   local owner_score = redis.call('ZSCORE', owner_key, snapshot.session_id)
@@ -735,32 +735,32 @@ local function assert_canonical_structure(
     'HGET', canonical_key, 'display_order_key'
   )
   if not valid_display_order_key(display_order_key, snapshot.session_id) then
-    error('IMPORT_QUEUE_STRUCTURE display_order_key')
+    error('INGESTION_QUEUE_STRUCTURE display_order_key')
   end
   local display_score = redis.call('ZSCORE', display_key, display_order_key)
   if snapshot.status == 'discarded' then
     if owner_score or display_score then
-      error('IMPORT_QUEUE_STRUCTURE discarded_owner')
+      error('INGESTION_QUEUE_STRUCTURE discarded_owner')
     end
   elseif not owner_score
     or tonumber(owner_score) ~= tonumber(snapshot.accepted_order) then
-    error('IMPORT_QUEUE_STRUCTURE owner_score')
+    error('INGESTION_QUEUE_STRUCTURE owner_score')
   elseif not display_score or tonumber(display_score) ~= 0 then
-    error('IMPORT_QUEUE_STRUCTURE display_score')
+    error('INGESTION_QUEUE_STRUCTURE display_score')
   end
   local runnable_score = redis.call('ZSCORE', runnable_key, canonical_key)
   if runnable_status(snapshot.status) then
     if not runnable_score
       or not valid_integer(tonumber(runnable_score), 1) then
-      error('IMPORT_QUEUE_STRUCTURE runnable_score')
+      error('INGESTION_QUEUE_STRUCTURE runnable_score')
     end
   elseif runnable_score then
-    error('IMPORT_QUEUE_STRUCTURE unexpected_runnable')
+    error('INGESTION_QUEUE_STRUCTURE unexpected_runnable')
   end
   local expires_score = redis.call('ZSCORE', expires_key, canonical_key)
   if not expires_score
     or tonumber(expires_score) ~= tonumber(snapshot.discard_at) then
-    error('IMPORT_QUEUE_STRUCTURE expires_score')
+    error('INGESTION_QUEUE_STRUCTURE expires_score')
   end
 end
 

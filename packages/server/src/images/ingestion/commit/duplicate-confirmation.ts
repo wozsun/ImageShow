@@ -4,7 +4,7 @@ import {
 } from "../../read-models/duplicates.ts";
 
 export function ingestionContentLockKey(md5: string) {
-  return `imageshow:import-content:${md5}`;
+  return `imageshow:ingestion:content:${md5}`;
 }
 
 export async function captureIngestionDuplicateCheck(md5: string): Promise<{

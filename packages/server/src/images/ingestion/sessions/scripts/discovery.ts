@@ -17,7 +17,7 @@ if not valid_integer(bound, 0)
   or not valid_integer(max_limit, 1)
   or not valid_integer(runnable_tail, 0)
   or limit > max_limit then
-  error('IMPORT_QUEUE_STRUCTURE discovery_arguments')
+  error('INGESTION_QUEUE_STRUCTURE discovery_arguments')
 end
 
 assert_zset_type(index_key, 'discovery')
@@ -38,12 +38,12 @@ elseif mode == 'runnable' then
     if #tail > 0 then
       frozen_tail = tonumber(tail[2])
       if not valid_integer(frozen_tail, 0) then
-        error('IMPORT_QUEUE_STRUCTURE runnable_score')
+        error('INGESTION_QUEUE_STRUCTURE runnable_score')
       end
     end
   end
   if bound > frozen_tail then
-    error('IMPORT_QUEUE_STRUCTURE runnable_cursor')
+    error('INGESTION_QUEUE_STRUCTURE runnable_cursor')
   end
   local scored = {}
   if runnable_tail == 0 and bound == 0 then
@@ -61,13 +61,13 @@ elseif mode == 'runnable' then
   for index = 1, #scored, 2 do
     local score = tonumber(scored[index + 1])
     if not valid_integer(score, 0) then
-      error('IMPORT_QUEUE_STRUCTURE runnable_score')
+      error('INGESTION_QUEUE_STRUCTURE runnable_score')
     end
     members[#members + 1] = scored[index]
     last_scanned_score = score
   end
 else
-  error('IMPORT_QUEUE_STRUCTURE discovery_mode')
+  error('INGESTION_QUEUE_STRUCTURE discovery_mode')
 end
 local output = {
   0,
@@ -80,13 +80,13 @@ local missing = {}
 for _, canonical_key in ipairs(members) do
   assert_snapshot_hash_container(canonical_key, 'canonical', 12)
   if string.sub(canonical_key, 1, #canonical_root) ~= canonical_root then
-    error('IMPORT_QUEUE_STRUCTURE canonical_key')
+    error('INGESTION_QUEUE_STRUCTURE canonical_key')
   end
   local suffix = string.sub(canonical_key, #canonical_root + 1)
   local separator = string.find(suffix, ':', 1, true)
   if not separator
     or string.find(suffix, ':', separator + 1, true) then
-    error('IMPORT_QUEUE_STRUCTURE canonical_key')
+    error('INGESTION_QUEUE_STRUCTURE canonical_key')
   end
   local owner_scope = string.sub(suffix, 1, separator - 1)
   local session_id = string.sub(suffix, separator + 1)
@@ -94,7 +94,7 @@ for _, canonical_key in ipairs(members) do
     or not string.match(owner_scope, '^[A-Za-z0-9_%-]+$')
     or #session_id ~= 43
     or not string.match(session_id, '^[A-Za-z0-9_%-]+$') then
-    error('IMPORT_QUEUE_STRUCTURE canonical_key')
+    error('INGESTION_QUEUE_STRUCTURE canonical_key')
   end
   local snapshot = redis.call('HGET', canonical_key, 'snapshot')
   if snapshot then
@@ -103,7 +103,7 @@ for _, canonical_key in ipairs(members) do
     assert_canonical_json_arrays(snapshot, parsed)
     if parsed.session_id ~= session_id
       or (parsed.queue ~= 'upload' and parsed.queue ~= 'import') then
-      error('IMPORT_QUEUE_STRUCTURE canonical_scope')
+      error('INGESTION_QUEUE_STRUCTURE canonical_scope')
     end
     local owner_key = owner_root .. owner_scope .. ':' .. parsed.queue
     local display_key = display_root .. owner_scope .. ':' .. parsed.queue
@@ -148,7 +148,7 @@ for _, canonical_key in ipairs(members) do
       or redis.call('ZSCORE', import_owner_key, session_id)
       or display_contains_session(upload_display_key, session_id)
       or display_contains_session(import_display_key, session_id) then
-      error('IMPORT_QUEUE_STRUCTURE canonical_missing')
+      error('INGESTION_QUEUE_STRUCTURE canonical_missing')
     end
     missing[#missing + 1] = canonical_key
   end
@@ -174,7 +174,7 @@ local count = tonumber(ARGV[3])
 local output = { count }
 
 if not valid_integer(count, 0) then
-  error('IMPORT_QUEUE_STRUCTURE session_read_arguments')
+  error('INGESTION_QUEUE_STRUCTURE session_read_arguments')
 end
 assert_discovery_index_types(runnable_key, expires_key)
 
@@ -204,7 +204,7 @@ for index = 1, count do
       or redis.call('ZSCORE', import_owner_key, session_id)
       or display_contains_session(upload_display_key, session_id)
       or display_contains_session(import_display_key, session_id) then
-      error('IMPORT_QUEUE_STRUCTURE canonical_missing')
+      error('INGESTION_QUEUE_STRUCTURE canonical_missing')
     end
     output[#output + 1] = ''
   else
@@ -213,7 +213,7 @@ for index = 1, count do
     assert_canonical_json_arrays(snapshot, parsed)
     if parsed.session_id ~= session_id or parsed.owner ~= expected_owner
       or (parsed.queue ~= 'upload' and parsed.queue ~= 'import') then
-      error('IMPORT_QUEUE_STRUCTURE canonical_scope')
+      error('INGESTION_QUEUE_STRUCTURE canonical_scope')
     end
     local owner_key = parsed.queue == 'upload'
       and upload_owner_key or import_owner_key

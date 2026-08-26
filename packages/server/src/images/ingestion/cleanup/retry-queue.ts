@@ -47,7 +47,7 @@ class IngestionRetiredCleanupQueue {
     this.#limiter = new DynamicConcurrencyLimiter(
       options.concurrency
         ?? (() => getRuntimeConfig().background_job.move_cleanup_concurrency),
-      (signal) => signal.reason ?? new Error("Import cleanup queue stopped")
+      (signal) => signal.reason ?? new Error("Ingestion cleanup queue stopped")
     );
   }
 
@@ -62,21 +62,21 @@ class IngestionRetiredCleanupQueue {
       try {
         await work();
         if (attempt > 1) {
-          logger.warn("retired_import_cleanup_backlog_recovered", {
+          logger.warn("ingestion_retired_cleanup_backlog_recovered", {
             attempts: attempt
           });
         }
         return;
       } catch (error) {
         if (attempt >= maxAttempts) {
-          logger.warn("retired_import_cleanup_retry_exhausted", {
+          logger.warn("ingestion_retired_cleanup_retry_exhausted", {
             attempts: attempt,
             error: errorMessage(error)
           });
           return;
         }
         if (attempt === 1 || (attempt & (attempt - 1)) === 0) {
-          logger.warn("retired_import_cleanup_deferred", {
+          logger.warn("ingestion_retired_cleanup_deferred", {
             attempts: attempt,
             error: errorMessage(error)
           });
@@ -99,7 +99,7 @@ class IngestionRetiredCleanupQueue {
         : 1;
       if (this.#pending.size < capacity) break;
       if (this.#lossy) {
-        logger.warn("retired_import_cleanup_capacity_exhausted", {
+        logger.warn("ingestion_retired_cleanup_capacity_exhausted", {
           capacity,
           pending: this.#pending.size
         });

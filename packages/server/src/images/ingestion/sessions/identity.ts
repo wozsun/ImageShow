@@ -2,8 +2,8 @@ import { createHash } from "node:crypto";
 import { ApiError } from "../../../core/api-error.ts";
 import type { IngestionQueueType } from "./model.ts";
 
-const sessionIdentityDomain = "imageshow/import-session/v1";
-const ownerKeyDomain = "imageshow/import-owner-key/v1";
+const sessionIdentityDomain = "imageshow/ingestion/session";
+const ownerKeyDomain = "imageshow/ingestion/owner";
 
 function lengthPrefixed(value: string) {
   return `${Buffer.byteLength(value, "utf8")}:${value}`;
@@ -47,7 +47,7 @@ export function createIngestionDisplayOrderKey(
     || manifestPosition > 0xfff
     || !/^[A-Za-z0-9_-]{43}$/u.test(sessionId)
   ) {
-    throw new ApiError(400, "invalid_import_order", "内容接入批次位置无效");
+    throw new ApiError(400, "invalid_ingestion_order", "内容接入批次位置无效");
   }
   const inversePosition = (0xfff - manifestPosition)
     .toString(16)

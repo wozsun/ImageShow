@@ -64,7 +64,7 @@ export class IngestionIrreversibleCoordinator {
       const key = pairKey(pair);
       const record = this.#records.get(key);
       if (!record || record.state !== "cancellable") {
-        throw new Error("Import commit is no longer cancellable at transaction start");
+        throw new Error("Ingestion commit is no longer cancellable at transaction start");
       }
       await verify();
       // verify() settles through a Promise reaction. A pause/stop can enqueue

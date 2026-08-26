@@ -14,7 +14,7 @@ export function completedIngestionReceipt(
   if (!session.commit) {
     throw new ApiError(
       409,
-      "import_commit_intent_missing",
+      "ingestion_commit_intent_missing",
       "内容接入任务缺少已冻结的提交意图"
     );
   }

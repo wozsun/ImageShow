@@ -117,7 +117,7 @@ export const uuidV7Input = uuidInput.refine((value) => (
 ), "必须使用 RFC 9562 UUIDv7");
 
 export const ingestionSessionIdInput = z.string()
-  .regex(/^[A-Za-z0-9_-]{43}$/u, "导入 session_id 无效");
+  .regex(/^[A-Za-z0-9_-]{43}$/u, "内容接入 session_id 无效");
 
 export const normalizedImageTagsInput = z.array(tagSlugInput)
   // The public limit applies after normalization, so repeated spellings do not

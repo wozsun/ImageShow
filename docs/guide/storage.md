@@ -21,8 +21,8 @@
 存储快照，再重建原图仍存在的缺失缩略图、更新该次真实修复的 `thumbnail_size`，并清理确认
 无引用的 `media`、`thumbs` 和超过统一年龄门槛、且不等于 Redis canonical 精确 prepared key
 的当前 attempt `_uploads`。同一 session 的非当前 generation 不会因 session ID 相同而被误当成
-当前引用；近期 generation 与无法解析年龄的非协议键会明确跳过。活动导入、仍受精确 generation 引用的
-对象、缺失原图、已消失候选和未完整列举均明确保留或跳过。数据库中
+当前引用；近期 generation 与无法解析年龄的非协议键会明确跳过。活动 Ingestion、仍受精确
+generation 引用的对象、缺失原图、已消失候选和未完整列举均明确保留或跳过。数据库中
 `thumbnail_size=0` 且实体仍在的未收口缩略图会单独列入待重新确认项。预览按物理命名空间去重
 受阻项，只把执行端可以再次核对的维修与删除计入可执行数量；仍被 active canonical 引用的
 暂存单独显示为受保护项。响应满足
@@ -101,7 +101,7 @@ local、无公开 URL 的 S3 与配置 `public_base_url` 的 S3 都遵守这一�
 所有会改变图片对象位置的操作共用“全局共享维护锁 + 单图独占锁”。进入锁后重新读取
 当前 `storage_slug`、对象键和分类，读取源对象并把原图 / 缩略图复制到目标位置，
 再流式回读目标做强摘要校验；media 还必须匹配数据库 MD5。只有全部验证通过才用旧位置
-和分类做数据库 CAS，并在同一事务中写入源对象的持久清理凭据。import commit 也取得
+和分类做数据库 CAS，并在同一事务中写入源对象的持久清理凭据。Ingestion commit 也取得
 同一单图锁，所以并发提交、分类、存储迁移、主题重分配或彻底删除都会串行收敛。候选
 补偿和旧对象删除均由持久 `move.cleanup` 任务负责，且只处理本次
 调用实际创建或事务明确转交的对象。整后端迁移先 COUNT 并固定本轮最大 UUID：最多
@@ -153,7 +153,7 @@ canonical、未解决的 `move.cleanup` 和 `_uploads` 对象；每个后端的 
 任务的入口。页面会在仍有可运行或待重试的清理任务时自动刷新占用计数；若只剩已耗尽
 且等待管理员重试的任务则停止轮询，避免空闲页面持续请求。
 intent 创建只短暂持有同一位置锁的共享模式且本身不构成占用；raw 上传不跨网络正文持锁，
-但 intent 转换、远程 accept、prepared 暂存写入和 commit 会在真正采用目标后端时重新取得
+但 Upload intent 转换、Import accept、prepared 暂存写入和 commit 会在真正采用目标后端时重新取得
 共享锁。因此转换 / accept 与删除竞争只能由先成立的锁边界胜出，不能留下指向已删除后端的
 可运行 canonical。锁连接丢失会发送中止信号并等待回调收口；raw、processed image 与
 thumbnail 都使用 attempt / generation 唯一键，且当前 `execution_token` 必须匹配才能发布，
@@ -195,7 +195,7 @@ driver DELETE 返回后还会重新确认对象不存在；对象仍存在或确
 并写入包含图片、后端、命名空间、前缀、对象键和原因的结构化错误日志，不回滚已经成功
 的数据库位置切换。耗尽任务仍保留删除租约与后端占用关系，等待管理员重新排队。
 
-prepare 会保存 processed image 与缩略图的 SHA-256（图片同时保存 MD5）。import commit
+prepare 会保存 processed image 与缩略图的 SHA-256（图片同时保存 MD5）。Ingestion commit
 流式校验 `_uploads` 源对象，并优先通过 S3 / 本地驱动的后端内复制生成正式
 对象，随后流式回读目标校验；源与目标校验均保持流式。正式同名
 对象已存在但内容不同返回 `storage_object_conflict`；本次复制成功后回读不一致返回
@@ -209,4 +209,4 @@ prepare 会保存 processed image 与缩略图的 SHA-256（图片同时保存 M
 相关索引。若 COMMIT 结果不确定或 Redis 发布失败，则关闭读门并排队全量重建，绝不把
 旧 `storage_slug` 重新发布到缓存。
 
-本地上传与链接下载的原始字节统一先进入服务端 `data/tmp`。服务端在本地完成校验、标准化、缩略图与最终 MD5 后，才把 processed image 和 prepared thumbnail 写入目标后端 `_uploads`。因此无需为存储桶配置浏览器 CORS，远端后端也不会发生“上传 raw 后再下载回来处理”的重复传输。详见[功能与流程](./flows.md#图片接入)。
+Upload 与 Import 的原始字节统一先进入服务端 `data/tmp`。服务端在本地完成校验、标准化、缩略图与最终 MD5 后，才把 processed image 和 prepared thumbnail 写入目标后端 `_uploads`。因此无需为存储桶配置浏览器 CORS，远端后端也不会发生“上传 raw 后再下载回来处理”的重复传输。详见[功能与流程](./flows.md#图片接入)。

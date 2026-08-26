@@ -55,9 +55,12 @@ export type IngestionVocabularyDto = {
   authors: FacetOptionDto[];
 };
 
-export const uploadIntentPath = "/api/admin/ingestion/upload-intents";
-export const uploadRawPath = "/api/admin/ingestion/upload-raw";
-export const importAcceptPath = "/api/admin/ingestion/import-accept";
+export const ingestionVocabularyPath = "/api/admin/ingestion/vocabulary";
+export const uploadIntentPath = "/api/admin/ingestion/upload/intents";
+export const uploadRawPath = "/api/admin/ingestion/upload/raw";
+export const importAcceptPath = "/api/admin/ingestion/import/accept";
+export const importJsonlParsePath = "/api/admin/ingestion/import/jsonl/parse";
+export const importWeiboParsePath = "/api/admin/ingestion/import/weibo/parse";
 export const ingestionStatusPath = "/api/admin/ingestion/status";
 export const ingestionCommitPath = "/api/admin/ingestion/commit";
 export const ingestionCancelPath = "/api/admin/ingestion/cancel";
@@ -66,6 +69,7 @@ export const ingestionActionPath = "/api/admin/ingestion/action";
 export const ingestionDuplicatesPath = "/api/admin/ingestion/duplicates";
 export const ingestionSnapshotPath = "/api/admin/ingestion/snapshot";
 export const ingestionEventsPath = "/api/admin/ingestion/events";
+export const ingestionPreviewPath = "/api/admin/ingestion/preview";
 export const ingestionActionScopeHeader = "x-imageshow-ingestion-action-scope";
 export const uploadCredentialHeader = "x-imageshow-upload-credential";
 

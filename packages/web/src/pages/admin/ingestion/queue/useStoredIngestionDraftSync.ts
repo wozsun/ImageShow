@@ -308,7 +308,7 @@ export function useStoredIngestionDraftSync({
           if (syncsRef.current.get(id) !== sync) continue;
           const result = update.response.items[index];
           if (!result || result.status === "failed") {
-            if (result?.code === "import_version_conflict") {
+            if (result?.code === "ingestion_version_conflict") {
               versionConflicts.push(entry);
               continue;
             }

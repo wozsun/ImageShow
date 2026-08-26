@@ -79,7 +79,7 @@ export async function fetchImportImageToFile(
     // this attempt owns only the partial file until atomic publication.
     await rm(part, { force: true });
     if ((error as Error).name === "AbortError") {
-      throw new ApiError(signal?.aborted ? 409 : 400, signal?.aborted ? "import_cancelled" : "import_timeout", signal?.aborted ? "导入已取消" : "下载超时", { url });
+      throw new ApiError(signal?.aborted ? 409 : 400, signal?.aborted ? "ingestion_cancelled" : "import_timeout", signal?.aborted ? "导入已取消" : "下载超时", { url });
     }
     throw error;
   }

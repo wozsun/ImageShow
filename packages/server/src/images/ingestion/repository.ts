@@ -63,7 +63,7 @@ import {
 export type { IngestionQueueMutation } from "./sessions/listener-hub.ts";
 
 export const ingestionSessionIncarnationMismatch = Symbol(
-  "import-session-incarnation-mismatch"
+  "ingestion-session-incarnation-mismatch"
 );
 
 type MutateSemanticOptions = Readonly<{
@@ -159,7 +159,7 @@ export class IngestionSessionRepository {
   }
 
   async createCanonical(
-    source: "intent" | "remote",
+    acceptance: IngestionQueueType,
     template: IngestionSessionSnapshot,
     executionToken = "",
     now = Date.now(),
@@ -190,7 +190,7 @@ export class IngestionSessionRepository {
       keys.metadata,
       keys.runnable,
       keys.expires,
-      source,
+      acceptance,
       now,
       ttlSeconds * 1000,
       JSON.stringify(normalizedTemplate),
@@ -199,7 +199,7 @@ export class IngestionSessionRepository {
     );
     const result = parseCanonicalReply(raw, "create");
     if (!result.session) {
-      throw new Error("Redis import creation omitted its canonical snapshot");
+      throw new Error("Redis ingestion creation omitted its canonical snapshot");
     }
     if (result.code === 1) {
       this.#listeners.publish({
@@ -222,7 +222,7 @@ export class IngestionSessionRepository {
     executionToken: string,
     now?: number
   ) {
-    return this.createCanonical("intent", template, executionToken, now);
+    return this.createCanonical("upload", template, executionToken, now);
   }
 
   acceptImportSession(
@@ -230,7 +230,7 @@ export class IngestionSessionRepository {
     displayOrderKey: string,
     now?: number
   ) {
-    return this.createCanonical("remote", template, "", now, displayOrderKey);
+    return this.createCanonical("import", template, "", now, displayOrderKey);
   }
 
   async readSession(owner: string, sessionId: string) {
@@ -239,7 +239,7 @@ export class IngestionSessionRepository {
       image_id: ""
     }]))[0] ?? null;
     if (result === ingestionSessionIncarnationMismatch) {
-      throw new Error("Import session read returned an impossible incarnation mismatch");
+      throw new Error("Ingestion session read returned an impossible incarnation mismatch");
     }
     return result;
   }
@@ -271,7 +271,7 @@ export class IngestionSessionRepository {
     const reply = redisReplyArray(raw, "session list");
     const count = redisReplyInteger(reply[0], "session list count");
     if (count !== pairs.length || reply.length !== count + 1) {
-      throw new Error("Redis import session list returned an invalid shape");
+      throw new Error("Redis ingestion session list returned an invalid shape");
     }
     return reply.slice(1).map((value) => {
       const serialized = redisReplyString(value, "session list item");
@@ -319,7 +319,7 @@ export class IngestionSessionRepository {
     );
     const result = parseCanonicalReply(raw, "mutate");
     if (!result.session) {
-      throw new Error("Redis import mutation omitted its canonical snapshot");
+      throw new Error("Redis ingestion mutation omitted its canonical snapshot");
     }
     if (result.code !== 0) {
       const eventCompletedItem = result.session.status === "completed"
@@ -417,7 +417,7 @@ export class IngestionSessionRepository {
     );
     const result = parseCanonicalReply(raw, "mutate");
     if (!result.session) {
-      throw new Error("Redis import mutation omitted its canonical snapshot");
+      throw new Error("Redis ingestion mutation omitted its canonical snapshot");
     }
     if (action === "progress") {
       this.#listeners.publish({
@@ -479,7 +479,7 @@ export class IngestionSessionRepository {
     next?: StoredIngestionSession
   ) {
     if (!Number.isSafeInteger(cutoff) || cutoff < 0) {
-      throw new RangeError("Redis import expiry cutoff is invalid");
+      throw new RangeError("Redis ingestion expiry cutoff is invalid");
     }
     const terminal = current.status === "completed"
       || current.status === "discarded";
@@ -489,8 +489,8 @@ export class IngestionSessionRepository {
     if ((terminal && next) || (!terminal && !validActiveTransition)) {
       throw new TypeError(
         terminal
-          ? "Terminal import expiry must not include a transition"
-          : "Active import expiry requires a completed, discarded, "
+          ? "Terminal ingestion expiry must not include a transition"
+          : "Active ingestion expiry requires a completed, discarded, "
             + "or resolving transition"
       );
     }
@@ -527,7 +527,7 @@ export class IngestionSessionRepository {
     );
     const result = parseCanonicalReply(raw, "mutate");
     if (!terminal && !result.session) {
-      throw new Error("Redis import expiry omitted its transition snapshot");
+      throw new Error("Redis ingestion expiry omitted its transition snapshot");
     }
     if ((!terminal && result.code !== 0) || (
       terminal && current.status !== "discarded"

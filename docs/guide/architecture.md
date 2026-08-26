@@ -78,7 +78,7 @@ additions 和最小 readiness 构成；其他结构整理必须显式停机、�
 
 Redis 8 承载可以从 PostgreSQL 重建的图片读模型，以及管理员会话、限流、近期随机历史、
 词表缓存、短期探测结果和可丢弃的未完成内容接入队列。它不替代账号、权限或最终图片状态；
-导入 canonical 是当前单实例 worker 的运行时真相，专用 logical database 冷启动时允许整体
+Ingestion canonical 是当前单实例 worker 的运行时真相，专用 logical database 冷启动时允许整体
 丢弃，不能把它回退到 PostgreSQL 或进程内队列。
 
 upload 与 import 分别维护 accepted-order owner 动作 ZSET、batch / manifest display 展示 ZSET、
@@ -169,7 +169,7 @@ Gallery 和其他后台页面。每个公开路由分别测量全新持久 profi
 证明一次请求链路。
 
 `tests/benchmarks/runtime-transfer/run-current-workload.ps1` 只运行一个明确的当前镜像，使用
-隔离 Compose、全新数据库、Redis 与浏览器 profile；完整工作负载固定执行 50 次 9 图导入并
+隔离 Compose、全新数据库、Redis 与浏览器 profile；完整工作负载固定执行 50 次 9 图内容接入并
 要求最终 450 张图片全部 ready、容器零重启且没有非预期失败。脚本输出每轮原始事实，报告
 字段只描述本次镜像、工作负载和运行环境。生产构建由 `check-web-chunks` 验证权限闭包、
 懒加载边界、资源 owner、内容哈希与重复产物，并用实际有效字节发现资源合并候选；资源治理
@@ -181,13 +181,13 @@ Gallery 和其他后台页面。每个公开路由分别测量全新持久 profi
 类型可以注册多个后端；领域代码不按类型拼接第二套对象路径。驱动、对象完整性、位置
 迁移、远端请求期限、流 lease 与退役规则以[存储](./storage.md)为唯一说明。
 
-本地上传和远端下载的 raw 素材先进入 `data/tmp`。服务端完成校验、标准化、缩略图和
-摘要后，才把 processed image 与 prepared thumbnail 写入选定后端的 `_uploads`；导入
+Upload 与 Import 的 raw 素材先进入 `data/tmp`。服务端完成校验、标准化、缩略图和
+摘要后，才把 processed image 与 prepared thumbnail 写入选定后端的 `_uploads`；Ingestion
 流程不让浏览器向对象存储直传原始或处理后字节。
 
 ## 一致性边界
 
-会改变图片对象位置的导入提交、分类修改、主题重分配、单图或整后端迁移和彻底删除，
+会改变图片对象位置的 Ingestion commit、分类修改、主题重分配、单图或整后端迁移和彻底删除，
 共用存储位置维护锁与单图 advisory lock。锁内重新读取 PostgreSQL 真相，候选对象必须
 经强摘要回读验证，数据库位置以旧值做 CAS。数据库提交后才处理旧对象；不可逆删除交给
 带物理命名空间 identity 的持久 `move.cleanup` 任务。Worker 取得同一单图锁并在删除边界
@@ -209,7 +209,7 @@ PostgreSQL 最终引用决定删除或保留。
 成功提交后，正常缩略图读取严格只读；缺失由 GET 返回 404 并在 Web 显示统一损坏图标，
 只有检查页维护可以补建。分类移动和存储迁移不会在业务路径隐式修复。
 
-Redis 导入 canonical 以 pair、version 和 execution token 隔离下载、prepare、commit、取消
+Redis Ingestion canonical 以 pair、version 和 execution token 隔离下载、prepare、commit、取消
 与恢复。commit 按 prepared 最终 MD5、pair、图片和词表取得 PostgreSQL advisory lock，只
 串行真正冲突的内容；对象复制到 PostgreSQL 事务 settle 全程持有 storage location shared
 lock。进程内不可逆协调器只保存 `cancellable -> database_started -> settled`，并让 worker
@@ -279,11 +279,11 @@ active 时继续等待同代后续 revision；批量 status 返回的 active DTO
 租约丢失、锁连接丢失和进程停机合并成同一中止信号。停机时不再领取新任务，并在总停机
 期限内等待已经登记的 handler 真正结算。
 
-导入另有一个单实例 Redis worker。它用独立的有界 download、prepare、commit pool，commit
+Ingestion 另有一个单实例 Redis worker。它用独立的有界 download、prepare、commit pool，commit
 同时受任务数和全局字节预算限制；Redis operational gate 关闭时停止领取并中止仍可安全
 中止的阶段，恢复后先运行有界 expiry / canonical 恢复入口。同一生命周期还启动独立的
 60 秒孤儿素材清理周期，并在停机时中止、排空；Redis unavailable 时该周期不删除任何素材。
-导入执行与临时素材周期不进入持久任务表；只有 commit 的两个确定正式候选在复制前写入
+Ingestion 执行与临时素材周期不进入持久任务表；只有 commit 的两个确定正式候选在复制前写入
 既有 `move.cleanup` guard，raw 与 prepared generation 不逐项持久化。
 
 任务表与状态字段见[数据库结构](./database.md)，对象清理协议见[存储](./storage.md)。

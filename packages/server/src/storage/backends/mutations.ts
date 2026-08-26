@@ -67,7 +67,7 @@ export async function createStorageBackend(input: StorageBackendCreateInput) {
   }
 }
 
-export async function ingestionStorageBackends(
+export async function importStorageBackends(
   backends: StorageBackendImportInput[],
   beforeCommit: () => void | Promise<void>,
   onTransactionId: (transactionId: string) => void

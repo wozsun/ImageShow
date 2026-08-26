@@ -189,7 +189,9 @@ async function responseWithSniffedImageBody(response: Response) {
 }
 
 function abortError(signal?: AbortSignal) {
-  if (signal?.aborted) return new ApiError(409, "import_cancelled", "导入已取消");
+  if (signal?.aborted) {
+    return new ApiError(409, "external_image_cancelled", "外部图片请求已取消");
+  }
   return new ApiError(400, "external_url_timeout", "外部图片请求超时");
 }
 

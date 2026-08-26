@@ -55,7 +55,7 @@ Redis 只保存会话、限流、统一就绪图片投影和可重建派生缓�
 TTL 语义和 ACL 权限。Redis 不是真相源，不能通过清理 PostgreSQL 来修复 Redis 状态，也不
 保存不可重建的业务数据。在应用停止时把其专用 Redis DB 替换为空库是安全的冷启动操作，
 但会使管理员会话、限流状态和全部派生投影失效；启动后必须等待投影重建并重新登录。
-Redis unavailable 时导入 worker 停止领取，孤儿素材周期也跳过 raw 与 `_uploads` 删除；恢复后
+Redis unavailable 时 Ingestion worker 停止领取，孤儿素材周期也跳过 raw 与 `_uploads` 删除；恢复后
 重新从稳定 canonical 引用开始，不把断线期间的 Redis 缺失当成对象删除证据。
 
 Redis ACL 还必须允许业务原子脚本使用的 `EVAL` 与 `EVALSHA`。应用在 client 构造时注册
@@ -133,8 +133,8 @@ npm run admin:reset-password -- <username>
 
 - TLS 证书覆盖主站与 `static` 资源域，并把 HTTP 重定向到 HTTPS。
 - 覆盖上述四个请求头；客户端 IP 必须是单跳、单值地址，不传访客提供的代理链。
-- 请求体上限覆盖 200 MiB 单图和 128 MiB JSONL；长导入和存储检查允许至少 300 秒。
-- 上传流按部署需要关闭请求缓冲；导入控制 JSON 和 raw 上传都使用固定短路由，代理不得按
+- 请求体上限覆盖 200 MiB 单图和 128 MiB JSONL；长时内容接入和存储检查允许至少 300 秒。
+- 上传流按部署需要关闭请求缓冲；Ingestion 控制 JSON 和 raw 上传都使用固定短路由，代理不得按
   session 或 metadata 生成 location。
 - 不覆盖应用的 `Cache-Control`、`Vary`、CSP 或其他安全响应头，不另设应用响应缓存。
 

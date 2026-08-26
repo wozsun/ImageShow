@@ -24,7 +24,7 @@ export function semanticIngestionSession(
 export function failedIngestionSession(
   current: IngestionSessionSnapshot,
   error: unknown,
-  fallbackCode = "import_stage_failed"
+  fallbackCode = "ingestion_stage_failed"
 ) {
   const sessionError: IngestionSessionError = {
     code: typeof error === "object"

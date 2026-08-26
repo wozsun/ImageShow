@@ -15,8 +15,11 @@ import type {
   IngestionQueueType
 } from "../sessions/model.ts";
 import { presentIngestionQueueSummary } from "../sessions/projection.ts";
-import type { IngestionTokenService } from "../sessions/token-service.ts";
-import type { IngestionTokenEnvelope } from "../sessions/token-service.ts";
+import {
+  ingestionActionWatermarkPurpose,
+  type IngestionTokenEnvelope,
+  type IngestionTokenService
+} from "../sessions/token-service.ts";
 
 const actionWatermarkLifetimeMs = 30 * 60 * 1_000;
 const actionRequestBindingLimit = 32;
@@ -71,7 +74,7 @@ type IngestionActionWatermarkClaims = IngestionTokenEnvelope & Readonly<{
 function staleActionScope() {
   return new ApiError(
     409,
-    "import_action_scope_stale",
+    "ingestion_action_scope_stale",
     "内容接入队列连接已变化，请重新连接并刷新队列"
   );
 }
@@ -83,7 +86,7 @@ function invalidateScope(scope: IngestionActionScope, notify: boolean) {
     try {
       scope.invalidate();
     } catch (error) {
-      logger.error("import action scope invalidation failed", error);
+      logger.error("ingestion_action_scope_invalidation_failed", error);
     }
   }
 }
@@ -189,7 +192,7 @@ export async function replayIngestionQueueActionBatch(input: Readonly<{
       && boundFingerprint !== input.requestFingerprint
     ) {
       throw actionReplayError(
-        "import_action_request_conflict",
+        "ingestion_action_request_conflict",
         "同一全局操作 ID 已绑定不同操作、水位或内容"
       );
     }
@@ -208,7 +211,7 @@ export async function replayIngestionQueueActionBatch(input: Readonly<{
     if (current.actionRequestId !== input.actionRequestId) {
       if (!current.settled) {
         throw actionReplayError(
-          "import_action_in_progress",
+          "ingestion_action_in_progress",
           "当前队列已有全局操作正在执行"
         );
       }
@@ -216,7 +219,7 @@ export async function replayIngestionQueueActionBatch(input: Readonly<{
     }
     if (current.requestFingerprint !== input.requestFingerprint) {
       throw actionReplayError(
-        "import_action_request_conflict",
+        "ingestion_action_request_conflict",
         "同一全局操作 ID 已绑定不同操作、水位或内容"
       );
     }
@@ -235,7 +238,7 @@ export async function replayIngestionQueueActionBatch(input: Readonly<{
       || input.continuation !== previous.continuation
     ) {
       throw actionReplayError(
-        "import_action_continuation_invalid",
+        "ingestion_action_continuation_invalid",
         "内容接入队列操作游标已被后续批次取代"
       );
     }
@@ -278,7 +281,7 @@ export function signIngestionActionWatermark(
     throw staleActionScope();
   }
   return tokens.sign(
-    "imageshow/queue-watermark/v1",
+    ingestionActionWatermarkPurpose,
     {
       action_scope: scope.id,
       redis_connection_epoch: scope.connectionEpoch,
@@ -330,7 +333,7 @@ export function verifyIngestionActionWatermark(input: Readonly<{
   queue: IngestionQueueType;
 }>) {
   const claims = input.tokens.verify(
-    "imageshow/queue-watermark/v1",
+    ingestionActionWatermarkPurpose,
     input.token,
     isActionWatermarkClaims
   );

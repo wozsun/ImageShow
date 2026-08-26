@@ -104,7 +104,7 @@ async function cleanupPreparedAttempt(
       if (failures.length) {
         throw new AggregateError(
           failures,
-          "Prepared import attempt cleanup failed"
+          "Prepared Ingestion attempt cleanup failed"
         );
       }
     });
@@ -113,7 +113,7 @@ async function cleanupPreparedAttempt(
     await removeIfUnreferenced();
     return;
   } catch (error) {
-    logger.warn("import_prepared_attempt_cleanup_deferred", {
+    logger.warn("ingestion_prepared_attempt_cleanup_deferred", {
       session_id: session.session_id,
       image_id: session.image_id,
       storage_slug: storageSlug,
@@ -138,7 +138,7 @@ export async function prepareIngestionSessionSnapshot(
     || !session.execution_token
     || !session.raw_generation
   ) {
-    throw new ApiError(409, "invalid_import_state", "内容接入任务不能进入处理阶段");
+    throw new ApiError(409, "invalid_ingestion_state", "内容接入任务不能进入处理阶段");
   }
   const preparedGeneration = randomUuidV7();
   const keyInput = {
@@ -284,7 +284,7 @@ export async function prepareIngestionSessionSnapshot(
       session,
       session.raw_generation
     ).catch((error) => {
-      logger.warn("import_raw_cleanup_deferred", {
+      logger.warn("ingestion_raw_cleanup_deferred", {
         session_id: session.session_id,
         image_id: session.image_id,
         error: errorMessage(error)

@@ -66,7 +66,7 @@ async function readIngestionStoragePass(
   maxItems = appConfig.ingestionRuntime.orphanCleanupMaxReferenceItems
 ) {
   if (!Number.isSafeInteger(maxItems) || maxItems < 0) {
-    throw new RangeError("Import storage reference limit must be a non-negative safe integer");
+    throw new RangeError("Ingestion storage reference limit must be a non-negative safe integer");
   }
   const batchSize = appConfig.ingestionRuntime.recoveryScanBatchSize;
   let offset = 0;
@@ -83,7 +83,7 @@ async function readIngestionStoragePass(
     expectedTotal ??= page.total;
     if (expectedTotal > maxItems) {
       throw new Error(
-        `Redis import storage reference count ${expectedTotal} exceeds bounded limit ${maxItems}`
+        `Redis ingestion storage reference count ${expectedTotal} exceeds bounded limit ${maxItems}`
       );
     }
     if (page.total !== expectedTotal) return null;
@@ -141,14 +141,14 @@ export async function activeIngestionStorageReferences(
     previous = current;
   }
   if (!stable) {
-    throw new Error("Redis import storage references changed during bounded read");
+    throw new Error("Redis ingestion storage references changed during bounded read");
   }
   options.signal?.throwIfAborted();
   await requireOperationalRedis();
   const finalState = getRedisOperationalState();
   if (!finalState.available || finalState.connectionEpoch !== expectedEpoch) {
     throw new RedisUnavailableError(
-      new Error("Redis connection changed while reading import storage references")
+      new Error("Redis connection changed while reading Ingestion storage references")
     );
   }
   const rows = stable.rows;

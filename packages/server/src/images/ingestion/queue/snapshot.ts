@@ -29,7 +29,7 @@ import type { IngestionTokenService } from "../sessions/token-service.ts";
 function snapshotRetryRequired() {
   return new ApiError(
     409,
-    "import_snapshot_retry_required",
+    "ingestion_snapshot_retry_required",
     "内容接入队列在读取期间发生变化，请重试"
   );
 }

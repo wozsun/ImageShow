@@ -5,7 +5,7 @@ import { IngestionSessionRepository } from "../repository.ts";
 const executionMutationAttempts = 8;
 
 function isIngestionVersionConflict(error: unknown) {
-  return error instanceof ApiError && error.code === "import_version_conflict";
+  return error instanceof ApiError && error.code === "ingestion_version_conflict";
 }
 
 function canAdoptIngestionExecutionVersion(
@@ -41,7 +41,7 @@ export async function refreshIngestionExecutionSession(
     || current.status === "discarded"
     || !canAdoptIngestionExecutionVersion(current, expected)
   ) {
-    throw new ApiError(409, "import_execution_fenced", "内容接入执行权已转移");
+    throw new ApiError(409, "ingestion_execution_fenced", "内容接入执行权已转移");
   }
   return current;
 }
@@ -63,7 +63,7 @@ async function retryIngestionExecutionMutation(
     }
     current = await refreshIngestionExecutionSession(repository, current);
   }
-  throw new Error("Import execution mutation exhausted its retry attempts");
+  throw new Error("Ingestion execution mutation exhausted its retry attempts");
 }
 
 export function updateIngestionExecutionProgress(

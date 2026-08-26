@@ -8,6 +8,8 @@ import {
   ingestionStatusPath,
   ingestionUpdatePath,
   importAcceptPath,
+  importJsonlParsePath,
+  importWeiboParsePath,
   uploadCredentialHeader,
   uploadIntentPath,
   uploadRawPath,
@@ -37,7 +39,6 @@ import {
   type WeiboImportResultDto
 } from "@imageshow/shared/browser";
 import { api, getCsrfToken } from "../../../../lib/api/client.js";
-import { adminApiBasePath } from "../../../../lib/constants.js";
 
 export type JsonlManifestItem = JsonlManifestItemDto;
 export type JsonlManifestParseError = JsonlManifestParseErrorDto;
@@ -133,7 +134,7 @@ export function getIngestionQueueSnapshot(
 }
 
 export function parseImportJsonl(content: string, signal?: AbortSignal) {
-  return api<JsonlManifestResult>(`${adminApiBasePath}/ingestion/import/jsonl/parse`, {
+  return api<JsonlManifestResult>(importJsonlParsePath, {
     method: "POST",
     body: JSON.stringify({ content }),
     signal
@@ -141,7 +142,7 @@ export function parseImportJsonl(content: string, signal?: AbortSignal) {
 }
 
 export function parseWeiboImport(urls: string[], signal?: AbortSignal) {
-  return api<WeiboImportResult>(`${adminApiBasePath}/ingestion/import/weibo/parse`, {
+  return api<WeiboImportResult>(importWeiboParsePath, {
     method: "POST",
     body: JSON.stringify({ urls }),
     signal
@@ -150,7 +151,7 @@ export function parseWeiboImport(urls: string[], signal?: AbortSignal) {
 
 type UploadResponse = UploadRawResultDto & { ok: true };
 
-export function uploadLocalRaw(
+export function uploadRaw(
   credential: string,
   file: File,
   callbacks: { onProgress: (progress: number) => void }

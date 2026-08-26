@@ -1,7 +1,7 @@
 import { projectionLua } from "./projection.ts";
 
 export const createIngestionCanonicalScript = `${projectionLua}
-local source = ARGV[1]
+local acceptance = ARGV[1]
 local now = tonumber(ARGV[2])
 local ttl_ms = tonumber(ARGV[3])
 local template = cjson.decode(ARGV[4])
@@ -19,7 +19,7 @@ local display_order_key = ''
 if not valid_integer(now, 0)
   or not valid_integer(ttl_ms, 1)
   or now > max_safe_integer - ttl_ms then
-  error('IMPORT_CANONICAL invalid_clock')
+  error('INGESTION_CANONICAL invalid_clock')
 end
 assert_discovery_index_types(runnable_key, expires_key)
 assert_snapshot_hash_container(canonical_key, 'canonical', 12)
@@ -46,7 +46,7 @@ if existing_json then
   if existing.session_id == template.session_id
     and existing.request_hash == template.request_hash
     and (
-      source ~= 'remote'
+      acceptance ~= 'import'
       or redis.call('HGET', canonical_key, 'display_order_key')
         == requested_display_order_key
     ) then
@@ -55,25 +55,25 @@ if existing_json then
   return { -2 }
 end
 
-if source == 'intent' then
-  assert_snapshot_hash_container(intent_key, 'intent', 6, 'IMPORT_INTENT')
+if acceptance == 'upload' then
+  assert_snapshot_hash_container(intent_key, 'intent', 6, 'UPLOAD_INTENT')
   if template.queue ~= 'upload' then
-    return redis.error_reply('IMPORT_CANONICAL invalid_upload_takeover')
+    return redis.error_reply('INGESTION_CANONICAL invalid_upload_takeover')
   end
   assert_queue_structure(
     owner_key, display_key, metadata_key, template.owner, 'upload'
   )
   if redis.call('ZSCORE', owner_key, template.session_id) then
-    error('IMPORT_QUEUE_STRUCTURE canonical_missing')
+    error('INGESTION_QUEUE_STRUCTURE canonical_missing')
   end
   local intent_json = redis.call('HGET', intent_key, 'snapshot')
   if not intent_json then return { -3 } end
-  local intent = decode_stored_json(intent_json, 'intent', 'IMPORT_INTENT')
+  local intent = decode_stored_json(intent_json, 'intent', 'UPLOAD_INTENT')
   assert_upload_intent_shape(intent, true)
   assert_upload_intent_hash(intent_key, intent)
-  assert_json_array_field(intent_json, 'tags', 1, 'IMPORT_INTENT')
+  assert_json_array_field(intent_json, 'tags', 1, 'UPLOAD_INTENT')
   if redis.call('ZSCORE', display_key, intent.display_order_key) then
-    error('IMPORT_QUEUE_STRUCTURE canonical_missing')
+    error('INGESTION_QUEUE_STRUCTURE canonical_missing')
   end
   if tonumber(intent.expires_at or 0) <= now then
     redis.call('DEL', intent_key)
@@ -96,7 +96,7 @@ if source == 'intent' then
     or template.image_time ~= intent.resolved_image_time
     or template.storage_slug ~= intent.storage_slug
     or not same_draft(template.metadata, intent.metadata) then
-    return redis.error_reply('IMPORT_CANONICAL invalid_upload_takeover')
+    return redis.error_reply('INGESTION_CANONICAL invalid_upload_takeover')
   end
   template.owner = intent.owner
   template.queue = 'upload'
@@ -108,25 +108,25 @@ if source == 'intent' then
   template.metadata = intent.metadata
   template.storage_slug = intent.storage_slug
   display_order_key = intent.display_order_key
-elseif source == 'remote' then
+elseif acceptance == 'import' then
   if template.queue ~= 'import'
-    or not valid_remote_source(template.source_type)
+    or not valid_import_source(template.source_type)
     or template.status ~= 'queued'
-    or not template.remote
-    or type(template.remote.url) ~= 'string'
-    or template.remote.url == ''
+    or not template.import_source
+    or type(template.import_source.url) ~= 'string'
+    or template.import_source.url == ''
     or template.execution_token ~= ''
     or template.raw_generation ~= ''
     or tonumber(template.raw_size) ~= 0 then
-    return redis.error_reply('IMPORT_CANONICAL invalid_remote_accept')
+    return redis.error_reply('INGESTION_CANONICAL invalid_import_accept')
   end
   display_order_key = requested_display_order_key
 else
-  return redis.error_reply('IMPORT_CANONICAL invalid_source')
+  return redis.error_reply('INGESTION_CANONICAL invalid_acceptance')
 end
 
 if not valid_display_order_key(display_order_key, template.session_id) then
-  return redis.error_reply('IMPORT_CANONICAL invalid_display_order')
+  return redis.error_reply('INGESTION_CANONICAL invalid_display_order')
 end
 
 local metadata_exists = assert_queue_structure(
@@ -136,10 +136,10 @@ if not metadata_exists then
   initialize_metadata(metadata_key, template.owner, template.queue)
 end
 if redis.call('ZSCORE', owner_key, template.session_id) then
-  return redis.error_reply('IMPORT_QUEUE_STRUCTURE duplicate_member')
+  return redis.error_reply('INGESTION_QUEUE_STRUCTURE duplicate_member')
 end
 if redis.call('ZSCORE', display_key, display_order_key) then
-  return redis.error_reply('IMPORT_QUEUE_STRUCTURE duplicate_display_member')
+  return redis.error_reply('INGESTION_QUEUE_STRUCTURE duplicate_display_member')
 end
 
 validate_projection_delta(
@@ -168,7 +168,7 @@ if runnable_status(template.status) then
   append_runnable(runnable_key, canonical_key, now)
 end
 redis.call('ZADD', expires_key, template.discard_at, canonical_key)
-if source == 'intent' then redis.call('DEL', intent_key) end
+if acceptance == 'upload' then redis.call('DEL', intent_key) end
 
 return { 1, serialized, cjson.encode(metadata_summary(metadata_key)) }
 `;
@@ -193,7 +193,7 @@ local expiry_semantic = false
 if not valid_integer(now, 0)
   or not valid_integer(ttl_ms, 1)
   or now > max_safe_integer - ttl_ms then
-  error('IMPORT_CANONICAL invalid_clock')
+  error('INGESTION_CANONICAL invalid_clock')
 end
 assert_discovery_index_types(runnable_key, expires_key)
 assert_snapshot_hash_container(canonical_key, 'canonical', 12)
@@ -246,7 +246,7 @@ if action == 'progress' then
     return { -4 }
   end
   if tonumber(current.progress_seq) >= max_safe_integer then
-    return redis.error_reply('IMPORT_CANONICAL progress_sequence_exhausted')
+    return redis.error_reply('INGESTION_CANONICAL progress_sequence_exhausted')
   end
   local progress = cjson.decode(payload_json)
   assert_exact_fields(progress, {
@@ -260,7 +260,7 @@ if action == 'progress' then
         and progress.progress >= 0
         and progress.progress <= 100)
     ) then
-    return redis.error_reply('IMPORT_CANONICAL invalid_progress')
+    return redis.error_reply('INGESTION_CANONICAL invalid_progress')
   end
   current.phase = progress.phase
   current.message = progress.message
@@ -287,7 +287,7 @@ end
 
 if action == 'delete' then
   if current.status ~= 'completed' and current.status ~= 'discarded' then
-    return redis.error_reply('IMPORT_CANONICAL terminal_delete_required')
+    return redis.error_reply('INGESTION_CANONICAL terminal_delete_required')
   end
   local before = projection(current)
   if before.total > 0 then
@@ -308,7 +308,7 @@ if action == 'delete' then
 end
 
 if action ~= 'semantic' then
-  return redis.error_reply('IMPORT_CANONICAL invalid_action')
+  return redis.error_reply('INGESTION_CANONICAL invalid_action')
 end
 
 local next = cjson.decode(payload_json)
@@ -330,7 +330,7 @@ if expiry_semantic
   and next.status ~= 'completed'
   and next.status ~= 'discarded'
   and next.status ~= 'resolving' then
-  return redis.error_reply('IMPORT_CANONICAL invalid_expiry_transition')
+  return redis.error_reply('INGESTION_CANONICAL invalid_expiry_transition')
 end
 if not expiry_semantic
   and tonumber(current.discard_at) <= now
@@ -339,7 +339,7 @@ if not expiry_semantic
   return { -5 }
 end
 if current.status == 'completed' or current.status == 'discarded' then
-  return redis.error_reply('IMPORT_CANONICAL terminal_transition')
+  return redis.error_reply('INGESTION_CANONICAL terminal_transition')
 end
 if next.session_id ~= current.session_id
   or next.image_id ~= current.image_id
@@ -349,27 +349,27 @@ if next.session_id ~= current.session_id
   or tonumber(next.accepted_at) ~= tonumber(current.accepted_at)
   or tonumber(next.accepted_order) ~= tonumber(current.accepted_order)
   or (next.status == 'discarded' and next.image_time ~= current.image_time) then
-  return redis.error_reply('IMPORT_CANONICAL immutable_field_changed')
+  return redis.error_reply('INGESTION_CANONICAL immutable_field_changed')
 end
 if next.status ~= 'completed' and next.status ~= 'discarded'
   and (next.source_type ~= current.source_type
     or next.image_time ~= current.image_time
     or next.storage_slug ~= current.storage_slug) then
-  return redis.error_reply('IMPORT_CANONICAL immutable_active_field_changed')
+  return redis.error_reply('INGESTION_CANONICAL immutable_active_field_changed')
 end
 if next.status ~= 'completed' and next.status ~= 'discarded'
   and current.queue == 'import'
-  and (not next.remote
-    or not current.remote
-    or next.remote.url ~= current.remote.url) then
-  return redis.error_reply('IMPORT_CANONICAL immutable_source_changed')
+  and (not next.import_source
+    or not current.import_source
+    or next.import_source.url ~= current.import_source.url) then
+  return redis.error_reply('INGESTION_CANONICAL immutable_source_changed')
 end
 if next.status == 'completed'
   and (not current.commit
     or (current.status ~= 'committing' and current.status ~= 'resolving')
     or next.commit_request_id ~= current.commit.commit_request_id
     or next.commit_intent_hash ~= current.commit.commit_intent_hash) then
-  return redis.error_reply('IMPORT_CANONICAL immutable_commit_changed')
+  return redis.error_reply('INGESTION_CANONICAL immutable_commit_changed')
 end
 
 if not expiry_semantic
@@ -379,7 +379,7 @@ if not expiry_semantic
 end
 
 if tonumber(current.version) >= max_safe_integer then
-  return redis.error_reply('IMPORT_CANONICAL version_exhausted')
+  return redis.error_reply('INGESTION_CANONICAL version_exhausted')
 end
 assert_metadata_incrementable(metadata_key, false)
 

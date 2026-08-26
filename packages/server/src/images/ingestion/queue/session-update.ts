@@ -19,7 +19,7 @@ function failure(
   return {
     ...pair,
     status: "failed",
-    code: error instanceof ApiError ? error.code : "import_update_failed",
+    code: error instanceof ApiError ? error.code : "ingestion_update_failed",
     message: error instanceof Error ? error.message : "内容接入任务更新失败"
   };
 }
@@ -57,27 +57,27 @@ export async function updateIngestionSessions(
         if (current === ingestionSessionIncarnationMismatch) {
           throw new ApiError(
             409,
-            "import_incarnation_conflict",
+            "ingestion_incarnation_conflict",
             "内容接入任务身份已被替换"
           );
         }
         if (!current || current.status === "discarded") {
           throw new ApiError(
             410,
-            "import_session_missing",
+            "ingestion_session_missing",
             "未完成内容接入已过期或被服务器丢弃"
           );
         }
         if (current.status === "completed") {
-          throw new ApiError(409, "invalid_import_state", "图片已经提交完成");
+          throw new ApiError(409, "invalid_ingestion_state", "图片已经提交完成");
         }
         if (current.commit) {
-          throw new ApiError(409, "invalid_import_state", "当前内容接入任务不可编辑");
+          throw new ApiError(409, "invalid_ingestion_state", "当前内容接入任务不可编辑");
         }
         if (input.duplicate_decision && !current.prepared) {
           throw new ApiError(
             409,
-            "invalid_import_state",
+            "invalid_ingestion_state",
             "图片尚未准备完成，不能确认重复项"
           );
         }

@@ -46,7 +46,7 @@ export async function commitIngestionSessionSnapshot(
     || !session.execution_token
     || !session.prepared
     || !session.commit
-  ) throw new ApiError(409, "invalid_import_state", "内容接入任务没有可执行的提交意图");
+  ) throw new ApiError(409, "invalid_ingestion_state", "内容接入任务没有可执行的提交意图");
   if (!coordinator.registerCancellable(session)) return null;
 
   const prepared = session.prepared;
@@ -78,7 +78,7 @@ export async function commitIngestionSessionSnapshot(
           ...vocabularyLocks,
           { key: ingestionContentLockKey(prepared.md5) },
           {
-            key: `imageshow:import-session:${session.session_id}`,
+            key: `imageshow:ingestion:session:${session.session_id}`,
             acquisition: "try"
           },
           { key: imageStorageMutationLockKey(session.image_id) }
@@ -145,7 +145,7 @@ export async function commitIngestionSessionSnapshot(
           await enqueueObjectsForCleanup(
             session.image_id,
             guardedObjects,
-            "import_commit_candidate_guard",
+            "ingestion_commit_candidate_guard",
             { guardToken: candidateGuardToken }
           );
           await withIngestionExecutionHeartbeat(
@@ -251,7 +251,7 @@ export async function commitIngestionSessionSnapshot(
           } catch (error) {
             // PostgreSQL is already authoritative. A presentation failure may
             // fall back to the compact terminal event and bounded snapshot.
-            logger.warn("import_completed_event_projection_deferred", {
+            logger.warn("ingestion_completed_event_projection_deferred", {
               session_id: session.session_id,
               image_id: session.image_id,
               error: errorMessage(error)
@@ -264,7 +264,7 @@ export async function commitIngestionSessionSnapshot(
             completedItem
           )
             .catch((error) => {
-              logger.warn("import_completed_receipt_deferred", {
+              logger.warn("ingestion_completed_receipt_deferred", {
                 session_id: session.session_id,
                 image_id: session.image_id,
                 error: errorMessage(error)
@@ -272,7 +272,7 @@ export async function commitIngestionSessionSnapshot(
             });
           const retainedStagingKeys = await stagingCleanupPlan.removeNow();
           if (retainedStagingKeys) {
-            logger.warn("import_staging_cleanup_deferred", {
+            logger.warn("ingestion_staging_cleanup_deferred", {
               session_id: session.session_id,
               image_id: session.image_id,
               keys: retainedStagingKeys

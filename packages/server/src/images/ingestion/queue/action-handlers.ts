@@ -72,7 +72,7 @@ function failed(session: StoredIngestionSession, error: unknown): ActionItem {
   return {
     ...pair(session),
     status: "failed",
-    code: error instanceof ApiError ? error.code : "import_action_failed",
+    code: error instanceof ApiError ? error.code : "ingestion_action_failed",
     message: error instanceof Error ? error.message : "内容接入队列操作失败"
   };
 }
@@ -80,7 +80,7 @@ function failed(session: StoredIngestionSession, error: unknown): ActionItem {
 const queueActionMutationAttempts = 8;
 
 function isIngestionVersionConflict(error: unknown) {
-  return error instanceof ApiError && error.code === "import_version_conflict";
+  return error instanceof ApiError && error.code === "ingestion_version_conflict";
 }
 
 function metadataForAction(
@@ -137,14 +137,14 @@ async function applyMetadataAction(input: Readonly<{
           if (session.status === "completed" || session.status === "discarded") {
             return skipped(
               session,
-              "import_action_predicate_changed",
+              "ingestion_action_predicate_changed",
               "当前任务已不再保存可修改草稿"
             );
           }
           if (session.commit) {
             return skipped(
               session,
-              "import_action_predicate_changed",
+              "ingestion_action_predicate_changed",
               "当前任务的提交意图已经冻结"
             );
           }
@@ -179,13 +179,13 @@ async function applyMetadataAction(input: Readonly<{
           ) {
             return skipped(
               initialSession,
-              "import_action_predicate_changed",
+              "ingestion_action_predicate_changed",
               "当前任务身份已经变化或不再存在"
             );
           }
           session = current;
         }
-        throw new Error("Import metadata action exhausted its mutation attempts");
+        throw new Error("Ingestion metadata action exhausted its mutation attempts");
       } catch (error) {
         return failed(initialSession, error);
       }
@@ -198,7 +198,7 @@ function commitInput(
   actionRequestId: string
 ): IngestionCommitItemInputDto {
   if (!session.prepared) {
-    throw new ApiError(409, "invalid_import_state", "图片尚未准备完成");
+    throw new ApiError(409, "invalid_ingestion_state", "图片尚未准备完成");
   }
   if (session.commit?.commit_request_id === actionRequestId) {
     return {
@@ -270,7 +270,7 @@ async function commitReadyAction(input: Readonly<{
     if (session.status === "completed" || session.status === "discarded") {
       results.set(pairKey(session), skipped(
         session,
-        "import_action_predicate_changed",
+        "ingestion_action_predicate_changed",
         "当前任务已不再处于可提交状态"
       ));
       continue;
@@ -279,7 +279,7 @@ async function commitReadyAction(input: Readonly<{
     if (!retry && session.last_semantic_revision > input.capturedRevision) {
       results.set(pairKey(session), skipped(
         session,
-        "import_action_state_changed",
+        "ingestion_action_state_changed",
         "任务在操作确认后已发生变化"
       ));
       continue;
@@ -293,7 +293,7 @@ async function commitReadyAction(input: Readonly<{
     if (!retry && !ready) {
       results.set(pairKey(session), skipped(
         session,
-        "import_action_predicate_changed",
+        "ingestion_action_predicate_changed",
         "当前任务已不再处于可提交状态"
       ));
       continue;
@@ -345,7 +345,7 @@ async function commitReadyAction(input: Readonly<{
     });
   }
   return input.sessions.map((session) => results.get(pairKey(session))
-    ?? skipped(session, "import_action_predicate_changed", "当前任务未被处理"));
+    ?? skipped(session, "ingestion_action_predicate_changed", "当前任务未被处理"));
 }
 
 function cancelPredicate(
@@ -379,14 +379,14 @@ function cancelActionSkip(
   ) {
     return skipped(
       session,
-      "import_action_state_changed",
+      "ingestion_action_state_changed",
       "任务在操作确认后已发生变化"
     );
   }
   if (!cancelPredicate(action, session)) {
     return skipped(
       session,
-      "import_action_predicate_changed",
+      "ingestion_action_predicate_changed",
       "任务不再符合当前清理条件"
     );
   }
@@ -464,7 +464,7 @@ async function clearQueueAction(input: Readonly<{
       if (result.status === "resolving") {
         results.set(pairKey(session), skipped(
           session,
-          "import_action_resolving",
+          "ingestion_action_resolving",
           "数据库事务已经开始，任务将保留到结果明确"
         ));
         return;
@@ -526,7 +526,7 @@ async function clearQueueAction(input: Readonly<{
         const target = pending[index]!;
         if (
           result.status === "failed"
-          && result.code === "import_version_conflict"
+          && result.code === "ingestion_version_conflict"
           && attempt < queueActionMutationAttempts - 1
         ) {
           versionConflicts.push(target);
@@ -553,7 +553,7 @@ async function clearQueueAction(input: Readonly<{
         ) {
           results.set(pairKey(target.initial), skipped(
             target.initial,
-            "import_action_predicate_changed",
+            "ingestion_action_predicate_changed",
             "当前任务身份已经变化或不再存在"
           ));
           continue;
@@ -576,7 +576,7 @@ async function clearQueueAction(input: Readonly<{
     }
   }
   return input.sessions.map((session) => results.get(pairKey(session))
-    ?? skipped(session, "import_action_predicate_changed", "当前任务未被处理"));
+    ?? skipped(session, "ingestion_action_predicate_changed", "当前任务未被处理"));
 }
 
 export function executeIngestionQueueActionBatch(input: Readonly<{

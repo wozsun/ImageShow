@@ -9,6 +9,8 @@ import {
   ingestionStatusPath,
   ingestionUpdatePath,
   importAcceptPath,
+  importJsonlParsePath,
+  importWeiboParsePath,
   uploadIntentPath,
   uploadRawPath
 } from "@imageshow/shared/browser";
@@ -25,8 +27,6 @@ const jsonlManifestBodyMaxBytes = appConfig.ingestion.jsonlManifestMaxBytes;
 const advancedConfigMaxBytes = configPackageRequestMaxBytes;
 const adminPreferencesBodyMaxBytes = adminPreferencesMaxBytes + 1024;
 const adminPreferencesPath = `${adminApiBasePath}/preferences`;
-const jsonlManifestPath = `${adminApiBasePath}/ingestion/import/jsonl/parse`;
-const weiboImportPath = `${adminApiBasePath}/ingestion/import/weibo/parse`;
 // Fifty maximum-length URLs occupy about 600 KiB after worst-case JSON
 // escaping. A 1 MiB tier accepts every legal request with finite headroom.
 const weiboImportBodyMaxBytes = appConfig.ingestion.weiboRequestBodyMaxBytes;
@@ -40,7 +40,7 @@ const imageUpdateBodyMaxBytes = 6 * 1024 * 1024;
 const ingestionControlBodyMaxBytes = 160 * 1024 * 1024;
 // One bounded 3,600-pair exclusion list plus the visible inclusion subset stay
 // well below 1 MiB. Keep snapshot selection independent from the much larger
-// metadata-bearing import control tier.
+// metadata-bearing ingestion control tier.
 const ingestionSnapshotBodyMaxBytes = 1024 * 1024;
 const ingestionControlPaths = new Set([
   uploadIntentPath,
@@ -169,8 +169,8 @@ export function limitApiRequestBody(c: Context, next: Next) {
 export function limitProtectedAdminRequestBody(c: Context, next: Next) {
   const path = new URL(c.req.url).pathname;
   if (
-    path === jsonlManifestPath
-    || path === weiboImportPath
+    path === importJsonlParsePath
+    || path === importWeiboParsePath
     || (c.req.method === "PUT" && path === uploadRawPath)
   ) {
     return next();

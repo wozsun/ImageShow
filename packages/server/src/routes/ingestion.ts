@@ -1,7 +1,6 @@
 import type { Context, Hono } from "hono";
 import { appConfig } from "@imageshow/shared";
 import {
-  adminApiBasePath,
   ingestionActionScopeHeader,
   ingestionActionPath,
   ingestionCancelPath,
@@ -12,6 +11,10 @@ import {
   ingestionStatusPath,
   ingestionUpdatePath,
   importAcceptPath,
+  importJsonlParsePath,
+  importWeiboParsePath,
+  ingestionPreviewPath,
+  ingestionVocabularyPath,
   uploadCredentialHeader,
   uploadIntentPath,
   uploadRawPath,
@@ -57,18 +60,16 @@ import {
   weiboImportInput
 } from "../core/validation.ts";
 import { acceptIngestionCommitIntents } from "../images/ingestion/commit/intent.ts";
-import { cancelIngestionSessions } from "../images/ingestion/cancel/coordinator.ts";
 import { JsonlManifestError, parseJsonlManifest } from "../images/ingestion/sources/jsonl.ts";
 import { receiveUploadIntentBody } from "../images/ingestion/raw/upload.ts";
 import { streamIngestionQueueEvents } from "../images/ingestion/queue/events.ts";
 import { readStableIngestionQueueSnapshot } from "../images/ingestion/queue/snapshot.ts";
 import { readDuplicateSnapshotsByMd5 } from "../images/read-models/duplicates.ts";
-import { runIngestionQueueAction } from "../images/ingestion/queue/action.ts";
 import { updateIngestionSessions } from "../images/ingestion/queue/session-update.ts";
 import {
+  ingestionExecutionControl,
   ingestionSessionRepository,
   ingestionSessionService,
-  ingestionSessionWorker,
   ingestionTokenService
 } from "../images/ingestion/runtime.ts";
 import {
@@ -101,7 +102,7 @@ function ingestionActionScope(c: Context) {
   ) {
     throw new ApiError(
       409,
-      "import_action_scope_stale",
+      "ingestion_action_scope_stale",
       "请先连接内容接入队列状态通道"
     );
   }
@@ -132,7 +133,7 @@ function uploadCredential(c: Context) {
 }
 
 export function registerIngestionRoutes(app: Hono) {
-  app.get(`${adminApiBasePath}/ingestion-vocabulary`, async (c) => {
+  app.get(ingestionVocabularyPath, async (c) => {
     return privateCacheableApiSuccess(c, await getIngestionVocabulary());
   });
 
@@ -156,7 +157,7 @@ export function registerIngestionRoutes(app: Hono) {
       > appConfig.ingestionRuntime.snapshotMaxItems) {
       throw new ApiError(
         400,
-        "invalid_import_snapshot",
+        "invalid_ingestion_snapshot",
         "队列页与补入任务总数超过快照上限"
       );
     }
@@ -231,7 +232,7 @@ export function registerIngestionRoutes(app: Hono) {
     return c.json(apiSuccess(response));
   });
 
-  app.post(`${adminApiBasePath}/ingestion/import/jsonl/parse`, limitJsonlManifestBody, async (c) => {
+  app.post(importJsonlParsePath, limitJsonlManifestBody, async (c) => {
     const input = parse(jsonlManifestInput, await readJsonBody(c));
     try {
       return c.json(apiSuccess(parseJsonlManifest(input.content, {
@@ -246,7 +247,7 @@ export function registerIngestionRoutes(app: Hono) {
     }
   });
 
-  app.post(`${adminApiBasePath}/ingestion/import/weibo/parse`, limitWeiboImportBody, async (c) => {
+  app.post(importWeiboParsePath, limitWeiboImportBody, async (c) => {
     const input = parse(weiboImportInput, await readJsonBody(c));
     const runtimeConfig = getRuntimeConfig();
     const maxPosts = Math.min(
@@ -292,7 +293,7 @@ export function registerIngestionRoutes(app: Hono) {
   });
 
   app.get(
-    `${adminApiBasePath}/ingestion/preview/:sessionId/:imageId/full`,
+    `${ingestionPreviewPath}/:sessionId/:imageId/full`,
     (c) => readIngestionPreview(
       ingestionSessionRepository,
       authenticatedUsername(c),
@@ -303,7 +304,7 @@ export function registerIngestionRoutes(app: Hono) {
   );
 
   app.get(
-    `${adminApiBasePath}/ingestion/preview/:sessionId/:imageId`,
+    `${ingestionPreviewPath}/:sessionId/:imageId`,
     (c) => readIngestionPreview(
       ingestionSessionRepository,
       authenticatedUsername(c),
@@ -339,14 +340,10 @@ export function registerIngestionRoutes(app: Hono) {
 
   app.post(ingestionActionPath, limitIngestionControlBody, async (c) => {
     const input = parse(ingestionQueueActionInput, await readJsonBody(c));
-    const response = await runIngestionQueueAction({
-      repository: ingestionSessionRepository,
-      coordinator: ingestionSessionWorker.coordinator,
-      tokens: ingestionTokenService,
+    const response = await ingestionExecutionControl.runQueueAction({
       session: authenticatedSession(c),
       actionScope: ingestionActionScope(c),
-      request: input,
-      abortActive: (pair) => ingestionSessionWorker.abortActive(pair)
+      request: input
     }) satisfies IngestionQueueActionResultDto;
     return c.json(apiSuccess(response));
   });
@@ -366,12 +363,9 @@ export function registerIngestionRoutes(app: Hono) {
   app.post(ingestionCancelPath, limitIngestionControlBody, async (c) => {
     const input = parse(ingestionCancelInput, await readJsonBody(c));
     const response = {
-      items: await cancelIngestionSessions(
-        ingestionSessionRepository,
-        ingestionSessionWorker.coordinator,
+      items: await ingestionExecutionControl.cancelSessions(
         authenticatedUsername(c),
-        input.items,
-        (pair) => ingestionSessionWorker.abortActive(pair)
+        input.items
       )
     } satisfies IngestionCancelResultDto;
     return c.json(apiSuccess(response));

@@ -57,7 +57,7 @@ export async function readIngestionQueueSnapshot(
     || includeItems.length > appConfig.ingestionRuntime.snapshotMaxItems
     || limit + includeItems.length > appConfig.ingestionRuntime.snapshotMaxItems
   ) {
-    throw new RangeError("Redis import snapshot range is invalid");
+    throw new RangeError("Redis ingestion snapshot range is invalid");
   }
   const raw = await run(
     "imageshowReadIngestionQueueSnapshot",
@@ -88,11 +88,11 @@ export async function readIngestionQueueSnapshot(
     };
   }
   if (status !== 1) {
-    throw new Error("Redis import snapshot returned an unknown status");
+    throw new Error("Redis ingestion snapshot returned an unknown status");
   }
   const metadataLength = redisReplyInteger(reply[1], "queue metadata length");
   if (metadataLength < 0 || metadataLength % 2 !== 0) {
-    throw new Error("Redis import snapshot returned invalid metadata length");
+    throw new Error("Redis ingestion snapshot returned invalid metadata length");
   }
   const metadataEnd = 2 + metadataLength;
   const metadata = metadataFromHashReply(reply.slice(2, metadataEnd));
@@ -114,7 +114,7 @@ export async function readIngestionQueueSnapshot(
     || staleCount < 0
     || staleValues.length !== staleCount * 2
   ) {
-    throw new Error("Redis import snapshot returned an invalid item count");
+    throw new Error("Redis ingestion snapshot returned an invalid item count");
   }
   return {
     metadata,
@@ -153,7 +153,7 @@ export async function scanIngestionQueueAction(
     || !Number.isSafeInteger(limit)
     || limit < 1
     || limit > appConfig.ingestionRuntime.queueActionBatchSize
-  ) throw new RangeError("Redis import action scan range is invalid");
+  ) throw new RangeError("Redis ingestion action scan range is invalid");
   const raw = await run(
     "imageshowScanIngestionQueueAction",
     ingestionOwnerQueueKey(owner, queue),
@@ -173,7 +173,7 @@ export async function scanIngestionQueueAction(
   const status = redisReplyInteger(reply[0], "queue action scan status");
   if (status === 0) return { items: [], nextCursor: null };
   if (status !== 1 || reply.length < 4) {
-    throw new Error("Redis import action scan returned an invalid shape");
+    throw new Error("Redis ingestion action scan returned an invalid shape");
   }
   const count = redisReplyInteger(reply[1], "queue action scan count");
   const hasMore = redisReplyInteger(
@@ -190,7 +190,7 @@ export async function scanIngestionQueueAction(
     || (hasMore === 0 && nextCursor !== 0)
     || (hasMore === 1 && (nextCursor < 1 || nextCursor >= cursor))
   ) {
-    throw new Error("Redis import action scan returned invalid bounds");
+    throw new Error("Redis ingestion action scan returned invalid bounds");
   }
   return {
     items: serialized.map((item) => parseStoredIngestionSession(
@@ -242,7 +242,7 @@ export async function deleteStoredCompletedReceipts(
   );
   if (status === 0) return { removed: 0, metadata: null };
   if (status !== 1) {
-    throw new Error("Redis import stale receipt cleanup returned unknown status");
+    throw new Error("Redis ingestion stale receipt cleanup returned unknown status");
   }
   return {
     removed: receipts.length,
@@ -270,7 +270,7 @@ async function discoverIngestionSessionPage(
     || limit < 1
     || limit > maximumLimit
   ) {
-    throw new RangeError("Redis import discovery range is invalid");
+    throw new RangeError("Redis ingestion discovery range is invalid");
   }
   const raw = await run(
     "imageshowDiscoverIngestionSessions",
@@ -318,7 +318,7 @@ async function discoverIngestionSessionPage(
     ))
     || reply.length !== 5 + count * 2
   ) {
-    throw new Error("Redis import discovery returned an invalid shape");
+    throw new Error("Redis ingestion discovery returned an invalid shape");
   }
   const items = Array.from({ length: count }, (_, index) => {
     const canonicalKey = redisReplyString(
