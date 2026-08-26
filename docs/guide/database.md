@@ -1,6 +1,6 @@
 # 数据库结构
 
-PostgreSQL 共 10 张业务表，不保存迁移账本或 schema 版本表。
+PostgreSQL 共 9 张业务表，不保存迁移账本或 schema 版本表。
 `packages/server/schema.sql` 直接定义当前干净安装基线；它与可选的
 `schema-additions.sql` 共同组成完整的新安装结构。随机图 `id` 的末 12 位查询所需 ready
 部分表达式索引，以及统一 Redis 图片投影的权威 revision 单行表均属于当前基线。PostgreSQL
@@ -8,7 +8,7 @@ PostgreSQL 共 10 张业务表，不保存迁移账本或 schema 版本表。
 会话均不替代数据库真值；未完成导入 canonical 是允许在受控冷启动时整体丢弃的运行态。
 
 `schema.sql` 按依赖和运行职责排列：存储注册表 →
-公共词表 → 图片真值、关联与投影 revision → 旧导入表 → 后台任务 → 管理员身份。
+公共词表 → 图片真值、关联与投影 revision → 后台任务 → 管理员身份。
 每张表内部统一为标识、状态 / 所有权、业务字段、错误 / 重试和时间字段；种子、约束与
 索引紧跟所属表，图片索引再按直接查询 / 外键、列表游标、随机选择 / 回收职责排列。
 
@@ -20,21 +20,26 @@ PostgreSQL 共 10 张业务表，不保存迁移账本或 schema 版本表。
 readiness 或干净初始化任一步失败都会回滚本次事务。全部连接固定使用 `search_path=public`。
 应用不为不受支持的第二个重叠进程持有 schema 或管理员播种 bootstrap lock。
 
-additions 只保存一个发布周期内经明确审查的受限结构增量或一次性数据变化。5.0.0 在同一
-事务中为 `metadata` 增加可空 `created_by TEXT`，把旧行中仅有的 NULL 精确回填为
-`wozsun`，随后立即设为 `NOT NULL` 并删除默认值；条件块让已完成结构可重复执行，不把旧值
-覆盖为新 actor。全部受控非空数据库应用并通过专项核对后，下一发布才能把最终无默认值定义
-并入 `schema.sql` 并恢复 additions 注释占位。部署和旧备份恢复不得跳过承载增量的发布；
-additions 不提供通用 diff、推测回填、版本行或任意数据修复入口。
+additions 只保存一个发布周期内经明确审查的受限结构增量或一次性数据变化。5.0.1 处理两项
+已经明确退役的结构：存在 PostgreSQL `import_session` 时先取得 `ACCESS EXCLUSIVE` 锁，确认
+0 行后执行不带 `CASCADE` 的删除；`background_job` 同样在排他锁内确认所有行都属于当前
+`move.cleanup` / `trash.purge` / `cache.rebuild`，只识别并删除项目已知的历史枚举 CHECK，再
+建立固定名称的当前约束。固定约束必须实际只接受三种当前类型，不能只靠名称冒充；部署方其他
+CHECK 原样保留。任一旧行或外部依赖都会回滚整个启动事务，additions 不自动删历史行。干净
+安装本来不创建旧表且直接带当前 CHECK，因此同一 additions 是幂等 no-op。
+`metadata.created_by TEXT NOT NULL` 已直接定义在 `schema.sql`，没有外键或默认值。全部受控
+非空数据库应用当期 additions 并通过核对后，下一发布移除一次性语句并恢复注释占位。部署和
+旧备份恢复不得跳过承载增量的发布；additions 不提供通用 diff、推测回填、版本行或任意数据
+修复入口。
 
 readiness 只读核对当前运行时所需业务表、源码实际使用的列及其 PostgreSQL 类型、必需系统种子，
 并确认会话可写、public schema 可用且当前角色具备各表实际操作所需的 SELECT / INSERT /
 UPDATE / DELETE 权限，不使用回滚写探针。它还按列和谓词语义核对当前 SQL 依赖的最小行为
 约束，不依赖数据库对象名称：当前运行时表的业务主键；`metadata.object_key`、后台任务
 非空幂等键与唯一活动 `cache.rebuild`、单一默认存储和单一超级管理员的唯一性；以及当前
-metadata / image_tag 删除路径依赖的 RESTRICT、CASCADE 和 SET NULL 外键。旧
-`import_session` 表与索引不再属于 readiness。`created_by` 的 `text` 类型进入最小列集合；
-NOT NULL、无默认值和回填结果由 additions 事务及升级 SQL 专项核对。
+metadata / image_tag 删除路径依赖的 RESTRICT、CASCADE 和 SET NULL 外键。`created_by` 的
+`text` 类型进入最小列集合；除 5.0.1 精确删除的空旧导入表及项目已知历史枚举 CHECK 外，
+额外表、额外索引和部署方其他约束仍作为兼容超集保留，不触发通用破坏性对齐。
 
 readiness 不复制 `schema.sql` 的可空性、默认值、CHECK、触发器、普通查询索引或无消费者
 约束。额外表、额外列、额外索引、等价约束改名以及更宽的 CHECK 不影响启动，只要当前代码
@@ -161,24 +166,20 @@ Redis meta 的 `applied_revision` 只有在精确同步或全量重建完成完�
 二者不一致时缓存读门关闭。该表不保存 Redis 状态；当前协议只服务于单个 ImageShow
 应用进程，不支持多应用实例。
 
-## Redis 导入运行态与旧 `import_session`
+## Redis 导入运行态
 
-5.0.0 不再读写 PostgreSQL `import_session`。运行中的 upload intent、owner queue、canonical、
-runnable、expires、计数和 revision 位于专用 Redis logical database；每个 canonical 冻结
+运行中的 upload intent、owner queue、canonical、runnable、expires、计数和 revision 位于
+专用 Redis logical database；每个 canonical 冻结
 owner、queue、pair、独立 `image_time`、metadata、storage、version、progress sequence、
 execution token、raw / prepared generation 及可选 commit intent。领域命令用 Lua 原子维护
 canonical 与全部派生索引；Redis 不可用或结构不一致时 fail closed。
-
-已封版 `schema.sql` 仍物理定义旧表，5.0.0 不执行破坏性 DDL。升级前必须在 4.16.5 仍运行时
-排空旧导入，并在停应用后人工确认该表为 0；此后旧表只作为待后续基线整理的遗留对象，
-不参与接口、检查、存储占用、清理或 readiness。
 
 ## background_job —— 后台任务队列
 
 | 字段 | 含义 |
 | --- | --- |
 | `id` (PK) | 任务 id |
-| `type` | 当前运行时支持 `move.cleanup` / `trash.purge` / `cache.rebuild`；旧 `import.cleanup` 历史行可以保留但不会再调度或处理 |
+| `type` | 只允许 `move.cleanup` / `trash.purge` / `cache.rebuild`；5.0.1 启动拒绝仍含其他历史类型行的数据库 |
 | `status` | `pending` / `running` / `succeeded` / `failed` / `ignored` |
 | `execution_token` | 每次领取生成的 UUID 所有权栅栏；仅当前 `running` 执行者持有，退出运行态时清空 |
 | `target_id` | 目标图片 id |

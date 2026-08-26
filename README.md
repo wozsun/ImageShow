@@ -114,11 +114,14 @@ docker compose exec postgresql sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB
 `schema.sql` 直接定义当前干净安装基线；镜像同时保留可选的
 `schema-additions.sql`，用于对现有数据库执行当前发布周期经明确审查的受限增量或一次性
 数据变化。空数据库在同一事务中依次执行两个入口，非空数据库只执行 additions 后进入只读
-readiness。5.0.0 additions 新增 `metadata.created_by`，把旧行精确回填为 `wozsun`，随后设为
-`NOT NULL` 并删除默认值；重复执行保持幂等。additions 只承载一个发布周期：全部受控非空数据库应用其中增量并
-通过 readiness 后，下一发布才能把同一定义并入 `schema.sql` 并恢复注释占位；升级和恢复旧
-备份都不得跳过承载 additions 的发布。应用不提供编号迁移、通用 schema diff、删除、重命名、
-类型改变、通用推测回填、版本标记或清库。精确契约见
+readiness。5.0.1 additions 删除已经停用且确认为空的 PostgreSQL `import_session`，并在确认
+不存在非当前 job type 后只移除项目已知的历史枚举 CHECK、建立三种当前类型的固定约束；
+部署方其他 CHECK 保持不变。两处都先取得排他锁，任何旧行或外部依赖都会让启动事务失败，
+且不使用 `CASCADE` 或自动删除历史行。
+`metadata.created_by TEXT NOT NULL` 已直接属于干净安装基线。additions 只承载一个发布周期：
+全部受控非空数据库应用其中增量并通过 readiness 后，下一发布才能移除一次性语句并恢复注释
+占位；升级和恢复旧备份都不得跳过承载 additions 的发布。应用不提供编号迁移、通用 schema
+diff、任意删除 / 重命名 / 类型改变、通用推测回填、版本标记或清库。精确契约见
 [数据库结构](docs/guide/database.md#启动与结构契约)。
 
 Redis 是必需的 operational datastore，但不是业务真相源；服务 unavailable 或命令 OOM 时，
@@ -136,12 +139,6 @@ Redis 是必需的 operational datastore，但不是业务真相源；服务 una
 私有网络，由可信反向代理终止 HTTPS，并覆盖客户端传入的 `Host`、`X-Real-IP`、
 `X-Forwarded-For` 与 `X-Forwarded-Proto`；应用不解析转发 Host 或多级 IP 链。
 产品无关的代理要求与唯一一份可替换的 Nginx 最简示例见[部署指南](docs/guide/deployment.md#反向代理与-https)。
-
-从 4.16.5 升级到 5.0.0 必须执行一次计划停机：在旧版排空 PostgreSQL `import_session` 与仍可
-执行的 `import.cleanup`，停止且只停止应用，复核唯一中止条件，再对已人工确认专供 ImageShow
-的 Redis logical database 执行 `FLUSHDB`；严禁 `FLUSHALL`、清理 PostgreSQL / storage 或运行
-中删 key。首次启动 5.0.0 后只允许 fix-forward，不支持降级。精确 SQL、命令、预期值和失败
-边界见[生产部署指南](docs/guide/deployment.md)。
 
 反向代理请求体上限不得低于应用配置。仓库示例使用 `client_max_body_size 256m`，覆盖
 默认 200 MiB 单图上限并留出代理层余量。完整 Docker、健康检查、停机、密码恢复及

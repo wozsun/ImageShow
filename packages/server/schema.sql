@@ -90,6 +90,7 @@ CREATE TABLE metadata (
   purge_started_at TIMESTAMPTZ,
   purge_attempts INTEGER NOT NULL DEFAULT 0,
   purge_error TEXT,
+  created_by TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   CHECK (status IN ('ready', 'deleted')),
@@ -196,41 +197,6 @@ CREATE TABLE ready_image_revision (
 INSERT INTO ready_image_revision(singleton, revision)
 VALUES (1, 0);
 
--- Import lifecycle
-CREATE TABLE import_session (
-  id UUID PRIMARY KEY,
-  mode TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'created',
-  execution_token UUID,
-  raw_token UUID,
-  idempotency_key TEXT NOT NULL UNIQUE,
-  request_hash TEXT NOT NULL DEFAULT '',
-  storage_slug TEXT NOT NULL REFERENCES storage_backend(slug) ON DELETE RESTRICT,
-  final_object_key TEXT NOT NULL DEFAULT '',
-  source_url TEXT NOT NULL DEFAULT '',
-  expected_size BIGINT,
-  metadata_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
-  prepared_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
-  error TEXT NOT NULL DEFAULT '',
-  image_time TIMESTAMPTZ NOT NULL DEFAULT now(),
-  expires_at TIMESTAMPTZ NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  CHECK (mode IN ('upload', 'download')),
-  CHECK (status IN (
-    'created', 'materializing', 'received', 'preparing', 'ready',
-    'committing', 'finalized', 'failed', 'cancelled'
-  )),
-  CHECK (expected_size IS NULL OR expected_size > 0),
-  CHECK (source_url = '' OR source_url ~* '^https://')
-);
-
-CREATE INDEX idx_import_session_status_expires
-ON import_session(status, expires_at);
-
-CREATE UNIQUE INDEX idx_import_session_final_object_key
-ON import_session(final_object_key) WHERE final_object_key <> '';
-
 -- Background work queue
 CREATE TABLE background_job (
   id UUID PRIMARY KEY,
@@ -245,7 +211,8 @@ CREATE TABLE background_job (
   next_retry_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  CHECK (type IN ('move.cleanup','import.cleanup','trash.purge','cache.rebuild')),
+  CONSTRAINT background_job_current_type_check
+    CHECK (type IN ('move.cleanup', 'trash.purge', 'cache.rebuild')),
   CHECK (status IN ('pending', 'running', 'succeeded', 'failed', 'ignored'))
 );
 

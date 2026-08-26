@@ -10,9 +10,6 @@
 - 配置唯一可信反向代理、HTTPS、Host 与转发头覆盖，并阻止公网直连应用端口。
 - 拉取或构建镜像，原位停止和启动应用，检查 `/livez`、`/readyz` 与三个容器健康状态。
 - 在部署前确认数据库 additions、备份与隔离恢复路径，不跳过承载当前增量的发布。
-- 从 4.16.5 升级到 5.0.0 时，先在旧版排空导入并执行停机 SQL 复核；只有确认目标 Redis
-  logical database 专供 ImageShow 后，才可清空该库并启动 v5。首次启动 v5 后只允许
-  fix-forward，禁止 `FLUSHALL`、共享库清空或降级启动。
 - 在后台不可登录时使用独立密码恢复入口，并核对 PostgreSQL / Redis 可用性。
 
 首次安装从[快速开始](../getting-started.md)开始；生产拓扑、Nginx、停机与健康检查见

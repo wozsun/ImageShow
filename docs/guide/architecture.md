@@ -62,23 +62,25 @@ packages/web ─────► packages/shared
 ### PostgreSQL
 
 PostgreSQL 是图片、词表、后台任务、存储注册表和管理员账号的唯一持久业务真相源。
-当前 schema 共 10 张表，其中 `ready_image_revision` 是图片投影 revision 单行表；旧
-`import_session` 表在 5.0.0 只作为尚未物理删除的升级遗留，不再有运行时读写或 readiness
-要求。schema 不保存迁移账本或应用版本号。
+当前 schema 共 9 张表，其中 `ready_image_revision` 是图片投影 revision 单行表。schema
+不保存迁移账本或应用版本号。
 
 `schema.sql` 直接定义当前干净安装基线；空库依次执行它与可选的
-`schema-additions.sql`，非空库只执行 additions 后做只读 readiness。5.0.0 additions 在一个
-事务中新增并回填 `metadata.created_by`：旧行精确写为 `wozsun`，随后设为 `NOT NULL` 并删除
-默认值；重复执行保持幂等。additions 只承载一个发布周期；全部受控非空数据库确认增量后，
-下一发布才把同一定义并入 `schema.sql`。应用不提供通用结构 diff、编号迁移、破坏性 DDL、
-契约标记或清库。允许的 additions、兼容超集和拒绝条件以[数据库结构](./database.md)为唯一说明。
+`schema-additions.sql`，非空库只执行 additions 后做只读 readiness。5.0.1 additions 在排他锁
+内确认旧 PostgreSQL `import_session` 为空后删除它，并在没有非当前 job type 行时只移除项目
+已知的历史枚举 CHECK、建立三种当前类型的固定约束；部署方其他 CHECK 保持不变。旧行或
+外部依赖使事务失败，不使用 `CASCADE`，也不自动删除历史行。
+`metadata.created_by TEXT NOT NULL` 已属于基线且没有默认值。
+additions 只承载一个发布周期；全部受控非空数据库确认增量后，下一发布移除一次性语句并恢复
+注释占位。应用不提供通用结构 diff、编号迁移、任意破坏性 DDL、契约标记或清库。允许的
+additions、兼容超集和拒绝条件以[数据库结构](./database.md)为唯一说明。
 
 ### Redis
 
 Redis 8 承载可以从 PostgreSQL 重建的图片读模型，以及管理员会话、限流、近期随机历史、
 词表缓存、短期探测结果和可丢弃的未完成导入队列。它不替代账号、权限或最终图片状态；
 导入 canonical 是当前单实例 worker 的运行时真相，专用 logical database 冷启动时允许整体
-丢弃，不能把它回退到 PostgreSQL 旧会话表或进程内队列。
+丢弃，不能把它回退到 PostgreSQL 或进程内队列。
 
 upload 与 import 分别维护 accepted-order owner 动作 ZSET、batch / manifest display 展示 ZSET、
 metadata 计数 / revision 和一个显示时 SSE。display 的倒序 rank 保持新批次在上、同批来源顺序
@@ -200,8 +202,8 @@ Gallery 和其他后台页面。每个公开路由分别测量全新持久 profi
 导入临时素材由另一个单实例周期 worker 保守回收。它在短时 storage location read lock 内
 完整列举每个 `_uploads` 物理组，删除阶段再取得 write lock，复核物理 namespace、Redis
 operational 状态及枚举前后精确引用；raw 另由进程内活跃路径租约保护。这个 worker
-不读取旧 PostgreSQL
-`import_session`、不从文件反建业务状态，也不把临时素材逐项复制成 `background_job`。
+只读取 Redis canonical 引用，不从 PostgreSQL 或文件反建导入状态，也不把临时素材逐项复制
+成 `background_job`。
 正式提交则在复制两个确定候选前创建一条持久 `move.cleanup` guard，使进程崩溃后仍能按
 PostgreSQL 最终引用决定删除或保留。
 
@@ -282,8 +284,8 @@ active 时继续等待同代后续 revision；批量 status 返回的 active DTO
 同时受任务数和全局字节预算限制；Redis operational gate 关闭时停止领取并中止仍可安全
 中止的阶段，恢复后先运行有界 expiry / canonical 恢复入口。同一生命周期还启动独立的
 60 秒孤儿素材清理周期，并在停机时中止、排空；Redis unavailable 时该周期不删除任何素材。
-导入执行与临时素材周期都不调度 `import.cleanup`；只有 commit 的两个确定正式候选在复制前
-写入既有 `move.cleanup` guard，raw 与 prepared generation 不逐项进入持久任务表。
+导入执行与临时素材周期不进入持久任务表；只有 commit 的两个确定正式候选在复制前写入
+既有 `move.cleanup` guard，raw 与 prepared generation 不逐项持久化。
 
 任务表与状态字段见[数据库结构](./database.md)，对象清理协议见[存储](./storage.md)。
 

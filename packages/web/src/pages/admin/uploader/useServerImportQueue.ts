@@ -37,6 +37,13 @@ type SnapshotRequestReason =
   | "reload"
   | "ready";
 
+type AuthorityRecovery = Readonly<{
+  minimumSnapshotSerial: number;
+  promise: Promise<void>;
+  resolve: () => void;
+  reject: (error: unknown) => void;
+}>;
+
 const snapshotRequestPriority: Readonly<Record<SnapshotRequestReason, number>> = {
   parameters: 1,
   refresh: 2,
@@ -166,6 +173,7 @@ export function useServerImportQueue(input: Readonly<{
   const requestSnapshotRef = useRef<(
     (reason?: SnapshotRequestReason) => void
   ) | null>(null);
+  const recoverAuthorityRef = useRef<(() => Promise<void>) | null>(null);
   const ensureRevisionRef = useRef<((revision?: number) => void) | null>(null);
   const onCompletedImportsRef = useRef(input.onCompletedImports);
   onCompletedImportsRef.current = input.onCompletedImports;
@@ -176,6 +184,7 @@ export function useServerImportQueue(input: Readonly<{
   useEffect(() => {
     if (!input.enabled) {
       requestSnapshotRef.current = null;
+      recoverAuthorityRef.current = null;
       setView((current) => emptyView("idle", current.connectionGeneration));
       return;
     }
@@ -207,6 +216,24 @@ export function useServerImportQueue(input: Readonly<{
     let protocolReconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let pendingCoverageRevision: number | null = null;
     let pendingUnknownCoverage = false;
+    let authorityRecovery: AuthorityRecovery | null = null;
+
+    const completeAuthorityRecovery = (serial: number) => {
+      if (
+        authorityRecovery === null
+        || serial < authorityRecovery.minimumSnapshotSerial
+      ) return;
+      const completed = authorityRecovery;
+      authorityRecovery = null;
+      completed.resolve();
+    };
+
+    const failAuthorityRecovery = (error: unknown) => {
+      if (authorityRecovery === null) return;
+      const failed = authorityRecovery;
+      authorityRecovery = null;
+      failed.reject(error);
+    };
 
     const cancelSnapshotRecoveryTimer = () => {
       if (snapshotRecoveryTimer !== null) {
@@ -471,6 +498,7 @@ export function useServerImportQueue(input: Readonly<{
           return;
         }
         setView(readyView(connectionGeneration, actionScope, merged));
+        completeAuthorityRecovery(serial);
       }).catch((error: unknown) => {
         if (disposed || controller.signal.aborted || serial !== snapshotSerial) {
           return;
@@ -527,6 +555,7 @@ export function useServerImportQueue(input: Readonly<{
               status: "error",
               error: error instanceof Error ? error.message : String(error)
             });
+            failAuthorityRecovery(error);
           }
         };
         if (
@@ -554,14 +583,28 @@ export function useServerImportQueue(input: Readonly<{
         }
         buffered = [];
         clearBaseline();
-        setView({
-          ...emptyView(
-            "error",
-            connectionGeneration,
-            error instanceof Error ? error.message : String(error)
-          ),
-          actionScope
-        });
+        const retryDelay = snapshotRecoveryDelays[snapshotRecoveryAttempt];
+        if (retryDelay !== undefined) {
+          snapshotRecoveryAttempt += 1;
+          snapshotRecoveryTimer = setTimeout(() => {
+            snapshotRecoveryTimer = null;
+            requestSnapshot("reload");
+          }, retryDelay);
+          setView({
+            ...emptyView("loading", connectionGeneration),
+            actionScope
+          });
+        } else {
+          setView({
+            ...emptyView(
+              "error",
+              connectionGeneration,
+              error instanceof Error ? error.message : String(error)
+            ),
+            actionScope
+          });
+          failAuthorityRecovery(error);
+        }
       }).finally(() => {
         if (activeSnapshot?.controller !== controller) return;
         activeSnapshot = null;
@@ -571,6 +614,23 @@ export function useServerImportQueue(input: Readonly<{
       });
     };
     requestSnapshotRef.current = requestSnapshot;
+    recoverAuthorityRef.current = () => {
+      if (authorityRecovery !== null) return authorityRecovery.promise;
+      let resolve!: () => void;
+      let reject!: (error: unknown) => void;
+      const promise = new Promise<void>((resolvePromise, rejectPromise) => {
+        resolve = resolvePromise;
+        reject = rejectPromise;
+      });
+      authorityRecovery = {
+        minimumSnapshotSerial: snapshotSerial + 1,
+        promise,
+        resolve,
+        reject
+      };
+      requestSnapshot("refresh");
+      return promise;
+    };
     ensureRevisionRef.current = (revision?: number) => {
       if (disposed) return;
       if (
@@ -633,6 +693,7 @@ export function useServerImportQueue(input: Readonly<{
           "error",
           error instanceof Error ? error.message : String(error)
         );
+        failAuthorityRecovery(error);
         return;
       }
       protocolReconnectAttempt += 1;
@@ -799,7 +860,9 @@ export function useServerImportQueue(input: Readonly<{
     return () => {
       disposed = true;
       requestSnapshotRef.current = null;
+      recoverAuthorityRef.current = null;
       ensureRevisionRef.current = null;
+      failAuthorityRecovery(new Error("导入队列连接已关闭"));
       snapshotSerial += 1;
       clearSnapshotRecovery();
       if (protocolReconnectTimer !== null) {
@@ -823,11 +886,17 @@ export function useServerImportQueue(input: Readonly<{
   const refresh = useCallback(() => {
     requestSnapshotRef.current?.("refresh");
   }, []);
+  const recoverAuthority = useCallback(() => {
+    const recover = recoverAuthorityRef.current;
+    return recover
+      ? recover()
+      : Promise.reject(new Error("导入队列连接尚未就绪"));
+  }, []);
   const ensureRevision = useCallback((revision?: number) => {
     ensureRevisionRef.current?.(revision);
   }, []);
 
-  return { ...view, ensureRevision, refresh };
+  return { ...view, ensureRevision, recoverAuthority, refresh };
 }
 
 export type ServerImportQueueController = ReturnType<

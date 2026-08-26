@@ -43,10 +43,13 @@ Redis 凭据只来自环境变量或 Secret，不写入 `config.json`。首次�
 执行两者，非空数据库只执行 additions 后做只读 readiness；整个过程受同一事务保护。
 单应用进程合同不为第二个重叠启动者取得 bootstrap lock；首次启动、停止后的顺序重启、
 已有数据启动，以及事务回滚后的顺序恢复仍使用同一初始化路径。
-5.0.0 additions 在同一事务中新增、回填并收紧 `metadata.created_by`；旧行精确写为
-`wozsun`，最终列为 `TEXT NOT NULL` 且无默认值，重复执行幂等。应用不提供编号迁移、通用
-schema diff、版本 ledger、破坏性 DDL 或清库。additions 只承载一个发布周期；全部受控数据库
-确认应用后，下一发布才把同一定义并入 `schema.sql`，部署与旧备份恢复不得跳过承载 additions 的发布。精确白名单与拒绝条件以
+5.0.1 additions 在排他锁内确认旧 PostgreSQL `import_session` 为 0 行后执行不带 `CASCADE`
+的删除，并在没有非当前 job type 行时只移除项目已知的历史枚举 CHECK、建立三种当前类型的
+固定约束；部署方其他 CHECK 保持不变。旧行或外部依赖使启动事务失败并回滚，历史行不会
+自动删除。`metadata.created_by TEXT NOT NULL`
+已直接属于基线且无默认值。应用不提供编号迁移、通用 schema diff、版本 ledger、任意破坏性
+DDL 或清库。additions 只承载一个发布周期；全部受控数据库确认应用后，下一发布移除一次性
+语句并恢复注释占位，部署与旧备份恢复不得跳过承载 additions 的发布。精确白名单与拒绝条件以
 [数据库结构](./database.md#启动与结构契约)为准。
 
 Redis 只保存会话、限流、统一就绪图片投影和可重建派生缓存。连接必须支持 Redis 8
@@ -85,130 +88,6 @@ Redis ACL 还必须允许业务原子脚本使用的 `EVAL` 与 `EVALSHA`。应�
 时服务端仍通过 `AbortSignal` 停止继续安排扫描或测量批次。界面只把深检的核心键数与内存
 填入核心卡；“图片成员”显示值继续使用轻量状态中的 `item_count`，不显示各核心键成员数之和。
 派生卡展示深检的键数、结果成员数与内存。`INFO MEMORY` 卡片只描述整个 Redis 实例。
-
-## 4.16.5 → 5.0.0 一次性停机升级
-
-> 【5.0.1 删除升级说明与专项演练】本节只服务已发布 `4.16.5` 到 `5.0.0` 的个人实例
-> 单向升级。它不是通用迁移器，也不授权清理其他版本、其他应用或共享 Redis 数据。
-
-5.0.0 把未完成导入从 PostgreSQL 旧 `import_session` 切换为可丢弃的 Redis canonical，
-不会迁移、双读或自动删除旧会话。维护前先完成 PostgreSQL 与存储备份，并在部署记录中确认
-目标 `REDIS_HOST` / `REDIS_PORT` / `REDIS_DB` 对应的 logical database 只供 ImageShow 使用；
-不要打印或记录 Redis 密码。内置 Compose 的 `redis` 服务与默认 DB 0 只属于当前项目；外部
-Redis 必须由维护者从基础设施配置证明专用。无法证明专用时不要开始维护窗口。
-
-在旧应用仍运行时，只记录不含密码的实际目标；结果必须与基础设施登记一致：
-
-```bash
-docker compose exec -T imageshow sh -lc 'printf "REDIS_HOST=%s\nREDIS_PORT=%s\nREDIS_DB=%s\n" "$REDIS_HOST" "$REDIS_PORT" "$REDIS_DB"'
-```
-
-### 1. 在 4.16.5 下停止新增导入并等待排空
-
-关闭所有后台导入页面，阻止其他管理员进入上传 / URL / JSONL / 微博入口，但保持当前
-4.16.5 应用运行，让既有任务和旧 `import.cleanup` worker 自然收敛。重复执行下面的只读 SQL；
-两个阻塞计数都为 0 才进入下一步，同时记录 `metadata_rows_before`。Compose 内置 PostgreSQL
-可直接使用所示命令；外部数据库在自己的受控 `psql` 会话执行同一 SQL。
-
-```bash
-docker compose exec -T postgresql sh -lc 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "$1"' sh "
-BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;
-SELECT count(*) AS legacy_import_session_rows
-FROM import_session;
-
-SELECT count(*) AS blocking_import_cleanup_jobs
-FROM background_job
-WHERE type = 'import.cleanup'
-  AND (
-    status IN ('pending', 'running')
-    OR (status = 'failed' AND next_retry_at IS NOT NULL)
-  );
-
-SELECT count(*) AS metadata_rows_before
-FROM metadata;
-COMMIT;
-"
-```
-
-不要把已经耗尽重试且 `next_retry_at IS NULL` 的历史 failed 行误当成仍会执行的任务；它不阻塞
-升级，也不需要删除。
-
-### 2. 停止且只停止应用，并执行唯一中止检查
-
-```bash
-docker compose stop imageshow
-```
-
-再次执行上面的完整只读 SQL，排除最后一刻进入的会话或 job。这是升级的唯一中止点：任一
-阻塞计数不为 0 时，不执行任何 Redis 命令、不启动 5.0.0，直接运行
-`docker compose start imageshow` 恢复原 4.16.5 容器，处理剩余任务后重新安排维护。不要执行
-`docker compose down`、`down -v`，不要删除 `data/`，也不要重建 PostgreSQL / Redis volume。
-
-两个阻塞计数均为 0 后，维护进入单向阶段；保持应用停止，后续异常只在 5.0.x 上
-fix-forward，不再启动 4.16.5。
-
-### 3. 只清空已确认的 ImageShow logical database
-
-下面三条命令只演示内置 Compose 默认 DB 0；若前面记录的 `REDIS_DB` 不是 0，必须先把三处
-`0` 全部替换为那个已确认的精确编号。外部 Redis 使用其受控客户端连接同一个已确认 logical
-database，不把凭据写入命令历史。
-
-```bash
-docker compose exec -T redis redis-cli -n 0 DBSIZE
-docker compose exec -T redis redis-cli -n 0 FLUSHDB
-docker compose exec -T redis redis-cli -n 0 DBSIZE
-```
-
-`FLUSHDB` 必须返回 `OK`，最后一次 `DBSIZE` 必须返回 `0`。严禁 `FLUSHALL`，严禁对共享或未
-确认的 DB 执行清空，也不得删除 PostgreSQL 行、正式 media / thumbs 或存储对象。应用运行期间
-单独删除 key 或执行 `FLUSHDB` 不受支持。
-
-### 4. 原位启动 5.0.0 并只允许 fix-forward
-
-生产部署先把 Compose 中的镜像精确切换为 5.0.0，再原位启动一个应用实例；本地源码候选使用
-第二条命令。两条命令只能选择其一。
-
-```bash
-docker compose up -d imageshow
-# 本地源码候选：docker compose up -d --build imageshow
-```
-
-首次启动会在同一数据库事务中应用当前 `schema-additions.sql`，为旧图片回填
-`metadata.created_by='wozsun'`，设为 `NOT NULL` 并删除默认值。不要并行启动第二个应用。
-依次核对：
-
-```bash
-docker compose ps
-docker inspect --format '{{.State.Health.Status}} {{.Image}}' imageshow
-curl --fail --show-error --header 'Host: img.example.com' \
-  http://127.0.0.1:5518/readyz
-```
-
-随后在还未恢复导入入口时执行：
-
-```sql
-BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;
-SELECT count(*) AS metadata_rows_after,
-       count(*) FILTER (WHERE created_by = 'wozsun') AS legacy_actor_rows,
-       count(*) FILTER (WHERE created_by IS NULL) AS null_actor_rows
-FROM metadata;
-
-SELECT is_nullable, column_default
-FROM information_schema.columns
-WHERE table_schema = 'public'
-  AND table_name = 'metadata'
-  AND column_name = 'created_by';
-COMMIT;
-```
-
-`metadata_rows_after` 必须等于维护前记录值，`legacy_actor_rows` 必须等于该值，
-`null_actor_rows` 必须为 0，列必须返回 `is_nullable='NO'` 与 `column_default IS NULL`。再登录后台
-检查页，确认 PostgreSQL、Redis、存储与应用均正常；管理员需要重新登录，旧浏览器导入队列和
-其他 Redis 运行态允许消失，随机池与派生索引会冷重建或按既有契约暂时返回 503。
-
-一旦 5.0.0 已首次启动或 additions 已执行，任何失败都不得通过旧镜像或旧数据库备份直接降级。
-保留当前 PostgreSQL 和存储，记录无 Secret 的镜像、行数、DB 编号与健康结果，在 5.0.x 上
-修复并重新执行受影响检查。恢复旧备份时也必须先用承载当前 additions 的 v5 版本应用增量。
 
 ## 健康检查与停机
 

@@ -47,6 +47,7 @@ import { invalidateImageDataAfterImport } from "../../../lib/api/query-invalidat
 import { invalidateImportDuplicateDetails } from "./useImportDuplicateDetails.js";
 import { useStoredImportDraftSync } from "./useStoredImportDraftSync.js";
 import { useImportAuthorityHandoffs } from "./useImportAuthorityHandoffs.js";
+import { useOptionalAuthSessionRecovery } from "../../../hooks/useAuthSession.js";
 
 function revokeObjectUrl(job: ImportJob) {
   if (job.objectUrl?.startsWith("blob:")) URL.revokeObjectURL(job.objectUrl);
@@ -97,6 +98,7 @@ export function useImportQueue(
   displayed: boolean
 ) {
   const queryClient = useQueryClient();
+  const recoverAuthSession = useOptionalAuthSessionRecovery();
   const [state, setState] = useState<ImportQueueState>({ jobs: [], page: 1 });
   const [draftNotice, setDraftNotice] = useState<{
     message: string;
@@ -279,7 +281,8 @@ export function useImportQueue(
     queueType,
     server,
     actionConnectionHoldRef,
-    observeCompletedImports
+    observeCompletedImports,
+    recoverAuthSession
   );
   const currentServerJobs = useMemo(
     () => state.jobs.filter(importJobHasServerAuthority),

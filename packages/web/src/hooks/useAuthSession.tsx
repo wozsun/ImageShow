@@ -3,7 +3,6 @@ import {
   useCallback,
   useContext,
   useEffect,
-  useEffectEvent,
   useState,
   type ReactNode
 } from "react";
@@ -32,7 +31,12 @@ import { queryKeys } from "../lib/api/query-keys.js";
 import { sameAdminPreferences } from "../lib/api/admin-preference-cache.js";
 import { adminBasePath } from "../lib/constants.js";
 
-const AuthSessionContext = createContext<UseQueryResult<AuthState> | null>(null);
+type AuthSessionContextValue = Readonly<{
+  query: UseQueryResult<AuthState>;
+  recoverAuthSession: () => Promise<void>;
+}>;
+
+const AuthSessionContext = createContext<AuthSessionContextValue | null>(null);
 
 function isAdminPath(pathname: string) {
   return pathname === adminBasePath || pathname.startsWith(`${adminBasePath}/`);
@@ -60,9 +64,16 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
   const [refreshCoordinator] = useState(
     () => new AuthSessionRefreshCoordinator()
   );
-  const refetchAuth = useEffectEvent(async () => {
-    await query.refetch({ cancelRefetch: false });
-  });
+  const { refetch } = query;
+  const recoverAuthSession = useCallback(() => refreshCoordinator.run(
+    async () => {
+      const result = await refetch({ cancelRefetch: false });
+      if (result.error) throw result.error;
+      if (!result.data?.authenticated) {
+        throw new Error("管理员登录已失效");
+      }
+    }
+  ), [refetch, refreshCoordinator]);
 
   useEffect(() => {
     if (!query.data) return;
@@ -80,16 +91,14 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
       clearCsrfToken();
       clearSessionProbeHint();
       setPublicProbeRequested(true);
-      void refreshCoordinator.run(async () => {
-        await refetchAuth();
-      }).catch(() => undefined);
+      void recoverAuthSession().catch(() => undefined);
     };
     window.addEventListener(authExpiredEvent, refreshAuth);
     return () => window.removeEventListener(authExpiredEvent, refreshAuth);
-  }, [refreshCoordinator]);
+  }, [recoverAuthSession]);
 
   return (
-    <AuthSessionContext.Provider value={query}>
+    <AuthSessionContext.Provider value={{ query, recoverAuthSession }}>
       {children}
     </AuthSessionContext.Provider>
   );
@@ -100,7 +109,11 @@ export function useAuthMe() {
   if (!query) {
     throw new Error("useAuthMe must be used inside AuthSessionProvider");
   }
-  return query;
+  return query.query;
+}
+
+export function useOptionalAuthSessionRecovery() {
+  return useContext(AuthSessionContext)?.recoverAuthSession;
 }
 
 /**

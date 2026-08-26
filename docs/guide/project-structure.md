@@ -47,7 +47,8 @@ packages/web ─────► packages/shared
 shared，也不写生产产物。
 
 GitHub Actions 只核对 dev 分支或 release tag、根包 / 三个 workspace / lockfile 版本，
-然后通过固定完整 commit SHA 的 Actions 构建和推送生产镜像、创建 Release。它不运行
+然后通过已审查的公开 Action 稳定主版本标签构建和推送生产镜像、创建 Release；job 不设置
+项目自定义总运行时限。它不运行
 `verify:*`、Knip、最终测试、数据库、存储、浏览器或性能验收；Action 成功不能替代本地
 `verify:release`。
 

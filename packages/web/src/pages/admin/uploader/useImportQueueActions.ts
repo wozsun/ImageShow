@@ -63,7 +63,8 @@ export function useImportQueueActions(
   connectionHoldRef: { current: boolean },
   observeCompletedImports: (
     entries: readonly CompletedImportObservation[]
-  ) => void
+  ) => void,
+  recoverAuthSession?: () => Promise<void>
 ) {
   const serverRef = useRef(server);
   serverRef.current = server;
@@ -213,8 +214,28 @@ export function useImportQueueActions(
           if (completed.length) observeCompletedImports(completed);
         }
       } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        setNotice(message);
+        if (
+          recoverAuthSession
+          && isApiClientError(error)
+          && error.status === 401
+          && error.code === "invalid_import_token"
+        ) {
+          try {
+            // The failed action is never replayed. Refresh the shared session
+            // first so this owner's single authoritative snapshot carries the
+            // current CSRF and replaces the expired signed watermark.
+            await recoverAuthSession();
+            await serverRef.current.recoverAuthority();
+            if (mountedRef.current) setNotice("");
+          } catch {
+            // Keep the original credential error visible. Authentication and
+            // queue controllers expose their own retry/login state.
+          }
+          return null;
+        }
         refreshRequestedRef.current = true;
-        setNotice(error instanceof Error ? error.message : String(error));
         return null;
       }
     };
@@ -234,7 +255,7 @@ export function useImportQueueActions(
         }
       }
     });
-  }, [observeCompletedImports, updateConnectionHold]);
+  }, [observeCompletedImports, recoverAuthSession, updateConnectionHold]);
 
   return {
     busy,
