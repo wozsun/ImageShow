@@ -14,7 +14,7 @@ export type CapturedMoveCleanupObject = MoveCleanupObjectInput & {
 export type MoveCleanupJobPayload = {
   objects: CapturedMoveCleanupObject[];
   reason: string;
-  /** Unique ownership of a pre-copy import guard attempt. */
+  /** Unique ownership of a pre-copy Ingestion commit guard attempt. */
   guard_token?: string;
   /** Exhausted deletion work remains a physical ownership record. */
   retain_exhausted: true;

@@ -39,9 +39,9 @@ import {
   normalizeMinQuality,
   normalizeQuality,
   normalizeQualityStep,
-  randomMethod,
+  randomDefaultMethod,
   recentUploads,
-  rootRedirect,
+  siteRoot,
   sessionTtlSeconds,
   siteDomain,
   siteDescription,
@@ -66,6 +66,22 @@ const subdomainLabel = z.string().trim().regex(
 const weiboUserId = z.string().regex(/^[1-9]\d{0,19}$/, "must be a numeric Weibo user ID");
 const weiboAuthorSlug = z.string().trim().toLowerCase().min(1)
   .max(slugMaxLength).regex(slugPattern);
+const weiboAuthorSlugs = z.preprocess((value, context) => {
+  if (
+    value !== null
+    && typeof value === "object"
+    && !Array.isArray(value)
+    && Object.hasOwn(value, "__proto__")
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: 'object key "__proto__" is not allowed',
+      path: ["__proto__"]
+    });
+    return z.NEVER;
+  }
+  return value;
+}, z.record(weiboUserId, weiboAuthorSlug));
 
 const runtimeConfigSchema = z.strictObject({
   site: z.strictObject({
@@ -77,7 +93,7 @@ const runtimeConfigSchema = z.strictObject({
       enabled: z.boolean(),
       link_enabled: z.boolean()
     }),
-    root_redirect: rootRedirect,
+    root: siteRoot,
     home: z.strictObject({
       enabled: z.boolean(),
       background: homeBackground,
@@ -88,13 +104,18 @@ const runtimeConfigSchema = z.strictObject({
       default_limit: galleryLimit,
       order: galleryOrder
     }),
-    random_default_method: randomMethod,
+    random_default_method: randomDefaultMethod,
     static_subdomain: subdomainLabel,
     robots_enabled: z.boolean()
   }),
   embed: z.strictObject({
     enabled: z.boolean(),
     allowed_origins: embedAllowedOrigins
+  }),
+  ingestion: z.strictObject({
+    commit_concurrency: commitConcurrency,
+    global_commit_concurrency: globalCommitConcurrency,
+    global_commit_byte_budget_mb: globalCommitByteBudgetMb
   }),
   upload: z.strictObject({
     max_items: uploadMaxItems,
@@ -116,7 +137,7 @@ const runtimeConfigSchema = z.strictObject({
     max_items: weiboImportMaxItems,
     concurrency: weiboMetadataConcurrency,
     global_concurrency: weiboGlobalConcurrency,
-    author_slugs: z.record(weiboUserId, weiboAuthorSlug)
+    author_slugs: weiboAuthorSlugs
   }),
   normalize: z.strictObject({
     quality: normalizeQuality,
@@ -130,12 +151,6 @@ const runtimeConfigSchema = z.strictObject({
     path: ["min_quality"]
   }),
   thumbnail: z.strictObject({ long_edge: thumbnailLongEdge, quality: thumbnailQuality }),
-  ingestion: z.strictObject({
-    commit_concurrency: commitConcurrency,
-    global_commit_concurrency: globalCommitConcurrency,
-    global_commit_byte_budget_mb: globalCommitByteBudgetMb
-  }),
-  image_detail: z.strictObject({ title_opens_image: z.boolean() }),
   admin: z.strictObject({
     login_background: loginBackground,
     image_page_size: imagePageSize,

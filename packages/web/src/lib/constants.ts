@@ -16,7 +16,7 @@ export const galleryDataWindowFullItemBudget = 480;
 export const galleryDataWindowMaxConcurrentPageLoads = 2;
 
 export function publicRootPath(
-  site: Pick<SiteSettings, "root_redirect" | "home">
+  site: Pick<SiteSettings, "root" | "home">
 ): "/home" | "/gallery" {
-  return site.home.enabled === false || site.root_redirect === "gallery" ? "/gallery" : "/home";
+  return site.home.enabled === false || site.root === "gallery" ? "/gallery" : "/home";
 }

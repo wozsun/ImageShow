@@ -1,4 +1,4 @@
-# 项目结构
+# 项目结构详细说明
 
 ImageShow 使用 npm workspaces 管理三个包。依赖方向固定为：
 
@@ -10,7 +10,8 @@ packages/web ─────► packages/shared
 `server` 与 `web` 不能互相导入；`shared` 不能依赖其他 workspace。Web 构建产物最终
 由服务端镜像提供；根目录 `docs/guide/` 只是普通仓库文档，不参与 workspace 或生产构建。
 
-本文直接描述现行源码、构建产物、状态所有者和依赖边界，是开发与运维的权威结构说明。
+本文面向项目开发与运维，详细描述现行源码、构建产物、状态所有者和依赖边界，是当前实现
+结构的权威说明。
 
 ## 根目录职责
 
@@ -22,7 +23,10 @@ packages/web ─────► packages/shared
   收敛后直接执行传入命令。
 - `Dockerfile` 只安装三个 workspace 的构建依赖（不安装根目录本地门禁工具）并完成编译，
   再单独安装 server/shared 的生产依赖；运行镜像只携带生产依赖、编译产物和运维入口。
-- `compose.yaml` 提供单实例 ImageShow、PostgreSQL 与 Redis 的标准部署。
+- `compose.yaml` 提供单实例 ImageShow、PostgreSQL 与 Redis 的标准部署，只把 `.env` 用作
+  显式最小白名单的插值来源；ImageShow 环境前部固定为数据库名、用户名、密码和首次管理员
+  用户名、密码五项，均有可直接启动的默认值。`.env.example` 另行承担部署变量与全部首次
+  seed 的完整目录。
 - `docs/guide/` 保存当前架构、配置、数据库、流程、部署和 API 说明，使用相对 Markdown
   链接，可直接在仓库中阅读。
 
@@ -39,7 +43,7 @@ packages/web ─────► packages/shared
 
 | 命令 | 内容 | 副作用 |
 | --- | --- | --- |
-| `npm run verify:source` | workspace 类型、Knip、语义颜色、TypeScript AST 依赖方向 / 环、配置示例、图标、Markdown 链接与 selector inventory | 只读源码，不生成 `dist`、容器或浏览器会话 |
+| `npm run verify:source` | workspace 类型、Knip、语义颜色、TypeScript AST 依赖方向 / 环、配置 schema / 环境目录 / 文档 / Compose 白名单、图标、Markdown 链接与 selector inventory | 只读源码，不生成 `dist`、容器或浏览器会话 |
 | `npm run verify:build` | 清理必要输出，先构建 shared，再并行构建 Web / Server，装配服务端资产并按真实产物图检查 Web 分块边界 | 只重建三个 workspace 的 `dist` |
 | `npm run verify:runtime` | baseline / Server / Web 三个最终入口，以及生产镜像冷启动、HTTP、schema 和重启 | 建立随机命名的 tmpfs PostgreSQL、Redis、应用容器、网络和临时镜像；无论成功、失败或中断均在结束前删除，不访问现有数据库、容器或浏览器 |
 | `npm run verify:release` | 依次执行以上三层 | 合并上述本地副作用 |
@@ -107,7 +111,7 @@ healthcheck 只读现有配置快照，密码恢复不初始化运行时配置�
 | `core/database/` | PostgreSQL pool、事务、advisory lock、公开 fallback 准入、schema 装配和 readiness；`readiness/` 只承载数据库基线断言的内部职责。 |
 | `core/redis/` | 唯一 Redis client、业务 Lua / 命令注册、JSON、pipeline、条件字符串和窗口限流基础设施；不导入 ready-cache 或其他业务领域。 |
 | `core/http/` | HTTP 响应与响应头、请求来源和请求体限制、压缩阈值、条件请求、静态响应与 Range 解析。 |
-| `config/` | 部署环境、首次播种、运行时配置 schema、无导入副作用的文件读写与显式进程内 store，以及配置包。 |
+| `config/` | 部署环境、首次播种、运行时配置 schema、无导入副作用的文件读写与显式进程内 store，以及配置包；`runtime-config-environment.ts` 是全部 RuntimeConfig 叶子到首次 seed 变量的唯一映射。 |
 | `routes/` | HTTP 方法、鉴权、CSRF、输入解析和响应投影；业务工作委托给领域模块。 |
 | `images/` | 图片读写、展示投影、分类与元数据变更、回收站和缩略图；`page-window.ts` 唯一计算安全数字页窗口，`ready-cache/` 拥有统一 Redis rich 投影、筛选、统计、精确同步与重建，`ingestion/` 拥有 Upload / Import 的完整接入会话生命周期及清理任务，`read-models/` 承载 PostgreSQL cursor / offset 读模型。 |
 | `storage/` | 只在根层保留横切 `maintenance-lock.ts`；`backends/`、`drivers/`、`objects/`、`migration/` 与 `cleanup/` 分别拥有注册表、驱动、对象原语、搬迁和持久清理。 |

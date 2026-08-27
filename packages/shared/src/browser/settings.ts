@@ -1,9 +1,12 @@
 import type { LogLevel, SiteVersionSettings } from "./common.ts";
 
-export const rootRedirects = ["home", "gallery"] as const;
-export type RootRedirect = (typeof rootRedirects)[number];
+export const siteRoots = ["home", "gallery"] as const;
+export type SiteRoot = (typeof siteRoots)[number];
 
-export const randomMethods = ["proxy", "redirect", "json"] as const;
+export const randomDefaultMethods = ["proxy", "redirect"] as const;
+export type RandomDefaultMethod = (typeof randomDefaultMethods)[number];
+
+export const randomMethods = [...randomDefaultMethods, "json"] as const;
 export type RandomMethod = (typeof randomMethods)[number];
 
 export const galleryOrders = ["latest", "random"] as const;
@@ -27,10 +30,10 @@ export type RuntimeSiteSettings = {
   description: string;
   icon_url: string;
   version: SiteVersionSettings;
-  root_redirect: RootRedirect;
+  root: SiteRoot;
   home: SiteHomeSettings;
   gallery: SiteGallerySettings;
-  random_default_method: RandomMethod;
+  random_default_method: RandomDefaultMethod;
   static_subdomain: string;
   robots_enabled: boolean;
 };
@@ -38,6 +41,12 @@ export type RuntimeSiteSettings = {
 export type EmbedSettings = {
   enabled: boolean;
   allowed_origins: string[];
+};
+
+export type IngestionSettings = {
+  commit_concurrency: number;
+  global_commit_concurrency: number;
+  global_commit_byte_budget_mb: number;
 };
 
 export type UploadSettings = {
@@ -79,16 +88,6 @@ export type ThumbnailSettings = {
   quality: number;
 };
 
-export type IngestionSettings = {
-  commit_concurrency: number;
-  global_commit_concurrency: number;
-  global_commit_byte_budget_mb: number;
-};
-
-export type ImageDetailSettings = {
-  title_opens_image: boolean;
-};
-
 export type AdminPanelSettings = {
   login_background: string;
   image_page_size: number;
@@ -99,13 +98,12 @@ export type AdminPanelSettings = {
 export type RuntimeConfig = {
   site: RuntimeSiteSettings;
   embed: EmbedSettings;
+  ingestion: IngestionSettings;
   upload: UploadSettings;
   import: ImportSettings;
   weibo: WeiboSettings;
   normalize: NormalizeSettings;
   thumbnail: ThumbnailSettings;
-  ingestion: IngestionSettings;
-  image_detail: ImageDetailSettings;
   admin: AdminPanelSettings;
   background_job: {
     move_cleanup_concurrency: number;
@@ -138,7 +136,7 @@ export type SiteSettings = Pick<
   | "name"
   | "domain"
   | "icon_url"
-  | "root_redirect"
+  | "root"
   | "home"
   | "gallery"
   | "random_default_method"
@@ -146,7 +144,7 @@ export type SiteSettings = Pick<
 
 export type PublicSiteSettings = Pick<
   RuntimeSiteSettings,
-  "name" | "description" | "icon_url" | "root_redirect" | "home"
+  "name" | "description" | "icon_url" | "root" | "home"
 > & {
   gallery: Pick<SiteGallerySettings, "order">;
   static_url: string;
@@ -161,6 +159,8 @@ export type AdminSiteSettings = Omit<
     "background" | "banner_label" | "banner_title"
   >;
 };
+
+export type AdminIngestionSettings = Pick<IngestionSettings, "commit_concurrency">;
 
 export type AdminUploadSettings = Pick<
   UploadSettings,
@@ -177,24 +177,21 @@ export type AdminImportSettings = Pick<
 >;
 
 export type AdminWeiboSettings = Pick<WeiboSettings, "max_items">;
-export type AdminIngestionSettings = Pick<IngestionSettings, "commit_concurrency">;
 
 export type AdminSettings = {
   site: AdminSiteSettings;
+  ingestion: AdminIngestionSettings;
   upload: AdminUploadSettings;
   import: AdminImportSettings;
   weibo: AdminWeiboSettings;
   normalize: NormalizeSettings;
   thumbnail: ThumbnailSettings;
-  ingestion: AdminIngestionSettings;
-  image_detail: ImageDetailSettings;
   admin: AdminPanelSettings;
 };
 
 export type SiteConfigDto = {
   site: PublicSiteSettings;
   embed: Pick<EmbedSettings, "enabled">;
-  image_detail: ImageDetailSettings;
 };
 
 export type RuntimeConfigChangeSummaryDto = {

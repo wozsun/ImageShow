@@ -191,7 +191,6 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
   const authorLabel = authorOption ? displayNameOrSlug(authorOption) : authorSlug;
   const authorLink = authorOption?.link || "";
 
-  const titleOpensImage = (siteConfig?.image_detail?.title_opens_image ?? true) && Boolean(item.object_url);
   const title = imageDisplayTitle(item);
   const hasRegisteredOriginal = item.diff_original;
   const imageTime = adminItem?.image_time ?? item.image_time;
@@ -255,20 +254,16 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
             <header className="image-detail-head" ref={titleHeaderRef}>
               <div className="image-detail-title-row">
                 <h2>
-                  {titleOpensImage
-                    ? (
-                      <a
-                        className="image-detail-title-link"
-                        href={item.object_url}
-                        target="_blank"
-                        rel="noreferrer noopener"
-                        referrerPolicy="no-referrer"
-                        title="在新标签页打开图片直链"
-                      >
-                        {title}
-                      </a>
-                    )
-                    : title}
+                  <a
+                    className="image-detail-title-link"
+                    href={item.object_url}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    referrerPolicy="no-referrer"
+                    title="在新标签页打开图片直链"
+                  >
+                    {title}
+                  </a>
                 </h2>
                 {!mobileLayout && (
                   <button

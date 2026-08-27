@@ -8,13 +8,13 @@ PostgreSQL。排查配置时先确认“这项配置由谁管理”，再判断�
 
 | 来源 | 保存内容 | 修改方式 |
 | --- | --- | --- |
-| 环境变量 | PostgreSQL / Redis 连接、宿主机端口映射，以及首次管理员凭据；也可在首次生成 `config.json` 时播种应用配置。 | 修改 `.env`、Compose 或 Secret 后重建 / 重启。部署字段在每次进程启动时读取，不写入 `config.json`。 |
+| 环境变量 | PostgreSQL / Redis 连接、时区与首次管理员凭据；也可在首次生成 `config.json` 时播种应用配置。 | 修改 `.env`、Compose 或 Secret 后重建 / 重启。`.env` 只是 Compose 插值来源，只有部署清单显式映射的值才会进入容器。部署字段在每次进程启动时读取，不写入 `config.json`。 |
 | `/app/data/config.json` | 站点、上传 / 导入、图片处理、安全和日志等应用运行策略。 | 后台设置页，或直接编辑文件后在后台「设置 → 读取配置文件」。上传文件大小、上传长边校验和服务端全局导入并发只通过配置文件维护。 |
 | PostgreSQL | 管理员账号及界面偏好；本地 / S3 存储后端注册表；S3 endpoint、region、bucket、access key、secret key、根目录、public URL 与连接 / 空闲 / 总时限等实例化数据。 | 后台设置页或对应管理界面。secret key 只保存，不返回给前端。 |
 
-完整应用字段清单、默认值和中英文注释见仓库根目录的
-`config.example.jsonc`；部署字段见 `.env.example`。实际运行配置文件是纯 JSON，
-不支持注释。启动和手动重载时会按当前 schema 归一化：缺少且有默认值的字段
+本页的 [RuntimeConfig 参数目录](#runtimeconfig-参数目录)是完整应用字段参考；仓库根目录
+`.env.example` 同时列出部署变量与全部首次播种变量。实际运行配置文件是纯 JSON，不支持
+注释。启动和手动重载时会按当前 schema 归一化：缺少且有默认值的字段
 自动补齐，未知字段递归删除，已有有效值保留；归一化发生变化时写入同目录临时文件，
 同步文件内容后原子替换完整配置，并在支持目录同步的平台持久化该 rename。只有已知
 字段值不符合自身规定的合法范围时才会失败。PostgreSQL 与 Redis 连接值必须由环境
@@ -22,6 +22,21 @@ PostgreSQL。排查配置时先确认“这项配置由谁管理”，再判断�
 `link_image` 远程来源段投影到 `import`，把含 commit 字段的 `import` 段投影到
 `ingestion`；目标分组已经存在时以目标值为准，归一化结果只写回现行结构。其他未知项按普通
 结构投影删除，对应现行字段按默认值补齐，不推测字段含义。
+
+### 从 5.1.2 升级
+
+5.2.0 把 `site.root_redirect` 改为 `site.root`，不迁移旧值，也没有别名、双读或版本投影。
+旧字段会按未知字段删除；缺少合法 `site.root` 时补当前默认值 `home`。新旧字段同时存在时
+只保留合法的新字段。升级前若要继续以画廊作为根页面，应先把配置改为
+`"site": { "root": "gallery" }`；`/home`、`/gallery` 与 `site.home.enabled` 的职责不变。
+同时移除 `image_detail.title_opens_image` 与 `IMAGE_DETAIL_TITLE_OPENS_IMAGE`；旧配置分组
+按未知字段删除，图片详情标题固定打开该图片的直链。
+`site.random_default_method` 不再接受 `json`，升级前应改为 `proxy` 或 `redirect`；JSON 返回
+仍可通过显式 `/random?m=json` 使用。`site.home.banner_title` 上限由 160 收紧为 80 字符，
+超长现有值需先缩短。
+首次播种布尔环境值仅接受 `true` / `false`，不再接受 `1` / `0`。
+`upload.max_long_edge` 的合法范围由 512–32768 px 调整为 300–32000 px；现行默认值
+`32000` 不变，超过新上限的现有值需先收紧。
 
 运行时配置模块本身不读取或写入文件。主进程在装配 HTTP 路由、注册配置变更监听器
 和启动 Worker 前显式初始化进程内快照；初始化失败时不会继续连接数据库或监听端口。
@@ -54,10 +69,10 @@ commit 并发等前端预检所需的只读值；不会返回部署配置、完�
 应用容器；后台不会读取、展示或保存这些连接值。
 
 应用在代码中固定监听容器内 `5518`，Docker healthcheck 与主进程共享该代码
-常量，并从现有配置快照取得请求所需的站点 Host。宿主机映射端口只由
-`HOST_PORT` 控制，不改变容器内监听端口。
-仓库 Compose 默认把该宿主机端口绑定到 `127.0.0.1`；只有容器化代理或明确的同机私有网络
-拓扑才应调整映射，同时仍须阻止不可信客户端直达应用端口。
+常量，并从现有配置快照取得请求所需的站点 Host。仓库 Compose 固定使用
+`127.0.0.1:5518:5518`，不提供宿主端口环境变量；只有容器化代理或明确的同机私有网络
+拓扑才应通过 `compose.override.yaml`、其他部署清单或
+`docker run -p [host-ip:]<host-port>:5518` 覆盖映射，同时仍须阻止不可信客户端直达应用端口。
 自定义镜像如需改变内部端口，应修改 `appConfig.applicationPort`，并同步
 Dockerfile 的 `EXPOSE` 与 Compose 目标端口；回归测试会校验三者保持一致。
 
@@ -69,94 +84,109 @@ PostgreSQL 的 `admin_account` 表，不进入 `config.json`。单应用进程�
 后台配置写入由同一进程内的 FIFO 写租约串行化，包括配置包导入的长 I/O 和补偿窗口；配置包的
 存储后端写入使用 PostgreSQL 事务、提交结果回执和运行时配置 revision 补偿。
 
-## 常用配置组
+## RuntimeConfig 参数目录
 
-| 配置路径 | 用途 |
-| --- | --- |
-| `site.name` | 站点名称，也会写入 SPA HTML 的 `<title>`；可在普通站点配置页维护。 |
-| `site.domain` / `site.icon_url` | 主域名和图标；域名仅允许 DNS 名称（开发环境可带端口），图标仅允许站内绝对路径或 HTTPS。两项只通过配置文件、高级配置或首次启动环境变量维护，不进入普通站点配置页及其读写 DTO；公开投影返回 `icon_url` 和由域名派生的 `static_url`，不返回原始 `domain` 字段。 |
-| `site.description` | 站点描述，默认“画廊与随机图片API”，仅写入 SPA HTML 的 `description`，不在首页正文或普通站点配置页显示；空值按 `site.name`、`ImageShow` 的顺序回退。只通过配置文件、高级配置或首次启动环境变量维护。 |
-| `site.version.enabled` / `site.version.link_enabled` | 是否显示后台版本卡片、是否链接到对应的 GitHub Release，默认均为 `true`。关闭链接后仍显示版本；两项只通过配置文件、高级配置或首次启动环境变量维护，不进入站点配置页，也不进入公开站点配置投影，只随已认证的会话探针返回。 |
-| `site.root_redirect` | 根路径直接显示的页面：`home` 或 `gallery`；`/home`、`/gallery` 固定路径仍可单独访问。 |
-| `site.home.enabled` | 是否启用公共首页 `/home`，默认 `true`。关闭后 `/home` 重定向到画廊，导航不再显示首页入口，根路径固定显示画廊；只通过配置文件、高级配置或首次启动环境变量维护。 |
-| `site.gallery.default_limit` / `site.gallery.order` | 画廊默认分页数量与排序。 |
-| `site.random_default_method` | `/random` 默认返回方式：`redirect`、`proxy` 或 `json`；默认 JSON 模式省略 `n` 时返回一项数组，批量仍须显式使用 `m=json&n=...`。 |
-| `site.static_subdomain` | 唯一资源子域前缀，承载 `/media/*`、`/thumbs/*` 与 `/link/original/<id>`；默认 `static`。随机图只使用主站 `/random`，外链原图与主题均无专用子域。 |
-| `site.robots_enabled` | 是否提供 `robots.txt`，默认 `false`。开启后主站首页可抓取，资源域禁抓。 |
-| `embed.enabled` | 是否开放无主导航的 `/embed/home` 与 `/embed/gallery`，默认 `false`。启用后会根据当前 `site.domain` 隐式允许站点自身 HTTPS origin 及其任意层级的现有和未来子域，因此只应在这些子域均可信时开启；若站点域名带非默认端口，两项都只允许该端口。派生来源不写回配置文件。仅在 `data/config.json` 中维护。 |
-| `embed.allowed_origins` | 除站点隐式来源外额外允许嵌入页面的 HTTPS 来源列表，可填写精确 origin 或形如 `https://*.example.com` 的子域通配符，最多 32 项且规范化后总长不超过 4096 字符；可以留空，重复隐式或显式来源会去除。通配符只允许出现在最左侧且不包含根域名，根域名须另列。拒绝 HTTP、IP 地址、路径、参数、凭据、裸 `*`、中间通配符和过宽的单标签后缀。通配符只能用于全部现有及未来子域均可信的自有父域；校验不内置 Public Suffix List，不得配置 `*.github.io` 等公共托管后缀。仅在 `data/config.json` 中维护。 |
-| `upload.*` | 本地文件单次选择上限、上传文件大小、图片长边限制、上传列表分页、浏览器 raw PUT 并发，以及服务端 prepare 全局并发；其中 `upload.max_items`、`upload.max_file_size_mb`、`upload.max_long_edge` 和 `upload.global_concurrency` 只在配置文件中维护。 |
-| `upload.max_items` | 本地文件单次选择与单次 intent 接管的运行时上限，默认 200，可配置范围为 1–1000；Server 还执行不可配置的通用 batch hard limit。 |
-| `import.fill_original_url` | URL 下载导入是否自动把输入 URL 填入「原图 URL」字段；默认 `true`，不做可直达探测。显式设为 `false` 时保持原图 URL 为空。 |
-| `import.auto_import` | URL、JSONL 清单或微博解析出有效图片且没有任何问题项时，是否省略二次确认并直接建立 Import 队列，默认 `true`；出现问题项时始终停留在解析结果页，由管理员确认是否导入有效部分。 |
-| `import.concurrency` | 单客户端 Import 来源队列并发数。 |
-| `import.global_concurrency` | 服务端 URL download 与 prepare 两个独立阶段使用的全局并发基数；只在配置文件中维护。 |
-| `import.fetch_timeout_seconds` | 外链图片请求超时，单位秒；只覆盖 download 素材化的外部请求。 |
-| `import.max_items` | URL 列表、JSONL 清单的单次条目软上限，默认 200；不在设置页展示，管理端只读返回该值供接入窗口预检，修改需编辑配置文件，可配置范围为 1–1000。微博导入不使用该限制。 |
-| `weibo.max_items` | 微博链接单次输入软上限，默认 20；不在设置页展示，管理端只读返回该值供导入窗口预检，可配置范围为 1–50。 |
-| `weibo.concurrency` | 服务端同时请求和解析的微博帖子数，默认 2，可配置范围为 1–16；空闲 worker 会持续补位，只在配置文件中维护。 |
-| `weibo.global_concurrency` | 单个服务端进程共享的微博上游请求并发数，默认 5，可配置范围为 1–32；访客身份和帖子详情请求共用，只在配置文件中维护。 |
-| `weibo.author_slugs` | 微博用户 ID 到作者 slug 的映射表。键必须是纯数字用户 ID，值必须是合法的小写 slug；微博导入只有命中映射时才填写作者。 |
-| `normalize.*` | 本地上传与下载导入共用的最终入库文件标准化策略。 |
-| `thumbnail.*` | 缩略图长边和压缩质量，只影响此后新生成的缩略图。 |
-| `ingestion.commit_concurrency` | 单个管理页面同时执行的 commit 数，默认 5；只在配置文件中维护，管理端只读返回。 |
-| `ingestion.global_commit_concurrency` | 单个服务端进程同时执行的 commit 数，默认 10；所有客户端和直接 API 请求共享，只在配置文件中维护。 |
-| `ingestion.global_commit_byte_budget_mb` | 单个服务端进程中处于 commit 的 prepared 图片与缩略图总字节预算，默认 512 MiB；与数量并发限制同时生效，只在配置文件中维护。 |
-| `image_detail.title_opens_image` | 图片详情弹窗标题是否链接到图片直链。 |
-| `admin.login_background` | 后台登录页背景，仅允许站内绝对路径或 HTTPS；留空时使用站点自身随机图。未认证登录页继承公开页面固定暗色上下文，不读取管理员外观偏好；登录成功并进入后台后才应用账号偏好。表单内容保持完全不透明，只有表面使用 alpha 0.20 的 `blur(6px) saturate(110%)` 毛玻璃，系统要求减少透明效果时回退为暗色实底。背景层固定于当前动态视口且完全不滚动，独立定位的卡片按 visual viewport 可见中线放置，在工具栏或软键盘压缩可见高度时通过快速过渡整体上移。 |
-| `admin.image_page_size` / `admin.recent_uploads` / `admin.show_unset_theme_card` | 后台图片分页、概览最近上传数量、主题页「未设置」占位卡片开关。 |
-| `background_job.*` | 后台任务并发：移动清理、删除主题时图片搬运、批量迁移存储拷贝。默认各 5。 |
-| `security.*` | 登录会话有效期和登录限流阈值；ALTCHA 挑战签发复用两组时间窗口，单 IP 使用登录阈值的三倍，全局使用登录阈值的五倍。 |
-| `altcha.*` | 自托管 ALTCHA 登录安全验证开关、挑战有效期和 PBKDF2 确定性工作量参数。 |
-| `log.*` | 日志级别、单文件大小上限和轮转文件保留数量。日志写入 `data/log/app.log`，并同时输出到容器 stdout / stderr；超级管理员可在后台「日志」页实时调整 `log.level` 并查看最近日志。日志文件在列举或读取时消失会按轮转中的缺失处理，权限、I/O 等其他错误会明确返回失败，不伪装成空日志。后台非 GET 写操作会记录操作者、路径、状态、耗时和 IP，不记录请求体。 |
+下表是 `data/config.json` 的完整叶子参数参考，也是 `.env.example` 的播种目录。环境变量仅在
+文件不存在时参与一次完整配置生成；已有文件的启动、重启、普通设置、高级配置、配置包和手动
+重载都不再读取或叠加 seed。默认 Compose 不注入任何 RuntimeConfig 变量；表内全部标为“显式
+映射”，表示变量虽然列在 `.env.example`，但只有部署者扩展 Compose 后才会进入容器。所有现行配置都可
+经高级配置保存或手动重载热生效；普通设置页只开放其中的非敏感常用子集。数值除明确注明外
+均为整数，布尔环境值只接受 `true`、`false`。
 
-## 数值配置范围
+### site
 
-除 `upload.max_file_size_mb` 和 `log.max_size_mb` 可使用小数外，下列数值字段都必须是整数。这里的默认值用于首次生成配置，并在启动或手动重载时补齐 `config.json` 中缺失的字段，不会覆盖已有有效值；高级配置编辑器和配置包仍要求提交当前完整 schema。
+| 配置路径 / 环境变量 / 注入 | 类型、默认值与合法值 | 用途、运行阶段与生效 |
+| --- | --- | --- |
+| <!-- runtime-config:site.name --> `site.name` / `SITE_NAME` / 显式映射 | 字符串；默认 `"ImageShow"`；去空白后非空 | 页面标题、导航和后台站点名；普通设置或热加载后影响后续响应。 |
+| <!-- runtime-config:site.domain --> `site.domain` / `SITE_DOMAIN` / 显式映射 | 字符串；默认 `"example.com"`；1–259 字符的 DNS 域名，可带 1–65535 端口 | 主站 Host 与资源域派生；首次播种或热加载后影响新请求，域名变化可能使当前地址失效。 |
+| <!-- runtime-config:site.description --> `site.description` / `SITE_DESCRIPTION` / 显式映射 | 字符串；默认 `"画廊与随机图片API"`；去空白后 0–200 字符 | SPA `description`；空值回退到站点名，首次播种或热加载后影响新 HTML。 |
+| <!-- runtime-config:site.icon_url --> `site.icon_url` / `SITE_ICON_URL` / 显式映射 | 字符串；默认 `"/assets/brand/favicon.svg"`；1–2048 字符的站内绝对路径或 HTTPS URL | 站点图标；首次播种或热加载后影响公开配置。 |
+| <!-- runtime-config:site.version.enabled --> `site.version.enabled` / `SITE_VERSION_ENABLED` / 显式映射 | 布尔；默认 `true` | 控制后台版本卡片；首次播种或热加载后影响已认证会话探针。 |
+| <!-- runtime-config:site.version.link_enabled --> `site.version.link_enabled` / `SITE_VERSION_LINK_ENABLED` / 显式映射 | 布尔；默认 `true` | 控制版本卡片是否链接 Release；首次播种或热加载后影响会话探针。 |
+| <!-- runtime-config:site.root --> `site.root` / `SITE_ROOT` / 显式映射 | 枚举；默认 `"home"`；`home`、`gallery` | 选择 `/` 显示首页或画廊；`/home`、`/gallery` 固定路径不变，普通设置或热加载后影响导航。 |
+| <!-- runtime-config:site.home.enabled --> `site.home.enabled` / `SITE_HOME_ENABLED` / 显式映射 | 布尔；默认 `true` | 关闭后 `/home` 与根入口都回退画廊；首次播种或热加载后影响新请求。 |
+| <!-- runtime-config:site.home.background --> `site.home.background` / `SITE_HOME_BACKGROUND` / 显式映射 | 字符串；默认 `""`；空值或最长 2048 字符的站内绝对路径 / HTTPS URL | 首页背景；空值使用 `/random`，普通设置或热加载后生效。 |
+| <!-- runtime-config:site.home.banner_label --> `site.home.banner_label` / `SITE_HOME_BANNER_LABEL` / 显式映射 | 字符串；默认 `"ImageShow · A FAN-MADE PHOTO HANDBOOK"`；1–160 字符 | 首页 Banner 标识；普通设置或热加载后生效。 |
+| <!-- runtime-config:site.home.banner_title --> `site.home.banner_title` / `SITE_HOME_BANNER_TITLE` / 显式映射 | 字符串；默认 `"我们一起，\n收藏这些瞬间。"`；1–80 字符，可换行 | 首页 Banner 标题；普通设置或热加载后生效。 |
+| <!-- runtime-config:site.gallery.default_limit --> `site.gallery.default_limit` / `SITE_GALLERY_DEFAULT_LIMIT` / 显式映射 | 整数；默认 `60`；1–200 项 | 公开画廊默认分页量；普通设置或热加载后影响新查询。 |
+| <!-- runtime-config:site.gallery.order --> `site.gallery.order` / `SITE_GALLERY_ORDER` / 显式映射 | 枚举；默认 `"random"`；`latest`、`random` | 画廊默认排序；普通设置或热加载后影响新查询。 |
+| <!-- runtime-config:site.random_default_method --> `site.random_default_method` / `SITE_RANDOM_DEFAULT_METHOD` / 显式映射 | 枚举；默认 `"redirect"`；`proxy`、`redirect` | `/random` 未指定模式时的图片返回方式；`json` 仅可作为显式 `m=json` 查询参数，普通设置或热加载后影响新请求。 |
+| <!-- runtime-config:site.static_subdomain --> `site.static_subdomain` / `SITE_STATIC_SUBDOMAIN` / 显式映射 | 字符串；默认 `"static"`；1–63 字符的合法小写 DNS label | `/media`、`/thumbs`、`/link/original` 的资源子域；首次播种或热加载后影响 Host 路由。 |
+| <!-- runtime-config:site.robots_enabled --> `site.robots_enabled` / `SITE_ROBOTS_ENABLED` / 显式映射 | 布尔；默认 `false` | 控制主站与资源域 `robots.txt`；首次播种或热加载后影响新请求。 |
 
-| 配置路径 | 默认值 | 合法范围 |
-| --- | ---: | ---: |
-| `site.gallery.default_limit` | 60 | 1–200 |
-| `upload.max_items` | 200 | 1–1000 |
-| `upload.max_file_size_mb` | 100 | 大于 0，最大 200 MiB |
-| `upload.max_long_edge` | 32000 | 512–32768 px |
-| `upload.list_page_size` | 20 | 1–100 |
-| `upload.concurrency` | 2 | 1–128 |
-| `upload.global_concurrency` | 5 | 1–512 |
-| `import.concurrency` | 2 | 1–128 |
-| `import.global_concurrency` | 5 | 1–512 |
-| `import.fetch_timeout_seconds` | 30 | 5–300 秒 |
-| `import.max_items` | 200 | 1–1000 |
-| `weibo.max_items` | 20 | 1–50 |
-| `weibo.concurrency` | 2 | 1–16 |
-| `weibo.global_concurrency` | 5 | 1–32 |
-| `normalize.quality` | 80 | 1–100 |
-| `normalize.quality_step` | 5 | 1–50 |
-| `normalize.min_quality` | 20 | 1–100，且不能高于 `quality` |
-| `normalize.max_long_edge` | 4500 | 512–32768 px |
-| `normalize.max_size_kb` | 500 | 50–102400 KiB |
-| `normalize.skip_webp_under_kb` | 700 | 0–102400 KiB |
-| `thumbnail.long_edge` | 512 | 64–4096 px |
-| `thumbnail.quality` | 75 | 1–100 |
-| `ingestion.commit_concurrency` | 5 | 1–128 |
-| `ingestion.global_commit_concurrency` | 10 | 1–512 |
-| `ingestion.global_commit_byte_budget_mb` | 512 | 16–4096 MiB |
-| `admin.image_page_size` | 60 | 10–200 |
-| `admin.recent_uploads` | 12 | 1–50 |
-| `background_job.move_cleanup_concurrency` | 5 | 1–512 |
-| `background_job.theme_reassign_concurrency` | 5 | 1–512 |
-| `background_job.migrate_concurrency` | 5 | 1–512 |
-| `security.session_ttl_seconds` | 604800 | 300–31536000 秒 |
-| `security.login_failure_window_seconds` | 60 | 30–300 秒 |
-| `security.login_max_failures` | 5 | 3–500 |
-| `security.login_global_window_seconds` | 180 | 60–600 秒 |
-| `security.login_global_max_attempts` | 10 | 5–1000 |
-| `altcha.ttl_seconds` | 300 | 90–3600 秒 |
-| `altcha.cost` | 5000 | 1000–100000 |
-| `altcha.counter_min` | 2000 | 100–100000，且不能高于 `counter_max` |
-| `altcha.counter_max` | 5000 | 100–100000，且 `cost × counter_max` 不能超过 100000000 |
-| `log.max_size_mb` | 10 | 大于 0，最大 1024 MiB |
-| `log.max_files` | 5 | 1–100 |
+### embed
+
+| 配置路径 / 环境变量 / 注入 | 类型、默认值与合法值 | 用途、运行阶段与生效 |
+| --- | --- | --- |
+| <!-- runtime-config:embed.enabled --> `embed.enabled` / `EMBED_ENABLED` / 显式映射 | 布尔；默认 `false` | 开放 `/embed/home` 与 `/embed/gallery`，并隐式允许当前站点 HTTPS 来源；首次播种或热加载后生效。 |
+| <!-- runtime-config:embed.allowed_origins --> `embed.allowed_origins` / `EMBED_ALLOWED_ORIGINS` / 显式映射 | 严格 JSON 数组；默认 `[]`；最多 32 个 HTTPS DNS origin，每项不超过 320 字符且总长不超过 4096 字符 | 增加精确来源或最左侧 `*.` 子域来源；规范化去重并拒绝 HTTP、IP、路径和凭据。schema 不含 Public Suffix List，部署者须避免为公共托管后缀配置通配，热加载后影响 CSP。 |
+
+### ingestion
+
+| 配置路径 / 环境变量 / 注入 | 类型、默认值与合法值 | 用途、运行阶段与生效 |
+| --- | --- | --- |
+| <!-- runtime-config:ingestion.commit_concurrency --> `ingestion.commit_concurrency` / `INGESTION_COMMIT_CONCURRENCY` / 显式映射 | 整数；默认 `5`；1–128 | 单页面 commit 并发；热加载后影响后续提交准入。 |
+| <!-- runtime-config:ingestion.global_commit_concurrency --> `ingestion.global_commit_concurrency` / `INGESTION_GLOBAL_COMMIT_CONCURRENCY` / 显式映射 | 整数；默认 `10`；1–512 | 单进程 commit 数量准入；热加载后影响后续提交。 |
+| <!-- runtime-config:ingestion.global_commit_byte_budget_mb --> `ingestion.global_commit_byte_budget_mb` / `INGESTION_GLOBAL_COMMIT_BYTE_BUDGET_MB` / 显式映射 | 整数；默认 `512`；16–4096 MiB | prepared 图片与缩略图的加权字节预算；热加载后按真实活动重量调整后续准入。 |
+
+### upload、import 与 weibo
+
+| 配置路径 / 环境变量 / 注入 | 类型、默认值与合法值 | 用途、运行阶段与生效 |
+| --- | --- | --- |
+| <!-- runtime-config:upload.max_items --> `upload.max_items` / `UPLOAD_MAX_ITEMS` / 显式映射 | 整数；默认 `200`；1–1000 项 | 文件选择与 intent 批次软上限；首次播种或热加载后影响新接入。 |
+| <!-- runtime-config:upload.max_file_size_mb --> `upload.max_file_size_mb` / `UPLOAD_MAX_FILE_SIZE_MB` / 显式映射 | 数值；默认 `100`；大于 0 且不超过 200 MiB | 单个 raw 文件体积上限；首次播种或热加载后影响新上传。 |
+| <!-- runtime-config:upload.max_long_edge --> `upload.max_long_edge` / `UPLOAD_MAX_LONG_EDGE` / 显式映射 | 整数；默认 `32000`；300–32000 px | 原图长边准入上限；首次播种或热加载后影响新上传。 |
+| <!-- runtime-config:upload.list_page_size --> `upload.list_page_size` / `UPLOAD_LIST_PAGE_SIZE` / 显式映射 | 整数；默认 `20`；1–100 项 | 上传与批量编辑列表分页；普通设置或热加载后生效。 |
+| <!-- runtime-config:upload.concurrency --> `upload.concurrency` / `UPLOAD_CONCURRENCY` / 显式映射 | 整数；默认 `2`；1–128 | 单页面 raw PUT 并发与 intent lane；普通设置或热加载后影响新调度。 |
+| <!-- runtime-config:upload.global_concurrency --> `upload.global_concurrency` / `UPLOAD_GLOBAL_CONCURRENCY` / 显式映射 | 整数；默认 `5`；1–512 | 服务端 Upload materialize / prepare 全局基数；热加载后调整后续准入。 |
+| <!-- runtime-config:import.fill_original_url --> `import.fill_original_url` / `IMPORT_FILL_ORIGINAL_URL` / 显式映射 | 布尔；默认 `true` | URL 导入是否填充原图 URL，不做可达探测；普通设置或热加载后影响新解析。 |
+| <!-- runtime-config:import.auto_import --> `import.auto_import` / `IMPORT_AUTO_IMPORT` / 显式映射 | 布尔；默认 `true` | 无问题项时是否直接建立 Import 队列；普通设置或热加载后影响新解析。 |
+| <!-- runtime-config:import.concurrency --> `import.concurrency` / `IMPORT_CONCURRENCY` / 显式映射 | 整数；默认 `2`；1–128 | 单页面 Import 来源队列并发；普通设置或热加载后影响新调度。 |
+| <!-- runtime-config:import.global_concurrency --> `import.global_concurrency` / `IMPORT_GLOBAL_CONCURRENCY` / 显式映射 | 整数；默认 `5`；1–512 | 服务端 URL download 与 prepare 的全局基数；热加载后调整后续准入。 |
+| <!-- runtime-config:import.fetch_timeout_seconds --> `import.fetch_timeout_seconds` / `IMPORT_FETCH_TIMEOUT_SECONDS` / 显式映射 | 整数；默认 `30`；5–300 秒 | 外链 download 请求期限；热加载后影响新请求。 |
+| <!-- runtime-config:import.max_items --> `import.max_items` / `IMPORT_MAX_ITEMS` / 显式映射 | 整数；默认 `200`；1–1000 项 | URL / JSONL 单次软上限，不限制微博图片数；热加载后影响新解析。 |
+| <!-- runtime-config:weibo.max_items --> `weibo.max_items` / `WEIBO_MAX_ITEMS` / 显式映射 | 整数；默认 `20`；1–50 条 | 单次微博链接软上限；热加载后影响新解析。 |
+| <!-- runtime-config:weibo.concurrency --> `weibo.concurrency` / `WEIBO_CONCURRENCY` / 显式映射 | 整数；默认 `2`；1–16 | 同时请求和解析的微博数；热加载后影响后续补位。 |
+| <!-- runtime-config:weibo.global_concurrency --> `weibo.global_concurrency` / `WEIBO_GLOBAL_CONCURRENCY` / 显式映射 | 整数；默认 `5`；1–32 | 单进程共享的微博上游请求并发；热加载后影响后续准入。 |
+| <!-- runtime-config:weibo.author_slugs --> `weibo.author_slugs` / `WEIBO_AUTHOR_SLUGS` / 显式映射 | 严格 JSON 对象；默认 `{}`；键为 1–20 位非零开头数字 ID，值为 1–32 字符合法小写 slug | 命中时给微博图片填充作者；重复 JSON 键或非法成员直接拒绝首次生成，热加载后影响新解析。 |
+
+### normalize 与 thumbnail
+
+| 配置路径 / 环境变量 / 注入 | 类型、默认值与合法值 | 用途、运行阶段与生效 |
+| --- | --- | --- |
+| <!-- runtime-config:normalize.quality --> `normalize.quality` / `NORMALIZE_QUALITY` / 显式映射 | 整数；默认 `80`；1–100 | 新图片 WebP 首次编码质量；普通设置或热加载后影响新 prepare。 |
+| <!-- runtime-config:normalize.quality_step --> `normalize.quality_step` / `NORMALIZE_QUALITY_STEP` / 显式映射 | 整数；默认 `5`；1–50 | 超体积后的质量递减步长；普通设置或热加载后影响新 prepare。 |
+| <!-- runtime-config:normalize.min_quality --> `normalize.min_quality` / `NORMALIZE_MIN_QUALITY` / 显式映射 | 整数；默认 `20`；1–100，且不高于 `normalize.quality` | 转码最低质量；普通设置或热加载后影响新 prepare。 |
+| <!-- runtime-config:normalize.max_long_edge --> `normalize.max_long_edge` / `NORMALIZE_MAX_LONG_EDGE` / 显式映射 | 整数；默认 `4500`；512–32768 px | 入库成品长边上限，不放大；普通设置或热加载后影响新 prepare。 |
+| <!-- runtime-config:normalize.max_size_kb --> `normalize.max_size_kb` / `NORMALIZE_MAX_SIZE_KB` / 显式映射 | 整数；默认 `500`；50–102400 KiB | 入库成品目标体积；普通设置或热加载后影响新 prepare。 |
+| <!-- runtime-config:normalize.skip_webp_under_kb --> `normalize.skip_webp_under_kb` / `NORMALIZE_SKIP_WEBP_UNDER_KB` / 显式映射 | 整数；默认 `700`；0–102400 KiB | 合法 WebP 原字节保留阈值；普通设置或热加载后影响新 prepare。 |
+| <!-- runtime-config:thumbnail.long_edge --> `thumbnail.long_edge` / `THUMBNAIL_LONG_EDGE` / 显式映射 | 整数；默认 `512`；64–4096 px | 新缩略图长边；普通设置或热加载后影响新生成，不重做旧图。 |
+| <!-- runtime-config:thumbnail.quality --> `thumbnail.quality` / `THUMBNAIL_QUALITY` / 显式映射 | 整数；默认 `75`；1–100 | 新缩略图质量；普通设置或热加载后影响新生成。 |
+
+### admin、background_job、security、altcha 与 log
+
+| 配置路径 / 环境变量 / 注入 | 类型、默认值与合法值 | 用途、运行阶段与生效 |
+| --- | --- | --- |
+| <!-- runtime-config:admin.login_background --> `admin.login_background` / `ADMIN_LOGIN_BACKGROUND` / 显式映射 | 字符串；默认 `""`；空值或最长 2048 字符的站内绝对路径 / HTTPS URL | 登录背景，空值使用站点 `/random`；普通设置或热加载后影响新登录页。 |
+| <!-- runtime-config:admin.image_page_size --> `admin.image_page_size` / `ADMIN_IMAGE_PAGE_SIZE` / 显式映射 | 整数；默认 `60`；10–200 项 | 后台图片数字分页量；普通设置或热加载后影响新查询。 |
+| <!-- runtime-config:admin.recent_uploads --> `admin.recent_uploads` / `ADMIN_RECENT_UPLOADS` / 显式映射 | 整数；默认 `12`；1–50 项 | 概览最近上传数量；普通设置或热加载后影响新查询。 |
+| <!-- runtime-config:admin.show_unset_theme_card --> `admin.show_unset_theme_card` / `ADMIN_SHOW_UNSET_THEME_CARD` / 显式映射 | 布尔；默认 `true` | 主题页未设置卡片；普通设置或热加载后影响新渲染。 |
+| <!-- runtime-config:background_job.move_cleanup_concurrency --> `background_job.move_cleanup_concurrency` / `BACKGROUND_JOB_MOVE_CLEANUP_CONCURRENCY` / 显式映射 | 整数；默认 `5`；1–512 | `move.cleanup` lane 并发；热加载后影响后续任务调度。 |
+| <!-- runtime-config:background_job.theme_reassign_concurrency --> `background_job.theme_reassign_concurrency` / `BACKGROUND_JOB_THEME_REASSIGN_CONCURRENCY` / 显式映射 | 整数；默认 `5`；1–512 | 删除主题时重分配 lane；热加载后影响后续任务调度。 |
+| <!-- runtime-config:background_job.migrate_concurrency --> `background_job.migrate_concurrency` / `BACKGROUND_JOB_MIGRATE_CONCURRENCY` / 显式映射 | 整数；默认 `5`；1–512 | 整后端迁移拷贝 lane；热加载后影响后续任务调度。 |
+| <!-- runtime-config:security.session_ttl_seconds --> `security.session_ttl_seconds` / `SECURITY_SESSION_TTL_SECONDS` / 显式映射 | 整数；默认 `604800`；300–31536000 秒 | 新登录会话有效期；热加载后影响新建 / 续发会话。 |
+| <!-- runtime-config:security.login_failure_window_seconds --> `security.login_failure_window_seconds` / `SECURITY_LOGIN_FAILURE_WINDOW_SECONDS` / 显式映射 | 整数；默认 `60`；30–300 秒 | 单来源失败统计窗口；热加载后影响后续登录与挑战。 |
+| <!-- runtime-config:security.login_max_failures --> `security.login_max_failures` / `SECURITY_LOGIN_MAX_FAILURES` / 显式映射 | 整数；默认 `5`；3–500 次 | 单来源失败阈值；热加载后影响后续登录与挑战。 |
+| <!-- runtime-config:security.login_global_window_seconds --> `security.login_global_window_seconds` / `SECURITY_LOGIN_GLOBAL_WINDOW_SECONDS` / 显式映射 | 整数；默认 `180`；60–600 秒 | 全局登录窗口；热加载后影响后续登录与挑战。 |
+| <!-- runtime-config:security.login_global_max_attempts --> `security.login_global_max_attempts` / `SECURITY_LOGIN_GLOBAL_MAX_ATTEMPTS` / 显式映射 | 整数；默认 `10`；5–1000 次 | 全局尝试阈值；热加载后影响后续登录与挑战。 |
+| <!-- runtime-config:altcha.enabled --> `altcha.enabled` / `ALTCHA_ENABLED` / 显式映射 | 布尔；默认 `true` | 自托管 ALTCHA 开关；热加载后影响新登录挑战。 |
+| <!-- runtime-config:altcha.ttl_seconds --> `altcha.ttl_seconds` / `ALTCHA_TTL_SECONDS` / 显式映射 | 整数；默认 `300`；90–3600 秒 | 签名挑战有效期，覆盖 60 秒求解与 30 秒余量；热加载后影响新挑战。 |
+| <!-- runtime-config:altcha.cost --> `altcha.cost` / `ALTCHA_COST` / 显式映射 | 整数；默认 `5000`；1000–100000 | PBKDF2 单次迭代成本；与 `counter_max` 的乘积不超过 100000000，热加载后影响新挑战。 |
+| <!-- runtime-config:altcha.counter_min --> `altcha.counter_min` / `ALTCHA_COUNTER_MIN` / 显式映射 | 整数；默认 `2000`；100–100000，且不高于 `counter_max` | 工作量下界；热加载后影响新挑战。 |
+| <!-- runtime-config:altcha.counter_max --> `altcha.counter_max` / `ALTCHA_COUNTER_MAX` / 显式映射 | 整数；默认 `5000`；100–100000，且与 `cost` 的乘积不超过 100000000 | 工作量上界；热加载后影响新挑战。 |
+| <!-- runtime-config:log.level --> `log.level` / `LOG_LEVEL` / 显式映射 | 枚举；默认 `"WARN"`；`DEBUG`、`INFO`、`WARN`、`ERROR`、`OFF` | stdout / stderr 与文件日志级别；后台日志页或热加载后立即影响后续记录。 |
+| <!-- runtime-config:log.max_size_mb --> `log.max_size_mb` / `LOG_MAX_SIZE_MB` / 显式映射 | 数值；默认 `10`；大于 0 且不超过 1024 MiB | 单日志文件轮转阈值；热加载后影响后续写入。 |
+| <!-- runtime-config:log.max_files --> `log.max_files` / `LOG_MAX_FILES` / 显式映射 | 整数；默认 `5`；1–100 个文件 | 轮转文件保留数；热加载后影响后续轮转。 |
 
 Ingestion 运行态期限是应用代码生命周期常量，不属于 `config.json`。Upload intent 与 credential
 是创建后绝对 30 分钟，读取、重签或显示窗口都不续期；Upload canonical 的空闲期限为 2 小时，
@@ -185,6 +215,11 @@ discarded / completed 紧凑回执沿用所属
 
 ```json
 {
+  "ingestion": {
+    "commit_concurrency": 5,
+    "global_commit_concurrency": 10,
+    "global_commit_byte_budget_mb": 512
+  },
   "upload": {
     "max_items": 200,
     "max_file_size_mb": 100,
@@ -199,11 +234,6 @@ discarded / completed 紧凑回执沿用所属
     "global_concurrency": 5,
     "fetch_timeout_seconds": 30,
     "max_items": 200
-  },
-  "ingestion": {
-    "commit_concurrency": 5,
-    "global_commit_concurrency": 10,
-    "global_commit_byte_budget_mb": 512
   },
   "weibo": {
     "max_items": 20,
@@ -326,62 +356,88 @@ PostgreSQL 提交状态，不根据可能已被后继修改的业务行猜测；
 
 ## 环境变量
 
-`compose.yaml` 默认使用或向容器注入以下变量：
+`.env` 不会自动成为容器环境。默认 `compose.yaml` 没有 `env_file`，只用映射形式逐项插值；
+未被引用的变量即使出现在 `.env`，也不会进入 ImageShow、PostgreSQL 或 Redis。默认模型只保留
+空数据首次启动所需的部署级最小值，并按职责顺序排列：
 
-| 环境变量 | 用途 |
+| 默认 Compose 职责 | 进入的目标与变量 |
 | --- | --- |
-| `ADMIN_USERNAME` / `ADMIN_PASSWORD` | 数据库没有 super 时初始化首个管理员账号。 |
-| `DATABASE_HOST` / `DATABASE_PORT` / `DATABASE_NAME` / `DATABASE_USER` / `DATABASE_PASSWORD` | 每次启动时建立 PostgreSQL 连接；Compose 同时用 name、user、password 初始化 PostgreSQL 容器。 |
-| `REDIS_HOST` / `REDIS_PORT` / `REDIS_DB` / `REDIS_PASSWORD` | 每次启动时建立 Redis 8 连接，并检查运行所需命令；内置 Redis 不设置密码，只有连接启用了认证的外部 Redis 时才填写可选密码。 |
-| `SITE_DOMAIN` | 首次生成配置文件时播种 `site.domain`，默认 `example.com`。 |
-| `HOST_PORT` | 映射到容器内固定 `5518` 的宿主机端口，默认 `5518`。 |
-| `TZ` | 无偏移本地图片时间的解析时区，默认 `UTC`。 |
+| PostgreSQL 必要身份 | ImageShow：`DATABASE_NAME=imageshow`、`DATABASE_USER=imageshow`、`DATABASE_PASSWORD=imageshow`；PostgreSQL：由同一组值转换出的 `POSTGRES_DB`、`POSTGRES_USER`、`POSTGRES_PASSWORD`。 |
+| 首次管理员 | ImageShow：`ADMIN_USERNAME=admin`、`ADMIN_PASSWORD=ImageShow123`；只在数据库没有 super 时读取。 |
+
+ImageShow 与 PostgreSQL 在各自 `environment` 中直接插值同一组数据库名、用户名和密码，
+不额外建立顶层 `x-*` 设置；这三项位于 `imageshow.environment` 前部，`ADMIN_*` 紧随其后。
+默认 Compose
+不注入 RuntimeConfig、`TZ`、`DATABASE_HOST` / `DATABASE_PORT` 或任何 `REDIS_*`。内置拓扑分别使用
+Server 的 `UTC`、`postgresql:5432`、`redis:6379/0` 代码默认值；Redis 服务本身不接收任何项目变量，
+也不设置密码。默认进入容器的五个 ImageShow 变量都使用映射形式和明确插值，不使用无值宿主透传。
+这些完整默认值保证只复制 `compose.yaml`、不创建 `.env` 也能冷启动；其中两个密码公开且可预测，
+只适合绑定回环地址的本地体验，任何非本地体验部署都必须在首次启动前替换为不同的随机强密码。
 
 本地开发或自动化测试可用 `IMAGESHOW_DEVELOPMENT_DATA_DIRECTORY` 将配置、存储、
 临时文件和日志整体指向一次性隔离目录，避免测试触碰仓库的真实 `data/`。该变量在
 `NODE_ENV=production` 时被忽略，生产容器的数据目录仍固定为 `/app/data`。
 
-除上述部署字段外，支持环境变量播种的应用配置统一按完整路径转成大写下划线，
-例如：
+全部 RuntimeConfig 变量只列在 `.env.example`，默认不注入。变量名严格由完整路径转成大写
+下划线，不增加类型后缀，例如 `site.root → SITE_ROOT`、
+`embed.allowed_origins → EMBED_ALLOWED_ORIGINS`、`weibo.author_slugs → WEIBO_AUTHOR_SLUGS`。
+部署者确需启用时，必须在 `services.imageshow.environment` 中逐项增加映射并重建，例如：
 
-| 配置字段 | 环境变量 |
-| --- | --- |
-| `site.domain` | `SITE_DOMAIN` |
-| `site.description` | `SITE_DESCRIPTION` |
-| `site.version.enabled` | `SITE_VERSION_ENABLED` |
-| `site.version.link_enabled` | `SITE_VERSION_LINK_ENABLED` |
-| `site.robots_enabled` | `SITE_ROBOTS_ENABLED` |
-| `site.home.enabled` | `SITE_HOME_ENABLED` |
-| `admin.login_background` | `ADMIN_LOGIN_BACKGROUND` |
-| `normalize.quality_step` | `NORMALIZE_QUALITY_STEP` |
-| `thumbnail.long_edge` | `THUMBNAIL_LONG_EDGE` |
-| `thumbnail.quality` | `THUMBNAIL_QUALITY` |
-| `ingestion.commit_concurrency` | `INGESTION_COMMIT_CONCURRENCY` |
-| `ingestion.global_commit_concurrency` | `INGESTION_GLOBAL_COMMIT_CONCURRENCY` |
-| `ingestion.global_commit_byte_budget_mb` | `INGESTION_GLOBAL_COMMIT_BYTE_BUDGET_MB` |
-| `upload.max_items` | `UPLOAD_MAX_ITEMS` |
-| `upload.max_file_size_mb` | `UPLOAD_MAX_FILE_SIZE_MB` |
-| `upload.max_long_edge` | `UPLOAD_MAX_LONG_EDGE` |
-| `upload.concurrency` | `UPLOAD_CONCURRENCY` |
-| `upload.global_concurrency` | `UPLOAD_GLOBAL_CONCURRENCY` |
-| `import.concurrency` | `IMPORT_CONCURRENCY` |
-| `import.auto_import` | `IMPORT_AUTO_IMPORT` |
-| `import.global_concurrency` | `IMPORT_GLOBAL_CONCURRENCY` |
-| `import.fetch_timeout_seconds` | `IMPORT_FETCH_TIMEOUT_SECONDS` |
-| `import.max_items` | `IMPORT_MAX_ITEMS` |
-| `weibo.max_items` | `WEIBO_MAX_ITEMS` |
-| `weibo.concurrency` | `WEIBO_CONCURRENCY` |
-| `weibo.global_concurrency` | `WEIBO_GLOBAL_CONCURRENCY` |
+```yaml
+services:
+  imageshow:
+    environment:
+      SITE_ROOT: ${SITE_ROOT:?set SITE_ROOT}
+      EMBED_ALLOWED_ORIGINS: ${EMBED_ALLOWED_ORIGINS:?set EMBED_ALLOWED_ORIGINS}
+```
 
-环境变量只使用上表列出的现行名称，并且只用于首次播种；已有 `data/config.json` 通过文件
-归一化处理配置段投影。部署环境应直接使用 `IMPORT_*` 与 `INGESTION_*`。
+在加入映射前先为变量设置合法值；示例使用 `:?` 让缺失或空值在 Compose 展开时直接失败。
+只有允许空字符串且确实要保留该语义的字段才应有意使用 `${VARIABLE:-}`。不要使用 `env_file`、
+列表式 `- VARIABLE` 宿主透传、通配变量或把完整目录放入共享锚点。
 
-部署字段在每次进程启动时读取；缺失必需的数据库环境变量会直接拒绝启动。
-应用配置的环境变量仍只在首次生成 `config.json` 时播种，文件存在后不会覆盖已有
-值，请直接修改 `config.json` 并热加载。
+`.env.example` 同时列出可选部署覆盖。只有外部拓扑或自定义时区确实需要时，才逐项映射
+`DATABASE_HOST`、`DATABASE_PORT`、`REDIS_HOST`、`REDIS_PORT`、`REDIS_DB`、`REDIS_PASSWORD`
+或 `TZ`；仅把它们写入 `.env` 不会改变默认容器。数据库名、用户名和密码仍是默认 Compose
+必须持续注入的部署身份，首次管理员则在创建 super 后可以移除。
 
-### 站点描述
+字符串保留空值语义，数字保留 `0`，布尔保留 `false`。数字必须是无首尾空白的有限 JSON
+数字；布尔只接受 `true`、`false`。数组和映射使用严格 JSON，不支持逗号列表、
+JSONC、重复对象键或静默跳过非法成员。可复制示例：
 
-`site.description` 是站点描述的唯一应用配置字段，首次生成配置时可由
-`SITE_DESCRIPTION` 播种。显式空字符串是合法配置，并按运行时回退规则使用站点名称；
-配置文件存在后，环境变量不会覆盖文件中的值。
+```ini
+SITE_DESCRIPTION=""
+NORMALIZE_SKIP_WEBP_UNDER_KB=0
+SITE_ROBOTS_ENABLED=false
+SITE_HOME_BANNER_TITLE="我们一起，\n收藏这些瞬间。"
+EMBED_ALLOWED_ORIGINS='["https://portal.example.com","https://*.trusted.example.net"]'
+WEIBO_AUTHOR_SLUGS='{"1234567890":"example-author"}'
+```
+
+对应的复杂配置纯 JSON 片段为：
+
+```json
+{
+  "site": {
+    "home": {
+      "banner_title": "我们一起，\n收藏这些瞬间。"
+    }
+  },
+  "embed": {
+    "allowed_origins": [
+      "https://portal.example.com",
+      "https://*.trusted.example.net"
+    ]
+  },
+  "weibo": {
+    "author_slugs": {
+      "1234567890": "example-author"
+    }
+  }
+}
+```
+
+Server 在首次生成前把所有已设置 seed 合并到代码默认值，再执行完整 strict schema 与交叉
+字段校验。非法变量会同时报告环境变量名与配置路径；任一失败都不会写出部分配置。部署连接
+仍在每次进程启动时解析：数据库名、用户名和密码缺失会拒绝启动，其余连接项缺失时使用代码
+默认值。`config.json` 一旦存在，即使容器里
+残留非法 seed，启动和手动重载也只处理文件，不会让 seed 覆盖、拒绝或改写合法文件。

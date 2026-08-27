@@ -57,30 +57,35 @@ Redis。Docker 部署不需要宿主机安装 Node.js；只有源码开发时需
 
 ### 配置
 
-首次启动空数据库前必须设置有效的 `ADMIN_USERNAME` 与 `ADMIN_PASSWORD`，否则应用会
-拒绝创建初始 super 管理员并退出。生产使用还应修改站点域名和数据库密码；可以先复制
-环境变量模板：
+默认 `compose.yaml` 已提供数据库和首个 super 管理员的完整默认凭据，不创建 `.env`、
+不修改 Compose 也能直接启动。默认值可预测，只适合绑定回环地址的本地体验；任何非本地
+体验部署都必须在首次启动前替换数据库密码和管理员密码，并在运行时配置中设置实际站点域名。
+如需覆盖默认值，可以先复制环境变量模板：
 
 ```bash
 cp .env.example .env
 ```
 
-关键环境变量：
+`.env.example` 是完整环境变量目录，但 `.env` 只作为 Compose 插值来源。默认
+`compose.yaml` 的 ImageShow 环境前部只保留空数据启动必要值：与 PostgreSQL 共享的数据库
+名、用户名和密码，以及首次管理员；共五项。其他部署覆盖和全部 RuntimeConfig seed 均不会
+因出现在 `.env` 而自动进入容器。默认注入变量：
 
 ```ini
-SITE_DOMAIN=img.example.com
-SITE_DESCRIPTION=画廊与随机图片API     # 仅首次生成 config.json 时播种
-ADMIN_USERNAME=admin
-ADMIN_PASSWORD=                   # 首次创建账号使用，至少 8 位且含字母和数字
 DATABASE_NAME=imageshow
 DATABASE_USER=imageshow
-DATABASE_PASSWORD=
-REDIS_PASSWORD=                   # 仅外部 Redis 启用认证时填写
+DATABASE_PASSWORD=imageshow
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=ImageShow123       # 首次创建账号使用，至少 8 位且含字母和数字
 ```
 
-`ADMIN_*` 只在数据库尚无 super 管理员时使用，不会覆盖已有账号。数据库和 Redis 连接
-配置每次启动都从部署环境读取；其他应用配置保存在 `data/config.json`，完整字段见
-[`config.example.jsonc`](config.example.jsonc)。
+`imageshow` 与 `ImageShow123` 是公开、可预测的本地体验密码，不是生产凭据。`ADMIN_*` 只在
+数据库尚无 super 管理员时使用，不会覆盖已有账号。数据库身份每次启动都由
+默认 Compose 注入；内置拓扑的数据库 host / port、Redis 连接和时区使用代码默认值。外部拓扑
+需要在 Compose override 中逐项映射对应变量。其他应用配置保存在 `data/config.json`，完整字段见
+[配置说明](docs/guide/configuration.md#runtimeconfig-参数目录)。5.2.0 的根页面字段为
+`site.root`，对应首次播种变量 `SITE_ROOT`；`SITE_DOMAIN`、`SITE_DESCRIPTION` 和其他 seed 一样，
+只有显式扩展 `services.imageshow.environment` 后才参与空目录首次生成。
 
 ### 启动
 
@@ -89,21 +94,26 @@ docker compose pull
 docker compose up -d
 ```
 
+首次使用默认值登录后台时，用户名为 `admin`，密码为 `ImageShow123`。
+
 Linux bind mount 用户应先确保镜像用户 UID/GID `1000` 可写数据目录：
 
 ```bash
 sudo install -d -o 1000 -g 1000 data
 ```
 
-默认应用端口为 `5518`。配置域名后可访问：
+默认 Compose 固定把 `127.0.0.1:5518` 映射到容器内 `5518`；需要其他宿主端口或绑定地址时
+使用 `compose.override.yaml`、其他部署清单或 `docker run -p [host-ip:]<host-port>:5518`。
+配置域名后可访问：
 
 - `https://img.example.com/home`
 - `https://img.example.com/gallery`
 - `https://img.example.com/admin`
 - `https://img.example.com/random`
 
-本地数据位于 `./data`，PostgreSQL 和 Redis 使用各自 Docker volume。内置 PostgreSQL
-默认不向宿主发布端口；需要直连时使用：
+本地正式图片和配置位于 `./data`，PostgreSQL 和 Redis 使用各自 Docker volume。Redis volume
+只提供尽力而为的重启保留，不承诺未完全入库内容不可丢失；派生状态可从 PostgreSQL 重建。
+内置 PostgreSQL 默认不向宿主发布端口；需要直连时使用：
 
 ```bash
 docker compose exec postgresql sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'

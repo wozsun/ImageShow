@@ -148,7 +148,7 @@ export const appConfig = {
         enabled: true,
         link_enabled: true
       },
-      root_redirect: "home",
+      root: "home",
       home: {
         enabled: true,
         background: "",
@@ -163,6 +163,11 @@ export const appConfig = {
     embed: {
       enabled: false,
       allowed_origins: [] as string[]
+    },
+    ingestion: {
+      commit_concurrency: 5,
+      global_commit_concurrency: 10,
+      global_commit_byte_budget_mb: 512
     },
     upload: {
       max_items: 200,
@@ -195,12 +200,6 @@ export const appConfig = {
       skip_webp_under_kb: 700
     },
     thumbnail: { long_edge: 512, quality: 75 },
-    ingestion: {
-      commit_concurrency: 5,
-      global_commit_concurrency: 10,
-      global_commit_byte_budget_mb: 512
-    },
-    image_detail: { title_opens_image: true },
     admin: {
       login_background: "",
       image_page_size: adminImagePageLimit,

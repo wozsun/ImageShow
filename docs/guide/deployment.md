@@ -33,6 +33,14 @@ docker run -d --name imageshow --restart unless-stopped --stop-timeout 50 \
 Redis 凭据只来自环境变量或 Secret，不写入 `config.json`。`ADMIN_USERNAME` /
 `ADMIN_PASSWORD` 仅在数据库没有 super 管理员时创建首个账号。
 
+仓库 `.env.example` 是变量目录，`.env` 只供 Compose 插值。默认 Compose 不使用
+`env_file`，也不把完整目录注入容器；ImageShow 只收到显式最小白名单，PostgreSQL 只收到
+三个 `POSTGRES_*`，内置 Redis 不收到项目变量。白名单依次是数据库名、用户名、密码和首次
+管理员用户名、密码；`compose.yaml` 为五项提供完整默认值，因此只复制该文件也能启动。
+默认数据库密码 `imageshow` 和管理员凭据 `admin` / `ImageShow123` 公开且可预测，只允许本地
+体验，任何非本地体验部署都必须在首次启动前全部替换。需要额外 RuntimeConfig 首次 seed 时，先按
+[配置说明](./configuration.md#环境变量)逐项扩展 ImageShow 的 `environment` 映射。
+
 应用容器的停止宽限必须至少为 50 秒。进程先停止接收请求，再协调 Worker、在途 HTTP、
 存储 driver 和数据库连接池；不要用短于该边界的外层编排超时提前强杀。
 
@@ -65,9 +73,11 @@ Redis ACL 还必须允许业务原子脚本使用的 `EVAL` 与 `EVALSHA`。应�
 清单，也不应把一次完整脚本传输误判为未启用缓存。检查页深度扫描的低频动态脚本仍可能
 直接使用 `EVAL`。
 
-内置 Compose 使用 `redis:8`、AOF、私有网络且不设置密码；只有外部 Redis 启用了认证时
-才传 `REDIS_PASSWORD`。Redis 的内存限制、淘汰策略和容器硬限制由部署方配置，应用只
-观测实例资源，不据此自动改写部署配置。
+内置 Compose 直接使用 `redis:8` 的默认启动命令，保留 `/data` volume，但不强制 AOF；私有
+网络内不设置密码。该 volume 只提供尽力而为的重启保留，不承诺会话、限流、派生状态或未完全
+入库内容不可丢失；PostgreSQL 中已正式提交的图片不受影响。只有外部 Redis 启用了认证时才传
+`REDIS_PASSWORD`。Redis 的内存限制、淘汰策略和容器硬限制由部署方配置，应用只观测实例资源，
+不据此自动改写部署配置。
 
 后台概览在既有 `/overview` 请求中与 PostgreSQL 统计并行，只对固定核心图片投影键执行一组
 准确的 `MEMORY USAGE ... SAMPLES 0`，不 `SCAN` ImageShow 键空间，也不读取派生、会话或
@@ -122,7 +132,7 @@ npm run admin:reset-password -- <username>
 ## 反向代理与 HTTPS
 
 生产环境必须由可信反向代理终止 TLS，证书覆盖主站与配置的 `static` 资源域，并把应用
-端口只绑定到回环或明确的同机私有网络；不需要通配 DNS 或通配证书。仓库 Compose 默认把 `5518`
+端口只绑定到回环或明确的同机私有网络；不需要通配 DNS 或通配证书。仓库 Compose 固定把 `5518`
 映射到 `127.0.0.1`。代理必须覆盖
 而不是追加访客传入的 `Host`、`X-Real-IP`、`X-Forwarded-For` 和 `X-Forwarded-Proto`。
 应用只使用 `Host`、单值 `X-Forwarded-Proto` 和单值客户端 IP 头，不解析

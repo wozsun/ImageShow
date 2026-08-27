@@ -19,9 +19,9 @@ import {
   normalizeMinQuality,
   normalizeQuality,
   normalizeQualityStep,
-  randomMethod,
+  randomDefaultMethod,
   recentUploads,
-  rootRedirect,
+  siteRoot,
   siteName,
   skipWebpUnderKb,
   thumbnailLongEdge,
@@ -50,13 +50,13 @@ function hasDefinedSetting(value: unknown): boolean {
 const appSettingsSchema = z.strictObject({
   site: z.strictObject({
     name: siteName.optional(),
-    root_redirect: rootRedirect.optional(),
+    root: siteRoot.optional(),
     home: siteHomeConfigSchema.optional(),
     gallery: z.strictObject({
       default_limit: galleryLimit.optional(),
       order: galleryOrder.optional()
     }).optional(),
-    random_default_method: randomMethod.optional()
+    random_default_method: randomDefaultMethod.optional()
   }).optional(),
   upload: z.strictObject({
     list_page_size: listPageSize.optional(),
@@ -78,9 +78,6 @@ const appSettingsSchema = z.strictObject({
   thumbnail: z.strictObject({
     long_edge: thumbnailLongEdge.optional(),
     quality: thumbnailQuality.optional()
-  }).optional(),
-  image_detail: z.strictObject({
-    title_opens_image: z.boolean().optional()
   }).optional(),
   admin: z.strictObject({
     login_background: loginBackground.optional(),
@@ -119,11 +116,12 @@ export function getSettingsForAdmin(): AdminSettings {
   const settings = getRuntimeConfig();
   const {
     name,
-    root_redirect,
+    root,
     home,
     gallery,
     random_default_method
   } = settings.site;
+  const { commit_concurrency } = settings.ingestion;
   const {
     max_items,
     max_file_size_mb,
@@ -138,12 +136,11 @@ export function getSettingsForAdmin(): AdminSettings {
     max_items: importMaxItemsValue
   } = settings.import;
   const { max_items: weiboMaxItems } = settings.weibo;
-  const { commit_concurrency } = settings.ingestion;
   const { login_background, image_page_size, recent_uploads, show_unset_theme_card } = settings.admin;
   return {
     site: {
       name,
-      root_redirect,
+      root,
       home: {
         background: home.background,
         banner_label: home.banner_label,
@@ -152,6 +149,7 @@ export function getSettingsForAdmin(): AdminSettings {
       gallery,
       random_default_method
     },
+    ingestion: { commit_concurrency },
     upload: {
       max_items,
       max_file_size_mb,
@@ -168,8 +166,6 @@ export function getSettingsForAdmin(): AdminSettings {
     weibo: { max_items: weiboMaxItems },
     normalize: settings.normalize,
     thumbnail: settings.thumbnail,
-    ingestion: { commit_concurrency },
-    image_detail: settings.image_detail,
     admin: { login_background, image_page_size, recent_uploads, show_unset_theme_card }
   };
 }
@@ -188,7 +184,7 @@ export function siteConfigPayload(): SiteConfigDto {
     name,
     description,
     icon_url,
-    root_redirect,
+    root,
     home,
     gallery
   } = runtime.site;
@@ -197,15 +193,14 @@ export function siteConfigPayload(): SiteConfigDto {
       name,
       description,
       icon_url,
-      root_redirect,
+      root,
       home,
       gallery: { order: gallery.order },
       static_url: staticLocalBaseUrl()
     },
     embed: {
       enabled: effectiveEmbedAncestorSources(runtime).length > 0
-    },
-    image_detail: runtime.image_detail
+    }
   };
 }
 
@@ -216,7 +211,6 @@ export async function saveAppSettings(input: AppSettingsInput) {
   if (input.import) runtimePatch.import = input.import;
   if (input.normalize) runtimePatch.normalize = input.normalize;
   if (input.thumbnail) runtimePatch.thumbnail = input.thumbnail;
-  if (input.image_detail) runtimePatch.image_detail = input.image_detail;
   if (input.admin) runtimePatch.admin = input.admin;
   if (Object.keys(runtimePatch).length) await updateRuntimeConfig(runtimePatch);
 }

@@ -1,6 +1,7 @@
 import { appConfig } from "@imageshow/shared";
 import {
   randomMethods as randomMethodValues,
+  type RandomDefaultMethod,
   type RandomMethod
 } from "@imageshow/shared/browser";
 import { apiErrorResponse } from "../core/http/responses.ts";
@@ -234,7 +235,7 @@ function parseTargetedIds(query: URLSearchParams): string[] | Response {
 
 export function parseRandomQuery(
   url: URL,
-  defaultMethod: RandomMethod
+  defaultMethod: RandomDefaultMethod
 ): ParsedRandomQuery | Response {
   const rawQuery = url.search.startsWith("?") ? url.search.slice(1) : url.search;
   const rawBytes = Buffer.byteLength(rawQuery, "utf8");

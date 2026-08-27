@@ -6,7 +6,7 @@
 ## 部署与升级职责
 
 - 准备单个 Compose 项目、一个 ImageShow 应用、一个 PostgreSQL 和一个 Redis。
-- 管理 `.env`、Compose Secret、`data/` bind mount、数据库与 Redis volume。
+- 管理 `.env`、Compose Secret、`data/` bind mount、PostgreSQL volume 与尽力保留临时态的 Redis volume。
 - 配置唯一可信反向代理、HTTPS、Host 与转发头覆盖，并阻止公网直连应用端口。
 - 拉取或构建镜像，原位停止和启动应用，检查 `/livez`、`/readyz` 与三个容器健康状态。
 - 在部署前确认数据库 additions、备份与隔离恢复路径，不跳过承载当前增量的发布。

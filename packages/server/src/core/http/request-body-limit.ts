@@ -36,7 +36,7 @@ export const imageUpdatePath = `${adminApiBasePath}/images/update`;
 const imageUpdateBodyMaxBytes = 6 * 1024 * 1024;
 // A legal 3,600-item batch can contain two 2 KiB URLs plus metadata and fifty
 // tags per item. Keep even worst-case JSON escaping bounded without rejecting
-// an otherwise valid configured import batch.
+// an otherwise valid configured ingestion batch.
 const ingestionControlBodyMaxBytes = 160 * 1024 * 1024;
 // One bounded 3,600-pair exclusion list plus the visible inclusion subset stay
 // well below 1 MiB. Keep snapshot selection independent from the much larger

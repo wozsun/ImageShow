@@ -95,7 +95,7 @@ Import： accept ─► queued ─► downloading ─► received ─► prepari
 JSONL 可设置 `original`、`source`、`image_time`、`author`、`tags`、`title`、
 `description`、`theme`、`device`、`brightness` 与 `storage_slug`。行内字段优先于窗口
 默认值；显式空标签和 `auto` 分类也是有效选择。完整数量、并发、文件大小和处理参数以
-[配置说明](./configuration.md)及 `config.example.jsonc` 为准。
+[配置说明](./configuration.md#runtimeconfig-参数目录)为准。
 
 ### 接管、prepare 与 commit
 
@@ -403,7 +403,8 @@ cursor 是客户端只能透传的 32 字符 Base64URL 值，服务端严格校�
 
 列表 DTO 提供详情首帧所需字段；详情请求只补充展示图、描述和来源。本地会话提示只触发
 `/auth/me` 探测；服务端确认已认证后才按需加载管理信息与编辑能力。未登录、过期提示、
-401 与 403 路径都不会下载管理 JS 或 CSS。
+401 与 403 路径都不会下载管理 JS 或 CSS。详情标题固定在新标签页打开该图片的直链，
+不提供运行时开关或条件分支。
 
 “原图”只在 `original` 是另一个 HTTPS URL 时显示。详情按钮直接请求 `static.` 资源域的
 `/link/original/<id>`；服务端在一次图片解析中复用按原图 URL 与 User-Agent 家族缓存的

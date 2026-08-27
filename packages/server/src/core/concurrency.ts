@@ -158,8 +158,8 @@ type DynamicWeightedQueueEntry = {
 
 /**
  * FIFO limiter for memory/bandwidth-sensitive work. An item larger than the
- * current budget may run alone, so a valid large import can never deadlock the
- * queue merely because the administrator lowered the dynamic limit.
+ * current budget may run alone, so a valid oversized item can never deadlock
+ * the queue merely because the administrator lowered the dynamic limit.
  */
 export class DynamicWeightedLimiter {
   private activeWeight = 0;

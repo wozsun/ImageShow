@@ -69,9 +69,9 @@ function additionalLockContext(held: StorageLocationLockContext) {
 
 /**
  * Hold a shared lease while code resolves a storage slug and reads or mutates
- * objects at that physical location. Shared leases are re-entrant so import
- * helpers can enforce the boundary themselves without consuming another pool
- * connection when their caller already owns it.
+ * objects at that physical location. Shared leases are re-entrant so nested
+ * storage helpers can enforce the boundary themselves without consuming
+ * another pool connection when the call chain already owns it.
  */
 export function withStorageLocationReadLock<T>(work: StorageLockWork<T>): Promise<T> {
   const held = storageLocationLockContext.getStore();

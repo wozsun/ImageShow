@@ -71,7 +71,7 @@ export type EditableImageSnapshotRecordWithTags = AdminImageCommonRecord & {
 };
 
 /**
- * Columns required by the full admin list, duplicate results and import
+ * Columns required by the full admin list, duplicate results and Ingestion
  * commit response. Keep this list aligned with ImageRecord.
  */
 export const adminImageListPresentationColumns = [

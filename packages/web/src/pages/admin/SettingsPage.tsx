@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  randomMethods,
-  rootRedirects,
-  type RandomMethod,
-  type RootRedirect
+  randomDefaultMethods,
+  siteRoots,
+  type RandomDefaultMethod,
+  type SiteRoot
 } from "@imageshow/shared/browser";
 import { api } from "../../lib/api/client.js";
 import { AdminIcon } from "../../components/icon/AdminIcon.js";
@@ -37,21 +37,20 @@ const saveSettingsPresentation = {
   error: { icon: "close-line", label: "保存配置失败" }
 } as const;
 
-const rootRedirectLabels: Record<RootRedirect, string> = {
+const siteRootLabels: Record<SiteRoot, string> = {
   home: "首页 /home",
   gallery: "画廊 /gallery"
 };
-const rootRedirectOptions = rootRedirects.map((value) => ({
+const siteRootOptions = siteRoots.map((value) => ({
   value,
-  label: rootRedirectLabels[value]
+  label: siteRootLabels[value]
 }));
 
-const randomMethodLabels: Record<RandomMethod, string> = {
+const randomMethodLabels: Record<RandomDefaultMethod, string> = {
   proxy: "代理返回",
-  redirect: "302 跳转",
-  json: "JSON 数据"
+  redirect: "302 跳转"
 };
-const randomMethodOptions = randomMethods.map((value) => ({
+const randomMethodOptions = randomDefaultMethods.map((value) => ({
   value,
   label: randomMethodLabels[value]
 }));
@@ -105,8 +104,7 @@ export function SettingsPage() {
             },
             normalize: settings.normalize,
             thumbnail: settings.thumbnail,
-            admin: settings.admin,
-            image_detail: settings.image_detail
+            admin: settings.admin
           })
         });
         // 统一失效已包含 settings 和 site-config；活动查询会在这里完成一次刷新，避免先
@@ -192,6 +190,7 @@ export function SettingsPage() {
               首页 Banner 标题
               <textarea
                 rows={2}
+                maxLength={80}
                 value={settings.site.home.banner_title}
                 onChange={(event) => updateSiteHome({ banner_title: event.target.value })}
                 placeholder={"我们一起，\n收藏这些瞬间。"}
@@ -219,9 +218,9 @@ export function SettingsPage() {
             <label>
               根路径页面
               <SelectMenu
-                value={settings.site.root_redirect}
-                onChange={(value) => updateSite({ root_redirect: value as RootRedirect })}
-                options={rootRedirectOptions}
+                value={settings.site.root}
+                onChange={(value) => updateSite({ root: value as SiteRoot })}
+                options={siteRootOptions}
                 ariaLabel="根路径页面"
               />
             </label>
@@ -257,7 +256,7 @@ export function SettingsPage() {
               <SelectMenu
                 value={settings.site.random_default_method}
                 onChange={(value) => updateSite({
-                  random_default_method: value as RandomMethod
+                  random_default_method: value as RandomDefaultMethod
                 })}
                 options={randomMethodOptions}
                 ariaLabel="随机图默认模式"
@@ -386,14 +385,6 @@ export function SettingsPage() {
               </label>
             </div>
             <div className="settings-toggle-grid">
-              <label>
-                <input
-                  type="checkbox"
-                  checked={settings.image_detail.title_opens_image}
-                  onChange={(event) => setSettings({ ...settings, image_detail: { title_opens_image: event.target.checked } })}
-                />
-                图片详情标题点击打开图片直链
-              </label>
               <label>
                 <input
                   type="checkbox"

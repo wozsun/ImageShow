@@ -1,16 +1,25 @@
 # 本地快速体验（Docker Compose）
 
-需要已安装 Docker。`compose.yaml` 已提供完整默认连接参数；不创建 `.env` 时，
-在 `services.imageshow.environment` 中设置首次管理员用户名和密码，并在文件顶部
-的 `x-database-settings` 中修改数据库用户名和密码即可启动。正式访问前还应把
-`SITE_DOMAIN` 默认值改为实际主域名。`TZ` 默认使用 `UTC`。
+需要已安装 Docker。`compose.yaml` 已提供完整数据库和首次管理员凭据；`.env` 只供 Compose 插值，
+不会作为 `env_file` 整份注入。未被 `services.imageshow.environment` 显式引用的变量不会进入
+容器。不创建 `.env`、不修改 `compose.yaml` 也能直接启动。默认凭据公开且可预测，只适合
+绑定回环地址的本地体验；任何非本地体验部署都必须在首次启动前替换。站点域名在首次启动后通过
+`data/config.json` / 高级配置修改；若要在空目录生成时播种，则需另行显式映射 `SITE_DOMAIN`。
+未映射 `TZ` 时 Server 使用 `UTC`。
 
 这套全内置 Compose 只用于本地体验、开发和全新安装验证，不作为当前正式生产部署。
 生产环境固定为一台主机上的一个 ImageShow 应用容器；PostgreSQL 与 Redis 在另一套
 基础设施 Compose 中各运行一个单机单容器。升级先停止对应当前容器，更新后原位启动。
 正式部署细节见[反向代理与部署](./deployment.md)。
 
-也可以复制环境变量模板覆盖 Compose 默认值，然后拉取并启动发布镜像：
+无需 `.env` 时直接拉取并启动发布镜像：
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+如需覆盖默认值，先复制环境变量模板，再运行相同的拉取和启动命令：
 
 ```bash
 cp .env.example .env
@@ -18,25 +27,34 @@ docker compose pull
 docker compose up -d
 ```
 
-Docker 镜像已包含 Node.js 26.7.0。只有在宿主机直接运行开发、检查或构建命令时，才需要安装 Node.js `>=26.3.0 <27`；该版本范围覆盖项目使用的原生 UUIDv7、Temporal、Argon2 与 TypeScript 类型擦除。
+Docker 镜像已包含 Node.js 26.7.0。只有在宿主机直接运行开发、检查或构建命令时，才需要安装
+Node.js `>=26.3.0 <27`；该版本范围覆盖项目使用的原生 UUIDv7、Temporal、Argon2 与
+TypeScript 类型擦除。
 
-若使用 `.env`，首次启动必须提供：
+默认后台登录用户名为 `admin`，密码为 `ImageShow123`。若使用 `.env` 覆盖默认值，五个必要值为：
 
 ```ini
-SITE_DOMAIN=img.example.com
-ADMIN_USERNAME=admin
-ADMIN_PASSWORD=
 DATABASE_NAME=imageshow
 DATABASE_USER=imageshow
-DATABASE_PASSWORD=
-REDIS_PASSWORD=
+DATABASE_PASSWORD=imageshow
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=ImageShow123
 ```
 
-`ADMIN_PASSWORD` 与 `DATABASE_PASSWORD` 必须先填入随机强密码，示例文件故意留空以避免可预测默认凭据进入生产。`ADMIN_USERNAME` / `ADMIN_PASSWORD` 仅在数据库尚无 super 管理员时用于创建首个账号（最终以用户名 + Argon2id 密码哈希保存到数据库），初始化完成后即可从 `.env` 移除。已有 super 时启动不会再读取它们覆盖账号或密码。
+`DATABASE_PASSWORD=imageshow` 与 `ADMIN_PASSWORD=ImageShow123` 只为“复制即运行”的本地体验
+提供，绝不能作为生产密码。任何非本地体验部署都应先替换为独立随机强密码；管理员密码至少
+8 位且同时包含字母和数字。`ADMIN_USERNAME` / `ADMIN_PASSWORD` 仅在数据库尚无 super 管理员
+时用于创建首个账号（最终以用户名 + Argon2id 密码哈希保存到数据库），初始化完成后即可从
+`.env` 移除。已有 super 时启动不会再读取它们覆盖账号或密码。
 
-`DATABASE_*` 与 `REDIS_*` 是部署配置，每次应用进程启动都会读取；其中
-数据库连接变量必须持续由 Compose、`.env` 或 Docker Secret 提供。Compose
-内置 Redis 使用私有网络内不固定次版本的无密码 `redis:8` 镜像，并启用 AOF；
+默认 Compose 只持续注入 `DATABASE_NAME`、`DATABASE_USER`、`DATABASE_PASSWORD`；ImageShow
+与 PostgreSQL 在各自 `environment` 中直接插值同一组值，不使用顶层 `x-*` 设置。内置拓扑的
+数据库 host / port 与 Redis host / port / db / password 使用 Server 代码默认值，不进入默认
+`imageshow.environment`。连接外部 PostgreSQL / Redis 时，
+必须在 Compose override 或其他部署清单中逐项映射相应可选变量。Compose
+内置 Redis 使用私有网络内不固定次版本的无密码 `redis:8` 镜像，直接采用镜像默认启动命令
+并保留 `/data` volume，但不强制 AOF。该 volume 只提供尽力而为的重启保留；会话、限流、
+缓存和未完全入库内容仍允许丢失，正式图片只以 PostgreSQL 为准。
 Compose 与应用都不设置或推断 Redis 内存上限、淘汰策略和容器硬限制。应用只读取
 `INFO MEMORY` 供运维观测，启动时在自有 5 秒 TTL 隔离探针键上实际执行 `INCREX`、
 `ARRING`、`ARLASTITEMS`、`SET ... IFEQ ... KEEPTTL` 与 `DELEX ... IFEQ`，并验证条件失败、
@@ -44,7 +62,14 @@ Compose 与应用都不设置或推断 Redis 内存上限、淘汰策略和容�
 连接外部 Redis 时同样要求具备这些能力，只有启用了认证时才填写
 可选的 `REDIS_PASSWORD`。部署字段不写入
 `data/config.json`，也不能从后台高级配置修改。应用在代码中固定监听容器内
-`5518`；`HOST_PORT` 只控制映射到该端口的宿主机端口，默认同为 `5518`。
+`5518`；默认 Compose 固定使用 `127.0.0.1:5518:5518`。需要其他宿主机端口或绑定地址时，
+使用 `compose.override.yaml`、其他部署清单或 `docker run -p [host-ip:]<host-port>:5518`，
+不要增加应用环境变量。
+
+`.env.example` 还列出所有 RuntimeConfig 首次播种变量，默认 Compose 不注入其中任何一项。
+这些变量只有在部署者逐项扩展 `services.imageshow.environment` 后才会进入容器；完整映射、
+默认值和严格 JSON 写法见
+[配置说明](./configuration.md#runtimeconfig-参数目录)。
 
 Redis 暂时不可连接或能力不满足时，HTTP 进程仍监听。当前进程首次通过连接及五项能力
 校验前只开放 `/livez` 与非就绪的 `/readyz`，全部业务返回 503，worker 也不启动；首次

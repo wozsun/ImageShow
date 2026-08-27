@@ -4,13 +4,13 @@ import { appConfig } from "@imageshow/shared";
 import {
   galleryOrders,
   logLevels,
-  randomMethods,
-  rootRedirects
+  randomDefaultMethods,
+  siteRoots
 } from "@imageshow/shared/browser";
 import { isRootRelativeOrHttpsUrl } from "../core/url-validation.ts";
 
-export const rootRedirect = z.enum(rootRedirects);
-export const randomMethod = z.enum(randomMethods);
+export const siteRoot = z.enum(siteRoots);
+export const randomDefaultMethod = z.enum(randomDefaultMethods);
 export const galleryOrder = z.enum(galleryOrders);
 
 export const siteName = z.string().trim().min(1);
@@ -41,7 +41,7 @@ export const loginBackground = z.string().trim().max(2048)
 export const homeBackground = z.string().trim().max(2048)
   .refine((value) => !value || isRootRelativeOrHttpsUrl(value), "首页背景必须是站内绝对路径或 HTTPS URL");
 export const homeBannerLabel = z.string().trim().min(1).max(160);
-export const homeBannerTitle = z.string().trim().min(1).max(160);
+export const homeBannerTitle = z.string().trim().min(1).max(80);
 
 function isCspSafeEmbedHostname(hostname: string) {
   return isIP(hostname) === 0
@@ -102,7 +102,7 @@ export const embedAllowedOrigins = z.array(embedAllowedOrigin)
 
 export const maxFileSizeMb = z.coerce.number().positive()
   .max(appConfig.ingestion.maxInputFileSizeMiB);
-export const maxLongEdge = z.coerce.number().int().min(512).max(32_768);
+export const maxLongEdge = z.coerce.number().int().min(300).max(32_000);
 export const listPageSize = z.coerce.number().int().min(1).max(100);
 export const uploadMaxItems = z.coerce.number().int().min(1)
   .max(appConfig.ingestion.uploadSoftLimitMax);
