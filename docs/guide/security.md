@@ -1,6 +1,9 @@
 # 安全
 
 - 管理员密码使用 Node.js `node:crypto` 原生异步 Argon2id 派生，以 PHC 字符串写入 PostgreSQL；固定参数为 64 MiB 内存、3 轮、并行度 4、32 字节输出和 24 字节随机 salt，并使用恒定时间比较派生结果。登录只接受参数与长度完全匹配当前策略的哈希，不在登录路径自动改写密码记录。
+- 默认 Compose 不提供数据库或首次管理员密码；`DATABASE_PASSWORD` 与 `ADMIN_PASSWORD` 都使用
+  必填插值，缺失或空值在 Compose 展开阶段直接失败。仓库只保留空值目录，实际密码来自
+  `.env` 或宿主环境，不写入 `config.json`。
 - 管理会话存于 Redis，Cookie 为 `HttpOnly` + `SameSite=Lax`，识别为 HTTPS 时附加
   `Secure`；所有写操作要求 `X-CSRF-Token` 并校验同源。会话保存密码哈希的不可逆
   SHA-256 代际，key namespace 固定为 `imageshow:session:`；其他 namespace 不参与认证。

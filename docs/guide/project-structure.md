@@ -25,8 +25,8 @@ packages/web ─────► packages/shared
   再单独安装 server/shared 的生产依赖；运行镜像只携带生产依赖、编译产物和运维入口。
 - `compose.yaml` 提供单实例 ImageShow、PostgreSQL 与 Redis 的标准部署，只把 `.env` 用作
   显式最小白名单的插值来源；ImageShow 环境前部固定为数据库名、用户名、密码和首次管理员
-  用户名、密码五项，均有可直接启动的默认值。`.env.example` 另行承担部署变量与全部首次
-  seed 的完整目录。
+  用户名、密码五项。数据库名、数据库用户名和管理员用户名有默认值，两个密码必须显式设置；
+  `.env.example` 另行承担部署变量与全部首次 seed 的完整目录。
 - `docs/guide/` 保存当前架构、配置、数据库、流程、部署和 API 说明，使用相对 Markdown
   链接，可直接在仓库中阅读。
 

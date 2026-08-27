@@ -1,25 +1,18 @@
 # 本地快速体验（Docker Compose）
 
-需要已安装 Docker。`compose.yaml` 已提供完整数据库和首次管理员凭据；`.env` 只供 Compose 插值，
-不会作为 `env_file` 整份注入。未被 `services.imageshow.environment` 显式引用的变量不会进入
-容器。不创建 `.env`、不修改 `compose.yaml` 也能直接启动。默认凭据公开且可预测，只适合
-绑定回环地址的本地体验；任何非本地体验部署都必须在首次启动前替换。站点域名在首次启动后通过
-`data/config.json` / 高级配置修改；若要在空目录生成时播种，则需另行显式映射 `SITE_DOMAIN`。
-未映射 `TZ` 时 Server 使用 `UTC`。
+需要已安装 Docker。`compose.yaml` 不提供数据库密码或首次管理员密码；首次启动前必须创建
+`.env` 并为 `DATABASE_PASSWORD`、`ADMIN_PASSWORD` 设置非空值，缺失或空值会在 Compose
+展开阶段直接失败。`.env` 只供 Compose 插值，不会作为 `env_file` 整份注入；未被
+`services.imageshow.environment` 显式引用的变量不会进入容器。站点域名在首次启动后通过
+`data/config.json` / 高级配置修改；若要在空目录生成时播种，则需另行显式映射
+`SITE_DOMAIN`。未映射 `TZ` 时 Server 使用 `UTC`。
 
 这套全内置 Compose 只用于本地体验、开发和全新安装验证，不作为当前正式生产部署。
 生产环境固定为一台主机上的一个 ImageShow 应用容器；PostgreSQL 与 Redis 在另一套
 基础设施 Compose 中各运行一个单机单容器。升级先停止对应当前容器，更新后原位启动。
 正式部署细节见[反向代理与部署](./deployment.md)。
 
-无需 `.env` 时直接拉取并启动发布镜像：
-
-```bash
-docker compose pull
-docker compose up -d
-```
-
-如需覆盖默认值，先复制环境变量模板，再运行相同的拉取和启动命令：
+复制环境变量模板，填写两个密码后拉取并启动发布镜像：
 
 ```bash
 cp .env.example .env
@@ -31,25 +24,24 @@ Docker 镜像已包含 Node.js 26.7.0。只有在宿主机直接运行开发、�
 Node.js `>=26.3.0 <27`；该版本范围覆盖项目使用的原生 UUIDv7、Temporal、Argon2 与
 TypeScript 类型擦除。
 
-默认后台登录用户名为 `admin`，密码为 `ImageShow123`。若使用 `.env` 覆盖默认值，五个必要值为：
+默认后台登录用户名为 `admin`。默认 Compose 的五个必要值为：
 
 ```ini
 DATABASE_NAME=imageshow
 DATABASE_USER=imageshow
-DATABASE_PASSWORD=imageshow
+DATABASE_PASSWORD=
 ADMIN_USERNAME=admin
-ADMIN_PASSWORD=ImageShow123
+ADMIN_PASSWORD=
 ```
 
-`DATABASE_PASSWORD=imageshow` 与 `ADMIN_PASSWORD=ImageShow123` 只为“复制即运行”的本地体验
-提供，绝不能作为生产密码。任何非本地体验部署都应先替换为独立随机强密码；管理员密码至少
-8 位且同时包含字母和数字。`ADMIN_USERNAME` / `ADMIN_PASSWORD` 仅在数据库尚无 super 管理员
-时用于创建首个账号（最终以用户名 + Argon2id 密码哈希保存到数据库），初始化完成后即可从
-`.env` 移除。已有 super 时启动不会再读取它们覆盖账号或密码。
+两个密码都没有默认值，必须使用不同的随机强密码；管理员密码为 8–128 位且同时包含字母和
+数字。`ADMIN_USERNAME` / `ADMIN_PASSWORD` 仅在数据库尚无 super 管理员时用于创建首个账号
+（最终以用户名 + Argon2id 密码哈希保存到数据库），已有 super 时应用不会用它们覆盖账号或
+密码。默认 `compose.yaml` 每次展开仍要求两个密码非空。
 
-默认 Compose 只持续注入 `DATABASE_NAME`、`DATABASE_USER`、`DATABASE_PASSWORD`；ImageShow
-与 PostgreSQL 在各自 `environment` 中直接插值同一组值，不使用顶层 `x-*` 设置。内置拓扑的
-数据库 host / port 与 Redis host / port / db / password 使用 Server 代码默认值，不进入默认
+默认 Compose 向 ImageShow 注入数据库三项和首次管理员两项；ImageShow 与 PostgreSQL 在各自
+`environment` 中直接插值同一组数据库值，不使用顶层 `x-*` 设置。内置拓扑的数据库 host / port
+与 Redis host / port / db / password 使用 Server 代码默认值，不进入默认
 `imageshow.environment`。连接外部 PostgreSQL / Redis 时，
 必须在 Compose override 或其他部署清单中逐项映射相应可选变量。Compose
 内置 Redis 使用私有网络内不固定次版本的无密码 `redis:8` 镜像，直接采用镜像默认启动命令

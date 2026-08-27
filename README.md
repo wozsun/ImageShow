@@ -57,10 +57,9 @@ Redis。Docker 部署不需要宿主机安装 Node.js；只有源码开发时需
 
 ### 配置
 
-默认 `compose.yaml` 已提供数据库和首个 super 管理员的完整默认凭据，不创建 `.env`、
-不修改 Compose 也能直接启动。默认值可预测，只适合绑定回环地址的本地体验；任何非本地
-体验部署都必须在首次启动前替换数据库密码和管理员密码，并在运行时配置中设置实际站点域名。
-如需覆盖默认值，可以先复制环境变量模板：
+默认 `compose.yaml` 不提供数据库密码或首个 super 管理员密码。首次启动前先复制环境变量
+模板，并为 `DATABASE_PASSWORD` 与 `ADMIN_PASSWORD` 分别设置非空密码；任一变量未设置或
+为空时，Compose 会在展开阶段直接失败：
 
 ```bash
 cp .env.example .env
@@ -68,21 +67,21 @@ cp .env.example .env
 
 `.env.example` 是完整环境变量目录，但 `.env` 只作为 Compose 插值来源。默认
 `compose.yaml` 的 ImageShow 环境前部只保留空数据启动必要值：与 PostgreSQL 共享的数据库
-名、用户名和密码，以及首次管理员；共五项。其他部署覆盖和全部 RuntimeConfig seed 均不会
-因出现在 `.env` 而自动进入容器。默认注入变量：
+名、用户名和密码，以及首次管理员用户名和密码，共五项。其他部署覆盖和全部 RuntimeConfig
+seed 均不会因出现在 `.env` 而自动进入容器。需要填写的前五项为：
 
 ```ini
 DATABASE_NAME=imageshow
 DATABASE_USER=imageshow
-DATABASE_PASSWORD=imageshow
+DATABASE_PASSWORD=
 ADMIN_USERNAME=admin
-ADMIN_PASSWORD=ImageShow123       # 首次创建账号使用，至少 8 位且含字母和数字
+ADMIN_PASSWORD=                   # 8–128 位且同时包含字母和数字
 ```
 
-`imageshow` 与 `ImageShow123` 是公开、可预测的本地体验密码，不是生产凭据。`ADMIN_*` 只在
-数据库尚无 super 管理员时使用，不会覆盖已有账号。数据库身份每次启动都由
-默认 Compose 注入；内置拓扑的数据库 host / port、Redis 连接和时区使用代码默认值。外部拓扑
-需要在 Compose override 中逐项映射对应变量。其他应用配置保存在 `data/config.json`，完整字段见
+两个密码没有默认值，应使用不同的随机强密码。`ADMIN_*` 只在数据库尚无 super 管理员时使用，
+不会覆盖已有账号。数据库身份每次启动都由默认 Compose 注入；内置拓扑的数据库 host / port、
+Redis 连接和时区使用代码默认值。外部拓扑需要在 Compose override 中逐项映射对应变量。其他
+应用配置保存在 `data/config.json`，完整字段见
 [配置说明](docs/guide/configuration.md#runtimeconfig-参数目录)。5.2.0 的根页面字段为
 `site.root`，对应首次播种变量 `SITE_ROOT`；`SITE_DOMAIN`、`SITE_DESCRIPTION` 和其他 seed 一样，
 只有显式扩展 `services.imageshow.environment` 后才参与空目录首次生成。
@@ -94,7 +93,7 @@ docker compose pull
 docker compose up -d
 ```
 
-首次使用默认值登录后台时，用户名为 `admin`，密码为 `ImageShow123`。
+首次登录后台时，用户名默认为 `admin`，密码使用 `.env` 中设置的 `ADMIN_PASSWORD`。
 
 Linux bind mount 用户应先确保镜像用户 UID/GID `1000` 可写数据目录：
 

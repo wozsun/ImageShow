@@ -8,7 +8,7 @@ PostgreSQL。排查配置时先确认“这项配置由谁管理”，再判断�
 
 | 来源 | 保存内容 | 修改方式 |
 | --- | --- | --- |
-| 环境变量 | PostgreSQL / Redis 连接、时区与首次管理员凭据；也可在首次生成 `config.json` 时播种应用配置。 | 修改 `.env`、Compose 或 Secret 后重建 / 重启。`.env` 只是 Compose 插值来源，只有部署清单显式映射的值才会进入容器。部署字段在每次进程启动时读取，不写入 `config.json`。 |
+| 环境变量 | PostgreSQL / Redis 连接、时区与首次管理员凭据；也可在首次生成 `config.json` 时播种应用配置。 | 修改 `.env`、宿主环境或 Compose 映射后重建 / 重启。`.env` 只是 Compose 插值来源，只有部署清单显式映射的值才会进入容器。部署字段在每次进程启动时读取，不写入 `config.json`。 |
 | `/app/data/config.json` | 站点、上传 / 导入、图片处理、安全和日志等应用运行策略。 | 后台设置页，或直接编辑文件后在后台「设置 → 读取配置文件」。上传文件大小、上传长边校验和服务端全局导入并发只通过配置文件维护。 |
 | PostgreSQL | 管理员账号及界面偏好；本地 / S3 存储后端注册表；S3 endpoint、region、bucket、access key、secret key、根目录、public URL 与连接 / 空闲 / 总时限等实例化数据。 | 后台设置页或对应管理界面。secret key 只保存，不返回给前端。 |
 
@@ -362,17 +362,17 @@ PostgreSQL 提交状态，不根据可能已被后继修改的业务行猜测；
 
 | 默认 Compose 职责 | 进入的目标与变量 |
 | --- | --- |
-| PostgreSQL 必要身份 | ImageShow：`DATABASE_NAME=imageshow`、`DATABASE_USER=imageshow`、`DATABASE_PASSWORD=imageshow`；PostgreSQL：由同一组值转换出的 `POSTGRES_DB`、`POSTGRES_USER`、`POSTGRES_PASSWORD`。 |
-| 首次管理员 | ImageShow：`ADMIN_USERNAME=admin`、`ADMIN_PASSWORD=ImageShow123`；只在数据库没有 super 时读取。 |
+| PostgreSQL 必要身份 | ImageShow：`DATABASE_NAME=imageshow`、`DATABASE_USER=imageshow`、`DATABASE_PASSWORD` 必填且无默认值；PostgreSQL：由同一组值转换出的 `POSTGRES_DB`、`POSTGRES_USER`、`POSTGRES_PASSWORD`。 |
+| 首次管理员 | ImageShow：`ADMIN_USERNAME=admin`、`ADMIN_PASSWORD` 必填且无默认值；只在数据库没有 super 时由应用读取。 |
 
 ImageShow 与 PostgreSQL 在各自 `environment` 中直接插值同一组数据库名、用户名和密码，
 不额外建立顶层 `x-*` 设置；这三项位于 `imageshow.environment` 前部，`ADMIN_*` 紧随其后。
-默认 Compose
-不注入 RuntimeConfig、`TZ`、`DATABASE_HOST` / `DATABASE_PORT` 或任何 `REDIS_*`。内置拓扑分别使用
+默认 Compose 不注入 RuntimeConfig、`TZ`、`DATABASE_HOST` / `DATABASE_PORT` 或任何
+`REDIS_*`。内置拓扑分别使用
 Server 的 `UTC`、`postgresql:5432`、`redis:6379/0` 代码默认值；Redis 服务本身不接收任何项目变量，
 也不设置密码。默认进入容器的五个 ImageShow 变量都使用映射形式和明确插值，不使用无值宿主透传。
-这些完整默认值保证只复制 `compose.yaml`、不创建 `.env` 也能冷启动；其中两个密码公开且可预测，
-只适合绑定回环地址的本地体验，任何非本地体验部署都必须在首次启动前替换为不同的随机强密码。
+两个密码使用 `:?` 必填插值，未设置或空值都会在 Compose 展开阶段失败；部署者必须分别提供
+不同的随机强密码。其余三项继续使用当前默认值。
 
 本地开发或自动化测试可用 `IMAGESHOW_DEVELOPMENT_DATA_DIRECTORY` 将配置、存储、
 临时文件和日志整体指向一次性隔离目录，避免测试触碰仓库的真实 `data/`。该变量在
@@ -398,7 +398,8 @@ services:
 `.env.example` 同时列出可选部署覆盖。只有外部拓扑或自定义时区确实需要时，才逐项映射
 `DATABASE_HOST`、`DATABASE_PORT`、`REDIS_HOST`、`REDIS_PORT`、`REDIS_DB`、`REDIS_PASSWORD`
 或 `TZ`；仅把它们写入 `.env` 不会改变默认容器。数据库名、用户名和密码仍是默认 Compose
-必须持续注入的部署身份，首次管理员则在创建 super 后可以移除。
+必须持续注入的部署身份；默认 Compose 也持续要求首次管理员用户名和密码，但已有 super 时
+应用不会再读取它们覆盖账号。
 
 字符串保留空值语义，数字保留 `0`，布尔保留 `false`。数字必须是无首尾空白的有限 JSON
 数字；布尔只接受 `true`、`false`。数组和映射使用严格 JSON，不支持逗号列表、

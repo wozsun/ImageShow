@@ -30,15 +30,15 @@ docker run -d --name imageshow --restart unless-stopped --stop-timeout 50 \
 ```
 
 应用只需挂载 `/app/data`，其中保存 `config.json`、本地存储对象和日志。PostgreSQL、
-Redis 凭据只来自环境变量或 Secret，不写入 `config.json`。`ADMIN_USERNAME` /
+Redis 凭据只来自显式环境变量，不写入 `config.json`。`ADMIN_USERNAME` /
 `ADMIN_PASSWORD` 仅在数据库没有 super 管理员时创建首个账号。
 
 仓库 `.env.example` 是变量目录，`.env` 只供 Compose 插值。默认 Compose 不使用
 `env_file`，也不把完整目录注入容器；ImageShow 只收到显式最小白名单，PostgreSQL 只收到
 三个 `POSTGRES_*`，内置 Redis 不收到项目变量。白名单依次是数据库名、用户名、密码和首次
-管理员用户名、密码；`compose.yaml` 为五项提供完整默认值，因此只复制该文件也能启动。
-默认数据库密码 `imageshow` 和管理员凭据 `admin` / `ImageShow123` 公开且可预测，只允许本地
-体验，任何非本地体验部署都必须在首次启动前全部替换。需要额外 RuntimeConfig 首次 seed 时，先按
+管理员用户名、密码。数据库名、数据库用户名和管理员用户名保留默认值；`DATABASE_PASSWORD`
+与 `ADMIN_PASSWORD` 没有默认值，必须在 `.env` 或宿主环境中显式设置，缺失或空值会
+在 Compose 展开阶段直接失败。需要额外 RuntimeConfig 首次 seed 时，先按
 [配置说明](./configuration.md#环境变量)逐项扩展 ImageShow 的 `environment` 映射。
 
 应用容器的停止宽限必须至少为 50 秒。进程先停止接收请求，再协调 Worker、在途 HTTP、
