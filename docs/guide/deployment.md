@@ -21,9 +21,9 @@ ImageShow 进程；应用不检测误部署，也不实现多实例 fencing、�
 docker run -d --name imageshow --restart unless-stopped --stop-timeout 50 \
   -p 127.0.0.1:5518:5518 \
   -e SITE_DOMAIN=img.example.com -e TZ=UTC \
-  -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD="${ADMIN_PASSWORD:?set ADMIN_PASSWORD first}" \
+  -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD="${ADMIN_PASSWORD:?}" \
   -e DATABASE_HOST=db.example.internal -e DATABASE_NAME=imageshow \
-  -e DATABASE_USER=imageshow -e DATABASE_PASSWORD="${DATABASE_PASSWORD:?set DATABASE_PASSWORD first}" \
+  -e DATABASE_USER=imageshow -e DATABASE_PASSWORD="${DATABASE_PASSWORD:?}" \
   -e REDIS_HOST=redis.example.internal \
   -v /srv/imageshow/data:/app/data \
   wozsun/imageshow:latest
