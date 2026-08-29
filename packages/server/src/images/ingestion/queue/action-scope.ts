@@ -1,8 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import type {
-  IngestionQueueActionResultDto,
-  IngestionQueueSummaryDto
-} from "@imageshow/shared/browser";
+import type { IngestionQueueActionResultDto } from "@imageshow/shared/browser";
 import { ApiError } from "../../../core/api-error.ts";
 import { logger } from "../../../core/logger.ts";
 import {
@@ -14,7 +11,6 @@ import type {
   IngestionQueueMetadata,
   IngestionQueueType
 } from "../sessions/model.ts";
-import { presentIngestionQueueSummary } from "../sessions/projection.ts";
 import {
   ingestionActionWatermarkPurpose,
   type IngestionTokenEnvelope,
@@ -48,19 +44,6 @@ type IngestionActionBatchReplay = {
 
 const scopes = new Map<string, IngestionActionScope>();
 
-const summaryFields = [
-  "total",
-  "unfinished",
-  "waiting",
-  "running",
-  "ready",
-  "duplicate_pending",
-  "committing",
-  "resolving",
-  "completed",
-  "failed"
-] as const;
-
 type IngestionActionWatermarkClaims = IngestionTokenEnvelope & Readonly<{
   action_scope: string;
   redis_connection_epoch: number;
@@ -68,7 +51,6 @@ type IngestionActionWatermarkClaims = IngestionTokenEnvelope & Readonly<{
   queue: IngestionQueueType;
   max_accepted_order: number;
   captured_queue_revision: number;
-  summary: IngestionQueueSummaryDto;
 }>;
 
 function staleActionScope() {
@@ -288,28 +270,18 @@ export function signIngestionActionWatermark(
       owner: scope.owner,
       queue: scope.queue,
       max_accepted_order: metadata.last_accepted_order,
-      captured_queue_revision: metadata.revision,
-      summary: presentIngestionQueueSummary(metadata)
+      captured_queue_revision: metadata.revision
     },
     now + actionWatermarkLifetimeMs,
     now
   );
 }
 
-function isQueueSummary(value: unknown): value is IngestionQueueSummaryDto {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const record = value as Record<string, unknown>;
-  return Object.keys(record).length === summaryFields.length
-    && summaryFields.every((field) => (
-      Number.isSafeInteger(record[field]) && Number(record[field]) >= 0
-    ));
-}
-
 function isActionWatermarkClaims(
   value: IngestionTokenEnvelope
 ): value is IngestionActionWatermarkClaims {
   const record = value as Record<string, unknown>;
-  return Object.keys(record).length === 10
+  return Object.keys(record).length === 9
     && typeof record.action_scope === "string"
     && /^[A-Za-z0-9_-]{32}$/u.test(record.action_scope)
     && Number.isSafeInteger(record.redis_connection_epoch)
@@ -320,8 +292,7 @@ function isActionWatermarkClaims(
     && Number.isSafeInteger(record.max_accepted_order)
     && Number(record.max_accepted_order) >= 0
     && Number.isSafeInteger(record.captured_queue_revision)
-    && Number(record.captured_queue_revision) >= 0
-    && isQueueSummary(record.summary);
+    && Number(record.captured_queue_revision) >= 0;
 }
 
 export function verifyIngestionActionWatermark(input: Readonly<{
