@@ -24,9 +24,7 @@ export async function getTagsForImages(
     [ids]
   )).rows as Array<{ image_id: string; slug: string }>;
   for (const row of rows) {
-    const list = map.get(row.image_id);
-    if (list) list.push(row.slug);
-    else map.set(row.image_id, [row.slug]);
+    map.getOrInsertComputed(row.image_id, () => []).push(row.slug);
   }
   return map;
 }

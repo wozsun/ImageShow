@@ -19,10 +19,11 @@ function closeConnection(connection: AdminSessionConnection) {
 export function registerAdminSessionConnection(
   connection: AdminSessionConnection
 ) {
-  const connections = connectionsBySession.get(connection.sessionId)
-    ?? new Set<AdminSessionConnection>();
+  const connections = connectionsBySession.getOrInsertComputed(
+    connection.sessionId,
+    () => new Set()
+  );
   connections.add(connection);
-  connectionsBySession.set(connection.sessionId, connections);
   return () => {
     connections.delete(connection);
     if (!connections.size) connectionsBySession.delete(connection.sessionId);

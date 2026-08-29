@@ -106,11 +106,10 @@ export async function removeStorageObjectsAndConfirm(
   };
   const groupsByDriver = new Map<RemovalGroup["driver"], RemovalGroup>();
   for (const entry of resolved) {
-    let group = groupsByDriver.get(entry.access.driver);
-    if (!group) {
-      group = { driver: entry.access.driver, entries: [] };
-      groupsByDriver.set(entry.access.driver, group);
-    }
+    const group = groupsByDriver.getOrInsertComputed(
+      entry.access.driver,
+      (driver) => ({ driver, entries: [] })
+    );
     group.entries.push(entry);
   }
 

@@ -159,17 +159,15 @@ export async function activeIngestionStorageReferences(
   const stagingKeysByBackend = new Map<string, Set<string>>();
   const rawPaths = new Set<string>();
   for (const row of rows) {
-    let sessions = sessionsByBackend.get(row.storage_slug);
-    if (!sessions) {
-      sessions = new Map<string, ActiveIngestionStorageReference>();
-      sessionsByBackend.set(row.storage_slug, sessions);
-    }
+    const sessions = sessionsByBackend.getOrInsertComputed(
+      row.storage_slug,
+      () => new Map()
+    );
     sessions.set(row.id, row);
-    let stagingKeys = stagingKeysByBackend.get(row.storage_slug);
-    if (!stagingKeys) {
-      stagingKeys = new Set<string>();
-      stagingKeysByBackend.set(row.storage_slug, stagingKeys);
-    }
+    const stagingKeys = stagingKeysByBackend.getOrInsertComputed(
+      row.storage_slug,
+      () => new Set()
+    );
     if (row.prepared_image_key) stagingKeys.add(row.prepared_image_key);
     if (row.prepared_thumbnail_key) stagingKeys.add(row.prepared_thumbnail_key);
     if (row.raw_generation) {

@@ -35,12 +35,7 @@ export async function captureStagingNamespaceSnapshot(
   const keysBySession = new Map<string, Set<string>>();
   for (const key of keys) {
     const sessionId = stagingSessionId(key);
-    let sessionKeys = keysBySession.get(sessionId);
-    if (!sessionKeys) {
-      sessionKeys = new Set();
-      keysBySession.set(sessionId, sessionKeys);
-    }
-    sessionKeys.add(key);
+    keysBySession.getOrInsertComputed(sessionId, () => new Set()).add(key);
   }
   return { keys, keysBySession };
 }

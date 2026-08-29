@@ -32,9 +32,11 @@ export class IngestionQueueListenerHub {
     listener: IngestionQueueListener
   ) {
     const scope = this.#scope(owner, queue);
-    const listeners = this.#listeners.get(scope) ?? new Set();
+    const listeners = this.#listeners.getOrInsertComputed(
+      scope,
+      () => new Set()
+    );
     listeners.add(listener);
-    this.#listeners.set(scope, listeners);
     return () => {
       listeners.delete(listener);
       if (!listeners.size) this.#listeners.delete(scope);

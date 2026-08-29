@@ -115,9 +115,7 @@ function storageGroups(backends: readonly StorageBackendRecord[]) {
     const physical = new Map<string, StorageBackendRecord[]>();
     for (const backend of referenceBackends) {
       const identity = storageNamespaceIdentity(backend);
-      const group = physical.get(identity);
-      if (group) group.push(backend);
-      else physical.set(identity, [backend]);
+      physical.getOrInsertComputed(identity, () => []).push(backend);
     }
     return [...physical].map(([identity, grouped]) => ({
       key: `${identity}\0${referenceIdentity}`,
