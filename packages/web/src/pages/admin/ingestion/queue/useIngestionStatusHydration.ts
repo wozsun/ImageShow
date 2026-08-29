@@ -98,7 +98,7 @@ export function useIngestionStatusHydration({
       const verifiedExternalRevisions = new Map<string, number>();
       let handoffChanged = false;
       let retryImmediately = false;
-      let refreshForCoverage = false;
+      let minimumCoverageRevision: number | null = null;
       const requireSnapshotCoverage = (pairKey: string, revision: number) => {
         retryGatesRef.current.set(pairKey, {
           connectionGeneration: server.connectionGeneration,
@@ -108,7 +108,10 @@ export function useIngestionStatusHydration({
         verifiedExternalRevisions.set(pairKey, revision);
         handoffChanged = true;
         if ((serverConnectionRef.current.revision ?? -1) < revision) {
-          refreshForCoverage = true;
+          minimumCoverageRevision = Math.max(
+            minimumCoverageRevision ?? 0,
+            revision
+          );
         }
       };
       try {
@@ -281,7 +284,12 @@ export function useIngestionStatusHydration({
           verifyExternalStatusRevisions(verifiedExternalRevisions);
         }
         if (handoffChanged || retryImmediately) bumpHandoffEpoch();
-        if (refreshForCoverage) server.refresh();
+        if (minimumCoverageRevision !== null) {
+          server.ensureRevision(
+            minimumCoverageRevision,
+            server.connectionGeneration
+          );
+        }
       } catch (error) {
         if (!controller.signal.aborted) {
           reportError(
@@ -303,7 +311,7 @@ export function useIngestionStatusHydration({
     retireDraftPairs,
     revokeObjectUrl,
     server.connectionGeneration,
-    server.refresh,
+    server.ensureRevision,
     server.status,
     statusRetryEpoch,
     verifyExternalStatusRevisions

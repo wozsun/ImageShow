@@ -184,7 +184,9 @@ export function Ingestion({
         attemptKey: job.attemptKey,
         pair: outcome.pair
       }]);
-      if (!released.has(job.id)) queue.server.refresh();
+      if (!released.has(job.id)) {
+        void queue.server.recoverAuthority().catch(() => undefined);
+      }
       return released.has(job.id);
     }
     return queue.removeJob(job.id);

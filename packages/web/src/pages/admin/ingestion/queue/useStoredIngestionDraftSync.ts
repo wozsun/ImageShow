@@ -99,6 +99,19 @@ export function useStoredIngestionDraftSync({
   const observeCompletedIngestionsRef = useRef(observeCompletedIngestions);
   observeCompletedIngestionsRef.current = observeCompletedIngestions;
 
+  const requireWriteCoverage = useCallback((
+    revision: number,
+    requestConnectionGeneration: number
+  ) => {
+    const currentServer = serverRef.current;
+    if (currentServer.ensureRevision(revision, requestConnectionGeneration)) return;
+    // Redis revisions are generation-local. A response that crossed a
+    // reconnect (including the short render gap after an SSE generation
+    // change) proves only that the write outcome is known; the replacement
+    // connection must establish its own post-trigger authoritative snapshot.
+    void currentServer.recoverAuthority().catch(() => undefined);
+  }, []);
+
   const hasPendingUpdates = useCallback(() => (
     syncsRef.current.size > 0
       || jobsRef.current.some((job) => (
@@ -333,6 +346,10 @@ export function useStoredIngestionDraftSync({
           sync.awaitingRevision = result.last_semantic_revision;
           sync.awaitingConnectionGeneration =
             update.requestConnectionGeneration;
+          requireWriteCoverage(
+            result.last_semantic_revision,
+            update.requestConnectionGeneration
+          );
           if (mountedRef.current && latest) {
             dispatch({
               type: "patch",
@@ -435,7 +452,7 @@ export function useStoredIngestionDraftSync({
           : `${messages[0]}（另有 ${messages.length - 1} 个错误）`,
         [...syncsRef.current.values()].some((sync) => sync.retryable)
       );
-      serverRef.current.refresh();
+      void serverRef.current.recoverAuthority().catch(() => undefined);
     }
     publishSyncStateRef.current();
     return outcomes;
@@ -654,7 +671,7 @@ export function useStoredIngestionDraftSync({
         error instanceof Error ? error.message : String(error),
         true
       );
-      serverRef.current.refresh();
+      void serverRef.current.recoverAuthority().catch(() => undefined);
       publishSyncStateRef.current();
       return false;
     }
@@ -705,12 +722,19 @@ export function useStoredIngestionDraftSync({
             false
           );
         }
-        serverRef.current.refresh();
+        void serverRef.current.recoverAuthority().catch(() => undefined);
         return false;
       }
       const latest = jobsRef.current.find((job) => job.id === id);
       if (!latest || !matchesDraftTarget(latest, requestTarget)) {
-        serverRef.current.refresh();
+        if (result && result.status !== "failed") {
+          requireWriteCoverage(
+            result.last_semantic_revision,
+            requestConnectionGeneration
+          );
+        } else {
+          void serverRef.current.recoverAuthority().catch(() => undefined);
+        }
         return false;
       }
       if (!result || result.status === "failed") {
@@ -718,11 +742,14 @@ export function useStoredIngestionDraftSync({
           result?.message ?? "重复决定更新响应缺少当前任务",
           false
         );
-        serverRef.current.refresh();
+        void serverRef.current.recoverAuthority().catch(() => undefined);
         return false;
       }
       if ((latest.serverVersion ?? 0) > result.version) {
-        serverRef.current.refresh();
+        requireWriteCoverage(
+          result.last_semantic_revision,
+          requestConnectionGeneration
+        );
         return latest.duplicateDecision === result.duplicate_decision;
       }
       dispatch({
@@ -765,6 +792,10 @@ export function useStoredIngestionDraftSync({
         syncsRef.current.set(id, sync);
         publishSyncStateRef.current();
       }
+      requireWriteCoverage(
+        result.last_semantic_revision,
+        requestConnectionGeneration
+      );
       return true;
     })();
     const request = { target: initialTarget, duplicateDecision, promise };
@@ -782,7 +813,7 @@ export function useStoredIngestionDraftSync({
       }
     );
     return promise;
-  }, [dispatch, jobsRef]);
+  }, [dispatch, jobsRef, requireWriteCoverage]);
   duplicateDecisionRef.current = updateDuplicateDecision;
   const scheduleJob = useCallback((id: string) => {
     scheduleRef.current(id);

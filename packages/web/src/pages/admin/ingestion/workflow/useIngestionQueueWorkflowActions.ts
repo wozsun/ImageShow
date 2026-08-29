@@ -458,7 +458,7 @@ export function useIngestionQueueWorkflowActions({
         deferredCompletedCleanupRef.current.splice(index, 1);
         pending.releaseConnection();
       }
-      queue.server.refresh();
+      void queue.server.recoverAuthority().catch(() => undefined);
       setDeferredCleanupEpoch((value) => value + 1);
     });
   }, [
@@ -468,7 +468,7 @@ export function useIngestionQueueWorkflowActions({
     queue.actions,
     queue.queueType,
     queue.server.connectionGeneration,
-    queue.server.refresh,
+    queue.server.recoverAuthority,
     queue.server.revision,
     queue.server.status
   ]);

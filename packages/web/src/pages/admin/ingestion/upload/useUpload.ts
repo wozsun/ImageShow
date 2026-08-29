@@ -632,7 +632,7 @@ export function useUpload(options: {
             pair: cancelled.pair
           }]);
           if (!released.has(current.id)) {
-            queue.server.refresh();
+            void queue.server.recoverAuthority().catch(() => undefined);
             return;
           }
           releasedServerOwner = true;

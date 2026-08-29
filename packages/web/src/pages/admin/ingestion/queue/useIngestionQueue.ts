@@ -536,6 +536,25 @@ export function useIngestionQueue(
       retainedServerDisplayItems += 1;
       return true;
     });
+    const stateServerPairs = new Set(stateServerItems.map(serverIngestionPairKey));
+    const resolveCoveredHandoff = (pairKey: string) => {
+      const gate = handoffRetryAfterRevisionRef.current.get(pairKey);
+      if (
+        handoffs.hasExternalPair(pairKey)
+        && (
+          gate?.connectionGeneration !== server.connectionGeneration
+          || gate.mode !== "coverage"
+          || server.revision === null
+          || server.revision < gate.revision
+        )
+      ) return;
+      if (!handoffJobsRef.current.delete(pairKey)) return;
+      handoffRetryAfterRevisionRef.current.delete(pairKey);
+      detachedProvisionalHandoffsRef.current.delete(pairKey);
+      completedHandoffPairsRef.current.delete(pairKey);
+      handoffChanged = true;
+      hydratedHandoffPairs.add(pairKey);
+    };
     const nextServerJobs = stateServerItems.map((item) => {
       const pairKey = serverIngestionPairKey(item);
       const existing = existingByPair.get(pairKey);
@@ -554,16 +573,34 @@ export function useIngestionQueue(
           ),
           mode: "state-change"
         });
-      } else if (handoffJobsRef.current.delete(pairKey)) {
-        handoffRetryAfterRevisionRef.current.delete(pairKey);
-        detachedProvisionalHandoffsRef.current.delete(pairKey);
-        completedHandoffPairsRef.current.delete(pairKey);
-        handoffChanged = true;
-        hydratedHandoffPairs.add(pairKey);
+      } else {
+        resolveCoveredHandoff(pairKey);
       }
       return next;
     });
-    const nextPairs = new Set(stateServerItems.map(serverIngestionPairKey));
+    for (const item of server.items) {
+      const pairKey = serverIngestionPairKey(item);
+      if (stateServerPairs.has(pairKey)) continue;
+      if (
+        completedHandoffPairsRef.current.has(pairKey)
+        && item.status !== "completed"
+      ) {
+        handoffRetryAfterRevisionRef.current.set(pairKey, {
+          connectionGeneration: server.connectionGeneration,
+          revision: Math.max(
+            server.revision ?? 0,
+            item.last_semantic_revision
+          ),
+          mode: "state-change"
+        });
+        continue;
+      }
+      // A required/include item can prove this handoff even when browser-owned
+      // cards consume every slot on the composed page. It does not need to be
+      // rendered to discharge the current-generation coverage fence.
+      resolveCoveredHandoff(pairKey);
+    }
+    const nextPairs = stateServerPairs;
     const retainedVisibleHandoffs: IngestionJob[] = [];
     for (const job of existingServerJobs) {
       const pairKey = serverIngestionJobPairKey(job);
@@ -610,6 +647,7 @@ export function useIngestionQueue(
     handoffs.resolvePairs,
     handoffs.resolveExternalStatuses,
     handoffs.hasExternalPair,
+    handoffEpoch,
     server.connectionGeneration,
     server.items,
     server.revision,
@@ -1193,7 +1231,9 @@ export function useIngestionQueue(
     captureServerConnectionGeneration,
     observeCompletedIngestions,
     releaseResolvedServerJobs,
-    server: { refresh: server.refresh },
+    server: {
+      recoverAuthority: server.recoverAuthority
+    },
     updateJob
   }), [
     appendJobs,
@@ -1202,7 +1242,7 @@ export function useIngestionQueue(
     jobsRef,
     observeCompletedIngestions,
     releaseResolvedServerJobs,
-    server.refresh,
+    server.recoverAuthority,
     updateJob
   ]);
 

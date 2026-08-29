@@ -73,7 +73,7 @@ export function useIngestionQueueActions(
   const retainedConnectionsRef = useRef(0);
   const mountedRef = useRef(true);
   const actionTailRef = useRef<Promise<void>>(Promise.resolve());
-  const refreshRequestedRef = useRef(false);
+  const authorityRecoveryRequestedRef = useRef(false);
   const lastActionTimestampRef = useRef(0);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
@@ -235,7 +235,7 @@ export function useIngestionQueueActions(
           }
           return null;
         }
-        refreshRequestedRef.current = true;
+        authorityRecoveryRequestedRef.current = true;
         return null;
       }
     };
@@ -249,9 +249,9 @@ export function useIngestionQueueActions(
       }
       if (pendingRunsRef.current === 0) {
         updateConnectionHold();
-        if (refreshRequestedRef.current) {
-          refreshRequestedRef.current = false;
-          serverRef.current.refresh();
+        if (authorityRecoveryRequestedRef.current) {
+          authorityRecoveryRequestedRef.current = false;
+          void serverRef.current.recoverAuthority().catch(() => undefined);
         }
       }
     });

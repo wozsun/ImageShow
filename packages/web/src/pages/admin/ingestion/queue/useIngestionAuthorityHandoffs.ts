@@ -31,6 +31,12 @@ type AuthorityHandoffFence = Readonly<{
   statusRetryAfterRevision?: number;
 }>;
 
+type ScheduledAuthorityCoverage = Readonly<{
+  connectionGeneration: number;
+  unknown: boolean;
+  revision?: number;
+}>;
+
 /**
  * Keep HTTP -> status-channel ownership fences independent of the bounded
  * page DTOs. A pair may leave the mounted page before its accept/completed
@@ -61,7 +67,10 @@ export function useIngestionAuthorityHandoffs(input: Readonly<{
   jobsRefRef.current = input.jobsRef;
   const observeCompletedIngestionsRef = useRef(input.observeCompletedIngestions);
   observeCompletedIngestionsRef.current = input.observeCompletedIngestions;
-  const scheduledCoverageRef = useRef<Map<string, number | undefined> | null>(
+  const scheduledCoverageRef = useRef<Map<
+    string,
+    ScheduledAuthorityCoverage
+  > | null>(
     null
   );
   const [fenceEpoch, setFenceEpoch] = useState(0);
@@ -142,35 +151,27 @@ export function useIngestionAuthorityHandoffs(input: Readonly<{
       : requestConnectionGeneration;
     const responseBelongsToCurrentGeneration = requestGeneration !== null
       && requestGeneration === server.connectionGeneration;
-    const effective = binding.serverHandoffPending === true
-      && binding.serverHandoffRevision !== undefined
-      && responseBelongsToCurrentGeneration
-      && server.revision !== null
-      && binding.serverHandoffRevision <= server.revision
-      ? {
-          ...binding,
-          serverHandoffPending: false,
-          serverHandoffRevision: undefined
-        }
-      : binding;
-    if (effective.serverHandoffPending !== true) return effective;
+    if (binding.serverHandoffPending !== true) return binding;
 
     const pairKey = serverIngestionPairKey({
-      session_id: effective.sessionId,
-      image_id: effective.imageId
+      session_id: binding.sessionId,
+      image_id: binding.imageId
     });
     const current = fencesRef.current.get(pairKey);
     const sameGeneration = current?.connectionGeneration
       === server.connectionGeneration;
-    const revision = sameGeneration
-      && current
-      && current.revision !== undefined
-      && effective.serverHandoffRevision !== undefined
-      ? Math.max(current.revision, effective.serverHandoffRevision)
-      : effective.serverHandoffRevision;
+    const existingRevision = sameGeneration ? current?.revision : undefined;
+    const responseRevision = responseBelongsToCurrentGeneration
+      ? binding.serverHandoffRevision
+      : undefined;
+    const revision = existingRevision !== undefined
+      && responseRevision !== undefined
+      ? Math.max(existingRevision, responseRevision)
+      : existingRevision ?? responseRevision;
+    const responseCompletionRequired = binding.serverHandoffRevision === undefined;
     const completionRequired = sameGeneration
-      ? current.completionRequired || revision === undefined
-      : revision === undefined;
+      ? current?.completionRequired === true || responseCompletionRequired
+      : responseCompletionRequired;
     const effectiveExternalStatusOwner = sameGeneration
       ? current.externalStatusOwner || externalStatusOwner
       : externalStatusOwner;
@@ -186,8 +187,8 @@ export function useIngestionAuthorityHandoffs(input: Readonly<{
     );
     fencesRef.current.set(pairKey, {
       pair: {
-        session_id: effective.sessionId,
-        image_id: effective.imageId
+        session_id: binding.sessionId,
+        image_id: binding.imageId
       },
       connectionGeneration: server.connectionGeneration,
       completionRequired,
@@ -200,35 +201,68 @@ export function useIngestionAuthorityHandoffs(input: Readonly<{
     });
     setFenceEpoch((value) => value + 1);
 
-    const coverageAlreadyScheduled = scheduledCoverageRef.current !== null;
-    const scheduledCoverage = scheduledCoverageRef.current ?? new Map();
-    const hadScheduledPair = scheduledCoverage.has(pairKey);
-    const scheduledRevision = scheduledCoverage.get(pairKey);
-    scheduledCoverage.set(
-      pairKey,
-      !hadScheduledPair
-        ? revision
-        : scheduledRevision === undefined || revision === undefined
-          ? undefined
-          : Math.max(scheduledRevision, revision)
-    );
-    scheduledCoverageRef.current = scheduledCoverage;
-    if (!coverageAlreadyScheduled) {
-      queueMicrotask(() => {
-        const coverage = scheduledCoverageRef.current;
-        scheduledCoverageRef.current = null;
-        if (!coverage?.size) return;
-        const revisions = [...coverage.values()];
-        const unknown = revisions.some((value) => value === undefined);
-        const revision = revisions.reduce<number>((maximum, value) => (
-          value === undefined ? maximum : Math.max(maximum, value)
-        ), 0);
-        serverRef.current.ensureRevision(
-          unknown ? undefined : revision
-        );
+    if (responseBelongsToCurrentGeneration) {
+      const coverageAlreadyScheduled = scheduledCoverageRef.current !== null;
+      const scheduledCoverage = scheduledCoverageRef.current
+        ?? new Map<string, ScheduledAuthorityCoverage>();
+      const scheduled = scheduledCoverage.get(pairKey);
+      const scheduledRevision = scheduled?.connectionGeneration
+        === server.connectionGeneration
+        ? scheduled.revision
+        : undefined;
+      const hadScheduledPair = scheduled?.connectionGeneration
+        === server.connectionGeneration;
+      const unknown = (
+        hadScheduledPair && scheduled.unknown
+      ) || revision === undefined;
+      let combinedRevision: number | undefined;
+      if (!hadScheduledPair) {
+        combinedRevision = revision;
+      } else {
+        combinedRevision = scheduledRevision !== undefined
+          && revision !== undefined
+          ? Math.max(scheduledRevision, revision)
+          : scheduledRevision ?? revision;
+      }
+      scheduledCoverage.set(pairKey, {
+        connectionGeneration: server.connectionGeneration,
+        unknown,
+        ...(combinedRevision === undefined ? {} : { revision: combinedRevision })
       });
+      scheduledCoverageRef.current = scheduledCoverage;
+      if (!coverageAlreadyScheduled) {
+        queueMicrotask(() => {
+          const coverage = scheduledCoverageRef.current;
+          scheduledCoverageRef.current = null;
+          if (!coverage?.size) return;
+          const currentGeneration = serverRef.current.connectionGeneration;
+          const currentCoverage = [...coverage.values()].filter((entry) => (
+            entry.connectionGeneration === currentGeneration
+          ));
+          if (!currentCoverage.length) return;
+          const unknown = currentCoverage.some((entry) => entry.unknown);
+          const hasKnownRevision = currentCoverage.some((entry) => (
+            entry.revision !== undefined
+          ));
+          const maximumRevision = currentCoverage.reduce<number>(
+            (maximum, entry) => entry.revision === undefined
+              ? maximum
+              : Math.max(maximum, entry.revision),
+            0
+          );
+          if (unknown) {
+            serverRef.current.ensureRevision(undefined, currentGeneration);
+          }
+          if (hasKnownRevision) {
+            serverRef.current.ensureRevision(
+              maximumRevision,
+              currentGeneration
+            );
+          }
+        });
+      }
     }
-    return effective;
+    return binding;
   }, []);
 
   const retry = useCallback(() => {
@@ -303,7 +337,7 @@ export function useIngestionAuthorityHandoffs(input: Readonly<{
           externalStatusOwner,
           statusCheckRequired: !externalStatusOwner,
           statusRetryAfterRevision: undefined,
-          revision: externalStatusOwner ? undefined : fence.revision
+          revision: undefined
         });
         retryChanged = true;
       } else if (
@@ -418,7 +452,17 @@ export function useIngestionAuthorityHandoffs(input: Readonly<{
             }
           }
         }
-        if (revisions.size) verifyFenceRevisions(revisions);
+        if (revisions.size) {
+          verifyFenceRevisions(revisions);
+          const maximumRevision = [...revisions.values()].reduce(
+            (maximum, revision) => Math.max(maximum, revision),
+            0
+          );
+          serverRef.current.ensureRevision(
+            maximumRevision,
+            generation
+          );
+        }
         if (deferred.size) deferFenceStatusChecks(deferred);
         if (resolved.size) clearFences(resolved);
       } catch (error) {

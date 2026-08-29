@@ -283,8 +283,11 @@ offset 与有上限的 limit 请求当前组合页；不保留非当前页卡片
 再读取一次。
 同一 scope、同一组合页内由动作收口、交接覆盖或真实成员变化触发的后台快照会保留当前
 稳定展示及原签名 watermark；旧水位止于原 accepted-order 与 revision，读取尚未失败时仍可
-冻结点击且绝不会纳入触发重读的新任务。重复触发合并为当前请求加至多一次尾随读取，不中止
-同 scope、同页请求。成功后再原位替换；当前文档新建批次在接管期间保持固定展示前缀，
+冻结点击且绝不会纳入触发重读的新任务。单一读取 owner 聚合同一 action scope / connection
+generation、组合页选择、最低 semantic revision、未知结果所需的触发后权威读取，以及普通成功
+同页快照等尚未覆盖要求；同页重复触发复用当前请求，不中止同 scope、同页读取。响应与期间可
+合并 SSE 逐项证明覆盖后不再尾读，只有仍未覆盖的要求才启动一个后继请求。成功后再原位替换；
+当前文档新建批次在接管期间保持固定展示前缀，
 因此逐项或整批 handoff 始终使用一页读取窗口，不会生成 `limit=N → limit=20` 的参数尾请求。
 只有翻页、清除任务等真实改变组合页范围的操作才会更新 offset 或精确 pair 选择；若参数在
 当前读取完成前恢复到已覆盖范围，
@@ -293,8 +296,10 @@ offset 与有上限的 limit 请求当前组合页；不保留非当前页卡片
 足以填满 Server 槽位或已经读到队尾，也直接复用该 revision，不为同一批 handoff 再发参数快照；
 HTTP 接管围栏只声明必须覆盖的 semantic revision：若当前或在途 snapshot 已达到该水位就直接
 消费，只有仍低于水位时才补读；显式 refresh、语义 reload 与新连接 ready 不会被参数回退误删。
-成功动作由同一 SSE 语义事件收敛；动作失败、缺少完整完成投影或发现 revision 缺口时才触发一次有界
-收敛快照，workflow 不叠加第二次刷新。
+成功动作和已知写入优先由同一 SSE 语义事件或最低 revision 证明收敛；revision 证明只在捕获
+该响应的 connection generation 内有效，跨代草稿响应改用触发后快照，跨代 handoff 先由当前代
+status 取得新 revision。动作 / 草稿失败、未知或格式错误响应、认证恢复、缺少完整完成投影，
+以及 revision 缺口仍要求触发后的有界权威快照，workflow 不叠加第二个读取 owner。
 单次同 scope 读取失败仍保留卡片和摘要，但立即把旧 canonical 基线降级为纯展示并撤销
 watermark 执行权威；limit 扩大、显式 refresh 与语义 reload 均进入同一 100 / 500 / 1500 ms
 有界恢复，读取期间到达的 reload 合并进该预算，不形成连续请求链。依赖 Server 且点击时没有

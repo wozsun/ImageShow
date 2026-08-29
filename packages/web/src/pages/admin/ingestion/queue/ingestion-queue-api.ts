@@ -43,7 +43,9 @@ export type IngestionQueueProducerApi = IngestionQueueApi & {
     attemptKey: string;
     pair: IngestionSessionPairDto;
   }>[]) => ReadonlySet<string>;
-  server: Readonly<{ refresh: () => void }>;
+  server: Readonly<{
+    recoverAuthority: () => Promise<void>;
+  }>;
 };
 
 export function isCurrentIngestionAttempt(

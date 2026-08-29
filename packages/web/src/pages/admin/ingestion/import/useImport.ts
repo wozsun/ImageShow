@@ -515,7 +515,7 @@ export function useImport(options: {
           pair: outcome.pair
         }]);
         if (!released.has(current.id)) {
-          queue.server.refresh();
+          void queue.server.recoverAuthority().catch(() => undefined);
           return;
         }
         releasedServerOwner = true;

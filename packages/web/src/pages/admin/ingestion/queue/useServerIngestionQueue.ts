@@ -35,18 +35,22 @@ type SnapshotRequestReason =
   | "reload"
   | "ready";
 
-type AuthorityRecovery = Readonly<{
-  minimumSnapshotSerial: number;
-  promise: Promise<void>;
-  resolve: () => void;
-  reject: (error: unknown) => void;
-}>;
+type SnapshotCoverageRequirements = {
+  actionScope: string;
+  connectionGeneration: number;
+  currentScope: boolean;
+  ordinarySnapshot: boolean;
+  currentSelection: boolean;
+  minimumRevision: number | null;
+  minimumSnapshotSerial: number | null;
+  postTriggerReason: Extract<SnapshotRequestReason, "refresh" | "reload"> | null;
+};
 
-const snapshotRequestPriority: Readonly<Record<SnapshotRequestReason, number>> = {
-  parameters: 1,
-  refresh: 2,
-  ready: 3,
-  reload: 4
+type AuthorityRecovery = {
+  minimumSnapshotSerial: number;
+  readonly promise: Promise<void>;
+  readonly resolve: () => void;
+  readonly reject: (error: unknown) => void;
 };
 
 /**
@@ -82,22 +86,22 @@ export function useServerIngestionQueue(input: Readonly<{
     limit: input.limit,
     requiredItems: input.requiredItems,
     excludeItems: input.excludeItems,
-    includeItems: input.includeItems,
-    filterKey
+    includeItems: input.includeItems
   });
   parametersRef.current = {
     offset: input.offset,
     limit: input.limit,
     requiredItems: input.requiredItems,
     excludeItems: input.excludeItems,
-    includeItems: input.includeItems,
-    filterKey
+    includeItems: input.includeItems
   };
   const requestSnapshotRef = useRef<(
     (reason?: SnapshotRequestReason) => void
   ) | null>(null);
   const recoverAuthorityRef = useRef<(() => Promise<void>) | null>(null);
-  const ensureRevisionRef = useRef<((revision?: number) => void) | null>(null);
+  const ensureRevisionRef = useRef<(
+    (revision?: number, connectionGeneration?: number) => boolean
+  ) | null>(null);
   const onCompletedIngestionsRef = useRef(input.onCompletedIngestions);
   onCompletedIngestionsRef.current = input.onCompletedIngestions;
   const displayedRef = useRef(input.displayed);
@@ -126,19 +130,26 @@ export function useServerIngestionQueue(input: Readonly<{
     let activeSnapshot: Readonly<{
       controller: AbortController;
       offset: number;
-      limit: number;
-      filterKey: string;
     }> | null = null;
-    let snapshotQueued: SnapshotRequestReason | null = null;
+    let snapshotRequirements: SnapshotCoverageRequirements = {
+      actionScope,
+      connectionGeneration,
+      currentScope: false,
+      ordinarySnapshot: false,
+      currentSelection: false,
+      minimumRevision: null,
+      minimumSnapshotSerial: null,
+      postTriggerReason: null
+    };
+    let immediateSnapshotFollowup = false;
     let buffered: Array<Extract<IngestionQueueEventDto, { type: "mutation" }>> = [];
     let bufferedAuthorityBaseline: ServerIngestionQueueBaseline | null = null;
     let snapshotRecoveryAttempt = 0;
     let snapshotRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
     let readySnapshotScheduled = false;
+    let authorityRecoverySnapshotScheduled = false;
     let protocolReconnectAttempt = 0;
     let protocolReconnectTimer: ReturnType<typeof setTimeout> | null = null;
-    let pendingCoverageRevision: number | null = null;
-    let pendingUnknownCoverage = false;
     let authorityRecovery: AuthorityRecovery | null = null;
 
     const completeAuthorityRecovery = (serial: number) => {
@@ -176,6 +187,95 @@ export function useServerIngestionQueue(input: Readonly<{
       baselineParameters = null;
     };
 
+    const alignSnapshotRequirements = (currentScope = false) => {
+      if (
+        snapshotRequirements.actionScope === actionScope
+        && snapshotRequirements.connectionGeneration === connectionGeneration
+      ) {
+        if (currentScope) snapshotRequirements.currentScope = true;
+        return;
+      }
+      snapshotRequirements = {
+        actionScope,
+        connectionGeneration,
+        currentScope,
+        ordinarySnapshot: snapshotRequirements.ordinarySnapshot,
+        currentSelection: snapshotRequirements.currentSelection,
+        // Semantic revisions belong to one Redis connection generation. A
+        // new ready scope must establish its own baseline before handoff
+        // owners can publish a new generation-specific revision requirement.
+        minimumRevision: null,
+        minimumSnapshotSerial: snapshotRequirements.minimumSnapshotSerial,
+        postTriggerReason: snapshotRequirements.postTriggerReason
+      };
+    };
+
+    const hasSnapshotRequirements = () => (
+      snapshotRequirements.actionScope === actionScope
+      && snapshotRequirements.connectionGeneration === connectionGeneration
+      && (
+        snapshotRequirements.currentScope
+        || snapshotRequirements.ordinarySnapshot
+        || snapshotRequirements.currentSelection
+        || snapshotRequirements.minimumRevision !== null
+        || snapshotRequirements.minimumSnapshotSerial !== null
+      )
+    );
+
+    const nextSnapshotReason = (): SnapshotRequestReason | null => {
+      if (!hasSnapshotRequirements()) return null;
+      if (snapshotRequirements.postTriggerReason === "reload") return "reload";
+      if (snapshotRequirements.currentScope) return "ready";
+      if (
+        snapshotRequirements.minimumSnapshotSerial !== null
+        || snapshotRequirements.minimumRevision !== null
+        || snapshotRequirements.ordinarySnapshot
+      ) return "refresh";
+      return snapshotRequirements.currentSelection ? "parameters" : null;
+    };
+
+    const requireSnapshotCoverage = (reason: SnapshotRequestReason) => {
+      alignSnapshotRequirements(reason === "ready");
+      if (reason === "refresh") {
+        snapshotRequirements.ordinarySnapshot = true;
+      } else if (reason === "parameters") {
+        snapshotRequirements.currentSelection = true;
+      } else if (reason === "reload") {
+        snapshotRequirements.minimumSnapshotSerial = Math.max(
+          snapshotRequirements.minimumSnapshotSerial ?? 0,
+          snapshotSerial + 1
+        );
+        snapshotRequirements.postTriggerReason = "reload";
+      }
+    };
+
+    const satisfySnapshotCoverage = (
+      serial: number,
+      requestedScope: string,
+      requestedGeneration: number,
+      merged: ServerIngestionQueueBaseline
+    ) => {
+      if (
+        snapshotRequirements.actionScope !== requestedScope
+        || snapshotRequirements.connectionGeneration !== requestedGeneration
+      ) return;
+      snapshotRequirements.currentScope = false;
+      snapshotRequirements.ordinarySnapshot = false;
+      snapshotRequirements.currentSelection = false;
+      if (
+        snapshotRequirements.minimumRevision !== null
+        && merged.revision >= snapshotRequirements.minimumRevision
+      ) snapshotRequirements.minimumRevision = null;
+      if (
+        snapshotRequirements.minimumSnapshotSerial !== null
+        && serial >= snapshotRequirements.minimumSnapshotSerial
+      ) {
+        snapshotRequirements.minimumSnapshotSerial = null;
+        snapshotRequirements.postTriggerReason = null;
+      }
+      immediateSnapshotFollowup = false;
+    };
+
     const abortSnapshotRequest = (keepOffset?: number) => {
       if (
         activeSnapshot === null
@@ -183,7 +283,7 @@ export function useServerIngestionQueue(input: Readonly<{
       ) return;
       activeSnapshot.controller.abort();
       activeSnapshot = null;
-      snapshotQueued = null;
+      immediateSnapshotFollowup = false;
     };
 
     const invalidateSnapshotScope = () => {
@@ -192,7 +292,6 @@ export function useServerIngestionQueue(input: Readonly<{
       // wait forever behind a slow response from the previous scope.
       snapshotSerial += 1;
       abortSnapshotRequest();
-      snapshotQueued = null;
       buffered = [];
       bufferedAuthorityBaseline = null;
     };
@@ -222,16 +321,6 @@ export function useServerIngestionQueue(input: Readonly<{
         });
     };
 
-    const queueSnapshotRequest = (reason: SnapshotRequestReason) => {
-      if (
-        snapshotQueued === null
-        || snapshotRequestPriority[reason]
-          > snapshotRequestPriority[snapshotQueued]
-      ) {
-        snapshotQueued = reason;
-      }
-    };
-
     const mergeBufferedMutations = (current: ServerIngestionQueueBaseline) => {
       let merged = current;
       let reload = false;
@@ -248,23 +337,18 @@ export function useServerIngestionQueue(input: Readonly<{
       return { merged, reload };
     };
 
-    const requestSnapshot = (
-      reason: SnapshotRequestReason = "refresh"
-    ) => {
+    const startSnapshot = (reason: SnapshotRequestReason) => {
       if (disposed) return;
-      if (reason === "refresh" || reason === "parameters") {
-        clearSnapshotRecovery();
-      }
       const {
         offset,
         limit,
         requiredItems,
         excludeItems,
-        includeItems,
-        filterKey: requestedFilterKey
+        includeItems
       } = parametersRef.current;
       // Offset changes cancel the obsolete page. Same-scope, same-page reloads
-      // share the active request and queue at most one necessary successor.
+      // share the active request. Its response is allowed to prove every
+      // compatible requirement that accumulated while it was in flight.
       abortSnapshotRequest(offset);
       if (!actionScope) {
         if (source === null && protocolReconnectTimer === null) {
@@ -278,8 +362,9 @@ export function useServerIngestionQueue(input: Readonly<{
         }
         return;
       }
+      alignSnapshotRequirements();
       if (
-        reason === "parameters"
+        snapshotRequirements.currentSelection
         && baseline !== null
         && baselineOffset === offset
         && baselineParameters !== null
@@ -292,20 +377,10 @@ export function useServerIngestionQueue(input: Readonly<{
         // The combined owner slices retained Server items and consumes exact
         // browser-owned pairs locally. A covered selection change therefore
         // must not issue a second snapshot for the same queue revision.
-        if (snapshotQueued === "parameters") snapshotQueued = null;
-        return;
+        snapshotRequirements.currentSelection = false;
       }
+      if (!hasSnapshotRequirements()) return;
       if (activeSnapshot !== null && activeSnapshot.offset === offset) {
-        if (reason === "parameters") {
-          if (
-            requestedFilterKey === activeSnapshot.filterKey
-            && limit <= activeSnapshot.limit
-          ) {
-            if (snapshotQueued === "parameters") snapshotQueued = null;
-            return;
-          }
-        }
-        queueSnapshotRequest(reason);
         if (reason === "reload" || reason === "ready") {
           publishSnapshotState(offset);
         }
@@ -325,13 +400,8 @@ export function useServerIngestionQueue(input: Readonly<{
       // fires. Starting that authoritative request consumes the old timer but
       // retains the attempt count until a snapshot actually succeeds.
       cancelSnapshotRecoveryTimer();
-      activeSnapshot = {
-        controller,
-        offset,
-        limit,
-        filterKey: requestedFilterKey
-      };
-      snapshotQueued = null;
+      activeSnapshot = { controller, offset };
+      immediateSnapshotFollowup = false;
       buffered = [];
       bufferedAuthorityBaseline = refreshInPlace ? baseline : null;
       if (!refreshInPlace) {
@@ -340,6 +410,7 @@ export function useServerIngestionQueue(input: Readonly<{
       if (!refreshInPlace || reason === "reload") {
         publishSnapshotState(offset);
       }
+      let deferSuccessor = false;
 
       void getIngestionQueueSnapshot(
         {
@@ -384,13 +455,24 @@ export function useServerIngestionQueue(input: Readonly<{
           // until the queued request reads the current exclusion set.
           buffered = [];
           bufferedAuthorityBaseline = null;
-          queueSnapshotRequest("parameters");
+          const stableCoversCurrent = baseline !== null
+            && baselineOffset === currentParameters.offset
+            && baselineParameters !== null
+            && ingestionQueueBaselineCoversSelection(
+              baseline,
+              baselineParameters,
+              currentParameters
+            );
+          if (stableCoversCurrent) {
+            snapshotRequirements.currentSelection = false;
+          } else {
+            requireSnapshotCoverage("parameters");
+          }
           return;
         }
-        if (snapshotQueued === "parameters") snapshotQueued = null;
         const { merged, reload } = mergeBufferedMutations(snapshotBaseline);
         if (reload) {
-          queueSnapshotRequest("reload");
+          requireSnapshotCoverage("reload");
           publishSnapshotState(offset);
           return;
         }
@@ -405,18 +487,15 @@ export function useServerIngestionQueue(input: Readonly<{
         };
         retainedBaseline = merged;
         retainedOffset = offset;
-        if (pendingUnknownCoverage) {
-          pendingUnknownCoverage = false;
-          pendingCoverageRevision = null;
-        } else if (pendingCoverageRevision !== null) {
-          if (merged.revision >= pendingCoverageRevision) {
-            pendingCoverageRevision = null;
-          } else {
-            queueSnapshotRequest("refresh");
-          }
-        }
+        satisfySnapshotCoverage(
+          serial,
+          requestedScope,
+          requestedGeneration,
+          merged
+        );
         clearSnapshotRecovery();
-        if (snapshotQueued === "reload" || snapshotQueued === "ready") {
+        const rerun = nextSnapshotReason();
+        if (rerun === "reload" || rerun === "ready") {
           publishSnapshotState(offset);
           return;
         }
@@ -426,6 +505,16 @@ export function useServerIngestionQueue(input: Readonly<{
         if (disposed || controller.signal.aborted || serial !== snapshotSerial) {
           return;
         }
+        const immediateFollowup = immediateSnapshotFollowup
+          && hasSnapshotRequirements();
+        if (!hasSnapshotRequirements()) {
+          // A parameter request can become unnecessary while it is in flight.
+          // If that obsolete request then fails, retain the documented bounded
+          // authority recovery instead of leaving a display-only baseline with
+          // no remaining requirement capable of starting the retry.
+          requireSnapshotCoverage("reload");
+        }
+        immediateSnapshotFollowup = false;
         const retainWithoutAuthority = (
           recoveryBaseline: ServerIngestionQueueBaseline
         ) => {
@@ -439,7 +528,7 @@ export function useServerIngestionQueue(input: Readonly<{
             recoveryBaseline
           );
         };
-        if (snapshotQueued === "parameters" || snapshotQueued === "refresh") {
+        if (immediateFollowup) {
           const recoveryBaseline = baseline !== null && baselineOffset === offset
             ? mergeBufferedMutations(baseline).merged
             : retainedBaseline !== null && retainedOffset === offset
@@ -457,22 +546,22 @@ export function useServerIngestionQueue(input: Readonly<{
           }
           return;
         }
-        if (snapshotQueued === "reload" || snapshotQueued === "ready") {
-          snapshotQueued = null;
-        }
         const recoverWithBaseline = (
           recoveryBaseline: ServerIngestionQueueBaseline
         ) => {
           const retryDelay = snapshotRecoveryDelays[snapshotRecoveryAttempt];
           const recoveryView = retainWithoutAuthority(recoveryBaseline);
           if (retryDelay !== undefined) {
+            deferSuccessor = true;
             snapshotRecoveryAttempt += 1;
             snapshotRecoveryTimer = setTimeout(() => {
               snapshotRecoveryTimer = null;
-              requestSnapshot("reload");
+              const retryReason = nextSnapshotReason();
+              if (retryReason && actionScope) startSnapshot(retryReason);
             }, retryDelay);
             setView(recoveryView);
           } else {
+            deferSuccessor = true;
             setView({
               ...recoveryView,
               status: "error",
@@ -508,16 +597,19 @@ export function useServerIngestionQueue(input: Readonly<{
         clearBaseline();
         const retryDelay = snapshotRecoveryDelays[snapshotRecoveryAttempt];
         if (retryDelay !== undefined) {
+          deferSuccessor = true;
           snapshotRecoveryAttempt += 1;
           snapshotRecoveryTimer = setTimeout(() => {
             snapshotRecoveryTimer = null;
-            requestSnapshot("reload");
+            const retryReason = nextSnapshotReason();
+            if (retryReason && actionScope) startSnapshot(retryReason);
           }, retryDelay);
           setView({
             ...emptyServerIngestionQueueView("loading", connectionGeneration),
             actionScope
           });
         } else {
+          deferSuccessor = true;
           setView({
             ...emptyServerIngestionQueueView(
               "error",
@@ -531,45 +623,116 @@ export function useServerIngestionQueue(input: Readonly<{
       }).finally(() => {
         if (activeSnapshot?.controller !== controller) return;
         activeSnapshot = null;
-        const rerun = snapshotQueued;
-        snapshotQueued = null;
-        if (!disposed && rerun && actionScope) requestSnapshot(rerun);
+        const rerun = nextSnapshotReason();
+        immediateSnapshotFollowup = false;
+        if (
+          !disposed
+          && !deferSuccessor
+          && snapshotRecoveryTimer === null
+          && rerun
+          && actionScope
+        ) startSnapshot(rerun);
       });
+    };
+    const requestSnapshot = (
+      reason: SnapshotRequestReason = "refresh"
+    ) => {
+      if (disposed) return;
+      if (reason === "refresh" || reason === "parameters") {
+        clearSnapshotRecovery();
+      }
+      requireSnapshotCoverage(reason);
+      const requiredReason = nextSnapshotReason();
+      if (requiredReason) startSnapshot(requiredReason);
     };
     requestSnapshotRef.current = requestSnapshot;
-    recoverAuthorityRef.current = () => {
-      if (authorityRecovery !== null) return authorityRecovery.promise;
-      let resolve!: () => void;
-      let reject!: (error: unknown) => void;
-      const promise = new Promise<void>((resolvePromise, rejectPromise) => {
-        resolve = resolvePromise;
-        reject = rejectPromise;
+    const scheduleAuthorityRecoverySnapshot = () => {
+      if (authorityRecoverySnapshotScheduled) return;
+      authorityRecoverySnapshotScheduled = true;
+      queueMicrotask(() => {
+        authorityRecoverySnapshotScheduled = false;
+        if (disposed) return;
+        const reason = nextSnapshotReason();
+        if (reason) startSnapshot(reason);
       });
-      authorityRecovery = {
-        minimumSnapshotSerial: snapshotSerial + 1,
-        promise,
-        resolve,
-        reject
-      };
-      requestSnapshot("refresh");
-      return promise;
     };
-    ensureRevisionRef.current = (revision?: number) => {
-      if (disposed) return;
+    recoverAuthorityRef.current = () => {
+      const minimumSnapshotSerial = snapshotSerial + 1;
+      if (authorityRecovery === null) {
+        let resolve!: () => void;
+        let reject!: (error: unknown) => void;
+        const promise = new Promise<void>((resolvePromise, rejectPromise) => {
+          resolve = resolvePromise;
+          reject = rejectPromise;
+        });
+        authorityRecovery = {
+          minimumSnapshotSerial,
+          promise,
+          resolve,
+          reject
+        };
+      } else {
+        // A second unknown outcome can arrive after the shared recovery read
+        // has already started. Keep one promise/owner, but move its proof
+        // fence forward so that older in-flight data cannot settle it.
+        authorityRecovery.minimumSnapshotSerial = Math.max(
+          authorityRecovery.minimumSnapshotSerial,
+          minimumSnapshotSerial
+        );
+      }
+      alignSnapshotRequirements();
+      snapshotRequirements.minimumSnapshotSerial = Math.max(
+        snapshotRequirements.minimumSnapshotSerial ?? 0,
+        authorityRecovery.minimumSnapshotSerial
+      );
+      if (snapshotRequirements.postTriggerReason !== "reload") {
+        snapshotRequirements.postTriggerReason = "refresh";
+      }
+      if (activeSnapshot !== null) immediateSnapshotFollowup = true;
+      clearSnapshotRecovery();
+      scheduleAuthorityRecoverySnapshot();
+      return authorityRecovery.promise;
+    };
+    ensureRevisionRef.current = (
+      revision?: number,
+      expectedConnectionGeneration = connectionGeneration
+    ) => {
+      if (
+        disposed
+        || expectedConnectionGeneration !== connectionGeneration
+      ) return false;
+      alignSnapshotRequirements();
       if (
         revision !== undefined
         && baseline !== null
         && baseline.revision >= revision
-      ) return;
+      ) return true;
       if (revision === undefined) {
-        pendingUnknownCoverage = true;
+        const minimumSnapshotSerial = snapshotSerial + 1;
+        const strengthened = snapshotRequirements.minimumSnapshotSerial === null
+          || snapshotRequirements.minimumSnapshotSerial < minimumSnapshotSerial;
+        snapshotRequirements.minimumSnapshotSerial = Math.max(
+          snapshotRequirements.minimumSnapshotSerial ?? 0,
+          minimumSnapshotSerial
+        );
+        if (snapshotRequirements.postTriggerReason !== "reload") {
+          snapshotRequirements.postTriggerReason = "refresh";
+        }
+        if (strengthened && activeSnapshot !== null) {
+          immediateSnapshotFollowup = true;
+        }
       } else {
-        pendingCoverageRevision = Math.max(
-          pendingCoverageRevision ?? 0,
+        snapshotRequirements.minimumRevision = Math.max(
+          snapshotRequirements.minimumRevision ?? 0,
           revision
         );
       }
-      if (activeSnapshot === null) requestSnapshot("refresh");
+      if (activeSnapshot === null) {
+        clearSnapshotRecovery();
+        const reason = nextSnapshotReason();
+        if (reason) startSnapshot(reason);
+      }
+      return true;
     };
 
     const disconnect = (
@@ -584,6 +747,7 @@ export function useServerIngestionQueue(input: Readonly<{
       clearBaseline();
       actionScope = "";
       invalidateSnapshotScope();
+      alignSnapshotRequirements();
       clearSnapshotRecovery();
       const { offset } = parametersRef.current;
       const retained = retainedBaseline !== null && retainedOffset === offset
@@ -662,6 +826,7 @@ export function useServerIngestionQueue(input: Readonly<{
         actionScope = event.action_scope;
         clearBaseline();
         invalidateSnapshotScope();
+        alignSnapshotRequirements(true);
         const { offset } = parametersRef.current;
         setView(
           retainedBaseline !== null && retainedOffset === offset
@@ -815,8 +980,11 @@ export function useServerIngestionQueue(input: Readonly<{
       ? recover()
       : Promise.reject(new Error("内容接入队列连接尚未就绪"));
   }, []);
-  const ensureRevision = useCallback((revision?: number) => {
-    ensureRevisionRef.current?.(revision);
+  const ensureRevision = useCallback((
+    revision?: number,
+    connectionGeneration?: number
+  ) => {
+    return ensureRevisionRef.current?.(revision, connectionGeneration) ?? false;
   }, []);
 
   return { ...view, ensureRevision, recoverAuthority, refresh };
