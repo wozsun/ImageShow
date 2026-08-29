@@ -206,12 +206,14 @@ export async function repairStorageThumbnail(
     )) {
       return { ...itemBase, outcome: "skipped", reason: "当前位置的原图不存在" };
     }
-    const thumbnailExists = await storage.driver.exists(
-      "thumbs",
-      thumbKey,
-      { signal: operationSignal }
-    );
-    if (thumbnailExists && Number(authority.thumbnail_size) > 0) {
+    if (
+      Number(authority.thumbnail_size) > 0
+      && await storage.driver.exists(
+        "thumbs",
+        thumbKey,
+        { signal: operationSignal }
+      )
+    ) {
       return { ...itemBase, outcome: "skipped", reason: "缩略图已存在，无需维修" };
     }
     const sourceAuthority = authority;

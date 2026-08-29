@@ -189,7 +189,8 @@ Ingestion staging 孤儿按代码内固定 100 项渐进删除。
 `checks/storage-maintenance-plan.ts` 重读 PostgreSQL、Ingestion 引用和完整存储快照并生成候选，
 `checks/storage-thumbnail-repair.ts` 负责缩略图写入与校验，`checks/storage-orphan-cleanup.ts`
 负责确认删除和空目录修剪，`checks/storage-maintenance.ts` 只保留独占位置锁、执行顺序和结果汇总。
-这组写维护只从显式维护入口调用，不接入普通请求热路径或通用后台任务。
+缩略图维修只为数据库已采用的缩略图执行生成前对象探测；未采用状态统一在生成后复核位置与
+对象再发布。这组写维护只从显式维护入口调用，不接入普通请求热路径或通用后台任务。
 回收站的移入 / 恢复集中于
 `images/trash-mutations.ts`，永久对象删除与 claim 状态机集中于 `images/trash-purge.ts`，
 两者不共享转发入口。`images/image-update.ts` 只拥有 1..N 图片锁、保序并发、逐项结果和
@@ -246,7 +247,8 @@ snapshot、SSE、watermark 和展示投影只使用 session / repository 边界�
   marker 使用 `INGESTION_CANONICAL` / `INGESTION_QUEUE_STRUCTURE`，Upload intent 使用
   `UPLOAD_INTENT`；签名 purpose 固定使用无版本后缀的 `imageshow/ingestion/...` 名称。
   canonical 的 `version`、revision、generation 与 execution token 只承担当前 CAS、顺序、
-  对象所有权和执行 fencing。
+  对象所有权和执行 fencing。snapshot 在 `sessions/scripts/queue.ts` 内收集有界的缺失 canonical
+  排除 session，并以一次 display 扫描区分正常 stale 与孤儿投影；不新增反向索引或迁移职责。
 - `queue/events.ts`、`snapshot.ts`、`action-scope.ts` 与 `store.ts` 共同负责 owner + queue 单
   SSE、稳定分页、动作作用域和最近动作批次的有界重放；`action.ts` 编排有界全队列动作，
   `action-protocol.ts` 校验 watermark / continuation，`action-handlers.ts` 执行逐项动作，

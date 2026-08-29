@@ -41,7 +41,6 @@ type VocabularyMutation = "" | "delete";
 const COPY = {
   tags: {
     noun: "标签",
-    headHint: "显示名可用于打标签时解析",
     slugPlaceholder: "标签 slug",
     displayPlaceholder: "显示名（可选）",
     empty: "还没有标签",
@@ -49,7 +48,6 @@ const COPY = {
   },
   themes: {
     noun: "主题",
-    headHint: "显示名可用于主题搜索",
     slugPlaceholder: "主题 slug",
     displayPlaceholder: "显示名（可选）",
     empty: "还没有主题（上传图片或在上方新建）",
@@ -57,7 +55,6 @@ const COPY = {
   },
   authors: {
     noun: "作者",
-    headHint: "显示名可用于作者搜索，链接显示在图片详情",
     slugPlaceholder: "作者 slug",
     displayPlaceholder: "显示名（可选）",
     empty: "还没有作者（上传图片或在上方新建）",
@@ -214,7 +211,7 @@ export function VocabularyAdmin({ kind }: { kind: VocabularyKind }) {
     <section className="workspace workspace-paged">
       <WorkspaceHeader
         title={`${copy.noun}管理`}
-        description={`第 ${page} / ${totalPages} 页 · 共 ${visibleItems.length} 个${copy.noun}${isFetching ? " · 加载中" : ""} · ${copy.headHint} · 可用前移/后移按钮，桌面端也可拖动排序`}
+        description={`第 ${page} / ${totalPages} 页 · 共 ${visibleItems.length} 个${copy.noun}${isFetching ? " · 加载中" : ""}`}
         feedbackTarget={feedbackTarget}
       />
       <p

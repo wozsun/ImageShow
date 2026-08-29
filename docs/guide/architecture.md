@@ -200,7 +200,9 @@ preparation owner，从等待图片处理一直持有到 `_uploads` 与 ready ca
 持有者完成，也阻止新持有者越过执行快照。它在锁内直接修复缺失缩略图和删除确认孤儿；两类
 工作按主要资源分别调度，但取消或失败必须等待已经启动的资源池全部收口后才释放独占锁。
 正常完成时逐项返回结果，不把修复字节或执行结果复制到 `background_job`。只读存储检查不持锁，结果
-仅用于预览；写入口始终重新扫描 PostgreSQL 和完整物理命名空间。
+仅用于预览；写入口始终重新扫描 PostgreSQL 和完整物理命名空间。缩略图记录已经采用
+有效字节时，维修在生成前确认对象是否仍存在；记录为 0 时不执行结果无消费者的提前探测，
+而是在源完整性校验与生成后统一复核当前位置及缩略图，再决定采用、替换或跳过。
 
 内容接入临时素材由另一个单实例周期 worker 保守回收。它在短时 storage location read lock 内
 完整列举每个 `_uploads` 物理组，删除阶段再取得 write lock，复核物理 namespace、Redis
@@ -234,7 +236,10 @@ Redis Lua 先完整校验这些精确 incarnation，再按其全局 display rank
 与 revision。它不从 rank 0 扫描，也不假定当前文档任务位于全局 ZSET 头部，因此巨大 offset
 和其他会话新增的更靠前批次都不会改变组合分页语义。排除 pair 已被删除、discard 或由同
 session 新 incarnation 替换时，快照在同一响应返回精确 stale pair；Web 在一次 reducer 更新中
-清除旧卡、Blob、状态围栏、detached owner 与草稿 owner，不能让失效排除项永久占位。
+清除旧卡、Blob、状态围栏、detached owner 与草稿 owner，不能让失效排除项永久占位。canonical
+已经缺失且 owner 不再包含该 session 时，Lua 先收集最多 3600 个缺失 session，再只遍历一次
+display ZSET 检查是否仍有孤儿成员；命中继续按结构损坏 fail closed，否则精确返回 stale。
+该校验不建立持久反向索引、迁移状态或第二套恢复真相。
 completed 回执只保留身份、提交摘要、期限与卡片所需的紧凑来源 / 原始处理信息，随后用一次
 PostgreSQL `WHERE id = ANY(...)` 水合。重连、Redis operational 周期变化或服务端停机都会
 废止 scope 与旧动作权威，但当前页只读展示保留到新快照原位替换；不保存事件历史，也不以

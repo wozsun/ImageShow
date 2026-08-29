@@ -16,6 +16,25 @@ local excluded_json = ARGV[7]
 local included_json = ARGV[8]
 local max_excluded = tonumber(ARGV[9])
 
+local function display_contains_any_session(display_key, session_ids)
+  if next(session_ids) == nil then return false end
+  local cursor = '0'
+  repeat
+    local page = redis.call('ZSCAN', display_key, cursor, 'COUNT', 128)
+    cursor = page[1]
+    local members = page[2]
+    for index = 1, #members, 2 do
+      local member = members[index]
+      if #member >= 44
+        and string.sub(member, -44, -44) == ':'
+        and session_ids[string.sub(member, -43)] then
+        return true
+      end
+    end
+  until cursor == '0'
+  return false
+end
+
 if not valid_integer(offset, 0)
   or not valid_integer(limit, 0)
   or not valid_integer(max_limit, 1)
@@ -77,6 +96,7 @@ local active_excluded = {}
 local excluded_snapshots = {}
 local excluded_ranks = {}
 local stale_items = {}
+local missing_canonical_sessions = {}
 
 -- Every client-owned pair is validated before it can affect pagination. A
 -- missing, discarded, or replaced incarnation is reported explicitly so the
@@ -86,10 +106,10 @@ for _, item in ipairs(excluded_items) do
   local canonical_key = canonical_prefix .. item.session_id
   local canonical_type = redis_key_type(canonical_key)
   if canonical_type == 'none' then
-    if redis.call('ZSCORE', owner_key, item.session_id)
-      or display_contains_session(display_key, item.session_id) then
+    if redis.call('ZSCORE', owner_key, item.session_id) then
       error('INGESTION_QUEUE_STRUCTURE canonical_missing')
     end
+    missing_canonical_sessions[item.session_id] = true
     stale_items[#stale_items + 1] = item
   else
     assert_snapshot_hash_container(canonical_key, 'canonical', 12)
@@ -130,6 +150,12 @@ for _, item in ipairs(excluded_items) do
       excluded_ranks[#excluded_ranks + 1] = tonumber(display_rank)
     end
   end
+end
+-- A canonical removed by another client is a normal stale exclusion. The
+-- display projection still has to be checked for an orphan, but scan the ZSET
+-- once for the complete bounded session set instead of once per stale pair.
+if display_contains_any_session(display_key, missing_canonical_sessions) then
+  error('INGESTION_QUEUE_STRUCTURE canonical_missing')
 end
 table.sort(excluded_ranks)
 if offset > max_safe_integer - limit - #excluded_ranks then
