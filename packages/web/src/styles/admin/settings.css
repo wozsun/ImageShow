@@ -23,13 +23,6 @@
   gap: 10px 12px;
 }
 .settings-field-grid label { margin-bottom: 0; }
-.settings-toggle-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 10px 12px;
-  margin-bottom: 10px;
-}
-.settings-toggle-grid label { margin-bottom: 0; }
 .settings-head-actions {
   display: flex;
   align-items: center;

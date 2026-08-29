@@ -13,14 +13,12 @@ import {
   homeBannerTitle,
   imagePageSize,
   ingestionListPageSize,
-  importTypesKeepingOriginalLink,
   loginBackground,
   normalizeMaxLongEdge,
   normalizeMaxSizeKb,
   normalizeConcurrency,
   normalizeMinQuality,
   normalizeQuality,
-  normalizeQualityStep,
   randomDefaultMethod,
   recentUploads,
   siteRoot,
@@ -68,17 +66,9 @@ const appSettingsSchema = z.strictObject({
   upload: z.strictObject({
     browser_concurrency: uploadBrowserConcurrency.optional()
   }).optional(),
-  import: z.strictObject({
-    keep_original_link: importTypesKeepingOriginalLink.optional(),
-    auto_import: z.boolean().optional()
-  }).optional(),
-  weibo: z.strictObject({
-    source_enabled: z.boolean().optional()
-  }).optional(),
   normalize: z.strictObject({
     concurrency: normalizeConcurrency.optional(),
     quality: normalizeQuality.optional(),
-    quality_step: normalizeQualityStep.optional(),
     min_quality: normalizeMinQuality.optional(),
     max_long_edge: normalizeMaxLongEdge.optional(),
     max_size_kb: normalizeMaxSizeKb.optional(),
@@ -145,10 +135,15 @@ export function getSettingsForAdmin(): AdminSettings {
     auto_import,
     max_items: importMaxItemsValue
   } = settings.import;
+  const weiboMaxItems = settings.weibo.max_items;
   const {
-    max_items: weiboMaxItems,
-    source_enabled
-  } = settings.weibo;
+    concurrency,
+    quality,
+    min_quality,
+    max_long_edge: normalizeMaxLongEdgeValue,
+    max_size_kb,
+    skip_webp_under_kb
+  } = settings.normalize;
   const { login_background, image_page_size, recent_uploads, show_unset_theme_card } = settings.admin;
   return {
     site: {
@@ -177,8 +172,15 @@ export function getSettingsForAdmin(): AdminSettings {
       auto_import,
       max_items: importMaxItemsValue
     },
-    weibo: { max_items: weiboMaxItems, source_enabled },
-    normalize: settings.normalize,
+    weibo: { max_items: weiboMaxItems },
+    normalize: {
+      concurrency,
+      quality,
+      min_quality,
+      max_long_edge: normalizeMaxLongEdgeValue,
+      max_size_kb,
+      skip_webp_under_kb
+    },
     thumbnail: settings.thumbnail,
     admin: { login_background, image_page_size, recent_uploads, show_unset_theme_card }
   };
@@ -227,8 +229,6 @@ export async function saveAppSettings(input: AppSettingsInput) {
   if (input.site) runtimePatch.site = input.site;
   if (input.ingestion) runtimePatch.ingestion = input.ingestion;
   if (input.upload) runtimePatch.upload = input.upload;
-  if (input.import) runtimePatch.import = input.import;
-  if (input.weibo) runtimePatch.weibo = input.weibo;
   if (input.normalize) runtimePatch.normalize = input.normalize;
   if (input.thumbnail) runtimePatch.thumbnail = input.thumbnail;
   if (input.admin) runtimePatch.admin = input.admin;

@@ -9,7 +9,7 @@ PostgreSQL。排查配置时先确认“这项配置由谁管理”，再判断�
 | 来源 | 保存内容 | 修改方式 |
 | --- | --- | --- |
 | 环境变量 | PostgreSQL / Redis 连接、时区与首次管理员凭据；也可在首次生成 `config.json` 时播种应用配置。 | 修改 `.env`、宿主环境或 Compose 映射后重建 / 重启。`.env` 只是 Compose 插值来源，只有部署清单显式映射的值才会进入容器。部署字段在每次进程启动时读取，不写入 `config.json`。 |
-| `/app/data/config.json` | 站点、内容接入、图片处理、安全和日志等应用运行策略。 | 后台设置页，或直接编辑文件后在后台「设置 → 读取配置文件」。页面上传窗口、图片处理并发与最终入库并发可在普通设置页修改；接入原图体积 / 长边与 Server raw 准入通过配置文件或高级配置维护。存储迁移准入是代码内固定调度，不属于 RuntimeConfig。 |
+| `/app/data/config.json` | 站点、内容接入、图片处理、安全和日志等应用运行策略。 | 后台普通设置页或高级配置，或直接编辑文件后在后台「设置 → 读取配置文件」。页面上传窗口、图片处理并发与最终入库并发可在普通设置页修改；导入原图链接、自动开始、微博来源页、质量递减步长、接入原图体积 / 长边与 Server raw 准入只通过配置文件或高级配置维护。存储迁移准入是代码内固定调度，不属于 RuntimeConfig。 |
 | PostgreSQL | 管理员账号及界面偏好；本地 / S3 存储后端注册表；S3 endpoint、region、bucket、access key、secret key、根目录、public URL 与连接 / 空闲 / 总时限等实例化数据。 | 后台设置页或对应管理界面。secret key 只保存，不返回给前端。 |
 
 本页的 [RuntimeConfig 参数目录](#runtimeconfig-参数目录)是完整应用字段参考；仓库根目录
@@ -33,7 +33,10 @@ Docker healthcheck 只读取并在内存中归一化已经存在的 `config.json
 工作流所需的只读值；部署配置、完整 `appConfig`、Server raw / 迁移准入、
 外链抓取超时和内部调度常量留在各自权威配置或代码边界。`POST /api/admin/settings`
 同样只接受设置页公开的可编辑字段，并以嵌套 patch 合并，未公开配置不会因保存
-设置页而被默认值覆盖。`embed` 不进入普通后台设置的读取或保存 DTO，只通过
+设置页而被默认值覆盖。`import.keep_original_link` 与 `import.auto_import` 只为内容接入
+工作流保留在读取 DTO 中，不进入普通设置写入；`weibo.source_enabled` 与
+`normalize.quality_step` 不进入普通设置读写 DTO。这些字段统一通过高级配置或配置文件
+维护。`embed` 不进入普通后台设置的读取或保存 DTO，只通过
 `data/config.json` 维护；公开站点配置仅返回前端路由实际消费的有效嵌入开关，
 不返回来源列表，并额外返回由 `site.domain` 与 `site.static_subdomain` 派生的
 `site.static_url`，供详情原图按钮直接进入资源域。`site.domain`、`site.description`、`site.icon` 与
@@ -120,12 +123,12 @@ PostgreSQL 的 `admin_account` 表，不进入 `config.json`。单应用进程�
 | <!-- runtime-config:upload.max_items --> `upload.max_items` / `UPLOAD_MAX_ITEMS` / 显式映射 | 整数；默认 `200`；1–1000 项 | 文件选择与 intent 批次软上限；首次播种或热加载后影响新接入。 |
 | <!-- runtime-config:upload.browser_concurrency --> `upload.browser_concurrency` / `UPLOAD_BROWSER_CONCURRENCY` / 显式映射 | 整数；默认 `2`；1–8 | 每个活动页面共享的预览解码、短凭据请求与 raw PUT 窗口；页面读取新设置后影响后续准入。 |
 | <!-- runtime-config:upload.raw_concurrency --> `upload.raw_concurrency` / `UPLOAD_RAW_CONCURRENCY` / 显式映射 | 整数；默认 `5`；1–8 | 所有客户端共享的 Server raw PUT 准入；热加载后按 FIFO 调整等待请求。 |
-| <!-- runtime-config:import.keep_original_link --> `import.keep_original_link` / `IMPORT_KEEP_ORIGINAL_LINK` / 显式映射 | 严格 JSON 字符串数组；默认 `["url", "jsonl", "weibo"]`；成员仅可为 `url`、`jsonl`、`weibo`，规范化去重，空白名单为 `[]` | 只有白名单中的导入来源会把实际下载 URL 保存为公开 `original`；未列出的来源仍正常下载和入库。Server 在接管与首次提交意图冻结时均执行权威投影，热加载后影响尚未冻结提交的任务；正式入库后的人工编辑不属于此配置。 |
-| <!-- runtime-config:import.auto_import --> `import.auto_import` / `IMPORT_AUTO_IMPORT` / 显式映射 | 布尔；默认 `true` | 无问题项时是否直接建立 Import 队列；普通设置或热加载后影响新解析。 |
+| <!-- runtime-config:import.keep_original_link --> `import.keep_original_link` / `IMPORT_KEEP_ORIGINAL_LINK` / 显式映射 | 严格 JSON 字符串数组；默认 `["url", "jsonl", "weibo"]`；成员仅可为 `url`、`jsonl`、`weibo`，规范化去重，空白名单为 `[]` | 只有白名单中的导入来源会把实际下载 URL 保存为公开 `original`；未列出的来源仍正常下载和入库。Server 在接管与首次提交意图冻结时均执行权威投影，高级配置或热加载后影响尚未冻结提交的任务；正式入库后的人工编辑不属于此配置。 |
+| <!-- runtime-config:import.auto_import --> `import.auto_import` / `IMPORT_AUTO_IMPORT` / 显式映射 | 布尔；默认 `true` | 无问题项时是否直接建立 Import 队列；高级配置或热加载后影响新解析。 |
 | <!-- runtime-config:import.fetch_timeout_seconds --> `import.fetch_timeout_seconds` / `IMPORT_FETCH_TIMEOUT_SECONDS` / 显式映射 | 整数；默认 `30`；5–300 秒 | 外链 download 请求期限；热加载后影响新请求。 |
 | <!-- runtime-config:import.max_items --> `import.max_items` / `IMPORT_MAX_ITEMS` / 显式映射 | 整数；默认 `200`；1–1000 项 | URL / JSONL 单次软上限，不限制微博图片数；热加载后影响新解析。 |
 | <!-- runtime-config:weibo.max_items --> `weibo.max_items` / `WEIBO_MAX_ITEMS` / 显式映射 | 整数；默认 `10`；1–50 条 | 单次微博链接软上限；热加载后影响新解析。 |
-| <!-- runtime-config:weibo.source_enabled --> `weibo.source_enabled` / `WEIBO_SOURCE_ENABLED` / 显式映射 | 布尔；默认 `true` | 微博导入是否把帖子页面写入 `source`；不影响图片下载、`original` 白名单或其他导入来源。关闭后，新解析、接管与首次提交意图冻结都会清空该字段；重新开启会让新解析清单携带来源，并允许仍持有来源值的未冻结任务提交，但不会重建此前已从清单省略的来源。正式入库后的人工编辑不属于此配置。 |
+| <!-- runtime-config:weibo.source_enabled --> `weibo.source_enabled` / `WEIBO_SOURCE_ENABLED` / 显式映射 | 布尔；默认 `true` | 微博导入是否把帖子页面写入 `source`；不影响图片下载、`original` 白名单或其他导入来源。关闭后，新解析、接管与首次提交意图冻结都会清空该字段；重新开启会让新解析清单携带来源，并允许仍持有来源值的未冻结任务提交，但不会重建此前已从清单省略的来源。高级配置或热加载后生效；正式入库后的人工编辑不属于此配置。 |
 | <!-- runtime-config:weibo.request_delay_seconds --> `weibo.request_delay_seconds` / `WEIBO_REQUEST_DELAY_SECONDS` / 显式映射 | 严格 JSON 二元整数数组；默认 `[2, 5]`；两项均为 0–60 秒且下界不高于上界 | 全进程串行微博帖子请求的随机间隔 `[下界, 上界]`；已经开始的等待保持其采样值，热加载影响再下一项。 |
 | <!-- runtime-config:weibo.author_slugs --> `weibo.author_slugs` / `WEIBO_AUTHOR_SLUGS` / 显式映射 | 严格 JSON 对象；默认 `{}`；键为 1–20 位非零开头数字 ID，值为 1–32 字符合法小写 slug | 命中时给微博图片填充作者；重复 JSON 键或非法成员直接拒绝首次生成，热加载后影响新解析。 |
 
@@ -135,7 +138,7 @@ PostgreSQL 的 `admin_account` 表，不进入 `config.json`。单应用进程�
 | --- | --- | --- |
 | <!-- runtime-config:normalize.concurrency --> `normalize.concurrency` / `NORMALIZE_CONCURRENCY` / 显式映射 | 整数；默认 `2`；1–8 | Upload / Import、缩略图维修与亮度重算共享的 Server 图片处理准入；同一数值还派生 Upload / Import 共用的 prepare / staging publication 总量，以及 Import 正在下载或持有磁盘 raw 的后继数量。每图 Sharp 线程固定为 `1`，普通设置或热加载后影响后续工作。 |
 | <!-- runtime-config:normalize.quality --> `normalize.quality` / `NORMALIZE_QUALITY` / 显式映射 | 整数；默认 `80`；1–100 | 新图片 WebP 首次编码质量；普通设置或热加载后影响新 prepare。 |
-| <!-- runtime-config:normalize.quality_step --> `normalize.quality_step` / `NORMALIZE_QUALITY_STEP` / 显式映射 | 整数；默认 `5`；1–50 | 超体积后的质量递减步长；普通设置或热加载后影响新 prepare。 |
+| <!-- runtime-config:normalize.quality_step --> `normalize.quality_step` / `NORMALIZE_QUALITY_STEP` / 显式映射 | 整数；默认 `5`；1–50 | 超体积后的质量递减步长；高级配置或热加载后影响新 prepare。 |
 | <!-- runtime-config:normalize.min_quality --> `normalize.min_quality` / `NORMALIZE_MIN_QUALITY` / 显式映射 | 整数；默认 `20`；1–100，且不高于 `normalize.quality` | 转码最低质量；普通设置或热加载后影响新 prepare。 |
 | <!-- runtime-config:normalize.max_long_edge --> `normalize.max_long_edge` / `NORMALIZE_MAX_LONG_EDGE` / 显式映射 | 整数；默认 `4200`；300–32000 px | 入库成品长边上限，不放大；普通设置或热加载后影响新 prepare。 |
 | <!-- runtime-config:normalize.max_size_kb --> `normalize.max_size_kb` / `NORMALIZE_MAX_SIZE_KB` / 显式映射 | 整数；默认 `500`；50–102400 KiB | 入库成品目标体积；普通设置或热加载后影响新 prepare。 |

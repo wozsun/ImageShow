@@ -173,7 +173,12 @@ export type AdminImportSettings = Pick<
 
 export type AdminWeiboSettings = Pick<
   WeiboSettings,
-  "max_items" | "source_enabled"
+  "max_items"
+>;
+
+export type AdminNormalizeSettings = Omit<
+  NormalizeSettings,
+  "quality_step"
 >;
 
 export type AdminSettings = {
@@ -182,7 +187,7 @@ export type AdminSettings = {
   upload: AdminUploadSettings;
   import: AdminImportSettings;
   weibo: AdminWeiboSettings;
-  normalize: NormalizeSettings;
+  normalize: AdminNormalizeSettings;
   thumbnail: ThumbnailSettings;
   admin: AdminPanelSettings;
 };

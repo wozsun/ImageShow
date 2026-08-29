@@ -1,10 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  importSourceTypes,
   randomDefaultMethods,
   siteRoots,
-  type ImportSourceTypeDto,
   type RandomDefaultMethod,
   type SiteRoot
 } from "@imageshow/shared/browser";
@@ -102,13 +100,6 @@ export function SettingsPage() {
             upload: {
               browser_concurrency: settings.upload.browser_concurrency
             },
-            import: {
-              keep_original_link: settings.import.keep_original_link,
-              auto_import: settings.import.auto_import
-            },
-            weibo: {
-              source_enabled: settings.weibo.source_enabled
-            },
             normalize: settings.normalize,
             thumbnail: settings.thumbnail,
             admin: settings.admin
@@ -142,22 +133,9 @@ export function SettingsPage() {
   const updateSiteGallery = (patch: Partial<AdminSettings["site"]["gallery"]>) => updateSite({ gallery: { ...settings.site.gallery, ...patch } });
   const updateIngestion = (patch: Partial<AdminSettings["ingestion"]>) => setSettings({ ...settings, ingestion: { ...settings.ingestion, ...patch } });
   const updateUpload = (patch: Partial<AdminSettings["upload"]>) => setSettings({ ...settings, upload: { ...settings.upload, ...patch } });
-  const updateImport = (patch: Partial<AdminSettings["import"]>) => setSettings({ ...settings, import: { ...settings.import, ...patch } });
-  const updateWeibo = (patch: Partial<AdminSettings["weibo"]>) => setSettings({ ...settings, weibo: { ...settings.weibo, ...patch } });
   const updateNormalize = (patch: Partial<AdminSettings["normalize"]>) => setSettings({ ...settings, normalize: { ...settings.normalize, ...patch } });
   const updateThumbnail = (patch: Partial<AdminSettings["thumbnail"]>) => setSettings({ ...settings, thumbnail: { ...settings.thumbnail, ...patch } });
   const updateAdmin = (patch: Partial<AdminSettings["admin"]>) => setSettings({ ...settings, admin: { ...settings.admin, ...patch } });
-  const updateImportTypeKeepingOriginalLink = (
-    importType: ImportSourceTypeDto,
-    enabled: boolean
-  ) => {
-    const selected = new Set(settings.import.keep_original_link);
-    if (enabled) selected.add(importType);
-    else selected.delete(importType);
-    updateImport({
-      keep_original_link: importSourceTypes.filter((item) => selected.has(item))
-    });
-  };
   return (
     <section className="workspace workspace-contained settings-page">
       <WorkspaceHeader
@@ -350,15 +328,6 @@ export function SettingsPage() {
                 />
               </label>
               <label>
-                质量递减步长
-                <NumberInput
-                  min={1}
-                  max={50}
-                  value={settings.normalize.quality_step}
-                  onChange={(value) => updateNormalize({ quality_step: value })}
-                />
-              </label>
-              <label>
                 最低压缩质量
                 <NumberInput
                   min={1}
@@ -411,52 +380,6 @@ export function SettingsPage() {
                   value={settings.thumbnail.quality}
                   onChange={(value) => updateThumbnail({ quality: value })}
                 />
-              </label>
-            </div>
-            <div className="settings-toggle-grid">
-              <label>
-                <input
-                  type="checkbox"
-                  checked={settings.import.keep_original_link.includes("url")}
-                  onChange={(event) => updateImportTypeKeepingOriginalLink("url", event.target.checked)}
-                />
-                URL 导入保留原图链接
-              </label>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={settings.import.keep_original_link.includes("jsonl")}
-                  onChange={(event) => updateImportTypeKeepingOriginalLink("jsonl", event.target.checked)}
-                />
-                JSONL 导入保留原图链接
-              </label>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={settings.import.keep_original_link.includes("weibo")}
-                  onChange={(event) => updateImportTypeKeepingOriginalLink("weibo", event.target.checked)}
-                />
-                微博导入保留原图链接
-              </label>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={settings.weibo.source_enabled}
-                  onChange={(event) => updateWeibo({
-                    source_enabled: event.target.checked
-                  })}
-                />
-                微博导入填写来源页面
-              </label>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={settings.import.auto_import}
-                  onChange={(event) => updateImport({
-                    auto_import: event.target.checked
-                  })}
-                />
-                解析无错误时自动开始导入
               </label>
             </div>
           </section>

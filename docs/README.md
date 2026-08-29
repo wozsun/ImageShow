@@ -22,7 +22,3 @@
   [存储](guide/storage.md)、[安全](guide/security.md)
 - 功能出口：[功能与流程](guide/flows.md)、[随机图 API](guide/random-api.md)、
   [主机与资源子域](guide/subdomains.md)
-
-## 版本开发记录
-
-- [5.3.0 开发与验证报告](5.3.0-development-report.md)
