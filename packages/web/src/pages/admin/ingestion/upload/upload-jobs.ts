@@ -8,19 +8,23 @@ import {
 import {
   filterNewUploadFiles,
   uploadFileFingerprint
-} from "../queue/model/ingestion-job-utils.js";
+} from "../queue/model/ingestion-job-deduplication.js";
 
-const defaultDraft: ImageDraft = {
-  device: "auto",
-  brightness: "auto",
-  theme: "",
-  author: "",
-  title: "",
-  description: "",
-  source: "",
-  original: "",
-  tags: []
-};
+function createUploadDraft(
+  defaults: IngestionAttributeDefaults
+): ImageDraft {
+  return {
+    device: defaults.device,
+    brightness: defaults.brightness,
+    theme: defaults.theme.trim().toLowerCase(),
+    author: defaults.author.trim().toLowerCase(),
+    title: "",
+    description: "",
+    source: "",
+    original: "",
+    tags: [...new Set(defaults.tags)]
+  };
+}
 
 function fileExt(file: File) {
   return (file.name.split(".").pop() || "").toLowerCase();
@@ -47,52 +51,38 @@ async function loadImageDimensions(previewUrl: string): Promise<{ width: number;
   });
 }
 
-function applyUploadDefaults(
-  inferred: ImageDraft,
-  defaults: IngestionAttributeDefaults
-): ImageDraft {
-  return {
-    ...inferred,
-    device: defaults.device,
-    brightness: defaults.brightness,
-    theme: defaults.theme.trim() ? defaults.theme.trim().toLowerCase() : inferred.theme,
-    author: defaults.author.trim() ? defaults.author.trim().toLowerCase() : inferred.author,
-    tags: defaults.tags.length ? [...new Set([...inferred.tags, ...defaults.tags])] : inferred.tags
-  };
-}
-
-async function draftFromFile(
+async function inspectUploadPreview(
   defaults: IngestionAttributeDefaults,
   previewUrl: string
 ) {
-  const image = await loadImageDimensions(previewUrl);
+  const dimensions = await loadImageDimensions(previewUrl);
   return {
-    draft: applyUploadDefaults(defaultDraft, defaults),
-    width: image.width,
-    height: image.height
+    draft: createUploadDraft(defaults),
+    width: dimensions.width,
+    height: dimensions.height
   };
 }
 
-export function uploadIntentInput(
+export function buildUploadIntentItemInput(
   job: IngestionJob,
   maxLongEdge: number
 ) {
   if (!job.file) throw new Error("上传任务缺少图片文件");
-  if (job.manifestPosition === undefined) {
+  if (job.batchPosition === undefined) {
     throw new Error("上传任务缺少批次位置");
   }
-  if (job.uploadIntentInput?.idempotency_key === job.attemptKey) {
-    return job.uploadIntentInput;
+  if (job.uploadIntentItemInput?.idempotency_key === job.attemptKey) {
+    return job.uploadIntentItemInput;
   }
   return {
     ...job.draft,
     theme: normalizeTheme(job.draft.theme),
     author: normalizeAuthor(job.draft.author),
     idempotency_key: job.attemptKey,
-    batch_key: job.subscriptionBatchKey,
+    batch_key: job.batchKey,
     storage_slug: job.storageSlug,
     batch_time: job.batchTime,
-    manifest_position: job.manifestPosition,
+    batch_position: job.batchPosition,
     expected_size: job.file.size,
     max_long_edge: maxLongEdge
   };
@@ -119,54 +109,76 @@ export async function createUploadJobs({
   defaults,
   storageSlug,
   maxBytes,
-  maxLongEdge
+  maxLongEdge,
+  runInBrowserLane
 }: {
   files: readonly File[];
   defaults: IngestionAttributeDefaults;
   storageSlug: string;
   maxBytes: number;
   maxLongEdge: number;
+  runInBrowserLane: <Result>(work: () => Promise<Result>) => Promise<Result>;
 }) {
   const batchTime = new Date().toISOString();
-  const subscriptionBatchKey = webIngestionBatchKey();
-  return Promise.all(files.map(async (
+  const batchKey = webIngestionBatchKey();
+  const outcomes = await Promise.allSettled(files.map((
     file,
-    manifestPosition
-  ): Promise<IngestionJob> => {
+    batchPosition
+  ): Promise<IngestionJob> => runInBrowserLane(async () => {
     const objectUrl = URL.createObjectURL(file);
-    const inferred = await draftFromFile(defaults, objectUrl);
-    const tooLarge = file.size > maxBytes;
-    const tooWide = Math.max(inferred.width, inferred.height) > maxLongEdge;
-    return {
-      id: webUuidV7(),
-      attemptKey: webUuidV7(),
-      subscriptionBatchKey,
-      batchTime,
-      manifestPosition,
-      kind: "upload",
-      file,
-      fileFingerprint: uploadFileFingerprint(file),
-      status: tooLarge || tooWide ? "failed" : "queued",
-      failureStage: tooLarge || tooWide ? "create" : undefined,
-      message: tooLarge
-        ? "图片大小超过限制"
-        : tooWide
-          ? "图片长边超过限制"
-          : "等待上传",
-      preview: objectUrl,
-      objectUrl,
-      draft: inferred.draft,
-      width: inferred.width,
-      height: inferred.height,
-      originalWidth: inferred.width,
-      originalHeight: inferred.height,
-      transferProgress: 0,
-      duplicates: [],
-      duplicateDecision: "upload",
-      storageSlug,
-      originalSize: file.size
-    };
-  }));
+    try {
+      const preview = await inspectUploadPreview(defaults, objectUrl);
+      const tooLarge = file.size > maxBytes;
+      const tooWide = Math.max(preview.width, preview.height) > maxLongEdge;
+      return {
+        id: webUuidV7(),
+        attemptKey: webUuidV7(),
+        batchKey,
+        batchTime,
+        batchPosition,
+        kind: "upload",
+        file,
+        fileFingerprint: uploadFileFingerprint(file),
+        status: tooLarge || tooWide ? "failed" : "queued",
+        failureStage: tooLarge || tooWide ? "create" : undefined,
+        message: tooLarge
+          ? "图片大小超过限制"
+          : tooWide
+            ? "图片长边超过限制"
+            : "等待上传",
+        preview: objectUrl,
+        objectUrl,
+        draft: preview.draft,
+        width: preview.width,
+        height: preview.height,
+        originalWidth: preview.width,
+        originalHeight: preview.height,
+        transferProgress: 0,
+        duplicates: [],
+        duplicateDecision: "upload",
+        storageSlug,
+        originalSize: file.size
+      };
+    } catch (error) {
+      URL.revokeObjectURL(objectUrl);
+      throw error;
+    }
+  })));
+  const jobs: IngestionJob[] = [];
+  let failed = false;
+  let firstError: unknown;
+  for (const outcome of outcomes) {
+    if (outcome.status === "fulfilled") jobs.push(outcome.value);
+    else if (!failed) {
+      failed = true;
+      firstError = outcome.reason;
+    }
+  }
+  if (failed) {
+    revokeUploadJobPreviews(jobs);
+    throw firstError;
+  }
+  return jobs;
 }
 
 export function revokeUploadJobPreviews(jobs: readonly IngestionJob[]) {

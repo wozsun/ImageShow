@@ -12,14 +12,59 @@ export type OpenedRead = {
   totalSize: number | undefined;
   contentRange?: string;
   etag?: string;
+  /** Provider validator that can guard a native server-side copy. */
+  serverCopyValidator?: string;
   lastModified?: string;
   backend: StorageType;
 };
 
-export type CopyPrefix = "media" | "thumbs" | "_uploads";
-
 export type StorageRequestOptions = {
   signal?: AbortSignal;
+};
+
+export type StorageStreamWriteOptions = StorageRequestOptions & {
+  /** Expected hexadecimal MD5 when the destination protocol can verify it. */
+  expectedMd5?: string;
+};
+
+/** Opaque provider-owned locator used only to negotiate a native server copy. */
+export type StorageServerCopySource = Readonly<{
+  provider: string;
+  compatibility: string;
+  size: number;
+  location: Readonly<Record<string, string>>;
+}>;
+
+export type StorageServerCopyOptions = StorageRequestOptions & {
+  /** Validator observed while the source bytes were verified. */
+  sourceValidator: string;
+};
+
+export type StorageObjectReference = Readonly<{
+  prefix: StoragePrefix;
+  key: string;
+}>;
+
+export type StorageRemovalFailure = Readonly<{
+  code: string;
+  message: string;
+}>;
+
+export type StorageRemovalResult =
+  | StorageObjectReference & { status: "removed"; error?: never }
+  | StorageObjectReference & { status: "missing"; error?: never }
+  | StorageObjectReference & {
+      status: "failed";
+      error: StorageRemovalFailure;
+    }
+  | StorageObjectReference & {
+      status: "unknown";
+      error: StorageRemovalFailure;
+    };
+
+export type StorageRemoveOptions = StorageRequestOptions & {
+  /** S3-compatible providers may omit successful keys from the response. */
+  quiet?: boolean;
 };
 
 export type StoragePruneOptions = StorageRequestOptions & {
@@ -62,20 +107,39 @@ export interface StorageDriver {
     prefix: StoragePrefix,
     key: string,
     body: Buffer,
-    type: string,
+    contentType: string,
     options?: StorageRequestOptions
   ): Promise<void>;
-  remove(
+  writeStream(
     prefix: StoragePrefix,
     key: string,
-    options?: StorageRequestOptions
+    body: Readable,
+    size: number,
+    contentType: string,
+    options?: StorageStreamWriteOptions
   ): Promise<void>;
+  removeObjects(
+    objects: readonly StorageObjectReference[],
+    options?: StorageRemoveOptions
+  ): Promise<StorageRemovalResult[]>;
   copy(
-    fromPrefix: CopyPrefix,
+    fromPrefix: StoragePrefix,
     fromKey: string,
-    toPrefix: CopyPrefix,
+    toPrefix: StoragePrefix,
     toKey: string,
     options?: StorageCopyOptions
+  ): Promise<void>;
+  serverCopySource(
+    prefix: StoragePrefix,
+    key: string,
+    size: number
+  ): StorageServerCopySource | undefined;
+  supportsServerCopySource(source: StorageServerCopySource): boolean;
+  copyFromServerSource(
+    source: StorageServerCopySource,
+    toPrefix: StoragePrefix,
+    toKey: string,
+    options: StorageServerCopyOptions
   ): Promise<void>;
   listKeys(
     prefix: StoragePrefix,

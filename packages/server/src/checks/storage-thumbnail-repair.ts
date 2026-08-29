@@ -1,13 +1,17 @@
 import { ApiError, errorMessage } from "../core/api-error.ts";
 import { pool } from "../core/database/pools.ts";
+import { withNormalizationAdmission } from "../images/normalization-admission.ts";
 import { createThumbnail, md5Buffer, sha256Buffer } from "../images/processing.ts";
 import { resolveStorageAccess } from "../storage/backends/registry.ts";
 import { thumbnailObjectKey } from "../storage/objects/image-paths.ts";
 import { assertObjectNotPendingCleanup } from "../storage/cleanup/service.ts";
-import { removeStorageObjectAndConfirm } from "../storage/objects/access.ts";
+import {
+  assertStorageRemovalResults,
+  removeStorageObjectsAndConfirm
+} from "../storage/objects/access.ts";
 import {
   digestStorageObject,
-  type StorageEndpoint
+  type StorageAccess
 } from "../storage/objects/transfer.ts";
 import type {
   MaintenanceImage,
@@ -36,17 +40,19 @@ function sameThumbnailAuthority(
 }
 
 async function cleanupFailedThumbnailWrite(
-  storage: StorageEndpoint,
+  storage: StorageAccess,
   key: string,
   signal: AbortSignal,
   failure: unknown
 ): Promise<never> {
   try {
-    await removeStorageObjectAndConfirm(
-      "thumbs",
-      key,
-      storage.config.slug,
+    const results = await removeStorageObjectsAndConfirm(
+      [{ prefix: "thumbs", key, storageSlug: storage.config.slug }],
       { signal }
+    );
+    assertStorageRemovalResults(
+      results,
+      "无法确认失败的缩略图候选已清理"
     );
   } catch (cleanupError) {
     signal.throwIfAborted();
@@ -59,7 +65,7 @@ async function cleanupFailedThumbnailWrite(
 }
 
 async function writeVerifiedThumbnail(
-  storage: StorageEndpoint,
+  storage: StorageAccess,
   key: string,
   body: Buffer,
   signal: AbortSignal
@@ -157,13 +163,15 @@ async function persistThumbnailSize(
 
 export async function repairStorageThumbnail(
   imageId: string,
-  signal: AbortSignal
+  scheduleSignal: AbortSignal,
+  operationSignal: AbortSignal = scheduleSignal
 ): Promise<MaintenanceItem> {
   let authority: MaintenanceImage | undefined;
   try {
-    signal.throwIfAborted();
+    scheduleSignal.throwIfAborted();
+    operationSignal.throwIfAborted();
     authority = await readThumbnailAuthority(imageId);
-    signal.throwIfAborted();
+    operationSignal.throwIfAborted();
     if (!authority) {
       return {
         action: "repair_thumbnail",
@@ -188,86 +196,102 @@ export async function repairStorageThumbnail(
     }
 
     const storage = await resolveStorageAccess(authority.storage_slug);
-    signal.throwIfAborted();
+    operationSignal.throwIfAborted();
     await assertObjectNotPendingCleanup(storage.config, "thumbs", thumbKey);
-    signal.throwIfAborted();
-    if (!await storage.driver.exists("media", authority.object_key, { signal })) {
+    operationSignal.throwIfAborted();
+    if (!await storage.driver.exists(
+      "media",
+      authority.object_key,
+      { signal: operationSignal }
+    )) {
       return { ...itemBase, outcome: "skipped", reason: "当前位置的原图不存在" };
     }
     const thumbnailExists = await storage.driver.exists(
       "thumbs",
       thumbKey,
-      { signal }
+      { signal: operationSignal }
     );
     if (thumbnailExists && Number(authority.thumbnail_size) > 0) {
       return { ...itemBase, outcome: "skipped", reason: "缩略图已存在，无需维修" };
     }
-    const source = await storage.driver.readBuffer(
-      "media",
-      authority.object_key,
-      { signal }
+    const sourceAuthority = authority;
+    const thumbnail = await withNormalizationAdmission(
+      scheduleSignal,
+      async () => {
+        const source = await storage.driver.readBuffer(
+          "media",
+          sourceAuthority.object_key,
+          { signal: operationSignal }
+        );
+        operationSignal.throwIfAborted();
+        if (sourceAuthority.md5 && md5Buffer(source) !== sourceAuthority.md5) {
+          throw new ApiError(
+            502,
+            "storage_source_integrity_failed",
+            "源存储对象与数据库记录的 MD5 不一致",
+            {
+              image_id: sourceAuthority.id,
+              object_key: sourceAuthority.object_key
+            }
+          );
+        }
+        return createThumbnail(source);
+      }
     );
-    signal.throwIfAborted();
-    if (authority.md5 && md5Buffer(source) !== authority.md5) {
-      throw new ApiError(
-        502,
-        "storage_source_integrity_failed",
-        "源存储对象与数据库记录的 MD5 不一致",
-        { image_id: authority.id, object_key: authority.object_key }
-      );
-    }
-    const thumbnail = await createThumbnail(source);
-    signal.throwIfAborted();
+    operationSignal.throwIfAborted();
 
     const current = await readThumbnailAuthority(authority.id);
-    signal.throwIfAborted();
+    operationSignal.throwIfAborted();
     if (!sameThumbnailAuthority(authority, current)) {
       return { ...itemBase, outcome: "skipped", reason: "生成后图片位置或状态已变化" };
     }
     const currentStorage = await resolveStorageAccess(current!.storage_slug);
-    signal.throwIfAborted();
+    operationSignal.throwIfAborted();
     const currentThumbnailExists = await currentStorage.driver.exists(
       "thumbs",
       thumbKey,
-      { signal }
+      { signal: operationSignal }
     );
     if (currentThumbnailExists && Number(current!.thumbnail_size) > 0) {
       return { ...itemBase, outcome: "skipped", reason: "生成期间缩略图已恢复" };
     }
     if (currentThumbnailExists) {
-      await removeStorageObjectAndConfirm(
-        "thumbs",
-        thumbKey,
-        current!.storage_slug,
-        { signal }
+      const removals = await removeStorageObjectsAndConfirm(
+        [{
+          prefix: "thumbs",
+          key: thumbKey,
+          storageSlug: current!.storage_slug
+        }],
+        { signal: operationSignal }
       );
-      signal.throwIfAborted();
+      assertStorageRemovalResults(removals);
+      operationSignal.throwIfAborted();
     }
-    await persistThumbnailSize(current!, 0, signal);
+    await persistThumbnailSize(current!, 0, operationSignal);
     const pendingAuthority = { ...current!, thumbnail_size: 0 };
     const materialized = await writeVerifiedThumbnail(
       currentStorage,
       thumbKey,
       thumbnail,
-      signal
+      operationSignal
     );
-    signal.throwIfAborted();
+    operationSignal.throwIfAborted();
     try {
       await persistThumbnailSize(
         pendingAuthority,
         thumbnail.byteLength,
-        signal
+        operationSignal
       );
     } catch (error) {
-      signal.throwIfAborted();
+      operationSignal.throwIfAborted();
       return await cleanupFailedThumbnailWrite(
         currentStorage,
         thumbKey,
-        signal,
+        operationSignal,
         error
       );
     }
-    signal.throwIfAborted();
+    operationSignal.throwIfAborted();
     return {
       ...itemBase,
       outcome: "repaired",
@@ -277,7 +301,8 @@ export async function repairStorageThumbnail(
         : {})
     };
   } catch (error) {
-    if (signal.aborted) throw signal.reason ?? error;
+    if (scheduleSignal.aborted) throw scheduleSignal.reason ?? error;
+    if (operationSignal.aborted) throw operationSignal.reason ?? error;
     return {
       action: "repair_thumbnail",
       outcome: "failed",

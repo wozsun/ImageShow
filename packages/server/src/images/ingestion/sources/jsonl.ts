@@ -1,9 +1,9 @@
 import { z } from "zod";
 import { appConfig } from "@imageshow/shared";
 import {
-  type JsonlManifestItemDto,
-  type JsonlManifestParseErrorDto,
-  type JsonlManifestResultDto,
+  type ImportManifestItemDto,
+  type ImportManifestParseErrorDto,
+  type ImportManifestResultDto,
   slugMaxLength,
   slugPattern
 } from "@imageshow/shared/browser";
@@ -48,7 +48,7 @@ function zodErrorMessage(error: z.ZodError) {
 export function parseJsonlManifest(
   content: string,
   options: { maxItems: number; timeZone?: string }
-): JsonlManifestResultDto {
+): ImportManifestResultDto {
   const maxItems = Math.min(
     appConfig.ingestion.batchHardLimit,
     Math.max(1, Math.floor(options.maxItems))
@@ -59,13 +59,13 @@ export function parseJsonlManifest(
   const lines = content.split(/\r?\n/)
     .map((raw, index) => ({ line: index + 1, raw: raw.trim() }))
     .filter((entry) => entry.raw.length > 0)
-    .map((entry, manifestPosition) => ({ ...entry, manifestPosition }));
+    .map((entry, batchPosition) => ({ ...entry, batchPosition }));
   if (lines.length > maxItems) {
     throw new JsonlManifestError("jsonl_limit_exceeded", `JSONL 清单最多允许 ${maxItems} 条图片记录`);
   }
 
-  const items: JsonlManifestItemDto[] = [];
-  const errors: JsonlManifestParseErrorDto[] = [];
+  const items: ImportManifestItemDto[] = [];
+  const errors: ImportManifestParseErrorDto[] = [];
   for (const entry of lines) {
     try {
       const value = jsonlRowSchema.parse(JSON.parse(entry.raw));
@@ -74,7 +74,7 @@ export function parseJsonlManifest(
       items.push({
         ...value,
         line: entry.line,
-        manifest_position: entry.manifestPosition,
+        batch_position: entry.batchPosition,
         image_time: imageTime
       });
     } catch (error) {

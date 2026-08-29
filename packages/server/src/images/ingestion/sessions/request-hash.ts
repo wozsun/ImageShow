@@ -3,7 +3,7 @@ import type { ImageDraftDto } from "@imageshow/shared/browser";
 import type {
   IngestionQueueType,
   IngestionSourceType,
-  ImportSource
+  ImportDownload
 } from "./model.ts";
 import { stableJson } from "./projection.ts";
 
@@ -12,8 +12,8 @@ export type IngestionIntentHashInput = Readonly<{
   source_type: IngestionSourceType;
   batch_key: string;
   provided_image_time: string | null;
-  manifest_position: number;
-  import_source: ImportSource | null;
+  batch_position: number;
+  import_download: ImportDownload | null;
   metadata: ImageDraftDto;
   storage_slug: string;
   expected_size: number | null;
@@ -26,9 +26,9 @@ export function ingestionIntentRequestHash(input: IngestionIntentHashInput) {
     source_type: input.source_type,
     batch_key: input.batch_key,
     provided_image_time: input.provided_image_time,
-    manifest_position: input.manifest_position,
-    import_source: input.import_source
-      ? { url: input.import_source.url }
+    batch_position: input.batch_position,
+    import_download: input.import_download
+      ? { url: input.import_download.url }
       : null,
     metadata: {
       device: input.metadata.device,

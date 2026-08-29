@@ -26,7 +26,7 @@ import type {
 import type { IngestionAttributeDefaults } from "../queue/model/ingestion-attribute-defaults.js";
 import type { IngestionPreviewTarget } from "../queue/cards/DuplicateMatchPanel.js";
 import { ingestionJobPreviewAvailable } from "../queue/model/duplicate-match.js";
-import type { JsonlManifestParseError } from "../queue/ingestion-api.js";
+import type { ImportManifestParseError } from "../queue/ingestion-api.js";
 import type {
   ImportSourceMode,
   ImportSourceSubmission
@@ -59,8 +59,8 @@ type IngestionWorkflowWindowProps = {
   themes: FacetOption[];
   tags: FacetOption[];
   authors: FacetOption[];
-  jsonlErrors: JsonlManifestParseError[];
-  onClearJsonlErrors: () => void;
+  importParseErrors: ImportManifestParseError[];
+  onClearImportParseErrors: () => void;
   storageName: (slug: string) => string;
   onAddFiles: (files: FileList | null) => void;
   onPatchJob: (job: IngestionJob, patch: Partial<ImageDraft>) => void;
@@ -202,8 +202,8 @@ export function IngestionWorkflowWindow({
   themes,
   tags,
   authors,
-  jsonlErrors,
-  onClearJsonlErrors,
+  importParseErrors,
+  onClearImportParseErrors,
   storageName,
   onAddFiles,
   onPatchJob,
@@ -605,8 +605,8 @@ export function IngestionWorkflowWindow({
               busy={busy}
               queue={queue}
               duplicateDetails={duplicateDetails}
-              jsonlErrors={jsonlErrors}
-              onClearJsonlErrors={onClearJsonlErrors}
+              importParseErrors={importParseErrors}
+              onClearImportParseErrors={onClearImportParseErrors}
               storageName={storageName}
               vocabulary={{ themes, tags, authors }}
               jobActions={{

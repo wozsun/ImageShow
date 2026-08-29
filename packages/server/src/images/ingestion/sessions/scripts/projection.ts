@@ -273,7 +273,7 @@ local function valid_status(status)
     or status == 'discarded'
 end
 
-local function valid_import_source(source_type)
+local function valid_import_source_type(source_type)
   return source_type == 'url'
     or source_type == 'jsonl'
     or source_type == 'weibo'
@@ -440,10 +440,10 @@ local function assert_draft(value, marker)
   end
 end
 
-local function assert_import_source(value)
-  assert_exact_fields(value, { 'url' }, 'import_source')
+local function assert_import_download(value)
+  assert_exact_fields(value, { 'url' }, 'import_download')
   if type(value.url) ~= 'string' or value.url == '' then
-    error('INGESTION_QUEUE_STRUCTURE import_source_shape')
+    error('INGESTION_QUEUE_STRUCTURE import_download_shape')
   end
 end
 
@@ -490,18 +490,18 @@ local function assert_completed_display(value, queue)
     'source_type', 'original_width', 'original_height', 'original_size',
     'quality', 'transcoded'
   }, {
-    'manifest_position', 'manifest_line'
+    'batch_position', 'manifest_line'
   }, 'completed_display')
   if (queue == 'upload' and value.source_type ~= 'upload')
-    or (queue == 'import' and not valid_import_source(value.source_type))
+    or (queue == 'import' and not valid_import_source_type(value.source_type))
     or not valid_integer(value.original_width, 1)
     or not valid_integer(value.original_height, 1)
     or not valid_integer(value.original_size, 1)
     or (value.quality ~= cjson.null and not valid_integer(value.quality, 0))
     or type(value.transcoded) ~= 'boolean'
-    or (value.manifest_position ~= nil
-      and (not valid_integer(value.manifest_position, 0)
-        or value.manifest_position > 4095))
+    or (value.batch_position ~= nil
+      and (not valid_integer(value.batch_position, 0)
+        or value.batch_position > 4095))
     or (value.manifest_line ~= nil
       and (not valid_integer(value.manifest_line, 1)
         or value.manifest_line > 1000000)) then
@@ -540,7 +540,7 @@ end
 local function assert_upload_intent_shape(intent, stored)
   assert_exact_fields(intent, {
     'owner', 'session_id', 'candidate_image_id', 'resolved_image_time',
-    'request_hash', 'display_order_key', 'manifest_position', 'metadata', 'storage_slug',
+    'request_hash', 'display_order_key', 'batch_position', 'metadata', 'storage_slug',
     'expected_size', 'max_long_edge', 'created_at', 'expires_at',
     'execution_token', 'claim_heartbeat_at'
   }, 'intent', 'UPLOAD_INTENT')
@@ -558,8 +558,8 @@ local function assert_upload_intent_shape(intent, stored)
     or type(intent.storage_slug) ~= 'string' or intent.storage_slug == ''
     or not valid_integer(intent.expected_size, 1)
     or not valid_integer(intent.max_long_edge, 1)
-    or not valid_integer(intent.manifest_position, 0)
-    or intent.manifest_position > 4095 then
+    or not valid_integer(intent.batch_position, 0)
+    or intent.batch_position > 4095 then
     error('UPLOAD_INTENT intent_shape')
   end
   if stored and (
@@ -640,14 +640,14 @@ local function assert_canonical_shape(snapshot, pending_acceptance)
       'accepted_at', 'accepted_order', 'execution_token', 'raw_generation',
       'raw_size', 'discard_at', 'semantic_hash'
     }, {
-      'import_source', 'manifest_position', 'manifest_line', 'prepared',
+      'import_download', 'batch_position', 'manifest_line', 'prepared',
       'duplicate_decision', 'commit', 'error'
     }, 'active')
     if snapshot.queue == 'upload' and snapshot.source_type ~= 'upload' then
       error('INGESTION_QUEUE_STRUCTURE canonical_source')
     end
     if snapshot.queue == 'import'
-      and not valid_import_source(snapshot.source_type) then
+      and not valid_import_source_type(snapshot.source_type) then
       error('INGESTION_QUEUE_STRUCTURE canonical_source')
     end
     if type(snapshot.image_time) ~= 'string' or snapshot.image_time == ''
@@ -660,9 +660,9 @@ local function assert_canonical_shape(snapshot, pending_acceptance)
       or not valid_hash(snapshot.semantic_hash, 32)
       or not valid_integer(snapshot.progress_seq, 0)
       or not valid_integer(snapshot.raw_size, 0)
-      or (snapshot.manifest_position ~= nil
-        and (not valid_integer(snapshot.manifest_position, 0)
-          or snapshot.manifest_position > 4095))
+      or (snapshot.batch_position ~= nil
+        and (not valid_integer(snapshot.batch_position, 0)
+          or snapshot.batch_position > 4095))
       or (snapshot.manifest_line ~= nil
         and (not valid_integer(snapshot.manifest_line, 1)
           or snapshot.manifest_line > 1000000))
@@ -673,9 +673,9 @@ local function assert_canonical_shape(snapshot, pending_acceptance)
     end
     assert_draft(snapshot.metadata)
     if snapshot.queue == 'import' then
-      assert_import_source(snapshot.import_source)
-    elseif snapshot.import_source ~= nil then
-      error('INGESTION_QUEUE_STRUCTURE import_source_scope')
+      assert_import_download(snapshot.import_download)
+    elseif snapshot.import_download ~= nil then
+      error('INGESTION_QUEUE_STRUCTURE import_download_scope')
     end
     if snapshot.prepared ~= nil then assert_prepared(snapshot.prepared) end
     if snapshot.duplicate_decision ~= nil

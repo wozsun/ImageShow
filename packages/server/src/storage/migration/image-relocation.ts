@@ -14,7 +14,7 @@ import {
 } from "../objects/transfer.ts";
 import {
   captureMoveCleanupObjects,
-  enqueueCapturedObjectsForCleanupDetached,
+  enqueueCapturedObjectsForCleanupWithoutLocationLock,
   enqueueCapturedObjectsForCleanup,
   type CapturedMoveCleanupObject,
   type MoveCleanupObjectInput
@@ -106,12 +106,15 @@ export async function prepareVerifiedImageRelocation(
     if (!captured) throw new Error("Candidate namespace could not be captured");
     return captured;
   };
-  const cleanupCandidate = (object: CapturedMoveCleanupObject) => () =>
-    enqueueCapturedObjectsForCleanupDetached(
-      image.id,
-      [object],
-      `${operation}_candidate_integrity_failure`
-    );
+  const cleanupCandidate = (object: CapturedMoveCleanupObject) => (
+    _candidate: unknown,
+    cleanupOptions?: Readonly<{ confirmAbsentAfter?: Date }>
+  ) => enqueueCapturedObjectsForCleanupWithoutLocationLock(
+    image.id,
+    [object],
+    `${operation}_candidate_integrity_failure`,
+    cleanupOptions
+  );
 
   try {
     signal?.throwIfAborted();
@@ -186,7 +189,7 @@ export async function prepareVerifiedImageRelocation(
     );
   } catch (error) {
     try {
-      await enqueueCapturedObjectsForCleanupDetached(
+      await enqueueCapturedObjectsForCleanupWithoutLocationLock(
         image.id,
         uniqueObjects(createdObjects),
         `${operation}_prepare_failed`
@@ -219,12 +222,12 @@ export async function prepareVerifiedImageRelocation(
   };
 }
 
-/** Remove only destination objects created by this operation. */
-export function discardPreparedImageRelocation(
+/** Enqueue only destination objects created by this operation for cleanup. */
+export function enqueuePreparedImageRelocationCleanup(
   relocation: PreparedImageRelocation,
   reason: string
 ) {
-  return enqueueCapturedObjectsForCleanupDetached(
+  return enqueueCapturedObjectsForCleanupWithoutLocationLock(
     relocation.imageId,
     relocation.createdObjects,
     reason
@@ -237,12 +240,12 @@ export function discardPreparedImageRelocation(
  * ownership before compensating, and prefer a harmless duplicate over
  * deleting a destination that became authoritative.
  */
-export async function discardPreparedImageRelocationIfUnreferenced(
+export async function enqueuePreparedImageRelocationCleanupIfUnreferenced(
   relocation: PreparedImageRelocation,
   reason: string
 ) {
   try {
-    const adopted = await pool.query(
+    const authoritativeLocation = await pool.query(
       `SELECT 1
          FROM metadata
         WHERE id=$1
@@ -260,7 +263,7 @@ export async function discardPreparedImageRelocationIfUnreferenced(
         relocation.target.theme
       ]
     );
-    if (adopted.rowCount) return;
+    if (authoritativeLocation.rowCount) return;
   } catch (error) {
     logger.error("image_relocation_candidate_ownership_unknown", {
       image_id: relocation.imageId,
@@ -275,7 +278,7 @@ export async function discardPreparedImageRelocationIfUnreferenced(
     });
     return;
   }
-  await discardPreparedImageRelocation(relocation, reason);
+  await enqueuePreparedImageRelocationCleanup(relocation, reason);
 }
 
 /**

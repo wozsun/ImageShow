@@ -86,7 +86,7 @@ export function ImageAdmin() {
   // 列表卡片的「所在存储」展示后端显示名（而非 slug）；从后端列表解析。
   const storageName = useStorageNameResolver();
   const pageSize = settingsData?.settings.admin.image_page_size ?? adminImagePageLimit;
-  const editPageSize = settingsData?.settings.upload.list_page_size ?? 20;
+  const editPageSize = settingsData?.settings.ingestion.list_page_size ?? 20;
   const navigation = useImageAdminPageNavigation({
     view,
     filters,

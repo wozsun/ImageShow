@@ -1,4 +1,4 @@
-import { ApiError, errorMessage } from "../../core/api-error.ts";
+import { ApiError } from "../../core/api-error.ts";
 import {
   getStorageBackend,
   resolveStorageAccess
@@ -9,6 +9,8 @@ import type {
 import type {
   OpenedRead,
   StoragePruneOptions,
+  StorageRemovalResult,
+  StorageRemoveOptions,
   StorageRequestOptions
 } from "../drivers/driver.ts";
 import type {
@@ -21,6 +23,11 @@ import {
   collectStorageKeyListing,
   type StorageKeyListOptions
 } from "./key-listing.ts";
+import {
+  withStorageObjectRemovalAdmission
+} from "./removal-admission.ts";
+
+const neverAbortedStorageRemovalSignal = new AbortController().signal;
 
 export async function storageObjectExists(
   prefix: StoragePrefix,
@@ -57,44 +64,121 @@ export async function writeStorageBuffer(
   );
 }
 
-export async function removeStorageObjectAndConfirm(
-  prefix: StoragePrefix,
-  key: string,
-  slug?: string,
-  options?: StorageRequestOptions
-) {
-  const { config, driver } = await resolveStorageAccess(slug);
-  const existed = await driver.exists(prefix, key, options);
-  // DELETE is idempotent for every driver. Issue it even after a negative
-  // preflight so a stale or faulty existence response cannot make cleanup
-  // terminal while the object is still present.
-  await driver.remove(prefix, key, options);
-  let stillExists: boolean;
-  try {
-    stillExists = await driver.exists(prefix, key, options);
-  } catch (error) {
-    options?.signal?.throwIfAborted();
-    throw new ApiError(
-      502,
-      "storage_delete_confirmation_failed",
-      "存储对象删除后无法确认最终状态",
-      {
-        backend: config.slug,
-        prefix,
-        key,
-        reason: errorMessage(error)
+export type StorageRemovalRequest = Readonly<{
+  prefix: StoragePrefix;
+  key: string;
+  storageSlug?: string;
+}>;
+
+export type ResolvedStorageRemovalResult = StorageRemovalResult & {
+  storageSlug: string;
+};
+
+/**
+ * Resolve one or more objects by security context, then execute one driver
+ * call per shared physical client. N=1 uses this same path. A distinct
+ * admission signal lets a caller cancel queued work without interrupting an
+ * operation that already owns a higher-level maintenance lock.
+ */
+export async function removeStorageObjectsAndConfirm(
+  objects: readonly StorageRemovalRequest[],
+  options: StorageRemoveOptions = {},
+  admissionSignal: AbortSignal = options.signal
+    ?? neverAbortedStorageRemovalSignal
+): Promise<ResolvedStorageRemovalResult[]> {
+  if (!objects.length) {
+    throw new RangeError("Storage cleanup requires at least one object");
+  }
+  const operationSignal = options.signal ?? neverAbortedStorageRemovalSignal;
+  operationSignal.throwIfAborted();
+  admissionSignal.throwIfAborted();
+  const resolved = await Promise.all(objects.map(async (object, index) => ({
+    index,
+    object,
+    access: await resolveStorageAccess(object.storageSlug)
+  })));
+  operationSignal.throwIfAborted();
+  admissionSignal.throwIfAborted();
+
+  type RemovalGroup = {
+    driver: (typeof resolved)[number]["access"]["driver"];
+    entries: typeof resolved;
+  };
+  const groupsByDriver = new Map<RemovalGroup["driver"], RemovalGroup>();
+  for (const entry of resolved) {
+    let group = groupsByDriver.get(entry.access.driver);
+    if (!group) {
+      group = { driver: entry.access.driver, entries: [] };
+      groupsByDriver.set(entry.access.driver, group);
+    }
+    group.entries.push(entry);
+  }
+
+  const ordered = new Array<ResolvedStorageRemovalResult>(objects.length);
+  // Hand groups to the shared cleanup admission one at a time. Enqueuing
+  // an arbitrary local window here would let one multi-backend caller reserve
+  // several FIFO positions ahead of unrelated cleanup producers.
+  for (const group of groupsByDriver.values()) {
+    const results = await withStorageObjectRemovalAdmission(
+      admissionSignal,
+      () => {
+        operationSignal.throwIfAborted();
+        return group.driver.removeObjects(
+          group.entries.map(({ object }) => ({
+            prefix: object.prefix,
+            key: object.key
+          })),
+          options
+        );
       }
     );
+    if (results.length !== group.entries.length) {
+      throw new ApiError(
+        502,
+        "storage_delete_response_invalid",
+        "存储后端返回了不完整的逐对象删除结果"
+      );
+    }
+    for (const [resultIndex, result] of results.entries()) {
+      const entry = group.entries[resultIndex]!;
+      ordered[entry.index] = {
+        ...result,
+        prefix: entry.object.prefix,
+        key: entry.object.key,
+        storageSlug: entry.access.config.slug
+      } as ResolvedStorageRemovalResult;
+    }
   }
-  if (stillExists) {
+  operationSignal.throwIfAborted();
+
+  return ordered;
+}
+
+export function assertStorageRemovalResults(
+  results: readonly ResolvedStorageRemovalResult[],
+  message = "一个或多个存储对象未能确认删除"
+) {
+  const incomplete = results.filter((result) => (
+    result.status === "failed" || result.status === "unknown"
+  ));
+  if (incomplete.length) {
     throw new ApiError(
       502,
       "storage_delete_incomplete",
-      "存储后端返回删除成功，但对象仍然存在",
-      { backend: config.slug, prefix, key }
+      message,
+      {
+        failed: incomplete.length,
+        objects: incomplete.map((result) => ({
+          backend: result.storageSlug,
+          prefix: result.prefix,
+          key: result.key,
+          outcome: result.status,
+          code: result.error.code,
+          message: result.error.message
+        }))
+      }
     );
   }
-  return existed ? "removed" as const : "missing" as const;
 }
 
 export async function collectStorageKeys(

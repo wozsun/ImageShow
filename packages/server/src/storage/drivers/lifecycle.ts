@@ -1,13 +1,18 @@
+import type { Readable } from "node:stream";
 import { ApiError } from "../../core/api-error.ts";
 import type { StoragePrefix } from "../objects/keys.ts";
 import type {
-  CopyPrefix,
   OpenedRead,
   StorageCopyOptions,
   StorageDriver,
+  StorageObjectReference,
   StoragePruneOptions,
+  StorageRemoveOptions,
   StorageRequestOptions,
-  StorageSelfTest
+  StorageServerCopyOptions,
+  StorageServerCopySource,
+  StorageSelfTest,
+  StorageStreamWriteOptions
 } from "./driver.ts";
 import type {
   StorageKeyListing,
@@ -107,28 +112,68 @@ class ManagedStorageDriver implements StorageDriver {
     prefix: StoragePrefix,
     key: string,
     body: Buffer,
-    type: string,
+    contentType: string,
     options?: StorageRequestOptions
   ) {
     return this.usingReference(() => (
-      this.driver.writeBuffer(prefix, key, body, type, options)
+      this.driver.writeBuffer(prefix, key, body, contentType, options)
     ));
   }
 
-  remove(prefix: StoragePrefix, key: string, options?: StorageRequestOptions) {
-    return this.usingReference(() => this.driver.remove(prefix, key, options));
+  writeStream(
+    prefix: StoragePrefix,
+    key: string,
+    body: Readable,
+    size: number,
+    contentType: string,
+    options?: StorageStreamWriteOptions
+  ) {
+    return this.usingReference(() => (
+      this.driver.writeStream(prefix, key, body, size, contentType, options)
+    ));
+  }
+
+  removeObjects(
+    objects: readonly StorageObjectReference[],
+    options?: StorageRemoveOptions
+  ) {
+    return this.usingReference(() => (
+      this.driver.removeObjects(objects, options)
+    ));
   }
 
   copy(
-    fromPrefix: CopyPrefix,
+    fromPrefix: StoragePrefix,
     fromKey: string,
-    toPrefix: CopyPrefix,
+    toPrefix: StoragePrefix,
     toKey: string,
     options?: StorageCopyOptions
   ) {
     return this.usingReference(() => this.driver.copy(
       fromPrefix,
       fromKey,
+      toPrefix,
+      toKey,
+      options
+    ));
+  }
+
+  serverCopySource(prefix: StoragePrefix, key: string, size: number) {
+    return this.driver.serverCopySource(prefix, key, size);
+  }
+
+  supportsServerCopySource(source: StorageServerCopySource) {
+    return this.driver.supportsServerCopySource(source);
+  }
+
+  copyFromServerSource(
+    source: StorageServerCopySource,
+    toPrefix: StoragePrefix,
+    toKey: string,
+    options: StorageServerCopyOptions
+  ) {
+    return this.usingReference(() => this.driver.copyFromServerSource(
+      source,
       toPrefix,
       toKey,
       options

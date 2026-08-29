@@ -39,14 +39,74 @@ export async function enqueueMoveCleanupJob(
   options: Readonly<{
     client?: PoolClient;
     guardToken?: string;
+    confirmAbsentAfter?: Date;
   }> = {}
 ) {
   await enqueueMoveCleanupJobs([{
     imageId,
     objects,
     reason,
-    guardToken: options.guardToken
+    guardToken: options.guardToken,
+    confirmAbsentAfter: options.confirmAbsentAfter
   }], options.client);
+}
+
+/**
+ * Keep one pre-copy Ingestion guard authoritative while an S3 request may
+ * still publish its deterministic target. The guard is created before the
+ * transfer starts; this update therefore changes only its absence-confirmation
+ * window and never races by replacing the immutable object list.
+ */
+export async function setIngestionCandidateGuardConfirmationDeadline(
+  imageId: string,
+  guardToken: string,
+  confirmAbsentAfter: Date | null
+) {
+  const deadline = confirmAbsentAfter?.toISOString() ?? null;
+  const result = await pool.query(
+    `UPDATE background_job AS job
+        SET payload=CASE
+              WHEN $3::text IS NULL
+                THEN job.payload - 'confirm_absent_after'
+              WHEN NULLIF(job.payload->>'confirm_absent_after', '') IS NOT NULL
+               AND (job.payload->>'confirm_absent_after')::timestamptz
+                     > $3::timestamptz
+                THEN job.payload
+              ELSE jsonb_set(
+                job.payload,
+                '{confirm_absent_after}',
+                to_jsonb($3::text),
+                true
+              )
+            END,
+            updated_at=now()
+      WHERE job.type='move.cleanup'
+        AND job.target_id=$1
+        AND job.payload->>'reason'='ingestion_commit_candidate_guard'
+        AND job.payload->>'guard_token'=$2
+        AND job.status IN ('pending', 'running', 'failed')`,
+    [imageId, guardToken, deadline]
+  );
+  if (result.rowCount !== 1) {
+    throw new Error("Ingestion candidate cleanup guard is no longer unresolved");
+  }
+}
+
+/** Re-read mutable guard timing after its handler acquires the image lock. */
+export async function readRunningMoveCleanupJobPayload(
+  jobId: string,
+  executionToken: string
+): Promise<Record<string, unknown> | null> {
+  const row = (await pool.query(
+    `SELECT payload
+       FROM background_job
+      WHERE id=$1
+        AND type='move.cleanup'
+        AND status='running'
+        AND execution_token=$2`,
+    [jobId, executionToken]
+  )).rows[0] as { payload: Record<string, unknown> } | undefined;
+  return row?.payload ?? null;
 }
 
 type MoveCleanupJobInput = Readonly<{
@@ -54,6 +114,7 @@ type MoveCleanupJobInput = Readonly<{
   objects: readonly CapturedMoveCleanupObject[];
   reason: string;
   guardToken?: string;
+  confirmAbsentAfter?: Date;
 }>;
 
 async function enqueueMoveCleanupJobs(
@@ -67,6 +128,9 @@ async function enqueueMoveCleanupJobs(
       objects,
       reason: job.reason,
       ...(job.guardToken ? { guard_token: job.guardToken } : {}),
+      ...(job.confirmAbsentAfter
+        ? { confirm_absent_after: job.confirmAbsentAfter.toISOString() }
+        : {}),
       retain_exhausted: true
     };
     return [{

@@ -1,4 +1,4 @@
-import { getInputImageMaxBytes } from "../../../config/app-settings.ts";
+import { getIngestionMaxFileBytes } from "../../../config/app-settings.ts";
 import { ApiError } from "../../../core/api-error.ts";
 import { randomUuidV7 } from "../../../core/uuid.ts";
 import { fetchImportImageToFile } from "./fetch.ts";
@@ -18,13 +18,13 @@ import { IngestionSessionRepository } from "../repository.ts";
 
 export type DownloadIngestionSessionDependencies = Readonly<{
   fetchImageToFile: typeof fetchImportImageToFile;
-  inputImageMaxBytes: () => number;
+  maxFileBytes: () => number;
   now: () => number;
 }>;
 
 const defaultDependencies: DownloadIngestionSessionDependencies = {
   fetchImageToFile: fetchImportImageToFile,
-  inputImageMaxBytes: getInputImageMaxBytes,
+  maxFileBytes: getIngestionMaxFileBytes,
   now: Date.now
 };
 
@@ -37,7 +37,7 @@ export async function downloadIngestionSessionSnapshot(
   if (
     session.status !== "downloading"
     || !session.execution_token
-    || !session.import_source?.url
+    || !session.import_download?.url
   ) {
     throw new ApiError(409, "invalid_ingestion_state", "导入任务不能进入下载阶段");
   }
@@ -56,9 +56,9 @@ export async function downloadIngestionSessionSnapshot(
       session,
       signal,
       async (executionSignal) => {
-        let progress = Promise.resolve(session);
-        let progressFailed = false;
-        let progressFailure: unknown;
+        let progressUpdateChain = Promise.resolve(session);
+        let progressUpdateFailed = false;
+        let progressUpdateFailure: unknown;
         const progressController = new AbortController();
         const downloadSignal = AbortSignal.any([
           executionSignal,
@@ -67,10 +67,10 @@ export async function downloadIngestionSessionSnapshot(
         let lastProgressAt = 0;
         try {
           const rawSize = await resolvedDependencies.fetchImageToFile(
-            session.import_source!.url,
+            session.import_download!.url,
             rawPath,
             partPath,
-            resolvedDependencies.inputImageMaxBytes(),
+            resolvedDependencies.maxFileBytes(),
             downloadSignal,
             (value) => {
               const now = resolvedDependencies.now();
@@ -80,7 +80,7 @@ export async function downloadIngestionSessionSnapshot(
                 && now - lastProgressAt < 250
               ) return;
               lastProgressAt = now;
-              progress = progress.then(async (current) => (
+              progressUpdateChain = progressUpdateChain.then(async (current) => (
                 await updateIngestionExecutionProgress(
                   repository,
                   current,
@@ -95,16 +95,16 @@ export async function downloadIngestionSessionSnapshot(
               // before a slow response body reaches the final await below.
               // Observe every link immediately and stop the sibling download,
               // while retaining the original promise for ordered settlement.
-              void progress.catch((error) => {
-                if (!progressFailed) {
-                  progressFailed = true;
-                  progressFailure = error;
+              void progressUpdateChain.catch((error) => {
+                if (!progressUpdateFailed) {
+                  progressUpdateFailed = true;
+                  progressUpdateFailure = error;
                   progressController.abort(error);
                 }
               });
             }
           );
-          const current = await progress;
+          const current = await progressUpdateChain;
           executionSignal.throwIfAborted();
           return mutateIngestionExecution(repository, current, (latest) => {
             const nextWithoutHash = {
@@ -125,14 +125,14 @@ export async function downloadIngestionSessionSnapshot(
             };
           });
         } catch (error) {
-          await progress.catch(() => undefined);
+          await progressUpdateChain.catch(() => undefined);
           await removeIngestionRawPart(
             "import",
             session,
             rawGeneration,
             session.execution_token
           ).catch(() => undefined);
-          throw progressFailed ? progressFailure : error;
+          throw progressUpdateFailed ? progressUpdateFailure : error;
         }
       }
     )

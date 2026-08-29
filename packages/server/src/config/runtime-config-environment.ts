@@ -33,7 +33,7 @@ export const runtimeConfigEnvironmentBindings = [
   { path: "site.name", environmentVariable: "SITE_NAME", valueKind: "string" },
   { path: "site.domain", environmentVariable: "SITE_DOMAIN", valueKind: "string" },
   { path: "site.description", environmentVariable: "SITE_DESCRIPTION", valueKind: "string" },
-  { path: "site.icon_url", environmentVariable: "SITE_ICON_URL", valueKind: "string" },
+  { path: "site.icon", environmentVariable: "SITE_ICON", valueKind: "string" },
   { path: "site.version.enabled", environmentVariable: "SITE_VERSION_ENABLED", valueKind: "boolean" },
   { path: "site.version.link_enabled", environmentVariable: "SITE_VERSION_LINK_ENABLED", valueKind: "boolean" },
   { path: "site.root", environmentVariable: "SITE_ROOT", valueKind: "string" },
@@ -41,32 +41,29 @@ export const runtimeConfigEnvironmentBindings = [
   { path: "site.home.background", environmentVariable: "SITE_HOME_BACKGROUND", valueKind: "string" },
   { path: "site.home.banner_label", environmentVariable: "SITE_HOME_BANNER_LABEL", valueKind: "string" },
   { path: "site.home.banner_title", environmentVariable: "SITE_HOME_BANNER_TITLE", valueKind: "string" },
-  { path: "site.gallery.default_limit", environmentVariable: "SITE_GALLERY_DEFAULT_LIMIT", valueKind: "number" },
+  { path: "site.gallery.limit", environmentVariable: "SITE_GALLERY_LIMIT", valueKind: "number" },
   { path: "site.gallery.order", environmentVariable: "SITE_GALLERY_ORDER", valueKind: "string" },
-  { path: "site.random_default_method", environmentVariable: "SITE_RANDOM_DEFAULT_METHOD", valueKind: "string" },
+  { path: "site.random_method", environmentVariable: "SITE_RANDOM_METHOD", valueKind: "string" },
   { path: "site.static_subdomain", environmentVariable: "SITE_STATIC_SUBDOMAIN", valueKind: "string" },
   { path: "site.robots_enabled", environmentVariable: "SITE_ROBOTS_ENABLED", valueKind: "boolean" },
   { path: "embed.enabled", environmentVariable: "EMBED_ENABLED", valueKind: "boolean" },
   { path: "embed.allowed_origins", environmentVariable: "EMBED_ALLOWED_ORIGINS", valueKind: "json-array" },
+  { path: "ingestion.max_file_size_mb", environmentVariable: "INGESTION_MAX_FILE_SIZE_MB", valueKind: "number" },
+  { path: "ingestion.max_long_edge", environmentVariable: "INGESTION_MAX_LONG_EDGE", valueKind: "number" },
+  { path: "ingestion.list_page_size", environmentVariable: "INGESTION_LIST_PAGE_SIZE", valueKind: "number" },
   { path: "ingestion.commit_concurrency", environmentVariable: "INGESTION_COMMIT_CONCURRENCY", valueKind: "number" },
-  { path: "ingestion.global_commit_concurrency", environmentVariable: "INGESTION_GLOBAL_COMMIT_CONCURRENCY", valueKind: "number" },
-  { path: "ingestion.global_commit_byte_budget_mb", environmentVariable: "INGESTION_GLOBAL_COMMIT_BYTE_BUDGET_MB", valueKind: "number" },
   { path: "upload.max_items", environmentVariable: "UPLOAD_MAX_ITEMS", valueKind: "number" },
-  { path: "upload.max_file_size_mb", environmentVariable: "UPLOAD_MAX_FILE_SIZE_MB", valueKind: "number" },
-  { path: "upload.max_long_edge", environmentVariable: "UPLOAD_MAX_LONG_EDGE", valueKind: "number" },
-  { path: "upload.list_page_size", environmentVariable: "UPLOAD_LIST_PAGE_SIZE", valueKind: "number" },
-  { path: "upload.concurrency", environmentVariable: "UPLOAD_CONCURRENCY", valueKind: "number" },
-  { path: "upload.global_concurrency", environmentVariable: "UPLOAD_GLOBAL_CONCURRENCY", valueKind: "number" },
-  { path: "import.fill_original_url", environmentVariable: "IMPORT_FILL_ORIGINAL_URL", valueKind: "boolean" },
+  { path: "upload.browser_concurrency", environmentVariable: "UPLOAD_BROWSER_CONCURRENCY", valueKind: "number" },
+  { path: "upload.raw_concurrency", environmentVariable: "UPLOAD_RAW_CONCURRENCY", valueKind: "number" },
+  { path: "import.keep_original_link", environmentVariable: "IMPORT_KEEP_ORIGINAL_LINK", valueKind: "json-array" },
   { path: "import.auto_import", environmentVariable: "IMPORT_AUTO_IMPORT", valueKind: "boolean" },
-  { path: "import.concurrency", environmentVariable: "IMPORT_CONCURRENCY", valueKind: "number" },
-  { path: "import.global_concurrency", environmentVariable: "IMPORT_GLOBAL_CONCURRENCY", valueKind: "number" },
   { path: "import.fetch_timeout_seconds", environmentVariable: "IMPORT_FETCH_TIMEOUT_SECONDS", valueKind: "number" },
   { path: "import.max_items", environmentVariable: "IMPORT_MAX_ITEMS", valueKind: "number" },
   { path: "weibo.max_items", environmentVariable: "WEIBO_MAX_ITEMS", valueKind: "number" },
-  { path: "weibo.concurrency", environmentVariable: "WEIBO_CONCURRENCY", valueKind: "number" },
-  { path: "weibo.global_concurrency", environmentVariable: "WEIBO_GLOBAL_CONCURRENCY", valueKind: "number" },
+  { path: "weibo.source_enabled", environmentVariable: "WEIBO_SOURCE_ENABLED", valueKind: "boolean" },
+  { path: "weibo.request_delay_seconds", environmentVariable: "WEIBO_REQUEST_DELAY_SECONDS", valueKind: "json-array" },
   { path: "weibo.author_slugs", environmentVariable: "WEIBO_AUTHOR_SLUGS", valueKind: "json-object" },
+  { path: "normalize.concurrency", environmentVariable: "NORMALIZE_CONCURRENCY", valueKind: "number" },
   { path: "normalize.quality", environmentVariable: "NORMALIZE_QUALITY", valueKind: "number" },
   { path: "normalize.quality_step", environmentVariable: "NORMALIZE_QUALITY_STEP", valueKind: "number" },
   { path: "normalize.min_quality", environmentVariable: "NORMALIZE_MIN_QUALITY", valueKind: "number" },
@@ -79,9 +76,6 @@ export const runtimeConfigEnvironmentBindings = [
   { path: "admin.image_page_size", environmentVariable: "ADMIN_IMAGE_PAGE_SIZE", valueKind: "number" },
   { path: "admin.recent_uploads", environmentVariable: "ADMIN_RECENT_UPLOADS", valueKind: "number" },
   { path: "admin.show_unset_theme_card", environmentVariable: "ADMIN_SHOW_UNSET_THEME_CARD", valueKind: "boolean" },
-  { path: "background_job.move_cleanup_concurrency", environmentVariable: "BACKGROUND_JOB_MOVE_CLEANUP_CONCURRENCY", valueKind: "number" },
-  { path: "background_job.theme_reassign_concurrency", environmentVariable: "BACKGROUND_JOB_THEME_REASSIGN_CONCURRENCY", valueKind: "number" },
-  { path: "background_job.migrate_concurrency", environmentVariable: "BACKGROUND_JOB_MIGRATE_CONCURRENCY", valueKind: "number" },
   { path: "security.session_ttl_seconds", environmentVariable: "SECURITY_SESSION_TTL_SECONDS", valueKind: "number" },
   { path: "security.login_failure_window_seconds", environmentVariable: "SECURITY_LOGIN_FAILURE_WINDOW_SECONDS", valueKind: "number" },
   { path: "security.login_max_failures", environmentVariable: "SECURITY_LOGIN_MAX_FAILURES", valueKind: "number" },
@@ -90,14 +84,13 @@ export const runtimeConfigEnvironmentBindings = [
   { path: "altcha.enabled", environmentVariable: "ALTCHA_ENABLED", valueKind: "boolean" },
   { path: "altcha.ttl_seconds", environmentVariable: "ALTCHA_TTL_SECONDS", valueKind: "number" },
   { path: "altcha.cost", environmentVariable: "ALTCHA_COST", valueKind: "number" },
-  { path: "altcha.counter_min", environmentVariable: "ALTCHA_COUNTER_MIN", valueKind: "number" },
-  { path: "altcha.counter_max", environmentVariable: "ALTCHA_COUNTER_MAX", valueKind: "number" },
+  { path: "altcha.counter_range", environmentVariable: "ALTCHA_COUNTER_RANGE", valueKind: "json-array" },
   { path: "log.level", environmentVariable: "LOG_LEVEL", valueKind: "string" },
   { path: "log.max_size_mb", environmentVariable: "LOG_MAX_SIZE_MB", valueKind: "number" },
   { path: "log.max_files", environmentVariable: "LOG_MAX_FILES", valueKind: "number" }
 ] as const satisfies readonly RuntimeConfigEnvironmentBinding[];
 
-function strictJsonValue(source: string) {
+function parseStrictJsonValue(source: string) {
   let index = 0;
 
   function fail(message: string): never {
@@ -239,8 +232,7 @@ function parseEnvironmentValue(
     if (value === "false") return false;
     throw new Error("must be true or false");
   }
-
-  const parsed = strictJsonValue(value);
+  const parsed = parseStrictJsonValue(value);
   if (binding.valueKind === "json-array" && !Array.isArray(parsed)) {
     throw new Error("must be a JSON array");
   }

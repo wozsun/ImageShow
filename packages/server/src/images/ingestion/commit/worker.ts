@@ -1,6 +1,8 @@
 import type { AdminImageListItemDto } from "@imageshow/shared/browser";
 import { ApiError, errorMessage } from "../../../core/api-error.ts";
-import { runWithAdvisoryLockSignal } from "../../../core/database/advisory-locks.ts";
+import {
+  runWithAdvisoryLockAcquisitionSignal
+} from "../../../core/database/advisory-locks.ts";
 import { logger } from "../../../core/logger.ts";
 import { randomUuidV7 } from "../../../core/uuid.ts";
 import { resolveTagNames } from "../../../tags/query.ts";
@@ -24,7 +26,7 @@ import { adminImageListItemsWithTags } from "../../presenter.ts";
 import { publishCompletedReceipt } from "./completion.ts";
 import { ingestionContentLockKey } from "./duplicate-confirmation.ts";
 import { persistIngestionImage } from "./persistence.ts";
-import { IngestionCommitStagingCleanupPlan } from "./staging-cleanup.ts";
+import { IngestionCommitStagingCleanup } from "./staging-cleanup.ts";
 import {
   assertCommitTargetsAvailable,
   assertCurrentCommitExecution,
@@ -55,7 +57,7 @@ export async function commitIngestionSessionSnapshot(
     prepared.prepared_image_key,
     prepared.prepared_thumbnail_key
   ];
-  const stagingCleanupPlan = new IngestionCommitStagingCleanupPlan(
+  const stagingCleanup = new IngestionCommitStagingCleanup(
     session.storage_slug,
     stagingKeys
   );
@@ -71,7 +73,7 @@ export async function commitIngestionSessionSnapshot(
         : []),
       ...resolvedTags.map((slug) => ({ entity: "tag" as const, slug }))
     ]);
-    const attempt = await runWithAdvisoryLockSignal(
+    const attempt = await runWithAdvisoryLockAcquisitionSignal(
       signal,
       () => tryWithStorageLocationReadAndAdvisoryLocks(
         [
@@ -176,7 +178,6 @@ export async function commitIngestionSessionSnapshot(
                   code: "storage_object_conflict",
                   message: "准备好的图片文件与完整性信息不一致"
                 },
-                cleanupCandidate: async () => undefined,
                 ownedIngestionCandidateGuard: {
                   imageId: session.image_id,
                   token: candidateGuardToken
@@ -198,7 +199,6 @@ export async function commitIngestionSessionSnapshot(
                   code: "storage_object_conflict",
                   message: "准备好的缩略图与完整性信息不一致"
                 },
-                cleanupCandidate: async () => undefined,
                 ownedIngestionCandidateGuard: {
                   imageId: session.image_id,
                   token: candidateGuardToken
@@ -224,9 +224,9 @@ export async function commitIngestionSessionSnapshot(
               combinedSignal
             );
             // From this point PostgreSQL is authoritative. Freeze the exact
-            // staging cleanup plan before any cache, receipt, or cleanup await
+            // staging cleanup keys before any cache, receipt, or cleanup await
             // can fail and erase the prepared keys from Redis recovery state.
-            stagingCleanupPlan.arm();
+            stagingCleanup.markDatabaseCommitted();
             if (result.inserted) mutationBatch.add({ id: session.image_id });
             return result;
           });
@@ -270,24 +270,26 @@ export async function commitIngestionSessionSnapshot(
                 error: errorMessage(error)
               });
             });
-          const retainedStagingKeys = await stagingCleanupPlan.removeNow();
-          if (retainedStagingKeys) {
+          const remainingStagingKeyCount = await stagingCleanup.removeNow(
+            combinedSignal
+          );
+          if (remainingStagingKeyCount) {
             logger.warn("ingestion_staging_cleanup_deferred", {
               session_id: session.session_id,
               image_id: session.image_id,
-              keys: retainedStagingKeys
+              remaining_key_count: remainingStagingKeyCount
             });
           }
           return persisted.image;
         }
       )
     );
-    await stagingCleanupPlan.enqueueRetained();
+    await stagingCleanup.scheduleRemainingRemoval();
     return attempt.acquired ? attempt.value : null;
   } catch (error) {
     // Formal media/thumb candidates were guarded persistently before copy.
     // Only disposable staging cleanup remains for the bounded retry queue.
-    await stagingCleanupPlan.enqueueRetained();
+    await stagingCleanup.scheduleRemainingRemoval();
     throw error;
   } finally {
     coordinator.unregisterCancellable(session);

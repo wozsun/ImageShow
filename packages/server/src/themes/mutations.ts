@@ -2,7 +2,6 @@ import type { PoolClient } from "pg";
 import { pool } from "../core/database/pools.ts";
 import { withTransaction } from "../core/database/transactions.ts";
 import { ApiError } from "../core/api-error.ts";
-import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { mapWithWorkerPool } from "../core/concurrency.ts";
 import {
   assertVocabularyCreated,
@@ -17,12 +16,16 @@ import {
   withStorageLocationReadAndAdvisoryLocks
 } from "../storage/maintenance-lock.ts";
 import {
-  discardPreparedImageRelocation,
-  discardPreparedImageRelocationIfUnreferenced,
+  enqueuePreparedImageRelocationCleanup,
+  enqueuePreparedImageRelocationCleanupIfUnreferenced,
   enqueuePreparedImageSourceCleanup,
   prepareVerifiedImageRelocation,
   type RelocatableImage
 } from "../storage/migration/image-relocation.ts";
+import {
+  STORAGE_MIGRATION_CONCURRENCY,
+  withStorageMigrationAdmission
+} from "../storage/migration/admission.ts";
 import {
   withImageMutationSync,
   withPlannedImageMutationRebuild
@@ -35,11 +38,12 @@ import { bumpReadyImageRevision } from "../images/ready-cache/revision.ts";
 import { invalidateEntityCountCaches } from "../vocab/vocab-cache.ts";
 
 const THEME_REASSIGN_PAGE_SIZE = 100;
+const themeReassignAdmissionSignal = new AbortController().signal;
 
 type ThemeReassignImage = RelocatableImage & { status: string };
 type ThemeReassignPlan = {
   affectedCount: number;
-  throughId: string | null;
+  upperBoundImageId: string | null;
 };
 type ThemeReassignProgress = {
   readyCommitted: number;
@@ -218,7 +222,7 @@ async function reassignThemeImageToNone(
         );
         readyCommitted = switched && image.status === "ready";
         if (!switched) {
-          await discardPreparedImageRelocation(
+          await enqueuePreparedImageRelocationCleanup(
             relocation,
             "theme_reassign_compare_and_swap_failed"
           );
@@ -226,7 +230,7 @@ async function reassignThemeImageToNone(
         return switched ? "committed" : "skipped";
       } catch (error) {
         try {
-          await discardPreparedImageRelocationIfUnreferenced(
+          await enqueuePreparedImageRelocationCleanupIfUnreferenced(
             relocation,
             "theme_reassign_failed"
           );
@@ -246,12 +250,11 @@ async function reassignThemeImageToNone(
 
 async function reassignThemeImagesToNone(
   theme: string,
-  throughId: string | null,
+  upperBoundImageId: string | null,
   progress: ThemeReassignProgress,
   exactReadyLimit: number | null
 ) {
-  if (!throughId) return { deferred: false };
-  const concurrency = getRuntimeConfig().background_job.theme_reassign_concurrency;
+  if (!upperBoundImageId) return { deferred: false };
   let afterId: string | null = null;
   for (;;) {
     const images = (await pool.query(
@@ -263,17 +266,22 @@ async function reassignThemeImagesToNone(
           AND id <= $3::uuid
         ORDER BY id
         LIMIT $4`,
-      [theme, afterId, throughId, THEME_REASSIGN_PAGE_SIZE]
+      [theme, afterId, upperBoundImageId, THEME_REASSIGN_PAGE_SIZE]
     )).rows as ThemeReassignImage[];
     if (!images.length) return { deferred: false };
-    const results = await mapWithWorkerPool(images, concurrency, (candidate) => (
-      reassignThemeImageToNone(
-        theme,
-        candidate,
-        progress,
-        exactReadyLimit
+    const results = await mapWithWorkerPool(
+      images,
+      STORAGE_MIGRATION_CONCURRENCY,
+      (candidate) => withStorageMigrationAdmission(
+        themeReassignAdmissionSignal,
+        () => reassignThemeImageToNone(
+          theme,
+          candidate,
+          progress,
+          exactReadyLimit
+        )
       )
-    ));
+    );
     if (results.includes("deferred")) return { deferred: true };
     afterId = images.at(-1)!.id;
     if (images.length < THEME_REASSIGN_PAGE_SIZE) {
@@ -287,17 +295,17 @@ async function readThemeReassignPlan(
 ): Promise<ThemeReassignPlan> {
   const row = (await pool.query(
     `SELECT (count(*) FILTER (WHERE status='ready'))::int AS affected_count,
-            max(id::text) AS through_id
+            max(id::text) AS upper_bound_image_id
        FROM metadata
       WHERE theme=$1`,
     [theme]
   )).rows[0] as {
     affected_count?: number;
-    through_id?: string | null;
+    upper_bound_image_id?: string | null;
   } | undefined;
   return {
     affectedCount: Number(row?.affected_count ?? 0),
-    throughId: row?.through_id ?? null
+    upperBoundImageId: row?.upper_bound_image_id ?? null
   };
 }
 
@@ -333,12 +341,12 @@ async function deleteThemeAndReassign(
       progress.readyCommitted + plan.affectedCount
     );
     const attempt = async (
-      throughId: string | null,
+      upperBoundImageId: string | null,
       exactReadyLimit: number | null
     ) => {
       const reassigned = await reassignThemeImagesToNone(
         slug,
-        throughId,
+        upperBoundImageId,
         progress,
         exactReadyLimit
       );
@@ -355,17 +363,17 @@ async function deleteThemeAndReassign(
       return withPlannedImageMutationRebuild(
         decision,
         async () => {
-          let throughId = plan.throughId;
+          let upperBoundImageId = plan.upperBoundImageId;
           for (;;) {
-            const result = await attempt(throughId, null);
+            const result = await attempt(upperBoundImageId, null);
             if (!result.retry) return result.deleted;
-            throughId = (await readThemeReassignPlan(slug)).throughId;
+            upperBoundImageId = (await readThemeReassignPlan(slug)).upperBoundImageId;
           }
         }
       );
     }
     const result = await attempt(
-      plan.throughId,
+      plan.upperBoundImageId,
       READY_IMAGE_EXACT_SYNC_MAX_ITEMS
     );
     if (!result.retry) {

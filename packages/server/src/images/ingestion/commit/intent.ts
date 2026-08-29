@@ -1,5 +1,6 @@
 import type {
   AdminImageListItemDto,
+  ImageDraftDto,
   IngestionCommitItemInputDto,
   IngestionCommitItemResultDto
 } from "@imageshow/shared/browser";
@@ -13,7 +14,8 @@ import {
   committedIngestionResultForOwner,
   readCommittedIngestionResultsByImageIds
 } from "../../read-models/ingestion-results.ts";
-import { readDuplicateSnapshotByMd5 } from "../../read-models/duplicates.ts";
+import { readDuplicateSnapshotsByMd5 } from "../../read-models/duplicates.ts";
+import { canonicalImportMetadata } from "../sessions/import-metadata.ts";
 import { ingestionSessionWithDuplicateConflict } from "./conflict-recovery.ts";
 import type {
   IngestionSessionSnapshot,
@@ -28,6 +30,8 @@ import {
   IngestionSessionRepository
 } from "../repository.ts";
 
+const COMMIT_INTENT_WORKER_COUNT = 10;
+
 function commitIntentHash(
   session: IngestionSessionSnapshot,
   input: IngestionCommitItemInputDto
@@ -40,6 +44,35 @@ function commitIntentHash(
     storage_slug: session.storage_slug,
     prepared_generation: session.prepared?.generation ?? ""
   });
+}
+
+function commitMetadata(
+  session: IngestionSessionSnapshot,
+  metadata: ImageDraftDto,
+  runtime: ReturnType<typeof getRuntimeConfig>
+): ImageDraftDto {
+  if (
+    session.queue !== "import"
+    || session.source_type === "upload"
+    || !session.import_download
+  ) return metadata;
+  if (session.commit) {
+    // Controlled Import fields are no longer caller intent after the first
+    // commit freeze. Reuse them across retries and later config reloads.
+    return {
+      ...metadata,
+      original: session.commit.metadata.original,
+      source: session.source_type === "weibo"
+        ? session.commit.metadata.source
+        : metadata.source
+    };
+  }
+  return canonicalImportMetadata(
+    runtime,
+    session.source_type,
+    session.import_download.url,
+    metadata
+  );
 }
 
 function failedResult(
@@ -74,12 +107,14 @@ function failedResult(
   };
 }
 
-async function assertDuplicateDecision(
+function assertDuplicateDecision(
   imageId: string,
-  md5: string,
+  snapshot: Awaited<ReturnType<typeof readDuplicateSnapshotsByMd5>> extends Map<
+    string,
+    infer Snapshot
+  > ? Snapshot : never,
   decision: IngestionCommitItemInputDto["duplicate_decision"]
 ) {
-  const snapshot = await readDuplicateSnapshotByMd5(md5);
   const ownVisible = snapshot.items.some(
     (item) => item.id.toLowerCase() === imageId.toLowerCase()
   );
@@ -139,6 +174,7 @@ async function convergeCommitVersionConflict(
   owner: string,
   input: IngestionCommitItemInputDto,
   intentHash: string,
+  runtime: ReturnType<typeof getRuntimeConfig>,
   error: unknown
 ): Promise<IngestionCommitItemResultDto> {
   if (!(error instanceof ApiError) || error.code !== "ingestion_version_conflict") {
@@ -186,9 +222,15 @@ async function convergeCommitVersionConflict(
   if (current.status === "discarded") {
     throw new ApiError(409, "ingestion_discarded", "内容接入任务已取消");
   }
+  const convergedIntentHash = current.commit
+    ? commitIntentHash(current, {
+        ...input,
+        metadata: commitMetadata(current, input.metadata, runtime)
+      })
+    : intentHash;
   if (
     current.commit?.commit_request_id === input.commit_request_id
-    && current.commit.commit_intent_hash === intentHash
+    && current.commit.commit_intent_hash === convergedIntentHash
     && (
       current.status === "committing"
       || current.status === "resolving"
@@ -223,13 +265,25 @@ export async function acceptIngestionCommitIntents(
   owner: string,
   items: readonly IngestionCommitItemInputDto[]
 ) {
+  const runtime = getRuntimeConfig();
   const committed = await readCommittedIngestionResultsByImageIds(
     items.map((item) => item.image_id)
   );
   const sessions = await repository.readSessions(owner, items);
+  const duplicateSnapshots = await readDuplicateSnapshotsByMd5([
+    ...new Set(sessions.flatMap((stored) => (
+      stored
+      && stored !== ingestionSessionIncarnationMismatch
+      && stored.status === "ready"
+      && "prepared" in stored
+      && stored.prepared
+        ? [stored.prepared.md5]
+        : []
+    )))
+  ]);
   return mapWithWorkerPool(
     items,
-    Math.min(10, getRuntimeConfig().ingestion.commit_concurrency),
+    COMMIT_INTENT_WORKER_COUNT,
     async (input, index): Promise<IngestionCommitItemResultDto> => {
       const pair = {
         session_id: input.session_id,
@@ -275,7 +329,9 @@ export async function acceptIngestionCommitIntents(
         if (!("prepared" in stored) || !stored.prepared) {
           throw new ApiError(409, "invalid_ingestion_state", "图片尚未准备完成");
         }
-        const intentHash = commitIntentHash(stored, input);
+        const metadata = commitMetadata(stored, input.metadata, runtime);
+        const canonicalInput = { ...input, metadata };
+        const intentHash = commitIntentHash(stored, canonicalInput);
         if (
           stored.status === "committing"
           || stored.status === "resolving"
@@ -323,6 +379,7 @@ export async function acceptIngestionCommitIntents(
                   owner,
                   input,
                   intentHash,
+                  runtime,
                   error
                 );
               }
@@ -359,26 +416,26 @@ export async function acceptIngestionCommitIntents(
             "准备提交的图片内容已变化，请重新处理"
           );
         }
-        await assertDuplicateDecision(
+        assertDuplicateDecision(
           stored.image_id,
-          stored.prepared.md5,
+          duplicateSnapshots.get(stored.prepared.md5)!,
           input.duplicate_decision
         );
-        const classification = resolveClassification(input.metadata, {
+        const classification = resolveClassification(metadata, {
           device: stored.prepared.detected_device,
           brightness: stored.prepared.detected_brightness
         });
         const finalObjectKey = storageObjectKey(
           classification.device,
           classification.brightness,
-          input.metadata.theme,
+          metadata.theme,
           stored.image_id,
           stored.prepared.ext
         );
         const executionToken = randomUuidV7();
         const nextWithoutHash = {
           ...stored,
-          metadata: input.metadata,
+          metadata,
           duplicate_decision: input.duplicate_decision,
           status: "committing" as const,
           phase: "committing",
@@ -391,7 +448,7 @@ export async function acceptIngestionCommitIntents(
             created_by: owner,
             expected_md5: input.expected_md5,
             duplicate_decision: input.duplicate_decision,
-            metadata: input.metadata,
+            metadata,
             final_object_key: finalObjectKey
           },
           error: undefined,
@@ -418,6 +475,7 @@ export async function acceptIngestionCommitIntents(
             owner,
             input,
             intentHash,
+            runtime,
             error
           );
         }

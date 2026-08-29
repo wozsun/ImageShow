@@ -1,6 +1,9 @@
 import { mapWithWorkerPool } from "../../../core/concurrency.ts";
 import { withStorageLocationReadLock } from "../../../storage/maintenance-lock.ts";
-import { removeStorageObjectAndConfirm } from "../../../storage/objects/access.ts";
+import {
+  assertStorageRemovalResults,
+  removeStorageObjectsAndConfirm
+} from "../../../storage/objects/access.ts";
 import { removeIngestionRaw } from "../raw/files.ts";
 import type { IngestionSessionSnapshot } from "../sessions/model.ts";
 
@@ -15,29 +18,22 @@ async function cleanupRetiredSession(session: IngestionSessionSnapshot) {
     : [];
   if (session.prepared) {
     cleanups.push(withStorageLocationReadLock(async (signal) => {
-      const removals = await Promise.allSettled([
-        removeStorageObjectAndConfirm(
-          "_uploads",
-          session.prepared!.prepared_image_key,
-          session.storage_slug,
-          { signal }
-        ),
-        removeStorageObjectAndConfirm(
-          "_uploads",
-          session.prepared!.prepared_thumbnail_key,
-          session.storage_slug,
-          { signal }
-        )
-      ]);
-      const failures = removals.flatMap((result) => (
-        result.status === "rejected" ? [result.reason] : []
-      ));
-      if (failures.length) {
-        throw new AggregateError(
-          failures,
-          "Retired Ingestion staging cleanup failed"
-        );
-      }
+      const removals = await removeStorageObjectsAndConfirm([
+        {
+          prefix: "_uploads",
+          key: session.prepared!.prepared_image_key,
+          storageSlug: session.storage_slug
+        },
+        {
+          prefix: "_uploads",
+          key: session.prepared!.prepared_thumbnail_key,
+          storageSlug: session.storage_slug
+        }
+      ], { signal });
+      assertStorageRemovalResults(
+        removals,
+        "Retired Ingestion staging cleanup failed"
+      );
     }));
   }
   const results = await Promise.allSettled(cleanups);
@@ -50,10 +46,10 @@ async function cleanupRetiredSession(session: IngestionSessionSnapshot) {
 }
 
 export async function cleanupRetiredSessions(
-  cleanupPlans: readonly IngestionSessionSnapshot[]
+  retiredSessions: readonly IngestionSessionSnapshot[]
 ) {
   const failures: unknown[] = [];
-  await mapWithWorkerPool(cleanupPlans, 1, async (session) => {
+  await mapWithWorkerPool(retiredSessions, 1, async (session) => {
     try {
       await cleanupRetiredSession(session);
     } catch (error) {

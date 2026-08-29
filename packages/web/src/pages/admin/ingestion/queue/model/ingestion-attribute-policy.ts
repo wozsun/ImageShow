@@ -25,7 +25,7 @@ function ingestionAttributePhase(job: IngestionJob): IngestionAttributePhase {
   if (job.commitIntent) return "locked";
   if (job.status === "ready") return "ready";
   if (initialAttributeStatuses.has(job.status)) return "initial";
-  if (job.uploadIntentInput || job.importAcceptInput) return "locked";
+  if (job.uploadIntentItemInput || job.importAcceptItemInput) return "locked";
   if (job.status !== "failed") return "locked";
 
   if (job.failureStage === "commit" || job.failureStage === "cancel") {

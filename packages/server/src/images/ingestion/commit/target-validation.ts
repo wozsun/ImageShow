@@ -1,5 +1,5 @@
 import { ApiError } from "../../../core/api-error.ts";
-import { assertStorageTargetAvailable } from "../../../storage/objects/transfer.ts";
+import { assertStorageTargetAdoptable } from "../../../storage/objects/transfer.ts";
 import { readDuplicateSnapshotByMd5 } from "../../read-models/duplicates.ts";
 import type {
   IngestionPreparedManifest,
@@ -8,7 +8,7 @@ import type {
 import { IngestionSessionRepository } from "../repository.ts";
 
 type CommitTargetAvailability = Omit<
-  Parameters<typeof assertStorageTargetAvailable>[0],
+  Parameters<typeof assertStorageTargetAdoptable>[0],
   "signal"
 >;
 
@@ -23,7 +23,7 @@ export async function assertCommitTargetsAvailable(
   let firstFailure: unknown;
   const checks = targets.map(async (target) => {
     try {
-      await assertStorageTargetAvailable({
+      await assertStorageTargetAdoptable({
         ...target,
         signal: checkSignal
       });

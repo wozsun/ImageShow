@@ -14,7 +14,7 @@ import {
   readyImageCacheRebuildPath,
   readyImageProjection
 } from "../../../lib/api/ready-image-cache.js";
-import { migrateStorageBackend } from "../../../lib/api/storage-backend-migration.js";
+import { migrateStorageBackendImages } from "../../../lib/api/storage-backend-image-migration.js";
 import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
 import { ReadyImageCachePanel } from "./ReadyImageCachePanel.js";
 import type {
@@ -53,7 +53,7 @@ export function CheckStorageMaintenanceActions({
   const client = useQueryClient();
   const [maintenancePreview, setMaintenancePreview] = useState<unknown>(null);
   const [operationModal, setOperationModal] = useState<
-    "storage-backend-migration" | "storage-maintenance" | null
+    "storage-backend-image-migration" | "storage-maintenance" | null
   >(null);
 
   const openStorageMaintenance = async () => {
@@ -73,18 +73,18 @@ export function CheckStorageMaintenanceActions({
     await onRunCheck("storage-maintenance") !== null
   );
   const runStorageMigration = async (source: string, target: string) => {
-    onRunningChange("storage-backend-migration");
+    onRunningChange("storage-backend-image-migration");
     try {
       onPublishResult(
-        await migrateStorageBackend(source, target),
-        "storage-backend-migration"
+        await migrateStorageBackendImages(source, target),
+        "storage-backend-image-migration"
       );
       return true;
     } catch (error) {
       reportAdminUiError("storage.backend_migration", error);
       onPublishResult(
         { ok: false, error: "迁移执行失败，请检查存储配置后重试" },
-        "storage-backend-migration"
+        "storage-backend-image-migration"
       );
       return false;
     } finally {
@@ -102,13 +102,13 @@ export function CheckStorageMaintenanceActions({
           <button
             type="button"
             disabled={Boolean(running)}
-            onClick={() => setOperationModal("storage-backend-migration")}
+            onClick={() => setOperationModal("storage-backend-image-migration")}
           >
             <AdminIcon name="database-2-line" />
             <StableButtonLabel
               idle="迁移存储后端"
               busyText="迁移中"
-              busy={running === "storage-backend-migration"}
+              busy={running === "storage-backend-image-migration"}
             />
           </button>
         )}
@@ -127,7 +127,7 @@ export function CheckStorageMaintenanceActions({
           </button>
         )}
       </div>
-      {operationModal === "storage-backend-migration"
+      {operationModal === "storage-backend-image-migration"
         && canMigrateStorage && (
         <StorageBackendMigrationDialog
           busy={Boolean(running)}
@@ -213,7 +213,7 @@ function StorageMaintenanceDialog({ preview, running, onClose, onRun }: {
                 </div>
                 <div>
                   <dt>受保护内容接入暂存</dt>
-                  <dd>{summary.protected_uploads.toLocaleString()}</dd>
+                  <dd>{summary.protected_staging_objects.toLocaleString()}</dd>
                 </div>
               </dl>
             )}

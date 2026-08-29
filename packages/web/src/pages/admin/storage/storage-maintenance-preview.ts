@@ -92,14 +92,14 @@ export function storageMaintenancePreview(result: unknown) {
     && !groupBlocked(issue)
     && unavailableSlugs.has(issueText(issue, "backend"))
   )).length;
-  const protectedUploads = issueList(storage, "active_staging_files").length
+  const protectedStagingObjects = issueList(storage, "active_staging_files").length
     + issueList(storage, "retained_staging_files").length;
 
   return {
     repairable_thumbnails: repairableThumbnails,
     missing_originals: missingObjects.length,
     removable_objects: removableObjects,
-    protected_uploads: protectedUploads,
+    protected_staging_objects: protectedStagingObjects,
     blocked_namespaces: blockedNamespaces.size,
     unavailable_logical_backends: unavailableSlugs.size,
     blocked_items: blockedItems,

@@ -1,7 +1,8 @@
 import { errorMessage } from "../core/api-error.ts";
 import {
+  assertStorageRemovalResults,
   pruneEmptyStorageDirs,
-  removeStorageObjectAndConfirm
+  removeStorageObjectsAndConfirm
 } from "../storage/objects/access.ts";
 import type {
   CapturedMaintenanceGroup,
@@ -11,27 +12,31 @@ import type {
 
 export async function removeStorageMaintenanceCandidate(
   candidate: Extract<MaintenanceCandidate, { kind: "remove" }>,
-  signal: AbortSignal
+  scheduleSignal: AbortSignal,
+  operationSignal: AbortSignal = scheduleSignal
 ): Promise<MaintenanceItem> {
   try {
-    signal.throwIfAborted();
-    const result = await removeStorageObjectAndConfirm(
-      candidate.prefix,
-      candidate.key,
-      candidate.backend,
-      { signal }
-    );
-    signal.throwIfAborted();
+    scheduleSignal.throwIfAborted();
+    operationSignal.throwIfAborted();
+    const results = await removeStorageObjectsAndConfirm([{
+      prefix: candidate.prefix,
+      key: candidate.key,
+      storageSlug: candidate.backend
+    }], { signal: operationSignal }, scheduleSignal);
+    assertStorageRemovalResults(results);
+    const result = results[0]!;
+    scheduleSignal.throwIfAborted();
     return {
       action: "remove_object",
-      outcome: result === "removed" ? "removed" : "skipped",
+      outcome: result.status === "removed" ? "removed" : "skipped",
       backend: candidate.backend,
       prefix: candidate.prefix,
       key: candidate.key,
-      ...(result === "missing" ? { reason: "对象已不存在" } : {})
+      ...(result.status === "missing" ? { reason: "对象已不存在" } : {})
     };
   } catch (error) {
-    if (signal.aborted) throw signal.reason ?? error;
+    if (scheduleSignal.aborted) throw scheduleSignal.reason ?? error;
+    if (operationSignal.aborted) throw operationSignal.reason ?? error;
     return {
       action: "remove_object",
       outcome: "failed",

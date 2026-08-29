@@ -60,12 +60,12 @@ export function presentIngestionSession(
     image_id: session.image_id,
     queue: session.queue,
     source_type: session.source_type,
-    ...(session.import_source
-      ? { source_url: session.import_source.url }
+    ...(session.import_download
+      ? { download_url: session.import_download.url }
       : {}),
-    ...(session.manifest_position === undefined
+    ...(session.batch_position === undefined
       ? {}
-      : { manifest_position: session.manifest_position }),
+      : { batch_position: session.batch_position }),
     ...(session.manifest_line === undefined
       ? {}
       : { manifest_line: session.manifest_line }),

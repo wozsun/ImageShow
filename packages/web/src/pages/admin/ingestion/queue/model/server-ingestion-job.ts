@@ -171,7 +171,7 @@ function activeIngestionJob(
   return {
     id: existing?.id ?? `server:${pairKey}`,
     attemptKey: existing?.attemptKey ?? pairKey,
-    subscriptionBatchKey: existing?.subscriptionBatchKey ?? pairKey,
+    batchKey: existing?.batchKey ?? pairKey,
     kind: item.queue,
     status: activeClientStatus(item),
     message: item.status === "ready"
@@ -201,9 +201,9 @@ function activeIngestionJob(
     fileFingerprint: existing?.fileFingerprint,
     md5: prepared?.md5 ?? existing?.md5,
     preparedOrder: existing?.preparedOrder,
-    url: item.source_url ?? existing?.url,
-    uploadIntentInput: existing?.uploadIntentInput,
-    importAcceptInput: existing?.importAcceptInput,
+    downloadUrl: item.download_url ?? existing?.downloadUrl,
+    uploadIntentItemInput: existing?.uploadIntentItemInput,
+    importAcceptItemInput: existing?.importAcceptItemInput,
     serverAccepted: true,
     serverDraftPending: existing?.serverDraftPending,
     sessionId: item.session_id,
@@ -221,7 +221,7 @@ function activeIngestionJob(
     manifestSource: manifestSource ?? existing?.manifestSource,
     manifestProvidedCommonFields: existing?.manifestProvidedCommonFields,
     manifestLine: item.manifest_line ?? existing?.manifestLine,
-    manifestPosition: item.manifest_position ?? existing?.manifestPosition,
+    batchPosition: item.batch_position ?? existing?.batchPosition,
     browserDisplayReleased: existing
       ? existing.browserDisplayReleased
       : true,
@@ -256,7 +256,7 @@ function completedIngestionJob(
   return {
     id: existing?.id ?? `server:${pairKey}`,
     attemptKey: existing?.attemptKey ?? pairKey,
-    subscriptionBatchKey: existing?.subscriptionBatchKey ?? pairKey,
+    batchKey: existing?.batchKey ?? pairKey,
     kind: item.queue,
     originalWidth: existing?.originalWidth,
     originalHeight: existing?.originalHeight,
@@ -265,12 +265,12 @@ function completedIngestionJob(
     transcoded: existing?.transcoded,
     file: existing?.file,
     fileFingerprint: existing?.fileFingerprint,
-    url: existing?.url,
+    downloadUrl: existing?.downloadUrl,
     batchTime: existing?.batchTime,
     manifestSource: existing?.manifestSource,
     manifestProvidedCommonFields: existing?.manifestProvidedCommonFields,
     manifestLine: existing?.manifestLine,
-    manifestPosition: existing?.manifestPosition,
+    batchPosition: existing?.batchPosition,
     browserDisplayReleased: existing
       ? existing.browserDisplayReleased
       : true,
@@ -329,9 +329,9 @@ export function completedIngestionJobPatch(
       ...(display.manifest_line === undefined
         ? {}
         : { manifestLine: display.manifest_line }),
-      ...(display.manifest_position === undefined
+      ...(display.batch_position === undefined
         ? {}
-        : { manifestPosition: display.manifest_position })
+        : { batchPosition: display.batch_position })
     } : {}),
     finalSize: completed.image_size,
     md5: completed.md5,

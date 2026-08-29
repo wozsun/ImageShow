@@ -7,35 +7,42 @@ import {
   cancelServerIngestionJobs,
   type IngestionQueueCancelOutcome
 } from "../queue/ingestion-cancel.js";
-import { isUnconfirmedUploadRawAttempt, retryPrepareJob } from "../queue/model/ingestion-job-utils.js";
+import {
+  isUnconfirmedUploadRawAttempt,
+  resetJobForPrepareRetry
+} from "../queue/model/ingestion-job-retry.js";
 import {
   createUploadIntents
 } from "../queue/ingestion-api.js";
 import {
   isCurrentIngestionAttempt,
-  type AppendIngestionQueueApi
+  type IngestionQueueProducerApi
 } from "../queue/ingestion-queue-api.js";
 import {
   createUploadJobs,
   uploadFileFingerprints,
-  uploadIntentInput,
+  buildUploadIntentItemInput,
   revokeUploadJobPreviews,
   selectUploadFiles
 } from "./upload-jobs.js";
 import {
-  runRawUploadLane,
+  BrowserUploadBatchSequencer,
+  BrowserUploadLane
+} from "./browser-upload-lane.js";
+import {
+  runRawUploadBatch,
   type ActiveRawUpload,
   type UploadCancellationOutcome
-} from "./raw-upload-lane.js";
+} from "./raw-upload-batch.js";
 
 export function useUpload(options: {
-  queue: AppendIngestionQueueApi;
+  queue: IngestionQueueProducerApi;
   defaults: IngestionAttributeDefaults;
   storageSlug: string;
   maxItems: number;
   maxBytes: number;
   maxLongEdge: number;
-  concurrency: number;
+  browserConcurrency: number;
 }) {
   const {
     queue,
@@ -44,8 +51,17 @@ export function useUpload(options: {
     maxItems,
     maxBytes,
     maxLongEdge,
-    concurrency
+    browserConcurrency
   } = options;
+  const browserLane = useRef<BrowserUploadLane | null>(null);
+  if (!browserLane.current) {
+    browserLane.current = new BrowserUploadLane(browserConcurrency);
+  }
+  const browserBatchSequencer = useRef<BrowserUploadBatchSequencer | null>(null);
+  if (!browserBatchSequencer.current) {
+    browserBatchSequencer.current = new BrowserUploadBatchSequencer();
+  }
+  const browserOperationController = useRef(new AbortController());
   const activeUploads = useRef(new Map<string, ActiveRawUpload>());
   const intentControllers = useRef(new Set<AbortController>());
   const pendingIntents = useRef(new Map<string, {
@@ -60,10 +76,15 @@ export function useUpload(options: {
 
   useEffect(() => {
     mounted.current = true;
+    if (browserOperationController.current.signal.aborted) {
+      browserOperationController.current = new AbortController();
+    }
+    const operationController = browserOperationController.current;
     const uploads = activeUploads.current;
     const controllers = intentControllers.current;
     return () => {
       mounted.current = false;
+      operationController.abort();
       for (const request of uploads.values()) request.abort();
       uploads.clear();
       for (const controller of controllers) controller.abort();
@@ -76,7 +97,11 @@ export function useUpload(options: {
     };
   }, []);
 
-  const startIntentBatch = useCallback(async (jobs: IngestionJob[]) => {
+  useEffect(() => {
+    browserLane.current!.setLimit(browserConcurrency);
+  }, [browserConcurrency]);
+
+  const transferUploadBatch = useCallback(async (jobs: IngestionJob[]) => {
     const candidates = jobs.filter((job) => (
       job.file
       && mounted.current
@@ -84,7 +109,7 @@ export function useUpload(options: {
     ));
     if (!candidates.length) return;
     const inputs = candidates.map((job) => (
-      uploadIntentInput(job, maxLongEdge)
+      buildUploadIntentItemInput(job, maxLongEdge)
     ));
     const controller = new AbortController();
     intentControllers.current.add(controller);
@@ -113,7 +138,7 @@ export function useUpload(options: {
     }
     for (const [index, job] of candidates.entries()) {
       queue.updateJob(job.id, {
-        uploadIntentInput: inputs[index],
+        uploadIntentItemInput: inputs[index],
         status: "queued",
         failureStage: undefined,
         message: "正在签发上传意图",
@@ -124,9 +149,9 @@ export function useUpload(options: {
     const intentConnectionGeneration =
       queue.captureServerConnectionGeneration();
     try {
-      results = (await createUploadIntents(
-        { items: inputs },
-        controller.signal
+      results = (await browserLane.current!.run(
+        controller.signal,
+        () => createUploadIntents({ items: inputs }, controller.signal)
       )).items;
     } catch (error) {
       if (mounted.current && (error as Error).name !== "AbortError") {
@@ -277,26 +302,27 @@ export function useUpload(options: {
       finishIntentOwnership();
     }
 
-    await runRawUploadLane({
+    await runRawUploadBatch({
       uploads,
-      concurrency,
+      browserLane: browserLane.current!,
       queue,
       mounted,
       activeUploads,
       cancellationOutcomes: cancellationIntentOutcomes
     });
-  }, [concurrency, maxLongEdge, queue]);
+  }, [maxLongEdge, queue]);
 
-  const startJobs = useCallback(async (jobs: IngestionJob[]) => {
+  const transferUploadJobs = useCallback(async (jobs: IngestionJob[]) => {
     // Credentials expire while raw bytes are still browser-owned. Sign only
     // the files that can enter the current upload lane immediately; the next
     // bounded group is signed after this group has settled.
-    const signedBatchSize = Math.max(1, concurrency);
-    for (let offset = 0; offset < jobs.length; offset += signedBatchSize) {
+    for (let offset = 0; offset < jobs.length;) {
       if (!mounted.current) return;
-      await startIntentBatch(jobs.slice(offset, offset + signedBatchSize));
+      const signedBatchSize = browserLane.current!.limit;
+      await transferUploadBatch(jobs.slice(offset, offset + signedBatchSize));
+      offset += signedBatchSize;
     }
-  }, [concurrency, startIntentBatch]);
+  }, [transferUploadBatch]);
 
   const addFiles = useCallback(async (files: FileList | null) => {
     const selected = selectUploadFiles(
@@ -310,30 +336,37 @@ export function useUpload(options: {
     }
     const fingerprints = uploadFileFingerprints(selected);
     fingerprints.forEach((value) => pendingFileFingerprints.current.add(value));
+    const signal = browserOperationController.current.signal;
     try {
-      const jobs = await createUploadJobs({
-        files: selected,
-        defaults,
-        storageSlug,
-        maxBytes,
-        maxLongEdge
+      await browserBatchSequencer.current!.run(async () => {
+        if (signal.aborted || !mounted.current) return;
+        const jobs = await createUploadJobs({
+          files: selected,
+          defaults,
+          storageSlug,
+          maxBytes,
+          maxLongEdge,
+          runInBrowserLane: (work) => browserLane.current!.run(signal, work)
+        });
+        if (!mounted.current) {
+          revokeUploadJobPreviews(jobs);
+          return;
+        }
+        if (queue.appendJobs(jobs) === false) {
+          revokeUploadJobPreviews(jobs);
+          window.alert(
+            `当前窗口待接管任务已达 ${ingestionBatchHardLimit} 项，请稍后再添加`
+          );
+          return;
+        }
+        await transferUploadJobs(jobs.filter((job) => job.status === "queued"));
       });
-      if (!mounted.current) {
-        revokeUploadJobPreviews(jobs);
-        return;
-      }
-      if (queue.appendJobs(jobs) === false) {
-        revokeUploadJobPreviews(jobs);
-        window.alert(
-          `当前窗口待接管任务已达 ${ingestionBatchHardLimit} 项，请稍后再添加`
-        );
-        return;
-      }
-      void startJobs(jobs.filter((job) => job.status === "queued"));
+    } catch (error) {
+      if ((error as Error).name !== "AbortError") throw error;
     } finally {
       fingerprints.forEach((value) => pendingFileFingerprints.current.delete(value));
     }
-  }, [defaults, maxBytes, maxItems, maxLongEdge, queue, startJobs, storageSlug]);
+  }, [defaults, maxBytes, maxItems, maxLongEdge, queue, transferUploadJobs, storageSlug]);
 
   const cancelMany = useCallback(async (jobs: readonly IngestionJob[]) => {
     const outcomes = new Map<string, IngestionQueueCancelOutcome>(jobs.map((job) => [
@@ -419,7 +452,7 @@ export function useUpload(options: {
         });
       } else if (
         current.serverVersion === undefined
-        && current.uploadIntentInput
+        && current.uploadIntentItemInput
       ) {
         replay.push(current);
       } else {
@@ -438,7 +471,7 @@ export function useUpload(options: {
       let results: Awaited<ReturnType<typeof createUploadIntents>>["items"];
       try {
         results = (await createUploadIntents({
-          items: chunk.map((job) => job.uploadIntentInput!)
+          items: chunk.map((job) => job.uploadIntentItemInput!)
         })).items;
       } catch (error) {
         for (const job of chunk) {
@@ -568,85 +601,88 @@ export function useUpload(options: {
   ), [cancelMany]);
 
   const retry = useCallback(async (job: IngestionJob) => {
-    let current = queue.jobsRef.current.find((item) => item.id === job.id);
-    let releasedServerOwner = false;
-    if (!current?.file) return;
-    const active = activeUploads.current.get(current.id);
-    if (active?.attemptKey === current.attemptKey) {
-      active.abort();
-      await active.settled;
-      if (activeUploads.current.get(current.id) === active) {
-        activeUploads.current.delete(current.id);
+    await browserBatchSequencer.current!.run(async () => {
+      if (!mounted.current) return;
+      let current = queue.jobsRef.current.find((item) => item.id === job.id);
+      let releasedServerOwner = false;
+      if (!current?.file) return;
+      const active = activeUploads.current.get(current.id);
+      if (active?.attemptKey === current.attemptKey) {
+        active.abort();
+        await active.settled;
+        if (activeUploads.current.get(current.id) === active) {
+          activeUploads.current.delete(current.id);
+        }
       }
-    }
-    const latest = queue.jobsRef.current.find((item) => item.id === job.id);
-    if (!latest?.file || latest.attemptKey !== current.attemptKey) return;
-    current = latest;
-    const replayUnconfirmedRaw = isUnconfirmedUploadRawAttempt(current);
-    if (current.sessionId && current.imageId && !replayUnconfirmedRaw) {
-      const cancelled = await cancel(current);
-      if (!cancelled.succeeded) return;
-      const cancelledCurrent = queue.jobsRef.current.find(
-        (item) => item.id === current!.id
-      );
-      if (!cancelledCurrent?.file) return;
-      if (cancelled.pair) {
-        const released = queue.releaseResolvedServerJobs([{
-          id: current.id,
-          attemptKey: current.attemptKey,
-          pair: cancelled.pair
-        }]);
-        if (!released.has(current.id)) {
-          queue.server.refresh();
+      const latest = queue.jobsRef.current.find((item) => item.id === job.id);
+      if (!latest?.file || latest.attemptKey !== current.attemptKey) return;
+      current = latest;
+      const replayUnconfirmedRaw = isUnconfirmedUploadRawAttempt(current);
+      if (current.sessionId && current.imageId && !replayUnconfirmedRaw) {
+        const cancelled = await cancel(current);
+        if (!cancelled.succeeded) return;
+        const cancelledCurrent = queue.jobsRef.current.find(
+          (item) => item.id === current!.id
+        );
+        if (!cancelledCurrent?.file) return;
+        if (cancelled.pair) {
+          const released = queue.releaseResolvedServerJobs([{
+            id: current.id,
+            attemptKey: current.attemptKey,
+            pair: cancelled.pair
+          }]);
+          if (!released.has(current.id)) {
+            queue.server.refresh();
+            return;
+          }
+          releasedServerOwner = true;
+        }
+        current = cancelledCurrent;
+      }
+      const file = current.file;
+      if (!file) return;
+      const reuseIntentAttempt = !current.serverVersion
+        && Boolean(current.uploadIntentItemInput)
+        && (
+          current.failureStage === "create" || replayUnconfirmedRaw
+        );
+      const objectUrl = !releasedServerOwner
+        && current.objectUrl?.startsWith("blob:")
+        ? current.objectUrl
+        : URL.createObjectURL(file);
+      const next = {
+        ...resetJobForPrepareRetry(current),
+        // A raw response can be lost before the canonical exists. Replaying the
+        // same upload intent is the only safe retry: it either returns the
+        // already accepted canonical or reissues a credential for the same pair.
+        attemptKey: reuseIntentAttempt
+          ? current.attemptKey
+          : webUuidV7(),
+        uploadIntentItemInput: reuseIntentAttempt
+          ? current.uploadIntentItemInput
+          : undefined,
+        preview: objectUrl,
+        previewFull: undefined,
+        objectUrl,
+        width: current.originalWidth ?? current.width,
+        height: current.originalHeight ?? current.height,
+        originalSize: file.size,
+        transferProgress: 0
+      };
+      if (releasedServerOwner) {
+        if (queue.appendJobs([next]) === false) {
+          if (next.objectUrl?.startsWith("blob:")) {
+            URL.revokeObjectURL(next.objectUrl);
+          }
+          window.alert(
+            `当前窗口待接管任务已达 ${ingestionBatchHardLimit} 项，请稍后再试`
+          );
           return;
         }
-        releasedServerOwner = true;
-      }
-      current = cancelledCurrent;
-    }
-    const file = current.file;
-    if (!file) return;
-    const reuseIntentAttempt = !current.serverVersion
-      && Boolean(current.uploadIntentInput)
-      && (
-        current.failureStage === "create" || replayUnconfirmedRaw
-      );
-    const objectUrl = !releasedServerOwner
-      && current.objectUrl?.startsWith("blob:")
-      ? current.objectUrl
-      : URL.createObjectURL(file);
-    const next = {
-      ...retryPrepareJob(current),
-      // A raw response can be lost before the canonical exists. Replaying the
-      // same upload intent is the only safe retry: it either returns the
-      // already accepted canonical or reissues a credential for the same pair.
-      attemptKey: reuseIntentAttempt
-        ? current.attemptKey
-        : webUuidV7(),
-      uploadIntentInput: reuseIntentAttempt
-        ? current.uploadIntentInput
-        : undefined,
-      preview: objectUrl,
-      previewFull: undefined,
-      objectUrl,
-      width: current.originalWidth ?? current.width,
-      height: current.originalHeight ?? current.height,
-      originalSize: file.size,
-      transferProgress: 0
-    };
-    if (releasedServerOwner) {
-      if (queue.appendJobs([next]) === false) {
-        if (next.objectUrl?.startsWith("blob:")) {
-          URL.revokeObjectURL(next.objectUrl);
-        }
-        window.alert(
-          `当前窗口待接管任务已达 ${ingestionBatchHardLimit} 项，请稍后再试`
-        );
-        return;
-      }
-    } else queue.updateJob(current.id, next);
-    await startJobs([next]);
-  }, [cancel, queue, startJobs]);
+      } else queue.updateJob(current.id, next);
+      await transferUploadJobs([next]);
+    });
+  }, [cancel, queue, transferUploadJobs]);
 
   return { addFiles, cancel, cancelMany, retry };
 }

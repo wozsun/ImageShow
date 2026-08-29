@@ -27,9 +27,9 @@ import {
   type IngestionStatusResultDto,
   type IngestionSessionUpdateInputDto,
   type IngestionSessionUpdateResultDto,
-  type JsonlManifestItemDto,
-  type JsonlManifestParseErrorDto,
-  type JsonlManifestResultDto,
+  type ImportManifestItemDto,
+  type ImportManifestParseErrorDto,
+  type ImportManifestResultDto,
   type ImportAcceptInputDto,
   type ImportAcceptResultDto,
   type UploadIntentInputDto,
@@ -40,9 +40,9 @@ import {
 } from "@imageshow/shared/browser";
 import { api, getCsrfToken } from "../../../../lib/api/client.js";
 
-export type JsonlManifestItem = JsonlManifestItemDto;
-export type JsonlManifestParseError = JsonlManifestParseErrorDto;
-export type JsonlManifestResult = JsonlManifestResultDto;
+export type ImportManifestItem = ImportManifestItemDto;
+export type ImportManifestParseError = ImportManifestParseErrorDto;
+export type JsonlManifestResult = ImportManifestResultDto;
 export type WeiboImportParseError = WeiboImportParseErrorDto;
 export type WeiboImportResult = WeiboImportResultDto;
 

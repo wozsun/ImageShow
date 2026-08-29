@@ -43,7 +43,7 @@
   手动重建统一图片缓存需要 `cache.maintenance.rebuild`。
   以上八项高风险操作权限当前只授予超级管理员；直接构造对应单项请求同样返回 403，
   且在解析正文或进入存储维护操作前终止。
-- Compose 内置 Redis 使用不固定次版本的 `redis:8` 镜像，只连接项目私有网络、不发布宿主机端口且不设置密码；直接使用镜像默认启动命令，保留 `/data` volume，但不强制 AOF。该 volume 只提供尽力而为的重启保留，不承诺会话、限流、派生状态或未完全入库内容不可丢失；PostgreSQL 中已正式提交的图片不受影响。ImageShow 不设置 Redis 内存上限、淘汰策略或容器硬限制，只把 `INFO MEMORY` 作为运维观测；启动与 `/readyz` 检查连接，并在自有 5 秒 TTL 隔离探针键上实际执行 `INCREX`、`ARRING`、`ARLASTITEMS`、`SET ... IFEQ ... KEEPTTL` 与 `DELEX ... IFEQ` 五项必需能力，同时验证条件失败、缺失和 TTL 保留；命令存在但 ACL 拒绝执行仍视为不可用。首次校验成功前后台与公开业务都由冷启动门拒绝；运行期 Redis 故障时后台在会话读取前统一返回 `503 redis_unavailable`，不能伪装成 401 或触发浏览器清除登录状态，公开只读业务才允许有界 PostgreSQL 回源。连接启用了认证的外部 Redis 时，可通过 `REDIS_PASSWORD` 向应用提供密码。
+- Compose 内置 Redis 使用不固定次版本的 `redis:8` 镜像，在项目私有网络内通过容器端口提供无密码连接；直接使用镜像默认启动命令并保留 `/data` volume。该 volume 提供尽力而为的重启保留；Redis 数据丢失时会话、限流、派生状态和未完全入库内容允许消失，PostgreSQL 中已正式提交的图片不受影响。Redis 内存上限、淘汰策略和容器硬限制由部署方管理，ImageShow 通过 `INFO MEMORY` 提供运维观测；启动与 `/readyz` 检查连接，并在自有 5 秒 TTL 隔离探针键上实际执行 `INCREX`、`ARRING`、`ARLASTITEMS`、`SET ... IFEQ ... KEEPTTL` 与 `DELEX ... IFEQ` 五项必需能力，同时验证条件失败、缺失和 TTL 保留；命令存在但 ACL 拒绝执行仍视为不可用。首次校验成功前后台与公开业务都由冷启动门拒绝；运行期 Redis 故障时后台在会话读取前统一返回 `503 redis_unavailable`，不能伪装成 401 或触发浏览器清除登录状态，公开只读业务才允许有界 PostgreSQL 回源。连接启用了认证的外部 Redis 时，可通过 `REDIS_PASSWORD` 向应用提供密码。
 - 管理端界面偏好接口只使用鉴权会话中的用户名定位 `admin_account.preferences`，不接受客户端传入目标账号。接口只接受 shared 注册的键与值域，PATCH 在 PostgreSQL 行内原子合并并返回完整投影；JSONB 顶层必须是对象且最大 4 KiB。GET 使用 `private, no-cache` 与内容 ETag，`/api/admin/auth/me` 的认证首帧同时携带完全相同偏好表示的 ETag，五分钟内由前端查询缓存直接复用，更久后的窗口聚焦 / 重连显式带该验证器条件读取，设置未变化时即使此前没有访问过偏好 URL 也返回 304。浏览器缓存键按用户名隔离，`localStorage` 仅承担首帧显示、断网 pending 和多标签同步，不参与鉴权，也不保存会话或 CSRF token。PostgreSQL 尚无某键时，已校验的本地值可补写一次；删除账号时偏好随该行自然删除。
 - 登录失败限流：每 IP + 用户名 60 秒内 5 次失败即拦截，叠加 180 秒内 10 次尝试的全局兜底（阈值与窗口均可在 `config.json` 的 `security.*` 调整）。两个固定窗口在一次 Redis 服务端原子操作中按来源到全局的顺序使用 `INCREX ... UBOUND ... EX ... ENX` 预留；前一窗口已拒绝时不再消耗后续共享额度。达到上限后计数不再增长，后续请求也不会延长首次建立的 TTL。
 - 登录前置安全验证使用完全自托管的 ALTCHA：服务端签发带 HMAC 的
@@ -57,7 +57,7 @@
   登录密码校验继续使用原阈值。可在 `config.json` 的
   `altcha.enabled` 关闭；
   浏览器单次求解最多等待 60 秒，服务端同时限制
-  `cost × counter_max <= 100000000`，挑战有效期最短 90 秒，避免可通过配置校验的
+  `cost × counter_range` 上界 `<= 100000000`，挑战有效期最短 90 秒，避免可通过配置校验的
   工作量在客户端必然超时或完成后立即过期；
   登录页通过 `/api/admin/auth/me` 的 `altcha_enabled` 决定是否加载组件，最终是否
   校验仍只由服务端配置决定。应用重启会使此前已签发但尚未提交的证明失效，用户
@@ -124,7 +124,7 @@ Content-Type 与缓存验证器会被省略或回退为站内类型；`Content-R
 Worker 与嵌入页。应用没有跨源 API 契约，不返回 `Access-Control-Allow-*`；跨源父页面
 只加载 iframe，iframe 内部继续同源请求本站 API。HSTS 也不由应用发送，只能由确认
 掌握 TLS 与全部相关主机的最外层代理部署。
-- Web 直接依赖 `react-router@8.3.0`，只使用 `<BrowserRouter>` / `<Routes>`、
+- Web 直接依赖 `react-router@8.3.1`，只使用 `<BrowserRouter>` / `<Routes>`、
   链接与位置等 Declarative Mode API，不使用 Framework / Data action、服务端
   渲染、React Server Components 或任何 unstable RSC API；将来若引入 RSC，须重新审查
   CSRF 边界。
@@ -150,8 +150,9 @@ Worker 与嵌入页。应用没有跨源 API 契约，不返回 `Access-Control-
   0.586 MiB，因此 1 MiB 可覆盖全部合法请求并保留余量。逐条微博失败不会回显
   响应正文或访客 Cookie；微博请求、正文读取和 JSON/JSONP 解析共用 15 秒期限，
   访客与帖子响应分别限制为 64 KiB 和 4 MiB，连接中断、取消及超限正文不会变成
-  未分类 500。所有微博批次还共用可配置为 1–32 的进程级上游请求并发限制，
-  排队项可取消。标题和描述在 `trim()` 后分别最多 80 和 500 个 UTF-16 code
+  未分类 500。微博访客握手与帖子元数据共用固定串行的全进程调度器，批次间逐项轮转且排队项
+  可取消；相邻帖子请求使用可配置的 0–60 秒随机间隔。访客身份只复用一个，明确拒绝后不重试
+  当前帖子，下一项才重新创建。标题和描述在 `trim()` 后分别最多 80 和 500 个 UTF-16 code
   unit，普通汉字各占一个。按每个字符都产生六字节 JSON 转义的最坏合法表示计算，
   3600 项 JSONL 外层请求约 120.537 MiB，200 项图片更新约 5.691 MiB；
   128、6 MiB 两档均覆盖合法表示并保留余量。本地文件选择使用 1–1000 的前端

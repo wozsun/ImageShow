@@ -17,8 +17,8 @@ import {
 } from "./runtime-config.ts";
 
 const configPackageFormat = "imageshow-config" as const;
-const configPackageMaxBackends = appConfig.ingestion.configPackageMaxBackends;
-const configPackageMaxBytes = appConfig.ingestion.configPackageMaxBytes;
+const configPackageMaxBackends = appConfig.configPackage.maxStorageBackends;
+const configPackageMaxBytes = appConfig.configPackage.maxBytes;
 
 const packageSlug = z.string().trim().toLowerCase().min(1).max(slugMaxLength)
   .regex(slugPattern)

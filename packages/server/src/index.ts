@@ -4,8 +4,7 @@ import { bootstrapEnvironment } from "./config/bootstrap-env.ts";
 import { deploymentConfig } from "./config/deployment-config.ts";
 import {
   getRuntimeConfig,
-  initializeRuntimeConfig,
-  onRuntimeConfigChange
+  initializeRuntimeConfig
 } from "./config/runtime-config-store.ts";
 import { configureSharpRuntime } from "./images/processing.ts";
 import {
@@ -66,7 +65,6 @@ try {
     password: bootstrapEnvironment.adminPassword
   });
   configureSharpRuntime();
-  onRuntimeConfigChange(configureSharpRuntime);
   markRuntimeInitializationComplete();
 
   unsubscribeBusinessAvailabilityGate = onBusinessAvailabilityGateOpen(() => {

@@ -27,22 +27,30 @@ type AdvisoryLockWork<T> = (
   lockClient: PoolClient
 ) => Promise<T>;
 
-const advisoryLockSignalContext = new AsyncLocalStorage<AbortSignal>();
+type AdvisoryLockSignalContext = Readonly<{
+  acquisitionSignal: AbortSignal;
+  operationSignal?: AbortSignal;
+}>;
+
+const advisoryLockSignalContext = new AsyncLocalStorage<
+  AdvisoryLockSignalContext
+>();
 const poisonedAdvisoryClients = new WeakSet<PoolClient>();
 
-export function runWithAdvisoryLockSignal<T>(
+/** Cancel advisory client checkout and lock acquisition, not acquired work. */
+export function runWithAdvisoryLockAcquisitionSignal<T>(
   signal: AbortSignal,
   work: () => Promise<T>
 ): Promise<T> {
   const parent = advisoryLockSignalContext.getStore();
-  const combined = parent ? AbortSignal.any([parent, signal]) : signal;
-  combined.throwIfAborted();
-  return advisoryLockSignalContext.run(combined, work);
-}
-
-function combinedLockSignal(signal: AbortSignal) {
-  const parent = advisoryLockSignalContext.getStore();
-  return parent ? AbortSignal.any([parent, signal]) : signal;
+  const acquisitionSignal = parent
+    ? AbortSignal.any([parent.acquisitionSignal, signal])
+    : signal;
+  acquisitionSignal.throwIfAborted();
+  return advisoryLockSignalContext.run({
+    acquisitionSignal,
+    operationSignal: parent?.operationSignal
+  }, work);
 }
 
 export async function acquireAdvisoryLockClient(
@@ -92,7 +100,10 @@ async function runAdvisoryLockWork<T>(
   work: AdvisoryLockWork<T>
 ) {
   const operation = Promise.resolve().then(() => (
-    advisoryLockSignalContext.run(signal, () => {
+    advisoryLockSignalContext.run({
+      acquisitionSignal: signal,
+      operationSignal: signal
+    }, () => {
       signal.throwIfAborted();
       return work(signal, client);
     })
@@ -112,20 +123,21 @@ async function runAdvisoryLockWork<T>(
 
 async function runWithAdvisoryLocksOnClient<T>(
   client: PoolClient,
-  signal: AbortSignal,
+  acquisitionSignal: AbortSignal,
   locks: readonly AdvisoryLockRequest[],
-  work: AdvisoryLockWork<T>
+  work: AdvisoryLockWork<T>,
+  operationSignal: AbortSignal = acquisitionSignal
 ): Promise<AdvisoryLockAttempt<T>> {
-  signal.throwIfAborted();
+  acquisitionSignal.throwIfAborted();
   if (poisonedAdvisoryClients.has(client)) throw new AdvisoryLockLostError();
   const acquired: AdvisoryLockRequest[] = [];
   try {
     for (const lock of locks) {
       let result;
       try {
-        signal.throwIfAborted();
+        acquisitionSignal.throwIfAborted();
         result = await raceWithAbortSignal(
-          signal,
+          acquisitionSignal,
           client.query(
             `SELECT ${advisoryLockFunction(lock)}(hashtext($1)) AS acquired`,
             [lock.key]
@@ -144,7 +156,7 @@ async function runWithAdvisoryLocksOnClient<T>(
     }
     return {
       acquired: true,
-      value: await runAdvisoryLockWork(signal, client, work)
+      value: await runAdvisoryLockWork(operationSignal, client, work)
     };
   } finally {
     for (const lock of acquired.reverse()) {
@@ -168,11 +180,17 @@ async function runWithAdvisoryLocks<T>(
   locks: readonly AdvisoryLockRequest[],
   work: AdvisoryLockWork<T>
 ): Promise<AdvisoryLockAttempt<T>> {
-  const checkoutSignal = advisoryLockSignalContext.getStore();
+  const parent = advisoryLockSignalContext.getStore();
+  const checkoutSignal = parent?.acquisitionSignal;
   const client = await acquireAdvisoryLockClient(checkoutSignal);
   let destroyClient = false;
   const connectionLoss = new AbortController();
-  const lockSignal = combinedLockSignal(connectionLoss.signal);
+  const operationSignal = parent?.operationSignal
+    ? AbortSignal.any([parent.operationSignal, connectionLoss.signal])
+    : connectionLoss.signal;
+  const acquisitionSignal = checkoutSignal
+    ? AbortSignal.any([checkoutSignal, connectionLoss.signal])
+    : operationSignal;
   const connectionLost = (cause?: unknown) => {
     destroyClient = true;
     if (!connectionLoss.signal.aborted) {
@@ -184,7 +202,13 @@ async function runWithAdvisoryLocks<T>(
   client.on("error", onClientError);
   client.on("end", onClientEnd);
   try {
-    return await runWithAdvisoryLocksOnClient(client, lockSignal, locks, work);
+    return await runWithAdvisoryLocksOnClient(
+      client,
+      acquisitionSignal,
+      locks,
+      work,
+      operationSignal
+    );
   } finally {
     destroyClient ||= poisonedAdvisoryClients.has(client);
     try {

@@ -26,7 +26,7 @@ import { QueryErrorState } from "../../../components/feedback/QueryErrorState.js
 import { invalidateStorageData } from "../../../lib/api/query-invalidation.js";
 import { useAsyncActionStatus } from "../../../hooks/useAsyncActionStatus.js";
 import { queryKeys } from "../../../lib/api/query-keys.js";
-import { migrateStorageBackend } from "../../../lib/api/storage-backend-migration.js";
+import { migrateStorageBackendImages } from "../../../lib/api/storage-backend-image-migration.js";
 import { usePersistedReorder } from "../../../hooks/usePersistedReorder.js";
 import { StorageBackendCard } from "./StorageBackendCard.js";
 import { StorageBackendMigrationDialog } from "./StorageBackendMigrationDialog.js";
@@ -221,7 +221,7 @@ export function StorageSettings() {
   const migrateBackend = async (source: string, target: string) => {
     const result = await executeStorageAction(
       `migrate:${source}`,
-      () => migrateStorageBackend(source, target)
+      () => migrateStorageBackendImages(source, target)
     );
     if (!result.succeeded) {
       setActionFeedback(createActionFeedback("存储后端迁移失败，请检查配置后重试", "error"));

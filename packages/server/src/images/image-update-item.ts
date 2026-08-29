@@ -9,7 +9,7 @@ import type { ImageUpdateItemInput } from "../core/validation.ts";
 import { readStorageBuffer, storageObjectExists } from "../storage/objects/access.ts";
 import { thumbnailRef } from "../storage/objects/image-paths.ts";
 import {
-  discardPreparedImageRelocationIfUnreferenced,
+  enqueuePreparedImageRelocationCleanupIfUnreferenced,
   enqueuePreparedImageSourceCleanup,
   prepareVerifiedImageRelocation,
   type PreparedImageRelocation
@@ -33,6 +33,7 @@ import {
   vocabularyAssociationLockRequests
 } from "../vocab/mutation-sync.ts";
 import { detectBrightness } from "./brightness.ts";
+import { withNormalizationAdmission } from "./normalization-admission.ts";
 import {
   deviceFromDimensions,
   resolveOptionalBrightnessWith,
@@ -112,12 +113,16 @@ async function detectImageBrightness(
   )) {
     return undefined;
   }
-  return detectBrightness(await readStorageBuffer(
+  const thumbnail = await readStorageBuffer(
     thumb.prefix,
     thumb.key,
     thumb.slug,
     { signal }
-  ));
+  );
+  return withNormalizationAdmission(
+    signal,
+    () => detectBrightness(thumbnail)
+  );
 }
 
 function sameTags(left: readonly string[], right: readonly string[]) {
@@ -454,7 +459,7 @@ async function mutateImageItem(
     }
     if (relocation) {
       try {
-        await discardPreparedImageRelocationIfUnreferenced(
+        await enqueuePreparedImageRelocationCleanupIfUnreferenced(
           relocation,
           "category_move_compare_and_swap_failed"
         );

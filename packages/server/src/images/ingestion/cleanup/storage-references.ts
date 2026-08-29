@@ -68,7 +68,7 @@ async function readIngestionStoragePass(
   if (!Number.isSafeInteger(maxItems) || maxItems < 0) {
     throw new RangeError("Ingestion storage reference limit must be a non-negative safe integer");
   }
-  const batchSize = appConfig.ingestionRuntime.recoveryScanBatchSize;
+  const batchSize = appConfig.ingestionRuntime.ingestionSessionScanBatchSize;
   let offset = 0;
   let expectedTotal: number | null = null;
   const sessions = new Map<string, StoredIngestionSession>();

@@ -87,6 +87,7 @@ export class DynamicConcurrencyLimiter {
   ): Promise<Result> {
     await this.acquire(signal, hooks.onQueued);
     try {
+      if (signal.aborted) throw this.cancellationError(signal);
       hooks.onStarted?.();
       return await work();
     } finally {
@@ -95,9 +96,22 @@ export class DynamicConcurrencyLimiter {
     }
   }
 
+  /** Re-evaluate a changed dynamic limit and fill any newly available slots. */
+  refresh() {
+    this.drain();
+  }
+
+  snapshot() {
+    return {
+      limit: this.currentLimit(),
+      active: this.active,
+      waiting: this.queue.length
+    } as const;
+  }
+
   private acquire(signal: AbortSignal, onQueued?: () => void) {
     if (signal.aborted) throw this.cancellationError(signal);
-    if (this.active < this.currentLimit()) {
+    if (this.queue.length === 0 && this.active < this.currentLimit()) {
       this.active += 1;
       return Promise.resolve();
     }
@@ -187,12 +201,30 @@ export class DynamicWeightedLimiter {
       hooks.onQueued
     );
     try {
+      if (signal.aborted) throw this.cancellationError(signal);
       hooks.onStarted?.();
       return await work();
     } finally {
       this.activeWeight = Math.max(0, this.activeWeight - acquiredWeight);
       this.drain();
     }
+  }
+
+  /** Re-evaluate a changed dynamic limit and fill any newly available weight. */
+  refresh() {
+    this.drain();
+  }
+
+  snapshot() {
+    return {
+      limit: this.currentLimit(),
+      activeWeight: this.activeWeight,
+      waiting: this.queue.length,
+      waitingWeight: this.queue.reduce(
+        (total, item) => total + this.normalizedWeight(item.requestedWeight),
+        0
+      )
+    } as const;
   }
 
   private acquire(

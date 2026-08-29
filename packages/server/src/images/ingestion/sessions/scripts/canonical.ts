@@ -110,11 +110,11 @@ if acceptance == 'upload' then
   display_order_key = intent.display_order_key
 elseif acceptance == 'import' then
   if template.queue ~= 'import'
-    or not valid_import_source(template.source_type)
+    or not valid_import_source_type(template.source_type)
     or template.status ~= 'queued'
-    or not template.import_source
-    or type(template.import_source.url) ~= 'string'
-    or template.import_source.url == ''
+    or not template.import_download
+    or type(template.import_download.url) ~= 'string'
+    or template.import_download.url == ''
     or template.execution_token ~= ''
     or template.raw_generation ~= ''
     or tonumber(template.raw_size) ~= 0 then
@@ -359,10 +359,10 @@ if next.status ~= 'completed' and next.status ~= 'discarded'
 end
 if next.status ~= 'completed' and next.status ~= 'discarded'
   and current.queue == 'import'
-  and (not next.import_source
-    or not current.import_source
-    or next.import_source.url ~= current.import_source.url) then
-  return redis.error_reply('INGESTION_CANONICAL immutable_source_changed')
+  and (not next.import_download
+    or not current.import_download
+    or next.import_download.url ~= current.import_download.url) then
+  return redis.error_reply('INGESTION_CANONICAL immutable_import_download_changed')
 end
 if next.status == 'completed'
   and (not current.commit

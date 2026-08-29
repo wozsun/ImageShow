@@ -29,7 +29,7 @@ export function completedIngestionObservations(
     : []);
 }
 
-export type AppendIngestionQueueApi = IngestionQueueApi & {
+export type IngestionQueueProducerApi = IngestionQueueApi & {
   appendJobs: (jobs: IngestionJob[]) => boolean;
   bindServerJob: (
     id: string,

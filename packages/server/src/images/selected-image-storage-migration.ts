@@ -1,52 +1,52 @@
 import type {
   ImageStorageMigrationItemResultDto
 } from "@imageshow/shared/browser";
-import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { ApiError } from "../core/api-error.ts";
 import { mapWithWorkerPool } from "../core/concurrency.ts";
 import { pool } from "../core/database/pools.ts";
 import {
-  migrateImageStorage,
-  type StorageMigrationImageRecord
-} from "../storage/migration/image-storage.ts";
+  migrateImageToStorageBackend,
+  type ImageStorageMigrationRecord
+} from "../storage/migration/image.ts";
 import { assertStorageWriteTarget } from "../storage/backends/registry.ts";
+import { STORAGE_MIGRATION_CONCURRENCY } from "../storage/migration/admission.ts";
 import { withPlannedImageMutation } from "./mutation-sync.ts";
 
-type ImageStorageMigrationMetrics = {
+type SelectedImageStorageMigrationMetrics = {
   maxImageDurationMs: number;
 };
 
-type ImageStorageMigrationOptions = {
-  onMetrics?: (metrics: ImageStorageMigrationMetrics) => void;
+type SelectedImageStorageMigrationOptions = {
+  onMetrics?: (metrics: SelectedImageStorageMigrationMetrics) => void;
   signal?: AbortSignal;
 };
 
-export async function migrateImagesStorage(
+export async function migrateSelectedImagesToStorageBackend(
   ids: string[],
   target: string,
-  options: ImageStorageMigrationOptions = {}
+  options: SelectedImageStorageMigrationOptions = {}
 ) {
   const execute = async () => {
     options.signal?.throwIfAborted();
     const rows = (await pool.query(
-      `SELECT id, object_key, ext, storage_slug, md5
+      `SELECT id, object_key, ext, storage_slug, md5,
+              image_size, thumbnail_size
          FROM metadata
         WHERE id = ANY($1::uuid[])`,
       [ids]
-    )).rows as StorageMigrationImageRecord[];
+    )).rows as ImageStorageMigrationRecord[];
     options.signal?.throwIfAborted();
     if (rows.some((row) => row.storage_slug !== target)) {
       await assertStorageWriteTarget(target);
       options.signal?.throwIfAborted();
     }
-    const concurrency = getRuntimeConfig().background_job.migrate_concurrency;
     const rowsById = new Map(
       rows.map((row) => [row.id.toLowerCase(), row])
     );
     let maxImageDurationMs = 0;
     const results = await mapWithWorkerPool(
       ids,
-      concurrency,
+      STORAGE_MIGRATION_CONCURRENCY,
       async (id) => {
         const row = rowsById.get(id.toLowerCase());
         if (!row) {
@@ -59,7 +59,7 @@ export async function migrateImagesStorage(
         }
         const startedAt = performance.now();
         try {
-          const result = await migrateImageStorage(row, target, {
+          const result = await migrateImageToStorageBackend(row, target, {
             signal: options.signal
           });
           if (result === "missing") {

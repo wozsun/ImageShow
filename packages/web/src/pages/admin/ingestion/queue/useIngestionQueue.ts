@@ -22,7 +22,7 @@ import {
   type IngestionQueueState
 } from "./model/ingestion-queue-state.js";
 import {
-  type AppendIngestionQueueApi
+  type IngestionQueueProducerApi
 } from "./ingestion-queue-api.js";
 import {
   ingestionJobFromServerItem,
@@ -214,7 +214,7 @@ export function useIngestionQueue(
       ? [pairKey]
       : [];
   }));
-  // Current-document cards retain their browser batch/manifest positions while
+  // Current-document cards retain their browser batch/position order while
   // authority moves item-by-item. The bounded snapshot supplies only the
   // remaining slots and keeps its own display-ZSET order.
   const displayedServerJobs = serverIngestionJobsForCombinedPage(
@@ -316,8 +316,8 @@ export function useIngestionQueue(
         previewFull: candidate.previewFull?.startsWith("blob:")
           ? undefined
           : candidate.previewFull,
-        uploadIntentInput: undefined,
-        importAcceptInput: undefined,
+        uploadIntentItemInput: undefined,
+        importAcceptItemInput: undefined,
         duplicates: []
       });
       detachedProvisionalHandoffsRef.current.delete(pairKey);
@@ -424,8 +424,8 @@ export function useIngestionQueue(
             ||
             job.file
             || job.objectUrl
-            || job.uploadIntentInput
-            || job.importAcceptInput
+            || job.uploadIntentItemInput
+            || job.importAcceptItemInput
             || job.commitIntent
           )
         ) {
@@ -918,8 +918,8 @@ export function useIngestionQueue(
           previewFull: bound.previewFull?.startsWith("blob:")
             ? undefined
             : bound.previewFull,
-          uploadIntentInput: undefined,
-          importAcceptInput: undefined,
+          uploadIntentItemInput: undefined,
+          importAcceptItemInput: undefined,
           duplicates: []
         }
       });
@@ -971,8 +971,8 @@ export function useIngestionQueue(
             previewFull: bound.previewFull?.startsWith("blob:")
               ? undefined
               : bound.previewFull,
-            uploadIntentInput: undefined,
-            importAcceptInput: undefined,
+            uploadIntentItemInput: undefined,
+            importAcceptItemInput: undefined,
             duplicates: []
           }
         });
@@ -1186,7 +1186,7 @@ export function useIngestionQueue(
     localJobs,
     provisionalSummaryJobs
   ]);
-  const workerApi = useMemo<AppendIngestionQueueApi>(() => ({
+  const producerApi = useMemo<IngestionQueueProducerApi>(() => ({
     jobsRef,
     appendJobs,
     bindServerJob,
@@ -1231,7 +1231,7 @@ export function useIngestionQueue(
             - (effectiveServerSummary?.resolving ?? 0)
         ),
     actions,
-    workerApi,
+    producerApi,
     setPage,
     appendJobs,
     captureBrowserActionJobs,

@@ -14,7 +14,7 @@ import {
   ingestionAutomaticClassificationLabel,
   ingestionJobAttributesEditable
 } from "../model/ingestion-attribute-policy.js";
-import { importPositionText } from "../model/ingestion-job-utils.js";
+import { importPositionText } from "../model/import-job-source.js";
 import {
   ingestionJobStatusDetail,
   ingestionJobStatusLabel
@@ -98,7 +98,7 @@ export const IngestionJobCard = memo(function IngestionJobCard({
   const hasOriginalSize = typeof originalSize === "number";
   const displayName = job.draft.title
     || job.file?.name
-    || job.url
+    || job.downloadUrl
     || (job.status === "done" ? job.draft.original : "")
     || job.imageId
     || job.id;
@@ -228,7 +228,7 @@ export const IngestionJobCard = memo(function IngestionJobCard({
         )}
         changed={{ device: job.classificationOverride?.device, brightness: job.classificationOverride?.brightness }}
         disabled={!editable}
-        ariaPrefix={job.url ?? job.file?.name ?? job.imageId ?? job.id}
+        ariaPrefix={job.downloadUrl ?? job.file?.name ?? job.imageId ?? job.id}
       />
       {confirmDuplicate && (
         <DuplicateMatchPanel

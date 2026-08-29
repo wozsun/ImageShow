@@ -6,8 +6,8 @@ import type {
   UploadIntentItemInputDto
 } from "@imageshow/shared/browser";
 import {
-  getInputImageMaxBytes,
-  getInputImageMaxLongEdge
+  getIngestionMaxFileBytes,
+  getIngestionMaxLongEdge
 } from "../../config/app-settings.ts";
 import { getRuntimeConfig } from "../../config/runtime-config-store.ts";
 import { ApiError, errorMessage } from "../../core/api-error.ts";
@@ -23,6 +23,7 @@ import {
   readCommittedIngestionResultsByImageIds,
   type CommittedIngestionResult
 } from "../read-models/ingestion-results.ts";
+import { canonicalImportMetadata } from "./sessions/import-metadata.ts";
 import { ingestionIntentRequestHash } from "./sessions/request-hash.ts";
 import {
   assertImageIdentity,
@@ -291,8 +292,8 @@ export class IngestionSessionService {
         `单批最多允许 ${runtime.upload.max_items} 张上传图片`
       );
     }
-    const maximumBytes = getInputImageMaxBytes();
-    const maximumLongEdge = getInputImageMaxLongEdge();
+    const maximumBytes = getIngestionMaxFileBytes();
+    const maximumLongEdge = getIngestionMaxLongEdge();
     const results = await this.#dependencies.withStorageReadLock(async (signal) => {
       const created: Array<SettledItem<
         UploadIntentItemInputDto,
@@ -334,8 +335,8 @@ export class IngestionSessionService {
             source_type: "upload",
             batch_key: item.batch_key,
             provided_image_time: explicitTime,
-            manifest_position: item.manifest_position,
-            import_source: null,
+            batch_position: item.batch_position,
+            import_download: null,
             metadata: draftMetadata(item),
             storage_slug: storageSlug,
             expected_size: item.expected_size,
@@ -346,16 +347,16 @@ export class IngestionSessionService {
             session_id: sessionId,
             candidate_image_id: createImageId(
               resolvedTime.date,
-              item.manifest_position
+              item.batch_position
             ),
             resolved_image_time: resolvedTime.iso,
             request_hash: requestHash,
             display_order_key: createIngestionDisplayOrderKey(
               item.batch_key,
-              item.manifest_position,
+              item.batch_position,
               sessionId
             ),
-            manifest_position: item.manifest_position,
+            batch_position: item.batch_position,
             metadata: draftMetadata(item),
             storage_slug: storageSlug,
             expected_size: item.expected_size,
@@ -459,19 +460,19 @@ export class IngestionSessionService {
             "import",
             item.idempotency_key
           );
-          const metadata = {
-            ...draftMetadata(item),
-            original: runtime.import.fill_original_url
-              ? item.url
-              : item.original
-          };
+          const metadata = canonicalImportMetadata(
+            runtime,
+            item.source_type,
+            item.download_url,
+            draftMetadata(item)
+          );
           const requestHash = ingestionIntentRequestHash({
             queue: "import",
             source_type: item.source_type,
             batch_key: item.batch_key,
             provided_image_time: explicitTime,
-            manifest_position: item.manifest_position,
-            import_source: { url: item.url },
+            batch_position: item.batch_position,
+            import_download: { url: item.download_url },
             metadata: draftMetadata(item),
             storage_slug: storageSlug,
             expected_size: null,
@@ -479,19 +480,19 @@ export class IngestionSessionService {
           });
           const imageId = createImageId(
             resolvedTime.date,
-            item.manifest_position
+            item.batch_position
           );
           const template = withSessionSemanticHash({
             owner,
             queue: "import",
             source_type: item.source_type,
-            manifest_position: item.manifest_position,
+            batch_position: item.batch_position,
             manifest_line: item.manifest_line,
             session_id: sessionId,
             image_id: imageId,
             image_time: resolvedTime.iso,
             request_hash: requestHash,
-            import_source: { url: item.url },
+            import_download: { url: item.download_url },
             metadata,
             storage_slug: storageSlug,
             status: "queued",
@@ -515,7 +516,7 @@ export class IngestionSessionService {
               template,
               createIngestionDisplayOrderKey(
                 item.batch_key,
-                item.manifest_position,
+                item.batch_position,
                 sessionId
               ),
               now
@@ -565,13 +566,13 @@ export class IngestionSessionService {
     assertImageIdentity(
       intent.candidate_image_id,
       intent.resolved_image_time,
-      intent.manifest_position
+      intent.batch_position
     );
     return withSessionSemanticHash({
       owner: intent.owner,
       queue: "upload",
       source_type: "upload",
-      manifest_position: intent.manifest_position,
+      batch_position: intent.batch_position,
       session_id: intent.session_id,
       image_id: intent.candidate_image_id,
       image_time: intent.resolved_image_time,

@@ -1,6 +1,7 @@
 export type WeiboImportErrorCode =
   | "weibo_invalid_url"
   | "weibo_visitor_failed"
+  | "weibo_visitor_rejected"
   | "weibo_request_failed"
   | "weibo_response_too_large"
   | "weibo_image_limit_exceeded"

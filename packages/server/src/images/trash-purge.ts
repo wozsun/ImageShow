@@ -4,13 +4,18 @@ import type {
   ImagePurgeResponseDto
 } from "@imageshow/shared/browser";
 import { errorMessage } from "../core/api-error.ts";
+import {
+  runWithAdvisoryLockAcquisitionSignal
+} from "../core/database/advisory-locks.ts";
 import { pool } from "../core/database/pools.ts";
 import { enqueue } from "../jobs/repository.ts";
 import { logger } from "../core/logger.ts";
+import { STORAGE_OBJECT_REMOVAL_CONCURRENCY } from "../storage/objects/removal-admission.ts";
 import { thumbnailRef } from "../storage/objects/image-paths.ts";
 import { withImageStorageMutationLock } from "../storage/maintenance-lock.ts";
 import {
-  removeStorageObjectAndConfirm
+  assertStorageRemovalResults,
+  removeStorageObjectsAndConfirm
 } from "../storage/objects/access.ts";
 import { invalidateEntityCountCaches } from "../vocab/vocab-cache.ts";
 import { withTrashMembershipLock } from "./trash-membership-lock.ts";
@@ -185,62 +190,69 @@ async function recordPurgeFailure(row: PurgeRow, error: unknown) {
   }
 }
 
-async function purgeClaimedRow(claim: PurgeRow): Promise<PurgeRow | null> {
-  return withImageStorageMutationLock(claim.id, async (signal) => {
-    signal.throwIfAborted();
-    const row = (await pool.query(
-      `SELECT ${purgeReturnColumns}
-         FROM metadata
-        WHERE id=$1
-          AND status='deleted'
-          AND purge_state='purging'
-          AND purge_attempts=$2`,
-      [claim.id, claim.purge_attempts]
-    )).rows[0] as PurgeRow | undefined;
-    signal.throwIfAborted();
-    if (!row) return null;
+async function purgeClaimedRow(
+  claim: PurgeRow,
+  scheduleSignal?: AbortSignal
+): Promise<PurgeRow | null> {
+  const purgeWhileLocked = () => withImageStorageMutationLock(
+    claim.id,
+    async (lockSignal) => {
+      const admissionSignal = scheduleSignal
+        ? AbortSignal.any([scheduleSignal, lockSignal])
+        : lockSignal;
+      admissionSignal.throwIfAborted();
+      const row = (await pool.query(
+        `SELECT ${purgeReturnColumns}
+           FROM metadata
+          WHERE id=$1
+            AND status='deleted'
+            AND purge_state='purging'
+            AND purge_attempts=$2`,
+        [claim.id, claim.purge_attempts]
+      )).rows[0] as PurgeRow | undefined;
+      admissionSignal.throwIfAborted();
+      if (!row) return null;
 
-    const thumb = thumbnailRef(row);
-    const removals = await Promise.allSettled([
-      removeStorageObjectAndConfirm(
-        thumb.prefix,
-        thumb.key,
-        row.storage_slug,
-        { signal }
-      ),
-      removeStorageObjectAndConfirm(
-        "media",
-        row.object_key,
-        row.storage_slug,
-        { signal }
-      )
-    ]);
-    signal.throwIfAborted();
-    const removalErrors = removals.flatMap((result) =>
-      result.status === "rejected" ? [result.reason] : []
-    );
-    if (removalErrors.length) {
-      throw new AggregateError(
-        removalErrors,
-        "Failed to remove all image objects"
+      const thumb = thumbnailRef(row);
+      const removals = await removeStorageObjectsAndConfirm([
+        {
+          prefix: thumb.prefix,
+          key: thumb.key,
+          storageSlug: row.storage_slug
+        },
+        {
+          prefix: "media",
+          key: row.object_key,
+          storageSlug: row.storage_slug
+        }
+      ], { signal: lockSignal }, admissionSignal);
+      // Physical deletion is now irreversible. Finish the database side under
+      // the image lock even if the request or background schedule is canceled.
+      lockSignal.throwIfAborted();
+      assertStorageRemovalResults(
+        removals,
+        "无法确认回收站图片的全部存储对象已删除"
       );
-    }
-    signal.throwIfAborted();
+      lockSignal.throwIfAborted();
 
-    const deleted = await pool.query(
-      `DELETE FROM metadata
-        WHERE id=$1
-          AND status='deleted'
-          AND purge_state='purging'
-          AND purge_attempts=$2
-          AND storage_slug=$3
-          AND object_key=$4
-        RETURNING id`,
-      [row.id, row.purge_attempts, row.storage_slug, row.object_key]
-    );
-    signal.throwIfAborted();
-    return deleted.rowCount ? row : null;
-  });
+      const deleted = await pool.query(
+        `DELETE FROM metadata
+          WHERE id=$1
+            AND status='deleted'
+            AND purge_state='purging'
+            AND purge_attempts=$2
+            AND storage_slug=$3
+            AND object_key=$4
+          RETURNING id`,
+        [row.id, row.purge_attempts, row.storage_slug, row.object_key]
+      );
+      lockSignal.throwIfAborted();
+      return deleted.rowCount ? row : null;
+    }
+  );
+  return scheduleSignal
+    ? runWithAdvisoryLockAcquisitionSignal(scheduleSignal, purgeWhileLocked)
+    : purgeWhileLocked();
 }
 
 function isSignalAbort(error: unknown, signal?: AbortSignal) {
@@ -253,7 +265,7 @@ async function processPurgeClaim(
 ): Promise<PurgeClaimOutcome> {
   try {
     signal?.throwIfAborted();
-    const deleted = await purgeClaimedRow(row);
+    const deleted = await purgeClaimedRow(row, signal);
     if (deleted) return { status: "deleted", row: deleted };
     await recordPurgeFailure(row, new Error(
       "Purge ownership was lost before metadata deletion"
@@ -283,9 +295,14 @@ async function purgeTargetBatch(
   let failed = 0;
 
   try {
-    for (let offset = 0; offset < rows.length; offset += 10) {
+    for (
+      let offset = 0;
+      offset < rows.length;
+      offset += STORAGE_OBJECT_REMOVAL_CONCURRENCY
+    ) {
+      options.signal?.throwIfAborted();
       const results = await Promise.allSettled(
-        rows.slice(offset, offset + 10).map((row) =>
+        rows.slice(offset, offset + STORAGE_OBJECT_REMOVAL_CONCURRENCY).map((row) =>
           processPurgeClaim(row, options.signal)
         )
       );

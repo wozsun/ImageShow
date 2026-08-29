@@ -122,11 +122,12 @@ export async function issueAltchaChallenge(c: Context) {
   await reserveChallengeRequest(c);
   c.header("Cache-Control", noStoreCacheControl);
   const secrets = getAltchaSecrets();
+  const [minCounter, maxCounter] = config.counter_range;
 
   return createChallenge({
     algorithm: altchaAlgorithm,
     cost: config.cost,
-    counter: randomInt(config.counter_max, config.counter_min),
+    counter: randomInt(maxCounter, minCounter),
     deriveKey,
     expiresAt: new Date(Date.now() + config.ttl_seconds * 1000),
     hmacSignatureSecret: secrets.challengeSignatureSecret,

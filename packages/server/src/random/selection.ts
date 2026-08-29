@@ -45,7 +45,7 @@ export async function selectRandomImages(
   signal?.throwIfAborted();
   const parsed = parseRandomQuery(
     url,
-    getRuntimeConfig().site.random_default_method
+    getRuntimeConfig().site.random_method
   );
   if (parsed instanceof Response) return parsed;
   if (parsed.ids.length) {

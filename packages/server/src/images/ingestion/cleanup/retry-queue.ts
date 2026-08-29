@@ -1,14 +1,15 @@
 import { appConfig } from "@imageshow/shared";
-import { getRuntimeConfig } from "../../../config/runtime-config-store.ts";
 import { errorMessage } from "../../../core/api-error.ts";
 import { DynamicConcurrencyLimiter } from "../../../core/concurrency.ts";
 import { logger } from "../../../core/logger.ts";
+import {
+  STORAGE_OBJECT_REMOVAL_CONCURRENCY
+} from "../../../storage/objects/removal-admission.ts";
 
 type CleanupWork = () => Promise<void>;
 
-type IngestionRetiredCleanupQueueOptions = Readonly<{
+type IngestionCleanupRetryQueueOptions = Readonly<{
   capacity?: () => number;
-  concurrency?: () => number;
   lossy?: boolean;
   maxAttempts?: () => number;
   retryDelayMs?: () => number;
@@ -23,12 +24,13 @@ function waitForRetry(delayMs: number) {
 }
 
 /**
- * Bounds retirement cleanup across requests. The default class contract keeps
+ * Bounds disposable Ingestion cleanup retries across requests. The default
+ * class contract keeps
  * exact work through admission backpressure and retries. The production
  * disposable instance opts into finite best-effort mode only after formal
  * media/thumb candidates have acquired a persistent move.cleanup guard.
  */
-class IngestionRetiredCleanupQueue {
+class IngestionCleanupRetryQueue {
   readonly #signal = new AbortController().signal;
   readonly #capacity: () => number;
   readonly #lossy: boolean;
@@ -37,16 +39,15 @@ class IngestionRetiredCleanupQueue {
   readonly #limiter: DynamicConcurrencyLimiter;
   readonly #pending = new Set<Promise<void>>();
 
-  constructor(options: IngestionRetiredCleanupQueueOptions = {}) {
+  constructor(options: IngestionCleanupRetryQueueOptions = {}) {
     this.#capacity = options.capacity
-      ?? (() => appConfig.ingestionRuntime.queueActionBatchSize);
+      ?? (() => appConfig.ingestionRuntime.cleanupRetryQueueCapacity);
     this.#lossy = options.lossy ?? false;
     this.#maxAttempts = options.maxAttempts
-      ?? (() => appConfig.ingestionRuntime.retiredCleanupMaxAttempts);
+      ?? (() => appConfig.ingestionRuntime.cleanupRetryMaxAttempts);
     this.#retryDelayMs = options.retryDelayMs ?? (() => 1_000);
     this.#limiter = new DynamicConcurrencyLimiter(
-      options.concurrency
-        ?? (() => getRuntimeConfig().background_job.move_cleanup_concurrency),
+      () => STORAGE_OBJECT_REMOVAL_CONCURRENCY,
       (signal) => signal.reason ?? new Error("Ingestion cleanup queue stopped")
     );
   }
@@ -60,23 +61,23 @@ class IngestionRetiredCleanupQueue {
       : Number.POSITIVE_INFINITY;
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       try {
-        await work();
+        await this.#limiter.run(this.#signal, work);
         if (attempt > 1) {
-          logger.warn("ingestion_retired_cleanup_backlog_recovered", {
+          logger.warn("ingestion_cleanup_retry_backlog_recovered", {
             attempts: attempt
           });
         }
         return;
       } catch (error) {
         if (attempt >= maxAttempts) {
-          logger.warn("ingestion_retired_cleanup_retry_exhausted", {
+          logger.warn("ingestion_cleanup_retry_exhausted", {
             attempts: attempt,
             error: errorMessage(error)
           });
           return;
         }
         if (attempt === 1 || (attempt & (attempt - 1)) === 0) {
-          logger.warn("ingestion_retired_cleanup_deferred", {
+          logger.warn("ingestion_cleanup_retry_deferred", {
             attempts: attempt,
             error: errorMessage(error)
           });
@@ -99,7 +100,7 @@ class IngestionRetiredCleanupQueue {
         : 1;
       if (this.#pending.size < capacity) break;
       if (this.#lossy) {
-        logger.warn("ingestion_retired_cleanup_capacity_exhausted", {
+        logger.warn("ingestion_cleanup_retry_capacity_exhausted", {
           capacity,
           pending: this.#pending.size
         });
@@ -108,10 +109,7 @@ class IngestionRetiredCleanupQueue {
       await Promise.race(this.#pending);
     }
     let task!: Promise<void>;
-    task = this.#limiter.run(
-      this.#signal,
-      () => this.#runBounded(work)
-    )
+    task = this.#runBounded(work)
       .finally(() => {
         this.#pending.delete(task);
       });
@@ -119,6 +117,6 @@ class IngestionRetiredCleanupQueue {
   }
 }
 
-export const ingestionRetiredCleanupQueue = new IngestionRetiredCleanupQueue({
+export const ingestionCleanupRetryQueue = new IngestionCleanupRetryQueue({
   lossy: true
 });

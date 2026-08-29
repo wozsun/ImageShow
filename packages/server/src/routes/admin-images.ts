@@ -32,7 +32,7 @@ import {
   parse,
   uuidInput,
 } from "../core/validation.ts";
-import { migrateImagesStorage } from "../images/image-storage-migration.ts";
+import { migrateSelectedImagesToStorageBackend } from "../images/selected-image-storage-migration.ts";
 import { updateImages } from "../images/image-update.ts";
 import {
   getAdminImageSnapshots,
@@ -114,7 +114,7 @@ export function registerAdminImageRoutes(app: Hono) {
         storage_display_name: targetBackend?.display_name
       });
       let maxItemDurationMs = 0;
-      const result = await migrateImagesStorage(input.ids, input.target, {
+      const result = await migrateSelectedImagesToStorageBackend(input.ids, input.target, {
         signal: c.req.raw.signal,
         onMetrics(metrics) {
           maxItemDurationMs = metrics.maxImageDurationMs;

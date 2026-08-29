@@ -148,18 +148,18 @@
 }
 .import-source-result-summary { min-width: 0; margin: 0; color: var(--admin-color-success-text); line-height: 20px; }
 .import-source-result-summary.is-warning { color: var(--admin-color-warning-text); }
-.jsonl-preview { display: grid; gap: 8px; min-height: 0; }
-.jsonl-preview-summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--admin-color-ingestion-summary); font-size: 13px; }
-.jsonl-preview-summary button { min-height: 32px; padding: 6px 9px; }
-.jsonl-error-list { max-height: 190px; margin: 0; padding: 0; overflow: auto; list-style: none; border-top: 1px solid var(--admin-color-ingestion-divider-strong); }
-.jsonl-error-list li { display: grid; gap: 2px; padding: 8px 2px; border-bottom: 1px solid var(--admin-color-ingestion-divider-muted); }
-.jsonl-error-list strong { font-size: 12px; }
-.jsonl-error-list span { overflow: hidden; color: var(--admin-color-text-secondary); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.jsonl-error-list strong,
-.jsonl-error-list span { color: var(--admin-color-danger-text); }
-.jsonl-import-report { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--admin-color-warning-border); border-radius: 6px; background: var(--admin-color-warning-surface-soft); color: var(--admin-color-warning-text); font-size: 13px; }
-.jsonl-import-report span { margin-right: auto; }
-.jsonl-import-report button { min-height: 30px; padding: 5px 8px; }
+.import-issue-preview { display: grid; gap: 8px; min-height: 0; }
+.import-issue-preview-summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--admin-color-ingestion-summary); font-size: 13px; }
+.import-issue-preview-summary button { min-height: 32px; padding: 6px 9px; }
+.import-issue-list { max-height: 190px; margin: 0; padding: 0; overflow: auto; list-style: none; border-top: 1px solid var(--admin-color-ingestion-divider-strong); }
+.import-issue-list li { display: grid; gap: 2px; padding: 8px 2px; border-bottom: 1px solid var(--admin-color-ingestion-divider-muted); }
+.import-issue-list strong { font-size: 12px; }
+.import-issue-list span { overflow: hidden; color: var(--admin-color-text-secondary); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.import-issue-list strong,
+.import-issue-list span { color: var(--admin-color-danger-text); }
+.ingestion-queue-notice { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--admin-color-warning-border); border-radius: 6px; background: var(--admin-color-warning-surface-soft); color: var(--admin-color-warning-text); font-size: 13px; }
+.ingestion-queue-notice span { margin-right: auto; }
+.ingestion-queue-notice button { min-height: 30px; padding: 5px 8px; }
 .ingestion-head-copy { min-width: 0; }
 .ingestion-task-summary { display: grid; gap: 2px; }
 .ingestion-summary-primary,

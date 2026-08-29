@@ -21,7 +21,7 @@ import type {
 import type { IngestionAttributeDefaults } from "../queue/model/ingestion-attribute-defaults.js";
 import type { IngestionPreviewTarget } from "../queue/cards/DuplicateMatchPanel.js";
 import { IngestionJobList } from "../queue/cards/IngestionJobList.js";
-import type { JsonlManifestParseError } from "../queue/ingestion-api.js";
+import type { ImportManifestParseError } from "../queue/ingestion-api.js";
 import type { IngestionQueueController } from "../queue/useIngestionQueue.js";
 import type { useIngestionDuplicateDetails } from "../queue/useIngestionDuplicateDetails.js";
 import type { ImportSourceMode } from "../import/ImportSourceDialog.js";
@@ -265,8 +265,8 @@ export function IngestionWorkflowQueueBody({
   busy,
   queue,
   duplicateDetails,
-  jsonlErrors,
-  onClearJsonlErrors,
+  importParseErrors,
+  onClearImportParseErrors,
   storageName,
   vocabulary,
   jobActions,
@@ -278,8 +278,8 @@ export function IngestionWorkflowQueueBody({
   busy: boolean;
   queue: IngestionQueueController;
   duplicateDetails: DuplicateDetailsController;
-  jsonlErrors: JsonlManifestParseError[];
-  onClearJsonlErrors: () => void;
+  importParseErrors: ImportManifestParseError[];
+  onClearImportParseErrors: () => void;
   storageName: (slug: string) => string;
   vocabulary: Readonly<{
     themes: FacetOption[];
@@ -321,13 +321,13 @@ export function IngestionWorkflowQueueBody({
       className="modal-scroll-list image-workflow-list ingestion-list"
       ref={listRef}
     >
-      {jsonlErrors.length > 0 && (
-        <div className="jsonl-import-report">
-          <span>{jsonlErrors.length} 行未创建任务</span>
+      {importParseErrors.length > 0 && (
+        <div className="ingestion-queue-notice">
+          <span>{importParseErrors.length} 行未创建任务</span>
           <button
             type="button"
             onClick={() => void copyTextToClipboard(
-              jsonlErrors
+              importParseErrors
                 .map((error) => (
                   `第 ${error.line} 行：${error.error}\n${error.raw}`
                 ))
@@ -336,13 +336,13 @@ export function IngestionWorkflowQueueBody({
           >
             <AdminIcon name="file-copy-line" />复制错误
           </button>
-          <button type="button" onClick={onClearJsonlErrors}>
+          <button type="button" onClick={onClearImportParseErrors}>
             清除
           </button>
         </div>
       )}
       {queue.serverNotice && (
-        <div className="jsonl-import-report" role="status">
+        <div className="ingestion-queue-notice" role="status">
           <span>{queue.serverNotice}</span>
           {queue.serverNoticeRetryable && (
             <button type="button" onClick={queue.retryServerNotice}>
@@ -352,12 +352,12 @@ export function IngestionWorkflowQueueBody({
         </div>
       )}
       {queue.actions.notice && (
-        <div className="jsonl-import-report" role="status">
+        <div className="ingestion-queue-notice" role="status">
           <span>{queue.actions.notice}</span>
         </div>
       )}
       {duplicateDetails.error && (
-        <div className="jsonl-import-report" role="alert">
+        <div className="ingestion-queue-notice" role="alert">
           <span>{duplicateDetails.error}</span>
           <button type="button" onClick={duplicateDetails.refresh}>
             <AdminIcon name="refresh-line" />重试
@@ -365,7 +365,7 @@ export function IngestionWorkflowQueueBody({
         </div>
       )}
       {serverFailed && (
-        <div className="jsonl-import-report" role="alert">
+        <div className="ingestion-queue-notice" role="alert">
           <span>{queue.server.error || "服务端队列读取失败"}</span>
           <button type="button" onClick={queue.server.refresh}>
             <AdminIcon name="refresh-line" />重试

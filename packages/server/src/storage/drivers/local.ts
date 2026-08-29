@@ -1,18 +1,25 @@
 import { randomUUID } from "node:crypto";
+import { createWriteStream } from "node:fs";
 import { copyFile, link, mkdir, open, opendir, rm, rmdir, writeFile, access } from "node:fs/promises";
 import { dirname, join, relative, sep } from "node:path";
+import type { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import { runtimePaths } from "../../config/bootstrap-env.ts";
-import { getInputImageMaxBytes } from "../../config/app-settings.ts";
+import { getIngestionMaxFileBytes } from "../../config/app-settings.ts";
 import { ApiError } from "../../core/api-error.ts";
 import { safeStoragePath, STORAGE_PREFIXES, type StoragePrefix } from "../objects/keys.ts";
 import type {
-  CopyPrefix,
   OpenedRead,
   StorageCopyOptions,
   StorageDriver,
+  StorageObjectReference,
   StoragePruneOptions,
+  StorageRemoveOptions,
   StorageRequestOptions,
-  StorageSelfTest
+  StorageServerCopyOptions,
+  StorageServerCopySource,
+  StorageSelfTest,
+  StorageStreamWriteOptions
 } from "./driver.ts";
 import { parseSingleByteRange } from "../../core/http/byte-range.ts";
 import { localObjectEtag } from "../objects/validator.ts";
@@ -22,6 +29,13 @@ import {
   batchStorageKeys,
   type StorageKeyListOptions
 } from "../objects/key-listing.ts";
+import {
+  LOCAL_STORAGE_REMOVAL_CONCURRENCY,
+  mapStorageObjectsBounded,
+  removeDriverObjectsAndConfirm,
+  storageRemovalFailure,
+  type StorageDeleteAttemptResult
+} from "./removal.ts";
 
 const uuidV7TokenPattern = new RegExp(
   "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}"
@@ -72,9 +86,15 @@ async function* walkLocalKeys(
 }
 
 export class LocalBackend implements StorageDriver {
-  async exists(prefix: StoragePrefix, key: string) {
+  async exists(
+    prefix: StoragePrefix,
+    key: string,
+    options: StorageRequestOptions = {}
+  ) {
+    options.signal?.throwIfAborted();
     try {
       await access(safeStoragePath(prefix, key));
+      options.signal?.throwIfAborted();
       return true;
     } catch (error) {
       if (isMissingFileError(error)) return false;
@@ -148,11 +168,16 @@ export class LocalBackend implements StorageDriver {
   ) {
     return openedReadToBuffer(
       await this.openRead(prefix, key, undefined, options),
-      getInputImageMaxBytes()
+      getIngestionMaxFileBytes()
     );
   }
 
-  async writeBuffer(prefix: StoragePrefix, key: string, body: Buffer, _type: string) {
+  async writeBuffer(
+    prefix: StoragePrefix,
+    key: string,
+    body: Buffer,
+    _contentType: string
+  ) {
     const target = safeStoragePath(prefix, key);
     await mkdir(dirname(target), { recursive: true });
     const candidate = `${target}.candidate-${randomUUID()}`;
@@ -166,14 +191,83 @@ export class LocalBackend implements StorageDriver {
     }
   }
 
-  async remove(prefix: StoragePrefix, key: string) {
-    await rm(safeStoragePath(prefix, key), { force: true });
+  async writeStream(
+    prefix: StoragePrefix,
+    key: string,
+    body: Readable,
+    size: number,
+    _contentType: string,
+    options: StorageStreamWriteOptions = {}
+  ) {
+    if (!Number.isSafeInteger(size) || size < 0) {
+      throw new RangeError("Storage stream size must be a non-negative safe integer");
+    }
+    options.signal?.throwIfAborted();
+    const target = safeStoragePath(prefix, key);
+    await mkdir(dirname(target), { recursive: true });
+    const candidate = `${target}.candidate-${randomUUID()}`;
+    const output = createWriteStream(candidate, { flags: "wx" });
+    try {
+      await pipeline(body, output, { signal: options.signal });
+      if (output.bytesWritten !== size) {
+        throw new ApiError(
+          502,
+          "storage_write_size_mismatch",
+          "Storage stream length did not match its declared size"
+        );
+      }
+      options.signal?.throwIfAborted();
+      await link(candidate, target);
+    } finally {
+      await rm(candidate, { force: true }).catch(() => undefined);
+    }
+  }
+
+  async removeObjects(
+    objects: readonly StorageObjectReference[],
+    options: StorageRemoveOptions = {}
+  ) {
+    return removeDriverObjectsAndConfirm({
+      objects,
+      options,
+      exists: (object, requestOptions) => this.exists(
+        object.prefix,
+        object.key,
+        requestOptions
+      ),
+      remove: (items, requestOptions) => mapStorageObjectsBounded(
+        items,
+        LOCAL_STORAGE_REMOVAL_CONCURRENCY,
+        async (object): Promise<StorageDeleteAttemptResult> => {
+          if (requestOptions.signal?.aborted) {
+            return {
+              status: "not_started",
+              error: storageRemovalFailure(
+                requestOptions.signal.reason,
+                "storage_delete_cancelled"
+              )
+            };
+          }
+          try {
+            await rm(safeStoragePath(object.prefix, object.key), {
+              force: true
+            });
+            return { status: "acknowledged" };
+          } catch (error) {
+            return {
+              status: "failed",
+              error: storageRemovalFailure(error)
+            };
+          }
+        }
+      )
+    });
   }
 
   async copy(
-    fromPrefix: CopyPrefix,
+    fromPrefix: StoragePrefix,
     fromKey: string,
-    toPrefix: CopyPrefix,
+    toPrefix: StoragePrefix,
     toKey: string,
     options: StorageCopyOptions = {}
   ) {
@@ -197,6 +291,27 @@ export class LocalBackend implements StorageDriver {
     }
   }
 
+  serverCopySource(
+    _prefix: StoragePrefix,
+    _key: string,
+    _size: number
+  ): StorageServerCopySource | undefined {
+    return undefined;
+  }
+
+  supportsServerCopySource(_source: StorageServerCopySource) {
+    return false;
+  }
+
+  async copyFromServerSource(
+    _source: StorageServerCopySource,
+    _toPrefix: StoragePrefix,
+    _toKey: string,
+    _options: StorageServerCopyOptions
+  ): Promise<void> {
+    throw new RangeError("Local storage does not support server-side copy");
+  }
+
   async *listKeys(
     prefix: StoragePrefix,
     options: StorageKeyListOptions = {}
@@ -212,7 +327,13 @@ export class LocalBackend implements StorageDriver {
     await mkdir(join(runtimePaths.storageDirectory, "_uploads"), { recursive: true });
     const path = safeStoragePath("_uploads", ".storage-test");
     await writeFile(path, "ok");
-    await rm(path, { force: true });
+    const [removed] = await this.removeObjects([{
+      prefix: "_uploads",
+      key: ".storage-test"
+    }]);
+    if (removed?.status !== "removed") {
+      throw new Error("Local self-test object could not be removed");
+    }
     return { backend: "local", writable: true, storage_dir: runtimePaths.storageDirectory };
   }
 

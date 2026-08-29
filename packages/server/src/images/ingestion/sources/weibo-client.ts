@@ -1,4 +1,3 @@
-import { runWeiboRequestWithinGlobalLimit } from "./weibo-request-limiter.ts";
 import {
   WeiboImportError,
   type WeiboImportErrorCode
@@ -113,23 +112,21 @@ async function requestAndParseWeiboResponse<Result>(
 ) {
   const callerSignal = init.signal ?? undefined;
   try {
-    return await runWeiboRequestWithinGlobalLimit(callerSignal, async () => {
-      const timeoutSignal = AbortSignal.timeout(weiboRequestTimeoutMs);
-      const requestSignal = callerSignal
-        ? AbortSignal.any([callerSignal, timeoutSignal])
-        : timeoutSignal;
-      const response = await fetch(input, {
-        ...init,
-        signal: requestSignal
-      });
-      const text = await readWeiboResponseText(
-        response,
-        maxResponseBytes,
-        requestSignal,
-        context
-      );
-      return parseResponse(response, text);
+    const timeoutSignal = AbortSignal.timeout(weiboRequestTimeoutMs);
+    const requestSignal = callerSignal
+      ? AbortSignal.any([callerSignal, timeoutSignal])
+      : timeoutSignal;
+    const response = await fetch(input, {
+      ...init,
+      signal: requestSignal
     });
+    const text = await readWeiboResponseText(
+      response,
+      maxResponseBytes,
+      requestSignal,
+      context
+    );
+    return parseResponse(response, text);
   } catch (error) {
     if (callerSignal?.aborted) throw callerSignal.reason ?? error;
     if (error instanceof WeiboImportError) throw error;
@@ -252,10 +249,22 @@ export async function fetchWeiboStatus(
     (response, text) => {
       const location = response.headers.get("location") ?? "";
       if (response.status >= 300 && response.status < 400) {
-        const message = /passport\.weibo\.(com|cn)/.test(location)
-          ? "微博要求登录验证，当前仅支持无需登录即可访问的公开微博"
-          : `微博接口返回重定向：${location || response.status}`;
-        throw new WeiboImportError("weibo_post_unavailable", message);
+        if (/passport\.weibo\.(com|cn)/.test(location)) {
+          throw new WeiboImportError(
+            "weibo_visitor_rejected",
+            "微博拒绝了当前访客身份，下一次请求将重新获取身份"
+          );
+        }
+        throw new WeiboImportError(
+          "weibo_post_unavailable",
+          `微博接口返回重定向：${location || response.status}`
+        );
+      }
+      if (response.status === 401 || response.status === 403) {
+        throw new WeiboImportError(
+          "weibo_visitor_rejected",
+          `微博拒绝了当前访客身份：HTTP ${response.status}`
+        );
       }
       if (!response.ok) {
         throw new WeiboImportError(

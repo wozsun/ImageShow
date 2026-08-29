@@ -50,8 +50,8 @@ export function SiteHead() {
       link.rel = "icon";
       document.head.appendChild(link);
     }
-    link.type = site.icon_url.endsWith(".svg") ? "image/svg+xml" : "";
-    link.href = site.icon_url || "/assets/brand/favicon.svg";
-  }, [site?.name, site?.description, site?.icon_url]);
+    link.type = site.icon.endsWith(".svg") ? "image/svg+xml" : "";
+    link.href = site.icon || "/assets/brand/favicon.svg";
+  }, [site?.name, site?.description, site?.icon]);
   return null;
 }

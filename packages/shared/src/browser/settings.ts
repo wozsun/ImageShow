@@ -1,4 +1,5 @@
 import type { LogLevel, SiteVersionSettings } from "./common.ts";
+import type { ImportSourceTypeDto } from "./ingestion.ts";
 
 export const siteRoots = ["home", "gallery"] as const;
 export type SiteRoot = (typeof siteRoots)[number];
@@ -20,7 +21,7 @@ export type SiteHomeSettings = {
 };
 
 export type SiteGallerySettings = {
-  default_limit: number;
+  limit: number;
   order: GalleryOrder;
 };
 
@@ -28,12 +29,12 @@ export type RuntimeSiteSettings = {
   name: string;
   domain: string;
   description: string;
-  icon_url: string;
+  icon: string;
   version: SiteVersionSettings;
   root: SiteRoot;
   home: SiteHomeSettings;
   gallery: SiteGallerySettings;
-  random_default_method: RandomDefaultMethod;
+  random_method: RandomDefaultMethod;
   static_subdomain: string;
   robots_enabled: boolean;
 };
@@ -44,37 +45,34 @@ export type EmbedSettings = {
 };
 
 export type IngestionSettings = {
+  max_file_size_mb: number;
+  max_long_edge: number;
+  list_page_size: number;
   commit_concurrency: number;
-  global_commit_concurrency: number;
-  global_commit_byte_budget_mb: number;
 };
 
 export type UploadSettings = {
   max_items: number;
-  max_file_size_mb: number;
-  max_long_edge: number;
-  list_page_size: number;
-  concurrency: number;
-  global_concurrency: number;
+  browser_concurrency: number;
+  raw_concurrency: number;
 };
 
 export type ImportSettings = {
-  fill_original_url: boolean;
+  keep_original_link: ImportSourceTypeDto[];
   auto_import: boolean;
-  concurrency: number;
-  global_concurrency: number;
   fetch_timeout_seconds: number;
   max_items: number;
 };
 
 export type WeiboSettings = {
   max_items: number;
-  concurrency: number;
-  global_concurrency: number;
+  source_enabled: boolean;
+  request_delay_seconds: [number, number];
   author_slugs: Record<string, string>;
 };
 
 export type NormalizeSettings = {
+  concurrency: number;
   quality: number;
   quality_step: number;
   min_quality: number;
@@ -105,11 +103,6 @@ export type RuntimeConfig = {
   normalize: NormalizeSettings;
   thumbnail: ThumbnailSettings;
   admin: AdminPanelSettings;
-  background_job: {
-    move_cleanup_concurrency: number;
-    theme_reassign_concurrency: number;
-    migrate_concurrency: number;
-  };
   security: {
     session_ttl_seconds: number;
     login_failure_window_seconds: number;
@@ -121,8 +114,7 @@ export type RuntimeConfig = {
     enabled: boolean;
     ttl_seconds: number;
     cost: number;
-    counter_min: number;
-    counter_max: number;
+    counter_range: [number, number];
   };
   log: {
     level: LogLevel;
@@ -135,16 +127,16 @@ export type SiteSettings = Pick<
   RuntimeSiteSettings,
   | "name"
   | "domain"
-  | "icon_url"
+  | "icon"
   | "root"
   | "home"
   | "gallery"
-  | "random_default_method"
+  | "random_method"
 >;
 
 export type PublicSiteSettings = Pick<
   RuntimeSiteSettings,
-  "name" | "description" | "icon_url" | "root" | "home"
+  "name" | "description" | "icon" | "root" | "home"
 > & {
   gallery: Pick<SiteGallerySettings, "order">;
   static_url: string;
@@ -152,7 +144,7 @@ export type PublicSiteSettings = Pick<
 
 export type AdminSiteSettings = Omit<
   SiteSettings,
-  "domain" | "home" | "icon_url"
+  "domain" | "home" | "icon"
 > & {
   home: Pick<
     SiteHomeSettings,
@@ -160,23 +152,29 @@ export type AdminSiteSettings = Omit<
   >;
 };
 
-export type AdminIngestionSettings = Pick<IngestionSettings, "commit_concurrency">;
+export type AdminIngestionSettings = Pick<
+  IngestionSettings,
+  | "max_file_size_mb"
+  | "max_long_edge"
+  | "list_page_size"
+  | "commit_concurrency"
+>;
 
 export type AdminUploadSettings = Pick<
   UploadSettings,
   | "max_items"
-  | "max_file_size_mb"
-  | "max_long_edge"
-  | "list_page_size"
-  | "concurrency"
+  | "browser_concurrency"
 >;
 
 export type AdminImportSettings = Pick<
   ImportSettings,
-  "fill_original_url" | "auto_import" | "concurrency" | "max_items"
+  "keep_original_link" | "auto_import" | "max_items"
 >;
 
-export type AdminWeiboSettings = Pick<WeiboSettings, "max_items">;
+export type AdminWeiboSettings = Pick<
+  WeiboSettings,
+  "max_items" | "source_enabled"
+>;
 
 export type AdminSettings = {
   site: AdminSiteSettings;

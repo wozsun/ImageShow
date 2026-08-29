@@ -72,11 +72,11 @@ export function parseImageTime(value?: string | null, options: ParseImageTimeOpt
   return { date, iso: date.toISOString() };
 }
 
-export function createImageId(imageTime: Date, manifestPosition?: number) {
+export function createImageId(imageTime: Date, batchPosition?: number) {
   assertAllowedImageTime(imageTime);
-  if (manifestPosition === undefined) return randomUuidV7At(imageTime);
-  if (!Number.isInteger(manifestPosition) || manifestPosition < 0 || manifestPosition > 0xfff) {
-    throw new RangeError("manifest_position must fit in 12 bits");
+  if (batchPosition === undefined) return randomUuidV7At(imageTime);
+  if (!Number.isInteger(batchPosition) || batchPosition < 0 || batchPosition > 0xfff) {
+    throw new RangeError("batch_position must fit in 12 bits");
   }
-  return randomUuidV7At(imageTime, manifestPosition);
+  return randomUuidV7At(imageTime, batchPosition);
 }

@@ -90,7 +90,7 @@ const chunkResponsibilityAliases: Readonly<Record<string, string>> = {
   "capability-account-user": "password",
   "capability-admin": "workspace-header",
   "capability-check-check-maintenance-overview": "cache-status",
-  "capability-check-maintenance-storage": "storage-move-api",
+  "capability-check-maintenance-storage": "storage-migration-api",
   "capability-image-editor-ingestion": "image-fields",
   "capability-settings-storage": "number-input",
   "capability-storage-vocabulary": "reorder",
@@ -169,14 +169,14 @@ const conciseAssetNames: Readonly<Record<string, string>> = {
   HomePage: "home",
   ImageAdmin: "images",
   ImageAdminDetails: "image-details",
-  ImageStorageMigrationDialog: "image-move",
+  ImageStorageMigrationDialog: "image-migration",
   ImportSourceDialog: "import-source",
   LoginChallenge: "login-challenge",
   LogPage: "logs",
   Overview: "overview",
   ReadyImageCachePanel: "cache-panel",
   SettingsPage: "settings",
-  StorageBackendMigrationDialog: "storage-move",
+  StorageBackendMigrationDialog: "storage-migration",
   StorageSettings: "storage",
   Ingestion: "ingestion",
   UserAdmin: "users",
@@ -204,14 +204,14 @@ function staticAssetPattern(names: string[]) {
   return `assets/${conciseAssetName(baseName)}-[hash]${extension}`;
 }
 
-const storageMoveModuleSuffixes = [
-  "/src/lib/api/storage-backend-migration.ts",
+const storageBackendImageMigrationModuleSuffixes = [
+  "/src/lib/api/storage-backend-image-migration.ts",
   "/src/pages/admin/storage/StorageBackendMigrationDialog.tsx"
 ];
 
-function isStorageMoveModule(id: string) {
+function isStorageBackendImageMigrationModule(id: string) {
   const normalized = id.replaceAll("\\", "/");
-  return storageMoveModuleSuffixes.some((suffix) => (
+  return storageBackendImageMigrationModuleSuffixes.some((suffix) => (
     normalized.endsWith(suffix)
   ));
 }
@@ -328,8 +328,8 @@ export default defineConfig({
               priority: 4
             },
             {
-              name: "storage-move",
-              test: isStorageMoveModule,
+              name: "storage-migration",
+              test: isStorageBackendImageMigrationModule,
               priority: 3,
               minShareCount: 2,
               includeDependenciesRecursively: false

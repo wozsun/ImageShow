@@ -1,7 +1,7 @@
 import { AdminIcon } from "../../../../components/icon/AdminIcon.js";
 import { copyTextToClipboard } from "../../../../lib/ui/clipboard.js";
 import type {
-  JsonlManifestParseError,
+  ImportManifestParseError,
   WeiboImportParseError
 } from "../queue/ingestion-api.js";
 import type { ParsedImportSourceResult } from "./import-source-adapters.js";
@@ -19,7 +19,7 @@ function issuePreviewSuffix(totalCount: number, visibleCount: number) {
     : "（明细未显示）";
 }
 
-function parseErrorText(errors: JsonlManifestParseError[]) {
+function parseErrorText(errors: ImportManifestParseError[]) {
   return errors
     .map((error) => `第 ${error.line} 行：${error.error}\n${error.raw}`)
     .join("\n\n");
@@ -43,8 +43,8 @@ function ImportIssuePreview({
   items: Array<{ key: string; line: number; message: string }>;
 }) {
   return (
-    <div className="jsonl-preview">
-      <div className="jsonl-preview-summary">
+    <div className="import-issue-preview">
+      <div className="import-issue-preview-summary">
         <span>{summary}</span>
         <button
           type="button"
@@ -57,7 +57,7 @@ function ImportIssuePreview({
         </button>
       </div>
       {items.length > 0 && (
-        <ol className="jsonl-error-list">
+        <ol className="import-issue-list">
           {items.slice(0, importIssuePreviewMaxItems).map((item) => (
             <li key={item.key}>
               <strong>第 {item.line} 行</strong>

@@ -10,9 +10,9 @@ export const ingestionDuplicateDecisions = ["upload", "confirmed"] as const;
 export type IngestionDuplicateDecision =
   (typeof ingestionDuplicateDecisions)[number];
 
-export type JsonlManifestItemDto = {
+export type ImportManifestItemDto = {
   line: number;
-  manifest_position: number;
+  batch_position: number;
   original: string;
   source?: string;
   image_time?: string;
@@ -26,15 +26,15 @@ export type JsonlManifestItemDto = {
   storage_slug?: string;
 };
 
-export type JsonlManifestParseErrorDto = {
+export type ImportManifestParseErrorDto = {
   line: number;
   raw: string;
   error: string;
 };
 
-export type JsonlManifestResultDto = {
-  items: JsonlManifestItemDto[];
-  errors: JsonlManifestParseErrorDto[];
+export type ImportManifestResultDto = {
+  items: ImportManifestItemDto[];
+  errors: ImportManifestParseErrorDto[];
 };
 
 export type WeiboImportParseErrorDto = {
@@ -46,7 +46,7 @@ export type WeiboImportParseErrorDto = {
 export type WeiboImportResultDto = {
   post_count: number;
   errors: WeiboImportParseErrorDto[];
-  manifest: JsonlManifestResultDto;
+  manifest: ImportManifestResultDto;
 };
 
 export type IngestionVocabularyDto = {
@@ -76,7 +76,10 @@ export const uploadCredentialHeader = "x-imageshow-upload-credential";
 export const ingestionQueueTypes = ["upload", "import"] as const;
 export type IngestionQueueTypeDto = typeof ingestionQueueTypes[number];
 
-export const ingestionSourceTypes = ["upload", "url", "jsonl", "weibo"] as const;
+export const importSourceTypes = ["url", "jsonl", "weibo"] as const;
+export type ImportSourceTypeDto = typeof importSourceTypes[number];
+
+export const ingestionSourceTypes = ["upload", ...importSourceTypes] as const;
 export type IngestionSourceTypeDto = typeof ingestionSourceTypes[number];
 
 export const serverIngestionStatuses = [
@@ -102,7 +105,7 @@ export type UploadIntentItemInputDto = ImageDraftDto & {
   batch_key: string;
   image_time?: string;
   batch_time?: string;
-  manifest_position: number;
+  batch_position: number;
   storage_slug?: string;
   expected_size: number;
   max_long_edge: number;
@@ -166,11 +169,11 @@ export type UploadRawResultDto = IngestionSessionPairDto & {
 export type ImportItemInputDto = ImageDraftDto & {
   idempotency_key: string;
   batch_key: string;
-  source_type: Exclude<IngestionSourceTypeDto, "upload">;
-  url: string;
+  source_type: ImportSourceTypeDto;
+  download_url: string;
   image_time?: string;
   batch_time?: string;
-  manifest_position: number;
+  batch_position: number;
   manifest_line?: number;
   storage_slug?: string;
 };
@@ -230,8 +233,8 @@ export type ServerIngestionPreparedDto = {
 export type ActiveServerIngestionItemDto = IngestionSessionPairDto & {
   queue: IngestionQueueTypeDto;
   source_type: IngestionSourceTypeDto;
-  source_url?: string;
-  manifest_position?: number;
+  download_url?: string;
+  batch_position?: number;
   manifest_line?: number;
   resolved_image_time: string;
   status: Exclude<ServerIngestionStatusDto, "completed">;
@@ -258,7 +261,7 @@ export type ActiveServerIngestionItemDto = IngestionSessionPairDto & {
 
 export type CompletedIngestionDisplayDto = {
   source_type: IngestionSourceTypeDto;
-  manifest_position?: number;
+  batch_position?: number;
   manifest_line?: number;
   original_width: number;
   original_height: number;

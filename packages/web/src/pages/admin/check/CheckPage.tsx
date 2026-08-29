@@ -387,7 +387,7 @@ const CHECK_RESULT_LABELS: Record<string, string> = {
   removed: "已删除对象",
   skipped: "已安全跳过",
   failed: "维护失败数量",
-  active_uploads_retained: "已保留有效内容接入暂存",
+  active_staging_objects_retained: "已保留有效内容接入暂存",
   pruned_dirs: "已回收空目录",
   items: "逐项维护明细",
   failures: "失败项",

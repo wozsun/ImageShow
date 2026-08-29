@@ -32,7 +32,7 @@ import {
   ImportSourceResultPanel,
   ImportSourceResultSummary
 } from "./ImportSourceResultPanel.js";
-import { parseImportUrlInput } from "../queue/model/ingestion-job-utils.js";
+import { parseImportUrlInput } from "../queue/model/import-job-source.js";
 
 export type { ImportSourceSubmission } from "./import-source-adapters.js";
 export type { ImportSourceMode } from "./import-source-model.js";

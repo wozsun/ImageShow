@@ -40,7 +40,7 @@ import { resolveStorageTestConfig } from "../storage/backends/probe.ts";
 import { updateStorageBackend } from "../storage/backends/update.ts";
 import { retryStorageBackendCleanup } from "../storage/cleanup/service.ts";
 import { testStorageBackend } from "../storage/backends/self-test.ts";
-import { migrateStorageBackend } from "../storage/migration/backend.ts";
+import { migrateStorageBackendImages } from "../storage/migration/backend-images.ts";
 
 export function registerStorageRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/storage/options`, async (c) => {
@@ -66,7 +66,7 @@ export function registerStorageRoutes(app: Hono) {
         await readJsonBody(c)
       );
       const response = apiSuccess(
-        await migrateStorageBackend(input.source, input.target, {
+        await migrateStorageBackendImages(input.source, input.target, {
           signal: c.req.raw.signal
         })
       ) satisfies StorageBackendMigrationResponseDto;

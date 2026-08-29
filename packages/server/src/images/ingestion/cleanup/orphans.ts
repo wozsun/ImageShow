@@ -1,8 +1,8 @@
 import { appConfig } from "@imageshow/shared";
-import { getRuntimeConfig } from "../../../config/runtime-config-store.ts";
 import { errorMessage } from "../../../core/api-error.ts";
-import { mapWithWorkerPool } from "../../../core/concurrency.ts";
-import { runWithAdvisoryLockSignal } from "../../../core/database/advisory-locks.ts";
+import {
+  runWithAdvisoryLockAcquisitionSignal
+} from "../../../core/database/advisory-locks.ts";
 import { logger } from "../../../core/logger.ts";
 import {
   getRedisOperationalState,
@@ -18,7 +18,7 @@ import {
 import {
   collectStorageKeys,
   pruneEmptyStorageDirs,
-  removeStorageObjectAndConfirm
+  removeStorageObjectsAndConfirm
 } from "../../../storage/objects/access.ts";
 import {
   groupStorageNamespaces,
@@ -51,6 +51,9 @@ export type IngestionOrphanCleanupReport = Readonly<{
 }>;
 
 type StagingScanBudget = { remaining: number };
+// Bound preflight and confirmation latency so a periodic cleanup can commit
+// progress before its cycle deadline even when one namespace has many orphans.
+const INGESTION_STAGING_REMOVAL_BATCH_SIZE = 100;
 let nextStagingGroupKey: string | null = null;
 
 function runWithCleanupLockSignal<T>(
@@ -58,7 +61,9 @@ function runWithCleanupLockSignal<T>(
   work: () => Promise<T>
 ) {
   signal?.throwIfAborted();
-  return signal ? runWithAdvisoryLockSignal(signal, work) : work();
+  return signal
+    ? runWithAdvisoryLockAcquisitionSignal(signal, work)
+    : work();
 }
 
 type CleanupLockWork<T> = (signal: AbortSignal) => Promise<T>;
@@ -266,30 +271,50 @@ async function cleanupCapturedStagingGroup(
     });
     let stagingRemoved = 0;
     let stagingFailed = 0;
-    await mapWithWorkerPool(
-      candidates,
-      getRuntimeConfig().upload.global_concurrency,
-      async (key) => {
-        try {
-          await removeStorageObjectAndConfirm(
-            "_uploads",
+    for (
+      let offset = 0;
+      offset < candidates.length;
+      offset += INGESTION_STAGING_REMOVAL_BATCH_SIZE
+    ) {
+      signal.throwIfAborted();
+      const batch = candidates.slice(
+        offset,
+        offset + INGESTION_STAGING_REMOVAL_BATCH_SIZE
+      );
+      try {
+        const results = await removeStorageObjectsAndConfirm(
+          batch.map((key) => ({
+            prefix: "_uploads" as const,
             key,
-            deletionBackend.slug,
-            { signal }
-          );
-          stagingRemoved += 1;
-        } catch (error) {
-          signal.throwIfAborted();
+            storageSlug: deletionBackend.slug
+          })),
+          { signal }
+        );
+        for (const result of results) {
+          if (result.status === "removed" || result.status === "missing") {
+            stagingRemoved += 1;
+            continue;
+          }
           stagingFailed += 1;
           logger.warn("ingestion_orphan_staging_cleanup_failed", {
             backend: deletionBackend.slug,
-            key,
-            error: errorMessage(error)
+            key: result.key,
+            outcome: result.status,
+            error: result.error.message
           });
         }
-      },
-      { signal }
-    );
+      } catch (error) {
+        signal.throwIfAborted();
+        const remaining = candidates.length - offset;
+        stagingFailed += remaining;
+        logger.warn("ingestion_orphan_staging_cleanup_failed", {
+          backend: deletionBackend.slug,
+          objects: remaining,
+          error: errorMessage(error)
+        });
+        break;
+      }
+    }
     if (deletionBackend.type === "local") {
       await pruneEmptyStorageDirs(deletionBackend.slug, {
         signal,
@@ -318,11 +343,12 @@ async function cleanupStagingOrphans(
     callerSignal,
     async () => listStorageBackends()
   );
-  const supportedBackendLimit = appConfig.ingestion.configPackageMaxBackends;
-  if (backends.length > supportedBackendLimit) {
+  const storageBackendHardLimit =
+    appConfig.ingestionRuntime.orphanCleanupStorageBackendHardLimit;
+  if (backends.length > storageBackendHardLimit) {
     logger.warn("ingestion_orphan_staging_supported_backend_limit_exceeded", {
       backends: backends.length,
-      limit: supportedBackendLimit
+      limit: storageBackendHardLimit
     });
     return {
       stagingRemoved: 0,

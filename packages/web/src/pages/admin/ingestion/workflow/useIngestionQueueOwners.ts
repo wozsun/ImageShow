@@ -12,7 +12,7 @@ export function useUploadQueueOwner({
   maxItems,
   maxBytes,
   maxLongEdge,
-  concurrency,
+  browserConcurrency,
   onDone
 }: {
   pageSize: number;
@@ -22,7 +22,7 @@ export function useUploadQueueOwner({
   maxItems: number;
   maxBytes: number;
   maxLongEdge: number;
-  concurrency: number;
+  browserConcurrency: number;
   onDone: () => void;
 }) {
   const queue = useIngestionQueue(pageSize, "upload", displayed);
@@ -36,13 +36,13 @@ export function useUploadQueueOwner({
     onDone
   });
   const uploadFlow = useUpload({
-    queue: queue.workerApi,
+    queue: queue.producerApi,
     defaults,
     storageSlug,
     maxItems,
     maxBytes,
     maxLongEdge,
-    concurrency
+    browserConcurrency
   });
   return { queue, commit, ...uploadFlow };
 }
@@ -51,14 +51,14 @@ export function useImportQueueOwner({
   pageSize,
   displayed,
   defaults,
-  fillOriginalUrl,
+  keepOriginalLinkForUrlImports,
   storageSlug,
   onDone
 }: {
   pageSize: number;
   displayed: boolean;
   defaults: IngestionAttributeDefaults;
-  fillOriginalUrl: boolean;
+  keepOriginalLinkForUrlImports: boolean;
   storageSlug: string;
   onDone: () => void;
 }) {
@@ -73,9 +73,9 @@ export function useImportQueueOwner({
     onDone
   });
   const importFlow = useImport({
-    queue: queue.workerApi,
+    queue: queue.producerApi,
     defaults,
-    fillOriginalUrl,
+    keepOriginalLinkForUrlImports,
     storageSlug
   });
   return { queue, commit, ...importFlow };

@@ -245,7 +245,7 @@ const ingestionMetadataInput = metadataCreateInput.extend({
 const ingestionTimeFields = {
   image_time: z.string().trim().min(1).max(64).optional(),
   batch_time: z.string().trim().min(1).max(64).optional(),
-  manifest_position: z.number().int().min(0).max(0xfff)
+  batch_position: z.number().int().min(0).max(0xfff)
 };
 
 export const uploadIntentInput = z.strictObject({
@@ -265,10 +265,10 @@ export const uploadIntentInput = z.strictObject({
     "上传意图不能包含重复幂等键"
   );
   addUniqueIdIssues(
-    value.items.map((item) => `${item.batch_key}\0${item.manifest_position}`),
+    value.items.map((item) => `${item.batch_key}\0${item.batch_position}`),
     ctx,
-    (index) => ["items", index, "manifest_position"],
-    "同一上传批次不能包含重复清单位置"
+    (index) => ["items", index, "batch_position"],
+    "同一上传批次不能包含重复批次位置"
   );
 });
 
@@ -277,7 +277,7 @@ export const importAcceptInput = z.strictObject({
     idempotency_key: uuidV7Input,
     batch_key: uuidV7Input,
     source_type: z.enum(ingestionSourceTypes).exclude(["upload"]),
-    url: optionalHttpsDomainUrlField(externalImageRejectedMessage)
+    download_url: optionalHttpsDomainUrlField(externalImageRejectedMessage)
       .refine(Boolean, externalImageRejectedMessage)
       .transform((value) => value!),
     ...ingestionTimeFields,
@@ -292,10 +292,10 @@ export const importAcceptInput = z.strictObject({
     "导入不能包含重复幂等键"
   );
   addUniqueIdIssues(
-    value.items.map((item) => `${item.batch_key}\0${item.manifest_position}`),
+    value.items.map((item) => `${item.batch_key}\0${item.batch_position}`),
     ctx,
-    (index) => ["items", index, "manifest_position"],
-    "同一导入批次不能包含重复清单位置"
+    (index) => ["items", index, "batch_position"],
+    "同一导入批次不能包含重复批次位置"
   );
 });
 
@@ -326,7 +326,7 @@ export const ingestionSnapshotQuery = z.strictObject({
   offset: z.coerce.number().int().min(0).default(0),
   limit: z.coerce.number().int().min(0)
     .max(appConfig.ingestionRuntime.snapshotMaxItems)
-    .default(appConfig.runtimeDefaults.upload.list_page_size)
+    .optional()
 });
 
 export const ingestionSnapshotSelectionInput = z.strictObject({

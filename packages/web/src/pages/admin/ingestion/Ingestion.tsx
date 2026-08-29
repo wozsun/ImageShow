@@ -18,8 +18,8 @@ import type {
   ImportSourceMode,
   ImportSourceSubmission
 } from "./import/ImportSourceDialog.js";
-import { manifestImportJobs } from "./import/manifest-jobs.js";
-import type { JsonlManifestParseError } from "./queue/ingestion-api.js";
+import { createManifestImportJobs } from "./import/manifest-jobs.js";
+import type { ImportManifestParseError } from "./queue/ingestion-api.js";
 import {
   useImportQueueOwner,
   useUploadQueueOwner
@@ -60,7 +60,8 @@ export function Ingestion({
     useState<ImportSourceDialogModule["ImportSourceDialog"] | null>(null);
   const [importSourceMode, setImportSourceMode] =
     useState<ImportSourceMode>("urls");
-  const [jsonlErrors, setJsonlErrors] = useState<JsonlManifestParseError[]>([]);
+  const [importParseErrors, setImportParseErrors] =
+    useState<ImportManifestParseError[]>([]);
   const [defaults, setDefaults] = useState<IngestionAttributeDefaults>({
     device: "auto",
     brightness: "auto",
@@ -86,19 +87,21 @@ export function Ingestion({
   const tags = vocabulary?.tags ?? EMPTY_FACET_OPTIONS;
   const authors = vocabulary?.authors ?? EMPTY_FACET_OPTIONS;
 
-  const pageSize = settingsData?.settings.upload.list_page_size ?? 20;
+  const pageSize = settingsData?.settings.ingestion.list_page_size ?? 20;
   const uploadMaxItems = settingsData?.settings.upload.max_items ?? 200;
-  const maxBytes = (settingsData?.settings.upload.max_file_size_mb ?? 100) * 1024 * 1024;
-  const maxLongEdge = settingsData?.settings.upload.max_long_edge ?? 32000;
-  const uploadConcurrency = settingsData?.settings.upload.concurrency ?? 2;
-  // 配置请求可能独立失败；未知值不能擅自启用预填并覆盖服务端明确的 false。
-  // 服务端会在该配置为 true 时权威地补入 canonical session。
-  const fillOriginalUrl =
-    settingsData?.settings.import.fill_original_url === true;
+  const maxBytes = (settingsData?.settings.ingestion.max_file_size_mb ?? 100) * 1024 * 1024;
+  const maxLongEdge = settingsData?.settings.ingestion.max_long_edge ?? 32000;
+  const uploadBrowserConcurrency =
+    settingsData?.settings.upload.browser_concurrency ?? 2;
+  // 配置请求可能独立失败；未知值不能擅自保留公开链接。Server 接管时仍按
+  // source_type 和当前白名单权威生成 canonical metadata。
+  const importTypesKeepingOriginalLink =
+    settingsData?.settings.import.keep_original_link ?? [];
+  const keepOriginalLinkForUrlImports = importTypesKeepingOriginalLink.includes("url");
   const autoImportAfterParse =
     settingsData?.settings.import.auto_import === true;
   const importMaxItems = settingsData?.settings.import.max_items ?? 200;
-  const weiboMaxItems = settingsData?.settings.weibo.max_items ?? 20;
+  const weiboMaxItems = settingsData?.settings.weibo.max_items ?? 10;
   const { data: storageData } = useStorageOptions();
   const storageBackends = useMemo(() => storageData?.backends ?? [], [storageData?.backends]);
   const defaultBackend = storageBackends.find((backend) => backend.is_default)?.slug ?? "local";
@@ -132,14 +135,14 @@ export function Ingestion({
     maxItems: uploadMaxItems,
     maxBytes,
     maxLongEdge,
-    concurrency: uploadConcurrency,
+    browserConcurrency: uploadBrowserConcurrency,
     onDone
   });
   const importOwner = useImportQueueOwner({
     pageSize,
     displayed: open && mode === "import",
     defaults,
-    fillOriginalUrl,
+    keepOriginalLinkForUrlImports,
     storageSlug: activeBackend,
     onDone
   });
@@ -154,8 +157,7 @@ export function Ingestion({
   } = uploadOwner;
   const {
     addUrls,
-    addJobs,
-    addWeiboJobs,
+    addParsedImports,
     cancel: cancelImport,
     cancelMany: cancelManyImports,
     retry: retryImport
@@ -368,31 +370,37 @@ export function Ingestion({
       return;
     }
     if (submission.mode === "weibo") {
-      const postErrors: JsonlManifestParseError[] = submission.result.errors.map((error) => ({
+      const postErrors: ImportManifestParseError[] = submission.result.errors.map((error) => ({
         line: error.line,
         raw: error.url,
         error: `微博解析失败：${error.error}`
       }));
-      setJsonlErrors((current) => [
+      setImportParseErrors((current) => [
         ...current,
         ...postErrors,
         ...submission.result.manifest.errors
       ]);
-      void addWeiboJobs(manifestImportJobs(
+      void addParsedImports(createManifestImportJobs(
         submission.result.manifest.items,
         defaults,
         activeBackend,
-        "weibo"
+        "weibo",
+        importTypesKeepingOriginalLink.includes("weibo")
       ));
       return;
     }
-    setJsonlErrors((current) => [...current, ...submission.manifest.errors]);
-    const jobs = manifestImportJobs(
+    setImportParseErrors((current) => [
+      ...current,
+      ...submission.manifest.errors
+    ]);
+    const jobs = createManifestImportJobs(
       submission.manifest.items,
       defaults,
-      activeBackend
+      activeBackend,
+      "jsonl",
+      importTypesKeepingOriginalLink.includes("jsonl")
     );
-    void addJobs(jobs);
+    void addParsedImports(jobs);
   };
 
   const patchJob = useCallback((job: IngestionJob, patch: Partial<IngestionJob["draft"]>) => {
@@ -429,8 +437,8 @@ export function Ingestion({
           themes={themes}
           tags={tags}
           authors={authors}
-          jsonlErrors={mode === "import" ? jsonlErrors : []}
-          onClearJsonlErrors={() => setJsonlErrors([])}
+          importParseErrors={mode === "import" ? importParseErrors : []}
+          onClearImportParseErrors={() => setImportParseErrors([])}
           storageName={storageName}
           onAddFiles={(files) => void addFiles(files)}
           onPatchJob={patchJob}

@@ -78,7 +78,7 @@ Redis 核心 meta 的当前图片数和最后更新时间随完整重建批次�
 | `md5` | 文件 MD5，32 位十六进制；用于判重 |
 | `width` / `height` | 像素尺寸 |
 | `image_size` / `thumbnail_size` | 标准化图片字节数 / 缩略图字节数 |
-| `title` / `description` / `source` / `original` | 标题 / 描述 / 来源 / 原图链接；标题和描述在去除首尾空白后分别最多 80 / 500 个普通汉字，外部链接仅允许 HTTPS |
+| `title` / `description` / `source` / `original` | 标题 / 描述 / 来源页面 / 可公开原图链接；标题和描述在去除首尾空白后分别最多 80 / 500 个普通汉字，外部链接仅允许 HTTPS |
 | `image_time` | 图片展示 / 图库排序时间；JSONL 可指定，同一前端批次未指定时共享 `batch_time`，省略时使用会话创建时间 |
 | `deleted_at` | 移入回收站时间 |
 | `purge_state` | 彻底删除认领状态：`idle` / `purging` / `failed`；只有 `idle` 可恢复 |
@@ -165,8 +165,8 @@ Redis meta 的 `applied_revision` 只有在精确同步或全量重建完成完�
 运行中的 Upload intent、owner queue、canonical、runnable、expires、计数和 revision 位于
 专用 Redis logical database，全部使用 `imageshow:ingestion:*` namespace；每个 canonical 冻结
 owner、queue、pair、独立 `image_time`、metadata、storage、version、progress sequence、
-execution token、raw / prepared generation 及可选 commit intent。Import canonical 额外保存
-`import_source`，Upload canonical 不含该字段；queue 只允许 `upload` / `import`。领域命令用
+execution token、raw / prepared generation 及可选 commit intent。Import canonical 额外以
+`import_download` 保存下载 URL，Upload canonical 不含该字段；queue 只允许 `upload` / `import`。领域命令用
 Lua 原子维护 canonical 与全部派生索引；Redis 不可用或结构不一致时 fail closed。上述
 namespace、canonical 结构和无版本后缀的签名 purpose 共同构成唯一现行运行时协议。
 

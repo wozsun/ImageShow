@@ -143,10 +143,10 @@ function parseDraft(value: unknown, context: string) {
   ) throw new Error(`Redis ingestion value has invalid ${context}.tags`);
 }
 
-function parseImportSource(value: unknown) {
-  const importSource = record(value, "import source");
-  exactFields(importSource, ["url"], "import source");
-  nonEmptyString(importSource.url, "import_source.url");
+function parseImportDownload(value: unknown) {
+  const importDownload = record(value, "import download");
+  exactFields(importDownload, ["url"], "import download");
+  nonEmptyString(importDownload.url, "import_download.url");
 }
 
 function parsePrepared(value: unknown) {
@@ -223,7 +223,7 @@ function parseCompletedDisplay(value: unknown, queue: unknown) {
     "quality",
     "transcoded"
   ], [
-    "manifest_position",
+    "batch_position",
     "manifest_line"
   ], "completed display");
   enumValue(display.source_type, ingestionSourceTypes, "display.source_type");
@@ -244,13 +244,13 @@ function parseCompletedDisplay(value: unknown, queue: unknown) {
   ) throw new Error("Redis ingestion value has invalid display.quality");
   booleanValue(display.transcoded, "display.transcoded");
   if (
-    display.manifest_position !== undefined
+    display.batch_position !== undefined
     && (
-      !Number.isSafeInteger(display.manifest_position)
-      || Number(display.manifest_position) < 0
-      || Number(display.manifest_position) > 0xfff
+      !Number.isSafeInteger(display.batch_position)
+      || Number(display.batch_position) < 0
+      || Number(display.batch_position) > 0xfff
     )
-  ) throw new Error("Redis ingestion value has invalid display.manifest_position");
+  ) throw new Error("Redis ingestion value has invalid display.batch_position");
   if (display.manifest_line !== undefined) {
     const line = positiveInteger(display.manifest_line, "display.manifest_line");
     if (line > 1_000_000) {
@@ -380,8 +380,8 @@ export function parseStoredIngestionSession(raw: string): StoredIngestionSession
       "discard_at",
       "semantic_hash"
     ], [
-      "import_source",
-      "manifest_position",
+      "import_download",
+      "batch_position",
       "manifest_line",
       "prepared",
       "duplicate_decision",
@@ -417,19 +417,19 @@ export function parseStoredIngestionSession(raw: string): StoredIngestionSession
     ) throw new Error("Redis ingestion value has invalid progress");
     parseDraft(value.metadata, "metadata");
     if (value.queue === "import") {
-      parseImportSource(value.import_source);
-    } else if (value.import_source !== undefined) {
-      throw new Error("Redis ingestion Upload canonical has an Import source");
+      parseImportDownload(value.import_download);
+    } else if (value.import_download !== undefined) {
+      throw new Error("Redis ingestion Upload canonical has an Import download");
     }
     if (value.prepared !== undefined) parsePrepared(value.prepared);
     if (
-      value.manifest_position !== undefined
+      value.batch_position !== undefined
       && (
-        !Number.isSafeInteger(value.manifest_position)
-        || Number(value.manifest_position) < 0
-        || Number(value.manifest_position) > 0xfff
+        !Number.isSafeInteger(value.batch_position)
+        || Number(value.batch_position) < 0
+        || Number(value.batch_position) > 0xfff
       )
-    ) throw new Error("Redis ingestion value has invalid manifest_position");
+    ) throw new Error("Redis ingestion value has invalid batch_position");
     if (value.manifest_line !== undefined) {
       const line = positiveInteger(value.manifest_line, "manifest_line");
       if (line > 1_000_000) {
@@ -464,7 +464,7 @@ export function parseUploadIntent(raw: string): UploadIntentSnapshot {
     "resolved_image_time",
     "request_hash",
     "display_order_key",
-    "manifest_position",
+    "batch_position",
     "metadata",
     "storage_slug",
     "expected_size",
@@ -489,10 +489,10 @@ export function parseUploadIntent(raw: string): UploadIntentSnapshot {
   nonNegativeInteger(value.claim_heartbeat_at, "claim_heartbeat_at");
   parseDraft(value.metadata, "metadata");
   if (
-    !Number.isSafeInteger(value.manifest_position)
-    || Number(value.manifest_position) < 0
-    || Number(value.manifest_position) > 0xfff
-  ) throw new Error("Redis ingestion value has invalid manifest_position");
+    !Number.isSafeInteger(value.batch_position)
+    || Number(value.batch_position) < 0
+    || Number(value.batch_position) > 0xfff
+  ) throw new Error("Redis ingestion value has invalid batch_position");
   return value as UploadIntentSnapshot;
 }
 

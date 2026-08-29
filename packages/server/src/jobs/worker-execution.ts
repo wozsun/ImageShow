@@ -226,12 +226,15 @@ export class WorkerExecutionCoordinator<Job, Result> {
         if (renewalStopped || signal.aborted) return;
         try {
           const renewed = await this.options.renewLease(job);
-          if (renewalStopped || signal.aborted) return;
+          // Once a renewal reaches the repository, its result remains part of
+          // this execution's fencing decision even if the handler finishes in
+          // the meantime. renewalStopped only prevents starting more calls.
+          if (signal.aborted) return;
           if (renewed) return;
           this.options.onLeaseLost?.(job);
           this.abort(record, new WorkerLeaseLostError());
         } catch (error) {
-          if (renewalStopped || signal.aborted) return;
+          if (signal.aborted) return;
           this.options.onLeaseRenewalError?.(job, error);
           this.abort(record, new WorkerLeaseRenewalError(error));
         }

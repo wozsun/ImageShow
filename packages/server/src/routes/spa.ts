@@ -78,7 +78,7 @@ function buildSpaDocument(): string {
   const inlineConfig = JSON.stringify(siteConfigPayload()).replace(/</g, "\\u003c");
   const title = escapeHtmlText(site.name || "ImageShow");
   const description = escapeHtmlAttr(site.description || site.name || "ImageShow");
-  const iconUrl = escapeHtmlAttr(site.icon_url || "/assets/brand/favicon.svg");
+  const iconUrl = escapeHtmlAttr(site.icon || "/assets/brand/favicon.svg");
   const head =
     `<link rel="preconnect" href="https://${site.static_subdomain}.${site.domain}" crossorigin>`
     + `<script type="application/json" id="__site_config__">${inlineConfig}</script>`;

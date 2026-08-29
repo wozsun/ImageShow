@@ -3,7 +3,7 @@ import {
   parseImportUrlInput,
   type ImportUrlParseIssue,
   type ImportUrlParseResult
-} from "../queue/model/ingestion-job-utils.js";
+} from "../queue/model/import-job-source.js";
 
 export type ImportSourceMode = "urls" | "jsonl" | "weibo";
 

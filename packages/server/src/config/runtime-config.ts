@@ -9,21 +9,20 @@ import {
   altchaCost,
   altchaCounter,
   altchaTtlSeconds,
-  commitConcurrency,
+  ingestionCommitConcurrency,
   embedAllowedOrigins,
   galleryLimit,
   galleryOrder,
-  globalCommitByteBudgetMb,
-  globalCommitConcurrency,
   homeBackground,
   homeBannerLabel,
   homeBannerTitle,
   imagePageSize,
-  ingestionStageConcurrency,
   importFetchTimeoutSeconds,
-  importConcurrency,
+  importTypesKeepingOriginalLink,
   importMaxItems,
-  listPageSize,
+  ingestionListPageSize,
+  ingestionMaxFileSizeMb,
+  ingestionMaxLongEdge,
   logLevel,
   logMaxFiles,
   logMaxSizeMb,
@@ -32,10 +31,9 @@ import {
   loginGlobalMaxAttempts,
   loginGlobalWindowSeconds,
   loginMaxFailures,
-  maxFileSizeMb,
-  maxLongEdge,
   normalizeMaxLongEdge,
   normalizeMaxSizeKb,
+  normalizeConcurrency,
   normalizeMinQuality,
   normalizeQuality,
   normalizeQualityStep,
@@ -45,17 +43,16 @@ import {
   sessionTtlSeconds,
   siteDomain,
   siteDescription,
-  siteIconUrl,
+  siteIcon,
   siteName,
   skipWebpUnderKb,
-  taskConcurrency,
   thumbnailLongEdge,
   thumbnailQuality,
-  uploadConcurrency,
+  uploadBrowserConcurrency,
   uploadMaxItems,
-  weiboGlobalConcurrency,
+  uploadRawConcurrency,
   weiboImportMaxItems,
-  weiboMetadataConcurrency
+  weiboRequestDelaySeconds
 } from "./fields.ts";
 
 const subdomainLabel = z.string().trim().regex(
@@ -88,7 +85,7 @@ const runtimeConfigSchema = z.strictObject({
     name: siteName,
     domain: siteDomain,
     description: siteDescription,
-    icon_url: siteIconUrl,
+    icon: siteIcon,
     version: z.strictObject({
       enabled: z.boolean(),
       link_enabled: z.boolean()
@@ -101,10 +98,10 @@ const runtimeConfigSchema = z.strictObject({
       banner_title: homeBannerTitle
     }),
     gallery: z.strictObject({
-      default_limit: galleryLimit,
+      limit: galleryLimit,
       order: galleryOrder
     }),
-    random_default_method: randomDefaultMethod,
+    random_method: randomDefaultMethod,
     static_subdomain: subdomainLabel,
     robots_enabled: z.boolean()
   }),
@@ -113,33 +110,39 @@ const runtimeConfigSchema = z.strictObject({
     allowed_origins: embedAllowedOrigins
   }),
   ingestion: z.strictObject({
-    commit_concurrency: commitConcurrency,
-    global_commit_concurrency: globalCommitConcurrency,
-    global_commit_byte_budget_mb: globalCommitByteBudgetMb
+    max_file_size_mb: ingestionMaxFileSizeMb,
+    max_long_edge: ingestionMaxLongEdge,
+    list_page_size: ingestionListPageSize,
+    commit_concurrency: ingestionCommitConcurrency
   }),
   upload: z.strictObject({
     max_items: uploadMaxItems,
-    max_file_size_mb: maxFileSizeMb,
-    max_long_edge: maxLongEdge,
-    list_page_size: listPageSize,
-    concurrency: uploadConcurrency,
-    global_concurrency: ingestionStageConcurrency
+    browser_concurrency: uploadBrowserConcurrency,
+    raw_concurrency: uploadRawConcurrency
   }),
   import: z.strictObject({
-    fill_original_url: z.boolean(),
+    keep_original_link: importTypesKeepingOriginalLink,
     auto_import: z.boolean(),
-    concurrency: importConcurrency,
-    global_concurrency: ingestionStageConcurrency,
     fetch_timeout_seconds: importFetchTimeoutSeconds,
     max_items: importMaxItems
   }),
   weibo: z.strictObject({
     max_items: weiboImportMaxItems,
-    concurrency: weiboMetadataConcurrency,
-    global_concurrency: weiboGlobalConcurrency,
+    source_enabled: z.boolean(),
+    request_delay_seconds: z.tuple([
+      weiboRequestDelaySeconds,
+      weiboRequestDelaySeconds
+    ]).refine(
+      ([minDelaySeconds, maxDelaySeconds]) => minDelaySeconds <= maxDelaySeconds,
+      {
+        message: "minimum delay must not exceed maximum delay",
+        path: [0]
+      }
+    ),
     author_slugs: weiboAuthorSlugs
   }),
   normalize: z.strictObject({
+    concurrency: normalizeConcurrency,
     quality: normalizeQuality,
     quality_step: normalizeQualityStep,
     min_quality: normalizeMinQuality,
@@ -157,11 +160,6 @@ const runtimeConfigSchema = z.strictObject({
     recent_uploads: recentUploads,
     show_unset_theme_card: z.boolean()
   }),
-  background_job: z.strictObject({
-    move_cleanup_concurrency: taskConcurrency,
-    theme_reassign_concurrency: taskConcurrency,
-    migrate_concurrency: taskConcurrency
-  }),
   security: z.strictObject({
     session_ttl_seconds: sessionTtlSeconds,
     login_failure_window_seconds: loginFailureWindowSeconds,
@@ -173,24 +171,24 @@ const runtimeConfigSchema = z.strictObject({
     enabled: z.boolean(),
     ttl_seconds: altchaTtlSeconds,
     cost: altchaCost,
-    counter_min: altchaCounter,
-    counter_max: altchaCounter
+    counter_range: z.tuple([altchaCounter, altchaCounter])
   }).superRefine((value, context) => {
-    if (value.counter_min > value.counter_max) {
+    const [minCounter, maxCounter] = value.counter_range;
+    if (minCounter > maxCounter) {
       context.addIssue({
         code: "custom",
-        message: "counter_min must not exceed counter_max",
-        path: ["counter_min"]
+        message: "minimum counter must not exceed maximum counter",
+        path: ["counter_range", 0]
       });
     }
     if (
-      value.cost * value.counter_max >
+      value.cost * maxCounter >
       appConfig.authentication.altcha.maximumWorkFactor
     ) {
       context.addIssue({
         code: "custom",
-        message: `cost * counter_max must not exceed ${appConfig.authentication.altcha.maximumWorkFactor}`,
-        path: ["counter_max"]
+        message: `cost * maximum counter must not exceed ${appConfig.authentication.altcha.maximumWorkFactor}`,
+        path: ["counter_range", 1]
       });
     }
   }),
@@ -211,38 +209,6 @@ export type RuntimeConfigPatch<T = RuntimeConfig> = {
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
-function isIngestionCommitSection(value: unknown) {
-  return isPlainRecord(value) && (
-    "commit_concurrency" in value
-    || "global_commit_concurrency" in value
-    || "global_commit_byte_budget_mb" in value
-  );
-}
-
-function projectIngestionSections(value: unknown): unknown {
-  if (!isPlainRecord(value)) return value;
-  const projected = structuredClone(value);
-  const linkImageSection = projected.link_image;
-  const importSection = projected.import;
-
-  if (
-    projected.ingestion === undefined
-    && isIngestionCommitSection(importSection)
-  ) {
-    projected.ingestion = importSection;
-  }
-  if (
-    linkImageSection !== undefined
-    && (importSection === undefined || isIngestionCommitSection(importSection))
-  ) {
-    projected.import = linkImageSection;
-  } else if (isIngestionCommitSection(importSection)) {
-    delete projected.import;
-  }
-  delete projected.link_image;
-  return projected;
 }
 
 function projectKnownConfig(base: unknown, input: unknown): unknown {
@@ -287,7 +253,7 @@ export function parseRuntimeConfig(value: unknown): RuntimeConfig {
 export function normalizeRuntimeConfig(value: unknown): RuntimeConfig {
   return runtimeConfigSchema.parse(projectKnownConfig(
     appConfig.runtimeDefaults,
-    projectIngestionSections(value)
+    value
   ));
 }
 

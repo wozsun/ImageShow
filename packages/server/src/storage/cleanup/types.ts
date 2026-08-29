@@ -14,6 +14,8 @@ export type CapturedMoveCleanupObject = MoveCleanupObjectInput & {
 export type MoveCleanupJobPayload = {
   objects: CapturedMoveCleanupObject[];
   reason: string;
+  /** Do not treat absence as terminal before a possibly late write settles. */
+  confirm_absent_after?: string;
   /** Unique ownership of a pre-copy Ingestion commit guard attempt. */
   guard_token?: string;
   /** Exhausted deletion work remains a physical ownership record. */

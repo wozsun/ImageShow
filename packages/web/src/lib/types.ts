@@ -95,14 +95,14 @@ export type IngestionJob = {
   fileFingerprint?: string;
   md5?: string;
   preparedOrder?: number;
-  url?: string;
+  downloadUrl?: string;
   // 当前前端处理尝试，同时作为 create 请求幂等键；重试时会更新。
   attemptKey: string;
   // 接管请求一旦开始便冻结；响应未知重放必须复用相同幂等键与完全相同的正文。
-  uploadIntentInput?: UploadIntentItemInputDto;
-  importAcceptInput?: ImportItemInputDto;
-  // 单次入队动作的前端身份；同批任务独立持有稳定状态订阅，绝不发送给服务端。
-  subscriptionBatchKey: string;
+  uploadIntentItemInput?: UploadIntentItemInputDto;
+  importAcceptItemInput?: ImportItemInputDto;
+  // 单次入队动作的稳定批次身份；随接管请求发送并用于同批排序。
+  batchKey: string;
   // Redis canonical pair；状态读取、提交和取消始终同时携带两部分身份。
   sessionId?: string;
   imageId?: string;
@@ -125,7 +125,7 @@ export type IngestionJob = {
   manifestSource?: ManifestImportSource;
   manifestProvidedCommonFields?: IngestionCommonAttributeField[];
   manifestLine?: number;
-  manifestPosition?: number;
+  batchPosition?: number;
   browserDisplayReleased?: boolean;
   originalSize?: number;
   finalSize?: number;

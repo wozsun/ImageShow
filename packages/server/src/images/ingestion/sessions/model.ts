@@ -36,7 +36,7 @@ export function ingestionSessionPairKey(pair: IngestionSessionPair) {
   return `${pair.session_id}\0${pair.image_id.toLowerCase()}`;
 }
 
-export type ImportSource = Readonly<{
+export type ImportDownload = Readonly<{
   url: string;
 }>;
 
@@ -86,11 +86,11 @@ export type IngestionSessionSnapshot = IngestionSessionPair & Readonly<{
   owner: string;
   queue: IngestionQueueType;
   source_type: IngestionSourceType;
-  manifest_position?: number;
+  batch_position?: number;
   manifest_line?: number;
   image_time: string;
   request_hash: string;
-  import_source?: ImportSource;
+  import_download?: ImportDownload;
   metadata: ImageDraftDto;
   storage_slug: string;
   status: Exclude<IngestionSessionStatus, "completed" | "discarded">;
@@ -119,9 +119,9 @@ export function completedIngestionDisplay(
   if (!session.prepared) return undefined;
   return {
     source_type: session.source_type,
-    ...(session.manifest_position === undefined
+    ...(session.batch_position === undefined
       ? {}
-      : { manifest_position: session.manifest_position }),
+      : { batch_position: session.batch_position }),
     ...(session.manifest_line === undefined
       ? {}
       : { manifest_line: session.manifest_line }),
@@ -175,7 +175,7 @@ export type UploadIntentSnapshot = Readonly<{
   resolved_image_time: string;
   request_hash: string;
   display_order_key: string;
-  manifest_position: number;
+  batch_position: number;
   metadata: ImageDraftDto;
   storage_slug: string;
   expected_size: number;

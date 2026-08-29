@@ -35,10 +35,13 @@ export function getRuntimeConfig() {
 }
 
 type RuntimeConfigListener = () => void;
-const runtimeConfigListeners: RuntimeConfigListener[] = [];
+const runtimeConfigListeners = new Set<RuntimeConfigListener>();
 
 export function onRuntimeConfigChange(listener: RuntimeConfigListener) {
-  runtimeConfigListeners.push(listener);
+  runtimeConfigListeners.add(listener);
+  return () => {
+    runtimeConfigListeners.delete(listener);
+  };
 }
 
 function notifyRuntimeConfigChange() {

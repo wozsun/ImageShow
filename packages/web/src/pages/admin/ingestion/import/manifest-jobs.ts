@@ -8,7 +8,7 @@ import {
   webIngestionBatchKey,
   webUuidV7
 } from "../queue/model/ingestion-identity.js";
-import type { JsonlManifestItem } from "../queue/ingestion-api.js";
+import type { ImportManifestItem } from "../queue/ingestion-api.js";
 
 function valueOrDefault<T>(value: T | undefined, fallback: T) {
   return value === undefined ? fallback : value;
@@ -22,19 +22,20 @@ const manifestCommonAttributeFields: readonly IngestionCommonAttributeField[] = 
   "tags"
 ];
 
-function providedManifestCommonFields(item: JsonlManifestItem) {
+function providedManifestCommonFields(item: ImportManifestItem) {
   return manifestCommonAttributeFields.filter((field) => Object.hasOwn(item, field));
 }
 
-function mergeJsonlDraft(
-  item: JsonlManifestItem,
-  defaults: IngestionAttributeDefaults
+function createManifestItemDraft(
+  item: ImportManifestItem,
+  defaults: IngestionAttributeDefaults,
+  retainOriginalLink: boolean
 ): ImageDraft {
   return {
     title: item.title ?? "",
     description: item.description ?? "",
     source: item.source ?? "",
-    original: item.original,
+    original: retainOriginalLink ? item.original : "",
     device: valueOrDefault(item.device, defaults.device),
     brightness: valueOrDefault(item.brightness, defaults.brightness),
     theme: valueOrDefault(item.theme, defaults.theme),
@@ -43,34 +44,35 @@ function mergeJsonlDraft(
   };
 }
 
-export function manifestImportJobs(
-  items: JsonlManifestItem[],
+export function createManifestImportJobs(
+  items: ImportManifestItem[],
   defaults: IngestionAttributeDefaults,
   defaultStorageSlug: string,
-  source: "jsonl" | "weibo" = "jsonl"
+  manifestSource: "jsonl" | "weibo",
+  retainOriginalLink: boolean
 ): IngestionJob[] {
   const batchTime = new Date().toISOString();
-  const subscriptionBatchKey = webIngestionBatchKey();
+  const batchKey = webIngestionBatchKey();
   return items.map((item) => ({
     id: webUuidV7(),
     attemptKey: webUuidV7(),
-    subscriptionBatchKey,
+    batchKey,
     kind: "import",
     status: "queued",
     message: "等待下载",
     preview: "",
-    draft: mergeJsonlDraft(item, defaults),
+    draft: createManifestItemDraft(item, defaults, retainOriginalLink),
     width: 0,
     height: 0,
     duplicates: [],
     duplicateDecision: "upload",
-    url: item.original,
+    downloadUrl: item.original,
     storageSlug: item.storage_slug ?? defaultStorageSlug,
     imageTime: item.image_time,
     batchTime,
-    manifestSource: source,
+    manifestSource,
     manifestProvidedCommonFields: providedManifestCommonFields(item),
     manifestLine: item.line,
-    manifestPosition: item.manifest_position
+    batchPosition: item.batch_position
   }));
 }

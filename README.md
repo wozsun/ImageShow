@@ -17,7 +17,17 @@ Node.js 26 / Hono、React 19、PostgreSQL、Redis 8 和 Docker 构成。
   读取，近期去重与最终排序仍由应用负责；不提供随机、外链或主题专用子域。
 - 后台图片上传、URL / JSONL / 微博导入、编辑、分类、回收站、日志与运行状态检查；本地上传
   使用一次有界 Upload intent POST 加逐文件 raw PUT，Import 来源一次批量 accept 后由单实例 Redis
-  worker 接管，异步提交只冻结意图并以 PostgreSQL 图片行确认完成；相同最终内容在提交边界
+  worker 接管。页面上传窗口、Server raw、Upload / Import 共用的 prepare / staging、全部 Sharp
+  normalize 与最终 commit 各有唯一准入 owner；prepare / staging 和 Import 后继窗口均由 normalize
+  容量派生，前者限制持有处理后 Buffer 直至 `_uploads` 和 ready 发布，后者只预取下一批 raw。
+  微博帖子元数据请求全进程串行，复用一个访客身份并在相邻请求间随机等待 2–5 秒，解析后的图片
+  进入同一后继窗口。
+  `import.keep_original_link` 可分别决定 URL、JSONL 与微博导入是否把下载 URL 保留为公开原图链接，
+  `weibo.source_enabled` 独立决定新解析的微博图片是否填写帖子来源页；两项都不影响素材下载与入库。
+  Upload、Import 与直接 API 共用 `ingestion.*` 的原图体积、长边和队列分页边界，页面预检不替代
+  Server 权威校验。
+  异步提交只冻结意图并以 PostgreSQL 图片行
+  确认完成；相同最终内容在提交边界
   串行确认，单项重复冲突不会中断同一批的其他图片，确认后复用该项已锁定的提交意图继续；
   Upload / Import 队列按当前管理员分别用一个 SSE 和有界分页快照同步；展示保持新批次置顶、
   同批来源顺序 1→N，并在窗口重开和跨页后保持稳定。重连只废止旧动作权威，当前页继续稳定
@@ -34,7 +44,9 @@ Node.js 26 / Hono、React 19、PostgreSQL、Redis 8 和 Docker 构成。
   预览、确认后执行的存储维修与孤儿清理。单实例后台还会按固定周期回收超过保守年龄门槛、
   且不再被 Redis canonical 精确引用的 raw、`.part` 与 `_uploads` generation；Redis 异常、
   存储列表不完整或键代际无法解析时保守保留。正式候选在复制前登记持久清理 guard，只有
-  PostgreSQL 未引用时才会回收。
+  PostgreSQL 未引用时才会回收。业务清理与永久删除统一使用 provider 中性 1…N 契约；S3 / COS 原生
+  `DeleteObjects` 每批最多 1000 个 key，业务清理与永久删除生产者固定共享一个活动调用，
+  并逐对象确认结果。
 - 成功提交的图片以正式缩略图为不变量；正常读取严格只读，缺图显示统一损坏图标并由
   检查页“存储维护”显式修复。
 - PostgreSQL 保存全部业务真值，Redis 只承载会话、限流、统一就绪图片投影与可重建缓存。
@@ -82,7 +94,7 @@ ADMIN_PASSWORD=                   # 8–128 位且同时包含字母和数字
 不会覆盖已有账号。数据库身份每次启动都由默认 Compose 注入；内置拓扑的数据库 host / port、
 Redis 连接和时区使用代码默认值。外部拓扑需要在 Compose override 中逐项映射对应变量。其他
 应用配置保存在 `data/config.json`，完整字段见
-[配置说明](docs/guide/configuration.md#runtimeconfig-参数目录)。5.2.0 的根页面字段为
+[配置说明](docs/guide/configuration.md#runtimeconfig-参数目录)。当前根页面字段为
 `site.root`，对应首次播种变量 `SITE_ROOT`；`SITE_DOMAIN`、`SITE_DESCRIPTION` 和其他 seed 一样，
 只有显式扩展 `services.imageshow.environment` 后才参与空目录首次生成。
 
@@ -148,7 +160,7 @@ metadata 结构不受支持，受影响队列会 fail closed 并要求停机处�
 产品无关的代理要求与唯一一份可替换的 Nginx 最简示例见[部署指南](docs/guide/deployment.md#反向代理与-https)。
 
 反向代理请求体上限不得低于应用配置。仓库示例使用 `client_max_body_size 256m`，覆盖
-默认 200 MiB 单图上限并留出代理层余量。完整 Docker、健康检查、停机、密码恢复及
+最高可配置的 200 MiB 单图上限并留出代理层余量。完整 Docker、健康检查、停机、密码恢复及
 Nginx 配置见[生产部署指南](docs/guide/deployment.md)。
 
 ## 开发与验证

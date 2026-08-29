@@ -132,7 +132,9 @@ CSRF、请求体限制和各管理能力的装配顺序。
 
 `core/database/` 按 PostgreSQL 生命周期边界拆分：`pools.ts` 只接收显式配置并拥有主查询与
 advisory lock 两个连接池；`transactions.ts`、`advisory-locks.ts` 和 `schema.ts` 分别拥有
-事务、锁与干净安装编排。`readiness.ts` 是唯一总入口，按固定顺序调用
+事务、锁与干净安装编排。advisory lock 调度信号只取消连接取得与锁等待；锁内回调收到独立的
+父锁 / 当前连接失效信号，由具体领域决定是否再合并请求、lease 或 deadline。`readiness.ts`
+是唯一总入口，按固定顺序调用
 `readiness/relations.ts`、`privileges.ts`、`indexes.ts`、`foreign-keys.ts` 与 `seeds.ts`；
 `readiness/contract.ts` 是最小表、列、权限、主键、索引与外键 contract 的唯一数据来源；
 `readiness/seeds.ts` 是稳定种子断言的唯一来源，其他检查模块不得复制两者。
@@ -161,17 +163,28 @@ Functions。检查页按键动态测量的低频 Lua 仍留在 `checks/`，不�
 storage/
 ├─ backends/   # 配置、记录、注册表、探测、读模型、更新、删除和占用
 ├─ drivers/    # driver 契约、无环工厂、实例生命周期、local 与 S3
-├─ objects/    # 对象 key、namespace、访问、传输、校验、列表和公开 URL
-├─ migration/  # 单图 CAS、整后端迁移、relocation 与 endpoint rebind
+├─ objects/    # 对象 key、namespace、访问、传输、校验、列表、删除准入和公开 URL
+├─ migration/  # 共享准入、单图 CAS、整后端迁移、relocation 与 endpoint rebind
 ├─ cleanup/    # 持久 move.cleanup 类型、仓储、handler 与 service
 └─ maintenance-lock.ts
 ```
 
-图片存储变更的单图原语集中在 `storage/migration/image-storage.ts`，在同一条可读控制流中
+图片存储变更的单图原语集中在 `storage/migration/image.ts`，在同一条可读控制流中
 完成锁内真相重读、候选发布与校验、PostgreSQL CAS，以及提交结果不确定时的补偿判断；
 不为只传递同一记录的 prepare / switch / settlement 阶段拆分文件和中间契约。
-`images/image-storage-migration.ts` 只负责管理接口的 1..N 保序结果，
-`storage/migration/backend.ts` 只负责整后端计数和流式分页，两者都直接调用同一个单图原语。
+`images/selected-image-storage-migration.ts` 只负责管理接口的 1..N 保序结果，
+`storage/migration/backend-images.ts` 只负责整后端计数和流式分页，两者都直接调用同一个单图原语。
+`storage/migration/admission.ts` 是所选图片、整后端迁移与主题重分配共用的活动逐图搬迁许可
+owner，所有生产者直接复用同一个代码内固定 5 项容量。
+`storage/objects/removal-admission.ts` 是 durable cleanup、orphan / retired、检查维护和回收站删除的
+唯一活动存储清理许可 owner，固定只允许一个 provider 中性 `removeObjects(1…N)` 调用；同一调用
+涉及多个 driver group 时逐组向该 FIFO 交接，不预占多个排队位置。持久 `move.cleanup` 同时只领取
+一个任务，回收站永久删除也逐图取得清理许可后才处理下一项，避免在共享许可前堆积持锁连接。
+显式维护按主要资源分流：repair 由 Normalize 容量调度，但替换未采用缩略图时仍取得唯一 cleanup
+许可；remove 直接由 cleanup 容量调度。两个资源池并行推进，取消或失败时先在独占位置锁内全部
+收口，正常输出再按原候选顺序合并；Ingestion raw / staging 清理重试每次只向清理入口交接一个 attempt，
+失败退避期间释放该 worker，让后续候选先行。
+Ingestion staging 孤儿按代码内固定 100 项渐进删除。
 `checks/storage-check.ts` 只生成无写入权限的存储预览；显式写维护按稳定职责拆分：
 `checks/storage-maintenance-plan.ts` 重读 PostgreSQL、Ingestion 引用和完整存储快照并生成候选，
 `checks/storage-thumbnail-repair.ts` 负责缩略图写入与校验，`checks/storage-orphan-cleanup.ts`
@@ -190,10 +203,10 @@ ingestion/
 ├─ sessions/    # 最低层 canonical / intent model、key、codec、命令与 Lua
 │  └─ scripts/  # projection、canonical、intents、queue、discovery
 ├─ queue/       # snapshot、SSE、action、watermark、草稿 CAS 与展示投影
-├─ raw/         # 路径、lease、流式接收、generation 与孤儿扫描
+├─ raw/         # 路径、lease、流式接收、Server 准入、generation 与孤儿扫描
 ├─ sources/     # 安全远端下载、JSONL 与微博适配
 ├─ execution/   # heartbeat、version fencing 与不可取消边界
-├─ commit/      # intent、校验、持久化、完成发布、补偿与 coordinator
+├─ commit/      # intent、最终准入、校验、持久化、完成发布、补偿与 coordinator
 ├─ cancel/      # 取消协调、批量结果和退休资源清理
 ├─ cleanup/     # 可重发现资源的保守扫描与重试队列
 ├─ workers/     # download / prepare / commit stage 编排与恢复
@@ -222,11 +235,14 @@ snapshot、SSE、watermark 和展示投影只使用 session / repository 边界�
 - `repository.ts` 保留命令调用边界、错误翻译与事件发布 facade；实际职责分别由
   `sessions/command-runner.ts`、`replies.ts`、`intent-store.ts`、`listener-hub.ts` 和
   `queue/store.ts` 承接。facade 与内部模块不复制 key 推导、严格解析或业务校验。
+- `sessions/import-metadata.ts` 统一投影 Import 接管与首次提交冻结时受 RuntimeConfig 控制的
+  `original` 和微博 `source`，只接收配置快照与纯 DTO；session service 与 commit intent 复用
+  同一规则，提交意图冻结后的重试继续使用已冻结值。
 - `sessions/scripts/` 的五个文件生成十段完整 Lua。`projection.ts` 只保存共享 Lua
   片段，不执行命令；每个业务操作由一段完整脚本和一次 `EVAL` / `EVALSHA` 原子完成，明确声明
   `numberOfKeys`、KEYS / ARGV、返回数组和错误 marker。TypeScript 与 Redis 持久运行时协议
   均以 Ingestion 为父领域：key 固定使用 `imageshow:ingestion:*`，queue 只允许 `upload` /
-  `import`；Import canonical 以 `import_source` 保存 URL，Upload canonical 不含该字段。共享
+  `import`；Import canonical 以 `import_download` 保存下载 URL，Upload canonical 不含该字段。共享
   marker 使用 `INGESTION_CANONICAL` / `INGESTION_QUEUE_STRUCTURE`，Upload intent 使用
   `UPLOAD_INTENT`；签名 purpose 固定使用无版本后缀的 `imageshow/ingestion/...` 名称。
   canonical 的 `version`、revision、generation 与 execution token 只承担当前 CAS、顺序、
@@ -243,7 +259,18 @@ snapshot、SSE、watermark 和展示投影只使用 session / repository 边界�
   `persistence.ts`、`staging-cleanup.ts`、`completion.ts` 只承接可独立命名的阶段。
 - `cancel/coordinator.ts` 保留 resolving / irreversible boundary、abort 顺序、mutation limiter
   单例和响应丢失后的真相核对；`items.ts` 与 `retired-cleanup.ts` 不建立第二状态 owner。
-- `workers/ingestion-worker.ts` 组合 download、prepare、commit 的独立有界 pool；
+- `workers/ingestion-worker.ts` 只编排 download、prepare、commit 与恢复扫描；
+  `workers/import-prefetch.ts` 按 Normalize 容量维护 FIFO 后继窗口，许可覆盖 Import 远程素材化到
+  实际取得图片处理许可。`workers/preparation-admission.ts` 是 Upload / Import 共用的唯一进程级
+  prepare / staging publication owner，容量同样由 Normalize 配置派生，覆盖等待图片处理到两个
+  `_uploads` 对象及 ready canonical 发布。`raw/upload-admission.ts`、`images/normalization-admission.ts` 和
+  `commit/admission.ts` 分别是 raw PUT、全部 Sharp 重工作与最终入库的进程级唯一资源 owner；
+  Worker 从 `normalize.concurrency=N` 派生 Import 与 Upload 各自的 pre-commit dispatch slot；Import 在取得
+  Normalize 许可时交还，Upload 在本项 prepare 完成时交还，两类补位各使用独立 frozen-tail 游标。
+  Import queued 与恢复后的 received 共用一个跨扫描页 FIFO。commit 由
+  `ingestion.commit_concurrency=N` 派生大小为 `N + ceil(N / 2)` 的 dispatch window，等待数量或字节许可的
+  任务继续占用候补，并以独立 frozen-tail 游标完成事件补位。Sharp 每图线程固定为 1，
+  最终入库同时使用代码内 256 MiB prepared 字节预算；
   `workers/session-recovery.ts` 复用同一 repository 做启动、Redis 重连和 expiry 收敛；
   `execution/session.ts` 只拥有同一执行 token 下 heartbeat、progress、阶段发布和失败落盘。
 - `cleanup/storage-references.ts` 有界读取 active canonical 的对象引用；`retention.ts`、
@@ -269,9 +296,10 @@ Server 队列模块与 Web 队列 owner 的连接关系保持不变：
 - 两套 owner 不共享页码、SSE、
   busy、清空范围或 action connection hold。内容接入队列不做固定 pair 轮询，只有响应未知的
   已知 pair 才使用一次有界 status 查询。
-- `sources/weibo.ts` 只编排批次和 JSONL 清单，链接 / 时间 / 响应提取、受限上游协议、未知
-  响应值归一化及公开类型分别位于同目录 `weibo-parser.ts`、`weibo-client.ts`、
-  `weibo-values.ts`、`weibo-types.ts`。
+- `sources/weibo.ts` 只编排批次和 JSONL 清单；`weibo-request-scheduler.ts` 唯一拥有全进程固定
+  串行、批次轮转、随机间隔和单一访客身份。链接 / 时间 / 响应提取、受限上游协议、未知响应值
+  归一化及公开类型分别位于同目录 `weibo-parser.ts`、`weibo-client.ts`、`weibo-values.ts`、
+  `weibo-types.ts`。
 - 图片读取先由 `image-serving-record.ts` 将 Redis 命中与 PostgreSQL fallback 归一为
   同一 serving record；公开正式媒体的 ready-cache 明确空命中仍会在有界数据库读取中查找
   ready 或 deleted 行，入口在缓存和数据库读取前统一拒绝非规范或过长对象键。
@@ -365,15 +393,18 @@ hooks ──► lib
   `cards/`；`upload/` 保存本地文件模型、raw XHR lane 和上传 owner；`import/` 保存 URL、JSONL、
   微博来源模型、弹窗与 Import 接收 owner；`workflow/` 保存窗口、稳定 DOM 区域、清理和动作状态机。
   来源弹窗由 `import/` 独立动态加载。配置段使用同一领域词汇：Import 来源使用
-  `import.*`，共用提交使用 `ingestion.*`。`data/config.json` 归一化器把 `link_image` 来源段和
-  含提交字段的 `import` 段投影到这两个现行分组，并原子写回规范结构。
+  `import.*`，Upload 专属入口使用 `upload.*`，共用原图准入、队列分页与提交使用
+  `ingestion.*`。`data/config.json` 只按当前默认结构投影、校验并原子
+  写回；当前结构之外的字段直接删除。
 - `workflow/IngestionWorkflowWindow.tsx` 拥有 DialogFrame、焦点捕获 / 恢复、滚动容器、
   关闭 / 隐藏、详情 / preview target、cleanup confirmation scope、mode 和 owner 选择；
   `IngestionWorkflowRegions.tsx` 只渲染 header、defaults、queue body、summary 与 footer，DOM 顺序、
   class、ARIA 和 focusable 顺序不变。
 - `upload/useUpload.ts` 仍唯一拥有 Blob URL、active XHR、AbortController、in-flight
   Promise 与 effect cleanup；`upload-jobs.ts` 只处理文件准入和 intent 输入，
-  `raw-upload-lane.ts` 按当前浏览器并发窗口执行 raw PUT，并让上传 owner 分批签发短凭据。
+  `browser-upload-lane.ts` 以页面级 FIFO owner 统一约束预览解码、短凭据请求和 raw PUT，
+  并以不占容量的批次顺序器保证一次选择完成 preview→credential→raw 交接后才允许后一次选择
+  入队预览；`raw-upload-batch.ts` 负责把 raw XHR 绑定到这个 owner，并让上传 owner 分批签发短凭据。
 - `pages/admin/shell/admin-route-modules.ts` 集中拥有后台路由页面的生命周期级动态加载器；
   `AuthenticatedAdminShell` 的 `React.lazy` 与桌面 / 移动导航意图共用这些 Promise。
   `AdminNavigation` 只为角色过滤后可见的内部页面绑定模块键，外部“首页”出口不猜测
@@ -437,8 +468,8 @@ Web 继续使用 entries-aware 的入口根集合分块，`minShareCount: 2` 表
 模块根和 CSS owner；服务端装配明确过滤 `.vite`，因此报告不进入最终镜像。
 
 内容接入 facade 与样式使用 `ingestion-[hash].js` / `ingestion-[hash].css`，来源弹窗使用
-`import-source-[hash].js`，facade 与来源弹窗共享的队列纯能力由实际源码职责命名为
-`ingestion-job-utils-[hash].js`。`upload` 与 `import` 分别作为浏览器文件和 Import 来源子模式，
+`import-source-[hash].js`，facade 与来源弹窗共享的 URL 来源解析能力按实际职责命名为
+`import-job-source-[hash].js`。`upload` 与 `import` 分别作为浏览器文件和 Import 来源子模式，
 父领域资源统一使用 `ingestion` 命名。
 
 本地 `check-web-chunks` 从真实输出计算原始、gzip 9、Brotli 11 和实际有效响应体字节；

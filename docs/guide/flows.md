@@ -23,7 +23,7 @@
 服务端队列按来源分为 `upload` 和 `import`。每个任务都以大小写敏感的
 `(session_id, image_id)` pair 定位；`session_id` 是 owner、队列和幂等键的稳定摘要，
 `image_id` 是按独立 `image_time` 生成并校验的 UUIDv7。一次选择共享 `batch_time`，存在
-`manifest_position` 时还写入 UUIDv7 的 12 位 `rand_a`，因此并发完成顺序不会改变同批排序。
+`batch_position` 时还写入 UUIDv7 的 12 位 `rand_a`，因此并发完成顺序不会改变同批排序。
 
 ```text
 本地：  upload intent ─► raw PUT ─► received ─► preparing ─► ready
@@ -48,7 +48,10 @@ Import： accept ─► queued ─► downloading ─► received ─► prepari
   不会产生一次明暗闪烁。
 - URL 列表把每个非空行作为一个候选；JSONL 每行一个对象，未知字段严格拒绝并保留行号；
   微博入口先提取公开帖子中的原图、发布时间、来源与可选作者映射，再交给同一 JSONL
-  解析器。
+  解析器。微博访客握手与帖子元数据由全进程固定串行调度器执行，并行批次逐项轮转；全进程
+  共享一个访客身份及其创建中的 single-flight，相邻帖子请求按当前配置区间（默认 2–5 秒）随机等待，
+   明确拒绝的身份只在下一项重建。取得图片链接后
+   立即离开微博调度器，图片进入通用 Import 后继窗口。
 - 本地来源按目录相对路径或文件名、大小、修改时间去重；远端来源按规范化 HTTPS URL
   去重。prepare 得到最终 MD5 后，以 PostgreSQL 快照提示重复；commit 在相同 MD5 的
   advisory lock 内再次读取，前一份提示不替代最终写入授权。Redis canonical 只保存 MD5、
@@ -57,7 +60,7 @@ Import： accept ─► queued ─► downloading ─► received ─► prepari
   用一次 PostgreSQL 批量计数同步 canonical `duplicate_count`，零匹配不会在翻页后复活。
 - 浏览器 `attemptKey` 是 UUIDv7 幂等键。相同规范化意图的重试复用原 session、候选 ID、
   `resolved_image_time` 和 request hash；只有 intent 已过期且 canonical 也不存在时才形成新
-  incarnation。每次选择 / 导入批次还冻结 UUIDv7 batch key 与从 0 开始的 manifest position；
+  incarnation。每次选择 / 导入批次还冻结 UUIDv7 batch key 与从 0 开始的 batch position；
   两者进入 request hash 并派生持久展示键。接管请求发出时同时冻结其完整输入；响应未知的重放
   不读取后来变化的窗口默认值。服务端派生的 accepted order、执行 token 和 generation 不进入
   request hash。
@@ -97,15 +100,37 @@ JSONL 可设置 `original`、`source`、`image_time`、`author`、`tags`、`titl
 默认值；显式空标签和 `auto` 分类也是有效选择。完整数量、并发、文件大小和处理参数以
 [配置说明](./configuration.md#runtimeconfig-参数目录)为准。
 
+`import.keep_original_link` 按 `url`、`jsonl`、`weibo` 来源决定是否把实际下载 URL 写入
+正式图片的 `original`；未列出的来源仍完成同一下载、校验和入库流程，只把该公开链接留空。
+微博帖子页面由独立的 `weibo.source_enabled` 控制是否写入 `source`，不改变图片下载地址，
+也不受原图链接白名单影响。Server 在 Import 接管时按 `source_type` 权威应用两项策略，直接
+调用接管 API 与后台页面使用同一结果；首次提交意图冻结时还会按当前配置重新投影这两个字段，
+因此草稿更新、应用到全部或直接提交都不能把客户端旧值写入正式图片。提交意图冻结后重试复用
+已经冻结的投影，不受随后热加载影响。微博来源页在关闭配置时不会进入新解析清单；重新开启会让
+新解析清单恢复携带来源，也允许仍持有来源值的未冻结任务提交，但不会重建此前已经省略的值。
+图片正式入库后的管理员人工编辑仍遵循普通图片编辑语义。
+
 ### 接管、prepare 与 commit
 
-1. **Upload 接管**先对可立即进入并发 lane 的一组文件发送一次固定
+资源准入按职责只有一个 owner：活动浏览器页面管理预览、凭据和 raw PUT 窗口，Server raw
+接收管理所有客户端的上传流，Upload / Import 共用的 preparation owner 管理从等待 Normalize 到
+`_uploads` 与 ready 发布的全部接入处理，normalize 管理全部 Sharp 重工作，commit 管理两类来源
+的最终入库。preparation owner 和 Import 一批远端后继窗口都由 Normalize 容量派生。直接调用
+API 仍进入对应的 Server 准入；页面窗口只限制单端工作，不替代服务端资源边界。
+`ingestion.max_file_size_mb` 与
+`ingestion.max_long_edge` 是所有来源共用的原图准入，浏览器预检只提供即时反馈；Upload raw、
+Import 下载与 prepare 会在各自取得完整事实的 Server 边界再次权威校验。
+
+1. **Upload 接管**先对不超过页面 lane 当前容量的一组文件发送一次固定
    `POST /api/admin/ingestion/upload/intents`。正文含完整草稿、目标 storage、大小与素材约束；
    响应为每项返回短期 credential。随后单次接管尝试对每个 intent 最多发送一次固定
    `PUT /api/admin/ingestion/upload/raw`，credential 只放受限 header，正文只有图片字节。
    Server 在读取正文前 claim intent，流式写 attempt 专属 `.part`，完成大小、格式和尺寸校验
    后原子发布 raw，并在同一请求中把 intent 转换为 `upload/received` canonical。不存在第三次
    takeover 或 receipt 请求。一次已签发的 N 项固定为一次 intent POST 加至多 N 次 raw PUT。
+   请求取消同时覆盖 Server raw 许可等待、正文接收和发布后的 storage read lock 取得；取消锁等待
+   会立即释放 raw 许可，不会让已断开的请求占住唯一上传槽位。锁取得后则由当前锁连接失效信号
+   保护 canonical 转换边界。
    raw PUT 在 canonical 形成前失败或响应未知时，显式重试复用原 `attemptKey` 再请求同一
    intent：服务端要么返回已经接管的 canonical，要么为同一 pair 重签 credential 后重传，
    不通过新幂等身份创建第二项任务。
@@ -113,9 +138,14 @@ JSONL 可设置 `original`、`source`、`image_time`、`author`、`tags`、`titl
    `POST /api/admin/ingestion/import/accept`。Server 在 storage read lock 内重新校验并创建
    `import/queued` canonical；请求断开不撤销已接受项。worker 使用现有安全抓取完成 HTTPS、
    SSRF、DNS、逐跳重定向、正文大小、超时和图片魔数校验，并以 attempt `.part` 原子发布 raw。
-3. **prepare**只处理完整 raw：Sharp 校验格式、尺寸和 EXIF 展示方向，按配置生成 processed
-   image 与 thumbnail，计算 MD5/SHA-256、设备和明暗，再在 storage location shared advisory
-   lock 内写入 `_uploads`。下载 / prepare 期间的草稿编辑可以推进 semantic version；worker
+   `normalize.concurrency=N` 时，全进程最多有 `N` 项 Import 正在下载或持有完整 raw 等待图片处理；
+   某项取得实际 Normalize 许可后即让出后继名额，使下载稳定预取下一批。
+3. **prepare**只处理完整 raw：Upload / Import 先取得同一个由 `normalize.concurrency=N` 派生的
+   preparation 许可，两种来源合计最多有 `N` 项进入本阶段。Sharp 校验格式、尺寸和 EXIF 展示方向，
+   按配置生成 processed image 与 thumbnail，计算 MD5/SHA-256、设备和明暗，再在 storage location
+   shared advisory lock 内写入 `_uploads`；两个对象及 ready canonical 发布完成后才释放 preparation
+   许可。图片重工作结束即释放 Normalize 许可，因此慢存储不会占用其他图片处理入口。下载 /
+   prepare 期间的草稿编辑可以推进 semantic version；worker
    在 heartbeat、progress 和阶段发布的 CAS 冲突后重读 canonical，只在状态和 execution token
    仍属于同一次执行时接力新版 version，并以最新草稿完成阶段。状态、图片身份或 token 已变化时
    仍立即围栏，迟到执行者不能覆盖新 generation。
@@ -130,9 +160,27 @@ JSONL 可设置 `original`、`source`、`image_time`、`author`、`tags`、`titl
    所有新 INSERT 显式写入
    `metadata.created_by`；该字段只取冻结的 server actor，不接受客户端输入，也不进入 browser DTO。
 
+最终入库同时取得 `ingestion.commit_concurrency=N` 的数量许可和代码内 `256 MiB` prepared 字节
+许可；两者都覆盖正式对象复制、PostgreSQL 事务、暂存清理与缓存发布。提交 intent 的批量建模
+使用代码内固定 10 个 worker，只建立不可变意图，不占用最终入库许可。Ingestion Worker 以同一个
+进程级 preparation owner 限制 Upload / Import 合计最多 `N` 个 prepare / staging publication；
+该值与两类 pre-commit dispatch slot 均由 `normalize.concurrency=N` 派生。Import 在真正取得
+Normalize 许可时立即交还 slot，因而正在下载或持有磁盘 raw 的后继始终最多为 `N`；尚未取得
+preparation 许可的后继不生成 Prepared Buffer。Upload 在本项 prepare 完成时交还 slot，中央 Normalize
+许可仍是全部来源与维护入口唯一的图片处理准入。两类补位各使用独立
+frozen-tail 游标，
+Import 的 queued 与恢复后的 received 仍共用 Redis runnable FIFO。commit dispatch window 由数量
+许可派生为 `N + ceil(N / 2)`，等待数量或字节许可的任务也占用该窗口；commit 完成后的
+事件补位继续使用自己的 frozen-tail 游标。提交成功后的 prepared image 与 thumbnail 由同一个
+N=2 删除调用收口，逐项失败只重试未确认的键。
+
 `metadata WHERE id=image_id` 是唯一完成判据。相同 commit request ID 与相同 hash 可安全重试；
 worker 在 PostgreSQL 事务前失败时，当前 version 可把同一冻结意图重新排入 committing，
 不能借重试修改 actor、metadata 或正式对象键。同 ID 不同 hash 或换 ID 覆盖已冻结意图会被拒绝。
+正式入库行已经汇集接入期间通过校验的图片身份、尺寸、格式、摘要、存储位置、缩略图与业务
+metadata；后续流程首先复用这份 PostgreSQL 事实，不为“再确认一次”常规重新下载、解码或计算
+图片摘要，也不建立第二套衍生真相。只有新输入尚未入库、管理员显式要求重算衍生字段、存储迁移 /
+漂移维修必须核对物理对象，或存储协议本身要求请求体完整性时，才重新读取或计算对应字节。
 PostgreSQL 已存在时，status、accept 和
 commit 重试通过同一个 `WHERE id = ANY(...)` 只读模型批量水合完整管理端图片；正常实时完成则
 直接把本次提交事务已经生成的完整管理投影随 SSE semantic 事件交给当前 owner，由 owner 消费
@@ -143,8 +191,8 @@ commit 重试通过同一个 `WHERE id = ANY(...)` 只读模型批量水合完�
 回执缺少 PostgreSQL 行时会被视为陈旧并清除，查询失败则 fail closed。批量 status 必须先固定
 Redis 会话读取，再发起 PostgreSQL
 查询：completed 只会在 PG 事务提交后发布，这一顺序避免把提交前 PG 快照与提交后 Redis
-回执拼成不存在的陈旧状态。completed 回执只额外保留卡片展示所需的来源类型、清单位置 / 行号、
-原始尺寸 / 大小和处理参数，不保留来源 URL、完整 prepared manifest、完整图片投影或草稿；完整
+回执拼成不存在的陈旧状态。completed 回执只额外保留卡片展示所需的来源类型、批次位置 / 清单行号、
+原始尺寸 / 大小和处理参数，不保留下载 URL、完整 prepared manifest、完整图片投影或草稿；完整
 图片投影只在实时 SSE 写出期间短暂复用，Redis 仍保持紧凑。因此任务实时完成、
 窗口隐藏后完成及窗口重开恢复都会沿用已就绪时的“微博第 N 张”和处理前后尺寸，详情明确显示
 “图片已入库”，且不需要额外状态请求。
@@ -159,7 +207,7 @@ Upload 与 Import 复用同一套 Server DTO 和 repository，但浏览器分别
 owner；两边分别持有本地资源、页码、显示状态、订阅和清空范围，隐藏或打开一边不会读取、
 重置或取消另一边。重复确认与单卡提交的 single-flight、busy 和迟到响应也由各自 owner 独立
 持有；隐藏 upload 后打开 import，不会被仍在途的 upload 请求锁住，响应只回写原队列。每个
-owner 把当前浏览器文档创建的批次作为稳定展示前缀，并按 batch / manifest 顺序排列；逐项
+owner 把当前浏览器文档创建的批次作为稳定展示前缀，并按 batch / position 顺序排列；逐项
 接管后业务权威立即转交 Server，但当前文档仍在整个窗口生命周期内保留该批的来源顺序，
 不会在整批接管时切换展示所有者或改变快照参数。窗口重新进入则从一开始完全使用 Server
 display，因此协议切换只体现为任务仍然存在，不增加恢复提示或卡片状态。当前文档保序任务
@@ -190,7 +238,7 @@ upload 与 import 窗口共用同一两行摘要，桌面和移动端都保持�
 
 当前快照同时给出 `last_accepted_order`；只有响应 order 晚于该
 基线时才临时把 Server total 增加一次，因此首次响应不会漏计，响应丢失后的幂等重放也不会
-重复计数。owner 随即发起一次有界当前页重取；当前文档卡片继续按原 batch / manifest 位置
+重复计数。owner 随即发起一次有界当前页重取；当前文档卡片继续按原 batch / position 顺序
 展示，Server 页只补足剩余槽位。已经离开当前组合页的 accepted / completed handoff 只保留
 不含 File、Blob、object URL 或 intent 正文的计数投影。跨连接响应经 status fence 接管时，该
 投影归属当前 owner generation，并在其 `last_accepted_order` 覆盖后移除；coverage gate 主动重取
@@ -561,7 +609,8 @@ overview 和词表分别只在自身字段受影响时刷新；公开编辑与�
    `object_url`、`thumb_url` 留在原位；已知正式媒体直链继续使用 immutable 缓存并可读取。
 2. 恢复把可恢复行写回 ready 投影，不搬对象，也不改变正式媒体 URL。
 3. 彻底删除先认领数据库行，再在单图锁内删除并确认原图、缩略图均不存在，最后条件
-   删除 metadata。
+   删除 metadata。请求或任务调度取消可以退出锁与共享清理许可的等待；driver 调用已经开始后，
+   当前项只再响应锁连接失效，并继续完成确认与 metadata 收尾。
 4. `scope: "all"` 与移入回收站、恢复共享一个短时回收站成员锁，在持锁连接上捕获
    `deleted_at + id` 稳定水位；服务端先把同一水位写入 `trash.purge` 任务，再在请求内
    处理一个批次，因此请求中止也不会丢失已确认范围。捕获后新进入回收站，或恢复后再次
@@ -595,8 +644,11 @@ overview 和词表分别只在自身字段受影响时刷新；公开编辑与�
 去重受阻情况，不把不完整组或不可读逻辑后端的相关项算作
 可执行维修 / 删除。Redis 中仍活动的 canonical 继续持有自己的暂存对象。不完整列举不会生成
 修复或删除候选。维修直接写回并校验当前 local / S3 对象，
-不创建后台缩略图任务；孤儿删除、跳过和失败都按项返回。请求中止后不再启动后续项，已经
-开始的并发片先收口，因此旧预览和断开的响应都不会被当作写入真相。
+不创建后台缩略图任务；孤儿删除进入固定单调用的 provider 中性 1…N 契约，并逐项返回
+`removed`、`missing`、`failed` 或 `unknown`。请求中止后不再启动后续 driver 调用；直接被中断的
+调用保持可重试，不把未确认对象计为成功。维修与删除按主要资源分别调度；维修替换未采用的
+缩略图时同样取得共享清理许可。已开始的短调用改由维护锁信号完成确认，调用方取消只停止后续
+调度；执行端等待两个资源池全部收口后才释放独占锁，因此旧预览和断开的响应都不会被当作写入真相。
 
 后台查询和 mutation 只由所属页面或共享 Hook 拥有。路由返回、Strict Mode、窗口聚焦、
 弹窗开关和写操作结束都不能为同一资源制造第二个查询所有者；写操作只做一次必要失效。

@@ -11,44 +11,48 @@ import {
   type IngestionQueueCancelOutcome
 } from "../queue/ingestion-cancel.js";
 import {
-  filterNewDownloadIngestionJobs,
-  retryImportPrepareJob,
-  urlImportJobs
-} from "../queue/model/ingestion-job-utils.js";
+  createUrlImportJobs
+} from "../queue/model/import-job-source.js";
+import {
+  deduplicateImportJobsByDownloadUrl
+} from "../queue/model/ingestion-job-deduplication.js";
+import {
+  resetImportJobForPrepareRetry
+} from "../queue/model/ingestion-job-retry.js";
 import { acceptImports } from "../queue/ingestion-api.js";
-import type { AppendIngestionQueueApi } from "../queue/ingestion-queue-api.js";
+import type { IngestionQueueProducerApi } from "../queue/ingestion-queue-api.js";
 
-function importInput(job: IngestionJob) {
-  if (!job.url) throw new Error("导入任务缺少来源 URL");
-  if (job.manifestPosition === undefined) {
+function buildImportAcceptItemInput(job: IngestionJob) {
+  if (!job.downloadUrl) throw new Error("导入任务缺少下载 URL");
+  if (job.batchPosition === undefined) {
     throw new Error("导入任务缺少批次位置");
   }
-  if (job.importAcceptInput?.idempotency_key === job.attemptKey) {
-    return job.importAcceptInput;
+  if (job.importAcceptItemInput?.idempotency_key === job.attemptKey) {
+    return job.importAcceptItemInput;
   }
   return {
     ...job.draft,
     theme: normalizeTheme(job.draft.theme),
     author: normalizeAuthor(job.draft.author),
     idempotency_key: job.attemptKey,
-    batch_key: job.subscriptionBatchKey,
+    batch_key: job.batchKey,
     source_type: job.manifestSource ?? "url" as const,
-    url: job.url,
+    download_url: job.downloadUrl,
     storage_slug: job.storageSlug,
     image_time: job.imageTime,
     batch_time: job.batchTime,
-    manifest_position: job.manifestPosition,
+    batch_position: job.batchPosition,
     manifest_line: job.manifestLine
   };
 }
 
 export function useImport(options: {
-  queue: AppendIngestionQueueApi;
+  queue: IngestionQueueProducerApi;
   defaults: IngestionAttributeDefaults;
-  fillOriginalUrl: boolean;
+  keepOriginalLinkForUrlImports: boolean;
   storageSlug: string;
 }) {
-  const { queue, defaults, fillOriginalUrl, storageSlug } = options;
+  const { queue, defaults, keepOriginalLinkForUrlImports, storageSlug } = options;
   const controllers = useRef(new Set<AbortController>());
   const pendingAccepts = useRef(new Map<string, Promise<void>>());
   const cancellationAcceptOutcomes = useRef(new Map<string, {
@@ -73,14 +77,14 @@ export function useImport(options: {
     };
   }, []);
 
-  const startBatch = useCallback((jobs: IngestionJob[]) => {
+  const submitImportBatch = useCallback((jobs: IngestionJob[]) => {
     if (!jobs.length) return Promise.resolve();
-    const inputs = jobs.map(importInput);
+    const inputs = jobs.map(buildImportAcceptItemInput);
     const controller = new AbortController();
     controllers.current.add(controller);
     for (const [index, job] of jobs.entries()) {
       queue.updateJob(job.id, {
-        importAcceptInput: inputs[index],
+        importAcceptItemInput: inputs[index],
         status: "queued",
         failureStage: undefined,
         message: "正在提交导入任务"
@@ -238,8 +242,8 @@ export function useImport(options: {
     return promise;
   }, [queue]);
 
-  const addBatch = useCallback(async (jobs: IngestionJob[]) => {
-    const acceptedJobs = filterNewDownloadIngestionJobs(
+  const enqueueImportJobs = useCallback(async (jobs: IngestionJob[]) => {
+    const acceptedJobs = deduplicateImportJobsByDownloadUrl(
       queue.jobsRef.current,
       jobs
     );
@@ -249,22 +253,26 @@ export function useImport(options: {
       );
       return;
     }
-    if (acceptedJobs.length) void startBatch(acceptedJobs);
-  }, [queue, startBatch]);
+    if (acceptedJobs.length) void submitImportBatch(acceptedJobs);
+  }, [queue, submitImportBatch]);
 
   const addUrls = useCallback(async (urls: string[]) => {
-    await addBatch(urlImportJobs(
+    await enqueueImportJobs(createUrlImportJobs(
       urls,
       defaults,
-      fillOriginalUrl,
+      keepOriginalLinkForUrlImports,
       storageSlug
     ));
-  }, [addBatch, defaults, fillOriginalUrl, storageSlug]);
+  }, [
+    defaults,
+    enqueueImportJobs,
+    keepOriginalLinkForUrlImports,
+    storageSlug
+  ]);
 
-  const addJobs = useCallback((jobs: IngestionJob[]) => addBatch(jobs), [addBatch]);
-  const addWeiboJobs = useCallback(
-    (jobs: IngestionJob[]) => addBatch(jobs),
-    [addBatch]
+  const addParsedImports = useCallback(
+    (jobs: IngestionJob[]) => enqueueImportJobs(jobs),
+    [enqueueImportJobs]
   );
 
   const cancelMany = useCallback(async (jobs: readonly IngestionJob[]) => {
@@ -365,7 +373,7 @@ export function useImport(options: {
       let results: Awaited<ReturnType<typeof acceptImports>>["items"];
       try {
         results = (await acceptImports({
-          items: chunk.map(importInput)
+          items: chunk.map(buildImportAcceptItemInput)
         })).items;
       } catch (error) {
         for (const job of chunk) {
@@ -515,7 +523,7 @@ export function useImport(options: {
       current = cancelledCurrent;
     }
     const next = {
-      ...retryImportPrepareJob(current),
+      ...resetImportJobForPrepareRetry(current),
       preview: "",
       previewFull: undefined,
       objectUrl: undefined,
@@ -533,8 +541,8 @@ export function useImport(options: {
         return;
       }
     } else queue.updateJob(current.id, next);
-    await startBatch([next]);
-  }, [queue, startBatch]);
+    await submitImportBatch([next]);
+  }, [queue, submitImportBatch]);
 
-  return { addUrls, addJobs, addWeiboJobs, cancel, cancelMany, retry };
+  return { addUrls, addParsedImports, cancel, cancelMany, retry };
 }

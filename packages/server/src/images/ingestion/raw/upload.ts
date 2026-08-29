@@ -1,5 +1,8 @@
-import { getInputImageMaxBytes } from "../../../config/app-settings.ts";
+import { getIngestionMaxFileBytes } from "../../../config/app-settings.ts";
 import { ApiError } from "../../../core/api-error.ts";
+import {
+  runWithAdvisoryLockAcquisitionSignal
+} from "../../../core/database/advisory-locks.ts";
 import { randomUuidV7 } from "../../../core/uuid.ts";
 import { assertStorageWriteTarget } from "../../../storage/backends/registry.ts";
 import { withStorageLocationReadLock } from "../../../storage/maintenance-lock.ts";
@@ -10,6 +13,7 @@ import {
 } from "./files.ts";
 import { withActiveIngestionRawPaths } from "./lease-registry.ts";
 import { ingestionRawPartPath, ingestionRawPath } from "./paths.ts";
+import { withRawUploadAdmission } from "./upload-admission.ts";
 import { assertImageIdentity } from "../sessions/identity.ts";
 import { IngestionSessionService } from "../session-service.ts";
 
@@ -22,6 +26,25 @@ export async function receiveUploadIntentBody(
 ) {
   if (!body) throw new ApiError(400, "empty_body", "Empty upload body");
   const claims = service.verifyUploadCredential(credential, owner);
+  const admissionSignal = signal ?? new AbortController().signal;
+  return withRawUploadAdmission(admissionSignal, () => (
+    receiveUploadIntentBodyUnderAdmission(
+      service,
+      owner,
+      claims,
+      body,
+      admissionSignal
+    )
+  ));
+}
+
+async function receiveUploadIntentBodyUnderAdmission(
+  service: IngestionSessionService,
+  owner: string,
+  claims: ReturnType<IngestionSessionService["verifyUploadCredential"]>,
+  body: ReadableStream<Uint8Array>,
+  signal: AbortSignal
+) {
   const executionToken = randomUuidV7();
   const intentPair = {
     session_id: claims.session_id,
@@ -48,14 +71,14 @@ export async function receiveUploadIntentBody(
   return withActiveIngestionRawPaths([rawPath, partPath], async () => {
     let published = false;
     try {
-      signal?.throwIfAborted();
+      signal.throwIfAborted();
       const received = await receiveUploadRaw({
         pair,
         raw_generation: rawGeneration,
         execution_token: executionToken,
         body,
         expected_size: claimed.expected_size,
-        maximum_size: getInputImageMaxBytes(),
+        maximum_size: getIngestionMaxFileBytes(),
         max_long_edge: claimed.max_long_edge,
         signal,
         heartbeat: () => service.repository.heartbeatUploadIntent(
@@ -65,29 +88,29 @@ export async function receiveUploadIntentBody(
         ).then(() => undefined)
       });
       published = true;
-      signal?.throwIfAborted();
-      return await withStorageLocationReadLock(async (lockSignal) => {
-        const combinedSignal = signal
-          ? AbortSignal.any([signal, lockSignal])
-          : lockSignal;
-        combinedSignal.throwIfAborted();
-        await assertStorageWriteTarget(claimed.storage_slug);
-        assertImageIdentity(
-          claimed.candidate_image_id,
-          claimed.resolved_image_time,
-          claimed.manifest_position
-        );
-        const template = service.uploadReceivedTemplate(
-          claimed,
-          rawGeneration,
-          received.rawSize
-        );
-        const converted = await service.repository.convertUploadIntent(
-          template,
-          executionToken
-        );
-        return converted.session;
-      });
+      signal.throwIfAborted();
+      return await runWithAdvisoryLockAcquisitionSignal(signal, () => (
+        withStorageLocationReadLock(async (lockSignal) => {
+          const combinedSignal = AbortSignal.any([signal, lockSignal]);
+          combinedSignal.throwIfAborted();
+          await assertStorageWriteTarget(claimed.storage_slug);
+          assertImageIdentity(
+            claimed.candidate_image_id,
+            claimed.resolved_image_time,
+            claimed.batch_position
+          );
+          const template = service.uploadReceivedTemplate(
+            claimed,
+            rawGeneration,
+            received.rawSize
+          );
+          const converted = await service.repository.convertUploadIntent(
+            template,
+            executionToken
+          );
+          return converted.session;
+        })
+      ));
     } catch (error) {
       if (published) {
         let retainPublishedRaw = true;

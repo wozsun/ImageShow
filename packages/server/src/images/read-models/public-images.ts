@@ -45,7 +45,7 @@ async function listPublicImagesWithAccess(
   signal: AbortSignal | undefined,
   database: PublicDatabaseReadAccess
 ): Promise<PublicImageListResponseDto> {
-  const limit = query.limit ?? getRuntimeConfig().site.gallery.default_limit;
+  const limit = query.limit ?? getRuntimeConfig().site.gallery.limit;
   const plan = await resolveImageFilterPlan(query, database);
   const cached = await readReadyImageCursorPage(
     plan,

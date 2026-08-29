@@ -38,18 +38,18 @@ function compactUuid(value: string) {
 
 export function createIngestionDisplayOrderKey(
   batchKey: string,
-  manifestPosition: number,
+  batchPosition: number,
   sessionId: string
 ) {
   if (
-    !Number.isInteger(manifestPosition)
-    || manifestPosition < 0
-    || manifestPosition > 0xfff
+    !Number.isInteger(batchPosition)
+    || batchPosition < 0
+    || batchPosition > 0xfff
     || !/^[A-Za-z0-9_-]{43}$/u.test(sessionId)
   ) {
     throw new ApiError(400, "invalid_ingestion_order", "内容接入批次位置无效");
   }
-  const inversePosition = (0xfff - manifestPosition)
+  const inversePosition = (0xfff - batchPosition)
     .toString(16)
     .padStart(3, "0");
   return `${compactUuid(batchKey)}:${inversePosition}:${sessionId}`;
@@ -67,7 +67,7 @@ export function inspectImageUuidV7(value: string) {
 export function assertImageIdentity(
   imageId: string,
   imageTime: string,
-  manifestPosition?: number | null
+  batchPosition?: number | null
 ) {
   const inspected = inspectImageUuidV7(imageId);
   const timestamp = new Date(imageTime).getTime();
@@ -77,15 +77,15 @@ export function assertImageIdentity(
     || !Number.isSafeInteger(timestamp)
     || inspected.timestamp !== timestamp
     || (
-      manifestPosition !== undefined
-      && manifestPosition !== null
-      && inspected.randA !== manifestPosition
+      batchPosition !== undefined
+      && batchPosition !== null
+      && inspected.randA !== batchPosition
     )
   ) {
     throw new ApiError(
       409,
       "invalid_image_identity",
-      "图片身份与已冻结的图片时间或清单位置不一致"
+      "图片身份与已冻结的图片时间或批次位置不一致"
     );
   }
   return inspected;

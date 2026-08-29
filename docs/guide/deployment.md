@@ -33,16 +33,34 @@ docker run -d --name imageshow --restart unless-stopped --stop-timeout 50 \
 Redis 凭据只来自显式环境变量，不写入 `config.json`。`ADMIN_USERNAME` /
 `ADMIN_PASSWORD` 仅在数据库没有 super 管理员时创建首个账号。
 
-仓库 `.env.example` 是变量目录，`.env` 只供 Compose 插值。默认 Compose 不使用
-`env_file`，也不把完整目录注入容器；ImageShow 只收到显式最小白名单，PostgreSQL 只收到
-三个 `POSTGRES_*`，内置 Redis 不收到项目变量。白名单依次是数据库名、用户名、密码和首次
-管理员用户名、密码。数据库名、数据库用户名和管理员用户名保留默认值；`DATABASE_PASSWORD`
+仓库 `.env.example` 是变量目录，`.env` 为 Compose 提供插值。默认 Compose 逐项映射最小
+白名单：ImageShow 收到数据库名、用户名、密码和首次管理员用户名、密码，PostgreSQL 收到
+对应的三个 `POSTGRES_*`。数据库名、数据库用户名和管理员用户名保留默认值；`DATABASE_PASSWORD`
 与 `ADMIN_PASSWORD` 没有默认值，必须在 `.env` 或宿主环境中显式设置，缺失或空值会
 在 Compose 展开阶段直接失败。需要额外 RuntimeConfig 首次 seed 时，先按
 [配置说明](./configuration.md#环境变量)逐项扩展 ImageShow 的 `environment` 映射。
 
 应用容器的停止宽限必须至少为 50 秒。进程先停止接收请求，再协调 Worker、在途 HTTP、
 存储 driver 和数据库连接池；不要用短于该边界的外层编排超时提前强杀。
+
+### 单机资源与默认准入
+
+现行默认值面向一台 `2C / 4 GiB` 主机上的单个 ImageShow 应用容器，并与 PostgreSQL、Redis
+和反向代理共享资源；约 `2 GiB` swap 只承担突发故障缓冲，不作为稳定吞吐所需内存。这是默认
+调优目标，不是通用最低配置。各资源边界的默认值如下：
+
+| 阶段 | 默认准入 | 边界 |
+| --- | --- | --- |
+| 浏览器 Upload | `upload.browser_concurrency = 2` | 每个活动页面的预览、短凭据与 raw PUT 窗口。 |
+| Server raw PUT | `upload.raw_concurrency = 5` | 所有页面和直接 API 共享。 |
+| 图片处理、Prepared 发布与 Import 后继窗口 | `normalize.concurrency = 2` | 全部 Sharp 重工作共享；Upload / Import 合计最多有 2 项处于 prepare 或 `_uploads` 发布，Import 另最多预取一批 raw，每图 Sharp 线程固定为 `1`。 |
+| 最终入库 | `ingestion.commit_concurrency = 8` | 同时受代码内 `256 MiB` prepared 字节预算约束；Worker 派生 12 个 dispatch slot。 |
+| 存储迁移 | 固定 `5` 张图片 | 所选图片、整后端和主题重分配共享同一 Server 准入。 |
+| 存储清理 | 固定 `1` 个活动调用 | 业务清理与永久删除生产者共用 provider 中性 `removeObjects(1…N)`。 |
+
+公开配置项可在合法范围内按更强单机实测结果调整；表中各数字分别保护对应资源，不能相乘为一个
+总并发值。应用不设置网络带宽上限，远程图片下载与同机 / 内网 S3 的吞吐由后继窗口、存储端
+能力和部署网络共同约束。
 
 ## PostgreSQL 与 Redis
 
@@ -73,9 +91,9 @@ Redis ACL 还必须允许业务原子脚本使用的 `EVAL` 与 `EVALSHA`。应�
 清单，也不应把一次完整脚本传输误判为未启用缓存。检查页深度扫描的低频动态脚本仍可能
 直接使用 `EVAL`。
 
-内置 Compose 直接使用 `redis:8` 的默认启动命令，保留 `/data` volume，但不强制 AOF；私有
-网络内不设置密码。该 volume 只提供尽力而为的重启保留，不承诺会话、限流、派生状态或未完全
-入库内容不可丢失；PostgreSQL 中已正式提交的图片不受影响。只有外部 Redis 启用了认证时才传
+内置 Compose 直接使用 `redis:8` 的默认启动命令，保留 `/data` volume，并在私有网络内采用
+无密码连接。该 volume 提供尽力而为的重启保留；Redis 数据丢失时会话、限流、派生状态和未完全
+入库内容允许消失，PostgreSQL 中已正式提交的图片不受影响。外部 Redis 启用认证时传入
 `REDIS_PASSWORD`。Redis 的内存限制、淘汰策略和容器硬限制由部署方配置，应用只观测实例资源，
 不据此自动改写部署配置。
 
@@ -192,8 +210,8 @@ server {
 都覆盖为同一个单值客户端地址。
 
 若 `X-Forwarded-Proto` 缺失或错误，Secure Cookie 和同源校验都会出错。
-反向代理的请求体上限不得低于应用对应配置；默认单图上限为 200 MiB，JSONL 使用独立
-128 MiB 请求档，因此示例取 256m。Compose 网络内应把上游改为 `imageshow:5518`。
+反向代理的请求体上限不得低于应用对应配置；默认单图上限为 100 MiB，最高可配置为 200 MiB，
+JSONL 使用独立 128 MiB 请求档，因此示例取 256m。Compose 网络内应把上游改为 `imageshow:5518`。
 
 上传流如需边收边传，可在同一 server 中增加：
 

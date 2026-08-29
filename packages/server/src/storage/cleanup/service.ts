@@ -7,6 +7,7 @@ import {
   enqueueMoveCleanupJob,
   listUnresolvedMoveCleanupReferences,
   retryExhaustedMoveCleanupJobs,
+  setIngestionCandidateGuardConfirmationDeadline as persistIngestionGuardDeadline,
   type UnresolvedMoveCleanupReference
 } from "./repository.ts";
 import type {
@@ -103,7 +104,38 @@ export async function assertObjectNotPendingCleanup(
   }
 }
 
-const cleanupEnqueueRetryDelaysMs = [0, 50, 150] as const;
+const cleanupPersistenceRetryDelaysMs = [0, 50, 150] as const;
+
+/**
+ * Arm or settle the absence-confirmation window of an existing Ingestion
+ * candidate guard. An omitted signal intentionally makes error-path extension
+ * detached from the transfer request that has already failed or been aborted.
+ */
+export async function setIngestionCandidateGuardConfirmationDeadline(
+  imageId: string,
+  guardToken: string,
+  confirmAbsentAfter: Date | null,
+  options: Readonly<{ signal?: AbortSignal }> = {}
+) {
+  let lastError: unknown;
+  for (const delayMs of cleanupPersistenceRetryDelaysMs) {
+    options.signal?.throwIfAborted();
+    await wait(delayMs);
+    options.signal?.throwIfAborted();
+    try {
+      await persistIngestionGuardDeadline(
+        imageId,
+        guardToken,
+        confirmAbsentAfter
+      );
+      options.signal?.throwIfAborted();
+      return;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
+}
 
 export async function captureMoveCleanupObjects(
   objects: readonly MoveCleanupObjectInput[]
@@ -152,14 +184,22 @@ export function enqueueCapturedObjectsForCleanup(
  * write; this remains safe after the original lock signal is lost because the
  * receipt never follows a mutable slug to a different physical location.
  */
-export async function enqueueCapturedObjectsForCleanupDetached(
+export async function enqueueCapturedObjectsForCleanupWithoutLocationLock(
   imageId: string,
   objects: readonly CapturedMoveCleanupObject[],
-  reason: string
+  reason: string,
+  options: Readonly<{ confirmAbsentAfter?: Date }> = {}
 ) {
   if (!objects.length) return;
   const signal = new AbortController().signal;
-  await enqueueMoveCleanupWithRetry(imageId, objects, reason, signal);
+  await enqueueMoveCleanupWithRetry(
+    imageId,
+    objects,
+    reason,
+    signal,
+    undefined,
+    options.confirmAbsentAfter
+  );
 }
 
 /**
@@ -178,15 +218,19 @@ async function enqueueMoveCleanupWithRetry(
   objects: readonly CapturedMoveCleanupObject[],
   reason: string,
   signal: AbortSignal,
-  guardToken?: string
+  guardToken?: string,
+  confirmAbsentAfter?: Date
 ) {
   let lastError: unknown;
-  for (const delayMs of cleanupEnqueueRetryDelaysMs) {
+  for (const delayMs of cleanupPersistenceRetryDelaysMs) {
     signal.throwIfAborted();
     await wait(delayMs);
     signal.throwIfAborted();
     try {
-      await enqueueMoveCleanupJob(imageId, objects, reason, { guardToken });
+      await enqueueMoveCleanupJob(imageId, objects, reason, {
+        guardToken,
+        confirmAbsentAfter
+      });
       signal.throwIfAborted();
       return;
     } catch (error) {

@@ -605,14 +605,14 @@ export class IngestionSessionRepository {
     return result;
   }
 
-  discoverRunnable(limit = appConfig.ingestionRuntime.recoveryScanBatchSize) {
+  discoverRunnable(limit = appConfig.ingestionRuntime.ingestionSessionScanBatchSize) {
     return discoverRunnableIngestionSessions(this.#run, limit);
   }
 
   discoverRunnablePage(
     cursorScore: number,
     frozenTailScore: number,
-    limit = appConfig.ingestionRuntime.recoveryScanBatchSize
+    limit = appConfig.ingestionRuntime.ingestionSessionScanBatchSize
   ) {
     return discoverRunnableIngestionSessionPage(
       this.#run,
@@ -631,7 +631,7 @@ export class IngestionSessionRepository {
 
   discoverExpiryPage(
     offset: number,
-    limit = appConfig.ingestionRuntime.recoveryScanBatchSize
+    limit = appConfig.ingestionRuntime.ingestionSessionScanBatchSize
   ) {
     return discoverExpiryIngestionSessionPage(this.#run, offset, limit);
   }

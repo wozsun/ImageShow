@@ -5,17 +5,19 @@ import type {
 } from "@imageshow/shared/browser";
 import { ApiError } from "../core/api-error.ts";
 import {
+  ingestionCommitConcurrency,
   galleryLimit,
   galleryOrder,
   homeBackground,
   homeBannerLabel,
   homeBannerTitle,
   imagePageSize,
-  importConcurrency,
-  listPageSize,
+  ingestionListPageSize,
+  importTypesKeepingOriginalLink,
   loginBackground,
   normalizeMaxLongEdge,
   normalizeMaxSizeKb,
+  normalizeConcurrency,
   normalizeMinQuality,
   normalizeQuality,
   normalizeQualityStep,
@@ -26,7 +28,7 @@ import {
   skipWebpUnderKb,
   thumbnailLongEdge,
   thumbnailQuality,
-  uploadConcurrency
+  uploadBrowserConcurrency
 } from "./fields.ts";
 import {
   getRuntimeConfig,
@@ -43,6 +45,7 @@ const siteHomeConfigSchema = z.strictObject({
 });
 
 function hasDefinedSetting(value: unknown): boolean {
+  if (Array.isArray(value)) return true;
   if (!value || typeof value !== "object") return value !== undefined;
   return Object.values(value).some(hasDefinedSetting);
 }
@@ -53,21 +56,27 @@ const appSettingsSchema = z.strictObject({
     root: siteRoot.optional(),
     home: siteHomeConfigSchema.optional(),
     gallery: z.strictObject({
-      default_limit: galleryLimit.optional(),
+      limit: galleryLimit.optional(),
       order: galleryOrder.optional()
     }).optional(),
-    random_default_method: randomDefaultMethod.optional()
+    random_method: randomDefaultMethod.optional()
+  }).optional(),
+  ingestion: z.strictObject({
+    list_page_size: ingestionListPageSize.optional(),
+    commit_concurrency: ingestionCommitConcurrency.optional()
   }).optional(),
   upload: z.strictObject({
-    list_page_size: listPageSize.optional(),
-    concurrency: uploadConcurrency.optional()
+    browser_concurrency: uploadBrowserConcurrency.optional()
   }).optional(),
   import: z.strictObject({
-    fill_original_url: z.boolean().optional(),
-    auto_import: z.boolean().optional(),
-    concurrency: importConcurrency.optional()
+    keep_original_link: importTypesKeepingOriginalLink.optional(),
+    auto_import: z.boolean().optional()
+  }).optional(),
+  weibo: z.strictObject({
+    source_enabled: z.boolean().optional()
   }).optional(),
   normalize: z.strictObject({
+    concurrency: normalizeConcurrency.optional(),
     quality: normalizeQuality.optional(),
     quality_step: normalizeQualityStep.optional(),
     min_quality: normalizeMinQuality.optional(),
@@ -100,12 +109,12 @@ export function parseSettingsInput(value: unknown) {
   return result.data;
 }
 
-export function getInputImageMaxBytes() {
-  return Math.floor(getRuntimeConfig().upload.max_file_size_mb * 1024 * 1024);
+export function getIngestionMaxFileBytes() {
+  return Math.floor(getRuntimeConfig().ingestion.max_file_size_mb * 1024 * 1024);
 }
 
-export function getInputImageMaxLongEdge() {
-  return Math.floor(getRuntimeConfig().upload.max_long_edge);
+export function getIngestionMaxLongEdge() {
+  return Math.floor(getRuntimeConfig().ingestion.max_long_edge);
 }
 
 export function getThumbnailSettings() {
@@ -119,23 +128,27 @@ export function getSettingsForAdmin(): AdminSettings {
     root,
     home,
     gallery,
-    random_default_method
+    random_method
   } = settings.site;
-  const { commit_concurrency } = settings.ingestion;
   const {
-    max_items,
     max_file_size_mb,
     max_long_edge,
     list_page_size,
-    concurrency: uploadConcurrencyValue
+    commit_concurrency
+  } = settings.ingestion;
+  const {
+    max_items,
+    browser_concurrency
   } = settings.upload;
   const {
-    fill_original_url,
+    keep_original_link,
     auto_import,
-    concurrency: importConcurrencyValue,
     max_items: importMaxItemsValue
   } = settings.import;
-  const { max_items: weiboMaxItems } = settings.weibo;
+  const {
+    max_items: weiboMaxItems,
+    source_enabled
+  } = settings.weibo;
   const { login_background, image_page_size, recent_uploads, show_unset_theme_card } = settings.admin;
   return {
     site: {
@@ -147,23 +160,24 @@ export function getSettingsForAdmin(): AdminSettings {
         banner_title: home.banner_title
       },
       gallery,
-      random_default_method
+      random_method
     },
-    ingestion: { commit_concurrency },
-    upload: {
-      max_items,
+    ingestion: {
       max_file_size_mb,
       max_long_edge,
       list_page_size,
-      concurrency: uploadConcurrencyValue
+      commit_concurrency
+    },
+    upload: {
+      max_items,
+      browser_concurrency
     },
     import: {
-      fill_original_url,
+      keep_original_link,
       auto_import,
-      concurrency: importConcurrencyValue,
       max_items: importMaxItemsValue
     },
-    weibo: { max_items: weiboMaxItems },
+    weibo: { max_items: weiboMaxItems, source_enabled },
     normalize: settings.normalize,
     thumbnail: settings.thumbnail,
     admin: { login_background, image_page_size, recent_uploads, show_unset_theme_card }
@@ -178,12 +192,16 @@ export function getEffectiveLoginBackground() {
   return effectiveLoginBackground(getRuntimeConfig().admin.login_background);
 }
 
+export function resolveIngestionSnapshotLimit(requestedLimit?: number) {
+  return requestedLimit ?? getRuntimeConfig().ingestion.list_page_size;
+}
+
 export function siteConfigPayload(): SiteConfigDto {
   const runtime = getRuntimeConfig();
   const {
     name,
     description,
-    icon_url,
+    icon,
     root,
     home,
     gallery
@@ -192,7 +210,7 @@ export function siteConfigPayload(): SiteConfigDto {
     site: {
       name,
       description,
-      icon_url,
+      icon,
       root,
       home,
       gallery: { order: gallery.order },
@@ -207,8 +225,10 @@ export function siteConfigPayload(): SiteConfigDto {
 export async function saveAppSettings(input: AppSettingsInput) {
   const runtimePatch: RuntimeConfigPatch = {};
   if (input.site) runtimePatch.site = input.site;
+  if (input.ingestion) runtimePatch.ingestion = input.ingestion;
   if (input.upload) runtimePatch.upload = input.upload;
   if (input.import) runtimePatch.import = input.import;
+  if (input.weibo) runtimePatch.weibo = input.weibo;
   if (input.normalize) runtimePatch.normalize = input.normalize;
   if (input.thumbnail) runtimePatch.thumbnail = input.thumbnail;
   if (input.admin) runtimePatch.admin = input.admin;

@@ -29,6 +29,7 @@ import {
   type UploadRawResultDto
 } from "@imageshow/shared/browser";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
+import { resolveIngestionSnapshotLimit } from "../config/app-settings.ts";
 import { ApiError } from "../core/api-error.ts";
 import { readJsonBody } from "../core/http/json-body.ts";
 import {
@@ -149,11 +150,12 @@ export function registerIngestionRoutes(app: Hono) {
 
   app.post(ingestionSnapshotPath, limitIngestionSnapshotBody, async (c) => {
     const input = parse(ingestionSnapshotQuery, c.req.query());
+    const limit = resolveIngestionSnapshotLimit(input.limit);
     const selection = parse(
       ingestionSnapshotSelectionInput,
       await readJsonBody(c)
     );
-    if (input.limit + selection.include_items.length
+    if (limit + selection.include_items.length
       > appConfig.ingestionRuntime.snapshotMaxItems) {
       throw new ApiError(
         400,
@@ -168,7 +170,7 @@ export function registerIngestionRoutes(app: Hono) {
       actionScope: ingestionActionScope(c),
       queue: input.queue,
       offset: input.offset,
-      limit: input.limit,
+      limit,
       excludeItems: selection.exclude_items,
       includeItems: selection.include_items
     })));
@@ -266,7 +268,7 @@ export function registerIngestionRoutes(app: Hono) {
         input.urls,
         {
           authorSlugs: runtimeConfig.weibo.author_slugs,
-          concurrency: runtimeConfig.weibo.concurrency,
+          sourceEnabled: runtimeConfig.weibo.source_enabled,
           timeZone: process.env.TZ,
           signal: c.req.raw.signal
         }
@@ -283,6 +285,7 @@ export function registerIngestionRoutes(app: Hono) {
         ) status = 400;
         if (
           error.code === "weibo_visitor_failed"
+          || error.code === "weibo_visitor_rejected"
           || error.code === "weibo_request_failed"
           || error.code === "weibo_response_too_large"
         ) status = 502;

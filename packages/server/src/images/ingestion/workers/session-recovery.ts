@@ -66,7 +66,7 @@ const defaultDependencies: IngestionSessionRecoveryDependencies = {
 
 /**
  * Performs one bounded recovery slice at a time. Expiry is always drained
- * before unexpired sessions are normalized for the runnable worker pools.
+ * before unexpired sessions are reconciled into runnable states for dispatch.
  */
 export class IngestionSessionRecovery {
   readonly #repository: IngestionSessionRepository;
@@ -120,7 +120,7 @@ export class IngestionSessionRecovery {
         .filter((session) => session.discard_at > now)
     );
     this.#offset += page.items.length;
-    if (page.scanned >= appConfig.ingestionRuntime.recoveryScanBatchSize) {
+    if (page.scanned >= appConfig.ingestionRuntime.ingestionSessionScanBatchSize) {
       return false;
     }
     if (this.#recoveredInPass) {

@@ -101,9 +101,9 @@ export type IngestionQueueAction =
 
 export function ingestionJobHasBrowserDisplayOrder(job: IngestionJob) {
   return job.browserDisplayReleased !== true
-    && Number.isInteger(job.manifestPosition)
-    && job.manifestPosition! >= 0
-    && job.manifestPosition! <= 0xfff;
+    && Number.isInteger(job.batchPosition)
+    && job.batchPosition! >= 0
+    && job.batchPosition! <= 0xfff;
 }
 
 export function browserDisplayPrefixJobs(jobs: readonly IngestionJob[]) {
@@ -113,12 +113,12 @@ export function browserDisplayPrefixJobs(jobs: readonly IngestionJob[]) {
   const ordered = prefix.filter(({ job }) => (
     ingestionJobHasBrowserDisplayOrder(job)
   )).sort((left, right) => {
-    if (left.job.subscriptionBatchKey !== right.job.subscriptionBatchKey) {
-      return left.job.subscriptionBatchKey > right.job.subscriptionBatchKey
+    if (left.job.batchKey !== right.job.batchKey) {
+      return left.job.batchKey > right.job.batchKey
         ? -1
         : 1;
     }
-    const position = left.job.manifestPosition! - right.job.manifestPosition!;
+    const position = left.job.batchPosition! - right.job.batchPosition!;
     return position || left.index - right.index;
   });
   const fallback = prefix.filter(({ job }) => (
@@ -430,7 +430,7 @@ function mergeCanonicalHandoff(
     ...canonical,
     id: local.id,
     attemptKey: local.attemptKey,
-    subscriptionBatchKey: local.subscriptionBatchKey,
+    batchKey: local.batchKey,
     file: local.file ?? canonical.file,
     fileFingerprint: local.fileFingerprint ?? canonical.fileFingerprint,
     objectUrl: preserveLocalPreview
@@ -440,14 +440,14 @@ function mergeCanonicalHandoff(
     serverDraftPending: preserveLocalDraft
       ? true
       : canonical.serverDraftPending,
-    uploadIntentInput: local.uploadIntentInput ?? canonical.uploadIntentInput,
-    importAcceptInput: local.importAcceptInput ?? canonical.importAcceptInput,
+    uploadIntentItemInput: local.uploadIntentItemInput ?? canonical.uploadIntentItemInput,
+    importAcceptItemInput: local.importAcceptItemInput ?? canonical.importAcceptItemInput,
     batchTime: local.batchTime ?? canonical.batchTime,
     manifestSource: local.manifestSource ?? canonical.manifestSource,
     manifestProvidedCommonFields: local.manifestProvidedCommonFields
       ?? canonical.manifestProvidedCommonFields,
     manifestLine: local.manifestLine ?? canonical.manifestLine,
-    manifestPosition: local.manifestPosition ?? canonical.manifestPosition,
+    batchPosition: local.batchPosition ?? canonical.batchPosition,
     serverHandoffPending: local.serverHandoffPending
       ?? canonical.serverHandoffPending,
     serverHandoffRevision: local.serverHandoffPending !== undefined

@@ -2,7 +2,7 @@ import type { AdminIconName } from "../../../../components/icon/AdminIcon.js";
 import {
   parseImportUrlInput,
   type ImportUrlParseResult
-} from "../queue/model/ingestion-job-utils.js";
+} from "../queue/model/import-job-source.js";
 import {
   parseImportJsonl,
   parseWeiboImport,

@@ -10,6 +10,7 @@ import {
   ingestionQueueSnapshotMaxItems,
   slugMaxLength
 } from "./browser/common.ts";
+import type { ImportSourceTypeDto } from "./browser/ingestion.ts";
 
 export const appConfig = {
   // Container-internal HTTP port. Keep Dockerfile and Compose target ports in sync.
@@ -41,6 +42,11 @@ export const appConfig = {
 
   trashBatchSize: 100,
 
+  configPackage: {
+    maxBytes: configPackageMaxBytes,
+    maxStorageBackends: 100
+  },
+
   ingestion: {
     batchHardLimit: ingestionBatchHardLimit,
     maxInputFileSizeMiB: 200,
@@ -49,9 +55,7 @@ export const appConfig = {
     weiboSoftLimitMax: 50,
     weiboImageHardLimit: 1_000,
     weiboRequestBodyMaxBytes: 1024 * 1024,
-    jsonlManifestMaxBytes: 128 * 1024 * 1024,
-    configPackageMaxBytes,
-    configPackageMaxBackends: 100
+    jsonlManifestMaxBytes: 128 * 1024 * 1024
   },
 
   ingestionRuntime: {
@@ -61,18 +65,20 @@ export const appConfig = {
     uploadClaimStaleSeconds: 2 * 60,
     workerHeartbeatSeconds: 30,
     expiryScanBatchSize: 100,
-    recoveryScanBatchSize: 100,
+    ingestionSessionScanBatchSize: 100,
     snapshotMaxItems: ingestionQueueSnapshotMaxItems,
     snapshotStaleReceiptCleanupBudget: 200,
     queueActionBatchSize: 100,
     orphanCleanupIntervalSeconds: 60,
     orphanCleanupSafetySeconds: 60,
     orphanCleanupCycleTimeoutSeconds: 50,
+    orphanCleanupStorageBackendHardLimit: 100,
     orphanCleanupMaxStorageBackends: 32,
     orphanCleanupMaxStagingKeysPerCycle: 3_200_000,
     orphanCleanupMaxRawEntriesPerCycle: 100_000,
     orphanCleanupMaxReferenceItems: 100_000,
-    retiredCleanupMaxAttempts: 8,
+    cleanupRetryQueueCapacity: 100,
+    cleanupRetryMaxAttempts: 8,
     tokenMaxBytes: 2 * 1024,
     tokenPayloadMaxBytes: 1024,
     sseAuthenticationHeartbeatSeconds: 30
@@ -143,7 +149,7 @@ export const appConfig = {
       name: "ImageShow",
       domain: "example.com",
       description: "画廊与随机图片API",
-      icon_url: "/assets/brand/favicon.svg",
+      icon: "/assets/brand/favicon.svg",
       version: {
         enabled: true,
         link_enabled: true
@@ -155,8 +161,8 @@ export const appConfig = {
         banner_label: "ImageShow · A FAN-MADE PHOTO HANDBOOK",
         banner_title: "我们一起，\n收藏这些瞬间。"
       },
-      gallery: { default_limit: 60, order: "random" },
-      random_default_method: "redirect",
+      gallery: { limit: 60, order: "latest" },
+      random_method: "redirect",
       static_subdomain: "static",
       robots_enabled: false
     },
@@ -165,37 +171,34 @@ export const appConfig = {
       allowed_origins: [] as string[]
     },
     ingestion: {
-      commit_concurrency: 5,
-      global_commit_concurrency: 10,
-      global_commit_byte_budget_mb: 512
-    },
-    upload: {
-      max_items: 200,
       max_file_size_mb: 100,
       max_long_edge: 32000,
       list_page_size: 20,
-      concurrency: 2,
-      global_concurrency: 5
+      commit_concurrency: 8
+    },
+    upload: {
+      max_items: 200,
+      browser_concurrency: 2,
+      raw_concurrency: 5
     },
     import: {
-      fill_original_url: true,
+      keep_original_link: ["url", "jsonl", "weibo"] as ImportSourceTypeDto[],
       auto_import: true,
-      concurrency: 2,
-      global_concurrency: 5,
       fetch_timeout_seconds: 30,
       max_items: 200
     },
     weibo: {
-      max_items: 20,
-      concurrency: 2,
-      global_concurrency: 5,
+      max_items: 10,
+      source_enabled: true,
+      request_delay_seconds: [2, 5],
       author_slugs: {} as Record<string, string>
     },
     normalize: {
+      concurrency: 2,
       quality: 80,
       quality_step: 5,
       min_quality: 20,
-      max_long_edge: 4500,
+      max_long_edge: 4200,
       max_size_kb: 500,
       skip_webp_under_kb: 700
     },
@@ -203,13 +206,8 @@ export const appConfig = {
     admin: {
       login_background: "",
       image_page_size: adminImagePageLimit,
-      recent_uploads: 12,
+      recent_uploads: 16,
       show_unset_theme_card: true
-    },
-    background_job: {
-      move_cleanup_concurrency: 5,
-      theme_reassign_concurrency: 5,
-      migrate_concurrency: 5
     },
     security: {
       session_ttl_seconds: 7 * 24 * 60 * 60,
@@ -222,8 +220,7 @@ export const appConfig = {
       enabled: true,
       ttl_seconds: 5 * 60,
       cost: 5000,
-      counter_min: 2000,
-      counter_max: 5000
+      counter_range: [2000, 5000]
     },
     log: { level: "WARN", max_size_mb: 10, max_files: 5 }
   } as const

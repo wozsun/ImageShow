@@ -177,7 +177,7 @@ function buildMaintenanceCandidates(
   stagingCutoff: number
 ) {
   const candidates = [...initial];
-  let activeUploadsRetained = 0;
+  let activeStagingObjectsRetained = 0;
 
   for (const { group, backend, snapshot } of groups) {
     const retainedRows = retainedRowsForGroup(rows, group);
@@ -223,7 +223,7 @@ function buildMaintenanceCandidates(
       snapshot._uploads.keys.toSorted(),
       activeSessions
     );
-    activeUploadsRetained += staging.active.length;
+    activeStagingObjectsRetained += staging.active.length;
     const activePreparedKeys = new Set(
       [...activeSessions.values()].flatMap((session) => [
         session.prepared_image_key,
@@ -244,7 +244,7 @@ function buildMaintenanceCandidates(
         acceptedIdentity?.local_atomic_candidate
         && activePreparedKeys.has(acceptedIdentity.base_key)
       ) {
-        activeUploadsRetained += 1;
+        activeStagingObjectsRetained += 1;
       } else if (!acceptedIdentity) {
         candidates.push({
           kind: "result",
@@ -273,7 +273,7 @@ function buildMaintenanceCandidates(
       }
     }
   }
-  return { candidates, activeUploadsRetained };
+  return { candidates, activeStagingObjectsRetained };
 }
 
 export async function buildStorageMaintenancePlan(
@@ -281,7 +281,7 @@ export async function buildStorageMaintenancePlan(
   now = Date.now()
 ) {
   signal.throwIfAborted();
-  const [rowsResult, importReferences, groups] = await Promise.all([
+  const [rowsResult, ingestionReferences, groups] = await Promise.all([
     pool.query<MaintenanceImage>(maintenanceRowsQuery),
     activeIngestionStorageReferences({ signal }),
     storageBackendGroups()
@@ -291,13 +291,13 @@ export async function buildStorageMaintenancePlan(
   signal.throwIfAborted();
   const built = buildMaintenanceCandidates(
     rowsResult.rows,
-    importReferences.sessionsByBackend,
+    ingestionReferences.sessionsByBackend,
     capture.captured,
     capture.candidates,
     ingestionOrphanCutoffs(now).stagingCutoff
   );
   return {
-    activeUploadsRetained: built.activeUploadsRetained,
+    activeStagingObjectsRetained: built.activeStagingObjectsRetained,
     candidates: built.candidates,
     capturedGroups: capture.captured
   };

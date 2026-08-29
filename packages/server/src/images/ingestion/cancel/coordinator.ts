@@ -21,7 +21,7 @@ import {
   completedIngestionReceipt,
   publishCompletedReceipt
 } from "../commit/completion.ts";
-import { ingestionRetiredCleanupQueue } from "../cleanup/retry-queue.ts";
+import { ingestionCleanupRetryQueue } from "../cleanup/retry-queue.ts";
 import { IngestionIrreversibleCoordinator } from "../execution/irreversible-coordinator.ts";
 import {
   ingestionSessionPairKey as pairKey,
@@ -80,7 +80,7 @@ type CancelIngestionSessionsDependencies = Readonly<{
 
 const defaultDependencies: CancelIngestionSessionsDependencies = {
   readCommitted: readCommittedIngestionResultsByImageIds,
-  scheduleCleanup: (work) => ingestionRetiredCleanupQueue.enqueue(work)
+  scheduleCleanup: (work) => ingestionCleanupRetryQueue.enqueue(work)
 };
 
 const cancelMutationSignal = new AbortController().signal;
@@ -261,10 +261,10 @@ async function cancelLoadedIngestionSessions(
 ) {
   if (!loaded.length) return [];
   const scheduleCleanup = dependencies.scheduleCleanup
-    ?? ((work: () => Promise<void>) => ingestionRetiredCleanupQueue.enqueue(work));
-  const retiredCleanups = new Map<string, IngestionSessionSnapshot>();
-  const scheduleRetiredCleanup = (session: IngestionSessionSnapshot) => {
-    retiredCleanups.set(pairKey(session), session);
+    ?? ((work: () => Promise<void>) => ingestionCleanupRetryQueue.enqueue(work));
+  const sessionsPendingCleanup = new Map<string, IngestionSessionSnapshot>();
+  const rememberSessionForCleanup = (session: IngestionSessionSnapshot) => {
+    sessionsPendingCleanup.set(pairKey(session), session);
   };
   const items = loaded.map(({ input }) => input);
   const sessions = loaded.map(({ session }) => session);
@@ -422,14 +422,14 @@ async function cancelLoadedIngestionSessions(
                 options.expiryCutoff
               );
               if (cleanup) {
-                scheduleRetiredCleanup(cleanup);
+                rememberSessionForCleanup(cleanup);
               }
             } else if (options.expiryCutoff === undefined) {
               abortActiveBestEffort(pair, abortActive);
               const cleanup = matchingActiveSession(current, pair)
                 ?? matchingActiveSession(initial, pair);
               if (cleanup) {
-                scheduleRetiredCleanup(cleanup);
+                rememberSessionForCleanup(cleanup);
               }
               await retireCompletedSession(repository, current ?? initial, pair);
             }
@@ -466,7 +466,7 @@ async function cancelLoadedIngestionSessions(
           continue;
         }
         if (outcome.result.value.status === "completed") {
-          scheduleRetiredCleanup(outcome.result.value.cleanup);
+          rememberSessionForCleanup(outcome.result.value.cleanup);
           if (options.expiryCutoff === undefined) {
             abortActiveBestEffort(pair, abortActive);
             await retireCompletedSession(repository, initial, pair);
@@ -476,7 +476,7 @@ async function cancelLoadedIngestionSessions(
           }
           results.push(completedCancelResult(pair, committedResult));
         } else {
-          scheduleRetiredCleanup(outcome.result.value.cleanup);
+          rememberSessionForCleanup(outcome.result.value.cleanup);
           results.push({ ...pair, status: "discarded" });
         }
         continue;
@@ -491,13 +491,13 @@ async function cancelLoadedIngestionSessions(
           );
           if (cleanup) {
             abortActiveBestEffort(pair, abortActive);
-            scheduleRetiredCleanup(cleanup);
+            rememberSessionForCleanup(cleanup);
           }
         } else if (options.expiryCutoff === undefined) {
           abortActiveBestEffort(pair, abortActive);
           const cleanup = matchingActiveSession(initial, pair);
           if (cleanup) {
-            scheduleRetiredCleanup(cleanup);
+            rememberSessionForCleanup(cleanup);
           }
           await retireCompletedSession(repository, initial, pair);
         }
@@ -540,12 +540,12 @@ async function cancelLoadedIngestionSessions(
       results.push(cancelFailure(pair, error));
     }
   }
-  const cleanupPlans = [...retiredCleanups.values()];
+  const retiredSessions = [...sessionsPendingCleanup.values()];
   // The commit path installs a persistent move.cleanup guard before copying
   // any formal media/thumb candidate. Cancellation only needs best-effort
   // cleanup for disposable raw and staging material here.
-  if (cleanupPlans.length) {
-    await scheduleCleanup(() => cleanupRetiredSessions(cleanupPlans));
+  if (retiredSessions.length) {
+    await scheduleCleanup(() => cleanupRetiredSessions(retiredSessions));
   }
   return results;
 }

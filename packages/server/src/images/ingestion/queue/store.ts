@@ -367,7 +367,7 @@ async function discoverIngestionSessions(
 
 export function discoverRunnableIngestionSessions(
   run: IngestionSessionCommandRunner,
-  limit = appConfig.ingestionRuntime.recoveryScanBatchSize
+  limit = appConfig.ingestionRuntime.ingestionSessionScanBatchSize
 ) {
   return discoverIngestionSessions(
     run,
@@ -375,7 +375,7 @@ export function discoverRunnableIngestionSessions(
     "runnable",
     0,
     limit,
-    appConfig.ingestionRuntime.recoveryScanBatchSize,
+    appConfig.ingestionRuntime.ingestionSessionScanBatchSize,
     0
   );
 }
@@ -384,7 +384,7 @@ export function discoverRunnableIngestionSessionPage(
   run: IngestionSessionCommandRunner,
   cursorScore: number,
   frozenTailScore: number,
-  limit = appConfig.ingestionRuntime.recoveryScanBatchSize
+  limit = appConfig.ingestionRuntime.ingestionSessionScanBatchSize
 ) {
   return discoverIngestionSessionPage(
     run,
@@ -392,7 +392,7 @@ export function discoverRunnableIngestionSessionPage(
     "runnable",
     cursorScore,
     limit,
-    appConfig.ingestionRuntime.recoveryScanBatchSize,
+    appConfig.ingestionRuntime.ingestionSessionScanBatchSize,
     frozenTailScore
   );
 }
@@ -415,7 +415,7 @@ export function discoverExpiredIngestionSessions(
 export function discoverExpiryIngestionSessionPage(
   run: IngestionSessionCommandRunner,
   offset: number,
-  limit = appConfig.ingestionRuntime.recoveryScanBatchSize
+  limit = appConfig.ingestionRuntime.ingestionSessionScanBatchSize
 ) {
   return discoverIngestionSessionPage(
     run,
@@ -423,6 +423,6 @@ export function discoverExpiryIngestionSessionPage(
     "all",
     offset,
     limit,
-    appConfig.ingestionRuntime.recoveryScanBatchSize
+    appConfig.ingestionRuntime.ingestionSessionScanBatchSize
   );
 }

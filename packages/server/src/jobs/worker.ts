@@ -1,6 +1,6 @@
 import { appConfig } from "@imageshow/shared";
-import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { logger } from "../core/logger.ts";
+import { STORAGE_OBJECT_REMOVAL_CONCURRENCY } from "../storage/objects/removal-admission.ts";
 import {
   handleBackgroundJob,
   type BackgroundJobOutcome
@@ -28,10 +28,12 @@ let lastStaleRecovery = 0;
 let lastHistoryCleanup = 0;
 
 function jobTypeConcurrency(type: BackgroundJobType): number {
-  const config = getRuntimeConfig();
   switch (type) {
     case "move.cleanup":
-      return config.background_job.move_cleanup_concurrency;
+      // Each job reaches the shared cleanup admission only after taking its
+      // image/storage locks. Match the sole active driver call so queued jobs
+      // do not consume lock connections while waiting behind that admission.
+      return STORAGE_OBJECT_REMOVAL_CONCURRENCY;
     case "trash.purge":
     case "cache.rebuild":
       return 1;

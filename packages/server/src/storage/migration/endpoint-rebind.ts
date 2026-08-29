@@ -73,9 +73,12 @@ function endpointMismatch(reason: string) {
 }
 
 async function removeChallengeObject(driver: StorageDriver, key: string) {
-  await driver.remove("_uploads", key);
-  if (await driver.exists("_uploads", key)) {
-    throw new Error(`Endpoint rebind probe still exists: ${key}`);
+  const [result] = await driver.removeObjects([{
+    prefix: "_uploads",
+    key
+  }]);
+  if (result?.status === "failed" || result?.status === "unknown") {
+    throw new Error(result.error.message);
   }
 }
 

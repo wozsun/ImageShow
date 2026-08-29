@@ -4,6 +4,7 @@
     ".": {
       "entry": ["tests/final-*.test.ts"],
       "ignoreDependencies": [
+        "@aws-sdk/client-s3",
         "@tanstack/react-query",
         "hono",
         "ipaddr.js",

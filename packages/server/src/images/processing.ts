@@ -2,8 +2,9 @@ import { createHash } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import sharp from "sharp";
 import { ApiError } from "../core/api-error.ts";
-import { getRuntimeConfig } from "../config/runtime-config-store.ts";
-import { getInputImageMaxLongEdge, getThumbnailSettings } from "../config/app-settings.ts";
+import { getIngestionMaxLongEdge, getThumbnailSettings } from "../config/app-settings.ts";
+
+const SHARP_THREADS_PER_IMAGE = 1;
 
 export function configureSharpRuntime() {
   // Sharp/libvips otherwise keeps recently-opened file descriptors in its
@@ -12,7 +13,7 @@ export function configureSharpRuntime() {
   // immutable and already cached at higher layers, so descriptor caching has
   // no ownership benefit here.
   sharp.cache({ files: 0 });
-  sharp.concurrency(Math.max(1, getRuntimeConfig().upload.concurrency));
+  sharp.concurrency(SHARP_THREADS_PER_IMAGE);
 }
 
 type ImageInput = Buffer | string;
@@ -76,7 +77,7 @@ async function storedImageMetadata(path: string): Promise<StoredImageMetadata> {
   const rawWidth = metadata.width;
   const rawHeight = metadata.height;
   const longEdge = Math.max(rawWidth, rawHeight);
-  const limit = getInputImageMaxLongEdge();
+  const limit = getIngestionMaxLongEdge();
   if (
     !Number.isSafeInteger(rawWidth)
     || !Number.isSafeInteger(rawHeight)
