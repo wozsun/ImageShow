@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   IngestionQueueActionResultDto,
+  IngestionQueueSummaryDto,
   IngestionSessionPairDto
 } from "@imageshow/shared/browser";
 import type { IngestionJob } from "../../../../lib/types.js";
@@ -146,6 +147,8 @@ export function useIngestionQueueWorkflowActions({
       id: string;
       attemptKey: string;
       pair: IngestionSessionPairDto;
+      releasedRevision?: number;
+      releasedSummary?: IngestionQueueSummaryDto;
     }> = [];
     for (const target of cancellationTargets) {
       const current = queue.jobsRef.current.find((job) => job.id === target.id);
@@ -159,7 +162,13 @@ export function useIngestionQueueWorkflowActions({
           resolvedServerTargets.push({
             id: target.id,
             attemptKey: target.attemptKey,
-            pair: outcome.pair
+            pair: outcome.pair,
+            ...(outcome.releasedRevision !== undefined
+              ? { releasedRevision: outcome.releasedRevision }
+              : {}),
+            ...(outcome.releasedSummary
+              ? { releasedSummary: outcome.releasedSummary }
+              : {})
           });
         } else if (current) {
           cancelledIds.add(target.id);
@@ -196,11 +205,13 @@ export function useIngestionQueueWorkflowActions({
   ) => {
     if (!local.unresolved.length) return local;
     const serverResults = new Map((server?.items ?? []).map((item) => (
-      [serverIngestionPairKey(item), item.status] as const
+      [serverIngestionPairKey(item), item] as const
     )));
     const releaseTargets: Array<Readonly<{
       item: UnresolvedLocalClear;
       pair: IngestionSessionPairDto;
+      releasedRevision?: number;
+      releasedSummary?: IngestionQueueSummaryDto;
     }>> = [];
     const unresolved: UnresolvedLocalClear[] = [];
     for (const item of local.unresolved) {
@@ -210,14 +221,26 @@ export function useIngestionQueueWorkflowActions({
         continue;
       }
       const outcomePair = item.outcome?.pair;
-      const serverStatus = outcomePair
+      const serverResult = outcomePair
         ? serverResults.get(serverIngestionPairKey(outcomePair))
         : undefined;
+      const serverStatus = serverResult?.status;
       if (
         outcomePair
         && (serverStatus === "changed" || serverStatus === "unchanged")
       ) {
-        releaseTargets.push({ item, pair: outcomePair });
+        releaseTargets.push({
+          item,
+          pair: outcomePair,
+          ...(serverResult?.queue_revision !== undefined
+            ? { releasedRevision: serverResult.queue_revision }
+            : item.outcome?.releasedRevision !== undefined
+              ? { releasedRevision: item.outcome.releasedRevision }
+              : {}),
+          ...(item.outcome?.releasedSummary
+            ? { releasedSummary: item.outcome.releasedSummary }
+            : {})
+        });
         continue;
       }
       if (serverStatus === "skipped" || serverStatus === "failed") {
@@ -233,16 +256,27 @@ export function useIngestionQueueWorkflowActions({
         && server !== null
         && frozenAction?.action === "clear_queue";
       if (coveredBySuccessfulClear) {
-        releaseTargets.push({ item, pair: outcomePair });
+        releaseTargets.push({
+          item,
+          pair: outcomePair,
+          ...(item.outcome?.releasedRevision !== undefined
+            ? { releasedRevision: item.outcome.releasedRevision }
+            : {}),
+          ...(item.outcome?.releasedSummary
+            ? { releasedSummary: item.outcome.releasedSummary }
+            : {})
+        });
       } else {
         unresolved.push(item);
       }
     }
     const released = queue.releaseResolvedServerJobs(releaseTargets.map(
-      ({ item, pair }) => ({
+      ({ item, pair, releasedRevision, releasedSummary }) => ({
         id: item.id,
         attemptKey: item.attemptKey,
-        pair
+        pair,
+        ...(releasedRevision !== undefined ? { releasedRevision } : {}),
+        ...(releasedSummary ? { releasedSummary } : {})
       })
     ));
     for (const target of releaseTargets) {

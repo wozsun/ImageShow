@@ -48,6 +48,7 @@ type CancelBoundaryValue =
   | Readonly<{
     status: "discarded";
     cleanup: IngestionSessionSnapshot;
+    queueRevision: number;
   }>;
 
 type CancelBoundaryResult =
@@ -321,19 +322,22 @@ async function cancelLoadedIngestionSessions(
               };
             }
             const receipt = discardedIngestionReceipt(active, Date.now());
+            let queueRevision: number;
             if (options.expiryCutoff === undefined) {
-              await repository.mutateSemantic(
+              const mutation = await repository.mutateSemantic(
                 active,
                 active.version,
                 receipt
               );
+              queueRevision = mutation.metadata.revision;
             } else {
-              await repository.expireSession(
+              const mutation = await repository.expireSession(
                 active,
                 active.version,
                 options.expiryCutoff,
                 receipt
               );
+              queueRevision = mutation.metadata.revision;
             }
             // Abort only after a known successful CAS. If the Redis response
             // is unknown, the execution token remains the durable fence and
@@ -341,7 +345,8 @@ async function cancelLoadedIngestionSessions(
             abortActiveBestEffort(pair, abortActive);
             return {
               status: "discarded" as const,
-              cleanup: active
+              cleanup: active,
+              queueRevision
             };
           }
         );
@@ -477,7 +482,11 @@ async function cancelLoadedIngestionSessions(
           results.push(completedCancelResult(pair, committedResult));
         } else {
           rememberSessionForCleanup(outcome.result.value.cleanup);
-          results.push({ ...pair, status: "discarded" });
+          results.push({
+            ...pair,
+            status: "discarded",
+            queue_revision: outcome.result.value.queueRevision
+          });
         }
         continue;
       }
@@ -527,7 +536,11 @@ async function cancelLoadedIngestionSessions(
         );
       }
       if (initial.status === "discarded") {
-        results.push({ ...pair, status: "discarded" });
+        results.push({
+          ...pair,
+          status: "discarded",
+          queue_revision: initial.last_semantic_revision
+        });
         continue;
       }
       if (initial.version !== input.expected_version) {

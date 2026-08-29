@@ -512,7 +512,13 @@ export function useImport(options: {
         const released = queue.releaseResolvedServerJobs([{
           id: current.id,
           attemptKey: current.attemptKey,
-          pair: outcome.pair
+          pair: outcome.pair,
+          ...(outcome.releasedRevision !== undefined
+            ? { releasedRevision: outcome.releasedRevision }
+            : {}),
+          ...(outcome.releasedSummary
+            ? { releasedSummary: outcome.releasedSummary }
+            : {})
         }]);
         if (!released.has(current.id)) {
           void queue.server.recoverAuthority().catch(() => undefined);

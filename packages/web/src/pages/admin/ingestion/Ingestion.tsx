@@ -182,7 +182,13 @@ export function Ingestion({
       const released = queue.releaseResolvedServerJobs([{
         id: job.id,
         attemptKey: job.attemptKey,
-        pair: outcome.pair
+        pair: outcome.pair,
+        ...(outcome.releasedRevision !== undefined
+          ? { releasedRevision: outcome.releasedRevision }
+          : {}),
+        ...(outcome.releasedSummary
+          ? { releasedSummary: outcome.releasedSummary }
+          : {})
       }]);
       if (!released.has(job.id)) {
         void queue.server.recoverAuthority().catch(() => undefined);

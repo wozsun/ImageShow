@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ingestionBatchHardLimit,
   ingestionQueueSnapshotMaxItems,
+  type ServerIngestionItemDto,
   type IngestionQueueSummaryDto,
   type IngestionQueueTypeDto,
   type IngestionSessionPairDto
@@ -57,6 +58,7 @@ function ingestionPairBelongsToSession(pairKey: string, sessionId: string) {
 type StableServerQueueSummary = Readonly<{
   connectionGeneration: number;
   lastAcceptedOrder: number;
+  revision: number;
   summary: IngestionQueueSummaryDto;
 }>;
 
@@ -64,7 +66,14 @@ type ResolvedServerJobTarget = Readonly<{
   id: string;
   attemptKey: string;
   pair: IngestionSessionPairDto;
+  releasedRevision?: number;
+  releasedSummary?: IngestionQueueSummaryDto;
 }>;
+
+type FailedResolvedReleaseRecovery = {
+  target: ResolvedServerJobTarget;
+  observedNonReady: boolean;
+};
 
 function ingestionJobMatchesResolvedServerTarget(
   job: IngestionJob,
@@ -76,6 +85,138 @@ function ingestionJobMatchesResolvedServerTarget(
   if (job.id === target.id && job.attemptKey === target.attemptKey) return true;
   return ingestionJobHasServerAuthority(job)
     && job.serverAttemptKey === target.attemptKey;
+}
+
+function serverItemSummary(
+  item: ServerIngestionItemDto
+): IngestionQueueSummaryDto {
+  const completed = item.status === "completed";
+  const duplicatePending = item.status === "ready"
+    && Boolean(item.prepared?.duplicate_count)
+    && !item.duplicate_decision;
+  return {
+    total: 1,
+    unfinished: completed ? 0 : 1,
+    waiting: ["queued", "received"].includes(item.status) ? 1 : 0,
+    running: ["downloading", "preparing"].includes(item.status) ? 1 : 0,
+    ready: item.status === "ready" && !duplicatePending ? 1 : 0,
+    duplicate_pending: duplicatePending ? 1 : 0,
+    committing: item.status === "committing" ? 1 : 0,
+    resolving: item.status === "resolving" ? 1 : 0,
+    completed: completed ? 1 : 0,
+    failed: item.status === "failed" ? 1 : 0
+  };
+}
+
+function withoutReleasedServerSummaries(
+  summary: IngestionQueueSummaryDto,
+  releasedSummaries: readonly IngestionQueueSummaryDto[]
+): IngestionQueueSummaryDto {
+  if (!releasedSummaries.length) return summary;
+  const released = releasedSummaries.reduce<IngestionQueueSummaryDto>(
+    (counts, item) => ({
+      total: counts.total + item.total,
+      unfinished: counts.unfinished + item.unfinished,
+      waiting: counts.waiting + item.waiting,
+      running: counts.running + item.running,
+      ready: counts.ready + item.ready,
+      duplicate_pending: counts.duplicate_pending + item.duplicate_pending,
+      committing: counts.committing + item.committing,
+      resolving: counts.resolving + item.resolving,
+      completed: counts.completed + item.completed,
+      failed: counts.failed + item.failed
+    }), {
+      total: 0,
+      unfinished: 0,
+      waiting: 0,
+      running: 0,
+      ready: 0,
+      duplicate_pending: 0,
+      committing: 0,
+      resolving: 0,
+      completed: 0,
+      failed: 0
+    }
+  );
+  const subtract = (value: number, amount: number) => Math.max(0, value - amount);
+  return {
+    total: subtract(summary.total, released.total),
+    unfinished: subtract(summary.unfinished, released.unfinished),
+    waiting: subtract(summary.waiting, released.waiting),
+    running: subtract(summary.running, released.running),
+    ready: subtract(summary.ready, released.ready),
+    duplicate_pending: subtract(
+      summary.duplicate_pending,
+      released.duplicate_pending
+    ),
+    committing: subtract(summary.committing, released.committing),
+    resolving: subtract(summary.resolving, released.resolving),
+    completed: subtract(summary.completed, released.completed),
+    failed: subtract(summary.failed, released.failed)
+  };
+}
+
+type ResolvedReleaseProjectionContext = Readonly<{
+  hasRetainedServerBaseline: boolean;
+  serverItems: readonly ServerIngestionItemDto[];
+  retainedServerSummary: IngestionQueueSummaryDto | null;
+  retainedServerRevision: number | null;
+  localJobs: readonly IngestionJob[];
+  provisionalSummaryJobs: readonly IngestionJob[];
+}>;
+
+function releasedServerSummariesForTargets(
+  context: Pick<
+    ResolvedReleaseProjectionContext,
+    | "hasRetainedServerBaseline"
+    | "serverItems"
+    | "retainedServerRevision"
+  >,
+  targets: ReadonlyMap<string, ResolvedServerJobTarget>
+) {
+  const snapshotItemsByPair = context.hasRetainedServerBaseline
+    ? new Map(context.serverItems.map((item) => (
+        [serverIngestionPairKey(item), item] as const
+      )))
+    : new Map<string, ServerIngestionItemDto>();
+  return [...targets].flatMap(([pairKey, target]) => {
+    const snapshotItem = snapshotItemsByPair.get(pairKey);
+    if (snapshotItem) return [serverItemSummary(snapshotItem)];
+    return target.releasedSummary
+      && target.releasedRevision !== undefined
+      && context.retainedServerRevision !== null
+      && context.retainedServerRevision < target.releasedRevision
+        ? [target.releasedSummary]
+        : [];
+  });
+}
+
+function projectedTotalAfterResolvedRelease(
+  context: ResolvedReleaseProjectionContext,
+  currentTargets: ReadonlyMap<string, ResolvedServerJobTarget>,
+  releasedTargets: ReadonlyMap<string, ResolvedServerJobTarget>
+) {
+  const projectedTargets = new Map(currentTargets);
+  for (const [pairKey, target] of releasedTargets) {
+    projectedTargets.set(pairKey, target);
+  }
+  const projectedServerSummary = context.retainedServerSummary
+    ? withoutReleasedServerSummaries(
+        context.retainedServerSummary,
+        releasedServerSummariesForTargets(context, projectedTargets)
+      )
+    : null;
+  const retainedLocalJobs = context.localJobs.filter((job) => {
+    const target = projectedTargets.get(serverIngestionJobPairKey(job));
+    return !target || !ingestionJobMatchesResolvedServerTarget(job, target);
+  });
+  const retainedProvisionalJobs = context.provisionalSummaryJobs.filter((job) => {
+    const target = projectedTargets.get(serverIngestionJobPairKey(job));
+    return !target || !ingestionJobMatchesResolvedServerTarget(job, target);
+  });
+  return retainedLocalJobs.length
+    + retainedProvisionalJobs.length
+    + (projectedServerSummary?.total ?? 0);
 }
 
 export function useIngestionQueue(
@@ -95,6 +236,7 @@ export function useIngestionQueue(
   } | null>(null);
   const [statusRetryEpoch, setStatusRetryEpoch] = useState(0);
   const [handoffEpoch, setHandoffEpoch] = useState(0);
+  const [resolvedReleaseEpoch, setResolvedReleaseEpoch] = useState(0);
   const stateRef = useRef(state);
   const jobsRef = useRef(state.jobs);
   const handoffJobsRef = useRef(new Map<string, IngestionJob>());
@@ -105,6 +247,12 @@ export function useIngestionQueue(
     new Map<string, HandoffRetryGate>()
   );
   const completedHandoffPairsRef = useRef(new Set<string>());
+  const resolvedReleaseTargetsRef = useRef(
+    new Map<string, ResolvedServerJobTarget>()
+  );
+  const failedResolvedReleaseRecoveriesRef = useRef(
+    new Map<string, FailedResolvedReleaseRecovery>()
+  );
   const handledStaleSnapshotRef = useRef("");
   const actionConnectionHoldRef = useRef(false);
   const lastReadyGenerationRef = useRef(0);
@@ -169,11 +317,13 @@ export function useIngestionQueue(
   if (
     server.status === "ready"
     && server.summary
+    && server.revision !== null
     && server.lastAcceptedOrder !== null
   ) {
     lastStableServerSummaryRef.current = {
       connectionGeneration: server.connectionGeneration,
       lastAcceptedOrder: server.lastAcceptedOrder,
+      revision: server.revision,
       summary: server.summary
     };
   }
@@ -194,12 +344,26 @@ export function useIngestionQueue(
     observeCompletedIngestions,
     recoverAuthSession
   );
+  const releasedTargets = useMemo(
+    () => [...resolvedReleaseTargetsRef.current.entries()],
+    [resolvedReleaseEpoch]
+  );
+  const releasedPairKeys = useMemo(
+    () => new Set(releasedTargets.map(([pairKey]) => pairKey)),
+    [releasedTargets]
+  );
   const currentServerJobs = useMemo(
     () => state.jobs.filter(ingestionJobHasServerAuthority),
     [state.jobs]
   );
   const availableServerJobs = currentServerJobs;
-  const snapshotItems = hasRetainedServerBaseline ? server.items : [];
+  const snapshotItems = useMemo(() => (
+    hasRetainedServerBaseline
+      ? server.items.filter((item) => (
+          !releasedPairKeys.has(serverIngestionPairKey(item))
+        ))
+      : []
+  ), [hasRetainedServerBaseline, releasedPairKeys, server.items]);
   const snapshotPairs = new Set(snapshotItems.map(serverIngestionPairKey));
   const visibleHandoffPairs = new Set(availableServerJobs.flatMap((job) => {
     const pairKey = serverIngestionJobPairKey(job);
@@ -248,19 +412,59 @@ export function useIngestionQueue(
       gate.connectionGeneration === server.connectionGeneration
       && gate.mode === "coverage"
     ));
-  const effectiveServerSummary = server.summary ?? (
-    server.status === "loading" && (
-      hasCurrentCoverageGate || provisionalSummaryJobs.length > 0
-    )
+  const retainsResolvedReleaseProjection = releasedTargets.length > 0
+    && lastStableServerSummaryRef.current?.connectionGeneration
+      === server.connectionGeneration
+    && (server.status === "loading" || server.status === "error");
+  const retainsLastStableServerSummary = (
+    server.status === "loading"
+    && (hasCurrentCoverageGate || provisionalSummaryJobs.length > 0)
+  ) || retainsResolvedReleaseProjection;
+  const retainedServerSummary = server.summary ?? (
+    retainsLastStableServerSummary
       ? lastStableServerSummaryRef.current?.summary ?? null
       : null
   );
+  const retainedServerRevision = server.summary !== null
+    ? server.revision
+    : retainsLastStableServerSummary
+      ? lastStableServerSummaryRef.current?.revision ?? null
+      : null;
+  const releasedSummaries = releasedServerSummariesForTargets({
+    hasRetainedServerBaseline,
+    serverItems: server.items,
+    retainedServerRevision
+  }, new Map(releasedTargets));
+  const effectiveServerSummary = retainedServerSummary
+    ? withoutReleasedServerSummaries(
+        retainedServerSummary,
+        releasedSummaries
+      )
+    : null;
   const serverTotal = effectiveServerSummary?.total ?? 0;
   const totalItems = localJobs.length
     + provisionalSummaryJobs.length
     + serverTotal;
   const totalItemsRef = useRef(totalItems);
   totalItemsRef.current = totalItems;
+  const resolvedReleaseProjectionContextRef = useRef<
+    ResolvedReleaseProjectionContext
+  >({
+    hasRetainedServerBaseline,
+    serverItems: server.items,
+    retainedServerSummary,
+    retainedServerRevision,
+    localJobs,
+    provisionalSummaryJobs
+  });
+  resolvedReleaseProjectionContextRef.current = {
+    hasRetainedServerBaseline,
+    serverItems: server.items,
+    retainedServerSummary,
+    retainedServerRevision,
+    localJobs,
+    provisionalSummaryJobs
+  };
 
   const dispatch = useCallback((action: IngestionQueueAction) => {
     // 上传/下载是异步并发流程，回调触发时 React state 可能已落后；ref 里同步维护最新队列供所有回调用。
@@ -356,7 +560,47 @@ export function useIngestionQueue(
     detachedProvisionalHandoffsRef.current.clear();
     handoffRetryAfterRevisionRef.current.clear();
     completedHandoffPairsRef.current.clear();
+    resolvedReleaseTargetsRef.current.clear();
+    failedResolvedReleaseRecoveriesRef.current.clear();
   }, []);
+  useEffect(() => {
+    if (server.status === "idle") {
+      if (
+        !resolvedReleaseTargetsRef.current.size
+        && !failedResolvedReleaseRecoveriesRef.current.size
+      ) return;
+      resolvedReleaseTargetsRef.current.clear();
+      failedResolvedReleaseRecoveriesRef.current.clear();
+      setResolvedReleaseEpoch((current) => current + 1);
+      return;
+    }
+    if (server.status !== "ready") {
+      for (const [pairKey, failed] of (
+        failedResolvedReleaseRecoveriesRef.current
+      )) {
+        if (resolvedReleaseTargetsRef.current.get(pairKey) !== failed.target) {
+          failedResolvedReleaseRecoveriesRef.current.delete(pairKey);
+          continue;
+        }
+        failed.observedNonReady = true;
+      }
+      return;
+    }
+    let changed = false;
+    for (const [pairKey, failed] of (
+      failedResolvedReleaseRecoveriesRef.current
+    )) {
+      if (resolvedReleaseTargetsRef.current.get(pairKey) !== failed.target) {
+        failedResolvedReleaseRecoveriesRef.current.delete(pairKey);
+        continue;
+      }
+      if (!failed.observedNonReady) continue;
+      resolvedReleaseTargetsRef.current.delete(pairKey);
+      failedResolvedReleaseRecoveriesRef.current.delete(pairKey);
+      changed = true;
+    }
+    if (changed) setResolvedReleaseEpoch((current) => current + 1);
+  }, [resolvedReleaseEpoch, server.status]);
   useEffect(() => {
     if (server.status !== "ready") return;
     observeCompletedIngestions(server.items.flatMap((item) => (
@@ -530,7 +774,7 @@ export function useIngestionQueue(
     }
     const hydratedHandoffPairs = new Set<string>();
     let retainedServerDisplayItems = 0;
-    const stateServerItems = server.items.filter((item) => {
+    const stateServerItems = snapshotItems.filter((item) => {
       if (acceptedDisplayPairs.has(serverIngestionPairKey(item))) return true;
       if (retainedServerDisplayItems >= serverDisplayLimit) return false;
       retainedServerDisplayItems += 1;
@@ -578,7 +822,7 @@ export function useIngestionQueue(
       }
       return next;
     });
-    for (const item of server.items) {
+    for (const item of snapshotItems) {
       const pairKey = serverIngestionPairKey(item);
       if (stateServerPairs.has(pairKey)) continue;
       if (
@@ -649,7 +893,7 @@ export function useIngestionQueue(
     handoffs.hasExternalPair,
     handoffEpoch,
     server.connectionGeneration,
-    server.items,
+    snapshotItems,
     server.revision,
     server.staleItems,
     server.status,
@@ -659,7 +903,7 @@ export function useIngestionQueue(
 
   useEffect(() => {
     if (server.status !== "ready") return;
-    const snapshotPairs = new Set(server.items.map(serverIngestionPairKey));
+    const snapshotPairs = new Set(snapshotItems.map(serverIngestionPairKey));
     const staleVisibleHandoffs = currentServerJobs.filter((job) => (
       job.serverHandoffDisplayPage !== undefined
       && !ingestionJobHasBrowserDisplayOrder(job)
@@ -673,13 +917,13 @@ export function useIngestionQueue(
       type: "replace-server-page",
       jobs: currentServerJobs.filter((job) => !staleIds.has(job.id))
     });
-  }, [currentServerJobs, dispatch, server.items, server.status]);
+  }, [currentServerJobs, dispatch, snapshotItems, server.status]);
 
   useEffect(() => {
     if (server.status !== "ready" || server.revision === null) return;
     let retry = false;
     const coveredExternalPairs = new Set<string>();
-    const snapshotPairs = new Set(server.items.map(serverIngestionPairKey));
+    const snapshotPairs = new Set(snapshotItems.map(serverIngestionPairKey));
     for (const [pairKey, gate] of handoffRetryAfterRevisionRef.current) {
       if (gate.connectionGeneration !== server.connectionGeneration) {
         handoffRetryAfterRevisionRef.current.delete(pairKey);
@@ -730,7 +974,7 @@ export function useIngestionQueue(
     handoffEpoch,
     handoffs.resolveExternalStatuses,
     server.connectionGeneration,
-    server.items,
+    snapshotItems,
     server.revision,
     server.status
   ]);
@@ -1133,9 +1377,21 @@ export function useIngestionQueue(
         || !candidates.size && pairHasIdentityFreeOwner
       ) continue;
       resolved.add(target.id);
-      if (candidates.size) releasedPairs.set(pairKey, target);
+      releasedPairs.set(pairKey, target);
     }
     if (!releasedPairs.size) return resolved;
+
+    const projectedTotalItems = projectedTotalAfterResolvedRelease(
+      resolvedReleaseProjectionContextRef.current,
+      resolvedReleaseTargetsRef.current,
+      releasedPairs
+    );
+
+    const recoveryTargets = new Map(releasedPairs);
+    for (const [pairKey, target] of releasedPairs) {
+      resolvedReleaseTargetsRef.current.set(pairKey, target);
+      failedResolvedReleaseRecoveriesRef.current.delete(pairKey);
+    }
 
     const removedStateTargets = new Map<string, {
       attemptKey: string;
@@ -1162,17 +1418,46 @@ export function useIngestionQueue(
       completedHandoffPairsRef.current.delete(pairKey);
     }
     handoffs.resolvePairs(new Set(releasedPairs.keys()));
-    if (removedStateTargets.size) {
-      dispatch({
-        type: "release-resolved",
-        targets: removedStateTargets,
-        pageSize,
-        totalItems: totalItemsRef.current
-      });
-    }
+    dispatch({
+      type: "release-resolved",
+      targets: removedStateTargets,
+      pageSize,
+      projectedTotalItems
+    });
     setHandoffEpoch((current) => current + 1);
+    setResolvedReleaseEpoch((current) => current + 1);
+    void server.recoverAuthority().then(() => {
+      let changed = false;
+      for (const [pairKey, target] of recoveryTargets) {
+        if (resolvedReleaseTargetsRef.current.get(pairKey) !== target) continue;
+        resolvedReleaseTargetsRef.current.delete(pairKey);
+        const failed = failedResolvedReleaseRecoveriesRef.current.get(pairKey);
+        if (failed?.target === target) {
+          failedResolvedReleaseRecoveriesRef.current.delete(pairKey);
+        }
+        changed = true;
+      }
+      if (changed) setResolvedReleaseEpoch((current) => current + 1);
+    }).catch(() => {
+      let changed = false;
+      for (const [pairKey, target] of recoveryTargets) {
+        if (resolvedReleaseTargetsRef.current.get(pairKey) !== target) continue;
+        failedResolvedReleaseRecoveriesRef.current.set(pairKey, {
+          target,
+          observedNonReady: false
+        });
+        changed = true;
+      }
+      if (changed) setResolvedReleaseEpoch((current) => current + 1);
+    });
     return resolved;
-  }, [dispatch, handoffs.hasPair, handoffs.resolvePairs, pageSize]);
+  }, [
+    dispatch,
+    handoffs.hasPair,
+    handoffs.resolvePairs,
+    pageSize,
+    server.recoverAuthority
+  ]);
 
   const totalPages = ingestionQueuePageCount(totalItems, pageSize);
   const visibleJobs = useMemo(

@@ -85,7 +85,7 @@ export type IngestionQueueAction =
         pairKey: string;
       }>>;
       pageSize: number;
-      totalItems?: number;
+      projectedTotalItems: number;
     }
   | {
       type: "apply-defaults";
@@ -671,18 +671,22 @@ export function reduceIngestionQueue(
       );
     }
     case "release-resolved": {
-      const removable = new Set(state.jobs.filter((job) => {
+      const jobs = state.jobs.filter((job) => {
         const target = action.targets.get(job.id);
-        return target !== undefined
+        const remove = target !== undefined
           && job.attemptKey === target.attemptKey
           && serverIngestionJobPairKey(job) === target.pairKey;
-      }).map((job) => job.id));
-      return removeQueueJobIds(
-        state,
-        removable,
-        action.pageSize,
-        action.totalItems
+        return !remove;
+      });
+      const page = Math.min(
+        state.page,
+        ingestionQueuePageCount(
+          action.projectedTotalItems,
+          action.pageSize
+        )
       );
+      if (jobs.length === state.jobs.length && page === state.page) return state;
+      return { jobs, page };
     }
     case "apply-defaults": {
       const jobs = mapJobsWithIdentity(

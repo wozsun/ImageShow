@@ -447,7 +447,7 @@ export type IngestionCancelInputDto = {
 };
 
 export type IngestionCancelItemResultDto = IngestionSessionPairDto & (
-  | { status: "discarded" }
+  | { status: "discarded"; queue_revision: number }
   | { status: "resolving" }
   | { status: "completed"; completed_item: AdminImageListItemDto }
   | { status: "failed"; code?: string; message?: string }
@@ -484,6 +484,7 @@ export type IngestionQueueActionResultDto = {
   continuation?: string;
   items: Array<IngestionSessionPairDto & {
     status: "changed" | "unchanged" | "skipped" | "failed";
+    queue_revision?: number;
     code?: string;
     message?: string;
     completed_item?: AdminImageListItemDto;

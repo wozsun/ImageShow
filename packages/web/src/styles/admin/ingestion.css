@@ -382,6 +382,8 @@ button.ingestion-empty-state.upload-dropzone:not(:disabled):hover,
     grid-column: 1;
     grid-row: 1;
     min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
     font-size: 21px;
   }
   .ingestion-window-header p {
@@ -463,18 +465,6 @@ button.ingestion-empty-state.upload-dropzone:not(:disabled):hover,
   .import-source-actions { align-items: stretch; flex-direction: column; }
   .import-source-action-buttons { width: 100%; margin-left: 0; }
   .import-source-action-buttons button { flex: 1; min-height: 44px; }
-}
-
-/* 窄屏无法在右侧两个操作列旁容纳完整的两行摘要；摘要独占第三行，
-   使两段统计仍各保持一行且不会被固定高度裁切。 */
-@media (max-width: 480px) {
-  .ingestion-window > header.ingestion-window-header {
-    grid-template-rows: auto auto auto;
-  }
-  .ingestion-window-header p {
-    grid-column: 1 / -1;
-    grid-row: 3;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

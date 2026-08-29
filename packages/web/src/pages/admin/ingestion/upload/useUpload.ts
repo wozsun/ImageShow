@@ -629,7 +629,13 @@ export function useUpload(options: {
           const released = queue.releaseResolvedServerJobs([{
             id: current.id,
             attemptKey: current.attemptKey,
-            pair: cancelled.pair
+            pair: cancelled.pair,
+            ...(cancelled.releasedRevision !== undefined
+              ? { releasedRevision: cancelled.releasedRevision }
+              : {}),
+            ...(cancelled.releasedSummary
+              ? { releasedSummary: cancelled.releasedSummary }
+              : {})
           }]);
           if (!released.has(current.id)) {
             void queue.server.recoverAuthority().catch(() => undefined);

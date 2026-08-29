@@ -40,11 +40,13 @@ function pair(session: StoredIngestionSession): IngestionSessionPairDto {
 
 function changed(
   session: StoredIngestionSession,
-  completedItem?: ActionItem["completed_item"]
+  completedItem?: ActionItem["completed_item"],
+  queueRevision?: number
 ): ActionItem {
   return {
     ...pair(session),
     status: "changed",
+    ...(queueRevision !== undefined ? { queue_revision: queueRevision } : {}),
     ...(completedItem ? { completed_item: completedItem } : {})
   };
 }
@@ -458,7 +460,10 @@ async function clearQueueAction(input: Readonly<{
       result: IngestionCancelItemResultDto
     ) => {
       if (result.status === "discarded") {
-        results.set(pairKey(session), changed(session));
+        results.set(
+          pairKey(session),
+          changed(session, undefined, result.queue_revision)
+        );
         return;
       }
       if (result.status === "resolving") {

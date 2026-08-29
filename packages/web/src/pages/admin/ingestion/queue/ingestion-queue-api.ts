@@ -1,6 +1,7 @@
 import type { RefObject } from "react";
 import type {
   AdminImageListItemDto,
+  IngestionQueueSummaryDto,
   IngestionSessionPairDto,
   IngestionStatusItemDto
 } from "@imageshow/shared/browser";
@@ -42,6 +43,8 @@ export type IngestionQueueProducerApi = IngestionQueueApi & {
     id: string;
     attemptKey: string;
     pair: IngestionSessionPairDto;
+    releasedRevision?: number;
+    releasedSummary?: IngestionQueueSummaryDto;
   }>[]) => ReadonlySet<string>;
   server: Readonly<{
     recoverAuthority: () => Promise<void>;

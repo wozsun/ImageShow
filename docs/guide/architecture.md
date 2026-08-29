@@ -254,6 +254,12 @@ batch / position 保留整批展示顺序；业务权威逐项立即转交 Serve
 无素材 provisional 投影。跨代 HTTP 结果把该投影重新归属当前 owner generation，并在
 accepted-order 基线覆盖后退出。status 返回更高 revision 而触发 coverage 快照时，最近稳定
 Server summary 会保留到新快照落地，组合总数不会因 canonical 先退出本地计数而短暂减少。
+取消边界返回 `discarded` 时同时返回该次 Redis 语义变更的精确 queue revision；Web 立即按 pair
+过滤旧基线并扣除单项投影。目标不在当前有界 DTO 页时，只有 retained summary 的 revision 仍
+早于该 revision 才使用取消前冻结的单项投影，权威快照追平后不再重复扣减。该成功路径只发起
+一次证明快照；投影使当前页越界时，页码与投影在同一状态提交内先行夹紧，证明快照只使用
+夹紧后的 offset。同代页参数切换期间继续复用最近稳定 summary 承载扣减投影，但不跨 connection
+generation 复用。失败或终态未定的任务继续保留。
 请求发出时的 connection generation 与结果一起进入围栏判断，跨连接响应必须先经批量 status
 核对，不能用旧 revision 快速越过新连接；active DTO 会合并回当前 owner，PG completed 且
 Redis missing 时直接水合完成卡片。该结果另持有独立于页内 DTO 的 semantic revision

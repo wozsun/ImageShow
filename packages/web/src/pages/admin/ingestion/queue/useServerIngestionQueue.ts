@@ -74,6 +74,7 @@ export function useServerIngestionQueue(input: Readonly<{
   const [view, setView] = useState<ServerIngestionQueueView>(() => (
     emptyServerIngestionQueueView("idle", 0)
   ));
+  const [authorityRecoveryEpoch, setAuthorityRecoveryEpoch] = useState(0);
   const excludeKey = input.excludeItems.map((item) => (
     `${item.session_id}\0${item.image_id.toLowerCase()}`
   )).join("\u0001");
@@ -99,6 +100,7 @@ export function useServerIngestionQueue(input: Readonly<{
     (reason?: SnapshotRequestReason) => void
   ) | null>(null);
   const recoverAuthorityRef = useRef<(() => Promise<void>) | null>(null);
+  const flushAuthorityRecoveryRef = useRef<(() => void) | null>(null);
   const ensureRevisionRef = useRef<(
     (revision?: number, connectionGeneration?: number) => boolean
   ) | null>(null);
@@ -112,6 +114,7 @@ export function useServerIngestionQueue(input: Readonly<{
     if (!input.enabled) {
       requestSnapshotRef.current = null;
       recoverAuthorityRef.current = null;
+      flushAuthorityRecoveryRef.current = null;
       setView((current) => emptyServerIngestionQueueView("idle", current.connectionGeneration));
       return;
     }
@@ -147,7 +150,6 @@ export function useServerIngestionQueue(input: Readonly<{
     let snapshotRecoveryAttempt = 0;
     let snapshotRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
     let readySnapshotScheduled = false;
-    let authorityRecoverySnapshotScheduled = false;
     let protocolReconnectAttempt = 0;
     let protocolReconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let authorityRecovery: AuthorityRecovery | null = null;
@@ -646,15 +648,10 @@ export function useServerIngestionQueue(input: Readonly<{
       if (requiredReason) startSnapshot(requiredReason);
     };
     requestSnapshotRef.current = requestSnapshot;
-    const scheduleAuthorityRecoverySnapshot = () => {
-      if (authorityRecoverySnapshotScheduled) return;
-      authorityRecoverySnapshotScheduled = true;
-      queueMicrotask(() => {
-        authorityRecoverySnapshotScheduled = false;
-        if (disposed) return;
-        const reason = nextSnapshotReason();
-        if (reason) startSnapshot(reason);
-      });
+    flushAuthorityRecoveryRef.current = () => {
+      if (disposed) return;
+      const reason = nextSnapshotReason();
+      if (reason) startSnapshot(reason);
     };
     recoverAuthorityRef.current = () => {
       const minimumSnapshotSerial = snapshotSerial + 1;
@@ -690,7 +687,10 @@ export function useServerIngestionQueue(input: Readonly<{
       }
       if (activeSnapshot !== null) immediateSnapshotFollowup = true;
       clearSnapshotRecovery();
-      scheduleAuthorityRecoverySnapshot();
+      // Publish the trigger through React so selection changes from the same
+      // resolved action reach parametersRef before its proof snapshot starts.
+      // The one post-trigger read can then cover both requirements.
+      setAuthorityRecoveryEpoch((current) => current + 1);
       return authorityRecovery.promise;
     };
     ensureRevisionRef.current = (
@@ -949,6 +949,7 @@ export function useServerIngestionQueue(input: Readonly<{
       disposed = true;
       requestSnapshotRef.current = null;
       recoverAuthorityRef.current = null;
+      flushAuthorityRecoveryRef.current = null;
       ensureRevisionRef.current = null;
       failAuthorityRecovery(new Error("内容接入队列连接已关闭"));
       snapshotSerial += 1;
@@ -970,6 +971,10 @@ export function useServerIngestionQueue(input: Readonly<{
   useEffect(() => {
     if (input.displayed) requestSnapshotRef.current?.("refresh");
   }, [input.displayed]);
+
+  useEffect(() => {
+    flushAuthorityRecoveryRef.current?.();
+  }, [authorityRecoveryEpoch]);
 
   const refresh = useCallback(() => {
     requestSnapshotRef.current?.("refresh");

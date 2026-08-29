@@ -2,6 +2,8 @@ import {
   ingestionBatchHardLimit,
   ingestionStatusBatchMaxItems,
   type IngestionCancelItemResultDto,
+  type IngestionQueueSummaryDto,
+  type ServerIngestionStatusDto,
   type IngestionSessionPairDto
 } from "@imageshow/shared/browser";
 import type { IngestionJob } from "../../../../lib/types.js";
@@ -19,13 +21,62 @@ type CancelTarget = Readonly<{
   attemptKey: string;
   pair: IngestionSessionPairDto;
   expectedVersion?: number;
+  releasedSummary?: IngestionQueueSummaryDto;
 }>;
 
 export type IngestionQueueCancelOutcome = Readonly<{
   succeeded: boolean;
   pair?: IngestionSessionPairDto;
   terminal?: "completed" | "resolving";
+  releasedRevision?: number;
+  releasedSummary?: IngestionQueueSummaryDto;
 }>;
+
+function releasedServerStatus(job: IngestionJob): ServerIngestionStatusDto | null {
+  if (job.serverStatus && job.serverStatus !== "missing") {
+    return job.serverStatus;
+  }
+  const statusByClient: Partial<Record<
+    IngestionJob["status"],
+    ServerIngestionStatusDto
+  >> = {
+    queued: "queued",
+    uploading: "received",
+    downloading: "downloading",
+    received: "received",
+    processing: "preparing",
+    ready: "ready",
+    "commit-queued": "ready",
+    committing: "committing",
+    finalized: "resolving",
+    done: "completed",
+    failed: "failed"
+  };
+  return statusByClient[job.status] ?? null;
+}
+
+function releasedSummaryForJob(
+  job: IngestionJob
+): IngestionQueueSummaryDto | undefined {
+  const status = releasedServerStatus(job);
+  if (!status) return undefined;
+  const completed = status === "completed";
+  const duplicatePending = status === "ready"
+    && Boolean(job.duplicateCount || job.duplicates.length)
+    && job.duplicateDecision === "undecided";
+  return {
+    total: 1,
+    unfinished: completed ? 0 : 1,
+    waiting: ["queued", "received"].includes(status) ? 1 : 0,
+    running: ["downloading", "preparing"].includes(status) ? 1 : 0,
+    ready: status === "ready" && !duplicatePending ? 1 : 0,
+    duplicate_pending: duplicatePending ? 1 : 0,
+    committing: status === "committing" ? 1 : 0,
+    resolving: status === "resolving" ? 1 : 0,
+    completed: completed ? 1 : 0,
+    failed: status === "failed" ? 1 : 0
+  };
+}
 
 function pairFor(job: IngestionJob) {
   return job.sessionId && job.imageId
@@ -62,6 +113,9 @@ function applyCancelResult(
   result: IngestionCancelItemResultDto | undefined
 ) {
   const current = currentAttempt(queue, target);
+  const releaseContext = target.releasedSummary
+    ? { releasedSummary: target.releasedSummary }
+    : {};
   if (result?.status === "completed") {
     queue.observeCompletedIngestions([{
       pair: target.pair,
@@ -72,7 +126,12 @@ function applyCancelResult(
     if (current) {
       queue.updateJob(current.id, { status: "cancelled", message: "已取消" });
     }
-    return { succeeded: true, pair: target.pair } satisfies IngestionQueueCancelOutcome;
+    return {
+      succeeded: true,
+      pair: target.pair,
+      releasedRevision: result.queue_revision,
+      ...releaseContext
+    } satisfies IngestionQueueCancelOutcome;
   }
   if (result?.status === "completed" || result?.status === "resolving") {
     if (current) {
@@ -87,7 +146,8 @@ function applyCancelResult(
     return {
       succeeded: false,
       pair: target.pair,
-      terminal: result.status
+      terminal: result.status,
+      ...releaseContext
     } satisfies IngestionQueueCancelOutcome;
   }
   markCancelFailure(
@@ -95,7 +155,11 @@ function applyCancelResult(
     target,
     result?.message || "服务端未确认取消结果"
   );
-  return { succeeded: false, pair: target.pair } satisfies IngestionQueueCancelOutcome;
+  return {
+    succeeded: false,
+    pair: target.pair,
+    ...releaseContext
+  } satisfies IngestionQueueCancelOutcome;
 }
 
 /**
@@ -120,14 +184,23 @@ export async function cancelServerIngestionJobs(
     if (seenAttempts.has(attempt)) continue;
     seenAttempts.add(attempt);
     const jobPair = pairFor(job) ?? undefined;
-    outcomes.set(job.id, { succeeded: false, pair: jobPair });
+    const releasedSummary = releasedSummaryForJob(job);
+    outcomes.set(job.id, {
+      succeeded: false,
+      pair: jobPair,
+      ...(releasedSummary ? { releasedSummary } : {})
+    });
     const mounted = currentAttempt(queue, job);
     const current = mounted ?? (
       options.allowDetached && pairFor(job) ? job : null
     );
     if (!current) continue;
     if (current.status === "cancelled") {
-      outcomes.set(job.id, { succeeded: true, pair: jobPair });
+      outcomes.set(job.id, {
+        succeeded: true,
+        pair: jobPair,
+        ...(releasedSummary ? { releasedSummary } : {})
+      });
       continue;
     }
     if (["done", "finalized"].includes(current.status)) continue;
@@ -157,7 +230,8 @@ export async function cancelServerIngestionJobs(
       id: current.id,
       attemptKey: current.attemptKey,
       pair,
-      expectedVersion: current.serverVersion
+      expectedVersion: current.serverVersion,
+      ...(releasedSummary ? { releasedSummary } : {})
     });
   }
 
