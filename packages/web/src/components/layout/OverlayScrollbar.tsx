@@ -22,6 +22,10 @@ const MIN_HANDLE = 36;
 
 const ENABLE_QUERY = "(hover: hover) and (pointer: fine) and (forced-colors: none)";
 
+function handleTransform(top: number) {
+  return `translateY(${top}px)`;
+}
+
 type OverlayScrollbarProps = {
   targetRef?: RefObject<HTMLElement | null>;
   containerRef?: RefObject<HTMLElement | null>;
@@ -96,17 +100,32 @@ function OverlayScrollbarHandle({
   });
   const [active, setActive] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const handleRef = useRef<HTMLDivElement | null>(null);
   const hideTimer = useRef<number | undefined>(undefined);
+  const activeRef = useRef(false);
   const draggingRef = useRef(false);
   const metricsRef = useRef(metrics);
-  metricsRef.current = metrics;
+
+  const updateActive = (next: boolean) => {
+    if (activeRef.current === next) return;
+    activeRef.current = next;
+    setActive(next);
+  };
 
   const scheduleHide = () => {
     window.clearTimeout(hideTimer.current);
     hideTimer.current = window.setTimeout(() => {
-      if (!draggingRef.current) setActive(false);
+      if (!draggingRef.current) updateActive(false);
     }, HIDE_DELAY);
   };
+
+  useLayoutEffect(() => {
+    if (handleRef.current) {
+      handleRef.current.style.transform = handleTransform(
+        metricsRef.current.top
+      );
+    }
+  });
 
   useEffect(() => {
     const el = targetRef?.current ?? null;
@@ -159,14 +178,39 @@ function OverlayScrollbarHandle({
     const recompute = () => {
       const { viewport, total, scroll, offsetTop, right } = read();
       if (isLocked() || viewport <= 1 || total <= viewport + 1) {
-        setMetrics((current) => (current.visible ? { ...current, visible: false } : current));
+        const current = metricsRef.current;
+        if (!current.visible) return;
+        const next = { ...current, visible: false };
+        metricsRef.current = next;
+        setMetrics(next);
         return;
       }
       // 滚动条手柄高度按可视区域占全文比例计算，并设最小值确保可拖拽。
       const handle = Math.min(viewport, Math.max(MIN_HANDLE, (viewport / total) * viewport));
       const maxScroll = total - viewport;
       const top = offsetTop + (maxScroll > 0 ? (scroll / maxScroll) * (viewport - handle) : 0);
-      setMetrics({ visible: true, top, height: handle, right, trackHeight: viewport });
+      const current = metricsRef.current;
+      const next = {
+        visible: true,
+        top,
+        height: handle,
+        right,
+        trackHeight: viewport
+      };
+      metricsRef.current = next;
+      // 滚动位置是逐帧瞬态值：直接移动手柄，避免把每一帧都提升为 React 根更新；
+      // 可见性、尺寸和拖拽状态仍由 React 持有。
+      if (handleRef.current) {
+        handleRef.current.style.transform = handleTransform(top);
+      }
+      if (
+        current.visible !== next.visible
+        || current.height !== next.height
+        || current.right !== next.right
+        || current.trackHeight !== next.trackHeight
+      ) {
+        setMetrics(next);
+      }
     };
 
     let framePending = false;
@@ -178,7 +222,7 @@ function OverlayScrollbarHandle({
     };
 
     const reveal = () => {
-      setActive(true);
+      updateActive(true);
       scheduleHide();
     };
 
@@ -243,7 +287,7 @@ function OverlayScrollbarHandle({
     draggingRef.current = true;
     window.clearTimeout(hideTimer.current);
     setDragging(true);
-    setActive(true);
+    updateActive(true);
     const onMove = (moveEvent: PointerEvent) => {
       if (travel <= 0) return;
       // 拖动距离按“手柄可移动距离 : 内容可滚动距离”换算，窗口和容器模式共用同一套算法。
@@ -273,8 +317,14 @@ function OverlayScrollbarHandle({
     const placementClass = containerRef ? "is-contained" : "is-floating";
     return (
       <div
+        ref={handleRef}
         className={`overlay-scrollbar-handle ${placementClass} ${toneClass} ${layerClass} ${activeClass} ${draggingClass}`.trim()}
-        style={{ top: metrics.top, height: metrics.height, right: metrics.right }}
+        style={{
+          top: 0,
+          transform: handleTransform(metrics.top),
+          height: metrics.height,
+          right: metrics.right
+        }}
         onPointerDown={onHandlePointerDown}
         aria-hidden="true"
       />
@@ -283,8 +333,13 @@ function OverlayScrollbarHandle({
   return (
     <div className={`overlay-scrollbar ${activeClass}`.trim()} aria-hidden="true">
       <div
+        ref={handleRef}
         className={`overlay-scrollbar-handle ${toneClass} ${layerClass} ${draggingClass}`.trim()}
-        style={{ top: metrics.top, height: metrics.height }}
+        style={{
+          top: 0,
+          transform: handleTransform(metrics.top),
+          height: metrics.height
+        }}
         onPointerDown={onHandlePointerDown}
       />
     </div>

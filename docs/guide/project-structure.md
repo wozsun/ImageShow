@@ -341,6 +341,8 @@ hooks ──► lib
 - `components/` 按稳定 UI 职责保存跨页面组件；`components/image/editor/` 的数量中性
   `1..N` 编辑器把重复图片卡片与 shell 编排分开，trash 模型和 Hook 集中拥有逐项响应
   对账、权威回读、会话成员修剪及查询失效，不把 mutation 收口重新分散到入口页面。
+  `components/layout/OverlayScrollbar.tsx` 统一拥有页面与局部容器滚动条：React 只提交可见性、
+  几何和拖拽状态，逐帧位置以同一手柄 ref 的 transform 更新，不把连续滚动提升为根渲染。
   `components/feedback/DialogLayerPortal.tsx` 是顶层动态视口和嵌套弹窗坐标系的唯一 owner；
   移动图片详情的根层关闭控件继续复用共享 `DirectActivationButton`，不在页面入口复制触控
   关闭分支。
@@ -376,7 +378,7 @@ hooks ──► lib
 - `pages/home/HomePage.tsx` 只编排查询、筛选状态和页面生命周期；首屏、筛选摘要栏
   与候选目录由同目录组件分别维护，首屏控制器只拥有背景与顶层阶段，目录区块单次
   揭示 Hook 就近维护，避免路由组件同时掌握全部首页交互。
-- `pages/gallery/` 就近拥有 cursor / ID 数据窗口、typed-array 瀑布流索引、虚拟窗口、
+- `pages/gallery/` 就近拥有 cursor / ID 数据窗口、typed-array 瀑布流索引、半屏滞回虚拟窗口、
   共享可见性观察器、三级导航状态机、查询级揭示 high-water 与开发统计；跨页面可复用的 DOM
   图片加载、解码和并发调度留在
   `components/image/`，页面层只设置画廊任务的优先级、暂停和驻留边界。无界面的

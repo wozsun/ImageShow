@@ -13,11 +13,7 @@ import {
   type RefObject
 } from "react";
 import { queryKeys } from "../../lib/api/query-keys.js";
-import {
-  galleryDataWindowMaxConcurrentPageLoads,
-  galleryLoadBufferScreens,
-  galleryVirtualOverscanScreens
-} from "../../lib/constants.js";
+import { galleryDataWindowMaxConcurrentPageLoads } from "../../lib/constants.js";
 import {
   isPageScrollLocked,
   pageScrollRestoredEvent
@@ -32,27 +28,13 @@ import {
 import { galleryImagePageQueryOptions } from "./gallery-images-query.js";
 import type { GalleryDataWindowMetrics } from "./gallery-debug-stats.js";
 import type { EditableImageSnapshot } from "../../lib/types.js";
+import {
+  createGalleryRenderViewport,
+  shouldRefreshGalleryRenderViewport
+} from "./gallery-render-viewport.js";
 
 function initialViewport(): GalleryDataWindowViewport {
-  const viewportHeight = Math.max(1, window.innerHeight);
-  return {
-    start: 0,
-    end: viewportHeight * (1 + galleryVirtualOverscanScreens),
-    visibleStart: 0,
-    visibleEnd: viewportHeight,
-    preloadEnd: viewportHeight * (1 + galleryLoadBufferScreens)
-  };
-}
-
-function sameViewport(
-  left: GalleryDataWindowViewport,
-  right: GalleryDataWindowViewport
-) {
-  return Math.abs(left.start - right.start) < 1
-    && Math.abs(left.end - right.end) < 1
-    && Math.abs(left.visibleStart - right.visibleStart) < 1
-    && Math.abs(left.visibleEnd - right.visibleEnd) < 1
-    && Math.abs(left.preloadEnd - right.preloadEnd) < 1;
+  return createGalleryRenderViewport(0, window.innerHeight);
 }
 
 function normalizedError(error: unknown) {
@@ -83,7 +65,6 @@ export function useGalleryDataWindow({
   const [viewport, setViewport] = useState(initialViewport);
   const [requestSlotRevision, setRequestSlotRevision] = useState(0);
   const viewportRef = useRef(viewport);
-  const pinnedImageIdRef = useRef(pinnedImageId);
   const anchorFrameRef = useRef<number | null>(null);
   const pendingAnchorRef = useRef<{ id: string; y: number } | null>(null);
   const activeRequestsRef = useRef(
@@ -95,7 +76,6 @@ export function useGalleryDataWindow({
   } | null>(null);
   const nextRequestPauseTokenRef = useRef(0);
   viewportRef.current = viewport;
-  pinnedImageIdRef.current = pinnedImageId;
 
   const preserveAnchor = useCallback((mutation: () => void) => {
     const currentViewport = viewportRef.current;
@@ -155,19 +135,14 @@ export function useGalleryDataWindow({
       if (!element) return;
       const viewportHeight = Math.max(1, window.innerHeight);
       const visibleStart = Math.max(0, -element.getBoundingClientRect().top);
-      const overscan = viewportHeight * galleryVirtualOverscanScreens;
-      const next = {
-        start: Math.max(0, visibleStart - overscan),
-        end: Math.min(
-          snapshot.totalHeight,
-          visibleStart + viewportHeight + overscan
-        ),
+      if (!shouldRefreshGalleryRenderViewport(
+        viewportRef.current,
         visibleStart,
-        visibleEnd: visibleStart + viewportHeight,
-        preloadEnd: visibleStart
-          + viewportHeight * (1 + galleryLoadBufferScreens)
-      };
-      setViewport((current) => sameViewport(current, next) ? current : next);
+        viewportHeight
+      )) return;
+      const next = createGalleryRenderViewport(visibleStart, viewportHeight);
+      viewportRef.current = next;
+      setViewport(next);
     };
     const schedule = () => {
       if (frame !== undefined) return;
@@ -183,7 +158,7 @@ export function useGalleryDataWindow({
       window.removeEventListener(pageScrollRestoredEvent, schedule);
       if (frame !== undefined) window.cancelAnimationFrame(frame);
     };
-  }, [snapshot.totalHeight, windowRef]);
+  }, [windowRef]);
 
   const fetchPage = useCallback((intent: GalleryPageIntent) => {
     let active = activeRequestsRef.current.get(controller);
