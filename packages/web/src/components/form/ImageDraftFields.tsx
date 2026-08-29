@@ -7,6 +7,27 @@ import { AuthorInput } from "./AuthorInput.js";
 import type { SelectOption } from "../../lib/ui/select-options.js";
 import type { FacetOption, ImageDraft } from "../../lib/types.js";
 
+export type ImageDraftDeferredField =
+  | "title"
+  | "theme"
+  | "author"
+  | "original"
+  | "source"
+  | "description";
+
+type ImageDraftDeferredPlainField = Exclude<
+  ImageDraftDeferredField,
+  "theme" | "author"
+>;
+
+export type ImageDraftDeferredEditing = Readonly<{
+  values: Pick<ImageDraft, ImageDraftDeferredPlainField>;
+  onFocus: (field: ImageDraftDeferredField) => void;
+  onTextChange: (field: ImageDraftDeferredPlainField, value: string) => void;
+  onCommit: (field: ImageDraftDeferredField, value: string) => void;
+  onBlur: (field: ImageDraftDeferredField) => void;
+}>;
+
 export function ImageDraftFields({
   draft,
   onPatch,
@@ -18,7 +39,8 @@ export function ImageDraftFields({
   disabled = false,
   ariaPrefix,
   title,
-  changed = {}
+  changed = {},
+  deferredEditing
 }: {
   draft: ImageDraft;
   onPatch: (patch: Partial<ImageDraft>) => void;
@@ -30,8 +52,8 @@ export function ImageDraftFields({
   disabled?: boolean;
   ariaPrefix: string;
   title?: { value: string; placeholder: string; disabled: boolean };
-
   changed?: Partial<Record<"title" | "device" | "brightness" | "theme" | "tags" | "author" | "original" | "source" | "description", boolean>>;
+  deferredEditing?: ImageDraftDeferredEditing;
 }) {
   const changedFields = changed;
   const fieldGroupId = useId();
@@ -41,8 +63,22 @@ export function ImageDraftFields({
         <input
           id={`${fieldGroupId}-title`}
           className={`image-fields-title${changedFields.title ? " is-changed" : ""}`}
-          value={title ? title.value : draft.title}
-          onChange={(event) => onPatch({ title: event.target.value })}
+          value={title
+            ? title.value
+            : deferredEditing?.values.title ?? draft.title}
+          onFocus={deferredEditing
+            ? () => deferredEditing.onFocus("title")
+            : undefined}
+          onChange={(event) => {
+            if (deferredEditing) {
+              deferredEditing.onTextChange("title", event.target.value);
+            } else {
+              onPatch({ title: event.target.value });
+            }
+          }}
+          onBlur={deferredEditing
+            ? () => deferredEditing.onBlur("title")
+            : undefined}
           maxLength={imageTitleMaxLength}
           placeholder={title?.placeholder ?? "标题"}
           disabled={title ? title.disabled : disabled}
@@ -66,7 +102,17 @@ export function ImageDraftFields({
         <ThemeInput
           className={`image-fields-theme${changedFields.theme ? " is-changed" : ""}`}
           value={draft.theme}
-          onChange={(theme) => onPatch({ theme })}
+          onChange={(theme) => {
+            if (deferredEditing) deferredEditing.onCommit("theme", theme);
+            else onPatch({ theme });
+          }}
+          publishTypedChanges={!deferredEditing}
+          onFocus={deferredEditing
+            ? () => deferredEditing.onFocus("theme")
+            : undefined}
+          onBlur={deferredEditing
+            ? () => deferredEditing.onBlur("theme")
+            : undefined}
           themes={themes}
           placeholder="主题"
           disabled={disabled}
@@ -75,7 +121,17 @@ export function ImageDraftFields({
         <AuthorInput
           className={`image-fields-author${changedFields.author ? " is-changed" : ""}`}
           value={draft.author}
-          onChange={(author) => onPatch({ author })}
+          onChange={(author) => {
+            if (deferredEditing) deferredEditing.onCommit("author", author);
+            else onPatch({ author });
+          }}
+          publishTypedChanges={!deferredEditing}
+          onFocus={deferredEditing
+            ? () => deferredEditing.onFocus("author")
+            : undefined}
+          onBlur={deferredEditing
+            ? () => deferredEditing.onBlur("author")
+            : undefined}
           authors={authors}
           placeholder="作者"
           disabled={disabled}
@@ -95,16 +151,40 @@ export function ImageDraftFields({
         <input
           id={`${fieldGroupId}-original`}
           className={changedFields.original ? "is-changed" : undefined}
-          value={draft.original}
-          onChange={(event) => onPatch({ original: event.target.value })}
+          value={deferredEditing?.values.original ?? draft.original}
+          onFocus={deferredEditing
+            ? () => deferredEditing.onFocus("original")
+            : undefined}
+          onChange={(event) => {
+            if (deferredEditing) {
+              deferredEditing.onTextChange("original", event.target.value);
+            } else {
+              onPatch({ original: event.target.value });
+            }
+          }}
+          onBlur={deferredEditing
+            ? () => deferredEditing.onBlur("original")
+            : undefined}
           placeholder="原图 URL"
           disabled={disabled}
         />
         <input
           id={`${fieldGroupId}-source`}
           className={changedFields.source ? "is-changed" : undefined}
-          value={draft.source}
-          onChange={(event) => onPatch({ source: event.target.value })}
+          value={deferredEditing?.values.source ?? draft.source}
+          onFocus={deferredEditing
+            ? () => deferredEditing.onFocus("source")
+            : undefined}
+          onChange={(event) => {
+            if (deferredEditing) {
+              deferredEditing.onTextChange("source", event.target.value);
+            } else {
+              onPatch({ source: event.target.value });
+            }
+          }}
+          onBlur={deferredEditing
+            ? () => deferredEditing.onBlur("source")
+            : undefined}
           placeholder="来源 URL"
           disabled={disabled}
         />
@@ -112,8 +192,20 @@ export function ImageDraftFields({
       <textarea
         id={`${fieldGroupId}-description`}
         className={`image-fields-desc${changedFields.description ? " is-changed" : ""}`}
-        value={draft.description}
-        onChange={(event) => onPatch({ description: event.target.value })}
+        value={deferredEditing?.values.description ?? draft.description}
+        onFocus={deferredEditing
+          ? () => deferredEditing.onFocus("description")
+          : undefined}
+        onChange={(event) => {
+          if (deferredEditing) {
+            deferredEditing.onTextChange("description", event.target.value);
+          } else {
+            onPatch({ description: event.target.value });
+          }
+        }}
+        onBlur={deferredEditing
+          ? () => deferredEditing.onBlur("description")
+          : undefined}
         maxLength={imageDescriptionMaxLength}
         placeholder="详情描述"
         disabled={disabled}

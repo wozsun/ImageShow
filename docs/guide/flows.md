@@ -75,9 +75,17 @@ Import： accept ─► queued ─► downloading ─► received ─► prepari
   行级解析错误也由 import owner 保留；切到
   upload owner 时不展示或清除，重开 import 窗口后仍可复制或显式清除。尚未接管的占位草稿
   只由对应浏览器 owner 持有；尚未冻结 commit 的 active canonical 卡片编辑以 pair/version
-  CAS 写回 Redis。占位转为 canonical 时还会
-  立即把接管前冻结的草稿补写到任何尚未冻结 commit 的 active 状态。防抖同步项自身冻结并
-  持有 pair、attempt、version 和最新草稿，翻页或隐藏窗口不会使它依赖已卸载的卡片；同一轮
+  CAS 写回 Redis。任务卡片的标题、主题 / 作者连续键入、原图 URL、来源 URL 与详情描述在一次
+  焦点会话内只更新卡片临时值，标题栏同步显示临时标题；同 incarnation 的 snapshot、SSE、迟到
+  响应和普通重渲染不能覆盖该值。失焦时先确认 attempt 与可编辑资格仍有效，再以焦点开始值和
+  最新任务草稿为基线，只把用户实际改变且尚未等于最新值的字段向队列 owner 发布一次；无变化
+  不发布。主题 / 作者候选选择、设备、亮度、标签增删等离散操作仍立即发布。提交点击先接收浏览器
+  自然失焦产生的发布，再由既有 `flushPendingUpdates` 围栏排空；写回失败仍阻止提交。任务冻结、
+  取消、attempt 换代或卡片卸载后丢弃旧焦点会话，关闭、Escape、路由卸载或浏览器崩溃发生在失焦
+  前也允许丢失临时值，不做 unload 补发或本地持久化。
+  占位转为 canonical 时还会立即把接管前已经发布的草稿补写到任何尚未冻结 commit 的 active
+  状态。防抖同步项自身冻结并持有 pair、attempt、version 和最新草稿，翻页或隐藏窗口不会使它
+  依赖已卸载的卡片；同一轮
   多张草稿按接口硬上限聚合写回，不建立逐卡并发请求。worker 先推进 version 时，Web 先用
   有界 status 批读取得当前 version，再重放同一草稿；草稿更新 HTTP 已推进 version / semantic
   revision 而旧 snapshot 先到时，卡片继续保留较大水位和本地草稿，直到状态通道覆盖。任务在

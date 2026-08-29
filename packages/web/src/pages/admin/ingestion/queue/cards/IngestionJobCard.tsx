@@ -23,6 +23,7 @@ import {
   ingestionJobCanBeCancelled,
   ingestionJobCanBeRemovedLocally
 } from "../model/ingestion-queue-state.js";
+import { useIngestionJobDraftEditing } from "./useIngestionJobDraftEditing.js";
 
 function formatPixelDimensions(width?: number, height?: number) {
   return width && height ? `${width}×${height}` : "0000×0000";
@@ -82,6 +83,7 @@ export const IngestionJobCard = memo(function IngestionJobCard({
   onPreview
 }: IngestionJobCardProps) {
   const editable = ingestionJobAttributesEditable(job) && !busy;
+  const draftEditing = useIngestionJobDraftEditing({ job, busy, onPatch });
   const cancellable = ingestionJobCanBeCancelled(job);
   const removable = ingestionJobCanBeRemovedLocally(job) && !cancellable;
   const cancelling = job.status === "cancelling";
@@ -96,7 +98,7 @@ export const IngestionJobCard = memo(function IngestionJobCard({
   const hasFinalSize = typeof job.finalSize === "number";
   const originalSize = job.originalSize ?? job.file?.size;
   const hasOriginalSize = typeof originalSize === "number";
-  const displayName = job.draft.title
+  const displayName = draftEditing.title
     || job.file?.name
     || job.downloadUrl
     || (job.status === "done" ? job.draft.original : "")
@@ -215,6 +217,7 @@ export const IngestionJobCard = memo(function IngestionJobCard({
       <ImageDraftFields
         draft={job.draft}
         onPatch={(patch) => onPatch(job, patch)}
+        deferredEditing={draftEditing.deferredEditing}
         themes={themes}
         allTags={allTags}
         authors={authors}

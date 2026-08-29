@@ -9,6 +9,9 @@ export function ThemeInput({ themes, value, className, ...rest }: {
   disabled?: boolean;
   ariaLabel?: string;
   className?: string;
+  publishTypedChanges?: boolean;
+  onFocus?: () => void;
+  onBlur?: () => void;
 }) {
   const unsetClass = value === "none" ? " is-placeholder-value" : "";
   return (

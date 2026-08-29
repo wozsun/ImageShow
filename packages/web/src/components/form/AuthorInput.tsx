@@ -9,6 +9,9 @@ export function AuthorInput({ authors, ...rest }: {
   disabled?: boolean;
   ariaLabel?: string;
   className?: string;
+  publishTypedChanges?: boolean;
+  onFocus?: () => void;
+  onBlur?: () => void;
 }) {
   return <SlugComboInput options={authors} noun="作者" {...rest} />;
 }

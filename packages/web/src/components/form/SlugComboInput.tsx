@@ -23,7 +23,19 @@ import {
 
 const hiddenSuggestionSlugs = new Set(["none"]);
 
-export function SlugComboInput({ value, onChange, options, noun, placeholder, disabled = false, ariaLabel, className }: {
+export function SlugComboInput({
+  value,
+  onChange,
+  options,
+  noun,
+  placeholder,
+  disabled = false,
+  ariaLabel,
+  className,
+  publishTypedChanges = true,
+  onFocus,
+  onBlur
+}: {
   value: string;
   onChange: (value: string) => void;
   options: FacetOption[];
@@ -32,6 +44,9 @@ export function SlugComboInput({ value, onChange, options, noun, placeholder, di
   disabled?: boolean;
   ariaLabel?: string;
   className?: string;
+  publishTypedChanges?: boolean;
+  onFocus?: () => void;
+  onBlur?: () => void;
 }) {
   const [activeIndex, setActiveIndex] = useState(-1);
 
@@ -79,7 +94,7 @@ export function SlugComboInput({ value, onChange, options, noun, placeholder, di
 
   const updateQuery = (nextValue: string) => {
     setEditingValue(nextValue);
-    publishSlug(parseFacetSlug(nextValue) ?? "");
+    if (publishTypedChanges) publishSlug(parseFacetSlug(nextValue) ?? "");
     setActiveIndex(-1);
     if (!normalizeFacetSearchQuery(nextValue)) {
       if (open) requestClose();
@@ -170,6 +185,7 @@ export function SlugComboInput({ value, onChange, options, noun, placeholder, di
           publishedValueRef.current = value;
           imeSession.beginEditing();
           setFocused(true);
+          onFocus?.();
         }}
         onBlur={(event) => {
           const chosenSlug = pendingChoiceRef.current;
@@ -180,6 +196,7 @@ export function SlugComboInput({ value, onChange, options, noun, placeholder, di
           imeSession.settleEditing(facetDisplayName(options, slug));
           setFocused(false);
           if (open) requestClose();
+          onBlur?.();
         }}
         onChange={(event) => {
           if (!imeSession.acceptInput(event.currentTarget)) return;

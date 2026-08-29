@@ -400,6 +400,11 @@ hooks ──► lib
   关闭 / 隐藏、详情 / preview target、cleanup confirmation scope、mode 和 owner 选择；
   `IngestionWorkflowRegions.tsx` 只渲染 header、defaults、queue body、summary 与 footer，DOM 顺序、
   class、ARIA 和 focusable 顺序不变。
+- `queue/cards/useIngestionJobDraftEditing.ts` 是任务卡片文本焦点会话的唯一 owner：标题、主题 /
+  作者键入、原图 URL、来源 URL 和详情描述只在有效 attempt 内保留临时值，并在失焦时向 queue
+  controller 至多发布一次实际字段变化。共享 `ImageDraftFields` 与 `SlugComboInput` 只提供可选的焦点 / 发布
+  边界，图片编辑器、工作流默认值和其他组合框仍使用原即时语义；250 ms 批处理、CAS、重试、
+  revision 围栏与页外持有仍只属于 `useStoredIngestionDraftSync.ts`。
 - `upload/useUpload.ts` 仍唯一拥有 Blob URL、active XHR、AbortController、in-flight
   Promise 与 effect cleanup；`upload-jobs.ts` 只处理文件准入和 intent 输入，
   `browser-upload-lane.ts` 以页面级 FIFO owner 统一约束预览解码、短凭据请求和 raw PUT，
