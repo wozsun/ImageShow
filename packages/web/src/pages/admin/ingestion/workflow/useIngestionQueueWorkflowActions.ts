@@ -61,6 +61,16 @@ export function useIngestionQueueWorkflowActions({
       (pending) => pending.maxSemanticRevision >= revision
     )
   ), []);
+  const convergeCompletedCleanup = useCallback(async (
+    result: IngestionQueueActionResultDto
+  ) => {
+    // The combined owner removes only pairs the action proved cleared, fences
+    // pre-action snapshot proof, and reuses the raw owner's recovery
+    // single-flight. Failed/skipped and post-boundary completions stay visible.
+    await queue.recoverAfterSuccessfulAction(result).catch(() => undefined);
+  }, [
+    queue.recoverAfterSuccessfulAction
+  ]);
 
   const captureServerAction = useCallback((
     action: Parameters<typeof queue.actions.freeze>[0],
@@ -289,9 +299,47 @@ export function useIngestionQueueWorkflowActions({
     intent: FrozenLocalClearIntent,
     stillMatches: (job: IngestionJob) => boolean
   ) => {
+    let observedServerResult: IngestionQueueActionResultDto = {
+      processed: 0,
+      changed: 0,
+      failed: 0,
+      items: []
+    };
+    let hasSuccessfulCompletedCleanup = false;
+    const frozenServerAction = intent.serverAction.frozen;
     const [serverResult, currentLocalResult] = await Promise.all([
-      intent.serverAction.frozen
-        ? queue.actions.run(intent.serverAction.frozen)
+      frozenServerAction
+        ? queue.actions.run(
+            frozenServerAction,
+            undefined,
+            frozenServerAction.action === "clear_completed"
+              ? {
+                  onBatchResult: (batch) => {
+                    observedServerResult = {
+                      processed: observedServerResult.processed
+                        + batch.processed,
+                      changed: observedServerResult.changed + batch.changed,
+                      failed: observedServerResult.failed + batch.failed,
+                      items: [...observedServerResult.items, ...batch.items]
+                    };
+                    if (batch.items.some((item) => (
+                      item.status === "changed"
+                      || item.status === "unchanged"
+                    ))) {
+                      hasSuccessfulCompletedCleanup = true;
+                    }
+                    // Exact per-item success is display authority immediately;
+                    // do not wait for the next continuation or proof snapshot.
+                    queue.projectCompletedCleanupBatch(batch);
+                  },
+                  onSettled: async () => {
+                    if (!hasSuccessfulCompletedCleanup) return false;
+                    await convergeCompletedCleanup(observedServerResult);
+                    return true;
+                  }
+                }
+              : undefined
+          )
         : Promise.resolve(null),
       clearCapturedLocalJobs(intent.localJobs, stillMatches)
     ]);
@@ -301,12 +349,15 @@ export function useIngestionQueueWorkflowActions({
     );
     const reconciledLocal = reconcileLocalClear(
       localResult,
-      serverResult,
-      intent.serverAction.frozen ?? undefined,
+      serverResult ?? (
+        observedServerResult.items.length ? observedServerResult : null
+      ),
+      frozenServerAction ?? undefined,
       stillMatches
     );
     return {
       serverResult,
+      serverChanged: serverResult?.changed ?? observedServerResult.changed,
       settled: (
         (!intent.serverAction.required || serverResult !== null)
         && reconciledLocal.unresolved.length === 0
@@ -317,7 +368,13 @@ export function useIngestionQueueWorkflowActions({
       ),
       unresolvedLocal: reconciledLocal
     } as const;
-  }, [clearCapturedLocalJobs, queue.actions, reconcileLocalClear]);
+  }, [
+    clearCapturedLocalJobs,
+    convergeCompletedCleanup,
+    queue.actions,
+    queue.projectCompletedCleanupBatch,
+    reconcileLocalClear
+  ]);
 
   const runCleanupAction = useCallback((action: IngestionCleanupActionId) => {
     const completedCleanupRevision = action === "completed"
@@ -384,6 +441,10 @@ export function useIngestionQueueWorkflowActions({
       unresolvedLocal: { unresolved: [] },
       retryable: false
     };
+    const releaseCompletedConnection = action === "completed"
+      && serverAction.required
+      ? queue.actions.retainConnection()
+      : null;
     if (completedCleanupRevision !== null) {
       runningCompletedCleanupRevisionsRef.current.add(
         completedCleanupRevision
@@ -392,10 +453,11 @@ export function useIngestionQueueWorkflowActions({
     void executeFrozenLocalClear(intent, localPredicate)
       .then((result) => {
         if (action === "completed" && (
-          (result.serverResult?.changed ?? 0) > 0 || localJobs.length > 0
+          result.serverChanged > 0 || localJobs.length > 0
         )) onDone();
       })
       .finally(() => {
+        releaseCompletedConnection?.();
         if (completedCleanupRevision !== null) {
           runningCompletedCleanupRevisionsRef.current.delete(
             completedCleanupRevision
@@ -444,6 +506,10 @@ export function useIngestionQueueWorkflowActions({
       queue.server.refresh();
       return;
     }
+    // The admission hold may already have been released by an earlier error
+    // generation. Acquire a fresh execution hold so this retry cannot tear
+    // down its owner between the action response and baseline convergence.
+    const releaseExecutionConnection = queue.actions.retainConnection();
     pending.running = true;
     const intent: FrozenLocalClearIntent = {
       queueType: queue.queueType,
@@ -460,10 +526,18 @@ export function useIngestionQueueWorkflowActions({
         (item) => item.id === pending.id
       );
       if (index < 0) return;
+      if (result.serverChanged > 0) onDone();
       if (result.settled) {
-        deferredCompletedCleanupRef.current.splice(index, 1);
+        const settledIndex = deferredCompletedCleanupRef.current.findIndex(
+          (item) => item.id === pending.id
+        );
+        if (settledIndex < 0) {
+          pending.releaseConnection();
+          return;
+        }
+        deferredCompletedCleanupRef.current.splice(settledIndex, 1);
         pending.releaseConnection();
-        if ((result.serverResult?.changed ?? 0) > 0 || pending.localJobs.length) {
+        if (result.serverChanged === 0 && pending.localJobs.length) {
           onDone();
         }
       } else {
@@ -494,7 +568,7 @@ export function useIngestionQueueWorkflowActions({
       }
       void queue.server.recoverAuthority().catch(() => undefined);
       setDeferredCleanupEpoch((value) => value + 1);
-    });
+    }).finally(releaseExecutionConnection);
   }, [
     deferredCleanupEpoch,
     executeFrozenLocalClear,
@@ -573,7 +647,7 @@ export function useIngestionQueueWorkflowActions({
       cleanupLocalPredicate(executing.action)
     );
     if (action === "completed" && (
-      (result.serverResult?.changed ?? 0) > 0 || executing.localJobs.length > 0
+      result.serverChanged > 0 || executing.localJobs.length > 0
     )) onDone();
     if (!result.settled) {
       if (cleanupIntentRef.current === executing) {

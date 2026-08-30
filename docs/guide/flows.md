@@ -67,10 +67,22 @@ Import： accept ─► queued ─► downloading ─► received ─► prepari
 - 状态读取使用固定 `POST /api/admin/ingestion/status` 批量提交 pair，不把 session、metadata
   或数组放进 URL，也不按卡片建立独立请求。Web 只接受 pair 匹配且
   `(version, progress_seq)` 单调向前的状态；UUID 可以规范化大小写，session ID 不得改写大小写。
-- 关闭或按 Escape 不会中止请求或未完成任务；关闭路径会按当时冻结的队列水位，异步删除已经
-  完成的卡片与 Redis completed 回执，正式图片不受影响。若关闭瞬间正在重连，则后台连接只保留
-  到清理收敛，并以关闭前最后一份权威 semantic revision 为上限重新签发动作；关闭后才完成或仍
-  未完成的任务继续保留。真正离开图片路由、使上传 owner 卸载时，仍由浏览器持有的 raw 传输可以中止；已经转换
+- 关闭或按 Escape 不会等待清理，也不会中止请求或未完成任务；关闭路径按点击时冻结的队列水位，
+  异步删除当时已经完成的卡片与 Redis completed 回执，正式图片不受影响。动作尚未成功时快速
+  重开，允许继续看到尚未清理完成的旧卡片；动作每个分页响应一旦返回，组合队列就按该批逐项
+  结果同步移除已确认清理的卡片，不等待后续 continuation，后续批失败也不会撤销此前成功 pair；
+  若续页因动作凭证失效而失败，先恢复共享登录态，再由本动作结束时的同一 owner recovery 收敛，
+  不会在它之前另发一条普通 snapshot；
+  失败项与关闭后才完成的任务继续保留，并以精确 pair 的临时释放投影过滤 retained baseline。
+  raw owner 继续保留未受影响的有界展示基线，但会作废动作成功前在途 snapshot 的证明
+  资格，并在后台连接仍被持有时用一次权威 snapshot 收敛，因此已经成功清理的卡片不能再由任何
+  旧投影闪回。
+  清理成功前已经启动的 snapshot 会失效；快速重开、普通 refresh 与并发
+  authority recovery 复用队列 owner 的同一 post-action single-flight，只有选择覆盖范围变化或
+  失败后的既有有界重试才追加读取。没有 `changed` / `unchanged` 逐项结果时不建立释放投影；动作
+  失败仍保留可能有效的旧 baseline。若关闭瞬间正在重连，则以
+  关闭前最后一份权威 semantic revision 为上限重新签发动作；关闭后才完成或仍未完成的任务继续
+  保留。真正离开图片路由、使上传 owner 卸载时，仍由浏览器持有的 raw 传输可以中止；已经转换
   或 Import accept 的 canonical 继续由 worker 执行，不在 effect cleanup 中隐式批量取消。JSONL
   行级解析错误也由 import owner 保留；切到
   upload owner 时不展示或清除，重开 import 窗口后仍可复制或显式清除。尚未接管的占位草稿

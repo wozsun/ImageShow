@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ingestionBatchHardLimit,
   ingestionQueueSnapshotMaxItems,
+  type IngestionQueueActionResultDto,
   type ServerIngestionItemDto,
   type IngestionQueueSummaryDto,
   type IngestionQueueTypeDto,
@@ -1348,8 +1349,9 @@ export function useIngestionQueue(
     });
   }, [dispatch, pageSize]);
 
-  const releaseResolvedServerJobs = useCallback((
-    targets: readonly ResolvedServerJobTarget[]
+  const projectResolvedServerJobs = useCallback((
+    targets: readonly ResolvedServerJobTarget[],
+    authoritativePairKeys: ReadonlySet<string> = new Set()
   ) => {
     const resolved = new Set<string>();
     const releasedPairs = new Map<string, ResolvedServerJobTarget>();
@@ -1371,15 +1373,18 @@ export function useIngestionQueue(
         || completedHandoffPairsRef.current.has(pairKey)
         || handoffs.hasPair(pairKey);
       if (
-        [...candidates].some((job) => (
-          !ingestionJobMatchesResolvedServerTarget(job, target)
-        ))
-        || !candidates.size && pairHasIdentityFreeOwner
+        !authoritativePairKeys.has(pairKey)
+        && (
+          [...candidates].some((job) => (
+            !ingestionJobMatchesResolvedServerTarget(job, target)
+          ))
+          || !candidates.size && pairHasIdentityFreeOwner
+        )
       ) continue;
       resolved.add(target.id);
       releasedPairs.set(pairKey, target);
     }
-    if (!releasedPairs.size) return resolved;
+    if (!releasedPairs.size) return { resolved, releasedPairs };
 
     const projectedTotalItems = projectedTotalAfterResolvedRelease(
       resolvedReleaseProjectionContextRef.current,
@@ -1387,7 +1392,6 @@ export function useIngestionQueue(
       releasedPairs
     );
 
-    const recoveryTargets = new Map(releasedPairs);
     for (const [pairKey, target] of releasedPairs) {
       resolvedReleaseTargetsRef.current.set(pairKey, target);
       failedResolvedReleaseRecoveriesRef.current.delete(pairKey);
@@ -1398,11 +1402,18 @@ export function useIngestionQueue(
       pairKey: string;
     }>();
     for (const job of stateRef.current.jobs) {
-      const target = releasedPairs.get(serverIngestionJobPairKey(job));
-      if (target && ingestionJobMatchesResolvedServerTarget(job, target)) {
+      const pairKey = serverIngestionJobPairKey(job);
+      const target = releasedPairs.get(pairKey);
+      if (
+        target
+        && (
+          authoritativePairKeys.has(pairKey)
+          || ingestionJobMatchesResolvedServerTarget(job, target)
+        )
+      ) {
         removedStateTargets.set(job.id, {
           attemptKey: job.attemptKey,
-          pairKey: serverIngestionJobPairKey(job)
+          pairKey
         });
         revokeObjectUrl(job);
       }
@@ -1426,7 +1437,19 @@ export function useIngestionQueue(
     });
     setHandoffEpoch((current) => current + 1);
     setResolvedReleaseEpoch((current) => current + 1);
-    void server.recoverAuthority().then(() => {
+    return { resolved, releasedPairs };
+  }, [
+    dispatch,
+    handoffs.hasPair,
+    handoffs.resolvePairs,
+    pageSize
+  ]);
+
+  const trackResolvedReleaseRecovery = useCallback((
+    recoveryTargets: ReadonlyMap<string, ResolvedServerJobTarget>,
+    recovery: Promise<void>
+  ) => {
+    void recovery.then(() => {
       let changed = false;
       for (const [pairKey, target] of recoveryTargets) {
         if (resolvedReleaseTargetsRef.current.get(pairKey) !== target) continue;
@@ -1450,13 +1473,96 @@ export function useIngestionQueue(
       }
       if (changed) setResolvedReleaseEpoch((current) => current + 1);
     });
-    return resolved;
+  }, []);
+
+  const releaseResolvedServerJobs = useCallback((
+    targets: readonly ResolvedServerJobTarget[]
+  ) => {
+    const projected = projectResolvedServerJobs(targets);
+    if (projected.releasedPairs.size) {
+      trackResolvedReleaseRecovery(
+        new Map(projected.releasedPairs),
+        server.recoverAuthority()
+      );
+    }
+    return projected.resolved;
   }, [
-    dispatch,
-    handoffs.hasPair,
-    handoffs.resolvePairs,
-    pageSize,
-    server.recoverAuthority
+    projectResolvedServerJobs,
+    server.recoverAuthority,
+    trackResolvedReleaseRecovery
+  ]);
+
+  const successfulActionItems = useCallback((
+    result: IngestionQueueActionResultDto
+  ) => new Map(result.items.flatMap((item) => (
+    item.status === "changed" || item.status === "unchanged"
+      ? [[serverIngestionPairKey(item), item] as const]
+      : []
+  ))), []);
+
+  const projectCompletedCleanupBatch = useCallback((
+    result: IngestionQueueActionResultDto
+  ) => {
+    const releasedItems = successfulActionItems(result);
+    if (!releasedItems.size) return 0;
+    const targets: ResolvedServerJobTarget[] = [];
+    for (const [pairKey, item] of releasedItems) {
+      // A completed result learned through status/commit deliberately hands
+      // browser display ownership back by setting serverAccepted=false. The
+      // Server action still proves the same pair was cleared, so release every
+      // matching current owner shape rather than only canonical DTO jobs.
+      const handoff = handoffJobsRef.current.get(pairKey);
+      const detached = detachedProvisionalHandoffsRef.current.get(pairKey)?.job;
+      const candidates = new Set([
+        ...stateRef.current.jobs.filter((job) => (
+          serverIngestionJobPairKey(job) === pairKey
+        )),
+        ...(handoff ? [handoff] : []),
+        ...(detached ? [detached] : [])
+      ]);
+      const owners = candidates.size
+        ? [...candidates]
+        : [{
+            id: item.image_id,
+            attemptKey: `completed-cleanup:${item.image_id}`
+          }];
+      for (const owner of owners) {
+        targets.push({
+          id: owner.id,
+          attemptKey: owner.attemptKey,
+          pair: item,
+          ...(item.queue_revision === undefined
+            ? {}
+            : { releasedRevision: item.queue_revision })
+        });
+      }
+    }
+    projectResolvedServerJobs(targets, new Set(releasedItems.keys()));
+    return releasedItems.size;
+  }, [projectResolvedServerJobs, successfulActionItems]);
+
+  const recoverAfterSuccessfulAction = useCallback((
+    result: IngestionQueueActionResultDto
+  ) => {
+    const releasedItems = successfulActionItems(result);
+    if (!releasedItems.size) return Promise.resolve();
+    // Fence every pre-action snapshot and retain the unaffected bounded raw
+    // baseline. Per-batch exact successes have already been projected out of
+    // the combined owner, including when a later continuation failed.
+    const recovery = server.recoverAfterSuccessfulAction();
+    const recoveryTargets = new Map<string, ResolvedServerJobTarget>();
+    for (const pairKey of releasedItems.keys()) {
+      const target = resolvedReleaseTargetsRef.current.get(pairKey);
+      if (target) recoveryTargets.set(pairKey, target);
+    }
+    if (recoveryTargets.size) {
+      trackResolvedReleaseRecovery(recoveryTargets, recovery);
+    }
+    return recovery;
+  }, [
+    server.recoverAfterSuccessfulAction,
+    successfulActionItems,
+    trackResolvedReleaseRecovery
   ]);
 
   const totalPages = ingestionQueuePageCount(totalItems, pageSize);
@@ -1576,6 +1682,8 @@ export function useIngestionQueue(
     removeJob,
     clearJobIds,
     releaseResolvedServerJobs,
+    projectCompletedCleanupBatch,
+    recoverAfterSuccessfulAction,
     removeLibraryDuplicate,
     applyDefaultsToLocalJobs
   };

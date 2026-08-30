@@ -23,6 +23,12 @@ export type FrozenIngestionQueueAction = Readonly<{
   connectionGeneration: number;
 }>;
 
+export type IngestionQueueActionRunOptions = Readonly<{
+  blockUi?: boolean;
+  onBatchResult?: (result: IngestionQueueActionResultDto) => void;
+  onSettled?: () => boolean | Promise<boolean>;
+}>;
+
 const maximumActionBatches = 10_000;
 
 function staleActionError() {
@@ -150,7 +156,7 @@ export function useIngestionQueueActions(
   const run = useCallback(async (
     frozen: FrozenIngestionQueueAction,
     before?: () => Promise<void>,
-    options?: Readonly<{ blockUi?: boolean }>
+    options?: IngestionQueueActionRunOptions
   ) => {
     const blocksUi = options?.blockUi !== false;
     pendingRunsRef.current += 1;
@@ -164,6 +170,8 @@ export function useIngestionQueueActions(
     const execute = async () => {
       setNotice("");
       const controller = new AbortController();
+      let requiresAuthorityRecovery = false;
+      let authSessionRecovered = false;
       try {
         await before?.();
         let continuation: string | undefined;
@@ -194,6 +202,10 @@ export function useIngestionQueueActions(
             changed += response.changed;
             failed += response.failed;
             items.push(...response.items);
+            // The action endpoint is paginated. Let its owner consume exact
+            // per-item success evidence before the next continuation can be
+            // delayed or fail; the callback must not start a proof snapshot.
+            options?.onBatchResult?.(response);
             if (!response.continuation) {
               const failures = items.filter((item) => item.status === "failed");
               setNotice(failures.length === 1
@@ -224,19 +236,41 @@ export function useIngestionQueueActions(
         ) {
           try {
             // The failed action is never replayed. Refresh the shared session
-            // first so this owner's single authoritative snapshot carries the
-            // current CSRF and replaces the expired signed watermark.
+            // first. The common settlement below then lets a caller with
+            // earlier successful pages own the single post-action snapshot;
+            // otherwise this action performs the ordinary owner recovery.
             await recoverAuthSession();
-            await serverRef.current.recoverAuthority();
-            if (mountedRef.current) setNotice("");
+            authSessionRecovered = true;
           } catch {
             // Keep the original credential error visible. Authentication and
             // queue controllers expose their own retry/login state.
           }
           return null;
         }
-        authorityRecoveryRequestedRef.current = true;
+        requiresAuthorityRecovery = true;
         return null;
+      } finally {
+        // A caller that projected per-batch success may perform one stronger
+        // post-action recovery here. Await it while this run still owns the
+        // connection, and suppress the ordinary failure recovery only when
+        // that owner confirms it handled convergence.
+        const recoveryHandled = await options?.onSettled?.() ?? false;
+        if (authSessionRecovered) {
+          if (recoveryHandled) {
+            if (mountedRef.current) setNotice("");
+          } else {
+            try {
+              await serverRef.current.recoverAuthority();
+              if (mountedRef.current) setNotice("");
+            } catch {
+              // The owner exposes its bounded retry/error state. Preserve the
+              // credential notice until a later authoritative read succeeds.
+            }
+          }
+        }
+        if (requiresAuthorityRecovery && !recoveryHandled) {
+          authorityRecoveryRequestedRef.current = true;
+        }
       }
     };
     const result = actionTailRef.current.then(execute, execute);

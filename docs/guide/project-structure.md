@@ -284,7 +284,17 @@ Server 队列模块与 Web 队列 owner 的连接关系保持不变：
 
 - Web 的 `useUploadQueueOwner` / `useImportQueueOwner` 分别组合浏览器来源与 Redis canonical，
   并各自持有重复确认与单卡提交的 single-flight controller；
-  `useServerIngestionQueue.ts` 只拥有当前显示队列的连接生命周期，
+  `useServerIngestionQueue.ts` 只拥有当前显示队列的连接生命周期与唯一 retained display
+  baseline；`useIngestionQueue.ts` 用动作逐项结果同步移除组合投影中同 pair 的已确认清理卡片，
+  包括纯 Server DTO 与已把显示权交回浏览器的 completed handoff；
+  `useIngestionQueueActions.ts` 在每个 continuation 响应后立即把该批结果交还工作流，逐批投影与
+  最终权威恢复分离，后续批延迟或失败不会延迟、撤销此前成功 pair；
+  raw owner 保留未受影响的有界基线、只作废动作成功前 snapshot 的证明资格，并复用一次权威
+  snapshot，失败项和关闭后才完成的任务仍由组合 owner 保留；
+  `useIngestionQueueWorkflowActions.ts` 冻结关闭时的 completed 清理边界，并把动作连接保留到上述
+  收敛完成，弹窗关闭本身不等待该流程；
+  pre-action snapshot 不能证明清理结果，快速重开、普通 refresh 和并发 recovery 复用该 owner
+  的 post-action single-flight。
   `model/server-ingestion-queue-state.ts` 负责 revision / version / progress 单调合并，
   `useStoredIngestionDraftSync.ts` 按硬上限批量排空草稿写入并在 version 冲突时有界回读，
   `useIngestionAuthorityHandoffs.ts` 持有独立于当前页 DTO 和连接代际的 HTTP 接管围栏，

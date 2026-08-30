@@ -100,6 +100,7 @@ export function useServerIngestionQueue(input: Readonly<{
     (reason?: SnapshotRequestReason) => void
   ) | null>(null);
   const recoverAuthorityRef = useRef<(() => Promise<void>) | null>(null);
+  const invalidateDisplayAuthorityRef = useRef<(() => void) | null>(null);
   const flushAuthorityRecoveryRef = useRef<(() => void) | null>(null);
   const ensureRevisionRef = useRef<(
     (revision?: number, connectionGeneration?: number) => boolean
@@ -114,6 +115,7 @@ export function useServerIngestionQueue(input: Readonly<{
     if (!input.enabled) {
       requestSnapshotRef.current = null;
       recoverAuthorityRef.current = null;
+      invalidateDisplayAuthorityRef.current = null;
       flushAuthorityRecoveryRef.current = null;
       setView((current) => emptyServerIngestionQueueView("idle", current.connectionGeneration));
       return;
@@ -296,6 +298,34 @@ export function useServerIngestionQueue(input: Readonly<{
       abortSnapshotRequest();
       buffered = [];
       bufferedAuthorityBaseline = null;
+    };
+
+    invalidateDisplayAuthorityRef.current = () => {
+      // The action response makes every earlier in-flight snapshot too old to
+      // prove convergence, but it does not make unaffected rows in the last
+      // stable page unsafe to display. Keep that bounded baseline while the
+      // combined owner projects the exact changed/unchanged pairs out of its
+      // cards. Failed/skipped pairs therefore remain visible, and the same
+      // baseline can still merge mutations racing the post-action snapshot.
+      clearSnapshotRecovery();
+      invalidateSnapshotScope();
+      const { offset } = parametersRef.current;
+      const displayBaseline = baseline !== null && baselineOffset === offset
+        ? baseline
+        : retainedBaseline !== null && retainedOffset === offset
+          ? retainedBaseline
+          : null;
+      setView(displayBaseline
+        ? retainedServerIngestionQueueView(
+            "loading",
+            connectionGeneration,
+            actionScope,
+            displayBaseline
+          )
+        : {
+            ...emptyServerIngestionQueueView("loading", connectionGeneration),
+            actionScope
+          });
     };
 
     const publishSnapshotState = (offset: number) => {
@@ -871,10 +901,11 @@ export function useServerIngestionQueue(input: Readonly<{
             completedAt: event.session.completed_at
           }]);
         }
-        // 关闭时的冻结动作会短暂保留 SSE action scope。此时不再为已
-        // 隐藏的页面追逐 removed/reordered 成员变化；动作结束会断开，
-        // 若期间重开则由 displayed effect 读取一次当前权威页面。
-        if (!displayedRef.current) return;
+        // Hidden owners normally do not chase removed/reordered members. A
+        // bounded authority recovery is the exception: mutations that race
+        // its snapshot must still be buffered so tasks completing after the
+        // frozen close boundary remain visible in the converged result.
+        if (!displayedRef.current && authorityRecovery === null) return;
         if (activeSnapshot !== null) {
           if (buffered.length >= clientMutationBufferLimit) {
             requestSnapshot("reload");
@@ -949,6 +980,7 @@ export function useServerIngestionQueue(input: Readonly<{
       disposed = true;
       requestSnapshotRef.current = null;
       recoverAuthorityRef.current = null;
+      invalidateDisplayAuthorityRef.current = null;
       flushAuthorityRecoveryRef.current = null;
       ensureRevisionRef.current = null;
       failAuthorityRecovery(new Error("内容接入队列连接已关闭"));
@@ -985,6 +1017,15 @@ export function useServerIngestionQueue(input: Readonly<{
       ? recover()
       : Promise.reject(new Error("内容接入队列连接尚未就绪"));
   }, []);
+  const recoverAfterSuccessfulAction = useCallback(() => {
+    const invalidate = invalidateDisplayAuthorityRef.current;
+    const recover = recoverAuthorityRef.current;
+    if (!invalidate || !recover) {
+      return Promise.reject(new Error("内容接入队列连接尚未就绪"));
+    }
+    invalidate();
+    return recover();
+  }, []);
   const ensureRevision = useCallback((
     revision?: number,
     connectionGeneration?: number
@@ -992,7 +1033,13 @@ export function useServerIngestionQueue(input: Readonly<{
     return ensureRevisionRef.current?.(revision, connectionGeneration) ?? false;
   }, []);
 
-  return { ...view, ensureRevision, recoverAuthority, refresh };
+  return {
+    ...view,
+    ensureRevision,
+    recoverAfterSuccessfulAction,
+    recoverAuthority,
+    refresh
+  };
 }
 
 export type ServerIngestionQueueController = ReturnType<
