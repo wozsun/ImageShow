@@ -25,6 +25,7 @@ export function DialogFrame({
   closeOnBackdrop = false,
   initialFocusRef,
   returnFocusRef,
+  prepareClose,
   onClose,
   children
 }: {
@@ -38,6 +39,7 @@ export function DialogFrame({
   closeOnBackdrop?: boolean;
   initialFocusRef?: RefObject<HTMLElement | null>;
   returnFocusRef?: RefObject<HTMLElement | null>;
+  prepareClose?: () => () => void;
   onClose: () => void;
   children: (controls: DialogFrameControls) => ReactNode;
 }) {
@@ -46,11 +48,14 @@ export function DialogFrame({
   const requestClose = useCallback((afterClose?: () => void) => {
     if (busy) return;
     if (animateClose) {
-      requestAnimatedClose(afterClose);
+      requestAnimatedClose(
+        afterClose,
+        afterClose === undefined ? prepareClose : undefined
+      );
       return;
     }
-    (afterClose ?? onClose)();
-  }, [animateClose, busy, onClose, requestAnimatedClose]);
+    (afterClose ?? prepareClose?.() ?? onClose)();
+  }, [animateClose, busy, onClose, prepareClose, requestAnimatedClose]);
 
   usePageScrollLock();
   useDialogFocus({

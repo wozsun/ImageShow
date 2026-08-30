@@ -1,6 +1,6 @@
 {
   "name": "@imageshow/server",
-  "version": "5.3.11",
+  "version": "5.3.12",
   "private": true,
   "type": "module",
   "scripts": {
@@ -15,7 +15,7 @@
     "@hono/node-server": "^2.1.1",
     "@imageshow/shared": "file:../shared",
     "@smithy/node-http-handler": "^4.11.3",
-    "altcha-lib": "^2.3.2",
+    "altcha-lib": "^2.4.0",
     "file-type": "^22.0.2",
     "hono": "^4.13.5",
     "ioredis": "^6.0.0",
@@ -23,7 +23,7 @@
     "pg": "^8.23.0",
     "sharp": "^0.35.4",
     "undici": "^8.10.0",
-    "zod": "^4.5.2"
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "@types/node": "^26.4.0",

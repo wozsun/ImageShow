@@ -47,8 +47,6 @@
       var(--public-color-gallery-sky-center) 46%,
       var(--public-color-gallery-sky-right)
     );
-  transform-origin: center;
-  animation: gallery-atmosphere-breathe 26s ease-in-out infinite alternate;
 }
 
 .gallery-page::before,
@@ -504,7 +502,6 @@
   height: 22px;
 }
 
-:root[data-document-motion-paused="true"] .gallery-atmosphere,
 :root[data-document-motion-paused="true"] .gallery-toolbar,
 :root[data-document-motion-paused="true"] .gallery-virtual-tile {
   animation-play-state: paused;
@@ -523,11 +520,6 @@
 @keyframes gallery-card-reveal-subsequent {
   from { opacity: 0; transform: translateY(7px); }
   to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes gallery-atmosphere-breathe {
-  from { opacity: .84; transform: scale(1) translate3d(-.2%, 0, 0); }
-  to { opacity: 1; transform: scale(1.018) translate3d(.2%, -.16%, 0); }
 }
 
 @media (max-width: 760px) {

@@ -356,7 +356,6 @@
     transition: none;
   }
 
-  .home-random-background::after,
   .home-filter-bar.is-home-filter-bar-entrance,
   .home-filter-bar.is-home-filter-bar-entrance > *,
   .home-reveal-axes.is-reveal-animation-active .home-axis-group,

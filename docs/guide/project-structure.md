@@ -356,7 +356,8 @@ hooks ──► lib
   共用 `usePageScrollMovement.ts` 管理 RAF 合并、页面锁定和有界滚动位移采样，
   `usePublicNavigationEntrance.ts` 保证公开主导航在 SPA 会话内只入场一次，
   `useOneShotAnimation.ts` 在动画结束或减少动态效果中断后永久移除本次入口状态，
-  `useDocumentMotionPause.ts` 统一把文档隐藏状态交给持续环境动效。共享
+  `useDocumentMotionPause.ts` 统一把文档隐藏状态交给首页加载 / 刷新反馈和画廊尚未结束的
+  有限入场动效。共享
   `usePageScrollLock.ts` 计数化冻结应用根、安装弹窗触摸边界并在最后释放时恢复页面滚动；
   `useDialogFocus.ts` 在相同层级归还 opener，页面和角色模块不得建立第二套 body 锁。
 - `lib/` 保存无界面代码；HTTP 客户端、query key 和共享查询 Hook 集中在 `lib/api/`。

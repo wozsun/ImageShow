@@ -102,8 +102,7 @@
   .gallery-toolbar { transition: none; }
   .gallery-toolbar.is-gallery-toolbar-entrance,
   .gallery-virtual-tile.is-gallery-card-reveal-initial,
-  .gallery-virtual-tile.is-gallery-card-reveal-subsequent,
-  .gallery-atmosphere {
+  .gallery-virtual-tile.is-gallery-card-reveal-subsequent {
     animation: none;
   }
   .tile { transition: none; }

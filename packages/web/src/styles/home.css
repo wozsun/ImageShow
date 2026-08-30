@@ -168,7 +168,6 @@
     radial-gradient(var(--public-color-home-grain-dot) .6px, transparent .6px);
   background-size: auto, 5px 5px;
   mix-blend-mode: soft-light;
-  animation: home-star-breathe 18s ease-in-out infinite alternate;
 }
 
 /* 图片 decode 前只保留与首页次级导航同基色的纯色舞台。 */
@@ -176,7 +175,6 @@
 .home-random-background:not(.is-ready)::after {
   opacity: 0;
   visibility: hidden;
-  animation: none;
 }
 
 .home-filter-bar {
@@ -567,15 +565,6 @@
 
 .home-scroll-cue:focus-visible {
   color: var(--public-color-text-strong);
-}
-
-:root[data-document-motion-paused="true"] .home-random-background::after {
-  animation-play-state: paused;
-}
-
-@keyframes home-star-breathe {
-  from { opacity: .13; }
-  to { opacity: .21; }
 }
 
 @keyframes home-filter-bar-surface-reveal {

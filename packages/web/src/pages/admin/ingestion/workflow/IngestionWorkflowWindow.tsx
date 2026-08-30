@@ -46,14 +46,19 @@ import {
 type ImportSourceDialogComponent =
   typeof import("../import/ImportSourceDialog.js")["ImportSourceDialog"];
 
+type IngestionWorkflowCloseOptions = Readonly<{
+  skipCompletedCleanup?: boolean;
+}>;
+
 type IngestionWorkflowWindowProps = {
   mode: "upload" | "import";
   busy: boolean;
   queue: IngestionQueueController;
   returnFocusRef: RefObject<HTMLElement | null>;
-  onClose: (options?: Readonly<{
-    skipCompletedCleanup?: boolean;
-  }>) => void;
+  onPrepareClose: (
+    options?: IngestionWorkflowCloseOptions
+  ) => () => void;
+  onClose: (options?: IngestionWorkflowCloseOptions) => void;
   defaults: IngestionAttributeDefaults;
   onDefaultsChange: (defaults: IngestionAttributeDefaults) => void;
   themes: FacetOption[];
@@ -196,6 +201,7 @@ export function IngestionWorkflowWindow({
   busy,
   queue,
   returnFocusRef,
+  onPrepareClose,
   onClose,
   defaults,
   onDefaultsChange,
@@ -546,6 +552,13 @@ export function IngestionWorkflowWindow({
       )}
       initialFocusRef={closeButtonRef}
       returnFocusRef={returnFocusRef}
+      prepareClose={() => {
+        const finishClose = onPrepareClose();
+        return () => {
+          onDiscardUnconfirmedIntents();
+          finishClose();
+        };
+      }}
       onClose={() => {
         onDiscardUnconfirmedIntents();
         onClose();

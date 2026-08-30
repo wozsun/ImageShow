@@ -228,7 +228,7 @@ export function Ingestion({
   const queueWorkflow = mode === "upload"
     ? uploadQueueWorkflow
     : importQueueWorkflow;
-  const closeWorkflow = useCallback((options: Readonly<{
+  const prepareCloseWorkflow = useCallback((options: Readonly<{
     skipCompletedCleanup?: boolean;
   }> = {}) => {
     intentFenceRef.current.invalidate();
@@ -236,10 +236,12 @@ export function Ingestion({
     if (!options.skipCompletedCleanup && queue.summary.doneJobs > 0) {
       queueWorkflow.runCleanupAction("completed");
     }
-    if (activation) onActivationSettled(activation.sequence);
-    setOpen(false);
-    setSourceDialogOpen(false);
-    setSourceDialogPending(false);
+    return () => {
+      if (activation) onActivationSettled(activation.sequence);
+      setOpen(false);
+      setSourceDialogOpen(false);
+      setSourceDialogPending(false);
+    };
   }, [
     activation,
     onActivationSettled,
@@ -247,6 +249,11 @@ export function Ingestion({
     queue.summary.doneJobs,
     queueWorkflow.runCleanupAction
   ]);
+  const closeWorkflow = useCallback((options: Readonly<{
+    skipCompletedCleanup?: boolean;
+  }> = {}) => {
+    prepareCloseWorkflow(options)();
+  }, [prepareCloseWorkflow]);
 
   const openInMode = async (
     next: "upload" | "import",
@@ -439,6 +446,7 @@ export function Ingestion({
           busy={busy}
           queue={queue}
           returnFocusRef={workflowReturnFocusRef}
+          onPrepareClose={prepareCloseWorkflow}
           onClose={closeWorkflow}
           defaults={defaults}
           onDefaultsChange={setDefaults}
