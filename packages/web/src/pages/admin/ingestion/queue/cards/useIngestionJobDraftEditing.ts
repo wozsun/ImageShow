@@ -1,4 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  type IngestionDraftUrlField,
+  normalizeIngestionDraftUrl
+} from "@imageshow/shared/browser";
 import type {
   ImageDraftDeferredEditing,
   ImageDraftDeferredField
@@ -19,6 +23,17 @@ function isDeferredPlainField(
   field: ImageDraftDeferredField
 ): field is DeferredPlainField {
   return field !== "theme" && field !== "author";
+}
+
+function isIngestionDraftUrlField(
+  field: ImageDraftDeferredField
+): field is IngestionDraftUrlField {
+  return field === "original" || field === "source";
+}
+
+function reportInvalidDraftUrl(field: IngestionDraftUrlField) {
+  const label = field === "original" ? "原图" : "来源";
+  console.info(`[ImageShow] 内容接入草稿${label} URL 格式无效，未保存`);
 }
 
 export function useIngestionJobDraftEditing({
@@ -85,6 +100,13 @@ export function useIngestionJobDraftEditing({
       || value === edit.initialValue
       || value === current.draft[field]
     ) return;
+    if (
+      isIngestionDraftUrlField(field)
+      && normalizeIngestionDraftUrl(field, value) === null
+    ) {
+      reportInvalidDraftUrl(field);
+      return;
+    }
     onPatchRef.current(current, { [field]: value } as Partial<ImageDraft>);
   }, [currentSessionJob]);
 

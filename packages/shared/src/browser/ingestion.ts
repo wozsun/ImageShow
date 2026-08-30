@@ -6,6 +6,47 @@ import type {
 } from "./images.ts";
 
 export const ingestionStatusBatchMaxItems = 100;
+export const ingestionDraftUrlMaxLength = 2_048;
+export type IngestionDraftUrlField = "original" | "source";
+
+function isIpHostname(hostname: string) {
+  const bareHostname = hostname.replace(/^\[|\]$/g, "");
+  if (bareHostname.includes(":")) return true;
+  const parts = bareHostname.split(".");
+  return parts.length === 4 && parts.every((part) => (
+    /^\d+$/u.test(part) && Number(part) <= 255
+  ));
+}
+
+/**
+ * Normalize only the lightweight syntax accepted when an Ingestion card draft
+ * loses focus. This helper deliberately performs no network or image I/O.
+ */
+export function normalizeIngestionDraftUrl(
+  field: IngestionDraftUrlField,
+  value: string
+): string | null {
+  const trimmed = value.trim();
+  if (trimmed.length > ingestionDraftUrlMaxLength) return null;
+  if (!trimmed) return "";
+  const normalized = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)
+    ? trimmed
+    : `https://${trimmed}`;
+  try {
+    const parsed = new URL(normalized);
+    if (
+      parsed.protocol !== "https:"
+      || !parsed.hostname
+      || parsed.username
+      || parsed.password
+    ) return null;
+    if (field === "original" && isIpHostname(parsed.hostname)) return null;
+    return normalized;
+  } catch {
+    return null;
+  }
+}
+
 export const ingestionDuplicateDecisions = ["upload", "confirmed"] as const;
 export type IngestionDuplicateDecision =
   (typeof ingestionDuplicateDecisions)[number];

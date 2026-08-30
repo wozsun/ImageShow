@@ -6,7 +6,9 @@ import {
   adminPreferencesMaxBytes,
   type ImageUpdateItemInputDto,
   ingestionBatchHardLimit,
+  type IngestionDraftUrlField,
   ingestionDuplicateDecisions,
+  normalizeIngestionDraftUrl,
   ingestionQueueActionTypes,
   ingestionQueueTypes,
   ingestionSourceTypes,
@@ -43,6 +45,19 @@ function urlBase(message: string) {
       if (value === "") return true;
       return isHttpsUrl(value);
     }, message);
+}
+
+function ingestionDraftUrlField(field: IngestionDraftUrlField) {
+  const label = field === "original" ? "原图" : "来源";
+  return z.string().transform((value, ctx) => {
+    const normalized = normalizeIngestionDraftUrl(field, value);
+    if (normalized !== null) return normalized;
+    ctx.addIssue({
+      code: "custom",
+      message: `内容接入草稿${label} URL 格式无效`
+    });
+    return z.NEVER;
+  }).default("");
 }
 
 const classificationDevices = [...appConfig.devices, "auto"] as const;
@@ -242,6 +257,11 @@ const ingestionMetadataInput = metadataCreateInput.extend({
   tags: normalizedImageTagsInput.optional().default([])
 });
 
+const ingestionDraftMetadataInput = ingestionMetadataInput.extend({
+  original: ingestionDraftUrlField("original"),
+  source: ingestionDraftUrlField("source")
+});
+
 const ingestionTimeFields = {
   image_time: z.string().trim().min(1).max(64).optional(),
   batch_time: z.string().trim().min(1).max(64).optional(),
@@ -371,7 +391,7 @@ const expectedIngestionVersionInput = z.number().int().positive();
 export const ingestionSessionUpdateInput = z.strictObject({
   items: z.array(ingestionPairInput.extend({
     expected_version: expectedIngestionVersionInput,
-    metadata: ingestionMetadataInput.optional(),
+    metadata: ingestionDraftMetadataInput.optional(),
     duplicate_decision: z.enum(ingestionDuplicateDecisions).optional()
   }).refine(
     (item) => item.metadata !== undefined || item.duplicate_decision !== undefined,

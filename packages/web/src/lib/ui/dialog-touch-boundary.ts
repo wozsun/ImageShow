@@ -1,8 +1,15 @@
 import {
+  canDialogHorizontalScrollOwnerConsumeTouchMove,
   canDialogScrollOwnerConsumeTouchMove,
+  consumeDialogHorizontalTouchMove,
   dialogEventTargetElement,
+  findDialogHorizontalTouchScrollOwner,
   findDialogTouchScrollOwner
 } from "./dialog-scroll-boundary.js";
+import {
+  classifyMovementIntent,
+  type ClientPoint
+} from "./movement-intent.js";
 
 function topDialogFrame(ownerDocument: Document) {
   const frames = ownerDocument.querySelectorAll<HTMLElement>(
@@ -52,15 +59,20 @@ function touchWithIdentifier(
 type ActiveTouchGesture = {
   frame: HTMLElement;
   identifier: number;
+  origin: ClientPoint;
+  lastClientX: number;
   lastClientY: number;
-  owner: HTMLElement | null;
+  horizontalOwner: HTMLElement | null;
+  verticalOwner: HTMLElement | null;
+  intent: "horizontal" | "vertical" | null;
   preserveNativeText: boolean;
 };
 
 /**
  * Creates the bounded capture handlers used only while at least one dialog
- * holds the page lock. Multi-touch is deliberately left to the browser for
- * pinch zoom, and text-editing gestures keep their native path.
+ * holds the page lock. This owner maps classified movement to scroll owners;
+ * it does not decide descendant focus or activation. Multi-touch is left to
+ * the browser for pinch zoom, and text-editing gestures keep their native path.
  */
 export function createDialogTouchBoundary(ownerDocument: Document) {
   let activeGesture: ActiveTouchGesture | null = null;
@@ -82,8 +94,18 @@ export function createDialogTouchBoundary(ownerDocument: Document) {
     activeGesture = {
       frame,
       identifier: touch.identifier,
+      origin: {
+        clientX: touch.clientX,
+        clientY: touch.clientY
+      },
+      lastClientX: touch.clientX,
       lastClientY: touch.clientY,
-      owner: findDialogTouchScrollOwner(event.target, frame),
+      horizontalOwner: findDialogHorizontalTouchScrollOwner(
+        event.target,
+        frame
+      ),
+      verticalOwner: findDialogTouchScrollOwner(event.target, frame),
+      intent: null,
       preserveNativeText: preservesNativeTextGesture(
         event.target,
         ownerDocument,
@@ -104,8 +126,42 @@ export function createDialogTouchBoundary(ownerDocument: Document) {
       reset();
       return;
     }
+    const touchDeltaX = touch.clientX - activeGesture.lastClientX;
     const touchDeltaY = touch.clientY - activeGesture.lastClientY;
+    activeGesture.lastClientX = touch.clientX;
     activeGesture.lastClientY = touch.clientY;
+
+    if (!activeGesture.intent) {
+      const movementIntent = classifyMovementIntent(
+        activeGesture.origin,
+        touch
+      );
+      if (!movementIntent) return;
+      activeGesture.intent = activeGesture.horizontalOwner
+        && movementIntent === "horizontal"
+        ? "horizontal"
+        : "vertical";
+    }
+
+    const currentFrame = topDialogFrame(ownerDocument);
+    if (activeGesture.intent === "horizontal") {
+      const owner = activeGesture.horizontalOwner;
+      const staysInActiveDialog = currentFrame === activeGesture.frame
+        && owner?.isConnected
+        && activeGesture.frame.contains(owner);
+      if (staysInActiveDialog && owner) {
+        if (canDialogHorizontalScrollOwnerConsumeTouchMove(
+          owner,
+          touchDeltaX
+        )) consumeDialogHorizontalTouchMove(owner, touchDeltaX);
+      }
+      // Horizontal intent is consumed explicitly so a text input, chip and
+      // viewport whitespace all move the same owner without a second native
+      // scroll or a chain into the frozen document at either boundary.
+      if (event.cancelable) event.preventDefault();
+      return;
+    }
+
     if (
       activeGesture.preserveNativeText
       || preservesNativeTextGesture(
@@ -115,8 +171,7 @@ export function createDialogTouchBoundary(ownerDocument: Document) {
       )
     ) return;
 
-    const currentFrame = topDialogFrame(ownerDocument);
-    const owner = activeGesture.owner;
+    const owner = activeGesture.verticalOwner;
     const staysInActiveDialog = currentFrame === activeGesture.frame
       && owner?.isConnected
       && activeGesture.frame.contains(owner);

@@ -4,10 +4,21 @@ import {
   type ButtonHTMLAttributes,
   type PointerEvent
 } from "react";
+import {
+  classifyMovementIntent,
+  type ClientPoint,
+  type MovementIntent
+} from "../../lib/ui/movement-intent.js";
 
 type CompatibilityActivationGuard = {
   release: () => void;
   renew: () => void;
+};
+
+type DirectPointerPress = {
+  pointerId: number;
+  origin: ClientPoint;
+  movementIntent: MovementIntent | null;
 };
 
 const pendingActivationSuppressions =
@@ -97,6 +108,7 @@ export type DirectActivationButtonProps = Omit<
   | "onClick"
   | "onPointerCancel"
   | "onPointerDown"
+  | "onPointerMove"
   | "onPointerUp"
   | "onLostPointerCapture"
 > & {
@@ -108,16 +120,16 @@ function useDirectActivation(
   onActivate: () => void,
   preserveFocusOnPress: boolean
 ) {
-  const pointerPressRef = useRef<number | null>(null);
+  const pointerPressRef = useRef<DirectPointerPress | null>(null);
 
   const clearPointerPress = (event: PointerEvent<HTMLButtonElement>) => {
-    if (pointerPressRef.current === event.pointerId) {
+    if (pointerPressRef.current?.pointerId === event.pointerId) {
       pointerPressRef.current = null;
     }
   };
   const cancelPointerPress = (event: PointerEvent<HTMLButtonElement>) => {
     if (
-      pointerPressRef.current === event.pointerId
+      pointerPressRef.current?.pointerId === event.pointerId
       && event.pointerType !== "mouse"
     ) {
       // Refresh the post-gesture window from cancellation rather than from
@@ -153,12 +165,30 @@ function useDirectActivation(
         pointerPressRef.current = null;
         return;
       }
-      pointerPressRef.current = event.pointerId;
+      pointerPressRef.current = {
+        pointerId: event.pointerId,
+        origin: {
+          clientX: event.clientX,
+          clientY: event.clientY
+        },
+        movementIntent: null
+      };
       suppressCompatibilityActivation(event.currentTarget.ownerDocument);
     },
-    onPointerUp(event: PointerEvent<HTMLButtonElement>) {
+    onPointerMove(event: PointerEvent<HTMLButtonElement>) {
+      const press = pointerPressRef.current;
       if (
-        pointerPressRef.current === event.pointerId
+        !press
+        || press.pointerId !== event.pointerId
+        || press.movementIntent
+      ) return;
+      press.movementIntent = classifyMovementIntent(press.origin, event);
+    },
+    onPointerUp(event: PointerEvent<HTMLButtonElement>) {
+      const press = pointerPressRef.current;
+      const ownsPress = press?.pointerId === event.pointerId;
+      if (
+        ownsPress
         && event.pointerType !== "mouse"
       ) {
         // pointerdown arms early enough to catch interleaved mousedown;
@@ -166,6 +196,11 @@ function useDirectActivation(
         // gesture recognition, including long presses.
         suppressCompatibilityActivation(event.currentTarget.ownerDocument);
       }
+      const movementIntent = press
+        ? press.movementIntent
+          ?? classifyMovementIntent(press.origin, event)
+        : null;
+      clearPointerPress(event);
       if (
         event.currentTarget.disabled
         || event.pointerType === "mouse"
@@ -173,9 +208,10 @@ function useDirectActivation(
       const pressedHere = (
         event.isPrimary !== false
         && event.button === 0
-        && pointerPressRef.current === event.pointerId
+        && ownsPress
+        && press !== null
+        && !movementIntent
       );
-      pointerPressRef.current = null;
       if (!pressedHere) return;
 
       const rect = event.currentTarget.getBoundingClientRect();
@@ -199,9 +235,11 @@ function useDirectActivation(
  * Shared activation boundary for controls whose activation can synchronously
  * close, remove, disable or reposition the touched surface.
  *
- * Touch and pen activation is committed on pointerup, before WebKit's delayed
- * compatibility mouse events can be retargeted. Mouse, keyboard and assistive
- * technology keep the native click path.
+ * Touch and pen activation is committed on pointerup only while the physical
+ * press stays below the shared movement-intent threshold. This prevents
+ * implicit pointer capture from turning a scroll that starts on the control
+ * into activation. It never selects or moves a scroll owner. Mouse, keyboard
+ * and assistive technology keep the native click path.
  */
 export const DirectActivationButton = forwardRef<
   HTMLButtonElement,

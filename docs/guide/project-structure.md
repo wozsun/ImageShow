@@ -288,7 +288,9 @@ Server 队列模块与 Web 队列 owner 的连接关系保持不变：
   `model/server-ingestion-queue-state.ts` 负责 revision / version / progress 单调合并，
   `useStoredIngestionDraftSync.ts` 按硬上限批量排空草稿写入并在 version 冲突时有界回读，
   `useIngestionAuthorityHandoffs.ts` 持有独立于当前页 DTO 和连接代际的 HTTP 接管围栏，
-  `useIngestionQueue.ts` 是单队列 controller 的公开组合入口。
+  `cards/useIngestionJobDraftEditing.ts` 在失焦发布前复用 `@imageshow/shared/browser` 的 Ingestion
+  草稿 URL 纯格式解析，不接入远端图片请求能力；`useIngestionQueue.ts` 是单队列 controller
+  的公开组合入口。
 - `useCompletedIngestionInvalidation.ts` 是 completed pair 去重与 PostgreSQL 图片查询失效 owner；
   `useIngestionStatusHydration.ts` 拥有响应未知 pair 的有界 status 回读与 AbortController；SSE
   view / protocol 纯投影位于 `model/server-ingestion-queue-view.ts`，不创建第二条连接。
@@ -341,6 +343,10 @@ hooks ──► lib
 - `components/` 按稳定 UI 职责保存跨页面组件；`components/image/editor/` 的数量中性
   `1..N` 编辑器把重复图片卡片与 shell 编排分开，trash 模型和 Hook 集中拥有逐项响应
   对账、权威回读、会话成员修剪及查询失效，不把 mutation 收口重新分散到入口页面。
+  `components/form/TagInput.tsx` 统一拥有按需覆盖、由父框圆角裁切的 22px 边缘按钮与单行标签
+  viewport；相邻 `tag-input-scroll.ts` 纯模型计算逐项边界、两端状态与滚轮像素，不把 Upload /
+  Import 的默认值和逐图入口拆成四套交互。`TagInput` 本身只把 DOM 几何接到纯模型，并在非交互
+  表面的轻点结束时提升编辑器焦点；它不重复决定主轴、消费触摸滚动或提交按钮激活。
   `components/layout/OverlayScrollbar.tsx` 统一拥有页面与局部容器滚动条：React 只提交可见性、
   几何和拖拽状态，逐帧位置以同一手柄 ref 的 transform 更新，不把连续滚动提升为根渲染。
   `components/feedback/DialogLayerPortal.tsx` 是顶层动态视口和嵌套弹窗坐标系的唯一 owner；
@@ -364,9 +370,12 @@ hooks ──► lib
   导航意图，`AppRoutes` 的 `React.lazy`、主导航和首页次级入口复用同一 Promise；它不绑定
   pointerdown，因而不会改变触摸或直接导航路径。`lib/image-url.ts` 只保存详情与画廊权威
   快照共同需要的原图 URL 判定，不让页面层复制同一字段投影。
-  `lib/ui/dialog-scroll-boundary.ts` 保存滚动 owner 选择与方向纯模型，
-  `dialog-touch-boundary.ts` 只管理 capture 触摸生命周期；二者只认识当前顶层 dialog frame
-  与 DOM 滚动能力，不依赖页面、角色或路由。
+  `lib/ui/movement-intent.ts` 是触控与指针共用的 5px 移动意图和主轴分类唯一来源；
+  `dialog-scroll-boundary.ts` 保存纵向 owner、显式登记的标签横向 owner 与方向纯模型，
+  `dialog-touch-boundary.ts` 只管理 capture 触摸生命周期并将已分类意图映射给 owner；共享
+  `DirectActivationButton` 另以局部 pointer 生命周期决定直接激活是否仍成立，不选择或移动滚动
+  owner。各层共享纯判定但不共享可变手势状态，也不互相承担后置补救；它们只认识坐标、当前顶层
+  dialog frame 与 DOM 滚动能力，不依赖页面、角色或路由。
 - `pages/` 保存路由页面与页面级编排，页面专属组件、状态机和 Hook 就近维护。
 - `pages/admin/images/useImageAdminPageNavigation.ts` 是后台图库、无主题与回收站数字页的唯一查询
   owner，只保存规范化 scope、目标 page 与最近成功的 scope total 快照，并让 React Query
