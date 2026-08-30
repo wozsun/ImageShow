@@ -29,6 +29,12 @@
   max-height: 90vh;
   background: var(--color-detail-image-surface);
 }
+.image-detail-modal[data-public-image-detail]
+  > article
+  > .image-detail-image
+  > .progressive-image-full-frame.is-ready {
+  pointer-events: auto;
+}
 .image-detail-panel {
   position: relative;
   min-width: 0;

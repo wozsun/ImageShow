@@ -111,7 +111,7 @@ healthcheck 只读现有配置快照，密码恢复不初始化运行时配置�
 | `core/database/` | PostgreSQL pool、事务、advisory lock、公开 fallback 准入、schema 装配和 readiness；`readiness/` 只承载数据库基线断言的内部职责。 |
 | `core/redis/` | 唯一 Redis client、业务 Lua / 命令注册、JSON、pipeline、条件字符串和窗口限流基础设施；不导入 ready-cache 或其他业务领域。 |
 | `core/http/` | HTTP 响应与响应头、请求来源和请求体限制、压缩阈值、条件请求、静态响应与 Range 解析。 |
-| `config/` | 部署环境、首次播种、运行时配置 schema、无导入副作用的文件读写与显式进程内 store，以及配置包；`runtime-config-environment.ts` 是全部 RuntimeConfig 叶子到首次 seed 变量的唯一映射。 |
+| `config/` | 部署环境、首次播种、运行时配置 schema、无导入副作用的文件读写与显式进程内 store，以及配置包；`runtime-config-environment.ts` 是具备环境首次播种能力的 RuntimeConfig 叶子到 seed 变量的唯一映射，并显式列出配置文件专属叶子。 |
 | `routes/` | HTTP 方法、鉴权、CSRF、输入解析和响应投影；业务工作委托给领域模块。 |
 | `images/` | 图片读写、展示投影、分类与元数据变更、回收站和缩略图；`page-window.ts` 唯一计算安全数字页窗口，`ready-cache/` 拥有统一 Redis rich 投影、筛选、统计、精确同步与重建，`ingestion/` 拥有 Upload / Import 的完整接入会话生命周期及清理任务，`read-models/` 承载 PostgreSQL cursor / offset 读模型。 |
 | `storage/` | 只在根层保留横切 `maintenance-lock.ts`；`backends/`、`drivers/`、`objects/`、`migration/` 与 `cleanup/` 分别拥有注册表、驱动、对象原语、搬迁和持久清理。 |
@@ -393,7 +393,9 @@ hooks ──► lib
   `components/image/`，页面层只设置画廊任务的优先级、暂停和驻留边界。无界面的
   页面滚动边界归一化放在 `lib/ui/`，由共享采样 Hook 提供给各页面交互状态机。图片编辑
   保存时，数据窗口用权威快照原位更新唯一命中卡片并保持其他卡片对象，再以同一 cursor
-  后台水合该页；筛选成员、几何和游标变化继续由数据窗口原子提交。
+  后台水合该页；筛选成员、几何和游标变化继续由数据窗口原子提交。公开详情只在完整展示
+  frame 就绪后恢复真实 `<img>` 命中，加载期透明 frame 与其他 `ProgressiveImage` 消费者继续
+  沿用不可命中的共享默认值。
 - `pages/admin/` 按稳定页面职责分为 `shell/`、`account/`、`images/`、`check/`、`storage/`
   与 `advanced-config/`；只有 `LogPage.tsx`、`Overview.tsx`、`SettingsPage.tsx`、
   `UserAdmin.tsx`、`VocabularyAdmin.tsx` 及其单个卡片等没有形成三文件族的页面留在根层。

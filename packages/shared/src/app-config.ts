@@ -161,7 +161,11 @@ export const appConfig = {
         banner_label: "ImageShow · A FAN-MADE PHOTO HANDBOOK",
         banner_title: "我们一起，\n收藏这些瞬间。"
       },
-      gallery: { limit: 60, order: "latest" },
+      gallery: {
+        limit: 60,
+        order: "latest",
+        show_original_button: false
+      },
       random_method: "redirect",
       static_subdomain: "static",
       robots_enabled: false

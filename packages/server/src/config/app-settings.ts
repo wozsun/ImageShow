@@ -154,7 +154,10 @@ export function getSettingsForAdmin(): AdminSettings {
         banner_label: home.banner_label,
         banner_title: home.banner_title
       },
-      gallery,
+      gallery: {
+        limit: gallery.limit,
+        order: gallery.order
+      },
       random_method
     },
     ingestion: {
@@ -215,7 +218,10 @@ export function siteConfigPayload(): SiteConfigDto {
       icon,
       root,
       home,
-      gallery: { order: gallery.order },
+      gallery: {
+        order: gallery.order,
+        show_original_button: gallery.show_original_button
+      },
       static_url: staticLocalBaseUrl()
     },
     embed: {

@@ -99,7 +99,8 @@ const runtimeConfigSchema = z.strictObject({
     }),
     gallery: z.strictObject({
       limit: galleryLimit,
-      order: galleryOrder
+      order: galleryOrder,
+      show_original_button: z.boolean()
     }),
     random_method: randomDefaultMethod,
     static_subdomain: subdomainLabel,

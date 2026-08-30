@@ -16,6 +16,14 @@ type RuntimeConfigLeafPath<T = RuntimeConfig> = {
       : K;
 }[keyof T & string];
 
+type RuntimeConfigFileOnlyPath =
+  | "site.gallery.show_original_button";
+
+type RuntimeConfigEnvironmentLeafPath = Exclude<
+  RuntimeConfigLeafPath,
+  RuntimeConfigFileOnlyPath
+>;
+
 type RuntimeConfigEnvironmentValueKind =
   | "string"
   | "number"
@@ -24,7 +32,7 @@ type RuntimeConfigEnvironmentValueKind =
   | "json-object";
 
 type RuntimeConfigEnvironmentBinding = {
-  path: RuntimeConfigLeafPath;
+  path: RuntimeConfigEnvironmentLeafPath;
   environmentVariable: string;
   valueKind: RuntimeConfigEnvironmentValueKind;
 };
@@ -247,7 +255,7 @@ function parseEnvironmentValue(
 
 function setPatchValue(
   patch: RuntimeConfigPatch,
-  path: RuntimeConfigLeafPath,
+  path: RuntimeConfigEnvironmentLeafPath,
   value: unknown
 ) {
   const segments = path.split(".");
