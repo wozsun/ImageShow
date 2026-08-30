@@ -10,7 +10,7 @@ const httpsEndpoint = z.string().trim().max(2048)
 const optionalHttpsUrl = z.string().trim().max(2048)
   .refine((value) => !value || isHttpsUrl(value), "URL must use HTTPS");
 
-const s3SettingsPatchSchema = z.strictObject({
+const s3SettingsPatchShape = {
   endpoint: httpsEndpoint.optional(),
   region: z.string().trim().optional(),
   bucket: z.string().trim().optional(),
@@ -24,7 +24,9 @@ const s3SettingsPatchSchema = z.strictObject({
   connect_timeout_seconds: z.coerce.number().int().min(1).max(120).optional(),
   idle_timeout_seconds: z.coerce.number().int().min(1).max(300).optional(),
   task_timeout_seconds: z.coerce.number().int().min(15).max(3_600).optional()
-});
+};
+
+const s3SettingsPatchSchema = z.strictObject(s3SettingsPatchShape);
 
 const s3SettingsDefaults = {
   endpoint: "",
@@ -39,10 +41,23 @@ const s3SettingsDefaults = {
   task_timeout_seconds: 300
 } as const;
 
-export const s3SettingsSchema = s3SettingsPatchSchema.transform((settings) => ({
+const withS3SettingsDefaults = (settings: z.infer<typeof s3SettingsPatchSchema>) => ({
   ...s3SettingsDefaults,
   ...settings
-}));
+});
+
+export const s3SettingsSchema = s3SettingsPatchSchema.transform(withS3SettingsDefaults);
+
+// Configuration packages are read by the target version. Extra settings from
+// another version are ignored, while any invalid current setting rejects only
+// that backend entry.
+export const looseS3SettingsSchema = z.object({
+  ...s3SettingsPatchShape,
+  connect_timeout_seconds: z.number().int().min(1).max(120).optional(),
+  idle_timeout_seconds: z.number().int().min(1).max(300).optional(),
+  task_timeout_seconds: z.number().int().min(15).max(3_600).optional()
+})
+  .transform(withS3SettingsDefaults);
 
 export type S3Settings = z.infer<typeof s3SettingsSchema>;
 export type S3SettingsPatch = z.infer<typeof s3SettingsPatchSchema>;

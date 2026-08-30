@@ -8,11 +8,14 @@ import {
 } from "@imageshow/shared/browser";
 import { ApiError } from "../core/api-error.ts";
 import {
+  looseS3SettingsSchema,
   s3SettingsSchema,
   type StorageBackendRecord
 } from "../storage/backends/config.ts";
 import {
+  parseRuntimeConfig,
   portableRuntimeConfigSchema,
+  projectPortableRuntimeConfig,
   type PortableRuntimeConfig
 } from "./runtime-config.ts";
 
@@ -30,17 +33,22 @@ const packageBackendBase = {
   enabled: z.boolean(),
   is_default: z.boolean()
 };
-const packageStorageBackendSchema = z.strictObject({
+const exportedStorageBackendSchema = z.strictObject({
   ...packageBackendBase,
   s3: s3SettingsSchema
 });
+const recognizableStorageBackendSchema = z.object({
+  ...packageBackendBase,
+  s3: looseS3SettingsSchema
+});
 
-const configPackageSchema = z.strictObject({
+const exportedConfigPackageSchema = z.strictObject({
   format: z.literal(configPackageFormat),
   application_version: z.string().trim().min(1).max(64),
   exported_at: z.iso.datetime(),
   config: portableRuntimeConfigSchema,
-  storage_backends: z.array(packageStorageBackendSchema).max(configPackageMaxBackends)
+  storage_backends: z.array(exportedStorageBackendSchema)
+    .max(configPackageMaxBackends)
 }).superRefine((value, context) => {
   const slugs = new Set<string>();
   let defaultCount = 0;
@@ -72,8 +80,45 @@ const configPackageSchema = z.strictObject({
   }
 });
 
-type ConfigPackage = z.infer<typeof configPackageSchema>;
-type ConfigPackageStorageBackend = ConfigPackage["storage_backends"][number];
+type ExportedConfigPackage = z.infer<typeof exportedConfigPackageSchema>;
+type ConfigPackageStorageBackend = z.infer<typeof recognizableStorageBackendSchema>;
+
+type ConfigPackage = {
+  format: string | null;
+  application_version: string | null;
+  exported_at: string | null;
+  config: PortableRuntimeConfig;
+  config_values: {
+    recognized: number;
+    defaulted: number;
+    ignored: number;
+  };
+  storage_backends: ConfigPackageStorageBackend[];
+  skipped_storage_backends: number;
+};
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function serializedConfigPackage(value: unknown) {
+  const serialized = JSON.stringify(value);
+  if (serialized === undefined) {
+    throw new ApiError(
+      400,
+      "config_package_invalid",
+      "配置包必须是可解析的 JSON"
+    );
+  }
+  if (Buffer.byteLength(serialized, "utf8") > configPackageMaxBytes) {
+    throw new ApiError(
+      413,
+      "config_package_too_large",
+      "配置包内容不能超过 1 MiB"
+    );
+  }
+  return serialized;
+}
 
 function portableConfig(runtime: RuntimeConfig): PortableRuntimeConfig {
   const { domain: _domain, ...portableSite } = runtime.site;
@@ -82,8 +127,8 @@ function portableConfig(runtime: RuntimeConfig): PortableRuntimeConfig {
 
 function portableBackends(
   backends: StorageBackendRecord[]
-): ConfigPackageStorageBackend[] {
-  const portable: ConfigPackageStorageBackend[] = [];
+): ExportedConfigPackage["storage_backends"] {
+  const portable: ExportedConfigPackage["storage_backends"] = [];
   for (const backend of backends) {
     if (backend.type === "local") continue;
     const base = {
@@ -97,31 +142,110 @@ function portableBackends(
   return portable;
 }
 
+function recognizeStorageBackends(values: unknown[]) {
+  const storageBackends: ConfigPackageStorageBackend[] = [];
+  const slugs = new Set<string>();
+  let hasDefault = false;
+  let skipped = 0;
+
+  for (const value of values) {
+    const result = recognizableStorageBackendSchema.safeParse(value);
+    if (!result.success) {
+      skipped += 1;
+      continue;
+    }
+    const backend = result.data;
+    if (
+      slugs.has(backend.slug)
+      || (backend.is_default && (!backend.enabled || hasDefault))
+    ) {
+      skipped += 1;
+      continue;
+    }
+    slugs.add(backend.slug);
+    if (backend.is_default) hasDefault = true;
+    storageBackends.push(backend);
+  }
+
+  return { storageBackends, skipped };
+}
+
+function sourceText(value: unknown) {
+  const result = z.string().trim().min(1).max(64).safeParse(value);
+  return result.success ? result.data : null;
+}
+
+function sourceExportedAt(value: unknown) {
+  const result = z.iso.datetime().safeParse(value);
+  return result.success ? result.data : null;
+}
+
 export function buildConfigPackage(
   runtime: RuntimeConfig,
   backends: StorageBackendRecord[],
   applicationVersion: string,
   exportedAt = new Date()
-): ConfigPackage {
-  return parseConfigPackage({
+): ExportedConfigPackage {
+  const pkg = exportedConfigPackageSchema.parse({
     format: configPackageFormat,
     application_version: applicationVersion,
     exported_at: exportedAt.toISOString(),
     config: portableConfig(runtime),
     storage_backends: portableBackends(backends)
   });
+  serializedConfigPackage(pkg);
+  return pkg;
 }
 
 export function parseConfigPackage(value: unknown): ConfigPackage {
-  const configPackage = configPackageSchema.parse(value);
-  if (Buffer.byteLength(JSON.stringify(configPackage), "utf8") > configPackageMaxBytes) {
+  serializedConfigPackage(value);
+  if (!isPlainRecord(value)) {
     throw new ApiError(
-      413,
-      "config_package_too_large",
-      "配置包内容不能超过 1 MiB"
+      400,
+      "config_package_invalid",
+      "配置包根节点必须是 JSON 对象"
     );
   }
-  return configPackage;
+  const record = value;
+  const rawStorageBackends = Array.isArray(record.storage_backends)
+    ? record.storage_backends
+    : [];
+  if (rawStorageBackends.length > configPackageMaxBackends) {
+    throw new ApiError(
+      400,
+      "config_package_invalid",
+      `配置包最多包含 ${configPackageMaxBackends} 个存储后端`
+    );
+  }
+
+  const config = projectPortableRuntimeConfig(record.config);
+  const storage = recognizeStorageBackends(rawStorageBackends);
+  return {
+    format: sourceText(record.format),
+    application_version: sourceText(record.application_version),
+    exported_at: sourceExportedAt(record.exported_at),
+    config: config.config,
+    config_values: {
+      recognized: config.recognizedValues,
+      defaulted: config.defaultedValues,
+      ignored: config.ignoredValues
+    },
+    storage_backends: storage.storageBackends,
+    skipped_storage_backends: storage.skipped
+  };
+}
+
+export function materializeImportedRuntimeConfig(
+  portable: PortableRuntimeConfig,
+  targetDomain: string
+): RuntimeConfig {
+  return parseRuntimeConfig({
+    ...portable,
+    site: {
+      ...portable.site,
+      domain: targetDomain
+    }
+  });
 }
 
 export function projectConfigPackagePreview(
@@ -132,13 +256,14 @@ export function projectConfigPackagePreview(
     format: pkg.format,
     application_version: pkg.application_version,
     exported_at: pkg.exported_at,
-    config_groups: Object.keys(pkg.config).length,
+    config_values: pkg.config_values,
     storage_backends: pkg.storage_backends.map((backend) => ({
       slug: backend.slug,
       display_name: backend.display_name,
       enabled: backend.enabled,
       is_default: backend.is_default
     })),
+    skipped_storage_backends: pkg.skipped_storage_backends,
     conflicts: pkg.storage_backends
       .filter((backend) => existingSlugs.has(backend.slug))
       .map((backend) => backend.slug),
@@ -153,7 +278,16 @@ export function resolveImportedStorageBackends(
   existingSlugs: Set<string>,
   inputMappings: unknown
 ): ConfigPackageStorageBackend[] {
-  const mappings = slugMappingsSchema.parse(inputMappings);
+  const mappingResult = slugMappingsSchema.safeParse(inputMappings);
+  if (!mappingResult.success) {
+    throw new ApiError(
+      400,
+      "config_slug_mapping_invalid",
+      "存储后端 slug 重命名无效",
+      mappingResult.error.flatten()
+    );
+  }
+  const mappings = mappingResult.data;
   const importedSlugs = new Set(pkg.storage_backends.map((backend) => backend.slug));
   const conflicts = new Set(
     pkg.storage_backends

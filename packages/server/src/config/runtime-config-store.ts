@@ -84,16 +84,13 @@ export function updateRuntimeConfig(patch: RuntimeConfigPatch) {
   });
 }
 
-/** Apply a patch and return the exact in-process write revision for rollback fencing. */
-export function updateRuntimeConfigWithRevision(patch: RuntimeConfigPatch) {
-  return withRuntimeConfigWriteLease(() => {
-    const next = mergeRuntimeConfig(getRuntimeConfig(), patch);
-    return commitRuntimeConfig(next);
-  });
-}
-
 export function replaceRuntimeConfig(next: RuntimeConfig) {
   return withRuntimeConfigWriteLease(() => commitRuntimeConfig(next).config);
+}
+
+/** Replace the complete config and return the exact write revision. */
+export function replaceRuntimeConfigWithRevision(next: RuntimeConfig) {
+  return withRuntimeConfigWriteLease(() => commitRuntimeConfig(next));
 }
 
 /** Replace an earlier write only if its exact revision is still current. */

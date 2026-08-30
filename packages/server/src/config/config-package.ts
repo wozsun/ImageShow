@@ -6,6 +6,7 @@ import {
 import { importStorageBackends } from "../storage/backends/mutations.ts";
 import {
   buildConfigPackage,
+  materializeImportedRuntimeConfig,
   parseConfigPackage,
   projectConfigPackagePreview,
   resolveImportedStorageBackends
@@ -13,7 +14,7 @@ import {
 import {
   getRuntimeConfig,
   replaceRuntimeConfigIfRevision,
-  updateRuntimeConfigWithRevision,
+  replaceRuntimeConfigWithRevision,
   withRuntimeConfigWriteLease
 } from "./runtime-config-store.ts";
 
@@ -48,6 +49,10 @@ export async function importConfigPackage(
       slugMappings
     );
     const previousRuntimeConfig = structuredClone(getRuntimeConfig());
+    const importedRuntimeConfig = materializeImportedRuntimeConfig(
+      pkg.config,
+      previousRuntimeConfig.site.domain
+    );
     const importedBackends = resolved.map((backend) => ({
       slug: backend.slug,
       display_name: backend.display_name,
@@ -63,7 +68,7 @@ export async function importConfigPackage(
         importedBackends,
         async () => {
           appliedRuntimeConfigRevision = (
-            await updateRuntimeConfigWithRevision(pkg.config)
+            await replaceRuntimeConfigWithRevision(importedRuntimeConfig)
           ).revision;
         },
         (transactionId) => {

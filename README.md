@@ -65,6 +65,8 @@ Node.js 26 / Hono、React 19、PostgreSQL、Redis 8 和 Docker 构成。
   并汇总核心 / 派生占用；手动 Redis 检查复用同一查询。
 - 图片管理员与超级管理员使用集中权限矩阵；高风险接口在服务端独立鉴权。
 - 管理员偏好跨端同步，公开页面固定暗色，后台可选亮色、暗色或跟随设备。
+- 超级管理员可导出固定格式的完整配置包；导入时由目标版本逐项采用可识别值，缺失或错误值
+  使用当前默认值，未知字段与无法安全识别的存储后端独立跳过，不维护跨版本迁移链。
 - 单应用实例、可信反向代理和容器健康检查组成当前生产边界。
 
 完整行为见[维护文档](docs/README.md)，随机接口见
@@ -106,6 +108,8 @@ Redis 连接和时区使用代码默认值。外部拓扑需要在 Compose overr
 [配置说明](docs/guide/configuration.md#runtimeconfig-参数目录)。当前根页面字段为
 `site.root`，对应首次播种变量 `SITE_ROOT`；`SITE_DOMAIN`、`SITE_DESCRIPTION` 和其他 seed 一样，
 只有显式扩展 `services.imageshow.environment` 后才参与空目录首次生成。
+配置包的导出、目标版本宽松识别、敏感凭据与冲突重命名边界见
+[配置说明中的配置包章节](docs/guide/configuration.md#配置包)。
 
 ### 启动
 

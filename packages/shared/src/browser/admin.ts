@@ -9,11 +9,16 @@ export type AdvancedConfigBackendPreviewDto = {
 };
 
 export type AdvancedConfigPreviewDto = {
-  format: "imageshow-config";
-  application_version: string;
-  exported_at: string;
-  config_groups: number;
+  format: string | null;
+  application_version: string | null;
+  exported_at: string | null;
+  config_values: {
+    recognized: number;
+    defaulted: number;
+    ignored: number;
+  };
   storage_backends: AdvancedConfigBackendPreviewDto[];
+  skipped_storage_backends: number;
   conflicts: string[];
   existing_slugs: string[];
 };

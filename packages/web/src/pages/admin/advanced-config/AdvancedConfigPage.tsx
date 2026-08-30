@@ -18,9 +18,9 @@ import { configPackageRequestMaxBytes } from "@imageshow/shared/browser";
 
 const previewPackagePresentation = {
   idle: { icon: "upload-cloud-2-line", label: "导入配置包" },
-  pending: { icon: "upload-cloud-2-line", label: "正在校验" },
-  success: { icon: "check-line", label: "校验通过" },
-  error: { icon: "close-line", label: "配置包无效" }
+  pending: { icon: "upload-cloud-2-line", label: "正在识别" },
+  success: { icon: "check-line", label: "预览完成" },
+  error: { icon: "close-line", label: "无法读取" }
 } as const;
 
 export function AdvancedConfigPage() {
@@ -97,7 +97,7 @@ export function AdvancedConfigPage() {
   };
 
   const applyPackage = async (slugMappings: Record<string, string>) => {
-    if (!selectedPackage || busy) return false;
+    if (selectedPackage === null || busy) return false;
     setBusy("import");
     try {
       await api(
@@ -122,7 +122,7 @@ export function AdvancedConfigPage() {
     <section className="workspace workspace-contained advanced-config-page">
       <WorkspaceHeader
         title="高级配置"
-        description="编辑当前实例完整配置，或通过版本化配置包迁移可移植设置。"
+        description="编辑当前实例完整配置，或通过目标版本逐项识别的配置包迁移可移植设置。"
         actionsClassName="advanced-config-head-actions"
         actions={
           <>

@@ -1,5 +1,9 @@
 import { useId, useRef, useState, type RefObject } from "react";
-import { slugFormatHint, slugPattern } from "../../../lib/constants.js";
+import {
+  slugFormatHint,
+  slugMaxLength,
+  slugPattern
+} from "../../../lib/constants.js";
 import type { AdvancedConfigPreview } from "../../../lib/types.js";
 import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import { AsyncActionButton } from "../../../components/actions/AsyncActionButton.js";
@@ -14,14 +18,54 @@ const importPackagePresentation = {
   error: { icon: "close-line", label: "导入失败" }
 } as const;
 
-function previewDate(value: string) {
+function previewDate(value: string | null) {
+  if (!value) return "未提供";
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }
 
+export function configPackageRecognitionNotice(preview: Pick<
+  AdvancedConfigPreview,
+  "config_values" | "skipped_storage_backends"
+>) {
+  const { recognized, defaulted, ignored } = preview.config_values;
+  const skipped = [
+    ignored > 0 ? `忽略 ${ignored} 个未知或错误的运行时配置字段` : "",
+    preview.skipped_storage_backends > 0
+      ? `跳过 ${preview.skipped_storage_backends} 个无法安全识别的存储后端`
+      : ""
+  ].filter(Boolean);
+  const skippedCopy = skipped.length > 0 ? `；${skipped.join("，")}` : "";
+  return `当前版本将逐项读取：采用 ${recognized} 个运行时配置项，${defaulted} 个运行时配置项使用当前默认值${skippedCopy}。未知、已删除或错误的运行时配置字段不会阻止其余内容导入。`;
+}
+
 function suggestedSlug(slug: string) {
   const suffix = "-imported";
-  return `${slug.slice(0, 32 - suffix.length).replace(/-+$/, "")}${suffix}`;
+  return `${slug.slice(0, slugMaxLength - suffix.length).replace(/-+$/, "")}${suffix}`;
+}
+
+export function configPackageSlugMappingError(
+  preview: Pick<
+    AdvancedConfigPreview,
+    "conflicts" | "existing_slugs" | "storage_backends"
+  >,
+  slugMappings: Record<string, string>,
+  sourceSlug: string
+) {
+  const target = (slugMappings[sourceSlug] ?? "").trim().toLowerCase();
+  if (!target) return "必须填写新的 slug";
+  if (target.length > slugMaxLength) {
+    return `slug 不能超过 ${slugMaxLength} 个字符`;
+  }
+  if (target === "local" || !slugPattern.test(target)) return slugFormatHint;
+  if (preview.existing_slugs.includes(target)) return "该 slug 已存在，请使用新的标识";
+  const resolved = preview.storage_backends.map((backend) =>
+    preview.conflicts.includes(backend.slug)
+      ? (slugMappings[backend.slug] ?? "").trim().toLowerCase()
+      : backend.slug
+  );
+  if (resolved.filter((slug) => slug === target).length > 1) return "导入后的 slug 不能重复";
+  return "";
 }
 
 export function ConfigPackageImportDialog({
@@ -47,19 +91,11 @@ export function ConfigPackageImportDialog({
   const importStatus = useAsyncActionStatus({ successDurationMs: null });
   const blocked = busy || importStatus.pending;
 
-  const mappingError = (sourceSlug: string) => {
-    const target = (slugMappings[sourceSlug] ?? "").trim().toLowerCase();
-    if (!target) return "必须填写新的 slug";
-    if (target === "local" || !slugPattern.test(target)) return slugFormatHint;
-    if (preview.existing_slugs.includes(target)) return "该 slug 已存在，请使用新的标识";
-    const resolved = preview.storage_backends.map((backend) =>
-      preview.conflicts.includes(backend.slug)
-        ? (slugMappings[backend.slug] ?? "").trim().toLowerCase()
-        : backend.slug
-    );
-    if (resolved.filter((slug) => slug === target).length > 1) return "导入后的 slug 不能重复";
-    return "";
-  };
+  const mappingError = (sourceSlug: string) => configPackageSlugMappingError(
+    preview,
+    slugMappings,
+    sourceSlug
+  );
 
   const mappingErrors = preview.conflicts.map(mappingError).filter(Boolean);
   const submit = async (requestClose: () => void) => {
@@ -84,7 +120,7 @@ export function ConfigPackageImportDialog({
           <header>
             <div className="config-package-dialog-copy">
               <h2 id={titleId}>导入配置包</h2>
-              <p id={descriptionId}>确认可迁移配置和即将新增的自定义存储后端。</p>
+              <p id={descriptionId}>确认当前版本识别的配置和即将新增的自定义存储后端。</p>
             </div>
             <button
               ref={closeButtonRef}
@@ -99,11 +135,20 @@ export function ConfigPackageImportDialog({
           </header>
           <div ref={operationBodyRef} className="operation-body">
             <dl className="advanced-config-summary">
-              <div><dt>格式</dt><dd>{preview.format}</dd></div>
-              <div><dt>应用版本</dt><dd>{preview.application_version}</dd></div>
+              <div><dt>来源格式</dt><dd>{preview.format ?? "未提供"}</dd></div>
+              <div><dt>来源版本</dt><dd>{preview.application_version ?? "未提供"}</dd></div>
               <div><dt>导出时间</dt><dd>{previewDate(preview.exported_at)}</dd></div>
-              <div><dt>配置组</dt><dd>{preview.config_groups}</dd></div>
+              <div>
+                <dt>采用配置项</dt>
+                <dd>
+                  {preview.config_values.recognized}/
+                  {preview.config_values.recognized + preview.config_values.defaulted}
+                </dd>
+              </div>
             </dl>
+            <p className="muted advanced-config-import-notice">
+              {configPackageRecognitionNotice(preview)}
+            </p>
             <div className="advanced-config-backends">
               {preview.storage_backends.length ? preview.storage_backends.map((backend) => {
                 const conflict = preview.conflicts.includes(backend.slug);
@@ -128,6 +173,7 @@ export function ConfigPackageImportDialog({
                           }))}
                           aria-invalid={Boolean(error)}
                           disabled={blocked}
+                          maxLength={slugMaxLength}
                         />
                         {error && <small className="admin-error">{error}</small>}
                       </label>

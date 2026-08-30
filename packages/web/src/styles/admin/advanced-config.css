@@ -93,6 +93,7 @@
 .advanced-config-summary div { min-width: 0; padding: 10px 12px; border-radius: 8px; background: var(--admin-color-config-summary-surface); }
 .advanced-config-summary dt { color: var(--admin-color-text-secondary); font-size: 12px; }
 .advanced-config-summary dd { margin: 4px 0 0; overflow: hidden; color: var(--admin-color-text-primary); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.advanced-config-import-notice { margin: 0; }
 .advanced-config-backends { display: grid; gap: var(--admin-card-grid-gap); }
 .advanced-config-backend {
   display: grid;

@@ -3,6 +3,7 @@ export {
   adminApiBasePath,
   adminBasePath,
   adminImagePageLimit,
+  slugMaxLength,
   slugPattern
 } from "@imageshow/shared/browser";
 
