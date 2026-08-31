@@ -267,7 +267,6 @@ export function registerIngestionRoutes(app: Hono) {
       return c.json(apiSuccess(await createWeiboImportBatchManifest(
         input.urls,
         {
-          authorSlugs: runtimeConfig.weibo.author_slugs,
           sourceEnabled: runtimeConfig.weibo.source_enabled,
           timeZone: process.env.TZ,
           signal: c.req.raw.signal

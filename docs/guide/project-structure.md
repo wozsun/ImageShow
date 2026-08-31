@@ -89,8 +89,8 @@ core / config
 - `src/http-app.ts` 只构造 Hono 应用、装配中间件和路由；导入模块不会初始化配置、
   创建目录或启动服务。
 - `src/index.ts` 先向 PostgreSQL pool 显式注入部署配置，再初始化运行时配置和日志来源，
-  创建 HTTP 应用，初始化 / 校验 schema 与管理员初始化，启动 Worker 和 HTTP 服务，并处理
-  优雅退出。
+  创建 HTTP 应用，初始化 / 校验 schema，执行 5.4.0 作者身份启动升级，再完成管理员初始化、
+  启动 Worker 和 HTTP 服务，并处理优雅退出。
 - `src/admin-password-cli.ts` 是管理员密码恢复入口。
 - `src/healthcheck-cli.ts` 是容器 readiness 检查入口。
 - `images/mutation-sync-policy.ts` 只定义图片变更总量的纯决策与结果契约；
@@ -111,14 +111,14 @@ healthcheck 只读现有配置快照，密码恢复不初始化运行时配置�
 | `core/database/` | PostgreSQL pool、事务、advisory lock、公开 fallback 准入、schema 装配和 readiness；`readiness/` 只承载数据库基线断言的内部职责。 |
 | `core/redis/` | 唯一 Redis client、业务 Lua / 命令注册、JSON、pipeline、条件字符串和窗口限流基础设施；不导入 ready-cache 或其他业务领域。 |
 | `core/http/` | HTTP 响应与响应头、请求来源和请求体限制、压缩阈值、条件请求、静态响应与 Range 解析。 |
-| `config/` | 部署环境、首次播种、运行时配置 schema、无导入副作用的文件读写与显式进程内 store，以及配置包；配置包由目标版本以当前默认配置为基线逐项投影，存储后端逐条识别，不维护来源版本迁移链；`runtime-config-environment.ts` 是具备环境首次播种能力的 RuntimeConfig 叶子到 seed 变量的唯一映射，并显式列出配置文件专属叶子。 |
+| `config/` | 部署环境、首次播种、运行时配置 schema、无导入副作用的文件读写与显式进程内 store，以及配置包；配置包由目标版本以当前默认配置为基线逐项投影，存储后端逐条识别，不维护来源版本迁移链；`runtime-config-environment.ts` 是具备环境首次播种能力的 RuntimeConfig 叶子到 seed 变量的唯一映射，并显式列出配置文件专属叶子。5.4.0 另以精确命名的 startup-only reader 在当前结构投影前暂存旧 `weibo.author_slugs`，普通读取、热加载和配置包不复用该分支。 |
 | `routes/` | HTTP 方法、鉴权、CSRF、输入解析和响应投影；业务工作委托给领域模块。 |
 | `images/` | 图片读写、展示投影、分类与元数据变更、回收站和缩略图；`page-window.ts` 唯一计算安全数字页窗口，`ready-cache/` 拥有统一 Redis rich 投影、筛选、统计、精确同步与重建，`ingestion/` 拥有 Upload / Import 的完整接入会话生命周期及清理任务，`read-models/` 承载 PostgreSQL cursor / offset 读模型。 |
 | `storage/` | 只在根层保留横切 `maintenance-lock.ts`；`backends/`、`drivers/`、`objects/`、`migration/` 与 `cleanup/` 分别拥有注册表、驱动、对象原语、搬迁和持久清理。 |
 | `random/` | 随机查询校验、设备轴推断、Redis 8 Array 最近历史、定向 id 与有界 pivot 普通随机 PG 降级查询及随机出口编排；Redis 候选投影、筛选与重建统一由 `images/ready-cache/` 提供。 |
 | `jobs/` | 仅拥有通用 `background_job` 生命周期、小型类型分派、公平调度 Worker，以及集中管理任务中止、期限、续租和有界排空的执行协调器；各领域拥有自己的 handler、payload 和结果语义。 |
 | `checks/` | PostgreSQL / Redis 独立轻量状态、数据库 / Redis / 存储手动深度检查、“全部”中的回收站一致性结果，以及显式触发的存储维护；状态页自动 Redis 深检与手动 Redis 检查复用同一有界扫描和 pipeline，只返回当前汇总。 |
-| `authors/`、`tags/`、`themes/`、`vocab/` | 词表查询、变更、关联锁与派生缓存。 |
+| `authors/`、`tags/`、`themes/`、`vocab/` | 词表查询、变更、关联锁与派生缓存；`authors/identity.ts` 唯一拥有作者链接到平台身份的当前解析和管理投影，`legacy-weibo-author-slugs-upgrade.ts` 仅承载 5.4.0 启动迁移及已有链接补齐。 |
 | `users/` | 管理员初始化、账号变更、Redis 登录会话、逐请求 PostgreSQL 角色与密码代际核对、操作授权、密码恢复、偏好和会话失效；不维护管理员凭据 Redis 投影。 |
 | `types/` | 仅放缺失的编译期声明，不承载运行时代码。 |
 
@@ -135,8 +135,9 @@ advisory lock 两个连接池；`transactions.ts`、`advisory-locks.ts` 和 `sch
 事务、锁与干净安装编排。advisory lock 调度信号只取消连接取得与锁等待；锁内回调收到独立的
 父锁 / 当前连接失效信号，由具体领域决定是否再合并请求、lease 或 deadline。`readiness.ts`
 是唯一总入口，按固定顺序调用
-`readiness/relations.ts`、`privileges.ts`、`indexes.ts`、`foreign-keys.ts` 与 `seeds.ts`；
+`readiness/relations.ts`、`privileges.ts`、`indexes.ts`、`checks.ts`、`foreign-keys.ts` 与 `seeds.ts`；
 `readiness/contract.ts` 是最小表、列、权限、主键、索引与外键 contract 的唯一数据来源；
+`checks.ts` 只核对当前作者身份读写依赖的三项长期 CHECK 和受支持 provider 数据集合；
 `readiness/seeds.ts` 是稳定种子断言的唯一来源，其他检查模块不得复制两者。
 后台数字页使用 `database/transactions.ts` 的 read-only repeatable-read 事务，让 COUNT、
 越界判断、metadata 与 tags 共享一个 client 和快照；事务后 formatter 不得借默认 pool。
@@ -310,10 +311,11 @@ Server 队列模块与 Web 队列 owner 的连接关系保持不变：
 - 两套 owner 不共享页码、SSE、
   busy、清空范围或 action connection hold。内容接入队列不做固定 pair 轮询，只有响应未知的
   已知 pair 才使用一次有界 status 查询。
-- `sources/weibo.ts` 只编排批次和 JSONL 清单；`weibo-request-scheduler.ts` 唯一拥有全进程固定
+- `sources/weibo.ts` 只编排批次、去重 UID 的单次作者身份查询和 JSONL 清单；
+  `weibo-request-scheduler.ts` 唯一拥有全进程固定
   串行、批次轮转、随机间隔和单一访客身份。链接 / 时间 / 响应提取、受限上游协议、未知响应值
   归一化及公开类型分别位于同目录 `weibo-parser.ts`、`weibo-client.ts`、`weibo-values.ts`、
-  `weibo-types.ts`。
+  `weibo-types.ts`；parser 逐媒体携带实际所属 status 的 UID，不读取 RuntimeConfig 作者映射。
 - 图片读取先由 `image-serving-record.ts` 将 Redis 命中与 PostgreSQL fallback 归一为
   同一 serving record；公开正式媒体的 ready-cache 明确空命中仍会在有界数据库读取中查找
   ready 或 deleted 行，入口在缓存和数据库读取前统一拒绝非规范或过长对象键。

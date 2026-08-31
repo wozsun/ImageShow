@@ -33,6 +33,11 @@ function predicateMatches(
         .includes(normalized);
     case "non_null_idempotency":
       return normalized === "idempotency_keyisnotnull";
+    case "non_null_author_identity":
+      return [
+        "identity_providerisnotnullandidentity_idisnotnull",
+        "identity_idisnotnullandidentity_providerisnotnull"
+      ].includes(normalized.replace(/[()]/g, ""));
     case "active_cache_rebuild":
       return [
         "type='cache.rebuild'and(status=any(array['pending','running']))",
@@ -49,6 +54,8 @@ function uniqueIndexLabel(required: RequiredUniqueIndex) {
     none: "",
     default_storage: " WHERE is_default",
     non_null_idempotency: " WHERE idempotency_key IS NOT NULL",
+    non_null_author_identity:
+      " WHERE identity_provider IS NOT NULL AND identity_id IS NOT NULL",
     active_cache_rebuild:
       " WHERE type = 'cache.rebuild' AND status IN ('pending', 'running')",
     super_admin: " WHERE role = 'super'"

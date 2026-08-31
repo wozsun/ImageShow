@@ -69,7 +69,6 @@ export type WeiboSettings = {
   max_items: number;
   source_enabled: boolean;
   request_delay_seconds: [number, number];
-  author_slugs: Record<string, string>;
 };
 
 export type NormalizeSettings = {

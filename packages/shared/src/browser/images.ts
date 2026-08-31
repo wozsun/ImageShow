@@ -199,10 +199,25 @@ export type TagDto = Omit<AdminEntityDto, "link">;
 
 export type ThemeDto = Omit<AdminEntityDto, "link">;
 
-export type AuthorDto = AdminEntityDto & { link: string };
+export type AuthorDerivedIdentityDto = {
+  provider: "weibo";
+  id: string;
+};
 
-export type AdminEntityListResponseDto = {
-  items: AdminEntityDto[];
+export type AuthorDto = AdminEntityDto & {
+  link: string;
+  derived_identity: AuthorDerivedIdentityDto | null;
+};
+
+export type AuthorMutationResponseDto = {
+  ok: true;
+  item: AuthorDto;
+};
+
+export type AdminEntityListResponseDto<
+  Item extends AdminEntityDto = AdminEntityDto
+> = {
+  items: Item[];
 };
 
 export type ImageTrashItemResultDto = {

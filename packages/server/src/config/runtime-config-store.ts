@@ -3,8 +3,12 @@ import type { RuntimeConfig } from "@imageshow/shared/browser";
 import { runtimeConfigFromEnvironment, runtimePaths } from "./bootstrap-env.ts";
 import {
   readRuntimeConfigFile,
+  readRuntimeConfigFileForLegacyWeiboAuthorSlugsUpgrade,
   writeRuntimeConfigFile
 } from "./runtime-config-file.ts";
+import type {
+  LegacyWeiboAuthorSlugs
+} from "./legacy-weibo-author-slugs-config.ts";
 import {
   mergeRuntimeConfig,
   type RuntimeConfigPatch
@@ -12,17 +16,43 @@ import {
 
 let runtimeConfig: RuntimeConfig | undefined;
 let runtimeConfigRevision = 0;
+let pendingLegacyWeiboAuthorSlugsUpgrade:
+  LegacyWeiboAuthorSlugs | undefined;
 const runtimeConfigWriteLeaseContext = new AsyncLocalStorage<boolean>();
 let runtimeConfigWriteLeaseTail = Promise.resolve();
 
 export function initializeRuntimeConfig() {
   if (runtimeConfig) return runtimeConfig;
 
-  const existing = readRuntimeConfigFile();
+  const existing = readRuntimeConfigFileForLegacyWeiboAuthorSlugsUpgrade();
   const initial = existing?.config ?? runtimeConfigFromEnvironment();
-  if (!existing || existing.needsWriteBack) writeRuntimeConfigFile(initial);
+  pendingLegacyWeiboAuthorSlugsUpgrade =
+    existing?.legacyWeiboAuthorSlugs;
+  if (
+    !existing
+    || (
+      existing.needsWriteBack
+      && pendingLegacyWeiboAuthorSlugsUpgrade === undefined
+    )
+  ) {
+    writeRuntimeConfigFile(initial);
+  }
   runtimeConfig = initial;
   return runtimeConfig;
+}
+
+export function getPendingLegacyWeiboAuthorSlugsUpgrade() {
+  return pendingLegacyWeiboAuthorSlugsUpgrade === undefined
+    ? undefined
+    : structuredClone(pendingLegacyWeiboAuthorSlugsUpgrade);
+}
+
+/** Persist current-shape config only after the PostgreSQL upgrade commits. */
+export function finalizeLegacyWeiboAuthorSlugsUpgrade() {
+  if (pendingLegacyWeiboAuthorSlugsUpgrade === undefined) return false;
+  writeRuntimeConfigFile(getRuntimeConfig());
+  pendingLegacyWeiboAuthorSlugsUpgrade = undefined;
+  return true;
 }
 
 export function getRuntimeConfig() {

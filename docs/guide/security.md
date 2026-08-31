@@ -43,6 +43,11 @@
   手动重建统一图片缓存需要 `cache.maintenance.rebuild`。
   以上八项高风险操作权限当前只授予超级管理员；直接构造对应单项请求同样返回 403，
   且在解析正文或进入存储维护操作前终止。
+- 作者身份的 PostgreSQL 原始列 `identity_provider` / `identity_id` 只由 Server 根据已校验的
+  作者主页链接写入，客户端请求中的同名或 `derived_identity` 字段会被严格对象校验拒绝。图片
+  管理员与超级管理员可通过现有作者查看 / 编辑权限读取管理端只读 `derived_identity`；未认证
+  请求仍先被鉴权拒绝。公共图片、Gallery facet、Ingestion browser DTO、日志与错误都不返回
+  原始身份列，唯一冲突也只使用稳定错误码，不回显 UID、作者 slug 或链接。
 - Compose 内置 Redis 使用不固定次版本的 `redis:8` 镜像，在项目私有网络内通过容器端口提供无密码连接；直接使用镜像默认启动命令并保留 `/data` volume。该 volume 提供尽力而为的重启保留；Redis 数据丢失时会话、限流、派生状态和未完全入库内容允许消失，PostgreSQL 中已正式提交的图片不受影响。Redis 内存上限、淘汰策略和容器硬限制由部署方管理，ImageShow 通过 `INFO MEMORY` 提供运维观测；启动与 `/readyz` 检查连接，并在自有 5 秒 TTL 隔离探针键上实际执行 `INCREX`、`ARRING`、`ARLASTITEMS`、`SET ... IFEQ ... KEEPTTL` 与 `DELEX ... IFEQ` 五项必需能力，同时验证条件失败、缺失和 TTL 保留；命令存在但 ACL 拒绝执行仍视为不可用。首次校验成功前后台与公开业务都由冷启动门拒绝；运行期 Redis 故障时后台在会话读取前统一返回 `503 redis_unavailable`，不能伪装成 401 或触发浏览器清除登录状态，公开只读业务才允许有界 PostgreSQL 回源。连接启用了认证的外部 Redis 时，可通过 `REDIS_PASSWORD` 向应用提供密码。
 - 管理端界面偏好接口只使用鉴权会话中的用户名定位 `admin_account.preferences`，不接受客户端传入目标账号。接口只接受 shared 注册的键与值域，PATCH 在 PostgreSQL 行内原子合并并返回完整投影；JSONB 顶层必须是对象且最大 4 KiB。GET 使用 `private, no-cache` 与内容 ETag，`/api/admin/auth/me` 的认证首帧同时携带完全相同偏好表示的 ETag，五分钟内由前端查询缓存直接复用，更久后的窗口聚焦 / 重连显式带该验证器条件读取，设置未变化时即使此前没有访问过偏好 URL 也返回 304。浏览器缓存键按用户名隔离，`localStorage` 仅承担首帧显示、断网 pending 和多标签同步，不参与鉴权，也不保存会话或 CSRF token。PostgreSQL 尚无某键时，已校验的本地值可补写一次；删除账号时偏好随该行自然删除。
 - 登录失败限流：每 IP + 用户名 60 秒内 5 次失败即拦截，叠加 180 秒内 10 次尝试的全局兜底（阈值与窗口均可在 `config.json` 的 `security.*` 调整）。两个固定窗口在一次 Redis 服务端原子操作中按来源到全局的顺序使用 `INCREX ... UBOUND ... EX ... ENX` 预留；前一窗口已拒绝时不再消耗后续共享额度。达到上限后计数不再增长，后续请求也不会延长首次建立的 TTL。

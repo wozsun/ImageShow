@@ -1,6 +1,7 @@
 import { appConfig } from "@imageshow/shared";
 import type { WeiboImportResultDto } from "@imageshow/shared/browser";
 import { getRuntimeConfig } from "../../../config/runtime-config-store.ts";
+import { resolveWeiboAuthorSlugs } from "../../../authors/query.ts";
 import { parseJsonlManifest } from "./jsonl.ts";
 import {
   createWeiboVisitorCookie,
@@ -21,7 +22,6 @@ import {
 } from "./weibo-types.ts";
 
 type WeiboExtractionOptions = {
-  authorSlugs: Readonly<Record<string, string>>;
   signal?: AbortSignal;
 };
 
@@ -54,17 +54,20 @@ const weiboRequestScheduler = createWeiboRequestScheduler({
 
 export function weiboPostToJsonl(
   post: ExtractedWeiboPost,
-  sourceEnabled: boolean
+  sourceEnabled: boolean,
+  authorSlugs: ReadonlyMap<string, string> = new Map()
 ) {
   const publicationYear = post.published_at.slice(0, 4);
-  return post.original_image_urls.map((original) => JSON.stringify({
-    original,
+  return post.images.map((image) => JSON.stringify({
+    original: image.original_url,
     ...(sourceEnabled ? { source: post.source_url } : {}),
     image_time: post.published_at,
     device: "auto",
     brightness: "auto",
     tags: [publicationYear],
-    ...(post.author ? { author: post.author } : {})
+    ...(image.user_id && authorSlugs.has(image.user_id)
+      ? { author: authorSlugs.get(image.user_id) }
+      : {})
   })).join("\n");
 }
 
@@ -115,8 +118,7 @@ export async function createWeiboImportBatchManifest(
         async (visitorCookie: string, signal: AbortSignal): Promise<WeiboBatchExtraction> => {
           const post = extractWeiboPost(
             await fetchWeiboStatus(parsedUrl.identifier, visitorCookie, signal),
-            parsedUrl,
-            options.authorSlugs
+            parsedUrl
           );
           fetchedImageCount += post.image_count;
           assertWeiboImageCountWithinHardLimit(fetchedImageCount);
@@ -153,10 +155,16 @@ export async function createWeiboImportBatchManifest(
   assertWeiboImageCountWithinHardLimit(
     posts.reduce((total, post) => total + post.image_count, 0)
   );
+  const authorSlugs = await resolveWeiboAuthorSlugs(
+    posts.flatMap((post) => post.images.flatMap((image) => (
+      image.user_id ? [image.user_id] : []
+    )))
+  );
   const manifest = parseJsonlManifest(
     posts.map((post) => weiboPostToJsonl(
       post,
-      options.sourceEnabled
+      options.sourceEnabled,
+      authorSlugs
     )).join("\n"),
     {
       maxItems: appConfig.ingestion.weiboImageHardLimit,

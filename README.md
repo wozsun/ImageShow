@@ -22,8 +22,10 @@ Node.js 26 / Hono、React 19、PostgreSQL、Redis 8 和 Docker 构成。
   worker 接管。页面上传窗口、Server raw、Upload / Import 共用的 prepare / staging、全部 Sharp
   normalize 与最终 commit 各有唯一准入 owner；prepare / staging 和 Import 后继窗口均由 normalize
   容量派生，前者限制持有处理后 Buffer 直至 `_uploads` 和 ready 发布，后者只预取下一批 raw。
-  微博帖子元数据请求全进程串行，复用一个访客身份并在相邻请求间随机等待 2–5 秒，解析后的图片
-  进入同一后继窗口。
+  微博帖子元数据请求全进程串行，复用一个访客身份并在相邻请求间随机等待 2–5 秒；解析器按媒体
+  实际所属 status 提取账号 UID，批次结束后一次查询 PostgreSQL 作者身份，为命中项填入作者草稿，
+  再进入同一后继窗口。作者身份只由管理员保存的主页链接派生，不在 RuntimeConfig 或 Redis 维护
+  第二份映射。
   `import.keep_original_link` 可分别决定 URL、JSONL 与微博导入是否把下载 URL 保留为公开原图链接，
   `weibo.source_enabled` 独立决定新解析的微博图片是否填写帖子来源页；两项都不影响素材下载与入库。
   Upload、Import 与直接 API 共用 `ingestion.*` 的原图体积、长边和队列分页边界，页面预检不替代
@@ -146,11 +148,11 @@ docker compose exec postgresql sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB
 
 ## 数据库基线
 
-`schema.sql` 完整定义当前干净安装的单一基线；镜像仍保留
-`schema-additions.sql` 作为当前发布周期的注释占位，并为以后经明确审查的受限增量或一次性
-数据变化保留固定入口。空数据库在同一事务中执行基线与占位文件，非空数据库执行占位文件后
-进入只读 readiness；当前结构完全由基线定义，readiness 只核对运行时实际依赖的最小契约。
-`metadata.created_by TEXT NOT NULL` 已直接属于干净安装基线。additions 只承载一个发布周期：
+`schema.sql` 完整定义上一个封版版本的干净安装基线；5.4.0 的 `schema-additions.sql` 为
+`author` 增加可空身份两列、长期 CHECK 与非空身份复合唯一索引。空数据库在同一事务中执行基线
+与 additions，非空数据库只执行 additions 后进入只读 readiness；readiness 核对当前读写所需的
+最小列、约束、索引、权限与受支持身份 provider。`metadata.created_by TEXT NOT NULL` 已直接属于
+干净安装基线。additions 只承载一个发布周期：
 全部受控非空数据库应用其中增量并通过 readiness 后，下一发布移除一次性语句并恢复注释占位。
 部署和备份恢复按相邻发布顺序应用 additions；破坏性结构整理由维护者在停机、备份和恢复验证后
 单独执行。应用的自动结构职责限定为干净初始化、单周期 additions 和最小 readiness。精确契约见

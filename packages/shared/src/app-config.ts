@@ -22,6 +22,9 @@ export const appConfig = {
     titleMaxLength: imageTitleMaxLength,
     descriptionMaxLength: imageDescriptionMaxLength
   },
+  authorIdentity: {
+    providers: ["weibo"] as const
+  },
 
   pagination: {
     maxLimit: 200
@@ -194,8 +197,7 @@ export const appConfig = {
     weibo: {
       max_items: 10,
       source_enabled: true,
-      request_delay_seconds: [2, 5],
-      author_slugs: {} as Record<string, string>
+      request_delay_seconds: [2, 5]
     },
     normalize: {
       concurrency: 2,

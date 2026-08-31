@@ -60,6 +60,8 @@ export const databaseReadiness = {
       slug: "text",
       display_name: "text",
       link: "text",
+      identity_provider: "text",
+      identity_id: "text",
       sort_order: "int4",
       updated_at: "timestamptz"
     },
@@ -153,6 +155,7 @@ export type RequiredUniqueIndex = RequiredPrimaryKey & {
     | "none"
     | "default_storage"
     | "non_null_idempotency"
+    | "non_null_author_identity"
     | "active_cache_rebuild"
     | "super_admin";
 };
@@ -182,6 +185,11 @@ export const requiredUniqueIndexes = [
     table: "metadata",
     columns: ["object_key"],
     predicate: "none"
+  },
+  {
+    table: "author",
+    columns: ["identity_provider", "identity_id"],
+    predicate: "non_null_author_identity"
   },
   {
     table: "background_job",

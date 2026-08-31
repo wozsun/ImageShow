@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   adminPermissions,
+  type AuthorDto,
+  type AuthorMutationResponseDto,
   type AdminEntityListResponseDto,
   type AdminPermission
 } from "@imageshow/shared/browser";
@@ -28,7 +30,10 @@ import { useAdminSettings } from "../../lib/api/admin-settings.js";
 import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
 import type { Author, Tag, Theme } from "../../lib/types.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
-import { invalidateImageData } from "../../lib/api/query-invalidation.js";
+import {
+  invalidateDataAfterAuthorProfileSave,
+  invalidateImageData
+} from "../../lib/api/query-invalidation.js";
 import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
 import { useAdminPermissions } from "../../hooks/useAuthSession.js";
 import { usePersistedReorder } from "../../hooks/usePersistedReorder.js";
@@ -76,11 +81,24 @@ export function VocabularyAdmin({ kind }: { kind: VocabularyKind }) {
   const permissions = useAdminPermissions();
   const canDelete = permissions.includes(DELETE_PERMISSIONS[kind]);
   const client = useQueryClient();
-  const { data, error: listError, isError: listFailed, isFetching, refetch } = useQuery<AdminEntityListResponseDto>({ queryKey, queryFn: ({ signal }) => api(`${adminApiBasePath}/${kind}`, { signal }) });
+  const { data, error: listError, isError: listFailed, isFetching, refetch } = useQuery<AdminEntityListResponseDto<VocabularyEntry>>({ queryKey, queryFn: ({ signal }) => api(`${adminApiBasePath}/${kind}`, { signal }) });
   const { data: settingsData } = useAdminSettings();
   // 新建/删除词条会改动公共画廊的筛选词表（gallery-facets，staleTime:Infinity 不会自动刷新），
   // 删除还会清除关联图片上的该属性，故一并失效后台图片列表，与 ImageAdmin.refresh 的失效集对齐。
   const refresh = () => invalidateImageData(client);
+  const acceptAuthorItem = async (item: AuthorDto) => {
+    client.setQueryData<AdminEntityListResponseDto<VocabularyEntry>>(queryKey, (current) => {
+      if (!current) return current;
+      const existingIndex = current.items.findIndex(
+        (candidate) => candidate.slug === item.slug
+      );
+      const items = [...current.items];
+      if (existingIndex >= 0) items[existingIndex] = item;
+      else items.push(item);
+      return { ...current, items };
+    });
+    await invalidateDataAfterAuthorProfileSave(client);
+  };
   const [slug, setSlug] = useState("");
   const [display, setDisplay] = useState("");
 
@@ -124,7 +142,7 @@ export function VocabularyAdmin({ kind }: { kind: VocabularyKind }) {
     refresh,
     readAuthoritative: () => {
       const queryState = client.getQueryState(queryKey);
-      const cached = client.getQueryData<AdminEntityListResponseDto>(queryKey);
+      const cached = client.getQueryData<AdminEntityListResponseDto<VocabularyEntry>>(queryKey);
       return cached
         && queryState?.status === "success"
         && !queryState.isInvalidated
@@ -171,14 +189,21 @@ export function VocabularyAdmin({ kind }: { kind: VocabularyKind }) {
         const body = isAuthor
           ? { slug: value, display_name: display.trim(), link: link.trim() }
           : { slug: value, display_name: display.trim() };
-        await api(`${adminApiBasePath}/${kind}`, {
-          method: "POST",
-          body: JSON.stringify(body)
-        });
+        const response = await api<AuthorMutationResponseDto | { ok: true }>(
+          `${adminApiBasePath}/${kind}`,
+          {
+            method: "POST",
+            body: JSON.stringify(body)
+          }
+        );
         setSlug("");
         setDisplay("");
         setLink("");
-        await refresh();
+        if (isAuthor && "item" in response) {
+          await acceptAuthorItem(response.item);
+        } else {
+          await refresh();
+        }
         return true;
       } catch (error) {
         reportAdminUiError(`vocabulary_admin.${kind}.create`, error);
@@ -249,7 +274,7 @@ export function VocabularyAdmin({ kind }: { kind: VocabularyKind }) {
           <input
             value={link}
             onChange={(event) => setLink(event.target.value)}
-            placeholder="链接 URL（HTTPS，可选）"
+            placeholder="作者主页链接（HTTPS，可选）"
             disabled={operationBusy}
             maxLength={2048}
           />
@@ -295,7 +320,10 @@ export function VocabularyAdmin({ kind }: { kind: VocabularyKind }) {
                 onReorderControlRef={(direction, node) => {
                   reorder.registerReorderControl(item.slug, direction, node);
                 }}
-                onChanged={() => void refresh()}
+                onChanged={async (item) => {
+                  if (item) await acceptAuthorItem(item);
+                  else await refresh();
+                }}
                 onDelete={() => setConfirmDelete(item)}
                 onError={(error) => reportAdminUiError(`vocabulary_admin.${kind}.update`, error)}
                 onDragStart={reorder.beginDrag}

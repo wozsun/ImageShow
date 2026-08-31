@@ -10,7 +10,7 @@ PostgreSQL。排查配置时先确认“这项配置由谁管理”，再判断�
 | --- | --- | --- |
 | 环境变量 | PostgreSQL / Redis 连接、时区与首次管理员凭据；也可在首次生成 `config.json` 时播种应用配置。 | 修改 `.env`、宿主环境或 Compose 映射后重建 / 重启。`.env` 只是 Compose 插值来源，只有部署清单显式映射的值才会进入容器。部署字段在每次进程启动时读取，不写入 `config.json`。 |
 | `/app/data/config.json` | 站点、内容接入、图片处理、安全和日志等应用运行策略。 | 后台普通设置页或高级配置，或直接编辑文件后在后台「设置 → 读取配置文件」。页面上传窗口、图片处理并发与最终入库并发可在普通设置页修改；导入原图链接、自动开始、微博来源页、质量递减步长、接入原图体积 / 长边与 Server raw 准入只通过配置文件或高级配置维护。存储迁移准入是代码内固定调度，不属于 RuntimeConfig。 |
-| PostgreSQL | 管理员账号及界面偏好；本地 / S3 存储后端注册表；S3 endpoint、region、bucket、access key、secret key、根目录、public URL 与连接 / 空闲 / 总时限等实例化数据。 | 后台设置页或对应管理界面。secret key 只保存，不返回给前端。 |
+| PostgreSQL | 管理员账号及界面偏好；作者主页与派生导入身份；本地 / S3 存储后端注册表；S3 endpoint、region、bucket、access key、secret key、根目录、public URL 与连接 / 空闲 / 总时限等实例化数据。 | 后台设置页或对应管理界面。secret key 与作者内部身份列不返回公共接口。 |
 
 本页的 [RuntimeConfig 参数目录](#runtimeconfig-参数目录)是完整应用字段参考；仓库根目录
 `.env.example` 同时列出部署变量与具备环境映射的首次播种变量，并注明仅由配置文件管理的
@@ -72,6 +72,22 @@ PostgreSQL 的 `admin_account` 表，不进入 `config.json`。单应用进程�
 
 后台配置写入由同一进程内的 FIFO 写租约串行化，包括配置包导入的长 I/O 和补偿窗口；配置包的
 存储后端写入使用 PostgreSQL 事务、提交结果回执和运行时配置 revision 补偿。
+
+## 5.4.0 作者身份升级
+
+`weibo.author_slugs` 与 `WEIBO_AUTHOR_SLUGS` 已从当前 RuntimeConfig、首次播种和配置包契约中
+删除；微博导入改为按 PostgreSQL 作者身份查询。5.4.0 仅在主进程启动的配置初始化边界、当前
+结构投影写回之前，识别磁盘 `config.json` 中这一个旧字段并按旧规则取得内存快照。非法映射会
+拒绝启动并保留原文件；环境变量、手动「读取配置文件」、高级配置保存和配置包导入都不进入这条
+升级路径，其中再次出现旧字段时只按未知字段删除。
+
+数据库 additions 与 readiness 成功后，启动升级在一个 PostgreSQL 事务中锁定 `author`：旧映射
+按 `UID -> author slug` 写入派生身份，目标作者没有链接时补为规范
+`https://weibo.com/u/<UID>`；同时扫描数据库中已经存在的可识别微博主页链接，即使旧配置没有
+列出也一并补齐身份。已有身份、链接与旧映射必须一致，同一身份只能属于一个作者；缺失作者、
+冲突链接、冲突身份或唯一性冲突都会回滚整个数据迁移，并保留含旧字段的配置文件供维护者处理。
+PostgreSQL 提交后才原子写回当前配置。若数据库已经提交而文件写回失败，下次启动会幂等重放，
+再完成旧字段清理；该临时启动分支会在所有受控非空数据库都经过 5.4.0 后删除。
 
 ## RuntimeConfig 参数目录
 
@@ -136,7 +152,6 @@ PostgreSQL 的 `admin_account` 表，不进入 `config.json`。单应用进程�
 | <!-- runtime-config:weibo.max_items --> `weibo.max_items` / `WEIBO_MAX_ITEMS` / 显式映射 | 整数；默认 `10`；1–50 条 | 单次微博链接软上限；热加载后影响新解析。 |
 | <!-- runtime-config:weibo.source_enabled --> `weibo.source_enabled` / `WEIBO_SOURCE_ENABLED` / 显式映射 | 布尔；默认 `true` | 微博导入是否把帖子页面写入 `source`；不影响图片下载、`original` 白名单或其他导入来源。关闭后，新解析、接管与首次提交意图冻结都会清空该字段；重新开启会让新解析清单携带来源，并允许仍持有来源值的未冻结任务提交，但不会重建此前已从清单省略的来源。高级配置或热加载后生效；正式入库后的人工编辑不属于此配置。 |
 | <!-- runtime-config:weibo.request_delay_seconds --> `weibo.request_delay_seconds` / `WEIBO_REQUEST_DELAY_SECONDS` / 显式映射 | 严格 JSON 二元整数数组；默认 `[2, 5]`；两项均为 0–60 秒且下界不高于上界 | 全进程串行微博帖子请求的随机间隔 `[下界, 上界]`；已经开始的等待保持其采样值，热加载影响再下一项。 |
-| <!-- runtime-config:weibo.author_slugs --> `weibo.author_slugs` / `WEIBO_AUTHOR_SLUGS` / 显式映射 | 严格 JSON 对象；默认 `{}`；键为 1–20 位非零开头数字 ID，值为 1–32 字符合法小写 slug | 命中时给微博图片填充作者；重复 JSON 键或非法成员直接拒绝首次生成，热加载后影响新解析。 |
 
 ### normalize 与 thumbnail
 
@@ -227,10 +242,7 @@ Redis runnable FIFO。commit dispatch window 由 `ingestion.commit_concurrency=N
   "weibo": {
     "max_items": 10,
     "source_enabled": true,
-    "request_delay_seconds": [2, 5],
-    "author_slugs": {
-      "1234567890": "example-author"
-    }
+    "request_delay_seconds": [2, 5]
   },
   "normalize": {
     "concurrency": 2,
@@ -382,7 +394,7 @@ ImageShow 与 PostgreSQL 在各自 `environment` 中直接插值同一组数据�
 
 `.env.example` 提供全部 RuntimeConfig 首次播种变量目录；默认应用容器环境保持上述五项
 部署值。变量名严格由完整路径转成大写下划线，不增加类型后缀，例如 `site.root → SITE_ROOT`、
-`embed.allowed_origins → EMBED_ALLOWED_ORIGINS`、`weibo.author_slugs → WEIBO_AUTHOR_SLUGS`。
+`embed.allowed_origins → EMBED_ALLOWED_ORIGINS`、`weibo.request_delay_seconds → WEIBO_REQUEST_DELAY_SECONDS`。
 部署者确需启用时，必须在 `services.imageshow.environment` 中逐项增加映射并重建，例如：
 
 ```yaml
@@ -413,7 +425,6 @@ NORMALIZE_SKIP_WEBP_UNDER_KB=0
 SITE_ROBOTS_ENABLED=false
 SITE_HOME_BANNER_TITLE="我们一起，\n收藏这些瞬间。"
 EMBED_ALLOWED_ORIGINS='["https://portal.example.com","https://*.trusted.example.net"]'
-WEIBO_AUTHOR_SLUGS='{"1234567890":"example-author"}'
 ```
 
 对应的复杂配置纯 JSON 片段为：
@@ -433,11 +444,6 @@ WEIBO_AUTHOR_SLUGS='{"1234567890":"example-author"}'
       "https://portal.example.com",
       "https://*.trusted.example.net"
     ]
-  },
-  "weibo": {
-    "author_slugs": {
-      "1234567890": "example-author"
-    }
   }
 }
 ```

@@ -1,9 +1,10 @@
 # 数据库结构
 
 PostgreSQL 共 9 张业务表，不保存迁移账本或 schema 版本表。
-`packages/server/schema.sql` 完整定义当前干净安装的单一基线；当前
-`schema-additions.sql` 是纯注释占位，不为新安装补充任何结构。随机图 `id` 的末 12 位查询所需 ready
-部分表达式索引，以及统一 Redis 图片投影的权威 revision 单行表均属于当前基线。PostgreSQL
+`packages/server/schema.sql` 完整定义上一个封版版本的干净安装基线；5.4.0 的
+`schema-additions.sql` 为 `author` 增加可空身份两列、三项长期 CHECK 和非空身份复合唯一索引。
+随机图 `id` 的末 12 位查询所需 ready 部分表达式索引，以及统一 Redis 图片投影的权威 revision
+单行表均属于基线。PostgreSQL
 是最终图片、账号、存储注册表和持久任务的唯一真相源。Redis 图片投影、查询缓存与管理员
 会话均不替代数据库真值；未完成 Ingestion canonical 是允许在受控冷启动时整体丢弃的运行态。
 
@@ -16,8 +17,10 @@ PostgreSQL 共 9 张业务表，不保存迁移账本或 schema 版本表。
 
 数据库生命周期由干净基线、单发布周期 additions 和轻量 readiness 组成。单应用进程启动时，
 空数据库在一个事务中先执行 `schema.sql`，再执行当前 `schema-additions.sql`；非空数据库只执行
-additions，随后进入 readiness。当前 additions 是纯注释占位，因此 `schema.sql` 是本版唯一
-结构来源。additions、readiness 或干净初始化任一步失败都会回滚本次事务。全部连接固定使用
+additions，随后进入 readiness。5.4.0 additions 先查 PostgreSQL catalog，仅在对象缺失时执行
+`ADD COLUMN`、命名 `CHECK ... NOT VALID` 后验证，以及部分复合唯一索引创建；已由运维预置完整
+当前结构时，较窄的运行角色不会因 no-op DDL 再被要求成为表 owner；
+additions、readiness 或干净初始化任一步失败都会回滚本次结构事务。全部连接固定使用
 `search_path=public`；单实例部署按顺序完成 schema 和管理员播种。
 
 additions 只为以后一个发布周期内经明确审查的受限结构增量或一次性数据变化保留入口。全部
@@ -32,12 +35,14 @@ UPDATE / DELETE 权限，不使用回滚写探针。它还按列和谓词语义�
 约束，不依赖数据库对象名称：当前运行时表的业务主键；`metadata.object_key`、后台任务
 非空幂等键与唯一活动 `cache.rebuild`、单一默认存储和单一超级管理员的唯一性；以及当前
 metadata / image_tag 删除路径依赖的 RESTRICT、CASCADE 和 SET NULL 外键。`created_by` 的
-`text` 类型进入最小列集合。readiness 的结论只由这套运行时最小契约决定；应用未消费的数据库
+`text` 类型进入最小列集合。5.4.0 还核对作者身份两列的 `text` 类型与读写权限、两列成对空值、
+provider token 和非空 ID 三项 CHECK、两列非空时生效的复合唯一索引，以及现存 provider 都属于
+当前作者领域支持集合。readiness 的结论只由这套运行时最小契约决定；应用未消费的数据库
 对象不进入启动判断，也不会触发自动结构对齐。
 
-readiness 不复制 `schema.sql` 的可空性、默认值、CHECK、触发器、普通查询索引或无消费者
-约束。应用未消费的表、列、索引和约束位于启动契约之外；破坏性清理由维护者在停机、备份和
-恢复验证后单独执行，不属于应用启动职责。
+readiness 不复制 `schema.sql` 的可空性、默认值、无消费者 CHECK、触发器或普通查询索引；作者
+身份 CHECK 与复合唯一索引因当前读写直接依赖而属于明确例外。应用未消费的表、列、索引和约束
+位于启动契约之外；破坏性清理由维护者在停机、备份和恢复验证后单独执行，不属于应用启动职责。
 
 ## 运行期连接与公开回源
 
@@ -269,9 +274,24 @@ HTTPS 格式并在后端配置锁内保存，不创建探针 driver，也不退�
 
 ## author —— 作者
 
-作者有 `slug`、`display_name`、`link`、排序和时间戳。一图最多一个作者，存在
-`metadata.author`。作者关联持有共享 slug 租约，并在同一锁边界内幂等完成“确保作者存在”和
+作者有 `slug`、`display_name`、公开 `link`、可空 `identity_provider` / `identity_id`、排序和
+时间戳。身份两列必须同时为空或同时非空；provider 是 1–32 位小写字母数字与内部连字符组成的
+稳定 token，ID 非空。两列均非空时 `(identity_provider, identity_id)` 唯一，因此不同 provider
+可以复用同一 ID，同一 provider 的同一 ID 只能属于一位作者；数据库 CHECK 不枚举当前平台。
+首版作者领域只支持 `weibo`，并只从严格的 `https://weibo.com/u/<UID>` 主页链接派生 1–20 位
+非零开头数字 UID。管理员不能独立写入身份列；链接清空、换成未识别 HTTPS 地址或换绑 UID 时，
+Server 在同一作者事务中同步清空或替换身份。管理端作者 DTO 只返回
+`derived_identity: null | { provider: "weibo"; id: string }`，公共图片和 Ingestion DTO 仍只消费
+作者 slug、显示名与公开链接。
+
+一图最多一个作者，存在 `metadata.author`。作者关联持有共享 slug 租约，并在同一锁边界内幂等完成“确保作者存在”和
 图片写入；显式词表管理与删除持有独占 slug 锁，因此删除不能穿过并发关联。删除事务
 返回本次实际置空的图片 id，推进 revision 后只用这组真值精确同步 Redis rich item、
 核心统计与词表 / 计数；旧 revision 的按需作者索引由读取端拒绝并重建，避免删除与并发
 关联互相覆盖。
+
+5.4.0 在 schema readiness 后执行一次启动升级事务：它从启动前保存的旧
+`weibo.author_slugs` 快照迁移映射，并同时扫描数据库里已有的可识别微博主页链接补齐身份；旧映射
+只为缺少链接的目标补规范主页。全表锁、冲突校验和更新在一个事务中完成，任一缺失作者、链接 /
+身份不一致或唯一冲突都会整体回滚。数据库提交后才清理旧配置；重启可幂等重放。这不是长期
+schema ledger，也不会在手动配置重载或配置包导入时执行。

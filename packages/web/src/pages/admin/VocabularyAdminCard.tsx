@@ -1,5 +1,9 @@
 import { useRef, useState, type DragEvent } from "react";
-import type { AdminEntityDto } from "@imageshow/shared/browser";
+import type {
+  AdminEntityDto,
+  AuthorDto,
+  AuthorMutationResponseDto
+} from "@imageshow/shared/browser";
 import { api } from "../../lib/api/client.js";
 import { AdminIcon } from "../../components/icon/AdminIcon.js";
 import { AsyncActionButton } from "../../components/actions/AsyncActionButton.js";
@@ -12,7 +16,7 @@ import type { ReorderDirection } from "../../lib/ui/reorder.js";
 export function VocabularyAdminCard({ kind, item, onChanged, onDelete, onError, pinned = false, canDelete = false, reorderBusy, canMovePrevious, canMoveNext, onMove, onReorderControlRef, onDragStart, onDragEnter, onDragEnd }: {
   kind: "themes" | "tags" | "authors";
   item: AdminEntityDto;
-  onChanged: () => void;
+  onChanged: (item?: AuthorDto) => void | Promise<void>;
   onDelete: () => void;
   onError: (error: unknown) => void;
   pinned?: boolean;
@@ -32,6 +36,9 @@ export function VocabularyAdminCard({ kind, item, onChanged, onDelete, onError, 
   const noun = kind === "themes" ? "主题" : kind === "tags" ? "标签" : "作者";
 
   const isAuthor = kind === "authors";
+  const derivedIdentity = isAuthor && "derived_identity" in item
+    ? item.derived_identity as AuthorDto["derived_identity"]
+    : null;
   const [display, setDisplay] = useState(item.display_name);
   const [link, setLink] = useState(item.link ?? "");
   const saveStatus = useAsyncActionStatus();
@@ -53,11 +60,20 @@ export function VocabularyAdminCard({ kind, item, onChanged, onDelete, onError, 
         const body = isAuthor
           ? { display_name: display.trim(), link: link.trim() }
           : { display_name: display.trim() };
-        await api(`${adminApiBasePath}/${kind}/${item.slug}`, {
-          method: "POST",
-          body: JSON.stringify(body)
-        });
-        onChanged();
+        const response = await api<AuthorMutationResponseDto | { ok: true }>(
+          `${adminApiBasePath}/${kind}/${item.slug}`,
+          {
+            method: "POST",
+            body: JSON.stringify(body)
+          }
+        );
+        if (isAuthor && "item" in response) {
+          setDisplay(response.item.display_name);
+          setLink(response.item.link);
+          await onChanged(response.item);
+        } else {
+          await onChanged();
+        }
         return true;
       } catch (error) {
         onError(error);
@@ -113,10 +129,13 @@ export function VocabularyAdminCard({ kind, item, onChanged, onDelete, onError, 
             className="entity-link-input"
             value={link}
             onChange={(event) => setLink(event.target.value)}
-            placeholder="链接 URL（HTTPS，可选）"
+            placeholder="作者主页链接（HTTPS，可选）"
             disabled={cardBusy}
             maxLength={2048}
             aria-label={`作者 ${item.slug} 链接`}
+            title={derivedIdentity
+              ? `派生身份：微博账号 UID ${derivedIdentity.id}`
+              : undefined}
           />
         </div>
       )}

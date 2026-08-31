@@ -56,6 +56,14 @@ export function invalidateImageData(client: QueryClient) {
   return invalidate(client, imageDataQueryKeys);
 }
 
+export function invalidateDataAfterAuthorProfileSave(client: QueryClient) {
+  return invalidate(client, [
+    queryKeys.galleryFacets,
+    queryKeys.galleryStats,
+    queryKeys.ingestionVocabulary
+  ]);
+}
+
 function updatesField(
   updates: readonly ImageUpdateItemInputDto[],
   field: keyof ImageUpdateItemInputDto

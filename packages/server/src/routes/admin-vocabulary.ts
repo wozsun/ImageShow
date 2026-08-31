@@ -55,9 +55,12 @@ type EntityRouteOptions<CreateSchema extends z.ZodType, UpdateSchema extends z.Z
   updateInput: UpdateSchema;
   deletePermission: AdminPermission;
   list: () => Promise<AdminEntityDto[]>;
-  create: (input: z.infer<CreateSchema>) => Promise<void>;
+  create: (input: z.infer<CreateSchema>) => Promise<AdminEntityDto | void>;
   reorder: (slugs: string[]) => Promise<void>;
-  update: (slug: string, input: z.infer<UpdateSchema>) => Promise<void>;
+  update: (
+    slug: string,
+    input: z.infer<UpdateSchema>
+  ) => Promise<AdminEntityDto | void>;
   remove: (slug: string) => Promise<void>;
 };
 
@@ -75,8 +78,8 @@ function registerAdminEntityRoutes<
 
   app.post(base, async (c) => {
     const input = parse(options.createInput, await readJsonBody(c));
-    await options.create(input);
-    return c.json(apiSuccess());
+    const item = await options.create(input);
+    return c.json(item ? apiSuccess({ item }) : apiSuccess());
   });
 
   app.post(`${base}/reorder`, async (c) => {
@@ -88,8 +91,8 @@ function registerAdminEntityRoutes<
   app.post(`${base}/:slug`, async (c) => {
     const slug = parse(options.slugInput, c.req.param("slug"));
     const input = parse(options.updateInput, await readJsonBody(c));
-    await options.update(slug, input);
-    return c.json(apiSuccess());
+    const item = await options.update(slug, input);
+    return c.json(item ? apiSuccess({ item }) : apiSuccess());
   });
 
   app.post(
@@ -123,9 +126,7 @@ export function registerAdminVocabularyRoutes(app: Hono) {
     updateInput: themeDisplayUpdateInput,
     deletePermission: adminPermissions.themeDelete,
     list: listThemesWithMeta,
-    create: async (input) => {
-      await createTheme(input.slug, input.display_name);
-    },
+    create: async (input) => { await createTheme(input.slug, input.display_name); },
     reorder: reorderThemes,
     update: async (slug, input) => updateThemeDisplayName(slug, input.display_name),
     remove: deleteTheme
@@ -137,11 +138,9 @@ export function registerAdminVocabularyRoutes(app: Hono) {
     updateInput: authorMetaUpdateInput,
     deletePermission: adminPermissions.authorDelete,
     list: listAuthorsWithMeta,
-    create: async (input) => {
-      await createAuthor(input.slug, input.display_name, input.link);
-    },
+    create: (input) => createAuthor(input.slug, input.display_name, input.link),
     reorder: reorderAuthors,
-    update: async (slug, input) => updateAuthorProfile(
+    update: (slug, input) => updateAuthorProfile(
       slug,
       input.display_name,
       input.link

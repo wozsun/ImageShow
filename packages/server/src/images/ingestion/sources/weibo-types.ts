@@ -25,15 +25,19 @@ export type ParsedWeiboPostUrl = {
   sourceUrl: string;
 };
 
+export type ExtractedWeiboImage = {
+  original_url: string;
+  user_id?: string;
+};
+
 export type ExtractedWeiboPost = {
   source_url: string;
   weibo_id: string;
   bid: string;
   user_id: string;
   published_at: string;
-  original_image_urls: string[];
+  images: ExtractedWeiboImage[];
   image_count: number;
-  author?: string;
 };
 
 export type WeiboPostParseError = {

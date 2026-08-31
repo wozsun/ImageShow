@@ -13,13 +13,21 @@ import {
 import type { RuntimeConfig } from "@imageshow/shared/browser";
 import { runtimePaths } from "./bootstrap-env.ts";
 import { normalizeRuntimeConfig } from "./runtime-config.ts";
+import {
+  legacyWeiboAuthorSlugsFromRuntimeConfig,
+  type LegacyWeiboAuthorSlugs
+} from "./legacy-weibo-author-slugs-config.ts";
 
 export type RuntimeConfigFileSnapshot = {
   config: RuntimeConfig;
   needsWriteBack: boolean;
 };
 
-export function readRuntimeConfigFile(): RuntimeConfigFileSnapshot | null {
+type RuntimeConfigFileSource = RuntimeConfigFileSnapshot & {
+  value: unknown;
+};
+
+function readRuntimeConfigFileSource(): RuntimeConfigFileSource | null {
   if (!existsSync(runtimePaths.configFile)) return null;
 
   let value: unknown;
@@ -41,7 +49,32 @@ export function readRuntimeConfigFile(): RuntimeConfigFileSnapshot | null {
   }
   return {
     config: normalized,
-    needsWriteBack: JSON.stringify(value) !== JSON.stringify(normalized)
+    needsWriteBack: JSON.stringify(value) !== JSON.stringify(normalized),
+    value
+  };
+}
+
+export function readRuntimeConfigFile(): RuntimeConfigFileSnapshot | null {
+  const source = readRuntimeConfigFileSource();
+  if (!source) return null;
+  return { config: source.config, needsWriteBack: source.needsWriteBack };
+}
+
+export type LegacyWeiboAuthorSlugsRuntimeConfigFileSnapshot =
+  RuntimeConfigFileSnapshot & {
+    legacyWeiboAuthorSlugs: LegacyWeiboAuthorSlugs | undefined;
+  };
+
+/** Isolated startup-only reader for the 5.4.0 weibo.author_slugs upgrade. */
+export function readRuntimeConfigFileForLegacyWeiboAuthorSlugsUpgrade():
+  LegacyWeiboAuthorSlugsRuntimeConfigFileSnapshot | null {
+  const source = readRuntimeConfigFileSource();
+  if (!source) return null;
+  return {
+    config: source.config,
+    needsWriteBack: source.needsWriteBack,
+    legacyWeiboAuthorSlugs:
+      legacyWeiboAuthorSlugsFromRuntimeConfig(source.value)
   };
 }
 

@@ -1,5 +1,6 @@
 import {
   WeiboImportError,
+  type ExtractedWeiboImage,
   type ExtractedWeiboPost,
   type ParsedWeiboPostUrl
 } from "./weibo-types.ts";
@@ -8,6 +9,7 @@ import {
   scalarString,
   type UnknownRecord
 } from "./weibo-values.ts";
+import { isWeiboUserId } from "../../../authors/identity.ts";
 
 /** Parses one supported Weibo post URL into its canonical identifiers. */
 export function parseWeiboPostUrl(input: string): ParsedWeiboPostUrl {
@@ -130,26 +132,44 @@ function bestImageUrl(value: unknown): string | null {
   );
 }
 
-function extractOriginalWeiboImageUrls(value: unknown) {
-  const result: string[] = [];
-  const seen = new Set<string>();
-  const add = (candidate: unknown) => {
+function statusUserId(status: UnknownRecord) {
+  const user = asRecord(status.user);
+  const userId = scalarString(user?.idstr) || scalarString(user?.id);
+  return isWeiboUserId(userId) ? userId : undefined;
+}
+
+function extractOriginalWeiboImages(value: unknown) {
+  const result: ExtractedWeiboImage[] = [];
+  const seen = new Map<string, number>();
+  const add = (candidate: unknown, userId: string | undefined) => {
     const originalUrl = toOriginalWeiboImageUrl(candidate);
-    if (!originalUrl || seen.has(originalUrl)) return;
-    seen.add(originalUrl);
-    result.push(originalUrl);
+    if (!originalUrl) return;
+    const existingIndex = seen.get(originalUrl);
+    if (existingIndex !== undefined) {
+      const existing = result[existingIndex]!;
+      if (existing.user_id !== userId) delete existing.user_id;
+      return;
+    }
+    seen.set(originalUrl, result.length);
+    result.push({
+      original_url: originalUrl,
+      ...(userId ? { user_id: userId } : {})
+    });
   };
   const visit = (candidate: unknown) => {
     const post = asRecord(candidate);
     if (!post) return;
+    const userId = statusUserId(post);
 
     const picInfos = asRecord(post.pic_infos) ?? {};
     const orderedIds = Array.isArray(post.pic_ids) ? post.pic_ids : [];
-    for (const id of orderedIds) add(bestImageUrl(picInfos[scalarString(id)]));
-    for (const info of Object.values(picInfos)) add(bestImageUrl(info));
+    for (const id of orderedIds) {
+      add(bestImageUrl(picInfos[scalarString(id)]), userId);
+    }
+    for (const info of Object.values(picInfos)) add(bestImageUrl(info), userId);
 
     if (Array.isArray(post.pics)) {
-      for (const pic of post.pics) add(bestImageUrl(pic));
+      for (const pic of post.pics) add(bestImageUrl(pic), userId);
     }
 
     const mixedItems = asRecord(post.mix_media_info)?.items;
@@ -158,7 +178,7 @@ function extractOriginalWeiboImageUrls(value: unknown) {
         const item = asRecord(itemValue);
         const data = asRecord(item?.data);
         if (item?.type === "pic" || data?.type !== "video") {
-          add(bestImageUrl(data));
+          add(bestImageUrl(data), userId);
         }
       }
     }
@@ -172,8 +192,7 @@ function extractOriginalWeiboImageUrls(value: unknown) {
 
 export function extractWeiboPost(
   rawStatus: unknown,
-  parsedUrl: ParsedWeiboPostUrl,
-  authorSlugs: Readonly<Record<string, string>>
+  parsedUrl: ParsedWeiboPostUrl
 ): ExtractedWeiboPost {
   const status = asRecord(rawStatus);
   const returnedWeiboId = scalarString(status?.idstr)
@@ -189,24 +208,21 @@ export function extractWeiboPost(
   const publishedAt = normalizeWeiboDate(createdAt);
   const user = asRecord(status.user);
   const userId = scalarString(user?.idstr) || scalarString(user?.id);
-  if (!publishedAt || !userId) {
+  if (!publishedAt || !isWeiboUserId(userId)) {
     throw new WeiboImportError(
       "weibo_post_incomplete",
       "微博缺少可识别的发布时间或用户 ID"
     );
   }
 
-  const originalImageUrls = extractOriginalWeiboImageUrls(status);
-  if (!originalImageUrls.length) {
+  const images = extractOriginalWeiboImages(status);
+  if (!images.length) {
     throw new WeiboImportError(
       "weibo_no_images",
       "这条微博没有可导入的公开图片"
     );
   }
 
-  const mappedAuthor = Object.hasOwn(authorSlugs, userId)
-    ? authorSlugs[userId]
-    : undefined;
   const mblogId = scalarString(status.mblogid);
   const weiboId = returnedWeiboId || parsedUrl.identifier;
   return {
@@ -219,8 +235,7 @@ export function extractWeiboPost(
     bid: mblogId || parsedUrl.identifier,
     user_id: userId,
     published_at: publishedAt,
-    original_image_urls: originalImageUrls,
-    image_count: originalImageUrls.length,
-    ...(mappedAuthor ? { author: mappedAuthor } : {})
+    images,
+    image_count: images.length
   };
 }

@@ -70,7 +70,6 @@ export const runtimeConfigEnvironmentBindings = [
   { path: "weibo.max_items", environmentVariable: "WEIBO_MAX_ITEMS", valueKind: "number" },
   { path: "weibo.source_enabled", environmentVariable: "WEIBO_SOURCE_ENABLED", valueKind: "boolean" },
   { path: "weibo.request_delay_seconds", environmentVariable: "WEIBO_REQUEST_DELAY_SECONDS", valueKind: "json-array" },
-  { path: "weibo.author_slugs", environmentVariable: "WEIBO_AUTHOR_SLUGS", valueKind: "json-object" },
   { path: "normalize.concurrency", environmentVariable: "NORMALIZE_CONCURRENCY", valueKind: "number" },
   { path: "normalize.quality", environmentVariable: "NORMALIZE_QUALITY", valueKind: "number" },
   { path: "normalize.quality_step", environmentVariable: "NORMALIZE_QUALITY_STEP", valueKind: "number" },

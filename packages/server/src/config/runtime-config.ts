@@ -1,8 +1,6 @@
 import { z } from "zod";
 import { appConfig } from "@imageshow/shared";
 import {
-  slugMaxLength,
-  slugPattern,
   type RuntimeConfig
 } from "@imageshow/shared/browser";
 import {
@@ -59,26 +57,6 @@ const subdomainLabel = z.string().trim().regex(
   /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/,
   "must be a lowercase DNS label"
 );
-
-const weiboUserId = z.string().regex(/^[1-9]\d{0,19}$/, "must be a numeric Weibo user ID");
-const weiboAuthorSlug = z.string().trim().toLowerCase().min(1)
-  .max(slugMaxLength).regex(slugPattern);
-const weiboAuthorSlugs = z.preprocess((value, context) => {
-  if (
-    value !== null
-    && typeof value === "object"
-    && !Array.isArray(value)
-    && Object.hasOwn(value, "__proto__")
-  ) {
-    context.addIssue({
-      code: "custom",
-      message: 'object key "__proto__" is not allowed',
-      path: ["__proto__"]
-    });
-    return z.NEVER;
-  }
-  return value;
-}, z.record(weiboUserId, weiboAuthorSlug));
 
 const runtimeConfigSchema = z.strictObject({
   site: z.strictObject({
@@ -139,8 +117,7 @@ const runtimeConfigSchema = z.strictObject({
         message: "minimum delay must not exceed maximum delay",
         path: [0]
       }
-    ),
-    author_slugs: weiboAuthorSlugs
+    )
   }),
   normalize: z.strictObject({
     concurrency: normalizeConcurrency,

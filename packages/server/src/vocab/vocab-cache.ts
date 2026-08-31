@@ -24,6 +24,10 @@ import type {
   TagDto as Tag,
   ThemeDto as Theme
 } from "@imageshow/shared/browser";
+import {
+  projectAuthorDerivedIdentity,
+  type AuthorIdentityColumns
+} from "../authors/identity.ts";
 
 const THEME_VOCAB_KEY = "imageshow:theme_vocab";
 const TAG_VOCAB_KEY = "imageshow:tag_vocab";
@@ -170,15 +174,43 @@ async function loadAdminThemeList(revision: number) {
 }
 
 async function loadAdminAuthorList(revision: number) {
-  const rows = await queryVocabularyRows<Author>(
-    `SELECT a.slug, a.display_name, a.link, count(m.id)::int AS image_count
+  const rows = await queryVocabularyRows<AuthorIdentityColumns & Omit<
+    Author,
+    "derived_identity"
+  >>(
+    `SELECT a.slug,
+            a.display_name,
+            a.link,
+            a.identity_provider,
+            a.identity_id,
+            count(m.id)::int AS image_count
        FROM author a
        LEFT JOIN metadata m ON m.author = a.slug AND m.status = 'ready'
-      GROUP BY a.slug, a.display_name, a.link, a.sort_order
+      GROUP BY a.slug,
+               a.display_name,
+               a.link,
+               a.identity_provider,
+               a.identity_id,
+               a.sort_order
       ORDER BY a.sort_order ASC, a.slug ASC`
   );
-  await cacheAdminEntityList("author", ADMIN_AUTHOR_LIST_KEY, revision, rows);
-  return rows;
+  const projected = rows.map((row): Author => {
+    const { identity_provider, identity_id, ...item } = row;
+    return {
+      ...item,
+      derived_identity: projectAuthorDerivedIdentity({
+        identity_provider,
+        identity_id
+      })
+    };
+  });
+  await cacheAdminEntityList(
+    "author",
+    ADMIN_AUTHOR_LIST_KEY,
+    revision,
+    projected
+  );
+  return projected;
 }
 
 async function cacheEntityVocabulary(

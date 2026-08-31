@@ -64,9 +64,10 @@ Redis 凭据只来自显式环境变量，不写入 `config.json`。`ADMIN_USERN
 
 ## PostgreSQL 与 Redis
 
-`schema.sql` 完整定义当前干净安装的单一基线；当前 `schema-additions.sql` 是纯注释占位，
-并为以后一个发布周期内经明确审查的受限增量或一次性数据变化保留固定入口。空数据库依次
-执行两者，非空数据库只执行 additions 后做只读 readiness；整个过程受同一事务保护。
+`schema.sql` 完整定义上一个封版版本的干净安装基线；5.4.0 的 `schema-additions.sql` 为作者
+增加可空身份两列、长期 CHECK 与非空身份复合唯一索引。空数据库依次执行两者，非空数据库只
+执行 additions 后做只读 readiness；整个结构过程受同一事务保护。随后启动升级在独立事务中
+迁移旧作者映射并补齐已有可识别微博主页链接，数据库提交后才清理旧配置文件字段。
 单应用进程合同不为第二个重叠启动者取得 bootstrap lock；首次启动、停止后的顺序重启、
 已有数据启动，以及事务回滚后的顺序恢复仍使用同一初始化路径。
 `metadata.created_by TEXT NOT NULL` 与后台任务当前类型约束直接属于基线。应用的自动结构职责
