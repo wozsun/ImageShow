@@ -48,6 +48,7 @@ import {
   mobileViewportMediaQuery,
   useMediaQuery
 } from "../../../hooks/useMediaQuery.js";
+import { useTwoStepConfirmation } from "../../../hooks/useTwoStepConfirmation.js";
 import {
   imageAdminConfirmationCopy,
   useImageAdminOperations,
@@ -71,6 +72,7 @@ export function ImageAdmin() {
   );
   const [cardDensity, setCardDensity] = useAdminPreference("image_card_density");
   const [ingestionPending, setIngestionPending] = useState(false);
+  const [batchTrashPending, setBatchTrashPending] = useState(false);
   const mobileLayout = useMediaQuery(mobileViewportMediaQuery);
   const permissions = useAdminPermissions();
   const canPurgeImage = permissions.includes(
@@ -79,6 +81,7 @@ export function ImageAdmin() {
 
   const feedbackTarget = useActionFeedbackTarget("image-admin");
   const gridRef = useRef<HTMLDivElement | null>(null);
+  const frozenBatchTrashIdsRef = useRef<string[]>([]);
   const client = useQueryClient();
   const { data: settingsData } = useAdminSettings();
 
@@ -167,6 +170,20 @@ export function ImageAdmin() {
   const clearImageSelection = selection.clear;
   const finishIngestionBatch = selection.clear;
   const canTrashReadyItems = view !== "deleted";
+  const batchTrashDisabled = (
+    !canTrashReadyItems
+    || !selected.length
+    || interfaceBusy
+    || batchTrashPending
+  );
+  const batchTrashConfirmation = useTwoStepConfirmation<HTMLButtonElement>({
+    disabled: batchTrashDisabled,
+    busy: batchTrashPending,
+    invalidationKey: `${view}:${scopeKey}:${pageNumber}:${selected.join(",")}`,
+    onDisarm: () => {
+      frozenBatchTrashIdsRef.current = [];
+    }
+  });
   useEffect(() => {
     if (routeView === view) return;
     setView(routeView);
@@ -357,14 +374,53 @@ export function ImageAdmin() {
               )}
               {canTrashReadyItems && (
                 <button
-                  className="danger-button"
+                  ref={batchTrashConfirmation.targetRef}
+                  className={[
+                    "danger-button",
+                    "two-step-confirm-text-button",
+                    batchTrashConfirmation.armed ? "is-armed" : ""
+                  ].filter(Boolean).join(" ")}
                   type="button"
-                  disabled={!selected.length || interfaceBusy}
+                  aria-label={batchTrashPending
+                    ? "删除中"
+                    : batchTrashConfirmation.armed
+                      ? "确认删除"
+                      : "批量删除"}
+                  aria-pressed={batchTrashConfirmation.armed}
+                  aria-busy={batchTrashPending || undefined}
+                  disabled={batchTrashDisabled}
+                  onBlur={batchTrashConfirmation.onBlur}
                   onClick={() => {
-                    setConfirmAction({ kind: "trash", ids: [...selected] });
+                    batchTrashConfirmation.activate(
+                      () => {
+                        const ids = [...selected];
+                        if (!ids.length) return false;
+                        frozenBatchTrashIdsRef.current = ids;
+                      },
+                      () => {
+                        const ids = frozenBatchTrashIdsRef.current;
+                        frozenBatchTrashIdsRef.current = [];
+                        if (!ids.length) return;
+                        setBatchTrashPending(true);
+                        void trash(ids).finally(() => {
+                          setBatchTrashPending(false);
+                        });
+                      }
+                    );
                   }}
                 >
-                  <AdminIcon name="delete-bin-6-line" />批量删除
+                  <AdminIcon name={batchTrashPending
+                    ? "delete-bin-5-line"
+                    : batchTrashConfirmation.armed
+                      ? "delete-bin-2-line"
+                      : "delete-bin-6-line"} />
+                  <StableButtonLabel
+                    idle={batchTrashConfirmation.armed
+                      ? "确认删除"
+                      : "批量删除"}
+                    busyText="删除中"
+                    busy={batchTrashPending}
+                  />
                 </button>
               )}
               {view === "deleted" && canPurgeImage && (
@@ -521,10 +577,13 @@ export function ImageAdmin() {
           description={confirmCopy.description}
           confirmLabel={confirmCopy.label}
           busy={actionBusy}
-          requireFinalConfirmation={confirmAction.kind === "purge"}
+          requireFinalConfirmation
           finalConfirmationLabel="确认删除"
-          pendingLabel={confirmAction.kind === "purge" ? "正在永久删除" : "处理中"}
-          successLabel={confirmAction.kind === "purge" ? "删除完成" : "操作成功"}
+          confirmIcon="delete-bin-7-line"
+          finalConfirmationIcon="delete-bin-7-line"
+          pendingIcon="delete-bin-5-line"
+          pendingLabel="删除中"
+          successLabel="删除完成"
           onClose={() => setConfirmAction(null)}
           onConfirm={runConfirmedAction}
         />

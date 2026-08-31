@@ -36,7 +36,6 @@ async function retryTrashPurgeJob(
         AND status='failed'
         AND next_retry_at IS NULL
         AND payload->>'retain_exhausted'='true'
-        AND NOT (payload ? 'watermark')
         AND EXISTS (
           SELECT 1
             FROM metadata

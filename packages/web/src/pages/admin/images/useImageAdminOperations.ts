@@ -16,34 +16,29 @@ import { waitForMinimumPendingDuration } from "../../../lib/ui/async-action-timi
 
 export type ImageAdminView = "ready" | "unset" | "deleted";
 
-export type ImageAdminConfirmAction =
+export type ImageAdminConfirmAction = {
+  kind: "purge";
+  request: ImagePurgeRequestDto;
+};
+
+type ImageAdminAction =
   | { kind: "trash"; ids: string[] }
-  | {
-      kind: "purge";
-      request: ImagePurgeRequestDto;
-    };
+  | ImageAdminConfirmAction;
 
 export function imageAdminConfirmationCopy(
   action: ImageAdminConfirmAction | null
 ) {
-  if (action?.kind === "trash") {
-    return {
-      title: "确认批量删除",
-      description: `选中的 ${action.ids.length} 张图片将移入回收站并退出站点发现，可以稍后恢复。`,
-      label: "确认删除"
-    };
-  }
-  if (action?.kind === "purge" && action.request.scope === "all") {
+  if (action?.request.scope === "all") {
     return {
       title: "确认清空回收站",
-      description: "将永久删除当前回收站快照中的全部图片。确认后会在此弹窗等待删除完成；关闭页面或连接中断不会撤销已经提交的删除。之后才移入回收站的图片不受影响，此操作无法撤销。",
+      description: "将永久删除当前回收站快照中的全部图片。关闭页面或连接中断不会撤销已经提交的删除。之后才移入回收站的图片不受影响，此操作无法撤销。",
       label: "永久删除"
     };
   }
-  if (action?.kind === "purge" && action.request.scope === "selected") {
+  if (action?.request.scope === "selected") {
     return {
       title: "确认删除已选图片",
-      description: `将永久删除选中的 ${action.request.ids.length} 张图片。确认后会在此弹窗等待删除完成；关闭页面或连接中断不会撤销已经提交的删除，此操作无法撤销。`,
+      description: `将永久删除选中的 ${action.request.ids.length} 张图片。关闭页面或连接中断不会撤销已经提交的删除，此操作无法撤销。`,
       label: "永久删除"
     };
   }
@@ -174,7 +169,7 @@ export function useImageAdminOperations({
     }
   }, [operationBusy, refresh, refreshUnknownOutcome, showFeedback]);
 
-  const runAction = useCallback(async (action: ImageAdminConfirmAction) => {
+  const runAction = useCallback(async (action: ImageAdminAction) => {
     if (operationBusy) return false;
     const purgeRequest = action.kind === "purge"
       ? action.request

@@ -16,6 +16,7 @@ export function ConfirmDialog({
   closeOnBackdrop = false,
   danger = true,
   confirmIcon = "delete-bin-6-line",
+  pendingIcon = confirmIcon,
   pendingLabel = "处理中",
   successLabel = "操作成功",
   errorLabel = "操作失败",
@@ -35,6 +36,7 @@ export function ConfirmDialog({
   closeOnBackdrop?: boolean;
   danger?: boolean;
   confirmIcon?: AdminIconName;
+  pendingIcon?: AdminIconName;
   pendingLabel?: string;
   successLabel?: string;
   errorLabel?: string;
@@ -61,7 +63,7 @@ export function ConfirmDialog({
       icon: finalConfirmationActive ? finalConfirmationIcon : confirmIcon,
       label: finalConfirmationActive ? finalConfirmationLabel : confirmLabel
     },
-    pending: { icon: confirmIcon, label: pendingLabel },
+    pending: { icon: pendingIcon, label: pendingLabel },
     success: { icon: "check-line", label: successLabel },
     error: { icon: "close-line", label: errorLabel }
   } as const;

@@ -65,10 +65,11 @@ PostgreSQL 是图片、词表、后台任务、存储注册表和管理员账号
 当前 schema 共 9 张表，其中 `ready_image_revision` 是图片投影 revision 单行表。schema
 不保存迁移账本或应用版本号。
 
-`schema.sql` 完整定义上一个封版版本的干净安装基线；当前版本空库依次执行它与
+`schema.sql` 完整定义干净安装基线；当前版本空库依次执行它与
 `schema-additions.sql`，非空库只执行 additions 后做只读 readiness。作者身份两列、长期 CHECK、
-非空身份复合唯一索引、`metadata.created_by TEXT NOT NULL` 和后台任务的三种当前类型约束都直接
-属于基线；当前 additions 为注释占位。additions 只为一个发布周期内经审查的受限增量保留固定入口；全部受控非空数据库确认增量
+非空身份复合唯一索引、`metadata.created_by TEXT NOT NULL`、`metadata.purge_job_id` 及其长期
+CHECK 和后台任务的三种当前类型约束都直接属于基线；当前 additions 为注释占位。additions 只为
+一个发布周期内经审查的受限增量保留固定入口；全部受控非空数据库确认增量
 后，下一发布把定义并入 `schema.sql` 并恢复注释占位。自动结构职责由干净初始化、单周期
 additions 和最小 readiness 构成；其他结构整理必须显式停机、备份并验证恢复。允许的 additions
 和 readiness 契约以
@@ -302,8 +303,7 @@ active 时继续等待同代后续 revision；批量 status 返回的 active DTO
 按任务归属有界分页并逐图取得存储 mutation lock 与共享清理准入；任务状态、执行 token、重试、
 退避和错误全部复用通用任务行。连接中断、有限等待结束或任务异常不会撤销已提交意图，未完成行
 继续由后台处理。历史裁剪在删除任务前核对 `metadata` 引用，检查页集中诊断耗尽、失联与迟滞并
-提供显式维护。5.4.2 启动升级在 readiness 之前一次性接管旧删除意图并删除旧 purge 结构，不让
-旧逐行状态机进入正常运行期。
+提供显式维护。启动路径只核对当前最小结构，不解释旧逐行状态或旧任务 payload。
 
 Ingestion 另有一个单实例 Redis worker。Upload / Import 共用最多 `N` 个 preparation 许可，覆盖
 等待 Normalize、图片重工作、两个 staging 对象与 ready canonical 发布；Normalize 完成后释放 CPU

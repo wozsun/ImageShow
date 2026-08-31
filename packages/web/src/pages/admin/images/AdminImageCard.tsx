@@ -160,10 +160,13 @@ export function AdminImageCard({
                 className="danger-button"
                 idleIcon="delete-bin-6-line"
                 confirmIcon="delete-bin-2-line"
+                busyIcon="delete-bin-5-line"
                 idleLabel={`删除图片：${title}`}
                 confirmLabel={`再次点击确认删除图片：${title}`}
+                busyLabel={`删除中：${title}`}
                 idleTitle="删除"
                 confirmTitle="再次点击确认删除"
+                busyTitle="删除中"
                 disabled={busy || actionsDisabled || detailPending}
                 busy={busy}
                 onConfirm={onTrash}

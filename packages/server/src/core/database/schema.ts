@@ -2,10 +2,8 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { PoolClient } from "pg";
-import { logger } from "../logger.ts";
 import { assertDatabaseReadiness } from "./readiness.ts";
 import { pool } from "./pools.ts";
-import { applySchemaUpgrade542 } from "./schema-upgrade-5-4-2.ts";
 
 export async function initializeDatabaseSchema() {
   const client = await pool.connect();
@@ -62,16 +60,8 @@ async function initializeDatabaseSchemaOnClient(client: PoolClient) {
   try {
     if (schema) await client.query(schema);
     await client.query(additions);
-    const upgrade = await applySchemaUpgrade542(client);
     await assertCoreDatabaseReady(client);
     await client.query("COMMIT");
-    if (upgrade.cleanedLegacyPurgeSchema) {
-      logger.info("database schema upgrade 5.4.2 completed", {
-        migrated_images: upgrade.migratedImages,
-        superseded_jobs: upgrade.supersededJobs,
-        replacement_job_id: upgrade.replacementJobId
-      });
-    }
   } catch (error) {
     await client.query("ROLLBACK").catch(() => undefined);
     if (!empty) throw databaseReadinessError(error);

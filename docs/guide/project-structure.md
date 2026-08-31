@@ -137,7 +137,8 @@ advisory lock 两个连接池；`transactions.ts`、`advisory-locks.ts` 和 `sch
 是唯一总入口，按固定顺序调用
 `readiness/relations.ts`、`privileges.ts`、`indexes.ts`、`checks.ts`、`foreign-keys.ts` 与 `seeds.ts`；
 `readiness/contract.ts` 是最小表、列、权限、主键、索引与外键 contract 的唯一数据来源；
-`checks.ts` 只核对当前作者身份读写依赖的三项长期 CHECK 和受支持 provider 数据集合；
+`checks.ts` 只核对当前作者身份读写依赖的三项长期 CHECK、`metadata` purge 任务归属 CHECK
+和受支持 provider 数据集合；
 `readiness/seeds.ts` 是稳定种子断言的唯一来源，其他检查模块不得复制两者。
 后台数字页使用 `database/transactions.ts` 的 read-only repeatable-read 事务，让 COUNT、
 越界判断、metadata 与 tags 共享一个 client 和快照；事务后 formatter 不得借默认 pool。
@@ -195,9 +196,8 @@ Ingestion staging 孤儿按代码内固定 100 项渐进删除。
 回收站的移入 / 恢复集中于
 `images/trash-mutations.ts`；`images/trash-purge.ts` 拥有任务原子绑定与按 job 逐图执行，
 `images/trash-purge-job.ts` 只把领域批次结果映射为通用任务结果，
-`images/trash-purge-maintenance.ts` 集中显式重试与异常引用修复。5.4.2 的一次性
-`core/database/schema-upgrade-5-4-2.ts` 在 schema additions 后、readiness 前接管可解释的旧
-watermark / 非 idle 删除意图并物理删除旧 purge 结构，待 5.4.3 连同专用 fixture 一起移除。深度诊断仍属于
+`images/trash-purge-maintenance.ts` 集中显式重试与异常引用修复；数据库启动只执行当前 additions
+并核对 readiness，不保留版本专用迁移 owner。深度诊断仍属于
 `checks/database-check.ts`，正常图片请求不探测任务完整性。`images/image-update.ts` 只拥有 1..N 图片锁、保序并发、逐项结果和
 请求级派生计数失效；`images/image-update-item.ts` 是单图 metadata、author / theme / tag
 创建、完整标签替换、分类位置 CAS 与持久清理回执的唯一 PostgreSQL 事务所有者。

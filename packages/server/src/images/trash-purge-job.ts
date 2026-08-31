@@ -6,20 +6,11 @@ import {
 import type { BackgroundJob } from "../jobs/types.ts";
 import { processTrashPurgeJobBatch } from "./trash-purge.ts";
 
-function isLegacyWatermarkJob(job: BackgroundJob) {
-  return Object.hasOwn(job.payload, "watermark");
-}
-
 export async function handleTrashPurgeJob(
   job: BackgroundJob,
   signal: AbortSignal
 ): Promise<BackgroundJobOutcome> {
   signal.throwIfAborted();
-  if (isLegacyWatermarkJob(job)) {
-    throw new Error(
-      "Legacy trash.purge watermark job escaped the 5.4.2 startup upgrade"
-    );
-  }
   const result = await processTrashPurgeJobBatch(job.id, signal);
   if (result.failed) {
     throw new Error(

@@ -1,10 +1,9 @@
 # 数据库结构
 
 PostgreSQL 共 9 张业务表，不保存迁移账本或 schema 版本表。
-`packages/server/schema.sql` 完整定义上一个封版版本的干净安装基线；`author` 可空身份两列、
-三项长期 CHECK 和非空身份复合唯一索引已经并入该基线。5.4.2 的
-`schema-additions.sql` 新增 `metadata.purge_job_id` 与“非空时必须为 deleted”长期 CHECK；紧随其后的
-一次性启动升级接管可解释的旧删除意图，并物理删除旧四列、旧 CHECK 与旧索引。
+`packages/server/schema.sql` 完整定义干净安装基线；`author` 可空身份两列、
+三项长期 CHECK、非空身份复合唯一索引、`metadata.purge_job_id` 与“非空时必须为 deleted”的
+长期 CHECK 均已并入该基线；当前 `schema-additions.sql` 为注释占位。
 随机图 `id` 的末 12 位查询所需 ready 部分表达式索引，以及统一 Redis 图片投影的权威 revision
 单行表均属于基线。PostgreSQL
 是最终图片、账号、存储注册表和持久任务的唯一真相源。Redis 图片投影、查询缓存与管理员
@@ -19,9 +18,8 @@ PostgreSQL 共 9 张业务表，不保存迁移账本或 schema 版本表。
 
 数据库生命周期由干净基线、单发布周期 additions 和轻量 readiness 组成。单应用进程启动时，
 空数据库在一个事务中先执行 `schema.sql`，再执行当前 `schema-additions.sql`；非空数据库只执行
-additions。5.4.2 随后在同一事务内检测完整旧 purge 结构、接管可解释的旧删除意图并删除旧对象，
-最后进入 readiness。当前 additions 本身只补上述可空列与行为中性 CHECK；一次性升级、additions、
-readiness 或干净初始化任一步失败都会回滚本次结构事务。全部连接固定使用
+additions 后直接进入 readiness。当前 additions 不含可执行语句；additions、readiness 或干净初始化
+任一步失败都会回滚本次结构事务。全部连接固定使用
 `search_path=public`；单实例部署按顺序完成 schema 和管理员播种。
 
 additions 只为以后一个发布周期内经明确审查的受限结构增量或一次性数据变化保留入口。全部
@@ -29,9 +27,8 @@ additions 只为以后一个发布周期内经明确审查的受限结构增量�
 注释占位。部署和备份恢复按相邻发布顺序经过承载 additions 的版本；自动结构操作限定为当期
 明确声明的 additions，其他结构与数据整理由维护者在停机、备份和恢复验证后执行。
 `metadata.created_by TEXT NOT NULL` 与后台任务当前类型约束都已直接定义在 `schema.sql`。
-作者身份结构也已并入基线；早于 `5.4.0` 的非空数据库必须先经过承载该 additions 与数据迁移的
-`5.4.0`，不能直接运行 `5.4.1` 或更高版本。非空数据库还必须运行 5.4.2 才能取得当前 purge
-任务归属列并删除旧四字段；5.4.3 会把最终结构并入干净基线并移除这段相邻版本兼容。
+作者身份与 purge 任务归属结构也已并入基线。当前启动不包含以旧版本、旧字段、旧协议、旧路由或
+旧 key 为条件的迁移、双读、转发或 fallback；非空数据库必须已经满足当前 readiness 最小契约。
 
 readiness 只读核对当前运行时所需业务表、源码实际使用的列及其 PostgreSQL 类型、必需系统种子，
 并确认会话可写、public schema 可用且当前角色具备各表实际操作所需的 SELECT / INSERT /
@@ -46,9 +43,9 @@ readiness 的结论只由这套运行时最小契约决定；应用未消费的�
 对象不进入启动判断，也不会触发自动结构对齐。
 
 readiness 不复制 `schema.sql` 的可空性、默认值、无消费者 CHECK、触发器或普通查询索引；作者
-身份 CHECK 与复合唯一索引因当前读写直接依赖而属于明确例外。应用未消费的表、列、索引和约束
-位于启动契约之外。5.4.2 只对完整识别的上一版 purge 结构执行已审阅的一次性清理；其他破坏性
-清理由维护者在停机、备份和恢复验证后单独执行，不属于应用启动职责。
+身份 CHECK 与复合唯一索引，以及 purge 任务归属 CHECK 因当前读写直接依赖而属于明确例外。
+应用未消费的表、列、索引和约束位于启动契约之外。破坏性清理由维护者在停机、备份和恢复验证后
+单独执行，不属于应用启动职责。
 
 ## 运行期连接与公开回源
 
@@ -123,13 +120,6 @@ Worker 按 `purge_job_id=job.id` 与 `deleted_at, id` 有界读取，每次只�
 准入。取得单图存储 mutation lock 后重新核对任务归属与对象位置；对象删除成功或已不存在后，
 以 `id + purge_job_id + storage_slug + object_key` 条件删除 metadata。失败行继续引用同一个任务，
 重试、退避、耗尽错误和执行 token 全部只写 `background_job`。
-
-从 5.4.1 升级时，应用必须在旧进程完全停止后启动。5.4.2 一次性兼容先锁定 `metadata`：旧
-`purging / failed` 行与可解释的活动 watermark 范围绑定到同一个 retained 替代任务，旧非 idle
-attempt 先递增以隔离迟到执行者，旧 watermark 任务标为已替代；范围外 idle 行继续保持可恢复。
-随后同一事务删除旧四列、旧 CHECK 与 `idx_metadata_trash_purge`。缺失或畸形的活动 watermark、部分旧结构、
-绑定或 DDL 失败都会让 additions 与清理整体回滚并拒绝启动，不猜测删除范围。字段已经消失时该
-分支只读跳过；其实现与升级 fixture 在 5.4.3 删除。
 
 关键索引：`ready` 状态下的随机轴 `(device, brightness, theme, id)`，以及随机图定向
 候选使用的 `right(id::text, 12)` ready 部分表达式索引；公开图库按
@@ -302,5 +292,4 @@ Server 在同一作者事务中同步清空或替换身份。管理端作者 DTO
 关联互相覆盖。
 
 当前运行时只读取已经写入 PostgreSQL 的作者身份，不在启动时从旧配置或现有链接补齐数据。
-早于 `5.4.0` 的部署必须先经过 `5.4.0` 完成一次性迁移；当前版本再次看到
-`weibo.author_slugs` 时只把它当作未知配置字段清理。
+`weibo.author_slugs` 等非当前结构字段只由全局配置投影作为未知字段清理，不触发版本迁移。

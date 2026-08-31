@@ -152,8 +152,8 @@ docker compose exec postgresql sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB
 
 ## 数据库基线
 
-`schema.sql` 完整定义上一个封版版本的干净安装基线；作者可空身份两列、长期 CHECK 与非空身份
-复合唯一索引已经并入该基线，当前 `schema-additions.sql` 为注释占位。空数据库在同一事务中执行
+`schema.sql` 完整定义干净安装基线；作者身份、`metadata.purge_job_id` 及其长期 CHECK 已经并入
+该基线，当前 `schema-additions.sql` 为注释占位。空数据库在同一事务中执行
 基线与 additions，非空数据库只执行 additions 后进入只读 readiness；readiness 核对当前读写所需的
 最小列、约束、索引、权限与受支持身份 provider。`metadata.created_by TEXT NOT NULL` 已直接属于
 干净安装基线。additions 只承载一个发布周期：
@@ -162,12 +162,9 @@ docker compose exec postgresql sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB
 单独执行。应用的自动结构职责限定为干净初始化、单周期 additions 和最小 readiness。精确契约见
 [数据库结构](docs/guide/database.md#启动与结构契约)。
 
-从早于 `5.4.0` 的非空数据库升级时必须先运行 `5.4.0`，完成作者身份 additions 与旧数据迁移；
-`5.4.1` 不再保留该升级读取和回填分支，不能代替中间版本。
-`5.4.2` 另以当期 additions 新增可空 `metadata.purge_job_id` 与长期 CHECK；在确认旧应用进程已经
-停止的同一启动事务中，可解释的旧非 idle 行和未完成 watermark 任务会绑定到 retained 替代任务，
-随后旧四列、旧 CHECK 与旧索引被物理删除。畸形旧任务或部分旧结构会使整次升级回滚并拒绝启动，
-不得跳过 5.4.2；`5.4.3` 才移除这段一次性升级兼容代码。
+当前版本不保留按旧版本、旧字段或旧任务 payload 分流的一次性升级代码。非空数据库必须已经
+具备当前 readiness 所需的最小结构；缺失或类型不兼容时启动会明确拒绝，应用未消费的额外表、列、
+索引和约束则不会阻止启动，也不会触发自动结构对齐。
 
 Redis 是必需的 operational datastore，但不是业务真相源；服务 unavailable 或命令 OOM 时，
 Ingestion 会话、写入和 worker 均 fail closed，不回退到 PostgreSQL 或进程内队列。停应用后把

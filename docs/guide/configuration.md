@@ -78,8 +78,7 @@ PostgreSQL 的 `admin_account` 表，不进入 `config.json`。单应用进程�
 `weibo.author_slugs` 与 `WEIBO_AUTHOR_SLUGS` 已从当前 RuntimeConfig、首次播种和配置包契约中
 删除；微博导入只按 PostgreSQL 作者身份查询。启动、手动「读取配置文件」、高级配置保存和配置包
 导入都只按当前默认结构投影，再次出现旧字段时直接作为未知字段删除，不读取其值、不触发迁移，
-也不影响已经写入 PostgreSQL 的作者身份。早于 `5.4.0` 的非空部署必须先运行 `5.4.0` 完成旧映射
-和已有微博主页链接的一次性迁移；`5.4.1` 不能代替该中间版本。
+也不影响已经写入 PostgreSQL 的作者身份。这是来源无关的当前结构归一化，不是旧版本迁移层。
 
 ## RuntimeConfig 参数目录
 

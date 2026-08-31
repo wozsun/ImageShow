@@ -5,10 +5,13 @@ type TwoStepConfirmIconButtonProps = {
   className?: string;
   idleIcon: AdminIconName;
   confirmIcon: AdminIconName;
+  busyIcon?: AdminIconName;
   idleLabel: string;
   confirmLabel: string;
+  busyLabel?: string;
   idleTitle?: string;
   confirmTitle?: string;
+  busyTitle?: string;
   disabled?: boolean;
   busy?: boolean;
   onArm?: () => boolean | void;
@@ -22,10 +25,13 @@ export function TwoStepConfirmIconButton({
   className = "",
   idleIcon,
   confirmIcon,
+  busyIcon,
   idleLabel,
   confirmLabel,
+  busyLabel = idleLabel,
   idleTitle = idleLabel,
   confirmTitle = confirmLabel,
+  busyTitle = busyLabel,
   disabled = false,
   busy = false,
   onArm,
@@ -36,8 +42,8 @@ export function TwoStepConfirmIconButton({
     busy
   });
   const active = confirmation.armed;
-  const label = active ? confirmLabel : idleLabel;
-  const title = active ? confirmTitle : idleTitle;
+  const label = busy ? busyLabel : active ? confirmLabel : idleLabel;
+  const title = busy ? busyTitle : active ? confirmTitle : idleTitle;
 
   return (
     <button
@@ -58,7 +64,11 @@ export function TwoStepConfirmIconButton({
         confirmation.activate(() => onArm?.(), onConfirm);
       }}
     >
-      <AdminIcon name={active ? confirmIcon : idleIcon} />
+      <AdminIcon name={busy && busyIcon
+        ? busyIcon
+        : active
+          ? confirmIcon
+          : idleIcon} />
     </button>
   );
 }

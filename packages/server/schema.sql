@@ -106,10 +106,7 @@ CREATE TABLE metadata (
   original TEXT NOT NULL DEFAULT '',
   image_time TIMESTAMPTZ NOT NULL DEFAULT now(),
   deleted_at TIMESTAMPTZ,
-  purge_state TEXT NOT NULL DEFAULT 'idle',
-  purge_started_at TIMESTAMPTZ,
-  purge_attempts INTEGER NOT NULL DEFAULT 0,
-  purge_error TEXT,
+  purge_job_id UUID,
   created_by TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -132,7 +129,8 @@ CREATE TABLE metadata (
   CHECK (source = '' OR source ~* '^https://'),
   CHECK (length(original) <= 2048),
   CHECK (original = '' OR original ~* '^https://'),
-  CHECK (purge_state IN ('idle', 'purging', 'failed')),
+  CONSTRAINT metadata_purge_job_deleted_check
+    CHECK (purge_job_id IS NULL OR status='deleted'),
   CONSTRAINT fk_metadata_storage  FOREIGN KEY (storage_slug) REFERENCES storage_backend(slug)  ON DELETE RESTRICT,
   CONSTRAINT fk_metadata_theme    FOREIGN KEY (theme)        REFERENCES theme(slug)            ON DELETE RESTRICT,
   CONSTRAINT fk_metadata_author   FOREIGN KEY (author)       REFERENCES author(slug)           ON DELETE SET NULL
@@ -183,16 +181,12 @@ ON metadata(theme, image_time DESC, id DESC) WHERE status = 'ready';
 CREATE INDEX idx_metadata_ready_author_image_time
 ON metadata(author, image_time DESC, id DESC) WHERE status = 'ready';
 
--- Random selection and trash cleanup
+-- Random selection
 CREATE INDEX idx_metadata_ready_random_axes
 ON metadata(device, brightness, theme, id) WHERE status = 'ready';
 
 CREATE INDEX idx_metadata_ready_id_suffix
 ON metadata ((right(id::text, 12))) WHERE status = 'ready';
-
-CREATE INDEX idx_metadata_trash_purge
-ON metadata(purge_state, deleted_at, id)
-WHERE status = 'deleted';
 
 CREATE TABLE image_tag (
   image_id UUID NOT NULL REFERENCES metadata(id) ON DELETE CASCADE,
