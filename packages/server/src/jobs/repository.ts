@@ -12,41 +12,6 @@ import {
 
 export type { BackgroundJob, BackgroundJobType } from "./types.ts";
 
-export async function enqueue(
-  type: BackgroundJobType,
-  targetId = "",
-  payload: unknown = {},
-  idempotencyKey?: string
-) {
-  await pool.query(
-    `INSERT INTO background_job(id, type, target_id, payload, idempotency_key)
-     VALUES($1, $2, $3, $4::jsonb, $5)
-     ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO UPDATE
-     SET type=EXCLUDED.type,
-         target_id=EXCLUDED.target_id,
-         payload=EXCLUDED.payload,
-         status='pending',
-         error='',
-         retry_count=0,
-         next_retry_at=NULL,
-         execution_token=NULL,
-         created_at=now(),
-         updated_at=now()
-     WHERE background_job.status='succeeded'
-        OR (
-          background_job.status='failed'
-          AND background_job.next_retry_at IS NULL
-        )`,
-    [
-      randomUuidV7(),
-      type,
-      targetId,
-      JSON.stringify(payload),
-      idempotencyKey ?? null
-    ]
-  );
-}
-
 /**
  * Deterministic work that races with its current handler must survive the
  * running -> succeeded transition. The in-flight payload remains immutable
@@ -350,14 +315,24 @@ export async function cleanupBackgroundJobHistory() {
        WHERE id IN (
          SELECT id FROM background_job
          WHERE (
-             status='succeeded'
-             AND updated_at < now() - ($1 || ' seconds')::interval
+             (
+               status='succeeded'
+               AND updated_at < now() - ($1 || ' seconds')::interval
+             )
+             OR (
+               status = 'failed'
+               AND next_retry_at IS NULL
+               AND (
+                 payload->>'retain_exhausted' IS DISTINCT FROM 'true'
+                 OR type='trash.purge'
+               )
+               AND updated_at < now() - ($2 || ' seconds')::interval
+             )
            )
-           OR (
-             status = 'failed'
-             AND next_retry_at IS NULL
-             AND payload->>'retain_exhausted' IS DISTINCT FROM 'true'
-             AND updated_at < now() - ($2 || ' seconds')::interval
+           AND NOT EXISTS (
+             SELECT 1
+               FROM metadata
+              WHERE metadata.purge_job_id=background_job.id
            )
          ORDER BY updated_at ASC
          LIMIT $3

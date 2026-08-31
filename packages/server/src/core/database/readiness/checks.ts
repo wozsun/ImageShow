@@ -77,8 +77,20 @@ function isIdentityIdNonemptyCheck(row: CheckConstraintRow) {
   ].includes(expression);
 }
 
-export async function assertRequiredCheckConstraints(database: DatabaseReader) {
-  const rows = (await database.query<CheckConstraintRow>(
+function isPurgeJobDeletedCheck(row: CheckConstraintRow) {
+  if (!sameColumns(row.columns, ["purge_job_id", "status"])) return false;
+  const expression = normalizedExpression(row.definition);
+  return [
+    "purge_job_idisnullorstatus='deleted'",
+    "status='deleted'orpurge_job_idisnull"
+  ].includes(expression);
+}
+
+async function validatedChecksFor(
+  database: DatabaseReader,
+  table: string
+) {
+  return (await database.query<CheckConstraintRow>(
     `SELECT ARRAY(
               SELECT attribute.attname
                 FROM unnest(constraint_record.conkey)
@@ -98,19 +110,30 @@ export async function assertRequiredCheckConstraints(database: DatabaseReader) {
        JOIN pg_class relation ON relation.oid=constraint_record.conrelid
        JOIN pg_namespace namespace ON namespace.oid=relation.relnamespace
       WHERE namespace.nspname='public'
-        AND relation.relname='author'
-        AND constraint_record.contype='c'`
+        AND relation.relname=$1
+        AND constraint_record.contype='c'`,
+    [table]
   )).rows.filter((row) => row.is_validated);
+}
+
+export async function assertRequiredCheckConstraints(database: DatabaseReader) {
+  const [authorRows, metadataRows] = await Promise.all([
+    validatedChecksFor(database, "author"),
+    validatedChecksFor(database, "metadata")
+  ]);
 
   const missing = [
     ["author identity null pairing", isIdentityPairCheck],
     ["author identity provider token", isIdentityProviderTokenCheck],
     ["author identity nonempty ID", isIdentityIdNonemptyCheck]
   ].flatMap(([label, matches]) => (
-    rows.some(matches as (row: CheckConstraintRow) => boolean)
+    authorRows.some(matches as (row: CheckConstraintRow) => boolean)
       ? []
       : [label as string]
   ));
+  if (!metadataRows.some(isPurgeJobDeletedCheck)) {
+    missing.push("metadata purge job requires deleted status");
+  }
   if (missing.length) {
     throw new Error(
       `required CHECK constraints are missing or invalid: ${missing.join(", ")}`

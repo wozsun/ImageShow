@@ -141,7 +141,6 @@ export function ImageAdmin() {
     resetTransientState,
     runConfirmedAction,
     trash,
-    purge,
     restore
   } = useImageAdminOperations({
     items,
@@ -455,7 +454,10 @@ export function ImageAdmin() {
               }}
               canPurge={canPurgeImage}
               onPurge={() => {
-                void purge({ scope: "selected", ids: [item.id] });
+                setConfirmAction({
+                  kind: "purge",
+                  request: { scope: "selected", ids: [item.id] }
+                });
               }}
               busy={busyIds.includes(item.id)}
               actionsDisabled={interfaceBusy}
@@ -519,6 +521,10 @@ export function ImageAdmin() {
           description={confirmCopy.description}
           confirmLabel={confirmCopy.label}
           busy={actionBusy}
+          requireFinalConfirmation={confirmAction.kind === "purge"}
+          finalConfirmationLabel="确认删除"
+          pendingLabel={confirmAction.kind === "purge" ? "正在永久删除" : "处理中"}
+          successLabel={confirmAction.kind === "purge" ? "删除完成" : "操作成功"}
           onClose={() => setConfirmAction(null)}
           onConfirm={runConfirmedAction}
         />

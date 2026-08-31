@@ -47,7 +47,8 @@ export async function listAdminImages(
       const images = await adminImageListItemsWithTags(cached.value.items.map((item) => ({
         ...item,
         status: "ready",
-        deleted_at: null
+        deleted_at: null,
+        purge_job_id: null
       })));
       return {
         items: images,

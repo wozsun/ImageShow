@@ -193,8 +193,12 @@ Ingestion staging 孤儿按代码内固定 100 项渐进删除。
 缩略图维修只为数据库已采用的缩略图执行生成前对象探测；未采用状态统一在生成后复核位置与
 对象再发布。这组写维护只从显式维护入口调用，不接入普通请求热路径或通用后台任务。
 回收站的移入 / 恢复集中于
-`images/trash-mutations.ts`，永久对象删除与 claim 状态机集中于 `images/trash-purge.ts`，
-两者不共享转发入口。`images/image-update.ts` 只拥有 1..N 图片锁、保序并发、逐项结果和
+`images/trash-mutations.ts`；`images/trash-purge.ts` 拥有任务原子绑定与按 job 逐图执行，
+`images/trash-purge-job.ts` 只把领域批次结果映射为通用任务结果，
+`images/trash-purge-maintenance.ts` 集中显式重试与异常引用修复。5.4.2 的一次性
+`core/database/schema-upgrade-5-4-2.ts` 在 schema additions 后、readiness 前接管可解释的旧
+watermark / 非 idle 删除意图并物理删除旧 purge 结构，待 5.4.3 连同专用 fixture 一起移除。深度诊断仍属于
+`checks/database-check.ts`，正常图片请求不探测任务完整性。`images/image-update.ts` 只拥有 1..N 图片锁、保序并发、逐项结果和
 请求级派生计数失效；`images/image-update-item.ts` 是单图 metadata、author / theme / tag
 创建、完整标签替换、分类位置 CAS 与持久清理回执的唯一 PostgreSQL 事务所有者。
 

@@ -14,9 +14,7 @@ import { lockTrashMembershipForTransaction } from "./trash-membership-lock.ts";
 const moveImagesToTrashSql = `UPDATE metadata
   SET status='deleted',
       deleted_at=clock_timestamp(),
-      purge_state='idle',
-      purge_started_at=NULL,
-      purge_error=NULL,
+      purge_job_id=NULL,
       updated_at=now()
   WHERE id = ANY($1::uuid[]) AND status='ready'
   RETURNING id`;
@@ -25,7 +23,7 @@ const restoreImagesSql = `UPDATE metadata
   SET status='ready', deleted_at=NULL, updated_at=now()
   WHERE id = ANY($1::uuid[])
     AND status='deleted'
-    AND purge_state='idle'
+    AND purge_job_id IS NULL
   RETURNING id`;
 
 async function mutateImageTrashState(ids: string[], sql: string) {

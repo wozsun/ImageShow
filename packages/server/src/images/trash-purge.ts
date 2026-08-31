@@ -3,14 +3,16 @@ import type {
   ImagePurgeRequestDto,
   ImagePurgeResponseDto
 } from "@imageshow/shared/browser";
+import { setTimeout as delay } from "node:timers/promises";
+import type { PoolClient } from "pg";
 import { errorMessage } from "../core/api-error.ts";
 import {
   runWithAdvisoryLockAcquisitionSignal
 } from "../core/database/advisory-locks.ts";
 import { pool } from "../core/database/pools.ts";
-import { enqueue } from "../jobs/repository.ts";
+import { withTransactionOnClient } from "../core/database/transactions.ts";
 import { logger } from "../core/logger.ts";
-import { STORAGE_OBJECT_REMOVAL_CONCURRENCY } from "../storage/objects/removal-admission.ts";
+import { randomUuidV7 } from "../core/uuid.ts";
 import { thumbnailRef } from "../storage/objects/image-paths.ts";
 import { withImageStorageMutationLock } from "../storage/maintenance-lock.ts";
 import {
@@ -25,190 +27,321 @@ type PurgeRow = {
   object_key: string;
   md5: string;
   storage_slug: string;
-  purge_attempts: number;
+  purge_job_id: string;
+};
+
+type QueuePlan = Pick<
+  ImagePurgeResponseDto,
+  "requested" | "queued" | "already_queued" | "ignored"
+> & {
+  queueableIds: string[];
+  targetIds: string[];
 };
 
 type PurgeOptions = {
   signal?: AbortSignal;
 };
 
-export type TrashPurgeWatermark = {
-  deletedAt: string;
-  id: string;
+type PurgeWaitState = {
+  remaining: number;
+  deferred: number;
 };
 
-type PurgeTarget =
-  | { ids: string[] }
-  | { watermark: TrashPurgeWatermark };
-
-type PurgeClaimOutcome =
-  | { status: "deleted"; row: PurgeRow }
-  | { status: "failed" }
-  | { status: "ignored" };
+type PurgeItemOutcome = "deleted" | "failed" | "ignored";
 
 const purgeReturnColumns = [
   "metadata.id",
   "metadata.object_key",
   "metadata.md5",
   "metadata.storage_slug",
-  "metadata.purge_attempts"
+  "metadata.purge_job_id"
 ].join(", ");
 
-function targetPredicate(target: PurgeTarget, params: unknown[]) {
-  if ("ids" in target) {
-    return `AND id = ANY($${params.push(target.ids)}::uuid[])`;
+const purgeRequestWaitMs = 30_000;
+const purgeRequestPollMs = 250;
+
+function numberField(value: unknown, field: string) {
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 0) {
+    throw new Error(`PostgreSQL returned an invalid ${field}`);
   }
-  const deletedAtParameter = params.push(target.watermark.deletedAt);
-  const idParameter = params.push(target.watermark.id);
-  return `AND (deleted_at, id) <= (
-    $${deletedAtParameter}::timestamptz,
-    $${idParameter}::uuid
-  )`;
+  return parsed;
 }
 
-async function claimPurgeRows(target: PurgeTarget) {
-  const params: unknown[] = [];
-  const predicate = targetPredicate(target, params);
-  const limit = "ids" in target
-    ? Math.min(appConfig.trashBatchSize, target.ids.length)
-    : appConfig.trashBatchSize;
-  const limitParameter = params.push(limit);
-  return (await pool.query(
-    `WITH candidates AS (
-       SELECT id
-         FROM metadata
-        WHERE status='deleted'
-          AND (
-            purge_state IN ('idle', 'failed')
-            OR (
-              purge_state='purging'
-              AND purge_started_at < now() - interval '15 minutes'
-            )
-          )
-          ${predicate}
-        ORDER BY deleted_at ASC, id ASC
-        FOR UPDATE SKIP LOCKED
-        LIMIT $${limitParameter}
-     )
-     UPDATE metadata
-        SET purge_state='purging',
-            purge_started_at=now(),
-            purge_attempts=purge_attempts + 1,
-            purge_error=NULL,
-            updated_at=now()
-       FROM candidates
-      WHERE metadata.id=candidates.id
-      RETURNING ${purgeReturnColumns}`,
-    params
-  )).rows as PurgeRow[];
+function uuidArrayField(value: unknown, field: string) {
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
+    throw new Error(`PostgreSQL returned an invalid ${field}`);
+  }
+  return value as string[];
 }
 
-async function releasePurgeClaims(rows: PurgeRow[]) {
-  if (!rows.length) return;
-  await pool.query(
-    `UPDATE metadata
-        SET purge_state='idle',
-            purge_started_at=NULL,
-            updated_at=now()
-        FROM unnest($1::uuid[], $2::integer[])
-          AS claim(id, purge_attempts)
-      WHERE metadata.id=claim.id
-        AND metadata.status='deleted'
-        AND metadata.purge_state='purging'
-        AND metadata.purge_attempts=claim.purge_attempts`,
-    [
-      rows.map((row) => row.id),
-      rows.map((row) => row.purge_attempts)
-    ]
+async function selectedQueueCounts(
+  client: PoolClient,
+  ids: string[]
+): Promise<QueuePlan> {
+  const row = (await client.query(
+    `SELECT count(*)::int AS requested,
+            count(*) FILTER (
+              WHERE metadata.status='deleted'
+                AND metadata.purge_job_id IS NOT NULL
+            )::int AS already_queued,
+            count(*) FILTER (
+              WHERE metadata.status='deleted'
+                AND metadata.purge_job_id IS NULL
+            )::int AS queueable,
+            COALESCE(
+              array_agg(metadata.id ORDER BY requested.ordinality) FILTER (
+                WHERE metadata.status='deleted'
+              ),
+              '{}'::uuid[]
+            ) AS target_ids,
+            COALESCE(
+              array_agg(metadata.id ORDER BY requested.ordinality) FILTER (
+                WHERE metadata.status='deleted'
+                  AND metadata.purge_job_id IS NULL
+              ),
+              '{}'::uuid[]
+            ) AS queueable_ids
+       FROM unnest($1::uuid[]) WITH ORDINALITY AS requested(id, ordinality)
+       LEFT JOIN metadata ON metadata.id=requested.id`,
+    [ids]
+  )).rows[0] as Record<string, unknown> | undefined;
+  const requested = numberField(row?.requested, "selected purge count");
+  const alreadyQueued = numberField(
+    row?.already_queued,
+    "selected already-queued purge count"
+  );
+  const queueable = numberField(row?.queueable, "selected queueable count");
+  const targetIds = uuidArrayField(row?.target_ids, "selected purge targets");
+  const queueableIds = uuidArrayField(
+    row?.queueable_ids,
+    "selected queueable purge targets"
+  );
+  if (targetIds.length !== alreadyQueued + queueable
+      || queueableIds.length !== queueable) {
+    throw new Error("PostgreSQL returned inconsistent selected purge targets");
+  }
+  return {
+    requested,
+    queued: 0,
+    already_queued: alreadyQueued,
+    ignored: requested - alreadyQueued - queueable,
+    queueableIds,
+    targetIds
+  };
+}
+
+async function allQueueCounts(client: PoolClient): Promise<QueuePlan> {
+  const row = (await client.query(
+    `SELECT count(*)::int AS requested,
+            count(*) FILTER (
+              WHERE purge_job_id IS NOT NULL
+            )::int AS already_queued,
+            count(*) FILTER (
+              WHERE purge_job_id IS NULL
+            )::int AS queueable,
+            COALESCE(
+              array_agg(id ORDER BY deleted_at, id),
+              '{}'::uuid[]
+            ) AS target_ids,
+            COALESCE(
+              array_agg(id ORDER BY deleted_at, id) FILTER (
+                WHERE purge_job_id IS NULL
+              ),
+              '{}'::uuid[]
+            ) AS queueable_ids
+       FROM metadata
+      WHERE status='deleted'`
+  )).rows[0] as Record<string, unknown> | undefined;
+  const requested = numberField(row?.requested, "trash purge count");
+  const alreadyQueued = numberField(
+    row?.already_queued,
+    "already-queued trash purge count"
+  );
+  const queueable = numberField(row?.queueable, "queueable trash purge count");
+  const targetIds = uuidArrayField(row?.target_ids, "trash purge targets");
+  const queueableIds = uuidArrayField(
+    row?.queueable_ids,
+    "queueable trash purge targets"
+  );
+  if (targetIds.length !== alreadyQueued + queueable
+      || queueableIds.length !== queueable) {
+    throw new Error("PostgreSQL returned inconsistent trash purge targets");
+  }
+  return {
+    requested,
+    queued: 0,
+    already_queued: alreadyQueued,
+    ignored: requested - alreadyQueued - queueable,
+    queueableIds,
+    targetIds
+  };
+}
+
+async function insertTrashPurgeJob(client: PoolClient, jobId: string) {
+  await client.query(
+    `INSERT INTO background_job(id, type, target_id, payload)
+     VALUES($1, 'trash.purge', '', $2::jsonb)`,
+    [jobId, JSON.stringify({ retain_exhausted: true })]
   );
 }
 
-async function countRemainingPurgeRows(target: PurgeTarget) {
-  const params: unknown[] = [];
-  const predicate = targetPredicate(target, params);
-  const result = await pool.query(
-    `SELECT count(*)::int AS count
+async function bindPurgeJob(
+  client: PoolClient,
+  ids: string[],
+  jobId: string
+) {
+  return client.query(
+    `UPDATE metadata
+        SET purge_job_id=$1, updated_at=now()
+      WHERE id=ANY($2::uuid[])
+        AND status='deleted'
+        AND purge_job_id IS NULL
+      RETURNING id`,
+    [jobId, ids]
+  );
+}
+
+async function queueTrashPurge(
+  client: PoolClient,
+  request: ImagePurgeRequestDto
+): Promise<QueuePlan> {
+  const plan = request.scope === "all"
+    ? await allQueueCounts(client)
+    : await selectedQueueCounts(client, request.ids);
+  if (!plan.queueableIds.length) return plan;
+
+  const jobId = randomUuidV7();
+  await insertTrashPurgeJob(client, jobId);
+  const bound = await bindPurgeJob(client, plan.queueableIds, jobId);
+  if (bound.rowCount !== plan.queueableIds.length) {
+    throw new Error(
+      "Trash membership changed while binding a persistent purge job"
+    );
+  }
+  return {
+    ...plan,
+    queued: bound.rowCount,
+  };
+}
+
+async function readPurgeWaitState(ids: string[]): Promise<PurgeWaitState> {
+  if (!ids.length) return { remaining: 0, deferred: 0 };
+  const row = (await pool.query(
+    `SELECT count(*)::int AS remaining,
+            count(*) FILTER (
+              WHERE background_job.id IS NULL
+                 OR background_job.type <> 'trash.purge'
+                 OR background_job.status IN ('failed', 'succeeded')
+            )::int AS deferred
+       FROM unnest($1::uuid[]) AS target(id)
+       JOIN metadata
+         ON metadata.id=target.id
+        AND metadata.status='deleted'
+        AND metadata.purge_job_id IS NOT NULL
+       LEFT JOIN background_job
+         ON background_job.id=metadata.purge_job_id`,
+    [ids]
+  )).rows[0] as Record<string, unknown> | undefined;
+  return {
+    remaining: numberField(row?.remaining, "remaining purge request count"),
+    deferred: numberField(row?.deferred, "deferred purge request count")
+  };
+}
+
+async function waitForPurgeTargets(
+  plan: QueuePlan,
+  signal?: AbortSignal
+): Promise<ImagePurgeResponseDto> {
+  const deadline = Date.now() + purgeRequestWaitMs;
+  let state = await readPurgeWaitState(plan.targetIds);
+  while (state.remaining && !state.deferred && Date.now() < deadline) {
+    signal?.throwIfAborted();
+    const remainingWaitMs = Math.min(
+      purgeRequestPollMs,
+      deadline - Date.now()
+    );
+    if (remainingWaitMs <= 0) break;
+    try {
+      await delay(
+        remainingWaitMs,
+        undefined,
+        signal ? { signal } : undefined
+      );
+    } catch (error) {
+      if (signal?.aborted) throw signal.reason;
+      throw error;
+    }
+    state = await readPurgeWaitState(plan.targetIds);
+  }
+  return {
+    requested: plan.requested,
+    queued: plan.queued,
+    already_queued: plan.already_queued,
+    deleted: plan.targetIds.length - state.remaining,
+    remaining: state.remaining,
+    ignored: plan.ignored
+  };
+}
+
+/**
+ * Persist the complete user-confirmed deletion intent, then keep the ordinary
+ * confirmation request open while the sole background owner finishes that
+ * exact 1...N set. A disconnect or bounded wait ending after commit never
+ * cancels the durable intent.
+ */
+export async function purgeImages(
+  request: ImagePurgeRequestDto,
+  options: PurgeOptions = {}
+): Promise<ImagePurgeResponseDto> {
+  const plan = await withTrashMembershipLock((client) => withTransactionOnClient(
+    client,
+    (transaction) => queueTrashPurge(transaction, request)
+  ));
+  return waitForPurgeTargets(plan, options.signal);
+}
+
+async function readPurgeJobBatch(jobId: string) {
+  return (await pool.query(
+    `SELECT id
        FROM metadata
       WHERE status='deleted'
-        ${predicate}`,
-    params
-  );
-  return Number(result.rows[0]?.count ?? 0);
+        AND purge_job_id=$1
+      ORDER BY deleted_at ASC, id ASC
+      LIMIT $2`,
+    [jobId, appConfig.trashBatchSize]
+  )).rows as Array<{ id: string }>;
 }
 
-async function captureTrashPurgeWatermark() {
-  return withTrashMembershipLock(async (client) => {
-    const row = (await client.query(
-      `SELECT deleted_at::text AS deleted_at,
-              id,
-              (count(*) OVER())::int AS requested
-         FROM metadata
-        WHERE status='deleted'
-        ORDER BY deleted_at DESC, id DESC
-        LIMIT 1`
-    )).rows[0] as {
-      deleted_at: string;
-      id: string;
-      requested: number;
-    } | undefined;
-    if (!row) return null;
-    return {
-      requested: Number(row.requested),
-      watermark: {
-        // PostgreSQL timestamptz carries microseconds; serializing a JS Date
-        // would truncate the maximum row and accidentally exclude it.
-        deletedAt: row.deleted_at,
-        id: row.id
-      }
-    };
-  });
+async function readCurrentPurgeOwner(id: string) {
+  return (await pool.query(
+    `SELECT status, purge_job_id
+       FROM metadata
+      WHERE id=$1`,
+    [id]
+  )).rows[0] as {
+    status: string;
+    purge_job_id: string | null;
+  } | undefined;
 }
 
-async function markPurgeFailed(row: PurgeRow, error: unknown) {
-  const message = errorMessage(error).slice(0, 2_000);
-  await pool.query(
-    `UPDATE metadata
-        SET purge_state='failed', purge_error=$2, updated_at=now()
-      WHERE id=$1
-        AND status='deleted'
-        AND purge_state='purging'
-        AND purge_attempts=$3`,
-    [row.id, message, row.purge_attempts]
-  );
-}
-
-async function recordPurgeFailure(row: PurgeRow, error: unknown) {
-  try {
-    await markPurgeFailed(row, error);
-  } catch (stateError) {
-    logger.error("trash_purge_failure_state_update_failed", {
-      image_id: row.id,
-      purge_attempt: row.purge_attempts,
-      purge_error: errorMessage(error),
-      state_error: errorMessage(stateError)
-    });
-  }
-}
-
-async function purgeClaimedRow(
-  claim: PurgeRow,
-  scheduleSignal?: AbortSignal
+async function purgeJobImage(
+  imageId: string,
+  jobId: string,
+  scheduleSignal: AbortSignal
 ): Promise<PurgeRow | null> {
   const purgeWhileLocked = () => withImageStorageMutationLock(
-    claim.id,
+    imageId,
     async (lockSignal) => {
-      const admissionSignal = scheduleSignal
-        ? AbortSignal.any([scheduleSignal, lockSignal])
-        : lockSignal;
+      const admissionSignal = AbortSignal.any([scheduleSignal, lockSignal]);
       admissionSignal.throwIfAborted();
       const row = (await pool.query(
         `SELECT ${purgeReturnColumns}
            FROM metadata
           WHERE id=$1
             AND status='deleted'
-            AND purge_state='purging'
-            AND purge_attempts=$2`,
-        [claim.id, claim.purge_attempts]
+            AND purge_job_id=$2`,
+        [imageId, jobId]
       )).rows[0] as PurgeRow | undefined;
       admissionSignal.throwIfAborted();
       if (!row) return null;
@@ -226,8 +359,8 @@ async function purgeClaimedRow(
           storageSlug: row.storage_slug
         }
       ], { signal: lockSignal }, admissionSignal);
-      // Physical deletion is now irreversible. Finish the database side under
-      // the image lock even if the request or background schedule is canceled.
+      // Physical deletion is irreversible. Once the driver starts, finish the
+      // PostgreSQL side under the image lock even if the job deadline fires.
       lockSignal.throwIfAborted();
       assertStorageRemovalResults(
         removals,
@@ -239,181 +372,113 @@ async function purgeClaimedRow(
         `DELETE FROM metadata
           WHERE id=$1
             AND status='deleted'
-            AND purge_state='purging'
-            AND purge_attempts=$2
+            AND purge_job_id=$2
             AND storage_slug=$3
             AND object_key=$4
           RETURNING id`,
-        [row.id, row.purge_attempts, row.storage_slug, row.object_key]
+        [row.id, jobId, row.storage_slug, row.object_key]
       );
       lockSignal.throwIfAborted();
       return deleted.rowCount ? row : null;
     }
   );
-  return scheduleSignal
-    ? runWithAdvisoryLockAcquisitionSignal(scheduleSignal, purgeWhileLocked)
-    : purgeWhileLocked();
+  return runWithAdvisoryLockAcquisitionSignal(
+    scheduleSignal,
+    purgeWhileLocked
+  );
 }
 
-function isSignalAbort(error: unknown, signal?: AbortSignal) {
-  return signal?.aborted === true && error === signal.reason;
-}
-
-async function processPurgeClaim(
-  row: PurgeRow,
-  signal?: AbortSignal
-): Promise<PurgeClaimOutcome> {
+async function processPurgeJobImage(
+  imageId: string,
+  jobId: string,
+  signal: AbortSignal
+): Promise<PurgeItemOutcome> {
   try {
-    signal?.throwIfAborted();
-    const deleted = await purgeClaimedRow(row, signal);
-    if (deleted) return { status: "deleted", row: deleted };
-    await recordPurgeFailure(row, new Error(
-      "Purge ownership was lost before metadata deletion"
-    ));
+    signal.throwIfAborted();
+    const deleted = await purgeJobImage(imageId, jobId, signal);
+    if (deleted) return "deleted";
   } catch (error) {
-    if (isSignalAbort(error, signal)) throw error;
-    await recordPurgeFailure(row, error);
+    if (signal.aborted) throw signal.reason;
+    const current = await readCurrentPurgeOwner(imageId);
+    if (!current) return "deleted";
+    logger.error("trash_purge_image_failed", {
+      image_id: imageId,
+      job_id: jobId,
+      error: errorMessage(error)
+    });
+    return current.status === "deleted" && current.purge_job_id === jobId
+      ? "failed"
+      : "ignored";
   }
 
-  const current = (await pool.query(
-    "SELECT status FROM metadata WHERE id=$1",
-    [row.id]
-  )).rows[0] as { status: string } | undefined;
-  if (!current) return { status: "deleted", row };
-  return current.status === "deleted"
-    ? { status: "failed" }
-    : { status: "ignored" };
+  const current = await readCurrentPurgeOwner(imageId);
+  if (!current) return "deleted";
+  if (current.status === "deleted" && current.purge_job_id === jobId) {
+    logger.error("trash_purge_image_ownership_unchanged", {
+      image_id: imageId,
+      job_id: jobId
+    });
+    return "failed";
+  }
+  return "ignored";
 }
 
-async function purgeTargetBatch(
-  target: PurgeTarget,
-  options: PurgeOptions = {}
+async function countPurgeJobImages(jobId: string) {
+  const row = (await pool.query(
+    `SELECT count(*)::int AS count
+       FROM metadata
+      WHERE status='deleted' AND purge_job_id=$1`,
+    [jobId]
+  )).rows[0] as { count?: unknown } | undefined;
+  return numberField(row?.count, "remaining purge job image count");
+}
+
+export async function processTrashPurgeJobBatch(
+  jobId: string,
+  signal: AbortSignal
 ) {
-  const rows = await claimPurgeRows(target);
-  const deletedRows: PurgeRow[] = [];
-  const finalizationErrors: unknown[] = [];
-  let failed = 0;
-
-  try {
-    for (
-      let offset = 0;
-      offset < rows.length;
-      offset += STORAGE_OBJECT_REMOVAL_CONCURRENCY
-    ) {
-      options.signal?.throwIfAborted();
-      const results = await Promise.allSettled(
-        rows.slice(offset, offset + STORAGE_OBJECT_REMOVAL_CONCURRENCY).map((row) =>
-          processPurgeClaim(row, options.signal)
-        )
-      );
-      for (const result of results) {
-        if (result.status === "fulfilled") {
-          if (result.value.status === "deleted") {
-            deletedRows.push(result.value.row);
-          } else if (result.value.status === "failed") {
-            failed += 1;
-          }
-        }
-      }
-      const rejected = results.find((result) => result.status === "rejected");
-      if (rejected) throw rejected.reason;
-    }
-  } catch (error) {
-    finalizationErrors.push(error);
-  }
-
-  try {
-    await releasePurgeClaims(rows);
-  } catch (error) {
-    finalizationErrors.push(error);
-  }
-
-  try {
-    if (rows.length) await invalidateEntityCountCaches(["tag"]);
-  } catch (error) {
-    finalizationErrors.push(error);
-  }
-  if (finalizationErrors.length === 1) throw finalizationErrors[0];
-  if (finalizationErrors.length > 1) {
-    throw new AggregateError(
-      finalizationErrors,
-      "Trash purge batch failed during processing or finalization"
-    );
-  }
-
-  return {
-    claimed: rows.length,
-    deleted: deletedRows.length,
-    failed,
-    remaining: await countRemainingPurgeRows(target)
-  };
-}
-
-async function purgeSelectedImages(
-  ids: string[],
-  options: PurgeOptions
-): Promise<ImagePurgeResponseDto> {
+  const batch = await readPurgeJobBatch(jobId);
   let deleted = 0;
   let failed = 0;
-  let remaining = 0;
-  for (let offset = 0; offset < ids.length; offset += appConfig.trashBatchSize) {
-    const target = { ids: ids.slice(offset, offset + appConfig.trashBatchSize) };
-    const result = await purgeTargetBatch(target, options);
-    deleted += result.deleted;
-    failed += result.failed;
-    remaining += result.remaining;
+  let processingError: unknown;
+  let processingFailed = false;
+  try {
+    for (const row of batch) {
+      signal.throwIfAborted();
+      const outcome = await processPurgeJobImage(row.id, jobId, signal);
+      if (outcome === "deleted") deleted += 1;
+      else if (outcome === "failed") failed += 1;
+    }
+  } catch (error) {
+    processingError = error;
+    processingFailed = true;
   }
+
+  let invalidationError: unknown;
+  let invalidationFailed = false;
+  try {
+    // An empty retry may be the recovery pass after every metadata row was
+    // deleted but the previous cache invalidation failed. Repeat the idempotent
+    // invalidation before allowing that durable task to settle successfully.
+    if (deleted || batch.length === 0) {
+      await invalidateEntityCountCaches(["tag"]);
+    }
+  } catch (error) {
+    invalidationError = error;
+    invalidationFailed = true;
+  }
+  if (processingFailed && invalidationFailed) {
+    throw new AggregateError(
+      [processingError, invalidationError],
+      "Trash purge batch failed during processing and cache invalidation"
+    );
+  }
+  if (processingFailed) throw processingError;
+  if (invalidationFailed) throw invalidationError;
   return {
-    requested: ids.length,
+    processed: batch.length,
     deleted,
     failed,
-    remaining,
-    ignored: Math.max(0, ids.length - deleted - remaining)
+    remaining: await countPurgeJobImages(jobId)
   };
-}
-
-export async function purgeImages(
-  request: ImagePurgeRequestDto,
-  options: PurgeOptions = {}
-): Promise<ImagePurgeResponseDto> {
-  if (request.scope === "selected") {
-    return purgeSelectedImages(request.ids, options);
-  }
-
-  const captured = await captureTrashPurgeWatermark();
-  if (!captured) {
-    return {
-      requested: 0,
-      deleted: 0,
-      failed: 0,
-      remaining: 0,
-      ignored: 0
-    };
-  }
-  await scheduleTrashPurge(captured.watermark);
-  const result = await purgeTargetBatch(
-    { watermark: captured.watermark },
-    options
-  );
-  return {
-    requested: captured.requested,
-    deleted: result.deleted,
-    failed: result.failed,
-    remaining: result.remaining,
-    ignored: Math.max(
-      0,
-      captured.requested - result.deleted - result.remaining
-    )
-  };
-}
-
-function scheduleTrashPurge(watermark: TrashPurgeWatermark) {
-  return enqueue("trash.purge", "", { watermark });
-}
-
-export function continueTrashPurge(
-  watermark: TrashPurgeWatermark,
-  options: PurgeOptions = {}
-) {
-  return purgeTargetBatch({ watermark }, options);
 }

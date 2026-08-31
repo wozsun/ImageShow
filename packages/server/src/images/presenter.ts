@@ -47,6 +47,7 @@ export type ImageRecord = AdminImageCommonRecord & {
   md5: string;
   status: "ready" | "deleted";
   deleted_at: DatabaseTimestamp | null;
+  purge_job_id: string | null;
   image_time: DatabaseTimestamp;
   created_at: DatabaseTimestamp;
   updated_at: DatabaseTimestamp;
@@ -92,6 +93,7 @@ export const adminImageListPresentationColumns = [
   "original",
   "status",
   "deleted_at",
+  "purge_job_id",
   "image_time",
   "created_at",
   "updated_at"
@@ -229,6 +231,7 @@ async function adminImageListItem(
     original: row.original,
     diff_original: hasDistinctOriginalUrl(row.original, base.object_url),
     status: row.status,
+    purge_pending: row.purge_job_id !== null,
     object_key: row.object_key,
     md5: row.md5,
     image_size: Number(row.image_size),

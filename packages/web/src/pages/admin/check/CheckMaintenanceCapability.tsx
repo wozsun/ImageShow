@@ -4,6 +4,10 @@ import {
   type UseQueryResult
 } from "@tanstack/react-query";
 import type { AdminCheckStatusDto } from "@imageshow/shared/browser";
+import type {
+  AdminTrashCheckDto,
+  TrashPurgeMaintenanceRequestDto
+} from "@imageshow/shared/browser";
 import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import { StableButtonLabel } from "../../../components/data-display/StableButtonLabel.js";
 import { DialogFrame } from "../../../components/feedback/DialogFrame.js";
@@ -28,6 +32,217 @@ type RunCheck = (
   name: string,
   body?: Record<string, unknown>
 ) => Promise<unknown | null>;
+
+function isTrashCheck(value: unknown): value is AdminTrashCheckDto {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const candidate = value as Record<string, unknown>;
+  return typeof candidate.deleted_count === "number"
+    && typeof candidate.unqueued_count === "number"
+    && typeof candidate.purge_pending_count === "number"
+    && Array.isArray(candidate.jobs)
+    && Array.isArray(candidate.issues);
+}
+
+export function TrashPurgeMaintenanceActions({
+  running,
+  onRunCheck,
+  onShowTrash
+}: {
+  running: string;
+  onRunCheck: RunCheck;
+  onShowTrash: () => void;
+}) {
+  const [preview, setPreview] = useState<AdminTrashCheckDto | null>(null);
+  const [open, setOpen] = useState(false);
+
+  const openMaintenance = async () => {
+    onShowTrash();
+    const checked = await onRunCheck("trash");
+    const next = isTrashCheck(checked) ? checked : null;
+    if (!next) return;
+    setPreview(next);
+    setOpen(true);
+  };
+
+  return (
+    <>
+      <div className="actions">
+        <button
+          type="button"
+          disabled={Boolean(running)}
+          onClick={() => void openMaintenance()}
+        >
+          <AdminIcon name="delete-bin-7-line" />
+          <StableButtonLabel
+            idle="彻底删除维护"
+            busyText="检查中"
+            busy={running === "trash"}
+          />
+        </button>
+      </div>
+      {open && preview && (
+        <TrashPurgeMaintenanceDialog
+          preview={preview}
+          running={running}
+          onClose={() => {
+            setOpen(false);
+            setPreview(null);
+          }}
+          onRun={(request) => onRunCheck(
+            "trash-purge-maintenance",
+            request
+          ).then((value) => value !== null)}
+        />
+      )}
+    </>
+  );
+}
+
+type TrashPurgeMaintenanceAction = TrashPurgeMaintenanceRequestDto["action"];
+
+function TrashPurgeMaintenanceDialog({ preview, running, onClose, onRun }: {
+  preview: AdminTrashCheckDto;
+  running: string;
+  onClose: () => void;
+  onRun: (request: TrashPurgeMaintenanceRequestDto) => Promise<boolean>;
+}) {
+  const exhaustedJobs = preview.jobs.filter((job) => job.state === "exhausted");
+  const repairable = preview.issues.some((issue) => [
+    "missing_job_reference",
+    "wrong_job_type",
+    "succeeded_job_reference"
+  ].includes(issue.kind));
+  const availableActions: TrashPurgeMaintenanceAction[] = [
+    ...(exhaustedJobs.length ? ["retry" as const] : []),
+    ...(repairable ? ["repair" as const] : [])
+  ];
+  const [action, setAction] = useState<TrashPurgeMaintenanceAction | "">(
+    availableActions[0] ?? ""
+  );
+  const [jobId, setJobId] = useState(exhaustedJobs[0]?.id ?? "");
+  const [confirmed, setConfirmed] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const busy = running === "trash-purge-maintenance";
+  const title = "彻底删除维护";
+
+  const submit = async () => {
+    if (!action) return false;
+    const request: TrashPurgeMaintenanceRequestDto = action === "retry"
+      ? { action, job_id: jobId }
+      : { action };
+    setErrorMessage("");
+    if (await onRun(request)) return true;
+    setErrorMessage("维护未执行，请重新运行回收站检查后确认当前状态。");
+    return false;
+  };
+
+  return (
+    <DialogFrame
+      className="modal edit-modal"
+      ariaLabel={title}
+      busy={busy}
+      onClose={onClose}
+    >
+      {({ requestClose }) => (
+        <form
+          className="operation-modal"
+          onSubmit={async (event) => {
+            event.preventDefault();
+            if (await submit()) requestClose();
+          }}
+        >
+          <header>
+            <div>
+              <h2>{title}</h2>
+              <p>仅处理持久彻底删除任务，不探测或恢复已经确认删除的对象。</p>
+            </div>
+            <button
+              className="icon close pressable"
+              type="button"
+              title="关闭"
+              disabled={busy}
+              onClick={() => requestClose()}
+            >
+              <AdminIcon name="close-line" />
+            </button>
+          </header>
+          <div className="operation-body">
+            <dl className="trash-purge-maintenance-preview">
+              <div><dt>回收站总数</dt><dd>{preview.deleted_count.toLocaleString()}</dd></div>
+              <div><dt>未排队</dt><dd>{preview.unqueued_count.toLocaleString()}</dd></div>
+              <div><dt>待彻底删除</dt><dd>{preview.purge_pending_count.toLocaleString()}</dd></div>
+              <div><dt>检查问题</dt><dd>{preview.issues.length.toLocaleString()}</dd></div>
+            </dl>
+            {availableActions.length ? (
+              <div className="trash-purge-maintenance-options">
+                <label>
+                  <span>维护动作</span>
+                  <select
+                    value={action}
+                    disabled={busy}
+                    onChange={(event) => {
+                      setAction(event.target.value as TrashPurgeMaintenanceAction);
+                      setConfirmed(false);
+                    }}
+                  >
+                    {exhaustedJobs.length > 0 && <option value="retry">重试耗尽任务</option>}
+                    {repairable && <option value="repair">修复异常任务引用</option>}
+                  </select>
+                </label>
+                {action === "retry" && (
+                  <label>
+                    <span>耗尽任务</span>
+                    <select
+                      value={jobId}
+                      disabled={busy}
+                      onChange={(event) => {
+                        setJobId(event.target.value);
+                        setConfirmed(false);
+                      }}
+                    >
+                      {exhaustedJobs.map((job) => (
+                        <option key={job.id} value={job.id}>
+                          {job.id.slice(0, 8)} · {job.image_count} 张
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+              </div>
+            ) : (
+              <p className="notice-line">当前没有需要人工维护的彻底删除任务。</p>
+            )}
+            {availableActions.length > 0 && (
+              <label className="storage-maintenance-confirmation">
+                <input
+                  type="checkbox"
+                  checked={confirmed}
+                  disabled={busy}
+                  onChange={(event) => setConfirmed(event.target.checked)}
+                />
+                <span>我已核对当前检查结果，并确认执行所选维护。</span>
+              </label>
+            )}
+            {errorMessage && <p className="admin-error" role="alert">{errorMessage}</p>}
+          </div>
+          <footer>
+            <button type="button" disabled={busy} onClick={() => requestClose()}>
+              取消
+            </button>
+            <button
+              className="button"
+              type="submit"
+              disabled={busy || !confirmed || !action || (action === "retry" && !jobId)}
+            >
+              <AdminIcon name="refresh-line" />
+              <StableButtonLabel idle="执行维护" busyText="处理中" busy={busy} />
+            </button>
+          </footer>
+        </form>
+      )}
+    </DialogFrame>
+  );
+}
 
 export function CheckStorageMaintenanceActions({
   canMaintainStorage,

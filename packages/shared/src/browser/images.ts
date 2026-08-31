@@ -94,6 +94,7 @@ export type RandomImageJsonResponseDto = {
 
 export type AdminImageListItemDto = ImageDetailItemDto & {
   status: "ready" | "deleted";
+  purge_pending: boolean;
   object_key: string;
   storage_slug: string;
   md5: string;
@@ -250,8 +251,9 @@ export type ImagePurgeRequestDto =
 
 export type ImagePurgeResponseDto = {
   requested: number;
+  queued: number;
+  already_queued: number;
   deleted: number;
-  failed: number;
   remaining: number;
   ignored: number;
 };

@@ -235,6 +235,14 @@ export const imagePurgeInput = z.discriminatedUnion("scope", [
   })
 ]);
 
+export const trashPurgeMaintenanceInput = z.discriminatedUnion("action", [
+  z.strictObject({
+    action: z.literal("retry"),
+    job_id: uuidInput
+  }),
+  z.strictObject({ action: z.literal("repair") })
+]);
+
 export const storageSlugInput = slugInput;
 
 export const storageBackendMigrationInput = z.strictObject({

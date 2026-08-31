@@ -62,11 +62,15 @@ export function AdminImageCard({
   const deletedAt = item.status === "deleted" && item.deleted_at
     ? `删除于 ${formatDate(item.deleted_at)}`
     : "";
-  const selectionDisabled = busy || actionsDisabled || detailPending;
+  const trashStatus = item.purge_pending ? "待彻底删除" : deletedAt;
+  const selectionDisabled = busy
+    || actionsDisabled
+    || detailPending
+    || item.purge_pending;
 
   return (
     <article
-      className={`admin-image-card${checked ? " is-selected" : ""}${busy ? " is-busy" : ""}`}
+      className={`admin-image-card${checked ? " is-selected" : ""}${busy ? " is-busy" : ""}${item.purge_pending ? " is-purge-pending" : ""}`}
       aria-busy={busy}
     >
       <label
@@ -128,7 +132,7 @@ export function AdminImageCard({
           <AdminImageCardMetadata
             placement="inline"
             storage={storage}
-            deletedAt={deletedAt}
+            deletedAt={trashStatus}
           />
         </span>
       </button>
@@ -136,7 +140,7 @@ export function AdminImageCard({
         <AdminImageCardMetadata
           placement="footer"
           storage={storage}
-          deletedAt={deletedAt}
+          deletedAt={trashStatus}
         />
         <div className="admin-image-card-actions">
           {item.status === "ready" ? (
@@ -171,24 +175,32 @@ export function AdminImageCard({
                 type="button"
                 title="恢复"
                 aria-label={`恢复图片：${title}`}
-                disabled={busy || actionsDisabled || detailPending}
+                disabled={
+                  busy
+                  || actionsDisabled
+                  || detailPending
+                  || item.purge_pending
+                }
                 onClick={onRestore}
               >
                 <AdminIcon name="arrow-go-back-line" />
               </button>
               {canPurge && (
-                <TwoStepConfirmIconButton
+                <button
+                  type="button"
                   className="danger-button"
-                  idleIcon="delete-bin-7-line"
-                  confirmIcon="delete-bin-2-line"
-                  idleLabel={`永久删除图片：${title}`}
-                  confirmLabel={`再次点击确认永久删除图片：${title}`}
-                  idleTitle="永久删除"
-                  confirmTitle="再次点击确认永久删除"
-                  disabled={busy || actionsDisabled || detailPending}
-                  busy={busy}
-                  onConfirm={onPurge}
-                />
+                  title="永久删除"
+                  aria-label={`永久删除图片：${title}`}
+                  disabled={
+                    busy
+                    || actionsDisabled
+                    || detailPending
+                    || item.purge_pending
+                  }
+                  onClick={onPurge}
+                >
+                  <AdminIcon name="delete-bin-7-line" />
+                </button>
               )}
             </>
           )}

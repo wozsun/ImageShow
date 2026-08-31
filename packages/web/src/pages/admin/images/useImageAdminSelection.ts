@@ -16,7 +16,9 @@ import {
 export function useImageAdminSelection(items: readonly AdminImageListItem[]) {
   const [selected, setSelected] = useState<string[]>([]);
   const controllerRef = useRef(new ImageListSelectionController());
-  const pageIds = useMemo(() => items.map((item) => item.id), [items]);
+  const pageIds = useMemo(() => items
+    .filter((item) => !item.purge_pending)
+    .map((item) => item.id), [items]);
 
   const clear = useCallback(() => {
     controllerRef.current.reset();
@@ -77,7 +79,7 @@ export function useImageAdminSelection(items: readonly AdminImageListItem[]) {
   return {
     selected,
     selectedItems,
-    allSelected: items.length > 0 && selected.length === items.length,
+    allSelected: pageIds.length > 0 && selected.length === pageIds.length,
     clear,
     update,
     selectAll,

@@ -77,6 +77,16 @@
   border-color: var(--admin-color-control-border-selected);
 }
 
+.admin-image-card.is-purge-pending {
+  border-color: var(--admin-color-pending-border-soft);
+  background: var(--admin-color-pending-surface-subtle);
+}
+
+.admin-image-card.is-purge-pending .admin-image-card-meta {
+  color: var(--admin-color-pending-text-strong);
+  font-weight: 600;
+}
+
 @media (hover: hover) and (pointer: fine) {
   .admin-image-card:has(> .admin-image-card-detail:not(:disabled):hover) {
     border-color: var(--admin-color-control-border-selected);

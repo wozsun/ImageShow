@@ -89,10 +89,7 @@ export const databaseReadiness = {
       original: "text",
       image_time: "timestamptz",
       deleted_at: "timestamptz",
-      purge_state: "text",
-      purge_started_at: "timestamptz",
-      purge_attempts: "int4",
-      purge_error: "text",
+      purge_job_id: "uuid",
       created_by: "text",
       created_at: "timestamptz",
       updated_at: "timestamptz"

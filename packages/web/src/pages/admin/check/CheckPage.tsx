@@ -37,6 +37,11 @@ const CheckStorageMaintenanceActions = lazy(() => (
     default: module.CheckStorageMaintenanceActions
   }))
 ));
+const TrashPurgeMaintenanceActions = lazy(() => (
+  loadCheckMaintenanceCapability().then((module) => ({
+    default: module.TrashPurgeMaintenanceActions
+  }))
+));
 const ReadyImageCacheMaintenancePanel = lazy(() => (
   loadCheckMaintenanceCapability().then((module) => ({
     default: module.ReadyImageCacheMaintenancePanel
@@ -46,6 +51,7 @@ const ReadyImageCacheMaintenancePanel = lazy(() => (
 const checkViews = [
   { name: "status", label: "状态" },
   { name: "db", label: "数据库" },
+  { name: "trash", label: "回收站" },
   { name: "storage", label: "存储" },
   { name: "redis", label: "Redis" },
   { name: "all", label: "全部" }
@@ -104,6 +110,9 @@ export function CheckPage() {
   );
   const canRebuildCache = permissions.includes(
     adminPermissions.cacheMaintenanceRebuild
+  );
+  const canMaintainTrashPurge = permissions.includes(
+    adminPermissions.imageTrashPurge
   );
 
   useEffect(() => {
@@ -198,6 +207,15 @@ export function CheckPage() {
                 onRunCheck={runCheck}
                 onRunningChange={setRunning}
                 onShowStorage={() => setCheckView("storage")}
+              />
+            </Suspense>
+          )}
+          {canMaintainTrashPurge && (
+            <Suspense fallback={null}>
+              <TrashPurgeMaintenanceActions
+                running={running}
+                onRunCheck={runCheck}
+                onShowTrash={() => setCheckView("trash")}
               />
             </Suspense>
           )}
@@ -366,6 +384,10 @@ const CHECK_RESULT_LABELS: Record<string, string> = {
   public_pg_fallback: "公开 PostgreSQL 回源准入",
   // 回收站
   deleted_count: "回收站数量",
+  unqueued_count: "未排队数量",
+  purge_pending_count: "待彻底删除数量",
+  job_counts: "彻底删除任务状态",
+  jobs: "彻底删除任务",
   candidates: "待处理对象",
   // 存储检查
   missing_objects: "缺失的原图",

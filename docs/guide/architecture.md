@@ -287,7 +287,7 @@ active 时继续等待同代后续 revision；批量 status 返回的 active DTO
 | 类型 | 所属领域 | 作用 |
 | --- | --- | --- |
 | `move.cleanup` | storage | 删除确认未引用的捕获候选或旧位置对象 |
-| `trash.purge` | images | 续处理大批回收站彻底删除 |
+| `trash.purge` | images | 独占执行由 `metadata.purge_job_id` 绑定的回收站彻底删除 |
 | `cache.rebuild` | images/ready-cache | 重建 ready 图片核心投影 |
 
 通用 `jobs` 层只负责 `FOR UPDATE SKIP LOCKED` 领取、`execution_token` 所有权、续租、
@@ -296,6 +296,14 @@ active 时继续等待同代后续 revision；批量 status 返回的 active DTO
 它用于连接 checkout 与锁获取。取得锁后，连接丢失由独立的锁信号约束，已经开始且必须收口的
 不可逆清理不再继承执行信号。停机时不再领取新任务，并在总停机期限内等待已经登记的 handler
 真正结算。
+
+永久删除的 HTTP 请求只在回收站成员锁内原子插入任务并绑定精确 deleted 行，不执行对象 I/O；
+提交后通常保持确认响应，等待同一 `1..N` 成员集合完成。`trash.purge` handler 是唯一执行 owner，
+按任务归属有界分页并逐图取得存储 mutation lock 与共享清理准入；任务状态、执行 token、重试、
+退避和错误全部复用通用任务行。连接中断、有限等待结束或任务异常不会撤销已提交意图，未完成行
+继续由后台处理。历史裁剪在删除任务前核对 `metadata` 引用，检查页集中诊断耗尽、失联与迟滞并
+提供显式维护。5.4.2 启动升级在 readiness 之前一次性接管旧删除意图并删除旧 purge 结构，不让
+旧逐行状态机进入正常运行期。
 
 Ingestion 另有一个单实例 Redis worker。Upload / Import 共用最多 `N` 个 preparation 许可，覆盖
 等待 Normalize、图片重工作、两个 staging 对象与 ready canonical 发布；Normalize 完成后释放 CPU

@@ -163,3 +163,55 @@ export type AdminCheckStatusDto = {
   postgresql: AdminCheckResourceDto<AdminPostgresqlStatusDto>;
   redis: AdminCheckResourceDto<AdminRedisStatusDto>;
 };
+
+export type TrashPurgeJobStateDto =
+  | "pending"
+  | "running"
+  | "retrying"
+  | "exhausted";
+
+export type AdminTrashPurgeJobDto = {
+  id: string;
+  state: TrashPurgeJobStateDto;
+  image_count: number;
+  retry_count: number;
+  next_retry_at: string | null;
+  updated_at: string;
+  error: string;
+};
+
+export type AdminTrashCheckIssueDto = {
+  kind:
+    | "missing_job_reference"
+    | "wrong_job_type"
+    | "succeeded_job_reference"
+    | "stalled_job";
+  count: number;
+  sample_ids: string[];
+};
+
+export type AdminTrashCheckDto = {
+  deleted_count: number;
+  unqueued_count: number;
+  purge_pending_count: number;
+  job_counts: Record<TrashPurgeJobStateDto, number>;
+  jobs: AdminTrashPurgeJobDto[];
+  issues: AdminTrashCheckIssueDto[];
+  candidates: Array<{
+    id: string;
+    object_key: string;
+    deleted_at: string;
+    purge_pending: boolean;
+  }>;
+};
+
+export type TrashPurgeMaintenanceRequestDto =
+  | { action: "retry"; job_id: string }
+  | { action: "repair" };
+
+export type TrashPurgeMaintenanceResponseDto = {
+  action: TrashPurgeMaintenanceRequestDto["action"];
+  affected_jobs: number;
+  affected_images: number;
+  skipped_jobs: number;
+};

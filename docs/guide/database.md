@@ -2,7 +2,9 @@
 
 PostgreSQL 共 9 张业务表，不保存迁移账本或 schema 版本表。
 `packages/server/schema.sql` 完整定义上一个封版版本的干净安装基线；`author` 可空身份两列、
-三项长期 CHECK 和非空身份复合唯一索引已经并入该基线，当前 `schema-additions.sql` 为注释占位。
+三项长期 CHECK 和非空身份复合唯一索引已经并入该基线。5.4.2 的
+`schema-additions.sql` 新增 `metadata.purge_job_id` 与“非空时必须为 deleted”长期 CHECK；紧随其后的
+一次性启动升级接管可解释的旧删除意图，并物理删除旧四列、旧 CHECK 与旧索引。
 随机图 `id` 的末 12 位查询所需 ready 部分表达式索引，以及统一 Redis 图片投影的权威 revision
 单行表均属于基线。PostgreSQL
 是最终图片、账号、存储注册表和持久任务的唯一真相源。Redis 图片投影、查询缓存与管理员
@@ -17,8 +19,9 @@ PostgreSQL 共 9 张业务表，不保存迁移账本或 schema 版本表。
 
 数据库生命周期由干净基线、单发布周期 additions 和轻量 readiness 组成。单应用进程启动时，
 空数据库在一个事务中先执行 `schema.sql`，再执行当前 `schema-additions.sql`；非空数据库只执行
-additions，随后进入 readiness。当前 additions 为注释占位，不对非空数据库补列、约束、索引或
-业务数据；additions、readiness 或干净初始化任一步失败都会回滚本次结构事务。全部连接固定使用
+additions。5.4.2 随后在同一事务内检测完整旧 purge 结构、接管可解释的旧删除意图并删除旧对象，
+最后进入 readiness。当前 additions 本身只补上述可空列与行为中性 CHECK；一次性升级、additions、
+readiness 或干净初始化任一步失败都会回滚本次结构事务。全部连接固定使用
 `search_path=public`；单实例部署按顺序完成 schema 和管理员播种。
 
 additions 只为以后一个发布周期内经明确审查的受限结构增量或一次性数据变化保留入口。全部
@@ -27,7 +30,8 @@ additions 只为以后一个发布周期内经明确审查的受限结构增量�
 明确声明的 additions，其他结构与数据整理由维护者在停机、备份和恢复验证后执行。
 `metadata.created_by TEXT NOT NULL` 与后台任务当前类型约束都已直接定义在 `schema.sql`。
 作者身份结构也已并入基线；早于 `5.4.0` 的非空数据库必须先经过承载该 additions 与数据迁移的
-`5.4.0`，不能直接运行 `5.4.1` 或更高版本。
+`5.4.0`，不能直接运行 `5.4.1` 或更高版本。非空数据库还必须运行 5.4.2 才能取得当前 purge
+任务归属列并删除旧四字段；5.4.3 会把最终结构并入干净基线并移除这段相邻版本兼容。
 
 readiness 只读核对当前运行时所需业务表、源码实际使用的列及其 PostgreSQL 类型、必需系统种子，
 并确认会话可写、public schema 可用且当前角色具备各表实际操作所需的 SELECT / INSERT /
@@ -37,12 +41,14 @@ UPDATE / DELETE 权限，不使用回滚写探针。它还按列和谓词语义�
 metadata / image_tag 删除路径依赖的 RESTRICT、CASCADE 和 SET NULL 外键。`created_by` 的
 `text` 类型进入最小列集合。readiness 还核对作者身份两列的 `text` 类型与读写权限、两列成对空值、
 provider token 和非空 ID 三项 CHECK、两列非空时生效的复合唯一索引，以及现存 provider 都属于
-当前作者领域支持集合。readiness 的结论只由这套运行时最小契约决定；应用未消费的数据库
+当前作者领域支持集合；同时核对 `purge_job_id` UUID 列及其只允许引用 deleted 行的长期 CHECK。
+readiness 的结论只由这套运行时最小契约决定；应用未消费的数据库
 对象不进入启动判断，也不会触发自动结构对齐。
 
 readiness 不复制 `schema.sql` 的可空性、默认值、无消费者 CHECK、触发器或普通查询索引；作者
 身份 CHECK 与复合唯一索引因当前读写直接依赖而属于明确例外。应用未消费的表、列、索引和约束
-位于启动契约之外；破坏性清理由维护者在停机、备份和恢复验证后单独执行，不属于应用启动职责。
+位于启动契约之外。5.4.2 只对完整识别的上一版 purge 结构执行已审阅的一次性清理；其他破坏性
+清理由维护者在停机、备份和恢复验证后单独执行，不属于应用启动职责。
 
 ## 运行期连接与公开回源
 
@@ -86,10 +92,7 @@ Redis 核心 meta 的当前图片数和最后更新时间随完整重建批次�
 | `title` / `description` / `source` / `original` | 标题 / 描述 / 来源页面 / 可公开原图链接；标题和描述在去除首尾空白后分别最多 80 / 500 个普通汉字，外部链接仅允许 HTTPS |
 | `image_time` | 图片展示 / 图库排序时间；JSONL 可指定，同一前端批次未指定时共享 `batch_time`，省略时使用会话创建时间 |
 | `deleted_at` | 移入回收站时间 |
-| `purge_state` | 彻底删除认领状态：`idle` / `purging` / `failed`；只有 `idle` 可恢复 |
-| `purge_started_at` | 当前彻底删除认领开始时间，用于回收崩溃遗留的过期认领 |
-| `purge_attempts` | 单调递增的彻底删除尝试号，同时作为当前执行者的所有权令牌 |
-| `purge_error` | 最近一次彻底删除失败的有界错误信息 |
+| `purge_job_id` | 可空的持久彻底删除任务归属；非空时图片不可恢复，执行状态由对应 `background_job` 持有；不建立外键 |
 | `created_by` | 首次提交该图片时冻结的规范化管理员 username；无外键、无默认值，不随编辑、删除、恢复或存储迁移改写 |
 | `created_at` | 图片首次正式入库时间 |
 | `updated_at` | 图片元数据最后更新时间 |
@@ -109,19 +112,24 @@ Redis 核心 meta 的当前图片数和最后更新时间随完整重建批次�
 最终更新和候选清理同时无法确认，后续显式维护仍会重新进入该记录，而不需要新表、任务或
 修复 payload。它是当前唯一会生成缩略图的维修入口。
 
-彻底删除先用 `FOR UPDATE SKIP LOCKED` 把 deleted 行原子认领为 `purging` 并增加
-`purge_attempts`，随后在该图的存储 mutation lock 内再次核对状态、尝试号和对象位置。
-对象删除完成后，数据库删除仍以尝试号、`storage_slug` 和 `object_key` 做条件更新；恢复只
-接受 `purge_state='idle'`。进程崩溃留下的过期 `purging` 可重新认领，旧执行者不能用过期
-令牌删除或覆盖新执行者的结果。一次认领最多 `trashBatchSize` 行；移入回收站、恢复事务与
-`scope: "all"` 的水位捕获共享一个短时 advisory lock，水位查询直接复用持锁连接，因此
-捕获前已经开始的成员变更必先提交或回滚。HTTP 请求捕获当前总数及 `deleted_at + id` 上界
-后，先持久化携带该上界的 `trash.purge` 任务，再处理一个批次；首批中止或收口失败也不会
-丢失已确认范围。上界之后新进入回收站，或恢复后再次删除而取得新 `deleted_at` 的行不会
-被该任务认领。请求中止或批次异常时，
-已经进入当前并发片的图片先收口各自的删除结果；尚未处理以及失败状态写回未完成的认领，
-通过一次有界更新按 `id + purge_attempts` 立即恢复为 `idle`。该更新不会命中已删除、
-已标记失败或已被新 attempt 领取的行。
+选中删除和清空回收站都先在回收站成员 advisory lock 内开启短事务：插入一个 retained
+`trash.purge` 任务，并把当时仍为 deleted、尚未绑定的精确成员写入同一个
+`purge_job_id`；任一步失败都会整体回滚。单图、批量与全部范围随后都以同一精确 `1..N` 集合
+等待唯一 Worker 完成，不由 HTTP 请求执行对象删除。响应返回 `requested / queued /
+already_queued / deleted / remaining / ignored`；正常完成时 `remaining=0`，连接断开、有限等待
+结束或任务异常也不撤销删除意图。恢复独立要求 `purge_job_id IS NULL`。
+
+Worker 按 `purge_job_id=job.id` 与 `deleted_at, id` 有界读取，每次只把一张图片交给共享对象清理
+准入。取得单图存储 mutation lock 后重新核对任务归属与对象位置；对象删除成功或已不存在后，
+以 `id + purge_job_id + storage_slug + object_key` 条件删除 metadata。失败行继续引用同一个任务，
+重试、退避、耗尽错误和执行 token 全部只写 `background_job`。
+
+从 5.4.1 升级时，应用必须在旧进程完全停止后启动。5.4.2 一次性兼容先锁定 `metadata`：旧
+`purging / failed` 行与可解释的活动 watermark 范围绑定到同一个 retained 替代任务，旧非 idle
+attempt 先递增以隔离迟到执行者，旧 watermark 任务标为已替代；范围外 idle 行继续保持可恢复。
+随后同一事务删除旧四列、旧 CHECK 与 `idx_metadata_trash_purge`。缺失或畸形的活动 watermark、部分旧结构、
+绑定或 DDL 失败都会让 additions 与清理整体回滚并拒绝启动，不猜测删除范围。字段已经消失时该
+分支只读跳过；其实现与升级 fixture 在 5.4.3 删除。
 
 关键索引：`ready` 状态下的随机轴 `(device, brightness, theme, id)`，以及随机图定向
 候选使用的 `right(id::text, 12)` ready 部分表达式索引；公开图库按
@@ -189,14 +197,17 @@ namespace、canonical 结构和无版本后缀的签名 purpose 共同构成唯�
 | `retry_count` / `next_retry_at` | 重试次数与下次重试时间 |
 | `created_at` / `updated_at` | 时间戳 |
 
-`cache.rebuild` 会从 PostgreSQL 全量重建统一 ready-image Redis 投影，`trash.purge` 在 payload
-中保存发起清空操作时的删除水位，并在 HTTP 首批开始前持久化；每次只执行该稳定范围内的
-一个有界批次并按范围内剩余数量重新调度。确定性幂等键只阻止 `pending`、`running` 和仍可重试
+`cache.rebuild` 会从 PostgreSQL 全量重建统一 ready-image Redis 投影。`trash.purge` 的成员范围由
+`metadata.purge_job_id` 持有；payload 只标记耗尽结果须保留，不复制图片集合、进度或逐图错误。
+每次执行一个有界批次，并在仍有关联图片时重排同一任务。确定性幂等键只阻止 `pending`、`running` 和仍可重试
 的 `failed` 重复入队；`succeeded` 与耗尽重试的 `failed` 会在同一记录上重置
 为 `pending`，因此同一对象以后再次需要 `move.cleanup` 时不会被历史任务静默拦截。
 Worker 会按保留策略裁剪历史记录：`succeeded` 保留 7 天；普通任务耗尽
 重试且 `next_retry_at IS NULL` 的 `failed` 同样保留 7 天。耗尽的 `move.cleanup` 不按历史
 保留期删除，因为它仍是后端对象的未解决保护引用，必须通过管理端重试并实际核验成功。
+任何仍被 `metadata.purge_job_id` 引用的任务也不得裁剪；耗尽 purge 任务由检查页恢复同一记录，
+引用异常时才在回收站锁内创建替代任务并重绑。已无 metadata 引用的耗尽 `trash.purge` 才按普通
+失败任务保留期裁剪；`move.cleanup` 等以 payload 持有物理清理回执的任务仍保持原有长期保留语义。
 每次 `FOR UPDATE SKIP LOCKED` 领取都会生成新的 `execution_token`；续租、成功、
 重排和失败写入必须同时匹配任务 id、`running` 状态与该 token。僵尸恢复及所有退出
 `running` 的路径会清空 token，因此租约超时后又被重新领取的旧执行者不能写入迟到

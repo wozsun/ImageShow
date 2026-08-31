@@ -36,14 +36,14 @@ export function imageAdminConfirmationCopy(
   if (action?.kind === "purge" && action.request.scope === "all") {
     return {
       title: "确认清空回收站",
-      description: "当前回收站内的所有图片及存储对象将被永久删除；操作开始后才移入回收站的图片不受影响。此操作无法撤销。",
-      label: "永久清空"
+      description: "将永久删除当前回收站快照中的全部图片。确认后会在此弹窗等待删除完成；关闭页面或连接中断不会撤销已经提交的删除。之后才移入回收站的图片不受影响，此操作无法撤销。",
+      label: "永久删除"
     };
   }
   if (action?.kind === "purge" && action.request.scope === "selected") {
     return {
       title: "确认删除已选图片",
-      description: `选中的 ${action.request.ids.length} 张图片及其存储对象将被永久删除，此操作无法撤销。`,
+      description: `将永久删除选中的 ${action.request.ids.length} 张图片。确认后会在此弹窗等待删除完成；关闭页面或连接中断不会撤销已经提交的删除，此操作无法撤销。`,
       label: "永久删除"
     };
   }
@@ -216,20 +216,14 @@ export function useImageAdminOperations({
           }
         } else {
           const result = await purgeImages(action.request);
-          const pending = Math.max(0, result.remaining - result.failed);
-          const all = action.request.scope === "all";
-          text = `已永久删除 ${result.deleted} 张${
-            result.failed ? `，${result.failed} 张删除失败` : ""
-          }${
-            pending
-              ? all
-                ? `，剩余 ${pending} 张由后台继续处理`
-                : `，${pending} 张暂未删除`
-              : ""
-          }${result.ignored ? `，${result.ignored} 张状态已改变` : ""}`;
-          status = result.failed || (!all && (pending || result.ignored))
-            ? "error"
-            : "success";
+          text = result.remaining
+            ? `已永久删除 ${result.deleted} 张，${result.remaining} 张仍由后台继续处理${
+                result.ignored ? `，${result.ignored} 张未处理` : ""
+              }`
+            : `已永久删除 ${result.deleted} 张${
+                result.ignored ? `，${result.ignored} 张未处理` : ""
+              }`;
+          status = result.remaining || result.ignored ? "error" : "success";
           if (status === "error") {
             reportAdminUiError(
               "image_admin.purge_partial",
@@ -279,11 +273,6 @@ export function useImageAdminOperations({
     (ids: string[]) => runAction({ kind: "trash", ids }),
     [runAction]
   );
-  const purge = useCallback(
-    (request: ImagePurgeRequestDto) => runAction({ kind: "purge", request }),
-    [runAction]
-  );
-
   return {
     operationText,
     feedback,
@@ -298,7 +287,6 @@ export function useImageAdminOperations({
     resetTransientState,
     runConfirmedAction,
     trash,
-    purge,
     restore
   };
 }
