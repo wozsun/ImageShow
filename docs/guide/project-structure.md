@@ -404,9 +404,9 @@ hooks ──► lib
   `components/image/`，页面层只设置画廊任务的优先级、暂停和驻留边界。无界面的
   页面滚动边界归一化放在 `lib/ui/`，由共享采样 Hook 提供给各页面交互状态机。图片编辑
   保存时，数据窗口用权威快照原位更新唯一命中卡片并保持其他卡片对象，再以同一 cursor
-  后台水合该页；筛选成员、几何和游标变化继续由数据窗口原子提交。公开详情只在完整展示
-  frame 就绪后恢复真实 `<img>` 命中，加载期透明 frame 与其他 `ProgressiveImage` 消费者继续
-  沿用不可命中的共享默认值。
+  后台水合该页；筛选成员、几何和游标变化继续由数据窗口原子提交。共享图片详情弹窗只在
+  完整展示 frame 就绪后恢复真实 `<img>` 命中，加载期透明 frame 与详情以外的
+  `ProgressiveImage` 消费者继续沿用不可命中的共享默认值。
 - `pages/admin/` 按稳定页面职责分为 `shell/`、`account/`、`images/`、`check/`、`storage/`
   与 `advanced-config/`；只有 `LogPage.tsx`、`Overview.tsx`、`SettingsPage.tsx`、
   `UserAdmin.tsx`、`VocabularyAdmin.tsx` 及其单个卡片等没有形成三文件族的页面留在根层。

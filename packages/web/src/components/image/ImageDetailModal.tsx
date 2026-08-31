@@ -220,7 +220,6 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
         className={`modal image-detail-modal ${exit.closing ? "is-closing" : ""}`}
         data-dialog-frame=""
         data-admin-dialog={admin ? "" : undefined}
-        data-public-image-detail={admin ? undefined : ""}
         role="dialog"
         aria-modal="true"
         aria-label="图片详情"
