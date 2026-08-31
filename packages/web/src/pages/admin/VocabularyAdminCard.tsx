@@ -134,7 +134,7 @@ export function VocabularyAdminCard({ kind, item, onChanged, onDelete, onError, 
             maxLength={2048}
             aria-label={`作者 ${item.slug} 链接`}
             title={derivedIdentity
-              ? `派生身份：微博账号 UID ${derivedIdentity.id}`
+              ? `平台: ${derivedIdentity.provider}; UID: ${derivedIdentity.id}`
               : undefined}
           />
         </div>

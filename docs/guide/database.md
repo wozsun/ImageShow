@@ -1,8 +1,8 @@
 # 数据库结构
 
 PostgreSQL 共 9 张业务表，不保存迁移账本或 schema 版本表。
-`packages/server/schema.sql` 完整定义上一个封版版本的干净安装基线；5.4.0 的
-`schema-additions.sql` 为 `author` 增加可空身份两列、三项长期 CHECK 和非空身份复合唯一索引。
+`packages/server/schema.sql` 完整定义上一个封版版本的干净安装基线；`author` 可空身份两列、
+三项长期 CHECK 和非空身份复合唯一索引已经并入该基线，当前 `schema-additions.sql` 为注释占位。
 随机图 `id` 的末 12 位查询所需 ready 部分表达式索引，以及统一 Redis 图片投影的权威 revision
 单行表均属于基线。PostgreSQL
 是最终图片、账号、存储注册表和持久任务的唯一真相源。Redis 图片投影、查询缓存与管理员
@@ -17,10 +17,8 @@ PostgreSQL 共 9 张业务表，不保存迁移账本或 schema 版本表。
 
 数据库生命周期由干净基线、单发布周期 additions 和轻量 readiness 组成。单应用进程启动时，
 空数据库在一个事务中先执行 `schema.sql`，再执行当前 `schema-additions.sql`；非空数据库只执行
-additions，随后进入 readiness。5.4.0 additions 先查 PostgreSQL catalog，仅在对象缺失时执行
-`ADD COLUMN`、命名 `CHECK ... NOT VALID` 后验证，以及部分复合唯一索引创建；已由运维预置完整
-当前结构时，较窄的运行角色不会因 no-op DDL 再被要求成为表 owner；
-additions、readiness 或干净初始化任一步失败都会回滚本次结构事务。全部连接固定使用
+additions，随后进入 readiness。当前 additions 为注释占位，不对非空数据库补列、约束、索引或
+业务数据；additions、readiness 或干净初始化任一步失败都会回滚本次结构事务。全部连接固定使用
 `search_path=public`；单实例部署按顺序完成 schema 和管理员播种。
 
 additions 只为以后一个发布周期内经明确审查的受限结构增量或一次性数据变化保留入口。全部
@@ -28,6 +26,8 @@ additions 只为以后一个发布周期内经明确审查的受限结构增量�
 注释占位。部署和备份恢复按相邻发布顺序经过承载 additions 的版本；自动结构操作限定为当期
 明确声明的 additions，其他结构与数据整理由维护者在停机、备份和恢复验证后执行。
 `metadata.created_by TEXT NOT NULL` 与后台任务当前类型约束都已直接定义在 `schema.sql`。
+作者身份结构也已并入基线；早于 `5.4.0` 的非空数据库必须先经过承载该 additions 与数据迁移的
+`5.4.0`，不能直接运行 `5.4.1` 或更高版本。
 
 readiness 只读核对当前运行时所需业务表、源码实际使用的列及其 PostgreSQL 类型、必需系统种子，
 并确认会话可写、public schema 可用且当前角色具备各表实际操作所需的 SELECT / INSERT /
@@ -35,7 +35,7 @@ UPDATE / DELETE 权限，不使用回滚写探针。它还按列和谓词语义�
 约束，不依赖数据库对象名称：当前运行时表的业务主键；`metadata.object_key`、后台任务
 非空幂等键与唯一活动 `cache.rebuild`、单一默认存储和单一超级管理员的唯一性；以及当前
 metadata / image_tag 删除路径依赖的 RESTRICT、CASCADE 和 SET NULL 外键。`created_by` 的
-`text` 类型进入最小列集合。5.4.0 还核对作者身份两列的 `text` 类型与读写权限、两列成对空值、
+`text` 类型进入最小列集合。readiness 还核对作者身份两列的 `text` 类型与读写权限、两列成对空值、
 provider token 和非空 ID 三项 CHECK、两列非空时生效的复合唯一索引，以及现存 provider 都属于
 当前作者领域支持集合。readiness 的结论只由这套运行时最小契约决定；应用未消费的数据库
 对象不进入启动判断，也不会触发自动结构对齐。
@@ -290,8 +290,6 @@ Server 在同一作者事务中同步清空或替换身份。管理端作者 DTO
 核心统计与词表 / 计数；旧 revision 的按需作者索引由读取端拒绝并重建，避免删除与并发
 关联互相覆盖。
 
-5.4.0 在 schema readiness 后执行一次启动升级事务：它从启动前保存的旧
-`weibo.author_slugs` 快照迁移映射，并同时扫描数据库里已有的可识别微博主页链接补齐身份；旧映射
-只为缺少链接的目标补规范主页。全表锁、冲突校验和更新在一个事务中完成，任一缺失作者、链接 /
-身份不一致或唯一冲突都会整体回滚。数据库提交后才清理旧配置；重启可幂等重放。这不是长期
-schema ledger，也不会在手动配置重载或配置包导入时执行。
+当前运行时只读取已经写入 PostgreSQL 的作者身份，不在启动时从旧配置或现有链接补齐数据。
+早于 `5.4.0` 的部署必须先经过 `5.4.0` 完成一次性迁移；当前版本再次看到
+`weibo.author_slugs` 时只把它当作未知配置字段清理。

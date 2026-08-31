@@ -21,9 +21,6 @@ import {
   configureDatabasePools
 } from "./core/database/pools.ts";
 import { initializeDatabaseSchema } from "./core/database/schema.ts";
-import {
-  upgradeAuthorIdentitiesForLegacyWeiboConfigAtStartup
-} from "./authors/legacy-weibo-author-slugs-upgrade.ts";
 import { ensureSuperAdmin } from "./users/admin-bootstrap.ts";
 import { redis } from "./core/redis/client.ts";
 import {
@@ -63,7 +60,6 @@ async function settleCoordinatorInitialization() {
 try {
   await ensureRuntimeDirectories();
   await initializeDatabaseSchema();
-  await upgradeAuthorIdentitiesForLegacyWeiboConfigAtStartup();
   await ensureSuperAdmin({
     username: bootstrapEnvironment.adminUsername,
     password: bootstrapEnvironment.adminPassword

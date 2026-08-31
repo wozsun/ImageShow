@@ -148,15 +148,18 @@ docker compose exec postgresql sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB
 
 ## 数据库基线
 
-`schema.sql` 完整定义上一个封版版本的干净安装基线；5.4.0 的 `schema-additions.sql` 为
-`author` 增加可空身份两列、长期 CHECK 与非空身份复合唯一索引。空数据库在同一事务中执行基线
-与 additions，非空数据库只执行 additions 后进入只读 readiness；readiness 核对当前读写所需的
+`schema.sql` 完整定义上一个封版版本的干净安装基线；作者可空身份两列、长期 CHECK 与非空身份
+复合唯一索引已经并入该基线，当前 `schema-additions.sql` 为注释占位。空数据库在同一事务中执行
+基线与 additions，非空数据库只执行 additions 后进入只读 readiness；readiness 核对当前读写所需的
 最小列、约束、索引、权限与受支持身份 provider。`metadata.created_by TEXT NOT NULL` 已直接属于
 干净安装基线。additions 只承载一个发布周期：
 全部受控非空数据库应用其中增量并通过 readiness 后，下一发布移除一次性语句并恢复注释占位。
 部署和备份恢复按相邻发布顺序应用 additions；破坏性结构整理由维护者在停机、备份和恢复验证后
 单独执行。应用的自动结构职责限定为干净初始化、单周期 additions 和最小 readiness。精确契约见
 [数据库结构](docs/guide/database.md#启动与结构契约)。
+
+从早于 `5.4.0` 的非空数据库升级时必须先运行 `5.4.0`，完成作者身份 additions 与旧数据迁移；
+`5.4.1` 不再保留该升级读取和回填分支，不能代替中间版本。
 
 Redis 是必需的 operational datastore，但不是业务真相源；服务 unavailable 或命令 OOM 时，
 Ingestion 会话、写入和 worker 均 fail closed，不回退到 PostgreSQL 或进程内队列。停应用后把

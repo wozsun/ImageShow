@@ -47,13 +47,6 @@ export function deriveAuthorIdentityFromLink(link: string): AuthorIdentity | nul
   return match ? { provider: "weibo", id: match[1]! } : null;
 }
 
-export function canonicalWeiboAuthorHomepage(userId: string) {
-  if (!isWeiboUserId(userId)) {
-    throw new Error("Cannot build a Weibo author homepage for an invalid user ID");
-  }
-  return `https://weibo.com/u/${userId}`;
-}
-
 export function projectAuthorDerivedIdentity(
   columns: AuthorIdentityColumns
 ): AuthorDerivedIdentityDto | null {

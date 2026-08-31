@@ -54,6 +54,8 @@ CREATE TABLE author (
   slug TEXT PRIMARY KEY,
   display_name TEXT NOT NULL DEFAULT '',
   link TEXT NOT NULL DEFAULT '',
+  identity_provider TEXT,
+  identity_id TEXT,
   sort_order INTEGER NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -61,8 +63,26 @@ CREATE TABLE author (
   CHECK (slug ~ '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'),
   CHECK (length(display_name) <= 64),
   CHECK (length(link) <= 2048),
-  CHECK (link = '' OR link ~* '^https://')
+  CHECK (link = '' OR link ~* '^https://'),
+  CONSTRAINT author_identity_pair_check CHECK (
+    (identity_provider IS NULL AND identity_id IS NULL)
+    OR (identity_provider IS NOT NULL AND identity_id IS NOT NULL)
+  ),
+  CONSTRAINT author_identity_provider_token_check CHECK (
+    identity_provider IS NULL
+    OR (
+      char_length(identity_provider) BETWEEN 1 AND 32
+      AND identity_provider ~ '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+    )
+  ),
+  CONSTRAINT author_identity_id_nonempty_check CHECK (
+    identity_id IS NULL OR char_length(identity_id) > 0
+  )
 );
+
+CREATE UNIQUE INDEX idx_author_identity
+ON author(identity_provider, identity_id)
+WHERE identity_provider IS NOT NULL AND identity_id IS NOT NULL;
 
 -- Image truth and relations
 CREATE TABLE metadata (

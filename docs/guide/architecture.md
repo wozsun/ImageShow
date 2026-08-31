@@ -66,9 +66,9 @@ PostgreSQL 是图片、词表、后台任务、存储注册表和管理员账号
 不保存迁移账本或应用版本号。
 
 `schema.sql` 完整定义上一个封版版本的干净安装基线；当前版本空库依次执行它与
-`schema-additions.sql`，非空库只执行 additions 后做只读 readiness。5.4.0 additions 承载作者
-身份两列、长期 CHECK 与非空身份复合唯一索引；`metadata.created_by TEXT NOT NULL` 和后台任务的
-三种当前类型约束直接属于基线。additions 只为一个发布周期内经审查的受限增量保留固定入口；全部受控非空数据库确认增量
+`schema-additions.sql`，非空库只执行 additions 后做只读 readiness。作者身份两列、长期 CHECK、
+非空身份复合唯一索引、`metadata.created_by TEXT NOT NULL` 和后台任务的三种当前类型约束都直接
+属于基线；当前 additions 为注释占位。additions 只为一个发布周期内经审查的受限增量保留固定入口；全部受控非空数据库确认增量
 后，下一发布把定义并入 `schema.sql` 并恢复注释占位。自动结构职责由干净初始化、单周期
 additions 和最小 readiness 构成；其他结构整理必须显式停机、备份并验证恢复。允许的 additions
 和 readiness 契约以
