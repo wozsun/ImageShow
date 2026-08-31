@@ -391,8 +391,10 @@ hooks ──► lib
   `dialog-scroll-boundary.ts` 保存纵向 owner、显式登记的标签横向 owner 与方向纯模型，
   `dialog-touch-boundary.ts` 只管理 capture 触摸生命周期并将已分类意图映射给 owner；共享
   `DirectActivationButton` 另以局部 pointer 生命周期决定直接激活是否仍成立，不选择或移动滚动
-  owner。各层共享纯判定但不共享可变手势状态，也不互相承担后置补救；它们只认识坐标、当前顶层
-  dialog frame 与 DOM 滚动能力，不依赖页面、角色或路由。
+  owner；其文档级短期兼容守卫只跨越一次直接激活，记录原触点是否仍活动，并在下一次单指
+  `touchstart` 或主 `pointerdown` 到达目标前退休，不把 800 ms 最终清理窗口误当成手势归属。
+  各层共享纯判定但不共享滚动与激活的可变手势状态，也不互相承担入口后置补救；它们只认识
+  坐标、当前顶层 dialog frame 与 DOM 滚动能力，不依赖页面、角色或路由。
 - `pages/` 保存路由页面与页面级编排，页面专属组件、状态机和 Hook 就近维护。
 - `pages/admin/images/useImageAdminPageNavigation.ts` 是后台图库、无主题与回收站数字页的唯一查询
   owner，只保存规范化 scope、目标 page 与最近成功的 scope total 快照，并让 React Query

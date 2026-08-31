@@ -653,6 +653,14 @@ PostgreSQL 回源在同一连接的 `REPEATABLE READ READ ONLY` 事务中依次�
 副标题、文案、分页、
 批量默认值和移出按钮，编辑器 shell、列表、卡片、动作和公共属性实现均使用数量中性命名；
 快照、草稿、保存、移入回收站、迁移、权威回读与卡片结果使用同一实现。
+移动端的批量默认属性使用共享折叠面板；“应用到全部”与其他会同步关闭、移除或重排表面的
+控件共用 `DirectActivationButton`。触控 / 笔在 `pointerup` 直接激活后，文档级短期守卫只消费
+该物理手势迟到的兼容鼠标与 click；原触点仍活动时到达的 `touchstart`、以及增加第二触点的
+多点手势都不会提前释放守卫。原手势结束后，下一次单指 `touchstart` 或主 `pointerdown` 会在
+新目标处理事件前退休旧守卫，所以 WebKit 即使延迟或省略下一次 `pointerdown`，折叠开关也能
+在第一次轻点响应。`detail=0` 的键盘 / 辅助技术 click 保留原生路径并同时退休旧守卫；800 ms
+定时器只承担最终清理，不作为区分两次物理手势的依据。外部触控仍由折叠面板自己的捕获阶段
+`touchstart` 关闭，不建立入口特判或第二套展开状态。
 
 编辑读取、保存和存储迁移分别使用数量中性的 `/api/admin/images/snapshot`、
 `/api/admin/images/update` 与 `/api/admin/images/migrate-storage`；三者都接收 1–200 张图片，
