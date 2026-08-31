@@ -23,7 +23,7 @@ export type SiteHomeSettings = {
 export type SiteGallerySettings = {
   limit: number;
   order: GalleryOrder;
-  show_original_button: boolean;
+  public_original_button: boolean;
 };
 
 export type RuntimeSiteSettings = {
@@ -139,7 +139,7 @@ export type PublicSiteSettings = Pick<
   RuntimeSiteSettings,
   "name" | "description" | "icon" | "root" | "home"
 > & {
-  gallery: Pick<SiteGallerySettings, "order" | "show_original_button">;
+  gallery: Pick<SiteGallerySettings, "order" | "public_original_button">;
   static_url: string;
 };
 

@@ -220,7 +220,7 @@ export function siteConfigPayload(): SiteConfigDto {
       home,
       gallery: {
         order: gallery.order,
-        show_original_button: gallery.show_original_button
+        public_original_button: gallery.public_original_button
       },
       static_url: staticLocalBaseUrl()
     },

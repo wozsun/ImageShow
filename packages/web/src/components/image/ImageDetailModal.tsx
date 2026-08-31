@@ -202,8 +202,8 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
       ? `${siteConfig.site.static_url}/link/original/${encodeURIComponent(item.id)}`
       : undefined;
   const canOpenOriginal = hasRegisteredOriginal && Boolean(originalHref);
-  const showOriginalAction = admin
-    || siteConfig?.site.gallery.show_original_button === true;
+  const showOriginalAction = showAdminDetails
+    || siteConfig?.site.gallery.public_original_button === true;
   const originalStateLabel = !hasRegisteredOriginal
     ? "当前图片未注册原图"
     : canOpenOriginal
@@ -327,6 +327,20 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
                 {imageTime && <><dt>图片时间</dt><dd>{formatDate(imageTime)}</dd></>}
               </dl>
               <div className="inline-actions image-detail-actions" ref={actionsRef}>
+                <a
+                  className={`button secondary pressable image-detail-source${sourceAvailable ? "" : " is-disabled"}`}
+                  href={sourceAvailable ? item.source : undefined}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  referrerPolicy="no-referrer"
+                  aria-disabled={!sourceAvailable}
+                  aria-label={sourceStateLabel}
+                  title={sourceStateLabel}
+                  tabIndex={sourceAvailable ? undefined : -1}
+                  onClick={(event) => { if (!sourceAvailable) event.preventDefault(); }}
+                >
+                  <Icon name="external-link-line" />来源
+                </a>
                 {showOriginalAction && (
                   <a
                     className={`button pressable image-detail-original${canOpenOriginal ? "" : " is-disabled"}`}
@@ -343,20 +357,6 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
                     原图
                   </a>
                 )}
-                <a
-                  className={`button secondary pressable image-detail-source${sourceAvailable ? "" : " is-disabled"}`}
-                  href={sourceAvailable ? item.source : undefined}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  referrerPolicy="no-referrer"
-                  aria-disabled={!sourceAvailable}
-                  aria-label={sourceStateLabel}
-                  title={sourceStateLabel}
-                  tabIndex={sourceAvailable ? undefined : -1}
-                  onClick={(event) => { if (!sourceAvailable) event.preventDefault(); }}
-                >
-                  <Icon name="external-link-line" />来源
-                </a>
               </div>
               {showAdminDetails && (
                 <ImageAdminDetailsModuleBoundary resetKey={item.id}>

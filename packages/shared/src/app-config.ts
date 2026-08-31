@@ -167,7 +167,7 @@ export const appConfig = {
       gallery: {
         limit: 60,
         order: "latest",
-        show_original_button: false
+        public_original_button: false
       },
       random_method: "redirect",
       static_subdomain: "static",

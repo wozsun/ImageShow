@@ -16,13 +16,7 @@ type RuntimeConfigLeafPath<T = RuntimeConfig> = {
       : K;
 }[keyof T & string];
 
-type RuntimeConfigFileOnlyPath =
-  | "site.gallery.show_original_button";
-
-type RuntimeConfigEnvironmentLeafPath = Exclude<
-  RuntimeConfigLeafPath,
-  RuntimeConfigFileOnlyPath
->;
+type RuntimeConfigEnvironmentLeafPath = RuntimeConfigLeafPath;
 
 type RuntimeConfigEnvironmentValueKind =
   | "string"
@@ -51,6 +45,7 @@ export const runtimeConfigEnvironmentBindings = [
   { path: "site.home.banner_title", environmentVariable: "SITE_HOME_BANNER_TITLE", valueKind: "string" },
   { path: "site.gallery.limit", environmentVariable: "SITE_GALLERY_LIMIT", valueKind: "number" },
   { path: "site.gallery.order", environmentVariable: "SITE_GALLERY_ORDER", valueKind: "string" },
+  { path: "site.gallery.public_original_button", environmentVariable: "SITE_GALLERY_PUBLIC_ORIGINAL_BUTTON", valueKind: "boolean" },
   { path: "site.random_method", environmentVariable: "SITE_RANDOM_METHOD", valueKind: "string" },
   { path: "site.static_subdomain", environmentVariable: "SITE_STATIC_SUBDOMAIN", valueKind: "string" },
   { path: "site.robots_enabled", environmentVariable: "SITE_ROBOTS_ENABLED", valueKind: "boolean" },

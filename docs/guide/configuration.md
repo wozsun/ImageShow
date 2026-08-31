@@ -40,8 +40,9 @@ Docker healthcheck 只读取并在内存中归一化已经存在的 `config.json
 维护。`embed` 不进入普通后台设置的读取或保存 DTO，只通过
 `data/config.json` 维护；公开站点配置仅返回前端路由实际消费的有效嵌入开关，
 不返回来源列表，并额外返回由 `site.domain` 与 `site.static_subdomain` 派生的
-`site.static_url`，以及公开详情实际消费的 `site.gallery.show_original_button` 有效布尔值。
-该开关不进入普通设置读写 DTO，普通设置保存不会读取、修改或覆盖它。
+`site.static_url`，以及公开详情实际消费的 `site.gallery.public_original_button` 有效布尔值。
+该开关只控制未登录访客的公开详情原图入口；服务端确认已登录的管理员复用管理详情的认证
+结果并始终显示入口。该开关不进入普通设置读写 DTO，普通设置保存不会读取、修改或覆盖它。
 `site.domain`、`site.description`、`site.icon` 与
 `site.home.enabled` 保留在运行时配置中，但不进入普通设置页及其读写 DTO；
 其中 `site.description` 只用于 HTML `description`。这些字段都需要通过配置文件
@@ -80,11 +81,15 @@ PostgreSQL 的 `admin_account` 表，不进入 `config.json`。单应用进程�
 导入都只按当前默认结构投影，再次出现旧字段时直接作为未知字段删除，不读取其值、不触发迁移，
 也不影响已经写入 PostgreSQL 的作者身份。这是来源无关的当前结构归一化，不是旧版本迁移层。
 
+`site.gallery.show_original_button` 已由当前结构中的
+`site.gallery.public_original_button` 取代；不读取、迁移或双读旧值。已有配置在启动或手动重载时
+直接删除旧字段，并在新字段缺失时按默认值 `false` 补齐；合法的新字段值原样保留并随完整配置
+原子写回。这同样只依赖当前结构归一化，不建立升级兼容层。
+
 ## RuntimeConfig 参数目录
 
-下表是 `data/config.json` 的完整叶子参数参考，也是 `.env.example` 中具备映射字段的播种目录。
-标为“配置文件专属”的字段不提供环境变量，只能通过 `config.json`、完整配置编辑器或配置包维护。
-其余环境变量仅在
+下表是 `data/config.json` 的完整叶子参数参考，也是 `.env.example` 中全部字段的首次播种目录。
+环境变量仅在
 文件不存在时参与一次完整配置生成；后续启动、重启、普通设置、高级配置、配置包和手动重载
 都以持久化配置为准。默认应用容器环境保持五项部署值；具备环境变量的 RuntimeConfig 字段均标为
 “显式映射”，由部署者扩展 Compose 后进入容器。所有现行配置都可
@@ -108,7 +113,7 @@ PostgreSQL 的 `admin_account` 表，不进入 `config.json`。单应用进程�
 | <!-- runtime-config:site.home.banner_title --> `site.home.banner_title` / `SITE_HOME_BANNER_TITLE` / 显式映射 | 字符串；默认 `"我们一起，\n收藏这些瞬间。"`；1–80 字符，可换行 | 首页 Banner 标题；普通设置或热加载后生效。 |
 | <!-- runtime-config:site.gallery.limit --> `site.gallery.limit` / `SITE_GALLERY_LIMIT` / 显式映射 | 整数；默认 `60`；1–200 项 | 公开画廊未显式指定页量时使用的分页量；普通设置或热加载后影响新查询。 |
 | <!-- runtime-config:site.gallery.order --> `site.gallery.order` / `SITE_GALLERY_ORDER` / 显式映射 | 枚举；默认 `"latest"`；`latest`、`random` | 画廊默认排序；普通设置或热加载后影响新查询。 |
-| <!-- runtime-config:site.gallery.show_original_button --> `site.gallery.show_original_button` / 无环境变量 / 配置文件专属 | 布尔；默认 `false` | 控制公开画廊详情是否渲染独立“原图”入口；完整配置、配置包或热加载后生效，不进入普通设置。关闭不影响当前展示图的原生保存。 |
+| <!-- runtime-config:site.gallery.public_original_button --> `site.gallery.public_original_button` / `SITE_GALLERY_PUBLIC_ORIGINAL_BUTTON` / 显式映射 | 布尔；默认 `false` | 控制未登录访客的公开画廊详情是否渲染独立“原图”入口；服务端确认已登录的管理员不受该开关影响。首次播种、完整配置、配置包或热加载后生效，不进入普通设置；关闭不影响当前展示图的原生保存。 |
 | <!-- runtime-config:site.random_method --> `site.random_method` / `SITE_RANDOM_METHOD` / 显式映射 | 枚举；默认 `"redirect"`；`proxy`、`redirect` | `/random` 未指定 `m` 时的图片返回方式；`json` 仅可作为显式 `m=json` 查询参数，普通设置或热加载后影响新请求。 |
 | <!-- runtime-config:site.static_subdomain --> `site.static_subdomain` / `SITE_STATIC_SUBDOMAIN` / 显式映射 | 字符串；默认 `"static"`；1–63 字符的合法小写 DNS label | `/media`、`/thumbs`、`/link/original` 的资源子域；首次播种或热加载后影响 Host 路由。 |
 | <!-- runtime-config:site.robots_enabled --> `site.robots_enabled` / `SITE_ROBOTS_ENABLED` / 显式映射 | 布尔；默认 `false` | 控制主站与资源域 `robots.txt`；首次播种或热加载后影响新请求。 |
@@ -424,7 +429,7 @@ EMBED_ALLOWED_ORIGINS='["https://portal.example.com","https://*.trusted.example.
 {
   "site": {
     "gallery": {
-      "show_original_button": false
+      "public_original_button": false
     },
     "home": {
       "banner_title": "我们一起，\n收藏这些瞬间。"

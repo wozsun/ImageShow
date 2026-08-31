@@ -12,8 +12,9 @@ Node.js 26 / Hono、React 19、PostgreSQL、Redis 8 和 Docker 构成。
   keyset cursor 恢复。移动端首页目录显示约 8 行半主题、7 行半标签和 6 行半作者选项，以
   露出的半行提示还可继续滚动；桌面端目录尺寸保持不变。后台图库、无主题与回收站则由
   服务端按数字页直达，不在浏览器补齐前序 cursor 边界。公开与后台详情中的当前展示图保留
-  浏览器原生右键与长按保存能力；公开详情可选“原图”按钮只打开另行登记的独立原图，两者
-  互不替代。
+  浏览器原生右键与长按保存能力；未登录访客的公开“原图”按钮由
+  `site.gallery.public_original_button` 控制，服务端确认已登录的管理员则继续复用同一详情中的
+  管理能力判定并始终看到该入口。“来源”与“原图”只打开各自另行登记的地址，互不替代。
 - 主站 `/random` 随机图 API，以及集中承载本地媒体、缩略图和外链原图直连决策 / 代理的
   `static.*` 资源子域；已解析随机池在一次只读 Redis 原子调用内完成校验、抽样和 rich item
   读取，近期去重与最终排序仍由应用负责；不提供随机、外链或主题专用子域。
@@ -114,7 +115,9 @@ Redis 连接和时区使用代码默认值。外部拓扑需要在 Compose overr
 应用配置保存在 `data/config.json`，完整字段见
 [配置说明](docs/guide/configuration.md#runtimeconfig-参数目录)。当前根页面字段为
 `site.root`，对应首次播种变量 `SITE_ROOT`；`SITE_DOMAIN`、`SITE_DESCRIPTION` 和其他 seed 一样，
-只有显式扩展 `services.imageshow.environment` 后才参与空目录首次生成。
+只有显式扩展 `services.imageshow.environment` 后才参与空目录首次生成。公开原图入口字段为
+`site.gallery.public_original_button`，对应 `SITE_GALLERY_PUBLIC_ORIGINAL_BUTTON`；现行每个
+RuntimeConfig 叶子都有唯一环境变量映射，不保留配置文件专属分支。
 配置包的导出、目标版本宽松识别、敏感凭据与冲突重命名边界见
 [配置说明中的配置包章节](docs/guide/configuration.md#配置包)。
 

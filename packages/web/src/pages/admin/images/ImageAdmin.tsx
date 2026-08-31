@@ -382,7 +382,7 @@ export function ImageAdmin() {
                   ].filter(Boolean).join(" ")}
                   type="button"
                   aria-label={batchTrashPending
-                    ? "删除中"
+                    ? "正在删除"
                     : batchTrashConfirmation.armed
                       ? "确认删除"
                       : "批量删除"}
@@ -418,7 +418,7 @@ export function ImageAdmin() {
                     idle={batchTrashConfirmation.armed
                       ? "确认删除"
                       : "批量删除"}
-                    busyText="删除中"
+                    busyText="正在删除"
                     busy={batchTrashPending}
                   />
                 </button>
@@ -580,9 +580,9 @@ export function ImageAdmin() {
           requireFinalConfirmation
           finalConfirmationLabel="确认删除"
           confirmIcon="delete-bin-7-line"
-          finalConfirmationIcon="delete-bin-7-line"
+          finalConfirmationIcon="delete-bin-2-line"
           pendingIcon="delete-bin-5-line"
-          pendingLabel="删除中"
+          pendingLabel="正在删除"
           successLabel="删除完成"
           onClose={() => setConfirmAction(null)}
           onConfirm={runConfirmedAction}
