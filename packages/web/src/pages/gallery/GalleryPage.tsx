@@ -51,6 +51,7 @@ import { scrollGalleryToTop, useGalleryViewportControls } from "./useGalleryView
 import {
   galleryApiSearchParams,
   galleryFiltersFromSearchParams,
+  galleryRandomRequestDevice,
   galleryRouteSearchParams,
   type GalleryFilters
 } from "../../lib/gallery/gallery-query.js";
@@ -170,9 +171,10 @@ export function GalleryPage({ embedded = false }: { embedded?: boolean }) {
   );
 
   const order = siteConfig?.site.gallery.order ?? "latest";
+  const userAgent = window.navigator.userAgent;
   const imageQuery = useMemo(
-    () => galleryApiSearchParams(filters, order).toString(),
-    [filters, order]
+    () => galleryApiSearchParams(filters, order, { userAgent }).toString(),
+    [filters, order, userAgent]
   );
   const revealRegistry = useMemo(
     () => new GalleryCardRevealRegistry({
@@ -209,7 +211,7 @@ export function GalleryPage({ embedded = false }: { embedded?: boolean }) {
 
   const randomUrl = buildRandomUrl({
     origin: window.location.origin,
-    device: filters.device,
+    device: galleryRandomRequestDevice(filters.device),
     brightness: filters.brightness || "random",
     theme: filters.theme,
     tag: filters.tag,

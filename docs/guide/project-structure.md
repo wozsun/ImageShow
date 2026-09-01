@@ -60,7 +60,7 @@ GitHub Actions 只核对 dev 分支或 release tag、根包 / 三个 workspace /
 
 ## packages/shared
 
-共享包是前后端唯一共同依赖，只承载稳定的配置默认值、类型、校验常量和 DTO。
+共享包是前后端唯一共同依赖，只承载稳定的配置默认值、类型、校验常量、DTO 与浏览器安全纯规则。
 
 - 默认入口只导出服务端与构建配置使用的完整 `appConfig`；Web 运行时代码不得导入。
 - `@imageshow/shared/browser` 是图片、分类、内容接入、存储和管理设置等双端 HTTP/SSE
@@ -107,20 +107,26 @@ healthcheck 只读现有配置快照，密码恢复不初始化运行时配置�
 
 | 目录 | 职责与允许依赖 |
 | --- | --- |
-| `core/` | 领域无关的运行可用性、安全抓取、日志、密码、UUID、并发和通用校验；不依赖业务领域或路由。只有未形成稳定三文件族的横切模块留在根层。 |
+| `core/` | 领域无关的运行可用性、安全抓取、日志、密码、UUID、并发和精确基础原语；不持有图片、词表、存储或 Ingestion 请求 schema，也不依赖业务领域或路由。只有未形成稳定三文件族的横切模块留在根层。 |
 | `core/database/` | PostgreSQL pool、事务、advisory lock、公开 fallback 准入、schema 装配和 readiness；`readiness/` 只承载数据库基线断言的内部职责。 |
-| `core/redis/` | 唯一 Redis client、业务 Lua / 命令注册、JSON、pipeline、条件字符串和窗口限流基础设施；不导入 ready-cache 或其他业务领域。 |
+| `core/redis/` | 唯一 Redis client、连接与能力探测、JSON、pipeline、条件字符串、窗口限流命令及其通用 Lua；不持有 ready-cache 等业务命令，也不导入其他业务领域。 |
 | `core/http/` | HTTP 响应与响应头、请求来源和请求体限制、压缩阈值、条件请求、静态响应与 Range 解析。 |
-| `config/` | 部署环境、首次播种、运行时配置 schema、无导入副作用的文件读写与显式进程内 store，以及配置包；配置包由目标版本以当前默认配置为基线逐项投影，存储后端逐条识别，不维护来源版本迁移链；`runtime-config-environment.ts` 是全部 RuntimeConfig 叶子到首次 seed 变量的唯一映射。启动、热加载和配置包都只读取当前结构，未知字段统一投影删除。 |
-| `routes/` | HTTP 方法、鉴权、CSRF、输入解析和响应投影；业务工作委托给领域模块。 |
-| `images/` | 图片读写、展示投影、分类与元数据变更、回收站和缩略图；`page-window.ts` 唯一计算安全数字页窗口，`ready-cache/` 拥有统一 Redis rich 投影、筛选、统计、精确同步与重建，`ingestion/` 拥有 Upload / Import 的完整接入会话生命周期及清理任务，`read-models/` 承载 PostgreSQL cursor / offset 读模型。 |
-| `storage/` | 只在根层保留横切 `maintenance-lock.ts`；`backends/`、`drivers/`、`objects/`、`migration/` 与 `cleanup/` 分别拥有注册表、驱动、对象原语、搬迁和持久清理。 |
-| `random/` | 随机查询校验、设备轴推断、Redis 8 Array 最近历史、定向 id 与有界 pivot 普通随机 PG 降级查询及随机出口编排；Redis 候选投影、筛选与重建统一由 `images/ready-cache/` 提供。 |
+| `config/` | 部署环境、首次播种、运行时配置 schema、无导入副作用的文件读写与显式进程内 store，以及配置包；普通保存与磁盘重载共用 FIFO 写租约内“持久化后发布”入口，配置包在同一租约内把候选文件持久化与数据库结果核对及收敛决定后的单次内存发布分离。配置包由目标版本以当前默认配置为基线逐项投影，存储后端逐条识别，不维护来源版本迁移链；`runtime-config-environment.ts` 是全部 RuntimeConfig 叶子到首次 seed 变量的唯一映射。启动、热加载和配置包都只读取当前结构，未知字段统一投影删除。 |
+| `routes/` | HTTP 方法、鉴权、CSRF、输入解析和响应投影；`validation/` 按图片、Ingestion、存储、用户和词表职责拥有请求 schema，并集中保留通用 HTTP 原语与 `validation_error` 映射；业务工作委托给领域模块。 |
+| `images/` | 图片读写、展示投影、分类与元数据变更、回收站和缩略图；`metadata-tags.ts` 拥有 HTTP 与 JSONL 共用的标签归一化契约，`page-window.ts` 唯一计算安全数字页窗口，`storage-location/` 拥有正式图片位置 CAS、revision、mutation fence 和 cache handoff，`ready-cache/` 拥有统一 Redis rich 投影、筛选、统计、精确同步与重建，`ingestion/` 拥有 Upload / Import 的完整接入会话生命周期及清理任务，`read-models/` 承载 PostgreSQL cursor / offset 读模型及其领域查询类型。 |
+| `storage/` | 只在根层保留横切 `maintenance-lock.ts`；`backends/`、`drivers/`、`objects/` 与 `cleanup/` 分别拥有注册表及 Endpoint 重绑定证明、驱动、对象原语及跨图片传输准入、持久清理。`storage/` 不修改正式图片位置或相应 revision，也不交接 ready-cache。`backends/config.ts` 保留 S3 配置 schema、归一化和存储领域输入类型，HTTP create / update / test schema 位于路由边界。 |
+| `random/` | 随机查询校验、规范 `auto` / `all` 到候选设备轴的选择、Redis 8 Array 最近历史、定向 id 与有界 pivot 普通随机 PG 降级查询及随机出口编排；纯 User-Agent 设备识别由 `@imageshow/shared/browser` 提供给 Server 与 Web，Redis 候选投影、筛选与重建统一由 `images/ready-cache/` 提供。 |
 | `jobs/` | 仅拥有通用 `background_job` 生命周期、小型类型分派、公平调度 Worker，以及集中管理任务中止、期限、续租和有界排空的执行协调器；各领域拥有自己的 handler、payload 和结果语义。 |
 | `checks/` | PostgreSQL / Redis 独立轻量状态、数据库 / Redis / 存储手动深度检查、“全部”中的回收站一致性结果，以及显式触发的存储维护；状态页自动 Redis 深检与手动 Redis 检查复用同一有界扫描和 pipeline，只返回当前汇总。 |
 | `authors/`、`tags/`、`themes/`、`vocab/` | 词表查询、变更、关联锁与派生缓存；`authors/identity.ts` 唯一拥有作者链接到平台身份的当前解析和管理投影，微博导入按身份批量查询 PostgreSQL，不保留旧配置迁移 owner。 |
 | `users/` | 管理员初始化、账号变更、Redis 登录会话、逐请求 PostgreSQL 角色与密码代际核对、操作授权、密码恢复、偏好和会话失效；不维护管理员凭据 Redis 投影。 |
 | `types/` | 仅放缺失的编译期声明，不承载运行时代码。 |
+
+`config/runtime-config-store.ts` 唯一拥有进程内 RuntimeConfig、listener 与 FIFO 写租约。普通设置、
+高级配置和磁盘重载都先完成所需原子文件写入，再替换内存并逐个通知 listener；同步 listener
+异常只记录结构化错误，不中断后续 listener 或反转已持久化结果。`config/config-package.ts` 在同一
+租约内先通过 store 的专用阶段持久化候选文件，再等待 PostgreSQL 事务结果；只有正常提交、确认
+已提交或结果 unknown 时才发布候选，确认回滚只恢复旧文件且不发布中间快照。
 
 `routes/` 当前保留 18 个直属文件。`admin-vocabulary.ts` 在一个 HTTP 能力边界中声明 tags、
 themes 与 authors 三组同构 CRUD，通用 registrar 为文件内私有实现；每组仍分别注入自己的
@@ -129,6 +135,14 @@ schema、查询、变更和删除权限，不把领域业务搬进路由。`publ
 其余短 registrar 即使只有一个导出，也分别拥有独立 URL、鉴权 / 权限、中间件顺序、Host
 或缓存契约；不按行数与相邻文件合并。`http-app.ts` 仍显式展示公开路由、管理员 session、
 CSRF、请求体限制和各管理能力的装配顺序。
+
+`routes/validation/` 不提供 `index.ts` 或旧路径转发：`parse.ts` 唯一把 Zod 问题映射为稳定的
+HTTP `validation_error`，`primitives.ts` 只复用 UUID、slug、HTTPS 和安全整数等无业务语义原语，
+其余文件分别拥有对应请求 schema。公开列表、后台列表与画廊统计的领域查询类型由各自
+`images/read-models/` 模块导出，路由 schema 以 `z.ZodType` 对其作编译期约束；图片更新直接使用
+`@imageshow/shared/browser` 的 `ImageUpdateItemInputDto`。JSONL 与 HTTP 共用
+`images/metadata-tags.ts` 的标签归一化 schema，cursor 复用 `core/uuid.ts` 的规范 UUID 原语，
+因此非路由模块无需也不得反向依赖请求校验目录。
 
 `core/database/` 按 PostgreSQL 生命周期边界拆分：`pools.ts` 只接收显式配置并拥有主查询与
 advisory lock 两个连接池；`transactions.ts`、`advisory-locks.ts` 和 `schema.ts` 分别拥有
@@ -149,11 +163,13 @@ schema 初始化和管理员播种直接使用主查询池，不为不受支持�
 缓存读取先行，首次真实回源才借 client，同一 scope 内的领域模块显式接收并复用 reader；
 底层 `pool.query` 保持显式调用与原始连接语义。
 
-高频且必须保持原子性的 Redis Lua 由 `core/redis/business-scripts.ts` 单独持有脚本文本，
-`core/redis/business-commands.ts` 统一声明七个 ioredis 自定义命令、key 数量、读写属性、
-参数布局和返回值解析，`core/redis/client.ts` 在唯一 client 构造点注册。限流与 ready-cache
-领域只调用类型化命令；ready-cache 的键和容量策略作为参数传入，`core/` 不反向依赖图片
-领域。其中两条只读抽样命令分别接收四个 core key 和六个 derived key，把已解析索引后的
+固定窗口限流的单条通用 Lua、命令定义、注册、参数布局和返回解析由
+`core/redis/window-limit.ts` 就近拥有；`core/redis/client.ts` 只构造唯一 client 并维护连接与
+能力状态。ready-cache 的六条领域 Lua 位于 `images/ready-cache/redis/scripts.ts`，相邻
+`client.ts` 拥有窄 client 类型和 ioredis 命令定义 / 注册，`commands.ts` 拥有参数布局、返回
+解析和类型化调用。两组命令都在首次调用前显式幂等注册；注册会保留 client 上已有脚本选项，
+使后续 `duplicate()` 继续继承命令，但不依赖全局类型扩充、模块导入副作用或 `core/` 对图片
+领域的反向导入。其中两条 ready-cache 只读抽样命令分别接收四个 core key 和六个 derived key，把已解析索引后的
 校验、候选数计算、随机成员与 rich item 读取收敛为一次 Redis 调用；脚本不拼接隐藏 key，
 也不接收 client ID 或近期去重集合。ioredis 负责按物理连接在首次调用发送 `EVAL`、后续
 发送 `EVALSHA`，并在 `NOSCRIPT` 后重发脚本；应用不维护 SHA、启动时预加载清单或 Redis
@@ -163,21 +179,24 @@ Functions。检查页按键动态测量的低频 Lua 仍留在 `checks/`，不�
 
 ```text
 storage/
-├─ backends/   # 配置、记录、注册表、探测、读模型、更新、删除和占用
+├─ backends/   # 配置、记录、注册表、探测、Endpoint 重绑定、读模型、更新、删除和占用
 ├─ drivers/    # driver 契约、无环工厂、实例生命周期、local 与 S3
-├─ objects/    # 对象 key、namespace、访问、传输、校验、列表、删除准入和公开 URL
-├─ migration/  # 共享准入、单图 CAS、整后端迁移、relocation 与 endpoint rebind
+├─ objects/    # 对象 key、namespace、访问、传输、校验、列表、图片传输 / 删除准入和公开 URL
 ├─ cleanup/    # 持久 move.cleanup 类型、仓储、handler 与 service
 └─ maintenance-lock.ts
 ```
 
-图片存储变更的单图原语集中在 `storage/migration/image.ts`，在同一条可读控制流中
+图片存储位置变更集中在 `images/storage-location/`。`image-backend-migration.ts` 的单图原语在同一条可读控制流中
 完成锁内真相重读、候选发布与校验、PostgreSQL CAS，以及提交结果不确定时的补偿判断；
 不为只传递同一记录的 prepare / switch / settlement 阶段拆分文件和中间契约。
-`images/selected-image-storage-migration.ts` 只负责管理接口的 1..N 保序结果，
-`storage/migration/backend-images.ts` 只负责整后端计数和流式分页，两者都直接调用同一个单图原语。
-`storage/migration/admission.ts` 是所选图片、整后端迁移与主题重分配共用的活动逐图搬迁许可
-owner，所有生产者直接复用同一个代码内固定 5 项容量。
+`selected-images-migration.ts` 只负责管理接口的 1..N 保序结果，
+`backend-images-migration.ts` 只负责整后端计数和流式分页，两者都直接调用同一个单图原语；
+`classification-relocation.ts` 持有分类 object-key 候选与清理回执，`theme-reassignment.ts` 把
+主题重分配的图片 SQL、revision 和 cache handoff 留在图片领域，主题领域仍拥有词表删除、重试与
+最终词表同步。`storage/objects/image-transfer-admission.ts` 是所选图片、整后端迁移与主题重分配
+共用的活动逐图搬迁许可 owner，所有生产者直接复用同一个代码内固定 5 项容量。
+Endpoint 重绑定的完整 `_uploads` 键集合证明位于 `storage/backends/endpoint-rebind.ts`；键按
+不透明完整值比较，不解析或重复证明 Ingestion session 分组。
 `storage/objects/removal-admission.ts` 是 durable cleanup、orphan / retired、检查维护和回收站删除的
 唯一活动存储清理许可 owner，固定只允许一个 provider 中性 `removeObjects(1…N)` 调用；同一调用
 涉及多个 driver group 时逐组向该 FIFO 交接，不预占多个排队位置。持久 `move.cleanup` 同时只领取
@@ -200,7 +219,9 @@ Ingestion staging 孤儿按代码内固定 100 项渐进删除。
 并核对 readiness，不保留版本专用迁移 owner。深度诊断仍属于
 `checks/database-check.ts`，正常图片请求不探测任务完整性。`images/image-update.ts` 只拥有 1..N 图片锁、保序并发、逐项结果和
 请求级派生计数失效；`images/image-update-item.ts` 是单图 metadata、author / theme / tag
-创建、完整标签替换、分类位置 CAS 与持久清理回执的唯一 PostgreSQL 事务所有者。
+创建、完整标签替换、编辑路径分类位置 CAS 与持久清理回执的 PostgreSQL 事务所有者；主题删除的
+分类位置 CAS 由 `images/storage-location/theme-reassignment.ts` 拥有，两者都在同一图片事务中
+推进 revision 并交接同一 mutation sync。
 
 `images/ingestion/` 是 Upload 与 Import 共用的统一内容接入领域，稳定子目录表达允许依赖方向：
 
@@ -329,8 +350,9 @@ Server 队列模块与 Web 队列 owner 的连接关系保持不变：
   边界直接映射为 404，显式维修只属于 `checks/storage-thumbnail-repair.ts`，并由
   `checks/storage-maintenance.ts` 在独占维护编排中调用。
 
-`images/ready-cache/` 以真实变化原因分为 `indexes/`、`derived/`、`counts/`、`sync/` 与
-`integrity/`；`keys.ts`、`model.ts`、`revision.ts`、`source.ts`、`query.ts`、
+`images/ready-cache/` 以真实变化原因分为 `indexes/`、`derived/`、`counts/`、`sync/`、
+`integrity/` 与 `redis/`；其中 `redis/` 就近拥有 ready-cache 的 Lua、显式命令注册、窄 client
+类型、参数布局和返回解析。`keys.ts`、`model.ts`、`revision.ts`、`source.ts`、`query.ts`、
 `ordered-window.ts`、`random-sampler.ts`、`rebuild.ts`、状态观测和 coordinator 等横切模块
 继续留在根层。`coordinator-machine.ts` 仍独占 phase、pending refresh、active task / abort、
 mutation hold 与 rebuild requirement；归组没有增加第二个状态机或装配实例。
@@ -435,6 +457,9 @@ hooks ──► lib
   后台水合该页；筛选成员、几何和游标变化继续由数据窗口原子提交。共享图片详情弹窗只在
   完整展示 frame 就绪后恢复真实 `<img>` 命中，加载期透明 frame 与详情以外的
   `ProgressiveImage` 消费者继续沿用不可命中的共享默认值。
+  `lib/gallery/gallery-query.ts` 保留完整语义的画廊路由状态，并在公开列表 query key 建立前把
+  `device=auto` 通过 shared User-Agent 纯函数投影为具体设备或无条件；随机链接则把缺省全部设备
+  投影为 `device=all`，并为自动设备省略该参数。
 - `pages/admin/` 按稳定页面职责分为 `shell/`、`account/`、`images/`、`check/`、`storage/`
   与 `advanced-config/`；只有 `LogPage.tsx`、`Overview.tsx`、`SettingsPage.tsx`、
   `UserAdmin.tsx`、`VocabularyAdmin.tsx` 及其单个卡片等没有形成三文件族的页面留在根层。

@@ -5,29 +5,31 @@ import {
 import { pool } from "../../core/database/pools.ts";
 import { withTransaction } from "../../core/database/transactions.ts";
 import { logger } from "../../core/logger.ts";
-import { withImageMutationSync } from "../../images/mutation-sync.ts";
-import { bumpReadyImageRevision } from "../../images/ready-cache/revision.ts";
+import { withImageMutationSync } from "../mutation-sync.ts";
+import { bumpReadyImageRevision } from "../ready-cache/revision.ts";
 import {
   assertStorageWriteTarget,
   getStorageBackend,
   resolveStorageAccessForConfig
-} from "../backends/registry.ts";
-import { thumbnailObjectKey } from "../objects/image-paths.ts";
-import { withImageStorageMutationLock } from "../maintenance-lock.ts";
+} from "../../storage/backends/registry.ts";
+import { thumbnailObjectKey } from "../../storage/objects/image-paths.ts";
+import { withImageStorageMutationLock } from "../../storage/maintenance-lock.ts";
 import {
   captureMoveCleanupObjects,
   enqueueCapturedObjectsForCleanup,
   enqueueCapturedObjectsForCleanupWithoutLocationLock,
   type CapturedMoveCleanupObject,
   type MoveCleanupObjectInput
-} from "../cleanup/service.ts";
-import { contentType, type StoragePrefix } from "../objects/keys.ts";
+} from "../../storage/cleanup/service.ts";
+import { contentType, type StoragePrefix } from "../../storage/objects/keys.ts";
 import {
   ensureVerifiedObjectAtDestination,
   missingThumbnailSourceError
-} from "../objects/transfer.ts";
-import { shareStorageNamespace } from "../objects/namespace.ts";
-import { withStorageMigrationAdmission } from "./admission.ts";
+} from "../../storage/objects/transfer.ts";
+import { shareStorageNamespace } from "../../storage/objects/namespace.ts";
+import {
+  withImageTransferAdmission
+} from "../../storage/objects/image-transfer-admission.ts";
 
 const neverAbortedStorageMigrationSignal = new AbortController().signal;
 
@@ -469,7 +471,7 @@ export function migrateImageToStorageBackend(
     }
   );
   const signal = options.signal ?? neverAbortedStorageMigrationSignal;
-  return withStorageMigrationAdmission(signal, () => (
+  return withImageTransferAdmission(signal, () => (
     options.signal
       ? runWithAdvisoryLockAcquisitionSignal(
           options.signal,

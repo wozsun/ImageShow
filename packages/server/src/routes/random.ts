@@ -37,7 +37,7 @@ async function respondRandom(c: Context, url: URL) {
       database
     );
     if (selection instanceof Response) return selection;
-    if (selection.method === "json") {
+    if (selection.mode === "json") {
       const items = await presentRandomJsonItems(
         selection.items,
         databaseSignal,
@@ -70,7 +70,7 @@ async function respondRandom(c: Context, url: URL) {
       "Cache-Control": noStoreCacheControl,
       "X-Image-Info": safeResponseHeaderValue("X-Image-Info", imageInfo)
     };
-    if (selection.method === "proxy") {
+    if (selection.mode === "proxy") {
       const opened = await (await resolveReadableObject(
         "media",
         picked.object_key,

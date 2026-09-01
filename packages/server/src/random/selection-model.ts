@@ -1,36 +1,42 @@
+import {
+  detectDeviceFromUserAgent,
+  type Device
+} from "@imageshow/shared/browser";
 import type { ReadyImageCacheItem } from "../images/ready-cache/model.ts";
 import {
   isRandomBrightness,
   randomBrightnesses,
-  randomDevices
+  randomDevices,
+  type RandomBrightness,
+  type RandomRequestDevice
 } from "./query.ts";
 
 export type SelectedReadyImage = ReadyImageCacheItem;
 
-function inferDevice(userAgent: string) {
-  if (!userAgent) return "r";
-  if (/Mobi|Android|iPhone|iPad|iPod/i.test(userAgent)) return "mb";
-  if (/Windows|Macintosh|Linux x86_64|X11/i.test(userAgent)) return "pc";
-  return "r";
-}
-
 export function resolveCandidateAxes(
-  requestedDevice: string | null,
-  requestedBrightness: string | null,
+  device: RandomRequestDevice,
+  brightness: RandomBrightness | null,
   userAgent: string
 ) {
-  const device = requestedDevice || inferDevice(userAgent);
-  const deviceCandidates = device === "r"
-    ? [...randomDevices]
-    : [device as "pc" | "mb"];
-  const brightnessCandidates = requestedBrightness
-    && isRandomBrightness(requestedBrightness)
-    ? [requestedBrightness]
+  const detectedDevice = device === "auto"
+    ? detectDeviceFromUserAgent(userAgent)
+    : null;
+  let deviceCandidates: Device[];
+  if (device === "pc" || device === "mb") {
+    deviceCandidates = [device];
+  } else if (device === "auto" && detectedDevice) {
+    deviceCandidates = [detectedDevice];
+  } else {
+    deviceCandidates = [...randomDevices];
+  }
+  const brightnessCandidates = brightness
+    && isRandomBrightness(brightness)
+    ? [brightness]
     : [...randomBrightnesses];
   return {
     deviceCandidates,
     brightnessCandidates,
-    requestedDevice,
-    requestedBrightness
+    device,
+    brightness
   };
 }

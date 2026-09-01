@@ -1,6 +1,7 @@
-import type { z } from "zod";
 import type {
   AdminImageListResponseDto,
+  Brightness,
+  Device,
   ImageSnapshotResponseDto,
   ImageAdminInfoDto
 } from "@imageshow/shared/browser";
@@ -10,7 +11,6 @@ import {
 } from "../../core/database/transactions.ts";
 import { withAdvisoryLocks } from "../../core/database/advisory-locks.ts";
 import { ApiError } from "../../core/api-error.ts";
-import { adminImageListQuery } from "../../core/validation.ts";
 import { imageUpdateLockRequests } from "../image-update-lock.ts";
 import { resolveImageFilterPlan } from "../filter-plan.ts";
 import { readReadyImagePageWindow } from "../ready-cache/query.ts";
@@ -28,7 +28,16 @@ import {
 import { fetchAdminImageOffsetRows } from "./pagination.ts";
 import { storageBackendLabel } from "../../storage/backends/label.ts";
 
-type AdminImageListQuery = z.infer<typeof adminImageListQuery>;
+export type AdminImageListQuery = {
+  status: "ready" | "deleted";
+  device?: Device;
+  brightness?: Brightness;
+  theme?: string;
+  tag?: string;
+  author?: string;
+  page: number;
+  limit: number;
+};
 
 export async function listAdminImages(
   query: AdminImageListQuery

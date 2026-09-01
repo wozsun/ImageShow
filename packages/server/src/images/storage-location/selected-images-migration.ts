@@ -1,16 +1,20 @@
 import type {
   ImageStorageMigrationItemResultDto
 } from "@imageshow/shared/browser";
-import { ApiError } from "../core/api-error.ts";
-import { mapWithWorkerPool } from "../core/concurrency.ts";
-import { pool } from "../core/database/pools.ts";
+import { ApiError } from "../../core/api-error.ts";
+import { mapWithWorkerPool } from "../../core/concurrency.ts";
+import { pool } from "../../core/database/pools.ts";
 import {
   migrateImageToStorageBackend,
   type ImageStorageMigrationRecord
-} from "../storage/migration/image.ts";
-import { assertStorageWriteTarget } from "../storage/backends/registry.ts";
-import { STORAGE_MIGRATION_CONCURRENCY } from "../storage/migration/admission.ts";
-import { withPlannedImageMutation } from "./mutation-sync.ts";
+} from "./image-backend-migration.ts";
+import {
+  assertStorageWriteTarget
+} from "../../storage/backends/registry.ts";
+import {
+  IMAGE_TRANSFER_CONCURRENCY
+} from "../../storage/objects/image-transfer-admission.ts";
+import { withPlannedImageMutation } from "../mutation-sync.ts";
 
 type SelectedImageStorageMigrationMetrics = {
   maxImageDurationMs: number;
@@ -46,7 +50,7 @@ export async function migrateSelectedImagesToStorageBackend(
     let maxImageDurationMs = 0;
     const results = await mapWithWorkerPool(
       ids,
-      STORAGE_MIGRATION_CONCURRENCY,
+      IMAGE_TRANSFER_CONCURRENCY,
       async (id) => {
         const row = rowsById.get(id.toLowerCase());
         if (!row) {

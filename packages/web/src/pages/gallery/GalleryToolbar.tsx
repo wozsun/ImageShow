@@ -96,7 +96,7 @@ export function GalleryToolbar({
               onChange={(value) => onFilterChange("device", value)}
               options={[
                 { value: "", label: "全部设备" },
-                { value: "r", label: "强制随机" },
+                { value: "auto", label: "自动设备" },
                 ...(facets?.devices ?? ["pc", "mb"]).map((value) => ({
                   value,
                   label: deviceOptionLabel(value)

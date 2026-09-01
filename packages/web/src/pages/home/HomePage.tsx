@@ -86,7 +86,7 @@ export function HomePage({ embedded = false }: { embedded?: boolean }) {
 
   const stats = currentStats ?? lastSuccessfulStatsRef.current;
   const background = siteQuery.data?.site.home.background
-    || "/random?m=redirect";
+    || "/random?mode=redirect";
   const bannerLabel = siteQuery.data?.site.home.banner_label
     || "ImageShow · A FAN-MADE PHOTO HANDBOOK";
   const bannerTitle = siteQuery.data?.site.home.banner_title

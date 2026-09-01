@@ -112,8 +112,11 @@ accepted-order 水位选成员；属性动作在最新 canonical 上 CAS 合并�
   写栅栏内核对 PostgreSQL revision 与 Redis 已应用 revision，只有失配或完整性失败才
   single-flight 重建；重连期间变化的连接由同一任务重新校验，不维护第二套 epoch 状态。
 
-限流、派生结果 touch、统计结果 touch、筛选集合生成和属性索引发布这五类原子写操作，以及
-core / derived ready index 的两类只读随机抽样，以 ioredis 自定义命令集中注册。已解析索引的
+窗口限流的通用 Lua 与命令留在 `core/redis/window-limit.ts`；派生结果 touch、统计结果 touch、
+筛选集合生成和属性索引发布四类 ready-cache 原子写操作，以及 core / derived ready index
+两类只读随机抽样，由 `images/ready-cache/redis/` 拥有各自 Lua、命令定义、参数和返回解析。
+两处都在首次调用前显式、幂等地向 ioredis 注册，唯一 Redis client 不反向导入图片领域，也
+不依赖全局类型扩充或模块导入副作用。已解析索引的
 随机读取在一次原子调用内核对 core meta / integrity、revision、派生 token / TTL 和 cardinality，
 完成有界 `ZRANDMEMBER` 与 rich item 读取；显式状态让核心损坏进入重建、派生失效进入丢弃与
 PostgreSQL fallback。近期图片集合、fresh / fallback 排序和最终 limit 仍由 TypeScript 负责。

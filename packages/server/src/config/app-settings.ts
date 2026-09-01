@@ -190,7 +190,7 @@ export function getSettingsForAdmin(): AdminSettings {
 }
 
 function effectiveLoginBackground(loginBackgroundValue?: string) {
-  return loginBackgroundValue?.trim() || "/random?m=redirect";
+  return loginBackgroundValue?.trim() || "/random?mode=redirect";
 }
 
 export function getEffectiveLoginBackground() {

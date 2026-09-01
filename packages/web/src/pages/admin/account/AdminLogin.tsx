@@ -101,7 +101,7 @@ export function AdminLogin({
     setChallengeInstance((current) => current + 1);
   }, [challengeFailure]);
 
-  const background = loginBackground || "/random?m=redirect";
+  const background = loginBackground || "/random?mode=redirect";
   const credentialsComplete = username.trim().length > 0 && password.length > 0;
   let buttonLabel = "登录";
   if (serverSessionEstablished) {

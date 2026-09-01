@@ -8,9 +8,9 @@ import { apiErrorResponse } from "../core/http/responses.ts";
 
 export const randomDevices = ["pc", "mb"] as const;
 export const randomBrightnesses = ["dark", "light"] as const;
-const randomRequestDeviceValues = ["pc", "mb", "r"] as const;
+const randomRequestDeviceValues = ["pc", "mb", "all", "auto"] as const;
 export type RandomBrightness = (typeof randomBrightnesses)[number];
-type RandomRequestDevice = (typeof randomRequestDeviceValues)[number];
+export type RandomRequestDevice = (typeof randomRequestDeviceValues)[number];
 
 export type RandomSelectorGroup = {
   include: string[];
@@ -18,11 +18,11 @@ export type RandomSelectorGroup = {
 };
 
 export type ParsedRandomQuery = {
-  method: RandomMethod;
-  resultLimit: number;
+  mode: RandomMethod;
+  limit: number;
   ids: string[];
-  requestedDevice: RandomRequestDevice | null;
-  requestedBrightness: RandomBrightness | null;
+  device: RandomRequestDevice;
+  brightness: RandomBrightness | null;
   theme: RandomSelectorGroup;
   tag: RandomSelectorGroup;
   author: RandomSelectorGroup;
@@ -40,9 +40,23 @@ export type RandomSelectorMaps = {
 
 const randomRequestDevices: ReadonlySet<string> = new Set(randomRequestDeviceValues);
 const randomMethods: ReadonlySet<string> = new Set(randomMethodValues);
-const randomAllowedQueryValues = ["d", "b", "t", "tag", "a", "id", "m", "n"] as const;
+const randomAllowedQueryValues = [
+  "device",
+  "brightness",
+  "theme",
+  "tag",
+  "author",
+  "id",
+  "mode",
+  "limit"
+] as const;
 const randomAllowedQuery = new Set<string>(randomAllowedQueryValues);
-const randomSingleValueQuery = new Set(["d", "b", "m", "n"]);
+const randomSingleValueQuery = new Set([
+  "device",
+  "brightness",
+  "mode",
+  "limit"
+]);
 const randomBrightnessSet = new Set(randomBrightnesses);
 const disallowedSelectorCharacters = /[\u0000-\u001f\u007f]/u;
 const fullUuidPattern = new RegExp(
@@ -85,7 +99,7 @@ function mixedSelectorsError(noun: string, include: string[], exclude: string[])
 
 function parseSelectorGroup(
   query: URLSearchParams,
-  field: "t" | "tag" | "a",
+  field: "theme" | "tag" | "author",
   noun: string
 ) {
   const include: string[] = [];
@@ -141,7 +155,12 @@ function parseSelectorGroup(
 function targetedIdCombinationError(query: URLSearchParams) {
   if (!query.has("id")) return null;
   const incompatible = [...new Set(
-    [...query.keys()].filter((key) => key !== "id" && key !== "m" && key !== "n")
+    [...query.keys()].filter((key) => (
+      key !== "id"
+      && key !== "mode"
+      && key !== "limit"
+      && !(key === "device" && query.get(key)?.toLowerCase() === "auto")
+    ))
   )].sort();
   if (!incompatible.length) return null;
   return apiErrorResponse(
@@ -149,35 +168,38 @@ function targetedIdCombinationError(query: URLSearchParams) {
     {
       field: "id",
       incompatible,
-      hint: "id can only be combined with m and n"
+      hint: "id can only be combined with device=auto, mode, and limit"
     }
   );
 }
 
-function parseJsonResultLimit(
+function parseJsonLimit(
   query: URLSearchParams,
-  explicitMethod: string | null
+  explicitMode: string | null
 ): number | Response {
-  if (!query.has("n")) return 1;
-  if (explicitMethod !== "json") {
+  if (!query.has("limit")) return 1;
+  if (explicitMode !== "json") {
     return apiErrorResponse(
-      { status: 400, message: "Bad Request: n requires m=json" },
-      { field: "n", hint: "Use n only with an explicit m=json parameter" }
+      { status: 400, message: "Bad Request: limit requires mode=json" },
+      {
+        field: "limit",
+        hint: "Use limit only with an explicit mode=json parameter"
+      }
     );
   }
 
-  const raw = query.get("n") ?? "";
+  const raw = query.get("limit") ?? "";
   if (!/^\d+$/u.test(raw)) {
     return apiErrorResponse(
       { status: 400, message: "Bad Request: Invalid result count" },
-      { field: "n", hint: "Use a positive integer" }
+      { field: "limit", hint: "Use a positive integer" }
     );
   }
   const significant = raw.replace(/^0+/u, "");
   if (!significant) {
     return apiErrorResponse(
       { status: 400, message: "Bad Request: Invalid result count" },
-      { field: "n", hint: "Use a positive integer" }
+      { field: "limit", hint: "Use a positive integer" }
     );
   }
 
@@ -235,7 +257,7 @@ function parseTargetedIds(query: URLSearchParams): string[] | Response {
 
 export function parseRandomQuery(
   url: URL,
-  defaultMethod: RandomDefaultMethod
+  defaultMode: RandomDefaultMethod
 ): ParsedRandomQuery | Response {
   const rawQuery = url.search.startsWith("?") ? url.search.slice(1) : url.search;
   const rawBytes = Buffer.byteLength(rawQuery, "utf8");
@@ -250,51 +272,51 @@ export function parseRandomQuery(
   const queryError = invalidQueryParameters(query);
   if (queryError) return queryError;
 
-  const explicitMethod = query.get("m")?.toLowerCase() ?? null;
-  if (query.has("m") && (!explicitMethod || !randomMethods.has(explicitMethod))) {
+  const explicitMode = query.get("mode")?.toLowerCase() ?? null;
+  if (query.has("mode") && (!explicitMode || !randomMethods.has(explicitMode))) {
     return apiErrorResponse(
-      { status: 400, message: "Bad Request: Invalid method" },
-      { field: "m" }
+      { status: 400, message: "Bad Request: Invalid mode" },
+      { field: "mode" }
     );
   }
-  const resultLimit = parseJsonResultLimit(query, explicitMethod);
-  if (resultLimit instanceof Response) return resultLimit;
+  const limit = parseJsonLimit(query, explicitMode);
+  if (limit instanceof Response) return limit;
   const targetedCombinationError = targetedIdCombinationError(query);
   if (targetedCombinationError) return targetedCombinationError;
   if (query.has("id")) {
     const ids = parseTargetedIds(query);
     if (ids instanceof Response) return ids;
     return {
-      method: (explicitMethod ?? defaultMethod) as RandomMethod,
-      resultLimit,
+      mode: (explicitMode ?? defaultMode) as RandomMethod,
+      limit,
       ids,
-      requestedDevice: null,
-      requestedBrightness: null,
+      device: "auto",
+      brightness: null,
       theme: { include: [], exclude: [] },
       tag: { include: [], exclude: [] },
       author: { include: [], exclude: [] }
     };
   }
-  const requestedBrightness = query.get("b")?.toLowerCase() || null;
-  if (requestedBrightness && !isRandomBrightness(requestedBrightness)) {
+  const brightness = query.get("brightness")?.toLowerCase() || null;
+  if (brightness && !isRandomBrightness(brightness)) {
     return apiErrorResponse(
       { status: 400, message: "Bad Request: Invalid brightness" },
-      { field: "b" }
+      { field: "brightness" }
     );
   }
-  const requestedDevice = query.get("d")?.toLowerCase() || null;
-  if (requestedDevice && !randomRequestDevices.has(requestedDevice)) {
+  const device = query.get("device")?.toLowerCase() || "auto";
+  if (!randomRequestDevices.has(device)) {
     return apiErrorResponse(
       { status: 400, message: "Bad Request: Invalid device" },
-      { field: "d" }
+      { field: "device" }
     );
   }
 
-  const theme = parseSelectorGroup(query, "t", "theme");
+  const theme = parseSelectorGroup(query, "theme", "theme");
   if (theme instanceof Response) return theme;
   const tag = parseSelectorGroup(query, "tag", "tag");
   if (tag instanceof Response) return tag;
-  const author = parseSelectorGroup(query, "a", "author");
+  const author = parseSelectorGroup(query, "author", "author");
   if (author instanceof Response) return author;
   const selectorCount =
     theme.submittedCount + tag.submittedCount + author.submittedCount;
@@ -306,11 +328,11 @@ export function parseRandomQuery(
   }
 
   return {
-    method: (explicitMethod ?? defaultMethod) as RandomMethod,
-    resultLimit,
+    mode: (explicitMode ?? defaultMode) as RandomMethod,
+    limit,
     ids: [],
-    requestedDevice: requestedDevice as RandomRequestDevice | null,
-    requestedBrightness: requestedBrightness as RandomBrightness | null,
+    device: device as RandomRequestDevice,
+    brightness: brightness as RandomBrightness | null,
     theme: theme.selectors,
     tag: tag.selectors,
     author: author.selectors
@@ -318,7 +340,7 @@ export function parseRandomQuery(
 }
 
 function normalizeSelectorGroup(
-  field: "t" | "tag" | "a",
+  field: "theme" | "tag" | "author",
   noun: string,
   selectors: RandomSelectorGroup,
   map: ReadonlyMap<string, string>
@@ -349,11 +371,21 @@ export function normalizeRandomQuery(
   query: ParsedRandomQuery,
   maps: RandomSelectorMaps
 ): NormalizedRandomQuery | Response {
-  const theme = normalizeSelectorGroup("t", "theme", query.theme, maps.theme);
+  const theme = normalizeSelectorGroup(
+    "theme",
+    "theme",
+    query.theme,
+    maps.theme
+  );
   if (theme instanceof Response) return theme;
   const tag = normalizeSelectorGroup("tag", "tag", query.tag, maps.tag);
   if (tag instanceof Response) return tag;
-  const author = normalizeSelectorGroup("a", "author", query.author, maps.author);
+  const author = normalizeSelectorGroup(
+    "author",
+    "author",
+    query.author,
+    maps.author
+  );
   if (author instanceof Response) return author;
 
   const normalized = {
@@ -364,12 +396,13 @@ export function normalizeRandomQuery(
   };
   return {
     ...normalized,
+    // Compact keys are the existing Redis dedupe-key serialization, not DTO fields.
     signature: JSON.stringify({
-      d: normalized.requestedDevice ?? "",
-      b: normalized.requestedBrightness ?? "",
-      t: normalized.theme,
+      "d": normalized.device === "auto" ? "" : normalized.device,
+      "b": normalized.brightness ?? "",
+      "t": normalized.theme,
       tag: normalized.tag,
-      a: normalized.author
+      "a": normalized.author
     })
   };
 }

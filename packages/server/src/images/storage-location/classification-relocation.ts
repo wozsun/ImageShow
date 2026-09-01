@@ -6,19 +6,19 @@ import { logger } from "../../core/logger.ts";
 import {
   storageObjectKey,
   thumbnailObjectKey
-} from "../objects/image-paths.ts";
-import { resolveStorageAccess } from "../backends/registry.ts";
+} from "../../storage/objects/image-paths.ts";
+import { resolveStorageAccess } from "../../storage/backends/registry.ts";
 import {
   copyVerifiedObjectWithinStorage,
   missingThumbnailSourceError
-} from "../objects/transfer.ts";
+} from "../../storage/objects/transfer.ts";
 import {
   captureMoveCleanupObjects,
   enqueueCapturedObjectsForCleanupWithoutLocationLock,
   enqueueCapturedObjectsForCleanup,
   type CapturedMoveCleanupObject,
   type MoveCleanupObjectInput
-} from "../cleanup/service.ts";
+} from "../../storage/cleanup/service.ts";
 
 export type RelocatableImage = {
   id: string;

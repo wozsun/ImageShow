@@ -8,11 +8,11 @@ import { buildImageFilterSql } from "./image-filter-sql.ts";
 
 export type ImageListFilterQuery = {
   status: "ready" | "deleted";
-  d?: Device;
-  b?: Brightness;
-  t?: string;
+  device?: Device;
+  brightness?: Brightness;
+  theme?: string;
   tag?: string;
-  a?: string;
+  author?: string;
 };
 
 /**

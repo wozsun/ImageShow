@@ -199,7 +199,7 @@ export function SettingsPage() {
               <input
                 value={settings.site.home.background}
                 onChange={(event) => updateSiteHome({ background: event.target.value })}
-                placeholder="留空＝站点随机图 API（/random?m=redirect）"
+                placeholder="留空＝站点随机图 API（/random?mode=redirect）"
               />
             </label>
             <label>
@@ -207,7 +207,7 @@ export function SettingsPage() {
               <input
                 value={settings.admin.login_background}
                 onChange={(event) => updateAdmin({ login_background: event.target.value })}
-                placeholder="留空＝站点域名的随机图 API（/random?m=redirect）"
+                placeholder="留空＝站点域名的随机图 API（/random?mode=redirect）"
               />
             </label>
           </section>

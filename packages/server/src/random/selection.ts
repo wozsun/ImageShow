@@ -27,7 +27,7 @@ import type {
 import { pool } from "../core/database/pools.ts";
 
 export type RandomImageSelection = {
-  method: RandomMethod;
+  mode: RandomMethod;
   items: SelectedReadyImage[];
 };
 
@@ -51,13 +51,13 @@ export async function selectRandomImages(
   if (parsed.ids.length) {
     const items = await pickTargetedImages(
       parsed.ids,
-      parsed.resultLimit,
+      parsed.limit,
       signal,
       database
     );
     return items instanceof Response
       ? items
-      : { method: parsed.method, items };
+      : { mode: parsed.mode, items };
   }
 
   const [themeMap, tagMap, authorMap] = await Promise.all([
@@ -79,8 +79,8 @@ export async function selectRandomImages(
   });
   if (query instanceof Response) return query;
   const axes = resolveCandidateAxes(
-    query.requestedDevice,
-    query.requestedBrightness,
+    query.device,
+    query.brightness,
     userAgent
   );
   const plan = createImageFilterPlan({
@@ -94,7 +94,7 @@ export async function selectRandomImages(
   signal?.throwIfAborted();
   const cached = await sampleReadyImages(
     plan,
-    query.resultLimit,
+    query.limit,
     recent,
     signal,
     Boolean(database.reader)
@@ -103,15 +103,15 @@ export async function selectRandomImages(
     ? cached.value
     : await sampleReadyImagesFromPostgres(
         plan,
-        query.resultLimit,
+        query.limit,
         recent,
         database.reader ?? pool,
         signal
       );
   if (!items.length) {
     const hasFilters = Boolean(
-      axes.requestedDevice
-      || axes.requestedBrightness
+      axes.device !== "auto"
+      || axes.brightness
       || hasSelectors(query.theme)
       || hasSelectors(query.tag)
       || hasSelectors(query.author)
@@ -128,7 +128,7 @@ export async function selectRandomImages(
     query.signature,
     items.map((item) => item.id)
   );
-  return { method: query.method, items };
+  return { mode: query.mode, items };
 }
 
 async function resolveSelectorMap(

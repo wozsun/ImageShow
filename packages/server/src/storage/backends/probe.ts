@@ -13,7 +13,7 @@ import type { StorageDriver } from "../drivers/driver.ts";
 import {
   verifyStorageEndpointRebind,
   type StagingNamespaceSnapshot
-} from "../migration/endpoint-rebind.ts";
+} from "./endpoint-rebind.ts";
 
 export type ExistingStorageProbe = {
   id: string;

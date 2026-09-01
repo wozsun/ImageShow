@@ -6,10 +6,8 @@ import {
 } from "@imageshow/shared/browser";
 import { apiSuccess } from "../core/http/responses.ts";
 import { readJsonBody } from "../core/http/json-body.ts";
-import {
-  parse,
-  trashPurgeMaintenanceInput
-} from "../core/validation.ts";
+import { trashPurgeMaintenanceInput } from "./validation/images.ts";
+import { parse } from "./validation/parse.ts";
 import { requireAdminPermission } from "../users/admin-authorization.ts";
 import { inspectRedisState } from "../checks/redis-inspect.ts";
 import { checkDatabase, checkTrash } from "../checks/database-check.ts";

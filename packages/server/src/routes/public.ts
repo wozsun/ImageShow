@@ -15,10 +15,10 @@ import {
 } from "../core/http/responses.ts";
 import {
   galleryStatsQuery,
-  listQuery,
-  parse,
-  uuidInput
-} from "../core/validation.ts";
+  listQuery
+} from "./validation/images.ts";
+import { parse } from "./validation/parse.ts";
+import { uuidInput } from "./validation/primitives.ts";
 import {
   servePublicExternalOriginal
 } from "../images/external-original-serving.ts";
@@ -34,7 +34,13 @@ import {
 } from "../images/stored-image-serving.ts";
 import type { StoredResponseRequest } from "../images/stored-object-response.ts";
 
-const galleryStatsQueryKeys = ["d", "b", "t", "tag", "a"] as const;
+const galleryStatsQueryKeys = [
+  "device",
+  "brightness",
+  "theme",
+  "tag",
+  "author"
+] as const;
 const galleryStatsQueryKeySet = new Set<string>(galleryStatsQueryKeys);
 
 function storedResponseRequest(context: Context): StoredResponseRequest {

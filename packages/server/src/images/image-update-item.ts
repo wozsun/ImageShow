@@ -5,7 +5,7 @@ import { ApiError, errorMessage } from "../core/api-error.ts";
 import { withAdvisoryLocks } from "../core/database/advisory-locks.ts";
 import { pool } from "../core/database/pools.ts";
 import { logger } from "../core/logger.ts";
-import type { ImageUpdateItemInput } from "../core/validation.ts";
+import type { ImageUpdateItemInputDto } from "@imageshow/shared/browser";
 import { readStorageBuffer, storageObjectExists } from "../storage/objects/access.ts";
 import { thumbnailRef } from "../storage/objects/image-paths.ts";
 import {
@@ -13,7 +13,7 @@ import {
   enqueuePreparedImageSourceCleanup,
   prepareVerifiedImageRelocation,
   type PreparedImageRelocation
-} from "../storage/migration/image-relocation.ts";
+} from "./storage-location/classification-relocation.ts";
 import {
   imageStorageMutationLockKey,
   withStorageLocationReadAndAdvisoryLocks
@@ -168,7 +168,7 @@ async function commitImageUpdate({
   relocation,
   signal
 }: {
-  item: ImageUpdateItemInput;
+  item: ImageUpdateItemInputDto;
   resolvedTags: string[] | null;
   sourceImage: UpdateImageRecord | null;
   target: Pick<UpdateImageRecord, "device" | "brightness" | "theme"> | null;
@@ -369,7 +369,7 @@ async function commitImageUpdate({
 }
 
 async function mutateImageItem(
-  item: ImageUpdateItemInput,
+  item: ImageUpdateItemInputDto,
   resolvedTags: string[] | null,
   options: ImageUpdateItemOptions,
   signal: AbortSignal
@@ -475,7 +475,7 @@ async function mutateImageItem(
 }
 
 export async function updateImageItem(
-  item: ImageUpdateItemInput,
+  item: ImageUpdateItemInputDto,
   options: ImageUpdateItemOptions,
   parentSignal?: AbortSignal
 ) {

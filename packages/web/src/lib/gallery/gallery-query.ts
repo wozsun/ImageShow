@@ -1,3 +1,5 @@
+import { detectDeviceFromUserAgent } from "@imageshow/shared/browser";
+
 export type GalleryFilters = {
   device: string;
   brightness: string;
@@ -6,7 +8,7 @@ export type GalleryFilters = {
   author: string;
 };
 
-const galleryDevices = new Set(["pc", "mb", "r"]);
+const galleryDevices = new Set(["pc", "mb", "auto"]);
 const galleryBrightnesses = new Set(["dark", "light"]);
 const selectorPattern = /^!?[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$/;
 
@@ -33,37 +35,52 @@ function selectorValue(params: URLSearchParams, key: string) {
 export function galleryFiltersFromSearchParams(
   params: URLSearchParams
 ): GalleryFilters {
-  const device = params.get("d")?.trim().toLowerCase() ?? "";
-  const brightness = params.get("b")?.trim().toLowerCase() ?? "";
+  const device = params.get("device")?.trim().toLowerCase() ?? "";
+  const brightness = params.get("brightness")?.trim().toLowerCase() ?? "";
   return {
-    device: galleryDevices.has(device) ? device : "",
+    device: device === "all" ? "" : galleryDevices.has(device) ? device : "",
     brightness: galleryBrightnesses.has(brightness) ? brightness : "",
-    theme: selectorValue(params, "t"),
+    theme: selectorValue(params, "theme"),
     tag: selectorValue(params, "tag"),
-    author: selectorValue(params, "a")
+    author: selectorValue(params, "author")
   };
 }
 
 export function galleryRouteSearchParams(filters: GalleryFilters) {
   const params = new URLSearchParams();
-  if (filters.device) params.set("d", filters.device);
-  if (filters.brightness) params.set("b", filters.brightness);
-  if (filters.theme) params.set("t", filters.theme);
+  if (galleryDevices.has(filters.device)) params.set("device", filters.device);
+  if (filters.brightness) params.set("brightness", filters.brightness);
+  if (filters.theme) params.set("theme", filters.theme);
   if (filters.tag) params.set("tag", filters.tag);
-  if (filters.author) params.set("a", filters.author);
+  if (filters.author) params.set("author", filters.author);
   return params;
 }
 
 export function galleryApiSearchParams(
   filters: GalleryFilters,
   order: string,
-  cursor = ""
+  options: { cursor?: string; userAgent?: string } = {}
 ) {
-  const params = galleryRouteSearchParams(filters);
-  if (filters.device === "r") params.delete("d");
-  if (cursor) params.set("cursor", cursor);
+  const params = new URLSearchParams();
+  const projectedDevice = filters.device === "auto"
+    ? detectDeviceFromUserAgent(options.userAgent ?? "")
+    : filters.device;
+  if (projectedDevice === "pc" || projectedDevice === "mb") {
+    params.set("device", projectedDevice);
+  }
+  if (filters.brightness) params.set("brightness", filters.brightness);
+  if (filters.theme) params.set("theme", filters.theme);
+  if (filters.tag) params.set("tag", filters.tag);
+  if (filters.author) params.set("author", filters.author);
+  if (options.cursor) params.set("cursor", options.cursor);
   if (order === "random") params.set("shuffle", "1");
   return params;
+}
+
+export function galleryRandomRequestDevice(device: string) {
+  if (device === "auto") return "";
+  if (device === "pc" || device === "mb") return device;
+  return "all";
 }
 
 export function galleryHref(

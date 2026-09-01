@@ -1,21 +1,21 @@
 # 随机图 API
 
 `GET /random` 默认从 Redis 的就绪图片读模型中随机选取一张图片；默认返回模式只可配置为
-`proxy` 或 `redirect`。显式 `m=json` 可一次
+`proxy` 或 `redirect`。显式 `mode=json` 可一次
 请求多张互不重复的图片元数据，也可用 `id` 限定本次请求的候选图片。
 
 | 参数 | 取值 | 说明 |
 | --- | --- | --- |
-| `d` | `pc` / `mb` / `r` | 设备，缺省按 User-Agent 推断，`r` 强制随机 |
-| `b` | `dark` / `light` | 亮度，缺省两者皆可 |
-| `t` | 逗号分隔主题 | 缺省全部；`t=a,b` 为包含，`t=!a,!b` 为排除，二者不可混用 |
+| `device` | `pc` / `mb` / `all` / `auto` | 设备；缺省在请求边界归一为 `auto`，按 User-Agent 推断，无法识别时使用全部设备；`all` 显式使用全部设备 |
+| `brightness` | `dark` / `light` | 亮度，缺省两者皆可 |
+| `theme` | 逗号分隔主题 | 缺省全部；`theme=a,b` 为包含，`theme=!a,!b` 为排除，二者不可混用 |
 | `tag` | 逗号分隔标签 | 缺省全部；包含为“任一”，`!` 前缀为排除，二者不可混用 |
-| `a` | 逗号分隔作者 | 缺省全部；`a=x,y` 为包含，`a=!x,!y` 为排除，二者不可混用 |
+| `author` | 逗号分隔作者 | 缺省全部；`author=x,y` 为包含，`author=!x,!y` 为排除，二者不可混用 |
 | `id` | 完整 UUID 或末 12 位 | 只从匹配到的可用图片中随机选择，可用逗号或重复参数给出多个值 |
-| `m` | `proxy` / `redirect` / `json` | 返回方式；缺省时取设置页的 `proxy` / `redirect` 默认值，`json` 只能显式指定 |
-| `n` | 大于 0 的整数 | 仅显式指定 `m=json` 时有效；缺省为 1，最多执行 200 张 |
+| `mode` | `proxy` / `redirect` / `json` | 返回方式；缺省时取设置页的 `proxy` / `redirect` 默认值，`json` 只能显式指定 |
+| `limit` | 大于 0 的整数 | 仅显式指定 `mode=json` 时有效；缺省为 1，最多返回 200 张 |
 
-`t` / `tag` / `a` 可填 slug 或显示名，服务端会先解析成 slug，再按字段排序去重并生成
+`theme` / `tag` / `author` 可填 slug 或显示名，服务端会先解析成 slug，再按字段排序去重并生成
 稳定筛选签名。基础随机、主题、标签和作者筛选都复用
 `imageshow:cache:images:*` 就绪图片投影：无筛选直接使用根层核心 `index:all`，轴 / 主题 /
 标签 / 作者 ZSET 与组合结果统一位于 `imageshow:cache:images:derived:*`。核心重建只建立
@@ -27,7 +27,8 @@ applied revision、count 与每次发布唯一的实例 token；组合结果只�
 且在消费后复核来源实例没有被清理或替换。派生结果缺失、过期、
 revision 变化或基数不符不会关闭核心读门：首次未命中请求不等待构建，构建成功后的后续
 随机请求自动使用 Redis；未取得槽位、失败或工作量超限也不改变当前有界 PostgreSQL fallback。
-属性索引、组合结果和统计结果共用 6 小时滑动 TTL 与 LRU registry，最多 256 个结果、
+缺省 `device` 与显式 `device=auto` 在解析后是同一个规范状态，并共享相同的候选、近期
+去重签名与 key；它们不会建立额外缓存分支。属性索引、组合结果和统计结果共用 6 小时滑动 TTL 与 LRU registry，最多 256 个结果、
 128 个活跃筛选签名；单结果、总成员数和序列化统计大小均有集中上限。超限、损坏或
 registry 不一致只使本次随机请求放弃派生结果，不触发核心投影重建。组合集合命令还限制
 单命令源成员、预期结果、操作数和整次构建累计工作量；超限时不创建共享临时集合，随机
@@ -35,16 +36,16 @@ registry 不一致只使本次随机请求放弃派生结果，不触发核心�
 
 查询使用有界、规范化的公开契约：
 
-- 只接受表中八个精确小写键；`d`、`b`、`m`、`n` 各最多出现一次。原始查询串最多
+- 只接受表中八个精确小写键；`device`、`brightness`、`mode`、`limit` 各最多出现一次。原始查询串最多
   4096 字节。
-- `t`、`tag`、`a` 每项最多 64 个字符，每类最多 32 项，三类合计最多 64 项；数量按
+- `theme`、`tag`、`author` 每项最多 64 个字符，每类最多 32 项，三类合计最多 64 项；数量按
   去重前的非空提交项计算。空白片段忽略，单独的 `!`、控制字符以及同类混用包含和
   排除均返回 400。
 - `id` 只接受带连字符的完整 UUID 或最后 12 位十六进制字符，不区分大小写；可通过
   逗号或重复参数提交，每次最多 32 个非空值。重复值会归一化去重，空值返回 400。
-- `n` 必须是大于 0 的十进制整数，但只有查询串明确包含 `m=json` 时才可使用。超过
+- `limit` 必须是大于 0 的十进制整数，但只有查询串明确包含 `mode=json` 时才可使用。超过
   200 时按 200 执行。
-- 指定 `id` 后只允许同时指定 `m` 和 `n`。所有格式、数量和互斥校验都先于词表、
+- 指定 `id` 后只允许同时指定无筛选作用的 `device=auto`、`mode` 和 `limit`。所有格式、数量和互斥校验都先于词表、
   Redis 与存储访问完成。
 - 未知包含项返回 404；未知排除项从有效筛选中删除。合法但没有图片的筛选返回 404。
 
@@ -89,18 +90,18 @@ PostgreSQL 事务推进 `ready_image_revision`。提交后仍持有进程内写�
 
 ```text
 /random?id=019f8457-063a-7002-a580-7a432dc7fd8d
-/random?id=7a432dc7fd8d,25a377d90f7f&m=proxy
-/random?id=019f8457-063a-7002-a580-7a432dc7fd8d&id=25a377d90f7f&m=redirect
-/random?id=7a432dc7fd8d,25a377d90f7f&m=json&n=2
+/random?id=7a432dc7fd8d,25a377d90f7f&mode=proxy
+/random?id=019f8457-063a-7002-a580-7a432dc7fd8d&id=25a377d90f7f&mode=redirect
+/random?id=7a432dc7fd8d,25a377d90f7f&mode=json&limit=2
 ```
 
 ## 返回方式
 
-`m=proxy` 从图片所属 local 或 S3 后端读取已入库图片字节，并附带
-`X-Image-Info`；它不声明 `Accept-Ranges`。`m=redirect` 返回 302 跳转到公开 URL。
+`mode=proxy` 从图片所属 local 或 S3 后端读取已入库图片字节，并附带
+`X-Image-Info`；它不声明 `Accept-Ranges`。`mode=redirect` 返回 302 跳转到公开 URL。
 这里的 `proxy` 只是返回传输方式，与图片接入模式无关。
 
-`m=json` 返回 `application/json`，顶层 `count` 是实际数量，`items` 是图片数组：
+`mode=json` 返回 `application/json`，顶层 `count` 是实际数量，`items` 是图片数组：
 
 ```json
 {
@@ -123,8 +124,18 @@ PostgreSQL 事务推进 `ready_image_revision`。提交后仍持有进程内写�
 }
 ```
 
-只写 `m=json` 等同 `n=1`，但仍返回数组。`n` 是上限而非数量保证。GET 与 HEAD 都为
+只写 `mode=json` 等同 `limit=1`，但仍返回数组。`limit` 是上限而非数量保证。GET 与 HEAD 都为
 `no-store`；HEAD 返回与 GET 一致的状态、内容类型和内容长度，但不发送正文。
+
+## 5.5.0 自定义 URL 检查
+
+5.5.0 不双读旧短键。升级者只需检查自行填写的
+`site.home.background` / `SITE_HOME_BACKGROUND` 与
+`admin.login_background` / `ADMIN_LOGIN_BACKGROUND` 中是否包含本站随机图 URL，以及已经
+分享、收藏、嵌入或交给外部客户端的 `/random`、`/gallery`、`/embed/gallery` URL。把
+`d`、`b`、`t`、`a`、`m`、`n` 分别改为 `device`、`brightness`、`theme`、`author`、
+`mode`、`limit`，并把旧设备值 `r` 改为 `all`。空配置、项目内置 fallback 和不使用
+ImageShow 查询参数的外部背景 URL 无需处理；服务不会扫描或改写用户 URL。
 
 随机图只通过主站 `https://<域名>/random` 提供，不设置专用子域；主机边界见
 [主机与资源子域](./subdomains.md)。

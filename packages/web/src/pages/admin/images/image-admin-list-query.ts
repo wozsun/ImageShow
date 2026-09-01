@@ -105,12 +105,12 @@ export function adminImageListQuery(
     page: String(page),
     limit: String(pageSize)
   });
-  if (view === "unset") params.set("t", "none");
-  else if (filters.theme) params.set("t", filters.theme);
-  if (filters.device) params.set("d", filters.device);
-  if (filters.brightness) params.set("b", filters.brightness);
+  if (view === "unset") params.set("theme", "none");
+  else if (filters.theme) params.set("theme", filters.theme);
+  if (filters.device) params.set("device", filters.device);
+  if (filters.brightness) params.set("brightness", filters.brightness);
   if (filters.tag) params.set("tag", filters.tag);
-  if (filters.author) params.set("a", filters.author);
+  if (filters.author) params.set("author", filters.author);
 
   const queryKey = [
     ...queryKeys.adminImages,

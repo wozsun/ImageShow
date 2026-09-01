@@ -29,10 +29,12 @@ import {
   imageSnapshotInput,
   imageStorageMigrationInput,
   imageUpdateInput,
-  parse,
-  uuidInput,
-} from "../core/validation.ts";
-import { migrateSelectedImagesToStorageBackend } from "../images/selected-image-storage-migration.ts";
+} from "./validation/images.ts";
+import { parse } from "./validation/parse.ts";
+import { uuidInput } from "./validation/primitives.ts";
+import {
+  migrateSelectedImagesToStorageBackend
+} from "../images/storage-location/selected-images-migration.ts";
 import { updateImages } from "../images/image-update.ts";
 import {
   getAdminImageSnapshots,

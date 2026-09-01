@@ -8,7 +8,7 @@ import { requestClientIp } from "../core/http/request-security.ts";
 import { requireSuperAdmin } from "../users/admin-authorization.ts";
 import { readRecentLogFile, updateLogLevel } from "../core/log-files.ts";
 import { logger } from "../core/logger.ts";
-import { parse } from "../core/validation.ts";
+import { parse } from "./validation/parse.ts";
 
 const logLevelInput = z.strictObject({
   level: z.string()

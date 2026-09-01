@@ -54,12 +54,12 @@ import {
   ingestionStatusInput,
   ingestionQueueActionInput,
   jsonlManifestInput,
-  parse,
   importAcceptInput,
   uploadIntentInput,
-  uuidV7Input,
   weiboImportInput
-} from "../core/validation.ts";
+} from "./validation/ingestion.ts";
+import { parse } from "./validation/parse.ts";
+import { uuidV7Input } from "./validation/primitives.ts";
 import { acceptIngestionCommitIntents } from "../images/ingestion/commit/intent.ts";
 import { JsonlManifestError, parseJsonlManifest } from "../images/ingestion/sources/jsonl.ts";
 import { receiveUploadIntentBody } from "../images/ingestion/raw/upload.ts";

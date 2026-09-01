@@ -16,16 +16,14 @@ import {
   requireSuperAdmin
 } from "../users/admin-authorization.ts";
 import {
-  parse,
-  slugListInput,
   storageBackendMigrationInput,
-  storageSlugInput
-} from "../core/validation.ts";
-import {
   storageBackendCreateInput,
+  storageBackendUpdateInput,
   storageBackendTestInput,
-  storageBackendUpdateInput
-} from "../storage/backends/config.ts";
+  storageSlugInput,
+  storageSlugListInput
+} from "./validation/storage.ts";
+import { parse } from "./validation/parse.ts";
 import {
   createStorageBackend,
   deleteStorageBackend,
@@ -40,7 +38,9 @@ import { resolveStorageTestConfig } from "../storage/backends/probe.ts";
 import { updateStorageBackend } from "../storage/backends/update.ts";
 import { retryStorageBackendCleanup } from "../storage/cleanup/service.ts";
 import { testStorageBackend } from "../storage/backends/self-test.ts";
-import { migrateStorageBackendImages } from "../storage/migration/backend-images.ts";
+import {
+  migrateStorageBackendImages
+} from "../images/storage-location/backend-images-migration.ts";
 
 export function registerStorageRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/storage/options`, async (c) => {
@@ -81,7 +81,7 @@ export function registerStorageRoutes(app: Hono) {
   });
 
   app.post(`${adminApiBasePath}/storage/backends/reorder`, requireSuperAdmin, async (c) => {
-    const input = parse(slugListInput, await readJsonBody(c));
+    const input = parse(storageSlugListInput, await readJsonBody(c));
     await reorderStorageBackends(input.slugs);
     return c.json(apiSuccess());
   });

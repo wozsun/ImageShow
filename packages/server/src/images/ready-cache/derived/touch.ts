@@ -3,7 +3,7 @@ import {
   touchReadyImageIndexedResultCommand,
   touchReadyImageStatsResultCommand,
   type RedisDerivedRegistryCommandConfig
-} from "../../../core/redis/business-commands.ts";
+} from "../redis/commands.ts";
 import {
   assertReadyImageDerivedResult,
   nextDerivedAccessScore,

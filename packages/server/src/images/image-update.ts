@@ -6,7 +6,7 @@ import { ApiError, errorMessage } from "../core/api-error.ts";
 import { mapWithWorkerPool } from "../core/concurrency.ts";
 import { withAdvisoryLocks } from "../core/database/advisory-locks.ts";
 import { logger } from "../core/logger.ts";
-import type { ImageUpdateItemInput } from "../core/validation.ts";
+import type { ImageUpdateItemInputDto } from "@imageshow/shared/browser";
 import { createEntityCountCacheInvalidationBatch } from "../vocab/vocab-cache.ts";
 import { updateImageItem } from "./image-update-item.ts";
 import { imageUpdateLockRequests } from "./image-update-lock.ts";
@@ -37,7 +37,7 @@ function publicItemError(error: unknown): Pick<
 }
 
 export async function updateImages(
-  items: ImageUpdateItemInput[],
+  items: ImageUpdateItemInputDto[],
   options: ImageUpdateOptions = {}
 ): Promise<ImageUpdateResponseDto> {
   const entityCountInvalidationBatch = createEntityCountCacheInvalidationBatch();

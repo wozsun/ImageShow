@@ -9,9 +9,10 @@ import {
   mergeRuntimeConfig,
   type RuntimeConfigPatch
 } from "./runtime-config.ts";
+import { errorMessage } from "../core/api-error.ts";
+import { logger } from "../core/logger.ts";
 
 let runtimeConfig: RuntimeConfig | undefined;
-let runtimeConfigRevision = 0;
 const runtimeConfigWriteLeaseContext = new AsyncLocalStorage<boolean>();
 let runtimeConfigWriteLeaseTail = Promise.resolve();
 
@@ -47,10 +48,21 @@ export function onRuntimeConfigChange(listener: RuntimeConfigListener) {
 }
 
 function notifyRuntimeConfigChange() {
-  for (const listener of runtimeConfigListeners) listener();
+  let listenerIndex = 0;
+  for (const listener of runtimeConfigListeners) {
+    try {
+      listener();
+    } catch (error) {
+      logger.error("runtime_config_listener_failed", {
+        listener_index: listenerIndex,
+        error: errorMessage(error)
+      });
+    }
+    listenerIndex += 1;
+  }
 }
 
-/** Serialize every in-process writer, including a config import's compensation window. */
+/** Serialize every writer, including a config import's persistence and settlement window. */
 export async function withRuntimeConfigWriteLease<T>(
   work: () => T | Promise<T>
 ): Promise<T> {
@@ -69,43 +81,49 @@ export async function withRuntimeConfigWriteLease<T>(
   }
 }
 
-function commitRuntimeConfig(next: RuntimeConfig) {
+function publishRuntimeConfig(next: RuntimeConfig) {
   getRuntimeConfig();
-  writeRuntimeConfigFile(next);
   runtimeConfig = next;
-  runtimeConfigRevision += 1;
-  const revision = runtimeConfigRevision;
   notifyRuntimeConfigChange();
-  return { config: next, revision };
+  return next;
+}
+
+function persistAndPublishRuntimeConfig(
+  next: RuntimeConfig,
+  shouldWriteFile = true
+) {
+  if (shouldWriteFile) writeRuntimeConfigFile(next);
+  return publishRuntimeConfig(next);
+}
+
+function assertRuntimeConfigWriteLeaseHeld() {
+  if (!runtimeConfigWriteLeaseContext.getStore()) {
+    throw new Error("Runtime config package stage requires the write lease");
+  }
 }
 
 export function updateRuntimeConfig(patch: RuntimeConfigPatch) {
   return withRuntimeConfigWriteLease(() => {
     const next = mergeRuntimeConfig(getRuntimeConfig(), patch);
-    return commitRuntimeConfig(next).config;
+    return persistAndPublishRuntimeConfig(next);
   });
 }
 
 export function replaceRuntimeConfig(next: RuntimeConfig) {
-  return withRuntimeConfigWriteLease(() => commitRuntimeConfig(next).config);
+  return withRuntimeConfigWriteLease(() => persistAndPublishRuntimeConfig(next));
 }
 
-/** Replace the complete config and return the exact write revision. */
-export function replaceRuntimeConfigWithRevision(next: RuntimeConfig) {
-  return withRuntimeConfigWriteLease(() => commitRuntimeConfig(next));
+/** Persist a config-package candidate or rollback snapshot without publishing. */
+export function persistRuntimeConfigForPackageImport(next: RuntimeConfig) {
+  assertRuntimeConfigWriteLeaseHeld();
+  getRuntimeConfig();
+  writeRuntimeConfigFile(next);
 }
 
-/** Replace an earlier write only if its exact revision is still current. */
-export function replaceRuntimeConfigIfRevision(
-  expectedRevision: number,
-  next: RuntimeConfig
-) {
-  return withRuntimeConfigWriteLease(() => {
-    getRuntimeConfig();
-    if (runtimeConfigRevision !== expectedRevision) return false;
-    commitRuntimeConfig(next);
-    return true;
-  });
+/** Publish a successfully persisted config-package candidate exactly once. */
+export function publishRuntimeConfigForPackageImport(next: RuntimeConfig) {
+  assertRuntimeConfigWriteLeaseHeld();
+  return publishRuntimeConfig(next);
 }
 
 export function reloadRuntimeConfigFromDisk() {
@@ -115,10 +133,9 @@ export function reloadRuntimeConfigFromDisk() {
     if (!snapshot) {
       throw new Error(`Runtime config ${runtimePaths.configFile} does not exist`);
     }
-    if (snapshot.needsWriteBack) writeRuntimeConfigFile(snapshot.config);
-    runtimeConfig = snapshot.config;
-    runtimeConfigRevision += 1;
-    notifyRuntimeConfigChange();
-    return runtimeConfig;
+    return persistAndPublishRuntimeConfig(
+      snapshot.config,
+      snapshot.needsWriteBack
+    );
   });
 }

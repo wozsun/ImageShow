@@ -2,7 +2,7 @@ import { getRedisConnectionState, redis } from "../../../core/redis/client.ts";
 import {
   storeReadyImageFilterSetCommand,
   type ReadyImageFilterSetOperation
-} from "../../../core/redis/business-commands.ts";
+} from "../redis/commands.ts";
 import { execRedisPipeline } from "../../../core/redis/pipeline.ts";
 import { randomUuidV7 } from "../../../core/uuid.ts";
 import {

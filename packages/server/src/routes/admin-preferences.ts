@@ -12,7 +12,8 @@ import {
 import { privateNoStoreCacheControl } from "../core/http/headers.ts";
 import { readJsonBody } from "../core/http/json-body.ts";
 import { limitAdminPreferencesBody } from "../core/http/request-body-limit.ts";
-import { adminPreferencesInput, parse } from "../core/validation.ts";
+import { parse } from "./validation/parse.ts";
+import { adminPreferencesInput } from "./validation/users.ts";
 import {
   readAdminPreferences,
   updateAdminPreferences

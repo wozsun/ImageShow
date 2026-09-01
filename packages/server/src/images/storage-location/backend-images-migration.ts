@@ -7,17 +7,19 @@ import { pool } from "../../core/database/pools.ts";
 import {
   migrateImageToStorageBackend,
   type ImageStorageMigrationRecord
-} from "./image.ts";
+} from "./image-backend-migration.ts";
 import {
   assertStorageWriteTarget,
   getStorageBackend
-} from "../backends/registry.ts";
-import { withPlannedImageMutationRebuild } from "../../images/mutation-sync.ts";
+} from "../../storage/backends/registry.ts";
+import { withPlannedImageMutationRebuild } from "../mutation-sync.ts";
 import {
   READY_IMAGE_EXACT_SYNC_MAX_ITEMS,
   decideImageMutationSync
-} from "../../images/mutation-sync-policy.ts";
-import { STORAGE_MIGRATION_CONCURRENCY } from "./admission.ts";
+} from "../mutation-sync-policy.ts";
+import {
+  IMAGE_TRANSFER_CONCURRENCY
+} from "../../storage/objects/image-transfer-admission.ts";
 
 const storageBackendImageMigrationPageSize = 100;
 
@@ -165,7 +167,7 @@ async function migrateBackendImages(
     page = [];
     const results = await mapWithWorkerPool(
       current,
-      STORAGE_MIGRATION_CONCURRENCY,
+      IMAGE_TRANSFER_CONCURRENCY,
       migrateImage,
       { signal }
     );

@@ -1,8 +1,4 @@
 import { z } from "zod";
-import {
-  slugMaxLength,
-  slugPattern
-} from "@imageshow/shared/browser";
 import { isHttpsEndpoint, isHttpsUrl } from "../../core/url-validation.ts";
 
 const httpsEndpoint = z.string().trim().max(2048)
@@ -26,7 +22,7 @@ const s3SettingsPatchShape = {
   task_timeout_seconds: z.coerce.number().int().min(15).max(3_600).optional()
 };
 
-const s3SettingsPatchSchema = z.strictObject(s3SettingsPatchShape);
+export const s3SettingsPatchSchema = z.strictObject(s3SettingsPatchShape);
 
 const s3SettingsDefaults = {
   endpoint: "",
@@ -96,44 +92,22 @@ export type StorageBackendRecord =
   | LocalStorageConfig & StorageBackendRecordFields
   | S3StorageConfig & StorageBackendRecordFields;
 
-const storageSlugInput = z.string().trim().toLowerCase().min(1)
-  .max(slugMaxLength).regex(slugPattern);
-const storageDisplayInput = z.string().trim().max(64);
+export type StorageBackendCreateInput = {
+  slug: string;
+  display_name: string;
+  s3: S3Settings;
+};
 
-const nonEmptySettingsObject = z.record(z.string(), z.unknown()).refine(
-  (value) => Object.keys(value).length > 0,
-  "远端存储配置至少需要提供一个字段"
-);
-const s3SettingsUpdateSchema = nonEmptySettingsObject.pipe(
-  s3SettingsPatchSchema
-);
+export type StorageBackendUpdateInput = {
+  display_name?: string;
+  enabled?: boolean;
+  s3?: S3SettingsPatch;
+};
 
-export const storageBackendCreateInput = z.strictObject({
-  slug: storageSlugInput,
-  display_name: storageDisplayInput.optional().default(""),
-  s3: s3SettingsSchema.optional().prefault({})
-});
-
-export const storageBackendUpdateInput = z.strictObject({
-  display_name: storageDisplayInput.optional(),
-  enabled: z.boolean().optional(),
-  s3: s3SettingsUpdateSchema.optional()
-}).refine(
-  (value) => Object.values(value).some((field) => field !== undefined),
-  "存储后端更新至少需要提供一个字段"
-);
-
-export const storageBackendTestInput = z.strictObject({
-  slug: storageSlugInput.optional(),
-  s3: s3SettingsPatchSchema.optional()
-}).refine(
-  (value) => Object.values(value).some((field) => field !== undefined),
-  "存储测试至少需要提供一个配置字段"
-);
-
-export type StorageBackendCreateInput = z.infer<typeof storageBackendCreateInput>;
-export type StorageBackendUpdateInput = z.infer<typeof storageBackendUpdateInput>;
-export type StorageBackendTestInput = z.infer<typeof storageBackendTestInput>;
+export type StorageBackendTestInput = {
+  slug?: string;
+  s3?: S3SettingsPatch;
+};
 
 export type StorageBackendImportInput = {
   slug: string;

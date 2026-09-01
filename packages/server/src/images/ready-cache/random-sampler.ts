@@ -3,7 +3,7 @@ import {
   sampleReadyImageCoreIndexCommand,
   sampleReadyImageDerivedIndexCommand,
   type RedisReadyImageSampleResult
-} from "../../core/redis/business-commands.ts";
+} from "./redis/commands.ts";
 import { redis } from "../../core/redis/client.ts";
 import { ReadyImageCoreCacheError } from "./cache-errors.ts";
 import { getReadyImageCacheCoordinatorStatus } from "./coordinator.ts";

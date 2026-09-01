@@ -1,5 +1,5 @@
 import { ApiError } from "../core/api-error.ts";
-import { uuidInput } from "../core/validation.ts";
+import { normalizedUuidSchema } from "../core/uuid.ts";
 
 const cursorPayloadBytes = 24;
 const cursorLength = 32;
@@ -93,8 +93,8 @@ function cursorImageTime(microseconds: bigint) {
 }
 
 function normalizedUuid(value: string) {
-  if (!uuidInput.safeParse(value).success) return null;
-  return value.toLowerCase();
+  const result = normalizedUuidSchema.safeParse(value);
+  return result.success ? result.data : null;
 }
 
 function uuidBytes(value: string) {

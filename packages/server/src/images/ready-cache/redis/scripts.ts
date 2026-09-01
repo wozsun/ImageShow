@@ -1,31 +1,3 @@
-export const reserveRedisWindowsScript = `
-local output = {}
-local blocked = false
-for index = 1, #KEYS do
-  local argument = (index - 1) * 2
-  local capacity = ARGV[argument + 1]
-  local duration = ARGV[argument + 2]
-  if blocked then
-    output[#output + 1] = -1
-    output[#output + 1] = 0
-    output[#output + 1] = 0
-    output[#output + 1] = duration
-  else
-    local increment = redis.call(
-      'INCREX', KEYS[index], 'BYINT', '1', 'UBOUND', capacity,
-      'EX', duration, 'ENX'
-    )
-    local ttl = redis.call('TTL', KEYS[index])
-    local allowed = increment[2] == 1
-    output[#output + 1] = allowed and 1 or 0
-    output[#output + 1] = increment[1]
-    output[#output + 1] = increment[2]
-    output[#output + 1] = ttl
-    if not allowed then blocked = true end
-  end
-end
-return output`;
-
 function validateDerivedRegistryScript(
   maximumArgument: number,
   itemCountArgument: number,

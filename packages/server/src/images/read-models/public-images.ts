@@ -1,5 +1,6 @@
-import type { z } from "zod";
 import type {
+  Brightness,
+  Device,
   PublicImageDetailDto,
   PublicImageListResponseDto
 } from "@imageshow/shared/browser";
@@ -11,7 +12,6 @@ import {
   type PublicDatabaseReadAccess
 } from "../../core/database/public-fallback.ts";
 import { pool, type DatabaseReader } from "../../core/database/pools.ts";
-import { listQuery } from "../../core/validation.ts";
 import { resolveImageFilterPlan } from "../filter-plan.ts";
 import {
   readReadyImageById,
@@ -25,10 +25,20 @@ import {
 import { buildResolvedReadyImageListFilters } from "./list-filters.ts";
 import { fetchPublicImageCardPage } from "./pagination.ts";
 
-type PublicListQuery = z.infer<typeof listQuery>;
+export type PublicImageListQuery = {
+  status: "ready";
+  device?: Device;
+  brightness?: Brightness;
+  theme?: string;
+  tag?: string;
+  author?: string;
+  cursor?: string;
+  limit?: number;
+  shuffle?: boolean;
+};
 
 function withShuffle(
-  query: PublicListQuery,
+  query: PublicImageListQuery,
   payload: PublicImageListResponseDto
 ): PublicImageListResponseDto {
   if (!query.shuffle || payload.items.length < 2) return payload;
@@ -41,7 +51,7 @@ function withShuffle(
 }
 
 async function listPublicImagesWithAccess(
-  query: PublicListQuery,
+  query: PublicImageListQuery,
   signal: AbortSignal | undefined,
   database: PublicDatabaseReadAccess
 ): Promise<PublicImageListResponseDto> {
@@ -89,7 +99,7 @@ async function listPublicImagesWithAccess(
 }
 
 export function listPublicImages(
-  query: PublicListQuery,
+  query: PublicImageListQuery,
   signal?: AbortSignal
 ): Promise<PublicImageListResponseDto> {
   return signal

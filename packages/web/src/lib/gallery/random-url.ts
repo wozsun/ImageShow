@@ -2,15 +2,15 @@ import type { RandomMode } from "../types.js";
 
 export function buildRandomUrl(input: { origin?: string; device: string; brightness: string; theme: string; tag: string; author: string; mode?: RandomMode }) {
   const params: string[] = [];
-  if (input.device) params.push(`d=${encodeRandomParam(input.device)}`);
-  if (input.brightness !== "random") params.push(`b=${encodeRandomParam(input.brightness)}`);
+  if (input.device) params.push(`device=${encodeRandomParam(input.device)}`);
+  if (input.brightness !== "random") params.push(`brightness=${encodeRandomParam(input.brightness)}`);
   const themes = input.theme.split(",").map((theme) => theme.trim().toLowerCase()).filter(Boolean);
-  if (themes.length) params.push(`t=${encodeRandomParam(themes.join(","))}`);
+  if (themes.length) params.push(`theme=${encodeRandomParam(themes.join(","))}`);
   const tags = input.tag.split(",").map((tag) => tag.trim().toLowerCase()).filter(Boolean);
   if (tags.length) params.push(`tag=${encodeRandomParam(tags.join(","))}`);
   const authors = input.author.split(",").map((author) => author.trim().toLowerCase()).filter(Boolean);
-  if (authors.length) params.push(`a=${encodeRandomParam(authors.join(","))}`);
-  if (input.mode) params.push(`m=${encodeRandomParam(input.mode)}`);
+  if (authors.length) params.push(`author=${encodeRandomParam(authors.join(","))}`);
+  if (input.mode) params.push(`mode=${encodeRandomParam(input.mode)}`);
   return `${input.origin ?? window.location.origin}/random${params.length ? `?${params.join("&")}` : ""}`;
 }
 

@@ -1,7 +1,7 @@
 import type { DatabaseReader } from "../../../core/database/pools.ts";
 import {
   publishReadyImageAttributeIndexCommand
-} from "../../../core/redis/business-commands.ts";
+} from "../redis/commands.ts";
 import { getRedisConnectionState, redis } from "../../../core/redis/client.ts";
 import { randomUuidV7 } from "../../../core/uuid.ts";
 import { getReadyImageCacheCoordinatorStatus } from "../coordinator.ts";

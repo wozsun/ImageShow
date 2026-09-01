@@ -1,4 +1,3 @@
-import type { z } from "zod";
 import { appConfig } from "@imageshow/shared";
 import {
   brightnesses,
@@ -14,7 +13,6 @@ import {
   type PublicDatabaseReadAccess
 } from "../../core/database/public-fallback.ts";
 import { pool, type DatabaseReader } from "../../core/database/pools.ts";
-import { galleryStatsQuery } from "../../core/validation.ts";
 import {
   readReadyImageCountSnapshot,
   type ReadyImageCountSnapshot
@@ -33,7 +31,13 @@ import {
   getThemeVocab
 } from "../../vocab/vocab-cache.ts";
 
-type GalleryStatsQuery = z.infer<typeof galleryStatsQuery>;
+export type GalleryStatsQuery = {
+  device?: Device;
+  brightness?: Brightness;
+  theme?: string;
+  tag?: string;
+  author?: string;
+};
 type CategoryRow = {
   device: Device;
   brightness: Brightness;
@@ -82,7 +86,7 @@ async function filteredRows<T>(
   client: DatabaseReader,
   plan: ImageFilterPlan,
   omittedAxes: readonly ImageFilterAxis[],
-  sql: (where: string, resultLimit: string) => string
+  sql: (where: string, rowLimit: string) => string
 ) {
   const clause = buildFilterClause(plan, omittedAxes);
   clause.params.push(appConfig.publicPgFallback.maximumVocabularyRows + 1);
@@ -118,44 +122,44 @@ async function readPublicGalleryStats(
         client,
         plan,
         [],
-        (where, resultLimit) => `SELECT count(*)::int AS image_count
-          FROM metadata m WHERE ${where} LIMIT ${resultLimit}`
+        (where, rowLimit) => `SELECT count(*)::int AS image_count
+          FROM metadata m WHERE ${where} LIMIT ${rowLimit}`
       );
       const categoryRows = await filteredRows<CategoryRow>(
         client,
         plan,
         [],
-        (where, resultLimit) => `SELECT m.device, m.brightness, count(*)::int AS image_count
+        (where, rowLimit) => `SELECT m.device, m.brightness, count(*)::int AS image_count
                       FROM metadata m
                      WHERE ${where}
                      GROUP BY m.device, m.brightness
-                     LIMIT ${resultLimit}`
+                     LIMIT ${rowLimit}`
       );
       const deviceRows = await filteredRows<DeviceRow>(
         client,
         plan,
         ["device"],
-        (where, resultLimit) => `SELECT m.device, count(*)::int AS image_count
+        (where, rowLimit) => `SELECT m.device, count(*)::int AS image_count
                       FROM metadata m
                      WHERE ${where}
                      GROUP BY m.device
-                     LIMIT ${resultLimit}`
+                     LIMIT ${rowLimit}`
       );
       const brightnessRows = await filteredRows<BrightnessRow>(
         client,
         plan,
         ["brightness"],
-        (where, resultLimit) => `SELECT m.brightness, count(*)::int AS image_count
+        (where, rowLimit) => `SELECT m.brightness, count(*)::int AS image_count
                       FROM metadata m
                      WHERE ${where}
                      GROUP BY m.brightness
-                     LIMIT ${resultLimit}`
+                     LIMIT ${rowLimit}`
       );
       const themeRows = await filteredRows<FacetCountRow>(
         client,
         plan,
         ["theme"],
-        (where, resultLimit) => `SELECT t.slug,
+        (where, rowLimit) => `SELECT t.slug,
                             t.display_name,
                             count(m.id)::int AS image_count
                        FROM theme t
@@ -164,13 +168,13 @@ async function readPublicGalleryStats(
                         AND ${where}
                       GROUP BY t.slug, t.display_name, t.sort_order
                       ORDER BY (t.slug='none') DESC, t.sort_order ASC, t.slug ASC
-                      LIMIT ${resultLimit}`
+                      LIMIT ${rowLimit}`
       );
       const tagRows = await filteredRows<FacetCountRow>(
         client,
         plan,
         ["tag"],
-        (where, resultLimit) => `SELECT t.slug,
+        (where, rowLimit) => `SELECT t.slug,
                             t.display_name,
                             count(DISTINCT m.id)::int AS image_count
                        FROM tag t
@@ -180,13 +184,13 @@ async function readPublicGalleryStats(
                         AND ${where}
                       GROUP BY t.slug, t.display_name, t.sort_order
                       ORDER BY t.sort_order ASC, t.slug ASC
-                      LIMIT ${resultLimit}`
+                      LIMIT ${rowLimit}`
       );
       const authorRows = await filteredRows<AuthorCountRow>(
         client,
         plan,
         ["author"],
-        (where, resultLimit) => `SELECT a.slug,
+        (where, rowLimit) => `SELECT a.slug,
                             a.display_name,
                             a.link,
                             count(m.id)::int AS image_count
@@ -196,7 +200,7 @@ async function readPublicGalleryStats(
                         AND ${where}
                       GROUP BY a.slug, a.display_name, a.link, a.sort_order
                       ORDER BY a.sort_order ASC, a.slug ASC
-                      LIMIT ${resultLimit}`
+                      LIMIT ${rowLimit}`
       );
 
       if ([themeRows, tagRows, authorRows].some((rows) => (

@@ -18,7 +18,7 @@ import {
   storageBackendUsage
 } from "./usage.ts";
 import { resolveStorageBackendDeletionState } from "./deletion.ts";
-import { captureStagingNamespaceSnapshot } from "../migration/endpoint-rebind.ts";
+import { captureStagingNamespaceSnapshot } from "./endpoint-rebind.ts";
 import { withStorageLocationWriteAndAdvisoryLock } from "../maintenance-lock.ts";
 
 function isForeignKeyViolation(error: unknown) {

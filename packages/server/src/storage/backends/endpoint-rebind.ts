@@ -1,6 +1,5 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { ApiError, errorMessage } from "../../core/api-error.ts";
-import { stagingSessionId } from "../../images/ingestion/staging-keys.ts";
 import type { StorageDriver } from "../drivers/driver.ts";
 import {
   collectStorageKeyListing,
@@ -11,10 +10,9 @@ const storageProbePrefix = ".storage-test-";
 
 export type StagingNamespaceSnapshot = {
   keys: Set<string>;
-  keysBySession: Map<string, Set<string>>;
 };
 
-/** Enumerate `_uploads` once and index every attempt-scoped key by session. */
+/** Enumerate `_uploads` once and retain every opaque complete object key. */
 export async function captureStagingNamespaceSnapshot(
   driver: StorageDriver,
   signal?: AbortSignal
@@ -32,12 +30,7 @@ export async function captureStagingNamespaceSnapshot(
     listing.keys
       .filter((key) => !key.startsWith(storageProbePrefix))
   );
-  const keysBySession = new Map<string, Set<string>>();
-  for (const key of keys) {
-    const sessionId = stagingSessionId(key);
-    keysBySession.getOrInsertComputed(sessionId, () => new Set()).add(key);
-  }
-  return { keys, keysBySession };
+  return { keys };
 }
 
 function sameKeys(first: ReadonlySet<string>, second: ReadonlySet<string>) {
@@ -49,13 +42,7 @@ function stagingSnapshotsMatch(
   current: StagingNamespaceSnapshot,
   candidate: StagingNamespaceSnapshot
 ) {
-  if (!sameKeys(current.keys, candidate.keys)) return false;
-  if (current.keysBySession.size !== candidate.keysBySession.size) return false;
-  for (const [sessionId, currentKeys] of current.keysBySession) {
-    const candidateKeys = candidate.keysBySession.get(sessionId);
-    if (!candidateKeys || !sameKeys(currentKeys, candidateKeys)) return false;
-  }
-  return true;
+  return sameKeys(current.keys, candidate.keys);
 }
 
 function endpointMismatch(reason: string) {

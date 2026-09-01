@@ -1,5 +1,5 @@
 /**
- * 浏览器与服务端共同使用、且可以安全进入公开前端产物的基础常量。
+ * 浏览器与服务端共同使用、且可以安全进入公开前端产物的基础常量与纯规则。
  *
  * 后端运行时默认配置只存在于 app-config.ts；这里不得引入 Node、数据库、
  * Redis、存储凭据或完整服务端默认值。
@@ -27,6 +27,13 @@ export const brightnesses = ["dark", "light"] as const;
 export type Device = (typeof devices)[number];
 export type Brightness = (typeof brightnesses)[number];
 export type StorageType = "local" | "s3";
+
+export function detectDeviceFromUserAgent(userAgent: string): Device | null {
+  if (!userAgent) return null;
+  if (/Mobi|Android|iPhone|iPad|iPod/i.test(userAgent)) return "mb";
+  if (/Windows|Macintosh|Linux x86_64|X11/i.test(userAgent)) return "pc";
+  return null;
+}
 
 export type AdminRole = "super" | "image";
 export const logLevels = ["DEBUG", "INFO", "WARN", "ERROR", "OFF"] as const;

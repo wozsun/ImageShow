@@ -71,8 +71,9 @@ PostgreSQL 的 `admin_account` 表，不进入 `config.json`。单应用进程�
 只有确实缺失时才要求这两个值；已有 super 时不会再读取环境变量覆盖账号或密码。顺序重启和
 崩溃后的顺序恢复受支持，两个应用进程重叠播种不受支持。
 
-后台配置写入由同一进程内的 FIFO 写租约串行化，包括配置包导入的长 I/O 和补偿窗口；配置包的
-存储后端写入使用 PostgreSQL 事务、提交结果回执和运行时配置 revision 补偿。
+后台配置写入由同一进程内的 FIFO 写租约串行化，包括配置包导入的长 I/O 和收敛窗口；配置包的
+存储后端写入使用 PostgreSQL 事务与 xid8 提交结果回执，运行配置采用候选文件持久化和结果核对
+后的单次内存发布，不维护运行时 revision 补偿。
 
 ## 作者身份配置边界
 
@@ -114,7 +115,7 @@ PostgreSQL 的 `admin_account` 表，不进入 `config.json`。单应用进程�
 | <!-- runtime-config:site.gallery.limit --> `site.gallery.limit` / `SITE_GALLERY_LIMIT` / 显式映射 | 整数；默认 `60`；1–200 项 | 公开画廊未显式指定页量时使用的分页量；普通设置或热加载后影响新查询。 |
 | <!-- runtime-config:site.gallery.order --> `site.gallery.order` / `SITE_GALLERY_ORDER` / 显式映射 | 枚举；默认 `"latest"`；`latest`、`random` | 画廊默认排序；普通设置或热加载后影响新查询。 |
 | <!-- runtime-config:site.gallery.public_original_button --> `site.gallery.public_original_button` / `SITE_GALLERY_PUBLIC_ORIGINAL_BUTTON` / 显式映射 | 布尔；默认 `false` | 控制未登录访客的公开画廊详情是否渲染独立“原图”入口；服务端确认已登录的管理员不受该开关影响。首次播种、完整配置、配置包或热加载后生效，不进入普通设置；关闭不影响当前展示图的原生保存。 |
-| <!-- runtime-config:site.random_method --> `site.random_method` / `SITE_RANDOM_METHOD` / 显式映射 | 枚举；默认 `"redirect"`；`proxy`、`redirect` | `/random` 未指定 `m` 时的图片返回方式；`json` 仅可作为显式 `m=json` 查询参数，普通设置或热加载后影响新请求。 |
+| <!-- runtime-config:site.random_method --> `site.random_method` / `SITE_RANDOM_METHOD` / 显式映射 | 枚举；默认 `"redirect"`；`proxy`、`redirect` | `/random` 未指定 `mode` 时的图片返回方式；`json` 仅可作为显式 `mode=json` 查询参数，普通设置或热加载后影响新请求。 |
 | <!-- runtime-config:site.static_subdomain --> `site.static_subdomain` / `SITE_STATIC_SUBDOMAIN` / 显式映射 | 字符串；默认 `"static"`；1–63 字符的合法小写 DNS label | `/media`、`/thumbs`、`/link/original` 的资源子域；首次播种或热加载后影响 Host 路由。 |
 | <!-- runtime-config:site.robots_enabled --> `site.robots_enabled` / `SITE_ROBOTS_ENABLED` / 显式映射 | 布尔；默认 `false` | 控制主站与资源域 `robots.txt`；首次播种或热加载后影响新请求。 |
 
@@ -356,11 +357,21 @@ super 管理员可在「设置 → 高级配置」导出或导入 JSON 配置包
 导入后端指定新的合法 slug。系统不会覆盖、合并或跳过同名后端，改名后的 slug
 也不能是 `local`、现有 slug 或同一批中的另一个目标。应用时再次检查当前注册表，
 以防预检之后发生竞态。全部存储后端在同一数据库事务内写入。进程内所有运行时配置写入
-共用一条写租约；配置包导入
-会持有租约直到数据库结果确认与补偿结束，普通错误会回滚数据库事务，并以本次写入的
-精确 revision 恢复旧快照。提交回包不确定时会用事务自身的 xid8 receipt 查询
-PostgreSQL 提交状态，不根据可能已被后继修改的业务行猜测；无法确认则保留候选配置
-供管理员核对。
+共用一条 FIFO 写租约；普通设置、高级配置保存和磁盘重载都先完成所需的原子文件持久化，再
+替换进程内快照并通知 listener。配置包导入会持有租约直到完成数据库结果核对并作出收敛决定：候选
+`config.json` 仍在 PostgreSQL `COMMIT` 前原子写入，文件写入失败会阻止提交，但这一阶段不替换
+内存快照，也不通知 listener；写入若在 rename 已生效、父目录同步尚未完成时抛错，系统知道
+`COMMIT` 尚未发送，会在同一租约内原子恢复旧文件。写租约同时阻止手动重载插入该窗口。
+
+正常 `COMMIT` 后只发布候选内存快照一次。若提交回包丢失，系统用该事务自身的 xid8 receipt
+查询 PostgreSQL，不根据业务行猜测：确认 committed 时按成功收敛并发布一次；确认 rolled back
+时原子恢复导入前文件，内存快照和 listener 始终保持旧值。旧文件恢复失败会记录
+`config_package_file_restore_failed` 结构化错误并返回 503，此时应立即检查 `config.json`，再到
+检查页与存储管理页核对后端注册表并人工恢复。结果仍为 unknown 时不盲目回滚候选文件，而是把
+同一候选发布到活进程一次并返回 503 `config_package_outcome_unknown`；管理员应在检查页核对
+PostgreSQL 与存储后端注册表后，决定恢复旧文件或重新导入，不存在后台轮询、重试或第二套恢复状态。
+运行配置 listener 是单进程同步回调；单个 listener 抛错只记录
+`runtime_config_listener_failed`，其余 listener 继续执行，已持久化配置和已确认提交不会被逆转。
 
 配置文件与 PostgreSQL 是两个独立资源，无法组成真正的跨资源原子事务。若在配置
 文件写入后遭遇 SIGKILL、容器崩溃或主机断电，仍存在配置已更新而数据库事务已回滚

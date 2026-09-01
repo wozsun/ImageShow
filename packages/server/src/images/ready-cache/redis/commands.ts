@@ -1,144 +1,25 @@
-import type { Redis, RedisOptions } from "ioredis";
 import {
-  publishReadyImageAttributeIndexScript,
-  reserveRedisWindowsScript,
-  sampleReadyImageCoreIndexScript,
-  sampleReadyImageDerivedIndexScript,
-  storeReadyImageFilterSetScript,
-  touchReadyImageIndexedResultScript,
-  touchReadyImageStatsResultScript
-} from "./business-scripts.ts";
+  readyImageRedisCommandClient,
+  type ReadyImageRedisCommandSource
+} from "./client.ts";
 
-export const redisBusinessScripts = Object.freeze({
-  imageshowReserveWindows: {
-    lua: reserveRedisWindowsScript,
-    readOnly: false
-  },
-  imageshowTouchReadyImageIndexedResult: {
-    lua: touchReadyImageIndexedResultScript,
-    numberOfKeys: 6,
-    readOnly: false
-  },
-  imageshowTouchReadyImageStatsResult: {
-    lua: touchReadyImageStatsResultScript,
-    numberOfKeys: 6,
-    readOnly: false
-  },
-  imageshowStoreReadyImageFilterSet: {
-    lua: storeReadyImageFilterSetScript,
-    readOnly: false
-  },
-  imageshowPublishReadyImageAttributeIndex: {
-    lua: publishReadyImageAttributeIndexScript,
-    numberOfKeys: 3,
-    readOnly: false
-  },
-  imageshowSampleReadyImageCoreIndex: {
-    lua: sampleReadyImageCoreIndexScript,
-    numberOfKeys: 4,
-    readOnly: true
-  },
-  imageshowSampleReadyImageDerivedIndex: {
-    lua: sampleReadyImageDerivedIndexScript,
-    numberOfKeys: 6,
-    readOnly: true
-  }
-}) satisfies NonNullable<RedisOptions["scripts"]>;
+export type RedisIndexedTouchCommandClient = ReadyImageRedisCommandSource<
+  "imageshowTouchReadyImageIndexedResult"
+>;
 
-export type RedisWindow = {
-  key: string;
-  capacity: number;
-  windowSeconds: number;
-};
+export type RedisStatsTouchCommandClient = ReadyImageRedisCommandSource<
+  "imageshowTouchReadyImageStatsResult"
+>;
 
-export type RedisWindowReservation = {
-  attempted: boolean;
-  allowed: boolean;
-  value: number;
-  retryAfterSeconds: number;
-};
-
-export type RedisWindowCommandClient = {
-  imageshowReserveWindows(
-    ...arguments_: Parameters<Redis["imageshowReserveWindows"]>
-  ): Promise<unknown>;
-};
-
-export type RedisIndexedTouchCommandClient = {
-  imageshowTouchReadyImageIndexedResult(
-    ...arguments_: Parameters<
-      Redis["imageshowTouchReadyImageIndexedResult"]
-    >
-  ): Promise<unknown>;
-};
-
-export type RedisStatsTouchCommandClient = {
-  imageshowTouchReadyImageStatsResult(
-    ...arguments_: Parameters<Redis["imageshowTouchReadyImageStatsResult"]>
-  ): Promise<unknown>;
-};
-
-export type RedisFilterSetCommandClient = {
-  imageshowStoreReadyImageFilterSet(
-    ...arguments_: Parameters<Redis["imageshowStoreReadyImageFilterSet"]>
-  ): Promise<unknown>;
+export type RedisFilterSetCommandClient = ReadyImageRedisCommandSource<
+  "imageshowStoreReadyImageFilterSet"
+> & {
   unlink(...keys: string[]): Promise<number>;
 };
 
-export type RedisAttributePublishCommandClient = {
-  imageshowPublishReadyImageAttributeIndex(
-    ...arguments_: Parameters<
-      Redis["imageshowPublishReadyImageAttributeIndex"]
-    >
-  ): Promise<unknown>;
-};
-
-function integer(value: unknown, context: string) {
-  const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed)) {
-    throw new Error(`Redis window script returned invalid ${context}`);
-  }
-  return parsed;
-}
-
-export async function reserveRedisWindowsCommand(
-  client: RedisWindowCommandClient,
-  windows: readonly RedisWindow[]
-): Promise<RedisWindowReservation[]> {
-  const raw = await client.imageshowReserveWindows(
-    String(windows.length),
-    ...windows.map((window) => window.key),
-    ...windows.flatMap((window) => [
-      String(window.capacity),
-      String(window.windowSeconds)
-    ])
-  );
-  if (!Array.isArray(raw) || raw.length !== windows.length * 4) {
-    throw new Error("Redis window script returned an invalid result count");
-  }
-
-  return windows.map((window, index) => {
-    const offset = index * 4;
-    const state = integer(raw[offset], "reservation state");
-    const current = integer(raw[offset + 1], "reservation value");
-    const increment = integer(raw[offset + 2], "reservation increment");
-    const ttl = integer(raw[offset + 3], "reservation TTL");
-    if (
-      ![-1, 0, 1].includes(state)
-      || current < 0
-      || ![0, 1].includes(increment)
-      || (state === 1) !== (increment === 1)
-    ) {
-      throw new Error("Redis window script returned inconsistent state");
-    }
-    return {
-      attempted: state !== -1,
-      allowed: state === 1,
-      value: current,
-      retryAfterSeconds: Math.max(1, ttl >= 0 ? ttl : window.windowSeconds)
-    };
-  });
-}
+export type RedisAttributePublishCommandClient = ReadyImageRedisCommandSource<
+  "imageshowPublishReadyImageAttributeIndex"
+>;
 
 export type RedisDerivedResultDescriptor = {
   key: string;
@@ -210,7 +91,11 @@ export async function touchReadyImageIndexedResultCommand(
 ) {
   const { descriptor } = input;
   const [lruKey, countsKey, kindsKey, signaturesKey] = input.registry.keys;
-  const raw = await client.imageshowTouchReadyImageIndexedResult(
+  const commandClient = readyImageRedisCommandClient(
+    client,
+    "imageshowTouchReadyImageIndexedResult"
+  );
+  const raw = await commandClient.imageshowTouchReadyImageIndexedResult(
     descriptor.key,
     descriptor.metaKey,
     lruKey,
@@ -245,7 +130,11 @@ export async function touchReadyImageStatsResultCommand(
   }
 ) {
   const [lruKey, countsKey, kindsKey, signaturesKey] = input.registry.keys;
-  const raw = await client.imageshowTouchReadyImageStatsResult(
+  const commandClient = readyImageRedisCommandClient(
+    client,
+    "imageshowTouchReadyImageStatsResult"
+  );
+  const raw = await commandClient.imageshowTouchReadyImageStatsResult(
     input.descriptor.key,
     input.descriptor.key,
     lruKey,
@@ -280,7 +169,11 @@ export async function storeReadyImageFilterSetCommand(
   }
 ) {
   const sourceKeys = input.sources.map(({ key }) => key);
-  const raw = await client.imageshowStoreReadyImageFilterSet(
+  const commandClient = readyImageRedisCommandClient(
+    client,
+    "imageshowStoreReadyImageFilterSet"
+  );
+  const raw = await commandClient.imageshowStoreReadyImageFilterSet(
     String(sourceKeys.length + 1),
     ...sourceKeys,
     input.destination,
@@ -329,7 +222,11 @@ export async function publishReadyImageAttributeIndexCommand(
     ttlSeconds: number;
   }
 ) {
-  const raw = await client.imageshowPublishReadyImageAttributeIndex(
+  const commandClient = readyImageRedisCommandClient(
+    client,
+    "imageshowPublishReadyImageAttributeIndex"
+  );
+  const raw = await commandClient.imageshowPublishReadyImageAttributeIndex(
     input.key,
     input.metaKey,
     input.temporaryKey,
@@ -371,17 +268,11 @@ export type RedisReadyImageSampleBounds = {
   maximumLimit: number;
 };
 
-export type RedisReadyImageCoreSampleCommandClient = {
-  imageshowSampleReadyImageCoreIndex(
-    ...arguments_: Parameters<Redis["imageshowSampleReadyImageCoreIndex"]>
-  ): Promise<unknown>;
-};
+export type RedisReadyImageCoreSampleCommandClient =
+  ReadyImageRedisCommandSource<"imageshowSampleReadyImageCoreIndex">;
 
-export type RedisReadyImageDerivedSampleCommandClient = {
-  imageshowSampleReadyImageDerivedIndex(
-    ...arguments_: Parameters<Redis["imageshowSampleReadyImageDerivedIndex"]>
-  ): Promise<unknown>;
-};
+export type RedisReadyImageDerivedSampleCommandClient =
+  ReadyImageRedisCommandSource<"imageshowSampleReadyImageDerivedIndex">;
 
 const readyImageSampleStatuses = new Map<number, RedisReadyImageSampleStatus>([
   [1, "ok"],
@@ -523,7 +414,11 @@ export async function sampleReadyImageCoreIndexCommand(
 ) {
   const count = nonNegativeSafeInteger(input.count, "core count");
   const bounds = readyImageSampleBounds(input.bounds);
-  const raw = await client.imageshowSampleReadyImageCoreIndex(
+  const commandClient = readyImageRedisCommandClient(
+    client,
+    "imageshowSampleReadyImageCoreIndex"
+  );
+  const raw = await commandClient.imageshowSampleReadyImageCoreIndex(
     ...input.keys,
     readyImageSampleRevision(input.revision),
     String(count),
@@ -572,7 +467,11 @@ export async function sampleReadyImageDerivedIndexCommand(
     throw new Error("Ready-image derived sample input is inconsistent");
   }
   const bounds = readyImageSampleBounds(input.bounds);
-  const raw = await client.imageshowSampleReadyImageDerivedIndex(
+  const commandClient = readyImageRedisCommandClient(
+    client,
+    "imageshowSampleReadyImageDerivedIndex"
+  );
+  const raw = await commandClient.imageshowSampleReadyImageDerivedIndex(
     ...input.keys,
     readyImageSampleRevision(input.revision),
     String(coreCount),

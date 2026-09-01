@@ -15,7 +15,8 @@ import {
 import { applicationVersion } from "../core/application-version.ts";
 import { issueAltchaChallenge, verifyAltchaProof } from "../core/altcha.ts";
 import { redis } from "../core/redis/client.ts";
-import { parse, passwordChangeInput } from "../core/validation.ts";
+import { parse } from "./validation/parse.ts";
+import { passwordChangeInput } from "./validation/users.ts";
 import { changeAdminPassword } from "../users/admin-accounts.ts";
 import {
   adminSessionRedisClient,

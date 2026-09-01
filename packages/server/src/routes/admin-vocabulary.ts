@@ -23,15 +23,15 @@ import {
   authorCreateInput,
   authorMetaUpdateInput,
   authorSlugInput,
-  parse,
-  slugListInput,
   tagCreateInput,
   tagDisplayUpdateInput,
   tagSlugInput,
   themeCreateInput,
   themeDisplayUpdateInput,
-  themeSlugInput
-} from "../core/validation.ts";
+  themeSlugInput,
+  vocabularySlugListInput
+} from "./validation/vocabulary.ts";
+import { parse } from "./validation/parse.ts";
 import {
   createTag,
   deleteTag,
@@ -83,7 +83,7 @@ function registerAdminEntityRoutes<
   });
 
   app.post(`${base}/reorder`, async (c) => {
-    const input = parse(slugListInput, await readJsonBody(c));
+    const input = parse(vocabularySlugListInput, await readJsonBody(c));
     await options.reorder(input.slugs);
     return c.json(apiSuccess());
   });

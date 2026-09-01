@@ -35,7 +35,7 @@ import {
 import {
   captureStagingNamespaceSnapshot,
   type StagingNamespaceSnapshot
-} from "../migration/endpoint-rebind.ts";
+} from "./endpoint-rebind.ts";
 import {
   withStorageLocationWriteAndAdvisoryLock
 } from "../maintenance-lock.ts";

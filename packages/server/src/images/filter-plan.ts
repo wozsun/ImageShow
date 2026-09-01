@@ -32,11 +32,11 @@ export type ImageFilterDimension =
   | "author";
 
 type ImageFilterInput = {
-  d?: Device;
-  b?: Brightness;
-  t?: string;
+  device?: Device;
+  brightness?: Brightness;
+  theme?: string;
   tag?: string;
-  a?: string;
+  author?: string;
 };
 
 const IMAGE_FILTER_AXES = devices.flatMap((device) => (
@@ -98,19 +98,19 @@ export async function resolveImageFilterPlan(
   access: VocabularyReadAccess = {}
 ) {
   const [theme, tag, author] = await Promise.all([
-    resolveSelector(input.t, "theme", (terms) => (
+    resolveSelector(input.theme, "theme", (terms) => (
       resolveThemeSlugs(terms, access)
     )),
     resolveSelector(input.tag, "tag", (terms) => (
       resolveTagNames(terms, access)
     )),
-    resolveSelector(input.a, "author", (terms) => (
+    resolveSelector(input.author, "author", (terms) => (
       resolveAuthorSlugs(terms, access)
     ))
   ]);
   return createImageFilterPlan({
-    devices: input.d ? [input.d] : devices,
-    brightnesses: input.b ? [input.b] : brightnesses,
+    devices: input.device ? [input.device] : devices,
+    brightnesses: input.brightness ? [input.brightness] : brightnesses,
     theme,
     tag,
     author
