@@ -230,14 +230,14 @@
   background: var(--admin-color-surface-primary);
   box-shadow: 0 0 0 1px var(--admin-color-control-changed-ring);
 }
-.ingestion-job.ready {
+.ingestion-job.ready,
+.ingestion-job.commit-queued,
+.ingestion-job.committing {
   --ingestion-job-border: var(--admin-color-pending-border);
   --ingestion-job-background: var(--admin-color-pending-surface);
   --ingestion-job-status: var(--admin-color-pending-text);
 }
-.ingestion-job.processing,
-.ingestion-job.commit-queued,
-.ingestion-job.committing {
+.ingestion-job.processing {
   --ingestion-job-border: var(--admin-color-pending-border-soft);
   --ingestion-job-background: var(--admin-color-pending-surface-soft);
   --ingestion-job-status: var(--admin-color-pending-text-soft);

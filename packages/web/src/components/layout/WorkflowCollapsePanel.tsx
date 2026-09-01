@@ -5,6 +5,7 @@ import {
   mobileViewportMediaQuery,
   useMediaQuery
 } from "../../hooks/useMediaQuery.js";
+import { DirectActivationButton } from "../feedback/DirectActivationButton.js";
 import { Icon } from "../icon/Icon.js";
 
 export function WorkflowCollapsePanel({
@@ -37,18 +38,18 @@ export function WorkflowCollapsePanel({
     <div
       className={`workflow-collapse-panel ${className}${expanded ? " is-expanded" : ""}${disclosure.motionEnabled ? " is-motion-enabled" : ""}`}
     >
-      <button
+      <DirectActivationButton
         ref={disclosure.triggerRef}
         type="button"
         className="workflow-collapse-toggle"
         aria-expanded={expanded}
         aria-controls={contentId}
-        onClick={() => disclosure.setOpen(!expanded)}
+        onActivate={() => disclosure.setOpen(!expanded)}
       >
         <span>{title}</span>
         <small>{summary}</small>
         <Icon name="arrow-down-s-line" />
-      </button>
+      </DirectActivationButton>
       <AnchoredMenuDismissSignalContext.Provider
         value={disclosure.menuDismissSignal}
       >

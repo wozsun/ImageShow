@@ -27,6 +27,7 @@ export const GalleryTile = memo(function GalleryTile({
   position,
   revealOrder,
   revealRegistry,
+  subtitle,
   onOpen
 }: GalleryTileRenderProps) {
   const { item } = position;
@@ -83,7 +84,7 @@ export const GalleryTile = memo(function GalleryTile({
       />
       <span className="tile-info">
         <strong>{title}</strong>
-        {item.subtitle && <small>{item.subtitle}</small>}
+        {subtitle && <small>{subtitle}</small>}
       </span>
     </button>
   );

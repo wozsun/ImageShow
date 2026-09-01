@@ -18,7 +18,7 @@ import type {
   ImageDetailItemDto,
   ImageDraftDto,
   ImageAdminInfoDto,
-  PublicImageItemDto,
+  PublicImageDetailDto,
   RandomMethod,
   RuntimeConfigChangeSummaryDto,
   ImportItemInputDto,
@@ -32,11 +32,10 @@ import type {
 
 export type GalleryImageCard = GalleryImageCardDto;
 export type ImageDetailItem = ImageDetailItemDto;
-export type PublicImageItem = PublicImageItemDto;
+export type PublicImageItem = GalleryImageCard & PublicImageDetailDto;
 export type AdminImageDetailItem = AdminImageDetailItemDto;
 export type EditableImageSnapshot = EditableImageSnapshotDto;
-/** Editor baseline fields; the server-only Gallery subtitle stays authoritative. */
-export type ImageEditorItem = Omit<EditableImageSnapshotDto, "subtitle">;
+export type ImageEditorItem = EditableImageSnapshotDto;
 export type AdminImageListItem = AdminImageListItemDto;
 export type ImageAdminInfo = ImageAdminInfoDto;
 

@@ -50,10 +50,11 @@ export type ImageCardBaseDto = {
   image_time: string;
 };
 
-export type GalleryImageCardDto = ImageCardBaseDto & {
-  /** Server-resolved theme/tag display names for the Gallery card. */
-  subtitle: string;
-};
+/**
+ * Stable image attributes used by the Gallery. Display names belong to the
+ * session-scoped Gallery facets response rather than every cursor page.
+ */
+export type GalleryImageCardDto = ImageCardBaseDto;
 
 export type PublicImageDetailDto = {
   id: string;
@@ -63,7 +64,6 @@ export type PublicImageDetailDto = {
 };
 
 export type ImageDetailItemDto = ImageCardBaseDto & PublicImageDetailDto;
-export type PublicImageItemDto = GalleryImageCardDto & PublicImageDetailDto;
 
 export type PublicImageListResponseDto = {
   items: GalleryImageCardDto[];
@@ -118,15 +118,10 @@ export type AdminImageDetailItemDto = ImageDetailItemDto & {
   updated_at: string;
 };
 
-/**
- * Exact recovery payload consumed by the image metadata editor. `subtitle`
- * also lets a logged-in Gallery apply the same authoritative card text before
- * its cursor page is re-read.
- */
+/** Exact recovery payload consumed by the image metadata editor. */
 export type EditableImageSnapshotDto = {
   id: string;
   title: string;
-  subtitle: string;
   description: string;
   source: string;
   original: string;

@@ -94,7 +94,7 @@ export function ImageAdminDetails({
   const trashedImageRef = useRef<string | null>(null);
   const knownUneditable = Boolean(
     adminListItem?.deleted_at
-      || (adminListItem && adminListItem.status !== "ready")
+    || (adminListItem && adminListItem.status !== "ready")
   );
 
   // 后台详情已有 Shell 确认过会话；公共详情只有在外层根据 /auth/me 的
@@ -255,8 +255,8 @@ export function ImageAdminDetails({
     };
     const immediateItem = committedForCurrent
       ? commit?.authoritativeItems?.find(
-          (candidate) => candidate.id === imageId
-        )
+        (candidate) => candidate.id === imageId
+      )
       : undefined;
     if (immediateItem) {
       applySnapshot(immediateItem);

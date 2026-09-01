@@ -11,13 +11,11 @@ import {
 } from "../../lib/ui/movement-intent.js";
 
 type CompatibilityActivationGuard = {
-  markOriginPointerActive: (active: boolean) => void;
   release: () => void;
   renew: () => void;
 };
 
 type DirectPointerPress = {
-  cancelled: boolean;
   pointerId: number;
   origin: ClientPoint;
   movementIntent: MovementIntent | null;
@@ -32,26 +30,20 @@ const compatibilityMouseEvents = ["mousedown", "mouseup"] as const;
  * Consume the complete activation sequence at window capture, so an element
  * removed or disabled by the direct activation cannot expose another control
  * to mousedown focus or a retargeted click. The guard survives synchronous
- * updates and is replaced by the next independent physical gesture.
+ * updates and is replaced by the next physical pointer gesture.
  */
-function suppressCompatibilityActivation(
-  ownerDocument: Document,
-  originPointerActive: boolean
-) {
+function suppressCompatibilityActivation(ownerDocument: Document) {
   const pending = pendingActivationSuppressions.get(ownerDocument);
   if (pending) {
-    pending.markOriginPointerActive(originPointerActive);
     pending.renew();
     return;
   }
 
   const eventRoot: EventTarget = ownerDocument.defaultView ?? ownerDocument;
-  let originActive = originPointerActive;
   let timeoutId: number | undefined;
   let captureCompatibilityMouse: EventListener;
   let captureClick: EventListener;
   let releaseForNextPointer: EventListener;
-  let releaseForNextTouch: EventListener;
   const release = () => {
     for (const eventName of compatibilityMouseEvents) {
       eventRoot.removeEventListener(
@@ -62,7 +54,6 @@ function suppressCompatibilityActivation(
     }
     eventRoot.removeEventListener("click", captureClick, true);
     eventRoot.removeEventListener("pointerdown", releaseForNextPointer, true);
-    eventRoot.removeEventListener("touchstart", releaseForNextTouch, true);
     if (timeoutId !== undefined) {
       ownerDocument.defaultView?.clearTimeout(timeoutId);
     }
@@ -70,16 +61,13 @@ function suppressCompatibilityActivation(
       pendingActivationSuppressions.delete(ownerDocument);
     }
   };
-  const markOriginPointerActive = (active: boolean) => {
-    originActive = active;
-  };
   const renew = () => {
     if (timeoutId !== undefined) {
       ownerDocument.defaultView?.clearTimeout(timeoutId);
     }
     timeoutId = ownerDocument.defaultView?.setTimeout(release, 800);
   };
-  const guard = { markOriginPointerActive, release, renew };
+  const guard = { release, renew };
   captureCompatibilityMouse = (event) => {
     event.preventDefault();
     event.stopImmediatePropagation();
@@ -87,12 +75,8 @@ function suppressCompatibilityActivation(
   captureClick = (event) => {
     const click = event as MouseEvent;
     // Keyboard and assistive-technology activation conventionally use
-    // detail=0 and must keep the native click path. That activation is also
-    // an independent transaction, so it retires the stale pointer guard.
-    if (click.detail === 0) {
-      release();
-      return;
-    }
+    // detail=0 and must keep the native click path.
+    if (click.detail === 0) return;
     click.preventDefault();
     click.stopImmediatePropagation();
     release();
@@ -100,15 +84,6 @@ function suppressCompatibilityActivation(
   releaseForNextPointer = (event) => {
     const pointer = event as globalThis.PointerEvent;
     if (pointer.isPrimary === false) return;
-    release();
-  };
-  releaseForNextTouch = (event) => {
-    const touch = event as TouchEvent;
-    // Some engines dispatch touchstart after pointerdown for the same contact.
-    // Keep protecting that originating gesture. A single remaining contact
-    // after it ended is the first touch of a new physical gesture; additional
-    // fingers in an existing multi-touch gesture must not retire the guard.
-    if (originActive || touch.touches.length !== 1) return;
     release();
   };
 
@@ -125,10 +100,6 @@ function suppressCompatibilityActivation(
   // before that pointer reaches its target, where another direct control can
   // arm the next transaction if necessary.
   eventRoot.addEventListener("pointerdown", releaseForNextPointer, true);
-  eventRoot.addEventListener("touchstart", releaseForNextTouch, {
-    capture: true,
-    passive: true
-  });
   renew();
 }
 
@@ -163,10 +134,7 @@ function useDirectActivation(
     ) {
       // Refresh the post-gesture window from cancellation rather than from
       // pointerdown, so a long press cannot outlive its suppression.
-      suppressCompatibilityActivation(
-        event.currentTarget.ownerDocument,
-        false
-      );
+      suppressCompatibilityActivation(event.currentTarget.ownerDocument);
     }
     clearPointerPress(event);
   };
@@ -194,21 +162,10 @@ function useDirectActivation(
         event.currentTarget.focus({ preventScroll: true });
       }
       if (!directPrimaryPress) {
-        if (
-          pointerPressRef.current
-          && event.pointerType !== "mouse"
-          && event.isPrimary === false
-        ) {
-          // A second contact cancels activation but keeps the primary press
-          // identity until its end can close and renew the guard transaction.
-          pointerPressRef.current.cancelled = true;
-        } else {
-          pointerPressRef.current = null;
-        }
+        pointerPressRef.current = null;
         return;
       }
       pointerPressRef.current = {
-        cancelled: false,
         pointerId: event.pointerId,
         origin: {
           clientX: event.clientX,
@@ -216,10 +173,7 @@ function useDirectActivation(
         },
         movementIntent: null
       };
-      suppressCompatibilityActivation(
-        event.currentTarget.ownerDocument,
-        true
-      );
+      suppressCompatibilityActivation(event.currentTarget.ownerDocument);
     },
     onPointerMove(event: PointerEvent<HTMLButtonElement>) {
       const press = pointerPressRef.current;
@@ -240,10 +194,7 @@ function useDirectActivation(
         // pointerdown arms early enough to catch interleaved mousedown;
         // pointerup renews the bounded guard for mouse events grouped after
         // gesture recognition, including long presses.
-        suppressCompatibilityActivation(
-          event.currentTarget.ownerDocument,
-          false
-        );
+        suppressCompatibilityActivation(event.currentTarget.ownerDocument);
       }
       const movementIntent = press
         ? press.movementIntent
@@ -259,7 +210,6 @@ function useDirectActivation(
         && event.button === 0
         && ownsPress
         && press !== null
-        && !press.cancelled
         && !movementIntent
       );
       if (!pressedHere) return;

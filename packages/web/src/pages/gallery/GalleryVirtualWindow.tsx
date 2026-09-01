@@ -7,8 +7,10 @@ import { GalleryCardRevealRegistry } from "./gallery-card-reveal.js";
 import type { GalleryWindowPosition } from "./gallery-data-window.js";
 import type { GalleryTileRenderProps } from "./gallery-tile-rendering.js";
 import { GalleryTile } from "./GalleryTile.js";
+import type { GalleryImageCard } from "../../lib/types.js";
 
 type GalleryVirtualWindowProps = {
+  cardSubtitle: (card: GalleryImageCard) => string;
   imageQuery: string;
   onOpen: GalleryTileRenderProps["onOpen"];
   positions: readonly GalleryWindowPosition[];
@@ -38,6 +40,7 @@ function GalleryWindowPlaceholder({
 }
 
 export const GalleryVirtualWindow = memo(function GalleryVirtualWindow({
+  cardSubtitle,
   imageQuery,
   onOpen,
   positions,
@@ -57,6 +60,7 @@ export const GalleryVirtualWindow = memo(function GalleryVirtualWindow({
           position={{ ...position, item: position.item }}
           revealOrder={index}
           revealRegistry={revealRegistry}
+          subtitle={cardSubtitle(position.item)}
           onOpen={onOpen}
         />
       ) : (

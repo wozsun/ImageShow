@@ -142,9 +142,8 @@ export function ImageStorageMigrationDialog({
         ? response.migrated
           ? `图片已迁移到${targetLabel}`
           : `图片已在${targetLabel}，无需迁移`
-        : `存储迁移完成：已迁移 ${response.migrated} 张${
-            unchanged ? `，${unchanged} 张未变化` : ""
-          }`;
+        : `存储迁移完成：已迁移 ${response.migrated} 张${unchanged ? `，${unchanged} 张未变化` : ""
+        }`;
       completedMessage = message;
       completedStorageLabel = targetLabel;
       return true;

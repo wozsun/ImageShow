@@ -20,6 +20,9 @@ import type {
   PublicImageItem
 } from "../../lib/types.js";
 import { useGalleryFacets, useSiteConfig } from "../../lib/api/site-data.js";
+import {
+  createGalleryTaxonomyDisplayFormatter
+} from "../../lib/gallery/card-display.js";
 import { useAuthMe } from "../../hooks/useAuthSession.js";
 import { useAnimatedClose } from "../../hooks/useAnimatedClose.js";
 import { usePageScrollLock } from "../../hooks/usePageScrollLock.js";
@@ -101,33 +104,33 @@ function isAdminImageListItem(
 
 type ImageDetailModalProps =
   | {
-      item: PublicImageItem;
-      onClose: () => void;
-      admin?: false;
-      detailLoading?: boolean;
-      detailError?: string;
-      onDetailRetry?: () => void;
-      onTrashCommitted?: (
-        imageId: string
-      ) => void | Promise<void>;
-      onTrashed?: (imageId: string) => void;
-      onItemUpdated?: (item: EditableImageSnapshot) => void;
-      onItemRefreshRequested?: (imageId: string) => void;
-      returnFocusRef?: RefObject<HTMLElement | null>;
-    }
+    item: PublicImageItem;
+    onClose: () => void;
+    admin?: false;
+    detailLoading?: boolean;
+    detailError?: string;
+    onDetailRetry?: () => void;
+    onTrashCommitted?: (
+      imageId: string
+    ) => void | Promise<void>;
+    onTrashed?: (imageId: string) => void;
+    onItemUpdated?: (item: EditableImageSnapshot) => void;
+    onItemRefreshRequested?: (imageId: string) => void;
+    returnFocusRef?: RefObject<HTMLElement | null>;
+  }
   | {
-      item: AdminImageDetailItem | AdminImageListItem;
-      onClose: () => void;
-      admin: true;
-      storageLabel: string;
-      onTrashCommitted?: (
-        imageId: string
-      ) => void | Promise<void>;
-      onTrashed?: (imageId: string) => void;
-      onItemUpdated?: (item: EditableImageSnapshot) => void;
-      onItemRefreshRequested?: (imageId: string) => void;
-      returnFocusRef?: RefObject<HTMLElement | null>;
-    };
+    item: AdminImageDetailItem | AdminImageListItem;
+    onClose: () => void;
+    admin: true;
+    storageLabel: string;
+    onTrashCommitted?: (
+      imageId: string
+    ) => void | Promise<void>;
+    onTrashed?: (imageId: string) => void;
+    onItemUpdated?: (item: EditableImageSnapshot) => void;
+    onItemRefreshRequested?: (imageId: string) => void;
+    returnFocusRef?: RefObject<HTMLElement | null>;
+  };
 
 export function ImageDetailModal(props: ImageDetailModalProps) {
   const { onClose } = props;
@@ -181,10 +184,13 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
   });
   const { data: siteConfig } = useSiteConfig();
   const { data: facets } = useGalleryFacets();
-  const themeNames = useMemo(() => new Map((facets?.themes ?? []).map((option) => [option.slug, displayNameOrSlug(option)])), [facets]);
-  const tagNames = useMemo(() => new Map((facets?.tags ?? []).map((option) => [option.slug, displayNameOrSlug(option)])), [facets]);
+  const taxonomyDisplay = useMemo(
+    () => createGalleryTaxonomyDisplayFormatter(facets),
+    [facets]
+  );
   const authorMap = useMemo(() => new Map((facets?.authors ?? []).map((option) => [option.slug, option])), [facets]);
-  const displayName = (map: Map<string, string>, slug: string) => map.get(slug) || slug;
+
+  const { themeLabel, tagLabels } = taxonomyDisplay(item);
 
   const authorSlug = item.author || "";
   const authorOption = authorSlug ? authorMap.get(authorSlug) : undefined;
@@ -241,149 +247,149 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
           </DirectActivationButton>
         )}
         <DialogPortalTargetContext.Provider value={frameRef}>
-        <article ref={dialogRef} tabIndex={-1} onClick={(event) => event.stopPropagation()}>
-        <ProgressiveImage
-          key={item.id}
-          imageKey={item.id}
-          thumbSrc={item.thumb_url}
-          fullSrc={item.object_url}
-          alt={title}
-          className="image-detail-image"
-          style={{ aspectRatio: imageAspectRatio }}
-        />
-        <div className="image-detail-panel">
-          <div className="image-detail-content" ref={detailContentRef}>
-            <header className="image-detail-head" ref={titleHeaderRef}>
-              <div className="image-detail-title-row">
-                <h2>
-                  <a
-                    className="image-detail-title-link"
-                    href={item.object_url}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    referrerPolicy="no-referrer"
-                    title="在新标签页打开图片直链"
-                  >
-                    {title}
-                  </a>
-                </h2>
-                {!mobileLayout && (
-                  <button
-                    className="icon close pressable"
-                    ref={desktopCloseButtonRef}
-                    type="button"
-                    title="关闭"
-                    aria-label="关闭图片详情"
-                    onClick={() => exit.requestClose()}
-                  >
-                    <Icon name="close-line" />
-                  </button>
-                )}
-              </div>
-            </header>
-            <ImageDescriptionSlot
-              description={item.description}
-              loading={detailLoading}
-              error={detailError}
-              onRetry={onDetailRetry}
-              boundaryRef={actionsRef}
-              inlineExpansion={mobileLayout}
+          <article ref={dialogRef} tabIndex={-1} onClick={(event) => event.stopPropagation()}>
+            <ProgressiveImage
+              key={item.id}
+              imageKey={item.id}
+              thumbSrc={item.thumb_url}
+              fullSrc={item.object_url}
+              alt={title}
+              className="image-detail-image"
+              style={{ aspectRatio: imageAspectRatio }}
             />
-            <div className="image-detail-scroll-body">
-              <dl className="image-detail-public-properties">
-                {authorSlug && (
-                  <>
-                    <dt>作者</dt>
-                    <dd>
-                      {authorLink
-                        ? (
-                          <a
-                            href={authorLink}
-                            target="_blank"
-                            rel="noreferrer noopener"
-                            referrerPolicy="no-referrer"
-                          >
-                            {authorLabel}
-                          </a>
-                        )
-                        : authorLabel}
-                    </dd>
-                  </>
-                )}
-                <dt>设备</dt><dd>{deviceOptionLabel(item.device)}</dd>
-                <dt>亮度</dt><dd>{brightnessOptionLabel(item.brightness)}</dd>
-                <dt>主题</dt><dd>{displayName(themeNames, item.theme)}</dd>
-                {item.tags.length > 0 && (
-                  <>
-                    <dt className="image-detail-tags-label">标签</dt>
-                    <dd className="image-detail-tags">
-                      {item.tags.map((tag) => (
-                        <span key={tag} className="tag-chip">{displayName(tagNames, tag)}</span>
-                      ))}
-                    </dd>
-                  </>
-                )}
-                <dt>尺寸</dt><dd>{formatDimensions(item.width, item.height)}</dd>
-                {imageTime && <><dt>图片时间</dt><dd>{formatDate(imageTime)}</dd></>}
-              </dl>
-              <div className="inline-actions image-detail-actions" ref={actionsRef}>
-                <a
-                  className={`button secondary pressable image-detail-source${sourceAvailable ? "" : " is-disabled"}`}
-                  href={sourceAvailable ? item.source : undefined}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  referrerPolicy="no-referrer"
-                  aria-disabled={!sourceAvailable}
-                  aria-label={sourceStateLabel}
-                  title={sourceStateLabel}
-                  tabIndex={sourceAvailable ? undefined : -1}
-                  onClick={(event) => { if (!sourceAvailable) event.preventDefault(); }}
-                >
-                  <Icon name="external-link-line" />来源
-                </a>
-                {showOriginalAction && (
-                  <a
-                    className={`button pressable image-detail-original${canOpenOriginal ? "" : " is-disabled"}`}
-                    href={canOpenOriginal ? originalHref : undefined}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    referrerPolicy="no-referrer"
-                    aria-disabled={!canOpenOriginal}
-                    aria-label={originalStateLabel}
-                    title={originalStateLabel}
-                    tabIndex={canOpenOriginal ? undefined : -1}
-                    onClick={(event) => { if (!canOpenOriginal) event.preventDefault(); }}
-                  >
-                    原图
-                  </a>
-                )}
+            <div className="image-detail-panel">
+              <div className="image-detail-content" ref={detailContentRef}>
+                <header className="image-detail-head" ref={titleHeaderRef}>
+                  <div className="image-detail-title-row">
+                    <h2>
+                      <a
+                        className="image-detail-title-link"
+                        href={item.object_url}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        referrerPolicy="no-referrer"
+                        title="在新标签页打开图片直链"
+                      >
+                        {title}
+                      </a>
+                    </h2>
+                    {!mobileLayout && (
+                      <button
+                        className="icon close pressable"
+                        ref={desktopCloseButtonRef}
+                        type="button"
+                        title="关闭"
+                        aria-label="关闭图片详情"
+                        onClick={() => exit.requestClose()}
+                      >
+                        <Icon name="close-line" />
+                      </button>
+                    )}
+                  </div>
+                </header>
+                <ImageDescriptionSlot
+                  description={item.description}
+                  loading={detailLoading}
+                  error={detailError}
+                  onRetry={onDetailRetry}
+                  boundaryRef={actionsRef}
+                  inlineExpansion={mobileLayout}
+                />
+                <div className="image-detail-scroll-body">
+                  <dl className="image-detail-public-properties">
+                    {authorSlug && (
+                      <>
+                        <dt>作者</dt>
+                        <dd>
+                          {authorLink
+                            ? (
+                              <a
+                                href={authorLink}
+                                target="_blank"
+                                rel="noreferrer noopener"
+                                referrerPolicy="no-referrer"
+                              >
+                                {authorLabel}
+                              </a>
+                            )
+                            : authorLabel}
+                        </dd>
+                      </>
+                    )}
+                    <dt>设备</dt><dd>{deviceOptionLabel(item.device)}</dd>
+                    <dt>亮度</dt><dd>{brightnessOptionLabel(item.brightness)}</dd>
+                    <dt>主题</dt><dd>{themeLabel}</dd>
+                    {item.tags.length > 0 && (
+                      <>
+                        <dt className="image-detail-tags-label">标签</dt>
+                        <dd className="image-detail-tags">
+                          {item.tags.map((tag, index) => (
+                            <span key={tag} className="tag-chip">{tagLabels[index]}</span>
+                          ))}
+                        </dd>
+                      </>
+                    )}
+                    <dt>尺寸</dt><dd>{formatDimensions(item.width, item.height)}</dd>
+                    {imageTime && <><dt>图片时间</dt><dd>{formatDate(imageTime)}</dd></>}
+                  </dl>
+                  <div className="inline-actions image-detail-actions" ref={actionsRef}>
+                    <a
+                      className={`button secondary pressable image-detail-source${sourceAvailable ? "" : " is-disabled"}`}
+                      href={sourceAvailable ? item.source : undefined}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      referrerPolicy="no-referrer"
+                      aria-disabled={!sourceAvailable}
+                      aria-label={sourceStateLabel}
+                      title={sourceStateLabel}
+                      tabIndex={sourceAvailable ? undefined : -1}
+                      onClick={(event) => { if (!sourceAvailable) event.preventDefault(); }}
+                    >
+                      <Icon name="external-link-line" />来源
+                    </a>
+                    {showOriginalAction && (
+                      <a
+                        className={`button pressable image-detail-original${canOpenOriginal ? "" : " is-disabled"}`}
+                        href={canOpenOriginal ? originalHref : undefined}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        referrerPolicy="no-referrer"
+                        aria-disabled={!canOpenOriginal}
+                        aria-label={originalStateLabel}
+                        title={originalStateLabel}
+                        tabIndex={canOpenOriginal ? undefined : -1}
+                        onClick={(event) => { if (!canOpenOriginal) event.preventDefault(); }}
+                      >
+                        原图
+                      </a>
+                    )}
+                  </div>
+                  {showAdminDetails && (
+                    <ImageAdminDetailsModuleBoundary resetKey={item.id}>
+                      <Suspense fallback={null}>
+                        <LazyImageAdminDetails
+                          key={item.id}
+                          imageId={item.id}
+                          adminItem={adminItem}
+                          adminStorageLabel={adminStorageLabel}
+                          onItemUpdated={handleItemUpdated}
+                          onItemRefreshRequested={props.onItemRefreshRequested}
+                          onItemTrashCommitted={props.onTrashCommitted}
+                          onItemTrashed={handleItemTrashed}
+                          onNestedDialogChange={setNestedDialogOpen}
+                        />
+                      </Suspense>
+                    </ImageAdminDetailsModuleBoundary>
+                  )}
+                </div>
               </div>
-              {showAdminDetails && (
-                <ImageAdminDetailsModuleBoundary resetKey={item.id}>
-                  <Suspense fallback={null}>
-                    <LazyImageAdminDetails
-                      key={item.id}
-                      imageId={item.id}
-                      adminItem={adminItem}
-                      adminStorageLabel={adminStorageLabel}
-                      onItemUpdated={handleItemUpdated}
-                      onItemRefreshRequested={props.onItemRefreshRequested}
-                      onItemTrashCommitted={props.onTrashCommitted}
-                      onItemTrashed={handleItemTrashed}
-                      onNestedDialogChange={setNestedDialogOpen}
-                    />
-                  </Suspense>
-                </ImageAdminDetailsModuleBoundary>
-              )}
+              <OverlayScrollbar
+                targetRef={mobileLayout ? dialogRef : detailContentRef}
+                topInsetRef={mobileLayout ? undefined : titleHeaderRef}
+                enableOnTouch
+              />
             </div>
-          </div>
-          <OverlayScrollbar
-            targetRef={mobileLayout ? dialogRef : detailContentRef}
-            topInsetRef={mobileLayout ? undefined : titleHeaderRef}
-            enableOnTouch
-          />
-        </div>
-        </article>
+          </article>
         </DialogPortalTargetContext.Provider>
       </div>
     </DialogLayerPortal>

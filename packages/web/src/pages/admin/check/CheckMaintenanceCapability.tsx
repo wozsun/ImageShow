@@ -344,12 +344,12 @@ export function CheckStorageMaintenanceActions({
       </div>
       {operationModal === "storage-backend-image-migration"
         && canMigrateStorage && (
-        <StorageBackendMigrationDialog
-          busy={Boolean(running)}
-          onClose={() => setOperationModal(null)}
-          onRun={runStorageMigration}
-        />
-      )}
+          <StorageBackendMigrationDialog
+            busy={Boolean(running)}
+            onClose={() => setOperationModal(null)}
+            onRun={runStorageMigration}
+          />
+        )}
       {operationModal === "storage-maintenance" && canMaintainStorage && (
         <StorageMaintenanceDialog
           preview={maintenancePreview}
@@ -439,13 +439,13 @@ function StorageMaintenanceDialog({ preview, running, onClose, onRun }: {
                 || summary.unavailable_logical_backends
               )
                 ? `当前另有 ${[
-                    summary.blocked_namespaces
-                      ? `${summary.blocked_namespaces} 个不可用或列举不完整的命名空间`
-                      : "",
-                    summary.unavailable_logical_backends
-                      ? `${summary.unavailable_logical_backends} 个不可读逻辑后端`
-                      : ""
-                  ].filter(Boolean).join("、")}，${summary.blocked_items} 个相关项目只报告、不计入可执行数量。`
+                  summary.blocked_namespaces
+                    ? `${summary.blocked_namespaces} 个不可用或列举不完整的命名空间`
+                    : "",
+                  summary.unavailable_logical_backends
+                    ? `${summary.unavailable_logical_backends} 个不可读逻辑后端`
+                    : ""
+                ].filter(Boolean).join("、")}，${summary.blocked_items} 个相关项目只报告、不计入可执行数量。`
                 : "预览之后发生的上传或迁移不会直接沿用旧结果。"}
             </p>
             <label className="storage-maintenance-confirmation">
@@ -530,7 +530,7 @@ export function ReadyImageCacheMaintenancePanel({
             current.state !== rebuildErrorBaseline.state
             || current.reason !== rebuildErrorBaseline.reason
             || current.applied_revision
-              !== rebuildErrorBaseline.appliedRevision
+            !== rebuildErrorBaseline.appliedRevision
           )
         )
       )

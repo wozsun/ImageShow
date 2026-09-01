@@ -339,7 +339,9 @@ mutation hold 与 rebuild requirement；归组没有增加第二个状态机或�
 `ready-cache/ordered-window.ts` 独占 ZCARD、精确 ZSET 范围、HMGET、水合及前后有效性校验；
 公开适配器生成下一 cursor，后台适配器只消费 `PageWindow.start`。
 `images/read-models/pagination.ts` 以同一行读取框架承载 PostgreSQL cursor 与 offset，但保留
-公开卡片和后台管理字段各自的最小 projection；后台先截取窗口，再只为最终行投影 tags。
+公开卡片和后台管理字段各自的最小 projection；公开 presenter 保留主题 / 标签稳定 slug 和
+高重复的亮度及详情首帧使用的 `image_time`；显示名由 Web 复用
+独立 facets 响应投影，后台先截取窗口，再只为最终行投影编辑所需 tags。
 
 领域模块可以依赖 `core/` 和 `config/`，但基础设施不能反向导入具体路由。跨领域调用直接
 指向对方表达职责的模块，不通过泛化 `service`、`storage` 或 barrel 隐藏真实依赖，也不能
@@ -385,16 +387,20 @@ hooks ──► lib
   跨页面机制归入 `app-foundation`，不产生独立微型请求，也不反向引入后台实现。
   `lib/public-route-modules.ts` 单独拥有 Home / Gallery 的可重试动态导入及 hover / focus
   导航意图，`AppRoutes` 的 `React.lazy`、主导航和首页次级入口复用同一 Promise；它不绑定
-  pointerdown，因而不会改变触摸或直接导航路径。`lib/image-url.ts` 只保存详情与画廊权威
-  快照共同需要的原图 URL 判定，不让页面层复制同一字段投影。
+  pointerdown，因而不会改变触摸或直接导航路径。`lib/gallery/card-display.ts` 是画廊卡片与
+  详情首帧共用的 slug 显示投影，各消费者按会话级 facets 快照复用映射并保留缺失时的 slug
+  fallback；`lib/image-url.ts` 只保存详情与画廊权威快照共同需要的原图 URL 判定，不让页面层
+  复制同一字段投影。
   `lib/ui/movement-intent.ts` 是触控与指针共用的 5px 移动意图和主轴分类唯一来源；
   `dialog-scroll-boundary.ts` 保存纵向 owner、显式登记的标签横向 owner 与方向纯模型，
   `dialog-touch-boundary.ts` 只管理 capture 触摸生命周期并将已分类意图映射给 owner；共享
   `DirectActivationButton` 另以局部 pointer 生命周期决定直接激活是否仍成立，不选择或移动滚动
-  owner；其文档级短期兼容守卫只跨越一次直接激活，记录原触点是否仍活动，并在下一次单指
-  `touchstart` 或主 `pointerdown` 到达目标前退休，不把 800 ms 最终清理窗口误当成手势归属。
-  各层共享纯判定但不共享滚动与激活的可变手势状态，也不互相承担入口后置补救；它们只认识
-  坐标、当前顶层 dialog frame 与 DOM 滚动能力，不依赖页面、角色或路由。
+  owner，并且只用于会同步关闭、移除、禁用或重排触控表面的动作。移动工作流折叠开关属于该
+  边界，“应用到全部”只修改仍挂载的业务数据，继续使用原生 click；共享按钮的文档级短期守卫
+  只消费一次直接激活后迟到的兼容序列，并由下一主 pointer 或有界最终清理退休，不推断
+  `touchstart`、多点或页面入口。各层共享纯判定但不共享滚动与激活的可变手势状态，也不互相承担
+  入口后置补救；它们只认识坐标、当前顶层 dialog frame 与 DOM 滚动能力，不依赖页面、角色或
+  路由。
 - `pages/` 保存路由页面与页面级编排，页面专属组件、状态机和 Hook 就近维护。
 - `pages/admin/images/useImageAdminPageNavigation.ts` 是后台图库、无主题与回收站数字页的唯一查询
   owner，只保存规范化 scope、目标 page 与最近成功的 scope total 快照，并让 React Query

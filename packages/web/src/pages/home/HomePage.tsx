@@ -32,10 +32,10 @@ const homeLoadingDotSteps: ReadonlyArray<{
   delayMs: number;
   extraDots: AppLoadingExtraDots;
 }> = [
-  { delayMs: 100, extraDots: 1 },
-  { delayMs: 300, extraDots: 2 },
-  { delayMs: 600, extraDots: 3 }
-];
+    { delayMs: 100, extraDots: 1 },
+    { delayMs: 300, extraDots: 2 },
+    { delayMs: 600, extraDots: 3 }
+  ];
 
 function HomeStartupLoadingText({
   active

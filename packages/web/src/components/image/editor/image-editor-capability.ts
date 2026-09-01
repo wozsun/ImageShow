@@ -97,10 +97,10 @@ export async function refreshImageEditorAfterSave<TAdjacentData>({
 }) {
   await (commit
     ? invalidateImageDataAfterMetadataSave(
-        queryClient,
-        commit.updates,
-        commit.authoritativeItems
-      )
+      queryClient,
+      commit.updates,
+      commit.authoritativeItems
+    )
     : invalidateImageData(queryClient));
   const snapshotRequest =
     commit === undefined

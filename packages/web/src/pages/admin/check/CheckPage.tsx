@@ -137,9 +137,9 @@ export function CheckPage() {
       const value = name === "redis"
         ? await refetchRedisInspection(redisInspectionQuery)
         : await api(`${adminApiBasePath}/check/${name}`, {
-            method: "POST",
-            body: body ? JSON.stringify(body) : undefined
-          });
+          method: "POST",
+          body: body ? JSON.stringify(body) : undefined
+        });
       setResult(value);
       setResultKind(name);
       if (name === "redis") {
@@ -274,13 +274,12 @@ function LightweightStatusCards({ query }: {
   const requestError = query.isError ? "轻量状态请求失败，请手动刷新重试。" : "";
   return (
     <div className="check-status-grid">
-      <section className={`check-status-card ${
-        postgresql?.status === "ok"
+      <section className={`check-status-card ${postgresql?.status === "ok"
           ? "ok"
           : postgresql?.status === "error" || requestError
             ? "warn"
             : ""
-      }`}>
+        }`}>
         <header>
           <div><h2>PostgreSQL</h2><p>权威图片与后台任务真相源</p></div>
           <span>{postgresql?.status === "ok" ? "已连接" : postgresql?.status === "error" ? "异常" : "读取中"}</span>
@@ -307,13 +306,12 @@ function LightweightStatusCards({ query }: {
           <div><dt>异常后台任务</dt><dd>{postgresql?.status === "ok" ? postgresql.data.abnormal_jobs.toLocaleString() : "—"}</dd></div>
         </dl>
       </section>
-      <section className={`check-status-card ${
-        redis?.status === "ok"
+      <section className={`check-status-card ${redis?.status === "ok"
           ? "ok"
           : redis?.status === "error" || requestError
             ? "warn"
             : ""
-      }`}>
+        }`}>
         <header>
           <div><h2>Redis</h2><p>缓存、会话与安全运行时依赖</p></div>
           <span>{redis?.status === "ok" ? "已连接" : redis?.status === "error" ? "异常" : "读取中"}</span>

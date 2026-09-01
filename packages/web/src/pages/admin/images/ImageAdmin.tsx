@@ -351,9 +351,9 @@ export function ImageAdmin() {
                     || selectedEditorPending
                   }
                   aria-busy={selectedEditorPending || undefined}
-                   {...preloadIntentProps(preloadBatchEditor)}
-                   onClick={(event) => {
-                     void editorCapability.open({
+                  {...preloadIntentProps(preloadBatchEditor)}
+                  onClick={(event) => {
+                    void editorCapability.open({
                       sources: selectedItems
                     }, event.currentTarget);
                   }}
@@ -432,16 +432,16 @@ export function ImageAdmin() {
                     setConfirmAction(
                       selected.length
                         ? {
-                            kind: "purge",
-                            request: {
-                              scope: "selected",
-                              ids: [...selected]
-                            }
+                          kind: "purge",
+                          request: {
+                            scope: "selected",
+                            ids: [...selected]
                           }
+                        }
                         : {
-                            kind: "purge",
-                            request: { scope: "all" }
-                          }
+                          kind: "purge",
+                          request: { scope: "all" }
+                        }
                     );
                   }}
                 >
@@ -450,7 +450,7 @@ export function ImageAdmin() {
                     idle={selected.length ? "删除已选图" : "清空回收站"}
                     busyText={
                       confirmAction?.kind === "purge"
-                      && confirmAction.request.scope === "selected"
+                        && confirmAction.request.scope === "selected"
                         ? "正在删除"
                         : "正在清空"
                     }

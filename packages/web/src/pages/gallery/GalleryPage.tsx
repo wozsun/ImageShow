@@ -25,6 +25,9 @@ import { ImageDetailModal } from "../../components/image/ImageDetailModal.js";
 import { queryKeys } from "../../lib/api/query-keys.js";
 import { errorMessage } from "../../lib/ui/formatters.js";
 import { buildRandomUrl } from "../../lib/gallery/random-url.js";
+import {
+  createGalleryTaxonomyDisplayFormatter
+} from "../../lib/gallery/card-display.js";
 import type {
   EditableImageSnapshot,
   GalleryImageCard,
@@ -158,6 +161,13 @@ export function GalleryPage({ embedded = false }: { embedded?: boolean }) {
   } = usePublicNavigationEntrance();
   const { data: facets } = useGalleryFacets();
   const { data: siteConfig } = useSiteConfig();
+  const cardSubtitle = useMemo(
+    () => {
+      const display = createGalleryTaxonomyDisplayFormatter(facets);
+      return (card: GalleryImageCard) => display(card).subtitle;
+    },
+    [facets]
+  );
 
   const order = siteConfig?.site.gallery.order ?? "latest";
   const imageQuery = useMemo(
@@ -301,103 +311,103 @@ export function GalleryPage({ embedded = false }: { embedded?: boolean }) {
       detailOpen={Boolean(selected)}
       resetKey={imageQuery}
     >
-    <main
-      className={`page gallery-page${embedded ? " is-embedded" : ""}`}
-      style={{
-        "--gallery-toolbar-height": toolbarHeight
-          ? `${toolbarHeight}px`
-          : undefined
-      } as CSSProperties}
-    >
-      <span className="gallery-atmosphere" aria-hidden="true" />
-      <div className="public-navigation-frame">
-        <div className="public-navigation-stack">
-          {!embedded && (
-            <AppHeader
-              animateEntrance={shouldAnimateNavigation}
-              onMenuExpandedChange={onHeaderMenuExpandedChange}
-              visible={headerVisible}
-            />
-          )}
-          <GalleryToolbar
-            filters={filters}
-            facets={facets}
-            randomUrl={randomUrl}
-            filtersOpen={filtersOpen}
-            filterPanelHidden={filterPanelHidden}
-            filterMenuDismissSignal={filterMenuDismissSignal}
-            toolbarVisible={toolbarVisible}
-            toolbarRef={toolbarRef}
-            filterToggleRef={filterToggleRef}
-            filterPanelRef={filterPanelRef}
-            toggleFilters={toggleFilters}
-            onFilterChange={updateFilter}
-          />
-        </div>
-      </div>
-      <div className="gallery-toolbar-spacer" aria-hidden="true" />
-      <section ref={galleryRef} className="gallery">
-        <GalleryVirtualWindow
-          imageQuery={imageQuery}
-          onOpen={openDetail}
-          positions={galleryData.positions}
-          revealRegistry={revealRegistry}
-          totalHeight={galleryData.snapshot.totalHeight}
-          windowRef={galleryWindowRef}
-        />
-      </section>
-      {galleryData.snapshot.error && (
-        <div className={`gallery-query-error${
-          galleryData.snapshot.errorRequest?.kind === "hydrate"
-            ? " gallery-window-error"
-            : ""
-        }`}>
-          <QueryErrorState
-            error={galleryData.snapshot.error}
-            onRetry={galleryData.retry}
-          />
-        </div>
-      )}
-      {!galleryData.snapshot.error
-        && !loading
-        && galleryData.snapshot.compactItems === 0
-        && <p className="gallery-empty">暂无图片</p>}
-      {initialLoading && (
-        <AppLoadingRegion
-          className="gallery-initial-loading"
-          extraDots={3}
-        />
-      )}
-      {nextPageLoading && <p className="gallery-loading">加载中</p>}
-      <button
-        type="button"
-        className={`gallery-back-to-top pressable${showBackToTop ? " is-visible" : ""}`}
-        aria-label="回到顶部"
-        title="回到顶部"
-        aria-hidden={!showBackToTop}
-        tabIndex={showBackToTop ? 0 : -1}
-        onClick={(event) => {
-          event.currentTarget.blur();
-          scrollGalleryToTop();
-        }}
+      <main
+        className={`page gallery-page${embedded ? " is-embedded" : ""}`}
+        style={{
+          "--gallery-toolbar-height": toolbarHeight
+            ? `${toolbarHeight}px`
+            : undefined
+        } as CSSProperties}
       >
-        <Icon name="arrow-up-line" />
-      </button>
-      {selected && (
-        <GalleryImageDetail
-          card={selected}
-          onClose={() => setSelected(null)}
-          onTrashCommitted={async (imageId) => {
-            const result = await galleryData.removeImage(imageId);
-            trashedFocusIdRef.current = result.focusId;
+        <span className="gallery-atmosphere" aria-hidden="true" />
+        <div className="public-navigation-frame">
+          <div className="public-navigation-stack">
+            {!embedded && (
+              <AppHeader
+                animateEntrance={shouldAnimateNavigation}
+                onMenuExpandedChange={onHeaderMenuExpandedChange}
+                visible={headerVisible}
+              />
+            )}
+            <GalleryToolbar
+              filters={filters}
+              facets={facets}
+              randomUrl={randomUrl}
+              filtersOpen={filtersOpen}
+              filterPanelHidden={filterPanelHidden}
+              filterMenuDismissSignal={filterMenuDismissSignal}
+              toolbarVisible={toolbarVisible}
+              toolbarRef={toolbarRef}
+              filterToggleRef={filterToggleRef}
+              filterPanelRef={filterPanelRef}
+              toggleFilters={toggleFilters}
+              onFilterChange={updateFilter}
+            />
+          </div>
+        </div>
+        <div className="gallery-toolbar-spacer" aria-hidden="true" />
+        <section ref={galleryRef} className="gallery">
+          <GalleryVirtualWindow
+            cardSubtitle={cardSubtitle}
+            imageQuery={imageQuery}
+            onOpen={openDetail}
+            positions={galleryData.positions}
+            revealRegistry={revealRegistry}
+            totalHeight={galleryData.snapshot.totalHeight}
+            windowRef={galleryWindowRef}
+          />
+        </section>
+        {galleryData.snapshot.error && (
+          <div className={`gallery-query-error${galleryData.snapshot.errorRequest?.kind === "hydrate"
+              ? " gallery-window-error"
+              : ""
+            }`}>
+            <QueryErrorState
+              error={galleryData.snapshot.error}
+              onRetry={galleryData.retry}
+            />
+          </div>
+        )}
+        {!galleryData.snapshot.error
+          && !loading
+          && galleryData.snapshot.compactItems === 0
+          && <p className="gallery-empty">暂无图片</p>}
+        {initialLoading && (
+          <AppLoadingRegion
+            className="gallery-initial-loading"
+            extraDots={3}
+          />
+        )}
+        {nextPageLoading && <p className="gallery-loading">加载中</p>}
+        <button
+          type="button"
+          className={`gallery-back-to-top pressable${showBackToTop ? " is-visible" : ""}`}
+          aria-label="回到顶部"
+          title="回到顶部"
+          aria-hidden={!showBackToTop}
+          tabIndex={showBackToTop ? 0 : -1}
+          onClick={(event) => {
+            event.currentTarget.blur();
+            scrollGalleryToTop();
           }}
-          onTrashed={handleGalleryImageTrashed}
-          onItemUpdated={galleryData.refreshImage}
-          onItemRefreshRequested={galleryData.refreshImage}
-          returnFocusRef={detailReturnFocusRef}
-        />
-      )}
-    </main>
+        >
+          <Icon name="arrow-up-line" />
+        </button>
+        {selected && (
+          <GalleryImageDetail
+            card={selected}
+            onClose={() => setSelected(null)}
+            onTrashCommitted={async (imageId) => {
+              const result = await galleryData.removeImage(imageId);
+              trashedFocusIdRef.current = result.focusId;
+            }}
+            onTrashed={handleGalleryImageTrashed}
+            onItemUpdated={galleryData.refreshImage}
+            onItemRefreshRequested={galleryData.refreshImage}
+            returnFocusRef={detailReturnFocusRef}
+          />
+        )}
+      </main>
     </GalleryImageRuntime>
   );
 }

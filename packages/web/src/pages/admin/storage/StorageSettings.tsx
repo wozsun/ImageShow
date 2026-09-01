@@ -76,9 +76,8 @@ export function StorageSettings() {
     isFixed: isFixedBackend,
     itemLabel: (items, movedSlug) => {
       const backend = items.find((candidate) => candidate.slug === movedSlug);
-      return `存储后端“${
-        backend ? storageBackendDisplay(backend) : storageBackendLabel(movedSlug)
-      }”`;
+      return `存储后端“${backend ? storageBackendDisplay(backend) : storageBackendLabel(movedSlug)
+        }”`;
     },
     save: (slugs) => api(`${adminApiBasePath}/storage/backends/reorder`, {
       method: "POST",

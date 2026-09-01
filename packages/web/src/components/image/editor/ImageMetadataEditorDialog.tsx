@@ -262,261 +262,261 @@ export function ImageMetadataEditorDialog({
       onClose={onClose}
     >
       {({ requestClose }) => (
-      <>
-      <form
-        className={`image-editor-modal image-workflow-window${singleItem ? " is-single" : ""}`}
-        tabIndex={-1}
-        onSubmit={async (event) => {
-          event.preventDefault();
-          if (busy) return;
-          await saveAll();
-        }}
-      >
-        <header>
-          <div>
-            <h2>{title}</h2>
-            <p title={singleItem ? modalSubtitle : undefined}>{modalSubtitle}</p>
-          </div>
-          <div className="image-editor-header-actions">
-            <button
-              ref={restoreTriggerRef}
-              className="image-editor-restore-button"
-              type="button"
-              title="撤销所有未保存修改"
-              disabled={busy || !restoreAvailable}
-              onClick={() => {
-                setRestoreError("");
-                setRestoreConfirmation(true);
-              }}
-            >
-              <AdminIcon name="history-line" />复原
-            </button>
-            <button
-              ref={closeButtonRef}
-              className="icon close pressable"
-              type="button"
-              title="关闭"
-              disabled={busy}
-              onClick={() => requestClose()}
-            >
-              <AdminIcon name="close-line" />
-            </button>
-          </div>
-        </header>
-        {multipleItems && (
-          <WorkflowCollapsePanel
-            className="image-editor-common-panel"
-            contentClassName="image-editor-common workflow-defaults"
-            title="批量默认属性"
-            summary={commonSummary}
-            expanded={commonExpanded}
-            onExpandedChange={setCommonExpanded}
-          >
-            <WorkflowDefaultFields
-              values={common}
-              onChange={{
-                device: (device) => setCommon({
-                  ...common,
-                  device: device as "" | "auto" | Device
-                }),
-                brightness: (brightness) => setCommon({
-                  ...common,
-                  brightness: brightness as "" | "auto" | Brightness
-                }),
-                theme: (theme) => setCommon({ ...common, theme }),
-                author: (author) => setCommon({ ...common, author }),
-                tags: (tags) => setCommon({ ...common, tags })
-              }}
-              deviceOptions={commonImageDeviceOptions}
-              brightnessOptions={commonImageBrightnessOptions}
-              themes={themes}
-              authors={authors}
-              tags={allTags}
-              placeholders={{
-                theme: "主题不变",
-                author: "作者不变",
-                tags: "追加标签"
-              }}
-              ariaLabels={{
-                device: "批量设备",
-                brightness: "批量亮度",
-                theme: "批量主题",
-                author: "批量作者",
-                tags: "批量标签"
-              }}
-              changed={commonChanged}
-              applyDisabled={busy}
-              applyReady={commonHasValue}
-              onApply={() => setSession((current) => ({
-                ...current,
-                drafts: Object.fromEntries(
-                  Object.entries(current.drafts).map(([id, draft]) => {
-                    if (!current.activeIds.includes(id)) return [id, draft];
-                    return [id, mergeCommonImageAttributes(draft, common)];
-                  })
-                )
-              }))}
-            />
-          </WorkflowCollapsePanel>
-        )}
-        <div
-          className="modal-scroll-list image-workflow-list image-editor-list"
-          ref={listRef}
-        >
-          {trashAction.errorMessage && (
-            <p className="image-editor-trash-error" role="alert">
-              {trashAction.errorMessage}
-            </p>
-          )}
-          {visibleItems.map((item) => (
-            <ImageMetadataEditorCard
-              key={item.id}
-              item={item}
-              draft={session.drafts[item.id]}
-              changed={changedByItem.get(item.id)!}
-              lastSaveReport={lastSaveReport}
-              multipleItems={multipleItems}
-              busy={busy}
-              themes={themes}
-              allTags={allTags}
-              authors={authors}
-              storageName={resolveStorageName(item)}
-              onPatch={(patch) => patchDraft(item.id, patch)}
-              onRemove={() => remove(item.id)}
-              onPreview={(opener) => {
-                previewReturnFocusRef.current = opener;
-                setPreview({
-                  src: item.object_url,
-                  thumbSrc: item.thumb_url,
-                  width: item.width,
-                  height: item.height
-                });
-              }}
-            />
-          ))}
-          {!activeItems.length && <p className="image-editor-empty-state">图片编辑列表为空</p>}
-        </div>
-        <footer className={`image-workflow-footer${paginationAvailable ? " has-pagination" : ""}`}>
-          {(canMigrateStorage || trashAvailable) && (
-            <div className="image-editor-resource-actions image-workflow-leading-actions">
-              {canMigrateStorage && (
-                <button
-                  ref={migrateTriggerRef}
-                  className="image-editor-migrate-trigger"
-                  type="button"
-                  disabled={busy || !activeItems.length}
-                  {...preloadIntentProps(preloadImageStorageMigrationDialog)}
-                  onClick={() => setMigrating(true)}
-                >
-                  <AdminIcon name="arrow-left-right-line" />{multipleItems ? "批量迁移存储" : "迁移存储"}
-                </button>
-              )}
-              {trashAvailable && (
-                multipleItems ? (
-                  <button
-                    ref={trashTriggerRef}
-                    className="icon danger-button image-editor-trash-trigger"
-                    type="button"
-                    title="删除这些图片"
-                    aria-label="删除这些图片"
-                    disabled={busy || !activeItems.length}
-                    onClick={() => {
-                      trashAction.clearError();
-                      setTrashConfirmation(true);
-                    }}
-                  >
-                    <AdminIcon name="delete-bin-6-line" />
-                  </button>
-                ) : (
-                  <TwoStepConfirmIconButton
-                    className="icon danger-button image-editor-trash-trigger"
-                    idleIcon="delete-bin-6-line"
-                    confirmIcon="delete-bin-2-line"
-                    idleLabel="删除此图片"
-                    confirmLabel="再次点击确认删除此图片"
-                    idleTitle="删除此图片"
-                    confirmTitle="再次点击确认删除"
-                    disabled={busy || !activeItems.length}
-                    busy={trashAction.pending}
-                    onConfirm={() => {
-                      trashAction.clearError();
-                      void trashActiveImages(requestClose);
-                    }}
-                  />
-                )
-              )}
-            </div>
-          )}
-          {paginationAvailable && (
-            <AdminPagination
-              className="image-workflow-pagination"
-              ariaLabel="批量编辑分页"
-              page={page}
-              totalPages={totalPages}
-              disabled={busy}
-              onPageChange={setPage}
-            />
-          )}
-          <div className="modal-footer-actions">
-            <button type="button" disabled={busy} onClick={() => requestClose()}>取消</button>
-            <AsyncActionButton
-              className={`button workflow-submit-button${multipleItems ? " image-editor-save-button" : ""}`}
-              type="submit"
-              status={saveStatus.status}
-              presentation={savePresentation}
-              disabled={busy || (!changedCount && !pendingReconciliation)}
-            />
-          </div>
-        </footer>
-      </form>
-      <OverlayScrollbar targetRef={listRef} />
-      {canMigrateStorage && migrating && (
-        <Suspense fallback={null}>
-          <ImageStorageMigrationDialog
-            open
-            imageIds={activeItems.map((item) => item.id)}
-            currentStorageSlugs={activeItems.map((item) => item.storage_slug)}
-            returnFocusRef={migrateTriggerRef}
-            onClose={() => setMigrating(false)}
-            onSaved={onSaved}
-            onSucceeded={(message, storageLabel) => {
-              setMigrating(false);
-              onStorageMigrationSucceeded?.(message, storageLabel);
-              requestClose();
+        <>
+          <form
+            className={`image-editor-modal image-workflow-window${singleItem ? " is-single" : ""}`}
+            tabIndex={-1}
+            onSubmit={async (event) => {
+              event.preventDefault();
+              if (busy) return;
+              await saveAll();
             }}
-          />
-        </Suspense>
-      )}
-      {preview && <ImagePreviewModal src={preview.src} thumbSrc={preview.thumbSrc} width={preview.width} height={preview.height} onClose={() => setPreview(null)} returnFocusRef={previewReturnFocusRef} />}
-      {restoreConfirmation && (
-        <ConfirmDialog
-          title="确认复原全部修改"
-          description="将当前活动图片尚未保存的属性草稿恢复到最近一次权威基线；图片列表成员、分页、批量默认属性、卡片保存状态及已经保存的修改都不会改变。"
-          confirmLabel="确认复原"
-          pendingLabel="复原中"
-          successLabel="已复原"
-          danger={false}
-          confirmIcon="history-line"
-          closeOnBackdrop
-          errorMessage={restoreError}
-          returnFocusRef={restoreTriggerRef}
-          onClose={() => setRestoreConfirmation(false)}
-          onConfirm={restoreAllChanges}
-        />
-      )}
-      {multipleItems && trashConfirmation && (
-        <ConfirmDialog
-          title="确认批量删除图片"
-          description={`这 ${activeItems.length} 张图片将移入回收站并退出站点发现，可以稍后恢复。`}
-          confirmLabel="确认删除"
-          pendingLabel="删除中"
-          errorMessage={trashAction.errorMessage}
-          returnFocusRef={trashTriggerRef}
-          onClose={() => setTrashConfirmation(false)}
-          onConfirm={() => trashActiveImages(requestClose)}
-        />
-      )}
-      </>
+          >
+            <header>
+              <div>
+                <h2>{title}</h2>
+                <p title={singleItem ? modalSubtitle : undefined}>{modalSubtitle}</p>
+              </div>
+              <div className="image-editor-header-actions">
+                <button
+                  ref={restoreTriggerRef}
+                  className="image-editor-restore-button"
+                  type="button"
+                  title="撤销所有未保存修改"
+                  disabled={busy || !restoreAvailable}
+                  onClick={() => {
+                    setRestoreError("");
+                    setRestoreConfirmation(true);
+                  }}
+                >
+                  <AdminIcon name="history-line" />复原
+                </button>
+                <button
+                  ref={closeButtonRef}
+                  className="icon close pressable"
+                  type="button"
+                  title="关闭"
+                  disabled={busy}
+                  onClick={() => requestClose()}
+                >
+                  <AdminIcon name="close-line" />
+                </button>
+              </div>
+            </header>
+            {multipleItems && (
+              <WorkflowCollapsePanel
+                className="image-editor-common-panel"
+                contentClassName="image-editor-common workflow-defaults"
+                title="批量默认属性"
+                summary={commonSummary}
+                expanded={commonExpanded}
+                onExpandedChange={setCommonExpanded}
+              >
+                <WorkflowDefaultFields
+                  values={common}
+                  onChange={{
+                    device: (device) => setCommon({
+                      ...common,
+                      device: device as "" | "auto" | Device
+                    }),
+                    brightness: (brightness) => setCommon({
+                      ...common,
+                      brightness: brightness as "" | "auto" | Brightness
+                    }),
+                    theme: (theme) => setCommon({ ...common, theme }),
+                    author: (author) => setCommon({ ...common, author }),
+                    tags: (tags) => setCommon({ ...common, tags })
+                  }}
+                  deviceOptions={commonImageDeviceOptions}
+                  brightnessOptions={commonImageBrightnessOptions}
+                  themes={themes}
+                  authors={authors}
+                  tags={allTags}
+                  placeholders={{
+                    theme: "主题不变",
+                    author: "作者不变",
+                    tags: "追加标签"
+                  }}
+                  ariaLabels={{
+                    device: "批量设备",
+                    brightness: "批量亮度",
+                    theme: "批量主题",
+                    author: "批量作者",
+                    tags: "批量标签"
+                  }}
+                  changed={commonChanged}
+                  applyDisabled={busy}
+                  applyReady={commonHasValue}
+                  onApply={() => setSession((current) => ({
+                    ...current,
+                    drafts: Object.fromEntries(
+                      Object.entries(current.drafts).map(([id, draft]) => {
+                        if (!current.activeIds.includes(id)) return [id, draft];
+                        return [id, mergeCommonImageAttributes(draft, common)];
+                      })
+                    )
+                  }))}
+                />
+              </WorkflowCollapsePanel>
+            )}
+            <div
+              className="modal-scroll-list image-workflow-list image-editor-list"
+              ref={listRef}
+            >
+              {trashAction.errorMessage && (
+                <p className="image-editor-trash-error" role="alert">
+                  {trashAction.errorMessage}
+                </p>
+              )}
+              {visibleItems.map((item) => (
+                <ImageMetadataEditorCard
+                  key={item.id}
+                  item={item}
+                  draft={session.drafts[item.id]}
+                  changed={changedByItem.get(item.id)!}
+                  lastSaveReport={lastSaveReport}
+                  multipleItems={multipleItems}
+                  busy={busy}
+                  themes={themes}
+                  allTags={allTags}
+                  authors={authors}
+                  storageName={resolveStorageName(item)}
+                  onPatch={(patch) => patchDraft(item.id, patch)}
+                  onRemove={() => remove(item.id)}
+                  onPreview={(opener) => {
+                    previewReturnFocusRef.current = opener;
+                    setPreview({
+                      src: item.object_url,
+                      thumbSrc: item.thumb_url,
+                      width: item.width,
+                      height: item.height
+                    });
+                  }}
+                />
+              ))}
+              {!activeItems.length && <p className="image-editor-empty-state">图片编辑列表为空</p>}
+            </div>
+            <footer className={`image-workflow-footer${paginationAvailable ? " has-pagination" : ""}`}>
+              {(canMigrateStorage || trashAvailable) && (
+                <div className="image-editor-resource-actions image-workflow-leading-actions">
+                  {canMigrateStorage && (
+                    <button
+                      ref={migrateTriggerRef}
+                      className="image-editor-migrate-trigger"
+                      type="button"
+                      disabled={busy || !activeItems.length}
+                      {...preloadIntentProps(preloadImageStorageMigrationDialog)}
+                      onClick={() => setMigrating(true)}
+                    >
+                      <AdminIcon name="arrow-left-right-line" />{multipleItems ? "批量迁移存储" : "迁移存储"}
+                    </button>
+                  )}
+                  {trashAvailable && (
+                    multipleItems ? (
+                      <button
+                        ref={trashTriggerRef}
+                        className="icon danger-button image-editor-trash-trigger"
+                        type="button"
+                        title="删除这些图片"
+                        aria-label="删除这些图片"
+                        disabled={busy || !activeItems.length}
+                        onClick={() => {
+                          trashAction.clearError();
+                          setTrashConfirmation(true);
+                        }}
+                      >
+                        <AdminIcon name="delete-bin-6-line" />
+                      </button>
+                    ) : (
+                      <TwoStepConfirmIconButton
+                        className="icon danger-button image-editor-trash-trigger"
+                        idleIcon="delete-bin-6-line"
+                        confirmIcon="delete-bin-2-line"
+                        idleLabel="删除此图片"
+                        confirmLabel="再次点击确认删除此图片"
+                        idleTitle="删除此图片"
+                        confirmTitle="再次点击确认删除"
+                        disabled={busy || !activeItems.length}
+                        busy={trashAction.pending}
+                        onConfirm={() => {
+                          trashAction.clearError();
+                          void trashActiveImages(requestClose);
+                        }}
+                      />
+                    )
+                  )}
+                </div>
+              )}
+              {paginationAvailable && (
+                <AdminPagination
+                  className="image-workflow-pagination"
+                  ariaLabel="批量编辑分页"
+                  page={page}
+                  totalPages={totalPages}
+                  disabled={busy}
+                  onPageChange={setPage}
+                />
+              )}
+              <div className="modal-footer-actions">
+                <button type="button" disabled={busy} onClick={() => requestClose()}>取消</button>
+                <AsyncActionButton
+                  className={`button workflow-submit-button${multipleItems ? " image-editor-save-button" : ""}`}
+                  type="submit"
+                  status={saveStatus.status}
+                  presentation={savePresentation}
+                  disabled={busy || (!changedCount && !pendingReconciliation)}
+                />
+              </div>
+            </footer>
+          </form>
+          <OverlayScrollbar targetRef={listRef} />
+          {canMigrateStorage && migrating && (
+            <Suspense fallback={null}>
+              <ImageStorageMigrationDialog
+                open
+                imageIds={activeItems.map((item) => item.id)}
+                currentStorageSlugs={activeItems.map((item) => item.storage_slug)}
+                returnFocusRef={migrateTriggerRef}
+                onClose={() => setMigrating(false)}
+                onSaved={onSaved}
+                onSucceeded={(message, storageLabel) => {
+                  setMigrating(false);
+                  onStorageMigrationSucceeded?.(message, storageLabel);
+                  requestClose();
+                }}
+              />
+            </Suspense>
+          )}
+          {preview && <ImagePreviewModal src={preview.src} thumbSrc={preview.thumbSrc} width={preview.width} height={preview.height} onClose={() => setPreview(null)} returnFocusRef={previewReturnFocusRef} />}
+          {restoreConfirmation && (
+            <ConfirmDialog
+              title="确认复原全部修改"
+              description="将当前活动图片尚未保存的属性草稿恢复到最近一次权威基线；图片列表成员、分页、批量默认属性、卡片保存状态及已经保存的修改都不会改变。"
+              confirmLabel="确认复原"
+              pendingLabel="复原中"
+              successLabel="已复原"
+              danger={false}
+              confirmIcon="history-line"
+              closeOnBackdrop
+              errorMessage={restoreError}
+              returnFocusRef={restoreTriggerRef}
+              onClose={() => setRestoreConfirmation(false)}
+              onConfirm={restoreAllChanges}
+            />
+          )}
+          {multipleItems && trashConfirmation && (
+            <ConfirmDialog
+              title="确认批量删除图片"
+              description={`这 ${activeItems.length} 张图片将移入回收站并退出站点发现，可以稍后恢复。`}
+              confirmLabel="确认删除"
+              pendingLabel="删除中"
+              errorMessage={trashAction.errorMessage}
+              returnFocusRef={trashTriggerRef}
+              onClose={() => setTrashConfirmation(false)}
+              onConfirm={() => trashActiveImages(requestClose)}
+            />
+          )}
+        </>
       )}
     </DialogFrame>
   );

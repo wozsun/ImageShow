@@ -83,7 +83,6 @@ export type GalleryDataWindowDebugSnapshot = GalleryDataWindowSnapshot & {
 function estimateCardBytes(item: GalleryImageCard) {
   const stringCharacters = item.id.length
     + item.title.length
-    + item.subtitle.length
     + item.theme.length
     + item.author.length
     + item.thumb_url.length
@@ -124,7 +123,6 @@ function galleryCardsEqual(
 ) {
   return left.id === right.id
     && left.title === right.title
-    && left.subtitle === right.subtitle
     && left.device === right.device
     && left.brightness === right.brightness
     && left.theme === right.theme
@@ -145,7 +143,6 @@ function galleryCardFromSnapshot(
   const next = {
     id: current.id,
     title: snapshot.title,
-    subtitle: snapshot.subtitle,
     device: snapshot.device,
     brightness: snapshot.brightness,
     theme: snapshot.theme,
@@ -246,7 +243,10 @@ export class GalleryDataWindow {
     return request;
   }
 
-  resolvePage(request: GalleryPageRequest, payload: PublicImageListResponseDto) {
+  resolvePage(
+    request: GalleryPageRequest,
+    payload: PublicImageListResponseDto
+  ) {
     if (!this.#takePendingRequest(request)) return false;
     const { cursor } = request;
     this.#failedCursors.delete(cursor);

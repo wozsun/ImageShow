@@ -6,6 +6,7 @@ export type GalleryTileRenderProps = {
   position: GalleryWindowPosition & { item: GalleryImageCard };
   revealOrder: number;
   revealRegistry: GalleryCardRevealRegistry;
+  subtitle: string;
   onOpen: (
     card: GalleryImageCard,
     opener: HTMLButtonElement
@@ -27,6 +28,7 @@ export function galleryTilePropsEqual(
     && previousPosition.width === currentPosition.width
     && previousPosition.height === currentPosition.height
     && previous.revealRegistry === current.revealRegistry
+    && previous.subtitle === current.subtitle
     && previous.onOpen === current.onOpen
   );
 }

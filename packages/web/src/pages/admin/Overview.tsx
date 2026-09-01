@@ -90,19 +90,19 @@ export function Overview({ canManageStorage }: { canManageStorage: boolean }) {
     && readyImageStatusIsCurrent
     && currentReadyImageStatus
     ? {
-        state: currentReadyImageStatus.state,
-        synchronized: currentReadyImageStatus.synchronized === true,
-        rebuilding: currentReadyImageStatus.rebuilding,
-        item_count: currentReadyImageStatus.item_count,
-        current_core_memory_bytes:
-          data?.redis_cache.current_core_memory_bytes ?? null,
-        current_core_measured_at:
-          data?.redis_cache.current_core_measured_at ?? null,
-        last_full_rebuild_core_memory_bytes:
-          data?.redis_cache.last_full_rebuild_core_memory_bytes ?? null,
-        last_full_rebuild_measured_at:
-          data?.redis_cache.last_full_rebuild_measured_at ?? null
-      }
+      state: currentReadyImageStatus.state,
+      synchronized: currentReadyImageStatus.synchronized === true,
+      rebuilding: currentReadyImageStatus.rebuilding,
+      item_count: currentReadyImageStatus.item_count,
+      current_core_memory_bytes:
+        data?.redis_cache.current_core_memory_bytes ?? null,
+      current_core_measured_at:
+        data?.redis_cache.current_core_measured_at ?? null,
+      last_full_rebuild_core_memory_bytes:
+        data?.redis_cache.last_full_rebuild_core_memory_bytes ?? null,
+      last_full_rebuild_measured_at:
+        data?.redis_cache.last_full_rebuild_measured_at ?? null
+    }
     : data?.redis_cache;
   if (query.isError) return <QueryErrorState error={query.error} onRetry={() => void query.refetch()} fullPage reportContext="overview.load" />;
   const imageCards: OverviewMetric[] = [
@@ -136,8 +136,8 @@ export function Overview({ canManageStorage }: { canManageStorage: boolean }) {
       || !redisCache.last_full_rebuild_measured_at
       ? "—"
       : formatBytes(
-          redisCache.last_full_rebuild_core_memory_bytes
-        );
+        redisCache.last_full_rebuild_core_memory_bytes
+      );
   const currentCoreMeasuredAt = redisCache?.current_core_measured_at
     ? new Date(redisCache.current_core_measured_at).toLocaleString()
     : null;
@@ -163,12 +163,16 @@ export function Overview({ canManageStorage }: { canManageStorage: boolean }) {
       to: `${adminBasePath}/check`
     },
     // 本地存储 / 其它存储的图片与缩略图占用，以及当前存储后端数。
-    { label: "本地存储", value: data?.local,
+    {
+      label: "本地存储", value: data?.local,
       hint: sizePair(data?.local_image_size, data?.local_thumb_size),
-      hintTitle: sizeTitle("原图", data?.local_image_size, "缩略图", data?.local_thumb_size) },
-    { label: "其它存储", value: data?.nonlocal,
+      hintTitle: sizeTitle("原图", data?.local_image_size, "缩略图", data?.local_thumb_size)
+    },
+    {
+      label: "其它存储", value: data?.nonlocal,
       hint: sizePair(data?.nonlocal_image_size, data?.nonlocal_thumb_size),
-      hintTitle: sizeTitle("原图", data?.nonlocal_image_size, "缩略图", data?.nonlocal_thumb_size) },
+      hintTitle: sizeTitle("原图", data?.nonlocal_image_size, "缩略图", data?.nonlocal_thumb_size)
+    },
     {
       label: "存储后端",
       value: data?.backend_count,

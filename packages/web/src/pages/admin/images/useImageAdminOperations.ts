@@ -157,8 +157,7 @@ export function useImageAdminOperations({
       }
       await waitForMinimumPendingDuration(startedAt);
       showFeedback(
-        `已恢复 ${result.restored} 张，${result.ignored} 张未处理${
-          refreshFailed ? "；图片列表刷新失败，请重新加载页面" : ""
+        `已恢复 ${result.restored} 张，${result.ignored} 张未处理${refreshFailed ? "；图片列表刷新失败，请重新加载页面" : ""
         }`,
         result.ignored || refreshFailed ? "error" : "success"
       );
@@ -212,12 +211,10 @@ export function useImageAdminOperations({
         } else {
           const result = await purgeImages(action.request);
           text = result.remaining
-            ? `已永久删除 ${result.deleted} 张，${result.remaining} 张仍由后台继续处理${
-                result.ignored ? `，${result.ignored} 张未处理` : ""
-              }`
-            : `已永久删除 ${result.deleted} 张${
-                result.ignored ? `，${result.ignored} 张未处理` : ""
-              }`;
+            ? `已永久删除 ${result.deleted} 张，${result.remaining} 张仍由后台继续处理${result.ignored ? `，${result.ignored} 张未处理` : ""
+            }`
+            : `已永久删除 ${result.deleted} 张${result.ignored ? `，${result.ignored} 张未处理` : ""
+            }`;
           status = result.remaining || result.ignored ? "error" : "success";
           if (status === "error") {
             reportAdminUiError(

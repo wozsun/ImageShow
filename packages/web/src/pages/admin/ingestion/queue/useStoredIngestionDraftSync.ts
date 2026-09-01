@@ -114,9 +114,9 @@ export function useStoredIngestionDraftSync({
 
   const hasPendingUpdates = useCallback(() => (
     syncsRef.current.size > 0
-      || jobsRef.current.some((job) => (
-        job.serverDraftPending === true && draftSyncTarget(job) !== null
-      ))
+    || jobsRef.current.some((job) => (
+      job.serverDraftPending === true && draftSyncTarget(job) !== null
+    ))
   ), [jobsRef]);
   const hasRetryableUpdates = useCallback(() => (
     [...syncsRef.current.values()].some((sync) => sync.retryable)
@@ -487,21 +487,21 @@ export function useStoredIngestionDraftSync({
     const sync = existing?.target.attemptKey === target.attemptKey
       ? existing
       : {
-          running: null,
-          dirty: false,
-          retryable: false,
-          target,
-          awaitingRevision: null,
-          awaitingConnectionGeneration: null
-        } satisfies PendingDraftSync;
+        running: null,
+        dirty: false,
+        retryable: false,
+        target,
+        awaitingRevision: null,
+        awaitingConnectionGeneration: null
+      } satisfies PendingDraftSync;
     sync.target = existing?.target.attemptKey === target.attemptKey
       ? {
-          ...target,
-          expectedVersion: Math.max(
-            target.expectedVersion,
-            existing.target.expectedVersion
-          )
-        }
+        ...target,
+        expectedVersion: Math.max(
+          target.expectedVersion,
+          existing.target.expectedVersion
+        )
+      }
       : target;
     sync.dirty = true;
     sync.retryable = false;
@@ -778,13 +778,13 @@ export function useStoredIngestionDraftSync({
           && matchesDraftTarget(patched, existingSync.target)
           ? existingSync
           : {
-              running: null,
-              dirty: false,
-              retryable: false,
-              target,
-              awaitingRevision: null,
-              awaitingConnectionGeneration: null
-            };
+            running: null,
+            dirty: false,
+            retryable: false,
+            target,
+            awaitingRevision: null,
+            awaitingConnectionGeneration: null
+          };
         sync.target = target;
         sync.retryable = false;
         sync.awaitingRevision = result.last_semantic_revision;
@@ -845,9 +845,9 @@ export function useStoredIngestionDraftSync({
     new Set([...syncsRef.current.values()].flatMap((sync) => (
       sync.target.sessionId === sessionId
         ? [serverIngestionPairKey({
-            session_id: sync.target.sessionId,
-            image_id: sync.target.imageId
-          })]
+          session_id: sync.target.sessionId,
+          image_id: sync.target.imageId
+        })]
         : []
     )))
   ), []);
