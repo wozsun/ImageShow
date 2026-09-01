@@ -658,7 +658,7 @@ button.active, .button {
   position: sticky;
   bottom: -10px;
   margin: 10px -10px -10px;
-  padding: 10px;
+  padding: 6px 10px;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 6px;

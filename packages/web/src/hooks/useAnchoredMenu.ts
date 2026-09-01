@@ -11,6 +11,7 @@ import {
 import { useAnimatedClose } from "./useAnimatedClose.js";
 import {
   computeAnchoredPosition,
+  measureFixedPositionOrigin,
   type AnchoredMenuPosition,
   type AnchoredMenuSize
 } from "../lib/ui/menu-position.js";
@@ -159,7 +160,8 @@ export function useAnchoredMenu(options: {
     setPosition(computeAnchoredPosition(
       anchor.getBoundingClientRect(),
       getSizeRef.current(),
-      naturalMenuHeight(menuNodeRef.current)
+      naturalMenuHeight(menuNodeRef.current),
+      measureFixedPositionOrigin()
     ));
   }, [triggerRef]);
 

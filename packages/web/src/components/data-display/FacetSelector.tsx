@@ -6,6 +6,7 @@ import {
   useState,
   type KeyboardEvent
 } from "react";
+import { flushSync } from "react-dom";
 import { AnchoredPopup } from "../feedback/AnchoredPopup.js";
 import { DirectActivationButton } from "../feedback/DirectActivationButton.js";
 import { MenuItemButton } from "../feedback/MenuItemButton.js";
@@ -69,9 +70,15 @@ export function FacetSelector({ options, value, onChange, noun, disabled = false
     onClose: () => setQuery(""),
     closeOnEscape: true,
     closeOnFocusOutside: true,
-    focusOnOpen: () => searchRef.current,
     focusAfterClose: () => triggerRef.current
   });
+  const openSearchFromActivation = () => {
+    // iOS only opens the software keyboard when focus remains inside the
+    // committing user gesture. Mount the replacement input synchronously,
+    // then focus it before pointerup/click returns.
+    flushSync(openMenu);
+    searchRef.current?.focus();
+  };
   const bindMenuRef = useCallback((node: HTMLElement | null) => {
     menuElementRef.current = node;
     menuRef(node);
@@ -250,7 +257,7 @@ export function FacetSelector({ options, value, onChange, noun, disabled = false
           aria-controls={open ? menuId : undefined}
           aria-expanded="false"
           disabled={disabled}
-          onActivate={() => open ? requestClose() : openMenu()}
+          onActivate={() => open ? requestClose() : openSearchFromActivation()}
         >
           <span>{label}</span>
         </DirectActivationButton>

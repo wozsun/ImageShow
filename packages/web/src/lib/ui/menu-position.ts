@@ -2,6 +2,11 @@ import type { CSSProperties } from "react";
 
 type MenuPosition = CSSProperties & { maxHeight: number };
 
+export type FixedPositionOrigin = {
+  left: number;
+  top: number;
+};
+
 export type AnchoredMenuPosition = {
   placement: "above" | "below";
   style: MenuPosition;
@@ -16,6 +21,65 @@ export type AnchoredMenuSize = {
   minAvailable: number;
   maxHeight: number;
 };
+
+const defaultFixedPositionOrigin: FixedPositionOrigin = { left: 0, top: 0 };
+const fixedOriginProbeSelector = "[data-anchored-fixed-origin]";
+
+export function measureFixedPositionOrigin(): FixedPositionOrigin {
+  if (typeof document === "undefined" || !document.body) {
+    return defaultFixedPositionOrigin;
+  }
+
+  let probe = document.querySelector<HTMLElement>(fixedOriginProbeSelector);
+  const temporary = !probe;
+  if (!probe) {
+    probe = document.createElement("span");
+    probe.setAttribute("data-anchored-fixed-origin", "");
+    probe.setAttribute("aria-hidden", "true");
+    Object.assign(probe.style, {
+      position: "fixed",
+      top: "0",
+      left: "0",
+      width: "0",
+      height: "0",
+      margin: "0",
+      padding: "0",
+      border: "0",
+      visibility: "hidden",
+      pointerEvents: "none"
+    });
+    document.body.append(probe);
+  }
+
+  try {
+    const rect = probe.getBoundingClientRect();
+    return {
+      left: Number.isFinite(rect.left) ? rect.left : 0,
+      top: Number.isFinite(rect.top) ? rect.top : 0
+    };
+  } finally {
+    if (temporary) probe.remove();
+  }
+}
+
+export function fixedPositionFromViewport(
+  style: CSSProperties,
+  fixedOrigin: FixedPositionOrigin
+): CSSProperties {
+  // iOS may pan the document while the software keyboard is visible, so a
+  // fixed element declared at top/left 0 can paint away from viewport 0/0.
+  // Subtract its observed origin to map the desired viewport coordinates back
+  // into the CSS offsets consumed by the same fixed positioning context.
+  return {
+    ...style,
+    left: typeof style.left === "number"
+      ? style.left - fixedOrigin.left
+      : style.left,
+    top: typeof style.top === "number"
+      ? style.top - fixedOrigin.top
+      : style.top
+  };
+}
 
 export function localizeAnchoredPosition(
   style: CSSProperties,
@@ -41,15 +105,16 @@ export function localizeAnchoredPosition(
 export function computeAnchoredPosition(
   rect: DOMRect,
   size: AnchoredMenuSize,
-  naturalMenuHeight = size.maxHeight
+  naturalMenuHeight = size.maxHeight,
+  fixedOrigin = defaultFixedPositionOrigin
 ): AnchoredMenuPosition {
   const gap = size.gap ?? 6;
-  // DOMRect 的 top/left 可直接用于 fixed 的 top/left；visualViewport 的 offset
-  // 只用于建立当前真正可见的边界，不能再次叠加到锚点坐标。这样软键盘平移
-  // 视觉视口后，上下可用高度和左右夹取范围都会同步更新。
   const visualViewport = window.visualViewport;
-  const viewportTop = visualViewport?.offsetTop ?? 0;
-  const viewportLeft = visualViewport?.offsetLeft ?? 0;
+  // visualViewport 的 offset 使用 fixed/layout 坐标，而锚点 DOMRect 使用
+  // 浏览器实际绘制坐标。加上实测 fixed 原点后，可见边界、锚点和最终菜单
+  // 都在同一坐标系中参与翻转、高度与左右夹取。
+  const viewportTop = (visualViewport?.offsetTop ?? 0) + fixedOrigin.top;
+  const viewportLeft = (visualViewport?.offsetLeft ?? 0) + fixedOrigin.left;
   const viewportHeight = visualViewport?.height ?? window.innerHeight;
   const viewportWidth = visualViewport?.width ?? window.innerWidth;
   const viewportBottom = viewportTop + viewportHeight;
