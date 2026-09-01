@@ -55,6 +55,10 @@ type ConfirmedMutationFeedbackTiming =
   | "after-list-refresh"
   | "before-list-refresh";
 
+function withIgnoredImageCount(text: string, ignored: number) {
+  return ignored ? `${text}，${ignored} 张未处理` : text;
+}
+
 export async function settleConfirmedImageAdminMutation({
   startedAt,
   text,
@@ -216,7 +220,10 @@ export function useImageAdminOperations({
       }
       await settleConfirmedImageAdminMutation({
         startedAt,
-        text: `已恢复 ${result.restored} 张，${result.ignored} 张未处理`,
+        text: withIgnoredImageCount(
+          `已恢复 ${result.restored} 张`,
+          result.ignored
+        ),
         status: result.ignored ? "error" : "success",
         feedbackTiming: "before-list-refresh",
         refresh,
@@ -267,7 +274,10 @@ export function useImageAdminOperations({
       try {
         if (action.kind === "trash") {
           const result = await moveImagesToTrash(action.ids);
-          text = `已移入回收站 ${result.trashed} 张，${result.ignored} 张未处理`;
+          text = withIgnoredImageCount(
+            `已移入回收站 ${result.trashed} 张`,
+            result.ignored
+          );
           status = result.ignored ? "error" : "success";
           if (result.ignored) {
             reportAdminUiError(
