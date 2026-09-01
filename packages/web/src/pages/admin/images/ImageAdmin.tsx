@@ -35,6 +35,7 @@ import { IngestionLauncher } from "../ingestion/IngestionLauncher.js";
 import { QueryErrorState } from "../../../components/feedback/QueryErrorState.js";
 import {
   invalidateImageData,
+  invalidateImageDataAfterAdminListMutation,
   invalidateImageDataAfterMetadataSave
 } from "../../../lib/api/query-invalidation.js";
 import { useAdminPreference } from "../../../hooks/useAdminPreferences.js";
@@ -115,7 +116,7 @@ export function ImageAdmin() {
     allSelected
   } = selection;
   const invalidateData = useCallback(async () => {
-    await invalidateImageData(client);
+    await invalidateImageDataAfterAdminListMutation(client);
   }, [client]);
   const refreshAfterEditorSave = useCallback(async (
     commit?: ImageMetadataSaveCommit
@@ -137,6 +138,7 @@ export function ImageAdmin() {
     setFeedback,
     showFeedback,
     confirmAction,
+    confirmError,
     setConfirmAction,
     actionBusy,
     busyIds,
@@ -577,6 +579,7 @@ export function ImageAdmin() {
           description={confirmCopy.description}
           confirmLabel={confirmCopy.label}
           busy={actionBusy}
+          confirmDisabled={Boolean(confirmError)}
           requireFinalConfirmation
           finalConfirmationLabel="确认删除"
           confirmIcon="delete-bin-7-line"
@@ -584,6 +587,8 @@ export function ImageAdmin() {
           pendingIcon="delete-bin-5-line"
           pendingLabel="正在删除"
           successLabel="删除完成"
+          errorLabel="结果未确认"
+          errorMessage={confirmError}
           onClose={() => setConfirmAction(null)}
           onConfirm={runConfirmedAction}
         />

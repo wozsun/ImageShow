@@ -521,7 +521,7 @@ export function TagInput({ value, onChange, suggestions, disabled = false, ariaL
         data-tag-scroll-navigation=""
         disabled={!scrollAvailability.backward}
         aria-label={`${ariaLabel ?? "标签"}，显示前一个被遮挡标签`}
-        preserveFocusOnPress
+        pointerFocus="preserve"
         onActivate={() => scrollTags(-1)}
       >
         <Icon name="arrow-down-s-line" />
@@ -548,7 +548,7 @@ export function TagInput({ value, onChange, suggestions, disabled = false, ariaL
                 aria-label={`移除标签 ${facetDisplayName(suggestions, tag)}`}
                 aria-disabled={disabled || undefined}
                 tabIndex={disabled ? -1 : undefined}
-                preserveFocusOnPress
+                pointerFocus="preserve"
                 onActivate={() => removeTag(tag)}
               >
                 <Icon name="close-line" />
@@ -608,7 +608,7 @@ export function TagInput({ value, onChange, suggestions, disabled = false, ariaL
         data-tag-scroll-navigation=""
         disabled={!scrollAvailability.forward}
         aria-label={`${ariaLabel ?? "标签"}，显示后一个被遮挡标签`}
-        preserveFocusOnPress
+        pointerFocus="preserve"
         onActivate={() => scrollTags(1)}
       >
         <Icon name="arrow-down-s-line" />

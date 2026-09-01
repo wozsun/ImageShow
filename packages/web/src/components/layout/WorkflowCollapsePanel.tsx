@@ -44,6 +44,7 @@ export function WorkflowCollapsePanel({
         className="workflow-collapse-toggle"
         aria-expanded={expanded}
         aria-controls={contentId}
+        pointerFocus={expanded ? "release-after-activation" : "target"}
         onActivate={() => disclosure.setOpen(!expanded)}
       >
         <span>{title}</span>

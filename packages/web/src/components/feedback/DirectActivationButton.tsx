@@ -2,6 +2,7 @@ import {
   forwardRef,
   useRef,
   type ButtonHTMLAttributes,
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent
 } from "react";
 import {
@@ -27,10 +28,10 @@ const compatibilityMouseEvents = ["mousedown", "mouseup"] as const;
 
 /**
  * A touch can produce a delayed compatibility mouse sequence after pointerup.
- * Consume the complete activation sequence at window capture, so an element
- * removed or disabled by the direct activation cannot expose another control
- * to mousedown focus or a retargeted click. The guard survives synchronous
- * updates and is replaced by the next physical pointer gesture.
+ * Consume the complete activation sequence at window capture, so a synchronous
+ * removal, disable or repaint cannot expose another control to mousedown focus
+ * or a retargeted click. The guard survives that update and is replaced by the
+ * next physical pointer gesture.
  */
 function suppressCompatibilityActivation(ownerDocument: Document) {
   const pending = pendingActivationSuppressions.get(ownerDocument);
@@ -113,12 +114,12 @@ export type DirectActivationButtonProps = Omit<
   | "onLostPointerCapture"
 > & {
   onActivate: () => void;
-  preserveFocusOnPress?: boolean;
+  pointerFocus?: "preserve" | "release-after-activation" | "target";
 };
 
 function useDirectActivation(
   onActivate: () => void,
-  preserveFocusOnPress: boolean
+  pointerFocus: NonNullable<DirectActivationButtonProps["pointerFocus"]>
 ) {
   const pointerPressRef = useRef<DirectPointerPress | null>(null);
 
@@ -147,14 +148,14 @@ function useDirectActivation(
         && event.isPrimary !== false
         && event.button === 0
       );
-      if (preserveFocusOnPress || directPrimaryPress) {
+      if (pointerFocus === "preserve" || directPrimaryPress) {
         // Cancelling pointerdown asks conforming browsers not to emit
         // compatibility mouse events. The capture guard still handles click,
         // which Pointer Events defines independently, plus WebKit sequences
         // already queued around synchronous UI teardown.
         event.preventDefault();
       }
-      if (directPrimaryPress && !preserveFocusOnPress) {
+      if (directPrimaryPress && pointerFocus !== "preserve") {
         // Preventing the compatibility mouse sequence also prevents the
         // browser's normal focus transfer. Recreate that transfer during the
         // press so focused editors settle before pointerup activates the
@@ -224,34 +225,53 @@ function useDirectActivation(
 
       event.preventDefault();
       onActivate();
+      if (pointerFocus === "release-after-activation") {
+        event.currentTarget.blur();
+      }
     },
     onPointerCancel: cancelPointerPress,
     onLostPointerCapture: cancelPointerPress,
-    onClick: onActivate
+    onClick(event: ReactMouseEvent<HTMLButtonElement>) {
+      onActivate();
+      // detail=0 identifies keyboard, assistive-technology and programmatic
+      // activation. Keep their focus position; only a physical pointer close
+      // should retire the target focus after the action.
+      if (
+        pointerFocus === "release-after-activation"
+        && event.detail !== 0
+      ) {
+        event.currentTarget.blur();
+      }
+    }
   };
 }
 
 /**
  * Shared activation boundary for controls whose activation can synchronously
- * close, remove, disable or reposition the touched surface.
+ * close, remove, disable, repaint or reposition the touched surface or nearby
+ * hit targets.
  *
  * Touch and pen activation is committed on pointerup only while the physical
  * press stays below the shared movement-intent threshold. This prevents
  * implicit pointer capture from turning a scroll that starts on the control
  * into activation. It never selects or moves a scroll owner. Mouse, keyboard
- * and assistive technology keep the native click path.
+ * and assistive technology keep the native click path. pointerFocus makes the
+ * pointer focus lifecycle explicit: target follows native button ordering,
+ * preserve keeps an editor focused, and release-after-activation removes a
+ * physical pointer's focus after a closing action while retaining keyboard
+ * focus.
  */
 export const DirectActivationButton = forwardRef<
   HTMLButtonElement,
   DirectActivationButtonProps
 >(function DirectActivationButton({
   onActivate,
-  preserveFocusOnPress = false,
+  pointerFocus = "target",
   ...buttonProps
 }, ref) {
   const activationHandlers = useDirectActivation(
     onActivate,
-    preserveFocusOnPress
+    pointerFocus
   );
 
   return (

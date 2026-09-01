@@ -50,6 +50,57 @@ type UnknownOutcomeRefreshResult = {
   refreshSucceeded: boolean;
 };
 
+type ConfirmedMutationStatus = "error" | "success";
+type ConfirmedMutationFeedbackTiming =
+  | "after-list-refresh"
+  | "before-list-refresh";
+
+export async function settleConfirmedImageAdminMutation({
+  startedAt,
+  text,
+  status,
+  feedbackTiming,
+  refresh,
+  present
+}: {
+  startedAt: number;
+  text: string;
+  status: ConfirmedMutationStatus;
+  feedbackTiming: ConfirmedMutationFeedbackTiming;
+  refresh: () => Promise<unknown>;
+  present: (text: string, status: ConfirmedMutationStatus) => void;
+}) {
+  const presentBeforeRefresh = feedbackTiming === "before-list-refresh";
+  if (presentBeforeRefresh) {
+    await waitForMinimumPendingDuration(startedAt);
+    // Trash and restore have no covering modal. Present their authoritative
+    // result while the affected cards still occupy the current view, then
+    // refresh list membership.
+    present(text, status);
+  }
+  let refreshFailed = false;
+  try {
+    await refresh();
+  } catch {
+    refreshFailed = true;
+  }
+  if (!presentBeforeRefresh) {
+    // Purge remains inside its confirmation dialog until this promise settles.
+    // Start page feedback only when the dialog can close, so a slow refresh
+    // cannot consume the feedback lifetime behind an inert page.
+    await waitForMinimumPendingDuration(startedAt);
+  }
+  if (refreshFailed) {
+    present(
+      `${text}；图片列表刷新失败，请重新加载页面`,
+      "error"
+    );
+  } else if (!presentBeforeRefresh) {
+    present(text, status);
+  }
+  return refreshFailed;
+}
+
 function unknownOutcomeFeedback(
   result: UnknownOutcomeRefreshResult,
   subject = "操作"
@@ -73,18 +124,32 @@ export function useImageAdminOperations({
 }) {
   const [operationText, setOperationText] = useState("");
   const [feedback, setFeedback] = useState<ActionFeedbackState | null>(null);
-  const [confirmAction, setConfirmAction] =
+  const [confirmAction, setConfirmActionState] =
     useState<ImageAdminConfirmAction | null>(null);
+  const [confirmError, setConfirmError] = useState("");
   const [actionBusy, setActionBusy] = useState(false);
   const [busyIds, setBusyIds] = useState<string[]>([]);
 
   const operationBusy = actionBusy || busyIds.length > 0;
+  const setConfirmAction = useCallback((
+    action: ImageAdminConfirmAction | null
+  ) => {
+    setConfirmError("");
+    setConfirmActionState(action);
+  }, []);
   const showFeedback = useCallback((
     text: string,
     status: "error" | "success"
   ) => {
     setFeedback(createActionFeedback(text, status));
   }, []);
+  const presentConfirmedMutation = useCallback((
+    text: string,
+    status: ConfirmedMutationStatus
+  ) => {
+    setOperationText(text);
+    showFeedback(text, status);
+  }, [showFeedback]);
 
   const refresh = useCallback(async () => {
     clearSelection();
@@ -111,8 +176,9 @@ export function useImageAdminOperations({
     try {
       await refresh();
       return { boundaryConfirmed, refreshSucceeded: true };
-    } catch (error) {
-      reportAdminUiError(`${context}_refresh`, error);
+    } catch {
+      // The list query owner records the read error. This operation owner only
+      // classifies its user-visible outcome, avoiding a duplicate report.
       return { boundaryConfirmed, refreshSucceeded: false };
     }
   }, [refresh]);
@@ -148,25 +214,26 @@ export function useImageAdminOperations({
           new Error(`恢复完成，但有 ${result.ignored} 张图片未处理`)
         );
       }
-      let refreshFailed = false;
-      try {
-        await refresh();
-      } catch (error) {
-        refreshFailed = true;
-        reportAdminUiError("image_admin.restore_refresh", error);
-      }
-      await waitForMinimumPendingDuration(startedAt);
-      showFeedback(
-        `已恢复 ${result.restored} 张，${result.ignored} 张未处理${refreshFailed ? "；图片列表刷新失败，请重新加载页面" : ""
-        }`,
-        result.ignored || refreshFailed ? "error" : "success"
-      );
+      await settleConfirmedImageAdminMutation({
+        startedAt,
+        text: `已恢复 ${result.restored} 张，${result.ignored} 张未处理`,
+        status: result.ignored ? "error" : "success",
+        feedbackTiming: "before-list-refresh",
+        refresh,
+        present: presentConfirmedMutation
+      });
     } finally {
       setActionBusy(false);
       setOperationText("");
       setBusyIds([]);
     }
-  }, [operationBusy, refresh, refreshUnknownOutcome, showFeedback]);
+  }, [
+    operationBusy,
+    presentConfirmedMutation,
+    refresh,
+    refreshUnknownOutcome,
+    showFeedback
+  ]);
 
   const runAction = useCallback(async (action: ImageAdminAction) => {
     if (operationBusy) return false;
@@ -232,31 +299,41 @@ export function useImageAdminOperations({
           action.kind === "trash" ? action.ids : undefined
         );
         await waitForMinimumPendingDuration(startedAt);
-        showFeedback(
-          unknownOutcomeFeedback(reconciliation),
-          "error"
-        );
+        const message = unknownOutcomeFeedback(reconciliation);
+        if (action.kind === "purge") {
+          // The confirmation dialog remains the visible interaction owner on
+          // unknown purge outcomes. Keep the message there and disable a blind
+          // mutation retry; page feedback would expire behind the inert layer.
+          setConfirmError(message);
+        } else {
+          showFeedback(message, "error");
+        }
         return false;
       }
-      let refreshFailed = false;
-      try {
-        await refresh();
-      } catch (error) {
-        refreshFailed = true;
-        reportAdminUiError("image_admin.action_refresh", error);
-      }
-      await waitForMinimumPendingDuration(startedAt);
-      showFeedback(
-        `${text}${refreshFailed ? "；图片列表刷新失败，请重新加载页面" : ""}`,
-        status === "error" || refreshFailed ? "error" : "success"
-      );
+      await settleConfirmedImageAdminMutation({
+        startedAt,
+        text,
+        status,
+        feedbackTiming: action.kind === "trash"
+          ? "before-list-refresh"
+          : "after-list-refresh",
+        refresh,
+        present: presentConfirmedMutation
+      });
       return true;
     } finally {
       setActionBusy(false);
       setOperationText("");
       setBusyIds([]);
     }
-  }, [items, operationBusy, refresh, refreshUnknownOutcome, showFeedback]);
+  }, [
+    items,
+    operationBusy,
+    presentConfirmedMutation,
+    refresh,
+    refreshUnknownOutcome,
+    showFeedback
+  ]);
 
   const runConfirmedAction = useCallback(() => (
     confirmAction ? runAction(confirmAction) : Promise.resolve(false)
@@ -271,6 +348,7 @@ export function useImageAdminOperations({
     setFeedback,
     showFeedback,
     confirmAction,
+    confirmError,
     setConfirmAction,
     actionBusy,
     busyIds,

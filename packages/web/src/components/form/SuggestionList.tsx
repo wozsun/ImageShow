@@ -110,7 +110,7 @@ export function SuggestionList({
             aria-selected={selectedSlug === undefined ? active : selected}
             className={active ? "is-active" : undefined}
             onMouseEnter={() => onActiveIndexChange(index)}
-            preserveFocusOnPress
+            pointerFocus="preserve"
             onActivate={() => onChoose(option.slug)}
           >
             <span>{option.slug}</span>

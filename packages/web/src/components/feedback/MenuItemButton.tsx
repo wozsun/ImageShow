@@ -21,7 +21,6 @@ export const MenuItemButton = forwardRef<
 >(function MenuItemButton({
   className = "",
   onActivate,
-  preserveFocusOnPress = false,
   ...buttonProps
 }, ref) {
   return (
@@ -29,7 +28,6 @@ export const MenuItemButton = forwardRef<
       {...buttonProps}
       ref={ref}
       className={`anchored-menu-item ${className}`.trim()}
-      preserveFocusOnPress={preserveFocusOnPress}
       onActivate={onActivate}
     />
   );

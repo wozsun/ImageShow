@@ -10,8 +10,13 @@ import {
   adminImageListValidationCovers
 } from "./admin-image-list-validation.js";
 
-function invalidate(client: QueryClient, queryKeysToInvalidate: readonly (readonly unknown[])[]) {
-  return Promise.all(queryKeysToInvalidate.map((queryKey) => client.invalidateQueries({ queryKey })));
+function invalidate(
+  client: QueryClient,
+  queryKeysToInvalidate: readonly (readonly unknown[])[]
+) {
+  return Promise.all(queryKeysToInvalidate.map((queryKey) => (
+    client.invalidateQueries({ queryKey })
+  )));
 }
 
 function removeQueries(client: QueryClient, queryKeysToRemove: readonly (readonly unknown[])[]) {
@@ -54,6 +59,23 @@ export function clearAdminCacheAfterLogin(client: QueryClient) {
 
 export function invalidateImageData(client: QueryClient) {
   return invalidate(client, imageDataQueryKeys);
+}
+
+export function invalidateImageDataAfterAdminListMutation(
+  client: QueryClient
+) {
+  return Promise.all([
+    // ImageAdmin reports the current list refresh outcome to the user. Other
+    // derived projections remain best-effort invalidations and must not
+    // masquerade as a list refresh failure.
+    client.invalidateQueries({ queryKey: queryKeys.adminImages }, {
+      throwOnError: true
+    }),
+    invalidate(
+      client,
+      imageDataQueryKeys.filter((queryKey) => queryKey !== queryKeys.adminImages)
+    )
+  ]);
 }
 
 export function invalidateDataAfterAuthorProfileSave(client: QueryClient) {
