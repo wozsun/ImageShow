@@ -163,14 +163,14 @@
   pointer-events: none;
 }
 .gallery-filter-panel { display: contents; }
-.gallery-toolbar label {
+.gallery-toolbar :is(label.gallery-axis, .gallery-filter-field) {
   display: grid;
   gap: 6px;
   min-width: 150px;
   color: var(--public-color-gallery-toolbar-label);
   line-height: 20px;
 }
-.gallery-toolbar .select-trigger {
+.gallery-toolbar :is(.select-trigger, .facet-search-input, .facet-search-collapse) {
   height: var(--gallery-control-height);
   color: var(--public-color-text-primary);
   background: var(--public-color-gallery-control-surface);
@@ -197,13 +197,13 @@
   background: var(--public-color-gallery-menu-hover);
 }
 
-.facet-select-menu.public-gallery-menu input {
+.gallery-toolbar .facet-search-input {
   color: var(--public-color-text-primary);
   background: var(--public-color-surface-raised);
   border-color: var(--public-color-border-default);
 }
 
-.facet-select-menu.public-gallery-menu input::placeholder,
+.gallery-toolbar .facet-search-input::placeholder,
 .facet-select-menu.public-gallery-menu .muted,
 .facet-select-menu.public-gallery-menu .option-display-name,
 .facet-select-menu.public-gallery-menu .facet-selected-list strong {

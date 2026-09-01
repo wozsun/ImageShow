@@ -365,6 +365,10 @@ hooks ──► lib
   viewport；相邻 `tag-input-scroll.ts` 纯模型计算逐项边界、两端状态与滚轮像素，不把 Upload /
   Import 的默认值和逐图入口拆成四套交互。`TagInput` 本身只把 DOM 几何接到纯模型，并在非交互
   表面的轻点结束时提升编辑器焦点；它不重复决定主轴、消费触摸滚动或提交按钮激活。
+  `components/data-display/FacetSelector.tsx` 是公开图库与后台图片主题、标签和作者筛选的唯一
+  交互 owner；显式字段标签始终绑定同一槽位内当前存在的收起按钮或展开搜索框，候选、已选和
+  包含 / 排除仍位于共享 Portal 非模态区域。组件内部显式衔接页面控件与 Portal 的键盘及读屏
+  状态，不让页面或视口建立第二套状态。
   `components/layout/OverlayScrollbar.tsx` 统一拥有页面与局部容器滚动条：React 只提交可见性、
   几何和拖拽状态，逐帧位置以同一手柄 ref 的 transform 更新，不把连续滚动提升为根渲染。
   `components/feedback/DialogLayerPortal.tsx` 是顶层动态视口和嵌套弹窗坐标系的唯一 owner；

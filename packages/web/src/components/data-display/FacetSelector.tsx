@@ -1,4 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type KeyboardEvent
+} from "react";
 import { AnchoredPopup } from "../feedback/AnchoredPopup.js";
 import { DirectActivationButton } from "../feedback/DirectActivationButton.js";
 import { MenuItemButton } from "../feedback/MenuItemButton.js";
@@ -21,34 +28,62 @@ function parseValue(value: string) {
   };
 }
 
-export function FacetSelector({ options, value, onChange, noun, disabled = false, ariaLabel, menuClassName }: {
+export function FacetSelector({ options, value, onChange, noun, disabled = false, ariaLabel, controlId, menuClassName }: {
   options: FacetOption[];
   value: string;
   onChange: (value: string) => void;
   noun: string;
   disabled?: boolean;
   ariaLabel?: string;
+  controlId?: string;
   menuClassName?: string;
 }) {
   const resolvedAriaLabel = ariaLabel ?? noun;
   const parsed = parseValue(value);
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState<FacetMode>(parsed.exclude ? "exclude" : "include");
+  const controlRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
-  const { open, closing, position, opensUp, menuRef, openMenu, requestClose, onAnimationEnd } = useAnchoredMenu({
-    triggerRef,
+  const collapseRef = useRef<HTMLButtonElement | null>(null);
+  const menuElementRef = useRef<HTMLElement | null>(null);
+  const generatedControlId = useId();
+  const resolvedControlId = controlId ?? generatedControlId;
+  const menuId = useId();
+  const statusId = useId();
+  const {
+    open,
+    closing,
+    position,
+    opensUp,
+    menuRef,
+    openMenu,
+    requestClose,
+    requestCloseAndRestoreFocus,
+    onAnimationEnd
+  } = useAnchoredMenu({
+    triggerRef: controlRef,
     getSize: (): AnchoredMenuSize => ({ minWidth: 300, maxWidth: window.innerWidth - 16, flipThreshold: 260, minAvailable: 180, maxHeight: 420 }),
     initialMaxHeight: 420,
     disabled,
     onClose: () => setQuery(""),
     closeOnEscape: true,
     closeOnFocusOutside: true,
-    focusOnOpen: () => searchRef.current
+    focusOnOpen: () => searchRef.current,
+    focusAfterClose: () => triggerRef.current
   });
+  const bindMenuRef = useCallback((node: HTMLElement | null) => {
+    menuElementRef.current = node;
+    menuRef(node);
+  }, [menuRef]);
   const selectedSet = new Set(parsed.selected);
   const normalizedQuery = normalizeFacetSearchQuery(query);
   const results = facetSuggestions(options, query, selectedSet);
+  const searchStatus = normalizedQuery
+    ? results.length
+      ? `${results.length} 个可添加的${noun}`
+      : `没有可添加的${noun}`
+    : `输入关键字搜索${noun}，按 Tab 浏览已选${noun}和筛选方式`;
 
   useEffect(() => {
     if (parsed.selected.length) setMode(parsed.exclude ? "exclude" : "include");
@@ -58,30 +93,56 @@ export function FacetSelector({ options, value, onChange, noun, disabled = false
     onChange(selected.map((slug) => nextMode === "exclude" ? `!${slug}` : slug).join(","));
   };
 
+  const menuButtons = () => Array.from(
+    menuElementRef.current?.querySelectorAll<HTMLButtonElement>(
+      "button:not(:disabled)"
+    ) ?? []
+  );
+  const focusMenuEdge = (edge: "first" | "last") => {
+    const buttons = menuButtons();
+    const target = edge === "first" ? buttons[0] : buttons.at(-1);
+    target?.focus();
+    return Boolean(target);
+  };
+  const onSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== "Tab" || event.shiftKey) return;
+    if (focusMenuEdge("first")) event.preventDefault();
+  };
+  const onMenuKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "Tab") return;
+    const buttons = menuButtons();
+    if (event.shiftKey && event.target === buttons[0]) {
+      event.preventDefault();
+      searchRef.current?.focus();
+    } else if (!event.shiftKey && event.target === buttons.at(-1)) {
+      event.preventDefault();
+      collapseRef.current?.focus();
+    }
+  };
+  const onCollapseKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (event.key !== "Tab" || !event.shiftKey) return;
+    if (focusMenuEdge("last")) event.preventDefault();
+  };
+
   const menu = open ? (
     <AnchoredPopup
-      popupRef={menuRef}
+      popupRef={bindMenuRef}
       overlayScrollbar
+      id={menuId}
       className={[
         "facet-select-menu",
         menuClassName,
         opensUp ? "opens-up" : "",
         closing ? "is-closing" : ""
       ].filter(Boolean).join(" ")}
-      role="dialog"
-      aria-label={`${resolvedAriaLabel}筛选`}
+      role="region"
+      aria-label={`${resolvedAriaLabel}筛选选项`}
       aria-hidden={closing}
       inert={closing}
       style={position}
       onAnimationEnd={onAnimationEnd}
+      onKeyDown={onMenuKeyDown}
     >
-      <input
-        ref={searchRef}
-        type="search"
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        placeholder={`搜索${noun}`}
-      />
       <div className="facet-search-results" aria-label={`待选${noun}`}>
         {!normalizedQuery && <span className="muted">输入关键字搜索{noun}</span>}
         {normalizedQuery && results.map((option) => (
@@ -139,20 +200,61 @@ export function FacetSelector({ options, value, onChange, noun, disabled = false
   const label = parsed.selected.length
     ? `${mode === "include" ? "包含" : "排除"} ${parsed.selected.length} 个${noun}`
     : `全部${noun}`;
+  const showSearch = open && !closing;
   return (
-    <div className="select-control facet-select-control">
-      <DirectActivationButton
-        ref={triggerRef}
-        className={`select-trigger ${open && !closing ? "is-open" : ""}`}
-        type="button"
-        aria-label={resolvedAriaLabel}
-        aria-haspopup="dialog"
-        aria-expanded={open && !closing}
-        disabled={disabled}
-        onActivate={() => open ? requestClose() : openMenu()}
-      >
-        <span>{label}</span>
-      </DirectActivationButton>
+    <div ref={controlRef} className="select-control facet-select-control">
+      {showSearch ? (
+        <div className="facet-search-control">
+          <input
+            ref={searchRef}
+            id={resolvedControlId}
+            className="facet-search-input"
+            type="search"
+            size={1}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={onSearchKeyDown}
+            placeholder={`搜索${noun}`}
+            aria-label={`搜索${resolvedAriaLabel}`}
+            aria-controls={menuId}
+            aria-describedby={statusId}
+          />
+          <span
+            id={statusId}
+            className="facet-search-status"
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+          >
+            {searchStatus}
+          </span>
+          <DirectActivationButton
+            ref={collapseRef}
+            className="facet-search-collapse"
+            type="button"
+            aria-label={`收起${resolvedAriaLabel}筛选`}
+            aria-controls={menuId}
+            aria-expanded="true"
+            title={`收起${noun}筛选`}
+            onKeyDown={onCollapseKeyDown}
+            onActivate={requestCloseAndRestoreFocus}
+          />
+        </div>
+      ) : (
+        <DirectActivationButton
+          ref={triggerRef}
+          id={resolvedControlId}
+          className="select-trigger"
+          type="button"
+          aria-label={resolvedAriaLabel}
+          aria-controls={open ? menuId : undefined}
+          aria-expanded="false"
+          disabled={disabled}
+          onActivate={() => open ? requestClose() : openMenu()}
+        >
+          <span>{label}</span>
+        </DirectActivationButton>
+      )}
       {menu}
     </div>
   );

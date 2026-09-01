@@ -122,36 +122,42 @@ export function GalleryToolbar({
               menuClassName="public-gallery-menu"
             />
           </label>
-          <label className="gallery-theme-filter">
-            主题
+          <div className="gallery-filter-field gallery-theme-filter">
+            <label htmlFor="gallery-theme-facet">主题</label>
             <FacetSelector
               options={facets?.themes ?? []}
               value={filters.theme}
               onChange={(value) => onFilterChange("theme", value)}
               noun="主题"
+              ariaLabel="主题"
+              controlId="gallery-theme-facet"
               menuClassName="public-gallery-menu"
             />
-          </label>
-          <label className="gallery-tag-filter">
-            标签
+          </div>
+          <div className="gallery-filter-field gallery-tag-filter">
+            <label htmlFor="gallery-tag-facet">标签</label>
             <FacetSelector
               options={facets?.tags ?? []}
               value={filters.tag}
               onChange={(value) => onFilterChange("tag", value)}
               noun="标签"
+              ariaLabel="标签"
+              controlId="gallery-tag-facet"
               menuClassName="public-gallery-menu"
             />
-          </label>
-          <label className="gallery-author-filter">
-            作者
+          </div>
+          <div className="gallery-filter-field gallery-author-filter">
+            <label htmlFor="gallery-author-facet">作者</label>
             <FacetSelector
               options={facets?.authors ?? []}
               value={filters.author}
               onChange={(value) => onFilterChange("author", value)}
               noun="作者"
+              ariaLabel="作者"
+              controlId="gallery-author-facet"
               menuClassName="public-gallery-menu"
             />
-          </label>
+          </div>
           <div className="theme-link">
             <span>随机图片API</span>
             <div className="theme-link-row">

@@ -1,3 +1,21 @@
+@media (min-width: 761px) and (max-width: 1325px) {
+  .gallery-page .gallery-toolbar > .gallery-filter-panel {
+    width: 100%;
+    display: grid;
+    grid-template-columns:
+      120px
+      120px
+      minmax(0, 1.1fr)
+      minmax(0, 1.3fr)
+      minmax(0, 1.2fr);
+    gap: 12px;
+    align-items: end;
+  }
+  .gallery-page .gallery-toolbar
+    > .gallery-filter-panel > .gallery-filter-field { min-width: 0; }
+  .gallery-filter-panel > .theme-link { grid-column: 1 / -1; }
+}
+
 @media (max-width: 760px) {
   .gallery-page { --gallery-toolbar-height: 65px; }
 
@@ -12,7 +30,7 @@
     + .gallery-toolbar {
     max-height: 100svh;
   }
-  .gallery-toolbar label { min-width: 0; }
+  .gallery-toolbar :is(label.gallery-axis, .gallery-filter-field) { min-width: 0; }
 
   .gallery-filter-toggle {
     display: flex;

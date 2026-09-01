@@ -284,7 +284,9 @@
 .image-list-filter-secondary {
   display: contents;
 }
-.image-list-filter-panel label {
+.image-list-filter-panel
+  :is(.image-list-filter-primary, .image-list-filter-secondary)
+  > :is(label, .image-list-filter-field) {
   min-width: 0;
   display: grid;
   gap: 6px;
@@ -296,7 +298,7 @@
 .image-list-filter-theme { grid-area: theme; }
 .image-list-filter-tag { grid-area: tag; }
 .image-list-filter-author { grid-area: author; }
-.image-list-filter-panel .select-trigger {
+.image-list-filter-panel :is(.select-trigger, .facet-search-input, .facet-search-collapse) {
   height: var(--image-list-filter-control-height);
   color: var(--admin-color-text-primary);
   background: var(--admin-color-surface-primary);
@@ -378,13 +380,13 @@
     .image-list-filter-primary > .image-list-filter-device,
     .image-list-filter-primary > .image-list-filter-brightness {
       min-width: 120px;
-      flex: 1 1 0;
+      flex: 0 0 120px;
     }
-    .image-list-filter-primary > .image-list-filter-author {
+    .image-list-filter-primary > .image-list-filter-theme {
       min-width: 150px;
-      flex: 1.5 1 0;
+      flex: 1 1 150px;
     }
-    .image-list-filter-secondary > .image-list-filter-theme {
+    .image-list-filter-secondary > .image-list-filter-author {
       min-width: 150px;
       flex: 1 1 0;
     }

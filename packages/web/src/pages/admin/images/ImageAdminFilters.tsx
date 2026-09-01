@@ -139,38 +139,44 @@ export function ImageAdminFilters({
                 ariaLabel="亮度"
               />
             </label>
-            <label className="image-list-filter-author">
-              作者
-              <FacetSelector
-                options={vocabulary?.authors ?? []}
-                value={value.author}
-                onChange={(next) => onChange("author", next)}
-                noun="作者"
-                disabled={disabled}
-              />
-            </label>
-          </div>
-          <div className="image-list-filter-secondary">
-            <label className="image-list-filter-theme">
-              主题
+            <div className="image-list-filter-field image-list-filter-theme">
+              <label htmlFor="admin-image-theme-facet">主题</label>
               <FacetSelector
                 options={vocabulary?.themes ?? []}
                 value={view === "unset" ? "" : value.theme}
                 onChange={(next) => onChange("theme", next)}
                 noun="主题"
                 disabled={themeDisabled}
+                ariaLabel="主题"
+                controlId="admin-image-theme-facet"
               />
-            </label>
-            <label className="image-list-filter-tag">
-              标签
+            </div>
+          </div>
+          <div className="image-list-filter-secondary">
+            <div className="image-list-filter-field image-list-filter-author">
+              <label htmlFor="admin-image-author-facet">作者</label>
+              <FacetSelector
+                options={vocabulary?.authors ?? []}
+                value={value.author}
+                onChange={(next) => onChange("author", next)}
+                noun="作者"
+                disabled={disabled}
+                ariaLabel="作者"
+                controlId="admin-image-author-facet"
+              />
+            </div>
+            <div className="image-list-filter-field image-list-filter-tag">
+              <label htmlFor="admin-image-tag-facet">标签</label>
               <FacetSelector
                 options={vocabulary?.tags ?? []}
                 value={value.tag}
                 onChange={(next) => onChange("tag", next)}
                 noun="标签"
                 disabled={disabled}
+                ariaLabel="标签"
+                controlId="admin-image-tag-facet"
               />
-            </label>
+            </div>
           </div>
         </div>
       </AnchoredMenuDismissSignalContext.Provider>

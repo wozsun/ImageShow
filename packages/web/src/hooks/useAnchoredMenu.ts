@@ -26,6 +26,24 @@ function naturalMenuHeight(menu: HTMLElement | null) {
   return menu.scrollHeight + Math.max(0, menu.offsetHeight - menu.clientHeight);
 }
 
+function isWithinTriggerInteractionBoundary(
+  trigger: HTMLElement | null,
+  target: Node
+) {
+  if (!trigger) return false;
+  if (trigger.contains(target)) return true;
+  if (!(target instanceof Element)) return false;
+
+  const label = target.closest("label");
+  if (!label) return false;
+  const explicitControlId = label.getAttribute("for");
+  if (explicitControlId) {
+    const control = label.ownerDocument.getElementById(explicitControlId);
+    return Boolean(control && trigger.contains(control));
+  }
+  return label.contains(trigger);
+}
+
 // Portal 不会脱离 React 上下文。折叠或隐藏一组触发器时更新此信号，组内所有
 // 锚定菜单都能同步退出，而无需由父组件逐一持有每个菜单的内部 open 状态。
 export const AnchoredMenuDismissSignalContext = createContext(0);
@@ -41,6 +59,7 @@ export function useAnchoredMenu(options: {
   closeOnFocusOutside?: boolean;
   animateClose?: boolean;
   focusOnOpen?: () => HTMLElement | null | undefined;
+  focusAfterClose?: () => HTMLElement | null | undefined;
 }) {
   const {
     triggerRef,
@@ -63,6 +82,8 @@ export function useAnchoredMenu(options: {
   const getAnchorRef = useRef(options.getAnchor); getAnchorRef.current = options.getAnchor;
   const onCloseRef = useRef(options.onClose); onCloseRef.current = options.onClose;
   const focusOnOpenRef = useRef(options.focusOnOpen); focusOnOpenRef.current = options.focusOnOpen;
+  const focusAfterCloseRef = useRef(options.focusAfterClose); focusAfterCloseRef.current = options.focusAfterClose;
+  const restoreFocusAfterCloseRef = useRef(false);
 
   // RefObject.current 的变化不会触发 effect。用稳定的 callback ref 同时保存
   // 当前节点并触发一次渲染，让条件渲染的菜单首次挂载时也能进入测量与观察流程。
@@ -99,6 +120,18 @@ export function useAnchoredMenu(options: {
     }
     animRequestClose(() => { setOpen(false); onCloseRef.current?.(); afterClose?.(); });
   }, [animateClose, animRequestClose]);
+
+  const requestCloseAndRestoreFocus = useCallback(() => {
+    requestClose(() => {
+      restoreFocusAfterCloseRef.current = true;
+    });
+  }, [requestClose]);
+
+  useLayoutEffect(() => {
+    if (open || !restoreFocusAfterCloseRef.current) return;
+    restoreFocusAfterCloseRef.current = false;
+    (focusAfterCloseRef.current?.() ?? triggerRef.current)?.focus();
+  }, [open, triggerRef]);
 
   useLayoutEffect(() => {
     if (Object.is(previousDismissSignalRef.current, dismissSignal)) return;
@@ -162,7 +195,7 @@ export function useAnchoredMenu(options: {
       const target = event.target;
       if (!(target instanceof Node)) return;
       if (
-        !triggerRef.current?.contains(target)
+        !isWithinTriggerInteractionBoundary(triggerRef.current, target)
         && !isWithinAnchoredPopupBoundary(menuNodeRef.current, target)
       ) {
         requestClose();
@@ -193,7 +226,7 @@ export function useAnchoredMenu(options: {
       onKeyDown = (event) => {
         if (event.key !== "Escape") return;
         event.preventDefault();
-        requestClose(() => triggerRef.current?.focus());
+        requestCloseAndRestoreFocus();
       };
       document.addEventListener("keydown", onKeyDown);
     }
@@ -204,7 +237,7 @@ export function useAnchoredMenu(options: {
         if (isDocumentFallbackFocusTarget(document, target)) return;
         if (!(target instanceof Node)) return;
         if (
-          !triggerRef.current?.contains(target)
+          !isWithinTriggerInteractionBoundary(triggerRef.current, target)
           && !isWithinAnchoredPopupBoundary(menuNodeRef.current, target)
         ) {
           requestClose();
@@ -225,7 +258,7 @@ export function useAnchoredMenu(options: {
       if (onKeyDown) document.removeEventListener("keydown", onKeyDown);
       if (onFocusIn) document.removeEventListener("focusin", onFocusIn);
     };
-  }, [open, menuNode, updatePosition, requestClose, triggerRef, closeOnEscape, closeOnFocusOutside]);
+  }, [open, menuNode, updatePosition, requestClose, requestCloseAndRestoreFocus, triggerRef, closeOnEscape, closeOnFocusOutside]);
 
   useEffect(() => {
     if (!open) return;
@@ -245,6 +278,7 @@ export function useAnchoredMenu(options: {
     menuRef,
     openMenu,
     requestClose,
+    requestCloseAndRestoreFocus,
     cancelClose,
     onAnimationEnd
   };
