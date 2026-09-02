@@ -263,20 +263,14 @@
 }
 .image-list-filter-bar {
   --image-list-filter-control-height: 40px;
+  --image-list-filter-action-width: 55px;
   margin-bottom: 10px;
 }
+.image-list-filter-actions,
 .image-list-filter-toggle { display: none; }
-.image-list-filter-panel-close { display: none; }
 .image-list-filter-panel {
   width: min(100%, calc(1920px - 220px - 48px));
   display: grid;
-  grid-template-columns:
-    minmax(120px, 1fr)
-    minmax(120px, 1fr)
-    minmax(150px, 1.5fr)
-    minmax(150px, 2.5fr)
-    minmax(150px, 1.5fr);
-  grid-template-areas: "device brightness theme tag author";
   align-items: end;
   gap: 12px;
 }
@@ -298,6 +292,34 @@
 .image-list-filter-theme { grid-area: theme; }
 .image-list-filter-tag { grid-area: tag; }
 .image-list-filter-author { grid-area: author; }
+.image-list-filter-device,
+.image-list-filter-brightness {
+  --image-list-filter-basis: 120px;
+}
+.image-list-filter-theme,
+.image-list-filter-tag,
+.image-list-filter-author {
+  --image-list-filter-basis: 150px;
+}
+.image-list-filter-action {
+  grid-area: action;
+  width: var(--image-list-filter-action-width);
+  min-width: var(--image-list-filter-action-width);
+  display: grid;
+  gap: 6px;
+  color: var(--admin-color-text-label);
+  line-height: 20px;
+}
+.image-list-filter-clear {
+  width: 100%;
+  min-height: var(--image-list-filter-control-height);
+  height: var(--image-list-filter-control-height);
+  padding-inline: 10px;
+  white-space: nowrap;
+  color: var(--admin-color-text-primary);
+  background: var(--admin-color-surface-primary);
+  border-color: var(--admin-color-border-control);
+}
 .image-list-filter-panel :is(.select-trigger, .facet-search-input, .facet-search-collapse) {
   height: var(--image-list-filter-control-height);
   color: var(--admin-color-text-primary);
@@ -332,6 +354,15 @@
 @media (min-width: 761px) {
   .image-list-controls {
     container: image-list-controls / inline-size;
+  }
+  .image-list-filter-panel {
+    display: flex;
+  }
+  .image-list-filter-panel
+    :is(.image-list-filter-primary, .image-list-filter-secondary)
+    > :is(label, .image-list-filter-field) {
+    min-width: var(--image-list-filter-basis);
+    flex: 1 1 var(--image-list-filter-basis);
   }
   .image-admin-head { align-items: center; }
   .image-admin-head .image-admin-view-switch { flex: 0 0 auto; }
@@ -368,8 +399,13 @@
   @container image-list-controls (max-width: 947px) {
     .image-list-filter-panel {
       width: 100%;
-      grid-template-columns: minmax(0, 1fr);
-      grid-template-areas: none;
+      display: grid;
+      grid-template-columns:
+        minmax(0, 1fr)
+        var(--image-list-filter-action-width);
+      grid-template-areas:
+        "primary primary"
+        "secondary action";
     }
     .image-list-filter-primary,
     .image-list-filter-secondary {
@@ -377,22 +413,15 @@
       display: flex;
       gap: 12px;
     }
-    .image-list-filter-primary > .image-list-filter-device,
-    .image-list-filter-primary > .image-list-filter-brightness {
-      min-width: 120px;
-      flex: 0 0 120px;
+    .image-list-filter-primary > :is(label, .image-list-filter-field),
+    .image-list-filter-secondary > .image-list-filter-field {
+      grid-area: auto;
     }
-    .image-list-filter-primary > .image-list-filter-theme {
-      min-width: 150px;
-      flex: 1 1 150px;
+    .image-list-filter-primary {
+      grid-area: primary;
     }
-    .image-list-filter-secondary > .image-list-filter-author {
-      min-width: 150px;
-      flex: 1 1 0;
-    }
-    .image-list-filter-secondary > .image-list-filter-tag {
-      min-width: 150px;
-      flex: 2 1 0;
+    .image-list-filter-secondary {
+      grid-area: secondary;
     }
   }
 }
@@ -445,6 +474,15 @@
   .image-list-filter-bar:is(.filters-open, .filters-motion-enabled) {
     z-index: 20;
   }
+  .image-list-filter-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 1px 72px;
+    align-items: stretch;
+    background: transparent;
+    border: 1px solid var(--admin-color-border-control);
+    border-radius: 8px;
+  }
   .image-list-filter-toggle {
     --pressable-active-scale: var(--pressable-scale-large, .99);
 
@@ -452,18 +490,39 @@
     align-items: center;
     justify-content: flex-start;
     gap: 8px;
-    width: 100%;
+    width: auto;
     min-height: 40px;
     padding: 8px 14px;
     color: var(--admin-color-text-primary);
     background: var(--admin-color-surface-primary);
-    border: 1px solid var(--admin-color-border-control);
-    border-radius: 8px;
+    border: 0;
+    border-radius: 7px 0 0 7px;
     font-weight: 600;
   }
-  .image-list-filter-bar.filters-open > .image-list-filter-toggle {
+  .image-list-filter-bar.filters-open > .image-list-filter-actions {
     border-bottom-right-radius: 0;
     border-bottom-left-radius: 0;
+  }
+  .image-list-filter-bar.filters-open .image-list-filter-toggle {
+    border-bottom-left-radius: 0;
+  }
+  .image-list-filter-bar.filters-open .image-list-filter-clear-mobile {
+    border-bottom-right-radius: 0;
+  }
+  .image-list-filter-action-divider {
+    width: 1px;
+    align-self: stretch;
+    background: var(--admin-color-border-control);
+  }
+  .image-list-filter-clear-mobile {
+    --pressable-active-scale: var(--pressable-scale-large, .99);
+
+    min-width: 72px;
+    height: auto;
+    min-height: 40px;
+    padding-inline: 12px;
+    border: 0;
+    border-radius: 0 7px 7px 0;
   }
   .image-list-filter-count {
     min-width: 20px;
@@ -495,8 +554,8 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-template-areas:
       "device brightness"
-      "theme author"
-      "tag tag";
+      "theme tag"
+      "author author";
     align-items: end;
     gap: 12px;
     padding: 12px;
@@ -628,24 +687,6 @@
     );
     overflow-y: auto;
     overscroll-behavior: contain;
-    grid-template-areas:
-      "close close"
-      "device brightness"
-      "theme author"
-      "tag tag";
-  }
-  .image-list-filter-panel-close {
-    grid-area: close;
-    position: sticky;
-    z-index: 1;
-    top: 0;
-    width: 100%;
-    min-height: 36px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    background: var(--admin-color-workflow-filter-surface);
   }
 }
 

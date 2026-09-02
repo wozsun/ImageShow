@@ -253,6 +253,11 @@ input[aria-invalid="true"] {
   min-height: 38px;
   border-radius: 6px 0 0 6px;
 }
+.facet-search-input::-webkit-search-cancel-button {
+  display: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
 .facet-search-collapse {
   position: relative;
   width: 38px;

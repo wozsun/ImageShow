@@ -1,19 +1,64 @@
-@media (min-width: 761px) and (max-width: 1325px) {
+@media (min-width: 1390px) {
+  .gallery-toolbar label.gallery-axis {
+    width: auto;
+    min-width: 120px;
+    flex: 1 1 120px;
+  }
+  .gallery-toolbar .gallery-filter-fields > .gallery-filter-field {
+    width: auto;
+    min-width: 150px;
+    flex: 1 1 150px;
+  }
+  .gallery-filter-panel > .theme-link {
+    min-width: min(470px, 100%);
+    flex: 1 1 470px;
+  }
+}
+
+@media (min-width: 761px) and (max-width: 1389px) {
   .gallery-page .gallery-toolbar > .gallery-filter-panel {
     width: 100%;
     display: grid;
-    grid-template-columns:
-      120px
-      120px
-      minmax(0, 1.1fr)
-      minmax(0, 1.3fr)
-      minmax(0, 1.2fr);
+    grid-template-columns: minmax(0, 1fr) var(--gallery-filter-action-width);
     gap: 12px;
     align-items: end;
   }
-  .gallery-page .gallery-toolbar
-    > .gallery-filter-panel > .gallery-filter-field { min-width: 0; }
-  .gallery-filter-panel > .theme-link { grid-column: 1 / -1; }
+  .gallery-filter-fields {
+    min-width: 0;
+    display: flex;
+    gap: 12px;
+    align-items: end;
+  }
+  .gallery-toolbar .gallery-filter-fields > label.gallery-axis {
+    min-width: 120px;
+    width: auto;
+    flex: 1 1 120px;
+  }
+  .gallery-toolbar .gallery-filter-fields > .gallery-filter-field {
+    min-width: 0;
+    width: auto;
+    flex: 1 1 150px;
+  }
+  .gallery-filter-action { grid-column: 2; }
+}
+
+@media (min-width: 1000px) and (max-width: 1389px) {
+  .gallery-filter-fields { grid-column: 1; grid-row: 1; }
+  .gallery-filter-action { grid-row: 1; }
+  .gallery-filter-panel > .theme-link {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
+
+@media (min-width: 761px) and (max-width: 999px) {
+  .gallery-filter-fields { grid-column: 1 / -1; grid-row: 1; }
+  .gallery-filter-panel > .theme-link {
+    min-width: 0;
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .gallery-filter-action { grid-row: 2; }
 }
 
 @media (max-width: 760px) {
@@ -32,19 +77,43 @@
   }
   .gallery-toolbar :is(label.gallery-axis, .gallery-filter-field) { min-width: 0; }
 
+  .gallery-filter-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 1px 72px;
+    align-items: stretch;
+    background: transparent;
+    border: 1px solid var(--public-color-border-default);
+    border-radius: 8px;
+  }
   .gallery-filter-toggle {
     display: flex;
     align-items: center;
     justify-content: flex-start;
     gap: 8px;
-    width: 100%;
+    width: auto;
     min-height: 40px;
     padding: 8px 14px;
-    border: 1px solid var(--public-color-border-default);
-    border-radius: 8px;
+    border: 0;
+    border-radius: 7px 0 0 7px;
     background: var(--public-color-gallery-control-surface);
     color: var(--public-color-text-primary);
     font-weight: 600;
+  }
+  .gallery-filter-action-divider {
+    width: 1px;
+    align-self: stretch;
+    background: var(--public-color-border-default);
+  }
+  .gallery-filter-clear-mobile {
+    --pressable-active-scale: var(--pressable-scale-large, .99);
+
+    min-width: 72px;
+    height: auto;
+    min-height: 40px;
+    padding-inline: 12px;
+    border: 0;
+    border-radius: 0 7px 7px 0;
   }
   .gallery-filter-count {
     display: inline-flex;
@@ -96,10 +165,12 @@
     transform: translateY(0);
     transition-delay: 0s;
   }
-  .gallery-filter-panel > label.gallery-axis { order: 1; width: auto; }
-  .gallery-filter-panel > .gallery-theme-filter,
-  .gallery-filter-panel > .gallery-author-filter { order: 2; }
-  .gallery-filter-panel > .gallery-tag-filter { order: 3; grid-column: 1 / -1; }
+  .gallery-filter-fields { display: contents; }
+  .gallery-toolbar .gallery-filter-fields > .gallery-filter-field { width: auto; }
+  .gallery-filter-fields > label.gallery-axis { order: 1; width: auto; }
+  .gallery-filter-fields > .gallery-theme-filter,
+  .gallery-filter-fields > .gallery-author-filter { order: 2; }
+  .gallery-filter-fields > .gallery-tag-filter { order: 3; grid-column: 1 / -1; }
   .gallery-filter-panel > .theme-link { order: 4; grid-column: 1 / -1; }
   .theme-link { width: 100%; min-width: 0; flex: 0 0 auto; gap: 4px; }
   .theme-link > span { font-size: 13px; line-height: 18px; }

@@ -50,6 +50,7 @@ import { GalleryVirtualWindow } from "./GalleryVirtualWindow.js";
 import { scrollGalleryToTop, useGalleryViewportControls } from "./useGalleryViewportControls.js";
 import {
   galleryApiSearchParams,
+  emptyGalleryFilters,
   galleryFiltersFromSearchParams,
   galleryRandomRequestDevice,
   galleryRouteSearchParams,
@@ -142,6 +143,8 @@ export function GalleryPage({ embedded = false }: { embedded?: boolean }) {
     filterPanelRef,
     filterMenuDismissSignal,
     filterToggleRef,
+    clearFiltersRef,
+    dismissFilterMenus,
     filtersOpen,
     headerVisible,
     onHeaderMenuExpandedChange,
@@ -222,6 +225,10 @@ export function GalleryPage({ embedded = false }: { embedded?: boolean }) {
     setRouteSearchParams(
       galleryRouteSearchParams({ ...filters, [key]: value })
     );
+  };
+  const clearFilters = () => {
+    if (!Object.values(filters).some(Boolean)) return;
+    setRouteSearchParams(galleryRouteSearchParams(emptyGalleryFilters));
   };
 
   const columnCount = useGalleryColumnCount();
@@ -341,9 +348,12 @@ export function GalleryPage({ embedded = false }: { embedded?: boolean }) {
               toolbarVisible={toolbarVisible}
               toolbarRef={toolbarRef}
               filterToggleRef={filterToggleRef}
+              clearFiltersRef={clearFiltersRef}
               filterPanelRef={filterPanelRef}
               toggleFilters={toggleFilters}
+              dismissFilterMenus={dismissFilterMenus}
               onFilterChange={updateFilter}
+              onClearFilters={clearFilters}
             />
           </div>
         </div>

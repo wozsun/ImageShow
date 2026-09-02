@@ -11,6 +11,7 @@ import {
   effectiveImageAdminPage,
   imageAdminPaginationScopeKey,
   imageAdminTotalPages,
+  resetImageAdminPage,
   resolveImageAdminScopeTotal,
   type ImageAdminPageState
 } from "./image-admin-list-query.js";
@@ -128,6 +129,10 @@ export function useImageAdminPageNavigation({
     }));
   }, [pageNumber, scopeKey, totalPages]);
 
+  const resetPage = useCallback(() => {
+    setState((current) => resetImageAdminPage(current, scopeKey));
+  }, [scopeKey]);
+
   return {
     items: query.data?.items ?? [],
     hasCurrentPageData: query.data !== undefined,
@@ -139,6 +144,7 @@ export function useImageAdminPageNavigation({
     scopeKey,
     pageNumber,
     totalPages,
-    loadPage
+    loadPage,
+    resetPage
   };
 }

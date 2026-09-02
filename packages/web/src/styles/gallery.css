@@ -134,6 +134,7 @@
 
 .gallery-toolbar {
   --gallery-control-height: 40px;
+  --gallery-filter-action-width: 86px;
   --gallery-toolbar-shift: 0%;
   z-index: 6;
   width: 100%;
@@ -162,13 +163,18 @@
   --gallery-toolbar-shift: -100%;
   pointer-events: none;
 }
-.gallery-filter-panel { display: contents; }
+.gallery-filter-panel,
+.gallery-filter-fields { display: contents; }
 .gallery-toolbar :is(label.gallery-axis, .gallery-filter-field) {
   display: grid;
   gap: 6px;
   min-width: 150px;
   color: var(--public-color-gallery-toolbar-label);
   line-height: 20px;
+}
+.gallery-toolbar .gallery-filter-fields > .gallery-filter-field {
+  width: 150px;
+  flex: 0 0 150px;
 }
 .gallery-toolbar :is(.select-trigger, .facet-search-input, .facet-search-collapse) {
   height: var(--gallery-control-height);
@@ -253,7 +259,27 @@
 
 .gallery-toolbar label.gallery-axis { min-width: 0; width: 120px; flex: 0 0 auto; }
 
+.gallery-filter-actions,
 .gallery-filter-toggle { display: none; }
+.gallery-filter-action {
+  width: var(--gallery-filter-action-width);
+  min-width: var(--gallery-filter-action-width);
+  flex: 0 0 var(--gallery-filter-action-width);
+  display: grid;
+  gap: 6px;
+  color: var(--public-color-gallery-toolbar-label);
+  line-height: 20px;
+}
+.gallery-filter-clear {
+  width: 100%;
+  min-height: var(--gallery-control-height);
+  height: var(--gallery-control-height);
+  padding-inline: 10px;
+  white-space: nowrap;
+  color: var(--public-color-text-primary);
+  background: var(--public-color-gallery-control-surface);
+  border-color: var(--public-color-border-default);
+}
 .theme-link {
   min-width: min(520px, 100%);
   flex: 1 1 360px;
@@ -275,14 +301,18 @@
   min-width: 0;
   padding: 0 calc(var(--gallery-control-height) + 8px) 0 10px;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   color: var(--public-color-gallery-code-text);
   background: var(--public-color-gallery-code-surface);
   border: 1px solid var(--public-color-border-default);
   border-radius: 6px;
   display: flex;
   align-items: center;
+}
+.generated-link-field code > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .generated-link-field .copy-button {
   position: absolute;

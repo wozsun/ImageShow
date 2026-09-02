@@ -89,6 +89,20 @@ export function effectiveImageAdminPage(
   return state.scopeKey === scopeKey ? state.page : 1;
 }
 
+export function resetImageAdminPage(
+  state: ImageAdminPageState,
+  scopeKey: string
+): ImageAdminPageState {
+  const currentScope = state.scopeKey === scopeKey;
+  if (currentScope && state.page === 1) return state;
+  return {
+    scopeKey,
+    page: 1,
+    total: currentScope ? state.total : null,
+    totalUpdatedAt: currentScope ? state.totalUpdatedAt : 0
+  };
+}
+
 export function imageAdminTotalPages(total: number, pageSize: number) {
   return Math.max(1, Math.ceil(total / pageSize));
 }

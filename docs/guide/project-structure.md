@@ -390,8 +390,8 @@ hooks ──► lib
   `components/data-display/FacetSelector.tsx` 是公开图库与后台图片主题、标签和作者筛选的唯一
   交互 owner；显式字段标签始终绑定同一槽位内当前存在的收起按钮或展开搜索框，候选、已选和
   包含 / 排除仍位于共享 Portal 非模态区域。组件内部显式衔接页面控件与 Portal 的键盘及读屏
-  状态，并在直接激活事件内同步提交按钮到输入框的替换及输入焦点，不让页面或视口建立第二套
-  状态。`components/feedback/AnchoredPopup.tsx` 与
+  状态，并在直接激活事件内同步提交按钮到输入框的替换及输入焦点；共享样式移除浏览器原生
+  search 清除入口，不让页面或视口建立第二套状态。`components/feedback/AnchoredPopup.tsx` 与
   `lib/ui/menu-position.ts` 共同统一页面 fixed、可见边界与弹窗局部坐标映射，并以实际 fixed
   绘制原点吸收软键盘造成的页面平移。
   `components/layout/OverlayScrollbar.tsx` 统一拥有页面与局部容器滚动条：React 只提交可见性、
@@ -407,6 +407,8 @@ hooks ──► lib
   有限入场动效。共享
   `usePageScrollLock.ts` 计数化冻结应用根、安装弹窗触摸边界并在最后释放时恢复页面滚动；
   `useDialogFocus.ts` 在相同层级归还 opener，页面和角色模块不得建立第二套 body 锁。
+  `useDismissiblePanel.ts` 还允许把外置的相邻操作登记为同一交互表面，并单独广播子菜单收起；
+  移动画廊与后台图片筛选据此让清空关闭 Select / Facet，却不改变外层面板状态。
 - `lib/` 保存无界面代码；HTTP 客户端、query key 和共享查询 Hook 集中在 `lib/api/`。
   首页与画廊的主导航滚动阈值由 `lib/ui/public-navigation.ts` 统一定义；共享公开端
   入场缓动与首页导航淡入时长由 `styles/base.css` 的 motion token 提供，页面样式
@@ -438,8 +440,12 @@ hooks ──► lib
 - `pages/` 保存路由页面与页面级编排，页面专属组件、状态机和 Hook 就近维护。
 - `pages/admin/images/useImageAdminPageNavigation.ts` 是后台图库、无主题与回收站数字页的唯一查询
   owner，只保存规范化 scope、目标 page 与最近成功的 scope total 快照，并让 React Query
-  处理取消、键隔离、90 秒新鲜缓存和重试；同目录 `images/image-admin-list-query.ts` 只构造规范化
+  处理取消、键隔离、90 秒新鲜缓存和重试；筛选整体清空通过该 owner 显式归一到第一页，因此
+  无主题视图中仅删除隐藏主题值时也保留相同分页收敛。同目录 `images/image-admin-list-query.ts` 只构造规范化
   scope、query key、数字页 URL 与纯 total 仲裁模型；页面状态只消费这两个所有者提供的结果。
+  `images/ImageAdminFilters.tsx` 以自身容器宽度同步 CSS 的 `947px` 单双行边界，并实际切换筛选项
+  DOM 分组，保证单行、双行与移动布局的视觉顺序和键盘顺序一致；设备 / 亮度与三类 Facet 分别
+  以 `120px`、`150px` 为弹性基准和下限。
   图片成员 mutation 通过显式的后台列表失效入口等待该 owner 的刷新错误，其余相关投影仍尽力
   失效，通用图片失效函数不接收页面专用的 query-key 特判参数。
 - `AppRoutes.tsx` 将普通与嵌入路径映射到同一 `HomePage` / `GalleryPage`；页面参数只
@@ -459,7 +465,8 @@ hooks ──► lib
   `ProgressiveImage` 消费者继续沿用不可命中的共享默认值。
   `lib/gallery/gallery-query.ts` 保留完整语义的画廊路由状态，并在公开列表 query key 建立前把
   `device=auto` 通过 shared User-Agent 纯函数投影为具体设备或无条件；随机链接则把缺省全部设备
-  投影为 `device=all`，并为自动设备省略该参数。
+  投影为 `device=all`，并为自动设备省略该参数。画廊整体清空只进行一次空筛选路由写入，让列表
+  查询和随机链接从同一 URL 状态同步更新。
 - `pages/admin/` 按稳定页面职责分为 `shell/`、`account/`、`images/`、`check/`、`storage/`
   与 `advanced-config/`；只有 `LogPage.tsx`、`Overview.tsx`、`SettingsPage.tsx`、
   `UserAdmin.tsx`、`VocabularyAdmin.tsx` 及其单个卡片等没有形成三文件族的页面留在根层。

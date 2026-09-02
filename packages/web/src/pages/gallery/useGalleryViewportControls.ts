@@ -141,6 +141,7 @@ export function useGalleryViewportControls({
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [headerMenuExpanded, setHeaderMenuExpanded] = useState(false);
   const toolbarRef = useRef<HTMLElement | null>(null);
+  const clearFiltersRef = useRef<HTMLButtonElement | null>(null);
   const mobileLayout = useMediaQuery(mobileViewportMediaQuery);
 
   useLayoutEffect(() => {
@@ -151,7 +152,8 @@ export function useGalleryViewportControls({
     open: filtersOpen,
     onOpenChange: setFiltersOpen,
     enabled: mobileLayout,
-    resetKey: mobileLayout
+    resetKey: mobileLayout,
+    auxiliarySurfaceRef: clearFiltersRef
   });
   const toggleFilters = useCallback(() => {
     disclosure.setOpen(!filtersOpen, filtersOpen
@@ -179,6 +181,8 @@ export function useGalleryViewportControls({
     filterPanelRef: disclosure.panelRef,
     filterMenuDismissSignal: disclosure.menuDismissSignal,
     filterToggleRef: disclosure.triggerRef,
+    clearFiltersRef,
+    dismissFilterMenus: disclosure.dismissMenus,
     filtersOpen,
     headerVisible,
     onHeaderMenuExpandedChange: setHeaderMenuExpanded,

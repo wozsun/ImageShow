@@ -198,15 +198,26 @@ export function ImageAdmin() {
     routeView,
     view
   ]);
+  const applyFilters = (nextFilters: ImageAdminFilterValues) => {
+    if (
+      interfaceBusy
+      || (Object.keys(filters) as Array<keyof ImageAdminFilterValues>)
+        .every((key) => filters[key] === nextFilters[key])
+    ) return;
+    navigation.resetPage();
+    setFilters(nextFilters);
+    clearImageSelection();
+    resetTransientState();
+    gridRef.current?.scrollTo({ top: 0, left: 0 });
+  };
   const changeFilter = (
     key: keyof ImageAdminFilterValues,
     nextValue: string
   ) => {
-    if (filters[key] === nextValue || interfaceBusy) return;
-    setFilters((current) => ({ ...current, [key]: nextValue }));
-    clearImageSelection();
-    resetTransientState();
-    gridRef.current?.scrollTo({ top: 0, left: 0 });
+    applyFilters({ ...filters, [key]: nextValue });
+  };
+  const clearFilters = () => {
+    applyFilters({ ...emptyImageAdminFilters });
   };
   const changeView = (next: typeof view) => {
     if (next === routeView || interfaceBusy) return;
@@ -294,6 +305,7 @@ export function ImageAdmin() {
           mobileLayout={mobileLayout}
           disabled={interfaceBusy}
           onChange={changeFilter}
+          onClear={clearFilters}
         />
         <div className="image-list-toolbar">
           <div className="inline-actions image-list-selection">

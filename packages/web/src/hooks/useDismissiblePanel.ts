@@ -3,7 +3,8 @@ import {
   useEffect,
   useLayoutEffect,
   useRef,
-  useState
+  useState,
+  type RefObject
 } from "react";
 import { isDocumentFallbackFocusTarget } from "../lib/ui/focus-target.js";
 import { anchoredPopupBoundarySelector } from "../lib/ui/anchored-popup-boundary.js";
@@ -85,16 +86,25 @@ function useTransientPanelSemantics({
 function isWithinPanelSurface(
   panel: HTMLElement,
   trigger: HTMLElement,
+  auxiliarySurface: HTMLElement | null,
   event: Pick<Event, "composedPath" | "target">,
   portalSelector: string
 ) {
   const path = event.composedPath?.() ?? (event.target ? [event.target] : []);
   return path.some((entry) => {
-    if (entry === panel || entry === trigger) return true;
+    if (
+      entry === panel
+      || entry === trigger
+      || entry === auxiliarySurface
+    ) return true;
     if (
       typeof Node !== "undefined"
       && entry instanceof Node
-      && (panel.contains(entry) || trigger.contains(entry))
+      && (
+        panel.contains(entry)
+        || trigger.contains(entry)
+        || auxiliarySurface?.contains(entry)
+      )
     ) {
       return true;
     }
@@ -116,12 +126,14 @@ export function useDismissiblePanel({
   onOpenChange,
   enabled = true,
   resetKey,
+  auxiliarySurfaceRef,
   portalSelector = defaultPortalSelector
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   enabled?: boolean;
   resetKey?: unknown;
+  auxiliarySurfaceRef?: RefObject<HTMLElement | null>;
   portalSelector?: string;
 }) {
   const openRef = useRef(open);
@@ -136,6 +148,10 @@ export function useDismissiblePanel({
   openRef.current = open;
   onOpenChangeRef.current = onOpenChange;
 
+  const dismissMenus = useCallback(() => {
+    setMenuDismissSignal((current) => current + 1);
+  }, []);
+
   const setOpen = useCallback((
     nextOpen: boolean,
     closeOptions?: TransientPanelCloseOptions
@@ -143,7 +159,7 @@ export function useDismissiblePanel({
     window.clearTimeout(motionTimerRef.current);
     if (!nextOpen) {
       semantics.prepareForClose(closeOptions);
-      setMenuDismissSignal((current) => current + 1);
+      dismissMenus();
     }
     setMotionEnabled(enabled);
     onOpenChangeRef.current(nextOpen);
@@ -154,17 +170,17 @@ export function useDismissiblePanel({
         100
       );
     }
-  }, [enabled, semantics.prepareForClose]);
+  }, [dismissMenus, enabled, semantics.prepareForClose]);
 
   useLayoutEffect(() => {
     window.clearTimeout(motionTimerRef.current);
-    setMenuDismissSignal((current) => current + 1);
+    dismissMenus();
     setMotionEnabled(false);
     if (openRef.current) {
       semantics.prepareForClose();
       onOpenChangeRef.current(false);
     }
-  }, [resetKey, semantics.prepareForClose]);
+  }, [dismissMenus, resetKey, semantics.prepareForClose]);
 
   useEffect(() => () => {
     window.clearTimeout(motionTimerRef.current);
@@ -217,7 +233,13 @@ export function useDismissiblePanel({
     if (!enabled || !open || !panel || !trigger) return;
 
     const closeOnOutsideInteraction = (event: Event) => {
-      if (isWithinPanelSurface(panel, trigger, event, portalSelector)) return;
+      if (isWithinPanelSurface(
+        panel,
+        trigger,
+        auxiliarySurfaceRef?.current ?? null,
+        event,
+        portalSelector
+      )) return;
       if (
         event.type === "focusin"
         && isDocumentFallbackFocusTarget(
@@ -252,13 +274,15 @@ export function useDismissiblePanel({
     enabled,
     open,
     portalSelector,
-    setOpen
+    setOpen,
+    auxiliarySurfaceRef
   ]);
 
   return {
     panelHidden: semantics.panelHidden,
     panelRef: semantics.panelRef,
     motionEnabled,
+    dismissMenus,
     menuDismissSignal,
     setOpen,
     triggerRef: semantics.triggerRef
