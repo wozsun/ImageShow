@@ -5,6 +5,7 @@ import {
   useState,
   type AnimationEvent
 } from "react";
+import { flushSync } from "react-dom";
 
 export function useAnimatedClose(onClose: () => void, fallbackMs = 170) {
   const [closing, setClosing] = useState(false);
@@ -32,8 +33,14 @@ export function useAnimatedClose(onClose: () => void, fallbackMs = 170) {
     if (!mountedRef.current || !closingRef.current) return;
     closingRef.current = false;
     window.clearTimeout(fallbackTimer.current);
-    setClosing(false);
-    closeCallbackRef.current();
+    // The closing animation has already made the surface transparent. Commit
+    // its removal and the caller's interaction unlock before the browser can
+    // paint another frame, so a vanished dialog never leaves stale disabled
+    // controls visible behind it.
+    flushSync(() => {
+      setClosing(false);
+      closeCallbackRef.current();
+    });
   }, []);
 
   // prepareClose 只在首次关闭请求被接受时运行，并返回退场结束后的收尾动作。

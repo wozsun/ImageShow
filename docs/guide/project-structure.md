@@ -317,8 +317,10 @@ Server 队列模块与 Web 队列 owner 的连接关系保持不变：
   `useServerIngestionQueue.ts` 只拥有当前显示队列的连接生命周期与唯一 retained display
   baseline；`useIngestionQueue.ts` 以 `session_id + image_id` 把 SSE、status 和动作中的逐项事实
   投影到所有已保留的当前文档卡片 owner（包括离页项），但不挂载未知 pair 或保存全队列 DTO；
-  它同时用动作逐项结果移除组合投影中同 pair 的已确认清理卡片，包括纯 Server DTO 与已把
-  显示权交回浏览器的 completed handoff；
+  `model/server-ingestion-job.ts` 在 bounded snapshot 覆盖 handoff revision 前同时保留卡片的临时
+  展示页与 summary 占位，来源无关的逐项 active 事件只推进卡片状态，不提前撤销计数或展示租约；
+  `useIngestionQueue.ts` 同时用动作逐项结果移除组合投影中同 pair 的已确认清理卡片，包括纯
+  Server DTO 与已把显示权交回浏览器的 completed handoff；
   `useIngestionQueueActions.ts` 在每个 continuation 响应后立即把该批结果交还工作流，逐批投影与
   最终权威恢复分离，后续批延迟或失败不会延迟、撤销此前成功 pair；
   raw owner 保留未受影响的有界基线、只作废动作成功前 snapshot 的证明资格，并复用一次权威
@@ -419,7 +421,9 @@ hooks ──► lib
   `useDocumentMotionPause.ts` 统一把文档隐藏状态交给首页加载 / 刷新反馈和画廊尚未结束的
   有限入场动效。共享
   `usePageScrollLock.ts` 计数化冻结应用根、安装弹窗触摸边界并在最后释放时恢复页面滚动；
-  `useDialogFocus.ts` 在相同层级归还 opener，页面和角色模块不得建立第二套 body 锁。
+  `useDialogFocus.ts` 在相同层级归还 opener，页面和角色模块不得建立第二套 body 锁；
+  `useAnimatedClose.ts` 在退场动画完成回调返回前同步提交表面卸载与调用方交互解锁，使首个
+  无弹窗或菜单的绘制帧不再保留背景禁用状态。
   `useDismissiblePanel.ts` 还允许把外置的相邻操作登记为同一交互表面，并单独广播子菜单收起；
   移动画廊与后台图片筛选据此让清空关闭 Select / Facet，却不改变外层面板状态。
 - `lib/` 保存无界面代码；HTTP 客户端、query key 和共享查询 Hook 集中在 `lib/api/`。

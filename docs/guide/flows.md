@@ -45,7 +45,9 @@ Import： accept ─► queued ─► downloading ─► received ─► prepari
 - 任一入口开始启动时，launcher 取得唯一页面交互锁。工作流或来源窗口成功打开后，该锁由
   整个工作流的关闭路径统一释放；加载失败、入口撤回或未能打开时才提前释放。因此链接、
   JSONL 和微博共用的异步来源模块不会在弹窗出现后把背景控件从禁用态短暂恢复，页面也
-  不会产生一次明暗闪烁。
+  不会产生一次明暗闪烁。正常退场在遮罩动画完成回调内同步提交弹窗卸载与页面解锁，确保
+  首个不再显示遮罩的绘制帧已经恢复页签、筛选、选择、卡片动作和分页；减少动态效果仍在
+  关闭请求内直接完成同一组状态，不复制动画时长或增加延时器。
 - URL 列表把每个非空行作为一个候选；JSONL 每行一个对象，未知字段严格拒绝并保留行号；
   微博入口先提取公开帖子中的原图、发布时间、来源与可选作者映射，再交给同一 JSONL
   解析器。微博访客握手与帖子元数据由全进程固定串行调度器执行，并行批次逐项轮转；全进程
@@ -302,6 +304,11 @@ SSE semantic mutation 与批量 status 的完整逐项 DTO 都由队列 owner �
 较旧 progress 的 snapshot、SSE、status 和迟到 HTTP 响应都受 pair / version / progress sequence
 及终态围栏约束，不能把已完成卡片回退到 `committing`、`finalized` 或其他 active 状态。重复完成
 观察仍由同一个 pair 去重入口合并一次图库失效，且不会改变当前文档批次顺序。
+HTTP 接管响应先于 bounded snapshot 时，浏览器只为尚未被 Server summary 覆盖的 accepted pair
+保留临时计数与原展示页租约；URL、JSONL、微博和 Upload 共用的逐项 SSE / status 映射可以推进
+等待、处理、失败或完成状态，但不能提前撤掉这两个租约。只有覆盖到对应 handoff revision 的
+snapshot 才一次性交还临时计数给 Server summary，因此 25 项开始并发处理时只会从“等待中”
+逐项迁移到“处理中”，总数不会先降到个位数再恢复，也不会双计数或扩大当前 DTO 页。
 
 单张任务的取消确认已经得到 `discarded` 结果时，队列 owner 立即按精确 session / attempt
 移除卡片。取消结果同时携带该次语义变更的精确 queue revision；在随后一次权威快照完成前，

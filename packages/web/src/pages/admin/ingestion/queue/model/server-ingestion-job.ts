@@ -218,6 +218,17 @@ function activeIngestionJob(
     serverHandoffRevision: handoffPending
       ? existing?.serverHandoffRevision
       : undefined,
+    // Exact-pair SSE/status projection can precede the bounded snapshot that
+    // adopts this accepted item into its global summary. Keep both temporary
+    // display and count leases until that snapshot revision actually covers
+    // the handoff; otherwise every early active event briefly removes one
+    // card/count before the new summary arrives.
+    serverHandoffDisplayPage: handoffPending
+      ? existing?.serverHandoffDisplayPage
+      : undefined,
+    serverHandoffProvisionalTotal: handoffPending
+      ? existing?.serverHandoffProvisionalTotal
+      : undefined,
     serverAcceptedOrder: item.accepted_order,
     imageTime: item.resolved_image_time,
     batchTime: existing?.batchTime,
