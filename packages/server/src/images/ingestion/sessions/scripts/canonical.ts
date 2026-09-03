@@ -262,10 +262,12 @@ if action == 'progress' then
     ) then
     return redis.error_reply('INGESTION_CANONICAL invalid_progress')
   end
+  local before = projection(current)
   current.phase = progress.phase
   current.message = progress.message
   current.progress = progress.progress
   current.progress_seq = tonumber(current.progress_seq or 0) + 1
+  apply_projection_delta(metadata_key, before, projection(current))
   local serialized = encode_snapshot(current)
   store_snapshot(canonical_key, current, serialized, display_order_key)
   return { 3, serialized, cjson.encode(metadata_summary(metadata_key)) }

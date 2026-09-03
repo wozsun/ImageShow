@@ -194,7 +194,10 @@ Import 下载与 prepare 会在各自取得完整事实的 Server 边界再次�
    `normalize.concurrency=N` 时，全进程最多有 `N` 项 Import 正在下载或持有完整 raw 等待图片处理；
    某项取得实际 Normalize 许可后即让出后继名额，使下载稳定预取下一批。
 3. **prepare**只处理完整 raw：Upload / Import 先取得同一个由 `normalize.concurrency=N` 派生的
-   preparation 许可，两种来源合计最多有 `N` 项进入本阶段。Sharp 校验格式、尺寸和 EXIF 展示方向，
+   preparation 许可，两种来源合计最多有 `N` 项进入本阶段。此时 canonical 使用内部
+   `preparing` 状态和 `prepare-waiting` phase，表示 raw 已完整但仍在等待 Normalize 许可；它在
+   页面显示“待处理”并计入“等待中”。只有真正进入全局 Normalize 许可回调后，Server 才发布
+   `normalizing` phase，页面随之进入“处理中”。Sharp 校验格式、尺寸和 EXIF 展示方向，
    按配置生成 processed image 与 thumbnail，计算 MD5/SHA-256、设备和明暗，再在 storage location
    shared advisory lock 内写入 `_uploads`；两个对象及 ready canonical 发布完成后才释放 preparation
    许可。图片重工作结束即释放 Normalize 许可，因此慢存储不会占用其他图片处理入口。下载 /
@@ -284,6 +287,22 @@ snapshot 才去重或清理资源。任务进入重复待确认后立即按当�
 对应卡片并在当前查询 revision 内缓存，期间新增的 MD5 只合并为一份尚未解析项的后继请求，
 避免已有卡片等待整批完成，也避免取消请求、重复查询已解析项与并发请求。
 
+SSE semantic mutation 与批量 status 的完整逐项 DTO 都由队列 owner 按
+`session_id + image_id` 投影到已经保留的精确浏览器卡片，包括当前文档保序前缀中暂时离页的
+卡片；事件不会挂载未知 pair，也不会建立全队列 DTO 缓存。completed 事件携带本次 PostgreSQL
+事务形成的完整图片投影，因而离页卡片在翻页前已经成为最终状态。若恢复路径或完成投影失败只
+能发送 compact completed 回执，owner 也会先按精确 pair 建立不可回退的“已完成”围栏，再把该
+有界 pair 放入既有 status 水合 owner 补齐 PostgreSQL DTO；没有 retained card 的 compact pair
+也只在这里水合以触发图库失效，不会挂载新卡片。超过单次 status 上限时，由每任 effect 只读取
+一个有界 chunk；成功原子落实卡片、引用和待失效事实并消费对应 pair 后，下一任 owner 才读取
+尾部，避免旧 owner 中止尾部后重复发起请求。完成去重 owner 会直接过滤已水合未知 pair 的 SSE
+重放；后续批失败只留下尚未
+处理的尾部，等待明确重试或后续状态事件，已经落实的完成事实与尾部最终仍合并为一次图库失效。
+它不为当前页追加 snapshot，Blob 在完整 DTO 替换预览后才回收。顶部 summary 只负责计数，绝不用于推断所有卡片成功。较旧或同版本
+较旧 progress 的 snapshot、SSE、status 和迟到 HTTP 响应都受 pair / version / progress sequence
+及终态围栏约束，不能把已完成卡片回退到 `committing`、`finalized` 或其他 active 状态。重复完成
+观察仍由同一个 pair 去重入口合并一次图库失效，且不会改变当前文档批次顺序。
+
 单张任务的取消确认已经得到 `discarded` 结果时，队列 owner 立即按精确 session / attempt
 移除卡片。取消结果同时携带该次语义变更的精确 queue revision；在随后一次权威快照完成前，
 owner 临时过滤旧基线中的同一任务，并从旧摘要扣除该任务当前状态对应的计数。目标不在当前
@@ -298,9 +317,10 @@ owner 临时过滤旧基线中的同一任务，并从旧摘要扣除该任务�
 或轮询制造第二状态源。
 
 upload 与 import 窗口共用同一两行摘要，桌面和移动端都保持：第一行显示总数、等待中与
-处理中，第二行显示待提交、提交中与已完成。其中等待 worker 准入的 `queued` / `received`
-以及等待提交准入或提交结果的任务计入“等待中”，实际下载、上传、准备或取消中的任务才
-计入“处理中”。重复图片卡片的状态标签显示黄色“待确认”，
+处理中，第二行显示待提交、提交中与已完成。其中等待 worker 准入的 `queued` / `received`、
+已下载完整 raw 但处于 `preparing + prepare-waiting` 的任务，以及等待提交准入或提交结果的任务
+计入“等待中”；实际下载、上传、已取得 Normalize 许可的准备或取消中的任务才计入“处理中”。
+重复图片卡片的状态标签显示黄色“待确认”，
 颜色直接复用重复提示标题的亮 / 暗语义色；协议恢复、读取和重连状态不在卡片列表上方另加
 提示。桌面标题栏下方 padding 为 12px；摘要两行本身提供稳定内容高度，因此右侧动作从一排
 切换到两排时不改变标题栏总高度。移动端标题栏始终保持两行：标题位于第一行清理与关闭
@@ -391,8 +411,11 @@ stale pair 供 owner 原子清退，不用闪现额外提示。它同时
 确认失去正式图片的陈旧回执按固定预算原子删除后整页重读，查询未知时 fail closed。最终稳定
 页面才签发绑定当前进程 scope、Redis connection epoch、owner、queue、captured revision 与
 accepted-order 水位的动作 watermark。owner rank 只供该水位下的有界动作扫描，不参与展示分页。
-SSE semantic 事件可更新 summary 或令当前页有界重读；
-同一 pair/version 的 `progress_seq` 只要求单调增加，允许节流造成跳号。
+SSE semantic 事件可更新 summary 或令当前页有界重读；同一 semantic revision 内，
+`prepare-waiting → normalizing` 的 progress 事件也携带新的 canonical summary，Web 对页内和离页
+事件都更新这份全局计数；同 revision 的绝对 summary 只允许 waiting 等量转入 running，因而
+较早离页帧也不能覆盖较新快照，旧 revision 同样不得回退计数。同一 pair/version 的
+`progress_seq` 只要求单调增加，允许节流造成跳号，旧 sequence 不能回退卡片或 summary。
 
 SSE 每 30 秒串行重新使用普通 HTTP 的 Redis + PostgreSQL 会话校验，但该长连接心跳不续期；
 只有显式 `/auth/me` 探针承担滑动续期。logout、密码重置和账号
@@ -401,8 +424,10 @@ SSE 每 30 秒串行重新使用普通 HTTP 的 Redis + PostgreSQL 会话校验�
 Server 基线和新 scope 开始，读取状态不会延长 Ingestion canonical 的 `discard_at`。
 
 “应用到全部”、提交全部 ready、三类顶部清理和右下角清空都使用点击时已有的签名
-`action_watermark`，不退化为当前页循环。Server 按 accepted-order 水位有界扫描，响应返回
-逐项结果和签名 continuation；continuation 绑定 action ID、动作、规范化参数、完整 watermark、
+`action_watermark`，不退化为当前页循环。Server 冻结 watermark 中的
+`max_accepted_order` 后，从 order 1 开始按 `accepted_order` 递增有界扫描候选，响应返回
+逐项结果和签名 continuation；continuation 以上一页最后 order + 1 单调向上推进，并绑定
+action ID、动作、规范化参数、完整 watermark、
 owner、queue、scope 和 cursor。首批响应丢失时浏览器用相同 action ID 从头重试，已经成立的
 commit intent、语义 no-op 或已移除成员不会再次推进 version、TTL 或 revision。当前进程的
 action scope 只保留这个动作最近一个请求批次的完整 Promise / 结果；完全相同的并发请求或
@@ -414,6 +439,9 @@ Redis operational 周期变化或 scope 废止后旧 token 本来就不能继续
 跨客户端 UUIDv7 大小不作为操作先后关系，实际成功的 CAS 顺序才是因果顺序。浏览器可以在
 前一动作执行期间继续冻结后续点击，每个动作使用独立 ID 与点击时 watermark，并在同一 owner
 内严格串行；全部排队动作结束后才触发一次收敛快照。
+该顺序只改变整体候选遍历方向：逐项 handler 仍使用现有并发窗口和执行时谓词复核，不增加
+批次 barrier，也不保证在途窗口内的开始、入队或完成严格 FIFO。冻结后新接受且
+`accepted_order > max_accepted_order` 的任务不会进入本轮。
 提交点击若包含当前浏览器持有且草稿尚待写回的 ready owner，会先冻结点击时的本地 ID / attempt，
 以及已取得 pair 但尚未进入当前 watermark 的精确交接 owner，按既有逐项草稿围栏完成写回与
 提交受理，再继续执行原点击 watermark 的全队列动作。已逐项受理

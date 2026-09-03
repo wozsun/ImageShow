@@ -150,16 +150,17 @@ export async function prepareIngestionSessionSnapshot(
 
   const prepareAndPublish = async () => {
     const runtime = getRuntimeConfig();
-    let current = await updateIngestionExecutionProgress(
-      repository,
-      session,
-      {
-        phase: "normalizing",
-        message: "校验格式、压缩原图并生成缩略图",
-        progress: null
-      }
-    );
+    let current = session;
     const normalizedState = await withNormalizationAdmission(signal, async () => {
+      current = await updateIngestionExecutionProgress(
+        repository,
+        current,
+        {
+          phase: "normalizing",
+          message: "校验格式、压缩原图并生成缩略图",
+          progress: null
+        }
+      );
       dependencies.onNormalizationAdmitted?.();
       const normalized = await transcode(
         rawPath,

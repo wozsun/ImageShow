@@ -100,7 +100,7 @@ export async function runRawUploadBatch({
         status: cancelling ? "cancelling" : "received",
         message: cancelling
           ? "正在取消上传"
-          : "上传已接收，等待服务器处理",
+          : "上传已接收，等待图片处理许可",
         transferProgress: 100
       }, rawConnectionGeneration, accepted.accepted_order);
     });

@@ -150,6 +150,7 @@ export async function scanIngestionQueueAction(
     || !Number.isSafeInteger(cursor)
     || cursor < 0
     || cursor > maximumOrder
+    || (maximumOrder === 0 ? cursor !== 0 : cursor < 1)
     || !Number.isSafeInteger(limit)
     || limit < 1
     || limit > appConfig.ingestionRuntime.queueActionBatchSize
@@ -188,7 +189,9 @@ export async function scanIngestionQueueAction(
     || serialized.length !== count
     || (hasMore !== 0 && hasMore !== 1)
     || (hasMore === 0 && nextCursor !== 0)
-    || (hasMore === 1 && (nextCursor < 1 || nextCursor >= cursor))
+    || (hasMore === 1 && (
+      nextCursor <= cursor || nextCursor > maximumOrder
+    ))
   ) {
     throw new Error("Redis ingestion action scan returned invalid bounds");
   }

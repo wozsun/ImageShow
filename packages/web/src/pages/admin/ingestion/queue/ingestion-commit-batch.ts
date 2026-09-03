@@ -173,7 +173,8 @@ async function commitBatch(
     if (result.status === "completed") {
       completed.push({
         pair: result,
-        item: result.completed_item
+        item: result.completed_item,
+        serverVersion: result.version
       });
     }
     accepted += 1;

@@ -280,7 +280,8 @@ snapshot、SSE、watermark 和展示投影只使用 session / repository 边界�
   排除 session，并以一次 display 扫描区分正常 stale 与孤儿投影；不新增反向索引或迁移职责。
 - `queue/events.ts`、`snapshot.ts`、`action-scope.ts` 与 `store.ts` 共同负责 owner + queue 单
   SSE、稳定分页、动作作用域和最近动作批次的有界重放；`action.ts` 编排有界全队列动作，
-  `action-protocol.ts` 校验 watermark / continuation，`action-handlers.ts` 执行逐项动作，
+  `action-protocol.ts` 校验 watermark / continuation，并让冻结最大 accepted order 后的扫描游标
+  从 1 单调向上推进；`action-handlers.ts` 执行逐项动作，
   `session-update.ts` 负责 active canonical 草稿和 ready duplicate decision 的 CAS。
 - `raw/lease-registry.ts` 是 `active`、`deleting`、`scanning`、`pruning` 可变状态的唯一 owner；
   `paths.ts` 只处理身份与路径，`files.ts` 处理 generation 精确对象操作，`orphan-scanner.ts`
@@ -314,8 +315,10 @@ Server 队列模块与 Web 队列 owner 的连接关系保持不变：
 - Web 的 `useUploadQueueOwner` / `useImportQueueOwner` 分别组合浏览器来源与 Redis canonical，
   并各自持有重复确认与单卡提交的 single-flight controller；
   `useServerIngestionQueue.ts` 只拥有当前显示队列的连接生命周期与唯一 retained display
-  baseline；`useIngestionQueue.ts` 用动作逐项结果同步移除组合投影中同 pair 的已确认清理卡片，
-  包括纯 Server DTO 与已把显示权交回浏览器的 completed handoff；
+  baseline；`useIngestionQueue.ts` 以 `session_id + image_id` 把 SSE、status 和动作中的逐项事实
+  投影到所有已保留的当前文档卡片 owner（包括离页项），但不挂载未知 pair 或保存全队列 DTO；
+  它同时用动作逐项结果移除组合投影中同 pair 的已确认清理卡片，包括纯 Server DTO 与已把
+  显示权交回浏览器的 completed handoff；
   `useIngestionQueueActions.ts` 在每个 continuation 响应后立即把该批结果交还工作流，逐批投影与
   最终权威恢复分离，后续批延迟或失败不会延迟、撤销此前成功 pair；
   raw owner 保留未受影响的有界基线、只作废动作成功前 snapshot 的证明资格，并复用一次权威
@@ -324,15 +327,22 @@ Server 队列模块与 Web 队列 owner 的连接关系保持不变：
   收敛完成，弹窗关闭本身不等待该流程；
   pre-action snapshot 不能证明清理结果，快速重开、普通 refresh 和并发 recovery 复用该 owner
   的 post-action single-flight。
-  `model/server-ingestion-queue-state.ts` 负责 revision / version / progress 单调合并，
+  `model/server-ingestion-queue-state.ts` 负责 revision / version / progress 单调合并，并让当前
+  revision 的页内或离页 progress 同步 canonical summary、拒绝旧 revision 回退计数，
   `useStoredIngestionDraftSync.ts` 按硬上限批量排空草稿写入并在 version 冲突时有界回读，
   `useIngestionAuthorityHandoffs.ts` 持有独立于当前页 DTO 和连接代际的 HTTP 接管围栏，
   `cards/useIngestionJobDraftEditing.ts` 在失焦发布前复用 `@imageshow/shared/browser` 的 Ingestion
   草稿 URL 纯格式解析，不接入远端图片请求能力；`useIngestionQueue.ts` 是单队列 controller
   的公开组合入口。
 - `useCompletedIngestionInvalidation.ts` 是 completed pair 去重与 PostgreSQL 图片查询失效 owner；
-  `useIngestionStatusHydration.ts` 拥有响应未知 pair 的有界 status 回读与 AbortController；SSE
-  view / protocol 纯投影位于 `model/server-ingestion-queue-view.ts`，不创建第二条连接。
+  `model/server-ingestion-job.ts` 集中完成 active / completed DTO 到卡片的单调映射，并以终态围栏
+  阻止迟到 snapshot、SSE、status 或 HTTP 结果回退；
+  `useIngestionStatusHydration.ts` 以同一个有界 status 请求 owner 处理未知交接与 compact completed
+  回执的 PostgreSQL DTO 水合（未知 compact pair 只用于失效而不挂载卡片），每个 effect 只发出一个
+  上限内的 status chunk，成功原子落实后才由下一任 owner 消费尾部，保证不发生中止后重发；完成
+  去重 owner 同时过滤未知 pair 的 SSE 重放，且后续失败只留下可重试尾部。该 Hook 拥有唯一
+  AbortController；SSE view / protocol 纯投影位于
+  `model/server-ingestion-queue-view.ts`，不创建第二条连接。
 - `model/stored-ingestion-draft-model.ts` 保存 target / authoritative projection 与 CAS 纯决策；
   pending / dirty map、250 ms timer、batch tail、flush 和 revision 等待仍只由
   `useStoredIngestionDraftSync.ts` 持有。

@@ -68,6 +68,8 @@ export function queueProjectionForSession(
     };
   }
   const completed = session.status === "completed" ? 1 : 0;
+  const prepareWaiting = session.status === "preparing"
+    && session.phase === "prepare-waiting";
   const duplicatePending = session.status === "ready"
     && "prepared" in session
     && Boolean(session.prepared?.duplicate_count)
@@ -75,8 +77,13 @@ export function queueProjectionForSession(
   return {
     total: 1,
     unfinished: completed ? 0 : 1,
-    waiting: ["queued", "received"].includes(session.status) ? 1 : 0,
-    running: ["downloading", "preparing"].includes(session.status) ? 1 : 0,
+    waiting: ["queued", "received"].includes(session.status) || prepareWaiting
+      ? 1
+      : 0,
+    running: ["downloading", "preparing"].includes(session.status)
+      && !prepareWaiting
+      ? 1
+      : 0,
     ready: session.status === "ready" && !duplicatePending ? 1 : 0,
     duplicate_pending: duplicatePending ? 1 : 0,
     committing_resolving: ["committing", "resolving"].includes(session.status)

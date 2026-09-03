@@ -101,6 +101,16 @@ export function useCompletedIngestionInvalidation() {
     queueIdleRef.current = idle;
   }, []);
   const isQueueIdle = useCallback(() => queueIdleRef.current, []);
+  const hasObserved = useCallback((
+    pair: Parameters<typeof serverIngestionPairKey>[0]
+  ) => observedPairsRef.current.has(serverIngestionPairKey(pair)), []);
 
-  return { flush, isQueueIdle, observe, schedule, setQueueIdle };
+  return {
+    flush,
+    hasObserved,
+    isQueueIdle,
+    observe,
+    schedule,
+    setQueueIdle
+  };
 }

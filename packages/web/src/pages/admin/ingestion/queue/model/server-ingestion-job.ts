@@ -3,6 +3,7 @@ import type {
   ActiveServerIngestionItemDto,
   CompletedIngestionDisplayDto,
   CompletedServerIngestionItemDto,
+  IngestionQueueTerminalEventItemDto,
   IngestionStatusItemDto,
   ServerIngestionItemDto
 } from "@imageshow/shared/browser";
@@ -108,7 +109,9 @@ function activeClientStatus(
     case "queued": return "queued";
     case "downloading": return "downloading";
     case "received": return "received";
-    case "preparing": return "processing";
+    case "preparing": return item.phase === "prepare-waiting"
+      ? "received"
+      : "processing";
     case "ready": return "ready";
     case "committing": return "committing";
     case "resolving": return "finalized";
@@ -253,6 +256,8 @@ function completedIngestionJob(
 ): IngestionJob {
   const pairKey = serverIngestionPairKey(item);
   const completed = item.completed_item;
+  const retainsExistingClock = existing?.serverVersion !== undefined
+    && existing.serverVersion >= item.version;
   return {
     id: existing?.id ?? `server:${pairKey}`,
     attemptKey: existing?.attemptKey ?? pairKey,
@@ -280,9 +285,14 @@ function completedIngestionJob(
     serverAccepted: true,
     sessionId: item.session_id,
     imageId: item.image_id,
-    serverVersion: item.version,
-    serverProgressSeq: 0,
-    serverSemanticRevision: item.last_semantic_revision,
+    serverVersion: retainsExistingClock ? existing.serverVersion : item.version,
+    serverProgressSeq: retainsExistingClock
+      ? existing.serverProgressSeq
+      : item.progress_seq,
+    serverSemanticRevision: Math.max(
+      existing?.serverSemanticRevision ?? 0,
+      item.last_semantic_revision
+    ),
     serverHandoffPending: false,
     serverHandoffRevision: undefined,
     serverAcceptedOrder: item.accepted_order,
@@ -337,14 +347,103 @@ export function completedIngestionJobPatch(
     md5: completed.md5,
     imageTime: completed.image_time,
     storageSlug: completed.storage_slug,
+    duplicates: [],
+    duplicateDecision: "upload",
+    serverDraftPending: false,
     failureStage: undefined,
     commitFailureCheckpoint: undefined,
     resultState: "hydrated",
     resultError: undefined,
     serverStatus: "completed",
+    serverPhase: undefined,
     serverError: "",
     serverProgress: undefined
   } satisfies Partial<IngestionJob>;
+}
+
+export function completedIngestionOwnerPatch(
+  existing: IngestionJob,
+  completed: Readonly<{
+    pair: Pick<ServerIngestionItemDto, "session_id" | "image_id">;
+    item: AdminImageListItemDto;
+    display?: CompletedIngestionDisplayDto;
+    serverVersion?: number;
+    serverSemanticRevision?: number;
+  }>
+): Partial<IngestionJob> | null {
+  if (
+    !existing.sessionId
+    || !existing.imageId
+    || existing.sessionId !== completed.pair.session_id
+    || existing.imageId.toLowerCase() !== completed.pair.image_id.toLowerCase()
+  ) return null;
+  const retainsExistingClock = completed.serverVersion !== undefined
+    && existing.serverVersion !== undefined
+    && existing.serverVersion >= completed.serverVersion;
+  return {
+    serverAttemptKey: existing.attemptKey,
+    serverSessionId: existing.sessionId,
+    serverImageId: existing.imageId,
+    originalSize: existing.originalSize ?? existing.file?.size,
+    ...completedIngestionJobPatch(completed.item, completed.display),
+    ...(completed.serverVersion === undefined ? {} : {
+      serverVersion: Math.max(
+        existing.serverVersion ?? 0,
+        completed.serverVersion
+      ),
+      serverProgressSeq: retainsExistingClock
+        ? existing.serverProgressSeq
+        : 0
+    }),
+    ...(completed.serverSemanticRevision === undefined ? {} : {
+      serverSemanticRevision: Math.max(
+        existing.serverSemanticRevision ?? 0,
+        completed.serverSemanticRevision
+      )
+    })
+  };
+}
+
+export function completedIngestionReceiptOwnerPatch(
+  existing: IngestionJob,
+  completed: IngestionQueueTerminalEventItemDto & { status: "completed" }
+): Partial<IngestionJob> | null {
+  if (
+    !existing.sessionId
+    || !existing.imageId
+    || existing.sessionId !== completed.session_id
+    || existing.imageId.toLowerCase() !== completed.image_id.toLowerCase()
+  ) return null;
+  const retainsExistingClock = existing.serverVersion !== undefined
+    && existing.serverVersion >= completed.version;
+  return {
+    serverAttemptKey: existing.attemptKey,
+    serverSessionId: existing.sessionId,
+    serverImageId: existing.imageId,
+    status: "done",
+    message: "已完成",
+    resultState: existing.resultState === "hydrated"
+      ? "hydrated"
+      : "recovering",
+    resultError: undefined,
+    failureStage: undefined,
+    commitFailureCheckpoint: undefined,
+    serverStatus: "completed",
+    serverPhase: undefined,
+    serverError: "",
+    serverProgress: undefined,
+    serverVersion: Math.max(existing.serverVersion ?? 0, completed.version),
+    serverProgressSeq: retainsExistingClock
+      ? existing.serverProgressSeq
+      : 0,
+    serverSemanticRevision: Math.max(
+      existing.serverSemanticRevision ?? 0,
+      completed.last_semantic_revision
+    ),
+    serverAcceptedOrder: existing.serverAcceptedOrder
+      ?? completed.accepted_order,
+    serverDraftPending: false
+  };
 }
 
 export function ingestionJobFromServerItem(
@@ -352,9 +451,26 @@ export function ingestionJobFromServerItem(
   existing?: IngestionJob,
   serverRevision?: number | null
 ) {
-  return item.status === "completed"
-    ? completedIngestionJob(item, existing)
-    : activeIngestionJob(item, existing, serverRevision);
+  // PostgreSQL completion is irreversible for a session/image pair. It must
+  // win even when a snapshot or HTTP response has already exposed a higher
+  // Redis clock; completedIngestionJob retains that clock so later active
+  // payloads still cannot move the browser owner backwards.
+  if (item.status === "completed") {
+    return completedIngestionJob(item, existing);
+  }
+  if (
+    existing?.serverVersion !== undefined
+    && (
+      item.version < existing.serverVersion
+      || item.version === existing.serverVersion
+        && item.progress_seq < (existing.serverProgressSeq ?? 0)
+    )
+  ) return existing;
+  if (
+    existing?.status === "done"
+    && existing.serverStatus === "completed"
+  ) return existing;
+  return activeIngestionJob(item, existing, serverRevision);
 }
 
 function ingestionJobFromKnownCompletedResult(

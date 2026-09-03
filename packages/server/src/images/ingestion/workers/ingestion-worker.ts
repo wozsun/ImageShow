@@ -685,10 +685,10 @@ export class IngestionSessionWorker {
   ) {
     const next = semanticIngestionSession(session, {
       status,
-      phase: status,
+      phase: status === "preparing" ? "prepare-waiting" : status,
       message: status === "downloading"
         ? "服务器正在下载原图"
-        : "服务器正在处理图片",
+        : "原图素材已接收，等待图片处理许可",
       progress: status === "downloading" ? 0 : null,
       execution_token: randomUuidV7(),
       error: undefined
@@ -720,15 +720,17 @@ export class IngestionSessionWorker {
       const committed = await readCommittedIngestionResultsByImageIds([
         current.image_id
       ]);
-      if (committedIngestionResultForOwner(
+      const committedResult = committedIngestionResultForOwner(
         committed,
         current.image_id,
         current.owner
-      )) {
+      );
+      if (committedResult) {
         await publishCompletedReceipt(
           this.repository,
           current as IngestionSessionSnapshot,
-          Date.now()
+          Date.now(),
+          committedResult.item
         );
         return;
       }

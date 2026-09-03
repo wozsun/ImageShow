@@ -249,8 +249,8 @@ export class IngestionSessionRecovery {
       const next = await this.#dependencies.rawExists(active)
         ? semanticIngestionSession(active, {
           status: "received",
-          phase: "received",
-          message: "应用恢复后等待重新处理",
+          phase: "prepare-waiting",
+          message: "应用恢复后等待图片处理许可",
           progress: null,
           execution_token: ""
         })
@@ -262,15 +262,17 @@ export class IngestionSessionRecovery {
       return true;
     }
     if (active.status === "committing" || active.status === "resolving") {
-      if (committedIngestionResultForOwner(
+      const committedResult = committedIngestionResultForOwner(
         committed,
         active.image_id,
         active.owner
-      )) {
+      );
+      if (committedResult) {
         await this.#dependencies.publishCompleted(
           this.#repository,
           active,
-          this.#dependencies.now()
+          this.#dependencies.now(),
+          committedResult.item
         );
       } else if (this.#coordinator.state(active) === "database_started") {
         const transaction = this.#coordinator.settled(active);

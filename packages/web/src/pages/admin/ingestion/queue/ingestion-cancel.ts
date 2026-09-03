@@ -61,14 +61,21 @@ function releasedSummaryForJob(
   const status = releasedServerStatus(job);
   if (!status) return undefined;
   const completed = status === "completed";
+  const prepareWaiting = status === "preparing"
+    && job.serverPhase === "prepare-waiting";
   const duplicatePending = status === "ready"
     && Boolean(job.duplicateCount || job.duplicates.length)
     && job.duplicateDecision === "undecided";
   return {
     total: 1,
     unfinished: completed ? 0 : 1,
-    waiting: ["queued", "received"].includes(status) ? 1 : 0,
-    running: ["downloading", "preparing"].includes(status) ? 1 : 0,
+    waiting: ["queued", "received"].includes(status) || prepareWaiting
+      ? 1
+      : 0,
+    running: ["downloading", "preparing"].includes(status)
+      && !prepareWaiting
+      ? 1
+      : 0,
     ready: status === "ready" && !duplicatePending ? 1 : 0,
     duplicate_pending: duplicatePending ? 1 : 0,
     committing: status === "committing" ? 1 : 0,

@@ -3,6 +3,7 @@ import {
   ingestionBatchHardLimit,
   ingestionQueueSnapshotMaxItems,
   type IngestionQueueActionResultDto,
+  type IngestionQueueTerminalEventItemDto,
   type ServerIngestionItemDto,
   type IngestionQueueSummaryDto,
   type IngestionQueueTypeDto,
@@ -24,9 +25,12 @@ import {
   type IngestionQueueState
 } from "./model/ingestion-queue-state.js";
 import {
+  type CompletedIngestionObservation,
   type IngestionQueueProducerApi
 } from "./ingestion-queue-api.js";
 import {
+  completedIngestionOwnerPatch,
+  completedIngestionReceiptOwnerPatch,
   ingestionJobFromServerItem,
   ingestionJobAwaitsActionCoverage,
   ingestionJobHasServerAuthority,
@@ -34,6 +38,7 @@ import {
   serverIngestionJobPairKey,
   serverIngestionPairKey
 } from "./model/server-ingestion-job.js";
+import { ingestionStatusPatchMovesForward } from "./model/ingestion-status-state.js";
 import { useServerIngestionQueue } from "./useServerIngestionQueue.js";
 import { useIngestionQueueActions } from "./useIngestionQueueActions.js";
 import { invalidateIngestionDuplicateDetails } from "./useIngestionDuplicateDetails.js";
@@ -92,14 +97,21 @@ function serverItemSummary(
   item: ServerIngestionItemDto
 ): IngestionQueueSummaryDto {
   const completed = item.status === "completed";
+  const prepareWaiting = item.status === "preparing"
+    && item.phase === "prepare-waiting";
   const duplicatePending = item.status === "ready"
     && Boolean(item.prepared?.duplicate_count)
     && !item.duplicate_decision;
   return {
     total: 1,
     unfinished: completed ? 0 : 1,
-    waiting: ["queued", "received"].includes(item.status) ? 1 : 0,
-    running: ["downloading", "preparing"].includes(item.status) ? 1 : 0,
+    waiting: ["queued", "received"].includes(item.status) || prepareWaiting
+      ? 1
+      : 0,
+    running: ["downloading", "preparing"].includes(item.status)
+      && !prepareWaiting
+      ? 1
+      : 0,
     ready: item.status === "ready" && !duplicatePending ? 1 : 0,
     duplicate_pending: duplicatePending ? 1 : 0,
     committing: item.status === "committing" ? 1 : 0,
@@ -248,6 +260,9 @@ export function useIngestionQueue(
     new Map<string, HandoffRetryGate>()
   );
   const completedHandoffPairsRef = useRef(new Set<string>());
+  const completedReceiptHydrationsRef = useRef(
+    new Map<string, IngestionSessionPairDto>()
+  );
   const resolvedReleaseTargetsRef = useRef(
     new Map<string, ResolvedServerJobTarget>()
   );
@@ -257,9 +272,129 @@ export function useIngestionQueue(
   const handledStaleSnapshotRef = useRef("");
   const actionConnectionHoldRef = useRef(false);
   const lastReadyGenerationRef = useRef(0);
+  const dispatch = useCallback((action: IngestionQueueAction) => {
+    // 上传/下载是异步并发流程，回调触发时 React state 可能已落后；ref 里同步维护最新队列供所有回调用。
+    const current = stateRef.current;
+    const next = reduceIngestionQueue(current, action);
+    if (next === current) return false;
+    stateRef.current = next;
+    jobsRef.current = next.jobs;
+    setState(next);
+    return true;
+  }, []);
   const completedInvalidation = useCompletedIngestionInvalidation();
   const flushCompletedIngestionInvalidations = completedInvalidation.flush;
-  const observeCompletedIngestions = completedInvalidation.observe;
+  const projectRetainedServerOwner = useCallback((
+    pairKey: string,
+    project: (job: IngestionJob) => IngestionJob
+  ) => {
+    const objectUrls = new Set<string>();
+    let retainedRefChanged = false;
+    const projectJob = (job: IngestionJob) => {
+      if (serverIngestionJobPairKey(job) !== pairKey) return job;
+      const next = project(job);
+      if (
+        next !== job
+        && job.objectUrl?.startsWith("blob:")
+        && next.objectUrl !== job.objectUrl
+      ) objectUrls.add(job.objectUrl);
+      return next;
+    };
+    const patches = new Map<string, Partial<IngestionJob>>();
+    for (const job of stateRef.current.jobs) {
+      const next = projectJob(job);
+      if (next !== job) patches.set(job.id, next);
+    }
+    const handoff = handoffJobsRef.current.get(pairKey);
+    if (handoff) {
+      const next = projectJob(handoff);
+      if (next !== handoff) {
+        handoffJobsRef.current.set(pairKey, next);
+        retainedRefChanged = true;
+      }
+    }
+    const detached = detachedProvisionalHandoffsRef.current.get(pairKey);
+    if (detached) {
+      const next = projectJob(detached.job);
+      if (next !== detached.job) {
+        detachedProvisionalHandoffsRef.current.set(pairKey, {
+          ...detached,
+          job: next
+        });
+        retainedRefChanged = true;
+      }
+    }
+    for (const objectUrl of objectUrls) URL.revokeObjectURL(objectUrl);
+    const stateChanged = patches.size
+      ? dispatch({ type: "patch-many", patches })
+      : false;
+    if (retainedRefChanged && !stateChanged) {
+      setHandoffEpoch((current) => current + 1);
+    }
+  }, [dispatch]);
+  const observeCompletedIngestions = useCallback((
+    entries: readonly CompletedIngestionObservation[]
+  ) => {
+    let hydrationChanged = false;
+    for (const entry of entries) {
+      const pairKey = serverIngestionPairKey(entry.pair);
+      hydrationChanged = completedReceiptHydrationsRef.current.delete(pairKey)
+        || hydrationChanged;
+      projectRetainedServerOwner(pairKey, (job) => {
+        const patch = completedIngestionOwnerPatch(job, entry);
+        if (!patch || !ingestionStatusPatchMovesForward(job, patch)) return job;
+        return { ...job, ...patch };
+      });
+    }
+    if (hydrationChanged) setHandoffEpoch((current) => current + 1);
+    completedInvalidation.observe(entries);
+  }, [completedInvalidation.observe, projectRetainedServerOwner]);
+  const observeCompletedIngestionReceipt = useCallback((
+    receipt: IngestionQueueTerminalEventItemDto & { status: "completed" }
+  ) => {
+    const pairKey = serverIngestionPairKey(receipt);
+    const retained = stateRef.current.jobs.find((job) => (
+      serverIngestionJobPairKey(job) === pairKey
+    )) ?? handoffJobsRef.current.get(pairKey)
+      ?? detachedProvisionalHandoffsRef.current.get(pairKey)?.job;
+    if (retained) {
+      projectRetainedServerOwner(pairKey, (job) => {
+        const patch = completedIngestionReceiptOwnerPatch(job, receipt);
+        if (!patch || !ingestionStatusPatchMovesForward(job, patch)) return job;
+        return { ...job, ...patch };
+      });
+    }
+    const projected = stateRef.current.jobs.find((job) => (
+      serverIngestionJobPairKey(job) === pairKey
+    )) ?? handoffJobsRef.current.get(pairKey)
+      ?? detachedProvisionalHandoffsRef.current.get(pairKey)?.job;
+    if (projected?.resultState === "hydrated") {
+      if (completedReceiptHydrationsRef.current.delete(pairKey)) {
+        setHandoffEpoch((current) => current + 1);
+      }
+      return;
+    }
+    // A compact receipt for an off-page/unknown pair may be replayed after its
+    // PostgreSQL DTO was already hydrated. Reuse the completion invalidation
+    // owner's bounded lifetime dedupe instead of issuing another status read.
+    if (!projected && completedInvalidation.hasObserved(receipt)) return;
+    if (!completedReceiptHydrationsRef.current.has(pairKey)) {
+      completedReceiptHydrationsRef.current.set(pairKey, {
+        session_id: receipt.session_id,
+        image_id: receipt.image_id
+      });
+      setHandoffEpoch((current) => current + 1);
+    }
+  }, [completedInvalidation.hasObserved, projectRetainedServerOwner]);
+  const observeServerIngestionItem = useCallback((
+    item: ServerIngestionItemDto
+  ) => {
+    const pairKey = serverIngestionPairKey(item);
+    projectRetainedServerOwner(pairKey, (job) => {
+      const next = ingestionJobFromServerItem(item, job);
+      return ingestionStatusPatchMovesForward(job, next) ? next : job;
+    });
+  }, [projectRetainedServerOwner]);
   const scheduleCompletedIngestionInvalidation = completedInvalidation.schedule;
   const localJobs = useMemo(
     () => state.jobs.filter((job) => !ingestionJobHasServerAuthority(job)),
@@ -292,12 +427,15 @@ export function useIngestionQueue(
     requiredItems: serverDisplayLimit,
     excludeItems: excludedServerItems,
     includeItems: includedServerItems,
-    onCompletedIngestions: observeCompletedIngestions
+    onCompletedIngestions: observeCompletedIngestions,
+    onCompletedIngestionReceipt: observeCompletedIngestionReceipt,
+    onServerIngestionItem: observeServerIngestionItem
   });
   completedInvalidation.setQueueIdle(server.status === "ready"
     && server.summary !== null
     && server.summary.committing === 0
-    && server.summary.resolving === 0);
+    && server.summary.resolving === 0
+    && completedReceiptHydrationsRef.current.size === 0);
   const serverItemsRef = useRef(server.items);
   serverItemsRef.current = server.items;
   const serverConnectionRef = useRef<ServerQueueConnectionSnapshot>({
@@ -467,17 +605,6 @@ export function useIngestionQueue(
     provisionalSummaryJobs
   };
 
-  const dispatch = useCallback((action: IngestionQueueAction) => {
-    // 上传/下载是异步并发流程，回调触发时 React state 可能已落后；ref 里同步维护最新队列供所有回调用。
-    const current = stateRef.current;
-    const next = reduceIngestionQueue(current, action);
-    if (next === current) return false;
-    stateRef.current = next;
-    jobsRef.current = next.jobs;
-    setState(next);
-    return true;
-  }, []);
-
   const reportDraftError = useCallback((
     message: string,
     retryable = true
@@ -561,6 +688,7 @@ export function useIngestionQueue(
     detachedProvisionalHandoffsRef.current.clear();
     handoffRetryAfterRevisionRef.current.clear();
     completedHandoffPairsRef.current.clear();
+    completedReceiptHydrationsRef.current.clear();
     resolvedReleaseTargetsRef.current.clear();
     failedResolvedReleaseRecoveriesRef.current.clear();
   }, []);
@@ -609,6 +737,9 @@ export function useIngestionQueue(
         ? [{
             pair: item,
             item: item.completed_item,
+            ...(item.display ? { display: item.display } : {}),
+            serverVersion: item.version,
+            serverSemanticRevision: item.last_semantic_revision,
             completedAt: item.completed_at
           }]
         : []
@@ -619,6 +750,7 @@ export function useIngestionQueue(
       scheduleCompletedIngestionInvalidation();
     }
   }, [
+    handoffEpoch,
     scheduleCompletedIngestionInvalidation,
     server.status,
     server.summary?.committing,
@@ -737,6 +869,7 @@ export function useIngestionQueue(
         detachedProvisionalHandoffsRef.current.delete(pairKey);
         handoffRetryAfterRevisionRef.current.delete(pairKey);
         completedHandoffPairsRef.current.delete(pairKey);
+        completedReceiptHydrationsRef.current.delete(pairKey);
       }
       for (const objectUrl of objectUrls) URL.revokeObjectURL(objectUrl);
       handoffs.resolvePairs(stalePairKeys);
@@ -797,6 +930,7 @@ export function useIngestionQueue(
       handoffRetryAfterRevisionRef.current.delete(pairKey);
       detachedProvisionalHandoffsRef.current.delete(pairKey);
       completedHandoffPairsRef.current.delete(pairKey);
+      completedReceiptHydrationsRef.current.delete(pairKey);
       handoffChanged = true;
       hydratedHandoffPairs.add(pairKey);
     };
@@ -951,6 +1085,7 @@ export function useIngestionQueue(
         handoffJobsRef.current.delete(pairKey);
         detachedProvisionalHandoffsRef.current.delete(pairKey);
         completedHandoffPairsRef.current.delete(pairKey);
+        completedReceiptHydrationsRef.current.delete(pairKey);
         revokeObjectUrl(job);
         coveredExternalPairs.add(pairKey);
       }
@@ -990,6 +1125,7 @@ export function useIngestionQueue(
     retryGatesRef: handoffRetryAfterRevisionRef,
     detachedHandoffsRef: detachedProvisionalHandoffsRef,
     completedPairsRef: completedHandoffPairsRef,
+    completedReceiptHydrationsRef,
     jobsRef,
     dispatch,
     ensureDraftSnapshot: draftSync.ensureJobSnapshot,
@@ -1170,6 +1306,7 @@ export function useIngestionQueue(
         detachedProvisionalHandoffsRef.current.delete(pairKey);
         handoffRetryAfterRevisionRef.current.delete(pairKey);
         completedHandoffPairsRef.current.delete(pairKey);
+        completedReceiptHydrationsRef.current.delete(pairKey);
       }
       for (const objectUrl of staleObjectUrls) {
         URL.revokeObjectURL(objectUrl);
@@ -1427,6 +1564,7 @@ export function useIngestionQueue(
       detachedProvisionalHandoffsRef.current.delete(pairKey);
       handoffRetryAfterRevisionRef.current.delete(pairKey);
       completedHandoffPairsRef.current.delete(pairKey);
+      completedReceiptHydrationsRef.current.delete(pairKey);
     }
     handoffs.resolvePairs(new Set(releasedPairs.keys()));
     dispatch({

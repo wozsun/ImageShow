@@ -2,8 +2,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ingestionEventsPath,
   type IngestionQueueEventDto,
+  type IngestionQueueTerminalEventItemDto,
   type IngestionSessionPairDto,
-  type IngestionQueueTypeDto
+  type IngestionQueueTypeDto,
+  type ServerIngestionItemDto
 } from "@imageshow/shared/browser";
 import { getIngestionQueueSnapshot } from "./ingestion-api.js";
 import {
@@ -70,6 +72,10 @@ export function useServerIngestionQueue(input: Readonly<{
   onCompletedIngestions?: (
     entries: readonly CompletedIngestionObservation[]
   ) => void;
+  onCompletedIngestionReceipt?: (
+    receipt: IngestionQueueTerminalEventItemDto & { status: "completed" }
+  ) => void;
+  onServerIngestionItem?: (item: ServerIngestionItemDto) => void;
 }>) {
   const [view, setView] = useState<ServerIngestionQueueView>(() => (
     emptyServerIngestionQueueView("idle", 0)
@@ -107,6 +113,12 @@ export function useServerIngestionQueue(input: Readonly<{
   ) | null>(null);
   const onCompletedIngestionsRef = useRef(input.onCompletedIngestions);
   onCompletedIngestionsRef.current = input.onCompletedIngestions;
+  const onCompletedIngestionReceiptRef = useRef(
+    input.onCompletedIngestionReceipt
+  );
+  onCompletedIngestionReceiptRef.current = input.onCompletedIngestionReceipt;
+  const onServerIngestionItemRef = useRef(input.onServerIngestionItem);
+  onServerIngestionItemRef.current = input.onServerIngestionItem;
   const displayedRef = useRef(input.displayed);
   displayedRef.current = input.displayed;
   const generationCounterRef = useRef(0);
@@ -888,18 +900,38 @@ export function useServerIngestionQueue(input: Readonly<{
         ) as Extract<IngestionQueueEventDto, { type: "mutation" }>;
         if (!actionScope) return;
         if (
-          event.kind === "semantic"
-          && event.session.status === "completed"
+          event.session.status === "completed"
           && "completed_item" in event.session
         ) {
           // Completion invalidation belongs to the queue owner, not to the
           // bounded page. A completed mutation outside this page still changes
-          // the image list, overview, gallery, and duplicate projections.
+          // both its retained browser card and the image-data projections.
           onCompletedIngestionsRef.current?.([{
             pair: event.session,
             item: event.session.completed_item,
+            ...(event.session.display
+              ? { display: event.session.display }
+              : {}),
+            serverVersion: event.session.version,
+            serverSemanticRevision: event.session.last_semantic_revision,
             completedAt: event.session.completed_at
           }]);
+        } else if (event.session.status === "completed") {
+          // A compact receipt still proves PostgreSQL completion for this
+          // exact pair. Let the combined owner establish a retained card's
+          // terminal fence immediately, then use its existing bounded status
+          // hydrator to fetch the deferred PostgreSQL presentation. Unknown
+          // pairs are not mounted, but still hydrate for image-data invalidation.
+          onCompletedIngestionReceiptRef.current?.(
+            event.session as IngestionQueueTerminalEventItemDto & {
+              status: "completed";
+            }
+          );
+        } else if ("source_type" in event.session) {
+          // Project only into an already retained exact-pair owner. This keeps
+          // off-page current-document cards current without retaining another
+          // queue DTO page or mounting a new card from an event.
+          onServerIngestionItemRef.current?.(event.session);
         }
         // Hidden owners normally do not chase removed/reordered members. A
         // bounded authority recovery is the exception: mutations that race

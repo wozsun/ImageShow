@@ -86,8 +86,10 @@ upload 与 import 分别维护 accepted-order owner 动作 ZSET、batch / positi
 metadata 计数 / revision 和一个显示时 SSE。display 的倒序 rank 保持新批次在上、同批来源顺序
 1→N；owner 的单调 accepted order 只服务动作水位与有界扫描。稳定 snapshot 从 metadata 直接
 签发绑定当前 Redis connection epoch 与进程内
-action scope 的 watermark；全队列写入口再按该水位有界扫描，并用绑定完整请求的签名
-continuation 续传。scope 只在进程内存中存在，Redis unavailable 或重新连接会立即废止，
+action scope 的 watermark；全队列写入口冻结最大 order 后从 1 向上有界扫描，并用绑定完整
+请求、单调递增 next cursor 与同一最大 order 的签名 continuation 续传。水位后新增成员不会进入
+本轮；逐项执行继续并发且不承诺严格 FIFO。scope 只在进程内存中存在，Redis unavailable 或
+重新连接会立即废止，
 不构成 Redis 数据代际、key namespace 或 session identity。每个 scope 还只保留当前动作最近
 一个请求批次的 Promise / 逐项结果，并以固定上限的小型 ID→请求指纹表拒绝近期 action ID 被
 换动作、水位或 payload 复用；相同请求并发或响应丢失时原样重放，只有携带上批已签发
@@ -247,7 +249,21 @@ display ZSET 检查是否仍有孤儿成员；命中继续按结构损坏 fail c
 completed 回执只保留身份、提交摘要、期限与卡片所需的紧凑来源 / 原始处理信息，随后用一次
 PostgreSQL `WHERE id = ANY(...)` 水合。重连、Redis operational 周期变化或服务端停机都会
 废止 scope 与旧动作权威，但当前页只读展示保留到新快照原位替换；不保存事件历史，也不以
-轮询补偿。HTTP 接管结果携带精确
+轮询补偿。SSE 与 status 的逐项结果按 `session_id + image_id` 直接投影到当前文档已经保留的
+卡片 owner，即使该卡片暂时离页；它不挂载未知 pair，也不缓存全队列 DTO。completed 的完整
+PostgreSQL 投影先把精确卡片推进终态，再由分页 snapshot 验证有界页面；version、progress
+sequence 与终态围栏阻止 snapshot 或迟到 HTTP 响应回退，summary 只计数而不推断逐卡结果。
+合法 compact completed 回执同样先把精确 retained owner 推进“已完成”，再由既有有界 status
+owner 分批补齐 PostgreSQL DTO，不追加当前分页读取；没有 retained owner 的 pair 也只进入该
+status owner 以完成图库失效，不会挂载卡片。每任 effect 只拥有一个有界 status chunk；成功时
+原子落实卡片、引用和待失效事实并消费对应 compact pair 后，下一任 owner 才处理尾部，因此不会
+中止并重复发出同一尾部请求；已水合未知 pair 的重连回执由完成去重 owner 直接过滤。后续 chunk
+失败时只保留未处理尾部，等待明确重试或后续状态
+事件，所有 pending 失效仍在队列收敛后合并一次。完整 DTO 到达后才替换 Blob 预览并进入同一失效
+去重入口。同一 semantic revision 内从 `prepare-waiting` 取得 Normalize 许可的 progress 会同步
+更新全局 summary，即使对应 DTO 不在当前页；同 revision 只接受 waiting 等量转入 running 的
+单调方向，较早帧或旧 revision 不得覆盖新快照的计数。
+HTTP 接管结果携带精确
 accepted order，并以 snapshot 的 `last_accepted_order` 判断是否需要临时增加一次 total；这使
 首次响应和响应丢失重放都能精确计数。当前文档创建的批次在窗口生命周期内始终由浏览器按
 batch / position 保留整批展示顺序；业务权威逐项立即转交 Server，整批 handoff 保持
@@ -309,7 +325,9 @@ active 时继续等待同代后续 revision；批量 status 返回的 active DTO
 提供显式维护。启动路径只核对当前最小结构，不解释旧逐行状态或旧任务 payload。
 
 Ingestion 另有一个单实例 Redis worker。Upload / Import 共用最多 `N` 个 preparation 许可，覆盖
-等待 Normalize、图片重工作、两个 staging 对象与 ready canonical 发布；Normalize 完成后释放 CPU
+等待 Normalize、图片重工作、两个 staging 对象与 ready canonical 发布；完整 raw 在等待
+Normalize 时保持内部 `preparing + prepare-waiting`，对 Web 投影为“待处理”和 waiting，实际取得
+Normalize 许可并发布 `normalizing` phase 后才进入 processing / running。Normalize 完成后释放 CPU
 许可但继续持有 preparation 许可，因此慢存储不会产生无界 Prepared Buffer，也不会占住维护入口。
 Import 与 Upload 各自持有最多 `N` 个 pre-commit
 dispatch slot，其中 `N` 是图片标准化容量：Import 的 queued 与恢复后的 received 共用跨扫描页

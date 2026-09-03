@@ -264,6 +264,8 @@ local max_limit = tonumber(ARGV[7])
 if not valid_integer(maximum_order, 0)
   or not valid_integer(cursor, 0)
   or cursor > maximum_order
+  or (maximum_order == 0 and cursor ~= 0)
+  or (maximum_order > 0 and cursor < 1)
   or not valid_integer(limit, 1)
   or not valid_integer(max_limit, 1)
   or limit > max_limit then
@@ -282,10 +284,10 @@ local current_maximum = parse_stored_integer(
 if maximum_order > current_maximum then
   error('INGESTION_QUEUE_STRUCTURE action_scan_watermark')
 end
-if cursor == 0 then return { 1, 0, 0, 0 } end
+if maximum_order == 0 then return { 1, 0, 0, 0 } end
 
 local values = redis.call(
-  'ZREVRANGEBYSCORE', owner_key, cursor, 1,
+  'ZRANGEBYSCORE', owner_key, cursor, maximum_order,
   'WITHSCORES', 'LIMIT', 0, limit + 1
 )
 local available = #values / 2
@@ -323,7 +325,7 @@ for index = 1, count do
     expires_key
   )
   output[#output + 1] = serialized
-  if index == count and has_more == 1 then next_cursor = score - 1 end
+  if index == count and has_more == 1 then next_cursor = score + 1 end
 end
 output[4] = next_cursor
 return output

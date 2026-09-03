@@ -64,6 +64,30 @@ function pairKey(pair: IngestionSessionPairDto) {
   return `${pair.session_id}\0${pair.image_id.toLowerCase()}`;
 }
 
+function mergeProgressSummary(
+  current: IngestionQueueSummaryDto,
+  incoming: IngestionQueueSummaryDto
+) {
+  const stableFieldsMatch = current.total === incoming.total
+    && current.unfinished === incoming.unfinished
+    && current.ready === incoming.ready
+    && current.duplicate_pending === incoming.duplicate_pending
+    && current.committing === incoming.committing
+    && current.resolving === incoming.resolving
+    && current.completed === incoming.completed
+    && current.failed === incoming.failed;
+  if (!stableFieldsMatch) return null;
+
+  // Within one semantic revision, progress can only move an admitted
+  // preparation from waiting to running. Absolute summaries from older
+  // off-page frames may arrive after a newer snapshot, so accept only that
+  // monotonic transfer and retain the newer projection for the inverse.
+  const waitingDecrease = current.waiting - incoming.waiting;
+  const runningIncrease = incoming.running - current.running;
+  if (waitingDecrease !== runningIncrease) return null;
+  return waitingDecrease > 0 ? incoming : current;
+}
+
 /**
  * Decide whether a captured page also covers a later selection. Browser-owned
  * pairs normally enter exclude/include together a few milliseconds after the
@@ -168,7 +192,25 @@ export function mergeIngestionQueueMutation(
     if (event.revision > baseline.revision) {
       return { kind: "reload", baseline };
     }
-    if (!current) return { kind: "ignored", baseline };
+    if (!current) {
+      // Progress does not change the semantic revision, but crossing the
+      // prepare-waiting -> normalizing boundary does change the canonical
+      // summary. An off-page event still owns that global projection. The
+      // monotonic merge also prevents an earlier same-revision frame or an
+      // older revision from replacing a newer snapshot's summary.
+      if (event.revision === baseline.revision) {
+        const summary = mergeProgressSummary(baseline.summary, event.summary);
+        if (!summary) return { kind: "reload", baseline };
+        if (summary === baseline.summary) {
+          return { kind: "ignored", baseline };
+        }
+        return {
+          kind: "accepted",
+          baseline: { ...baseline, summary }
+        };
+      }
+      return { kind: "ignored", baseline };
+    }
     if (!pairMatches(current, event.session)) {
       return { kind: "reload", baseline };
     }
@@ -181,12 +223,16 @@ export function mergeIngestionQueueMutation(
     if (event.session.progress_seq <= current.progress_seq) {
       return { kind: "ignored", baseline };
     }
+    const summary = event.revision === baseline.revision
+      ? mergeProgressSummary(baseline.summary, event.summary)
+      : baseline.summary;
+    if (!summary) return { kind: "reload", baseline };
     const replacement = replaceItem(baseline, index, event);
     const next = replacement && {
       ...replacement,
       revision: baseline.revision,
       lastAcceptedOrder: baseline.lastAcceptedOrder,
-      summary: baseline.summary,
+      summary,
       actionWatermark: baseline.actionWatermark
     };
     return next
@@ -215,7 +261,21 @@ export function mergeIngestionQueueMutation(
   if (
     event.session.status === "completed"
     && !("completed_item" in event.session)
-  ) return { kind: "reload", baseline };
+  ) {
+    // The exact-pair owner establishes the terminal fence and schedules the
+    // existing bounded status hydration. Advance this page's global metadata
+    // without fabricating a full DTO or issuing a duplicate page request.
+    return {
+      kind: "accepted",
+      baseline: {
+        ...baseline,
+        revision: event.revision,
+        lastAcceptedOrder: event.last_accepted_order,
+        summary: event.summary,
+        actionWatermark: event.action_watermark ?? baseline.actionWatermark
+      }
+    };
+  }
 
   if (!current) {
     if (event.session.version === 1) return { kind: "reload", baseline };

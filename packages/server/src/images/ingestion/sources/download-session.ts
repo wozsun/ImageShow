@@ -110,8 +110,8 @@ export async function downloadIngestionSessionSnapshot(
             const nextWithoutHash = {
               ...latest,
               status: "received" as const,
-              phase: "received",
-              message: "原图下载完成，等待服务器处理",
+              phase: "prepare-waiting",
+              message: "原图下载完成，等待图片处理许可",
               progress: 100,
               execution_token: "",
               raw_generation: rawGeneration,

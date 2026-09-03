@@ -1,6 +1,7 @@
 import type { RefObject } from "react";
 import type {
   AdminImageListItemDto,
+  CompletedIngestionDisplayDto,
   IngestionQueueSummaryDto,
   IngestionSessionPairDto,
   IngestionStatusItemDto
@@ -19,6 +20,9 @@ export type IngestionQueueApi = {
 export type CompletedIngestionObservation = Readonly<{
   pair: IngestionSessionPairDto;
   item: AdminImageListItemDto;
+  display?: CompletedIngestionDisplayDto;
+  serverVersion?: number;
+  serverSemanticRevision?: number;
   completedAt?: number;
 }>;
 
@@ -26,7 +30,17 @@ export function completedIngestionObservations(
   statuses: readonly IngestionStatusItemDto[]
 ): CompletedIngestionObservation[] {
   return statuses.flatMap((status) => status.status === "completed"
-    ? [{ pair: status, item: status.completed_item }]
+    ? [{
+        pair: status,
+        item: status.completed_item,
+        ...(status.display ? { display: status.display } : {}),
+        ...(status.redis_version === undefined
+          ? {}
+          : { serverVersion: status.redis_version }),
+        ...(status.redis_last_semantic_revision === undefined
+          ? {}
+          : { serverSemanticRevision: status.redis_last_semantic_revision })
+      }]
     : []);
 }
 

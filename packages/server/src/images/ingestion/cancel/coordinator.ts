@@ -1,4 +1,5 @@
 import type {
+  AdminImageListItemDto,
   IngestionCancelItemInputDto,
   IngestionCancelItemResultDto
 } from "@imageshow/shared/browser";
@@ -138,7 +139,8 @@ function matchingActiveSession(
 async function retireCompletedSession(
   repository: IngestionSessionRepository,
   session: StoredIngestionSession | null,
-  input: IngestionSessionPair
+  input: IngestionSessionPair,
+  completedItem?: AdminImageListItemDto
 ) {
   if (
     session
@@ -149,7 +151,12 @@ async function retireCompletedSession(
       let terminal = session;
       if (session.status !== "completed" && session.status !== "discarded") {
         try {
-          await publishCompletedReceipt(repository, session, Date.now());
+          await publishCompletedReceipt(
+            repository,
+            session,
+            Date.now(),
+            completedItem
+          );
         } catch (error) {
           // PostgreSQL has already established the authoritative outcome. A
           // stale Redis state or a raced CAS must not prevent the canonical
@@ -436,7 +443,12 @@ async function cancelLoadedIngestionSessions(
               if (cleanup) {
                 rememberSessionForCleanup(cleanup);
               }
-              await retireCompletedSession(repository, current ?? initial, pair);
+              await retireCompletedSession(
+                repository,
+                current ?? initial,
+                pair,
+                committedResult.item
+              );
             }
             results.push(completedCancelResult(pair, committedResult));
             continue;
@@ -472,12 +484,17 @@ async function cancelLoadedIngestionSessions(
         }
         if (outcome.result.value.status === "completed") {
           rememberSessionForCleanup(outcome.result.value.cleanup);
-          if (options.expiryCutoff === undefined) {
-            abortActiveBestEffort(pair, abortActive);
-            await retireCompletedSession(repository, initial, pair);
-          }
           if (!committedResult) {
             throw new Error("Completed cancel boundary omitted its PG result");
+          }
+          if (options.expiryCutoff === undefined) {
+            abortActiveBestEffort(pair, abortActive);
+            await retireCompletedSession(
+              repository,
+              initial,
+              pair,
+              committedResult.item
+            );
           }
           results.push(completedCancelResult(pair, committedResult));
         } else {
@@ -508,7 +525,12 @@ async function cancelLoadedIngestionSessions(
           if (cleanup) {
             rememberSessionForCleanup(cleanup);
           }
-          await retireCompletedSession(repository, initial, pair);
+          await retireCompletedSession(
+            repository,
+            initial,
+            pair,
+            committedResult.item
+          );
         }
         results.push(completedCancelResult(pair, committedResult));
         continue;

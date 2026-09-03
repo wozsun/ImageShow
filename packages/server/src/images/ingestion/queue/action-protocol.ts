@@ -92,7 +92,7 @@ export function resolveIngestionQueueActionCursor(input: Readonly<{
       watermark,
       payloadHash,
       watermarkHash,
-      cursor: watermark.max_accepted_order
+      cursor: watermark.max_accepted_order === 0 ? 0 : 1
     };
   }
   const continuation = input.tokens.verify(

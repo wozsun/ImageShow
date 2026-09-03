@@ -28,7 +28,8 @@ Node.js 26 / Hono、React 19、PostgreSQL、Redis 8 和 Docker 构成。
   使用一次有界 Upload intent POST 加逐文件 raw PUT，Import 来源一次批量 accept 后由单实例 Redis
   worker 接管。页面上传窗口、Server raw、Upload / Import 共用的 prepare / staging、全部 Sharp
   normalize 与最终 commit 各有唯一准入 owner；prepare / staging 和 Import 后继窗口均由 normalize
-  容量派生，前者限制持有处理后 Buffer 直至 `_uploads` 和 ready 发布，后者只预取下一批 raw。
+  容量派生，前者限制持有处理后 Buffer 直至 `_uploads` 和 ready 发布，后者只预取下一批 raw；
+  raw 已完整但尚未取得 Normalize 许可时明确显示“待处理”并计入等待，许可取得后才显示“处理中”。
   微博帖子元数据请求全进程串行，复用一个访客身份并在相邻请求间随机等待 2–5 秒；解析器按媒体
   实际所属 status 提取账号 UID，批次结束后一次查询 PostgreSQL 作者身份，为命中项填入作者草稿，
   再进入同一后继窗口。作者身份只由管理员保存的主页链接派生，不在 RuntimeConfig 或 Redis 维护
@@ -47,9 +48,11 @@ Node.js 26 / Hono、React 19、PostgreSQL、Redis 8 和 Docker 构成。
   Upload / Import 队列按当前管理员分别用一个 SSE 和有界分页快照同步；展示保持新批次置顶、
   同批来源顺序 1→N，并在窗口重开和跨页后保持稳定。重连只废止旧动作权威，当前页继续稳定
   展示直至新快照原位替换；实时 completed 直接复用提交事务生成的 PostgreSQL 投影，窗口恢复时
-  再按页批量水合；全队列提交、默认值和清理
+  再按页批量水合，并按精确 pair 同步当前文档中暂时离页的卡片，翻页首帧无需等待新快照才显示
+  最终状态；全队列提交、默认值和清理
   使用预冻结签名 watermark 与有界 continuation，HTTP 接管到状态通道之间以独立 revision
-  围栏和点击时精确 pair 集合关闭动作缺口；当前文档在窗口生命周期内保留新建批次的来源
+  围栏和点击时精确 pair 集合关闭动作缺口。Server 在冻结最大 accepted order 后按 order 递增扫描
+  候选，仍保留逐项并发且不把水位后的新任务纳入本轮；当前文档在窗口生命周期内保留新建批次的来源
   顺序，业务权威仍逐项立即转交 Server，窗口重开后才完全使用 Server display；重复详情按
   当前页 MD5 批量读取 PostgreSQL；单项取消以 `discarded` 的精确队列 revision 立即释放卡片和
   统计，页界收缩时先原子夹紧当前页，再用一次权威快照证明，旧分页基线不会把已移除项重新

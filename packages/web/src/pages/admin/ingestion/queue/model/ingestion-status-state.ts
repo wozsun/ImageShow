@@ -29,13 +29,15 @@ export function ingestionStatusPatchMovesForward(
 }
 
 function clientStatusFor(
-  status: Extract<IngestionStatusItemDto, { status: "present" }>["item"]["status"]
+  item: Extract<IngestionStatusItemDto, { status: "present" }>["item"]
 ): IngestionJob["status"] {
-  switch (status) {
+  switch (item.status) {
     case "queued": return "queued";
     case "downloading": return "downloading";
     case "received": return "received";
-    case "preparing": return "processing";
+    case "preparing": return item.phase === "prepare-waiting"
+      ? "received"
+      : "processing";
     case "ready": return "ready";
     case "committing": return "committing";
     case "resolving": return "finalized";
@@ -95,7 +97,7 @@ export function ingestionStatusEventPatch(
     serverProgress: item.progress,
     serverVersion: item.version,
     serverProgressSeq: item.progress_seq,
-    status: clientStatusFor(item.status),
+    status: clientStatusFor(item),
     failureStage: failed
       ? job.commitIntent ? "commit" : "prepare"
       : undefined,

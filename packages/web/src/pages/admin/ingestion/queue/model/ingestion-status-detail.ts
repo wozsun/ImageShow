@@ -44,9 +44,7 @@ export function ingestionJobStatusDetail(job: IngestionJob): string | null {
     case "downloading":
       return "下载原图中";
     case "received":
-      return job.serverPhase === "prepare-waiting"
-        ? "原图素材已接收，等待处理"
-        : "处理图片并生成缩略图";
+      return "原图素材已接收，等待处理";
     case "processing":
       return "处理图片并生成缩略图";
     case "ready":

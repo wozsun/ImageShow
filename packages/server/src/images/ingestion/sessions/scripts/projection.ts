@@ -25,7 +25,11 @@ local function projection(snapshot)
   else
     result.unfinished = 1
   end
-  if snapshot.status == 'queued' or snapshot.status == 'received' then
+  local prepare_waiting = snapshot.status == 'preparing'
+    and snapshot.phase == 'prepare-waiting'
+  if snapshot.status == 'queued'
+    or snapshot.status == 'received'
+    or prepare_waiting then
     result.waiting = 1
   elseif snapshot.status == 'downloading'
     or snapshot.status == 'preparing' then
