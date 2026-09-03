@@ -1,4 +1,4 @@
-import type { RefObject } from "react";
+import { useLayoutEffect, useRef, useState, type RefObject } from "react";
 import type { GalleryFacetsDto } from "@imageshow/shared/browser";
 import { CopyButton } from "../../components/actions/CopyButton.js";
 import { FacetSelector } from "../../components/data-display/FacetSelector.js";
@@ -15,6 +15,65 @@ import {
   brightnessOptionLabel,
   deviceOptionLabel
 } from "../../lib/ui/select-options.js";
+
+export function randomLinkNeedsTruncation(
+  contentWidth: number,
+  availableWidth: number
+) {
+  return availableWidth > 0 && contentWidth - availableWidth > 0.5;
+}
+
+function RandomLinkText({ value }: { value: string }) {
+  const viewportRef = useRef<HTMLSpanElement>(null);
+  const contentRef = useRef<HTMLSpanElement>(null);
+  const [truncated, setTruncated] = useState(false);
+
+  useLayoutEffect(() => {
+    const viewport = viewportRef.current;
+    const content = contentRef.current;
+    if (!viewport || !content) return;
+
+    const measure = () => {
+      const next = randomLinkNeedsTruncation(
+        content.scrollWidth,
+        viewport.clientWidth
+      );
+      setTruncated((current) => current === next ? current : next);
+    };
+    measure();
+
+    const ownerWindow = viewport.ownerDocument.defaultView;
+    const observer = typeof ownerWindow?.ResizeObserver === "function"
+      ? new ownerWindow.ResizeObserver(measure)
+      : undefined;
+    observer?.observe(viewport);
+    observer?.observe(content);
+    ownerWindow?.addEventListener("resize", measure);
+
+    let active = true;
+    void viewport.ownerDocument.fonts?.ready.then(() => {
+      if (active) measure();
+    });
+    return () => {
+      active = false;
+      observer?.disconnect();
+      ownerWindow?.removeEventListener("resize", measure);
+    };
+  }, [value]);
+
+  return (
+    <span
+      ref={viewportRef}
+      className={`generated-link-value${truncated ? " is-truncated" : ""}`}
+      title={truncated ? value : undefined}
+    >
+      <span ref={contentRef} className="generated-link-text">{value}</span>
+      {truncated && (
+        <span className="generated-link-truncation" aria-hidden="true">...</span>
+      )}
+    </span>
+  );
+}
 
 export function GalleryToolbar({
   filters,
@@ -84,7 +143,7 @@ export function GalleryToolbar({
       <div className="theme-link-row">
         <div className="generated-link-field">
           <code>
-            <span>{randomUrl}</span>
+            <RandomLinkText value={randomUrl} />
           </code>
           <CopyButton value={randomUrl} ariaLabel="复制随机图片链接" />
         </div>

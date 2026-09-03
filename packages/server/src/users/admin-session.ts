@@ -13,6 +13,7 @@ import { isCurrentPasswordHash, verifyPassword } from "../core/password.ts";
 import { redis } from "../core/redis/client.ts";
 import {
   deleteRedisStringIfEqual,
+  refreshRedisStringTtlIfEqual,
   replaceRedisStringIfEqualKeepingTtl
 } from "../core/redis/conditional-string.ts";
 import {
@@ -122,6 +123,20 @@ function sessionPayload(
   } satisfies StoredAdminSession);
 }
 
+function setAdminSessionCookie(
+  context: Context,
+  sessionId: string,
+  sessionTtl: number
+) {
+  setCookie(context, adminSessionCookie, sessionId, {
+    httpOnly: true,
+    sameSite: "Lax",
+    secure: requestIsSecure(context),
+    path: "/",
+    maxAge: sessionTtl
+  });
+}
+
 async function replaceCredentialTransitionSnapshot(
   id: string,
   expectedPayload: string,
@@ -186,13 +201,7 @@ export async function createAdminSession(
     "EX",
     sessionTtl
   ));
-  setCookie(context, adminSessionCookie, sessionId, {
-    httpOnly: true,
-    sameSite: "Lax",
-    secure: requestIsSecure(context),
-    path: "/",
-    maxAge: sessionTtl
-  });
+  setAdminSessionCookie(context, sessionId, sessionTtl);
   return { csrf_token: csrf };
 }
 
@@ -228,27 +237,19 @@ async function validateAdminSessionPayload(id: string, raw: string): Promise<
     : adminSessionChanged;
 }
 
-/**
- * Validate one login session through the same Redis + PostgreSQL authority
- * used by ordinary HTTP middleware. Long-lived transports call this by ID on
- * every authentication heartbeat instead of maintaining a second auth path.
- */
-export async function validateAdminSessionById(
+/** Read and validate one stable Redis snapshot without changing its TTL. */
+async function validateAdminSessionSnapshotById(
   id: string
-): Promise<AdminSession | null> {
-  const raw = await runRequiredRedisCommand(
-    () => redis.get(adminSessionKey(id))
-  );
-  if (!raw) return null;
-  const session = await validateAdminSessionPayload(id, raw);
-  if (session !== adminSessionChanged) return session;
-
-  const changedRaw = await runRequiredRedisCommand(
-    () => redis.get(adminSessionKey(id))
-  );
-  if (!changedRaw) return null;
-  const retried = await validateAdminSessionPayload(id, changedRaw);
-  if (retried !== adminSessionChanged) return retried;
+): Promise<Readonly<{ session: AdminSession; payload: string }> | null> {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const raw = await runRequiredRedisCommand(
+      () => redis.get(adminSessionKey(id))
+    );
+    if (!raw) return null;
+    const session = await validateAdminSessionPayload(id, raw);
+    if (session === adminSessionChanged) continue;
+    return session ? { session, payload: raw } : null;
+  }
   throw new ApiError(
     503,
     "session_changed",
@@ -256,11 +257,59 @@ export async function validateAdminSessionById(
   );
 }
 
-export async function readAdminSession(
+/**
+ * Validate through the same Redis + PostgreSQL authority as HTTP middleware.
+ * Long-lived transports use this non-renewing path for auth heartbeats.
+ */
+export async function validateAdminSessionById(
+  id: string
+): Promise<AdminSession | null> {
+  return (await validateAdminSessionSnapshotById(id))?.session ?? null;
+}
+
+async function readAdminSession(
   context: Context
 ): Promise<AdminSession | null> {
   const id = getCookie(context, adminSessionCookie);
   return id ? validateAdminSessionById(id) : null;
+}
+
+type AdminSessionProbe = Readonly<{
+  session: AdminSession;
+  renew: () => Promise<void>;
+}>;
+
+/** Prepare the explicit /auth/me probe without renewing an incomplete read. */
+export async function readAdminSessionProbe(
+  context: Context
+): Promise<AdminSessionProbe | null> {
+  const id = getCookie(context, adminSessionCookie);
+  if (!id) return null;
+
+  const snapshot = await validateAdminSessionSnapshotById(id);
+  if (!snapshot) return null;
+  return {
+    session: snapshot.session,
+    renew: async () => {
+      const sessionTtl = getRuntimeConfig().security.session_ttl_seconds;
+      const renewed = await runRequiredRedisCommand(
+        () => refreshRedisStringTtlIfEqual(
+          redis,
+          adminSessionKey(id),
+          snapshot.payload,
+          sessionTtl
+        )
+      );
+      if (!renewed) {
+        throw new ApiError(
+          503,
+          "session_changed",
+          "Administrator session changed; retry request"
+        );
+      }
+      setAdminSessionCookie(context, id, sessionTtl);
+    }
+  };
 }
 
 export async function authorizeAdminSessionCredentialTransition(

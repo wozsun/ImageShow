@@ -394,7 +394,8 @@ accepted-order 水位的动作 watermark。owner rank 只供该水位下的有�
 SSE semantic 事件可更新 summary 或令当前页有界重读；
 同一 pair/version 的 `progress_seq` 只要求单调增加，允许节流造成跳号。
 
-SSE 每 30 秒串行重新使用普通 HTTP 的 Redis + PostgreSQL 会话校验。logout、密码重置和账号
+SSE 每 30 秒串行重新使用普通 HTTP 的 Redis + PostgreSQL 会话校验，但该长连接心跳不续期；
+只有显式 `/auth/me` 探针承担滑动续期。logout、密码重置和账号
 删除会通过本进程连接登记立即关闭旧连接；自然 TTL、Redis session key 丢失、账号/角色/凭据
 变化或 Redis unavailable 最晚在下一次心跳关闭，失败后不再发送 ping。重新连接总是从空
 Server 基线和新 scope 开始，读取状态不会延长 Ingestion canonical 的 `discard_at`。
@@ -516,8 +517,10 @@ Server 随机出口相同的纯 User-Agent 规则，在列表请求和 query key
 画廊工具栏的“清空筛选”只把设备、亮度、主题、标签和作者五项一次写回缺省路由状态；列表
 查询与生成的随机图片链接由同一次 URL 更新共同收敛，不改变站点配置的画廊排序。移动端把
 筛选开关与“清空”呈现为两个相邻操作；清空会收起已打开的 Select / Facet 子菜单，但保持外层
-筛选面板原有的展开或收起状态。随机图片链接过长时会在复制按钮的保留区域前单行省略，复制
-动作仍使用完整 URL。`/gallery` 与 `/embed/gallery` 使用同一个页面实现和清空语义。
+筛选面板原有的展开或收起状态。随机图片链接按真实内容宽度判断溢出；过长时在复制按钮的
+保留区域前单行裁切，并以随文字基线靠近底部的三个 ASCII 句号 `...` 标记，不使用居中的
+`U+2026`。短链接不显示标记，复制动作仍使用完整 URL。`/gallery` 与 `/embed/gallery` 使用
+同一个页面实现和清空语义。
 
 列表按 `image_time DESC, id DESC` 使用 keyset cursor；
 cursor 是客户端只能透传的 32 字符 Base64URL 值，服务端严格校验编码、时间与 UUID 边界。
@@ -619,6 +622,9 @@ pointerup 直接提交关闭；桌面标题栏、键盘、Escape 和背景路径
 
 管理员会话保存在 Redis，但每次认证都会按用户名读取 PostgreSQL 账号并校验角色和密码
 代际。数据库不可用时保留会话并返回 503；只有真值明确失配时才删除会话并返回 401。
+`session_ttl_seconds` 是空闲超时：仅已认证的 `/auth/me` 在完成响应依赖读取后原子刷新当前
+Redis payload 的 TTL 并续发 Cookie。普通管理请求不 touch，会话也没有定时探针；首次直达后台
+或公开页已有本地提示时产生的既有 `/auth/me` 请求就是续期点，页面间切换不追加请求。
 
 ### 作者主页与导入身份
 

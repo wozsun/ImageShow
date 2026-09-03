@@ -308,12 +308,21 @@
   display: flex;
   align-items: center;
 }
-.generated-link-field code > span {
+.generated-link-value {
+  width: 100%;
   min-width: 0;
+  display: flex;
+  align-items: baseline;
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
+.generated-link-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+.generated-link-truncation { flex: 0 0 auto; }
 .generated-link-field .copy-button {
   position: absolute;
   top: 4px;

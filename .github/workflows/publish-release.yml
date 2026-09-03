@@ -20,6 +20,7 @@ jobs:
     env:
       DOCKER_HUB_IMAGE: ${{ secrets.DOCKER_HUB_USERNAME }}/imageshow
       TCR_IMAGE: ccr.ccs.tencentyun.com/${{ secrets.TCR_NAMESPACE }}/imageshow
+      ACR_IMAGE: registry.cn-hangzhou.aliyuncs.com/${{ secrets.ACR_NAMESPACE }}/imageshow
     steps:
       - name: Checkout source
         uses: actions/checkout@v7
@@ -64,82 +65,87 @@ jobs:
           username: ${{ secrets.TCR_USERNAME }}
           password: ${{ secrets.TCR_PASSWORD }}
 
-      - name: Check for reusable dev image
+      - name: Log in to Alibaba Cloud Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: registry.cn-hangzhou.aliyuncs.com
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Validate reusable dev image
         id: reusable_image
         shell: bash
         run: |
           set -euo pipefail
           revision_key="org.opencontainers.image.revision"
-
-          inspect_manifest() {
-            local image="$1"
-            docker buildx imagetools inspect "${image}:dev" \
-              --format '{{json .Manifest}}' 2>/dev/null
-          }
-
-          docker_hub_manifest="$(inspect_manifest "${DOCKER_HUB_IMAGE}" || true)"
-          tcr_manifest="$(inspect_manifest "${TCR_IMAGE}" || true)"
-          docker_hub_revision="$(jq -r --arg key "${revision_key}" \
-            '.annotations[$key] // empty' <<< "${docker_hub_manifest}" 2>/dev/null || true)"
-          tcr_revision="$(jq -r --arg key "${revision_key}" \
-            '.annotations[$key] // empty' <<< "${tcr_manifest}" 2>/dev/null || true)"
-          docker_hub_digest="$(jq -r '.digest // empty' \
-            <<< "${docker_hub_manifest}" 2>/dev/null || true)"
-          tcr_digest="$(jq -r '.digest // empty' \
-            <<< "${tcr_manifest}" 2>/dev/null || true)"
           digest_pattern='^sha256:[0-9a-f]{64}$'
 
-          if [[ "${docker_hub_revision}" == "${GITHUB_SHA}" \
-            && "${tcr_revision}" == "${GITHUB_SHA}" \
-            && "${docker_hub_digest}" =~ ${digest_pattern} \
-            && "${tcr_digest}" =~ ${digest_pattern} ]]; then
-            {
-              echo "available=true"
-              echo "docker_hub_digest=${docker_hub_digest}"
-              echo "tcr_digest=${tcr_digest}"
-            } >> "${GITHUB_OUTPUT}"
-            echo "Reusing the current dev image from both registries."
-          else
-            echo "available=false" >> "${GITHUB_OUTPUT}"
-            echo "The current dev image does not match ${GITHUB_SHA}; falling back to a full build."
-            echo "Docker Hub revision: ${docker_hub_revision:-missing}"
-            echo "Tencent registry revision: ${tcr_revision:-missing}"
+          validate_dev_image() {
+            local image="$1"
+            local output_name="$2"
+            local raw_manifest descriptor revision digest
+
+            descriptor="$(docker buildx imagetools inspect "${image}:dev" \
+              --format '{{json .Manifest}}' 2>/dev/null || true)"
+            digest="$(jq -r '.digest // empty' <<< "${descriptor}" 2>/dev/null || true)"
+
+            if [[ ! "${digest}" =~ ${digest_pattern} ]]; then
+              echo "${image}:dev mismatch: revision=missing, digest=${digest:-missing}" >&2
+              return 1
+            fi
+
+            raw_manifest="$(docker buildx imagetools inspect "${image}@${digest}" \
+              --raw 2>/dev/null || true)"
+            revision="$(jq -r --arg key "${revision_key}" \
+              '.annotations[$key] // empty' <<< "${raw_manifest}" 2>/dev/null || true)"
+
+            if [[ "${revision}" == "${GITHUB_SHA}" ]]; then
+              echo "${output_name}=${digest}" >> "${GITHUB_OUTPUT}"
+              return 0
+            fi
+
+            echo "${image}:dev mismatch: revision=${revision:-missing}, digest=${digest:-missing}" >&2
+            return 1
+          }
+
+          validation_failed=0
+          validate_dev_image "${DOCKER_HUB_IMAGE}" docker_hub_digest || validation_failed=1
+          validate_dev_image "${TCR_IMAGE}" tcr_digest || validation_failed=1
+          validate_dev_image "${ACR_IMAGE}" acr_digest || validation_failed=1
+
+          if (( validation_failed )); then
+            echo "The current dev image does not match ${GITHUB_SHA}; refusing to publish the release." >&2
+            exit 1
           fi
 
+          echo "Reusing the current dev image from all registries."
+
       - name: Add release tags to current dev image
-        if: steps.reusable_image.outputs.available == 'true'
         shell: bash
         env:
           DOCKER_HUB_DIGEST: ${{ steps.reusable_image.outputs.docker_hub_digest }}
           TCR_DIGEST: ${{ steps.reusable_image.outputs.tcr_digest }}
+          ACR_DIGEST: ${{ steps.reusable_image.outputs.acr_digest }}
         run: |
           set -euo pipefail
 
           docker buildx imagetools create \
-            --annotation "index:org.opencontainers.image.revision=${GITHUB_SHA}" \
+            --prefer-index=false \
             --tag "${DOCKER_HUB_IMAGE}:${GITHUB_REF_NAME}" \
             --tag "${DOCKER_HUB_IMAGE}:latest" \
             "${DOCKER_HUB_IMAGE}@${DOCKER_HUB_DIGEST}"
 
           docker buildx imagetools create \
-            --annotation "index:org.opencontainers.image.revision=${GITHUB_SHA}" \
+            --prefer-index=false \
             --tag "${TCR_IMAGE}:${GITHUB_REF_NAME}" \
             --tag "${TCR_IMAGE}:latest" \
             "${TCR_IMAGE}@${TCR_DIGEST}"
 
-      - name: Build and push release image
-        if: steps.reusable_image.outputs.available != 'true'
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          push: true
-          tags: |
-            ${{ env.DOCKER_HUB_IMAGE }}:${{ github.ref_name }}
-            ${{ env.DOCKER_HUB_IMAGE }}:latest
-            ${{ env.TCR_IMAGE }}:${{ github.ref_name }}
-            ${{ env.TCR_IMAGE }}:latest
-          annotations: |
-            index:org.opencontainers.image.revision=${{ github.sha }}
+          docker buildx imagetools create \
+            --prefer-index=false \
+            --tag "${ACR_IMAGE}:${GITHUB_REF_NAME}" \
+            --tag "${ACR_IMAGE}:latest" \
+            "${ACR_IMAGE}@${ACR_DIGEST}"
 
   release:
     name: Publish GitHub Release

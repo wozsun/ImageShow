@@ -47,6 +47,24 @@ export async function replaceRedisStringIfEqualKeepingTtl(
   return parseRedisSetIfEqualReply(reply);
 }
 
+export async function refreshRedisStringTtlIfEqual(
+  client: RedisConditionalStringCommandClient,
+  key: string,
+  expectedValue: string,
+  ttlSeconds: number
+) {
+  const reply = await client.call(
+    "SET",
+    key,
+    expectedValue,
+    "IFEQ",
+    expectedValue,
+    "EX",
+    String(ttlSeconds)
+  );
+  return parseRedisSetIfEqualReply(reply);
+}
+
 export async function deleteRedisStringIfEqual(
   client: RedisConditionalStringCommandClient,
   key: string,

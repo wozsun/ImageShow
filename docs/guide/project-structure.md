@@ -52,9 +52,12 @@ packages/web ─────► packages/shared
 `npm run icons:check`。`npm run check` 直接检查 shared / Server / Web 源码，不先构建
 shared，也不写生产产物。
 
-GitHub Actions 只核对 dev 分支或 release tag、根包 / 三个 workspace / lockfile 版本，
-然后通过已审查的公开 Action 稳定主版本标签构建和推送生产镜像、创建 Release；job 不设置
-项目自定义总运行时限。它不运行
+本地 source 门禁核对根包、三个 workspace 与 lockfile 版本。GitHub Dev Action 只接受 `dev`
+分支，显式只构建 `linux/amd64`、关闭默认 provenance 证明清单，并把同一次生产构建推送到
+Docker Hub、腾讯云 TCR 与阿里云杭州 ACR；Release Action 核对 release tag、根包版本、`main`
+祖先关系及三仓同提交 `:dev` digest，只把各仓已验证的单平台 manifest 原样添加版本与 `latest`
+标签，任一校验失败即退出且不重新构建。公开 Action 使用稳定主版本标签，job 不设置项目自定义
+总运行时限。Actions 不运行
 `verify:*`、Knip、最终测试、数据库、存储、浏览器或性能验收；Action 成功不能替代本地
 `verify:release`。
 
@@ -466,7 +469,8 @@ hooks ──► lib
   `lib/gallery/gallery-query.ts` 保留完整语义的画廊路由状态，并在公开列表 query key 建立前把
   `device=auto` 通过 shared User-Agent 纯函数投影为具体设备或无条件；随机链接则把缺省全部设备
   投影为 `device=all`，并为自动设备省略该参数。画廊整体清空只进行一次空筛选路由写入，让列表
-  查询和随机链接从同一 URL 状态同步更新。
+  查询和随机链接从同一 URL 状态同步更新。随机链接显示层测量真实溢出，只在裁切时于复制按钮
+  保留区前追加贴合基线的 ASCII `...`；复制值不使用截断后的显示文本。
 - `pages/admin/` 按稳定页面职责分为 `shell/`、`account/`、`images/`、`check/`、`storage/`
   与 `advanced-config/`；只有 `LogPage.tsx`、`Overview.tsx`、`SettingsPage.tsx`、
   `UserAdmin.tsx`、`VocabularyAdmin.tsx` 及其单个卡片等没有形成三文件族的页面留在根层。

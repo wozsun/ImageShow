@@ -27,7 +27,7 @@ import { getEffectiveLoginBackground } from "../config/app-settings.ts";
 import {
   createAdminSession,
   deleteAdminSession,
-  readAdminSession,
+  readAdminSessionProbe,
   authorizeAdminSessionCredentialTransition,
   type AdminSession
 } from "../users/admin-session.ts";
@@ -69,7 +69,8 @@ export function registerPublicAuthRoutes(app: Hono) {
   );
 
   app.get(`${adminApiBasePath}/auth/me`, async (c) => {
-    const session = await readAdminSession(c);
+    const probe = await readAdminSessionProbe(c);
+    const session = probe?.session;
     const runtime = getRuntimeConfig();
     if (!session) {
       const authState = {
@@ -92,6 +93,7 @@ export function registerPublicAuthRoutes(app: Hono) {
       preferences_etag: apiSuccessEtag({ preferences }),
       version_settings: runtime.site.version
     } satisfies AuthStateDto;
+    await probe.renew();
     return c.json(apiSuccess(authState));
   });
 }

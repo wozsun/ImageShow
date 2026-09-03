@@ -231,9 +231,15 @@ location /api/admin/ingestion/ {
 ## 本地发布门禁与镜像清理
 
 源码发版前必须在本地执行 `npm run verify:release`，并把该次验收的同一不可变 image ID
-标记为 `imageshow:local`。之后才推送 `dev`、等待该提交 Action、快进 `main`、创建同名
-版本标签并等待 Release Action。上传后的 Actions 只做基础校验、容器构建和发布，不代替
-本地类型、Knip、最终测试、数据库、存储或浏览器验收。
+标记为 `imageshow:local`。之后才推送 `dev`，等待 Dev Action 把同一次构建推送到 Docker Hub、
+腾讯云 TCR 与阿里云杭州 ACR，再快进 `main`、创建同名版本标签并等待 Release Action。
+Dev 显式只构建 `linux/amd64`，并关闭 Buildx 默认 provenance 证明清单，以使用三仓共同接受的
+镜像清单格式；当前提交仍由 OCI image manifest 顶层
+`org.opencontainers.image.revision` 注解记录并供 Release 校验。
+Release 只校验三仓 `:dev` 清单都属于当前提交且 digest 合法，再分别按该 digest 添加版本与
+`latest` 标签；`imagetools create --prefer-index=false` 原样复用已验证的单平台 manifest，不再
+包装新的 image index。任一仓缺失或不匹配即失败退出，不在 `main` / tag 上重新构建。Actions
+不代替本地类型、Knip、最终测试、数据库、存储或浏览器验收。
 
 清理镜像时只使用已核对且无容器引用的精确 ImageShow image ID：
 

@@ -172,7 +172,7 @@ PostgreSQL 的 `admin_account` 表，不进入 `config.json`。单应用进程�
 | <!-- runtime-config:admin.image_page_size --> `admin.image_page_size` / `ADMIN_IMAGE_PAGE_SIZE` / 显式映射 | 整数；默认 `60`；10–200 项 | 后台图片数字分页量；普通设置或热加载后影响新查询。 |
 | <!-- runtime-config:admin.recent_uploads --> `admin.recent_uploads` / `ADMIN_RECENT_UPLOADS` / 显式映射 | 整数；默认 `16`；1–60 项 | 概览最近上传数量；普通设置或热加载后影响新查询。 |
 | <!-- runtime-config:admin.show_unset_theme_card --> `admin.show_unset_theme_card` / `ADMIN_SHOW_UNSET_THEME_CARD` / 显式映射 | 布尔；默认 `true` | 主题页未设置卡片；普通设置或热加载后影响新渲染。 |
-| <!-- runtime-config:security.session_ttl_seconds --> `security.session_ttl_seconds` / `SECURITY_SESSION_TTL_SECONDS` / 显式映射 | 整数；默认 `604800`；300–31536000 秒 | 新登录会话有效期；热加载后影响新建 / 续发会话。 |
+| <!-- runtime-config:security.session_ttl_seconds --> `security.session_ttl_seconds` / `SECURITY_SESSION_TTL_SECONDS` / 显式映射 | 整数；默认 `604800`；300–31536000 秒 | 管理员会话空闲超时；登录时设置，之后仅在已认证 `/auth/me` 成功探针中滑动续期。热加载后影响新登录及后续成功续期。 |
 | <!-- runtime-config:security.login_failure_window_seconds --> `security.login_failure_window_seconds` / `SECURITY_LOGIN_FAILURE_WINDOW_SECONDS` / 显式映射 | 整数；默认 `60`；30–300 秒 | 单来源失败统计窗口；热加载后影响后续登录与挑战。 |
 | <!-- runtime-config:security.login_max_failures --> `security.login_max_failures` / `SECURITY_LOGIN_MAX_FAILURES` / 显式映射 | 整数；默认 `5`；3–500 次 | 单来源失败阈值；热加载后影响后续登录与挑战。 |
 | <!-- runtime-config:security.login_global_window_seconds --> `security.login_global_window_seconds` / `SECURITY_LOGIN_GLOBAL_WINDOW_SECONDS` / 显式映射 | 整数；默认 `180`；60–600 秒 | 全局登录窗口；热加载后影响后续登录与挑战。 |
