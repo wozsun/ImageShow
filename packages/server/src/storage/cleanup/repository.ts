@@ -224,7 +224,7 @@ export type UnresolvedMoveCleanupReference = {
 
 /** Unresolved rows are deletion leases for the exact physical object. */
 export async function listUnresolvedMoveCleanupReferences(
-  prefix: "media" | "thumbs",
+  prefix: "full" | "media" | "thumbs",
   key: string
 ): Promise<UnresolvedMoveCleanupReference[]> {
   const rows = (await pool.query(

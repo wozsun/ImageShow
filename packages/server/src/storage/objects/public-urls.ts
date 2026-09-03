@@ -2,7 +2,10 @@ import { staticLocalBaseUrl } from "../../config/site-host.ts";
 import { getStorageBackend } from "../backends/registry.ts";
 import type { PublicDatabaseReadAccess } from "../../core/database/public-fallback.ts";
 import type { StorageConfig } from "../backends/config.ts";
-import { thumbnailObjectKey } from "./image-paths.ts";
+import {
+  imageObjectPrefix,
+  thumbnailObjectKey
+} from "./image-paths.ts";
 import {
   storageS3ObjectName,
   type ReadablePrefix
@@ -12,9 +15,8 @@ function encodeKeyPath(key: string) {
   return key.split("/").map(encodeURIComponent).join("/");
 }
 
-function localMediaUrl(prefix: ReadablePrefix, key: string) {
-  const route = prefix === "media" ? "media" : "thumbs";
-  return `/${route}/${encodeKeyPath(key)}`;
+function localStorageObjectUrl(prefix: ReadablePrefix, key: string) {
+  return `/${prefix}/${encodeKeyPath(key)}`;
 }
 
 export function directStorageObjectUrl(
@@ -34,13 +36,14 @@ export async function publicImageUrls(
   access: PublicDatabaseReadAccess = {}
 ) {
   const config = await getStorageBackend(slug, access);
+  const objectPrefix = imageObjectPrefix(objectKey);
   const thumbKey = thumbnailObjectKey(objectKey);
   const staticBase = staticLocalBaseUrl();
-  const applicationThumbUrl = `${staticBase}${localMediaUrl("thumbs", thumbKey)}`;
+  const applicationThumbUrl = `${staticBase}${localStorageObjectUrl("thumbs", thumbKey)}`;
   const directThumbUrl = directStorageObjectUrl(config, "thumbs", thumbKey);
   return {
-    object_url: directStorageObjectUrl(config, "media", objectKey)
-      || `${staticBase}${localMediaUrl("media", objectKey)}`,
+    object_url: directStorageObjectUrl(config, objectPrefix, objectKey)
+      || `${staticBase}${localStorageObjectUrl(objectPrefix, objectKey)}`,
     thumb_url: directThumbUrl || applicationThumbUrl
   };
 }

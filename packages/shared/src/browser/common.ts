@@ -46,6 +46,7 @@ export const adminPermissions = {
   authorDelete: "author.delete",
   storageMaintenanceMigrate: "storage.maintenance.migrate",
   storageMaintenanceExecute: "storage.maintenance.execute",
+  storageLayoutUpgrade: "storage.layout.upgrade",
   cacheMaintenanceRebuild: "cache.maintenance.rebuild"
 } as const;
 export type AdminPermission =

@@ -110,8 +110,8 @@ PostgreSQL 事务推进 `ready_image_revision`。提交后仍持有进程内写�
   "items": [
     {
       "id": "019f8457-063a-7002-a580-7a432dc7fd8d",
-      "object_url": "https://static.example.com/media/pc/dark/theme/example.webp",
-      "thumb_url": "https://static.example.com/thumbs/pc/dark/theme/example.webp",
+      "object_url": "https://static.example.com/full/8d/019f8457-063a-7002-a580-7a432dc7fd8d.webp",
+      "thumb_url": "https://static.example.com/thumbs/8d/019f8457-063a-7002-a580-7a432dc7fd8d.webp",
       "device": "pc",
       "brightness": "dark",
       "theme": "theme",

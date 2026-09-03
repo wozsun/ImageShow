@@ -9,12 +9,6 @@ import type { ImageUpdateItemInputDto } from "@imageshow/shared/browser";
 import { readStorageBuffer, storageObjectExists } from "../storage/objects/access.ts";
 import { thumbnailRef } from "../storage/objects/image-paths.ts";
 import {
-  enqueuePreparedImageRelocationCleanupIfUnreferenced,
-  enqueuePreparedImageSourceCleanup,
-  prepareVerifiedImageRelocation,
-  type PreparedImageRelocation
-} from "./storage-location/classification-relocation.ts";
-import {
   imageStorageMutationLockKey,
   withStorageLocationReadAndAdvisoryLocks
 } from "../storage/maintenance-lock.ts";
@@ -53,8 +47,6 @@ type UpdateImageRecord = {
   theme: string;
   width: number | string | null;
   height: number | string | null;
-  ext: string;
-  md5: string | null;
   object_key: string;
   storage_slug: string;
   author: string | null;
@@ -82,8 +74,6 @@ const updateImageColumns = [
   "theme",
   "width",
   "height",
-  "ext",
-  "md5",
   "object_key",
   "storage_slug",
   "author",
@@ -165,14 +155,12 @@ async function commitImageUpdate({
   resolvedTags,
   sourceImage,
   target,
-  relocation,
   signal
 }: {
   item: ImageUpdateItemInputDto;
   resolvedTags: string[] | null;
   sourceImage: UpdateImageRecord | null;
   target: Pick<UpdateImageRecord, "device" | "brightness" | "theme"> | null;
-  relocation: PreparedImageRelocation | null;
   signal: AbortSignal;
 }): Promise<ImageUpdateTransactionOutcome> {
   let client: PoolClient | undefined;
@@ -289,33 +277,29 @@ async function commitImageUpdate({
             SET device=$2,
                 brightness=$3,
                 theme=$4,
-                object_key=$5,
-                title=$6,
-                description=$7,
-                source=$8,
-                original=$9,
-                author=$10,
-                thumbnail_size=COALESCE($11::bigint,thumbnail_size),
+                title=$5,
+                description=$6,
+                source=$7,
+                original=$8,
+                author=$9,
                 updated_at=now()
           WHERE id=$1
-            AND storage_slug=$12
-            AND object_key=$13
-            AND device=$14
-            AND brightness=$15
-            AND theme=$16
+            AND storage_slug=$10
+            AND object_key=$11
+            AND device=$12
+            AND brightness=$13
+            AND theme=$14
           RETURNING id`,
         [
           item.id,
           nextClassification.device,
           nextClassification.brightness,
           nextClassification.theme,
-          relocation?.nextObjectKey ?? locked.object_key,
           nextFields.title,
           nextFields.description,
           nextFields.source,
           nextFields.original,
           nextAuthor,
-          relocation?.thumbnailSize ?? null,
           locked.storage_slug,
           locked.object_key,
           locked.device,
@@ -341,14 +325,6 @@ async function commitImageUpdate({
       );
       if (tagMutation.createdTag) createdEntityKinds.add("tag");
     }
-    if (relocation) {
-      await enqueuePreparedImageSourceCleanup(
-        client,
-        relocation,
-        "category_move_source_cleanup"
-      );
-    }
-
     if (locked.theme !== nextClassification.theme) {
       changedEntityKinds.add("theme");
     }
@@ -379,7 +355,6 @@ async function mutateImageItem(
     || item.theme !== undefined;
   let sourceImage: UpdateImageRecord | null = null;
   let target: Pick<UpdateImageRecord, "device" | "brightness" | "theme"> | null = null;
-  let relocation: PreparedImageRelocation | null = null;
   const commitState: {
     outcome: ImageUpdateTransactionOutcome | null;
   } = { outcome: null };
@@ -414,18 +389,6 @@ async function mutateImageItem(
         brightness: resolvedBrightness ?? sourceImage.brightness,
         theme: item.theme ?? sourceImage.theme
       };
-      if (
-        target.device !== sourceImage.device
-        || target.brightness !== sourceImage.brightness
-        || target.theme !== sourceImage.theme
-      ) {
-        relocation = await prepareVerifiedImageRelocation(
-          sourceImage,
-          target,
-          "category_move",
-          signal
-        );
-      }
     }
 
     const outcome = await withImageMutationSync(async (mutationSyncBatch) => {
@@ -434,7 +397,6 @@ async function mutateImageItem(
         resolvedTags,
         sourceImage,
         target,
-        relocation,
         signal
       });
       commitState.outcome = transactionOutcome;
@@ -456,19 +418,6 @@ async function mutateImageItem(
       }
       await repairDerivedCaches(committedOutcome, options);
       return committedOutcome;
-    }
-    if (relocation) {
-      try {
-        await enqueuePreparedImageRelocationCleanupIfUnreferenced(
-          relocation,
-          "category_move_compare_and_swap_failed"
-        );
-      } catch (cleanupError) {
-        throw new AggregateError(
-          [error, cleanupError],
-          "Image update failed and candidate cleanup could not be queued"
-        );
-      }
     }
     throw error;
   }
@@ -507,13 +456,13 @@ export async function updateImageItem(
   );
 
   if (classificationRequested) {
-    return withStorageLocationReadAndAdvisoryLocks(
-      [
-        ...vocabularyLocks,
-        { key: imageStorageMutationLockKey(item.id) }
-      ],
-      work
-    );
+    const classificationLocks = [
+      ...vocabularyLocks,
+      { key: imageStorageMutationLockKey(item.id) }
+    ];
+    return item.brightness === "auto"
+      ? withStorageLocationReadAndAdvisoryLocks(classificationLocks, work)
+      : withAdvisoryLocks(classificationLocks, work);
   }
   if (vocabularyLocks.length) {
     return withAdvisoryLocks(vocabularyLocks, work);

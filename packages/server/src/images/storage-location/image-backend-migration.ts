@@ -12,7 +12,10 @@ import {
   getStorageBackend,
   resolveStorageAccessForConfig
 } from "../../storage/backends/registry.ts";
-import { thumbnailObjectKey } from "../../storage/objects/image-paths.ts";
+import {
+  imageObjectPrefix,
+  thumbnailObjectKey
+} from "../../storage/objects/image-paths.ts";
 import { withImageStorageMutationLock } from "../../storage/maintenance-lock.ts";
 import {
   captureMoveCleanupObjects,
@@ -238,6 +241,7 @@ async function migrateImageToStorageBackendWhileLocked(
   const sourceAccess = resolveStorageAccessForConfig(source);
   const destinationAccess = resolveStorageAccessForConfig(destination);
   const sharedNamespace = shareStorageNamespace(source, destination);
+  const objectPrefix = imageObjectPrefix(current.object_key);
   const thumbKey = thumbnailObjectKey(current.object_key);
   const created: CapturedMoveCleanupObject[] = [];
   const sourceObjects: MoveCleanupObjectInput[] = [];
@@ -285,7 +289,7 @@ async function migrateImageToStorageBackendWhileLocked(
   try {
     try {
       await materialize(
-        "media",
+        objectPrefix,
         current.object_key,
         { size: current.image_size, md5: current.md5 },
         contentType(current.ext)
@@ -324,7 +328,7 @@ async function migrateImageToStorageBackendWhileLocked(
     if (!sharedNamespace) {
       sourceObjects.push(
         {
-          prefix: "media",
+          prefix: objectPrefix,
           key: current.object_key,
           backend: current.storage_slug
         },

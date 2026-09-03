@@ -77,7 +77,7 @@ Redis 核心 meta 的当前图片数和最后更新时间随完整重建批次�
 | `id` (UUID, PK) | 图片唯一 id（uuid v7，时间有序）；目录中的文件名也使用它 |
 | `status` | `ready` / `deleted` |
 | `storage_slug` | 图片所在存储后端 slug（外键 → `storage_backend.slug`） |
-| `object_key` (UNIQUE) | 标准化图片在所属后端中的对象存储键 |
+| `object_key` (UNIQUE) | 标准化完整展示图在所属后端中的对象键；新布局为 `<UUID 尾部两位>/<UUID>.<ext>` |
 | `device` | 设备：`pc`（横屏）/ `mb`（竖屏），由宽高比或用户选择得到 |
 | `brightness` | 亮度：`dark` / `light`，上传默认自动识别 |
 | `theme` | 主题 slug；`none` 表示无主题 |
@@ -94,13 +94,21 @@ Redis 核心 meta 的当前图片数和最后更新时间随完整重建批次�
 | `created_at` | 图片首次正式入库时间 |
 | `updated_at` | 图片元数据最后更新时间 |
 
-图片分类直接由 `device`、`brightness` 与 `theme` 表达，人工可读目录也使用这三项；
-随机候选由统一 Redis ready-image ZSET 投影维护，PostgreSQL 不保存分类连续编号。
+图片分类直接由 `device`、`brightness` 与 `theme` 表达，不再参与对象路径。新图片的
+`object_key` 只由 UUID 和扩展名决定，外层 `full` / `thumbs` prefix 由存储层管理；5.6.0
+迁移完成前仍可读旧的 `<pc|mb>-<dark|light>/<theme>/<uuid>.<ext>` 分类键。随机候选由统一 Redis
+ready-image ZSET 投影维护，PostgreSQL 不保存分类连续编号。
 
-成功提交的图片以正式原图与正式缩略图同时存在为数据库外对象不变量。正常缩略图 GET
+成功提交的图片以正式完整展示图与正式缩略图同时存在为数据库外对象不变量。正常缩略图 GET
 只按 `storage_slug + object_key` 解析唯一地址并读取正式对象，不查询 repair 状态、不探测
-存在性、不读取原图降级，也不在请求中写对象或 `thumbnail_size`。缺图返回 404；分类移动
-和存储迁移返回结构化 `storage_thumbnail_missing`，要求先运行检查页“存储维护”。
+存在性、不读取完整图降级，也不在请求中写对象或 `thumbnail_size`。缺图返回 404；分类编辑
+不为路径搬迁读取或搬动对象，只有显式自动亮度检测会读取现有缩略图。存储后端迁移缺少缩略图
+时返回结构化 `storage_thumbnail_missing`，要求先运行检查页“存储维护”。
+
+5.6.0 布局升级不增加 schema 字段、版本 ledger 或持久迁移任务。检查页状态直接按
+`metadata.object_key` 统计新旧布局；每张图复制完成后以旧 `storage_slug + object_key + status`
+做条件更新，并在同一事务推进 ready revision、登记旧对象 `move.cleanup`。浏览器断线后只需
+重新读取仍为旧键的行，不依赖进程内或浏览器游标。
 
 检查页显式维护是独立的管理员同步操作：它在全局存储位置写锁内重读当前图片位置，只为
 原图仍存在且缩略图确实缺失的记录生成、强摘要回读并写回 `thumbnail_size`。该路径不创建
@@ -210,7 +218,7 @@ Worker 会按保留策略裁剪历史记录：`succeeded` 保留 7 天；普通�
 可按后端把耗尽任务恢复为 `pending`；Worker 删除前还会核对当前 slug 的 identity，并把
 对象已不存在视为核验完成。它不会生成或采用缩略图，也不会更新 `metadata`。未解决记录
 也是该 identity、前缀与对象键的持久删除租约；
-commit、分类移动和存储迁移在写入或采用正式对象前必须确认不存在该租约，避免远端
+Ingestion commit、5.6.0 布局升级和存储后端迁移在写入或采用正式对象前必须确认不存在该租约，避免远端
 DELETE 发出后失锁时由后继重新采用同一对象。
 
 ## storage_backend —— 命名存储后端注册表
@@ -268,8 +276,9 @@ HTTPS 格式并在后端配置锁内保存，不创建探针 driver，也不退�
 真值重新构建，保证 `tag=` 随机过滤和 gallery facets 不会沿用旧成员；旧索引仍受统一
 派生 registry 的 TTL、LRU、结果数和成员数上限约束，不参与核心完整性判定。
 
-图片编辑把 metadata、必要的 author / theme / tag 创建、完整标签替换和分类移动清理回执
-放进同一张图片的单个事务。实际变化只推进一次 `ready_image_revision`；事务任一步失败会
+图片编辑把 metadata、必要的 author / theme / tag 创建和完整标签替换放进同一张图片的单个
+事务；分类变化不修改 `object_key`、`thumbnail_size` 或创建清理回执。实际变化只推进一次
+`ready_image_revision`；事务任一步失败会
 完整回滚该图片，纯 no-op 不推进。并发编辑采用 last-write-wins，不存储逐图编辑版本，也不
 以 `ready_image_revision` 充当编辑冲突仲裁。
 

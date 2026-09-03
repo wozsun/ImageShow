@@ -61,7 +61,7 @@ async function cleanupReferenceMatchesTarget(
  */
 export async function assertObjectNotPendingCleanup(
   target: Awaited<ReturnType<typeof getStorageBackend>>,
-  prefix: "media" | "thumbs",
+  prefix: "full" | "media" | "thumbs",
   key: string,
   options: Readonly<{
     /**

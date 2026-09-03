@@ -411,7 +411,7 @@ async function cleanupStagingOrphans(
 /**
  * Delete only disposable material whose absence from a stable Redis projection
  * has been proven. Redis loss therefore skips both raw and staging cleanup;
- * formal media/thumb candidates remain owned by persistent move.cleanup jobs.
+ * formal full-or-legacy-media/thumb candidates remain owned by persistent move.cleanup jobs.
  */
 export async function cleanupIngestionOrphans(
   now = Date.now(),

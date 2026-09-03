@@ -189,7 +189,7 @@ function digestMatchesExpected(
  */
 export async function assertStorageTargetAdoptable(input: {
   storage: StorageAccess;
-  prefix: "media" | "thumbs";
+  prefix: "full" | "media" | "thumbs";
   key: string;
   expected: SourceDigestExpectation;
   signal?: AbortSignal;
@@ -256,7 +256,7 @@ async function cleanupAttemptedCandidate(
 /**
  * Copy within one physical backend using the driver's native copy primitive.
  * Source and target are streamed for hashing, which avoids a second full
- * in-memory copy for S3 Ingestion commits and category moves.
+ * in-memory copy for S3 Ingestion commits and storage-location moves.
  */
 export async function copyVerifiedObjectWithinStorage(input: {
   storage: StorageAccess;

@@ -6,7 +6,11 @@ import type {
 export {
   activeIngestionStorageReferences
 } from "../images/ingestion/cleanup/storage-references.ts";
-import { thumbnailObjectKey } from "../storage/objects/image-paths.ts";
+import {
+  imageObjectPrefix,
+  thumbnailObjectKey,
+  type ImageObjectPrefix
+} from "../storage/objects/image-paths.ts";
 import { listStorageBackends } from "../storage/backends/registry.ts";
 import type { StorageBackendRecord } from "../storage/backends/config.ts";
 import { groupStorageNamespaces } from "../storage/objects/namespace.ts";
@@ -22,7 +26,7 @@ export type StorageRow = {
 };
 
 type IngestionFinalStorageReference = {
-  prefix: "media" | "thumbs";
+  prefix: ImageObjectPrefix | "thumbs";
   key: string;
 };
 
@@ -37,7 +41,7 @@ export function ingestionFinalStorageReferences(
   const key = session.final_object_key;
   if (!key) return [];
   return [
-    { prefix: "media", key },
+    { prefix: imageObjectPrefix(key), key },
     { prefix: "thumbs", key: thumbnailObjectKey(key) }
   ];
 }

@@ -33,7 +33,7 @@ Hono HTTP 应用 ──► PostgreSQL（业务真相）
 | 主机 | 职责 |
 | --- | --- |
 | `<站点域名>` | SPA、公共 API、管理 API、健康检查与 `/random` |
-| `static.<站点域名>` | `/media/*`、`/thumbs/*` 对象字节与 `/link/original/<id>` 外部 HTTPS 原图直连决策 / 代理 |
+| `static.<站点域名>` | `/full/*`、`/thumbs/*` 对象字节，5.6.0 升级期旧 `/media/*`，以及 `/link/original/<id>` 外部 HTTPS 原图直连决策 / 代理 |
 
 随机、外链和主题都不拥有专用子域；未注册子域返回 404。嵌入页只在配置开启时提供，
 并由文档响应的 CSP
@@ -195,7 +195,7 @@ preparation owner，从等待图片处理一直持有到 `_uploads` 与 ready ca
 
 ## 一致性边界
 
-会改变图片对象位置的 Ingestion commit、分类修改、主题重分配、单图或整后端迁移和彻底删除，
+会改变图片对象位置的 Ingestion commit、5.6.0 布局升级、单图或整后端迁移和彻底删除，
 共用存储位置维护锁与单图 advisory lock。锁内重新读取 PostgreSQL 真相，候选对象必须
 按所属领域的冻结摘要或数据库完整性信息完成传输验证，数据库位置以旧值做 CAS。数据库提交后
 才处理旧对象；不可逆删除交给
@@ -220,7 +220,8 @@ PostgreSQL 最终引用决定删除或保留；S3 写入的不确定窗口在请
 单图锁后重读窗口，避免把尚未可见的迟到发布误判为清理完成。
 
 成功提交后，正常缩略图读取严格只读；缺失由 GET 返回 404 并在 Web 显示统一损坏图标，
-只有检查页维护可以补建。分类移动和存储迁移不会在业务路径隐式修复。
+只有检查页维护可以补建。分类编辑只更新 metadata，不为路径搬迁读取或移动对象；显式选择
+自动亮度时仍读取现有缩略图完成检测。存储迁移不会在业务路径隐式修复。
 
 Redis Ingestion canonical 以 pair、version 和 execution token 隔离下载、prepare、commit、取消
 与恢复。commit 按 prepared 最终 MD5、pair、图片和词表取得 PostgreSQL advisory lock，只

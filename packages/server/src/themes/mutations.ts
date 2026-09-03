@@ -13,7 +13,7 @@ import {
   readThemeReassignPlan,
   reassignThemeImagesToNone,
   type ThemeReassignProgress
-} from "../images/storage-location/theme-reassignment.ts";
+} from "../images/theme-reassignment.ts";
 import { invalidateEntityCountCaches } from "../vocab/vocab-cache.ts";
 
 async function insertTheme(client: PoolClient, slug: string) {
@@ -31,7 +31,7 @@ async function insertTheme(client: PoolClient, slug: string) {
 /**
  * Use only while the caller owns vocabularyMutationLockKey("theme", slug).
  * This avoids acquiring the same advisory lock from the transaction client
- * after the storage/vocabulary/image compound lease is already held.
+ * after the caller's vocabulary/image compound lease is already held.
  */
 export function ensureThemeWithMutationLockHeld(
   client: PoolClient,

@@ -47,6 +47,14 @@ const ReadyImageCacheMaintenancePanel = lazy(() => (
     default: module.ReadyImageCacheMaintenancePanel
   }))
 ));
+const loadStorageLayoutUpgradeCapability = createPageLifetimeModuleLoader(
+  () => import("./storage-layout-upgrade/StorageLayoutUpgradeAction.js")
+);
+const StorageLayoutUpgradeAction = lazy(() => (
+  loadStorageLayoutUpgradeCapability().then((module) => ({
+    default: module.StorageLayoutUpgradeAction
+  }))
+));
 
 const checkViews = [
   { name: "status", label: "状态" },
@@ -113,6 +121,9 @@ export function CheckPage() {
   );
   const canMaintainTrashPurge = permissions.includes(
     adminPermissions.imageTrashPurge
+  );
+  const canUpgradeStorageLayout = permissions.includes(
+    adminPermissions.storageLayoutUpgrade
   );
 
   useEffect(() => {
@@ -207,6 +218,14 @@ export function CheckPage() {
                 onRunCheck={runCheck}
                 onRunningChange={setRunning}
                 onShowStorage={() => setCheckView("storage")}
+              />
+            </Suspense>
+          )}
+          {canUpgradeStorageLayout && (
+            <Suspense fallback={null}>
+              <StorageLayoutUpgradeAction
+                running={running}
+                onRunningChange={setRunning}
               />
             </Suspense>
           )}
@@ -414,7 +433,8 @@ const CHECK_RESULT_LABELS: Record<string, string> = {
   migrated: "已迁移",
   unchanged: "无需迁移",
   missing: "源对象缺失",
-  media: "原图数",
+  media: "旧布局完整图数",
+  full: "新布局完整图数",
   thumbs: "缩略图数",
   error_samples: "错误样本",
   error_count: "错误数量",

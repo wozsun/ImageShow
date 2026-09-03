@@ -125,7 +125,13 @@ export function registerPublicRoutes(app: Hono) {
   });
 
   app.get("/media/*", async (c) => servePublicStoredObject(
+    "media",
     c.req.path.replace(/^\/media\//, ""),
+    storedResponseRequest(c)
+  ));
+  app.get("/full/*", async (c) => servePublicStoredObject(
+    "full",
+    c.req.path.replace(/^\/full\//, ""),
     storedResponseRequest(c)
   ));
   app.get("/thumbs/*", async (c) => servePublicStoredThumbnail(

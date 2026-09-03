@@ -28,7 +28,7 @@ function waitForRetry(delayMs: number) {
  * class contract keeps
  * exact work through admission backpressure and retries. The production
  * disposable instance opts into finite best-effort mode only after formal
- * media/thumb candidates have acquired a persistent move.cleanup guard.
+ * full-or-legacy-media/thumb candidates have acquired a persistent move.cleanup guard.
  */
 class IngestionCleanupRetryQueue {
   readonly #signal = new AbortController().signal;

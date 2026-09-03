@@ -9,7 +9,6 @@ import { ApiError } from "../../../core/api-error.ts";
 import { mapWithWorkerPool } from "../../../core/concurrency.ts";
 import { randomUuidV7 } from "../../../core/uuid.ts";
 import { storageObjectKey } from "../../../storage/objects/image-paths.ts";
-import { resolveClassification } from "../../classification.ts";
 import {
   committedIngestionResultForOwner,
   readCommittedIngestionResultsByImageIds
@@ -421,14 +420,7 @@ export async function acceptIngestionCommitIntents(
           duplicateSnapshots.get(stored.prepared.md5)!,
           input.duplicate_decision
         );
-        const classification = resolveClassification(metadata, {
-          device: stored.prepared.detected_device,
-          brightness: stored.prepared.detected_brightness
-        });
         const finalObjectKey = storageObjectKey(
-          classification.device,
-          classification.brightness,
-          metadata.theme,
           stored.image_id,
           stored.prepared.ext
         );

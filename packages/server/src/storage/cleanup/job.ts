@@ -8,7 +8,10 @@ import {
 } from "../../jobs/handler-outcome.ts";
 import type { BackgroundJob } from "../../jobs/types.ts";
 import { getStorageBackend } from "../backends/registry.ts";
-import { thumbnailObjectKey } from "../objects/image-paths.ts";
+import {
+  imageObjectPrefix,
+  thumbnailObjectKey
+} from "../objects/image-paths.ts";
 import { withImageStorageMutationLock } from "../maintenance-lock.ts";
 import {
   assertStorageRemovalResults,
@@ -39,12 +42,12 @@ function cleanupObjectsFromPayload(
       || !object.backend
       || typeof object.namespace_identity !== "string"
       || !object.namespace_identity
-      || !["media", "thumbs"].includes(String(object.prefix))
+      || !["full", "media", "thumbs"].includes(String(object.prefix))
     ) {
       return null;
     }
     objects.push({
-      prefix: object.prefix as "media" | "thumbs",
+      prefix: object.prefix as "full" | "media" | "thumbs",
       key: object.key,
       backend: object.backend,
       namespace_identity: object.namespace_identity
@@ -66,8 +69,9 @@ function metadataReferencesObject(
   object: CapturedMoveCleanupObject,
   row: { object_key: string; storage_slug: string }
 ) {
-  return object.prefix === "media"
-    ? row.object_key === object.key
+  return object.prefix !== "thumbs"
+    ? imageObjectPrefix(row.object_key) === object.prefix
+      && row.object_key === object.key
     : thumbnailObjectKey(row.object_key) === object.key;
 }
 

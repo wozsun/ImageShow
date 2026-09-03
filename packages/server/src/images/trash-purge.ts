@@ -13,7 +13,10 @@ import { pool } from "../core/database/pools.ts";
 import { withTransactionOnClient } from "../core/database/transactions.ts";
 import { logger } from "../core/logger.ts";
 import { randomUuidV7 } from "../core/uuid.ts";
-import { thumbnailRef } from "../storage/objects/image-paths.ts";
+import {
+  imageObjectPrefix,
+  thumbnailRef
+} from "../storage/objects/image-paths.ts";
 import { withImageStorageMutationLock } from "../storage/maintenance-lock.ts";
 import {
   assertStorageRemovalResults,
@@ -354,7 +357,7 @@ async function purgeJobImage(
           storageSlug: row.storage_slug
         },
         {
-          prefix: "media",
+          prefix: imageObjectPrefix(row.object_key),
           key: row.object_key,
           storageSlug: row.storage_slug
         }

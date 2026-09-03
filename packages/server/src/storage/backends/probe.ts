@@ -10,6 +10,7 @@ import {
   resolveStorageAccessForConfig
 } from "./registry.ts";
 import type { StorageDriver } from "../drivers/driver.ts";
+import { imageObjectPrefix } from "../objects/image-paths.ts";
 import {
   verifyStorageEndpointRebind,
   type StagingNamespaceSnapshot
@@ -28,7 +29,7 @@ async function assertExistingObjectReadable(
 ) {
   try {
     const opened = await driver.openRead(
-      "media",
+      imageObjectPrefix(existingObject.object_key),
       existingObject.object_key,
       "bytes=0-0",
       { signal }

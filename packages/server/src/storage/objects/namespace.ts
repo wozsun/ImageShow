@@ -19,7 +19,7 @@ function canonicalHttpsEndpoint(value: string) {
 
 /**
  * Return an opaque identity for the physical namespace that owns every
- * `media/`, `thumbs/` and `_uploads/` key. Credentials, public URLs,
+ * `full/`, transitional `media/`, `thumbs/` and `_uploads/` key. Credentials, public URLs,
  * timeouts and display settings intentionally do not participate.
  */
 export function configuredStorageNamespaceIdentity(config: StorageConfig) {
