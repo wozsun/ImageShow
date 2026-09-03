@@ -500,10 +500,16 @@ hooks ──► lib
   `import.*`，Upload 专属入口使用 `upload.*`，共用原图准入、队列分页与提交使用
   `ingestion.*`。`data/config.json` 只按当前默认结构投影、校验并原子
   写回；当前结构之外的字段直接删除。
+- `IngestionLauncher.tsx` 只拥有入口按需加载与激活意图：启动阶段复用页面根 `inert` 锁而不禁用
+  图片页按钮，`Ingestion.tsx` 在最外层 `DialogFrame` 挂载后以同一引用计数锁完成无缝交接；
+  关闭只退休仍活动的意图，加载失败则在根锁清理后归焦仍连接的启动入口。来源菜单在自身退场前
+  同步提交启动意图，不持有动画结束后的延迟激活。模态生命周期的焦点、滚动和背景命中仍只属于
+  共享弹窗边界。
 - `workflow/IngestionWorkflowWindow.tsx` 拥有 DialogFrame、焦点捕获 / 恢复、滚动容器、
   关闭 / 隐藏、详情 / preview target、cleanup confirmation scope、mode 和 owner 选择；
   `IngestionWorkflowRegions.tsx` 只渲染 header、defaults、queue body、summary 与 footer，DOM 顺序、
-  class、ARIA 和 focusable 顺序不变。
+  class、ARIA 和 focusable 顺序不变。queue body 在首份服务端快照前直接绘制非权威的默认选择入口，
+  并让它跨过汇总到卡片的水合间隙；未完成任务仍只由现有有界 `visibleJobs` 投影替换为真实卡片。
 - `queue/cards/useIngestionJobDraftEditing.ts` 是任务卡片文本焦点会话的唯一 owner：标题、主题 /
   作者键入、原图 URL、来源 URL 和详情描述只在有效 attempt 内保留临时值，并在失焦时向 queue
   controller 至多发布一次实际字段变化。共享 `ImageDraftFields` 与 `SlugComboInput` 只提供可选的焦点 / 发布

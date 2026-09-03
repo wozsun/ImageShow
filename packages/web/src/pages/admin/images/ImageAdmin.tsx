@@ -72,7 +72,6 @@ export function ImageAdmin() {
     emptyImageAdminFilters
   );
   const [cardDensity, setCardDensity] = useAdminPreference("image_card_density");
-  const [ingestionPending, setIngestionPending] = useState(false);
   const [batchTrashPending, setBatchTrashPending] = useState(false);
   const mobileLayout = useMediaQuery(mobileViewportMediaQuery);
   const permissions = useAdminPermissions();
@@ -164,7 +163,7 @@ export function ImageAdmin() {
     }
   });
   const editorPending = editorCapability.pending !== null;
-  const editorConflictBusy = operationBusy || detailPending || ingestionPending;
+  const editorConflictBusy = operationBusy || detailPending;
   const modalOpen = Boolean(
     detailCapability.item || editorCapability.session || confirmAction
   );
@@ -279,9 +278,6 @@ export function ImageAdmin() {
             onLoadError={(error) => {
               reportAdminUiError("image_admin.ingestion_load", error);
               showFeedback("上传与导入功能加载失败，请重新加载页面", "error");
-            }}
-            onPendingChange={(pending) => {
-              setIngestionPending(pending);
             }}
           />
           <div className="image-admin-view-switch">
@@ -490,7 +486,7 @@ export function ImageAdmin() {
               item={item}
               storageName={storageName}
               checked={selected.includes(item.id)}
-              detailDisabled={operationBusy || ingestionPending || editorPending}
+              detailDisabled={operationBusy || editorPending}
               detailPending={detailCapability.pendingItemId === item.id}
               onPreloadDetail={detailCapability.preload}
               onCheck={(checked, extendRange) => selection.update(

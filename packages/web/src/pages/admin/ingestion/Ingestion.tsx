@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState
+} from "react";
 import { useAdminSettings } from "../../../lib/api/admin-settings.js";
 import { storageBackendLabel } from "../../../lib/ui/select-options.js";
 import { useIngestionVocabulary } from "../../../lib/api/ingestion-vocabulary.js";
@@ -41,6 +48,7 @@ export function Ingestion({
   activation,
   activationEnabled,
   loadImportSourceModule,
+  onActivationOpened,
   onActivationSettled,
   onDone,
   onLoadError
@@ -48,6 +56,7 @@ export function Ingestion({
   activation: IngestionActivation | null;
   activationEnabled: boolean;
   loadImportSourceModule: () => Promise<ImportSourceDialogModule>;
+  onActivationOpened: (sequence: number) => void;
   onActivationSettled: (sequence: number) => void;
   onDone: () => void;
   onLoadError: (error: unknown) => void;
@@ -335,6 +344,14 @@ export function Ingestion({
     void loadImportSourceModule().catch(() => undefined);
   };
 
+  useLayoutEffect(() => {
+    if (!open || !activation) return;
+    // The workflow DialogFrame is now committed in the same tree. Its layout
+    // effect owns the page-level inert/focus/scroll boundary before paint, so
+    // the launcher's root-lock lease can be handed off without an interactive gap.
+    onActivationOpened(activation.sequence);
+  }, [activation, onActivationOpened, open]);
+
   useEffect(() => {
     if (!activationEnabled || !activation) {
       intentFenceRef.current.invalidate();
@@ -369,8 +386,8 @@ export function Ingestion({
       } catch (error) {
         if (intentFenceRef.current.isCurrent(intent)) onLoadError(error);
       } finally {
-        // 成功启动后由 closeWorkflow 统一释放激活锁。若在弹窗打开时提前释放，
-        // 图片页会短暂经历 disabled -> enabled，从而在来源模块慢加载时产生闪烁。
+        // 成功启动后由已挂载的 DialogFrame 接管页面交互，关闭时再退休激活意图。
+        // 失败路径没有模态边界可接管，因此必须直接释放 launcher 的启动锁。
         if (!opened && intentFenceRef.current.isCurrent(intent)) {
           onActivationSettled(activation.sequence);
         }

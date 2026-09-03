@@ -313,8 +313,12 @@ export function IngestionWorkflowQueueBody({
   }>;
 }) {
   const [dragOver, setDragOver] = useState(false);
-  const serverReady = queue.server.status === "ready";
   const serverFailed = queue.server.status === "error";
+  // This is an entry affordance, not an empty-queue proof. Keep it through the
+  // summary-to-card hydration gap, then let the bounded visible projection
+  // replace it as soon as any task card exists.
+  const showDefaultEntry = queue.visibleJobs.length === 0
+    && !serverFailed;
 
   return (
     <div
@@ -388,7 +392,7 @@ export function IngestionWorkflowQueueBody({
         onFocusWithin={jobActions.onFocusWithin}
         onPreview={jobActions.onPreview}
       />
-      {serverReady && queue.totalItems === 0 && (mode === "import" ? (
+      {showDefaultEntry && (mode === "import" ? (
         <button
           type="button"
           className="ingestion-empty-state upload-dropzone"
@@ -397,7 +401,7 @@ export function IngestionWorkflowQueueBody({
           onClick={() => source.onOpen("urls")}
         >
           <AdminIcon name="download-cloud-2-line" />
-          <span>还没有上传或导入任务，点击此处选择图片来源</span>
+          <span>点击此处选择图片来源</span>
         </button>
       ) : (
         <button
@@ -418,7 +422,7 @@ export function IngestionWorkflowQueueBody({
           }}
         >
           <AdminIcon name="image-line" />
-          <span>还没有选择图片，点击此处选择，或将图片拖到这里</span>
+          <span>点击此处选择图片，或将图片拖到这里</span>
         </button>
       ))}
     </div>

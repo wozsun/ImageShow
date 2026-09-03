@@ -111,9 +111,12 @@ export function ImportSplitButton({
     const opener = menuTriggerRef.current;
     if (!opener) return;
     selectionPendingRef.current = true;
+    // Claim the launch transaction in the same activation turn. Waiting for
+    // the menu exit animation would leave its pointer-transparent surface over
+    // still-active page controls and would retain a stale activation callback.
+    action(opener);
     menu.requestClose(() => {
       selectionPendingRef.current = false;
-      action(opener);
     });
   };
 

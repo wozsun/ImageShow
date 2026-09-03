@@ -1,8 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState
+} from "react";
 import { AsyncIntentFence } from "../../../lib/async-intent-fence.js";
 import {
   createPageLifetimeModuleLoader
 } from "../../../lib/page-lifetime-module-loader.js";
+import { usePageScrollLock } from "../../../hooks/usePageScrollLock.js";
 import { IngestionTriggers } from "./IngestionTriggers.js";
 import type {
   IngestionActivation,
@@ -13,6 +20,11 @@ import "../../../styles/admin/ingestion-triggers.css";
 type IngestionModule = typeof import("./Ingestion.js");
 type ImportSourceDialogModule =
   typeof import("./import/ImportSourceDialog.js");
+
+type IngestionLauncherModuleLoaders = Readonly<{
+  ingestion: () => Promise<IngestionModule>;
+  importSource: () => Promise<ImportSourceDialogModule>;
+}>;
 
 const loadIngestionModule = createPageLifetimeModuleLoader<IngestionModule>(
   () => import("./Ingestion.js")
@@ -27,30 +39,52 @@ export function IngestionLauncher({
   disabled,
   onDone,
   onLoadError,
-  onPendingChange
+  moduleLoaders
 }: {
   showTriggers: boolean;
   disabled: boolean;
   onDone: () => void;
   onLoadError: (error: unknown) => void;
-  onPendingChange: (pending: boolean) => void;
+  moduleLoaders?: IngestionLauncherModuleLoaders;
 }) {
+  const ingestionLoader = moduleLoaders?.ingestion ?? loadIngestionModule;
+  const importSourceLoader = moduleLoaders?.importSource
+    ?? loadImportSourceModule;
   const [IngestionComponent, setIngestionComponent] =
     useState<IngestionModule["Ingestion"] | null>(null);
   const [activation, setActivation] = useState<IngestionActivation | null>(null);
-  const [pending, setPending] = useState(false);
-  const pendingRef = useRef(false);
+  const [launchPending, setLaunchPending] = useState(false);
+  const activationActiveRef = useRef(false);
+  const launchPendingRef = useRef(false);
+  const failedLaunchFocusRef = useRef<HTMLButtonElement | null>(null);
   const sequenceRef = useRef(0);
   const activeSequenceRef = useRef(0);
   const launchFenceRef = useRef(new AsyncIntentFence());
   const showTriggersRef = useRef(showTriggers);
   showTriggersRef.current = showTriggers;
 
-  const updatePending = useCallback((nextPending: boolean) => {
-    pendingRef.current = nextPending;
-    setPending(nextPending);
-    onPendingChange(nextPending);
-  }, [onPendingChange]);
+  const updateLaunchPending = useCallback((nextPending: boolean) => {
+    if (launchPendingRef.current === nextPending) return;
+    launchPendingRef.current = nextPending;
+    setLaunchPending(nextPending);
+  }, []);
+
+  // The lazy-loading interval needs interaction exclusion, not a disabled
+  // presentation. Reuse the page-root lock so buttons keep their normal
+  // appearance while pointer, keyboard, focus and scrolling are fenced. The
+  // mounted DialogFrame takes a second lease before this one is released.
+  usePageScrollLock(launchPending);
+
+  useLayoutEffect(() => {
+    if (launchPending) return;
+    const target = failedLaunchFocusRef.current;
+    failedLaunchFocusRef.current = null;
+    if (
+      target?.isConnected
+      && !target.disabled
+      && !target.closest("[inert]")
+    ) target.focus();
+  }, [launchPending]);
 
   useEffect(() => {
     const launchFence = launchFenceRef.current;
@@ -61,24 +95,27 @@ export function IngestionLauncher({
   useEffect(() => {
     if (showTriggers) return;
     launchFenceRef.current.invalidate();
+    activationActiveRef.current = false;
     setActivation(null);
-    updatePending(false);
-  }, [showTriggers, updatePending]);
+    updateLaunchPending(false);
+  }, [showTriggers, updateLaunchPending]);
 
   const preloadIngestion = () => {
-    void loadIngestionModule().catch(() => undefined);
+    void ingestionLoader().catch(() => undefined);
   };
   const preloadImportSource = () => {
-    void loadImportSourceModule().catch(() => undefined);
+    void importSourceLoader().catch(() => undefined);
   };
   const activate = async (
     kind: IngestionActivationKind,
     opener: HTMLButtonElement
   ) => {
-    if (pendingRef.current || disabled) return;
+    if (activationActiveRef.current || disabled) return;
     const launchFence = launchFenceRef.current;
     const launchSequence = launchFence.begin();
-    updatePending(true);
+    activationActiveRef.current = true;
+    failedLaunchFocusRef.current = null;
+    updateLaunchPending(true);
     let dispatched = false;
     try {
       const needsImportSource = kind === "urls"
@@ -86,10 +123,10 @@ export function IngestionLauncher({
         || kind === "weibo";
       const ingestionModule = needsImportSource
         ? (await Promise.all([
-            loadIngestionModule(),
-            loadImportSourceModule()
+            ingestionLoader(),
+            importSourceLoader()
           ]))[0]
-        : await loadIngestionModule();
+        : await ingestionLoader();
       if (
         !launchFence.isCurrent(launchSequence)
         || !showTriggersRef.current
@@ -117,28 +154,43 @@ export function IngestionLauncher({
         !dispatched
         && launchFence.isCurrent(launchSequence)
       ) {
-        updatePending(false);
+        activationActiveRef.current = false;
+        failedLaunchFocusRef.current = opener;
+        updateLaunchPending(false);
       }
     }
   };
-  const settleActivation = (sequence: number) => {
+  const markActivationOpened = useCallback((sequence: number) => {
+    if (
+      launchFenceRef.current.isMounted()
+      && activeSequenceRef.current === sequence
+      && activationActiveRef.current
+    ) {
+      // DialogFrame has mounted and made the page root inert. From this point
+      // the modal boundary owns interaction, so release the launcher's counted
+      // root-lock lease without exposing an interactive frame.
+      updateLaunchPending(false);
+    }
+  }, [updateLaunchPending]);
+  const settleActivation = useCallback((sequence: number) => {
     if (
       launchFenceRef.current.isMounted()
       && activeSequenceRef.current === sequence
     ) {
       launchFenceRef.current.invalidate();
+      activationActiveRef.current = false;
       setActivation((current) => (
         current?.sequence === sequence ? null : current
       ));
-      updatePending(false);
+      updateLaunchPending(false);
     }
-  };
+  }, [updateLaunchPending]);
 
   return (
     <>
       {showTriggers && (
         <IngestionTriggers
-          pending={pending || disabled}
+          pending={disabled}
           onPreloadWorkflow={preloadIngestion}
           onPreloadImportSource={preloadImportSource}
           onOpenWorkflow={(opener) => void activate("workflow", opener)}
@@ -152,7 +204,8 @@ export function IngestionLauncher({
         <IngestionComponent
           activation={activation}
           activationEnabled={showTriggers}
-          loadImportSourceModule={loadImportSourceModule}
+          loadImportSourceModule={importSourceLoader}
+          onActivationOpened={markActivationOpened}
           onActivationSettled={settleActivation}
           onDone={onDone}
           onLoadError={onLoadError}
