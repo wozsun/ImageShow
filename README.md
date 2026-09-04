@@ -75,7 +75,7 @@ Node.js 26 / Hono、React 19、PostgreSQL、Redis 8 和 Docker 构成。
   并逐对象确认结果。
 - 完整展示图固定使用 `full/<UUID 尾部两位>/<UUID>.<ext>`，缩略图使用
   `thumbs/<UUID 尾部两位>/<UUID>.webp`；设备、亮度、主题、作者和标签只保存在 metadata，
-  编辑分类不再搬动对象。
+  这些可编辑属性只更新 PostgreSQL metadata，正式对象键与所在存储后端保持不变。
 - 成功提交的图片以正式缩略图为不变量；正常读取严格只读，缺图显示统一损坏图标并由
   检查页“存储维护”显式修复。数据库已记录有效缩略图时，维修会先确认现有对象；记录为
   未采用时直接校验原图并生成，再在发布前复核当前位置和缩略图，避免无消费者的远端探测。
@@ -176,19 +176,19 @@ docker compose exec postgresql sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB
 
 ## 数据库基线
 
-`schema.sql` 完整定义干净安装基线；作者身份、`metadata.purge_job_id` 及其长期 CHECK 已经并入
-该基线，当前 `schema-additions.sql` 为注释占位。空数据库在同一事务中执行
-基线与 additions，非空数据库只执行 additions 后进入只读 readiness；readiness 核对当前读写所需的
-最小列、约束、索引、权限与受支持身份 provider。`metadata.created_by TEXT NOT NULL` 已直接属于
-干净安装基线。additions 只承载一个发布周期：
-全部受控非空数据库应用其中增量并通过 readiness 后，下一发布移除一次性语句并恢复注释占位。
-部署和备份恢复按相邻发布顺序应用 additions；破坏性结构整理由维护者在停机、备份和恢复验证后
-单独执行。应用的自动结构职责限定为干净初始化、单周期 additions 和最小 readiness。精确契约见
+`schema.sql` 定义上一已封版版本的完整干净安装基线，包括作者身份、
+`metadata.created_by TEXT NOT NULL`、`metadata.purge_job_id` 及其长期 CHECK；
+`schema-additions.sql` 承载当前发布相对该基线的结构增量，目前为注释占位。空数据库在同一事务中
+执行基线与 additions；符合该基线的非空数据库执行 additions 后进入只读 readiness。readiness
+核对当前读写所需的最小列、约束、索引、
+权限与受支持身份 provider。additions 每个发布周期只承载一次受控增量；全部受控数据库应用并通过
+readiness 后，下一发布以结果结构作为新的干净安装基线。部署和备份恢复按相邻发布顺序应用
+additions；破坏性结构整理由维护者在停机、备份和恢复验证后单独执行。应用的自动结构职责由干净
+初始化、单周期 additions 和最小 readiness 组成。精确契约见
 [数据库结构](docs/guide/database.md#启动与结构契约)。
 
-启动与 schema 路径不保留按旧版本、旧字段或旧任务 payload 分流的自动升级代码。非空数据库
-必须已经具备当前 readiness 所需的最小结构；缺失或类型不兼容时启动会明确拒绝，应用未
-消费的额外表、列、索引和约束则不会阻止启动，也不会触发自动结构对齐。
+非空数据库以当前 additions 和 readiness 作为唯一启动结构路径；缺失当前运行所需结构或类型
+不兼容时会明确拒绝启动，应用未消费的额外表、列、索引和约束不会影响 readiness 结论。
 
 Redis 是必需的 operational datastore，但不是业务真相源；服务 unavailable 或命令 OOM 时，
 Ingestion 会话、写入和 worker 均 fail closed，不回退到 PostgreSQL 或进程内队列。停应用后把

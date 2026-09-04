@@ -202,8 +202,9 @@ discarded / completed 紧凑回执沿用所属
 常量，不属于 `config.json`。停机排空的 10 秒是领取、handler、续租收口、终态写入和
 当前 tick 共用的总期限，不会按任务或阶段重复计算。
 后台任务 lane、短窗口和时间片都是代码内部调度策略。存储清理由代码固定为一个活动的
-provider 中性 1…N 删除调用，同一业务调用的 driver group 逐组交接；所选图片、整后端迁移和主题
-重分配直接共享代码内固定 5 项的逐图搬迁容量。内容接入 Worker 另有一个 Upload / Import 共用的
+provider 中性 1…N 删除调用，同一业务调用的 driver group 逐组交接；所选图片与整后端迁移直接
+共享代码内固定 5 项的逐图对象传输容量，主题重分配使用图片领域独立的固定 5 项 metadata 更新
+容量。内容接入 Worker 另有一个 Upload / Import 共用的
 进程级 prepare / staging publication owner，由 `normalize.concurrency=N` 派生并从等待 Normalize
 一直持有到两个 `_uploads` 对象及 ready canonical 发布完成；因此两种来源合计最多保留 `N` 份
 Prepared Buffer。Import 与 Upload pre-commit dispatch slot 也由同一值派生；Import 在取得

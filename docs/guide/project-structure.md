@@ -189,12 +189,12 @@ storage/
 └─ maintenance-lock.ts
 ```
 
-图片存储位置变更集中在 `images/storage-location/`。`image-backend-migration.ts` 的单图原语在同一条可读控制流中
+图片存储位置变更集中在 `images/storage-location/`。`image-migration.ts` 的单图原语在同一条可读控制流中
 完成锁内真相重读、候选发布与校验、PostgreSQL CAS，以及提交结果不确定时的补偿判断；
 不为只传递同一记录的 prepare / switch / settlement 阶段拆分文件和中间契约。
 `selected-images-migration.ts` 只负责管理接口的 1..N 保序结果，
-`backend-images-migration.ts` 只负责整后端计数和流式分页，两者都直接调用同一个单图原语。
-分类不再改变 object key：`image-update-item.ts` 直接提交分类 metadata，根层
+`storage-backend-migration.ts` 只负责整后端计数和流式分页，两者都直接调用同一个单图原语。
+分类 metadata 与正式对象位置相互独立：`image-update-item.ts` 直接提交分类 metadata，根层
 `images/theme-reassignment.ts` 持有主题删除时的图片 SQL、revision 和 cache handoff，主题领域仍
 拥有词表删除、重试与最终词表同步。`storage/objects/image-transfer-admission.ts` 是所选图片与
 整后端迁移共用的活动逐图搬迁许可 owner，两个生产者直接复用同一个代码内固定 5 项容量。
@@ -219,8 +219,8 @@ Ingestion staging 孤儿按代码内固定 100 项渐进删除。
 回收站的移入 / 恢复集中于
 `images/trash-mutations.ts`；`images/trash-purge.ts` 拥有任务原子绑定与按 job 逐图执行，
 `images/trash-purge-job.ts` 只把领域批次结果映射为通用任务结果，
-`images/trash-purge-maintenance.ts` 集中维护入口触发的全部耗尽任务重试与异常引用修复；数据库启动只执行当前 additions
-并核对 readiness，启动路径不执行版本专用迁移。深度诊断仍属于
+`images/trash-purge-maintenance.ts` 集中维护入口触发的全部耗尽任务重试与异常引用修复；数据库
+启动由当前 additions 与 readiness 组成。深度诊断仍属于
 `checks/database-check.ts`，正常图片请求不探测任务完整性。`images/image-update.ts` 只拥有 1..N 图片锁、保序并发、逐项结果和
 请求级派生计数失效；`images/image-update-item.ts` 是单图 metadata、author / theme / tag
 创建、完整标签替换与分类 metadata 更新的 PostgreSQL 事务所有者；主题删除的图片重分配由

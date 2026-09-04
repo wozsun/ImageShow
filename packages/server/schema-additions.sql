@@ -1,3 +1,4 @@
+-- ImageShow current-release additions over the clean-install baseline.
 -- Current-release additions contain only explicitly reviewed, bounded schema
 -- changes or one-time data changes for the active release cycle.
 -- After every controlled database has applied an entry, the following release

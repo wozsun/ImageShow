@@ -65,10 +65,11 @@ PostgreSQL 是图片、词表、后台任务、存储注册表和管理员账号
 当前 schema 共 9 张表，其中 `ready_image_revision` 是图片投影 revision 单行表。schema
 不保存迁移账本或应用版本号。
 
-`schema.sql` 完整定义干净安装基线；当前版本空库依次执行它与
-`schema-additions.sql`，非空库只执行 additions 后做只读 readiness。作者身份两列、长期 CHECK、
+`schema.sql` 完整定义上一已封版版本的干净安装基线；当前发布的空库依次执行它与
+`schema-additions.sql`，符合该基线的非空库执行 additions 后做只读 readiness。
+作者身份两列、长期 CHECK、
 非空身份复合唯一索引、`metadata.created_by TEXT NOT NULL`、`metadata.purge_job_id` 及其长期
-CHECK 和后台任务的三种当前类型约束都直接属于基线；当前 additions 为注释占位。additions 只为
+CHECK 和后台任务的三种当前类型约束都属于基线；当前 additions 为注释占位。additions 只为
 一个发布周期内经审查的受限增量保留固定入口；全部受控非空数据库确认增量
 后，下一发布把定义并入 `schema.sql` 并恢复注释占位。自动结构职责由干净初始化、单周期
 additions 和最小 readiness 构成；其他结构整理必须显式停机、备份并验证恢复。允许的 additions

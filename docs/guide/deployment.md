@@ -55,7 +55,7 @@ Redis 凭据只来自显式环境变量，不写入 `config.json`。`ADMIN_USERN
 | Server raw PUT | `upload.raw_concurrency = 5` | 所有页面和直接 API 共享。 |
 | 图片处理、Prepared 发布与 Import 后继窗口 | `normalize.concurrency = 2` | 全部 Sharp 重工作共享；Upload / Import 合计最多有 2 项处于 prepare 或 `_uploads` 发布，Import 另最多预取一批 raw，每图 Sharp 线程固定为 `1`。 |
 | 最终入库 | `ingestion.commit_concurrency = 8` | 同时受代码内 `256 MiB` prepared 字节预算约束；Worker 派生 12 个 dispatch slot。 |
-| 存储迁移 | 固定 `5` 张图片 | 所选图片、整后端和主题重分配共享同一 Server 准入。 |
+| 存储迁移 | 固定 `5` 张图片 | 所选图片与整后端迁移共享同一 Server 对象传输准入。 |
 | 存储清理 | 固定 `1` 个活动调用 | 业务清理与永久删除生产者共用 provider 中性 `removeObjects(1…N)`。 |
 
 公开配置项可在合法范围内按更强单机实测结果调整；表中各数字分别保护对应资源，不能相乘为一个
@@ -64,13 +64,13 @@ Redis 凭据只来自显式环境变量，不写入 `config.json`。`ADMIN_USERN
 
 ## PostgreSQL 与 Redis
 
-`schema.sql` 完整定义干净安装基线；作者身份、`metadata.purge_job_id` 及其长期 CHECK 已经并入
-该基线，当前 `schema-additions.sql` 为注释占位。空数据库依次执行两者；非空数据库执行 additions
-后直接进入只读 readiness，整个结构过程受同一事务保护。当前启动不读取旧作者映射、不补齐已有
-链接，也不解析旧 purge 状态或任务 payload；非空数据库必须已经满足当前最小结构。
+`schema.sql` 完整定义上一已封版版本的干净安装基线，其中包括作者身份、`metadata.purge_job_id`
+及其长期 CHECK；`schema-additions.sql` 承载当前发布增量，目前为注释占位。空数据库依次执行两者；
+符合该基线的非空数据库执行 additions 后直接进入只读 readiness，整个结构过程受同一事务保护，
+并以当前最小结构作为启动条件。
 单应用进程合同不为第二个重叠启动者取得 bootstrap lock；首次启动、停止后的顺序重启、
 已有数据启动，以及事务回滚后的顺序恢复仍使用同一初始化路径。
-`metadata.created_by TEXT NOT NULL` 与后台任务当前类型约束直接属于基线。应用的自动结构职责
+`metadata.created_by TEXT NOT NULL` 与后台任务当前类型约束属于基线。应用的自动结构职责
 限定为干净初始化、单周期 additions 和最小 readiness；破坏性 DDL 与数据整理由维护者另行执行。
 additions 全部受控应用后，下一发布把定义并入基线并恢复注释占位；部署与备份恢复按相邻发布
 顺序经过承载 additions 的版本，不能以新基线替代旧非空数据库的中间升级。精确白名单与拒绝条件以

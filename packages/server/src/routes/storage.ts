@@ -40,7 +40,7 @@ import { retryStorageBackendCleanup } from "../storage/cleanup/service.ts";
 import { testStorageBackend } from "../storage/backends/self-test.ts";
 import {
   migrateStorageBackendImages
-} from "../images/storage-location/backend-images-migration.ts";
+} from "../images/storage-location/storage-backend-migration.ts";
 
 export function registerStorageRoutes(app: Hono) {
   app.get(`${adminApiBasePath}/storage/options`, async (c) => {

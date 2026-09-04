@@ -1,9 +1,9 @@
 # 数据库结构
 
 PostgreSQL 共 9 张业务表，不保存迁移账本或 schema 版本表。
-`packages/server/schema.sql` 完整定义干净安装基线；`author` 可空身份两列、
+`packages/server/schema.sql` 完整定义上一已封版版本的干净安装基线；`author` 可空身份两列、
 三项长期 CHECK、非空身份复合唯一索引、`metadata.purge_job_id` 与“非空时必须为 deleted”的
-长期 CHECK 均已并入该基线；当前 `schema-additions.sql` 为注释占位。
+长期 CHECK 都属于该基线；`schema-additions.sql` 承载当前发布的当期增量，目前为注释占位。
 随机图 `id` 的末 12 位查询所需 ready 部分表达式索引，以及统一 Redis 图片投影的权威 revision
 单行表均属于基线。PostgreSQL
 是最终图片、账号、存储注册表和持久任务的唯一真相源。Redis 图片投影、查询缓存与管理员
@@ -16,19 +16,18 @@ PostgreSQL 共 9 张业务表，不保存迁移账本或 schema 版本表。
 
 ## 启动与结构契约
 
-数据库生命周期由干净基线、单发布周期 additions 和轻量 readiness 组成。单应用进程启动时，
-空数据库在一个事务中先执行 `schema.sql`，再执行当前 `schema-additions.sql`；非空数据库只执行
-additions 后直接进入 readiness。当前 additions 不含可执行语句；additions、readiness 或干净初始化
-任一步失败都会回滚本次结构事务。全部连接固定使用
+数据库生命周期由上一已封版版本的干净基线、当前 additions 和轻量 readiness 组成。单应用进程
+启动时，空数据库在一个事务中先执行 `schema.sql`，再执行当前 `schema-additions.sql`；符合该
+基线的非空数据库执行 additions 后直接进入 readiness。当前 additions 不含可执行语句；
+additions、readiness 或干净初始化任一步失败都会回滚本次结构事务。全部连接固定使用
 `search_path=public`；单实例部署按顺序完成 schema 和管理员播种。
 
-additions 只为以后一个发布周期内经明确审查的受限结构增量或一次性数据变化保留入口。全部
-受控非空数据库应用当期 additions 并通过核对后，下一发布把同一定义并入 `schema.sql` 并恢复
+additions 是每个发布周期经明确审查的受限结构增量或一次性数据变化入口。全部受控非空数据库应用
+当期 additions 并通过核对后，下一发布以结果结构更新 `schema.sql` 基线，并将 additions 恢复为
 注释占位。部署和备份恢复按相邻发布顺序经过承载 additions 的版本；自动结构操作限定为当期
 明确声明的 additions，其他结构与数据整理由维护者在停机、备份和恢复验证后执行。
-`metadata.created_by TEXT NOT NULL` 与后台任务当前类型约束都已直接定义在 `schema.sql`。
-作者身份与 purge 任务归属结构也已并入基线。当前启动不包含以旧版本、旧字段、旧协议、旧路由或
-旧 key 为条件的迁移、双读、转发或 fallback；非空数据库必须已经满足当前 readiness 最小契约。
+当前基线直接定义 `metadata.created_by TEXT NOT NULL`、后台任务类型约束、作者身份与 purge 任务
+归属结构；非空数据库通过 additions 与 readiness 收敛到同一当前结构契约。
 
 readiness 只读核对当前运行时所需业务表、源码实际使用的列及其 PostgreSQL 类型、必需系统种子，
 并确认会话可写、public schema 可用且当前角色具备各表实际操作所需的 SELECT / INSERT /

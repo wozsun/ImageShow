@@ -220,7 +220,7 @@ Import 下载与 prepare 会在各自取得完整事实的 Server 边界再次�
    仍立即围栏，迟到执行者不能覆盖新 generation。
 4. **commit**请求只受理不可变意图。每项携带 pair、expected version、prepared MD5、稳定
    UUIDv7 request ID、重复决定和完整 metadata；Server 冻结 intent hash、prepared generation、
-   只由 UUID 尾部两位分片的稳定正式对象键及当前认证 username。API 返回 `accepted` 后立即结束，
+   只由 UUID 尾部两位分片的规范正式对象键及当前认证 username。API 返回 `accepted` 后立即结束，
    不等待对象复制或数据库。
    worker 在 storage、图片、词表和同 MD5 advisory lock 内，先为两个确定正式键写入持久
    `move.cleanup` candidate guard，再复制候选，并在不可逆协调器的临界区完成最后一次 token
@@ -787,8 +787,8 @@ WebKit 一定把延迟 click 派发给原触点元素。共享按钮的触控 / 
 图片 ID 锁后，以固定低并发逐图处理并按输入顺序返回结果。每张图片的 metadata、词表创建和
 完整标签替换在一个 PostgreSQL 事务内提交；一张失败只回滚该张，实际变化只
 推进一次 `ready_image_revision` 并交接一次投影，纯 no-op 仍返回 `updated` 但不推进 revision。
-设备、亮度或主题变化只修改 PostgreSQL 与必要投影，`object_key` 和 `thumbnail_size` 保持不变；
-编辑路径不再为搬迁读取、复制或清理完整图和缩略图，只有显式自动亮度检测继续读取现有缩略图。
+设备、亮度或主题变化的持久化范围是 PostgreSQL 与必要投影，`object_key` 和 `thumbnail_size`
+保持不变；编辑路径中的存储读取仅用于显式自动亮度检测所需的现有缩略图。
 
 编辑明确采用 last-write-wins，不存在逐图编辑 revision、预期版本、冲突响应或三方合并；
 陈旧窗口最后提交时可以覆盖较新结果。同一图片的在途请求由锁串行，锁不证明窗口最初读取的
@@ -806,10 +806,10 @@ Gallery 先用同一次权威快照原位替换命中卡片，再后台重读唯
 overview 和词表分别只在自身字段受影响时刷新；公开编辑与后台编辑共用同一 mutation、
 快照和编辑会话能力，不建立第二个公开查询所有者。
 分类变化由 `images/image-update-item.ts` 直接提交 metadata；主题删除通过
-`images/theme-reassignment.ts` 把受影响图片改为 `none`。两者都保留逐图锁、图片 revision、
-mutation fence 和提交后 cache handoff，但不依赖对象传输。单图、批量与整后端迁移才调用
-`images/storage-location/` 的图片位置能力并复用 storage 域的对象验证、持久清理与共享传输
-准入。主题领域仍只编排词表删除、重试和最终同步。
+`images/theme-reassignment.ts` 把受影响图片改为 `none`。两者拥有逐图锁、图片 revision、
+mutation fence 和提交后 cache handoff。对象传输由单图、批量与整后端迁移通过
+`images/storage-location/` 的图片位置能力发起，并复用 storage 域的对象验证、持久清理与共享传输
+准入。主题领域只编排词表删除、重试和最终同步。
 管理端以同一个保序列表编排器报告逐项迁移、跳过与失败，单图只是列表中只有
 一个成员。迁移响应同时返回服务端解析的目标显示名；后台与公开登录详情都优先复用或按需
 执行同轮管理信息回读，并在处理编辑快照结果前保留其成功值。相邻回读失败时采用迁移响应值；

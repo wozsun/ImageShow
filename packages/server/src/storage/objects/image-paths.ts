@@ -6,20 +6,16 @@ export function storageObjectKey(id: string, ext: string) {
   return `${id.slice(-2)}/${id}.${ext}`;
 }
 
-const stableImageObjectKeyPattern = new RegExp(
+const canonicalImageObjectKeyPattern = new RegExp(
   `^([0-9a-f]{2})/(${imageUuidPattern})\\.(${imageExtensionPattern})$`,
   "u"
 );
-const stableImageObjectKeyMaxLength = 44;
-
-export function isStableImageObjectKey(key: string) {
-  if (key.length > stableImageObjectKeyMaxLength) return false;
-  const match = stableImageObjectKeyPattern.exec(key);
-  return Boolean(match && match[1] === match[2]?.slice(-2));
-}
+const canonicalImageObjectKeyMaxLength = 44;
 
 export function isCanonicalImageObjectKey(key: string) {
-  return isStableImageObjectKey(key);
+  if (key.length > canonicalImageObjectKeyMaxLength) return false;
+  const match = canonicalImageObjectKeyPattern.exec(key);
+  return Boolean(match && match[1] === match[2]?.slice(-2));
 }
 
 export function assertCanonicalImageObjectKey(key: string) {

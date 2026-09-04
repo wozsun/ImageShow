@@ -127,15 +127,5 @@ PostgreSQL 事务推进 `ready_image_revision`。提交后仍持有进程内写�
 只写 `mode=json` 等同 `limit=1`，但仍返回数组。`limit` 是上限而非数量保证。GET 与 HEAD 都为
 `no-store`；HEAD 返回与 GET 一致的状态、内容类型和内容长度，但不发送正文。
 
-## 5.5.0 自定义 URL 检查
-
-5.5.0 不双读旧短键。升级者只需检查自行填写的
-`site.home.background` / `SITE_HOME_BACKGROUND` 与
-`admin.login_background` / `ADMIN_LOGIN_BACKGROUND` 中是否包含本站随机图 URL，以及已经
-分享、收藏、嵌入或交给外部客户端的 `/random`、`/gallery`、`/embed/gallery` URL。把
-`d`、`b`、`t`、`a`、`m`、`n` 分别改为 `device`、`brightness`、`theme`、`author`、
-`mode`、`limit`，并把旧设备值 `r` 改为 `all`。空配置、项目内置 fallback 和不使用
-ImageShow 查询参数的外部背景 URL 无需处理；服务不会扫描或改写用户 URL。
-
 随机图只通过主站 `https://<域名>/random` 提供，不设置专用子域；主机边界见
 [主机与资源子域](./subdomains.md)。
