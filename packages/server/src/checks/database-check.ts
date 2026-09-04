@@ -132,12 +132,14 @@ export async function checkTrash() {
             FROM metadata
             JOIN background_job ON background_job.id=metadata.purge_job_id
            WHERE metadata.status='deleted'
+             AND background_job.type='trash.purge'
              AND background_job.status='succeeded') AS succeeded_count,
          ARRAY(SELECT metadata.id::text
                  FROM metadata
-                 JOIN background_job
+                JOIN background_job
                    ON background_job.id=metadata.purge_job_id
                 WHERE metadata.status='deleted'
+                  AND background_job.type='trash.purge'
                   AND background_job.status='succeeded'
                 ORDER BY metadata.deleted_at, metadata.id
                 LIMIT $1)::text[] AS succeeded_samples,

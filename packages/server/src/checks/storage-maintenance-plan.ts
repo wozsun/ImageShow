@@ -3,10 +3,7 @@ import { ingestionOrphanCutoffs } from "../images/ingestion/cleanup/retention.ts
 import {
   parseIngestionStagingCleanupKey
 } from "../images/ingestion/staging-keys.ts";
-import {
-  imageObjectPrefix,
-  thumbnailObjectKey
-} from "../storage/objects/image-paths.ts";
+import { thumbnailObjectKey } from "../storage/objects/image-paths.ts";
 import { STORAGE_ADMIN_LIST_MAX_KEYS } from "../storage/objects/key-listing.ts";
 import type { StoragePrefix } from "../storage/objects/keys.ts";
 import {
@@ -141,7 +138,6 @@ async function captureMaintenanceGroups(
     }
     const incomplete = ([
       ["full", result.snapshot.full],
-      ["media", result.snapshot.media],
       ["thumbs", result.snapshot.thumbs],
       ["_uploads", result.snapshot._uploads]
     ] as const).filter(([, listing]) => !listing.complete);
@@ -186,15 +182,11 @@ function buildMaintenanceCandidates(
   for (const { group, backend, snapshot } of groups) {
     const retainedRows = retainedRowsForGroup(rows, group);
     const fullKeys = new Set(snapshot.full.keys);
-    const mediaKeys = new Set(snapshot.media.keys);
     const thumbKeys = new Set(snapshot.thumbs.keys);
     for (const row of retainedRows) {
       const thumbKey = thumbnailObjectKey(row.object_key);
-      const objectKeys = imageObjectPrefix(row.object_key) === "full"
-        ? fullKeys
-        : mediaKeys;
       if (
-        !objectKeys.has(row.object_key)
+        !fullKeys.has(row.object_key)
         || !thumbKeys.has(thumbKey)
         || Number(row.thumbnail_size) <= 0
       ) {
@@ -203,10 +195,7 @@ function buildMaintenanceCandidates(
     }
 
     const referencedFull = new Set(retainedRows.flatMap((row) => (
-      imageObjectPrefix(row.object_key) === "full" ? [row.object_key] : []
-    )));
-    const referencedMedia = new Set(retainedRows.flatMap((row) => (
-      imageObjectPrefix(row.object_key) === "media" ? [row.object_key] : []
+      [row.object_key]
     )));
     const referencedThumbs = new Set(
       retainedRows.map((row) => thumbnailObjectKey(row.object_key))
@@ -217,7 +206,6 @@ function buildMaintenanceCandidates(
     for (const session of activeSessions.values()) {
       for (const reference of ingestionFinalStorageReferences(session)) {
         if (reference.prefix === "full") referencedFull.add(reference.key);
-        if (reference.prefix === "media") referencedMedia.add(reference.key);
         if (reference.prefix === "thumbs") referencedThumbs.add(reference.key);
       }
     }
@@ -225,11 +213,6 @@ function buildMaintenanceCandidates(
     for (const key of snapshot.full.keys.toSorted()) {
       if (!referencedFull.has(key)) {
         candidates.push({ kind: "remove", backend, prefix: "full", key });
-      }
-    }
-    for (const key of snapshot.media.keys.toSorted()) {
-      if (!referencedMedia.has(key)) {
-        candidates.push({ kind: "remove", backend, prefix: "media", key });
       }
     }
     for (const key of snapshot.thumbs.keys.toSorted()) {

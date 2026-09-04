@@ -1,6 +1,7 @@
 import { ApiError } from "../../core/api-error.ts";
 import { withAdvisoryLock } from "../../core/database/advisory-locks.ts";
 import type { PoolClient } from "pg";
+import type { ReadablePrefix } from "../objects/keys.ts";
 import { getStorageBackend } from "../backends/registry.ts";
 import { withStorageLocationReadLock } from "../maintenance-lock.ts";
 import {
@@ -61,7 +62,7 @@ async function cleanupReferenceMatchesTarget(
  */
 export async function assertObjectNotPendingCleanup(
   target: Awaited<ReturnType<typeof getStorageBackend>>,
-  prefix: "full" | "media" | "thumbs",
+  prefix: ReadablePrefix,
   key: string,
   options: Readonly<{
     /**

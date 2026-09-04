@@ -7,8 +7,7 @@
 - `img.example.com`：SPA、公共与管理 API、健康检查，以及唯一的随机图入口
   `/random`。随机查询参数和返回方式见[随机图 API](./random-api.md)。
 - `static.img.example.com`：与主站 Cookie 隔离的资源域。`/full/*` 与
-  `/thumbs/*` 提供本地或无公开 URL 存储的图片字节；5.6.0 迁移期间还保留只服务旧分类键的
-  `/media/*`，迁移完成后的 5.6.1 会删除该入口。`/link/original/<id>` 为详情页中
+  `/thumbs/*` 提供本地或无公开 URL 存储的图片字节；`/link/original/<id>` 为详情页中
   不同于展示图的 HTTPS 原图提供唯一公开入口。该入口只解析图片一次：无 Referer 直连
   可用时返回不可缓存的 302，否则在同一请求内安全代理。代理请求使用图片源站 origin
   作为 Referer，成功响应优先继承源站 `Cache-Control` / `Expires`，源站未声明时使用

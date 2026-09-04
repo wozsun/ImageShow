@@ -2,10 +2,7 @@ import { staticLocalBaseUrl } from "../../config/site-host.ts";
 import { getStorageBackend } from "../backends/registry.ts";
 import type { PublicDatabaseReadAccess } from "../../core/database/public-fallback.ts";
 import type { StorageConfig } from "../backends/config.ts";
-import {
-  imageObjectPrefix,
-  thumbnailObjectKey
-} from "./image-paths.ts";
+import { thumbnailObjectKey } from "./image-paths.ts";
 import {
   storageS3ObjectName,
   type ReadablePrefix
@@ -36,14 +33,13 @@ export async function publicImageUrls(
   access: PublicDatabaseReadAccess = {}
 ) {
   const config = await getStorageBackend(slug, access);
-  const objectPrefix = imageObjectPrefix(objectKey);
   const thumbKey = thumbnailObjectKey(objectKey);
   const staticBase = staticLocalBaseUrl();
   const applicationThumbUrl = `${staticBase}${localStorageObjectUrl("thumbs", thumbKey)}`;
   const directThumbUrl = directStorageObjectUrl(config, "thumbs", thumbKey);
   return {
-    object_url: directStorageObjectUrl(config, objectPrefix, objectKey)
-      || `${staticBase}${localStorageObjectUrl(objectPrefix, objectKey)}`,
+    object_url: directStorageObjectUrl(config, "full", objectKey)
+      || `${staticBase}${localStorageObjectUrl("full", objectKey)}`,
     thumb_url: directThumbUrl || applicationThumbUrl
   };
 }

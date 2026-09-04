@@ -8,7 +8,7 @@ import {
 } from "../images/ingestion/staging-keys.ts";
 import { resolveStorageAccess } from "../storage/backends/registry.ts";
 import {
-  imageObjectPrefix,
+  assertCanonicalImageObjectKey,
   thumbnailRef
 } from "../storage/objects/image-paths.ts";
 import { STORAGE_ADMIN_LIST_MAX_KEYS } from "../storage/objects/key-listing.ts";
@@ -48,7 +48,7 @@ export async function checkStorage(signal?: AbortSignal) {
   const incompleteListings: Array<{
     backend: string;
     namespace: string;
-    prefix: "full" | "media" | "thumbs" | "_uploads";
+    prefix: "full" | "thumbs" | "_uploads";
     scanned: number;
     limit: number;
   }> = [];
@@ -98,13 +98,11 @@ export async function checkStorage(signal?: AbortSignal) {
     const namespace = storageBackendGroupName(group);
     const {
       full,
-      media,
       thumbs,
       _uploads: stagingListing
     } = captured.snapshot;
     const listings = [
       ["full", full],
-      ["media", media],
       ["thumbs", thumbs],
       ["_uploads", stagingListing]
     ] as const;
@@ -130,36 +128,29 @@ export async function checkStorage(signal?: AbortSignal) {
       && (row.status === "ready" || row.status === "deleted")
     ));
     const fullSet = new Set(full.keys);
-    const mediaSet = new Set(media.keys);
     const thumbSet = new Set(thumbs.keys);
-    const objectSetFor = (objectKey: string) => (
-      imageObjectPrefix(objectKey) === "full" ? fullSet : mediaSet
-    );
-    const objectListingFor = (objectKey: string) => (
-      imageObjectPrefix(objectKey) === "full" ? full : media
-    );
+    for (const row of retainedDuringEnumeration) {
+      assertCanonicalImageObjectKey(row.object_key);
+    }
     for (const slug of group.slugs) {
       const rowsForSlug = retainedDuringEnumeration.filter((row) => (
         row.storage_slug === slug
       ));
       const sample = rowsForSlug.find((row) => (
-        objectSetFor(row.object_key).has(row.object_key)
+        fullSet.has(row.object_key)
       ))
         ?? rowsForSlug[0];
       if (!sample) continue;
       try {
         const access = await resolveStorageAccess(slug);
-        const samplePrefix = imageObjectPrefix(sample.object_key);
-        const sampleSet = objectSetFor(sample.object_key);
-        const sampleListing = objectListingFor(sample.object_key);
         const readable = await access.driver.exists(
-          samplePrefix,
+          "full",
           sample.object_key,
           { signal }
         );
         if (
-          sampleListing.complete
-          && sampleSet.has(sample.object_key)
+          full.complete
+          && fullSet.has(sample.object_key)
           && !readable
         ) {
           unavailableBackends.push({
@@ -180,14 +171,7 @@ export async function checkStorage(signal?: AbortSignal) {
       }
     }
     const referencedFullKeys = new Set(
-      retainedDuringEnumeration.flatMap((row) => (
-        imageObjectPrefix(row.object_key) === "full" ? [row.object_key] : []
-      ))
-    );
-    const referencedMediaKeys = new Set(
-      retainedDuringEnumeration.flatMap((row) => (
-        imageObjectPrefix(row.object_key) === "media" ? [row.object_key] : []
-      ))
+      retainedDuringEnumeration.map((row) => row.object_key)
     );
     const referencedThumbKeys = new Set(
       retainedDuringEnumeration.map((row) => thumbnailRef(row).key)
@@ -275,20 +259,16 @@ export async function checkStorage(signal?: AbortSignal) {
     for (const session of activeSessions.values()) {
       for (const reference of ingestionFinalStorageReferences(session)) {
         if (reference.prefix === "full") referencedFullKeys.add(reference.key);
-        if (reference.prefix === "media") referencedMediaKeys.add(reference.key);
         if (reference.prefix === "thumbs") referencedThumbKeys.add(reference.key);
       }
     }
 
     for (const image of retainedBeforeEnumeration) {
-      const objectPrefix = imageObjectPrefix(image.object_key);
-      const objectSet = objectSetFor(image.object_key);
-      const objectListing = objectListingFor(image.object_key);
-      if (objectListing.complete && !objectSet.has(image.object_key)) {
+      if (full.complete && !fullSet.has(image.object_key)) {
         missingObjects.push({
           id: image.id,
           object_key: image.object_key,
-          prefix: objectPrefix,
+          prefix: "full",
           backend: image.storage_slug,
           namespace
         });
@@ -316,11 +296,6 @@ export async function checkStorage(signal?: AbortSignal) {
     for (const key of full.keys) {
       if (!referencedFullKeys.has(key)) {
         orphanObjects.push({ prefix: "full", key, backend, namespace });
-      }
-    }
-    for (const key of media.keys) {
-      if (!referencedMediaKeys.has(key)) {
-        orphanObjects.push({ prefix: "media", key, backend, namespace });
       }
     }
     for (const key of thumbs.keys) {

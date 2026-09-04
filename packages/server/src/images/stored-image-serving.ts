@@ -11,8 +11,6 @@ import {
 import {
   isCanonicalImageObjectKey,
   isCanonicalThumbnailObjectKey,
-  isImageObjectKeyForPrefix,
-  type ImageObjectPrefix,
   thumbnailObjectKey
 } from "../storage/objects/image-paths.ts";
 import { resolveReadableObject } from "../storage/objects/access.ts";
@@ -91,13 +89,12 @@ async function deliverStoredThumbnail(
 }
 
 export async function servePublicStoredObject(
-  prefix: ImageObjectPrefix,
   key: string,
   request: StoredResponseRequest = {},
   dependencies: StoredImageServingDependencies =
     defaultStoredImageServingDependencies
 ) {
-  if (!isCanonicalImageObjectKey(key) || !isImageObjectKeyForPrefix(prefix, key)) {
+  if (!isCanonicalImageObjectKey(key)) {
     throw new ApiError(404, "not_found", "Object not found");
   }
   const signal = request.signal ?? new AbortController().signal;
@@ -108,7 +105,7 @@ export async function servePublicStoredObject(
     );
     if (!record) throw new ApiError(404, "not_found", "Object not found");
     const object = await dependencies.resolveReadableObject(
-      prefix,
+      "full",
       key,
       record.storage_slug,
       database

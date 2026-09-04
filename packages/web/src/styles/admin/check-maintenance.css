@@ -25,6 +25,15 @@
 }
 .storage-maintenance-confirmation input { margin-top: 3px; }
 
+.storage-maintenance-section {
+  display: grid;
+  gap: 8px;
+}
+.storage-maintenance-section h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
 .trash-purge-maintenance-preview {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -39,8 +48,6 @@
 }
 .trash-purge-maintenance-preview dt { color: var(--admin-color-text-secondary); font-size: 12px; }
 .trash-purge-maintenance-preview dd { margin: 4px 0 0; font-weight: 700; }
-.trash-purge-maintenance-options { display: grid; gap: 10px; }
-.trash-purge-maintenance-options label { display: grid; gap: 5px; }
 
 @media (max-width: 760px) {
   .storage-maintenance-preview,

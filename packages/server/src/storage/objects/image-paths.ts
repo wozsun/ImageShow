@@ -18,40 +18,14 @@ export function isStableImageObjectKey(key: string) {
   return Boolean(match && match[1] === match[2]?.slice(-2));
 }
 
-// storage-layout-upgrade: remove this legacy classifier with /media in 5.6.1.
-const legacyImageObjectKeyPattern = new RegExp(
-  "^(?:pc|mb)-(?:dark|light)/"
-    + "(?:[a-z0-9]|[a-z0-9][a-z0-9-]{0,30}[a-z0-9])/"
-    + imageUuidPattern
-    + "\\.(?:jpg|png|webp|gif|avif)$",
-  "u"
-);
-const legacyImageObjectKeyMaxLength = 83;
-
-export function isLegacyImageObjectKey(key: string) {
-  return key.length <= legacyImageObjectKeyMaxLength
-    && legacyImageObjectKeyPattern.test(key);
-}
-
 export function isCanonicalImageObjectKey(key: string) {
-  return isStableImageObjectKey(key) || isLegacyImageObjectKey(key);
+  return isStableImageObjectKey(key);
 }
 
-export type ImageObjectPrefix = "full" | "media";
-
-export function imageObjectPrefix(key: string): ImageObjectPrefix {
-  if (isStableImageObjectKey(key)) return "full";
-  if (isLegacyImageObjectKey(key)) return "media";
-  throw new TypeError("Invalid image object key");
-}
-
-export function isImageObjectKeyForPrefix(
-  prefix: ImageObjectPrefix,
-  key: string
-) {
-  return prefix === "full"
-    ? isStableImageObjectKey(key)
-    : isLegacyImageObjectKey(key);
+export function assertCanonicalImageObjectKey(key: string) {
+  if (!isCanonicalImageObjectKey(key)) {
+    throw new TypeError("Invalid image object key");
+  }
 }
 
 export function isCanonicalThumbnailObjectKey(key: string) {
@@ -59,6 +33,7 @@ export function isCanonicalThumbnailObjectKey(key: string) {
 }
 
 export function thumbnailObjectKey(objectKey: string) {
+  assertCanonicalImageObjectKey(objectKey);
   return `${objectKey.replace(/\.[^/.]+$/, "")}.webp`;
 }
 

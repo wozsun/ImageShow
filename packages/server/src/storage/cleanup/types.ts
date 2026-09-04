@@ -1,7 +1,7 @@
-import type { StoragePrefix } from "../objects/keys.ts";
+import type { ReadablePrefix } from "../objects/keys.ts";
 
 export type MoveCleanupObjectInput = {
-  prefix: StoragePrefix;
+  prefix: ReadablePrefix;
   key: string;
   backend: string;
 };

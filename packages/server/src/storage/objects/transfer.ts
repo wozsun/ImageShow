@@ -12,7 +12,7 @@ import {
   assertObjectNotPendingCleanup,
   setIngestionCandidateGuardConfirmationDeadline
 } from "../cleanup/service.ts";
-import type { StoragePrefix } from "./keys.ts";
+import type { ReadablePrefix, StoragePrefix } from "./keys.ts";
 import { shareStorageNamespace } from "./namespace.ts";
 
 export type StorageAccess = {
@@ -189,7 +189,7 @@ function digestMatchesExpected(
  */
 export async function assertStorageTargetAdoptable(input: {
   storage: StorageAccess;
-  prefix: "full" | "media" | "thumbs";
+  prefix: ReadablePrefix;
   key: string;
   expected: SourceDigestExpectation;
   signal?: AbortSignal;

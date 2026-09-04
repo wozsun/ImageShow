@@ -12,10 +12,7 @@ import {
   getStorageBackend,
   resolveStorageAccessForConfig
 } from "../../storage/backends/registry.ts";
-import {
-  imageObjectPrefix,
-  thumbnailObjectKey
-} from "../../storage/objects/image-paths.ts";
+import { thumbnailObjectKey } from "../../storage/objects/image-paths.ts";
 import { withImageStorageMutationLock } from "../../storage/maintenance-lock.ts";
 import {
   captureMoveCleanupObjects,
@@ -24,7 +21,7 @@ import {
   type CapturedMoveCleanupObject,
   type MoveCleanupObjectInput
 } from "../../storage/cleanup/service.ts";
-import { contentType, type StoragePrefix } from "../../storage/objects/keys.ts";
+import { contentType, type ReadablePrefix } from "../../storage/objects/keys.ts";
 import {
   ensureVerifiedObjectAtDestination,
   missingThumbnailSourceError
@@ -241,13 +238,12 @@ async function migrateImageToStorageBackendWhileLocked(
   const sourceAccess = resolveStorageAccessForConfig(source);
   const destinationAccess = resolveStorageAccessForConfig(destination);
   const sharedNamespace = shareStorageNamespace(source, destination);
-  const objectPrefix = imageObjectPrefix(current.object_key);
   const thumbKey = thumbnailObjectKey(current.object_key);
   const created: CapturedMoveCleanupObject[] = [];
   const sourceObjects: MoveCleanupObjectInput[] = [];
 
   const materialize = async (
-    prefix: StoragePrefix,
+    prefix: ReadablePrefix,
     key: string,
     expected: { size: string | number; md5?: string },
     objectContentType: string
@@ -289,7 +285,7 @@ async function migrateImageToStorageBackendWhileLocked(
   try {
     try {
       await materialize(
-        objectPrefix,
+        "full",
         current.object_key,
         { size: current.image_size, md5: current.md5 },
         contentType(current.ext)
@@ -328,7 +324,7 @@ async function migrateImageToStorageBackendWhileLocked(
     if (!sharedNamespace) {
       sourceObjects.push(
         {
-          prefix: objectPrefix,
+          prefix: "full",
           key: current.object_key,
           backend: current.storage_slug
         },

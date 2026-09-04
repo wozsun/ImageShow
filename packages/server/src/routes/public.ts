@@ -124,13 +124,7 @@ export function registerPublicRoutes(app: Hono) {
     return cacheableApiSuccess(c, response, publicMetadataCacheControl);
   });
 
-  app.get("/media/*", async (c) => servePublicStoredObject(
-    "media",
-    c.req.path.replace(/^\/media\//, ""),
-    storedResponseRequest(c)
-  ));
   app.get("/full/*", async (c) => servePublicStoredObject(
-    "full",
     c.req.path.replace(/^\/full\//, ""),
     storedResponseRequest(c)
   ));

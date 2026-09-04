@@ -29,9 +29,6 @@ import { registerAdminUserRoutes } from "./routes/admin-users.ts";
 import { registerAdminPreferenceRoutes } from "./routes/admin-preferences.ts";
 import { registerAdminCacheRoutes } from "./routes/admin-cache.ts";
 import { registerCheckRoutes } from "./routes/check.ts";
-import {
-  registerStorageLayoutUpgradeRoutes
-} from "./routes/storage-layout-upgrade.ts";
 import { registerHealthRoutes } from "./routes/health.ts";
 import {
   registerProtectedAuthRoutes,
@@ -119,7 +116,6 @@ export function createHttpApp(
     if (
       path === "/robots.txt"
       || path.startsWith("/full/")
-      || path.startsWith("/media/")
       || path.startsWith("/thumbs/")
       || path.startsWith("/link/original/")
     ) {
@@ -146,7 +142,6 @@ export function createHttpApp(
     return apiErrorResponse({ status: 404, message: "Not Found" });
   };
   app.use("/full/*", resourceHostGuard);
-  app.use("/media/*", resourceHostGuard);
   app.use("/thumbs/*", resourceHostGuard);
   app.use("/link/original/*", resourceHostGuard);
 
@@ -219,7 +214,6 @@ export function createHttpApp(
   registerSettingsRoutes(app);
   registerStorageRoutes(app);
   registerCheckRoutes(app);
-  registerStorageLayoutUpgradeRoutes(app);
   registerSpaRoutes(app);
   app.notFound(() => apiErrorResponse({ status: 404, message: "Not Found" }));
 

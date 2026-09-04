@@ -1,4 +1,5 @@
 import type { PoolClient } from "pg";
+import type { ReadablePrefix } from "../objects/keys.ts";
 import { pool } from "../../core/database/pools.ts";
 import { enqueueRerunnableJobs } from "../../jobs/repository.ts";
 import type {
@@ -224,7 +225,7 @@ export type UnresolvedMoveCleanupReference = {
 
 /** Unresolved rows are deletion leases for the exact physical object. */
 export async function listUnresolvedMoveCleanupReferences(
-  prefix: "full" | "media" | "thumbs",
+  prefix: ReadablePrefix,
   key: string
 ): Promise<UnresolvedMoveCleanupReference[]> {
   const rows = (await pool.query(

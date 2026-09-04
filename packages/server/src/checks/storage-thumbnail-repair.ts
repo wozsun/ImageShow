@@ -3,10 +3,7 @@ import { pool } from "../core/database/pools.ts";
 import { withNormalizationAdmission } from "../images/normalization-admission.ts";
 import { createThumbnail, md5Buffer, sha256Buffer } from "../images/processing.ts";
 import { resolveStorageAccess } from "../storage/backends/registry.ts";
-import {
-  imageObjectPrefix,
-  thumbnailObjectKey
-} from "../storage/objects/image-paths.ts";
+import { thumbnailObjectKey } from "../storage/objects/image-paths.ts";
 import { assertObjectNotPendingCleanup } from "../storage/cleanup/service.ts";
 import {
   assertStorageRemovalResults,
@@ -203,7 +200,7 @@ export async function repairStorageThumbnail(
     await assertObjectNotPendingCleanup(storage.config, "thumbs", thumbKey);
     operationSignal.throwIfAborted();
     if (!await storage.driver.exists(
-      imageObjectPrefix(authority.object_key),
+      "full",
       authority.object_key,
       { signal: operationSignal }
     )) {
@@ -224,7 +221,7 @@ export async function repairStorageThumbnail(
       scheduleSignal,
       async () => {
         const source = await storage.driver.readBuffer(
-          imageObjectPrefix(sourceAuthority.object_key),
+          "full",
           sourceAuthority.object_key,
           { signal: operationSignal }
         );

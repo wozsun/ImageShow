@@ -37,25 +37,11 @@ const CheckStorageMaintenanceActions = lazy(() => (
     default: module.CheckStorageMaintenanceActions
   }))
 ));
-const TrashPurgeMaintenanceActions = lazy(() => (
-  loadCheckMaintenanceCapability().then((module) => ({
-    default: module.TrashPurgeMaintenanceActions
-  }))
-));
 const ReadyImageCacheMaintenancePanel = lazy(() => (
   loadCheckMaintenanceCapability().then((module) => ({
     default: module.ReadyImageCacheMaintenancePanel
   }))
 ));
-const loadStorageLayoutUpgradeCapability = createPageLifetimeModuleLoader(
-  () => import("./storage-layout-upgrade/StorageLayoutUpgradeAction.js")
-);
-const StorageLayoutUpgradeAction = lazy(() => (
-  loadStorageLayoutUpgradeCapability().then((module) => ({
-    default: module.StorageLayoutUpgradeAction
-  }))
-));
-
 const checkViews = [
   { name: "status", label: "状态" },
   { name: "db", label: "数据库" },
@@ -69,7 +55,6 @@ type CheckView = typeof checkViews[number]["name"];
 
 export function CheckPage() {
   const [result, setResult] = useState<unknown>(null);
-  const [resultKind, setResultKind] = useState("");
   const [running, setRunning] = useState("");
   const [automaticInspectionSatisfied, setAutomaticInspectionSatisfied] =
     useState(false);
@@ -115,17 +100,10 @@ export function CheckPage() {
   );
   const canMaintainStorage = permissions.includes(
     adminPermissions.storageMaintenanceExecute
-  );
+  ) && permissions.includes(adminPermissions.imageTrashPurge);
   const canRebuildCache = permissions.includes(
     adminPermissions.cacheMaintenanceRebuild
   );
-  const canMaintainTrashPurge = permissions.includes(
-    adminPermissions.imageTrashPurge
-  );
-  const canUpgradeStorageLayout = permissions.includes(
-    adminPermissions.storageLayoutUpgrade
-  );
-
   useEffect(() => {
     if (!redisInspectionQuery.error) return;
     reportAdminUiError(
@@ -152,7 +130,6 @@ export function CheckPage() {
           body: body ? JSON.stringify(body) : undefined
         });
       setResult(value);
-      setResultKind(name);
       if (name === "redis") {
         if (retainProjectionUsage(readyImageProjectionUsage(value, "redis"))) {
           setAutomaticInspectionSatisfied(true);
@@ -166,7 +143,6 @@ export function CheckPage() {
     } catch (error) {
       if (name !== "redis") reportAdminUiError(`check.${name}`, error);
       setResult({ ok: false, error: "检查执行失败，请稍后重试" });
-      setResultKind(name);
       return null;
     } finally {
       if (name === "all") {
@@ -178,7 +154,6 @@ export function CheckPage() {
   const selectCheckView = (view: CheckView) => {
     setCheckView(view);
     setResult(null);
-    setResultKind("");
     if (view !== "status") void runCheck(view);
   };
   return (
@@ -208,33 +183,11 @@ export function CheckPage() {
               <CheckStorageMaintenanceActions
                 canMaintainStorage={canMaintainStorage}
                 canMigrateStorage={canMigrateStorage}
-                result={result}
-                resultKind={resultKind}
                 running={running}
-                onPublishResult={(value, kind) => {
-                  setResult(value);
-                  setResultKind(kind);
-                }}
+                onPublishResult={setResult}
                 onRunCheck={runCheck}
                 onRunningChange={setRunning}
                 onShowStorage={() => setCheckView("storage")}
-              />
-            </Suspense>
-          )}
-          {canUpgradeStorageLayout && (
-            <Suspense fallback={null}>
-              <StorageLayoutUpgradeAction
-                running={running}
-                onRunningChange={setRunning}
-              />
-            </Suspense>
-          )}
-          {canMaintainTrashPurge && (
-            <Suspense fallback={null}>
-              <TrashPurgeMaintenanceActions
-                running={running}
-                onRunCheck={runCheck}
-                onShowTrash={() => setCheckView("trash")}
               />
             </Suspense>
           )}
@@ -433,8 +386,7 @@ const CHECK_RESULT_LABELS: Record<string, string> = {
   migrated: "已迁移",
   unchanged: "无需迁移",
   missing: "源对象缺失",
-  media: "旧布局完整图数",
-  full: "新布局完整图数",
+  full: "完整图数",
   thumbs: "缩略图数",
   error_samples: "错误样本",
   error_count: "错误数量",
@@ -476,23 +428,35 @@ function isIssueKey(key: string) {
 }
 
 function storageMaintenanceSummary(result: Record<string, unknown>) {
-  if (!("requested" in result) || !("repaired" in result) || !("items" in result)) {
+  const storage = result.storage
+    && typeof result.storage === "object"
+    && !Array.isArray(result.storage)
+    ? result.storage as Record<string, unknown>
+    : result;
+  if (!("requested" in storage) || !("repaired" in storage) || !("items" in storage)) {
     return null;
   }
-  const requested = numericResult(result.requested);
-  const repaired = numericResult(result.repaired);
-  const removed = numericResult(result.removed);
-  const skipped = numericResult(result.skipped);
-  const failed = numericResult(result.failed);
-  const prunedDirs = numericResult(result.pruned_dirs);
+  const requested = numericResult(storage.requested);
+  const repaired = numericResult(storage.repaired);
+  const removed = numericResult(storage.removed);
+  const skipped = numericResult(storage.skipped);
+  const failed = numericResult(storage.failed);
+  const prunedDirs = numericResult(storage.pruned_dirs);
+  const trashPurge = result.trash_purge
+    && typeof result.trash_purge === "object"
+    && !Array.isArray(result.trash_purge)
+    ? result.trash_purge as Record<string, unknown>
+    : {};
+  const retriedJobs = numericResult(trashPurge.retried_jobs);
+  const repairedReferences = numericResult(trashPurge.repaired_images);
   return {
     warning: failed > 0,
     title: failed
       ? `存储维护完成，但有 ${failed} 项失败`
       : `存储维护完成：修复 ${repaired} 项，删除 ${removed} 项`,
     detail: failed
-      ? `本次共请求 ${requested} 项；失败项未被视为成功，请根据逐项明细处理后安全重试。`
-      : `本次共请求 ${requested} 项，安全跳过 ${skipped} 项，另回收 ${prunedDirs} 个空目录。`
+      ? `本次共请求 ${requested} 个存储对象项；失败项未被视为成功，请根据逐项明细处理后安全重试。`
+      : `本次共请求 ${requested} 个存储对象项，安全跳过 ${skipped} 项，回收 ${prunedDirs} 个空目录；另重试 ${retriedJobs} 个耗尽任务、修复 ${repairedReferences} 条彻底删除引用。`
   };
 }
 

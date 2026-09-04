@@ -9,7 +9,7 @@ import {
 import type { BackgroundJob } from "../../jobs/types.ts";
 import { getStorageBackend } from "../backends/registry.ts";
 import {
-  imageObjectPrefix,
+  assertCanonicalImageObjectKey,
   thumbnailObjectKey
 } from "../objects/image-paths.ts";
 import { withImageStorageMutationLock } from "../maintenance-lock.ts";
@@ -42,12 +42,12 @@ function cleanupObjectsFromPayload(
       || !object.backend
       || typeof object.namespace_identity !== "string"
       || !object.namespace_identity
-      || !["full", "media", "thumbs"].includes(String(object.prefix))
+      || !["full", "thumbs"].includes(String(object.prefix))
     ) {
       return null;
     }
     objects.push({
-      prefix: object.prefix as "full" | "media" | "thumbs",
+      prefix: object.prefix as "full" | "thumbs",
       key: object.key,
       backend: object.backend,
       namespace_identity: object.namespace_identity
@@ -69,9 +69,9 @@ function metadataReferencesObject(
   object: CapturedMoveCleanupObject,
   row: { object_key: string; storage_slug: string }
 ) {
-  return object.prefix !== "thumbs"
-    ? imageObjectPrefix(row.object_key) === object.prefix
-      && row.object_key === object.key
+  assertCanonicalImageObjectKey(row.object_key);
+  return object.prefix === "full"
+    ? row.object_key === object.key
     : thumbnailObjectKey(row.object_key) === object.key;
 }
 

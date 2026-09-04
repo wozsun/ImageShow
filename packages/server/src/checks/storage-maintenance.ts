@@ -16,6 +16,7 @@ import {
   type MaintenanceOutcome
 } from "./storage-maintenance-plan.ts";
 import { repairStorageThumbnail } from "./storage-thumbnail-repair.ts";
+import { maintainTrashPurgeTasks } from "../images/trash-purge-maintenance.ts";
 
 function summarizeMaintenance(
   items: readonly MaintenanceItem[],
@@ -127,4 +128,13 @@ export function maintainStorage(callerSignal?: AbortSignal) {
   return callerSignal
     ? runWithAdvisoryLockAcquisitionSignal(callerSignal, maintain)
     : maintain();
+}
+
+export async function maintainStorageAndPurgeTasks(
+  callerSignal?: AbortSignal
+) {
+  const storage = await maintainStorage(callerSignal);
+  callerSignal?.throwIfAborted();
+  const trashPurge = await maintainTrashPurgeTasks();
+  return { storage, trash_purge: trashPurge };
 }

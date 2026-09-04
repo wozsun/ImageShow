@@ -3,10 +3,10 @@ import {
   useQueryClient,
   type UseQueryResult
 } from "@tanstack/react-query";
-import type { AdminCheckStatusDto } from "@imageshow/shared/browser";
-import type {
-  AdminTrashCheckDto,
-  TrashPurgeMaintenanceRequestDto
+import {
+  adminApiBasePath,
+  type AdminCheckStatusDto,
+  type AdminTrashCheckDto
 } from "@imageshow/shared/browser";
 import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import { StableButtonLabel } from "../../../components/data-display/StableButtonLabel.js";
@@ -33,222 +33,69 @@ type RunCheck = (
   body?: Record<string, unknown>
 ) => Promise<unknown | null>;
 
-function isTrashCheck(value: unknown): value is AdminTrashCheckDto {
+type TrashMaintenanceIssue = Pick<
+  AdminTrashCheckDto["issues"][number],
+  "kind" | "count"
+>;
+
+type TrashMaintenancePreview = {
+  unqueued_count: number;
+  purge_pending_count: number;
+  job_counts: AdminTrashCheckDto["job_counts"];
+  issues: TrashMaintenanceIssue[];
+};
+
+const trashPurgeJobStates = [
+  "pending",
+  "running",
+  "retrying",
+  "exhausted"
+] as const;
+const trashCheckIssueKinds = [
+  "missing_job_reference",
+  "wrong_job_type",
+  "succeeded_job_reference",
+  "stalled_job"
+] as const;
+
+function isCount(value: unknown): value is number {
+  return Number.isSafeInteger(value) && Number(value) >= 0;
+}
+
+function isTrashMaintenancePreview(
+  value: unknown
+): value is TrashMaintenancePreview {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const candidate = value as Record<string, unknown>;
-  return typeof candidate.deleted_count === "number"
-    && typeof candidate.unqueued_count === "number"
-    && typeof candidate.purge_pending_count === "number"
-    && Array.isArray(candidate.jobs)
-    && Array.isArray(candidate.issues);
+  const jobCounts = candidate.job_counts;
+  return isCount(candidate.unqueued_count)
+    && isCount(candidate.purge_pending_count)
+    && Boolean(jobCounts)
+    && typeof jobCounts === "object"
+    && !Array.isArray(jobCounts)
+    && trashPurgeJobStates.every((state) => (
+      isCount((jobCounts as Record<string, unknown>)[state])
+    ))
+    && Array.isArray(candidate.issues)
+    && candidate.issues.every((issue) => {
+      if (!issue || typeof issue !== "object" || Array.isArray(issue)) {
+        return false;
+      }
+      const record = issue as Record<string, unknown>;
+      return trashCheckIssueKinds.includes(
+        record.kind as typeof trashCheckIssueKinds[number]
+      ) && isCount(record.count);
+    });
 }
 
-export function TrashPurgeMaintenanceActions({
-  running,
-  onRunCheck,
-  onShowTrash
-}: {
-  running: string;
-  onRunCheck: RunCheck;
-  onShowTrash: () => void;
-}) {
-  const [preview, setPreview] = useState<AdminTrashCheckDto | null>(null);
-  const [open, setOpen] = useState(false);
-
-  const openMaintenance = async () => {
-    onShowTrash();
-    const checked = await onRunCheck("trash");
-    const next = isTrashCheck(checked) ? checked : null;
-    if (!next) return;
-    setPreview(next);
-    setOpen(true);
-  };
-
-  return (
-    <>
-      <div className="actions">
-        <button
-          type="button"
-          disabled={Boolean(running)}
-          onClick={() => void openMaintenance()}
-        >
-          <AdminIcon name="delete-bin-7-line" />
-          <StableButtonLabel
-            idle="彻底删除维护"
-            busyText="检查中"
-            busy={running === "trash"}
-          />
-        </button>
-      </div>
-      {open && preview && (
-        <TrashPurgeMaintenanceDialog
-          preview={preview}
-          running={running}
-          onClose={() => {
-            setOpen(false);
-            setPreview(null);
-          }}
-          onRun={(request) => onRunCheck(
-            "trash-purge-maintenance",
-            request
-          ).then((value) => value !== null)}
-        />
-      )}
-    </>
-  );
-}
-
-type TrashPurgeMaintenanceAction = TrashPurgeMaintenanceRequestDto["action"];
-
-function TrashPurgeMaintenanceDialog({ preview, running, onClose, onRun }: {
-  preview: AdminTrashCheckDto;
-  running: string;
-  onClose: () => void;
-  onRun: (request: TrashPurgeMaintenanceRequestDto) => Promise<boolean>;
-}) {
-  const exhaustedJobs = preview.jobs.filter((job) => job.state === "exhausted");
-  const repairable = preview.issues.some((issue) => [
-    "missing_job_reference",
-    "wrong_job_type",
-    "succeeded_job_reference"
-  ].includes(issue.kind));
-  const availableActions: TrashPurgeMaintenanceAction[] = [
-    ...(exhaustedJobs.length ? ["retry" as const] : []),
-    ...(repairable ? ["repair" as const] : [])
-  ];
-  const [action, setAction] = useState<TrashPurgeMaintenanceAction | "">(
-    availableActions[0] ?? ""
-  );
-  const [jobId, setJobId] = useState(exhaustedJobs[0]?.id ?? "");
-  const [confirmed, setConfirmed] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
-  const busy = running === "trash-purge-maintenance";
-  const title = "彻底删除维护";
-
-  const submit = async () => {
-    if (!action) return false;
-    const request: TrashPurgeMaintenanceRequestDto = action === "retry"
-      ? { action, job_id: jobId }
-      : { action };
-    setErrorMessage("");
-    if (await onRun(request)) return true;
-    setErrorMessage("维护未执行，请重新运行回收站检查后确认当前状态。");
-    return false;
-  };
-
-  return (
-    <DialogFrame
-      className="modal edit-modal"
-      ariaLabel={title}
-      busy={busy}
-      onClose={onClose}
-    >
-      {({ requestClose }) => (
-        <form
-          className="operation-modal"
-          onSubmit={async (event) => {
-            event.preventDefault();
-            if (await submit()) requestClose();
-          }}
-        >
-          <header>
-            <div>
-              <h2>{title}</h2>
-              <p>仅处理持久彻底删除任务，不探测或恢复已经确认删除的对象。</p>
-            </div>
-            <button
-              className="icon close pressable"
-              type="button"
-              title="关闭"
-              disabled={busy}
-              onClick={() => requestClose()}
-            >
-              <AdminIcon name="close-line" />
-            </button>
-          </header>
-          <div className="operation-body">
-            <dl className="trash-purge-maintenance-preview">
-              <div><dt>回收站总数</dt><dd>{preview.deleted_count.toLocaleString()}</dd></div>
-              <div><dt>未排队</dt><dd>{preview.unqueued_count.toLocaleString()}</dd></div>
-              <div><dt>待彻底删除</dt><dd>{preview.purge_pending_count.toLocaleString()}</dd></div>
-              <div><dt>检查问题</dt><dd>{preview.issues.length.toLocaleString()}</dd></div>
-            </dl>
-            {availableActions.length ? (
-              <div className="trash-purge-maintenance-options">
-                <label>
-                  <span>维护动作</span>
-                  <select
-                    value={action}
-                    disabled={busy}
-                    onChange={(event) => {
-                      setAction(event.target.value as TrashPurgeMaintenanceAction);
-                      setConfirmed(false);
-                    }}
-                  >
-                    {exhaustedJobs.length > 0 && <option value="retry">重试耗尽任务</option>}
-                    {repairable && <option value="repair">修复异常任务引用</option>}
-                  </select>
-                </label>
-                {action === "retry" && (
-                  <label>
-                    <span>耗尽任务</span>
-                    <select
-                      value={jobId}
-                      disabled={busy}
-                      onChange={(event) => {
-                        setJobId(event.target.value);
-                        setConfirmed(false);
-                      }}
-                    >
-                      {exhaustedJobs.map((job) => (
-                        <option key={job.id} value={job.id}>
-                          {job.id.slice(0, 8)} · {job.image_count} 张
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                )}
-              </div>
-            ) : (
-              <p className="notice-line">当前没有需要人工维护的彻底删除任务。</p>
-            )}
-            {availableActions.length > 0 && (
-              <label className="storage-maintenance-confirmation">
-                <input
-                  type="checkbox"
-                  checked={confirmed}
-                  disabled={busy}
-                  onChange={(event) => setConfirmed(event.target.checked)}
-                />
-                <span>我已核对当前检查结果，并确认执行所选维护。</span>
-              </label>
-            )}
-            {errorMessage && <p className="admin-error" role="alert">{errorMessage}</p>}
-          </div>
-          <footer>
-            <button type="button" disabled={busy} onClick={() => requestClose()}>
-              取消
-            </button>
-            <button
-              className="button"
-              type="submit"
-              disabled={busy || !confirmed || !action || (action === "retry" && !jobId)}
-            >
-              <AdminIcon name="refresh-line" />
-              <StableButtonLabel idle="执行维护" busyText="处理中" busy={busy} />
-            </button>
-          </footer>
-        </form>
-      )}
-    </DialogFrame>
-  );
-}
+type StorageMaintenancePreviewState = {
+  storage: unknown;
+  trash: TrashMaintenancePreview;
+};
 
 export function CheckStorageMaintenanceActions({
   canMaintainStorage,
   canMigrateStorage,
-  result,
-  resultKind,
   running,
   onPublishResult,
   onRunCheck,
@@ -257,31 +104,45 @@ export function CheckStorageMaintenanceActions({
 }: {
   canMaintainStorage: boolean;
   canMigrateStorage: boolean;
-  result: unknown;
-  resultKind: string;
   running: string;
-  onPublishResult: (value: unknown, kind: string) => void;
+  onPublishResult: (value: unknown) => void;
   onRunCheck: RunCheck;
   onRunningChange: (value: string) => void;
   onShowStorage: () => void;
 }) {
   const client = useQueryClient();
-  const [maintenancePreview, setMaintenancePreview] = useState<unknown>(null);
+  const [maintenancePreview, setMaintenancePreview] = useState<
+    StorageMaintenancePreviewState | null
+  >(null);
   const [operationModal, setOperationModal] = useState<
-    "storage-backend-image-migration" | "storage-maintenance" | null
+    | "storage-backend-image-migration"
+    | "storage-maintenance"
+    | null
   >(null);
 
   const openStorageMaintenance = async () => {
-    let preview = resultKind === "storage"
-      ? storageMaintenancePreview(result) && result
-      : null;
-    if (!preview) {
-      onShowStorage();
-      preview = await onRunCheck("storage");
-    }
-    if (preview && storageMaintenancePreview(preview)) {
+    onShowStorage();
+    onRunningChange("storage-maintenance-preview");
+    try {
+      const [storage, trash] = await Promise.all([
+        api(`${adminApiBasePath}/check/storage`, { method: "POST" }),
+        api(`${adminApiBasePath}/check/trash`, { method: "POST" })
+      ]);
+      if (
+        !storageMaintenancePreview(storage)
+        || !isTrashMaintenancePreview(trash)
+      ) {
+        throw new Error("Storage maintenance preview is incomplete");
+      }
+      const preview = { storage, trash };
       setMaintenancePreview(preview);
+      onPublishResult(preview);
       setOperationModal("storage-maintenance");
+    } catch (error) {
+      reportAdminUiError("storage.maintenance.preview", error);
+      onPublishResult({ ok: false, error: "存储维护预览失败，请稍后重试" });
+    } finally {
+      onRunningChange("");
     }
   };
   const runStorageMaintenance = async () => (
@@ -290,17 +151,14 @@ export function CheckStorageMaintenanceActions({
   const runStorageMigration = async (source: string, target: string) => {
     onRunningChange("storage-backend-image-migration");
     try {
-      onPublishResult(
-        await migrateStorageBackendImages(source, target),
-        "storage-backend-image-migration"
-      );
+      onPublishResult(await migrateStorageBackendImages(source, target));
       return true;
     } catch (error) {
       reportAdminUiError("storage.backend_migration", error);
-      onPublishResult(
-        { ok: false, error: "迁移执行失败，请检查存储配置后重试" },
-        "storage-backend-image-migration"
-      );
+      onPublishResult({
+        ok: false,
+        error: "迁移执行失败，请检查存储配置后重试"
+      });
       return false;
     } finally {
       await invalidateStorageData(client).catch((error) => {
@@ -309,7 +167,6 @@ export function CheckStorageMaintenanceActions({
       onRunningChange("");
     }
   };
-
   return (
     <>
       <div className="actions">
@@ -337,7 +194,8 @@ export function CheckStorageMaintenanceActions({
             <StableButtonLabel
               idle="存储维护"
               busyText="处理中"
-              busy={running === "storage" || running === "storage-maintenance"}
+              busy={running === "storage-maintenance-preview"
+                || running === "storage-maintenance"}
             />
           </button>
         )}
@@ -350,7 +208,9 @@ export function CheckStorageMaintenanceActions({
             onRun={runStorageMigration}
           />
         )}
-      {operationModal === "storage-maintenance" && canMaintainStorage && (
+      {operationModal === "storage-maintenance"
+        && canMaintainStorage
+        && maintenancePreview && (
         <StorageMaintenanceDialog
           preview={maintenancePreview}
           running={running}
@@ -366,16 +226,26 @@ export function CheckStorageMaintenanceActions({
 }
 
 function StorageMaintenanceDialog({ preview, running, onClose, onRun }: {
-  preview: unknown;
+  preview: StorageMaintenancePreviewState;
   running: string;
   onClose: () => void;
   onRun: () => Promise<boolean>;
 }) {
   const [errorMessage, setErrorMessage] = useState("");
   const [confirmed, setConfirmed] = useState(false);
-  const summary = storageMaintenancePreview(preview);
+  const summary = storageMaintenancePreview(preview.storage);
+  const repairableReferences = preview.trash.issues
+    .filter((issue) => [
+      "missing_job_reference",
+      "wrong_job_type",
+      "succeeded_job_reference"
+    ].includes(issue.kind))
+    .reduce((total, issue) => total + issue.count, 0);
+  const stalledJobs = preview.trash.issues
+    .filter((issue) => issue.kind === "stalled_job")
+    .reduce((total, issue) => total + issue.count, 0);
   const title = "存储维护";
-  const description = "重建可恢复的缺失缩略图，并删除数据库确认未引用的存储对象。回收站图片和有效内容接入仍会保留。";
+  const description = "修复缩略图与孤儿对象，并维护已请求彻底删除的持久任务。普通回收站图片和有效内容接入仍会保留。";
   return (
     <DialogFrame
       className="modal edit-modal"
@@ -412,8 +282,9 @@ function StorageMaintenanceDialog({ preview, running, onClose, onRun }: {
             </button>
           </header>
           <div className="operation-body">
-            {summary && (
-              <dl className="storage-maintenance-preview">
+            <section className="storage-maintenance-section">
+              <h3>存储对象</h3>
+              {summary && <dl className="storage-maintenance-preview">
                 <div>
                   <dt>可重建缩略图</dt>
                   <dd>{summary.repairable_thumbnails.toLocaleString()}</dd>
@@ -430,8 +301,17 @@ function StorageMaintenanceDialog({ preview, running, onClose, onRun }: {
                   <dt>受保护内容接入暂存</dt>
                   <dd>{summary.protected_staging_objects.toLocaleString()}</dd>
                 </div>
+              </dl>}
+            </section>
+            <section className="storage-maintenance-section">
+              <h3>持久彻底删除任务</h3>
+              <dl className="trash-purge-maintenance-preview">
+                <div><dt>待彻底删除</dt><dd>{preview.trash.purge_pending_count.toLocaleString()}</dd></div>
+                <div><dt>将重试耗尽任务</dt><dd>{preview.trash.job_counts.exhausted.toLocaleString()}</dd></div>
+                <div><dt>将修复异常引用</dt><dd>{repairableReferences.toLocaleString()}</dd></div>
+                <div><dt>保留普通回收站</dt><dd>{preview.trash.unqueued_count.toLocaleString()}</dd></div>
               </dl>
-            )}
+            </section>
             <p className="notice-line">
               以上仅为当前检查预览。执行时服务端会在独占维护锁内重新读取数据库和完整存储快照；
               {summary && (
@@ -447,6 +327,10 @@ function StorageMaintenanceDialog({ preview, running, onClose, onRun }: {
                     : ""
                 ].filter(Boolean).join("、")}，${summary.blocked_items} 个相关项目只报告、不计入可执行数量。`
                 : "预览之后发生的上传或迁移不会直接沿用旧结果。"}
+              持久任务维护也会按执行时真值修复异常引用并重试全部仍有成员的耗尽任务；
+              {stalledJobs
+                ? `${stalledJobs} 个仍标记为运行中的停滞任务只报告，不会被强行接管。`
+                : "当前没有需要人工接管的停滞任务。"}
             </p>
             <label className="storage-maintenance-confirmation">
               <input
@@ -455,7 +339,7 @@ function StorageMaintenanceDialog({ preview, running, onClose, onRun }: {
                 disabled={Boolean(running)}
                 onChange={(event) => setConfirmed(event.target.checked)}
               />
-              <span>我已核对预览，并确认执行存储维修与孤儿对象清理。</span>
+              <span>我已核对预览，并确认执行存储对象维护及持久彻底删除任务维护。</span>
             </label>
             {errorMessage && (
               <p className="admin-error" role="alert">{errorMessage}</p>

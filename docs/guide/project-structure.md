@@ -116,7 +116,7 @@ healthcheck 只读现有配置快照，密码恢复不初始化运行时配置�
 | `core/http/` | HTTP 响应与响应头、请求来源和请求体限制、压缩阈值、条件请求、静态响应与 Range 解析。 |
 | `config/` | 部署环境、首次播种、运行时配置 schema、无导入副作用的文件读写与显式进程内 store，以及配置包；普通保存与磁盘重载共用 FIFO 写租约内“持久化后发布”入口，配置包在同一租约内把候选文件持久化与数据库结果核对及收敛决定后的单次内存发布分离。配置包由目标版本以当前默认配置为基线逐项投影，存储后端逐条识别，不维护来源版本迁移链；`runtime-config-environment.ts` 是全部 RuntimeConfig 叶子到首次 seed 变量的唯一映射。启动、热加载和配置包都只读取当前结构，未知字段统一投影删除。 |
 | `routes/` | HTTP 方法、鉴权、CSRF、输入解析和响应投影；`validation/` 按图片、Ingestion、存储、用户和词表职责拥有请求 schema，并集中保留通用 HTTP 原语与 `validation_error` 映射；业务工作委托给领域模块。 |
-| `images/` | 图片读写、展示投影、分类与元数据变更、回收站和缩略图；`metadata-tags.ts` 拥有 HTTP 与 JSONL 共用的标签归一化契约，`page-window.ts` 唯一计算安全数字页窗口，`storage-location/` 拥有正式图片后端位置 CAS、revision、mutation fence 和 cache handoff，`storage-layout-upgrade/` 是 5.6.0 可整体删除的一次性布局升级边界，`ready-cache/` 拥有统一 Redis rich 投影、筛选、统计、精确同步与重建，`ingestion/` 拥有 Upload / Import 的完整接入会话生命周期及清理任务，`read-models/` 承载 PostgreSQL cursor / offset 读模型及其领域查询类型。 |
+| `images/` | 图片读写、展示投影、分类与元数据变更、回收站和缩略图；`metadata-tags.ts` 拥有 HTTP 与 JSONL 共用的标签归一化契约，`page-window.ts` 唯一计算安全数字页窗口，`storage-location/` 拥有正式图片后端位置 CAS、revision、mutation fence 和 cache handoff，`ready-cache/` 拥有统一 Redis rich 投影、筛选、统计、精确同步与重建，`ingestion/` 拥有 Upload / Import 的完整接入会话生命周期及清理任务，`read-models/` 承载 PostgreSQL cursor / offset 读模型及其领域查询类型。 |
 | `storage/` | 只在根层保留横切 `maintenance-lock.ts`；`backends/`、`drivers/`、`objects/` 与 `cleanup/` 分别拥有注册表及 Endpoint 重绑定证明、驱动、对象原语及跨图片传输准入、持久清理。`storage/` 不修改正式图片位置或相应 revision，也不交接 ready-cache。`backends/config.ts` 保留 S3 配置 schema、归一化和存储领域输入类型，HTTP create / update / test schema 位于路由边界。 |
 | `random/` | 随机查询校验、规范 `auto` / `all` 到候选设备轴的选择、Redis 8 Array 最近历史、定向 id 与有界 pivot 普通随机 PG 降级查询及随机出口编排；纯 User-Agent 设备识别由 `@imageshow/shared/browser` 提供给 Server 与 Web，Redis 候选投影、筛选与重建统一由 `images/ready-cache/` 提供。 |
 | `jobs/` | 仅拥有通用 `background_job` 生命周期、小型类型分派、公平调度 Worker，以及集中管理任务中止、期限、续租和有界排空的执行协调器；各领域拥有自己的 handler、payload 和结果语义。 |
@@ -131,11 +131,10 @@ healthcheck 只读现有配置快照，密码恢复不初始化运行时配置�
 租约内先通过 store 的专用阶段持久化候选文件，再等待 PostgreSQL 事务结果；只有正常提交、确认
 已提交或结果 unknown 时才发布候选，确认回滚只恢复旧文件且不发布中间快照。
 
-`routes/` 当前保留 19 个直属文件。`admin-vocabulary.ts` 在一个 HTTP 能力边界中声明 tags、
+`routes/` 当前保留 18 个直属文件。`admin-vocabulary.ts` 在一个 HTTP 能力边界中声明 tags、
 themes 与 authors 三组同构 CRUD，通用 registrar 为文件内私有实现；每组仍分别注入自己的
 schema、查询、变更和删除权限，不把领域业务搬进路由。`public.ts` 私有持有 Hono 请求到
-`StoredResponseRequest` 的 header / signal 投影，共同服务该文件内 `full`、升级期旧 `media` 与
-thumbnail 入口。`storage-layout-upgrade.ts` 只装配一次性状态与有界批次接口，5.6.1 整体删除。
+`StoredResponseRequest` 的 header / signal 投影，共同服务该文件内 `full` 与 thumbnail 入口。
 其余短 registrar 即使只有一个导出，也分别拥有独立 URL、鉴权 / 权限、中间件顺序、Host
 或缓存契约；不按行数与相邻文件合并。`http-app.ts` 仍显式展示公开路由、管理员 session、
 CSRF、请求体限制和各管理能力的装配顺序。
@@ -199,10 +198,6 @@ storage/
 `images/theme-reassignment.ts` 持有主题删除时的图片 SQL、revision 和 cache handoff，主题领域仍
 拥有词表删除、重试与最终词表同步。`storage/objects/image-transfer-admission.ts` 是所选图片与
 整后端迁移共用的活动逐图搬迁许可 owner，两个生产者直接复用同一个代码内固定 5 项容量。
-`images/storage-layout-upgrade/migration.ts` 与 `status.ts` 只服务 5.6.0：前者在短独占批次中逐图
-复制、CAS 和登记清理，后者汇总 PostgreSQL、Redis 与 ready revision，并只在这些廉价状态收敛后
-列举物理 `media` 作为最终完成门槛；它们
-复用长期 driver、传输、锁、事务、`move.cleanup` 和 cache handoff，但不被稳定领域反向依赖。
 Endpoint 重绑定的完整 `_uploads` 键集合证明位于 `storage/backends/endpoint-rebind.ts`；键按
 不透明完整值比较，不解析或重复证明 Ingestion session 分组。
 `storage/objects/removal-admission.ts` 是 durable cleanup、orphan / retired、检查维护和回收站删除的
@@ -217,13 +212,14 @@ Ingestion staging 孤儿按代码内固定 100 项渐进删除。
 `checks/storage-check.ts` 只生成无写入权限的存储预览；显式写维护按稳定职责拆分：
 `checks/storage-maintenance-plan.ts` 重读 PostgreSQL、Ingestion 引用和完整存储快照并生成候选，
 `checks/storage-thumbnail-repair.ts` 负责缩略图写入与校验，`checks/storage-orphan-cleanup.ts`
-负责确认删除和空目录修剪，`checks/storage-maintenance.ts` 只保留独占位置锁、执行顺序和结果汇总。
+负责确认删除和空目录修剪，`checks/storage-maintenance.ts` 保留独占位置锁、执行顺序，并把对象
+维护与持久彻底删除任务维护汇总为单一检查页操作。
 缩略图维修只为数据库已采用的缩略图执行生成前对象探测；未采用状态统一在生成后复核位置与
 对象再发布。这组写维护只从显式维护入口调用，不接入普通请求热路径或通用后台任务。
 回收站的移入 / 恢复集中于
 `images/trash-mutations.ts`；`images/trash-purge.ts` 拥有任务原子绑定与按 job 逐图执行，
 `images/trash-purge-job.ts` 只把领域批次结果映射为通用任务结果，
-`images/trash-purge-maintenance.ts` 集中显式重试与异常引用修复；数据库启动只执行当前 additions
+`images/trash-purge-maintenance.ts` 集中维护入口触发的全部耗尽任务重试与异常引用修复；数据库启动只执行当前 additions
 并核对 readiness，启动路径不执行版本专用迁移。深度诊断仍属于
 `checks/database-check.ts`，正常图片请求不探测任务完整性。`images/image-update.ts` 只拥有 1..N 图片锁、保序并发、逐项结果和
 请求级派生计数失效；`images/image-update-item.ts` 是单图 metadata、author / theme / tag
@@ -312,8 +308,8 @@ snapshot、SSE、watermark 和展示投影只使用 session / repository 边界�
   `execution/session.ts` 只拥有同一执行 token 下 heartbeat、progress、阶段发布和失败落盘。
 - `cleanup/storage-references.ts` 有界读取 active canonical 的对象引用；`retention.ts`、
   `orphans.ts` 与 `orphan-worker.ts` 负责 60 秒保守周期、完整存储列表、namespace 复核和
-  停机排空；`retry-queue.ts` 只清理可由年龄扫描重新发现的 raw / staging。正式 full（以及
-  5.6.0 冻结旧意图的 legacy media）/ thumbs 仍在复制前由持久 `move.cleanup` guard 接管。
+  停机排空；`retry-queue.ts` 只清理可由年龄扫描重新发现的 raw / staging。正式 full / thumbs
+  仍在复制前由持久 `move.cleanup` guard 接管。
 
 Server 队列模块与 Web 队列 owner 的连接关系保持不变：
 
@@ -534,9 +530,8 @@ hooks ──► lib
   同一个页面生命周期 Promise。
   冷启动资源所有权分为公开、后台登录、图片管理员与超级管理员四层；直接访问无权 URL
   仍先完成角色过滤，不执行超级管理员页面加载器。`CheckPage` 保留两种管理员共用的只读
-  状态与检查，`CheckMaintenanceCapability` 才拥有整后端迁移、存储维护、缓存重建及其样式；
-  `check/storage-layout-upgrade/StorageLayoutUpgradeAction.tsx` 与专用样式独立拥有 5.6.0 的升级
-  状态、连续有界批次和断线后权威续跑界面，5.6.1 可连同懒加载接线整体移除。
+  状态与检查，`CheckMaintenanceCapability` 才拥有整后端迁移、合并对象与持久彻底删除任务的
+  存储维护、缓存重建及其样式。
 - `styles/` 按 base、home、gallery、admin 和 responsive 组织全局样式；首页进一步
   将页面 / 首屏基础、候选目录基础及共享响应式交互分文件，并按该顺序引入。公开页
   不参与动画的 fixed 导航外壳、主次导航共用的位移栈和根滚动回弹边界集中在

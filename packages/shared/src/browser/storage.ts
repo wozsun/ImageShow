@@ -1,50 +1,5 @@
 import type { ApiSuccessResponseDto } from "./common.ts";
 
-export const storageLayoutUpgradeBatchMaxItems = 100;
-
-export type StorageLayoutUpgradeNamespaceDto = {
-  namespace: string;
-  backends: string[];
-  media_objects: number | null;
-  complete: boolean;
-  error: string;
-};
-
-export type StorageLayoutUpgradeStatusDto = {
-  total_images: number;
-  compliant_images: number;
-  remaining_images: number;
-  invalid_layout_images: number;
-  estimated_transfer_bytes: number;
-  active_legacy_ingestions: number;
-  pending_media_cleanup_jobs: number;
-  media_objects: number | null;
-  media_listing_complete: boolean;
-  namespaces: StorageLayoutUpgradeNamespaceDto[];
-  projection: {
-    authoritative_revision: string;
-    applied_revision: string | null;
-    synchronized: boolean;
-  };
-  can_migrate: boolean;
-  complete: boolean;
-};
-
-export type StorageLayoutUpgradeItemResultDto =
-  | { id: string; status: "migrated" | "unchanged" }
-  | { id: string; status: "failed"; code: string; message: string };
-
-export type StorageLayoutUpgradeBatchResponseDto = {
-  batch: {
-    requested: number;
-    migrated: number;
-    unchanged: number;
-    failed: number;
-    results: StorageLayoutUpgradeItemResultDto[];
-  };
-  status: StorageLayoutUpgradeStatusDto;
-};
-
 export type StorageBackendDeleteBlocker =
   | "built_in"
   | "default"

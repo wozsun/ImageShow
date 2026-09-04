@@ -189,7 +189,7 @@ export async function collectStorageKeys(
   return collectStorageKeyListing(driver.listKeys(prefix, options));
 }
 
-/** Collect all four namespaces through one driver and cancel sibling scans on failure. */
+/** Collect every current namespace through one driver and cancel sibling scans on failure. */
 export async function collectStorageNamespaceSnapshot(
   slug: string,
   options: StorageKeyListOptions = {}
@@ -203,8 +203,8 @@ export async function collectStorageNamespaceSnapshot(
     driver.listKeys(prefix, { ...options, signal })
   ));
   try {
-    const [full, media, thumbs, uploads] = await Promise.all(tasks);
-    return { full, media, thumbs, _uploads: uploads };
+    const [full, thumbs, uploads] = await Promise.all(tasks);
+    return { full, thumbs, _uploads: uploads };
   } catch (error) {
     siblingAbort.abort(error);
     await Promise.allSettled(tasks);

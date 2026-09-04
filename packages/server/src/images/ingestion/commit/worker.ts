@@ -12,10 +12,7 @@ import {
 } from "../../../vocab/vocab-cache.ts";
 import { vocabularyAssociationLockRequests } from "../../../vocab/mutation-sync.ts";
 import { resolveStorageAccess } from "../../../storage/backends/registry.ts";
-import {
-  imageObjectPrefix,
-  thumbnailObjectKey
-} from "../../../storage/objects/image-paths.ts";
+import { thumbnailObjectKey } from "../../../storage/objects/image-paths.ts";
 import {
   imageStorageMutationLockKey,
   tryWithStorageLocationReadAndAdvisoryLocks
@@ -94,7 +91,6 @@ export async function commitIngestionSessionSnapshot(
         async (lockSignal) => {
           const combinedSignal = AbortSignal.any([signal, lockSignal]);
           const storage = await resolveStorageAccess(session.storage_slug);
-          const objectPrefix = imageObjectPrefix(commit.final_object_key);
           const thumbnailKey = thumbnailObjectKey(commit.final_object_key);
           // A guard may own only an absent target or content this frozen
           // commit can adopt. Reject unrelated pre-existing bytes before the
@@ -103,7 +99,7 @@ export async function commitIngestionSessionSnapshot(
           await assertCommitTargetsAvailable([
             {
               storage,
-              prefix: objectPrefix,
+              prefix: "full",
               key: commit.final_object_key,
               expected: {
                 size: prepared.size,
@@ -127,7 +123,7 @@ export async function commitIngestionSessionSnapshot(
           // unreferenced created objects therefore always have durable owner.
           const guardedObjects: MoveCleanupObjectInput[] = [
             {
-              prefix: objectPrefix,
+              prefix: "full",
               key: commit.final_object_key,
               backend: session.storage_slug
             },
@@ -140,7 +136,7 @@ export async function commitIngestionSessionSnapshot(
           if (storage.config.type === "local") {
             guardedObjects.push(
               {
-                prefix: objectPrefix,
+                prefix: "full",
                 key: `${commit.final_object_key}.candidate-${candidateGuardToken}`,
                 backend: session.storage_slug
               },
@@ -173,7 +169,7 @@ export async function commitIngestionSessionSnapshot(
                 storage,
                 fromPrefix: "_uploads",
                 fromKey: prepared.prepared_image_key,
-                toPrefix: objectPrefix,
+                toPrefix: "full",
                 toKey: commit.final_object_key,
                 expectedSource: {
                   size: prepared.size,
@@ -294,7 +290,7 @@ export async function commitIngestionSessionSnapshot(
     await stagingCleanup.scheduleRemainingRemoval();
     return attempt.acquired ? attempt.value : null;
   } catch (error) {
-    // Formal full-or-legacy-media/thumb candidates were guarded before copy.
+    // Formal full/thumb candidates were guarded before copy.
     // Only disposable staging cleanup remains for the bounded retry queue.
     await stagingCleanup.scheduleRemainingRemoval();
     throw error;

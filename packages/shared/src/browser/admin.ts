@@ -204,14 +204,3 @@ export type AdminTrashCheckDto = {
     purge_pending: boolean;
   }>;
 };
-
-export type TrashPurgeMaintenanceRequestDto =
-  | { action: "retry"; job_id: string }
-  | { action: "repair" };
-
-export type TrashPurgeMaintenanceResponseDto = {
-  action: TrashPurgeMaintenanceRequestDto["action"];
-  affected_jobs: number;
-  affected_images: number;
-  skipped_jobs: number;
-};

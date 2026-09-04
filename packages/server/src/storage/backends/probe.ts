@@ -10,7 +10,7 @@ import {
   resolveStorageAccessForConfig
 } from "./registry.ts";
 import type { StorageDriver } from "../drivers/driver.ts";
-import { imageObjectPrefix } from "../objects/image-paths.ts";
+import { assertCanonicalImageObjectKey } from "../objects/image-paths.ts";
 import {
   verifyStorageEndpointRebind,
   type StagingNamespaceSnapshot
@@ -28,8 +28,9 @@ async function assertExistingObjectReadable(
   signal?: AbortSignal
 ) {
   try {
+    assertCanonicalImageObjectKey(existingObject.object_key);
     const opened = await driver.openRead(
-      imageObjectPrefix(existingObject.object_key),
+      "full",
       existingObject.object_key,
       "bytes=0-0",
       { signal }

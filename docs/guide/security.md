@@ -46,12 +46,12 @@
   分别需要 `theme.delete`、`tag.delete` 和 `author.delete`。图片管理员还可以执行
   数据库、存储、Redis 和全部四项只读检查；“全部”仍包含回收站一致性结果。存储后端迁移需要
   `storage.maintenance.migrate`，显式存储维护需要 `storage.maintenance.execute`，
-  5.6.0 一次性图片布局升级需要 `storage.layout.upgrade`，手动重建统一图片缓存需要
-  `cache.maintenance.rebuild`。
-  以上九项高风险操作权限当前只授予超级管理员；直接构造对应单项请求同样返回 403，
+  手动重建统一图片缓存需要 `cache.maintenance.rebuild`。
+  以上八项高风险操作权限当前只授予超级管理员；直接构造对应单项请求同样返回 403，
   且在解析正文或进入存储维护操作前终止。
-  回收站单项深检也允许图片管理员读取；耗尽任务重试和异常引用修复复用
-  `image.trash.purge`，前端维护实现保持懒加载，服务端仍在解析维护正文前独立拒绝图片管理员。
+  回收站单项深检也允许图片管理员读取；耗尽任务重试和异常引用修复已并入“存储维护”，同时
+  要求 `storage.maintenance.execute` 与 `image.trash.purge`。前端维护实现保持懒加载，服务端仍在
+  进入维护操作前独立拒绝图片管理员。
 - 作者身份的 PostgreSQL 原始列 `identity_provider` / `identity_id` 只由 Server 根据已校验的
   作者主页链接写入，客户端请求中的同名或 `derived_identity` 字段会被严格对象校验拒绝。图片
   管理员与超级管理员可通过现有作者查看 / 编辑权限读取管理端只读 `derived_identity`；未认证
@@ -122,7 +122,7 @@ Content-Type 与缓存验证器会被省略或回退为站内类型；`Content-R
 | 随机 proxy / redirect / JSON | 永远 `no-store` | proxy 不声明 Range；302 的 `Location` 先校验；前两种模式带 `X-Image-Info`，JSON 只返回公开字段与实际 `count`，HEAD 不发送正文 |
 | 外链原图 proxy / redirect | `static.` 唯一公开入口的 direct 302 使用 `private, no-store`；proxy 继承已校验源站策略或使用 fallback，URL 命名空间弱 ETag、Last-Modified 与 304；后台 `private, no-store` | 单次公开图片解析、HTTPS 安全抓取、GET 内容嗅探、HEAD 不保留正文、验证结果严格绑定请求 URL、`Referrer-Policy: no-referrer` |
 | Ingestion SSE | `no-store, no-transform` | 每个已显示的 owner + queue 使用一个固定 GET 路径；不压缩、不缓冲，30 秒串行鉴权 heartbeat，断开即清理 listener / scope |
-| `static.` 与未知子域 | `static.` 只开放 `/full/*`、`/thumbs/*`、5.6.0 迁移期旧 `/media/*`、`/link/original/<id>` 与可选 `/robots.txt`；失败 `no-store` | 主站不暴露资源字节路径；随机、外链、主题和其他未知子域均返回带完整安全头的 404 |
+| `static.` 与未知子域 | `static.` 只开放 `/full/*`、`/thumbs/*`、`/link/original/<id>` 与可选 `/robots.txt`；失败 `no-store` | 主站不暴露资源字节路径；随机、外链、主题和其他未知子域均返回带完整安全头的 404 |
 
 确定性管理只读 JSON 包括偏好、管理员列表、存储选项 / 后端，以及已有的设置、
 词表、图片列表与管理详情；写后仍由各领域精确失效查询，内容未变化的再次读取返回 304。
@@ -130,7 +130,7 @@ Content-Type 与缓存验证器会被省略或回退为站内类型；`Content-R
 304 缓存或固定这项实时表示。
 
 稳定图片地址本身不是管理员授权边界。图片进入回收站后会退出所有公开发现入口，但已知的
-`/full/*`、`/thumbs/*`、迁移期尚未切换的 `/media/*` 或 S3 `public_base_url` 直链仍可访问；后台列表和动作权限继续由
+`/full/*`、`/thumbs/*` 或 S3 `public_base_url` 直链仍可访问；后台列表和动作权限继续由
 管理 API 独立强制。永久删除会同时清理源对象。
 
 当前不发送 COEP 或 CORP：页面允许 HTTPS 外链图片，静态 / 随机 / 原图出口也需要被

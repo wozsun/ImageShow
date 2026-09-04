@@ -12,7 +12,7 @@ import { presentRandomJsonItems } from "../random/json-presentation.ts";
 import { selectRandomImages } from "../random/selection.ts";
 import { resolveReadableObject } from "../storage/objects/access.ts";
 import { contentType } from "../storage/objects/keys.ts";
-import { imageObjectPrefix } from "../storage/objects/image-paths.ts";
+import { assertCanonicalImageObjectKey } from "../storage/objects/image-paths.ts";
 import { publicImageUrls } from "../storage/objects/public-urls.ts";
 import { webReadableFromNode } from "../storage/objects/stream-buffer.ts";
 
@@ -72,8 +72,9 @@ async function respondRandom(c: Context, url: URL) {
       "X-Image-Info": safeResponseHeaderValue("X-Image-Info", imageInfo)
     };
     if (selection.mode === "proxy") {
+      assertCanonicalImageObjectKey(picked.object_key);
       const opened = await (await resolveReadableObject(
-        imageObjectPrefix(picked.object_key),
+        "full",
         picked.object_key,
         picked.storage_slug,
         database
