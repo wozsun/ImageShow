@@ -117,10 +117,8 @@ async function validatedChecksFor(
 }
 
 export async function assertRequiredCheckConstraints(database: DatabaseReader) {
-  const [authorRows, metadataRows] = await Promise.all([
-    validatedChecksFor(database, "author"),
-    validatedChecksFor(database, "metadata")
-  ]);
+  const authorRows = await validatedChecksFor(database, "author");
+  const metadataRows = await validatedChecksFor(database, "metadata");
 
   const missing = [
     ["author identity null pairing", isIdentityPairCheck],

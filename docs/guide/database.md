@@ -20,7 +20,8 @@ PostgreSQL 共 9 张业务表，不保存迁移账本或 schema 版本表。
 启动时，空数据库在一个事务中先执行 `schema.sql`，再执行当前 `schema-additions.sql`；符合该
 基线的非空数据库执行 additions 后直接进入 readiness。当前 additions 不含可执行语句；
 additions、readiness 或干净初始化任一步失败都会回滚本次结构事务。全部连接固定使用
-`search_path=public`；单实例部署按顺序完成 schema 和管理员播种。
+`search_path=public`；单实例部署按顺序完成 schema 和管理员播种。readiness 在启动事务的
+同一连接上顺序执行 SQL，包括作者与图片 CHECK 约束读取，不并发调用该 client 的 query。
 
 additions 是每个发布周期经明确审查的受限结构增量或一次性数据变化入口。全部受控非空数据库应用
 当期 additions 并通过核对后，下一发布以结果结构更新 `schema.sql` 基线，并将 additions 恢复为

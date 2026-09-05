@@ -330,20 +330,22 @@ export function GalleryPage({
           />
         )}
         {nextPageLoading && <p className="gallery-loading">加载中</p>}
-        <button
-          type="button"
-          className={`gallery-back-to-top pressable${showBackToTop ? " is-visible" : ""}`}
-          aria-label="回到顶部"
-          title="回到顶部"
-          aria-hidden={!showBackToTop}
-          tabIndex={showBackToTop ? 0 : -1}
-          onClick={(event) => {
-            event.currentTarget.blur();
-            scrollPublicImagePageToTop();
-          }}
-        >
-          <Icon name="arrow-up-line" />
-        </button>
+        <div className="gallery-floating-controls">
+          <button
+            type="button"
+            className={`gallery-back-to-top pressable${showBackToTop ? " is-visible" : ""}`}
+            aria-label="回到顶部"
+            title="回到顶部"
+            aria-hidden={!showBackToTop}
+            tabIndex={showBackToTop ? 0 : -1}
+            onClick={(event) => {
+              event.currentTarget.blur();
+              scrollPublicImagePageToTop();
+            }}
+          >
+            <Icon name="arrow-up-line" />
+          </button>
+        </div>
         {selected && (
           <PublicImageDetail
             card={selected}

@@ -2,8 +2,9 @@
   --show-controls-opacity: 1;
   --show-hint-opacity: 1;
   position: fixed;
-  inset: 0;
-  min-height: 100svh;
+  inset: 0 0 auto;
+  height: 100dvh;
+  min-height: 0;
   padding: 0;
   overflow: hidden;
 }

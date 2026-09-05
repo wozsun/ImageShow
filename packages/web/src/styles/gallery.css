@@ -9,10 +9,33 @@
 .gallery-page {
   --gallery-toolbar-height: 61px;
   --public-navigation-secondary-height: var(--gallery-toolbar-height);
+  --public-navigation-safe-top: env(safe-area-inset-top);
+  min-height: 100dvh;
   position: relative;
   isolation: isolate;
   color: var(--public-color-text-primary);
   background: var(--public-color-gallery-sky-left);
+}
+
+body:has(.gallery-page) { min-height: 100dvh; }
+
+.gallery-page:not(.show-page) {
+  padding-top: calc(var(--public-page-header-height) + var(--public-navigation-safe-top));
+}
+
+.gallery-page .public-navigation-stack {
+  padding-top: var(--public-navigation-safe-top);
+}
+
+.gallery-page .public-navigation-frame {
+  /* Clip both navigation stages at the safe edge while leaving room below for
+     dropdowns and their shadows. The page background still fills the inset. */
+  clip-path: inset(var(--public-navigation-safe-top) 0 -100dvh);
+}
+
+.gallery-page .topbar {
+  padding-left: max(28px, calc(env(safe-area-inset-left) + 12px));
+  padding-right: max(28px, calc(env(safe-area-inset-right) + 12px));
 }
 
 .gallery-atmosphere,
@@ -120,6 +143,8 @@
   gap: 12px;
   align-items: end;
   padding: 10px 28px;
+  padding-left: max(28px, calc(env(safe-area-inset-left) + 12px));
+  padding-right: max(28px, calc(env(safe-area-inset-right) + 12px));
   color: var(--public-color-text-primary);
   background: transparent;
   border-bottom: 1px solid var(--public-color-toolbar-border);
@@ -314,6 +339,9 @@
 .gallery {
   --gallery-gap: 16px;
   padding: 28px;
+  padding-left: max(28px, calc(env(safe-area-inset-left) + 12px));
+  padding-right: max(28px, calc(env(safe-area-inset-right) + 12px));
+  padding-bottom: max(28px, calc(env(safe-area-inset-bottom) + 12px));
 }
 .gallery-window {
   position: relative;
@@ -518,8 +546,16 @@
   pointer-events: auto;
 }
 
-.gallery-back-to-top {
+.gallery-floating-controls {
   position: fixed;
+  inset: 0 0 auto;
+  height: 100dvh;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.gallery-back-to-top {
+  position: absolute;
   right: max(40px, calc(env(safe-area-inset-right) + 32px));
   bottom: max(40px, calc(env(safe-area-inset-bottom) + 32px));
   z-index: 3;

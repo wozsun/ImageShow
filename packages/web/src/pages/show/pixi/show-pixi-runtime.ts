@@ -73,6 +73,7 @@ export class ShowPixiRuntime {
   readonly #tick: (ticker: Ticker) => void;
   readonly #onVisibilityChange: () => void;
   readonly #onOnline: () => void;
+  readonly #onImageLoad: (event: Event) => void;
   readonly #onPointerPresence: (event: PointerEvent) => void;
   readonly #onPointerLeave: () => void;
   readonly #onMotionChange: () => void;
@@ -195,6 +196,14 @@ export class ShowPixiRuntime {
     window.addEventListener("blur", this.#onPointerLeave);
     this.#onOnline = () => this.#textureCache.resumeTransportRequests();
     window.addEventListener("online", this.#onOnline);
+    this.#onImageLoad = (event) => {
+      const image = event.target;
+      if (!(image instanceof HTMLImageElement) || image.naturalWidth === 0) return;
+      this.#textureCache.retryFailedUrl(image.currentSrc || image.src);
+    };
+    // DOM detail images and WebGL textures have separate loaders. Their native
+    // success event can release a matching failed URL without resetting cards.
+    document.addEventListener("load", this.#onImageLoad, true);
     this.#tick = (ticker) => {
       const frameMs = Math.max(0, ticker.elapsedMS);
       this.#scene?.update(frameMs);
@@ -368,6 +377,7 @@ export class ShowPixiRuntime {
     this.app.canvas.removeEventListener("pointercancel", this.#onPointerLeave);
     window.removeEventListener("blur", this.#onPointerLeave);
     window.removeEventListener("online", this.#onOnline);
+    document.removeEventListener("load", this.#onImageLoad, true);
     this.app.canvas.removeEventListener("webglcontextlost", this.#onContextLost);
     this.app.canvas.removeEventListener("webglcontextrestored", this.#onContextRestored);
     const tickerListenersBeforeRemoval = this.app.ticker.count;

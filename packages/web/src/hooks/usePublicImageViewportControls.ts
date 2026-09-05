@@ -283,6 +283,16 @@ export function usePublicImageViewportControls({
   const mobileLayout = useMediaQuery(mobileViewportMediaQuery);
 
   useLayoutEffect(() => {
+    // Only the mounted gallery/show owns edge-to-edge browsing, including root
+    // aliases and embedded routes. Restore the document policy when it leaves.
+    const viewport = document.querySelector<HTMLMetaElement>('meta[name="viewport"]');
+    if (!viewport) return;
+    const previous = viewport.content;
+    viewport.content = `${previous}, viewport-fit=cover`;
+    return () => { viewport.content = previous; };
+  }, []);
+
+  useLayoutEffect(() => {
     if (!headerPresent) setHeaderMenuExpanded(false);
   }, [headerPresent]);
 

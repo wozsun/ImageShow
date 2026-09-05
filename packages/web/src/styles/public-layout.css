@@ -79,6 +79,7 @@
   /* Both bars and their backdrop leave in one transition. */
   --public-navigation-stack-shift: calc(
     0px - var(--public-page-header-height) - var(--public-navigation-secondary-height, 0px)
+    - var(--public-navigation-safe-top, 0px)
   );
 }
 

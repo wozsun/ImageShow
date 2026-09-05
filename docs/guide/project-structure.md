@@ -155,7 +155,7 @@ advisory lock 两个连接池；`transactions.ts`、`advisory-locks.ts` 和 `sch
 `readiness/relations.ts`、`privileges.ts`、`indexes.ts`、`checks.ts`、`foreign-keys.ts` 与 `seeds.ts`；
 `readiness/contract.ts` 是最小表、列、权限、主键、索引与外键 contract 的唯一数据来源；
 `checks.ts` 只核对当前作者身份读写依赖的三项长期 CHECK、`metadata` purge 任务归属 CHECK
-和受支持 provider 数据集合；
+和受支持 provider 数据集合，在调用者提供的同一连接上顺序读取约束；
 `readiness/seeds.ts` 是稳定种子断言的唯一来源，其他检查模块不得复制两者。
 后台数字页使用 `database/transactions.ts` 的 read-only repeatable-read 事务，让 COUNT、
 越界判断、metadata 与 tags 共享一个 client 和快照；事务后 formatter 不得借默认 pool。
@@ -407,6 +407,7 @@ hooks ──► lib
   viewport；相邻 `tag-input-scroll.ts` 纯模型计算逐项边界、两端状态与滚轮像素，不把 Upload /
   Import 的默认值和逐图入口拆成四套交互。`TagInput` 本身只把 DOM 几何接到纯模型，并在非交互
   表面的轻点结束时提升编辑器焦点；它不重复决定主轴、消费触摸滚动或提交按钮激活。
+  禁用期间保留标签间距、padding 和删除按钮尺寸与符号，仅降低控件透明度并阻止编辑，避免保存时标签宽度跳动。
   `components/data-display/FacetSelector.tsx` 是公开图库与后台图片主题、标签和作者筛选的唯一
   交互 owner；筛选栏不重复显示上方字段标题，收起按钮与展开搜索框保持同一控件 ID 和无障碍名称，候选、已选和
   包含 / 排除仍位于共享 Portal 非模态区域。组件内部显式衔接页面控件与 Portal 的键盘及读屏
@@ -428,8 +429,13 @@ hooks ──► lib
   `usePublicNavigationTopEdgeReveal.ts` 统一识别鼠标移入视口顶部 36 CSS px；首页由独立
   `AppHeader` 接收，画廊与展映由导航阶段 owner 接收，每次移入只唤出一次，区内移动不重置计时。
   只处理可信鼠标事件，`pointerover` 仅接收从文档外进入的情况，Pixi 合成移动和内部悬停目标切换不唤出导航。
-  `usePublicImageViewportControls.ts` 统一拥有画廊与展映的导航阶段；展映只在自动播放期间启用三秒无点击隐藏，
-  计时器、`click` 监听、整组导航的鼠标进出与焦点转移、菜单展开观察均由该 owner 管理。
+  `usePublicImageViewportControls.ts` 统一拥有画廊与展映的导航阶段，并在页面挂载期间拥有
+  `viewport-fit=cover`，卸载时恢复原有 viewport meta，根路径别名与嵌入页
+  复用同一生命周期。`gallery.css` 为导航、内容与回顶按钮提供安全区布局，导航整体收起包含顶部
+  安全区；回顶按钮的固定外层与 `show.css` 的展映外壳使用 `100dvh`，底部操作继续在各自外层内
+  按安全区定位。展映尺寸变化由既有 ResizeObserver 传递给画布，不另建 JS 视口状态。
+  展映只在自动播放期间启用三秒无点击隐藏，计时器、`click` 监听、整组导航的鼠标进出与焦点转移、
+  菜单展开观察均由该 owner 管理。
   `lib/ui/public-navigation.ts` 统一判定导航内的悬停或焦点；精细悬停设备保护导航内的悬停与焦点，
   触控设备只保护 `:focus-visible`，忽略触摸残留的悬停与筛选关闭后的普通按钮焦点。交互期间取消计时并暂停滚动收起，
   首页独立 `AppHeader` 复用该判定保护滚动收起；焦点移出在同一次焦点转移完成后重新读取。
@@ -538,7 +544,11 @@ hooks ──► lib
   `thumb_url`，按屏幕尺寸选择 LOD、限制并发与像素预算，并在 WebGL2 生成 mipmap。
   原图比例参与解码裁剪，缓存共享同规格引用；容量不足的卡片持有可取消等待，在引用释放后
   重新领取纹理，不重新布局。网络传输失败暂停该 URL，同源连续失败暂停该来源；浏览器恢复
-  联网或用户恢复播放时统一允许重试，HTTP / 解码失败仍只对本次运行时记忆，不逐帧重试。
+  联网或用户恢复播放时统一允许传输重试。运行时还捕获文档内真实图片的 `load` 事件：详情成功加载
+  同一缩略图 URL 后，清除该 URL 的传输 / HTTP / 解码失败记录，并解除同源传输暂停；资源键、等待与
+  成功信号统一使用浏览器 URL 解析后的形式，避免域名大小写或默认端口造成匹配失败。其他失败 URL
+  保持原记录。所有失败卡片沿用可取消的缓存可用性等待，重领纹理不重新布局；若仍失败则再次暂停，
+  不逐帧重试、不重建画布、不清空健康纹理，卸载时移除成功事件监听。
   运行时在有效自动播放状态变化时上报 `onMotionActiveChange`，同一状态供调试快照使用；`ShowPixiPage`
   结合播放开关与数据就绪状态启停导航计时，初始化完成前、无图、加载、错误、减少动态效果、详情、后台或 WebGL 中断期间均不启用。
   生产默认不创建统计 output、帧样本或长任务 observer；开发模式自动开启，生产排查时可在进入展映前

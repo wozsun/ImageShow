@@ -519,15 +519,6 @@ textarea.is-changed,
 .tag-input-control .tag-input-field:focus-visible { outline: none; }
 .tag-input-control[data-tag-input-disabled] { opacity: .45; cursor: not-allowed; }
 .tag-input-control[data-tag-input-disabled] .tag-input-field { cursor: not-allowed; }
-.tag-input-control[data-tag-input-disabled] .tag-chip { gap: 0; padding: 3px 8px; }
-.tag-input-control[data-tag-input-disabled] .tag-chip-remove {
-  width: 0;
-  min-height: 0;
-  height: 0;
-  overflow: hidden;
-  opacity: 0;
-  pointer-events: none;
-}
 
 :root[data-ui-context="admin"] .slug-combo-control input[data-new-slug="true"],
 [data-admin-dialog] .slug-combo-control input[data-new-slug="true"] {

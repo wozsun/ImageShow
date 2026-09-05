@@ -270,12 +270,14 @@ export class ShowPixiTextureCache {
       queueMicrotask(() => listener(null, false));
       return { release: () => undefined };
     }
+    url = this.#resourceUrl(url);
     const lod = normalizedLod(requestedLod);
     const key = `${url}\n${lod.pixelWidth}x${lod.pixelHeight}`;
     if (this.#isBlocked(url)) {
       if (this.#failedUrls.has(url)) this.#touchFailedUrl(url);
-      const retryable = this.#isTransportBlocked(url);
-      queueMicrotask(() => listener(null, retryable));
+      // Every blocked URL can recover on an explicit successful image load;
+      // HTTP/decode failures still stay blocked on ordinary online events.
+      queueMicrotask(() => listener(null, true));
       return { release: () => undefined };
     }
     let entry = this.#entries.get(key);
@@ -346,7 +348,7 @@ export class ShowPixiTextureCache {
 
   whenAvailable(url: string, listener: () => void) {
     if (this.#destroyed) return () => undefined;
-    this.#availabilityListeners.set(listener, url);
+    this.#availabilityListeners.set(listener, this.#resourceUrl(url));
     return () => { this.#availabilityListeners.delete(listener); };
   }
 
@@ -357,6 +359,22 @@ export class ShowPixiTextureCache {
     for (const [url, transportFailure] of this.#failedUrls) {
       if (transportFailure) this.#failedUrls.delete(url);
     }
+    this.#notifyAvailable();
+  }
+
+  retryFailedUrl(url: string) {
+    if (this.#destroyed || !url) return;
+    url = this.#resourceUrl(url);
+    const origin = this.#origin(url);
+    if (!this.#failedUrls.has(url) && !(
+      this.#blockedOrigins.has(origin)
+      && [...this.#availabilityListeners.values()].includes(url)
+    )) return;
+    this.#failedUrls.delete(url);
+    // A real image load proves this origin is reachable again. Keep other
+    // failed URL records, but allow requests held only by the origin pause.
+    this.#blockedOrigins.delete(origin);
+    this.#originTransportFailures.delete(origin);
     this.#notifyAvailable();
   }
 
@@ -437,7 +455,7 @@ export class ShowPixiTextureCache {
       const entry = this.#queue.shift();
       if (!entry || this.#entries.get(entry.key) !== entry) continue;
       if (this.#isBlocked(entry.url)) {
-        this.#discardFailedEntry(entry, this.#isTransportBlocked(entry.url), false, false);
+        this.#discardFailedEntry(entry, true, false, false);
         continue;
       }
       if (entry.references === 0) {
@@ -490,7 +508,7 @@ export class ShowPixiTextureCache {
           this.#recordTransportFailure(entry.url);
         }
         const transportFailure = error instanceof TextureTransportError;
-        this.#discardFailedEntry(entry, transportFailure, true, true, transportFailure);
+        this.#discardFailedEntry(entry, true, true, true, transportFailure);
       }).finally(() => {
         entry.controller = null;
         this.#inFlight = Math.max(0, this.#inFlight - 1);
@@ -571,10 +589,6 @@ export class ShowPixiTextureCache {
     this.#failedUrls.set(url, transportFailure);
   }
 
-  #isTransportBlocked(url: string) {
-    return this.#failedUrls.get(url) === true || this.#blockedOrigins.has(this.#origin(url));
-  }
-
   #notifyAvailable() {
     if (this.#destroyed || this.#availabilityScheduled) return;
     this.#availabilityScheduled = true;
@@ -610,6 +624,16 @@ export class ShowPixiTextureCache {
       const oldest = this.#blockedOrigins.keys().next().value;
       if (oldest === undefined) break;
       this.#blockedOrigins.delete(oldest);
+    }
+  }
+
+  #resourceUrl(url: string) {
+    try {
+      // Match native img.currentSrc (host casing, default ports and escapes).
+      // An invalid URL still follows the normal failed-request path.
+      return new URL(url, window.location.href).href;
+    } catch {
+      return url;
     }
   }
 
