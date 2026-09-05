@@ -42,7 +42,7 @@ import { registerSecurityReportRoutes } from "./routes/security-reports.ts";
 import { registerStorageRoutes } from "./routes/storage.ts";
 import { registerSpaRoutes } from "./routes/spa.ts";
 import { registerIngestionRoutes } from "./routes/ingestion.ts";
-import { isAllowedSiteHost, isStaticSiteHost } from "./config/site-host.ts";
+import { isAllowedSiteHost, isStaticSiteHost, staticResourcePathPrefix } from "./config/site-host.ts";
 import {
   auditAdminMutation,
   markAdminReadRequest
@@ -62,6 +62,12 @@ const defaultHttpAvailabilityDependencies: HttpAvailabilityDependencies = {
   businessGateIsOpen: businessAvailabilityGateIsOpen,
   requireRedis: requireOperationalRedis
 };
+
+function isPublicResourcePath(path: string) {
+  return path.startsWith("/full/")
+    || path.startsWith("/thumbs/")
+    || path.startsWith("/link/original/");
+}
 
 export function createHttpApp(): Hono;
 export function createHttpApp(
@@ -115,14 +121,27 @@ export function createHttpApp(
     const path = new URL(c.req.url).pathname;
     if (
       path === "/robots.txt"
-      || path.startsWith("/full/")
-      || path.startsWith("/thumbs/")
-      || path.startsWith("/link/original/")
+      || isPublicResourcePath(path)
     ) {
       return next();
     }
     return apiErrorResponse({ status: 404, message: "Not Found" });
   });
+  const resourceHostGuard = async (c: Context, next: Next) => {
+    const prefix = c.req.path === "/static" || c.req.path.startsWith("/static/")
+      ? "/static" : "";
+    if (
+      prefix === staticResourcePathPrefix()
+      && isPublicResourcePath(c.req.path.slice(prefix.length))
+      && (prefix === "/static" || isStaticSiteHost(c.req.header("host") ?? ""))
+    ) return next();
+    return apiErrorResponse({ status: 404, message: "Not Found" });
+  };
+  app.use("/full/*", resourceHostGuard);
+  app.use("/thumbs/*", resourceHostGuard);
+  app.use("/link/original/*", resourceHostGuard);
+  app.use("/static/*", resourceHostGuard);
+
   app.options(
     "*",
     async (c, next) => {
@@ -136,14 +155,6 @@ export function createHttpApp(
     })
   );
   app.get("/robots.txt", serveRobotsTxt);
-
-  const resourceHostGuard = async (c: Context, next: Next) => {
-    if (isStaticSiteHost(c.req.header("host") ?? "")) return next();
-    return apiErrorResponse({ status: 404, message: "Not Found" });
-  };
-  app.use("/full/*", resourceHostGuard);
-  app.use("/thumbs/*", resourceHostGuard);
-  app.use("/link/original/*", resourceHostGuard);
 
   app.use("/api/*", limitApiRequestBody);
   app.use("/api/*", async (c, next) => {

@@ -150,7 +150,7 @@ npm run admin:reset-password -- <username>
 
 ## 反向代理与 HTTPS
 
-生产环境必须由可信反向代理终止 TLS，证书覆盖主站与配置的 `static` 资源域，并把应用
+生产环境必须由可信反向代理终止 TLS，默认只需主站证书；配置非空资源子域时再覆盖该子域。应用
 端口只绑定到回环或明确的同机私有网络；不需要通配 DNS 或通配证书。仓库 Compose 固定把 `5518`
 映射到 `127.0.0.1`。代理必须覆盖
 而不是追加访客传入的 `Host`、`X-Real-IP`、`X-Forwarded-For` 和 `X-Forwarded-Proto`。
@@ -160,7 +160,7 @@ npm run admin:reset-password -- <username>
 
 以下先列出代理产品无关的必要行为：
 
-- TLS 证书覆盖主站与 `static` 资源域，并把 HTTP 重定向到 HTTPS。
+- TLS 证书覆盖主站；仅非空 `site.static_subdomain` 模式需要额外子域 DNS 与证书。HTTP 重定向到 HTTPS。
 - 覆盖上述四个请求头；客户端 IP 必须是单跳、单值地址，不传访客提供的代理链。
 - 请求体上限覆盖 200 MiB 单图和 128 MiB JSONL；长时内容接入和存储检查允许至少 300 秒。
 - 上传流按部署需要关闭请求缓冲；Ingestion 控制 JSON 和 raw 上传都使用固定短路由，代理不得按
@@ -176,22 +176,19 @@ ImageShow 已负责 ETag、304、Range、压缩、静态预压缩和缓存头。
 
 ### 最少配置
 
-```nginx
-map $host $imageshow_static_cors_origin {
-  default "";
-  static.img.example.com "*";
-}
+下面采用默认空 `site.static_subdomain`，所有资源由主站 `/static` 提供。
 
+```nginx
 server {
   listen 80;
-  server_name img.example.com static.img.example.com;
+  server_name img.example.com;
   return 301 https://$host$request_uri;
 }
 
 server {
   listen 443 ssl;
   http2 on;
-  server_name img.example.com static.img.example.com;
+  server_name img.example.com;
 
   ssl_certificate /etc/nginx/cert/fullchain.pem;
   ssl_certificate_key /etc/nginx/cert/privkey.pem;
@@ -204,8 +201,6 @@ server {
   proxy_set_header X-Forwarded-For $remote_addr;
   proxy_set_header X-Forwarded-Proto $scheme;
 
-  add_header Access-Control-Allow-Origin $imageshow_static_cors_origin always;
-
   proxy_read_timeout 300s;
   proxy_send_timeout 300s;
 
@@ -215,6 +210,20 @@ server {
 
 }
 ```
+
+若改用 `site.static_subdomain: "static"`，为 `static.img.example.com` 配置 DNS 和证书，
+把它加入上面的两个 `server_name`，并仅在该资源 Host 的图片响应上提供 CORS。可在 `http` 层增加：
+
+```nginx
+map $host $imageshow_static_cors_origin {
+  default "";
+  static.img.example.com "*";
+}
+```
+
+然后在 HTTPS server 中加入 `add_header Access-Control-Allow-Origin $imageshow_static_cors_origin always;`。
+路径需原样转发，不剥除 `/static`；不要同时开放另一模式的资源路径。默认同源模式会发送主站
+Cookie，但资源处理器不消费它；详见[主机与资源出口](./subdomains.md)。
 
 不要使用会拼接访客输入的 `$proxy_add_x_forwarded_for`；可信代理必须把两个来源 IP 头
 都覆盖为同一个单值客户端地址。

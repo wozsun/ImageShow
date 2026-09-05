@@ -59,8 +59,8 @@ import {
 } from "./fields.ts";
 
 const subdomainLabel = z.string().trim().regex(
-  /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/,
-  "must be a lowercase DNS label"
+  /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)?$/,
+  "must be empty or a lowercase DNS label"
 );
 
 const runtimeConfigSchema = z.strictObject({

@@ -94,11 +94,11 @@
   `svelte-trusted-html`、`decodeHTMLEntitiesPolicy` 与 `AGPolicy`，不放行任意策略名，也不
   提供放行任意脚本 URL 或 HTML 的默认策略。候选策略明确覆盖 script、Worker、connect、
   HTTPS 图片、样式、字体、object、base 与 form；connect 同时允许 HTTPS，以覆盖展映读取
-  `static.` 或对象存储缩略图并解码为纹理的实际请求，图片服务仍须提供对应 CORS。经浏览器报告验证前不直接收紧为强制
+  当前资源出口或对象存储缩略图并解码为纹理的实际请求，图片服务仍须提供对应 CORS。经浏览器报告验证前不直接收紧为强制
   策略。同源 `/api/security/csp-report` 只接受 POST，经 Fetch Metadata 拒绝跨站 / 同站
   跨源，声明体积上限为 64 KiB，并立即取消正文流；它不解析 JSON、不写日志、数据库或
   Redis。登录页在 ALTCHA 首次挂载前预设隐藏 footer 与 logo，使组件不渲染会被 Trusted
-  Types 拒绝的动态 HTML footer；应用只接受 `site.domain` 及配置的 `static` 资源子域，
+  Types 拒绝的动态 HTML footer；应用只接受 `site.domain`，仅非空资源子域配置时额外接受该资源 Host，
   随机、外链、主题和其他未知 Host 均直接返回不可缓存的 404。
 - 反向代理或 CDN 不得对 `/embed/*` 重新注入 `X-Frame-Options`，也不得覆盖应用生成的 CSP `frame-ancestors`，否则会把已授权的 iframe 一并拦截；普通路径的拒绝策略仍由应用统一生成。若代理层必须统一添加这些头，应为三个精确嵌入路径设置例外，并保留应用响应头。
 
@@ -129,9 +129,9 @@ Content-Type 与缓存验证器会被省略或回退为站内类型；`Content-R
 | CSP report、OPTIONS、204 | `no-store` | 只允许各自方法，先做 Host / Fetch Metadata 检查，取消不需要的正文；不启用 CORS |
 | hash 资产、稳定图片、HEAD、206、304 | hash 资产 / 稳定图片 `immutable`；非 hash 品牌资源短缓存；ETag、Last-Modified、单 Range | 304 无正文；206 保留完整对象验证器；416 返回 `Content-Range: bytes */总长` |
 | 随机 proxy / redirect / JSON | 永远 `no-store` | proxy 不声明 Range；302 的 `Location` 先校验；前两种模式带 `X-Image-Info`，JSON 只返回公开字段与实际 `count`，HEAD 不发送正文 |
-| 外链原图 proxy / redirect | `static.` 唯一公开入口的 direct 302 使用 `private, no-store`；proxy 继承已校验源站策略或使用 fallback，URL 命名空间弱 ETag、Last-Modified 与 304；后台 `private, no-store` | 单次公开图片解析、HTTPS 安全抓取、GET 内容嗅探、HEAD 不保留正文、验证结果严格绑定请求 URL、`Referrer-Policy: no-referrer` |
+| 外链原图 proxy / redirect | 当前资源根下唯一公开入口的 direct 302 使用 `private, no-store`；proxy 继承已校验源站策略或使用 fallback，URL 命名空间弱 ETag、Last-Modified 与 304；后台 `private, no-store` | 单次公开图片解析、HTTPS 安全抓取、GET 内容嗅探、HEAD 不保留正文、验证结果严格绑定请求 URL、`Referrer-Policy: no-referrer` |
 | Ingestion SSE | `no-store, no-transform` | 每个已显示的 owner + queue 使用一个固定 GET 路径；不压缩、不缓冲，30 秒串行鉴权 heartbeat，断开即清理 listener / scope |
-| `static.` 与未知子域 | `static.` 只开放 `/full/*`、`/thumbs/*`、`/link/original/<id>` 与可选 `/robots.txt`；失败 `no-store` | 主站不暴露资源字节路径；随机、外链、主题和其他未知子域均返回带完整安全头的 404 |
+| 资源出口与未知 Host | 默认主站 `/static`，或非空配置的独立资源子域；仅开放对应资源根下的 `/full/*`、`/thumbs/*`、`/link/original/<id>`；独立子域另可开放 `/robots.txt`；失败 `no-store` | 两种模式互斥，主站根级资源路径与未知 Host 返回完整安全头的 404；同源资源不读会话、不写 Cookie，不按 Cookie 改变缓存 |
 
 确定性管理只读 JSON 包括偏好、管理员列表、存储选项 / 后端，以及已有的设置、
 词表、图片列表与管理详情；写后仍由各领域精确失效查询，内容未变化的再次读取返回 304。

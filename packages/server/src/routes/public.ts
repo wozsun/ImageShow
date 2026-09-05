@@ -124,22 +124,26 @@ export function registerPublicRoutes(app: Hono) {
     return cacheableApiSuccess(c, response, publicMetadataCacheControl);
   });
 
-  app.get("/full/*", async (c) => servePublicStoredObject(
-    c.req.path.replace(/^\/full\//, ""),
-    storedResponseRequest(c)
-  ));
-  app.get("/thumbs/*", async (c) => servePublicStoredThumbnail(
-    c.req.path.replace(/^\/thumbs\//, ""),
-    storedResponseRequest(c)
-  ));
-  app.get("/link/original/:id", async (c) => servePublicExternalOriginal(
-    parse(uuidInput, c.req.param("id")),
-    {
-      userAgent: c.req.header("user-agent") ?? "",
-      method: c.req.method === "HEAD" ? "HEAD" : "GET",
-      ifNoneMatch: c.req.header("if-none-match"),
-      ifModifiedSince: c.req.header("if-modified-since"),
-      signal: c.req.raw.signal
-    }
-  ));
+  // Both route shapes share handlers; the Host/prefix guard opens only the
+  // configured shape, so a runtime config reload needs no route remount.
+  for (const prefix of ["", "/static"]) {
+    app.get(`${prefix}/full/*`, async (c) => servePublicStoredObject(
+      c.req.path.slice(`${prefix}/full/`.length),
+      storedResponseRequest(c)
+    ));
+    app.get(`${prefix}/thumbs/*`, async (c) => servePublicStoredThumbnail(
+      c.req.path.slice(`${prefix}/thumbs/`.length),
+      storedResponseRequest(c)
+    ));
+    app.get(`${prefix}/link/original/:id`, async (c) => servePublicExternalOriginal(
+      parse(uuidInput, c.req.param("id")),
+      {
+        userAgent: c.req.header("user-agent") ?? "",
+        method: c.req.method === "HEAD" ? "HEAD" : "GET",
+        ifNoneMatch: c.req.header("if-none-match"),
+        ifModifiedSince: c.req.header("if-modified-since"),
+        signal: c.req.raw.signal
+      }
+    ));
+  }
 }

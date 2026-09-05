@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   logLevels,
   type AdminLogLevelDto,
@@ -58,6 +58,7 @@ function logsPath(file: string) {
 }
 
 export function LogPage() {
+  const client = useQueryClient();
   const logViewerRef = useRef<HTMLPreElement | null>(null);
   const reportedLoadErrorsRef = useRef(new Map<string, number>());
   const [selectedFile, setSelectedFile] = useState("");
@@ -125,10 +126,14 @@ export function LogPage() {
         method: "POST",
         body: JSON.stringify({ level: nextLevel })
       });
+      await client.cancelQueries({ queryKey: queryKeys.logs });
+      client.setQueriesData<AdminLogPayloadDto>({ queryKey: queryKeys.logs }, (current) => (
+        current ? { ...current, level: response.level } : current
+      ));
       setLevel(response.level);
+      void client.invalidateQueries({ queryKey: queryKeys.logs });
       await waitForMinimumPendingDuration(startedAt);
       setFeedback(createActionFeedback("日志写入等级已更新", "success"));
-      void query.refetch();
     } catch (error) {
       setLevel(previousLevel);
       reportAdminUiError("admin_logs.level_update", error);

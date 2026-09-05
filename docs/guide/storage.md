@@ -269,3 +269,9 @@ prepare 会保存 processed image 与缩略图的 SHA-256（图片同时保存 M
 旧 `storage_slug` 重新发布到缓存。
 
 Upload 与 Import 的原始字节统一先进入服务端 `data/tmp`。服务端在本地完成校验、标准化、缩略图与最终 MD5 后，才把 processed image 和 prepared thumbnail 写入目标后端 `_uploads`。因此无需为存储桶配置浏览器 CORS，远端后端也不会发生“上传 raw 后再下载回来处理”的重复传输。详见[功能与流程](./flows.md#图片接入)。
+
+
+Local 驱动的缓冲写、流式写与复制在候选创建和原子发布前检查取消；缓冲写透传 AbortSignal。
+不可中断的复制等待当前文件 I/O 收口，取消后清理候选并停止发布。每次存储自检创建唯一临时 key，
+无论成功、失败或取消都只清理本次对象；清理有独立 10 秒准入预算，不继承已取消的请求信号，
+也不提前放弃正在执行的文件 I/O。

@@ -13,6 +13,7 @@ function siteHostKind(hostHeader: string): SiteHostKind {
   if (current.port && (Number(current.port) < 1 || Number(current.port) > 65_535)) return "";
   if (root.port && current.port !== root.port) return "";
   if (current.hostname === root.hostname) return "site";
+  if (!site.static_subdomain) return "";
   const staticHostname = `${site.static_subdomain}.${root.hostname}`;
   return current.hostname === staticHostname ? "static" : "";
 }
@@ -27,7 +28,13 @@ export function isStaticSiteHost(hostHeader: string) {
 
 export function staticLocalBaseUrl() {
   const site = getRuntimeConfig().site;
-  return `https://${site.static_subdomain}.${site.domain}`;
+  return site.static_subdomain
+    ? `https://${site.static_subdomain}.${site.domain}`
+    : `https://${site.domain}${staticResourcePathPrefix()}`;
+}
+
+export function staticResourcePathPrefix() {
+  return getRuntimeConfig().site.static_subdomain ? "" : "/static";
 }
 
 function splitHost(value: string): HostParts {

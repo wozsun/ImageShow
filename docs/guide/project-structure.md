@@ -131,6 +131,16 @@ healthcheck 只读现有配置快照，密码恢复不初始化运行时配置�
 租约内先通过 store 的专用阶段持久化候选文件，再等待 PostgreSQL 事务结果；只有正常提交、确认
 已提交或结果 unknown 时才发布候选，确认回滚只恢复旧文件且不发布中间快照。
 
+`config/site-host.ts` 是资源根 URL、路径前缀和 Host 判断的共同入口：空 `static_subdomain`
+默认选择主站 `/static`，非空选择资源子域。`http-app.ts` 在公共资源、OPTIONS 与 SPA 之前执行
+模式与 Host 隔离；`routes/public.ts` 的两组路径共用相同资源处理器，热加载只切换当前出口。
+不按版本添加转发或迁移。公开资源不读取管理员会话，S3 已配置公开 URL 的对象仍使用直链。
+
+`storage/drivers/local.ts` 在缓冲写、复制和流式写入创建候选前及 link 发布前检查取消，
+缓冲写同时向文件写入传递 signal。不可中断的本地复制等待当前 I/O 完成后检查取消并清理候选。
+每次自检使用独立随机 key，读写受请求 signal 控制，清理使用独立 10 秒准入预算并等待已开始
+的文件 I/O 收口；失败或取消仅删除本次探针对象。
+
 `routes/` 当前保留 18 个直属文件。`admin-vocabulary.ts` 在一个 HTTP 能力边界中声明 tags、
 themes 与 authors 三组同构 CRUD，通用 registrar 为文件内私有实现；每组仍分别注入自己的
 schema、查询、变更和删除权限，不把领域业务搬进路由。`public.ts` 私有持有 Hono 请求到
@@ -624,6 +634,8 @@ hooks ──► lib
   解析输入后复用；不保存队列状态，也不替代 Redis 汇总权威。
 - `import/ImportSplitButton.tsx` 复用共享 anchored menu 的焦点外关闭及按来源决定 Escape 归焦；
   键盘打开与悬停打开分开处理焦点。来源标签页维护 roving tabindex 和关联 tabpanel，保留指针输入流程。
+- `LogPage.tsx` 保存等级成功后取消旧日志读取，将已确认等级写入所有现有日志文件查询，
+  只刷新当前活动文件一次；刷新失败保留确认值，不新增等级查询或延时同步。
 - `SettingsPage.tsx` 仅拥有当前未保存表单，后台回读只在 clean 状态更新；保存与重载禁用整个表单，
   使用 15 秒请求期限，成功由 POST 返回值直接更新唯一 settings 查询，失败保留提交内容。
 - `VocabularyAdminCard.tsx` 按字段对照上一权威基线维护 clean / dirty，同 slug 回读只同步 clean 字段，

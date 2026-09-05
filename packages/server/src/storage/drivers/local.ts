@@ -53,6 +53,7 @@ async function* walkLocalKeys(
   try {
     directory = await opendir(directoryPath, { bufferSize: 64 });
   } catch (error) {
+    signal?.throwIfAborted();
     if (isMissingFileError(error)) return;
     throw error;
   }
@@ -64,6 +65,7 @@ async function* walkLocalKeys(
       try {
         entry = await directory.read();
       } catch (error) {
+        signal?.throwIfAborted();
         if (isMissingFileError(error)) return;
         throw error;
       }
@@ -85,6 +87,26 @@ async function* walkLocalKeys(
   }
 }
 
+async function withLocalCandidate(candidate: string, publish: () => Promise<void>) {
+  let publishFailed = false;
+  let publishError: unknown;
+  try {
+    await publish();
+  } catch (error) {
+    publishFailed = true;
+    publishError = error;
+  }
+  try {
+    await rm(candidate, { force: true });
+  } catch (cleanupError) {
+    if (publishFailed) {
+      throw new AggregateError([publishError, cleanupError], "Local publication and candidate cleanup both failed");
+    }
+    throw cleanupError;
+  }
+  if (publishFailed) throw publishError;
+}
+
 export class LocalBackend implements StorageDriver {
   async exists(
     prefix: StoragePrefix,
@@ -97,6 +119,7 @@ export class LocalBackend implements StorageDriver {
       options.signal?.throwIfAborted();
       return true;
     } catch (error) {
+      options.signal?.throwIfAborted();
       if (isMissingFileError(error)) return false;
       throw error;
     }
@@ -176,19 +199,21 @@ export class LocalBackend implements StorageDriver {
     prefix: StoragePrefix,
     key: string,
     body: Buffer,
-    _contentType: string
+    _contentType: string,
+    options: StorageRequestOptions = {}
   ) {
+    options.signal?.throwIfAborted();
     const target = safeStoragePath(prefix, key);
     await mkdir(dirname(target), { recursive: true });
+    options.signal?.throwIfAborted();
     const candidate = `${target}.candidate-${randomUUID()}`;
-    try {
-      await writeFile(candidate, body, { flag: "wx" });
+    await withLocalCandidate(candidate, async () => {
+      await writeFile(candidate, body, { flag: "wx", signal: options.signal });
       // Linking a complete same-directory candidate makes publication atomic
       // and refuses to overwrite an object that appeared concurrently.
+      options.signal?.throwIfAborted();
       await link(candidate, target);
-    } finally {
-      await rm(candidate, { force: true }).catch(() => undefined);
-    }
+    });
   }
 
   async writeStream(
@@ -205,9 +230,10 @@ export class LocalBackend implements StorageDriver {
     options.signal?.throwIfAborted();
     const target = safeStoragePath(prefix, key);
     await mkdir(dirname(target), { recursive: true });
+    options.signal?.throwIfAborted();
     const candidate = `${target}.candidate-${randomUUID()}`;
     const output = createWriteStream(candidate, { flags: "wx" });
-    try {
+    await withLocalCandidate(candidate, async () => {
       await pipeline(body, output, { signal: options.signal });
       if (output.bytesWritten !== size) {
         throw new ApiError(
@@ -218,9 +244,7 @@ export class LocalBackend implements StorageDriver {
       }
       options.signal?.throwIfAborted();
       await link(candidate, target);
-    } finally {
-      await rm(candidate, { force: true }).catch(() => undefined);
-    }
+    });
   }
 
   async removeObjects(
@@ -271,8 +295,10 @@ export class LocalBackend implements StorageDriver {
     toKey: string,
     options: StorageCopyOptions = {}
   ) {
+    options.signal?.throwIfAborted();
     const target = safeStoragePath(toPrefix, toKey);
     await mkdir(dirname(target), { recursive: true });
+    options.signal?.throwIfAborted();
     const candidateToken = options.atomicCandidateToken ?? randomUUID();
     if (
       options.atomicCandidateToken
@@ -281,14 +307,13 @@ export class LocalBackend implements StorageDriver {
       throw new RangeError("Invalid local atomic candidate token");
     }
     const candidate = `${target}.candidate-${candidateToken.toLowerCase()}`;
-    try {
+    await withLocalCandidate(candidate, async () => {
       await copyFile(safeStoragePath(fromPrefix, fromKey), candidate);
       // Publish only a complete same-directory candidate and never overwrite a
       // target that appeared after the caller's existence check.
+      options.signal?.throwIfAborted();
       await link(candidate, target);
-    } finally {
-      await rm(candidate, { force: true }).catch(() => undefined);
-    }
+    });
   }
 
   serverCopySource(
@@ -323,17 +348,35 @@ export class LocalBackend implements StorageDriver {
     );
   }
 
-  async selfTest(): Promise<StorageSelfTest> {
-    await mkdir(join(runtimePaths.storageDirectory, "_uploads"), { recursive: true });
-    const path = safeStoragePath("_uploads", ".storage-test");
-    await writeFile(path, "ok");
-    const [removed] = await this.removeObjects([{
-      prefix: "_uploads",
-      key: ".storage-test"
-    }]);
-    if (removed?.status !== "removed") {
-      throw new Error("Local self-test object could not be removed");
+  async selfTest(options: StorageRequestOptions = {}): Promise<StorageSelfTest> {
+    options.signal?.throwIfAborted();
+    const key = `.storage-test-${randomUUID()}`;
+    let testError: unknown;
+    try {
+      await this.writeBuffer("_uploads", key, Buffer.from("ok"), "text/plain", options);
+      if (!await this.exists("_uploads", key, options)) {
+        throw new Error("Local self-test object could not be read back");
+      }
+    } catch (error) {
+      testError = error;
     }
+    try {
+      // The caller may cancel after publication. Cleanup has its own budget
+      // and only owns this probe's unique object, including uncertain writes.
+      const [removed] = await this.removeObjects([{ prefix: "_uploads", key }], {
+        signal: AbortSignal.timeout(10_000)
+      });
+      if (removed?.status !== "removed" && removed?.status !== "missing") {
+        throw new Error("Local self-test object could not be removed");
+      }
+    } catch (cleanupError) {
+      if (testError) {
+        throw new AggregateError([testError, cleanupError], "Local self-test and cleanup both failed");
+      }
+      throw cleanupError;
+    }
+    if (testError) throw testError;
+    options.signal?.throwIfAborted();
     return { backend: "local", writable: true, storage_dir: runtimePaths.storageDirectory };
   }
 
@@ -353,6 +396,7 @@ export class LocalBackend implements StorageDriver {
       try {
         directory = await opendir(dir, { bufferSize: 64 });
       } catch (error) {
+        options.signal?.throwIfAborted();
         if (isMissingFileError(error)) return;
         throw error;
       }
@@ -367,6 +411,7 @@ export class LocalBackend implements StorageDriver {
         if (entry.isDirectory()) await prune(join(dir, entry.name));
       }
       if (dir === root || protectedDirs.has(dir)) return;
+      options.signal?.throwIfAborted();
       try {
         await rmdir(dir);
         removed += 1;
@@ -377,6 +422,7 @@ export class LocalBackend implements StorageDriver {
       }
     };
     await prune(start);
+    options.signal?.throwIfAborted();
     return removed;
   }
 }

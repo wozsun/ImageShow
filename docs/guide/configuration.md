@@ -141,7 +141,7 @@ PostgreSQL 的 `admin_account` 表，不进入 `config.json`。单应用进程�
 | <!-- runtime-config:site.gallery.order --> `site.gallery.order` / `SITE_GALLERY_ORDER` / 显式映射 | 枚举；默认 `"latest"`；`latest`、`random` | 画廊默认排序；普通设置或热加载后影响新查询。 |
 | <!-- runtime-config:site.gallery.public_original_button --> `site.gallery.public_original_button` / `SITE_GALLERY_PUBLIC_ORIGINAL_BUTTON` / 显式映射 | 布尔；默认 `false` | 控制未登录访客的公开画廊详情是否渲染独立“原图”入口；服务端确认已登录的管理员不受该开关影响。首次播种、完整配置、配置包或热加载后生效，不进入普通设置；关闭不影响当前展示图的原生保存。 |
 | <!-- runtime-config:site.random_method --> `site.random_method` / `SITE_RANDOM_METHOD` / 显式映射 | 枚举；默认 `"redirect"`；`proxy`、`redirect` | `/random` 未指定 `mode` 时的图片返回方式；`json` 仅可作为显式 `mode=json` 查询参数，普通设置或热加载后影响新请求。 |
-| <!-- runtime-config:site.static_subdomain --> `site.static_subdomain` / `SITE_STATIC_SUBDOMAIN` / 显式映射 | 字符串；默认 `"static"`；1–63 字符的合法小写 DNS label | `/full`、`/thumbs`、`/link/original` 的资源子域；首次播种或热加载后影响 Host 路由。 |
+| <!-- runtime-config:site.static_subdomain --> `site.static_subdomain` / `SITE_STATIC_SUBDOMAIN` / 显式映射 | 字符串；默认 `""`；空值或 1–63 字符的合法小写 DNS label | 空值使用主站 `/static` 子路径，非空使用独立资源子域；高级配置保存或热加载后两种出口互斥。同源模式不具备浏览器 Cookie 隔离，详见[资源出口](./subdomains.md)。 |
 | <!-- runtime-config:site.robots_enabled --> `site.robots_enabled` / `SITE_ROBOTS_ENABLED` / 显式映射 | 布尔；默认 `false` | 控制主站与资源域 `robots.txt`；首次播种或热加载后影响新请求。 |
 
 ### embed

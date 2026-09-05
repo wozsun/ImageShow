@@ -180,7 +180,7 @@ export const appConfig = {
         public_original_button: false
       },
       random_method: "redirect",
-      static_subdomain: "static",
+      static_subdomain: "",
       robots_enabled: false
     },
     embed: {

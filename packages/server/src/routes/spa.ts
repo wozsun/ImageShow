@@ -86,7 +86,9 @@ function buildSpaDocument(): string {
   const description = escapeHtmlAttr(site.description);
   const iconUrl = escapeHtmlAttr(site.icon);
   const head =
-    `<link rel="preconnect" href="${escapeHtmlAttr(site.static_url)}" crossorigin>`
+    (getRuntimeConfig().site.static_subdomain
+      ? `<link rel="preconnect" href="${escapeHtmlAttr(site.static_url)}" crossorigin>`
+      : "")
     + `<script type="application/json" id="__site_config__">${inlineConfig}</script>`;
   return spaTemplate
     .replace(/<title>[\s\S]*?<\/title>/i, `<title>${title}</title>`)

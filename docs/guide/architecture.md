@@ -33,7 +33,7 @@ Hono HTTP 应用 ──► PostgreSQL（业务真相）
 | 主机 | 职责 |
 | --- | --- |
 | `<站点域名>` | SPA、公共 API、管理 API、健康检查与 `/random` |
-| `static.<站点域名>` | `/full/*`、`/thumbs/*` 对象字节，以及 `/link/original/<id>` 外部 HTTPS 原图直连决策 / 代理 |
+| 主站 `/static`（默认），或配置的资源子域 | 当前资源根下的 `/full/*`、`/thumbs/*` 对象字节，以及 `/link/original/<id>` 外部 HTTPS 原图直连决策 / 代理；模式互斥 |
 
 随机、外链和主题都不拥有专用子域；未注册子域返回 404。嵌入页只在配置开启时提供，
 并由文档响应的 CSP
