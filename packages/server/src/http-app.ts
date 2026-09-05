@@ -66,7 +66,7 @@ const defaultHttpAvailabilityDependencies: HttpAvailabilityDependencies = {
 function isPublicResourcePath(path: string) {
   return path.startsWith("/full/")
     || path.startsWith("/thumbs/")
-    || path.startsWith("/link/original/");
+    || path.startsWith("/link/");
 }
 
 export function createHttpApp(): Hono;
@@ -139,7 +139,7 @@ export function createHttpApp(
   };
   app.use("/full/*", resourceHostGuard);
   app.use("/thumbs/*", resourceHostGuard);
-  app.use("/link/original/*", resourceHostGuard);
+  app.use("/link/*", resourceHostGuard);
   app.use("/static/*", resourceHostGuard);
 
   app.options(

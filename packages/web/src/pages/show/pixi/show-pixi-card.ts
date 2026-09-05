@@ -151,6 +151,9 @@ export class ShowPixiCard {
   #edgeLight: ShowPixiEdgeLight | null = null;
   readonly #perspectiveCorners = new Float32Array(8);
   #perspectiveTexture: Texture | null = null;
+  readonly #perspectiveFrame = new Rectangle();
+  #perspectivePhotoWidth = 1;
+  #perspectivePhotoHeight = 1;
   #perspectiveSourceSignature = "";
   #perspectiveUnavailableSignature = "";
   #onOpen: (image: ShowImage, key: string) => void;
@@ -582,14 +585,18 @@ export class ShowPixiCard {
       output[offset] = rotatedX / divisor;
       output[offset + 1] = rotatedY / divisor;
     };
-    const padding = cardSurfacePaddingPixels / Math.max(0.01, this.#renderScale);
-    const halfWidth = this.width / 2 + padding;
-    const halfHeight = this.height / 2 + padding;
+    // The cached snapshot retains its original padding and border inset. Map
+    // its photo rectangle to today's inner card, rather than stretching old
+    // pixels over a frame reconstructed with today's padding.
+    const borderWidth = Math.min(this.width / 2, this.height / 2, 1 / this.#renderScale);
+    const scaleX = Math.max(0, this.width - borderWidth * 2) / this.#perspectivePhotoWidth;
+    const scaleY = Math.max(0, this.height - borderWidth * 2) / this.#perspectivePhotoHeight;
+    const frame = this.#perspectiveFrame;
     const corners = this.#perspectiveCorners;
-    project(-halfWidth, -halfHeight, corners, 0);
-    project(halfWidth, -halfHeight, corners, 2);
-    project(halfWidth, halfHeight, corners, 4);
-    project(-halfWidth, halfHeight, corners, 6);
+    project(frame.left * scaleX, frame.top * scaleY, corners, 0);
+    project(frame.right * scaleX, frame.top * scaleY, corners, 2);
+    project(frame.right * scaleX, frame.bottom * scaleY, corners, 4);
+    project(frame.left * scaleX, frame.bottom * scaleY, corners, 6);
     mesh.setCorners(
       corners[0]!, corners[1]!, corners[2]!, corners[3]!,
       corners[4]!, corners[5]!, corners[6]!, corners[7]!
@@ -648,6 +655,12 @@ export class ShowPixiCard {
       this.#perspectiveUnavailableSignature = sourceSignature;
       return null;
     }
+    // Pixi rounds the generated extent; retain the actual texture dimensions
+    // with the requested origin so fractional frames do not shift the photo.
+    this.#perspectiveFrame.set(frame.x, frame.y, texture.width, texture.height);
+    const borderWidth = Math.min(this.width / 2, this.height / 2, 1 / this.#renderScale);
+    this.#perspectivePhotoWidth = Math.max(1, this.width - borderWidth * 2);
+    this.#perspectivePhotoHeight = Math.max(1, this.height - borderWidth * 2);
     const mesh = new PerspectiveMesh({
       texture,
       verticesX: 16,

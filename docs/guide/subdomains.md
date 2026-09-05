@@ -5,16 +5,16 @@
 
 | 配置示例 | 资源根地址 | 公开资源路径 |
 | --- | --- | --- |
-| `site.domain: "img.example.com"`，`static_subdomain: ""`（默认） | `https://img.example.com/static` | `/static/full/*`、`/static/thumbs/*`、`/static/link/original/<id>` |
-| `site.domain: "img.example.com"`，`static_subdomain: "static"` | `https://static.img.example.com` | `/full/*`、`/thumbs/*`、`/link/original/<id>` |
+| `site.domain: "img.example.com"`，`static_subdomain: ""`（默认） | `https://img.example.com/static` | `/static/full/*`、`/static/thumbs/*`、`/static/link/<id>` |
+| `site.domain: "img.example.com"`，`static_subdomain: "static"` | `https://static.img.example.com` | `/full/*`、`/thumbs/*`、`/link/<id>` |
 
 主站承担 SPA、公共与管理 API、健康检查，以及唯一随机图入口 `/random`。
 独立资源子域仅开放表中的资源路径和可选 `/robots.txt`，不提供 SPA、API 或随机图。
-主站根级 `/full/*`、`/thumbs/*`、`/link/original/*` 不开放；`/static` 也不会转入 SPA 或管理 API。
+主站根级 `/full/*`、`/thumbs/*`、`/link/*` 不开放；`/static` 也不会转入 SPA 或管理 API。
 子路径模式只接受主站 Host，非空子域模式关闭主站 `/static/*`，其余 Host 一律返回不可缓存的 404。
 
 `full` 与 `thumbs` 提供 local 或没有公开 URL 的存储对象；已有 S3 `public_base_url` 的直链保持不变。
-外部原图通过当前资源根下的 `/link/original/<id>` 入口读取：一次图片解析后，无 Referer 直连可用时
+外部原图通过当前资源根下的 `/link/<id>` 入口读取：一次图片解析后，无 Referer 直连可用时
 返回不可缓存的 302，否则在同一请求内安全代理。代理使用图片源站 origin 作为 Referer，继承已校验
 源站缓存策略或使用站内 CDN fallback；回收站的外部原图仍只允许鉴权后的管理入口读取。
 详细随机协议见[随机图 API](./random-api.md)，媒体生命周期见[安全说明](./security.md)。

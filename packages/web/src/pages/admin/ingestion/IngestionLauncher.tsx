@@ -5,7 +5,9 @@ import {
   useRef,
   useState
 } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import type { AdminSettings } from "@imageshow/shared/browser";
+import { storageOptionsQueryOptions } from "../../../lib/api/storage-options.js";
 import { AsyncIntentFence } from "../../../lib/async-intent-fence.js";
 import {
   createPageLifetimeModuleLoader
@@ -50,6 +52,7 @@ export function IngestionLauncher({
   onLoadError: (error: unknown) => void;
   moduleLoaders?: IngestionLauncherModuleLoaders;
 }) {
+  const queryClient = useQueryClient();
   const ingestionLoader = moduleLoaders?.ingestion ?? loadIngestionModule;
   const importSourceLoader = moduleLoaders?.importSource
     ?? loadImportSourceModule;
@@ -124,12 +127,11 @@ export function IngestionLauncher({
       const needsImportSource = kind === "urls"
         || kind === "jsonl"
         || kind === "weibo";
-      const ingestionModule = needsImportSource
-        ? (await Promise.all([
-            ingestionLoader(),
-            importSourceLoader()
-          ]))[0]
-        : await ingestionLoader();
+      const [ingestionModule] = await Promise.all([
+        ingestionLoader(),
+        queryClient.fetchQuery(storageOptionsQueryOptions),
+        ...(needsImportSource ? [importSourceLoader()] : [])
+      ]);
       if (
         !launchFence.isCurrent(launchSequence)
         || !showTriggersRef.current

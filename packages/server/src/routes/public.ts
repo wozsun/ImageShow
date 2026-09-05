@@ -135,7 +135,7 @@ export function registerPublicRoutes(app: Hono) {
       c.req.path.slice(`${prefix}/thumbs/`.length),
       storedResponseRequest(c)
     ));
-    app.get(`${prefix}/link/original/:id`, async (c) => servePublicExternalOriginal(
+    app.get(`${prefix}/link/:id`, async (c) => servePublicExternalOriginal(
       parse(uuidInput, c.req.param("id")),
       {
         userAgent: c.req.header("user-agent") ?? "",

@@ -63,7 +63,7 @@ generation 引用的对象、缺失原图、已消失候选和未完整列举均
 真实目录。`device`、`brightness`、`theme`、作者和标签只存在于 PostgreSQL metadata，修改它们
 时正式对象键、对象内容、存储后端与 `move.cleanup` 保持不变；显式自动亮度检测会读取现有
 缩略图。`full` 表示站点标准化后的完整展示图；
-另行登记的外部原图仍由 `metadata.original` 与 `/link/original/<id>` 表示，`_uploads` 仍只保存
+另行登记的外部原图仍由 `metadata.original` 与 `/link/<id>` 表示，`_uploads` 仍只保存
 内容接入期间的 processed image 和 prepared thumbnail。
 
 生成 staging 时，Upload / Import 共用一个由 `normalize.concurrency=N` 派生的进程级 preparation

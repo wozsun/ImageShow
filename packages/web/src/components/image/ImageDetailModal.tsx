@@ -205,7 +205,7 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
   const originalHref = adminListItem?.deleted_at
     ? `/api/admin/images/${encodeURIComponent(item.id)}/original`
     : siteConfig?.site.static_url
-      ? `${siteConfig.site.static_url}/link/original/${encodeURIComponent(item.id)}`
+      ? `${siteConfig.site.static_url}/link/${encodeURIComponent(item.id)}`
       : undefined;
   const canOpenOriginal = hasRegisteredOriginal && Boolean(originalHref);
   const showOriginalAction = showAdminDetails

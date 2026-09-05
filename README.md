@@ -75,6 +75,8 @@ Node.js 26 / Hono、React 19、PostgreSQL、Redis 8 和 Docker 构成。
   实际所属 status 提取账号 UID，批次结束后一次查询 PostgreSQL 作者身份，为命中项填入作者草稿，
   再进入同一后继窗口。作者身份只由管理员保存的主页链接派生，不在 RuntimeConfig 或 Redis 维护
   第二份映射。
+  首次打开上传或导入会等待存储选项就绪；解析后自动导入采用提交时的存储选择和默认属性。
+  外部原图统一通过当前资源根下的 `/link/<id>` 访问。
   `import.keep_original_link` 可分别决定 URL、JSONL 与微博导入是否把下载 URL 保留为公开原图链接，
   `weibo.source_enabled` 独立决定新解析的微博图片是否填写帖子来源页；两项都不影响素材下载与入库。
   Upload、Import 与直接 API 共用 `ingestion.*` 的原图体积、长边和队列分页边界，页面预检不替代

@@ -111,16 +111,11 @@ export function Ingestion({
   const weiboMaxItems = settings.weibo.max_items;
   const { data: storageData } = useStorageOptions();
   const storageBackends = useMemo(() => storageData?.backends ?? [], [storageData?.backends]);
-  const defaultBackend = storageBackends.find((backend) => backend.is_default)?.slug ?? "local";
+  const defaultBackend = storageBackends.find((backend) => backend.is_default)?.slug ?? "";
   const [backendChoice, setBackendChoice] = useState("");
   const activeBackend = backendChoice || defaultBackend;
   const backendOptions = useMemo(
-    () => (storageBackends.length ? storageBackends : [{
-      slug: "local",
-      display_name: storageBackendLabel("local"),
-      enabled: true,
-      is_default: true
-    }])
+    () => storageBackends
       .filter((backend) => backend.enabled)
       .map((backend) => ({ value: backend.slug, label: backend.display_name || storageBackendLabel(backend.slug) })),
     [storageBackends]

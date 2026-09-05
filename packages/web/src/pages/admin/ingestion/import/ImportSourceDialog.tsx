@@ -1,6 +1,7 @@
 import {
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -62,6 +63,11 @@ export function ImportSourceDialog({
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const requestControllerRef = useRef<AbortController | null>(null);
   const submittedRef = useRef(false);
+  const onSubmitRef = useRef(onSubmit);
+  useLayoutEffect(() => {
+    // 解析期间存储查询可能更新；提交必须使用最新已提交渲染的默认值。
+    onSubmitRef.current = onSubmit;
+  }, [onSubmit]);
   const [text, setText] = useState("");
   const [mode, setMode] = useState<ImportSourceMode>(initialMode);
   const [parsedResult, setParsedResult] =
@@ -149,7 +155,7 @@ export function ImportSourceDialog({
   ) => {
     if (submittedRef.current) return;
     submittedRef.current = true;
-    onSubmit(submission);
+    onSubmitRef.current(submission);
     requestClose();
   };
 

@@ -131,7 +131,7 @@ Content-Type 与缓存验证器会被省略或回退为站内类型；`Content-R
 | 随机 proxy / redirect / JSON | 永远 `no-store` | proxy 不声明 Range；302 的 `Location` 先校验；前两种模式带 `X-Image-Info`，JSON 只返回公开字段与实际 `count`，HEAD 不发送正文 |
 | 外链原图 proxy / redirect | 当前资源根下唯一公开入口的 direct 302 使用 `private, no-store`；proxy 继承已校验源站策略或使用 fallback，URL 命名空间弱 ETag、Last-Modified 与 304；后台 `private, no-store` | 单次公开图片解析、HTTPS 安全抓取、GET 内容嗅探、HEAD 不保留正文、验证结果严格绑定请求 URL、`Referrer-Policy: no-referrer` |
 | Ingestion SSE | `no-store, no-transform` | 每个已显示的 owner + queue 使用一个固定 GET 路径；不压缩、不缓冲，30 秒串行鉴权 heartbeat，断开即清理 listener / scope |
-| 资源出口与未知 Host | 默认主站 `/static`，或非空配置的独立资源子域；仅开放对应资源根下的 `/full/*`、`/thumbs/*`、`/link/original/<id>`；独立子域另可开放 `/robots.txt`；失败 `no-store` | 两种模式互斥，主站根级资源路径与未知 Host 返回完整安全头的 404；同源资源不读会话、不写 Cookie，不按 Cookie 改变缓存 |
+| 资源出口与未知 Host | 默认主站 `/static`，或非空配置的独立资源子域；仅开放对应资源根下的 `/full/*`、`/thumbs/*`、`/link/<id>`；独立子域另可开放 `/robots.txt`；失败 `no-store` | 两种模式互斥，主站根级资源路径与未知 Host 返回完整安全头的 404；同源资源不读会话、不写 Cookie，不按 Cookie 改变缓存 |
 
 确定性管理只读 JSON 包括偏好、管理员列表、存储选项 / 后端，以及已有的设置、
 词表、图片列表与管理详情；写后仍由各领域精确失效查询，内容未变化的再次读取返回 304。
