@@ -133,11 +133,13 @@ export type PreparedStoredImage = {
   transcoded: boolean;
 };
 
-export async function transcodeStoredImage(path: string, settings: StoredImageTranscodeSettings): Promise<PreparedStoredImage> {
+export async function transcodeStoredImage(path: string, settings: StoredImageTranscodeSettings, signal?: AbortSignal): Promise<PreparedStoredImage> {
+  signal?.throwIfAborted();
   const [sourceSize, source] = await Promise.all([
     stat(path).then((value) => value.size),
     storedImageMetadata(path)
   ]);
+  signal?.throwIfAborted();
   // 小体积 WebP 且尺寸已达标时保留原字节，避免重复有损编码；缩略图仍重新生成，保证尺寸与配置一致。
   const canSkip = source.ext === "webp"
     && sourceSize < settings.skip_webp_under_kb * 1024
@@ -152,7 +154,7 @@ export async function transcodeStoredImage(path: string, settings: StoredImageTr
         quality: null as number | null,
         transcoded: false
       }))
-    : transcodeImageToWebp(path, settings).then(({ data, info, quality }) => ({
+    : transcodeImageToWebp(path, settings, signal).then(({ data, info, quality }) => ({
         buffer: data,
         width: info.width,
         height: info.height,
@@ -164,6 +166,7 @@ export async function transcodeStoredImage(path: string, settings: StoredImageTr
     thumbnailPromise,
     convertedPromise
   ]);
+  signal?.throwIfAborted();
   if (thumbnailResult.status === "rejected") {
     normalizeSharpInputError(thumbnailResult.reason);
   }
@@ -188,7 +191,8 @@ export async function transcodeStoredImage(path: string, settings: StoredImageTr
   };
 }
 
-async function transcodeImageToWebp(input: ImageInput, settings: ImageTranscodeSettings) {
+async function transcodeImageToWebp(input: ImageInput, settings: ImageTranscodeSettings, signal?: AbortSignal) {
+  signal?.throwIfAborted();
   const pipeline = sharp(input)
     .rotate()
     .resize({
@@ -200,10 +204,14 @@ async function transcodeImageToWebp(input: ImageInput, settings: ImageTranscodeS
   const maxBytes = Math.floor(settings.max_size_kb * 1024);
   let quality = settings.quality;
   let lastDropMultiplier = 1;
-  const encode = (targetQuality: number) => pipeline
-    .clone()
-    .webp({ quality: targetQuality })
-    .toBuffer({ resolveWithObject: true });
+  const encode = async (targetQuality: number) => {
+    signal?.throwIfAborted();
+    const encoded = await pipeline.clone()
+      .webp({ quality: targetQuality })
+      .toBuffer({ resolveWithObject: true });
+    signal?.throwIfAborted();
+    return encoded;
+  };
   const backfillQuality = async (
     encoded: Awaited<ReturnType<typeof encode>>,
     successfulQuality: number,

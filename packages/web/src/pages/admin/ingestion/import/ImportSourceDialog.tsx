@@ -57,6 +57,7 @@ export function ImportSourceDialog({
   returnFocusRef?: RefObject<HTMLElement | null>;
 }) {
   const inputId = useId();
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const importCardRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const requestControllerRef = useRef<AbortController | null>(null);
@@ -104,15 +105,16 @@ export function ImportSourceDialog({
     resetParsedResult();
   };
 
-  const changeMode = (nextMode: ImportSourceMode) => {
+  const changeMode = (nextMode: ImportSourceMode, focusInput = true) => {
+    if (parseAction.pending) return;
     if (nextMode === mode) {
-      inputRef.current?.focus();
+      if (focusInput) inputRef.current?.focus();
       return;
     }
     setMode(nextMode);
     setText("");
     resetParsedResult();
-    inputRef.current?.focus();
+    if (focusInput) inputRef.current?.focus();
   };
 
   const parseInput = async () => {
@@ -251,11 +253,24 @@ export function ImportSourceDialog({
               role="tablist"
               aria-label="输入模式"
             >
-              {importSourceModes.map((value) => (
+              {importSourceModes.map((value, index) => (
                 <button
                   key={value}
                   type="button"
                   role="tab"
+                  id={`${inputId}-tab-${value}`}
+                  ref={(element) => { tabRefs.current[index] = element; }}
+                  tabIndex={mode === value ? 0 : -1}
+                  aria-controls={`${inputId}-panel`}
+                  onKeyDown={(event) => {
+                    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+                    event.preventDefault();
+                    if (parseAction.pending) return;
+                    const next = event.key === "Home" ? 0 : event.key === "End" ? 2
+                      : (index + (event.key === "ArrowRight" ? 1 : 2)) % 3;
+                    changeMode(importSourceModes[next], false);
+                    tabRefs.current[next]?.focus();
+                  }}
                   disabled={parseAction.pending}
                   aria-selected={mode === value}
                   className={mode === value ? "is-active" : ""}
@@ -265,61 +280,70 @@ export function ImportSourceDialog({
                 </button>
               ))}
             </div>
-            <p className="hint import-source-hint">
-              {adapter.hint(limitState.maxItems)}
-            </p>
             <div
-              className={`import-source-input-region${parsedResult ? " has-result-summary" : ""}`}
+              className="import-source-panel"
+              role="tabpanel"
+              id={`${inputId}-panel`}
+              aria-labelledby={`${inputId}-tab-${mode}`}
             >
-              <textarea
-                ref={inputRef}
-                id={inputId}
-                className="import-source-textarea"
-                value={text}
-                disabled={parseAction.pending}
-                onChange={(event) => changeText(event.target.value)}
-                placeholder={adapter.presentation.placeholder}
-                rows={importSourceTextareaRows}
-              />
-              {mobileLayout && parsedResult && (
-                <ImportSourceResultSummary result={parsedResult} />
-              )}
-            </div>
-            {(parseError || limitState.overLimit) && (
-              <p
-                className="form-error"
-                role="alert"
-                title={parseError || undefined}
-              >
-                {parseError || (
-                  `已输入 ${limitState.count} 条，最多允许 ${limitState.maxItems} 条，请拆分后再导入`
-                )}
+              <p className="hint import-source-hint" id={`${inputId}-hint`}>
+                {adapter.hint(limitState.maxItems)}
               </p>
-            )}
-            {parsedResult && (
-              <ImportSourceResultPanel result={parsedResult} />
-            )}
-            <div className="import-source-actions">
-              {!mobileLayout && parsedResult && (
-                <ImportSourceResultSummary result={parsedResult} />
-              )}
-              <div className="import-source-action-buttons">
-                <button type="button" onClick={() => requestClose()}>
-                  取消
-                </button>
-                <AsyncActionButton
-                  type="button"
-                  className="button import-source-submit-button"
-                  status={parseAction.status}
-                  presentation={actionPresentation}
-                  disabled={
-                    parseAction.pending
-                    || limitState.overLimit
-                    || !adapter.hasInput(text)
-                    || parsedWithoutItems
-                  }
-                  onClick={() => void submit(requestClose)}
+              <div
+                className={`import-source-input-region${parsedResult ? " has-result-summary" : ""}`}
+              >
+                <textarea
+                  ref={inputRef}
+                  id={inputId}
+                  aria-labelledby={`${inputId}-tab-${mode}`}
+                  aria-describedby={`${inputId}-hint`}
+                  className="import-source-textarea"
+                  value={text}
+                  disabled={parseAction.pending}
+                  onChange={(event) => changeText(event.target.value)}
+                  placeholder={adapter.presentation.placeholder}
+                  rows={importSourceTextareaRows}
                 />
+                {mobileLayout && parsedResult && (
+                  <ImportSourceResultSummary result={parsedResult} />
+                )}
+              </div>
+              {(parseError || limitState.overLimit) && (
+                <p
+                  className="form-error"
+                  role="alert"
+                  title={parseError || undefined}
+                >
+                  {parseError || (
+                    `已输入 ${limitState.count} 条，最多允许 ${limitState.maxItems} 条，请拆分后再导入`
+                  )}
+                </p>
+              )}
+              {parsedResult && (
+                <ImportSourceResultPanel result={parsedResult} />
+              )}
+              <div className="import-source-actions">
+                {!mobileLayout && parsedResult && (
+                  <ImportSourceResultSummary result={parsedResult} />
+                )}
+                <div className="import-source-action-buttons">
+                  <button type="button" onClick={() => requestClose()}>
+                    取消
+                  </button>
+                  <AsyncActionButton
+                    type="button"
+                    className="button import-source-submit-button"
+                    status={parseAction.status}
+                    presentation={actionPresentation}
+                    disabled={
+                      parseAction.pending
+                      || limitState.overLimit
+                      || !adapter.hasInput(text)
+                      || parsedWithoutItems
+                    }
+                    onClick={() => void submit(requestClose)}
+                  />
+                </div>
               </div>
             </div>
           </div>

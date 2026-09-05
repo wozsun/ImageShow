@@ -97,6 +97,7 @@ function VocabularyAdminContent({ kind, settings }: {
   // 删除还会清除关联图片上的该属性，故一并失效后台图片列表，与 ImageAdmin.refresh 的失效集对齐。
   const refresh = () => invalidateImageData(client);
   const acceptAuthorItem = async (item: AuthorDto) => {
+    await client.cancelQueries({ queryKey, exact: true });
     client.setQueryData<AdminEntityListResponseDto<VocabularyEntry>>(queryKey, (current) => {
       if (!current) return current;
       const existingIndex = current.items.findIndex(

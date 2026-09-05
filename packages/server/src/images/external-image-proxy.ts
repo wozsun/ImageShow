@@ -23,6 +23,7 @@ type ProxyFallback = () => Response | Promise<Response>;
 
 export type ExternalProxyRequest = {
   method: "GET" | "HEAD";
+  signal?: AbortSignal;
   validators?: {
     ifNoneMatch?: string;
     ifModifiedSince?: string;
@@ -47,14 +48,18 @@ export async function proxyExternalImage(
   fallbackCacheControl?: string,
   fallback?: ProxyFallback
 ): Promise<Response> {
-  const redirectFallback = async () => fallback ? fallback() : new Response(null, {
-    status: 302,
-    headers: {
-      ...baseHeaders,
-      Location: safeResponseHeaderValue("Location", externalUrl),
-      "Referrer-Policy": "no-referrer"
-    }
-  });
+  request.signal?.throwIfAborted();
+  const redirectFallback = async () => {
+    request.signal?.throwIfAborted();
+    return fallback ? fallback() : new Response(null, {
+      status: 302,
+      headers: {
+        ...baseHeaders,
+        Location: safeResponseHeaderValue("Location", externalUrl),
+        "Referrer-Policy": "no-referrer"
+      }
+    });
+  };
 
   let origin: string;
   try {
@@ -98,6 +103,7 @@ export async function proxyExternalImage(
       externalUrl,
       {
         method,
+        signal: request.signal,
         timeoutMs: externalImageProxyTimeoutMs,
         headers: requestHeaders,
         imageValidation: method === "HEAD" ? "none" : "sniff"
@@ -159,6 +165,7 @@ export async function proxyExternalImage(
     }
     return new Response(upstream.body, { status: upstream.status, headers });
   } catch (error) {
+    request.signal?.throwIfAborted();
     if (isExternalImageRejection(error)) {
       if (fallback) return fallback();
       throw error;

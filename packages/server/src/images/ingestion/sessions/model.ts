@@ -186,7 +186,7 @@ export type UploadIntentSnapshot = Readonly<{
   claim_heartbeat_at: number;
 }>;
 
-export type IngestionQueueSummary = Readonly<{
+type IngestionQueueSummary = Readonly<{
   total: number;
   unfinished: number;
   waiting: number;

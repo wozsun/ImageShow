@@ -170,7 +170,8 @@ export async function prepareIngestionSessionSnapshot(
             runtime.normalize.max_long_edge,
             getIngestionMaxLongEdge()
           )
-        }
+        },
+        signal
       );
       signal.throwIfAborted();
       current = await currentPreparingSession(repository, current);

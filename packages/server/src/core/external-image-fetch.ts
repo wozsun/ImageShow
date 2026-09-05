@@ -139,7 +139,7 @@ function imageMimeFromExt(ext?: string) {
   return normalized && ["jpeg", "png", "webp", "gif", "avif"].includes(normalized) ? `image/${normalized}` : "";
 }
 
-async function responseWithSniffedImageBody(response: Response) {
+async function responseWithSniffedImageBody(response: Response, signal?: AbortSignal) {
   if (!response.body) throw externalImageRejected("empty_image_response");
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
@@ -156,6 +156,7 @@ async function responseWithSniffedImageBody(response: Response) {
       detectedMime = imageMimeFromExt(detected?.ext);
       if (detectedMime) break;
     }
+    signal?.throwIfAborted();
     if (!detectedMime) throw externalImageRejected("unsupported_image_body");
   } catch (error) {
     await reader.cancel().catch(() => undefined);
@@ -196,6 +197,7 @@ function abortError(signal?: AbortSignal) {
 }
 
 async function fetchWithTimeout(url: URL, options: SafeExternalImageFetchOptions) {
+  if (options.signal?.aborted) throw abortError(options.signal);
   assertTlsCertificateVerificationEnabled();
   const controller = new AbortController();
   const abort = () => controller.abort();
@@ -221,10 +223,14 @@ async function fetchWithTimeout(url: URL, options: SafeExternalImageFetchOptions
       signal: controller.signal,
       dispatcher: externalImageDispatcher
     } as RequestInit & { dispatcher: Agent });
+    if (controller.signal.aborted) {
+      await response.body?.cancel().catch(() => undefined);
+      throw abortError(options.signal);
+    }
     handedOff = Boolean(response.body);
     return responseWithCleanup(response, cleanup);
   } catch (error) {
-    if ((error as Error).name === "AbortError") throw abortError(options.signal);
+    if (controller.signal.aborted) throw abortError(options.signal);
     if (hasErrorCode(error, externalImageLookupErrorCode)) {
       throw externalImageRejected("blocked_resolved_address", urlLogContext(url));
     }
@@ -238,6 +244,7 @@ async function fetchWithTimeout(url: URL, options: SafeExternalImageFetchOptions
 export async function safeFetchExternalImage(input: string, options: SafeExternalImageFetchOptions): Promise<Response> {
   let current = input;
   for (let redirects = 0; redirects <= maxExternalRedirects; redirects += 1) {
+    if (options.signal?.aborted) throw abortError(options.signal);
     const url = await validateExternalImageUrl(current);
     const response = await fetchWithTimeout(url, options);
     if (isRedirect(response.status)) {
@@ -256,10 +263,10 @@ export async function safeFetchExternalImage(input: string, options: SafeExterna
         await response.body?.cancel().catch(() => undefined);
         throw externalImageRejected("unsupported_image_header", urlLogContext(url));
       }
-      if (validation === "sniff" && options.method !== "HEAD") return responseWithSniffedImageBody(response);
+      if (validation === "sniff" && options.method !== "HEAD") return await responseWithSniffedImageBody(response, options.signal);
       return response;
     } catch (error) {
-      if ((error as Error).name === "AbortError") throw abortError(options.signal);
+      if (options.signal?.aborted || (error as Error).name === "AbortError") throw abortError(options.signal);
       throw error;
     }
   }

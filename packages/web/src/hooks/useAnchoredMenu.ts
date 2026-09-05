@@ -58,6 +58,7 @@ export function useAnchoredMenu(options: {
   onClose?: () => void;
   closeOnEscape?: boolean;
   closeOnFocusOutside?: boolean;
+  restoreFocusOnEscape?: () => boolean;
   animateClose?: boolean;
   focusOnOpen?: () => HTMLElement | null | undefined;
   focusAfterClose?: () => HTMLElement | null | undefined;
@@ -85,6 +86,7 @@ export function useAnchoredMenu(options: {
   const focusOnOpenRef = useRef(options.focusOnOpen); focusOnOpenRef.current = options.focusOnOpen;
   const focusAfterCloseRef = useRef(options.focusAfterClose); focusAfterCloseRef.current = options.focusAfterClose;
   const restoreFocusAfterCloseRef = useRef(false);
+  const restoreFocusOnEscapeRef = useRef(options.restoreFocusOnEscape); restoreFocusOnEscapeRef.current = options.restoreFocusOnEscape;
 
   // RefObject.current 的变化不会触发 effect。用稳定的 callback ref 同时保存
   // 当前节点并触发一次渲染，让条件渲染的菜单首次挂载时也能进入测量与观察流程。
@@ -228,7 +230,8 @@ export function useAnchoredMenu(options: {
       onKeyDown = (event) => {
         if (event.key !== "Escape") return;
         event.preventDefault();
-        requestCloseAndRestoreFocus();
+        if (restoreFocusOnEscapeRef.current?.() ?? true) requestCloseAndRestoreFocus();
+        else requestClose();
       };
       document.addEventListener("keydown", onKeyDown);
     }
@@ -263,10 +266,10 @@ export function useAnchoredMenu(options: {
   }, [open, menuNode, updatePosition, requestClose, requestCloseAndRestoreFocus, triggerRef, closeOnEscape, closeOnFocusOutside]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || closing) return;
     const frame = window.requestAnimationFrame(() => focusOnOpenRef.current?.()?.focus());
     return () => window.cancelAnimationFrame(frame);
-  }, [open]);
+  }, [open, closing]);
 
   useEffect(() => {
     if (disabled && open) requestClose();

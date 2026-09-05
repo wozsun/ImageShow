@@ -1,6 +1,7 @@
 import type { Query, QueryClient } from "@tanstack/react-query";
 import type {
   AdminImageListItemDto,
+  AdminSettingsResponseDto,
   EditableImageSnapshotDto,
   ImageUpdateItemInputDto,
   IngestionVocabularyDto
@@ -141,22 +142,36 @@ export function invalidateImageDataAfterMetadataSave(
       ...(changesTags ? [queryKeys.tags] : []),
       ...(changesAuthor ? [queryKeys.authors] : [])
     ]),
+    ...(changesFacetVocabulary ? [invalidateIngestionVocabulary(client, updates)] : []),
     ...exactInvalidations
   ]);
 }
 
-function importedVocabularyChanged(
-  vocabulary: IngestionVocabularyDto,
-  items: readonly AdminImageListItemDto[]
+async function invalidateIngestionVocabulary(
+  client: QueryClient,
+  items: readonly Partial<Pick<AdminImageListItemDto, "theme" | "author" | "tags">>[]
 ) {
-  const themes = new Set(vocabulary.themes.map(({ slug }) => slug));
-  const tags = new Set(vocabulary.tags.map(({ slug }) => slug));
-  const authors = new Set(vocabulary.authors.map(({ slug }) => slug));
-  return items.some((item) => (
-    !themes.has(item.theme)
-    || (item.author !== "" && !authors.has(item.author))
-    || item.tags.some((tag) => !tags.has(tag))
-  ));
+  const query = client.getQueryState<IngestionVocabularyDto>(
+    queryKeys.ingestionVocabulary
+  );
+  if (!query) return;
+  const vocabulary = query.data;
+  if (vocabulary) {
+    const themes = new Set(vocabulary.themes.map(({ slug }) => slug));
+    const tags = new Set(vocabulary.tags.map(({ slug }) => slug));
+    const authors = new Set(vocabulary.authors.map(({ slug }) => slug));
+    const changed = items.some((item) => (
+      (item.theme !== undefined && !themes.has(item.theme))
+      || (item.author !== undefined && item.author !== "" && !authors.has(item.author))
+      || item.tags?.some((tag) => !tags.has(tag))
+    ));
+    if (!changed) return;
+  } else if (query.fetchStatus !== "idle") {
+    // TanStack reuses an in-flight initial fetch even when invalidated. Retire
+    // that older snapshot so it cannot cache a vocabulary from before commit.
+    await client.cancelQueries({ queryKey: queryKeys.ingestionVocabulary, exact: true });
+  }
+  return client.invalidateQueries({ queryKey: queryKeys.ingestionVocabulary });
 }
 
 export function invalidateImageDataAfterIngestion(
@@ -164,12 +179,6 @@ export function invalidateImageDataAfterIngestion(
   items: readonly AdminImageListItemDto[],
   options: Readonly<{ completedAt?: number }> = {}
 ) {
-  const vocabulary = client.getQueryData<IngestionVocabularyDto>(
-    queryKeys.ingestionVocabulary
-  );
-  const vocabularyQueryExists = Boolean(
-    client.getQueryState(queryKeys.ingestionVocabulary)
-  );
   const hasTags = items.some((item) => item.tags.length > 0);
   const hasAuthors = items.some((item) => item.author !== "");
   const completedAt = options.completedAt;
@@ -211,11 +220,9 @@ export function invalidateImageDataAfterIngestion(
       queryKeys.overview,
       queryKeys.themes,
       ...(hasTags ? [queryKeys.tags] : []),
-      ...(hasAuthors ? [queryKeys.authors] : []),
-      ...(vocabularyQueryExists && (
-        !vocabulary || importedVocabularyChanged(vocabulary, items)
-      ) ? [queryKeys.ingestionVocabulary] : [])
+      ...(hasAuthors ? [queryKeys.authors] : [])
     ]),
+    invalidateIngestionVocabulary(client, items),
     invalidateAdminImages()
   ]);
 }
@@ -258,9 +265,13 @@ export function invalidateStorageData(client: QueryClient) {
   ]);
 }
 
-export function invalidateRuntimeData(client: QueryClient) {
+export function invalidateRuntimeData(
+  client: QueryClient,
+  settings?: AdminSettingsResponseDto
+) {
+  if (settings) client.setQueryData(queryKeys.settings, settings);
   return invalidate(client, [
-    queryKeys.settings,
+    ...(settings ? [] : [queryKeys.settings]),
     queryKeys.siteConfig,
     queryKeys.me,
     queryKeys.storageBackends,

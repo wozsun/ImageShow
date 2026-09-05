@@ -1,4 +1,4 @@
-import { useRef, useState, type DragEvent } from "react";
+import { useLayoutEffect, useRef, useState, type DragEvent } from "react";
 import type {
   AdminEntityDto,
   AuthorDto,
@@ -39,13 +39,28 @@ export function VocabularyAdminCard({ kind, item, onChanged, onDelete, onError, 
   const derivedIdentity = isAuthor && "derived_identity" in item
     ? item.derived_identity as AuthorDto["derived_identity"]
     : null;
-  const [display, setDisplay] = useState(item.display_name);
-  const [link, setLink] = useState(item.link ?? "");
+  const [form, setForm] = useState(() => ({
+    kind, slug: item.slug,
+    display: item.display_name, link: item.link ?? "",
+    savedDisplay: item.display_name, savedLink: item.link ?? ""
+  }));
+  const { display, link } = form;
+  useLayoutEffect(() => {
+    setForm((current) => {
+      const replaced = current.kind !== kind || current.slug !== item.slug;
+      return {
+        kind, slug: item.slug,
+        display: replaced || current.display === current.savedDisplay ? item.display_name : current.display,
+        link: replaced || current.link === current.savedLink ? item.link ?? "" : current.link,
+        savedDisplay: item.display_name, savedLink: item.link ?? ""
+      };
+    });
+  }, [item.display_name, item.link, item.slug, kind]);
   const saveStatus = useAsyncActionStatus();
 
   const cardRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
-  const dirty = display !== item.display_name || (isAuthor && link.trim() !== (item.link ?? ""));
+  const dirty = display !== form.savedDisplay || (isAuthor && link !== form.savedLink);
   const cardBusy = saveStatus.pending || reorderBusy;
   const savePresentation = {
     idle: { icon: "save-3-line", label: "保存" },
@@ -54,6 +69,11 @@ export function VocabularyAdminCard({ kind, item, onChanged, onDelete, onError, 
     error: { icon: "close-line", label: "保存失败" }
   } as const;
 
+  const acceptSaved = (savedDisplay: string, savedLink: string) => {
+    setForm((current) => current.kind === kind && current.slug === item.slug
+      ? { ...current, display: savedDisplay, link: savedLink, savedDisplay, savedLink }
+      : current);
+  };
   const save = async () => {
     await saveStatus.run(async () => {
       try {
@@ -68,10 +88,11 @@ export function VocabularyAdminCard({ kind, item, onChanged, onDelete, onError, 
           }
         );
         if (isAuthor && "item" in response) {
-          setDisplay(response.item.display_name);
-          setLink(response.item.link);
+          acceptSaved(response.item.display_name, response.item.link);
           await onChanged(response.item);
         } else {
+          // Theme/tag writes persist the trimmed display name unchanged.
+          acceptSaved(body.display_name, "");
           await onChanged();
         }
         return true;
@@ -116,7 +137,7 @@ export function VocabularyAdminCard({ kind, item, onChanged, onDelete, onError, 
             <input
               className="entity-display-input"
               value={display}
-              onChange={(event) => setDisplay(event.target.value)}
+              onChange={(event) => setForm({ ...form, display: event.target.value })}
               placeholder="显示名"
               disabled={cardBusy}
               maxLength={64}
@@ -128,7 +149,7 @@ export function VocabularyAdminCard({ kind, item, onChanged, onDelete, onError, 
           <input
             className="entity-link-input"
             value={link}
-            onChange={(event) => setLink(event.target.value)}
+            onChange={(event) => setForm({ ...form, link: event.target.value })}
             placeholder="作者主页链接（HTTPS，可选）"
             disabled={cardBusy}
             maxLength={2048}

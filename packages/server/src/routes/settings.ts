@@ -27,12 +27,12 @@ export function registerSettingsRoutes(app: Hono) {
   app.post(`${adminApiBasePath}/settings`, requireSuperAdmin, async (c) => {
     const input = parseSettingsInput(await readJsonBody(c));
     await saveAppSettings(input);
-    return c.json(apiSuccess());
+    return c.json(apiSuccess({ settings: getSettingsForAdmin() } satisfies AdminSettingsResponseDto));
   });
 
   app.post(`${adminApiBasePath}/settings/reload`, requireSuperAdmin, async (c) => {
     await reloadRuntimeConfigFromDisk();
-    return c.json(apiSuccess());
+    return c.json(apiSuccess({ settings: getSettingsForAdmin() } satisfies AdminSettingsResponseDto));
   });
 
 }

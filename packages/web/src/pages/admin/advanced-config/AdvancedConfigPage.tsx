@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { AdvancedConfigPreviewResponseDto } from "@imageshow/shared/browser";
-import { api } from "../../../lib/api/client.js";
+import { api, apiResponse } from "../../../lib/api/client.js";
 import { adminApiBasePath } from "../../../lib/constants.js";
 import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
 import type { AdvancedConfigPreview } from "../../../lib/types.js";
@@ -43,23 +43,20 @@ export function AdvancedConfigPage() {
   const downloadPackage = async (): Promise<boolean> => {
     setBusy("export");
     try {
-      const response = await fetch(`${adminApiBasePath}/advanced-config/export`, {
-        credentials: "same-origin"
-      });
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({})) as { error?: string };
-        throw new Error(body.error || `HTTP ${response.status}`);
-      }
+      const response = await apiResponse(`${adminApiBasePath}/advanced-config/export`);
       const disposition = response.headers.get("Content-Disposition") ?? "";
       const filename = /filename="?([^";]+)"?/i.exec(disposition)?.[1] ?? "imageshow-config.json";
       const objectUrl = URL.createObjectURL(await response.blob());
       const anchor = document.createElement("a");
-      anchor.href = objectUrl;
-      anchor.download = filename;
-      document.body.append(anchor);
-      anchor.click();
-      anchor.remove();
-      URL.revokeObjectURL(objectUrl);
+      try {
+        anchor.href = objectUrl;
+        anchor.download = filename;
+        document.body.append(anchor);
+        anchor.click();
+      } finally {
+        anchor.remove();
+        URL.revokeObjectURL(objectUrl);
+      }
       return true;
     } catch (error) {
       reportAdminUiError("advanced_config.package_export", error);

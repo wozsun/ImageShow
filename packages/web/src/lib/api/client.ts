@@ -55,17 +55,25 @@ async function fetchApi(path: string, init: RequestInit = {}) {
 }
 
 async function parseApiResponse<T>(response: Response): Promise<T> {
+  if (response.status === 204) return {} as T;
   const body = await response.text();
-  let data: Record<string, unknown> = {};
-  if (body) {
-    try {
-      data = JSON.parse(body) as Record<string, unknown>;
-    } catch {
-      // 非 JSON 错误由统一 HTTP fallback 展示，不泄露代理层 HTML 响应。
+  let data: unknown = {};
+  try {
+    data = JSON.parse(body);
+  } catch {
+    if (response.ok) {
+      throw new ApiClientError(
+        "服务器响应不是有效的 JSON",
+        response.status,
+        "invalid_json_response"
+      );
     }
+    // 非 JSON 错误由统一 HTTP fallback 展示，不泄露代理层 HTML 响应。
   }
-  if (!response.ok || data.ok === false) {
-    const failure = data as Partial<ApiErrorResponseDto>;
+  const failure = data !== null && typeof data === "object"
+    ? data as Partial<ApiErrorResponseDto>
+    : {};
+  if (!response.ok || failure.ok === false) {
     throw new ApiClientError(
       typeof failure.error === "string"
         ? failure.error
@@ -80,6 +88,12 @@ async function parseApiResponse<T>(response: Response): Promise<T> {
 
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   return parseApiResponse<T>(await fetchApi(path, init));
+}
+
+export async function apiResponse(path: string, init: RequestInit = {}) {
+  const response = await fetchApi(path, init);
+  if (!response.ok) await parseApiResponse<never>(response);
+  return response;
 }
 
 export async function apiWithEtag<T>(

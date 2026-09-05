@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   randomDefaultMethods,
   siteRoots,
+  type AdminSettingsResponseDto,
   type RandomDefaultMethod,
   type SiteRoot
 } from "@imageshow/shared/browser";
@@ -21,6 +23,7 @@ import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.js";
 import "../../styles/admin/settings.css";
 import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
 import { invalidateRuntimeData } from "../../lib/api/query-invalidation.js";
+import { queryKeys } from "../../lib/api/query-keys.js";
 
 const reloadConfigPresentation = {
   idle: { icon: "refresh-line", label: "读取配置文件" },
@@ -65,55 +68,77 @@ export function SettingsPage() {
 
 function SettingsPageContent({ serverSettings }: { serverSettings: AdminSettings }) {
   const client = useQueryClient();
-  const [settings, setSettings] = useState(serverSettings);
+  const [draft, setDraft] = useState<AdminSettings | null>(null);
+  const settings = draft ?? serverSettings;
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
+  const [actionError, setActionError] = useState("");
+  const actionRef = useRef<AbortController | null>(null);
   const reloadConfigStatus = useAsyncActionStatus();
   const saveSettingsStatus = useAsyncActionStatus();
   const scrollRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    setSettings(serverSettings);
-  }, [serverSettings]);
-  const saveApplication = async () => {
-    if (reloadConfigStatus.pending || saveSettingsStatus.pending) return;
-    await saveSettingsStatus.run(async () => {
+  const busy = reloadConfigStatus.pending || saveSettingsStatus.pending;
+  useEffect(() => () => actionRef.current?.abort(), []);
+  const runSettingsAction = async (reload: boolean) => {
+    if (busy || actionRef.current) return;
+    // NumberInput publishes its edit on blur. Settle it before freezing the
+    // request, including activations that do not move browser focus first.
+    flushSync(() => {
+      const focused = document.activeElement;
+      if (focused instanceof HTMLElement && scrollRef.current?.contains(focused)) focused.blur();
+    });
+    const submitted = settingsRef.current;
+    const controller = new AbortController();
+    actionRef.current = controller;
+    const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(15_000)]);
+    setActionError("");
+    const status = reload ? reloadConfigStatus : saveSettingsStatus;
+    await status.run(async () => {
       try {
-        await api(`${adminApiBasePath}/settings`, {
+        const response = await api<AdminSettingsResponseDto>(
+          `${adminApiBasePath}/settings${reload ? "/reload" : ""}`, {
           method: "POST",
-          body: JSON.stringify({
-            site: settings.site,
+          signal,
+          body: reload ? undefined : JSON.stringify({
+            site: submitted.site,
             ingestion: {
-              list_page_size: settings.ingestion.list_page_size,
-              commit_concurrency: settings.ingestion.commit_concurrency
+              list_page_size: submitted.ingestion.list_page_size,
+              commit_concurrency: submitted.ingestion.commit_concurrency
             },
             upload: {
-              browser_concurrency: settings.upload.browser_concurrency
+              browser_concurrency: submitted.upload.browser_concurrency
             },
-            normalize: settings.normalize,
-            thumbnail: settings.thumbnail,
-            admin: settings.admin
+            normalize: submitted.normalize,
+            thumbnail: submitted.thumbnail,
+            admin: submitted.admin
           })
         });
-        // 统一失效已包含 settings 和 site-config；活动查询会在这里完成一次刷新，避免先
-        // refetch settings、随后又因 invalidate 重复请求。
-        await invalidateRuntimeData(client);
+        signal.throwIfAborted();
+        await client.cancelQueries({ queryKey: queryKeys.settings, exact: true });
+        signal.throwIfAborted();
+        // The mutation response is the normalized settings snapshot. Refresh
+        // other projections without holding the form lock on their requests.
+        void invalidateRuntimeData(client, response).catch((error) => {
+          reportAdminUiError("settings.refresh", error);
+        });
+        setDraft(null);
         return true;
       } catch (error) {
-        reportAdminUiError("settings.save", error);
+        if (controller.signal.aborted) return false;
+        if (signal.aborted) {
+          setActionError("请求超时，草稿已保留。可重试保存或读取配置文件确认结果。");
+        }
+        reportAdminUiError(reload ? "settings.reload" : "settings.save", error);
         return false;
+      } finally {
+        if (actionRef.current === controller) actionRef.current = null;
       }
     });
   };
-  const reloadConfig = async () => {
-    if (reloadConfigStatus.pending || saveSettingsStatus.pending) return;
-    await reloadConfigStatus.run(async () => {
-      try {
-        await api(`${adminApiBasePath}/settings/reload`, { method: "POST" });
-        await invalidateRuntimeData(client);
-        return true;
-      } catch (error) {
-        reportAdminUiError("settings.reload", error);
-        return false;
-      }
-    });
+  const setSettings = (next: AdminSettings) => {
+    if (!busy && !actionRef.current) {
+      setDraft(JSON.stringify(next) === JSON.stringify(serverSettings) ? null : next);
+    }
   };
   const updateSite = (patch: Partial<AdminSettings["site"]>) => setSettings({ ...settings, site: { ...settings.site, ...patch } });
   const updateSiteHome = (patch: Partial<AdminSettings["site"]["home"]>) => updateSite({ home: { ...settings.site.home, ...patch } });
@@ -136,22 +161,24 @@ function SettingsPageContent({ serverSettings }: { serverSettings: AdminSettings
               className="settings-config-button"
               status={reloadConfigStatus.status}
               presentation={reloadConfigPresentation}
-              disabled={reloadConfigStatus.pending || saveSettingsStatus.pending}
-              onClick={() => void reloadConfig()}
+              disabled={busy}
+              title="读取成功后替换当前未保存的修改"
+              onClick={() => void runSettingsAction(true)}
             />
             <AsyncActionButton
               className="button settings-config-button"
               type="button"
               status={saveSettingsStatus.status}
               presentation={saveSettingsPresentation}
-              disabled={reloadConfigStatus.pending || saveSettingsStatus.pending}
-              onClick={() => void saveApplication()}
+              disabled={busy}
+              onClick={() => void runSettingsAction(false)}
             />
           </>
         }
       />
+      {actionError && <p className="hint" role="alert">{actionError}</p>}
       <div className="settings-scroll-region" ref={scrollRef}>
-        <div className="settings-grid">
+        <fieldset className="settings-grid" disabled={busy} aria-busy={busy}>
           <section>
             <h2><AdminIcon name="information-line" />站点信息</h2>
             <p className="hint">这些非敏感配置只保存到容器配置目录；环境变量仅在配置文件首次生成时读取。</p>
@@ -203,6 +230,7 @@ function SettingsPageContent({ serverSettings }: { serverSettings: AdminSettings
             <label>
               根路径页面
               <SelectMenu
+                disabled={busy}
                 value={settings.site.root}
                 onChange={(value) => updateSite({ root: value as SiteRoot })}
                 options={siteRootOptions}
@@ -221,6 +249,7 @@ function SettingsPageContent({ serverSettings }: { serverSettings: AdminSettings
             <label>
               画廊排序
               <SelectMenu
+                disabled={busy}
                 value={settings.site.gallery.order}
                 onChange={(value) => updateSiteGallery({ order: value as AdminSettings["site"]["gallery"]["order"] })}
                 options={galleryOrderSelectOptions}
@@ -240,6 +269,7 @@ function SettingsPageContent({ serverSettings }: { serverSettings: AdminSettings
               随机图默认模式
               <SelectMenu
                 value={settings.site.random_method}
+                disabled={busy}
                 onChange={(value) => updateSite({
                   random_method: value as RandomDefaultMethod
                 })}
@@ -370,7 +400,7 @@ function SettingsPageContent({ serverSettings }: { serverSettings: AdminSettings
               </label>
             </div>
           </section>
-        </div>
+        </fieldset>
       </div>
       <OverlayScrollbar targetRef={scrollRef} pageEdge />
     </section>

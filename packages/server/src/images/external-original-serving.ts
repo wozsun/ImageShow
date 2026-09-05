@@ -5,6 +5,7 @@ import {
   type PublicDatabaseReadAccess
 } from "../core/database/public-fallback.ts";
 import { coalesce } from "../core/coalesce.ts";
+import { raceWithAbortSignal } from "../core/abort.ts";
 import { safeFetchExternalImage } from "../core/external-image-fetch.ts";
 import {
   noStoreCacheControl,
@@ -160,10 +161,12 @@ export async function servePublicExternalOriginal(
     signal,
     (database) => resolveExternalOriginal(id, { database }, dependencies)
   );
-  if (await dependencies.supportsDirectAccess(
-    original.url,
-    request.userAgent ?? ""
-  )) {
+  signal.throwIfAborted();
+  const direct = await raceWithAbortSignal(signal, dependencies.supportsDirectAccess(
+    original.url, request.userAgent ?? ""
+  ));
+  signal.throwIfAborted();
+  if (direct) {
     return new Response(null, {
       status: 302,
       headers: {
@@ -178,6 +181,7 @@ export async function servePublicExternalOriginal(
     externalImageExt(original.url),
     {
       method: request.method ?? "GET",
+      signal,
       validators: {
         ifNoneMatch: request.ifNoneMatch,
         ifModifiedSince: request.ifModifiedSince,
@@ -195,15 +199,20 @@ export async function servePublicExternalOriginal(
 export async function serveAdminExternalOriginal(
   id: string,
   userAgent: string,
+  signal: AbortSignal,
   dependencies: ExternalOriginalServingDependencies =
     defaultExternalOriginalServingDependencies
 ) {
+  signal.throwIfAborted();
   const original = await resolveExternalOriginal(
     id,
     { includeDeleted: true },
     dependencies
   );
-  if (await dependencies.supportsDirectAccess(original.url, userAgent)) {
+  signal.throwIfAborted();
+  const direct = await raceWithAbortSignal(signal, dependencies.supportsDirectAccess(original.url, userAgent));
+  signal.throwIfAborted();
+  if (direct) {
     return new Response(null, {
       status: 302,
       headers: {
@@ -216,7 +225,7 @@ export async function serveAdminExternalOriginal(
   return dependencies.proxyExternalImage(
     original.url,
     externalImageExt(original.url),
-    { method: "GET" },
+    { method: "GET", signal },
     {
       "Cache-Control": privateNoStoreCacheControl,
       "Referrer-Policy": "no-referrer"

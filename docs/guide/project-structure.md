@@ -162,8 +162,9 @@ advisory lock 两个连接池；`transactions.ts`、`advisory-locks.ts` 和 `sch
 schema 初始化和管理员播种直接使用主查询池，不为不受支持的第二应用进程取得启动锁；图片、
 词表、内容接入、存储位置等运行期领域锁仍使用独立 advisory lock 池。
 公开降级读取由 `database/public-admission.ts` 统一管理一个 FIFO 容量与等待队列，
-`database/public-fallback.ts` 只负责请求级惰性 reader scope、执行期限和 client 释放 / 淘汰。Redis
-缓存读取先行，首次真实回源才借 client，同一 scope 内的领域模块显式接收并复用 reader；
+`database/public-fallback.ts` 负责请求级惰性 reader scope、单连接 SQL 顺序、执行期限和 client
+释放 / 淘汰。Redis 缓存读取先行并保留外层并行，首次真实回源才借 client，同一 scope 内的领域模块
+显式接收并复用 reader；查询失败、请求取消或 scope 结束后不再启动排队 SQL。
 底层 `pool.query` 保持显式调用与原始连接语义。
 
 固定窗口限流的单条通用 Lua、命令定义、注册、参数布局和返回解析由
@@ -263,6 +264,10 @@ snapshot、SSE、watermark 和展示投影只使用 session / repository 边界�
   HTTP 层公开 queue action / cancel 所需的窄执行控制接口。Routes 不接触 Worker 实例、stage
   pool、tick、drain 或不可取消边界协调器；HTTP、Worker 和恢复流程仍复用核心 Redis client 上
   的同一 command runner 与 listener hub。
+- `sessions/projection.ts` 只拥有稳定哈希与实际使用的 metadata 汇总展示；单项汇总变化的 Server
+  权威位于 Redis Lua，不再维护测试专用 TypeScript 投影镜像。
+- `images/processing.ts` 在编码轮次前后检查执行取消；已启动的转换与并行缩略图全部收口后才归还，
+  Worker 继续持有现有 Normalize、buffer 和 raw 租约，取消不启动下一轮降质或质量回补。
 - `repository.ts` 保留命令调用边界、错误翻译与事件发布 facade；实际职责分别由
   `sessions/command-runner.ts`、`replies.ts`、`intent-store.ts`、`listener-hub.ts` 和
   `queue/store.ts` 承接。facade 与内部模块不复制 key 推导、严格解析或业务校验。
@@ -517,7 +522,10 @@ hooks ──► lib
   `components/image/`，页面层只设置画廊任务的优先级、暂停和驻留边界。无界面的
   页面滚动边界归一化放在 `lib/ui/`，由共享采样 Hook 提供给各页面交互状态机。图片编辑
   保存时，数据窗口用权威快照原位更新唯一命中卡片并保持其他卡片对象，再以同一 cursor
-  后台水合该页；筛选成员、几何和游标变化继续由数据窗口原子提交。共享图片详情弹窗只在
+  后台水合该页；筛选成员、几何和游标变化继续由数据窗口原子提交。`LazyGalleryImage` 在资源地址
+  变化时清除旧地址的完成与失败状态，旧任务由既有任务清理和结果围栏隔离；共享调度、可见性与
+  驻留边界不重建。共享图片详情的标题在展示图地址未就绪时保留纯文本布局，不产生空链接或
+  额外 Tab 停靠点；有效地址就绪后才提供直链。共享图片详情弹窗只在
   完整展示 frame 就绪后恢复真实 `<img>` 命中，加载期透明 frame 与详情以外的
   `ProgressiveImage` 消费者继续沿用不可命中的共享默认值。
   `lib/gallery/gallery-query.ts` 保留完整语义的画廊路由状态，并在公开列表 query key 建立前把
@@ -612,6 +620,16 @@ hooks ──► lib
   `import.*`，Upload 专属入口使用 `upload.*`，共用原图准入、队列分页与提交使用
   `ingestion.*`。`data/config.json` 只按当前默认结构投影、校验并原子
   写回；当前结构之外的字段直接删除。
+- `queue/model/ingestion-status-summary.ts` 是单项服务端状态桶纯函数，快照移除与取消释放分别
+  解析输入后复用；不保存队列状态，也不替代 Redis 汇总权威。
+- `import/ImportSplitButton.tsx` 复用共享 anchored menu 的焦点外关闭及按来源决定 Escape 归焦；
+  键盘打开与悬停打开分开处理焦点。来源标签页维护 roving tabindex 和关联 tabpanel，保留指针输入流程。
+- `SettingsPage.tsx` 仅拥有当前未保存表单，后台回读只在 clean 状态更新；保存与重载禁用整个表单，
+  使用 15 秒请求期限，成功由 POST 返回值直接更新唯一 settings 查询，失败保留提交内容。
+- `VocabularyAdminCard.tsx` 按字段对照上一权威基线维护 clean / dirty，同 slug 回读只同步 clean 字段，
+  成功保存立即采用规范化值，切换词条身份重新初始化。
+- `lib/api/client.ts` 集中 JSON 解析失败、凭据和 401；`apiResponse` 为配置包提供原始文件响应。
+  元数据与接入完成复用词表成员比较，仅新词条超出已有缓存时失效一次 `ingestionVocabulary`。
 - `IngestionLauncher.tsx` 只拥有入口按需加载与激活意图：启动阶段复用页面根 `inert` 锁而不禁用
   图片页按钮，`Ingestion.tsx` 在最外层 `DialogFrame` 挂载后以同一引用计数锁完成无缝交接；
   关闭只退休仍活动的意图，加载失败则在根锁清理后归焦仍连接的启动入口。来源菜单在自身退场前

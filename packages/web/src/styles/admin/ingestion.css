@@ -117,6 +117,7 @@
 .import-source-card { width: min(560px, 96vw); max-height: 90vh; overflow: auto; background: var(--admin-color-surface-primary); border-radius: 8px; padding: 18px; display: flex; flex-direction: column; gap: 10px; animation: modal-pop .18s cubic-bezier(.2, .8, .2, 1); }
 .import-source-head { display: flex; align-items: center; justify-content: space-between; }
 .import-source-head h2 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 20px; }
+.import-source-panel { min-height: 0; display: flex; flex-direction: column; gap: 10px; }
 .import-source-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-bottom: 1px solid var(--admin-color-border-default); }
 .import-source-tabs button { border: 0; border-radius: 0; background: transparent; color: var(--admin-color-text-secondary); }
 .import-source-tabs button.is-active { color: var(--admin-color-action-primary-dark); box-shadow: inset 0 -2px var(--admin-color-action-primary); }

@@ -75,7 +75,7 @@ export function registerAdminImageRoutes(app: Hono) {
 
   app.get(`${adminApiBasePath}/images/:id/original`, async (c) => {
     const id = parse(uuidInput, c.req.param("id"));
-    return serveAdminExternalOriginal(id, c.req.header("user-agent") ?? "");
+    return serveAdminExternalOriginal(id, c.req.header("user-agent") ?? "", c.req.raw.signal);
   });
 
   app.post(`${adminApiBasePath}/images/trash`, async (c) => {

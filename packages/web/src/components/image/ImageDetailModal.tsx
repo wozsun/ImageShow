@@ -262,16 +262,20 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
                 <header className="image-detail-head" ref={titleHeaderRef}>
                   <div className="image-detail-title-row">
                     <h2>
-                      <a
-                        className="image-detail-title-link"
-                        href={item.object_url}
-                        target="_blank"
-                        rel="noreferrer noopener"
-                        referrerPolicy="no-referrer"
-                        title="在新标签页打开图片直链"
-                      >
-                        {title}
-                      </a>
+                      {item.object_url.trim()
+                        ? (
+                          <a
+                            className="image-detail-title-link"
+                            href={item.object_url}
+                            target="_blank"
+                            rel="noreferrer noopener"
+                            referrerPolicy="no-referrer"
+                            title="在新标签页打开图片直链"
+                          >
+                            {title}
+                          </a>
+                        )
+                        : title}
                     </h2>
                     {!mobileLayout && (
                       <button

@@ -53,6 +53,7 @@ export function createPublicDatabaseReadScope(
     let timer: ReturnType<typeof setTimeout> | null = null;
     let scopeClosed = false;
     let activeQueries = 0;
+    let queryTail: Promise<unknown> = Promise.resolve();
     const closedError = () => operationAbort.signal.aborted
       ? abortSignalError(operationAbort.signal)
       : new Error("Public PostgreSQL read scope is closed");
@@ -111,8 +112,12 @@ export function createPublicDatabaseReadScope(
       query: ((...args: never[]) => {
         if (scopeClosed) return Promise.reject(closedError());
         activeQueries += 1;
-        return checkoutClient()
-          .then((activeClient) => {
+        const query = queryTail
+          .then(async () => {
+            if (scopeClosed) throw closedError();
+            operationAbort.signal.throwIfAborted();
+            const activeClient = await checkoutClient();
+            if (scopeClosed) throw closedError();
             operationAbort.signal.throwIfAborted();
             return Reflect.apply(activeClient.query, activeClient, args);
           })
@@ -130,6 +135,10 @@ export function createPublicDatabaseReadScope(
           .finally(() => {
             activeQueries -= 1;
           });
+        // A rejected tail also rejects queued SQL without starting it.
+        queryTail = query;
+        void query.catch(() => undefined);
+        return query;
       }) as DatabaseReader["query"]
     };
 

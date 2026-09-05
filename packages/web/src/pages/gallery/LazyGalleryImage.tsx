@@ -121,6 +121,11 @@ export const LazyGalleryImage = memo(function LazyGalleryImage({
   }, [failed, galleryPaused, loaded, visibility]);
 
   useLayoutEffect(() => {
+    setLoaded(false);
+    setFailed(false);
+  }, [src]);
+
+  useLayoutEffect(() => {
     if (!renderImage || failed) return;
     const image = imageRef.current;
     if (!image) return;

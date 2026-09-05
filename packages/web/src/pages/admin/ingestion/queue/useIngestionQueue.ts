@@ -52,6 +52,7 @@ import type {
   HandoffRetryGate,
   ServerQueueConnectionSnapshot
 } from "./model/ingestion-handoff-runtime.js";
+import { ingestionStatusSummary } from "./model/ingestion-status-summary.js";
 
 function revokeObjectUrl(job: IngestionJob) {
   if (job.objectUrl?.startsWith("blob:")) URL.revokeObjectURL(job.objectUrl);
@@ -96,29 +97,11 @@ function ingestionJobMatchesResolvedServerTarget(
 function serverItemSummary(
   item: ServerIngestionItemDto
 ): IngestionQueueSummaryDto {
-  const completed = item.status === "completed";
-  const prepareWaiting = item.status === "preparing"
-    && item.phase === "prepare-waiting";
-  const duplicatePending = item.status === "ready"
-    && Boolean(item.prepared?.duplicate_count)
-    && !item.duplicate_decision;
-  return {
-    total: 1,
-    unfinished: completed ? 0 : 1,
-    waiting: ["queued", "received"].includes(item.status) || prepareWaiting
-      ? 1
-      : 0,
-    running: ["downloading", "preparing"].includes(item.status)
-      && !prepareWaiting
-      ? 1
-      : 0,
-    ready: item.status === "ready" && !duplicatePending ? 1 : 0,
-    duplicate_pending: duplicatePending ? 1 : 0,
-    committing: item.status === "committing" ? 1 : 0,
-    resolving: item.status === "resolving" ? 1 : 0,
-    completed: completed ? 1 : 0,
-    failed: item.status === "failed" ? 1 : 0
-  };
+  return ingestionStatusSummary(
+    item.status,
+    item.status === "ready" && Boolean(item.prepared?.duplicate_count) && !item.duplicate_decision,
+    item.status === "preparing" && item.phase === "prepare-waiting"
+  );
 }
 
 function withoutReleasedServerSummaries(
