@@ -4,6 +4,7 @@ import {
   type AuthorDto,
   type AuthorMutationResponseDto,
   type AdminEntityListResponseDto,
+  type AdminSettings,
   type AdminPermission
 } from "@imageshow/shared/browser";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -21,12 +22,11 @@ import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.js";
 import { VocabularyAdminCard } from "./VocabularyAdminCard.js";
 import {
   adminApiBasePath,
-  adminImagePageLimit,
   slugFormatHint,
   slugPattern
 } from "../../lib/constants.js";
 import { queryKeys } from "../../lib/api/query-keys.js";
-import { useAdminSettings } from "../../lib/api/admin-settings.js";
+import { AdminSettingsBoundary } from "../../components/feedback/AdminSettingsBoundary.js";
 import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
 import type { Author, Tag, Theme } from "../../lib/types.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
@@ -75,6 +75,17 @@ const DELETE_PERMISSIONS = {
 } satisfies Record<VocabularyKind, AdminPermission>;
 
 export function VocabularyAdmin({ kind }: { kind: VocabularyKind }) {
+  return (
+    <AdminSettingsBoundary>
+      {(settings) => <VocabularyAdminContent kind={kind} settings={settings} />}
+    </AdminSettingsBoundary>
+  );
+}
+
+function VocabularyAdminContent({ kind, settings }: {
+  kind: VocabularyKind;
+  settings: AdminSettings;
+}) {
   const copy = COPY[kind];
   const isAuthor = kind === "authors";
   const queryKey = QUERY_KEYS[kind];
@@ -82,7 +93,6 @@ export function VocabularyAdmin({ kind }: { kind: VocabularyKind }) {
   const canDelete = permissions.includes(DELETE_PERMISSIONS[kind]);
   const client = useQueryClient();
   const { data, error: listError, isError: listFailed, isFetching, refetch } = useQuery<AdminEntityListResponseDto<VocabularyEntry>>({ queryKey, queryFn: ({ signal }) => api(`${adminApiBasePath}/${kind}`, { signal }) });
-  const { data: settingsData } = useAdminSettings();
   // 新建/删除词条会改动公共画廊的筛选词表（gallery-facets，staleTime:Infinity 不会自动刷新），
   // 删除还会清除关联图片上的该属性，故一并失效后台图片列表，与 ImageAdmin.refresh 的失效集对齐。
   const refresh = () => invalidateImageData(client);
@@ -119,13 +129,13 @@ export function VocabularyAdmin({ kind }: { kind: VocabularyKind }) {
   const slugInvalid = slug.length > 0 && !slugPattern.test(slug);
   const slugError = slugInvalid ? slugFormatHint : createError;
   const externalBusy = Boolean(mutation) || createAction.pending;
-  const pageSize = settingsData?.settings.admin.image_page_size ?? adminImagePageLimit;
+  const pageSize = settings.admin.image_page_size;
   const isFixedVocabularyEntry = (item: VocabularyEntry) => (
     kind === "themes" && item.slug === "none"
   );
-  // 主题页可隐藏钉住的「未设置 / none」占位卡片（设置页 admin 组的开关，默认显示）；其它类别无此卡片。
+  // 主题页按配置决定是否展示钉住的「未设置 / none」占位卡片；其它类别无此卡片。
   // 只过滤展示用列表，order（含 none）保持完整，拖拽排序逻辑不受影响。
-  const showUnsetCard = settingsData?.settings.admin.show_unset_theme_card ?? true;
+  const showUnsetCard = settings.admin.show_unset_theme_card;
   const reorder = usePersistedReorder<VocabularyEntry>({
     items: data?.items,
     externalBusy,

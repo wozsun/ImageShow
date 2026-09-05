@@ -1,6 +1,9 @@
 import { serveStatic } from "@hono/node-server/serve-static";
 import type { Context, Hono } from "hono";
-import { adminBasePath } from "@imageshow/shared/browser";
+import {
+  adminBasePath,
+  publicRootPath
+} from "@imageshow/shared/browser";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
@@ -47,10 +50,12 @@ export function registerSpaRoutes(app: Hono) {
     return await serveStaticWithValidators(c, faviconStatic) ?? next();
   });
 
-  app.get("/", spaHandler);
+  app.get("/", rootSpaHandler);
   app.get("/home", spaHandler);
+  app.get("/show", spaHandler);
   app.get("/gallery", spaHandler);
   app.get("/embed/home", embedSpaHandler);
+  app.get("/embed/show", embedSpaHandler);
   app.get("/embed/gallery", embedSpaHandler);
   app.get(adminBasePath, spaHandler);
   app.get(`${adminBasePath}/*`, spaHandler);
@@ -74,13 +79,14 @@ function escapeHtmlAttr(value: string) {
 
 function buildSpaDocument(): string {
   spaTemplate ??= readFileSync(join(publicDir, "index.html"), "utf8");
-  const site = getRuntimeConfig().site;
-  const inlineConfig = JSON.stringify(siteConfigPayload()).replace(/</g, "\\u003c");
-  const title = escapeHtmlText(site.name || "ImageShow");
-  const description = escapeHtmlAttr(site.description || site.name || "ImageShow");
-  const iconUrl = escapeHtmlAttr(site.icon || "/assets/brand/favicon.svg");
+  const config = siteConfigPayload();
+  const { site } = config;
+  const inlineConfig = JSON.stringify(config).replace(/</g, "\\u003c");
+  const title = escapeHtmlText(site.name);
+  const description = escapeHtmlAttr(site.description);
+  const iconUrl = escapeHtmlAttr(site.icon);
   const head =
-    `<link rel="preconnect" href="https://${site.static_subdomain}.${site.domain}" crossorigin>`
+    `<link rel="preconnect" href="${escapeHtmlAttr(site.static_url)}" crossorigin>`
     + `<script type="application/json" id="__site_config__">${inlineConfig}</script>`;
   return spaTemplate
     .replace(/<title>[\s\S]*?<\/title>/i, `<title>${title}</title>`)
@@ -117,6 +123,13 @@ async function spaHandler(c: Context) {
     currentSpaRepresentation(),
     { ifNoneMatch: c.req.header("if-none-match") }
   );
+}
+
+async function rootSpaHandler(c: Context) {
+  if (publicRootPath(getRuntimeConfig().site) === null) {
+    return apiErrorResponse({ status: 404, message: "Not Found" });
+  }
+  return spaHandler(c);
 }
 
 async function embedSpaHandler(c: Context) {

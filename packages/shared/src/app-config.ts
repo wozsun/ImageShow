@@ -160,11 +160,21 @@ export const appConfig = {
       root: "home",
       home: {
         enabled: true,
+        browse_target: "show",
         background: "",
         banner_label: "ImageShow · A FAN-MADE PHOTO HANDBOOK",
         banner_title: "我们一起，\n收藏这些瞬间。"
       },
+      show: {
+        enabled: true,
+        autoplay: true,
+        mode: "waterfall",
+        density: "balanced",
+        drift_speed: 28,
+        order: "random"
+      },
       gallery: {
+        enabled: true,
         limit: 60,
         order: "latest",
         public_original_button: false

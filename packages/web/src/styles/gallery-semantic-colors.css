@@ -35,6 +35,7 @@
   --public-color-gallery-code-surface: rgba(86, 128, 185, .14);
   --public-shadow-gallery-tile: rgba(0, 3, 10, .28);
   --public-color-gallery-tile-border-hover: rgba(145, 199, 255, .5);
+  --public-color-card-edge-light: rgba(221, 237, 255, .85);
   --public-shadow-gallery-tile-hover: rgba(66, 148, 255, .34);
   --public-color-gallery-tile-surface: #0d1422;
   --public-color-gallery-tile-surface-raised: #18243a;
@@ -43,4 +44,6 @@
   --public-color-gallery-back-to-top: rgba(10, 16, 28, .94);
   --public-shadow-gallery-back-to-top: rgba(0, 3, 10, .38);
   --public-shadow-gallery-mobile-filter: rgba(0, 2, 8, .4);
+  --public-color-show-hint-text: color-mix(in srgb, var(--public-color-text-secondary) 70%, #fff);
+  --public-color-show-hint-outline: rgba(24, 28, 35, .7);
 }

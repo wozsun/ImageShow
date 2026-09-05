@@ -11,6 +11,7 @@ import {
   type PublicImageCardRecord
 } from "../presenter.ts";
 import type { PageWindow } from "../page-window.ts";
+import type { PublicImageOrder } from "@imageshow/shared/browser";
 
 const publicImageCardColumns = [
   "id",
@@ -43,13 +44,17 @@ async function fetchImageRows<Row>(
   columns: string,
   reader: DatabaseReader,
   position: ImageRowPosition,
-  deferredProjection?: DeferredProjection
+  deferredProjection?: DeferredProjection,
+  order: PublicImageOrder = "latest"
 ) {
+  const ascending = order === "oldest";
+  const comparison = ascending ? ">" : "<";
+  const direction = ascending ? "ASC" : "DESC";
   if (position.kind === "cursor" && position.cursor !== undefined) {
     const decoded = decodeImageCursor(position.cursor);
     params.push(decoded.imageTime, decoded.id);
     where.push(
-      `(image_time, id) < ($${params.length - 1}::timestamptz, $${params.length}::uuid)`
+      `(image_time, id) ${comparison} ($${params.length - 1}::timestamptz, $${params.length}::uuid)`
     );
   }
   const cursorPosition = position.kind === "cursor";
@@ -62,7 +67,7 @@ async function fetchImageRows<Row>(
   const offsetClause = cursorPosition ? "" : ` OFFSET $${params.length}`;
   const orderedWindow = `FROM metadata
      WHERE ${where.join(" AND ")}
-     ORDER BY image_time DESC, id DESC
+     ORDER BY image_time ${direction}, id ${direction}
      LIMIT $${limitParameter}${offsetClause}`;
   const sql = deferredProjection && !cursorPosition
     ? `SELECT ${columns}
@@ -70,7 +75,7 @@ async function fetchImageRows<Row>(
            SELECT ${deferredProjection.sourceColumns}
              ${orderedWindow}
          ) metadata
-        ORDER BY image_time DESC, id DESC`
+        ORDER BY image_time ${direction}, id ${direction}`
     : `SELECT ${columns}${cursorPosition ? ", image_time::text AS cursor_image_time" : ""}
        ${orderedWindow}`;
   const result = await reader.query(sql, params);
@@ -111,6 +116,7 @@ export async function fetchPublicImageCardPage(
   where: string[],
   params: unknown[],
   limit: number,
+  order: PublicImageOrder,
   cursor?: string,
   reader: DatabaseReader = pool
 ) {
@@ -121,7 +127,9 @@ export async function fetchPublicImageCardPage(
     params,
     publicImageCardColumns,
     reader,
-    { kind: "cursor", cursor, limit }
+    { kind: "cursor", cursor, limit },
+    undefined,
+    order
   );
   const rows = page.rows;
   const items = await publicImageCards(rows, reader);

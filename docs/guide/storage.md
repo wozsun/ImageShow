@@ -141,6 +141,10 @@ Server 固定单调用的 `removeObjects(1…N)`
 local、无公开 URL 的 S3 与配置 `public_base_url` 的 S3 都遵守这一边界。彻底删除确认源对象
 不存在后，后续源站请求无法回源。
 
+Show 的 PixiJS / WebGL 运行时直接把 `thumb_url` 作为纹理来源。配置 `public_base_url` 时，目标
+CDN 必须为缩略图 GET 返回允许主站 Origin 的 CORS 响应；公开无凭据媒体可返回
+`Access-Control-Allow-Origin: *`。ImageShow 不为生产纹理新增图片代理。
+
 异步操作只改变按钮文案、禁用和等待光标，不把所有进行中状态强制提升为主按钮：保存
 本身是实心主按钮，保存中保持实心蓝色；连接测试、启停和默认后端切换分别使用
 次按钮或状态开关表面。成功与失败结果使用对应反馈色。

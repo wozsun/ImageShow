@@ -1,4 +1,7 @@
-import type { GalleryStatsDto } from "@imageshow/shared/browser";
+import type {
+  GalleryStatsDto,
+  PublicSiteSettings
+} from "@imageshow/shared/browser";
 import {
   useEffect,
   useLayoutEffect,
@@ -13,7 +16,8 @@ import {
 import { AppHeader } from "../../components/navigation/AppHeader.js";
 import { useDocumentMotionPause } from "../../hooks/useDocumentMotionPause.js";
 import { usePublicNavigationEntrance } from "../../hooks/usePublicNavigationEntrance.js";
-import { useGalleryStats, useSiteConfig } from "../../lib/api/site-data.js";
+import { useGalleryStats } from "../../lib/api/site-data.js";
+import { publicHomeBrowsePath } from "../../lib/constants.js";
 import {
   emptyGalleryFilters,
   galleryRouteSearchParams,
@@ -58,7 +62,13 @@ function HomeStartupLoadingText({
   return <AppLoadingText extraDots={extraDots} />;
 }
 
-export function HomePage({ embedded = false }: { embedded?: boolean }) {
+export function HomePage({
+  embedded = false,
+  site
+}: {
+  embedded?: boolean;
+  site: Pick<PublicSiteSettings, "home" | "show" | "gallery">;
+}) {
   const catalogRef = useRef<HTMLElement>(null);
   const lastSuccessfulStatsRef = useRef<GalleryStatsDto | undefined>(undefined);
   const {
@@ -70,7 +80,6 @@ export function HomePage({ embedded = false }: { embedded?: boolean }) {
   const [filters, setFilters] = useState<GalleryFilters>({
     ...emptyGalleryFilters
   });
-  const siteQuery = useSiteConfig();
   const statsSearch = useMemo(
     () => galleryRouteSearchParams(filters).toString(),
     [filters]
@@ -85,12 +94,10 @@ export function HomePage({ embedded = false }: { embedded?: boolean }) {
   }, [currentStats, statsQuery.isPlaceholderData]);
 
   const stats = currentStats ?? lastSuccessfulStatsRef.current;
-  const background = siteQuery.data?.site.home.background
-    || "/random?mode=redirect";
-  const bannerLabel = siteQuery.data?.site.home.banner_label
-    || "ImageShow · A FAN-MADE PHOTO HANDBOOK";
-  const bannerTitle = siteQuery.data?.site.home.banner_title
-    || "我们一起，\n收藏这些瞬间。";
+  const background = site.home.background;
+  const bannerLabel = site.home.banner_label;
+  const bannerTitle = site.home.banner_title;
+  const browsePath = publicHomeBrowsePath(site, embedded);
   const entrance = useHomeEntrance(
     background,
     catalogRef,
@@ -150,7 +157,7 @@ export function HomePage({ embedded = false }: { embedded?: boolean }) {
           <HomeFilterBar
             entranceReady={entrance.navigationRevealed}
             filters={filters}
-            galleryPath={embedded ? "/embed/gallery" : "/gallery"}
+            browsePath={browsePath}
             stats={stats}
             isPending={statsQuery.isPending}
             isError={statsQuery.isError}

@@ -1,10 +1,10 @@
 @media (hover: hover) {
-  .home-gallery-entry:hover {
+  .home-gallery-entry:not(.is-disabled):hover {
     background: var(--public-color-action-strong);
     border-color: var(--public-color-action-primary);
   }
 
-  .home-gallery-entry:hover span {
+  .home-gallery-entry:not(.is-disabled):hover span {
     transform: translateX(3px);
   }
 
@@ -28,7 +28,7 @@
   }
 }
 
-.home-gallery-entry:active,
+.home-gallery-entry:not(.is-disabled):active,
 .home-filter-reset:not(:disabled):active,
 .home-axis-group button:not(:disabled):not([data-availability-locked="true"]):active,
 .home-theme-options > .home-selector-options > button:not(:disabled):not([data-availability-locked="true"]):active,

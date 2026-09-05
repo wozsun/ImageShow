@@ -14,6 +14,10 @@
   站内 CDN fallback（浏览器 1 天、共享缓存 1 年、回源失败可用旧副本 30 天）。公开原图
   入口只位于静态资源域；回收站图片只允许已鉴权的管理入口读取。
 
+Show 的 WebGL 纹理直接读取公开 `thumb_url`，因此资源域或外部 `public_base_url` CDN 必须对
+图片 GET 响应提供允许主站读取的 CORS 头；公开且不携带凭据的缩略图可使用
+`Access-Control-Allow-Origin: *`。生产入口不通过主站图片代理规避 CORS。
+
 静态资源域只开放上述精确路径和可选的 `/robots.txt`，不会提供 SPA、API 或随机图。
 随机、外链和主题均没有专用子域；除主站与配置的静态资源子域外，其他 Host 全部返回
 不可缓存的 404。若 `site.domain` 直接配置为 `example.com`，资源域就是

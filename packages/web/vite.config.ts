@@ -83,6 +83,7 @@ const chunkResponsibilityAliases: Readonly<Record<string, string>> = {
   "route-authenticated-shell-gallery-image": "async-ui",
   "route-authenticated-shell-image": "workspace-ui",
   "route-gallery-home": "public-ui",
+  "route-gallery-home-show": "public-ui",
   "route-gallery-image": "image-ui",
   "route-gallery": "image-view",
   "route-image": "image-actions",
@@ -137,18 +138,19 @@ function rootSetChunkName(prefix: string, roots: string[]) {
 function sharedChunkName(moduleId: string, context: ChunkingContext) {
   const roots = entryRootIds(moduleId, context);
   const home = roots.some((id) => /\/src\/pages\/home\//.test(id));
+  const show = roots.some((id) => /\/src\/pages\/show\//.test(id));
   const gallery = roots.some((id) => /\/src\/pages\/gallery\//.test(id));
   const hasNonPublicRoot = roots.some((id) => (
-    !/\/src\/pages\/(?:home|gallery)\//.test(id)
+    !/\/src\/pages\/(?:home|show|gallery)\//.test(id)
   ));
   if (
     roots.some((id) => id.endsWith("/index.html"))
-    || (home && gallery && hasNonPublicRoot)
+    || ((home && gallery || home && show || show && gallery) && hasNonPublicRoot)
   ) {
     return "app-foundation";
   }
   const initialRouteRoots = roots.filter((id) => (
-    /\/src\/pages\/(?:home|gallery)\//.test(id)
+    /\/src\/pages\/(?:home|show|gallery)\//.test(id)
     || /\/src\/pages\/admin\/(?:shell\/(?:AdminShell|AuthenticatedAdminShell)|account\/(?:AdminLogin|LoginChallenge)|images\/ImageAdmin)\.tsx$/.test(id)
   ));
   return initialRouteRoots.length > 0
@@ -167,6 +169,7 @@ const conciseAssetNames: Readonly<Record<string, string>> = {
   CheckPage: "check",
   GalleryPage: "gallery",
   HomePage: "home",
+  ShowPage: "show",
   ImageAdmin: "images",
   ImageAdminDetails: "image-details",
   ImageStorageMigrationDialog: "image-migration",

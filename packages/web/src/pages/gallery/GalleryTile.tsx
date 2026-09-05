@@ -3,10 +3,15 @@ import {
   useEffect,
   useLayoutEffect,
   useState,
-  type CSSProperties
+  type CSSProperties,
+  type PointerEvent
 } from "react";
 import { useOneShotAnimation } from "../../hooks/useOneShotAnimation.js";
 import { imageDisplayTitle } from "../../lib/ui/formatters.js";
+import {
+  applyPointerMagnet,
+  resetPointerMagnet
+} from "../../lib/ui/pointer-magnet.js";
 import {
   galleryTilePropsEqual,
   type GalleryTileRenderProps
@@ -42,9 +47,19 @@ export const GalleryTile = memo(function GalleryTile({
     ).matches === true
   }));
   const entrance = useOneShotAnimation(reveal.variant !== "settled");
+  const portrait = item.width > 0 && item.height > 0
+    ? item.height > item.width
+    : item.device === "mb";
   useLayoutEffect(() => {
     revealRegistry.markRevealed(position.index);
   }, [position.index, revealRegistry]);
+  const applyMagnet = (event: PointerEvent<HTMLButtonElement>) => {
+    applyPointerMagnet(event.currentTarget, event.currentTarget, event, {
+      maximumAngleDegrees: portrait ? 3 : 5,
+      maximumShadowOffsetPixels: 4,
+      useLayoutDimensions: true
+    });
+  };
   return (
     <button
       className={[
@@ -59,10 +74,14 @@ export const GalleryTile = memo(function GalleryTile({
         top: position.y,
         width: position.width,
         height: position.height,
+        "--gallery-card-hover-scale": portrait ? 1.03 : 1.05,
         "--gallery-card-reveal-delay": `${reveal.delayMs}ms`
       } as CSSProperties}
       data-image-id={item.id}
       onClick={(event) => onOpen(item, event.currentTarget)}
+      onPointerCancel={(event) => resetPointerMagnet(event.currentTarget)}
+      onPointerLeave={(event) => resetPointerMagnet(event.currentTarget)}
+      onPointerMove={applyMagnet}
       onAnimationEnd={(event) => {
         if (
           event.currentTarget === event.target

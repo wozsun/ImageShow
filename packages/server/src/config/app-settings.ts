@@ -193,6 +193,10 @@ function effectiveLoginBackground(loginBackgroundValue?: string) {
   return loginBackgroundValue?.trim() || "/random?mode=redirect";
 }
 
+function effectiveHomeBackground(homeBackgroundValue?: string) {
+  return homeBackgroundValue?.trim() || "/random?mode=redirect";
+}
+
 export function getEffectiveLoginBackground() {
   return effectiveLoginBackground(getRuntimeConfig().admin.login_background);
 }
@@ -209,16 +213,22 @@ export function siteConfigPayload(): SiteConfigDto {
     icon,
     root,
     home,
+    show,
     gallery
   } = runtime.site;
   return {
     site: {
       name,
-      description,
+      description: description || name,
       icon,
       root,
-      home,
+      home: {
+        ...home,
+        background: effectiveHomeBackground(home.background)
+      },
+      show,
       gallery: {
+        enabled: gallery.enabled,
         order: gallery.order,
         public_original_button: gallery.public_original_button
       },

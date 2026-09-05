@@ -20,13 +20,11 @@ import {
 export function useImageAdminPageNavigation({
   view,
   filters,
-  pageSize,
-  enabled
+  pageSize
 }: {
   view: ImageAdminView;
   filters: ImageAdminFilterValues;
   pageSize: number;
-  enabled: boolean;
 }) {
   const scopeKey = imageAdminPaginationScopeKey(view, filters, pageSize);
   const [state, setState] = useState<ImageAdminPageState>({
@@ -43,8 +41,7 @@ export function useImageAdminPageNavigation({
       scopeKey,
       pageNumber,
       pageSize
-    ),
-    enabled
+    )
   });
   // Total belongs to the normalized scope, not to one numeric page. Keep the
   // newest successful scope snapshot while the target page has no data yet.

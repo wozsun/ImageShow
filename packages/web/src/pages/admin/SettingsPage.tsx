@@ -13,11 +13,10 @@ import { NumberInput } from "../../components/form/NumberInput.js";
 import { SelectMenu } from "../../components/form/SelectMenu.js";
 import { OverlayScrollbar } from "../../components/layout/OverlayScrollbar.js";
 import { adminApiBasePath } from "../../lib/constants.js";
-import { useAdminSettings } from "../../lib/api/admin-settings.js";
+import { AdminSettingsBoundary } from "../../components/feedback/AdminSettingsBoundary.js";
 import { galleryOrderSelectOptions } from "../../lib/ui/select-options.js";
 import { reportAdminUiError } from "../../lib/ui/error-reporting.js";
 import type { AdminSettings } from "../../lib/types.js";
-import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
 import { WorkspaceHeader } from "../../components/layout/WorkspaceHeader.js";
 import "../../styles/admin/settings.css";
 import { useAsyncActionStatus } from "../../hooks/useAsyncActionStatus.js";
@@ -39,6 +38,7 @@ const saveSettingsPresentation = {
 
 const siteRootLabels: Record<SiteRoot, string> = {
   home: "首页 /home",
+  show: "展映 /show",
   gallery: "画廊 /gallery"
 };
 const siteRootOptions = siteRoots.map((value) => ({
@@ -56,35 +56,22 @@ const randomMethodOptions = randomDefaultMethods.map((value) => ({
 }));
 
 export function SettingsPage() {
-  const query = useAdminSettings();
+  return (
+    <AdminSettingsBoundary>
+      {(settings) => <SettingsPageContent serverSettings={settings} />}
+    </AdminSettingsBoundary>
+  );
+}
+
+function SettingsPageContent({ serverSettings }: { serverSettings: AdminSettings }) {
   const client = useQueryClient();
-  const [settings, setSettings] = useState<AdminSettings | null>(null);
+  const [settings, setSettings] = useState(serverSettings);
   const reloadConfigStatus = useAsyncActionStatus();
   const saveSettingsStatus = useAsyncActionStatus();
   const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (query.data?.settings) {
-      setSettings(query.data.settings);
-    }
-  }, [query.data]);
-  if (!settings) {
-    return (
-      <section className="workspace workspace-contained settings-page">
-        {query.isError ? (
-          <QueryErrorState
-            error={query.error}
-            onRetry={() => void query.refetch()}
-            reportContext="settings.load"
-          />
-        ) : (
-          <>
-            <h1>站点配置</h1>
-            <p className="muted">加载中</p>
-          </>
-        )}
-      </section>
-    );
-  }
+    setSettings(serverSettings);
+  }, [serverSettings]);
   const saveApplication = async () => {
     if (reloadConfigStatus.pending || saveSettingsStatus.pending) return;
     await saveSettingsStatus.run(async () => {
@@ -173,7 +160,7 @@ export function SettingsPage() {
               <input
                 value={settings.site.name}
                 onChange={(event) => updateSite({ name: event.target.value })}
-                placeholder="ImageShow"
+                placeholder="站点名称"
               />
             </label>
             <label>
@@ -181,7 +168,7 @@ export function SettingsPage() {
               <input
                 value={settings.site.home.banner_label}
                 onChange={(event) => updateSiteHome({ banner_label: event.target.value })}
-                placeholder="ImageShow · A FAN-MADE PHOTO HANDBOOK"
+                placeholder="首页上方标识"
               />
             </label>
             <label>
@@ -191,7 +178,7 @@ export function SettingsPage() {
                 maxLength={80}
                 value={settings.site.home.banner_title}
                 onChange={(event) => updateSiteHome({ banner_title: event.target.value })}
-                placeholder={"我们一起，\n收藏这些瞬间。"}
+                placeholder="首页标题，可换行"
               />
             </label>
             <label>

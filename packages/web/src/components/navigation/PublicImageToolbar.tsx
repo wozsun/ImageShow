@@ -1,9 +1,9 @@
 import { useLayoutEffect, useRef, useState, type RefObject } from "react";
 import type { GalleryFacetsDto } from "@imageshow/shared/browser";
-import { CopyButton } from "../../components/actions/CopyButton.js";
-import { FacetSelector } from "../../components/data-display/FacetSelector.js";
-import { SelectMenu } from "../../components/form/SelectMenu.js";
-import { Icon } from "../../components/icon/Icon.js";
+import { CopyButton } from "../actions/CopyButton.js";
+import { FacetSelector } from "../data-display/FacetSelector.js";
+import { SelectMenu } from "../form/SelectMenu.js";
+import { Icon } from "../icon/Icon.js";
 import { AnchoredMenuDismissSignalContext } from "../../hooks/useAnchoredMenu.js";
 import {
   mobileViewportMediaQuery,
@@ -26,7 +26,12 @@ export function randomLinkNeedsTruncation(
 function RandomLinkText({ value }: { value: string }) {
   const viewportRef = useRef<HTMLSpanElement>(null);
   const contentRef = useRef<HTMLSpanElement>(null);
+  const selectOnClickRef = useRef(false);
   const [truncated, setTruncated] = useState(false);
+  const selectLink = () => {
+    const content = contentRef.current;
+    if (content) content.ownerDocument.getSelection()?.selectAllChildren(content);
+  };
 
   useLayoutEffect(() => {
     const viewport = viewportRef.current;
@@ -66,6 +71,24 @@ function RandomLinkText({ value }: { value: string }) {
       ref={viewportRef}
       className={`generated-link-value${truncated ? " is-truncated" : ""}`}
       title={truncated ? value : undefined}
+      tabIndex={0}
+      role="textbox"
+      aria-label="随机图片链接"
+      aria-readonly="true"
+      onFocus={selectLink}
+      onPointerDown={(event) => {
+        selectOnClickRef.current = event.button === 0
+          && event.currentTarget.ownerDocument.activeElement !== event.currentTarget;
+      }}
+      onClick={() => {
+        if (!selectOnClickRef.current) return;
+        selectOnClickRef.current = false;
+        // Reapply after the browser's first-click caret placement. Further
+        // clicks while focused keep native partial text selection.
+        selectLink();
+      }}
+      onBlur={() => { selectOnClickRef.current = false; }}
+      onPointerCancel={() => { selectOnClickRef.current = false; }}
     >
       <span ref={contentRef} className="generated-link-text">{value}</span>
       {truncated && (
@@ -75,7 +98,8 @@ function RandomLinkText({ value }: { value: string }) {
   );
 }
 
-export function GalleryToolbar({
+export function PublicImageToolbar({
+  animateEntrance,
   filters,
   facets,
   randomUrl,
@@ -92,6 +116,7 @@ export function GalleryToolbar({
   onFilterChange,
   onClearFilters
 }: {
+  animateEntrance: boolean;
   filters: GalleryFilters;
   facets: GalleryFacetsDto | undefined;
   randomUrl: string;
@@ -108,7 +133,7 @@ export function GalleryToolbar({
   onFilterChange: (key: keyof GalleryFilters, value: string) => void;
   onClearFilters: () => void;
 }) {
-  const entrance = useOneShotAnimation(true);
+  const entrance = useOneShotAnimation(animateEntrance);
   const mobileLayout = useMediaQuery(mobileViewportMediaQuery);
   const actionFollowsFilters = useMediaQuery("(min-width: 1000px)");
   const activeFilterCount = [
@@ -125,7 +150,6 @@ export function GalleryToolbar({
   };
   const desktopClearAction = (
     <div className="gallery-filter-action">
-      <span>操作</span>
       <button
         ref={!mobileLayout ? clearFiltersRef : undefined}
         type="button"
@@ -139,14 +163,12 @@ export function GalleryToolbar({
   );
   const randomLink = (
     <div className="theme-link">
-      <span>随机图片API</span>
-      <div className="theme-link-row">
-        <div className="generated-link-field">
-          <code>
-            <RandomLinkText value={randomUrl} />
-          </code>
-          <CopyButton value={randomUrl} ariaLabel="复制随机图片链接" />
-        </div>
+      <div className="generated-link-field">
+        <span className="generated-link-label">随机API</span>
+        <code>
+          <RandomLinkText value={randomUrl} />
+        </code>
+        <CopyButton value={randomUrl} ariaLabel="复制随机图片链接" />
       </div>
     </div>
   );
@@ -204,13 +226,12 @@ export function GalleryToolbar({
           id="gallery-filter-panel"
           className="gallery-filter-panel"
           role="group"
-          aria-label="画廊筛选条件"
+          aria-label="图片筛选条件"
           aria-hidden={filterPanelHidden}
           inert={filterPanelHidden}
         >
           <div className="gallery-filter-fields">
-            <label className="gallery-axis">
-              设备
+            <div className="gallery-axis">
               <SelectMenu
                 value={filters.device}
                 onChange={(value) => onFilterChange("device", value)}
@@ -225,9 +246,8 @@ export function GalleryToolbar({
                 ariaLabel="设备"
                 menuClassName="public-gallery-menu"
               />
-            </label>
-            <label className="gallery-axis">
-              亮度
+            </div>
+            <div className="gallery-axis">
               <SelectMenu
                 value={filters.brightness}
                 onChange={(value) => onFilterChange("brightness", value)}
@@ -241,9 +261,8 @@ export function GalleryToolbar({
                 ariaLabel="亮度"
                 menuClassName="public-gallery-menu"
               />
-            </label>
+            </div>
             <div className="gallery-filter-field gallery-theme-filter">
-              <label htmlFor="gallery-theme-facet">主题</label>
               <FacetSelector
                 options={facets?.themes ?? []}
                 value={filters.theme}
@@ -255,7 +274,6 @@ export function GalleryToolbar({
               />
             </div>
             <div className="gallery-filter-field gallery-tag-filter">
-              <label htmlFor="gallery-tag-facet">标签</label>
               <FacetSelector
                 options={facets?.tags ?? []}
                 value={filters.tag}
@@ -267,7 +285,6 @@ export function GalleryToolbar({
               />
             </div>
             <div className="gallery-filter-field gallery-author-filter">
-              <label htmlFor="gallery-author-facet">作者</label>
               <FacetSelector
                 options={facets?.authors ?? []}
                 value={filters.author}

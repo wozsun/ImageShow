@@ -110,12 +110,15 @@ PostgreSQL 事务推进 `ready_image_revision`。提交后仍持有进程内写�
   "items": [
     {
       "id": "019f8457-063a-7002-a580-7a432dc7fd8d",
+      "title": "示例图片",
+      "author": "photographer",
       "object_url": "https://static.example.com/full/8d/019f8457-063a-7002-a580-7a432dc7fd8d.webp",
       "thumb_url": "https://static.example.com/thumbs/8d/019f8457-063a-7002-a580-7a432dc7fd8d.webp",
       "device": "pc",
       "brightness": "dark",
       "theme": "theme",
       "tags": ["sample"],
+      "diff_original": true,
       "width": 2560,
       "height": 1440,
       "image_time": "2026-08-03T12:00:00.000Z"
@@ -123,6 +126,10 @@ PostgreSQL 事务推进 `ready_image_revision`。提交后仍持有进程内写�
   ]
 }
 ```
+
+`title`、`author` 与 `diff_original` 让公开页面在不额外读取详情的情况下建立卡片；描述、来源仍只在
+点击后由公开详情接口读取。展映的乱序模式使用当前筛选请求 `limit=200`，仍受同一去重、缓存和
+PostgreSQL 有界降级约束，不建立展映专用随机池。
 
 只写 `mode=json` 等同 `limit=1`，但仍返回数组。`limit` 是上限而非数量保证。GET 与 HEAD 都为
 `no-store`；HEAD 返回与 GET 一致的状态、内容类型和内容长度，但不发送正文。

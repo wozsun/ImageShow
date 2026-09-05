@@ -14,6 +14,7 @@ import {
   homeBackground,
   homeBannerLabel,
   homeBannerTitle,
+  homeBrowseTarget,
   imagePageSize,
   importFetchTimeoutSeconds,
   importTypesKeepingOriginalLink,
@@ -37,6 +38,10 @@ import {
   normalizeQualityStep,
   randomDefaultMethod,
   recentUploads,
+  showDensity,
+  showDriftSpeed,
+  showMode,
+  showOrder,
   siteRoot,
   sessionTtlSeconds,
   siteDomain,
@@ -71,11 +76,21 @@ const runtimeConfigSchema = z.strictObject({
     root: siteRoot,
     home: z.strictObject({
       enabled: z.boolean(),
+      browse_target: homeBrowseTarget,
       background: homeBackground,
       banner_label: homeBannerLabel,
       banner_title: homeBannerTitle
     }),
+    show: z.strictObject({
+      enabled: z.boolean(),
+      autoplay: z.boolean(),
+      mode: showMode,
+      density: showDensity,
+      drift_speed: showDriftSpeed,
+      order: showOrder
+    }),
     gallery: z.strictObject({
+      enabled: z.boolean(),
       limit: galleryLimit,
       order: galleryOrder,
       public_original_button: z.boolean()

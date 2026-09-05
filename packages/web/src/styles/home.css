@@ -309,6 +309,14 @@
   transition: transform .16s ease;
 }
 
+.home-gallery-entry.is-disabled {
+  color: var(--public-color-home-toolbar-description);
+  background: var(--public-color-home-reset-surface);
+  border-color: var(--public-color-border-default);
+  box-shadow: none;
+  cursor: default;
+}
+
 .home-banner {
   position: relative;
   z-index: 1;

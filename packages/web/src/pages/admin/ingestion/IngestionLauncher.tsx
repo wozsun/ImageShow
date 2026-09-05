@@ -5,6 +5,7 @@ import {
   useRef,
   useState
 } from "react";
+import type { AdminSettings } from "@imageshow/shared/browser";
 import { AsyncIntentFence } from "../../../lib/async-intent-fence.js";
 import {
   createPageLifetimeModuleLoader
@@ -35,12 +36,14 @@ const loadImportSourceModule =
   );
 
 export function IngestionLauncher({
+  settings,
   showTriggers,
   disabled,
   onDone,
   onLoadError,
   moduleLoaders
 }: {
+  settings: AdminSettings;
   showTriggers: boolean;
   disabled: boolean;
   onDone: () => void;
@@ -202,6 +205,7 @@ export function IngestionLauncher({
       )}
       {IngestionComponent && (
         <IngestionComponent
+          settings={settings}
           activation={activation}
           activationEnabled={showTriggers}
           loadImportSourceModule={importSourceLoader}

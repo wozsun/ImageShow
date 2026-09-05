@@ -2,9 +2,9 @@ import {
   publicNavigationHeaderHideThreshold,
   publicNavigationHeaderRevealThreshold,
   publicNavigationTopRevealThreshold
-} from "../../lib/ui/public-navigation.js";
+} from "./public-navigation.js";
 
-const galleryNavigationThresholds = {
+const publicImageNavigationThresholds = {
   hideHeader: publicNavigationHeaderHideThreshold,
   hideToolbar: 56,
   revealToolbar: 28,
@@ -12,41 +12,43 @@ const galleryNavigationThresholds = {
   revealAtTop: publicNavigationTopRevealThreshold
 } as const;
 
-export type GalleryNavigationStage = "visible" | "toolbar-only" | "hidden";
+export type PublicImageNavigationStage = "visible" | "toolbar-only" | "hidden";
 
 type ScrollDirection = "up" | "down" | null;
 
-export type GalleryNavigationState = {
-  stage: GalleryNavigationStage;
+export type PublicImageNavigationState = {
+  stage: PublicImageNavigationStage;
   direction: ScrollDirection;
   distance: number;
 };
 
-export type GalleryNavigationInput = {
+export type PublicImageNavigationInput = {
   delta: number;
   headerPresent: boolean;
   scrollTop: number;
   toolbarHeight: number;
   lockedOpen: boolean;
+  allowReveal?: boolean;
 };
 
-export const initialGalleryNavigationState: GalleryNavigationState = {
+export const initialPublicImageNavigationState: PublicImageNavigationState = {
   stage: "visible",
   direction: null,
   distance: 0
 };
 
-function settledState(stage: GalleryNavigationStage): GalleryNavigationState {
+function settledState(stage: PublicImageNavigationStage): PublicImageNavigationState {
   return { stage, direction: null, distance: 0 };
 }
 
-export function advanceGalleryNavigation(
-  state: GalleryNavigationState,
-  input: GalleryNavigationInput
-): GalleryNavigationState {
+export function advancePublicImageNavigation(
+  state: PublicImageNavigationState,
+  input: PublicImageNavigationInput
+): PublicImageNavigationState {
   if (
     input.lockedOpen
-    || input.scrollTop <= galleryNavigationThresholds.revealAtTop
+    || (input.allowReveal !== false
+      && input.scrollTop <= publicImageNavigationThresholds.revealAtTop)
   ) {
     return settledState("visible");
   }
@@ -60,21 +62,22 @@ export function advanceGalleryNavigation(
   let stepDistance = Math.abs(input.delta);
 
   if (direction === "up") {
+    if (input.allowReveal === false) return settledState(state.stage);
     if (!input.headerPresent) {
       if (state.stage !== "hidden") return settledState("visible");
       const distance = carriedDistance + stepDistance;
-      if (distance < galleryNavigationThresholds.revealToolbar) {
+      if (distance < publicImageNavigationThresholds.revealToolbar) {
         return { stage: "hidden", direction, distance };
       }
       return settledState("visible");
     }
     if (state.stage === "visible") return settledState("visible");
-    let stage: GalleryNavigationStage = state.stage;
+    let stage: PublicImageNavigationStage = state.stage;
     let distance = carriedDistance + stepDistance;
     while (stage !== "visible") {
       const threshold = stage === "hidden"
-        ? galleryNavigationThresholds.revealToolbar
-        : galleryNavigationThresholds.revealHeader;
+        ? publicImageNavigationThresholds.revealToolbar
+        : publicImageNavigationThresholds.revealHeader;
       if (distance < threshold) return { stage, direction, distance };
       distance -= threshold;
       stage = stage === "hidden" ? "toolbar-only" : "visible";
@@ -98,18 +101,18 @@ export function advanceGalleryNavigation(
 
   if (!input.headerPresent) {
     const distance = carriedDistance + stepDistance;
-    if (distance < galleryNavigationThresholds.hideToolbar) {
+    if (distance < publicImageNavigationThresholds.hideToolbar) {
       return { stage: "visible", direction, distance };
     }
     return settledState("hidden");
   }
 
-  let stage: GalleryNavigationStage = state.stage;
+  let stage: PublicImageNavigationStage = state.stage;
   let distance = carriedDistance + stepDistance;
   while (stage !== "hidden") {
     const threshold = stage === "visible"
-      ? galleryNavigationThresholds.hideHeader
-      : galleryNavigationThresholds.hideToolbar;
+      ? publicImageNavigationThresholds.hideHeader
+      : publicImageNavigationThresholds.hideToolbar;
     if (distance < threshold) return { stage, direction, distance };
     distance -= threshold;
     stage = stage === "visible" ? "toolbar-only" : "hidden";

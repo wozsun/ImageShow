@@ -6,7 +6,7 @@ import {
   useRef,
   useState
 } from "react";
-import { useAdminSettings } from "../../../lib/api/admin-settings.js";
+import type { AdminSettings } from "@imageshow/shared/browser";
 import { storageBackendLabel } from "../../../lib/ui/select-options.js";
 import { useIngestionVocabulary } from "../../../lib/api/ingestion-vocabulary.js";
 import {
@@ -45,6 +45,7 @@ type ImportSourceDialogModule =
   typeof import("./import/ImportSourceDialog.js");
 
 export function Ingestion({
+  settings,
   activation,
   activationEnabled,
   loadImportSourceModule,
@@ -53,6 +54,7 @@ export function Ingestion({
   onDone,
   onLoadError
 }: {
+  settings: AdminSettings;
   activation: IngestionActivation | null;
   activationEnabled: boolean;
   loadImportSourceModule: () => Promise<ImportSourceDialogModule>;
@@ -90,27 +92,23 @@ export function Ingestion({
     return () => intentFence.unmount();
   }, []);
 
-  const { data: settingsData } = useAdminSettings();
   const { data: vocabulary } = useIngestionVocabulary(open);
   const themes = vocabulary?.themes ?? EMPTY_FACET_OPTIONS;
   const tags = vocabulary?.tags ?? EMPTY_FACET_OPTIONS;
   const authors = vocabulary?.authors ?? EMPTY_FACET_OPTIONS;
 
-  const pageSize = settingsData?.settings.ingestion.list_page_size ?? 20;
-  const uploadMaxItems = settingsData?.settings.upload.max_items ?? 200;
-  const maxBytes = (settingsData?.settings.ingestion.max_file_size_mb ?? 100) * 1024 * 1024;
-  const maxLongEdge = settingsData?.settings.ingestion.max_long_edge ?? 32000;
-  const uploadBrowserConcurrency =
-    settingsData?.settings.upload.browser_concurrency ?? 2;
-  // 配置请求可能独立失败；未知值不能擅自保留公开链接。Server 接管时仍按
-  // source_type 和当前白名单权威生成 canonical metadata。
-  const importTypesKeepingOriginalLink =
-    settingsData?.settings.import.keep_original_link ?? [];
+  const pageSize = settings.ingestion.list_page_size;
+  const uploadMaxItems = settings.upload.max_items;
+  const maxBytes = settings.ingestion.max_file_size_mb * 1024 * 1024;
+  const maxLongEdge = settings.ingestion.max_long_edge;
+  const uploadBrowserConcurrency = settings.upload.browser_concurrency;
+  // 配置由页面就绪边界取得并传入；Server 接管时仍按 source_type 和当前
+  // 白名单权威生成 canonical metadata。
+  const importTypesKeepingOriginalLink = settings.import.keep_original_link;
   const keepOriginalLinkForUrlImports = importTypesKeepingOriginalLink.includes("url");
-  const autoImportAfterParse =
-    settingsData?.settings.import.auto_import === true;
-  const importMaxItems = settingsData?.settings.import.max_items ?? 200;
-  const weiboMaxItems = settingsData?.settings.weibo.max_items ?? 10;
+  const autoImportAfterParse = settings.import.auto_import;
+  const importMaxItems = settings.import.max_items;
+  const weiboMaxItems = settings.weibo.max_items;
   const { data: storageData } = useStorageOptions();
   const storageBackends = useMemo(() => storageData?.backends ?? [], [storageData?.backends]);
   const defaultBackend = storageBackends.find((backend) => backend.is_default)?.slug ?? "local";

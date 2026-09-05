@@ -40,9 +40,9 @@ export function SiteHead() {
 
   useEffect(() => {
     if (!site) return;
-    document.title = site.name || "ImageShow";
+    document.title = site.name;
     const description = ensureMeta("description");
-    description.content = site.description || site.name || "ImageShow";
+    description.content = site.description;
 
     let link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
     if (!link) {
@@ -51,7 +51,7 @@ export function SiteHead() {
       document.head.appendChild(link);
     }
     link.type = site.icon.endsWith(".svg") ? "image/svg+xml" : "";
-    link.href = site.icon || "/assets/brand/favicon.svg";
+    link.href = site.icon;
   }, [site?.name, site?.description, site?.icon]);
   return null;
 }

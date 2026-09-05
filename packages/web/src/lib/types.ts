@@ -1,8 +1,7 @@
 export type {
   AdminSettings,
   Brightness,
-  Device,
-  SiteSettings
+  Device
 } from "@imageshow/shared/browser";
 import type {
   AdminUserDto,

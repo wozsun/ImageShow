@@ -20,6 +20,7 @@ const iconGroups = [
     exportName: "ICONS",
     typeName: "IconName",
     names: [
+      "add-line",
       "arrow-down-s-line",
       "arrow-up-line",
       "check-line",
@@ -33,8 +34,16 @@ const iconGroups = [
       "home-4-line",
       "image-line",
       "menu-line",
+      "pause-fill",
       "pencil-line",
+      "play-fill",
       "refresh-line",
+      "reset-left-line",
+      "shuffle-line",
+      "slideshow-3-line",
+      "sort-asc",
+      "sort-desc",
+      "subtract-line",
       "settings-3-line"
     ]
   },
@@ -44,7 +53,6 @@ const iconGroups = [
     exportName: "ADMIN_ICONS",
     typeName: "AdminOnlyIconName",
     names: [
-      "add-line",
       "arrow-go-back-line",
       "arrow-left-right-line",
       "checkbox-circle-line",
@@ -72,7 +80,6 @@ const iconGroups = [
       "price-tag-3-line",
       "quill-pen-line",
       "save-3-line",
-      "shuffle-line",
       "star-fill",
       "star-line",
       "sun-line",

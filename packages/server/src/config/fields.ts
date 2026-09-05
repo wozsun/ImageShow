@@ -3,16 +3,25 @@ import { isIP } from "node:net";
 import { appConfig } from "@imageshow/shared";
 import {
   galleryOrders,
+  homeBrowseTargets,
   importSourceTypes,
   logLevels,
   randomDefaultMethods,
+  showDensities,
+  showModes,
+  showOrders,
   siteRoots
 } from "@imageshow/shared/browser";
 import { isRootRelativeOrHttpsUrl } from "../core/url-validation.ts";
 
 export const siteRoot = z.enum(siteRoots);
+export const homeBrowseTarget = z.enum(homeBrowseTargets);
 export const randomDefaultMethod = z.enum(randomDefaultMethods);
 export const galleryOrder = z.enum(galleryOrders);
+export const showDensity = z.enum(showDensities);
+export const showMode = z.enum(showModes);
+export const showOrder = z.enum(showOrders);
+export const showDriftSpeed = z.coerce.number().int().min(10).max(60);
 
 export const siteName = z.string().trim().min(1);
 export const siteDomain = z.string().trim().toLowerCase().min(1).max(259).refine((value) => {

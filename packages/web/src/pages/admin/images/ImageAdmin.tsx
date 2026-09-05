@@ -6,7 +6,7 @@ import {
 } from "react";
 import { useSearchParams } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { adminPermissions } from "@imageshow/shared/browser";
+import { adminPermissions, type AdminSettings } from "@imageshow/shared/browser";
 import { AdminIcon } from "../../../components/icon/AdminIcon.js";
 import { StableButtonLabel } from "../../../components/data-display/StableButtonLabel.js";
 import { ConfirmDialog } from "../../../components/feedback/ConfirmDialog.js";
@@ -18,10 +18,9 @@ import {
 import { LabeledSwitch } from "../../../components/form/LabeledSwitch.js";
 import { OverlayScrollbar } from "../../../components/layout/OverlayScrollbar.js";
 import { AdminPagination } from "../../../components/navigation/AdminPagination.js";
-import { adminImagePageLimit } from "../../../lib/constants.js";
 import { preloadIntentProps } from "../../../lib/ui/preload-intent.js";
 import { reportAdminUiError } from "../../../lib/ui/error-reporting.js";
-import { useAdminSettings } from "../../../lib/api/admin-settings.js";
+import { AdminSettingsBoundary } from "../../../components/feedback/AdminSettingsBoundary.js";
 import { useIngestionVocabulary } from "../../../lib/api/ingestion-vocabulary.js";
 import { useStorageNameResolver } from "../../../lib/api/storage-options.js";
 import type { AdminImageListItem } from "../../../lib/types.js";
@@ -62,6 +61,14 @@ import "../../../styles/admin/images.css";
 const imageRangeSelectionHelpId = "admin-image-range-selection-help";
 
 export function ImageAdmin() {
+  return (
+    <AdminSettingsBoundary>
+      {(settings) => <ImageAdminContent settings={settings} />}
+    </AdminSettingsBoundary>
+  );
+}
+
+function ImageAdminContent({ settings }: { settings: AdminSettings }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const viewParam = searchParams.get("view");
   const routeView: ImageAdminView = viewParam === "unset" || viewParam === "deleted"
@@ -83,18 +90,16 @@ export function ImageAdmin() {
   const gridRef = useRef<HTMLDivElement | null>(null);
   const frozenBatchTrashIdsRef = useRef<string[]>([]);
   const client = useQueryClient();
-  const { data: settingsData } = useAdminSettings();
 
   const { data: vocabulary } = useIngestionVocabulary();
   // 列表卡片的「所在存储」展示后端显示名（而非 slug）；从后端列表解析。
   const storageName = useStorageNameResolver();
-  const pageSize = settingsData?.settings.admin.image_page_size ?? adminImagePageLimit;
-  const editPageSize = settingsData?.settings.ingestion.list_page_size ?? 20;
+  const pageSize = settings.admin.image_page_size;
+  const editPageSize = settings.ingestion.list_page_size;
   const navigation = useImageAdminPageNavigation({
     view,
     filters,
-    pageSize,
-    enabled: Boolean(settingsData)
+    pageSize
   });
   const {
     items,
@@ -272,6 +277,7 @@ export function ImageAdmin() {
         </div>
         <div className="image-admin-head-tools">
           <IngestionLauncher
+            settings={settings}
             showTriggers={view === "ready"}
             disabled={operationBusy || detailPending || editorPending}
             onDone={finishIngestionBatch}

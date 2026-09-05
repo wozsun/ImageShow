@@ -2,6 +2,7 @@ import { z } from "zod";
 import { appConfig } from "@imageshow/shared";
 import {
   adminImagePageLimit,
+  publicImageOrders,
   type ImageUpdateItemInputDto,
   type ImageUpdateRequestDto,
   slugMaxLength,
@@ -187,6 +188,7 @@ export const listQuery = z.strictObject({
   cursor: z.string().optional(),
   limit: safePositiveIntegerInput
     .max(appConfig.pagination.maxLimit).optional(),
+  order: z.enum(publicImageOrders).default("latest"),
   shuffle: z.enum(["1", "true"]).optional().transform(Boolean)
 }) satisfies z.ZodType<PublicImageListQuery>;
 

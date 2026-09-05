@@ -2,7 +2,8 @@ import type {
   Brightness,
   Device,
   PublicImageDetailDto,
-  PublicImageListResponseDto
+  PublicImageListResponseDto,
+  PublicImageOrder
 } from "@imageshow/shared/browser";
 import { getRuntimeConfig } from "../../config/runtime-config-store.ts";
 import { ApiError } from "../../core/api-error.ts";
@@ -34,6 +35,7 @@ export type PublicImageListQuery = {
   author?: string;
   cursor?: string;
   limit?: number;
+  order?: PublicImageOrder;
   shuffle?: boolean;
 };
 
@@ -56,10 +58,12 @@ async function listPublicImagesWithAccess(
   database: PublicDatabaseReadAccess
 ): Promise<PublicImageListResponseDto> {
   const limit = query.limit ?? getRuntimeConfig().site.gallery.limit;
+  const order = query.order ?? "latest";
   const plan = await resolveImageFilterPlan(query, database);
   const cached = await readReadyImageCursorPage(
     plan,
     limit,
+    order,
     query.cursor,
     signal,
     Boolean(database.reader)
@@ -74,13 +78,14 @@ async function listPublicImagesWithAccess(
     });
   }
 
-  const fallbackKey = JSON.stringify({ ...query, limit });
+  const fallbackKey = JSON.stringify({ ...query, limit, order });
   const load = async (reader: DatabaseReader) => {
     const { params, where } = buildResolvedReadyImageListFilters(plan);
     const page = await fetchPublicImageCardPage(
       where,
       params,
       limit,
+      order,
       query.cursor,
       reader
     );

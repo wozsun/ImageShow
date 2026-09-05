@@ -1,5 +1,5 @@
 @media (min-width: 1390px) {
-  .gallery-toolbar label.gallery-axis {
+  .gallery-toolbar .gallery-axis {
     width: auto;
     min-width: 120px;
     flex: 1 1 120px;
@@ -16,6 +16,8 @@
 }
 
 @media (min-width: 761px) and (max-width: 1389px) {
+  .gallery-page { --gallery-toolbar-height: 113px; }
+
   .gallery-page .gallery-toolbar > .gallery-filter-panel {
     width: 100%;
     display: grid;
@@ -29,7 +31,7 @@
     gap: 12px;
     align-items: end;
   }
-  .gallery-toolbar .gallery-filter-fields > label.gallery-axis {
+  .gallery-toolbar .gallery-filter-fields > .gallery-axis {
     min-width: 120px;
     width: auto;
     flex: 1 1 120px;
@@ -75,7 +77,7 @@
     + .gallery-toolbar {
     max-height: 100svh;
   }
-  .gallery-toolbar :is(label.gallery-axis, .gallery-filter-field) { min-width: 0; }
+  .gallery-toolbar :is(.gallery-axis, .gallery-filter-field) { min-width: 0; }
 
   .gallery-filter-actions {
     width: 100%;
@@ -138,7 +140,7 @@
     grid-template-columns: 1fr 1fr;
     gap: 12px;
     max-height: min(70svh, calc(100svh - 100% - var(--public-page-header-height)));
-    padding: 12px 16px 16px;
+    padding: 12px 16px 10px;
     overflow-y: auto;
     overscroll-behavior: contain;
     align-items: end;
@@ -167,13 +169,12 @@
   }
   .gallery-filter-fields { display: contents; }
   .gallery-toolbar .gallery-filter-fields > .gallery-filter-field { width: auto; }
-  .gallery-filter-fields > label.gallery-axis { order: 1; width: auto; }
+  .gallery-filter-fields > .gallery-axis { order: 1; width: auto; }
   .gallery-filter-fields > .gallery-theme-filter,
   .gallery-filter-fields > .gallery-author-filter { order: 2; }
   .gallery-filter-fields > .gallery-tag-filter { order: 3; grid-column: 1 / -1; }
   .gallery-filter-panel > .theme-link { order: 4; grid-column: 1 / -1; }
-  .theme-link { width: 100%; min-width: 0; flex: 0 0 auto; gap: 4px; }
-  .theme-link > span { font-size: 13px; line-height: 18px; }
+  .theme-link { width: 100%; min-width: 0; flex: 0 0 auto; }
   .gallery {
     --gallery-gap: 12px;
     padding: 16px;
@@ -188,14 +189,13 @@
 
 /* Keep accessibility overrides after desktop and mobile declarations. */
 @media (prefers-reduced-motion: reduce) {
-  .gallery-toolbar { transition: none; }
   .gallery-toolbar.is-gallery-toolbar-entrance,
   .gallery-virtual-tile.is-gallery-card-reveal-initial,
   .gallery-virtual-tile.is-gallery-card-reveal-subsequent {
     animation: none;
   }
   .tile { transition: none; }
-  .tile:hover { translate: none; }
+  .tile:hover { transform: none; }
   .tile-image-shell img { transition: none; }
   .gallery-back-to-top { transition: none; }
   .gallery-filter-chevron,

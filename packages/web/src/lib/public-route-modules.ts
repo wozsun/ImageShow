@@ -102,6 +102,7 @@ type PublicRoutePreloadIntentProps = ReturnType<
 
 type PublicRoutePreloadIntents = {
   home: PublicRoutePreloadIntentProps;
+  show: PublicRoutePreloadIntentProps;
   gallery: PublicRoutePreloadIntentProps;
 };
 
@@ -111,10 +112,12 @@ const PublicRoutePreloadContext = createContext<
 
 export function createPublicRoutePreloadIntents(
   homeRouteModule: ReturnType<typeof createPublicRouteModuleLoader>,
+  showRouteModule: ReturnType<typeof createPublicRouteModuleLoader>,
   galleryRouteModule: ReturnType<typeof createPublicRouteModuleLoader>
 ): PublicRoutePreloadIntents {
   return {
     home: routePreloadIntentProps(homeRouteModule),
+    show: routePreloadIntentProps(showRouteModule),
     gallery: routePreloadIntentProps(galleryRouteModule)
   };
 }

@@ -1,7 +1,13 @@
 @import "./gallery-semantic-colors.css";
 
+@property --gallery-card-border-color {
+  syntax: "<color>";
+  inherits: false;
+  initial-value: transparent;
+}
+
 .gallery-page {
-  --gallery-toolbar-height: 99px;
+  --gallery-toolbar-height: 61px;
   --public-navigation-secondary-height: var(--gallery-toolbar-height);
   position: relative;
   isolation: isolate;
@@ -10,7 +16,7 @@
 }
 
 .gallery-atmosphere,
-.gallery-page::before,
+.gallery-starfield,
 .gallery-page::after {
   position: fixed;
   top: 0;
@@ -49,41 +55,13 @@
     );
 }
 
-.gallery-page::before,
 .gallery-page::after {
   content: "";
 }
 
-.gallery-page::before {
+.gallery-starfield {
   z-index: -2;
   opacity: .68;
-  background-image:
-    radial-gradient(
-      circle at 19px 37px,
-      var(--public-color-gallery-star-primary) 0 .72px,
-      var(--public-color-gallery-star-primary-halo) .92px,
-      transparent 1.48px
-    ),
-    radial-gradient(
-      circle at 83px 29px,
-      var(--public-color-gallery-star-secondary) 0 .58px,
-      var(--public-color-gallery-star-secondary-halo) .86px,
-      transparent 1.34px
-    ),
-    radial-gradient(
-      circle at 47px 113px,
-      var(--public-color-gallery-star-tertiary) 0 .5px,
-      var(--public-color-gallery-star-tertiary-halo) .78px,
-      transparent 1.22px
-    );
-  background-position:
-    7px 13px,
-    -41px 67px,
-    103px -31px;
-  background-size:
-    223px 191px,
-    347px 269px,
-    487px 383px;
   -webkit-mask-image: linear-gradient(
     117deg,
     var(--public-color-gallery-mask-strongest),
@@ -135,22 +113,17 @@
 .gallery-toolbar {
   --gallery-control-height: 40px;
   --gallery-filter-action-width: 86px;
-  --gallery-toolbar-shift: 0%;
   z-index: 6;
   width: 100%;
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
   align-items: end;
-  padding: 10px 28px 16px;
+  padding: 10px 28px;
   color: var(--public-color-text-primary);
   background: transparent;
   border-bottom: 1px solid var(--public-color-toolbar-border);
   box-shadow: 0 12px 30px var(--public-shadow-navigation);
-  transform: translateY(var(--gallery-toolbar-shift));
-  transition:
-    transform var(--public-nav-motion-duration)
-    var(--public-nav-motion-easing);
 }
 
 .gallery-toolbar.is-gallery-toolbar-entrance {
@@ -160,16 +133,13 @@
   height: var(--gallery-toolbar-height);
 }
 .gallery-toolbar.is-scroll-hidden {
-  --gallery-toolbar-shift: -100%;
   pointer-events: none;
 }
 .gallery-filter-panel,
 .gallery-filter-fields { display: contents; }
-.gallery-toolbar :is(label.gallery-axis, .gallery-filter-field) {
+.gallery-toolbar :is(.gallery-axis, .gallery-filter-field) {
   display: grid;
-  gap: 6px;
   min-width: 150px;
-  color: var(--public-color-gallery-toolbar-label);
   line-height: 20px;
 }
 .gallery-toolbar .gallery-filter-fields > .gallery-filter-field {
@@ -257,7 +227,7 @@
   background: var(--public-color-gallery-menu-surface);
 }
 
-.gallery-toolbar label.gallery-axis { min-width: 0; width: 120px; flex: 0 0 auto; }
+.gallery-toolbar .gallery-axis { min-width: 0; width: 120px; flex: 0 0 auto; }
 
 .gallery-filter-actions,
 .gallery-filter-toggle { display: none; }
@@ -266,9 +236,6 @@
   min-width: var(--gallery-filter-action-width);
   flex: 0 0 var(--gallery-filter-action-width);
   display: grid;
-  gap: 6px;
-  color: var(--public-color-gallery-toolbar-label);
-  line-height: 20px;
 }
 .gallery-filter-clear {
   width: 100%;
@@ -283,30 +250,34 @@
 .theme-link {
   min-width: min(520px, 100%);
   flex: 1 1 360px;
-  display: grid;
-  gap: 6px;
-  color: var(--public-color-gallery-toolbar-label);
-}
-.theme-link > span { line-height: 20px; }
-.theme-link-row {
-  min-width: 0;
 }
 .generated-link-field {
   position: relative;
-  min-width: 0;
-}
-.generated-link-field code {
   height: var(--gallery-control-height);
   width: 100%;
   min-width: 0;
   padding: 0 calc(var(--gallery-control-height) + 8px) 0 10px;
-  overflow: hidden;
-  color: var(--public-color-gallery-code-text);
   background: var(--public-color-gallery-code-surface);
   border: 1px solid var(--public-color-border-default);
   border-radius: 6px;
   display: flex;
   align-items: center;
+  gap: 8px;
+}
+.generated-link-label {
+  flex: 0 0 auto;
+  color: var(--public-color-gallery-toolbar-label);
+  font-size: 13px;
+  line-height: 20px;
+  white-space: nowrap;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.generated-link-field code {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--public-color-gallery-code-text);
 }
 .generated-link-value {
   width: 100%;
@@ -315,6 +286,7 @@
   align-items: baseline;
   overflow: hidden;
   white-space: nowrap;
+  cursor: text;
 }
 .generated-link-text {
   min-width: 0;
@@ -322,11 +294,15 @@
   text-overflow: clip;
   white-space: nowrap;
 }
-.generated-link-truncation { flex: 0 0 auto; }
+.generated-link-truncation {
+  flex: 0 0 auto;
+  -webkit-user-select: none;
+  user-select: none;
+}
 .generated-link-field .copy-button {
   position: absolute;
-  top: 4px;
-  right: 4px;
+  top: 3px;
+  right: 3px;
   width: calc(var(--gallery-control-height) - 8px);
   min-height: calc(var(--gallery-control-height) - 8px);
   height: calc(var(--gallery-control-height) - 8px);
@@ -337,7 +313,6 @@
 }
 .gallery {
   --gallery-gap: 16px;
-  --gallery-interactive-card-lift: -1px;
   padding: 28px;
 }
 .gallery-window {
@@ -347,6 +322,13 @@
   contain: layout style;
 }
 .tile {
+  --gallery-card-border-color: var(--public-color-border-default);
+  --gallery-card-edge-color: transparent;
+  --public-card-magnet-axis-x: 0;
+  --public-card-magnet-axis-y: 0;
+  --public-card-magnet-angle: 0deg;
+  --public-card-magnet-shadow-x: 0px;
+  --public-card-magnet-shadow-y: 0px;
   position: relative;
   display: block;
   width: 100%;
@@ -355,13 +337,22 @@
   padding: 0;
   overflow: hidden;
   text-align: left;
-  background: var(--public-color-surface-default);
-  border-color: var(--public-color-border-default);
+  /* Paint the existing border box; the opaque padding fill keeps every
+     gradient out of the photo without adding an inset ring or mask layer. */
+  background:
+    linear-gradient(var(--public-color-surface-default), var(--public-color-surface-default)) padding-box,
+    radial-gradient(
+      ellipse 65% 65% at var(--public-card-magnet-light-x, 50%) var(--public-card-magnet-light-y, 50%),
+      var(--gallery-card-edge-color), transparent
+    ) border-box,
+    linear-gradient(var(--gallery-card-border-color), var(--gallery-card-border-color)) border-box,
+    var(--public-color-surface-default);
+  border-color: transparent;
   box-shadow: 0 8px 22px var(--public-shadow-gallery-tile);
   transition:
-    border-color .16s ease,
+    --gallery-card-border-color .16s ease,
     box-shadow .16s ease,
-    translate .16s ease;
+    transform .5s cubic-bezier(.22, 1, .36, 1);
 }
 .gallery-virtual-tile {
   position: absolute;
@@ -376,11 +367,29 @@
 @media (hover: hover) and (pointer: fine) {
   .tile:hover {
     z-index: 1;
-    border-color: var(--public-color-gallery-tile-border-hover);
+    --gallery-card-border-color: var(--public-color-gallery-tile-border-hover);
+    --gallery-card-edge-color: color-mix(
+      in srgb,
+      var(--public-color-card-edge-light) calc(var(--public-card-magnet-light-strength, 0) * 100%),
+      transparent
+    );
     box-shadow:
-      0 8px 22px var(--public-shadow-gallery-tile),
+      var(--public-card-magnet-shadow-x)
+      calc(8px + var(--public-card-magnet-shadow-y))
+      22px var(--public-shadow-gallery-tile),
       0 0 8px var(--public-shadow-gallery-tile-hover);
-    translate: 0 var(--gallery-interactive-card-lift);
+    transform:
+      perspective(1200px)
+      rotate3d(
+        var(--public-card-magnet-axis-x),
+        var(--public-card-magnet-axis-y),
+        0,
+        var(--public-card-magnet-angle)
+      )
+      scale(var(--gallery-card-hover-scale, 1.03));
+    transform-style: preserve-3d;
+    backface-visibility: hidden;
+    will-change: transform;
   }
 
   button.tile:not(:disabled):not(.select-trigger):not([data-availability-locked="true"]):hover {
@@ -421,9 +430,10 @@
 }
 .tile-image-shell img {
   display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
+  width: calc(100% + 2px);
+  height: calc(100% + 2px);
+  max-width: none;
+  object-fit: cover;
   background: var(--public-color-gallery-tile-surface);
   opacity: 0;
   transform: scale(1.025);
@@ -439,11 +449,11 @@
 .tile-info {
   position: absolute;
   right: 0;
-  bottom: 0;
+  bottom: -1px;
   left: 0;
   display: grid;
   gap: 2px;
-  padding: 10px 12px;
+  padding: 10px 12px 11px;
   color: var(--public-color-text-strong);
   line-height: 1.35;
   white-space: nowrap;
@@ -562,7 +572,7 @@
 }
 
 @media (max-width: 760px) {
-  .gallery-page::before {
+  .gallery-starfield {
     opacity: .48;
   }
 

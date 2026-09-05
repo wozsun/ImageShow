@@ -1,8 +1,11 @@
 import type { LogLevel, SiteVersionSettings } from "./common.ts";
 import type { ImportSourceTypeDto } from "./ingestion.ts";
 
-export const siteRoots = ["home", "gallery"] as const;
+export const siteRoots = ["home", "show", "gallery"] as const;
 export type SiteRoot = (typeof siteRoots)[number];
+
+export const homeBrowseTargets = ["gallery", "show"] as const;
+export type HomeBrowseTarget = (typeof homeBrowseTargets)[number];
 
 export const randomDefaultMethods = ["proxy", "redirect"] as const;
 export type RandomDefaultMethod = (typeof randomDefaultMethods)[number];
@@ -13,14 +16,34 @@ export type RandomMethod = (typeof randomMethods)[number];
 export const galleryOrders = ["latest", "random"] as const;
 export type GalleryOrder = (typeof galleryOrders)[number];
 
+export const showOrders = ["random", "latest", "oldest"] as const;
+export type ShowOrder = (typeof showOrders)[number];
+
+export const showModes = ["waterfall", "float"] as const;
+export type ShowMode = (typeof showModes)[number];
+
+export const showDensities = ["relaxed", "balanced", "dense"] as const;
+export type ShowDensity = (typeof showDensities)[number];
+
 export type SiteHomeSettings = {
   enabled: boolean;
+  browse_target: HomeBrowseTarget;
   background: string;
   banner_label: string;
   banner_title: string;
 };
 
+export type SiteShowSettings = {
+  enabled: boolean;
+  autoplay: boolean;
+  mode: ShowMode;
+  density: ShowDensity;
+  drift_speed: number;
+  order: ShowOrder;
+};
+
 export type SiteGallerySettings = {
+  enabled: boolean;
   limit: number;
   order: GalleryOrder;
   public_original_button: boolean;
@@ -34,11 +57,54 @@ export type RuntimeSiteSettings = {
   version: SiteVersionSettings;
   root: SiteRoot;
   home: SiteHomeSettings;
+  show: SiteShowSettings;
   gallery: SiteGallerySettings;
   random_method: RandomDefaultMethod;
   static_subdomain: string;
   robots_enabled: boolean;
 };
+
+export type PublicPagePath = "/home" | "/show" | "/gallery";
+
+type PublicPageAvailability = {
+  root: SiteRoot;
+  home: Pick<SiteHomeSettings, "enabled">;
+  show: Pick<SiteShowSettings, "enabled">;
+  gallery: Pick<SiteGallerySettings, "enabled">;
+};
+
+export function publicPageEnabled(
+  site: PublicPageAvailability,
+  root: SiteRoot
+) {
+  if (root === "home") return site.home.enabled;
+  if (root === "show") return site.show.enabled;
+  return site.gallery.enabled;
+}
+
+export function publicRootPath(
+  site: PublicPageAvailability
+): PublicPagePath | null {
+  if (publicPageEnabled(site, site.root)) return `/${site.root}`;
+  for (const fallback of ["gallery", "show", "home"] as const) {
+    if (publicPageEnabled(site, fallback)) return `/${fallback}`;
+  }
+  return null;
+}
+
+export function publicHomeBrowsePath(
+  site: {
+    home: Pick<SiteHomeSettings, "browse_target">;
+    show: Pick<SiteShowSettings, "enabled">;
+    gallery: Pick<SiteGallerySettings, "enabled">;
+  },
+  embedded = false
+): Extract<PublicPagePath, "/show" | "/gallery"> | "/embed/show" | "/embed/gallery" | null {
+  for (const target of [site.home.browse_target, "gallery", "show"] as const) {
+    if (site[target].enabled) return embedded ? `/embed/${target}` : `/${target}`;
+  }
+  return null;
+}
 
 export type EmbedSettings = {
   enabled: boolean;
@@ -132,21 +198,27 @@ export type SiteSettings = Pick<
   | "home"
   | "random_method"
 > & {
-  gallery: Pick<SiteGallerySettings, "limit" | "order">;
+  gallery: Pick<SiteGallerySettings, "enabled" | "limit" | "order">;
+  show: SiteShowSettings;
 };
 
 export type PublicSiteSettings = Pick<
   RuntimeSiteSettings,
   "name" | "description" | "icon" | "root" | "home"
 > & {
-  gallery: Pick<SiteGallerySettings, "order" | "public_original_button">;
+  gallery: Pick<
+    SiteGallerySettings,
+    "enabled" | "order" | "public_original_button"
+  >;
+  show: SiteShowSettings;
   static_url: string;
 };
 
 export type AdminSiteSettings = Omit<
   SiteSettings,
-  "domain" | "home" | "icon"
+  "domain" | "home" | "icon" | "show" | "gallery"
 > & {
+  gallery: Pick<SiteGallerySettings, "limit" | "order">;
   home: Pick<
     SiteHomeSettings,
     "background" | "banner_label" | "banner_title"

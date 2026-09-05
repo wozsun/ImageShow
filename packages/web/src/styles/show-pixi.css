@@ -1,0 +1,45 @@
+.show-pixi-canvas-host,
+.show-pixi-canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.show-pixi-canvas-host {
+  z-index: 1;
+  overflow: hidden;
+}
+
+.show-pixi-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+}
+
+.show-pixi-viewport.is-waterfall {
+  touch-action: none;
+  cursor: grab;
+}
+
+.show-pixi-viewport.is-waterfall:active { cursor: grabbing; }
+
+.show-pixi-viewport.is-float {
+  touch-action: none;
+  cursor: grab;
+}
+
+.show-pixi-viewport.is-float:active { cursor: grabbing; }
+
+.show-pixi-accessibility {
+  z-index: 3;
+}
+
+.show-pixi-page .show-query-state > p {
+  width: min(440px, calc(100vw - 32px));
+  margin: 0;
+  padding: 18px;
+  color: var(--public-color-text-primary);
+  background: var(--public-color-gallery-menu-surface);
+  border: 1px solid var(--public-color-border-default);
+  border-radius: 14px;
+}

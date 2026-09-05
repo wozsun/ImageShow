@@ -22,6 +22,12 @@ PostgreSQL。排查配置时先确认“这项配置由谁管理”，再判断�
 变量提供。归一化是长期的结构校验与自愈能力：只投影当前默认结构，结构之外的字段删除，
 缺少的字段按默认值补齐，不推测字段含义。
 
+运行时配置的默认值只定义在 shared 的 `appConfig.runtimeDefaults`，由服务端归一化后
+通过公开配置或后台设置 DTO 提供。前端不再为站点名称、图标、分页、接入限制与并发、
+导入策略等字段复制一套默认值；初次配置读取完成前保持加载状态，失败时提供重试。
+后台刷新失败且已有配置时保留当前页面和工作流。公开配置在服务端统一处理空描述回退到
+站点名，SPA 文档与浏览器页面头部直接消费同一有效投影。
+
 运行时配置模块本身不读取或写入文件。主进程在装配 HTTP 路由、注册配置变更监听器
 和启动 Worker 前显式初始化进程内快照；初始化失败时不会继续连接数据库或监听端口。
 Docker healthcheck 只读取并在内存中归一化已经存在的 `config.json`，缺失或非法时
@@ -40,11 +46,15 @@ Docker healthcheck 只读取并在内存中归一化已经存在的 `config.json
 维护。`embed` 不进入普通后台设置的读取或保存 DTO，只通过
 `data/config.json` 维护；公开站点配置仅返回前端路由实际消费的有效嵌入开关，
 不返回来源列表，并额外返回由 `site.domain` 与 `site.static_subdomain` 派生的
-`site.static_url`，以及公开详情实际消费的 `site.gallery.public_original_button` 有效布尔值。
+`site.static_url`、公开路由实际消费的完整 `site.show`，以及公开详情实际消费的
+`site.gallery.public_original_button` 有效布尔值。
 该开关只控制未登录访客的公开详情原图入口；服务端确认已登录的管理员复用管理详情的认证
 结果并始终显示入口。该开关不进入普通设置读写 DTO，普通设置保存不会读取、修改或覆盖它。
 `site.domain`、`site.description`、`site.icon` 与
-`site.home.enabled` 保留在运行时配置中，但不进入普通设置页及其读写 DTO；
+`site.home.enabled` 保留在运行时配置中，但不进入普通设置页及其读写 DTO。
+普通站点设置暂维持 5.6.2 的字段范围；`site.home.browse_target`、完整 `site.show.*`
+（含 `autoplay`）及 `site.gallery.enabled` 只通过配置文件或高级配置维护，并支持首次环境变量播种。
+普通设置接口不返回或接受这些新增字段，保存时不会覆盖它们；画廊分页量和排序仍可编辑。
 其中 `site.description` 只用于 HTML `description`。这些字段都需要通过配置文件
 或高级配置维护；公开站点配置投影会返回描述，供 SPA 路由切换后维护同一 meta。
 
@@ -107,11 +117,19 @@ PostgreSQL 的 `admin_account` 表，不进入 `config.json`。单应用进程�
 | <!-- runtime-config:site.icon --> `site.icon` / `SITE_ICON` / 显式映射 | 字符串；默认 `"/assets/brand/favicon.svg"`；1–2048 字符的站内绝对路径或 HTTPS URL | 站点图标；首次播种或热加载后影响公开配置。 |
 | <!-- runtime-config:site.version.enabled --> `site.version.enabled` / `SITE_VERSION_ENABLED` / 显式映射 | 布尔；默认 `true` | 控制后台版本卡片；首次播种或热加载后影响已认证会话探针。 |
 | <!-- runtime-config:site.version.link_enabled --> `site.version.link_enabled` / `SITE_VERSION_LINK_ENABLED` / 显式映射 | 布尔；默认 `true` | 控制版本卡片是否链接 Release；首次播种或热加载后影响会话探针。 |
-| <!-- runtime-config:site.root --> `site.root` / `SITE_ROOT` / 显式映射 | 枚举；默认 `"home"`；`home`、`gallery` | 选择 `/` 显示首页或画廊；`/home`、`/gallery` 固定路径不变，普通设置或热加载后影响导航。 |
-| <!-- runtime-config:site.home.enabled --> `site.home.enabled` / `SITE_HOME_ENABLED` / 显式映射 | 布尔；默认 `true` | 关闭后 `/home` 与根入口都回退画廊；首次播种或热加载后影响新请求。 |
+| <!-- runtime-config:site.root --> `site.root` / `SITE_ROOT` / 显式映射 | 枚举；默认 `"home"`；`home`、`show`、`gallery` | 选择 `/` 显示首页、展映或画廊；目标关闭时按画廊、展映、首页的稳定优先级选择仍启用页面，三页均关闭时 `/` 返回 404，不改写配置值或转向随机图 / 后台。普通设置或热加载后影响导航。 |
+| <!-- runtime-config:site.home.enabled --> `site.home.enabled` / `SITE_HOME_ENABLED` / 显式映射 | 布尔；默认 `true` | 控制公开首页入口与 `/home`；关闭时回退到仍启用的公开页，配置选择原样保留。首次播种或热加载后影响新请求。 |
+| <!-- runtime-config:site.home.browse_target --> `site.home.browse_target` / `SITE_HOME_BROWSE_TARGET` / 显式映射 | 枚举；默认 `"show"`；`gallery`、`show` | 选择首页筛选入口进入画廊或展映；目标关闭时改用另一个仍启用的图片页，两者都关闭时入口不可用。嵌入首页遵循同一配置与回退规则，使用 `/embed/gallery` 或 `/embed/show`。配置文件或高级配置热加载后生效。 |
 | <!-- runtime-config:site.home.background --> `site.home.background` / `SITE_HOME_BACKGROUND` / 显式映射 | 字符串；默认 `""`；空值或最长 2048 字符的站内绝对路径 / HTTPS URL | 首页背景；空值使用 `/random`，普通设置或热加载后生效。 |
 | <!-- runtime-config:site.home.banner_label --> `site.home.banner_label` / `SITE_HOME_BANNER_LABEL` / 显式映射 | 字符串；默认 `"ImageShow · A FAN-MADE PHOTO HANDBOOK"`；1–160 字符 | 首页 Banner 标识；普通设置或热加载后生效。 |
 | <!-- runtime-config:site.home.banner_title --> `site.home.banner_title` / `SITE_HOME_BANNER_TITLE` / 显式映射 | 字符串；默认 `"我们一起，\n收藏这些瞬间。"`；1–80 字符，可换行 | 首页 Banner 标题；普通设置或热加载后生效。 |
+| <!-- runtime-config:site.show.enabled --> `site.show.enabled` / `SITE_SHOW_ENABLED` / 显式映射 | 布尔；默认 `true` | 控制公开展映入口、`/show` 与 `/embed/show`，嵌入入口还需开启 `embed.enabled`；关闭后直接访问、根入口和首页目标均使用公共目标解析器，配置选择原样保留。配置文件或高级配置热加载后生效。 |
+| <!-- runtime-config:site.show.autoplay --> `site.show.autoplay` / `SITE_SHOW_AUTOPLAY` / 显式映射 | 布尔；默认 `true` | 普通与嵌入展映首次挂载时是否自动播放；`false` 初始暂停，访客仍可手动启停和拖动、缩放，同次挂载内模式或筛选变化不重置播放状态。通过配置文件或高级配置维护，修改后重新进入或刷新页面采用新值；减少动态效果优先。 |
+| <!-- runtime-config:site.show.mode --> `site.show.mode` / `SITE_SHOW_MODE` / 显式映射 | 枚举；默认 `"waterfall"`；`waterfall`、`float` | 未带合法 `mode` URL 参数时的展映模式，读取默认值不改写 URL；访客手动切换始终显式写入目标 `mode`，切回配置默认模式也保留参数，不回写配置。配置文件或高级配置热加载后生效。 |
+| <!-- runtime-config:site.show.density --> `site.show.density` / `SITE_SHOW_DENSITY` / 显式映射 | 枚举；默认 `"balanced"`；`relaxed`、`balanced`、`dense` | `waterfall` 初始列数分别为同宽画廊列数 `G` 的 `0.5G`、`G`、`1.5G`；`float` 分别映射为较大、默认与较小图片档。访客按钮调整不写回配置。配置文件或高级配置热加载后生效。 |
+| <!-- runtime-config:site.show.drift_speed --> `site.show.drift_speed` / `SITE_SHOW_DRIFT_SPEED` / 显式映射 | 整数；默认 `28`；10–60 CSS px/s | 展映自动漂移的基准速度；`float` 按生命周期距离和相邻间距微调各卡片速度，不改变手动拖动、滚轮或导航显隐。配置文件或高级配置热加载后生效。 |
+| <!-- runtime-config:site.show.order --> `site.show.order` / `SITE_SHOW_ORDER` / 显式映射 | 枚举；默认 `"random"`；`random`、`latest`、`oldest` | 未带 `order` URL 参数时的展映初始数据顺序；访客三态切换只写 URL，不写配置。配置文件或高级配置热加载后生效。 |
+| <!-- runtime-config:site.gallery.enabled --> `site.gallery.enabled` / `SITE_GALLERY_ENABLED` / 显式映射 | 布尔；默认 `true` | 控制公开画廊入口、`/gallery` 与嵌入画廊；关闭后直接访问、根入口和首页目标均使用公共目标解析器，配置选择原样保留。配置文件或高级配置热加载后生效。 |
 | <!-- runtime-config:site.gallery.limit --> `site.gallery.limit` / `SITE_GALLERY_LIMIT` / 显式映射 | 整数；默认 `60`；1–200 项 | 公开画廊未显式指定页量时使用的分页量；普通设置或热加载后影响新查询。 |
 | <!-- runtime-config:site.gallery.order --> `site.gallery.order` / `SITE_GALLERY_ORDER` / 显式映射 | 枚举；默认 `"latest"`；`latest`、`random` | 画廊默认排序；普通设置或热加载后影响新查询。 |
 | <!-- runtime-config:site.gallery.public_original_button --> `site.gallery.public_original_button` / `SITE_GALLERY_PUBLIC_ORIGINAL_BUTTON` / 显式映射 | 布尔；默认 `false` | 控制未登录访客的公开画廊详情是否渲染独立“原图”入口；服务端确认已登录的管理员不受该开关影响。首次播种、完整配置、配置包或热加载后生效，不进入普通设置；关闭不影响当前展示图的原生保存。 |
@@ -123,7 +141,7 @@ PostgreSQL 的 `admin_account` 表，不进入 `config.json`。单应用进程�
 
 | 配置路径 / 环境变量 / 注入 | 类型、默认值与合法值 | 用途、运行阶段与生效 |
 | --- | --- | --- |
-| <!-- runtime-config:embed.enabled --> `embed.enabled` / `EMBED_ENABLED` / 显式映射 | 布尔；默认 `false` | 开放 `/embed/home` 与 `/embed/gallery`，并隐式允许当前站点 HTTPS 来源；首次播种或热加载后生效。 |
+| <!-- runtime-config:embed.enabled --> `embed.enabled` / `EMBED_ENABLED` / 显式映射 | 布尔；默认 `false` | 开放 `/embed/home`、`/embed/show` 与 `/embed/gallery`，并隐式允许当前站点 HTTPS 来源；首次播种或热加载后生效。 |
 | <!-- runtime-config:embed.allowed_origins --> `embed.allowed_origins` / `EMBED_ALLOWED_ORIGINS` / 显式映射 | 严格 JSON 数组；默认 `[]`；最多 32 个 HTTPS DNS origin，每项不超过 320 字符且总长不超过 4096 字符 | 增加精确来源或最左侧 `*.` 子域来源；规范化去重并拒绝 HTTP、IP、路径和凭据。schema 不含 Public Suffix List，部署者须避免为公共托管后缀配置通配，热加载后影响 CSP。 |
 
 ### ingestion

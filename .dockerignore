@@ -13,6 +13,7 @@
 .codex-baseline-*
 .agents
 .playwright-cli
+/output/playwright
 AGENTS.md
 TODO.md
 

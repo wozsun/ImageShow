@@ -1,4 +1,10 @@
-import { detectDeviceFromUserAgent } from "@imageshow/shared/browser";
+import {
+  detectDeviceFromUserAgent,
+  showModes,
+  showOrders,
+  type ShowMode,
+  type ShowOrder
+} from "@imageshow/shared/browser";
 
 export type GalleryFilters = {
   device: string;
@@ -10,6 +16,8 @@ export type GalleryFilters = {
 
 const galleryDevices = new Set(["pc", "mb", "auto"]);
 const galleryBrightnesses = new Set(["dark", "light"]);
+const showOrderSet = new Set<ShowOrder>(showOrders);
+const showModeSet = new Set<ShowMode>(showModes);
 const selectorPattern = /^!?[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$/;
 
 export const emptyGalleryFilters: GalleryFilters = {
@@ -56,6 +64,33 @@ export function galleryRouteSearchParams(filters: GalleryFilters) {
   return params;
 }
 
+export function showOrderFromSearchParams(
+  params: URLSearchParams,
+  fallback: ShowOrder
+) {
+  const value = params.get("order")?.trim().toLowerCase() as ShowOrder;
+  return showOrderSet.has(value) ? value : fallback;
+}
+
+export function showModeFromSearchParams(
+  params: URLSearchParams,
+  fallback: ShowMode
+) {
+  const value = params.get("mode")?.trim().toLowerCase() as ShowMode;
+  return showModeSet.has(value) ? value : fallback;
+}
+
+export function showRouteSearchParams(
+  filters: GalleryFilters,
+  order: ShowOrder,
+  mode?: ShowMode
+) {
+  const params = galleryRouteSearchParams(filters);
+  params.set("order", order);
+  if (mode) params.set("mode", mode);
+  return params;
+}
+
 export function galleryApiSearchParams(
   filters: GalleryFilters,
   order: string,
@@ -77,6 +112,16 @@ export function galleryApiSearchParams(
   return params;
 }
 
+export function showOrderedApiSearchParams(
+  filters: GalleryFilters,
+  order: Exclude<ShowOrder, "random">,
+  options: { cursor?: string; userAgent?: string } = {}
+) {
+  const params = galleryApiSearchParams(filters, "latest", options);
+  params.set("order", order);
+  return params;
+}
+
 export function galleryRandomRequestDevice(device: string) {
   if (device === "auto") return "";
   if (device === "pc" || device === "mb") return device;
@@ -85,7 +130,7 @@ export function galleryRandomRequestDevice(device: string) {
 
 export function galleryHref(
   filters: GalleryFilters,
-  pathname: "/gallery" | "/embed/gallery" = "/gallery"
+  pathname: "/show" | "/gallery" | "/embed/show" | "/embed/gallery" = "/gallery"
 ) {
   const query = galleryRouteSearchParams(filters).toString();
   return query ? `${pathname}?${query}` : pathname;

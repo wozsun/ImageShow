@@ -27,7 +27,7 @@ const commonSpaDocumentHeaders: Readonly<Record<string, string>> = {
     "default-src 'self'",
     "script-src 'self'",
     "worker-src 'self'",
-    "connect-src 'self'",
+    "connect-src 'self' https:",
     "img-src 'self' https: data: blob:",
     "style-src 'self' 'unsafe-inline'",
     "font-src 'self' data:",

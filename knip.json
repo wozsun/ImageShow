@@ -9,6 +9,7 @@
         "hono",
         "ipaddr.js",
         "pg",
+        "pixi.js",
         "react",
         "react-dom",
         "react-router",

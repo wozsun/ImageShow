@@ -1,0 +1,42 @@
+.public-starfield {
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.public-starfield path {
+  fill: none;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.public-starfield-primary-halo {
+  stroke: var(--public-color-gallery-star-primary-halo);
+  stroke-width: 2.96;
+}
+
+.public-starfield-primary {
+  stroke: var(--public-color-gallery-star-primary);
+  stroke-width: 1.44;
+}
+
+.public-starfield-secondary-halo {
+  stroke: var(--public-color-gallery-star-secondary-halo);
+  stroke-width: 2.68;
+}
+
+.public-starfield-secondary {
+  stroke: var(--public-color-gallery-star-secondary);
+  stroke-width: 1.16;
+}
+
+.public-starfield-tertiary-halo {
+  stroke: var(--public-color-gallery-star-tertiary-halo);
+  stroke-width: 2.44;
+}
+
+.public-starfield-tertiary {
+  stroke: var(--public-color-gallery-star-tertiary);
+  stroke-width: 1;
+}

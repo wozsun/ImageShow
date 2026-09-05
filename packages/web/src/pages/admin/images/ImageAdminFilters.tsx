@@ -128,8 +128,7 @@ export function ImageAdminFilters({
   };
   const filterControls = {
     device: (
-      <label key="device" className="image-list-filter-device">
-        设备
+      <div key="device" className="image-list-filter-field image-list-filter-device">
         <SelectMenu
           value={value.device}
           onChange={(next) => onChange("device", next)}
@@ -143,11 +142,10 @@ export function ImageAdminFilters({
           disabled={disabled}
           ariaLabel="设备"
         />
-      </label>
+      </div>
     ),
     brightness: (
-      <label key="brightness" className="image-list-filter-brightness">
-        亮度
+      <div key="brightness" className="image-list-filter-field image-list-filter-brightness">
         <SelectMenu
           value={value.brightness}
           onChange={(next) => onChange("brightness", next)}
@@ -161,14 +159,13 @@ export function ImageAdminFilters({
           disabled={disabled}
           ariaLabel="亮度"
         />
-      </label>
+      </div>
     ),
     theme: (
       <div
         key="theme"
         className="image-list-filter-field image-list-filter-theme"
       >
-        <label htmlFor="admin-image-theme-facet">主题</label>
         <FacetSelector
           options={vocabulary?.themes ?? []}
           value={view === "unset" ? "" : value.theme}
@@ -185,7 +182,6 @@ export function ImageAdminFilters({
         key="tag"
         className="image-list-filter-field image-list-filter-tag"
       >
-        <label htmlFor="admin-image-tag-facet">标签</label>
         <FacetSelector
           options={vocabulary?.tags ?? []}
           value={value.tag}
@@ -202,7 +198,6 @@ export function ImageAdminFilters({
         key="author"
         className="image-list-filter-field image-list-filter-author"
       >
-        <label htmlFor="admin-image-author-facet">作者</label>
         <FacetSelector
           options={vocabulary?.authors ?? []}
           value={value.author}
@@ -279,7 +274,6 @@ export function ImageAdminFilters({
           </div>
           {!mobileLayout && (
             <div className="image-list-filter-action">
-              <span>操作</span>
               <button
                 ref={clearFiltersRef}
                 type="button"

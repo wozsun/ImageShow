@@ -26,8 +26,8 @@ function syncBrowserSurface(root: HTMLElement) {
 }
 
 /**
- * 只有完整后台可以消费管理员外观偏好。启动、公开首页、画廊及由画廊打开的
- * 管理弹窗都由顶层公开颜色域锁定为暗色。
+ * 只有完整后台可以消费管理员外观偏好。启动、公开首页、展映、画廊及其图片
+ * 详情都由顶层公开颜色域锁定为暗色。
  */
 export function applyUiColorContext(
   uiContext: UiColorContext,

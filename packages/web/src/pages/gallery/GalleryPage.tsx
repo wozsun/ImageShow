@@ -5,35 +5,24 @@ import {
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
-  type RefObject
+  type CSSProperties
 } from "react";
-import {
-  useQuery,
-  useQueryClient
-} from "@tanstack/react-query";
-import type {
-  PublicImageDetailResponseDto
-} from "@imageshow/shared/browser";
+import type { GalleryOrder } from "@imageshow/shared/browser";
+import { useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router";
-import { api } from "../../lib/api/client.js";
 import { AppHeader } from "../../components/navigation/AppHeader.js";
 import { Icon } from "../../components/icon/Icon.js";
+import { PublicStarfield } from "../../components/layout/PublicStarfield.js";
 // 当前详情共享 JS + CSS 实测压缩后不足 6 KiB；画廊首击直接使用，继续随路由
 // 加载可避免新增请求和 Suspense 边界。
-import { ImageDetailModal } from "../../components/image/ImageDetailModal.js";
+import { PublicImageDetail } from "../../components/image/PublicImageDetail.js";
 import { queryKeys } from "../../lib/api/query-keys.js";
-import { errorMessage } from "../../lib/ui/formatters.js";
 import { buildRandomUrl } from "../../lib/gallery/random-url.js";
 import {
   createGalleryTaxonomyDisplayFormatter
 } from "../../lib/gallery/card-display.js";
-import type {
-  EditableImageSnapshot,
-  GalleryImageCard,
-  PublicImageItem
-} from "../../lib/types.js";
-import { useGalleryFacets, useSiteConfig } from "../../lib/api/site-data.js";
+import type { GalleryImageCard } from "../../lib/types.js";
+import { useGalleryFacets } from "../../lib/api/site-data.js";
 import { QueryErrorState } from "../../components/feedback/QueryErrorState.js";
 import {
   AppLoadingRegion
@@ -47,7 +36,10 @@ import {
 } from "./gallery-layout.js";
 import { GalleryImageRuntime } from "./GalleryImageRuntime.js";
 import { GalleryVirtualWindow } from "./GalleryVirtualWindow.js";
-import { scrollGalleryToTop, useGalleryViewportControls } from "./useGalleryViewportControls.js";
+import {
+  scrollPublicImagePageToTop,
+  usePublicImageViewportControls
+} from "../../hooks/usePublicImageViewportControls.js";
 import {
   galleryApiSearchParams,
   emptyGalleryFilters,
@@ -57,77 +49,19 @@ import {
   type GalleryFilters
 } from "../../lib/gallery/gallery-query.js";
 import { GalleryCardRevealRegistry } from "./gallery-card-reveal.js";
-import { GalleryToolbar } from "./GalleryToolbar.js";
+import { PublicImageToolbar } from "../../components/navigation/PublicImageToolbar.js";
 import { useGalleryDataWindow } from "./useGalleryDataWindow.js";
 import "../../styles/public-core.css";
 import "../../styles/gallery.css";
 import "../../styles/gallery-responsive.css";
 
-function imagePlaceholder(card: GalleryImageCard): PublicImageItem {
-  return {
-    ...card,
-    description: "",
-    object_url: "",
-    source: ""
-  };
-}
-
-function GalleryImageDetail({
-  card,
-  onClose,
-  onTrashCommitted,
-  onTrashed,
-  onItemUpdated,
-  onItemRefreshRequested,
-  returnFocusRef,
+export function GalleryPage({
+  embedded = false,
+  order
 }: {
-  card: GalleryImageCard;
-  onClose: () => void;
-  onTrashCommitted: (
-    imageId: string
-  ) => void | Promise<void>;
-  onTrashed: (imageId: string) => void;
-  onItemUpdated: (item: EditableImageSnapshot) => void;
-  onItemRefreshRequested: (imageId: string) => void;
-  returnFocusRef: RefObject<HTMLElement | null>;
+  embedded?: boolean;
+  order: GalleryOrder;
 }) {
-  const placeholder = useMemo(() => imagePlaceholder(card), [card]);
-  const [trashCommitted, setTrashCommitted] = useState(false);
-  const { data, isPending, isFetching, isError, error, refetch } = useQuery<PublicImageDetailResponseDto>({
-    queryKey: [...queryKeys.publicImageDetail, card.id],
-    // 详情元数据很小，不把 React StrictMode 的模拟卸载传给 fetch；
-    // 重放会继续复用同一 Promise，真正关闭后则立即回收零驻留期查询。
-    // 原图请求仍由下方 DOM 图片调度器同步取消和清理。
-    queryFn: () => api(`/api/images/${encodeURIComponent(card.id)}`),
-    gcTime: 0,
-    enabled: !trashCommitted
-  });
-  const detail = data?.item.id === card.id ? data.item : null;
-  const item = useMemo(() => ({ ...placeholder, ...(detail ?? {}) }), [placeholder, detail]);
-  const detailLoading = isPending || (isFetching && !detail);
-  const detailError = isError && !detail && !isFetching ? errorMessage(error) : "";
-  return (
-    <ImageDetailModal
-      item={item}
-      onClose={onClose}
-      onTrashCommitted={async (imageId) => {
-        if (imageId !== card.id) return;
-        setTrashCommitted(true);
-        await onTrashCommitted(imageId);
-      }}
-      onTrashed={onTrashed}
-      onItemUpdated={onItemUpdated}
-      onItemRefreshRequested={onItemRefreshRequested}
-      admin={false}
-      detailLoading={detailLoading}
-      detailError={detailError}
-      onDetailRetry={() => void refetch()}
-      returnFocusRef={returnFocusRef}
-    />
-  );
-}
-
-export function GalleryPage({ embedded = false }: { embedded?: boolean }) {
   const [selected, setSelected] = useState<GalleryImageCard | null>(null);
   const [pinnedImageId, setPinnedImageId] = useState<string | null>(null);
   const queryClient = useQueryClient();
@@ -152,7 +86,10 @@ export function GalleryPage({ embedded = false }: { embedded?: boolean }) {
     toolbarHeight,
     toolbarRef,
     toolbarVisible,
-  } = useGalleryViewportControls({ headerPresent: !embedded });
+  } = usePublicImageViewportControls({
+    headerPresent: !embedded,
+    paused: Boolean(selected)
+  });
   const detailReturnFocusRef = useRef<HTMLElement | null>(null);
   const trashedFocusIdRef = useRef<string | null>(null);
   const galleryRef = useRef<HTMLElement | null>(null);
@@ -164,7 +101,6 @@ export function GalleryPage({ embedded = false }: { embedded?: boolean }) {
     shouldAnimate: shouldAnimateNavigation
   } = usePublicNavigationEntrance();
   const { data: facets } = useGalleryFacets();
-  const { data: siteConfig } = useSiteConfig();
   const cardSubtitle = useMemo(
     () => {
       const display = createGalleryTaxonomyDisplayFormatter(facets);
@@ -173,7 +109,6 @@ export function GalleryPage({ embedded = false }: { embedded?: boolean }) {
     [facets]
   );
 
-  const order = siteConfig?.site.gallery.order ?? "latest";
   const userAgent = window.navigator.userAgent;
   const imageQuery = useMemo(
     () => galleryApiSearchParams(filters, order, { userAgent }).toString(),
@@ -329,6 +264,9 @@ export function GalleryPage({ embedded = false }: { embedded?: boolean }) {
         } as CSSProperties}
       >
         <span className="gallery-atmosphere" aria-hidden="true" />
+        <div className="gallery-starfield" aria-hidden="true">
+          <PublicStarfield />
+        </div>
         <div className="public-navigation-frame">
           <div className="public-navigation-stack">
             {!embedded && (
@@ -338,7 +276,8 @@ export function GalleryPage({ embedded = false }: { embedded?: boolean }) {
                 visible={headerVisible}
               />
             )}
-            <GalleryToolbar
+            <PublicImageToolbar
+              animateEntrance={shouldAnimateNavigation}
               filters={filters}
               facets={facets}
               randomUrl={randomUrl}
@@ -400,13 +339,13 @@ export function GalleryPage({ embedded = false }: { embedded?: boolean }) {
           tabIndex={showBackToTop ? 0 : -1}
           onClick={(event) => {
             event.currentTarget.blur();
-            scrollGalleryToTop();
+            scrollPublicImagePageToTop();
           }}
         >
           <Icon name="arrow-up-line" />
         </button>
         {selected && (
-          <GalleryImageDetail
+          <PublicImageDetail
             card={selected}
             onClose={() => setSelected(null)}
             onTrashCommitted={async (imageId) => {

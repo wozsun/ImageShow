@@ -1,8 +1,8 @@
-import type { SiteSettings } from "./types.js";
 export {
   adminApiBasePath,
   adminBasePath,
-  adminImagePageLimit,
+  publicHomeBrowsePath,
+  publicRootPath,
   slugMaxLength,
   slugPattern
 } from "@imageshow/shared/browser";
@@ -15,9 +15,3 @@ export const galleryVirtualOverscanScreens = 3;
 export const galleryMaxMountedTiles = 180;
 export const galleryDataWindowFullItemBudget = 480;
 export const galleryDataWindowMaxConcurrentPageLoads = 2;
-
-export function publicRootPath(
-  site: Pick<SiteSettings, "root" | "home">
-): "/home" | "/gallery" {
-  return site.home.enabled === false || site.root === "gallery" ? "/gallery" : "/home";
-}

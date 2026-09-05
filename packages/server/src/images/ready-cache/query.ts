@@ -7,6 +7,7 @@ import {
   runRequiredRedisCommand
 } from "../../core/runtime-availability.ts";
 import { decodeImageCursor, encodeImageCursor } from "../cursor.ts";
+import type { PublicImageOrder } from "@imageshow/shared/browser";
 import {
   getReadyImageCacheCoordinatorStatus,
   reportReadyImageCacheFailure,
@@ -208,6 +209,7 @@ function executePageRedisCommand<T>(
 async function cursorWindowStart(
   index: ReadyImageFilterIndex,
   cursor: string | undefined,
+  order: PublicImageOrder,
   mode: ReadyImagePageReadMode
 ) {
   if (cursor === undefined) return 0;
@@ -215,7 +217,8 @@ async function cursorWindowStart(
   const member = readyImageMember(decoded.id);
   const cursorState = redis.pipeline();
   cursorState.zscore(index.key, member);
-  cursorState.zrevrank(index.key, member);
+  if (order === "oldest") cursorState.zrank(index.key, member);
+  else cursorState.zrevrank(index.key, member);
   const cursorResults = await executePageRedisCommand(
     mode,
     () => execRedisPipeline(cursorState)
@@ -233,17 +236,19 @@ async function cursorWindowStart(
     : null;
 }
 
-const readyImageWindowDependencies: ReadyImageWindowDependencies = {
-  validate: validateReadyImageFilterIndex,
-  count: (index) => redis.zcard(index.key),
-  members: (index, start, stop) => redis.zrevrange(
-    index.key,
-    start,
-    stop
-  ),
-  items: readCoreItems,
-  assertDerivedItems: assertDerivedMissingItemsAreNotCore
-};
+function readyImageWindowDependencies(
+  order: PublicImageOrder
+): ReadyImageWindowDependencies {
+  return {
+    validate: validateReadyImageFilterIndex,
+    count: (index) => redis.zcard(index.key),
+    members: (index, start, stop) => order === "oldest"
+      ? redis.zrange(index.key, String(start), String(stop))
+      : redis.zrevrange(index.key, start, stop),
+    items: readCoreItems,
+    assertDerivedItems: assertDerivedMissingItemsAreNotCore
+  };
+}
 
 async function readPageFromIndex<T>(
   index: ReadyImageFilterIndex,
@@ -252,6 +257,7 @@ async function readPageFromIndex<T>(
     present: (window: ReadyImageCacheWindow) => T;
   } | null>,
   limit: number,
+  order: PublicImageOrder,
   mode: ReadyImagePageReadMode
 ): Promise<ReadyImagePageReadResult<T>> {
   try {
@@ -263,7 +269,7 @@ async function readPageFromIndex<T>(
         location.start,
         limit,
         mode,
-        readyImageWindowDependencies
+        readyImageWindowDependencies(order)
       );
       return window ? location.present(window) : null;
     }, index.kind === "core" ? "core" : "derived", async () => {
@@ -297,6 +303,7 @@ async function resolvedReadyImagePage<T>(
     present: (window: ReadyImageCacheWindow) => T;
   } | null>,
   limit: number,
+  order: PublicImageOrder,
   signal: AbortSignal | undefined,
   background: boolean,
   mode: ReadyImagePageReadMode
@@ -310,6 +317,7 @@ async function resolvedReadyImagePage<T>(
       index,
       (readMode) => locate(index, readMode),
       limit,
+      order,
       mode
     );
   } catch (error) {
@@ -340,6 +348,7 @@ async function resolvedReadyImagePage<T>(
 export function readReadyImageCursorPage(
   plan: ImageFilterPlan,
   limit: number,
+  order: PublicImageOrder,
   cursor?: string,
   signal?: AbortSignal,
   background = false
@@ -347,7 +356,7 @@ export function readReadyImageCursorPage(
   return resolvedReadyImagePage(
     plan,
     async (index, mode) => {
-      const start = await cursorWindowStart(index, cursor, mode);
+      const start = await cursorWindowStart(index, cursor, order, mode);
       if (start === null) return null;
       return {
         start,
@@ -366,6 +375,7 @@ export function readReadyImageCursorPage(
       };
     },
     limit,
+    order,
     signal,
     background,
     "fallback"
@@ -383,6 +393,7 @@ export function readReadyImagePageWindow(
       present: (value) => value
     }),
     window.limit,
+    "latest",
     undefined,
     false,
     "required"

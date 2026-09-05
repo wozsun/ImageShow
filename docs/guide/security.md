@@ -80,7 +80,7 @@
 - 普通响应在最终响应对象上统一补齐 `X-Content-Type-Options`、
   `X-Frame-Options: DENY`、`Referrer-Policy`、`Cross-Origin-Opener-Policy` 与 CSP
   `frame-ancestors 'none'`，直接返回的 API、静态、错误和未知 Host 响应也不会漏掉。
-  只有服务端确认 `embed.enabled=true` 后，精确的 `/embed/home` 与 `/embed/gallery`
+  只有服务端确认 `embed.enabled=true` 后，精确的 `/embed/home`、`/embed/show` 与 `/embed/gallery`
   文档才移除 `X-Frame-Options`，并将当前 `site.domain` 的 HTTPS origin、同端口子域
   host-source 以及规范化且使用 DNS 主机名的额外精确 HTTPS origin 或
   `https://*.example.com` 形式的子域 host-source 写入 CSP `frame-ancestors`；隐式来源
@@ -93,13 +93,14 @@
   策略与脚本 Trusted Types；白名单只列出实际出现的 `imageshow-altcha-worker`、
   `svelte-trusted-html`、`decodeHTMLEntitiesPolicy` 与 `AGPolicy`，不放行任意策略名，也不
   提供放行任意脚本 URL 或 HTML 的默认策略。候选策略明确覆盖 script、Worker、connect、
-  HTTPS 图片、样式、字体、object、base 与 form；经浏览器报告验证前不直接收紧为强制
+  HTTPS 图片、样式、字体、object、base 与 form；connect 同时允许 HTTPS，以覆盖展映读取
+  `static.` 或对象存储缩略图并解码为纹理的实际请求，图片服务仍须提供对应 CORS。经浏览器报告验证前不直接收紧为强制
   策略。同源 `/api/security/csp-report` 只接受 POST，经 Fetch Metadata 拒绝跨站 / 同站
   跨源，声明体积上限为 64 KiB，并立即取消正文流；它不解析 JSON、不写日志、数据库或
   Redis。登录页在 ALTCHA 首次挂载前预设隐藏 footer 与 logo，使组件不渲染会被 Trusted
   Types 拒绝的动态 HTML footer；应用只接受 `site.domain` 及配置的 `static` 资源子域，
   随机、外链、主题和其他未知 Host 均直接返回不可缓存的 404。
-- 反向代理或 CDN 不得对 `/embed/*` 重新注入 `X-Frame-Options`，也不得覆盖应用生成的 CSP `frame-ancestors`，否则会把已授权的 iframe 一并拦截；普通路径的拒绝策略仍由应用统一生成。若代理层必须统一添加这些头，应为两个精确嵌入路径设置例外，并保留应用响应头。
+- 反向代理或 CDN 不得对 `/embed/*` 重新注入 `X-Frame-Options`，也不得覆盖应用生成的 CSP `frame-ancestors`，否则会把已授权的 iframe 一并拦截；普通路径的拒绝策略仍由应用统一生成。若代理层必须统一添加这些头，应为三个精确嵌入路径设置例外，并保留应用响应头。
 
 ## 响应头矩阵
 
@@ -113,7 +114,7 @@ Content-Type 与缓存验证器会被省略或回退为站内类型；`Content-R
 | 响应类型 | 缓存 / 验证器 | 额外边界 |
 | --- | --- | --- |
 | 普通 SPA HTML | `max-age=0`、内容 ETag、支持 304 | 强制禁止嵌入；完整 CSP 候选与 Trusted Types 先 report-only |
-| `/embed/home`、`/embed/gallery` | `no-store`，仍带内容 ETag | 仅移除 `X-Frame-Options`，CSP 精确生成 `frame-ancestors` |
+| `/embed/home`、`/embed/show`、`/embed/gallery` | `no-store`，仍带内容 ETag | 仅移除 `X-Frame-Options`，CSP 精确生成 `frame-ancestors` |
 | 确定性公共 JSON API | `max-age=0`、最长 30 秒共享缓存窗口、内容弱 ETag 与 304；按入口决定 `Sec-Fetch-Site`，统一 `Vary: Accept-Encoding` | 不返回后台字段；受保护读取拒绝跨站 / 同站跨源；`shuffle` 保持 `no-store` |
 | 确定性管理只读 JSON | `private, no-cache`、完整 envelope 内容弱 ETag 与 304 | 仅浏览器私有保存且每次重验证；身份鉴权先于内容生成，禁止 CDN 共享 |
 | 登录、其他管理 API、错误、404、健康检查 | `no-store` 或 `private, no-store` | `auth/me`、ALTCHA、检查状态、日志、SSE、后台字节、预览、敏感配置与写接口不缓存；登录限流的 429 使用纯数字 `Retry-After` |
@@ -198,7 +199,7 @@ Worker 与嵌入页。应用没有跨源 API 契约，不返回 `Access-Control-
 - 外链导入下载会为每个已通过安全校验的当前目标生成仅含 `https` origin 的
   `Referer`，用于微博图床等基础防盗链。重定向后按新目标重新生成，不透传图片
   路径、查询参数、来源页面或管理员输入的任意 Referer。
-- 公共画廊数据接口 `/api/images`、`/api/images/:id`、`/api/gallery-facets` 与 `/api/gallery-stats` 的**跨源保护**：借 Fetch Metadata（`Sec-Fetch-Site`）拒绝**跨站 / 同站跨源**读取，只放行同源（前端自身）、直接导航（`none`）与**不发该头**的老浏览器 / 非浏览器客户端（优雅降级，不误伤画廊）。嵌入页中的数据请求仍由 iframe 内的同源应用发出，不增加 CORS、跨源凭据或后台写权限。它是跨源护栏、不是反爬墙——省略该头的客户端仍可访问，合规爬虫由 robots.txt 兜。（`/api/site-config` 不设限——它是内联进 SPA 的启动配置，需在任意首屏场景下可加载；返回内容只包含公开页面实际消费的站点名称、图标、根路径、首页、画廊排序、派生 static 资源根地址、有效嵌入开关和详情行为，不包含嵌入来源列表、原始部署字段、后台版本显示策略、服务端分页默认值、随机出口默认方式、安全验证开关、登录页背景、上传限制或处理并发。）
+- 公共图片数据接口 `/api/images`、`/api/images/:id`、`/api/gallery-facets` 与 `/api/gallery-stats` 的**跨源保护**：借 Fetch Metadata（`Sec-Fetch-Site`）拒绝**跨站 / 同站跨源**读取，只放行同源（前端自身）、直接导航（`none`）与**不发该头**的老浏览器 / 非浏览器客户端（优雅降级，不误伤展映与画廊）。嵌入页中的数据请求仍由 iframe 内的同源应用发出，不增加 CORS、跨源凭据或后台写权限。它是跨源护栏、不是反爬墙——省略该头的客户端仍可访问，合规爬虫由 robots.txt 兜。（`/api/site-config` 不设限——它是内联进 SPA 的启动配置，需在任意首屏场景下可加载；返回内容只包含公开页面实际消费的站点名称、图标、根路径、首页、展映设置、画廊启用状态与排序、派生 static 资源根地址、有效嵌入开关和详情行为，不包含嵌入来源列表、原始部署字段、后台版本显示策略、服务端分页默认值、随机出口默认方式、安全验证开关、登录页背景、上传限制或处理并发。）
 - **robots.txt（按主机区分，默认关闭）**：由 `config.json` 的 `site.robots_enabled`
   控制，**默认 `false`**——此时 `/robots.txt` 对所有主机返回 404、不提供任何抓取规则。
   开启后按主机区分：主站**仅放行首页**（站点描述），画廊 / 接口 / 静态资源 / 后台

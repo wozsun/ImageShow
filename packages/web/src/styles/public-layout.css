@@ -24,7 +24,6 @@
 
 .public-navigation-stack {
   --public-navigation-stack-shift: 0px;
-  --public-navigation-material-clip: 0px;
   position: relative;
   width: 100%;
   pointer-events: none;
@@ -46,10 +45,6 @@
 
 .public-navigation-stack::before {
   inset: 0;
-  clip-path: inset(0 0 var(--public-navigation-material-clip) 0);
-  transition:
-    clip-path var(--public-nav-motion-duration)
-    var(--public-nav-motion-easing);
   background-color: var(--public-color-navigation-surface);
   -webkit-backdrop-filter: blur(20px) saturate(118%);
   backdrop-filter: blur(20px) saturate(118%);
@@ -81,8 +76,10 @@
 }
 
 .public-navigation-stack:has(> .public-navigation-secondary.is-scroll-hidden) {
-  --public-navigation-material-clip:
-    var(--public-navigation-secondary-height, 0px);
+  /* Both bars and their backdrop leave in one transition. */
+  --public-navigation-stack-shift: calc(
+    0px - var(--public-page-header-height) - var(--public-navigation-secondary-height, 0px)
+  );
 }
 
 .public-navigation-stack > .topbar,

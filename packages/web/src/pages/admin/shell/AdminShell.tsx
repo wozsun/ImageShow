@@ -6,7 +6,6 @@ import { adminApiBasePath, adminBasePath } from "../../../lib/constants.js";
 import {
   clearSessionProbeHint
 } from "../../../lib/api/auth-session.js";
-import { useSiteConfig } from "../../../lib/api/site-data.js";
 import { useAuthMe } from "../../../hooks/useAuthSession.js";
 import { QueryErrorState } from "../../../components/feedback/QueryErrorState.js";
 import { AppLoadingScreen } from "../../../components/feedback/AppLoadingScreen.js";
@@ -39,12 +38,9 @@ const AuthenticatedAdminShell = lazy(() => (
   }))
 ));
 
-export function AdminShell() {
+export function AdminShell({ siteName }: { siteName: string }) {
   const navigate = useNavigate();
   const client = useQueryClient();
-
-  const { data: siteConfig } = useSiteConfig();
-  const siteName = siteConfig?.site?.name || "ImageShow";
 
   const {
     data,

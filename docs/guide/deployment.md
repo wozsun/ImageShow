@@ -166,6 +166,8 @@ npm run admin:reset-password -- <username>
 - 上传流按部署需要关闭请求缓冲；Ingestion 控制 JSON 和 raw 上传都使用固定短路由，代理不得按
   session 或 metadata 生成 location。
 - 不覆盖应用的 `Cache-Control`、`Vary`、CSP 或其他安全响应头，不另设应用响应缓存。
+- `static` 资源域的公开图片响应允许主站跨域读取；无凭据媒体可设置
+  `Access-Control-Allow-Origin: *`，供 Show WebGL 纹理读取使用。主站与 API 响应不因此开放 CORS。
 
 随后只给出一份可替换的 Nginx 最简示例；ImageShow 不检测代理品牌，也不依赖 Nginx。
 
@@ -175,6 +177,11 @@ ImageShow 已负责 ETag、304、Range、压缩、静态预压缩和缓存头。
 ### 最少配置
 
 ```nginx
+map $host $imageshow_static_cors_origin {
+  default "";
+  static.img.example.com "*";
+}
+
 server {
   listen 80;
   server_name img.example.com static.img.example.com;
@@ -196,6 +203,8 @@ server {
   proxy_set_header X-Real-IP $remote_addr;
   proxy_set_header X-Forwarded-For $remote_addr;
   proxy_set_header X-Forwarded-Proto $scheme;
+
+  add_header Access-Control-Allow-Origin $imageshow_static_cors_origin always;
 
   proxy_read_timeout 300s;
   proxy_send_timeout 300s;

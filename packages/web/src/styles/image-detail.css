@@ -228,7 +228,9 @@
 }
 
 @media (max-width: 760px) {
-  .image-detail-modal {
+  /* Fullscreen detail layout must outrank the shared .modal defaults even
+     when route chunks insert those defaults after this stylesheet. */
+  .modal.image-detail-modal {
     padding: 0;
     place-items: stretch;
     overscroll-behavior: contain;

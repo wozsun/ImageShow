@@ -63,7 +63,7 @@ Redis 内存上限、淘汰策略和容器硬限制由部署方管理；应用�
 Redis 暂时不可连接或能力不满足时，HTTP 进程仍监听。当前进程首次通过连接及五项能力
 校验前只开放 `/livez` 与非就绪的 `/readyz`，全部业务返回 503，worker 也不启动；首次
 成功后该冷启动门不再关闭。此后的运行期故障仍让 `/readyz` 非就绪并使后台统一返回
-`503 redis_unavailable`，但公开画廊、详情、facets、统计、图片 / 缩略图和定向及普通
+`503 redis_unavailable`，但公开展映、画廊、详情、facets、统计、图片 / 缩略图和定向及普通
 随机通过有界 PostgreSQL fallback 保持可用，只有准入队列或执行上限饱和时才返回
 `429/503` 与 `Retry-After`。
 应用进程冷启动和每个新 Redis 连接周期都会重新检查当前连接与命令能力；图片协调器以
@@ -81,9 +81,14 @@ Redis 全局字节使用量阻止写入或触发全局清理。派生结果错�
 应用默认监听 `5518` 端口，由反向代理对外提供 HTTPS（见 [反向代理与部署](./deployment.md)）。以站点域名访问（下例以 `img.example.com` 为站点域名）：
 
 - 首页：`https://img.example.com/home`
+- 展映：`https://img.example.com/show`
+- 指定展映模式：`https://img.example.com/show?mode=float`
 - 画廊：`https://img.example.com/gallery`
 - 后台：`https://img.example.com/admin`
 - 随机图：`https://img.example.com/random`
+
+首页、展映和画廊可分别启停，主导航只显示已启用页面。三者全部关闭时站点根地址返回 404，
+不会自动跳转到随机图或后台；上面的 `/random` 与 `/admin` 地址仍保持可用。
 
 应用镜像以 UID/GID `1000` 运行。Linux 使用 bind mount 前，先让该用户可写入持久化目录：
 

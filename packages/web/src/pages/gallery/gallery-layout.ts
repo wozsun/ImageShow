@@ -5,7 +5,7 @@ import {
   type RefObject
 } from "react";
 import type { Device } from "../../lib/types.js";
-import { galleryColumnCount } from "./gallery-columns.js";
+import { galleryColumnCount } from "../../lib/gallery/gallery-columns.js";
 
 type GalleryGeometry = {
   contentWidth: number;
