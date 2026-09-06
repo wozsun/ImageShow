@@ -81,10 +81,11 @@
   `X-Frame-Options: DENY`、`Referrer-Policy`、`Cross-Origin-Opener-Policy` 与 CSP
   `frame-ancestors 'none'`，直接返回的 API、静态、错误和未知 Host 响应也不会漏掉。
   只有服务端确认 `embed.enabled=true` 后，精确的 `/embed/home`、`/embed/show` 与 `/embed/gallery`
-  文档才移除 `X-Frame-Options`，并将当前 `site.domain` 的 HTTPS origin、同端口子域
+  文档才移除 `X-Frame-Options`，并将显式 `site.domain` 的 HTTPS origin、同端口子域
   host-source 以及规范化且使用 DNS 主机名的额外精确 HTTPS origin 或
   `https://*.example.com` 形式的子域 host-source 写入 CSP `frame-ancestors`；隐式来源
-  随站点配置变化，不写回或经 DTO 暴露。通配符不包含根域名，IP literal、裸 `*` 与
+  随站点配置变化，不写回或经 DTO 暴露。域名为空或 `example.com` 时只隐式允许 `'self'`，
+  不从访问 Host 推导通配来源。通配符不包含根域名，IP literal、裸 `*` 与
   中间通配符不进入额外白名单，也不使用已废弃且不能表达多来源的 `ALLOW-FROM`。通配符
   会同时授权该后缀下全部现有和未来子域，因此 `site.domain` 及额外通配符都必须处于可信
   DNS 管理边界，不得把公共托管后缀作为安全边界。CSP 原生支持这类 host-source，因此
@@ -98,8 +99,10 @@
   策略。同源 `/api/security/csp-report` 只接受 POST，经 Fetch Metadata 拒绝跨站 / 同站
   跨源，声明体积上限为 64 KiB，并立即取消正文流；它不解析 JSON、不写日志、数据库或
   Redis。登录页在 ALTCHA 首次挂载前预设隐藏 footer 与 logo，使组件不渲染会被 Trusted
-  Types 拒绝的动态 HTML footer；应用只接受 `site.domain`，仅非空资源子域配置时额外接受该资源 Host，
-  随机、外链、主题和其他未知 Host 均直接返回不可缓存的 404。
+  Types 拒绝的动态 HTML footer。显式设置域名时，应用只接受 `site.domain` 与已配置的资源子域，
+  其他未知 Host 返回不可缓存的 404；域名为空或 `example.com` 时接受格式合法的访问 Host，
+  图片地址使用同源路径，不把请求 Host 写入共享缓存、队列或持久配置。生产部署强烈建议设置域名，
+  并由反向代理限制允许的 Host；基础回退不替代鉴权、CSRF 或代理配置。
 - 反向代理或 CDN 不得对 `/embed/*` 重新注入 `X-Frame-Options`，也不得覆盖应用生成的 CSP `frame-ancestors`，否则会把已授权的 iframe 一并拦截；普通路径的拒绝策略仍由应用统一生成。若代理层必须统一添加这些头，应为三个精确嵌入路径设置例外，并保留应用响应头。
 
 Web 的唯一 JSON API 客户端拒绝成功响应中的 HTML、空正文或截断 JSON，错误不包含原始正文，
@@ -131,7 +134,7 @@ Content-Type 与缓存验证器会被省略或回退为站内类型；`Content-R
 | 随机 proxy / redirect / JSON | 永远 `no-store` | proxy 不声明 Range；302 的 `Location` 先校验；前两种模式带 `X-Image-Info`，JSON 只返回公开字段与实际 `count`，HEAD 不发送正文 |
 | 外链原图 proxy / redirect | 当前资源根下唯一公开入口的 direct 302 使用 `private, no-store`；proxy 继承已校验源站策略或使用 fallback，URL 命名空间弱 ETag、Last-Modified 与 304；后台 `private, no-store` | 单次公开图片解析、HTTPS 安全抓取、GET 内容嗅探、HEAD 不保留正文、验证结果严格绑定请求 URL、`Referrer-Policy: no-referrer` |
 | Ingestion SSE | `no-store, no-transform` | 每个已显示的 owner + queue 使用一个固定 GET 路径；不压缩、不缓冲，30 秒串行鉴权 heartbeat，断开即清理 listener / scope |
-| 资源出口与未知 Host | 默认主站 `/static`，或非空配置的独立资源子域；仅开放对应资源根下的 `/full/*`、`/thumbs/*`、`/link/<id>`；独立子域另可开放 `/robots.txt`；失败 `no-store` | 两种模式互斥，主站根级资源路径与未知 Host 返回完整安全头的 404；同源资源不读会话、不写 Cookie，不按 Cookie 改变缓存 |
+| 资源出口与未知 Host | 默认主站 `/static`；显式域名下可选择独立资源子域；仅开放对应资源根下的 `/full/*`、`/thumbs/*`、`/link/<id>`；独立子域另可开放 `/robots.txt`；失败 `no-store` | 两种资源模式互斥；显式域名拒绝未知 Host，基础回退使用访问 Host 与同源路径；同源资源不读会话、不写 Cookie，不按 Cookie 改变缓存 |
 
 确定性管理只读 JSON 包括偏好、管理员列表、存储选项 / 后端，以及已有的设置、
 词表、图片列表与管理详情；写后仍由各领域精确失效查询，内容未变化的再次读取返回 304。

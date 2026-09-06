@@ -8,33 +8,43 @@ packages/web ─────► packages/shared
 ```
 
 `server` 与 `web` 不能互相导入；`shared` 不能依赖其他 workspace。Web 构建产物最终
-由服务端镜像提供；根目录 `docs/guide/` 只是普通仓库文档，不参与 workspace 或生产构建。
+由服务端镜像提供；根目录 `docs/` 只是普通仓库文档，不参与 workspace 或生产构建。
 
 本文面向项目开发与运维，详细描述现行源码、构建产物、状态所有者和依赖边界，是当前实现
 结构的权威说明。
 
 ## 根目录职责
 
-- `package.json` 只编排 workspace 构建、类型检查、死代码检查和运维入口。
+- `package.json` 编排 workspace 构建、类型检查、长期契约测试、门禁和运维入口。
 - `scripts/build/` 只保存生产构建所需的清理、进程编排、Web 图标生成和服务端 schema / SPA
   资产装配；Web 构建直接输出通用产物图报告，报告不装配进运行镜像。
 - `scripts/runtime/` 只放容器内的命令包装；容器启动由
   `scripts/runtime/docker-entrypoint.sh` 负责权限
   收敛后直接执行传入命令。
+- `scripts/tests/` 保存受 Git 跟踪的长期契约测试、源码 / 构建 / 隔离镜像门禁和固定夹具。
+  [测试说明](../../scripts/tests/README.md)维护入口、运行前提和资源范围。
 - `Dockerfile` 只安装三个 workspace 的构建依赖（不安装根目录本地门禁工具）并完成编译，
   再单独安装 server/shared 的生产依赖；运行镜像只携带生产依赖、编译产物和运维入口。
 - `compose.yaml` 提供单实例 ImageShow、PostgreSQL 与 Redis 的标准部署，只把 `.env` 用作
-  显式最小白名单的插值来源；ImageShow 环境前部固定为数据库名、用户名、密码和首次管理员
-  用户名、密码五项。数据库名、数据库用户名和管理员用户名有默认值，两个密码必须显式设置；
+  数据库名、用户名、密码和首次管理员用户名、密码的显式插值来源；可选的 `SITE_DOMAIN`
+  紧随其后，用于首次生成站点配置。数据库名、数据库用户名和管理员
+  用户名有默认值，两个密码必须显式设置；
   `.env.example` 另行承担部署变量与全部首次 seed 的完整目录。
-- `docs/guide/` 保存当前架构、配置、数据库、流程、部署和 API 说明，使用相对 Markdown
-  链接，可直接在仓库中阅读。
+- `docs/CONFIG.md` 与 `docs/DEPLOY.md` 分别维护配置与部署说明；`docs/guide/` 保存当前架构、
+  数据库、流程和 API 等指南。文档使用相对 Markdown 链接，可直接在仓库中阅读。
 
-本地测试、源码 / 构建 / 隔离镜像门禁脚本及 benchmarks 统一位于根目录 `tests/`，由 Git
-忽略且不进入 Docker build context、生产镜像或 GitHub Actions。测试从外部启动与生产镜像
-相同的服务入口；测试数据库、Redis、Compose、fixture、网络模拟和清理编排均留在
-`tests/`。Web 最终测试使用根目录仅供本地门禁的 `linkedom` 真实挂载 React 组件；生产构建
-和运行镜像不安装该依赖。
+长期行为测试保留 Server 和 Web 两个入口，门禁编排位于 `scripts/tests/verify/`。
+颜色识别用例归入源码阶段的语义颜色门禁，正文压缩收益用例归入构建阶段的 Web 产物门禁；
+包版本、配置和依赖方向由各自门禁统一核对。
+固定夹具采用合成数据；运行时配置、日志与生成夹具通过 `support/` 创建在根目录
+`tests/tmp/` 的唯一目录中。Server 入口先设置隔离数据路径，再导入应用模块；数据库、Redis
+和生产镜像使用本次创建的一次性资源，结束后清理。
+
+根目录 `tests/` 被 Git 忽略，用于临时测试、真实资源验收、基线测量、日志、截图、浏览器
+profile 和额外工作树；长期测试不依赖其中预存的文件、个人凭据或既有业务数据。
+`data/` 只保存应用配置、存储、日志和接入临时数据。两处测试目录均不进入 Docker build
+context、生产镜像或 GitHub Actions。Web 测试使用根目录开发依赖 `linkedom` 真实挂载
+React 组件；生产构建和运行镜像不安装该依赖。
 
 ## 本地门禁与发布职责
 
@@ -43,9 +53,9 @@ packages/web ─────► packages/shared
 
 | 命令 | 内容 | 副作用 |
 | --- | --- | --- |
-| `npm run verify:source` | workspace 类型、Knip、语义颜色、TypeScript AST 依赖方向 / 环、配置 schema / 环境目录 / 文档 / Compose 白名单、图标、Markdown 链接与 selector inventory | 只读源码，不生成 `dist`、容器或浏览器会话 |
+| `npm run verify:source` | workspace 类型、Knip、语义颜色、TypeScript AST 依赖方向 / 环、实际配置解析 / 环境目录 / 文档 / Compose 同步、图标与 Markdown 链接 | 只读源码，不生成 `dist`、容器或浏览器会话 |
 | `npm run verify:build` | 清理必要输出，先构建 shared，再并行构建 Web / Server，装配服务端资产并按真实产物图检查 Web 分块边界 | 只重建三个 workspace 的 `dist` |
-| `npm run verify:runtime` | baseline / Server / Web 三个最终入口，以及生产镜像冷启动、HTTP、schema 和重启 | 建立随机命名的 tmpfs PostgreSQL、Redis、应用容器、网络和临时镜像；无论成功、失败或中断均在结束前删除，不访问现有数据库、容器或浏览器 |
+| `npm run verify:runtime` | Server / Web 行为测试，以及生产镜像冷启动、HTTP、schema 和重启 | 建立随机命名的 tmpfs PostgreSQL、Redis、应用容器、网络和临时镜像；无论成功、失败或中断均在结束前删除，不访问现有数据库、容器或浏览器 |
 | `npm run verify:release` | 依次执行以上三层 | 合并上述本地副作用 |
 
 `npm run icons:generate` 是维护图标生成源码的显式写命令；日常门禁只运行只读的
@@ -110,7 +120,7 @@ healthcheck 只读现有配置快照，密码恢复不初始化运行时配置�
 
 | 目录 | 职责与允许依赖 |
 | --- | --- |
-| `core/` | 领域无关的运行可用性、安全抓取、日志、密码、UUID、并发和精确基础原语；不持有图片、词表、存储或 Ingestion 请求 schema，也不依赖业务领域或路由。只有未形成稳定三文件族的横切模块留在根层。 |
+| `core/` | 领域无关的运行可用性、安全抓取、日志、密码、UUID、并发和精确基础原语；不持有图片、词表、存储或 Ingestion 请求 schema，也不依赖业务领域或路由。未形成独立稳定职责边界的横切模块留在根层。 |
 | `core/database/` | PostgreSQL pool、事务、advisory lock、公开 fallback 准入、schema 装配和 readiness；`readiness/` 只承载数据库基线断言的内部职责。 |
 | `core/redis/` | 唯一 Redis client、连接与能力探测、JSON、pipeline、条件字符串、窗口限流命令及其通用 Lua；不持有 ready-cache 等业务命令，也不导入其他业务领域。 |
 | `core/http/` | HTTP 响应与响应头、请求来源和请求体限制、压缩阈值、条件请求、静态响应与 Range 解析。 |
@@ -131,8 +141,10 @@ healthcheck 只读现有配置快照，密码恢复不初始化运行时配置�
 租约内先通过 store 的专用阶段持久化候选文件，再等待 PostgreSQL 事务结果；只有正常提交、确认
 已提交或结果 unknown 时才发布候选，确认回滚只恢复旧文件且不发布中间快照。
 
-`config/site-host.ts` 是资源根 URL、路径前缀和 Host 判断的共同入口：空 `static_subdomain`
-默认选择主站 `/static`，非空选择资源子域。`http-app.ts` 在公共资源、OPTIONS 与 SPA 之前执行
+`config/site-host.ts` 是资源根 URL、路径前缀和 Host 判断的共同入口：域名为空或 `example.com`
+时接受格式合法的访问 Host，使用 `/static` 同源路径，不向配置、共享缓存或队列写入请求域名，
+也不启用资源子域。显式域名下，空 `static_subdomain` 选择主站 `/static`，非空选择资源子域。
+`http-app.ts` 在公共资源、OPTIONS 与 SPA 之前执行
 模式与 Host 隔离；`routes/public.ts` 的两组路径共用相同资源处理器，热加载只切换当前出口。
 不按版本添加转发或迁移。公开资源不读取管理员会话，S3 已配置公开 URL 的对象仍使用直链。
 
@@ -709,10 +721,10 @@ hooks ──► lib
   后台外观模式提供显式亮色、暗色与自动；自动模式跟随浏览器或操作系统并实时响应
   变化。公开页面和启动底色仍拥有独立颜色上下文；未认证登录页与公开页面中的管理弹窗
   都继承公开暗色分支，不读取后台保存的外观偏好，只有认证后的完整后台应用账号偏好；
-  `tests/verify/check-semantic-colors.mjs` 校验传统与现代颜色语法、完整 CSS 命名色、
-  SVG 资产白名单、定义/引用完整性、无用 token、按色相命名及公开/后台依赖边界，
-  并拒绝超出规范集合的后台状态角色；
-  当前品牌 favicon 是唯一允许保留原始色值的 SVG。
+  `scripts/tests/verify/check-semantic-colors.mjs` 校验传统与现代颜色语法、完整 CSS 命名色、
+  token 定义与引用完整性、无用 token、启动文字对比度及公开/后台依赖边界。
+  颜色值集中在语义色表或 CSS token 声明中；品牌资产不属于应用主题源码扫描范围。
+  语义命名与视觉设计由审查和页面验收判断，门禁不维护状态词黑名单或文件例外清单。
 
 `lib/`、`hooks/` 和通用组件不得反向导入具体页面。只有形成稳定跨页面职责的代码才上移，
 页面内部的小组件无需为目录对称而拆分。
@@ -747,20 +759,24 @@ gzip 与 Brotli 各自只要结果严格小于原始响应体就采用，不设�
 不是页面请求数或响应体积预算。只有与目标页面必然同行且不扩大权限、路由或能力懒加载边界的
 资产才合并；资源门禁以真实构建图、权限闭包、同行关系和重复内容为准，总文件数本身不是目标。
 报告保留全部入口必达的 Rolldown runtime，该虚拟 runtime 不进入模块 ownership 分组，也不在
-构建后改写 import 或内容 hash。正文压缩采用规则与分块采用规则彼此独立。报告还会发现主构建
-图之外的 Worker 入口，并把它们纳入体积、命名和重复内容审计；
+构建后改写 import 或内容 hash。正文压缩采用规则与分块采用规则彼此独立。主构建图之外的
+辅助 JavaScript 参与通用哈希、压缩与重复内容检查，不固定 Worker 数量，也不推定加载归属。
 ALTCHA PBKDF2 Worker 必须由浏览器通过独立 URL 创建，且只在实际出现登录挑战时加载，不能并入
-登录页首屏脚本。门禁同时拒绝具有完全相同入口根的重复 emitted JS、具有完全相同 owner 的重复
-CSS，以及内容完全重复的资产。
+登录页首屏脚本。具有相同入口根的 emitted JS 与相同 owner 的 CSS 分组仅供合并评估，
+不单独导致失败；内容完全重复的资产会使门禁失败。
 
 当前镜像的运行时传输、浏览器 profile 和 450 图 Upload 工作负载只属于本地发布验收，保存在被
-Git 忽略的 `tests/benchmarks/`。它们不进入 `scripts/`、npm
-package scripts、Actions 或生产镜像；`scripts/` 继续只保存构建和容器运行所需命令。权威的
+Git 忽略的 `tests/benchmarks/`，工作负载自身的检查也保留在该目录。
+这些测量不属于受跟踪的长期测试或默认门禁，不进入 npm 命令、Actions 或生产镜像。权威的
 固定媒体身份和验收边界见[架构总览](./architecture.md#浏览器传输验收)。
 
 ## docs
 
-`docs/guide/` 保存普通 Markdown 现行文档。`roles/` 按普通用户、图片管理员、超级管理员和
-实例维护者提供任务入口；同级主题文档维护架构、配置、数据库、流程、部署和 API 的唯一完整
-契约。角色页只链接技术参考，不复制容易漂移的底层细节。
+`docs/CONFIG.md` 按配置路径维护完整参数说明，`docs/DEPLOY.md` 维护部署说明。
+`docs/guide/` 保存其他现行指南；其中 `roles/` 按普通用户、图片管理员、超级管理员和实例维护者
+提供任务入口，主题文档维护架构、数据库、流程和 API 等完整契约。角色页只链接技术参考，
+不复制容易漂移的底层细节。
+`tests/report/` 保存本地结论、比较决策和验收说明，由 Git 忽略；按报告中的时间与基线解释，
+不替代现行指南。
+原始日志、截图、浏览器快照和性能采样属于可清理的测试产物，不是报告或现行测试的必需依赖。
 这些文档不生成或提供在线站点。

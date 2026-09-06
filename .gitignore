@@ -14,11 +14,8 @@ dist/
 *.tsbuildinfo
 *.log
 
-# Local-only tests
-**/test/
-**/tests/
-**/*.test.*
-**/*.spec.*
+# Local test runs, measurements, and worktrees
+/tests/
 
 # Runtime and local tool data
 data/

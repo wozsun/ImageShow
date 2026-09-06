@@ -4,7 +4,7 @@
 *.tsbuildinfo
 *.log
 
-# Local-only tests and tooling
+# Tests and local tooling
 **/test
 **/tests
 **/*.test.*

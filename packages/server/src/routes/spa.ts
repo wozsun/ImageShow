@@ -9,6 +9,7 @@ import { join } from "node:path";
 import { getRuntimeConfig } from "../config/runtime-config-store.ts";
 import { siteConfigPayload } from "../config/app-settings.ts";
 import { effectiveEmbedAncestorSources } from "../config/embed-ancestors.ts";
+import { staticResourcePathPrefix } from "../config/site-host.ts";
 import {
   appendVaryHeader,
   embedSpaDocumentHeaders,
@@ -86,7 +87,7 @@ function buildSpaDocument(): string {
   const description = escapeHtmlAttr(site.description);
   const iconUrl = escapeHtmlAttr(site.icon);
   const head =
-    (getRuntimeConfig().site.static_subdomain
+    (staticResourcePathPrefix() === ""
       ? `<link rel="preconnect" href="${escapeHtmlAttr(site.static_url)}" crossorigin>`
       : "")
     + `<script type="application/json" id="__site_config__">${inlineConfig}</script>`;

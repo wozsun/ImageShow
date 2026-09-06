@@ -1,7 +1,7 @@
 {
   "name": "imageshow",
   "private": true,
-  "version": "6.0.4",
+  "version": "6.0.5",
   "type": "module",
   "workspaces": [
     "packages/*"
@@ -16,14 +16,14 @@
     "build": "node scripts/build/run-build.mjs",
     "icons:generate": "npm run icons:generate -w @imageshow/web",
     "icons:check": "npm run icons:check -w @imageshow/web",
-    "check:colors": "node tests/verify/check-semantic-colors.mjs",
+    "check:colors": "node scripts/tests/verify/check-semantic-colors.mjs",
     "check": "npm --workspaces run check --if-present",
     "knip": "knip",
-    "verify:source": "node tests/verify/run.mjs source",
-    "verify:build": "node tests/verify/run.mjs build",
-    "verify:runtime": "node tests/verify/run.mjs runtime",
-    "verify:release": "node tests/verify/run.mjs release",
-    "test:final:web": "tsx --test tests/final-web.test.ts",
+    "verify:source": "node scripts/tests/verify/run.mjs source",
+    "verify:build": "node scripts/tests/verify/run.mjs build",
+    "verify:runtime": "node scripts/tests/verify/run.mjs runtime",
+    "verify:release": "node scripts/tests/verify/run.mjs release",
+    "test:final:web": "tsx --test scripts/tests/final-web.test.ts",
     "admin:reset-password": "node --env-file-if-exists=.env packages/server/src/admin-password-cli.ts reset-password",
     "start": "npm run start -w @imageshow/server"
   },

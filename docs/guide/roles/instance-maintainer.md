@@ -13,7 +13,7 @@
 - 在后台不可登录时使用独立密码恢复入口，并核对 PostgreSQL / Redis 可用性。
 
 首次安装从[快速开始](../getting-started.md)开始；生产拓扑、Nginx、停机与健康检查见
-[生产部署](../deployment.md)。配置来源和环境变量见[配置说明](../configuration.md)，数据库
+[生产部署](../../DEPLOY.md)。配置来源和环境变量见[配置说明](../../CONFIG.md)，数据库
 基线与安全新增边界见[数据库结构](../database.md#启动与结构契约)。
 
 ## 数据安全边界

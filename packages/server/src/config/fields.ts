@@ -24,7 +24,8 @@ export const showOrder = z.enum(showOrders);
 export const showDriftSpeed = z.coerce.number().int().min(10).max(60);
 
 export const siteName = z.string().trim().min(1);
-export const siteDomain = z.string().trim().toLowerCase().min(1).max(259).refine((value) => {
+export const siteDomain = z.string().trim().toLowerCase().max(259).refine((value) => {
+  if (!value) return true;
   if (!/^[a-z0-9.-]+(?::\d{1,5})?$/.test(value)) return false;
   try {
     const parsed = new URL(`https://${value}`);
@@ -40,7 +41,7 @@ export const siteDomain = z.string().trim().toLowerCase().min(1).max(259).refine
   } catch {
     return false;
   }
-}, "站点域名需为不含协议和路径的有效 DNS 域名，可带端口");
+}, "站点域名需为空或不含协议和路径的有效 DNS 域名，可带端口");
 export const siteIcon = z.string().trim().min(1).max(2048)
   .refine(isRootRelativeOrHttpsUrl, "站点图标必须是站内绝对路径或 HTTPS URL");
 export const siteDescription = z.string().trim().max(200);

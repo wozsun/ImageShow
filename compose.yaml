@@ -43,6 +43,7 @@ services:
       DATABASE_PASSWORD: ${DATABASE_PASSWORD:?}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?}
+      SITE_DOMAIN: ${SITE_DOMAIN:-}
     ports:
       - "127.0.0.1:5518:5518"
     volumes:

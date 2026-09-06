@@ -1,7 +1,8 @@
 # ImageShow 文档
 
-这里保存可直接在仓库中阅读的维护文档，不参与 npm workspace、生产构建或运行时路由。
-先按自己的身份选择入口；角色页负责给出任务路径，技术参考负责维护唯一的完整契约。
+这里保存可直接在仓库中阅读的维护文档，不参与 npm workspace、生产构建或运行时路由。先按自己的身份选择入口；角色页负责给出任务路径，技术参考负责维护唯一的完整契约。
+
+部署与配置可直接阅读 [DEPLOY](DEPLOY.md) 和 [CONFIG](CONFIG.md)；CONFIG 按配置路径逐项说明。
 
 ## 按角色开始
 
@@ -16,9 +17,10 @@
 
 ## 技术参考
 
-- 入门与部署：[快速开始](guide/getting-started.md)、[生产部署](guide/deployment.md)
+- 入门与部署：[快速开始](guide/getting-started.md)、[生产部署](DEPLOY.md)
 - 系统设计：[架构总览](guide/architecture.md)、[项目结构](guide/project-structure.md)
-- 运行契约：[配置说明](guide/configuration.md)、[数据库结构](guide/database.md)、
-  [存储](guide/storage.md)、[安全](guide/security.md)
-- 功能出口：[功能与流程](guide/flows.md)、[随机图 API](guide/random-api.md)、
-  [主机与资源子域](guide/subdomains.md)
+- 开发验证：[长期测试与本地门禁](../scripts/tests/README.md)
+- 运行契约：[配置说明](CONFIG.md)、[数据库结构](guide/database.md)、[存储](guide/storage.md)、[安全](guide/security.md)
+- 功能出口：[功能与流程](guide/flows.md)、[随机图 API](guide/random-api.md)、[主机与资源子域](guide/subdomains.md)
+
+本地结论、比较决策和验收说明统一放在被 Git 忽略的 `tests/report/`，不替代上述现行指南。

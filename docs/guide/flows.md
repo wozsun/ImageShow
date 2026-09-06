@@ -6,12 +6,12 @@
 | 主题 | 权威来源 |
 | --- | --- |
 | 数据表、结构契约、任务状态 | [数据库结构](./database.md) |
-| 运行配置、环境变量、配置包 | [配置说明](./configuration.md) |
+| 运行配置、环境变量、配置包 | [配置说明](../CONFIG.md) |
 | local / S3、迁移与对象清理 | [存储](./storage.md) |
 | Redis、Worker、锁与进程生命周期 | [架构总览](./architecture.md) |
 | 随机图查询参数与返回方式 | [随机图 API](./random-api.md) |
 | 鉴权、请求限制、代理和响应头 | [安全](./security.md) |
-| 部署、健康检查与 Nginx | [生产部署](./deployment.md) |
+| 部署、健康检查与 Nginx | [生产部署](../DEPLOY.md) |
 
 ## 图片接入
 
@@ -160,7 +160,7 @@ Import： accept ─► queued ─► downloading ─► received ─► prepari
 JSONL 可设置 `original`、`source`、`image_time`、`author`、`tags`、`title`、
 `description`、`theme`、`device`、`brightness` 与 `storage_slug`。行内字段优先于窗口
 默认值；显式空标签和 `auto` 分类也是有效选择。完整数量、并发、文件大小和处理参数以
-[配置说明](./configuration.md#runtimeconfig-参数目录)为准。
+[配置说明](../CONFIG.md#runtimeconfig-参数目录)为准。
 
 `import.keep_original_link` 按 `url`、`jsonl`、`weibo` 来源决定是否把实际下载 URL 写入
 正式图片的 `original`；未列出的来源仍完成同一下载、校验和入库流程，只把该公开链接留空。
@@ -1053,7 +1053,7 @@ mutation fence 和提交后 cache handoff。对象传输由单图、批量与整
 应用设置写 `data/config.json`，存储后端与凭据写 PostgreSQL。完整配置编辑器只管理当前
 实例运行策略；带来源版本提示的配置包可以携带可移植运行配置和自定义存储注册项，目标
 版本按自身当前能力逐项识别，但不搬运数据库业务数据、Redis、图片对象或部署连接。配置来源、归一化和跨资源提交边界见
-[配置说明](./configuration.md)。
+[配置说明](../CONFIG.md)。
 
 配置包导入在单一 FIFO 写租约内先原子持久化候选 `config.json`，此时普通请求和运行配置
 listener 仍只观察旧内存快照；PostgreSQL 正常提交或 xid8 确认已提交后才发布候选一次。确认
@@ -1090,4 +1090,4 @@ listener 仍只观察旧内存快照；PostgreSQL 正常提交或 xid8 确认已
   共用的图片工作流样式由两种能力各自携带，不依赖访问顺序。
 
 完整缓存头、CSP、压缩、条件请求和 Range 约束见[安全](./security.md)及相关 API 文档；
-反向代理不重复实现应用缓存，见[生产部署](./deployment.md#反向代理与-https)。
+反向代理不重复实现应用缓存，见[生产部署](../DEPLOY.md#反向代理与-https)。

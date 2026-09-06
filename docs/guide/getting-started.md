@@ -3,15 +3,16 @@
 需要已安装 Docker。`compose.yaml` 不提供数据库密码或首次管理员密码；首次启动前必须创建
 `.env` 并为 `DATABASE_PASSWORD`、`ADMIN_PASSWORD` 设置非空值，缺失或空值会在 Compose
 展开阶段直接失败。`.env` 为 Compose 提供插值，`services.imageshow.environment` 的显式
-映射构成应用容器的环境变量集合。站点域名在首次启动后通过 `data/config.json` / 高级配置
-修改；空目录生成时可显式映射 `SITE_DOMAIN` 播种。内置拓扑使用 Server 的 `UTC` 时区默认值。
+映射构成应用容器的环境变量集合。`SITE_DOMAIN` 已有可选映射，强烈建议首次部署前在 `.env`
+中填写实际域名，不带协议或路径。未设置、为空或为 `example.com` 时，项目使用访问 Host 与
+同源 `/static` 资源路径，不启用资源子域；已有站点通过 `data/config.json` / 高级配置修改域名。
+内置拓扑使用 Server 的 `UTC` 时区默认值。
 
-这套全内置 Compose 只用于本地体验、开发和全新安装验证，不作为当前正式生产部署。
-生产环境固定为一台主机上的一个 ImageShow 应用容器；PostgreSQL 与 Redis 在另一套
-基础设施 Compose 中各运行一个单机单容器。升级先停止对应当前容器，更新后原位启动。
-正式部署细节见[反向代理与部署](./deployment.md)。
+默认 Compose 提供单机部署：一台主机只运行一个 ImageShow 应用实例，PostgreSQL 与 Redis
+可使用内置服务或独立基础设施。升级先停止当前应用容器，更新后原位启动。
+正式部署细节见[反向代理与部署](../DEPLOY.md)。
 
-复制环境变量模板，填写两个密码后拉取并启动发布镜像：
+复制环境变量模板，填写两个密码并按需设置 `.env` 中的站点域名后，拉取并启动发布镜像：
 
 ```bash
 cp .env.example .env
@@ -23,7 +24,7 @@ Docker 镜像已包含 Node.js 26.8.1。只有在宿主机直接运行开发、�
 Node.js `>=26.3.0 <27`；该版本范围覆盖项目使用的原生 UUIDv7、Temporal、Argon2 与
 TypeScript 类型擦除。
 
-默认后台登录用户名为 `admin`。默认 Compose 的五个必要值为：
+默认后台登录用户名为 `admin`。默认 Compose 从 `.env` 读取以下数据库与管理员设置：
 
 ```ini
 DATABASE_NAME=imageshow
@@ -31,6 +32,7 @@ DATABASE_USER=imageshow
 DATABASE_PASSWORD=
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=
+SITE_DOMAIN=example.com
 ```
 
 两个密码都没有默认值，必须使用不同的随机强密码；管理员密码为 8–128 位且同时包含字母和
@@ -38,8 +40,9 @@ ADMIN_PASSWORD=
 （最终以用户名 + Argon2id 密码哈希保存到数据库），已有 super 时应用不会用它们覆盖账号或
 密码。默认 `compose.yaml` 每次展开仍要求两个密码非空。
 
-默认 Compose 向 ImageShow 注入数据库三项和首次管理员两项；ImageShow 与 PostgreSQL 在各自
-`environment` 中直接插值同一组数据库值。内置拓扑的数据库 host / port 与 Redis
+默认 Compose 向 ImageShow 注入数据库三项、首次管理员两项及可选的 `SITE_DOMAIN`；
+后者通过 `${SITE_DOMAIN:-}` 读取 `.env`，未设置时传入空值。ImageShow 与 PostgreSQL 在各自 `environment`
+中直接插值同一组数据库值。内置拓扑的数据库 host / port 与 Redis
 host / port / db / password 使用 Server 代码默认值；连接外部 PostgreSQL / Redis 时，
 在 Compose override 或其他部署清单中逐项映射相应可选变量。Compose
 内置 Redis 使用私有网络内不固定次版本的无密码 `redis:8` 镜像，直接采用镜像默认启动命令
@@ -56,9 +59,9 @@ Redis 内存上限、淘汰策略和容器硬限制由部署方管理；应用�
 使用 `compose.override.yaml`、其他部署清单或 `docker run -p [host-ip:]<host-port>:5518`，
 并保持应用容器内端口为 `5518`。
 
-`.env.example` 还列出所有 RuntimeConfig 首次播种变量；部署者可逐项扩展
+`.env.example` 还列出所有 RuntimeConfig 首次播种变量；除已有映射的站点域名外，部署者可逐项扩展
 `services.imageshow.environment` 以在首次生成时启用。完整映射、默认值和严格 JSON 写法见
-[配置说明](./configuration.md#runtimeconfig-参数目录)。
+[配置说明](../CONFIG.md#runtimeconfig-参数目录)。
 
 Redis 暂时不可连接或能力不满足时，HTTP 进程仍监听。当前进程首次通过连接及五项能力
 校验前只开放 `/livez` 与非就绪的 `/readyz`，全部业务返回 503，worker 也不启动；首次
@@ -78,7 +81,7 @@ degraded 不影响 `/readyz` 或后台会话，公开读取与管理员 ready �
 128 个活跃签名、单结果与总成员数、单统计结果大小和构建并发约束结构规模，不根据
 Redis 全局字节使用量阻止写入或触发全局清理。派生结果错误不会关闭核心图片读门。
 
-应用默认监听 `5518` 端口，由反向代理对外提供 HTTPS（见 [反向代理与部署](./deployment.md)）。以站点域名访问（下例以 `img.example.com` 为站点域名）：
+应用默认监听 `5518` 端口，由反向代理对外提供 HTTPS（见 [反向代理与部署](../DEPLOY.md)）。以站点域名访问（下例以 `img.example.com` 为站点域名）：
 
 - 首页：`https://img.example.com/home`
 - 展映：`https://img.example.com/show`

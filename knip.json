@@ -2,7 +2,14 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "workspaces": {
     ".": {
-      "entry": ["tests/final-*.test.ts"],
+      "entry": [
+        "scripts/tests/final-*.test.ts",
+        "scripts/tests/verify/source-contract.mjs",
+        "scripts/tests/verify/version-contract.mjs",
+        "scripts/tests/verify/markdown-links.mjs",
+        "scripts/tests/verify/check-web-chunks.mjs",
+        "scripts/tests/verify/runtime-image.mjs"
+      ],
       "ignoreDependencies": [
         "@aws-sdk/client-s3",
         "@tanstack/react-query",

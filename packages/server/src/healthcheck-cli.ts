@@ -8,7 +8,7 @@ if (!runtimeConfig) {
   throw new Error(`Runtime config ${runtimePaths.configFile} does not exist`);
 }
 const port = String(appConfig.applicationPort);
-const host = runtimeConfig.config.site.domain;
+const host = runtimeConfig.config.site.domain || `127.0.0.1:${port}`;
 
 function requestReadiness() {
   return new Promise<number>((resolve, reject) => {

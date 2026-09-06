@@ -99,6 +99,9 @@ PostgreSQL 事务推进 `ready_image_revision`。提交后仍持有进程内写�
 
 `mode=proxy` 从图片所属 local 或 S3 后端读取已入库图片字节，并附带
 `X-Image-Info`；它不声明 `Accept-Ranges`。`mode=redirect` 返回 302 跳转到公开 URL。
+域名未设置、为空或为 `example.com` 时，应用提供的图片 URL 使用 `/static/...` 同源路径：
+浏览器会按访问地址解析，API 客户端应以请求 origin 解析 JSON 图片地址及相对 `Location`。
+已配置公开地址的 S3 对象继续返回存储直链。
 这里的 `proxy` 只是返回传输方式，与图片接入模式无关。
 
 `mode=json` 返回 `application/json`，顶层 `count` 是实际数量，`items` 是图片数组：
@@ -112,8 +115,8 @@ PostgreSQL 事务推进 `ready_image_revision`。提交后仍持有进程内写�
       "id": "019f8457-063a-7002-a580-7a432dc7fd8d",
       "title": "示例图片",
       "author": "photographer",
-      "object_url": "https://example.com/static/full/8d/019f8457-063a-7002-a580-7a432dc7fd8d.webp",
-      "thumb_url": "https://example.com/static/thumbs/8d/019f8457-063a-7002-a580-7a432dc7fd8d.webp",
+      "object_url": "https://img.example.com/static/full/8d/019f8457-063a-7002-a580-7a432dc7fd8d.webp",
+      "thumb_url": "https://img.example.com/static/thumbs/8d/019f8457-063a-7002-a580-7a432dc7fd8d.webp",
       "device": "pc",
       "brightness": "dark",
       "theme": "theme",
