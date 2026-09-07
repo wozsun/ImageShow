@@ -130,7 +130,8 @@ async function getPublicImageWithAccess(
               object_key,
               storage_slug,
               description,
-              source
+              source,
+              original
          FROM metadata
         WHERE id=$1 AND status='ready'
         LIMIT 1`,

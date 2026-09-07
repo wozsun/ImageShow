@@ -1,17 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   PublicImageListResponseDto,
+  RandomImageJsonItemDto,
   RandomImageJsonResponseDto,
   ShowOrder
 } from "@imageshow/shared/browser";
-import { api } from "../../lib/api/client.js";
+import { api, isApiClientError } from "../../lib/api/client.js";
 import type { GalleryFilters } from "../../lib/gallery/gallery-query.js";
 import {
   galleryRandomRequestDevice,
   showOrderedApiSearchParams
 } from "../../lib/gallery/gallery-query.js";
 import { buildRandomUrl } from "../../lib/gallery/random-url.js";
+import type { EditableImageSnapshot } from "../../lib/types.js";
 import type { ShowImage } from "./show-layout.js";
+import {
+  showImageMatchesFilters,
+  updatedShowImage
+} from "./show-image-update.js";
 
 const showBatchSize = 200;
 const showMaximumRetainedDtos = 800;
@@ -42,6 +48,31 @@ function orderedBatchPath(
   });
   params.set("limit", String(showBatchSize));
   return `/api/images?${params.toString()}`;
+}
+
+function targetedImagePath(imageId: string) {
+  const params = new URLSearchParams({
+    id: imageId,
+    mode: "json"
+  });
+  return `/random?${params.toString()}`;
+}
+
+function showImageFromRandomItem(item: RandomImageJsonItemDto): ShowImage {
+  return {
+    id: item.id,
+    title: item.title,
+    author: item.author,
+    object_url: item.object_url,
+    thumb_url: item.thumb_url,
+    device: item.device,
+    brightness: item.brightness,
+    theme: item.theme,
+    tags: item.tags,
+    width: item.width,
+    height: item.height,
+    image_time: item.image_time
+  };
 }
 
 function appendUnique(
@@ -81,6 +112,7 @@ export function useShowData(
   } | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
   const requestRef = useRef<{ controller: AbortController; replace: boolean } | null>(null);
+  const targetedRequestsRef = useRef(new Map<string, AbortController>());
   const generationRef = useRef(0);
   const imagesRef = useRef<ShowImage[]>([]);
   const committedKeyRef = useRef(sourceKey);
@@ -114,7 +146,7 @@ export function useShowData(
         const response = await api<RandomImageJsonResponseDto>(randomPath, {
           signal: controller.signal
         });
-        responseItems = response.items;
+        responseItems = response.items.map(showImageFromRandomItem);
       } else {
         const response = await api<PublicImageListResponseDto>(orderedBatchPath(
           requestFilters,
@@ -160,6 +192,10 @@ export function useShowData(
     generationRef.current += 1;
     requestRef.current?.controller.abort();
     requestRef.current = null;
+    for (const controller of targetedRequestsRef.current.values()) {
+      controller.abort();
+    }
+    targetedRequestsRef.current.clear();
     cursorRef.current = "";
     canLoadMoreRef.current = true;
     setFailure(null);
@@ -169,31 +205,103 @@ export function useShowData(
       generationRef.current += 1;
       requestRef.current?.controller.abort();
       requestRef.current = null;
+      for (const controller of targetedRequestsRef.current.values()) {
+        controller.abort();
+      }
+      targetedRequestsRef.current.clear();
     };
   }, [request, sourceKey]);
 
-  const removeImage = useCallback((imageId: string) => {
+  const removeImage = useCallback((imageId: string, replenish = false) => {
+    const next = imagesRef.current.filter((image) => image.id !== imageId);
+    if (next.length === imagesRef.current.length) return false;
     const interrupted = requestRef.current;
     generationRef.current += 1;
     interrupted?.controller.abort();
     requestRef.current = null;
-    const next = imagesRef.current.filter((image) => image.id !== imageId);
+    targetedRequestsRef.current.get(imageId)?.abort();
+    targetedRequestsRef.current.delete(imageId);
     imagesRef.current = next;
     setImages(next);
     // Restart an interrupted read only after the deletion has committed. Its
     // old response cannot resurrect the removed ID, even if abort arrives late.
-    if (interrupted) void request(interrupted.replace);
+    if (replenish) canLoadMoreRef.current = true;
+    if (interrupted || replenish) void request(interrupted?.replace ?? false);
+    return true;
   }, [request]);
 
-  const refreshImages = useCallback(() => {
-    generationRef.current += 1;
-    requestRef.current?.controller.abort();
-    requestRef.current = null;
-    canLoadMoreRef.current = true;
-    // Membership is decided by the same Server query as the stream, including
-    // include/exclude selectors and device=auto. Keep the old plane until ready.
-    void request(true);
-  }, [request]);
+  const updateImage = useCallback((snapshot: EditableImageSnapshot) => {
+    const pendingSnapshot = targetedRequestsRef.current.get(snapshot.id);
+    pendingSnapshot?.abort();
+    targetedRequestsRef.current.delete(snapshot.id);
+    const current = imagesRef.current.find((image) => image.id === snapshot.id);
+    if (!current) return "missing" as const;
+    if (!showImageMatchesFilters(
+      snapshot,
+      requestFilters,
+      window.navigator.userAgent
+    )) {
+      removeImage(snapshot.id, true);
+      return "removed" as const;
+    }
+    const updated = updatedShowImage(current, snapshot);
+    const next = imagesRef.current.map((image) => (
+      image.id === snapshot.id ? updated : image
+    ));
+    imagesRef.current = next;
+    setImages(next);
+    return "updated" as const;
+  }, [removeImage, requestFilters]);
+
+  const refreshImage = useCallback((imageId: string) => {
+    if (!imagesRef.current.some((image) => image.id === imageId)) return;
+    targetedRequestsRef.current.get(imageId)?.abort();
+    const controller = new AbortController();
+    targetedRequestsRef.current.set(imageId, controller);
+    void api<RandomImageJsonResponseDto>(targetedImagePath(imageId), {
+      signal: controller.signal
+    })
+      .then((response) => {
+        if (targetedRequestsRef.current.get(imageId) !== controller) return;
+        const randomItem = response.items.find((item) => item.id === imageId);
+        if (!randomItem) {
+          removeImage(imageId, true);
+          return;
+        }
+        const image = showImageFromRandomItem(randomItem);
+        const current = imagesRef.current.find((item) => item.id === imageId);
+        if (!current) return;
+        if (!showImageMatchesFilters(
+          image,
+          requestFilters,
+          window.navigator.userAgent
+        )) {
+          removeImage(imageId, true);
+          return;
+        }
+        const next = imagesRef.current.map((item) => (
+          item.id === imageId ? image : item
+        ));
+        imagesRef.current = next;
+        setImages(next);
+      })
+      .catch((error: unknown) => {
+        if (
+          targetedRequestsRef.current.get(imageId) === controller
+          && isApiClientError(error)
+          && error.status === 404
+        ) {
+          removeImage(imageId, true);
+        }
+        // Other failures stay visible through the editor's existing save error;
+        // keeping the last committed card is safer than guessing membership.
+      })
+      .finally(() => {
+        if (targetedRequestsRef.current.get(imageId) === controller) {
+          targetedRequestsRef.current.delete(imageId);
+        }
+      });
+  }, [removeImage, requestFilters]);
 
   const transitioning = committedKey !== sourceKey || committedOrder !== order;
   const error = failure?.sourceKey === sourceKey ? failure.value : null;
@@ -214,6 +322,7 @@ export function useShowData(
         || committedKeyRef.current !== sourceKey
       );
     },
-    refreshImages
+    updateImage,
+    refreshImage
   };
 }

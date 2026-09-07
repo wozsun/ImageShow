@@ -25,7 +25,6 @@ const publicImageCardColumns = [
   "storage_slug",
   "author",
   "title",
-  "original",
   "image_time",
   "status"
 ].join(", ");

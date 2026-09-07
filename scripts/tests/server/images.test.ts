@@ -1034,40 +1034,6 @@ test("[Server/图片] stored serving 的缩略图读取严格只读并保留真�
     source: item.source,
     updated_at: item.updated_at
   };
-  const presentedUrls = {
-    object_url: `https://static.example.com/full/${item.object_key}`,
-    thumb_url: `https://static.example.com/thumbs/${item.object_key.replace(/\.[^.]+$/, ".webp")}`
-  };
-  const readyAdminView = {
-    ...item,
-    ...presentedUrls,
-    status: "ready",
-    deleted_at: null,
-    created_at: item.created_at,
-    image_time: item.image_time,
-    tags: item.tags,
-    diff_original: true
-  };
-  const deletedAdminView = {
-    ...item,
-    ...presentedUrls,
-    status: "deleted",
-    deleted_at: "2026-08-11T00:00:00.000Z",
-    created_at: item.created_at,
-    image_time: item.image_time,
-    tags: item.tags,
-    diff_original: true
-  };
-  assert.deepEqual(
-    {
-      object_url: deletedAdminView.object_url,
-      thumb_url: deletedAdminView.thumb_url
-    },
-    {
-      object_url: readyAdminView.object_url,
-      thumb_url: readyAdminView.thumb_url
-    }
-  );
   const request = {
     range: "bytes=1-2",
     ifNoneMatch: '"fixture"',

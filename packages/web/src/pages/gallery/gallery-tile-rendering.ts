@@ -11,6 +11,11 @@ export type GalleryTileRenderProps = {
     card: GalleryImageCard,
     opener: HTMLButtonElement
   ) => void;
+  onIntrinsicSize: (
+    imageId: string,
+    width: number,
+    height: number
+  ) => void;
 };
 
 export function galleryTilePropsEqual(
@@ -27,8 +32,10 @@ export function galleryTilePropsEqual(
     && previousPosition.y === currentPosition.y
     && previousPosition.width === currentPosition.width
     && previousPosition.height === currentPosition.height
+    && previousPosition.measureIntrinsicSize === currentPosition.measureIntrinsicSize
     && previous.revealRegistry === current.revealRegistry
     && previous.subtitle === current.subtitle
     && previous.onOpen === current.onOpen
+    && previous.onIntrinsicSize === current.onIntrinsicSize
   );
 }

@@ -5,6 +5,7 @@ import {
 import {
   useCallback,
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -13,6 +14,7 @@ import {
   type RefObject
 } from "react";
 import { queryKeys } from "../../lib/api/query-keys.js";
+import { imageDataRevision } from "../../lib/api/image-data-revision.js";
 import { galleryDataWindowMaxConcurrentPageLoads } from "../../lib/constants.js";
 import {
   isPageScrollLocked,
@@ -22,9 +24,16 @@ import type { GalleryCompactGeometry } from "./compact-masonry-layout.js";
 import {
   GalleryDataWindow,
   type GalleryDataWindowViewport,
+  type GalleryIntrinsicSize,
   type GalleryPageIntent,
   type GalleryPageRequest
 } from "./gallery-data-window.js";
+import {
+  activateGalleryRestorationSession,
+  retainGalleryRestorationSession,
+  reusableGalleryRestorationSession,
+  type GalleryScrollAnchor
+} from "./gallery-restoration.js";
 import { galleryImagePageQueryOptions } from "./gallery-images-query.js";
 import type { GalleryDataWindowMetrics } from "./gallery-debug-stats.js";
 import type { EditableImageSnapshot } from "../../lib/types.js";
@@ -33,8 +42,15 @@ import {
   shouldRefreshGalleryRenderViewport
 } from "./gallery-render-viewport.js";
 
-function initialViewport(): GalleryDataWindowViewport {
-  return createGalleryRenderViewport(0, window.innerHeight);
+function viewportForAnchor(
+  controller: GalleryDataWindow,
+  anchor: GalleryScrollAnchor | null
+): GalleryDataWindowViewport {
+  const position = anchor ? controller.positionForId(anchor.id) : null;
+  const visibleStart = position && anchor
+    ? Math.max(0, position.y - anchor.offset)
+    : 0;
+  return createGalleryRenderViewport(visibleStart, window.innerHeight);
 }
 
 function normalizedError(error: unknown) {
@@ -43,30 +59,79 @@ function normalizedError(error: unknown) {
 
 export function useGalleryDataWindow({
   geometry,
+  geometryReady,
   imageQuery,
+  navigationKey,
+  restorePosition,
   pinnedImageId,
   windowRef
 }: {
   geometry: GalleryCompactGeometry;
+  geometryReady: boolean;
   imageQuery: string;
+  navigationKey: string;
+  restorePosition: boolean;
   pinnedImageId: string | null;
   windowRef: RefObject<HTMLDivElement | null>;
 }) {
   const queryClient = useQueryClient();
-  const controller = useMemo(
-    () => new GalleryDataWindow({ geometry }),
-    [imageQuery]
+  const ownerId = useId();
+  // A fresh navigation must not join a previous visit's in-flight page read,
+  // even when neither its filters nor its image mutation revision changed.
+  const queryScope = `${ownerId}:${navigationKey}`;
+  // Retain the old height during measurement so a classic scrollbar does not
+  // disappear and change the measured width. Ownership waits for real geometry.
+  const session = useMemo(
+    () => {
+      const retained = restorePosition
+        ? reusableGalleryRestorationSession(
+            imageQuery,
+            navigationKey,
+            geometryReady ? geometry : undefined
+          )
+        : null;
+      return retained ?? {
+        imageQuery,
+        navigationKey,
+        imageDataRevision: imageDataRevision(queryClient),
+        geometry,
+        controller: new GalleryDataWindow({ geometry }),
+        anchor: null
+      };
+    },
+    [imageQuery, navigationKey, restorePosition, queryClient, geometryReady]
   );
+  const controller = session.controller;
   const snapshot = useSyncExternalStore(
     controller.subscribe,
     controller.snapshot,
     controller.snapshot
   );
-  const [viewport, setViewport] = useState(initialViewport);
+  const [viewport, setViewport] = useState(
+    () => viewportForAnchor(controller, session.anchor)
+  );
   const [requestSlotRevision, setRequestSlotRevision] = useState(0);
+  const viewportControllerRef = useRef<GalleryDataWindow | null>(null);
   const viewportRef = useRef(viewport);
   const anchorFrameRef = useRef<number | null>(null);
-  const pendingAnchorRef = useRef<{ id: string; y: number } | null>(null);
+  const pendingAnchorRef = useRef<{
+    id: string;
+    y: number;
+    offset: number;
+  } | null>(null);
+  const measurementFrameRef = useRef<number | null>(null);
+  const pendingMeasurementsRef = useRef(new Map<string, GalleryIntrinsicSize>());
+  const routeRestorationRef = useRef<{
+    controller: GalleryDataWindow;
+    anchor: GalleryScrollAnchor;
+  } | null>(session.anchor ? { controller, anchor: session.anchor } : null);
+  const restorationControllerRef = useRef(controller);
+  if (restorationControllerRef.current !== controller) {
+    restorationControllerRef.current = controller;
+    routeRestorationRef.current = session.anchor
+      ? { controller, anchor: session.anchor }
+      : null;
+  }
   const activeRequestsRef = useRef(
     new WeakMap<GalleryDataWindow, Map<string, Promise<void>>>()
   );
@@ -78,18 +143,15 @@ export function useGalleryDataWindow({
   viewportRef.current = viewport;
 
   const preserveAnchor = useCallback((mutation: () => void) => {
-    const currentViewport = viewportRef.current;
+    const element = windowRef.current;
+    const visibleStart = element
+      ? Math.max(0, -element.getBoundingClientRect().top)
+      : viewportRef.current.visibleStart;
     const existingAnchor = pendingAnchorRef.current;
-    const anchor = existingAnchor ?? controller.windowPositions({
-      start: currentViewport.visibleStart,
-      end: currentViewport.visibleEnd,
-      visibleStart: currentViewport.visibleStart,
-      visibleEnd: currentViewport.visibleEnd,
-      pinnedId: null
-    }).find((position) => (
-      position.bottom >= currentViewport.visibleStart
-      && position.y <= currentViewport.visibleEnd
-    ));
+    const anchor = existingAnchor ?? controller.viewportAnchor(
+      visibleStart,
+      visibleStart + window.innerHeight
+    );
     mutation();
     if (!anchor) return;
     const nextPosition = controller.positionForId(anchor.id);
@@ -99,27 +161,102 @@ export function useGalleryDataWindow({
     }
     const delta = nextPosition.y - anchor.y;
     if (Math.abs(delta) < 0.5 && anchorFrameRef.current === null) return;
-    pendingAnchorRef.current = { id: anchor.id, y: anchor.y };
+    pendingAnchorRef.current = existingAnchor ?? {
+      id: anchor.id,
+      y: anchor.y,
+      offset: anchor.y - visibleStart
+    };
     if (anchorFrameRef.current !== null) return;
     anchorFrameRef.current = window.requestAnimationFrame(() => {
       anchorFrameRef.current = null;
       const pendingAnchor = pendingAnchorRef.current;
       pendingAnchorRef.current = null;
-      if (!pendingAnchor) return;
+      const currentElement = windowRef.current;
+      if (!pendingAnchor || !currentElement
+        || viewportControllerRef.current !== controller) return;
       const settledPosition = controller.positionForId(pendingAnchor.id);
       if (!settledPosition) return;
       const settledDelta = settledPosition.y - pendingAnchor.y;
       if (Math.abs(settledDelta) < 0.5) return;
-      window.scrollBy({ top: settledDelta, behavior: "instant" });
+      // A shorter layout may already have clamped scrollY. Restore the card's
+      // absolute viewport offset rather than applying the layout delta twice.
+      const documentTop = window.scrollY + currentElement.getBoundingClientRect().top;
+      window.scrollTo({
+        top: Math.max(0, documentTop + settledPosition.y - pendingAnchor.offset),
+        behavior: "instant"
+      });
+      const next = createGalleryRenderViewport(
+        Math.max(0, -currentElement.getBoundingClientRect().top),
+        window.innerHeight
+      );
+      viewportRef.current = next;
+      setViewport(next);
     });
-  }, [controller]);
+  }, [controller, windowRef]);
 
   useLayoutEffect(() => {
+    if (!geometryReady) return;
+    if (viewportControllerRef.current === controller) return;
+    viewportControllerRef.current = controller;
+    const restoration = routeRestorationRef.current;
+    const restoring = restoration?.controller === controller;
+    if (restoring) {
+      if (session.imageDataRevision !== imageDataRevision(queryClient)) {
+        controller.invalidateHydratedPages();
+      } else {
+        controller.invalidatePendingRequests();
+      }
+    }
+    const next = viewportForAnchor(
+      controller,
+      restoring ? restoration.anchor : null
+    );
+    viewportRef.current = next;
+    setViewport(next);
+    const element = windowRef.current;
+    if (restoring && element) {
+      const documentTop = window.scrollY + element.getBoundingClientRect().top;
+      window.scrollTo({ top: Math.max(0, documentTop + next.visibleStart), behavior: "instant" });
+    } else if (!restoring) {
+      window.scrollTo({ top: 0 });
+    }
+  }, [controller, geometryReady, queryClient, session.imageDataRevision, windowRef]);
+
+  useLayoutEffect(() => {
+    if (!geometryReady) return;
+    activateGalleryRestorationSession();
+    return () => {
+      const element = windowRef.current;
+      if (!element) return;
+      const visibleStart = Math.max(0, -element.getBoundingClientRect().top);
+      const anchor = controller.viewportAnchor(
+        visibleStart,
+        visibleStart + Math.max(1, window.innerHeight)
+      );
+      if (!anchor) return;
+      retainGalleryRestorationSession({
+        imageQuery,
+        navigationKey,
+        imageDataRevision: imageDataRevision(queryClient),
+        geometry: controller.compactGeometry(),
+        controller,
+        anchor: {
+          id: anchor.id,
+          offset: anchor.y - visibleStart,
+          pageLimit: anchor.pageIndex + 2
+        }
+      });
+    };
+  }, [controller, geometryReady, imageQuery, navigationKey, queryClient, windowRef]);
+
+  useLayoutEffect(() => {
+    if (!geometryReady) return;
     preserveAnchor(() => {
       controller.setGeometry(geometry);
     });
   }, [
     controller,
+    geometryReady,
     geometry.columnCount,
     geometry.contentWidth,
     geometry.gap,
@@ -131,6 +268,7 @@ export function useGalleryDataWindow({
     const update = () => {
       frame = undefined;
       if (isPageScrollLocked()) return;
+      if (routeRestorationRef.current?.controller === controller) return;
       const element = windowRef.current;
       if (!element) return;
       const viewportHeight = Math.max(1, window.innerHeight);
@@ -158,7 +296,7 @@ export function useGalleryDataWindow({
       window.removeEventListener(pageScrollRestoredEvent, schedule);
       if (frame !== undefined) window.cancelAnimationFrame(frame);
     };
-  }, [windowRef]);
+  }, [controller, windowRef]);
 
   const fetchPage = useCallback((intent: GalleryPageIntent) => {
     let active = activeRequestsRef.current.get(controller);
@@ -174,7 +312,9 @@ export function useGalleryDataWindow({
     }
     const request: GalleryPageRequest | null = controller.claimRequest(intent);
     if (!request) return;
-    const options = galleryImagePageQueryOptions(imageQuery, request.cursor);
+    const options = galleryImagePageQueryOptions(
+      imageQuery, request.cursor, imageDataRevision(queryClient).sequence, queryScope
+    );
     const pending = queryClient.fetchQuery(options)
       .then((payload) => {
         preserveAnchor(() => controller.resolvePage(request, payload));
@@ -198,9 +338,10 @@ export function useGalleryDataWindow({
         setRequestSlotRevision((current) => current + 1);
       });
     active.set(request.cursor, pending);
-  }, [controller, imageQuery, preserveAnchor, queryClient]);
+  }, [controller, imageQuery, preserveAnchor, queryClient, queryScope]);
 
   useEffect(() => {
+    if (!geometryReady) return;
     const requests = controller.updateViewport(viewport, pinnedImageId);
     if (requestPauseRef.current?.controller === controller) return;
     const active = activeRequestsRef.current.get(controller);
@@ -212,6 +353,7 @@ export function useGalleryDataWindow({
   }, [
     controller,
     fetchPage,
+    geometryReady,
     pinnedImageId,
     requestSlotRevision,
     snapshot.revision,
@@ -223,7 +365,12 @@ export function useGalleryDataWindow({
       window.cancelAnimationFrame(anchorFrameRef.current);
       anchorFrameRef.current = null;
     }
+    if (measurementFrameRef.current !== null) {
+      window.cancelAnimationFrame(measurementFrameRef.current);
+      measurementFrameRef.current = null;
+    }
     pendingAnchorRef.current = null;
+    pendingMeasurementsRef.current.clear();
     if (requestPauseRef.current?.controller === controller) {
       requestPauseRef.current = null;
     }
@@ -236,6 +383,54 @@ export function useGalleryDataWindow({
     visibleEnd: viewport.visibleEnd,
     pinnedId: pinnedImageId
   }), [controller, pinnedImageId, snapshot.revision, viewport]);
+
+  useLayoutEffect(() => {
+    if (!geometryReady) return;
+    const pending = routeRestorationRef.current;
+    const element = windowRef.current;
+    if (!pending || pending.controller !== controller || !element) return;
+    const position = controller.positionForId(pending.anchor.id);
+    if (!position) {
+      // Replacing a changed earlier page truncates later local boundaries; it
+      // does not establish that the anchor itself was removed. Rebuild through
+      // its former page and one successor, then use a bounded nearby fallback.
+      if (snapshot.hasNextPage && snapshot.fetchedPages < pending.anchor.pageLimit) return;
+    } else if (!controller.hasHydratedItem(pending.anchor.id)) {
+      return;
+    }
+    // A predecessor arriving after the anchor can still change the cursor
+    // chain. Finish the restoration only after this viewport is authoritative.
+    if ((position && snapshot.pendingQueryPages) || !controller.hasHydratedViewport()) return;
+    const visibleStart = position
+      ? Math.max(0, position.y - pending.anchor.offset)
+      : Math.min(viewportRef.current.visibleStart, Math.max(0, snapshot.totalHeight - window.innerHeight));
+    const documentTop = window.scrollY + element.getBoundingClientRect().top;
+    const next = createGalleryRenderViewport(visibleStart, window.innerHeight);
+    routeRestorationRef.current = null;
+    viewportRef.current = next;
+    setViewport(next);
+    window.scrollTo({
+      top: Math.max(0, documentTop + visibleStart),
+      behavior: "instant"
+    });
+    window.dispatchEvent(new Event(pageScrollRestoredEvent));
+  }, [controller, geometryReady, snapshot, windowRef]);
+
+  const reportIntrinsicSize = useCallback((
+    id: string,
+    width: number,
+    height: number
+  ) => {
+    if (!controller.needsIntrinsicMeasurement(id)) return;
+    pendingMeasurementsRef.current.set(id, { id, width, height });
+    if (measurementFrameRef.current !== null) return;
+    measurementFrameRef.current = window.requestAnimationFrame(() => {
+      measurementFrameRef.current = null;
+      const measurements = [...pendingMeasurementsRef.current.values()];
+      pendingMeasurementsRef.current.clear();
+      preserveAnchor(() => controller.resolveIntrinsicSizes(measurements));
+    });
+  }, [controller, preserveAnchor]);
 
   const debugMetrics = useMemo<GalleryDataWindowMetrics | null>(() => {
     if (import.meta.env?.DEV !== true) return null;
@@ -274,11 +469,11 @@ export function useGalleryDataWindow({
     const active = activeRequestsRef.current.get(controller);
     const pending = active ? [...active.values()] : [];
     await queryClient.cancelQueries({
-      queryKey: [...queryKeys.publicImages, imageQuery],
+      queryKey: [...queryKeys.publicImages, imageQuery, queryScope],
       exact: false
     }).catch(() => undefined);
     await Promise.allSettled(pending);
-  }, [controller, imageQuery, queryClient]);
+  }, [controller, imageQuery, queryClient, queryScope]);
 
   const refreshImage = useCallback((
     image: string | EditableImageSnapshot
@@ -342,6 +537,7 @@ export function useGalleryDataWindow({
     retry,
     refreshImage,
     removeImage,
+    reportIntrinsicSize,
     debugMetrics
   };
 }

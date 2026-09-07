@@ -175,8 +175,11 @@
   line-height: 20px;
 }
 .image-detail-public-properties { margin-top: 0; }
-.image-detail-actions { min-height: 38px; }
-.image-detail-original.is-disabled,
+.image-detail-actions {
+  min-height: 38px;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+}
 .image-detail-source.is-disabled {
   opacity: .45;
   cursor: not-allowed;

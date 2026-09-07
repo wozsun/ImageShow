@@ -63,11 +63,13 @@ import {
   createFloatSceneHarness,
   floatCardPositions,
   createTextureRecoveryHarness,
+  editableImage,
   createConfigStreamHarness
 } from "../support/web-test-context.ts";
 import {
   installProperties
 } from "../support/property-descriptors.ts";
+import { showImageMatchesFilters } from "../../../packages/web/src/pages/show/show-image-update.ts";
 
 function pixiPointerEvent(
   x: number,
@@ -1180,16 +1182,63 @@ test("[Web/展映] 图片成功信号解除来源暂停，CORS 仍失败时再�
   await h.flush();
   assert.equal(h.requests.length, 5, "已回收卡片不会因迟到成功信号发起请求");
 });
-test("[Web/展映] float 随机候选增量更新保留屏内卡片和纹理引用，500 张上限不触发重排", (t) => {
-  const h = createFloatSceneHarness(t, { count: 800 });
-  const images = showImages(800);
-  h.scene.setImages(images, "random-float", "random");
-  const positions = floatCardPositions(h.scene);
-  const leases = h.activeLeases().map((entry) => entry.key);
-  h.scene.setImages(images.map((image) => ({ ...image, title: "更新标题" })), "random-float", "random");
-  assert.equal(h.scene.stats().retainedDtos, 500);
-  assert.deepEqual(floatCardPositions(h.scene), positions, "元数据刷新不重置图片位置与身份");
-  assert.deepEqual(h.activeLeases().map((entry) => entry.key), leases, "保留相同纹理引用，避免重新加载闪白");
+test("[Web/展映] 两种场景和三种排序原位更新元数据并保持卡片位置与纹理引用", async (t) => {
+  for (const order of ["random", "latest", "oldest"] as const) {
+    await t.test(`float/${order}`, (t) => {
+      const h = createFloatSceneHarness(t, { count: 800 });
+      const images = showImages(800);
+      h.scene.setImages(images, "edited-float", order);
+      h.advance(16);
+      const positions = floatCardPositions(h.scene);
+      const leases = h.activeLeases().map((entry) => entry.key);
+      h.scene.setImages(images.map((image) => ({ ...image, title: "更新标题" })), "edited-float", order);
+      h.advance(16);
+      assert.equal(h.scene.stats().retainedDtos, 500);
+      assert.ok(h.visibleItems().length > 0);
+      assert.ok(h.visibleItems().every(({ image }) => image.title === "更新标题"));
+      assert.deepEqual(floatCardPositions(h.scene), positions);
+      assert.deepEqual(h.activeLeases().map((entry) => entry.key), leases);
+    });
+    await t.test(`waterfall/${order}`, (t) => {
+      installPixiPaletteFixture(t);
+      t.after(installProperties(globalThis, { devicePixelRatio: 1 }));
+      const target = createCameraTestElement(1440, 900);
+      const images = showImages(800);
+      let visible: readonly ShowPixiVisibleItem[] = [];
+      let acquired = 0;
+      let released = 0;
+      const scene = new ShowPixiWaterfallScene({
+        width: 1440, height: 900, columns: 4,
+        images, dataKey: "edited-waterfall", order,
+        running: false, reducedMotion: false, speed: 28,
+        inputElement: target.element,
+        textureCache: { acquire() {
+          acquired++;
+          return { release() { released++; } };
+        } } as unknown as ShowPixiTextureCache,
+        renderer: {} as Renderer,
+        onNeedImages() {}, onOpen() {}, onManualVerticalMovement() {},
+        onVisibleItems: (items) => { visible = items; },
+        onColumnsChange: (columns) => columns
+      });
+      t.after(() => {
+        scene.destroy();
+        assert.equal(acquired, released);
+        assert.equal(target.listenerCount(), 0);
+      });
+      const positions = () => scene.root.children.map((root) => ({
+        root, x: root.x, y: root.y, rotation: root.rotation
+      }));
+      const before = positions();
+      const leases = { acquired, released };
+      scene.setImages(images.map((image) => ({ ...image, title: "更新标题" })), "edited-waterfall", order);
+      assert.equal(scene.stats().retainedDtos, 800);
+      assert.ok(visible.length > 0);
+      assert.ok(visible.every(({ image }) => image.title === "更新标题"));
+      assert.deepEqual(positions(), before);
+      assert.deepEqual({ acquired, released }, leases);
+    });
+  }
 });
 test("[Web/展映] float 导航位移保留拖动和惯性的指针类型，滚轮独立上报", async (t) => {
   for (const pointerType of ["mouse", "touch"]) {
@@ -1349,39 +1398,137 @@ test("[Web/展映] 展映补图失败只等待显式重试，切换查询会取�
   await h.React.act(async () => current.loadMore());
   assert.equal(h.pending.length, 4, "有序游标耗尽后不重复首批");
 });
-test("[Web/展映] 展映删除隔离晚到补图，编辑通过原查询刷新筛选成员并正确重试替换", async (t) => {
+test("[Web/展映] 编辑累计批次中的图片只原位更新目标并保持后续补图游标", async (t) => {
+  for (const order of ["random", "latest", "oldest"] as const) {
+    await t.test(order, async (t) => {
+      const h = await createConfigStreamHarness(t, { honorAbort: false });
+      const { useShowData } = await import("../../../packages/web/src/pages/show/useShowData.ts");
+      let current!: ReturnType<typeof useShowData>;
+      function Probe() {
+        current = useShowData(emptyGalleryFilters, order, order);
+        return null;
+      }
+      const initial = showImages(400);
+      await h.render(h.React.createElement(Probe));
+      await h.respond(0, { count: 200, items: initial.slice(0, 200), next_cursor: "page-2" });
+      await h.React.act(async () => current.loadMore());
+      await h.respond(1, { count: 100, items: initial.slice(200, 300), next_cursor: "page-3" });
+      const before = current.images;
+      const target = before[250]!;
+      await h.React.act(async () => current.loadMore());
+      await h.React.act(async () => current.updateImage(editableImage(target.id, {
+        ...target, title: "更新后的标题", theme: "changed"
+      })));
+      assert.deepEqual(current.images.map(({ id }) => id), before.map(({ id }) => id));
+      assert.equal(current.images[250]!.title, "更新后的标题");
+      assert.equal(current.images[250]!.image_time, target.image_time);
+      for (const index of [0, 249, 251, 299]) assert.strictEqual(current.images[index], before[index]);
+      assert.equal(h.pending.length, 3);
+      if (order !== "random") {
+        assert.equal(new URL(h.pending[2]!.path, "https://img.example").searchParams.get("cursor"), "page-3");
+      }
+      await h.respond(2, { count: 101, items: [target, ...initial.slice(300)], next_cursor: null });
+      assert.equal(current.images.length, 400);
+      assert.equal(current.images[250]!.title, "更新后的标题");
+      assert.equal(current.committedKey, order);
+    });
+  }
+});
+test("[Web/展映] 定向回读按 ID 收敛连续编辑并保留失败前的已提交图片", async (t) => {
   const h = await createConfigStreamHarness(t, { honorAbort: false });
   const { useShowData } = await import("../../../packages/web/src/pages/show/useShowData.ts");
   let current!: ReturnType<typeof useShowData>;
   function Probe() {
-    current = useShowData({ ...emptyGalleryFilters, theme: "included", device: "auto" }, "filtered", "latest");
+    current = useShowData(emptyGalleryFilters, "targeted", "latest");
     return null;
   }
   const initial = showImages(3);
   await h.render(h.React.createElement(Probe));
   await h.respond(0, { items: initial, next_cursor: "next" });
-  await h.React.act(async () => current.loadMore());
-  await h.React.act(async () => current.removeImage(initial[0].id));
-  assert.equal(h.pending[1].signal?.aborted, true);
-  await h.respond(1, { items: initial, next_cursor: "stale" });
-  assert.deepEqual(current.images.map((image) => image.id), initial.slice(1).map((image) => image.id));
-  assert.equal(new URL(h.pending[2].path, "https://img.example").searchParams.get("cursor"), "next");
-  await h.respond(2, { items: initial.slice(1), next_cursor: "end" });
-  await h.React.act(async () => current.refreshImages());
-  const refreshUrl = new URL(h.pending[3].path, "https://img.example");
-  assert.equal(refreshUrl.searchParams.get("cursor"), null);
-  assert.equal(refreshUrl.searchParams.get("theme"), "included");
-  await h.React.act(async () => current.removeImage(initial[1].id));
-  assert.equal(h.pending[3].signal?.aborted, true);
-  assert.equal(new URL(h.pending[4].path, "https://img.example").searchParams.get("cursor"), null, "中断替换后仍从首批刷新");
-  await h.respond(3, { items: initial, next_cursor: "stale" });
-  await h.respond(4, { error: "刷新失败" }, 503);
-  assert.equal(current.images.length, 1, "失败保留已提交画面");
-  await h.React.act(async () => current.retry());
-  assert.equal(new URL(h.pending[5].path, "https://img.example").searchParams.get("cursor"), null);
-  await h.respond(5, { items: [], next_cursor: "" });
-  assert.deepEqual(current.images, [], "改过分类而不再匹配的图片由权威查询移除");
-  assert.equal(current.initialLoading, false);
+  const preserved = current.images;
+  const target = initial[1]!;
+  await h.React.act(async () => current.refreshImage(target.id));
+  const url = new URL(h.pending[1]!.path, "https://img.example");
+  assert.equal(url.pathname, "/random");
+  assert.equal(url.searchParams.get("id"), target.id);
+  assert.equal(url.searchParams.get("mode"), "json");
+  await h.React.act(async () => current.refreshImage(target.id));
+  assert.equal(h.pending[1]!.signal?.aborted, true);
+  await h.respond(2, { count: 1, items: [{ ...target, title: "较新回读" }] });
+  await h.respond(1, { count: 1, items: [{ ...target, title: "过时回读" }] });
+  assert.equal(current.images[1]!.title, "较新回读");
+  await h.React.act(async () => current.refreshImage(target.id));
+  await h.React.act(async () => current.updateImage(editableImage(target.id, { ...target, title: "保存快照" })));
+  assert.equal(h.pending[3]!.signal?.aborted, true);
+  await h.respond(3, { count: 1, items: [{ ...target, title: "快照前回读" }] });
+  assert.equal(current.images[1]!.title, "保存快照");
+  await h.React.act(async () => current.refreshImage(target.id));
+  await h.respond(4, { error: "暂时不可用" }, 503);
+  assert.equal(current.images[1]!.title, "保存快照");
+  await h.React.act(async () => current.refreshImage(target.id));
+  await h.respond(5, { count: 1, items: [{ ...target, title: "回读恢复" }] });
+  assert.equal(current.images[1]!.title, "回读恢复");
+  assert.strictEqual(current.images[0], preserved[0]);
+  assert.strictEqual(current.images[2], preserved[2]);
+  await h.React.act(async () => current.refreshImage(target.id));
+  await h.render(null);
+  assert.equal(h.pending[6]!.signal?.aborted, true);
+});
+test("[Web/展映] 退出筛选或删除只移除目标并隔离在途补图后继续同一游标", async (t) => {
+  for (const action of ["edit", "trash", "missing"] as const) {
+    await t.test(action, async (t) => {
+      const h = await createConfigStreamHarness(t, { honorAbort: false });
+      const { useShowData } = await import("../../../packages/web/src/pages/show/useShowData.ts");
+      let current!: ReturnType<typeof useShowData>;
+      function Probe() {
+        current = useShowData({ ...emptyGalleryFilters, theme: "included" }, "filtered", "latest");
+        return null;
+      }
+      const initial = showImages(3).map((image) => ({ ...image, theme: "included" }));
+      await h.render(h.React.createElement(Probe));
+      await h.respond(0, { items: initial, next_cursor: "next" });
+      const preserved = current.images;
+      await h.React.act(async () => current.loadMore());
+      const target = initial[0]!;
+      if (action === "edit") {
+        await h.React.act(async () => current.updateImage(editableImage(target.id, { ...target, theme: "excluded" })));
+      } else if (action === "trash") {
+        await h.React.act(async () => current.removeImage(target.id));
+      } else {
+        await h.React.act(async () => current.refreshImage(target.id));
+        await h.respond(2, { error: "找不到图片" }, 404);
+      }
+      assert.equal(h.pending[1]!.signal?.aborted, true);
+      const resumedRequest = h.pending.at(-1)!;
+      await h.React.act(async () => {
+        assert.equal(current.removeImage(target.id), false);
+      });
+      assert.equal(resumedRequest.signal?.aborted, false, "重复删除回执不打断已恢复的补图流");
+      await h.respond(1, { items: initial, next_cursor: "stale" });
+      assert.deepEqual(current.images.map(({ id }) => id), initial.slice(1).map(({ id }) => id));
+      const nextRequest = h.pending.length - 1;
+      assert.equal(new URL(h.pending[nextRequest]!.path, "https://img.example").searchParams.get("cursor"), "next");
+      await h.respond(nextRequest, { items: [showImages(4)[3]], next_cursor: null });
+      assert.equal(current.images.length, 3);
+      assert.strictEqual(current.images[0], preserved[1]);
+      assert.strictEqual(current.images[1], preserved[2]);
+      assert.equal(current.initialLoading, false);
+    });
+  }
+});
+test("[Web/展映] 编辑成员判断遵循包含、排除和自动设备筛选", () => {
+  const image = { ...showImages(2)[1]!, theme: "night", tags: ["blue", "stars"], author: "author" };
+  for (const [filter, expected] of [
+    [{ theme: "night,day" }, true], [{ theme: "!night" }, false],
+    [{ tag: "red,stars" }, true], [{ tag: "!red,!green" }, true],
+    [{ tag: "!stars" }, false], [{ author: "author" }, true],
+    [{ author: "!author" }, false], [{ brightness: "light" }, false],
+    [{ device: "mb" }, false]
+  ] as const) {
+    assert.equal(showImageMatchesFilters(image, { ...emptyGalleryFilters, ...filter }, ""), expected);
+  }
+  assert.equal(showImageMatchesFilters(image, { ...emptyGalleryFilters, device: "auto" }, "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"), true);
+  assert.equal(showImageMatchesFilters(image, { ...emptyGalleryFilters, device: "auto" }, "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Mobile"), false);
 });
 test("[Web/展映] 瀑布缩放保持视口四周 35% 驻留缓冲并按世界坐标换算", () => {
   const residence: ShowResidencePolicy = {

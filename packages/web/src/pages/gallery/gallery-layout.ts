@@ -10,6 +10,7 @@ import { galleryColumnCount } from "../../lib/gallery/gallery-columns.js";
 type GalleryGeometry = {
   contentWidth: number;
   gap: number;
+  measured: boolean;
 };
 
 export function useGalleryColumnCount() {
@@ -48,7 +49,8 @@ export function useGalleryGeometry(
     const padding = mobile ? 16 : 28;
     return {
       contentWidth: Math.max(0, window.innerWidth - padding * 2),
-      gap: mobile ? 12 : 16
+      gap: mobile ? 12 : 16,
+      measured: false
     };
   });
 
@@ -67,9 +69,10 @@ export function useGalleryGeometry(
         style.getPropertyValue("--gallery-gap")
       );
       setGeometry((current) => (
-        Math.abs(current.contentWidth - contentWidth) < 0.5
+        current.measured
+        && Math.abs(current.contentWidth - contentWidth) < 0.5
         && Math.abs(current.gap - gap) < 0.5
-      ) ? current : { contentWidth, gap });
+      ) ? current : { contentWidth, gap, measured: true });
     };
     const observer = new ResizeObserver(update);
     observer.observe(gallery);

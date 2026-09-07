@@ -17,6 +17,16 @@ export type CompactMasonryPosition = {
   bottom: number;
 };
 
+export type CompactMasonryRatioState = {
+  ratio: number;
+  resolved: boolean;
+};
+
+export type CompactMasonryRatioResolution = {
+  index: number;
+  ratio: number;
+};
+
 type CompactPageBounds = {
   top: number;
   bottom: number;
@@ -108,6 +118,7 @@ export class CompactMasonryLayout {
   #count = 0;
   #capacity = 0;
   #ratios = new Float32Array(0);
+  #resolvedRatios = new Uint8Array(0);
   #columns = new Uint16Array(0);
   #ys = new Float64Array(0);
   #heights = new Float32Array(0);
@@ -133,6 +144,7 @@ export class CompactMasonryLayout {
 
   get itemByteLength() {
     return this.#ratios.byteLength
+      + this.#resolvedRatios.byteLength
       + this.#columns.byteLength
       + this.#ys.byteLength
       + this.#heights.byteLength
@@ -142,7 +154,7 @@ export class CompactMasonryLayout {
       );
   }
 
-  append(ratio: number) {
+  append(ratio: number, resolved = true) {
     this.#ensureCapacity(this.#count + 1);
     const normalizedRatio = Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
     const index = this.#count;
@@ -150,6 +162,7 @@ export class CompactMasonryLayout {
     const y = this.#columnHeights[column]!;
     const height = this.#itemHeight(normalizedRatio);
     this.#ratios[index] = normalizedRatio;
+    this.#resolvedRatios[index] = resolved ? 1 : 0;
     this.#columns[index] = column;
     this.#ys[index] = y;
     this.#heights[index] = height;
@@ -160,19 +173,68 @@ export class CompactMasonryLayout {
   }
 
   setRatios(startIndex: number, ratios: readonly number[]) {
+    return this.setRatioStates(startIndex, ratios.map((ratio) => ({
+      ratio,
+      resolved: true
+    })));
+  }
+
+  setRatioStates(
+    startIndex: number,
+    states: readonly CompactMasonryRatioState[]
+  ) {
     let changed = false;
-    for (const [offset, ratio] of ratios.entries()) {
+    let resolutionChanged = false;
+    for (const [offset, state] of states.entries()) {
       const index = startIndex + offset;
       if (index < 0 || index >= this.#count) continue;
-      const normalizedRatio = Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
-      if (Math.abs(this.#ratios[index]! - normalizedRatio) < 0.00001) {
+      if (!state.resolved && this.#resolvedRatios[index] === 1) {
         continue;
       }
-      this.#ratios[index] = normalizedRatio;
-      changed = true;
+      const normalizedRatio = Number.isFinite(state.ratio) && state.ratio > 0
+        ? state.ratio
+        : 1;
+      if (Math.abs(this.#ratios[index]! - normalizedRatio) >= 0.00001) {
+        this.#ratios[index] = normalizedRatio;
+        changed = true;
+      }
+      const resolved = state.resolved ? 1 : 0;
+      if (this.#resolvedRatios[index] !== resolved) {
+        this.#resolvedRatios[index] = resolved;
+        resolutionChanged = true;
+      }
     }
     if (changed) this.#rebuildPositions();
-    return changed;
+    return changed || resolutionChanged;
+  }
+
+  resolveRatios(updates: readonly CompactMasonryRatioResolution[]) {
+    let changed = false;
+    let resolutionChanged = false;
+    for (const { index, ratio } of updates) {
+      if (
+        index < 0
+        || index >= this.#count
+        || this.#resolvedRatios[index] === 1
+      ) {
+        continue;
+      }
+      const normalizedRatio = Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
+      if (Math.abs(this.#ratios[index]! - normalizedRatio) >= 0.00001) {
+        this.#ratios[index] = normalizedRatio;
+        changed = true;
+      }
+      this.#resolvedRatios[index] = 1;
+      resolutionChanged = true;
+    }
+    if (changed) this.#rebuildPositions();
+    return changed || resolutionChanged;
+  }
+
+  needsRatioResolution(index: number) {
+    return index >= 0
+      && index < this.#count
+      && this.#resolvedRatios[index] !== 1;
   }
 
   remove(index: number) {
@@ -183,6 +245,7 @@ export class CompactMasonryLayout {
       const oldIndex = nextIndex + 1;
       const column = this.#columns[oldIndex]!;
       this.#ratios[nextIndex] = this.#ratios[oldIndex]!;
+      this.#resolvedRatios[nextIndex] = this.#resolvedRatios[oldIndex]!;
       this.#columns[nextIndex] = column;
       this.#ys[nextIndex] = this.#ys[oldIndex]!
         - (column === removedColumn ? removedSpace : 0);
@@ -323,14 +386,17 @@ export class CompactMasonryLayout {
     if (required <= this.#capacity) return;
     const capacity = Math.max(64, 2 ** Math.ceil(Math.log2(required)));
     const ratios = new Float32Array(capacity);
+    const resolvedRatios = new Uint8Array(capacity);
     const columns = new Uint16Array(capacity);
     const ys = new Float64Array(capacity);
     const heights = new Float32Array(capacity);
     ratios.set(this.#ratios.subarray(0, this.#count));
+    resolvedRatios.set(this.#resolvedRatios.subarray(0, this.#count));
     columns.set(this.#columns.subarray(0, this.#count));
     ys.set(this.#ys.subarray(0, this.#count));
     heights.set(this.#heights.subarray(0, this.#count));
     this.#ratios = ratios;
+    this.#resolvedRatios = resolvedRatios;
     this.#columns = columns;
     this.#ys = ys;
     this.#heights = heights;

@@ -15,7 +15,7 @@ import { storageBackendLabel } from "../storage/backends/label.ts";
 import { listStorageBackends } from "../storage/backends/registry.ts";
 import { publicImageUrls } from "../storage/objects/public-urls.ts";
 import { getTagsForImages } from "../tags/query.ts";
-import { hasDistinctOriginalUrl } from "./original-link.ts";
+import { publicOriginalAccessUrl } from "./original-link.ts";
 
 type DatabaseNumber = number | string;
 type DatabaseTimestamp = string | Date;
@@ -161,14 +161,18 @@ export type PublicImageCardRecord = Pick<
   | "storage_slug"
   | "author"
   | "title"
-  | "original"
 > & {
   image_time: DatabaseTimestamp;
 };
 
 export type PublicImageDetailRecord = Pick<
   AdminImageCommonRecord,
-  "id" | "object_key" | "storage_slug" | "description" | "source"
+  | "id"
+  | "object_key"
+  | "storage_slug"
+  | "description"
+  | "source"
+  | "original"
 >;
 
 type PublicImageUrlRecord = Pick<
@@ -202,7 +206,7 @@ async function presentAdminImageBase(
     id: row.id,
     title: row.title,
     description: row.description,
-    source: row.source,
+    source: row.source || null,
     device: row.device,
     brightness: row.brightness,
     theme: row.theme,
@@ -210,6 +214,11 @@ async function presentAdminImageBase(
     tags,
     thumb_url: urls.thumb_url,
     object_url: urls.object_url,
+    original_url: publicOriginalAccessUrl(
+      row.id,
+      row.original,
+      urls.object_url
+    ),
     width: Number(row.width),
     height: Number(row.height),
     storage_slug: storageSlug
@@ -224,7 +233,9 @@ async function adminImageListItem(
   return {
     ...base,
     original: row.original,
-    diff_original: hasDistinctOriginalUrl(row.original, base.object_url),
+    original_url: row.status === "deleted" && base.original_url
+      ? `/api/admin/images/${encodeURIComponent(row.id)}/original`
+      : base.original_url,
     status: row.status,
     purge_pending: row.purge_job_id !== null,
     object_key: row.object_key,
@@ -256,7 +267,6 @@ export async function adminImageDetailItemsWithTags(
     } = await presentAdminImageBase(row, row.tags);
     return {
       ...base,
-      diff_original: hasDistinctOriginalUrl(row.original, base.object_url),
       md5: row.md5,
       storage_label: storageBackendLabel({
         storage_slug: storageSlug,
@@ -292,8 +302,13 @@ export async function publicImageDetail(
   return {
     id: row.id,
     description: row.description,
-    source: row.source,
-    object_url: urls.object_url
+    source: row.source || null,
+    object_url: urls.object_url,
+    original_url: publicOriginalAccessUrl(
+      row.id,
+      row.original,
+      urls.object_url
+    )
   };
 }
 
@@ -303,7 +318,6 @@ async function publicImageCard(
   access: PublicDatabaseReadAccess
 ): Promise<GalleryImageCardDto> {
   const { urls } = await publicUrlsForRow(row, access);
-  const original = row.original;
   return {
     id: row.id,
     device: row.device,
@@ -314,7 +328,6 @@ async function publicImageCard(
     height: Number(row.height),
     title: row.title,
     tags,
-    diff_original: hasDistinctOriginalUrl(original, urls.object_url),
     image_time: serializeTimestamp(row.image_time),
     thumb_url: urls.thumb_url
   };

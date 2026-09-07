@@ -69,7 +69,6 @@ function imageDetailCard(image: ShowImage): GalleryImageCard {
     width: image.width,
     height: image.height,
     tags: image.tags,
-    diff_original: image.diff_original === true,
     image_time: image.image_time
   };
 }
@@ -226,6 +225,19 @@ export function ShowPixiPage({
   useEffect(() => {
     resetManualNavigation();
   }, [resetManualNavigation, sourceKey]);
+
+  useEffect(() => {
+    if (
+      !selected
+      || data.images.some((image) => image.id === selected.id)
+      || !detailReturnFocusRef.current?.matches("[data-show-pixi-proxy]")
+    ) return;
+    const fallback = [...document.querySelectorAll<HTMLElement>(
+      "[data-show-pixi-proxy]"
+    )].find((element) => element.dataset.imageId !== selected.id);
+    detailReturnFocusRef.current = fallback
+      ?? document.querySelector<HTMLElement>(".show-pixi-canvas-host");
+  }, [data.images, selected]);
 
   useEffect(() => {
     let frame: number | undefined;
@@ -475,14 +487,10 @@ export function ShowPixiPage({
           card={selected}
           onClose={() => setSelected(null)}
           onTrashCommitted={(imageId) => {
-            const fallback = [...document.querySelectorAll<HTMLElement>(
-              "[data-show-pixi-proxy]"
-            )].find((element) => element.dataset.imageId !== imageId);
-            detailReturnFocusRef.current = fallback ?? null;
             data.removeImage(imageId);
           }}
-          onItemUpdated={data.refreshImages}
-          onItemRefreshRequested={data.refreshImages}
+          onItemUpdated={data.updateImage}
+          onItemRefreshRequested={data.refreshImage}
           returnFocusRef={detailReturnFocusRef}
         />
       )}

@@ -5,12 +5,16 @@ import { queryKeys } from "../../lib/api/query-keys.js";
 
 export function galleryImagePageQueryOptions(
   imageQuery: string,
-  cursor: string
+  cursor: string,
+  dataRevision: number,
+  queryScope: string
 ) {
   return queryOptions({
     queryKey: [
       ...queryKeys.publicImages,
       imageQuery,
+      queryScope,
+      dataRevision,
       "window-page",
       cursor || "$initial"
     ] as const,
@@ -19,7 +23,9 @@ export function galleryImagePageQueryOptions(
       if (cursor) params.set("cursor", cursor);
       return api<PublicImageListResponseDto>(
         `/api/images?${params}`,
-        { signal }
+        // Await conditional validation instead of displaying a stale HTTP page
+        // while the browser refreshes it in the background.
+        { signal, cache: "no-cache" }
       );
     },
     staleTime: 0,

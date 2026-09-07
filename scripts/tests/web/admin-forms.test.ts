@@ -543,6 +543,32 @@ for (const itemCount of [1, 3]) {
     }
   });
 }
+test("[Web/后台表单] 可空来源可添加和清空，权威回读收敛草稿及丢失回执", () => {
+  const id = "source-image";
+  let state = createImageMetadataSession([editableImage(id, { source: null })]);
+  assert.equal(state.drafts[id]!.source, "");
+  assert.equal(fieldsChangedFor(state.baselineItems[0]!, state.drafts[id]!).source, false);
+
+  for (const source of ["https://source.example.com/post", ""]) {
+    state = {
+      ...state,
+      drafts: { [id]: { ...state.drafts[id]!, source } }
+    };
+    const changes = fieldsChangedFor(state.baselineItems[0]!, state.drafts[id]!);
+    assert.equal(changes.source, true);
+    const update = changedMetadataUpdate(state.baselineItems[0]!, state.drafts[id]!, changes);
+    assert.deepEqual(update, { id, source });
+    const attempt: ImageMetadataSaveAttempt = {
+      activeIds: [id], items: [update], response: null
+    };
+    const authority = [editableImage(id, { source: source || null })];
+    const report = createImageMetadataSaveReport(attempt, authority);
+    assert.equal(imageMetadataCardSaveState(report, id), "saved");
+    state = reconcileImageMetadataSession(state, attempt, authority);
+    assert.equal(state.drafts[id]!.source, source);
+    assert.equal(fieldsChangedFor(state.baselineItems[0]!, state.drafts[id]!).source, false);
+  }
+});
 test("[Web/后台表单] 图片元数据部分失败保留对应卡片草稿", () => {
   let state = createImageMetadataSession([
     editableImage("a"),

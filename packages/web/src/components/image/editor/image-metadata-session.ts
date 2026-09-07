@@ -63,7 +63,7 @@ function draftFromImage(item: ImageEditorItem): ImageDraft {
   return {
     title: item.title,
     description: item.description,
-    source: item.source,
+    source: item.source ?? "",
     original: item.original,
     device: item.device,
     brightness: item.brightness,
@@ -101,7 +101,7 @@ export function fieldsChangedFor(
   return {
     title: draft.title !== item.title,
     description: draft.description !== item.description,
-    source: draft.source !== item.source,
+    source: draft.source !== (item.source ?? ""),
     original: draft.original !== item.original,
     device: draft.device !== item.device,
     brightness: draft.brightness !== item.brightness,

@@ -19,6 +19,9 @@ type ImagePathsModule = typeof import(
 type PublicImagesReadModelModule = typeof import(
   "../../../../packages/server/src/images/read-models/public-images.ts"
 );
+type PublicUrlsModule = typeof import(
+  "../../../../packages/server/src/storage/objects/public-urls.ts"
+);
 type ReadyCacheCoordinatorModule = typeof import(
   "../../../../packages/server/src/images/ready-cache/coordinator.ts"
 );
@@ -42,6 +45,9 @@ await runIntegrationScenario(async (runtime) => {
   const imagePaths = await import(
     runtime.moduleUrl("packages/server/src/storage/objects/image-paths.ts")
   ) as ImagePathsModule;
+  const publicUrls = await import(
+    runtime.moduleUrl("packages/server/src/storage/objects/public-urls.ts")
+  ) as PublicUrlsModule;
   const coreUuid = await import(
     runtime.moduleUrl("packages/server/src/core/uuid.ts")
   ) as CoreUuidModule;
@@ -111,6 +117,30 @@ await runIntegrationScenario(async (runtime) => {
     }
     await vocabCache.refreshEntityVocabularies(["theme", "tag", "author"]);
     await runtimeAvailability.requireOperationalRedis();
+    await runtime.runtimeConfigStore.updateRuntimeConfig({
+      site: { domain: "images.example", static_subdomain: "static" }
+    });
+    const displayed = await publicUrls.publicImageUrls(
+      imagePaths.storageObjectKey(imageIds[2], "webp"), "local"
+    );
+    await runtime.databasePools.pool.query(
+      "UPDATE metadata SET original=$2, source=$3 WHERE id=$1",
+      [imageIds[0], "https://original.example.com/image.jpg", "https://source.example.com/post"]
+    );
+    await runtime.databasePools.pool.query(
+      "UPDATE metadata SET original=$2 WHERE id=$1",
+      [imageIds[2], `${displayed.object_url}#original`]
+    );
+    // Before the ready projection is initialized, detail reads use PostgreSQL.
+    const databaseDetails = await Promise.all(imageIds.map((id) => (
+      publicImages.getPublicImage(id)
+    )));
+    assert.ok(databaseDetails[0].original_url?.endsWith(`/link/${imageIds[0]}`));
+    assert.equal(databaseDetails[1].original_url, null);
+    assert.equal(databaseDetails[2].original_url, null);
+    assert.deepEqual(databaseDetails.map((item) => item.source), [
+      "https://source.example.com/post", null, null
+    ]);
     await coordinator.initializeReadyImageCacheCoordinator();
     await coordinator.requestReadyImageCacheRebuild();
     assert.equal(coordinator.getReadyImageCacheCoordinatorStatus().readable, true);
@@ -129,6 +159,27 @@ await runIntegrationScenario(async (runtime) => {
     });
     assert.deepEqual(adminPage.items.map((item) => item.id), expectedOrder);
     assert.equal(adminPage.total, 3);
+    const cachedDetails = await Promise.all(imageIds.map((id) => (
+      publicImages.getPublicImage(id)
+    )));
+    assert.deepEqual(cachedDetails, databaseDetails);
+    const snapshots = await adminImages.getAdminImageSnapshots(imageIds);
+    assert.deepEqual(
+      snapshots.items.map((item) => item.original_url),
+      databaseDetails.map((item) => item.original_url)
+    );
+    assert.deepEqual(
+      snapshots.items.map((item) => item.source),
+      databaseDetails.map((item) => item.source)
+    );
+    for (const item of adminPage.items) {
+      assert.equal(item.original_url, databaseDetails.find((detail) => (
+        detail.id === item.id
+      ))?.original_url);
+      assert.equal(item.source, databaseDetails.find((detail) => (
+        detail.id === item.id
+      ))?.source);
+    }
     const publicPage = await publicImages.listPublicImages({
       status: "ready",
       theme,
@@ -139,6 +190,19 @@ await runIntegrationScenario(async (runtime) => {
     }, new AbortController().signal);
     assert.deepEqual(publicPage.items.map((item) => item.id), expectedOrder);
     assert.equal(publicPage.next_cursor, null);
+    await runtime.databasePools.pool.query(
+      "UPDATE metadata SET status='deleted', deleted_at=now() WHERE id=$1",
+      [imageIds[0]]
+    );
+    const deletedPage = await adminImages.listAdminImages({
+      status: "deleted", theme, page: 1, limit: 10
+    });
+    assert.equal(deletedPage.items.length, 1);
+    assert.equal(
+      deletedPage.items[0].original_url,
+      `/api/admin/images/${imageIds[0]}/original`
+    );
+    assert.equal(deletedPage.items[0].object_url, databaseDetails[0].object_url);
   } catch (error) {
     errors.push(error);
   }

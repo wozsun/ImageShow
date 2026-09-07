@@ -334,7 +334,7 @@ export function completedIngestionJobPatch(
       author: completed.author,
       title: completed.title,
       description: completed.description,
-      source: completed.source,
+      source: completed.source ?? "",
       original: completed.original,
       tags: completed.tags
     },

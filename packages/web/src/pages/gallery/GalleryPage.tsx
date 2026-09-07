@@ -9,7 +9,7 @@ import {
 } from "react";
 import type { GalleryOrder } from "@imageshow/shared/browser";
 import { useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "react-router";
+import { useLocation, useNavigationType, useSearchParams } from "react-router";
 import { AppHeader } from "../../components/navigation/AppHeader.js";
 import { Icon } from "../../components/icon/Icon.js";
 import { PublicStarfield } from "../../components/layout/PublicStarfield.js";
@@ -65,6 +65,8 @@ export function GalleryPage({
   const [selected, setSelected] = useState<GalleryImageCard | null>(null);
   const [pinnedImageId, setPinnedImageId] = useState<string | null>(null);
   const queryClient = useQueryClient();
+  const { key: navigationKey } = useLocation();
+  const navigationType = useNavigationType();
   const [routeSearchParams, setRouteSearchParams] = useSearchParams();
   const routeQuery = routeSearchParams.toString();
   const filters = useMemo(
@@ -143,8 +145,8 @@ export function GalleryPage({
         queryKey: previousKey,
         exact: false
       });
+      window.scrollTo({ top: 0 });
     }
-    window.scrollTo({ top: 0 });
   }, [imageQuery, queryClient]);
 
   const randomUrl = buildRandomUrl({
@@ -170,7 +172,10 @@ export function GalleryPage({
   const geometry = useGalleryGeometry(galleryRef);
   const galleryData = useGalleryDataWindow({
     geometry: { ...geometry, columnCount },
+    geometryReady: geometry.measured,
     imageQuery,
+    navigationKey,
+    restorePosition: navigationType === "POP",
     pinnedImageId,
     windowRef: galleryWindowRef
   });
@@ -302,6 +307,7 @@ export function GalleryPage({
             cardSubtitle={cardSubtitle}
             imageQuery={imageQuery}
             onOpen={openDetail}
+            onIntrinsicSize={galleryData.reportIntrinsicSize}
             positions={galleryData.positions}
             revealRegistry={revealRegistry}
             totalHeight={galleryData.snapshot.totalHeight}

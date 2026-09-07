@@ -11,8 +11,8 @@
     "types": ["node"],
     "verbatimModuleSyntax": true,
     "paths": {
-      "@imageshow/shared": ["./packages/shared/src/app-config.ts"],
-      "@imageshow/shared/browser": ["./packages/shared/src/browser.ts"]
+      "@imageshow/shared": ["../../packages/shared/src/app-config.ts"],
+      "@imageshow/shared/browser": ["../../packages/shared/src/browser.ts"]
     }
   },
   "include": [

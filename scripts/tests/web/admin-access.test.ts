@@ -3026,7 +3026,8 @@ test("[Web/后台访问] 图片后台真实挂载保持弹窗页码、操作后�
       ...galleryCard(`00000000-0000-7000-8000-${serial}`),
       description: "",
       object_url: `/full/${serial.slice(-2)}/00000000-0000-7000-8000-${serial}.webp`,
-      source: "",
+      original_url: null,
+      source: null,
       thumb_url: "",
       status: "deleted",
       purge_pending: false,
@@ -4299,11 +4300,11 @@ test("[Web/后台访问] 图片详情原图入口真实挂载覆盖公开开关�
     );
     const container = document.getElementById("root");
     assert.ok(container);
-    const publicItem = (diffOriginal: boolean): PublicImageItem => ({
+    const publicItem = (originalUrl: string | null): PublicImageItem => ({
       id: "00000000-0000-7000-8000-000000000544",
       title: "原图入口真值表",
       description: "",
-      source: "",
+      source: null,
       object_url: "https://static.example.com/full/544.webp",
       thumb_url: "",
       device: "pc",
@@ -4313,7 +4314,7 @@ test("[Web/后台访问] 图片详情原图入口真实挂载覆盖公开开关�
       tags: ["blue", "stars"],
       width: 1600,
       height: 900,
-      diff_original: diffOriginal,
+      original_url: originalUrl,
       image_time: "2026-09-01T00:00:00.000Z"
     });
     type AuthScenario = "pending" | "expired" | "guest" | "image" | "super";
@@ -4332,7 +4333,8 @@ test("[Web/后台访问] 图片详情原图入口真实挂载覆盖公开开关�
     const renderScenario = async ({
       auth,
       publicOriginalButton,
-      diffOriginal = true,
+      originalUrl = "https://static.example.com/link/00000000-0000-7000-8000-000000000544",
+      sourceUrl = null,
       admin = false,
       objectUrl,
       detailLoading = false,
@@ -4341,7 +4343,8 @@ test("[Web/后台访问] 图片详情原图入口真实挂载覆盖公开开关�
     }: {
       auth: AuthScenario;
       publicOriginalButton: boolean;
-      diffOriginal?: boolean;
+      originalUrl?: string | null;
+      sourceUrl?: string | null;
       admin?: boolean;
       objectUrl?: string;
       detailLoading?: boolean;
@@ -4417,15 +4420,15 @@ test("[Web/后台访问] 图片详情原图入口真实挂载覆盖公开开关�
                 admin
                   ? React.createElement(ImageDetailModal, {
                       item: adminImageListItem({
-                        id: publicItem(diffOriginal).id,
-                        diff_original: diffOriginal
+                        id: publicItem(originalUrl).id,
+                        original_url: originalUrl
                       }),
                       admin: true,
                       storageLabel: "本地存储",
                       onClose() {}
                     })
                   : React.createElement(ImageDetailModal, {
-                      item: { ...publicItem(diffOriginal), ...(objectUrl === undefined ? {} : { object_url: objectUrl }) },
+                      item: { ...publicItem(originalUrl), source: sourceUrl, ...(objectUrl === undefined ? {} : { object_url: objectUrl }) },
                       admin: false,
                       detailLoading,
                       detailError,
@@ -4501,7 +4504,7 @@ test("[Web/后台访问] 图片详情原图入口真实挂载覆盖公开开关�
     for (const admin of [false, true]) {
       const sameOrigin = await renderScenario({
         auth: admin ? "super" : "guest", publicOriginalButton: true, admin,
-        staticUrl: "https://img.example.com/static"
+        originalUrl: "https://img.example.com/static/link/00000000-0000-7000-8000-000000000544"
       });
       assert.equal(sameOrigin.href, "https://img.example.com/static/link/00000000-0000-7000-8000-000000000544");
     }
@@ -4534,11 +4537,25 @@ test("[Web/后台访问] 图片详情原图入口真实挂载覆盖公开开关�
     const unavailableOriginal = await renderScenario({
       auth: "guest",
       publicOriginalButton: true,
-      diffOriginal: false
+      originalUrl: null
     });
-    assert.equal(unavailableOriginal.present, true);
+    assert.equal(unavailableOriginal.present, false);
     assert.equal(unavailableOriginal.href, null);
-    assert.equal(unavailableOriginal.ariaDisabled, "true");
+    assert.equal(unavailableOriginal.ariaDisabled, null);
+    for (const auth of ["guest", "image", "super"] as const) {
+      for (const state of [{ detailLoading: true }, { detailError: "详情加载失败" }, {}]) {
+        const pending = await renderScenario({ auth, publicOriginalButton: true, originalUrl: null, ...state });
+        assert.equal(pending.present, false);
+        assert.equal(pending.actionClasses.length, 1);
+        assert.ok(pending.actionClasses[0]!.includes("image-detail-source"));
+        assert.equal(pending.sourceAriaDisabled, "true");
+      }
+    }
+    const sourceReady = await renderScenario({ auth: "guest", publicOriginalButton: true, originalUrl: null, sourceUrl: "https://source.example/item" });
+    assert.equal(sourceReady.sourceHref, "https://source.example/item");
+    assert.equal(sourceReady.sourceAriaDisabled, "false");
+    const deleted = await renderScenario({ auth: "super", publicOriginalButton: false, admin: true, originalUrl: "/api/admin/images/00000000-0000-7000-8000-000000000544/original" });
+    assert.equal(deleted.href, "/api/admin/images/00000000-0000-7000-8000-000000000544/original");
   } finally {
     window.HTMLElement.prototype.focus = originalFocus;
     window.HTMLElement.prototype.blur = originalBlur;

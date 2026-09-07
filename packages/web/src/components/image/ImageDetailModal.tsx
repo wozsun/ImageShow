@@ -37,7 +37,6 @@ import { DialogLayerPortal } from "../feedback/DialogLayerPortal.js";
 import { DialogPortalTargetContext } from "../feedback/DialogPortalContext.js";
 import { DirectActivationButton } from "../feedback/DirectActivationButton.js";
 import { LazyImageAdminDetails } from "./image-admin-details-loader.js";
-import { hasDistinctOriginalUrl } from "../../lib/image-url.js";
 import "../../styles/image-detail.css";
 
 class ImageAdminDetailsModuleBoundary extends Component<{
@@ -88,18 +87,8 @@ function applyEditedSnapshot<T extends ImageDetailItem>(
   if (snapshot?.id !== item.id) return item;
   return {
     ...item,
-    ...snapshot,
-    diff_original: hasDistinctOriginalUrl(
-      snapshot.original,
-      snapshot.object_url
-    )
+    ...snapshot
   } as T;
-}
-
-function isAdminImageListItem(
-  item: AdminImageDetailItem | AdminImageListItem
-): item is AdminImageListItem {
-  return "status" in item;
 }
 
 type ImageDetailModalProps =
@@ -140,9 +129,6 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
   const admin = props.admin === true;
   const adminItem = props.admin === true
     ? applyEditedSnapshot(props.item, editedSnapshot)
-    : null;
-  const adminListItem = adminItem && isAdminImageListItem(adminItem)
-    ? adminItem
     : null;
   const adminStorageLabel = props.admin ? props.storageLabel : undefined;
   const authQuery = useAuthMe();
@@ -198,23 +184,12 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
   const authorLink = authorOption?.link || "";
 
   const title = imageDisplayTitle(item);
-  const hasRegisteredOriginal = item.diff_original;
   const imageTime = adminItem?.image_time ?? item.image_time;
   const sourceAvailable = Boolean(item.source);
   const sourceStateLabel = detailError ? "详情加载失败" : detailLoading ? "来源加载中" : sourceAvailable ? "打开来源页面" : "暂无来源";
-  const originalHref = adminListItem?.deleted_at
-    ? `/api/admin/images/${encodeURIComponent(item.id)}/original`
-    : siteConfig?.site.static_url
-      ? `${siteConfig.site.static_url}/link/${encodeURIComponent(item.id)}`
-      : undefined;
-  const canOpenOriginal = hasRegisteredOriginal && Boolean(originalHref);
+  const originalHref = item.original_url?.trim() ?? "";
   const showOriginalAction = showAdminDetails
     || siteConfig?.site.gallery.public_original_button === true;
-  const originalStateLabel = !hasRegisteredOriginal
-    ? "当前图片未注册原图"
-    : canOpenOriginal
-      ? "打开原图"
-      : "原图链接加载中";
   const imageAspectRatio = item.width > 0 && item.height > 0
     ? `${item.width} / ${item.height}`
     : "16 / 9";
@@ -339,7 +314,7 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
                   <div className="inline-actions image-detail-actions" ref={actionsRef}>
                     <a
                       className={`button secondary pressable image-detail-source${sourceAvailable ? "" : " is-disabled"}`}
-                      href={sourceAvailable ? item.source : undefined}
+                      href={item.source || undefined}
                       target="_blank"
                       rel="noreferrer noopener"
                       referrerPolicy="no-referrer"
@@ -351,18 +326,15 @@ export function ImageDetailModal(props: ImageDetailModalProps) {
                     >
                       <Icon name="external-link-line" />来源
                     </a>
-                    {showOriginalAction && (
+                    {showOriginalAction && originalHref && (
                       <a
-                        className={`button pressable image-detail-original${canOpenOriginal ? "" : " is-disabled"}`}
-                        href={canOpenOriginal ? originalHref : undefined}
+                        className="button pressable image-detail-original"
+                        href={originalHref}
                         target="_blank"
                         rel="noreferrer noopener"
                         referrerPolicy="no-referrer"
-                        aria-disabled={!canOpenOriginal}
-                        aria-label={originalStateLabel}
-                        title={originalStateLabel}
-                        tabIndex={canOpenOriginal ? undefined : -1}
-                        onClick={(event) => { if (!canOpenOriginal) event.preventDefault(); }}
+                        aria-label="打开原图"
+                        title="打开原图"
                       >
                         原图
                       </a>

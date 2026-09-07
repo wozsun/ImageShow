@@ -130,9 +130,11 @@ PostgreSQL 事务推进 `ready_image_revision`。提交后仍持有进程内写�
 }
 ```
 
-`title`、`author` 与 `diff_original` 让公开页面在不额外读取详情的情况下建立卡片；描述、来源仍只在
-点击后由公开详情接口读取。展映的乱序模式使用当前筛选请求 `limit=200`，仍受同一去重、缓存和
-PostgreSQL 有界降级约束，不建立展映专用随机池。
+`title`、`author` 与 `diff_original` 是随机 JSON 的既有公开契约；其中 `diff_original` 继续按
+“登记了另一条 HTTPS 原图”计算，不因站内详情链路调整而改变或删除。站内画廊 / 展映页面批次不
+依赖该布尔值；描述、来源与可空的原图访问链接在点击后由公开详情接口读取。展映的乱序模式使用
+当前筛选请求 `limit=200`，仍受同一去重、缓存和 PostgreSQL 有界降级约束，不建立展映专用随机池；
+按 ID 定向读取也继续使用同一随机 JSON 契约。
 
 只写 `mode=json` 等同 `limit=1`，但仍返回数组。`limit` 是上限而非数量保证。GET 与 HEAD 都为
 `no-store`；HEAD 返回与 GET 一致的状态、内容类型和内容长度，但不发送正文。

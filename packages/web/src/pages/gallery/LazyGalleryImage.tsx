@@ -51,13 +51,17 @@ export const LazyGalleryImage = memo(function LazyGalleryImage({
   alt,
   device,
   width,
-  height
+  height,
+  measureIntrinsicSize,
+  onIntrinsicSize
 }: {
   src: string;
   alt: string;
   device: Device;
   width: number;
   height: number;
+  measureIntrinsicSize: boolean;
+  onIntrinsicSize: (width: number, height: number) => void;
 }) {
   const {
     scheduler,
@@ -68,6 +72,10 @@ export const LazyGalleryImage = memo(function LazyGalleryImage({
   const holderRef = useRef<HTMLDivElement | null>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
   const taskRef = useRef<ImageLoadTaskHandle | null>(null);
+  const intrinsicMeasurementRef = useRef({
+    enabled: measureIntrinsicSize,
+    report: onIntrinsicSize
+  });
   const inViewportRef = useRef(false);
   const [visibility, setVisibility] =
     useState<GalleryImageVisibility>(hiddenVisibility);
@@ -75,6 +83,10 @@ export const LazyGalleryImage = memo(function LazyGalleryImage({
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
   inViewportRef.current = visibility.inViewport;
+  intrinsicMeasurementRef.current = {
+    enabled: measureIntrinsicSize,
+    report: onIntrinsicSize
+  };
   const setImageRef = useCallback((image: HTMLImageElement | null) => {
     imageRef.current = image;
   }, []);
@@ -143,6 +155,14 @@ export const LazyGalleryImage = memo(function LazyGalleryImage({
     void task.result.then((result) => {
       if (!current || taskRef.current !== task) return;
       if (result.status === "completed") {
+        const measurement = intrinsicMeasurementRef.current;
+        if (
+          measurement.enabled
+          && image.naturalWidth > 0
+          && image.naturalHeight > 0
+        ) {
+          measurement.report(image.naturalWidth, image.naturalHeight);
+        }
         setLoaded(true);
       } else if (result.status === "failed") {
         setFailed(true);

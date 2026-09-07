@@ -1655,10 +1655,20 @@ test("[Web/共享交互] 共享页面锁计数化冻结根节点并按层级归�
     document.dispatchEvent(strictEscapeEvent);
     assert.deepEqual(escapeVersions, [2, 4]);
 
+    const replacementTarget = document.createElement("button");
+    replacementTarget.id = "replacement-dialog-return-target";
+    document.body.append(replacementTarget);
+    strictReturnTarget.remove();
+    strictReturnFocusRef.current = replacementTarget;
     await React.act(async () => root.render(strictDialogTree(false, 4)));
     assert.equal(activeKeydownListeners.size, 0);
-    assert.equal(activeElement, strictReturnTarget);
+    assert.equal(activeElement, replacementTarget, "关闭应归还到调用方更新后的可用目标");
+    await React.act(async () => root.render(strictDialogTree(true, 5)));
+    document.body.append(strictReturnTarget);
+    replacementTarget.remove();
+    strictReturnFocusRef.current = strictReturnTarget;
     await React.act(async () => root.unmount());
+    assert.equal(activeElement, strictReturnTarget, "卸载关闭也应读取最新归还目标");
     assert.equal(activeKeydownListeners.size, 0);
     assert.equal(keydownListenerRemoves, keydownListenerAdds);
     strictReturnTarget.remove();

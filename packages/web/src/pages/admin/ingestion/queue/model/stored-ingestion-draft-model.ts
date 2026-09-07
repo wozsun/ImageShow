@@ -71,7 +71,7 @@ function completedDraft(
     author: item.author,
     title: item.title,
     description: item.description,
-    source: item.source,
+    source: item.source ?? "",
     original: item.original,
     tags: item.tags
   };

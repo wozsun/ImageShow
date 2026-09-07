@@ -1,5 +1,6 @@
 import {
   memo,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useState,
@@ -33,7 +34,8 @@ export const GalleryTile = memo(function GalleryTile({
   revealOrder,
   revealRegistry,
   subtitle,
-  onOpen
+  onOpen,
+  onIntrinsicSize
 }: GalleryTileRenderProps) {
   const { item } = position;
   const title = imageDisplayTitle(item);
@@ -50,6 +52,9 @@ export const GalleryTile = memo(function GalleryTile({
   const portrait = item.width > 0 && item.height > 0
     ? item.height > item.width
     : item.device === "mb";
+  const reportIntrinsicSize = useCallback((width: number, height: number) => {
+    onIntrinsicSize(item.id, width, height);
+  }, [item.id, onIntrinsicSize]);
   useLayoutEffect(() => {
     revealRegistry.markRevealed(position.index);
   }, [position.index, revealRegistry]);
@@ -100,6 +105,8 @@ export const GalleryTile = memo(function GalleryTile({
         device={item.device}
         width={item.width}
         height={item.height}
+        measureIntrinsicSize={position.measureIntrinsicSize}
+        onIntrinsicSize={reportIntrinsicSize}
       />
       <span className="tile-info">
         <strong>{title}</strong>

@@ -7,7 +7,6 @@ import type {
   EditableImageSnapshot,
   GalleryImageCard
 } from "../../lib/types.js";
-import { hasDistinctOriginalUrl } from "../../lib/image-url.js";
 import {
   CompactMasonryLayout,
   galleryImageNumericRatio,
@@ -20,6 +19,7 @@ type GalleryWindowPage = {
   nextCursor: string;
   ids: string[];
   items: GalleryImageCard[] | null;
+  needsRefresh: boolean;
   fullBytes: number;
   startIndex: number;
   top: number;
@@ -51,6 +51,19 @@ type GalleryPageFailure = {
 export type GalleryWindowPosition = CompactMasonryPosition & {
   id: string;
   item: GalleryImageCard | null;
+  pageIndex: number;
+  measureIntrinsicSize: boolean;
+};
+
+export type GalleryIntrinsicSize = {
+  id: string;
+  width: number;
+  height: number;
+};
+
+export type GalleryViewportAnchor = {
+  id: string;
+  y: number;
   pageIndex: number;
 };
 
@@ -95,6 +108,14 @@ function pageFullBytes(items: readonly GalleryImageCard[]) {
   return items.reduce((total, item) => total + estimateCardBytes(item), 0);
 }
 
+function cardRatioState(item: GalleryImageCard) {
+  const resolved = item.width > 0 && item.height > 0;
+  return {
+    ratio: galleryImageNumericRatio(item.device, item.width, item.height),
+    resolved
+  };
+}
+
 function itemsInStoredOrder(
   ids: readonly string[],
   items: readonly GalleryImageCard[],
@@ -130,7 +151,6 @@ function galleryCardsEqual(
     && left.thumb_url === right.thumb_url
     && left.width === right.width
     && left.height === right.height
-    && left.diff_original === right.diff_original
     && left.image_time === right.image_time
     && left.tags.length === right.tags.length
     && left.tags.every((tag, index) => tag === right.tags[index]);
@@ -151,10 +171,6 @@ function galleryCardFromSnapshot(
     width: snapshot.width,
     height: snapshot.height,
     tags: [...snapshot.tags],
-    diff_original: hasDistinctOriginalUrl(
-      snapshot.original,
-      snapshot.object_url
-    ),
     image_time: current.image_time
   } satisfies GalleryImageCard;
   return galleryCardsEqual(current, next) ? current : next;
@@ -219,6 +235,10 @@ export class GalleryDataWindow {
     ...this.#snapshot,
     materializedPositions: this.#materializedPositions
   });
+
+  compactGeometry() {
+    return this.#layout.geometry;
+  }
 
   setGeometry(geometry: GalleryCompactGeometry) {
     if (!this.#layout.setGeometry(geometry)) return false;
@@ -292,10 +312,29 @@ export class GalleryDataWindow {
   }
 
   invalidatePendingRequests() {
-    if (this.#pendingCursors.size === 0) return false;
+    let changed = this.#pendingCursors.size > 0;
+    for (const page of this.#pages) {
+      if (!page.needsRefresh || !page.items) continue;
+      this.#fullBytes -= page.fullBytes;
+      page.items = null;
+      page.fullBytes = 0;
+      changed = true;
+    }
+    if (!changed) return false;
     this.#pendingCursors.clear();
     this.#commit();
     return true;
+  }
+
+  invalidateHydratedPages() {
+    this.#pendingCursors.clear();
+    this.#failedCursors.clear();
+    for (const page of this.#pages) {
+      page.items = null;
+      page.fullBytes = 0;
+    }
+    this.#fullBytes = 0;
+    this.#commit();
   }
 
   prepareImageRefresh(
@@ -328,17 +367,15 @@ export class GalleryDataWindow {
         page.items![offset] = nextItem;
         page.fullBytes += byteDelta;
         this.#fullBytes += byteDelta;
-        const geometryChanged = this.#layout.setRatios(itemIndex, [
-          galleryImageNumericRatio(
-            nextItem.device,
-            nextItem.width,
-            nextItem.height
-          )
-        ]);
+        const geometryChanged = this.#layout.setRatioStates(
+          itemIndex,
+          [cardRatioState(nextItem)]
+        );
         if (geometryChanged) this.#recalculatePageBounds();
       }
     }
     this.#activePageIndexes.add(pageIndex);
+    page.needsRefresh = true;
     this.#commit();
     return { cursor: page.cursor, kind: "hydrate" };
   }
@@ -399,7 +436,8 @@ export class GalleryDataWindow {
         ...position,
         id,
         item: page.items?.[offset] ?? null,
-        pageIndex
+        pageIndex,
+        measureIntrinsicSize: this.#layout.needsRatioResolution(index)
       }];
     });
     this.#materializedPositions = positions.length;
@@ -416,6 +454,84 @@ export class GalleryDataWindow {
 
   positionForId(imageId: string) {
     return this.#layout.position(this.indexOfId(imageId));
+  }
+
+  hasHydratedItem(imageId: string) {
+    const index = this.indexOfId(imageId);
+    const pageIndex = this.#pageIndexAtItem(index);
+    if (pageIndex < 0) return false;
+    const page = this.#pages[pageIndex]!;
+    return !page.needsRefresh && Boolean(page.items?.[index - page.startIndex]);
+  }
+
+  hasHydratedViewport() {
+    return [...this.#activePageIndexes].every((index) => {
+      const page = this.#pages[index];
+      return Boolean(page?.items) && page?.needsRefresh === false;
+    });
+  }
+
+  needsIntrinsicMeasurement(imageId: string) {
+    return this.#layout.needsRatioResolution(this.indexOfId(imageId));
+  }
+
+  resolveIntrinsicSizes(sizes: readonly GalleryIntrinsicSize[]) {
+    const updates = sizes.flatMap(({ id, width, height }) => {
+      const index = this.indexOfId(id);
+      if (
+        index < 0
+        || !this.#layout.needsRatioResolution(index)
+        || !Number.isFinite(width)
+        || !Number.isFinite(height)
+        || width <= 0
+        || height <= 0
+      ) {
+        return [];
+      }
+      return [{ index, ratio: height / width }];
+    });
+    if (!this.#layout.resolveRatios(updates)) return false;
+    this.#recalculatePageBounds();
+    this.#applyRetention();
+    this.#commit();
+    return true;
+  }
+
+  viewportAnchor(
+    visibleStart: number,
+    visibleEnd: number
+  ): GalleryViewportAnchor | null {
+    const indexes = this.#layout.windowIndexes({
+      start: visibleStart,
+      end: visibleEnd,
+      priorityStart: visibleStart,
+      priorityEnd: visibleEnd
+    });
+    let anchor: (CompactMasonryPosition & { id: string }) | null = null;
+    for (const index of indexes) {
+      const position = this.#layout.position(index);
+      const id = this.#idAt(index);
+      if (
+        !position
+        || !id
+        || position.bottom < visibleStart
+        || position.y > visibleEnd
+      ) {
+        continue;
+      }
+      if (
+        !anchor
+        || position.y < anchor.y
+        || (position.y === anchor.y && position.x < anchor.x)
+      ) {
+        anchor = { ...position, id };
+      }
+    }
+    return anchor ? {
+      id: anchor.id,
+      y: anchor.y,
+      pageIndex: this.#pageIndexAtItem(this.indexOfId(anchor.id))
+    } : null;
   }
 
   removeImage(imageId: string) {
@@ -459,7 +575,7 @@ export class GalleryDataWindow {
     const hydration = [...this.#activePageIndexes]
       .filter((pageIndex) => {
         const page = this.#pages[pageIndex];
-        return page && !page.items && this.#requestAvailable(page.cursor);
+        return page && (!page.items || page.needsRefresh) && this.#requestAvailable(page.cursor);
       })
       .sort((left, right) => {
         const leftPage = this.#pages[left]!;
@@ -531,15 +647,12 @@ export class GalleryDataWindow {
       this.#fullBytes -= page.fullBytes;
     }
     page.items = orderedItems;
+    page.needsRefresh = false;
     page.fullBytes = pageFullBytes(orderedItems);
     this.#fullBytes += page.fullBytes;
-    const geometryChanged = this.#layout.setRatios(
+    const geometryChanged = this.#layout.setRatioStates(
       page.startIndex,
-      orderedItems.map((item) => galleryImageNumericRatio(
-        item.device,
-        item.width,
-        item.height
-      ))
+      orderedItems.map(cardRatioState)
     );
     const nextCursor = payload.next_cursor ?? "";
     if (page.nextCursor !== nextCursor && pageIndex < this.#pages.length - 1) {
@@ -558,17 +671,15 @@ export class GalleryDataWindow {
       nextCursor: payload.next_cursor ?? "",
       ids: items.map((item) => item.id),
       items,
+      needsRefresh: false,
       fullBytes: pageFullBytes(items),
       startIndex: this.#itemCount,
       top: this.#layout.totalHeight,
       bottom: this.#layout.totalHeight
     };
     for (const item of items) {
-      this.#layout.append(galleryImageNumericRatio(
-        item.device,
-        item.width,
-        item.height
-      ));
+      const ratioState = cardRatioState(item);
+      this.#layout.append(ratioState.ratio, ratioState.resolved);
       this.#idCharacters += item.id.length;
       this.#itemCount += 1;
     }

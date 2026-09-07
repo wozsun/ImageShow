@@ -49,7 +49,6 @@ export type ImageCardBaseDto = {
   width: number;
   height: number;
   tags: string[];
-  diff_original: boolean;
   image_time: string;
 };
 
@@ -63,7 +62,8 @@ export type PublicImageDetailDto = {
   id: string;
   description: string;
   object_url: string;
-  source: string;
+  original_url: string | null;
+  source: string | null;
 };
 
 export type ImageDetailItemDto = ImageCardBaseDto & PublicImageDetailDto;
@@ -129,7 +129,7 @@ export type EditableImageSnapshotDto = {
   id: string;
   title: string;
   description: string;
-  source: string;
+  source: string | null;
   original: string;
   device: Device;
   brightness: Brightness;
@@ -138,6 +138,7 @@ export type EditableImageSnapshotDto = {
   tags: string[];
   thumb_url: string;
   object_url: string;
+  original_url: string | null;
   width: number;
   height: number;
   image_size: number;

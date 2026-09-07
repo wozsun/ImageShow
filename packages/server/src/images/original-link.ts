@@ -1,4 +1,5 @@
 import { publicImageUrls } from "../storage/objects/public-urls.ts";
+import { staticLocalBaseUrl } from "../config/site-host.ts";
 import type {
   PublicDatabaseReadAccess
 } from "../core/database/public-fallback.ts";
@@ -35,4 +36,14 @@ export async function displayUrlForOriginalComparison(
 
 export function hasDistinctOriginalUrl(original: string, displayUrl: string) {
   return /^https:\/\//i.test(original.trim()) && !equivalentUrl(original, displayUrl);
+}
+
+export function publicOriginalAccessUrl(
+  id: string,
+  original: string,
+  displayUrl: string
+) {
+  return hasDistinctOriginalUrl(original, displayUrl)
+    ? `${staticLocalBaseUrl()}/link/${encodeURIComponent(id)}`
+    : null;
 }

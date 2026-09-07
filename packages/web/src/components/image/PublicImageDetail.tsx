@@ -16,7 +16,8 @@ function imagePlaceholder(card: GalleryImageCard): PublicImageItem {
     ...card,
     description: "",
     object_url: "",
-    source: ""
+    original_url: null,
+    source: null
   };
 }
 

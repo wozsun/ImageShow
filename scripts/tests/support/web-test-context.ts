@@ -61,7 +61,6 @@ export function galleryCardDto(
     width,
     height,
     tags: [],
-    diff_original: false,
     image_time: "2026-09-01T00:00:00.000Z"
   };
 }
@@ -137,7 +136,7 @@ export function adminImageListItem(
     id: "00000000-0000-7000-8000-000000000001",
     title: "fixture",
     description: "",
-    source: "",
+    source: null,
     original: "fixture.jpg",
     object_url: "/full/01/00000000-0000-7000-8000-000000000001.jpg",
     thumb_url: "/thumbs/01/00000000-0000-7000-8000-000000000001.webp",
@@ -148,7 +147,7 @@ export function adminImageListItem(
     tags: [],
     width: 1600,
     height: 900,
-    diff_original: false,
+    original_url: null,
     image_time: timestamp,
     status: "ready",
     purge_pending: false,
@@ -179,6 +178,7 @@ export function editableImage(
     tags: ["tag"],
     thumb_url: "/thumb/" + id,
     object_url: "/image/" + id,
+    original_url: "/static/link/" + id,
     width: 1920,
     height: 1080,
     image_size: 1024,
@@ -728,28 +728,24 @@ export async function createTextureRecoveryHarness(t: TestContext, {
     }
   };
 }
-export async function createConfigStreamHarness(t: TestContext, { honorAbort = true } = {}) {
+export async function createConfigStreamHarness(t: TestContext, {
+  honorAbort = true,
+  animationFrame
+}: {
+  honorAbort?: boolean;
+  animationFrame?: Pick<Window, "requestAnimationFrame" | "cancelAnimationFrame">;
+} = {}) {
   const React = await import("react");
   const { createRoot } = await import("react-dom/client");
   const { window, document } = parseHTML("<html><body><div id=root></div></body></html>");
-  Object.defineProperties(window, {
-    innerWidth: { configurable: true, value: 1024 },
-    innerHeight: { configurable: true, value: 768 },
-    requestAnimationFrame: {
-      configurable: true,
-      value: (callback: FrameRequestCallback) => window.setTimeout(
-        () => callback(Date.now()),
-        0
-      )
-    },
-    cancelAnimationFrame: {
-      configurable: true,
-      value: (id: number) => window.clearTimeout(id)
-    }
-  });
-  const pending: Array<{ path: string; body?: BodyInit | null; signal: AbortSignal | null | undefined; resolve: (response: Response) => void }> = [];
+  const pending: Array<{ path: string; body?: BodyInit | null; cache?: RequestCache; signal: AbortSignal | null | undefined; resolve: (response: Response) => void }> = [];
   const globals = {
     window, document, self: window, navigator: window.navigator,
+    innerWidth: 1024, innerHeight: 768,
+    requestAnimationFrame: animationFrame?.requestAnimationFrame
+      ?? ((callback: FrameRequestCallback) => window.setTimeout(() => callback(Date.now()), 0)),
+    cancelAnimationFrame: animationFrame?.cancelAnimationFrame
+      ?? ((id: number) => window.clearTimeout(id)),
     location: new URL("https://img.example/show"),
     matchMedia: (media: string) => ({ media, matches: false, addEventListener() {}, removeEventListener() {} }),
     HTMLElement: window.HTMLElement, Element: window.Element, Node: window.Node,
@@ -757,7 +753,7 @@ export async function createConfigStreamHarness(t: TestContext, { honorAbort = t
     React, IS_REACT_ACT_ENVIRONMENT: true,
     fetch: (path: string, init?: RequestInit) => new Promise<Response>((resolve, reject) => {
       if (String(path).endsWith("/logs/client-errors")) { resolve(Response.json({ ok: true })); return; }
-      pending.push({ path: String(path), body: init?.body, signal: init?.signal, resolve });
+      pending.push({ path: String(path), body: init?.body, cache: init?.cache, signal: init?.signal, resolve });
       if (honorAbort) init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")), { once: true });
     })
   };

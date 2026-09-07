@@ -7,6 +7,7 @@ import type {
   IngestionVocabularyDto
 } from "@imageshow/shared/browser";
 import { queryKeys } from "./query-keys.js";
+import { advanceImageDataRevision } from "./image-data-revision.js";
 import {
   adminImageListValidationCovers
 } from "./admin-image-list-validation.js";
@@ -15,6 +16,9 @@ function invalidate(
   client: QueryClient,
   queryKeysToInvalidate: readonly (readonly unknown[])[]
 ) {
+  if (queryKeysToInvalidate.includes(queryKeys.publicImages)) {
+    advanceImageDataRevision(client);
+  }
   return Promise.all(queryKeysToInvalidate.map((queryKey) => (
     client.invalidateQueries({ queryKey })
   )));
@@ -100,6 +104,7 @@ export function invalidateImageDataAfterMetadataSave(
   authoritativeItems: readonly Pick<EditableImageSnapshotDto, "id">[] | null
 ) {
   if (!updates.length) return Promise.resolve([]);
+  advanceImageDataRevision(client);
   const changesDevice = updatesField(updates, "device");
   const changesBrightness = updatesField(updates, "brightness");
   const changesTheme = updatesField(updates, "theme");
@@ -231,6 +236,7 @@ export async function invalidateImageDataAfterTrash(
   client: QueryClient,
   imageIds: string[]
 ) {
+  if (imageIds.length) advanceImageDataRevision(client);
   // 当前公开详情在移入回收站后必然返回 404。先终止可能尚未完成的旧读取，但不改变
   // 它的 freshness；详情关闭后 gcTime: 0 会自然回收它。
   await Promise.all(imageIds.map((imageId) => client.cancelQueries({

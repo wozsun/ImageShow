@@ -947,6 +947,7 @@ test("[Web/内容接入] 内容接入队列以 pair、version 与 progress_seq �
   }, completionDisplaySource, 12);
   assert.equal(completedReplayAfterSnapshot.serverHandoffPending, false);
   assert.equal(completedReplayAfterSnapshot.finalSize, 1);
+  assert.equal(completedReplayAfterSnapshot.draft.source, "");
   assert.equal(completedReplayAfterSnapshot.width, 1600);
   assert.equal(completedReplayAfterSnapshot.height, 900);
   assert.equal(completedReplayAfterSnapshot.originalWidth, 6002);

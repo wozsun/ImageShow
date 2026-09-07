@@ -51,8 +51,14 @@ import {
   galleryCard,
   syntheticGalleryPage,
   resolveGalleryIntent,
+  createConfigStreamHarness,
   editableImage
 } from "../support/web-test-context.ts";
+import { installProperties } from "../support/property-descriptors.ts";
+import {
+  activateGalleryRestorationSession,
+  reusableGalleryRestorationSession
+} from "../../../packages/web/src/pages/gallery/gallery-restoration.ts";
 
 test("[Web/画廊] 首页目录、瀑布流、分页预载与滚动导航组成完整公开浏览流程", () => {
   const none = { slug: "none", image_count: 7 };
@@ -618,8 +624,7 @@ test("[Web/画廊] 公共详情保存为目标页建立新权威边界", () => {
     theme: "saved-theme",
     tags: ["saved-tag"],
     width: 100,
-    height: 300,
-    diff_original: false
+    height: 300
   };
   resolveGalleryIntent(dataWindow, refreshIntent!, refreshedPage);
   const refreshedPosition = dataWindow.windowPositions({
@@ -693,11 +698,13 @@ test("[Web/画廊] 画廊图片同节点换源隔离失败与迟到解码并保�
     const { GalleryImageRuntime } = await import("../../../packages/web/src/pages/gallery/GalleryImageRuntime.tsx");
     const { LazyGalleryImage } = await import("../../../packages/web/src/pages/gallery/LazyGalleryImage.tsx");
     root = createRoot(document.getElementById("root")!);
-    const render = async (src: string, detailOpen = false) => React.act(async () => {
+    const measurements: Array<{ src: string; width: number; height: number }> = [];
+    const render = async (src: string, detailOpen = false, measureIntrinsicSize = false) => React.act(async () => {
       root!.render(React.createElement(GalleryImageRuntime, {
         dataWindowMetrics: null, detailOpen, resetKey: "same-query",
         children: React.createElement(LazyGalleryImage, {
-          src, alt: "测试缩略图", width: 800, height: 600, device: "pc"
+          src, alt: "测试缩略图", width: 800, height: 600, device: "pc",
+          measureIntrinsicSize, onIntrinsicSize(width, height) { measurements.push({ src, width, height }); }
         })
       }));
     });
@@ -718,17 +725,23 @@ test("[Web/画廊] 画廊图片同节点换源隔离失败与迟到解码并保�
     assert.equal(document.querySelector(".tile-image-fallback"), null);
     await settle("load");
     assert.ok(shell().classList.contains("loaded"));
+    assert.equal(measurements.length, 0);
 
-    await render("/slow.webp");
+    await render("/slow.webp", false, true);
     const slowImage = image()!;
+    Object.defineProperties(slowImage, {
+      naturalWidth: { configurable: true, value: 512 },
+      naturalHeight: { configurable: true, value: 341 }
+    });
     const decode = Promise.withResolvers<void>();
     Object.defineProperty(slowImage, "decode", { configurable: true, value: () => decode.promise });
     await settle("load");
-    await render("/new.webp");
+    await render("/new.webp", false, true);
     assert.strictEqual(image(), slowImage, "正常换源复用最终 img 节点");
     assert.equal(image()?.getAttribute("src"), "/new.webp");
     await React.act(async () => decode.resolve());
     assert.equal(shell().classList.contains("loaded"), false, "旧解码完成不得标记新地址就绪");
+    assert.equal(measurements.length, 0, "旧解码结果不能回填新地址的比例");
     await settle("error");
     assert.ok(document.querySelector(".tile-image-fallback"), "新地址失败仍需显示反馈");
     await render("/slow.webp");
@@ -741,10 +754,15 @@ test("[Web/画廊] 画廊图片同节点换源隔离失败与迟到解码并保�
     assert.equal(image()?.getAttribute("src"), "/slow.webp");
     await render("/paused.webp", true);
     assert.equal(image(), null, "详情打开时换源继续遵守画廊暂停");
-    await render("/paused.webp", false);
+    await render("/paused.webp", false, true);
     assert.equal(image()?.getAttribute("src"), "/paused.webp");
+    Object.defineProperties(image()!, {
+      naturalWidth: { configurable: true, value: 512 },
+      naturalHeight: { configurable: true, value: 341 }
+    });
     await settle("load");
     assert.ok(shell().classList.contains("loaded"));
+    assert.deepEqual(measurements, [{ src: "/paused.webp", width: 512, height: 341 }]);
     assert.equal(observations, 1, "换源不能重建共享可见性注册");
     await React.act(async () => root!.unmount());
     root = undefined;
@@ -758,6 +776,348 @@ test("[Web/画廊] 画廊图片同节点换源隔离失败与迟到解码并保�
     }
   }
 });
+test("[Web/画廊] 自然尺寸批量回填后远页水合、删除和 resize 继续使用已解析比例", () => {
+  const dataWindow = new GalleryDataWindow({
+    geometry: { contentWidth: 420, gap: 10, columnCount: 2 }, fullItemBudget: 4
+  });
+  const page = syntheticGalleryPage({ count: 4, start: 0, total: 12 });
+  page.items[0] = galleryCard(page.items[0]!.id, 0, 0);
+  page.items[1] = galleryCard(page.items[1]!.id, 0, 0);
+  resolveGalleryIntent(dataWindow, { cursor: "", kind: "initial" }, page);
+  const [first, second] = page.items;
+  let commits = 0;
+  dataWindow.subscribe(() => { commits += 1; });
+  dataWindow.resolveIntrinsicSizes([
+    { id: first!.id, width: 300, height: 600 },
+    { id: second!.id, width: 400, height: 300 }
+  ]);
+  assert.equal(commits, 1);
+  const measured = dataWindow.positionForId(first!.id)!;
+  assert.equal(measured.height, (measured.width - 2) * 2 + 2);
+  assert.equal(dataWindow.needsIntrinsicMeasurement(first!.id), false);
+  assert.equal(dataWindow.needsIntrinsicMeasurement(second!.id), false);
+  dataWindow.resolveIntrinsicSizes([{ id: first!.id, width: 1, height: 1 }]);
+  assert.equal(commits, 1, "已解析结果不会再次提交布局");
+  for (const start of [4, 8]) {
+    resolveGalleryIntent(dataWindow, { cursor: `cursor-${start}`, kind: "append" }, syntheticGalleryPage({ count: 4, start, total: 12 }));
+    const end = dataWindow.snapshot().totalHeight;
+    dataWindow.updateViewport({ start: end - 100, end, visibleStart: end - 100, visibleEnd: end, preloadEnd: end }, null);
+  }
+  assert.equal(dataWindow.hasHydratedItem(first!.id), false);
+  resolveGalleryIntent(dataWindow, { cursor: "", kind: "hydrate" }, page);
+  assert.equal(dataWindow.positionForId(first!.id)!.height, measured.height);
+  dataWindow.removeImage(first!.id);
+  dataWindow.setGeometry({ contentWidth: 210, gap: 10, columnCount: 1 });
+  const remaining = dataWindow.positionForId(second!.id)!;
+  assert.equal(remaining.height, (remaining.width - 2) * 0.75 + 2);
+});
+
+test("[Web/画廊] Strict Mode 历史恢复锚点，主动导航一次读取新列表并回到顶部", async (t) => {
+  activateGalleryRestorationSession();
+  t.after(activateGalleryRestorationSession);
+  let serial = 0;
+  const frames = new Map<number, FrameRequestCallback>();
+  const originalAnimationFrame = Object.getOwnPropertyDescriptor(globalThis, "requestAnimationFrame");
+  const originalCancelAnimationFrame = Object.getOwnPropertyDescriptor(globalThis, "cancelAnimationFrame");
+  const h = await createConfigStreamHarness(t, { animationFrame: {
+    requestAnimationFrame: (callback) => { frames.set(++serial, callback); return serial; },
+    cancelAnimationFrame: (id) => { frames.delete(id); }
+  } });
+  const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
+  const { useGalleryDataWindow } = await import("../../../packages/web/src/pages/gallery/useGalleryDataWindow.ts");
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  t.after(() => client.clear());
+  let geometry = { contentWidth: 900, columnCount: 3, gap: 12 };
+  let geometryReady = true;
+  const imageQuery = "theme=none&limit=120";
+  let navigationKey = "gallery-history-entry";
+  let restorePosition = true;
+  let scrollY = 0;
+  t.after(installProperties(h.window, {
+    scrollY: 0,
+    scrollTo: ({ top }: ScrollToOptions) => { scrollY = top ?? 0; Object.defineProperty(h.window, "scrollY", { value: scrollY, configurable: true }); },
+    scrollBy: ({ top }: ScrollToOptions) => { scrollY += top ?? 0; Object.defineProperty(h.window, "scrollY", { value: scrollY, configurable: true }); }
+  }));
+  const WindowEvent = (h.window as Window & typeof globalThis).Event;
+  t.after(installProperties(globalThis, { Event: WindowEvent }));
+  let current!: ReturnType<typeof useGalleryDataWindow>;
+  function Probe({ query }: { query: string }) {
+    const ref = h.React.useRef<HTMLDivElement | null>(null);
+    current = useGalleryDataWindow({ geometry, geometryReady, imageQuery: query, navigationKey, restorePosition, pinnedImageId: null, windowRef: ref });
+    return h.React.createElement("div", { ref: (element: HTMLDivElement | null) => {
+      ref.current = element;
+      if (element) element.getBoundingClientRect = () => ({ top: -scrollY, left: 0, x: 0, y: -scrollY, width: 900, height: current.snapshot.totalHeight, bottom: current.snapshot.totalHeight - scrollY, right: 900, toJSON() {} });
+    }});
+  }
+  const render = (query: string | null) => h.render(h.React.createElement(QueryClientProvider, { client }, h.React.createElement(h.React.StrictMode, null, query === null ? null : h.React.createElement(Probe, { query }))));
+  const flushFrames = async () => {
+    for (let turn = 0; frames.size && turn < 20; turn += 1) {
+      await h.React.act(async () => {
+        const batch = [...frames.values()]; frames.clear();
+        for (const callback of batch) callback(turn * 16);
+      });
+    }
+  };
+  await render(imageQuery);
+  const initialRequest = h.pending.length - 1;
+  await h.respond(initialRequest, syntheticGalleryPage({ count: 120, start: 0, total: 120 }));
+  await flushFrames();
+  await h.React.act(async () => {
+    h.window.scrollTo({ top: 5_200 });
+    h.window.dispatchEvent(new WindowEvent("scroll"));
+  });
+  await flushFrames();
+  const before = current.positions.filter((item) => item.bottom >= scrollY && item.y <= scrollY + h.window.innerHeight)
+    .sort((left, right) => left.y - right.y || left.x - right.x)[0]!;
+  const offset = before.y - scrollY;
+  const requestCount = h.pending.length;
+  await render(null);
+  const saved = reusableGalleryRestorationSession(imageQuery, navigationKey, geometry);
+  assert.equal(saved?.anchor.id, before.id);
+  assert.equal(saved?.anchor.offset, offset);
+  h.window.scrollTo({ top: 0 });
+  const measuredGeometry = geometry;
+  geometry = { ...geometry, contentWidth: geometry.contentWidth + 42 };
+  geometryReady = false;
+  await render(imageQuery);
+  assert.equal(h.pending.length, requestCount, "首次实测前不发起新页请求");
+  assert.equal(reusableGalleryRestorationSession(imageQuery, navigationKey, measuredGeometry), saved);
+  assert.equal(reusableGalleryRestorationSession(imageQuery, "another-history-entry", measuredGeometry), null);
+  geometry = measuredGeometry;
+  geometryReady = true;
+  await render(imageQuery);
+  await flushFrames();
+  assert.equal(scrollY, 5_200);
+  assert.equal(current.positions.find(({ id }) => id === before.id)!.y - scrollY, offset);
+  assert.equal(current.snapshot.compactItems, 120);
+  assert.equal(h.pending.length, requestCount);
+  for (const top of [4_500, 3_500, 2_500, 1_500]) {
+    await h.React.act(async () => {
+      h.window.scrollTo({ top });
+      h.window.dispatchEvent(new WindowEvent("scroll"));
+    });
+    await flushFrames();
+    assert.equal(scrollY, top, "恢复完成后不再重放路由锚点");
+    assert.ok(current.positions.some((position) => (
+      position.bottom >= top && position.y <= top + h.window.innerHeight
+    )));
+  }
+  const resizeAnchor = current.positions.filter((position) => (
+    position.bottom >= scrollY && position.y <= scrollY + h.window.innerHeight
+  )).sort((left, right) => left.y - right.y || left.x - right.x)[0]!;
+  const resizeOffset = resizeAnchor.y - scrollY;
+  geometry = { contentWidth: 420, columnCount: 4, gap: 12 };
+  await render(imageQuery);
+  const resizedAnchor = current.positions.find(({ id }) => id === resizeAnchor.id);
+  // The browser can clamp an old deep scroll position as layout height shrinks.
+  h.window.scrollTo({ top: 800 });
+  await flushFrames();
+  assert.ok(resizedAnchor);
+  assert.equal(scrollY, resizedAnchor.y - resizeOffset);
+  assert.ok(current.positions.some((position) => (
+    position.bottom >= scrollY && position.y <= scrollY + h.window.innerHeight
+  )));
+  const {
+    invalidateImageDataAfterMetadataSave,
+    invalidateImageDataAfterTrash,
+    invalidateImageDataAfterIngestion
+  } = await import("../../../packages/web/src/lib/api/query-invalidation.ts");
+  let authoritativePage = syntheticGalleryPage({ count: 120, start: 0, total: 120 });
+  for (const mutation of ["metadata", "trash", "ingestion"] as const) {
+    const anchor = current.positions.filter((position) => (
+      position.bottom >= scrollY && position.y <= scrollY + h.window.innerHeight
+    )).sort((left, right) => left.y - right.y || left.x - right.x)[0]!;
+    const retainedOffset: number = anchor.y - scrollY;
+    const removedId = current.positions.filter(({ id, item }) => item && id !== anchor.id).at(-1)!.id;
+    const stalePage = authoritativePage;
+    await h.React.act(async () => current.refreshImage(anchor.id));
+    const staleRequest = h.pending.length - 1;
+    const beforeRequests = h.pending.length;
+    await render(null);
+    assert.equal(reusableGalleryRestorationSession(imageQuery, navigationKey, geometry)?.anchor.id, anchor.id);
+    assert.equal(reusableGalleryRestorationSession(imageQuery, navigationKey, geometry)?.anchor.offset, retainedOffset);
+    if (mutation === "metadata") {
+      authoritativePage = { ...authoritativePage, items: authoritativePage.items.map((item) => (
+        item.id === anchor.id ? { ...item, title: "离页期间编辑" } : item
+      )) };
+      await invalidateImageDataAfterMetadataSave(client, [{ id: anchor.id, title: "离页期间编辑" }], [{ id: anchor.id }]);
+    } else if (mutation === "trash") {
+      authoritativePage = { ...authoritativePage, items: authoritativePage.items.filter(({ id }) => id !== removedId) };
+      await invalidateImageDataAfterTrash(client, [removedId]);
+    } else {
+      const appended = syntheticGalleryPage({ count: 1, start: 120, total: 121 }).items[0]!;
+      authoritativePage = { ...authoritativePage, items: [...authoritativePage.items, appended] };
+      await invalidateImageDataAfterIngestion(client, []);
+    }
+    h.window.scrollTo({ top: 0 });
+    await render(imageQuery);
+    assert.equal(current.snapshot.fullItems, 0, "已知图片变更后的返回首帧不发布旧 DTO");
+    assert.equal(h.pending.length, beforeRequests + 1, "离页变更后只读取所需权威页");
+    const currentRequest = h.pending.length - 1;
+    await h.respond(staleRequest, stalePage);
+    assert.equal(current.snapshot.fullItems, 0, "离页前迟到响应不能成为新代次的权威页");
+    assert.equal(h.pending[currentRequest]!.signal?.aborted, false, "旧请求清理不能取消新代次");
+    if (mutation === "metadata") {
+      await h.respond(currentRequest, { error: "暂时不可用" }, 503);
+      assert.ok(current.snapshot.error);
+      assert.ok(scrollY > 0, "水合失败时保留深位置，让当前页错误和重试可见");
+      await h.React.act(async () => current.retry());
+      await h.respond(h.pending.length - 1, authoritativePage);
+    } else {
+      await h.respond(currentRequest, authoritativePage);
+    }
+    await flushFrames();
+    const restored = current.positions.find(({ id }) => id === anchor.id)!;
+    assert.equal(restored.y - scrollY, retainedOffset, `${mutation} 权威页更新后保持未变锚点`);
+    assert.equal(current.snapshot.fullItems, authoritativePage.items.length);
+    if (mutation === "metadata") assert.equal(restored.item?.title, "离页期间编辑");
+  }
+  const localTarget = current.positions.filter(({ item }) => item).at(-1)!;
+  await h.React.act(async () => {
+    current.refreshImage(editableImage(localTarget.id, { ...localTarget.item!, theme: "outside" }));
+    await invalidateImageDataAfterMetadataSave(client, [{ id: localTarget.id, theme: "outside" }], [{ id: localTarget.id }]);
+  });
+  const localRefreshRequest = h.pending.length - 1;
+  await render(null);
+  await render(imageQuery);
+  assert.equal(current.snapshot.fullItems, 0, "本页编辑尚未确认成员时，返回也需要权威水合");
+  assert.equal(h.pending.length - 1, localRefreshRequest + 1, "重新挂载的成员水合有独立请求所有者");
+  const resumedRefreshRequest = h.pending.length - 1;
+  await h.respond(localRefreshRequest, authoritativePage);
+  assert.equal(current.snapshot.fullItems, 0, "上一挂载的迟到读取不能确认当前筛选成员");
+  assert.equal(h.pending[resumedRefreshRequest]!.signal?.aborted, false);
+  authoritativePage = { ...authoritativePage, items: authoritativePage.items.filter(({ id }) => id !== localTarget.id) };
+  await h.respond(resumedRefreshRequest, authoritativePage);
+  await flushFrames();
+  assert.equal(current.snapshot.fullItems, authoritativePage.items.length);
+  assert.ok(current.positions.every(({ id }) => id !== localTarget.id));
+  navigationKey = "gallery-manual-first";
+  restorePosition = false;
+  await render(imageQuery);
+  assert.equal(scrollY, 0, "相同筛选的主动导航也回到顶部");
+  assert.equal(current.snapshot.fullItems, 0);
+  const firstManualRequest = h.pending.length - 1;
+  navigationKey = "gallery-manual-second";
+  await render(imageQuery);
+  const secondManualRequest = h.pending.length - 1;
+  assert.equal(secondManualRequest, firstManualRequest + 1, "连续主动导航各自拥有新读取");
+  await h.respond(firstManualRequest, authoritativePage);
+  assert.equal(current.snapshot.fullItems, 0);
+  assert.equal(h.pending[secondManualRequest]!.signal?.aborted, false);
+  const externallyRemovedId = authoritativePage.items[0]!.id;
+  authoritativePage = { ...authoritativePage, items: authoritativePage.items.slice(1) };
+  await h.respond(secondManualRequest, authoritativePage);
+  await flushFrames();
+  assert.equal(current.snapshot.fullItems, authoritativePage.items.length);
+  assert.ok(current.positions.every(({ id }) => id !== externallyRemovedId), "无需本标签页失效通知，一次新读取即可移除外部删除的卡片");
+  assert.ok(h.pending.every(({ cache }) => cache === "no-cache"), "列表页等待 HTTP 条件重验证，不先交付 stale-while-revalidate 缓存");
+  await render("theme=night&limit=120");
+  await flushFrames();
+  assert.equal(scrollY, 0);
+  assert.equal(current.snapshot.compactItems, 0);
+  assert.equal(new URL(h.pending.at(-1)!.path, "https://img.example").searchParams.get("theme"), "night");
+  t.after(() => {
+    assert.deepEqual(Object.getOwnPropertyDescriptor(globalThis, "requestAnimationFrame"), originalAnimationFrame);
+    assert.deepEqual(Object.getOwnPropertyDescriptor(globalThis, "cancelAnimationFrame"), originalCancelAnimationFrame);
+  });
+});
+
+test("[Web/画廊] 多页恢复等待前邻页成员变化收敛，并为已删除锚点有界回退", async (t) => {
+  for (const order of ["predecessor-first", "anchor-first", "anchor-removed"] as const) {
+    await t.test(order, async (t) => {
+      activateGalleryRestorationSession();
+      t.after(activateGalleryRestorationSession);
+      let serial = 0;
+      const frames = new Map<number, FrameRequestCallback>();
+      const h = await createConfigStreamHarness(t, { animationFrame: {
+        requestAnimationFrame: (callback) => { frames.set(++serial, callback); return serial; },
+        cancelAnimationFrame: (id) => { frames.delete(id); }
+      } });
+      const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
+      const { useGalleryDataWindow } = await import("../../../packages/web/src/pages/gallery/useGalleryDataWindow.ts");
+      const { invalidateImageDataAfterTrash } = await import("../../../packages/web/src/lib/api/query-invalidation.ts");
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      t.after(() => client.clear());
+      const geometry = { contentWidth: 900, columnCount: 3, gap: 12 };
+      let scrollY = 0;
+      t.after(installProperties(h.window, {
+        scrollY: 0,
+        scrollTo: ({ top }: ScrollToOptions) => { scrollY = top ?? 0; Object.defineProperty(h.window, "scrollY", { value: scrollY, configurable: true }); }
+      }));
+      const WindowEvent = (h.window as Window & typeof globalThis).Event;
+      t.after(installProperties(globalThis, { Event: WindowEvent }));
+      let current!: ReturnType<typeof useGalleryDataWindow>;
+      function Probe() {
+        const ref = h.React.useRef<HTMLDivElement | null>(null);
+        current = useGalleryDataWindow({ geometry, geometryReady: true, imageQuery: "limit=120", navigationKey: "gallery-history-entry", restorePosition: true, pinnedImageId: null, windowRef: ref });
+        return h.React.createElement("div", { ref: (element: HTMLDivElement | null) => {
+          ref.current = element;
+          if (element) element.getBoundingClientRect = () => ({ top: -scrollY, left: 0, x: 0, y: -scrollY, width: 900, height: current.snapshot.totalHeight, bottom: current.snapshot.totalHeight - scrollY, right: 900, toJSON() {} });
+        }});
+      }
+      const render = (active: boolean) => h.render(h.React.createElement(QueryClientProvider, { client }, h.React.createElement(h.React.StrictMode, null, active ? h.React.createElement(Probe) : null)));
+      const flushFrames = async () => {
+        for (let turn = 0; frames.size && turn < 20; turn++) await h.React.act(async () => {
+          const batch = [...frames.values()]; frames.clear(); for (const callback of batch) callback(turn * 16);
+        });
+      };
+      const scroll = async (top: number) => {
+        await h.React.act(async () => { h.window.scrollTo({ top }); h.window.dispatchEvent(new WindowEvent("scroll")); });
+        await flushFrames();
+      };
+      const cards = syntheticGalleryPage({ count: 360, start: 0, total: 360 }).items;
+      const removed = new Set<string>();
+      const settled = new Set<number>();
+      const cursorFor = (index: number) => new URL(h.pending[index]!.path, "https://img.example").searchParams.get("cursor") ?? "";
+      const respond = async (index: number) => {
+        const start = Number(cursorFor(index).replace("cursor-", ""));
+        const candidates = cards.slice(start).filter(({ id }) => !removed.has(id));
+        const items = candidates.slice(0, 120);
+        const next_cursor = candidates.length > 120 ? `cursor-${cards.indexOf(items.at(-1)!) + 1}` : null;
+        settled.add(index);
+        await h.respond(index, { items, next_cursor });
+        await flushFrames();
+      };
+      await render(true);
+      for (let page = 0; page < 3; page++) {
+        await respond(h.pending.length - 1);
+        await scroll(current.snapshot.totalHeight - 500);
+      }
+      await scroll(current.snapshot.totalHeight - 1_500);
+      const anchor = current.positions.filter((position) => position.bottom >= scrollY && position.y <= scrollY + h.window.innerHeight)
+        .sort((left, right) => left.y - right.y || left.x - right.x)[0]!;
+      assert.equal(anchor.pageIndex, 2);
+      const offset: number = anchor.y - scrollY;
+      await render(false);
+      removed.add(cards[130]!.id);
+      if (order === "anchor-removed") removed.add(anchor.id);
+      await invalidateImageDataAfterTrash(client, [...removed]);
+      h.window.scrollTo({ top: 0 });
+      const firstNewRequest = h.pending.length;
+      await render(true);
+      const predecessorRequest = h.pending.findIndex((_, index) => index >= firstNewRequest && cursorFor(index) === "cursor-120");
+      const anchorRequest = h.pending.findIndex((_, index) => index >= firstNewRequest && cursorFor(index) === "cursor-240");
+      assert.ok(predecessorRequest >= 0 && anchorRequest >= 0);
+      for (const index of order === "predecessor-first" ? [predecessorRequest, anchorRequest] : [anchorRequest, predecessorRequest]) await respond(index);
+      for (let turn = 0; turn < 8; turn++) {
+        const next = h.pending.findIndex((_, index) => index >= firstNewRequest && !settled.has(index));
+        if (next < 0) break;
+        await respond(next);
+      }
+      assert.equal(current.snapshot.pendingQueryPages, 0);
+      assert.ok(h.pending.length - firstNewRequest <= 4, "成员变更只重建受影响的相邻游标链");
+      if (order === "anchor-removed") {
+        assert.ok(scrollY > 0, "锚点已删除时落到深位置附近，不重置为顶部");
+        assert.ok(current.positions.some((position) => position.item && position.bottom >= scrollY && position.y <= scrollY + h.window.innerHeight));
+      } else {
+        const restored = current.positions.find(({ id }) => id === anchor.id)!;
+        assert.ok(restored?.item);
+        assert.equal(restored.y - scrollY, offset);
+      }
+    });
+  }
+});
+
 test("[Web/画廊] 画廊调试快照覆盖查询、DTO、紧凑布局、揭示与 JS heap 指标", () => {
   const scheduler = new ImageLoadScheduler(2);
   const debug = new GalleryDebugStats(scheduler);

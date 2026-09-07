@@ -40,10 +40,12 @@ export function useDialogFocus({
   const hasActivatedRef = useRef(false);
   const wasActiveRef = useRef(false);
 
-  const restoreFocus = () => {
-    const returnFocus = returnFocusTargetRef.current;
+  const restoreFocus = useEffectEvent(() => {
+    if (!wasActiveRef.current) return;
+    const currentTarget = returnFocusRef?.current;
+    const returnFocus = currentTarget?.isConnected ? currentTarget : returnFocusTargetRef.current;
     if (returnFocus && returnFocus.isConnected) returnFocus.focus({ preventScroll: true });
-  };
+  });
 
   // active 表示弹窗是否存在；paused 只暂停父级 trap，不归还焦点。Ingestion 这类常驻组件
   // 关闭条件渲染的弹窗时会把 active 置为 false，因此无需卸载整个组件也能正确归还焦点。
