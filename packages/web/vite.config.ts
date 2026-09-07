@@ -83,10 +83,12 @@ const chunkResponsibilityAliases: Readonly<Record<string, string>> = {
   "route-authenticated-shell-gallery-image": "async-ui",
   "route-authenticated-shell-image": "workspace-ui",
   "route-gallery-home": "public-ui",
-  "route-gallery-home-show": "public-ui",
+  "route-gallery-home-show-route": "public-ui",
   "route-gallery-image": "image-ui",
   "route-gallery": "image-view",
+  "route-gallery-show-route": "image-view",
   "route-image": "image-actions",
+  "route-image-show-route": "dialog-frame",
   "route-login": "password-input",
   "capability-account-user": "password",
   "capability-admin": "workspace-header",
@@ -158,41 +160,36 @@ function sharedChunkName(moduleId: string, context: ChunkingContext) {
     : rootSetChunkName("capability", roots);
 }
 
-const conciseAssetNames: Readonly<Record<string, string>> = {
-  index: "app",
-  AccountSettings: "account",
-  AdminLogin: "login",
-  AdminShell: "access-shell",
-  AdvancedConfigPage: "config",
-  AuthenticatedAdminShell: "workspace-shell",
-  CheckMaintenanceCapability: "maintenance",
-  CheckPage: "check",
-  GalleryPage: "gallery",
-  HomePage: "home",
-  ShowPage: "show",
-  ImageAdmin: "images",
-  ImageAdminDetails: "image-details",
-  ImageStorageMigrationDialog: "image-migration",
-  ImportSourceDialog: "import-source",
-  LoginChallenge: "login-challenge",
-  LogPage: "logs",
-  Overview: "overview",
-  ReadyImageCachePanel: "cache-panel",
-  SettingsPage: "settings",
-  StorageBackendMigrationDialog: "storage-migration",
-  StorageSettings: "storage",
-  Ingestion: "ingestion",
-  UserAdmin: "users",
-  VocabularyAdmin: "vocabulary",
-  "image-editor-capability": "image-editor"
+const assetResponsibilityAliases: Readonly<Record<string, string>> = {
+  index: "App",
+  AccountSettings: "Account",
+  AdminLogin: "Login",
+  AdminShell: "AccessShell",
+  AdvancedConfigPage: "Config",
+  AuthenticatedAdminShell: "WorkspaceShell",
+  CheckMaintenanceCapability: "Maintenance",
+  CheckPage: "Check",
+  GalleryPage: "Gallery",
+  HomePage: "Home",
+  ShowRoutePage: "Show",
+  ImageAdminDetails: "ImageDetails",
+  ImageStorageMigrationDialog: "ImageMigration",
+  ImportSourceDialog: "ImportSource",
+  LoginChallenge: "Challenge",
+  LogPage: "Logs",
+  SettingsPage: "Settings",
+  StorageSettings: "Storage",
+  UserAdmin: "Users",
+  VocabularyAdmin: "Vocabulary",
+  "image-editor-capability": "ImageEditor"
 };
 
-function conciseAssetName(name: string) {
-  return conciseAssetNames[name] ?? name;
+function assetResponsibilityName(name: string) {
+  return assetResponsibilityAliases[name] ?? name;
 }
 
 function javascriptAssetPattern(name: string) {
-  return `assets/${conciseAssetName(name)}-[hash].js`;
+  return `assets/${assetResponsibilityName(name)}-[hash].js`;
 }
 
 function staticAssetPattern(names: string[]) {
@@ -204,7 +201,7 @@ function staticAssetPattern(names: string[]) {
   const baseName = extensionIndex >= 0
     ? originalName.slice(0, extensionIndex)
     : originalName;
-  return `assets/${conciseAssetName(baseName)}-[hash]${extension}`;
+  return `assets/${assetResponsibilityName(baseName)}-[hash]${extension}`;
 }
 
 const storageBackendImageMigrationModuleSuffixes = [
@@ -310,8 +307,8 @@ export default defineConfig({
     emptyOutDir: true,
     rollupOptions: {
       output: {
-        // 文件名只表达简短职责；内容哈希独立负责缓存失效。这里不按字符数
-        // 截断名称，新增职责通过语义别名自然保持简洁。
+        // 独立 facade 使用简洁的 PascalCase 职责名，合并与共享块使用
+        // kebab-case 职责名；内容哈希独立负责缓存失效，不按字符数截断。
         entryFileNames: ({ name }) => javascriptAssetPattern(name),
         chunkFileNames: ({ name }) => javascriptAssetPattern(name),
         assetFileNames: ({ names }) => staticAssetPattern(names),

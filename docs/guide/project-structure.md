@@ -768,16 +768,18 @@ Web 继续使用 entries-aware 的入口根集合分块，`minShareCount: 2` 表
 只有权限可见性、最早懒加载祖先和全部受测闭包都相同的资产才可以合并。交叉入口小块若并入
 任一调用方会造成未访问能力预载或复制，就保留为可解释的独立共享成本。
 
-生产 JS 与 CSS 使用从 Vite / Rolldown 构建图推导的简短语义 `[name]-[hash]` 文件名。动态
-入口沿用真实 facade 的职责别名，共享块名称来自实际入口根和能力关系；不按字符数截断，
-也不使用序号命名或构建后 import 重写。内容哈希仍是缓存身份，名称只负责解释职责。每次生产构建都生成
+生产 JS 与 CSS 使用从 Vite / Rolldown 构建图推导的简短语义 `[name]-[hash]` 文件名。独立
+facade 使用 PascalCase 职责名，例如 `Home`、`Gallery`、`Show`、`ImageAdmin`、`ImageEditor`；
+合并与共享块使用 kebab-case 职责名，例如 `public-ui`、`image-view`、`dialog-frame`。名称不按
+字符数截断，也不使用序号或构建后 import 重写。内容哈希仍是缓存身份，名称只负责解释职责；
+资源 URL 大小写敏感，全部引用由构建器按实际名称生成，不在业务代码中手写。每次生产构建都生成
 `.vite/web-build-report.json`，记录 facade、dynamic importer、入口类型、静态 / 动态依赖、
 模块根和 CSS owner；服务端装配明确过滤 `.vite`，因此报告不进入最终镜像。
 
-内容接入 facade 与样式使用 `ingestion-[hash].js` / `ingestion-[hash].css`，来源弹窗使用
-`import-source-[hash].js`，facade 与来源弹窗共享的 URL 来源解析能力按实际职责命名为
+内容接入 facade 与样式使用 `Ingestion-[hash].js` / `Ingestion-[hash].css`，来源弹窗使用
+`ImportSource-[hash].js`，facade 与来源弹窗共享的 URL 来源解析能力按实际职责命名为
 `import-job-source-[hash].js`。`upload` 与 `import` 分别作为浏览器文件和 Import 来源子模式，
-父领域资源统一使用 `ingestion` 命名。
+父领域独立 facade 统一使用 `Ingestion` 命名。
 
 本地 `check-web-chunks` 从真实输出计算原始、gzip 9、Brotli 11 和实际有效响应体字节；
 gzip 与 Brotli 各自只要结果严格小于原始响应体就采用，不设置最低原始体积或最低节省量。
